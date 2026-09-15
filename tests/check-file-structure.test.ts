@@ -49,10 +49,15 @@ const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 let workdir = "";
 
 function run(): { code: number; output: string } {
+  return runWith([]);
+}
+
+/** 带参数的调用：R5 的棘轮只在 `--strict` 下判定（规范 §18.5）。 */
+function runWith(args: string[]): { code: number; output: string } {
   try {
     const output = execFileSync(
       process.execPath,
-      [join(workdir, "check-file-structure.cjs")],
+      [join(workdir, "check-file-structure.cjs"), ...args],
       { cwd: workdir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     return { code: 0, output };
@@ -358,6 +363,90 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       const { code, output } = run();
       expect(code).toBe(0);
       expect(output).not.toContain("拆分候选");
+    });
+  });
+
+  // ── R5 棘轮（ISSUE #575 第 8 项 / 规范 §18.5）──
+  // 「只提醒」挡不住新增长文件：提醒是输出里的一行字，没有人会因为一行提示
+  // 去拆文件 —— 本项目 900 行以上的文件长期停在 10 个、只增不减。这里把
+  // 「存量交给排期、增量交给棘轮」这条口径机器化。
+  describe("R5 棘轮：超 900 行文件只许降不许升（--strict）", () => {
+    const writeLines = (rel: string, lines: number) => {
+      const abs = join(workdir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, Array.from({ length: lines }, () => "// x").join("\n"));
+    };
+    /* 写基线（键为仓库相对路径，值为行数）。
+     * 路径与脚本同级 —— 本测试把脚本**拷到工作区根**（`__dirname` = 工作区根），
+     * 真实仓库里它住在 `scripts/`，两者的相对关系（基线在脚本旁边）一致。 */
+    const BASELINE = () => join(workdir, ".file-size-baseline.json");
+    const writeBaseline = (files: Record<string, number>) => {
+      writeFileSync(
+        BASELINE(),
+        JSON.stringify({ threshold: 900, total: Object.keys(files).length, files }, null, 2),
+      );
+    };
+
+    it("基线缺失时 --strict 阻断并给出可行动作", () => {
+      writeLines("src/lib/huge.ts", 1000);
+      const { code, output } = runWith(["--strict"]);
+      expect(code).toBe(1);
+      expect(output).toContain("R5 基线文件缺失");
+      expect(output).toContain("--update");
+    });
+
+    it("基线内的超限文件放行（存量交给排期）", () => {
+      writeLines("src/lib/huge.ts", 1000);
+      writeBaseline({ "src/lib/huge.ts": 1000 });
+      const { code, output } = runWith(["--strict"]);
+      expect(code).toBe(0);
+      expect(output).toContain("[structure] OK");
+    });
+
+    it("新增超限文件被阻断（这才是棘轮的意义）", () => {
+      writeLines("src/lib/huge.ts", 1000);
+      writeBaseline({ "src/lib/huge.ts": 1000 });
+      writeLines("src/lib/another-huge.ts", 950);
+      const { code, output } = runWith(["--strict"]);
+      expect(code).toBe(1);
+      expect(output).toContain("R5 新增超限文件");
+      expect(output).toContain("src/lib/another-huge.ts");
+    });
+
+    it("存量文件继续变大同样阻断（不是「进过基线就永久免疫」）", () => {
+      writeLines("src/lib/huge.ts", 1000);
+      writeBaseline({ "src/lib/huge.ts": 1000 });
+      writeLines("src/lib/huge.ts", 1200);
+      const { code, output } = runWith(["--strict"]);
+      expect(code).toBe(1);
+      expect(output).toContain("R5 超限文件继续变大");
+    });
+
+    it("降回阈值内后提示收紧基线（不阻断，避免打断提交）", () => {
+      writeLines("src/lib/shrunk.ts", 800);
+      writeBaseline({ "src/lib/shrunk.ts": 1000 });
+      const { code, output } = runWith(["--strict"]);
+      expect(code).toBe(0);
+      expect(output).toContain("R5 基线可收紧");
+    });
+
+    it("非 strict（pre-commit 口径）不因新增超限文件阻断", () => {
+      writeLines("src/lib/huge.ts", 1000);
+      writeBaseline({});
+      const { code } = run();
+      expect(code).toBe(0);
+    });
+
+    it("--update 按当前扫描重写基线（治理后收紧）", () => {
+      writeLines("src/lib/huge.ts", 1000);
+      writeBaseline({ "src/lib/stale.ts": 1234 });
+      const { code, output } = runWith(["--update"]);
+      expect(code).toBe(0);
+      expect(output).toContain("R5 基线已更新");
+      const written = JSON.parse(readFileSync(BASELINE(), "utf8")) as {
+        files: Record<string, number>;
+      };
+      expect(written.files).toEqual({ "src/lib/huge.ts": 1000 });
     });
   });
 });

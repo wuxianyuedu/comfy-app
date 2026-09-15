@@ -88,11 +88,15 @@ jobs:
       - name: File structure rules
         # 文件命名/组织硬规则（规范 §12.6/§12.8/§12.11/§12.12）：R7/R8 Windows
         # 入口 .ps1 化与 BOM、R9 根目录不放双击入口、R10 注释禁历史流水、
-        # R11 Next 16 代理约定名、R12 源码禁内嵌控制字符；另有 R5 的超大文件
-        # 拆分提醒（提示级，不阻断）。
+        # R11 Next 16 代理约定名、R12 源码禁内嵌控制字符。
         # 此前这套规则**只在本地 pre-commit 跑**（`--no-verify` 或未启用钩子的检出
         # 可绕过），CI 侧没有任何复核——与 13.5「本地与 CI 同一口径」相悖。
-        run: node scripts/check-file-structure.cjs
+        #
+        # `--strict`（ISSUE #575 第 8 项 / 规范 §18.5）：R5 的超 900 行文件从
+        # 「只提醒」升级为棘轮。提醒只是输出里的一行字，**没有人会因为一行提示去
+        # 拆文件** —— 本项目 900 行以上的文件长期停在 10 个、只增不减。CI 用
+        # `--strict` 判「新增超限文件 / 已有文件继续变大」，治理后 `--update` 收紧。
+        run: node scripts/check-file-structure.cjs --strict
 
       - name: Cross-platform action pairs
         # 跨平台动作对照（规范 §9.5）。Windows 入口是 .ps1，Linux / macOS 跑不了
