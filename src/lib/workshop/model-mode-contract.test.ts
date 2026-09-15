@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { exposedParamDisplayLabel } from "~/lib/workflow-exposed-params";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow-types";
 import {
   adapterInputsFromContract,
   builtInModeContract,
   contractToStatusEntries,
   isModeContractInputId,
+  modeContractEntries,
   nextReferenceImageId,
   modeContractInputLabel,
   parseModeContracts,
@@ -126,5 +128,36 @@ describe("模式契约的「尺寸」口与统一尺寸口径一致", () => {
   it("multiple 是适配器侧的细分类型，不混进契约口 id 值域", () => {
     expect(WORKSHOP_INPUT_TYPES.map((t) => t.type)).toContain("multiple");
     expect(isModeContractInputId("multiple")).toBe(false);
+  });
+});
+
+describe("modeContractEntries：两个页签共读的那一份契约口清单", () => {
+  it("未改过的模式回落内置默认（按模式：文生图 = 提示词 + 负向 + 尺寸）", () => {
+    const entries = modeContractEntries("T2I", []);
+    expect(entries.map((e) => e.id)).toEqual(["prompt", "negative", "size"]);
+    /* 展示名与契约表同一份（「尺寸」写明工坊控件的两类写法）。 */
+    expect(entries.map((e) => e.label)).toEqual([
+      exposedParamDisplayLabel("prompt"),
+      exposedParamDisplayLabel("negative"),
+      exposedParamDisplayLabel("size"),
+    ]);
+  });
+
+  it("用户改过的模式按注册表列口，但展示名仍取统一那一份", () => {
+    const stored = parseModeContracts([
+      { mode: "T2I", inputs: ["prompt", "reference-image-2"], output: "image" },
+    ]);
+    const entries = modeContractEntries("t2i", stored);
+    expect(entries.map((e) => e.id)).toEqual(["prompt", "reference-image-2"]);
+    expect(entries[1]?.label).toBe(exposedParamDisplayLabel("reference-image-2"));
+  });
+
+  it("模式大小写不敏感（注册表按大写存）", () => {
+    const stored = parseModeContracts([
+      { mode: "T2I", inputs: ["prompt"], output: "image" },
+    ]);
+    expect(modeContractEntries("t2i", stored).map((e) => e.id)).toEqual([
+      "prompt",
+    ]);
   });
 });

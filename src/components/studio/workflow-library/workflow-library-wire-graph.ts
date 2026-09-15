@@ -148,6 +148,8 @@ export function layoutLibraryNodes(
 export interface LibraryNodeContent {
   params: {
     cards: LibraryParamCards;
+    /** 该模式生效的契约口清单（卡片头取名与「工坊封装」页签同一份）。 */
+    contractEntries: readonly { id: string; label: string }[];
     canWire: boolean;
     selectedEntryId: string | null;
     onSelect: (entryId: string | null) => void;
