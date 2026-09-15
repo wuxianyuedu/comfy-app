@@ -6,7 +6,6 @@
  *
  * | 模块          | 提供                                   | 设计模式/意图        |
  * |---------------|----------------------------------------|---------------------|
- * | `result`      | `Result` 类型 + `Ok`/`Err`/守卫          | 函数式错误处理       |
  * | `errors`      | `AppError` 类树 + 归一化/信封            | 统一错误契约         |
  * | `logger`      | `createLogger` 结构化日志               | 横切关注点           |
  * | `repository`  | `Repository` 接口 + `PrismaRepository`  | Repository 模式     |
@@ -19,7 +18,6 @@
  *
  * @module core
  */
-export * from "./result";
 export * from "./errors";
 export * from "./logger";
 export * from "./repository";

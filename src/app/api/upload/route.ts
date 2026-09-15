@@ -4,6 +4,7 @@ import { uploadImage, comfyBase } from "@/lib/comfyui/client";
 import { ensureComfyUiReady } from "@/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { errorMessage } from "~/lib/error-message";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 
@@ -26,10 +27,7 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
 
   const form = await req.formData();
