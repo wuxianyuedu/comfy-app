@@ -38,7 +38,7 @@ import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
-import { probeComfyAtPort } from "./client";
+import { probeComfyAtPort } from "./probe";
 import { collectComfyPythonCandidates } from "./env-python";
 import { logger } from "~/server/lib/logger";
 

@@ -44,17 +44,17 @@ import {
   typeDisplay,
 } from "@/components/studio/shared/workflow-io";
 import { type CanvasNodeData, NODE_META } from "@/lib/project-canvas/canvas-types";
+import {
+  type WorkflowSourceFilter,
+  type WorkflowModesState,
+} from "./workflow-node-types";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";
 import { WorkflowModePickChip } from "./WorkflowModePickChip";
 
-export type WorkflowSourceFilter = "all" | "local" | "online";
-
-export interface WorkflowModesState {
-  modes: string[];
-  defaultMode: string | null;
-}
+/* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
+export type { WorkflowSourceFilter, WorkflowModesState } from "./workflow-node-types";
 
 export interface WorkflowNodeProps {
   id: string;

@@ -138,6 +138,14 @@ jobs:
         # 自然长度比 TSX 短），按文件记账走棘轮。
         run: node scripts/check-rust-function-length.cjs --strict
 
+      - name: Module circular dependencies ratchet
+        # 模块循环依赖（规范 §12.7 / ISSUE #574）：`src/lib` 内曾有 2 组真实环
+        # （executor 家族 4 文件互相递归、comfyui 状态探测 3 文件成环），此前只靠
+        # executor.ts 的一句注释「加载期是安全的」维持、**没有任何测试**。环的症状
+        # 是「import 顺序变了就 undefined is not a function」，排查成本极高，因此
+        # 把「无环」做成棘轮：新增环即失败；消除一个必须 --update 收紧基线。
+        run: node scripts/check-circular-deps.cjs --strict
+
       - name: App port cross-language consistency
         # 端口推导四语言一致性（规范 §1.1 / ISSUE #489 缺陷 4）：四侧读同一份
         # 共享向量 tests/fixtures/app-port-vectors.json，Node/Python 真跑，

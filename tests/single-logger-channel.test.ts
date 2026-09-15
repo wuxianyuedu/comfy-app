@@ -32,22 +32,22 @@ const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
 
 /**
- * 扫描范围：只判「服务端可达的库代码」。
+ * 扫描范围：**服务端可达的全部库代码**，无目录级豁免。
  *
- * 不扫视图层（`src/components/**`、`src/app/**`）与 `src/lib` 里的**诊断通道**
- * 文件——它们各有自己的落盘/上屏契约，不在本条判据内（本轮不顺手改，登记在
- * ISSUE #568 的清单里）。判据盯的是「服务端日志有没有第二条实现」。
+ * 不扫视图层（`src/components/**`、`src/app/**`）—— 客户端本来就往浏览器
+ * 控制台写，不在「服务端日志唯一通道」这条判据内。
+ *
+ * 历史上这里有 `SKIP_DIRS = ["src/lib/comfyui"]` 与一条 `ALLOWED`
+ * （`generation-log.server.ts`），也就是**整片目录免检**。它们已被逐条消除：
+ *
+ *   - `generation-log.server.ts`：`console.warn` 已改走 `core/logger`（pino），
+ *     消息文案不变，额外获得脱敏与 ERROR 镜像（面板可见）。豁免删除。
+ *   - `src/lib/comfyui/**`：本目录**根本没有 console 调用**（实测），它真正的
+ *     缺口是「trace 直写文件、不经脱敏」—— 那条由值形状守卫
+ *     （`src/lib/core/redact-secret.ts`）在写入边界补上，不是靠目录免检绕开。
+ *     目录级 SKIP 的危险恰在于：它让「以后往这里加 console」完全无声。
  */
 const SCAN_DIRS = ["src/lib", "src/server"];
-const SKIP_DIRS = ["src/lib/comfyui"];
-
-/** 允许直接使用 console 的文件（相对仓库根的 POSIX 路径）。 */
-const ALLOWED: Record<string, string> = {
-  // 本轮不触碰的既有诊断通道：各有自己的落盘契约（trace / 工坊执行日志），
-  // 且都是「失败静默」的辅助通道，改造成 pino 会改变它们的可见性语义。
-  "src/lib/workshop/generation-log.server.ts":
-    "工坊执行日志：自身落盘通道，写失败时只提示一句，登记在 ISSUE #568 清单",
-};
 
 /** 去掉注释，避免把注释里提到的 `console.log` 误判成调用。 */
 function stripComments(src: string): string {
@@ -73,8 +73,6 @@ describe("日志实现只有一处（ISSUE #568）", () => {
       for (const file of walk(join(ROOT, dir))) {
         const rel = relative(ROOT, file).split("\\").join("/");
         if (/\.test\.(ts|tsx)$/.test(rel)) continue; // 用例自己会打点/断言输出
-        if (SKIP_DIRS.some((d) => rel.startsWith(d + "/"))) continue;
-        if (rel in ALLOWED) continue;
         const src = stripComments(readFileSync(file, "utf8"));
         if (/\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/.test(src)) {
           offenders.push(rel);
@@ -105,5 +103,25 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     expect(src).not.toMatch(/process\.env\.LOG_LEVEL/);
     // 级别过滤也不许自己实现一遍（旧实现的特征）
     expect(src).not.toMatch(/LEVEL_ORDER/);
+  });
+  it("trace 直写通道也过值形状守卫（唯一脱敏实现的第二个消费者）", () => {
+    // 判据：`comfyui/trace.ts` 直写文件、不经 pino —— 它必须自己调用共享守卫，
+    // 否则「原始回执里的密钥明文落盘」这条在 §7.18.2.1 之后仍然成立。
+    const src = readFileSync(join(SRC, "lib", "comfyui", "trace.ts"), "utf8");
+    expect(src).toMatch(/from\s+["']@\/lib\/core\/redact-secret["']/);
+    expect(stripComments(src)).toMatch(/redactSecretShaped\(/);
+    // 反向：路径上不许再出现第二份守卫实现（PEM/JWT 判据各写一份 = 孪生对）
+    expect(src).not.toMatch(/BEGIN \[A-Z \]\*PRIVATE KEY/);
+  });
+
+  it("值形状守卫只有一份实现（两条通道都从 core 取）", () => {
+    const files = walk(join(SRC, "lib"))
+      .concat(walk(join(SRC, "server")))
+      .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
+      .filter((f) =>
+        /export\s+function\s+redactSecretShaped/.test(readFileSync(f, "utf8")),
+      )
+      .map((f) => relative(ROOT, f).split("\\").join("/"));
+    expect(files).toEqual(["src/lib/core/redact-secret.ts"]);
   });
 });
