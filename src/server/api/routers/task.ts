@@ -2,19 +2,20 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
 import { taskRepository } from "@/lib/core/repository";
+import { kindOf } from "@/lib/media-kind";
 
-const VIDEO_EXT = /\.(mp4|webm|mov|mkv|avi|gif)$/i;
-const AUDIO_EXT = /\.(wav|mp3|flac|ogg|m4a|aac)$/i;
-
+/* 扩展名判据已收敛到 `media-kind.ts`（ISSUE #571）。此前这里自带一份清单，
+ * 且与 `lib/media.ts` 的注释**直接矛盾**——那边明确写「gif 不是视频，`<video>`
+ * 解不了 GIF 会黑屏」，这边却把 gif 判成视频。 */
 function inferMediaType(
   coverPath: string | null,
   coverMediaType: string | null,
   taskType: string
 ): "image" | "video" | "audio" {
-  if (coverPath) {
-    if (AUDIO_EXT.test(coverPath)) return "audio";
-    if (VIDEO_EXT.test(coverPath)) return "video";
-  }
+  /* 文件事实（扩展名）优先于元数据（mediaType），元数据优先于任务类型推断：
+   * 越靠前的来源越接近「磁盘上到底是什么」。 */
+  const byName = kindOf(coverPath);
+  if (byName === "video" || byName === "audio") return byName;
   if (coverMediaType === "video") return "video";
   if (coverMediaType === "audio") return "audio";
   if (coverMediaType === "image") return "image";

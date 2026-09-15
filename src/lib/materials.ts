@@ -17,6 +17,8 @@
 import { promises as fs } from "fs";
 import path from "path";
 
+import { kindOf, type MediaKind } from "./media-kind";
+
 /** 跨项目共享素材的 scope 目录名（下划线前缀，不会与 `proj_...` 冲突）。 */
 export const SHARED_SCOPE = "_shared";
 
@@ -45,17 +47,14 @@ export function folderName(id: string): string {
 
 /* ── 媒体种类推导 ── */
 
-export type MaterialKind = "image" | "video" | "audio" | "doc";
-
-const IMAGE_EXT = /\.(png|jpe?g|webp|gif|bmp|avif|svg)$/i;
-const VIDEO_EXT = /\.(mp4|webm|mov|mkv|avi)$/i;
-const AUDIO_EXT = /\.(wav|mp3|flac|ogg|m4a|aac)$/i;
+/* 扩展名判据已收敛到 `media-kind.ts`（ISSUE #571）：此前这里与
+ * `lib/media.ts`、`server/api/routers/task.ts` 各有一份**互相不同**的清单
+ * （本文件无 ogg/m4v、task router 把 gif 算成视频），同一文件在三处得到三种
+ * 结论。这里只保留一个与既有类型名对齐的别名，判据不再复制。 */
+export type MaterialKind = MediaKind;
 
 export function inferKind(fileName: string): MaterialKind {
-  if (IMAGE_EXT.test(fileName)) return "image";
-  if (VIDEO_EXT.test(fileName)) return "video";
-  if (AUDIO_EXT.test(fileName)) return "audio";
-  return "doc";
+  return kindOf(fileName);
 }
 
 /* ── 路径安全 ── */
