@@ -25,7 +25,7 @@ const SCOPED_DOCS = [
   "docs/standards/Comfy-APP-T3-项目开发规范.md",
   "docs/standards/16-shadcn-ui与表单校验.md",
   "docs/workshop-mcp.md",
-  // 全量：standards 规范正文（01~17 章，除已纳入的 16）
+  // 全量：standards 规范正文（01~18 章，除已纳入的 16）
   "docs/standards/01-架构与状态管理.md",
   "docs/standards/02-性能规范.md",
   "docs/standards/03-样式与-tailwind.md",
@@ -42,6 +42,7 @@ const SCOPED_DOCS = [
   "docs/standards/14-反模式速查表.md",
   "docs/standards/15-附录.md",
   "docs/standards/17-UI与逻辑分离.md",
+  "docs/standards/18-lib层规范.md",
   // 全量：guides 规范指南（不含 reviews 评审归档、api 自动生成、superpowers 设计归档、audits 过程文件）
   "docs/guides/DEV-QUERIES.md",
   "docs/guides/PRODUCTION-GAPS.md",

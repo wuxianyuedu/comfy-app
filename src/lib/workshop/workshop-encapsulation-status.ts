@@ -16,7 +16,7 @@ import {
 } from "~/lib/workflow-param-mapping";
 import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
 import { modeContractInputLabel } from "~/lib/workshop/model-mode-contract";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
  *  时长是秒数选择。 */
