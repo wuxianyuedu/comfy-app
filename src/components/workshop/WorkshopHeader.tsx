@@ -1,6 +1,10 @@
 "use client";
 
-// 工坊顶栏：项目切换器、项目标识、总进度、API 通道入口。纯展示，数据由 controller 下发。
+// 工坊顶栏：项目切换器、项目标识、总进度、模型适配 / 模式契约两个入口。
+// 纯展示，数据由 controller 下发。
+//
+// 两个入口是并列的（ISSUE #597）：模型适配 = 每个远端模型 × 每个模式的字段映射；
+// 模式契约 = 每种模式对外有哪些统一输入 / 输出。后者在工作流库也有一份。
 
 import { useEffect, useRef, useState } from "react";
 
@@ -15,6 +19,7 @@ interface WorkshopHeaderProps {
   pendingCategories: number;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
+  onOpenModeContract: () => void;
   /* ── 多项目切换 ── */
   projects: WorkshopProjectSummary[];
   activeProjectId: string;
@@ -30,6 +35,7 @@ export function WorkshopHeader({
   pendingCategories,
   apiChannels,
   onOpenApiSettings,
+  onOpenModeContract,
   projects,
   activeProjectId,
   onSwitchProject,
@@ -283,6 +289,17 @@ export function WorkshopHeader({
           <Icon name="settings" size={13} />
           模型适配
           {anyChannelConfigured ? " · 已配置" : ""}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={onOpenModeContract}
+          className="text-muted-foreground hover:text-ink gap-1 rounded-full bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
+          title="配置每种模式对外有哪些统一输入 / 输出（本地工作流按它配落点）"
+        >
+          <Icon name="settings" size={13} />
+          模式契约
         </Button>
         <Button
           type="button"

@@ -19,12 +19,9 @@ import {
   deriveEncapsulationStatus,
   type EncapsulationEntryStatus,
 } from "@/lib/workshop/workshop-encapsulation-status";
-import { useModeContracts } from "@/components/workshop/hooks/use-mode-contracts";
-import {
-  builtInModeContract,
-  contractToStatusEntries,
-  type ModeContract,
-} from "@/lib/workshop/model-mode-contract";
+import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
+import { effectiveModeContract } from "~/components/workshop/mode-contract/mode-contract-config";
+import { contractToStatusEntries } from "@/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow-types";
 import {
   DEFAULT_SHOT_SIZE,
@@ -62,11 +59,8 @@ export function WorkshopEncapsulationPanel({
    * 封装视图与远端适配器、实际生成链路同说一套话。 */
   const { contracts: storedContracts } = useModeContracts();
   const status = React.useMemo(() => {
-    const contract: ModeContract | undefined = storedContracts.find(
-      (c) => c.mode === (mode ?? "").toUpperCase(),
-    );
-    const effective = contract ?? builtInModeContract(mode ?? "");
-    const contractEntries = contractToStatusEntries(effective);
+    const { contract } = effectiveModeContract(mode ?? "", storedContracts);
+    const contractEntries = contractToStatusEntries(contract);
     return deriveEncapsulationStatus({
       io: workflowIO,
       paramMap,
