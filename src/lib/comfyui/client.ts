@@ -26,6 +26,7 @@
 import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
+import { probeBaseOnce, probeComfyAtPort } from "./probe";
 import { queryNvidiaVram } from "./gpu-vram";
 import { logger } from "~/server/lib/logger";
 
@@ -277,6 +278,10 @@ export async function resolveComfyBase(): Promise<string> {
  * 若沿用粘性缓存，一次「进程在但端口未绑定」的探测会把配置地址钉在缓存里，
  * ComfyUI 随后就绪（或落在偏移端口）时仍被当成不可达 —— 设置页的「正在启动…」
  * 就再也不会翻成「运行中」（ISSUE #344）。*/
+/* 既有导入路径的兼容出口：`probeComfyAtPort` 曾在本模块定义，
+ * 已下沉到零依赖叶子（断环所需），名字与签名逐字不变。 */
+export { probeComfyAtPort };
+
 export async function probeComfyBase(): Promise<string | null> {
   const cached = _resolvedBase;
   try {
@@ -290,35 +295,7 @@ export async function probeComfyBase(): Promise<string | null> {
   }
 }
 
-/** 对指定地址各发一次 `/system_stats`，通了返回该地址。 */
-async function probeBaseOnce(base: string): Promise<string | null> {
-  try {
-    const r = await fetch(`${base}/system_stats`, {
-      signal: AbortSignal.timeout(1500),
-    });
-    return r.ok ? base : null;
-  } catch {
-    return null;
-  }
-}
 
-/** 直接探一个已知端口，**不做**任何进程表查询 / 端口扫描。
- *
- * 给「进程级快照已经定位到实例与端口」的调用方用（设置页状态判定）：
- * 那种情况下 `probeComfyBase()` 是绕远路——它会先 `resolveComfyBase()`，
- * 而后者在配置了路径时又要查一遍进程表（PowerShell 枚举 `Win32_Process`，
- * 本机 ~2.5s），再决定探哪个地址，等于把已经拿到的事实重新推一遍。
- * 直接探快照给出的端口既省掉这段重复 IO，也比「按配置端口 + 偏移扫描」
- * 更准：快照里的端口就是该 PID 实际监听的端口（ISSUE #339 残留延迟）。 */
-export async function probeComfyAtPort(port: number): Promise<string | null> {
-  if (!Number.isInteger(port) || port <= 0) return null;
-  /* `COMFYUI_BASE` 指向的是远端实例（不是本机进程），此时「快照给出的本机监听
-   * 端口」与要连的地址根本不是一回事——把远端主机的端口换成本机端口会直接
-   * 探错地方。这种情况下返回 null，交给调用方走通用探测（它会尊重
-   * COMFYUI_BASE）。 */
-  if (process.env.COMFYUI_BASE) return null;
-  return probeBaseOnce(comfyUiBaseUrl(port));
-}
 
 /**
  * Synchronous version — returns cached value or raw config (no probing).

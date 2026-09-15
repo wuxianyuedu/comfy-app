@@ -542,6 +542,27 @@ export function schedulePersistLogs(taskId: string) {
 
 
 
+/**
+ * 抢占任务的终态。
+ *
+ * 返回 true 表示本次调用赢得了收口权（并已停掉超时定时器）；返回 false 表示
+ * 别处已经把任务结算过了，调用方应直接退出。
+ *
+ * ⚠️ 历史坑：complete() 曾在入口就 `settled.add`，随后它内部的失败分支再调
+ * fail()，而 fail() 第一行就是 `if (settled.has) return` —— 直接空转。结果
+ * 是任务永远停在 RUNNING、`active` 不回落、MAX_CONCURRENCY=1 的队列被彻底
+ * 堵死，只能重启进程。所以失败收口一律走 finalizeFailure()，不再经过 fail()。
+ */
+export function claimSettle(taskId: string): boolean {
+  const s = state();
+  if (s.settled.has(taskId)) return false;
+  s.settled.add(taskId);
+  const t = s.timers.get(taskId);
+  if (t) clearTimeout(t);
+  s.timers.delete(taskId);
+  return true;
+}
+
 /** 尝试认领「DB 终态写入」这一次性权利。首个调用者返回 true（应落库），
  *  其余（含 reaper 与 executor 并发收口同一任务）返回 false（必须跳过）。
  *  语义与 `claimSettle` 平行，但锁的是「DB 终态」而不是「收口流程」。 */

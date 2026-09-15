@@ -21,14 +21,19 @@ import { getView } from "./client";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
 import {
-  claimSettle,
   fetchHistoryEntry,
   traceComfyQueue,
   type ComfyHistoryEntry,
-} from "./executor-ws";
+} from "./executor-history";
 import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
-import { processQueue } from "./executor-scheduler";
-import { state, log, persistLogs, claimFinalize } from "./runner-state";
+import { kickQueue } from "./executor-continuation";
+import {
+  state,
+  log,
+  persistLogs,
+  claimFinalize,
+  claimSettle,
+} from "./runner-state";
 import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
 
 const taskRuntimeLog = createAppRuntimeLogger("task");
@@ -332,7 +337,7 @@ async function completeInner(
   if (!claimFinalize(taskId)) {
     log(taskId, "warn", "跳过重复收口：终态已由其它路径落库（本次结果：成功）");
     s.active = Math.max(0, s.active - 1);
-    void processQueue();
+    kickQueue();
     return;
   }
   await taskRepository.finalizeSuccess(taskId, {
@@ -412,7 +417,7 @@ async function completeInner(
   s.executedWorkflow.delete(taskId);
   s.lastLogPct.delete(taskId);
   s.active = Math.max(0, s.active - 1);
-  void processQueue();
+  kickQueue();
 }
 
 /** 对外的失败入口：先抢终态，再收口。
@@ -453,7 +458,7 @@ export async function finalizeFailure(
     );
     /* 仍需释放活跃槽位并推进队列，否则重复收口会把队列卡死。 */
     s.active = Math.max(0, s.active - 1);
-    void processQueue();
+    kickQueue();
     return;
   }
   // emit total elapsed time on the failure
@@ -502,5 +507,5 @@ export async function finalizeFailure(
   s.promptByTask.delete(taskId);
   s.lastLogPct.delete(taskId);
   s.active = Math.max(0, s.active - 1);
-  void processQueue();
+  kickQueue();
 }

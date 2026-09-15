@@ -19,10 +19,21 @@ import { postPrompt } from "./client";
 import { prepareGraphForExecution } from "./raw";
 import { extractValidationErrors } from "./validation";
 import { state, log, CLIENT_ID, MAX_CONCURRENCY } from "./runner-state";
+import { registerQueueKick } from "./executor-continuation";
 import { executeViaComfyCli } from "./executor-cli";
 import { fail, finalizeFailure } from "./executor-finalize";
 import { connect, armWatchdog } from "./executor-ws";
 import { buildPromptError } from "./executor-errors";
+
+/* 把「续跑出队」注册进叶子总线（唯一注册点，规范 12.7 断环）：
+ * 收口侧（finalize / ws）此前直接 import 本模块的 processQueue，形成
+ * `cli/ws → finalize → scheduler → cli/ws` 的环。改由本模块在**加载时**注册，
+ * 收口侧只调 kickQueue()，依赖方向因此单向。
+ *
+ * 放在模块体（不放进函数）的原因：注册必须先于任何任务处理 —— 入口链是
+ * `enqueue → ./executor → ./executor-scheduler`，调度层模块体先求值完毕，
+ * 任务才可能被收口。 */
+registerQueueKick(processQueue);
 
 export async function processQueue() {
   const s = state();

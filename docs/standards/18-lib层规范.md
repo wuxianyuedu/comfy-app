@@ -134,11 +134,11 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 
 | 缺口                          | Issue        | 为什么不在本章落地                                                                                                        |
 | ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `lib` 内循环依赖无判据        | #574         | 与断环改造同批做，否则棘轮基线立刻要重写                                                                                  |
+| ~~`lib` 内循环依赖无判据~~    | #574         | **已落地**：`scripts/check-circular-deps.cjs` + 棘轮基线（见 §12.7），`src/lib` 实到 2 组环已消除 |
 | 零调用导出无判据              | #573         | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算） |
 | `IIFE` / 回调体不计函数长度   | #570         | 改判据会同时改变 §12.13 的既有基线数字，须与拆分同批                                                                      |
 | prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
-| `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）；`comfyui/**` 与工坊执行日志两条诊断通道的直接 `console` 属各自落盘契约，未并入本条 |
+| `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）|
 
 ## 18.8 core 骨架的取用口径（ISSUE #568）
 
@@ -152,6 +152,13 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 配置 | `core/config.ts` 是**类型契约 + 默认值**，不承诺「集中配置」 | `tests/core-spine-single-source.test.ts`（禁承诺句式；默认值必须取自 `CONFIG_ENV_DEFAULTS` / `endpoints.ts`） |
 
 三条判据都已接入 `.githooks/pre-commit`（第 17 步）与 CI（`Core spine single source`）。
+
+**两条诊断通道已并入唯一通道（不再豁免）**：`generation-log.server.ts` 的
+`console.warn` 改走 `core/logger`（消息文案不变，额外获得脱敏与 ERROR 镜像）；
+`comfyui/trace.ts` 直写文件、不经 pino，因此**在写入边界**过一次值形状守卫
+（`core/redact-secret.ts`，与 pino 镜像共用同一份实现 —— 见 18.4 的「共享内核」）。
+`tests/single-logger-channel.test.ts` 的目录级 `SKIP_DIRS` 与逐文件 `ALLOWED`
+豁免**已全部删除**：目录级豁免的危险在于，它让「以后往这里加 `console`」完全无声。
 
 **为什么移除 DI 容器（`core/container.ts`）而不是「收口到只经容器取用」**：
 裁决不靠「哪种更像架构」，而靠两条可验证的事实 ——
@@ -185,3 +192,5 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 - `lib` 要共享类型给视图：**下沉类型模块到 `src/lib`**，不要在 lib 里 import components。
 - 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试。
 - 需要新增守卫：**先查既有更强的那一条**（18.4 的判定反模式）。
+- 改 `src/lib/**` 的 import 前：想清楚依赖方向（§12.7）。要下沉叶子、还是回调注入？
+  同目录内 `x → y` 与 `y → x` 同时存在就是环，`node scripts/check-circular-deps.cjs --report` 立即可见。
