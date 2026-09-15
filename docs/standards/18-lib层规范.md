@@ -200,6 +200,13 @@ import `server`」这条顺手漏了** —— 于是 `lib/comfyui/**` 与
 | **测试里与源码串一致的 mock** | `vi.mock("~/server/lib/logger")` | 跟着源码一起改，不单独设判据 |
 | **越界依赖** | `lib/comfyui/client.ts` → `~/server/lib/logger` | **逐个登记，清单只许变短** |
 
+**登记的粒度是「边」，不是「源文件」**（`from → to` 这一对）：键只记源文件的话，
+一个文件因为**任何**理由进过一次清单，它此后新增的**任意** lib → server 依赖都会被
+放行，而两条断言都不会红 —— 新增边被当成「已登记」，`REGISTERED` 的值也没人比对。
+实测确认过这条逃避（在 `lib/comfyui/client.ts` 追加一个指向 `~/server/lib/…` 新模块
+的 import，三条用例全绿），因此判据比对 `from → to`，登记才真正等价于「这条边被裁决过」；
+`tests/lib-server-imports.test.ts` 另有一条纯数据回归护栏钉住这一点。
+
 **为什么必须登记而不是「列个 Issue 就完了」**：这类依赖的代价是**可数的** ——
 `lib/comfyui/**` 里 30+ 个测试只能靠 `vi.mock("~/server/lib/logger")` 才跑得起来
 （mock 说明符必须与源码串逐字一致，另有 7 个测试文件重复了这段），而 `lib` 也就
