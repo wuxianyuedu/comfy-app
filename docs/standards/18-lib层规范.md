@@ -135,6 +135,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 缺口                          | Issue        | 为什么不在本章落地                                                                                                        |
 | ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- |
 | ~~`lib` 内循环依赖无判据~~    | #574         | **已落地**：`scripts/check-circular-deps.cjs` + 棘轮基线（见 §12.7），`src/lib` 实到 2 组环已消除 |
+| ~~`lib` → `server` 越界无判据~~ | #569 第 6 项 | **已落地**：依赖逐个登记 + 「登记清单不许失效」双向判定（见 18.10） |
 | 零调用导出无判据              | #573         | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算） |
 | `IIFE` / 回调体不计函数长度   | #570         | 改判据会同时改变 §12.13 的既有基线数字，须与拆分同批                                                                      |
 | prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
@@ -183,12 +184,45 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 **更大**的误导性承诺。所以裁决是**删掉承诺、只留契约与默认值**：新增配置项时，
 只有「两侧都要读的连接 / 端口 / 路径」才把默认值放这里。
 
+## 18.10 lib 与 server 的依赖方向（ISSUE #569 第 6 项）
+
+18.3 只把「`lib` 不得 import `components`」变成了机器判据，**「`lib` 不得
+import `server`」这条顺手漏了** —— 于是 `lib/comfyui/**` 与
+`lib/drizzle-studio/lifecycle.ts` 里 11 个文件直接 `from "~/server/lib/logger"`，
+而 `pnpm lint` 全绿。本节的判据是 `tests/lib-server-imports.test.ts`。
+
+**为什么不是「一律禁止」**：`lib` 与 `server` 之间有**三类**引用，前两类是合法的，
+一律禁止会把它们一起误伤 —— 那种判据只会被绕过：
+
+| 形态 | 例 | 处置 |
+| --- | --- | --- |
+| **数据层同层引用**（`lib/core/**`、`lib/db/**` 在 18.3 里就是 element `server`） | `lib/core/repository-task.ts` → `~/server/db/schema`（Drizzle 表定义） | 合法，不入清单 |
+| **测试里与源码串一致的 mock** | `vi.mock("~/server/lib/logger")` | 跟着源码一起改，不单独设判据 |
+| **越界依赖** | `lib/comfyui/client.ts` → `~/server/lib/logger` | **逐个登记，清单只许变短** |
+
+**为什么必须登记而不是「列个 Issue 就完了」**：这类依赖的代价是**可数的** ——
+`lib/comfyui/**` 里 30+ 个测试只能靠 `vi.mock("~/server/lib/logger")` 才跑得起来
+（mock 说明符必须与源码串逐字一致，另有 7 个测试文件重复了这段），而 `lib` 也就
+永远无法脱离 Next 服务端上下文单测。没有判据时，新模块再引一次 `server/lib/logger`
+不会有任何提示。
+
+**消除这批依赖时不需要新抽象**：`lib/core/logger.ts` 已经是 `server/lib/logger` 的
+**薄封装**（接口 `debug/info/warn/error/child` 逐字一致、调用方零改动），且它按
+18.4 第三类**不带** `server-only`（核心层被纯 Node 宿主与 Next 同时加载）。因此
+`lib` 侧的统一出口就是 `@/lib/core/logger`；实现在 `core/logger` 与
+`server/lib/logger` 两个**同层**模块之间的合并/下沉，新增已无事可做 —— 它剩下的
+价值只是「同一个文件里两套写法」。
+
+> 登记清单里的 `lib/auth-server.ts` → `~/server/better-auth/server` 属另一种情形
+> （Next 请求上下文，无法下沉），留待专项裁决。
+
 ## 18.9 速查
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
 - 要取仓储：**直接 import**（`@/lib/core/repository`），别再找容器 —— 它已按 18.8 移除。
-- 要写日志：走 `@/lib/core/logger`（核心层）或 `@/server/lib/logger`（服务端），
-  **不要直接 `console.*`**（会绕开脱敏与面板镜像）。
+- 要写日志：**lib 侧走 `@/lib/core/logger`**（中立出口、不带 `server-only`），服务端走
+  `@/server/lib/logger`；新增 lib → server 依赖会被 `tests/lib-server-imports.test.ts`
+  拦下（见 18.10）。**不要直接 `console.*`**（会绕开脱敏与面板镜像）。
 - `lib` 要共享类型给视图：**下沉类型模块到 `src/lib`**，不要在 lib 里 import components。
 - 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试。
 - 需要新增守卫：**先查既有更强的那一条**（18.4 的判定反模式）。
