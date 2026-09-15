@@ -39,6 +39,7 @@
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
+| 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs` | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs` |
 | 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 | 复用/去重与常量收口 | 抽共享模块、加/改默认地址与端口、写新的质量门禁 | §12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口） |
@@ -110,8 +111,15 @@
     `tools/start/`，与 `tools/build/`、`tools/registry/`、`tools/studio/` 按用途并列；
     根目录只留工程配置与文档。R9 在 pre-commit 强制拦截，回归测试见
     `tests/check-file-structure.test.ts`。
-   理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
-   历史上被迫把入口做成「不含中文、不含逻辑」的哑壳。新增入口规则：
+    **`.ps1` 不是逻辑层，也不代表「这个仓库只能在 Windows 用」**：它只解决
+    「Windows 上怎么被双击 / 被 exe 拉起」。同一件事在 Linux / macOS 上的入口是
+    `pnpm` 脚本（`pnpm check:all` / `pnpm test:file` / `pnpm doc:gen` …），逐条登记在
+    规范 §9.5 的**跨平台动作对照表**，由 `scripts/check-ps1-consistency.mjs` 在
+    pre-commit 与 CI 核对。**新增动作 = 写 `.mjs` 逻辑 + 挂 `package.json` 脚本 +
+    登记 §9.5**；只写一侧、或在 `.ps1` 里又抄一份「会静默失效的清单」
+    （如 `KNOWN_FAILED_FILES`）都会被拦下。
+    理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
+    历史上被迫把入口做成「不含中文、不含逻辑」的哑壳。新增入口规则：
    - 入口只做「定位项目根 → 调用逻辑脚本 → 收尾」，逻辑下沉到 `scripts/` 或
      `tools/scripts/`，公共能力复用 `scripts/entry-common.ps1`；
    - 含中文的 `.ps1` 必须 **UTF-8 with BOM** 保存（无 BOM 会被 PowerShell 5.1
@@ -214,7 +222,8 @@
 ## 快速排障
 
 被提交门槛拦下时，先看报错指出的规范章节（分支守卫 → §13.6.1、文件结构/命名 → §12.8、
-源码控制字符 → §12.11、CHANGELOG 碎片 → §13.10.5），不要用 `--no-verify` 换一条干净历史。
+源码控制字符 → §12.11、跨平台动作对照 → §9.5、CHANGELOG 碎片 → §13.10.5），
+不要用 `--no-verify` 换一条干净历史。
 
 **端口写进文档前先分清两条链路**（ISSUE #489）：`pnpm dev` / `pnpm start` / Playwright 走
 **解析链**（`.env` → 检出路径推导 3200~3999 → 兜底 3100，`scripts/app-port.mjs`），缺省拿到的是

@@ -94,6 +94,13 @@ jobs:
         # 可绕过），CI 侧没有任何复核——与 13.5「本地与 CI 同一口径」相悖。
         run: node scripts/check-file-structure.cjs
 
+      - name: Cross-platform action pairs
+        # 跨平台动作对照（规范 §9.5）。Windows 入口是 .ps1，Linux / macOS 跑不了
+        # .ps1 —— 同一个动作因此在两侧各有一份实现，而「记得同步另一侧」全靠自觉
+        # （启动编排已经因为这条静默分叉过一次）。本步骤核两件事：对照表里每个
+        # 动作两侧脚本都真实存在；会失效的清单（KNOWN_FAILED_FILES）只定义一次。
+        run: node scripts/check-ps1-consistency.mjs
+
       - name: ComfyUI port contract
         # ComfyUI 端口口径一致性（规范 §5 / §12.14 / ISSUE #534 P1）：默认端口
         # 单点定义、连接侧与拉起侧共用同一常量、buildSpawnArgs 的 >0 口径、
