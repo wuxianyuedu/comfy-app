@@ -104,6 +104,9 @@
     .stale-banner {
       display: none;
       margin: 0 0 10px;
+      /* 提示是多行的（诊断 + 修复命令），必须按换行原样渲染：
+         压成一行会把「先做什么」挤没，而这正是用户此刻唯一能照着做的东西。 */
+      white-space: pre-wrap;
       padding: 8px 10px;
       border: 1px solid rgba(245, 180, 60, 0.35);
       background: rgba(245, 180, 60, 0.1);
@@ -597,7 +600,7 @@
           if (status.stale_shell) {
             if (!window.staleShown) {
               window.staleShown = true;
-              banner.textContent = '⚠ ' + status.stale_shell;
+              banner.textContent = '⚠ ' + String(status.stale_shell).replace(/\r\n?/g, '\n');
             }
             banner.style.display = 'block';
           } else if (!window.staleShown) {
