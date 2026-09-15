@@ -31,7 +31,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { NEXTJS_LOG_DIR } from "@/lib/log-paths";
+import { APP_RUNTIME_LOG, NEXTJS_LOG_DIR } from "@/lib/log-paths";
+import { appendSessionBanner } from "@/lib/session-banner.server";
 
 export const PANEL_LOG_PREFIX = "nextjs-panel-";
 
@@ -106,6 +107,13 @@ export function installStreamCapture(): void {
     }
     pruneOldFiles(filePath);
     safeAppend(filePath, "----- 应用服务输出（本次运行）-----\n");
+    /* app-runtime.log 是**追加不轮转**的：上一次、上上一次运行的行全留在同一
+     * 个文件里。面板侧靠会话起点裁剪（log-session-scope），但**文件本身**还要
+     * 能被人读懂——用户打开 log/services/app-runtime.log 排查时，最新一次运行的
+     * 头几行接着上一次的尾几行，分不清本次从哪开始（ISSUE #592）。
+     * 这里在每次应用服务启动时写一条会话边界横幅（两侧各留空行），与其他
+     * runtime 通道（comfyui / drizzle-studio / ollama）口径一致。 */
+    appendSessionBanner(APP_RUNTIME_LOG, "start", "▶ 应用运行日志（本次运行）");
   } catch {
     /* 目录建不出来就不再转录（退化为原行为，不影响应用） */
   }
