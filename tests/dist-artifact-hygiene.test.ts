@@ -16,9 +16,14 @@
  * 两道守：本用例锁清单还在（改坏了先红），`check-standalone-contents.cjs`
  * 在构建后真去数文件（清单还在 ≠ 清单生效）。
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
+
+// 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
+// 行为只有真删一次才看得出来。
+import { stripDevArtifacts } from "../scripts/standalone-private-inputs.mjs";
 
 const buildDesktop = readFileSync(
   join(process.cwd(), "scripts", "build-desktop.mjs"),
@@ -106,15 +111,43 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
     }
   });
 
-  it("scripts/ 走白名单：只保留运行时真的会读的那两个", () => {
+  it("scripts/ 走白名单：运行时真的会读的逐个点名，新增脚本默认不进产物", () => {
     // 白名单的意义就在这里：黑名单欠完备（每加一个脚本都要记得补一条，
     // 而漏掉是静默的）。这里锁「白名单存在且条目被逐个点名」——
-    // 把白名单换成黑名单会让下面这条失败。
+    // 把白名单换成黑名单、或改成目录级放行，都会让下面这条失败。
     expect(stripModule).toContain("export const RUNTIME_SCRIPTS = [");
     expect(stripModule).toContain('"install-comfyapp-helper.ps1"');
-    expect(stripModule).toContain('"dev-launcher.ps1"');
+    expect(stripModule).toContain('"dev-launcher.mjs"');
+    // 嵌套条目也要逐项登记（`launcher-core/*` 是编排器的运行期依赖，
+    // 目录级放行会让以后新增的脚本自动进产物）
+    expect(stripModule).toContain('"launcher-core/orchestrator.mjs"');
     // 剔除实现必须是「不在白名单里就删」，而不是「在黑名单里才删」
-    expect(stripDevArtifactsBody).toMatch(/if \(keep\.has\(name\)\) continue;/);
+    expect(stripDevArtifactsBody).toContain("pruneNotWhitelisted(scriptsDir");
+  });
+
+  it("白名单剔除真跑：嵌套条目保留、未登记的新文件被剔", () => {
+    // 静态断言看不出「嵌套条目到底生效没有」——给一份临时产物目录真删一次。
+    const dir = mkdtempSync(join(tmpdir(), "comfyapp-static-"));
+    try {
+      for (const rel of [
+        "scripts/dev-launcher.mjs",
+        "scripts/launcher-core/orchestrator.mjs",
+        "scripts/launcher-core/secret-new.mjs",
+        "scripts/gate-new.cjs",
+        "AGENTS.md",
+      ]) {
+        mkdirSync(join(dir, dirname(rel)), { recursive: true });
+        writeFileSync(join(dir, rel), "");
+      }
+      stripDevArtifacts(dir);
+      expect(existsSync(join(dir, "scripts", "dev-launcher.mjs"))).toBe(true);
+      expect(existsSync(join(dir, "scripts", "launcher-core", "orchestrator.mjs"))).toBe(true);
+      expect(existsSync(join(dir, "scripts", "launcher-core", "secret-new.mjs"))).toBe(false);
+      expect(existsSync(join(dir, "scripts", "gate-new.cjs"))).toBe(false);
+      expect(existsSync(join(dir, "AGENTS.md"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("build-desktop 也跑白名单剔除（static 是唯一能覆盖的那一层）", () => {
@@ -133,7 +166,8 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
 describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () => {
   it("产物层检查持有与剔除清单一致的 scripts 白名单", () => {
     expect(checker).toContain('"install-comfyapp-helper.ps1"');
-    expect(checker).toContain('"dev-launcher.ps1"');
+    expect(checker).toContain('"dev-launcher.mjs"');
+    expect(checker).toContain('"launcher-core/orchestrator.mjs"');
     expect(checker).toContain("ALLOWED_SCRIPTS");
   });
 

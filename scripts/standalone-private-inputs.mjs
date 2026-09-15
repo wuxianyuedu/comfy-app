@@ -25,7 +25,7 @@
  * 直接执行时（`node scripts/standalone-private-inputs.mjs`）清理
  * `.next/standalone`；被 import 时导出 `stripPrivateInputs(dir)` 供复用。
  */
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -79,23 +79,39 @@ export function stripPrivateInputs(dir, onRemoved) {
  * 只保留**运行时真的会读**的那几个（判据是代码里有 `process.cwd()` + 路径拼接），
  * 其余一律剔除；新增脚本默认被剔除，要留下必须显式加进 RUNTIME_SCRIPTS 并说明理由。
  *
- * 注意 RUNTIME_SCRIPTS 里保留两份 launcher 有两个身份：`src-tauri/src/lib.rs`
- * 的 `resolve_project_root()` 靠它们存在来判断项目根（判据是「package.json +
- * 任一平台的 dev-launcher」），`build-desktop.mjs` 也会单独把它们拷进
- * static/scripts。**跨平台版本必须一起保留**：只留 .ps1 时 Linux/macOS 上的
- * 壳找不到项目根，启动页读不到 launch-status、壳日志也落不了盘（ISSUE #489）。
+ * RUNTIME_SCRIPTS 里的启动链路有三个身份：
+ *   · `src-tauri/src/lib.rs::looks_like_project_root()` 的项目根判据（判据是
+ *     `package.json` + `scripts/dev-launcher.mjs`，即编排器的**唯一实现**）；
+ *   · `build-desktop.mjs` 把它们拷进 `static/scripts`，让桌面包脱离仓库时仍
+ *     能被重新编排一次；
+ *   · 组件的 `scripts/launcher-core/*` 与 `kill-process-tree` 是编排器的运行期
+ *     依赖 —— 缺一份就是运行时 ENOENT，而表现只是「双击没反应」。
+ *
+ * `.ps1` 只是 Windows 侧的**调用入口**，编排逻辑不在这里（见规范 §3/§8）。
  */
 export const RUNTIME_SCRIPTS = [
   // src/app/api/helper/{install,status}/route.ts 直接把这份脚本当下载内容返回
   "install-comfyapp-helper.ps1",
-  // src-tauri/src/lib.rs::resolve_project_root() 的项目根判据 + Windows 侧启动编排
-  "dev-launcher.ps1",
-  // 同一判据的跨平台实现 + Linux / macOS 侧启动编排（零 .ps1 依赖）
+  // 启动编排的唯一实现（跨平台）：项目根判据也靠它
   "dev-launcher.mjs",
+  // Windows 侧的调用入口（双击 / 启动器 exe 转交），本身不含编排逻辑
+  "dev-launcher.ps1",
   // dev-launcher.mjs 的会话锚点（PID/心跳落盘）与端口解析：被它 import，
   // 缺一份即整条编排在运行时 ENOENT
   "dev-launcher-session.mjs",
   "app-port.mjs",
+  // 统一的进程树回收入口：编排器收尾、Python 启动器的兜底补刀、Rust 壳的
+  // `kill_sidecar` 补刀都调它（平台判据只此一份，见 AGENTS 硬规则 3），
+  // 连同它 import 的 kill-process-tree 一起缺不了。
+  "reap-process.mjs",
+  // 编排器的内部分件（procs / shell / log / worktree / orchestrator）：
+  // 逐项登记而不是放行整个目录 —— 目录级放行会让**以后新增**的脚本自动进产物，
+  // 而「新增脚本默认不进产物」正是这条白名单的意义。
+  "launcher-core/procs.mjs",
+  "launcher-core/shell.mjs",
+  "launcher-core/log.mjs",
+  "launcher-core/worktree.mjs",
+  "launcher-core/orchestrator.mjs",
 ];
 
 /** 产物根下不该随分发包出去的开发文件（相对产物根）。 */
@@ -135,20 +151,62 @@ export function stripDevArtifacts(dir, onRemoved) {
       onRemoved?.(name);
     }
   }
-  // scripts/：白名单之外一律剔除（新增脚本默认不进产物）
+  // scripts/：白名单之外一律剔除（新增脚本默认不进产物）。
+  // 白名单条目允许是相对路径（如 `launcher-core/orchestrator.mjs`）：逐层比对，
+  // 目录只有在「白名单里有它的子项」时才保留。
   const scriptsDir = join(dir, "scripts");
   if (existsSync(scriptsDir)) {
-    const keep = new Set(RUNTIME_SCRIPTS);
-    for (const name of readdirSync(scriptsDir)) {
-      if (keep.has(name)) continue;
-      rmSync(join(scriptsDir, name), { recursive: true, force: true });
-      removed.push(`scripts/${name}`);
-      onRemoved?.(`scripts/${name}`);
-    }
+    pruneNotWhitelisted(scriptsDir, "", RUNTIME_SCRIPTS, removed, onRemoved);
     // 全部被剔（未来 RUNTIME_SCRIPTS 变空）时不留空目录
     if (readdirSync(scriptsDir).length === 0) rmSync(scriptsDir, { recursive: true, force: true });
   }
   return removed;
+}
+
+
+/**
+ * 按白名单剔除目录内的条目（支持 `a/b.mjs` 形式的相对路径）。
+ *
+ * 为什么白名单允许嵌套路径而不是「目录级放行」：目录级放行会让**以后新增**的
+ * 脚本自动进产物 —— 而「新增脚本默认不进产物、要留下必须显式登记」正是这条
+ * 白名单存在的全部意义。
+ *
+ * @param {string} absDir 当前扫描的绝对目录
+ * @param {string} prefix 相对产物根的相对前缀（顶层调用传空串）
+ * @param {string[]} allowed 白名单（相对 `scripts/` 的路径）
+ * @param {string[]} removed 输出：实际删掉的条目（相对 `scripts/`）
+ * @param {(name: string) => void} [onRemoved]
+ */
+function pruneNotWhitelisted(absDir, prefix, allowed, removed, onRemoved) {
+  const direct = new Set();
+  const nested = new Set();
+  for (const rel of allowed) {
+    if (prefix && !rel.startsWith(`${prefix}/`)) continue;
+    const rest = prefix ? rel.slice(prefix.length + 1) : rel;
+    const [head] = rest.split("/");
+    if (!head) continue;
+    direct.add(head);
+    if (rest.includes("/")) nested.add(head);
+  }
+  for (const name of readdirSync(absDir)) {
+    const rel = prefix ? `${prefix}/${name}` : name;
+    const abs = join(absDir, name);
+    let isDir = false;
+    try {
+      isDir = statSync(abs).isDirectory();
+    } catch {
+      /* 读不到时按需删除处理 */
+    }
+    if (isDir && direct.has(name) && nested.has(name)) {
+      pruneNotWhitelisted(abs, rel, allowed, removed, onRemoved);
+      continue;
+    }
+    if (!isDir && direct.has(name)) continue;
+    if (isDir && nested.has(name)) continue;
+    rmSync(abs, { recursive: true, force: true });
+    removed.push(`scripts/${rel}`);
+    onRemoved?.(`scripts/${rel}`);
+  }
 }
 
 /** 作为脚本直接执行：清理 `.next/standalone`。 */

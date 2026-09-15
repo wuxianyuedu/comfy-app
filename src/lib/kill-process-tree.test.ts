@@ -102,11 +102,15 @@ describe("killProcessTree 平台分支", () => {
   });
 
   it("Windows：via 是 taskkill /PID /T /F（硬规则 3 的原始要求）", async () => {
-    // 不真的执行 taskkill（非 Windows 上不存在该命令）：只验证命令构造。
-    // 在 Windows CI 上这条会真实执行（pid 用一个必然不存在的值）。
-    if (!isWindowsPlatform()) return;
+    // 真跑（含「命令确实发出去了」）见 kill-process-tree.windows.test.ts ——
+    // 那里注入一个同名假 taskkill，把 Windows 分支在本机完整跑一遍。
+    // 这条只做平台判据的冒烟：非 Windows 上不该走 taskkill 分支。
+    if (!isWindowsPlatform()) {
+      const r = await killProcessTree({ pid: 999999 });
+      expect(r.via).not.toContain("taskkill");
+      return;
+    }
     const r = await killProcessTree({ pid: 999999 });
-    expect(r.via).toContain("taskkill");
     expect(r.via).toContain("/T");
     expect(r.via).toContain("/F");
   });

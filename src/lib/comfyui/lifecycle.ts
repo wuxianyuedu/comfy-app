@@ -170,7 +170,7 @@ export async function probeComfyUi(_timeoutMs = 2500): Promise<string | null> {
 
 /**
  * 关闭 ComfyUI：杀整棵进程树。
- * Windows 用 `taskkill /PID <pid> /T /F`（cmd 外壳死了不杀子进程会留下
+ * Windows 走 `taskkill /PID <pid> /T /F`（cmd 外壳死了不杀子进程会留下
  * python 孤儿锁住端口与日志文件）；POSIX 由 `killProcessTree` 向进程组
  * 发信号（拿不到组时单杀兜底），两条路径都收在 `~/lib/kill-process-tree`。
  *
@@ -745,7 +745,7 @@ export async function ensureComfyUiReady(
     // 退出策略决定拉起方式：exitKillComfyui=true → bound，ComfyUI 挂在应用
     // 进程树内，应用退出连带关闭；false（默认，见 app-settings 的 DEFAULTS）
     // → keepAlive，脱离进程树保活，下次打开应用直接复用。注意开关只在
-    // 「拉起时」生效（桌面壳退出是 taskkill /T /F 杀整树，退出那一刻没有
+    // 「拉起时」生效（桌面壳退出是整树强制关闭，退出那一刻没有
     // 机会再决定）。
     const keepAlive =
       resolveLaunchPolicy(getExitPolicy().exitKillComfyui) === "keepAlive";

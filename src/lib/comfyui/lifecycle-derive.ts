@@ -65,7 +65,7 @@ export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
  *
  * `exitKillComfyui` 为 false（或未配置，即设置里的默认值）时视为「保活」；
  * 显式 true 才是 bound。
- * 注意开关只在**拉起那一刻**生效：桌面壳退出是 `taskkill /T /F` 杀整树，
+ * 注意开关只在**拉起那一刻**生效：桌面壳退出是整树强制关闭，
  * 退出时没有机会再改决定。
  */
 export function resolveLaunchPolicy(
@@ -176,7 +176,7 @@ export interface StopFacts {
 }
 
 export type StopDecision =
-  /** 杀进程树（Windows `taskkill /PID <pid> /T /F`）。 */
+  /** 杀进程树（平台机制由 `~/lib/kill-process-tree` 选）。 */
   | {
       kind: "kill";
       pid: number;
