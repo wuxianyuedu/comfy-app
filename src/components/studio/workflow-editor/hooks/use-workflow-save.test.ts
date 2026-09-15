@@ -42,7 +42,17 @@ describe("useWorkflowSaveMutation", () => {
   it("mutate 转发输入", () => {
     const { result } = renderHook(() => useWorkflowSaveMutation());
     result.current.mutate({ id: "wf-1", positions: { "1": [0, 0] } });
-    expect(mutate).toHaveBeenCalledWith({ id: "wf-1", positions: { "1": [0, 0] } });
+    expect(mutate).toHaveBeenCalledWith({ id: "wf-1", positions: { "1": [0, 0] } }, undefined);
+  });
+
+  /* 第二实参不是装饰：`onError` 是「拖拽落盘失败」这类静默写暴露给用户的唯一
+   * 通道（useWorkflowPersistence 两处拖拽落盘都在传）。断言写成全参精确匹配，
+   * 是为了让「第二参被实现吃掉」也一并暴露 —— 只比第一参等于放过这条通道本身。 */
+  it("mutate 透传 options.onError（拖拽落盘失败的用户可见出口）", () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() => useWorkflowSaveMutation());
+    result.current.mutate({ id: "wf-1" }, { onError });
+    expect(mutate).toHaveBeenCalledWith({ id: "wf-1" }, { onError });
   });
 
   it("mutateAsync 转发输入并把结果透出（点「保存」后要据此关弹窗）", async () => {
