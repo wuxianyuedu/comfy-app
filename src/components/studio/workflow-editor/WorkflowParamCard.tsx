@@ -91,7 +91,7 @@ export interface WorkflowParamCardProps {
   /** 卡片元素的 ref（节点渲染器用 useHoverElevation 生成）—— 悬浮态由该钩子
    *  写到 React Flow 的节点外壳上，由 CSS 抬起层级压住连线（ISSUE #400）。
    *  命名刻意不含端点类关键字：本文件是**画布无关**的视觉本体（见
-   *  workflow-canvas-io-isolation 的守卫）。 */
+   *  workflow-canvas-io-isolation-guard 的守卫）。 */
   hoverRef?: (element: HTMLDivElement | null) => void;
   /** 鼠标进出卡片本体时的事件（节点渲染器用 useHoverElevation 生成）。 */
   hoverEvents?: DOMAttributes<HTMLDivElement>;
