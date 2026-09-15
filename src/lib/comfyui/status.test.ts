@@ -471,3 +471,51 @@ describe("didQueryProcTable — 区分「查过没命中」与「根本没查」
     expect(snap.didQueryProcTable).toBe(true);
   });
 });
+
+/* ── 配置端口已应答：跳过整条进程表判据链（ISSUE #553）───────────────
+ * 一个只认 localhost 的实例如果**真的**在跑，它监听的端口已经把这个事实
+ * 答出来了。此时再去枚举 Win32_Process 与 uv 托管目录，换来的是同一句
+ * 「在跑」，代价却是冷启动高负载下的秒级等待——而这正是「启动一次要等很久」
+ * 里最不该付的那一段。反过来，端口上没人应答才是「没在跑」的主场景，
+ * 进程表与端口扫描此时必须照跑（否则外部实例的端口偏移会被漏掉）。
+ */
+describe("配置端口已应答 → 直接判「在跑」，不再枚举进程表", () => {
+  it("端口有人应答即命中，且一次进程表查询都不发", async () => {
+    vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(true);
+    expect(snap.port).toBe(8188);
+    expect(snap.source).toBe("port");
+    expect(snap.unverified).toBe(false);
+    // 「端口有人应答」是比进程表更强的证据，不必再问一遍进程
+    expect(findPidForMainPyDetailed).not.toHaveBeenCalled();
+    expect(collectComfyPythonCandidates).not.toHaveBeenCalled();
+    // 上层据此把「没命中」坐实成「未运行」是安全的：这次结论不是「没得查」
+    expect(snap.didQueryProcTable).toBe(true);
+  });
+
+  it("端口没人应答 → 照旧走完整条判据链（不因快路径漏掉端口偏移的实例）", async () => {
+    vi.mocked(probeComfyAtPort).mockResolvedValue(null);
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+      pid: 4242,
+      failed: false,
+    });
+    vi.mocked(findPidListeningPort).mockResolvedValue(8190);
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.running).toBe(true);
+    expect(snap.port).toBe(8190);
+    expect(snap.source).toBe("process");
+    expect(findPidForMainPyDetailed).toHaveBeenCalled();
+  });
+
+  it("配置里显式写了端口时，快路径问的就是那个端口", async () => {
+    vi.mocked(getSettingsSync).mockReturnValue({
+      comfyuiPath: "C:\\Comfy",
+      comfyuiPort: 9000,
+    } as never);
+    vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:9000");
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(probeComfyAtPort).toHaveBeenCalledWith(9000);
+    expect(snap.port).toBe(9000);
+  });
+});

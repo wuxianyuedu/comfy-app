@@ -186,15 +186,18 @@ function Get-OutputTail {
   return ""
 }
 
-# ── 判定「壳在 dev server 之前退出，且原因是用户关掉启动页放弃本次启动」──
-# 背景：Prebuilt 链路的收尾路径是「壳退出 → 连带 taskkill 回收 dev server 整棵树」，
-# 被 taskkill /F 收走的进程没有收尾机会，dev server 落到这里是 exit=0 且几乎无输出。
-# 对真正的失败（编译错、端口占用）该提示准确；对用户主动放弃就是误报——明明是用户
-# 自己按的关闭，却弹红色「启动失败：Next.js dev server 提前退出（exit=0）」。
-# 判据取壳 stderr 的标记行（src-tauri/src/lib.rs 的 splash CloseRequested 分支写
-# `... exiting app (launch abandoned)`），理由与 python 启动器同源（见 changelog.d/
-# 0-launcher-cancel-is-not-failure.md）：这条路径上退出码与「正常收尾」无从区分，
-# 而标记行旧壳同样会写。python 启动器在启动前已清空该文件，读到即属本次。
+# ── 壳侧收尾证据（失败提示与「谁结束了这次启动」的判据来源）──
+# prebuilt 链路里 dev server 的退出码对三种成因**完全一样**（都被 taskkill /T /F
+# 连带收走，见文件头的进程树约定），所以成因只能从壳写下的证据里读。壳侧的出口
+# 有两个，都在壳 stderr 里（python 启动器每次启动前清空该文件，读到即属本次）：
+#   ① `... exiting app (launch abandoned)` —— 用户关掉启动页（splash 的
+#      CloseRequested 分支），壳按约定 exit(0)；
+#   ② `... exiting with non-zero code <N>` —— 壳以异常码收尾，即被别的实例顶掉 /
+#      任务管理器结束 / 启动期崩溃（RunEvent::ExitRequested 里记），壳自己退与
+#      被杀在这里都不算「设计内」。
+# 这两行都只认「正标记」：没有它并不等于「用户在放弃」，恰恰相反——过去把
+# 「没有标记」报成「大概率是你自己关的」的那版文案，等于替用户回答了「不是我关的」
+# 那种真故障，是本 ISSUE 一开始被误报的同源错误。
 function Test-ShellLaunchAbandoned {
   param([string]$Path)
   try {
@@ -206,29 +209,41 @@ function Test-ShellLaunchAbandoned {
   return $false
 }
 
+# 壳侧是否写了「异常退出码」那条 warn（判据见 Test-ShellLaunchAbandoned 的注释②）。
+function Test-ShellNonZeroExit {
+  param([string]$Path)
+  try {
+    if ($Path -and (Test-Path -LiteralPath $Path)) {
+      $text = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+      if ($text -and $text.ToLowerInvariant().Contains("non-zero code")) { return $true }
+    }
+  } catch { }
+  return $false
+}
+
 # ── Prebuilt 模式的下游进程退出分类（失败提示的单一判据点）──
-# 症状「Next.js dev server 提前退出（exit=0）」有三种成因，用户看到的文案必须能
-# 分辨——历史事故里三种都被写成同一句 exit=0，看日志的人无从下手：
+# 症状「Next.js dev server 提前退出（exit=0）」有四种成因，用户看到的文案必须能
+# 分辨——历史事故里全被写成同一句 exit=0，看日志的人无从下手：
 #   1. 壳已被回收（$ShellExited）且壳 stderr 有 `launch abandoned` 标记 → 用户
 #      关掉启动页放弃本次启动（设计内，非失败）；
-#   2. 壳已被回收但**没有该标记** → 这次收尾不是「关启动页」，壳是被外部终止的
-#      （另一次启动顶掉 / 任务管理器 / 崩溃），dev server 是陪葬——真失败，但根因
-#      在壳不在 dev server；
-#   3. 壳还活着 → dev server 自己退出（编译失败、端口被占、pnpm 坏），看 stderr。
+#   2. 壳已被回收、且壳 stderr 写了非零退出码 → 壳自己以异常码结束（被另一次启动
+#      顶掉前的收尾 / 启动期崩溃），dev server 是陪葬；
+#   3. 壳已被回收、壳 stderr 只有启动期 INFO → 壳是被**强行收走**的（新实例的
+#      单实例检查 / 任务管理器结束 / 崩溃到写不出日志），dev server 陪葬；
+#   4. 壳还活着 → dev server 自己退出（编译失败、端口被占、pnpm 坏），看 stderr。
 #
-# 判据只认「正标记」（缩进敏感）：$Abandoned 反映的是 dev-launcher-stderr.log 里
-# 有没有那行壳自己写下的 `exiting app (launch abandoned)`。第 2 类的标注**必须**
-# 与标记取值绑定 —— 把「没有标记」也报成「很可能就是你关掉了启动页，不算失败」，
-# 就等于把「壳被外部顶掉」这条真故障吞掉，而那条路径恰恰是唯一能解释
-# `dev-launcher-stderr.log` 里只有四行 INFO、其余一个字都没有的成因（壳活到了
-# 托盘/watchdog 就绪，随后被 TerminateProcess 收走，什么都没来得及写）。
+# 判据只认壳写下的「正标记」：$Abandoned / $ShellCrashed 都是「壳侧真的写了这一行」
+# 才为真，没有标记不等于「用户在放弃」——把没有标记也报成「大概率是你自己关的」，
+# 就等于替用户回答了「不是我关的」那种真故障（ISSUE #553 同源错误）。
 function Get-DownstreamExitKind {
   param(
     [bool]$ShellExited,
-    [bool]$Abandoned
+    [bool]$Abandoned,
+    [bool]$ShellCrashed
   )
   if (-not $ShellExited) { return "dev-server" }
   if ($Abandoned) { return "abandoned" }
+  if ($ShellCrashed) { return "shell-self-exited" }
   return "shell-terminated"
 }
 
@@ -1071,8 +1086,10 @@ try {
       if ($devProc.HasExited) {
         $errTail = Get-OutputTail -Path $nextErr
         $outTail = Get-OutputTail -Path $nextOut
-        $shellAbandoned = Test-ShellLaunchAbandoned -Path (Join-Path $launcherLogDir "dev-launcher-stderr.log")
-        $kind = Get-DownstreamExitKind -ShellExited $tauriProc.HasExited -Abandoned $shellAbandoned
+        $shellStderr = Join-Path $launcherLogDir "dev-launcher-stderr.log"
+        $shellAbandoned = Test-ShellLaunchAbandoned -Path $shellStderr
+        $shellCrashed = Test-ShellNonZeroExit -Path $shellStderr
+        $kind = Get-DownstreamExitKind -ShellExited $tauriProc.HasExited -Abandoned $shellAbandoned -ShellCrashed $shellCrashed
         if ($kind -eq "abandoned") {
           # 用户关闭启动页 = 放弃本次启动（壳已按约定 exit(0)、进程树正被本脚本回收）。
           # 这不是失败：写一条 info 说明收尾原因，调用方按 0 正常退出。
@@ -1081,14 +1098,21 @@ try {
           $script:LaunchAbandonedByUser = $true
           break
         }
+        if ($kind -eq "shell-self-exited") {
+          # 壳自己写了「exiting with non-zero code」：这次收尾是壳**主动**以异常码结束，
+          # 最常见的是「本检出已有壳在跑，这次启动只是把已有窗口唤到前台」（新实例的
+          # 单实例检查：置焦点事件 → return，日志里是 another instance of this checkout
+          # is running）。所以文案只陈述壳写下的判据并给出核对方式，不替用户下结论。
+          throw "本地服务随桌面壳一起退出（壳自身以非零码结束）：壳（PID $($tauriProc.Id)）在服务就绪前退出（exit=$($tauriProc.ExitCode)），dev server 属于连带回收而不是自身报错（exit=$($devProc.ExitCode)）。壳侧判据：log\launcher\dev-launcher-stderr.log 里的 `exiting with non-zero code`；若同一行附近还有 `another instance of this checkout is running`，说明这次启动只是把已在运行的窗口唤到前台——本次双击没有启动新进程，属于设计内行为。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
+        }
         if ($kind -eq "shell-terminated") {
-          # 壳已退出、且壳 stderr 里**没有** `launch abandoned` = 收尾不是「关启动页」，
-          # 而是壳被外部终止的（另一次启动顶掉 / 任务管理器结束任务 / 壳崩溃），
-          # dev server 只是陪葬。根因在壳侧，必须把用户往壳日志引，否则照
-          # 「dev server 报错」的方向排查永远查不出东西。
-          # 判据与标注一一对应：$shellAbandoned 为真时上面那条分支已拦下并定性为
-          # 「用户放弃」，走到这里即等价于「没有标记」。
-          throw "本地服务随桌面壳一起退出：壳（PID $($tauriProc.Id)）在服务就绪前已退出（exit=$($tauriProc.ExitCode)），dev server 属于连带回收而不是自身报错（exit=$($devProc.ExitCode)）。常见原因：另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃。请看壳日志 log\shell\shell.log 与 log\launcher\dev-launcher-stderr.log。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
+          # 壳已退出、且壳 stderr 里**没有**任何收尾标记 = 壳被强行收走的（新实例的
+          # 单实例检查 / 任务管理器结束任务 / 壳崩溃到写不出日志），dev server 只是
+          # 陪葬。根因在壳侧，必须把用户往两个文件引，否则照「dev server 报错」的
+          # 方向排查永远查不出东西。
+          # 判据与标注一一对应：两个标记为真时上面的分支已拦下并给出定性，走到这里
+          # 即等价于「一条收尾日志都没有」。
+          throw "本地服务随桌面壳一起退出：壳（PID $($tauriProc.Id)）在服务就绪前已退出（exit=$($tauriProc.ExitCode)），且 log\launcher\dev-launcher-stderr.log 里**没有**壳写下的任何收尾标记——说明壳是被强行收走的（另一次启动把它顶掉 / 任务管理器结束了任务 / 壳崩溃），dev server 属于连带回收而不是自身报错（exit=$($devProc.ExitCode)）。这次双击等于**从未启动**：请只双击一次启动入口并等启动页自己切到主界面。另请对照 log\shell\shell.log 与 log\launcher\dev-launcher-stderr.log。最近 stderr：`n$errTail`n最近 stdout：`n$outTail`n（完整输出见 $nextOut 与 $nextErr）"
         }
         $shellNote = if ($tauriProc.HasExited) {
           "壳（PID $($tauriProc.Id)）也已退出（exit=$($tauriProc.ExitCode)）——本次 dev server 退出发生在壳收尾之后，而不是自身编译失败。壳若并非你手动关闭，请看 log\shell\shell.log。"
