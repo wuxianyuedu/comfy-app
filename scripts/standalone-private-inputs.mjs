@@ -79,15 +79,23 @@ export function stripPrivateInputs(dir, onRemoved) {
  * 只保留**运行时真的会读**的那几个（判据是代码里有 `process.cwd()` + 路径拼接），
  * 其余一律剔除；新增脚本默认被剔除，要留下必须显式加进 RUNTIME_SCRIPTS 并说明理由。
  *
- * 注意 RUNTIME_SCRIPTS 里保留 dev-launcher.ps1 有两个身份：`src-tauri/src/lib.rs`
- * 的 `resolve_project_root()` 靠它存在来判断项目根，`build-desktop.mjs` 也会单独
- * 把它拷进 static/scripts。删掉它壳会找不到项目根。
+ * 注意 RUNTIME_SCRIPTS 里保留两份 launcher 有两个身份：`src-tauri/src/lib.rs`
+ * 的 `resolve_project_root()` 靠它们存在来判断项目根（判据是「package.json +
+ * 任一平台的 dev-launcher」），`build-desktop.mjs` 也会单独把它们拷进
+ * static/scripts。**跨平台版本必须一起保留**：只留 .ps1 时 Linux/macOS 上的
+ * 壳找不到项目根，启动页读不到 launch-status、壳日志也落不了盘（ISSUE #489）。
  */
 export const RUNTIME_SCRIPTS = [
   // src/app/api/helper/{install,status}/route.ts 直接把这份脚本当下载内容返回
   "install-comfyapp-helper.ps1",
-  // src-tauri/src/lib.rs::resolve_project_root() 的项目根判据 + 壳的启动编排
+  // src-tauri/src/lib.rs::resolve_project_root() 的项目根判据 + Windows 侧启动编排
   "dev-launcher.ps1",
+  // 同一判据的跨平台实现 + Linux / macOS 侧启动编排（零 .ps1 依赖）
+  "dev-launcher.mjs",
+  // dev-launcher.mjs 的会话锚点（PID/心跳落盘）与端口解析：被它 import，
+  // 缺一份即整条编排在运行时 ENOENT
+  "dev-launcher-session.mjs",
+  "app-port.mjs",
 ];
 
 /** 产物根下不该随分发包出去的开发文件（相对产物根）。 */

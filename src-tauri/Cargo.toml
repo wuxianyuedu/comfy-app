@@ -37,10 +37,26 @@ tauri-plugin-log = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# 子进程管理：standalone sidecar 的拉起与回收走官方插件（跨平台机制由它选择），
+# 见 lib.rs 的 SIDECAR / spawn_sidecar / kill_sidecar。
+tauri-plugin-shell = "2"
 # 按检出隔离的单实例保护（src-tauri/src/single_instance.rs）：tauri-plugin-
 # single-instance 的互斥量/窗口名取自编译期 identifier，是全机共享的——同一
 # 项目检出两份并行开发时，后启动的壳会被另一份检出「吞掉」。自实现把身份
 # 锚点换成检出路径（多检出并行，launch-and-build.md §1.4）。
+#
+# **必须是 Windows 条件依赖**：无条件声明时整棵 windows crate 会在 Linux/macOS
+# 上参与编译并以 `error[E0425]: cannot find type IMarshal in windows_core::imp`
+# 失败（windows-future 子 crate 在非 Windows 上没有该 COM 接口实现），跨平台
+# 构建因此根本走不到链接阶段。POSIX 侧的单实例由 same-path 锁文件 + PID 存活
+# 探测承担（见 single_instance.rs 的 `#[cfg(not(windows))]` 实现）。
+# POSIX 侧的单实例保护需要 kill(2) / sigaction(2)。
+# 只有这两个调用，且都不在任何热路径上——因此直接用 libc 的薄封装，
+# 不引入 nix（几十个 feature 的完整 Unix 抽象，对本用途过重）。
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Security",

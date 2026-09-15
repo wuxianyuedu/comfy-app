@@ -41,7 +41,7 @@ Comfy-APP-T3/
 │  ├─ tauri.conf.json       # Tauri 配置（窗口、CSP、beforeBuildCommand）
 │  ├─ Cargo.toml            # Rust 依赖
 │  ├─ icons/                # 应用图标
-│  └─ binaries/             # Node 运行时 sidecar（node-<triple>.exe）
+│  └─ binaries/             # Node 运行时 sidecar（Windows: node-<triple>.exe；其它: node-<triple>）
 ├─ scripts/                 # 启动与构建脚本（被壳/工具调用）
 │  ├─ dev-launcher.ps1      # 启动器：起 dev server / Tauri 壳 / 探测端口
 │  ├─ entry-common.ps1      # 双击入口公共库（定位项目根 / 解析 pwsh / 透传退出码）
@@ -116,14 +116,23 @@ Comfy-APP-T3/
 - **Node.js** ≥ 22 与 **pnpm** 10（`corepack enable` 或直接安装 pnpm）
 - 其他都不用装：`pnpm dev` 是一条纯 Node 链路，**不依赖 PowerShell / Rust /
   WebView2**。Linux / macOS 上按下方「快速上手」跑起来即可（详见
-  [规范 §9 Web-only Linux 模式](docs/standards/launch-and-build.md#9-web-only-linux-模式pnpm-dev-零-ps1-依赖)）。
+  [规范 §9 跨平台模式](docs/standards/launch-and-build.md)）。
 
-要打包/运行**桌面壳**时另需（仅 Windows）：
+要打包/运行**桌面壳**时另需（三平台通用）：
 
 - **Rust 工具链**（cargo / rustc）：用于编译桌面壳，见 https://rustup.rs/
-- **PowerShell 7（pwsh）**：启动器推荐；Windows PowerShell 5.1 亦可回退
-- **WebView2 运行时**：Windows 10/11 通常已内置
-- （可选）**Python**：部分辅助脚本可能用到
+- **WebView2 运行时**：Windows 10/11 通常已内置；Linux 用系统 WebKitGTK
+  （Debian/Ubuntu：`libwebkit2gtk-4.1-dev` / `libgtk-3-dev` / `pkg-config`，
+  Fedora：`webkit2gtk4.1-devel`），macOS 用系统 WKWebView
+- （可选）**Python**：仅 Windows 双击入口（`start-tauri*.exe` 的启动画面）与
+  comfy-cli venv 用到
+
+启动编排按平台分两条等价链路，**改一侧必须同步另一侧**（规范 §3.3）：
+
+| 平台 | 编排器 | 回收机制 |
+|---|---|---|
+| Windows | `scripts/dev-launcher.ps1`（双击入口走 `start-tauri*.exe`） | `taskkill /T /F` + Job Object |
+| Linux / macOS | `scripts/dev-launcher.mjs`（`node scripts/dev-launcher.mjs`） | 进程组（`detached` 建组 + 整组信号） |
 
 ---
 
@@ -205,6 +214,24 @@ pnpm dev
 
 # 5. 注册 comfyapp:// 协议（可选，仅 Windows：双击 tools/start/register-comfyapp-protocol.ps1）
 ```
+
+**桌面壳（三平台）**：
+
+```bash
+# 开发期：起壳 + dev server（跨平台编排器，Linux/macOS 上零 .ps1 依赖）
+pnpm tauri dev
+
+# 完整编排（预检 / 缓存指纹 / 就绪等待 / 整组回收 / 启动进度快照）
+node scripts/dev-launcher.mjs
+
+# 出安装包（先组装 standalone 资源 + 平台判据的 sidecar，再打包）
+pnpm tauri build
+```
+
+> Linux 上编译壳需要系统 WebKitGTK 开发库（上表），
+> 且**必须**经 `pnpm tauri build`（`beforeBuildCommand` 会组装
+> `src-tauri/static` 与 sidecar）——裸 `cargo build` 缺资源时会在 `build.rs`
+> 直接 panic，报的是「resource path binaries/node-<triple> doesn't exist」。
 
 ---
 

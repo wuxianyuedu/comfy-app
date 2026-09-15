@@ -326,6 +326,10 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 
 ### 3.2 Windows 启动器（dev-launcher.ps1 / Build-Guard.ps1）
 
+> 跨平台（Linux / macOS）侧的同职责编排器见 §3.3。两者**同契约、同产物、
+> 同日志布局**，区别只在平台机制：`.ps1` 用 `taskkill /T` + Job Object，
+> `dev-launcher.mjs` 用进程组 + 会话锚点。改其中一侧的编排语义时另一侧必须同步。
+
 - 启动器只允许用 `taskkill /PID <pid> /T /F` 回收进程树。`Process.Kill()`
   只杀 cmd.exe 外壳，node/pnpm 子进程会残留（占端口、锁日志文件）。
 - Job Object 的 `KILL_ON_JOB_CLOSE` 标志在本机设置失败（Win32 错误 87，
@@ -338,6 +342,62 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 - pnpm 已关闭 `verifyDepsBeforeRun`（见 §6）：任何 pnpm 命令都不会隐式
   补跑 install。dev server 运行期间不要手动跑 `pnpm install`
   （better-sqlite3 等原生模块被进程锁定，install 会 EPERM）。
+
+### 3.3 跨平台启动编排器（`scripts/dev-launcher.mjs`）
+
+`dev-launcher.ps1` 是 Windows 主路径，且 1324 行里有 19 处 Windows 专属调用
+（`taskkill` / `Get-CimInstance` / Job Object / `cmd.exe`）——装 PowerShell 也没用，
+脚本里的 Windows 命令在 POSIX 上跑不出对应语义。Linux / macOS 的等价物是
+`scripts/dev-launcher.mjs`，职责逐项对齐：
+
+| 环节 | `.ps1`（Windows） | `.mjs`（跨平台） |
+|---|---|---|
+| 端口 | `app-port.ps1` 的 `Get-AppPort` | `scripts/app-port.mjs` 的 `resolveAppPort`（**同一事实源**，禁止重算） |
+| 缓存指纹 | `Get-ConfigFingerprint`（sha256 逐文件） | `configFingerprint()`（同口径、同目标文件） |
+| dev server | `cmd /c pnpm dev -p N -H 127.0.0.1` | `spawn("pnpm", ["dev","-p",N,"-H",…], { detached: true })` |
+| 回收 | `taskkill /PID /T /F` + Job Object | **进程组**：`detached: true` 建组，收尾整组发信号（走 §3.1 的 `reapProcessTree`） |
+| 孤儿线索 | `log/launcher/tauri-shell.pid` | `run/launcher-session.json` + `run/launcher-heartbeat.txt` |
+| 进度快照 | `run/launch-status.json` | 同左（**同一契约**，字段口径见 §9.3） |
+
+**进程组是本方案的地基，不是优化项**。POSIX 上没有 Job Object，而
+`spawn` 默认让子进程与编排器**同组**：此时 §3.1 的防自杀判据会禁用组路径，
+回收退化成单杀 leader，其下的 `pnpm` / `next` / `turbopack worker` 全部残留。
+实测（本机）对照：
+
+```
+编排器起来后的真实进程树（与 §3.1 记录的历史形态一致）：
+  PID 23201  PGID 23199  node scripts/dev-launcher.mjs
+  PID 23246  PGID 23210  pnpm exec next dev --turbo -p 3311
+  PID 23273  PGID 23210  node .../next/dist/bin/next dev
+  PID 23290  PGID 23210  next-server
+
+旧做法（单杀 leader）：残留 2 个进程（PPID=1），继续占着端口
+spawnInGroup（自建进程组）+ 整组回收：残留 0，端口立即释放
+```
+
+**会话锚点为什么是「心跳 + PID」两条**（`run/launcher-session.json`、
+`run/launcher-heartbeat.txt`）：编排器被 SIGKILL 时没有任何清理机会，
+下次启动必须能认出「上一次留下的孤儿」。只看 PID 会被**系统复用**骗过
+（旧号可能已归某个无关进程，照着杀就是误伤）；只看心跳会把「卡死但活着」
+的实例当成死的。两条都满足才算「上一位还活着」：
+
+| 心跳 | PID | 判定 | 动作 |
+|---|---|---|---|
+| 新鲜 | 存活 | 上一位在跑 | 不回收，提示端口占用（**不擅自杀**，可能属另一份检出，§1.4） |
+| 陈旧（> 30s） | 任意 | 上一位卡死 / 被杀 | 按 `child_pids` 回收整组 |
+| 新鲜 | 已死 | 写完心跳即被收走 | 同上（回收） |
+| 不存在 | — | 没有会话 | 无事发生 |
+
+**端口占用只提示、不擅自杀**：`dev-launcher.ps1` 的 `Stop-ProcessOnPort` 靠
+`Get-CimInstance` 判「可执行路径是否落在本检出内」来保护多检出并行；POSIX 侧
+没有等价且可靠的判据（`/proc/<pid>/exe` 在容器里常指向宿主路径），因此改为
+**清楚地告诉用户怎么办**（改 `.env` 的 `COMFYAPP_PORT` 或关闭残留实例）。
+判据不清时「猜着杀」比「说清楚」危险得多——这是 §1.4 的直接推论。
+
+回归测试：`tests/cross-platform-launcher.test.ts` —— 真起带子进程的进程组、
+杀完数残留；会话锚点的四种心跳/PID 组合；缓存指纹的清/留判据。
+反向验证：把 `spawnInGroup` 的 `detached` 改回 `false`，「进程组回收真跑」
+用例必失败（残留 > 0）。
 
 ## 4. 日志布局（排障从上往下看）
 
@@ -572,6 +632,10 @@ zustand 队列，而不是再加一个模块级单例。
 | 症状                                                                                                                                   | 根因（历史案例）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 对策                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **「配置了 ComfyUI 端口却像没配」**：设置里 `comfyuiPort` 留空 / 填了一个值，应用却连到了**另一个** ComfyUI 实例上——现象是上传素材失败、任务「未找到生成结果」、端口在日志里漂移，而地址栏/探测看起来一切正常（ISSUE #534 P1） | **同一个事实（默认端口）有多份实现**：连接侧 `resolveComfyBase()` 把 `comfyuiPort: 0` 判为「未配置」并用**硬编码**的 8188 作为探测起点；拉起侧 `resolveEffectiveLaunch()` → `buildSpawnArgs()` 同样把 `0` 当「未配置」，**不传 `--port`**，于是 ComfyUI 以它自己的默认端口启动；`lib/core/config.ts` 的 schema 默认值与错误文案里又各写了一遍 8188。四处都写 8188 看着一致，但**没有任何断言把它们绑在一起** —— 单独改一处不会有测试变红。「连错实例」比「连不上」难查得多：8188 上往往真有个别的实例在应答（Comfy Desktop 常驻），`client.ts` 的兜底探测链最后一项正是窗口地址 :8000 | 已修（门禁 + 收口）：① 默认端口单点定义在 `src/lib/app-settings.ts` 的 `COMFYUI_DEFAULT_PORT`，连接侧与拉起侧一律 import；② `lib/core/config.ts` 的 ComfyUI 兜底地址改由 `endpoints.ts` 的 `comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)` 拼出，不再写裸地址；③ 设置页 placeholder / 说明文案与错误建议里的端口改为运行时取值（不再各写一遍数字）；④ 新增可失败断言 `scripts/check-comfyui-port-contract.cjs`（pre-commit 与 CI）+ `tests/comfyui-port-contract.test.ts`、`tests/check-comfyui-port-contract.test.ts`。口径见 §9.2 第 5 条 |
+| **Linux / macOS 上 `cargo build --release --features custom-protocol` 报 `error[E0425]: cannot find type IMarshal in module windows_core::imp`（×12）** | `Cargo.toml` 的 `windows` crate 是**无条件依赖**，`mod single_instance` 也没 `#[cfg(windows)]` 门控 —— 非 Windows 上整棵 windows 树都会参与编译，而 `windows-future` 子 crate 在那边没有该 COM 接口实现。跨平台构建立刻死在编译期，看不出与「壳的单实例保护」有关（ISSUE #489） | 已修：`windows` 挪进 `[target.'cfg(windows)'.dependencies]`；`single_instance.rs` 拆 `#[cfg(windows)]` / `#[cfg(not(windows))]` 双实现（POSIX 用检出内锁文件 + `kill(pid,0)` 存活探测 + `SIGUSR1` 唤起），模块声明不做 cfg、调用点因此不分叉。见 §9.3 |
+| **`cargo build` 报 ``resource path `binaries/node-x86_64-unknown-linux-gnu` doesn't exist``** | `bundle.externalBin` 声明的是「无后缀 basename」，打包器按目标三元组找 `node-<triple>[.exe]`，而 `build-desktop.mjs` 只产出 `.exe`（历史实现按 Windows 单一平台写的） | 已修：`scripts/build-desktop.mjs` 的 `sidecarFileName()` 与 Rust 侧 `sidecar_binary_name()` 同一平台判据（非 Windows 无后缀 + 补可执行位）。见 §9.3 |
+| **Linux / macOS 上 `resolve_project_root()` 恒返回空串 → 启动页一直转圈、`log/shell/` 为空** | 判据是 `scripts/dev-launcher.ps1` 是否存在 —— Windows 专属文件，POSIX 上永不存在。表现完全不像「路径判据错了」，像「启动页坏了」或「日志没写」 | 已修：改判 `package.json` + 任一平台的 `scripts/dev-launcher.*`（`looks_like_project_root`）。见 §9.3 |
+| **POSIX 上编排器退出后 `pnpm` / `next-server` 仍在跑、端口不释放** | 回收是 `taskkill /T /F`（POSIX 上等于不执行）；或虽有 POSIX 分支但 `spawn` 未 `detached`，子进程与编排器**同组** → 命中 §3.1 的防自杀判据，退化成单杀 leader，其下三层（`pnpm` / `next` / `turbopack worker`）全部残留 | 已修：`scripts/dev-launcher.mjs` 用 `spawnInGroup`（`detached: true` 自建进程组）+ 整组回收；编排器被 SIGKILL 时留下的孤儿由 `run/launcher-session.json` + 心跳在下次启动回收。见 §3.3 |
 | 双击 exe：启动即报「pnpm 工具链不可用 / 无法获取 pnpm 版本」并弹窗                                                                     | corepack 管理的 pnpm 在切换版本时本地缓存损坏：`.tools\pnpm\<ver>\bin` 缺失 → `pnpm -v` 报 `Failed to switch pnpm to pnpm@<ver> ... ENOENT`，命令完全不可用（install/dev 全依赖 pnpm）                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 已由 `Test-ToolchainGate`（弹壳前）拦截并弹 MessageBox 给修复步骤：`corepack enable && corepack prepare pnpm@<版本> --activate`（重建缓存，需联网一次），仍不行则删除损坏缓存后重装 Node/pnpm                                                                                                                                                                                                                                                 |
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                         | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                     |
 | `pnpm install` 已成功（exit 0）但仍报「node_modules/…为空或缺失」启动失败；同机跑 `sync-lint.ps1`/`run-local.ps1` 却正常               | 假阳性：`Get-BrokenKeyDeps` 用 `Get-ChildItem -LiteralPath` 枚举顶层 junction/symlink 判空，pwsh（7.6.5 实测）对这类 reparse point 的枚举可能返回 0 项 → 健康安装被误判残缺，触发 install 后因 `.modules.yaml`/lockfile 已一致而“Already up to date”无法自愈，二次复查仍误报                                                                                                                                                                                                                                                                                                                                                              | 已修：先 `Resolve-Path` 解析到链接目标真实绝对路径，再用 .NET `Directory.EnumerateFileSystemEntries` 对真实目录判非空（见 §2.2 step 5）。同步/自检脚本（sync-lint/run-local）本就只查 `.modules.yaml`+`.bin`+lockfile，故不受影响                                                                                                                                                                                                             |
@@ -672,7 +736,7 @@ zustand 队列，而不是再加一个模块级单例。
 
 | 场景                                                                                      | 命令                                                                                                         | 说明                                                                                                                                                                |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri; cargo build --release --features custom-protocol`                                             | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目 |
+| 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri && cargo build --release --features custom-protocol`（Windows 上 `;` 亦可）                                             | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目 |
 | 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                |
 | 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   |
 | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 |
@@ -1118,11 +1182,15 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 | 双击闪一下就没了，看不到报错         | 入口已执行并快速退出；`.ps1` 退出后窗口随之关闭 | 入口在双击场景（父进程是 explorer）会自动暂停，见 `Complete-Entry`；若仍闪退说明脚本在收尾前抛异常，改用终端执行 `pwsh -File .\入口.ps1` 看完整输出 |
 | 终端执行提示「禁止运行脚本」         | 机器执行策略为 Restricted                       | `pwsh -ExecutionPolicy Bypass -File .\入口.ps1`（入口内部已自带该参数，直接双击不受影响）                                                           |
 
-## 9. Web-only Linux 模式（`pnpm dev` 零 `.ps1` 依赖）
+## 9. 跨平台模式（Linux / macOS，零 `.ps1` 依赖）
 
-> 2026-09-14 制定（ISSUE #489）。**适用范围**：只想在 Linux / macOS / CI 上
-> 开发与验证前端与业务逻辑的人。桌面壳（Tauri）、双击启动链路（`.ps1`）、
-> ComfyUI / Ollama 的自动启停**不在本模式范围内**，见 §9.3。
+> 2026-09-14 制定（ISSUE #489），2026-09-15 扩到「启动全链路 + 桌面壳」
+> （ISSUE #489 后续）。**适用范围**：在 Linux / macOS / CI 上开发前端、
+> 业务逻辑，并构建桌面壳的人。
+>
+> - §9.1 纯 Web 链路（`pnpm dev` / `pnpm build` / `pnpm start`）
+> - §9.3 桌面壳的跨平台构建与运行（`pnpm tauri build`）
+> - §9.4 仍**未**解决的部分（comfy-cli venv、`.ps1` 启动链、e2e、保活语义）
 
 ### 9.1 这条链路怎么跑
 
@@ -1180,6 +1248,7 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 | 环节 | Linux 上的实现 | 平台判断位置 |
 |---|---|---|
 | 入口 | `pnpm dev` → `node scripts/dev.mjs` | 无分支（Node 脚本本身跨平台） |
+| 完整编排 | `node scripts/dev-launcher.mjs`（预检 / 缓存 / 拉起 / 就绪 / 回收 / 进度快照，与 `.ps1` 同契约） | §3.3；平台机制差异只在这一处 |
 | 端口 | `.env` → 路径推导（3200~3999）→ 兜底 3100 | `scripts/app-port.mjs`，规范化只对相对路径 resolve（§1.1） |
 | 进程树回收 | `process.kill(-pid)` 杀进程组 | `src/lib/kill-process-tree.ts`（§3.1） |
 | 进程探测 | `ps -eo pid,args` 查命令行；监听端口用 `/proc/net/tcp{,6}`（LISTEN 的 socket inode）∩ `/proc/<pid>/fd` 的 `socket:[…]` | `src/lib/comfyui/proc-detect.ts`。**不依赖 `lsof` / `ss` / `netstat`**（很多发行版默认不装，缺它时探测会静默返回 null，正是 §9.2 第 3 条禁止的形态） |
@@ -1230,17 +1299,52 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
    回归测试见 `tests/linux-env-bootstrap.test.ts`（含真跑 `env-init.mjs` 与
    `dev.mjs`，反向验证：还原旧入口/去掉预检，对应用例必失败）。
 
-### 9.3 这个模式**不**解决的问题（别误当成 Linux 支持）
+### 9.3 桌面壳的跨平台（`pnpm tauri build`）
 
-- **Tauri 壳编译**：`src-tauri/Cargo.toml` 的 `windows` crate 是无条件依赖，
-  `mod single_instance` 也没 `#[cfg(windows)]` 门控；`bundle.externalBin` 与
-  `lib.rs::spawn_sidecar` 写死 `.exe`。要在 Linux 出桌面包 = 另做一套，不在
-  本模式范围。
-- **`.ps1` 启动编排**：`scripts/dev-launcher.ps1`（唯一编排者）、
-  `tools/**/*.ps1` 全部是 Windows 语义（`taskkill`、`Get-CimInstance`、
-  `%APPDATA%`）。装 `powershell` 也没用——脚本里的 Windows 命令在 Linux 上
-  跑不出对应语义。
+壳侧此前**整条都是 Windows 独占**：`Cargo.toml` 的 `windows` crate 是无条件
+依赖、`mod single_instance` 无 cfg 门控、sidecar 写死 `node.exe`、
+`kill_sidecar` 写死 `taskkill`、`resolve_project_root()` 校验
+`dev-launcher.ps1` 是否存在。四项都会在 Linux / macOS 上直接炸：
+
+| 症状 | 根因 | 现在的判据 |
+|---|---|---|
+| `error[E0425]: cannot find type IMarshal in windows_core::imp` | `windows` crate 无条件依赖；`windows-future` 子 crate 在非 Windows 上没有该 COM 接口 | Cargo 的 `[target.'cfg(windows)'.dependencies]` |
+| `mod single_instance` 编不过 / 单实例失效 | 模块只有 Windows 实现（`CreateMutexW` / `CreateEventW`） | 模块内 `#[cfg(windows)]` / `#[cfg(not(windows))]` 双实现，调用点不分叉 |
+| ``resource path `binaries/node-x86_64-unknown-linux-gnu` doesn't exist`` | `build-desktop.mjs` 只产出 `node-<triple>.exe` | `sidecarFileName()`（Node 侧）与 `sidecar_binary_name()`（Rust 侧）同一判据 |
+| 壳退出后 sidecar 与 next-server 仍在跑 | `kill_sidecar()` 是 `taskkill`，在 POSIX 上等于不执行 | `tauri-plugin-shell` 的 `CommandChild::kill()`（跨平台机制由插件选） |
+| 启动页一直转圈、`log/shell/` 为空 | `resolve_project_root()` 只认 `scripts/dev-launcher.ps1` → POSIX 上恒返回空串 | `looks_like_project_root()`：`package.json` + 任一平台的 `dev-launcher.*` |
+
+**sidecar 的命名判据必须两处同源**：`bundle.externalBin` 声明的是「无后缀
+basename」，打包器按目标三元组找 `node-<triple>[.exe]`，打进资源后按平台补
+`node.exe` / `node`。只改一处会得到「编译期 panic」或「编过了但运行时找不到
+sidecar」两种不同形态的失败。
+
+**POSIX 单实例为什么不是 `flock`**：锁随**文件描述符**存活，而壳要在启动早期
+判定、之后长期持有——fd 被 fork 出的子进程继承或意外关闭时锁会静默失效。
+改成「`run/shell-<检出哈希>.pid` 写 PID + `kill(pid, 0)` 存活探测」后判据是
+**可读的**：崩了留下的锁文件被判定为陈旧并覆盖。二次启动经 `SIGUSR1` 请首实例
+把窗口带到前台（Windows 侧是 `SetEvent`，同一语义两条通道）。
+
+**安全边界**：shell 插件只在 Rust 侧使用，caps 里**不授**
+`shell:allow-execute` / `shell:allow-spawn` —— 前端窗口拿不到任意命令执行能力。
+
+实测（本机 Debian 12）：`cargo build --release --features custom-protocol`
+从「复现 IMarshal 失败」变为 `Finished`（零 warning），
+`cargo test --release` 4 项通过；`cargo check --target x86_64-pc-windows-msvc`
+的资源校验也按 `node-x86_64-pc-windows-msvc.exe` 通过（Windows 侧命名未回归）。
+回归测试：`tests/cross-platform-launcher.test.ts`。
+
+### 9.4 这个模式**仍不**解决的问题（别误当成完整跨平台支持）
+
+- **`.ps1` 启动链**：`scripts/dev-launcher.ps1`、`tools/**/*.ps1` 仍是 Windows
+  语义（`taskkill`、`Get-CimInstance`、`%APPDATA%`）。跨平台侧的等价物是
+  `scripts/dev-launcher.mjs`（§3.3）——装 `powershell` 也没用，脚本里的
+  Windows 命令在 Linux 上跑不出对应语义，**别试图在 POSIX 上跑 `.ps1`**。
+- **comfy-cli 的 venv**：由 `scripts/setup-comfy-cli-venv.ps1` 建
+  （Windows 侧），Linux / macOS 上需手工准备；解释器发现与进程探测本身
+  已支持 POSIX 布局（§9.1）。
+- **「保活」模式的 POSIX 语义**：`src/lib/process-launch.ts` 的 keepAlive
+  分支在 POSIX 上未经真机回归（Windows 侧走 `powershell Start-Process` 中介）。
 - **e2e（Playwright）**：需要浏览器与显示环境；无头容器里需自行准备。
-- **ComfyUI 自动启停**：解释器发现与进程探测已支持 POSIX 布局，但
-  `comfy-cli` 的 venv 由 `scripts/setup-comfy-cli-venv.ps1` 建（Windows 侧），
-  Linux 上需手工准备；「保活」模式的 POSIX 分支语义未在真机回归。
+- **双击入口**：POSIX 没有「双击 `.ps1`」这种交互模型，Linux / macOS 侧的入口
+  是 `pnpm` 脚本与 `scripts/dev-launcher.mjs`（README「快速上手」已按平台分列）。

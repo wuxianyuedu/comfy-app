@@ -33,13 +33,13 @@
 
 | 范围 | 路径 | 规范章节 |
 |---|---|---|
-| 启动链路 | `start-tauri/`、`scripts/start_tauri_launcher.py`、`scripts/dev-launcher.ps1` | §1–§3 |
+| 启动链路 | `start-tauri/`、`scripts/start_tauri_launcher.py`、`scripts/dev-launcher.ps1`（Windows）、`scripts/dev-launcher.mjs` + `scripts/dev-launcher-session.mjs`（跨平台） | §1–§3（跨平台编排见 §3.3） |
 | Windows 双击入口 | `tools/<分类>/*.ps1`（启动类 `tools/start/`）、`scripts/entry-common.ps1` | §8 |
 | Tauri 壳 | `src-tauri/**`（conf.json / src / splash-assets） | §2、§7 |
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
-| 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs`，或**在文档/README 里写具体端口号** | §1.1、§3.1、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
+| 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 | 复用/去重与常量收口 | 抽共享模块、加/改默认地址与端口、写新的质量门禁 | §12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口） |
 
@@ -56,6 +56,11 @@
    `process.kill`）：Windows 走 `taskkill /PID <pid> /T /F`，POSIX 向进程组发
    信号（`kill(-pid)`，拿不到组时单杀兜底）。禁止 `Process.Kill()` / 单杀
    leader（外壳死了，node/python 子进程会残留成孤儿，锁住端口与日志文件）。
+   **Rust 壳侧同理**：起子进程只能用官方 `tauri-plugin-shell` 的 `CommandChild`
+   （跨平台机制由它选，`kill()` 连带回收），禁止 `std::process::Command` +
+   `taskkill`——后者在 POSIX 上等于**什么都不做**。**POSIX 自建进程组是前提**：
+   `spawn({ detached: true })`，否则子进程与编排器同组，回收会命中防自杀判据退化成
+   单杀（见 §3.3）。
 4. **失败路径必须有日志 + 用户可见出口**；日志按规范 §4 的布局落 `log/`，
    不得引入新的固定名日志文件（残留进程句柄会锁死它，用按次命名 + 轮转）。
 5. **改了 `tauri.conf.json` / `src-tauri/src/**` / `splash-assets/**` 必须
@@ -90,6 +95,10 @@
    `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit 与 CI）。
    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
 11. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
+    **跨平台入口是 Node（`.mjs`），不是 `.sh`**：`scripts/dev-launcher.mjs` 是
+    Linux / macOS 的编排器，与 `dev-launcher.ps1` **同契约同产物**（端口 / 缓存
+    指纹 / 进度快照 / 回收语义），改一侧必须同步另一侧；`.sh` 会被 R7 拦下
+    （Windows 上不可执行，且与「一份逻辑两端复用」相悖）。
     **入口放 `tools/<分类>/`，不放仓库根**（ISSUE #29 / 规范 §8.6）：启动类归
     `tools/start/`，与 `tools/build/`、`tools/registry/`、`tools/studio/` 按用途并列；
     根目录只留工程配置与文档。R9 在 pre-commit 强制拦截，回归测试见
