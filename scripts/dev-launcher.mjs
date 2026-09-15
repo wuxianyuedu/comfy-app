@@ -24,7 +24,7 @@
 // 环境变量开关（与 .ps1 版同名同义）：SKIP_CLEAN / FORCE_CLEAN / NO_OPEN /
 // COMFYAPP_FOREGROUND / COMFYAPP_PREBUILT_SHELL。
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,7 +42,13 @@ import {
   writeLaunchStatus,
 } from "./launcher-core/orchestrator.mjs";
 import { listeningPidsOnPort, pidBelongsToRoot } from "./launcher-core/procs.mjs";
-import { isWindows, spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
+import {
+  orchestratePnpm,
+  packageManagerVersion,
+  preparePnpm,
+  probePnpm,
+} from "./launcher-core/corepack.mjs";
+import { commandInvocation, isWindows, spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
 import {
   checkNodeModules,
   pruneTimestampedLogs,
@@ -62,6 +68,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // 既让测试与其它调用方有一个稳定的门面（编排器就是这套能力的入口），也避免
 // 调用方各自去 import 内部模块造成路径散布。
 export { spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
+export { orchestratePnpm, probePnpm, packageManagerVersion } from "./launcher-core/corepack.mjs";
+
+/** 工具链门禁留下的 pnpm 修复提示（供启动页横幅 / 测试取值）。 */
+/** @returns {string | null} */
+export function pnpmToolchainTip() {
+  return lastPnpmTip;
+}
 export { configFingerprint, syncNextCache, checkNodeModules } from "./launcher-core/worktree.mjs";
 export { waitForReady, readTail, fileHasMarker, writeLaunchStatus } from "./launcher-core/orchestrator.mjs";
 export { listeningPidsOnPort, pidBelongsToRoot, processCwd } from "./launcher-core/procs.mjs";
@@ -112,92 +125,83 @@ export function log(message, level = "INFO") {
 /** @type {import("node:child_process").ChildProcess[]} */
 const spawned = [];
 
+/** 工具链门禁认定的 pnpm 修复提示（非 null 时会被记进启动页横幅）。
+ *
+ *  为什么要在模块里留一份：门禁跑在**弹壳之前**，那一刻启动页还不存在，
+ *  无法把提示交出去；而这条提示恰恰是「服务起不来」现场里最该被看到的一句。
+ *  落进 launch-status 的 stale_shell 通道（启动页已有的横幅），用户不必先去翻日志。 */
+let lastPnpmTip = /** @type {string | null} */ (null);
+
 // ── 预检 ────────────────────────────────────────────────────────────────────
 
 /** 工具链门禁：node 可用 + pnpm 可用 + node_modules 已装。
  *
  *  双击链路里这一步尤其重要：**在弹壳之前**拦下致命损坏，用户才能看到一句
  *  「pnpm 坏了，怎么修」，而不是先弹出黑窗口再在启动页里慢慢报错。
+ *
+ *  探测与「坏了怎么修」都收在 `launcher-core/corepack.mjs`（Issue #576）：
+ *    · 探测不再只看退出码 —— 命令压根没起来（EACCES/ENOEXEC）与命令报错退出
+ *      是两种成因，此前都塌成一句「exit=?：未知错误」，把「PATH 上选错了可执行
+ *      形态」误报成「corepack 缓存损坏」（后者要用户删缓存 / 重装 Node，方向全错）；
+ *    · 修复提示里的版本号取自 package.json 的 `packageManager`，不再留
+ *      `<项目版本>` 这种没人会去填的占位符；
+ *    · spawn-error 一类（看起来就是缓存/形态坏了）会**自动 corepack prepare 重建
+ *      并复核**，只有复核仍失败才落回提示 —— 把「自己就能好」的那部分留给自己。
+ *
  *  @param {string} [root] @returns {string | null} 失败原因（null = 通过） */
 export function runToolchainGate(root = ROOT) {
-  const pnpm = whichCommand("pnpm");
-  if (!pnpm) {
-    return "未找到 pnpm 命令（需 corepack enable）。\n修复：corepack enable && corepack prepare pnpm@<项目版本> --activate，再重启应用。";
-  }
-  const probe = spawnSync(pnpm, ["-v"], {
-    cwd: root,
-    encoding: "utf8",
-    timeout: 30_000,
-    windowsHide: true,
-  });
-  const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;
-  if (probe.status !== 0 || !/\d+\.\d+/.test(output)) {
-    const detail = output
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, 3)
-      .join(" ");
-    return (
-      `pnpm 工具链不可用（exit=${probe.status ?? "?"}）：${detail || "未知错误"}\n` +
-      "疑似 corepack 切换版本时本地缓存损坏。\n修复：corepack enable && corepack prepare pnpm@<项目版本> --activate，再重启应用。"
-    );
+  const pnpm = orchestratePnpm({ root });
+  if (pnpm.repaired) log(`pnpm 已自动修复：${pnpm.tip}`, "OK");
+  if (!pnpm.probe.ok) {
+    lastPnpmTip = pnpm.tip;
+    return pnpm.tip ?? "pnpm 不可用";
   }
   const modules = checkNodeModules(root);
   if (!modules.healthy) {
     return (
       `node_modules 缺失或不完整（${modules.reasons.join("；")}）。\n` +
-      "修复：pnpm install（或先跑 tools/start/run-local.ps1 完成本地初始化）"
+      "修复：pnpm install（首次上手可先跑 pnpm env:init 生成 .env；" +
+      "Windows 双击入口 tools/start/run-local.ps1 会把这两步一起做完）"
     );
   }
   return null;
 }
 
-/** pnpm 版本一致性：不一致时尝试 corepack 对齐；失败只提示（不阻断启动）。 */
-/**
- * @param {string} [root] @returns {{ version: string, expected: string, tip: string | null } | null}
- */
+/** pnpm 版本一致性：不一致时尝试 corepack 对齐；失败只提示（不阻断启动）。
+ *
+ *  「本机版本」与「期望版本」都走 corepack.mjs 的单一判据：版本号只从
+ *  package.json 的 `packageManager` 解析，命令探测只用 `probePnpm()` ——
+ *  这里不再自己 whichCommand + spawnSync 一遍（那种写法会让「探测失败」在
+ *  两个地方各有一套说法，正是 Issue #576 里「同一件事两个口径」的形态）。
+ *
+ *  @param {string} [root] @returns {{ version: string, expected: string, tip: string | null } | null} */
 export function reconcilePnpmVersion(root = ROOT) {
-  let expected = "";
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-    const match = /^pnpm@(\S+)$/.exec(String(pkg.packageManager ?? ""));
-    if (match) expected = match[1] ?? "";
-  } catch {
-    return null;
-  }
+  const expected = packageManagerVersion(root);
   if (!expected) return null;
-  const pnpm = whichCommand("pnpm");
-  if (!pnpm) return null;
-  const probe = spawnSync(pnpm, ["-v"], { cwd: root, encoding: "utf8", timeout: 30_000, windowsHide: true });
-  const actual = String(probe.stdout ?? "").trim().split("\n")[0]?.trim() || "";
-  if (!actual) return null;
+  const probe = probePnpm({ root });
+  if (!probe.ok) return null; // 门禁已就「不可用」给过提示，这里不再叠一句
+  const actual = probe.version ?? "";
   if (actual.replace(/^v/, "") === expected.replace(/^v/, "")) {
     log(`pnpm 版本匹配：${actual}（packageManager: pnpm@${expected}）`, "OK");
     return { version: actual, expected, tip: null };
   }
   log(`pnpm 版本不匹配：本机 ${actual}，package.json 要求 ${expected}`, "WARN");
-  const corepack = whichCommand("corepack");
-  if (corepack) {
-    log("检测到 corepack，尝试自动切换到要求的 pnpm 版本…", "STEP");
-    const prepare = spawnSync(corepack, ["prepare", `pnpm@${expected}`, "--activate"], {
-      cwd: root,
-      encoding: "utf8",
-      timeout: 600_000,
-      windowsHide: true,
-    });
-    const after = spawnSync(pnpm, ["-v"], { cwd: root, encoding: "utf8", timeout: 30_000, windowsHide: true });
-    const now = String(after.stdout ?? "").trim().split("\n")[0]?.trim() ?? "";
-    if (prepare.status === 0 && now.replace(/^v/, "") === expected.replace(/^v/, "")) {
-      log(`corepack 已自动切换 pnpm 至 ${now}`, "OK");
-      return { version: now, expected, tip: null };
-    }
-    log(`corepack prepare 未生效（exit=${prepare.status ?? "?"}，当前 ${now || "未知"}）`, "WARN");
+  // 对齐动作就是「按 packageManager 重建」——与门禁里的自动修复同一个实现。
+  const prepare = preparePnpm({ root, expected });
+  const after = probePnpm({ root });
+  const now = after.version ?? "";
+  if (after.ok && now.replace(/^v/, "") === expected.replace(/^v/, "")) {
+    log(`corepack 已自动切换 pnpm 至 ${now}`, "OK");
+    return { version: now, expected, tip: null };
   }
-  const tip =
-    `pnpm 版本不匹配（本机 ${actual}，项目要求 ${expected}）；` +
-    `请执行 corepack enable && corepack prepare pnpm@${expected} --activate 后重启应用`;
-  return { version: actual, expected, tip };
+  log(`corepack 对齐未生效（${prepare.description}，当前 ${now || "未知"}）`, "WARN");
+  return {
+    version: actual,
+    expected,
+    tip:
+      `pnpm 版本不匹配（本机 ${actual}，项目要求 ${expected}）；` +
+      `请执行 corepack enable && corepack prepare pnpm@${expected} --activate 后重启应用`,
+  };
 }
 
 /** 旧版桌面壳提醒（判据与 .ps1 的 Test-ShellFreshness 同源：比时间戳）。 */
@@ -614,7 +618,13 @@ export async function run(argv = process.argv.slice(2)) {
   const gateProblem = runToolchainGate(ROOT);
   if (gateProblem) {
     log(gateProblem, "ERROR");
-    status("error", 1, gateProblem.split("\n")[0] ?? "工具链不可用", { error: true });
+    // 多行提示分两条写：`status` 的 message 是启动页**一行**标题位，塞整段
+    // 会把「先做什么」挤没；完整提示（含修复命令）放 stale_shell 横幅，
+    // 启动页是多行渲染（见 splash.html 的 renderNotice）。
+    status("error", 1, gateProblem.split("\n")[0] ?? "工具链不可用", {
+      error: true,
+      staleShell: gateProblem,
+    });
     return 1;
   }
   log("工具链门禁：pnpm 可用、node_modules 已安装", "OK");
@@ -751,11 +761,17 @@ export async function run(argv = process.argv.slice(2)) {
  *  不靠环境变量兜底 —— 裸 `next dev` 会落 Next 默认 3000，与 .env / 壳 / e2e 对不上）。 */
 /** @param {number} port @param {string} host @param {string} outFile @param {string} errFile */
 export function spawnDevServer(port, host, outFile, errFile) {
-  const pnpm = whichCommand("pnpm");
-  if (!pnpm) throw new Error("pnpm 不在 PATH 上，无法启动 dev server");
+  // 起服务用的是**门禁验过的那个命令形态**（`commandInvocation`）：
+  // `pnpm` 在 Windows 上常常只有 shebang shim 而 shim 起不来，此时真正能用的是
+  // 同目录的 `pnpm.ps1`（经 PowerShell 宿主）。门禁选出来的形态必须在起服务这一
+  // 步复用同一个实现，否则「探测过了、起服务却用另一种方式又失败一次」。
+  // 判据只在 shell.mjs 一处（规范 §9.5），这里不自己拼可执行名。
+  const candidate = whichCommand("pnpm");
+  if (!candidate) throw new Error("pnpm 不在 PATH 上，无法启动 dev server");
+  const invocation = commandInvocation(candidate, ["-v"]);
   const child = spawnInGroup({
-    command: pnpm,
-    args: ["dev", "-p", String(port), "-H", host],
+    command: invocation.command,
+    args: [...invocation.prefixArgs, "dev", "-p", String(port), "-H", host],
     cwd: ROOT,
     env: { ...process.env, COMFYAPP_PORT: String(port), PORT: String(port) },
     stdoutFile: outFile,
