@@ -32,6 +32,13 @@
  * 口径：源码串 + 目标文件路径。正则剥掉块注释，行注释只剥 `//` 开头的那一
  * 种，因此文件末尾的 `// from "~/server/lib/logger"` 这类说明**仍会被计入** ——
  * 对循环依赖检测（以源码串为输入）它就是同一条边，宁可多登记一条。
+ *
+ * **登记粒度是「边」，不是「源文件」**（这一点此前写错，等于门禁基本失效）：
+ * `REGISTERED` 的键是源文件、值是目标文件，而判定曾写成 `!(e.from in REGISTERED)`
+ * —— 只要一个文件因为**任何**理由进过一次清单，它此后新增的**任意** lib → server
+ * 依赖都会被放行，且两条断言都不会红：新增边被当成「已登记」，`REGISTERED` 的值
+ * 也没人比对。实测（`client.ts` 追加一个指向 `~/server/lib/brand-new` 的 import）
+ * 三条用例全绿。现在比对的是 `from → to` 这一对，登记才真正等价于「这条边被裁决过」。
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -105,7 +112,14 @@ const REGISTERED: Record<string, string> = {
 };
 
 type Edge = { from: string; to: string };
+/** 边的唯一标识。**必须带上目标**：只按源文件判「是否登记过」会把该文件此后
+ *  新增的任意依赖一并放行（详见头注「登记粒度是边」）。 */
 const key = (e: Edge) => `${e.from} -> ${e.to}`;
+
+/** 已登记的边集合（由 `REGISTERED` 展开）。 */
+const REGISTERED_EDGES = new Set(
+  Object.entries(REGISTERED).map(([from, to]) => key({ from, to })),
+);
 
 function collectEdges(): Edge[] {
   const edges = new Map<string, Edge>();
@@ -127,7 +141,7 @@ function collectEdges(): Edge[] {
 
 describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSUE #569 第 6 项）", () => {
   it("没有未登记的 lib → server 依赖", () => {
-    const unregistered = collectEdges().filter((e) => !(e.from in REGISTERED));
+    const unregistered = collectEdges().filter((e) => !REGISTERED_EDGES.has(key(e)));
     const report = unregistered.map((e) => `  ✗ ${e.from}\n      → ${e.to}`).join("\n");
     expect(
       unregistered,
@@ -148,6 +162,26 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       "以下登记项已不再成立（依赖被消除或目标文件被移动），请从 REGISTERED 中删除：\n" +
         stale.join("\n"),
     ).toEqual([]);
+  });
+
+  it("判定按「边」而非「源文件」：已登记文件新增别的 server 依赖必须被拦下", () => {
+    // 这条用例是回归护栏本身：判定曾写成 `!(e.from in REGISTERED)`，于是
+    // 「进过一次清单的文件」此后新增任意 lib → server 依赖都被放行。
+    // 用纯数据复现那个谓词，锁住「新边必须算未登记」。
+    const registered = new Map(Object.entries(REGISTERED));
+    const registeredEdges = new Set(
+      [...registered].map(([from, to]) => key({ from, to })),
+    );
+    const sample: Edge[] = [
+      { from: "src/lib/comfyui/client.ts", to: "src/server/lib/logger.ts" }, // 已登记
+      { from: "src/lib/comfyui/client.ts", to: "src/server/lib/brand-new.ts" }, // 未登记
+    ];
+    const unregistered = sample.filter((e) => !registeredEdges.has(key(e)));
+    expect(
+      unregistered.map(key),
+      "同一源文件上新增的 server 依赖必须算「未登记」——否则清单一旦收录过某个文件，\n" +
+        "它此后所有越界都会被静默放行（门禁形同不存在）。",
+    ).toEqual(["src/lib/comfyui/client.ts -> src/server/lib/brand-new.ts"]);
   });
 
   it("扫描器本身有效：能识别登记项里的真实依赖边（反向验证）", () => {
