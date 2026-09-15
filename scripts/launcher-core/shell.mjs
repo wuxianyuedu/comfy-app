@@ -276,6 +276,39 @@ export function commandInvocation(candidate, probeArgs = ["--version"], { env = 
     : { command: candidate, prefixArgs: [] };
 }
 
+/** 把 `pnpm <args…>` 解析成「这台机器上真能跑起来」的命令形态。
+ *
+ * 存在的理由：**任何**由 Node 去 spawn pnpm 的地方都在重复同一个坑 —— 在
+ * Windows 上写死 `pnpm.cmd`（或让 PATHEXT 去挑）会选中 Node 起不来的形态
+ * （批处理只有 cmd.exe 解释，实测 `EINVAL`），于是子进程「命令没起来」：
+ * `spawnSync` 的 `status` 是 `null`，而 `process.exit(status ?? 0)` 把它读成
+ * **成功退出（0）** —— 表现为「dev server 已启动」之后两秒静默退出、stdout
+ * 只有一行包装脚本的打印、stderr 全空，用户完全看不出哪里不对（ISSUE #576）。
+ *
+ * 判据只在 `whichCommand()` + `commandInvocation()` 一处（规范 §9.5 / §2.1.1）：
+ * 选中能跑的候选，需要宿主时（`.ps1` → PowerShell）连宿主参数一起给出来。
+ *
+ * @param {string[]} [args] 接在 pnpm 后面的参数
+ * @param {WhichCommandOptions & { name?: string }} [options]
+ * @returns {{ command: string, args: string[], candidate: string, viaHost: boolean } | null}
+ *   `null` = PATH 上没有任何可用的 pnpm 形态（调用方必须给出可见出口，不能静默 `null → 0`）
+ */
+export function pnpmInvocation(args = [], { env = process.env, platform = process.platform, name = "pnpm" } = {}) {
+  const candidate = whichCommand(name, { env, platform });
+  if (!candidate) return null;
+  const probe = ["-v"];
+  const usable = usableCommand(candidate, probe, { env, platform });
+  const invocation = usable.ok
+    ? { command: usable.command, prefixArgs: usable.prefixArgs }
+    : { command: candidate, prefixArgs: [] };
+  return {
+    command: invocation.command,
+    args: [...invocation.prefixArgs, ...args],
+    candidate,
+    viaHost: invocation.command !== candidate,
+  };
+}
+
 /**
  * 起一个子进程并**单独建进程组**（POSIX）。
  *

@@ -1039,6 +1039,41 @@ fn setup_splash_window(app: &mut tauri::App) {
     let (width, height) = splash_window_size(app.handle());
     let _ = splash.set_size(tauri::LogicalSize::new(width, height));
     let _ = splash.center();
+    bring_splash_to_front(&splash);
+  }
+}
+
+/// 启动页首次出现时把它带到前台。
+///
+/// 启动页与「应用」窗口是两种不同的语义，不能共用同一套「不抢前台」策略：
+///
+/// - **应用窗口**：启动要几十秒，用户完全可能切去干别的，加载完成再弹到最前面
+///   就是打断（ISSUE #359）。所以它默认只 `show()` + 任务栏闪烁；
+/// - **启动页**：它是用户**刚刚双击/点击启动**的直接反馈，此刻不给前台，
+///   用户看到的就是「双击了没反应」，启动页被文件资源管理器之类的窗口压住
+///   ——「双击后画面在资源管理器之后」正是这么来的（ISSUE #576）。一次启动
+///   只抢这一次，且是**显示之后立即**抢，不是几十秒后突然冒出来。
+///
+/// 用 `set_focus()` 而不是 `always_on_top`：置顶是**持续**语义（窗口会一直压在
+/// 别人上面，用户在启动期想切走也切不掉），而这里要的只是「出现的那一刻在前面」。
+/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），
+/// 此时补一次任务栏闪烁作为可见提醒，与主窗的策略保持一致。
+fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
+  // 声明式窗口（tauri.conf.json 的 windows[0]）默认已可见，但显式 `show()` 一次
+  // 更稳：某些窗口状态插件/系统还原会把首次显示推迟，未显示的窗口 set_focus 无意义。
+  if !splash.is_visible().unwrap_or(true) {
+    let _ = splash.show();
+  }
+  if let Err(e) = splash.set_focus() {
+    log::warn!("[ComfyAPP] splash set_focus failed: {:?}", e);
+    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
+    return;
+  }
+  if splash.is_focused().unwrap_or(false) {
+    log::info!("[ComfyAPP] splash window brought to front");
+  } else {
+    log::warn!("[ComfyAPP] splash window shown but foreground not granted");
+    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
   }
 }
 

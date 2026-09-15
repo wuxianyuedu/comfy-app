@@ -278,6 +278,19 @@ Node 一个都起不来）。「pnpm 可用」的判据是**真的能跑**：`wh
 `scripts/launcher-core/corepack.mjs`。自查入口 `pnpm check:toolchain`（跨平台，
 登记在规范 §9.5 对照表；不需要任何 `.ps1` 副本）。
 
+**「dev server 已启动」之后两秒静默退出（exit=0）、stderr 全空**（ISSUE #576 / 规范 §2.1.6）：
+不是 Next 崩了，而是**内层 spawn 的 pnpm 形态起不来** —— `scripts/dev.mjs` 曾写死
+`pnpm.cmd`，Windows 上批处理只有 cmd.exe 会解释、Node 起它必 `EINVAL`，`status` 为
+`null` 又被 `?? 0` 读成「成功退出」。任何「Node 去 spawn pnpm」的地方都只能经
+`shell.mjs` 的 `pnpmInvocation()` 拿 `{ command, args }`，不许自己拼可执行名
+（更不许按平台写后缀）。同一条现场里，**失败弹窗给的日志路径必须是本次运行的**
+（按文件名字典序重找会挑到上一次运行那份，历史 `_` 命名排在现 `T` 命名之后）。
+
+**双击启动后启动页被文件资源管理器压在后面**（ISSUE #576 / 规范 §5）：
+「不抢前台」是**应用窗口**的策略（它几十秒后才冒出来，用户可能早已切走），
+不该套在**启动页**上 —— 启动页是双击的直接反馈，要出现在前面。启动页由
+`spawn_splash_front()` / `bring_splash_to_front()` 单独抢一次（只首次可见那一下）。
+
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：
 `launcher/`、`nextjs/`、`services/`、`tools/`、`archive/`）：
