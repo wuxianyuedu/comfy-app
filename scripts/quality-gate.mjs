@@ -38,6 +38,14 @@ const GATES = {
     label: "ESLint zero error / zero warning",
     args: ["exec", "eslint", ".", "--max-warnings", "0"],
   },
+  /**
+   * 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项）。
+   *
+   * 放在一键门禁里，是因为它是**唯一一条会随时间变坏**的检查：其余命令当日跑过
+   * 就是过了，而格式棘轮要求「你今天新增的文件必须干净」。只写在 pre-commit 里
+   * 的话，用 `--no-verify` 或被未启用钩子的检出提交就绕过去了 —— 那恰好是它要防的。
+   */
+  format: { label: "Prettier format ratchet", args: ["../scripts/check-format.cjs"] },
   test: { label: "Vitest full run (excluding known baseline failures)", args: ["exec", "vitest", "run"] },
 };
 
@@ -92,6 +100,23 @@ function resolvePnpm() {
 
 function runGate(pnpm, key) {
   const gate = GATES[key];
+  // 门禁脚本是 `node scripts/xxx.cjs` 而不是 pnpm 子命令：用 node 直接跑，
+  // 免得再套一层 pnpm exec（那层只带来解析开销与 Windows 的 .cmd 差异）。
+  if (gate.args[0]?.endsWith(".cjs")) {
+    const script = path.resolve(ROOT, "scripts", path.basename(gate.args[0]));
+    console.log("");
+    console.log(`==> ${gate.label}`);
+    console.log(`>>> node scripts/${path.basename(script)}`);
+    const r = spawnSync(process.execPath, [script, ...gate.args.slice(1)], {
+      cwd: ROOT,
+      stdio: "inherit",
+      windowsHide: true,
+    });
+    const code = r.status ?? 1;
+    if (code === 0) console.log(`  [OK] ${gate.label} passed`);
+    else console.log(`  [FAIL] ${gate.label} failed (exit ${code})`);
+    return code;
+  }
   const args = [...gate.args];
   if (key === "test") {
     for (const f of KNOWN_FAILED_FILES) {
