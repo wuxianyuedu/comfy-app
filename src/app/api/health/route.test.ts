@@ -24,7 +24,7 @@ vi.mock("~/server/db", () => ({
   db: { run: vi.fn() },
 }));
 
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 

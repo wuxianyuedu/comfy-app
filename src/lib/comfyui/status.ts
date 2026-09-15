@@ -42,7 +42,7 @@ import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
 import { probeComfyAtPort } from "./probe";
 import { collectComfyPythonCandidates } from "./env-python";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 
 /** 进程/端口事实的快照：拿不到就都为空。 */
 export type ComfyRuntimeSnapshot = {

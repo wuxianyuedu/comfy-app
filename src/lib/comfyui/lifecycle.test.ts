@@ -58,7 +58,7 @@ vi.mock("../log-paths", () => ({
   COMFYUI_RUNTIME_LOG: "/tmp/comfyui-runtime.log",
   SERVICES_LOG_DIR: "/tmp",
 }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 /* win32 的 stopComfyUiProcess 经 taskkill 杀整棵进程树；不 mock 的话

@@ -69,8 +69,8 @@ export default defineConfig({
          *   1. 门槛取**实测值向下取整到 5 的倍数**，不设理想值 —— 设高了会让
          *      无关提交变红，设低了等于没设；
          *   2. 之后**只升不降**（补了测试就上调，改动导致下降要在这里说清楚）；
-         *   3. 实测为 0 的目录（`drizzle-studio`）**现在先设 0**：给它设一个
-         *      非零门槛会让主线立刻红，而它需要的是先有测试（见 §18.7 登记）。
+         *   3. 实测为 0 的目录先设 0，**但 0 不是终点**：补上测试就立刻上调
+         *      （`drizzle-studio` 就是这么从 0 抬到 40 的）。
          *
          * 统计口径与表格里的 `lib/<domain>` 行一致（v8 按目录聚合）。 */
         "src/lib/agent/**": {
@@ -80,22 +80,26 @@ export default defineConfig({
           branches: 10,
         },
         "src/lib/core/**": {
-          lines: 35,
-          functions: 30,
-          statements: 35,
-          branches: 30,
+          lines: 40,
+          functions: 35,
+          statements: 40,
+          branches: 35,
         },
+        // 从「全 0」抬到实测值：`lifecycle` 的探测 / 定位 / 启停判决进了用例
+        // （端口应答三态、找不到 drizzle-kit、不是本应用拉起的就不乱杀）。
         "src/lib/drizzle-studio/**": {
-          lines: 0,
-          functions: 0,
-          statements: 0,
-          branches: 0,
+          lines: 40,
+          functions: 35,
+          statements: 35,
+          branches: 35,
         },
+        // 从「5/10/5/5」抬到实测值：编排的判决面（取消撤任务、合成前置条件、
+        // 镜头参数与画幅折算）进了用例，不再只有两个纯函数文件被覆盖。
         "src/lib/film/**": {
-          lines: 5,
-          functions: 10,
-          statements: 5,
-          branches: 5,
+          lines: 40,
+          functions: 55,
+          statements: 40,
+          branches: 30,
         },
         "src/lib/llm/**": {
           lines: 30,

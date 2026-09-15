@@ -24,7 +24,7 @@ vi.mock("./proc-detect", () => ({
   findPidListeningPort: vi.fn(),
 }));
 vi.mock("./launch-path", () => ({ resolveComfyLaunchPlan: vi.fn() }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
@@ -38,7 +38,7 @@ import {
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { resolveComfyLaunchPlan } from "./launch-path";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 
 const plan = {
   cmd: "D:\\Comfy\\ComfyUI\\.venv\\Scripts\\python.exe",

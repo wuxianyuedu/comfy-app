@@ -1,10 +1,10 @@
-import type * as LoggerModule from "~/server/lib/logger";
+import type * as LoggerModule from "~/lib/core/logger";
 import type * as FsPromises from "fs/promises";
 /**
  * task.router 集成测试。
  *
  * mock 边界：~/server/db（内存 Prisma 替身）、~/server/better-auth、
- * ~/server/lib/logger（静音）、fs/promises（仅替换 stat——openFolder 的
+ * ~/lib/core/logger（静音）、fs/promises（仅替换 stat——openFolder 的
  * 「目录存在」分支不再触真实磁盘；unlink/rm 保持真实实现，路径不存在时
  * 被 .catch 吞掉，无副作用）。repository 与限流中间件均走真实实现。
  */
@@ -23,7 +23,7 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
-vi.mock("~/server/lib/logger", async (importOriginal) => ({
+vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

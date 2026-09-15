@@ -7,16 +7,24 @@ import {
   createPinoLogger,
   redactSecretShaped,
   REDACT_PATHS,
-} from "~/server/lib/logger";
+} from "~/lib/core/logger";
 import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
 
 /**
- * 可观测/日志契约测试（Issue #11）：
- * 断言 pino 服务端日志的「格式 + 脱敏」契约，防止格式漂移 / 敏感字段落盘。
+ * 日志「格式 + 脱敏」契约测试（原 `src/server/lib/logger.test.ts`）。
+ *
+ * 断言实现层（`core/logger` 的 pino 工厂与 ERROR 镜像）的四条契约，防止格式
+ * 漂移或敏感字段落盘：
  * - 契约 1：日志必须是单行合法 JSON，含 level/time/msg 标准字段（采集端友好）。
  * - 契约 2：redact 对密钥/认证头生效（password/token/secret/apiKey → [Redacted]）。
  * - 契约 3：PII 与 prompt 原文默认被脱敏（规范 §11.5 埋点纪律扩展到日志契约），
  *   即便代码误把 prompt/email 塞进结构化字段也不会原样落盘。
+ * - 契约 4：ERROR 镜像（app-runtime 通道）**不经 pino redact**，只写文本字段 ——
+ *   它必须自己过值形状守卫，且绝不整包 `JSON.stringify`（§7.18.2.1）。
+ *
+ * 随「日志实现合并为一份」从 `src/server/lib/logger.test.ts` 迁移至此：实现现在
+ * 在 `src/lib/core/logger.ts`，测契约的用例跟着实现走（`src/server/lib/logger.ts`
+ * 已降为转发层，对它测等于对同一份实现测两遍）。
  */
 
 /** 造一个可捕获输出的 Writable 目标流。 */

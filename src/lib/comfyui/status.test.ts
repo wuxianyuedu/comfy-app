@@ -38,7 +38,7 @@ vi.mock("./client", () => ({
   resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
   resetComfyBase: vi.fn(),
 }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 

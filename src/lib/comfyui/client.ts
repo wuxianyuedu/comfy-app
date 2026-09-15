@@ -29,7 +29,7 @@ import { comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
 import { probeBaseOnce, probeComfyAtPort } from "./probe";
 import { queryNvidiaVram } from "./gpu-vram";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 
 /** How many extra ports to probe when the configured one is unreachable */
 const PROBE_RANGE = 5;
