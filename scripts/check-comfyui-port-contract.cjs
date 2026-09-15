@@ -43,7 +43,9 @@ function read(rel) {
 }
 
 const CLIENT = "src/lib/comfyui/client.ts";
-const LIFECYCLE = "src/lib/comfyui/lifecycle.ts";
+/* 拉起侧（buildSpawnArgs 调用 + 默认端口注入）自 ISSUE #570 起在
+ * lifecycle-launch.ts；lifecycle.ts 只留「取事实 → 判决 → 交付」。 */
+const LIFECYCLE = "src/lib/comfyui/lifecycle-launch.ts";
 const DERIVE = "src/lib/comfyui/lifecycle-derive.ts";
 const DESKTOP = "src/lib/comfyui/desktop-instance.ts";
 const SETTINGS = "src/lib/app-settings.ts";
