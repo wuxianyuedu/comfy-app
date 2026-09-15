@@ -1,26 +1,91 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
 
 /** tRPC 查询返回的工作流详情载荷：在 WorkflowDetail 基础上，失败分支会带上
  *  `error` 字段（成功时缺省）。用它对全文件散落的 `(x as any)` 做类型收窄，
- *  满足 §4.1 禁止 any 的约束，同时保留失败态的错误读取。 */
+ *  满足禁止 any 的约束，同时保留失败态的错误读取。 */
 type WorkflowDetailResponse = WorkflowDetail & { error?: string };
 
-/** 冷路径请求超时兜底：tRPC vanilla client 不支持直接传 signal，用
- *  Promise.race 在超时后抛错，避免后端长时间不返回时加载覆盖层无限
- *  转圈（用户侧表现为"点展开后一直没恢复"）。底层请求超时后仍可能
- *  最终返回，但 myReqId 守卫 + 错误提示保证 UI 不会卡死。 */
+interface WorkflowSubgraphStackEntry {
+  uid: string;
+  name: string;
+  nodeId: string;
+}
+
+interface CacheEnvelope {
+  t: number;
+  d: WorkflowDetail;
+}
+
+/* 缓存 schema 版本后缀。每当 workflow.detailFull / subgraph 响应结构变化时就
+ *  提升此后缀，使旧的 sessionStorage 条目失效（每次 fetch 都会 purge 旧命名空间，
+ *  见 purgeStaleCache）。改动响应字段时只改这里一处，比散落的版本号更难漏。 */
+const CACHE_KEY_PREFIX = "wfdetail:R7:subgraphHostNamespaced:";
+const CACHE_TTL_MS = 30_000;
+
+/** 清掉所有非当前命名空间的 wfdetail:* 键，防止旧版本键残留被误命中。best-effort。 */
+function purgeStaleCache(): void {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith("wfdetail:") && !k?.startsWith(CACHE_KEY_PREFIX)) {
+        sessionStorage.removeItem(k);
+      }
+    }
+  } catch {
+    /* sessionStorage 可能被禁用（隐私模式），静默跳过 */
+  }
+}
+
+/** 强制重载时清掉本应用命名空间下的全部缓存键（不再清整个 origin 的 storage）。 */
+function clearWorkflowCache(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith("wfdetail:")) keys.push(k);
+    }
+    keys.forEach((k) => sessionStorage.removeItem(k));
+  } catch {
+    /* sessionStorage 可能被禁用（隐私模式），静默跳过 */
+  }
+}
+
+function readCache(key: string): WorkflowDetail | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const obj = JSON.parse(raw) as CacheEnvelope;
+    return Date.now() - obj.t < CACHE_TTL_MS ? obj.d : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key: string, data: WorkflowDetail): void {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ t: Date.now(), d: data }));
+  } catch {
+    /* 配额超限，忽略 */
+  }
+}
+
+/** tRPC vanilla client 不支持直接传 signal，用 Promise.race 在超时后抛错，
+ *  避免后端长时间不返回时加载覆盖层无限转圈。底层请求超时后仍可能最终返回，
+ *  但竞态守卫 + 错误提示保证 UI 不会卡死。定时器在收尾时清理，避免泄漏。 */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`${label}加载超时（${ms / 1000}s），请重试`)), ms);
-    }),
-  ]);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label}加载超时（${ms / 1000}s），请重试`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 export interface WorkflowDetailLoaderArgs {
@@ -37,7 +102,7 @@ export interface WorkflowDetailLoaderArgs {
       | Record<string, WorkflowIOParam>
       | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>)
   ) => void;
-  setSubgraphStack: Dispatch<SetStateAction<{ uid: string; name: string; nodeId: string }[]>>;
+  setSubgraphStack: Dispatch<SetStateAction<WorkflowSubgraphStackEntry[]>>;
   setRootWorkflowName: Dispatch<SetStateAction<string>>;
   setSubgraphLoading: Dispatch<SetStateAction<boolean>>;
   setSubgraphRawContext: Dispatch<SetStateAction<{ parentRawJson: unknown; subUid: string } | null>>;
@@ -65,241 +130,146 @@ export function useWorkflowDetailLoader({
   setSubgraphRawContext,
   setSubgraphError,
 }: WorkflowDetailLoaderArgs) {
+  /* 子图栈的镜像引用：用于在 state updater 之外读取最新值（避免在 updater 里
+   *  排副作用 —— React StrictMode 会双调用 updater，导致重复发请求）。所有栈
+   *  变更都走 updateStack，保证镜像与 state 同步。 */
+  const stackRef = useRef<WorkflowSubgraphStackEntry[]>([]);
+  const updateStack = useCallback(
+    (
+      updater:
+        | WorkflowSubgraphStackEntry[]
+        | ((prev: WorkflowSubgraphStackEntry[]) => WorkflowSubgraphStackEntry[]),
+    ) => {
+      setSubgraphStack((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        stackRef.current = next;
+        return next;
+      });
+    },
+    [setSubgraphStack],
+  );
+
+  /* 调用方传入的是「已经拼接好的宿主链」（如顶层 "4"、嵌套子图 "4:5"，
+   *  与 comfy-cli 展开后的节点 id 口径一致）。这里只负责追加，切勿再把 prev
+   *  拼到前面，否则嵌套层会双重前缀、坐标全部退回原始值。 */
   const pushSubgraphStack = useCallback(
     (uid: string, name: string, nodeId: string) => {
-      setSubgraphStack((prev) => [
-        ...prev,
-        /* nodeId 是「外层封装节点 id 的完整链路」，每下钻一层就把本层宿主接在
-         * 末尾：第 1 层是 `4`，第 2 层是 `4:5` —— 与 comfy-cli 展开嵌套子图
-         * 后 `4:5:1670` 的拼接顺序一致，运行期拼上内部节点 id 即得真实节点 id。 */
-        { uid, name, nodeId: [...prev.map((entry) => entry.nodeId), nodeId].filter(Boolean).join(":") },
-      ]);
+      updateStack((prev) => [...prev, { uid, name, nodeId }]);
     },
-    [], // eslint-disable-line react-hooks/exhaustive-deps
+    [updateStack],
+  );
+
+  /* 只更新 detail / paramMap / workflowIO / 顶层根名，不碰子图栈。
+   *  后台刷新与冷路径共用，避免重复的 set-state 块。 */
+  const applyDetailState = useCallback(
+    (data: WorkflowDetail, isSubgraph: boolean) => {
+      setDetail(data);
+      setParamMap(data.paramMap ?? {});
+      setWorkflowIO(data.workflowIO ?? {});
+      if (!isSubgraph) {
+        setRootWorkflowName((prev) => prev ?? data.name ?? "");
+      }
+    },
+    [setDetail, setParamMap, setWorkflowIO, setRootWorkflowName],
+  );
+
+  /* 在 applyDetailState 基础上，下钻分支把新层级压入子图栈。 */
+  const commitDetail = useCallback(
+    (
+      data: WorkflowDetail,
+      isSubgraph: boolean,
+      o?: { subgraphUid?: string; parentTitle?: string; hostNodeId?: string },
+    ) => {
+      applyDetailState(data, isSubgraph);
+      if (isSubgraph && o?.subgraphUid) {
+        pushSubgraphStack(o.subgraphUid, o.parentTitle ?? data.name ?? "子工作流", o.hostNodeId ?? "");
+      }
+    },
+    [applyDetailState, pushSubgraphStack],
   );
 
   const fetchDetail = useCallback(
     async (opts?: { subgraphUid?: string; parentTitle?: string; bust?: boolean; hostNodeId?: string }) => {
-      /* 子图内部节点在 `positions` 列里存的是 `宿主:内部` 拼接键，读回时
-       * 必须带同一个宿主链前缀，否则子图里拖过的位置会被当成「没有覆盖」而
-       * 退回原始坐标。前缀进 URL 也顺带进了缓存键，不同层级的同名子图不会
-       * 互相串用缓存。 */
+      const subgraphUid = opts?.subgraphUid;
+      const isSubgraph = Boolean(subgraphUid);
       const hostId = opts?.hostNodeId ?? "";
-      const url = opts?.subgraphUid
-        ? `/api/workflows/${workflowId}/subgraph?uid=${encodeURIComponent(opts.subgraphUid)}${
+      const url = subgraphUid
+        ? `/api/workflows/${workflowId}/subgraph?uid=${encodeURIComponent(subgraphUid)}${
             hostId ? `&host=${encodeURIComponent(hostId)}` : ""
           }`
         : `/api/workflows/${workflowId}`;
+      /* hostId 是累积的「宿主:内部」链。拼进 URL 后：① 嵌套子图坐标按该前缀
+       *  读回（否则拖过的位置退回原始坐标）；② 缓存键按层级命名，同名子图不串用。 */
+      const cacheKey = CACHE_KEY_PREFIX + url;
 
-      // 维护 subgraphRawContext
-      //  - drill-in (subgraphUid 有值): 缓存父 rawJson + sub uid, 供
-      //    SourceModal 在 sub 视图下从父 rawJson.definitions.subgraphs[uid]
-      //    切出 sub 自己的 LiteGraph json 当 RAW 渲染。
-      //    * 用 detailRef 而不是 closure 里的 detail, 避免 stale;
-      //      第一次 drill-in 触发时 detail 还是父的, setDetail 还没生效。
-      //    * 同一 subUid 重复调用 (比如 background refresh) 不要覆盖
-      //      已捕获的父 rawJson, 防止 race 把正确的父 rawJson 洗掉。
-      //  - 顶层 detail (无 subgraphUid): 清空 subgraphRawContext,
-      //    回到 "SourceModal 读 detail.rawJson" 的常规路径。
-      if (opts?.subgraphUid) {
-        const targetUid = opts.subgraphUid;
+      /* subgraphRawContext 让 SourceModal 从父 rawJson 切出子图自己的 LiteGraph
+       *  json 当 RAW 渲染。用 detailRef（非闭包里的 detail）避免 stale；
+       *  同一 subUid 重复调用不要覆盖已捕获的父 rawJson，防止 race 把正确的洗掉。
+       *  顶层 detail 则清空，回到「SourceModal 读 detail.rawJson」常规路径。 */
+      if (subgraphUid) {
         setSubgraphRawContext((prev) =>
-          prev?.subUid === targetUid
+          prev?.subUid === subgraphUid
             ? prev
-            : { parentRawJson: detailRef.current?.rawJson ?? null, subUid: targetUid }
+            : { parentRawJson: detailRef.current?.rawJson ?? null, subUid: subgraphUid },
         );
       } else {
         setSubgraphRawContext(null);
       }
-      //     architecture (v2). v3 added the
-      //     `isBoundary` stamp on rawInputs/rawOutputs so WorkflowNode knows
-      //     which handles exist for boundary wires (input -10 sentinel
-      //     / output -20 sentinel) — without the flag the "no wire ⇒
-      //     no dot" rule hides the Handle and React Flow silently drops
-      //     the matching boundary edges.
-      //     v4 (late) invalidates any v3 entries cached BEFORE
-      //     the server's `.next` was actually rebuilt with that change
-      //     (Turbopack doesn't always hot-reload route.ts; without a
-      //     cache bump the UI keeps reading pre-isBoundary data forever,
-      //     even after a hard refresh).
-      //     On ANY further detail-shape change bump this version so
-      //     stale sessionStorage entries can't mask new behaviour for
-      //     5 min — remember that Ctrl+Shift+R does NOT clear
-      //     sessionStorage, only closing the tab does. v5
-      //     is a defensive bump: even though the *response shape* didn't
-      //     change, the runtime now reads `data.boundaryOutputs` /
-      //     `data.boundaryInputs` sets — derived in initialNodes from
-      // late (v6): wfIoPort boundary pins are now wrapped
-      //     in two wfGroup rectangles ("grp:bpin:inputs" /
-      //     "grp:bpin:outputs") with parentId + extent:"parent" on the
-      //     children; the layout pass reads `positions["grp:bpin:…
-      //     "]"` to honour a manually dragged column.  v5-cached
-      //     `detail` had no such keys and would silently fall back to
-      //     the rail-layout anchor on next paint, looking like the
-      //     change "didn't take".  Bumping to v6 invalidates every old
-      //     wfdetail:v5:* entry so the new boundary-group render kicks
-      //     in immediately on next open.
-      // (v7): the layout pass now anchors each rail at the
-      //     raw pin.pos coords (sub.inputs[i].pos / sub.outputs[i].pos)
-      //     instead of bbox-snapping every rail to the middle column's
-      //     minY.  v6-cached detail already carries the raw coords (the
-      //     raw subgraph endpoint has emitted them since this morning),
-      //     but the LAYOUT DECISION was different — v6 would still pick
-      //     the bbox fallback for workflows whose pin.pos is all-zero.
-      //     v7 invalidates any stale sessionStorage v6 entry that
-      //     matched the old layout decision so the new pin-anchored
-      //     render kicks in immediately on next open.
-      // 16:29 → v8: input-pin wfIoPort children now sit at
-      //     `relX = 2*GROUP_PAD_X` instead of `GROUP_PAD_X`, so their
-      //     right edge anchors flush to the parent wfGroup's right
-      //     border.  v7 cached entries would still render with the
-      //     10-px inner gap and look like nothing changed.
-      // 16:50 → v9: top-level layout now requires
-      //     `Object.keys(positions).length >= realNodes.length` to
-      //     take the saved-positions branch.  A partial positions
-      //     snapshot (e.g. 2/114 nodes) used to make 112 nodes fall
-      //     through to `{padX, padY}` = (80, 80) and stack on top of
-      //     each other, producing a broken main-graph render.  v9
-      //     invalidates any stale v8 entry so the new guard takes
-      //     effect on next open.
-      /* 终极缓存方案 4 重保险
-       *  ① SCHEMA fingerprint：cacheKey 嵌入了「route.ts 输出字段映射」指
-       *     纹，凡再加/删/改 API 返回字段，必须同步改本常量（语义注释强
-       *     制显式记录 schema 变更）——比单纯 v9→v10 手敲版本号更难漏。
-       *  ② __purgeStaleWorkflowCache() 主动清理：fetchDetail 进入即扫一
-       *     遍 sessionStorage，凡命名空间不对的 wfdetail: 全部物理删除，
-       *     杜绝老 key 在新 sessionStorage 里残留被误命中。
-       *  ③ fetch 改 cache:"no-store"：浏览器/HTTP 缓存层强制走完。
-       *  ④ 顶栏 🔄 强制重载按钮：用户可以一键清光所有 sessionStorage 并
-       *     带 ?bust 重新拉 server LRU bypass。
-       *  附带：TTL 5min → 30s；后台 fetch 也更新 UI（latestRequestId 守
-       *     卫 race condition）；console.banner 在每次 fetchDetail 入口打
-       *     显眼状态。 */
-      const cacheKey = `wfdetail:R7:subgraphHostNamespaced:${url}`;
-      const WFCACHE_TTL_MS = 30_000;
 
-      /* Once-per-page-load purge: drop every wfdetail:* entry that doesn't
-       *  share the current namespace suffix.  Catches the entire family of
-       *  "stuck v8/v9/v10" keys that used to lock users into a stale canvas
-       *  for up to 5 minutes.  Safe to call repeatedly — best-effort only. */
-      try {
-        for (let i = sessionStorage.length - 1; i >= 0; i--) {
-          const k = sessionStorage.key(i);
-          if (k && k.startsWith("wfdetail:") && !k.startsWith("wfdetail:R7:")) {
-            sessionStorage.removeItem(k);
-          }
-        }
-      } catch {
-        /* sessionStorage may be blocked (private mode); skip silently */
-      }
+      purgeStaleCache();
 
-      // 1) Synchronous sessionStorage lookup → instant paint on re-open.
-      let cached: WorkflowDetail | null = null;
-      try {
-        const raw = sessionStorage.getItem(cacheKey);
-        if (raw) {
-          const obj = JSON.parse(raw) as { t: number; d: WorkflowDetail };
-          if (Date.now() - obj.t < WFCACHE_TTL_MS) cached = obj.d;
-        }
-      } catch {
-        cached = null;
-      }
-
-      // Race-safe token: only the most recent fetchDetail invocation for a
-      // given URL is allowed to commit setDetail.  Solves "background fetch
-      // returns fresh data but UI still shows the cached one" by routing
-      // both branches through the same commit path.
+      /* 竞态令牌：同一 URL 仅最新一次 fetchDetail 允许提交 setDetail，解决
+       *  「后台刷新返回新数据但 UI 仍显示旧缓存」的问题（两条路径统一走这里）。 */
       const myReqId = ++latestRequestIdRef.current;
+      const cached = readCache(cacheKey);
 
       if (cached) {
         if (myReqId === latestRequestIdRef.current) {
-          setDetail(cached);
-          setParamMap(cached.paramMap ?? {});
-          setWorkflowIO(cached.workflowIO ?? {});
+          commitDetail(cached, isSubgraph, opts);
           setLoading(false);
           setSubgraphLoading(false);
-          /* Capture root workflow name on the first top-level fetch only. */
-          if (!opts?.subgraphUid) {
-            setRootWorkflowName((prev) => prev ?? cached.name ?? "");
-          }
-          if (opts?.subgraphUid) {
-            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? cached.name ?? "子工作流", opts.hostNodeId ?? "");
-          }
         }
-        // Background refresh: ALWAYS commit if it wins the race (it's
-        // newer than what we just painted), so schema-fingerprint
-        // upgrades automatically surface without a manual reload.
-        const bgPromise = opts?.subgraphUid
-          ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid, hostId })
+        /* 后台刷新：即使命中缓存也发一次网络请求，赢了竞态就提交（比缓存更新）。
+         *  不触碰子图栈。 */
+        const bg = subgraphUid
+          ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: subgraphUid, hostId })
           : vanillaApi.workflow.detailFull.query({ id: workflowId });
-        bgPromise
+        void bg
           .then((data: WorkflowDetailResponse | null) => {
             if (!data || data.error) return;
-            try {
-              sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), data }));
-            } catch {
-              /* ignore quota errors */
-            }
-            if (latestRequestIdRef.current === myReqId) {
-              setDetail(data);
-              setParamMap(data.paramMap ?? {});
-              setWorkflowIO(data.workflowIO ?? {});
-              if (!opts?.subgraphUid) {
-                setRootWorkflowName((prev) => prev ?? data.name ?? "");
-              }
+            writeCache(cacheKey, data);
+            if (myReqId === latestRequestIdRef.current) {
+              applyDetailState(data, isSubgraph);
             }
           })
           .catch(() => undefined);
         return;
       }
 
-      // 2) Cold path: network fetch via tRPC (POST, bypasses HTTP cache).
-      /* callers may pass {bust:true} via fetchDetail so that
-       *  the server's in-memory LRU is also invalidated (matches the
-       *  顶栏 🔄 强制重载按钮 contract). */
-      const isBust = opts?.bust === true;
+      /* 冷路径：走 tRPC（POST，绕过 HTTP 缓存）。 */
       if (!detail) setLoading(true);
       try {
         const d = (await withTimeout(
-          opts?.subgraphUid
-            ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: opts.subgraphUid, hostId })
+          subgraphUid
+            ? vanillaApi.workflow.subgraph.query({ id: workflowId, uid: subgraphUid, hostId })
             : vanillaApi.workflow.detailFull.query({
                 id: workflowId,
-                bust: isBust ? true : undefined,
+                bust: opts?.bust ? true : undefined,
               }),
           60_000,
-          opts?.subgraphUid ? "子工作流" : "工作流",
+          subgraphUid ? "子工作流" : "工作流",
         )) as WorkflowDetailResponse;
         if (d.error) throw new Error(d.error);
-        try {
-          sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), d }));
-        } catch {
-          /* ignore quota errors */
-        }
-        if (myReqId === latestRequestIdRef.current) {
-          setDetail(d);
-          setParamMap(d.paramMap ?? {});
-          setWorkflowIO(d.workflowIO ?? {});
-          /* Capture root workflow name on first top-level fetch. */
-          if (!opts?.subgraphUid) {
-            setRootWorkflowName((prev) => prev ?? d.name ?? "");
-          }
-          if (opts?.subgraphUid) {
-            pushSubgraphStack(opts.subgraphUid, opts.parentTitle ?? d.name ?? "子工作流", opts.hostNodeId ?? "");
-          }
-        }
+        writeCache(cacheKey, d);
+        if (myReqId === latestRequestIdRef.current) commitDetail(d, isSubgraph, opts);
       } catch (e: unknown) {
-        // 子工作流下钻失败：非致命 —— 保留父图，仅用内联错误提示，
-        // 绝不渲染「返回」错误屏（那会回退到工作流库界面）。
-        // e 为 unknown：先用 instanceof Error 收窄再取 message，否则回退到约定文案。
+        /* 子图下钻失败：非致命 —— 保留父图，仅用内联错误提示，绝不渲染「返回」
+         *  错误屏（那会回退到工作流库界面）。e 为 unknown：先 instanceof Error
+         *  收窄再取 message，否则回退到约定文案。 */
         const msg =
-          (e instanceof Error ? e.message : "") ||
-          (opts?.subgraphUid ? "子工作流加载失败" : "加载失败");
-        if (opts?.subgraphUid) {
-          setSubgraphError(msg);
-        } else {
-          setError(msg);
-        }
+          (e instanceof Error ? e.message : "") || (isSubgraph ? "子工作流加载失败" : "加载失败");
+        if (isSubgraph) setSubgraphError(msg);
+        else setError(msg);
       } finally {
         if (myReqId === latestRequestIdRef.current) {
           setLoading(false);
@@ -307,36 +277,33 @@ export function useWorkflowDetailLoader({
         }
       }
     },
-    [workflowId, pushSubgraphStack], // eslint-disable-line react-hooks/exhaustive-deps
+    [
+      workflowId,
+      commitDetail,
+      applyDetailState,
+      detail,
+      detailRef,
+      latestRequestIdRef,
+      setSubgraphRawContext,
+      setLoading,
+      setSubgraphLoading,
+      setSubgraphError,
+      setError,
+    ],
   );
 
-  /* 终极方案 #4: 顶栏 🔄 强制重载按钮触发的入口
-   *  - 清空整个 sessionStorage（不只是 wfdetail:*，避免任何层残渣）
-   *  - 提前把 latestRequestIdRef 自增一次让任何 in-flight fetch 全部失效
-   *  - 重新调用 fetchDetail({bust:true})（服务器 LRU 也会被 ?_bust=1 清掉）
-   *  - server side 通过 url 上的 _r3= 时间戳参数穿透 server LRU 的 30s 边界
-   */
+  /* 顶栏强制重载按钮触发的入口：清本应用缓存命名空间 + 让任何 in-flight fetch
+   *  作废，再以 bust 重新拉（服务器 LRU 也被穿透）。 */
   const forceReloadDetail = useCallback(
     (
       hostNodeId = "",
       /** 静默模式：不把编辑器打成 loading、不清空当前 detail。用于「重置布局」
-       *  这类**主动重拉**——用户刚点完按钮，画布不该整屏闪一下 loading，
-       *  而新数据到了自然会替换（保留节点拖拽/缩放状态）。 */
-      silent = false
+       *  这类主动重拉——新数据到了自然会替换，画布不该整屏闪一下 loading。 */
+      silent = false,
     ) => {
-      try {
-        // 1) 清光所有 sessionStorage key（防御性）
-        sessionStorage.clear();
-      } catch {
-        /* private mode 等 */
-      }
-      // 2) 任何 in-flight fetchDetail 都作废
+      clearWorkflowCache();
       latestRequestIdRef.current++;
       setError("");
-      // 3) 重新跑一次（冷路径 → network → setDetail → 立刻看到新数据）
-      /* 强制重载必须带上当前视图的宿主链：子图视图下节点的坐标存在
-       *  `宿主:内部` 键上，不带前缀重新拉回来的就是一份丢了全部拖拽结果的
-       *  数据 —— 看起来像「一重载布局就全乱」。 */
       if (!silent) {
         setDetail(null);
         setLoading(true);
@@ -344,84 +311,75 @@ export function useWorkflowDetailLoader({
       }
       void fetchDetail({ bust: true, hostNodeId });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fetchDetail]
+    [fetchDetail, latestRequestIdRef, setError, setDetail, setLoading, setSubgraphLoading],
   );
 
   useEffect(() => {
-    /* When the parent reuses this editor instance for a *different*
-     *  workflow (same `WorkflowCanvasEditor` element, new `workflowId`
-     *  prop), reset the breadcrumb state.  Otherwise the old root
-     *  name + subgraph stack would briefly show against the new
-     *  workflow before the new top-level fetch lands. */
-    setSubgraphStack([]);
+    /* 编辑器实例被复用到另一个 workflow 时重置面包屑状态，避免旧根名 / 子图栈
+     *  在新 fetch 落地前短暂闪现。 */
+    updateStack([]);
     setRootWorkflowName("");
     setDetail(null);
     setError("");
     void fetchDetail();
   }, [workflowId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* Enter a subgraph: flash the loading overlay synchronously, then fetch
-   *  the inner graph in a separate macrotask so React 18 commits the
-   *  overlay before the new `detail` arrives.  We no longer stash a
-   *  WorkflowSubgraphData "summary" — the user wants the I/O to live ON the
-   *  WorkflowSubgraphNode card in the parent graph, not in a separate full-
-   *  canvas panel; clicking expand jumps straight into the inner graph. */
+  /* 进入子图：先同步亮出 loading 覆盖层，再用 setTimeout 把新 detail 推到下一个
+   *  macrotask，让 React 18 先提交覆盖层再替换 detail。点击展开直接跳进子图。 */
   const onEnterSubgraph = useCallback(
     (
       nodeId: string,
       uid: string,
       parentTitle: string,
-      /** 上一层的宿主链（顶层下钻为空串）。嵌套子图要拼成 `4:5`，
-       *  与拖拽落库用的 `runtimeNodeId` 口径一致。 */
-      parentHostId = ""
+      /** 上一层的宿主链（顶层下钻为空串）。嵌套子图拼成 `4:5`，与拖拽落库用的
+       *  runtimeNodeId 口径一致。 */
+      parentHostId = "",
     ) => {
-      /* IO 编辑态**跨层保留**：子图本身没有独立的 IO 契约，但父工作流的对外
-       *  参数完全可能落在子图内部的节点上（`LoadImage.image` / `PrimitiveInt.value`
-       *  …）。下钻后仍能勾选，作者才能把这类内部参数接进父工作流的对外参数；
-       *  勾选时画布带上宿主节点 id（`IoRef.hostNodeId`），运行期据此把内部节点
-       *  id 还原成 comfy-cli 展开后的 `宿主id:内部id`。两个开关都不在这里清掉，
-       *  否则下钻一次就得重新手动打开。 */
+      /* IO 编辑态跨层保留：子图本身没有独立 IO 契约，但父工作流的对外参数可能落在
+       *  子图内部节点上（`LoadImage.image` / `PrimitiveInt.value`…）。下钻后仍可
+       *  勾选，作者才能把内部参数接进父工作流对外参数；勾选时画布带上宿主节点 id，
+       *  运行期据此把内部节点 id 还原成 comfy-cli 展开后的 `宿主id:内部id`。 */
       setSubgraphError("");
       setSubgraphLoading(true);
       const hostChain = [parentHostId, nodeId].filter(Boolean).join(":");
       setTimeout(
-        () => { void fetchDetail({ subgraphUid: uid, parentTitle, hostNodeId: hostChain }); },
-        0
+        () => {
+          void fetchDetail({ subgraphUid: uid, parentTitle, hostNodeId: hostChain });
+        },
+        0,
       );
     },
-    [fetchDetail], // eslint-disable-line react-hooks/exhaustive-deps
+    [fetchDetail, setSubgraphError, setSubgraphLoading],
   );
 
-  /* Pop one level off the subgraph stack and re-render.  If we end up
-   *  back at the top level, re-fetch the workflow detail. */
+  /* 退出一层子图：回退子图栈并重拉对应层级。回退逻辑在 updater 之外做，
+   *  避免 StrictMode 双调用 updater 时重复发请求。 */
   const onExitSubgraph = useCallback(async () => {
     setSubgraphLoading(true);
-    setSubgraphStack((prev) => {
-      if (prev.length === 0) return prev;
-      const next = prev.slice(0, -1);
-      // Schedule a re-fetch of the right level outside the setter.
-      if (next.length === 0) {
-        // Back at top level
-        setTimeout(() => { void fetchDetail(); }, 0);
-      } else {
-        const parent = next[next.length - 1];
-        /* 回到上一层时同样要带上它自己的宿主链：上一层若是子图内部视图，
-         *  它的坐标也存成 `宿主:内部`，不带前缀就会退回原始坐标。 */
-        setTimeout(
-          () => {
-            void fetchDetail({
-              subgraphUid: parent!.uid,
-              parentTitle: parent!.name,
-              hostNodeId: parent!.nodeId,
-            });
-          },
-          0
-        );
-      }
-      return next;
-    });
-  }, [fetchDetail]); // eslint-disable-line react-hooks/exhaustive-deps
+    const current = stackRef.current;
+    if (current.length === 0) return;
+    const next = current.slice(0, -1);
+    updateStack(next);
+    if (next.length === 0) {
+      setTimeout(() => {
+        void fetchDetail();
+      }, 0);
+    } else {
+      const parent = next[next.length - 1]!;
+      /* 回到上一层同样带上它自己的宿主链：上一层若是子图内部视图，坐标也存成
+       *  `宿主:内部`，不带前缀会退回原始坐标。 */
+      setTimeout(
+        () => {
+          void fetchDetail({
+            subgraphUid: parent.uid,
+            parentTitle: parent.name,
+            hostNodeId: parent.nodeId,
+          });
+        },
+        0,
+      );
+    }
+  }, [fetchDetail, updateStack, setSubgraphLoading]);
 
   return { pushSubgraphStack, fetchDetail, forceReloadDetail, onEnterSubgraph, onExitSubgraph };
 }
