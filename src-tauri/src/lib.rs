@@ -1,8 +1,6 @@
 use std::net::TcpStream;
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
-#[cfg(not(debug_assertions))]
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -12,12 +10,21 @@ use tauri::{Manager, Wry};
 use tauri_plugin_process;
 use tauri_plugin_window_state::StateFlags as WindowStateFlags;
 
-// 按检出隔离的单实例保护与端口推导（launch-and-build.md §1.4 多检出并行）
+// 按检出隔离的单实例保护与端口推导（launch-and-build.md §1.4 多检出并行）。
+// 该模块自带平台实现（Windows 具名内核对象 / POSIX 锁文件 + SIGUSR1），
+// 因此**不需要**在模块声明上做 cfg —— 调用点因此不用按平台分叉。
 mod single_instance;
 
-// 生产模式 sidecar（Next standalone server）PID，应用退出时回收
+/// 生产模式 sidecar（Next standalone server）句柄，应用退出时回收。
+///
+/// 用 **tauri-plugin-shell 的 CommandChild** 而不是 `std::process::Command`：
+/// 官方的 shell 插件按平台选择解释器（Windows `cmd /C`、POSIX `sh -c`），
+/// 且 `kill()` 会连带回收子进程（POSIX 走进程组、Windows 走 Job/任务终止），
+/// 这正是「跨平台启动链路」里最不能自己手写的一段（AGENTS 硬规则 3）。
+/// 自持 `Command::new` + `taskkill` 的写法在 POSIX 上只剩单杀 leader ——
+/// node 之下的 next-server / turbopack worker 会残留成孤儿，继续占端口锁日志。
 #[cfg(not(debug_assertions))]
-static SIDECAR_PID: Mutex<Option<u32>> = Mutex::new(None);
+static SIDECAR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = Mutex::new(None);
 
 /// 应用级状态：由 launcher 通过环境变量传入项目根目录，
 /// 启动页调用 get_launch_status / navigate_to_app 时使用。
@@ -531,12 +538,36 @@ fn pick_free_port() -> u16 {
   3100
 }
 
-/// 生产模式：以 Node sidecar 启动 Next standalone server，端口就绪后主窗口跳转
+/// sidecar 可执行文件名：**按目标平台判据**，不写死 `node.exe`。
+///
+/// 写死时跨平台构建会直接死在 `build.rs`：`bundle.externalBin` 声明的是
+/// Tauri 的「无后缀 basename」约定，打包器按当前目标三元组补后缀去找
+/// `node-<triple>[.exe]`，而 Windows 版脚本只产出 `.exe`、sidecar 解析又只
+/// 拼 `node.exe` —— Linux/macOS 上两处都会落空（实测报错
+/// ``resource path `binaries/node-x86_64-unknown-linux-gnu` doesn't exist``）。
+/// 判据收在这一个函数里，与 scripts/build-desktop.mjs 的 sidecarFileName 同源。
+#[cfg(not(debug_assertions))]
+fn sidecar_binary_name() -> &'static str {
+  if cfg!(windows) {
+    "node.exe"
+  } else {
+    "node"
+  }
+}
+
+/// 生产模式：以 Node sidecar 启动 Next standalone server，端口就绪后主窗口跳转。
+///
+/// 进程经 **tauri-plugin-shell** 拉起（而不是 `std::process::Command`）：
+/// 官方插件按平台选解释器并让 `kill()` 连带回收子进程，跨平台回收因此不必
+/// 自己写两套（见 SIDECAR 静态量的注释）。
 #[cfg(not(debug_assertions))]
 fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+  use tauri_plugin_shell::process::CommandEvent;
+  use tauri_plugin_shell::ShellExt;
+
   let port = pick_free_port();
   let res_dir = app.path().resource_dir()?;
-  let node = res_dir.join("binaries").join("node.exe");
+  let node = res_dir.join("binaries").join(sidecar_binary_name());
   let server = res_dir.join("server.js");
 
   let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
@@ -567,13 +598,38 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
     .into());
   }
 
-  let child = Command::new(&node)
-    .arg(&server)
+  // 直接执行 sidecar 二进制本身（不经 shell 解释器）：
+  // `Command::new` 在 shell 插件里是「可执行 + 参数」语义，路径由资源目录给出，
+  // 不需要 `sh -c` / `cmd /C` 这层间接 —— 少一层中转就少一个孤儿来源。
+  let (mut rx, child) = app
+    .shell()
+    .command(node.to_string_lossy().to_string())
+    .args([server.to_string_lossy().to_string()])
     .env("PORT", port.to_string())
     .env("HOSTNAME", "127.0.0.1")
     .current_dir(&res_dir)
     .spawn()?;
-  *SIDECAR_PID.lock().unwrap() = Some(child.id());
+  *SIDECAR.lock().unwrap() = Some(child);
+
+  // sidecar 的 stdout/stderr 必须有人读：shell 插件把输出投递到事件通道，
+  // 无人消费时管道写满会让 sidecar 静默卡死（表现为「服务一直不就绪」）。
+  // 落进壳日志，也正好补上 standalone 脱离 launcher 时的诊断通道。
+  tauri::async_runtime::spawn(async move {
+    while let Some(event) = rx.recv().await {
+      match event {
+        CommandEvent::Stdout(line) => {
+          log::info!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
+        }
+        CommandEvent::Stderr(line) => {
+          log::warn!("[sidecar] {}", String::from_utf8_lossy(&line).trim_end())
+        }
+        CommandEvent::Terminated(payload) => {
+          log::info!("[sidecar] terminated: {:?}", payload.code)
+        }
+        _ => {}
+      }
+    }
+  });
 
   // 更新应用 URL，供启动页 ready 后导航
   let app_url = format!("http://127.0.0.1:{}/workspace", port);
@@ -635,29 +691,51 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
   });
 }
 
-/// 应用退出时回收 sidecar 整棵进程树（Windows）
+/// 应用退出时回收 sidecar 整棵进程树。
+///
+/// 交给 shell 插件的 `kill()`：它按平台选择机制（Windows 任务终止 /
+/// POSIX 进程组信号），是「跨平台回收」里唯一不该自己写的一段。此前这里写死
+/// `taskkill /T /F`，在 Linux/macOS 上等于**什么也不做** —— sidecar 与它拉起的
+/// next-server 会活过壳退出，继续占着端口与日志文件。
 #[cfg(not(debug_assertions))]
 fn kill_sidecar() {
-  if let Some(pid) = *SIDECAR_PID.lock().unwrap() {
-    let _ = Command::new("taskkill")
-      .args(["/T", "/F", "/PID", &pid.to_string()])
-      .status();
+  let child = SIDECAR.lock().unwrap().take();
+  if let Some(child) = child {
+    match child.kill() {
+      Ok(()) => log::info!("[ComfyAPP] sidecar killed"),
+      Err(e) => log::warn!("[ComfyAPP] sidecar kill failed: {:?}", e),
+    }
   }
+}
+
+/// 该路径是否像一个「本检出」的项目根。
+///
+/// 判据刻意**不看平台专属文件**：此前校验的是 `scripts/dev-launcher.ps1`
+/// 是否存在，于是 Linux/macOS 上 `resolve_project_root()` 永远返回空串 ——
+/// 启动页读不到 `run/launch-status.json`、壳日志落不到 `log/shell/`，
+/// 表现为「启动页一直转圈 + 没有日志可查」，而根因只是判据绑在了 Windows 上。
+/// 现在认两个**跨平台都存在**的仓库标识文件（package.json 是必需，
+/// 另一个任选其一：跨平台编排器或 Windows 编排器）。
+fn looks_like_project_root(dir: &std::path::Path) -> bool {
+  if !dir.join("package.json").is_file() {
+    return false;
+  }
+  dir.join("scripts").join("dev-launcher.mjs").is_file()
+    || dir.join("scripts").join("dev-launcher.ps1").is_file()
 }
 
 /// 尝试从 launcher 传入的环境变量读取项目根目录；
 /// 失败则回退到当前 exe 所在目录。
 fn resolve_project_root() -> String {
   if let Ok(root) = std::env::var("COMFYAPP_PROJECT_ROOT") {
-    if std::path::Path::new(&root).join("scripts").join("dev-launcher.ps1").exists() {
+    if looks_like_project_root(std::path::Path::new(&root)) {
       return root;
     }
   }
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
-      let dir = dir.to_string_lossy().to_string();
-      if std::path::Path::new(&dir).join("scripts").join("dev-launcher.ps1").exists() {
-        return dir;
+      if looks_like_project_root(dir) {
+        return dir.to_string_lossy().to_string();
       }
     }
   }
@@ -852,6 +930,11 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     // 进程重启：更新安装完成后调 relaunch 使新版本生效；也供「重启应用」按钮用。
     .plugin(tauri_plugin_process::init())
+    // 子进程管理（standalone sidecar 的拉起与回收）：官方 shell 插件按平台
+    // 选择机制，跨平台回收不必自己写两套（见 spawn_sidecar / kill_sidecar）。
+    // 安全取向：**不把 shell 命令暴露给前端**（caps 里不授 shell:allow-execute /
+    // allow-spawn），只有壳内 Rust 代码经 ShellExt 使用，前端窗口拿不到执行能力。
+    .plugin(tauri_plugin_shell::init())
     .manage(AppState::new(project_root, app_url, foreground))
     .invoke_handler(tauri::generate_handler![
       get_launch_status,

@@ -42,7 +42,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "nsis",
+      "msi",
+      "app",
+      "dmg",
+      "deb",
+      "rpm",
+      "appimage"
+    ],
     "externalBin": [
       "binaries/node"
     ],
