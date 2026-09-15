@@ -277,11 +277,21 @@ true`——这类场景的策略反过来，必须给前台。
    > （unary comma 防展开）。后者在依赖健康、`$broken` 为空数组时会把「一个空数组」
    > 当作单对象输出，调用方 `@(Get-BrokenKeyDeps)` 收集成 `.Count=1` 的空子数组，健康
    > 环境也会被判残缺、反复 `pnpm install` 却 “Already up to date” 无法自愈（见 §5 对应行）。
-6. **壳时效提醒**：{{shell.app.exe}} 比 tauri.conf.json / src\*.rs / splash-assets 旧时
+6. **依赖漂移差异定位（ISSUE #550）**：判定「依赖与 lockfile 不一致」只回答了一半问题——
+   用户接着要问的是「哪儿不一致」。启动链路与质量门禁统一调用
+   `scripts/lockfile/diff-cli.mjs`（内核 `scripts/lockfile/lock-diff.mjs`），把两份 lockfile
+   分段比对后**逐项打印**：顶层配置（`settings` / `overrides`）、各 importer 的直接依赖
+   （新增 / 删除 / `specifier` 或解析版本变更）、以及 `packages` / `snapshots` 的条目增删。
+   只依赖 Node 内置能力，不引第三方 YAML 解析器（standalone 产物里也不带）。
+   > 判据仍是 `node_modules\.pnpm\lock.yaml` 与仓库根 `pnpm-lock.yaml` 的内容差异，
+   > 差异定位只是把「为什么不一致」讲清楚，不改变谁触发重装。
+   > 两份 lockfile 的正文段必须用 `splitTopSections` 统一处理：仓库 lockfile 头部含一段
+   > pnpm 自举（bundled CLI）内容与正文同形，整体拿去比对会被误判成「重复段落」。
+7. **壳时效提醒**：{{shell.app.exe}} 比 tauri.conf.json / src\*.rs / splash-assets 旧时
    WARN 提醒重编（`cd src-tauri; cargo build --release --features custom-protocol`）。
    窗口配置与启动页是编译期内嵌的，只改源码不重编壳 = 跑旧逻辑（黑屏问题的
    直接来源）。
-7. **数据库 schema 同步（Drizzle）**：依赖预检后执行 `pnpm exec drizzle-kit push`，
+8. **数据库 schema 同步（Drizzle）**：依赖预检后执行 `pnpm exec drizzle-kit push`，
    以 ALTER 方式把 `src/server/db/schema.ts` 的表结构增量同步进 `db.sqlite`
    （保留现有数据）。改用 Drizzle 后不再有「运行时必须重新 prisma generate 一个
    庞大 client + DLL 被锁」的步骤；改了 schema 后双击启动即可自动生效。失败仅
@@ -571,6 +581,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **启动页的最小化 / 关闭点了没反应**（#412 二次回报；按钮画在右上角、能悬停高亮，就是点下去什么都不发生） | 按钮「画出来」与「调得动窗口」是两件事：①`decorations: false` 之后窗口唯一的出口就是这两个按钮，而它们此前只挂在**一条** `addEventListener` 上——脚本没跑到绑定、监听被顶掉，点击就没人接；②兜底要靠新壳命令，而改了 `src-tauri/**` / `public/{{shell.splash}}` 不重编壳时跑的是旧壳（新命令不存在），症状同样是「点了没反应」；③`--splash` 那张启动器自绘画面用的是 `ShowWindow(SW_MINIMIZE)`——`WS_EX_TOPMOST` 的无主弹窗**不会被它最小化**（系统去找可最小化的父窗口组，找不到就什么都不做） | 已修：启动页的窗口按钮改为「三条互补路径 + 失败可见」（事件监听 / 按钮内联 `onclick` → `window.__splashWinAction` / 应用自建命令 `win_minimize`·`win_close`，三条都失败时消息区写「当前壳缺少窗口命令，请更新」）；新命令按规范三处同步（`build.rs` AppManifest / `capabilities/splash.json`），壳侧直接操作 splash 窗口、不额外授权 `core:window` 命令面；启动器自绘画面的最小化改为「隐藏 + 撤置顶 + 交还前台」并由 40ms 定时器维持，尺寸同步到 744×216（与启动页一致）；另启动器启动前比一次壳文件时间戳，过期时在画面/日志里钉一条「请重编壳」。判据见 `tests/check-file-structure.test.ts`，规范 07 §7.18.7 |
 | **启动页窗口一大块没用的空白**，只有中间一张小卡片有内容；右上角只有一个 ✕、没有最小化（ISSUE #412） | **窗口尺寸与内容尺寸脱钩**：splash 窗口按「窗口越大、日志一行越能放全」给了 1680×1000 并带原生标题栏，而内容卡片只有 720（收起日志）/1400（展开）宽——2K/4K 屏上于是大半块是空白，观感像「弹了个空窗口」。同时原生标题栏只为三个系统按钮多占一条，且窗口本身没有「跟内容一起长」的能力 | 已改为**窗口即内容 + 无边框**：①`decorations: false`（无原生标题栏），最小化/关闭由启动页右上角自绘（`-webkit-app-region: drag` 铺满标题行、按钮 `no-drag` 排除，否则点击被拖拽吞掉）；②开窗 = 紧凑档 `SPLASH_WINDOW_SIZE`（744×216，`tauri.conf.json` 同值，高度贴着收起日志时的内容），展开日志时页面调应用命令 `set_splash_compact(false)` 由壳调到 `SPLASH_WINDOW_SIZE_EXPANDED`（1424×788）并居中——**两档常量只在壳里一份**，页面不自己拼尺寸；③两档都过 `clamp_to_monitor` 收敛（小屏不越界）；④面板不再写死 320px 高度，改 `flex: 1` 吃掉窗口剩余高度，展开后既不是窄缝、下方也不留空白。新增命令已三处同步（`build.rs` AppManifest / `capabilities/splash.json`），改动 splash-assets 与 tauri.conf.json 后**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol` |
 | **双击启动弹红色「启动失败：Next.js dev server 提前退出（exit=0）」，但两个 nextjs 日志都只有一行、完全看不出原因**（stderr 里那句 `$ node scripts/dev.mjs "-p" … "-H" …` 只是 pnpm 回显的启动命令行，不是报错） | **把设计内的收尾路径报成了失败**：Prebuilt 链路的生命周期是「壳在，dev server 才在」——壳一退出，dev-launcher 就 `taskkill /PID <dev> /T /F` 回收整棵树（见 §3.2），而 `/F` 走的 TerminateProcess 不给进程收尾机会，dev server 于是表现成「exit=0 且几乎无输出」（启动 17s，连 `Ready in xxs` 都没来得及 flush）。触发这条路径的常见成因是**用户关掉启动页 = 放弃本次启动**（壳按约定 `exit(0)`，见 §1 链路图的 splash 分支），也可能是壳被另一次启动顶掉 / 任务管理器结束 / 壳崩溃——三种成因的退出码一样，旧文案只写 exit=0，用户只能照「dev server 编译失败」的方向查，而现场根本不在 dev server 侧 | 已修：dev-launcher 判定 dev server 退出时带上壳侧证据再定性——壳 stderr 含 `launch abandoned` 标记（`Test-ShellLaunchAbandoned`）+ 壳是否已退出 → `Get-DownstreamExitKind` 给出三种分支：① 用户放弃 → 写 info、按**正常退出码**收尾，不再弹失败框（与 python 启动器的 `cancelled` 语义一致）；② 壳被外部终止 → 提示明确指向 `log/shell/shell.log` 与 `log/launcher/dev-launcher-stderr.log`，不再让人去查 dev server 编译错；③ 壳仍在 → 保持原有「dev server 自身退出」提示与 stderr/stdout 现场（编译失败 / 端口占用 / pnpm 异常）。回归测试 `tests/dev-launcher-downstream-exit.test.ts` |
+| **只报「依赖与 lockfile 不一致」，却看不出哪里不一致**（ISSUE #550）                                                                   | 漂移判定只用 SHA256 比对两份 lockfile，答案只有布尔值：「拉取更新后未重装」成了唯一解释，用户既不知道是新增依赖、版本变更还是配置项变动，也没法判断该不该删 `node_modules` 重来                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 已修：差异定位收口在 `scripts/lockfile/lock-diff.mjs`（解析 + 比对，纯函数可单测），`diff-cli.mjs` 负责输出；`prepare-local-run.ps1`（双击入口）与 `quality-gate.ps1`（依赖预检）都调用它逐项打印差异，见 §2.2 第 6 条。回归测试 `tests/lockfile-diff.test.ts`（含「拿真仓库 lockfile 比对」的真实形态用例）                                                                                                            |
 | dev server「提前退出 exit=1」且无输出                                                                                                  | cmd 重定向目标文件被残留进程锁定，打开即失败                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 已修复：nextjs 日志按次命名。残留进程见 §3                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `pnpm install` 被拒：`minimumReleaseAge` / `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`                                                    | pnpm 默认拒绝发布不足 24h 的包                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 已在 pnpm-workspace.yaml 关闭；新包确认可信后可按需放开                                                                                                                                                                                                                                                                                                                                                                                       |
 | `pnpm install` exit 1：`ERR_PNPM_IGNORED_BUILDS`                                                                                       | pnpm 默认不批准第三方 postinstall                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 已在 pnpm-workspace.yaml `allowBuilds` 批准 6 个包；新增含构建脚本的依赖需补充                                                                                                                                                                                                                                                                                                                                                                |
@@ -661,7 +672,7 @@ zustand 队列，而不是再加一个模块级单例。
 | 场景                                                                                      | 命令                                                                                                         | 说明                                                                                                                                                                |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 只改了 Rust 壳 / 窗口配置 / 启动页                                                        | `cd src-tauri; cargo build --release --features custom-protocol`                                             | **必须带 `--features custom-protocol`**（见 §5「启动先看到 Edge 错误页」条目：不带会把启动页导航到 devUrl 且资源不内嵌）；增量编译约 1 分钟；启动器预检会提醒壳过期。注意：裸 `cargo build` 要求 `src-tauri\binaries` 已有 Node sidecar（`tauri.conf.json` 的 externalBin 在编译期被校验，缺失即 panic）——缺失时先跑一次 `tools\build\build-tauri-release.ps1` 自动补齐，见 §5 对应条目 |
-| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`                                                                              |
+| 生产构建（standalone + 安装包）                                                           | `tools\build\build-standalone.ps1` → `tools\build\build-tauri-release.ps1`（或 `tools\build\build-all.ps1`） | build-desktop.mjs 组装 static（含体积护栏 1.5GB）+ Node sidecar，再 `pnpm tauri build`；`build-all` 结束时报告各步与总耗时（见 §7.0）                                |
 | 前端/standalone 体积分析                                                                  | `pnpm analyze` （`node scripts/analyze-bundle.mjs` → `ANALYZE=true next build --webpack`）                   |
 | `@next/bundle-analyzer` 量化各 bundle 体积。**仅 webpack 支持**（Turbopack 不支持），默认 |
 | `next build` 走 Turbopack 不受影响；因此分析时强制 `--webpack`。产物                      |
@@ -670,6 +681,30 @@ zustand 队列，而不是再加一个模块级单例。
 | 可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。    |
 | 重新打包双击启动器                                                                        | `tools\build\build-launcher.ps1`                                                                             | PyInstaller onedir，产物 `start-tauri/`（gitignore）                                                                                                                |
 | 开发者工具箱                                                                              | `tools\build\rebuild-static.ps1` 等 / `dev-tools`                                                            | 见 `tools/README.md`                                                                                                                                                |
+
+### 7.0 构建耗时报告（`tools/scripts/Log-Common.ps1`）
+
+构建是一轮「按分钟到按十分钟计」的等待，构建者（尤其是双击入口的用户）需要在
+结束那一刻看到「这一轮到底花了多久」。耗时口径统一收敛在构建脚本共用的日志库
+`tools/scripts/Log-Common.ps1`：
+
+| 函数                    | 职责                                                     |
+| ----------------------- | -------------------------------------------------------- |
+| `Start-LogStopwatch`    | 起一个计时器（`System.Diagnostics.Stopwatch`）           |
+| `Format-Elapsed`        | 按量级格式化成 `45.6 秒` / `3 分 12.4 秒` / `1 时 02 分 03 秒` |
+| `Log-Elapsed`           | 记一行「<标签> 耗时：<格式化用时>」，控制台与日志同落     |
+
+三层各自报告，不重复计同一笔：
+
+- **入口** `tools\build\build-all.ps1`：收尾前打印整轮总耗时（含子进程启动开销），
+  双击场景里它是关窗口前最后读到的一行；失败时同样打印（判断是否直接重跑）；
+- **编排层** `tools\scripts\build-all.ps1`：汇总里给出「总耗时」，任一步失败中止时
+  也报出已用时间；各步耗时由子脚本自己负责，编排层不重复计；
+- **子步骤** `build-tauri-release.ps1`（第 4/4 步 cargo build）/ `build-launcher.ps1`
+  （第 3/3 步 pyinstaller）：在各自的完成汇总里给出本步耗时。
+
+新增构建/工具脚本时直接复用这三个函数，不要各写一套 `Stopwatch`——格式漂成几种
+就没法横向对比，汇总也对不齐。
 
 ### 7.1 构建前置检查：目标壳不得在运行（`tools/scripts/Build-Guard.ps1`）
 

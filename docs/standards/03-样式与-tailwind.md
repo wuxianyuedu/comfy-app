@@ -154,6 +154,14 @@ import "@/styles/json-viewer.css";
 
 **AuroraBackground 模式**：极光装饰光晕作为可复用装饰组件集中管理（`AuroraBackground.tsx`），不要在多个页面内联重复相同的 radial-gradient 块。
 
+**门禁（机器强制）**：`scripts/check-inline-style.cjs`（pre-commit 与 CI）扫描 `src/**`，
+渲染出的 `<style>` 一律阻断——判据只看「有没有 `<style>` 元素」，不做按文件豁免
+（只有注释里解释历史写法的引用放行，因为那是口径本身）。
+这条判据来自**同一个形态在本仓库犯过两次**：`WorkflowEditorCanvas` 与
+`studio/ui/CodeBlock` 的 `CODE_BLOCK_CSS` 都是「组件私有 CSS 字符串 + 渲染时注入」。
+第一次改完只留了注释说明，第二次照样犯 —— 所以必须有机器判据，而不是「下次记得」。
+回归测试见 `tests/check-inline-style.test.ts`。
+
 ### 3.6 暗色模式与 CSS 变量
 
 ```css

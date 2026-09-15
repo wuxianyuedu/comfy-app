@@ -78,6 +78,37 @@ corepack prepare pnpm@12.4.1 --activate
    （它检测到依赖缺失后会自动完整重装）。
 3. 仍失败：把 `log\` 目录发给团队（见 `docs/guide-non-developer.md` 第 8 节）。
 
+### 为什么脚本会说「依赖与 lockfile 不一致」
+
+`pnpm` 会把**最近一次成功安装时的** lockfile 复制到 `node_modules\.pnpm\lock.yaml`。
+它和仓库根 `pnpm-lock.yaml` 不一致，就说明本机装的是旧依赖 —— 拉取更新后没重装，
+或上次 `install` 被中断。**`run-local.ps1` 与 `tools/start/verify-quality.ps1` 都会
+逐项打印差异**，直接告诉你哪里不一致：
+
+```
+[WARN] 检测到依赖与 lockfile 不一致（拉取更新后未重装），将补装依赖...
+[INFO] 下面列出不一致的具体位置（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）：
+  [直接依赖]
+    dependencies（运行时依赖）（.）共 2 项变化:
+      + some-new-pkg  ^1.0.0 -> 1.2.3
+      ~ next  ^16.3.2：16.3.2 -> 16.4.0
+  [解析结果 packages] 新增 1 项 / 删除 0 项
+      + some-new-pkg@1.2.3
+```
+
+分段含义：**直接依赖**是 `package.json` 里声明、解析版本变了或增删的包；
+**解析结果**是 `packages` / `snapshots` 段的条目增删（传递依赖的连带变化）。
+
+只想看差异、不想装依赖时，可手动执行同一条命令：
+
+```powershell
+node scripts/lockfile/diff-cli.mjs --installed node_modules\.pnpm\lock.yaml --root .
+```
+
+> 若输出里提示「lockfile 里出现重复段落」，说明 lockfile 本身有合并冲突残留或上一次
+> `install` 写到一半，按下面第 2 步删掉 `node_modules` 重装即可（必要时同时
+> `git checkout -- pnpm-lock.yaml` 回到仓库版本）。
+
 > 原理说明：`run-local.ps1` 只在 `node_modules` 不完整时才重装，因此拉取新代码后
 > 它可能「看起来正常但跳过了安装」；一旦新配置与旧 `node_modules` 不兼容，
 > 按上面第 2 步删掉重装即可。
