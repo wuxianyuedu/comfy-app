@@ -40,11 +40,13 @@ function useLibraryNodeContent(): LibraryNodeContent | null {
 export function LibraryParamsNode(_props: NodeProps) {
   const content = useLibraryNodeContent()?.params;
   if (!content) return null;
-  const { cards, canWire, selectedEntryId, onSelect, onReset } = content;
+  const { cards, canWire, contractEntries, selectedEntryId, onSelect, onReset } =
+    content;
   return (
     <div data-testid="wflib-canvas-node-params">
     <WorkflowParamCardColumn
       entries={cards.entries}
+      contractEntries={contractEntries}
       resolved={cards.resolved}
       io={cards.io}
       canWire={canWire}

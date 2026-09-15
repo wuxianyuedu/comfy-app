@@ -10,6 +10,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+/* 模式契约注册表（工坊封装 / 画布节点共读的那一份）打桩：
+ * 预览现在也读它（卡片头与「工坊封装」页签同一份措辞），jsdom 里没有 tRPC
+ * Provider，直接用「无自定义契约」的等价结果 —— 与 `useModeContracts` 在
+ * 查询未落地时返回的空数组一致。 */
+vi.mock("~/components/workshop/mode-contract/hooks/use-mode-contracts", () => ({
+  useModeContracts: () => ({ contracts: [], loading: false, save: vi.fn() }),
+}));
 vi.mock("@/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
   watchTask: vi.fn(),
@@ -31,6 +38,7 @@ vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
+import { exposedParamDisplayLabel } from "~/lib/workflow-exposed-params";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 
 /* 预览卡片现在挂在 React Flow 画布上（ISSUE #355），React Flow 挂载时会自行
@@ -228,7 +236,10 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     );
     /* 提示词落到 positive_prompt、尺寸落到宽高比那一行 —— 两行各带一次徽标。 */
     const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
-    expect(tags.map((tag) => tag.textContent).sort()).toEqual(["尺寸", "提示词"]);
+    /* 徽标文案 = 契约口的展示名（与「工坊封装」页签同一份），按同一份取值断言。 */
+    expect(tags.map((tag) => tag.textContent).sort()).toEqual(
+      [exposedParamDisplayLabel("size"), exposedParamDisplayLabel("prompt")].sort(),
+    );
   });
 
   it("作者显式断开的那一条不再标徽标", () => {
@@ -247,7 +258,9 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       />,
     );
     const tags = [...container.querySelectorAll('[data-testid="wflib-param-owner"]')];
-    expect(tags.map((tag) => tag.textContent)).toEqual(["尺寸"]);
+    expect(tags.map((tag) => tag.textContent)).toEqual([
+      exposedParamDisplayLabel("size"),
+    ]);
   });
 
   it("每张卡片右侧有端点，宿主行是它另一端（ISSUE #355 复审 / #529）", () => {

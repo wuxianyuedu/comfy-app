@@ -20,8 +20,7 @@ import {
   type EncapsulationEntryStatus,
 } from "@/lib/workshop/workshop-encapsulation-status";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
-import { effectiveModeContract } from "~/components/workshop/mode-contract/mode-contract-config";
-import { contractToStatusEntries } from "@/lib/workshop/model-mode-contract";
+import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow-types";
 import {
   DEFAULT_SHOT_SIZE,
@@ -56,18 +55,20 @@ export function WorkshopEncapsulationPanel({
   mode,
 }: WorkshopEncapsulationPanelProps) {
   /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
-   * 封装视图与远端适配器、实际生成链路同说一套话。 */
+   * 封装视图与远端适配器、实际生成链路同说一套话。清单本身经
+   * `modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
+   * （ISSUE #596：两个页签各读各的，口径就对不上了）。 */
   const { contracts: storedContracts } = useModeContracts();
-  const status = React.useMemo(() => {
-    const { contract } = effectiveModeContract(mode ?? "", storedContracts);
-    const contractEntries = contractToStatusEntries(contract);
-    return deriveEncapsulationStatus({
-      io: workflowIO,
-      paramMap,
-      mode: mode ?? null,
-      contractEntries,
-    });
-  }, [workflowIO, paramMap, mode, storedContracts]);
+  const status = React.useMemo(
+    () =>
+      deriveEncapsulationStatus({
+        io: workflowIO,
+        paramMap,
+        mode: mode ?? null,
+        contractEntries: modeContractEntries(mode, storedContracts),
+      }),
+    [workflowIO, paramMap, mode, storedContracts],
+  );
 
   /* 流程测试的对外输入（与工坊同口径）：提示词 / 负向 / 尺寸。 */
   const [prompt, setPrompt] = React.useState(

@@ -9,10 +9,10 @@
     "src/components/studio/logs/log-store.ts": 1579,
     "src/components/studio/shared/workflow-io.ts": 923,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 909,
-    "src/components/workshop/hooks/use-workshop-pipeline.ts": 1086,
-    "src/lib/comfyui/lifecycle.ts": 1042,
+    "src/components/workshop/hooks/use-workshop-pipeline.ts": 1100,
+    "src/lib/comfyui/lifecycle.ts": 1027,
     "src/lib/comfyui/raw.ts": 993,
     "src/lib/comfyui/workflow-subgraph-parse.ts": 929,
-    "src/lib/workflow-param-mapping.ts": 1136
+    "src/lib/workflow-param-mapping.ts": 1146
   }
 }

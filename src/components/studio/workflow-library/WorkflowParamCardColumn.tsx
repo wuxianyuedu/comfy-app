@@ -35,6 +35,15 @@ const CARD_WIDTH = 220;
 
 export interface WorkflowParamCardColumnProps {
   entries: readonly ParamEntry[];
+  /** 契约口清单（`modeContractEntries` / `exposedParamsForMode` 的产物）。
+   *
+   *  卡片头必须与「工坊封装」页签说同一句话（ISSUE #596：同一页面的两个页签，
+   *  「尺寸」一处写全、一处只写两个字）。这里**按 id 覆盖** `entry.label`：
+   *  `entry.label` 里可能混着用户自定义契约的措辞与历史落库的改名，而契约口
+   *  清单是产品对用户承诺的那几个口，名字只该有一套。
+   *
+   *  形状只要求 id + label（消费方不必 import 契约模块的类型）。 */
+  contractEntries?: readonly { id: string; label: string }[];
   /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
   resolved: Record<string, string | null>;
   io: WorkflowIOMap | null;
@@ -55,6 +64,7 @@ export interface WorkflowParamCardColumnProps {
 
 export function WorkflowParamCardColumn({
   entries,
+  contractEntries,
   resolved,
   io,
   canWire = false,
@@ -88,7 +98,10 @@ export function WorkflowParamCardColumn({
             onSelect={onSelect ? () => onSelect(entry.id) : undefined}
             entryId={entry.id}
             cls={entry.cls}
-            label={entry.label}
+            label={
+              contractEntries?.find((item) => item.id === entry.id)?.label ??
+              entry.label
+            }
             /* 与「工坊封装」页签同口径：名字后面标出契约口 id（`prompt` /
                `size` / `reference-image-2`…），配置与日志里认的是 id。 */
             idLabel={entry.id}
