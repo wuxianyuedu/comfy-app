@@ -36,7 +36,10 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
 } from "~/lib/workflow-io-types";
-import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
+import {
+  exposedParamDisplayLabel,
+  exposedParamsForMode,
+} from "~/lib/workflow-exposed-params";
 import { megapixelsForSize } from "~/lib/workshop/workflow-encapsulation";
 import { aspectLabelForDims } from "~/lib/size-presets";
 
@@ -108,19 +111,26 @@ export function nodeIdOfIoKey(ioKey: string): string {
   return parts.length >= 2 ? parts[0]! : ioKey;
 }
 
-/** 分类默认名（作者未改名时用来填充「对外参数名」列）。 */
+/** 分类默认名（作者未改名时用来填充「对外参数名」列）。
+ *
+ *  对外口（`size` / `reference-image` / …）的措辞取自
+ *  `workflow-exposed-params` 的展示名表 —— 无模式语境走的就是这条旧聚类路径，
+ *  同一张卡片列在两种语境下说两套话会让用户以为换了口径（ISSUE #596）。
+ *  只有 `size-*` 这四个「落点形态」与 `other` 是本路径独有的内部名
+ *  （对外聚合为「尺寸」之后它们不该出现在任何**对外**清单里，卡片上出现时
+ *  说明这条口子还没被契约收编）。 */
 const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
-  prompt: "提示词",
-  negative: "负面提示词",
-  size: "尺寸",
+  prompt: exposedParamDisplayLabel("prompt"),
+  negative: exposedParamDisplayLabel("negative"),
+  size: exposedParamDisplayLabel("size"),
   "size-width": "宽度",
   "size-height": "高度",
   "size-aspect": "宽高比",
   "size-megapixels": "像素量",
-  "reference-image": "参考图",
-  "first-frame": "首帧",
-  "last-frame": "尾帧",
-  duration: "时长",
+  "reference-image": exposedParamDisplayLabel("reference-image"),
+  "first-frame": exposedParamDisplayLabel("first-frame"),
+  "last-frame": exposedParamDisplayLabel("last-frame"),
+  duration: exposedParamDisplayLabel("duration"),
   other: "参数",
 };
 

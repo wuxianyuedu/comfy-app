@@ -68,6 +68,8 @@ import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
+import { useModeContracts } from "@/components/workshop/hooks/use-mode-contracts";
+import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
@@ -397,6 +399,15 @@ export function WorkflowCanvasNodePreview({
     (r) => r.workflowId === workflowId,
   );
 
+  /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
+   * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
+   * 两处各读各的会让同一页面的两个页签列出两种名字（ISSUE #596）。 */
+  const { contracts: storedContracts } = useModeContracts();
+  const contractEntries = useMemo(
+    () => modeContractEntries(effectiveMode, storedContracts),
+    [effectiveMode, storedContracts],
+  );
+
   /* ── 对外参数卡片列（映射可编辑）──
    * 每个对外参数一张卡片，与宿主卡片并排；卡片说「这个对外参数由哪些端口组成」，
    * 表单行说「这一格填的是什么值」，两者不重复表达同一个落点。
@@ -556,6 +567,8 @@ export function WorkflowCanvasNodePreview({
         entries={buildParamEntries(workflowIO ?? null, undefined, {
           mode: effectiveMode,
         })}
+        /* 契约口清单：卡片头与「工坊封装」页签同一份措辞（ISSUE #596）。 */
+        contractEntries={contractEntries}
         canWire={!!effectiveMode && !!onPatchParamMap}
         selectedEntryId={selectedParamId}
         selectedOutputId={selectedOutputId}

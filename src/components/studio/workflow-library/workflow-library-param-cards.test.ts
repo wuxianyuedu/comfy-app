@@ -18,6 +18,7 @@ import {
   inferGroups,
   splitWorkflowIO,
 } from "~/components/studio/shared/workflow-io";
+import { exposedParamDisplayLabel } from "~/lib/workflow-exposed-params";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
@@ -157,13 +158,15 @@ describe("deriveLibraryParamCards", () => {
       mode: "T2I",
     });
     const plain = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
+    /* 措辞取自契约表的展示名（「尺寸」在工坊里是组合控件，名字里带它的两类
+     * 写法），这里按同一份取值断言，不写字面量 —— 话术调整不该改这条用例。 */
     expect(plain.entries.map((entry) => entry.label)).toEqual([
-      "提示词",
-      "尺寸",
+      exposedParamDisplayLabel("prompt"),
+      exposedParamDisplayLabel("size"),
     ]);
     expect(withRename.entries.map((entry) => entry.label)).toEqual([
-      "提示词",
-      "尺寸",
+      exposedParamDisplayLabel("prompt"),
+      exposedParamDisplayLabel("size"),
     ]);
     expect(withRename.ownersByPin["9::widget::text"]).toBe("提示词");
   });

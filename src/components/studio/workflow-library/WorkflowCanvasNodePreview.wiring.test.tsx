@@ -18,6 +18,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+/* 模式契约注册表（工坊封装 / 画布节点共读的那一份）打桩：
+ * 预览现在也读它（卡片头与「工坊封装」页签同一份措辞），jsdom 里没有 tRPC
+ * Provider，直接用「无自定义契约」的等价结果 —— 与 `useModeContracts` 在
+ * 查询未落地时返回的空数组一致。 */
+vi.mock("@/components/workshop/hooks/use-mode-contracts", () => ({
+  useModeContracts: () => ({ contracts: [], loading: false, save: vi.fn() }),
+}));
 vi.mock("@/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
   watchTask: vi.fn(),

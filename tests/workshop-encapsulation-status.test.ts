@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowIOMap } from "../src/components/studio/shared/workflow-io";
 import { deriveEncapsulationStatus } from "../src/lib/workshop/workshop-encapsulation-status";
 import { modeContractInputLabel } from "../src/lib/workshop/model-mode-contract";
+import { exposedParamDisplayLabel } from "../src/lib/workflow-exposed-params";
 
 /** 尺寸口的展示名与模式契约编辑器同一份措辞（单一出处，不做字面重复断言）。 */
 const SIZE_LABEL = modeContractInputLabel("size");
@@ -134,5 +135,42 @@ describe("deriveEncapsulationStatus：契约注册表覆盖", () => {
     const ref = status.entries.find((e) => e.id === "reference-image");
     expect(ref?.targetIoKey).toBeNull();
     expect(status.ready).toBe(true);
+  });
+});
+
+/* ── 对外口话术的**单一出处**（ISSUE #596）──
+ *
+ * 同一张契约口清单会同时在工坊封装页与「画布节点」卡片列露面。此前两处各写一份
+ * 字符串：「尺寸」在一处带括号（写明工坊控件的两类写法），另一处只有两个字 ——
+ * 用户读到的像是两个不同的口。
+ *
+ * 这里钉住「派生出的展示名一律取自 `exposedParamDisplayLabel`」：谁再写一个字面
+ * 量，就会与契约表漂移。 */
+describe("契约口展示名的单一出处", () => {
+  it("派生出的尺寸口展示名 = 契约表的展示名（不认调用方传入的自定义 label）", () => {
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: null,
+      mode: "T2I",
+      contractEntries: [
+        { id: "size", label: "随便写的名字", control: "size" },
+      ],
+    });
+    expect(status.entries.find((e) => e.id === "size")?.label).toBe(
+      exposedParamDisplayLabel("size"),
+    );
+  });
+
+  it("没有契约口清单时（内置口径）也是同一份展示名", () => {
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: null,
+      mode: "T2I",
+    });
+    expect(status.entries.map((e) => e.label)).toEqual([
+      exposedParamDisplayLabel("prompt"),
+      exposedParamDisplayLabel("negative"),
+      exposedParamDisplayLabel("size"),
+    ]);
   });
 });
