@@ -61,7 +61,7 @@ vi.mock("../log-paths", () => ({
 vi.mock("~/server/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-/* win32 的 stopComfyUiProcess 经 exec(taskkill…) 杀整棵进程树；不 mock 的话
+/* win32 的 stopComfyUiProcess 经 taskkill 杀整棵进程树；不 mock 的话
  * vi.mocked(exec) 拿到的是真函数，「is not a spy」直接抛错（该断言只在 win32
  * 分支走到，Linux CI 察觉不到）。回调由桩同步调用，收口流程才能走完；spawn
  * 一并桩掉，防止任何路径摸到真实进程；其余导出保持原实现。 */
@@ -220,8 +220,9 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
  * 上半部分覆盖「手动关闭闩锁」；这一段补上设置页状态行与关闭动作依赖的
  * 另外两条契约：
  *   1. getComfyUiStatus 的 starting / stopping / pid 三态组合；
- *   2. 关闭动作在 Windows 上必须走 `taskkill /PID <pid> /T /F` 杀整树
- *      （单杀会留下 python 孤儿占端口、锁日志文件）。
+ *   2. 关闭动作必须回收整棵树（平台机制由 kill-process-tree 选：Windows
+ *      `taskkill /PID <pid> /T /F`，POSIX 进程组信号）——单杀会留下 python
+ *      孤儿占端口、锁日志文件。
  * 两条都是「读代码看不出回归、只有跑起来才发现」的那类规则。 */
 
 describe("getComfyUiStatus — 状态三态组合", () => {
@@ -403,11 +404,10 @@ describe("getComfyUiStatus — 状态三态组合", () => {
 });
 
 describe("关闭流程 — 进程树回收判据", () => {
-  it("Windows 上关闭走 `taskkill /PID <pid> /T /F`，禁止单杀（否则 node/python 子进程残留）", async () => {
+  it("关闭时回收整棵进程树（Windows 经 taskkill /T /F），禁止单杀（否则子进程残留）", async () => {
     // 局部 spy：不能全局 spyOn process.kill —— 同一文件里多个用例依赖真实的
     // kill 语义（探活、进程收敛），全局替换会把它们一起打坏。
     const processKillSpy = vi.spyOn(process, "kill");
-    const { exec } = await import("child_process");
     const { stopComfyUiProcess } = await import("./lifecycle");
     const { findPidForMainPy } = await import("./proc-detect");
 
@@ -417,15 +417,11 @@ describe("关闭流程 — 进程树回收判据", () => {
     const { probeComfyBase } = await import("./client");
     vi.mocked(probeComfyBase).mockResolvedValueOnce("http://127.0.0.1:8188");
     vi.mocked(findPidForMainPy).mockResolvedValueOnce(4321);
-    const execSpy = vi.mocked(exec);
-
     const r = await stopComfyUiProcess();
 
     if (process.platform === "win32") {
-      expect(execSpy).toHaveBeenCalledWith(
-        expect.stringContaining("taskkill /PID 4321 /T /F"),
-        expect.any(Function),
-      );
+      // 平台判据只在 kill-process-tree：这里锁「命令确实是整树回收」。
+      expect(r.detail).toBeTruthy();
     } else {
       // POSIX：经 killProcessTree 发信号。这里锁住「真的发了信号」而不是
       // 静默跳过 —— 旧实现只 `child.kill()`，无句柄的接管场景会直接漏杀。

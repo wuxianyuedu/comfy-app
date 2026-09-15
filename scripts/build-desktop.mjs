@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 // 开发机私有输入（.env / db.sqlite*）的剔除清单与实现：与 `pnpm build` 的
 // 收尾步骤共用同一份，避免两处清单各写一套后静默漂移。
 import {
+  RUNTIME_SCRIPTS,
   stripDevArtifacts,
   stripPrivateInputs,
 } from "./standalone-private-inputs.mjs";
@@ -111,15 +112,23 @@ rmSync(staticDir, { recursive: true, force: true });
 mkdirSync(staticDir, { recursive: true });
 
 // ── 2.1 §10.2 自动同步启动脚本 ─────────────────────────────
-// dev-launcher.ps1 是手工维护的主脚本（scripts/dev-launcher.ps1）在
-// Tauri 打包内的同步副本。原本靠人工维护，这里改为构建时自动覆盖，
-// 保证 §10.2「改主脚本须同步副本」由构建流程保证，不再依赖手动同步。
+// 桌面包之外还要能被「开发/救援」链路重新编排一次（壳找不到 dev server 时，
+// 用户会去双击项目里的启动入口）。因此启动编排器与它的运行期依赖（会话锚点、
+// 端口解析、跨平台回收器）都要进 static/scripts —— 缺一份，桌面包里的启动
+// 入口就会在运行时 ENOENT，而表现只是「双击没反应」。
+// 清单与白名单同源：scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS。
 const launcherDestDir = join(staticDir, "scripts");
-for (const launcherFile of ["dev-launcher.ps1", "dev-launcher.mjs"]) {
+for (const launcherFile of RUNTIME_SCRIPTS.filter((name) => name.endsWith(".mjs"))) {
   const launcherSrc = join(root, "scripts", launcherFile);
-  if (!existsSync(launcherSrc)) continue;
-  mkdirSync(launcherDestDir, { recursive: true });
-  copyFileSync(launcherSrc, join(launcherDestDir, launcherFile));
+  if (!existsSync(launcherSrc)) {
+    // 白名单里面写了但源文件不在 = 清单漂移。静默跳过会让桌面包里的编排器
+    // 在运行时 ENOENT，而表现只是「双击没反应」，所以这里直接失败。
+    fail(`白名单登记的运行期脚本不存在：scripts/${launcherFile}（与 RUNTIME_SCRIPTS 不同步）`);
+  }
+  // 白名单条目允许是相对路径（`launcher-core/procs.mjs`）：目标子目录要先建出来。
+  const dest = join(launcherDestDir, launcherFile);
+  mkdirSync(dirname(dest), { recursive: true });
+  copyFileSync(launcherSrc, dest);
   console.log(`[build-desktop]   §10.2 已自动同步 scripts/${launcherFile} → static/scripts/${launcherFile}`);
 }
 
