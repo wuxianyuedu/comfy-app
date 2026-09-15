@@ -29,7 +29,7 @@ export function resolveComfyBase() {
   return COMFYUI_DEFAULT_PORT;
 }
 `,
-  "src/lib/comfyui/lifecycle.ts": `import { COMFYUI_DEFAULT_PORT } from "../app-settings";
+  "src/lib/comfyui/lifecycle-launch.ts": `import { COMFYUI_DEFAULT_PORT } from "../app-settings";
 import { buildSpawnArgs } from "./lifecycle-derive";
 export function launch() {
   return buildSpawnArgs({ baseArgs: [], effectivePort: 0, defaultPort: COMFYUI_DEFAULT_PORT, extraArgs: [] });
@@ -102,7 +102,7 @@ describe("check-comfyui-port-contract", () => {
 
   it("拉起侧注入别的默认端口即阻断", () => {
     const { run } = scanner({
-      "src/lib/comfyui/lifecycle.ts": `import { COMFYUI_DEFAULT_PORT } from "../app-settings";
+      "src/lib/comfyui/lifecycle-launch.ts": `import { COMFYUI_DEFAULT_PORT } from "../app-settings";
 import { buildSpawnArgs } from "./lifecycle-derive";
 export function launch() {
   return buildSpawnArgs({ baseArgs: [], effectivePort: 0, defaultPort: 9000, extraArgs: [] });

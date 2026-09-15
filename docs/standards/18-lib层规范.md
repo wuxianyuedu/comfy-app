@@ -138,6 +138,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | ~~`lib` → `server` 越界无判据~~ | #569 第 6 项 | **已落地**：依赖逐个登记 + 「登记清单不许失效」双向判定（见 18.10） |
 | 零调用导出无判据              | #573         | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算） |
 | ~~`IIFE` / 回调体不计函数长度~~ | #570 第 7–8 项 | **已落地**：判据纳入无名字块体 + 跨行签名（12 §12.13.2），基线按「判据版本」一次性重记（20 → 22，新增的 2 条为存量登记） |
+| ~~`lib` 巨型函数未拆（`ensureComfyUiReady` / `executeViaComfyCli` / `cacheJson` 闭包 / drizzle IIFE）~~ | #570 第 1–6 项 | **已落地**：等待循环与事件回调抽成 `comfyui/lifecycle-wait.ts`（策略注入 + 具名纯函数）、comfy-cli 流解析收在 `comfyui/executor-cli-stream.ts`、`cacheJson` 闭包提为 `buildWorkflowDetailJson`、drizzle IIFE 复用同一套等待原语；基线随之收紧（22 → 20，见 12 §12.13） |
 | prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
 | `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）|
 

@@ -19,11 +19,14 @@ import { promises as fs } from "fs";
 import path from "path";
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
-import { extractValidationErrors } from "./validation";
-import type { ValidationError } from "./validation";
 import { state, log } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
+import {
+  createCliEnvelopeParser,
+  createCliFinisher,
+  createCliStderrSink,
+} from "./executor-cli-stream";
 import { applyRawOverrides, type JsonRecord } from "./raw-overrides";
 import { trace } from "./trace";
 import { COMFYUI_DEFAULT_PORT } from "../app-settings";
@@ -269,295 +272,71 @@ export async function executeViaComfyCli(job: Job) {
     void fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）");
   }, CLI_TIMEOUT_MS);
 
-  // flatten /prompt errors returned via
-  // comfy-cli's envelope into a structured `validationErrors[]` and
-  // pass them to `fail()` as the 4th arg, mirroring the API-format
-  // branch at line ~1226.  comfy-cli ships the upstream /prompt
-  // response under `env.error`; we look for `node_errors` first, then
-  // fall back to the message string.  Without this, the user only
-  // ever saw "Workflow has N validation error(s) against server"
-  // with no per-field breakdown, and the "↻ 重新执行" hint for
-  // re-running to populate structure was a no-op (re-running the
-  // SAME workflow would produce the SAME envelope with the SAME
-  // unflattened payload).
-  // comfy-cli wraps the upstream /prompt
-  // payload in an `envelope`. The structured `node_errors` lands at
-  // several possible positions depending on the comfy-cli version:
-  //   • error.details.node_errors  → LIST of records (this is what
-  //     `_node_errors_to_list()` produces and what actually reaches us)
-  //   • error.node_errors          → dict (defensive)
-  //   • node_errors                → dict (defensive)
-  //   • data/response/result.*     → future-proofing
-  // A single `env.error.node_errors` check (the old code) only ever saw
-  // {code, message, hint, details} — which has NO `node_errors` — so the
-  // 6-item per-field list never rendered.  Deep-search the envelope for
-  // `node_errors` (dict or list) and hand it to extractValidationErrors,
-  // which now accepts both shapes.
-  const findNodeErrorsCarrier = (root: unknown, depth = 5): unknown => {
-    if (!root || typeof root !== "object") return undefined;
-    const seen = new WeakSet<object>();
-    const stack: { node: JsonRecord; d: number }[] = [
-      { node: root as JsonRecord, d: 0 },
-    ];
-    while (stack.length) {
-      const { node, d } = stack.pop()!;
-      if (d > depth || seen.has(node)) continue;
-      seen.add(node);
-      const ne = node.node_errors;
-      if (
-        ne != null &&
-        (Array.isArray(ne)
-          ? ne.length > 0
-          : typeof ne === "object" && Object.keys(ne).length > 0)
-      ) {
-        return ne;
-      }
-      for (const v of Object.values(node)) {
-        if (v && typeof v === "object")
-          stack.push({ node: v as JsonRecord, d: d + 1 });
-      }
-    }
-    return undefined;
-  };
-
-  const extractEnvelopeValidationErrors = (
-    env: unknown,
-  ): ValidationError[] | undefined => {
-    const carrier = findNodeErrorsCarrier(env);
-    if (!carrier) return undefined;
-    return extractValidationErrors(carrier, patched);
-  };
-
-  const finish = (ok: boolean, env: unknown) => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(guard);
-    cliProcs.delete(taskId);
-    if (ok) {
-      void complete(taskId, promptId ?? "");
-    } else {
-      const err =
-        env != null && typeof env === "object"
-          ? (env as JsonRecord).error
-          : undefined;
-      const msg =
-        strField(err, "message") ??
-        strField(err, "hint") ??
-        "comfy-cli 执行失败";
-      const validationErrors = extractEnvelopeValidationErrors(env);
-      if (validationErrors?.length) {
-        // Mirror the API-format branch's behaviour: surface the
-        // structured list in a single log line for the user, then
-        // pass it to fail() so the UI can render a per-field block.
-        log(
-          taskId,
-          "error",
-          `✗ comfy-cli 报 ${validationErrors.length} 条校验错误（见上方红框）`,
-        );
-        validationErrors.slice(0, 12).forEach((ve) => {
-          log(
-            taskId,
-            "error",
-            `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}` +
-              (ve.field ? ` · 字段 ${ve.field}` : "") +
-              `：${ve.message}`,
-          );
-        });
-        if (validationErrors.length > 12) {
-          log(
-            taskId,
-            "error",
-            `  …还有 ${validationErrors.length - 12} 条（请查看红框/重新执行工作流查看完整清单）`,
-          );
-        }
-      } else {
-        // Comprehensive-detection safety net: the message
-        // says "validation error" but the deep search found no
-        // structured `node_errors`.  Dump the raw envelope (truncated)
-        // so a support re-run can see the real shape instead of a
-        // silent "Workflow has N validation error(s)" line.
-        const rawMsg = typeof msg === "string" ? msg : "";
-        if (
-          /validation error/i.test(rawMsg) ||
-          strField(err, "code") === "prompt_rejected"
-        ) {
-          try {
-            const dump = JSON.stringify(env).slice(0, 900);
-            log(
-              taskId,
-              "warn",
-              `⚠ 未从 comfy-cli envelope 解析出结构化校验错误，原始 envelope（截断）：${dump}`,
-            );
-          } catch {
-            /* stringify can throw on circular refs — ignore */
-          }
-        }
-      }
-      void fail(taskId, promptId ?? "", msg, validationErrors);
-    }
-  };
-
-  let buf = "";
-  let nonJsonLines = 0;
-  child.stdout?.setEncoding("utf-8");
-  child.stdout?.on("data", (chunk: string) => {
-    /* ISSUE #216：原始 chunk 直送 trace（不截断不聚合）——面板只显示解析后的
-     * 事件，出现「没找到生成结果」时唯一能回答「ComfyUI 到底回了什么」的就是这里。 */
-    trace("cli", taskId, "stdout 原始输出", { chunk });
-    buf += chunk;
-    let idx: number;
-    while ((idx = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, idx).trim();
-      buf = buf.slice(idx + 1);
-      if (!line) continue;
-      let ev: unknown = null;
-      try {
-        ev = JSON.parse(line);
-      } catch {
-        // surface non-JSON lines too so the
-        // user can see when comfy-cli prints a Python traceback or
-        // import error.  Cap to avoid flooding the panel during
-        // legitimate verbose output.
-        nonJsonLines++;
-        trace("cli", taskId, "stdout 非 JSON 行", { line });
-        if (nonJsonLines <= 20) {
-          const trimmed = line.length > 240 ? line.slice(0, 240) + "…" : line;
-          log(taskId, "info", `[comfy-cli stdout] ${trimmed}`);
-        } else if (nonJsonLines === 21) {
-          log(
-            taskId,
-            "info",
-            `[comfy-cli stdout] …后续非 JSON 行已省略（查看后端日志）`,
-          );
-        }
-        continue;
-      }
-      if (!ev || typeof ev !== "object") {
-        trace("cli", taskId, "stdout JSON 非对象", { line });
-        continue;
-      }
-      /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
-      trace("cli", taskId, "stdout 事件", { event: ev });
-      const evt = ev as JsonRecord;
-      if (
-        evt.type === "queued" &&
-        typeof evt.prompt_id === "string" &&
-        evt.prompt_id
-      ) {
-        promptId = evt.prompt_id;
-        s.promptToTask.set(evt.prompt_id, taskId);
-        void taskRepository
-          .markRunning(taskId, evt.prompt_id)
-          .catch(() => undefined);
-        // mirror the API-format branch's
-        // "✓ 已接收…等待 executing" wording so the log panel shows a
-        // consistent vocabulary across both submission paths.
-        log(
-          taskId,
-          "info",
-          `✓ comfy-cli 已提交（prompt_id: ${promptId}），等待节点执行…`,
-        );
-      } else if (evt.type === "envelope") {
-        finish(Boolean(evt.ok), ev);
-      } else if (evt.type === "error") {
-        /* comfy-cli 的显式 error 事件（非 envelope）：完整落盘，否则只有
-         * 「未收到 envelope」这类结论，看不到 CLI 自己的原因。 */
-        trace("cli", taskId, "error 事件", { event: ev, promptId });
-        log(
-          taskId,
-          "warn",
-          `[comfy-cli] error 事件${typeof evt.message === "string" ? `：${evt.message}` : ""}`,
-        );
-      } else if (
-        evt.type === "progress" &&
-        typeof evt.completed === "number" &&
-        typeof evt.total === "number" &&
-        evt.total > 0
-      ) {
-        s.emitter.emit(taskId, {
-          type: "progress",
-          progress: Math.round((evt.completed / evt.total) * 100),
-        });
-      } else if (evt.type === "executing" || evt.type === "execution_success") {
-        // forward the raw CLI events for
-        // per-node visibility (we can't map them back to the raw
-        // graph class_type here without the original UUIDs, but the
-        // node id + event type alone is enough to show "something is
-        // running").
-        // 断言仅为类型收口（运行时擦除）：模板插值与原 any 行为逐值一致。
-        const node = (evt.node ??
-          (evt.data as JsonRecord | null | undefined)?.node ??
-          "?") as string;
-        log(
-          taskId,
-          "info",
-          evt.type === "execution_success"
-            ? `✓ comfy-cli 节点 [${node}] 执行完成`
-            : `▶ comfy-cli 节点 [${node}] 开始执行`,
-        );
-      }
-    }
+  /* stdout / stderr 的流解析与 envelope 收口都收在 executor-cli-stream.ts：
+   * 这些回调此前是内联闭包（合计约 240 行），捕获 promptId / patched /
+   * settled，只能起真进程验证（ISSUE #570 第 5 项）。 */
+  const finish = createCliFinisher({
+    taskId,
+    log,
+    patched,
+    complete: (id, pid) => void complete(id, pid),
+    fail: (id, pid, detail, ves) => void fail(id, pid, detail, ves),
+    settle: () => {
+      if (settled) return false;
+      settled = true;
+      clearTimeout(guard);
+      cliProcs.delete(taskId);
+      return true;
+    },
+    promptId: () => promptId,
   });
+
+  child.stdout?.setEncoding("utf-8");
+  const stdoutParser = createCliEnvelopeParser({
+    taskId,
+    log,
+    patched,
+    finish,
+    onPromptId: (id: string) => {
+      promptId = id;
+      s.promptToTask.set(id, taskId);
+      void taskRepository.markRunning(taskId, id).catch(() => undefined);
+    },
+    onProgress: (progress: number) => {
+      s.emitter.emit(taskId, { type: "progress", progress });
+    },
+  });
+  child.stdout?.on("data", stdoutParser.sink);
 
   // stream stderr live so Python tracebacks
   // appear in the panel as they happen, instead of only at close().
   // 行数上限 60（真实 traceback 一般 < 40 行）；click/Python 的
   // DeprecationWarning 噪声不占额度、计数后由 close 汇总，避免把真正的
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
-  // errBuf 始终完整累积，close 时的 tail 汇总不受行数上限影响。
-  let errBuf = "";
-  let errLines = 0;
-  let noisyWarningLines = 0;
+  // stderrSink.raw() 始终完整累积，close 时的 tail 汇总不受行数上限影响。
+  const stderrSink = createCliStderrSink({ taskId, log });
   child.stderr?.setEncoding("utf-8");
-  child.stderr?.on("data", (d: string) => {
-    /* ISSUE #216：stderr 原始 chunk 直送 trace——面板只显示前 60 行且会过滤
-     * Python 警告噪声，真正的 traceback 尾部（异常类 + 行号）必须完整可查。 */
-    trace("cli", taskId, "stderr 原始输出", { chunk: d });
-    errBuf += d;
-    const lines = d.split(/\r?\n/);
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      if (
-        /DeprecationWarning|SyntaxWarning: invalid escape sequence/i.test(
-          trimmed,
-        )
-      ) {
-        noisyWarningLines++;
-        continue;
-      }
-      errLines++;
-      if (errLines <= 60) {
-        const t = trimmed.length > 400 ? trimmed.slice(0, 400) + "…" : trimmed;
-        log(taskId, "warn", `[comfy-cli stderr] ${t}`);
-      } else if (errLines === 61) {
-        log(
-          taskId,
-          "warn",
-          `[comfy-cli stderr] …后续行已省略（完整内容在进程退出汇总）`,
-        );
-      }
-    }
-  });
+  child.stderr?.on("data", stderrSink.sink);
 
   child.on("close", (code) => {
     clearTimeout(guard);
     cliProcs.delete(taskId);
     if (settled) return;
     settled = true;
-    if (noisyWarningLines > 0) {
+    const noisy = stderrSink.noisyWarningLines();
+    if (noisy > 0) {
       log(
         taskId,
         "warn",
-        `[comfy-cli stderr] 另有 ${noisyWarningLines} 行 Python Deprecation/Syntax 警告（第三方库噪声，与执行结果无关）已省略`,
+        `[comfy-cli stderr] 另有 ${noisy} 行 Python Deprecation/Syntax 警告（第三方库噪声，与执行结果无关）已省略`,
       );
     }
-    const tail = errBuf.trim().split("\n").slice(-12).join("\n");
+    const tail = stderrSink.raw().trim().split("\n").slice(-12).join("\n");
     /* 未收到 envelope 的退出是「结果丢失」的头号嫌疑路径：完整 stderr +
      * 未消费的 stdout 尾部一次性落 trace（面板仍是精简的 12 行）。 */
     trace("cli", taskId, `进程退出 code=${code}（未收到 envelope）`, {
-      stderr: errBuf,
-      stdoutLeftover: buf,
+      stderr: stderrSink.raw(),
+      stdoutLeftover: stdoutParser.leftover(),
       promptId,
     });
     log(
