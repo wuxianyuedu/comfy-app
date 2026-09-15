@@ -23,6 +23,11 @@ entry-common.ps1 — 双击入口公共库（供根入口与 tools/<分类>/ 下
   - 入口脚本只做「定位 + 调用 + 收尾」，业务逻辑一律在 scripts/ 或 tools/scripts/
     下的逻辑脚本里，与旧 .bat 的职责划分保持一致。
   - 所有入口都返回逻辑脚本的真实退出码，方便 CI/终端判断成败。
+  - 本库**只管 PowerShell 逻辑脚本**。要调的是 node 逻辑脚本（.mjs，例如启动
+    编排器 scripts/dev-launcher.mjs）时不要走这里：那样只能在 `param()` 之外
+    新增一个没人传的开关，而本库顶部是 `Set-StrictMode -Version Latest`——
+    引用未声明的变量会当场终止整个入口（不是返回 $null）。各入口按自己的薄壳
+    直调 node 即可（参考 scripts/dev-launcher.ps1 的「定位 → 转交 → 透传退出码」）。
 #>
 
 Set-StrictMode -Version Latest
@@ -82,10 +87,6 @@ function Get-Pwsh {
 .PARAMETER HideWindow
   后台启动（不等待、不占用当前窗口），用于启动桌面壳这类长驻进程。
   返回被启动的 Process 对象；不再配合 Complete-Entry 使用。
-.PARAMETER NodeScript
-  以 node 逻辑脚本（.mjs）为调用对象：除 -Root / -FilePath / -ScriptArgs 外不再
-  包一层 PowerShell 宿主。启动编排器是 scripts/dev-launcher.mjs —— 它是
-  **全平台唯一实现**，`.ps1` 只做「定位项目根 → 调它 → 透传退出码」。
 #>
 function Invoke-Entry {
   param(
@@ -103,10 +104,6 @@ function Invoke-Entry {
     return 1
   }
 
-  if ($NodeScript) {
-    return (Invoke-NodeEntry -Root $Root -ScriptPath $ScriptPath -ScriptArgs $ScriptArgs -HideWindow:$HideWindow)
-  }
-
   $psExe = Get-Pwsh
   # -NoProfile 避免加载用户 profile 引入不确定行为；-ExecutionPolicy Bypass 让
   # 双击场景不必先手工改机器的执行策略。子脚本自己负责中文输出编码。
@@ -119,49 +116,6 @@ function Invoke-Entry {
 
   # -NoNewWindow + -Wait：日志留在当前窗口，退出码能原样带回（等价于旧 .bat 的 call）。
   $proc = Start-Process -FilePath $psExe -ArgumentList $argList `
-    -WorkingDirectory $Root -NoNewWindow -Wait -PassThru
-  return [int]$proc.ExitCode
-}
-
-<#
-.SYNOPSIS
-  以 node 直接调用跨平台逻辑脚本（.mjs），把入口缩成「定位 + 调用 + 收尾」。
-.DESCRIPTION
-  启动编排的唯一实现是 scripts/dev-launcher.mjs：平台特有的只有进程机制与
-  入口形态，脚本本身不分平台。`.ps1` 因此不再承担任何编排逻辑——它只负责
-  「Windows 侧怎么被双击/被 exe 拉起」这件事（见规范 §8、§3）。
-
-  node 由 Get-Command 解析（不硬编码安装路径）；找不到时给可行动的中文提示。
-#>
-function Invoke-NodeEntry {
-  param(
-    [string]$Root = "",
-    [Parameter(Mandatory = $true)][string]$ScriptPath,
-    [string[]]$ScriptArgs = @(),
-    [switch]$HideWindow
-  )
-
-  if (-not $Root) { $Root = Get-ProjectRoot }
-  $abs = Join-Path $Root $ScriptPath
-  if (-not (Test-Path -LiteralPath $abs)) {
-    Write-Host "[ERROR] 未找到逻辑脚本：$ScriptPath" -ForegroundColor Red
-    Write-Host "        期望位置：$abs" -ForegroundColor Red
-    return 1
-  }
-
-  $node = Get-Command node -ErrorAction SilentlyContinue
-  if (-not $node) {
-    Write-Host "[ERROR] 未找到 node（启动编排器 scripts/dev-launcher.mjs 需要它）。" -ForegroundColor Red
-    Write-Host "        请安装 Node.js 22+ 后重试；或直接运行 pnpm dev。" -ForegroundColor Red
-    return 1
-  }
-
-  $argList = @("`"$abs`"") + $ScriptArgs
-  if ($HideWindow) {
-    return (Start-Process -FilePath $node.Source -ArgumentList $argList `
-        -WorkingDirectory $Root -WindowStyle Hidden -PassThru)
-  }
-  $proc = Start-Process -FilePath $node.Source -ArgumentList $argList `
     -WorkingDirectory $Root -NoNewWindow -Wait -PassThru
   return [int]$proc.ExitCode
 }
