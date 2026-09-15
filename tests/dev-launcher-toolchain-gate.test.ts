@@ -27,6 +27,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  commandInvocation,
   executableExts,
   executableKind,
   usableCommand,
@@ -81,6 +82,36 @@ function makeWindowsPnpmDir(options: { shim?: "broken" | "working" | "none"; ps1
 
 const WIN_ENV = (dir: string) => ({ PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" });
 
+/** 造一个「假的 PowerShell 宿主」：`powershellHost()` 只认二进制形态（MZ 头）。 */
+function makePowerShellHost(dir: string) {
+  fs.mkdirSync(dir, { recursive: true });
+  // 最小二进制形态：非可打印 ASCII 起头即判 binary（`executableKind`）。
+  const host = path.join(dir, "pwsh.EXE");
+  fs.writeFileSync(host, Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03]));
+  fs.chmodSync(host, 0o755);
+  return dir;
+}
+
+/** corepack 装的 pnpm（`.tools\pnpm\<ver>\bin`）在 Windows 上是 `.CMD` + `.ps1` 并排，
+ *  且**没有**可用的无扩展名 shim。造出这个最小现场（ISSUE #576 第二轮）。 */
+function makeInstalledPnpmDir(options: { cmd?: boolean; ps1?: boolean } = {}) {
+  const dir = path.join(tmp, "installed-bin");
+  fs.mkdirSync(dir, { recursive: true });
+  if (options.cmd !== false) {
+    const cmd = path.join(dir, "pnpm.CMD");
+    fs.writeFileSync(cmd, "@ECHO off\r\n@SETLOCAL\r\n");
+    // Windows 上 `accessSync(X_OK)` 恒通过；CI 跑在 POSIX 上要给它执行位，
+    // 否则先被 `no-exec-permission` 拦下，测不到形态判据本身。
+    fs.chmodSync(cmd, 0o755);
+  }
+  if (options.ps1 !== false) {
+    const ps1 = path.join(dir, "pnpm.ps1");
+    fs.writeFileSync(ps1, "#!/usr/bin/env pwsh\nWrite-Output '12.4.1'\n");
+    fs.chmodSync(ps1, 0o755);
+  }
+  return dir;
+}
+
 describe("可执行形态的候选顺序（executableExts）", () => {
   it("Windows：真正能被 Node 起的形态在前，.CMD/.BAT 垫底", () => {
     const exts = executableExts(
@@ -121,7 +152,9 @@ describe("whichCommand 只认「真的能跑」的候选", () => {
   it("形态判据读文件头而不是扩展名", () => {
     const dir = makeWindowsPnpmDir({ shim: "working", cmd: true });
     expect(executableKind(path.join(dir, "pnpm"))).toBe("shebang");
-    expect(executableKind(path.join(dir, "pnpm.CMD"))).toBe("script");
+    // 批处理是**独立形态**（不是通用 script）：它只有 cmd.exe 会解释，
+    // Node 起不了 —— 与 .ps1 混成一种曾被当成「可用」而选中（ISSUE #576 第二轮）。
+    expect(executableKind(path.join(dir, "pnpm.CMD"))).toBe("batch");
   });
 
   it("不可执行的候选给出原因（权限位 / 起不来各有其名），供上层拼提示", () => {
@@ -135,6 +168,76 @@ describe("whichCommand 只认「真的能跑」的候选", () => {
     const result = usableCommand(path.join(dir, "pnpm"));
     expect(result.ok).toBe(false);
     expect(["ENOENT", "EACCES", "ENOEXEC"]).toContain(result.reason);
+  });
+});
+
+describe("批处理形态不再被当成「可用」（ISSUE #576 第二轮，实测 EINVAL）", () => {
+  /** 用户现场：命令选中 `...\.tools\pnpm\12.4.1\bin\pnpm.CMD`，探测报
+   *  `EINVAL（未发现可回退形态）`，而 `pnpm.ps1` 就摆在同一个目录里。
+   *  根因是 `.CMD` 与 `.ps1` 当时同被认作 `script`，而「非 shebang」直接 `ok: true`。 */
+  it("`.CMD` 不被认作可用（旧实现在此 ok:true → 真跑 EINVAL）", () => {
+    const dir = makeInstalledPnpmDir({ ps1: false });
+    const cmd = path.join(dir, "pnpm.CMD");
+    expect(executableKind(cmd)).toBe("batch");
+    const usable = usableCommand(cmd, ["--version"], { env: WIN_ENV(dir), platform: "win32" });
+    expect(usable.ok).toBe(false);
+    // 拒绝的理由是形态（而不是拿 `exit=?` 交差），上层据此才拼得出人话。
+    expect(usable.reason).toBe("batch-script");
+  });
+
+  it("同目录的 `.ps1` 就是回退：经 PowerShell 宿主起，不再报「未发现可回退形态」", () => {
+    const dir = makeInstalledPnpmDir();
+    const hostDir = makePowerShellHost(path.join(tmp, "host"));
+    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const cmd = path.join(dir, "pnpm.CMD");
+    const usable = usableCommand(cmd, ["--version"], { env, platform: "win32" });
+    expect(usable.ok).toBe(true);
+    expect(usable.command).toBe(path.join(hostDir, "pwsh.EXE"));
+    expect(usable.prefixArgs).toEqual([
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      path.join(dir, "pnpm.ps1"),
+    ]);
+  });
+
+  it("起服务/探测走同一个形态：commandInvocation 把 `.CMD` 映射到宿主 + `.ps1`", () => {
+    const dir = makeInstalledPnpmDir();
+    const hostDir = makePowerShellHost(path.join(tmp, "host"));
+    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const invocation = commandInvocation(path.join(dir, "pnpm.CMD"), ["-v"], {
+      env,
+      platform: "win32",
+    });
+    expect(invocation.command).toBe(path.join(hostDir, "pwsh.EXE"));
+    expect(invocation.prefixArgs).toContain(path.join(dir, "pnpm.ps1"));
+  });
+
+  it("回退同胞名是「去掉自身扩展名再拼 `.ps1`」（不是 `pnpm.CMD.ps1`）", () => {
+    const dir = path.join(tmp, "only-cmd-no-ps1");
+    fs.mkdirSync(dir, { recursive: true });
+    const cmd = path.join(dir, "pnpm.CMD");
+    fs.writeFileSync(cmd, "@ECHO off\r\n");
+    fs.chmodSync(cmd, 0o755);
+    // 造一个名字明显不对的同胞：`pnpm.CMD.ps1`。它**不该**被当成回退目标。
+    fs.writeFileSync(path.join(dir, "pnpm.CMD.ps1"), "Write-Output '1'\n");
+    const hostDir = makePowerShellHost(path.join(tmp, "host"));
+    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const usable = usableCommand(path.join(dir, "pnpm.CMD"), ["--version"], { env, platform: "win32" });
+    expect(usable.ok).toBe(false);
+    expect(usable.reason).toBe("batch-script");
+  });
+
+  it("POSIX 上 `.cmd` 的判据不生效（内核解析 shebang / 无扩展名才是常态）", () => {
+    // 同一个 `.ps1` 缺失的目录：Windows 上被否，POSIX 上「重形态」判据不参与，
+    // 走的是真起一次（`.CMD` 在 Linux 上本来也是无谓形态，这里只钉平台边界）。
+    const dir = makeInstalledPnpmDir({ ps1: false });
+    const usable = usableCommand(path.join(dir, "pnpm.CMD"), ["--version"], {
+      env: WIN_ENV(dir),
+      platform: "linux",
+    });
+    expect(usable.reason).not.toBe("batch-script");
   });
 });
 

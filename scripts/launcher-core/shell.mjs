@@ -64,7 +64,7 @@ export function whichCommand(name, { env = process.env, platform = process.platf
     for (const ext of exts) {
       const candidate = path.join(dir, name + ext);
       if (!isFile(candidate)) continue;
-      const usable = usableCommand(candidate);
+      const usable = usableCommand(candidate, undefined, { env, platform });
       if (usable.ok) return candidate;
       // 不可用的候选直接跳过：同目录里往往还并存别的形态（`pnpm` shim 与
       // `pnpm.ps1` / `pnpm.cmd` 是三个文件），继续往后找才有机会选中能跑的。
@@ -128,14 +128,18 @@ function isFile(candidate) {
  *
  * 读文件头几个字节而不是看扩展名 —— Windows 上 `.CMD` 与 `pnpm`（shim）后缀
  * 不同但内容形态更要紧，而扩展名只是给 shell 看的。
- *   · `shebang`  —— 以 `#!` 开头（corepack 的 shim 就是）；Node 起不了，
- *                   `usableCommand()` 会经同目录的 `.ps1` / `.cmd` 回退；
- *   · `script`   —— 文本但无 shebang（.cmd / .bat / .ps1）；
- *   · `binary`   —— 二进制（.exe / .com）；
- *   · `unknown`  —— 读不到或形态判不出，按可执行形态处理（交给 spawn 决定）。
+ *   · `shebang` —— 以 `#!` 开头（corepack 的无扩展名 shim 就是）；**Node 起不了**
+ *                 （libuv 不解析 shebang），`usableCommand()` 走同目录回退；
+ *   · `batch`   —— 批处理（`@echo` / `@setlocal` 起头，`.cmd` / `.bat`）；
+ *                 **Node 同样起不了**（只有 cmd.exe 会解释它），照旧走回退 ——
+ *                 把两者混成 `script` 曾让 `.CMD` 被当成「可用」而选中，
+ *                 真跑起来是 `EINVAL`（ISSUE #576 第二轮现场）；
+ *   · `script`  —— 其余文本脚本（`.ps1` 等），由各自的宿主解释；
+ *   · `binary`  —— 二进制（.exe / .com），CreateProcess 能直接起；
+ *   · `unknown` —— 读不到或形态判不出，按可执行形态处理（交给 spawn 决定）。
  *
  * @param {string} candidate
- * @returns {"shebang" | "script" | "binary" | "unknown"}
+ * @returns {"shebang" | "batch" | "script" | "binary" | "unknown"}
  */
 export function executableKind(candidate) {
   let fd;
@@ -145,11 +149,15 @@ export function executableKind(candidate) {
     return "unknown";
   }
   try {
-    const head = Buffer.alloc(2);
-    const read = fs.readSync(fd, head, 0, 2, 0);
+    // 批处理判据要看到 `@echo` / `@setlocal` 这一类开头，2 字节不够 —— 统一读 16。
+    const head = Buffer.alloc(16);
+    const read = fs.readSync(fd, head, 0, head.length, 0);
     if (read < 2) return "unknown";
-    const text = head.toString("latin1");
-    if (text === "#!") return "shebang";
+    const text = head.subarray(0, read).toString("latin1");
+    if (text.startsWith("#!")) return "shebang";
+    // 批处理：以 `@` 起头（`@echo off` / `@SETLOCAL`），或 `:label` / `echo off`。
+    // 只认开头，不看扩展名 —— `.cmd` 只是命名习惯，内容才是判据。
+    if (/^@?\s*(echo|setlocal)\b/i.test(text) || /^@/.test(text)) return "batch";
     // 可打印 ASCII 起头 → 文本脚本；其余按二进制（含 Windows 的 MZ 头）。
     return /^[\x09\x0a\x0d\x20-\x7e]{2}$/.test(text) ? "script" : "binary";
   } catch {
@@ -162,50 +170,71 @@ export function executableKind(candidate) {
 /**
  * 这个候选**现在能不能被 spawn 起来**。
  *
- * 三层判据，任一层失败即 `ok: false`（附上原因后缀，供上层拼进「为什么没选中它」）：
+ * 判据按**形态**分派（不是「一层层试」），任一路失败即落到同目录回退：
  *   1. `fs.accessSync(X_OK)` —— 权限位。POSIX 上这层就能拦下「文件在但不可执行」；
- *      Windows 上 Node 把 X_OK 当存在性检查（恒通过），所以还需要下面两层。
- *   2. shebang 形态先试一次静默启动（`spawnSync` + `stdio: "ignore"`）：这是
- *      唯一能确认「Node 真能起它」的办法 —— 也正是 `pnpm -v` 之前踩坑的那一步。
- *   3. 起不来（EACCES / ENOEXEC）或**不是 shebang** 时，在同目录里找可回退形态：
- *      `<name>.ps1` → `powershell -NoProfile -ExecutionPolicy Bypass -File`；
- *      `<name>.cmd` → **不返回**（cmd.exe 有控制台窗口 / 需要 shell 中转，
- *      垫底交给调用方按「没有可用命令」处理，见 whichCommand 的注释）。
+ *      Windows 上 Node 把 X_OK 当存在性检查（恒通过），所以形态判据才是主力。
+ *   2. **Windows 上的批处理**（`.cmd` / `.bat`）不真起：它只有 cmd.exe 会解释，
+ *      Node 起它必然 `EINVAL`。此前它与 `.ps1` 混成同一种 `script` 形态、被直接
+ *      认作「可用」，于是选中 `pnpm.CMD`（ISSUE #576 第二轮现场）—— 而 `pnpm.ps1`
+ *      就在旁边，回退目标稳定可得。POSIX 上 `.cmd` 是无谓形态，不受此条约束。
+ *   3. **其余形态真起一次确认**（`binary` / `shebang` / `script` / `unknown`）：
+ *      这是唯一能证明「Node 真能起它」的办法（`spawnSync` + `stdio: "ignore"`，
+ *      `--version` 报错退出也算起得来），起不来再落回同目录 `.ps1`。
+ *      shebang 留在这里而**不按形态一刀切**：libuv 在 Windows 上不解析 shebang，
+ *      起不来会走回退；但机器上真配好了文件关联时它确实能用，不该被形态否掉。
  *
- * 探测用的参数取自**调用方真正要跑的第一个参数**（`whichCommand(..., { probeArgs })`）：
- * 判断「能不能跑」不需要它跑成功，`--version` 报错退出也算「起得来」。
+ * 探测用的参数取自**调用方真正要跑的第一个参数**（`whichCommand(..., { probeArgs })`）。
  *
  * @param {string} candidate @param {string[]} [probeArgs]
+ * @param {WhichCommandOptions} [options] env / platform 可注入，供单测与「模拟另一平台」
  * @returns {CommandUsability}
  */
-export function usableCommand(candidate, probeArgs = ["--version"]) {
+export function usableCommand(candidate, probeArgs = ["--version"], { env = process.env, platform = process.platform } = {}) {
   const kind = executableKind(candidate);
   try {
     fs.accessSync(candidate, fs.constants.X_OK);
   } catch {
     return { ok: false, command: candidate, prefixArgs: [], reason: "no-exec-permission" };
   }
-  if (kind !== "shebang") {
-    // 非 shebang：Node 能直接起的（二进制 / .cmd 由 spawn 交给系统）就在这里认下。
-    // 真正的可用性由调用方的 spawnSync 给出，本层只做「形态上可能是可执行」的粗筛。
-    return { ok: true, command: candidate, prefixArgs: [], reason: null };
+  // **批处理（`.cmd` / `.bat`）在 Windows 上不由「真起一次」来判**：它只有 cmd.exe
+  // 会解释，Node 起它必然失败（实测 `EINVAL`）。此前把它与 `.ps1` 混成同一种
+  // `script` 形态、直接认作「可用」，于是选中 `pnpm.CMD` → 探测 EINVAL、
+  // 提示却说「未发现可回退形态」—— 而 `pnpm.ps1` 就摆在旁边（ISSUE #576 第二轮）。
+  // shebang 不在此列：Node 在 Windows 上确实起不了它（libuv 不解析 shebang），
+  // 但**留着「真起一次」去发现**，机器上真配了文件关联时还能用；起不来自然会落到
+  // 下面的回退。POSIX 上两者都不是问题（内核解析 shebang，`.cmd` 本就是无谓形态）。
+  if (isWindows(platform) && kind === "batch") {
+    const fallback = siblingFallback(candidate, { env, platform });
+    if (fallback) return fallback;
+    return { ok: false, command: candidate, prefixArgs: [], reason: "batch-script" };
   }
   const probe = spawnSync(candidate, probeArgs, { stdio: "ignore", windowsHide: true, timeout: 10_000 });
   /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
   const code = /** @type {NodeJS.ErrnoException | undefined} */ (probe.error)?.code;
   if (!code) return { ok: true, command: candidate, prefixArgs: [], reason: null };
 
-  const fallback = shebangFallback(candidate);
+  const fallback = siblingFallback(candidate, { env, platform });
   if (fallback) return fallback;
   return { ok: false, command: candidate, prefixArgs: [], reason: String(code) };
 }
 
-/** shebang 脚本的同目录回退形态：`<name>.ps1`（经 PowerShell 宿主）优先。 */
-/** @param {string} shim @returns {CommandUsability | null} */
-function shebangFallback(shim) {
-  const script = shim + ".ps1";
+/** 同目录回退形态：**同名的 `.ps1`**（经 PowerShell 宿主）。
+ *
+ *  为什么对所有「Node 起不来」的形态共用一条回退：corepack 的三种形态是
+ *  `.ps1` + `.cmd` + 无扩展名 shim 并排摆放（`.tools\pnpm\<ver>\bin` 亦然），
+ *  能被 Node 起的只有经宿主的那一种。此前只有 shebang 分支会来这儿，
+ *  `pnpm.CMD` 被认成「可用」后真跑起来是 EINVAL，用户在提示里只看到
+ *  「未发现可回退形态」—— 其实回退就在旁边。
+ *
+ *  **同胞名按「去掉自身扩展名再拼 `.ps1`」求**：无扩展名的 shim 是 `pnpm` →
+ *  `pnpm.ps1`，批处理是 `pnpm.CMD` → `pnpm.ps1`（不是 `pnpm.CMD.ps1`）。
+ *  只按字符串拼接会让 `.CMD` 一侧的回退永远找不到，等于没修。 */
+/** @param {string} candidate @param {WhichCommandOptions} [options] @returns {CommandUsability | null} */
+function siblingFallback(candidate, { env = process.env, platform = process.platform } = {}) {
+  const ext = path.extname(candidate);
+  const script = (ext ? candidate.slice(0, -ext.length) : candidate) + ".ps1";
   if (!isFile(script)) return null;
-  const host = powershellHost();
+  const host = powershellHost({ env, platform });
   if (!host) return null;
   return {
     ok: true,
@@ -237,10 +266,11 @@ export function powershellHost({ env = process.env, platform = process.platform 
 /** 当前脚本要跑的命令形态（`command` / `prefixArgs`）——POSIX 上恒为原路径。 */
 /**
  * @param {string} candidate @param {string[]} [probeArgs]
+ * @param {WhichCommandOptions} [options] env / platform 可注入，供单测与「模拟另一平台」
  * @returns {{ command: string, prefixArgs: string[] }}
  */
-export function commandInvocation(candidate, probeArgs = ["--version"]) {
-  const usable = usableCommand(candidate, probeArgs);
+export function commandInvocation(candidate, probeArgs = ["--version"], { env = process.env, platform = process.platform } = {}) {
+  const usable = usableCommand(candidate, probeArgs, { env, platform });
   return usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
     : { command: candidate, prefixArgs: [] };
