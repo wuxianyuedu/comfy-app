@@ -82,6 +82,13 @@ export interface WorkflowDetailNote {
   color: string;
 }
 
+/** `findByIdForUserSelect` 的行类型（含 detail 转换用到的全部列）。
+ *  单独起名是为了让 `buildWorkflowDetailJson` 的参数可读——
+ *  它只依赖这份行数据，不依赖调用方的其它上下文。 */
+type WorkflowDetailTemplateRow = NonNullable<
+  Awaited<ReturnType<typeof workflowTemplateRepository.findByIdForUserSelect>>
+>;
+
 /** Shape returned by the legacy `GET /api/workflows/:id` (and the subgraph
  *  variant) — mirrors the client-side `WorkflowDetail` interface in
  *  components/studio/wf-types.ts.  Some fields only appear on the
@@ -129,130 +136,34 @@ export interface WorkflowDetailFull {
 }
 
 
-/** 丢弃某个工作流已缓存的详情（顶层 + 它的全部子图视图）。
+/** 把已读出的工作流行转换成下发给客户端的序列化 JSON。
  *
- *  PATCH 之后必须调用：服务端详情缓存 TTL 30s，不主动清的话客户端就算重新
- *  拉 `detailFull` 也会拿回改动前的富化 IO，界面看起来像「改了没生效」。 */
-export function invalidateWorkflowDetailCache(userId: string, id: string): void {
-  cacheDel(`wf:${userId}:${id}`);
-  cacheDelPrefix(`sg:${userId}:${id}:`);
-}
-
-export async function buildWorkflowDetailFull(
-  userId: string,
-  id: string,
-  opts: { bust?: boolean } = {}
-): Promise<WorkflowDetailFull> {
-  const cacheKey = `wf:${userId}:${id}`;
-
-  /* COMBO option resolver. ComfyUI COMBO widgets
-   * (unet_name / clip_name / vae_name / ckpt_name …) carry NO candidate
-   * list in the raw JSON — the only authoritative source is
-   * /api/object_info.  The resolver fetches it once per request
-   * (fetchObjectInfo itself caches for 5 min + degrades to null when
-   * ComfyUI is unreachable) and resolves `classType + field` → candidate
-   * array so the project-canvas form and the subgraph wrapper node can
-   * render a real <select> instead of a free-text box.  Missing /
-   * unreachable → undefined → graceful fallback to a plain text control.
-   * Implementation lives in workflow-detail-combo.ts. */
-  const { comboOptionsForClassField, comboOptionsForFieldName } =
-    createComboResolver();
-
-  /* ?_bust=1 query flag forces the in-memory LRU to be
-   *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
-   *  a guaranteed-fresh serialisation from Prisma.  Without this, even
-   *  cache:"no-store" on the client would still pull a 60s-stale
-   *  pre-serialised JSON blob from server memory.  The flag is
-   *  deliberately a private client-only token — never logged. */
-  if (opts.bust) {
-    cacheDel(cacheKey);
-  }
-
-  /* ── Local-file workflows: detect on-disk changes & auto re-import ──
-   *  If this workflow was imported from a local file (sourcePath set), we stat
-   *  the file up-front (cheap) so we can re-import it before serving a stale
-   *  cached blob.  This is what lets the user edit the file in ComfyUI and see
-   *  the latest on refresh — with OR without the 🔄 force-reload button.
-   *  `meta` is a lightweight select so we don't drag the (large) rawJson blob
-   *  twice; the full read below still happens when the cache misses. */
-  let sourceChanged = false;
-  let sourceMissing = false;
-  let sourcePath: string | null = null;
-  const meta = await workflowTemplateRepository.findByIdForUserSelect(
-    userId,
-    id,
-    {
-      id: true,
-      sourcePath: true,
-      sourceMtime: true,
-      sourceChecksum: true,
-      taskType: true,
-    }
-  );
-  if (meta?.sourcePath) {
-    sourcePath = meta.sourcePath;
-    const { reimportFromSource } = await import("@/lib/comfyui/importSource");
-    const re = await reimportFromSource({
-      sourcePath: meta.sourcePath,
-      sourceMtime: meta.sourceMtime,
-      sourceChecksum: meta.sourceChecksum,
-      /* 透传已存在的 taskType 让 reimport 时保留
-       * 用户在 UI 里手动设置的值（不再被自动推断覆盖）。 */
-      existingTaskType: meta.taskType ?? null,
-    });
-    if (re.missing) {
-      sourceMissing = true;
-      cacheDel(cacheKey); // rebuild so the missing flag reaches the client
-    } else if (re.update) {
-      await workflowTemplateRepository.update(id, {
-        graph: re.update.graph,
-        rawJson: re.update.rawJson,
-        positions: re.update.positions,
-        paramMap: re.update.paramMap,
-        taskType: re.update.taskType,
-        sourceChecksum: re.update.sourceChecksum,
-        sourceMtime: re.update.sourceMtime,
-      });
-      sourceChanged = true;
-      cacheDel(cacheKey); // force a fresh re-serialisation below
-    }
-  }
-
-  /* Hot path: if the pre-serialized detail is already cached we return it
-   * directly — skipping the Prisma read of the (large) rawJson blob AND the
-   * per-request JSON.stringify.  This is what gets repeat opens to <50ms.
-   * (The cache entry is invalidated on PATCH/DELETE; a 404 is never cached.) */
-  const cached = cachePeek<string>(cacheKey);
-  if (cached !== undefined && typeof cached === "string") {
-    return JSON.parse(cached) as WorkflowDetailFull;
-  }
-
-  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
-    userId,
-    id,
-    {
-      id: true,
-      name: true,
-      taskType: true,
-      modes: true,
-      defaultMode: true,
-      graph: true,
-      paramMap: true,
-      workflowIO: true,
-      rawJson: true,
-      positions: true,
-      apiSource: true,
-    }
-  );
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
-
-  /* The transform below is pure (depends only on tpl.graph / tpl.rawJson /
-   * tpl.positions which never change between writes), so we cache the already
-   * serialized JSON string by user+id.  Repeated opens return it verbatim.
-   *
-   * TTL shortened from 60_000ms → 30_000ms so it locks at
-   * most 30s of staleness even if client cache:"no-store" is bypassed. */
-  const detailJson = await cacheJson(cacheKey, 30_000, async () => {
+ *  这是 `buildWorkflowDetailFull` 里那段 278 行 `cacheJson` 闭包的正身：闭包体
+ *  只被调用一次、又不返回值对象而是一段 JSON 字符串，所以「它做了什么」在调用点
+ *  看不出来，缩进还与外层脱节（ISSUE #570 第 4 项）。抽成具名函数后语义与调用点
+ *  分开、可单独 profile，`cacheJson` 在那头只做缓存包裹。
+ *
+ *  `sourcePath` / `sourceChanged` / `sourceMissing` 由调用方（re-import 判定）
+ *  算好后传入 —— 本函数只管转换，不碰磁盘。 */
+async function buildWorkflowDetailJson(input: {
+  tpl: WorkflowDetailTemplateRow;
+  comboOptionsForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<string[] | undefined>;
+  comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  sourcePath: string | null;
+  sourceChanged: boolean;
+  sourceMissing: boolean;
+}): Promise<string> {
+  const {
+    tpl,
+    comboOptionsForClassField,
+    comboOptionsForFieldName,
+    sourcePath,
+    sourceChanged,
+    sourceMissing,
+  } = input;
   /* 存库 graph 恒为 API 格式对象（Json 列）；rawJson 收窄为 RawWorkflow 视图
    * （根不是普通对象时为 null，下游均有守卫，路径与旧 any 代码等价）。 */
   const graph = tpl.graph as Record<string, ApiWorkflowNode>;
@@ -529,7 +440,142 @@ export async function buildWorkflowDetailFull(
     /** Classification: "local" when tied to an on-disk file, else "online". */
     source: sourcePath ? "local" : "online",
   });
-  });
+}
+
+
+/** 丢弃某个工作流已缓存的详情（顶层 + 它的全部子图视图）。
+ *
+ *  PATCH 之后必须调用：服务端详情缓存 TTL 30s，不主动清的话客户端就算重新
+ *  拉 `detailFull` 也会拿回改动前的富化 IO，界面看起来像「改了没生效」。 */
+export function invalidateWorkflowDetailCache(userId: string, id: string): void {
+  cacheDel(`wf:${userId}:${id}`);
+  cacheDelPrefix(`sg:${userId}:${id}:`);
+}
+
+export async function buildWorkflowDetailFull(
+  userId: string,
+  id: string,
+  opts: { bust?: boolean } = {}
+): Promise<WorkflowDetailFull> {
+  const cacheKey = `wf:${userId}:${id}`;
+
+  /* COMBO option resolver. ComfyUI COMBO widgets
+   * (unet_name / clip_name / vae_name / ckpt_name …) carry NO candidate
+   * list in the raw JSON — the only authoritative source is
+   * /api/object_info.  The resolver fetches it once per request
+   * (fetchObjectInfo itself caches for 5 min + degrades to null when
+   * ComfyUI is unreachable) and resolves `classType + field` → candidate
+   * array so the project-canvas form and the subgraph wrapper node can
+   * render a real <select> instead of a free-text box.  Missing /
+   * unreachable → undefined → graceful fallback to a plain text control.
+   * Implementation lives in workflow-detail-combo.ts. */
+  const { comboOptionsForClassField, comboOptionsForFieldName } =
+    createComboResolver();
+
+  /* ?_bust=1 query flag forces the in-memory LRU to be
+   *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
+   *  a guaranteed-fresh serialisation from Prisma.  Without this, even
+   *  cache:"no-store" on the client would still pull a 60s-stale
+   *  pre-serialised JSON blob from server memory.  The flag is
+   *  deliberately a private client-only token — never logged. */
+  if (opts.bust) {
+    cacheDel(cacheKey);
+  }
+
+  /* ── Local-file workflows: detect on-disk changes & auto re-import ──
+   *  If this workflow was imported from a local file (sourcePath set), we stat
+   *  the file up-front (cheap) so we can re-import it before serving a stale
+   *  cached blob.  This is what lets the user edit the file in ComfyUI and see
+   *  the latest on refresh — with OR without the 🔄 force-reload button.
+   *  `meta` is a lightweight select so we don't drag the (large) rawJson blob
+   *  twice; the full read below still happens when the cache misses. */
+  let sourceChanged = false;
+  let sourceMissing = false;
+  let sourcePath: string | null = null;
+  const meta = await workflowTemplateRepository.findByIdForUserSelect(
+    userId,
+    id,
+    {
+      id: true,
+      sourcePath: true,
+      sourceMtime: true,
+      sourceChecksum: true,
+      taskType: true,
+    }
+  );
+  if (meta?.sourcePath) {
+    sourcePath = meta.sourcePath;
+    const { reimportFromSource } = await import("@/lib/comfyui/importSource");
+    const re = await reimportFromSource({
+      sourcePath: meta.sourcePath,
+      sourceMtime: meta.sourceMtime,
+      sourceChecksum: meta.sourceChecksum,
+      /* 透传已存在的 taskType 让 reimport 时保留
+       * 用户在 UI 里手动设置的值（不再被自动推断覆盖）。 */
+      existingTaskType: meta.taskType ?? null,
+    });
+    if (re.missing) {
+      sourceMissing = true;
+      cacheDel(cacheKey); // rebuild so the missing flag reaches the client
+    } else if (re.update) {
+      await workflowTemplateRepository.update(id, {
+        graph: re.update.graph,
+        rawJson: re.update.rawJson,
+        positions: re.update.positions,
+        paramMap: re.update.paramMap,
+        taskType: re.update.taskType,
+        sourceChecksum: re.update.sourceChecksum,
+        sourceMtime: re.update.sourceMtime,
+      });
+      sourceChanged = true;
+      cacheDel(cacheKey); // force a fresh re-serialisation below
+    }
+  }
+
+  /* Hot path: if the pre-serialized detail is already cached we return it
+   * directly — skipping the Prisma read of the (large) rawJson blob AND the
+   * per-request JSON.stringify.  This is what gets repeat opens to <50ms.
+   * (The cache entry is invalidated on PATCH/DELETE; a 404 is never cached.) */
+  const cached = cachePeek<string>(cacheKey);
+  if (cached !== undefined && typeof cached === "string") {
+    return JSON.parse(cached) as WorkflowDetailFull;
+  }
+
+  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
+    userId,
+    id,
+    {
+      id: true,
+      name: true,
+      taskType: true,
+      modes: true,
+      defaultMode: true,
+      graph: true,
+      paramMap: true,
+      workflowIO: true,
+      rawJson: true,
+      positions: true,
+      apiSource: true,
+    }
+  );
+  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+
+  /* The transform below is pure (depends only on tpl.graph / tpl.rawJson /
+   * tpl.positions which never change between writes), so we cache the already
+   * serialized JSON string by user+id.  Repeated opens return it verbatim.
+   *
+   * TTL shortened from 60_000ms → 30_000ms so it locks at
+   * most 30s of staleness even if client cache:"no-store" is bypassed. */
+  const detailJson = await cacheJson(cacheKey, 30_000, () =>
+    buildWorkflowDetailJson({
+      tpl,
+      comboOptionsForClassField,
+      comboOptionsForFieldName,
+      sourcePath,
+      sourceChanged,
+      sourceMissing,
+    }),
+  );
 
   return JSON.parse(detailJson) as WorkflowDetailFull;
 }

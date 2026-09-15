@@ -68,8 +68,8 @@ describe("默认端口是单一事实源", () => {
     );
   });
 
-  it("拉起侧（lifecycle.ts）注入的就是同一个常量", () => {
-    const src = read("src/lib/comfyui/lifecycle.ts");
+  it("拉起侧（lifecycle-launch.ts）注入的就是同一个常量", () => {
+    const src = read("src/lib/comfyui/lifecycle-launch.ts");
     expect(src).toMatch(
       /import\s*\{[\s\S]*?COMFYUI_DEFAULT_PORT[\s\S]*?\}\s*from\s*"\.\.\/app-settings"/,
     );
