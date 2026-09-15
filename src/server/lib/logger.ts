@@ -58,7 +58,8 @@ export const REDACT_PATHS = [
  * 判据选取可读性优先于覆盖率——高召回会误伤正常日志，反而没人敢留这道守卫。
  */
 const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
-const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b/g;
+const JWT_RE =
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b/g;
 /* 高熵候选：整条串都是 `[A-Za-z0-9_-]`、长度 ≥ 24、**自带数字**（口令/散文几乎
  * 不含数字）；命中的 token 再按 Shannon 熵（≥ 3.5 bit/char）复核，避免把
  * 「长长的一串英文短横线词」误判成密钥。 */
@@ -134,6 +135,15 @@ export interface PinoLoggerOptions {
   /** 覆盖日志级别；缺省读 `LOG_LEVEL`，再回退 info。 */
   level?: string;
   /**
+   * 绑定的命名空间（pino 的 `bindings.ns`）。
+   *
+   * `lib/core/logger` 是**不带 `server-only`** 的核心层入口（它被纯 Node 宿主
+   * 与 Next 服务端同时加载），它不能把命名空间塞进 `every log call` 的对象里，
+   * 否则同一条日志的字段形状会随调用方漂移。绑定一次、处处带上，是 pino 的
+   * 标准做法（`log.child({ ns })`）。
+   */
+  ns?: string;
+  /**
    * 覆盖 ERROR 镜像的落盘目标（app-runtime 通道）。
    *
    * 默认走全局 `appRuntimeLog`（真实 `log/services/app-runtime.log`）。
@@ -149,10 +159,11 @@ export interface PinoLoggerOptions {
  * 保证「格式/脱敏契约」只在 logger.ts 一处定义、处处一致。
  */
 export function createPinoLogger(opts: PinoLoggerOptions = {}) {
-  const { destination, level, mirror } = opts;
+  const { destination, level, mirror, ns } = opts;
   const mirrorLog = mirror ?? appRuntimeLog;
   const base: LoggerOptions = {
     level: level ?? process.env.LOG_LEVEL ?? "info",
+    ...(ns === undefined ? {} : { base: { ns } }),
     redact: [...REDACT_PATHS],
     /**
      * ERROR 级再镜像一条进「应用日志」面板（app-runtime 通道）。
@@ -187,8 +198,14 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
   if (process.env.NODE_ENV === "production") return pino(base);
 
   // 本地开发：pino-pretty 美化。
-  return pino({ ...base, transport: { target: "pino-pretty", options: { colorize: true } } });
+  return pino({
+    ...base,
+    transport: { target: "pino-pretty", options: { colorize: true } },
+  });
 }
+
+/** pino 实例类型（`createPinoLogger` 的返回；`lib/core/logger` 的薄封装据此包装）。 */
+export type PinoLogger = ReturnType<typeof createPinoLogger>;
 
 /** 全局默认 logger（Next 服务端 runtime / dev 用 pretty，prod 用 JSON）。 */
 export const logger = createPinoLogger();
@@ -242,7 +259,8 @@ function renderServerLogEntry(rawArgs: unknown[]): { msg: string; ns: string } {
     candidates.find((c) => c !== undefined && c.length > 0);
 
   const msg = payload
-    ? (firstNonEmpty(renderServerLogMessage(payload), stringArg) ?? "服务端错误")
+    ? (firstNonEmpty(renderServerLogMessage(payload), stringArg) ??
+      "服务端错误")
     : // 没有结构化字段：字符串参数就是正文；再没有才回落占位文案
       (firstNonEmpty(stringArg, secondString) ?? "服务端错误");
 

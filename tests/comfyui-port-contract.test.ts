@@ -30,7 +30,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST, comfyUiBaseUrl } from "~/lib/endpoints";
+import {
+  COMFYUI_DEFAULT_PORT,
+  LOOPBACK_HOST,
+  comfyUiBaseUrl,
+} from "~/lib/endpoints";
 import { buildSpawnArgs } from "~/lib/comfyui/lifecycle-derive";
 
 const root = process.cwd();
@@ -45,11 +49,15 @@ describe("默认端口是单一事实源", () => {
 
   it("常量定义在零依赖的 endpoints.ts；app-settings.ts 只再导出（不自己定义）", () => {
     const endpoints = read("src/lib/endpoints.ts");
-    expect(endpoints).toMatch(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*\d+\s*;/);
+    expect(endpoints).toMatch(
+      /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*\d+\s*;/,
+    );
     // app-settings.ts 顶层 import fs：它的定义进不了浏览器图（ISSUE #282/#317）
     expect(endpoints).not.toMatch(/^import\s/m);
     const settings = read("src/lib/app-settings.ts");
-    expect(settings).toMatch(/export\s*\{\s*COMFYUI_DEFAULT_PORT\s*\}\s*from\s*"\.\/endpoints"/);
+    expect(settings).toMatch(
+      /export\s*\{\s*COMFYUI_DEFAULT_PORT\s*\}\s*from\s*"\.\/endpoints"/,
+    );
     expect(settings).not.toMatch(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=/);
   });
 
@@ -138,9 +146,18 @@ describe("「未配置端口」在两侧落到同一个默认端口", () => {
 describe("源码里不再有第二份默认端口口径（§12.14）", () => {
   it("config.ts 的 ComfyUI 兜底地址走端点模块，不写裸地址", () => {
     const src = read("src/lib/core/config.ts");
-    expect(src).toMatch(/import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/);
-    expect(src).toMatch(/import\s*\{[^}]*comfyUiBaseUrl[^}]*\}\s*from\s*"\.\.\/endpoints"/);
-    expect(src).toMatch(/default\(comfyUiBaseUrl\(COMFYUI_DEFAULT_PORT\)\)/);
+    expect(src).toMatch(
+      /import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/,
+    );
+    expect(src).toMatch(
+      /import\s*\{[^}]*comfyUiBaseUrl[^}]*\}\s*from\s*"\.\.\/endpoints"/,
+    );
+    /* 默认值走 `CONFIG_ENV_DEFAULTS`（ISSUE #568）：裸地址/裸端口在 config.ts 里
+     * 仍只有一处，且那一处本身取自 endpoints.ts —— 等价于原来的直接字面量写法。 */
+    expect(src).toMatch(
+      /comfyuiBaseUrl:\s*comfyUiBaseUrl\(COMFYUI_DEFAULT_PORT\)/,
+    );
+    expect(src).toMatch(/default\(CONFIG_ENV_DEFAULTS\.comfyuiBaseUrl\)/);
     expect(src).not.toMatch(/127\.0\.0\.1:8188/);
   });
 });

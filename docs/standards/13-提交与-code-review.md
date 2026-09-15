@@ -141,6 +141,8 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 ✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
 ✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
 ✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
+✅ vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts
+   tests/core-spine-single-source.test.ts   # core 骨架单一事实源（见 18 §18.8）
 ```
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。

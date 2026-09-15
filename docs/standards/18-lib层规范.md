@@ -138,11 +138,50 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 零调用导出无判据              | #573         | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算） |
 | `IIFE` / 回调体不计函数长度   | #570         | 改判据会同时改变 §12.13 的既有基线数字，须与拆分同批                                                                      |
 | prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
-| `lib` 直读 `process.env` 收口 | #568         | 涉及 `config.ts` 的存废裁决，与 #573 重叠                                                                                 |
+| `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）；`comfyui/**` 与工坊执行日志两条诊断通道的直接 `console` 属各自落盘契约，未并入本条 |
 
-## 18.8 速查
+## 18.8 core 骨架的取用口径（ISSUE #568）
+
+`src/lib/core/**` 是 18.3 里被声明为 element `server` 的那部分（架构基座）。它的
+三处「唯一事实源」曾经都只是注释里的承诺，现在各有机器判据：
+
+| 关注点 | 现状 | 机器判据 |
+| --- | --- | --- |
+| 日志 | `core/logger.ts` 是 pino 的**薄封装**（只有一条通道） | `tests/single-logger-channel.test.ts`（服务端库代码禁直接 `console.*`） |
+| 仓储取用 | **只有一种**：直接 `import { xRepository } from "@/lib/core/repository"` | `tests/container-single-access.test.ts`（`src/` 内禁 `container.resolve(`） |
+| 配置 | `core/config.ts` 是**类型契约 + 默认值**，不承诺「集中配置」 | `tests/core-spine-single-source.test.ts`（禁承诺句式；默认值必须取自 `CONFIG_ENV_DEFAULTS` / `endpoints.ts`） |
+
+三条判据都已接入 `.githooks/pre-commit`（第 17 步）与 CI（`Core spine single source`）。
+
+**为什么移除 DI 容器（`core/container.ts`）而不是「收口到只经容器取用」**：
+裁决不靠「哪种更像架构」，而靠两条可验证的事实 ——
+
+1. **两种取法取到的是同一个对象**。容器用 `register("x", () => x)` 把模块单例
+   原样返回，没有任何「每个 resolve 一个新实例」的语义；全仓也没有任何一处
+   `register(..., mock)`。所以注释里承诺的「可替换单例、便于测试」**从未被使用**，
+   连测试都只 `vi.mock` 模块本身（那本来就绕过容器）。
+2. **直接 import 是全仓的既成形态**：29 个文件直接 import，容器 2 个文件 /
+   10 处调用。要收口到容器，得把它重新写进 29 个文件（含 `lib/comfyui/**` 的
+   执行链），并连带改掉所有 `vi.mock("../core/repository")`；收益是零
+   （同一批对象），代价是最大的一次重写 + 一个「只有 2 个调用方用过」的抽象。
+
+> 一句话判据：**当一个抽象与它的（潜在）实现给出了同一个答案时，留下的是更小的那个。**
+> 反之，如果本仓库真的需要「按请求替换仓储」（多租户 / 请求级作用域），结论会反过来
+> —— 那时要引入的是**请求作用域**容器，而不是目前这种进程级单例包装。
+
+**`config.ts` 为什么不「把所有 `process.env` 收进来」**：它的 schema 只覆盖 7 个
+变量，而实际用到的还有 `COMFYUI_PATH` / `COMFY_CLIENT_ID` / `LLM_*` / `FFMPEG_BIN` /
+`COMFYAPP_TASKKILL` 等一大批；把 30+ 处就地读全部改成 `config.x` 要么补齐 20+ 个
+变量（其中多数是「按调用点不同」的路径解析，不是配置树该管的东西），要么留下一个
+**更大**的误导性承诺。所以裁决是**删掉承诺、只留契约与默认值**：新增配置项时，
+只有「两侧都要读的连接 / 端口 / 路径」才把默认值放这里。
+
+## 18.9 速查
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
+- 要取仓储：**直接 import**（`@/lib/core/repository`），别再找容器 —— 它已按 18.8 移除。
+- 要写日志：走 `@/lib/core/logger`（核心层）或 `@/server/lib/logger`（服务端），
+  **不要直接 `console.*`**（会绕开脱敏与面板镜像）。
 - `lib` 要共享类型给视图：**下沉类型模块到 `src/lib`**，不要在 lib 里 import components。
 - 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试。
 - 需要新增守卫：**先查既有更强的那一条**（18.4 的判定反模式）。

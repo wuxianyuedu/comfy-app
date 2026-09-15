@@ -159,6 +159,14 @@ jobs:
         # 棘轮只许降不许升（规范 17）：新增违规失败；治理后未收紧基线也失败
         run: node scripts/check-ui-logic-separation.cjs --strict
 
+      - name: Core spine single source
+        # core 骨架三处「唯一事实源」（ISSUE #568）：日志只有一条通道
+        # （core/logger 是 pino 薄封装、服务端库代码禁直接 console.*）、
+        # 仓储只有一种取法（container 已移除）、config 不再承诺「集中配置」。
+        # 这三条此前**只写在注释里**，而注释与现状恰好相反（容器只有 2 个调用方、
+        # 30+ 处直接读 process.env）—— 于是「照着注释写」的人会再多一条口径。
+        run: pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+
       - name: Coverage
         # 覆盖率棘轮（vitest.config.ts）：middleware/lib 目录按真实水平设硬门槛
         run: pnpm run test:coverage

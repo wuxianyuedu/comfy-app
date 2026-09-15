@@ -1,54 +1,100 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { PassThrough } from "node:stream";
+
 import { createLogger, logger } from "~/lib/core/logger";
 
+const streams: PassThrough[] = [];
+
 afterEach(() => {
-  vi.restoreAllMocks();
-  delete process.env.LOG_LEVEL;
+  while (streams.length > 0) streams.pop()?.destroy();
 });
 
-describe("logger — 级别过滤", () => {
-  it("默认(info)只输出 >= info", () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const log = createLogger("test");
+/**
+ * 造一个把 JSON 行写进内存流的日志器。
+ *
+ * 必须显式传 `destination`：默认目标在 dev 下是 pino-pretty 的 worker transport
+ * （抓不到稳定 JSON），生产是 stdout；而且全局实例的级别来自 `LOG_LEVEL`，
+ * 用例会随环境漂移。
+ */
+function makeLogger(ns: string) {
+  const stream = new PassThrough();
+  streams.push(stream);
+  const chunks: string[] = [];
+  stream.on("data", (c: Buffer) => chunks.push(c.toString("utf8")));
+  const log = createLogger(ns, { destination: stream, level: "debug" });
+  const lines = () =>
+    chunks
+      .join("")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+  return { log, lines };
+}
+
+describe("core/logger — 委派给 pino，不再自带实现", () => {
+  it("级别过滤走 pino：实例级别 debug 时四档全出", () => {
+    const { log, lines } = makeLogger("t");
     log.debug("d");
     log.info("i");
     log.warn("w");
     log.error("e");
-    expect(logSpy).toHaveBeenCalledTimes(2); // info + warn 走 stdout
-    expect(errSpy).toHaveBeenCalledTimes(1); // error 走 stderr
+    expect(lines().map((l) => l.level)).toEqual([20, 30, 40, 50]);
   });
 
-  it("LOG_LEVEL=error 时仅 error 输出", () => {
-    process.env.LOG_LEVEL = "error";
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const log = createLogger("test");
+  it("实例级别决定门槛：level=error 时只有 error 输出", () => {
+    const stream = new PassThrough();
+    streams.push(stream);
+    const chunks: string[] = [];
+    stream.on("data", (c: Buffer) => chunks.push(c.toString("utf8")));
+    const log = createLogger("t", { destination: stream, level: "error" });
     log.info("i");
     log.error("e");
-    expect(logSpy).not.toHaveBeenCalled();
-    expect(errSpy).toHaveBeenCalledTimes(1);
+    const out = chunks
+      .join("")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as { level: number });
+    expect(out.map((l) => l.level)).toEqual([50]);
   });
 
-  it("非法 LOG_LEVEL 回退 info", () => {
-    process.env.LOG_LEVEL = "bogus";
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    const log = createLogger("test");
-    log.info("i");
-    expect(logSpy).toHaveBeenCalledTimes(1);
+  it("结构化字段原样进 JSON，不进 msg 字符串", () => {
+    const { log, lines } = makeLogger("repo");
+    log.debug("create", { id: "t1" });
+    const [entry] = lines();
+    expect(entry?.msg).toBe("create");
+    expect(entry?.id).toBe("t1");
+    expect(entry?.ns).toBe("repo");
   });
-});
 
-describe("logger — child 命名空间", () => {
-  it("命名空间拼接为 parent:child", () => {
-    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    createLogger("a").child("b").info("hi");
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("[a:b]"));
+  it("child 的命名空间拼接为 parent:child", () => {
+    const { log, lines } = makeLogger("a");
+    log.child("b").info("hi");
+    expect(lines()[0]?.ns).toBe("a:b");
   });
-});
 
-describe("logger — 缺省实例", () => {
-  it("logger 暴露标准方法", () => {
+  /* 旧实现「零脱敏」正是本条要根治的缺口：同一条字段在 pino 那条通道会被
+   * `REDACT_PATHS` 擦成 `[Redacted]`，在旧 `core/logger` 里则原文落盘。 */
+  it("敏感字段被 pino redact 擦掉", () => {
+    const { log, lines } = makeLogger("auth");
+    log.error("login", { password: "P@ssw0rd", token: "tok" });
+    const raw = JSON.stringify(lines()[0]);
+    expect(raw).toContain("[Redacted]");
+    expect(raw).not.toContain("P@ssw0rd");
+    expect(raw).not.toContain('"tok"');
+  });
+
+  it("命名空间不同的两个日志器互不串台", () => {
+    const a = makeLogger("a");
+    const b = makeLogger("b");
+    a.log.info("from-a");
+    b.log.info("from-b");
+    expect(a.lines()[0]?.ns).toBe("a");
+    expect(b.lines()[0]?.ns).toBe("b");
+  });
+
+  it("默认实例暴露标准方法", () => {
     expect(typeof logger.info).toBe("function");
     expect(typeof logger.child).toBe("function");
   });
