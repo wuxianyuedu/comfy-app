@@ -129,6 +129,12 @@ jobs:
         # 函数长度（规范 §12.13 / ISSUE #536）：超过 400 行的函数按文件记账，
         # 棘轮只许降不许升。文件行数由 R5 管、函数没人管，于是 2186 行的单函数
         # 一路合法存在。
+        #
+        # ISSUE #570 第 7 项补齐另一半（规范 §12.13.2）：**无名字的块体**
+        # （IIFE / 回调 / 闭包参数）与跨行签名的具名函数同受约束 —— 此前
+        # 「把 300 行塞进 IIFE 里」能整条绕过本门禁（真实实例：lifecycle.ts 的
+        # ensureComfyUiReady 里挂了 288 行 IIFE）。基线与脚本各带判据版本，
+        # 棘轮不许被静默放宽。
         run: node scripts/check-function-length.cjs --strict
 
       - name: Rust function length ratchet
