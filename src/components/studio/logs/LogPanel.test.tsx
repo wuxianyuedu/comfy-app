@@ -29,6 +29,7 @@ import {
   LOG_PANEL_OVERLAY_Z,
   LOG_PANEL_POPUP_Z_CLASS,
 } from "./log-panel-layers";
+import { LOG_ROW_SINGLE } from "./log-virtual";
 
 /* 本文件是 jsdom 里的**重交互**用例（数百行日志的渲染 + 多次 userEvent 点击），
  * 默认 5s 超时在全量并行负载下不够（翻页 / 回到最新等用例各自偶发超时）。
@@ -836,6 +837,108 @@ describe("LogPanel 日志面板", () => {
     const rows = container.querySelectorAll("[data-log-text]");
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]?.textContent).toContain("事件");
+  });
+
+  /* ISSUE #609 八审：「日志切换到 1000+ 的页签有明显卡顿需要优化」。
+   *
+   * 根因是一页 2000 行**全部**挂进 DOM（加上行内的分片 span，满页约 1.5 万
+   * 个节点），切页那一刻的布局成本就是用户感知到的卡顿。现在只渲染视口内的
+   * 几十行（`log-virtual`）。
+   *
+   * jsdom 不做布局、量不到视口高度，所以面板在这一支走的是「整页渲染」的兜底
+   * ——这里断言的正是**这条兜底**与**几何接线**：量不到就不能少渲染（否则内容
+   * 会看不见），量到了就必须给出撑开滚动条的总高与窗口起点。真实浏览器里
+   * 「节点数不随页大小增长」由 e2e 量。 */
+  it("量不到视口时整页渲染（虚拟化不能变成内容看不见）", () => {
+    /* 页大小显式钉住 200：本文件里别的用例（`useSmallPage`）会把它改小，
+     * 而页码/页大小是**全文件共享的 store 状态**——不钉住就会读到上个用例
+     * 留下的那一份，断言「300 行」拿到 200 行。 */
+    useSmallPage(200);
+    seed(120);
+    const { container } = render(<LogPanel />);
+    /* jsdom 的 clientHeight 恒为 0 → 走兜底分支 → 整页都在。 */
+    expect(container.querySelectorAll("[data-log-index]")).toHaveLength(120);
+  });
+
+  it("每行都带显式高度，且外层撑出与之一致的估算总高", () => {
+    useSmallPage(200);
+    seed(120);
+    const { container } = render(<LogPanel />);
+    const rows = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-log-index] > div"),
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    /* 显式高度是这件事的地基：估算高度与实际渲染高度不同口径时，累计误差会让
+     * 滚动位置与内容错开（见 log-virtual 的常量说明）。 */
+    for (const row of rows) {
+      expect(row.style.height).toBe(`${LOG_ROW_SINGLE}px`);
+    }
+    /* 撑开滚动条的那一层：高度 = 行数 × 单行高度。 */
+    const spacer =
+      rows[0]!.closest("[data-log-index]")!.parentElement!.parentElement!;
+    expect(spacer.style.height).toBe(`${120 * LOG_ROW_SINGLE}px`);
+  });
+
+  /* 上面两条走的是「量不到视口就整页渲染」的兜底分支。这条**真的把视口量出来**
+   * （jsdom 里 `clientHeight` 本来是 0，这里给它一个数），于是走的是真正的虚拟
+   * 窗口分支——判据是「渲染的行数明显少于整页」以及「滚动能换窗口」。
+   *
+   * 为什么值得在 jsdom 里也钉一条：整页渲染的兜底让「虚拟化没生效」这件事在
+   * jsdom 里**完全不可见**（两条分支的可见输出都是全部行）。这条是唯一能在单测
+   * 层发现「窗口算歪了、滚动不换段」的判据；真实浏览器里的节点数与总高由 e2e 量。 */
+  it("量到视口后只渲染窗口内的行，滚动能换窗口", () => {
+    useSmallPage(200);
+    seed(200);
+
+    /* jsdom 不做布局，`clientHeight` 恒为 0；这里给它一个真实尺度的视口
+     * （600px 高、1100px 宽），面板才会走虚拟窗口分支。改的是**原型**上的取值：
+     * 面板读的是它自己那个滚动元素，而 jsdom 里所有元素的尺寸都由这一份原型给出。 */
+    const prototype: object = Object.getPrototypeOf(
+      document.createElement("div"),
+    ) as object;
+    const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
+    const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
+    Object.defineProperty(prototype, "clientHeight", {
+      configurable: true,
+      get: () => 600,
+    });
+    Object.defineProperty(prototype, "clientWidth", {
+      configurable: true,
+      get: () => 1100,
+    });
+    try {
+      const { container } = render(<LogPanel />);
+      const rowCount = () =>
+        container.querySelectorAll("[data-log-index]").length;
+      const firstIndex = () =>
+        Number(
+          container
+            .querySelector("[data-log-index]")!
+            .getAttribute("data-log-index"),
+        );
+
+      /* 一页 200 行，视口 600px（单行 27px）只装得下二十来行 + overscan。 */
+      expect(rowCount()).toBeGreaterThan(0);
+      expect(rowCount()).toBeLessThan(200);
+      expect(firstIndex()).toBe(0);
+
+      /* 往下滚 → 窗口跟着走（「滚动不换段」正是窗口算歪的表现）。 */
+      const scroller =
+        container.querySelector<HTMLElement>(".custom-scrollbar")!;
+      scroller.scrollTop = 3000;
+      act(() => {
+        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      expect(firstIndex()).toBeGreaterThan(0);
+      /* 窗口长度恒定：DOM 节点数不随滚动位置变化。 */
+      expect(rowCount()).toBeLessThan(200);
+    } finally {
+      /* 还原原型上的取值：本文件其余用例要靠「量不到视口」走整页渲染那一支。 */
+      if (heights) Object.defineProperty(prototype, "clientHeight", heights);
+      else Reflect.deleteProperty(prototype, "clientHeight");
+      if (widths) Object.defineProperty(prototype, "clientWidth", widths);
+      else Reflect.deleteProperty(prototype, "clientWidth");
+    }
   });
 
   /* ISSUE #360 复审：候选列表要能当表读，且每项都要写清「切过去有多少」。
