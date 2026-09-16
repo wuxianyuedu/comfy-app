@@ -4,11 +4,7 @@
  * live in FlowNodePinRows; this section renders the scalar/object inputs
  * with their values, including STRING multiline textareas. */
 import { Handle, Position } from "@xyflow/react";
-import {
-  portColor,
-  inferInputType,
-  inferIsMultiline,
-} from "~/lib/comfyui/types";
+import { portColor, inferInputType } from "~/lib/comfyui/types";
 import { friendlyInputName } from "~/lib/comfyui/node-titles";
 import {
   renderWidgetValue,
@@ -78,9 +74,12 @@ export function FlowNodeWidgetRows({
         // only when genuinely long / multi-line; short scalars
         // ("auto", "fp16") keep the compact 22px inline row.
         const stringText = typeof v === "string" ? v : "";
+        /* 多行只认两件事：服务端按**类型声明**盖的 `multiline`（rawMeta 的
+         *  `{"multiline": true}`），以及「值本身很长 / 带换行」这条数据判据 ——
+         *  不按字段名猜（叫 prompt 的单行输入不该被升级成 textarea）。 */
         const isStringWidget =
           inputType === "STRING" &&
-          (inferIsMultiline(data.classType, k, stringText) ||
+          (meta?.multiline === true ||
             stringText.length >= 32 ||
             stringText.includes("\n"));
 

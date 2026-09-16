@@ -101,9 +101,18 @@ async function noCombo(): Promise<undefined> {
   return undefined;
 }
 
+/** 没有 object_info 声明时的多行查询桩：判定只剩「值很长」那条数据判据。 */
+async function noMultiline(): Promise<undefined> {
+  return undefined;
+}
+
 describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () => {
   it("按 proxyWidgets 记下内部真实字段（label / localized 一并带上）", async () => {
-    const { rawInputsById } = await buildRawInputs(wrapperWorkflow, noCombo);
+    const { rawInputsById } = await buildRawInputs(
+      wrapperWorkflow,
+      noCombo,
+      noMultiline,
+    );
     const entries = rawInputsById["1"]!;
     expect(entries).toHaveLength(2);
     expect(entries[0]!.name).toBe("value_1");
@@ -139,7 +148,7 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
       ],
       links: [],
     } as unknown as RawWorkflow;
-    const { rawInputsById } = await buildRawInputs(plain, noCombo);
+    const { rawInputsById } = await buildRawInputs(plain, noCombo, noMultiline);
     expect(rawInputsById["7"]![0]!.proxyField).toBeUndefined();
   });
 
@@ -150,7 +159,11 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
     const subs = broken.definitions!.subgraphs!;
     const key = Object.keys(subs)[0]!;
     subs[key]!.nodes = [];
-    const { rawInputsById } = await buildRawInputs(broken, noCombo);
+    const { rawInputsById } = await buildRawInputs(
+      broken,
+      noCombo,
+      noMultiline,
+    );
     expect(rawInputsById["1"]![0]!.proxyField).toEqual({
       nodeId: "12",
       field: "seed",
@@ -204,12 +217,20 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
   } as unknown as RawWorkflow;
 
   it("本层没写 label 时用边界 pin 的作者名", async () => {
-    const { rawInputsById } = await buildRawInputs(quarantined, noCombo);
+    const { rawInputsById } = await buildRawInputs(
+      quarantined,
+      noCombo,
+      noMultiline,
+    );
     expect(rawInputsById["4"]![0]!.label).toBe("Seed");
   });
 
   it("边界 pin 也没写 label 时保持原样（不给无信息量的名字）", async () => {
-    const { rawInputsById } = await buildRawInputs(quarantined, noCombo);
+    const { rawInputsById } = await buildRawInputs(
+      quarantined,
+      noCombo,
+      noMultiline,
+    );
     expect(rawInputsById["4"]![1]!.label).toBeUndefined();
   });
 
@@ -218,7 +239,7 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
       JSON.stringify(quarantined),
     ) as unknown as RawWorkflow;
     own.nodes[0]!.inputs![0]!.label = "我的种子";
-    const { rawInputsById } = await buildRawInputs(own, noCombo);
+    const { rawInputsById } = await buildRawInputs(own, noCombo, noMultiline);
     expect(rawInputsById["4"]![0]!.label).toBe("我的种子");
   });
 
@@ -243,7 +264,7 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
       links: [],
       definitions: quarantined.definitions,
     } as unknown as RawWorkflow;
-    const { rawInputsById } = await buildRawInputs(plain, noCombo);
+    const { rawInputsById } = await buildRawInputs(plain, noCombo, noMultiline);
     expect(rawInputsById["7"]![0]!.label).toBeUndefined();
   });
 });
@@ -294,6 +315,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
         proxyWidgets: { value_1: ["12", "seed"], value_2: ["12", "steps"] },
       }),
       noCombo,
+      noMultiline,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField?.field).toBe("seed");
@@ -309,6 +331,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
         proxyWidgets: { value_2: ["12", "steps"], value_1: ["12", "seed"] },
       }),
       noCombo,
+      noMultiline,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.name).toBe("value_1");
@@ -323,6 +346,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
     const { rawInputsById } = await buildRawInputs(
       withProxy({ proxyWidgets: [["12", "seed"]] }),
       noCombo,
+      noMultiline,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField?.field).toBe("seed");
@@ -335,6 +359,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
         proxyWidgets: [["12"], ["12", "steps"], ["12", "seed"]].slice(0, 2),
       }),
       noCombo,
+      noMultiline,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField?.field).toBe("steps");
@@ -345,6 +370,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
     const { rawInputsById } = await buildRawInputs(
       withProxy({ proxyWidgetErrorQuarantine: [["12", "seed"]] }),
       noCombo,
+      noMultiline,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField).toBeUndefined();

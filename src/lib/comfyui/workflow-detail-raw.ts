@@ -261,6 +261,12 @@ export async function buildRawInputs(
     classType: string | undefined,
     field: string,
   ) => Promise<string[] | undefined>,
+  /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的事实）。
+   *  查不到返回 `undefined` —— 多行判定退到「值很长」那条数据判据，不猜名字。 */
+  multilineForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<boolean | undefined>,
 ): Promise<{
   rawInputsById: Record<string, RawInputEntry[]>;
   sizeById: Record<string, [number, number]>;
@@ -414,12 +420,18 @@ export async function buildRawInputs(
          *  the upstream `inferIsMultiline` helper flags.  The helper
          *  intentionally never stamps `multiline: false` (an opt-in
          *  only flag); the renderer treats absence as "no opinion"
-         *  and falls back to its own heuristics. */
+         *  and falls back to its own heuristics.
+         *
+         *  判据来自节点自己的类型声明（`("STRING", {"multiline": true})`
+         *  → object_info），不按字段名猜：「叫 prompt 的就是多行」会把
+         *  `prompt_width_of_thing` 这类单行输入升级成 textarea。 */
         if (typeof inp.type === "string" && inp.type === "STRING") {
           if (
             inferIsMultiline(
-              typeof rn.type === "string" ? rn.type : undefined,
-              inp.name,
+              await multilineForClassField(
+                typeof rn.type === "string" ? rn.type : undefined,
+                inp.name,
+              ),
               widgetValue,
             )
           ) {
@@ -446,7 +458,10 @@ export async function buildRawInputs(
             widget: { name: w.name },
             widgetValue: w.value,
             ...(type === "STRING" &&
-            inferIsMultiline(rnClassType, w.name, w.value)
+            inferIsMultiline(
+              await multilineForClassField(rnClassType, w.name),
+              w.value,
+            )
               ? { multiline: true as const }
               : {}),
           });
@@ -696,17 +711,20 @@ export async function buildRawInputs(
            *  它仍比别名 value_1 有信息量，富化按 field 兜底。 */
           updated.proxyField = { nodeId: internalNodeId, field: fieldName };
         }
-        /* Re-stamp multiline if we just learned the value (the base
-         *  parser ran before this pass and may have skipped it). */
-        if (
-          updated.type === "STRING" &&
-          !updated.multiline &&
-          inferIsMultiline(subNodeType, entry.name, updated.widgetValue)
-        ) {
-          updated.multiline = true;
-        }
         return updated;
       });
+      /* Re-stamp multiline 现在才知道值（基础解析跑在这一趟之前，可能整段跳过）。
+       *  声明查的是**内部节点**的类与字段（业务语义在那一侧），wrapper 本层的
+       *  槽位名只是别名。必须排在下面的 COMBO 趟之前：那一趟会把
+       *  `__comboClass` / `__comboField` 临时字段删掉。 */
+      for (const e of updatedList) {
+        if (e.type !== "STRING" || e.multiline) continue;
+        const declared = await multilineForClassField(
+          e.__comboClass ?? subNodeType,
+          e.__comboField ?? e.name,
+        );
+        if (inferIsMultiline(declared, e.widgetValue)) e.multiline = true;
+      }
       /* Resolve COMBO candidate lists from /api/object_info (single fetch
        *  per request, cached).  Only wrapper widget inputs that are COMBOs
        *  get a `comboOptions` array; everything else is left untouched.  If

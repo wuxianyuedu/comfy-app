@@ -5,7 +5,7 @@ import React, { useState } from "react";
 import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
-import { portColor, inferIsMultiline } from "~/lib/comfyui/types";
+import { portColor } from "~/lib/comfyui/types";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
@@ -467,20 +467,14 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
             const isConn = inp.isConnection === true || inp.isBoundary === true;
             const typeCol = portColor(inp.type);
             const stringText: string = typeof v === "string" ? v : "";
-            /* (parity with WorkflowNode): STRING widget detection now
-             *  uses the shared `inferIsMultiline` helper rather than
-             *  the `length >= 32 || \n` heuristic.  Subgraph wrapper
-             *  inputs (the wrapper-node's own exposed pins) hit this
-             *  branch — without the helper a short prompt input
-             *  silently degrades to a one-line chip. */
+            /* (parity with WorkflowNode): STRING widget detection reads the
+             *  server-stamped `multiline`（来自节点类型声明
+             *  `("STRING", {"multiline": true})`）plus the long-value /
+             *  newline data heuristics —— 不按字段名猜。 */
             const isStringWidget =
               !isConn &&
               inp.type === "STRING" &&
-              (inferIsMultiline(
-                data.classType as string | undefined,
-                inp.name,
-                stringText,
-              ) ||
+              (inp.multiline === true ||
                 stringText.length >= 32 ||
                 stringText.includes("\n"));
             const displayValue = isStringWidget
