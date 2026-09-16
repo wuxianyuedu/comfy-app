@@ -31,7 +31,6 @@ export interface WorkflowDerivedData {
  *  - scopeDetail: view-scoped detail (RAW view swaps node/graph/position
  *    sources to `detail.rawView`, keeping wrapper-level data intact)
  *  - outSlotNameById: per-node output-slot name inference
- * Extracted from wf-editor-inner.tsx (P4 split).
  */
 export function useWorkflowDerivedData(
   detail: WorkflowDetail | null,

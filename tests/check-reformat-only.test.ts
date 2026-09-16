@@ -273,6 +273,39 @@ describe(
       expect(r.code).toBe(1);
       expect(r.output).toContain("纯格式化 12 个");
     });
+
+    /* 合并提交豁免：一次 merge 会把上游整批（含别处做的格式化）带进来，
+     * 「拆成两次提交」在这里物理上不可能 —— 上游形态已定死在历史里。
+     * 判据取 `MERGE_HEAD` 是否存在（pre-commit 跑在合并提交对象生成**之前**，
+     * 此时该文件由 `git merge` 写入、合并完成后删除）。 */
+    it("合并进行中（MERGE_HEAD 存在）→ 跳过判定，不阻断", () => {
+      seedDirty(12);
+      for (let i = 0; i < 12; i++) formatInPlace(`src/lib/dirty-${i}.ts`);
+      git(["add", "-A"]);
+      // 模拟 `git merge` 的现场：pre-commit 触发时 MERGE_HEAD 已写好。
+      writeFileSync(
+        join(workdir, ".git", "MERGE_HEAD"),
+        `${git(["rev-parse", "HEAD"]).trim()}\n`,
+      );
+
+      const r = run();
+      expect(r.code).toBe(0);
+      expect(r.output).toContain("合并提交");
+    });
+
+    it("合并提交豁免不掩盖 CI 的 --range 盘点（按范围判，不受现场影响）", () => {
+      seedDirty(12);
+      for (let i = 0; i < 12; i++) formatInPlace(`src/lib/dirty-${i}.ts`);
+      commit("format only");
+      writeFileSync(
+        join(workdir, ".git", "MERGE_HEAD"),
+        `${git(["rev-parse", "HEAD"]).trim()}\n`,
+      );
+
+      const r = run(["--range", "HEAD~1..HEAD"]);
+      expect(r.code).toBe(1);
+      expect(r.output).toContain("纯格式化 12 个");
+    });
   },
 );
 
