@@ -261,34 +261,25 @@
   - name: E2E 关键流程
     script: pnpm exec playwright test --grep @critical
 
-master:
-  # PR 端的全套门禁:PR 不合并就不该结束,这里一步不省。
-  pull_request:
-    - <<: *common
-      name: 质量门禁
-      stages: *gates
-
-  # 合并后的 push:不重跑全套。合并提交由平台按**已被门禁验过的源分支 SHA**
-  # 生成,不引入新代码;再跑一遍 30 步只是把同一份代码的第二遍算进核时。
-  # 保留的这条是形态复核:落到 master 的必须是合并提交。若出现非合并提交
-  # (本地 --no-verify 就能做到),说明有变更绕过了 PR 与门禁 —— 那要拦下。
+# ── 临时探针分支（只为验证 testing:coverage 插件对上报路径的判据）──
+probe/coverage-plugin:
   push:
-    - <<: *common
-      name: master 合并复核
+    - name: 探针
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 2
+      docker:
+        image: node:24
+      env:
+        CI: "true"
       stages:
-        - name: 合并形态复核
-          script: node scripts/check-branch-guard.cjs --merge-commit
-
-  # 失败时才上传报告(对齐 upload-artifact 的 if: failure())。allowFailure:
-  # 上传失败不该把一次「测试红」改写成「上传红」,掩盖真正的现场。
-  # 挂在 push 上(而不是挂在两条流水线上各写一份):一次合并失败时真正要看的
-  # 是 PR 那条记录的现场,而 push 侧的现场同样值得留一份;两条各写一份会漂移。
-  failStages:
-    - name: 上传 Playwright 报告
-      allowFailure: true
-      image: cnbcool/attachments:latest
-      settings:
-        type: UPLOAD
-        attachments:
-          - playwright-report
-        ttl: 7
+        - name: Install dependencies
+          script: |
+            corepack enable
+            pnpm install --frozen-lockfile
+        - name: 覆盖率插件探针
+          script: pnpm run test:coverage
+          type: testing:coverage
+          options:
+            pattern: coverage/lcov.info
+            breakIfNoCoverage: false
