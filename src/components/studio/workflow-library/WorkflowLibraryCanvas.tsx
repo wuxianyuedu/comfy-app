@@ -19,7 +19,7 @@
  * 边的**集合**由 `key` 重建（换工作流 / 改模式 / 改落点），避免每帧重建整棵表单。
  */
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -43,7 +43,9 @@ import {
   LAYOUT_SIZING,
   useLibraryWireFlow,
 } from "./hooks/use-library-wire-flow";
+import { libraryBackdropSize } from "./workflow-library-wire-graph";
 import {
+  LibraryBackdropNode,
   LibraryHostNode,
   LibraryNodeContentContext,
   LibraryOutputsNode,
@@ -75,6 +77,7 @@ export interface WorkflowLibraryCanvasProps {
 
 /** 节点类型注册表：**模块级常量**（§2.11 —— 内联会在每次 render 重建整棵 DOM）。 */
 const NODE_TYPES = {
+  libBackdrop: LibraryBackdropNode,
   libParams: LibraryParamsNode,
   libHost: LibraryHostNode,
   libOutputs: LibraryOutputsNode,
@@ -94,6 +97,50 @@ const DEFAULT_EDGE_OPTIONS = {
 function positionOf(nodeId: string): { x: number; y: number } | null {
   const node = LAYOUT_NODES.find((item) => item.id === nodeId);
   return node ? node.position : null;
+}
+
+/** 画布容器的可视尺寸 → 背景板尺寸（ISSUE #596）。
+ *
+ *  背景板要「铺满面板」，所以尺寸得从真实布局里量。量的是画布容器自己：
+ *  React Flow 会把 `.react-flow__viewport` 拉伸到容器大小，容器尺寸即视口尺寸。
+ *
+ *  首帧（以及 SSR / jsdom 里量不到尺寸时）用 `LAYOUT_SIZING.fillHeight` 的兜底值
+ *  —— 高度只会由「视口」与「内容」取大，兜底量级与卡片列一致，不会比真实需要的
+ *  更小。尺寸变化时（窗口缩放、面板拖动）重新派生，同步进 React Flow 的节点表。
+ */
+function useCanvasBackdropSize(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+): { width: number; height: number } {
+  const [viewport, setViewport] = useState(() => ({
+    width:
+      LAYOUT_SIZING.paramsWidth +
+      LAYOUT_SIZING.hostWidth +
+      LAYOUT_SIZING.outputsWidth,
+    height: LAYOUT_SIZING.fillHeight,
+  }));
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const sync = () => {
+      const rect = element.getBoundingClientRect();
+      setViewport((prev) =>
+        prev.width === rect.width && prev.height === rect.height
+          ? prev
+          : { width: rect.width, height: rect.height },
+      );
+    };
+    sync();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [containerRef]);
+
+  return useMemo(
+    () => libraryBackdropSize(LAYOUT_SIZING, viewport),
+    [viewport],
+  );
 }
 
 export function WorkflowLibraryCanvas(props: WorkflowLibraryCanvasProps) {
@@ -121,6 +168,9 @@ function WorkflowLibraryCanvasInner({
   onConnectOutput,
   host,
 }: WorkflowLibraryCanvasProps) {
+  /* 画布容器：量它才知道「铺满」要铺到哪儿（ISSUE #596）。 */
+  const containerRef = useRef<HTMLDivElement>(null);
+  const backdropSize = useCanvasBackdropSize(containerRef);
   const flow = useLibraryWireFlow({
     io,
     paramCards,
@@ -144,6 +194,7 @@ function WorkflowLibraryCanvasInner({
     },
     connect: onConnect,
     connectOutput: onConnectOutput,
+    backdropSize,
   });
 
   /* 节点与边在挂载时取一次：React Flow 自己持有视口、位置与选中。
@@ -155,6 +206,24 @@ function WorkflowLibraryCanvasInner({
    * （view 组件本来就在同一个渲染树里，引用天然是最新的）。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(flow.defaultNodes);
   const [edges, , onEdgesChange] = useEdgesState(flow.defaultEdges);
+
+  /* 背景板尺寸随容器变化（窗口缩放 / 左右分栏拖动），而 React Flow 只在挂载时
+   * 读 `nodes`（不受控画布）—— 尺寸变了要把新尺寸同步进去，否则画布还停在旧
+   * 尺寸上、下方又会露出来（ISSUE #596）。只更新**尺寸**，位置仍由 React Flow
+   * 自己的拖动状态持有。 */
+  const backdropKey = `${backdropSize.width}x${backdropSize.height}`;
+  const lastBackdropKey = useRef(backdropKey);
+  useEffect(() => {
+    if (lastBackdropKey.current === backdropKey) return;
+    lastBackdropKey.current = backdropKey;
+    setNodes((current) =>
+      current.map((node) => {
+        const sized = flow.defaultNodes.find((item) => item.id === node.id);
+        if (!sized || node.width === sized.width) return node;
+        return { ...node, width: sized.width, height: sized.height };
+      }),
+    );
+  }, [backdropKey, flow.defaultNodes, setNodes]);
 
   /* 节点被拖动后回到布局位置：三列是**固定布局**（左列说「要什么」、中间是宿主
    *  卡片、右列说「给什么」），拖散之后读者要自己重新认列 —— 而「可拖」这件事
@@ -175,7 +244,11 @@ function WorkflowLibraryCanvasInner({
 
   return (
     <div
-      className="border-border-subtle bg-panel-deep relative h-[460px] w-full overflow-hidden rounded-xl border"
+      ref={containerRef}
+      /* `bg-canvas` 是画布自己的底色（与项目画布同一 token）—— 面板底色
+       *  （`bg-panel-deep`）与画布底色深浅不同，画布但凡没铺到容器底边，那条
+       *  缝就会以「下方一块空白却不是画布」的形式被看见（ISSUE #596）。 */
+      className="border-border-subtle bg-canvas relative h-full min-h-[460px] w-full overflow-hidden rounded-xl border"
       data-testid="wflib-canvas"
     >
       <LibraryNodeContentContext.Provider value={flow.nodeContent}>

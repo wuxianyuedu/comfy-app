@@ -548,8 +548,12 @@ export function WorkflowCanvasNodePreview({
   return (
     /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
      * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
-     * 进度/结果/错误行与其对齐。 */
-    <div className="flex w-full flex-col items-center gap-3">
+     * 进度/结果/错误行与其对齐。
+     *
+     * 纵向**吃满**父级高度（`h-full min-h-0`）：画布是这里唯一需要撑开的块，
+     * 它得拿到一个真实高度才能铺到面板底边（ISSUE #596）。前面那些进度 / 结果 /
+     * 日志块按内容高度排，剩下的全归画布。 */
+    <div className="flex h-full min-h-0 w-full flex-col items-center gap-3">
       {/* ── 画布视口外框（拖动平移 / 滚轮缩放 / 适应 / 复位）──
           三列（对外参数 / 宿主卡片 / 对外输出参数）合起来常宽过面板，超出去的
           部分此前看不到（ISSUE #355：「需要可以拖动整个画布查看其他超出边框的

@@ -106,3 +106,52 @@ describe("左右分栏：详情面板能窄于内容最小宽度", () => {
     expect(existsSync(path.join(ROOT, "WorkflowLibraryList.tsx"))).toBe(true);
   });
 });
+
+describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
+  const ROOT = path.resolve(__dirname);
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+  /* 用户口径：「全屏时，下方区域有空白却不是画布」。
+   *
+   * 根因是**高度链条断了 + fitView 的下限由内容高度决定**：画布容器钉在
+   * `h-[460px]`、横向画布之外还套了一层 `overflow-auto`（它按内容高度收边），
+   * 而 React Flow 的 `fitView` 又只按节点包围盒缩放 —— 内容比视口矮时它不会
+   * 把画布放大到铺满视口，于是画布底边以下落回面板底色。
+   *
+   * 这里锁三件事：① 容器不再被钉死高度；② 三列之上真的垫了背景板（它才是把
+   * 包围盒撑到视口的那个）；③ 背景板尺寸由「视口与内容取大」给出（纯函数另有
+   * 精确用例，这里钉住「没被写成只按内容算」）。 */
+
+  it("画布容器吃满可用高度，不再被钉死在外层高度上", () => {
+    const canvas = read("WorkflowLibraryCanvas.tsx");
+    expect(canvas).toMatch(/bg-canvas relative h-full min-h-\[460px\]/);
+    /* 画布自己的底色要在画布这一层（面板底色深浅不同，没铺到就成了那条缝）。 */
+    expect(canvas).not.toMatch(/bg-panel-deep relative h-full min-h-\[460px\]/);
+  });
+
+  it("预览纵向吃满父级，中间不再有一层按内容收边的高度来源", () => {
+    expect(read("WorkflowCanvasNodePreview.tsx")).toMatch(
+      /flex h-full min-h-0 w-full flex-col items-center gap-3/,
+    );
+    /* 页签面板把高度传下去（缺 `h-full` 则整条链断在第一层）。 */
+    expect(read("sections/DetailBody.tsx")).toMatch(
+      /flex h-full min-h-\[420px\] flex-col/,
+    );
+  });
+
+  it("三列之上垫了一层背景板，且它的尺寸由视口与内容取大", () => {
+    const flow = read("hooks/use-library-wire-flow.ts");
+    expect(flow).toContain("LIB_NODE_BACKDROP");
+    /* 背景板不可交互：它只是底，不能抢走卡片的点击 / 拖动 / 连线。 */
+    expect(flow).toMatch(/selectable: false[\s\S]{0,80}draggable: false/);
+
+    const graph = read("workflow-library-wire-graph.ts");
+    /* 取大，缺一边都会退回空白：比视口矮（高度）或比三列窄（右列被挤出视野）。 */
+    expect(graph).toMatch(
+      /Math\.max\(content\.height,\s*clamp\(viewport\.height\)\)/,
+    );
+    expect(graph).toMatch(
+      /Math\.max\(content\.width,\s*clamp\(viewport\.width\)\)/,
+    );
+  });
+});

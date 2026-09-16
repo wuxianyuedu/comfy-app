@@ -30,9 +30,11 @@ import {
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { pinAcceptsEntry, type ParamEntry } from "~/lib/workflow-param-mapping";
 import {
+  LIB_NODE_BACKDROP,
   LIB_NODE_HOST,
   LIB_NODE_OUTPUTS,
   LIB_NODE_PARAMS,
+  libraryBackdropSize,
   libraryEdgeId,
   libraryEdgeStyle,
   layoutLibraryNodes,
@@ -48,6 +50,8 @@ export const LIB_NODE_TYPES = {
   libParams: "libParams",
   libHost: "libHost",
   libOutputs: "libOutputs",
+  /** 背景板（撑起画布高度，见 `buildLibraryNodes`）。 */
+  libBackdrop: "libBackdrop",
 } as const;
 
 /** 落点失败时给用户的原因（人类可读）——「拖了没反应」不许是静默的。 */
@@ -69,9 +73,14 @@ export interface LibraryWireFlowArgs {
   connect?: (entryId: string, ioKey: string) => void;
   /** 输出侧取值行写入。 */
   connectOutput?: (outputIoKey: string, targetIoKey: string) => void;
+  /** 背景板尺寸（画布量到容器尺寸后给出；不传用兜底值，见 `buildLibraryNodes`）。 */
+  backdropSize?: { width: number; height: number };
 }
 
-/** 三列节点的首帧布局尺寸（面板靠 fitView 收进视口，这里只需稳定可读）。 */
+/** 三列节点的首帧布局尺寸（面板靠 fitView 收进视口，这里只需稳定可读）。
+ *
+ *  `envelopeHeight` 与 `fillHeight` 是**两个不同的高度**，见
+ *  `LibraryNodeSizing` 的说明：前者是卡片列的首帧声明高度，后者是背景板高度。 */
 export interface LayoutSizing {
   paramsWidth: number;
   outputsWidth: number;
@@ -79,8 +88,10 @@ export interface LayoutSizing {
   columnGap: number;
   originX: number;
   originY: number;
-  /** 三列的首帧包络高度（真实高度由内容撑开，见 `buildLibraryNodes`）。 */
+  /** 宿主节点的首帧声明高度（真实高度由内容撑开，见 `buildLibraryNodes`）。 */
   envelopeHeight: number;
+  /** 背景板高度（面板可视高度与卡片列高度取大，见 `backdropSize`）。 */
+  fillHeight: number;
 }
 
 export const LAYOUT_SIZING: LayoutSizing = {
@@ -92,6 +103,9 @@ export const LAYOUT_SIZING: LayoutSizing = {
   originY: 0,
   /** 三列的首帧包络高度（真实高度由内容撑开，见 `defaultNodes`）。 */
   envelopeHeight: 720,
+  /* 测量还没回来前的兜底（视口未知时按内容量级给）；真值由画布量到容器尺寸
+   * 后经 `libraryBackdropSize` 给出（ISSUE #596）。 */
+  fillHeight: 720,
 } as const;
 
 export function useLibraryWireFlow({
@@ -104,6 +118,7 @@ export function useLibraryWireFlow({
   outputsNode,
   connect,
   connectOutput,
+  backdropSize,
 }: LibraryWireFlowArgs) {
   /* 落点失败的原因：`onConnectEnd` 的 `connectionState.isValid` 给三态
    * （null = 没落在任何 handle 上、false = 落在 handle 上但被闸门拒了），
@@ -123,7 +138,22 @@ export function useLibraryWireFlow({
    * **节点的渲染内容不在这里**：它随渲染变（表单值 / 运行态 / 候选端点），走
    * `nodeContent` 由画布经 Context 下发 —— 塞进 `node.data` 就只能在「冻在首帧」
    * 与「每帧 setNodes 打循环」里二选一（见画布的说明）。 */
-  const defaultNodes = useMemo(() => buildLibraryNodes(LAYOUT_SIZING), []);
+  /* 背景板尺寸随容器尺寸变（窗口缩放 / 面板拖动），所以 `defaultNodes` 不再
+   *  完全「只在挂载时派生」——尺寸变了要重建。用它的**两个数字**当依赖（而不是
+   *  对象引用）：尺寸真的变了，重建才有意义；重建代价是四个节点对象 + 一次
+   *  `setNodes`，不是整棵表单。 */
+  const backdropWidth = backdropSize?.width;
+  const backdropHeight = backdropSize?.height;
+  const defaultNodes = useMemo(
+    () =>
+      buildLibraryNodes(
+        LAYOUT_SIZING,
+        backdropWidth !== undefined && backdropHeight !== undefined
+          ? { width: backdropWidth, height: backdropHeight }
+          : undefined,
+      ),
+    [backdropWidth, backdropHeight],
+  );
   const defaultEdges = useMemo(
     () => deriveLibraryEdges(paramCards.wires, outputWires),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在挂载时派生
@@ -201,10 +231,40 @@ export function useLibraryWireFlow({
   };
 }
 
-/** 三列节点的位置与声明尺寸（首帧用；真实尺寸由内容决定）。 */
-export function buildLibraryNodes(sizing: LayoutSizing): Node[] {
+/** 三列节点的位置与声明尺寸（首帧用；真实尺寸由内容决定）。
+ *
+ *  `nodesDraggable` 要求节点**必须能放得下内容的拖拽命中面**（见画布里的说明），
+ *  所以「撑起画布高度」这件事不能靠给卡片节点虚报尺寸 —— 虚报的声明尺寸会被
+ *  React Flow 当作端口几何的依据，线会从卡片半空里穿出来。改为在三列之下垫一层
+ *  **背景板**（`LIB_NODE_BACKDROP`，无内容、无端口）：它把画布的包围盒撑到面板
+ *  可视高度，`fitView` 于是只会落在「等比铺满视口」的那个缩放上，画布不会在
+ *  内容高度处收边、下面留出一块面板底色（ISSUE #596）。
+ *
+ *  @param sizing       三列布局尺寸
+ *  @param backdropSize 背景板尺寸（不传则取 `fillHeight` 见方的兜底值）
+ */
+export function buildLibraryNodes(
+  sizing: LayoutSizing,
+  backdropSize?: { width: number; height: number },
+): Node[] {
   const at = layoutLibraryNodes(sizing);
+  const extent = libraryBackdropSize(sizing, {
+    width: sizing.paramsWidth + sizing.hostWidth + sizing.outputsWidth,
+    height: sizing.fillHeight,
+  });
   return [
+    {
+      id: LIB_NODE_BACKDROP,
+      /* 背景板不可交互、不参与连线：它只是画布上的一块底。 */
+      type: LIB_NODE_TYPES.libBackdrop,
+      position: at[LIB_NODE_BACKDROP]!,
+      width: backdropSize?.width ?? extent.width,
+      height: backdropSize?.height ?? extent.height,
+      selectable: false,
+      draggable: false,
+      connectable: false,
+      data: {},
+    },
     {
       id: LIB_NODE_PARAMS,
       type: LIB_NODE_TYPES.libParams,
