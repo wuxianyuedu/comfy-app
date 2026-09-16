@@ -157,6 +157,12 @@ function seedDirty(n: number): string[] {
   return files;
 }
 
+/** 建一个空的基线提交：只在「判定与门禁现场无关」的用例里用（它们不需要脏文件）。 */
+function seedEmpty(): void {
+  write("src/lib/keep.ts", "export const KEEP = 1;\n");
+  commit("base");
+}
+
 describe("格式化提交与行为改动分离", { timeout: 60_000 }, () => {
   it("一次提交格式化 12 个文件 → 阻断（远超阈值）", () => {
     const files = seedDirty(12);
@@ -381,6 +387,80 @@ describe(
     });
   },
 );
+
+/**
+ * 「批量结果里没被 prettier 改过」不是一个结论，而是**两件事**叠在一起：
+ * 文件本来就规范，或 prettier 自己的 ignore 规则把它跳过了。只有前者能推出
+ * 「这次提交不是纯格式化」。这组用例锁的就是「后者必须回落到 stdin 口径」——
+ * 判据漏掉它，纯格式化提交会被放行（`git blame` 永久失真，正是本门禁存在的理由）。
+ *
+ * 真起 prettier 而不打桩：被锁的正是「谁来给答案」，桩一打就锁不住了。
+ */
+describe("批量口径的缺项退回逐文件 stdin 判定", { timeout: 60_000 }, () => {
+  /* 「批量结果里没被 prettier 改过」不是一个结论，而是**两件事**叠在一起：
+   * 文件本来就规范，或 prettier 自己的忽略规则把它跳过了。只有前者能推出
+   * 「这次提交不是纯格式化」—— 判据漏掉后者，纯格式化提交会被放行，
+   * `git blame` 永久失真（正是本门禁存在的理由）。
+   *
+   * 忽略规则的判据必须取 prettier 自己的那一套（它以 cwd 为根读 `.gitignore`），
+   * 不能用 `git check-ignore` 代判 —— 实测两者不一致：目录名被 `.gitignore`
+   * 命中时，prettier 连**显式点名**的路径也一并跳过（`--write <file>` 静默返回
+   * 空输出），而 `git check-ignore` 对**已跟踪**的路径报「未被忽略」。真实历史
+   * 里的形态正是这样（`.workbuddy/skills/build-guard/guard.js` 被格式化后，
+   * 在 #619 的合并提交里落成了「纯格式化」）。
+   *
+   * 判据本体是「谁来给答案」：`classifyReformatOnly` 会真起 prettier，用桩就锁不住。
+   */
+  it("落在 prettier 忽略路径下的源码被跳过 → 仍按 stdin 口径判为纯格式化", () => {
+    seedEmpty();
+    write(".gitignore", "node_modules\n.workbuddy\n");
+    commit("ignore the dir");
+
+    // 这一批全部落在被忽略的目录下：批量口径一个都不会回读（`--write <dir>`
+    // 整目录跳过它），于是每个文件都只剩「本来就规范」这一种解释 —— 而 stdin
+    // 口径明明白白给出「prettier 会把它改成下面那样」。真结论是后者。
+    const before = "export const P={a:1,\n\n\n  b:2};\n";
+    const after = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+    write(".workbuddy/probe.ts", before);
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("../scripts/check-reformat-only.cjs") as {
+      classifyReformatOnly: (
+        entries: Array<{ file: string; before: string; after: string }>,
+      ) => Set<string>;
+    };
+    const verdict = mod.classifyReformatOnly([
+      { file: ".workbuddy/probe.ts", before, after },
+    ]);
+    expect(
+      [...verdict],
+      "文件没出现在批量结果里 —— 那不代表「它本来就规范」，仍要按 stdin 口径判",
+    ).toEqual([".workbuddy/probe.ts"]);
+  });
+
+  it("批量口径判为「本来就规范」的文件不再起 stdin（常见路径不为兜底付账）", () => {
+    seedEmpty();
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("../scripts/check-reformat-only.cjs") as {
+      classifyReformatOnly: (
+        entries: Array<{ file: string; before: string; after: string }>,
+      ) => Set<string>;
+    };
+    // 改动前的内容**已经规范**：prettier 不会改写它，批量结果里没有这项，
+    // 但它本来就没有「被跳过」的可能（不在忽略路径下），兜底不该被触发 ——
+    // 判定为「不是纯格式化」靠的是 stdin 给的回文与改动后不同。
+    const clean = "export const P = { a: 1, b: 2 };\n";
+    const changed = "export const P = { a: 1, b: 3 };\n";
+    expect([...mod.classifyReformatOnly([{ file: "src/lib/p.ts", before: clean, after: changed }])]).toEqual([]);
+    // 同一个文件若是「改动前就不规范、改动后是它的规范形态」→ 纯格式化。
+    const messy = "export const P={a:1,\n\n\n  b:2};\n";
+    const tidy = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+    expect([...mod.classifyReformatOnly([{ file: "src/lib/p.ts", before: messy, after: tidy }])]).toEqual([
+      "src/lib/p.ts",
+    ]);
+  });
+});
 
 describe("补丁解析（纯函数，不跑 git）", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports

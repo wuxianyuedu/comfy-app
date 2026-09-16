@@ -130,17 +130,22 @@ function collectChangedFiles(patch) {
  * 偶发超时(现场是 `Test timed out in 5000ms`,看起来像测试写得慢,实际是
  * 每条用例都要起十几个 prettier)。
  *
- * 批量口径必须与逐文件 stdin **逐字等价**,所以不是「就地 --write 原文件」,而是:
- *   ① 把「改动前的内容」写进一个临时目录的文件树(保持原文件相对路径——
- *      prettier 按路径选 parser、按 `.prettierignore` 筛文件,相对路径丢了
- *      就等于换了一套判据);
- *   ② 一次 `prettier --list-different --write <tmpdir>`,让 prettier 自己走
- *      与 `format:check` 同一套配置发现;
- *   ③ 回读临时目录里的最终内容。
- * 拿不到结果(**没有被 prettier 改写**)的文件退回逐文件 stdin 再判一次:
- * `--list-different` 的清单是 prettier **自己**的筛选结果,而退回逐文件正是
- * 「本文件被 .prettierignore / 无 parser 排除了,但门禁仍有结论」的兜底。
- * 这一步只在「结果缺项」时发生,常见路径上一次都不会走到。
+ * 批量口径必须与逐文件 stdin **等价**,所以不是「就地 --write 原文件」,而是:
+ *   ① 把「改动前的内容」(换行符归一成 LF)写进一个临时目录的文件树,保持原
+ *      文件的相对路径 —— prettier 按路径选 parser,相对路径丢了等于换了一套判据;
+ *   ② 一次 `prettier --write <tmpdir>`(不加 `--list-different`:它只回「改了哪
+ *      些」,而这里本来就要回读内容,两个信息源只会多一处漂移);
+ *   ③ 回读临时目录里的最终内容,与**归一化后**的改动前内容比对。
+ * 与逐文件 stdin 的**唯一**差异在「被跳过」那一档:整体处理意味着 prettier
+ * 自己的筛选(无 parser / 自带 ignore 规则)对每个文件都生效,而 stdin 会把
+ * 内容无条件当成对应扩展名来格式化(它能格式化 .gitignore 掉的路径)。
+ * **判据必须以后者为准** —— 仓库里已经有过「忽略路径下的源码」被格式化一次就
+ * 判成「只改格式」的先例(#619 合并提交里的 `.workbuddy/skills/build-guard/
+ * guard.js`,删除于 #623/#636)。因此:没出现在批量结果里的文件一律退回逐文件
+ * stdin 再判一次,并把结论按「批量是否成功」定级 ——
+ *   · 批量成功 → 「没被改过」是 prettier **自己**的结论,采信,不再兜底(常见
+ *     路径,一个文件都不会多起进程);
+ *   · 批量失败(起不来 / 配置写错)→ 没有结论,全部退回兜底。
  *
  * **不能带 `--cache`**:prettier 明确拒绝「stdin + cache」的组合
  * (`--cache cannot be used when formatting stdin`),带上去会拿到空输出 ——
@@ -207,8 +212,16 @@ function runnerPrefix() {
 /**
  * 一次 prettier 调用把整批「改动前内容」重排完。
  *
- * 返回 `相对路径 → 规范形态`;该批里**没有被 prettier 碰过**的文件不出现在
- * 结果里(由调用方逐文件退回 stdin 兜底)。
+ * 返回「**已被 prettier 改写**的 `相对路径 → 规范形态`」;没被改写(它本来就规范)
+ * 的文件不出现在结果里,由调用方退回逐文件 stdin 兜底 —— 那里才有「有结论」与
+ * 「没结论」的区别。
+ *
+ * **换行符在写入前统一成 LF**:临时目录里的副本若保持 CRLF,两个后果叠加 ——
+ * ① prettier 会把它改成 LF,于是**每个 CRLF 文件都进结果**,旧口径下这些文件
+ * 一律走一遍逐文件兜底(等于把刚收敛掉的成本又放回来);
+ * ② git 检出受 `core.autocrlf` 影响(本仓库统一 LF,但浅克隆的临时仓库可以是
+ * CRLF),兜底读回的内容与本地文件差一个 `\r`,而判定侧本来就要归一化行尾
+ * (§13.7)—— 两端一致才让「由谁给答案」这件事与行尾无关。
  */
 function formatMany(entries) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reformat-ref-"));
@@ -216,7 +229,7 @@ function formatMany(entries) {
     for (const { file, text } of entries) {
       const target = path.join(dir, file);
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, text);
+      fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
     }
     const { cmd, head, cwd } = runnerPrefix();
     const res = spawnSync(cmd, [...head, "--write", dir], {
@@ -224,13 +237,15 @@ function formatMany(entries) {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     });
-    // prettier 整批失败(起不来 / 配置写错):返回空映射,调用方全部退回 stdin ——
+    // prettier 整批失败(起不来 / 配置写错):返回空列表,调用方全部退回 stdin ——
     // 退回是把判据降级而不是把它改写成「没格式化」,不会静默放过。
     const out = new Map();
     if (res.error || res.status !== 0) return { ok: false, out };
     for (const { file, text } of entries) {
       const after = fs.readFileSync(path.join(dir, file), "utf8");
-      if (after !== text) out.set(file, after);
+      // 比的是**已经规范化**的改动前内容:本文件只判「prettier 会不会改动它」,
+      // 行尾差异归判定侧的归一化管(见上)。
+      if (after !== text.replace(/\r\n/g, "\n")) out.set(file, after);
     }
     return { ok: true, out };
   } finally {
@@ -238,7 +253,13 @@ function formatMany(entries) {
   }
 }
 
-/** 逐文件 stdin 兜底:prietter 整批没跑起来 / 该文件不在批量结果里时用。 */
+/**
+ * 逐文件 stdin 兜底:prettier 整批没跑起来 / 该文件不在批量结果里时用。
+ *
+ * 它是**判据的一侧**而不只是性能兜底:批量结果里「没被改写」既可能是「本来就
+ * 规范」也可能是「被 prettier 自己的 ignore 规则跳过」,两种情况在批量结果里
+ * 长得一样,只有 stdin 口径能把它们分开。
+ */
 function formatOne(text, file) {
   const ext = path.extname(file).slice(1);
   const { cmd, head, cwd } = runnerPrefix();
@@ -265,17 +286,21 @@ function formatOne(text, file) {
 function classifyReformatOnly(entries) {
   const norm = (s) => s.replace(/\r\n/g, "\n").trimEnd();
   const pending = entries.filter((e) => e.before && e.after);
-  const { out } = formatMany(
+  const { ok, out } = formatMany(
     pending.map((e) => ({ file: e.file, text: e.before })),
   );
 
   const reformatOnly = new Set();
   for (const e of pending) {
-    // 批量结果里没有 → 该文件没被 prettier 改写(已被规范)或不在 prettier 的
-    // 视野里,逐文件再判一次;逐文件也拿不到结论就按「真实改动」保守放行。
-    const formatted = out.has(e.file)
-      ? out.get(e.file)
-      : formatOne(e.before, e.file);
+    // 逐文件兜底的触发条件只有两个:批量**自己**说这个文件没被改过,或批量
+    // 整批没跑起来(没有结论)。两次口径必须都是真 prettier —— 见 formatMany
+    // 上方「唯一差异在被跳过那一档」的说明:判据以 stdin 口径为准。
+    //
+    // 「没被改写」听起来像一句确定的结论,但它同时覆盖「本来就规范」与
+    // 「prettier 自己的 ignore 规则把它跳过了」两件不同的事,而只有前者能推出
+    // 「这次提交不是纯格式化」—— 后者根本没有结论,漏掉兜底就会把真实改动放行。
+    const formatted =
+      ok && out.has(e.file) ? out.get(e.file) : formatOne(e.before, e.file);
     if (formatted === null) continue;
     if (norm(formatted) === norm(e.after)) reformatOnly.add(e.file);
   }
@@ -440,5 +465,11 @@ function report(files, reformatOnly, limit) {
 
 if (require.main === module) main();
 
-/** 供测试直接引用:纯判定函数（不执行 git / prettier）。 */
-module.exports = { collectChangedFiles, LIMIT, SOURCE_RE };
+/**
+ * 供测试直接引用。
+ *
+ * `classifyReformatOnly` 会**真的起 prettier**（那是它的判据本体），测试用它
+ * 锁「批量结果里没被改过的文件也必须回落到 stdin 口径」—— 用桩替换掉 prettier
+ * 就锁不住这条，因为被锁的正是「谁来给答案」。
+ */
+module.exports = { collectChangedFiles, classifyReformatOnly, LIMIT, SOURCE_RE };
