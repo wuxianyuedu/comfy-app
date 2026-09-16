@@ -66,11 +66,13 @@ describe("exposedParamsForMode", () => {
     expect(ids("")).toEqual(["prompt", "negative", "size"]);
   });
 
-  it("负面提示词是可选口子：工作流没有对应端口时不摆出来", () => {
-    const negative = exposedParamsForMode("T2I").find(
-      (def) => def.id === "negative",
-    );
-    expect(negative?.optional).toBe(true);
+  it("契约口一律常驻：没有 `optional` 这种「看工作流脸色」的标记", () => {
+    /* 显示与否只由契约决定 —— 工作流能不能承接是**落点**问题，不是「这一口
+     *  存不存在」的问题。契约表里因此不该有按工作流裁剪口子的字段。 */
+    for (const def of exposedParamsForMode("T2I")) {
+      expect(Object.keys(def)).not.toContain("optional");
+    }
+    expect(ids("T2I")).toEqual(["prompt", "negative", "size"]);
   });
 });
 

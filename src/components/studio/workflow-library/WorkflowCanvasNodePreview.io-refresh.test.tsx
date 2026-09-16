@@ -448,7 +448,10 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     }
   });
 
-  it("没有对外参数时不渲染卡片列（空 IO）", () => {
+  it("空 IO 也渲染卡片列：契约口常驻，落点为空（未配置）", () => {
+    /* 以前这一条断言的是「没有对外参数就不渲染卡片列」——判据是工作流能承接
+     *  什么。对外有哪些参数只由**契约**决定：工作流一个可落点端口都没有时，
+     *  契约口照样在列，卡片如实显示成未配置（作者在库里连线才是落点问题）。 */
     const { container } = render(
       <WorkflowCanvasNodePreview
         workflowId="wf-1"
@@ -461,6 +464,9 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     );
     expect(
       container.querySelector('[data-testid="workflow-param-card-column"]'),
-    ).toBeNull();
+    ).toBeTruthy();
+    expect(screen.getByTestId("param-node-prompt")).toBeTruthy();
+    expect(screen.getByTestId("param-node-negative")).toBeTruthy();
+    expect(screen.getByTestId("param-node-size")).toBeTruthy();
   });
 });

@@ -306,65 +306,11 @@ describe("enrichWorkflowIO — classType（产出节点类名）", () => {
   });
 });
 
-describe("enrichWorkflowIO — 图内语义角色 role（ISSUE #611）", () => {
-  it("顶层正 / 反向文本编码节点按 paramMap 投影出 role", async () => {
+describe("enrichWorkflowIO — 不投影图内语义角色（工坊契约口径）", () => {
+  it("产物里没有任何 `role` 字段：正 / 负只由作者画布上的落点决定", async () => {
     /* 同一对 CLIPTextEncode 的 pin 名与显示名完全一样（都叫 text / 「文本」），
-     * 名字层面分不出正负 —— 角色只能来自导入图沿 KSampler 的 positive /
-     * negative 连线链推出的 paramMap。 */
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "6::widget::text": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "6",
-            name: "text",
-          },
-          "7::widget::text": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "7",
-            name: "text",
-          },
-          "5::widget::width": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "5",
-            name: "width",
-          },
-        },
-        { paramMap: { positiveNode: "6", negativeNode: "7" } },
-      ),
-    );
-    expect(result["6::widget::text"]!.role).toBe("positive");
-    expect(result["7::widget::text"]!.role).toBe("negative");
-    /* 不在正 / 反向节点上的条目不下发 role（宁可不显示，也不猜错）。 */
-    expect(result["5::widget::width"]!.role).toBeUndefined();
-  });
-
-  it("paramMap 的 id 是 UUID 形态时按前缀宽容匹配（与 canonicalNodeId 同源）", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "7::widget::text": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "7",
-            name: "text",
-          },
-        },
-        {
-          paramMap: {
-            positiveNode: "6",
-            negativeNode: "7-abcdef00-1111-2222-3333-444444444444",
-          },
-        },
-      ),
-    );
-    expect(result["7::widget::text"]!.role).toBe("negative");
-  });
-
-  it("没有 paramMap（老数据 / API-only 未判定）时不下发 role", async () => {
+     * 名字分不出正负；而**本项目不给「哪一行是负向」做图内推导**：对外参数是
+     * 工坊的契约，工作流只决定每一口落到哪一行（作者在库里连线）。 */
     const result = await enrichWorkflowIO(
       makeParams({
         "6::widget::text": {
@@ -373,15 +319,19 @@ describe("enrichWorkflowIO — 图内语义角色 role（ISSUE #611）", () => {
           nodeId: "6",
           name: "text",
         },
+        "7::widget::text": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "7",
+          name: "text",
+        },
       }),
     );
-    expect(result["6::widget::text"]!.role).toBeUndefined();
+    expect(Object.keys(result["6::widget::text"]!)).not.toContain("role");
+    expect(Object.keys(result["7::widget::text"]!)).not.toContain("role");
   });
 
-  it("文本编码节点标记 isTextNode 只对输入口下发（ISSUE #620）", async () => {
-    /* 客户端在 `role` 判不出来时，靠这一标记把提示词候选收窄到图内的文本编码
-     * 节点上做有限兜底（正向写死在自己的 CLIPTextEncode、负向接在第三方节点上
-     * 的 T2I 工作流是常规做法）。 */
+  it("节点类名只作展示用途，不派生任何「是不是文本编码节点」的标记", async () => {
     const result = await enrichWorkflowIO(
       makeParams(
         {
@@ -397,57 +347,17 @@ describe("enrichWorkflowIO — 图内语义角色 role（ISSUE #611）", () => {
             nodeId: "77",
             name: "value",
           },
-          "9::output::images": {
-            direction: "output",
-            kind: "output",
-            nodeId: "9",
-            name: "images",
-          },
         },
         {
-          nodeTypeById: {
-            "6": "CLIPTextEncode",
-            "77": "PromptEnhancer",
-            "9": "SaveImage",
-          },
+          nodeTypeById: { "6": "CLIPTextEncode", "77": "PromptEnhancer" },
         },
       ),
     );
-    expect(result["6::widget::text"]!.isTextNode).toBe(true);
-    /* 第三方节点不是文本编码节点；输出口一律不带（输出没有提示词语义）。 */
-    expect(result["77::widget::value"]!.isTextNode).toBeUndefined();
-    expect(result["9::output::images"]!.isTextNode).toBeUndefined();
-  });
-
-  it("类名拿不到时不标 isTextNode（宁可不兜底，也不凭猜）", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams({
-        "6::widget::text": {
-          direction: "input",
-          kind: "widget",
-          nodeId: "6",
-          name: "text",
-        },
-      }),
+    expect(result["6::widget::text"]!.classType).toBe("CLIPTextEncode");
+    expect(Object.keys(result["6::widget::text"]!)).not.toContain("isTextNode");
+    expect(Object.keys(result["77::widget::value"]!)).not.toContain(
+      "isTextNode",
     );
-    expect(result["6::widget::text"]!.isTextNode).toBeUndefined();
-  });
-
-  it("输出条目不带 role（角色只对输入口有意义）", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "9::output::images": {
-            direction: "output",
-            kind: "output",
-            nodeId: "9",
-            name: "images",
-          },
-        },
-        { paramMap: { positiveNode: "9", negativeNode: "9" } },
-      ),
-    );
-    expect(result["9::output::images"]!.role).toBeUndefined();
   });
 });
 

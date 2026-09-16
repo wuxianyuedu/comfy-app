@@ -54,24 +54,18 @@ describe("classifyPin", () => {
     );
   });
 
-  it("图内角色先于名字：同一对 CLIPTextEncode 的正负靠 role 分清（ISSUE #611）", () => {
+  it("正负只认名字：同一对文本编码节点的 `text` 两行都判不出（不做图内推导）", () => {
     /* 真实文生图里两个文本编码节点的 pin 名与显示名完全一样（都叫 text /
-     *  「文本」），名字层面分不出正负 —— 只有导入图沿 KSampler 的
-     *  positive / negative 连线链推出的 role 说得清。缺了它「负向提示词」
-     *  这条契约口就永远判不出来，画布节点上少一张负向卡片。 */
-    const pos = pin("6", "text", { role: "positive" });
-    const neg = pin("7", "text", { role: "negative" });
-    expect(classifyPin(pos)).toBe("prompt");
-    expect(classifyPin(neg)).toBe("negative");
-    /* 名字里显式写了负向时仍以名字为准（角色是名字层面分不出来时的补充信号，
-     *  不与明确的作者命名抢）；只有名字给不出答案时才靠角色定夺。 */
-    expect(classifyPin(pin("7", "negative_prompt", { role: "positive" }))).toBe(
-      "negative",
+     *  「文本」）。本项目**不在这一层替作者猜正负**：判不出就是判不出，
+     *  「负向提示词」这一口由契约常驻显示、落点由作者在库里连线决定。 */
+    expect(classifyPin(pin("6", "text"))).toBe("other");
+    expect(classifyPin(pin("7", "text"))).toBe("other");
+    /* 名字里写了负向才认。 */
+    expect(classifyPin(pin("7", "negative_prompt"))).toBe("negative");
+    /* 图片口按图片判，不受名字里的正负词影响。 */
+    expect(classifyPin(pin("8", "image", { type: "IMAGE" }))).toBe(
+      "reference-image",
     );
-    /* 图片口不受 role 影响（采样器的 negative conditioning 与 LoadImage 无关）。 */
-    expect(
-      classifyPin(pin("8", "image", { type: "IMAGE", role: "negative" })),
-    ).toBe("reference-image");
   });
 
   it("时长口认 duration / length / frames，但帧率不算时长", () => {
@@ -187,7 +181,9 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
     const ids = buildParamEntries(io, undefined, { mode: "T2I" }).map(
       (entry) => entry.id,
     );
-    expect(ids).toEqual(["prompt", "size"]);
+    /* 契约口一律常驻：工作流里没有 `negative` 那一行也照样列出这一口
+     *  （落点为空 = 未配置），显示与否不跟着工作流内容走。 */
+    expect(ids).toEqual(["prompt", "negative", "size"]);
   });
 
   it("「尺寸」是一个口子：宽 / 高 / 宽高比 / 像素量都算它的候选落点", () => {
@@ -206,21 +202,27 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       buildParamEntries(videoIO, undefined, { mode: "I2V" }).map(
         (entry) => entry.id,
       ),
-    ).toEqual(["prompt", "first-frame", "size", "duration"]);
+    ).toEqual(["prompt", "negative", "first-frame", "size", "duration"]);
     expect(
       buildParamEntries(videoIO, undefined, { mode: "T2I" }).map(
         (entry) => entry.id,
       ),
-    ).toEqual(["prompt", "size"]);
+    ).toEqual(["prompt", "negative", "size"]);
   });
 
-  it("契约里没有对应端口的口子不出现（工作流一个可落点端口都没有时）", () => {
+  it("工作流一个可落点端口都没有时，契约口照样列出（零候选 = 未配置）", () => {
     const internalOnly: WorkflowIOMap = {
       "5::widget::steps": pin("5", "steps", { type: "INT", defaultValue: 20 }),
     };
-    expect(buildParamEntries(internalOnly, undefined, { mode: "T2I" })).toEqual(
-      [],
-    );
+    const entries = buildParamEntries(internalOnly, undefined, {
+      mode: "T2I",
+    });
+    expect(entries.map((entry) => entry.id)).toEqual([
+      "prompt",
+      "negative",
+      "size",
+    ]);
+    expect(entries.every((entry) => entry.pins.length === 0)).toBe(true);
   });
 
   it("卡片名是契约里的统一名，不跟着工作流端口名走", () => {
