@@ -142,10 +142,6 @@ export function FlowNodePinRows({
                         name: inName ?? "",
                         kind: "param",
                         direction: "input",
-                        // Prefer the raw port's display label / zh
-                        // localized_name so the IO preview resolves to the
-                        // meaningful name.
-                        label: inMeta?.label ?? inMeta?.localized ?? inName,
                       }}
                     />
                   )}

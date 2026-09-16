@@ -182,7 +182,6 @@ export function FlowNodeWidgetRows({
                       name: k,
                       kind: "widget",
                       direction: "input",
-                      label: friendlyLabel,
                     }}
                   />
                 )}

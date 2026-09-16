@@ -132,17 +132,15 @@ export interface WorkflowIOParam {
   kind: "param" | "widget" | "output";
   nodeId: string;
   name: string;
-  /** Optional user-renamed display label.  When absent / empty, the
-   *  consumers fall back to `name` (the parameter name) via
-   *  `ioLabel(e) = e.label ?? e.name`.  When two pins would render
-   *  with the same display string the call sites pass `allEntries`
-   *  so `ioLabel` falls back to `name` for the colliding entries.
-   *  We intentionally do NOT seed
-   *  this from `data.title` — node titles are shared between sibling
-   *  pins of the same node (e.g. two `text` / `text_1` inputs on a
-   *  single Text-to-Image node end up with the same title), which
-   *  makes the IO summary useless.  Users can override per-pin via
-   *  the IO preview panel's ✎ editor. */
+  /** 作者在 IO 面板里显式重命名的显示名（**唯一**写入点是面板的 ✎ 改名框）。
+   *
+   *  勾选 IO 那一刻画布透传的名字不再进库：它本来就是画布从同一个 raw 槽位
+   *  读出来的名字，抄一份下来只会在两处口径不一致时固化出一个陈旧名字。
+   *  因此这里没有值 = 作者没重命名过，显示名走富化链
+   *  （`ioLabel(e) = e.label ?? e.name` 之外还含子图内部业务名）。
+   *  刻意不从 `data.title` 播种 —— 节点标题在同节点的兄弟 pin 之间是共用的
+   *  （一个 T2I 节点上的 `text` / `text_1` 会拿到同一个标题），那样 IO 摘要
+   *  反而没法看。 */
   label?: string;
   /* ── Server-enriched fields (GET /api/workflows/[id], ) ──
    * Absent on entries that were just toggled locally (the checkbox only
@@ -189,23 +187,21 @@ export interface WorkflowIOParam {
   hostNodeId?: string;
   /** 本层槽位上作者写的业务名（服务端富化下发，与槽位名不同才有值）。
    *
-   *  只用作**别名判定的事实源**，不参与显示：本地 label 是不是一串机器生成
-   *  的槽位名，要看它和真实 pin 名、富化名、本层作者名是否互相指向同一个名字。
-   *  缺了这份事实，本地存着的那串机器名就会被当成作者命名，任何一次写入都把
-   *  它固化回库（ISSUE #349）。 */
+   *  事实字段：富化链把它排在 `localized` 之后（通用翻译会盖住它），所以显示
+   *  名算不到它；想按「作者在本层槽位上写的名字」取名时只有这里有。 */
   slotLabel?: string;
-  /** 富化链现在给这个条目的显示名（`label → localized → name` 之外，还含子图
-   *  内部字段业务名）。同 `slotLabel`，只作别名判定的事实源。 */
-  enrichedLabel?: string;
 }
 
-/** A single parameter reference used to toggle IO exposure. */
+/** A single parameter reference used to toggle IO exposure.
+ *
+ *  只带**身份字段**：显示名不进库（画布行上的名字与 IO 面板里的名字都由富化链
+ *  一处给，抄一份下来只会在两处口径不一致时固化出陈旧名字）。作者想改名走
+ *  IO 面板的 ✎ 改名框（`setIOLabel`）。 */
 export interface IoRef {
   nodeId: string;
   name: string;
   kind: "param" | "widget" | "output";
   direction: "input" | "output";
-  label?: string;
   /** 宿主（外层封装）节点 id：当前视图是子工作流内部时，由画布把「从哪一层
    *  钻进来」的宿主 id 一并带上，落库后运行期据它还原 `host:inner` 拼接 id。 */
   hostNodeId?: string;

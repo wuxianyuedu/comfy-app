@@ -37,7 +37,6 @@ function wrapperSeedEntry(): WorkflowIOParam {
     classType: WRAPPER,
     nodeTitle: "Checkpoint settings",
     slotLabel: "Seed",
-    enrichedLabel: "Seed",
   };
 }
 

@@ -22,9 +22,10 @@ export interface SubgraphHeaderProps {
   onToggle: () => void;
   onEnter?: () => void;
   io?: IOEditContextValue;
-  /** First output entry (already label-resolved) used by the per-node
-   *  output checkbox.  Pass null when the subgraph exposes no outputs. */
-  outputRef?: { name: string; label: string } | null;
+  /** First output entry used by the per-node output checkbox（只带端口身份：
+   *  显示名不进库，由富化链一处给）。Pass null when the subgraph exposes no
+   *  outputs. */
+  outputRef?: { name: string } | null;
 }
 
 export function SubgraphHeader({
@@ -120,10 +121,6 @@ export function SubgraphHeader({
             name: outputRef.name,
             kind: "output",
             direction: "output",
-            // forward the subgraph wrapper's output label
-            // (e.g. business `IMAGE_FINAL`) so it reaches the IO
-            // preview unchanged.
-            label: outputRef.label,
           }}
         />
       )}
