@@ -152,10 +152,10 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 目录                        | lines | functions | statements | branches | 实测 trend                                                                                                                    |
 | --------------------------- | ----- | --------- | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `src/lib/agent/**`          | 20    | 20        | 15         | 10       | 18.9 / 21.7 / 12.9                                                                                                            |
-| `src/lib/core/**`           | 40    | 35        | 40         | 35       | 40.9 / 38.5 / 42.7（含日志实现合并后的新计数）                                                                                |
+| `src/lib/core/**`           | 90    | 85        | 90         | 90       | 94.6 / 96.5 / 90.8（仓储层 12 个模块接内存 SQLite 真库用例后从 42.7 抬起，见 §18.12）                                        |
 | `src/lib/drizzle-studio/**` | 40    | 35        | 35         | 35       | 41.1 / 37.2 / 39.1                                                                                                            |
 | `src/lib/film/**`           | 40    | 55        | 40         | 30       | 40.4 / 33.2 / 40.9（编排判决面进用例后从 7.5 抬起）                                                                           |
-| `src/lib/llm/**`            | 55    | 55        | 55         | 50       | 56.7 / 55.8 / 55.3（secrets 加密往返 / video-task 轮询与路径穿越 / prompts 兜底 / browser 跨 chunk 拼帧进用例后从 31.2 抬起） |
+| `src/lib/llm/**`            | 90    | 85        | 90         | 85       | 97.5 / 96.6 / 89.7（`server.ts` 唯一 LLM 出口与 `usage-test.server.ts` 从 0 覆盖接入用例后，从 55.3 再次抬起）              |
 | `src/lib/project-canvas/**` | 70    | 70        | 65         | 50       | 69.0 / 70.8 / 53.8                                                                                                            |
 | `src/lib/workshop/**`       | 65    | 70        | 65         | 55       | 65.8 / 70.3 / 59.3                                                                                                            |
 
@@ -192,6 +192,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | **`llm/browser.ts` 的 3 处现存缺陷**                                                                    | 本轮回报       | **补测试时实测发现、本批不改源码**（「补测试」与「改行为」必须分开，否则无法判断行为变化来自哪一侧）：① SSE `error` 帧被静默吞掉 —— `json.error` 抛出的 Error 被同一个 `catch` 重新接住，而该 `catch` 只在消息命中 `/LLM\|请求\|fetch/i` 时才 rethrow，于是「上游鉴权失败」这类文案被丢弃、`"前半"` 作为**正常回答**返回（用户看到「答到一半就没了」且界面上无报错）；② 末帧缺 `\n` 时整条丢弃 —— 读取循环 `break` 后再未冲刷 `buffer`；③ `core/config` 的 `REAPER_ENABLED=false` **无法关闭** reaper —— `z.coerce.boolean()` 等价 `Boolean(value)`，而 `Boolean("false") === true`，它按 JS 真值而非环境变量布尔字面量解析，且没有任何提示。三条都由 `src/lib/llm/browser.test.ts` / `src/lib/core/config.test.ts` 钉住现状，修复另开条目。 |
 | ~~`drizzle-studio/**` 覆盖率 0~~                                                                        | #572 第 5 项   | **已落地**：`lifecycle` 的探测 / 定位 / 启停判决进用例，目录 0% → 41%，门槛随之从 0 抬到 40（见 18.6）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ~~`film/**` 只有两个纯函数文件被覆盖~~                                                                  | #572 第 5 项   | **已落地**：编排判决面（取消撤任务 / 合成前置条件 / 镜头参数与画幅折算）进用例，7.5% → 40%，门槛从 5 抬到 40（见 18.6）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ~~`core/**` / `llm/**` 覆盖率停在 42.7 / 55.3~~                                                          | #565 覆盖率爬坡 | **已落地**：仓储层 12 个模块接入**内存 SQLite 真库夹具**（§18.11），LLM 的 `server.ts` 与 `usage-test.server.ts` 两个零覆盖模块补上用例；`core` 42.7 → 94.6、`llm` 55.3 → 97.5，门槛同步抬到 90（见 18.6）。补测试过程实测出 3 处真缺陷（分页丢 LIMIT / LEFT JOIN 下 count(*) / 错误文案重复状态码），已在本轮修掉 |
 
 ## 18.8 core 骨架的取用口径（ISSUE #568）
 
@@ -301,7 +302,43 @@ import」—— 那只是把同一条边换个写法（`core/logger` 当时仍�
 （`src/lib/core/logger.ts`）。谁再建第二条通道，那条断言立刻红；「谁是实现处」不再
 依赖文件名或注释，而是靠「谁在 import pino」这个事实。
 
-## 18.11 速查
+## 18.11 仓储层怎么测：内存 SQLite 真库夹具（ISSUE #565）
+
+`src/lib/core/**` 此前实测 42.7% 行覆盖，而分母被 12 个 `repository-*.ts` 主导 ——
+它们是**全库唯一的 SQL 出口**，却一个用例都没有。补法有两个错误选项：
+
+- **逐个 mock `db`**：断言的是「调了 `select().from(task)`」而不是「SQL 真的对」。
+  这一层的缺陷全在 SQL 语义上（`count(列)` vs `count(*)`、`onConflictDoUpdate`
+  的 target 必须真的存在 UNIQUE 约束、`and()` 里 `undefined` 的短路、JSON 列的
+  加解密顺序），mock 到不了这些。
+- **要求测试自己建 `db.sqlite`**：CI 上干净检出没有库，测试会互相污染真实数据。
+
+采用的做法是 `tests/helpers/test-db.ts` 的**内存 SQLite + 真 Drizzle**：
+`vi.mock("~/server/db")` 只把 `db` 换成 `new Database(":memory:")` 上的实例，
+仓储代码一行不改。代价是要**手工维护一份建表 DDL**，因此有两条硬要求：
+
+1. **DDL 必须与 `schema.ts` 对齐**，包括**唯一索引**。漏了索引不会在启动时报错，
+   只会在第一次跑到 `onConflictDoUpdate` 时抛
+   `ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint`
+   —— 那时报错指向的是 upsert 语句，看不出是夹具缺东西。
+2. **`$tables` 断言要读原始行**。「写进去的密钥是密文」这类结论**不能**用「读出来
+   是明文」证明 —— 那只证明了读路径，证明不了落盘不是明文。
+
+补测试的这一轮实测出 3 处真缺陷（都已修）。它们的共同点是
+**只在「真 SQL + 真约束 + 真数据形状」下才暴露**，mock 一辈子也测不出来。
+
+| 缺陷 | 症状 | 修法 |
+| --- | --- | --- |
+| `TaskRepository.listByUser` 只给 `skip` 不给 `take` | 生成 `… offset ?`（SQLite 的 `OFFSET` 必须跟在 `LIMIT` 后）→ better-sqlite3 抛 `near "offset": syntax error`，调用方拿到一次 500 而不是「第二页」 | 补 `LIMIT -1`。**注意 drizzle 的坑**：`offset()` 会把链上的数字 `limit` **整个丢掉**（`limit(-1).offset(n)` 生成的 SQL 里没有 limit），必须传 `sql\`-1\`` 片段；relational query（`db.query.*.findMany`）更彻底 —— `limit: -1` 直接被忽略，所以「只给 skip」那条路改成「普通 select 取页 + 按 id 装载关联」 |
+| `FilmRepository.listByUser` 用 `count()` 配 `leftJoin` | 一个镜头都没有的成片被数成 **1 镜**（`COUNT(*)` 把 NULL 行也算了）—— 而 `film.list` 是 UI **唯一**拿到镜头数的地方 | 改 `count(filmShot.id)`。同一个坑在 `repository-model-tag.ts` 已踩过并留了注释，说明注释拦不住第二次 —— 判据是这回把它钉进了用例 |
+| `usage-test.server.ts` 非 JSON 失败体 | 上游返回 HTML 错误页 / 纯文本 502 时，提示拼成 **`HTTP 503：HTTP 503`**：状态码说两遍，框架写的真实原因一个字都没带上 | `httpFailureDetail` 增加 `rawText` 入参，错误分支读一次响应文本并截断 240 字符带出 |
+
+> 另一条不算缺陷但值得记：`listByUser` 的**两条分页分支**（普通 select 与
+> relational query）此前口径不一致，且后者根本无法表达「不限条数只跳过」。
+> 现在两条路都产出「同一页 + 同一份 images」，并且用例把两**条**路都覆盖了 ——
+> 只测一条会让人以为另一条也对。
+
+## 18.12 速查
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
 - 要取仓储：**直接 import**（`@/lib/core/repository`），别再找容器 —— 它已按 18.8 移除。

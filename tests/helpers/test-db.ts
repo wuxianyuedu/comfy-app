@@ -22,6 +22,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "~/server/db/schema";
+import { encryptSecret } from "~/lib/llm/secrets";
 
 export type Row = Record<string, unknown>;
 
@@ -43,6 +44,9 @@ const jsonColumns = new Set<string>([
   "defaultParams",
   "datasetImages",
   "temperatureByTask",
+  "scenes",
+  "characters",
+  "shots",
 ]);
 
 const TABLES = [
@@ -66,6 +70,9 @@ const TABLES = [
   "filmProject",
   "filmShot",
   "auditLog",
+  "remoteModel",
+  "workshopSession",
+  "workshopDraft",
 ];
 
 const CREATE_SQL = `
@@ -128,7 +135,7 @@ CREATE TABLE IF NOT EXISTS workflowModelTag_workflowTemplate (
 );
 CREATE TABLE IF NOT EXISTS llmConfig (
   id TEXT PRIMARY KEY, provider TEXT NOT NULL DEFAULT 'local', baseUrl TEXT NOT NULL DEFAULT 'http://localhost:11434/v1',
-  model TEXT NOT NULL DEFAULT '', apiKey TEXT, temperature REAL NOT NULL DEFAULT 0.7,
+  model TEXT NOT NULL DEFAULT '', extraModels TEXT, apiKey TEXT, temperature REAL NOT NULL DEFAULT 0.7,
   temperatureByTask TEXT, maxTokens INTEGER NOT NULL DEFAULT 2048, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS skill (
@@ -159,6 +166,32 @@ CREATE TABLE IF NOT EXISTS filmShot (
 CREATE TABLE IF NOT EXISTS auditLog (
   id TEXT PRIMARY KEY, event TEXT NOT NULL, userId TEXT, ip TEXT, meta TEXT, createdAt TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS remoteModel (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, baseUrl TEXT, apiKey TEXT,
+  kind TEXT NOT NULL DEFAULT 'chat', workshopAdapters TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workshopSession (
+  id TEXT PRIMARY KEY, userId TEXT, title TEXT NOT NULL DEFAULT '未命名工坊项目', type TEXT NOT NULL DEFAULT 'short_video',
+  tone TEXT NOT NULL DEFAULT '', logline TEXT NOT NULL DEFAULT '', idea TEXT NOT NULL DEFAULT '',
+  scriptMarkdown TEXT NOT NULL DEFAULT '', scenes TEXT NOT NULL DEFAULT '[]', characters TEXT NOT NULL DEFAULT '[]',
+  shots TEXT NOT NULL DEFAULT '[]', stage TEXT NOT NULL DEFAULT 'script', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workshopDraft (
+  id TEXT PRIMARY KEY, userId TEXT, title TEXT NOT NULL DEFAULT '未命名工坊项目', type TEXT NOT NULL DEFAULT 'short_video',
+  tone TEXT NOT NULL DEFAULT '', logline TEXT NOT NULL DEFAULT '', scriptMarkdown TEXT NOT NULL DEFAULT '',
+  scenes TEXT NOT NULL DEFAULT '[]', characters TEXT NOT NULL DEFAULT '[]', shots TEXT NOT NULL DEFAULT '[]',
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+
+
+-- 与 schema.ts 对齐的唯一索引（缺了它们，仓储的 onConflictDoUpdate 会直接抛
+-- ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint）：
+CREATE UNIQUE INDEX IF NOT EXISTS umc_user_folder_uniq ON userModelConfig (userId, folder);
+CREATE UNIQUE INDEX IF NOT EXISTS model_file_folder_uniq ON model (fileName, folder);
+CREATE UNIQUE INDEX IF NOT EXISTS skill_slug_uniq ON skill (slug);
+CREATE UNIQUE INDEX IF NOT EXISTS wmt_user_name_uniq ON workflowModelTag (userId, name);
+CREATE UNIQUE INDEX IF NOT EXISTS remoteModel_name_uniq ON remoteModel (name);
 `;
 
 export interface TestTables {
@@ -171,6 +204,7 @@ export interface TestTables {
   llmConfig: Row[];
   posts: Row[];
   models: Row[];
+  remoteModels: Row[];
 }
 
 export interface TestDb {
@@ -184,11 +218,7 @@ let currentDb: TestDb | null = null;
 
 /** 判定 text 列是否应还原成 Date：schema.ts 的日期列统一 text + ISO 字符串。 */
 function isDateColumn(col: string): boolean {
-  return (
-    col.endsWith("At") &&
-    col !== "sourceMtime" &&
-    col !== "sortIndex"
-  );
+  return col.endsWith("At") && col !== "sourceMtime" && col !== "sortIndex";
 }
 
 function parseRow(table: string, row: Record<string, unknown>): Row {
@@ -229,7 +259,10 @@ function serializeValue(col: string, v: unknown): unknown {
 function allRows(table: string): Row[] {
   if (!currentSqlite) throw new Error("test db 未初始化");
   return (
-    currentSqlite.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]
+    currentSqlite.prepare(`SELECT * FROM ${table}`).all() as Record<
+      string,
+      unknown
+    >[]
   ).map((r) => parseRow(table, r));
 }
 
@@ -265,16 +298,27 @@ export function createTestDb(): TestDb {
       .prepare(
         `SELECT wm.workflowModelTag AS tagId, wm.workflowTemplate AS wtId, t.name AS name, t.userId AS userId
          FROM workflowModelTag_workflowTemplate wm
-         JOIN workflowModelTag t ON wm.workflowModelTag = t.id`
+         JOIN workflowModelTag t ON wm.workflowModelTag = t.id`,
       )
-      .all() as Array<{ tagId: string; wtId: string; name: string; userId: string }>;
-    const byWt = new Map<string, Array<{ id: string; name: string; userId: string }>>();
+      .all() as Array<{
+      tagId: string;
+      wtId: string;
+      name: string;
+      userId: string;
+    }>;
+    const byWt = new Map<
+      string,
+      Array<{ id: string; name: string; userId: string }>
+    >();
     for (const r of tagRows) {
       const arr = byWt.get(r.wtId) ?? [];
       arr.push({ id: r.tagId, name: r.name, userId: r.userId });
       byWt.set(r.wtId, arr);
     }
-    return rows.map((row) => ({ ...row, modelTags: byWt.get(row.id as string) ?? [] }));
+    return rows.map((row) => ({
+      ...row,
+      modelTags: byWt.get(row.id as string) ?? [],
+    }));
   };
 
   const tables: TestTables = {
@@ -305,6 +349,9 @@ export function createTestDb(): TestDb {
     get models() {
       return allRows("model");
     },
+    get remoteModels() {
+      return allRows("remoteModel");
+    },
   };
 
   const reset = (): void => {
@@ -324,7 +371,9 @@ export function createTestDb(): TestDb {
 /** 取当前测试文件已创建的内存 db（须先触发 ~/server/db 的 mock 工厂）。 */
 export function getTestDb(): TestDb {
   if (!currentDb) {
-    throw new Error('test db 未初始化：请先 vi.mock("~/server/db") 并导入被测 router');
+    throw new Error(
+      'test db 未初始化：请先 vi.mock("~/server/db") 并导入被测 router',
+    );
   }
   return currentDb;
 }
@@ -333,9 +382,19 @@ export function getTestDb(): TestDb {
 
 let seedSeq = 0;
 
+/**
+ * seed 期用的密钥加密：与 `lib/core/repository-user.ts` 落库前调用的是**同一个**
+ * `encryptSecret`（不是再写一份），否则 helper 与生产写入会各自漂移 —— 而
+ * 「密文形态」恰恰是 `LlmConfigRepository` / `RemoteModelRepository` 的关键行为。
+ */
+function encryptSeedSecret(plain: string | null | undefined): string | null {
+  if (plain == null || plain === "") return null;
+  return encryptSecret(plain);
+}
+
 export function seedUser(
   _tdb: TestDb,
-  input: { id: string; email: string; name?: string | null }
+  input: { id: string; email: string; name?: string | null },
 ): Row {
   const now = new Date().toISOString();
   insertInto("user", {
@@ -368,7 +427,10 @@ export interface SeedWorkflowTemplateInput {
   createdAt?: Date;
 }
 
-export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateInput): Row {
+export function seedWorkflowTemplate(
+  _tdb: TestDb,
+  input: SeedWorkflowTemplateInput,
+): Row {
   const id = input.id ?? `seed-wt-${++seedSeq}`;
   const now = new Date().toISOString();
   insertInto("workflowTemplate", {
@@ -460,7 +522,14 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
 
 export function seedProject(
   _tdb: TestDb,
-  input: { id?: string; userId: string; name: string; nodes?: unknown; edges?: unknown; updatedAt?: Date }
+  input: {
+    id?: string;
+    userId: string;
+    name: string;
+    nodes?: unknown;
+    edges?: unknown;
+    updatedAt?: Date;
+  },
 ): Row {
   const id = input.id ?? `seed-proj-${++seedSeq}`;
   const now = new Date().toISOString();
@@ -474,4 +543,41 @@ export function seedProject(
     updatedAt: now,
   });
   return getRow("project", id);
+}
+
+export interface SeedRemoteModelInput {
+  id?: string;
+  name: string;
+  baseUrl?: string | null;
+  /** 明文密钥；helper 内部按 schema 约定加密后再落库（与运行时写入同形）。 */
+  apiKey?: string | null;
+  kind?: string;
+  workshopAdapters?: unknown;
+}
+
+/**
+ * seed 一行远端模型。`apiKey` 收**明文**、由 helper 调 `encryptSecret` 落库
+ * —— 直接 insert 明文的测试会绕开 `LlmConfigRepository.replaceAll` 的加密语义，
+ * 让「读取时解密」这条真实行为在测试里消失（假通过）。
+ */
+export function seedRemoteModel(
+  _tdb: TestDb,
+  input: SeedRemoteModelInput,
+): Row {
+  const id = input.id ?? `seed-rm-${++seedSeq}`;
+  const now = new Date().toISOString();
+  insertInto("remoteModel", {
+    id,
+    name: input.name,
+    baseUrl: input.baseUrl ?? null,
+    apiKey: encryptSeedSecret(input.apiKey),
+    kind: input.kind ?? "chat",
+    workshopAdapters:
+      input.workshopAdapters === undefined
+        ? null
+        : JSON.stringify(input.workshopAdapters),
+    createdAt: now,
+    updatedAt: now,
+  });
+  return getRow("remoteModel", id);
 }

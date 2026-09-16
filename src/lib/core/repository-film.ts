@@ -33,7 +33,12 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
         progress: filmProject.progress,
         finalVideo: filmProject.finalVideo,
         createdAt: filmProject.createdAt,
-        shotCount: count(),
+        /* `count(列)` 而不是 `count(*)`：这里是与 filmShot 的 LEFT JOIN，
+         * 一个镜头都没有的成片那一行里 filmShot 侧全是 NULL ——
+         * `COUNT(*)` 会把它数成 1，于是**没生成过任何镜头的成片显示「1 镜」**。
+         * 同一个坑在 `repository-model-tag.ts` 的 listByUser 已经踩过一次，
+         * 那条注释与这里同因：LEFT JOIN 下必须数关联列。 */
+        shotCount: count(filmShot.id),
       })
       .from(filmProject)
       .leftJoin(filmShot, eq(filmShot.filmId, filmProject.id))
