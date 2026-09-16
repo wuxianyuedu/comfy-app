@@ -15,6 +15,13 @@
  * 历史教训：#445 曾把开关押在 exe 同级 `app.exe.manifest` 的
  * `per_app_arguments` 上——那不是 WebView2 官方文档认可的机制，实测参数
  * 到不了浏览器进程（msedgewebview2 命令行无该开关），已整体移除。
+ *
+ * 同一条链路上还有第三件事（ISSUE #616）：页签**能显示**之后，页内的
+ * HTML5 拖放（ComfyUI 拖入图片 / 工作流）还必须真的派发到 DOM。wry 默认给
+ * 每个 webview 挂 WebView2 的原生拖放处理器，它一接手 `dragover` / `drop`
+ * 就不再到 DOM —— 应用内拖不进去、浏览器整窗打开却正常。修法同样在壳侧：
+ * 主窗 builder 调 `disable_drag_drop_handler()`。这层没有类型系统能拦住
+ * 「谁顺手删了那一行」，所以在此钉住。
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -24,7 +31,7 @@ const root = path.resolve(__dirname, "..");
 const nextConfig = readFileSync(path.join(root, "next.config.js"), "utf8");
 const libRs = readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
 
-describe("ComfyUI 页签内嵌（应用页 CSP frame-src）", () => {
+describe("ComfyUI 页签内嵌（应用页 CSP frame-src 与壳侧拖放）", () => {
   it("next.config.js 的 CSP 用 frame-src 放行本地 ComfyUI 源", () => {
     expect(nextConfig).toContain(
       "frame-src 'self' http://127.0.0.1:* http://localhost:*",
@@ -33,6 +40,13 @@ describe("ComfyUI 页签内嵌（应用页 CSP frame-src）", () => {
 
   it("frame-ancestors 'none' 仍在（本应用不被别站内嵌的反点击劫持不放宽）", () => {
     expect(nextConfig).toContain("frame-ancestors 'none'");
+  });
+
+  /* 页签里的 ComfyUI 靠 HTML5 拖放接收图片 / 工作流（drop 事件的
+   * dataTransfer.files）。宿主窗口挂原生拖放处理器时这些事件不派发到 DOM，
+   * 表现就是「拖进去毫无反应」，而 iframe 页面自己完全不知道为什么。 */
+  it("主窗关掉原生拖放拦截，页内 HTML5 拖放才派发到 DOM", () => {
+    expect(libRs).toContain(".disable_drag_drop_handler()");
   });
 
   it("无效的旧机制（app.exe.manifest per_app_arguments）不再回流", () => {
