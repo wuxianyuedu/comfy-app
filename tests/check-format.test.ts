@@ -12,10 +12,24 @@
  * 规范：docs/standards/13-提交与-code-review.md §13.5
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/* 这些用例每条都要在临时仓库里**真起子进程**（`git init` + add/commit，
+ * 再 spawn 一次门禁脚本；门禁自己还要 spawn prettier），5s 的默认用例超时不够用：
+ * CI 上剩余 261 个文件并行跑时，首条用例实测被击穿（`Test timed out in 5000ms`），
+ * 而单跑或低负载下同样代码只要 0.2~0.3s —— 是超时口径问题，不是功能问题。
+ * 与 tests/check-branch-guard.test.ts / tests/check-reformat-only.test.ts 同口径的
+ * 整文件放宽，只影响本文件，不掩盖其它文件的真实挂起（那些文件仍有各自的门槛）。 */
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const SCRIPT = join(process.cwd(), "scripts", "check-format.cjs");
 
@@ -58,7 +72,7 @@ function git(...args: string[]): void {
 }
 
 // 脏内容：多余空格 + 多余空行，prettier 一定会改它。
-const DIRTY = 'export const PROBE={a:1,\n\n\n  b:2};\n';
+const DIRTY = "export const PROBE={a:1,\n\n\n  b:2};\n";
 const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 
 beforeEach(() => {
@@ -84,7 +98,11 @@ afterEach(() => {
 function seedBaseline(files: string[]): void {
   writeFileSync(
     join(workdir, "scripts", ".format-baseline.json"),
-    JSON.stringify({ files: Object.fromEntries(files.map((f) => [f, true])) }, null, 2),
+    JSON.stringify(
+      { files: Object.fromEntries(files.map((f) => [f, true])) },
+      null,
+      2,
+    ),
   );
   git("add", "-A");
   git("commit", "-qm", "baseline");
@@ -152,7 +170,10 @@ describe("prettier 格式棘轮", () => {
 
   it("基线未被 git 跟踪 → 阻断（棘轮文件必须入库，否则 CI 上会缺失）", () => {
     write("src/lib/keep.ts", CLEAN);
-    writeFileSync(join(workdir, "scripts", ".format-baseline.json"), JSON.stringify({ files: {} }));
+    writeFileSync(
+      join(workdir, "scripts", ".format-baseline.json"),
+      JSON.stringify({ files: {} }),
+    );
     const r = run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("未被 git 跟踪");
