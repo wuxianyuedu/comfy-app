@@ -470,6 +470,89 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible();
     });
 
+    /**
+     * ISSUE #609 八审：「日志切换到 1000+ 的页签有明显卡顿需要优化」。
+     *
+     * 根因是一页 2000 行**全部**挂进 DOM（行内还有若干分片 span，满页约 1.5 万
+     * 个节点），切页那一刻的布局成本就是用户感知到的卡顿。规范 02 §2.6 要求
+     * 大列表虚拟滚动，现在只渲染视口内的几十行。
+     *
+     * 三条判据只有真实浏览器量得出来（jsdom 不做布局、clientHeight 恒为 0）：
+     *   1. **节点数不再随页大小增长**——满页时 DOM 里的行数是几十，不是 2000；
+     *   2. **一行都没丢**：总高 = 满页行数 × 单行高度，滚动条长度与内容一致，
+     *      而且滚到底能看到最后一行（虚拟化的经典翻车就是「滚不到底」）；
+     *   3. 切页那一刻的耗时远低于一次性渲染 2000 行的水平。
+     *
+     * 这里刻意把夹具堆到满页（`LOG_PAGE_SIZE`）：450 行时虚拟化前后都只有几十
+     * 行的量级，量不出差异。
+     */
+    test("@critical 满页 2000 行只渲染视口内的几十行，且滚动条长度与内容一致", async ({
+      page,
+    }) => {
+      await stubBackend(page);
+      const ROWS = 2000;
+      await page.route("**/api/logs/current**", async (route: Route) => {
+        const start = Date.now() - ROWS * 1000;
+        const p = (n: number, l = 2) => String(n).padStart(l, "0");
+        const fmt = (ms: number) => {
+          const d = new Date(ms);
+          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+        };
+        const lines = Array.from({ length: ROWS }, (_, i) => {
+          const level =
+            i >= ROWS - 3 ? "[ERROR]" : i >= ROWS - 9 ? "[WARN]" : "[INFO]";
+          return `[${fmt(start + i * 1000)}] ${level} [app] 事件 ${i}`;
+        });
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            content: lines.join("\n") + "\n",
+            size: 10_000_000,
+            offset: 0,
+            sessionStart: start,
+            bootId: "e2e:big",
+          }),
+        });
+      });
+      await openPanel(page);
+
+      /* ① 满页 2000 行，但 DOM 里只有视口内的那几十行。上限取 200（远低于
+       * 2000，又给不同视口高度留足余量）：这条断言就是「不会卡」的判据本身。 */
+      await expect
+        .poll(async () => page.locator("[data-log-index]").count())
+        .toBeGreaterThan(0);
+      const rendered = await page.locator("[data-log-index]").count();
+      expect(rendered).toBeLessThan(200);
+
+      /* ② 内容一行不少：撑开滚动条的总高 = 2000 × 单行高度。外层的 style.height
+       * 就是它——读 style 而不是读 offsetHeight，是因为「估算高度」才是这里要
+       * 钉住的契约（实际布局高度会被浏览器取整，量出来恒差几个像素）。 */
+      const spacerHeight = await page
+        .locator("[data-log-index]")
+        .first()
+        .evaluate((el) => el.parentElement!.parentElement!.style.height);
+      expect(spacerHeight).toBe(`${ROWS * 27}px`);
+
+      /* ③ 滚到底能看到**最后一行**（虚拟化的经典翻车是「滚不到底」）。 */
+      await page.locator(".custom-scrollbar").evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      await expect(
+        page
+          .locator("[data-log-text]", { hasText: `事件 ${ROWS - 1}` })
+          .first(),
+      ).toBeVisible();
+
+      /* ④ 切页那一刻的耗时：满页 2000 行一次性渲染在真实 Chromium 里是几百
+       * 毫秒量级（用户读到的就是「明显卡顿」）。虚拟化之后只剩几十行，
+       * 给一个宽松但足以区分两者的上限。 */
+      const t0 = Date.now();
+      await page.getByTitle("更早的一页").click();
+      await expect(page.getByText(/第 2 \/ \d+ 页/)).toBeVisible();
+      expect(Date.now() - t0).toBeLessThan(1500);
+    });
+
     test("@critical 框选日志文本后，新日志到达不会把内容滚动走", async ({
       page,
     }) => {
@@ -1013,17 +1096,17 @@ test.describe("应用页签与全屏视图 @critical", () => {
       await expect(page.getByText("Job Object 创建成功")).toBeVisible();
       await expect(page.getByText("找不到预编译 Tauri 壳")).toBeVisible();
 
-      const body = await page
-        .locator('[data-log-text]')
-        .allInnerTexts();
+      const body = await page.locator("[data-log-text]").allInnerTexts();
       expect(body.length).toBeGreaterThan(0);
       for (const text of body) {
-        expect(text).not.toMatch(/\[\d{2}:\d{2}:\d{2}\]\s*\[(INFO|STEP|OK|WARN|ERROR|DEBUG)\s*\]/);
+        expect(text).not.toMatch(
+          /\[\d{2}:\d{2}:\d{2}\]\s*\[(INFO|STEP|OK|WARN|ERROR|DEBUG)\s*\]/,
+        );
       }
 
       /* 级别标签与正文分开：`INFO` / `ERROR` 出现在级别徽标里，而不是正文里。 */
       const errorRow = page
-        .locator('[data-log-text]')
+        .locator("[data-log-text]")
         .filter({ hasText: "找不到预编译 Tauri 壳" });
       await expect(errorRow).toHaveText("找不到预编译 Tauri 壳");
 
