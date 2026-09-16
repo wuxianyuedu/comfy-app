@@ -328,7 +328,7 @@ export function AspectMegapixelControl({
         scene={scene}
         onOpen={() => setTableOpen(true)}
         extra={
-          <span className="text-[10px] text-ink-faint">
+          <span className="text-ink-faint text-[10px]">
             {currentDims
               ? `${currentDims.width}×${currentDims.height}`
               : resolutionHint}
@@ -344,7 +344,7 @@ export function AspectMegapixelControl({
         className={
           narrow
             ? "flex items-start justify-end gap-3"
-            : "rounded-lg border border-accent/30 bg-accent/4 p-2.5"
+            : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
         }
       >
         {narrow ? (
@@ -377,7 +377,7 @@ export function AspectMegapixelControl({
                       style={{ top: "50%", transform: "translateY(-50%)" }}
                     />
                     <span
-                      className="min-w-0 truncate text-[12px] font-medium text-ink-bright"
+                      className="text-ink-bright min-w-0 truncate text-[12px] font-medium"
                       style={{ fontFamily: "var(--font-sans)" }}
                     >
                       {entry.label ?? entry.name}
@@ -395,9 +395,9 @@ export function AspectMegapixelControl({
                 —— 它们已经以真正的参数行形态摆在框外左侧了。 */}
             <div
               data-grouped-box
-              className="w-fit max-w-full shrink-0 rounded-lg border border-accent/30 bg-accent/4 p-2"
+              className="border-accent/30 bg-accent/4 w-fit max-w-full shrink-0 rounded-lg border p-2"
             >
-              <span className="text-[10px] font-semibold tracking-wider text-accent uppercase">
+              <span className="text-accent text-[10px] font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="mt-1 w-[168px] min-w-0">
@@ -424,7 +424,7 @@ export function AspectMegapixelControl({
         ) : (
           <div>
             <div className="flex items-center gap-2">
-              <span className="shrink-0 text-[10px] font-semibold tracking-wider text-accent uppercase">
+              <span className="text-accent shrink-0 text-[10px] font-semibold tracking-wider uppercase">
                 比例 + 像素{multiple ? " + 倍数" : ""}
               </span>
               <div className="min-w-0 flex-1">
@@ -452,7 +452,10 @@ export function AspectMegapixelControl({
       </div>
 
       {tableOpen && (
-        <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />
+        <SizePresetTableModal
+          scene={scene}
+          onClose={() => setTableOpen(false)}
+        />
       )}
     </div>
   );

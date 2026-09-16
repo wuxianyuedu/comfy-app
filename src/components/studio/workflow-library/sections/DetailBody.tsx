@@ -57,15 +57,18 @@ export function DetailBody({
   return (
     <>
       {activeTab === "canvas" && (
-        <div className="flex h-full min-h-[420px] flex-col rounded-2xl border border-border bg-panel-deep p-1">
+        /* 画布页签**吃满可用高度**（不再钉在 420px）：用户把详情面板看全屏时，
+         *  画布要一直铺到面板底部，下面不留一块面板底色（ISSUE #596）。高度链条
+         *  靠 flex 传下去 —— 外层的 `min-h-0 flex-1` 与本层的 `h-full` 缺一不可。 */
+        <div className="border-border bg-panel-deep flex h-full min-h-[420px] flex-col rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium text-ink-faint">
+            <span className="text-ink-faint text-xs font-medium">
               画布样式预览（与项目画布节点一致，可直接运行调试）
             </span>
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/10"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300"
             >
               <Maximize2 className="h-3 w-3" />
               在编辑器中打开
@@ -75,25 +78,28 @@ export function DetailBody({
               输入参数」（要什么、落到哪一行），右侧是「对外输出参数」（给什么）。
               三列一起参与居中，不用固定留白挂靠；窄面板放不下时由 outer 的
               `overflow-auto` 横向滚动。 */}
-          <div className="flex min-h-0 flex-1 justify-center overflow-auto px-2 py-4">
-            {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
+          <div className="flex min-h-0 flex-1 justify-center px-2 py-4">
+            {/* 横向仍可滚（三列常宽过面板）；纵向交给画布撑开（见上面的高度链条）。*/}
+            <div className="flex min-h-0 w-full min-w-0 flex-1 justify-center overflow-x-auto overflow-y-hidden">
+              {/* key=workflow.id：切换左侧工作流时重建预览，避免上一工作流的
                 运行结果/状态/表单残留（详情区复用的是同一 DOM 位置）。 */}
-            <WorkflowCanvasNodePreview
-              key={workflow.id}
-              workflowId={workflow.id}
-              workflowName={workflow.name}
-              taskType={workflow.taskType}
-              workflowIO={workflowIO}
-              paramMap={paramMap}
-              usable={usable}
-              modes={meta?.modes}
-              defaultMode={meta?.defaultMode}
-              onModeChange={(code) => {
-                meta?.onModeChange(code);
-              }}
-              onSeedModeChange={onSeedModeChange}
-              onPatchParamMap={onPatchParamMap}
-            />
+              <WorkflowCanvasNodePreview
+                key={workflow.id}
+                workflowId={workflow.id}
+                workflowName={workflow.name}
+                taskType={workflow.taskType}
+                workflowIO={workflowIO}
+                paramMap={paramMap}
+                usable={usable}
+                modes={meta?.modes}
+                defaultMode={meta?.defaultMode}
+                onModeChange={(code) => {
+                  meta?.onModeChange(code);
+                }}
+                onSeedModeChange={onSeedModeChange}
+                onPatchParamMap={onPatchParamMap}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -105,18 +111,25 @@ export function DetailBody({
           displayName={workflow.modelTags?.[0] ?? workflow.name}
           workflowIO={workflowIO}
           paramMap={paramMap}
-          mode={workflow.defaultMode ?? workflow.taskType ?? workflow.modes?.[0] ?? null}
+          mode={
+            workflow.defaultMode ??
+            workflow.taskType ??
+            workflow.modes?.[0] ??
+            null
+          }
         />
       )}
 
       {activeTab === "source" && (
-        <div className="rounded-2xl border border-border bg-panel-deep p-1">
+        <div className="border-border bg-panel-deep rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium text-ink-faint">
-              {sourceData?.isApiFallback ? "可执行图（无原始文件）" : "原始导入 JSON"}
+            <span className="text-ink-faint text-xs font-medium">
+              {sourceData?.isApiFallback
+                ? "可执行图（无原始文件）"
+                : "原始导入 JSON"}
             </span>
           </div>
-          <div className="max-h-[70vh] overflow-auto rounded-xl bg-canvas-deep">
+          <div className="bg-canvas-deep max-h-[70vh] overflow-auto rounded-xl">
             {sourceData?.source != null ? (
               <JsonViewer
                 data={sourceData.source}
@@ -124,7 +137,9 @@ export function DetailBody({
                 initialCollapsedDepth={2}
               />
             ) : (
-              <p className="px-4 py-10 text-center text-xs text-ink-fainter">暂无源文件数据</p>
+              <p className="text-ink-fainter px-4 py-10 text-center text-xs">
+                暂无源文件数据
+              </p>
             )}
           </div>
         </div>

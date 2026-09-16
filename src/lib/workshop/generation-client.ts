@@ -29,7 +29,9 @@ import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 export type GenerateInput = RouterInputs["generate"]["generate"];
 
 /** Create a local ComfyUI generation task; resolves to the task id. */
-export async function startLocalGenerate(input: GenerateInput): Promise<string> {
+export async function startLocalGenerate(
+  input: GenerateInput,
+): Promise<string> {
   const res = await vanillaApi.generate.generate.mutate(input);
   if (!res?.taskId) throw new Error("本地生成任务创建失败");
   return res.taskId;
@@ -59,7 +61,9 @@ export interface WorkshopWorkflowOption {
  *
  *  类别优先取服务端富化的 typeCategory（由 taskType 在类型体系里查到），
  *  查不到则退到「模式码是否视频」。 */
-function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption | null {
+function toWorkflowOption(
+  row: Record<string, unknown>,
+): WorkshopWorkflowOption | null {
   const id = row.id;
   const name = row.name;
   if (typeof id !== "string" || typeof name !== "string") return null;
@@ -77,12 +81,18 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
           ? "video"
           : "image";
   const modelTags = Array.isArray(row.modelTags)
-    ? row.modelTags.filter((tag): tag is string => typeof tag === "string" && tag !== "")
+    ? row.modelTags.filter(
+        (tag): tag is string => typeof tag === "string" && tag !== "",
+      )
     : [];
   const mode = row.defaultMode ?? taskType ?? modes[0] ?? null;
   const encapsulationReady = deriveEncapsulationStatus({
-    io: (row.workflowIO ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["io"],
-    paramMap: (row.paramMap ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["paramMap"],
+    io: (row.workflowIO ?? null) as Parameters<
+      typeof deriveEncapsulationStatus
+    >[0]["io"],
+    paramMap: (row.paramMap ?? null) as Parameters<
+      typeof deriveEncapsulationStatus
+    >[0]["paramMap"],
     mode: typeof mode === "string" ? mode : null,
   }).ready;
   return {
@@ -97,7 +107,9 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
 }
 
 /** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。 */
-export async function fetchWorkshopWorkflows(): Promise<WorkshopWorkflowOption[]> {
+export async function fetchWorkshopWorkflows(): Promise<
+  WorkshopWorkflowOption[]
+> {
   const res = await vanillaApi.workflow.list.query({});
   const rows: unknown = res;
   if (!Array.isArray(rows)) return [];
@@ -134,7 +146,7 @@ export interface LibraryWorkflowBuildResult {
  *  出现在 `unmatched` 里（由调用方决定是否提示用户）。 */
 export async function buildLibraryWorkflowInput(
   workflowId: string,
-  values: WorkshopExposedValues
+  values: WorkshopExposedValues,
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
   const io = detail?.workflowIO ?? null;
@@ -142,7 +154,11 @@ export async function buildLibraryWorkflowInput(
     ? detail.modes.filter((mode): mode is string => typeof mode === "string")
     : [];
   const mode = detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null;
-  const { workflowInputs, unmatched } = buildEncapsulatedInputs(io, mode, values);
+  const { workflowInputs, unmatched } = buildEncapsulatedInputs(
+    io,
+    mode,
+    values,
+  );
   /* 尺寸**不**再带 `size`（"WxH"）兼容字段：尺寸只以「比例 + 分辨率」或
    *  「比例 + 百万像素 + 倍数」表达，逐端口落进 `workflowInputs`；
    *  目标工作流要 width/height 时由封装层按场景尺寸表现算（见
@@ -150,8 +166,12 @@ export async function buildLibraryWorkflowInput(
   const input: GenerateInput = {
     workflow: workflowId,
     ...(values.prompt !== undefined ? { prompt: values.prompt } : {}),
-    ...(values.negativePrompt !== undefined ? { negative: values.negativePrompt } : {}),
-    ...(values.firstFrame !== undefined ? { firstFrame: values.firstFrame } : {}),
+    ...(values.negativePrompt !== undefined
+      ? { negative: values.negativePrompt }
+      : {}),
+    ...(values.firstFrame !== undefined
+      ? { firstFrame: values.firstFrame }
+      : {}),
     ...(values.lastFrame !== undefined ? { lastFrame: values.lastFrame } : {}),
     // 视频时长：帧数走内置字段，秒数由 workflowInputs 里的时长口落下去。
     ...(values.frames !== undefined ? { frames: values.frames } : {}),
@@ -241,7 +261,11 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
             const value: unknown = rawNode.value;
             const max: unknown = rawNode.max;
             const label: unknown = rawNode.label;
-            if (typeof id === "string" && typeof value === "number" && typeof max === "number") {
+            if (
+              typeof id === "string" &&
+              typeof value === "number" &&
+              typeof max === "number"
+            ) {
               node = {
                 id,
                 value,
@@ -399,7 +423,8 @@ export async function apiSubmitVideo(req: {
     typeof data.remoteTaskId === "string" && data.remoteTaskId
       ? data.remoteTaskId
       : undefined;
-  if (!url && !remoteTaskId) throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
+  if (!url && !remoteTaskId)
+    throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
   return { url, remoteTaskId };
 }
 

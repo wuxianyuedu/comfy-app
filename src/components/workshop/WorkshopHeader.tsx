@@ -1,6 +1,10 @@
 "use client";
 
-// 工坊顶栏：项目切换器、项目标识、总进度、API 通道入口。纯展示，数据由 controller 下发。
+// 工坊顶栏：项目切换器、项目标识、总进度、模型适配 / 模式契约两个入口。
+// 纯展示，数据由 controller 下发。
+//
+// 两个入口是并列的（ISSUE #597）：模型适配 = 每个远端模型 × 每个模式的字段映射；
+// 模式契约 = 每种模式对外有哪些统一输入 / 输出。后者在工作流库也有一份。
 
 import { useEffect, useRef, useState } from "react";
 
@@ -15,6 +19,7 @@ interface WorkshopHeaderProps {
   pendingCategories: number;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
+  onOpenModeContract: () => void;
   /* ── 多项目切换 ── */
   projects: WorkshopProjectSummary[];
   activeProjectId: string;
@@ -30,6 +35,7 @@ export function WorkshopHeader({
   pendingCategories,
   apiChannels,
   onOpenApiSettings,
+  onOpenModeContract,
   projects,
   activeProjectId,
   onSwitchProject,
@@ -109,7 +115,7 @@ export function WorkshopHeader({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-ink hover:bg-primary/10 flex max-w-[240px] items-center gap-2 rounded-lg border border-border bg-subtle px-3 py-1.5 transition-colors"
+            className="text-ink hover:bg-primary/10 border-border bg-subtle flex max-w-[240px] items-center gap-2 rounded-lg border px-3 py-1.5 transition-colors"
             title="切换 / 新建 / 重命名项目"
           >
             <span className="truncate text-[13px] font-medium">{title}</span>
@@ -122,7 +128,7 @@ export function WorkshopHeader({
           </button>
 
           {open && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-[280px] overflow-hidden rounded-xl border border-border bg-panel/98 shadow-2xl backdrop-blur-md">
+            <div className="border-border bg-panel/98 absolute top-full left-0 z-50 mt-1.5 w-[280px] overflow-hidden rounded-xl border shadow-2xl backdrop-blur-md">
               <div className="max-h-[280px] overflow-y-auto py-1">
                 {projects.map((p) => {
                   const active = p.id === activeProjectId;
@@ -130,7 +136,7 @@ export function WorkshopHeader({
                   return (
                     <div
                       key={p.id}
-                      className="group flex items-center gap-1 px-2 py-1.5 hover:bg-surface-2"
+                      className="group hover:bg-surface-2 flex items-center gap-1 px-2 py-1.5"
                     >
                       {pendingDelete === p.id ? (
                         <div className="flex w-full items-center gap-2">
@@ -150,7 +156,7 @@ export function WorkshopHeader({
                           <button
                             type="button"
                             onClick={() => setPendingDelete(null)}
-                            className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-ink-strong hover:bg-subtle"
+                            className="bg-surface-2 text-ink-strong hover:bg-subtle rounded px-1.5 py-0.5 text-[11px]"
                           >
                             取消
                           </button>
@@ -185,7 +191,9 @@ export function WorkshopHeader({
                             />
                             <span
                               className={`truncate text-[13px] ${
-                                active ? "text-ink font-medium" : "text-muted-foreground"
+                                active
+                                  ? "text-ink font-medium"
+                                  : "text-muted-foreground"
                               }`}
                             >
                               {shown}
@@ -197,7 +205,7 @@ export function WorkshopHeader({
                               setDraftTitle(shown);
                               setEditingId(p.id);
                             }}
-                            className="text-muted-foreground shrink-0 rounded px-1 text-[11px] opacity-0 transition-opacity hover:text-ink-bright group-hover:opacity-100"
+                            className="text-muted-foreground hover:text-ink-bright shrink-0 rounded px-1 text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
                             title="重命名项目"
                           >
                             ✎
@@ -219,7 +227,7 @@ export function WorkshopHeader({
                 })}
               </div>
 
-              <div className="border-t border-border p-1">
+              <div className="border-border border-t p-1">
                 {creating ? (
                   <input
                     autoFocus
@@ -243,7 +251,7 @@ export function WorkshopHeader({
                       setCreating(true);
                       setEditingId(null);
                     }}
-                    className="text-muted-foreground hover:text-ink w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-surface-2"
+                    className="text-muted-foreground hover:text-ink hover:bg-surface-2 w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
                   >
                     ＋ 新建项目
                   </button>
@@ -269,7 +277,7 @@ export function WorkshopHeader({
       </div>
 
       <div className="flex flex-1 items-center justify-end gap-3">
-        <span className="rounded-full bg-amber/15 px-3 py-1.5 text-xs font-medium text-amber">
+        <span className="bg-amber/15 text-amber rounded-full px-3 py-1.5 text-xs font-medium">
           距离成片还差 {pendingCategories} 个阶段
         </span>
         <Button
@@ -277,12 +285,23 @@ export function WorkshopHeader({
           variant="ghost"
           size="xs"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink gap-1 rounded-full bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
           title="为远端模型配置工坊各模式下的输入 / 输出"
         >
           <Icon name="settings" size={13} />
           模型适配
           {anyChannelConfigured ? " · 已配置" : ""}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={onOpenModeContract}
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 gap-1 rounded-full px-3 py-1.5 text-xs"
+          title="配置每种模式对外有哪些统一输入 / 输出（本地工作流按它配落点）"
+        >
+          <Icon name="settings" size={13} />
+          模式契约
         </Button>
         <Button
           type="button"

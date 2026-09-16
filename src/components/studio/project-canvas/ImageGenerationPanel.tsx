@@ -3,11 +3,19 @@
 import React, { useEffect, useRef } from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
 import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
-import { Field, ResultCard, btnCls } from "./CanvasNode";
+/* 直接引基础件与结果卡（不再经 CanvasNode 目录 barrel）：barrel 会 re-export
+ * `CanvasNode`，而 CanvasNode.tsx 又渲染本组件 —— 经 barrel 就成了
+ * `CanvasNode → ImageGenerationPanel → index → CanvasNode` 的循环（规范 12.7）。 */
+import { Field, btnCls } from "./CanvasNode/CanvasNodePrimitives";
+import { ResultCard } from "./CanvasNode/ResultCard";
 import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
 import type { WorkflowModesState } from "./WorkflowNode";
 import type { CanvasNodeData } from "@/lib/project-canvas/canvas-types";
-import { IMAGE_WORKFLOW_TYPES, VIDEO_WORKFLOW_TYPES, normalizeTaskType } from "@/lib/workflow-types";
+import {
+  IMAGE_WORKFLOW_TYPES,
+  VIDEO_WORKFLOW_TYPES,
+  normalizeTaskType,
+} from "@/lib/workflow-types";
 import { setActiveTaskId } from "./activeTask";
 import { useCancelTask } from "./hooks/use-cancel-task";
 
@@ -30,7 +38,13 @@ export interface ImageGenerationPanelProps {
   kind: "image" | "video" | "picture";
   d: CanvasNodeData;
   patch: (p: Partial<CanvasNodeData>) => void;
-  wfList: { id: string; name: string; taskType?: string | null; sourcePath?: string | null; modelTags?: string[] }[];
+  wfList: {
+    id: string;
+    name: string;
+    taskType?: string | null;
+    sourcePath?: string | null;
+    modelTags?: string[];
+  }[];
   modelTagLib: { id: string; name: string; count: number }[];
   wfIO: WorkflowIOMap | null;
   wfIOLoading: boolean;
@@ -87,7 +101,7 @@ export function ImageGenerationPanel({
    *  工作流 taskType 可能为空或误判，导致「文生图」筛选下混入 I2V
    *  等其他类型。这里按 wf.name 后缀关键字补一个最可能的类型，留空
    *  让上层 drop。
- * 扩 Chinese 关键字（"图生视频"/"文生视频"/
+   * 扩 Chinese 关键字（"图生视频"/"文生视频"/
    *  "视频"）—— 全中文命名（无 I2V/T2V 等英文 marker）也能识别。 */
   const inferTypeByName = (rawName: string): string => {
     const up = (rawName ?? "").toUpperCase();
@@ -95,29 +109,35 @@ export function ImageGenerationPanel({
     //    因为中文 "图生视频" 后面可能不带 "I2V" 字样）
     if (/图生视频|IMG2VIDEO/.test(rawName)) return "I2V";
     if (/文生视频|TXT2VIDEO/.test(rawName)) return "T2V";
-    if (/首尾帧视频|FLFVIDEO|FLF2V/.test(up)) return "FLF2V";
+    if (/首尾帧视频|FLFVIDEO|FLF2V|FL2V/.test(up)) return "FLF2V";
     if (/视频转视频|V2V/.test(up)) return "V2V";
-    if (rawName.includes('图生视频') || up.includes('I2V')) return "I2V";
-    if (/FL2V|FMF2V/.test(up)) return "FL2V";
-    if (up.includes('T2V')) return "T2V";
-    if (up.includes('S2V')) return "S2V";
-    if (up.includes('R2V')) return "R2V";
+    if (rawName.includes("图生视频") || up.includes("I2V")) return "I2V";
+    if (up.includes("FMF2V")) return "FMF2V";
+    if (up.includes("T2V")) return "T2V";
+    if (up.includes("S2V")) return "S2V";
+    if (up.includes("R2V")) return "R2V";
     if (/VR2V|VRC2V/.test(up)) return "VR2V";
-    if (/视频|VIDEO/.test(rawName) || up.includes('VIDEO')) return "T2V"; // 中文"视频"或VIDEO兜底
+    if (/视频|VIDEO/.test(rawName) || up.includes("VIDEO")) return "T2V"; // 中文"视频"或VIDEO兜底
     // ── IMAGE 类
-    if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up)) return "T2I";
-    if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up)) return "I2I";
-    if (up.includes('INPAINT')) return "Inpaint";
-    if (up.includes('OUTPAINT')) return "Outpaint";
-    if (up.includes('UPSCAL')) return "Upscale";
-    if (up.includes('C2I')) return "C2I";
-    if (up.includes('IMAGE')) return "T2I"; // 兜底归 T2I
+    if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up))
+      return "T2I";
+    if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up))
+      return "I2I";
+    if (up.includes("INPAINT")) return "Inpaint";
+    if (up.includes("OUTPAINT")) return "Outpaint";
+    if (up.includes("UPSCAL")) return "Upscale";
+    if (up.includes("C2I")) return "C2I";
+    if (up.includes("IMAGE")) return "T2I"; // 兜底归 T2I
     return "";
   };
   /* name 推断优先于 DB。
- *  此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
+   *  此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
    *  误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
-  const effectiveTaskType = (w: { taskType?: string | null; name?: string | null; id?: string | null }): string => {
+  const effectiveTaskType = (w: {
+    taskType?: string | null;
+    name?: string | null;
+    id?: string | null;
+  }): string => {
     const fromName = inferTypeByName(w.name ?? "");
     if (fromName) return fromName;
     const fromDb = normalizeTaskType(w.taskType ?? "");
@@ -126,18 +146,20 @@ export function ImageGenerationPanel({
   };
   // Q3=B：列出全部类型，但隐藏无对应工作流的页签
   const typeOptions = typeList.filter((typeOption) =>
-    wfList.some((wfList) => effectiveTaskType(wfList) === typeOption.code)
+    wfList.some((wfList) => effectiveTaskType(wfList) === typeOption.code),
   );
-  const typeKnown = typeOptions.some((typeOption) => typeOption.code === d.mode);
+  const typeKnown = typeOptions.some(
+    (typeOption) => typeOption.code === d.mode,
+  );
   const genTag = d.genModelTag ?? "";
   /* 模型 dropdown 列表只受「类型」影响，不受当前
    *  已选 genModelTag 影响 —— 否则选了 z-Anime 后下拉只剩一项。 */
   const typeFilteredWorkflows = wfList.filter(
-    (workflow) => effectiveTaskType(workflow) === d.mode
+    (workflow) => effectiveTaskType(workflow) === d.mode,
   );
   // Q2=A：工作流同时按 taskType + 模型标签 严格匹配
   const workflowOptions = typeFilteredWorkflows.filter((workflow) =>
-    genTag ? (workflow.modelTags ?? []).includes(genTag) : true
+    genTag ? (workflow.modelTags ?? []).includes(genTag) : true,
   );
   /* 模型 dropdown 按当前选中类型过滤 —
    *  源必须是 typeFilteredWorkflows（与 genTag 解耦）。 */
@@ -147,7 +169,9 @@ export function ImageGenerationPanel({
       availableModelTags.add(tag);
     }
   }
-  const modelTagOptions = modelTagLib.filter((modelTagLib) => availableModelTags.has(modelTagLib.name));
+  const modelTagOptions = modelTagLib.filter((modelTagLib) =>
+    availableModelTags.has(modelTagLib.name),
+  );
 
   const selectType = (code: string) => {
     // eslint-disable-next-line react-hooks/immutability -- seededFor 为 useRef，重选类型时清空种子标记
@@ -155,7 +179,9 @@ export function ImageGenerationPanel({
     setWfModes(null);
     /* 切类型时若当前模型标签在新类型下没有工作流
      *  也清掉，避免 DarkSelect 残留「幽灵选项」。如仍匹配则保留。 */
-    const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === code);
+    const newTypeWfs = wfList.filter(
+      (wfList) => effectiveTaskType(wfList) === code,
+    );
     const newAvailTags = new Set<string>();
     for (const w of newTypeWfs) {
       for (const tag of w.modelTags ?? []) newAvailTags.add(tag);
@@ -181,9 +207,11 @@ export function ImageGenerationPanel({
     // 多点一次。注意保持与显式换工作流等同的清空（workflowInputs/sinkId），
     // 并与下面 selectWorkflow 的字段集合完全一致；否则会出现「自动选的 wf
     // 比用户手动选的 wf 字段少一截」的诡异状态。
-    const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === d.mode);
+    const newTypeWfs = wfList.filter(
+      (wfList) => effectiveTaskType(wfList) === d.mode,
+    );
     const candidateWfs = newTypeWfs.filter((workflow) =>
-      name ? (workflow.modelTags ?? []).includes(name) : true
+      name ? (workflow.modelTags ?? []).includes(name) : true,
     );
     const onlyWf = candidateWfs.length === 1 ? candidateWfs[0] : null;
     if (onlyWf) {
@@ -243,7 +271,12 @@ export function ImageGenerationPanel({
             value={typeKnown ? d.mode : ""}
             onChange={selectType}
             options={typeOptions.map((typeOption) => typeOption.code)}
-            labels={Object.fromEntries(typeOptions.map((typeOption) => [typeOption.code, typeOption.label]))}
+            labels={Object.fromEntries(
+              typeOptions.map((typeOption) => [
+                typeOption.code,
+                typeOption.label,
+              ]),
+            )}
             placeholder="选择类型"
           />
         ) : (
@@ -261,10 +294,20 @@ export function ImageGenerationPanel({
               <DarkSelect
                 value={genTag}
                 onChange={selectModelTag}
-                options={["", ...modelTagOptions.map((modelTagOption) => modelTagOption.name)]}
+                options={[
+                  "",
+                  ...modelTagOptions.map(
+                    (modelTagOption) => modelTagOption.name,
+                  ),
+                ]}
                 labels={{
                   "": <span className="text-ink-muted">全部模型</span>,
-                  ...Object.fromEntries(modelTagOptions.map((modelTagOption) => [modelTagOption.name, modelTagOption.name])),
+                  ...Object.fromEntries(
+                    modelTagOptions.map((modelTagOption) => [
+                      modelTagOption.name,
+                      modelTagOption.name,
+                    ]),
+                  ),
                 }}
                 placeholder="选择模型"
               />
@@ -285,8 +328,15 @@ export function ImageGenerationPanel({
               <DarkSelect
                 value={d.workflowId ?? ""}
                 onChange={selectWorkflow}
-                options={workflowOptions.map((workflowOption) => workflowOption.id)}
-                labels={Object.fromEntries(workflowOptions.map((workflowOption) => [workflowOption.id, workflowOption.name]))}
+                options={workflowOptions.map(
+                  (workflowOption) => workflowOption.id,
+                )}
+                labels={Object.fromEntries(
+                  workflowOptions.map((workflowOption) => [
+                    workflowOption.id,
+                    workflowOption.name,
+                  ]),
+                )}
                 placeholder="选择工作流"
               />
             ) : (
@@ -348,7 +398,7 @@ export function ImageGenerationPanel({
                 onClick={onCancel}
                 disabled={cancelling}
                 title="强制终止当前任务并释放活动槽位"
-                className="rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 dark:text-red-300/90 disabled:opacity-50"
+                className="rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 disabled:opacity-50 dark:text-red-300/90"
               >
                 {cancelling ? "× 取消中…" : "× 强制取消"}
               </button>
@@ -360,7 +410,11 @@ export function ImageGenerationPanel({
            * 结构化校验错误与每条日志的调用来源。 */}
         </>
       ) : (
-        <button type="button" className={btnCls + " mx-auto block w-auto px-6 opacity-40"} disabled>
+        <button
+          type="button"
+          className={btnCls + " mx-auto block w-auto px-6 opacity-40"}
+          disabled
+        >
           请先选择工作流
         </button>
       )}

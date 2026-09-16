@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  *  「闩锁」类用例靠每例先 stopComfyUiProcess 落闩锁自证；
  *  状态结论另有 10s TTL 缓存（ISSUE #346），**必须每例清掉**——否则前一个用例
  *  留下的结论会被后一个用例当成「当下事实」读到（判据类用例就是这么被污染的）。 */
-vi.mock("../app-settings", () => ({
+vi.mock("../app-settings/app-settings.server", () => ({
   COMFYUI_DEFAULT_PORT: 8188,
   getExitPolicy: vi.fn().mockReturnValue({ exitKillComfyui: true }),
   getSettingsSync: vi.fn(),
@@ -58,7 +58,7 @@ vi.mock("../log-paths", () => ({
   COMFYUI_RUNTIME_LOG: "/tmp/comfyui-runtime.log",
   SERVICES_LOG_DIR: "/tmp",
 }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 /* win32 的 stopComfyUiProcess 经 taskkill 杀整棵进程树；不 mock 的话
@@ -89,7 +89,7 @@ import {
   findPidForMainPyDetailed,
   findPidListeningPort,
 } from "./proc-detect";
-import { getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
 
 const autoStartSettings = {
   comfyuiPath: "/x",
@@ -239,7 +239,8 @@ describe("getComfyUiStatus — 状态三态组合", () => {
   it("启动进行中时 starting=true、收尾后回 false（设置页据此禁用「启动 ComfyUI」）", async () => {
     const { ensureComfyUiReady, getComfyUiStatus } =
       await import("./lifecycle");
-    const { getExitPolicy } = await import("../app-settings");
+    const { getExitPolicy } =
+      await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("../process-launch");
     // 走保活（keepAlive）路径 + 进程探测永远找不到 main.py：启动会一直等到
     // timeoutMs 到点收尾，这段时间正好观察 starting 的 true → false 两端。
@@ -499,7 +500,8 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
 
     /* 造一个「启动进行中」的窗口：走保活路径 + 进程探测找不到 main.py，
      * 启动会一直等到 timeoutMs 到点，期间 starting 为真。 */
-    const { getExitPolicy } = await import("../app-settings");
+    const { getExitPolicy } =
+      await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("../process-launch");
     const { resolveComfyLaunchPlan } = await import("./launch-path");
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({

@@ -18,7 +18,8 @@ export function pathKey(path: string): string {
   // without Windows complaining about case.
   let normalized = path.replace(/\\/g, "/");
   // drop trailing slash for directory roots
-  if (normalized.length > 1 && normalized.endsWith("/")) normalized = normalized.replace(/\/+$/, "");
+  if (normalized.length > 1 && normalized.endsWith("/"))
+    normalized = normalized.replace(/\/+$/, "");
   return normalized.toLowerCase();
 }
 
@@ -40,7 +41,8 @@ export function deriveRowState(
   const savedHash = saved.contentHash || "";
   if (!savedHash || !sub.contentHash) {
     // No hash info on either side — treat as loaded only when status==='ok' on saved
-    if (saved.status === "ok") return { kind: "loaded", savedHash: "", nodeCount: saved.nodeCount };
+    if (saved.status === "ok")
+      return { kind: "loaded", savedHash: "", nodeCount: saved.nodeCount };
     return { kind: "unimported" };
   }
   if (savedHash === sub.contentHash) {
@@ -68,6 +70,7 @@ export function splitPaths(text: string): string[] {
 
 export function eqArr(first: string[], second: string[]) {
   if (first.length !== second.length) return false;
-  for (let i = 0; i < first.length; i++) if (first[i] !== second[i]) return false;
+  for (let i = 0; i < first.length; i++)
+    if (first[i] !== second[i]) return false;
   return true;
 }

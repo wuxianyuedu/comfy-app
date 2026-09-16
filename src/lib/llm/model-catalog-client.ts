@@ -21,7 +21,8 @@ async function getModels(
   provider: "local" | "remote",
   model?: string,
 ): Promise<RemoteModelCatalog> {
-  const modelQ = provider === "remote" && model ? `&model=${encodeURIComponent(model)}` : "";
+  const modelQ =
+    provider === "remote" && model ? `&model=${encodeURIComponent(model)}` : "";
   try {
     const res = await fetch(`/api/llm/models?provider=${provider}${modelQ}`, {
       signal: AbortSignal.timeout(8000),
@@ -34,9 +35,14 @@ async function getModels(
     return {
       ok: json.ok === true,
       models: Array.isArray(json.models)
-        ? json.models.filter((m): m is string => typeof m === "string" && m !== "")
+        ? json.models.filter(
+            (m): m is string => typeof m === "string" && m !== "",
+          )
         : [],
-      detail: typeof json.detail === "string" ? json.detail : `请求失败 (${res.status})`,
+      detail:
+        typeof json.detail === "string"
+          ? json.detail
+          : `请求失败 (${res.status})`,
     };
   } catch (e) {
     return {

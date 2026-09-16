@@ -43,18 +43,24 @@ import {
   ioLabel,
   typeDisplay,
 } from "@/components/studio/shared/workflow-io";
-import { type CanvasNodeData, NODE_META } from "@/lib/project-canvas/canvas-types";
+import {
+  type CanvasNodeData,
+  NODE_META,
+} from "@/lib/project-canvas/canvas-types";
+import {
+  type WorkflowSourceFilter,
+  type WorkflowModesState,
+} from "./workflow-node-types";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";
 import { WorkflowModePickChip } from "./WorkflowModePickChip";
 
-export type WorkflowSourceFilter = "all" | "local" | "online";
-
-export interface WorkflowModesState {
-  modes: string[];
-  defaultMode: string | null;
-}
+/* 共享类型下沉到叶子模块（断环，规范 12.7/18）；按原样 re-export 保住既有导入路径。 */
+export type {
+  WorkflowSourceFilter,
+  WorkflowModesState,
+} from "./workflow-node-types";
 
 export interface WorkflowNodeProps {
   id: string;
@@ -150,13 +156,13 @@ export function WorkflowNode({
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-label="类型 工作流"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-primary"
+            className="text-primary flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
             style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
           >
             W
           </span>
           <span
-            className="truncate text-[14px] font-bold text-ink-bright"
+            className="text-ink-bright truncate text-[14px] font-bold"
             style={{ fontFamily: "var(--font-sans)" }}
             title={meta.label}
           >
@@ -164,7 +170,7 @@ export function WorkflowNode({
           </span>
         </div>
         <div
-          className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-overlay-accent-surface px-2"
+          className="bg-overlay-accent-surface flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] px-2"
           title={`项目画布节点 Id：${id}`}
         >
           <span
@@ -179,7 +185,7 @@ export function WorkflowNode({
       </div>
 
       {/* 分隔线 340×1 #26262E */}
-      <div className="h-px bg-border-strong" />
+      <div className="bg-border-strong h-px" />
 
       {/* 拆双行 — 头部窄节点挤 4 chip，按用户给优先级排。
        *   Row 1 (高优先级，筛选类)  ① SourceFilterChip + ④ ModelFilterChip
@@ -280,7 +286,7 @@ export function WorkflowNode({
                  *  labelRow 中线（pt-1.5=6 + h-5/2=10=16px），与 typeChip 上下对齐。 */}
                 <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
                   <span
-                    className="min-w-0 truncate text-[14px] font-semibold text-ink-bright"
+                    className="text-ink-bright min-w-0 truncate text-[14px] font-semibold"
                     style={{ fontFamily: "var(--font-sans)" }}
                     title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
                   >
@@ -306,7 +312,7 @@ export function WorkflowNode({
         type="button"
         disabled={d.status === "running"}
         onClick={onGenerate}
-        className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r from-primary to-accent text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+        className="nodrag nopan from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}

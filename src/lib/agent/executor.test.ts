@@ -16,7 +16,6 @@ function makeMockContext() {
     scenes: [],
     characters: [],
     shots: [],
-    checkpoint: "",
   };
   const handlers = {
     getDraft: () => state,

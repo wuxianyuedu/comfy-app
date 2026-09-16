@@ -18,7 +18,6 @@ import {
   type PortraitLogEntry,
 } from "~/lib/workshop/character-portrait";
 import {
-  generateLocalPortrait,
   generateRemotePortrait,
   generateWorkflowPortrait,
   importPortraitFile,
@@ -46,7 +45,8 @@ export interface PortraitSession {
   channel: PortraitChannel;
   /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
   remoteModel: string;
-  /** 本地通道使用的工作流（工作流库中已配置对外参数的条目；空串 = 内置 txt2img） */
+  /** 本地通道使用的工作流（工作流库中已配置对外参数的条目）—— 本地通道的
+   *  唯一可执行来源（内置模板已移除），空串 = 未选。 */
   localWorkflowId: string;
   /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
   size: ShotSizeState;
@@ -63,7 +63,10 @@ export interface PortraitSessionActions {
   /** 更新用户选择（通道 / 尺寸） */
   patch: (
     p: Partial<
-      Pick<PortraitSession, "channel" | "size" | "remoteModel" | "localWorkflowId">
+      Pick<
+        PortraitSession,
+        "channel" | "size" | "remoteModel" | "localWorkflowId"
+      >
     >,
   ) => void;
   appendLog: (entry: PortraitLogEntry) => void;
@@ -104,39 +107,43 @@ function initialSession(): PortraitSession {
 
 export function useCharacterPortrait(opts: {
   setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
-  /** 本地通道当前选定的 checkpoint（右侧「生成资源」里切换） */
-  checkpoint: string;
   /** 工坊项目 id：导入的定妆照落到素材库的本项目目录 */
   projectId: string;
 }): [PortraitSession, PortraitSessionActions] {
-  const { setCharacters, checkpoint, projectId } = opts;
+  const { setCharacters, projectId } = opts;
   const [session, setSession] = React.useState<PortraitSession>(initialSession);
 
   const patch = React.useCallback(
-    (p: Partial<
-      Pick<PortraitSession, "channel" | "size" | "remoteModel" | "localWorkflowId">
-    >) =>
-      setSession((prev) => ({ ...prev, ...p })),
+    (
+      p: Partial<
+        Pick<
+          PortraitSession,
+          "channel" | "size" | "remoteModel" | "localWorkflowId"
+        >
+      >,
+    ) => setSession((prev) => ({ ...prev, ...p })),
     [],
   );
 
-  const appendLog = React.useCallback(
-    (entry: PortraitLogEntry) => {
-      setSession((prev) => ({ ...prev, log: appendPortraitLog(prev.log, entry) }));
-      // 生成日志异步落一份到 log/workshop/（fire-and-forget，失败不影响生成）
-      persistGenerationLogs("portrait", [
-        { ts: entry.ts, kind: entry.level, summary: entry.text },
-      ]);
-    },
-    [],
-  );
+  const appendLog = React.useCallback((entry: PortraitLogEntry) => {
+    setSession((prev) => ({
+      ...prev,
+      log: appendPortraitLog(prev.log, entry),
+    }));
+    // 生成日志异步落一份到 log/workshop/（fire-and-forget，失败不影响生成）
+    persistGenerationLogs("portrait", [
+      { ts: entry.ts, kind: entry.level, summary: entry.text },
+    ]);
+  }, []);
 
   /** 候选写入统一走角色列表的更新（函数式更新，不依赖 characters 快照）。 */
   const addCandidate = React.useCallback(
     (characterId: string, candidate: CharacterPortrait) => {
       setCharacters((prev) =>
         prev.map((item) =>
-          item.id === characterId ? withPortraitCandidate(item, candidate) : item,
+          item.id === characterId
+            ? withPortraitCandidate(item, candidate)
+            : item,
         ),
       );
     },
@@ -180,23 +187,26 @@ export function useCharacterPortrait(opts: {
         setSession((prev) => ({
           ...prev,
           status: "",
-          error: "该角色还没有生成提示词，请先补全角色信息（外貌 / 服装等会自动合成提示词）",
+          error:
+            "该角色还没有生成提示词，请先补全角色信息（外貌 / 服装等会自动合成提示词）",
         }));
         return;
       }
       const channel = session.channel;
-      const remoteModel = (overrides?.remoteModel ?? session.remoteModel).trim();
+      const remoteModel = (
+        overrides?.remoteModel ?? session.remoteModel
+      ).trim();
       const localWorkflowId = (
         overrides?.localWorkflowId ?? session.localWorkflowId
       ).trim();
-      /* 本地通道二选一：库工作流（自带封装，不依赖 Checkpoint）或内置 txt2img
-       *（需要 Checkpoint）。两者都没有才拦下，与区块的门禁提示同一口径。 */
-      if (channel === "local" && !localWorkflowId && !checkpoint) {
+      /* 本地通道没有内置模板可回落：必须先选好一个工作流库工作流（自带封装）。
+       * 与区块的门禁提示同一口径。 */
+      if (channel === "local" && !localWorkflowId) {
         setSession((prev) => ({
           ...prev,
           status: "",
           error:
-            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数），或到右侧「生成资源」选一个本地 Checkpoint",
+            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数）",
         }));
         return;
       }
@@ -207,9 +217,7 @@ export function useCharacterPortrait(opts: {
       const localLabel = (overrides?.localLabel ?? "").trim();
       const modelLabel =
         channel === "local"
-          ? localWorkflowId
-            ? `本地 · ${localLabel || "库工作流"}`
-            : `本地 · ${checkpoint}`
+          ? `本地 · ${localLabel || "库工作流"}`
           : remoteModel
             ? `远端 API · ${remoteModel}`
             : "远端 API";
@@ -236,31 +244,10 @@ export function useCharacterPortrait(opts: {
       };
       try {
         if (channel === "local") {
-          const { taskId, url } = localWorkflowId
-            ? await generateWorkflowPortrait(
-                req,
-                { workflowId: localWorkflowId },
-                {
-                  onProgress: (pct) =>
-                    setSession((prev) =>
-                      prev.focusCharacterId === character.id
-                        ? { ...prev, progress: pct }
-                        : prev,
-                    ),
-                  onLog: (entry) => {
-                    if (entry.level === "progress") return;
-                    appendLog(
-                      makePortraitLog(
-                        entry.level === "error" ? "error" : "info",
-                        entry.msg,
-                      ),
-                    );
-                  },
-                },
-              )
-            : await generateLocalPortrait(
-                req,
-                { checkpoint, params: character.params },
+          /* 本地通道只有库工作流这条路：内置 txt2img（+ Checkpoint）已移除。 */
+          const { taskId, url } = await generateWorkflowPortrait(
+            req,
+            { workflowId: localWorkflowId },
             {
               onProgress: (pct) =>
                 setSession((prev) =>
@@ -268,7 +255,6 @@ export function useCharacterPortrait(opts: {
                     ? { ...prev, progress: pct }
                     : prev,
                 ),
-              /* 逐步骤日志量很大，只保留有信息量的行（进度百分比用进度条表达）。 */
               onLog: (entry) => {
                 if (entry.level === "progress") return;
                 appendLog(
@@ -283,7 +269,7 @@ export function useCharacterPortrait(opts: {
           addCandidate(character.id, {
             url,
             source: "local",
-            model: checkpoint,
+            ...(localLabel ? { model: localLabel } : {}),
             taskId,
             createdAt: Date.now(),
           });
@@ -293,17 +279,17 @@ export function useCharacterPortrait(opts: {
             status: `已生成一张定妆照（${modelLabel}），可在下方候选里挑选`,
           }));
           appendLog(
-            makePortraitLog("success", `定妆照生成完成（任务 ${taskId.slice(0, 12)}…）`),
+            makePortraitLog(
+              "success",
+              `定妆照生成完成（任务 ${taskId.slice(0, 12)}…）`,
+            ),
           );
         } else {
-          const url = await generateRemotePortrait(
-            req,
-            {
-              projectId,
-              name: `${label}-定妆照-${Date.now()}`,
-              ...(remoteModel ? { model: remoteModel } : {}),
-            },
-          );
+          const url = await generateRemotePortrait(req, {
+            projectId,
+            name: `${label}-定妆照-${Date.now()}`,
+            ...(remoteModel ? { model: remoteModel } : {}),
+          });
           addCandidate(character.id, {
             url,
             source: "remote",
@@ -331,7 +317,6 @@ export function useCharacterPortrait(opts: {
       session.size,
       session.remoteModel,
       session.localWorkflowId,
-      checkpoint,
       projectId,
       addCandidate,
       appendLog,
@@ -341,7 +326,11 @@ export function useCharacterPortrait(opts: {
   const importFile = React.useCallback(
     async (character: Character, file: File) => {
       if (!file.type.startsWith("image/")) {
-        setSession((prev) => ({ ...prev, status: "", error: "只能导入图片文件" }));
+        setSession((prev) => ({
+          ...prev,
+          status: "",
+          error: "只能导入图片文件",
+        }));
         return;
       }
       setSession((prev) => ({
@@ -353,13 +342,20 @@ export function useCharacterPortrait(opts: {
       }));
       try {
         const url = await importPortraitFile(file, { projectId });
-        addCandidate(character.id, { url, source: "import", createdAt: Date.now() });
+        addCandidate(character.id, {
+          url,
+          source: "import",
+          createdAt: Date.now(),
+        });
         setSession((prev) => ({
           ...prev,
           status: `已导入 ${file.name}，可在下方候选里挑选`,
         }));
       } catch (e: unknown) {
-        setSession((prev) => ({ ...prev, error: errorMessage(e, "导入定妆照失败") }));
+        setSession((prev) => ({
+          ...prev,
+          error: errorMessage(e, "导入定妆照失败"),
+        }));
       } finally {
         setSession((prev) => ({ ...prev, importing: false }));
       }

@@ -34,7 +34,10 @@ export function filterModels(
   const term = q.trim().toLowerCase();
   return models.filter((model) => {
     if (filter !== ALL_TYPES && model.type !== filter) return false;
-    if (term && !`${model.name} ${model.fileName}`.toLowerCase().includes(term)) {
+    if (
+      term &&
+      !`${model.name} ${model.fileName}`.toLowerCase().includes(term)
+    ) {
       return false;
     }
     return true;
@@ -56,7 +59,8 @@ export function countByType(models: ModelRow[]): Array<[string, number]> {
 /** 模型体积：B / KB / MB / GB 自动换挡；空值显示「—」。 */
 export function fmtSize(n?: number | null): string {
   if (!n) return "—";
-  if (n > 1024 * 1024 * 1024) return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (n > 1024 * 1024 * 1024)
+    return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
   if (n > 1024 * 1024) return `${(n / 1024 / 1024).toFixed(0)} MB`;
   return `${(n / 1024).toFixed(0)} KB`;
 }
@@ -68,8 +72,8 @@ export function filterFolders(
 ): FolderConfigRow[] {
   const term = q.trim().toLowerCase();
   if (!term) return folders;
-  return folders.filter(
-    (row) => `${row.folder} ${row.label}`.toLowerCase().includes(term),
+  return folders.filter((row) =>
+    `${row.folder} ${row.label}`.toLowerCase().includes(term),
   );
 }
 

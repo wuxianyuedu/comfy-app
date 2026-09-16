@@ -8,7 +8,11 @@
 import { ExternalLink } from "lucide-react";
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
-import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
+import {
+  IoCheckbox,
+  NodeIdChip,
+  type IOEditContextValue,
+} from "./IOEditContext";
 
 export interface SubgraphHeaderProps {
   title: string;
@@ -62,7 +66,7 @@ export function SubgraphHeader({
         }}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors e/15"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
         style={{ pointerEvents: "auto" }}
       >
         <svg
@@ -86,7 +90,11 @@ export function SubgraphHeader({
       </button>
       <span
         className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
-        style={{ background: accent, color: "var(--color-canvas)", boxShadow: `0 0 6px ${accent}` }}
+        style={{
+          background: accent,
+          color: "var(--color-canvas)",
+          boxShadow: `0 0 6px ${accent}`,
+        }}
         title="子工作流"
       >
         S
@@ -95,7 +103,7 @@ export function SubgraphHeader({
        *  回车聚焦不再触发进入子工作流（见 WorkflowSubgraphNode 双击移除
        *  同一决策），避免用户误触。标题保持纯文本，禁止选中。 */}
       <span
-        className="text-ink-bright min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-wide"
+        className="text-ink-bright min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide select-none"
         title={title || "子工作流"}
       >
         {title || "子工作流"}
@@ -135,7 +143,7 @@ export function SubgraphHeader({
            *  in-bar button (vs the 28-32px standalone chip look).
            *  Sits a step above the chevron collapse button's h-5 w-5
            *  to mark drill-in as the *primary* subgraph action. */
-          className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-700 dark:text-violet-200 transition-colors hover:bg-violet-500/30 hover:text-white"
+          className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-700 transition-colors hover:bg-violet-500/30 hover:text-white dark:text-violet-200"
         >
           <ExternalLink size={12} strokeWidth={2.5} />
         </button>

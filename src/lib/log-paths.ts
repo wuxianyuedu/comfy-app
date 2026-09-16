@@ -1,3 +1,4 @@
+import "server-only";
 import path from "path";
 
 /* ── log/ 目录布局的唯一事实来源 ────────────────────────────────────────
@@ -79,6 +80,17 @@ export const COMFYUI_TRACE_LOG = path.join(
 
 /** 应用运行期业务操作日志（tRPC 调用/生成/任务/工作流增删改等），供「应用日志」面板轮询。 */
 export const APP_RUNTIME_LOG = path.join(SERVICES_LOG_DIR, "app-runtime.log");
+
+/**
+ * 日志面板「保存到本地」的落盘目录（`log/exports/`，按次命名）。
+ *
+ * 为什么服务端落盘、而不是只靠浏览器下载：桌面壳（WebView2）里 `<a download>`
+ * 是否弹出保存框取决于宿主设置，用户经常「点了下载但本地哪儿都没有」；而日志
+ * 面板排障时最需要的正是「**确实存在磁盘上、路径说得出来**」（ISSUE #609 用户
+ * 反馈第 3 条：「应用运行日志，没看到本地有保存」）。落进 log/ 目录也让导出与
+ * 其余日志在同一处可查。
+ */
+export const LOG_EXPORT_DIR = path.join(LOG_ROOT, "exports");
 
 /**
  * 「应用服务输出」转录文件（面板可见通道）的前缀与全局匹配式。

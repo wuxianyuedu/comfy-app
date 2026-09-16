@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./db", () => ({ workshopDb: {} }));
 
 import type { WorkshopDraft as WorkshopDraftRow } from "../db/schema";
-import { draftHasContent, parseDraftDto } from "../../lib/workshop/draft-sync-shared";
+import {
+  draftHasContent,
+  parseDraftDto,
+} from "../../lib/workshop/draft-sync-shared";
 import { draftToRow, rowToDto } from "./draft-repository";
 
 const row: WorkshopDraftRow = {
@@ -19,7 +22,6 @@ const row: WorkshopDraftRow = {
   scenes: [],
   characters: [],
   shots: [],
-  checkpoint: "model.safetensors",
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-02"),
 };
@@ -30,7 +32,6 @@ describe("draft-repository 映射", () => {
     expect(dto.meta.title).toBe("未命名项目");
     expect(dto.meta.tone).toBe("悬疑");
     expect(dto.scriptMarkdown).toContain("场景1");
-    expect(dto.checkpoint).toBe("model.safetensors");
   });
 
   it("draftToRow 反向映射", () => {
@@ -48,7 +49,9 @@ describe("draft-repository 映射", () => {
   });
 
   it("draftHasContent 判断空/非空", () => {
-    expect(draftHasContent(parseDraftDto({ scriptMarkdown: "有内容" }))).toBe(true);
+    expect(draftHasContent(parseDraftDto({ scriptMarkdown: "有内容" }))).toBe(
+      true,
+    );
     expect(draftHasContent(parseDraftDto({}))).toBe(false);
   });
 });

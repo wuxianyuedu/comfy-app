@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireServerUser } from "@/lib/auth-server";
 import fs from "node:fs";
 import path from "node:path";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 const LOG_DIR = path.join(process.cwd(), "log");
 
@@ -37,10 +38,7 @@ function scanLogFiles(dir: string, base: string): LogFileInfo[] {
 export async function GET() {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
 
   try {
@@ -54,7 +52,7 @@ export async function GET() {
         files: [],
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

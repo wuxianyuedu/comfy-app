@@ -89,7 +89,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.clearAllTimers?.();
   vanilla.skill.list.query.mockResolvedValue({ skills: [] });
-  vanilla.film.list.query.mockResolvedValue({ films: [], ffmpegAvailable: true });
+  vanilla.film.list.query.mockResolvedValue({
+    films: [],
+    ffmpegAvailable: true,
+  });
   vanilla.film.detail.query.mockResolvedValue({ film: runningFilm() });
   vanilla.film.create.mutate.mockResolvedValue({ id: "f-1" });
   vanilla.film.start.mutate.mockResolvedValue({ ok: true });
@@ -130,7 +133,11 @@ describe("useFilmStudio", () => {
     });
     expect(vanilla.film.create.mutate).toHaveBeenCalledWith(
       /* 尺寸下发的是尺寸表达（比例 + 分辨率），不再是 "WxH" 字符串。 */
-      expect.objectContaining({ title: "未命名成片", size: FILM_SIZE, fps: 16 }),
+      expect.objectContaining({
+        title: "未命名成片",
+        size: FILM_SIZE,
+        fps: 16,
+      }),
     );
     expect(vanilla.film.start.mutate).toHaveBeenCalledWith({ id: "f-1" });
     expect(vanilla.film.detail.query).toHaveBeenCalledWith({ id: "f-1" });
@@ -163,7 +170,9 @@ describe("useFilmStudio", () => {
     try {
       vanilla.film.detail.query
         .mockResolvedValueOnce({ film: runningFilm() })
-        .mockResolvedValue({ film: { ...runningFilm(), status: "DONE", finalVideo: "/v.mp4" } });
+        .mockResolvedValue({
+          film: { ...runningFilm(), status: "DONE", finalVideo: "/v.mp4" },
+        });
       const { result } = renderHook(() => useFilmStudio());
       await act(async () => {
         await result.current.create();

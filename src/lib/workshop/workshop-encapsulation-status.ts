@@ -14,8 +14,10 @@ import {
   manualTargetFor,
   resolveMapping,
 } from "~/lib/workflow-param-mapping";
-import { exposedParamsForMode } from "~/lib/workflow-exposed-params";
-import { modeContractInputLabel } from "~/lib/workshop/model-mode-contract";
+import {
+  exposedParamDisplayLabel,
+  exposedParamsForMode,
+} from "~/lib/workflow-exposed-params";
 import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
@@ -57,12 +59,15 @@ function controlFor(id: string): EncapsulationControl {
   return "text";
 }
 
-/** 展示名：size 按工坊控件的真实形态说话（与模式契约编辑器同一份措辞，
- *  单一出处 = `MODE_CONTRACT_INPUT_TYPES`；两处各写一份字符串必然漂移），
- *  其余用契约自带 label。 */
-function displayLabel(id: string, label: string): string {
-  if (id === "size") return modeContractInputLabel("size");
-  return label;
+/** 展示名：一律以契约 id 取**统一的那一份**展示名（`exposedParamDisplayLabel`），
+ *  不认契约自带 label。
+ *
+ *  自带 label 有两个坑：① 它可能来自**用户自定义契约**（措辞由用户当次输入，
+ *  与内置口径能差到认不出是同一个口）；② 契约表里「尺寸」只写「尺寸」，而工坊
+ *  控件是「比例 + 分辨率 / (百万像素 + 倍数)」的组合控件，只写两个字用户答不出
+ *  该填什么（ISSUE #596：同一页面两处对不上）。 */
+function displayLabel(id: string): string {
+  return exposedParamDisplayLabel(id);
 }
 
 /** 派生一条工作流在工坊视角下的封装状态。
@@ -102,17 +107,16 @@ export function deriveEncapsulationStatus(args: {
     const target = resolved[slot.id] ?? (manual !== undefined ? manual : null);
     return {
       id: slot.id,
-      label: displayLabel(slot.id, slot.label),
+      label: displayLabel(slot.id),
       control: slot.control,
       targetIoKey: target,
       manual: manual !== undefined && manual !== null,
     };
   });
-  const ordered = Array.from(
-    new Map(mapped.map((e) => [e.id, e])).values(),
-  );
+  const ordered = Array.from(new Map(mapped.map((e) => [e.id, e])).values());
   const resolvedCount = ordered.filter((e) => e.targetIoKey !== null).length;
-  const prompt = mapped.find((e) => e.id === "prompt");  return {
+  const prompt = mapped.find((e) => e.id === "prompt");
+  return {
     entries: ordered,
     ready: (prompt?.targetIoKey ?? null) !== null,
     resolvedCount,

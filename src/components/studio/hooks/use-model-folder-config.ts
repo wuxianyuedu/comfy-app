@@ -105,7 +105,8 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     [runMutate, saveMut],
   );
   const add = useCallback(
-    (folder: string) => runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
+    (folder: string) =>
+      runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
     [runMutate, saveMut],
   );
   const remove = useCallback(

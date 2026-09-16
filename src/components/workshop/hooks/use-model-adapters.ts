@@ -14,7 +14,7 @@ import {
   parseRemoteModeAdapters,
   type RemoteModeAdapter,
 } from "@/lib/workshop/model-mode-contract";
-import { useModeContracts } from "./use-mode-contracts";
+import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { api } from "~/trpc/react";
 
 export interface AdapterCandidate {
@@ -47,9 +47,10 @@ export function useModelAdapters(): ModelAdaptersController {
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState<RemoteModeAdapter[]>([]);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<
-    { kind: "ok" | "err"; text: string } | null
-  >(null);
+  const [message, setMessage] = useState<{
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
 
   const candidates: AdapterCandidate[] = React.useMemo(() => {
     const raw: unknown = configQ.data?.config;
@@ -62,7 +63,11 @@ export function useModelAdapters(): ModelAdaptersController {
       const rec = item as Record<string, unknown>;
       const name = typeof rec.name === "string" ? rec.name : "";
       const kind =
-        rec.kind === "video" ? "video" : rec.kind === "image" ? "image" : "chat";
+        rec.kind === "video"
+          ? "video"
+          : rec.kind === "image"
+            ? "image"
+            : "chat";
       const baseUrl = typeof rec.baseUrl === "string" ? rec.baseUrl : null;
       if (!name || kind === "chat") continue; // 文本模型不参与工坊生图/视频
       out.push({ name, kind, baseUrl });
@@ -80,11 +85,7 @@ export function useModelAdapters(): ModelAdaptersController {
   const [prevKey, setPrevKey] = useState<string | null>(null);
   if (selectedModel && prevKey !== selectedModel) {
     setPrevKey(selectedModel);
-    setDraft(
-      parseRemoteModeAdapters(
-        fetched ?? [],
-      ),
-    );
+    setDraft(parseRemoteModeAdapters(fetched ?? []));
   } else if (
     selectedModel &&
     prevKey === selectedModel &&
@@ -138,7 +139,10 @@ export function useModelAdapters(): ModelAdaptersController {
         adapters: draft,
       });
       setDraft(parseRemoteModeAdapters(data.adapters));
-      setMessage({ kind: "ok", text: `已保存 ${selectedModel} 的模式适配器。` });
+      setMessage({
+        kind: "ok",
+        text: `已保存 ${selectedModel} 的模式适配器。`,
+      });
     } catch (e) {
       setMessage({
         kind: "err",

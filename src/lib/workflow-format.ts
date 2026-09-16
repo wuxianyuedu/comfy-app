@@ -20,7 +20,8 @@
  * @returns "api" | "raw" | null
  */
 export function detectWorkflowFormat(parsed: unknown): "api" | "raw" | null {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    return null;
   const obj = parsed as Record<string, unknown>;
   // RAW signature: LiteGraph exports always carry a `nodes` array +
   // `links` array (links may be empty for solo nodes).
@@ -32,17 +33,18 @@ export function detectWorkflowFormat(parsed: unknown): "api" | "raw" | null {
   if (keys.length === 0) return null;
   let apiHits = 0;
   for (const k of keys) {
-
     if (!/^\d+$/.test(k)) continue;
 
     const value = obj[k];
 
-    if (value && typeof value === "object" && !Array.isArray(value) && typeof (value as { class_type?: unknown }).class_type === "string") {
-
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      typeof (value as { class_type?: unknown }).class_type === "string"
+    ) {
       apiHits += 1;
-
     }
-
   }
 
   if (apiHits > 0) return "api";

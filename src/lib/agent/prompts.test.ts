@@ -49,7 +49,6 @@ describe("formatDraftContext", () => {
       scenes: [],
       characters: [],
       shots: [],
-      checkpoint: "",
     });
     expect(ctx).toContain("海边故事");
     expect(ctx).toContain("温暖治愈");

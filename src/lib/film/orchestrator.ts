@@ -4,9 +4,10 @@
 //   (reusing the ComfyUI video workflow) → ffmpeg concat (+ subtitles / BGM)
 //   → a single finished film.
 //
-// Reuses buildAndValidate + enqueue so each shot goes through the exact same
-// pipeline as the manual "video" tab.
+// Each shot goes through the same library-workflow chain as the manual "video"
+// tab (workflow library id + encapsulation), so no built-in template is needed.
 
+import "server-only";
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
@@ -16,26 +17,22 @@ import {
   skillRepository,
   taskRepository,
 } from "@/lib/core/repository";
-import { buildAndValidate } from "@/lib/comfyui/workflow";
-import { getWorkflow } from "@/lib/comfyui/_meta";
-import { enqueue, cancelTask } from "@/lib/comfyui/enqueue";
+import { cancelTask } from "@/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
-import { getSettingsSync } from "@/lib/app-settings";
+import { createWorkflowRunTask } from "@/lib/workshop/workflow-run.server";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
-import { sizeSpecDims, sizeSpecToWxH, toSizeSpec } from "@/lib/size-presets";
-import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE } from "@/lib/film/film-size";
+import { sizeSpecDims, toSizeSpec } from "@/lib/size-presets";
+import {
+  FILM_COMPOSE_SIZE,
+  NATIVE_SHOT_VIDEO_SIZE,
+} from "@/lib/film/film-size";
 import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "@/lib/llm/server";
 import type { ProjectType } from "@/lib/workshop/types";
 import { errorMessage } from "~/lib/error-message";
 
 export type FilmStatus =
-  | "PARSING"
-  | "GENERATING"
-  | "COMPOSING"
-  | "DONE"
-  | "FAILED"
-  | "CANCELLED";
+  "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
 
 export type ShotStatus = "IDLE" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
@@ -59,9 +56,11 @@ export interface CreateFilmInput {
   framesPerShot?: number;
   subtitleOn?: boolean;
   bgmName?: string | null;
+  /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
+  videoWorkflowId?: string | null;
+  /** 文生视频镜头合成首帧用的**图类工作流 id**；镜头自带首帧时不需要。 */
+  imageWorkflowId?: string | null;
 }
-
-
 
 const FILM_NEGATIVE =
   "low quality, blurry, deformed, watermark, text, distorted, extra limbs, bad anatomy";
@@ -84,7 +83,7 @@ const toStr = (v: unknown): string => String(v);
 async function appendFilmLog(
   id: string,
   level: "info" | "progress" | "warn" | "error" | "success",
-  msg: string
+  msg: string,
 ) {
   await filmRepository.appendLog(id, { t: Date.now(), level, msg });
 }
@@ -98,7 +97,12 @@ const ShotSchema = z.object({
 });
 
 async function expandScriptLLM(raw: string): Promise<
-  Array<{ heading: string; action: string; dialogue: string; shotCount: number }>
+  Array<{
+    heading: string;
+    action: string;
+    dialogue: string;
+    shotCount: number;
+  }>
 > {
   // 结构化 JSON 解析：低温度（code 任务）+ Zod 校验，避免手写正则/JSON.parse 不稳。
   const cfg = await getLLMConfig({ taskType: "code" });
@@ -106,7 +110,7 @@ async function expandScriptLLM(raw: string): Promise<
   const sys =
     "你是一个影视分镜助手。用户会给出一段创意 / 剧本 / 一句话。请把它拆分成分镜场景，" +
     "每个场景给出标题、画面动作描述、台词旁白、建议镜头数(shotCount 1-4)。只输出 JSON 数组，" +
-    "不要解释，格式：[{\"heading\":\"场景1\",\"action\":\"画面描述\",\"dialogue\":\"台词\",\"shotCount\":2}]";
+    '不要解释，格式：[{"heading":"场景1","action":"画面描述","dialogue":"台词","shotCount":2}]';
 
   const shots = await completeLLMStructured(
     cfg,
@@ -125,21 +129,29 @@ async function expandScriptLLM(raw: string): Promise<
   }));
 }
 
-
 /** Turn a raw script into an ordered list of shot prompts. */
 async function parseScriptToShots(
   raw: string,
   type: string,
   stylePrompt?: string,
-  styleNegative?: string
+  styleNegative?: string,
 ): Promise<FilmShotInput[]> {
   let scenes: Array<{ heading: string; action: string; shotCount: number }>;
   try {
     const expanded = await expandScriptLLM(raw);
-    scenes = expanded.map((expanded) =>({ heading: expanded.heading, action: expanded.action, shotCount: expanded.shotCount }));
+    scenes = expanded.map((expanded) => ({
+      heading: expanded.heading,
+      action: expanded.action,
+      shotCount: expanded.shotCount,
+    }));
   } catch {
     // offline fallback — reuse the workshop parser
-    const sc = parseIdeaToScenes(raw, { title: "", type: (type as ProjectType) ?? "short_video", tone: "", logline: "" });
+    const sc = parseIdeaToScenes(raw, {
+      title: "",
+      type: (type as ProjectType) ?? "short_video",
+      tone: "",
+      logline: "",
+    });
     scenes = sc.map((scene) => ({
       heading: scene.heading,
       action: `${scene.action}${scene.dialogue ? " " + scene.dialogue : ""}`,
@@ -156,7 +168,9 @@ async function parseScriptToShots(
       const parts = [base, cam];
       if (stylePrompt) parts.push(stylePrompt);
       const prompt = parts.filter(Boolean).join(", ");
-      const negative = [FILM_NEGATIVE, styleNegative].filter(Boolean).join(", ");
+      const negative = [FILM_NEGATIVE, styleNegative]
+        .filter(Boolean)
+        .join(", ");
       shots.push({
         order: order++,
         heading: sc.heading,
@@ -165,15 +179,17 @@ async function parseScriptToShots(
       });
     }
   }
-  return shots.length ? shots : [{ order: 0, heading: "镜头 1", prompt: raw.trim() }];
+  return shots.length
+    ? shots
+    : [{ order: 0, heading: "镜头 1", prompt: raw.trim() }];
 }
 
 // ── create ─────────────────────────────────────────────────
 export async function createFilm(input: CreateFilmInput) {
-  /* 成片画幅按尺寸表达存（数据库那一列是文本，存 JSON）；镜头侧仍拿 "WxH" ——
-   * 内置视频工作流只认字符串（token __W__/__H__）。 */
+  /* 成片画幅按尺寸表达存（数据库那一列是文本，存 JSON）；镜头侧存同一份尺寸表达
+   * （工作流库工作流由封装层逐端口派值，不再折算成 "WxH"）。 */
   const sizeSpec = toSizeSpec(input.size ?? FILM_COMPOSE_SIZE);
-  const shotSize = sizeSpecToWxH(sizeSpec, "video");
+  const shotSize = sizeSpec;
   const fps = input.fps ?? 16;
   const framesPerShot = input.framesPerShot ?? 49;
 
@@ -191,10 +207,11 @@ export async function createFilm(input: CreateFilmInput) {
     input.script,
     input.type ?? "short_video",
     stylePrompt,
-    styleNegative
+    styleNegative,
   );
 
-  const wf = await pickVideoWorkflow();
+  const videoWorkflowId = input.videoWorkflowId ?? "";
+  const imageWorkflowId = input.imageWorkflowId ?? "";
 
   const film = await filmRepository.create({
     userId: input.userId,
@@ -211,13 +228,13 @@ export async function createFilm(input: CreateFilmInput) {
 
   await filmShotRepository.createMany(
     film.id,
-    shots.map((shot) =>
-{
+    shots.map((shot) => {
       const params: Record<string, unknown> = {
         frames: framesPerShot,
         fps,
         size: shotSize,
-        workflow: wf,
+        videoWorkflowId,
+        imageWorkflowId,
       };
       return {
         order: shot.order,
@@ -226,117 +243,70 @@ export async function createFilm(input: CreateFilmInput) {
         negative: shot.negative ?? null,
         params,
       };
-    })
+    }),
   );
 
-  await appendFilmLog(film.id, "success", `已生成分镜，共 ${shots.length} 个镜头`);
+  await appendFilmLog(
+    film.id,
+    "success",
+    `已生成分镜，共 ${shots.length} 个镜头`,
+  );
   return { id: film.id, shots: shots.length };
 }
 
-// ── pick the video workflow ───────────────────────────────
-// Local-only: the machine ships with a WAN image-to-video checkpoint but no
-// text-to-video checkpoint, so text-to-video auto-synthesizes a first frame
-// and feeds it to the same I2V graph. An explicit choice in app settings wins.
-async function pickVideoWorkflow(): Promise<"txt2video" | "img2video"> {
-  const pref = getSettingsSync().defaultVideoWorkflow;
-  if (pref === "txt2video" || pref === "img2video") return pref;
-  // default "auto" → text-to-video (first frame is synthesized locally)
-  return "txt2video";
-}
-
-// ── generate one video shot via the existing pipeline ──────
-// Both text-to-video and image-to-video run through the local WAN I2V graph.
-// Text-to-video shots without a supplied first frame get one synthesized from
-// the prompt via a local txt2img pass (no cloud, no authorization).
+// ── 生成一个视频镜头 ──────────────────────────────────────
+// 视频这一跳没有内置模板（内置 img2video / txt2video 与 `__PROMPT__` 系列
+// token 替换已移除）：镜头 params 里必须带**工作流库视频工作流 id**。
+// 没有首帧时，用同一份 params 里的**图类工作流 id** 本地合成一张再喂给视频图。
 async function generateVideoShot(
   userId: string,
-  shot: { prompt: string; negative?: string | null; params?: unknown }
+  shot: { prompt: string; negative?: string | null; params?: unknown },
 ): Promise<string> {
-
   const params = (shot.params ?? {}) as Record<string, unknown>;
 
-  const wf: "txt2video" | "img2video" =
+  const videoWorkflowId =
+    typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
+  if (!videoWorkflowId) {
+    throw new Error("镜头缺少「工作流库视频工作流 id」，无法本地生成");
+  }
 
-    params.workflow === "img2video" ? "img2video" : "txt2video";
-
-  const meta = getWorkflow("img2video")!;
-
-  const size = (params.size ?? NATIVE_SHOT_VIDEO_SIZE) as string;
+  const size = toSizeSpec(params.size ?? NATIVE_SHOT_VIDEO_SIZE);
 
   // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
-  // 下方合成首帧分支，与原 any 行为逐值一致。
+  // 下方合成首帧分支。
   let inputImage = (params.inputImage ?? params.firstFrame ?? null) as string;
 
   if (!inputImage) {
-
+    const imageWorkflowId =
+      typeof params.imageWorkflowId === "string" ? params.imageWorkflowId : "";
+    if (!imageWorkflowId) {
+      throw new Error(
+        "镜头缺少首帧，且没有配置「工作流库图类工作流 id」可用于合成首帧",
+      );
+    }
     inputImage = await synthesizeFirstFrame({
-
       userId,
-
+      workflowId: imageWorkflowId,
       prompt: shot.prompt,
-
       negative: shot.negative ?? undefined,
-
       size,
-
     });
-
   }
 
-
-
-  const built = await buildAndValidate("img2video", {
-
-    prompt: shot.prompt,
-
-    negative: shot.negative ?? undefined,
-
-    inputImage,
-
-    frames: (params.frames ?? 81) as number,
-
-    fps: (params.fps ?? 16) as number,
-
-    size,
-
-    steps: 25,
-
-    cfg: 6,
-
-    sampler: "euler",
-
-    scheduler: "unipc",
-
-    count: 1,
-
-  });
-
-  if (!built.ok || !built.prompt) throw new Error(built.error ?? "工作流构建失败");
-
-
-
-  const task = await taskRepository.createQueued({
-
+  const { taskId } = await createWorkflowRunTask({
     userId,
-
-    type: meta.taskType,
-
-    prompt: shot.prompt,
-
-    negativePrompt: shot.negative ?? null,
-
-    params: { workflow: wf, ...params },
-
-    workflowName: wf,
-
+    workflowId: videoWorkflowId,
+    values: {
+      prompt: shot.prompt,
+      ...(shot.negative ? { negativePrompt: shot.negative } : {}),
+      firstFrame: inputImage,
+      frames: (params.frames ?? 81) as number,
+      size,
+    },
   });
 
-  enqueue({ taskId: task.id, prompt: built.prompt });
-
-  return task.id;
-
+  return taskId;
 }
-
 
 // ── start (autopilot) ───────────────────────────────────────
 export async function startFilm(id: string) {
@@ -363,7 +333,7 @@ export async function startFilm(id: string) {
       await appendFilmLog(
         id,
         "error",
-        `镜头 ${shot.order + 1} 提交失败：${errorMessage(e, "提交失败")}`
+        `镜头 ${shot.order + 1} 提交失败：${errorMessage(e, "提交失败")}`,
       );
     }
   }
@@ -377,7 +347,8 @@ async function watchFilm(id: string) {
   const MAX_ITER = 240; // ~16 min at 4s
   for (let i = 0; i < MAX_ITER; i++) {
     const film = await filmRepository.findById(id);
-    if (!film || film.status === "CANCELLED" || film.status === "FAILED") return;
+    if (!film || film.status === "CANCELLED" || film.status === "FAILED")
+      return;
     if (film.status !== "GENERATING") {
       // already moved on (e.g. compose started)
     }
@@ -413,8 +384,11 @@ async function watchFilm(id: string) {
       let videoPath: string | undefined;
       let duration: number | undefined;
       if (next === "SUCCEEDED") {
-
-        const imgs = (task.resultImages as Array<{ mediaType?: unknown; localPath?: string }> | null) ?? [];
+        const imgs =
+          (task.resultImages as Array<{
+            mediaType?: unknown;
+            localPath?: string;
+          }> | null) ?? [];
 
         const vid = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
 
@@ -422,8 +396,11 @@ async function watchFilm(id: string) {
 
         const params = (shot.params ?? {}) as Record<string, unknown>;
 
-        duration = typeof params.duration === "number" ? params.duration : ((params.frames ?? 49) as number) / ((params.fps ?? 16) as number);
-
+        duration =
+          typeof params.duration === "number"
+            ? params.duration
+            : ((params.frames ?? 49) as number) /
+              ((params.fps ?? 16) as number);
       }
 
       await filmShotRepository.updateFromTask(shot.id, {
@@ -470,7 +447,11 @@ export async function isFFmpegAvailable(): Promise<boolean> {
   return _ffmpegOk;
 }
 
-function runFFmpeg(args: string[], cwd?: string, timeout = 120000): Promise<{ code: number; stderr: string }> {
+function runFFmpeg(
+  args: string[],
+  cwd?: string,
+  timeout = 120000,
+): Promise<{ code: number; stderr: string }> {
   return new Promise((resolve) => {
     const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
     const cp = spawn(/*turbopackIgnore: true*/ bin, args, { cwd });
@@ -506,16 +487,22 @@ export async function composeFilm(id: string) {
 
   const ok = await isFFmpegAvailable();
   if (!ok) {
-    await filmRepository.markFailed(id, "未检测到 ffmpeg，无法合成。请安装 ffmpeg 后点「重新合成」");
+    await filmRepository.markFailed(
+      id,
+      "未检测到 ffmpeg，无法合成。请安装 ffmpeg 后点「重新合成」",
+    );
     await appendFilmLog(
       id,
       "error",
-      "未检测到 ffmpeg。请安装 ffmpeg 并设置环境变量 FFMPEG_BIN（或确保 ffmpeg 在 PATH 中），然后点击「重新合成」。"
+      "未检测到 ffmpeg。请安装 ffmpeg 并设置环境变量 FFMPEG_BIN（或确保 ffmpeg 在 PATH 中），然后点击「重新合成」。",
     );
     return;
   }
 
-  const shots = await filmShotRepository.listByFilm(id, { status: "SUCCEEDED", onlyWithVideo: true });
+  const shots = await filmShotRepository.listByFilm(id, {
+    status: "SUCCEEDED",
+    onlyWithVideo: true,
+  });
   if (!shots.length) {
     await filmRepository.markFailed(id, "没有可用的镜头视频");
     return;
@@ -528,14 +515,20 @@ export async function composeFilm(id: string) {
   const fps = film.fps;
   const tmpDir = path.join(cwd, "public", "generated", "films", `_tmp_${id}`);
   await fs.mkdir(tmpDir, { recursive: true });
-  await fs.mkdir(path.join(cwd, "public", "generated", "films"), { recursive: true });
+  await fs.mkdir(path.join(cwd, "public", "generated", "films"), {
+    recursive: true,
+  });
 
   try {
     for (let i = 0; i < shots.length; i++) {
       const shot = shots[i];
-      const clip = path.join(cwd, "public", (shot!.videoPath!).replace(/^\//, ""));
+      const clip = path.join(
+        cwd,
+        "public",
+        shot!.videoPath!.replace(/^\//, ""),
+      );
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
-      const dur = shot!.duration ?? (film.framesPerShot / fps);
+      const dur = shot!.duration ?? film.framesPerShot / fps;
       const fadeOut = Math.max(0, dur - 0.3);
 
       const vf =
@@ -548,37 +541,69 @@ export async function composeFilm(id: string) {
       if (film.subtitleOn) {
         await fs.writeFile(
           srtPath,
-// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           `1\n00:00:00,000 --> 00:00:${String(Math.floor(dur)).padStart(2, "0")},000\n${(shot!.heading || shot!.prompt).slice(0, 80)}\n`,
-          "utf-8"
+          "utf-8",
         );
       }
 
       const tryWithSub = film.subtitleOn;
       let args: string[] = [
         "-y",
-        "-i", clip,
-        "-vf", vf + (tryWithSub ? `,subtitles='${escapeFilter(srtPath.replace(/\\/g, "/"))}'` : ""),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-        "-c:a", "aac", "-b:a", "128k",
-        "-t", dur.toFixed(2),
+        "-i",
+        clip,
+        "-vf",
+        vf +
+          (tryWithSub
+            ? `,subtitles='${escapeFilter(srtPath.replace(/\\/g, "/"))}'`
+            : ""),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-t",
+        dur.toFixed(2),
         segOut,
       ];
       let res = await runFFmpeg(args, tmpDir);
       if (res.code !== 0 && tryWithSub) {
-        await appendFilmLog(id, "warn", `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`);
+        await appendFilmLog(
+          id,
+          "warn",
+          `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`,
+        );
         args = [
-          "-y", "-i", clip,
-          "-vf", vf,
-          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-          "-c:a", "aac", "-b:a", "128k",
-          "-t", dur.toFixed(2),
+          "-y",
+          "-i",
+          clip,
+          "-vf",
+          vf,
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-movflags",
+          "+faststart",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "128k",
+          "-t",
+          dur.toFixed(2),
           segOut,
         ];
         res = await runFFmpeg(args, tmpDir);
       }
       if (res.code !== 0) {
-        throw new Error(`镜头 ${i + 1} 归一化失败：${res.stderr.slice(0, 200)}`);
+        throw new Error(
+          `镜头 ${i + 1} 归一化失败：${res.stderr.slice(0, 200)}`,
+        );
       }
       await appendFilmLog(id, "info", `镜头 ${i + 1}/${shots.length} 已就绪`);
     }
@@ -589,26 +614,67 @@ export async function composeFilm(id: string) {
     await fs.writeFile(listPath, list, "utf-8");
     const concatPath = path.join(tmpDir, "concat.mp4");
     const cres = await runFFmpeg(
-      ["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", concatPath],
-      tmpDir
+      [
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        listPath,
+        "-c",
+        "copy",
+        concatPath,
+      ],
+      tmpDir,
     );
-    if (cres.code !== 0) throw new Error(`拼接失败：${cres.stderr.slice(0, 200)}`);
+    if (cres.code !== 0)
+      throw new Error(`拼接失败：${cres.stderr.slice(0, 200)}`);
 
-    const finalPath = path.join(cwd, "public", "generated", "films", `${id}.mp4`);
+    const finalPath = path.join(
+      cwd,
+      "public",
+      "generated",
+      "films",
+      `${id}.mp4`,
+    );
     const localPath = `/api/generated/films/${id}.mp4`;
 
     if (film.bgmName) {
-      const bgm = path.join(cwd, "public", "generated", "films", "bgm", film.bgmName);
-      const bgmExists = await fs.stat(bgm).then(() => true).catch(() => false);
+      const bgm = path.join(
+        cwd,
+        "public",
+        "generated",
+        "films",
+        "bgm",
+        film.bgmName,
+      );
+      const bgmExists = await fs
+        .stat(bgm)
+        .then(() => true)
+        .catch(() => false);
       if (bgmExists) {
         const mres = await runFFmpeg(
           [
-            "-y", "-i", concatPath, "-i", bgm,
-            "-filter_complex", "[0:a][1:a]amix=inputs=2:duration=shortest:dropout_transition=0[a]",
-            "-map", "0:v", "-map", "[a]",
-            "-c:v", "copy", "-c:a", "aac", "-shortest", finalPath,
+            "-y",
+            "-i",
+            concatPath,
+            "-i",
+            bgm,
+            "-filter_complex",
+            "[0:a][1:a]amix=inputs=2:duration=shortest:dropout_transition=0[a]",
+            "-map",
+            "0:v",
+            "-map",
+            "[a]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-shortest",
+            finalPath,
           ],
-          tmpDir
+          tmpDir,
         );
         if (mres.code !== 0) {
           await appendFilmLog(id, "warn", "BGM 混音失败，使用无配乐版本");
@@ -630,10 +696,12 @@ export async function composeFilm(id: string) {
     await appendFilmLog(
       id,
       "error",
-      `合成失败：${errorMessage(e, "合成失败")}`
+      `合成失败：${errorMessage(e, "合成失败")}`,
     );
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+    await fs
+      .rm(tmpDir, { recursive: true, force: true })
+      .catch(() => undefined);
   }
 }
 

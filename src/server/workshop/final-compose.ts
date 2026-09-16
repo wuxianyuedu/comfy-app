@@ -8,7 +8,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { DEFAULT_SIZE_SPEC, sizeSpecToWxH, type SizeSpec } from "@/lib/size-presets";
+import {
+  DEFAULT_SIZE_SPEC,
+  sizeSpecToWxH,
+  type SizeSpec,
+} from "@/lib/size-presets";
 import type { Shot } from "@/lib/workshop/types";
 
 const COMPOSE_DIR = path.join(process.cwd(), "data", "workshop-compositions");
@@ -51,7 +55,10 @@ export interface RenderResult {
 }
 
 /** 由分镜构建有序合成清单（与界面 FinalComposer.exportPlan 对齐）。 */
-export function buildCompositionPlan(title: string, shots: Shot[]): CompositionPlan {
+export function buildCompositionPlan(
+  title: string,
+  shots: Shot[],
+): CompositionPlan {
   const segments: CompositionSegment[] = shots.map((shot, i) => ({
     order: i + 1,
     shotId: shot.id,
@@ -60,7 +67,10 @@ export function buildCompositionPlan(title: string, shots: Shot[]): CompositionP
     prompt: shot.prompt,
     imageUrl: shot.imageUrl ?? null,
     clipUrl: shot.clipUrl ?? null,
-    durationSec: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
+    durationSec:
+      typeof shot.duration === "number" && shot.duration > 0
+        ? shot.duration
+        : 4,
     motion: shot.motion ?? "medium",
     transition: shot.transition ?? "cut",
     dialogue: shot.dialogue ?? "",
@@ -75,7 +85,10 @@ export function buildCompositionPlan(title: string, shots: Shot[]): CompositionP
   };
 }
 
-export async function writeCompositionPlan(sessionId: string, plan: CompositionPlan): Promise<string> {
+export async function writeCompositionPlan(
+  sessionId: string,
+  plan: CompositionPlan,
+): Promise<string> {
   await fs.mkdir(COMPOSE_DIR, { recursive: true });
   const file = path.join(COMPOSE_DIR, `${sessionId}.json`);
   await fs.writeFile(file, JSON.stringify(plan, null, 2), "utf-8");
@@ -95,12 +108,18 @@ function localPathOf(ref: string | null): string | null {
  *  - 仅图片的镜头 → 按 duration 以静帧占位
  * 任一片段不可用则跳过；无可用本地片段则仅返回清单。
  */
-export async function renderComposition(plan: CompositionPlan, outputName: string): Promise<RenderResult> {
+export async function renderComposition(
+  plan: CompositionPlan,
+  outputName: string,
+): Promise<RenderResult> {
   const ff = process.env.FFMPEG_PATH ?? "ffmpeg";
   try {
     await execFileP(ff, ["-version"], { timeout: 5000 });
   } catch {
-    return { ok: false, note: "未找到 ffmpeg（配置 FFMPEG_PATH 或加入 PATH 后可合成成片），本次仅产出合成清单" };
+    return {
+      ok: false,
+      note: "未找到 ffmpeg（配置 FFMPEG_PATH 或加入 PATH 后可合成成片），本次仅产出合成清单",
+    };
   }
 
   await fs.mkdir(COMPOSE_DIR, { recursive: true });
@@ -116,8 +135,38 @@ export async function renderComposition(plan: CompositionPlan, outputName: strin
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
     const scale = `scale=${COMPOSE_SCALE}`;
     const args = clip
-      ? ["-i", src, "-t", String(s.durationSec), "-vf", scale, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", tmp]
-      : ["-loop", "1", "-i", src, "-t", String(s.durationSec), "-r", "25", "-vf", scale, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", tmp];
+      ? [
+          "-i",
+          src,
+          "-t",
+          String(s.durationSec),
+          "-vf",
+          scale,
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-an",
+          tmp,
+        ]
+      : [
+          "-loop",
+          "1",
+          "-i",
+          src,
+          "-t",
+          String(s.durationSec),
+          "-r",
+          "25",
+          "-vf",
+          scale,
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-an",
+          tmp,
+        ];
     try {
       await execFileP(ff, args, { timeout: 120_000 });
       segs.push(tmp);
@@ -128,7 +177,10 @@ export async function renderComposition(plan: CompositionPlan, outputName: strin
 
   if (segs.length === 0) {
     await fs.rm(tmpDir, { recursive: true, force: true });
-    return { ok: false, note: "没有可用的本地片段（clipUrl/imageUrl 需为本地路径），仅产出合成清单" };
+    return {
+      ok: false,
+      note: "没有可用的本地片段（clipUrl/imageUrl 需为本地路径），仅产出合成清单",
+    };
   }
 
   const listFile = path.join(tmpDir, "list.txt");
@@ -139,12 +191,19 @@ export async function renderComposition(plan: CompositionPlan, outputName: strin
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);
   try {
-    await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out], {
-      timeout: 300_000,
-    });
+    await execFileP(
+      ff,
+      ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out],
+      {
+        timeout: 300_000,
+      },
+    );
   } catch (e) {
     await fs.rm(tmpDir, { recursive: true, force: true });
-    return { ok: false, note: `ffmpeg 合成失败：${e instanceof Error ? e.message : String(e)}` };
+    return {
+      ok: false,
+      note: `ffmpeg 合成失败：${e instanceof Error ? e.message : String(e)}`,
+    };
   }
   await fs.rm(tmpDir, { recursive: true, force: true });
   return { ok: true, outputPath: out };

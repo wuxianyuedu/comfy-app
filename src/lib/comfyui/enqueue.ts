@@ -14,13 +14,19 @@
 
 import "./reaper"; // module side-effect: launch the reaper sweeps
 import { interrupt } from "./client";
-import { state, log, persistLogs, claimFinalize, clearFinalize, MAX_CONCURRENCY } from "./runner-state";
+import {
+  state,
+  log,
+  persistLogs,
+  claimFinalize,
+  clearFinalize,
+  MAX_CONCURRENCY,
+} from "./runner-state";
 import type { Job, TaskEvent, LogEntry } from "./runner-state";
 import { connect, processQueue, cliProcs } from "./executor";
 import { taskRepository } from "../core/repository";
 
 export function enqueue(job: Job) {
-
   const store = state();
 
   store.settled.delete(job.taskId);
@@ -54,39 +60,34 @@ export function enqueue(job: Job) {
   // see if they had the log panel open before clicking 生成.
 
   log(
-
     job.taskId,
 
     "info",
 
-    `队列位置：${store.queue.length} / 活跃槽位：${store.active}/${MAX_CONCURRENCY}`
-
+    `队列位置：${store.queue.length} / 活跃槽位：${store.active}/${MAX_CONCURRENCY}`,
   );
 
   void connect();
 
   void processQueue();
-
 }
 
-
-export function subscribe(taskId: string, cb: (e: TaskEvent) => void): () => void {
-
+export function subscribe(
+  taskId: string,
+  cb: (e: TaskEvent) => void,
+): () => void {
   const store = state();
 
   store.emitter.on(taskId, cb);
 
   return () => store.emitter.off(taskId, cb);
-
 }
-
 
 export function getLogs(taskId: string): LogEntry[] {
   return state().logs.get(taskId) ?? [];
 }
 
 export async function cancelTask(taskId: string) {
-
   const store = state();
 
   // Kill any comfy-cli subprocess driving this task before flipping status.
@@ -94,18 +95,18 @@ export async function cancelTask(taskId: string) {
   const cliProc = cliProcs.get(taskId);
 
   if (cliProc) {
-
-    try { cliProc.kill("SIGKILL"); } catch { /* ignore */ }
+    try {
+      cliProc.kill("SIGKILL");
+    } catch {
+      /* ignore */
+    }
 
     cliProcs.delete(taskId);
-
   }
 
   const task = await taskRepository.findStatusAndPromptById(taskId);
 
   if (!task) return;
-
-
 
   /* previously this required
 
@@ -124,10 +125,7 @@ export async function cancelTask(taskId: string) {
    *  its prompt as well; if not, we just close out the DB row. */
 
   const isTerminal = (st: string | null) =>
-
     st === "SUCCEEDED" || st === "FAILED" || st === "CANCELLED";
-
-
 
   log(taskId, "warn", "用户取消任务");
 
@@ -140,7 +138,6 @@ export async function cancelTask(taskId: string) {
   // 悄悄覆盖掉。DB 行本就是终态时保持旧行为（仍允许改写为 CANCELLED）。
 
   if (!isTerminal(task.status) && !claimFinalize(taskId)) {
-
     log(taskId, "warn", "任务终态已落库，取消请求不再改写终态");
 
     if (task.promptId) store.promptToTask.delete(task.promptId);
@@ -149,31 +146,23 @@ export async function cancelTask(taskId: string) {
 
     const hadQueueSlot = store.queue.some((queue) => queue.taskId === taskId);
 
-    if (hadQueueSlot || cliProcs.has(taskId)) store.active = Math.max(0, store.active - 1);
+    if (hadQueueSlot || cliProcs.has(taskId))
+      store.active = Math.max(0, store.active - 1);
 
     await persistLogs(taskId);
 
     if (hadQueueSlot || cliProcs.has(taskId)) void processQueue();
 
     return;
-
   }
 
   if (!isTerminal(task.status) && task.promptId) {
-
     try {
-
       await interrupt();
-
     } catch {
-
       /* ignore */
-
     }
-
   }
-
-
 
   await taskRepository.cancel(taskId);
 
@@ -226,7 +215,6 @@ export async function cancelTask(taskId: string) {
    *  first (heal UI), error second (close socket). */
 
   store.emitter.emit(taskId, {
-
     type: "state",
 
     status: "CANCELLED",
@@ -236,7 +224,6 @@ export async function cancelTask(taskId: string) {
     error: "用户取消",
 
     validationErrors: [],
-
   });
 
   store.emitter.emit(taskId, { type: "error", error: "用户取消" });
@@ -252,6 +239,4 @@ export async function cancelTask(taskId: string) {
   await persistLogs(taskId);
 
   if (hadSlot) void processQueue();
-
 }
-

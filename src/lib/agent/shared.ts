@@ -6,7 +6,11 @@ import type { WorkshopDraftDto } from "@/lib/workshop/draft-sync-shared";
 /** Agent 对话中的消息类型（与服务端/浏览器共享）。 */
 export type AgentMessageLike =
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string; tool_calls?: Array<{ id: string; name: string; arguments: string }> }
+  | {
+      role: "assistant";
+      content: string;
+      tool_calls?: Array<{ id: string; name: string; arguments: string }>;
+    }
   | { role: "tool"; tool_call_id: string; content: string };
 
 /** 客户端 → 服务端的 Agent 请求体。 */

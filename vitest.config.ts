@@ -8,7 +8,10 @@ export default defineConfig({
       "~": path.resolve(import.meta.dirname, "src"),
       // server-only 包在 vitest node 环境会抛错（它就是干这个的）；
       // 数据访问层的硬约束在 Next 构建期仍然生效，测试里换空实现。
-      "server-only": path.resolve(import.meta.dirname, "tests/stubs/server-only.ts"),
+      "server-only": path.resolve(
+        import.meta.dirname,
+        "tests/stubs/server-only.ts",
+      ),
     },
   },
   test: {
@@ -58,6 +61,84 @@ export default defineConfig({
           functions: 70,
           statements: 70,
           branches: 50,
+        },
+        /* ── `src/lib` 的子域门槛（ISSUE #572 第 5 项 / 规范 §18.6）──────────
+         *
+         * 门槛此前只有上面那几个**文件**：`src/lib` 其余 180 个文件**零门槛**，
+         * 于是「覆盖率」这件事对它们既不报警也不记账 —— 而 `film`（7.5%）、
+         * `llm`（31%）、`core`（35%）恰恰是本项目的关键路径（编排 / 解密 / 仓储）。
+         *
+         * 三条口径（与 §11.7 的覆盖率棘轮一致）：
+         *   1. 门槛取**实测值向下取整到 5 的倍数**，不设理想值 —— 设高了会让
+         *      无关提交变红，设低了等于没设；
+         *   2. 之后**只升不降**（补了测试就上调，改动导致下降要在这里说清楚）；
+         *   3. 实测为 0 的目录先设 0，**但 0 不是终点**：补上测试就立刻上调
+         *      （`drizzle-studio` 就是这么从 0 抬到 40 的）。
+         *
+         * 统计口径与表格里的 `lib/<domain>` 行一致（v8 按目录聚合）。 */
+        "src/lib/agent/**": {
+          lines: 20,
+          functions: 20,
+          statements: 15,
+          branches: 10,
+        },
+        "src/lib/core/**": {
+          lines: 40,
+          functions: 35,
+          statements: 40,
+          branches: 35,
+        },
+        // 从「全 0」抬到实测值：`lifecycle` 的探测 / 定位 / 启停判决进了用例
+        // （端口应答三态、找不到 drizzle-kit、不是本应用拉起的就不乱杀）。
+        "src/lib/drizzle-studio/**": {
+          lines: 40,
+          functions: 35,
+          statements: 35,
+          branches: 35,
+        },
+        // 从「5/10/5/5」抬到实测值：编排的判决面（取消撤任务、合成前置条件、
+        // 镜头参数与画幅折算）进了用例，不再只有两个纯函数文件被覆盖。
+        //
+        // `lines` 取 39 而不是 40：v8 的 `lines` 是**按源码行**统计的，而全库
+        // prettier 治理把 `orchestrator.ts` 里若干单行写法拆成多行，同一批语句
+        // 落在更多行上 —— 分子（被覆盖行 77）不变、分母 214 → 220，
+        // 百分比因此从 35.98% 掉到 35.00%。**语句口径 245/87 = 35.51% 两个版本
+        // 完全一致**，即这不是覆盖率下降而是行数口径随源码行数变化。
+        // 因此这里对齐到「按语句口径换算出的同一水平」，其余三项（functions /
+        // statements / branches）保持不动 —— 棘轮指的是测试强度，不是行数巧合。
+        "src/lib/film/**": {
+          lines: 39,
+          functions: 55,
+          statements: 40,
+          branches: 30,
+        },
+        // 从「30/30/30/25」抬到实测值：四组低覆盖文件进了用例 ——
+        //   · `secrets`（曾 9.5/0/0）：GCM 往返 + 每次新 IV + 篡改密文/换密钥
+        //     返回 null 而不抛错 + 密钥文件 0600 落盘 + env / 进程内随机兜底；
+        //   · `video-task-util`（曾 0）：轮询两候选、窗口耗尽报 pending、单次
+        //     失败不终止、模型名路径穿越清洗、落盘失败一律静默；
+        //   · `prompts`（曾 13.5/0）：模型不听话（围栏 / 前言 / 越界景别 /
+        //     非字符串字段）时全部走兜底而非 `[object Object]`；
+        //   · `browser`（曾 2.1/0）：SSE 跨 chunk 半个 JSON 的拼帧、坏帧跳过、
+        //     非 2xx 必须抛错。
+        // 数字仍取「实测值向下取整到 5 的倍数」，只升不降（§18.6）。
+        "src/lib/llm/**": {
+          lines: 55,
+          functions: 55,
+          statements: 55,
+          branches: 50,
+        },
+        "src/lib/project-canvas/**": {
+          lines: 70,
+          functions: 70,
+          statements: 65,
+          branches: 50,
+        },
+        "src/lib/workshop/**": {
+          lines: 65,
+          functions: 70,
+          statements: 65,
+          branches: 55,
         },
       },
     },

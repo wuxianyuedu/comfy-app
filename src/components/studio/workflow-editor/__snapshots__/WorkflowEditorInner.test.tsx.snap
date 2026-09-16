@@ -3,7 +3,7 @@
 exports[`WorkflowEditorInner > 在 ReactFlowProvider 内挂载并渲染加载态 1`] = `
 <div>
   <div
-    class="fixed top-title-bar right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-canvas pb-6"
+    class="fixed top-title-bar right-0 bottom-0 left-0 z-50 bg-canvas flex items-center justify-center pb-6"
   >
     <div
       class="text-center"
@@ -19,7 +19,7 @@ exports[`WorkflowEditorInner > 在 ReactFlowProvider 内挂载并渲染加载态
     </div>
   </div>
   <div
-    class="pointer-events-none fixed bottom-8 right-5 z-100 flex w-[340px] flex-col gap-2.5"
+    class="pointer-events-none fixed right-5 bottom-8 z-100 flex w-[340px] flex-col gap-2.5"
   />
 </div>
 `;

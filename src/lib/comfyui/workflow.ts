@@ -1,27 +1,22 @@
-import { listModels } from "./client";
-import { getWorkflow } from "./_meta";
 import { linkTargetId } from "./workflow-preview";
 import type { RawWorkflowOverride } from "./runner-state";
-import txt2img from "./workflows/txt2img.json";
-import img2img from "./workflows/img2img.json";
-import inpaint from "./workflows/inpaint.json";
-import upscale from "./workflows/upscale.json";
-import txt2video from "./workflows/txt2video.json";
-import img2video from "./workflows/img2video.json";
-import flfvideo from "./workflows/flfvideo.json";
-
-const TEMPLATES: Record<string, unknown> = {
-  txt2img,
-  img2img,
-  inpaint,
-  upscale,
-  txt2video,
-  img2video,
-  flfvideo,
-};
 
 export type LoraSpec = { name: string; weight: number };
 
+/** `buildCustomWorkflow` 能消费的参数。
+ *
+ *  **只有 `GenerateInput`（`generate.generate` 的入参）里也有的字段会被真正填充**
+ *  —— 内置模板（token 替换）移除后，`checkpoint` / `sampler` / `scheduler` /
+ *  `steps` / `cfg` / `seed` / `size` / `count` / `denoise` / `mask` / `upscaleModel`
+ *  / `prefix` / `wanModel` / `wanVae` / `t5Model` / `ltxModel` / `duration` /
+ *  `resolution` / `fps` / `loras` 已无任何生产写入方，它们的自动注入分支只在
+ *  「有人绕过路由直接调用本函数」时才有意义。
+ *
+ *  保留这些字段与自动注入是为了两件事：① 画布 / 导入图的**提示词**注入
+ *  （`prompt` / `negative` / `inputImage`，这条是真的在用）；② 未来若把某个
+ *  扁平字段重新接回路由，注入逻辑不必重写。**新增字段前先确认路由入参里有它**，
+ *  否则就是那个反复出现的「传了不生效且无任何报错」的静默失配。
+ */
 export type GenerateParams = {
   prompt?: string;
   negative?: string;
@@ -35,8 +30,7 @@ export type GenerateParams = {
   count?: number;
   seed?: number;
   denoise?: number;
-  inputImage?: string; // filename already in ComfyUI input dir (img2img)
-  prefix?: string;
+  inputImage?: string; // filename already in ComfyUI input dir
   // image editing
   mask?: string;
   upscaleModel?: string;
@@ -227,26 +221,6 @@ export function detectParamMap(graph: Record<string, unknown>): ParamMap {
   return map;
 }
 
-function replaceTokens(obj: unknown, values: Record<string, string>): unknown {
-  if (typeof obj === "string") {
-    let str = obj;
-
-    for (const [k, v] of Object.entries(values)) {
-      str = str.split(k).join(v);
-    }
-
-    return str;
-  }
-
-  if (Array.isArray(obj)) return obj.map((obj) => replaceTokens(obj, values));
-  if (obj && typeof obj === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(obj)) out[k] = replaceTokens(v, values);
-    return out;
-  }
-  return obj;
-}
-
 /**
  * ComfyUI seeds are unsigned 32-bit integers. The old code used
  * `Math.random() * 0xffffffffffffffff` (2^64), which is both beyond
@@ -264,63 +238,6 @@ function clampSeed(seed: number): number {
   if (!Number.isFinite(truncated)) return randomSeed();
 
   return Math.max(0, Math.min(0xffffffff, truncated));
-}
-
-/**
- * Token substitution turns every `__TOKEN__` value into a string, and
- * `replaceTokens` substitutes them verbatim. ComfyUI's INT/FLOAT input
- * validation rejects string values, so coerce the known numeric input names
- * back to numbers after the token pass. Guarded by an allow-list of numeric
- * field names so genuinely-string fields (ckpt_name, text, prefix) stay strings.
- */
-const NUMERIC_INPUT_NAMES = new Set([
-  "seed",
-  "noise_seed",
-  "variation_seed",
-  "variation_seed_strength",
-  "steps",
-  "cfg",
-  "denoise",
-  "shift",
-  "guidance",
-  "guidance_scale",
-  "width",
-  "height",
-  "batch_size",
-  "count",
-  "frames",
-  "fps",
-  "num_frames",
-  "loop_count",
-  "frame_rate",
-  "riflex_freq_index",
-  "base_shift",
-  "max_shift",
-  "samples",
-  "num_inference_steps",
-  "strength",
-  "noise",
-  "clip_sample",
-]);
-
-function coerceNumericFields(graph: Record<string, unknown>): void {
-  for (const nodeValue of Object.values(graph)) {
-    const node = asGraphNode(nodeValue);
-    if (!node?.inputs) continue;
-    for (const key of Object.keys(node.inputs)) {
-      if (!NUMERIC_INPUT_NAMES.has(key)) continue;
-
-      const value = node.inputs[key];
-
-      if (
-        typeof value === "string" &&
-        value.trim() !== "" &&
-        !Number.isNaN(Number(value))
-      ) {
-        node.inputs[key] = Number(value);
-      }
-    }
-  }
 }
 
 const CHECKPOINT_LOADER = new Set([
@@ -446,96 +363,16 @@ function setPromptText(node: GraphNodeLike | null, prompt: string) {
   }
 }
 
-export async function buildAndValidate(
-  templateName: string,
-  params: GenerateParams,
-): Promise<BuildResult> {
-  const meta = getWorkflow(templateName);
-  if (!meta) return { ok: false, error: `未知工作流: ${templateName}` };
-  const template = TEMPLATES[templateName];
-  if (!template) return { ok: false, error: `缺少模板文件: ${templateName}` };
-
-  // Validate the checkpoint exists on disk (filename contract). Only enforced
-  // for templates that actually use a CheckpointLoaderSimple.
-  const usesCheckpoint = (meta.supports ?? []).includes("checkpoint");
-  try {
-    const available = await listModels("checkpoints");
-    if (
-      available.length &&
-      usesCheckpoint &&
-      params.checkpoint &&
-      !available.includes(params.checkpoint)
-    ) {
-      return {
-        ok: false,
-        error: `模型不可用或文件名不匹配: ${params.checkpoint}`,
-      };
-    }
-  } catch {
-    // ComfyUI unreachable — let submission surface the error later.
-  }
-
-  const def = meta.defaultParams ?? {};
-  const [w, h] = (params.size ?? (def.size as string) ?? "1024x1024")
-    .split("x")
-    .map((num) => parseInt(num, 10));
-  const values: Record<string, string> = {
-    __CKPT__: params.checkpoint ?? "",
-    __PROMPT__: params.prompt ?? "",
-    __NEG__: params.negative ?? "",
-    __W__: String(w ?? 1024),
-    __H__: String(h ?? 1024),
-    __COUNT__: String(params.count ?? 1),
-    __SEED__: String(params.seed ?? randomSeed()),
-    __STEPS__: String(params.steps ?? 25),
-    __CFG__: String(params.cfg ?? 7),
-    __SAMPLER__: params.sampler ?? "euler",
-    __SCHEDULER__: params.scheduler ?? "normal",
-    __DENOISE__: String(
-      params.denoise ?? (templateName === "img2img" ? 0.65 : 1),
-    ),
-    __INPUT__: params.inputImage ?? "",
-    __PREFIX__: params.prefix ?? "ComfyAPP",
-    __UPSCALE_MODEL__:
-      params.upscaleModel ??
-      (def.upscaleModel as string) ??
-      "4x-UltraSharp.pth",
-    __WAN_MODEL__: params.wanModel ?? (def.wanModel as string) ?? "",
-    __WAN_VAE__: params.wanVae ?? (def.wanVae as string) ?? "",
-    __T5_MODEL__: params.t5Model ?? (def.t5Model as string) ?? "",
-    __FRAMES__: String(params.frames ?? (def.frames as number) ?? 81),
-    __FPS__: String(params.fps ?? (def.fps as number) ?? 16),
-    __FIRST_FRAME__: params.firstFrame ?? "",
-    __LAST_FRAME__: params.lastFrame ?? "",
-  };
-
-  const graph = replaceTokens(template, values) as Record<string, unknown>;
-
-  // ComfyUI rejects string values for numeric inputs, but token substitution
-  // produces strings. Coerce the known numeric fields back to numbers after the
-  // token pass (handles WAN video nodes, sampler steps/cfg, seed, width, etc.).
-  coerceNumericFields(graph);
-
-  // Re-wire model/clip if LoRAs are present.
-  if (params.loras?.length) {
-    const { baseModel, baseClip, lastLora } = injectLoras(graph, params.loras);
-    if (lastLora) rewireLoaders(graph, baseModel, baseClip, lastLora);
-  }
-
-  return { ok: true, prompt: graph };
-}
-
 /**
  * Build a graph from a user-imported ComfyUI workflow (API format).
  *
- * Two modes:
- *  - If the graph still contains our `__PROMPT__`-style placeholders, run the
- *    same token replacement as built-in templates (advanced users who export
- *    with tokens).
- *  - Otherwise auto-inject by node detection: prompt/negative into the first
- *    two CLIPTextEncode nodes, and steps/cfg/seed/sampler/scheduler/checkpoint
- *    into the matching nodes when present. This lets a plain "Export (API
- *    Format)" graph be reused with new prompts without manual editing.
+ * 按节点检测自动注入：prompt/negative 进第一对 CLIPTextEncode，steps/cfg/seed/
+ * sampler/scheduler/checkpoint 进对应节点（存在时）。这样一张原样的
+ * "Export (API Format)" 图不必手工改就能换提示词复用。
+ *
+ * 这条通路**不做** `__PROMPT__` / `__SEED__` 这类 token 替换 —— 那套占位符
+ * 是与内置模板一起移除的「模板作者约定」，导入的工作流按 `paramMap` /
+ * 节点检测下发，或由工坊的对外封装逐端口派值。
  */
 export function buildCustomWorkflow(
   graph: Record<string, unknown>,
@@ -543,39 +380,6 @@ export function buildCustomWorkflow(
   paramMap?: ParamMap | null,
 ): Record<string, unknown> {
   const out = JSON.parse(JSON.stringify(graph)) as Record<string, unknown>;
-
-  const serialized = JSON.stringify(out);
-  const hasTokens =
-    serialized.includes("__PROMPT__") ||
-    serialized.includes("__NEG__") ||
-    serialized.includes("__SEED__");
-
-  if (hasTokens) {
-    const [w, h] = (params.size ?? "1024x1024")
-      .split("x")
-      .map((num) => parseInt(num, 10));
-    const values: Record<string, string> = {
-      __PROMPT__: params.prompt ?? "",
-      __NEG__: params.negative ?? "",
-      __SEED__: String(params.seed ?? randomSeed()),
-
-      __STEPS__: String(params.steps ?? 25),
-      __CFG__: String(params.cfg ?? 7),
-      __W__: String(w ?? 1024),
-      __H__: String(h ?? 1024),
-      __COUNT__: String(params.count ?? 1),
-      __CKPT__: params.checkpoint ?? "",
-      __SAMPLER__: params.sampler ?? "euler",
-      __SCHEDULER__: params.scheduler ?? "normal",
-      __DENOISE__: String(params.denoise ?? 0.65),
-      __FIRST_FRAME__: params.firstFrame ?? "",
-      __LAST_FRAME__: params.lastFrame ?? "",
-      __INPUT__: params.inputImage ?? "",
-    };
-    const tok = replaceTokens(out, values) as Record<string, unknown>;
-    coerceNumericFields(tok);
-    return tok;
-  }
 
   // Use the user-supplied role mapping, else fall back to auto-detection.
   const map: ParamMap =
@@ -601,8 +405,7 @@ export function buildCustomWorkflow(
   if (params.checkpoint && map.checkpointNode) {
     const ck = asGraphNode(out[map.checkpointNode]);
     const inputs = ck?.inputs;
-    if (inputs?.ckpt_name !== undefined)
-      inputs.ckpt_name = params.checkpoint;
+    if (inputs?.ckpt_name !== undefined) inputs.ckpt_name = params.checkpoint;
   }
 
   const seedNum = params.seed;
@@ -612,8 +415,7 @@ export function buildCustomWorkflow(
     if (samplerNode?.inputs) {
       const inputs = samplerNode.inputs;
 
-      if (typeof params.steps === "number")
-        inputs.steps = params.steps;
+      if (typeof params.steps === "number") inputs.steps = params.steps;
 
       if (typeof params.cfg === "number") inputs.cfg = params.cfg;
 

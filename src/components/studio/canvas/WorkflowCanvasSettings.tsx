@@ -179,9 +179,9 @@ export function useDebugMode() {
  *  visual customisation, so it shouldn't light the "you have overrides"
  *  dot. */
 export function isCustomCanvasSettings(s: CanvasSettings): boolean {
-  const keys = (Object.keys(DEFAULT_CANVAS_SETTINGS) as (keyof CanvasSettings)[]).filter(
-    (key) => key !== "debugMode"
-  );
+  const keys = (
+    Object.keys(DEFAULT_CANVAS_SETTINGS) as (keyof CanvasSettings)[]
+  ).filter((key) => key !== "debugMode");
   for (const k of keys) {
     if (s[k] !== DEFAULT_CANVAS_SETTINGS[k]) return true;
   }
@@ -216,7 +216,11 @@ export function CanvasSettingsPanel({
   }, [onClose]);
 
   return createPortal(
-    <FullScreenLayer zClass="z-50" className="flex justify-end" role="presentation">
+    <FullScreenLayer
+      zClass="z-50"
+      className="flex justify-end"
+      role="presentation"
+    >
       {/* Click-to-dismiss scrim.  Stays interactive so a click outside
        *  feels like clicking "the background of the drawer", not a
        *  floating dim layer. */}
@@ -224,7 +228,7 @@ export function CanvasSettingsPanel({
         type="button"
         aria-label="关闭画布设置"
         onClick={onClose}
-        className="flex-1 cursor-default bg-black/25 backdrop-blur-[1px] dark:bg-canvas-deep"
+        className="dark:bg-canvas-deep flex-1 cursor-default bg-black/25 backdrop-blur-[1px]"
       />
       <aside
         role="dialog"
@@ -234,7 +238,9 @@ export function CanvasSettingsPanel({
         {/* Header bar */}
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
-            <span aria-hidden className="text-[15px]">⚙</span>
+            <span aria-hidden className="text-[15px]">
+              ⚙
+            </span>
             <span className="text-ink-bright truncate text-[12.5px] font-semibold tracking-wide">
               画布设置
             </span>
@@ -254,14 +260,13 @@ export function CanvasSettingsPanel({
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <Section
-            title="网格"
-            subtitle="背景格子线条的视觉强度"
-          >
+          <Section title="网格" subtitle="背景格子线条的视觉强度">
             <SliderRow
               label="细线透明度"
               value={settings.gridMinorAlpha}
-              min={0} max={1} step={0.02}
+              min={0}
+              max={1}
+              step={0.02}
               onChange={(value) => update({ gridMinorAlpha: value })}
               format={(value) => value.toFixed(2)}
               tooltip="细格子 (默认 10px 一格) 线条的可见度。设为 0 接近全透明"
@@ -269,7 +274,9 @@ export function CanvasSettingsPanel({
             <SliderRow
               label="主线透明度"
               value={settings.gridMajorAlpha}
-              min={0} max={1} step={0.02}
+              min={0}
+              max={1}
+              step={0.02}
               onChange={(value) => update({ gridMajorAlpha: value })}
               format={(value) => value.toFixed(2)}
               tooltip="主参考线 (每 10 格 = 100px) 的可见度"
@@ -277,21 +284,27 @@ export function CanvasSettingsPanel({
             <SliderRow
               label="细线宽度"
               value={settings.gridMinorLineWidth}
-              min={0.5} max={3} step={0.25}
+              min={0.5}
+              max={3}
+              step={0.25}
               onChange={(value) => update({ gridMinorLineWidth: value })}
               format={(value) => `${value.toFixed(2)}px`}
             />
             <SliderRow
               label="主线宽度"
               value={settings.gridMajorLineWidth}
-              min={0.5} max={3} step={0.25}
+              min={0.5}
+              max={3}
+              step={0.25}
               onChange={(value) => update({ gridMajorLineWidth: value })}
               format={(value) => `${value.toFixed(2)}px`}
             />
             <SliderRow
               label="格子间距"
               value={settings.gridGap}
-              min={4} max={40} step={2}
+              min={4}
+              max={40}
+              step={2}
               onChange={(value) => update({ gridGap: value })}
               format={(value) => `${value}px`}
               tooltip="细格子之间的世界坐标距离；调小 → 更密集的网格"
@@ -322,20 +335,27 @@ export function CanvasSettingsPanel({
             <SliderRow
               label="最大缩放"
               value={settings.maxZoom}
-              min={1} max={4} step={0.1}
+              min={1}
+              max={4}
+              step={0.1}
               onChange={(value) => update({ maxZoom: value })}
               format={(value) => `${value.toFixed(1)}×`}
             />
             <SliderRow
               label="最小缩放"
               value={settings.minZoom}
-              min={0.05} max={0.5} step={0.05}
+              min={0.05}
+              max={0.5}
+              step={0.05}
               onChange={(value) => update({ minZoom: value })}
               format={(value) => `${value.toFixed(2)}×`}
             />
           </Section>
 
-          <Section title="调试" subtitle="日志入口开关；节点渲染链路标签由顶栏「调试」按钮控制">
+          <Section
+            title="调试"
+            subtitle="日志入口开关；节点渲染链路标签由顶栏「调试」按钮控制"
+          >
             <ToggleRow
               label="日志面板"
               value={settings.debugMode}
@@ -378,7 +398,9 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
       aria-label="画布设置"
       className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-12 right-3 z-6 rounded-md border px-2.5 py-1 text-[11px] font-medium tracking-tight shadow-lg backdrop-blur-sm transition-colors select-none"
     >
-      <span aria-hidden className="mr-1 align-baseline text-[12px]">⚙</span>
+      <span aria-hidden className="mr-1 align-baseline text-[12px]">
+        ⚙
+      </span>
       设置
       {/* Violet dot tells the user "you have unsaved-from-default
        *  preferences" without forcing them to open the panel.  Reads as
@@ -409,7 +431,9 @@ export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
       aria-label="重新居中"
       className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 rounded-md border px-2.5 py-1 text-[11px] font-medium tracking-tight shadow-lg backdrop-blur-sm transition-colors select-none"
     >
-      <span aria-hidden className="mr-1 align-baseline text-[12px]">🎯</span>
+      <span aria-hidden className="mr-1 align-baseline text-[12px]">
+        🎯
+      </span>
       居中
     </button>
   );

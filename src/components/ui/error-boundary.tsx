@@ -40,7 +40,9 @@ export class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       if (this.props.fallback) {
         return typeof this.props.fallback === "function"
-          ? (this.props.fallback as (error: Error | null) => React.ReactNode)(this.state.error)
+          ? (this.props.fallback as (error: Error | null) => React.ReactNode)(
+              this.state.error,
+            )
           : this.props.fallback;
       }
       return (

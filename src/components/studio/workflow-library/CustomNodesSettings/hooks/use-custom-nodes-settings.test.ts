@@ -17,7 +17,10 @@ vi.mock("@/config/custom-nodes", () => ({
   getCustomNodesManifest: vi.fn().mockResolvedValue(null),
 }));
 
-import { getCustomNodesManifest, refreshCustomNodes } from "@/config/custom-nodes";
+import {
+  getCustomNodesManifest,
+  refreshCustomNodes,
+} from "@/config/custom-nodes";
 import { useCustomNodesSettings } from "./use-custom-nodes-settings";
 
 const mockedManifest = vi.mocked(getCustomNodesManifest);
@@ -183,7 +186,9 @@ describe("useCustomNodesSettings — 失败路径必须有可见出口", () => {
 
 describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle）", () => {
   it("未找到自定义节点目录时 onParseAll 直接给出可行动提示，不发请求", async () => {
-    fetchMock.mockImplementation(async () => settingsBlob({ settings: { paths: [] } }));
+    fetchMock.mockImplementation(async () =>
+      settingsBlob({ settings: { paths: [] } }),
+    );
     const { result } = renderHook(() => useCustomNodesSettings());
     act(() => result.current.setOpen(true));
     // 本用例的响应本来就「没有目录」，等不到 savedPaths —— 改为等首次拉取完成
@@ -267,9 +272,7 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
       await new Promise((r) => setTimeout(r, 20));
     });
 
-    await waitFor(() =>
-      expect(result.current.report).toEqual(serverReport),
-    );
+    await waitFor(() => expect(result.current.report).toEqual(serverReport));
   });
 
   it("解析失败（请求抛错）→ saveErr 有原因，parsing 归位", async () => {
@@ -337,7 +340,9 @@ describe("useCustomNodesSettings — 解析流程（onParseAll / onParseSingle�
       headers: { "content-type": "application/x-ndjson" },
     });
     fetchMock.mockImplementation(async (_i, init) =>
-      (init?.method ?? "GET").toUpperCase() === "POST" ? noBody : settingsBlob(),
+      (init?.method ?? "GET").toUpperCase() === "POST"
+        ? noBody
+        : settingsBlob(),
     );
 
     const { result } = renderHook(() => useCustomNodesSettings());
@@ -362,11 +367,37 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
         settings: { paths: ["D:/p"] },
         discoveredByParent: {
           "D:/p": [
-            { path: "D:/p/a", name: "a", parent: "D:/p", exists: true, packageFileCount: 1, contentHash: "h1", status: "ok" },
-            { path: "D:/p/b", name: "b", parent: "D:/p", exists: true, packageFileCount: 1, contentHash: "h2", status: "ok" },
+            {
+              path: "D:/p/a",
+              name: "a",
+              parent: "D:/p",
+              exists: true,
+              packageFileCount: 1,
+              contentHash: "h1",
+              status: "ok",
+            },
+            {
+              path: "D:/p/b",
+              name: "b",
+              parent: "D:/p",
+              exists: true,
+              packageFileCount: 1,
+              contentHash: "h2",
+              status: "ok",
+            },
           ],
         },
-        byPath: { "d:/p/a": { name: "a", path: "D:/p/a", status: "ok", nodeCount: 3, nodeTypes: [], errors: [], contentHash: "h1" } },
+        byPath: {
+          "d:/p/a": {
+            name: "a",
+            path: "D:/p/a",
+            status: "ok",
+            nodeCount: 3,
+            nodeTypes: [],
+            errors: [],
+            contentHash: "h1",
+          },
+        },
       }),
     );
 
@@ -388,15 +419,47 @@ describe("useCustomNodesSettings — 派生数据（parentBlocks / 合计）", (
         settings: { paths: ["D:/p1", "D:/p2"] },
         discoveredByParent: {
           "D:/p1": [
-            { path: "D:/p1/a", name: "a", parent: "D:/p1", exists: true, packageFileCount: 1, contentHash: "h", status: "ok" },
+            {
+              path: "D:/p1/a",
+              name: "a",
+              parent: "D:/p1",
+              exists: true,
+              packageFileCount: 1,
+              contentHash: "h",
+              status: "ok",
+            },
           ],
           "D:/p2": [
-            { path: "D:/p2/b", name: "b", parent: "D:/p2", exists: true, packageFileCount: 1, contentHash: "h2", status: "ok" },
+            {
+              path: "D:/p2/b",
+              name: "b",
+              parent: "D:/p2",
+              exists: true,
+              packageFileCount: 1,
+              contentHash: "h2",
+              status: "ok",
+            },
           ],
         },
         byPath: {
-          "d:/p1/a": { name: "a", path: "D:/p1/a", status: "ok", nodeCount: 1, nodeTypes: [], errors: [], contentHash: "h" },
-          "d:/p2/b": { name: "b", path: "D:/p2/b", status: "ok", nodeCount: 1, nodeTypes: [], errors: [], contentHash: "OLD" },
+          "d:/p1/a": {
+            name: "a",
+            path: "D:/p1/a",
+            status: "ok",
+            nodeCount: 1,
+            nodeTypes: [],
+            errors: [],
+            contentHash: "h",
+          },
+          "d:/p2/b": {
+            name: "b",
+            path: "D:/p2/b",
+            status: "ok",
+            nodeCount: 1,
+            nodeTypes: [],
+            errors: [],
+            contentHash: "OLD",
+          },
         },
       }),
     );

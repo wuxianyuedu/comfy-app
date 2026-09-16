@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
-import { getExitPolicy } from "@/lib/app-settings";
+import { getExitPolicy } from "@/lib/app-settings/app-settings.server";
 import { spawnManaged, waitForDetachMediator } from "@/lib/process-launch";
 import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
+import { appendSessionBanner as appendSessionBannerToFile } from "@/lib/session-banner.server";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,7 +27,10 @@ const SPAWN_GRACE_MS = 1000;
  * Next.js dev 模式 HMR 会重置模块变量，让并发 POST 各自 spawn。
  */
 const G_KEY = "__ollamaServeSpawnLock_v2";
-const g = globalThis as unknown as Record<string, { starting: boolean } | undefined>;
+const g = globalThis as unknown as Record<
+  string,
+  { starting: boolean } | undefined
+>;
 const st: { starting: boolean } = g[G_KEY] ?? { starting: false };
 g[G_KEY] = st;
 
@@ -42,30 +46,20 @@ function localTimestamp(): string {
 function appendOllamaLog(line: string): void {
   try {
     fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    fs.appendFileSync(OLLAMA_RUNTIME_LOG, `${localTimestamp()} ${line}\n`, "utf-8");
+    fs.appendFileSync(
+      OLLAMA_RUNTIME_LOG,
+      `${localTimestamp()} ${line}\n`,
+      "utf-8",
+    );
   } catch {
     /* 日志失败不影响主流程 */
   }
 }
 
-/** 会话边界横幅（与 comfyui/drizzle-studio 同模式）：区分多次启动累积日志。 */
+/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：区分多次启动累积的
+ * ollama-runtime.log（两侧各留空行，直接看文件也能看出本次从哪开始）。 */
 function appendOllamaBanner(kind: "start" | "end", title: string): void {
-  try {
-    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    const bar = "─".repeat(72);
-    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
-    const reset = "\x1b[0m";
-    const banner = [
-      "",
-      `${color}${bar}${reset}`,
-      `${color}  ${title}${reset}`,
-      `${color}${bar}${reset}`,
-      "",
-    ].join("\n");
-    fs.appendFileSync(OLLAMA_RUNTIME_LOG, banner + "\n", "utf-8");
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+  appendSessionBannerToFile(OLLAMA_RUNTIME_LOG, kind, title);
 }
 
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
@@ -118,11 +112,10 @@ async function ollamaServiceRunning(): Promise<boolean> {
   try {
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
-    const { stdout } = await promisify(execFile)(
-      "sc",
-      ["query", "ollama"],
-      { windowsHide: true, timeout: 3000 },
-    );
+    const { stdout } = await promisify(execFile)("sc", ["query", "ollama"], {
+      windowsHide: true,
+      timeout: 3000,
+    });
     return /STATE\s*:\s*4\s+RUNNING/i.test(stdout);
   } catch {
     return false;
@@ -142,7 +135,9 @@ async function spawnOllamaServe(
   keepAlive: boolean,
 ): Promise<{ ok: boolean; detail: string }> {
   if (keepAlive) {
-    appendOllamaLog(`[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`);
+    appendOllamaLog(
+      `[keepAlive-spawn] cmd=${exe} args=${JSON.stringify(["serve"])}`,
+    );
     const launched = spawnManaged({
       command: exe,
       args: ["serve"],
@@ -156,7 +151,10 @@ async function spawnOllamaServe(
           ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
           : msg;
       appendOllamaLog(`[err] 启动失败：${hint}`);
-      return Promise.resolve({ ok: false, detail: `启动 Ollama 失败：${hint}` });
+      return Promise.resolve({
+        ok: false,
+        detail: `启动 Ollama 失败：${hint}`,
+      });
     }
     /* Start-Process 参数被拒等拉起失败发生在 powershell 中介里，目标进程
      * 根本不会出现；等中介退出并带出 stderr，立刻给用户可行动的报错。 */
@@ -187,7 +185,9 @@ async function spawnOllamaServe(
       windowsHide: true,
       shell: false, // 直接执行二进制，不经 cmd.exe（防 Windows cmd 窗口）
     });
-    appendOllamaLog(`[spawn] pid=${child.pid ?? "unknown"} cmd=${exe} args=${JSON.stringify(["serve"])}`);
+    appendOllamaLog(
+      `[spawn] pid=${child.pid ?? "unknown"} cmd=${exe} args=${JSON.stringify(["serve"])}`,
+    );
 
     // Ollama 输出（serve 的 stdout/stderr）——截断每行避免日志文件膨胀
     child.stdout?.on("data", (d: Buffer) => {
@@ -226,8 +226,13 @@ async function spawnOllamaServe(
 
     // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
     child.on("exit", (code, signal) => {
-      appendOllamaBanner("end", `■ Ollama 进程已退出（code=${code ?? "null"}）`);
-      appendOllamaLog(`[exit] code=${code ?? "null"} signal=${signal ?? "none"}`);
+      appendOllamaBanner(
+        "end",
+        `■ Ollama 进程已退出（code=${code ?? "null"}）`,
+      );
+      appendOllamaLog(
+        `[exit] code=${code ?? "null"} signal=${signal ?? "none"}`,
+      );
       done(
         false,
         `Ollama 进程启动后立即退出（code=${code ?? "null"}, signal=${signal ?? "none"}）。` +
@@ -267,7 +272,9 @@ export async function POST(_req: NextRequest) {
   if (await probeOllamaPort()) {
     appendOllamaLog("[state] Ollama 已在运行，跳过启动");
     return NextResponse.json({
-      ok: true, alreadyRunning: true, detail: "Ollama 已在运行",
+      ok: true,
+      alreadyRunning: true,
+      detail: "Ollama 已在运行",
     });
   }
 
@@ -275,14 +282,18 @@ export async function POST(_req: NextRequest) {
   if (await ollamaServiceRunning()) {
     appendOllamaLog("[state] Ollama 已注册为 Windows 服务并在后台运行");
     return NextResponse.json({
-      ok: true, alreadyRunning: true, detail: "Ollama 服务已在后台运行",
+      ok: true,
+      alreadyRunning: true,
+      detail: "Ollama 服务已在后台运行",
     });
   }
 
   // ── 互斥锁：防止并发 POST 重复 spawn ──
   if (st.starting) {
     return NextResponse.json({
-      ok: true, alreadyRunning: false, detail: "Ollama 正在启动中，请稍候",
+      ok: true,
+      alreadyRunning: false,
+      detail: "Ollama 正在启动中，请稍候",
     });
   }
   st.starting = true;
@@ -308,7 +319,10 @@ export async function POST(_req: NextRequest) {
         ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
         : msg;
     appendOllamaLog(`[err] 启动失败：${hint}`);
-    return NextResponse.json({ error: `启动 Ollama 失败：${hint}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `启动 Ollama 失败：${hint}` },
+      { status: 500 },
+    );
   } finally {
     st.starting = false;
   }

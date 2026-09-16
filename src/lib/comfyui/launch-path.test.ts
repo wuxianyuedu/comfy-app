@@ -24,7 +24,7 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(
       root,
       path.join(root, "main.py"),
-      path.join(root, "python_embeded", "python.exe")
+      path.join(root, "python_embeded", "python.exe"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
@@ -40,7 +40,7 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(
       root,
       path.join(root, "ComfyUI", "main.py"),
-      path.join(root, "standalone-env", "python.exe")
+      path.join(root, "standalone-env", "python.exe"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
@@ -57,7 +57,7 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(
       srcDir,
       path.join(srcDir, "main.py"),
-      path.join(instRoot, "standalone-env", "python.exe")
+      path.join(instRoot, "standalone-env", "python.exe"),
     );
     const plan = resolveComfyLaunchPlan(srcDir, makeExists(fsSet));
 
@@ -72,7 +72,7 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(
       root,
       path.join(root, "main.py"),
-      path.join(root, ".venv", "Scripts", "python.exe")
+      path.join(root, ".venv", "Scripts", "python.exe"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
@@ -87,14 +87,16 @@ describe("resolveComfyLaunchPlan", () => {
       root,
       path.join(root, "ComfyUI", "main.py"),
       path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
-      path.join(root, "standalone-env", "python.exe")
+      path.join(root, "standalone-env", "python.exe"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
     expect(plan).not.toHaveProperty("error");
     if ("error" in plan) return;
     // .venv 排在 standalone-env 之前（vendor 构建的 torch 在 .venv 里）
-    expect(plan.cmd).toBe(path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"));
+    expect(plan.cmd).toBe(
+      path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
+    );
   });
 
   it("桌面版 Desktop 实例（.comfyui-desktop-2 标记）：standalone-env 优先于 .venv", () => {
@@ -105,7 +107,7 @@ describe("resolveComfyLaunchPlan", () => {
       path.join(root, "manifest.json"),
       path.join(root, "ComfyUI", "main.py"),
       path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
-      path.join(root, "standalone-env", "python.exe")
+      path.join(root, "standalone-env", "python.exe"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
@@ -130,7 +132,7 @@ describe("resolveComfyLaunchPlan", () => {
       path.join(root, "ComfyUI", "main.py"),
       path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
       path.join(root, "ComfyUI", ".venv", "Lib", "site-packages", "torch"),
-      path.join(root, "standalone-env", "python.exe")
+      path.join(root, "standalone-env", "python.exe"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
@@ -151,7 +153,7 @@ describe("resolveComfyLaunchPlan", () => {
       path.join(root, "ComfyUI", "main.py"),
       path.join(root, "ComfyUI", ".venv", "Scripts", "python.exe"),
       path.join(root, "standalone-env", "python.exe"),
-      path.join(root, "standalone-env", "Lib", "site-packages", "torch")
+      path.join(root, "standalone-env", "Lib", "site-packages", "torch"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
 
@@ -186,12 +188,12 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(
       root,
       path.join(root, "main.py"),
-      path.join(root, ".venv", "bin", "python")
+      path.join(root, ".venv", "bin", "python"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     expect(plan).not.toHaveProperty("error");
     expect((plan as { cmd: string }).cmd).toBe(
-      path.join(root, ".venv", "bin", "python")
+      path.join(root, ".venv", "bin", "python"),
     );
   });
 
@@ -201,11 +203,11 @@ describe("resolveComfyLaunchPlan", () => {
       root,
       path.join(root, "main.py"),
       path.join(root, ".venv", "bin", "python3"),
-      path.join(root, ".venv", "bin", "python")
+      path.join(root, ".venv", "bin", "python"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     expect((plan as { cmd: string }).cmd).toBe(
-      path.join(root, ".venv", "bin", "python3")
+      path.join(root, ".venv", "bin", "python3"),
     );
   });
 
@@ -224,12 +226,12 @@ describe("resolveComfyLaunchPlan", () => {
       path.join(envRoot, "lib"),
       path.join(envRoot, "lib", "python3.12"),
       sp,
-      path.join(sp, "torch")
+      path.join(sp, "torch"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     // 选中带 torch 的 .venv（依赖判据认 POSIX 的 lib/python3.x/site-packages）
     expect((plan as { cmd: string; hasDeps?: boolean }).cmd).toBe(
-      path.join(envRoot, "bin", "python3")
+      path.join(envRoot, "bin", "python3"),
     );
     expect((plan as { hasDeps?: boolean }).hasDeps).toBe(true);
   });
@@ -240,7 +242,7 @@ describe("resolveComfyLaunchPlan", () => {
     const fsSet = fakeFs(
       root,
       path.join(root, "main.py"),
-      path.join(envRoot, "bin", "python")
+      path.join(envRoot, "bin", "python"),
     );
     const plan = resolveComfyLaunchPlan(root, makeExists(fsSet));
     expect(plan).not.toHaveProperty("error");

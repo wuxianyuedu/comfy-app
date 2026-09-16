@@ -17,7 +17,7 @@ import {
   type RawSubgraphDef,
 } from "@/lib/comfyui/raw";
 import { inferIsMultiline } from "@/lib/comfyui/types";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 import {
   type DetailNodeView,
   type RawInputEntry,
@@ -34,8 +34,13 @@ import {
  * Empty LoadImage uploads (widgets_values[0] missing/empty) still push
  * the synthetic entry so the body can show a 「需要上传图片」 placeholder. */
 const LOAD_IMAGE_NODE_TYPES = new Set([
-  "LoadImage", "LoadImageMasked", "ComfyUI LoadImage", "ComfyUI-LoadImage",
-  "Load Image", "ImageLoader", "ComfyUI-ImageLoader",
+  "LoadImage",
+  "LoadImageMasked",
+  "ComfyUI LoadImage",
+  "ComfyUI-LoadImage",
+  "Load Image",
+  "ImageLoader",
+  "ComfyUI-ImageLoader",
 ]);
 
 /** 按节点归拢「被哨兵边实际关联的槽位」——**这是下标口径的唯一权威事实**。
@@ -51,14 +56,15 @@ const LOAD_IMAGE_NODE_TYPES = new Set([
  *  槽位名与「哪一行真的有边」于是永远同源。 */
 
 export function boundarySlotsByNode(
-  boundaryLinkInfoById: Record<number, BoundaryLinkInfo>
+  boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
 ): Record<string, number[]> {
   const byNode: Record<string, Set<number>> = {};
   for (const info of Object.values(boundaryLinkInfoById)) {
     (byNode[info.innerNodeId] ??= new Set()).add(info.innerSlot);
   }
   const out: Record<string, number[]> = {};
-  for (const [nodeId, slots] of Object.entries(byNode)) out[nodeId] = [...slots].sort((a, b) => a - b);
+  for (const [nodeId, slots] of Object.entries(byNode))
+    out[nodeId] = [...slots].sort((a, b) => a - b);
   return out;
 }
 
@@ -168,7 +174,7 @@ interface InputSlotRef {
  *  判据按节点取，所以同一子图里两种口径可以并存。 */
 function resolveInputSlots(
   inputs: readonly RawNodeInput[],
-  boundarySlots: readonly number[] | undefined
+  boundarySlots: readonly number[] | undefined,
 ): InputSlotRef[] {
   if (!boundarySlots || boundarySlots.length === 0) {
     return inputs
@@ -187,7 +193,7 @@ function resolveInputSlots(
 function slotNameAt(
   slots: readonly InputSlotRef[],
   inputs: readonly RawNodeInput[],
-  index: number
+  index: number,
 ): string {
   const ref = slots.find((item) => item.slot === index);
   const name = ref ? inputs[ref.index]?.name : undefined;
@@ -205,7 +211,7 @@ export function parseSubgraphSlots(
   sub: RawSubgraphDef,
   /** 被哨兵边**实际关联**的输入槽位（`boundarySlotsByNode(…)` 的产物）——
    *  ComfyUI 写下的关联是事实，能直接解开「下标口径不一致」的歧义。 */
-  boundarySlotsByNodeId?: Record<string, number[]>
+  boundarySlotsByNodeId?: Record<string, number[]>,
 ): {
   inputNameByNodeSlot: Record<string, string[]>;
   outputNameByNodeSlot: Record<string, string[]>;
@@ -223,9 +229,14 @@ export function parseSubgraphSlots(
     const nodeId = String(rn.id);
     if (Array.isArray(rn.inputs)) {
       const rawInputs: RawNodeInput[] = rn.inputs;
-      const slots = resolveInputSlots(rawInputs, boundarySlotsByNodeId?.[nodeId]);
+      const slots = resolveInputSlots(
+        rawInputs,
+        boundarySlotsByNodeId?.[nodeId],
+      );
       const widgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
-      inputNameByNodeSlot[nodeId] = slots.map(({ slot }) => slotNameAt(slots, rawInputs, slot));
+      inputNameByNodeSlot[nodeId] = slots.map(({ slot }) =>
+        slotNameAt(slots, rawInputs, slot),
+      );
       // Snapshot widget values aligned with slot order so the boundary
       // pass can also surface a default `value` (CLIPTextEncode's `text`
       // sits here when the wrapper exposes the prompt as an input).
@@ -238,15 +249,19 @@ export function parseSubgraphSlots(
     }
     if (Array.isArray(rn.outputs)) {
       const sorted = [...rn.outputs].sort(
-        (a, b) => (a?.idx ?? 0) - (b?.idx ?? 0)
+        (a, b) => (a?.idx ?? 0) - (b?.idx ?? 0),
       );
-      outputNameByNodeSlot[nodeId] = sorted.map(
-        (x) => (typeof x?.name === "string" ? x.name : "")
+      outputNameByNodeSlot[nodeId] = sorted.map((x) =>
+        typeof x?.name === "string" ? x.name : "",
       );
     }
   }
 
-  return { inputNameByNodeSlot, outputNameByNodeSlot, inputWidgetValueByNodeSlot };
+  return {
+    inputNameByNodeSlot,
+    outputNameByNodeSlot,
+    inputWidgetValueByNodeSlot,
+  };
 }
 
 export interface SubgraphGraphResult {
@@ -258,7 +273,10 @@ export interface SubgraphGraphResult {
   nodes: DetailNodeView[];
   inputEndpointNodes: Set<string>;
   outputEndpointNodes: Set<string>;
-  boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }>;
+  boundaryInputByNode: Record<
+    string,
+    { name: string; type: string; value: unknown }
+  >;
   boundaryOutputByNode: Record<string, { name: string; type: string }>;
   connectsToByNode: Record<string, string>;
   connectsFromByNode: Record<string, string>;
@@ -296,7 +314,7 @@ export function buildSubgraphGraph(
   linkById: Record<number, SubgraphLinkEntry>,
   /** 被哨兵边实际关联的输入槽位（`boundarySlotsByNode(…)` 的产物）——槽位表
    *  按它解析，边界 handle id 才会落在真的挂载了 Handle 的那一行上。 */
-  boundarySlotsByNodeId?: Record<string, number[]>
+  boundarySlotsByNodeId?: Record<string, number[]>,
 ): SubgraphGraphResult {
   const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
   const graph: Record<string, ApiWorkflowNode> = {};
@@ -327,14 +345,18 @@ export function buildSubgraphGraph(
    * ignores them now. */
   const inputEndpointNodes = new Set<string>();
   const outputEndpointNodes = new Set<string>();
-  const boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }> = {};
-  const boundaryOutputByNode: Record<string, { name: string; type: string }> = {};
+  const boundaryInputByNode: Record<
+    string,
+    { name: string; type: string; value: unknown }
+  > = {};
+  const boundaryOutputByNode: Record<string, { name: string; type: string }> =
+    {};
   const connectsToByNode: Record<string, string> = {};
   const connectsFromByNode: Record<string, string> = {};
 
   const { inputNameByNodeSlot, outputNameByNodeSlot } = parseSubgraphSlots(
     sub,
-    boundarySlotsByNodeId
+    boundarySlotsByNodeId,
   );
 
   /* 子图暴露口 → 作者名（见 SubgraphGraphResult.proxyAuthorLabels 的说明）。
@@ -364,7 +386,8 @@ export function buildSubgraphGraph(
       if (lk?.src !== "-10") continue;
       const slotNames: string[] | undefined = inputNameByNodeSlot[lk.targetId];
       const slotName = slotNames?.[lk.targetSlot];
-      if (slotName) proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
+      if (slotName)
+        proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
     }
   }
 
@@ -374,8 +397,10 @@ export function buildSubgraphGraph(
     const classType: string = rn.type ?? "?";
     /* Capture the raw litegraph box size so the client can paint the node
      *  at its exact ComfyUI dimensions (see `sizeById` declaration above). */
-    const rnSize = Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
-    if (rnSize) sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
+    const rnSize =
+      Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
+    if (rnSize)
+      sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
 
     /* Per-input metadata.  We tag a connection as "internal" (originates
      * from another node inside the subgraph) vs "boundary" (originates
@@ -386,7 +411,9 @@ export function buildSubgraphGraph(
     const rawInputs: RawInputEntry[] = [];
     const inputMap: Record<string, unknown> = {};
     if (Array.isArray(rn.inputs)) {
-      const rnWidgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
+      const rnWidgets = Array.isArray(rn.widgets_values)
+        ? rn.widgets_values
+        : [];
       /* Sentinel-aware pairing: ComfyUI inserts a `control_after_generate`
        *  slot into `widgets_values` right after a seed-type INT widget, so
        *  a naive index match would shift every later widget by one.  Use the
@@ -398,13 +425,20 @@ export function buildSubgraphGraph(
       for (const inp of rn.inputs) {
         if (!inp || typeof inp.name !== "string") continue;
         const isConn = inp.link != null;
-        const widgetName = inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
+        const widgetName =
+          inp.widget && typeof inp.widget.name === "string"
+            ? inp.widget.name
+            : undefined;
         const widgetValue = widgetName ? wvMap[widgetName] : undefined;
         const entry: RawInputEntry = {
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
-          localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
-          type: typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
+          localized:
+            typeof inp.localized_name === "string"
+              ? inp.localized_name
+              : undefined,
+          type:
+            typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
           /* Mark boundary wires (origin_id = -10/-20) as "isBoundary" so
            *  the canvas can render them as a wrapper-exposed input (still
            *  a connection, but no real source node inside the subgraph). */
@@ -421,8 +455,13 @@ export function buildSubgraphGraph(
          *  consumers would only re-display the un-scaled / un-encoded
          *  upstream image, which is misleading.  Only the LoadImage
          *  source node gets a preview (synthetic entry pushed below). */
-        if (typeof inp.type === "string" && inp.type === "STRING" && widgetValue !== undefined) {
-          if (inferIsMultiline(rn.type, inp.name, widgetValue)) entry.multiline = true;
+        if (
+          typeof inp.type === "string" &&
+          inp.type === "STRING" &&
+          widgetValue !== undefined
+        ) {
+          if (inferIsMultiline(rn.type, inp.name, widgetValue))
+            entry.multiline = true;
         }
         rawInputs.push(entry);
         if (isConn) {
@@ -464,7 +503,8 @@ export function buildSubgraphGraph(
              *  positioning helper).  We only keep the FIRST non-sentinel
              *  source to keep positioning deterministic. */
             // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 需保留 first-truthy 语义（空串也视为未设置）
-            if (!connectsFromByNode[nodeId]) connectsFromByNode[nodeId] = lk?.src ?? "";
+            if (!connectsFromByNode[nodeId])
+              connectsFromByNode[nodeId] = lk?.src ?? "";
           }
         } else if (widgetValue !== undefined) {
           // Fold the corresponding widget value into inputs[] (API form).
@@ -513,16 +553,24 @@ export function buildSubgraphGraph(
             }
             /* Non-sentinel target → record first as `connects_to` (used
              *  by the INPUT endpoint positioning helper). */
-            if (target && target !== "-10" && target !== "-20" && !connectsToByNode[nodeId]) {
+            if (
+              target &&
+              target !== "-10" &&
+              target !== "-20" &&
+              !connectsToByNode[nodeId]
+            ) {
               connectsToByNode[nodeId] = target;
             }
           }
         }
         rawOutputs.push({
           name: o.name,
-          localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
+          localized:
+            typeof o.localized_name === "string" ? o.localized_name : undefined,
           type: typeof o.type === "string" ? o.type : "*",
-          links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
+          links: Array.isArray(o.links)
+            ? o.links.map((n) => Number(n) || 0)
+            : [],
           isBoundary: isBoundaryOut,
         });
       }
@@ -554,7 +602,13 @@ export function buildSubgraphGraph(
             isBoundary: false,
             preview: true,
             ...(fname
-              ? { imageRef: { filename: fname, subfolder: "", type: "input" as const } }
+              ? {
+                  imageRef: {
+                    filename: fname,
+                    subfolder: "",
+                    type: "input" as const,
+                  },
+                }
               : {}),
           });
         }
@@ -563,12 +617,12 @@ export function buildSubgraphGraph(
       rawOutputsById[nodeId] = rawOutputs;
       rawNodeMeta.push({
         id: nodeId,
-        widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
+        widgets_values: Array.isArray(rn.widgets_values)
+          ? rn.widgets_values
+          : [],
         outputs: rawOutputs,
         flags:
-          typeof rn.flags === "object" && rn.flags !== null
-            ? rn.flags
-            : {},
+          typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {},
         mode: typeof rn.mode === "number" ? rn.mode : 0,
       });
     }
@@ -607,8 +661,8 @@ export function buildSubgraphGraph(
        *  items on the LEFT (input) / RIGHT (output) of the inner canvas.
        *  Without these fields the canvas can't show the port name and
        *  default value (e.g. "noise_seed  41"). */
-      boundary_input: isInEp ? boundaryInputByNode[nodeId] ?? null : null,
-      boundary_output: isOutEp ? boundaryOutputByNode[nodeId] ?? null : null,
+      boundary_input: isInEp ? (boundaryInputByNode[nodeId] ?? null) : null,
+      boundary_output: isOutEp ? (boundaryOutputByNode[nodeId] ?? null) : null,
       /* First non-sentinel middle node this endpoint actually wires to
        *  internally — used by the client to position the wfIoPort
        *  adjacent to its target/source middle node.  Undefined for pure
@@ -673,9 +727,14 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
     inputs: [],
     outputs: [],
   };
-  const pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }> = {};
+  const pinIdByLinkId: Record<
+    number,
+    { pinId: string; kind: "input" | "output" }
+  > = {};
   const rawSubInputs: unknown[] = Array.isArray(sub.inputs) ? sub.inputs : [];
-  const rawSubOutputs: unknown[] = Array.isArray(sub.outputs) ? sub.outputs : [];
+  const rawSubOutputs: unknown[] = Array.isArray(sub.outputs)
+    ? sub.outputs
+    : [];
 
   const normalizePin = (p: unknown): BoundaryPin | null => {
     const rec = asRecord(p);
@@ -690,15 +749,16 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
     const linkIdsRaw: unknown[] = Array.isArray(rec.linkIds)
       ? rec.linkIds
       : rec.link !== undefined
-      ? [rec.link]
-      : Array.isArray(rec.links)
-      ? rec.links
-      : [];
+        ? [rec.link]
+        : Array.isArray(rec.links)
+          ? rec.links
+          : [];
     return {
       id,
       name: typeof rec.name === "string" ? rec.name : "",
       type: typeof rec.type === "string" ? rec.type : "*",
-      localized: typeof rec.localized_name === "string" ? rec.localized_name : undefined,
+      localized:
+        typeof rec.localized_name === "string" ? rec.localized_name : undefined,
       label: typeof rec.label === "string" ? rec.label : undefined,
       pos,
       linkIds: linkIdsRaw.map((n) => Number(n) || 0).filter((n) => n > 0),
@@ -749,7 +809,7 @@ export function buildBoundaryLinks(
   inputNameByNodeSlot: Record<string, string[]>,
   /** 输出侧槽位表 —— 输出边界连线由别处组装，本函数只处理输入侧，保留参数以
    *  与调用方口径一致（不参与计算）。 */
-  _outputNameByNodeSlot: Record<string, string[]>
+  _outputNameByNodeSlot: Record<string, string[]>,
 ): BoundaryLink[] {
   const boundaryLinks: BoundaryLink[] = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
@@ -759,7 +819,8 @@ export function buildBoundaryLinks(
      * 产出也会在客户端落成一条指向不存在 handle 的边（React Flow 丢弃整条边
      * 并打 error#008），不如在这里就不产出。 */
     if (!pinInfo || info.kind !== "input") continue;
-    const innerSlotName = inputNameByNodeSlot[info.innerNodeId]?.[info.innerSlot] ?? "";
+    const innerSlotName =
+      inputNameByNodeSlot[info.innerNodeId]?.[info.innerSlot] ?? "";
     /* 解析不出槽位名 → 整条边丢掉：handle id 只在这里产出，空槽位名到了画布上
      * 会退化成字面量 `"in"`，而那个 handle 并不存在（error#008 的成因）。
      * 丢掉的那条在下方 `reportDroppedBoundaryLinks` 里点名上报。 */
@@ -787,10 +848,15 @@ export function reportDroppedBoundaryLinks(
   sub: RawSubgraphDef,
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
   pinIdByLinkId: Record<number, { pinId: string; kind: "input" | "output" }>,
-  produced: readonly BoundaryLink[]
+  produced: readonly BoundaryLink[],
 ): { linkId: number; pinId: string; innerNodeId: string; innerSlot: number }[] {
   const producedIds = new Set(produced.map((link) => link.linkId));
-  const dropped: { linkId: number; pinId: string; innerNodeId: string; innerSlot: number }[] = [];
+  const dropped: {
+    linkId: number;
+    pinId: string;
+    innerNodeId: string;
+    innerSlot: number;
+  }[] = [];
   for (const [linkIdStr, info] of Object.entries(boundaryLinkInfoById)) {
     const linkId = Number(linkIdStr);
     if (producedIds.has(linkId)) continue;
@@ -815,7 +881,7 @@ export function reportDroppedBoundaryLinks(
   logger.warn(
     `[workflow] 子图 ${subgraphName} ` +
       `有 ${dropped.length} 条边界连线解析不出内层落点，已跳过绘制（不会画成指向不存在 handle 的边）：` +
-      ` ${JSON.stringify(dropped)}；涉及节点 ${nodeIds.join(", ")}`
+      ` ${JSON.stringify(dropped)}；涉及节点 ${nodeIds.join(", ")}`,
   );
   return dropped;
 }
@@ -849,38 +915,70 @@ export function runtimeInnerId(key: string, hostId: string): string {
 export function extractSubgraphAnnotations(
   sub: RawSubgraphDef,
   tplPositions: Record<string, [number, number]>,
-  hostId = ""
+  hostId = "",
 ): {
-  groups: { id: string; title: string; bounding: [number, number, number, number]; color: string }[];
-  notes: { id: string; title: string; text: string; pos: [number, number]; size: [number, number]; color: string }[];
+  groups: {
+    id: string;
+    title: string;
+    bounding: [number, number, number, number];
+    color: string;
+  }[];
+  notes: {
+    id: string;
+    title: string;
+    text: string;
+    pos: [number, number];
+    size: [number, number];
+    color: string;
+  }[];
   positions: Record<string, [number, number]>;
 } {
   /* Inner group frames. */
-  const groups: { id: string; title: string; bounding: [number, number, number, number]; color: string }[] = [];
+  const groups: {
+    id: string;
+    title: string;
+    bounding: [number, number, number, number];
+    color: string;
+  }[] = [];
   if (Array.isArray(sub.groups)) {
     sub.groups.forEach((g: unknown, idx: number) => {
       const rec = asRecord(g);
       if (!rec) return;
 
       const bounds: unknown[] =
-        Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
+        Array.isArray(rec.bounding) && rec.bounding.length >= 4
+          ? rec.bounding
+          : [0, 0, 0, 0];
 
       groups.push({
         id: toStringValue(rec.id ?? `g-${idx}`),
         title: typeof rec.title === "string" ? rec.title : "",
-        bounding: [Number(bounds[0]) || 0, Number(bounds[1]) || 0, Number(bounds[2]) || 0, Number(bounds[3]) || 0],
+        bounding: [
+          Number(bounds[0]) || 0,
+          Number(bounds[1]) || 0,
+          Number(bounds[2]) || 0,
+          Number(bounds[3]) || 0,
+        ],
         color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
       });
     });
   }
 
   /* Inner note annotations. */
-  const notes: { id: string; title: string; text: string; pos: [number, number]; size: [number, number]; color: string }[] = [];
+  const notes: {
+    id: string;
+    title: string;
+    text: string;
+    pos: [number, number];
+    size: [number, number];
+    color: string;
+  }[] = [];
   const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const n of innerNodes) {
     if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) continue;
     const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
-    const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
+    const size =
+      Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
     const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
     const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
     const title = typeof n.title === "string" ? n.title : "";
@@ -898,7 +996,7 @@ export function extractSubgraphAnnotations(
    *  Both `host:inner` and bare-inner key spellings are read — see the
    *  `hostId` note above. */
   const innerNodeIdSet = new Set(
-    innerNodes.filter((rn) => rn?.id != null).map((rn) => String(rn.id))
+    innerNodes.filter((rn) => rn?.id != null).map((rn) => String(rn.id)),
   );
   const draggedByInnerId: Record<string, [number, number]> = {};
   for (const [key, pos] of Object.entries(tplPositions)) {

@@ -14,14 +14,22 @@
 //
 // HMR 安全：单飞锁与子进程句柄挂在 globalThis 上（同 comfyui），模块重载不重复拉起。
 
+import "server-only";
 import { spawn } from "child_process";
 import { connect } from "net";
 import fs from "fs";
 import path from "path";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 import { openUrlInBrowser } from "~/lib/open-in-browser";
 import { DRIZZLE_STUDIO_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
+import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { killProcessTree } from "~/lib/kill-process-tree";
+import {
+  createChildExitHandler,
+  createOutputSink,
+  createRecentOutputLedger,
+  waitForComfyReady,
+} from "~/lib/comfyui/lifecycle-wait";
 
 /** drizzle-kit studio 默认监听端口。 */
 export const DRIZZLE_STUDIO_DEFAULT_PORT = 4983;
@@ -50,6 +58,15 @@ g[G_KEY] = st;
 export async function probeDrizzleStudio(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
   timeoutMs = 1500,
+): Promise<boolean> {
+  const up = await probeDrizzleStudioRaw(port, timeoutMs);
+  rememberProbe(port, up);
+  return up;
+}
+
+async function probeDrizzleStudioRaw(
+  port: number,
+  timeoutMs: number,
 ): Promise<boolean> {
   try {
     return await new Promise((resolve) => {
@@ -116,29 +133,11 @@ function appendRuntimeLog(line: string): void {
   }
 }
 
-/** 会话边界横幅（与 comfyui/lifecycle.ts 同模式）：多次启动累积的
- *  drizzle-studio-runtime.log 靠它分清会话边界。 */
+/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：多次启动累积的
+ * drizzle-studio-runtime.log 靠它分清会话边界（两侧各留空行，直接看文件也
+ * 能看出本次从哪开始）。 */
 function appendSessionBanner(kind: "start" | "end", title: string): void {
-  try {
-    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
-    const bar = "─".repeat(72);
-    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
-    const reset = "\x1b[0m";
-    const banner = [
-      "",
-      `${color}${bar}${reset}`,
-      `${color}  ${title}${reset}`,
-      `${color}${bar}${reset}`,
-      "",
-    ].join("\n");
-    fs.appendFileSync(
-      DRIZZLE_STUDIO_RUNTIME_LOG,
-      banner + "\n",
-      "utf-8",
-    );
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+  appendSessionBannerToFile(DRIZZLE_STUDIO_RUNTIME_LOG, kind, title);
 }
 
 /** 确保 studio 本地端口就绪：可达则直接返回；否则按解析出的 drizzle-kit 拉起。 */
@@ -181,7 +180,10 @@ export async function ensureDrizzleStudioUp(
     // 含 node_modules 的项目根，保证它能解析自身传递依赖。
     const nodeExe = process.execPath;
     const args = [bin, "studio", "--port", String(port), "--host", "127.0.0.1"];
-    appendSessionBanner("start", `▶ Drizzle Studio 启动会话  ${localTimestamp()}`);
+    appendSessionBanner(
+      "start",
+      `▶ Drizzle Studio 启动会话  ${localTimestamp()}`,
+    );
     note(`Drizzle Studio 未运行，按解析路径启动：${nodeExe} ${args.join(" ")}`);
     let child: ReturnType<typeof spawn>;
     try {
@@ -199,60 +201,47 @@ export async function ensureDrizzleStudioUp(
     appendRuntimeLog(
       `[spawn] pid=${child.pid} cmd=${nodeExe} args=${JSON.stringify(args)}`,
     );
-    const recentOutput: string[] = [];
-    const pushRecent = (text: string) => {
-      for (const line of text.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        recentOutput.push(trimmed);
-        while (recentOutput.length > 60) recentOutput.shift();
-      }
-    };
-    child.stdout?.on("data", (d: Buffer) => {
-      const text = d.toString().trimEnd().slice(0, 500);
-      appendRuntimeLog(`[out] ${text}`);
-      pushRecent(text);
+    /* 回调与等待循环复用 comfyui 侧的同一套原语（ISSUE #570 第 6 项）：
+     * 此前这里是另一段 80 行 IIFE，与 lifecycle.ts 同构 —— 两处各写一遍
+     * 「留底 + 输出截断 + 退出横幅 + 轮询」只会各自漂移。 */
+    const ledger = createRecentOutputLedger();
+    const outSink = createOutputSink({
+      appendRuntimeLog,
+      pushRecent: ledger.push,
     });
-    child.stderr?.on("data", (d: Buffer) => {
-      const text = d.toString().trimEnd().slice(0, 500);
-      appendRuntimeLog(`[err] ${text}`);
-      pushRecent(text);
-    });
-    child.on("exit", (code) => {
-      appendSessionBanner("end", `■ Drizzle Studio 进程已退出（code=${code ?? "null"}）`);
-      note(`Drizzle Studio 进程退出（code=${code ?? "null"}）`);
-      if (st.child === child) st.child = undefined;
-    });
+    child.stdout?.on("data", outSink);
+    child.stderr?.on("data", outSink);
+    child.on(
+      "exit",
+      createChildExitHandler({
+        banner: (code) => `■ Drizzle Studio 进程已退出（code=${String(code)}）`,
+        appendSessionBanner: (b) => appendSessionBanner("end", b),
+        log: note,
+        clearChild: () => {
+          if (st.child === child) st.child = undefined;
+        },
+      }),
+    );
 
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      if (st.child !== child) {
+    const r = await waitForComfyReady({
+      deadline: Date.now() + timeoutMs,
+      timeoutDetail: `Drizzle Studio 启动超时（${Math.round(timeoutMs / 1000)}s 未就绪），详见 log/services/drizzle-studio-runtime.log`,
+      readyDetail: `Drizzle Studio 已就绪（端口 ${port}）`,
+      intervalMs: 500,
+      probe: async () =>
+        (await probeDrizzleStudio(port)) ? `127.0.0.1:${port}` : null,
+      isDead: async () => {
+        if (st.child === child) return null;
         const modErr =
           /Cannot find module '([^']+)'|Cannot find package '([^']+)'/.exec(
-            recentOutput.join("\n"),
+            ledger.lines.join("\n"),
           );
-        return {
-          ok: false,
-          port,
-          detail: modErr
-            ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
-            : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log",
-        };
-      }
-      if (await probeDrizzleStudio(port)) {
-        return {
-          ok: true,
-          port,
-          detail: `Drizzle Studio 已就绪（端口 ${port}）`,
-        };
-      }
-      await new Promise((r) => setTimeout(r, 500));
-    }
-    return {
-      ok: false,
-      port,
-      detail: `Drizzle Studio 启动超时（${Math.round(timeoutMs / 1000)}s 未就绪），详见 log/services/drizzle-studio-runtime.log`,
-    };
+        return modErr
+          ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
+          : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log";
+      },
+    });
+    return { ok: r.ok, port, detail: r.detail };
   })().finally(() => {
     st.starting = undefined;
   });
@@ -322,11 +311,42 @@ export function isDrizzleStudioStarting(): boolean {
   return !!st.starting;
 }
 
+/**
+ * 端口可达性结果的短 TTL 缓存。
+ *
+ * `getDrizzleStudioStatus` 是**同步**函数（可达性只能异步问），此前它直接返回
+ * `up: false` —— 于是「端口上确实有实例在跑、但不是本应用拉起的」会被读成
+ * 「未运行」，调用方据此去重拉一个（或反过来以为无实例可关）。现在把最近一次
+ * 探测结论缓存下来供同步读取；缓存缺失或过期时按 `false` 返回。
+ */
+const PROBE_TTL_MS = 2000;
+let probeCache: { at: number; up: boolean } | null = null;
+
+/** 记录一次异步探测结论（供同步状态读取）。 */
+function rememberProbe(port: number, up: boolean): void {
+  if (port !== DRIZZLE_STUDIO_DEFAULT_PORT) return;
+  probeCache = { at: Date.now(), up };
+}
+
+/**
+ * 清掉探测缓存（**测试用**）。
+ *
+ * 缓存是模块级状态，而用例之间共享同一个模块实例 —— 不清会让「上一个用例探测到
+ * 可达」泄漏到下一个用例，表现为随机的假绿/假红。生产代码不需要调用它。
+ */
+export function resetDrizzleStudioProbeCache(): void {
+  probeCache = null;
+}
+
 export function getDrizzleStudioStatus(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
 ): DrizzleStudioStatus {
+  const fresh =
+    probeCache && Date.now() - probeCache.at < PROBE_TTL_MS
+      ? probeCache.up
+      : false;
   return {
-    up: false,
+    up: fresh,
     port,
     starting: isDrizzleStudioStarting(),
     pid: st.child?.pid,

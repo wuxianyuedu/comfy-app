@@ -86,11 +86,15 @@ describe("blocksTitleBar：门禁用的「盖标题行」判定", () => {
     expect(blocksTitleBar(FULL_SCREEN_LAYER_CLASS)).toBe(false);
     expect(blocksTitleBar(OVERLAY_POSITION_CLASS.modal)).toBe(false);
     // 让位后再加 z-index / 居中布局，仍属合规
-    expect(blocksTitleBar(overlayClass("modal", "z-50 flex items-center"))).toBe(false);
+    expect(
+      blocksTitleBar(overlayClass("modal", "z-50 flex items-center")),
+    ).toBe(false);
   });
 
   it("认出会让位的旧写法 fixed inset-0", () => {
-    expect(blocksTitleBar("fixed inset-0 z-99 flex items-center justify-center")).toBe(true);
+    expect(
+      blocksTitleBar("fixed inset-0 z-99 flex items-center justify-center"),
+    ).toBe(true);
     expect(blocksTitleBar("fixed inset-0")).toBe(true);
     expect(blocksTitleBar("  fixed   inset-0   z-50  ")).toBe(true);
   });

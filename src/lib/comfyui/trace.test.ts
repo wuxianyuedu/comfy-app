@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { redactSecretShaped } from "@/lib/core/redact-secret";
 import {
   TRACE_MAX_LINE,
   traceStringify,
@@ -107,6 +108,31 @@ describe("queueTraceSummary — 失败收口时回答「任务其实还在跑吗
   it("空队列与非预期结构都归零", () => {
     expect(queueTraceSummary({})).toEqual({ running: [], pending: [] });
     expect(queueTraceSummary(null)).toEqual({ running: [], pending: [] });
+  });
+});
+
+describe("trace 落盘前过值形状守卫（与 pino 镜像共用一份实现）", () => {
+  it("原始回执里的 PEM / JWT / 高熵串被擦成 [Redacted]", () => {
+    // trace 直写文件、不经 pino，因此脱敏必须在写入边界自己做一次。
+    // 这里断言的是「写入前的那次变换」（trace() 本身会真实写盘，测试不触发它）。
+    const pem =
+      "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----";
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+    expect(traceStringify(redactSecretShaped({ err: pem }))).toContain(
+      "[Redacted]",
+    );
+    expect(traceStringify(redactSecretShaped({ header: jwt }))).toContain(
+      "[Redacted]",
+    );
+  });
+
+  it("正常回执（stdout chunk / prompt_id / 文件名）原样保留", () => {
+    const payload = {
+      chunk: "Prompt executed in 3.2 seconds",
+      promptId: "a1b2",
+    };
+    expect(redactSecretShaped(payload)).toEqual(payload);
   });
 });
 

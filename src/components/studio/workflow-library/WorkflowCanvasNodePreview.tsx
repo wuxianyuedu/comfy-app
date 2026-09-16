@@ -68,6 +68,8 @@ import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
+import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
+import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
@@ -397,6 +399,15 @@ export function WorkflowCanvasNodePreview({
     (r) => r.workflowId === workflowId,
   );
 
+  /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
+   * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
+   * 两处各读各的会让同一页面的两个页签列出两种名字（ISSUE #596）。 */
+  const { contracts: storedContracts } = useModeContracts();
+  const contractEntries = useMemo(
+    () => modeContractEntries(effectiveMode, storedContracts),
+    [effectiveMode, storedContracts],
+  );
+
   /* ── 对外参数卡片列（映射可编辑）──
    * 每个对外参数一张卡片，与宿主卡片并排；卡片说「这个对外参数由哪些端口组成」，
    * 表单行说「这一格填的是什么值」，两者不重复表达同一个落点。
@@ -537,8 +548,12 @@ export function WorkflowCanvasNodePreview({
   return (
     /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
      * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
-     * 进度/结果/错误行与其对齐。 */
-    <div className="flex w-full flex-col items-center gap-3">
+     * 进度/结果/错误行与其对齐。
+     *
+     * 纵向**吃满**父级高度（`h-full min-h-0`）：画布是这里唯一需要撑开的块，
+     * 它得拿到一个真实高度才能铺到面板底边（ISSUE #596）。前面那些进度 / 结果 /
+     * 日志块按内容高度排，剩下的全归画布。 */
+    <div className="flex h-full min-h-0 w-full flex-col items-center gap-3">
       {/* ── 画布视口外框（拖动平移 / 滚轮缩放 / 适应 / 复位）──
           三列（对外参数 / 宿主卡片 / 对外输出参数）合起来常宽过面板，超出去的
           部分此前看不到（ISSUE #355：「需要可以拖动整个画布查看其他超出边框的
@@ -556,6 +571,8 @@ export function WorkflowCanvasNodePreview({
         entries={buildParamEntries(workflowIO ?? null, undefined, {
           mode: effectiveMode,
         })}
+        /* 契约口清单：卡片头与「工坊封装」页签同一份措辞（ISSUE #596）。 */
+        contractEntries={contractEntries}
         canWire={!!effectiveMode && !!onPatchParamMap}
         selectedEntryId={selectedParamId}
         selectedOutputId={selectedOutputId}
@@ -603,7 +620,8 @@ export function WorkflowCanvasNodePreview({
                 )}
                 onSeedModeChange={
                   onSeedModeChange
-                    ? (ioKey: string, mode: string) => onSeedModeChange(ioKey, mode)
+                    ? (ioKey: string, mode: string) =>
+                        onSeedModeChange(ioKey, mode)
                     : undefined
                 }
                 workflowId={workflowId}
@@ -632,15 +650,17 @@ export function WorkflowCanvasNodePreview({
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
         <div className="w-[380px]" aria-live="polite">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-ink-faint">
+          <div className="text-ink-faint mb-1 flex items-center justify-between text-[11px]">
             <span>
               {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
               {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
             </span>
-            <span className="font-medium text-violet-700 dark:text-violet-300">{pct}%</span>
+            <span className="font-medium text-violet-700 dark:text-violet-300">
+              {pct}%
+            </span>
           </div>
           <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2"
+            className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full"
             role="progressbar"
             aria-valuenow={pct}
             aria-valuemin={0}
@@ -657,11 +677,11 @@ export function WorkflowCanvasNodePreview({
       {/* 运行结果图 */}
       {resultUrl && (
         <div className="w-[380px]">
-          <p className="mb-1 text-[11px] text-ink-faint">运行结果</p>
+          <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
           <img
             src={resultUrl}
             alt="运行结果"
-            className="w-full rounded-xl border border-border"
+            className="border-border w-full rounded-xl border"
           />
         </div>
       )}
@@ -686,7 +706,7 @@ export function WorkflowCanvasNodePreview({
             <button
               type="button"
               onClick={() => setUploadNotice(null)}
-              className="shrink-0 rounded px-1 text-amber-800 dark:text-amber-300/70 transition-colors hover:text-amber-800"
+              className="shrink-0 rounded px-1 text-amber-800 transition-colors hover:text-amber-800 dark:text-amber-300/70"
               aria-label="关闭上传提示"
             >
               ✕
@@ -711,16 +731,16 @@ export function WorkflowCanvasNodePreview({
             setLogOpen(true);
           }}
           data-testid="wflib-log-open"
-          className="flex w-[380px] items-center justify-between rounded-xl border border-border bg-panel-deep px-3 py-2 text-left transition-colors hover:border-border-strong"
+          className="border-border bg-panel-deep hover:border-border-strong flex w-[380px] items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors"
           title="打开执行日志"
         >
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink-strong">
+          <span className="text-ink-strong flex items-center gap-1.5 text-[11px] font-medium">
             执行日志
             {running && (
               <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
             )}
           </span>
-          <span className="text-[10.5px] text-ink-fainter">
+          <span className="text-ink-fainter text-[10.5px]">
             {activeRun
               ? activeRun.status === "done"
                 ? "上次已完成"

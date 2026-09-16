@@ -72,14 +72,17 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("status=missing 时为 missing(即使 saved 已有记录)", () => {
-    expect(
-      deriveRowState(makeSub({ status: "missing" }), makeSaved()),
-    ).toEqual({ kind: "missing" });
+    expect(deriveRowState(makeSub({ status: "missing" }), makeSaved())).toEqual(
+      { kind: "missing" },
+    );
   });
 
   it("status=empty 且包文件数为 0 时为 empty", () => {
     expect(
-      deriveRowState(makeSub({ status: "empty", packageFileCount: 0 }), undefined),
+      deriveRowState(
+        makeSub({ status: "empty", packageFileCount: 0 }),
+        undefined,
+      ),
     ).toEqual({ kind: "empty" });
   });
 
@@ -102,7 +105,9 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("无已保存清单时为 unimported", () => {
-    expect(deriveRowState(makeSub(), undefined)).toEqual({ kind: "unimported" });
+    expect(deriveRowState(makeSub(), undefined)).toEqual({
+      kind: "unimported",
+    });
   });
 
   it("saved.status=error 时透出首个错误信息", () => {
@@ -117,7 +122,9 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("saved.status=error 且无错误信息时回退默认文案 解析出错", () => {
-    expect(deriveRowState(makeSub(), makeSaved({ status: "error", errors: [] }))).toEqual({
+    expect(
+      deriveRowState(makeSub(), makeSaved({ status: "error", errors: [] })),
+    ).toEqual({
       kind: "error",
       reason: "解析出错",
     });
@@ -132,9 +139,11 @@ describe("deriveRowState 行状态推导", () => {
   });
 
   it("saved.status=missing 时为 missing", () => {
-    expect(deriveRowState(makeSub(), makeSaved({ status: "missing" }))).toEqual({
-      kind: "missing",
-    });
+    expect(deriveRowState(makeSub(), makeSaved({ status: "missing" }))).toEqual(
+      {
+        kind: "missing",
+      },
+    );
   });
 
   it("任一侧缺少 hash 且 saved.status=ok 时视为 loaded(空 savedHash)", () => {

@@ -1,7 +1,15 @@
 "use client";
 import React from "react";
 
-export function StringTextarea({ value, mono, hasSize }: { value: string; mono?: boolean; hasSize: boolean }) {
+export function StringTextarea({
+  value,
+  mono,
+  hasSize,
+}: {
+  value: string;
+  mono?: boolean;
+  hasSize: boolean;
+}) {
   const ref = React.useRef<HTMLTextAreaElement>(null);
   React.useLayoutEffect(() => {
     const ta = ref.current;
@@ -26,7 +34,7 @@ export function StringTextarea({ value, mono, hasSize }: { value: string; mono?:
       rows={1}
       onFocus={(event) => event.currentTarget.blur()}
       className={
-        "block w-full resize-none rounded border border-border-strong bg-canvas-deep px-2 py-1.5 text-[10.5px] leading-snug text-ink-bright outline-none" +
+        "border-border-strong bg-canvas-deep text-ink-bright block w-full resize-none rounded border px-2 py-1.5 text-[10.5px] leading-snug outline-none" +
         (mono ? " font-mono" : "")
       }
       style={{

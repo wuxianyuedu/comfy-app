@@ -19,7 +19,9 @@ describe("shouldUseTitleBarTabs", () => {
 
 describe("isDragRegionTarget", () => {
   it("空白处（不含 data-no-drag 祖先）视为拖拽区", () => {
-    const target = { closest: (s: string) => (s === "[data-no-drag]" ? null : null) };
+    const target = {
+      closest: (s: string) => (s === "[data-no-drag]" ? null : null),
+    };
     expect(isDragRegionTarget(target)).toBe(true);
   });
 

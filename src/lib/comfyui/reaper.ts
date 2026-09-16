@@ -14,8 +14,14 @@ import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
 import { cliProcs } from "./executor-cli";
 import { isComfyStarting } from "./lifecycle";
-import { state, log, persistLogs, claimFinalize, type RunnerState } from "./runner-state";
-import { logger } from "~/server/lib/logger";
+import {
+  state,
+  log,
+  persistLogs,
+  claimFinalize,
+  type RunnerState,
+} from "./runner-state";
+import { logger } from "~/lib/core/logger";
 
 /* ── DB-side QUEUED reaper ─────────────────────────
  * Symptom: after a dev-server cold restart, tasks in
@@ -97,7 +103,10 @@ interface ReaperGlobal {
   reaping: Set<string>;
 }
 const rg = globalThis as unknown as Record<string, ReaperGlobal | undefined>;
-const reaperState: ReaperGlobal = rg[REAPER_GLOBAL] ?? { handle: null, reaping: new Set() };
+const reaperState: ReaperGlobal = rg[REAPER_GLOBAL] ?? {
+  handle: null,
+  reaping: new Set(),
+};
 rg[REAPER_GLOBAL] = reaperState;
 /**
  * Pure in-memory claim check: is `taskId` still owned by the CURRENT dev
@@ -119,7 +128,7 @@ rg[REAPER_GLOBAL] = reaperState;
 export function isTaskClaimedInProcess(
   s: Pick<RunnerState, "queue" | "executedWorkflow" | "settled">,
   hasCliProc: (taskId: string) => boolean,
-  taskId: string
+  taskId: string,
 ): boolean {
   return (
     s.queue.some((job) => job.taskId === taskId) ||
@@ -177,14 +186,19 @@ function claimTerminal(taskId: string): boolean {
  *  几乎只对「刚写库就被判死」的竞态兜底），才判 true。
  *
  *  单独作为一次 tick 的探测（调用方每个 tick 只调一次，不按行重复请求）。 */
-async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<boolean | null> {
+async function comfyHasActiveWorkflow(
+  hintPromptId: string | null,
+): Promise<boolean | null> {
   try {
     const base = await resolveComfyBase();
-    const q = await fetch(`${base}/queue`, { signal: AbortSignal.timeout(3_000) });
+    const q = await fetch(`${base}/queue`, {
+      signal: AbortSignal.timeout(3_000),
+    });
     if (!q.ok) return null;
-    const qd = (await q.json()) as
-      | { queue_running?: { prompt_id?: string }[]; queue_pending?: { prompt_id?: string }[] }
-      | null;
+    const qd = (await q.json()) as {
+      queue_running?: { prompt_id?: string }[];
+      queue_pending?: { prompt_id?: string }[];
+    } | null;
     const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
     /* 队列非空 → 本应用（MAX_CONCURRENCY=1）必有任务在跑。raw 路径的
      *  comfy-cli 自己生成 client_id，无法反查属于哪个 taskId，因此无法区分
@@ -193,7 +207,9 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (!hintPromptId) return false;
     /* 队列空但有 promptId 线索：只有「最近一条历史确实是本次 prompt」才算
      *  在飞（任务刚收尾的竞态窗口），否则视为已死。 */
-    const h = await fetch(`${base}/history?max_items=1`, { signal: AbortSignal.timeout(3_000) });
+    const h = await fetch(`${base}/history?max_items=1`, {
+      signal: AbortSignal.timeout(3_000),
+    });
     if (!h.ok) return null;
     const hd = (await h.json()) as Record<string, unknown> | null;
     return !!hd && Object.prototype.hasOwnProperty.call(hd, hintPromptId);
@@ -228,20 +244,32 @@ export async function reapStaleQueuedTasks(): Promise<void> {
          *  path to finalise.  Only a task with no in-memory footprint
          *  (dev cold restart) is a true orphan. */
         if (isTaskClaimedInProcess(s, (id) => cliProcs.has(id), t.id)) {
-          log(t.id, "warn", `任务仍在当前进程的执行链中（已 ${ageSec}s），跳过 reaper 回收——等待 prompt_id 回传`);
+          log(
+            t.id,
+            "warn",
+            `任务仍在当前进程的执行链中（已 ${ageSec}s），跳过 reaper 回收——等待 prompt_id 回传`,
+          );
           continue;
         }
         /* ComfyUI 正在自动启动（lifecycle 单飞进行中）时暂不回收——
          * 启动可能需要 30-120s，任务会在 WS 连上后正常出队执行。 */
         if (isComfyStarting()) {
-          log(t.id, "warn", `任务在队列中等待 ComfyUI 自动启动（已 ${ageSec}s）——启动完成后自动执行`);
+          log(
+            t.id,
+            "warn",
+            `任务在队列中等待 ComfyUI 自动启动（已 ${ageSec}s）——启动完成后自动执行`,
+          );
           continue;
         }
         /* 先抢终态：executor 若同时也在收口这个任务，谁先认领谁赢。
          *  抢不到说明本进程（或上一次 tick）已经判过终态——直接跳过，
          *  避免同一任务写出两个互相矛盾的失败原因。 */
         if (!claimTerminal(t.id)) {
-          log(t.id, "warn", `reaper 跳过：任务终态已被本进程认领（已 ${ageSec}s）`);
+          log(
+            t.id,
+            "warn",
+            `reaper 跳过：任务终态已被本进程认领（已 ${ageSec}s）`,
+          );
           continue;
         }
         /* 与 executor 共享「DB 终态一次写入」锁：executor 已经落库过就
@@ -265,7 +293,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
             "warn",
             comfyActive === true
               ? `ComfyUI 侧仍有正在执行/排队的工作流（已排队 ${ageSec}s）——跳过回收，等待其收口`
-              : `无法确认任务是否仍由 ComfyUI 执行（已排队 ${ageSec}s，ComfyUI 不可达）——本轮不回收，稍后重试`
+              : `无法确认任务是否仍由 ComfyUI 执行（已排队 ${ageSec}s，ComfyUI 不可达）——本轮不回收，稍后重试`,
           );
           continue;
         }
@@ -292,11 +320,13 @@ export async function reapStaleQueuedTasks(): Promise<void> {
     }
     if (stale.length > 0) {
       logger.warn(
-        `[comfyui] reaper: marked ${stale.length} stale QUEUED task(s) as FAILED (older than ${STALE_MS / 1000}s, no promptId)`
+        `[comfyui] reaper: marked ${stale.length} stale QUEUED task(s) as FAILED (older than ${STALE_MS / 1000}s, no promptId)`,
       );
     }
   } catch (err) {
-    logger.warn(`[comfyui] reapStaleQueuedTasks 失败：${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(
+      `[comfyui] reapStaleQueuedTasks 失败：${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -306,7 +336,10 @@ export async function reapStaleQueuedTasks(): Promise<void> {
 export async function reapStaleRunningTasks(): Promise<void> {
   try {
     const cutoff = new Date(Date.now() - RUNNING_STALE_MS);
-    const stale = await taskRepository.listStaleRunning(cutoff, RUNNING_TICK_CAP);
+    const stale = await taskRepository.listStaleRunning(
+      cutoff,
+      RUNNING_TICK_CAP,
+    );
     if (stale.length === 0) return;
     const base = await resolveComfyBase();
     const s = state();
@@ -329,10 +362,14 @@ export async function reapStaleRunningTasks(): Promise<void> {
           const r = await fetch(url, { signal: AbortSignal.timeout(5_000) });
           if (r.status === 200) {
             const data = (await r.json()) as Record<string, unknown> | null;
-            const entry = data && (data[t.promptId] as Record<string, unknown> | undefined);
+            const entry =
+              data && (data[t.promptId] as Record<string, unknown> | undefined);
             if (entry) {
-              const status = entry.status as { executed?: unknown; errored?: unknown; messages?: unknown } | undefined;
-              const errMsg = (entry.error as { message?: string } | undefined)?.message;
+              const status = entry.status as
+                | { executed?: unknown; errored?: unknown; messages?: unknown }
+                | undefined;
+              const errMsg = (entry.error as { message?: string } | undefined)
+                ?.message;
               if (status?.errored || errMsg) {
                 verdict = "failed";
                 reason = `ComfyUI execution_error: ${errMsg ?? "未知原因"} (promptId=${t.promptId})`;
@@ -348,13 +385,23 @@ export async function reapStaleRunningTasks(): Promise<void> {
                *  queue_pending, it's effectively lost → FAILED orphan. */
               let inQueue = false;
               try {
-                const q = await fetch(`${base}/queue`, { signal: AbortSignal.timeout(3_000) });
+                const q = await fetch(`${base}/queue`, {
+                  signal: AbortSignal.timeout(3_000),
+                });
                 if (q.ok) {
-                  const qd = (await q.json()) as { queue_running?: { prompt_id?: string }[]; queue_pending?: { prompt_id?: string }[] } | null;
-                  const all = [...(qd?.queue_running ?? []), ...(qd?.queue_pending ?? [])];
+                  const qd = (await q.json()) as {
+                    queue_running?: { prompt_id?: string }[];
+                    queue_pending?: { prompt_id?: string }[];
+                  } | null;
+                  const all = [
+                    ...(qd?.queue_running ?? []),
+                    ...(qd?.queue_pending ?? []),
+                  ];
                   inQueue = all.some((all) => all?.prompt_id === t.promptId);
                 }
-              } catch { /* queue probe failed — fall through to unknown */ }
+              } catch {
+                /* queue probe failed — fall through to unknown */
+              }
               if (!inQueue) {
                 verdict = "failed";
                 reason = `dev server 重启后无人在监控，ComfyUI /history 与 /queue 均无此 prompt (${t.promptId}) — 请重新执行`;
@@ -405,7 +452,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
         await taskRepository.finalizeFromReaper(
           t.id,
           finalStatus,
-          verdict === "failed" ? reason : null
+          verdict === "failed" ? reason : null,
         );
         await persistLogs(t.id);
       } finally {
@@ -413,10 +460,12 @@ export async function reapStaleRunningTasks(): Promise<void> {
       }
     }
     logger.warn(
-      `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`
+      `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`,
     );
   } catch (err) {
-    logger.warn(`[comfyui] reapStaleRunningTasks 失败：${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(
+      `[comfyui] reapStaleRunningTasks 失败：${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 

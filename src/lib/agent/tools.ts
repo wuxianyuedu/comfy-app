@@ -31,7 +31,14 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
           title: { type: "string", description: "项目标题" },
           type: {
             type: "string",
-            enum: ["short_video", "micro_film", "animation", "ad", "comic", "other"],
+            enum: [
+              "short_video",
+              "micro_film",
+              "animation",
+              "ad",
+              "comic",
+              "other",
+            ],
             description: "项目类型",
           },
           tone: { type: "string", description: "基调/情绪" },
@@ -66,7 +73,8 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
         properties: {
           instruction: {
             type: "string",
-            description: "对现有剧本的修改要求（如『扩写第三场景』『把基调改更轻松』）",
+            description:
+              "对现有剧本的修改要求（如『扩写第三场景』『把基调改更轻松』）",
           },
         },
         required: ["instruction"],
@@ -124,7 +132,7 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
     function: {
       name: "generate_shot_images",
       description:
-        "为当前全部（或指定）镜头生成本地 ComfyUI 图片。依赖 checkpoint 已配置，默认用本地 txt2img 工作流。",
+        "为当前全部（或指定）镜头生成本地 ComfyUI 图片。依赖工作流库里已有配好对外参数的图类工作流。",
       parameters: {
         type: "object",
         properties: {

@@ -1039,8 +1039,69 @@ fn setup_splash_window(app: &mut tauri::App) {
     let (width, height) = splash_window_size(app.handle());
     let _ = splash.set_size(tauri::LogicalSize::new(width, height));
     let _ = splash.center();
+    bring_splash_to_front(&splash);
   }
 }
+
+/// 启动页首次出现时把它带到前台。
+///
+/// 启动页与「应用」窗口是两种不同的语义，不能共用同一套「不抢前台」策略：
+///
+/// - **应用窗口**：启动要几十秒，用户完全可能切去干别的，加载完成再弹到最前面
+///   就是打断（ISSUE #359）。所以它默认只 `show()` + 任务栏闪烁；
+/// - **启动页**：它是用户**刚刚双击/点击启动**的直接反馈，此刻不给前台，
+///   用户看到的就是「双击了没反应」，启动页被文件资源管理器之类的窗口压住
+///   ——「双击后画面在资源管理器之后」正是这么来的（ISSUE #576）。一次启动
+///   只抢这一次，且是**显示之后立即**抢，不是几十秒后突然冒出来。
+///
+/// 用 `set_focus()` 而不是 `always_on_top`：置顶是**持续**语义（窗口会一直压在
+/// 别人上面，用户在启动期想切走也切不掉），而这里要的只是「出现的那一刻在前面」。
+/// Windows 的前台锁定可能让 `set_focus()` 落空（用户刚在别的窗口上点过），
+/// 此时补一次任务栏闪烁作为可见提醒，与主窗的策略保持一致。
+fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
+  // 声明式窗口（tauri.conf.json 的 windows[0]）默认已可见，但显式 `show()` 一次
+  // 更稳：某些窗口状态插件/系统还原会把首次显示推迟，未显示的窗口 set_focus 无意义。
+  if !splash.is_visible().unwrap_or(true) {
+    let _ = splash.show();
+  }
+  if let Err(e) = splash.set_focus() {
+    log::warn!("[ComfyAPP] splash set_focus failed: {:?}", e);
+    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
+    return;
+  }
+  if splash.is_focused().unwrap_or(false) {
+    log::info!("[ComfyAPP] splash window brought to front");
+  } else {
+    log::warn!("[ComfyAPP] splash window shown but foreground not granted");
+    let _ = splash.request_user_attention(Some(tauri::UserAttentionType::Informational));
+  }
+}
+
+/// 为什么 main 窗上必须调 `disable_drag_drop_handler`：不调，应用内拖不进图片 /
+/// 工作流，而浏览器整窗打开同一个 ComfyUI 地址却是好的（ISSUE #616 的现场）。
+///
+/// 成因：宿主窗口默认挂着 **WebView2 的原生拖放处理器**（wry 的
+/// `drag_drop_handler_enabled`，默认 true；tauri 的
+/// `WebviewWindowBuilder::disable_drag_drop_handler` 的官方说明就是
+/// 「Disables the drag and drop handler. **This is required to use HTML5 drag and
+/// drop APIs on the frontend on Windows.**」）。它一接手，Chromium 就不再走自己
+/// 的拖放路径：`dragover` / `drop` **不派发到 DOM**，文件被换成 wry 的回调
+/// `on_drag_drop` —— 而本应用没有注册它，于是「拖进去一点反应都没有」。
+/// 页签里的 ComfyUI 完全靠 `drop` 事件的 `dataTransfer.files`，它自己并不知道
+/// 被壳托管着，所以看起来就是这个功能在应用里坏了（浏览器整窗打开没有这层壳，
+/// 因此正常——这条对照就是最好的判据）。
+///
+/// 为什么在**宿主**窗口上关：命中测试落在宿主那个 WebView（`main`）上，iframe
+/// 只是它内部的一块区域，被拖进来的文件由宿主这一层决定交给 DOM 还是交给原生
+/// 处理器。ComfyUI 自己的独立窗口（`open_comfyui_window` 建的 `comfyui` 窗）
+/// 不承载 iframe，保留默认。
+///
+/// 为什么可以放心关（本应用的壳侧**不消费**原生拖放）：窗口内没有一处需要原生
+/// 文件拖入——项目画布与工作流库的拖放都是页内拖元素（自定义 dataTransfer），
+/// 与文件拖入无关；壳侧也没有注册 `on_drag_drop`，`tauri://drag-drop` 事件
+/// 无人监听。关掉它是纯收益：DOM 恢复正常拖放语义，同时少一层原生处理器。
+/// **改回默认值 = 重新引入本缺陷**，门禁把它钉在
+/// `tests/comfyui-embed-csp.test.ts`（同族还有页签内嵌的 CSP 放行断言）。
 
 /// 创建隐藏待命的「应用」窗口（label="main"），并挂上「页面加载完成即交换窗口」回调。
 ///
@@ -1073,6 +1134,11 @@ fn create_main_window(app: &mut tauri::App) -> tauri::Result<()> {
     // 显式唤起（托盘 / 二次启动 / 启动器判决给前台）仍走 set_focus()，
     // 不受本标记影响。
     .focused(false)
+    // 关掉 WebView2 的**原生拖放拦截**：不关，页签里的 ComfyUI 收不到 HTML5
+    // 拖放事件，图片/工作流拖进去毫无反应（浏览器整窗打开同一地址却正常）。
+    // 判据与查证方式见 `main_window_native_drag_disabled`（函数注释里写全了
+    // 「为什么 wry 的默认值是 true」与改回默认值的后果）。
+    .disable_drag_drop_handler()
     .on_page_load(move |_win, payload| {
       if payload.event() == tauri::webview::PageLoadEvent::Finished {
         on_main_page_finished(&app_handle_for_page, payload.url().clone());

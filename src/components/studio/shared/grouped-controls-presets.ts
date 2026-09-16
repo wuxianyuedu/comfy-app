@@ -25,14 +25,21 @@ export const VIDEO_QUALITY_PRESETS: { label: string; value: number }[] = [
 
 /** Map a video length / quality / aspect value to a friendly popover label. */
 export function videoDurationLabel(value: number): string {
-  return VIDEO_DURATION_PRESETS.find((preset) => preset.value === value)?.label ?? `${value} 帧`;
+  return (
+    VIDEO_DURATION_PRESETS.find((preset) => preset.value === value)?.label ??
+    `${value} 帧`
+  );
 }
 export function videoQualityLabel(value: number): string {
-  return VIDEO_QUALITY_PRESETS.find((preset) => preset.value === value)?.label ?? `${value}P`;
+  return (
+    VIDEO_QUALITY_PRESETS.find((preset) => preset.value === value)?.label ??
+    `${value}P`
+  );
 }
 export function videoAspectLabel(ratio: number): string {
   return shortRatioLabel(
-    DIM_RATIO_PRESETS.find((preset) => Math.abs(preset.ratio - ratio) < 0.05)?.label ?? "自定义"
+    DIM_RATIO_PRESETS.find((preset) => Math.abs(preset.ratio - ratio) < 0.05)
+      ?.label ?? "自定义",
   );
 }
 

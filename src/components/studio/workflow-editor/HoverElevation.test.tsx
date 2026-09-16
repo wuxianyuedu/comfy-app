@@ -71,7 +71,10 @@ function nodeData(overrides: Partial<WorkflowNodeData> = {}): WorkflowNodeData {
  *  的原因，也是 CSS 选择器 `.react-flow__node[data-hovered="true"]` 的落点。 */
 function renderInsideNodeWrapper(data: WorkflowNodeData) {
   return render(
-    <div className="react-flow__node react-flow__node-wfNode" style={{ position: "absolute", zIndex: 10 }}>
+    <div
+      className="react-flow__node react-flow__node-wfNode"
+      style={{ position: "absolute", zIndex: 10 }}
+    >
       <ReactFlowProvider>
         <WFStoresProvider stores={makeStores()}>
           <FlowNode data={data} />
@@ -99,7 +102,9 @@ describe("悬浮置顶：标记落在 React Flow 的节点外壳上", () => {
   it("初始不写 data-hovered（避免全局选择器误命中）", () => {
     const { container } = renderInsideNodeWrapper(nodeData());
     expect(wrapperOf(container).hasAttribute(HOVER_ATTRIBUTE)).toBe(false);
-    expect(container.querySelectorAll(`[${HOVER_ATTRIBUTE}="true"]`)).toHaveLength(0);
+    expect(
+      container.querySelectorAll(`[${HOVER_ATTRIBUTE}="true"]`),
+    ).toHaveLength(0);
   });
 
   it("鼠标移入卡片 → 外壳打标记；移出 → 撤销", () => {
@@ -132,7 +137,9 @@ describe("悬浮置顶：标记落在 React Flow 的节点外壳上", () => {
     const card = cardOf(container);
     fireEvent.mouseEnter(card);
 
-    const marked = container.querySelector(`.react-flow__node[${HOVER_ATTRIBUTE}="true"]`);
+    const marked = container.querySelector(
+      `.react-flow__node[${HOVER_ATTRIBUTE}="true"]`,
+    );
     expect(marked).not.toBeNull();
     expect(marked).toBe(wrapperOf(container));
   });
@@ -162,9 +169,10 @@ describe("悬浮压住连线：CSS 抬升规则", () => {
   });
 
   it("抬升值高于节点自带 zIndex，也高于选中态（+1000）", () => {
-    const decl = /\.react-flow__node\[data-hovered="true"\]\s*\{[^}]*z-index:\s*(\d+)/.exec(
-      css,
-    );
+    const decl =
+      /\.react-flow__node\[data-hovered="true"\]\s*\{[^}]*z-index:\s*(\d+)/.exec(
+        css,
+      );
     expect(decl).not.toBeNull();
     const hoverZ = Number(decl![1]);
     /* 节点自带 zIndex 最大 20（对外参数卡片）、选中态 ≈1010（elevateNodesOnSelect）。 */
@@ -177,7 +185,9 @@ describe("悬浮压住连线：CSS 抬升规则", () => {
     /* 选择器必须带 [data-hovered="true"] —— 无条件给 .react-flow__node 抬层级
      * 会让所有节点常驻最上层，等于把「连线压在节点上」的默认关系永久倒过来。 */
     expect(css.includes('.react-flow__node[data-hovered="true"]')).toBe(true);
-    expect(/\.react-flow__node\s*\{[^}]*z-index:[^}]*!important/.test(css)).toBe(false);
+    expect(
+      /\.react-flow__node\s*\{[^}]*z-index:[^}]*!important/.test(css),
+    ).toBe(false);
   });
 
   it("注释里写明了 !important 的理由（行内 z-index 优先于类选择器）", () => {
@@ -233,7 +243,9 @@ describe("useHoverElevation", () => {
     const { getByTestId } = render(<Bare />);
     const bare = getByTestId("bare");
     expect(() => fireEvent.mouseEnter(bare)).not.toThrow();
-    expect(document.querySelectorAll(`[${HOVER_ATTRIBUTE}="true"]`)).toHaveLength(0);
+    expect(
+      document.querySelectorAll(`[${HOVER_ATTRIBUTE}="true"]`),
+    ).toHaveLength(0);
   });
 });
 
@@ -274,6 +286,8 @@ describe("悬浮状态是每个节点自己的", () => {
       fireEvent.mouseEnter(card);
       fireEvent.mouseLeave(card);
     }
-    expect(container.querySelectorAll(`[${HOVER_ATTRIBUTE}="true"]`)).toHaveLength(0);
+    expect(
+      container.querySelectorAll(`[${HOVER_ATTRIBUTE}="true"]`),
+    ).toHaveLength(0);
   });
 });

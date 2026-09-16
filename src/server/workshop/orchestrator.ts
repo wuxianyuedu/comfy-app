@@ -13,7 +13,12 @@ import {
   parseExtractedCharacters,
   parseExtractedShots,
 } from "@/lib/workshop/script-parse";
-import { buildCharacterNegative, buildCharacterPrompt, buildShotNegative, buildShotPrompt } from "@/lib/workshop/prompt-builder";
+import {
+  buildCharacterNegative,
+  buildCharacterPrompt,
+  buildShotNegative,
+  buildShotPrompt,
+} from "@/lib/workshop/prompt-builder";
 import { sizeSpecToWxH, type SizeSpec } from "@/lib/size-presets";
 import {
   generateImageViaApi,
@@ -36,7 +41,10 @@ const SCRIPT_SYSTEM = `你是漫剧编剧。把用户给出的灵感 / 梗概扩
 要求：分场景书写，每场用「场景N · 标题」起头，含地点 / 时间；动作行以「Δ」开头，
 台词行以「V1 角色：台词」形式书写。中文，画面感强，节奏适合短视频。`;
 
-function buildScriptMessages(idea: string, meta: ProjectMeta): Parameters<typeof completeWorkshopLLM>[1] {
+function buildScriptMessages(
+  idea: string,
+  meta: ProjectMeta,
+): Parameters<typeof completeWorkshopLLM>[1] {
   const brief = [
     meta.tone ? `基调：${meta.tone}` : "",
     meta.logline ? `一句话梗概：${meta.logline}` : "",
@@ -130,9 +138,13 @@ export async function setIdea(id: string, idea: string) {
 
 export async function generateScript(id: string) {
   const state = await load(id);
-  if (!state.idea.trim()) throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
+  if (!state.idea.trim())
+    throw new Error("请先设置 idea（灵感 / 梗概）再生成脚本");
   const cfg = await getWorkshopLLMConfig();
-  const script = await completeWorkshopLLM(cfg, buildScriptMessages(state.idea, state.meta));
+  const script = await completeWorkshopLLM(
+    cfg,
+    buildScriptMessages(state.idea, state.meta),
+  );
   const scenes = parseIdeaToScenes(script, {
     title: state.meta.title,
     type: state.meta.type,
@@ -159,18 +171,30 @@ export async function setScript(id: string, markdown: string, parse = true) {
   }
   state.stage = "script";
   await repo.updateState(id, state);
-  return { scriptLength: markdown.length, sceneCount: state.scenes.length, scenes: state.scenes };
+  return {
+    scriptLength: markdown.length,
+    sceneCount: state.scenes.length,
+    scenes: state.scenes,
+  };
 }
 
 // ── 阶段 2：角色卡 ─────────────────────────────────────────────
 
 export async function extractCharacters(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再提取角色");
+  if (!state.meta.scriptMarkdown?.trim())
+    throw new Error("请先生成 / 设置脚本再提取角色");
   const cfg = await getWorkshopLLMConfig();
-  const text = await completeWorkshopLLM(cfg, buildExtractCharactersMessages(state.meta.scriptMarkdown));
+  const text = await completeWorkshopLLM(
+    cfg,
+    buildExtractCharactersMessages(state.meta.scriptMarkdown),
+  );
   const drafts = parseExtractedCharacters(text);
-  const { list, added, skipped } = mergeCharacterDrafts(state.characters, drafts, []);
+  const { list, added, skipped } = mergeCharacterDrafts(
+    state.characters,
+    drafts,
+    [],
+  );
   state.characters = list;
   state.stage = "character";
   await repo.updateState(id, state);
@@ -189,12 +213,20 @@ export async function setCharacters(id: string, characters: Character[]) {
 
 export async function buildStoryboard(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) throw new Error("请先生成 / 设置脚本再拆分分镜");
+  if (!state.meta.scriptMarkdown?.trim())
+    throw new Error("请先生成 / 设置脚本再拆分分镜");
   const names = state.characters.map((c) => c.name);
   const cfg = await getWorkshopLLMConfig();
-  const text = await completeWorkshopLLM(cfg, buildExtractShotsMessages(state.meta.scriptMarkdown, names));
+  const text = await completeWorkshopLLM(
+    cfg,
+    buildExtractShotsMessages(state.meta.scriptMarkdown, names),
+  );
   const entries = parseExtractedShots(text);
-  const shots = rebuildShotPrompts(buildShotsFromEntries(entries, 0, state.scenes, state.characters), state.scenes, state.characters);
+  const shots = rebuildShotPrompts(
+    buildShotsFromEntries(entries, 0, state.scenes, state.characters),
+    state.scenes,
+    state.characters,
+  );
   state.shots = shots;
   state.stage = "storyboard";
   await repo.updateState(id, state);
@@ -226,7 +258,9 @@ export async function generateImage(id: string, input: GenerateImageInput) {
   const channel = input.channel ?? "api";
   let prompt: string;
   let negative: string | undefined;
-  const shot = input.shotId ? state.shots.find((s) => s.id === input.shotId) : undefined;
+  const shot = input.shotId
+    ? state.shots.find((s) => s.id === input.shotId)
+    : undefined;
   const character = input.characterId
     ? state.characters.find((c) => c.id === input.characterId)
     : undefined;
@@ -240,7 +274,12 @@ export async function generateImage(id: string, input: GenerateImageInput) {
     throw new Error("generateImage 需要有效的 shotId 或 characterId");
   }
   if (channel === "comfyui") {
-    const url = await generateImageViaComfyUI({ prompt, negative, size: input.size, sessionId: id });
+    const url = await generateImageViaComfyUI({
+      prompt,
+      negative,
+      size: input.size,
+      sessionId: id,
+    });
     if (shot) {
       shot.imageUrl = url;
       shot.status = "done";
@@ -328,7 +367,11 @@ export async function pollVideo(id: string, shotId: string) {
   if (!shot) throw new Error(`镜头不存在：${shotId}`);
   const taskId = extractRemoteTaskId(shot.clipUrl);
   if (!taskId) {
-    return { pending: false, url: shot.clipUrl, note: "该镜头没有待轮询的异步任务" };
+    return {
+      pending: false,
+      url: shot.clipUrl,
+      note: "该镜头没有待轮询的异步任务",
+    };
   }
   const r = await pollVideoViaApi(taskId);
   if (!r.pending && r.url) {
@@ -354,9 +397,15 @@ export interface ComposeFinalResult {
 }
 
 /** 把分镜按序合成为成片：写出合成清单（JSON），可选 ffmpeg 渲染成 mp4。 */
-export async function composeFinal(id: string, input: ComposeFinalInput = {}): Promise<ComposeFinalResult> {
+export async function composeFinal(
+  id: string,
+  input: ComposeFinalInput = {},
+): Promise<ComposeFinalResult> {
   const state = await load(id);
-  const plan = buildCompositionPlan(input.title ?? state.meta.title, state.shots);
+  const plan = buildCompositionPlan(
+    input.title ?? state.meta.title,
+    state.shots,
+  );
   const planPath = await writeCompositionPlan(id, plan);
   let outputPath: string | undefined;
   let renderNote: string | undefined;

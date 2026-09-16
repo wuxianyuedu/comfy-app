@@ -15,6 +15,7 @@
 //   venv = 源码内 .venv / venv（自建 Python 虚拟环境）；
 //   unknown = 无 main.py（不是有效安装）等无法判定的情形。
 
+import "server-only";
 import fs from "fs";
 import path from "path";
 

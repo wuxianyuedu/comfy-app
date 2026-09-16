@@ -124,7 +124,7 @@ export function WorkflowParamCard({
 
   return (
     <div
-      className="bg-card relative flex flex-col rounded-lg border shadow-card"
+      className="bg-card shadow-card relative flex flex-col rounded-lg border"
       style={{
         width,
         /* 描边配色：选中 → 分类色；**可编辑但当前不可连**（没有模式语境）→ 灰，
@@ -163,12 +163,12 @@ export function WorkflowParamCard({
           }}
         />
         <span
-          className="min-w-0 flex-1 truncate text-[11px] font-semibold text-ink-bright"
+          className="text-ink-bright min-w-0 flex-1 truncate text-[11px] font-semibold"
           title={`${classLabel} · ${hostNodeId}`}
         >
           {label}
           {idLabel && (
-            <span className="ml-1 font-mono text-[10px] font-normal text-ink-faint">
+            <span className="text-ink-faint ml-1 font-mono text-[10px] font-normal">
               {idLabel}
             </span>
           )}
@@ -181,7 +181,7 @@ export function WorkflowParamCard({
             className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
               canReset
                 ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
-                : "cursor-default text-ink-fainter"
+                : "text-ink-fainter cursor-default"
             }`}
             data-testid={`param-node-reset-${entryId}`}
             title={
@@ -223,9 +223,7 @@ export function WorkflowParamCard({
             {side === "left" ? endpoint?.(port, index) : null}
             <span
               className={`min-w-0 truncate ${
-                port.connected
-                  ? "text-ink-soft"
-                  : "text-ink-fainter"
+                port.connected ? "text-ink-soft" : "text-ink-fainter"
               }`}
             >
               {port.name}
@@ -254,7 +252,9 @@ export function WorkflowParamCard({
       {!readOnly && footNote && (
         <div
           className={`px-2 pb-1.5 text-[9.5px] leading-relaxed ${
-            wired ? "text-ink-fainter" : "text-amber-600/90 dark:text-amber-500/80"
+            wired
+              ? "text-ink-fainter"
+              : "text-amber-600/90 dark:text-amber-500/80"
           }`}
           data-testid={`param-node-hint-${entryId}`}
         >

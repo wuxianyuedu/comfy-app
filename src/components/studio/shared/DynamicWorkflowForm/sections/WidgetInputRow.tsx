@@ -121,8 +121,8 @@ export function WidgetInputRow({
             onMouseDown={(ev) => ev.stopPropagation()}
             className={`nodrag nopan shrink-0 rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
               entry.required
-                ? "border border-red-400/40 bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/25"
-                : "border border-border-strong bg-subtle text-ink-muted hover:bg-subtle hover:text-ink-soft"
+                ? "border border-red-400/40 bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-300"
+                : "border-border-strong bg-subtle text-ink-muted hover:bg-subtle hover:text-ink-soft border"
             }`}
           >
             {entry.required ? "必填" : "可选"}
@@ -171,24 +171,22 @@ export function WidgetInputRow({
           )}
           <div className="px-[14px] pt-1.5">{labelRow}</div>
           <div className="px-[14px] pt-1 pb-1.5">
-            <span className="text-[11px] text-ink-muted">只接受连线</span>
+            <span className="text-ink-muted text-[11px]">只接受连线</span>
           </div>
         </div>
       );
     }
     return (
-      <div
-        className={`relative ${dimmed ? "opacity-50" : ""}`}
-      >
+      <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
         {withHandle && (
           <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
         )}
-        <div className="flex items-center gap-2 rounded-md bg-canvas-deep px-2.5 py-1.5 pr-[14px] pl-[14px]">
+        <div className="bg-canvas-deep flex items-center gap-2 rounded-md px-2.5 py-1.5 pr-[14px] pl-[14px]">
           <span
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ background: accent }}
           />
-          <span className="min-w-0 flex-1 truncate text-[11px] text-ink-soft">
+          <span className="text-ink-soft min-w-0 flex-1 truncate text-[11px]">
             {label}
           </span>
           {/* link 行同样打印 pin 真实声明的类型：MODEL / CLIP / LATENT /
@@ -248,9 +246,7 @@ export function WidgetInputRow({
   /* 宽版：标签行在上，控件紧随其后。handle 挂在行 wrapper 上，圆心才能骑跨
    * 卡片左缘 —— 放进带 padding 的子行会让圆心内缩 14px，与端口行错位。 */
   return (
-    <div
-      className={`relative ${dimmed ? "opacity-50" : ""}`}
-    >
+    <div className={`relative ${dimmed ? "opacity-50" : ""}`}>
       {withHandle && (
         <PortHandle id={handleId ?? entry.ioKey} dir="in" type={entry.type} />
       )}

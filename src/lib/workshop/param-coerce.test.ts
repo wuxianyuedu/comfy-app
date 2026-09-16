@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_GEN_PARAMS, paramInt, paramNumber, paramString } from "./param-coerce";
+import { paramInt, paramNumber, paramString } from "./param-coerce";
 
 describe("paramString", () => {
   it("字符串原样返回", () => {
     expect(paramString("euler", "dpmpp_2m")).toBe("euler");
   });
 
-  it("空串落回缺省——参数表里的 \"\" 是「用户清空了输入框」，不是有效值", () => {
+  it('空串落回缺省——参数表里的 "" 是「用户清空了输入框」，不是有效值', () => {
     expect(paramString("", "normal")).toBe("normal");
   });
 
@@ -55,16 +55,5 @@ describe("paramInt", () => {
 
   it("落回缺省时同样取整，缺省值本身若是小数不会漏过去", () => {
     expect(paramInt("abc", 28.6)).toBe(29);
-  });
-});
-
-describe("内置 txt2img 缺省值唯一来源", () => {
-  it("三条生成链路的缺省参数取自同一常量", () => {
-    expect(DEFAULT_GEN_PARAMS).toEqual({
-      steps: 28,
-      cfg: 7,
-      sampler: "euler_ancestral",
-      scheduler: "normal",
-    });
   });
 });

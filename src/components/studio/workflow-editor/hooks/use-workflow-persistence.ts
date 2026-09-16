@@ -3,8 +3,14 @@
 import { useCallback, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
-import type { WorkflowDetail, WorkflowIOParam } from "@/components/studio/workflow-types";
-import { NODE_TITLE_H, extractNoteTitle } from "@/components/studio/workflow-utils";
+import type {
+  WorkflowDetail,
+  WorkflowIOParam,
+} from "@/components/studio/workflow-types";
+import {
+  NODE_TITLE_H,
+  extractNoteTitle,
+} from "@/components/studio/workflow-utils";
 import { MODE_KEY_PREFIX, runtimeNodeId } from "@/lib/workflow-param-mapping";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
@@ -96,7 +102,7 @@ export function useWorkflowPersistence({
       const inner = key.slice(prefix.length);
       return inner.includes(":");
     },
-    [hostNodeId]
+    [hostNodeId],
   );
   /* 把当前视图的节点位置恢复成工作流自带的原始布局（用户口语里的
    *  「重置位置」）。语义 = 清除本视图所有被改动过的坐标，见下方实现说明。 */
@@ -161,10 +167,11 @@ export function useWorkflowPersistence({
           ...node.data,
           assignedRole:
             Object.entries(paramMap).find(
-              ([key, value]) => value === node.data.nodeId && !key.startsWith(MODE_KEY_PREFIX)
+              ([key, value]) =>
+                value === node.data.nodeId && !key.startsWith(MODE_KEY_PREFIX),
             )?.[0] ?? null,
         },
-      }))
+      })),
     );
   }, [paramMap, setNodes]);
 
@@ -186,7 +193,16 @@ export function useWorkflowPersistence({
     } finally {
       setSaving(false);
     }
-  }, [workflowId, paramMap, workflowIO, onSave, savePatch, setError, setSaving, toast]);
+  }, [
+    workflowId,
+    paramMap,
+    workflowIO,
+    onSave,
+    savePatch,
+    setError,
+    setSaving,
+    toast,
+  ]);
 
   /* Persist a node's position after the user finishes dragging it.
    *  - Note nodes (`note:<id>`) → write back into rawJson.nodes[i].pos via
@@ -205,83 +221,112 @@ export function useWorkflowPersistence({
    *    way as a real graph node.
    *  The write is fire-and-forget: it must NOT trigger a detail re-fetch, so
    *  the canvas never re-mounts or flashes. */
-    const reportPositionSaveFailure = useCallback(
-      (err: unknown) => {
-        console.error("[workflow-persistence] failed to persist node position", err);
-        toast.error("位置保存失败", err instanceof Error ? err.message : "请重试");
-      },
-      [toast]
-    );
+  const reportPositionSaveFailure = useCallback(
+    (err: unknown) => {
+      console.error(
+        "[workflow-persistence] failed to persist node position",
+        err,
+      );
+      toast.error(
+        "位置保存失败",
+        err instanceof Error ? err.message : "请重试",
+      );
+    },
+    [toast],
+  );
 
-    const onNodeDragStop = useCallback(
-      (_event: unknown, node: Node) => {
-        /* `detail` may be null during the loading → ready transition
-         * (e.g. user closes the editor mid-load); if so we have nowhere
-         * to persist the new position.  Bail silently — the canvas
-         * re-mounts with the persisted state on the next open. */
-        if (!detail) return;
-        const x = Math.round(node.position.x);
-        /* Anchor inversion: wfNode / wfSubgraph cards paint a
-         *  30 px title bar ABOVE their body, so the React Flow `position.y`
-         *  is the CARD (title-bar) top, and the body sits `NODE_TITLE_H`
-         *  below it.  The on-disk `positions[id]` must keep the ComfyUI
-         *  body-top convention (what the user/other tools expect), so we
-         *  ADD NODE_TITLE_H before persisting: bodyTop = cardTop + 30.
-         *  Untitled notes, wfGroup and wfIoPort don't carry a title bar,
-         *  so their `position` already equals the ComfyUI top-left. */
-        const back = node.type ? NODE_TITLE_ANCHOR[node.type] ?? 0 : 0;
-        const y = Math.round(node.position.y + back);
-        if (node.id.startsWith("note:")) {
-          const noteId = node.id.replace(/^note:/, "");
-          /* Same anchor convention as the wfNode / wfSubgraph branch: a
-           *  titled note's React Flow `position.y` is its CARD top
-           *  (title-bar top), while the body sits NODE_TITLE_H below.  The
-           *  on-disk `pos` keeps the ComfyUI body-top convention, so we
-           *  ADD NODE_TITLE_H before persisting.  Untitled notes need no
-           *  inversion because their React Flow box has no title bar. */
-          const noteMeta = (detail.notes ?? []).find((nn) => String(nn.id) === noteId);
-          const noteHasTitle = noteMeta ? !!extractNoteTitle(noteMeta.text, noteMeta.title) : false;
-          const noteY = Math.round(node.position.y + (noteHasTitle ? NODE_TITLE_H : 0));
-          setDetail((prev) =>
-            prev
-              ? { ...prev, notes: (prev.notes ?? []).map((note) => (note.id === noteId ? { ...note, pos: [x, noteY] } : note)) }
-              : prev
-          );
-          savePatch.mutate(
-            {
-              id: workflowId,
-              notes: [{ id: noteId, pos: [x, noteY] }],
-            },
-            { onError: reportPositionSaveFailure }
-          );
-        } else {
-          /* 图节点拖拽统一
-           *  写回 detail.positions（覆盖 ComfyUI 原始布局）。
-           *
-           *  子图视图下的节点 id 是**裸内部 id**，而 `positions` 列存的是
-           *  `宿主:内部` 拼接键（`runtimeNodeId` 就是这条约定的实现，预览/运行
-           *  链路也用它）。不拼前缀就会出现两个各写各的键：子图里的拖拽落到
-           *  `1670`、顶层链路只认 `4:1670`，两边的布局互相看不见 —— 下钻回来
-           *  时那个裸键还会被当成「已保存坐标」把真正的原始位置盖掉。 */
-          const nodeId = runtimeNodeId({ nodeId: node.id, hostNodeId });
-          setDetail((prev) =>
-            prev ? { ...prev, positions: { ...(prev.positions ?? {}), [nodeId]: [x, y] } } : prev
-          );
-          /* 一律走 `merge: true` 的单键合并：`positions` 是一张混装多套
-           *  id 命名空间（顶层裸 id / 子图拼接键 / `grp:bpin:*` 导轨）的平表，
-           *  顶层默认的 REPLACE 会把其它命名空间的坐标整片清掉。 */
-          savePatch.mutate(
-            {
-              id: workflowId,
-              positions: { [nodeId]: [x, y] },
-              mergePositions: true,
-            },
-            { onError: reportPositionSaveFailure }
-          );
-        }
-      },
-      [detail, setDetail, workflowId, savePatch, hostNodeId, reportPositionSaveFailure]
-    );
+  const onNodeDragStop = useCallback(
+    (_event: unknown, node: Node) => {
+      /* `detail` may be null during the loading → ready transition
+       * (e.g. user closes the editor mid-load); if so we have nowhere
+       * to persist the new position.  Bail silently — the canvas
+       * re-mounts with the persisted state on the next open. */
+      if (!detail) return;
+      const x = Math.round(node.position.x);
+      /* Anchor inversion: wfNode / wfSubgraph cards paint a
+       *  30 px title bar ABOVE their body, so the React Flow `position.y`
+       *  is the CARD (title-bar) top, and the body sits `NODE_TITLE_H`
+       *  below it.  The on-disk `positions[id]` must keep the ComfyUI
+       *  body-top convention (what the user/other tools expect), so we
+       *  ADD NODE_TITLE_H before persisting: bodyTop = cardTop + 30.
+       *  Untitled notes, wfGroup and wfIoPort don't carry a title bar,
+       *  so their `position` already equals the ComfyUI top-left. */
+      const back = node.type ? (NODE_TITLE_ANCHOR[node.type] ?? 0) : 0;
+      const y = Math.round(node.position.y + back);
+      if (node.id.startsWith("note:")) {
+        const noteId = node.id.replace(/^note:/, "");
+        /* Same anchor convention as the wfNode / wfSubgraph branch: a
+         *  titled note's React Flow `position.y` is its CARD top
+         *  (title-bar top), while the body sits NODE_TITLE_H below.  The
+         *  on-disk `pos` keeps the ComfyUI body-top convention, so we
+         *  ADD NODE_TITLE_H before persisting.  Untitled notes need no
+         *  inversion because their React Flow box has no title bar. */
+        const noteMeta = (detail.notes ?? []).find(
+          (nn) => String(nn.id) === noteId,
+        );
+        const noteHasTitle = noteMeta
+          ? !!extractNoteTitle(noteMeta.text, noteMeta.title)
+          : false;
+        const noteY = Math.round(
+          node.position.y + (noteHasTitle ? NODE_TITLE_H : 0),
+        );
+        setDetail((prev) =>
+          prev
+            ? {
+                ...prev,
+                notes: (prev.notes ?? []).map((note) =>
+                  note.id === noteId ? { ...note, pos: [x, noteY] } : note,
+                ),
+              }
+            : prev,
+        );
+        savePatch.mutate(
+          {
+            id: workflowId,
+            notes: [{ id: noteId, pos: [x, noteY] }],
+          },
+          { onError: reportPositionSaveFailure },
+        );
+      } else {
+        /* 图节点拖拽统一
+         *  写回 detail.positions（覆盖 ComfyUI 原始布局）。
+         *
+         *  子图视图下的节点 id 是**裸内部 id**，而 `positions` 列存的是
+         *  `宿主:内部` 拼接键（`runtimeNodeId` 就是这条约定的实现，预览/运行
+         *  链路也用它）。不拼前缀就会出现两个各写各的键：子图里的拖拽落到
+         *  `1670`、顶层链路只认 `4:1670`，两边的布局互相看不见 —— 下钻回来
+         *  时那个裸键还会被当成「已保存坐标」把真正的原始位置盖掉。 */
+        const nodeId = runtimeNodeId({ nodeId: node.id, hostNodeId });
+        setDetail((prev) =>
+          prev
+            ? {
+                ...prev,
+                positions: { ...(prev.positions ?? {}), [nodeId]: [x, y] },
+              }
+            : prev,
+        );
+        /* 一律走 `merge: true` 的单键合并：`positions` 是一张混装多套
+         *  id 命名空间（顶层裸 id / 子图拼接键 / `grp:bpin:*` 导轨）的平表，
+         *  顶层默认的 REPLACE 会把其它命名空间的坐标整片清掉。 */
+        savePatch.mutate(
+          {
+            id: workflowId,
+            positions: { [nodeId]: [x, y] },
+            mergePositions: true,
+          },
+          { onError: reportPositionSaveFailure },
+        );
+      }
+    },
+    [
+      detail,
+      setDetail,
+      workflowId,
+      savePatch,
+      hostNodeId,
+      reportPositionSaveFailure,
+    ],
+  );
 
   return { resetLayout, handleSave, onNodeDragStop };
 }

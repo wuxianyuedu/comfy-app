@@ -4,12 +4,9 @@
  * first [ or { and the matching last ] or }.
  */
 export function extractJson(text: string): unknown {
-
   let trimmed = (text ?? "").trim();
 
   if (!trimmed) throw new Error("LLM 返回为空");
-
-
 
   // Strip ```json ... ``` fences
 
@@ -17,33 +14,22 @@ export function extractJson(text: string): unknown {
 
   if (fence) trimmed = fence[1]!.trim();
 
-
-
   const start = trimmed.search(/[[{]/);
 
   const end = Math.max(trimmed.lastIndexOf("]"), trimmed.lastIndexOf("}"));
 
   if (start >= 0 && end > start) {
-
     trimmed = trimmed.slice(start, end + 1);
-
   }
 
-
-
   return JSON.parse(trimmed);
-
 }
-
 
 /** Like extractJson but always returns an array (or throws). */
 export function extractJsonArray(text: string): unknown[] {
-
   const value = extractJson(text);
 
   if (!Array.isArray(value)) throw new Error("LLM 未返回数组");
 
   return value;
-
 }
-

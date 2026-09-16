@@ -53,17 +53,28 @@ async function callWithTools(
   cfg: LLMConfig,
   messages: LLMMessage[],
   tools: LLMTool[],
-): Promise<{ content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }> {
+): Promise<{
+  content: string;
+  toolCalls: Array<{
+    id: string;
+    function: { name: string; arguments: string };
+  }>;
+}> {
   return completeLLMTools(cfg, messages, tools);
 }
 
 /** 普通对话调用（不带 tools / response_format）。 */
-async function callPlain(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
+async function callPlain(
+  cfg: LLMConfig,
+  messages: LLMMessage[],
+): Promise<string> {
   return completeLLM(cfg, messages);
 }
 
 /** 处理一次 Agent 请求：调模型理解意图并返回指令。 */
-export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
+export async function handleAgentChat(
+  req: AgentChatRequest,
+): Promise<AgentChatResponse> {
   const cfg = await getLLMConfig({ taskType: "chat" });
   const messages = narrowMessages(req.messages);
   const tools = workshopOpenAITools();
@@ -81,7 +92,11 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   // 方案 1：OpenAI 兼容 tools 协议
   if (req.useTools !== false) {
     try {
-      const { content, toolCalls } = await callWithTools(cfg, sysMessages, tools);
+      const { content, toolCalls } = await callWithTools(
+        cfg,
+        sysMessages,
+        tools,
+      );
       if (toolCalls.length > 0) {
         return {
           ...(content.trim() ? { reply: content.trim() } : {}),
@@ -114,7 +129,10 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   // 从模型输出解析 JSON 指令
   const instruction = parseJsonInstruction(content);
   if (!instruction) {
-    return { reply: content.trim() || "抱歉，我暂时无法理解你的意思。", done: true };
+    return {
+      reply: content.trim() || "抱歉，我暂时无法理解你的意思。",
+      done: true,
+    };
   }
 
   // 指令对象可能是 {reply: ...} / {action: ...} / {done: true, reply: ...}
@@ -133,5 +151,8 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   if (hasReply) {
     return { reply: instruction.reply as string };
   }
-  return { reply: content.trim() || "我已收到你的请求，但暂时无法处理。", done: true };
+  return {
+    reply: content.trim() || "我已收到你的请求，但暂时无法处理。",
+    done: true,
+  };
 }

@@ -141,6 +141,12 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 ✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
 ✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
 ✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
+✅ vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts
+   tests/core-spine-single-source.test.ts   # core 骨架单一事实源（见 18 §18.8）
+✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
+✅ vitest run tests/lib-node-only-declarations.test.ts # src/lib Node-only 声明（见 18 §18.4）
+✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
+✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ```
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
@@ -151,11 +157,69 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
   别名链会崩溃（`Class extends value undefined`）。
 - **E2E 用 `@critical` tag 圈定关键流程**：新增冒烟用例若属于「合并前必须验证的
   主流程」，标题带上 `@critical`；非关键用例不阻断合并。
-- **`format:check`（prettier）暂未纳入门禁**：全库基线未过 prettier，一次性格式化
-  会产生与功能无关的全文件 diff（违反 [13.7](#137-换行符与提交噪声lf)）。待基线整改
-  后单独接入，接入时同步删掉 ci.yml 里对应注释。
+- **prettier 已接入，但走「棘轮」而不是「全库必须过」**：见下面 13.5.1 / 13.5.2。
 - 新增含 postinstall 构建脚本的依赖，同步 `pnpm-workspace.yaml` 的 `allowBuilds`
   （AGENTS.md 硬规则 7），否则非交互 `pnpm install` 会 exit 1。
+
+#### 13.5.1 prettier 格式棘轮（ISSUE #575 第 9 项）
+
+`format:check` 是**唯一长期没有纳入门禁**的既有质量命令。原因很实在：全库
+**576 个文件**未过 prettier，一次性 `--write` 会产生与本次改动无关的全文件 diff
+（违反 [13.7](#137-换行符与提交噪声lf)，评审无法从 diff 里看出改了什么）。
+但「等基线整改完再接入」的代价是**每个新文件都可以带着任意格式进来**，存量只增
+不减，那一天永远不会到。
+
+判据因此改为**基线 + 只许下降**（`scripts/check-format.cjs`，与重复块 / 函数长度 /
+文件行数 / 环依赖同口径）：
+
+| 情形 | 结果 |
+|---|---|
+| 新增未过 prettier 的文件 | **阻断** |
+| 存量文件从干净变脏 | **阻断**（它落在基线外） |
+| 治理有进展（未过文件变少） | 提示执行 `--update` 收紧；CI `--strict` 下**未收紧即失败** |
+| `--update` 试图把新增的脏文件写进基线 | **拒绝**（棘轮只许收紧） |
+
+两个刻意的设计：
+
+- **按文件记账，不记全局计数。** 计数只约束总量 —— 修好 3 个、弄坏 4 个，总数变大
+  才失败，弄坏的那 3 个无人知晓。文件级记账下「把干净的文件弄脏」当场失败，而
+  「这个文件此前是干净的」本身就是一个可断言的事实。
+- **白名单是形态（glob），不是文件列表。** `scripts/**`、`tests/**`、`e2e/**`、
+  根级配置是**高频 churn 路径**（每次排障都要改一遍），把它们纳入棘轮会让每一次
+  排障提交都顺带产生格式 diff。用 glob 表达「这类文件暂不纳入」不会漂移，且新增
+  这类文件时**自动**落在白名单里。豁免不进棘轮计数。
+
+**存量文件怎么治理**：单独立项、单独一个 PR，对一批文件跑
+`pnpm exec prettier --write <文件>`，提交后 `node scripts/check-format.cjs --update`
+收紧基线。**禁止**在功能提交里顺手做（见 13.5.2）。
+
+#### 13.5.2 格式化提交与行为改动分离（同批）
+
+格式棘轮只判「文件干不干净」，管不住「顺手全库 `format:write`」—— 后者会把一次
+真实改动埋在几百个文件的重排里，`git blame` 当场失效、评审看不出改了什么。
+`scripts/check-reformat-only.cjs` 判**这次提交的形态**：
+
+- 某文件的改动若「把改动前的**整份文件**交给 prettier 重排，结果逐字等于改动后」，
+  即记为**纯格式化文件**；
+- 一次提交里纯格式化文件 ≥ **10** 个 → 阻断，并打印可照抄的拆分命令。
+
+三个实现上的硬口径（都踩过）：
+
+1. **必须比整份文件，不能比 `git diff` 的 hunk 片段**。片段不是完整的语法单元，
+   单独交给 prettier 会 `SyntaxError` —— 那样每个文件都「无法判定」，门禁静默失效
+   （实测：`<p className=...>` 片段报 `'>' expected`）。
+2. **判据必须用真 formatter，不能是「抹掉空白后比对」**。前者覆盖 prettier 的
+   **重新断行**（超宽对象拆成多行）与 `prettier-plugin-tailwindcss` 的**类名重排**
+   （`mt-1 text-sm` → `text-sm mt-1`），后两类在抹空白口径下都看不见（实测漏报）。
+3. **阈值取 10 而不是 1**。改一行时顺手格式化同文件是正常操作，拦在 1 会让门禁
+   变成「每次提交都要拆两次」的噪声源 —— 那样的门禁活不过一周。10 个以上文件
+   同时「只动格式」已经不是顺手，而是一次全库 / 全目录格式化。
+
+判据是**保守**的：重排后只要有一个字符不同就当成真实改动 —— 宁可漏报（放行一次
+没拆开的提交）也不误伤（把真实改动判成格式化而阻断）。
+
+**CI 也要跑**：squash 合并后 `master` 上只剩一个提交，「拆成两次提交」在本地不做
+就再没有机会补，而它造成的后果（blame 失真）是永久性的。
 
 ### 13.6 分支与合并策略
 

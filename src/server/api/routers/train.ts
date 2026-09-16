@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { loraTrainingJobRepository } from "@/lib/core/repository";
 import { enqueueTraining, isTrainerConfigured } from "@/lib/comfyui/trainer";
-import { getSettingsSync } from "@/lib/app-settings";
+import { getSettingsSync } from "@/lib/app-settings/app-settings.server";
 
 export const trainRouter = createTRPCRouter({
   /** GET /api/train */
@@ -11,7 +11,8 @@ export const trainRouter = createTRPCRouter({
     return {
       jobs,
       backendConfigured: isTrainerConfigured(),
-      trainerUrl: getSettingsSync().trainerUrl || (process.env.LORA_TRAINER_URL ?? null),
+      trainerUrl:
+        getSettingsSync().trainerUrl || (process.env.LORA_TRAINER_URL ?? null),
     };
   }),
 
@@ -35,7 +36,7 @@ export const trainRouter = createTRPCRouter({
         optimizer: z.string().max(40).optional(),
         scheduler: z.string().max(40).optional(),
         seed: z.number().int().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const job = await loraTrainingJobRepository.createQueued({
@@ -65,7 +66,7 @@ export const trainRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const job = await loraTrainingJobRepository.findByIdForUser(
         ctx.user.id,
-        input.id
+        input.id,
       );
       if (!job) throw new Error("Training job not found");
       return { job };
@@ -78,7 +79,7 @@ export const trainRouter = createTRPCRouter({
       const job = await loraTrainingJobRepository.findByIdForUser(
         ctx.user.id,
         input.id,
-        { id: true, status: true }
+        { id: true, status: true },
       );
       if (!job) throw new Error("Training job not found");
       const { cancelTraining } = await import("@/lib/comfyui/trainer");

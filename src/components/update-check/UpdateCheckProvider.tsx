@@ -27,20 +27,30 @@ function readEnabledDefault(): boolean {
   }
 }
 
-function summaryOf(groups: { key: string; label: string; files?: string[] }[]): string {
+function summaryOf(
+  groups: { key: string; label: string; files?: string[] }[],
+): string {
   return groups
     .map((g) => {
-      const detail = g.files && g.files.length > 0 ? `（${g.files.slice(0, 3).join("、")}${g.files.length > 3 ? "…" : ""}）` : "";
+      const detail =
+        g.files && g.files.length > 0
+          ? `（${g.files.slice(0, 3).join("、")}${g.files.length > 3 ? "…" : ""}）`
+          : "";
       return `${g.label}${detail}`;
     })
     .join("；");
 }
 /** 生成全屏消息正文：逐组列出改动的文件清单（比 toast 概要更全）。 */
-function bodyOf(groups: { key: string; label: string; hint?: string; files?: string[] }[]): string {
+function bodyOf(
+  groups: { key: string; label: string; hint?: string; files?: string[] }[],
+): string {
   const parts = groups.map((g) => {
     const head = `${g.label}${g.hint ? `（${g.hint}）` : ""}`;
-    const files = g.files && g.files.length > 0 ? `
-  · ${g.files.join("\n  · ")}` : "";
+    const files =
+      g.files && g.files.length > 0
+        ? `
+  · ${g.files.join("\n  · ")}`
+        : "";
     return `${head}${files}`;
   });
   return `检测到需重启应用才生效的本地改动：\n\n${parts.join("\n")}\n\n请重启应用以让改动生效。`;
@@ -54,7 +64,10 @@ export function UpdateCheckProvider() {
   const { checkNow } = useUpdateCheck({
     onDirty: useCallback(
       (groups) => {
-        toast.info("检测到本地更新", `${summaryOf(groups)}。需重启应用才生效。`);
+        toast.info(
+          "检测到本地更新",
+          `${summaryOf(groups)}。需重启应用才生效。`,
+        );
         // 同步收进消息中心，未读计数 +1，避免 toast 一闪而过无处回看
         useMessageCenterStore.getState().push({
           kind: "update",
@@ -100,7 +113,10 @@ export function UpdateCheckProvider() {
             if (!dirty) {
               toast.info(MANUAL_SHORTCUT, "本地文件无需重启的改动。");
             } else {
-              toast.info(MANUAL_SHORTCUT, `检测到需重启的改动：${summaryOf(groups)}`);
+              toast.info(
+                MANUAL_SHORTCUT,
+                `检测到需重启的改动：${summaryOf(groups)}`,
+              );
             }
           }
         })();

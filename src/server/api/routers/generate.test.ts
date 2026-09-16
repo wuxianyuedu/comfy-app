@@ -1,12 +1,12 @@
-import type * as LoggerModule from "~/server/lib/logger";
+import type * as LoggerModule from "~/lib/core/logger";
 /**
  * generate.router 集成测试。
  *
  * mock 边界：~/server/db（内存 Prisma 替身）、~/server/better-auth、
- * ~/server/lib/logger（静音）、@/lib/comfyui/enqueue（enqueue 整体 mock——
+ * ~/lib/core/logger（静音）、@/lib/comfyui/enqueue（enqueue 整体 mock——
  * 真模块 import 时会启动 reaper 定时器并连 ComfyUI WS）、
- * @/lib/comfyui/client（listModels 需访问 ComfyUI /api/models）。
- * buildAndValidate / buildCustomWorkflow / getWorkflow / repository 均走真实实现。
+ * `buildCustomWorkflow` / repository 均走真实实现（内置模板 + token 替换已移除，
+ * 故不再 mock `@/lib/comfyui/client` 的 listModels）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type * as AppRuntimeLogModule from "@/lib/app-runtime-log";
@@ -31,9 +31,8 @@ vi.mock("@/lib/app-runtime-log", async (importOriginal) => {
   };
 });
 
-const { enqueueMock, listModelsMock } = vi.hoisted(() => ({
+const { enqueueMock } = vi.hoisted(() => ({
   enqueueMock: vi.fn<(job: unknown) => void>(() => undefined),
-  listModelsMock: vi.fn<(folder: string) => Promise<string[]>>(async () => []),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -43,7 +42,7 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
-vi.mock("~/server/lib/logger", async (importOriginal) => ({
+vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -53,11 +52,14 @@ vi.mock("@/lib/comfyui/enqueue", () => ({
   getLogs: vi.fn(),
   cancelTask: vi.fn(),
 }));
-vi.mock("@/lib/comfyui/client", () => ({ listModels: listModelsMock }));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { generateRouter } from "~/server/api/routers/generate";
-import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedUser,
+  seedWorkflowTemplate,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(generateRouter);
@@ -75,63 +77,60 @@ beforeEach(() => {
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });
 });
 
-// ────────────────────────────── 内置模板路径 ──────────────────────────────
+// ────────────────────────────── 工作流库路径 ──────────────────────────────
 
-describe("generate.generate（内置工作流）", () => {
-  it("txt2img：建 QUEUED 任务并入队（prompt 由模板真实构建）", async () => {
+describe("generate.generate（工作流库工作流）", () => {
+  it("rawJson 工作流：建 QUEUED 任务并入队（workflowInputs 作 overrides）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-lib",
+      userId: "user-a",
+      name: "库生图",
+      taskType: "T2I",
+      graph: CUSTOM_GRAPH,
+      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+    });
     const res = await createCaller(makeCtx()).generate({
-      workflow: "txt2img",
+      workflow: "wf-lib",
       prompt: "a cat",
       negative: "blur",
-      count: 2,
       referenceImages: ["ref.png"],
+      workflowInputs: [{ nodeId: "1", name: "text", value: "a cat" }],
     });
     expect(typeof res.taskId).toBe("string");
     const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
     expect(row).toBeDefined();
     expect(row?.userId).toBe("user-a");
     expect(row?.status).toBe("QUEUED");
-    expect(row?.type).toBe("TXT2IMG"); // 内置模板 taskType
-    expect(row?.workflowName).toBe("txt2img");
+    expect(row?.type).toBe("T2I");
+    expect(row?.workflowName).toBe("库生图");
     expect(row?.prompt).toBe("a cat");
     expect(row?.negativePrompt).toBe("blur");
     expect(row?.referenceImages).toEqual(["ref.png"]);
     expect(enqueueMock).toHaveBeenCalledTimes(1);
     const job = enqueueMock.mock.calls[0]?.[0] as {
       taskId: string;
-      prompt?: Record<string, unknown>;
+      rawJson?: unknown;
+      overrides?: unknown;
     };
     expect(job.taskId).toBe(res.taskId);
-    expect(job.prompt && Object.keys(job.prompt).length).toBeGreaterThan(0);
+    expect(job.rawJson).toBeDefined();
+    expect(job.overrides).toEqual([
+      { nodeId: "1", name: "text", value: "a cat" },
+    ]);
   });
 
-  it("checkpoint 不在 listModels 列表 → 构建失败并抛错（不入队）", async () => {
-    listModelsMock.mockResolvedValue(["real.safetensors"]);
+  it("工作流不存在且无 canvasGraph → 抛 Workflow not found（不入队）", async () => {
     await expect(
-      createCaller(makeCtx()).generate({
-        workflow: "txt2img",
-        checkpoint: "other.safetensors",
-      })
-    ).rejects.toThrow("模型不可用或文件名不匹配");
+      createCaller(makeCtx()).generate({ workflow: "no-such-workflow" }),
+    ).rejects.toThrow("Workflow not found");
     expect(enqueueMock).not.toHaveBeenCalled();
     expect(tdb.$tables.tasks).toHaveLength(0);
   });
 
-  it("Zod 校验失败：steps/count/超长 prompt/非法 loras → BAD_REQUEST", async () => {
+  it("Zod 校验失败：超长 prompt / 空 workflow → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(
-      caller.generate({ workflow: "txt2img", steps: 0 })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(
-      caller.generate({ workflow: "txt2img", count: 9 })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(
-      caller.generate({ workflow: "txt2img", prompt: "x".repeat(2001) })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    // 运行时缺 weight 字段 → Zod 校验失败（类型层刻意绕过以构造非法输入）
-    const badLora = { name: "a" } as unknown as { name: string; weight: number };
-    await expect(
-      caller.generate({ workflow: "txt2img", loras: [badLora] })
+      caller.generate({ workflow: "wf-lib", prompt: "x".repeat(2001) }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(caller.generate({ workflow: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -144,7 +143,7 @@ describe("generate.generate（内置工作流）", () => {
 // ────────────────────────────── 自定义工作流路径 ──────────────────────────────
 
 describe("generate.generate（自定义工作流）", () => {
-  it("canvasGraph：经 buildCustomWorkflow 回填 prompt/seed/steps 并入队", async () => {
+  it("canvasGraph：经 buildCustomWorkflow 回填 prompt 并入队", async () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-1",
       userId: "user-a",
@@ -157,8 +156,6 @@ describe("generate.generate（自定义工作流）", () => {
       prompt: "hello",
       canvasGraph: CUSTOM_GRAPH,
       paramMap: { positiveNode: "1", samplerNode: "2" },
-      steps: 5,
-      seed: 42,
     });
     const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
     expect(row?.type).toBe("T2I");
@@ -167,8 +164,6 @@ describe("generate.generate（自定义工作流）", () => {
       prompt: Record<string, { inputs: Record<string, unknown> }>;
     };
     expect(job.prompt["1"]?.inputs.text).toBe("hello");
-    expect(job.prompt["2"]?.inputs.steps).toBe(5);
-    expect(job.prompt["2"]?.inputs.seed).toBe(42);
   });
 
   it("模板 rawJson（无 canvasGraph）→ comfy-cli 原始执行路径（rawJson + overrides 入队）", async () => {
@@ -212,18 +207,25 @@ describe("generate.generate（自定义工作流）", () => {
     // graph 列 NOT NULL，「空图」在库里的形态就是空对象 {}
     seedWorkflowTemplate(tdb, { id: "wf-empty", userId: "user-a", graph: {} });
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-empty" })
+      createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
     ).rejects.toThrow("Workflow graph is empty");
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 
   it("越权/不存在：非本人且不存在的 workflow → 'Workflow not found'", async () => {
-    seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b", graph: CUSTOM_GRAPH });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-b",
+      userId: "user-b",
+      graph: CUSTOM_GRAPH,
+    });
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-b", canvasGraph: undefined })
+      createCaller(makeCtx()).generate({
+        workflow: "wf-b",
+        canvasGraph: undefined,
+      }),
     ).rejects.toThrow("Workflow not found");
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-missing" })
+      createCaller(makeCtx()).generate({ workflow: "wf-missing" }),
     ).rejects.toThrow("Workflow not found");
     expect(tdb.$tables.tasks).toHaveLength(0);
   });

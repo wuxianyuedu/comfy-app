@@ -9,7 +9,10 @@
  *  in CanvasNode's JSX; only the refs/handlers live here. */
 import React from "react";
 import { type CanvasNodeData } from "@/lib/project-canvas/canvas-types";
-import { uploadImageFile, uploadMediaFile } from "@/lib/project-canvas/canvas-api";
+import {
+  uploadImageFile,
+  uploadMediaFile,
+} from "@/lib/project-canvas/canvas-api";
 
 /** catch 抛出值（unknown）→ 与旧 `err?.message ?? fallback` 逐值等价的
  *  消息提取：带 string message 的对象取 message（含空串），其余回退。 */
@@ -28,8 +31,12 @@ export interface UseFileUploadArgs {
 export function useFileUpload({ patch }: UseFileUploadArgs) {
   /* file upload helper */
   const fileRef = React.useRef<HTMLInputElement>(null);
-  const uploadTo = React.useRef<"inputImage" | "firstFrame" | "lastFrame" | "media">("inputImage");
-  const pickFile = (target: "inputImage" | "firstFrame" | "lastFrame" | "media") => {
+  const uploadTo = React.useRef<
+    "inputImage" | "firstFrame" | "lastFrame" | "media"
+  >("inputImage");
+  const pickFile = (
+    target: "inputImage" | "firstFrame" | "lastFrame" | "media",
+  ) => {
     uploadTo.current = target;
     fileRef.current?.click();
   };
@@ -84,5 +91,13 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     }
   };
 
-  return { fileRef, pickFile, onFile, mediaRef, pickMedia, onMediaFile, onUploadFile };
+  return {
+    fileRef,
+    pickFile,
+    onFile,
+    mediaRef,
+    pickMedia,
+    onMediaFile,
+    onUploadFile,
+  };
 }

@@ -10,6 +10,7 @@
 // Windows：`start` 是 cmd 内建命令，须以 `cmd /c start "" <url>` 调用；
 // 空标题参数 "" 用于防止 URL 里的 & 被当成 start 的窗口标题。
 
+import "server-only";
 import { spawn } from "child_process";
 
 export async function openUrlInBrowser(
@@ -22,8 +23,7 @@ export async function openUrlInBrowser(
       : platform === "darwin"
         ? "open"
         : "xdg-open";
-  const args =
-    platform === "win32" ? ["/c", "start", "", url] : [url];
+  const args = platform === "win32" ? ["/c", "start", "", url] : [url];
   try {
     await new Promise<void>((resolve, reject) => {
       // 不走 shell：Node 按数组参数直接构造命令行，URL 原样送达，

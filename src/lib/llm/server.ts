@@ -1,9 +1,26 @@
 import "server-only";
 import type { ZodType } from "zod";
-import { llmConfigRepository, remoteModelRepository } from "@/lib/core/repository";
+import {
+  llmConfigRepository,
+  remoteModelRepository,
+} from "@/lib/core/repository";
 import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
-import { resolveTaskTemperature, splitExtraModels, foldRemoteToLocal, isLoopbackBaseUrl } from "./types";
-import type { LLMConfig, LLMMessage, LLMRequestOptions, LLMProviderType, RemoteModelEntry, RemoteModelKind, TaskType, LLMTool } from "./types";
+import {
+  resolveTaskTemperature,
+  splitExtraModels,
+  foldRemoteToLocal,
+  isLoopbackBaseUrl,
+} from "./types";
+import type {
+  LLMConfig,
+  LLMMessage,
+  LLMRequestOptions,
+  LLMProviderType,
+  RemoteModelEntry,
+  RemoteModelKind,
+  TaskType,
+  LLMTool,
+} from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
   provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
@@ -27,7 +44,9 @@ const ENV_DEFAULTS: LLMConfig = {
  * 模型解析：override.model 命中 extraModels 里带独立 baseUrl / apiKey 的远端
  * 条目时，本次请求改走该条目的连接参数（未配置的继续用全局值）。
  */
-export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMConfig> {
+export async function getLLMConfig(
+  override?: LLMRequestOptions,
+): Promise<LLMConfig> {
   const cfg: LLMConfig = { ...ENV_DEFAULTS };
 
   try {
@@ -40,7 +59,9 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       // 远端独立模型改存 remoteModel 表。读取时合并两者，保证下游（运行时按名
       // 找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
       // 直接吃 DB 原始值（llmConfig.extraModels 里字符串=本地候选，对象=遗留/远端）
-      const split = splitExtraModels((row as Record<string, unknown>).extraModels);
+      const split = splitExtraModels(
+        (row as Record<string, unknown>).extraModels,
+      );
       const remoteRows = await remoteModelRepository.list();
       const remoteEntries = remoteRows.map((r) => ({
         name: r.name,
@@ -50,7 +71,12 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       }));
       // 合并三来源：本地候选名 + 表内远端条目 + 遗留(尚未迁表)的远端对象
       cfg.extraModels = [
-        ...split.localNames.map((n) => ({ name: n, baseUrl: null, apiKey: null, kind: null as RemoteModelKind | null })),
+        ...split.localNames.map((n) => ({
+          name: n,
+          baseUrl: null,
+          apiKey: null,
+          kind: null as RemoteModelKind | null,
+        })),
         ...remoteEntries,
         ...split.remoteEntries,
       ];
@@ -58,7 +84,11 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       if (row.temperature != null) cfg.temperature = row.temperature;
       // temperatureByTask 是 Json 字段，prisma generate 后类型会自动包含；先用 any 绕过
       const raw = row as Record<string, unknown>;
-      if (raw.temperatureByTask) cfg.temperatureByTask = raw.temperatureByTask as Record<TaskType, number>;
+      if (raw.temperatureByTask)
+        cfg.temperatureByTask = raw.temperatureByTask as Record<
+          TaskType,
+          number
+        >;
       if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
     }
   } catch {
@@ -106,7 +136,11 @@ export async function ensureRemoteStorageMigrated(): Promise<void> {
   // 迁移前先做本地/远端归并：历史对象形态里指向本机回环、且不带 apiKey 的条目是
   // 「误存的本地 ollama」，应折回本地候选，绝不能搬进 remoteModel 表当远端 —— 否则
   // 工坊下拉会把本机 ollama 挂成「远端」小标。
-  const folded = foldRemoteToLocal(split.remoteEntries, split.localNames, row.baseUrl);
+  const folded = foldRemoteToLocal(
+    split.remoteEntries,
+    split.localNames,
+    row.baseUrl,
+  );
   await remoteModelRepository.replaceAll(folded.remoteEntries);
   await llmConfigRepository.upsertSingleton({
     extraModels: folded.localNames,
@@ -125,7 +159,9 @@ export async function getConfigForClient() {
   const row = await llmConfigRepository.findSingleton();
   let extra: Array<string | RemoteModelEntry> = [];
   if (row) {
-    const split = splitExtraModels((row as Record<string, unknown>).extraModels);
+    const split = splitExtraModels(
+      (row as Record<string, unknown>).extraModels,
+    );
     const remoteRows = await remoteModelRepository.list();
     const tableEntries: RemoteModelEntry[] = remoteRows.map((r) => ({
       name: r.name,
@@ -154,17 +190,20 @@ function headersFor(cfg: LLMConfig): Record<string, string> {
   return h;
 }
 
-
 /** 把 Node fetch 的网络层 TypeError（如 `fetch failed`）翻译成可操作的人话。
  *  历史 bug：Ollama 未启动 / 远端不可达时，用户只看到一句 `fetch failed`，
  *  既不知道是连不上本地 Ollama 还是远端 Key 无效，也没提示怎么处理。 */
 export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
-  if (!(e instanceof TypeError)) return e instanceof Error ? e.message : "网络请求失败";
+  if (!(e instanceof TypeError))
+    return e instanceof Error ? e.message : "网络请求失败";
   const cause = (e as { cause?: unknown }).cause;
   const causeMsg =
-    cause instanceof Error ? String(cause.message)
+    cause instanceof Error
+      ? String(cause.message)
       : cause != null
-        ? typeof cause === "string" ? cause : JSON.stringify(cause) ?? ""
+        ? typeof cause === "string"
+          ? cause
+          : (JSON.stringify(cause) ?? "")
         : "";
   const base = cfg.baseUrl.replace(/\/$/, "");
   const local = cfg.provider === "local" || isLoopbackBaseUrl(base);
@@ -187,7 +226,10 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
 }
 
 /** 统一的上游 /chat/completions 请求：网络层失败给出可读原因，HTTP 非 2xx 带状态码与响应片段。 */
-async function upstreamChat(cfg: LLMConfig, body: Record<string, unknown>): Promise<Response> {
+async function upstreamChat(
+  cfg: LLMConfig,
+  body: Record<string, unknown>,
+): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -221,7 +263,10 @@ function assertModelConfigured(cfg: LLMConfig): void {
 }
 
 /** One-shot (non-streaming) completion. */
-export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promise<string> {
+export async function completeLLM(
+  cfg: LLMConfig,
+  messages: LLMMessage[],
+): Promise<string> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {
     model: cfg.model,
@@ -245,7 +290,7 @@ export async function completeLLM(cfg: LLMConfig, messages: LLMMessage[]): Promi
 export async function streamLLM(
   cfg: LLMConfig,
   messages: LLMMessage[],
-  onToken: (token: string) => void
+  onToken: (token: string) => void,
 ): Promise<string> {
   assertModelConfigured(cfg);
   const res = await upstreamChat(cfg, {

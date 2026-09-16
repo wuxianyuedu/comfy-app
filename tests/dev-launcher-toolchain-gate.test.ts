@@ -30,6 +30,7 @@ import {
   commandInvocation,
   executableExts,
   executableKind,
+  pnpmInvocation,
   usableCommand,
   whichCommand,
 } from "../scripts/launcher-core/shell.mjs";
@@ -395,5 +396,220 @@ describe("pnpm check:toolchain 真跑", () => {
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out).toContain("corepack");
     expect(out).not.toContain("<项目版本>");
+  });
+});
+
+/** 版本不一致时，自查入口必须与启动器同一条口径：**先对齐、复核通过才算一致**。
+ *
+ *  用户现场（ISSUE #576 第三轮）：`pnpm check:toolchain` 只报一句
+ *  `[WARN] 版本与 package.json 要求不一致（本机 10.34.5，要求 12.4.1）`
+ *  就结束了 —— 而真启动时启动器**自己就会 corepack 对齐**（`reconcilePnpmVersion()`
+ *  → `preparePnpm()` + 复核），`prepare-local-run.ps1` 第 3 步也早已这么做。
+ *  于是自检看起来像「排查完了、没办法」，用户只能手动跑 corepack；更糟的是
+ *  脚本还以 0 退出、不提示其实还有一道「node_modules 未装」的门禁在等着。
+ */
+describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口径", () => {
+  /** 造一个能跑的 POSIX pnpm + corepack：corepack prepare 会把「激活状态」落盘，
+   *  pnpm 据此报告不同版本（对齐成功 / 失败的两种现场都靠它模拟）。 */
+  function makeAlignableToolchain(options: { aligns: boolean }) {
+    const bin = path.join(tmp, "bin");
+    fs.mkdirSync(bin, { recursive: true });
+    const marker = path.join(tmp, "activated");
+    const pnpmScript = path.join(bin, "pnpm");
+    fs.writeFileSync(
+      pnpmScript,
+      [
+        "#!/bin/sh",
+        `if [ "$1" = "-v" ]; then`,
+        `  if [ -f "${marker}" ]; then printf 12.4.1; else printf 10.34.5; fi`,
+        "  exit 0",
+        "fi",
+        "",
+      ].join("\n"),
+    );
+    fs.chmodSync(pnpmScript, 0o755);
+    const corepackScript = path.join(bin, "corepack");
+    fs.writeFileSync(
+      corepackScript,
+      [
+        "#!/bin/sh",
+        `if [ "$1" = "--version" ]; then echo 0.34.0; exit 0; fi`,
+        options.aligns ? `: > "${marker}"` : `echo "prepare failed" >&2; exit 1`,
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    fs.chmodSync(corepackScript, 0o755);
+    return bin;
+  }
+
+  function runSelfCheck(bin: string) {
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      { encoding: "utf8", env: { ...process.env, PATH: bin, PATHEXT: "" } },
+    );
+    return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+  }
+
+  it("对齐成功：报已对齐（带前后版本号），不留下「你只能自己修」的 WARN", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
+    expect(status).toBe(0);
+    expect(out).toContain("已对齐");
+    expect(out).toContain("10.34.5");
+    expect(out).toContain(packageManagerVersion(ROOT)!);
+    expect(out).not.toContain("自动对齐未生效");
+  });
+
+  it("对齐失败：复核后才 WARN，并给出手动命令（版本号取自 package.json）", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: false }));
+    expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
+    expect(out).toContain("自动对齐未生效");
+    expect(out).toContain(`corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`);
+  });
+
+  it("node_modules 未装时点出下一道门禁，不让「[OK] pnpm 可用」被读成「可以启动了」", () => {
+    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
+    expect(status).toBe(0);
+    // 本仓库测试环境两态都可能（CI 装了 / 干净检出没装），只钉「不存在假装没事」：
+    // 未装时必须出现 node_modules 的 WARN 与修复动作。
+    const marker = path.join(ROOT, "node_modules", ".modules.yaml");
+    if (!fs.existsSync(marker)) {
+      expect(out).toContain("node_modules");
+      expect(out).toContain("pnpm install");
+    }
+  });
+});
+
+/** 自检要把「探到的是哪个 pnpm」打印清楚（ISSUE #576 第四轮）。
+ *
+ *  用户现场（Windows）：
+ *    $ pnpm --version           → 12.4.1
+ *    $ pnpm check:toolchain     → [OK] pnpm 可用：10.34.5（C:\Program Files\PowerShell\7\pwsh.EXE）
+ *
+ *  「本机 10.34.5」与「终端里 12.4.1」并不矛盾：终端敲的 `pnpm` 与 Node 探测到的
+ *  **不是同一个文件**。corepack 的 `.ps1` 形态必须经宿主执行，所以命令名打印出来
+ *  是 `pwsh.EXE`；而 PATH 上并存多个 pnpm 时，被选中的那个又是另一个版本。
+ *  旧文案只给「版本号 + 命令名」，这个现场看起来就无解（ISSUE #576 第四轮）。
+ *
+ *  契约：① 打印**选中的文件**（PATH 上命中的那个）；② 经宿主执行时额外打印
+ *  「宿主 → 真实文件」；③ 版本漂移的提示把方向指向「选中的 pnpm」。
+ */
+describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释", () => {
+  it("经宿主执行时，选中的文件与真实命名的区别可被解释（`.ps1` → 宿主）", () => {
+    const dir = makeInstalledPnpmDir({ cmd: false });
+    const hostDir = makePowerShellHost(path.join(tmp, "host"));
+    const script = path.join(dir, "pnpm.ps1");
+    // 仓库里跑的是 POSIX（没有真 pwsh）：宿主形态由注入的 env/platform 模拟，
+    // 这与被测路径在 Windows 上实际走的是同一条 `siblingFallback()`。
+    const invocation = commandInvocation(script, ["-v"], {
+      env: WIN_ENV(dir),
+      platform: "win32",
+    });
+    const host = path.join(hostDir, "pwsh.EXE");
+    // 经宿主时命令名会变成宿主（现场里那句 `（…\pwsh.EXE）` 就是这么来的）——
+    // 自检据此把「命令是 pwsh.EXE」译回「它跑的是哪个 .ps1」。
+    if (invocation.command === host) {
+      expect(invocation.prefixArgs).toContain(script);
+    } else {
+      // 机器上 `.ps1` 被当成可直接执行（POSIX 的 shebang 语义）时退化为原样调用：
+      // 那也满足「命令名可解释」，只是无需再打印宿主一行。
+      expect(invocation.command).toBe(script);
+    }
+  });
+
+  it("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {
+    const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-pnpm-available.mjs")], {
+      encoding: "utf8",
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(`${r.stdout ?? ""}${r.stderr ?? ""}`).toContain("选中的 pnpm：");
+  });
+});
+
+/**
+ * 回归护栏：**任何**由 Node 去 spawn pnpm 的地方都走同一条形态判据（ISSUE #576）。
+ *
+ * 现场：双击 `start-tauri.exe`，启动页报「应用启动失败：启动进程 dev-launcher.mjs
+ * 提前退出（exit=1）」，日志里 `dev server 已启动（PID …）` 之后**两秒**就
+ * `dev server 自身退出（exit=0）`，`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=…`，
+ * stderr 全空 —— 用户「看不出哪里有问题」。
+ *
+ * 根因在**内层**：`scripts/dev.mjs` 写死 `spawnSync("pnpm.cmd", …)`。Windows 上
+ * 批处理只有 cmd.exe 会解释，Node 起它会失败（EINVAL/EACCES），于是
+ * `result.status === null`，而旧代码 `process.exit(result.status ?? 0)` 把它读成
+ * **成功退出 0** —— dev server 静默消失、Next 一行输出都没有。
+ * 这正是 `whichCommand()` / `commandInvocation()` 早已解决的同一坑
+ * （见 §2.1.1），只是「起服务的那一层」没复用同一个判据。
+ *
+ * 契约（反向验证：把 `pnpmInvocation` 换回写死 `pnpm.cmd`，对应用例必失败）：
+ *   · 形态判据只有一个出口（`shell.mjs` 的 `pnpmInvocation`），内层脚本不许自己拼；
+ *   · 「命令没起来」必须与非零退出分开报，绝不塌成 `?? 0`。
+ */
+describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）", () => {
+  it("pnpmInvocation 与 whichCommand + commandInvocation 结果一致", () => {
+    // 用户现场形态：`.tools\pnpm\<ver>\bin` 里 `.CMD` + `.ps1` 并排，
+    // 宿主在同机 PATH 上（判据只认二进制形态的 pwsh/powershell）。
+    const dir = makeInstalledPnpmDir();
+    const hostDir = makePowerShellHost(path.join(tmp, "host"));
+    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const args = ["exec", "next", "dev", "--turbo", "-p", "3734"];
+    const inv = pnpmInvocation(args, { env, platform: "win32" });
+    expect(inv, "PATH 上有可用形态时必须给出调用方式").not.toBeNull();
+    // 选中的是 .CMD 旁的 .ps1（批处理 Node 起不了，直接走同胞回退）
+    expect(inv!.candidate).toBe(path.join(dir, "pnpm.CMD"));
+    expect(inv!.viaHost).toBe(true);
+    expect(inv!.args.slice(-args.length)).toEqual(args);
+    // 与既有判据同源：命令形态必须等于 commandInvocation 的结论
+    const reference = commandInvocation(path.join(dir, "pnpm.CMD"), ["-v"], {
+      env,
+      platform: "win32",
+    });
+    expect(inv!.command).toBe(reference.command);
+    expect(inv!.command).toBe(path.join(hostDir, "pwsh.EXE"));
+  });
+
+  it("PATH 上没有可用 pnpm 时返回 null（调用方必须给可见出口，不许静默 0）", () => {
+    const dir = makeWindowsPnpmDir({});
+    expect(
+      pnpmInvocation([], { env: WIN_ENV(dir), platform: "win32" }),
+      "一个可跑形态都没有时必须显式 null",
+    ).toBeNull();
+  });
+
+  it("POSIX 上不退化为 pnpm.cmd（判据不按平台分叉）", () => {
+    const dir = makeWindowsPnpmDir({ shim: "working" });
+    const inv = pnpmInvocation(["dev"], { env: { PATH: dir }, platform: "linux" });
+    expect(inv).not.toBeNull();
+    expect(inv!.command).toBe(path.join(dir, "pnpm"));
+  });
+
+  it("dev.mjs / start.mjs / analyze-bundle.mjs 不再各自拼 pnpm 可执行名", () => {
+    for (const rel of ["scripts/dev.mjs", "scripts/start.mjs", "scripts/analyze-bundle.mjs"]) {
+      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain("pnpmInvocation");
+      // 写死平台后缀的旧写法必须消失（它是这条缺陷的形态本身）
+      expect(src, `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
+      expect(src, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(
+        /win32"\s*\?\s*"pnpm/,
+      );
+    }
+  });
+
+  it("dev.mjs：spawn 失败（命令起不来）必须非零退出，且把 error.code 与真实命令打出来", () => {
+    const raw = fs.readFileSync(path.join(ROOT, "scripts", "dev.mjs"), "utf8");
+    // 注释里会**引用**旧写法作反面说明，判据只看代码：先剥掉行注释。
+    const code = raw
+      .split("\n")
+      .map((line) => line.replace(/\/\/.*$/, ""))
+      .join("\n");
+    expect(code).toContain("result.error");
+    expect(code).toContain("result.error.code");
+    expect(code).toContain("实际命令：");
+    // 旧写法 `process.exit(result.status ?? 0)` 把「没起来」读成成功 —— 必须分开判。
+    expect(code, "不得再出现 ?? 0 吞掉「没起来」").not.toMatch(
+      /exit\(result\.status\s*\?\?\s*0\)/,
+    );
+    expect(code, "status 为 null 必须与非零退出分开").toContain("result.status === null");
   });
 });

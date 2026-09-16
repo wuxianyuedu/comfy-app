@@ -38,13 +38,11 @@ describe("ollamaTagsUrl", () => {
 
 describe("probeOllama", () => {
   it("2xx 且带 models → up + 模型列表", async () => {
-    const fetchMock: Mock<typeof fetch> = vi
-      .fn()
-      .mockResolvedValue(
-        jsonRes(200, {
-          models: [{ name: "qwen3:14b", size: 1, modified_at: "" }],
-        }),
-      );
+    const fetchMock: Mock<typeof fetch> = vi.fn().mockResolvedValue(
+      jsonRes(200, {
+        models: [{ name: "qwen3:14b", size: 1, modified_at: "" }],
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(probeOllama("http://localhost:11434/v1")).resolves.toEqual({
@@ -103,7 +101,11 @@ describe("startOllama", () => {
   it("非 2xx → 抛带服务端 error 详情的 Error（失败路径必须有可读出口）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonRes(500, { error: "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试" })),
+      vi.fn().mockResolvedValue(
+        jsonRes(500, {
+          error: "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试",
+        }),
+      ),
     );
     await expect(startOllama()).rejects.toThrow(
       "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试",
@@ -111,10 +113,7 @@ describe("startOllama", () => {
   });
 
   it("非 2xx 且响应无 error 字段 → 抛兜底文案", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonRes(500, {})),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonRes(500, {})));
     await expect(startOllama()).rejects.toThrow(
       "启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用",
     );

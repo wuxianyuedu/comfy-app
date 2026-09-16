@@ -50,17 +50,16 @@ const isTestFile = (rel) =>
  *  规模；降到 200 会让 40 个函数一起亮，清单变成噪音，没人会照它排期。 */
 const HINT_LINES = 400;
 
-/** 函数声明形态。刻意只认「有名字的顶层/模块级函数」——
- *  匿名回调(useEffect 里的箭头、数组 map)不在本规则射程内，它们的长度由
- *  它们所在函数的长度间接约束。 */
-const DECLARATIONS = [
-  // function name(...) {
-  /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\(/,
-  // const name = (...) => {   /   const name = async (...) => {
-  /^\s*(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=]*?)?=\s*(?:async\s*)?\(/,
-  // const name = (...) : T => {
-  /^\s*(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?function\b/,
-];
+/** **判据版本**：命中哪些形态算「一个函数」。
+ *
+ *  棘轮基线记的是「该判据下每个文件的超阈值函数数」，所以判据本身变了（例如
+ *  把无名字的 IIFE / 回调体纳入统计）之后，旧基线与新计数**不是同一个量** ——
+ *  直接比对会把「新看见的存量」误判成「新增的巨型函数」。
+ *
+ *  这个常量的作用是让那次变更**可审计**：改了判据必须同步改这里，`--update`
+ *  才允许重记基线（否则一律按棘轮拒绝放宽）。版本号写进基线文件，评审时能看出
+ *  「这次基线数字变了，是因为判据变了，而不是有人偷偷放宽」。 */
+const RULE_VERSION = 3;
 
 /** 括号字符流需要跳过的部分：字符串 / 模板 / 注释 / 正则里的括号不算配对。
  *  逐字符状态机(与 check-theme-colors 的 stripComments 同思路，这里保留原
@@ -143,43 +142,222 @@ const relOf = (p) =>
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
-const longFunctions = [];
-for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
-  const rel = relOf(abs);
-  if (!SOURCE_EXT.test(rel) || rel.endsWith(".d.ts")) continue;
-  if (isTestFile(rel)) continue;
-  const lines = fs.readFileSync(abs, "utf8").split("\n");
-  const depthAtLine = bracketDepths(lines);
-  for (let i = 0; i < lines.length; i++) {
-    let name = null;
-    for (const re of DECLARATIONS) {
-      const m = lines[i].match(re);
-      if (m) {
-        name = m[1];
+/** 具名函数头的**开头**：签名可能跨行（`export async function f(\n  opts…`），
+ *  所以这里只认开头，函数体 `{` 由 findBodyBrace 向后配平 `()` 找。 */
+const NAMED_HEAD_RE =
+  /(?:^|[\s;{}()])(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*[(<]/;
+/** `const f = (` / `const f = async (` / `const f: T = function (` 三种赋值形态。 */
+const ASSIGN_HEAD_RE =
+  /(?:^|[\s;{}()])(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]*?)?=\s*(?:async\s*)?(?:\(\s*\)|\([^()\n]*\)\s*(?::[^=\n]*?)?=>|function\b)/;
+
+/** 中文、字符串、模板与注释里的 `=>` / `function` / `const x = (` 会误报：
+ *  采集前先把它们按字符换成空格（**保留长度与列号**，行号不受影响）。 */
+function stripNonCode(lines) {
+  const out = [];
+  let inBlock = false;
+  let inTemplate = 0;
+  for (const line of lines) {
+    let res = "";
+    let inStr = null;
+    for (let j = 0; j < line.length; j++) {
+      const ch = line[j];
+      const nx = line[j + 1];
+      if (inBlock) {
+        if (ch === "*" && nx === "/") {
+          inBlock = false;
+          j++;
+        }
+        res += "  ";
+        continue;
+      }
+      if (inTemplate > 0) {
+        if (ch === "\\") {
+          j++;
+          res += "  ";
+          continue;
+        }
+        if (ch === "`") inTemplate--;
+        res += " ";
+        continue;
+      }
+      if (inStr) {
+        if (ch === "\\") {
+          j++;
+          res += "  ";
+          continue;
+        }
+        if (ch === inStr) inStr = null;
+        res += " ";
+        continue;
+      }
+      if (ch === "/" && nx === "/") {
+        res += " ".repeat(line.length - j);
         break;
       }
+      if (ch === "/" && nx === "*") {
+        inBlock = true;
+        j++;
+        res += "  ";
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        inStr = ch;
+        res += " ";
+        continue;
+      }
+      if (ch === "`") {
+        inTemplate++;
+        res += " ";
+        continue;
+      }
+      res += ch;
     }
-    if (!name) continue;
-    /* 声明行末尾的深度基准：函数体从「声明起始深度 + 1」开始，
-     * 配平回起始深度即函数结束。 */
-    const startDepth = depthAtLine[i - 1] ?? 0;
+    out.push(res);
+  }
+  return out;
+}
+
+/** 从 (line, col) 处的 `(` 起配平，返回紧跟其后的函数体 `{` 坐标；找不到返回 null。
+ *  只配 `()` 与 `[]`（`<>` 与 bracketDepths 同一取舍：TSX 里不配平）。 */
+function findBodyBrace(codeLines, line, col) {
+  let depth = 0;
+  let seenClose = false;
+  for (let i = line; i < codeLines.length; i++) {
+    const text = codeLines[i];
+    for (let j = i === line ? col : 0; j < text.length; j++) {
+      const ch = text[j];
+      if (ch === "(" || ch === "[") depth++;
+      else if (ch === ")" || ch === "]") {
+        depth--;
+        if (ch === ")") seenClose = true;
+      } else if (depth <= 0 && ch === "{") {
+        /* 必须已见过 `)` —— 否则 `function f({a, b}) {` 的解构参数会被当函数体。 */
+        return seenClose ? { line: i, col: j } : null;
+      } else if (depth < 0) return null;
+    }
+  }
+  return null;
+}
+
+/** 找出一行里所有**匿名**块体：`=> {` 与无名字的 `function (…) {`。 */
+function findAnonHeads(codeLines, i) {
+  const text = codeLines[i];
+  const heads = [];
+  const arrow = /=>\s*\{/g;
+  let m;
+  while ((m = arrow.exec(text)) !== null) {
+    heads.push({ decl: i, body: i, name: null });
+  }
+  const fnAnon = /(?:^|[\s(=,:;[{])(?:async\s+)?function\s*\(/g;
+  while ((m = fnAnon.exec(text)) !== null) {
+    const brace = findBodyBrace(codeLines, i, m.index + m[0].length - 1);
+    if (brace) heads.push({ decl: i, body: brace.line, name: null });
+  }
+  return heads;
+}
+
+/** 扫描一个文件里的全部函数头。具名头的签名区间不再参与匿名识别 ——
+ *  否则 `(msg: string) => void` 这种类型注解会被当成回调。 */
+function collectHeads(codeLines) {
+  const heads = [];
+  const byPos = new Map();
+  /* 同一个函数体只留一条（键 = 函数体所在行）：签名跨行时声明行与函数体行不同，
+   *  但函数体只有一个。具名优先于匿名（名字比「(匿名块体)」有信息量），
+   *  `decl` 取最小（函数头真正开始的那一行）。 */
+  const push = (h) => {
+    const key = h.body;
+    const prev = byPos.get(key);
+    if (!prev) {
+      byPos.set(key, h);
+      return;
+    }
+    if (prev.name && !h.name) return;
+    byPos.set(key, {
+      decl: Math.min(prev.decl, h.decl),
+      body: h.body,
+      name: h.name ?? prev.name,
+    });
+  };
+  for (let i = 0; i < codeLines.length; i++) {
+    const line = codeLines[i];
+    let namedEnd = -1;
+    for (const re of [NAMED_HEAD_RE, ASSIGN_HEAD_RE]) {
+      const m = re.exec(line);
+      if (!m) continue;
+      const parenAt = line.indexOf("(", m.index + m[0].length - 1);
+      const brace = findBodyBrace(codeLines, i, parenAt < 0 ? 0 : parenAt);
+      if (!brace) continue;
+      push({ decl: i, body: brace.line, name: m[1] });
+      namedEnd = brace.line;
+      break;
+    }
+    for (const h of findAnonHeads(codeLines, i)) {
+      /* 落在具名签名区间内的匿名头是类型注解 / 参数默认值的一部分，跳过。 */
+      if (namedEnd >= i && h.body <= namedEnd) continue;
+      push(h);
+    }
+  }
+  return [...byPos.values()].sort((a, b) => a.decl - b.decl || a.body - b.body);
+}
+
+/** 扫描一个文件，返回超阈值函数清单。
+ *
+ *  **嵌套两层都报**：外层具名函数与它内部的无名字块体各自超阈值时是两条记录
+ *  —— 它们要拆的方式不同（前者按职责切分支，后者直接提成具名函数），只报外层
+ *  会让内块继续在「外层已经很糟」的掩护下膨胀。完全相同的区间才去重。 */
+function scanFile(rel, source) {
+  const lines = source.split("\n");
+  const codeLines = stripNonCode(lines);
+  const depthAtLine = bracketDepths(lines);
+  const rows = [];
+
+  for (const head of collectHeads(codeLines)) {
+    /* 函数尾：函数体 `{` 所在行(含 `{`)结束时的深度为 D，函数体内容在
+     *  D 之上；配平回 `D - 1` 的那一行就是函数尾（含它的 `}`）。 */
+    const bodyDepth = depthAtLine[head.body];
     let end = -1;
-    for (let j = i; j < lines.length; j++) {
-      if (depthAtLine[j] <= startDepth) {
+    for (let j = head.body; j < lines.length; j++) {
+      if (depthAtLine[j] < bodyDepth) {
         end = j;
         break;
       }
     }
     if (end < 0) continue;
-    const size = end - i + 1;
-    // 声明行本身也可能是单行箭头函数(不跨行)：size <= 1 直接跳过
-    if (size < HINT_LINES) {
-      i = Math.max(i, end);
-      continue;
-    }
-    longFunctions.push({ rel, line: i + 1, name, lines: size });
-    i = end;
+    /* 长度从**声明行**算起（签名占了 7 行时那 7 行也属这个函数）。 */
+    const size = end - head.decl + 1;
+    if (size < HINT_LINES) continue;
+    rows.push({
+      rel,
+      line: head.decl + 1,
+      name: head.name ?? "(匿名块体)",
+      lines: size,
+      start: head.decl,
+      end,
+      named: !!head.name,
+    });
   }
+
+  rows.sort((a, b) => a.start - b.start || b.lines - a.lines);
+  /* 去重只对**完全相同**的区间生效（同一函数被多个形态命中）。嵌套两条
+   *  （外层具名 405 行、内层 IIFE 288 行）**都保留**：两条都要拆，只报外层会
+   *  让内层继续在「外层已经很糟」的掩护下膨胀。 */
+  const kept = [];
+  const seen = new Set();
+  for (const f of rows) {
+    const key = f.start + ":" + f.end;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(f);
+  }
+  return kept.map(({ start, end, named, ...rest }) => rest);
+}
+
+const longFunctions = [];
+for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
+  const rel = relOf(abs);
+  if (!SOURCE_EXT.test(rel) || rel.endsWith(".d.ts")) continue;
+  if (isTestFile(rel)) continue;
+  longFunctions.push(...scanFile(rel, fs.readFileSync(abs, "utf8")));
 }
 
 longFunctions.sort((a, b) => b.lines - a.lines || a.rel.localeCompare(b.rel));
@@ -209,10 +387,14 @@ const baseFiles = prev?.files ?? null;
 if (UPDATE) {
   const before = baseFiles ? Object.values(baseFiles).reduce((a, b) => a + b, 0) : 0;
   const after = longFunctions.length;
-  if (baseFiles && after > before) {
+  /* 判据变更时（RULE_VERSION 抬升）允许一次性重记：旧基线与新计数不是同一个量。
+   * 除此之外，数字只许下降 —— 否则 `--update` 就成了「放宽棘轮」的后门。 */
+  const ruleChanged = baseFiles && prev.ruleVersion !== RULE_VERSION;
+  if (baseFiles && after > before && !ruleChanged) {
     console.error(
       `[function-length] 拒绝放宽基线：${before} → ${after} 个巨型函数（棘轮只许下降）。\n` +
-        "  新增的先拆开，不要用 --update 掩盖。",
+        "  新增的先拆开，不要用 --update 掩盖。\n" +
+        `  若确属判据变更（现为 RULE_VERSION=${RULE_VERSION}），须先改脚本里的常数再 --update。`,
     );
     process.exit(1);
   }
@@ -221,9 +403,10 @@ if (UPDATE) {
     JSON.stringify(
       {
         generatedAt: new Date().toISOString().slice(0, 10),
+        ruleVersion: RULE_VERSION,
         note:
-          `超过 ${HINT_LINES} 行的函数计数（规范 §12.13）。棘轮只许下降：` +
-          "新增巨型函数须先拆分，再收紧基线。",
+          `超过 ${HINT_LINES} 行的函数计数（规范 §12.13，判据版本 ${RULE_VERSION}）。` +
+          "棘轮只许下降：新增巨型函数须先拆分，再收紧基线。",
         total: after,
         files: counts,
       },
@@ -232,7 +415,8 @@ if (UPDATE) {
     ) + "\n",
   );
   console.log(
-    `[function-length] 基线已更新：${before} → ${after}（scripts/.function-length-baseline.json）`,
+    `[function-length] 基线已更新：${before} → ${after}（scripts/.function-length-baseline.json）` +
+      (ruleChanged ? `【判据版本 ${prev.ruleVersion ?? "?"} → ${RULE_VERSION}，一次性重记】` : ""),
   );
   process.exit(0);
 }
@@ -240,6 +424,18 @@ if (UPDATE) {
 if (!baseFiles) {
   console.error(
     "[function-length] 基线文件缺失：先执行 node scripts/check-function-length.cjs --update",
+  );
+  process.exit(1);
+}
+
+/* 基线若来自旧判据，先提示重记：旧数字与新计数不是同一个量，直接比对没有意义
+ * （重记前不阻断，只把「该跑一次 --update」说清楚 —— 阻断会让判据变更本身
+ *  在 CI 上无法合并）。 */
+if (prev.ruleVersion !== RULE_VERSION) {
+  console.error(
+    `[function-length] 基线的判据版本（${prev.ruleVersion ?? "未标记"}）与当前脚本（${RULE_VERSION}）不一致：\n` +
+      "  判据变了，旧基线数字不再是同一个量。请执行 node scripts/check-function-length.cjs --update\n" +
+      "  重记一次（判据变更允许一次性重记；重记后棘轮照旧只许下降）。",
   );
   process.exit(1);
 }

@@ -182,7 +182,6 @@ describe.runIf(!isWindowsPlatform())("killProcessTree POSIX 行为", () => {
     expect(isAlive(pid)).toBe(false);
   });
 
-
   it("【反向验证锚点】detached 标记与实际组不一致时，不得按 pid 猜组长杀组", async () => {
     // 模拟 keepAlive 的标记与实际进程组不一致：调用方传 detached:true（它以为
     // pid 是组长），但实际 pid 与调用者同组、并非组长。旧实现直接 `kill(-pid)`

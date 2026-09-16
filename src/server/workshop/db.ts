@@ -18,7 +18,11 @@ const DEFAULT_DB_FILE = "./db.sqlite";
 
 function resolveDbPath(url: string): string {
   const raw = url.startsWith("file:") ? url.slice("file:".length) : url;
-  return path.resolve(...tracingIgnoreArgs(), process.cwd(), raw || DEFAULT_DB_FILE);
+  return path.resolve(
+    ...tracingIgnoreArgs(),
+    process.cwd(),
+    raw || DEFAULT_DB_FILE,
+  );
 }
 
 const dbUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";

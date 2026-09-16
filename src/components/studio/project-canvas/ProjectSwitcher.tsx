@@ -45,7 +45,7 @@ export function ProjectSwitcher({
   return (
     <div className="relative">
       <button
-        className="flex items-center gap-2 border-border-strong rounded-full border bg-linear-to-br from-subtle to-surface-2 px-3.5 py-1.5 text-[12px] font-medium text-ink-bright shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
+        className="border-border-strong from-subtle to-surface-2 text-ink-bright flex items-center gap-2 rounded-full border bg-linear-to-br px-3.5 py-1.5 text-[12px] font-medium shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
         onClick={onToggleMenu}
         title="项目列表"
       >
@@ -55,8 +55,11 @@ export function ProjectSwitcher({
       </button>
       {menuOpen && (
         <>
-          <div className={overlayClass("modal", "z-30")} onClick={onCloseMenu} />
-          <div className="absolute top-10 left-0 z-40 border-border-strong bg-panel/95 w-60 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60">
+          <div
+            className={overlayClass("modal", "z-30")}
+            onClick={onCloseMenu}
+          />
+          <div className="border-border-strong bg-panel/95 absolute top-10 left-0 z-40 w-60 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60">
             <div className="text-ink-muted px-2 py-1 text-[10px] tracking-wider uppercase">
               我的画布项目
             </div>
@@ -74,7 +77,9 @@ export function ProjectSwitcher({
                 >
                   <span className="truncate">{project.name}</span>
                   {project.id === projectId && (
-                    <span className="text-[10px] text-violet-700 dark:text-violet-400">当前</span>
+                    <span className="text-[10px] text-violet-700 dark:text-violet-400">
+                      当前
+                    </span>
                   )}
                 </button>
               ))}

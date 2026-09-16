@@ -45,7 +45,12 @@ export interface ExposedParamDef {
   optional?: boolean;
 }
 
-/** 统一对外参数的展示名。 */
+/** 统一对外参数的**基础名**。
+ *
+ *  ⚠️ 这一份只给「id → 基础名」的映射用，**不是任何界面的展示名** —— 界面一律
+ *  经 `exposedParamDisplayLabel` 取（见下方）。两处直接读它会话术再次漂移：
+ *  「尺寸」在工坊里是一个「比例 + 分辨率 / (百万像素 + 倍数)」的组合控件，
+ *  只写「尺寸」用户答不出这个控件到底要填什么。 */
 export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
   prompt: "提示词",
   negative: "负面提示词",
@@ -54,6 +59,28 @@ export const EXPOSED_PARAM_LABEL: Record<ExposedParamClass, string> = {
   "first-frame": "首帧",
   "last-frame": "尾帧",
   duration: "时长",
+};
+
+/** 各口的**界面展示名** —— 整个仓库的**唯一出处**。
+ *
+ *  同一张契约清单会出现在三处（工坊封装的对外口一览、工作流库「画布节点」的
+ *  卡片列、模式契约编辑器），三处各写一份字符串必然漂移：ISSUE #596 现场就是
+ *  「尺寸」在工坊封装页写成 `尺寸（比例 + 分辨率 / (百万像素 + 倍数)）`、在同一
+ *  页面的画布节点卡片上只写 `尺寸`，用户读到的像是两个不同的口。
+ *
+ *  另外「负向提示词」（契约编辑器）与「负面提示词」（契约表）本来就是同一个口
+ *  的两种叫法，在这里统一为一套措辞。
+ *
+ *  措辞与具体形态无关的一律不带括号：括号是给「同一类的多种写法」用的，
+ *  只有 `size` 与 `duration` 各有两类等价表达，需要在这里说清。 */
+export const EXPOSED_PARAM_DISPLAY_LABEL: Record<ExposedParamClass, string> = {
+  prompt: "提示词",
+  negative: "负向提示词",
+  size: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）",
+  "reference-image": "参考图",
+  "first-frame": "首帧图片",
+  "last-frame": "尾帧图片",
+  duration: "时长（秒）",
 };
 
 /** 内置默认给几张参考图槽 —— 只是默认值，契约编辑器里可以继续加，不设上限。 */
@@ -83,11 +110,11 @@ export function exposedParamsForMode(
   code: string | null | undefined,
 ): ExposedParamDef[] {
   const out: ExposedParamDef[] = [
-    { cls: "prompt", id: "prompt", label: EXPOSED_PARAM_LABEL.prompt },
+    { cls: "prompt", id: "prompt", label: EXPOSED_PARAM_DISPLAY_LABEL.prompt },
     {
       cls: "negative",
       id: "negative",
-      label: EXPOSED_PARAM_LABEL.negative,
+      label: EXPOSED_PARAM_DISPLAY_LABEL.negative,
       optional: true,
     },
   ];
@@ -97,23 +124,27 @@ export function exposedParamsForMode(
       out.push({
         cls: "first-frame",
         id: "first-frame",
-        label: EXPOSED_PARAM_LABEL["first-frame"],
+        label: EXPOSED_PARAM_DISPLAY_LABEL["first-frame"],
       });
     }
     if (modeUsesLastFrame(code)) {
       out.push({
         cls: "last-frame",
         id: "last-frame",
-        label: EXPOSED_PARAM_LABEL["last-frame"],
+        label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"],
       });
     }
-    out.push({ cls: "size", id: "size", label: EXPOSED_PARAM_LABEL.size });
+    out.push({
+      cls: "size",
+      id: "size",
+      label: EXPOSED_PARAM_DISPLAY_LABEL.size,
+    });
     /* 视频还有时长口（秒）。落点由契约映射决定（duration / length / frames 类
      * 端口都算），值由调用方按该端口的单位折算后落下去。 */
     out.push({
       cls: "duration",
       id: "duration",
-      label: EXPOSED_PARAM_LABEL.duration,
+      label: EXPOSED_PARAM_DISPLAY_LABEL.duration,
     });
     return out;
   }
@@ -127,16 +158,43 @@ export function exposedParamsForMode(
       out.push({
         cls: "reference-image",
         id: i === 0 ? "reference-image" : `reference-image-${i + 1}`,
-        label:
-          i === 0 ? EXPOSED_PARAM_LABEL["reference-image"] : `参考图 ${i + 1}`,
+        label: exposedParamDisplayLabel(
+          i === 0 ? "reference-image" : `reference-image-${i + 1}`,
+        ),
       });
     }
   }
-  out.push({ cls: "size", id: "size", label: EXPOSED_PARAM_LABEL.size });
+  out.push({
+    cls: "size",
+    id: "size",
+    label: EXPOSED_PARAM_DISPLAY_LABEL.size,
+  });
   return out;
 }
 
-/** 契约里给定 id 的展示名（未知 id 原样返回，兼容历史落库键）。 */
+/** 任意契约口 id 的**界面展示名**（带序号的参考图口显示为「参考图 2」）。
+ *
+ *  未知 id（历史落库键 / 自定义口）原样返回 —— 界面读不出名字时宁可显示键本身，
+ *  也不凭空编一个名字。 */
+export function exposedParamDisplayLabel(id: string): string {
+  const cls = exposedClassOf(id);
+  if (!cls) return id;
+  const slot = referenceImageSlotIndex(id);
+  if (slot > 1)
+    return `${EXPOSED_PARAM_DISPLAY_LABEL["reference-image"]} ${slot}`;
+  return EXPOSED_PARAM_DISPLAY_LABEL[cls];
+}
+
+/** 带序号的参考图口的序号（`reference-image-2` → 2；其余口返回 0）。
+ *  第一张不带序号，故「序号 > 1」才是「参考图 2」这种带序号的槽位。 */
+export function referenceImageSlotIndex(id: string): number {
+  const m = /^reference-image-(\d+)$/.exec(id);
+  return m ? Number(m[1]) : 0;
+}
+
+/** 契约里给定 id 的基础名（未知 id 原样返回，兼容历史落库键）。
+ *
+ *  **界面不要用它**：请走 `exposedParamDisplayLabel`。 */
 export function exposedParamLabel(id: string): string {
   const cls = id as ExposedParamClass;
   return EXPOSED_PARAM_LABEL[cls] ?? id;

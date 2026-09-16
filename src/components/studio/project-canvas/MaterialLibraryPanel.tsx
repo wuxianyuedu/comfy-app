@@ -20,7 +20,10 @@ import {
 import { MediaThumbnail as MediaThumb } from "@/components/studio/ui/MediaThumbnail";
 import { useState } from "react";
 
-import { useMaterialLibrary, type MaterialScope } from "./hooks/use-material-library";
+import {
+  useMaterialLibrary,
+  type MaterialScope,
+} from "./hooks/use-material-library";
 import type { MaterialItem } from "~/lib/materials-client";
 
 /* 对外类型再导出：历史消费方从本文件 import MaterialItem，保持 API 不变。 */
@@ -97,10 +100,12 @@ export function MaterialLibraryPanel({
     refresh,
   } = c;
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col overflow-hidden bg-panel/98 border-border-strong border-l backdrop-blur-md">
+    <aside className="bg-panel/98 border-border-strong flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
       {/* ── Header ── */}
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
-        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">素材库</h2>
+        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">
+          素材库
+        </h2>
         <button
           type="button"
           className="text-ink-muted hover:bg-subtle hover:text-ink-soft flex h-6 w-6 items-center justify-center rounded-md transition-colors"
@@ -139,10 +144,10 @@ export function MaterialLibraryPanel({
 
       {/* ── Tabs ── */}
       <div className="border-border-strong flex gap-4 border-b px-4 pt-2">
-        {([
+        {[
           { id: "project" as MaterialScope, label: "本项目" },
           { id: "cross" as MaterialScope, label: "跨项目" },
-        ]).map((scopeItem) => (
+        ].map((scopeItem) => (
           <button
             key={scopeItem.id}
             type="button"
@@ -194,10 +199,22 @@ export function MaterialLibraryPanel({
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
           className="text-ink-soft hover:bg-subtle hover:text-ink-bright flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-40"
-          title={folder ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」` : "上传到「参考素材」"}
+          title={
+            folder
+              ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
+              : "上传到「参考素材」"
+          }
         >
           {uploading ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              className="animate-spin"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
               <path d="M21 12a9 9 0 00-9-9" strokeLinecap="round" />
             </svg>
@@ -231,7 +248,7 @@ export function MaterialLibraryPanel({
                 <button
                   type="button"
                   onClick={() => enterFolder(seg.key)}
-                  className="text-ink-muted text-[12px] transition-colors hover:text-violet-700 hover:underline dark:hover:text-violet-700 dark:text-violet-300"
+                  className="text-ink-muted text-[12px] transition-colors hover:text-violet-700 hover:underline dark:text-violet-300 dark:hover:text-violet-700"
                 >
                   {seg.label}
                 </button>
@@ -255,7 +272,9 @@ export function MaterialLibraryPanel({
       {/* ── Error banner ── */}
       {error && (
         <div className="mx-4 mb-2 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-          <span className="min-w-0 flex-1 break-words text-[11px] text-red-700 dark:text-red-300">{error}</span>
+          <span className="min-w-0 flex-1 text-[11px] break-words text-red-700 dark:text-red-300">
+            {error}
+          </span>
           <button
             type="button"
             onClick={refresh}
@@ -272,7 +291,10 @@ export function MaterialLibraryPanel({
           /* Skeleton */
           <div className="space-y-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={`skeleton-${i}`} className="flex items-center gap-3 py-2">
+              <div
+                key={`skeleton-${i}`}
+                className="flex items-center gap-3 py-2"
+              >
                 <div className="bg-subtle h-9 w-9 shrink-0 animate-pulse rounded-lg" />
                 <div className="bg-subtle h-3 flex-1 animate-pulse rounded" />
               </div>
@@ -284,7 +306,11 @@ export function MaterialLibraryPanel({
             <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
               {/* 文件夹图标 */}
               <div className="border-border-strong bg-subtle mb-5 flex h-20 w-20 items-center justify-center rounded-2xl border">
-                <Folder size={40} strokeWidth={1.2} className="text-ink-fainter" />
+                <Folder
+                  size={40}
+                  strokeWidth={1.2}
+                  className="text-ink-fainter"
+                />
               </div>
               <p className="text-ink-soft text-[14px] font-medium">
                 {searching ? "没有匹配的素材" : "暂无内容"}
@@ -294,7 +320,7 @@ export function MaterialLibraryPanel({
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="flex items-center gap-2 transition-colors hover:text-violet-700 dark:hover:text-violet-700 dark:text-violet-400"
+                    className="flex items-center gap-2 transition-colors hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-700"
                   >
                     <Plus size={14} />
                     点击 + 或右键菜单创建内容
@@ -316,12 +342,18 @@ export function MaterialLibraryPanel({
                   onDragStart={(event) => {
                     event.dataTransfer.setData(
                       "application/x-comfyapp-media",
-                      JSON.stringify({ url: item.url, displayName: item.name, mediaType: item.kind })
+                      JSON.stringify({
+                        url: item.url,
+                        displayName: item.name,
+                        mediaType: item.kind,
+                      }),
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
-                  className={`group relative border-border-strong bg-subtle overflow-hidden rounded-lg border ${
-                    item.kind === "image" || item.kind === "video" ? "cursor-grab active:cursor-grabbing" : ""
+                  className={`group border-border-strong bg-subtle relative overflow-hidden rounded-lg border ${
+                    item.kind === "image" || item.kind === "video"
+                      ? "cursor-grab active:cursor-grabbing"
+                      : ""
                   }`}
                 >
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
@@ -332,19 +364,23 @@ export function MaterialLibraryPanel({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}>
+                      <div
+                        className={`flex h-12 w-12 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
+                      >
                         <KindIcon kind={item.kind} />
                       </div>
                     )}
                   </div>
-                  <p className="text-ink-soft truncate px-2 py-1.5 text-[11px]">{item.name}</p>
+                  <p className="text-ink-soft truncate px-2 py-1.5 text-[11px]">
+                    {item.name}
+                  </p>
                   {/* hover 操作 */}
-                  <div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
+                  <div className="absolute top-1 right-1 hidden gap-1 group-hover:flex">
                     {onUse && (
                       <button
                         type="button"
                         onClick={() => onUse(item)}
-                        className="bg-black/60 text-ink-soft flex h-6 w-6 items-center justify-center rounded backdrop-blur transition-colors hover:text-white"
+                        className="text-ink-soft flex h-6 w-6 items-center justify-center rounded bg-black/60 backdrop-blur transition-colors hover:text-white"
                         title="加入画布"
                       >
                         <Plus size={12} strokeWidth={2.5} />
@@ -353,7 +389,7 @@ export function MaterialLibraryPanel({
                     <button
                       type="button"
                       onClick={() => void remove(item)}
-                      className="bg-black/60 text-ink-soft flex h-6 w-6 items-center justify-center rounded backdrop-blur transition-colors hover:text-red-700 dark:text-red-600 dark:hover:text-red-400"
+                      className="text-ink-soft flex h-6 w-6 items-center justify-center rounded bg-black/60 backdrop-blur transition-colors hover:text-red-700 dark:text-red-600 dark:hover:text-red-400"
                       title="删除"
                     >
                       <Trash2 size={12} />
@@ -372,25 +408,39 @@ export function MaterialLibraryPanel({
                   onDragStart={(event) => {
                     event.dataTransfer.setData(
                       "application/x-comfyapp-media",
-                      JSON.stringify({ url: item.url, displayName: item.name, mediaType: item.kind })
+                      JSON.stringify({
+                        url: item.url,
+                        displayName: item.name,
+                        mediaType: item.kind,
+                      }),
                     );
                     event.dataTransfer.effectAllowed = "copy";
                   }}
                   className={`hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
-                    item.kind === "image" || item.kind === "video" ? "cursor-grab active:cursor-grabbing" : ""
+                    item.kind === "image" || item.kind === "video"
+                      ? "cursor-grab active:cursor-grabbing"
+                      : ""
                   }`}
                 >
                   {item.kind === "image" || item.kind === "video" ? (
                     <div className="bg-canvas-deep h-9 w-9 shrink-0 overflow-hidden rounded-lg">
-                      <MediaThumb src={item.url} alt={item.name} className="h-full w-full object-cover" />
+                      <MediaThumb
+                        src={item.url}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   ) : (
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}>
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${KIND_STYLE[item.kind]}`}
+                    >
                       <KindIcon kind={item.kind} />
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-ink-bright truncate text-[13px]">{item.name}</p>
+                    <p className="text-ink-bright truncate text-[13px]">
+                      {item.name}
+                    </p>
                     <p className="text-ink-fainter mt-0.5 text-[11px]">
                       {searching ? `${item.folderName} · ` : ""}
                       {formatSize(item.size)}
@@ -429,50 +479,56 @@ export function MaterialLibraryPanel({
               ))}
             </div>
           )
-        ) : (
-          /* 分类列表 — 响应 display 网格/列表切换 */
-          display === "grid" ? (
-            <div className="grid grid-cols-3 gap-2 px-1 pt-1">
-              {folders.map((folder) =>
-(
-                <button
-                  key={folder.id}
-                  type="button"
-                  onClick={() => enterFolder(folder.id)}
-                  className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex flex-col items-center gap-2 rounded-lg border py-4 transition-colors"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
-                    <Folder size={22} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-ink-soft min-w-0 truncate text-center text-[12px]">{folder.name}</span>
-                  {folder.count > 0 && (
-                    <span className="text-ink-fainter text-[10px] tabular-nums">{folder.count}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {folders.map((folder) =>
-(
-                <button
-                  key={folder.id}
-                  type="button"
-                  onClick={() => enterFolder(folder.id)}
-                  className="hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
-                    <Folder size={18} strokeWidth={1.8} />
-                  </div>
-                  <span className="min-w-0 flex-1 text-ink-bright truncate text-[13px]">{folder.name}</span>
-                  <span className="text-ink-fainter shrink-0 text-[11px] tabular-nums">
-                    {folder.count > 0 ? folder.count : ""}
+        ) : /* 分类列表 — 响应 display 网格/列表切换 */
+        display === "grid" ? (
+          <div className="grid grid-cols-3 gap-2 px-1 pt-1">
+            {folders.map((folder) => (
+              <button
+                key={folder.id}
+                type="button"
+                onClick={() => enterFolder(folder.id)}
+                className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex flex-col items-center gap-2 rounded-lg border py-4 transition-colors"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
+                  <Folder size={22} strokeWidth={1.8} />
+                </div>
+                <span className="text-ink-soft min-w-0 truncate text-center text-[12px]">
+                  {folder.name}
+                </span>
+                {folder.count > 0 && (
+                  <span className="text-ink-fainter text-[10px] tabular-nums">
+                    {folder.count}
                   </span>
-                  <ChevronRight size={12} strokeWidth={2.5} className="text-ink-fainter group-hover:text-ink-muted shrink-0" />
-                </button>
-              ))}
-            </div>
-          )
+                )}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {folders.map((folder) => (
+              <button
+                key={folder.id}
+                type="button"
+                onClick={() => enterFolder(folder.id)}
+                className="hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-yellow-500/20 to-orange-500/10 text-yellow-700/90 dark:text-yellow-400/80">
+                  <Folder size={18} strokeWidth={1.8} />
+                </div>
+                <span className="text-ink-bright min-w-0 flex-1 truncate text-[13px]">
+                  {folder.name}
+                </span>
+                <span className="text-ink-fainter shrink-0 text-[11px] tabular-nums">
+                  {folder.count > 0 ? folder.count : ""}
+                </span>
+                <ChevronRight
+                  size={12}
+                  strokeWidth={2.5}
+                  className="text-ink-fainter group-hover:text-ink-muted shrink-0"
+                />
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </aside>

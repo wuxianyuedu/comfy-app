@@ -40,10 +40,15 @@ describe("MaterialLibraryPanel", () => {
   });
 
   it("拉取成功后渲染素材项", async () => {
-    mockFetch({ folders: [{ id: "ref", name: "参考素材", count: 1 }], items: sampleItems });
+    mockFetch({
+      folders: [{ id: "ref", name: "参考素材", count: 1 }],
+      items: sampleItems,
+    });
     const onUse = vi.fn();
     const onClose = vi.fn();
-    render(<MaterialLibraryPanel onClose={onClose} projectId="p-1" onUse={onUse} />);
+    render(
+      <MaterialLibraryPanel onClose={onClose} projectId="p-1" onUse={onUse} />,
+    );
 
     // 首屏停在分类列表（folder === null），此时只渲染分类卡片
     expect(await screen.findByText("参考素材")).toBeInTheDocument();
@@ -57,7 +62,9 @@ describe("MaterialLibraryPanel", () => {
     mockFetch({ folders: [], items: [] });
     render(<MaterialLibraryPanel onClose={vi.fn()} projectId="p-1" />);
     // 初始 loading 文案应消失(拉取完成),且不抛错
-    await waitFor(() => expect(screen.queryByText("读取素材库失败")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByText("读取素材库失败")).not.toBeInTheDocument(),
+    );
   });
 
   it("请求失败时展示错误文案", async () => {

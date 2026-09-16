@@ -17,11 +17,8 @@ import { errorMessage } from "~/lib/error-message";
 
 interface Props {
   shots: Shot[];
-  checkpoints: string[];
-  checkpoint: string;
-  onCheckpointChange: (name: string) => void;
-  /** 选定的视频工作流 id；空串 = 内置 img2video / txt2video。
-   *  非空时按封装口径只暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
+  /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
+   *  按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
@@ -41,9 +38,6 @@ type Channel = "local" | "api";
  */
 export function VideoStudio({
   shots,
-  checkpoints,
-  checkpoint,
-  onCheckpointChange,
   workflowId,
   apiChannels,
   onOpenApiSettings,
@@ -60,11 +54,15 @@ export function VideoStudio({
   const apiReady = apiChannels?.video.configured === true;
   const doneCount = shots.filter((s) => !!s.clipUrl).length;
   const pending = shots.filter(
-    (s) => !s.clipUrl && (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
+    (s) =>
+      !s.clipUrl &&
+      (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
   );
 
   function patchShot(id: string, p: Partial<Shot>) {
-    onShotsChange((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
+    onShotsChange((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...p } : s)),
+    );
   }
 
   function setShotError(id: string, message: string | undefined) {
@@ -93,17 +91,23 @@ export function VideoStudio({
         },
       });
       // Safety valve: video renders are slow, but never wedge the batch loop.
-      const timeout = setTimeout(() => {
-        close();
-        patchShot(shotId, { clipStatus: "failed" });
-        setShotError(shotId, "任务超时(30 分钟无响应)");
-        resolve();
-      }, 30 * 60 * 1000);
+      const timeout = setTimeout(
+        () => {
+          close();
+          patchShot(shotId, { clipStatus: "failed" });
+          setShotError(shotId, "任务超时(30 分钟无响应)");
+          resolve();
+        },
+        30 * 60 * 1000,
+      );
     });
   }
 
   /** Poll an async API video task until it resolves or times out (~10 min). */
-  async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
+  async function pollApiVideo(
+    shotId: string,
+    remoteTaskId: string,
+  ): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 3000));
@@ -128,6 +132,15 @@ export function VideoStudio({
       setShotError(shot.id, "提示词为空,请先回上一阶段补全镜头信息");
       return;
     }
+    /* 本地通道没有内置模板可回落：必须先在工作流库选好一个视频工作流。
+     * 门禁放在入口，避免带着空 workflow id 去拉详情。 */
+    if (channel === "local" && !workflowId) {
+      setShotError(
+        shot.id,
+        "本地通道需要先在右侧「生成资源」选择一个视频工作流；或切到远端 API 通道",
+      );
+      return;
+    }
     setShotError(shot.id, undefined);
     patchShot(shot.id, { clipStatus: "running" });
     const frames = framesFor(shot, fps);
@@ -137,31 +150,21 @@ export function VideoStudio({
         const inputImage = shot.imageUrl
           ? await prepareLocalInputImage(shot.imageUrl)
           : undefined;
-        /* 选定工作流库工作流时，按封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，
-         * 其余参数用工作流默认值；否则用内置 img2video / txt2video。
-         * 时长口按落点端口自己的单位取值：按帧表达的端口给 frames，按秒表达的
-         * 给 duration —— 这里已经按当前 fps 折算好，封装层不再猜 fps。 */
-        const input: GenerateInput = workflowId
-          ? (
-              await buildLibraryWorkflowInput(workflowId, {
-                prompt,
-                negativePrompt: shot.negativePrompt || undefined,
-                ...(inputImage ? { firstFrame: inputImage } : {}),
-                ...(typeof shot.duration === "number" && shot.duration > 0
-                  ? { duration: shot.duration }
-                  : {}),
-                frames,
-              })
-            ).input
-          : {
-              workflow: inputImage ? "img2video" : "txt2video",
-              prompt,
-              negative: shot.negativePrompt || undefined,
-              checkpoint: checkpoint || undefined,
-              frames,
-              fps,
-              ...(inputImage ? { inputImage } : {}),
-            };
+        /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个视频工作流
+         *（封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值）。
+         * 见 generateClip 入口的门禁。 */
+        const input: GenerateInput = (
+          await buildLibraryWorkflowInput(workflowId, {
+            prompt,
+            negativePrompt: shot.negativePrompt || undefined,
+            ...(inputImage ? { firstFrame: inputImage } : {}),
+            ...(typeof shot.duration === "number" && shot.duration > 0
+              ? { duration: shot.duration }
+              : {}),
+            frames,
+          })
+        ).input;
+
         const taskId = await startLocalGenerate(input);
         await runLocalTask(shot.id, taskId);
       } else {
@@ -201,9 +204,6 @@ export function VideoStudio({
         onChannelChange={setChannel}
         apiChannels={apiChannels}
         apiReady={apiReady}
-        checkpoints={checkpoints}
-        checkpoint={checkpoint}
-        onCheckpointChange={onCheckpointChange}
         workflowSelected={!!workflowId}
         fps={fps}
         onFpsChange={setFps}
@@ -216,7 +216,8 @@ export function VideoStudio({
 
       {shots.length === 0 ? (
         <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          暂无镜头数据。请先完成「场景分镜」— 镜头时长与运动强度会自动带入本阶段。
+          暂无镜头数据。请先完成「场景分镜」—
+          镜头时长与运动强度会自动带入本阶段。
         </div>
       ) : (
         <div className="space-y-3">
@@ -238,14 +239,15 @@ export function VideoStudio({
 
       {shots.length > 0 && (
         <p className="text-muted-foreground text-[11px]">
-          已完成 {doneCount}/{shots.length} 片段 — 片段与首帧会自动进入「成片合成」时间线;可随时回来重跑单个镜头。
+          已完成 {doneCount}/{shots.length} 片段 —
+          片段与首帧会自动进入「成片合成」时间线;可随时回来重跑单个镜头。
         </p>
       )}
       {shots.length > 0 && (
         <button
           type="button"
           onClick={onPrevStage}
-          className="text-muted-foreground hover:text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 rounded-lg px-3 py-1.5 text-xs"
         >
           ← 回镜头生图
         </button>
@@ -253,4 +255,3 @@ export function VideoStudio({
     </div>
   );
 }
-

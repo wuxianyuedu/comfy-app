@@ -22,7 +22,10 @@ function uploadPin(over: Partial<EnrichedWidget> = {}): EnrichedWidget {
   };
 }
 
-function renderRow(entry: EnrichedWidget, over: Partial<Parameters<typeof WidgetInputRow>[0]> = {}) {
+function renderRow(
+  entry: EnrichedWidget,
+  over: Partial<Parameters<typeof WidgetInputRow>[0]> = {},
+) {
   const onPickFile = vi.fn();
   const onValueChange = vi.fn();
   render(
@@ -36,7 +39,7 @@ function renderRow(entry: EnrichedWidget, over: Partial<Parameters<typeof Widget
       onValueChange={onValueChange}
       onPickFile={onPickFile}
       {...over}
-    />
+    />,
   );
   return { onPickFile, onValueChange };
 }
@@ -50,7 +53,9 @@ describe("WidgetInputRow — 图片上传位", () => {
 
   it("渲染上传按钮,点击触发选文件", () => {
     const { onPickFile } = renderRow(uploadPin());
-    const button = screen.getByRole("button", { name: /上传 choose 1st frame to upload/ });
+    const button = screen.getByRole("button", {
+      name: /上传 choose 1st frame to upload/,
+    });
     fireEvent.click(button);
     expect(onPickFile).toHaveBeenCalledTimes(1);
   });
@@ -80,7 +85,7 @@ describe("WidgetInputRow — 类型徽章与 pin 声明一致", () => {
         type: "STRING",
         control: "text",
         ioKey: "10::widget::text",
-      })
+      }),
     );
     expect(screen.getByText("STRING")).toBeInTheDocument();
   });
@@ -94,7 +99,7 @@ describe("WidgetInputRow — 类型徽章与 pin 声明一致", () => {
         control: "select",
         options: ["euler", "dpmpp_2m"],
         ioKey: "3::widget::sampler_name",
-      })
+      }),
     );
     expect(screen.getByText("COMBO")).toBeInTheDocument();
   });

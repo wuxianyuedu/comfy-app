@@ -3,6 +3,7 @@ import { getServerUser } from "@/lib/auth-server";
 import fs from "node:fs";
 import path from "node:path";
 import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
+import { appendSessionBanner as appendSessionBannerToFile } from "@/lib/session-banner.server";
 import { OLLAMA_DEFAULT_PORT } from "@/lib/endpoints";
 import { killProcessTreeByImage } from "@/lib/kill-process-tree";
 
@@ -29,30 +30,20 @@ function localTimestamp(): string {
 function appendOllamaLog(line: string): void {
   try {
     fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    fs.appendFileSync(OLLAMA_RUNTIME_LOG, `${localTimestamp()} ${line}\n`, "utf-8");
+    fs.appendFileSync(
+      OLLAMA_RUNTIME_LOG,
+      `${localTimestamp()} ${line}\n`,
+      "utf-8",
+    );
   } catch {
     /* 日志失败不影响主流程 */
   }
 }
 
-/** 会话边界横幅（与 ollama-start 同模式）：区分多次启动累积日志。 */
+/** 会话边界横幅（唯一实现见 `src/lib/session-banner.server.ts`）：区分多次启动累积的
+ * ollama-runtime.log（两侧各留空行，直接看文件也能看出本次从哪开始）。 */
 function appendOllamaBanner(kind: "start" | "end", title: string): void {
-  try {
-    fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    const bar = "─".repeat(72);
-    const color = kind === "start" ? "\x1b[1;32m" : "\x1b[1;33m";
-    const reset = "\x1b[0m";
-    const banner = [
-      "",
-      `${color}${bar}${reset}`,
-      `${color}  ${title}${reset}`,
-      `${color}${bar}${reset}`,
-      "",
-    ].join("\n");
-    fs.appendFileSync(OLLAMA_RUNTIME_LOG, banner + "\n", "utf-8");
-  } catch {
-    /* 日志失败不影响主流程 */
-  }
+  appendSessionBannerToFile(OLLAMA_RUNTIME_LOG, kind, title);
 }
 
 async function ollamaUp(): Promise<boolean> {
@@ -100,8 +91,5 @@ export async function POST(_req: NextRequest) {
   }
   const msg = "关闭命令已发送，但 Ollama 仍在响应，请手动确认进程已退出";
   appendOllamaLog(`[err] ${msg}`);
-  return NextResponse.json(
-    { ok: false, detail: msg },
-    { status: 500 },
-  );
+  return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
 }

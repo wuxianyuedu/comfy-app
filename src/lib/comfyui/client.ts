@@ -23,11 +23,13 @@
 // 进程列表确认「该路径的实例进程是否真的在运行」，再通过 PID→监听端口
 // 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
-import { COMFYUI_DEFAULT_PORT, getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
+import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
+import { probeBaseOnce, probeComfyAtPort } from "./probe";
 import { queryNvidiaVram } from "./gpu-vram";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 
 /** How many extra ports to probe when the configured one is unreachable */
 const PROBE_RANGE = 5;
@@ -50,7 +52,10 @@ function probeTargets(configuredPort: number): { port: number; url: string }[] {
     return { port, url: comfyUiBaseUrl(port) };
   });
   if (!targets.some((t) => t.port === COMFY_WINDOW_PORT)) {
-    targets.push({ port: COMFY_WINDOW_PORT, url: comfyUiBaseUrl(COMFY_WINDOW_PORT) });
+    targets.push({
+      port: COMFY_WINDOW_PORT,
+      url: comfyUiBaseUrl(COMFY_WINDOW_PORT),
+    });
   }
   return targets;
 }
@@ -112,15 +117,12 @@ export function resetProbeMissLog(): void {
  */
 function forceIpv4Host(raw: string): string {
   try {
-
     const url = new URL(raw);
 
     if (url.hostname === "localhost") url.hostname = LOOPBACK_HOST;
 
     return url.toString().replace(/\/$/, "");
-
   } catch {
-
     return raw;
   }
 }
@@ -161,7 +163,9 @@ export async function resolveComfyBase(): Promise<string> {
             : COMFYUI_DEFAULT_PORT,
         ),
     );
-  } catch { url = new URL(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)); }
+  } catch {
+    url = new URL(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT));
+  }
   const host = url.hostname === "localhost" ? LOOPBACK_HOST : url.hostname;
   const configuredPort =
     settings.comfyuiPort && settings.comfyuiPort > 0
@@ -218,9 +222,10 @@ export async function resolveComfyBase(): Promise<string> {
    * 走到这里的前提是「问不到实例进程」——要么没配 comfyuiPath，要么按路径没
    * 命中（含查询失败/不可信），要么实例确实不是这个路径起的。 */
   if (await probePort(host, configuredPort)) {
-    _resolvedBase = host === LOOPBACK_HOST
-      ? comfyUiBaseUrl(configuredPort)
-      : `http://${host}:${configuredPort}`;
+    _resolvedBase =
+      host === LOOPBACK_HOST
+        ? comfyUiBaseUrl(configuredPort)
+        : `http://${host}:${configuredPort}`;
     logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
     return _resolvedBase;
   }
@@ -277,6 +282,10 @@ export async function resolveComfyBase(): Promise<string> {
  * 若沿用粘性缓存，一次「进程在但端口未绑定」的探测会把配置地址钉在缓存里，
  * ComfyUI 随后就绪（或落在偏移端口）时仍被当成不可达 —— 设置页的「正在启动…」
  * 就再也不会翻成「运行中」（ISSUE #344）。*/
+/* 既有导入路径的兼容出口：`probeComfyAtPort` 曾在本模块定义，
+ * 已下沉到零依赖叶子（断环所需），名字与签名逐字不变。 */
+export { probeComfyAtPort };
+
 export async function probeComfyBase(): Promise<string | null> {
   const cached = _resolvedBase;
   try {
@@ -288,36 +297,6 @@ export async function probeComfyBase(): Promise<string | null> {
      * 这里回滚成探测前的值。 */
     _resolvedBase = cached;
   }
-}
-
-/** 对指定地址各发一次 `/system_stats`，通了返回该地址。 */
-async function probeBaseOnce(base: string): Promise<string | null> {
-  try {
-    const r = await fetch(`${base}/system_stats`, {
-      signal: AbortSignal.timeout(1500),
-    });
-    return r.ok ? base : null;
-  } catch {
-    return null;
-  }
-}
-
-/** 直接探一个已知端口，**不做**任何进程表查询 / 端口扫描。
- *
- * 给「进程级快照已经定位到实例与端口」的调用方用（设置页状态判定）：
- * 那种情况下 `probeComfyBase()` 是绕远路——它会先 `resolveComfyBase()`，
- * 而后者在配置了路径时又要查一遍进程表（PowerShell 枚举 `Win32_Process`，
- * 本机 ~2.5s），再决定探哪个地址，等于把已经拿到的事实重新推一遍。
- * 直接探快照给出的端口既省掉这段重复 IO，也比「按配置端口 + 偏移扫描」
- * 更准：快照里的端口就是该 PID 实际监听的端口（ISSUE #339 残留延迟）。 */
-export async function probeComfyAtPort(port: number): Promise<string | null> {
-  if (!Number.isInteger(port) || port <= 0) return null;
-  /* `COMFYUI_BASE` 指向的是远端实例（不是本机进程），此时「快照给出的本机监听
-   * 端口」与要连的地址根本不是一回事——把远端主机的端口换成本机端口会直接
-   * 探错地方。这种情况下返回 null，交给调用方走通用探测（它会尊重
-   * COMFYUI_BASE）。 */
-  if (process.env.COMFYUI_BASE) return null;
-  return probeBaseOnce(comfyUiBaseUrl(port));
 }
 
 /**
@@ -362,7 +341,7 @@ export type PromptResult = {
 
 export async function postPrompt(
   prompt: unknown,
-  clientId: string
+  clientId: string,
 ): Promise<PromptResult> {
   const base = await resolveComfyBase();
   const res = await fetch(`${base}/api/prompt`, {
@@ -373,7 +352,9 @@ export async function postPrompt(
   return (await res.json()) as PromptResult;
 }
 
-export async function getHistory(promptId: string): Promise<Record<string, unknown>> {
+export async function getHistory(
+  promptId: string,
+): Promise<Record<string, unknown>> {
   const res = await fetch(`${comfyBase()}/api/history/${promptId}`);
   return (await res.json()) as Record<string, unknown>;
 }
@@ -381,9 +362,8 @@ export async function getHistory(promptId: string): Promise<Record<string, unkno
 export async function getView(
   filename: string,
   subfolder: string,
-  type: string
+  type: string,
 ): Promise<Buffer> {
-
   const url = new URL(`${comfyBase()}/api/view`);
 
   url.searchParams.set("filename", filename);
@@ -397,14 +377,14 @@ export async function getView(
   if (!res.ok) throw new Error(`getView failed: ${res.status}`);
 
   return Buffer.from(await res.arrayBuffer());
-
 }
-
 
 // Returns the list of real filenames on disk for a model folder.
 export async function listModels(folder: string): Promise<string[]> {
   try {
-    const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`);
+    const res = await fetch(
+      `${comfyBase()}/api/models/${encodeURIComponent(folder)}`,
+    );
     if (!res.ok) return [];
     const data = (await res.json()) as string[];
     return Array.isArray(data) ? data : [];
@@ -431,7 +411,9 @@ export async function listModelFolders(): Promise<string[]> {
     });
     if (!res.ok) return [];
     const data = (await res.json()) as string[];
-    return Array.isArray(data) ? data.filter((datum) => typeof datum === "string" && datum.length > 0) : [];
+    return Array.isArray(data)
+      ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
+      : [];
   } catch {
     return [];
   }
@@ -440,7 +422,7 @@ export async function listModelFolders(): Promise<string[]> {
 export async function uploadImage(
   buffer: Buffer,
   filename: string,
-  type = "input"
+  type = "input",
 ): Promise<{ name?: string }> {
   const base = await resolveComfyBase();
   const form = new FormData();
@@ -451,7 +433,9 @@ export async function uploadImage(
     body: form,
   });
   if (!res.ok) {
-    throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
+    throw new Error(
+      `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
+    );
   }
   return (await res.json()) as { name?: string };
 }

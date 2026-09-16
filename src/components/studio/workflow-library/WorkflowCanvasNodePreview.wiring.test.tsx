@@ -18,6 +18,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+/* 模式契约注册表（工坊封装 / 画布节点共读的那一份）打桩：
+ * 预览现在也读它（卡片头与「工坊封装」页签同一份措辞），jsdom 里没有 tRPC
+ * Provider，直接用「无自定义契约」的等价结果 —— 与 `useModeContracts` 在
+ * 查询未落地时返回的空数组一致。 */
+vi.mock("~/components/workshop/mode-contract/hooks/use-mode-contracts", () => ({
+  useModeContracts: () => ({ contracts: [], loading: false, save: vi.fn() }),
+}));
 vi.mock("@/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
   watchTask: vi.fn(),
@@ -125,7 +132,9 @@ describe("库内映射编辑", () => {
     expect(dot, "尺寸卡的像素量出口应有一颗可连的 handle").toBeTruthy();
     /* 它是 source（线从这里出发去宿主卡片），不是装饰圆点。 */
     expect(
-      container.querySelector('.react-flow__handle.source[data-handleid="megapixels"]'),
+      container.querySelector(
+        '.react-flow__handle.source[data-handleid="megapixels"]',
+      ),
     ).toBeTruthy();
   });
 
@@ -134,9 +143,14 @@ describe("库内映射编辑", () => {
      *  这里不断言手势，只钉住「库内改的落点落成什么形状」—— 形状错了刷新后就
      *  读不回来（用户口径：「改了落点没生效」）。 */
     const parsed = parseParamMapping(
-      applyWireEdit({}, { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" }),
+      applyWireEdit(
+        {},
+        { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+      ),
     );
-    expect(parsed.manualByMode).toEqual({ T2I: { size: "5::widget::megapixels" } });
+    expect(parsed.manualByMode).toEqual({
+      T2I: { size: "5::widget::megapixels" },
+    });
   });
 
   it("落库后的 paramMap 读回来：卡片头「恢复默认」可用", () => {
@@ -176,15 +190,55 @@ describe("库内映射编辑", () => {
   });
 });
 
+describe("画布铺满：背景板（ISSUE #596）", () => {
+  /* 用户口径：「全屏时，下方区域有空白却不是画布」。
+   *
+   * 画布的缩放由 React Flow 的 `fitView` 按节点包围盒算 —— 卡片比视口矮时它只会
+   * 放大到内容高度，画布底边以下就落回面板底色。三列之上垫的那层背景板把包围盒
+   * 撑到「视口与内容取大」，最优缩放因此只能是「等比铺满视口」的那个值。
+   *
+   * 背景板必须是**透明、不可交互**的：它只是底，不能抢走卡片与表单的点击 / 拖动。 */
+  it("三列之下有一层背景板节点，且它不抢交互", () => {
+    const { container } = renderPreview({});
+    const backdrop = container.querySelector(
+      '[data-testid="wflib-canvas-backdrop"]',
+    );
+    expect(backdrop, "画布应有一层撑满高度的背景板").toBeTruthy();
+
+    /* 它的节点外壳不可选中 / 不可拖动 —— React Flow 只在为真时挂上这两个类，
+     * 都不出现即「都不是」。否则画布上会多出一块能点、能拖的空面板。 */
+    const wrapper = backdrop!.closest(".react-flow__node")!;
+    expect(wrapper.className).not.toContain("selectable");
+    expect(wrapper.className).not.toContain("draggable");
+    /* 声明尺寸给的是撑满视口的那个值，容器才会铺到面板底边。 */
+    expect(backdrop!.className).toContain("h-full");
+  });
+
+  it("背景板垫在三列之下，不遮挡卡片（DOM 顺序在前的那个先画）", () => {
+    const { container } = renderPreview({});
+    const nodes = Array.from(
+      container.querySelectorAll(".react-flow__node"),
+    ).map((el) => el.getAttribute("data-id"));
+    const backdropIndex = nodes.indexOf("lib:backdrop");
+    const paramsIndex = nodes.indexOf("lib:params");
+    expect(backdropIndex).toBeGreaterThanOrEqual(0);
+    expect(paramsIndex).toBeGreaterThan(backdropIndex);
+  });
+});
+
 describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
   it("宿主卡片的输出行带 <Handle>（红框里的那一行）", () => {
     /* 用户口径：「红框中的输出端口也要有端口圆点」。项目画布上的输出行一直有
      *  这颗点（`PortHandle dir="out"`），库内预览此前漏了 —— 补上，且它正是
      *  右列连线的起点。 */
     const { container } = renderPreview({});
-    const host = container.querySelector('[data-testid="wflib-canvas-node-host"]')!;
+    const host = container.querySelector(
+      '[data-testid="wflib-canvas-node-host"]',
+    )!;
     expect(
-      host.querySelector('.react-flow__handle.source[data-handleid="5::output::IMAGE"]'),
+      host.querySelector(
+        '.react-flow__handle.source[data-handleid="5::output::IMAGE"]',
+      ),
     ).toBeTruthy();
   });
 
@@ -216,8 +270,9 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
       '[data-testid="param-node-5::output::IMAGE"]',
     )!;
     expect(
-      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!
-        .disabled,
+      card.querySelector<HTMLButtonElement>(
+        '[data-testid^="param-node-reset"]',
+      )!.disabled,
     ).toBe(true);
     /* 但端点本身在（可拖）—— 端点由画布的节点注入。 */
     expect(
@@ -233,8 +288,9 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
       '[data-testid="param-node-5::output::IMAGE"]',
     )!;
     expect(
-      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!
-        .disabled,
+      card.querySelector<HTMLButtonElement>(
+        '[data-testid^="param-node-reset"]',
+      )!.disabled,
     ).toBe(false);
   });
 });
@@ -259,7 +315,9 @@ describe("画布视口（由 React Flow 承担）", () => {
   it("三列各挂在一个节点里（左列 / 宿主 / 右列）", () => {
     const { container } = renderPreview({});
     for (const id of ["lib:params", "lib:host", "lib:outputs"]) {
-      const node = container.querySelector(`.react-flow__node[data-id="${id}"]`);
+      const node = container.querySelector(
+        `.react-flow__node[data-id="${id}"]`,
+      );
       expect(node, `节点 ${id} 应挂载`).toBeTruthy();
     }
   });
@@ -298,7 +356,11 @@ describe("尺寸各项各自可取外部值", () => {
      *  ISSUE #529 之后这件事是**纯派生**：几条该画的线就有几条 edge，id 里带
      *  handle（`libwire:param:<条目>?<handle>`）。这里断言派生结果 —— 边的
      *  渲染本身由 React Flow 负责，jsdom 量不到 handleBounds。 */
-    const paramCards = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
+    const paramCards = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "T2I",
+    });
     const edges = deriveLibraryEdges(paramCards.wires, []);
     for (const handle of ["aspect_ratio", "megapixels", "width"]) {
       expect(

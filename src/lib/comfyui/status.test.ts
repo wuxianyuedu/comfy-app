@@ -14,7 +14,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-vi.mock("../app-settings", () => ({
+vi.mock("../app-settings/app-settings.server", () => ({
   COMFYUI_DEFAULT_PORT: 8188,
   getSettingsSync: vi.fn(),
 }));
@@ -26,14 +26,19 @@ vi.mock("./proc-detect", () => ({
 }));
 vi.mock("./env-python", () => ({ collectComfyPythonCandidates: vi.fn() }));
 /* 「配置端口抢跑」用的直连探测：测试里默认「没人应答」，避免真发 HTTP。
- * 需要它的用例（端口抢跑）自行改 mock 返回值。 */
-vi.mock("./client", () => ({
+ * 需要它的用例（端口抢跑）自行改 mock 返回值。
+ *
+ * `/probe` 与 `./client` 分别 mock：`probeComfyAtPort` 是零依赖叶子（§12.7 断环时
+ * 从 `client.ts` 下沉出去），而 status 只经它取「已知端口是否应答」。 */
+vi.mock("./probe", () => ({
   probeComfyAtPort: vi.fn(async () => null),
+}));
+vi.mock("./client", () => ({
   probeComfyBase: vi.fn(async () => null),
   resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
   resetComfyBase: vi.fn(),
 }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
@@ -46,12 +51,12 @@ import {
   COMFY_SNAPSHOT_TTL_MS,
   COMFY_UNBOUND_PORT_TTL_MS,
 } from "./status";
-import { getSettingsSync } from "../app-settings";
+import { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { collectComfyPythonCandidates } from "./env-python";
-import { probeComfyAtPort } from "./client";
+import { probeComfyAtPort } from "./probe";
 
 const plan = {
   cmd: "C:\\Comfy\\python_embeded\\python.exe",

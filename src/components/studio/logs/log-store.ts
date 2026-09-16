@@ -21,6 +21,20 @@
 
 import { create } from "zustand";
 
+import { saveLogExport, type SavedLogExport } from "~/lib/log-file-client";
+
+import { copyLogText, downloadLogText } from "./log-export";
+import { formatForClipboard } from "./log-format";
+import { splitLogRecords, stripSgr } from "./log-record";
+
+/* 格式化口径落在 log-format（视图与 store 共用一份）；这里按原路径转出，
+ * 既有导入（测试、面板）逐字不变。 */
+export {
+  formatEntryForClipboard,
+  formatForClipboard,
+  formatTime,
+} from "./log-format";
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 /**
@@ -297,31 +311,6 @@ export function isNextDevNoise(args: unknown[]): boolean {
   return /\[Fast\s*Refresh\]\s*(?:done|finished)?.*\d+\s*ms/i.test(text);
 }
 
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function formatTime(ts: number, opts?: { alwaysDate?: boolean }): string {
-  const d = new Date(ts);
-  const time = d.toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
-  if (opts?.alwaysDate || !isSameDay(d, new Date())) {
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${month}-${day} ${time}`;
-  }
-  return time;
-}
-
 /* 启动链路行的形态（dev-launcher 的 Transcript 是「裸文本 + 缩进」的混合体）：
  *
  *   "[10:22:24] [INFO ] 预检通过"                    ← 级别标记带填充空格（PadRight 5）
@@ -448,23 +437,23 @@ export function parseFileLogs(
   const push = (entry: Omit<LogEntry, "seq">) => {
     entries.push({ ...entry, seq: seq++ });
   };
-  for (const rawLine of text.split("\n")) {
-    // Strip ANSI SGR (e.g. \x1b[36m) that the launcher now writes into the
-    // transcript, so the [HH:mm:ss] [LEVEL] regex still matches cleanly.
-    // 颜色码残缺（\x1b 丢失、只剩 `[90m` / `[0m`）时它们会留在正文里，按 SGR
-    // 的形状整段剥掉，免得面板上出现 `[[OK] 【[90m[OK[0m] …` 这类双份级别标记。
-    const line = rawLine
-      .replace(/\r$/, "")
-      .replace(/\x1b\[[0-9;:]*m/g, "")
-      .replace(/\[[0-9;:]*m/g, "");
-    if (!line.trim()) continue;
+  const originOf = origin ? { origin } : {};
+  /* 时刻/级别只看**记录头**；续行拼回正文（见 log-record 模块）——续行本来
+   * 就没有时刻前缀，此前各自成了一条 level=info 的裸文本行，用户读到的就是
+   * 「一个 json 被拆成十几条」（ISSUE #609）。 */
+  for (const record of splitLogRecords(stripSgr(text), isLogLine)) {
+    const head = record.head;
+    if (!head.trim()) continue;
+    /* ANSI 已在 splitLogRecords 之前剥掉，这里只处理「有无续行」。 */
+    const withRest = (msg: string) =>
+      record.rest ? `${msg}\n${record.rest}` : msg;
     // 常规 tRPC/RPC 调用计时行（如 `[rpc] xxx 155ms {"type":"query"}`）不进面板：
     // 正常调用高频产生会刷屏（#294）；失败/慢查询（error/warn 级别）仍保留。
-    if (isRoutineRpcTimingLine(line)) continue;
+    if (isRoutineRpcTimingLine(head)) continue;
     // 面板自轮询的访问日志行（`GET /api/logs/current?…` 等）不进面板：
     // 它们是面板每 2s 轮询自己的回声，无限累积且成批挤在同一毫秒（见函数说明）。
-    if (isPanelSelfPollingLine(line)) continue;
-    const m = LOG_LINE_RE.exec(line);
+    if (isPanelSelfPollingLine(head)) continue;
+    const m = LOG_LINE_RE.exec(head);
     if (m) {
       const [, hh, mm, ss, lv, msg] = m;
       // 带时间戳前缀的自轮询行（如 dev-launcher 转录的 dev 输出）：拆出正文后再判一次
@@ -475,13 +464,13 @@ export function parseFileLogs(
         id: nextId(),
         time: d.getTime(),
         level: parseLogLevel(lv ?? "INFO"),
-        message: msg ?? "",
+        message: withRest(msg ?? ""),
         source: "system",
-        ...(origin ? { origin } : {}),
+        ...originOf,
       });
       continue;
     }
-    const am = APP_RUNTIME_LOG_RE.exec(line);
+    const am = APP_RUNTIME_LOG_RE.exec(head);
     if (am) {
       const [, year, month, day, hh, mm, ss, ms, lv, ns, msg] = am;
       const d = new Date(
@@ -493,8 +482,7 @@ export function parseFileLogs(
         Number(ss),
         Number(ms),
       );
-      const nsTag = ns ? `[${ns}] ` : "";
-      const msgText = nsTag + (msg ?? "");
+      const msgText = withRest((ns ? `[${ns}] ` : "") + (msg ?? ""));
       push({
         id: nextId(),
         time: d.getTime(),
@@ -504,11 +492,11 @@ export function parseFileLogs(
           : parseLogLevel(lv ?? "INFO"),
         message: msgText,
         source: "system",
-        ...(origin ? { origin } : {}),
+        ...originOf,
       });
       continue;
     }
-    const lm = LAUNCHER_LOG_RE.exec(line);
+    const lm = LAUNCHER_LOG_RE.exec(head);
     if (lm) {
       const [, year, month, day, hh, mm, ss, ms, msg] = lm;
       const d = new Date(
@@ -524,9 +512,9 @@ export function parseFileLogs(
         id: nextId(),
         time: d.getTime(),
         level: "info",
-        message: msg ?? "",
+        message: withRest(msg ?? ""),
         source: "system",
-        ...(origin ? { origin } : {}),
+        ...originOf,
       });
       continue;
     }
@@ -534,12 +522,21 @@ export function parseFileLogs(
       id: nextId(),
       time: now,
       level: "info",
-      message: line,
+      message: record.text,
       source: "system",
-      ...(origin ? { origin } : {}),
+      ...originOf,
     });
   }
   return entries;
+}
+
+/** 该行是不是「带时刻的日志记录头」（三种可解析形态之一）。 */
+function isLogLine(line: string): boolean {
+  return (
+    LOG_LINE_RE.test(line) ||
+    APP_RUNTIME_LOG_RE.test(line) ||
+    LAUNCHER_LOG_RE.test(line)
+  );
 }
 
 /** 行身份：同一行被多路读到（launcher 转写含 dev 输出）时据此去重。 */
@@ -687,21 +684,6 @@ export function dedupeRepeats(
     i += run;
   }
   return out;
-}
-
-/**
- * 单行日志 → 可复制的文本（**唯一口径**：行的复制按钮与「复制全部日志」共用）。
- *
- * 时刻取**全日期**（`MM-DD HH:mm:ss.mmm`）而不是行首显示的那一截：面板上同一天
- * 的行只显示时分秒，但复制出去的文本会离开面板的上下文（贴进 issue、发给人看），
- * 没有日期就说不清是哪天的事。
- */
-export function formatEntryForClipboard(entry: LogEntry): string {
-  return `${formatTime(entry.time, { alwaysDate: true })} [${entry.level.toUpperCase()}] ${entry.message}`;
-}
-
-function formatForClipboard(entries: LogEntry[]): string {
-  return entries.map(formatEntryForClipboard).join("\n");
 }
 
 function zeroCounts(): LogLevelCounts {
@@ -943,6 +925,13 @@ export interface LogStoreState {
   clear: () => void;
   copyAll: () => Promise<void>;
   download: () => void;
+  /**
+   * 把当前筛选下的**全部日志**保存到本机 `log/exports/`（返回落盘路径）。
+   *
+   * 与 `download` 并存而不是替换：浏览器下载在桌面壳里不一定真的落盘，而排障
+   * 现场要的是「文件确实在、路径说得出」（ISSUE #609 反馈第 3 条）。
+   */
+  saveExport: (label: string) => Promise<SavedLogExport>;
 }
 
 /** 面板渲染一帧需要的全部状态（`LogPanelState` 的别称，视图侧更短的写法）。 */
@@ -1391,36 +1380,18 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       };
     }),
 
-  copyAll: async () => {
-    const text = formatForClipboard(get().logs);
-    if (typeof navigator === "undefined") return;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Fallback
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
-  },
-
-  download: () => {
-    if (typeof document === "undefined") return;
-    const blob = new Blob([formatForClipboard(get().logs)], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `comfy-app-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  },
+  /* 复制的范围 = **当前筛选下的全部日志**（来源 × 级别 × 搜索词，跨所有页），
+   * 而不是「全部日志」也不是「当前这一页」。用户诉求原文：「复制日志，需要只
+   * 复制当前选择类型的全部日志」——他先把来源/级别收窄到想看的那一类，再按下
+   * 复制，期望拿到的就是这一类；此前不分范围地倒出面板里的所有行（含 2000 行
+   * 之外的其他来源、启动噪音），用户还得自己去里面挑（ISSUE #609）。
+   *
+   * `filteredLogs` 正是这个范围：它与面板显示的行同源（同一个 computeFiltered），
+   * 只是不受分页窗口限制——「全部日志」指的是一整类，不是一页。 */
+  copyAll: () => copyLogText(formatForClipboard(get().filteredLogs)),
+  download: () => downloadLogText(formatForClipboard(get().filteredLogs)),
+  saveExport: (label) =>
+    saveLogExport(label, formatForClipboard(get().filteredLogs)),
 }));
 
 /* ── 已读水位与贴底基线 ─────────────────────────────────────────────── */

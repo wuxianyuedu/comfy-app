@@ -24,7 +24,7 @@ vi.mock("~/server/db", () => ({
   db: { run: vi.fn() },
 }));
 
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
@@ -48,7 +48,11 @@ describe("GET /api/health", () => {
     const { GET } = await import("./route");
     const res = await GET();
     expect(res.status).toBe(503);
-    const body = (await res.json()) as { status: string; db: string; hint: string };
+    const body = (await res.json()) as {
+      status: string;
+      db: string;
+      hint: string;
+    };
     expect(body.db).toBe("empty");
     expect(body.status).toBe("error");
     // 失败路径必须有可行动出口（规范 §9.2 第 3 条），不能只报「错了」。

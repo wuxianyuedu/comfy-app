@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { getWorkflow } from "@/lib/comfyui/_meta";
 import { useMyWorks } from "./hooks/use-my-works";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   QUEUED: { label: "排队中", cls: "bg-subtle text-muted-foreground" },
   RUNNING: { label: "生成中", cls: "bg-primary-soft text-primary" },
-  SUCCEEDED: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-500" },
-  FAILED: { label: "失败", cls: "bg-red-500/15 text-red-700 dark:text-red-500" },
+  SUCCEEDED: {
+    label: "已完成",
+    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-500",
+  },
+  FAILED: {
+    label: "失败",
+    cls: "bg-red-500/15 text-red-700 dark:text-red-500",
+  },
   CANCELLED: { label: "已取消", cls: "bg-subtle text-muted-foreground" },
 };
 
@@ -45,8 +50,9 @@ export default function MyWorks() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {data.map((task) => {
             const st = STATUS[task.status] ?? STATUS.QUEUED!;
-            const wf =
-              getWorkflow(task.workflowName)?.label ?? task.workflowName;
+            /* 工作流名直接展示：内置模板（含中文 label 表）已移除，任务行存的
+             *  workflowName 就是工作流库里的名字。 */
+            const wf = task.workflowName;
             return (
               <div
                 key={task.id}

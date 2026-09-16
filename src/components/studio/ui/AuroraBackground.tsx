@@ -24,7 +24,7 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
     >
       {/* 极光晕 1：紫罗兰（右上） */}
       <div
-        className="absolute right-[-10%] top-[-20%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-60 dark:mix-blend-screen"
+        className="absolute top-[-20%] right-[-10%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-60 dark:mix-blend-screen"
         style={{
           background:
             "radial-gradient(circle, rgba(139,92,246,0.48) 0%, rgba(139,92,246,0) 70%)",
@@ -33,7 +33,7 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
       />
       {/* 极光晕 2：青蓝（左下） */}
       <div
-        className="absolute left-[-15%] bottom-[10%] h-[60%] w-[50%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        className="absolute bottom-[10%] left-[-15%] h-[60%] w-[50%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         style={{
           background:
             "radial-gradient(circle, rgba(34,212,237,0.32) 0%, rgba(34,212,237,0) 70%)",
@@ -42,7 +42,7 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
       />
       {/* 极光晕 3：品红（中下，柔光点缀） */}
       <div
-        className="absolute left-[20%] bottom-[-10%] h-[40%] w-[35%] rounded-full opacity-5 mix-blend-normal dark:opacity-30 dark:mix-blend-screen"
+        className="absolute bottom-[-10%] left-[20%] h-[40%] w-[35%] rounded-full opacity-5 mix-blend-normal dark:opacity-30 dark:mix-blend-screen"
         style={{
           background:
             "radial-gradient(circle, rgba(255,92,168,0.22) 0%, rgba(255,92,168,0) 70%)",

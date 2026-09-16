@@ -9,9 +9,15 @@ import {
   workflowTemplateRepository,
   workflowModelTagRepository,
 } from "@/lib/core/repository";
-import { reimportFromSource, importFromLocalPath } from "@/lib/comfyui/importSource";
+import {
+  reimportFromSource,
+  importFromLocalPath,
+} from "@/lib/comfyui/importSource";
 import { readEnvVar } from "@/lib/envfile";
-import { deriveComfyuiWorkflowsDir, getSettingsSync } from "@/lib/app-settings";
+import {
+  deriveComfyuiWorkflowsDir,
+  getSettingsSync,
+} from "@/lib/app-settings/app-settings.server";
 import {
   scanLocalWorkflowRoots,
   scanLocalWorkflowChecksums,
@@ -58,7 +64,9 @@ function getLocalWorkflowRoots(): string[] {
 /** Stable, deterministic placeholder id for files that exist on disk but
  *  haven't been imported yet. */
 function pendingId(absPath: string): string {
-  return "pending-" + createHash("sha1").update(absPath).digest("hex").slice(0, 12);
+  return (
+    "pending-" + createHash("sha1").update(absPath).digest("hex").slice(0, 12)
+  );
 }
 
 /** shape of the local-pending placeholder rows appended to
@@ -96,7 +104,11 @@ interface LocalPendingRow {
 function pathKey(p: string): string {
   if (!p) return "";
   try {
-    return path.resolve(p).toLowerCase().replace(/\\/g, "/").replace(/\/+$/, "");
+    return path
+      .resolve(p)
+      .toLowerCase()
+      .replace(/\\/g, "/")
+      .replace(/\/+$/, "");
   } catch {
     return p.toLowerCase().replace(/\\/g, "/").replace(/\/+$/, "");
   }
@@ -105,7 +117,7 @@ function pathKey(p: string): string {
 /** Find the configured root whose `absPath` is a path-prefix of `filePath`. */
 function findRootFor(
   filePath: string,
-  roots: Array<{ rawPath: string; absPath: string }>
+  roots: Array<{ rawPath: string; absPath: string }>,
 ): string | undefined {
   if (!filePath || roots.length === 0) return undefined;
   const target = pathKey(filePath);
@@ -134,22 +146,31 @@ export const workflowRouter = createTRPCRouter({
           category: z.string().optional(),
           model: z.string().optional(),
         })
-        .optional()
+        .optional(),
     )
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id;
       const whereConditions: SQL[] = [];
 
       if (input?.type) {
-        whereConditions.push(eq(workflowTemplate.taskType, normalizeTaskType(input.type)));
+        whereConditions.push(
+          eq(workflowTemplate.taskType, normalizeTaskType(input.type)),
+        );
       } else if (input?.category) {
         const category =
-          input.category === "image" || input.category === "video" || input.category === "audio"
+          input.category === "image" ||
+          input.category === "video" ||
+          input.category === "audio"
             ? input.category
             : null;
         const typesInCat = category ? getWorkflowTypesByCategory(category) : [];
         if (typesInCat.length > 0) {
-          whereConditions.push(inArray(workflowTemplate.taskType, typesInCat.map((t) => t.code)));
+          whereConditions.push(
+            inArray(
+              workflowTemplate.taskType,
+              typesInCat.map((t) => t.code),
+            ),
+          );
         }
       }
 
@@ -159,10 +180,15 @@ export const workflowRouter = createTRPCRouter({
           .map((part) => part.trim())
           .filter(Boolean);
         if (names.length > 0) {
-          const tagRows = await workflowModelTagRepository.listIdsByNames(userId, names);
+          const tagRows = await workflowModelTagRepository.listIdsByNames(
+            userId,
+            names,
+          );
           const tagIds = tagRows.map((r) => r.id);
           if (tagIds.length > 0) {
-            whereConditions.push(workflowModelTagRepository.templateHasTagIdsWhere(tagIds));
+            whereConditions.push(
+              workflowModelTagRepository.templateHasTagIdsWhere(tagIds),
+            );
           } else {
             // 没有任何匹配标签 → 结果为空
             whereConditions.push(sql`0 = 1`);
@@ -170,7 +196,8 @@ export const workflowRouter = createTRPCRouter({
         }
       }
 
-      const where = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+      const where =
+        whereConditions.length > 0 ? and(...whereConditions) : undefined;
       const list = await workflowTemplateRepository.listForUser(userId, {
         where,
         orderBy: [desc(workflowTemplate.createdAt)],
@@ -178,7 +205,8 @@ export const workflowRouter = createTRPCRouter({
 
       // 批量取出每个模板的模型标签名（替代 Prisma modelTags 关系投影）
       const wfIds = list.map((w) => w.id);
-      const tagRows = await workflowModelTagRepository.getTemplateTagRows(wfIds);
+      const tagRows =
+        await workflowModelTagRepository.getTemplateTagRows(wfIds);
       const tagsByName = new Map<string, string[]>();
       for (const r of tagRows) {
         const arr = tagsByName.get(r.templateId) ?? [];
@@ -188,16 +216,18 @@ export const workflowRouter = createTRPCRouter({
 
       // ── Local-on-disk roots ──
       const localRoots = getLocalWorkflowRoots();
-      let localRootsSummary:
-        | Array<{
-            rawPath: string;
-            absPath: string;
-            exists: boolean;
-            count: number;
-            error?: string;
-          }>
-        | null = null;
-      let localRootsList: Array<{ rawPath: string; absPath: string; exists: boolean }> = [];
+      let localRootsSummary: Array<{
+        rawPath: string;
+        absPath: string;
+        exists: boolean;
+        count: number;
+        error?: string;
+      }> | null = null;
+      let localRootsList: Array<{
+        rawPath: string;
+        absPath: string;
+        exists: boolean;
+      }> = [];
       let localAllFiles: LocalWorkflowFile[] = [];
       if (localRoots.length > 0) {
         /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
@@ -206,13 +236,15 @@ export const workflowRouter = createTRPCRouter({
         const { roots, allFiles } = scanLocalWorkflowRoots(localRoots, {
           recursive: true,
         });
-        localRootsSummary = roots.map((root) =>({          rawPath: root.rawPath,
+        localRootsSummary = roots.map((root) => ({
+          rawPath: root.rawPath,
           absPath: root.absPath,
           exists: root.exists,
           count: root.files.length,
           error: root.error,
         }));
-        localRootsList = roots.map((root) =>({          rawPath: root.rawPath,
+        localRootsList = roots.map((root) => ({
+          rawPath: root.rawPath,
           absPath: root.absPath,
           exists: root.exists,
         }));
@@ -230,12 +262,18 @@ export const workflowRouter = createTRPCRouter({
       const renamedFromTo = new Map<string, string>();
       if (localAllFiles.length > 0) {
         const checksumEntries = await scanLocalWorkflowChecksums(localRoots);
-        const checksumIndex = new Map<string, { absPath: string; mtimeMs: number }>();
+        const checksumIndex = new Map<
+          string,
+          { absPath: string; mtimeMs: number }
+        >();
         for (const e of checksumEntries) {
           if (!e.checksum) continue;
           const cur = checksumIndex.get(e.checksum);
           if (!cur || e.mtimeMs > cur.mtimeMs) {
-            checksumIndex.set(e.checksum, { absPath: e.absPath, mtimeMs: e.mtimeMs });
+            checksumIndex.set(e.checksum, {
+              absPath: e.absPath,
+              mtimeMs: e.mtimeMs,
+            });
           }
         }
         for (const w of list) {
@@ -262,11 +300,12 @@ export const workflowRouter = createTRPCRouter({
       }
 
       // ── Enrich with type metadata + compact preview ──
-      const enriched = list.map((list) =>
-{
+      const enriched = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const graphObj =
-          list.graph && typeof list.graph === "object" && !Array.isArray(list.graph)
+          list.graph &&
+          typeof list.graph === "object" &&
+          !Array.isArray(list.graph)
             ? (list.graph as Record<string, unknown>)
             : null;
         const hasApi = !!graphObj && Object.keys(graphObj).length > 0;
@@ -288,7 +327,10 @@ export const workflowRouter = createTRPCRouter({
             diskMissing = true;
           } else {
             diskMtimeSec = Math.floor(diskMs / 1000);
-            if (typeof list.sourceMtime === "number" && diskMtimeSec > list.sourceMtime) {
+            if (
+              typeof list.sourceMtime === "number" &&
+              diskMtimeSec > list.sourceMtime
+            ) {
               diskDirty = true;
             }
           }
@@ -315,11 +357,14 @@ export const workflowRouter = createTRPCRouter({
           format: hasRaw ? ("raw" as const) : ("api" as const),
           preview: buildWorkflowPreview(graphObj ?? {}),
           workflowIO:
-            list.workflowIO && typeof list.workflowIO === "object" && !Array.isArray(list.workflowIO)
+            list.workflowIO &&
+            typeof list.workflowIO === "object" &&
+            !Array.isArray(list.workflowIO)
               ? (list.workflowIO as unknown as WorkflowIOMap)
               : {},
           modelTags: tagsByName.get(list.id) ?? [],
-          sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
+          sourceMtimeSec:
+            typeof list.sourceMtime === "number" ? list.sourceMtime : null,
           diskMtimeSec,
           diskDirty,
           diskMissing,
@@ -410,21 +455,24 @@ export const workflowRouter = createTRPCRouter({
         graph: z.unknown().optional(),
         raw: z.unknown().optional(),
         sourcePath: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const body = input;
-      const explicitFormat = body.format === "raw" || body.format === "api" ? body.format : null;
+      const explicitFormat =
+        body.format === "raw" || body.format === "api" ? body.format : null;
       const candidate = body.raw ?? body.graph;
 
       // ── Local-file import ──
-      const sourcePath = typeof body.sourcePath === "string" ? body.sourcePath.trim() : "";
+      const sourcePath =
+        typeof body.sourcePath === "string" ? body.sourcePath.trim() : "";
       if (sourcePath) {
         let imported;
         try {
           imported = await importFromLocalPath(sourcePath, {
             explicitFormat,
-            preferredTaskType: typeof body.taskType === "string" ? body.taskType : undefined,
+            preferredTaskType:
+              typeof body.taskType === "string" ? body.taskType : undefined,
             defaultName: typeof body.name === "string" ? body.name : undefined,
           });
         } catch (e: unknown) {
@@ -435,19 +483,24 @@ export const workflowRouter = createTRPCRouter({
           });
         }
         const fallbackName =
-          sourcePath.split(/[\\/]/).pop()?.replace(/\.(json|workflow)$/i, "").trim() ??
-          "未命名工作流";
+          sourcePath
+            .split(/[\\/]/)
+            .pop()
+            ?.replace(/\.(json|workflow)$/i, "")
+            .trim() ?? "未命名工作流";
         const name =
           typeof body.name === "string" && body.name.trim()
             ? body.name.trim()
             : fallbackName;
-        const modes = Array.isArray(body.modes) && body.modes.length > 0
-          ? body.modes
-          : undefined;
-      const defaultMode = typeof body.defaultMode === "string" && body.defaultMode
-          ? body.defaultMode
-          : modes?.[0];
-      const tpl = await workflowTemplateRepository.createImported({
+        const modes =
+          Array.isArray(body.modes) && body.modes.length > 0
+            ? body.modes
+            : undefined;
+        const defaultMode =
+          typeof body.defaultMode === "string" && body.defaultMode
+            ? body.defaultMode
+            : modes?.[0];
+        const tpl = await workflowTemplateRepository.createImported({
           userId: ctx.user.id,
           name,
           taskType: defaultMode ?? imported.taskType,
@@ -474,10 +527,15 @@ export const workflowRouter = createTRPCRouter({
         };
       }
 
-      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      if (
+        !candidate ||
+        typeof candidate !== "object" ||
+        Array.isArray(candidate)
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "缺少工作流 JSON。请粘贴 ComfyUI「导出 (API格式)」或「导出 (工作流格式)」的 JSON",
+          message:
+            "缺少工作流 JSON。请粘贴 ComfyUI「导出 (API格式)」或「导出 (工作流格式)」的 JSON",
         });
       }
 
@@ -485,7 +543,8 @@ export const workflowRouter = createTRPCRouter({
       if (!detected) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "无法识别的工作流格式：未找到 API 节点 (class_type) 或 raw 节点 (type + pos)。",
+          message:
+            "无法识别的工作流格式：未找到 API 节点 (class_type) 或 raw 节点 (type + pos)。",
         });
       }
 
@@ -497,7 +556,7 @@ export const workflowRouter = createTRPCRouter({
       if (detected === "api") {
         const g = candidate as Record<string, unknown>;
         const looksLikeGraph = Object.values(g).some(
-          (node) => node && typeof node === "object" && "class_type" in (node)
+          (node) => node && typeof node === "object" && "class_type" in node,
         );
         if (!looksLikeGraph) {
           throw new TRPCError({
@@ -512,11 +571,14 @@ export const workflowRouter = createTRPCRouter({
         try {
           result = await convertRawToApi(candidate as RawWorkflow);
         } catch (e: unknown) {
-          logger.warn(`[workflow] /object_info convert failed, using fallback: ${e instanceof Error ? e.message : String(e)}`);
+          logger.warn(
+            `[workflow] /object_info convert failed, using fallback: ${e instanceof Error ? e.message : String(e)}`,
+          );
           result = fallbackRawToApi(candidate as RawWorkflow);
         }
         apiGraph = result.graph;
-        positions = Object.keys(result.positions).length > 0 ? result.positions : null;
+        positions =
+          Object.keys(result.positions).length > 0 ? result.positions : null;
         warnings.push(...result.warnings);
 
         if (Object.keys(apiGraph).length === 0) {
@@ -528,10 +590,12 @@ export const workflowRouter = createTRPCRouter({
       }
 
       const name = String(body.name ?? "未命名工作流").slice(0, 80);
-      const modes = Array.isArray(body.modes) && body.modes.length > 0
+      const modes =
+        Array.isArray(body.modes) && body.modes.length > 0
           ? body.modes
           : undefined;
-      const explicitDefaultMode = typeof body.defaultMode === "string" && body.defaultMode
+      const explicitDefaultMode =
+        typeof body.defaultMode === "string" && body.defaultMode
           ? body.defaultMode
           : undefined;
       const defaultMode = explicitDefaultMode ?? modes?.[0];
@@ -540,7 +604,9 @@ export const workflowRouter = createTRPCRouter({
         taskType = normalizeTaskType(taskType);
       }
       if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
-        logger.info(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
+        logger.info(
+          `[workflow] Unknown taskType "${taskType}", allowing as custom type`,
+        );
       }
 
       const paramMap = detectParamMap(apiGraph);
@@ -572,9 +638,13 @@ export const workflowRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const template = await workflowTemplateRepository.findByIdForUser(
         ctx.user.id,
-        input.id
+        input.id,
       );
-      if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
+      if (!template)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
       return { template };
     }),
 
@@ -584,7 +654,9 @@ export const workflowRouter = createTRPCRouter({
   detailFull: authedProcedure
     .input(z.object({ id: z.string(), bust: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
-      return buildWorkflowDetailFull(ctx.user.id, input.id, { bust: input.bust });
+      return buildWorkflowDetailFull(ctx.user.id, input.id, {
+        bust: input.bust,
+      });
     }),
 
   /** PATCH /api/workflows/[id] */
@@ -611,14 +683,18 @@ export const workflowRouter = createTRPCRouter({
         resetPositionsScope: z.string().optional(),
         groups: z.unknown().optional(),
         notes: z.unknown().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const existing = await workflowTemplateRepository.findByIdForUser(
         ctx.user.id,
-        input.id
+        input.id,
       );
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
+      if (!existing)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
 
       // patch 为显式字段构造（不含 ...rest 展开），故 upgradeFromApi 无需在此
       // 排除——它的读取走下方 input.upgradeFromApi，解构里留着反而是死变量。
@@ -674,7 +750,9 @@ export const workflowRouter = createTRPCRouter({
          *  以重置为准，否则刚清掉的键又被写回来，按钮看起来时灵时不灵。 */
         patch.positions = undefined;
         const cur =
-          existing.positions && typeof existing.positions === "object" && !Array.isArray(existing.positions)
+          existing.positions &&
+          typeof existing.positions === "object" &&
+          !Array.isArray(existing.positions)
             ? (existing.positions as Record<string, unknown>)
             : {};
         const next: Record<string, unknown> = {};
@@ -685,7 +763,9 @@ export const workflowRouter = createTRPCRouter({
              *  一部分：顶层重置要清掉，子图重置不能顺手抹掉（那是外层视图的
              *  布局）。 */
             if (key.startsWith("grp:bpin:")) continue;
-            const inner = key.startsWith(prefix) ? key.slice(prefix.length) : "";
+            const inner = key.startsWith(prefix)
+              ? key.slice(prefix.length)
+              : "";
             /* 只保留「不属于本层」的键：不带前缀的裸键（原始/老数据）与更深一层
              *  的拼接键都要留着，「属于本层」的才丢。 */
             if (inner && !inner.includes(":")) continue;
@@ -705,19 +785,28 @@ export const workflowRouter = createTRPCRouter({
 
       // positions merge / replace + groups & notes write-back into rawJson
       let nextRawJson: Record<string, unknown> | null = null;
-      if (existing.rawJson && typeof existing.rawJson === "object" && !Array.isArray(existing.rawJson)) {
+      if (
+        existing.rawJson &&
+        typeof existing.rawJson === "object" &&
+        !Array.isArray(existing.rawJson)
+      ) {
         nextRawJson = existing.rawJson as Record<string, unknown>;
       }
-      const writePositions = input.positions !== undefined && input.resetPositionsScope === undefined;
+      const writePositions =
+        input.positions !== undefined &&
+        input.resetPositionsScope === undefined;
       if (writePositions || groups !== undefined || notes !== undefined) {
         nextRawJson = nextRawJson ? { ...nextRawJson } : {};
-        const nodes = Array.isArray(nextRawJson.nodes) ? [...(nextRawJson.nodes as unknown[])] : [];
+        const nodes = Array.isArray(nextRawJson.nodes)
+          ? [...(nextRawJson.nodes as unknown[])]
+          : [];
         if (writePositions) {
           const posMap = input.positions as Record<string, [number, number]>;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
             if (!nd || typeof nd !== "object") continue;
-            const rawId = nd && "id" in nd ? (nd as { id?: unknown }).id : undefined;
+            const rawId =
+              nd && "id" in nd ? (nd as { id?: unknown }).id : undefined;
             const pid =
               typeof rawId === "string"
                 ? rawId
@@ -738,10 +827,15 @@ export const workflowRouter = createTRPCRouter({
             // Merge into the existing positions column (single-key drags from
             // subgraph / RAW views must not wipe the other namespace).
             const cur =
-              existing.positions && typeof existing.positions === "object" && !Array.isArray(existing.positions)
+              existing.positions &&
+              typeof existing.positions === "object" &&
+              !Array.isArray(existing.positions)
                 ? (existing.positions as Record<string, [number, number]>)
                 : {};
-            patch.positions = { ...cur, ...(input.positions as Record<string, [number, number]>) };
+            patch.positions = {
+              ...cur,
+              ...(input.positions as Record<string, [number, number]>),
+            };
           } else {
             patch.positions = input.positions;
           }
@@ -760,7 +854,10 @@ export const workflowRouter = createTRPCRouter({
       if (modelTags !== undefined) {
         const tagIds: string[] = [];
         for (const name of modelTags) {
-          const tag = await workflowModelTagRepository.upsertByName(ctx.user.id, name);
+          const tag = await workflowModelTagRepository.upsertByName(
+            ctx.user.id,
+            name,
+          );
           tagIds.push(tag.id);
         }
         await workflowTemplateRepository.setModelTags(id, tagIds);
@@ -780,9 +877,13 @@ export const workflowRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const existing = await workflowTemplateRepository.findByIdForUser(
         ctx.user.id,
-        input.id
+        input.id,
       );
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
+      if (!existing)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
       await workflowTemplateRepository.delete(input.id);
       return { ok: true };
     }),
@@ -793,9 +894,13 @@ export const workflowRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const existing = await workflowTemplateRepository.findByIdForUser(
         ctx.user.id,
-        input.id
+        input.id,
       );
-      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Workflow not found" });
+      if (!existing)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workflow not found",
+        });
       const result = await reimportFromSource({
         sourcePath: existing.sourcePath ?? "",
         sourceMtime: existing.sourceMtime,
@@ -835,9 +940,14 @@ export const workflowRouter = createTRPCRouter({
          * `宿主:内部` 拼接键，读回时按同一口径还原；缺省为空串（顶层口径 /
          * 老客户端调用）。 */
         hostId: z.string().optional(),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
-      return buildSubgraphDetail(ctx.user.id, input.id, input.uid, input.hostId ?? "");
+      return buildSubgraphDetail(
+        ctx.user.id,
+        input.id,
+        input.uid,
+        input.hostId ?? "",
+      );
     }),
 });

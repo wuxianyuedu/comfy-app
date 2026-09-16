@@ -14,15 +14,26 @@
  */
 import WebSocket from "ws";
 import { taskRepository } from "../core/repository";
-import { logger } from "~/server/lib/logger";
+import { logger } from "~/lib/core/logger";
 import { postPrompt } from "./client";
 import { prepareGraphForExecution } from "./raw";
 import { extractValidationErrors } from "./validation";
 import { state, log, CLIENT_ID, MAX_CONCURRENCY } from "./runner-state";
+import { registerQueueKick } from "./executor-continuation";
 import { executeViaComfyCli } from "./executor-cli";
 import { fail, finalizeFailure } from "./executor-finalize";
 import { connect, armWatchdog } from "./executor-ws";
 import { buildPromptError } from "./executor-errors";
+
+/* 把「续跑出队」注册进叶子总线（唯一注册点，规范 12.7 断环）：
+ * 收口侧（finalize / ws）此前直接 import 本模块的 processQueue，形成
+ * `cli/ws → finalize → scheduler → cli/ws` 的环。改由本模块在**加载时**注册，
+ * 收口侧只调 kickQueue()，依赖方向因此单向。
+ *
+ * 放在模块体（不放进函数）的原因：注册必须先于任何任务处理 —— 入口链是
+ * `enqueue → ./executor → ./executor-scheduler`，调度层模块体先求值完毕，
+ * 任务才可能被收口。 */
+registerQueueKick(processQueue);
 
 export async function processQueue() {
   const s = state();
@@ -56,7 +67,7 @@ export async function processQueue() {
       job.taskId,
       "info",
       `输入参数（workflowInputs，${job.overrides.length} 项）：\n` +
-        JSON.stringify(job.overrides, null, 2)
+        JSON.stringify(job.overrides, null, 2),
     );
   }
 
@@ -88,7 +99,7 @@ export async function processQueue() {
           log(
             job.taskId,
             "error",
-            `finalizeFailure 二次失败：${inner instanceof Error ? inner.message : String(inner)}`
+            `finalizeFailure 二次失败：${inner instanceof Error ? inner.message : String(inner)}`,
           );
           if (s.startedAt.has(job.taskId)) s.startedAt.delete(job.taskId);
           s.lastNodeByTask.delete(job.taskId);
@@ -113,7 +124,7 @@ export async function processQueue() {
         job.taskId,
         "info",
         `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点` +
-          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : "")
+          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""),
       );
     }
     // explicit pre-submit log so the user
@@ -122,7 +133,11 @@ export async function processQueue() {
     // the user only ever sees the post-submit "✓ 已接收" line, which
     // makes it impossible to tell whether the request was ever sent.
     const nodeCount = Object.keys(prep.graph).length;
-    log(job.taskId, "info", `→ 准备提交到 ComfyUI /prompt（${nodeCount} 节点）`);
+    log(
+      job.taskId,
+      "info",
+      `→ 准备提交到 ComfyUI /prompt（${nodeCount} 节点）`,
+    );
     const res = await postPrompt(prep.graph, CLIENT_ID);
     if (res.error || (res.node_errors && Object.keys(res.node_errors).length)) {
       // carry the flattened `node_errors` into the task
@@ -143,7 +158,7 @@ export async function processQueue() {
         log(
           job.taskId,
           "error",
-          `✗ ComfyUI 报 ${validationErrors.length} 条校验错误（见下方逐条 + 红框清单）`
+          `✗ ComfyUI 报 ${validationErrors.length} 条校验错误（见下方逐条 + 红框清单）`,
         );
         validationErrors.slice(0, 12).forEach((ve) => {
           log(
@@ -151,14 +166,14 @@ export async function processQueue() {
             "error",
             `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}` +
               (ve.field ? ` · 字段 ${ve.field}` : "") +
-              `：${ve.message}`
+              `：${ve.message}`,
           );
         });
         if (validationErrors.length > 12) {
           log(
             job.taskId,
             "error",
-            `  …还有 ${validationErrors.length - 12} 条（请查看红框 / 重新执行工作流查看完整清单）`
+            `  …还有 ${validationErrors.length - 12} 条（请查看红框 / 重新执行工作流查看完整清单）`,
           );
         }
       }
@@ -166,7 +181,7 @@ export async function processQueue() {
         job.taskId,
         "",
         buildPromptError(res, prep.graph),
-        validationErrors
+        validationErrors,
       );
       return;
     }
@@ -178,13 +193,17 @@ export async function processQueue() {
     // richer post-submit log so the user
     // can correlate the prompt_id they see in the panel with the
     // /history/{prompt_id} ComfyUI URL when investigating hangs.
-    log(job.taskId, "info", `✓ ComfyUI 已接收（prompt_id: ${promptId}），等待首个 executing 事件…`);
+    log(
+      job.taskId,
+      "info",
+      `✓ ComfyUI 已接收（prompt_id: ${promptId}），等待首个 executing 事件…`,
+    );
     armWatchdog(job.taskId, promptId);
   } catch (e) {
     await fail(
       job.taskId,
       "",
-      (e as { message?: unknown } | null | undefined)?.message ?? "提交失败"
+      (e as { message?: unknown } | null | undefined)?.message ?? "提交失败",
     );
   }
 }
@@ -222,7 +241,9 @@ function startHeartbeat() {
         void processQueue();
       }
     } catch (err) {
-      logger.warn(`[comfyui] heartbeat processQueue 失败：${err instanceof Error ? err.message : String(err)}`);
+      logger.warn(
+        `[comfyui] heartbeat processQueue 失败：${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }, HEARTBEAT_MS);
 }

@@ -11,6 +11,7 @@
  *   4. 只在本机查询——nvidia-smi 反映的是本机物理 GPU，ComfyUI 指向远端
  *      时该项不适用，返回 null 由调用方隐藏。
  */
+import "server-only";
 import { execFile } from "child_process";
 
 /** nvidia-smi 内存查询的一条结果（MiB → 调用方换算字节）。 */

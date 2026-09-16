@@ -91,7 +91,9 @@ const ENTRY_SPLIT_RE = /[、;；]/;
  * 每条目形如「名字(年龄/性别)——外貌描述」,也支持「名字 描述」;
  * 同名角色去重(后条仅在前条外貌为空时补齐)。
  */
-export function parseCharacterEntries(markdown: string): ParsedCharacterDraft[] {
+export function parseCharacterEntries(
+  markdown: string,
+): ParsedCharacterDraft[] {
   const byName = new Map<string, ParsedCharacterDraft>();
   for (const line of markdown.split(/\r?\n/)) {
     const m = CHARACTER_LINE_RE.exec(line.trim());
@@ -112,7 +114,10 @@ export function parseCharacterEntries(markdown: string): ParsedCharacterDraft[] 
 
 /** 解析单个条目「名字(年龄/性别) 描述」→ 草稿;无法得到有效名字时返回 null */
 function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
-  const seg = raw.trim().replace(/^[-*•·]\s*/, "").replace(/^\d{1,2}[.、)]\s*/, "");
+  const seg = raw
+    .trim()
+    .replace(/^[-*•·]\s*/, "")
+    .replace(/^\d{1,2}[.、)]\s*/, "");
   if (!seg) return null;
 
   let name = "";
@@ -144,7 +149,15 @@ function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
     .trim();
   if (!name || name.length > 20) return null;
   rest = rest.replace(/^[\s\-—–:：.。、,，]+/, "").trim();
-  return { name, ageGender, appearance: rest, costume: "", personality: "", temperament: "", styleTags: [] };
+  return {
+    name,
+    ageGender,
+    appearance: rest,
+    costume: "",
+    personality: "",
+    temperament: "",
+    styleTags: [],
+  };
 }
 
 /** 在 text 中出现的已知角色名(保持传入顺序,去重) */
@@ -178,16 +191,28 @@ export interface SceneHeadingInfo {
  * 其余普通文本行返回 null(避免「场面混乱」「12-30 两人对视」误判)。
  */
 export function matchSceneHeading(line: string): SceneHeadingInfo | null {
-  const s = line.trim().replace(/^#{1,6}\s*/, "").replace(/^[-*•]\s*/, "");
+  const s = line
+    .trim()
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*•]\s*/, "");
   if (!s) return null;
 
   // A:「编号-编号」+ (场景关键词 | 内/外标记) + 尾部
-  const a = /^\d{1,3}\s*[-–—.、]\s*\d{1,3}\s*(?:(场\s*景|场|SCENE)\s*)?((?:内|外|INT\.?|EXT\.?)(?=\s|[:：,.、。]|$))?\s*(.*)$/i.exec(s);
+  const a =
+    /^\d{1,3}\s*[-–—.、]\s*\d{1,3}\s*(?:(场\s*景|场|SCENE)\s*)?((?:内|外|INT\.?|EXT\.?)(?=\s|[:：,.、。]|$))?\s*(.*)$/i.exec(
+      s,
+    );
   if (a && (a[1] || a[2])) {
-    return { heading: s, marker: normalizeMarker(a[2]), tail: (a[3] ?? "").trim() };
+    return {
+      heading: s,
+      marker: normalizeMarker(a[2]),
+      tail: (a[3] ?? "").trim(),
+    };
   }
   // B:「场景N」或「场景·」(必须带序号或分隔符,防误伤普通句子)
-  const b = /^(场\s*景|场|SCENE)\s*(?:(\d{1,3})|([:：·.\-–—、]))\s*(.*)$/i.exec(s);
+  const b = /^(场\s*景|场|SCENE)\s*(?:(\d{1,3})|([:：·.\-–—、]))\s*(.*)$/i.exec(
+    s,
+  );
   if (b) {
     return { heading: s, marker: "", tail: (b[4] ?? "").trim() };
   }
@@ -208,14 +233,20 @@ const TIME_WORDS_RE =
   /(清晨|早晨|早上|上午|中午|正午|午后|下午|黄昏|傍晚|晚上|夜晚|夜里|深夜|午夜|凌晨|黎明|白天|月夜)/;
 
 /** 从场景标题尾部提取地点/时间:优先「地点(时间)」括号,其次时间词扫描 */
-function extractLocationTime(marker: string, tailRaw: string): { location: string; time: string } {
+function extractLocationTime(
+  marker: string,
+  tailRaw: string,
+): { location: string; time: string } {
   const tail = tailRaw.trim();
   if (!tail) return { location: normalizeLocation(marker, ""), time: "" };
 
   const paren = /[(（]([^()（）]*)[)）]\s*$/.exec(tail);
   if (paren) {
     const maybeTime = (paren[1] ?? "").trim();
-    const loc = tail.slice(0, paren.index).trim().replace(/[.。、,，:：\-–—\s]+$/, "");
+    const loc = tail
+      .slice(0, paren.index)
+      .trim()
+      .replace(/[.。、,，:：\-–—\s]+$/, "");
     if (maybeTime) {
       return { location: normalizeLocation(marker, loc), time: maybeTime };
     }
@@ -250,7 +281,7 @@ const DIALOGUE_LINE_RE = /^\*{0,2}[Vv]\s*(\d{1,3})\s*[:：.]?\s*(.+?)\*{0,2}$/;
  */
 export function parseShotDrafts(
   markdown: string,
-  knownCharacterNames: string[] = []
+  knownCharacterNames: string[] = [],
 ): ParsedShotDraft[] {
   interface Block {
     heading: string;
@@ -265,7 +296,13 @@ export function parseShotDrafts(
   const lines = markdown.split(/\r?\n/);
   const hasHeading = lines.some((line) => matchSceneHeading(line) !== null);
   if (!hasHeading) {
-    cur = { heading: "未命名场景", location: "", time: "", items: [], leadingDialogue: [] };
+    cur = {
+      heading: "未命名场景",
+      location: "",
+      time: "",
+      items: [],
+      leadingDialogue: [],
+    };
     blocks.push(cur);
   }
 
@@ -274,7 +311,13 @@ export function parseShotDrafts(
     const h = matchSceneHeading(s);
     if (h) {
       const lt = extractLocationTime(h.marker, h.tail);
-      cur = { heading: h.heading, location: lt.location, time: lt.time, items: [], leadingDialogue: [] };
+      cur = {
+        heading: h.heading,
+        location: lt.location,
+        time: lt.time,
+        items: [],
+        leadingDialogue: [],
+      };
       blocks.push(cur);
       continue;
     }
@@ -298,9 +341,12 @@ export function parseShotDrafts(
   for (const b of blocks) {
     if (b.items.length === 0 && b.leadingDialogue.length === 0) continue;
     const items =
-      b.items.length > 0 ? b.items : [{ description: "", dialogue: b.leadingDialogue }];
+      b.items.length > 0
+        ? b.items
+        : [{ description: "", dialogue: b.leadingDialogue }];
     items.forEach((item, i) => {
-      const own = i === 0 ? [...b.leadingDialogue, ...item.dialogue] : item.dialogue;
+      const own =
+        i === 0 ? [...b.leadingDialogue, ...item.dialogue] : item.dialogue;
       const dialogue = own.join("\n");
       drafts.push({
         sceneHeading: b.heading,
@@ -308,7 +354,10 @@ export function parseShotDrafts(
         time: b.time,
         description: item.description,
         dialogue,
-        characterNames: matchCharacterNames(`${item.description}\n${dialogue}`, knownCharacterNames),
+        characterNames: matchCharacterNames(
+          `${item.description}\n${dialogue}`,
+          knownCharacterNames,
+        ),
         firstInScene: i === 0,
       });
     });
@@ -342,7 +391,10 @@ export const EXTRACT_CHARACTERS_SYSTEM = `你是剧本分析师。用户给出�
 export function buildExtractCharactersMessages(script: string): LLMMessage[] {
   return [
     { role: "system", content: EXTRACT_CHARACTERS_SYSTEM },
-    { role: "user", content: `剧本全文:\n${script.slice(0, SCRIPT_SLICE_LIMIT)}` },
+    {
+      role: "user",
+      content: `剧本全文:\n${script.slice(0, SCRIPT_SLICE_LIMIT)}`,
+    },
   ];
 }
 
@@ -351,7 +403,10 @@ export const EXTRACT_SHOTS_SYSTEM = `你是分镜师。用户给出一段漫剧�
 { "sceneHeading": "所属场景标题(沿用剧本中的场景标题)", "shotType": "景别,取值之一:${VALID_SHOT_TYPES.join(" / ")}", "description": "该镜头画面描述(具象,含角色动作)", "characterNames": ["出场角色名,可空数组"], "dialogue": "该镜头的台词/旁白(可空字符串)" }
 景别要有变化,全程使用中文。`;
 
-export function buildExtractShotsMessages(script: string, characterNames: string[] = []): LLMMessage[] {
+export function buildExtractShotsMessages(
+  script: string,
+  characterNames: string[] = [],
+): LLMMessage[] {
   const names = characterNames.filter((n) => n.trim()).join("、");
   return [
     { role: "system", content: EXTRACT_SHOTS_SYSTEM },
@@ -404,7 +459,9 @@ export function parseExtractedShots(text: string): ShotEntry[] {
     const description = asStr(item.description).trim();
     if (!sceneHeading && !description) continue;
     const st = asStr(item.shotType);
-    const shotType: ShotType = (VALID_SHOT_TYPES as readonly string[]).includes(st)
+    const shotType: ShotType = (VALID_SHOT_TYPES as readonly string[]).includes(
+      st,
+    )
       ? (st as ShotType)
       : "medium";
     const rawNames: unknown = item.characterNames;
@@ -430,7 +487,9 @@ export function parseExtractedShots(text: string): ShotEntry[] {
  * 导入角色卡 JSON:支持数组、单对象、{ "characters": [...] } 包装。
  * 缺 name 的条目跳过;全部无效时抛错。字段与既有 Character 结构对齐。
  */
-export function parseImportedCharacterCards(raw: string): ParsedCharacterDraft[] {
+export function parseImportedCharacterCards(
+  raw: string,
+): ParsedCharacterDraft[] {
   let data: unknown;
   try {
     data = JSON.parse(raw);
@@ -483,7 +542,7 @@ export function parseImportedCharacterCards(raw: string): ParsedCharacterDraft[]
 export function mergeCharacterDrafts(
   existing: Character[],
   drafts: ParsedCharacterDraft[],
-  styles: StyleRef[]
+  styles: StyleRef[],
 ): { list: Character[]; added: number; skipped: number } {
   const seen = new Set(existing.map((c) => c.name.trim()).filter(Boolean));
   const list = [...existing];
@@ -511,11 +570,13 @@ export function mergeCharacterDrafts(
       negativePrompt: "",
       params: {},
     };
-    const style = styles.find((st) => st.slug === character.skillSlug) ?? styles[0];
+    const style =
+      styles.find((st) => st.slug === character.skillSlug) ?? styles[0];
     character.positivePrompt = buildCharacterPrompt(character, style);
     character.negativePrompt = buildCharacterNegative(character, style);
     if (style?.defaultParams) character.params = { ...style.defaultParams };
-    if (draft.params) character.params = { ...character.params, ...draft.params };
+    if (draft.params)
+      character.params = { ...character.params, ...draft.params };
     list.push(character);
     added += 1;
   }
@@ -523,12 +584,17 @@ export function mergeCharacterDrafts(
 }
 
 /** 按标题匹配既有场景:先精确匹配,再做双向包含匹配 */
-export function matchSceneByHeading(heading: string, scenes: Scene[]): Scene | undefined {
+export function matchSceneByHeading(
+  heading: string,
+  scenes: Scene[],
+): Scene | undefined {
   const h = heading.trim();
   if (!h) return undefined;
   return (
     scenes.find((sc) => sc.heading === h) ??
-    scenes.find((sc) => sc.heading && (sc.heading.includes(h) || h.includes(sc.heading)))
+    scenes.find(
+      (sc) => sc.heading && (sc.heading.includes(h) || h.includes(sc.heading)),
+    )
   );
 }
 
@@ -537,7 +603,7 @@ export function buildShotsFromEntries(
   entries: ShotEntry[],
   startIndex: number,
   scenes: Scene[],
-  characters: Character[]
+  characters: Character[],
 ): Shot[] {
   const shots: Shot[] = [];
   entries.forEach((entry, i) => {
@@ -563,7 +629,12 @@ export function buildShotsFromEntries(
     const prompt = buildShotPrompt(shot, scene, linked, undefined);
     const negativePrompt = buildShotNegative(linked, undefined);
     const params = mergeParams(undefined, undefined);
-    shots.push({ ...shot, prompt, negativePrompt, params: { ...shot.params, ...params } });
+    shots.push({
+      ...shot,
+      prompt,
+      negativePrompt,
+      params: { ...shot.params, ...params },
+    });
   });
   return shots;
 }

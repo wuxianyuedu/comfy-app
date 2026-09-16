@@ -87,7 +87,7 @@ export function LibraryHostCard({
                 ].join(" ")}
               />
               <span
-                className="text-[10px] font-medium text-ink-soft"
+                className="text-ink-soft text-[10px] font-medium"
                 style={{ fontFamily: "var(--font-sans)" }}
               >
                 {statusLabel}
@@ -103,20 +103,20 @@ export function LibraryHostCard({
         <div className="flex flex-col gap-1 pr-[14px] pb-1.5 pl-[14px]">
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip>
-              <span className="h-1.5 w-1.5 rounded-full bg-success-strong" />
-              <span className="text-[11px] font-semibold text-success-strong">
+              <span className="bg-success-strong h-1.5 w-1.5 rounded-full" />
+              <span className="text-success-strong text-[11px] font-semibold">
                 本机
               </span>
             </WorkflowStaticChip>
             <WorkflowStaticChip className="min-w-0 flex-1">
-              <span className="truncate text-[11px] font-semibold text-ink-bright">
+              <span className="text-ink-bright truncate text-[11px] font-semibold">
                 全部模型
               </span>
             </WorkflowStaticChip>
           </div>
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip className="min-w-0 flex-1" title={workflowName}>
-              <span className="truncate text-[11px] font-semibold text-ink-bright">
+              <span className="text-ink-bright truncate text-[11px] font-semibold">
                 {workflowName}
               </span>
             </WorkflowStaticChip>
@@ -131,11 +131,11 @@ export function LibraryHostCard({
                 )}
                 popoverMinWidth={150}
                 autoFitFromOptions={false}
-                className="shrink-0 !border-border-strong !bg-transparent text-[11px]"
+                className="!border-border-strong shrink-0 !bg-transparent text-[11px]"
               />
             ) : (
               <WorkflowStaticChip>
-                <span className="text-[11px] font-medium text-ink-bright">
+                <span className="text-ink-bright text-[11px] font-medium">
                   {effectiveModeLabel || "—"}
                 </span>
               </WorkflowStaticChip>
@@ -151,7 +151,7 @@ export function LibraryHostCard({
             就是真正的 `<Handle>`），右侧那列「对外输出参数」卡片再从这颗圆点
             连出去（ISSUE #529）。 */}
         {outputs.length > 0 && (
-          <div className="border-t border-border-subtle">
+          <div className="border-border-subtle border-t">
             {outputs.map((output) => (
               <WorkflowNodeOutputsRow
                 key={output.nodeId + ":" + output.name}

@@ -61,6 +61,34 @@ describe("WorkflowParamCardColumn", () => {
     expect(screen.getByText("高度")).toBeTruthy();
   });
 
+  it("卡片头取契约口清单的展示名（与「工坊封装」页签同一份）—— ISSUE #596", () => {
+    /* 同一张卡片在库里由「画布节点」页签与「工坊封装」页签各画一次，两处必须说
+     * 同一句话：无条件读 entry.label 时，「尺寸」在一处带括号、另一处只有两个字。 */
+    const withLabels = [
+      { ...entries[0]!, label: "工作流里的端口名" },
+      { ...entries[1]!, label: "另一个端口名" },
+    ];
+    render(
+      <WorkflowParamCardColumn
+        entries={withLabels}
+        contractEntries={[
+          { id: withLabels[0]!.id, label: "提示词" },
+          {
+            id: withLabels[1]!.id,
+            label: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）",
+          },
+        ]}
+        resolved={autoMapEntries(withLabels, io)}
+        io={io}
+      />,
+    );
+    expect(screen.getByText("提示词")).toBeTruthy();
+    expect(
+      screen.getByText("尺寸（比例 + 分辨率 / (百万像素 + 倍数)）"),
+    ).toBeTruthy();
+    expect(screen.queryByText("工作流里的端口名")).toBeNull();
+  });
+
   it("端口行只列端口本身，落点不再在行尾重复一遍（ISSUE #355 复审）", () => {
     /* 用户圈出「红框内那段没用」：行尾的「→ 落点」与下面那行带类型的输出端口
      * 说的是同一件事（那一行已经写出落点名，还贴着端点圆点）。单端口条目因此
@@ -129,7 +157,10 @@ describe("WorkflowParamCardColumn", () => {
         resolved={autoMapEntries(entries, io)}
         io={io}
         endpoint={(port) => (
-          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
+          <span
+            data-testid="probe-endpoint"
+            data-endpoint-handle={port.handleId}
+          />
         )}
       />,
     );
@@ -154,10 +185,7 @@ describe("WorkflowParamCardColumn", () => {
         resolved={{}}
         io={io}
         endpoint={(port, index) => (
-          <span
-            data-node-handle={port.handleId}
-            data-node-index={index}
-          />
+          <span data-node-handle={port.handleId} data-node-index={index} />
         )}
       />,
     );

@@ -14,10 +14,16 @@ vi.mock("../core/repository", () => ({
     finalizeFromReaper: vi.fn(),
   },
 }));
-vi.mock("./lifecycle", () => ({ isComfyStarting: vi.fn().mockReturnValue(false) }));
-vi.mock("./client", () => ({ resolveComfyBase: vi.fn().mockResolvedValue("http://127.0.0.1:8188") }));
+vi.mock("./lifecycle", () => ({
+  isComfyStarting: vi.fn().mockReturnValue(false),
+}));
+vi.mock("./client", () => ({
+  resolveComfyBase: vi.fn().mockResolvedValue("http://127.0.0.1:8188"),
+}));
 vi.mock("./executor-cli", () => ({ cliProcs: new Map() }));
-vi.mock("~/server/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
+vi.mock("~/lib/core/logger", () => ({
+  logger: { warn: vi.fn(), error: vi.fn() },
+}));
 
 import { isTaskClaimedInProcess } from "./reaper";
 
@@ -26,7 +32,7 @@ function fakeState(
     queue: Job[];
     executedWorkflow: Map<string, unknown>;
     settled: Set<string>;
-  }>
+  }>,
 ) {
   return {
     queue: overrides.queue ?? [],
@@ -55,7 +61,9 @@ describe("isTaskClaimedInProcess — QUEUED reaper 的 in-memory 认领保护", 
   });
 
   it("executedWorkflow 已记录（raw 路径已开始）时，判为被认领", () => {
-    const s = fakeState({ executedWorkflow: new Map<string, unknown>([["task-1", {}]]) });
+    const s = fakeState({
+      executedWorkflow: new Map<string, unknown>([["task-1", {}]]),
+    });
     expect(isTaskClaimedInProcess(s, cli([]), "task-1")).toBe(true);
   });
 
@@ -66,7 +74,9 @@ describe("isTaskClaimedInProcess — QUEUED reaper 的 in-memory 认领保护", 
 
   it("队里有其他任务时，不误判当前任务", () => {
     const s = fakeState({ queue: [{ taskId: "task-other" }] });
-    expect(isTaskClaimedInProcess(s, cli(["task-other"]), "task-1")).toBe(false);
+    expect(isTaskClaimedInProcess(s, cli(["task-other"]), "task-1")).toBe(
+      false,
+    );
   });
 
   it("多个信号并存时任一命中即判认领", () => {

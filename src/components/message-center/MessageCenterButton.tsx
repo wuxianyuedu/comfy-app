@@ -9,8 +9,8 @@ import { Bell } from "lucide-react";
 import { useMessageCenterStore } from "./message-center-store";
 
 export function MessageCenterButton() {
-  const unread = useMessageCenterStore(
-    (s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0),
+  const unread = useMessageCenterStore((s) =>
+    s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0),
   );
   const open = useMessageCenterStore((s) => s.open);
   const toggleOpen = useMessageCenterStore((s) => s.toggleOpen);

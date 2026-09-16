@@ -245,8 +245,172 @@ true`——这类场景的策略反过来，必须给前台。
 
 ### 2.1 工具链门禁（弹壳前，只读快检，任一失败立即终止并弹窗）
 
-1. **pnpm 命令可用性**：corepack shim 存在但切换版本缓存损坏（如 `.tools\pnpm\<ver>\bin` 缺失）时 `pnpm -v` 报 `Failed to switch pnpm to ... ENOENT`，命令完全不可用。此为致命损坏——install/dev 全依赖 pnpm，弹壳也起不来服务，直接报错给修复指引，不弹黑窗口。
-2. **node_modules 是否完全未装**：`.modules.yaml` 缺失 = 依赖从未正确安装，引导先跑 `tools\start\run-local.ps1`。
+1. **pnpm 命令可用性**：install / dev 全依赖 pnpm，命令不可用即致命损坏 ——
+   直接给修复指引，不弹黑窗口。判据与文案收在
+   `scripts/launcher-core/corepack.mjs`（`orchestratePnpm()`），编排器只接线
+   （`runToolchainGate()`）。三条口径见下。
+2. **node_modules 是否完全未装**：`.modules.yaml` 缺失 = 依赖从未正确安装，引导先跑
+   `tools\start\run-local.ps1`（Windows 双击）/ `pnpm install`（三平台通用）。
+
+#### 2.1.1 「pnpm 可用」的判据：**选中的可执行形态真的起得来**（ISSUE #576）
+
+`whichCommand()` 只保证「PATH × PATHEXT 上存在同名文件」，**不等于能跑**：
+
+- Node 的 `spawnSync` 在 Windows 上**不解析 shebang**（libuv 直接 `CreateProcess`
+  传文件路径），所以 corepack 那只无扩展名 shim（`#!/usr/bin/env node`）被 spawn 时
+  一律 `EACCES` / `ENOEXEC`；
+- 而 PATHEXT 的常见顺序把 `.CMD` 排在最前，`.CMD` **只有 cmd.exe 会解释** ——
+  同一目录里「能跑的 `pnpm.ps1` / 能跑的 `pnpm`」会被**跳过**，选中的偏偏是跑不起来的那个；
+- **`.CMD` 被选中时 Node 一定会失败**（实测 `EINVAL`，不是 `EACCES`）：它既不是
+  能做 `CreateProcess` 的 PE 镜像，也没有 Node 认的 shebang。所以「批处理」必须是
+  一个**独立形态**，不能被塞进通用的「文本脚本」里当成可执行 —— 那会让它一路通过
+  候选确认，直到真跑起来才炸。
+
+表现是 `pnpm -v` 探测失败、**stdout / stderr 全空**，用户只看到
+`pnpm 工具链不可用（exit=?）：未知错误`（选中的若正是 `.CMD`，则是
+`EINVAL（未发现可回退形态）`）—— 看起来完全像 corepack 缓存损坏，
+而真正的修法是「别选中那个文件，改用它旁边的 `.ps1`」。因此判据分两层：
+
+| 层 | 位置 | 做什么 |
+|---|---|---|
+| 候选**顺序** | `executableExts()` | 无扩展名 / `.EXE`（CreateProcess 能直接起）→ `.PS1`（经 PowerShell 宿主）→ `.CMD` / `.BAT`（Node 起不了，只能垫底）→ PATHEXT 其余项 |
+| 候选**形态** | `executableKind()` | `shebang`（`#!` 起头）/ **`batch`**（`@echo` / `@setlocal` 起头，即 `.cmd` / `.bat`）/ `script` / `binary` / `unknown`。**批处理单列一类**，不与 `.ps1` 混 |
+| 候选**确认** | `usableCommand()` | `fs.accessSync(X_OK)`；**Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`）；其余形态**真起一次**（`stdio: "ignore"`）。起不来 / 属 `batch` 时在**同目录**取 `<去掉自身扩展名>.ps1`（`powershell -NoProfile -ExecutionPolicy Bypass -File`）。**选第一个真的能跑的**，全都不能跑才返回「没找到」 |
+
+> 为什么是「真起一次」而不是「看扩展名」：扩展名只说明「谁解释它」，不说明
+> 「这台机器上现在能不能跑」。探针的退出码无关紧要（`--version` 报错也算起得来），
+> 只有 `probe.error.code`（EACCES / ENOENT / ENOEXEC）才算不可用。
+> shebang **不按形态一刀切**：libuv 在 Windows 上确实不解析它，但机器上真配好了
+> 文件关联时它仍可用，所以留给「真起一次」去发现；起不来自然落到回退。
+> POSIX 上只有一种形态（无扩展名），且内核自己解析 shebang，整条判据退化为原来的行为
+> ——「批处理专属」的短路**只在 Windows 生效**。
+
+> **回退同胞名按「去掉自身扩展名再拼 `.ps1`」求**：无扩展名 shim 是 `pnpm` → `pnpm.ps1`，
+> 批处理是 `pnpm.CMD` → `pnpm.ps1`（**不是** `pnpm.CMD.ps1`）。只做字符串拼接会让
+> `.CMD` 一侧的回退永远找不到，等于没修 —— 这正是第二轮现场里提示说
+> 「未发现可回退形态」而 `pnpm.ps1` 明明就在旁边的原因。
+
+**同一个形态必须一路走到起服务**：`spawnDevServer()` 经 `commandInvocation()`
+拿 `{ command, prefixArgs }`，不再自己拼可执行名 —— 否则会出现「门禁探测通过了，
+起 dev server 时换一种方式又失败一次」。
+
+#### 2.1.2 探测结果要区分成因，并且**不把猜测写成结论**
+
+`probePnpm()` 返回结构化结论（`ok` / `reason` / `reasonText` / `detail` / `exitCode`）：
+
+| reason | 现场 | 提示口径 |
+|---|---|---|
+| `not-found` | PATH 上没有任何可用形态 | 给 `corepack enable`，并点明「检查 PATH 上是否同时存在多个 pnpm 形态」 |
+| `spawn-error` | 命令**起不来**（EACCES / ENOENT / ENOEXEC） | 附 `error.code` 与回退结果；**自动 corepack 重建 + 复核**（见 §2.1.3） |
+| `exit-nonzero` | 命令能起，自己报错退出 | 原样带出 stderr 头几行（不再塌成「未知错误」） |
+| `no-version` | 能起、退出 0，但没打印版本号 | 同上，带出实际输出 |
+
+文案里「你看到的是现象」与「可能的成因」分两句写：此前把
+`疑似 corepack 切换版本时本地缓存损坏` 直接当结论（`疑似` 又写成陈述句），
+用户会照着错的方向删缓存 / 重装 Node，而真正该做的是**先看命令起没起来**。
+
+修复提示里的版本号**取自 `package.json` 的 `packageManager`**
+（`packageManagerVersion()`），不再出现 `corepack prepare pnpm@<项目版本>`
+这种没人会去填的占位符。提示是多行文本，经 launch-status 的 `stale_shell`
+横幅落到启动页（启动页的横幅用 `white-space: pre-wrap` 渲染，
+修复动作不会被压成一行挤没）。
+
+#### 2.1.3 能自愈的先自愈，**修完必须复核**
+
+`spawn-error` / `not-found` 一类看起来就是「缓存或可执行形态坏了」，正是 corepack
+的修法能治的；`no-version` / `exit-nonzero` 则往往是 pnpm 自己在报业务错误
+（工作区配置、磁盘权限），重建既治不好又白等几分钟下载 —— 所以自动重建只对前者触发
+（`shouldRepair()`）。重建后**必须用同一条探测再验一次**（`repairPnpm()`）：
+`corepack prepare` 的退出码只说明「下载/激活动作完成」，而「shim 仍不可执行」
+这类现场里正好是 prepare 成功、`pnpm -v` 依旧起不来 —— 只报 prepare 成功
+等于把「修好了」当结论，用户下一次启动会原封不动再撞一次。
+
+#### 2.1.4 独立自查入口：**与启动器同一条口径**（ISSUE #576）
+
+`pnpm check:toolchain` → `scripts/check-pnpm-available.mjs`，登记在 §9.5 对照表。
+启动被门禁拦下之后，用户需要的是「只跑一次自查、看清结论与动作」，而不是反复双击
+入口撞同一堵墙。它是**薄壳**，判据全部复用上面这些函数；且与 `dev-launcher.mjs`
+一样**不需要任何 `.ps1` 副本**（Windows 双击侧由 `prepare-local-run.ps1` 的第 2/3 步
+覆盖同一件事）。
+
+「薄壳」也包括**动作**，不只是判据 —— 自检看到的每条结论，都必须是启动链路里
+真正会发生的事，否则用户会照着自检去手工修一个「真启动时它自己就会好」的问题：
+
+| 情况 | 启动链路会怎么做 | 自检必须怎么做 |
+|---|---|---|
+| pnpm 不可用 | 门禁终止 + 给修复提示 | 同样非零退出 + 同一份 `buildTip()` 文案 |
+| 版本与 `packageManager` 不一致 | `reconcilePnpmVersion()`：`preparePnpm()` 对齐后用**同一条探测复核**，仍不一致才 WARN（不阻断） | **先试同一条对齐**：复核通过 → `[OK] 已对齐（10.34.5 → 12.4.1）`；复核仍不一致才 `[WARN] 自动对齐未生效` + 手动命令 |
+| `node_modules` 未装 | 完整依赖预检（§2.2 第 5 步）终止 | 点出这一道门禁与 `pnpm install`，不让「`[OK] pnpm 可用`」被读成「可以启动了」 |
+| 探到的是「哪个 pnpm」 | 日志里记选中的可执行文件（`commandInvocation()`） | 另打印「选中的 pnpm：<文件>」与「经宿主执行：<宿主> → <文件>」两行（§2.1.5） |
+
+> 反例（已修）：自检此前只对版本不一致打一句 `[WARN]`、什么也不做，还以 0 退出；
+> 而启动器在同一情形下会自己 corepack 对齐。用户看到的是「排查完了、没办法」，
+> 只能手动跑 corepack —— **自检与真启动两套说法**，正是 §9.5「一份逻辑两端复用」
+> 要消灭的形态。判据（`probePnpm` / `preparePnpm`）与动作（对齐 + 复核）现在都在
+> `corepack.mjs`，自检与 `reconcilePnpmVersion()` 各调用一次，不各写一份。
+
+#### 2.1.5 「版本对不上终端」先看探测身份：选中的是哪个文件（ISSUE #576 第四轮）
+
+用户现场（Windows，`F:\AI\Other\Comfy-APP-T3`）：同一个窗口里
+`pnpm --version` → `12.4.1`，而 `pnpm check:toolchain` →
+`[OK] pnpm 可用：10.34.5（C:\Program Files\PowerShell\7\pwsh.EXE）`。
+
+两句都不假，因为它们说的**不是同一个文件**：终端敲的 `pnpm` 由 shell 的 PATHEXT 解析
+（会走 `.cmd` 交 cmd.exe）；Node 侧由 `whichCommand()` 解析，只看节点**真的能起**的形态
+（`.cmd` / `.bat` 被跳过，见 §2.1.1），选中 `.ps1` 时命令名就变成宿主 `pwsh.EXE`。
+再叠上「PATH 上并存多个 pnpm」（独立安装 / 另一份 corepack 副本 / 另一个检出）时，
+被选中的那个完全可能是另一个版本 —— 旧文案只给「版本号 + 命令名」，现场于是无解。
+
+因此自检必须打印**探测身份**（`scripts/check-pnpm-available.mjs`）：
+
+- `[INFO] 选中的 pnpm：<文件>` —— PATH 上真正命中并被 spawn 的那个；
+- `[INFO] 经宿主执行：<宿主> <参数> → <文件>` —— 仅当形态需要宿主时打印；
+- 版本漂移的提示把方向指向「选中的 pnpm」，而不是项目里的 `package.json`。
+
+判据仍在 `shell.mjs` 的 `commandInvocation()`（形态 + 宿主前缀只有一处定义），
+自检只是把它返回的 `{ command, prefixArgs }` 印出来，不自己拼可执行名。
+
+> **排障口径**：看到 `（…\pwsh.EXE）` 不是异常，含义是「本次探测经 PowerShell 宿主
+> 跑的是同目录的 `pnpm.ps1`」；要改「用哪个 pnpm」，改的是 **PATH 顺序**
+> （把想用的形态目录排到前面），而不是改仓库里的任何文件。
+
+#### 2.1.6 内层 spawn pnpm 也必须走同一个形态判据（ISSUE #576 第五轮）
+
+第五轮现场（用户第二次双击 `start-tauri.exe`）：启动页报
+`应用启动失败：启动进程 dev-launcher.mjs 提前退出（exit=1）`，而 `dev-launcher.log`
+里 `dev server 已启动（PID …）` 之后**两秒**就出现 `dev server 自身退出（exit=0）`，
+`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=3734 host=127.0.0.1`，stderr 全空。
+用户的反馈是「还是看不出那有问题，日志需要详细」。
+
+根因在**编排器之下**：`scripts/dev.mjs`（`pnpm dev` 的入口，由启动器 spawn）当时写死
+`spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", …)`。Windows 上批处理
+只有 cmd.exe 会解释，**Node 起它会失败**（实测 `EINVAL`，正是 §2.1.1 已记录的那条判据），
+于是 `result.status === null`，而旧代码 `process.exit(result.status ?? 0)` 把它读成
+**成功退出 0** —— dev server 静默消失，Next 一行输出都没有。
+
+| 缺陷 | 形态 | 修法 |
+|---|---|---|
+| 内层起服务自己拼可执行名 | `dev.mjs` / `start.mjs` / `analyze-bundle.mjs` 各自写 `win32 ? "pnpm.cmd" : "pnpm"` | 一律经 `shell.mjs` 的 **`pnpmInvocation()`**（它内部就是 `whichCommand()` + `commandInvocation()`，见 §2.1.1），拿 `{ command, args }` 直接 spawn |
+| 「命令没起来」被读成成功 | `process.exit(result.status ?? 0)` | 先判 `result.error`（带 `error.code` + 实际命令），再判 `status === null`，两者都以非零退出并打印**真实命令** |
+| PATH 上没有任何可用 pnpm | 静默 —（`status` 也是 null） | `pnpmInvocation()` 返回 `null`，调用方打印可行动作（`pnpm check:toolchain`）并非零退出 |
+
+> `pnpmInvocation()` 是**唯一出口**：任何「Node 去 spawn pnpm」的地方都从这里拿命令，
+> 不许自己拼可执行名、更不许按平台写后缀 —— 那正是本条缺陷的形态本身。
+> 回归护栏：`tests/dev-launcher-toolchain-gate.test.ts` 的
+> 「内层 spawn pnpm 复用同一形态判据」一组（含「不得再出现 `?? 0`」的源码级断言）。
+
+**失败出口的日志必须落在「本次运行」的文件上**：同一次现场里，
+`concludeDownstreamExit()` 还按文件名重找「最近一份」nextjs 日志
+（`lastNextLog()` → `readdirSync().sort().reverse()` 的**字典序**）。目录里同时存在
+历史命名（`…<date>_<time>.log`）与现命名（`…<date>T<time>.log`）时，
+`_`（0x5F）排在 `T`（0x54）之后，「最新」恒定指向**上一次运行**那份 ——
+用户照着弹窗给的路径去翻，看到的是别的失败现场。现在把本次起的
+`nextOut` / `nextErr` **直接传进**收尾函数，不再按名字猜（`lastNextLog` 已删除）。
+
+失败弹窗（`_build_failure_message`）同时补齐最关键的现场：除了启动器两侧，
+还贴出 **dev server 自己的输出尾部**（`log/nextjs/nextjs-stderr-*.log`，取
+**mtime 最新**的一份 —— 不按文件名字典序，理由同上）与「下一步」（`pnpm check:toolchain`），
+让用户不必再去翻别处。
 
 ### 2.2 完整依赖预检（壳窗口出现后）
 
@@ -259,12 +423,14 @@ true`——这类场景的策略反过来，必须给前台。
    被挤到 +1 后浏览器连着旧代码）。
 3. **缓存指纹**：next.config/tsconfig/package.json/lockfile 指纹变化才清 .next。
 4. **pnpm 版本一致性检查**：比对 `package.json` 的 `packageManager` 声明版本与
-   `pnpm -v` 实际版本。一致则跳过；不一致且 corepack 可用时自动
-   `corepack prepare pnpm@<期望版本> --activate` 对齐（需联网一次），成功 OK；
-   自动对齐失败仅 WARN 并透出到启动页（复用 stale_shell 字段，不阻断启动）。
-   手动对齐指引：`corepack enable && corepack prepare pnpm@<期望版本> --activate`。
-   > 此步也会兜底识别 pnpm 命令**完全不可用**（探测拿不到版本号，见 §5 新增行），
-   > 但若已先经过 §2.1 门禁，此处通常到不了该分支。
+   `probePnpm()` 报告的实际版本。一致则跳过；不一致时按同一版本号
+   `corepack prepare pnpm@<期望版本> --activate` 对齐（需联网一次），**并用同一条
+   探测复核**（不看 prepare 的退出码，见 §2.1.3），成功 OK；不一致仍持续时只 WARN
+   并透出到启动页（复用 stale_shell 字段，不阻断启动），提示里的版本号取自
+   `package.json`（不再有 `<期望版本>` 占位符）。
+   > 本步与 §2.1 门禁共用 `corepack.mjs` 的探测与重建（规范 §9.5「一份逻辑两端复用」）：
+   > 探测失败**不在这里二次解释** —— 门禁已给过「不可用 + 怎么修」，这里不再叠一句。
+   > 若已先经过 §2.1 门禁，此处通常到不了该分支。
 5. **node_modules 健康检查**：`.modules.yaml` 与 `.bin/next` 缺失，或关键依赖目录
    （`typescript`、`@typescript/native`、`next`）**存在但为空**（pnpm 策略拒装/中断安装的典型残留——空目录会让 tsc 垫片找不到入口），即视为残缺。显式跑一次 `pnpm install`（CI 模式），失败立刻报错带日志尾部；install 后仍残缺也明确报错而非静默通过。日志：`log/launcher/pnpm-install-stdout/stderr.log`。
    > 判空注意：顶层关键依赖在 pnpm 下是指向 `.pnpm` store 的 **junction/symlink**。
@@ -470,7 +636,7 @@ log/
 | `log/services/comfyui-runtime.log`                                          | Next server（src/lib/comfyui/lifecycle.ts）                                                    | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）                                                                                                                                                            | 追加不轮转；接口首次打开只回尾部窗口（1MB，按行对齐，见 §4.1） |
 | `log/services/comfyui-keepalive-<ts>.out/.err.log`                          | dev-launcher 保活中介（Start-Process 重定向）                                                  | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进 runtime.log                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 按次命名，不自动清理                                           |
 | `log/services/drizzle-studio-runtime.log` `log/services/ollama-runtime.log` | Next server（对应 lifecycle / api 路由）                                                       | Drizzle Studio / Ollama 拉起与子进程输出，设置页日志面板跟随（同 comfyui-runtime 模式）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 追加不轮转                                                     |
-| `log/services/app-runtime.log`                                              | Next server（src/lib/app-runtime-log.ts）                                                      | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**面板只显示本次运行**：本文件追加不轮转，服务端在轮询响应里带回「会话起点」（dev-launcher.log 的 mtime），面板据此丢弃早于起点的历史行（`src/lib/log-session-scope.ts`，见 §4.1）                                                                                                                    | 追加不轮转                                                     |
+| `log/services/app-runtime.log`                                              | Next server（src/lib/app-runtime-log.ts）                                                      | **应用运行期业务操作日志**：tRPC 中间件每次调用（path+duration+type）+ 生成任务入队/完成/失败等里程碑，`[日期时间] [LEVEL] [ns] msg` 本地时区行格式；仅记事件/耗时/类型，不外泄 prompt/PII；应用内「应用日志」面板经 `GET /api/logs/current?source=app-runtime` 实时轮询（规范 07 §7.11）。**面板只显示本次运行**：本文件追加不轮转，服务端在轮询响应里带回「会话起点」（dev-launcher.log 的 mtime），面板据此丢弃早于起点的历史行（`src/lib/log-session-scope.ts`，见 §4.1）。**文件侧也有会话边界**：每次应用服务启动时由 `installStreamCapture` 写一条会话分隔横幅（两侧留空行，`src/lib/session-banner.server.ts`），用户直接看文件也能看出本次从哪开始（ISSUE #592） | 追加不轮转                                                     |
 | `log/comfyui/comfyui-trace.log`                                             | Next server（`src/lib/comfyui/trace.ts`）                                                      | **ComfyUI 通信层原始回执**（诊断通道，ISSUE #216）：comfy-cli 全部 stdout 原始 chunk 与解析后的 JSON 事件、stderr 原始 chunk 与退出时的完整 errBuf、本任务的全部 WS 帧、`/history` 与 `/queue` 的原始 JSON、以及各终局结论（「未找到生成结果」时附带 promptId 与 /queue 快照）。行格式 `[本地时间] [INFO] [trace] <channel> [<taskId>] <内容>`，channel ∈ `cli`/`ws`/`http`/`history`/`session`；单行上限 8000 字符（超出标注 `…(truncated)`），写入失败静默跳过（诊断通道不得把生成带崩）。**只在应用内「创作后端 → 启动日志」之外单独查看**，不参与日志面板轮询（避免大体量原文刷屏，见 §4.2） | 追加不轮转                                                     |
 | `log/tools/*.log`                                                           | tools/scripts（Log-Common.ps1）与 setup 脚本                                                   | 构建/打包/工具运行日志（build-tauri-release、build-standalone、build-launcher、rebuild-static、comfy-cli-setup 等）                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 每次运行覆盖                                                   |
 | `log/workshop/generation-<yyyy-mm-dd>.log`                                  | Next server（`/api/workshop/logs`，工坊前端在日志追加时异步上报）                              | **工坊生成执行日志**（JSONL，按天分文件）：角色卡提取 / 分镜提取与 AI 拆镜 / 定妆照生成的发起、模型输入输出、结果与错误。界面上各环节的「执行日志」面板即时展示本次会话，「历史」入口按需拉取落盘记录（跨刷新 / 重启可回看）；写入失败静默，绝不影响生成流程                                                                                                                                                                                                                                                                                                                                                                                                 | 按天分文件（自然轮转）                                         |
@@ -670,6 +836,10 @@ zustand 队列，而不是再加一个模块级单例。
 | **`cargo build` 报 ``resource path `binaries/node-x86_64-unknown-linux-gnu` doesn't exist``** | `bundle.externalBin` 声明的是「无后缀 basename」，打包器按目标三元组找 `node-<triple>[.exe]`，而 `build-desktop.mjs` 只产出 `.exe`（历史实现按 Windows 单一平台写的） | 已修：`scripts/build-desktop.mjs` 的 `sidecarFileName()` 与 Rust 侧 `sidecar_binary_name()` 同一平台判据（非 Windows 无后缀 + 补可执行位）。见 §9.3 |
 | **启动页一直转圈、`log/shell/` 为空** | `resolve_project_root()` 的判据绑在 Windows 专属文件（历史上的 `scripts/dev-launcher.ps1`）上 → POSIX 上恒返回空串。表现完全不像「路径判据错了」，像「启动页坏了」或「日志没写」 | 已修：改判 `package.json` + **编排器的唯一实现** `scripts/dev-launcher.mjs`（`looks_like_project_root`）。见 §9.3 |
 | **POSIX 上编排器退出后 `pnpm` / `next-server` 仍在跑、端口不释放** | 回收是 `taskkill /T /F`（POSIX 上等于不执行）；或虽有 POSIX 分支但 `spawn` 未 `detached`，子进程与编排器**同组** → 命中 §3.1 的防自杀判据，退化成单杀 leader，其下三层（`pnpm` / `next` / `turbopack worker`）全部残留 | 已修：`scripts/dev-launcher.mjs` 用 `spawnInGroup`（`detached: true` 自建进程组）+ 整组回收；编排器被 SIGKILL 时留下的孤儿由 `run/launcher-session.json` + 心跳在下次启动回收。见 §3.3 |
+| **双击 exe：启动即报「pnpm 工具链不可用（exit=?）：未知错误」，`dev-launcher-stderr` 空、stdout 里也没有 pnpm 自己的报错**（ISSUE #576，用户现场 `F:\AI\Other\Comfy-APP-T3`） | **PATH 上选中了一个「存在但跑不起来」的 pnpm 形态**：corepack 的 shim 在 Windows 上看起来是三个文件（无扩展名的 `pnpm`、`pnpm.cmd`、`pnpm.ps1`），其中**只有 `.ps1`（经 PowerShell 宿主）与「已关联 node 的无扩展名 shim」能跑**，`.cmd` 只有 cmd.exe；而 `whichCommand` 只按 `PATH × PATHEXT` 找**存在的文件**、PATHEXT 又把 `.CMD` 排在最前 → 选中必然 EACCES 的那个。三个观测点彼此吻合却被误读：① `spawnSync` 起不来 ⇒ `probe.error.code = EACCES`、`probe.status = null`、**stdout+stderr 都是空串** ⇒ `detail` 落到 `未知错误`；② `exit=?` 与「stderr 空」看着像「corepack 缓存损坏」（那条真故障会在 stderr 打印 `Failed to switch pnpm to ...`），于是提示把人引向「删缓存 / 重装 Node」；③ 修复文案里的版本号是 `<项目版本>` 占位符，没人会去翻 `package.json` | 已修（§2.1.1 / §2.1.2 / §2.1.3）：① `whichCommand` 改为**选第一个真的能跑的候选**（`executableExts()` 定顺序：无扩展名 / `.EXE` → `.PS1` → `.CMD`/`.BAT` 垫底；`usableCommand()` 用 `accessSync(X_OK)` + 对 shebang 形态**真起一次**确认，起不来则回退同目录 `<name>.ps1`）；② 探测结果结构化（`not-found` / `spawn-error` / `exit-nonzero` / `no-version`），把 `error.code` 与输出头几行一起带出来，**不再把「疑似缓存损坏」写成结论**；③ 提示中的版本号取自 `package.json` 的 `packageManager`，多行提示经 `stale_shell` 横幅进启动页（`white-space: pre-wrap`）；④ `spawn-error` 一类**自动 `corepack prepare` 重建并用同一条探测复核**，复核仍失败才落回提示；⑤ `spawnDevServer()` 复用同一个命令形态（`commandInvocation`），避免「探测过了、起服务又失败一次」。自查入口 `pnpm check:toolchain`。回归测试 `tests/dev-launcher-toolchain-gate.test.ts` |
+| **`pnpm check:toolchain` 只报 `[WARN] 版本与 package.json 要求不一致（本机 10.34.5，要求 12.4.1）` 就结束，而真启动时启动器自己会对齐**（ISSUE #576 第三轮，同一用户同一现场） | **自检与启动器两套口径**：版本对齐动作只写在启动器（`reconcilePnpmVersion()` → `preparePnpm()` + 复核）与 `prepare-local-run.ps1` 第 3 步里，自查入口当时只打印一行 WARN、什么也不做，还以 0 退出 —— 用户于是以为「只能手动跑 corepack」，或者以为已经可以启动了（其实下一关还有 node_modules 门禁） | 已修（§2.1.4）：自查入口**复用同一条对齐动作**（`preparePnpm()` + 同一条探测复核），复核通过报 `[OK] 已对齐（旧版本 → 新版本）`，仍不一致才 WARN + 手动命令；并补上 `node_modules` 检查（点出下一道门禁与 `pnpm install`）。判定「一致」的判据与启动器共用 `sameVersion` 语义。回归 3 例见 `tests/dev-launcher-toolchain-gate.test.ts` |
+| **同一窗口里 `pnpm --version` 是 12.4.1，`pnpm check:toolchain` 却报「pnpm 可用：10.34.5（…\pwsh.EXE）」，像是检测到了别的机器的版本**（ISSUE #576 第四轮，同一用户同一现场） | **探测身份没打印出来，两句话各自为真却看着矛盾**：① 终端敲的 `pnpm` 由 shell 的 PATHEXT 解析（走 `.cmd` 交 cmd.exe），而 Node 侧 `whichCommand()` 只看「真的起得来」的形态，`.ps1` 经宿主执行 ⇒ 命令名变成 `pwsh.EXE`；② PATH 上并存多个 pnpm（独立安装 / 另一份 corepack 副本 / 另一个检出）时，被选中的那个就是另一个版本 —— 旧文案只给「版本号 + 命令名」，用户无从知道它指的是哪个文件，于是「本机版本为什么是 10.34.5」无解 | 已修（§2.1.5）：自检另打印**探测身份** —— `[INFO] 选中的 pnpm：<文件>`（PATH 上真正命中的那个）与经宿主时的 `[INFO] 经宿主执行：<宿主> … → <文件>`；版本漂移提示改为把方向指向「选中的 pnpm」（PATH 顺序问题），不再让人去翻项目文件。判据仍只在 `shell.mjs::commandInvocation()` 一处。回归 2 例见 `tests/dev-launcher-toolchain-gate.test.ts` |
+| **`pnpm check:toolchain` 报「命令起不来（可执行形态/权限不对） —— EINVAL（未发现可回退形态）」，命令是 `...\.tools\pnpm\<ver>\bin\pnpm.CMD`**（ISSUE #576 第二轮，同一用户同一现场） | **选中了批处理，而 Node 起不了批处理**：corepack 装到 `.tools\pnpm\<ver>\bin` 的 pnpm 是 `.CMD` + `.ps1` 并排（旁边并没有可用的无扩展名 shim）。此时两个缺陷叠加：① `executableKind()` 把 `.cmd` / `.bat` 与 `.ps1` **同判为通用 `script`**，`usableCommand()` 又对「非 shebang」直接 `ok: true`（没真起一次）—— 于是 `.CMD` 一路通过候选确认被选中；② 真跑起来是 `EINVAL`（批处理既不是 PE 镜像、也没有 Node 认的 shebang），而 `shebangFallback()` **只服务 shebang**，`.CMD` 走到这里没有回退，提示于是说「未发现可回退形态」—— 而 `pnpm.ps1` 就摆在同一个目录里。表现是探测失败、命令完全不可用 | 已修（§2.1.1）：① `executableKind()` 把**批处理单列一类 `batch`**（`@echo` / `@setlocal` 起头判形态，不看扩展名），不再与 `.ps1` 混；② `usableCommand()` 对 **Windows 上的 `batch` 直接走回退、不真起**（真起必 `EINVAL`，白搭一次进程创建），`shebangFallback()` 改名 `siblingFallback()` 并为**所有**「Node 起不来」的形态服务；③ 回退同胞名按**「去掉自身扩展名再拼 `.ps1`」**求（`pnpm.CMD` → `pnpm.ps1`，不是 `pnpm.CMD.ps1`）；④ `commandInvocation()` / `usableCommand()` / `probeCommand()` / `preparePnpm()` 统一接受可注入的 `{ env, platform }`，让「模拟另一平台」的被测路径与真实路径同一条。shebang **不按形态一刀切**（机器上真配好文件关联时仍可用），POSIX 不受批处理短路影响。回归 5 例见 `tests/dev-launcher-toolchain-gate.test.ts`（还原修复后 4 例立即失败） |
 | 双击 exe：启动即报「pnpm 工具链不可用 / 无法获取 pnpm 版本」并弹窗                                                                     | corepack 管理的 pnpm 在切换版本时本地缓存损坏：`.tools\pnpm\<ver>\bin` 缺失 → `pnpm -v` 报 `Failed to switch pnpm to pnpm@<ver> ... ENOENT`，命令完全不可用（install/dev 全依赖 pnpm）                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 已由 `Test-ToolchainGate`（弹壳前）拦截并弹 MessageBox 给修复步骤：`corepack enable && corepack prepare pnpm@<版本> --activate`（重建缓存，需联网一次），仍不行则删除损坏缓存后重装 Node/pnpm                                                                                                                                                                                                                                                 |
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                         | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                     |
 | `pnpm install` 已成功（exit 0）但仍报「node_modules/…为空或缺失」启动失败；同机跑 `sync-lint.ps1`/`run-local.ps1` 却正常               | 假阳性：`Get-BrokenKeyDeps` 用 `Get-ChildItem -LiteralPath` 枚举顶层 junction/symlink 判空，pwsh（7.6.5 实测）对这类 reparse point 的枚举可能返回 0 项 → 健康安装被误判残缺，触发 install 后因 `.modules.yaml`/lockfile 已一致而“Already up to date”无法自愈，二次复查仍误报                                                                                                                                                                                                                                                                                                                                                              | 已修：先 `Resolve-Path` 解析到链接目标真实绝对路径，再用 .NET `Directory.EnumerateFileSystemEntries` 对真实目录判非空（见 §2.2 step 5）。同步/自检脚本（sync-lint/run-local）本就只查 `.modules.yaml`+`.bin`+lockfile，故不受影响                                                                                                                                                                                                             |
@@ -696,6 +866,8 @@ zustand 队列，而不是再加一个模块级单例。
 | 应用启动完成瞬间把窗口弹到最前面，打断用户正在看的别的内容（启动期间切出去干别的了）                                                   | **窗口交换只做 `show()` + `set_focus()`**：启动耗时期间用户可能已切走，加载完成照样抢前台（ISSUE #359）。判据缺失——「用户刚点的启动」与「用户早就切走了」在旧实现里没被区分                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 已修：启动完成默认只 `show()`（窗口进任务栏）并 `request_user_attention` 请求任务栏闪烁提醒；是否给前台由启动器 `decide_foreground()` 判决并经 `COMFYAPP_FOREGROUND` 注入（见 §1.3），只有「前台本来就是本应用 / 显式冷启动 / 唤起已有实例」才给（双击启动同样不给，见下一行）。改的是 `src-tauri/src/**`、`Cargo.toml`（`tray-icon`）与 capabilities，**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol`                    |
 | 上面这条修完、重编壳后**启动仍然抢前台**（ISSUE #359 回归）                                                                            | **交接瞬间 Windows 自己把前台放行给了主窗**，壳里那条「不抢前台」根本管不到：①启动页窗口是 `WS_EX_TOOLWINDOW`，不产生任务栏按钮；主窗 `show()` 时任务栏按钮首次创建，Windows 按「新窗口 + 用户刚启动」放行前台（实测日志就是 `show_main_window_without_focus` 里 `is_focused()` 一开始就为 true）；②旧实现「无条件调一次 `set_focus()` 再看结果」——窗口已被系统放行，这次调用必然「成功」，反而把「不抢前台」演成了「一定给前台」；③启动期的 `decide_foreground()` 只判一次，用户切去干别的几分钟后「双击入口还在前台」这条早已失真                                                                                                       | 已修（两段）：①壳侧只在 `request_focus` / `COMFYAPP_FOREGROUND=1` 时才调 `set_focus()`，不再无条件试探；②新增交接复核进程（`scripts/win32-window-focus.py`，由 `spawn_foreground_watch()` 在主窗口可见时拉起）：不该给就给前台**还回去**（`SendInput` 无副作用 Alt + `SetForegroundWindow`），该给就拿到手（含键盘焦点）。判决表与结论见 §1.3，回归测试见 `tests/check-file-structure.test.ts`。诊断入口：`log/launcher/foreground-watch.log` |
 | **双击启动完成后主窗弹到最前；点回别处遮盖它，马上又被强拉到最前（同一此启动被打断两次）** | **启动期判决把「前台是双击入口」放行了**：`decide_foreground()` 曾把「前台是 explorer / 启动器自身」判为允许（理由是「用户刚点过启动」），双击启动因此恒得 `COMFYAPP_FOREGROUND=1`——壳在交换窗口时 `set_focus()` 弹到最前（第一次）；用户点回别处后，交接复核进程按「启动期判决允许 = 用户就在等」执行 `give` 又把前台强拉回来（第二次）。而「双击之后切去干别的」正是常态：等几十秒后正式窗口冒出来时，「双击入口还在前台」这条判据早已失真 | 已修：①判决表删去「双击入口」分支——双击启动一律 `COMFYAPP_FOREGROUND=0`，窗口进任务栏 + 闪烁提醒；显式给前台只剩 `--foreground` / `--cold-start` / 唤起已有实例；②主窗 builder 加 `focused(false)`：tao 据此把首次 `show()` 走 `SW_SHOWNOACTIVATE`，从源头掐掉「`show()` 自带激活语义被 Windows 当新窗口放行前台」的路径（无激活就无需复核进程去「还」）。改了启动器（`scripts/start_tauri_launcher.py`）与壳（`src-tauri/src/**`）：前者必须重打包（`tools\build\build-launcher.ps1`）才对双击 exe 生效，后者必须重编壳；回归测试见 `tests/check-file-structure.test.ts` 的「启动链路『不抢前台』判据」用例组 |
+| **双击 `start-tauri.exe` 后启动页被文件资源管理器等窗口压在后面**（用户看得到启动页露出的一个角，但不在最前面）；用户反馈「这不正常，应该显示在前面才对」（ISSUE #576） | **把「应用窗口」的「不抢前台」策略套在了启动页上**：启动期判决（`decide_foreground`）为防打断用户，双击启动一律 `COMFYAPP_FOREGROUND=0`，壳侧 `show_main_window_without_focus()` 于是只 `show()` + 任务栏闪烁。这条对**几十秒后才冒出来**的应用窗口是对的（用户可能早已切走），但启动页是用户**刚刚双击下去**的直接反馈——不给前台的结果就是启动页出现在 Explorer 后面 | 已修（启动页单独一套判据，与主窗那套**不合并**）：① 启动器在启动页**首次可见**时拉一次独立复核进程（`spawn_splash_front()` → `win32-window-focus.py --splash`），复用已验证可靠的 `focus_window()`（Alt + `AttachThreadInput`）；判定收在纯函数 `should_front_splash()`——只抢**首次可见**那一下，one-shot；② 壳侧 `bring_splash_to_front()` 另做一次本地 `set_focus()` 兜底（冷启动时壳本就是前台进程，无须等复核进程）。改的是 `scripts/start_tauri_launcher.py`、`scripts/win32-window-focus.py` 与 `src-tauri/src/**`：前者必须重打包（`tools\build\build-launcher.ps1`），后者必须重编壳；回归测试见 `tests/check-file-structure.test.ts` 的「启动页首次可见时被带到前台」用例 |
+| **启动失败但「看不出哪有问题」**：启动页弹「启动进程 dev-launcher.mjs 提前退出（exit=1）」，`dev-launcher.log` 里 `dev server 已启动（PID …）` 后**两秒**就是 `dev server 自身退出（exit=0）`，`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=…`、stderr 全空（ISSUE #576 第五轮） | **两个缺陷叠加**：① `scripts/dev.mjs` 写死 `spawnSync("pnpm.cmd", …)`，Windows 上批处理只有 cmd.exe 会解释、Node 起它必失败（`EINVAL`），于是 `result.status === null`，旧代码 `process.exit(result.status ?? 0)` 把它读成**成功退出 0** —— dev server 静默消失，Next 一行输出都没有（判据见 §2.1.1，只是「起服务那一层」没复用）；② 收尾函数还按文件名字典序重找「最近一份」nextjs 日志（历史 `_` 命名排在现 `T` 命名之后），弹窗给的路径恒定指向**上一次运行**的文件，用户照过去看自然是别的现场 | 已修：① 内层 spawn 一律经 `shell.mjs` 的 `pnpmInvocation()`（形态判据唯一出口），并把「命令没起来」（`result.error`）与「跑完非零退出」分开报、打印真实命令；② 本次运行的 `nextOut` / `nextErr` **直接传入**收尾函数（`lastNextLog` 删除），失败弹窗再补一段 **dev server 自己的输出尾部**（取 `log/nextjs/nextjs-stderr-*.log` 里 **mtime 最新**的一份）与自查入口 `pnpm check:toolchain`。见 §2.1.6；回归测试见 `tests/dev-launcher-toolchain-gate.test.ts` 与 `tests/dev-launcher-downstream-exit.test.ts` |
 | **启动页一出现就自己最小化进任务栏**（用户没点任何按钮，只能从任务栏还原回来看进度） | **把「探测」写成了「执行」**：splash 页脚本加载即调 `probeWindowCommands()`，用 `invoke('win_minimize')` 探壳兜底命令是否就位——但 IPC 命令没有 dry-run，`invoke` 就是**真的执行**，启动页刚显示就把自己最小化了 | 已修：删除启动期探测（对有副作用的命令无法无损探测）；「壳过期」的判定改由用户真正点最小化/关闭按钮时的三条互补路径承担（窗口 API / 内联 onclick / 壳命令 `win_minimize`·`win_close`，全失败时消息区给可见提示，见 07 §7.18.7）。改的是 `splash-assets/**`（编译期内嵌），**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol` |
 
 | 关掉应用、马上重新双击 start-tauri.exe，再进工作流库看到「未找到匹配的工作流 / 共 0 个工作流」——像是工作流被清空了（ISSUE #369） | **「还没加载出来」与「真的没有」在界面上长得一样**：`workflow.list` 是服务端较慢的一跳，而服务启动期要经过依赖预检（可能触发一次 `pnpm install`）→ next dev 首屏编译 → Drizzle `push` 同步表结构，这段时间里查询一直没 resolve；列表组件只有「有数据 / 无数据」两种呈现，于是空态文案（「未找到匹配的工作流」）被当成结论显示出来。这与「数据库真的空 / 目录里真的没有工作流」逐字相同，用户无从区分 | 已修：列表三态明确分开——`loading`（正在加载）/ `loadStalled`（超过 8s 未返回 → 可重试 + 引导打开日志面板看原因）/ 真为空（区分「搜索无结果」与「还没有工作流」，给导入或配置本地目录的引导）。判据在 `use-workflow-library.ts` 的 controller，形态在 `workflow-library-config` 与 `WorkflowLibraryList`。**注意**：这类「慢一跳」的界面不能只在快路径上测；新增列表/详情页时默认要有加载态，否则同一症状会在别处再现 |
@@ -1428,6 +1600,7 @@ sidecar」两种不同形态的失败。
 | 端口推导跨语言自检 | `scripts/check-app-port-vectors.ps1` | `scripts/check-app-port-vectors.cjs` |
 | 生成 / 补齐 `.env` | `scripts/prepare-local-run.ps1`（第 4 步） | `scripts/env-init.mjs`（`pnpm env:init`） |
 | 建库（Drizzle 表结构同步） | `scripts/prepare-local-run.ps1`（前置）/ 启动器预检 8 | `scripts/db-push.mjs`（`pnpm db:push`） |
+| `pnpm` 可用性自检与修复（工具链门禁的独立入口） | `scripts/prepare-local-run.ps1`（第 2/3 步） | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`） |
 
 **为什么 `.mjs` 里不写中文**：门禁/构建期模块会经 Next 的 `next-code-frame` 渲染，
 而它按**字节**切串——高亮区间端点落在多字节字符内部时 Rust 侧直接 panic、整个

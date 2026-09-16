@@ -4,12 +4,15 @@ import { uploadImage, comfyBase } from "@/lib/comfyui/client";
 import { ensureComfyUiReady } from "@/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { errorMessage } from "~/lib/error-message";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 
 /** ComfyUI 不可达（未运行 / 端口不通）的判据：这些形态才值得触发自动启动。 */
 function isUnreachable(msg: string): boolean {
-  return /fetch failed|ECONNREFUSED|ENOTFOUND|instance is not running/i.test(msg);
+  return /fetch failed|ECONNREFUSED|ENOTFOUND|instance is not running/i.test(
+    msg,
+  );
 }
 
 // (OWASP A04/A05): whitelist image types and cap the size so a
@@ -26,10 +29,7 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export async function POST(req: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
 
   const form = await req.formData();
@@ -38,13 +38,13 @@ export async function POST(req: NextRequest) {
   if (!ALLOWED_MIME.has(file.type)) {
     return NextResponse.json(
       { error: "仅支持 PNG / JPG / WebP / GIF 图片" },
-      { status: 400 }
+      { status: 400 },
     );
   }
   if (file.size > MAX_UPLOAD_BYTES) {
     return NextResponse.json(
       { error: "图片大小不能超过 50MB" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await uploadImage(buf, filename, "input");
-    if (!res.name) return NextResponse.json({ error: "上传失败" }, { status: 500 });
+    if (!res.name)
+      return NextResponse.json({ error: "上传失败" }, { status: 500 });
     return NextResponse.json({ name: res.name });
   } catch (e) {
     const msg = errorMessage(e, "上传失败");
@@ -71,14 +72,14 @@ export async function POST(req: NextRequest) {
         /* 启动失败已在 ensure 侧落日志（含「不再自动重试」闩锁），此处不重复刷 */
       });
       logger.error(
-        `[upload] 503 ComfyUI unreachable — ${base} | error: ${msg} | file: ${filename} (${(buf.length/1024).toFixed(0)}KB)`
+        `[upload] 503 ComfyUI unreachable — ${base} | error: ${msg} | file: ${filename} (${(buf.length / 1024).toFixed(0)}KB)`,
       );
       return NextResponse.json(
         {
           error: `无法连接 ComfyUI (${base})。请确认 ComfyUI 已启动后再上传素材。`,
           hint: "comfyui-unreachable",
         },
-        { status: 503 }
+        { status: 503 },
       );
     }
     // Log other upload errors too

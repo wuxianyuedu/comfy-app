@@ -14,6 +14,7 @@
  *   经 /api/generated/[...path] 提供读取，浏览器可直接引用。
  */
 
+import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -35,14 +36,16 @@ export const MATERIAL_FOLDERS = [
 
 export type MaterialFolderId = (typeof MATERIAL_FOLDERS)[number]["id"];
 
-const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) => MATERIAL_FOLDERS.id));
+const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((folder) => folder.id));
 
-export function isValidFolder(id: string | null | undefined): id is MaterialFolderId {
+export function isValidFolder(
+  id: string | null | undefined,
+): id is MaterialFolderId {
   return !!id && FOLDER_IDS.has(id);
 }
 
 export function folderName(id: string): string {
-  return MATERIAL_FOLDERS.find((MATERIAL_FOLDERS) => MATERIAL_FOLDERS.id === id)?.name ?? id;
+  return MATERIAL_FOLDERS.find((folder) => folder.id === id)?.name ?? id;
 }
 
 /* ── 媒体种类推导 ── */
@@ -81,7 +84,9 @@ export function sanitizeScope(raw: string | null | undefined): string | null {
  * 文件名白名单化：剥掉所有目录成分，再替换掉在 Windows/POSIX 上有特殊含义
  * 的字符。返回 null 表示该名字不可用。
  */
-export function sanitizeFileName(raw: string | null | undefined): string | null {
+export function sanitizeFileName(
+  raw: string | null | undefined,
+): string | null {
   if (!raw) return null;
   // 同时按两种分隔符切，避免 Windows 上 "a/b\\c.png" 漏网
   const base = raw.split(/[\\/]/).pop()?.trim();
@@ -119,7 +124,7 @@ export interface MaterialItem {
 /** 列出单个 scope/folder 下的素材。目录不存在时返回空数组（不是错误）。 */
 export async function listFolderItems(
   scope: string,
-  folder: string
+  folder: string,
 ): Promise<MaterialItem[]> {
   const dir = folderDir(scope, folder);
   if (!dir) return [];
@@ -133,7 +138,12 @@ export async function listFolderItems(
   for (const name of entries) {
     if (name.startsWith(".")) continue; // 跳过 .DS_Store 之类
     try {
-      const st = await fs.stat(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ dir, name));
+      const st = await fs.stat(
+        /*turbopackIgnore: true*/ path.join(
+          /*turbopackIgnore: true*/ dir,
+          name,
+        ),
+      );
       if (!st.isFile()) continue;
       items.push({
         id: `${scope}/${folder}/${name}`,
@@ -142,7 +152,7 @@ export async function listFolderItems(
         folderName: folderName(folder),
         kind: inferKind(name),
         url: `/api/generated/materials/${encodeURIComponent(scope)}/${encodeURIComponent(
-          folder
+          folder,
         )}/${encodeURIComponent(name)}`,
         size: st.size,
         updatedAt: st.mtime.toISOString(),
@@ -161,7 +171,9 @@ export async function listFolderItems(
 export async function listScopes(): Promise<string[]> {
   try {
     const entries = await fs.readdir(materialsRoot(), { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((dir) => dir.name);
+    return entries
+      .filter((entry) => entry.isDirectory())
+      .map((dir) => dir.name);
   } catch {
     return [];
   }
@@ -173,7 +185,7 @@ export async function listScopes(): Promise<string[]> {
  * 这样前端不必自己补齐缺失分类。
  */
 export async function collectByFolder(
-  scopes: string[]
+  scopes: string[],
 ): Promise<Map<string, MaterialItem[]>> {
   const map = new Map<string, MaterialItem[]>();
   for (const f of MATERIAL_FOLDERS) map.set(f.id, []);
@@ -183,6 +195,7 @@ export async function collectByFolder(
       if (items.length) map.get(f.id)!.push(...items);
     }
   }
-  for (const [, arr] of map) arr.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  for (const [, arr] of map)
+    arr.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   return map;
 }

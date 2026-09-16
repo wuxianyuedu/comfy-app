@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ComfyGraphNode, RawOutputMeta, WorkflowDetail } from "../workflow-types";
+import type {
+  ComfyGraphNode,
+  RawOutputMeta,
+  WorkflowDetail,
+} from "../workflow-types";
 import { inferSourceOutNames } from "../workflow-utils";
 
 /** Raw ComfyUI node metadata — `widgets_values` elements and the flags /
@@ -36,11 +40,15 @@ export function useWorkflowDerivedData(
     for (const rn of detail?.rawNodes ?? []) {
       if (rn?.id) {
         m[rn.id] = {
-          widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
+          widgets_values: Array.isArray(rn.widgets_values)
+            ? rn.widgets_values
+            : [],
           outputs: Array.isArray(rn.outputs) ? rn.outputs : [],
           flags: rn.flags && typeof rn.flags === "object" ? rn.flags : {},
           properties:
-            rn.properties && typeof rn.properties === "object" ? rn.properties : {},
+            rn.properties && typeof rn.properties === "object"
+              ? rn.properties
+              : {},
           mode: typeof rn.mode === "number" ? rn.mode : 0,
         };
       }

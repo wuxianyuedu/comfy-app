@@ -14,7 +14,8 @@
 // 输出类型由模式的类别决定（图像 → 图片，视频 → 视频，音频 → 音频）。
 
 import {
-  EXPOSED_PARAM_LABEL,
+  EXPOSED_PARAM_DISPLAY_LABEL,
+  exposedParamDisplayLabel,
   exposedParamsForMode,
 } from "~/lib/workflow-exposed-params";
 import { getWorkflowType } from "~/lib/workflow-types";
@@ -45,9 +46,7 @@ export const WORKSHOP_INPUT_TYPES = [
 
 export type WorkshopInputType = (typeof WORKSHOP_INPUT_TYPES)[number]["type"];
 
-const INPUT_TYPE_SET = new Set<string>(
-  WORKSHOP_INPUT_TYPES.map((t) => t.type),
-);
+const INPUT_TYPE_SET = new Set<string>(WORKSHOP_INPUT_TYPES.map((t) => t.type));
 
 export function isWorkshopInputType(v: unknown): v is WorkshopInputType {
   return typeof v === "string" && INPUT_TYPE_SET.has(v);
@@ -108,7 +107,11 @@ export function defaultInputsForMode(mode: string): Array<{
     case "M2I":
       return [...base, { type: "mask", field: "mask_image" }, ...size];
     case "INPAINT":
-      return [...base, { type: "image", field: "image" }, { type: "mask", field: "mask" }];
+      return [
+        ...base,
+        { type: "image", field: "image" },
+        { type: "mask", field: "mask" },
+      ];
     case "OUTPAINT":
       return [...base, { type: "image", field: "image" }, ...size];
     default:
@@ -118,7 +121,7 @@ export function defaultInputsForMode(mode: string): Array<{
     if (/^I2V$/.test(code)) {
       return [{ type: "image", field: "image" }, ...base, durationRow];
     }
-    if (/^(FLF2V|FL2V|FMF2V)$/.test(code)) {
+    if (/^(FLF2V|FMF2V)$/.test(code)) {
       return [
         { type: "first-frame", field: "first_frame" },
         { type: "last-frame", field: "last_frame" },
@@ -151,9 +154,15 @@ export function outputKindForMode(mode: string): "image" | "video" | "audio" {
 /** 该模式是否为「图生」类（输入里带控制图 / 参考图）。 */
 export function modeUsesControlImage(mode: string): boolean {
   return defaultInputsForMode(mode).some((i) =>
-    ["image", "first-frame", "mask", "depth", "pose", "lineart", "edge"].includes(
-      i.type,
-    ),
+    [
+      "image",
+      "first-frame",
+      "mask",
+      "depth",
+      "pose",
+      "lineart",
+      "edge",
+    ].includes(i.type),
   );
 }
 
@@ -165,7 +174,8 @@ export function parseRemoteModeAdapters(raw: unknown): RemoteModeAdapter[] {
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
-    const mode = typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
+    const mode =
+      typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
     if (!mode || seen.has(mode)) continue;
     const inputs: Array<{ type: WorkshopInputType; field: string }> = [];
     if (Array.isArray(rec.inputs)) {
@@ -227,24 +237,35 @@ export function readFieldPath(payload: unknown, path: string): unknown {
  * （exposedParamsForMode + outputKindForMode），保证升级零破坏。
  */
 
-/** 模式契约的输入口类型（与画布落点编辑器的契约口同一套 id）。 */
+/** 模式契约的输入口类型（与画布落点编辑器的契约口同一套 id）。
+ *
+ *  label 一律取自 `~/lib/workflow-exposed-params` 的 `EXPOSED_PARAM_DISPLAY_LABEL`
+ *  —— 契约口清单会在三处露面（本编辑器、工作流库「工坊封装」、工作流库「画布
+ *  节点」的卡片列），各写一份字符串必然漂移（ISSUE #596：「尺寸」在一处带括号、
+ *  另一处不带，读起来像两个口）。这里的 type 只做「契约 id → 展示名」的取值。 */
 export const MODE_CONTRACT_INPUT_TYPES = [
-  { type: "prompt", label: "提示词" },
-  { type: "negative", label: "负向提示词" },
-  { type: "size", label: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）" },
-  { type: "duration", label: "时长" },
-  { type: "reference-image", label: "参考图" },
-  { type: "first-frame", label: "首帧图片" },
-  { type: "last-frame", label: "尾帧图片" },
+  { type: "prompt", label: EXPOSED_PARAM_DISPLAY_LABEL.prompt },
+  { type: "negative", label: EXPOSED_PARAM_DISPLAY_LABEL.negative },
+  { type: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size },
+  { type: "duration", label: EXPOSED_PARAM_DISPLAY_LABEL.duration },
+  {
+    type: "reference-image",
+    label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],
+  },
+  { type: "first-frame", label: EXPOSED_PARAM_DISPLAY_LABEL["first-frame"] },
+  { type: "last-frame", label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"] },
 ] as const;
 
-export type ModeContractInputType = (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
+export type ModeContractInputType =
+  (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
 
 const MODE_CONTRACT_INPUT_SET = new Set<string>(
   MODE_CONTRACT_INPUT_TYPES.map((t) => t.type),
 );
 
-export function isModeContractInputType(v: unknown): v is ModeContractInputType {
+export function isModeContractInputType(
+  v: unknown,
+): v is ModeContractInputType {
   return typeof v === "string" && MODE_CONTRACT_INPUT_SET.has(v);
 }
 
@@ -258,7 +279,8 @@ export function modeContractInputLabel(type: ModeContractInputType): string {
  *  与适配器侧的 WorkshopInputType 是**两套 id**，别混用：适配器口按接口请求体
  *  分得更细（契约的「尺寸」在适配器层拆成 aspect-ratio + megapixels + multiple），
  *  契约口是工坊对用户的统一口径（尺寸 / 参考图）。 */
-export type ModeContractInputId = ModeContractInputType | `reference-image-${number}`;
+export type ModeContractInputId =
+  ModeContractInputType | `reference-image-${number}`;
 
 export function isModeContractInputId(v: unknown): v is ModeContractInputId {
   if (typeof v !== "string") return false;
@@ -272,11 +294,12 @@ export function referenceImageSlotIndex(id: string): number {
   return m ? Number(m[1]) : 0;
 }
 
-/** 任意契约口 id 的展示名（带序号的参考图口显示为「参考图 2」，其余同基础口）。 */
+/** 任意契约口 id 的展示名（带序号的参考图口显示为「参考图 2」，其余同基础口）。
+ *
+ *  转发 `exposedParamDisplayLabel`：契约口清单的措辞只有那一份（ISSUE #596），
+ *  本模块不再自己拼字符串。 */
 export function modeContractInputIdLabel(id: ModeContractInputId): string {
-  const slot = referenceImageSlotIndex(id);
-  if (slot) return `${EXPOSED_PARAM_LABEL["reference-image"]} ${slot}`;
-  return modeContractInputLabel(id as ModeContractInputType);
+  return exposedParamDisplayLabel(id);
 }
 
 /** 下一个可追加的参考图口 id —— 参考图不设数量上限，每次追加下一个序号槽
@@ -325,7 +348,8 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
-    const mode = typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
+    const mode =
+      typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
     if (!mode || seen.has(mode)) continue;
     const rawInputs = Array.isArray(rec.inputs) ? rec.inputs : [];
     const inputs = rawInputs.filter((i): i is ModeContractInputId =>
@@ -343,24 +367,51 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
   return out;
 }
 
-/** 契约 → 封装状态派生用的口子清单（id / 展示名 / 工坊控件形态）。 */
-export function contractToStatusEntries(contract: ModeContract): Array<{
+/** 契约口清单的**统一形状** —— 工坊封装页与工作流库「画布节点」卡片列都读它。
+ *
+ *  两份视图看的必须是同一张清单：一份按内置契约（按模式）、一份按用户改过的
+ *  模式契约注册表。若各读各的，同一页面上两个页签会列出不同的口（ISSUE #596
+ *  的「对外参数显示不一致」就是这么来的）。 */
+export interface ContractEntryDisplay {
   id: string;
   label: string;
   control: "text" | "size" | "image" | "duration";
-}> {
+}
+
+/** 契约口 id → 工坊控件形态（尺寸是组合控件、时长是秒数选择、其余按图示）。 */
+function contractControlFor(id: string): ContractEntryDisplay["control"] {
+  if (id === "size") return "size";
+  if (id === "duration") return "duration";
+  if (id === "prompt" || id === "negative") return "text";
+  return "image";
+}
+
+/** **某一模式生效的契约口清单**：用户改过的模式用注册表里的口径，未改过的
+ *  回落内置默认。仓库里凡是「按模式列对外口」的地方都该经它取，别自己
+ *  调 `exposedParamsForMode` / 自己解析 `storedContracts`。 */
+export function modeContractEntries(
+  mode: string | null | undefined,
+  storedContracts?: readonly ModeContract[] | null,
+): ContractEntryDisplay[] {
+  const code = (mode ?? "").toUpperCase();
+  const stored = storedContracts?.find((c) => c.mode === code);
+  if (stored) return contractToStatusEntries(stored);
+  return exposedParamsForMode(mode).map((def) => ({
+    id: def.id,
+    label: def.label,
+    control: contractControlFor(def.id),
+  }));
+}
+
+/** 契约 → 封装状态派生用的口子清单（id / 展示名 / 工坊控件形态）。 */
+export function contractToStatusEntries(
+  contract: ModeContract,
+): ContractEntryDisplay[] {
   return contract.inputs.map((type) => ({
     id: type,
     // 带序号的参考图口展示为「参考图 2」（与 exposedParamsForMode 的命名一致）
     label: modeContractInputIdLabel(type),
-    control:
-      type === "size"
-        ? ("size" as const)
-        : type === "duration"
-          ? ("duration" as const)
-          : type === "prompt" || type === "negative"
-            ? ("text" as const)
-            : ("image" as const),
+    control: contractControlFor(type),
   }));
 }
 

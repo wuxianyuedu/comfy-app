@@ -4,7 +4,15 @@ import { DEFAULT_SIZE_SPEC, type SizeSpec } from "@/lib/size-presets";
 
 /* ── Canvas node model ── */
 
-export type NodeKind = "image" | "video" | "script" | "agent" | "workflow" | "text" | "picture" | "movie";
+export type NodeKind =
+  | "image"
+  | "video"
+  | "script"
+  | "agent"
+  | "workflow"
+  | "text"
+  | "picture"
+  | "movie";
 
 /* Which parameters a given model exposes in its node UI.
  * Different models → different param sets.  The node renders only the params
@@ -13,20 +21,20 @@ export type NodeKind = "image" | "video" | "script" | "agent" | "workflow" | "te
 export interface ModelParamSchema {
   prompt?: boolean;
   negative?: boolean;
-  size?: boolean;       // image resolution OR video resolution
-  ratio?: boolean;      // aspect ratio chip
-  duration?: boolean;   // video length in seconds
+  size?: boolean; // image resolution OR video resolution
+  ratio?: boolean; // aspect ratio chip
+  duration?: boolean; // video length in seconds
   steps?: boolean;
   cfg?: boolean;
   seed?: boolean;
-  frames?: boolean;     // video
-  fps?: boolean;        // video
+  frames?: boolean; // video
+  fps?: boolean; // video
 }
 
 export interface ModelPreset {
   id: string;
   name: string;
-  badge?: string;       // short tag shown next to name (e.g. "推荐")
+  badge?: string; // short tag shown next to name (e.g. "推荐")
   params: ModelParamSchema;
 }
 
@@ -43,10 +51,54 @@ export const MODEL_REGISTRY: Record<NodeKind, ModelRegistry> = {
   image: {
     chainable: true,
     image: [
-      { id: "seedream45", name: "SeeDream 4.5", badge: "推荐", params: { prompt: true, negative: true, size: true, steps: true, cfg: true, seed: true } },
-      { id: "sdxl",       name: "SDXL",         params: { prompt: true, negative: true, size: true, steps: true, cfg: true, seed: true } },
-      { id: "flux1",      name: "Flux.1",       params: { prompt: true, negative: true, size: true, steps: true, cfg: true, seed: true } },
-      { id: "kandinsky",  name: "Kandinsky 3",  params: { prompt: true, negative: true, size: true, steps: true, seed: true } },
+      {
+        id: "seedream45",
+        name: "SeeDream 4.5",
+        badge: "推荐",
+        params: {
+          prompt: true,
+          negative: true,
+          size: true,
+          steps: true,
+          cfg: true,
+          seed: true,
+        },
+      },
+      {
+        id: "sdxl",
+        name: "SDXL",
+        params: {
+          prompt: true,
+          negative: true,
+          size: true,
+          steps: true,
+          cfg: true,
+          seed: true,
+        },
+      },
+      {
+        id: "flux1",
+        name: "Flux.1",
+        params: {
+          prompt: true,
+          negative: true,
+          size: true,
+          steps: true,
+          cfg: true,
+          seed: true,
+        },
+      },
+      {
+        id: "kandinsky",
+        name: "Kandinsky 3",
+        params: {
+          prompt: true,
+          negative: true,
+          size: true,
+          steps: true,
+          seed: true,
+        },
+      },
     ],
     video: [],
     text: [],
@@ -55,10 +107,50 @@ export const MODEL_REGISTRY: Record<NodeKind, ModelRegistry> = {
     chainable: false,
     image: [],
     video: [
-      { id: "kling30",  name: "Kling 3.0 Omni", badge: "热门", params: { prompt: true, negative: true, ratio: true, duration: true, size: true } },
-      { id: "wan22",    name: "Wan 2.2 I2V 14B",           params: { prompt: true, negative: true, ratio: true, frames: true, fps: true, steps: true, cfg: true, seed: true } },
-      { id: "hunyuan",  name: "HunyuanVideo",               params: { prompt: true, negative: true, ratio: true, duration: true, steps: true, cfg: true, seed: true } },
-      { id: "cogvideo", name: "CogVideoX 5B",               params: { prompt: true, ratio: true, duration: true } },
+      {
+        id: "kling30",
+        name: "Kling 3.0 Omni",
+        badge: "热门",
+        params: {
+          prompt: true,
+          negative: true,
+          ratio: true,
+          duration: true,
+          size: true,
+        },
+      },
+      {
+        id: "wan22",
+        name: "Wan 2.2 I2V 14B",
+        params: {
+          prompt: true,
+          negative: true,
+          ratio: true,
+          frames: true,
+          fps: true,
+          steps: true,
+          cfg: true,
+          seed: true,
+        },
+      },
+      {
+        id: "hunyuan",
+        name: "HunyuanVideo",
+        params: {
+          prompt: true,
+          negative: true,
+          ratio: true,
+          duration: true,
+          steps: true,
+          cfg: true,
+          seed: true,
+        },
+      },
+      {
+        id: "cogvideo",
+        name: "CogVideoX 5B",
+        params: { prompt: true, ratio: true, duration: true },
+      },
     ],
     text: [],
   },
@@ -67,10 +159,10 @@ export const MODEL_REGISTRY: Record<NodeKind, ModelRegistry> = {
     image: [],
     video: [],
     text: [
-      { id: "gpt55",    name: "GPT-5.5", badge: "推荐", params: { prompt: true } },
-      { id: "claude45", name: "Claude 4.5",            params: { prompt: true } },
-      { id: "deepseek", name: "DeepSeek V3",           params: { prompt: true } },
-      { id: "qwen",     name: "Qwen 3",                params: { prompt: true } },
+      { id: "gpt55", name: "GPT-5.5", badge: "推荐", params: { prompt: true } },
+      { id: "claude45", name: "Claude 4.5", params: { prompt: true } },
+      { id: "deepseek", name: "DeepSeek V3", params: { prompt: true } },
+      { id: "qwen", name: "Qwen 3", params: { prompt: true } },
     ],
   },
   agent: {
@@ -115,14 +207,25 @@ export const MODEL_REGISTRY: Record<NodeKind, ModelRegistry> = {
 /** First (default) model id for a given kind. */
 export function defaultModelFor(kind: NodeKind): string {
   const reg = MODEL_REGISTRY[kind];
-  const list = reg.image.length ? reg.image : reg.video.length ? reg.video : reg.text;
+  const list = reg.image.length
+    ? reg.image
+    : reg.video.length
+      ? reg.video
+      : reg.text;
   return list[0]?.id ?? "";
 }
 
 /** Resolve a model preset by id; falls back to the first preset of the kind. */
-export function getModelPreset(kind: NodeKind, modelId?: string): ModelPreset | null {
+export function getModelPreset(
+  kind: NodeKind,
+  modelId?: string,
+): ModelPreset | null {
   const reg = MODEL_REGISTRY[kind];
-  const list = reg.image.length ? reg.image : reg.video.length ? reg.video : reg.text;
+  const list = reg.image.length
+    ? reg.image
+    : reg.video.length
+      ? reg.video
+      : reg.text;
   if (!list.length) return null;
   return list.find((item) => item.id === modelId) ?? list[0] ?? null;
 }
@@ -167,7 +270,7 @@ export interface StrictCanvasNodeData {
   mode: string; // image: txt2img | img2img ; video: t2v | i2v | flf
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见 `lib/size-presets`）。
    *
-   *  下发内置工作流时才折算成 "WxH"（`sizeSpecToWxH`）；工作流节点的尺寸本来就由
+   *  发往只认字符串的老接口时才折算成 "WxH"（`sizeSpecToWxH`）；工作流节点的尺寸本来就由
    *  它自己暴露的尺寸口决定（画布上的组合控件走同一套尺寸表），这个字段只服务
    *  「没选工作流」的内置通道。
    *
@@ -222,7 +325,13 @@ export interface StrictCanvasNodeData {
     prompt: string;
     negative?: string;
     kind?: "image" | "video";
-    params?: { steps?: number; cfg?: number; sampler?: string; scheduler?: string; size?: string };
+    params?: {
+      steps?: number;
+      cfg?: number;
+      sampler?: string;
+      scheduler?: string;
+      size?: string;
+    };
   };
 
   // workflow node (user-uploaded ComfyUI workflow)
@@ -255,7 +364,6 @@ export interface StrictCanvasNodeData {
   mediaPath?: string;
   /** Discriminator: picture → image, movie → video. */
   mediaKind?: "image" | "video";
-
 }
 
 /** ReactFlow 要求 `data` 可索引；这是**唯一**允许挂索引签名的地方。 */
@@ -284,7 +392,7 @@ export type CanvasNodeType =
 
 /** 类型守卫：是否是带 CanvasNodeData 的逻辑节点（排除 workflowArdot 纯视觉节点）。 */
 export function isCanvasNode(
-  node: CanvasNodeType
+  node: CanvasNodeType,
 ): node is Extract<CanvasNodeType, { type: "canvasNode" }> {
   return node.type === "canvasNode";
 }
@@ -292,7 +400,7 @@ export function isCanvasNode(
 /* ── Sizes ──
  *  尺寸不再有「画布专用候选表」：全项目只有两种表达（比例 + 分辨率 /
  *  比例 + 百万像素 + 倍数），档位与换算都在 `lib/size-presets`。节点数据里存的是
- *  尺寸表达本身（`CanvasNodeData.size`），下发内置工作流时再折算成它认的 "WxH"。 */
+ *  尺寸表达本身（`CanvasNodeData.size`），由工作流封装层逐端口派值。 */
 
 /* ── Node palette metadata ── */
 export const NODE_META: Record<
@@ -306,22 +414,70 @@ export const NODE_META: Record<
     typeChar: string;
   }
 > = {
-  image:    { label: "生图",         icon: "image",   color: "#8B5CF6", desc: "文生图 / 图生图",     typeChar: "I" },
-  video:    { label: "生视频",       icon: "film",    color: "#22D3EE", desc: "文生视频 / 图生视频 / 首尾帧", typeChar: "V" },
-  script:   { label: "生成剧本",     icon: "filetext",color: "#F59E0B", desc: "一句话扩写为分镜剧本", typeChar: "T" },
-  agent:    { label: "Agent 模式",   icon: "bot",     color: "#34D399", desc: "多轮对话引导创作",     typeChar: "A" },
-  workflow: { label: "自定义工作流", icon: "puzzle",  color: "#A78BFA", desc: "运行你上传的 ComfyUI 工作流", typeChar: "W" },
-  text:    { label: "文本", icon: "filetext", color: "#FBBF24", desc: "输入提示词 / 参考文字", typeChar: "T" },
-  picture: { label: "图片", icon: "image",    color: "#FB7185", desc: "上传图片作为参考图",     typeChar: "P" },
-  movie:   { label: "视频", icon: "film",     color: "#818CF8", desc: "上传视频作为参考帧",     typeChar: "V" },
+  image: {
+    label: "生图",
+    icon: "image",
+    color: "#8B5CF6",
+    desc: "文生图 / 图生图",
+    typeChar: "I",
+  },
+  video: {
+    label: "生视频",
+    icon: "film",
+    color: "#22D3EE",
+    desc: "文生视频 / 图生视频 / 首尾帧",
+    typeChar: "V",
+  },
+  script: {
+    label: "生成剧本",
+    icon: "filetext",
+    color: "#F59E0B",
+    desc: "一句话扩写为分镜剧本",
+    typeChar: "T",
+  },
+  agent: {
+    label: "Agent 模式",
+    icon: "bot",
+    color: "#34D399",
+    desc: "多轮对话引导创作",
+    typeChar: "A",
+  },
+  workflow: {
+    label: "自定义工作流",
+    icon: "puzzle",
+    color: "#A78BFA",
+    desc: "运行你上传的 ComfyUI 工作流",
+    typeChar: "W",
+  },
+  text: {
+    label: "文本",
+    icon: "filetext",
+    color: "#FBBF24",
+    desc: "输入提示词 / 参考文字",
+    typeChar: "T",
+  },
+  picture: {
+    label: "图片",
+    icon: "image",
+    color: "#FB7185",
+    desc: "上传图片作为参考图",
+    typeChar: "P",
+  },
+  movie: {
+    label: "视频",
+    icon: "film",
+    color: "#818CF8",
+    desc: "上传视频作为参考帧",
+    typeChar: "V",
+  },
 };
 
 /** Human-readable labels for the status badge shown on the node header + result card. */
 export const STATUS_LABEL: Record<CanvasNodeData["status"], string> = {
-  idle:    "待开始",
+  idle: "待开始",
   running: "生成中…",
-  done:    "运行后生成",
-  error:   "生成失败",
+  done: "运行后生成",
+  error: "生成失败",
 };
 
 export const CANVAS_STORAGE_KEY = "comfyapp.canvas.v1";

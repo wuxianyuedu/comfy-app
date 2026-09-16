@@ -135,7 +135,9 @@ describe("workflow-run-store", () => {
       startedAt: 1,
     });
     appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" });
-    expect(appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" })).toHaveLength(1);
+    expect(
+      appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" }),
+    ).toHaveLength(1);
 
     failWorkflowRun("t1", "未找到生成结果");
 
@@ -156,7 +158,11 @@ describe("workflow-run-store", () => {
       taskType: "t",
       startedAt: 1,
     });
-    appendWorkflowRunLog("t1", { t: 100, level: "error", msg: "✗ 生成失败：未找到生成结果" });
+    appendWorkflowRunLog("t1", {
+      t: 100,
+      level: "error",
+      msg: "✗ 生成失败：未找到生成结果",
+    });
     failWorkflowRun("t1", "未找到生成结果");
     expect(getWorkflowRun("t1")?.logs).toHaveLength(1);
   });

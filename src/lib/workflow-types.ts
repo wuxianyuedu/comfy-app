@@ -12,9 +12,9 @@
 
 /* ── 分类枚举 ── */
 export const WORKFLOW_CATEGORIES = [
-  "image",    // 图像侧（静态）
-  "video",    // 视频侧（动态）
-  "audio",    // 音频 / 语音侧
+  "image", // 图像侧（静态）
+  "video", // 视频侧（动态）
+  "audio", // 音频 / 语音侧
 ] as const;
 
 export type WorkflowCategory = (typeof WORKFLOW_CATEGORIES)[number];
@@ -195,16 +195,8 @@ export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
     label: "首尾帧生视频",
     category: "video",
     subCategory: "生成",
-    description: "Wan/LTX/Bernini 用",
-    isGenerative: true,
-  },
-  {
-    code: "FL2V",
-    fullName: "First-Last-Frame-to-Video",
-    label: "首尾帧生视频",
-    category: "video",
-    subCategory: "生成",
-    description: "同 FLF2V（简写）",
+    description:
+      "Wan/LTX/Bernini 用（首尾帧只此一个 code，旧 FL2V 已归一至此）",
     isGenerative: true,
   },
   {
@@ -394,36 +386,54 @@ export const ALL_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 /* ── 查找工具 ── */
 
 /** 按 code 查找 */
-export function getWorkflowType(code: string): WorkflowTypeDefinition | undefined {
-  return ALL_WORKFLOW_TYPES.find((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === code);
+export function getWorkflowType(
+  code: string,
+): WorkflowTypeDefinition | undefined {
+  return ALL_WORKFLOW_TYPES.find(
+    (ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === code,
+  );
 }
 
 /** 按分类查找 */
-export function getWorkflowTypesByCategory(cat: WorkflowCategory): WorkflowTypeDefinition[] {
-  return ALL_WORKFLOW_TYPES.filter((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat);
+export function getWorkflowTypesByCategory(
+  cat: WorkflowCategory,
+): WorkflowTypeDefinition[] {
+  return ALL_WORKFLOW_TYPES.filter(
+    (ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat,
+  );
 }
 
 /** 获取所有合法的 taskType code 集合（用于校验 DB 字段） */
 export const VALID_TASK_TYPE_CODES = new Set<string>(
-  ALL_WORKFLOW_TYPES.map((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code)
+  ALL_WORKFLOW_TYPES.map((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code),
 );
 
 /** 大小写不敏感匹配用的规范 code 表（lower → 规范 code）。
  *  规范 code 本身区分大小写（如 Inpaint / Upscale 为混合大小写），
  *  故以 toLowerCase 作键，命中时回写规范 code，保留规范大小写。 */
 const CODE_BY_LOWER = new Map<string, string>(
-  ALL_WORKFLOW_TYPES.map((def) => [def.code.toLowerCase(), def.code])
+  ALL_WORKFLOW_TYPES.map((def) => [def.code.toLowerCase(), def.code]),
 );
+
+/** 已删除的规范 code → 现存 code 的别名表（去重后必须留一份迁移判据）。
+ *
+ *  「首尾帧生视频」曾同时存在 FLF2V 与 FL2V 两个同义 code，面板上出现两条同名
+ *  条目，已删除 FL2V 只留 FLF2V（见别名表下方归一）。库里若已按旧 code 落过
+ *  taskType / modes，必须在读取侧归一到 FLF2V，否则该工作流会被判成「未知模式」
+ *  而丢掉模式端口。 */
+const RETIRED_CODE_ALIASES = new Map<string, string>([["fl2v", "FLF2V"]]);
 
 /** 将用户/前端输入的任务类型码归一到规范 code（大小写不敏感）。
  *
  *  数据自始即使用规范 code 写入，此函数不再承担历史旧值（TXT2IMG 等）的
- *  映射兼容——只把输入统一成规范大小写；非规范的自定义类型按原样透传。
+ *  映射兼容——只把输入统一成规范大小写；已删 code 按 RETIRED_CODE_ALIASES
+ *  归一到现存 code；非规范的自定义类型按原样透传。
  */
 export function normalizeTaskType(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return trimmed;
-  return CODE_BY_LOWER.get(trimmed.toLowerCase()) ?? trimmed;
+  const lower = trimmed.toLowerCase();
+  return CODE_BY_LOWER.get(lower) ?? RETIRED_CODE_ALIASES.get(lower) ?? trimmed;
 }
 
 /** 一个工作流「当前生效的模式」—— 三处消费方（画布节点 / 工作流库 / 编辑器）
@@ -440,7 +450,8 @@ export function resolveWorkflowMode(args: {
     (mode): mode is string => typeof mode === "string" && mode.length > 0,
   );
   const declared = args.defaultMode;
-  if (declared && (modes.length === 0 || modes.includes(declared))) return declared;
+  if (declared && (modes.length === 0 || modes.includes(declared)))
+    return declared;
   if (modes.length > 0) return modes[0]!;
   if (typeof args.taskType === "string" && args.taskType) {
     return normalizeTaskType(args.taskType);
@@ -449,18 +460,24 @@ export function resolveWorkflowMode(args: {
 }
 
 /** 根据图中节点自动推断工作流类型 */
-export function inferWorkflowTypeFromGraph(graph: Record<string, unknown>): string {
+export function inferWorkflowTypeFromGraph(
+  graph: Record<string, unknown>,
+): string {
   const nodeClasses = new Set(
     Object.values(graph)
       .map((n) => {
-        const classType = (n as { class_type?: string } | null | undefined)?.class_type;
+        const classType = (n as { class_type?: string } | null | undefined)
+          ?.class_type;
         return typeof classType === "string" ? classType : "";
       })
-      .filter(Boolean)
+      .filter(Boolean),
   );
 
   // Video detection
-  if (nodeClasses.has("WanVideoSampler") || nodeClasses.has("VideoLinearScaleUniform")) {
+  if (
+    nodeClasses.has("WanVideoSampler") ||
+    nodeClasses.has("VideoLinearScaleUniform")
+  ) {
     if (nodeClasses.has("LoadImage")) return "I2V";
     if (nodeClasses.has("WanVideoImageToVideoEncode")) return "TI2V";
     return "T2V";
@@ -468,20 +485,28 @@ export function inferWorkflowTypeFromGraph(graph: Record<string, unknown>): stri
 
   // Image-to-image
   if (nodeClasses.has("VAEEncode") && nodeClasses.has("LoadImage")) {
-    if (nodeClasses.has("VAEInpaint") || nodeClasses.has("SetLatentNoiseMask")) return "Inpaint";
+    if (nodeClasses.has("VAEInpaint") || nodeClasses.has("SetLatentNoiseMask"))
+      return "Inpaint";
     return "I2I";
   }
 
   // ControlNet variants
   if (nodeClasses.has("ControlNetApply")) {
-    if (nodeClasses.has("CannyEdgePreprocessor") || nodeClasses.has("CannyEdgeDetection")) return "E2I";
+    if (
+      nodeClasses.has("CannyEdgePreprocessor") ||
+      nodeClasses.has("CannyEdgeDetection")
+    )
+      return "E2I";
     if (nodeClasses.has("DepthAnythingPreprocessor")) return "D2I";
     if (nodeClasses.has("OpenPosePreprocessor")) return "P2I";
     return "R2I";
   }
 
   // Upscale
-  if (nodeClasses.has("ImageUpscaleWithModel") || nodeClasses.has("UpscaleModelLoader")) {
+  if (
+    nodeClasses.has("ImageUpscaleWithModel") ||
+    nodeClasses.has("UpscaleModelLoader")
+  ) {
     return "Upscale";
   }
 

@@ -5,9 +5,13 @@
 // 渲染「对话消息区 + 工作过程面板 + 输入框」。无业务逻辑。
 import React from "react";
 import { Icon } from "@/components/ui/icon";
-import type { WorkshopAgentController, AgentToolRun } from "./hooks/use-workshop-agent";
+import type {
+  WorkshopAgentController,
+  AgentToolRun,
+} from "./hooks/use-workshop-agent";
 
-const GREETING = "你好！我是工坊的创作指挥助手。你可以直接用自然语言告诉我想做什么，我会帮你指挥整个创作流程。\n\n比如：\n• 「帮我写一个海边重逢的温暖短片剧本」\n• 「在现有剧本基础上提取主要角色」\n• 「把分镜规划出来」";
+const GREETING =
+  "你好！我是工坊的创作指挥助手。你可以直接用自然语言告诉我想做什么，我会帮你指挥整个创作流程。\n\n比如：\n• 「帮我写一个海边重逢的温暖短片剧本」\n• 「在现有剧本基础上提取主要角色」\n• 「把分镜规划出来」";
 
 const TOOL_STATUS_LABEL: Record<AgentToolRun["status"], string> = {
   running: "执行中…",
@@ -26,7 +30,17 @@ export function AgentOverlay({
 }: {
   controller: WorkshopAgentController;
 }) {
-  const { open, messages, input, busy, error, toolRuns, closeAgent, setInput, send } = controller;
+  const {
+    open,
+    messages,
+    input,
+    busy,
+    error,
+    toolRuns,
+    closeAgent,
+    setInput,
+    send,
+  } = controller;
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -37,14 +51,15 @@ export function AgentOverlay({
 
   if (!open) return null;
 
-  const visibleMessages = messages.length === 0
-    ? [{ id: "greeting", role: "assistant" as const, content: GREETING }]
-    : messages;
+  const visibleMessages =
+    messages.length === 0
+      ? [{ id: "greeting", role: "assistant" as const, content: GREETING }]
+      : messages;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border border-border bg-panel-deep/95 shadow-2xl backdrop-blur-xl">
+    <div className="border-border bg-panel-deep/95 fixed right-6 bottom-6 z-50 flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+      <div className="border-border flex items-center gap-2 border-b px-4 py-3">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
           <Icon name="bot" size={13} className="text-white" />
         </span>
@@ -76,7 +91,11 @@ export function AgentOverlay({
               <div key={run.id} className="flex items-center gap-2">
                 <span
                   className={`h-1.5 w-1.5 shrink-0 rounded-full ${TOOL_STATUS_COLOR[run.status]}`}
-                  style={run.status === "running" ? { animation: "pulse 1.2s ease-in-out infinite" } : undefined}
+                  style={
+                    run.status === "running"
+                      ? { animation: "pulse 1.2s ease-in-out infinite" }
+                      : undefined
+                  }
                 />
                 <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px]">
                   {run.summary}
@@ -99,7 +118,7 @@ export function AgentOverlay({
           if (msg.role === "user") {
             return (
               <div key={msg.id} className="flex justify-end">
-                <div className="bg-violet-500/90 max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed text-white">
+                <div className="max-w-[85%] rounded-2xl bg-violet-500/90 px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-white">
                   {msg.content}
                 </div>
               </div>
@@ -108,7 +127,7 @@ export function AgentOverlay({
           if (msg.role === "tool-run") {
             return (
               <div key={msg.id} className="flex justify-start">
-                <div className="border-border/60 bg-bg/80 max-w-[85%] rounded-xl border px-3 py-1.5 text-[11px] text-muted-foreground">
+                <div className="border-border/60 bg-bg/80 text-muted-foreground max-w-[85%] rounded-xl border px-3 py-1.5 text-[11px]">
                   ⚙ {msg.run.summary}
                 </div>
               </div>
@@ -128,13 +147,13 @@ export function AgentOverlay({
           <div className="flex justify-start">
             <div className="bg-subtle rounded-2xl px-3 py-2.5">
               <span className="inline-flex gap-1">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
+                <span className="bg-muted-foreground h-1.5 w-1.5 animate-pulse rounded-full" />
                 <span
-                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground"
+                  className="bg-muted-foreground h-1.5 w-1.5 animate-pulse rounded-full"
                   style={{ animationDelay: "0.15s" }}
                 />
                 <span
-                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground"
+                  className="bg-muted-foreground h-1.5 w-1.5 animate-pulse rounded-full"
                   style={{ animationDelay: "0.3s" }}
                 />
               </span>
@@ -157,7 +176,8 @@ export function AgentOverlay({
           onChange={(event) => {
             setInput(event.target.value);
             event.target.style.height = "auto";
-            event.target.style.height = Math.min(event.target.scrollHeight, 80) + "px";
+            event.target.style.height =
+              Math.min(event.target.scrollHeight, 80) + "px";
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -173,7 +193,7 @@ export function AgentOverlay({
           type="button"
           onClick={() => void send()}
           disabled={!input.trim() || busy}
-          className="bg-violet-500 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-violet-400 disabled:opacity-30"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500 text-white transition-colors hover:bg-violet-400 disabled:opacity-30"
           aria-label="发送"
         >
           {busy ? (
@@ -188,16 +208,12 @@ export function AgentOverlay({
 }
 
 /** 触发 Agent 浮层打开的浮动按钮。 */
-export function AgentFab({
-  onOpen,
-}: {
-  onOpen: () => void;
-}) {
+export function AgentFab({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="fixed bottom-8 right-6 z-40 flex items-center gap-2 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
+      className="fixed right-6 bottom-8 z-40 flex items-center gap-2 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
       aria-label="打开创作指挥 Agent"
     >
       <Icon name="bot" size={15} />

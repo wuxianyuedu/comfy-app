@@ -83,7 +83,9 @@ describe("useLLMConfig 播种：本地/远端候选拆出", () => {
 
   it("热重挂（配置已在查询缓存）仍应拆出 local/remote", async () => {
     const qc = createTestQueryClient();
-    const first = renderHook(() => useLLMConfig(), { wrapper: makeWrapper(qc) });
+    const first = renderHook(() => useLLMConfig(), {
+      wrapper: makeWrapper(qc),
+    });
     await waitFor(() =>
       expect(first.result.current.localModels.length).toBeGreaterThan(0),
     );

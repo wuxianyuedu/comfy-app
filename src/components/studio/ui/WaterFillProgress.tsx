@@ -60,7 +60,7 @@ export function WaterFillProgress({
       </div>
       {/* 百分比：永远居中（在整张图之上，无论水位多高都可见）。 */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[28px] font-semibold tabular-nums leading-none text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
+        <span className="text-[28px] leading-none font-semibold text-white tabular-nums drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
           {Math.round(pct)}%
         </span>
       </div>

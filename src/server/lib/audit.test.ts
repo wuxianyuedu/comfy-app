@@ -27,8 +27,13 @@ vi.mock("~/server/db", () => ({
     })),
   },
 }));
-vi.mock("~/server/lib/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: loggerErrorMock },
+vi.mock("~/lib/core/logger", () => ({
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: loggerErrorMock,
+  },
 }));
 
 import { audit } from "~/server/lib/audit";

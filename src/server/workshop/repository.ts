@@ -27,11 +27,15 @@ const VALID_STAGES: readonly PipelineStageId[] = [
 ];
 
 export function isStage(v: unknown): v is PipelineStageId {
-  return typeof v === "string" && (VALID_STAGES as readonly string[]).includes(v);
+  return (
+    typeof v === "string" && (VALID_STAGES as readonly string[]).includes(v)
+  );
 }
 
 /** 纯函数：内存状态 → 可写行（不含 id / 时间戳），便于单测。 */
-export function stateToRow(state: WorkshopSessionState): Partial<WorkshopSessionInsert> {
+export function stateToRow(
+  state: WorkshopSessionState,
+): Partial<WorkshopSessionInsert> {
   return {
     idea: state.idea,
     title: state.meta.title,
@@ -58,7 +62,9 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
       scriptMarkdown: row.scriptMarkdown,
     },
     scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters) ? (row.characters as Character[]) : [],
+    characters: Array.isArray(row.characters)
+      ? (row.characters as Character[])
+      : [],
     shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
     stage: isStage(row.stage) ? row.stage : "script",
   };
@@ -92,7 +98,9 @@ export interface CreateSessionInput {
   userId?: string | null;
 }
 
-export async function createSession(input: CreateSessionInput = {}): Promise<string> {
+export async function createSession(
+  input: CreateSessionInput = {},
+): Promise<string> {
   const id = createId();
   const insert: WorkshopSessionInsert = {
     id,
@@ -107,7 +115,9 @@ export async function createSession(input: CreateSessionInput = {}): Promise<str
   return id;
 }
 
-export async function getSession(id: string): Promise<WorkshopSessionState | null> {
+export async function getSession(
+  id: string,
+): Promise<WorkshopSessionState | null> {
   const rows = await workshopDb
     .select()
     .from(workshopSession)
@@ -124,7 +134,10 @@ export async function listSessions(): Promise<WorkshopSessionSummary[]> {
   return rows.map(summarize);
 }
 
-export async function updateState(id: string, state: WorkshopSessionState): Promise<void> {
+export async function updateState(
+  id: string,
+  state: WorkshopSessionState,
+): Promise<void> {
   await workshopDb
     .update(workshopSession)
     .set(stateToRow(state))

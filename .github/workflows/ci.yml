@@ -46,10 +46,6 @@ jobs:
       # 说明：ORM 已由 Prisma 迁到 Drizzle（better-sqlite3），`prisma generate`
       # 步骤已删除——它在本仓库既不存在也必然失败。
 
-      # 说明：format:check（prettier）仍未纳入门禁——全库 361 个文件未过 prettier，
-      # 一次性格式化是与本次门禁对齐无关的大面积噪声 diff（且会与 §13.7 的
-      # 「禁止无关全文件变更」冲突）。待基线整改后单独接入。
-
       - name: Branch guard (PR 必须来自分支,不来自 master)
         # master 只接受「分支开发 → PR → 合并」(规范 13.6 / ISSUE #492)。
         # 本地门槛在 .githooks/pre-commit,但 --no-verify 或未启用钩子的检出可以绕过;
@@ -129,6 +125,12 @@ jobs:
         # 函数长度（规范 §12.13 / ISSUE #536）：超过 400 行的函数按文件记账，
         # 棘轮只许降不许升。文件行数由 R5 管、函数没人管，于是 2186 行的单函数
         # 一路合法存在。
+        #
+        # ISSUE #570 第 7 项补齐另一半（规范 §12.13.2）：**无名字的块体**
+        # （IIFE / 回调 / 闭包参数）与跨行签名的具名函数同受约束 —— 此前
+        # 「把 300 行塞进 IIFE 里」能整条绕过本门禁（真实实例：lifecycle.ts 的
+        # ensureComfyUiReady 里挂了 288 行 IIFE）。基线与脚本各带判据版本，
+        # 棘轮不许被静默放宽。
         run: node scripts/check-function-length.cjs --strict
 
       - name: Rust function length ratchet
@@ -137,6 +139,14 @@ jobs:
         # 协议 / sidecar 编排，没有任何机器信号。阈值 120（Rust 是结构化编排，
         # 自然长度比 TSX 短），按文件记账走棘轮。
         run: node scripts/check-rust-function-length.cjs --strict
+
+      - name: Module circular dependencies ratchet
+        # 模块循环依赖（规范 §12.7 / ISSUE #574）：`src/lib` 内曾有 2 组真实环
+        # （executor 家族 4 文件互相递归、comfyui 状态探测 3 文件成环），此前只靠
+        # executor.ts 的一句注释「加载期是安全的」维持、**没有任何测试**。环的症状
+        # 是「import 顺序变了就 undefined is not a function」，排查成本极高，因此
+        # 把「无环」做成棘轮：新增环即失败；消除一个必须 --update 收紧基线。
+        run: node scripts/check-circular-deps.cjs --strict
 
       - name: App port cross-language consistency
         # 端口推导四语言一致性（规范 §1.1 / ISSUE #489 缺陷 4）：四侧读同一份
@@ -158,6 +168,50 @@ jobs:
       - name: UI/Logic separation ratchet
         # 棘轮只许降不许升（规范 17）：新增违规失败；治理后未收紧基线也失败
         run: node scripts/check-ui-logic-separation.cjs --strict
+
+      - name: lib Node-only declarations
+        # `src/lib` 的 Node-only 声明与可达性（规范 §18.4 / ISSUE #572 第 1 项）。
+        # 三套写法（.server.ts / server-only / 都没有）并存了很久，而「都没有」
+        # 那一类真的出过整页 500：log-session-scope 顶层 node:fs 被客户端组件
+        # 引到，Turbopack 报 does not support external modules（ISSUE #317）。
+        # 判据走依赖图，不用「扫到 fs 就要求 server-only」——后者会误伤纯 Node
+        # 宿主（kill-process-tree / llm-secrets，它们的入口是一句 throw，加上去
+        # scripts/*.mjs 的启动编排直接崩）。
+        run: pnpm exec vitest run tests/lib-node-only-declarations.test.ts
+
+      - name: Prettier format ratchet
+        # 格式门禁（规范 §13.5 / ISSUE #575 第 9 项）：`format:check` 长期是唯一
+        # 没进门禁的既有质量命令 —— 全库 576 个文件未过 prettier，一次性 --write
+        # 会产生与本次改动无关的全文件 diff（违反 §13.7）。判据改为**基线 +
+        # 只许下降**：新增脏文件即失败；存量修掉后必须 --update 收紧（CI 用
+        # --strict，未收紧也失败）——否则「等基线整改完再接入」永远不会发生。
+        run: node scripts/check-format.cjs --strict
+
+      - name: Reformat-only commit guard
+        # 格式化提交与行为改动分离（规范 §13.5 / ISSUE #575 第 9 项）。
+        # 格式棘轮只判「文件干不干净」，管不住「顺手全库 format:write」——那会把
+        # 一次真实改动埋在几百个文件的重排里，`git blame` 当场失效。这条判**提交
+        # 形态**：改动若「过一遍 prettier 就变成另一种写法」即视为纯格式化，
+        # 一次提交里这种文件 ≥ 10 个即失败。squash 合并后 master 上只剩一个提交，
+        # 所以本地不拆就再没机会补 —— CI 必须复核一次。
+        run: node scripts/check-reformat-only.cjs
+
+      - name: Core spine single source
+        # core 骨架三处「唯一事实源」（ISSUE #568）：日志只有一条通道
+        # （core/logger 是 pino 薄封装、服务端库代码禁直接 console.*）、
+        # 仓储只有一种取法（container 已移除）、config 不再承诺「集中配置」。
+        # 这三条此前**只写在注释里**，而注释与现状恰好相反（容器只有 2 个调用方、
+        # 30+ 处直接读 process.env）—— 于是「照着注释写」的人会再多一条口径。
+        run: pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+
+      - name: Dead export ratchet
+        # `src/lib` 的零消费值导出（规范 §12.16 / ISSUE #573 第 9 项）。
+        # §12.15 给了「死代码该接线还是该删」的口径，但它只有口径、没有判据 ——
+        # 那批 `Result` / 7 个零 `new` 调用点的错误类 / `eventBus` 全是人工读出来
+        # 的。判据只扫 `src/lib/**` 且只认**值导出**（`type` / `interface` 不看：
+        # 「导出但零外部引用」的 566 个清单里 90% 是同文件内使用的 props 类型，
+        # 纳入只会把判据变成噪音），按符号记棘轮、只许降不许升。
+        run: node scripts/check-dead-exports.cjs --strict
 
       - name: Coverage
         # 覆盖率棘轮（vitest.config.ts）：middleware/lib 目录按真实水平设硬门槛

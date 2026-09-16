@@ -32,7 +32,10 @@ export function CanvasToolbar({
       <button className={ghostTool} onClick={onExport}>
         导出 JSON
       </button>
-      <button className={ghostTool + " hover:text-red-700 dark:text-red-300"} onClick={onClear}>
+      <button
+        className={ghostTool + " hover:text-red-700 dark:text-red-300"}
+        onClick={onClear}
+      >
         清空画布
       </button>
     </div>

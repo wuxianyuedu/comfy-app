@@ -4,19 +4,25 @@
  * wf-editor-nodes.tsx (WorkflowGroupNode / WorkflowIoPortNode / WorkflowNoteNode +
  * workflowNodeTypes / workflowEdgeTypes + shared layout constants).
  * Originally inside WorkflowCanvasEditor.tsx. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-  useNodesState, useEdgesState, useReactFlow,
-  type Node, type Edge,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  type Node,
+  type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "@/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
-import type { WorkflowDetail,
-  WorkflowIOParam,
-} from "../workflow-types";
-import { buildEdges,
-} from "../workflow-utils";
+import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
+import { buildEdges } from "../workflow-utils";
 import { useMiniMapJump } from "../shared/useMiniMapJump";
 import {
   useCanvasSettings,
@@ -43,7 +49,11 @@ import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { buildInitialNodes } from "./workflow-editor-build-nodes";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
 import { useWorkflowDerivedData } from "./workflow-editor-derived";
-import { enrichFromViewNodes, isMachineName, type ExposedAliasBase } from "./io-exposure";
+import {
+  enrichFromViewNodes,
+  isMachineName,
+  type ExposedAliasBase,
+} from "./io-exposure";
 import { sanitizeComboLabel } from "../workflow-utils";
 import { ioLabel, type WorkflowIOEntry } from "../shared/workflow-io";
 import { useWorkflowPersistence } from "./hooks/use-workflow-persistence";
@@ -110,9 +120,15 @@ const FIT_MAX_ATTEMPTS = 24;
  *  `minX - RAIL_GAP` / `maxX + RAIL_GAP`（见 workflow-editor-build-nodes），
  *  参与包围盒就会把中心拉偏、把工作流压成一条细缝。 */
 function collectFitTargets(
-  nodes: readonly { id: string; type?: string; position: { x: number; y: number };
-    measured?: { width?: number; height?: number }; width?: number; height?: number;
-    style?: { width?: number | string; height?: number | string } }[],
+  nodes: readonly {
+    id: string;
+    type?: string;
+    position: { x: number; y: number };
+    measured?: { width?: number; height?: number };
+    width?: number;
+    height?: number;
+    style?: { width?: number | string; height?: number | string };
+  }[],
 ): FitBoundsNode[] {
   const out: FitBoundsNode[] = [];
   for (const n of nodes) {
@@ -125,9 +141,13 @@ function collectFitTargets(
 
 /** 下发一次视口。没有可测量的节点时退回 React Flow 自己的 fitView。 */
 function applyFitViewport(
-  rf: { fitView: (options?: { padding?: number; duration?: number }) => unknown;
-    setViewport: (viewport: { x: number; y: number; zoom: number },
-      options?: { duration?: number }) => unknown },
+  rf: {
+    fitView: (options?: { padding?: number; duration?: number }) => unknown;
+    setViewport: (
+      viewport: { x: number; y: number; zoom: number },
+      options?: { duration?: number },
+    ) => unknown;
+  },
   bounds: Bounds | null,
 ): void {
   const container = document.querySelector(".react-flow");
@@ -224,18 +244,30 @@ function WorkflowEditorBody({
    *  that drives CanvasGrid / CanvasRulers / ZoomIndicator / MiniMap.
    *  Until `hydrated` is true we render with defaults so SSR / first
    *  paint don't briefly show saved values before the read completes. */
-  const { settings: canvasSettings, update: updateCanvasSetting, reset: resetCanvasSettings, hydrated: canvasSettingsHydrated } = useCanvasSettings();
+  const {
+    settings: canvasSettings,
+    update: updateCanvasSetting,
+    reset: resetCanvasSettings,
+    hydrated: canvasSettingsHydrated,
+  } = useCanvasSettings();
   /* 画布顶部「📋 查看 JSON」按钮 — 复用 SourceModal。
    *  数据直接从 `detail.graph/rawJson` 读 (缓存里的磁盘已保存版本)，
    *  无需网络请求；当前未保存的画布修改不在内，文案里写明。 */
   const [viewJsonOpen, setViewJsonOpen] = useState(false);
   const setWorkflowIO = useCallback(
-    (updater: Record<string, WorkflowIOParam> | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>)) => {
+    (
+      updater:
+        | Record<string, WorkflowIOParam>
+        | ((
+            prev: Record<string, WorkflowIOParam>,
+          ) => Record<string, WorkflowIOParam>),
+    ) => {
       ioApi.setState((state) => ({
-        workflowIO: typeof updater === "function" ? updater(state.workflowIO) : updater,
+        workflowIO:
+          typeof updater === "function" ? updater(state.workflowIO) : updater,
       }));
     },
-    [ioApi]
+    [ioApi],
   );
   /* 预览开关一律走 store 动作：关闭预览时 store 会把 `ioEditMode` 一并关掉、
    *  打开时一并打开，绕过动作直接写状态就会留下「面板没了、勾选框还在」或
@@ -244,8 +276,10 @@ function WorkflowEditorBody({
     (v: boolean | ((prev: boolean) => boolean)) =>
       ioApi
         .getState()
-        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v),
-    [ioApi]
+        .setIoPreviewOpen(
+          typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v,
+        ),
+    [ioApi],
   );
   const [error, setError] = useState("");
   /* Sync the on-disk custom-node manifest into the in-memory registry once
@@ -324,12 +358,17 @@ function WorkflowEditorBody({
        * subgraphRawContext 的注释）。 */
       const ctx = subgraphRawContext;
       if (!ctx) return null;
-      const subs = (ctx.parentRawJson as { definitions?: { subgraphs?: Record<string, unknown> } } | null)
-        ?.definitions?.subgraphs;
+      const subs = (
+        ctx.parentRawJson as {
+          definitions?: { subgraphs?: Record<string, unknown> };
+        } | null
+      )?.definitions?.subgraphs;
       if (!subs) return null;
       return (
         subs[ctx.subUid] ??
-        Object.values(subs).find((s) => (s as { id?: unknown } | null)?.id === ctx.subUid) ??
+        Object.values(subs).find(
+          (s) => (s as { id?: unknown } | null)?.id === ctx.subUid,
+        ) ??
         null
       );
     })();
@@ -361,7 +400,9 @@ function WorkflowEditorBody({
    * nodes.length 变化），重跑时的 cleanup 会取消还没触发的 rAF；把「已聚焦」
    * 在排程时就记死，会让被取消的那一次永远补不回来 —— 视口于是停在上一份图
    * （ISSUE #394：打开子工作流没聚焦到）。 */
-  const fitSchedulerRef = useRef<ReturnType<typeof createFitOnceScheduler> | null>(null);
+  const fitSchedulerRef = useRef<ReturnType<
+    typeof createFitOnceScheduler
+  > | null>(null);
   fitSchedulerRef.current ??= createFitOnceScheduler();
   /* MiniMap → main-viewport single-click jump.
    *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
@@ -381,7 +422,10 @@ function WorkflowEditorBody({
    *  以及画布右上角「🎯 居中」按钮 —— 作者把节点拖出视野或缩得太小之后
    *  需要一条回到内容处的出口。纯视口动作：不移动节点、不写库。 */
   const fitToContent = useCallback(() => {
-    applyFitViewport(rf, normalizeBounds(collectFitTargets(rf.getNodes()), FIT_FALLBACK_SIZE));
+    applyFitViewport(
+      rf,
+      normalizeBounds(collectFitTargets(rf.getNodes()), FIT_FALLBACK_SIZE),
+    );
   }, [rf]);
 
   /* 「重新居中」按钮。延后一帧再算：React Flow 在下一帧才提交最新的测量
@@ -396,29 +440,23 @@ function WorkflowEditorBody({
    * first open still benefits from the server-side LRU cache (see
    * src/lib/server-cache.ts). On a cache hit we render immediately and then
    * refresh the stored copy in the background without disturbing the UI. */
-  const {
-    fetchDetail,
-    forceReloadDetail,
-    onEnterSubgraph,
-    onExitSubgraph,
-  } = useWorkflowDetailLoader({
-    workflowId,
-    detail,
-    detailRef,
-    latestRequestIdRef,
-    setDetail,
-    setLoading,
-    setError,
-    setParamMap,
-    setWorkflowIO,
-    setSubgraphStack,
-    setRootWorkflowName,
-    setSubgraphLoading,
-    setSubgraphRawContext,
-    setSubgraphError,
-  });
-;
-
+  const { fetchDetail, forceReloadDetail, onEnterSubgraph, onExitSubgraph } =
+    useWorkflowDetailLoader({
+      workflowId,
+      detail,
+      detailRef,
+      latestRequestIdRef,
+      setDetail,
+      setLoading,
+      setError,
+      setParamMap,
+      setWorkflowIO,
+      setSubgraphStack,
+      setRootWorkflowName,
+      setSubgraphLoading,
+      setSubgraphRawContext,
+      setSubgraphError,
+    });
   /* Convert graph → flow nodes.  Rendering order (back→front):
    *   groups (frames) → notes (annotations) → real graph nodes (always on top).
    *  Layout strategies for the real nodes, in priority order:
@@ -432,7 +470,8 @@ function WorkflowEditorBody({
 
   /* Derived lookups: raw-node metadata map, view-scoped detail (RAW / API),
    * and per-node output-slot names. */
-  const { rawMetaById, scopeDetail, outSlotNameById } = useWorkflowDerivedData(detail);
+  const { rawMetaById, scopeDetail, outSlotNameById } =
+    useWorkflowDerivedData(detail);
 
   /* IO 预览的富化数据源。顶层视图直接用服务端产出的 `detail.workflowIO`；
    * 下钻到子工作流后该字段为空（子图路由不产出它），于是退回「按当前视图
@@ -494,7 +533,9 @@ function WorkflowEditorBody({
       state.purgeMachineNames((key, entry) => {
         const facts = ioDetailMap[key];
         const enriched = facts ? sanitizeComboLabel(ioLabel(facts)) : undefined;
-        const slot = facts?.slotLabel ? sanitizeComboLabel(facts.slotLabel) : undefined;
+        const slot = facts?.slotLabel
+          ? sanitizeComboLabel(facts.slotLabel)
+          : undefined;
         /* 宿主类名优先取富化事实源；富化还没到时退到条目自身记录的类名 ——
          *  「封装节点的 `value_N` 槽位是机器名」这条判据不依赖作者名回收，
          *  因此不能只在富化到场时才成立（ISSUE #349）。 */
@@ -515,9 +556,10 @@ function WorkflowEditorBody({
          *  没有这一步，图三里的 `1` 会永远粘在面板上（ISSUE #349）。 */
         if (entry.label === undefined) return false;
         const keyEntries = key.split("::");
-        const keyTail = keyEntries.length >= 3 ? keyEntries.slice(2).join("::") : key;
+        const keyTail =
+          keyEntries.length >= 3 ? keyEntries.slice(2).join("::") : key;
         return keyTail === entry.name && entry.label === entry.name;
-      })
+      }),
     );
   }, [detail, ioDetailMap, ioApi]);
 
@@ -557,8 +599,16 @@ function WorkflowEditorBody({
         onEnterSubgraph,
         hostNodeId: viewHostNodeId || undefined,
       }),
-     
-    [detail, scopeDetail, rawMetaById, outSlotNameById, paramMap, onEnterSubgraph, viewHostNodeId]
+
+    [
+      detail,
+      scopeDetail,
+      rawMetaById,
+      outSlotNameById,
+      paramMap,
+      onEnterSubgraph,
+      viewHostNodeId,
+    ],
   );
 
   /* ── 对外参数映射：编辑器不碰 ──
@@ -600,7 +650,6 @@ function WorkflowEditorBody({
     setEdges,
   ]);
 
-
   /* Fit-to-content once per workflow/subgraph open. Placed after `nodes`
    * so we don't reference it before declaration (react-hooks/immutability). */
   useEffect(() => {
@@ -632,7 +681,9 @@ function WorkflowEditorBody({
     });
     let raf = 0;
     const step = () => {
-      const { bounds, done } = stepper.next(() => collectFitTargets(rf.getNodes()));
+      const { bounds, done } = stepper.next(() =>
+        collectFitTargets(rf.getNodes()),
+      );
       applyFitViewport(rf, bounds);
       /* 收敛（测量已稳定、视口已下发）后才把这份图记为「聚焦过」：只排过程
        * 不算数，否则被 cleanup 取消的那次就补不回来了。提前在首帧记账也不
@@ -660,11 +711,11 @@ function WorkflowEditorBody({
       if (edge.deletable === true && edge.reconnectable === true) return;
       setEdges((eds) =>
         eds.map((e) =>
-          e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e
-        )
+          e.id === edge.id ? { ...e, deletable: true, reconnectable: true } : e,
+        ),
       );
     },
-    [setEdges]
+    [setEdges],
   );
 
   /* 对外参数卡片的「已连线目标」高亮：卡片行上没有端点，靠宿主节点那一行
@@ -691,14 +742,12 @@ function WorkflowEditorBody({
      *  `positions` 列里的键同口径（见 use-workflow-persistence 的说明）。 */
     hostNodeId: viewHostNodeId,
   });
-;
-
   /* Loading state */
   if (loading) {
     return (
       <FullScreenLayer
         zClass="z-50"
-        className="flex items-center justify-center bg-canvas pb-6"
+        className="bg-canvas flex items-center justify-center pb-6"
       >
         <div className="text-center">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
@@ -712,12 +761,12 @@ function WorkflowEditorBody({
     return (
       <FullScreenLayer
         zClass="z-50"
-        className="flex items-center justify-center bg-canvas pb-6"
+        className="bg-canvas flex items-center justify-center pb-6"
       >
         <div className="text-center">
           <p className="text-red-700 dark:text-red-400">
-                {error ?? "未知错误"}
-              </p>
+            {error ?? "未知错误"}
+          </p>
           <button
             type="button"
             onClick={onClose}
@@ -731,27 +780,24 @@ function WorkflowEditorBody({
   }
 
   return (
-    <FullScreenLayer
-      zClass="z-50"
-      className="flex flex-col bg-canvas pb-6"
-    >
-        {/* ── Top bar ── */}
-        <WorkflowEditorTopBar
-          onClose={onClose}
-          detail={detail}
-          rootWorkflowName={rootWorkflowName}
-          subgraphStack={subgraphStack}
-          setSubgraphStack={setSubgraphStack}
-          fetchDetail={fetchDetail}
-          onExitSubgraph={onExitSubgraph}
-          forceReloadDetail={forceReloadDetail}
-          viewHostNodeId={viewHostNodeId}
-          setViewJsonOpen={setViewJsonOpen}
-          resetLayout={resetLayout}
-          handleSave={handleSave}
-          saving={saving}
-          error={error}
-        />
+    <FullScreenLayer zClass="z-50" className="bg-canvas flex flex-col pb-6">
+      {/* ── Top bar ── */}
+      <WorkflowEditorTopBar
+        onClose={onClose}
+        detail={detail}
+        rootWorkflowName={rootWorkflowName}
+        subgraphStack={subgraphStack}
+        setSubgraphStack={setSubgraphStack}
+        fetchDetail={fetchDetail}
+        onExitSubgraph={onExitSubgraph}
+        forceReloadDetail={forceReloadDetail}
+        viewHostNodeId={viewHostNodeId}
+        setViewJsonOpen={setViewJsonOpen}
+        resetLayout={resetLayout}
+        handleSave={handleSave}
+        saving={saving}
+        error={error}
+      />
 
       {/* ── Canvas ── */}
       <div className="relative min-h-0 flex-1">
@@ -760,7 +806,7 @@ function WorkflowEditorBody({
          *  This matches the requested UX: current content unchanged, then a
          *  loading screen, then the subgraph content. */}
         {subgraphLoading && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-canvas-deep">
+          <div className="bg-canvas-deep pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div className="bg-canvas/90 border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm dark:shadow-black/50">
               <div className="flex items-center gap-3">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
@@ -772,14 +818,15 @@ function WorkflowEditorBody({
           </div>
         )}
         {ioEditMode && (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-1.5 text-[12px] font-medium text-amber-800 shadow-lg dark:text-amber-100 backdrop-blur-sm">
-            📌 IO 编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
+          <div className="pointer-events-none absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-1.5 text-[12px] font-medium text-amber-800 shadow-lg backdrop-blur-sm dark:text-amber-100">
+            📌 IO
+            编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
           </div>
         )}
         {/* 子工作流下钻失败：内联错误提示，父图保持可见（绝不回退到工作流库） */}
         {subgraphError && (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2">
-            <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-[12px] text-rose-700 shadow-lg dark:text-rose-100 backdrop-blur-sm">
+          <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-[12px] text-rose-700 shadow-lg backdrop-blur-sm dark:text-rose-100">
               <span>⚠ {subgraphError}</span>
               <button
                 type="button"
@@ -830,13 +877,17 @@ function WorkflowEditorBody({
                * 覆盖层（modes[mode]）必须一并摘掉——页签栏只跟 modes 走，
                * 留下的无主覆盖会一直随 workflowIO 落库往返；清理结果随同
                * 一 PATCH 落库。 */
-              const removedModes = (detail.modes ?? []).filter((m) => !modes.includes(m));
+              const removedModes = (detail.modes ?? []).filter(
+                (m) => !modes.includes(m),
+              );
               const cleanedIO =
                 removedModes.length > 0
                   ? ioApi.getState().purgeModeOverrides(removedModes)
                   : null;
               setDetail((prev) =>
-                prev ? { ...prev, modes, defaultMode, taskType: defaultMode } : prev,
+                prev
+                  ? { ...prev, modes, defaultMode, taskType: defaultMode }
+                  : prev,
               );
               savePatch.mutate({
                 id: workflowId,
@@ -866,12 +917,11 @@ function WorkflowEditorBody({
           setEdges={setEdges}
           setNodes={setNodes}
         />
-
-        {/* Floating instruction tooltip */}        {/* Floating instruction tooltip */}
-        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] text-ink-soft backdrop-blur-sm">
+        {/* Floating instruction tooltip */}{" "}
+        {/* Floating instruction tooltip */}
+        <div className="text-ink-soft pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] backdrop-blur-sm">
           点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
         </div>
-
         {/* right-edge canvas settings drawer.  Portaled to
          *  document.body by the panel itself so it can sit above the
          *  WorkflowCanvasEditor root overlay stack (`z-50`); rendered
@@ -884,10 +934,8 @@ function WorkflowEditorBody({
             onClose={() => setCanvasSettingsOpen(false)}
           />
         )}
-
         {/* 工作流编辑画布是纯配置界面（不存在执行），不再挂执行日志入口；
          *  执行期的日志仍由项目画布的 GlobalStepLogPanel 承担。 */}
-
         {/* 顶部「📋 查看 JSON」触发的全屏 modal。
             派生数据由 `sourceModalData` (useMemo) 给出:
               - 顶层 detail: graph/rawJson 来自 detail

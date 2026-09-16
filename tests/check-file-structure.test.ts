@@ -1083,6 +1083,41 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     ).toBeGreaterThanOrEqual(4);
     expect(launcher).toContain("foreground-watch.log");
   });
+
+  it("启动页首次可见时被带到前台（双击启动的反馈，不是「别打断」那一档）", () => {
+    // 现场（ISSUE #576）：双击 `start-tauri.exe`，启动页被文件资源管理器压住，
+    // 用户看到的是「双击了没反应」。根因是**同一套「不抢前台」策略被套在了启动页上**
+    // ——那套策略针对的是几十秒后才冒出来的**应用窗口**（用户可能早已切走）。
+    // 启动页是用户刚刚点下去的直接反馈，必须出现在前面。
+    const launcher = readFileSync(
+      join(process.cwd(), "scripts", "start_tauri_launcher.py"),
+      "utf8",
+    );
+    const focus = readFileSync(FOCUS_SCRIPT, "utf8");
+    // ① 启动器：启动页一可见就拉一次（one-shot，只做一次）
+    expect(launcher).toContain("def spawn_splash_front(");
+    expect(launcher).toMatch(/if not splash_front_done and find_tauri_window\(\):/);
+    expect(launcher).toContain("splash_front_done = True");
+    // ② 判据在复核脚本里，复用已验证可靠的前台手段（Alt + AttachThreadInput）
+    expect(focus).toContain("def should_front_splash(");
+    expect(focus).toContain("def run_bring_splash(");
+    expect(focus).toContain("focus_window(hwnd)");
+    // ③ 启动页与主窗是两套判据，不许合并成一条
+    expect(focus.indexOf("def should_front_splash(")).toBeGreaterThan(-1);
+    expect(focus).toContain("两套判据");
+  });
+
+  it("壳侧启动页也显式置前一次（本地冷启动时无须等复核进程）", () => {
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    expect(rust).toContain("fn bring_splash_to_front(");
+    // 只 `show()` 不给前台的写法不够：启动页要真的到前面
+    expect(rust).toContain("splash.set_focus()");
+    // 用了「不抢前台」那套的话会只闪任务栏 —— 那正是被压住的原因
+    expect(rust).toContain("bring_splash_to_front(&splash)");
+  });
 });
 
 describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自绘标题行）", () => {
@@ -1190,9 +1225,68 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(html).toContain('id="btn-close"');
     expect(html).toContain("minimize()");
     expect(html).toContain("close()");
-    // 拖拽区与按钮分开：整条标题行可拖动，按钮不吞点击
-    expect(html).toContain("-webkit-app-region: drag");
+    // 拖拽由页面脚本显式接管（拖不动见 ISSUE #608 那条用例），按钮不吞点击
+    expect(html).toContain("startDragging()");
     expect(html).toContain("-webkit-app-region: no-drag");
+  });
+
+  /**
+   * ISSUE #608：启动页**拖不动**。
+   *
+   * 窗口没有原生标题栏（`decorations: false`），拖拽区只能自己声明。
+   * 两个成因，任一没修都仍然「按住不动」：
+   *
+   * 1. **权限**：启动页来自内嵌本地源，而 `core:default` **不含**
+   *    `core:window:allow-start-dragging`。未授权时窗口侧发起的拖拽会被 ACL
+   *    静默拒绝——页面看起来完全正常，就是不动。主窗之所以能拖，是因为
+   *    `capabilities/{default,remote}.json` 各自显式补了这条（见 07 §7.18.7）。
+   * 2. **拖拽区**：此前只有 `.titlebar` 一条是 drag（十几像素高，右侧还被
+   *    按钮占掉），窗口其余大片区域按下去都不动。现在由页面脚本统一接管：
+   *    落点不在交互件上就调 `startDragging()`，于是整窗（含内边距）都能拖。
+   *
+   * 因此判据是「权限 + 显式拖拽路径 + 交互件被排除」三件套，缺一个都还是拖不动。
+   * 改动启动页布局或 capabilities 时先看这条。
+   */
+  it("启动页能拖动位置：显式 startDragging + 交互件排除 + 拖拽权限", () => {
+    const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
+
+    // ① 显式拖拽路径（CSS 非客户区判定在各引擎上并不一致，不走那条）
+    expect(html).toContain("startSplashDrag");
+    expect(html).toContain("startDragging()");
+    // 整窗都要能拖：不能只把标题行一条设成 drag（那正是「拖不动」的观感来源）
+    expect(html).not.toMatch(/\.titlebar \{[^}]*app-region: drag/);
+
+    // ② 交互件必须被排除，否则点击被拖拽吞掉、日志也没法选中复制
+    expect(html).toContain("INTERACTIVE_SELECTOR");
+    expect(html).toContain("closest(INTERACTIVE_SELECTOR)");
+    const interactive = html.slice(
+      html.indexOf("const INTERACTIVE_SELECTOR"),
+      html.indexOf("const INTERACTIVE_SELECTOR") + 200,
+    );
+    expect(interactive).toContain("button");
+    expect(interactive).toContain("[data-no-drag]");
+    // 窗口按钮 / 查看日志 / 日志面板各自声明 no-drag（与脚本判据同源）
+    for (const [start, end] of [
+      [".win-buttons {", ".win-btn {"],
+      [".log-toggle {", ".log-toggle:hover"],
+      [".log-panel {", ".log-panel pre"],
+    ] as const) {
+      const rule = html.slice(html.indexOf(start), html.indexOf(end));
+      expect(rule).toContain("-webkit-app-region: no-drag");
+    }
+
+    // ③ 权限：漏了这条，拖拽会被 ACL 静默拒绝（页面完全正常就是不动）
+    const splashCap = readFileSync(
+      join(process.cwd(), "src-tauri", "capabilities", "splash.json"),
+      "utf8",
+    );
+    expect(splashCap).toContain('"core:window:allow-start-dragging"');
+    // 主窗走的是另两份 capability，一并守住「这条权限是每窗各自声明的」
+    for (const name of ["default.json", "remote.json"]) {
+      expect(
+        readFileSync(join(process.cwd(), "src-tauri", "capabilities", name), "utf8"),
+      ).toContain('"core:window:allow-start-dragging"');
+    }
   });
 
   it("三份启动页副本一致，且日志展开由壳统一调尺寸", () => {

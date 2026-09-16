@@ -24,7 +24,9 @@
   `docs/guide-stale-code.md`）；
 - 改 `src/lib/**` → `docs/standards/18-lib层规范.md`（**它曾是四类门禁的盲区**：
   分层 element / Node-only 声明规则 / 文件与函数长度棘轮 / 覆盖率门槛；
-  尤其 §18.4「`.server.ts` / `server-only` / 纯 Node 宿主」三选一的唯一口径）；
+  尤其 §18.4「`.server.ts` / `server-only` / 纯 Node 宿主」三选一的唯一口径，
+  自查 `node scripts/lib-node-only-scan.mjs`；新增 `lib` 子域目录时按 §18.6 在
+  `vitest.config.ts` 设实测门槛）；
 - 提交 / PR / 自查清单 / 分支策略 → `docs/standards/13-提交与-code-review.md`
   （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
@@ -42,7 +44,7 @@
 | ComfyUI 生命周期 | `src/lib/comfyui/**`（lifecycle / executor-* / reaper） | §3、§5 |
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
-| lib 层边界与门禁 | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层） | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，文件长度棘轮 `check-file-structure.cjs --strict` |
+| lib 层边界与门禁 | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层） | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度棘轮 `check-file-structure.cjs --strict` |
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs` | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs` |
 | 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
@@ -277,6 +279,19 @@ Node 一个都起不来）。「pnpm 可用」的判据是**真的能跑**：`wh
 `usableCommand()` 认下的候选（顺序见 `executableExts()`），探测与「坏了怎么修」收在
 `scripts/launcher-core/corepack.mjs`。自查入口 `pnpm check:toolchain`（跨平台，
 登记在规范 §9.5 对照表；不需要任何 `.ps1` 副本）。
+
+**「dev server 已启动」之后两秒静默退出（exit=0）、stderr 全空**（ISSUE #576 / 规范 §2.1.6）：
+不是 Next 崩了，而是**内层 spawn 的 pnpm 形态起不来** —— `scripts/dev.mjs` 曾写死
+`pnpm.cmd`，Windows 上批处理只有 cmd.exe 会解释、Node 起它必 `EINVAL`，`status` 为
+`null` 又被 `?? 0` 读成「成功退出」。任何「Node 去 spawn pnpm」的地方都只能经
+`shell.mjs` 的 `pnpmInvocation()` 拿 `{ command, args }`，不许自己拼可执行名
+（更不许按平台写后缀）。同一条现场里，**失败弹窗给的日志路径必须是本次运行的**
+（按文件名字典序重找会挑到上一次运行那份，历史 `_` 命名排在现 `T` 命名之后）。
+
+**双击启动后启动页被文件资源管理器压在后面**（ISSUE #576 / 规范 §5）：
+「不抢前台」是**应用窗口**的策略（它几十秒后才冒出来，用户可能早已切走），
+不该套在**启动页**上 —— 启动页是双击的直接反馈，要出现在前面。启动页由
+`spawn_splash_front()` / `bring_splash_to_front()` 单独抢一次（只首次可见那一下）。
 
 遇到启动/生成问题，先查规范文档 **§5 症状 → 根因对照表**（本项目全部历史
 事故都在里面），再按 **§4 日志布局** 的顺序看日志（log/ 按子系统分区：

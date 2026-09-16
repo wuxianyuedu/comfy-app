@@ -17,7 +17,10 @@ vi.mock("@/lib/project-canvas/canvas-api", () => ({
 }));
 
 import { uploadImageFile } from "@/lib/project-canvas/canvas-api";
-import type { WorkflowIOEntry, WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type {
+  WorkflowIOEntry,
+  WorkflowIOMap,
+} from "~/components/studio/shared/workflow-io";
 import type { DynamicWorkflowFormProps } from "../dynamic-workflow-form-config";
 
 import { useDynamicWorkflowForm } from "./use-dynamic-workflow-form";
@@ -38,7 +41,10 @@ function widget(
 }
 
 /** 连线端口（kind=param）。 */
-function wire(name: string, over: Partial<WorkflowIOEntry> = {}): WorkflowIOEntry {
+function wire(
+  name: string,
+  over: Partial<WorkflowIOEntry> = {},
+): WorkflowIOEntry {
   return {
     direction: "input",
     kind: "param",
@@ -129,7 +135,12 @@ describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作
   it("运行态：非数值 widget（prompt 等）进参数行，不进端口行", () => {
     const { result } = renderHook(() =>
       useDynamicWorkflowForm(
-        baseProps({ io: ioMap(widget("prompt", { type: "STRING" }), widget("steps", numeric)) }),
+        baseProps({
+          io: ioMap(
+            widget("prompt", { type: "STRING" }),
+            widget("steps", numeric),
+          ),
+        }),
       ),
     );
     expect(result.current.widgetSectionEntries.map((e) => e.name)).toEqual([
@@ -289,9 +300,11 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
       useDynamicWorkflowForm(baseProps({ onReorder })),
     );
 
-    act(() => result.current.dragHandlers!.onDragStart("from")({
-      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
-    } as never));
+    act(() =>
+      result.current.dragHandlers!.onDragStart("from")({
+        dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+      } as never),
+    );
     act(() =>
       result.current.dragHandlers!.onDrop("to")({
         preventDefault: vi.fn(),

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { requireServerUser } from "@/lib/auth-server";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**
  * GET /api/debug/source?file=src/components/studio/workflow-node.tsx
@@ -36,10 +37,7 @@ const ALLOWED_EXT = new Set([
 export async function GET(request: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 }
-    );
+    return unauthorizedResponse();
   }
 
   const file = request.nextUrl.searchParams.get("file");
@@ -53,7 +51,10 @@ export async function GET(request: NextRequest) {
   const resolved = path.resolve(/*turbopackIgnore: true*/ PROJECT_ROOT, file);
   const rel = path.relative(SRC_ROOT, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    return NextResponse.json({ error: "forbidden: outside src/" }, { status: 403 });
+    return NextResponse.json(
+      { error: "forbidden: outside src/" },
+      { status: 403 },
+    );
   }
   if (!ALLOWED_EXT.has(path.extname(resolved).toLowerCase())) {
     return NextResponse.json({ error: "not a source file" }, { status: 400 });

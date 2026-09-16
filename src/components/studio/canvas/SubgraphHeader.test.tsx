@@ -33,7 +33,11 @@ function makeStores(): WFStores {
 }
 
 /** 在 Provider 内读取真实 IOEdit 上下文并注入 SubgraphHeader 的 io prop。 */
-function IoHarness({ children }: { children: (io: IOEditContextValue) => ReactNode }) {
+function IoHarness({
+  children,
+}: {
+  children: (io: IOEditContextValue) => ReactNode;
+}) {
   const io = useIOEditContext();
   return <>{children(io)}</>;
 }
@@ -85,15 +89,21 @@ describe("SubgraphHeader", () => {
 
   it("标题仅为纯文本，不渲染为可点击按钮（展开只允许右上角图标触发）", () => {
     const onEnter = vi.fn();
-    renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} onEnter={onEnter} />);
+    renderHeader(
+      <SubgraphHeader {...base} onToggle={vi.fn()} onEnter={onEnter} />,
+    );
     // 标题不再带 role=button，因此整行只剩右上角「展开子工作流」一个 onEnter 入口
-    expect(screen.queryByRole("button", { name: "我的子图" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "我的子图" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("我的子图")).toBeInTheDocument();
   });
 
   it("传入 onEnter 时渲染钻入按钮,点击触发 onEnter", async () => {
     const onEnter = vi.fn();
-    renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} onEnter={onEnter} />);
+    renderHeader(
+      <SubgraphHeader {...base} onToggle={vi.fn()} onEnter={onEnter} />,
+    );
     await userEvent.click(screen.getByTitle("展开子工作流"));
     expect(onEnter).toHaveBeenCalledOnce();
   });
@@ -114,7 +124,12 @@ describe("SubgraphHeader", () => {
     renderHeader(
       <IoHarness>
         {(io) => (
-          <SubgraphHeader {...base} onToggle={vi.fn()} io={io} outputRef={OUTPUT_REF} />
+          <SubgraphHeader
+            {...base}
+            onToggle={vi.fn()}
+            io={io}
+            outputRef={OUTPUT_REF}
+          />
         )}
       </IoHarness>,
     );
@@ -126,7 +141,14 @@ describe("SubgraphHeader", () => {
     stores.io.setState({ ioEditMode: true });
     renderHeader(
       <IoHarness>
-        {(io) => <SubgraphHeader {...base} onToggle={vi.fn()} io={io} outputRef={null} />}
+        {(io) => (
+          <SubgraphHeader
+            {...base}
+            onToggle={vi.fn()}
+            io={io}
+            outputRef={null}
+          />
+        )}
       </IoHarness>,
       stores,
     );
@@ -139,7 +161,12 @@ describe("SubgraphHeader", () => {
     renderHeader(
       <IoHarness>
         {(io) => (
-          <SubgraphHeader {...base} onToggle={vi.fn()} io={io} outputRef={OUTPUT_REF} />
+          <SubgraphHeader
+            {...base}
+            onToggle={vi.fn()}
+            io={io}
+            outputRef={OUTPUT_REF}
+          />
         )}
       </IoHarness>,
       stores,
@@ -148,7 +175,9 @@ describe("SubgraphHeader", () => {
     expect(checkbox).toHaveAttribute("title", "点击将其暴露为工作流输出");
     await userEvent.click(checkbox);
     // key = `${nodeId}::kind::name`,direction/kind 均为 output
-    expect(stores.io.getState().workflowIO["42::output::IMAGE_FINAL"]).toMatchObject({
+    expect(
+      stores.io.getState().workflowIO["42::output::IMAGE_FINAL"],
+    ).toMatchObject({
       name: "IMAGE_FINAL",
       kind: "output",
       label: "最终图像",

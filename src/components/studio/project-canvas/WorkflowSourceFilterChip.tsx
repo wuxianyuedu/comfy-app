@@ -6,7 +6,9 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePopoverDismiss, usePopoverPosition } from "./workflow-node-popover";
-import type { WorkflowSourceFilter } from "./WorkflowNode";
+/* 类型来自叶子模块而不是宿主：经宿主会形成
+ * `WorkflowNode → chip → WorkflowNode` 的循环（规范 12.7）。 */
+import type { WorkflowSourceFilter } from "./workflow-node-types";
 
 interface WorkflowSourceFilterChipProps {
   value: WorkflowSourceFilter;
@@ -32,7 +34,7 @@ export function WorkflowSourceFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-overlay-accent-surface px-2.5 text-[12px]"
+        className="nodrag nopan border-primary/35 bg-overlay-accent-surface flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
       >
         <span
           className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -54,7 +56,7 @@ export function WorkflowSourceFilterChip({
           {label}
         </span>
         <span
-          className={`shrink-0 text-ink-icon transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-ink-icon shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -106,7 +108,11 @@ export function WorkflowSourceFilterChip({
                     style={{ background: option.dot }}
                   />
                   <span className="flex-1">{option.label}</span>
-                  {sel && <span className="text-violet-700 dark:text-violet-300">✓</span>}
+                  {sel && (
+                    <span className="text-violet-700 dark:text-violet-300">
+                      ✓
+                    </span>
+                  )}
                 </button>
               );
             })}

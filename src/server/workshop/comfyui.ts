@@ -6,15 +6,23 @@
 // 支持 {{prompt}}/{{negative}}/{{image}} 占位替换，从而与任意已安装模型解耦。
 import { randomUUID } from "node:crypto";
 
-import { COMFYUI_DEFAULT_PORT } from "@/lib/app-settings";
+import { COMFYUI_DEFAULT_PORT } from "@/lib/endpoints";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "@/lib/endpoints";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { DEFAULT_SIZE_SPEC, sizeSpecDims, type SizeSpec } from "@/lib/size-presets";
+import {
+  DEFAULT_SIZE_SPEC,
+  sizeSpecDims,
+  type SizeSpec,
+} from "@/lib/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
-const SETTINGS_FILE = path.join(process.cwd(), "data", "workshop-comfy-settings.json");
+const SETTINGS_FILE = path.join(
+  process.cwd(),
+  "data",
+  "workshop-comfy-settings.json",
+);
 
 interface ComfySettings {
   checkpoint?: string;
@@ -54,7 +62,9 @@ export async function resolveComfyBase(): Promise<string> {
   for (let offset = 0; offset <= 5; offset++) {
     const base = `http://${host}:${port + offset}`;
     try {
-      const r = await fetch(`${base}/system_stats`, { signal: AbortSignal.timeout(800) });
+      const r = await fetch(`${base}/system_stats`, {
+        signal: AbortSignal.timeout(800),
+      });
       if (r.ok) {
         resolvedBase = base;
         return base;
@@ -68,7 +78,11 @@ export async function resolveComfyBase(): Promise<string> {
 }
 
 function comfyBase(): string {
-  return resolvedBase ?? process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
+  return (
+    resolvedBase ??
+    process.env.COMFYUI_BASE ??
+    comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)
+  );
 }
 
 export interface ComfyPromptResult {
@@ -76,7 +90,9 @@ export interface ComfyPromptResult {
   error?: string;
 }
 
-export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResult> {
+export async function postComfyPrompt(
+  prompt: unknown,
+): Promise<ComfyPromptResult> {
   const base = await resolveComfyBase();
   const res = await fetch(`${base}/api/prompt`, {
     method: "POST",
@@ -85,14 +101,20 @@ export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResul
     signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
-    throw new Error(`ComfyUI /api/prompt 失败 (${res.status}): ${await res.text().catch(() => "")}`);
+    throw new Error(
+      `ComfyUI /api/prompt 失败 (${res.status}): ${await res.text().catch(() => "")}`,
+    );
   }
   return (await res.json()) as ComfyPromptResult;
 }
 
-export async function getComfyHistory(promptId: string): Promise<Record<string, unknown>> {
+export async function getComfyHistory(
+  promptId: string,
+): Promise<Record<string, unknown>> {
   const base = comfyBase();
-  const res = await fetch(`${base}/api/history/${promptId}`, { signal: AbortSignal.timeout(30_000) });
+  const res = await fetch(`${base}/api/history/${promptId}`, {
+    signal: AbortSignal.timeout(30_000),
+  });
   if (!res.ok) throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
   return (await res.json()) as Record<string, unknown>;
 }
@@ -107,12 +129,17 @@ export async function getComfyView(
   url.searchParams.set("filename", filename);
   url.searchParams.set("subfolder", subfolder ?? "");
   url.searchParams.set("type", type ?? "");
-  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(60_000) });
+  const res = await fetch(url.toString(), {
+    signal: AbortSignal.timeout(60_000),
+  });
   if (!res.ok) throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
   return Buffer.from(await res.arrayBuffer());
 }
 
-export async function uploadComfyImage(buffer: Buffer, filename: string): Promise<string> {
+export async function uploadComfyImage(
+  buffer: Buffer,
+  filename: string,
+): Promise<string> {
   const base = await resolveComfyBase();
   const form = new FormData();
   form.append("image", new Blob([new Uint8Array(buffer)]), filename);
@@ -122,7 +149,10 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
     body: form,
     signal: AbortSignal.timeout(30_000),
   });
-  if (!res.ok) throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
+  if (!res.ok)
+    throw new Error(
+      `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
+    );
   const data = (await res.json()) as { name?: string };
   if (!data.name) throw new Error("ComfyUI 上传未返回文件名");
   return data.name;
@@ -150,7 +180,9 @@ export async function fetchToBuffer(ref: string): Promise<Buffer> {
 }
 
 /** 持久化 ComfyUI 通道配置（checkpoint / 自定义图模板）。 */
-export async function saveComfySettings(patch: Partial<ComfySettings>): Promise<ComfySettings> {
+export async function saveComfySettings(
+  patch: Partial<ComfySettings>,
+): Promise<ComfySettings> {
   const current = loadSettings();
   const next: ComfySettings = { ...current, ...patch };
   settingsCache = next;
@@ -163,7 +195,10 @@ export async function saveComfySettings(patch: Partial<ComfySettings>): Promise<
  *
  *  服务端也吃同一套尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
  *  `lib/size-presets`）：缺省按图片场景的默认档（3:4 1k），不写像素字面量。 */
-export function sizeDimsForImage(spec?: SizeSpec): { width: number; height: number } {
+export function sizeDimsForImage(spec?: SizeSpec): {
+  width: number;
+  height: number;
+} {
   return sizeSpecDims(spec ?? DEFAULT_SIZE_SPEC, "image");
 }
 
@@ -175,7 +210,11 @@ export function buildTxt2ImgWorkflow(input: {
   checkpoint?: string;
   seed?: number;
 }): unknown {
-  const ckpt = input.checkpoint ?? loadSettings().checkpoint ?? process.env.WORKSHOP_COMFYUI_CHECKPOINT ?? "sd_xl_base_1.0.safetensors";
+  const ckpt =
+    input.checkpoint ??
+    loadSettings().checkpoint ??
+    process.env.WORKSHOP_COMFYUI_CHECKPOINT ??
+    "sd_xl_base_1.0.safetensors";
   const { width, height } = sizeDimsForImage(input.size);
   return {
     "3": {
@@ -193,11 +232,26 @@ export function buildTxt2ImgWorkflow(input: {
       },
     },
     "4": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: ckpt } },
-    "5": { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
-    "6": { class_type: "CLIPTextEncode", inputs: { text: input.prompt, clip: ["4", 1] } },
-    "7": { class_type: "CLIPTextEncode", inputs: { text: input.negative ?? "", clip: ["4", 1] } },
-    "8": { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["4", 2] } },
-    "9": { class_type: "SaveImage", inputs: { images: ["8", 0], filename_prefix: "workshop" } },
+    "5": {
+      class_type: "EmptyLatentImage",
+      inputs: { width, height, batch_size: 1 },
+    },
+    "6": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: input.prompt, clip: ["4", 1] },
+    },
+    "7": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: input.negative ?? "", clip: ["4", 1] },
+    },
+    "8": {
+      class_type: "VAEDecode",
+      inputs: { samples: ["3", 0], vae: ["4", 2] },
+    },
+    "9": {
+      class_type: "SaveImage",
+      inputs: { images: ["8", 0], filename_prefix: "workshop" },
+    },
   };
 }
 
@@ -230,26 +284,34 @@ export async function runComfyWorkflow(
 ): Promise<ComfyRunResult> {
   const posted = await postComfyPrompt(workflow);
   const promptId = posted.prompt_id;
-  if (!promptId) throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
+  if (!promptId)
+    throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
 
   const deadline = Date.now() + 10 * 60_000;
   let history: Record<string, unknown> = {};
   while (Date.now() < deadline) {
     history = await getComfyHistory(promptId).catch(() => ({}));
-    const entry = history[promptId] as { status?: { completed?: boolean; status_str?: string } } | undefined;
-    const done = entry?.status?.completed === true || entry?.status?.status_str === "success";
+    const entry = history[promptId] as
+      { status?: { completed?: boolean; status_str?: string } } | undefined;
+    const done =
+      entry?.status?.completed === true ||
+      entry?.status?.status_str === "success";
     const failed = entry?.status?.status_str === "error";
     if (done || failed) break;
     await new Promise((r) => setTimeout(r, 1500));
   }
 
-  const entry = history[promptId] as { outputs?: Record<string, unknown> } | undefined;
+  const entry = history[promptId] as
+    { outputs?: Record<string, unknown> } | undefined;
   const outputs = entry?.outputs ?? {};
   const files: string[] = [];
   const outDir = outputDirForSession(opts?.sessionId);
   await fs.mkdir(outDir, { recursive: true });
   for (const nodeOut of Object.values(outputs)) {
-    const rec = nodeOut as { images?: Array<{ filename: string; subfolder: string; type: string }>; gifs?: Array<{ filename: string; subfolder: string; type: string }> };
+    const rec = nodeOut as {
+      images?: Array<{ filename: string; subfolder: string; type: string }>;
+      gifs?: Array<{ filename: string; subfolder: string; type: string }>;
+    };
     const items = [...(rec.images ?? []), ...(rec.gifs ?? [])];
     for (const item of items) {
       const buf = await getComfyView(item.filename, item.subfolder, item.type);
@@ -275,9 +337,18 @@ export async function generateImageViaComfyUI(input: {
 }): Promise<string> {
   const settings = loadSettings();
   const workflow = settings.imageWorkflow
-    ? substitutePlaceholders(settings.imageWorkflow, { prompt: input.prompt, negative: input.negative })
-    : buildTxt2ImgWorkflow({ prompt: input.prompt, negative: input.negative, size: input.size });
-  const { files } = await runComfyWorkflow(workflow, { sessionId: input.sessionId });
+    ? substitutePlaceholders(settings.imageWorkflow, {
+        prompt: input.prompt,
+        negative: input.negative,
+      })
+    : buildTxt2ImgWorkflow({
+        prompt: input.prompt,
+        negative: input.negative,
+        size: input.size,
+      });
+  const { files } = await runComfyWorkflow(workflow, {
+    sessionId: input.sessionId,
+  });
   return files[0] ?? "";
 }
 
@@ -301,13 +372,18 @@ export async function submitVideoViaComfyUI(input: {
   let image: string | undefined;
   if (input.imageDataUrl) {
     const buf = await fetchToBuffer(input.imageDataUrl);
-    image = await uploadComfyImage(buf, `workshop-frame-${randomUUID().slice(0, 8)}.png`);
+    image = await uploadComfyImage(
+      buf,
+      `workshop-frame-${randomUUID().slice(0, 8)}.png`,
+    );
   }
   const workflow = substitutePlaceholders(settings.videoWorkflow, {
     prompt: input.prompt,
     negative: input.negative,
     image,
   });
-  const { files } = await runComfyWorkflow(workflow, { sessionId: input.sessionId });
+  const { files } = await runComfyWorkflow(workflow, {
+    sessionId: input.sessionId,
+  });
   return { url: files[0] };
 }

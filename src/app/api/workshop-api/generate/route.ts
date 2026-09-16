@@ -16,8 +16,13 @@ import {
   submitVideoViaApi,
 } from "@/lib/workshop/api-channel.server";
 import { isRecord } from "@/lib/workshop/api-channel-shared";
-import { intField, resolveMediaDataUrl, strField } from "@/lib/workshop/media-source.server";
+import {
+  intField,
+  resolveMediaDataUrl,
+  strField,
+} from "@/lib/workshop/media-source.server";
 import { errorMessage } from "~/lib/error-message";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,10 +30,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 },
-    );
+    return unauthorizedResponse();
   }
 
   let body: unknown;
@@ -86,12 +88,24 @@ export async function POST(req: NextRequest) {
       const imageDataUrl = image
         ? await resolveMediaDataUrl(image, new URL(req.url).origin)
         : undefined;
-      const result = await submitVideoViaApi({ prompt, negative, imageDataUrl, frames, fps });
+      const result = await submitVideoViaApi({
+        prompt,
+        negative,
+        imageDataUrl,
+        frames,
+        fps,
+      });
       return NextResponse.json(result);
     }
 
-    return NextResponse.json({ error: "kind 必须是 image 或 video" }, { status: 400 });
+    return NextResponse.json(
+      { error: "kind 必须是 image 或 video" },
+      { status: 400 },
+    );
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "API 生成失败") }, { status: 502 });
+    return NextResponse.json(
+      { error: errorMessage(e, "API 生成失败") },
+      { status: 502 },
+    );
   }
 }

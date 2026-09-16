@@ -29,6 +29,10 @@ vi.mock("@/lib/log-paths", async () => {
   return {
     ...(actual as Record<string, unknown>),
     NEXTJS_LOG_DIR: tmp,
+    /* 同时把 app-runtime.log 也指到临时目录：installStreamCapture 会往它写一条
+     * 会话边界横幅（ISSUE #592），不 mock 就会往仓库真实的 log/services/ 写字
+     * （硬规则：测试必须给自己的临时目录）。 */
+    APP_RUNTIME_LOG: path.join(tmp, "app-runtime.log"),
   };
 });
 
@@ -84,6 +88,22 @@ describe("installStreamCapture", () => {
     const text = readCapture(file);
     expect(text).toContain("首屏编译错误：Module not found");
     expect(text).toContain("FATAL: An unexpected Turbopack error occurred");
+  });
+
+  it("每次安装都会往 app-runtime.log 写一条会话边界横幅（两侧留空行）", async () => {
+    await freshInstall();
+    const text = readCapture(path.join(tmp, "app-runtime.log"));
+    /* 横幅本体：box 字符分隔线 + 会话说明；两侧各留一个空行（ISSUE #592：
+     * 「一个文件记录多次日志，每次启动之间需要行空白」）。 */
+    expect(text).toContain("─".repeat(72));
+    expect(text).toContain("应用运行日志（本次运行）");
+    const lines = text.split("\n");
+    const titleAt = lines.findIndex((l) => l.includes("应用运行日志"));
+    expect(titleAt).toBeGreaterThan(0);
+    expect(lines[titleAt - 1]).toContain("─");
+    expect(lines[titleAt - 2]).toBe(""); // 横幅上方的空行
+    // 横幅以空行收口，下一次 append 的内容不会粘在分隔线上
+    expect(text.endsWith("─\x1b[0m\n\n")).toBe(true);
   });
 
   it("原输出行为不变（转录是额外落一份，不接管）", async () => {

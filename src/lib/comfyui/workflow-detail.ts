@@ -24,7 +24,12 @@ import {
   toStringValue,
   type ApiWorkflowNode,
 } from "@/lib/comfyui/raw";
-import { cacheJson, cacheDel, cacheDelPrefix, cachePeek } from "@/lib/server-cache";
+import {
+  cacheJson,
+  cacheDel,
+  cacheDelPrefix,
+  cachePeek,
+} from "@/lib/server-cache";
 import { parseModesJson } from "@/lib/workflow-types";
 import { createComboResolver } from "@/lib/comfyui/workflow-detail-combo";
 import {
@@ -82,6 +87,13 @@ export interface WorkflowDetailNote {
   color: string;
 }
 
+/** `findByIdForUserSelect` 的行类型（含 detail 转换用到的全部列）。
+ *  单独起名是为了让 `buildWorkflowDetailJson` 的参数可读——
+ *  它只依赖这份行数据，不依赖调用方的其它上下文。 */
+type WorkflowDetailTemplateRow = NonNullable<
+  Awaited<ReturnType<typeof workflowTemplateRepository.findByIdForUserSelect>>
+>;
+
 /** Shape returned by the legacy `GET /api/workflows/:id` (and the subgraph
  *  variant) — mirrors the client-side `WorkflowDetail` interface in
  *  components/studio/wf-types.ts.  Some fields only appear on the
@@ -128,131 +140,34 @@ export interface WorkflowDetailFull {
   boundaryLinks?: BoundaryLink[];
 }
 
-
-/** 丢弃某个工作流已缓存的详情（顶层 + 它的全部子图视图）。
+/** 把已读出的工作流行转换成下发给客户端的序列化 JSON。
  *
- *  PATCH 之后必须调用：服务端详情缓存 TTL 30s，不主动清的话客户端就算重新
- *  拉 `detailFull` 也会拿回改动前的富化 IO，界面看起来像「改了没生效」。 */
-export function invalidateWorkflowDetailCache(userId: string, id: string): void {
-  cacheDel(`wf:${userId}:${id}`);
-  cacheDelPrefix(`sg:${userId}:${id}:`);
-}
-
-export async function buildWorkflowDetailFull(
-  userId: string,
-  id: string,
-  opts: { bust?: boolean } = {}
-): Promise<WorkflowDetailFull> {
-  const cacheKey = `wf:${userId}:${id}`;
-
-  /* COMBO option resolver. ComfyUI COMBO widgets
-   * (unet_name / clip_name / vae_name / ckpt_name …) carry NO candidate
-   * list in the raw JSON — the only authoritative source is
-   * /api/object_info.  The resolver fetches it once per request
-   * (fetchObjectInfo itself caches for 5 min + degrades to null when
-   * ComfyUI is unreachable) and resolves `classType + field` → candidate
-   * array so the project-canvas form and the subgraph wrapper node can
-   * render a real <select> instead of a free-text box.  Missing /
-   * unreachable → undefined → graceful fallback to a plain text control.
-   * Implementation lives in workflow-detail-combo.ts. */
-  const { comboOptionsForClassField, comboOptionsForFieldName } =
-    createComboResolver();
-
-  /* ?_bust=1 query flag forces the in-memory LRU to be
-   *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
-   *  a guaranteed-fresh serialisation from Prisma.  Without this, even
-   *  cache:"no-store" on the client would still pull a 60s-stale
-   *  pre-serialised JSON blob from server memory.  The flag is
-   *  deliberately a private client-only token — never logged. */
-  if (opts.bust) {
-    cacheDel(cacheKey);
-  }
-
-  /* ── Local-file workflows: detect on-disk changes & auto re-import ──
-   *  If this workflow was imported from a local file (sourcePath set), we stat
-   *  the file up-front (cheap) so we can re-import it before serving a stale
-   *  cached blob.  This is what lets the user edit the file in ComfyUI and see
-   *  the latest on refresh — with OR without the 🔄 force-reload button.
-   *  `meta` is a lightweight select so we don't drag the (large) rawJson blob
-   *  twice; the full read below still happens when the cache misses. */
-  let sourceChanged = false;
-  let sourceMissing = false;
-  let sourcePath: string | null = null;
-  const meta = await workflowTemplateRepository.findByIdForUserSelect(
-    userId,
-    id,
-    {
-      id: true,
-      sourcePath: true,
-      sourceMtime: true,
-      sourceChecksum: true,
-      taskType: true,
-    }
-  );
-  if (meta?.sourcePath) {
-    sourcePath = meta.sourcePath;
-    const { reimportFromSource } = await import("@/lib/comfyui/importSource");
-    const re = await reimportFromSource({
-      sourcePath: meta.sourcePath,
-      sourceMtime: meta.sourceMtime,
-      sourceChecksum: meta.sourceChecksum,
-      /* 透传已存在的 taskType 让 reimport 时保留
-       * 用户在 UI 里手动设置的值（不再被自动推断覆盖）。 */
-      existingTaskType: meta.taskType ?? null,
-    });
-    if (re.missing) {
-      sourceMissing = true;
-      cacheDel(cacheKey); // rebuild so the missing flag reaches the client
-    } else if (re.update) {
-      await workflowTemplateRepository.update(id, {
-        graph: re.update.graph,
-        rawJson: re.update.rawJson,
-        positions: re.update.positions,
-        paramMap: re.update.paramMap,
-        taskType: re.update.taskType,
-        sourceChecksum: re.update.sourceChecksum,
-        sourceMtime: re.update.sourceMtime,
-      });
-      sourceChanged = true;
-      cacheDel(cacheKey); // force a fresh re-serialisation below
-    }
-  }
-
-  /* Hot path: if the pre-serialized detail is already cached we return it
-   * directly — skipping the Prisma read of the (large) rawJson blob AND the
-   * per-request JSON.stringify.  This is what gets repeat opens to <50ms.
-   * (The cache entry is invalidated on PATCH/DELETE; a 404 is never cached.) */
-  const cached = cachePeek<string>(cacheKey);
-  if (cached !== undefined && typeof cached === "string") {
-    return JSON.parse(cached) as WorkflowDetailFull;
-  }
-
-  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
-    userId,
-    id,
-    {
-      id: true,
-      name: true,
-      taskType: true,
-      modes: true,
-      defaultMode: true,
-      graph: true,
-      paramMap: true,
-      workflowIO: true,
-      rawJson: true,
-      positions: true,
-      apiSource: true,
-    }
-  );
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
-
-  /* The transform below is pure (depends only on tpl.graph / tpl.rawJson /
-   * tpl.positions which never change between writes), so we cache the already
-   * serialized JSON string by user+id.  Repeated opens return it verbatim.
-   *
-   * TTL shortened from 60_000ms → 30_000ms so it locks at
-   * most 30s of staleness even if client cache:"no-store" is bypassed. */
-  const detailJson = await cacheJson(cacheKey, 30_000, async () => {
+ *  这是 `buildWorkflowDetailFull` 里那段 278 行 `cacheJson` 闭包的正身：闭包体
+ *  只被调用一次、又不返回值对象而是一段 JSON 字符串，所以「它做了什么」在调用点
+ *  看不出来，缩进还与外层脱节（ISSUE #570 第 4 项）。抽成具名函数后语义与调用点
+ *  分开、可单独 profile，`cacheJson` 在那头只做缓存包裹。
+ *
+ *  `sourcePath` / `sourceChanged` / `sourceMissing` 由调用方（re-import 判定）
+ *  算好后传入 —— 本函数只管转换，不碰磁盘。 */
+async function buildWorkflowDetailJson(input: {
+  tpl: WorkflowDetailTemplateRow;
+  comboOptionsForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<string[] | undefined>;
+  comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  sourcePath: string | null;
+  sourceChanged: boolean;
+  sourceMissing: boolean;
+}): Promise<string> {
+  const {
+    tpl,
+    comboOptionsForClassField,
+    comboOptionsForFieldName,
+    sourcePath,
+    sourceChanged,
+    sourceMissing,
+  } = input;
   /* 存库 graph 恒为 API 格式对象（Json 列）；rawJson 收窄为 RawWorkflow 视图
    * （根不是普通对象时为 null，下游均有守卫，路径与旧 any 代码等价）。 */
   const graph = tpl.graph as Record<string, ApiWorkflowNode>;
@@ -288,7 +203,8 @@ export async function buildWorkflowDetailFull(
    *      ignored. */
   const positionsFromRaw =
     raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
-  const tplPositions = (tpl.positions as Record<string, [number, number]>) ?? {};
+  const tplPositions =
+    (tpl.positions as Record<string, [number, number]>) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
     ...tplPositions,
@@ -297,7 +213,8 @@ export async function buildWorkflowDetailFull(
    * whole graph rather than treat an empty object as "use these (none)
    * positions".  Return null so the client-side sparse guard kicks in
    * and falls through cleanly. */
-  const positions = Object.keys(effectivePositions).length > 0 ? effectivePositions : null;
+  const positions =
+    Object.keys(effectivePositions).length > 0 ? effectivePositions : null;
 
   /* Per-node input metadata + exact ComfyUI box sizes (see
    * workflow-detail-raw.ts buildRawInputs for the full semantics —
@@ -305,7 +222,7 @@ export async function buildWorkflowDetailFull(
    * COMBO resolution). */
   const { rawInputsById, sizeById } = await buildRawInputs(
     raw,
-    comboOptionsForClassField
+    comboOptionsForClassField,
   );
 
   /* Sparse raw-node metadata — only enough for the canvas editor to render
@@ -341,7 +258,9 @@ export async function buildWorkflowDetailFull(
       const subs = raw.definitions.subgraphs;
       let def = subs[classType];
       if (!def) {
-        const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
+        const matchKey = Object.keys(subs).find(
+          (key) => subs[key]?.id === classType,
+        );
         if (matchKey) def = subs[matchKey];
       }
       if (def && typeof def.name === "string" && def.name.trim()) {
@@ -374,11 +293,15 @@ export async function buildWorkflowDetailFull(
    * ComfyUI 自身画布一致。fallbackRawToApi 走离线启发式、不发网络请求。 */
   const rawView = buildRawView(raw, rawInputsById, sizeById);
 
-  const paramMap = (tpl.paramMap as Record<string, string>) ?? detectParamMap(graph);
+  const paramMap =
+    (tpl.paramMap as Record<string, string>) ?? detectParamMap(graph);
   // User-curated exposure selection: which node params/widgets/outputs are
   // exposed as the workflow's external inputs/outputs.  (ioKey is
   // `${nodeId}::${kind}::${name}`; see the canvas editor's IO-edit mode.)
-  const workflowIORaw = (asRecord(tpl.workflowIO) ?? {}) as Record<string, WorkflowIORawEntry>;
+  const workflowIORaw = (asRecord(tpl.workflowIO) ?? {}) as Record<
+    string,
+    WorkflowIORawEntry
+  >;
 
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
@@ -431,18 +354,25 @@ export async function buildWorkflowDetailFull(
       const rec = asRecord(g);
       if (!rec) return;
       const bounds: unknown[] =
-        Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
+        Array.isArray(rec.bounding) && rec.bounding.length >= 4
+          ? rec.bounding
+          : [0, 0, 0, 0];
       groups.push({
         id: toStringValue(rec.id ?? `g-${idx}`),
         title: typeof rec.title === "string" ? rec.title : "",
-        bounding: [Number(bounds[0]) || 0, Number(bounds[1]) || 0, Number(bounds[2]) || 0, Number(bounds[3]) || 0],
+        bounding: [
+          Number(bounds[0]) || 0,
+          Number(bounds[1]) || 0,
+          Number(bounds[2]) || 0,
+          Number(bounds[3]) || 0,
+        ],
         color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
         /* Group bypass state. Forwarded so rgthree's
          *  `Fast Groups Bypasser` runtime UI can reflect — and toggle —
          *  the `flags.bypass` of every matched group via PATCH.  Stored
          *  on the group's `flags` object in rawJson, same place
          *  ComfyUI's own frontend reads it. */
-        bypass: !!(asRecord(rec.flags)?.bypass),
+        bypass: !!asRecord(rec.flags)?.bypass,
       });
     });
   }
@@ -454,7 +384,8 @@ export async function buildWorkflowDetailFull(
     raw.nodes.forEach((n) => {
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) return;
       const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
-      const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
+      const size =
+        Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
       const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
       const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
       // ComfyUI's Note node may carry an explicit `title` field (newer
@@ -529,11 +460,148 @@ export async function buildWorkflowDetailFull(
     /** Classification: "local" when tied to an on-disk file, else "online". */
     source: sourcePath ? "local" : "online",
   });
-  });
+}
+
+/** 丢弃某个工作流已缓存的详情（顶层 + 它的全部子图视图）。
+ *
+ *  PATCH 之后必须调用：服务端详情缓存 TTL 30s，不主动清的话客户端就算重新
+ *  拉 `detailFull` 也会拿回改动前的富化 IO，界面看起来像「改了没生效」。 */
+export function invalidateWorkflowDetailCache(
+  userId: string,
+  id: string,
+): void {
+  cacheDel(`wf:${userId}:${id}`);
+  cacheDelPrefix(`sg:${userId}:${id}:`);
+}
+
+export async function buildWorkflowDetailFull(
+  userId: string,
+  id: string,
+  opts: { bust?: boolean } = {},
+): Promise<WorkflowDetailFull> {
+  const cacheKey = `wf:${userId}:${id}`;
+
+  /* COMBO option resolver. ComfyUI COMBO widgets
+   * (unet_name / clip_name / vae_name / ckpt_name …) carry NO candidate
+   * list in the raw JSON — the only authoritative source is
+   * /api/object_info.  The resolver fetches it once per request
+   * (fetchObjectInfo itself caches for 5 min + degrades to null when
+   * ComfyUI is unreachable) and resolves `classType + field` → candidate
+   * array so the project-canvas form and the subgraph wrapper node can
+   * render a real <select> instead of a free-text box.  Missing /
+   * unreachable → undefined → graceful fallback to a plain text control.
+   * Implementation lives in workflow-detail-combo.ts. */
+  const { comboOptionsForClassField, comboOptionsForFieldName } =
+    createComboResolver();
+
+  /* ?_bust=1 query flag forces the in-memory LRU to be
+   *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
+   *  a guaranteed-fresh serialisation from Prisma.  Without this, even
+   *  cache:"no-store" on the client would still pull a 60s-stale
+   *  pre-serialised JSON blob from server memory.  The flag is
+   *  deliberately a private client-only token — never logged. */
+  if (opts.bust) {
+    cacheDel(cacheKey);
+  }
+
+  /* ── Local-file workflows: detect on-disk changes & auto re-import ──
+   *  If this workflow was imported from a local file (sourcePath set), we stat
+   *  the file up-front (cheap) so we can re-import it before serving a stale
+   *  cached blob.  This is what lets the user edit the file in ComfyUI and see
+   *  the latest on refresh — with OR without the 🔄 force-reload button.
+   *  `meta` is a lightweight select so we don't drag the (large) rawJson blob
+   *  twice; the full read below still happens when the cache misses. */
+  let sourceChanged = false;
+  let sourceMissing = false;
+  let sourcePath: string | null = null;
+  const meta = await workflowTemplateRepository.findByIdForUserSelect(
+    userId,
+    id,
+    {
+      id: true,
+      sourcePath: true,
+      sourceMtime: true,
+      sourceChecksum: true,
+      taskType: true,
+    },
+  );
+  if (meta?.sourcePath) {
+    sourcePath = meta.sourcePath;
+    const { reimportFromSource } = await import("@/lib/comfyui/importSource");
+    const re = await reimportFromSource({
+      sourcePath: meta.sourcePath,
+      sourceMtime: meta.sourceMtime,
+      sourceChecksum: meta.sourceChecksum,
+      /* 透传已存在的 taskType 让 reimport 时保留
+       * 用户在 UI 里手动设置的值（不再被自动推断覆盖）。 */
+      existingTaskType: meta.taskType ?? null,
+    });
+    if (re.missing) {
+      sourceMissing = true;
+      cacheDel(cacheKey); // rebuild so the missing flag reaches the client
+    } else if (re.update) {
+      await workflowTemplateRepository.update(id, {
+        graph: re.update.graph,
+        rawJson: re.update.rawJson,
+        positions: re.update.positions,
+        paramMap: re.update.paramMap,
+        taskType: re.update.taskType,
+        sourceChecksum: re.update.sourceChecksum,
+        sourceMtime: re.update.sourceMtime,
+      });
+      sourceChanged = true;
+      cacheDel(cacheKey); // force a fresh re-serialisation below
+    }
+  }
+
+  /* Hot path: if the pre-serialized detail is already cached we return it
+   * directly — skipping the Prisma read of the (large) rawJson blob AND the
+   * per-request JSON.stringify.  This is what gets repeat opens to <50ms.
+   * (The cache entry is invalidated on PATCH/DELETE; a 404 is never cached.) */
+  const cached = cachePeek<string>(cacheKey);
+  if (cached !== undefined && typeof cached === "string") {
+    return JSON.parse(cached) as WorkflowDetailFull;
+  }
+
+  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
+    userId,
+    id,
+    {
+      id: true,
+      name: true,
+      taskType: true,
+      modes: true,
+      defaultMode: true,
+      graph: true,
+      paramMap: true,
+      workflowIO: true,
+      rawJson: true,
+      positions: true,
+      apiSource: true,
+    },
+  );
+  if (!tpl)
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+
+  /* The transform below is pure (depends only on tpl.graph / tpl.rawJson /
+   * tpl.positions which never change between writes), so we cache the already
+   * serialized JSON string by user+id.  Repeated opens return it verbatim.
+   *
+   * TTL shortened from 60_000ms → 30_000ms so it locks at
+   * most 30s of staleness even if client cache:"no-store" is bypassed. */
+  const detailJson = await cacheJson(cacheKey, 30_000, () =>
+    buildWorkflowDetailJson({
+      tpl,
+      comboOptionsForClassField,
+      comboOptionsForFieldName,
+      sourcePath,
+      sourceChanged,
+      sourceMissing,
+    }),
+  );
 
   return JSON.parse(detailJson) as WorkflowDetailFull;
 }
-
 
 export async function buildSubgraphDetail(
   userId: string,
@@ -542,7 +610,7 @@ export async function buildSubgraphDetail(
   /** 宿主链前缀（`4` / `4:5`）。拖拽落库时子图内部节点用的是 `宿主:内部`
    *  拼接键，读回时必须按同一个口径还原，否则子图里拖过的位置在下次打开
    *  时全部退回原始坐标。 */
-  hostId = ""
+  hostId = "",
 ): Promise<WorkflowDetailFull> {
   const cacheKey = `sg:${userId}:${id}:${uid}:${hostId}`;
 
@@ -553,20 +621,28 @@ export async function buildSubgraphDetail(
     return JSON.parse(cached) as WorkflowDetailFull;
   }
 
-  const tpl = await workflowTemplateRepository.findByIdForUserSelect(userId, id, {
-    id: true,
-    name: true,
-    taskType: true,
-    graph: true,
-    rawJson: true,
-    positions: true,
-    paramMap: true,
-  });
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
+    userId,
+    id,
+    {
+      id: true,
+      name: true,
+      taskType: true,
+      graph: true,
+      rawJson: true,
+      positions: true,
+      paramMap: true,
+    },
+  );
+  if (!tpl)
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
   const raw = asRawWorkflow(tpl.rawJson);
   if (!raw?.definitions?.subgraphs) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "该工作流没有内嵌子工作流" });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "该工作流没有内嵌子工作流",
+    });
   }
 
   // Subgraph definitions may be keyed by either the UUID or a numeric id;
@@ -575,11 +651,16 @@ export async function buildSubgraphDetail(
   let sub = subgraphs[uid];
   if (!sub) {
     // Try matching by .id field
-    const matchUid = Object.keys(subgraphs).find((key) => subgraphs[key]?.id === uid);
+    const matchUid = Object.keys(subgraphs).find(
+      (key) => subgraphs[key]?.id === uid,
+    );
     if (matchUid) sub = subgraphs[matchUid];
   }
   if (!sub) {
-    throw new TRPCError({ code: "NOT_FOUND", message: `未找到子工作流 ${uid.slice(0, 8)}` });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `未找到子工作流 ${uid.slice(0, 8)}`,
+    });
   }
 
   /* The subgraph transform depends only on tpl.rawJson (immutable between
@@ -596,7 +677,7 @@ export async function buildSubgraphDetail(
     const sg = buildSubgraphGraph(
       sub,
       linkById,
-      boundarySlotsByNode(boundaryLinkInfoById)
+      boundarySlotsByNode(boundaryLinkInfoById),
     );
     /* 子图暴露口的作者名（proxyWidgets 被隔离时长名字的来源），随节点下发给
      *  客户端「就地派生富化」用 —— 顶层富化在这里也在场，直接按
@@ -620,16 +701,21 @@ export async function buildSubgraphDetail(
       boundaryLinkInfoById,
       pinIdByLinkId,
       sg.inputNameByNodeSlot,
-      sg.outputNameByNodeSlot
+      sg.outputNameByNodeSlot,
     );
     /* 被丢掉的边界连线必须留下可诊断的痕迹：否则「这条线没画出来」在界面上
      *  只是一个安静的空白，排障时既不知道是哪条边、也无从判断是数据问题还是
      *  渲染问题（规范 10 §10.3.1：降级不得静默）。 */
-    reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, boundaryLinks);
+    reportDroppedBoundaryLinks(
+      sub,
+      boundaryLinkInfoById,
+      pinIdByLinkId,
+      boundaryLinks,
+    );
     const ann = extractSubgraphAnnotations(
       sub,
       (tpl.positions as Record<string, [number, number]>) ?? {},
-      hostId
+      hostId,
     );
 
     return JSON.stringify({

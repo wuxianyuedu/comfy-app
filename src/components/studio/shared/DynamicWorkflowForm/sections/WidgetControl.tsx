@@ -79,7 +79,11 @@ export function WidgetControl({
       return (
         <input
           className={`${inputCls} ${compact ? "" : "mt-1"} ${missingRequired ? "border-red-400/50" : ""}`}
-          value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
+          value={
+            typeof value === "string" || typeof value === "number"
+              ? String(value)
+              : ""
+          }
           disabled={disabled}
           placeholder={`输入 ${label}${requiredHint}`}
           onChange={(ev) => onValueChange(ev.target.value)}
@@ -95,7 +99,13 @@ export function WidgetControl({
       const randomSeed = isSeed && seedMode === "random";
       const stepper = (
         <NumberField
-          value={randomSeed ? -1 : typeof value === "number" ? value : Number(value) || bounds.min}
+          value={
+            randomSeed
+              ? -1
+              : typeof value === "number"
+                ? value
+                : Number(value) || bounds.min
+          }
           onChange={onValueChange}
           min={bounds.min}
           max={bounds.max}
@@ -105,7 +115,10 @@ export function WidgetControl({
         />
       );
       const seedButton = isSeed ? (
-        <SeedModeButton mode={seedMode} onPick={(mode) => onSeedModeChange?.(mode)} />
+        <SeedModeButton
+          mode={seedMode}
+          onPick={(mode) => onSeedModeChange?.(mode)}
+        />
       ) : null;
 
       if (compact) {
@@ -113,7 +126,7 @@ export function WidgetControl({
          * 余下的卡片宽度留给标签列，避免「宽度 / 高度 / 步数」被截断。 */
         return (
           <div className="flex items-center gap-1.5">
-            <div className="min-w-[120px] max-w-[180px]">{stepper}</div>
+            <div className="max-w-[180px] min-w-[120px]">{stepper}</div>
             {seedButton}
           </div>
         );
@@ -132,7 +145,7 @@ export function WidgetControl({
           type="button"
           disabled={disabled}
           onClick={() => onValueChange(!value)}
-          className={`nodrag nopan ${compact ? "h-[28px] px-2.5" : "mt-1 h-[30px] px-3"} flex w-full items-center justify-between rounded-md bg-canvas-deep text-[12px] transition-colors ${
+          className={`nodrag nopan ${compact ? "h-[28px] px-2.5" : "mt-1 h-[30px] px-3"} bg-canvas-deep flex w-full items-center justify-between rounded-md text-[12px] transition-colors ${
             value ? "text-emerald-700 dark:text-emerald-200" : "text-ink-muted"
           } ${missingRequired ? "ring-1 ring-red-400/50" : ""}`}
         >
@@ -154,7 +167,7 @@ export function WidgetControl({
       return (
         <button
           type="button"
-          className={`nodrag nopan ${compact ? "h-[28px] w-full" : "mt-1 py-1.5"} inline-flex items-center gap-1.5 rounded-md bg-canvas-deep px-2.5 text-[11px] text-ink-soft transition-colors hover:text-ink-bright ${
+          className={`nodrag nopan ${compact ? "h-[28px] w-full" : "mt-1 py-1.5"} bg-canvas-deep text-ink-soft hover:text-ink-bright inline-flex items-center gap-1.5 rounded-md px-2.5 text-[11px] transition-colors ${
             missingRequired ? "ring-1 ring-red-400/50" : ""
           }`}
           disabled={disabled || uploading}
@@ -177,7 +190,7 @@ export function WidgetControl({
           disabled={disabled}
           placeholder={`选择 ${label}${requiredHint}`}
           className={`w-full ${compact ? "" : "mt-1"} ${
-            missingRequired ? "ring-1 ring-red-400/50 rounded-md" : ""
+            missingRequired ? "rounded-md ring-1 ring-red-400/50" : ""
           }`}
           popoverMinWidth={compact ? 220 : 260}
         />

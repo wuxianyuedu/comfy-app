@@ -45,12 +45,15 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { useLogPanel } from "./LogProvider";
+import { formatTime } from "./log-format";
+import { SaveExportButton } from "./SaveExportButton";
 import {
   LOG_PANEL_OVERLAY_Z_CLASS,
   LOG_PANEL_POPUP_Z_CLASS,
 } from "./log-panel-layers";
 import { overlayClass } from "~/lib/full-screen-layer";
 import {
+  FILTER_SELECTED_STYLES,
   LEVEL_BADGE_STYLES,
   LEVEL_TEXT_STYLES,
   LOG_ROW_TEXT_ATTRIBUTE,
@@ -181,7 +184,8 @@ const LEVEL_LABEL_STYLES: Record<LogFilter, string> = {
   debug: "text-ink-muted hover:text-ink",
   info: "text-cyan-700 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-200",
   warn: "text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200",
-  error: "text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200",
+  error:
+    "text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200",
 };
 
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
@@ -205,31 +209,6 @@ const ORIGIN_LABELS: LogOriginFilter[] = [
   "launcher",
   CONSOLE_ORIGIN,
 ];
-
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function formatTime(ts: number): string {
-  const date = new Date(ts);
-  const time = date.toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
-  if (!isSameDay(date, new Date())) {
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${month}-${day} ${time}`;
-  }
-  return time;
-}
 
 /* Per-message render cache: a parsed log line is immutable, so we cache the
  * produced fragment list by the raw message string.  This avoids re-running the
@@ -360,7 +339,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
        * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
       className={`shrink-0 self-center rounded p-1 transition-opacity ${
         state === "idle"
-          ? "hover:bg-subtle hover:text-ink focus-visible:opacity-100 opacity-0 group-hover:opacity-100"
+          ? "hover:bg-subtle hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
           : "opacity-100"
       } ${
         state === "done"
@@ -777,6 +756,14 @@ export function LogPanel() {
   };
 
   const total = filteredLogs.length;
+  /* 「现在复制/下载的是哪一类」——与页脚的筛选摘要同口径，导出前一眼可见。 */
+  const scopeLabel = [
+    ORIGIN_TEXT[origin ?? "all"],
+    FILTER_LABELS.find((item) => item.value === filter)?.label ?? "全部",
+    search.trim() ? `搜索「${search.trim()}」` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   if (!isOpen) return null;
 
@@ -791,29 +778,21 @@ export function LogPanel() {
         className={`border-border-strong bg-panel flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
       >
         {/* Header */}
-        {/* 行头：宽窗口下是一行（标题 / 筛选器 / 空白 / 搜索 / 来源 / 操作），
-            窄窗口下筛选器整组**折到第二行**（见筛选器容器的 `min-w`），
-            因此行高用 `min-h`、允许内容把它撑高，而不是钉死一个固定高度。
-
-            为什么必须能折行：筛选器五个按钮加标题、搜索、来源下拉、六个操作按钮
-            的总宽在 700px 上下就超过可用宽度；此前只有「一起硬挤」一条路，挤到
-            最后标题换行、搜索框缩成图标、筛选器只剩下一列竖字。折行是这类
-            「控件数量固定、宽度不定」行头的标准解法。 */}
+        {/* 行头：宽窗口一行，窄窗口下筛选器整组折到第二行（判据是筛选器容器的
+            `min-w-56`），所以行高用 `min-h`、允许内容把它撑高而不是钉死高度。 */}
         <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
           <div className="flex shrink-0 items-center gap-2">
-            <FileText size={16} className="shrink-0 text-violet-700 dark:text-violet-400" />
+            <FileText
+              size={16}
+              className="shrink-0 text-violet-700 dark:text-violet-400"
+            />
             {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
                 （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
             <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
               应用日志
             </span>
-            {/* 这里**不再**复述任何计数（ISSUE #262 五审）。
-                它此前是一块灰底胶囊，写着「警告 n · 错误 n」——而这两个数在右边
-                的级别按钮上已经各有一份（同一个 `originCounts`）。用户圈出的
-                「警告/错误显示重复了，左侧那两个去掉」指的就是它：一项数据两处
-                出现，还会把标题行本就紧张的横向空间挤掉。
-                计数只保留在级别按钮上，颜色由那儿的文字承担（「警告」黄、
-                「错误」红）；完整分类数（含信息）在各按钮的悬浮说明里。 */}
+            {/* 标题旁不复述任何计数：数字的唯一出口是右侧级别按钮（同一份
+                `originCounts`），完整分类数（含信息）在各按钮的悬浮说明里。 */}
           </div>
 
           {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径。
@@ -841,18 +820,15 @@ export function LogPanel() {
                 type="button"
                 onClick={() => setFilter(option.value)}
                 aria-pressed={filter === option.value}
-                /* 横向预算 = 左右内边距 + 标签 + 数字。`min-w-fit` 取的是**内容
-                 * 固有宽度**（不是容器宽度）：`min-w-0` 会让容器压到能忽略固有宽度、
-                 * 于是「警告」被切成 `警…`——用户报的就是这个（ISSUE #262）。
-                 *
-                 * 不省略的代价是窄窗口下整组可能横向溢出，所以同步去掉
-                 * `overflow-hidden`：它是 `text-overflow: ellipsis` 生效的前提之一，
-                 * 留着它等于给省略号留后门。横向溢出由行头的 `flex-wrap`
-                 * （容器 `min-w-56` 是折行判据）接住。 */
+                /* `min-w-fit` 取的是**内容固有宽度**：`min-w-0` 会让容器压到能
+                 * 忽略固有宽度、于是「警告」被切成 `警…`（ISSUE #262）。窄窗口下
+                 * 整组可能横向溢出，交给行头的 `flex-wrap` 接住（折行判据就是
+                 * 上面容器的 `min-w-56`），而不是靠切字。
+                 * 选中态见 log-row-style 的 FILTER_SELECTED_STYLES。 */
                 className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${
                   filter === option.value
-                    ? "bg-subtle"
-                    : "hover:bg-subtle/70"
+                    ? FILTER_SELECTED_STYLES
+                    : "hover:bg-subtle"
                 } ${LEVEL_LABEL_STYLES[option.value]}`}
                 title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
               >
@@ -880,7 +856,7 @@ export function LogPanel() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索日志（支持命中高亮）..."
-              className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus:border-violet-500/40 h-8 w-full rounded-lg border pr-7 pl-8 text-[13px] outline-none"
+              className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter h-8 w-full rounded-lg border pr-7 pl-8 text-[13px] outline-none focus:border-violet-500/40"
             />
             {search && (
               <button
@@ -893,10 +869,9 @@ export function LogPanel() {
             )}
           </div>
 
-          {/* 来源筛选贴到最右侧（搜索框之后）。候选列表里每项自带
-              「条数 / 信息 / 警告 / 错误」四列——此前只有名字，用户必须先切过去
-              才知道那边有没有问题，切换后看到空列表就以为日志丢了（ISSUE #360）。
-              位置放在最右是用户的直接要求：中间空出来的宽度归左侧的类别与条数。 */}
+          {/* 来源筛选贴最右（用户要求：中间让出来的宽度归左侧的类别与条数）。
+              候选列表每项自带「条数 / 信息 / 警告 / 错误」四列——此前只有名字，
+              用户必须先切过去才知道那边有没有问题（ISSUE #360）。 */}
           <OriginSelect
             value={origin ?? "all"}
             countsByOrigin={countsByOrigin}
@@ -909,30 +884,39 @@ export function LogPanel() {
               type="button"
               onClick={() => setWrap((prev) => !prev)}
               title={wrap ? "折叠超长行" : "自动换行显示"}
+              /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
               className={`rounded-md p-2 transition-colors ${
                 wrap
-                  ? "bg-subtle text-ink-bright"
+                  ? `${FILTER_SELECTED_STYLES} text-ink-bright`
                   : "text-ink-muted hover:bg-subtle hover:text-ink"
               }`}
             >
               <Type size={16} />
             </button>
-            <button
-              type="button"
-              onClick={copyAll}
-              title="复制全部日志"
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
-            >
-              <Copy size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={download}
-              title="下载为文本文件"
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
-            >
-              <Download size={16} />
-            </button>
+            {/* title 写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。 */}
+            {(
+              [
+                { onClick: copyAll, label: "复制", Icon: Copy },
+                { onClick: download, label: "下载为文本文件", Icon: Download },
+              ] as const
+            ).map(({ onClick, label, Icon }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={onClick}
+                title={`${label}当前筛选的全部日志（${scopeLabel} · ${total} 条）`}
+                aria-label={`${label}当前筛选的全部日志`}
+                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
+              >
+                <Icon size={16} />
+              </button>
+            ))}
+            {/* 服务端落盘版导出（见 SaveExportButton）。 */}
+            <SaveExportButton
+              label={origin ?? "all"}
+              scopeLabel={scopeLabel}
+              total={total}
+            />
             <button
               type="button"
               onClick={clear}

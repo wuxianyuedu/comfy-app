@@ -17,13 +17,18 @@ vi.mock("../core/repository", () => ({
     markRunning: vi.fn().mockResolvedValue(undefined),
   },
 }));
-vi.mock("~/server/lib/logger", () => ({
+vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock("./client", () => ({ postPrompt: vi.fn(), resolveComfyBase: vi.fn() }));
 vi.mock("./raw", () => ({ prepareGraphForExecution: vi.fn() }));
-vi.mock("./validation", () => ({ extractValidationErrors: vi.fn().mockReturnValue([]) }));
-vi.mock("./executor-cli", () => ({ executeViaComfyCli: vi.fn(), cliProcs: new Map() }));
+vi.mock("./validation", () => ({
+  extractValidationErrors: vi.fn().mockReturnValue([]),
+}));
+vi.mock("./executor-cli", () => ({
+  executeViaComfyCli: vi.fn(),
+  cliProcs: new Map(),
+}));
 vi.mock("./executor-finalize", () => ({
   fail: vi.fn().mockResolvedValue(undefined),
   finalizeFailure: vi.fn().mockResolvedValue(undefined),
@@ -32,7 +37,9 @@ vi.mock("./executor-ws", () => ({
   connect: vi.fn(),
   armWatchdog: vi.fn(),
 }));
-vi.mock("./executor-errors", () => ({ buildPromptError: vi.fn().mockReturnValue("boom") }));
+vi.mock("./executor-errors", () => ({
+  buildPromptError: vi.fn().mockReturnValue("boom"),
+}));
 
 import { taskRepository } from "../core/repository";
 import { postPrompt } from "./client";
@@ -153,7 +160,9 @@ describe("processQueue — 并发槽位", () => {
 describe("processQueue — raw 路径异常必须释放槽位", () => {
   it("executeViaComfyCli 抛异常 → 交给 finalizeFailure 收口（槽位由收口路径释放），队列能继续推进", async () => {
     openWs();
-    fnMock(executeViaComfyCli).mockRejectedValue(new Error("spawn python ENOENT"));
+    fnMock(executeViaComfyCli).mockRejectedValue(
+      new Error("spawn python ENOENT"),
+    );
     state().queue.push({ taskId: "t-raw", rawJson: { "1": {} } });
 
     await processQueue();
@@ -163,8 +172,14 @@ describe("processQueue — raw 路径异常必须释放槽位", () => {
 
     // 关键契约：异常被 .catch 接住并**走统一收口路径**（而不是变成
     // unhandled rejection 让槽位永远卡在 1）。
-    expect(finalizeFailure).toHaveBeenCalledWith("t-raw", "", "spawn python ENOENT");
-    expect(logsOf("t-raw").some((m) => m.includes("raw 工作流启动异常"))).toBe(true);
+    expect(finalizeFailure).toHaveBeenCalledWith(
+      "t-raw",
+      "",
+      "spawn python ENOENT",
+    );
+    expect(logsOf("t-raw").some((m) => m.includes("raw 工作流启动异常"))).toBe(
+      true,
+    );
   });
 
   it("收口路径本身再失败（DB down）→ 仍手动释放槽位，队列不被一条坏任务堵死", async () => {
@@ -179,7 +194,9 @@ describe("processQueue — raw 路径异常必须释放槽位", () => {
 
     // 二次失败必须走「手动 -1」兜底：这是保证队列继续推进的最后一道闸
     expect(state().active).toBe(0);
-    expect(logsOf("t-raw-db").some((m) => m.includes("finalizeFailure 二次失败"))).toBe(true);
+    expect(
+      logsOf("t-raw-db").some((m) => m.includes("finalizeFailure 二次失败")),
+    ).toBe(true);
   });
 
   it("raw 路径正常启动时不写「启动异常」，槽位由后续收口释放", async () => {
@@ -190,7 +207,9 @@ describe("processQueue — raw 路径异常必须释放槽位", () => {
     await processQueue();
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(logsOf("t-raw-ok").some((m) => m.includes("raw 工作流启动异常"))).toBe(false);
+    expect(
+      logsOf("t-raw-ok").some((m) => m.includes("raw 工作流启动异常")),
+    ).toBe(false);
     expect(executeViaComfyCli).toHaveBeenCalled();
   });
 });
@@ -209,7 +228,9 @@ describe("processQueue — API 格式路径的提交", () => {
     await processQueue();
 
     const msgs = logsOf("t-api");
-    expect(msgs.some((m) => m.includes("准备提交到 ComfyUI /prompt"))).toBe(true);
+    expect(msgs.some((m) => m.includes("准备提交到 ComfyUI /prompt"))).toBe(
+      true,
+    );
     expect(msgs.some((m) => m.includes("ComfyUI 已接收"))).toBe(true);
   });
 
@@ -225,7 +246,11 @@ describe("processQueue — API 格式路径的提交", () => {
     await processQueue();
 
     expect(postPrompt).not.toHaveBeenCalled();
-    const [, , reason] = fnMock(fail).mock.calls[0] as unknown as [string, string, string];
+    const [, , reason] = fnMock(fail).mock.calls[0] as unknown as [
+      string,
+      string,
+      string,
+    ];
     expect(String(reason)).toContain("没有可执行的节点");
   });
 
@@ -242,14 +267,21 @@ describe("processQueue — API 格式路径的提交", () => {
     });
     const { extractValidationErrors } = await import("./validation");
     vi.mocked(extractValidationErrors).mockReturnValue([
-      { nodeId: "5", classType: "KSampler", field: "cfg", message: "must be a float" },
+      {
+        nodeId: "5",
+        classType: "KSampler",
+        field: "cfg",
+        message: "must be a float",
+      },
     ] as never);
     state().queue.push({ taskId: "t-bad", prompt: { "5": {} } });
 
     await processQueue();
 
     const msgs = logsOf("t-bad");
-    expect(msgs.some((m) => m.includes("节点 5") && m.includes("cfg"))).toBe(true);
+    expect(msgs.some((m) => m.includes("节点 5") && m.includes("cfg"))).toBe(
+      true,
+    );
     expect(fail).toHaveBeenCalled();
   });
 });

@@ -31,6 +31,13 @@ export const LIB_NODE_PARAMS = "lib:params";
 export const LIB_NODE_HOST = "lib:host";
 export const LIB_NODE_OUTPUTS = "lib:outputs";
 
+/** 三列共用的一层**透明背景板**（铺满面板可视高度，见 `LibraryNodeSizing.fillHeight`）。
+ *
+ *  它唯一的职责是把画布的缩放下限钉住，让 `fitView` 不会在「卡片比视口矮」时
+ *  只放大到内容高度、把画布底边以下留成面板底色（ISSUE #596）。因为不承载内容、
+ *  也没有端口，抬高它不会影响任何端点几何 —— 三列节点的声明高度继续照实给。 */
+export const LIB_NODE_BACKDROP = "lib:backdrop";
+
 /** 边的业务身份：它连的是**哪个对外参数 / 哪个输出口**。
  *
  *  卡片上的圆点与线是同一份事实的两端，点选一条线要能反查出「点的是哪个口」
@@ -65,7 +72,11 @@ export function libraryEdgeOwner(
   const rest = parts.slice(2).join(":");
   const sep = rest.indexOf("?");
   if (sep < 0) return null;
-  return { namespace, entryId: rest.slice(0, sep), handleId: rest.slice(sep + 1) };
+  return {
+    namespace,
+    entryId: rest.slice(0, sep),
+    handleId: rest.slice(sep + 1),
+  };
 }
 
 /** 一条库内边的两端锚点（来自映射表）。 */
@@ -88,7 +99,12 @@ export function libraryEdgeStyle(manual: boolean): {
 } {
   return manual
     ? { stroke: MANUAL_STROKE, strokeWidth: 2.5, opacity: 1 }
-    : { stroke: AUTO_STROKE, strokeWidth: 2, strokeDasharray: "6 4", opacity: 0.75 };
+    : {
+        stroke: AUTO_STROKE,
+        strokeWidth: 2,
+        strokeDasharray: "6 4",
+        opacity: 0.75,
+      };
 }
 
 /** 自动判定落点的描边色（与编辑器画布一致）。 */
@@ -100,7 +116,6 @@ export const DRAG_STROKE = "#c4b5fd";
 
 /** 选中一条线时的高亮色（两侧卡片与线同时提亮）。 */
 export const SELECTED_STROKE = "#c4b5fd";
-
 
 /** 三列节点的首帧布局尺寸（px）。 */
 export interface LibraryNodeSizing {
@@ -114,6 +129,32 @@ export interface LibraryNodeSizing {
   columnGap: number;
   originX: number;
   originY: number;
+  /* ── 两套高度尺寸（不是一个值）────────────────────────────────────────
+   * 用户口径（ISSUE #596「全屏时，下方区域有空白却不是画布」）：画布要一直
+   * 铺到面板底部，下面那块空白不该出现。
+   *
+   * 成因：面板靠 React Flow 的 `fitView` 把三列收进视口，而 `fitView` 按**节点
+   * 的并集包围盒**缩放。卡片的真实高度是内容撑出来的（通常 300~400px），而
+   * 视口可能上千像素高 —— 于是「内容比视口矮」时 fitView 反被内容高度限制、
+   * 只放大到贴满**内容高度**，画布底边以下就落回面板底色，成了那块空白。
+   *
+   * 两个尺寸各司其职：
+   *   · `envelopeHeight` —— 首个（宿主）节点的**声明尺寸**，给 React Flow 首帧
+   *     算边落点用（jsdom / 布局前量不到 DOM 尺寸会一条边都不画），沿用卡片列
+   *     高度量级即可，不再承担「撑满视口」的职责；
+   *   · `fillHeight` —— 三列节点共用的一层**透明背景板**高度，铺满面板可视高度
+   *     与卡片列高度中的较大者。它把画布的缩放下限钉住：fitView 的最优缩放因此
+   *     只会是「等比铺满视口」的那个值，画布不再停在内容高度上。
+   *
+   * 为什么是「背景板」而不是把三个节点的声明高度一起抬到 `fillHeight`：节点的
+   * 声明尺寸会被 React Flow 用来**断言节点尺寸**（首帧给边算落点），声明得比
+   * 实际卡片高，卡片上的端口圆点就会被算到偏下的位置、线从卡片半空里穿出来。
+   * 背景板是空节点、没有端口，抬高它不影响任何端点几何。
+   * ──────────────────────────────────────────────────────────────────── */
+  /** 宿主节点的首帧声明高度（px）。 */
+  envelopeHeight: number;
+  /** 背景板的渲染高度（px）：面板可视高度与卡片列高度取大。 */
+  fillHeight: number;
 }
 
 /** 三列节点的布局：左列参数卡片 → 宿主卡片 → 右列输出卡片，横向排开。
@@ -133,6 +174,43 @@ export function layoutLibraryNodes(
       x: originX + paramsWidth + columnGap + hostWidth + columnGap,
       y: originY,
     },
+    /* 背景板从三列的左上角起铺（它比三列都大，位置对包围盒没有影响）。 */
+    [LIB_NODE_BACKDROP]: { x: originX, y: originY },
+  };
+}
+
+/* ── 背景板几何（纯函数，可单测）────────────────────────────────────────
+ * 两层尺寸都由「视口」与「内容」取大，缺一都会退回那块空白：
+ *   · 宽 —— 面板窄时三列会横向溢出，画布要跟到三列右缘（右列不可见 = 线断了）；
+ *   · 高 —— 面板高时画布要铺到面板底边（用户报的就是这一条）。
+ * 两者都加一点留白，免得内容正好贴死在背景板边缘上。 */
+
+/** 背景板四周的留白（px）：内容与视口边界之间留一口气。 */
+export const BACKDROP_PADDING = 120;
+
+/** 三列的包围盒（含列宽与列间距），背景板至少要盖住它。 */
+export function libraryContentExtent(sizing: LibraryNodeSizing): {
+  width: number;
+  height: number;
+} {
+  const { paramsWidth, hostWidth, outputsWidth, columnGap, envelopeHeight } =
+    sizing;
+  return {
+    width: paramsWidth + hostWidth + outputsWidth + columnGap * 2,
+    height: envelopeHeight,
+  };
+}
+
+/** 背景板尺寸：视口与内容取大，各加 `BACKDROP_PADDING`。 */
+export function libraryBackdropSize(
+  sizing: LibraryNodeSizing,
+  viewport: { width: number; height: number },
+): { width: number; height: number } {
+  const content = libraryContentExtent(sizing);
+  const clamp = (viewportSide: number) => Math.max(1, Math.round(viewportSide));
+  return {
+    width: Math.max(content.width, clamp(viewport.width)) + BACKDROP_PADDING,
+    height: Math.max(content.height, clamp(viewport.height)) + BACKDROP_PADDING,
   };
 }
 
@@ -148,6 +226,8 @@ export function layoutLibraryNodes(
 export interface LibraryNodeContent {
   params: {
     cards: LibraryParamCards;
+    /** 该模式生效的契约口清单（卡片头取名与「工坊封装」页签同一份）。 */
+    contractEntries: readonly { id: string; label: string }[];
     canWire: boolean;
     selectedEntryId: string | null;
     onSelect: (entryId: string | null) => void;

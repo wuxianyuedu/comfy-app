@@ -1,6 +1,6 @@
 // ── 角色定妆照：生成 / 导入的网络层（规范 17 §17.2 第②层）──────────────────
 // 三条链路都是既有的，这里只做「按定妆照语义组装参数 + 把结果归一成一条候选地址」：
-//   · 本地：内置 txt2img → tRPC generate.generate → SSE 任务流（与镜头生图同链路）
+//   · 本地：工作流库工作流 → tRPC generate.generate → SSE 任务流（与镜头生图同链路）
 //   · 远端：/api/workshop-api/generate 的 image 通道（OpenAI 兼容 images/generations）
 //   · 导入：素材库「角色」分类（/api/materials），落盘后拿到可引用的本地地址
 
@@ -12,25 +12,18 @@ import {
 } from "~/lib/size-presets";
 import type { SavedOutput } from "./api-channel-shared";
 import {
-  DEFAULT_GEN_PARAMS,
-  paramInt,
-  paramNumber,
-  paramString,
-} from "./param-coerce";
-import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
   startLocalGenerate,
   watchTask,
-  type GenerateInput,
   type TaskLogEntry,
 } from "./generation-client";
 
 /** 定妆照生成请求：提示词直接取角色卡的正 / 负向提示词，模型与尺寸由调用方给。
  *
  *  尺寸给的是**尺寸表达**（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
- *  `lib/size-presets`），不是 "WxH" 字符串：三条通道各自要的形状由本层现算
- *  （内置 txt2img 要 WxH、远端要「比例 + 百万像素」、库工作流直接吃尺寸表达）。 */
+ *  `lib/size-presets`），不是 "WxH" 字符串：两条通道各自要的形状由本层现算
+ *  （远端要「比例 + 百万像素」、库工作流直接吃尺寸表达）。 */
 export interface PortraitRequest {
   prompt: string;
   negative?: string;
@@ -43,55 +36,8 @@ export interface LocalPortraitHandlers {
   onLog?: (entry: TaskLogEntry) => void;
 }
 
-/** 角色卡推荐参数（Skill 默认值）→ 内置 txt2img 输入；缺项用与镜头生图相同的缺省。 */
-function buildLocalPortraitInput(
-  req: PortraitRequest,
-  opts: { checkpoint: string; params?: Record<string, unknown> },
-): GenerateInput {
-  const params = opts.params ?? {};
-  return {
-    workflow: "txt2img",
-    prompt: req.prompt,
-    negative: req.negative,
-    checkpoint: opts.checkpoint || undefined,
-    steps: paramInt(params.steps, DEFAULT_GEN_PARAMS.steps),
-    cfg: paramNumber(params.cfg, DEFAULT_GEN_PARAMS.cfg),
-    sampler: paramString(params.sampler, DEFAULT_GEN_PARAMS.sampler),
-    scheduler: paramString(params.scheduler, DEFAULT_GEN_PARAMS.scheduler),
-    /* 内置 txt2img 只认 "WxH" —— 唯一还在用字符串表达的通道，由尺寸表达现算。 */
-    size: sizeSpecToWxH(req.size),
-    count: 1,
-  };
-}
-
-/** 本机通道生成一张定妆照：提交任务并等它跑完，返回任务 id 与产物地址。 */
-export async function generateLocalPortrait(
-  req: PortraitRequest,
-  opts: { checkpoint: string; params?: Record<string, unknown> },
-  handlers: LocalPortraitHandlers = {},
-): Promise<{ taskId: string; url: string }> {
-  const taskId = await startLocalGenerate(buildLocalPortraitInput(req, opts));
-  const url = await new Promise<string>((resolve, reject) => {
-    let imageUrl = "";
-    watchTask(taskId, {
-      onProgress: (pct) => handlers.onProgress?.(pct),
-      onLog: (entry) => handlers.onLog?.(entry),
-      onOutput: (output: SavedOutput) => {
-        if (output.kind !== "video" && !imageUrl) imageUrl = output.url;
-      },
-      onSettled: (result) => {
-        if (!result.ok) reject(new Error(result.message ?? "定妆照生成失败"));
-        else if (imageUrl) resolve(imageUrl);
-        else reject(new Error("任务完成但没有产出图片"));
-      },
-    });
-  });
-  return { taskId, url };
-}
-
-/** 库工作流链路生成一张定妆照：按对外参数封装（提示词 / 尺寸，其余走默认值）
+/** 本地通道生成一张定妆照：按对外参数封装（提示词 / 尺寸，其余走默认值）
  *  组装输入并提交本地 ComfyUI，返回任务 id 与产物地址。
- *  与 generateLocalPortrait（内置 txt2img + Checkpoint）互为替代 ——
  *  工作流库里配置好对外参数的工作流，在角色卡本地通道像远端模型一样被选择。 */
 export async function generateWorkflowPortrait(
   req: PortraitRequest,

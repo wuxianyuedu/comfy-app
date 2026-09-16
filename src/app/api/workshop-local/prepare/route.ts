@@ -8,8 +8,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { uploadImage } from "@/lib/comfyui/client";
 import { isRecord } from "@/lib/workshop/api-channel-shared";
-import { resolveMediaBytes, strField } from "@/lib/workshop/media-source.server";
+import {
+  resolveMediaBytes,
+  strField,
+} from "@/lib/workshop/media-source.server";
 import { errorMessage } from "~/lib/error-message";
+import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,10 +31,7 @@ function extForMime(mime: string): string {
 export async function POST(req: NextRequest) {
   const user = await requireServerUser();
   if (!user) {
-    return NextResponse.json(
-      { error: { code: "auth.required", message: "未登录或会话已失效" } },
-      { status: 401 },
-    );
+    return unauthorizedResponse();
   }
 
   let body: unknown;
@@ -48,11 +49,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { buffer, mime } = await resolveMediaBytes(image, new URL(req.url).origin);
+    const { buffer, mime } = await resolveMediaBytes(
+      image,
+      new URL(req.url).origin,
+    );
     const filename = `workshop-ref-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extForMime(mime)}`;
     const uploaded = await uploadImage(buffer, filename);
     return NextResponse.json({ filename: uploaded.name ?? filename });
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "参考图准备失败") }, { status: 502 });
+    return NextResponse.json(
+      { error: errorMessage(e, "参考图准备失败") },
+      { status: 502 },
+    );
   }
 }

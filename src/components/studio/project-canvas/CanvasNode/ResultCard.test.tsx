@@ -37,7 +37,12 @@ describe("ResultCard", () => {
 
   it("path 已是绝对路径时不重复加前缀", () => {
     render(
-      <ResultCard kind="image" status="idle" path="/outputs/b.png" onReplace={vi.fn()} />,
+      <ResultCard
+        kind="image"
+        status="idle"
+        path="/outputs/b.png"
+        onReplace={vi.fn()}
+      />,
     );
     expect(screen.getByRole("img", { name: "result" })).toHaveAttribute(
       "src",
@@ -55,7 +60,10 @@ describe("ResultCard", () => {
         onReplace={vi.fn()}
       />,
     );
-    expect(container.querySelector("video")).toHaveAttribute("src", "/out/video.mp4");
+    expect(container.querySelector("video")).toHaveAttribute(
+      "src",
+      "/out/video.mp4",
+    );
     expect(screen.getByText("生成中…")).toBeInTheDocument();
   });
 
@@ -69,13 +77,21 @@ describe("ResultCard", () => {
         onReplace={vi.fn()}
       />,
     );
-    expect(container.querySelector("video")).toHaveAttribute("src", "/frame.png");
+    expect(container.querySelector("video")).toHaveAttribute(
+      "src",
+      "/frame.png",
+    );
     expect(container.querySelector("img")).toBeNull();
   });
 
   it("path 后缀 .webm 也视为视频", () => {
     const { container } = render(
-      <ResultCard kind="image" status="idle" path="clip.webm" onReplace={vi.fn()} />,
+      <ResultCard
+        kind="image"
+        status="idle"
+        path="clip.webm"
+        onReplace={vi.fn()}
+      />,
     );
     expect(container.querySelector("video")).not.toBeNull();
   });
@@ -122,14 +138,28 @@ describe("ResultCard", () => {
   });
 
   it("agent 卡片走文本分支", () => {
-    render(<ResultCard kind="agent" status="error" text="回复内容" onReplace={vi.fn()} />);
+    render(
+      <ResultCard
+        kind="agent"
+        status="error"
+        text="回复内容"
+        onReplace={vi.fn()}
+      />,
+    );
     expect(screen.getByText("回复内容")).toBeInTheDocument();
     expect(screen.getByText("生成失败")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "编辑" })).toBeInTheDocument();
   });
 
   it("非 script/agent 类型但携带文本(且无 src)时也走文本分支", () => {
-    render(<ResultCard kind="text" status="done" text="参考文案" onReplace={vi.fn()} />);
+    render(
+      <ResultCard
+        kind="text"
+        status="done"
+        text="参考文案"
+        onReplace={vi.fn()}
+      />,
+    );
     expect(screen.getByText("参考文案")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "A-" })).toBeInTheDocument();
   });

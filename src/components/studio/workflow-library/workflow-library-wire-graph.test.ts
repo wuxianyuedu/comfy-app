@@ -16,9 +16,12 @@ import type { Edge } from "@xyflow/react";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { buildParamEntries } from "~/lib/workflow-param-mapping";
 import {
+  LIB_NODE_BACKDROP,
   LIB_NODE_HOST,
   LIB_NODE_OUTPUTS,
   LIB_NODE_PARAMS,
+  libraryBackdropSize,
+  libraryContentExtent,
   libraryEdgeId,
   libraryEdgeOwner,
   layoutLibraryNodes,
@@ -132,8 +135,12 @@ describe("边的两端与 handle 取值", () => {
   it("自动线画虚线、作者改过的画实线（与编辑器画布同一套语义）", () => {
     const auto = buildInputEdge(inputWire);
     const manual = buildInputEdge({ ...inputWire, manual: true });
-    expect((auto.style as { strokeDasharray?: string }).strokeDasharray).toBe("6 4");
-    expect((manual.style as { strokeDasharray?: string }).strokeDasharray).toBeUndefined();
+    expect((auto.style as { strokeDasharray?: string }).strokeDasharray).toBe(
+      "6 4",
+    );
+    expect(
+      (manual.style as { strokeDasharray?: string }).strokeDasharray,
+    ).toBeUndefined();
   });
 
   it("两侧一起派生：几条 wire 就几条边", () => {
@@ -246,10 +253,64 @@ describe("三列布局", () => {
       columnGap: 96,
       originX: 0,
       originY: 0,
+      envelopeHeight: 720,
+      fillHeight: 720,
     });
     expect(at[LIB_NODE_PARAMS]!.x).toBeLessThan(at[LIB_NODE_HOST]!.x);
     expect(at[LIB_NODE_HOST]!.x).toBeLessThan(at[LIB_NODE_OUTPUTS]!.x);
     expect(at[LIB_NODE_HOST]!.x - at[LIB_NODE_PARAMS]!.x).toBe(220 + 96);
     expect(at[LIB_NODE_OUTPUTS]!.x - at[LIB_NODE_HOST]!.x).toBe(380 + 96);
+  });
+
+  it("背景板与三列同起于左上角（位置不影响包围盒）", () => {
+    const at = layoutLibraryNodes(SIZING);
+    expect(at[LIB_NODE_BACKDROP]).toEqual(at[LIB_NODE_PARAMS]);
+  });
+});
+
+/* 背景板尺寸 —— ISSUE #596「全屏时，下方区域有空白却不是画布」。
+ *
+ * 画布的缩放由 `fitView` 按节点包围盒算：内容比视口矮时它只会放大到内容高度，
+ * 画布底边以下就落回面板底色。背景板把包围盒撑到「视口与内容取大」，于是最优
+ * 缩放永远是「等比铺满视口」的那个值。
+ *
+ * 两个方向都要取大，缺一都会退回某种「没铺满」：
+ *   · 只按内容算高 → 面板高时下方留白（用户报的就是这个）；
+ *   · 只按内容算宽 → 面板窄时右列（对外输出参数）被挤出视野。 */
+const SIZING = {
+  paramsWidth: 220,
+  outputsWidth: 200,
+  hostWidth: 380,
+  columnGap: 96,
+  originX: 0,
+  originY: 0,
+  envelopeHeight: 720,
+  fillHeight: 720,
+};
+
+describe("背景板尺寸：视口与内容取大", () => {
+  it("面板比内容高时按视口给高（这才是不留白的那一条）", () => {
+    const size = libraryBackdropSize(SIZING, { width: 800, height: 1400 });
+    expect(size.height).toBeGreaterThanOrEqual(1400);
+    expect(size.width).toBeGreaterThanOrEqual(800);
+  });
+
+  it("面板比内容矮时按内容给（画不出比内容更小的画布，否则右列看不见）", () => {
+    const content = libraryContentExtent(SIZING);
+    const size = libraryBackdropSize(SIZING, { width: 100, height: 100 });
+    expect(size.width).toBeGreaterThanOrEqual(content.width);
+    expect(size.height).toBeGreaterThanOrEqual(content.height);
+  });
+
+  it("量不到视口（0 / 负数 / 首帧）时不退化成零尺寸", () => {
+    const size = libraryBackdropSize(SIZING, { width: 0, height: 0 });
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.height).toBeGreaterThan(0);
+    expect(Number.isFinite(size.width)).toBe(true);
+  });
+
+  it("内容包围盒把列宽与列间距都算进去（右列不能被漏掉）", () => {
+    const content = libraryContentExtent(SIZING);
+    expect(content.width).toBe(220 + 380 + 200 + 96 * 2);
   });
 });

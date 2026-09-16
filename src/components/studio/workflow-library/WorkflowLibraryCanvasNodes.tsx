@@ -23,9 +23,8 @@ import { PortHandle } from "../shared/WorkflowPortHandle";
 /** 三列节点的渲染内容（类型收在纯 `.ts` 里，hooks 层也要引用它）。 */
 export type { LibraryNodeContent };
 
-export const LibraryNodeContentContext = createContext<LibraryNodeContent | null>(
-  null,
-);
+export const LibraryNodeContentContext =
+  createContext<LibraryNodeContent | null>(null);
 
 /** 取三列的渲染内容；不在画布里（直接单测某个节点）时返回 null。 */
 function useLibraryNodeContent(): LibraryNodeContent | null {
@@ -40,34 +39,42 @@ function useLibraryNodeContent(): LibraryNodeContent | null {
 export function LibraryParamsNode(_props: NodeProps) {
   const content = useLibraryNodeContent()?.params;
   if (!content) return null;
-  const { cards, canWire, selectedEntryId, onSelect, onReset } = content;
+  const {
+    cards,
+    canWire,
+    contractEntries,
+    selectedEntryId,
+    onSelect,
+    onReset,
+  } = content;
   return (
     <div data-testid="wflib-canvas-node-params">
-    <WorkflowParamCardColumn
-      entries={cards.entries}
-      resolved={cards.resolved}
-      io={cards.io}
-      canWire={canWire}
-      selectedEntryId={selectedEntryId}
-      onSelect={onSelect}
-      isManual={cards.isManual}
-      onReset={onReset}
-      reachableKeys={cards.reachableKeys}
-      endpoint={(port) => (
-        <PortHandle
-          id={port.handleId}
-          dir="out"
-          type={port.type}
-          style={{
-            right: -(12 + 6),
-            top: "50%",
-            transform: "translateY(-50%)",
-            /* 已连接的圆点实心、未连接的淡一档（与旧口径一致）。 */
-            opacity: port.active ? 1 : 0.55,
-          }}
-        />
-      )}
-    />
+      <WorkflowParamCardColumn
+        entries={cards.entries}
+        contractEntries={contractEntries}
+        resolved={cards.resolved}
+        io={cards.io}
+        canWire={canWire}
+        selectedEntryId={selectedEntryId}
+        onSelect={onSelect}
+        isManual={cards.isManual}
+        onReset={onReset}
+        reachableKeys={cards.reachableKeys}
+        endpoint={(port) => (
+          <PortHandle
+            id={port.handleId}
+            dir="out"
+            type={port.type}
+            style={{
+              right: -(12 + 6),
+              top: "50%",
+              transform: "translateY(-50%)",
+              /* 已连接的圆点实心、未连接的淡一档（与旧口径一致）。 */
+              opacity: port.active ? 1 : 0.55,
+            }}
+          />
+        )}
+      />
     </div>
   );
 }
@@ -80,27 +87,27 @@ export function LibraryOutputsNode(_props: NodeProps) {
   const { cards, canWire, selectedOutputId, onSelect, onReset } = content;
   return (
     <div data-testid="wflib-canvas-node-outputs">
-    <WorkflowOutputParamCardColumn
-      outputs={cards.outputs}
-      resolved={cards.resolved}
-      canWire={canWire}
-      selectedOutputId={selectedOutputId}
-      onSelect={onSelect}
-      isManual={cards.isManual}
-      onReset={onReset}
-      endpoint={(port) => (
-        <PortHandle
-          id={port.handleId}
-          dir="in"
-          type={port.type}
-          style={{
-            left: -(12 + 6),
-            top: "50%",
-            transform: "translateY(-50%)",
-          }}
-        />
-      )}
-    />
+      <WorkflowOutputParamCardColumn
+        outputs={cards.outputs}
+        resolved={cards.resolved}
+        canWire={canWire}
+        selectedOutputId={selectedOutputId}
+        onSelect={onSelect}
+        isManual={cards.isManual}
+        onReset={onReset}
+        endpoint={(port) => (
+          <PortHandle
+            id={port.handleId}
+            dir="in"
+            type={port.type}
+            style={{
+              left: -(12 + 6),
+              top: "50%",
+              transform: "translateY(-50%)",
+            }}
+          />
+        )}
+      />
     </div>
   );
 }
@@ -110,6 +117,25 @@ export function LibraryHostNode(_props: NodeProps) {
   const content = useLibraryNodeContent()?.host;
   if (!content) return null;
   return <div data-testid="wflib-canvas-node-host">{content.host}</div>;
+}
+
+/** 垫在三列之下的**透明背景板**：把画布的包围盒撑到面板可视高度。
+ *
+ *  为什么需要它：画布靠 `fitView` 收内容，而 `fitView` 按节点包围盒缩放 ——
+ *  卡片比视口矮时它只会放大到「贴满内容高度」，画布底边以下就落回面板底色，
+ *  成了用户报的那块空白（ISSUE #596）。这一层不含内容、也没有端口，抬高它不会
+ *  影响任何端点几何（与「给卡片节点虚报尺寸」的区别正在此）。
+ *
+ *  它**不是**背景色的来源：底色由容器与 `bg-canvas` 给，这里只负责撑尺寸，
+ *  免得两处各画一层底色、深浅主题下互相盖。 */
+export function LibraryBackdropNode(_props: NodeProps) {
+  return (
+    <div
+      className="h-full w-full"
+      data-testid="wflib-canvas-backdrop"
+      aria-hidden
+    />
+  );
 }
 
 /** 契约条目类型（导出给编排层用，避免两处各写一套）。 */

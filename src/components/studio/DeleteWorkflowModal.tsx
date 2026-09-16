@@ -46,11 +46,14 @@ export function DeleteWorkflowModal({
       aria-modal="true"
       aria-labelledby="delete-modal-title"
       onClick={() => !deleting && onBackdropClick()}
-      className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm")}
+      className={overlayClass(
+        "modal",
+        "z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm",
+      )}
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-red-500/30 bg-card p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
+        className="bg-card w-full max-w-md rounded-2xl border border-red-500/30 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
       >
         <div className="mb-3 flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-700 dark:text-red-300">
@@ -63,7 +66,7 @@ export function DeleteWorkflowModal({
             >
               删除工作流
             </h3>
-            <p className="mt-1 text-sm break-words text-ink-soft">
+            <p className="text-ink-soft mt-1 text-sm break-words">
               确认删除「
               <span className="text-ink-bright">{pendingDelete.name}</span>
               」？此操作不可撤销。
@@ -75,7 +78,7 @@ export function DeleteWorkflowModal({
             type="button"
             onClick={onCancel}
             disabled={deleting}
-            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-ink-soft hover:bg-subtle disabled:opacity-50"
+            className="border-border-strong text-ink-soft hover:bg-subtle rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
           >
             取消
           </button>

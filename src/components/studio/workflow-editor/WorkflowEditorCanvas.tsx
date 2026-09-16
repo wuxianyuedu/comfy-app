@@ -6,11 +6,21 @@
 
 import React, { useCallback } from "react";
 import {
-  ReactFlow, Controls, MiniMap, useStoreApi,
-  type Connection, type Node, type Edge,
-  type OnNodesChange, type OnEdgesChange,
+  ReactFlow,
+  Controls,
+  MiniMap,
+  useStoreApi,
+  type Connection,
+  type Node,
+  type Edge,
+  type OnNodesChange,
+  type OnEdgesChange,
 } from "@xyflow/react";
-import { CanvasGrid, ZoomIndicator, CanvasRulers } from "../WorkflowCanvasDecorations";
+import {
+  CanvasGrid,
+  ZoomIndicator,
+  CanvasRulers,
+} from "../WorkflowCanvasDecorations";
 import {
   CanvasSettingsButton,
   CanvasRecenterButton,
@@ -86,7 +96,10 @@ export interface WorkflowEditorCanvasProps {
   onNodeDragStop: (e: unknown, node: Node) => void;
   canvasSettings: CanvasSettings;
   canvasSettingsHydrated: boolean;
-  onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
+  onMiniMapJump: (
+    event: React.MouseEvent,
+    position: { x: number; y: number },
+  ) => void;
   onOpenSettings: () => void;
   /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
   onRecenter: () => void;
@@ -128,7 +141,10 @@ export function WorkflowEditorCanvas({
    *  callback reference while nodes are dragged. */
   const miniMapNodeColor = useCallback((node: Node) => {
     const d = node.data as WorkflowNodeData | undefined;
-    return (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "var(--color-ink-faint)";
+    return (
+      (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ??
+      "var(--color-ink-faint)"
+    );
   }, []);
 
   /* 选中节点 → 相关连线高亮（上下游加粗）。标记写在 edges 的 data 上，
@@ -167,7 +183,7 @@ export function WorkflowEditorCanvas({
       }
       console.warn(`[React Flow] ${message}`);
     },
-    [store]
+    [store],
   );
 
   return (
@@ -224,7 +240,9 @@ export function WorkflowEditorCanvas({
        *  a violet dot lights up whenever the user has changed any
        *  setting from its default. */}
       <CanvasSettingsButton
-        hasOverrides={canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)}
+        hasOverrides={
+          canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)
+        }
         onClick={onOpenSettings}
       />
       <CanvasRecenterButton onClick={onRecenter} />
