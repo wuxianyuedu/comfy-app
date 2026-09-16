@@ -17,7 +17,52 @@ import {
   lt,
   isNull,
   isNotNull,
+  sql,
 } from "drizzle-orm";
+
+/**
+ * SQLite 表达「不限条数，只跳过前 n 条」的写法是 `LIMIT -1 OFFSET n` ——
+ * 光有 `OFFSET` 是**语法错误**（`near "offset": syntax error`）。
+ *
+ * 为什么不用 `.limit(-1)`：drizzle 的 `offset()` 在 SQLite 上会把链上的
+ * `limit` **整个丢掉**（实测 `limit(-1).offset(1)` 生成的 SQL 里没有 limit，
+ * 运行时直接抛语法错误）。传 `sql` 片段才不会被它吃掉。relational query
+ * （`db.query.*.findMany`）更彻底 —— `limit: -1` 直接被忽略，所以那条路
+ * 只能改用「普通 select 取页 + 按 id 装载关联」。
+ *
+ * 类型上 `limit()` 只声明 `number | Placeholder`，所以这里收成一个窄助手
+ * （断言集中在**这一处**，而不是散在调用点）。
+ */
+const NO_LIMIT = sql`-1`;
+
+/** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
+function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
+  return (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
+}
+
+/**
+ * 按 id 批量装载封面图（封面优先、再按 sortIndex 升序），保持入参顺序。
+ *
+ * 用途：`listByUser` 的「只给 skip 不给 take」分页走普通 select 取页（relational
+ * query 表达不了无 limit 的 offset），但对外仍要返回带 images 的行 —— 与其在
+ * 两处分头拼 `with`，不如把「按 id 装载」收到这里，保证两种取法给出同一形状。
+ */
+async function attachImages(rows: Task[]): Promise<TaskWithCover[]> {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  const images = await db
+    .select()
+    .from(taskImage)
+    .where(inArray(taskImage.taskId, ids))
+    .orderBy(desc(taskImage.isCover), asc(taskImage.sortIndex));
+  const byTask = new Map<string, typeof images>();
+  for (const img of images) {
+    const list = byTask.get(img.taskId) ?? [];
+    list.push(img);
+    byTask.set(img.taskId, list);
+  }
+  return rows.map((r) => ({ ...r, images: byTask.get(r.id) ?? [] }));
+}
 
 export class TaskRepository extends DrizzleRepository<Task> {
   constructor() {
@@ -91,11 +136,21 @@ export class TaskRepository extends DrizzleRepository<Task> {
         : undefined,
     );
     if (opts?.includeImages) {
+      const withImages = (rows: Task[]) => attachImages(rows);
+      // 分页口径与下面普通 select 分支**必须一致**：drizzle 的 relational
+      // query 只认 `limit`（`limit: -1` 会被整个丢掉，实测），所以「只给 skip」
+      // 那条路走不了它 —— 先用普通 select 取到这一页的 id，再按 id 装载图片。
+      // 两条路都产出「同一页 + 同一份 images」，顺序由外层 orderBy 保证。
+      if (opts.skip !== undefined && opts.take === undefined) {
+        const page = await limitAll(
+          db.select().from(task).where(where).orderBy(desc(task.createdAt)),
+        ).offset(opts.skip);
+        return withImages(page);
+      }
       const rows = await db.query.task.findMany({
         where,
         orderBy: [desc(task.createdAt)],
         ...(opts.take !== undefined ? { limit: opts.take } : {}),
-        ...(opts.skip !== undefined ? { offset: opts.skip } : {}),
         with: {
           images: {
             orderBy: [desc(taskImage.isCover), asc(taskImage.sortIndex)],
@@ -104,10 +159,16 @@ export class TaskRepository extends DrizzleRepository<Task> {
       });
       return rows;
     }
-    let q = db.select().from(task).where(where).orderBy(desc(task.createdAt));
-    if (opts?.take !== undefined) q = q.limit(opts.take) as typeof q;
-    if (opts?.skip !== undefined) q = q.offset(opts.skip) as typeof q;
-    return q;
+    const q = db.select().from(task).where(where).orderBy(desc(task.createdAt));
+    if (opts?.skip === undefined) {
+      return opts?.take !== undefined ? q.limit(opts.take) : q;
+    }
+    // `skip` 单独给时补 `LIMIT -1`（见上方 NO_LIMIT 的注释：不能写数字 -1，
+    // drizzle 的 offset() 会把数字 limit 丢掉）。此前这条路径生成的是不带
+    // limit 的 `… offset ?`，better-sqlite3 抛 `near "offset": syntax error`
+    // —— 调用方拿到的是一次 500，而不是「第二页」。
+    const paged = opts.take !== undefined ? q.limit(opts.take) : limitAll(q);
+    return paged.offset(opts.skip);
   }
 
   async findByIdForUser(userId: string, id: string): Promise<Task | null> {

@@ -140,12 +140,32 @@ export async function readPayload(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
 }
 
-/** 非 2xx 的统一错误文案（响应体截断，不把整页 HTML 灌进界面）。 */
-export function httpFailureDetail(status: number, payload: unknown): string {
-  const detail = isRecord(payload)
-    ? JSON.stringify(payload).slice(0, 240)
-    : `HTTP ${status}`;
-  return `HTTP ${status}：${detail}`;
+/** 非 2xx 时取一次原始响应文本，供 `httpFailureDetail` 拼出可读原因。
+ *  只读一次（`res.text()` 消费 body），因此仅在错误分支调用。 */
+async function readRawText(res: Response): Promise<string> {
+  try {
+    return await res.text();
+  } catch {
+    return "";
+  }
+}
+
+/** 非 2xx 的统一错误文案（响应体截断，不把整页 HTML 灌进界面）。
+ *
+ *  非 JSON 响应体（网关的 HTML 错误页、反代的纯文本 502 等）此前会走
+ *  `HTTP 503` 这条兜底，拼出来是 **`HTTP 503：HTTP 503`** —— 状态码说了两遍，
+ *  而上游真正写的原因一个字都没带上，用户只能看到一个没有信息量的重复。
+ *  现在把原始文本截断带出（同样限 240 字符，不把整页 HTML 灌进界面）。 */
+export function httpFailureDetail(
+  status: number,
+  payload: unknown,
+  rawText = "",
+): string {
+  if (isRecord(payload)) {
+    return `HTTP ${status}：${JSON.stringify(payload).slice(0, 240)}`;
+  }
+  const snippet = rawText.trim().slice(0, 240);
+  return snippet ? `HTTP ${status}：${snippet}` : `HTTP ${status}`;
 }
 
 /** 额外参数（JSON 对象字符串）→ 逐键合并用的对象。 */
@@ -202,7 +222,10 @@ export async function callChat(
   });
   const payload = await readPayload(res);
   if (!res.ok || !isRecord(payload)) {
-    return { ok: false, detail: httpFailureDetail(res.status, payload) };
+    return {
+      ok: false,
+      detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+    };
   }
   const text = chatTextFrom(payload);
   if (!text) {
@@ -235,8 +258,12 @@ export async function callImage(
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
   const payload = await readPayload(res);
-  if (!res.ok)
-    return { ok: false, detail: httpFailureDetail(res.status, payload) };
+  if (!res.ok) {
+    return {
+      ok: false,
+      detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+    };
+  }
   const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
   if (!url) {
     return {
@@ -269,8 +296,12 @@ export async function callVideo(
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
   const payload = await readPayload(res);
-  if (!res.ok)
-    return { status: "error", detail: httpFailureDetail(res.status, payload) };
+  if (!res.ok) {
+    return {
+      status: "error",
+      detail: httpFailureDetail(res.status, payload, await readRawText(res)),
+    };
+  }
   const directUrl = extractMediaUrl(payload);
   if (directUrl) return { status: "done", url: directUrl };
   const taskId = extractRemoteTaskId(payload);
