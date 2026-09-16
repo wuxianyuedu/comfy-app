@@ -54,6 +54,26 @@ describe("classifyPin", () => {
     );
   });
 
+  it("图内角色先于名字：同一对 CLIPTextEncode 的正负靠 role 分清（ISSUE #611）", () => {
+    /* 真实文生图里两个文本编码节点的 pin 名与显示名完全一样（都叫 text /
+     *  「文本」），名字层面分不出正负 —— 只有导入图沿 KSampler 的
+     *  positive / negative 连线链推出的 role 说得清。缺了它「负向提示词」
+     *  这条契约口就永远判不出来，画布节点上少一张负向卡片。 */
+    const pos = pin("6", "text", { role: "positive" });
+    const neg = pin("7", "text", { role: "negative" });
+    expect(classifyPin(pos)).toBe("prompt");
+    expect(classifyPin(neg)).toBe("negative");
+    /* 名字里显式写了负向时仍以名字为准（角色是名字层面分不出来时的补充信号，
+     *  不与明确的作者命名抢）；只有名字给不出答案时才靠角色定夺。 */
+    expect(classifyPin(pin("7", "negative_prompt", { role: "positive" }))).toBe(
+      "negative",
+    );
+    /* 图片口不受 role 影响（采样器的 negative conditioning 与 LoadImage 无关）。 */
+    expect(
+      classifyPin(pin("8", "image", { type: "IMAGE", role: "negative" })),
+    ).toBe("reference-image");
+  });
+
   it("时长口认 duration / length / frames，但帧率不算时长", () => {
     expect(classifyPin(pin("1", "duration", { type: "INT" }))).toBe("duration");
     expect(classifyPin(pin("1", "length", { type: "INT" }))).toBe("duration");

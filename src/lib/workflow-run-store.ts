@@ -18,12 +18,29 @@
 
 import type { TaskLogEntry } from "./workshop/generation-client";
 
+/** 这次运行**从哪个入口发起**。
+ *
+ *  「画布节点」页签的「▶ 用此工作流生成」与「工坊封装」页签的「执行流程测试」
+ *  是同一份封装口径、同一条 ComfyUI 链路的两次运行 —— 它们此前各写各的
+ *  状态与日志，于是两处各自「占用」一个执行视角：一处在跑，另一处看着像
+ *  「执行不了」（ISSUE #611）。现在两者都登记进本 store，只是带自己的来源标记，
+ *  日志弹窗按来源如实标注。 */
+export type WorkflowRunSource = "canvas-node" | "encapsulation-test";
+
+/** 运行来源的展示名（日志弹窗头部按它标注这次运行是从哪儿发起的）。 */
+export function runLogSourceLabel(source?: WorkflowRunSource): string {
+  if (source === "encapsulation-test") return "工坊封装 · 流程测试";
+  return "画布节点 · 就地运行";
+}
+
 export interface WorkflowRunMeta {
   taskId: string;
   workflowId: string;
   workflowName: string;
   taskType: string;
   startedAt: number;
+  /** 发起入口（缺省按 `canvas-node` 处理，兼容早期落库的记录）。 */
+  source?: WorkflowRunSource;
   /** 终态（done / failed）时由订阅者 patch；running/缺省 = 仍在跑。 */
   status?: "running" | "done" | "failed";
   resultUrl?: string;

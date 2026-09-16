@@ -337,6 +337,10 @@ async function buildWorkflowDetailJson(input: {
     innerInputsById: buildInnerNodeInputs(raw),
     rawNodeMeta,
     graph,
+    /* 图内正 / 反向文本编码节点（`detectParamMap` 沿 KSampler 连线链推出）——
+     * 富化时把角色投影到条目上，让「负向提示词」这类只靠 pin 名分不出的口
+     * 能被判出来（ISSUE #611）。 */
+    paramMap,
     nodeTitleById,
     nodeTypeById: buildNodeTypeMap(raw),
     comboOptionsForClassField,

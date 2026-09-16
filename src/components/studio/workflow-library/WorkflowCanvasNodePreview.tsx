@@ -73,6 +73,7 @@ import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
+import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import { WorkflowNodeActionButton } from "../shared/WorkflowNodeParts";
 
@@ -352,6 +353,7 @@ export function WorkflowCanvasNodePreview({
         taskType,
         startedAt: nowMs(),
         status: "running",
+        source: "canvas-node",
       });
       await new Promise<void>((resolve) => {
         watchTask(taskId, {
@@ -542,7 +544,6 @@ export function WorkflowCanvasNodePreview({
     ],
   );
 
-  const hasRuns = currentRuns.length > 0;
   const activeRun = currentRuns[0] ?? null;
 
   return (
@@ -720,38 +721,18 @@ export function WorkflowCanvasNodePreview({
         </p>
       )}
 
-      {/* 执行日志入口：点击打开全屏日志弹窗（与项目画布执行日志面板同款）。
-       *  有运行记录即显示（跨窗口存活），运行中带呼吸点提示。 */}
-      {hasRuns && (
-        <button
-          type="button"
-          onClick={() => {
-            /* 打开日志默认定位到本工作流最近一次运行（切到的工作流独立展示）。 */
-            if (!viewTaskId && activeRun) setViewTaskId(activeRun.taskId);
-            setLogOpen(true);
-          }}
-          data-testid="wflib-log-open"
-          className="border-border bg-panel-deep hover:border-border-strong flex w-[380px] items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors"
-          title="打开执行日志"
-        >
-          <span className="text-ink-strong flex items-center gap-1.5 text-[11px] font-medium">
-            执行日志
-            {running && (
-              <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
-            )}
-          </span>
-          <span className="text-ink-fainter text-[10.5px]">
-            {activeRun
-              ? activeRun.status === "done"
-                ? "上次已完成"
-                : activeRun.status === "failed"
-                  ? "上次已失败"
-                  : "生成中…"
-              : `${currentRuns.length} 次运行`}
-            <span className="ml-2">›</span>
-          </span>
-        </button>
-      )}
+      {/* 执行日志入口：与「工坊封装」页签**同一扇门**（同一个按钮组件、同一份
+       *  运行登记表、同一个全屏弹窗）。有运行记录即显示（跨窗口存活）。 */}
+      <WorkflowRunLogButton
+        workflowId={workflowId}
+        taskId={activeRun?.taskId ?? null}
+        running={running}
+        onOpen={() => {
+          /* 打开日志默认定位到本工作流最近一次运行（切到的工作流独立展示）。 */
+          if (!viewTaskId && activeRun) setViewTaskId(activeRun.taskId);
+          setLogOpen(true);
+        }}
+      />
 
       {/* 全屏执行日志弹窗：与项目画布 GlobalStepLogPanel 同款交互。 */}
       <WorkflowRunLogModal
