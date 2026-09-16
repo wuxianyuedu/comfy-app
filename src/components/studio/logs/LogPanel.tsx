@@ -538,24 +538,21 @@ export function LogPanel() {
       Math.min(baselineRef.current, bottomIndex),
       Math.min(appliedRef.current, bottomIndex),
     );
-    const target = el.querySelector<HTMLElement>(
-      `[data-log-index="${targetIndex}"]`,
-    );
-    if (!target) {
-      /* **虚拟化之后目标行可能没被渲染**（窗口外的行不在 DOM 里）。此时改按
-       * 估算位置滚——`rows[targetIndex]` 的上边缘减去一个视口，把目标行带进窗口，
-       * 下一轮 effect 就能找到真实节点并按它的实际高度对齐。找不到就什么都不做
-       * （下一轮还会再来），绝不能乱滚。 */
-      const row = rows[targetIndex];
-      if (!row) return;
-      el.scrollTop = Math.max(0, row.start - el.clientHeight + row.size);
-      appliedRef.current = targetIndex;
-      return;
-    }
-    el.scrollTop = Math.max(
-      0,
-      target.offsetTop + target.offsetHeight - el.clientHeight,
-    );
+    /* 贴到目标行的下边缘（减去一个视口高）：位置一律取自**位置表**
+     * `rows[targetIndex]`，那是 `translateY` 与滚动条共用的同一份口径。
+     *
+     * ⚠️ **不能用 `target.offsetTop` 量**。虚拟化之后行的 `offsetParent` 是那层
+     * `translateY` 过的内层容器，`offsetTop` 给的是「它在**当前窗口**里的位置」
+     * 而不是「它在整页内容里的位置」；拿它算 `scrollTop` 会把视口拉回窗口起点
+     * ——用户滚到底就再也回不去底（这条 e2e 抓到的正是它）。
+     *
+     * 目标行在窗口外时它根本不在 DOM 里，这一支天然也走同一个算式：把目标行带进
+     * 窗口，下一轮 effect 按同一张表对齐（两轮同解，不再有「真实节点」与「估算
+     * 位置」两套坐标）。`rows[targetIndex]` 与 `pageLogs` 同源同长；真取不到就
+     * 什么都不做，绝不能乱滚。 */
+    const row = rows[targetIndex];
+    if (!row) return;
+    el.scrollTop = Math.max(0, row.start + row.size - el.clientHeight);
     appliedRef.current = targetIndex;
   }, [
     isOpen,
@@ -846,10 +843,10 @@ export function LogPanel() {
                 }}
                 className="absolute top-0 left-0 w-full"
               >
-                {/* `data-log-index`：贴底要知道「滚到哪一行」，而不是「滚到
-                    最底下」——两者差的就是用户还没看的那批新日志。序号必须是
-                    **页内绝对序号**：虚拟化之后窗口外的行不在 DOM 里，贴底找
-                    不到节点时会退化为「滚到窗口末尾」。 */}
+                {/* `data-log-index`：这一行在**整页**里的绝对序号（不是它在
+                    当前窗口里的第几个）。它同时是测试量「渲染了哪一段」的落点
+                    （e2e 与 jsdom 单测都按它断言窗口位置），因此序号口径必须是
+                    页内绝对的——窗口一变，同一个序号还得指着同一行。 */}
                 {rowWindow.entries.map((entry, offset) => {
                   const index = rowWindow.start + offset;
                   return (
