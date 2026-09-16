@@ -29,6 +29,6 @@ export function useMiniMapJump(rf: ReactFlowInstance) {
       const { zoom } = rf.getViewport();
       void rf.setCenter(position.x, position.y, { zoom, duration: 350 });
     },
-    [rf]
+    [rf],
   );
 }

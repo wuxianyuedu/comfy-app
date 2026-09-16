@@ -65,7 +65,8 @@ describe("编辑器画布只画工作流图", () => {
 
   it("画布节点/连线的来源只有工作流自身", () => {
     const inner = stripComments(readEditor("WorkflowEditorInner.tsx"));
-    for (const allowed of ALLOWED_GRAPH_SOURCES) expect(inner).toContain(allowed);
+    for (const allowed of ALLOWED_GRAPH_SOURCES)
+      expect(inner).toContain(allowed);
     /* 卡片 / 映射线的构建入口已从编辑器移除。 */
     for (const gone of [
       "buildParamNodes",
@@ -88,7 +89,13 @@ describe("编辑器画布只画工作流图", () => {
     expect(nodes).not.toContain("wfParam");
     expect(nodes).not.toContain("wfOutput");
     /* 图自身的五类仍要齐（少了哪一类画布都会静默丢节点）。 */
-    for (const keep of ["wfNode", "wfNote", "wfGroup", "wfSubgraph", "wfIoPort"]) {
+    for (const keep of [
+      "wfNode",
+      "wfNote",
+      "wfGroup",
+      "wfSubgraph",
+      "wfIoPort",
+    ]) {
       expect(nodes).toContain(keep);
     }
   });
@@ -103,7 +110,9 @@ describe("编辑器画布只画工作流图", () => {
         "utf8",
       ),
     );
-    expect(persistence).toMatch(/savePatch\.mutateAsync\(\{[\s\S]{0,120}paramMap/);
+    expect(persistence).toMatch(
+      /savePatch\.mutateAsync\(\{[\s\S]{0,120}paramMap/,
+    );
     /* 编辑器里也没有映射编排层了：落点归库内那一层管。 */
     const inner = stripComments(readEditor("WorkflowEditorInner.tsx"));
     for (const gone of ["useParamMapping", "resetAll", "resetParamWiring"]) {
@@ -126,7 +135,10 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
      * （`endpoint`），卡片列只负责把槽位让出来。这条边界必须留在源码里：
      * 卡片列一旦直接用 `<Handle>`，它就不能再被非画布表面复用。 */
     const column = stripComments(
-      readFileSync(path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"), "utf8"),
+      readFileSync(
+        path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"),
+        "utf8",
+      ),
     );
     expect(column).toContain("endpoint");
     for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
@@ -134,7 +146,10 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     }
     /* 端点注入点在画布节点那一层（那里才是 React Flow 的上下文）。 */
     const nodes = stripComments(
-      readFileSync(path.join(LIBRARY_DIR, "WorkflowLibraryCanvasNodes.tsx"), "utf8"),
+      readFileSync(
+        path.join(LIBRARY_DIR, "WorkflowLibraryCanvasNodes.tsx"),
+        "utf8",
+      ),
     );
     expect(nodes).toContain("@xyflow/react");
     expect(nodes).toContain("PortHandle");
@@ -220,7 +235,10 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
 
   it("库内按端口名找圆点锚点，落点仍在 ioKey 键空间（两者不混）", () => {
     const cards = stripComments(
-      readFileSync(path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"), "utf8"),
+      readFileSync(
+        path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"),
+        "utf8",
+      ),
     );
     /* 落点是 ioKey；圆点锚点是端口名 —— 两者之间由 `wireHandleIdForIoKey` 换算，
      * 库内不许各写一套字符串拼装。 */

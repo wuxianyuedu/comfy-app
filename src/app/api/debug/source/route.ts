@@ -51,7 +51,10 @@ export async function GET(request: NextRequest) {
   const resolved = path.resolve(/*turbopackIgnore: true*/ PROJECT_ROOT, file);
   const rel = path.relative(SRC_ROOT, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    return NextResponse.json({ error: "forbidden: outside src/" }, { status: 403 });
+    return NextResponse.json(
+      { error: "forbidden: outside src/" },
+      { status: 403 },
+    );
   }
   if (!ALLOWED_EXT.has(path.extname(resolved).toLowerCase())) {
     return NextResponse.json({ error: "not a source file" }, { status: 400 });

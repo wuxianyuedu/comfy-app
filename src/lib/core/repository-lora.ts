@@ -67,20 +67,24 @@ export class LoraTrainingJobRepository extends DrizzleRepository<LoraTrainingJob
   async findByIdForUser(
     userId: string,
     id: string,
-    select?: unknown
+    select?: unknown,
   ): Promise<LoraTrainingJob | null> {
     if (select) {
       const rows = await db
         .select(select as never)
         .from(loraTrainingJob)
-        .where(and(eq(loraTrainingJob.id, id), eq(loraTrainingJob.userId, userId)))
+        .where(
+          and(eq(loraTrainingJob.id, id), eq(loraTrainingJob.userId, userId)),
+        )
         .limit(1);
       return rows[0] ?? null;
     }
     const rows = await db
       .select()
       .from(loraTrainingJob)
-      .where(and(eq(loraTrainingJob.id, id), eq(loraTrainingJob.userId, userId)))
+      .where(
+        and(eq(loraTrainingJob.id, id), eq(loraTrainingJob.userId, userId)),
+      )
       .limit(1);
     return rows[0] ?? null;
   }
@@ -96,7 +100,11 @@ export class LoraTrainingJobRepository extends DrizzleRepository<LoraTrainingJob
 
   async appendLog(
     jobId: string,
-    entry: { t: number; level: "info" | "progress" | "warn" | "error" | "success"; msg: string }
+    entry: {
+      t: number;
+      level: "info" | "progress" | "warn" | "error" | "success";
+      msg: string;
+    },
   ): Promise<void> {
     const job = await db
       .select({ logs: loraTrainingJob.logs })

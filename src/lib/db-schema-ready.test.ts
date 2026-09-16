@@ -112,7 +112,8 @@ describe("isSchemaReady 缓存", () => {
   afterEach(() => cwd.restore());
 
   it("同进程内只探一次：建表后缓存仍为 false（调用方每轮自行重探的语义由 sweep 决定）", async () => {
-    const { isSchemaReady, resetSchemaReadinessCache } = await import("./db-schema-ready");
+    const { isSchemaReady, resetSchemaReadinessCache } =
+      await import("./db-schema-ready");
     expect(isSchemaReady()).toBe(false);
     createSchema(dbFile);
     // 缓存命中，不会因为库刚建好就翻牌
@@ -151,7 +152,10 @@ describe("reaper 模块级副作用", () => {
     vi.stubEnv("DATABASE_URL", `file:${dbFile}`);
 
     const repository = await import("./core/repository");
-    const listStaleQueued = vi.spyOn(repository.taskRepository, "listStaleQueued");
+    const listStaleQueued = vi.spyOn(
+      repository.taskRepository,
+      "listStaleQueued",
+    );
 
     await expect(import("./comfyui/reaper")).resolves.toBeTruthy();
     // 副作用是 fire-and-forget：给异步 sweeper 一点时间落定

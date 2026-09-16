@@ -30,7 +30,12 @@ describe("deriveLocalRootsHint 空列表原因", () => {
   it("全部根都不可访问 → 列出路径并提示核对安装路径", () => {
     const hint = deriveLocalRootsHint([
       { absPath: "D:/Comfy/workflows", exists: false, count: 0 },
-      { absPath: "D:/Comfy/ComfyUI/workflows", exists: false, count: 0, error: "无法访问" },
+      {
+        absPath: "D:/Comfy/ComfyUI/workflows",
+        exists: false,
+        count: 0,
+        error: "无法访问",
+      },
     ]);
     expect(hint).toContain("不可访问");
     expect(hint).toContain("D:/Comfy/workflows");
@@ -38,13 +43,17 @@ describe("deriveLocalRootsHint 空列表原因", () => {
 
   it("根在但一个工作流文件都没有 → 指出目录里没有文件", () => {
     expect(
-      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", exists: true, count: 0 }]),
+      deriveLocalRootsHint([
+        { absPath: "D:/Comfy/workflows", exists: true, count: 0 },
+      ]),
     ).toContain("没有工作流文件");
   });
 
   it("根可用且扫到文件 → 不算「因为目录有问题」，返回 null 走默认空态文案", () => {
     expect(
-      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", exists: true, count: 7 }]),
+      deriveLocalRootsHint([
+        { absPath: "D:/Comfy/workflows", exists: true, count: 7 },
+      ]),
     ).toBeNull();
     // 多个根里只要有一个可用并扫到文件，也不归因到目录
     expect(
@@ -59,17 +68,21 @@ describe("deriveLocalRootsHint 空列表原因", () => {
 describe("deriveFormatFlags 格式标志推导", () => {
   it("新字段齐全时透传 hasApi/hasRaw/apiOrigin", () => {
     expect(
-      deriveFormatFlags(makeRow({ hasApi: true, hasRaw: false, apiOrigin: "user" })),
+      deriveFormatFlags(
+        makeRow({ hasApi: true, hasRaw: false, apiOrigin: "user" }),
+      ),
     ).toEqual({ hasApi: true, hasRaw: false, apiOrigin: "user", usable: true });
   });
 
   it("hasApi=false 时 usable=false 且未给 apiOrigin 时推断为 null", () => {
-    expect(deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true }))).toEqual({
-      hasApi: false,
-      hasRaw: true,
-      apiOrigin: null,
-      usable: false,
-    });
+    expect(deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true }))).toEqual(
+      {
+        hasApi: false,
+        hasRaw: true,
+        apiOrigin: null,
+        usable: false,
+      },
+    );
   });
 
   it("同时有 API 与 RAW 且未给 apiOrigin 时推断为 derived", () => {
@@ -82,23 +95,34 @@ describe("deriveFormatFlags 格式标志推导", () => {
   });
 
   it("仅有 API 且未给 apiOrigin 时推断为 user", () => {
-    expect(deriveFormatFlags(makeRow({ hasApi: true, hasRaw: false }))).toEqual({
-      hasApi: true,
-      hasRaw: false,
-      apiOrigin: "user",
-      usable: true,
-    });
+    expect(deriveFormatFlags(makeRow({ hasApi: true, hasRaw: false }))).toEqual(
+      {
+        hasApi: true,
+        hasRaw: false,
+        apiOrigin: "user",
+        usable: true,
+      },
+    );
   });
 
   it("hasApi 显式 false 但给了 apiOrigin 时保留给定值", () => {
     expect(
-      deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true, apiOrigin: "user" })),
-    ).toEqual({ hasApi: false, hasRaw: true, apiOrigin: "user", usable: false });
+      deriveFormatFlags(
+        makeRow({ hasApi: false, hasRaw: true, apiOrigin: "user" }),
+      ),
+    ).toEqual({
+      hasApi: false,
+      hasRaw: true,
+      apiOrigin: "user",
+      usable: false,
+    });
   });
 
   it("缺省的一侧按规则回填:hasApi 默认 true,hasRaw 按 format 推断", () => {
     // 只给 hasApi=false → hasRaw 回填自 format:"raw"
-    expect(deriveFormatFlags(makeRow({ hasApi: false, format: "raw" }))).toEqual({
+    expect(
+      deriveFormatFlags(makeRow({ hasApi: false, format: "raw" })),
+    ).toEqual({
       hasApi: false,
       hasRaw: true,
       apiOrigin: null,
@@ -142,7 +166,9 @@ describe("deriveFormatFlags 格式标志推导", () => {
 
   it("新旧字段混用时显式 hasRaw 优先于 legacy format", () => {
     expect(
-      deriveFormatFlags(makeRow({ format: "raw", hasApi: true, hasRaw: false })),
+      deriveFormatFlags(
+        makeRow({ format: "raw", hasApi: true, hasRaw: false }),
+      ),
     ).toEqual({ hasApi: true, hasRaw: false, apiOrigin: "user", usable: true });
   });
 });
@@ -207,4 +233,3 @@ describe("isTechnicalName 技术文件名识别", () => {
     expect(isTechnicalName("a".repeat(39))).toBe(false);
   });
 });
-

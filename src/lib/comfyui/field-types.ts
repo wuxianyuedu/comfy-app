@@ -7,10 +7,10 @@
 
 /** 参数字段的控件类型。 */
 export type FieldType =
-  | "text"          // multi-line prompt
-  | "string"        // single-line (ckpt_name, lora_name, etc.)
-  | "number"        // steps, cfg, seed, denoise, strength
-  | "select"        // sampler_name, scheduler (dropdown)
-  | "toggle"        // boolean flags
-  | "image"         // image upload / reference
-  | "latent";       // latent size (width x height)
+  | "text" // multi-line prompt
+  | "string" // single-line (ckpt_name, lora_name, etc.)
+  | "number" // steps, cfg, seed, denoise, strength
+  | "select" // sampler_name, scheduler (dropdown)
+  | "toggle" // boolean flags
+  | "image" // image upload / reference
+  | "latent"; // latent size (width x height)

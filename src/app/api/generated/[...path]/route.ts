@@ -33,7 +33,7 @@ const MIME_BY_EXT: Record<string, string> = {
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ path?: string[] }> }
+  { params }: { params: Promise<{ path?: string[] }> },
 ): Promise<Response> {
   const { path: segments } = await params;
   if (!segments || segments.length === 0) {

@@ -54,11 +54,15 @@ describe("validateTrainForm", () => {
   });
 
   it("校验顺序 = 名称 → 底模 → 触发词 → 数据集（原组件的提示顺序）", () => {
-    expect(validateTrainForm({ ...baseForm, name: "   " })).toBe("请填写任务名称");
+    expect(validateTrainForm({ ...baseForm, name: "   " })).toBe(
+      "请填写任务名称",
+    );
     expect(validateTrainForm({ ...baseForm, baseModel: "" })).toBe(
       "请选择底模（Checkpoint）",
     );
-    expect(validateTrainForm({ ...baseForm, triggerWord: "" })).toBe("请填写触发词");
+    expect(validateTrainForm({ ...baseForm, triggerWord: "" })).toBe(
+      "请填写触发词",
+    );
     expect(validateTrainForm({ ...baseForm, datasetImages: [] })).toBe(
       "请至少上传一张数据集图片",
     );
@@ -66,7 +70,12 @@ describe("validateTrainForm", () => {
 
   it("多项同时缺失时只报第一条（逐条修，不刷屏）", () => {
     expect(
-      validateTrainForm({ name: "", baseModel: "", triggerWord: "", datasetImages: [] }),
+      validateTrainForm({
+        name: "",
+        baseModel: "",
+        triggerWord: "",
+        datasetImages: [],
+      }),
     ).toBe("请填写任务名称");
   });
 });
@@ -77,16 +86,16 @@ describe("pickActiveJob", () => {
   });
 
   it("进行中优先于排队中，排队中优先于首条", () => {
-    expect(pickActiveJob([job("DONE"), job("QUEUED"), job("RUNNING")])?.status).toBe(
-      "RUNNING",
-    );
+    expect(
+      pickActiveJob([job("DONE"), job("QUEUED"), job("RUNNING")])?.status,
+    ).toBe("RUNNING");
     expect(pickActiveJob([job("DONE"), job("QUEUED")])?.status).toBe("QUEUED");
   });
 
   it("无进行中/排队中时退回列表首条（而不是 null —— 监控卡总要有内容）", () => {
-    expect(pickActiveJob([job("DONE", "first"), job("FAILED", "second")])?.id).toBe(
-      "first",
-    );
+    expect(
+      pickActiveJob([job("DONE", "first"), job("FAILED", "second")])?.id,
+    ).toBe("first");
   });
 });
 

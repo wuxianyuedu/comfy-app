@@ -75,7 +75,10 @@ describe("WorkflowOutputParamCardColumn", () => {
       <WorkflowOutputParamCardColumn
         outputs={outputs}
         endpoint={(port) => (
-          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
+          <span
+            data-testid="probe-endpoint"
+            data-endpoint-handle={port.handleId}
+          />
         )}
       />,
     );
@@ -93,7 +96,9 @@ describe("WorkflowOutputParamCardColumn", () => {
     expect(
       screen.queryByTestId("param-node-reset-9::output::IMAGE"),
     ).toBeNull();
-    expect(container.querySelector("[data-testid=\"probe-endpoint\"]")).toBeNull();
+    expect(
+      container.querySelector('[data-testid="probe-endpoint"]'),
+    ).toBeNull();
   });
 
   it("可拖 + 作者改过：端点槽位在，「恢复默认」可用", () => {
@@ -144,12 +149,12 @@ describe("WorkflowOutputParamCardColumn", () => {
       <WorkflowOutputParamCardColumn
         outputs={outputs}
         canWire
-        endpoint={(port) => (
-          <span data-endpoint-handle={port.handleId} />
-        )}
+        endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
       />,
     );
-    expect(container.querySelector("[data-endpoint-handle=\"images\"]")).toBeTruthy();
+    expect(
+      container.querySelector('[data-endpoint-handle="images"]'),
+    ).toBeTruthy();
   });
 
   it("端口名为空 / 带空白时 handle id 退回「输出」—— 与连线派生同一份算式", () => {

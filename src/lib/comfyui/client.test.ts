@@ -49,13 +49,15 @@ const plan = {
 
 /** 只让指定端口应答 `/system_stats`，其余连接一律拒绝。 */
 function respondOn(ports: number[]) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
-    const url = String(input);
-    if (ports.some((p) => url.includes(`:${p}/`))) {
-      return new Response("{}", { status: 200 });
-    }
-    throw new Error("ECONNREFUSED");
-  });
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (ports.some((p) => url.includes(`:${p}/`))) {
+        return new Response("{}", { status: 200 });
+      }
+      throw new Error("ECONNREFUSED");
+    });
 }
 
 beforeEach(() => {
@@ -67,7 +69,10 @@ beforeEach(() => {
     comfyuiPort: 8188,
   } as never);
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);
-  vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: null, failed: false });
+  vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+    pid: null,
+    failed: false,
+  });
   vi.mocked(findPidListeningPort).mockResolvedValue(null);
 });
 
@@ -149,7 +154,10 @@ describe("resolveComfyBase — 先问进程事实，再谈探测（ISSUE #449）
 
 describe("probeComfyBase — 按次探测，不污染会话缓存", () => {
   it("「进程在、端口未绑定」的启动中结论不写进缓存：端口就绪后立刻能探到", async () => {
-    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({ pid: 100, failed: false });
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+      pid: 100,
+      failed: false,
+    });
     const fetchSpy = respondOn([]);
     // 启动中：配置地址上还没有实例应答
     await expect(probeComfyBase()).resolves.toBeNull();

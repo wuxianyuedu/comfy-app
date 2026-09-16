@@ -15,10 +15,14 @@ import type {
  *  否则 null。与旧 any 代码 `x?.prop` / `Object.entries(x ?? {})` 的运行时语义
  *  一致（§5.6：graph / JSON 值一律 unknown + 守卫）。 */
 function asRecord(v: unknown): Record<string, unknown> | null {
-  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+  return typeof v === "object" && v !== null
+    ? (v as Record<string, unknown>)
+    : null;
 }
 
-export function rectToAnchor(rect: DOMRect): NodeJsonViewerRequest["anchorRect"] {
+export function rectToAnchor(
+  rect: DOMRect,
+): NodeJsonViewerRequest["anchorRect"] {
   return {
     left: rect.left,
     top: rect.top,
@@ -33,7 +37,13 @@ export function rectToAnchor(rect: DOMRect): NodeJsonViewerRequest["anchorRect"]
  *  at line 4948 — we accept it directly rather than recomputing from
  *  `detail.rawNodes` to avoid a second pass over the same array on every
  *  popover open. */
-export function computePos(rect: { left: number; top: number; right: number; width: number; height: number }): {
+export function computePos(rect: {
+  left: number;
+  top: number;
+  right: number;
+  width: number;
+  height: number;
+}): {
   left: number;
   top: number;
 } {
@@ -47,7 +57,9 @@ export function computePos(rect: { left: number; top: number; right: number; wid
    *  + popover-width > viewport - inset). */
   const rightCandidate = rect.left + rect.width + GAP;
   const leftFits = rightCandidate + POPOVER_W + INSET <= vw;
-  const left = leftFits ? rightCandidate : Math.max(INSET, rect.left - GAP - POPOVER_W);
+  const left = leftFits
+    ? rightCandidate
+    : Math.max(INSET, rect.left - GAP - POPOVER_W);
   /* Vertical center on chip — clamp so the popover stays inside vh with
    *  a 24px top and bottom buffer (max-height 60vh is enforced in the
    *  popover style — this just keeps the anchor near the chip). */
@@ -85,7 +97,7 @@ export const KNOWN_PACKAGE_HEURISTIC: Record<string, string> = {
  *  treats that as the built-in hint and hides the label entirely. */
 export function resolveNodePackage(
   classType: string,
-  properties?: Record<string, unknown>
+  properties?: Record<string, unknown>,
 ): string {
   const fromManifest = getCustomNodePackage(classType);
   if (fromManifest) return fromManifest;
@@ -123,7 +135,8 @@ export function extractNoteTitle(text: string, fallback?: string): string {
   }
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed) return trimmed.length > 32 ? trimmed.slice(0, 30) + "…" : trimmed;
+    if (trimmed)
+      return trimmed.length > 32 ? trimmed.slice(0, 30) + "…" : trimmed;
   }
   return "";
 }
@@ -168,11 +181,11 @@ export const NODE_TITLE_H = 30;
 export function pseudoFrostPalette(modeColor: string | null) {
   const mode = modeColor ?? "#ec4899";
   return {
-    primary:   hexToRgba(mode, 0.45),                    // mode-tinted mass
-    secondary: hexToRgba(mode, 0.30),                    // mode-tinted halftone
-    cool:      "rgba(110, 145, 215, 0.32)",           // cool blue "leak"
-    warm:      "rgba(255, 255, 255, 0.10)",           // light from above
-    shadow:    "rgba(0, 0, 0, 0.36)",                 // unlit corner
+    primary: hexToRgba(mode, 0.45), // mode-tinted mass
+    secondary: hexToRgba(mode, 0.3), // mode-tinted halftone
+    cool: "rgba(110, 145, 215, 0.32)", // cool blue "leak"
+    warm: "rgba(255, 255, 255, 0.10)", // light from above
+    shadow: "rgba(0, 0, 0, 0.36)", // unlit corner
   };
 }
 
@@ -184,38 +197,38 @@ export function inferOutputTypeAll(classType: string): Record<string, string> {
   // so we use slot-based names.  For CheckpointLoaderSimple etc. this is
   // MODEL/CLIP/VAE which lines up with ComfyUI's default display.
   const KNOWN_NAMES: Record<string, string[]> = {
-    CheckpointLoaderSimple:          ["MODEL", "CLIP", "VAE"],
-    CheckpointLoader:                ["MODEL", "CLIP", "VAE"],
-    UNETLoader:                      ["MODEL"],
-    UNetLoader:                      ["MODEL"],
-    CLIPLoader:                      ["CLIP"],
-    DualCLIPLoader:                  ["CLIP", "CLIP"],
-    VAELoader:                       ["VAE"],
-    ControlNetLoader:                ["CONTROL_NET"],
-    LoraLoader:                      ["MODEL", "CLIP"],
-    KSampler:                        ["LATENT"],
-    KSamplerAdvanced:                ["LATENT"],
-    CLIPTextEncode:                  ["CONDITIONING"],
-    CLIPTextEncodeSDXL:              ["positive", "negative"],
-    VAEDecode:                       ["IMAGE"],
-    VAEEncode:                       ["LATENT"],
-    EmptyLatentImage:                ["LATENT"],
-    LoadImage:                       ["IMAGE", "MASK"],
-    ImageScale:                      ["IMAGE"],
-    ImageUpscaleWithModel:           ["IMAGE"],
-    LatentUpscale:                   ["LATENT"],
-    SetLatentNoiseMask:              ["LATENT"],
-    ControlNetApply:                 ["CONDITIONING"],
-    ConditioningCombine:             ["CONDITIONING"],
-    ConditioningAverage:             ["CONDITIONING"],
-    SaveImage:                       [],
-    PreviewImage:                    [],
-    WanVideoSampler:                 ["LATENT"],
-    WanVideoDecode:                  ["IMAGE"],
-    WanVideoImageToVideoEncode:      ["LATENT"],
-    WanVideoTextEncode:              ["CONDITIONING"],
-    WanVideoT5TextEncode:            ["CONDITIONING"],
-    WanVideoModelLoader:             ["MODEL", "CLIP", "VAE"],
+    CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
+    CheckpointLoader: ["MODEL", "CLIP", "VAE"],
+    UNETLoader: ["MODEL"],
+    UNetLoader: ["MODEL"],
+    CLIPLoader: ["CLIP"],
+    DualCLIPLoader: ["CLIP", "CLIP"],
+    VAELoader: ["VAE"],
+    ControlNetLoader: ["CONTROL_NET"],
+    LoraLoader: ["MODEL", "CLIP"],
+    KSampler: ["LATENT"],
+    KSamplerAdvanced: ["LATENT"],
+    CLIPTextEncode: ["CONDITIONING"],
+    CLIPTextEncodeSDXL: ["positive", "negative"],
+    VAEDecode: ["IMAGE"],
+    VAEEncode: ["LATENT"],
+    EmptyLatentImage: ["LATENT"],
+    LoadImage: ["IMAGE", "MASK"],
+    ImageScale: ["IMAGE"],
+    ImageUpscaleWithModel: ["IMAGE"],
+    LatentUpscale: ["LATENT"],
+    SetLatentNoiseMask: ["LATENT"],
+    ControlNetApply: ["CONDITIONING"],
+    ConditioningCombine: ["CONDITIONING"],
+    ConditioningAverage: ["CONDITIONING"],
+    SaveImage: [],
+    PreviewImage: [],
+    WanVideoSampler: ["LATENT"],
+    WanVideoDecode: ["IMAGE"],
+    WanVideoImageToVideoEncode: ["LATENT"],
+    WanVideoTextEncode: ["CONDITIONING"],
+    WanVideoT5TextEncode: ["CONDITIONING"],
+    WanVideoModelLoader: ["MODEL", "CLIP", "VAE"],
   };
   const types = KNOWN_NAMES[classType] ?? [];
   const out: Record<string, string> = {};
@@ -263,9 +276,10 @@ export function renderWidgetValue(value: unknown): string {
  *  a rainbow.  Returns a CSS color (rgba) suitable for inline style. */
 export function valueCellColor(value: unknown): string {
   if (value === undefined || value === null) return "rgba(255,255,255,0.30)";
-  if (typeof value === "boolean") return value ? "#86efac" /* green-300 */ : "#fca5a5" /* red-300 */;
-  if (typeof value === "number") return "#fcd34d" /* amber-300 */;
-  if (typeof value === "string") return "#c7d2fe" /* indigo-200 */;
+  if (typeof value === "boolean")
+    return value ? "#86efac" /* green-300 */ : "#fca5a5"; /* red-300 */
+  if (typeof value === "number") return "#fcd34d"; /* amber-300 */
+  if (typeof value === "string") return "#c7d2fe"; /* indigo-200 */
   return "rgba(255,255,255,0.55)";
 }
 
@@ -279,7 +293,8 @@ export function withAlpha(color: string): string {
   const match = /rgba\(([^)]+)\)/.exec(color);
   if (match) {
     const parts = match[1]!.split(",").map((str) => str.trim());
-    if (parts.length === 4) return `rgba(${parts[0]},${parts[1]},${parts[2]},0.40)`;
+    if (parts.length === 4)
+      return `rgba(${parts[0]},${parts[1]},${parts[2]},0.40)`;
   }
   return color;
 }
@@ -311,7 +326,12 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   if (Array.isArray(value)) return "[…]";
   if (typeof value === "object") return "{…}";
   if (value === null || value === undefined) return "";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
     return String(value);
   }
   return "";
@@ -346,7 +366,6 @@ export function sanitizeComboLabel(label: string | undefined | null): string {
   return label.trim();
 }
 
-
 /* ── Group frame node (ComfyUI group / frame rectangle) ──
  * Pure decoration: a translucent filled rectangle with a coloured border and a
  * title chip.  It never carries ports and never intercepts pointer events, so
@@ -363,7 +382,11 @@ export function colorToRgba(hex: string, alpha: number): string {
 export function hexToRgba(hex: string, alpha: number): string {
   let hexValue = (hex || "").trim();
   if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
-  if (hexValue.length === 3) hexValue = hexValue.split("").map((char) => char + char).join("");
+  if (hexValue.length === 3)
+    hexValue = hexValue
+      .split("")
+      .map((char) => char + char)
+      .join("");
   if (hexValue.length < 6) return `rgba(120,120,135,${alpha})`;
   const red = parseInt(hexValue.slice(0, 2), 16);
   const green = parseInt(hexValue.slice(2, 4), 16);
@@ -376,7 +399,11 @@ export function hexToRgba(hex: string, alpha: number): string {
 export function lightenHex(hex: string, amt: number): string {
   let hexValue = (hex || "").trim();
   if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
-  if (hexValue.length === 3) hexValue = hexValue.split("").map((char) => char + char).join("");
+  if (hexValue.length === 3)
+    hexValue = hexValue
+      .split("")
+      .map((char) => char + char)
+      .join("");
   if (hexValue.length < 6) return hex;
   let red = parseInt(hexValue.slice(0, 2), 16);
   let green = parseInt(hexValue.slice(2, 4), 16);
@@ -392,9 +419,18 @@ export function lightenHex(hex: string, amt: number): string {
 export function parseHex(hex: string): [number, number, number] {
   let hexValue = (hex || "").trim();
   if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
-  if (hexValue.length === 3) hexValue = hexValue.split("").map((char) => char + char).join("");
-  if (hexValue.length < 6 || /[^0-9a-fA-F]/.test(hexValue)) return [120, 120, 135];
-  return [parseInt(hexValue.slice(0, 2), 16), parseInt(hexValue.slice(2, 4), 16), parseInt(hexValue.slice(4, 6), 16)];
+  if (hexValue.length === 3)
+    hexValue = hexValue
+      .split("")
+      .map((char) => char + char)
+      .join("");
+  if (hexValue.length < 6 || /[^0-9a-fA-F]/.test(hexValue))
+    return [120, 120, 135];
+  return [
+    parseInt(hexValue.slice(0, 2), 16),
+    parseInt(hexValue.slice(2, 4), 16),
+    parseInt(hexValue.slice(4, 6), 16),
+  ];
 }
 
 /** Blend hex `a` (the *base*, e.g. a node's canvas-coloured body) towards
@@ -441,7 +477,7 @@ export function computeKahnLayout(
   colW: number,
   rowH: number,
   padX: number,
-  padY: number
+  padY: number,
 ): Record<string, { x: number; y: number }> {
   const level: Record<string, number> = {};
   const incoming: Record<string, Set<string>> = {};
@@ -466,7 +502,9 @@ export function computeKahnLayout(
       }
     }
   }
-  const remaining = new Map(Object.entries(incoming).map(([key, links]) => [key, links.size]));
+  const remaining = new Map(
+    Object.entries(incoming).map(([key, links]) => [key, links.size]),
+  );
   const queue: string[] = [];
   for (const [id, deg] of remaining) {
     if (deg === 0) {
@@ -504,7 +542,7 @@ export function computeKahnLayout(
 export function buildEdges(
   detail: WorkflowDetail | null,
   _nodes: Node[],
-  outSlotNameById?: Record<string, string[]>
+  outSlotNameById?: Record<string, string[]>,
 ): Edge[] {
   if (!detail) return [];
   // Only real graph nodes carry edges; group/note frames never do.
@@ -518,7 +556,10 @@ export function buildEdges(
   const rawOutById = new Map<string, RawOutputMeta[]>();
   for (const rawNode of detail.rawNodes ?? []) {
     if (!rawNode?.id) continue;
-    rawOutById.set(rawNode.id, Array.isArray(rawNode.outputs) ? rawNode.outputs : []);
+    rawOutById.set(
+      rawNode.id,
+      Array.isArray(rawNode.outputs) ? rawNode.outputs : [],
+    );
   }
 
   const edges: Edge[] = [];
@@ -528,7 +569,12 @@ export function buildEdges(
     const inputs = asRecord(raw.inputs);
     if (!inputs) continue;
     for (const [inputName, value] of Object.entries(inputs)) {
-      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
+      if (
+        !Array.isArray(value) ||
+        value.length < 1 ||
+        typeof value[0] !== "string"
+      )
+        continue;
       const srcId = value[0];
       if (!known.has(srcId) || !known.has(nodeId)) continue;
       const srcSlot = Number(value[1] ?? 0);
@@ -551,9 +597,11 @@ export function buildEdges(
        * 这类边回落到每个节点都挂的通用 "out" handle。 */
       let outName: string | null = null;
       if (staticNames.length > 0 || rawOuts.length > 0) {
-        if (slotNames && srcSlot < slotNames.length) outName = slotNames[srcSlot]!;
+        if (slotNames && srcSlot < slotNames.length)
+          outName = slotNames[srcSlot]!;
         else if (srcSlot < staticNames.length) outName = staticNames[srcSlot]!;
-        else if (srcSlot < rawOuts.length) outName = rawOuts[srcSlot]!.name ?? null;
+        else if (srcSlot < rawOuts.length)
+          outName = rawOuts[srcSlot]!.name ?? null;
       }
       edges.push({
         id: `e-${srcId}-${nodeId}-${inputName}-${i++}`,
@@ -589,7 +637,11 @@ export function buildEdges(
     const bp = detail.boundaryPins;
     const lookupPin = (pinId: string): { type: string } | null => {
       if (!bp) return null;
-      return bp.inputs.find((item) => item.id === pinId) ?? bp.outputs.find((item) => item.id === pinId) ?? null;
+      return (
+        bp.inputs.find((item) => item.id === pinId) ??
+        bp.outputs.find((item) => item.id === pinId) ??
+        null
+      );
     };
     for (const bl of detail.boundaryLinks) {
       const pinNodeId = `bpin:${bl.pinId}`;
@@ -630,12 +682,23 @@ export function buildEdges(
  * by data type.  Inputs that aren't connections are skipped. */
 export function buildInputSources(
   inputs: Record<string, unknown> | undefined,
-  nodesById: Record<string, ComfyGraphNode>
-): Record<string, { id: string; title: string; slot: number; classType?: string }> {
-  const out: Record<string, { id: string; title: string; slot: number; classType?: string }> = {};
+  nodesById: Record<string, ComfyGraphNode>,
+): Record<
+  string,
+  { id: string; title: string; slot: number; classType?: string }
+> {
+  const out: Record<
+    string,
+    { id: string; title: string; slot: number; classType?: string }
+  > = {};
   if (!inputs) return out;
   for (const [key, value] of Object.entries(inputs)) {
-    if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
+    if (
+      !Array.isArray(value) ||
+      value.length < 1 ||
+      typeof value[0] !== "string"
+    )
+      continue;
     const src = nodesById[value[0]];
     out[key] = {
       id: value[0],
@@ -658,14 +721,27 @@ export function buildInputSources(
 export function buildConnectedOutputs(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,
-  rawMetaById: Record<string, { widgets_values: unknown[]; outputs: RawOutputMeta[]; flags?: Record<string, unknown>; properties?: Record<string, unknown> }>,
-  outSlotNameById?: Record<string, string[]>
+  rawMetaById: Record<
+    string,
+    {
+      widgets_values: unknown[];
+      outputs: RawOutputMeta[];
+      flags?: Record<string, unknown>;
+      properties?: Record<string, unknown>;
+    }
+  >,
+  outSlotNameById?: Record<string, string[]>,
 ): Record<string, Set<string>> {
   const map: Record<string, Set<string>> = {};
   for (const raw of Object.values(detail.graph ?? {})) {
     const inp = asRecord(asRecord(raw)?.inputs) ?? {};
     for (const value of Object.values(inp)) {
-      if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
+      if (
+        !Array.isArray(value) ||
+        value.length < 1 ||
+        typeof value[0] !== "string"
+      )
+        continue;
       const srcId = value[0];
       const slot = Number(value[1] ?? 0);
       const node = nodesById[srcId];
@@ -703,21 +779,41 @@ export function buildConnectedOutputs(
 export function inferSourceOutNames(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,
-  rawMetaById: Record<string, { widgets_values: unknown[]; outputs: RawOutputMeta[]; flags?: Record<string, unknown> }>
+  rawMetaById: Record<
+    string,
+    {
+      widgets_values: unknown[];
+      outputs: RawOutputMeta[];
+      flags?: Record<string, unknown>;
+    }
+  >,
 ): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const [nodeId, node] of Object.entries(nodesById)) {
     const staticNames = Object.keys(inferOutputTypeAll(node.class_type));
-    if (staticNames.length > 0) { out[nodeId] = staticNames; continue; }
-    const rawNames = (rawMetaById[nodeId]?.outputs ?? []).map((output) => output.name);
-    if (rawNames.length > 0) { out[nodeId] = rawNames; continue; }
+    if (staticNames.length > 0) {
+      out[nodeId] = staticNames;
+      continue;
+    }
+    const rawNames = (rawMetaById[nodeId]?.outputs ?? []).map(
+      (output) => output.name,
+    );
+    if (rawNames.length > 0) {
+      out[nodeId] = rawNames;
+      continue;
+    }
 
     // 静态 + raw 都没有，从消费者（下游节点）的输入键反推
     const bySlot: Record<number, string[]> = {};
     for (const consumerRaw of Object.values(detail.graph ?? {})) {
       const inp = asRecord(asRecord(consumerRaw)?.inputs) ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
-        if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") continue;
+        if (
+          !Array.isArray(value) ||
+          value.length < 1 ||
+          typeof value[0] !== "string"
+        )
+          continue;
         if (value[0] !== nodeId) continue;
         const slot = Number(value[1] ?? 0);
         const stripped = inputKey.replace(/_\d+$/g, "");
@@ -739,7 +835,9 @@ export function inferSourceOutNames(
 /* Compute nesting depth for each group by bounding-box containment.  A group's
  * depth is how many other groups directly/indirectly contain it, so child frames
  * render on top of (above) their parents and nested groups read correctly. */
-export function computeGroupDepths(groups: WorkflowGroup[]): Record<string, number> {
+export function computeGroupDepths(
+  groups: WorkflowGroup[],
+): Record<string, number> {
   if (groups.length === 0) return {};
   const inside = (inner: WorkflowGroup, outer: WorkflowGroup) => {
     const [ix, iy, iw, ih] = inner.bounding;
@@ -748,8 +846,10 @@ export function computeGroupDepths(groups: WorkflowGroup[]): Record<string, numb
     const same = ix === ox && iy === oy && iw === ow && ih === oh;
     return (
       !same &&
-      ox - tolerance <= ix && oy - tolerance <= iy &&
-      ox + ow + tolerance >= ix + iw && oy + oh + tolerance >= iy + ih
+      ox - tolerance <= ix &&
+      oy - tolerance <= iy &&
+      ox + ow + tolerance >= ix + iw &&
+      oy + oh + tolerance >= iy + ih
     );
   };
   const findParent = (group: WorkflowGroup): WorkflowGroup | null => {

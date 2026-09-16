@@ -21,9 +21,18 @@ const NETWORK_ERROR_TRANSLATIONS: [RegExp, string][] = [
     /Unexpected token '?.<'?.*is not valid JSON/i,
     "服务返回了非预期内容（通常是应用服务正在重启或未就绪），请稍候重试",
   ],
-  [/Failed to fetch|NetworkError|Load failed/i, "网络请求失败，请检查应用服务是否正在运行"],
-  [/fetch failed|ECONNREFUSED|ECONNRESET|socket hang up/i, "连接被拒绝或中断，应用服务可能尚未就绪"],
-  [/signal is aborted without reason|AbortError/i, "请求被中断，应用服务可能正在重启，请稍候重试"],
+  [
+    /Failed to fetch|NetworkError|Load failed/i,
+    "网络请求失败，请检查应用服务是否正在运行",
+  ],
+  [
+    /fetch failed|ECONNREFUSED|ECONNRESET|socket hang up/i,
+    "连接被拒绝或中断，应用服务可能尚未就绪",
+  ],
+  [
+    /signal is aborted without reason|AbortError/i,
+    "请求被中断，应用服务可能正在重启，请稍候重试",
+  ],
   [/aborted|timeout|ETIMEDOUT/i, "请求超时或被中断，请稍候重试"],
 ];
 

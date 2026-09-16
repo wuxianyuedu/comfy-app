@@ -81,8 +81,20 @@ const ONE: Row = {
   fileSize: 5120,
   createdAt: "2026-01-01T00:00:00.000Z",
 };
-const TWO: Row = { ...ONE, id: "m2", name: "Detail Tweaker", type: "loras", fileName: "detail.safetensors" };
-const THREE: Row = { ...ONE, id: "m3", name: "Anime Style", type: "loras", fileName: "anime.safetensors" };
+const TWO: Row = {
+  ...ONE,
+  id: "m2",
+  name: "Detail Tweaker",
+  type: "loras",
+  fileName: "detail.safetensors",
+};
+const THREE: Row = {
+  ...ONE,
+  id: "m3",
+  name: "Anime Style",
+  type: "loras",
+  fileName: "anime.safetensors",
+};
 
 /**
  * hook 用到 api.model.*，必须挂在真实的 tRPC Provider 下。
@@ -122,17 +134,25 @@ afterAll(() => server.close());
 describe("useModelLibrary", () => {
   it("挂载：静默同步后 loading 收敛到 false，并拿到模型行", async () => {
     behavior = { models: [ONE] };
-    const { result } = renderHook(() => useModelLibrary(), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
 
     expect(result.current.loading).toBe(true);
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
     expect(result.current.models).toHaveLength(1);
-    expect(result.current.models[0]?.fileName).toBe("dreamshaper-xl.safetensors");
+    expect(result.current.models[0]?.fileName).toBe(
+      "dreamshaper-xl.safetensors",
+    );
   });
 
   it("筛选与搜索：filtered / typeChips 随状态派生（本地筛选，不打新请求）", async () => {
     behavior = { models: [ONE, TWO, THREE] };
-    const { result } = renderHook(() => useModelLibrary(), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.filtered).toHaveLength(3);
@@ -158,15 +178,21 @@ describe("useModelLibrary", () => {
 
   it("类型 count 为 0 时 chips 不出现（数据驱动，不是写死的目录表）", async () => {
     behavior = { models: [ONE] };
-    const { result } = renderHook(() => useModelLibrary(), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.typeChips).toEqual([["checkpoints", 1]]);
   });
 
   it("sync 失败不阻塞列表：loading 仍收敛，行照常渲染", async () => {
     behavior = { models: [ONE], syncError: "ComfyUI 未启动" };
-    const { result } = renderHook(() => useModelLibrary(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
     expect(result.current.models).toHaveLength(1);
   });
 });
@@ -255,7 +281,11 @@ describe("useModelLibrary 卸载后不再 setState", () => {
       configurable: true,
       get() {
         const stack = new Error().stack ?? "";
-        if (/resolveUpdatePriority|dispatchSetState|scheduleUpdateOnFiber/.test(stack)) {
+        if (
+          /resolveUpdatePriority|dispatchSetState|scheduleUpdateOnFiber/.test(
+            stack,
+          )
+        ) {
           scheduleReads += 1;
         }
         return realWindow?.value as unknown;

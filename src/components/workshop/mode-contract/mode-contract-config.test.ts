@@ -31,7 +31,11 @@ describe("生效契约（改过的用改过的，未改过的回落内置默认�
   });
 
   it("注册表里有该模式时用它并标「已改」（模式码大小写不敏感）", () => {
-    const custom = { mode: "T2I", inputs: ["prompt" as const], output: "image" as const };
+    const custom = {
+      mode: "T2I",
+      inputs: ["prompt" as const],
+      output: "image" as const,
+    };
     const { contract, customized } = effectiveModeContract("t2i", [custom]);
     expect(customized).toBe(true);
     expect(contract).toEqual(custom);

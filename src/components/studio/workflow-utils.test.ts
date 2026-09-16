@@ -15,7 +15,7 @@ import type { WorkflowDetail } from "./workflow-types";
 function detailWith(
   nodes: WorkflowDetail["nodes"],
   graph: WorkflowDetail["graph"],
-  rawNodes: WorkflowDetail["rawNodes"]
+  rawNodes: WorkflowDetail["rawNodes"],
 ): WorkflowDetail {
   return { nodes, graph, rawNodes } as unknown as WorkflowDetail;
 }
@@ -64,7 +64,9 @@ describe("resolveNodePackage", () => {
     expect(resolveNodePackage("AnySwitch (rgthree)")).toBe("rgthree-comfy");
   });
   it("cnr_id 属性优先于回退", () => {
-    expect(resolveNodePackage("X", { cnr_id: "custom-pack" })).toBe("custom-pack");
+    expect(resolveNodePackage("X", { cnr_id: "custom-pack" })).toBe(
+      "custom-pack",
+    );
     expect(resolveNodePackage("X", { cnr_id: "comfy-core" })).toBe("ComfyUI");
   });
 });
@@ -77,8 +79,18 @@ describe("buildEdges sourceHandle", () => {
   it("无输出元数据的源节点回落到通用 out handle", () => {
     const detail = detailWith(
       [
-        { id: "94", type: "CustomNoOutputs", class_type: "CustomNoOutputs", inputs: {} },
-        { id: "76", type: "EmptyLatentImage", class_type: "EmptyLatentImage", inputs: {} },
+        {
+          id: "94",
+          type: "CustomNoOutputs",
+          class_type: "CustomNoOutputs",
+          inputs: {},
+        },
+        {
+          id: "76",
+          type: "EmptyLatentImage",
+          class_type: "EmptyLatentImage",
+          inputs: {},
+        },
       ] as unknown as WorkflowDetail["nodes"],
       {
         "76": {
@@ -86,7 +98,7 @@ describe("buildEdges sourceHandle", () => {
           inputs: { width_1: ["94", 0], height_1: ["94", 1] },
         },
       },
-      []
+      [],
     );
     const edges = buildEdges(detail, [], { "94": ["width", "height"] });
     expect(edges).toHaveLength(2);
@@ -100,7 +112,7 @@ describe("buildEdges sourceHandle", () => {
         { id: "20", type: "VAEDecode", class_type: "VAEDecode", inputs: {} },
       ] as unknown as WorkflowDetail["nodes"],
       { "20": { class_type: "VAEDecode", inputs: { samples: ["10", 0] } } },
-      []
+      [],
     );
     const edges = buildEdges(detail, []);
     expect(edges[0]?.sourceHandle).toBe("out:LATENT");
@@ -109,11 +121,29 @@ describe("buildEdges sourceHandle", () => {
   it("仅有 raw outputs 的源节点按 raw 名字 pin", () => {
     const detail = detailWith(
       [
-        { id: "30", type: "ResolutionSelector", class_type: "ResolutionSelector", inputs: {} },
-        { id: "40", type: "EmptyLatentImage", class_type: "EmptyLatentImage", inputs: {} },
+        {
+          id: "30",
+          type: "ResolutionSelector",
+          class_type: "ResolutionSelector",
+          inputs: {},
+        },
+        {
+          id: "40",
+          type: "EmptyLatentImage",
+          class_type: "EmptyLatentImage",
+          inputs: {},
+        },
       ] as unknown as WorkflowDetail["nodes"],
-      { "40": { class_type: "EmptyLatentImage", inputs: { width: ["30", 0] } } },
-      [{ id: "30", widgets_values: [], outputs: [{ name: "WIDTH", type: "INT" }] }] as unknown as WorkflowDetail["rawNodes"]
+      {
+        "40": { class_type: "EmptyLatentImage", inputs: { width: ["30", 0] } },
+      },
+      [
+        {
+          id: "30",
+          widgets_values: [],
+          outputs: [{ name: "WIDTH", type: "INT" }],
+        },
+      ] as unknown as WorkflowDetail["rawNodes"],
     );
     const edges = buildEdges(detail, []);
     expect(edges[0]?.sourceHandle).toBe("out:WIDTH");
@@ -126,7 +156,10 @@ describe("hex color helpers", () => {
   });
 
   it("lightenHex 提高亮度分量", () => {
-    const [before, after] = [lightenHex("#111111", 0), lightenHex("#111111", 0.5)];
+    const [before, after] = [
+      lightenHex("#111111", 0),
+      lightenHex("#111111", 0.5),
+    ];
     expect(after).not.toBe(before);
   });
 

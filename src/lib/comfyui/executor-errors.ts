@@ -77,7 +77,10 @@ export function friendlyError(raw: unknown): string {
  *  ComfyUI returns `node_errors` keyed by node id, each with `input_errors`
  *  (field → {message}) or a top-level `message`. Surface those instead of a
  *  generic "节点配置错误" so the user can fix the actual bad value. */
-export function buildPromptError(res: PromptResult, graph: Record<string, unknown>): string {
+export function buildPromptError(
+  res: PromptResult,
+  graph: Record<string, unknown>,
+): string {
   // previously `String(res.error)` — that collapses a structured
   // error object to the literal "[object Object]" and gets stored as
   // the task's error string, which then surfaces verbatim in the UI.
@@ -102,11 +105,17 @@ export function buildPromptError(res: PromptResult, graph: Record<string, unknow
       input_errors?: Record<string, unknown>;
       message?: string;
     };
-    const cls = err.class_type ?? (graph?.[nid] as { class_type?: string } | undefined)?.class_type ?? "";
+    const cls =
+      err.class_type ??
+      (graph?.[nid] as { class_type?: string } | undefined)?.class_type ??
+      "";
     let detail = "";
     if (err.input_errors) {
       detail = Object.entries(err.input_errors)
-        .map(([k, v]) => `${k}: ${(v as { message?: string })?.message ?? (v as { details?: string })?.details ?? JSON.stringify(v)}`)
+        .map(
+          ([k, v]) =>
+            `${k}: ${(v as { message?: string })?.message ?? (v as { details?: string })?.details ?? JSON.stringify(v)}`,
+        )
         .join("; ");
     } else if (typeof err.message === "string") {
       detail = err.message;

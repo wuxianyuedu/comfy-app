@@ -58,74 +58,82 @@ export function FlowNodePinRows({
       className="border-border-strong border-b py-0.5"
       style={{ background: "var(--color-subtle)" }}
     >
-      {Array.from({ length: Math.max(uniqueConnEntries.length, outputs.length) }).map(
-        (_, rowIdx) => {
-          const inEntry = uniqueConnEntries[rowIdx];
-          const outEntry = outputs[rowIdx];
-          const inName = inEntry?.[0];
-          const outName = outEntry?.[0];
-          const outType = outEntry?.[1];
+      {Array.from({
+        length: Math.max(uniqueConnEntries.length, outputs.length),
+      }).map((_, rowIdx) => {
+        const inEntry = uniqueConnEntries[rowIdx];
+        const outEntry = outputs[rowIdx];
+        const inName = inEntry?.[0];
+        const outName = outEntry?.[0];
+        const outType = outEntry?.[1];
 
-          // Input side — colour by declared slot type, label via the same
-          // label / zh-CN / friendly chain the widget rows use（作者 label 优先）。
-          const inMeta = inName ? rawMeta[inName] : undefined;
-          const inType = inMeta?.type ?? "*";
-          const inCol = portColor(inType);
-          const inLabel = inName
-            ? sanitizeComboLabel(inMeta?.label) ||
-              sanitizeComboLabel(inMeta?.localized) ||
-              friendlyInputName(inName)
-            : "";
+        // Input side — colour by declared slot type, label via the same
+        // label / zh-CN / friendly chain the widget rows use（作者 label 优先）。
+        const inMeta = inName ? rawMeta[inName] : undefined;
+        const inType = inMeta?.type ?? "*";
+        const inCol = portColor(inType);
+        const inLabel = inName
+          ? sanitizeComboLabel(inMeta?.label) ||
+            sanitizeComboLabel(inMeta?.localized) ||
+            friendlyInputName(inName)
+          : "";
 
-          // Output side — colour by `outputs[i][1]`, label via rawOutputs
-          // `localized` (zh), else the raw key.
-          const outCol = outType ? portColor(outType) : undefined;
-          const outRaw = outName
-            ? data.rawOutputs?.find((output) => output.name === outName)
-            : undefined;
-          const outDisplay = outRaw?.localized ?? outName;
+        // Output side — colour by `outputs[i][1]`, label via rawOutputs
+        // `localized` (zh), else the raw key.
+        const outCol = outType ? portColor(outType) : undefined;
+        const outRaw = outName
+          ? data.rawOutputs?.find((output) => output.name === outName)
+          : undefined;
+        const outDisplay = outRaw?.localized ?? outName;
 
-          /* 端口行的观感：两端取一致的一档（见 toneOf）。 */
-          const tone = PORT_ROW_TONES[
-            toneOf(inName, outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined)
+        /* 端口行的观感：两端取一致的一档（见 toneOf）。 */
+        const tone =
+          PORT_ROW_TONES[
+            toneOf(
+              inName,
+              outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined,
+            )
           ];
 
-          return (
-            <div
-              // Key includes both names so number-slot ports ("1", "2", …)
-              // don't collide inside the array.
-              key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-              className="relative flex h-[22px] items-center pl-5 pr-5 text-[11px]"
-              data-pin-input={inName}
-              data-pin-output={outName}
-              /* 相关行提亮背景：线加粗了、落到的那一行也跟着亮，视线从线落到行上。
+        return (
+          <div
+            // Key includes both names so number-slot ports ("1", "2", …)
+            // don't collide inside the array.
+            key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
+            className="relative flex h-[22px] items-center pr-5 pl-5 text-[11px]"
+            data-pin-input={inName}
+            data-pin-output={outName}
+            /* 相关行提亮背景：线加粗了、落到的那一行也跟着亮，视线从线落到行上。
                  无关行压暗是**整行**的（含标签与端口），由 style.opacity 统一施加。 */
-              style={{ background: tone.background, opacity: tone.opacity }}
-            >
-              {inEntry && (
-                <>
-                  <Handle
-                    type="target"
-                    position={Position.Left}
-                    id={inName}
-                    /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
-                     * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
-                    isConnectable
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
-                    style={{
-                      left: 5,
-                      background: inCol,
-                      /* 相关行的端口放大 + 光晕增强：线是接到这一颗点上的。 */
-                      width: tone.dotSize,
-                      height: tone.dotSize,
-                      boxShadow: portDotGlow(inCol, tone.dotGlowStrong),
-                    }}
-                    title={`${inName} (${inType})`}
-                  />
-                  {/* IO checkbox for TOP PINS inputs that are UNCONNECTED —
-                   * a wired slot gets its value from upstream, so exposing
-                   * it as a workflow input is meaningless. */}
-                  {io?.ioEditMode && inMeta && !inMeta.isConnection && !inMeta.isBoundary && (
+            style={{ background: tone.background, opacity: tone.opacity }}
+          >
+            {inEntry && (
+              <>
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={inName}
+                  /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
+                   * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
+                  isConnectable
+                  className="!border-port-surface !h-2.5 !w-2.5 !rounded-full !border"
+                  style={{
+                    left: 5,
+                    background: inCol,
+                    /* 相关行的端口放大 + 光晕增强：线是接到这一颗点上的。 */
+                    width: tone.dotSize,
+                    height: tone.dotSize,
+                    boxShadow: portDotGlow(inCol, tone.dotGlowStrong),
+                  }}
+                  title={`${inName} (${inType})`}
+                />
+                {/* IO checkbox for TOP PINS inputs that are UNCONNECTED —
+                 * a wired slot gets its value from upstream, so exposing
+                 * it as a workflow input is meaningless. */}
+                {io?.ioEditMode &&
+                  inMeta &&
+                  !inMeta.isConnection &&
+                  !inMeta.isBoundary && (
                     <IoCheckbox
                       io={io}
                       ioRef={{
@@ -141,65 +149,70 @@ export function FlowNodePinRows({
                       }}
                     />
                   )}
-                  <span
-                    className="min-w-0 flex-1 truncate text-left text-[11px]"
-                    style={{ color: tone.labelColor, fontWeight: tone.labelWeight }}
-                    title={String(inName)}
-                  >
-                    {inLabel}
-                  </span>
-                </>
-              )}
-              {outEntry && (
-                <>
-                  <span
-                    className="min-w-0 flex-1 truncate text-right text-[11px]"
-                    style={{ color: tone.labelColor, fontWeight: tone.labelWeight }}
-                    title={`${outName} (${outType})`}
-                  >
-                    {outDisplay}
-                  </span>
-                  {/* Output source Handle —— **任何视图模式下都必须挂载**。
-                   *
-                   * 它不只是「拖线的入口」，更是下游那些 `out:<name>` 边的
-                   * 锚点：React Flow 在 handleBounds 里找不到边引用的 handle id 时，
-                   * 会丢弃整条边并打 error#008 —— 用户看到的就是「这条输出没有
-                   * 连线」。IO 编辑模式下曾整个不渲染它（理由：输出按节点勾选，
-                   * 端口圆点是多余的视觉噪声），结果切进 IO 编辑那一刻，该节点
-                   * 所有下游连线集体消失。
-                   *
-                   * 保留「不误导作者去连输出口」的原意改为**视觉降级**：IO 编辑
-                   * 模式下圆点缩到几乎不可见（只留一点色晕锚点），作者看不到可
-                   * 拖的端口，线却照样画得出来。 */}
-                  <Handle
-                    type="source"
-                    position={Position.Right}
-                    id={`out:${outName}`}
-                    isConnectable={false}
-                    className="!rounded-full !border !border-port-surface"
-                    style={{
-                      right: 5,
-                      background: outCol,
-                      boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                      ...(io?.ioEditMode
-                        ? {
-                            /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连
-                             * 输出口），提亮档只放大 1px 保持「这是同一个锚点」。 */
-                            width: tone.dotSize === 12 ? 5 : 4,
-                            height: tone.dotSize === 12 ? 5 : 4,
-                            opacity: 0.35,
-                            right: 0,
-                          }
-                        : { width: tone.dotSize, height: tone.dotSize }),
-                    }}
-                    title={`${outDisplay} (${outType})`}
-                  />
-                </>
-              )}
-            </div>
-          );
-        }
-      )}
+                <span
+                  className="min-w-0 flex-1 truncate text-left text-[11px]"
+                  style={{
+                    color: tone.labelColor,
+                    fontWeight: tone.labelWeight,
+                  }}
+                  title={String(inName)}
+                >
+                  {inLabel}
+                </span>
+              </>
+            )}
+            {outEntry && (
+              <>
+                <span
+                  className="min-w-0 flex-1 truncate text-right text-[11px]"
+                  style={{
+                    color: tone.labelColor,
+                    fontWeight: tone.labelWeight,
+                  }}
+                  title={`${outName} (${outType})`}
+                >
+                  {outDisplay}
+                </span>
+                {/* Output source Handle —— **任何视图模式下都必须挂载**。
+                 *
+                 * 它不只是「拖线的入口」，更是下游那些 `out:<name>` 边的
+                 * 锚点：React Flow 在 handleBounds 里找不到边引用的 handle id 时，
+                 * 会丢弃整条边并打 error#008 —— 用户看到的就是「这条输出没有
+                 * 连线」。IO 编辑模式下曾整个不渲染它（理由：输出按节点勾选，
+                 * 端口圆点是多余的视觉噪声），结果切进 IO 编辑那一刻，该节点
+                 * 所有下游连线集体消失。
+                 *
+                 * 保留「不误导作者去连输出口」的原意改为**视觉降级**：IO 编辑
+                 * 模式下圆点缩到几乎不可见（只留一点色晕锚点），作者看不到可
+                 * 拖的端口，线却照样画得出来。 */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={`out:${outName}`}
+                  isConnectable={false}
+                  className="!border-port-surface !rounded-full !border"
+                  style={{
+                    right: 5,
+                    background: outCol,
+                    boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
+                    ...(io?.ioEditMode
+                      ? {
+                          /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连
+                           * 输出口），提亮档只放大 1px 保持「这是同一个锚点」。 */
+                          width: tone.dotSize === 12 ? 5 : 4,
+                          height: tone.dotSize === 12 ? 5 : 4,
+                          opacity: 0.35,
+                          right: 0,
+                        }
+                      : { width: tone.dotSize, height: tone.dotSize }),
+                  }}
+                  title={`${outDisplay} (${outType})`}
+                />
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

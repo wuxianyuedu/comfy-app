@@ -14,9 +14,12 @@ const projectDeleteMutate = vi.fn();
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     project: {
-      list: { query: (...args: unknown[]) => projectListQuery(...args) as never },
+      list: {
+        query: (...args: unknown[]) => projectListQuery(...args) as never,
+      },
       upsert: {
-        mutate: (...args: unknown[]) => Promise.resolve(projectUpsertMutate(...args)),
+        mutate: (...args: unknown[]) =>
+          Promise.resolve(projectUpsertMutate(...args)),
       },
       delete: {
         mutate: (...args: unknown[]) =>
@@ -81,19 +84,31 @@ describe("reapEmptyProject", () => {
   });
 
   it("旧版 legacy 默认名不再被回收（仅当前默认名是哨兵）", () => {
-    seed([{ id: "p1", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([
+      { id: "p1", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] },
+    ]);
     expect(reapEmptyProject("p1")).toBe(false);
     expect(listProjects()).toHaveLength(1);
   });
 
   it("已被用户命名的空画布不被回收（刻意保存的空白板）", () => {
-    seed([{ id: "p1", name: "空白灵感板", updatedAt: 1, nodes: [], edges: [] }]);
+    seed([
+      { id: "p1", name: "空白灵感板", updatedAt: 1, nodes: [], edges: [] },
+    ]);
     expect(reapEmptyProject("p1")).toBe(false);
     expect(listProjects()).toHaveLength(1);
   });
 
   it("有节点或有边就不回收（哪怕名字还是默认名）", () => {
-    seed([{ id: "p1", name: "未命名", updatedAt: 1, nodes: [{ id: "n1" }], edges: [] }]);
+    seed([
+      {
+        id: "p1",
+        name: "未命名",
+        updatedAt: 1,
+        nodes: [{ id: "n1" }],
+        edges: [],
+      },
+    ]);
     expect(reapEmptyProject("p1")).toBe(false);
   });
 
@@ -197,7 +212,13 @@ describe("hydrateFromServer", () => {
   it("服务端 updatedAt 更新时覆盖本地，并落盘", async () => {
     seed([{ id: "p1", name: "本地旧", updatedAt: 100, nodes: [], edges: [] }]);
     projectListQuery.mockResolvedValue([
-      { id: "p1", name: "服务端新", updatedAt: new Date(500), nodes: [], edges: [] },
+      {
+        id: "p1",
+        name: "服务端新",
+        updatedAt: new Date(500),
+        nodes: [],
+        edges: [],
+      },
     ]);
 
     await hydrateFromServer();
@@ -210,7 +231,13 @@ describe("hydrateFromServer", () => {
   it("本地更新时保留本地副本，不倒退", async () => {
     seed([{ id: "p1", name: "本地新", updatedAt: 900, nodes: [], edges: [] }]);
     projectListQuery.mockResolvedValue([
-      { id: "p1", name: "服务端旧", updatedAt: new Date(500), nodes: [], edges: [] },
+      {
+        id: "p1",
+        name: "服务端旧",
+        updatedAt: new Date(500),
+        nodes: [],
+        edges: [],
+      },
     ]);
     await hydrateFromServer();
     expect(getProject("p1")?.name).toBe("本地新");

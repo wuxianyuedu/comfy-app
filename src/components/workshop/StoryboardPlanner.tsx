@@ -6,7 +6,15 @@ import { useStoryboardPlanner, type Props } from "./useStoryboardPlanner";
 import { ShotRow } from "./StoryboardPlanner.parts";
 
 export function StoryboardPlanner(props: Props) {
-  const { shots, scenes, characters, styles, onGenerate, generating, progressByShot } = props;
+  const {
+    shots,
+    scenes,
+    characters,
+    styles,
+    onGenerate,
+    generating,
+    progressByShot,
+  } = props;
   const planner = useStoryboardPlanner(props);
   const {
     aiBusy,
@@ -34,20 +42,23 @@ export function StoryboardPlanner(props: Props) {
     polishAll,
   } = planner;
 
-  const idleCount = shots.filter((shot) => shot.status === "idle" || shot.status === "failed").length;
+  const idleCount = shots.filter(
+    (shot) => shot.status === "idle" || shot.status === "failed",
+  ).length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="u-title">
-          分镜规划 <span className="text-muted-foreground">({shots.length})</span>
+          分镜规划{" "}
+          <span className="text-muted-foreground">({shots.length})</span>
         </h3>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={importFromScript}
             disabled={scenes.length === 0 || aiBusy}
-            className="rounded-lg border border-border px-3 py-1.5 text-xs text-primary hover:bg-subtle disabled:opacity-40"
+            className="border-border text-primary hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs disabled:opacity-40"
           >
             ↓ 从剧本导入
           </button>
@@ -55,17 +66,19 @@ export function StoryboardPlanner(props: Props) {
             type="button"
             onClick={handleAISplit}
             disabled={scenes.length === 0 || aiBusy}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
           >
             {aiBusy ? (
               "AI 拆镜中…"
             ) : (
-              (
-                <>
-                  <Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />
-                  AI 智能拆镜
-                </>
-              )
+              <>
+                <Icon
+                  name="sparkles"
+                  size={13}
+                  className="mr-1 inline align-[-2px]"
+                />
+                AI 智能拆镜
+              </>
             )}
           </button>
           {shots.length > 0 && (
@@ -75,11 +88,17 @@ export function StoryboardPlanner(props: Props) {
                 title="用模型把模板提示词润色为更有画面感的生图提示词"
                 onClick={() => void polishAll()}
                 disabled={polishBusyAll || polishBusyId != null || aiBusy}
-                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
               >
-                {polishBusyAll ? "润色中…" : (
+                {polishBusyAll ? (
+                  "润色中…"
+                ) : (
                   <>
-                    <Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />
+                    <Icon
+                      name="sparkles"
+                      size={13}
+                      className="mr-1 inline align-[-2px]"
+                    />
                     AI 润色提示词
                   </>
                 )}
@@ -87,7 +106,7 @@ export function StoryboardPlanner(props: Props) {
               <button
                 type="button"
                 onClick={clearShots}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-subtle"
+                className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs"
               >
                 清空
               </button>
@@ -97,7 +116,7 @@ export function StoryboardPlanner(props: Props) {
             type="button"
             onClick={generateAll}
             disabled={idleCount === 0 || generating}
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
           >
             {generating ? "生成中…" : `批量生成 (${idleCount})`}
           </button>
@@ -126,8 +145,9 @@ export function StoryboardPlanner(props: Props) {
       />
 
       {scenes.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
-          先在「剧本」中创建场景，再点「从剧本导入」或「AI 智能拆镜」自动生成分镜。
+        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-6 text-center text-xs">
+          先在「剧本」中创建场景，再点「从剧本导入」或「AI
+          智能拆镜」自动生成分镜。
         </div>
       )}
 
@@ -140,7 +160,9 @@ export function StoryboardPlanner(props: Props) {
       {(aiProgress || aiError) && (
         <div
           className={`rounded-lg px-3 py-2 text-xs ${
-            aiError ? "bg-red-100 text-red-800 dark:text-red-300" : "bg-primary-soft/40 text-primary"
+            aiError
+              ? "bg-red-100 text-red-800 dark:text-red-300"
+              : "bg-primary-soft/40 text-primary"
           }`}
         >
           {aiError || aiProgress}
@@ -148,13 +170,15 @@ export function StoryboardPlanner(props: Props) {
       )}
 
       {!config && scenes.length > 0 && (
-        <div className="rounded-lg bg-subtle px-3 py-2 text-xs text-muted-foreground">
-          未配置 LLM。「AI 智能拆镜」将不可用，可改用「从剧本导入」（按镜头数模板拆分），或在右上角「LLM 设置」接入本地/远端模型。
+        <div className="bg-subtle text-muted-foreground rounded-lg px-3 py-2 text-xs">
+          未配置 LLM。「AI
+          智能拆镜」将不可用，可改用「从剧本导入」（按镜头数模板拆分），或在右上角「LLM
+          设置」接入本地/远端模型。
         </div>
       )}
 
       {shots.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+        <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
           暂无分镜。导入剧本后，每个场景会按建议镜头数拆分为多个镜头。
         </div>
       ) : (

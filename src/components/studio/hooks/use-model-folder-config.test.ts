@@ -74,29 +74,35 @@ const mockRouter = t.router({
       };
     }),
     configSave: t.procedure
-      .input(z.object({ folder: z.string(), enabled: z.boolean(), label: z.string().optional() }))
+      .input(
+        z.object({
+          folder: z.string(),
+          enabled: z.boolean(),
+          label: z.string().optional(),
+        }),
+      )
       .mutation(({ input }) => {
-      saveInputs.push(input);
-      if (behavior.saveError) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: behavior.saveError,
-        });
-      }
-      return { ok: true };
-    }),
+        saveInputs.push(input);
+        if (behavior.saveError) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: behavior.saveError,
+          });
+        }
+        return { ok: true };
+      }),
     configDelete: t.procedure
       .input(z.object({ folder: z.string() }))
       .mutation(({ input }) => {
-      deleteInputs.push(input);
-      if (behavior.deleteError) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: behavior.deleteError,
-        });
-      }
-      return { ok: true };
-    }),
+        deleteInputs.push(input);
+        if (behavior.deleteError) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: behavior.deleteError,
+          });
+        }
+        return { ok: true };
+      }),
     sync: t.procedure.mutation(() => {
       if (behavior.syncError) {
         throw new TRPCError({
@@ -147,20 +153,32 @@ describe("useModelFolderConfig", () => {
       folders: [folder("checkpoints", true), folder("loras")],
       comfyReachable: false,
     };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
 
     expect(result.current.loading).toBe(true);
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
     expect(result.current.totalCount).toBe(2);
-    expect(result.current.enabledRows.map((r) => r.folder)).toEqual(["checkpoints"]);
-    expect(result.current.availableRows.map((r) => r.folder)).toEqual(["loras"]);
+    expect(result.current.enabledRows.map((r) => r.folder)).toEqual([
+      "checkpoints",
+    ]);
+    expect(result.current.availableRows.map((r) => r.folder)).toEqual([
+      "loras",
+    ]);
     expect(result.current.comfyReachable).toBe(false);
   });
 
   it("toggle：写入后端并在结束后刷新（写操作统一走 runMutate）", async () => {
     behavior = { folders: [folder("checkpoints", true), folder("loras")] };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
 
     await act(async () => {
       await result.current.toggle("loras", true);
@@ -171,8 +189,12 @@ describe("useModelFolderConfig", () => {
 
   it("add / remove：分别落到 configSave(enabled:true) 与 configDelete", async () => {
     behavior = { folders: [folder("loras")] };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
 
     await act(async () => {
       await result.current.add("loras");
@@ -186,8 +208,12 @@ describe("useModelFolderConfig", () => {
 
   it("写操作失败：错误文案可见（失败路径必须有出口），且不吞掉后续刷新", async () => {
     behavior = { folders: [folder("loras")], saveError: "目录不存在" };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
 
     await act(async () => {
       await result.current.add("loras");
@@ -199,8 +225,12 @@ describe("useModelFolderConfig", () => {
 
   it("rescan：失败时给出「扫描失败」兜底文案，scanning 收敛回 false", async () => {
     behavior = { folders: [folder("loras")], syncError: "ComfyUI 未启动" };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
 
     await act(async () => {
       await result.current.rescan();
@@ -211,8 +241,12 @@ describe("useModelFolderConfig", () => {
 
   it("写操作抛非 Error：回落「网络错误」而不是把 unknown 抛给用户", async () => {
     behavior = { folders: [folder("loras")], deleteError: "boom" };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
 
     behavior.deleteError = "boom";
     await act(async () => {
@@ -223,8 +257,12 @@ describe("useModelFolderConfig", () => {
 
   it("错误不被随后的刷新吞掉（§17.5.4 同源回归）", async () => {
     behavior = { folders: [folder("loras")], saveError: "目录不存在" };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
 
     await act(async () => {
       await result.current.add("loras");
@@ -242,11 +280,17 @@ describe("useModelFolderConfig", () => {
 
   it("目录关键字：先过滤再分组（搜索「lora」时已启用组为空）", async () => {
     behavior = { folders: [folder("checkpoints", true), folder("loras")] };
-    const { result } = renderHook(() => useModelFolderConfig(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 3000 });
+    const { result } = renderHook(() => useModelFolderConfig(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false), {
+      timeout: 3000,
+    });
 
     act(() => result.current.setQ("lora"));
     expect(result.current.enabledRows).toEqual([]);
-    expect(result.current.availableRows.map((r) => r.folder)).toEqual(["loras"]);
+    expect(result.current.availableRows.map((r) => r.folder)).toEqual([
+      "loras",
+    ]);
   });
 });

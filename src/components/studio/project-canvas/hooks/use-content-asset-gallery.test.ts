@@ -34,7 +34,9 @@ describe("useContentAssetGallery", () => {
   });
 
   it("单图不启用（images 为 null，视图走常规预览）", async () => {
-    mockedFetch.mockResolvedValue([{ id: "i1", localPath: "/a.png", isCover: true }]);
+    mockedFetch.mockResolvedValue([
+      { id: "i1", localPath: "/a.png", isCover: true },
+    ]);
     const { result } = renderHook(() =>
       useContentAssetGallery({ taskId: "t-1", enabled: true }),
     );
@@ -44,13 +46,17 @@ describe("useContentAssetGallery", () => {
 
   it("enabled=false（movie / text 节点）完全不发请求", async () => {
     renderHook(() => useContentAssetGallery({ taskId: "t-1", enabled: false }));
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(mockedFetch).not.toHaveBeenCalled();
   });
 
   it("无 taskId 不发请求", async () => {
     renderHook(() => useContentAssetGallery({ taskId: null, enabled: true }));
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(mockedFetch).not.toHaveBeenCalled();
   });
 

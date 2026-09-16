@@ -51,8 +51,10 @@ type Level = StepLogEntry["level"];
 const LEVEL_STYLES: Record<Level, string> = {
   error: "border-rose-500/20 bg-rose-500/15 text-rose-700 dark:text-rose-400",
   warn: "border-amber-500/20 bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  success: "border-emerald-500/20 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  progress: "border-violet-500/20 bg-violet-500/15 text-violet-700 dark:text-violet-400",
+  success:
+    "border-emerald-500/20 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  progress:
+    "border-violet-500/20 bg-violet-500/15 text-violet-700 dark:text-violet-400",
   info: "border-cyan-500/20 bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
 };
 
@@ -65,12 +67,20 @@ const LEVEL_STYLES: Record<Level, string> = {
  *
  *  纯函数 + 显式 next：去重判断在 updater 之外完成，避免在 setState 的
  *  updater 里做副作用（StrictMode 下 updater 可能被调用两次）。 */
-function withFailureLogLine(prev: StepLogEntry[], reason: string, now: number): StepLogEntry[] {
+function withFailureLogLine(
+  prev: StepLogEntry[],
+  reason: string,
+  now: number,
+): StepLogEntry[] {
   if (!reason) return prev;
   const text = `✗ 生成失败：${reason}`;
   const last = prev[prev.length - 1];
   /* 末行已是同因错误（服务端自己写过 ✗ 生成失败）→ 不重复追加。 */
-  if (last?.level === "error" && typeof last.msg === "string" && last.msg.includes(reason)) {
+  if (
+    last?.level === "error" &&
+    typeof last.msg === "string" &&
+    last.msg.includes(reason)
+  ) {
     return prev;
   }
   return [...prev, { t: now, level: "error", msg: text, client: true }];
@@ -83,7 +93,12 @@ function appendFailureLogLine(
   setLogs: React.Dispatch<React.SetStateAction<StepLogEntry[]>>,
 ): void {
   const t = Date.now();
-  appendStepLog(taskId, { t, level: "error", msg: `✗ 生成失败：${reason}`, client: true });
+  appendStepLog(taskId, {
+    t,
+    level: "error",
+    msg: `✗ 生成失败：${reason}`,
+    client: true,
+  });
   setLogs((prev) => withFailureLogLine(prev, reason, t));
 }
 
@@ -98,11 +113,16 @@ const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
 
 function levelLabel(level: Level): string {
   switch (level) {
-    case "error": return "ERROR";
-    case "warn": return "WARN";
-    case "success": return "OK";
-    case "progress": return "PROG";
-    default: return "INFO";
+    case "error":
+      return "ERROR";
+    case "warn":
+      return "WARN";
+    case "success":
+      return "OK";
+    case "progress":
+      return "PROG";
+    default:
+      return "INFO";
   }
 }
 
@@ -129,7 +149,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   const [viewTaskId, setViewTaskId] = useState<string | null>(null);
   const [logs, setLogs] = useState<StepLogEntry[]>([]);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[] | null>(null);
+  const [validationErrors, setValidationErrors] = useState<
+    ValidationError[] | null
+  >(null);
   const [status, setStatus] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -148,10 +170,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   /* Cancel the currently viewed task from inside the panel.
    * 「取消中…」态与失败文案都在 useCancelTask 里（视图零 IO）。 */
-  const {
-    cancelling: cancellingFromPanel,
-    cancel: cancelFromPanel,
-  } = useCancelTask({ taskId, onFailed: setError });
+  const { cancelling: cancellingFromPanel, cancel: cancelFromPanel } =
+    useCancelTask({ taskId, onFailed: setError });
   const onCancelFromPanel = () => {
     // 无任务时按钮本就禁用（下方 disabled），这里只是防重复点击的兜底。
     if (!taskId) return;
@@ -208,7 +228,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
           const entry = msg.entry as StepLogEntry;
           appendStepLog(tid, entry);
           setLogs((prev) => {
-            if (prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)) return prev;
+            if (
+              prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)
+            )
+              return prev;
             return [...prev, entry];
           });
         } else if (msg.type === "state") {
@@ -234,18 +257,23 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
           }
           if (msg.workflowName || msg.status) {
             patchStepLogMeta(tid, {
-              workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
+              workflowName:
+                typeof msg.workflowName === "string"
+                  ? msg.workflowName
+                  : undefined,
               status: typeof msg.status === "string" ? msg.status : undefined,
               nodeId: getNodeIdByTaskId(tid) ?? undefined,
             });
           }
         } else if (msg.type === "done") {
-          if (lastStatusRef.current !== "SUCCEEDED") lastStatusRef.current = "SUCCEEDED";
+          if (lastStatusRef.current !== "SUCCEEDED")
+            lastStatusRef.current = "SUCCEEDED";
           setStatus("SUCCEEDED");
           es.close();
           esRef.current = null;
         } else if (msg.type === "error") {
-          if (lastStatusRef.current !== "FAILED") lastStatusRef.current = "FAILED";
+          if (lastStatusRef.current !== "FAILED")
+            lastStatusRef.current = "FAILED";
           setStatus("FAILED");
           if (typeof msg.error === "string") {
             setError(msg.error);
@@ -276,9 +304,20 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
       if (idle > 20000 && status === "RUNNING") {
         const now = Date.now();
         setLogs((prev) => {
-          if (prev.length && prev[prev.length - 1]!.msg.includes("无新日志") && now - prev[prev.length - 1]!.t < 5000)
+          if (
+            prev.length &&
+            prev[prev.length - 1]!.msg.includes("无新日志") &&
+            now - prev[prev.length - 1]!.t < 5000
+          )
             return prev;
-          return [...prev, { t: now, level: "warn", msg: "⏳ 已 20s 无新日志，任务可能卡住（详见后端 runner 日志）" }];
+          return [
+            ...prev,
+            {
+              t: now,
+              level: "warn",
+              msg: "⏳ 已 20s 无新日志，任务可能卡住（详见后端 runner 日志）",
+            },
+          ];
         });
         lastActivityRef.current = now;
       }
@@ -294,8 +333,11 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     el.scrollTop = el.scrollHeight;
   }, [logs, filter, autoscroll]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const cachedIds = useMemo(() => listCachedTaskIds(), [logs, validationErrors, taskId]);
+  const cachedIds = useMemo(
+    () => listCachedTaskIds(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logs, validationErrors, taskId],
+  );
 
   /* 把每个已缓存的 taskId 映射回画布节点短序号 (#1, #2…)。
    * 映射来源：运行开始时 setActiveTaskId(taskId, nodeId) 写进 activeTask，
@@ -304,7 +346,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const nodeSeqByTaskId = useMemo(() => {
     const map = new Map<string, number>();
     for (const cachedId of cachedIds) {
-      const nodeId = getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
+      const nodeId =
+        getNodeIdByTaskId(cachedId) ?? loadStepLogPanelState(cachedId)?.nodeId;
       if (!nodeId) continue;
       const idx = nodes.findIndex((node) => node.id === nodeId);
       if (idx !== -1) map.set(cachedId, idx + 1);
@@ -317,16 +360,29 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   if (!debugMode && !open) return null;
 
   const visibleAll = logs.slice(-300);
-  const visible = filter === "all" ? visibleAll : visibleAll.filter((log) => log.level === filter);
+  const visible =
+    filter === "all"
+      ? visibleAll
+      : visibleAll.filter((log) => log.level === filter);
   const valErrs = validationErrors ?? [];
   const statusLabel =
-    status === "SUCCEEDED" ? "完成" : status === "FAILED" ? "失败" : status === "CANCELLED" ? "已取消"
-    : status === "RUNNING" ? `运行中 ${progress}%` : status ?? "—";
+    status === "SUCCEEDED"
+      ? "完成"
+      : status === "FAILED"
+        ? "失败"
+        : status === "CANCELLED"
+          ? "已取消"
+          : status === "RUNNING"
+            ? `运行中 ${progress}%`
+            : (status ?? "—");
   const statusClass =
-    status === "FAILED" ? "bg-red-500/20 text-red-700 dark:text-red-300"
-    : status === "SUCCEEDED" ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-    : status === "RUNNING" ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
-    : "bg-subtle text-ink-soft";
+    status === "FAILED"
+      ? "bg-red-500/20 text-red-700 dark:text-red-300"
+      : status === "SUCCEEDED"
+        ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+        : status === "RUNNING"
+          ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
+          : "bg-subtle text-ink-soft";
 
   const errorCount = visibleAll.filter((l) => l.level === "error").length;
 
@@ -363,13 +419,15 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <div
           className={overlayClass(
             "modal",
-            "z-50 flex items-center justify-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-black/60",
+            "bg-canvas-deep z-50 flex items-center justify-center p-4 backdrop-blur-sm dark:bg-black/60",
           )}
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} flex-col overflow-hidden border-border-strong bg-panel rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}>
+          <div
+            className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border-strong bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
+          >
             {/* Header */}
             <div className="border-border-strong bg-surface-1 flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
               <div className="flex min-w-0 items-center gap-2">
@@ -380,7 +438,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <span className="text-ink-bright truncate text-[15px] font-semibold">
                   执行日志
                 </span>
-                <span className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}>
+                <span
+                  className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}
+                >
                   {statusLabel}
                 </span>
                 <span
@@ -394,14 +454,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                {taskId && status !== "SUCCEEDED" && status !== "FAILED" && status !== "CANCELLED" ? (
+                {taskId &&
+                status !== "SUCCEEDED" &&
+                status !== "FAILED" &&
+                status !== "CANCELLED" ? (
                   <button
                     type="button"
                     onClick={onCancelFromPanel}
                     disabled={cancellingFromPanel}
                     title="取消当前查看的任务"
                     data-testid="log-panel-cancel"
-                    className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 dark:text-red-300/90 disabled:opacity-50"
+                    className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 disabled:opacity-50 dark:text-red-300/90"
                   >
                     {cancellingFromPanel ? "× 取消中…" : "× 取消"}
                   </button>
@@ -409,7 +472,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 {cachedIds.length > 0 && (
                   <select
                     value={taskId ?? ""}
-                    onChange={(event) => setViewTaskId(event.target.value || null)}
+                    onChange={(event) =>
+                      setViewTaskId(event.target.value || null)
+                    }
                     className="bg-panel border-border-strong text-ink-soft max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
                     title="切换查看的任务"
                   >
@@ -421,9 +486,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       const st = meta?.status ?? "?";
                       const seqLabel = seq ? `#${seq}` : null;
                       const titleParts = [seqLabel, wn, st, id].filter(Boolean);
-                      const displayParts = [seqLabel, wn ?? `task ${id.slice(0, 8)}`, st].filter(Boolean);
+                      const displayParts = [
+                        seqLabel,
+                        wn ?? `task ${id.slice(0, 8)}`,
+                        st,
+                      ].filter(Boolean);
                       return (
-                        <option key={id} value={id} title={titleParts.join(" · ")}>
+                        <option
+                          key={id}
+                          value={id}
+                          title={titleParts.join(" · ")}
+                        >
                           {displayParts.join(" · ")}
                         </option>
                       );
@@ -463,7 +536,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   const count =
                     option.value === "all"
                       ? visibleAll.length
-                      : visibleAll.filter((l) => l.level === option.value).length;
+                      : visibleAll.filter((l) => l.level === option.value)
+                          .length;
                   return (
                     <button
                       key={option.value}
@@ -478,7 +552,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       }`}
                     >
                       {option.label}
-                      <span className="text-ink-fainter ml-1 text-[11px]">{count}</span>
+                      <span className="text-ink-fainter ml-1 text-[11px]">
+                        {count}
+                      </span>
                     </button>
                   );
                 })}
@@ -504,9 +580,14 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                   <div className="mb-1.5 text-[13px] font-semibold text-red-700 dark:text-red-300">
                     ⚠ 工作流验证错误（{valErrs.length}）
                   </div>
-                  <ValidationErrorList errors={valErrs.slice(0, 12)} className="text-red-700/95 dark:text-red-300/90" />
+                  <ValidationErrorList
+                    errors={valErrs.slice(0, 12)}
+                    className="text-red-700/95 dark:text-red-300/90"
+                  />
                   {valErrs.length > 12 && (
-                    <div className="mt-1 text-[12px] text-red-700 dark:text-red-300/70">+{valErrs.length - 12} more…</div>
+                    <div className="mt-1 text-[12px] text-red-700 dark:text-red-300/70">
+                      +{valErrs.length - 12} more…
+                    </div>
                   )}
                 </div>
               )}
@@ -519,7 +600,11 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
               {visible.length === 0 ? (
                 <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
-                  <FileText size={32} strokeWidth={1.5} className="opacity-30" />
+                  <FileText
+                    size={32}
+                    strokeWidth={1.5}
+                    className="opacity-30"
+                  />
                   {taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
                 </div>
               ) : (
@@ -533,7 +618,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                         data-level={log.level}
                         className="border-border-subtle hover:bg-subtle/60 flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
                       >
-                        <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
+                        <span className="text-ink-muted shrink-0">
+                          {fmtTime(log.t)}
+                        </span>
                         <span
                           className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
                         >

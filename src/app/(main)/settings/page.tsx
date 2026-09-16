@@ -66,7 +66,6 @@ export default function SettingsPage() {
   return <SettingsPageView c={{ ...c, drafts: c.drafts }} />;
 }
 
-
 /* ── 设置页加载失败降级视图 ──────────────────────────────────────────────
  * 此前只有一行被截断的错误文案，原始报错（如 tRPC 拿到 HTML 的
  * "Unexpected token '<'"）既看不全也没有任何出口，问题无从排查（#220）。
@@ -100,8 +99,13 @@ export function SettingsLoadError({
   return (
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">
       <div className="w-full max-w-xl text-center">
-        <p className="text-rose-700 dark:text-rose-400">加载设置失败，请刷新重试</p>
-        <p className="text-muted-foreground mt-2 truncate text-xs" title={errorText}>
+        <p className="text-rose-700 dark:text-rose-400">
+          加载设置失败，请刷新重试
+        </p>
+        <p
+          className="text-muted-foreground mt-2 truncate text-xs"
+          title={errorText}
+        >
           {errorText}
         </p>
         <div className="mt-3 flex items-center justify-center gap-2">
@@ -135,12 +139,15 @@ export function SettingsLoadError({
         <div className="text-muted-foreground mt-4 space-y-1 text-xs">
           <p>
             本次失败已写入日志面板（按{" "}
-            <kbd className="border-border rounded border px-1 font-mono">Ctrl+Shift+L</kbd>{" "}
+            <kbd className="border-border rounded border px-1 font-mono">
+              Ctrl+Shift+L
+            </kbd>{" "}
             打开，筛选「错误」可快速定位）。
           </p>
           <p>
-            若反复出现，先看日志面板里这条错误：启动阶段（应用服务未就绪 / 正在重启）
-            和运行阶段的读取失败（如数据库表 / 字段缺失）都可能是原因——只当“服务在
+            若反复出现，先看日志面板里这条错误：启动阶段（应用服务未就绪 /
+            正在重启） 和运行阶段的读取失败（如数据库表 /
+            字段缺失）都可能是原因——只当“服务在
             重启”处理会漏掉后者，重试也不会好。
           </p>
           <button

@@ -32,7 +32,9 @@ describe("uploadDatasetImage", () => {
   it("413：把后端的体积限制文案原样透出", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonRes(413, { error: "图片大小不能超过 50MB" })),
+      vi
+        .fn()
+        .mockResolvedValue(jsonRes(413, { error: "图片大小不能超过 50MB" })),
     );
     await expect(uploadDatasetImage(new File(["x"], "a.png"))).rejects.toThrow(
       "图片大小不能超过 50MB",
@@ -42,14 +44,13 @@ describe("uploadDatasetImage", () => {
   it("503 ComfyUI 不可达：透出带地址的排障提示（硬规则：失败须可行动）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonRes(503, {
-            error: "无法连接 ComfyUI (http://127.0.0.1:8188)。请确认 ComfyUI 已启动后再上传素材。",
-            hint: "comfyui-unreachable",
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        jsonRes(503, {
+          error:
+            "无法连接 ComfyUI (http://127.0.0.1:8188)。请确认 ComfyUI 已启动后再上传素材。",
+          hint: "comfyui-unreachable",
+        }),
+      ),
     );
     await expect(uploadDatasetImage(new File(["x"], "a.png"))).rejects.toThrow(
       /无法连接 ComfyUI/,
@@ -58,7 +59,9 @@ describe("uploadDatasetImage", () => {
 
   it("非 2xx 无 error 字段：回落兜底", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonRes(500, {})));
-    await expect(uploadDatasetImage(new File(["x"], "a.png"))).rejects.toThrow("上传失败");
+    await expect(uploadDatasetImage(new File(["x"], "a.png"))).rejects.toThrow(
+      "上传失败",
+    );
   });
 
   it("2xx 但缺 name：视为失败", async () => {

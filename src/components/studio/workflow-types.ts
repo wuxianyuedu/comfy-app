@@ -75,7 +75,12 @@ export interface RawInputMeta {
    *  wrapper 的槽位名是本层自动编号的别名（`value_1`），业务名在内部节点
    *  上。画布与 IO 面板都按「内部字段 label → localized → 字段名」取名，
    *  避免同一 pin 在两处显示成不同字符串（ISSUE #349）。普通节点不携带。 */
-  proxyField?: { nodeId: string; field: string; label?: string; localized?: string };
+  proxyField?: {
+    nodeId: string;
+    field: string;
+    label?: string;
+    localized?: string;
+  };
 }
 
 export interface ComfyGraphNode {
@@ -245,7 +250,14 @@ export interface NodeJsonViewerRequest {
   /** `DOMRect` of the `#id` chip that triggered the popover.  Captured
    *  when the user clicks, then frozen for the lifetime of the popover
    *  so re-renders (or pan/zoom) don't drag it around mid-read. */
-  anchorRect: { left: number; top: number; right: number; bottom: number; width: number; height: number };
+  anchorRect: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    width: number;
+    height: number;
+  };
   /** ComfyUI workflow JSON key — `data.nodeId`.  For subgraphs this is
    *  ALSO the same key (subgraph wrappers are top-level entries in
    *  `graph`, not nested). */
@@ -264,9 +276,7 @@ export interface NodeJsonViewerContextValue {
    *  with the raw-ui metadata (`detail.rawNodes[i]` matched by id) and
    *  the canvas position (`detail.positions[id]`).  `raw` and `pos` are
    *  `undefined` / `null` for API-only imports. */
-  getNodeView: (
-    nodeId: string
-  ) => {
+  getNodeView: (nodeId: string) => {
     entry: Record<string, unknown> | null;
     raw:
       | {
@@ -286,7 +296,11 @@ export interface NodeJsonViewerContextValue {
   /** Show the popover.  `anchorEl` should be the `#id` chip element
    *  (used for positioning only — pointer-events fire on it AFTER the
    *  popover is mounted, so we capture rect synchronously here). */
-  requestShow: (anchorEl: HTMLElement, nodeId: string, kind: "node" | "subgraph") => void;
+  requestShow: (
+    anchorEl: HTMLElement,
+    nodeId: string,
+    kind: "node" | "subgraph",
+  ) => void;
   /** Manually dismiss.  ESC and outside-click both call this. */
   dismiss: () => void;
   /** Live viewer state — Provider exposes it ONLY for the popover
@@ -341,20 +355,22 @@ export interface WorkflowDetail {
    *  table doesn't know the class (e.g. custom nodes like
    *  ResolutionSelector, or subgraph UUIDs whose outputs we discover from
    *  the raw JSON). */
-  rawNodes: {
-    id: string;
-    widgets_values: unknown[];
-    outputs: RawOutputMeta[];
-    /** Per-node LiteGraph flags (e.g. `collapsed`).  Empty when raw was
-     *  absent (API-only import).  The Flow already consumed these via
-     *  `(rn as any).flags`; declared here so the JSON popover can show
-     *  them in the synthesised "节点视图" tab. */
-    flags?: Record<string, unknown>;
-    /** Custom-node properties (e.g. rgthree's `Fast Groups Bypasser`
-     *  reads `matchTitle` from this).  Empty when raw was absent. */
-    properties?: Record<string, unknown>;
-    mode?: number;
-  }[] | null;
+  rawNodes:
+    | {
+        id: string;
+        widgets_values: unknown[];
+        outputs: RawOutputMeta[];
+        /** Per-node LiteGraph flags (e.g. `collapsed`).  Empty when raw was
+         *  absent (API-only import).  The Flow already consumed these via
+         *  `(rn as any).flags`; declared here so the JSON popover can show
+         *  them in the synthesised "节点视图" tab. */
+        flags?: Record<string, unknown>;
+        /** Custom-node properties (e.g. rgthree's `Fast Groups Bypasser`
+         *  reads `matchTitle` from this).  Empty when raw was absent. */
+        properties?: Record<string, unknown>;
+        mode?: number;
+      }[]
+    | null;
   /** Boundary pin entities (subgraph.inputs/outputs from ComfyUI raw).
    *  Each pin has its own UUID, name, type, saved position, and linkIds
    *  pointing at the cross-boundary wires.  Rendered as compact
@@ -449,7 +465,7 @@ export interface WorkflowNote {
  *  echo "Note: Note: Foo". */
 export interface WorkflowNodeData {
   [key: string]: unknown;
-  nodeId: string;          // ComfyUI node ID
+  nodeId: string; // ComfyUI node ID
   classType: string;
   title: string;
   inputs: Record<string, unknown>;
@@ -458,7 +474,10 @@ export interface WorkflowNodeData {
   /** For every input that is a connection ([srcId, slot]), the source node's
    *  title + class_type.  Used to render the "← <srcNode> #xx" label and to
    *  infer the data type flowing through the wire. */
-  inputSources: Record<string, { id: string; title: string; slot: number; classType?: string }>;
+  inputSources: Record<
+    string,
+    { id: string; title: string; slot: number; classType?: string }
+  >;
   /** Per-input display metadata from raw JSON (localized_name + type). */
   rawInputs?: RawInputMeta[];
   /** True if this node is an INPUT endpoint of the current subgraph (its
@@ -631,7 +650,7 @@ export interface WorkflowSubgraphData {
    *  because that's a hash, not the canonical ComfyUI id. */
   nodeId: string;
   title: string;
-  uid: string;             // first 8 chars of class_type — used as subtitle
+  uid: string; // first 8 chars of class_type — used as subtitle
   inputs: RawInputMeta[];
   /** Per-output display metadata from raw JSON (e.g. the IMAGE output a
    *  subgraph exposes).  Empty when the subgraph has no outputs. */
@@ -664,4 +683,3 @@ export interface WorkflowSubgraphData {
    *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
   hostNodeId?: string;
 }
-

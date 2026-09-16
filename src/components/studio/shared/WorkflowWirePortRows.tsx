@@ -120,8 +120,7 @@ export function WirePortRows({
   };
   return (
     <div className="space-y-0">
-      {wireInputs.map((wireInput) =>
-{
+      {wireInputs.map((wireInput) => {
         /* conflict-aware — see ioLabel() in workflow-io.ts. */
         const label = ioLabel(wireInput, [...wireInputs, ...outputs]);
         const chipStyle = portChipStyle(wireInput.type);
@@ -132,20 +131,30 @@ export function WirePortRows({
           (wireInput.type ?? "").toUpperCase() === "FLOAT" ||
           (wireInput.type ?? "").toUpperCase() === "NUMBER";
         const v = values[wireInput.ioKey];
-        {/* ── PortRowInt · 数值行 · h=33 严格（Ardot 3:52）───────────────
+        {
+          /* ── PortRowInt · 数值行 · h=33 严格（Ardot 3:52）───────────────
             单行：Handle 在整行中部 (y_in_row=16.5)，label · spacer · 数字
             输入 · SeedModeButton · chip 行末。chip 永在所有控件之后，与
-            Card pr=14 边距对齐——STRING/INT/FLOAT/NUMBER chip 统一右对齐。*/}
-        if (numericType && wireInput.control !== "textarea" && wireInput.control !== "image") {
+            Card pr=14 边距对齐——STRING/INT/FLOAT/NUMBER chip 统一右对齐。*/
+        }
+        if (
+          numericType &&
+          wireInput.control !== "textarea" &&
+          wireInput.control !== "image"
+        ) {
           const b = numericBounds(wireInput);
           const isSeed = isSeedLike(wireInput);
           const isDragging = onReorder && draggingKey === wireInput.ioKey;
-          const isDropTarget = onReorder && dragOverKey === wireInput.ioKey && draggingKey && draggingKey !== wireInput.ioKey;
+          const isDropTarget =
+            onReorder &&
+            dragOverKey === wireInput.ioKey &&
+            draggingKey &&
+            draggingKey !== wireInput.ioKey;
           return (
             <div
               key={wireInput.ioKey}
               {...portDrag(wireInput.ioKey)}
-              className={`relative flex h-[33px] shrink-0 items-center gap-2.5 pl-[14px] pr-[14px] ${isDragging ? "opacity-50" : ""}`}
+              className={`relative flex h-[33px] shrink-0 items-center gap-2.5 pr-[14px] pl-[14px] ${isDragging ? "opacity-50" : ""}`}
             >
               {isDropTarget && (
                 <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
@@ -157,7 +166,7 @@ export function WirePortRows({
                 style={{ top: "50%", transform: "translateY(-50%)" }}
               />
               <span
-                className="text-[14px] font-medium text-ink-bright"
+                className="text-ink-bright text-[14px] font-medium"
                 style={{ fontFamily: "var(--font-sans)" }}
               >
                 {label}
@@ -181,7 +190,9 @@ export function WirePortRows({
                   min={b.min}
                   max={b.max}
                   step={b.step}
-                  decimalPlaces={wireInput.control === "float" ? b.decimalPlaces : 0}
+                  decimalPlaces={
+                    wireInput.control === "float" ? b.decimalPlaces : 0
+                  }
                 />
               </div>
               {isSeed && onSeedModeChange && (
@@ -194,12 +205,16 @@ export function WirePortRows({
                 className="inline-flex shrink-0 items-center rounded-[3px] px-1.5 py-0.5 text-[12px] font-semibold"
                 style={{ fontFamily: "var(--font-sans)", ...chipStyle }}
               >
-                {typeDisplay(wireInput.type, wireInput.control === "float" ? "FLOAT" : "INT")}
+                {typeDisplay(
+                  wireInput.type,
+                  wireInput.control === "float" ? "FLOAT" : "INT",
+                )}
               </span>
             </div>
           );
         }
-        {/* ── PortRow · 非数值行 · min-h=86（Ardot 3:40）───────────────
+        {
+          /* ── PortRow · 非数值行 · min-h=86（Ardot 3:40）───────────────
             R-ardot17 (2026-08-14): 解锁 row wrapper 高度——
               · row wrapper h-[86px] overflow-hidden → min-h-[86px]
                 （让真实 prompt 多行内容自然撑高，整张 Card 跟随）。
@@ -210,16 +225,20 @@ export function WirePortRows({
                 min-height 28、max-height 120（约 5-6 行）——超出滚动。
               · Handle 圆心 y_in_row=14 不变（subrow 始终锁顶），但
                 y_in_card 跟随 row 高度（这是 Ardot "placeholder=1 行" 假
-                设自然延伸）。*/}
+                设自然延伸）。*/
+        }
         return (
           <div
             key={wireInput.ioKey}
             {...portDrag(wireInput.ioKey)}
             className={`relative min-h-[86px] shrink-0 ${onReorder && draggingKey === wireInput.ioKey ? "opacity-50" : ""}`}
           >
-            {onReorder && dragOverKey === wireInput.ioKey && draggingKey && draggingKey !== wireInput.ioKey && (
-              <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
-            )}
+            {onReorder &&
+              dragOverKey === wireInput.ioKey &&
+              draggingKey &&
+              draggingKey !== wireInput.ioKey && (
+                <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+              )}
             <PortHandle
               id={wireInput.ioKey}
               dir="in"
@@ -229,9 +248,9 @@ export function WirePortRows({
             <div className="flex min-h-[86px] flex-col pt-1.5 pb-1.5">
               {/* subrow h=16：label 在左（pl-14 避让 Handle 圆点 -6），
                   chip 在右（pr-14 贴 Card 右内缘）——chip 永远在 subrow 右端。*/}
-              <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
+              <div className="relative flex h-4 shrink-0 items-center justify-between gap-2.5 pr-[14px] pl-[14px]">
                 <span
-                  className="text-[14px] font-medium text-ink-bright"
+                  className="text-ink-bright text-[14px] font-medium"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}
@@ -250,7 +269,7 @@ export function WirePortRows({
                   min-w-0` 兜底——textarea 的 box 即使 intrinsic content size
                   撑出 wrapper（Chrome `field-sizing:content` 的 width 接管
                   在 R-ardot20 实测不可靠），wrapper 也会视觉裁掉。*/}
-              <div className="mt-1.5 flex-1 min-h-0 min-w-0 overflow-hidden pl-[14px] pr-[14px]">
+              <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden pr-[14px] pl-[14px]">
                 {wireInput.control === "textarea" && (
                   <AutoResizeTextarea
                     value={typeof v === "string" ? v : ""}
@@ -260,10 +279,14 @@ export function WirePortRows({
                 )}
                 {wireInput.control === "text" && (
                   <input
-                    value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
+                    value={
+                      typeof v === "string" || typeof v === "number"
+                        ? String(v)
+                        : ""
+                    }
                     placeholder={`输入 ${label}`}
                     onChange={(ev) => set(wireInput.ioKey, ev.target.value)}
-                    className="nodrag nopan h-full w-full rounded-md bg-canvas-deep px-2.5 py-2 text-[13px] text-ink-soft outline-none placeholder:text-ink-placeholder"
+                    className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder h-full w-full rounded-md px-2.5 py-2 text-[13px] outline-none"
                     style={{ fontFamily: "var(--font-sans)" }}
                   />
                 )}
@@ -272,7 +295,7 @@ export function WirePortRows({
                     type="button"
                     disabled={uploading}
                     onClick={() => pickFile(wireInput.ioKey)}
-                    className="nodrag nopan inline-flex h-full items-center gap-1.5 rounded-md bg-canvas-deep px-2.5 py-1.5 text-[13px] text-ink-soft transition-colors hover:text-ink-bright"
+                    className="nodrag nopan bg-canvas-deep text-ink-soft hover:text-ink-bright inline-flex h-full items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors"
                   >
                     {uploading && uploadTarget === wireInput.ioKey
                       ? "上传中…"
@@ -293,8 +316,7 @@ export function WirePortRows({
        *  `showOutputs` 守护未来重构不会被破坏。 */}
       {showOutputs && outputs.length > 0 && (
         <div>
-          {outputs.map((output) =>
-{
+          {outputs.map((output) => {
             /* conflict-aware — see ioLabel(). */
             const label = ioLabel(output, [...wireInputs, ...outputs]);
             const chipStyle = portChipStyle(output.type);
@@ -305,20 +327,27 @@ export function WirePortRows({
               <div
                 key={output.ioKey}
                 {...portDrag(output.ioKey)}
-                className={`relative flex h-[28px] shrink-0 items-center gap-2.5 pl-[14px] pr-[14px] ${onReorder && draggingKey === output.ioKey ? "opacity-50" : ""}`}
+                className={`relative flex h-[28px] shrink-0 items-center gap-2.5 pr-[14px] pl-[14px] ${onReorder && draggingKey === output.ioKey ? "opacity-50" : ""}`}
               >
-                {onReorder && dragOverKey === output.ioKey && draggingKey && draggingKey !== output.ioKey && (
-                  <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
-                )}
+                {onReorder &&
+                  dragOverKey === output.ioKey &&
+                  draggingKey &&
+                  draggingKey !== output.ioKey && (
+                    <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                  )}
                 <PortHandle
                   id={output.ioKey}
                   dir="out"
                   type={output.type}
-                  style={{ right: -6, top: "50%", transform: "translateY(-50%)" }}
+                  style={{
+                    right: -6,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                  }}
                 />
                 <div className="flex-1" />
                 <span
-                  className="text-[14px] font-medium text-ink-bright"
+                  className="text-ink-bright text-[14px] font-medium"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   {label}

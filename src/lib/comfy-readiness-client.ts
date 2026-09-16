@@ -20,8 +20,7 @@ export const COMFY_READY_TIMEOUT_MS = 180_000;
 export const COMFY_READY_POLL_MS = 2_000;
 
 export type ComfyReadyResult =
-  | { ok: true }
-  | { ok: false; pending: boolean; message: string };
+  { ok: true } | { ok: false; pending: boolean; message: string };
 
 interface EnsureBody {
   ok?: unknown;
@@ -64,7 +63,12 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
     body = undefined;
   }
   const detail = readComfyErrorMessage(body, "ComfyUI 未就绪");
-  if (res.ok && typeof body === "object" && body !== null && (body as EnsureBody).ok === true) {
+  if (
+    res.ok &&
+    typeof body === "object" &&
+    body !== null &&
+    (body as EnsureBody).ok === true
+  ) {
     return { ok: true };
   }
   return {
@@ -81,15 +85,24 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
  * 渲染可见状态；返回结果里的 `pending=true` 表示「还在启动 / 被手动关闭 / 未开
  * 自动启动」，`message` 直接可展示给用户。
  */
-export async function waitForComfyReady(opts: {
-  timeoutMs?: number;
-  pollMs?: number;
-  onProgress?: (message: string) => void;
-} = {}): Promise<ComfyReadyResult> {
+export async function waitForComfyReady(
+  opts: {
+    timeoutMs?: number;
+    pollMs?: number;
+    onProgress?: (message: string) => void;
+  } = {},
+): Promise<ComfyReadyResult> {
   const timeoutMs = opts.timeoutMs ?? COMFY_READY_TIMEOUT_MS;
-  const pollMs = Math.min(opts.pollMs ?? COMFY_READY_POLL_MS, Math.max(timeoutMs, 1));
+  const pollMs = Math.min(
+    opts.pollMs ?? COMFY_READY_POLL_MS,
+    Math.max(timeoutMs, 1),
+  );
   const deadline = Date.now() + timeoutMs;
-  let last: ComfyReadyResult = { ok: false, pending: true, message: "ComfyUI 未就绪" };
+  let last: ComfyReadyResult = {
+    ok: false,
+    pending: true,
+    message: "ComfyUI 未就绪",
+  };
   let announced = false;
 
   for (;;) {

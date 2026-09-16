@@ -4,12 +4,18 @@ import type { LLMConfigView, LLMProviderType } from "@/lib/llm/types";
 export type ExtractChannel = "tool" | "local" | "remote";
 
 /** 下拉选项值：工具通道无模型；local/remote 携带模型名 */
-export function channelOptionValue(channel: ExtractChannel, model: string): string {
+export function channelOptionValue(
+  channel: ExtractChannel,
+  model: string,
+): string {
   return channel === "tool" ? "tool" : `${channel}::${model}`;
 }
 
 /** 下拉选项值 → 通道 + 模型名（与 channelOptionValue 互逆） */
-export function parseChannelOption(value: string): { channel: ExtractChannel; model: string } {
+export function parseChannelOption(value: string): {
+  channel: ExtractChannel;
+  model: string;
+} {
   if (value === "tool") return { channel: "tool", model: "" };
   const idx = value.indexOf("::");
   const channel = value.slice(0, idx) as "local" | "remote";

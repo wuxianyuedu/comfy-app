@@ -52,6 +52,11 @@ const SPLIT_HINT_LINES = 900;
  * 默认(非 strict)只提醒;`--strict`(CI)下「基线里没有的超限文件」即阻断,
  * 「基线里已有但变大了」一并阻断 —— 只许降不许升。 */
 const FILE_SIZE_BASELINE = path.join(__dirname, ".file-size-baseline.json");
+/** R5 棘轮的**判据版本**:只有「数行数的口径」本身变了(例如全库 prettier 治理
+ *  拆行、整体抬高行长口径)才允许 `--update` 一次性重记,其余情况数字只许下降。
+ *  理由与 check-function-length.cjs 的 RULE_VERSION 同源:基线是「该判据下的计数」,
+ *  判据一变,旧数字与新计数就不是同一个量 —— 不做标记的重记会被读成「有人放宽棘轮」。 */
+const R5_RULE_VERSION = 2;
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
@@ -324,11 +329,31 @@ const SCAN_EXCLUDED = [
   const prevFiles = prev?.files ?? null;
 
   if (UPDATE) {
+    const prevTotal = prevFiles ? Object.keys(prevFiles).length : 0;
+    /* 棘轮只许下降;唯一例外是判据版本抬升(旧数字与新计数不是同一个量)。 */
+    const ruleChanged = Boolean(prevFiles) && prev.ruleVersion !== R5_RULE_VERSION;
+    const grew = prevFiles
+      ? names.filter((f) => f in prevFiles && oversizedFiles[f] > prevFiles[f])
+      : [];
+    const added = prevFiles ? names.filter((f) => !(f in prevFiles)) : [];
+    if (prevFiles && (grew.length || added.length || names.length > prevTotal) && !ruleChanged) {
+      console.error(
+        "[structure] 拒绝放宽 R5 基线(棘轮只许下降):" +
+          (grew.length ? " 变大 " + grew.join(", ") : "") +
+          (added.length ? " 新增 " + added.join(", ") : "") +
+          "\n  新增的先拆分,不要用 --update 掩盖。" +
+          "\n  若确属判据变更(现为 R5_RULE_VERSION=" +
+          R5_RULE_VERSION +
+          "),须先改脚本里的常数再 --update。",
+      );
+      process.exit(1);
+    }
     fs.writeFileSync(
       FILE_SIZE_BASELINE,
       JSON.stringify(
         {
           generatedAt: new Date().toISOString().slice(0, 10),
+          ruleVersion: R5_RULE_VERSION,
           note:
             "超 " + SPLIT_HINT_LINES + " 行的文件(规范 §12.6 R5 / ISSUE #575)。" +
             "棘轮只许下降:新增超限文件须先拆分,再收紧基线。",
@@ -341,7 +366,12 @@ const SCAN_EXCLUDED = [
       ) + "\n",
     );
     console.log(
-      "[structure] R5 基线已更新:" + names.length + " 个超限文件(scripts/.file-size-baseline.json)",
+      "[structure] R5 基线已更新:" +
+        names.length +
+        " 个超限文件(scripts/.file-size-baseline.json)" +
+        (ruleChanged
+          ? "【判据版本 " + (prev.ruleVersion ?? "?") + " → " + R5_RULE_VERSION + ",一次性重记】"
+          : ""),
     );
     return;
   }

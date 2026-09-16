@@ -4,7 +4,11 @@
 // 读取共用，纯函数可直接单测）；文件布局见 log-paths.ts 的 WORKSHOP_LOG_DIR。
 
 /** 产生执行日志的工坊环节。 */
-export const GENERATION_LOG_STAGES = ["character", "storyboard", "portrait"] as const;
+export const GENERATION_LOG_STAGES = [
+  "character",
+  "storyboard",
+  "portrait",
+] as const;
 export type GenerationLogStage = (typeof GENERATION_LOG_STAGES)[number];
 
 export const GENERATION_LOG_STAGE_LABELS: Record<GenerationLogStage, string> = {
@@ -38,11 +42,15 @@ function isGenerationLogStage(v: unknown): v is GenerationLogStage {
 }
 
 /** 任意输入 → 可落盘条目；形状不合法（无摘要）返回 null，坏数据不炸文件。 */
-export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | null {
+export function normalizeGenerationLogEntry(
+  raw: unknown,
+): GenerationLogEntry | null {
   if (typeof raw !== "object" || raw === null) return null;
   const rec = raw as Record<string, unknown>;
   const summary =
-    typeof rec.summary === "string" ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS) : "";
+    typeof rec.summary === "string"
+      ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS)
+      : "";
   if (!summary) return null;
   const ts =
     typeof rec.ts === "number" && Number.isFinite(rec.ts)
@@ -56,14 +64,17 @@ export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | 
       : undefined;
   return {
     ts: Number.isFinite(ts) ? ts : Date.now(),
-    kind: typeof rec.kind === "string" && rec.kind ? rec.kind.slice(0, 24) : "info",
+    kind:
+      typeof rec.kind === "string" && rec.kind ? rec.kind.slice(0, 24) : "info",
     summary,
     ...(detail ? { detail } : {}),
   };
 }
 
 /** 解析一行 JSONL（容错：坏行返回 null）。 */
-export function parseGenerationLogLine(line: string): GenerationLogEntry | null {
+export function parseGenerationLogLine(
+  line: string,
+): GenerationLogEntry | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   try {

@@ -21,7 +21,12 @@ import { Icon } from "@/components/ui/icon";
 import { useWorkflowModes } from "./hooks/use-workflow-modes";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";
-import { NodeChip, PORT_STYLE, StatusBadge, StatusDot } from "./CanvasNodePrimitives";
+import {
+  NodeChip,
+  PORT_STYLE,
+  StatusBadge,
+  StatusDot,
+} from "./CanvasNodePrimitives";
 import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
 import { useFileUpload } from "./hooks/use-file-upload";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
@@ -29,7 +34,11 @@ import { useGenerate } from "./hooks/use-generate";
 import { ErrorPanel } from "./ErrorPanel";
 import { resolveWorkflowMode } from "@/lib/workflow-types";
 
-export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }: NodeProps<CanvasNodeType>) {
+export const CanvasNode = React.memo(function CanvasNode({
+  id,
+  data,
+  selected,
+}: NodeProps<CanvasNodeType>) {
   const d = data as CanvasNodeData;
   const { setNodes, getNode, setEdges, fitView } = useReactFlow();
   const meta = NODE_META[d.kind];
@@ -40,10 +49,10 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
         nds.map((node) =>
           node.id === id
             ? { ...node, data: { ...(node.data as CanvasNodeData), ...p } }
-            : node
-        )
+            : node,
+        ),
       ),
-    [id, setNodes]
+    [id, setNodes],
   );
   const deleteSelf = () => setNodes((nds) => nds.filter((nd) => nd.id !== id));
 
@@ -138,7 +147,8 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
      *  Handle 全部在本组件渲染：右侧 output（同 parent 50%）。内容区与 FAB 抽离到
      *  ContentAssetBody 便于复用与单测。输出 Handle
      *  直接骑跨在右侧边框 50% 处。 */
-    const outStyle = d.kind === "text" ? PORT_STYLE.condition : PORT_STYLE.image;
+    const outStyle =
+      d.kind === "text" ? PORT_STYLE.condition : PORT_STYLE.image;
     body = (
       <div className="relative -mx-3.5">
         {/* 右侧 source Handle — 与 picture 左输入 Handle 同 parent
@@ -260,10 +270,10 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
       /* node card width bumped 340→380 so the
        *  label column ("宽度"/"高度"/"步数"…) can render the full 2-char
        *  CJK label without competing with the stepper.  Combined with
- *  (stepper capped at max-w-[180px]) the layout is
+       *  (stepper capped at max-w-[180px]) the layout is
        *  now:  [label flex-1] ……… [type chip] / [stepper ≤180]   on
        *  each workflow widget row. */
-      className="relative w-[380px] rounded-[14px] border border-border-strong bg-card transition-[outline,box-shadow] duration-150"
+      className="border-border-strong bg-card relative w-[380px] rounded-[14px] border transition-[outline,box-shadow] duration-150"
       style={
         selected
           ? {
@@ -277,7 +287,9 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
             }
       }
     >
-      {selected && <SelectedToolbar onDelete={deleteSelf} onFocusNode={focusNode} />}
+      {selected && (
+        <SelectedToolbar onDelete={deleteSelf} onFocusNode={focusNode} />
+      )}
       {/* 头部按节点类型分支：自定义工作流走 Ardot 稿 v2 精确 token
        * （紫色 W 圆角方块 + 标题 + 状态胶囊）；其它节点保留通用 NodeChip。
        * 外壳严格对齐 9:27/9:61：radius12、无投影、padding20；表单区包一层
@@ -325,7 +337,8 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
              * 是「内容载体」，不参与运行态，状态徽标/关闭按钮与画布语义无关 →
              * 头部只留 NodeChip。无障碍与误删保护由 SelectedToolbar 的
              * ⌫ 按钮统一承担。*/
-            const isAsset = d.kind === "text" || d.kind === "picture" || d.kind === "movie";
+            const isAsset =
+              d.kind === "text" || d.kind === "picture" || d.kind === "movie";
             return (
               <div className="border-border-strong flex items-center justify-between gap-2 border-b px-3.5 py-2.5">
                 <NodeChip kind={d.kind} name={meta.label} />
@@ -392,7 +405,7 @@ export const CanvasNode = React.memo(function CanvasNode({ id, data, selected }:
        *  (IMAGE/VHS_VIDEO…) via outputTargetKind, so the handle always matches
        *  Ardot design tokens regardless of the selected workflow's task type.
        *
- *  用户反馈画布 workflow 节点右侧的紫色圆点
+       *  用户反馈画布 workflow 节点右侧的紫色圆点
        *  「看起来像漏出的 bug」——workflow 节点是叶节点（生成图片/视频），
        *  在 project canvas 上不会接出到下游节点，所以这个 source Handle 实
        *  际上没人连。需要让出端口的能力由画布 IO-edit modal 提供（不在节

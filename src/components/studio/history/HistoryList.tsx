@@ -62,7 +62,11 @@ function HistoryGroupTaskList({
  * 历史记录面板 —— 容器（规范 17 §17.2 第④层）。
  * 只做：取 controller → 传给视图 → 挂详情弹层；不含任何业务规则。
  */
-export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: string) => void }) {
+export function HistoryList({
+  onOpenTask: _onOpenTask,
+}: {
+  onOpenTask?: (id: string) => void;
+}) {
   /* 拿掉 modal「打开完整详情 ↗」按钮后 onOpenTask 变成无用 prop,
    *  重命名为 _onOpenTask 让 lint 沉默并保留向下兼容（父组件还在传，旧版可以仍然保留这个 prop）。
    *  用户反馈「在这里点开就显示详情，别在其他界面再显示」—— 历史 modal 是「这里」，
@@ -72,12 +76,12 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
+      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
         {/* ── Header ── */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-xl font-bold text-ink">历史记录</h1>
-            <p className="mt-1 text-sm text-ink-muted">
+            <h1 className="font-title text-ink text-xl font-bold">历史记录</h1>
+            <p className="text-ink-muted mt-1 text-sm">
               所有生成任务与执行日志，按时间倒序排列。
             </p>
           </div>
@@ -85,7 +89,7 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
             <select
               value={c.sort}
               onChange={(event) => c.setSort(event.target.value as SortKey)}
-              className="rounded-lg border border-border bg-subtle px-3 py-1.5 text-xs text-ink-strong outline-none focus:border-violet-500/40"
+              className="border-border bg-subtle text-ink-strong rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-violet-500/40"
               aria-label="排序"
             >
               <option value="newest" className="bg-node">
@@ -97,7 +101,7 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
             </select>
             <button
               onClick={c.refresh}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs text-ink-faint hover:text-ink-bright"
+              className="border-border text-ink-faint hover:text-ink-bright rounded-lg border px-3 py-1.5 text-xs"
             >
               ↻ 刷新
             </button>
@@ -117,11 +121,13 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                   "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all " +
                   (isActive
                     ? "bg-linear-to-r from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/20"
-                    : "border-border border bg-card text-ink-strong hover:bg-surface-2")
+                    : "border-border bg-card text-ink-strong hover:bg-surface-2 border")
                 }
               >
                 {filterOption.dotCls && (
-                  <span className={`h-1.5 w-1.5 rounded-full ${filterOption.dotCls}`} />
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${filterOption.dotCls}`}
+                  />
                 )}
                 <span>{filterOption.label}</span>
                 <span
@@ -140,11 +146,13 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
         </div>
 
         {c.loading ? (
-          <p className="text-sm text-ink-muted">加载中…</p>
+          <p className="text-ink-muted text-sm">加载中…</p>
         ) : c.filteredCount === 0 ? (
-          <div className="grid min-h-[300px] place-items-center rounded-2xl border border-dashed border-border text-ink-muted">
+          <div className="border-border text-ink-muted grid min-h-[300px] place-items-center rounded-2xl border border-dashed">
             <div className="text-center">
-              <p className="text-lg font-medium text-ink-strong">{c.empty.title}</p>
+              <p className="text-ink-strong text-lg font-medium">
+                {c.empty.title}
+              </p>
               <p className="mt-1 text-sm">{c.empty.hint}</p>
             </div>
           </div>
@@ -155,9 +163,13 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
                 {/* ── 日期分组标题 ── */}
                 <div className="mb-3 flex items-center gap-3">
                   <div className="h-4 w-1 rounded-full bg-linear-to-b from-violet-500 to-fuchsia-500" />
-                  <h2 className="text-sm font-semibold text-ink-strong">{group.key}</h2>
-                  <span className="text-xs text-ink-fainter">{group.items.length} 个任务</span>
-                  <div className="h-px flex-1 bg-subtle" />
+                  <h2 className="text-ink-strong text-sm font-semibold">
+                    {group.key}
+                  </h2>
+                  <span className="text-ink-fainter text-xs">
+                    {group.items.length} 个任务
+                  </span>
+                  <div className="bg-subtle h-px flex-1" />
                 </div>
 
                 {/* ── 任务列表 ── */}
@@ -174,19 +186,19 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
             ))}
 
             {/* ── 分页 footer ── */}
-            <div className="flex items-center justify-center gap-3 border-t border-border-subtle pt-6">
-              <span className="text-xs text-ink-muted">
+            <div className="border-border-subtle flex items-center justify-center gap-3 border-t pt-6">
+              <span className="text-ink-muted text-xs">
                 已加载 {c.visibleTotal} / {c.filteredCount} 个任务
               </span>
               {c.canLoadMore ? (
                 <button
                   onClick={c.loadMore}
-                  className="rounded-lg border border-border bg-subtle px-4 py-1.5 text-xs text-ink-strong hover:bg-surface-2"
+                  className="border-border bg-subtle text-ink-strong hover:bg-surface-2 rounded-lg border px-4 py-1.5 text-xs"
                 >
                   加载更多
                 </button>
               ) : (
-                <span className="text-[11px] text-ink-fainter">已全部加载</span>
+                <span className="text-ink-fainter text-[11px]">已全部加载</span>
               )}
             </div>
           </div>

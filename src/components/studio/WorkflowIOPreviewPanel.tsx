@@ -94,19 +94,24 @@ export function WorkflowIoPreviewPanel({
     return out;
   }, [workflowIO, detailIOMap]);
 
-  const editableEntries = useMemo(() => splitWorkflowIO(previewIO).inputs, [previewIO]);
+  const editableEntries = useMemo(
+    () => splitWorkflowIO(previewIO).inputs,
+    [previewIO],
+  );
 
   /* 当前模式是否落过覆盖（驱动「恢复默认」按钮）。 */
   const hasModeOverrides = useMemo(
     () =>
       effectiveMode != null &&
-      Object.values(workflowIO).some((entry) => entry?.modes?.[effectiveMode] !== undefined),
+      Object.values(workflowIO).some(
+        (entry) => entry?.modes?.[effectiveMode] !== undefined,
+      ),
     [workflowIO, effectiveMode],
   );
 
   const setIOLabel = useCallback(
     (key: string, label: string) => ioApi.getState().setIOLabel(key, label),
-    [ioApi]
+    [ioApi],
   );
   /* 「必填 / 可选」切换：按当前模式写入覆盖（modes[mode].required）。
    *  仅 widget 输入可调必填（与服务端富化迁移语义一致）。 */
@@ -116,7 +121,7 @@ export function WorkflowIoPreviewPanel({
       if (workflowIO[key]?.kind !== "widget") return;
       ioApi.getState().setIOModeOverride(key, effectiveMode, { required });
     },
-    [effectiveMode, workflowIO, ioApi]
+    [effectiveMode, workflowIO, ioApi],
   );
 
   /* seed「控件后行为」（固定值 / 递增 / 递减 / 随机）：按当前模式写入覆盖
@@ -124,14 +129,16 @@ export function WorkflowIoPreviewPanel({
   const setSeedModeForMode = useCallback(
     (key: string, seedBehavior: string) => {
       if (!effectiveMode) return;
-      ioApi.getState().setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
+      ioApi
+        .getState()
+        .setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
     },
-    [effectiveMode, ioApi]
+    [effectiveMode, ioApi],
   );
   const reorderIO = useCallback(
     (fromKey: string, beforeKey: string | null) =>
       ioApi.getState().reorderIO(fromKey, beforeKey),
-    [ioApi]
+    [ioApi],
   );
 
   /* 表单写入：一律落当前模式的覆盖层（defaultValue），「通用值」概念随
@@ -147,7 +154,7 @@ export function WorkflowIoPreviewPanel({
           .setIOModeOverride(key, effectiveMode, { defaultValue: value });
       }
     },
-    [effectiveMode, ioApi, previewIO]
+    [effectiveMode, ioApi, previewIO],
   );
 
   const toggleModeVisibility = useCallback(
@@ -155,7 +162,7 @@ export function WorkflowIoPreviewPanel({
       if (!effectiveMode) return;
       ioApi.getState().setIOModeOverride(key, effectiveMode, { visible });
     },
-    [effectiveMode, ioApi]
+    [effectiveMode, ioApi],
   );
 
   /* 恢复默认 = 清掉当前模式的全部覆盖（回到通用默认 + 默认可见）。 */
@@ -174,13 +181,15 @@ export function WorkflowIoPreviewPanel({
     }`;
 
   return (
-    <div className="pointer-events-none absolute right-4 top-4 bottom-4 z-30 flex w-[520px] flex-col">
-      <div className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 bg-panel/92 shadow-2xl backdrop-blur-md">
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-strong px-3 py-2">
+    <div className="pointer-events-none absolute top-4 right-4 bottom-4 z-30 flex w-[520px] flex-col">
+      <div className="bg-panel/92 pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 shadow-2xl backdrop-blur-md">
+        <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
-            <span className="truncate text-[12px] font-semibold text-ink-bright">IO 预览</span>
-            <span className="rounded-full bg-subtle px-1.5 py-px text-[10px] font-mono text-ink-soft">
+            <span className="text-ink-bright truncate text-[12px] font-semibold">
+              IO 预览
+            </span>
+            <span className="bg-subtle text-ink-soft rounded-full px-1.5 py-px font-mono text-[10px]">
               {Object.keys(workflowIO).length}
             </span>
           </div>
@@ -188,7 +197,7 @@ export function WorkflowIoPreviewPanel({
             <button
               type="button"
               onClick={resetActiveModeOverrides}
-              className="rounded-md border border-border-strong bg-subtle px-1.5 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
+              className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-1.5 py-0.5 text-[11px] transition-colors"
               title={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}
             >
               恢复默认
@@ -197,7 +206,7 @@ export function WorkflowIoPreviewPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-border-strong bg-subtle px-1.5 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-1.5 py-0.5 text-[11px] transition-colors"
             title="关闭预览"
           >
             ✕
@@ -205,7 +214,7 @@ export function WorkflowIoPreviewPanel({
         </div>
 
         {/* ── 模式页签：来自工作流 modes（与库「类型」同源）＋右侧模式管理 ── */}
-        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border-strong px-3 py-1.5">
+        <div className="border-border-strong flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
           {modes.map((code) => (
             <span key={code} className="flex shrink-0 items-center gap-0.5">
               <button
@@ -223,7 +232,7 @@ export function WorkflowIoPreviewPanel({
                     const next = modes.filter((m) => m !== code);
                     onModesChange(next, next[0] ?? "");
                   }}
-                  className="rounded px-0.5 text-[10px] text-ink-muted transition-colors hover:text-red-700 dark:text-red-300"
+                  className="text-ink-muted rounded px-0.5 text-[10px] transition-colors hover:text-red-700 dark:text-red-300"
                   title={`从工作流模式中移除「${modeLabel(code)}」`}
                 >
                   ×
@@ -241,20 +250,22 @@ export function WorkflowIoPreviewPanel({
           </span>
         </div>
 
-        <div className="nodrag nopan flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3 text-ink-bright">
+        <div className="nodrag nopan text-ink-bright flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3">
           {Object.keys(workflowIO).length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border-strong bg-subtle px-3 py-4 text-center text-[11px] leading-relaxed text-ink-muted">
+            <div className="border-border-strong bg-subtle text-ink-muted rounded-lg border border-dashed px-3 py-4 text-center text-[11px] leading-relaxed">
               尚未勾选任何 IO。
               <br />
               在画布上勾选参数后，这里会同步出现对应的表单行；点击变量名称即可就地重命名。
             </div>
           ) : modes.length === 0 ? (
             <div className="rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-3 py-4 text-center text-[11px] leading-relaxed text-amber-800/80 dark:text-amber-200/80">
-              该工作流还没有配置模式 —— 请先在上方「模式」里勾选
-              （文生图 / 图生图 / …），之后才能在这里配置参数。
+              该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 /
+              图生图 / …），之后才能在这里配置参数。
             </div>
           ) : (
-            <div className={effectiveMode ? "" : "pointer-events-none opacity-50"}>
+            <div
+              className={effectiveMode ? "" : "pointer-events-none opacity-50"}
+            >
               <DynamicWorkflowForm
                 io={previewIO}
                 values={defaultInputValues(previewIO, effectiveMode)}
@@ -285,8 +296,11 @@ export function WorkflowIoPreviewPanel({
             </div>
           )}
         </div>
-        <div className="shrink-0 border-t border-border-strong px-3 py-1.5 text-[10px] text-ink-muted">
-          <span className="opacity-80">点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 / 可选」切换是否在运行时强校验。</span>
+        <div className="border-border-strong text-ink-muted shrink-0 border-t px-3 py-1.5 text-[10px]">
+          <span className="opacity-80">
+            点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 /
+            可选」切换是否在运行时强校验。
+          </span>
           <RequiredSummary io={previewIO} mode={effectiveMode} />
         </div>
       </div>

@@ -23,8 +23,7 @@ export async function openUrlInBrowser(
       : platform === "darwin"
         ? "open"
         : "xdg-open";
-  const args =
-    platform === "win32" ? ["/c", "start", "", url] : [url];
+  const args = platform === "win32" ? ["/c", "start", "", url] : [url];
   try {
     await new Promise<void>((resolve, reject) => {
       // 不走 shell：Node 按数组参数直接构造命令行，URL 原样送达，

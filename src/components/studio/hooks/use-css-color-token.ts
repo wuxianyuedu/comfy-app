@@ -96,7 +96,7 @@ export function useCssColorToken(name: string, fallback: string): string {
    *  天然稳定，所以即便每次 render 新建闭包也不会触发多余渲染。 */
   const getSnapshot = useCallback(
     () => readCssColorToken(name) ?? fallback,
-    [name, fallback]
+    [name, fallback],
   );
   const getServerSnapshot = useCallback(() => fallback, [fallback]);
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

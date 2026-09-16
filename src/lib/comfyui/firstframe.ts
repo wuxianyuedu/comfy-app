@@ -28,7 +28,8 @@ export async function synthesizeFirstFrame(opts: {
     scheduler: "normal",
     count: 1,
   });
-  if (!built.ok || !built.prompt) throw new Error(built.error ?? "首帧构图失败");
+  if (!built.ok || !built.prompt)
+    throw new Error(built.error ?? "首帧构图失败");
 
   const task = await taskRepository.createQueued({
     userId,
@@ -52,14 +53,17 @@ export async function synthesizeFirstFrame(opts: {
 // Resolve with the first generated image's local path, or reject on error/timeout.
 function waitForImage(taskId: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("首帧生成超时")), 5 * 60 * 1000);
+    const timeout = setTimeout(
+      () => reject(new Error("首帧生成超时")),
+      5 * 60 * 1000,
+    );
     const off = subscribe(taskId, (event) => {
       if (event.type === "done") {
         clearTimeout(timeout);
         off();
-        const imgs = (event.images as Array<{ mediaType?: string; localPath?: string }>).filter(
-          (im) => im.mediaType === "image"
-        );
+        const imgs = (
+          event.images as Array<{ mediaType?: string; localPath?: string }>
+        ).filter((im) => im.mediaType === "image");
         const first = imgs[0];
         if (first?.localPath) resolve(first.localPath);
         else reject(new Error("首帧无图像输出"));

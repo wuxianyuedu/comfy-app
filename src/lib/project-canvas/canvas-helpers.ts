@@ -21,7 +21,7 @@ export function makeNodeId(): string {
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，
  *  替代脆弱的 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */
 export function makeFitViewScheduler(
-  fitView: (options?: FitViewOptions) => void
+  fitView: (options?: FitViewOptions) => void,
 ): (padding?: number) => void {
   return (padding = 0.25) => {
     requestAnimationFrame(() => {
@@ -44,7 +44,7 @@ export function applyPropagationToNodes(
     srcData: CanvasNodeData;
     outEdges: Edge[];
     importedFile: string | null;
-  }
+  },
 ): CanvasNodeType[] {
   const { srcData: src, outEdges, importedFile } = opts;
 
@@ -61,9 +61,16 @@ export function applyPropagationToNodes(
       const key = edge.targetHandle;
       let stored: unknown = undefined;
       if (src.kind === "text" && src.content?.trim()) stored = src.content;
-      else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath)
+      else if (
+        (src.kind === "picture" || src.kind === "movie") &&
+        src.mediaPath
+      )
         stored = src.mediaPath;
-      else if (src.resultPath && src.resultMediaType !== "video" && importedFile)
+      else if (
+        src.resultPath &&
+        src.resultMediaType !== "video" &&
+        importedFile
+      )
         stored = importedFile;
       if (stored !== undefined) {
         return {
@@ -87,7 +94,9 @@ export function applyPropagationToNodes(
     if (td.kind === "picture" || td.kind === "movie") {
       const incoming: string | undefined =
         importedFile ??
-        (src.kind === "picture" || src.kind === "movie" ? src.mediaPath ?? undefined : undefined);
+        (src.kind === "picture" || src.kind === "movie"
+          ? (src.mediaPath ?? undefined)
+          : undefined);
       if (incoming) {
         return {
           ...node,
@@ -132,7 +141,8 @@ export function applyPropagationToNodes(
           next.inputImage = importedFile;
           next.upstreamId = sourceId;
           // auto-switch the consumer mode so the fed input is actually used
-          if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
+          if (next.kind === "image" && next.mode === "txt2img")
+            next.mode = "img2img";
           if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
         } else if (
           (src.kind === "picture" || src.kind === "movie") &&
@@ -142,7 +152,8 @@ export function applyPropagationToNodes(
           // re-import is needed — wire the existing filename straight in.
           next.inputImage = src.mediaPath;
           next.upstreamId = sourceId;
-          if (next.kind === "image" && next.mode === "txt2img") next.mode = "img2img";
+          if (next.kind === "image" && next.mode === "txt2img")
+            next.mode = "img2img";
           if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
         }
         break;

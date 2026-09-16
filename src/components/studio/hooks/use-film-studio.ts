@@ -76,7 +76,9 @@ export function useFilmStudio(): FilmStudioController {
   const [loading, setLoading] = useState(false);
   /** 未消费的技能列表：先取回来用于后续开放风格选择，暂不渲染。 */
   const [, setSkills] = useState<{ slug: string; name: string }[]>([]);
-  const [, setRecent] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [, setRecent] = useState<
+    { id: string; title: string; status: string }[]
+  >([]);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

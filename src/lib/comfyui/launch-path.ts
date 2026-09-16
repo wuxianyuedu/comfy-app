@@ -46,7 +46,7 @@ function venvDirs(sourceRoot: string): string[] {
  *  「环境根 / 源码根」（python_embeded、standalone-env，解释器直接在根下）。 */
 function findInterpreterIn(
   pyDir: string,
-  exists: (p: string) => boolean
+  exists: (p: string) => boolean,
 ): string | null {
   for (const names of Object.values(INTERPRETER_NAMES)) {
     for (const name of names) {
@@ -59,7 +59,7 @@ function findInterpreterIn(
 
 export function envHasTorch(
   pyDir: string,
-  exists: (p: string) => boolean
+  exists: (p: string) => boolean,
 ): boolean {
   const base = path.basename(pyDir).toLowerCase();
   const envRoot =
@@ -71,13 +71,18 @@ export function envHasTorch(
   // 退化成「按优先级选中空壳解释器」（启动即 No module named 'torch'）。
   if (
     exists(
-      /*turbopackIgnore: true*/ path.join(envRoot, "Lib", "site-packages", "torch")
+      /*turbopackIgnore: true*/ path.join(
+        envRoot,
+        "Lib",
+        "site-packages",
+        "torch",
+      ),
     )
   ) {
     return true;
   }
   return sitePackagesDirs(envRoot, exists).some((sp) =>
-    exists(/*turbopackIgnore: true*/ path.join(sp, "torch"))
+    exists(/*turbopackIgnore: true*/ path.join(sp, "torch")),
   );
 }
 
@@ -100,7 +105,7 @@ const PYTHON_MINOR_CANDIDATES: readonly string[] = [
 
 export function sitePackagesDirs(
   envRoot: string,
-  exists: (p: string) => boolean
+  exists: (p: string) => boolean,
 ): string[] {
   const out: string[] = [];
   for (const minor of PYTHON_MINOR_CANDIDATES) {
@@ -138,7 +143,7 @@ export function sitePackagesDirs(
  */
 export function resolveComfyLaunchPlan(
   installDir: string,
-  exists: (p: string) => boolean = fs.existsSync
+  exists: (p: string) => boolean = fs.existsSync,
 ): ComfyLaunchPlan | { error: string } {
   const root = path.resolve(installDir);
   if (!exists(/*turbopackIgnore: true*/ root)) {
@@ -146,7 +151,8 @@ export function resolveComfyLaunchPlan(
   }
 
   // 枚举「源码根」候选：配置根本身直接有 main.py，或 <root>/ComfyUI/main.py。
-  const hasMain = (dir: string) => exists(/*turbopackIgnore: true*/ path.join(dir, "main.py"));
+  const hasMain = (dir: string) =>
+    exists(/*turbopackIgnore: true*/ path.join(dir, "main.py"));
   const sourceRoots: string[] = [];
   if (hasMain(root)) sourceRoots.push(root);
   const comfySub = path.join(root, "ComfyUI");

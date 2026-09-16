@@ -3,7 +3,7 @@
 exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染表单外壳 1`] = `
 <div>
   <div
-    class="flex h-full w-full flex-col overflow-hidden bg-canvas"
+    class="bg-canvas flex h-full w-full flex-col overflow-hidden"
     style="font-family: var(--font-sans);"
   >
     <div
@@ -11,16 +11,16 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       class="pointer-events-none absolute inset-0 overflow-hidden"
     >
       <div
-        class="absolute right-[-10%] top-[-20%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        class="absolute top-[-20%] right-[-10%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         style="background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, rgba(139, 92, 246, 0) 70%);"
       />
       <div
-        class="absolute left-[-15%] bottom-[15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        class="absolute bottom-[15%] left-[-15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         style="background: radial-gradient(circle, rgba(34, 211, 238, 0.26) 0%, rgba(34, 211, 238, 0) 70%);"
       />
     </div>
     <header
-      class="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-border-subtle bg-panel/88 px-4 backdrop-blur-md"
+      class="border-border-subtle bg-panel/88 relative z-10 flex h-12 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md"
     >
       <div
         class="flex items-center gap-2"
@@ -31,7 +31,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
           LoRA 训练工作室
         </span>
         <span
-          class="text-xs text-ink-fainter"
+          class="text-ink-fainter text-xs"
         >
           · 炼丹
         </span>
@@ -58,21 +58,21 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       class="relative z-10 flex min-h-0 flex-1 overflow-hidden"
     >
       <aside
-        class="flex w-[300px] shrink-0 flex-col border-r border-border-subtle bg-panel-deep/85 backdrop-blur-sm"
+        class="border-border-subtle bg-panel-deep/85 flex w-[300px] shrink-0 flex-col border-r backdrop-blur-sm"
       >
         <div
-          class="flex h-11 items-center justify-between border-b border-border-subtle px-4"
+          class="border-border-subtle flex h-11 items-center justify-between border-b px-4"
         >
           <div
             class="flex items-center gap-2"
           >
             <span
-              class="text-[13px] font-semibold text-ink-field"
+              class="text-ink-field text-[13px] font-semibold"
             >
               数据集
             </span>
             <span
-              class="text-[11px] text-ink-fainter"
+              class="text-ink-fainter text-[11px]"
             >
               0
                张
@@ -130,7 +130,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               点击或拖拽上传图片
             </p>
             <p
-              class="text-[10px] text-ink-fainter"
+              class="text-ink-fainter text-[10px]"
             >
               建议 10–30 张同主题图片
             </p>
@@ -150,13 +150,13 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
           class="mb-4 flex items-center gap-2"
         >
           <span
-            class="text-[13px] font-semibold text-ink-field"
+            class="text-ink-field text-[13px] font-semibold"
           >
             训练监控
           </span>
         </div>
         <div
-          class="rounded-2xl border border-border-subtle bg-card p-4"
+          class="border-border-subtle bg-card rounded-2xl border p-4"
         >
           <div
             class="flex items-center gap-5"
@@ -214,13 +214,13 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 class="absolute inset-0 flex flex-col items-center justify-center"
               >
                 <span
-                  class="text-lg font-semibold text-ink-field"
+                  class="text-ink-field text-lg font-semibold"
                 >
                   0
                   %
                 </span>
                 <span
-                  class="text-[10px] text-ink-fainter"
+                  class="text-ink-fainter text-[10px]"
                 >
                   进度
                 </span>
@@ -231,12 +231,12 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             >
               <div>
                 <p
-                  class="text-[10px] text-ink-fainter"
+                  class="text-ink-fainter text-[10px]"
                 >
                   当前步数
                 </p>
                 <p
-                  class="truncate text-[13px] font-medium text-ink-field"
+                  class="text-ink-field truncate text-[13px] font-medium"
                 >
                   0
                    / 
@@ -245,7 +245,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               </div>
               <div>
                 <p
-                  class="text-[10px] text-ink-fainter"
+                  class="text-ink-fainter text-[10px]"
                 >
                   触发词
                 </p>
@@ -259,12 +259,12 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 class="col-span-2 min-w-0"
               >
                 <p
-                  class="text-[10px] text-ink-fainter"
+                  class="text-ink-fainter text-[10px]"
                 >
                   底模
                 </p>
                 <p
-                  class="truncate text-[13px] font-medium text-ink-field"
+                  class="text-ink-field truncate text-[13px] font-medium"
                 >
                   —
                 </p>
@@ -272,7 +272,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             </div>
           </div>
           <div
-            class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-2"
+            class="bg-surface-2 mt-4 h-1.5 w-full overflow-hidden rounded-full"
           >
             <div
               class="h-full rounded-full bg-linear-to-r from-violet-500 to-cyan-400 transition-all"
@@ -281,18 +281,18 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
           </div>
         </div>
         <div
-          class="mt-4 rounded-2xl border border-border-subtle bg-card p-4"
+          class="border-border-subtle bg-card mt-4 rounded-2xl border p-4"
         >
           <div
             class="mb-3 flex items-center justify-between"
           >
             <span
-              class="text-[12px] font-medium text-ink-field"
+              class="text-ink-field text-[12px] font-medium"
             >
               Loss 曲线
             </span>
             <div
-              class="flex items-center gap-3 text-[10px] text-ink-fainter"
+              class="text-ink-fainter flex items-center gap-3 text-[10px]"
             >
               <span
                 class="flex items-center gap-1"
@@ -363,12 +363,12 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
           class="mt-4"
         >
           <h3
-            class="mb-3 text-[12px] font-medium text-ink-faint"
+            class="text-ink-faint mb-3 text-[12px] font-medium"
           >
             训练任务
           </h3>
           <div
-            class="grid min-h-[160px] place-items-center rounded-2xl border border-dashed border-border text-ink-muted"
+            class="border-border text-ink-muted grid min-h-[160px] place-items-center rounded-2xl border border-dashed"
           >
             <p
               class="text-sm"
@@ -379,13 +379,13 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
         </div>
       </main>
       <aside
-        class="flex w-[320px] shrink-0 flex-col border-l border-border-subtle bg-panel-deep/85 backdrop-blur-sm"
+        class="border-border-subtle bg-panel-deep/85 flex w-[320px] shrink-0 flex-col border-l backdrop-blur-sm"
       >
         <div
-          class="flex h-11 items-center border-b border-border-subtle px-4"
+          class="border-border-subtle flex h-11 items-center border-b px-4"
         >
           <span
-            class="text-[13px] font-semibold text-ink-field"
+            class="text-ink-field text-[13px] font-semibold"
           >
             超参数
           </span>
@@ -418,7 +418,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 aria-controls="_r_0_"
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-subtle !border-border h-9 text-[13px] text-ink-field"
+                class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none focus:border-violet-500/40 !bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 role="combobox"
                 type="button"
               >
@@ -486,7 +486,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 aria-controls="_r_1_"
                 aria-expanded="false"
                 aria-haspopup="listbox"
-                class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-subtle !border-border h-9 text-[13px] text-ink-field"
+                class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none focus:border-violet-500/40 !bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 role="combobox"
                 type="button"
               >
@@ -518,7 +518,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               class="mb-1.5 flex items-center justify-between"
             >
               <span
-                class="text-[11px] font-medium text-ink-faint"
+                class="text-ink-faint text-[11px] font-medium"
               >
                 训练步数
               </span>
@@ -542,7 +542,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               class="mb-1.5 flex items-center justify-between"
             >
               <span
-                class="text-[11px] font-medium text-ink-faint"
+                class="text-ink-faint text-[11px] font-medium"
               >
                 批次大小
               </span>
@@ -565,7 +565,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               class="mb-1.5 flex items-center justify-between"
             >
               <span
-                class="text-[11px] font-medium text-ink-faint"
+                class="text-ink-faint text-[11px] font-medium"
               >
                 LoRA 维度 (rank)
               </span>
@@ -589,7 +589,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               class="mb-1.5 flex items-center justify-between"
             >
               <span
-                class="text-[11px] font-medium text-ink-faint"
+                class="text-ink-faint text-[11px] font-medium"
               >
                 Alpha
               </span>
@@ -641,7 +641,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="text-ink-bright h-[24px] min-w-[36px] flex-1 bg-transparent py-0 text-center font-mono text-xs outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
+                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-center font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 inputmode="decimal"
                 type="text"
                 value="0.0001"
@@ -690,7 +690,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   aria-controls="_r_2_"
                   aria-expanded="false"
                   aria-haspopup="listbox"
-                  class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-subtle !border-border h-9 text-[13px] text-ink-field"
+                  class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none focus:border-violet-500/40 !bg-subtle !border-border text-ink-field h-9 text-[13px]"
                   role="combobox"
                   type="button"
                 >
@@ -730,7 +730,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   aria-controls="_r_3_"
                   aria-expanded="false"
                   aria-haspopup="listbox"
-                  class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 !bg-subtle !border-border h-9 text-[13px] text-ink-field"
+                  class="border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none focus:border-violet-500/40 !bg-subtle !border-border text-ink-field h-9 text-[13px]"
                   role="combobox"
                   type="button"
                 >
@@ -792,7 +792,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="text-ink-bright h-[24px] min-w-[36px] flex-1 bg-transparent py-0 text-center font-mono text-xs outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
+                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-center font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 inputmode="decimal"
                 type="text"
                 value="0"
@@ -831,7 +831,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             开始训练
           </button>
           <p
-            class="text-center text-[10px] leading-relaxed text-ink-faintest"
+            class="text-ink-faintest text-center text-[10px] leading-relaxed"
           >
             全部在本机运行 · 无需登录 · 零授权
           </p>
@@ -839,13 +839,13 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       </aside>
     </div>
     <footer
-      class="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-border-subtle bg-panel-deep/95 backdrop-blur-sm"
+      class="border-border-subtle bg-panel-deep/95 relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm"
     >
       <span
         class="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40"
       />
       <span
-        class="text-[11px] text-ink-muted"
+        class="text-ink-muted text-[11px]"
       >
         ComfyUI·Kohya 就绪 · 本地算力 · 零授权
       </span>

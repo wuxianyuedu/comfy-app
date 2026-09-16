@@ -9,7 +9,11 @@ import {
   getLineStart,
   getLineEnd,
 } from "./script-markdown-utils";
-import { EditorToolbar, OutlineSidebar, EditorBody } from "./ScriptMarkdownEditor.parts";
+import {
+  EditorToolbar,
+  OutlineSidebar,
+  EditorBody,
+} from "./ScriptMarkdownEditor.parts";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 
 interface ScriptMarkdownEditorProps {
@@ -274,18 +278,18 @@ export function ScriptMarkdownEditor({
   return (
     /* 全屏编辑弹层:底部 padding-bottom 6(24px) 为全局常驻的 BrowserStatusBar
        (fixed bottom-0 z-[100] h-6) 让位,避免底部「取消/保存」按钮被它盖住(ISSUE #35)。 */
-    <FullScreenLayer zClass="z-50" className="flex flex-col bg-canvas pb-6">
+    <FullScreenLayer zClass="z-50" className="bg-canvas flex flex-col pb-6">
       {/* Header */}
-      <header className="flex h-14 items-center justify-between border-b border-border px-5">
+      <header className="border-border flex h-14 items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">
           <span className="bg-primary/15 text-primary grid h-8 w-8 place-items-center rounded-lg">
             <FileText size={16} />
           </span>
-          <h2 className="text-[15px] font-semibold text-ink-bright">{title}</h2>
+          <h2 className="text-ink-bright text-[15px] font-semibold">{title}</h2>
         </div>
         <button
           onClick={onCancel}
-          className="grid h-8 w-8 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-subtle hover:text-ink-bright"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-bright grid h-8 w-8 place-items-center rounded-lg transition-colors"
           aria-label="关闭"
         >
           <X size={18} />
@@ -329,14 +333,14 @@ export function ScriptMarkdownEditor({
       </div>
 
       {/* Footer */}
-      <footer className="flex h-16 items-center justify-end gap-3 border-t border-border bg-panel px-6">
-        <span className="mr-auto text-xs text-ink-fainter">
+      <footer className="border-border bg-panel flex h-16 items-center justify-end gap-3 border-t px-6">
+        <span className="text-ink-fainter mr-auto text-xs">
           {value.split("\n").filter((line) => line.trim()).length} 行 ·{" "}
           {value.trim().length} 字符
         </span>
         <button
           onClick={onCancel}
-          className="rounded-lg border border-border bg-transparent px-5 py-2 text-xs font-medium text-ink-strong transition-colors hover:bg-subtle"
+          className="border-border text-ink-strong hover:bg-subtle rounded-lg border bg-transparent px-5 py-2 text-xs font-medium transition-colors"
         >
           取消
         </button>

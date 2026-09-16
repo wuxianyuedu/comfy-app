@@ -53,7 +53,9 @@ describe("WorkflowLibraryList 三态区分", () => {
     renderList({});
 
     expect(screen.getByText("还没有工作流")).toBeInTheDocument();
-    expect(screen.getByText(/导入工作流|配置本地工作流目录/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/导入工作流|配置本地工作流目录/),
+    ).toBeInTheDocument();
   });
 
   it("搜索无结果：空态改为「未找到匹配的工作流」，并提示清空搜索", () => {

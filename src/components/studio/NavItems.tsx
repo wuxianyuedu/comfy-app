@@ -1,7 +1,15 @@
 "use client";
 
 import React from "react";
-import { BookOpen, Box, Film, Folder, History, Home, Image as ImageIcon } from "lucide-react";
+import {
+  BookOpen,
+  Box,
+  Film,
+  Folder,
+  History,
+  Home,
+  Image as ImageIcon,
+} from "lucide-react";
 
 /**
  * Shared left-sidebar navigation registry.
@@ -49,9 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: "home",
     label: "首页",
-    icon: (
-      <Home size={22} strokeWidth={1.8} />
-    ),
+    icon: <Home size={22} strokeWidth={1.8} />,
   },
   {
     id: "canvas",
@@ -69,39 +75,29 @@ export const NAV_ITEMS: NavItem[] = [
     id: "works",
     label: "项目",
     enabled: true,
-    icon: (
-      <Folder size={22} strokeWidth={1.8} />
-    ),
+    icon: <Folder size={22} strokeWidth={1.8} />,
   },
   {
     id: "models",
     label: "模型",
-    icon: (
-      <Box size={22} strokeWidth={1.8} />
-    ),
+    icon: <Box size={22} strokeWidth={1.8} />,
   },
   {
     id: "workshop",
     label: "工坊",
-    icon: (
-      <BookOpen size={22} strokeWidth={1.8} />
-    ),
+    icon: <BookOpen size={22} strokeWidth={1.8} />,
   },
   {
     id: "outputs",
     label: "产出",
     enabled: true,
-    icon: (
-      <ImageIcon size={22} strokeWidth={1.8} />
-    ),
+    icon: <ImageIcon size={22} strokeWidth={1.8} />,
   },
   {
     id: "history",
     label: "历史",
     enabled: true,
-    icon: (
-      <History size={22} strokeWidth={1.8} />
-    ),
+    icon: <History size={22} strokeWidth={1.8} />,
   },
   {
     id: "train",
@@ -118,9 +114,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: "film",
     label: "成片",
-    icon: (
-      <Film size={22} strokeWidth={1.8} />
-    ),
+    icon: <Film size={22} strokeWidth={1.8} />,
   },
   {
     id: "workflows",

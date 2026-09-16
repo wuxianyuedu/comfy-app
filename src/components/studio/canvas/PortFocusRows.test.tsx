@@ -76,9 +76,11 @@ function renderWithPortFocus(
 ) {
   const data = nodeData();
   if (portFocus !== undefined) {
-    (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_DATA_KEY] = portFocus;
+    (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_DATA_KEY] =
+      portFocus;
   }
-  (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_ACTIVE_KEY] = active;
+  (data as unknown as Record<string, unknown>)[NODE_PORT_FOCUS_ACTIVE_KEY] =
+    active;
   return renderWithFlow(
     <WFStoresProvider stores={makeStores()}>
       <FlowNode data={data} />
@@ -149,10 +151,14 @@ describe("端口行关注级别渲染", () => {
 
   it("输出侧的标记按 `out:<名字>` 落在同一行（TOP PINS 共享行）", () => {
     renderWithPortFocus({ "out:LATENT": "downstream" }, true);
-    const row = document.querySelector<HTMLElement>('[data-pin-output="LATENT"]')!;
+    const row = document.querySelector<HTMLElement>(
+      '[data-pin-output="LATENT"]',
+    )!;
     expect(row).not.toBeNull();
     expect(row.style.background).not.toBe("");
-    const handle = row.querySelector<HTMLElement>('[data-handleid="out:LATENT"]')!;
+    const handle = row.querySelector<HTMLElement>(
+      '[data-handleid="out:LATENT"]',
+    )!;
     expect(handle.style.width).toBe("12px");
   });
 });

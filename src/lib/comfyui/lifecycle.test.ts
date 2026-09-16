@@ -239,7 +239,8 @@ describe("getComfyUiStatus — 状态三态组合", () => {
   it("启动进行中时 starting=true、收尾后回 false（设置页据此禁用「启动 ComfyUI」）", async () => {
     const { ensureComfyUiReady, getComfyUiStatus } =
       await import("./lifecycle");
-    const { getExitPolicy } = await import("../app-settings/app-settings.server");
+    const { getExitPolicy } =
+      await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("../process-launch");
     // 走保活（keepAlive）路径 + 进程探测永远找不到 main.py：启动会一直等到
     // timeoutMs 到点收尾，这段时间正好观察 starting 的 true → false 两端。
@@ -499,7 +500,8 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
 
     /* 造一个「启动进行中」的窗口：走保活路径 + 进程探测找不到 main.py，
      * 启动会一直等到 timeoutMs 到点，期间 starting 为真。 */
-    const { getExitPolicy } = await import("../app-settings/app-settings.server");
+    const { getExitPolicy } =
+      await import("../app-settings/app-settings.server");
     const { spawnManaged } = await import("../process-launch");
     const { resolveComfyLaunchPlan } = await import("./launch-path");
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({

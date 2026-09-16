@@ -73,28 +73,41 @@ export interface NodePalette {
 export function computeNodePalette(
   data: WorkflowNodeData,
   role?: { color?: string },
-  base: NodePaletteBase = DARK_PALETTE_BASE
+  base: NodePaletteBase = DARK_PALETTE_BASE,
 ): NodePalette {
   const nodeMode = data.mode ?? 0;
   const modeColor =
-    nodeMode === 4 ? BYPASS_COLOR :
-    nodeMode === 2 ? DISABLED_COLOR :
-    null;
+    nodeMode === 4 ? BYPASS_COLOR : nodeMode === 2 ? DISABLED_COLOR : null;
   const effectiveColor = modeColor ?? role?.color;
 
-  const headerBg = effectiveColor ? mixHex(base.body, effectiveColor, 0.22) : base.header;
+  const headerBg = effectiveColor
+    ? mixHex(base.body, effectiveColor, 0.22)
+    : base.header;
   // Body: only ~8% tint so role identity is a hint, not a flood.  Mode
   // nodes keep a translucent tint that the real backdrop blur picks up.
   const nodeBg = modeColor
     ? hexToRgba(modeColor, nodeMode === 4 ? 0.16 : 0.11)
-    : role?.color ? mixHex(base.body, role.color, 0.08) : base.body;
+    : role?.color
+      ? mixHex(base.body, role.color, 0.08)
+      : base.body;
   const nodeBorder = effectiveColor
     ? mixHex(base.body, effectiveColor, 0.55)
     : base.borderFallback;
-  const titleColor = modeColor ? lightenHex(modeColor, 0.3) : (role?.color ?? base.titleFallback);
+  const titleColor = modeColor
+    ? lightenHex(modeColor, 0.3)
+    : (role?.color ?? base.titleFallback);
   const dotBg = effectiveColor ?? base.dotFallback;
 
-  return { nodeMode, modeColor, effectiveColor, headerBg, nodeBg, nodeBorder, titleColor, dotBg };
+  return {
+    nodeMode,
+    modeColor,
+    effectiveColor,
+    headerBg,
+    nodeBg,
+    nodeBorder,
+    titleColor,
+    dotBg,
+  };
 }
 
 /**
@@ -129,6 +142,10 @@ export const DARK_ANCHOR_CYLINDER: AnchorCylinderTheme = {
 };
 
 /** Resolve the anchor theme from `next-themes`' `resolvedTheme`. */
-export function resolveAnchorCylinder(resolvedTheme: string | undefined): AnchorCylinderTheme {
-  return resolvedTheme === "light" ? LIGHT_ANCHOR_CYLINDER : DARK_ANCHOR_CYLINDER;
+export function resolveAnchorCylinder(
+  resolvedTheme: string | undefined,
+): AnchorCylinderTheme {
+  return resolvedTheme === "light"
+    ? LIGHT_ANCHOR_CYLINDER
+    : DARK_ANCHOR_CYLINDER;
 }

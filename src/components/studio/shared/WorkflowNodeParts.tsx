@@ -30,7 +30,7 @@ export function WorkflowNodeCardShell({
 }) {
   return (
     <div
-      className={`relative w-[380px] rounded-[14px] border border-border-strong bg-card shadow-xl shadow-black/6 dark:shadow-black/30 ${className}`}
+      className={`border-border-strong bg-card relative w-[380px] rounded-[14px] border shadow-xl shadow-black/6 dark:shadow-black/30 ${className}`}
     >
       {children}
     </div>
@@ -52,13 +52,13 @@ export function WorkflowNodeHeader({
       <div className="flex min-w-0 items-center gap-2">
         <span
           aria-label="类型 工作流"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold text-primary"
+          className="text-primary flex h-7 w-7 shrink-0 items-center justify-center rounded-[14px] text-[14px] font-bold"
           style={{ background: "#2A1F4A", fontFamily: "var(--font-sans)" }}
         >
           W
         </span>
         <span
-          className="truncate text-[14px] font-bold text-ink-bright"
+          className="text-ink-bright truncate text-[14px] font-bold"
           style={{ fontFamily: "var(--font-sans)" }}
           title={titleTitle ?? title}
         >
@@ -72,7 +72,7 @@ export function WorkflowNodeHeader({
 
 /** 分隔线 1px --color-border-strong。 */
 export function WorkflowNodeDivider() {
-  return <div className="h-px bg-border-strong" />;
+  return <div className="bg-border-strong h-px" />;
 }
 
 /** 右侧胶囊（h-5 r11 bg --color-node-accent px-2），内容由调用方给。 */
@@ -85,7 +85,7 @@ export function WorkflowNodePill({
 }) {
   return (
     <div
-      className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-node-accent px-2"
+      className="bg-node-accent flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] px-2"
       title={title}
     >
       {children}
@@ -107,7 +107,7 @@ export function WorkflowStaticChip({
   return (
     <span
       title={title}
-      className={`flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 ${className}`}
+      className={`border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 ${className}`}
     >
       {children}
     </span>
@@ -132,7 +132,7 @@ export function WorkflowNodeActionButton({
       disabled={disabled}
       onClick={onClick}
       title={title}
-      className="nodrag nopan flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r from-primary to-accent text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
+      className="nodrag nopan from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
       style={{ fontFamily: "var(--font-sans)" }}
     >
       {label}
@@ -153,7 +153,11 @@ export function WorkflowNodeOutputsRow({
   output: WorkflowIOEntry & { ioKey: string };
   inputs: (WorkflowIOEntry & { ioKey: string })[];
   outputs: (WorkflowIOEntry & { ioKey: string })[];
-  renderHandle?: (arg: { id: string; dir: "out"; type: string }) => React.ReactNode;
+  renderHandle?: (arg: {
+    id: string;
+    dir: "out";
+    type: string;
+  }) => React.ReactNode;
 }) {
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";
@@ -164,7 +168,7 @@ export function WorkflowNodeOutputsRow({
         : null}
       <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
         <span
-          className="min-w-0 truncate text-[14px] font-semibold text-ink-bright"
+          className="text-ink-bright min-w-0 truncate text-[14px] font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${oLabel}${oType ? ` · ${oType}` : ""}`}
         >

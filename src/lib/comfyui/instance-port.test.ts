@@ -24,7 +24,9 @@ vi.mock("./proc-detect", () => ({
   findPidForMainPyDetailed: vi.fn(),
   findPidListeningPort: vi.fn(),
 }));
-vi.mock("./env-python", () => ({ collectComfyPythonCandidates: vi.fn(() => []) }));
+vi.mock("./env-python", () => ({
+  collectComfyPythonCandidates: vi.fn(() => []),
+}));
 vi.mock("./status", () => ({
   readRegisteredLauncher: vi.fn(() => null),
   launcherCommandCandidates: vi.fn(() => []),

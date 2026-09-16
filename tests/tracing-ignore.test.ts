@@ -55,7 +55,7 @@ describe("turbopackIgnore 注解的落位（TS 侧）", () => {
     ).toBe(true);
     // ② 展开进 path.resolve(...) / path.join(...) 的参数列表
     expect(
-      /path\.(resolve|join)\(\.\.\.tracingIgnoreArgs/.test(src),
+      /path\.(resolve|join)\(\s*\.\.\.tracingIgnoreArgs/.test(src),
       `${rel} 的 tracingIgnoreArgs 必须展开在 path.resolve/join 的参数列表里` +
         `（Turbopack 看的是算出路径的那个表达式，塞在 fs 调用参数里会被静默忽略）`,
     ).toBe(true);

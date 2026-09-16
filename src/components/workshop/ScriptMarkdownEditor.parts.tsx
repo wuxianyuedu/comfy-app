@@ -41,7 +41,7 @@ export function ToolbarButton({
       type="button"
       onClick={onClick}
       title={title}
-      className="grid h-8 w-8 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-subtle hover:text-ink-bright"
+      className="text-ink-muted hover:bg-subtle hover:text-ink-bright grid h-8 w-8 place-items-center rounded-lg transition-colors"
     >
       {children}
     </button>
@@ -53,7 +53,7 @@ export function ToolbarGroup({ children }: { children: ReactNode }) {
 }
 
 export function ToolbarDivider() {
-  return <div className="mx-2 h-5 w-px bg-border" />;
+  return <div className="bg-border mx-2 h-5 w-px" />;
 }
 
 /* ── Full toolbar(标题 / 行内样式 / 列表引用 / 媒体 / 撤销重做 / 预览) ── */
@@ -79,7 +79,7 @@ export function EditorToolbar({
   onTogglePreview: () => void;
 }) {
   return (
-    <div className="flex items-center gap-1 border-b border-border bg-panel px-4 py-2">
+    <div className="border-border bg-panel flex items-center gap-1 border-b px-4 py-2">
       <ToolbarGroup>
         <ToolbarButton onClick={() => insertAtLineStart("#")} title="标题 1">
           <Heading1 size={18} />
@@ -95,19 +95,34 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton onClick={() => wrapSelection("**", "**", "粗体")} title="粗体">
+        <ToolbarButton
+          onClick={() => wrapSelection("**", "**", "粗体")}
+          title="粗体"
+        >
           <Bold size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("*", "*", "斜体")} title="斜体">
+        <ToolbarButton
+          onClick={() => wrapSelection("*", "*", "斜体")}
+          title="斜体"
+        >
           <Italic size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("__", "__", "下划线")} title="下划线">
+        <ToolbarButton
+          onClick={() => wrapSelection("__", "__", "下划线")}
+          title="下划线"
+        >
           <Underline size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("~~", "~~", "删除线")} title="删除线">
+        <ToolbarButton
+          onClick={() => wrapSelection("~~", "~~", "删除线")}
+          title="删除线"
+        >
           <Strikethrough size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrapSelection("`", "`", "代码")} title="行内代码">
+        <ToolbarButton
+          onClick={() => wrapSelection("`", "`", "代码")}
+          title="行内代码"
+        >
           <Code size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -146,7 +161,10 @@ export function EditorToolbar({
         <ToolbarButton onClick={() => restoreHistory(-1)} title="撤销 (Ctrl+Z)">
           <Undo size={18} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => restoreHistory(1)} title="重做 (Ctrl+Shift+Z)">
+        <ToolbarButton
+          onClick={() => restoreHistory(1)}
+          title="重做 (Ctrl+Shift+Z)"
+        >
           <Redo size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -154,7 +172,7 @@ export function EditorToolbar({
       <div className="ml-auto flex items-center gap-2">
         <button
           onClick={onTogglePreview}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-subtle hover:text-ink-bright"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
         >
           {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
           {showPreview ? "返回编辑" : "预览"}
@@ -173,12 +191,12 @@ export function OutlineSidebar({
   onJump: (line: number) => void;
 }) {
   return (
-    <aside className="w-64 shrink-0 overflow-y-auto border-r border-border bg-panel p-4">
-      <h3 className="mb-3 text-xs font-semibold tracking-wider text-ink-fainter uppercase">
+    <aside className="border-border bg-panel w-64 shrink-0 overflow-y-auto border-r p-4">
+      <h3 className="text-ink-fainter mb-3 text-xs font-semibold tracking-wider uppercase">
         目录大纲
       </h3>
       {outline.length === 0 ? (
-        <p className="text-xs leading-relaxed text-ink-faintest">
+        <p className="text-ink-faintest text-xs leading-relaxed">
           使用 # / ## / ### 添加标题后，此处自动生成目录。
         </p>
       ) : (
@@ -187,12 +205,12 @@ export function OutlineSidebar({
             <button
               key={`${item.line}-${index}`}
               onClick={() => onJump(item.line)}
-              className={`block w-full truncate rounded-md px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-subtle hover:text-ink-bright ${
+              className={`hover:bg-subtle hover:text-ink-bright block w-full truncate rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                 item.level === 1
-                  ? "font-medium text-ink-strong"
+                  ? "text-ink-strong font-medium"
                   : item.level === 2
-                    ? "pl-5 text-ink-muted"
-                    : "pl-8 text-ink-faint"
+                    ? "text-ink-muted pl-5"
+                    : "text-ink-faint pl-8"
               }`}
               title={item.text}
             >
@@ -229,7 +247,7 @@ export function EditorBody({
     <main className="relative flex min-w-0 flex-1 flex-col">
       {showPreview ? (
         <div
-          className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 bg-canvas p-6 text-[13px] leading-7 text-ink`}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} bg-canvas text-ink min-h-0 flex-1 p-6 text-[13px] leading-7`}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
       ) : (
@@ -240,7 +258,7 @@ export function EditorBody({
             onChange(
               event.target.value,
               event.target.selectionStart,
-              event.target.selectionEnd
+              event.target.selectionEnd,
             );
           }}
           onKeyDown={(event) => {
@@ -251,14 +269,15 @@ export function EditorBody({
               emitChange(nextValue);
               pushHistory(nextValue, start + 2, start + 2);
               setTimeout(
-                () => textareaRef.current?.setSelectionRange(start + 2, start + 2),
-                0
+                () =>
+                  textareaRef.current?.setSelectionRange(start + 2, start + 2),
+                0,
               );
             }
           }}
           spellCheck={false}
           placeholder="# 剧本标题\n\n## 第一场\n\n（在此处编写完整剧本……）"
-          className={`${SCROLLBAR_VISIBLE_CLASSES} min-h-0 flex-1 resize-none bg-canvas p-6 font-mono text-[13px] leading-7 text-ink-bright outline-none placeholder:text-ink-fainter`}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} bg-canvas text-ink-bright placeholder:text-ink-fainter min-h-0 flex-1 resize-none p-6 font-mono text-[13px] leading-7 outline-none`}
           style={{ tabSize: 2 }}
         />
       )}

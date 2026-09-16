@@ -7,20 +7,32 @@ export type GroupStyle = "split" | "preset";
 
 const STYLE_PREFIX = "comfyapp:wf-group-style:v1";
 
-export function loadGroupStyle(workflowId: string | undefined, groupId: string): GroupStyle {
+export function loadGroupStyle(
+  workflowId: string | undefined,
+  groupId: string,
+): GroupStyle {
   if (typeof window === "undefined") return "split";
   try {
-    const raw = window.localStorage.getItem(`${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`);
+    const raw = window.localStorage.getItem(
+      `${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`,
+    );
     return raw === "preset" ? "preset" : "split";
   } catch {
     return "split";
   }
 }
 
-export function saveGroupStyle(workflowId: string | undefined, groupId: string, style: GroupStyle) {
+export function saveGroupStyle(
+  workflowId: string | undefined,
+  groupId: string,
+  style: GroupStyle,
+) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(`${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`, style);
+    window.localStorage.setItem(
+      `${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`,
+      style,
+    );
   } catch {
     /* storage unavailable (private mode / quota) — non-fatal */
   }
@@ -41,11 +53,13 @@ export function StyleSwitcher({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="shrink-0 text-[10px] text-ink-muted">录入方式</span>
+      <span className="text-ink-muted shrink-0 text-[10px]">录入方式</span>
       <DarkSelect
         value={style}
         options={options.map((option) => option.value)}
-        labels={Object.fromEntries(options.map((option) => [option.value, option.label]))}
+        labels={Object.fromEntries(
+          options.map((option) => [option.value, option.label]),
+        )}
         className={narrow ? "w-[148px] max-w-full" : "flex-1"}
         onChange={(value) => onChange(value as GroupStyle)}
       />
@@ -53,10 +67,16 @@ export function StyleSwitcher({
   );
 }
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] text-ink-muted">{label}</span>
+      <span className="text-ink-muted text-[10px]">{label}</span>
       {children}
     </div>
   );

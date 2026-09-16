@@ -73,7 +73,9 @@ export function useHistoryDetailActions(
   deps: HistoryDetailActionsDeps,
 ): HistoryDetailActions {
   const toast = useToast();
-  const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(null);
+  const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(
+    null,
+  );
   const [openFolderBusy, setOpenFolderBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -93,19 +95,30 @@ export function useHistoryDetailActions(
           const onBlur = () => {
             openedByOs = true;
             window.removeEventListener("blur", onBlur);
-            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev));
+            setFolderPopover((prev) =>
+              prev ? { ...prev, helperMissing: false } : prev,
+            );
           };
           window.addEventListener("blur", onBlur);
           window.location.href = result.comfyappUrl;
           window.setTimeout(() => {
             window.removeEventListener("blur", onBlur);
             if (!openedByOs) {
-              setFolderPopover({ path: result.absolutePath ?? "", helperMissing: true });
+              setFolderPopover({
+                path: result.absolutePath ?? "",
+                helperMissing: true,
+              });
             }
           }, PROTOCOL_DETECT_MS);
-          setFolderPopover({ path: result.absolutePath ?? "", helperMissing: false });
+          setFolderPopover({
+            path: result.absolutePath ?? "",
+            helperMissing: false,
+          });
         } else if (result.error === "directory missing") {
-          toast.error("该任务尚未生成文件目录", result.absolutePath ?? undefined);
+          toast.error(
+            "该任务尚未生成文件目录",
+            result.absolutePath ?? undefined,
+          );
         } else {
           toast.error("打开目录失败");
         }

@@ -20,7 +20,9 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
 
 describe("migrateExitDefaults 退出策略默认值迁移", () => {
   it("老文件里那条「旧默认 true」被翻成新默认 false 并落标记", () => {
-    const migrated = migrateExitDefaults(makeSettings({ exitKillComfyui: true }));
+    const migrated = migrateExitDefaults(
+      makeSettings({ exitKillComfyui: true }),
+    );
     expect(migrated.exitKillComfyui).toBe(false);
     expect(migrated.exitKillComfyuiDefaultMigrated).toBe(true);
   });
@@ -34,11 +36,13 @@ describe("migrateExitDefaults 退出策略默认值迁移", () => {
   });
 
   it("不碰 Ollama 的开关（另一个语义、另一套默认）", () => {
-    expect(migrateExitDefaults(makeSettings({ exitKillOllama: false })).exitKillOllama).toBe(
-      false,
-    );
-    expect(migrateExitDefaults(makeSettings({ exitKillOllama: true })).exitKillOllama).toBe(
-      true,
-    );
+    expect(
+      migrateExitDefaults(makeSettings({ exitKillOllama: false }))
+        .exitKillOllama,
+    ).toBe(false);
+    expect(
+      migrateExitDefaults(makeSettings({ exitKillOllama: true }))
+        .exitKillOllama,
+    ).toBe(true);
   });
 });

@@ -13,7 +13,10 @@ import {
 import type { TaskDetail } from "./history-types";
 
 /** 只造测试关心的字段：TaskDetail 很大，其余字段用 unknown 兜。 */
-function makeDetail(params: unknown, extra: Partial<TaskDetail> = {}): TaskDetail {
+function makeDetail(
+  params: unknown,
+  extra: Partial<TaskDetail> = {},
+): TaskDetail {
   return { id: "t-1", params, images: [], ...extra } as unknown as TaskDetail;
 }
 
@@ -31,7 +34,9 @@ describe("toWorkflowHints", () => {
 
 describe("workflowInputsOf", () => {
   it("非数组回落为空数组", () => {
-    expect(workflowInputsOf(makeDetail({ workflowInputs: "nope" }))).toEqual([]);
+    expect(workflowInputsOf(makeDetail({ workflowInputs: "nope" }))).toEqual(
+      [],
+    );
     expect(workflowInputsOf(makeDetail(null))).toEqual([]);
   });
 });
@@ -80,12 +85,18 @@ describe("deriveGenValues", () => {
     const d = makeDetail({
       workflowInputs: [{ name: "Sampler_name", value: "euler" }],
     });
-    expect(deriveGenValues(d, null)).toEqual([{ label: "采样器", value: "euler" }]);
+    expect(deriveGenValues(d, null)).toEqual([
+      { label: "采样器", value: "euler" },
+    ]);
   });
 
   it("R-ardot63：再回落到 workflowHints（工作流硬编码的节点默认值）", () => {
     const d = makeDetail({});
-    const values = deriveGenValues(d, { steps: 20, cfg: 8, sampler_name: "dpmpp_2m" });
+    const values = deriveGenValues(d, {
+      steps: 20,
+      cfg: 8,
+      sampler_name: "dpmpp_2m",
+    });
     expect(values).toEqual([
       { label: "步数", value: 20, hint: undefined },
       { label: "CFG", value: 8, hint: undefined },
@@ -115,12 +126,16 @@ describe("deriveGenValues", () => {
 
   it("R-ardot62：seed 来源决定 hint，区分真值 / 用户填值", () => {
     const d = makeDetail({});
-    expect(deriveGenValues(d, { seed: 12345, seedSource: "history" })[0]).toEqual({
+    expect(
+      deriveGenValues(d, { seed: 12345, seedSource: "history" })[0],
+    ).toEqual({
       label: "种子",
       value: 12345,
       hint: "本次执行真实使用值",
     });
-    expect(deriveGenValues(d, { seed: 12345, seedSource: "request" })[0]).toEqual({
+    expect(
+      deriveGenValues(d, { seed: 12345, seedSource: "request" })[0],
+    ).toEqual({
       label: "种子",
       value: 12345,
       hint: "用户提交时填写的 seed",
@@ -134,7 +149,9 @@ describe("deriveGenValues", () => {
 
   it("同 label 多个候选键只取一次（seed / noise_seed / image_seed 不重复出卡）", () => {
     const d = makeDetail({ seed: 1, noise_seed: 2, image_seed: 3 });
-    expect(deriveGenValues(d, null).filter((v) => v.label === "种子")).toHaveLength(1);
+    expect(
+      deriveGenValues(d, null).filter((v) => v.label === "种子"),
+    ).toHaveLength(1);
   });
 });
 
@@ -153,7 +170,9 @@ describe("deriveParamRows", () => {
 
   it("顶层条目排除 workflowInputs 本身", () => {
     const d = makeDetail({ lora: "x.safetensors", workflowInputs: [] });
-    expect(deriveParamRows(d).topLevelEntries).toEqual([["lora", "x.safetensors"]]);
+    expect(deriveParamRows(d).topLevelEntries).toEqual([
+      ["lora", "x.safetensors"],
+    ]);
   });
 
   it("无参数时 hasAny 为 false（视图不渲染空参数区块）", () => {

@@ -55,7 +55,11 @@ const MAX_URL_LENGTH = 2048;
  * Used to normalize heterogeneous upstream API responses (OpenAI images,
  * async task APIs, provider-specific envelopes) without hard-coding shapes.
  */
-export function findStringUnderKeys(value: unknown, keys: string[], depth = 0): string | null {
+export function findStringUnderKeys(
+  value: unknown,
+  keys: string[],
+  depth = 0,
+): string | null {
   if (depth > MAX_EXTRACT_DEPTH) return null;
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -67,7 +71,8 @@ export function findStringUnderKeys(value: unknown, keys: string[], depth = 0): 
   if (!isRecord(value)) return null;
   for (const key of keys) {
     const v: unknown = value[key];
-    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH) return v;
+    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH)
+      return v;
   }
   for (const v of Object.values(value)) {
     if (isRecord(v) || Array.isArray(v)) {
@@ -123,7 +128,10 @@ export function extractRemoteTaskId(payload: unknown): string | null {
 }
 
 /** Extract a base64 media payload and wrap it as a data URL, or null. */
-export function extractBase64DataUrl(payload: unknown, mime = "image/png"): string | null {
+export function extractBase64DataUrl(
+  payload: unknown,
+  mime = "image/png",
+): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
   if (!b64) return null;
   // Some providers inline a data URL already.

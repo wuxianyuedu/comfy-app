@@ -52,7 +52,9 @@ export function EmptyState({
             size={32}
             aria-hidden
             className={`mx-auto mb-2 ${
-              warning ? "text-amber-600 dark:text-amber-500/80" : "text-ink-faint"
+              warning
+                ? "text-amber-600 dark:text-amber-500/80"
+                : "text-ink-faint"
             }`}
           />
         )}
@@ -68,7 +70,9 @@ export function EmptyState({
             {description}
           </p>
         )}
-        {action && <div className="mt-3 flex justify-center gap-2">{action}</div>}
+        {action && (
+          <div className="mt-3 flex justify-center gap-2">{action}</div>
+        )}
       </div>
     </div>
   );

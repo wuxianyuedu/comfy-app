@@ -85,7 +85,14 @@ describe("asCanvasNodeData — 唯一的数据收口点", () => {
 
 describe("defaultData — 各 kind 的必要字段齐备", () => {
   it("每种 kind 都产出可直接渲染的数据（不含 undefined 必填字段）", () => {
-    for (const kind of ["image", "video", "text", "script", "agent", "workflow"] as const) {
+    for (const kind of [
+      "image",
+      "video",
+      "text",
+      "script",
+      "agent",
+      "workflow",
+    ] as const) {
       const d = defaultData(kind);
       expect(d.kind).toBe(kind);
       expect(d.status).toBe("idle");

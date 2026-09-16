@@ -43,7 +43,9 @@ function summarizeArgs(argsJson: string, maxLen = 200): string {
     const keys = Object.entries(obj)
       .filter(
         ([, v]) =>
-          typeof v === "string" || typeof v === "number" || typeof v === "boolean",
+          typeof v === "string" ||
+          typeof v === "number" ||
+          typeof v === "boolean",
       )
       .map(([k, v]) => `${k}=${String(v).slice(0, 60)}`)
       .join(", ");
@@ -54,9 +56,7 @@ function summarizeArgs(argsJson: string, maxLen = 200): string {
 }
 
 /** 从 LLM 输出文本中解析角色 JSON 数组。 */
-function parseCharactersFromJson(
-  text: string,
-): Array<{
+function parseCharactersFromJson(text: string): Array<{
   name: string;
   appearance?: string;
   costume?: string;
@@ -112,9 +112,7 @@ function parseCharacterFull(
 }
 
 /** 从 LLM 输出文本中解析分镜镜头 JSON 数组。 */
-function parseShotsFromJson(
-  text: string,
-): Array<{
+function parseShotsFromJson(text: string): Array<{
   sceneHeading: string;
   description: string;
   shotType: string;
@@ -141,8 +139,7 @@ function parseShotsFromJson(
                 : "",
           description:
             typeof rec.description === "string" ? rec.description : "",
-          shotType:
-            typeof rec.shotType === "string" ? rec.shotType : "medium",
+          shotType: typeof rec.shotType === "string" ? rec.shotType : "medium",
           characterNames: Array.isArray(rec.characterNames)
             ? (rec.characterNames as unknown[]).map(String)
             : [],
@@ -240,9 +237,8 @@ export function resolveAgentTool(
         argSummary,
         execute: async () => {
           const meta = hd.getMeta();
-          const { buildScriptMarkdownMessages } = await import(
-            "@/lib/llm/prompts"
-          );
+          const { buildScriptMarkdownMessages } =
+            await import("@/lib/llm/prompts");
           const { streamChat } = await import("@/lib/llm/browser");
           let full = "";
           await streamChat({
@@ -363,8 +359,7 @@ ${script.slice(0, 8000)}`,
     case "add_character": {
       const args = safeParseJson(argsJson);
       const charName = typeof args.name === "string" ? args.name : "";
-      const desc =
-        typeof args.description === "string" ? args.description : "";
+      const desc = typeof args.description === "string" ? args.description : "";
       return {
         toolName: name,
         summary: `添加角色「${charName}」`,
@@ -375,9 +370,8 @@ ${script.slice(0, 8000)}`,
           if (existing.some((c) => c.name === charName)) {
             return { ok: false, summary: `角色「${charName}」已存在` };
           }
-          const { buildCharacterFromBriefMessages } = await import(
-            "@/lib/llm/prompts"
-          );
+          const { buildCharacterFromBriefMessages } =
+            await import("@/lib/llm/prompts");
           const { streamChat } = await import("@/lib/llm/browser");
           const full = await streamChat({
             messages: buildCharacterFromBriefMessages(

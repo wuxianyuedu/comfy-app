@@ -47,7 +47,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   async findByIdForUser(
     userId: string,
     id: string,
-    opts: { includeShots?: boolean } = {}
+    opts: { includeShots?: boolean } = {},
   ): Promise<FilmProject | null> {
     if (opts.includeShots) {
       return (
@@ -100,7 +100,11 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
 
   async appendLog(
     id: string,
-    entry: { t: number; level: "info" | "progress" | "warn" | "error" | "success"; msg: string }
+    entry: {
+      t: number;
+      level: "info" | "progress" | "warn" | "error" | "success";
+      msg: string;
+    },
   ): Promise<void> {
     const film = await db
       .select({ logs: filmProject.logs })
@@ -124,7 +128,10 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   }
 
   async updateProgress(id: string, pct: number): Promise<void> {
-    await db.update(filmProject).set({ progress: pct }).where(eq(filmProject.id, id));
+    await db
+      .update(filmProject)
+      .set({ progress: pct })
+      .where(eq(filmProject.id, id));
   }
 
   async markFailed(id: string, error: string): Promise<void> {
@@ -159,7 +166,13 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
 export class FilmShotRepository {
   async createMany(
     filmId: string,
-    shots: Array<{ order: number; heading?: string | null; prompt: string; negative?: string | null; params: unknown }>
+    shots: Array<{
+      order: number;
+      heading?: string | null;
+      prompt: string;
+      negative?: string | null;
+      params: unknown;
+    }>,
   ): Promise<void> {
     await db.insert(filmShot).values(
       shots.map((shot) => ({
@@ -170,13 +183,13 @@ export class FilmShotRepository {
         negative: shot.negative ?? null,
         status: "IDLE",
         params: shot.params,
-      }))
+      })),
     );
   }
 
   async listByFilm(
     filmId: string,
-    opts: { status?: string; onlyWithVideo?: boolean } = {}
+    opts: { status?: string; onlyWithVideo?: boolean } = {},
   ): Promise<
     Array<{
       id: string;
@@ -195,7 +208,7 @@ export class FilmShotRepository {
     const where = and(
       eq(filmShot.filmId, filmId),
       opts.status ? eq(filmShot.status, opts.status) : undefined,
-      opts.onlyWithVideo ? isNotNull(filmShot.videoPath) : undefined
+      opts.onlyWithVideo ? isNotNull(filmShot.videoPath) : undefined,
     );
     return db.select().from(filmShot).where(where).orderBy(asc(filmShot.order));
   }
@@ -208,12 +221,20 @@ export class FilmShotRepository {
   }
 
   async markFailed(shotId: string): Promise<void> {
-    await db.update(filmShot).set({ status: "FAILED" }).where(eq(filmShot.id, shotId));
+    await db
+      .update(filmShot)
+      .set({ status: "FAILED" })
+      .where(eq(filmShot.id, shotId));
   }
 
   async updateFromTask(
     shotId: string,
-    data: { status: string; progress: number; videoPath?: string | null; duration?: number | null }
+    data: {
+      status: string;
+      progress: number;
+      videoPath?: string | null;
+      duration?: number | null;
+    },
   ): Promise<void> {
     await db
       .update(filmShot)
@@ -227,7 +248,7 @@ export class FilmShotRepository {
   }
 
   async listActiveWithTask(
-    filmId: string
+    filmId: string,
   ): Promise<Array<{ id: string; taskId: string | null }>> {
     return db
       .select({ id: filmShot.id, taskId: filmShot.taskId })
@@ -236,8 +257,8 @@ export class FilmShotRepository {
         and(
           eq(filmShot.filmId, filmId),
           inArray(filmShot.status, ["QUEUED", "RUNNING"]),
-          isNotNull(filmShot.taskId)
-        )
+          isNotNull(filmShot.taskId),
+        ),
       );
   }
 
@@ -245,7 +266,12 @@ export class FilmShotRepository {
     await db
       .update(filmShot)
       .set({ status: "FAILED" })
-      .where(and(eq(filmShot.filmId, filmId), inArray(filmShot.status, ["QUEUED", "RUNNING"])));
+      .where(
+        and(
+          eq(filmShot.filmId, filmId),
+          inArray(filmShot.status, ["QUEUED", "RUNNING"]),
+        ),
+      );
   }
 }
 

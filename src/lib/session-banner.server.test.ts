@@ -14,7 +14,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { appendSessionBanner, buildSessionBanner } from "@/lib/session-banner.server";
+import {
+  appendSessionBanner,
+  buildSessionBanner,
+} from "@/lib/session-banner.server";
 
 let tmpDir: string;
 let logFile: string;
@@ -61,7 +64,10 @@ describe("appendSessionBanner", () => {
 
   it("多次追加的横幅之间保持空行分隔（多次运行累积的口径）", () => {
     appendSessionBanner(logFile, "start", "▶ 第一次");
-    fs.appendFileSync(logFile, "[2026-09-15 10:00:00.000] [INFO] [x] 中间一行\n");
+    fs.appendFileSync(
+      logFile,
+      "[2026-09-15 10:00:00.000] [INFO] [x] 中间一行\n",
+    );
     appendSessionBanner(logFile, "start", "▶ 第二次");
 
     const text = fs.readFileSync(logFile, "utf-8");

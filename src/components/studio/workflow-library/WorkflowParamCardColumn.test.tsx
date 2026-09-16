@@ -73,7 +73,10 @@ describe("WorkflowParamCardColumn", () => {
         entries={withLabels}
         contractEntries={[
           { id: withLabels[0]!.id, label: "提示词" },
-          { id: withLabels[1]!.id, label: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）" },
+          {
+            id: withLabels[1]!.id,
+            label: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）",
+          },
         ]}
         resolved={autoMapEntries(withLabels, io)}
         io={io}
@@ -154,7 +157,10 @@ describe("WorkflowParamCardColumn", () => {
         resolved={autoMapEntries(entries, io)}
         io={io}
         endpoint={(port) => (
-          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
+          <span
+            data-testid="probe-endpoint"
+            data-endpoint-handle={port.handleId}
+          />
         )}
       />,
     );
@@ -179,10 +185,7 @@ describe("WorkflowParamCardColumn", () => {
         resolved={{}}
         io={io}
         endpoint={(port, index) => (
-          <span
-            data-node-handle={port.handleId}
-            data-node-index={index}
-          />
+          <span data-node-handle={port.handleId} data-node-index={index} />
         )}
       />,
     );

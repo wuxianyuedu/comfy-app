@@ -8,7 +8,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireServerUser } from "@/lib/auth-server";
-import { parseDraftDto, draftHasContent } from "@/lib/workshop/draft-sync-shared";
+import {
+  parseDraftDto,
+  draftHasContent,
+} from "@/lib/workshop/draft-sync-shared";
 import { isRecord } from "@/lib/workshop/api-channel-shared";
 import {
   deleteDraft,
@@ -22,8 +25,7 @@ import { unauthorizedResponse } from "~/server/lib/error-response";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const UNAUTHORIZED = () =>
-  unauthorizedResponse();
+const UNAUTHORIZED = () => unauthorizedResponse();
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();

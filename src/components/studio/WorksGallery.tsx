@@ -53,7 +53,9 @@ export function WorksGallery({
   const handleConfirmDeleteCanvas = useCallback(() => {
     if (!confirmDeleteId) return;
     const id = confirmDeleteId;
-    const target = canvasProjects.find((canvasProject) => canvasProject.id === id);
+    const target = canvasProjects.find(
+      (canvasProject) => canvasProject.id === id,
+    );
     setPendingDelete(true);
     // Use a microtask delay so the dialog's spinner / disabled state is
     // visible at least one paint frame. deleteProject itself fires
@@ -73,29 +75,32 @@ export function WorksGallery({
 
   useEffect(() => {
     // Sweep legacy empty default-named drafts before listing.
-    window.addEventListener("comfyapp:canvas-store-changed", refreshCanvasProjects);
+    window.addEventListener(
+      "comfyapp:canvas-store-changed",
+      refreshCanvasProjects,
+    );
     return () =>
       window.removeEventListener(
         "comfyapp:canvas-store-changed",
-        refreshCanvasProjects
+        refreshCanvasProjects,
       );
   }, [refreshCanvasProjects]);
 
   return (
     <div className="h-full overflow-y-auto">
       <AuroraBackground />
-      <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10">
+      <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-title text-xl font-bold text-ink">所有项目</h1>
-            <p className="mt-1 text-sm text-ink-muted">
+            <h1 className="font-title text-ink text-xl font-bold">所有项目</h1>
+            <p className="text-ink-muted mt-1 text-sm">
               本地画布项目，按时间倒序排列。生成作品请查看「历史记录」。
             </p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={refreshCanvasProjects}
-              className="rounded-lg border border-border px-3 py-2 text-xs text-ink-faint hover:text-ink-bright"
+              className="border-border text-ink-faint hover:text-ink-bright rounded-lg border px-3 py-2 text-xs"
             >
               ↻ 刷新
             </button>
@@ -113,28 +118,29 @@ export function WorksGallery({
         {canvasProjects.length > 0 ? (
           <section className="mb-10">
             <div className="mb-4 flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold text-ink-strong">
+              <h2 className="text-ink-strong text-sm font-semibold">
                 画布项目{" "}
-                <span className="ml-1 text-xs font-normal text-ink-fainter">
+                <span className="text-ink-fainter ml-1 text-xs font-normal">
                   ({canvasProjects.length})
                 </span>
               </h2>
-              <span className="text-[11px] text-ink-fainter">本地 · 可继续编辑</span>
+              <span className="text-ink-fainter text-[11px]">
+                本地 · 可继续编辑
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {canvasProjects.map((canvasProject) =>
-{
+              {canvasProjects.map((canvasProject) => {
                 const nodeCount = canvasProject.nodes?.length ?? 0;
                 const edgeCount = canvasProject.edges?.length ?? 0;
                 return (
                   <div
                     key={canvasProject.id}
-                    className="group relative rounded-2xl border border-border-subtle bg-card transition-all hover:border-cyan-400/25 hover:bg-cyan-400/4"
+                    className="group border-border-subtle bg-card relative rounded-2xl border transition-all hover:border-cyan-400/25 hover:bg-cyan-400/4"
                   >
                     <button
                       type="button"
                       onClick={() => onOpenCanvasProject?.(canvasProject.id)}
-                      className="flex w-full items-start gap-3 rounded-2xl canvasProject-3.5 text-left"
+                      className="canvasProject-3.5 flex w-full items-start gap-3 rounded-2xl text-left"
                     >
                       <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/12 text-cyan-700 dark:text-cyan-400">
                         <svg
@@ -153,15 +159,15 @@ export function WorksGallery({
                         </svg>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink-bright group-hover:text-ink">
+                        <p className="text-ink-bright group-hover:text-ink truncate text-sm font-medium">
                           {canvasProject.name || "未命名项目"}
                         </p>
-                        <p className="mt-1 truncate text-[11px] text-ink-muted">
+                        <p className="text-ink-muted mt-1 truncate text-[11px]">
                           {nodeCount > 0
                             ? `${nodeCount} 节点 · ${edgeCount} 连线`
                             : "空画布"}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-ink-fainter">
+                        <p className="text-ink-fainter mt-0.5 text-[11px]">
                           {projectTimeAgo(canvasProject.updatedAt)}
                         </p>
                       </div>
@@ -176,7 +182,7 @@ export function WorksGallery({
                         event.stopPropagation();
                         setConfirmDeleteId(canvasProject.id);
                       }}
-                      className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-ink-muted opacity-0 transition-opacity hover:bg-red-500/15 hover:text-red-700 dark:text-red-300 focus-visible:opacity-100 group-hover:opacity-100"
+                      className="text-ink-muted absolute top-2 right-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-700 focus-visible:opacity-100 dark:text-red-300"
                     >
                       <Trash2 size={12} />
                       <span>删除</span>
@@ -188,7 +194,7 @@ export function WorksGallery({
           </section>
         ) : (
           <section>
-            <div className="grid min-h-[360px] place-items-center rounded-2xl border border-dashed border-border">
+            <div className="border-border grid min-h-[360px] place-items-center rounded-2xl border border-dashed">
               <div className="text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/12 text-cyan-700 dark:text-cyan-400">
                   <svg
@@ -206,8 +212,10 @@ export function WorksGallery({
                     <circle cx="15" cy="15" r="2" />
                   </svg>
                 </div>
-                <p className="text-lg font-medium text-ink-strong">还没有画布项目</p>
-                <p className="mt-1 text-sm text-ink-muted">
+                <p className="text-ink-strong text-lg font-medium">
+                  还没有画布项目
+                </p>
+                <p className="text-ink-muted mt-1 text-sm">
                   点击右上角「新建创作」开始你的第一个工作流，或者在工作流库载入模板。
                 </p>
               </div>
@@ -227,8 +235,9 @@ export function WorksGallery({
         description={
           confirmDeleteId
             ? `即将永久删除「${
-                canvasProjects.find((canvasProject) => canvasProject.id === confirmDeleteId)?.name ??
-                "未命名项目"
+                canvasProjects.find(
+                  (canvasProject) => canvasProject.id === confirmDeleteId,
+                )?.name ?? "未命名项目"
               }」。\n该操作不可撤销，画布内的节点与连线将一并丢失。`
             : ""
         }

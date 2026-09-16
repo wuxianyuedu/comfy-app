@@ -28,7 +28,13 @@ export function TaskTypeChip({ taskType }: { taskType?: string | null }) {
 
 const CATEGORY_STYLES: Record<WorkflowCategory, { bg: string; text: string }> =
   {
-    image: { bg: "bg-violet-500/12", text: "text-violet-700 dark:text-violet-300" },
+    image: {
+      bg: "bg-violet-500/12",
+      text: "text-violet-700 dark:text-violet-300",
+    },
     video: { bg: "bg-sky-500/12", text: "text-sky-700 dark:text-sky-300" },
-    audio: { bg: "bg-amber-500/12", text: "text-amber-700 dark:text-amber-300" },
+    audio: {
+      bg: "bg-amber-500/12",
+      text: "text-amber-700 dark:text-amber-300",
+    },
   };

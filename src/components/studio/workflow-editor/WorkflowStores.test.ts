@@ -11,7 +11,11 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { callStoreAction, createIOEditStore, type IOEditStore } from "./WorkflowStores";
+import {
+  callStoreAction,
+  createIOEditStore,
+  type IOEditStore,
+} from "./WorkflowStores";
 import {
   registerStaleStoreDeliver,
   reportCodeUpdatedSinceLoad,
@@ -43,7 +47,9 @@ describe("IOEditStore.toggleIO", () => {
       kind: "widget",
       direction: "input",
     });
-    expect(store.getState().workflowIO["1670::widget::value"]!.hostNodeId).toBe("4");
+    expect(store.getState().workflowIO["1670::widget::value"]!.hostNodeId).toBe(
+      "4",
+    );
   });
 
   it("再次勾选同一 pin 时整体摘掉条目", () => {
@@ -60,7 +66,6 @@ describe("IOEditStore.toggleIO", () => {
     expect(store.getState().workflowIO["1670::widget::value"]).toBeUndefined();
   });
 });
-
 
 describe("IOEditStore 写入时清掉存量机器名", () => {
   const seedEntry = {
@@ -84,7 +89,9 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
 
   it("切换 seed 模式时不再把 alias 固化回库", () => {
     const store = storeWithSeed();
-    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "random" });
+    store
+      .getState()
+      .setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "random" });
     const entry = store.getState().workflowIO["4::widget::value_1"]!;
     expect(entry.label).toBeUndefined();
     expect(entry.modes?.i2v?.seedMode).toBe("random");
@@ -94,15 +101,23 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO(seedEntry);
     store.getState().setIOLabel("4::widget::value_1", "我的种子");
-    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
-    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBe("我的种子");
+    store
+      .getState()
+      .setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBe(
+      "我的种子",
+    );
   });
 
   it("基准还没到（富化未加载）时不做清理", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO(seedEntry);
-    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
-    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBe("value_1");
+    store
+      .getState()
+      .setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBe(
+      "value_1",
+    );
   });
 
   it("setAliasBase 内容不变时保持同一引用，避免渲染回路", () => {
@@ -123,7 +138,9 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
 
   it("基准里的宿主类名参与等价判定（它是别名判据的一部分）", () => {
     const store = createIOEditStore("wf");
-    store.getState().setAliasBase({ a: { name: "value_1", classType: "PrimitiveInt" } });
+    store
+      .getState()
+      .setAliasBase({ a: { name: "value_1", classType: "PrimitiveInt" } });
     const first = store.getState().aliasBaseByKey;
     store.getState().setAliasBase({
       a: { name: "value_1", classType: "e0940f57-80b2-480e-8a38-36968dc1763d" },
@@ -136,13 +153,23 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
      *  对它恒成立，等于没判，条目被当成作者命名留下；一切换 seed 行为，写入再把
      *  它固化回库，显示名随即退回 value_1。 */
     const store = createIOEditStore("wf");
+    store.getState().toggleIO({
+      nodeId: "4",
+      name: "value_1",
+      kind: "widget",
+      direction: "input",
+      label: "value_1",
+    });
+    store.getState().setAliasBase({
+      "4::widget::value_1": {
+        name: "value_1",
+        enrichedLabel: "随机种",
+        slotLabel: "Seed",
+      },
+    });
     store
       .getState()
-      .toggleIO({ nodeId: "4", name: "value_1", kind: "widget", direction: "input", label: "value_1" });
-    store.getState().setAliasBase({
-      "4::widget::value_1": { name: "value_1", enrichedLabel: "随机种", slotLabel: "Seed" },
-    });
-    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "random" });
+      .setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "random" });
     const entry = store.getState().workflowIO["4::widget::value_1"]!;
     expect(entry.label).toBeUndefined();
     expect(entry.modes?.i2v?.seedMode).toBe("random");
@@ -150,26 +177,48 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
 
   it("本层有作者业务名但富化名也停在别名时，同样清得掉", () => {
     const store = createIOEditStore("wf");
+    store.getState().toggleIO({
+      nodeId: "4",
+      name: "value_1",
+      kind: "widget",
+      direction: "input",
+      label: "value_1",
+    });
+    store.getState().setAliasBase({
+      "4::widget::value_1": {
+        name: "value_1",
+        enrichedLabel: "value_1",
+        slotLabel: "Seed",
+      },
+    });
     store
       .getState()
-      .toggleIO({ nodeId: "4", name: "value_1", kind: "widget", direction: "input", label: "value_1" });
-    store.getState().setAliasBase({
-      "4::widget::value_1": { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" },
-    });
-    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
-    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBeUndefined();
+      .setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "fixed" });
+    expect(
+      store.getState().workflowIO["4::widget::value_1"]!.label,
+    ).toBeUndefined();
   });
 
   it("全库只有机器名一个来源、且宿主不是封装节点时不动本地值（无从判定）", () => {
     /* 普通节点的 pin 名由插件作者定义，可能恰好长成 value_1 —— 没有第二个
      *  来源时不能凭形状清掉它，那是作者命名（规范 §10.1 宁降级不误删）。 */
     const store = createIOEditStore("wf");
+    store.getState().toggleIO({
+      nodeId: "7",
+      name: "value_1",
+      kind: "widget",
+      direction: "input",
+      label: "value_1",
+    });
+    store.getState().setAliasBase({
+      "7::widget::value_1": { name: "value_1", enrichedLabel: "value_1" },
+    });
     store
       .getState()
-      .toggleIO({ nodeId: "7", name: "value_1", kind: "widget", direction: "input", label: "value_1" });
-    store.getState().setAliasBase({ "7::widget::value_1": { name: "value_1", enrichedLabel: "value_1" } });
-    store.getState().setIOModeOverride("7::widget::value_1", "i2v", { seedMode: "fixed" });
-    expect(store.getState().workflowIO["7::widget::value_1"]!.label).toBe("value_1");
+      .setIOModeOverride("7::widget::value_1", "i2v", { seedMode: "fixed" });
+    expect(store.getState().workflowIO["7::widget::value_1"]!.label).toBe(
+      "value_1",
+    );
   });
 
   it("作者名整体回收不到时，封装节点的自动编号槽位仍按机器名清掉", () => {
@@ -196,7 +245,9 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
         classType: "e0940f57-80b2-480e-8a38-36968dc1763d",
       },
     });
-    store.getState().setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "random" });
+    store
+      .getState()
+      .setIOModeOverride("4::widget::value_1", "i2v", { seedMode: "random" });
     const entry = store.getState().workflowIO["4::widget::value_1"]!;
     expect(entry.label).toBeUndefined();
     expect(entry.modes?.i2v?.seedMode).toBe("random");
@@ -212,14 +263,18 @@ describe("IOEditStore 写入时清掉存量机器名", () => {
       },
     });
     const ref = {
-      nodeId: "4", name: "value_1", kind: "widget" as const, direction: "input" as const,
+      nodeId: "4",
+      name: "value_1",
+      kind: "widget" as const,
+      direction: "input" as const,
       label: "value_1",
     };
     store.getState().toggleIO(ref);
-    expect(store.getState().workflowIO["4::widget::value_1"]!.label).toBeUndefined();
+    expect(
+      store.getState().workflowIO["4::widget::value_1"]!.label,
+    ).toBeUndefined();
   });
 });
-
 
 /* ────────────────────────────────────────────────────────────────────────
  * ISSUE #349 收尾：编辑 IO 时「取消勾选 → 重新勾选」和「切模式」都不该让
@@ -235,13 +290,18 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
   const KEY = "4::widget::value_1";
   /* 图一那条工作流的事实：wrapper 槽位 value_1 → 内部 PrimitiveInt.value，
    * 富化名停在槽位名，作者名只有本层 slotLabel 能作证。 */
-  const aliasBase = { [KEY]: { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" } };
+  const aliasBase = {
+    [KEY]: { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" },
+  };
 
   it("勾选时不把机器名写进 label —— 所以取消勾选再勾选不会复活脏名", () => {
     const store = createIOEditStore("wf");
     store.getState().setAliasBase(aliasBase);
     const ref = {
-      nodeId: "4", name: "value_1", kind: "widget" as const, direction: "input" as const,
+      nodeId: "4",
+      name: "value_1",
+      kind: "widget" as const,
+      direction: "input" as const,
       label: "value_1",
     };
     store.getState().toggleIO(ref);
@@ -256,7 +316,11 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
     const store = createIOEditStore("wf");
     store.getState().setAliasBase(aliasBase);
     store.getState().toggleIO({
-      nodeId: "4", name: "value_1", kind: "widget", direction: "input", label: "Seed",
+      nodeId: "4",
+      name: "value_1",
+      kind: "widget",
+      direction: "input",
+      label: "Seed",
     });
     expect(store.getState().workflowIO[KEY]!.label).toBe("Seed");
   });
@@ -268,7 +332,13 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
     const store = createIOEditStore("wf");
     store.setState({
       workflowIO: {
-        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "value_1" },
+        [KEY]: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "4",
+          name: "value_1",
+          label: "value_1",
+        },
       },
     });
     store.getState().setAliasBase(aliasBase);
@@ -284,10 +354,18 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
     const store = createIOEditStore("wf");
     store.setState({
       workflowIO: {
-        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "value_1" },
+        [KEY]: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "4",
+          name: "value_1",
+          label: "value_1",
+        },
       },
     });
-    store.getState().setAliasBase({ [KEY]: { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" } });
+    store.getState().setAliasBase({
+      [KEY]: { name: "value_1", enrichedLabel: "value_1", slotLabel: "Seed" },
+    });
     store.getState().setIOModeOverride(KEY, "i2v", { seedMode: "fixed" });
     expect(store.getState().workflowIO[KEY]!.label).toBeUndefined();
   });
@@ -296,10 +374,18 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
     const store = createIOEditStore("wf");
     store.setState({
       workflowIO: {
-        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "value_1" },
+        [KEY]: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "4",
+          name: "value_1",
+          label: "value_1",
+        },
       },
     });
-    store.getState().setAliasBase({ [KEY]: { name: "value_1", enrichedLabel: "value_1" } });
+    store
+      .getState()
+      .setAliasBase({ [KEY]: { name: "value_1", enrichedLabel: "value_1" } });
     store.getState().setIOModeOverride(KEY, "i2v", { seedMode: "fixed" });
     expect(store.getState().workflowIO[KEY]!.label).toBe("value_1");
   });
@@ -308,7 +394,13 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
     const store = createIOEditStore("wf");
     store.setState({
       workflowIO: {
-        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "我的种子" },
+        [KEY]: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "4",
+          name: "value_1",
+          label: "我的种子",
+        },
       },
     });
     store.getState().setAliasBase(aliasBase);
@@ -319,28 +411,43 @@ describe("IOEditStore 机器名的入口与出口都挡（ISSUE #349）", () => 
   it("改名成与 pin 名逐字相同的名字也留得住（图三「修改了也不行」）", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "24", name: "image", kind: "widget", direction: "input",
+      nodeId: "24",
+      name: "image",
+      kind: "widget",
+      direction: "input",
     });
     store.getState().setIOLabel("24::widget::image", "image");
     expect(store.getState().workflowIO["24::widget::image"]!.label).toBe(
-      `image${HOMONYM_LABEL_SUFFIX}`
+      `image${HOMONYM_LABEL_SUFFIX}`,
     );
   });
 
   it("清空改名 = 恢复默认显示名", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "24", name: "image", kind: "widget", direction: "input", label: "尾帧图",
+      nodeId: "24",
+      name: "image",
+      kind: "widget",
+      direction: "input",
+      label: "尾帧图",
     });
     store.getState().setIOLabel("24::widget::image", "  ");
-    expect(store.getState().workflowIO["24::widget::image"]!.label).toBeUndefined();
+    expect(
+      store.getState().workflowIO["24::widget::image"]!.label,
+    ).toBeUndefined();
   });
 
   it("purgeMachineNames 只在判定命中时产生新状态引用", () => {
     const store = createIOEditStore("wf");
     store.setState({
       workflowIO: {
-        [KEY]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "我的种子" },
+        [KEY]: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "4",
+          name: "value_1",
+          label: "我的种子",
+        },
       },
     });
     const before = store.getState().workflowIO;
@@ -438,11 +545,17 @@ describe("callStoreAction", () => {
     const key = "4::widget::value_1";
     store.setState({
       workflowIO: {
-        [key]: { direction: "input", kind: "widget", nodeId: "4", name: "value_1", label: "我的种子" },
+        [key]: {
+          direction: "input",
+          kind: "widget",
+          nodeId: "4",
+          name: "value_1",
+          label: "我的种子",
+        },
       },
     });
     const ok = callStoreAction(store, "purgeMachineNames", (state) =>
-      state.purgeMachineNames(() => true)
+      state.purgeMachineNames(() => true),
     );
     expect(ok).toBe(true);
     expect(store.getState().workflowIO[key]!.label).toBeUndefined();
@@ -457,11 +570,13 @@ describe("callStoreAction", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       expect(() =>
-        callStoreAction(stale, "purgeMachineNames", () => undefined)
+        callStoreAction(stale, "purgeMachineNames", () => undefined),
       ).not.toThrow();
       expect(warn).toHaveBeenCalledOnce();
       /* 正常实例不受影响。 */
-      expect(callStoreAction(store, "purgeMachineNames", () => undefined)).toBe(true);
+      expect(callStoreAction(store, "purgeMachineNames", () => undefined)).toBe(
+        true,
+      );
     } finally {
       warn.mockRestore();
     }
@@ -488,4 +603,3 @@ describe("callStoreAction", () => {
     }
   });
 });
-

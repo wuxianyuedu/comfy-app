@@ -62,7 +62,10 @@ function mergeScene(
           ? (rawRow as Record<string, unknown>)[tier]
           : undefined;
       row[tier] = isValidDims(candidate)
-        ? { width: Math.round(candidate.width), height: Math.round(candidate.height) }
+        ? {
+            width: Math.round(candidate.width),
+            height: Math.round(candidate.height),
+          }
         : { ...(fallbackRow?.[tier] ?? { width: 1024, height: 1024 }) };
     }
     out[preset.label] = row;
@@ -71,7 +74,8 @@ function mergeScene(
 }
 
 function mergeTable(raw: unknown): SizePresetTable {
-  const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const record =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
     image: mergeScene(DEFAULT_SIZE_PRESET_TABLE.image, record.image),
     video: mergeScene(DEFAULT_SIZE_PRESET_TABLE.video, record.video),
@@ -113,7 +117,10 @@ function commit(next: SizePresetTable): void {
   snapshot = next;
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(SIZE_PRESET_STORAGE_KEY, JSON.stringify(next));
+      window.localStorage.setItem(
+        SIZE_PRESET_STORAGE_KEY,
+        JSON.stringify(next),
+      );
     } catch {
       /* 存储不可用：本次会话内仍然生效。 */
     }
@@ -132,10 +139,15 @@ export function setSizePresetDims(
   if (!row) return;
   const nextScene: SceneResolutionTable = {
     ...snapshot[scene],
-    [ratioLabel]: { ...row, [tier]: { width: size.width, height: size.height } },
+    [ratioLabel]: {
+      ...row,
+      [tier]: { width: size.width, height: size.height },
+    },
   };
   commit(
-    scene === "image" ? { ...snapshot, image: nextScene } : { ...snapshot, video: nextScene },
+    scene === "image"
+      ? { ...snapshot, image: nextScene }
+      : { ...snapshot, video: nextScene },
   );
 }
 
@@ -143,7 +155,9 @@ export function setSizePresetDims(
 export function resetSizePresetScene(scene: SizeScene): void {
   const fresh = mergeTable(null);
   commit(
-    scene === "image" ? { ...snapshot, image: fresh.image } : { ...snapshot, video: fresh.video },
+    scene === "image"
+      ? { ...snapshot, image: fresh.image }
+      : { ...snapshot, video: fresh.video },
   );
 }
 

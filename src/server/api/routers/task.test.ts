@@ -88,7 +88,11 @@ describe("task.list", () => {
       type: "T2V",
       status: "RUNNING",
       images: [
-        { ...COVER("img-2", "/generated/task-video/2.mp4", "video"), isCover: false, sortIndex: 1 },
+        {
+          ...COVER("img-2", "/generated/task-video/2.mp4", "video"),
+          isCover: false,
+          sortIndex: 1,
+        },
       ],
       error: null,
       createdAt: new Date(1000),
@@ -128,11 +132,15 @@ describe("task.list", () => {
 
   it("Zod 校验：take 越界 / 非法 media → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
-    await expect(caller.list({ take: 0 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(caller.list({ take: 201 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(
-      caller.list({ media: "doc" as never })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.list({ take: 0 })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(caller.list({ take: 201 })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(caller.list({ media: "doc" as never })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
   });
 });
 
@@ -153,8 +161,12 @@ describe("task.detail", () => {
   it("不存在 / 他人任务 → 抛 'Task not found'", async () => {
     seedTask(tdb, { id: "task-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
-    await expect(caller.detail({ id: "nope" })).rejects.toThrow("Task not found");
-    await expect(caller.detail({ id: "task-b" })).rejects.toThrow("Task not found");
+    await expect(caller.detail({ id: "nope" })).rejects.toThrow(
+      "Task not found",
+    );
+    await expect(caller.detail({ id: "task-b" })).rejects.toThrow(
+      "Task not found",
+    );
   });
 });
 
@@ -163,7 +175,9 @@ describe("task.detail", () => {
 describe("task.cancel", () => {
   it("置为 CANCELLED 并写 finishedAt", async () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", status: "RUNNING" });
-    expect(await createCaller(makeCtx()).cancel({ id: "task-1" })).toEqual({ ok: true });
+    expect(await createCaller(makeCtx()).cancel({ id: "task-1" })).toEqual({
+      ok: true,
+    });
     const row = tdb.$tables.tasks.find((t) => t.id === "task-1")!;
     expect(row.status).toBe("CANCELLED");
     expect(row.finishedAt).toBeInstanceOf(Date);
@@ -188,7 +202,11 @@ describe("task.workflow", () => {
     seedTask(tdb, {
       id: "task-1",
       userId: "user-a",
-      workflowSnapshot: { workflow: { nodes: [] }, source: "canvas", capturedAt: "t0" },
+      workflowSnapshot: {
+        workflow: { nodes: [] },
+        source: "canvas",
+        capturedAt: "t0",
+      },
     });
     const res = await createCaller(makeCtx()).workflow({ id: "task-1" });
     expect(res).toEqual({
@@ -206,7 +224,9 @@ describe("task.workflow", () => {
       source: null,
       capturedAt: null,
     });
-    await expect(caller.workflow({ id: "nope" })).rejects.toThrow("Task not found");
+    await expect(caller.workflow({ id: "nope" })).rejects.toThrow(
+      "Task not found",
+    );
   });
 });
 
@@ -216,7 +236,7 @@ describe("task.openFolder", () => {
   it("projectId 路径穿越 → FORBIDDEN（目录白名单）", async () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "../../evil" });
     await expect(
-      createCaller(makeCtx()).openFolder({ id: "task-1" })
+      createCaller(makeCtx()).openFolder({ id: "task-1" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
@@ -239,7 +259,7 @@ describe("task.openFolder", () => {
   it("他人任务 → NOT_FOUND", async () => {
     seedTask(tdb, { id: "task-b", userId: "user-b" });
     await expect(
-      createCaller(makeCtx()).openFolder({ id: "task-b" })
+      createCaller(makeCtx()).openFolder({ id: "task-b" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
@@ -253,35 +273,33 @@ describe("task.delete（rateLimitedProcedure）", () => {
       userId: "user-a",
       images: [COVER("img-1", "/nonexistent/task-1/1.png")],
     });
-    expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({ ok: true });
+    expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
+      ok: true,
+    });
     expect(tdb.$tables.tasks.find((t) => t.id === "task-1")).toBeUndefined();
   });
 
   it("他人任务 → NOT_FOUND", async () => {
     seedTask(tdb, { id: "task-b", userId: "user-b" });
     await expect(
-      createCaller(makeCtx()).delete({ id: "task-b" })
+      createCaller(makeCtx()).delete({ id: "task-b" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   // 21 次串行调用叠加 timingMiddleware 的 dev 随机延迟，放宽本用例超时
-  it(
-    "限流：同用户 10s 窗口内第 21 次调用 → TOO_MANY_REQUESTS",
-    async () => {
-      seedTask(tdb, { id: "task-a", userId: "user-a" });
-      const caller = createCaller(
-        makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } })
-      );
-      // 前 20 次：命中 NOT_FOUND 分支（同时消耗限流配额）
-      for (let i = 0; i < 20; i++) {
-        await expect(caller.delete({ id: "task-a" })).rejects.toMatchObject({
-          code: "NOT_FOUND",
-        });
-      }
+  it("限流：同用户 10s 窗口内第 21 次调用 → TOO_MANY_REQUESTS", async () => {
+    seedTask(tdb, { id: "task-a", userId: "user-a" });
+    const caller = createCaller(
+      makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }),
+    );
+    // 前 20 次：命中 NOT_FOUND 分支（同时消耗限流配额）
+    for (let i = 0; i < 20; i++) {
       await expect(caller.delete({ id: "task-a" })).rejects.toMatchObject({
-        code: "TOO_MANY_REQUESTS",
+        code: "NOT_FOUND",
       });
-    },
-    30_000
-  );
+    }
+    await expect(caller.delete({ id: "task-a" })).rejects.toMatchObject({
+      code: "TOO_MANY_REQUESTS",
+    });
+  }, 30_000);
 });

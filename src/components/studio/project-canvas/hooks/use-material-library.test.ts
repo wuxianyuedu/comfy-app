@@ -47,7 +47,9 @@ afterEach(cleanup);
 
 describe("useMaterialLibrary", () => {
   it("挂载即拉取，loading 由 true 收敛到 false", async () => {
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockedList).toHaveBeenCalledWith(
@@ -57,7 +59,9 @@ describe("useMaterialLibrary", () => {
 
   it("拉取失败：错误文案可读，列表清空（失败路径必须有用户可见出口）", async () => {
     mockedList.mockRejectedValue(new Error("读取素材库失败"));
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.error).toBe("读取素材库失败"));
     expect(result.current.items).toEqual([]);
     expect(result.current.folders).toEqual([]);
@@ -66,24 +70,32 @@ describe("useMaterialLibrary", () => {
 
   it("拉取失败但抛值非 Error 时用兜底文案", async () => {
     mockedList.mockRejectedValue("boom");
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.error).toBe("读取素材库失败"));
   });
 
   it("进入分类后查询带上 folder；showItems 随之翻转", async () => {
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.showItems).toBe(false);
 
     act(() => result.current.enterFolder("ref"));
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ folder: "ref" })),
+      expect(mockedList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ folder: "ref" }),
+      ),
     );
     expect(result.current.showItems).toBe(true);
   });
 
   it("搜索态：查询带 q 且不带 folder，showItems 为 true", async () => {
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     act(() => result.current.enterFolder("ref"));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -93,14 +105,17 @@ describe("useMaterialLibrary", () => {
         expect.objectContaining({ q: "角色" }),
       ),
     );
-    const lastCall = mockedList.mock.calls[mockedList.mock.calls.length - 1]?.[0];
+    const lastCall =
+      mockedList.mock.calls[mockedList.mock.calls.length - 1]?.[0];
     // 搜索优先于 folder：folder 不参与查询（客户端置 null）
     expect(lastCall?.folder).toBeNull();
     expect(result.current.searching).toBe(true);
   });
 
   it("切换 scope 时退回到分类列表（避免停在已消失的分类）", async () => {
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     act(() => result.current.enterFolder("ref"));
     await waitFor(() => expect(result.current.folder).toBe("ref"));
 
@@ -111,22 +126,33 @@ describe("useMaterialLibrary", () => {
 
   it("上传：分类列表页默认落到「参考素材」，成功后触发刷新", async () => {
     mockedUpload.mockResolvedValue();
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     const file = new File(["x"], "a.png", { type: "image/png" });
-    const files = { length: 1, 0: file, item: (i: number) => (i === 0 ? file : null) } as unknown as FileList;
+    const files = {
+      length: 1,
+      0: file,
+      item: (i: number) => (i === 0 ? file : null),
+    } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
     });
 
-    expect(mockedUpload).toHaveBeenCalledWith(file, { folder: "ref", projectId: "p-1" });
+    expect(mockedUpload).toHaveBeenCalledWith(file, {
+      folder: "ref",
+      projectId: "p-1",
+    });
     expect(result.current.uploading).toBe(false);
   });
 
   it("上传多文件逐个提交，全部走同一目标分类", async () => {
     mockedUpload.mockResolvedValue();
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
     act(() => result.current.enterFolder("scenes"));
 
@@ -138,12 +164,17 @@ describe("useMaterialLibrary", () => {
     });
 
     expect(mockedUpload).toHaveBeenCalledTimes(2);
-    expect(mockedUpload).toHaveBeenNthCalledWith(1, a, { folder: "scenes", projectId: "p-1" });
+    expect(mockedUpload).toHaveBeenNthCalledWith(1, a, {
+      folder: "scenes",
+      projectId: "p-1",
+    });
   });
 
   it("上传失败：文案为「上传失败」，uploading 复位", async () => {
     mockedUpload.mockRejectedValue(new Error("磁盘已满"));
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     const file = new File(["x"], "a.png");
     const files = { length: 1, 0: file } as unknown as FileList;
     await act(async () => {
@@ -155,7 +186,9 @@ describe("useMaterialLibrary", () => {
 
   it("上传失败后不会被后台刷新悄悄清空（提示条必须留在屏幕上）", async () => {
     mockedUpload.mockRejectedValue(new Error("磁盘已满"));
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     const file = new File(["x"], "a.png");
@@ -172,7 +205,9 @@ describe("useMaterialLibrary", () => {
   });
 
   it("空 FileList / null 不发起任何上传请求", async () => {
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await act(async () => {
       await result.current.upload(null);
     });
@@ -182,7 +217,9 @@ describe("useMaterialLibrary", () => {
   it("删除：乐观移除本地条目后再刷新校准计数", async () => {
     mockedList.mockResolvedValue({ folders, items: [item] });
     mockedDelete.mockResolvedValue();
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.items).toHaveLength(1));
 
     await act(async () => {
@@ -195,7 +232,9 @@ describe("useMaterialLibrary", () => {
   it("删除失败：错误文案保留，条目不消失（不做错误乐观更新）", async () => {
     mockedList.mockResolvedValue({ folders, items: [item] });
     mockedDelete.mockRejectedValue(new Error("文件被占用"));
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.items).toHaveLength(1));
 
     await act(async () => {
@@ -207,9 +246,13 @@ describe("useMaterialLibrary", () => {
 
   it("面包屑：分类态给出「全部 / 当前分类」，搜索态给出命中数", async () => {
     mockedList.mockResolvedValue({ folders, items: [item] });
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.breadcrumbSegments).toEqual([{ label: "全部", key: null }]);
+    expect(result.current.breadcrumbSegments).toEqual([
+      { label: "全部", key: null },
+    ]);
 
     act(() => result.current.enterFolder("ref"));
     await waitFor(() => expect(result.current.folder).toBe("ref"));
@@ -224,10 +267,14 @@ describe("useMaterialLibrary", () => {
   });
 
   it("refresh 递增触发重新拉取", async () => {
-    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    const { result } = renderHook(() =>
+      useMaterialLibrary({ projectId: "p-1" }),
+    );
     await waitFor(() => expect(result.current.loading).toBe(false));
     const before = mockedList.mock.calls.length;
     act(() => result.current.refresh());
-    await waitFor(() => expect(mockedList.mock.calls.length).toBeGreaterThan(before));
+    await waitFor(() =>
+      expect(mockedList.mock.calls.length).toBeGreaterThan(before),
+    );
   });
 });

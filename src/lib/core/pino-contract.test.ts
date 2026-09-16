@@ -269,7 +269,10 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
   it("结构化埋点的 event 名同时充当命名空间", async () => {
     const { dest } = capture();
     const log = createPinoLogger({ destination: dest, ...makeMirror() });
-    log.error({ event: "audit_write_failed", err: new Error("disk full") }, "audit");
+    log.error(
+      { event: "audit_write_failed", err: new Error("disk full") },
+      "audit",
+    );
     await flush();
 
     const added = readMirror();
@@ -308,10 +311,7 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
     const { dest, lines } = capture();
     const log = createPinoLogger({ destination: dest, ...makeMirror() });
     log.error({ BETTER_AUTH_SECRET: HEX_SECRET }, "cfg");
-    log.error(
-      { BETTER_AUTH_GITHUB_CLIENT_SECRET: HEX_SECRET },
-      "cfg2",
-    );
+    log.error({ BETTER_AUTH_GITHUB_CLIENT_SECRET: HEX_SECRET }, "cfg2");
     await flush();
 
     // 镜像文件不得含明文。
@@ -320,26 +320,30 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
     // 的名字 pino 侧擦不掉（这是 pino 通配语义的限制，见 REDACT_PATHS 上方注释），
     // 其防线是日志写入边界上的值形状守卫——镜像文件那一行就是它的证词。
     expect(lines().join("")).not.toContain(
-      "BETTER_AUTH_SECRET\":\"99486355989d06c782d60d892774bbafdf8a157c223fd963b6b8d15dc38f83f6",
+      'BETTER_AUTH_SECRET":"99486355989d06c782d60d892774bbafdf8a157c223fd963b6b8d15dc38f83f6',
     );
   });
 
   /* 值形状守卫本身（不问字段名，只问值长啥样）——这是 `*_SECRET` 这类
    * 「名字无法穷举」的密钥唯一的兜底，因此单独钉住它的判据与边界。 */
   it("值形状守卫：私钥块 / JWT / 高熵串被擦，普通长句不误伤", () => {
-    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEow…\n-----END RSA PRIVATE KEY-----";
+    const pem =
+      "-----BEGIN RSA PRIVATE KEY-----\nMIIEow…\n-----END RSA PRIVATE KEY-----";
     const jwt =
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1LTEifQ.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk";
     expect(redactSecretShaped(pem)).toContain("[Redacted]");
     expect(redactSecretShaped(jwt)).toContain("[Redacted]");
     expect(redactSecretShaped(HEX_SECRET)).toBe("[Redacted]");
     // 嵌套结构里同样生效，且不改结构
-    expect(redactSecretShaped({ a: { b: HEX_SECRET }, list: [HEX_SECRET] })).toEqual({
+    expect(
+      redactSecretShaped({ a: { b: HEX_SECRET }, list: [HEX_SECRET] }),
+    ).toEqual({
       a: { b: "[Redacted]" },
       list: ["[Redacted]"],
     });
     // 普通可读长句（无数字 / 低熵）不误伤
-    const plain = "任务卡在队列超过 Ns，无人重新认领，请检查 ComfyUI 是否在运行";
+    const plain =
+      "任务卡在队列超过 Ns，无人重新认领，请检查 ComfyUI 是否在运行";
     expect(redactSecretShaped(plain)).toBe(plain);
     // Error 实例保形：message 必须还在（`logger.error({ err })` 是最常见形态）
     const err = new Error("no such table: task");

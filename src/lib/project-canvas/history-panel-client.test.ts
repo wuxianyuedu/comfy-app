@@ -3,14 +3,19 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchHistoryTasks, probeGlobalTaskCount } from "./history-panel-client";
+import {
+  fetchHistoryTasks,
+  probeGlobalTaskCount,
+} from "./history-panel-client";
 import type { HistoryTaskRow } from "./history-panel-types";
 
 const taskListQuery = vi.fn();
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
-    task: { list: { query: (...args: unknown[]) => taskListQuery(...args) as never } },
+    task: {
+      list: { query: (...args: unknown[]) => taskListQuery(...args) as never },
+    },
   },
 }));
 
@@ -39,8 +44,16 @@ function row(over: Partial<HistoryTaskRow> = {}): HistoryTaskRow {
 describe("fetchHistoryTasks", () => {
   it("透传查询参数，并按契约校验后返回行", async () => {
     taskListQuery.mockResolvedValue({ tasks: [row()] });
-    const out = await fetchHistoryTasks({ take: 80, projectId: "p-1", media: "video" });
-    expect(taskListQuery).toHaveBeenCalledWith({ take: 80, projectId: "p-1", media: "video" });
+    const out = await fetchHistoryTasks({
+      take: 80,
+      projectId: "p-1",
+      media: "video",
+    });
+    expect(taskListQuery).toHaveBeenCalledWith({
+      take: 80,
+      projectId: "p-1",
+      media: "video",
+    });
     // 不再「原样透传」：行经 Zod 校验后返回（缺字段会被补齐默认值）
     expect(out).toEqual([row()]);
   });
@@ -77,7 +90,10 @@ describe("fetchHistoryTasks", () => {
 
   it("mediaType 非法值 → 该行被丢弃（枚举是硬约束，不静默兜底）", async () => {
     taskListQuery.mockResolvedValue({
-      tasks: [row({ id: "ok" }), { ...row({ id: "bad" }), mediaType: "hologram" }],
+      tasks: [
+        row({ id: "ok" }),
+        { ...row({ id: "bad" }), mediaType: "hologram" },
+      ],
     });
     const out = await fetchHistoryTasks({ take: 10 });
     expect(out.map((r) => r.id)).toEqual(["ok"]);

@@ -16,21 +16,43 @@
  *
  * 反向验证：把 `windowsKillArgs` 的 `/T` 去掉，本文件立刻失败。
  */
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { killProcessTreeWith, windowsKillArgs, windowsTaskkillPath } from "./kill-process-tree";
+import {
+  killProcessTreeWith,
+  windowsKillArgs,
+  windowsTaskkillPath,
+} from "./kill-process-tree";
 
 /** 造一个假 taskkill：把收到的参数写进文件，退出码可控。 */
-function fakeTaskkill(dir: string, exitCode = 0): { exe: string; logFile: string } {
-  const exe = join(dir, process.platform === "win32" ? "taskkill.cmd" : "taskkill");
+function fakeTaskkill(
+  dir: string,
+  exitCode = 0,
+): { exe: string; logFile: string } {
+  const exe = join(
+    dir,
+    process.platform === "win32" ? "taskkill.cmd" : "taskkill",
+  );
   const logFile = join(dir, "args.txt");
   if (process.platform === "win32") {
-    writeFileSync(exe, `@echo off\r\necho %* > "${logFile}"\r\nexit /b ${exitCode}\r\n`);
+    writeFileSync(
+      exe,
+      `@echo off\r\necho %* > "${logFile}"\r\nexit /b ${exitCode}\r\n`,
+    );
   } else {
-    writeFileSync(exe, `#!/bin/sh\nprintf '%s' "$*" > "${logFile}"\nexit ${exitCode}\n`);
+    writeFileSync(
+      exe,
+      `#!/bin/sh\nprintf '%s' "$*" > "${logFile}"\nexit ${exitCode}\n`,
+    );
     chmodSync(exe, 0o755);
   }
   return { exe, logFile };
@@ -45,7 +67,8 @@ function tempDir(): string {
 
 afterEach(() => {
   delete process.env.COMFYAPP_TASKKILL;
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0))
+    rmSync(dir, { recursive: true, force: true });
 });
 
 /** 等假 taskkill 把参数写下来（异步派发，需要给一小段窗口）。 */
@@ -65,11 +88,21 @@ async function readArgs(logFile: string, timeoutMs = 3000): Promise<string> {
 
 describe("Windows 回收命令构造（唯一出处）", () => {
   it("tree 模式是 /PID <pid> /T /F（杀整棵树，硬规则 3 的原始要求）", () => {
-    expect(windowsKillArgs("4321", "tree")).toEqual(["/PID", "4321", "/T", "/F"]);
+    expect(windowsKillArgs("4321", "tree")).toEqual([
+      "/PID",
+      "4321",
+      "/T",
+      "/F",
+    ]);
   });
 
   it("image 模式是 /IM <name> /T /F（按映像名杀整棵树）", () => {
-    expect(windowsKillArgs("ollama.exe", "image")).toEqual(["/IM", "ollama.exe", "/T", "/F"]);
+    expect(windowsKillArgs("ollama.exe", "image")).toEqual([
+      "/IM",
+      "ollama.exe",
+      "/T",
+      "/F",
+    ]);
   });
 
   it("默认走系统自带 taskkill；COMFYAPP_TASKKILL 只作为显式注入口", () => {
@@ -109,7 +142,9 @@ describe("Windows 分支真跑（注入同名可执行文件）", () => {
     const dir = tempDir();
     const { exe, logFile } = fakeTaskkill(dir);
     process.env.COMFYAPP_TASKKILL = exe;
-    expect((await killProcessTreeWith({ pid: 0 }, { windows: true })).ok).toBe(false);
+    expect((await killProcessTreeWith({ pid: 0 }, { windows: true })).ok).toBe(
+      false,
+    );
     expect(await readArgs(logFile, 300)).toBe("");
   });
 });

@@ -1,6 +1,14 @@
 "use client";
 
-import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -103,7 +111,12 @@ export function DarkSelect({
   }, [open, options, footer]);
   /* Popover position (fixed, in viewport coords). Computed from the trigger
    * button's bounding rect so the dropdown escapes any parent overflow. */
-  const [pos, setPos] = useState<{ left: number; top: number; width: number; placement: "down" | "up" }>({
+  const [pos, setPos] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    placement: "down" | "up";
+  }>({
     left: 0,
     top: 0,
     width: 0,
@@ -120,9 +133,17 @@ export function DarkSelect({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent && e.key === "Escape") { setOpen(false); emitOpenChange(false); return; }
+      if (e instanceof KeyboardEvent && e.key === "Escape") {
+        setOpen(false);
+        emitOpenChange(false);
+        return;
+      }
       if (e instanceof MouseEvent) {
-        if (ref.current?.contains(e.target as Node) || listRef.current?.contains(e.target as Node)) return;
+        if (
+          ref.current?.contains(e.target as Node) ||
+          listRef.current?.contains(e.target as Node)
+        )
+          return;
         setOpen(false);
         emitOpenChange(false);
       }
@@ -195,17 +216,27 @@ export function DarkSelect({
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
       const desiredWidth = Math.max(rect.width, effectiveMinWidth);
-      const maxAllowedWidth = Math.max(0, window.innerWidth - VIEWPORT_MARGIN * 2);
+      const maxAllowedWidth = Math.max(
+        0,
+        window.innerWidth - VIEWPORT_MARGIN * 2,
+      );
       const popoverWidth = Math.min(desiredWidth, maxAllowedWidth);
       let left = rect.left;
       if (left + popoverWidth > window.innerWidth - VIEWPORT_MARGIN) {
-        left = Math.max(VIEWPORT_MARGIN, window.innerWidth - VIEWPORT_MARGIN - popoverWidth);
+        left = Math.max(
+          VIEWPORT_MARGIN,
+          window.innerWidth - VIEWPORT_MARGIN - popoverWidth,
+        );
       }
       const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-      const place: "down" | "up" = spaceBelow >= POPOVER_MAX_H || spaceBelow >= rect.top ? "down" : "up";
+      const place: "down" | "up" =
+        spaceBelow >= POPOVER_MAX_H || spaceBelow >= rect.top ? "down" : "up";
       setPos({
         left,
-        top: place === "down" ? rect.bottom + 4 : Math.max(VIEWPORT_MARGIN, rect.top - POPOVER_MAX_H - 4),
+        top:
+          place === "down"
+            ? rect.bottom + 4
+            : Math.max(VIEWPORT_MARGIN, rect.top - POPOVER_MAX_H - 4),
         width: popoverWidth,
         placement: place,
       });
@@ -228,19 +259,48 @@ export function DarkSelect({
     [onChange, emitOpenChange],
   );
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((value) => !value); return; }
-    if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted((index) => Math.min(index + 1, options.length - 1)); }
-    if (e.key === "ArrowUp") { e.preventDefault(); setHighlighted((index) => Math.max(index - 1, 0)); }
-  }, [options.length]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setOpen((value) => !value);
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlighted((index) => Math.min(index + 1, options.length - 1));
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlighted((index) => Math.max(index - 1, 0));
+      }
+    },
+    [options.length],
+  );
 
-  const listKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && highlighted >= 0) { e.preventDefault(); pick(options[highlighted]!); }
-    if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted((index) => Math.min(index + 1, options.length - 1)); }
-    if (e.key === "ArrowUp") { e.preventDefault(); setHighlighted((index) => Math.max(index - 1, 0)); }
-  }, [highlighted, options, pick]);
+  const listKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && highlighted >= 0) {
+        e.preventDefault();
+        pick(options[highlighted]!);
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlighted((index) => Math.min(index + 1, options.length - 1));
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlighted((index) => Math.max(index - 1, 0));
+      }
+    },
+    [highlighted, options, pick],
+  );
 
-  const label = value ? (labels?.[value] ?? options.find((option) => option === value) ?? placeholder) : placeholder;
+  const label = value
+    ? (labels?.[value] ??
+      options.find((option) => option === value) ??
+      placeholder)
+    : placeholder;
 
   return (
     <div className={`relative ${disabled ? "opacity-50" : ""}`}>
@@ -258,15 +318,29 @@ export function DarkSelect({
           emitOpenChange(nextOpen);
         }}
         onKeyDown={handleKeyDown}
-        className={`border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] outline-none transition-colors focus:border-violet-500/40 ${className}`}
+        className={`border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none focus:border-violet-500/40 ${className}`}
       >
         {/* min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
          *  cleanly; callers that want a right-aligned badge (e.g. "本机" /
          *  "在线") should place a `flex-1` spacer before the badge so it
          *  pushes right even under this `truncate` (nowrap) context. */}
-        <span className="flex min-w-0 flex-1 items-center truncate">{label}</span>
-        <svg className={`text-ink-muted ml-2 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <span className="flex min-w-0 flex-1 items-center truncate">
+          {label}
+        </span>
+        <svg
+          className={`text-ink-muted ml-2 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+        >
+          <path
+            d="M3 4.5L6 7.5L9 4.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
 
@@ -297,7 +371,7 @@ export function DarkSelect({
                 onClick={() => pick(opt)}
                 className={`flex cursor-pointer items-center gap-1.5 truncate px-2.5 py-1 text-[12px] transition-colors ${
                   value === opt
-                    ? "bg-violet-500/20 text-violet-700 font-medium dark:text-violet-300"
+                    ? "bg-violet-500/20 font-medium text-violet-700 dark:text-violet-300"
                     : i === highlighted
                       ? "bg-surface-2 text-ink-bright"
                       : "text-ink-faint hover:bg-subtle hover:text-ink-bright"
@@ -307,9 +381,10 @@ export function DarkSelect({
               </li>
             ))}
           </ul>,
-          document.body
+          document.body,
         )}
-      {open && footer &&
+      {open &&
+        footer &&
         typeof document !== "undefined" &&
         createPortal(
           <div
@@ -317,16 +392,17 @@ export function DarkSelect({
             style={{
               position: "fixed",
               left: pos.left,
-              top: pos.placement === "down"
-                ? pos.top + Math.min(listHeight, POPOVER_MAX_H) + 4
-                : pos.top - footerHeight - 4,
+              top:
+                pos.placement === "down"
+                  ? pos.top + Math.min(listHeight, POPOVER_MAX_H) + 4
+                  : pos.top - footerHeight - 4,
               width: pos.width,
               zIndex: 9999,
             }}
           >
             {footer}
           </div>,
-          document.body
+          document.body,
         )}
     </div>
   );

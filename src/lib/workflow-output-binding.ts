@@ -41,7 +41,10 @@ export function defaultOutputSource(
   let best = outputs[0]!;
   for (const item of outputs) {
     if (item.displayOrder === undefined) continue;
-    if (best.displayOrder === undefined || item.displayOrder < best.displayOrder) {
+    if (
+      best.displayOrder === undefined ||
+      item.displayOrder < best.displayOrder
+    ) {
       best = item;
     }
   }
@@ -70,7 +73,9 @@ function manualMapForMode(
   const table = (ns as Record<string, unknown>)[`${MODE_KEY_PREFIX}${mode}`];
   if (!table || typeof table !== "object" || Array.isArray(table)) return {};
   const out: Record<string, string | null> = {};
-  for (const [ioKey, value] of Object.entries(table as Record<string, unknown>)) {
+  for (const [ioKey, value] of Object.entries(
+    table as Record<string, unknown>,
+  )) {
     if (typeof value === "string") out[ioKey] = value;
     else if (value === null) out[ioKey] = null;
   }
@@ -127,8 +132,7 @@ export function applyOutputBindingEdit(
   paramMap: Record<string, unknown> | null | undefined,
   edit: { outputIoKey: string; ioKey: string | null; mode: string | null },
 ): Record<string, unknown> {
-  const base =
-    paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
+  const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
   if (!edit.mode) return base;
   const ns = base[OUTPUT_BINDING_NAMESPACE];
   const table =
@@ -155,8 +159,7 @@ export function clearOutputBindingEdit(
   outputIoKey: string,
   mode: string | null,
 ): Record<string, unknown> {
-  const base =
-    paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
+  const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
   if (!mode) return base;
   const ns = base[OUTPUT_BINDING_NAMESPACE];
   if (!ns || typeof ns !== "object" || Array.isArray(ns)) return base;

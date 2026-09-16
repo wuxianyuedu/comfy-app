@@ -49,7 +49,7 @@ export function buildShotPrompt(
   shot: Pick<Shot, "description" | "shotType">,
   scene: Scene | undefined,
   characters: Character[],
-  style?: StyleRef
+  style?: StyleRef,
 ): string {
   const parts: string[] = [];
 
@@ -80,7 +80,10 @@ export function buildShotPrompt(
   return parts.filter(Boolean).join(", ");
 }
 
-export function buildShotNegative(characters: Character[], style?: StyleRef): string {
+export function buildShotNegative(
+  characters: Character[],
+  style?: StyleRef,
+): string {
   const neg = [
     "ugly",
     "deformed",
@@ -91,8 +94,7 @@ export function buildShotNegative(characters: Character[], style?: StyleRef): st
     "text",
     "extra fingers",
   ];
-  characters.forEach((character) =>
-{
+  characters.forEach((character) => {
     if (character.negativePrompt) neg.push(character.negativePrompt);
   });
   if (style?.negativePrompt) neg.push(style.negativePrompt);
@@ -113,7 +115,7 @@ const SHOT_KEYWORDS: Record<string, string> = {
 /** Merge recommended params from style + character, character wins ties */
 export function mergeParams(
   style?: StyleRef,
-  character?: Character
+  character?: Character,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (style?.defaultParams) Object.assign(out, style.defaultParams);

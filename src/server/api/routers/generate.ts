@@ -3,7 +3,10 @@ import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
 
 const generateRuntimeLog = createAppRuntimeLogger("generate");
-import { taskRepository, workflowTemplateRepository } from "@/lib/core/repository";
+import {
+  taskRepository,
+  workflowTemplateRepository,
+} from "@/lib/core/repository";
 import {
   buildAndValidate,
   buildCustomWorkflow,
@@ -15,7 +18,10 @@ import { enqueue } from "@/lib/comfyui/enqueue";
 /** ComfyUI API-format graph(Export (API Format)):nodeId → node。
  *  最小精确形状:buildCustomWorkflow 只对节点整体深拷贝并回填 inputs,
  *  字段值类型多样,故 inputs 值收口为 unknown(不入本文件以外的共享类型)。 */
-type ApiGraph = Record<string, { class_type?: unknown; inputs?: Record<string, unknown> }>;
+type ApiGraph = Record<
+  string,
+  { class_type?: unknown; inputs?: Record<string, unknown> }
+>;
 
 /** Prisma Json 列(graph)→ 预期形状。仅排除 null/标量;原 `as any` 同样把任何
  *  对象/数组原样透传给 buildCustomWorkflow,数组因此也放行,保持运行时一致。 */
@@ -78,7 +84,11 @@ export const generateRouter = createTRPCRouter({
       const data = input;
       const count = data.count ?? 1;
 
-      let built: { ok: boolean; prompt?: Record<string, unknown>; error?: string };
+      let built: {
+        ok: boolean;
+        prompt?: Record<string, unknown>;
+        error?: string;
+      };
       let workflowName: string;
       let taskType: string;
 
@@ -92,7 +102,7 @@ export const generateRouter = createTRPCRouter({
         // Custom workflow imported from ComfyUI "Export (API Format)".
         const tpl = await workflowTemplateRepository.findByIdForUser(
           ctx.user.id,
-          data.workflow
+          data.workflow,
         );
         if (!tpl && !data.canvasGraph) {
           throw new Error("Workflow not found");
@@ -119,7 +129,10 @@ export const generateRouter = createTRPCRouter({
             rawJson: tpl.rawJson,
             overrides: data.workflowInputs,
           });
-          generateRuntimeLog.info(`生成任务已入队 ${task.id}`, { type: taskType, workflow: workflowName });
+          generateRuntimeLog.info(`生成任务已入队 ${task.id}`, {
+            type: taskType,
+            workflow: workflowName,
+          });
           return { taskId: task.id };
         }
 
@@ -137,7 +150,7 @@ export const generateRouter = createTRPCRouter({
             prompt: buildCustomWorkflow(
               graph,
               { ...data, count },
-              data.paramMap ?? asParamMap(tpl?.paramMap)
+              data.paramMap ?? asParamMap(tpl?.paramMap),
             ),
           };
         } catch (e) {

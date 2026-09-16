@@ -1,6 +1,12 @@
 "use client";
 /* Unified multi-section popover dropdown — extracted from GroupedControls.tsx. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -19,7 +25,13 @@ import { createPortal } from "react-dom";
  * ───────────────────────────────────────────────────────────────────────── */
 
 /** Small rectangle that visually mirrors a width/height ratio. */
-export function RatioIcon({ ratio, className = "" }: { ratio: number; className?: string }) {
+export function RatioIcon({
+  ratio,
+  className = "",
+}: {
+  ratio: number;
+  className?: string;
+}) {
   const MAX = 18;
   const width = ratio >= 1 ? MAX : Math.max(4, Math.round(MAX * ratio));
   const height = ratio >= 1 ? Math.max(4, Math.round(MAX / ratio)) : MAX;
@@ -97,7 +109,8 @@ function MultiSegmentPopoverInner({
     left = Math.max(margin, Math.min(left, window.innerWidth - margin - width));
     const popHeight = popRef.current?.offsetHeight ?? 420;
     const spaceBelow = window.innerHeight - rect.bottom;
-    const above = spaceBelow < Math.min(420, popHeight + 12) && rect.top > spaceBelow;
+    const above =
+      spaceBelow < Math.min(420, popHeight + 12) && rect.top > spaceBelow;
     const top = above
       ? Math.max(margin, rect.top - popHeight - 6)
       : Math.min(window.innerHeight - margin - popHeight, rect.bottom + 6);
@@ -160,7 +173,7 @@ function MultiSegmentPopoverInner({
         aria-expanded={open}
         disabled={disabled}
         onClick={handleToggle}
-        className={`nodrag nopan flex w-full items-center gap-2 rounded-lg border border-primary/35 bg-canvas-deep px-3 py-2 text-left text-[12px] text-ink-bright outline-none transition-colors focus:border-primary/70 ${
+        className={`nodrag nopan border-primary/35 bg-canvas-deep text-ink-bright focus:border-primary/70 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-[12px] transition-colors outline-none ${
           disabled ? "cursor-not-allowed opacity-50" : "hover:border-primary/70"
         }`}
       >
@@ -169,7 +182,7 @@ function MultiSegmentPopoverInner({
           width="10"
           height="10"
           viewBox="0 0 10 10"
-          className={`shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-ink-muted shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="1.6"
@@ -192,13 +205,21 @@ function MultiSegmentPopoverInner({
               overflowY: "auto",
               zIndex: 9999,
             }}
-            className="bg-panel/95 rounded-xl p-3 shadow-2xl shadow-black/10 dark:shadow-black/50 ring-1 ring-border-strong backdrop-blur-md"
+            className="bg-panel/95 ring-border-strong rounded-xl p-3 shadow-2xl ring-1 shadow-black/10 backdrop-blur-md dark:shadow-black/50"
             onMouseDown={(event) => event.stopPropagation()}
           >
             {sections.map((section, i) => (
-              <Section key={section.label + ":" + (section.value ?? "")} section={section} first={i === 0} />
+              <Section
+                key={section.label + ":" + (section.value ?? "")}
+                section={section}
+                first={i === 0}
+              />
             ))}
-            {footer ? <div className="mt-3 border-t border-border-strong pt-3">{footer}</div> : null}
+            {footer ? (
+              <div className="border-border-strong mt-3 border-t pt-3">
+                {footer}
+              </div>
+            ) : null}
           </div>,
           document.body,
         )}
@@ -224,12 +245,19 @@ const Section = React.memo(function Section({
       return [{ key: "_", label: undefined, options: section.options }];
     }
     const order: string[] = [];
-    const map = new Map<string, { key: string; label?: string; options: typeof section.options }>();
+    const map = new Map<
+      string,
+      { key: string; label?: string; options: typeof section.options }
+    >();
     for (const option of section.options) {
       const key = option.subgroup ?? "_";
       if (!map.has(key)) {
         order.push(key);
-        map.set(key, { key: key, label: option.subgroup, options: [] as typeof section.options });
+        map.set(key, {
+          key: key,
+          label: option.subgroup,
+          options: [] as typeof section.options,
+        });
       }
       map.get(key)!.options.push(option);
     }
@@ -238,18 +266,18 @@ const Section = React.memo(function Section({
 
   const onPick = useCallback(
     (value: string) => section.onChange(value),
-    [section]
+    [section],
   );
 
   return (
     <div className={first ? "" : "mt-3"}>
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+      <div className="text-ink-muted mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
         {section.label}
       </div>
       {grouped.map((group, gi) => (
         <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
           {group.label && (
-            <div className="mb-1 text-[9px] uppercase tracking-wider text-ink-icon">
+            <div className="text-ink-icon mb-1 text-[9px] tracking-wider uppercase">
               {group.label}
             </div>
           )}
@@ -265,7 +293,7 @@ const Section = React.memo(function Section({
                   onClick={() => onPick(opt.value)}
                   className={`nodrag nopan flex min-w-[52px] flex-col items-center gap-1 rounded-md px-1.5 py-1.5 text-[11px] transition-colors ${
                     selected
-                      ? "bg-primary/20 text-ink-bright ring-1 ring-primary/55"
+                      ? "bg-primary/20 text-ink-bright ring-primary/55 ring-1"
                       : "text-ink-muted hover:bg-subtle hover:text-ink-bright"
                   }`}
                 >

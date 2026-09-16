@@ -14,7 +14,11 @@
 
 import { getLLMConfig } from "@/lib/llm/server";
 import { errorMessage } from "~/lib/error-message";
-import { extractBase64DataUrl, extractMediaUrl, extractRemoteTaskId } from "~/lib/workshop/api-channel-shared";
+import {
+  extractBase64DataUrl,
+  extractMediaUrl,
+  extractRemoteTaskId,
+} from "~/lib/workshop/api-channel-shared";
 import {
   VIDEO_POLL_TOTAL_MS,
   pollRemoteVideoTask,
@@ -41,7 +45,9 @@ export function strField(rec: Record<string, unknown>, key: string): string {
 }
 
 /** 取第一个非空白字符串（空串视为未填，继续向后回落）。 */
-export function firstNonEmpty(...vals: Array<string | null | undefined>): string {
+export function firstNonEmpty(
+  ...vals: Array<string | null | undefined>
+): string {
   for (const v of vals) {
     if (typeof v === "string" && v.trim() !== "") return v;
   }
@@ -79,13 +85,54 @@ export async function resolveUpstream(
     };
   }
   const apiKey = firstNonEmpty(typedKey, entry?.apiKey, cfg.apiKey);
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   return {
     base: baseUrl.replace(/\/+$/, ""),
     path: normalizeEndpointPath(rawPath),
     headers,
   };
+}
+
+/** 两个路由共用的**请求前言**：读 body → 取条目名 → 解析连接参数。
+ *
+ *  为什么抽出来：`POST /api/llm/test-usage` 与 `POST /api/llm/test-usage/query`
+ *  的前言逐行相同（读 body、`strField` 取 name、把弹窗填的连接参数与已保存条目
+ *  一起交给 `resolveUpstream`），而且**出错时都必须回答同一个信封**
+ *  （`{ ok:false, detail }`）。此前两份各写一遍 —— 按行统计重合 ~79%，属规范
+ *  §12.12 的孪生对：改一处漏一处就是静默行为分叉（分叉的正是「密钥怎么解析」
+ *  与「错误文案长什么样」）。路由因此只剩「HTTP 形状」（包 NextResponse）。
+ *
+ *  返回判别式联合而不是抛异常：调用方要原样把它翻成 200 + `{ok:false,detail}`，
+ *  抛异常会让「空接口地址」这类**用户可修正**的输入走成 500。 */
+export type UsageTestPrologue =
+  | {
+      ok: true;
+      name: string;
+      rec: Record<string, unknown>;
+      up: ResolvedUpstream;
+    }
+  | { ok: false; detail: string };
+
+export async function readUsageTestPrologue(
+  req: Request,
+): Promise<UsageTestPrologue> {
+  const body: unknown = await req.json().catch(() => ({}));
+  const rec = isRecord(body) ? body : {};
+  const name = strField(rec, "name");
+  if (!name) return { ok: false, detail: "缺少模型名" };
+
+  const up = await resolveUpstream(
+    name,
+    strField(rec, "baseUrl"),
+    strField(rec, "apiKey"),
+    strField(rec, "path"),
+  );
+  if ("error" in up) return { ok: false, detail: up.error };
+
+  return { ok: true, name, rec, up };
 }
 
 /** 上游响应体：非 JSON 或解析失败一律给 null（调用方按 HTTP 状态给文案）。 */
@@ -95,21 +142,27 @@ export async function readPayload(res: Response): Promise<unknown> {
 
 /** 非 2xx 的统一错误文案（响应体截断，不把整页 HTML 灌进界面）。 */
 export function httpFailureDetail(status: number, payload: unknown): string {
-  const detail = isRecord(payload) ? JSON.stringify(payload).slice(0, 240) : `HTTP ${status}`;
+  const detail = isRecord(payload)
+    ? JSON.stringify(payload).slice(0, 240)
+    : `HTTP ${status}`;
   return `HTTP ${status}：${detail}`;
 }
 
 /** 额外参数（JSON 对象字符串）→ 逐键合并用的对象。 */
-export function parseExtraJson(extraJson: string):
-  | { ok: true; extra: Record<string, unknown> }
-  | { ok: false; detail: string } {
+export function parseExtraJson(
+  extraJson: string,
+):
+  { ok: true; extra: Record<string, unknown> } | { ok: false; detail: string } {
   if (extraJson === "") return { ok: true, extra: {} };
   try {
     const parsed: unknown = JSON.parse(extraJson);
     if (!isRecord(parsed)) throw new Error("不是 JSON 对象");
     return { ok: true, extra: parsed };
   } catch (e) {
-    return { ok: false, detail: `额外参数不是有效的 JSON 对象：${errorMessage(e, "解析失败")}` };
+    return {
+      ok: false,
+      detail: `额外参数不是有效的 JSON 对象：${errorMessage(e, "解析失败")}`,
+    };
   }
 }
 
@@ -118,12 +171,15 @@ export function chatTextFrom(payload: unknown): string {
   if (!isRecord(payload)) return "";
   const choices: unknown = payload.choices;
   const first: unknown = Array.isArray(choices) ? choices[0] : undefined;
-  const message = isRecord(first) && isRecord(first.message) ? first.message : null;
+  const message =
+    isRecord(first) && isRecord(first.message) ? first.message : null;
   const content: unknown = message?.content;
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
-    .map((part) => (isRecord(part) && typeof part.text === "string" ? part.text : ""))
+    .map((part) =>
+      isRecord(part) && typeof part.text === "string" ? part.text : "",
+    )
     .join("");
 }
 
@@ -179,7 +235,8 @@ export async function callImage(
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
   const payload = await readPayload(res);
-  if (!res.ok) return { ok: false, detail: httpFailureDetail(res.status, payload) };
+  if (!res.ok)
+    return { ok: false, detail: httpFailureDetail(res.status, payload) };
   const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
   if (!url) {
     return {
@@ -212,7 +269,8 @@ export async function callVideo(
     signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
   });
   const payload = await readPayload(res);
-  if (!res.ok) return { status: "error", detail: httpFailureDetail(res.status, payload) };
+  if (!res.ok)
+    return { status: "error", detail: httpFailureDetail(res.status, payload) };
   const directUrl = extractMediaUrl(payload);
   if (directUrl) return { status: "done", url: directUrl };
   const taskId = extractRemoteTaskId(payload);
@@ -222,8 +280,16 @@ export async function callVideo(
       detail: `响应中未找到视频 URL 或任务 ID：${JSON.stringify(payload).slice(0, 240)}`,
     };
   }
-  const doneUrl = await pollRemoteVideoTask(up.base, up.path, model, taskId, up.headers);
-  return doneUrl ? { status: "done", url: doneUrl } : { status: "pending", taskId };
+  const doneUrl = await pollRemoteVideoTask(
+    up.base,
+    up.path,
+    model,
+    taskId,
+    up.headers,
+  );
+  return doneUrl
+    ? { status: "done", url: doneUrl }
+    : { status: "pending", taskId };
 }
 
 /** 「继续等待」一轮：只查既有任务，**绝不重新提交**（不重复扣费）。 */
@@ -232,7 +298,13 @@ export async function queryVideoTask(
   model: string,
   taskId: string,
 ): Promise<{ done: true; url: string } | { done: false }> {
-  const url = await pollRemoteVideoTask(up.base, up.path, model, taskId, up.headers);
+  const url = await pollRemoteVideoTask(
+    up.base,
+    up.path,
+    model,
+    taskId,
+    up.headers,
+  );
   return url ? { done: true, url } : { done: false };
 }
 

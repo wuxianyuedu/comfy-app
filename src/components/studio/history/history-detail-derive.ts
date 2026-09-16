@@ -92,7 +92,9 @@ export function derivePrompt(detail: TaskDetail | null): {
   const inputs = workflowInputsOf<{ name: string; value: unknown }>(detail);
   const hit = inputs.find(
     (input) =>
-      input.name === "text" || input.name === "prompt" || input.name === "positive",
+      input.name === "text" ||
+      input.name === "prompt" ||
+      input.name === "positive",
   );
   const fallbackPrompt = hit && typeof hit.value === "string" ? hit.value : "";
   const prompt = detail?.prompt ?? fallbackPrompt;
@@ -117,10 +119,15 @@ export function deriveGenValues(
 ): GenValue[] {
   if (!detail) return [];
   const params = paramsOf(detail);
-  const inputs = workflowInputsOf<{ nodeId?: string; name: string; value: unknown }>(detail);
+  const inputs = workflowInputsOf<{
+    nodeId?: string;
+    name: string;
+    value: unknown;
+  }>(detail);
   const wf = toWorkflowHints(workflowHints);
   const images = detail.images ?? [];
-  const coverImage = images.length > 0 ? (images.find((im) => im.isCover) ?? images[0]) : null;
+  const coverImage =
+    images.length > 0 ? (images.find((im) => im.isCover) ?? images[0]) : null;
   const coverSize =
     coverImage?.width && coverImage.height
       ? `${coverImage.width}×${coverImage.height}`
@@ -193,7 +200,9 @@ export function deriveParamRows(detail: TaskDetail | null): {
   const rows = workflowInputsOf<ParamRow>(detail).filter(
     (input) => !GEN_KEYS_LOWER.has(String(input.name).toLowerCase()),
   );
-  const topLevelEntries = Object.entries(params).filter(([k]) => k !== "workflowInputs");
+  const topLevelEntries = Object.entries(params).filter(
+    ([k]) => k !== "workflowInputs",
+  );
   return {
     rows,
     topLevelEntries,

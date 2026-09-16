@@ -143,10 +143,7 @@ describe("decideComfyTabOpen — 打开方式判决", () => {
 });
 
 describe("probeComfyEmbeddable — 取事实（IO）", () => {
-  const res = (
-    headers: Record<string, string>,
-    status = 200,
-  ) =>
+  const res = (headers: Record<string, string>, status = 200) =>
     ({ ok: status < 400, status, headers: new Headers(headers) }) as Response;
 
   it("同源不发请求，直接可嵌", async () => {
@@ -157,7 +154,9 @@ describe("probeComfyEmbeddable — 取事实（IO）", () => {
   });
 
   it("探测请求必须带 Origin（否则测不出跨源拦截）", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => res({ "access-control-allow-origin": "*" }));
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      res({ "access-control-allow-origin": "*" }),
+    );
     await probeComfyEmbeddable(COMFY, HOST, fetchImpl);
     const init = fetchImpl.mock.calls[0]?.[1];
     expect((init?.headers as Record<string, string> | undefined)?.Origin).toBe(

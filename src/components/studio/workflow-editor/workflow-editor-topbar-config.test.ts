@@ -127,8 +127,13 @@ describe("顶栏容器：窄了换行，不压扁按钮", () => {
  * 消失、节点卡片上的一排勾选框还留着 —— 作者看到一个关不掉的编辑态。
  * 这里做源码级守卫 —— 断言的是「有没有留后门」，不是某个按钮的字面实现。 */
 describe("IO 编辑 / 预览开关必须走 store 动作（ISSUE #400）", () => {
-  const source = readFileSync(path.resolve(__dirname, "WorkflowEditorTopbar.tsx"), "utf8");
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const source = readFileSync(
+    path.resolve(__dirname, "WorkflowEditorTopbar.tsx"),
+    "utf8",
+  );
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
 
   it("顶栏不直接 setState 写 ioEditMode / ioPreviewOpen", () => {
     expect(code).not.toMatch(/setState\([\s\S]{0,120}?ioEditMode/);
@@ -148,8 +153,13 @@ describe("IO 编辑 / 预览开关必须走 store 动作（ISSUE #400）", () =>
 /* 画布侧（`WorkflowEditorInner.tsx`）的预览关闭按钮同样是「关面板」的入口，
  * 它若绕开动作，预览面板收起、勾选框照样留在画布上。 */
 describe("画布侧关闭预览也走 store 动作（ISSUE #400）", () => {
-  const source = readFileSync(path.resolve(__dirname, "WorkflowEditorInner.tsx"), "utf8");
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const source = readFileSync(
+    path.resolve(__dirname, "WorkflowEditorInner.tsx"),
+    "utf8",
+  );
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
 
   it("不直接 setState 写 ioPreviewOpen", () => {
     expect(code).not.toMatch(/setState\([\s\S]{0,120}?ioPreviewOpen/);

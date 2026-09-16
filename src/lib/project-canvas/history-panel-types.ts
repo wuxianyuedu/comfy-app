@@ -31,9 +31,18 @@ export interface HistoryTaskRow {
 }
 
 export const STATUS_PILL: Record<string, { label: string; cls: string }> = {
-  QUEUED: { label: "排队中", cls: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300" },
-  RUNNING: { label: "生成中", cls: "bg-violet-500/20 text-violet-700 dark:text-violet-300" },
-  FAILED: { label: "失败", cls: "bg-red-500/15 text-red-700 dark:text-red-400" },
+  QUEUED: {
+    label: "排队中",
+    cls: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",
+  },
+  RUNNING: {
+    label: "生成中",
+    cls: "bg-violet-500/20 text-violet-700 dark:text-violet-300",
+  },
+  FAILED: {
+    label: "失败",
+    cls: "bg-red-500/15 text-red-700 dark:text-red-400",
+  },
   CANCELLED: { label: "已取消", cls: "bg-surface-2 text-ink-soft" },
 };
 
@@ -52,7 +61,10 @@ export function timeAgo(iso: string): string {
   if (h < 24) return `${h} 小时前`;
   const d = Math.floor(h / 24);
   if (d < 30) return `${d} 天前`;
-  return new Date(iso).toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("zh-CN", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 /** 卡片主标题：优先提示词摘要，退回工作流名，最后退回任务 id 短码。 */
@@ -65,12 +77,16 @@ export function titleOf(task: HistoryTaskRow): string {
 
 /** 进行中（需要轮询）的任务数。 */
 export function countActive(tasks: HistoryTaskRow[]): number {
-  return tasks.filter((task) => task.status === "RUNNING" || task.status === "QUEUED").length;
+  return tasks.filter(
+    (task) => task.status === "RUNNING" || task.status === "QUEUED",
+  ).length;
 }
 
 /** 只有图片/视频封面可拖拽到画布；音频没有可视封面。 */
 export function isDraggableCover(task: HistoryTaskRow): boolean {
-  return !!task.cover && (task.mediaType === "image" || task.mediaType === "video");
+  return (
+    !!task.cover && (task.mediaType === "image" || task.mediaType === "video")
+  );
 }
 
 export const FILTER_TABS: { id: HistoryFilter; label: string }[] = [

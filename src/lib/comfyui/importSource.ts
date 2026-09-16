@@ -22,10 +22,7 @@ import {
   type ConversionResult,
   type RawWorkflow,
 } from "@/lib/comfyui/raw";
-import {
-  normalizeTaskType,
-  VALID_TASK_TYPE_CODES,
-} from "@/lib/workflow-types";
+import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "@/lib/workflow-types";
 import { detectParamMap } from "@/lib/comfyui/workflow";
 
 export interface ParsedWorkflow {
@@ -41,7 +38,7 @@ export interface ParsedWorkflow {
 /** Read a local file and return its text + mtime in ms. Throws a friendly
  *  error when the path is missing / unreadable. */
 export async function readLocalFile(
-  absPath: string
+  absPath: string,
 ): Promise<{ text: string; mtimeMs: number }> {
   let stat;
   try {
@@ -76,13 +73,15 @@ export async function parseWorkflowContent(
     explicitFormat?: "api" | "raw" | null;
     preferredTaskType?: string;
     defaultName?: string;
-  } = {}
+  } = {},
 ): Promise<ParsedWorkflow> {
   let candidate: unknown;
   try {
     candidate = JSON.parse(content);
   } catch {
-    throw new Error("JSON 解析失败，请检查文件内容是否为有效的 ComfyUI 工作流 JSON");
+    throw new Error(
+      "JSON 解析失败，请检查文件内容是否为有效的 ComfyUI 工作流 JSON",
+    );
   }
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
     throw new Error("不是有效的工作流 JSON（根节点应为对象）");
@@ -91,7 +90,7 @@ export async function parseWorkflowContent(
   const detected = opts.explicitFormat ?? detectFormat(candidate);
   if (!detected) {
     throw new Error(
-      "无法识别的工作流格式：未找到 API 节点 (class_type) 或 raw 节点 (type + pos)。"
+      "无法识别的工作流格式：未找到 API 节点 (class_type) 或 raw 节点 (type + pos)。",
     );
   }
 
@@ -101,32 +100,27 @@ export async function parseWorkflowContent(
   const warnings: string[] = [];
 
   if (detected === "api") {
-
     const graph = candidate as Record<string, unknown>;
 
     const looksLikeGraph = Object.values(graph).some(
-
-      (node) => node && typeof node === "object" && "class_type" in (node)
-
+      (node) => node && typeof node === "object" && "class_type" in node,
     );
 
     if (!looksLikeGraph) {
-
       throw new Error("不是有效的 ComfyUI API 工作流（未找到节点 class_type）");
-
     }
 
     apiGraph = graph;
-
   } else {
-
     rawJson = candidate;
     let result: ConversionResult;
     try {
       result = await convertRawToApi(candidate as unknown as RawWorkflow);
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      logger.warn(`[importSource] /object_info convert failed, using fallback: ${errMsg}`);
+      logger.warn(
+        `[importSource] /object_info convert failed, using fallback: ${errMsg}`,
+      );
       result = fallbackRawToApi(candidate as unknown as RawWorkflow);
     }
     apiGraph = result.graph;
@@ -148,7 +142,9 @@ export async function parseWorkflowContent(
     taskType = normalizeTaskType(taskType);
   }
   if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
-    logger.info(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
+    logger.info(
+      `[importSource] Unknown taskType "${taskType}", allowing as custom type`,
+    );
   }
 
   const paramMap = detectParamMap(apiGraph);
@@ -180,7 +176,7 @@ export async function importFromLocalPath(
     explicitFormat?: "api" | "raw" | null;
     preferredTaskType?: string;
     defaultName?: string;
-  } = {}
+  } = {},
 ): Promise<ImportedFromFile> {
   const { text, mtimeMs } = await readLocalFile(absPath);
   const parsed = await parseWorkflowContent(text, opts);

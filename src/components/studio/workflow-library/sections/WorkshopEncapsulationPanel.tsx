@@ -110,9 +110,7 @@ export function WorkshopEncapsulationPanel({
           onProgress: (pct) => setProgress(pct),
           onLog: (entry) => {
             if (entry.level === "progress") return;
-            setLogLines((prev) =>
-              [...prev, entry.msg].slice(-100),
-            );
+            setLogLines((prev) => [...prev, entry.msg].slice(-100));
           },
           onOutput: (output) => {
             if (output.kind !== "video" && !imageUrl) imageUrl = output.url;
@@ -133,7 +131,7 @@ export function WorkshopEncapsulationPanel({
   }, [running, status.ready, workflowId, prompt, negative, size]);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-border bg-panel-deep p-4">
+    <div className="border-border bg-panel-deep mx-auto max-w-2xl space-y-4 rounded-2xl border p-4">
       {/* 封装状态总览 */}
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
@@ -149,7 +147,9 @@ export function WorkshopEncapsulationPanel({
         {mode && (
           <span className="text-muted-foreground text-[11px]">
             {getWorkflowType(mode)?.label ?? mode}
-            <span className="font-mono text-[10px]">（{mode.toUpperCase()}）</span>
+            <span className="font-mono text-[10px]">
+              （{mode.toUpperCase()}）
+            </span>
           </span>
         )}
         <span className="text-muted-foreground text-[11px]">
@@ -158,7 +158,8 @@ export function WorkshopEncapsulationPanel({
       </div>
       {!status.ready && (
         <p className="rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
-          提示词口还没落到任何端口 —— 工坊（角色卡定妆照 / 镜头生图）无法驱动这条
+          提示词口还没落到任何端口 —— 工坊（角色卡定妆照 /
+          镜头生图）无法驱动这条
           工作流。到「画布节点」页签把「提示词」卡片的圆点拖到工作流里承载提示词的
           那一行参数上（或使用自动判定），再回这里跑流程测试。
         </p>
@@ -189,7 +190,9 @@ export function WorkshopEncapsulationPanel({
                 {entry.targetIoKey ?? "—"}
               </span>
               {entry.manual && (
-                <span className="text-muted-foreground text-[10px]">手动落点</span>
+                <span className="text-muted-foreground text-[10px]">
+                  手动落点
+                </span>
               )}
             </div>
           </div>
@@ -274,7 +277,7 @@ export function WorkshopEncapsulationPanel({
               <img
                 src={resultUrl}
                 alt="流程测试产物"
-                className="max-h-56 rounded-lg border border-border"
+                className="border-border max-h-56 rounded-lg border"
               />
             </div>
           )}

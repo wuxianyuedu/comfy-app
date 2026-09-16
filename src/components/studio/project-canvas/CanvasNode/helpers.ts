@@ -24,14 +24,18 @@ function toComfySeedMode(mode: string): string {
 
 export function seedModeOverrides(
   io: WorkflowIOMap | null,
-  seedModes: Record<string, string> | undefined
+  seedModes: Record<string, string> | undefined,
 ): { nodeId: string; name: string; value: string }[] {
   if (!io || !seedModes) return [];
   const out: { nodeId: string; name: string; value: string }[] = [];
   for (const [ioKey, mode] of Object.entries(seedModes)) {
     const entry = io[ioKey];
     if (!entry?.nodeId || !mode) continue;
-    out.push({ nodeId: entry.nodeId, name: "control_after_generate", value: toComfySeedMode(mode) });
+    out.push({
+      nodeId: entry.nodeId,
+      name: "control_after_generate",
+      value: toComfySeedMode(mode),
+    });
   }
   return out;
 }

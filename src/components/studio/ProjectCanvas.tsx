@@ -171,7 +171,9 @@ function CanvasInner({
     setNodes,
     setEdges,
     fitView: (...fitViewArgs: Parameters<typeof fitView>) => {
-      fitView(...fitViewArgs).catch(() => { /* noop */ });
+      fitView(...fitViewArgs).catch(() => {
+        /* noop */
+      });
     },
     toast,
   });
@@ -211,7 +213,9 @@ function CanvasInner({
   useRelatedEdgesHighlight(setEdges, {
     /* 节点表的 setter 声明的是 CanvasNodeType[]，而这里只改节点 data 上的端口
      *  关注字段（结构上仍是同一批节点）—— 收窄成 Node[] 会挡在类型门口。 */
-    setNodes: setNodes as unknown as (updater: (nodes: FlowNode[]) => FlowNode[]) => void,
+    setNodes: setNodes as unknown as (
+      updater: (nodes: FlowNode[]) => FlowNode[],
+    ) => void,
   });
 
   /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
@@ -219,7 +223,9 @@ function CanvasInner({
   const requestFitView = useMemo(
     () =>
       makeFitViewScheduler((...fitViewArgs: Parameters<typeof fitView>) => {
-        fitView(...fitViewArgs).catch(() => { /* noop */ });
+        fitView(...fitViewArgs).catch(() => {
+          /* noop */
+        });
       }),
     [fitView],
   );
@@ -289,7 +295,9 @@ function CanvasInner({
       requestFitView();
       setHydrating(false);
       onConsumeSeed?.();
-    })().catch(() => { /* noop */ });
+    })().catch(() => {
+      /* noop */
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -373,7 +381,7 @@ function CanvasInner({
 
   return (
     <div
-      className="relative h-full w-full bg-canvas"
+      className="bg-canvas relative h-full w-full"
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
     >

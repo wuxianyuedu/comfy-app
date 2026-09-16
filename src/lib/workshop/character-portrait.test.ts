@@ -30,7 +30,9 @@ function makeCharacter(patch: Partial<Character> = {}): Character {
   };
 }
 
-function makePortrait(patch: Partial<CharacterPortrait> = {}): CharacterPortrait {
+function makePortrait(
+  patch: Partial<CharacterPortrait> = {},
+): CharacterPortrait {
   return {
     url: "/api/generated/t1/a.png",
     source: "local",
@@ -76,7 +78,9 @@ describe("normalizePortrait 脏数据归一化", () => {
 describe("portraitCandidates 读取候选", () => {
   it("无 portraits 字段（旧数据）返回空数组", () => {
     expect(portraitCandidates(makeCharacter())).toEqual([]);
-    expect(portraitCandidates(makeCharacter({ portraits: "x" as never }))).toEqual([]);
+    expect(
+      portraitCandidates(makeCharacter({ portraits: "x" as never })),
+    ).toEqual([]);
   });
 
   it("按时间倒序返回，坏条目被剔除", () => {
@@ -96,17 +100,28 @@ describe("portraitCandidates 读取候选", () => {
 
 describe("withPortraitCandidate 追加候选", () => {
   it("第一张候选自动成为定妆照，后续候选不抢已定妆照", () => {
-    const first = withPortraitCandidate(makeCharacter(), makePortrait({ url: "/u/a.png" }));
+    const first = withPortraitCandidate(
+      makeCharacter(),
+      makePortrait({ url: "/u/a.png" }),
+    );
     expect(first.portraitUrl).toBe("/u/a.png");
 
-    const second = withPortraitCandidate(first, makePortrait({ url: "/u/b.png", createdAt: 2 }));
+    const second = withPortraitCandidate(
+      first,
+      makePortrait({ url: "/u/b.png", createdAt: 2 }),
+    );
     expect(second.portraitUrl).toBe("/u/a.png");
-    expect(second.portraits?.map((item) => item.url)).toEqual(["/u/b.png", "/u/a.png"]);
+    expect(second.portraits?.map((item) => item.url)).toEqual([
+      "/u/b.png",
+      "/u/a.png",
+    ]);
   });
 
   it("同一地址重复加入只保留一条并提到最新", () => {
     const character = withPortraitCandidate(
-      makeCharacter({ portraits: [makePortrait({ url: "/u/a.png", createdAt: 1 })] }),
+      makeCharacter({
+        portraits: [makePortrait({ url: "/u/a.png", createdAt: 1 })],
+      }),
       makePortrait({ url: "/u/a.png", createdAt: 7, source: "remote" }),
     );
     expect(character.portraits).toHaveLength(1);
@@ -127,7 +142,9 @@ describe("withPortraitCandidate 追加候选", () => {
     );
     expect(character.portraits).toHaveLength(MAX_PORTRAIT_CANDIDATES);
     expect(character.portraits?.[0]?.url).toBe("/u/newest.png");
-    expect(character.portraits?.some((item) => item.url === "/u/0.png")).toBe(false);
+    expect(character.portraits?.some((item) => item.url === "/u/0.png")).toBe(
+      false,
+    );
   });
 });
 
@@ -136,7 +153,9 @@ describe("withSelectedPortrait 挑选定妆照", () => {
     const character = makeCharacter({
       portraits: [makePortrait({ url: "/u/a.png" })],
     });
-    expect(withSelectedPortrait(character, "/u/a.png").portraitUrl).toBe("/u/a.png");
+    expect(withSelectedPortrait(character, "/u/a.png").portraitUrl).toBe(
+      "/u/a.png",
+    );
     expect(withSelectedPortrait(character, "/u/ghost.png")).toBe(character);
   });
 });
@@ -163,7 +182,10 @@ describe("withoutPortraitCandidate 删除候选", () => {
 
   it("删光后不再留下悬空定妆照地址", () => {
     const one = withoutPortraitCandidate(
-      makeCharacter({ portraits: [makePortrait({ url: "/u/a.png" })], portraitUrl: "/u/a.png" }),
+      makeCharacter({
+        portraits: [makePortrait({ url: "/u/a.png" })],
+        portraitUrl: "/u/a.png",
+      }),
       "/u/a.png",
     );
     expect(one.portraitUrl).toBeUndefined();

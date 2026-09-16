@@ -18,7 +18,12 @@ import {
   useLogStore,
 } from "./log-store";
 
-export type { LogEntry, LogFilter, LogLevel, LogOriginFilter } from "./log-store";
+export type {
+  LogEntry,
+  LogFilter,
+  LogLevel,
+  LogOriginFilter,
+} from "./log-store";
 
 /**
  * 订阅日志 store 的指定字段（规范 07 §7.4：组件只订阅自己需要的字段，
@@ -37,7 +42,8 @@ export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
 
 /** unknown 抛值 → 可读文本（Error 带堆栈；对象取 message；其余 JSON/String 兜底）。 */
 export function describeGlobalError(reason: unknown): string {
-  if (reason instanceof Error) return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
+  if (reason instanceof Error)
+    return `${reason.name}: ${reason.message}\n${reason.stack ?? ""}`;
   if (typeof reason === "string") return reason;
   if (
     typeof reason === "object" &&

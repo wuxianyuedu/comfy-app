@@ -132,7 +132,9 @@ describe("库内映射编辑", () => {
     expect(dot, "尺寸卡的像素量出口应有一颗可连的 handle").toBeTruthy();
     /* 它是 source（线从这里出发去宿主卡片），不是装饰圆点。 */
     expect(
-      container.querySelector('.react-flow__handle.source[data-handleid="megapixels"]'),
+      container.querySelector(
+        '.react-flow__handle.source[data-handleid="megapixels"]',
+      ),
     ).toBeTruthy();
   });
 
@@ -141,9 +143,14 @@ describe("库内映射编辑", () => {
      *  这里不断言手势，只钉住「库内改的落点落成什么形状」—— 形状错了刷新后就
      *  读不回来（用户口径：「改了落点没生效」）。 */
     const parsed = parseParamMapping(
-      applyWireEdit({}, { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" }),
+      applyWireEdit(
+        {},
+        { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+      ),
     );
-    expect(parsed.manualByMode).toEqual({ T2I: { size: "5::widget::megapixels" } });
+    expect(parsed.manualByMode).toEqual({
+      T2I: { size: "5::widget::megapixels" },
+    });
   });
 
   it("落库后的 paramMap 读回来：卡片头「恢复默认」可用", () => {
@@ -189,9 +196,13 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
      *  这颗点（`PortHandle dir="out"`），库内预览此前漏了 —— 补上，且它正是
      *  右列连线的起点。 */
     const { container } = renderPreview({});
-    const host = container.querySelector('[data-testid="wflib-canvas-node-host"]')!;
+    const host = container.querySelector(
+      '[data-testid="wflib-canvas-node-host"]',
+    )!;
     expect(
-      host.querySelector('.react-flow__handle.source[data-handleid="5::output::IMAGE"]'),
+      host.querySelector(
+        '.react-flow__handle.source[data-handleid="5::output::IMAGE"]',
+      ),
     ).toBeTruthy();
   });
 
@@ -223,8 +234,9 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
       '[data-testid="param-node-5::output::IMAGE"]',
     )!;
     expect(
-      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!
-        .disabled,
+      card.querySelector<HTMLButtonElement>(
+        '[data-testid^="param-node-reset"]',
+      )!.disabled,
     ).toBe(true);
     /* 但端点本身在（可拖）—— 端点由画布的节点注入。 */
     expect(
@@ -240,8 +252,9 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
       '[data-testid="param-node-5::output::IMAGE"]',
     )!;
     expect(
-      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!
-        .disabled,
+      card.querySelector<HTMLButtonElement>(
+        '[data-testid^="param-node-reset"]',
+      )!.disabled,
     ).toBe(false);
   });
 });
@@ -266,7 +279,9 @@ describe("画布视口（由 React Flow 承担）", () => {
   it("三列各挂在一个节点里（左列 / 宿主 / 右列）", () => {
     const { container } = renderPreview({});
     for (const id of ["lib:params", "lib:host", "lib:outputs"]) {
-      const node = container.querySelector(`.react-flow__node[data-id="${id}"]`);
+      const node = container.querySelector(
+        `.react-flow__node[data-id="${id}"]`,
+      );
       expect(node, `节点 ${id} 应挂载`).toBeTruthy();
     }
   });
@@ -305,7 +320,11 @@ describe("尺寸各项各自可取外部值", () => {
      *  ISSUE #529 之后这件事是**纯派生**：几条该画的线就有几条 edge，id 里带
      *  handle（`libwire:param:<条目>?<handle>`）。这里断言派生结果 —— 边的
      *  渲染本身由 React Flow 负责，jsdom 量不到 handleBounds。 */
-    const paramCards = deriveLibraryParamCards({ io, paramMap: {}, mode: "T2I" });
+    const paramCards = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "T2I",
+    });
     const edges = deriveLibraryEdges(paramCards.wires, []);
     for (const handle of ["aspect_ratio", "megapixels", "width"]) {
       expect(
