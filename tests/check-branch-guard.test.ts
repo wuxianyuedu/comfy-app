@@ -45,11 +45,15 @@ let workdir = "";
 
 function run(args: string[] = []): { code: number; output: string } {
   try {
-    const output = execFileSync(process.execPath, [join(workdir, "check-branch-guard.cjs"), ...args], {
-      cwd: workdir,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const output = execFileSync(
+      process.execPath,
+      [join(workdir, "check-branch-guard.cjs"), ...args],
+      {
+        cwd: workdir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     return { code: 0, output };
   } catch (err) {
     const e = err as { status?: number; stdout?: string; stderr?: string };
@@ -121,10 +125,14 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     const bare = mkdtempSync(join(tmpdir(), "branch-guard-nogit-"));
     try {
       copyFileSync(SCRIPT, join(bare, "check-branch-guard.cjs"));
-      const output = execFileSync(process.execPath, [join(bare, "check-branch-guard.cjs")], {
-        cwd: bare,
-        encoding: "utf8",
-      });
+      const output = execFileSync(
+        process.execPath,
+        [join(bare, "check-branch-guard.cjs")],
+        {
+          cwd: bare,
+          encoding: "utf8",
+        },
+      );
       // 取不到分支名(空) ≠ master,判据无从命中,放行而非报错
       expect(output).toContain("[branch-guard] OK");
     } finally {
@@ -199,13 +207,32 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("PR 合并提交");
   });
 
-  it("--merge-commit:master 上的非合并提交 → 阻断(变更绕过了 PR)", () => {
-    // 默认判据在 master 上也会拦,这条锁的是「push 复核形态也拦」——
-    // 否则 .cnb.yml 的 push 流水线会把每一条正常 PR 合并都判红。
+  it("--merge-commit:squash 合并(单父 + PR 关联)→ 放行", () => {
+    // 本仓库规范 §13.6 优先 Squash Merge。squash 提交只有 1 个父,与「直连主干」
+    // 在拓扑上同形 —— 拿「父提交数 > 1」当判据会把每一次正常合并都判红
+    // (此前 master 的 push 流水线**每一次都是红的**,就是这么来的)。
+    // 平台在合并提交信息里写下 PR 关联,这是可核实的「走过 PR」的痕迹。
+    git(["checkout", "-q", "-b", "feat/squash-me"]);
+    writeFileSync(join(workdir, "feature.txt"), "feature\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "feat: feature"]);
+    git(["checkout", "-q", "master"]);
+    // squash 等价形态:把分支改动并成 master 上的单个提交,并带上平台的 PR 关联。
+    git(["merge", "--squash", "-q", "feat/squash-me"]);
+    git(["commit", "-qm", "feat: feature\n\nPR-URL: #646"]);
     const { code, output } = run(["--merge-commit"]);
-    expect(code).toBe(1);
-    expect(output).toContain("非合并提交");
-    expect(output).toContain("绕过了 PR");
+    expect(code).toBe(0);
+    expect(output).toContain("squash/rebase");
+    expect(output).toContain("PR 关联");
+  });
+
+  it("--merge-commit:单父且无 PR 关联 → 保守放行(不误报,直推拦截在平台分支保护)", () => {
+    // 拓扑同形时判据无从命中,按「保守放行」处理 —— 与 --pr-check 的
+    // 「取不到目标分支 → 保守放行」同一口径。真正拦直推的是平台分支保护
+    // (规范 §13.6.1),这里不再叠加一条会误报的判据。
+    const { code, output } = run(["--merge-commit"]);
+    expect(code).toBe(0);
+    expect(output).toContain("保守放行");
   });
 
   it("--merge-commit:工作分支上提交 → 放行(不误报)", () => {
