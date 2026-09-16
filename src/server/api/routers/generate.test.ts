@@ -203,12 +203,12 @@ describe("generate.generate（自定义工作流）", () => {
     expect(row?.userId).toBe("user-a");
   });
 
-  it("边界：模板 graph/rawJson 均为空且无 canvasGraph → 'Workflow graph is empty'", async () => {
+  it("边界：模板 graph/rawJson 均为空且无 canvasGraph → 报「没有可执行内容」", async () => {
     // graph 列 NOT NULL，「空图」在库里的形态就是空对象 {}
     seedWorkflowTemplate(tdb, { id: "wf-empty", userId: "user-a", graph: {} });
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
-    ).rejects.toThrow("Workflow graph is empty");
+    ).rejects.toThrow("工作流没有可执行内容");
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 

@@ -9,10 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import {
-  buildParamEntries,
-  autoMapEntries,
-} from "~/lib/workflow-param-mapping";
+import { buildParamEntries } from "~/lib/workflow-param-mapping";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 
@@ -43,12 +40,23 @@ const io: WorkflowIOMap = {
 
 const entries = buildParamEntries(io);
 
+/** 作者画过的线（每条口连到它的第一个候选端口）—— 落点只由作者画的线决定，
+ *  没有线就是「未配置」，所以这里必须显式给（不再是自动判定）。 */
+function wiredFor(list: { id: string; pins: { ioKey: string }[] }[]) {
+  const out: Record<string, string> = {};
+  for (const entry of list) {
+    const pin = entry.pins[0];
+    if (pin) out[entry.id] = pin.ioKey;
+  }
+  return out;
+}
+
 describe("WorkflowParamCardColumn", () => {
   it("每个对外参数一张卡片，卡片头是它的名字", () => {
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
-        resolved={autoMapEntries(entries, io)}
+        resolved={wiredFor(entries)}
         io={io}
       />,
     );
@@ -78,7 +86,7 @@ describe("WorkflowParamCardColumn", () => {
             label: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）",
           },
         ]}
-        resolved={autoMapEntries(withLabels, io)}
+        resolved={wiredFor(withLabels)}
         io={io}
       />,
     );
@@ -96,7 +104,7 @@ describe("WorkflowParamCardColumn", () => {
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
-        resolved={autoMapEntries(entries, io)}
+        resolved={wiredFor(entries)}
         io={io}
       />,
     );
@@ -115,7 +123,7 @@ describe("WorkflowParamCardColumn", () => {
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
-        resolved={autoMapEntries(entries, io)}
+        resolved={wiredFor(entries)}
         io={io}
       />,
     );
@@ -132,7 +140,7 @@ describe("WorkflowParamCardColumn", () => {
     render(
       <WorkflowParamCardColumn
         entries={entries}
-        resolved={autoMapEntries(entries, io)}
+        resolved={wiredFor(entries)}
         io={io}
       />,
     );
@@ -154,7 +162,7 @@ describe("WorkflowParamCardColumn", () => {
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
-        resolved={autoMapEntries(entries, io)}
+        resolved={wiredFor(entries)}
         io={io}
         endpoint={(port) => (
           <span

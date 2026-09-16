@@ -202,25 +202,25 @@ import "@/styles/json-viewer.css";
 
 **已明确不属于固定暗色**（历史误判，已 token 化，勿回退）：
 
-| 表面                                                                              | 应使用的 token                                                                                  |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button`                       | `--color-node` / `--color-border-strong` / `--color-ink-muted`                                  |
-| MiniMap 非视口遮罩（`maskColor`）                                                 | `--color-canvas-minimap-mask`                                                                   |
-| 原生 `<select>` / `<option>` 与滚动条                                             | `color-scheme` + `--color-node` / `--color-ink-field`                                           |
-| 登录页整屏底 + 极光                                                               | `--color-bg` + 两态极光                                                                         |
-| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`）             | `--color-port-surface`                                                                          |
-| 端口内圈光晕（`flow-focus-endpoints` 的 `portDotGlow`）                           | `--color-port-halo-ring` / `--color-port-halo-ring-weak`                                        |
-| 项目画布 MiniMap / Background / Controls（`#0D0818` / `#0B0712` / 25% 白点阵）    | `--color-canvas-minimap-mask` / `--color-canvas-grid-dot` + `.react-flow__controls*` token 规则 |
-| 工作流画布底色 `CANVAS_BG`（写死 `#0a0a0f`）                                      | `--color-canvas`                                                                                |
-| 画布标尺文字 / 连线中点圆点（85% 近白字 + 深色 text-shadow / 纯白点）             | `--color-canvas-ruler-ink` `-shadow` / `--color-edge-hub-dot`                                   |
-| 子图标题栏混色基准（写死 `#16161E` 作为 `mixHex` 基色）                           | `--color-node-mix-base`                                                                         |
-| `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档） | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                           |
-| `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                  | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                    |
-| `lib/comfyui/markdown.ts` 内联 style（便签 Markdown）                             | `--color-md-*` token                                                                            |
-| 类型 chip 的载体底（`WorkflowNodeArdot` 写死 `#1E1A2E` / `#331A28`）            | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（chip 文字仍是类型色，底色是表面）  |
-| 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                    | `--color-panel/85` + `--color-shadow-strong`                                                    |
-| 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）      | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`） |
-| 「本机 / 在线」状态点与文字（写死 `#33D499`）                                    | `--color-status-online`（浅色 = `#047857`，与 `emerald-700` 同值）                              |
+| 表面                                                                              | 应使用的 token                                                                                                                                              |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button`                       | `--color-node` / `--color-border-strong` / `--color-ink-muted`                                                                                              |
+| MiniMap 非视口遮罩（`maskColor`）                                                 | `--color-canvas-minimap-mask`                                                                                                                               |
+| 原生 `<select>` / `<option>` 与滚动条                                             | `color-scheme` + `--color-node` / `--color-ink-field`                                                                                                       |
+| 登录页整屏底 + 极光                                                               | `--color-bg` + 两态极光                                                                                                                                     |
+| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`）             | `--color-port-surface`                                                                                                                                      |
+| 端口内圈光晕（`flow-focus-endpoints` 的 `portDotGlow`）                           | `--color-port-halo-ring` / `--color-port-halo-ring-weak`                                                                                                    |
+| 项目画布 MiniMap / Background / Controls（`#0D0818` / `#0B0712` / 25% 白点阵）    | `--color-canvas-minimap-mask` / `--color-canvas-grid-dot` + `.react-flow__controls*` token 规则                                                             |
+| 工作流画布底色 `CANVAS_BG`（写死 `#0a0a0f`）                                      | `--color-canvas`                                                                                                                                            |
+| 画布标尺文字 / 连线中点圆点（85% 近白字 + 深色 text-shadow / 纯白点）             | `--color-canvas-ruler-ink` `-shadow` / `--color-edge-hub-dot`                                                                                               |
+| 子图标题栏混色基准（写死 `#16161E` 作为 `mixHex` 基色）                           | `--color-node-mix-base`                                                                                                                                     |
+| `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档） | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                                                                                       |
+| `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                  | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                                                                                |
+| `lib/comfyui/markdown.ts` 内联 style（便签 Markdown）                             | `--color-md-*` token                                                                                                                                        |
+| 类型 chip 的载体底（`WorkflowNodeArdot` 写死 `#1E1A2E` / `#331A28`）              | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（chip 文字仍是类型色，底色是表面）                                                              |
+| 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                      | `--color-panel/85` + `--color-shadow-strong`                                                                                                                |
+| 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）        | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`） |
+| 「本机 / 在线」状态点与文字（写死 `#33D499`）                                     | `--color-status-online`（浅色 = `#047857`，与 `emerald-700` 同值）                                                                                          |
 
 > 判据的用意：**控件**是结构性表面（用户要操作它），跟主题走才不会在浅色
 > 下变成「深底深图标」的隐形按钮；**叠加在内容上的说明层**才是例外。
@@ -234,11 +234,11 @@ import "@/styles/json-viewer.css";
 `lib/project-canvas/canvas-types.ts`、`workflow-param-mapping-ui.ts`、
 `project-canvas/WorkflowNodeArdot.tsx` 的 `PORT_TYPE_COLORS` / `PORT_DOT_SHADOW`、
 `workflow-library/workflow-library-wire-graph.ts` 的连线状态色常量
-（`AUTO_STROKE` / `MANUAL_STROKE` / `DRAG_STROKE` / `SELECTED_STROKE`）
+（`MANUAL_STROKE` / `DRAG_STROKE` / `SELECTED_STROKE`）
 等（全库约 320 处，成组出现）。
 
 > **连线状态色按「类型色」判**：一条边的描边色表达的是「这条线是什么状态」
-> （自动判定 / 作者改过 / 拖动预览 / 选中），与端口类型色同属「内容自身的
+> （已连上 / 拖动预览 / 选中），与端口类型色同属「内容自身的
 > 颜色」——它画的是线，不是承载线的表面。`WorkflowParamWires` → React Flow
 > 的改造（ISSUE #529）把这份常量表从 `WorkflowParamWires.tsx` 搬到
 > `workflow-library-wire-graph.ts`，判定口径不变。
