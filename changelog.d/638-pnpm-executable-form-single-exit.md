@@ -1,0 +1,6 @@
+## Fixed
+
+- **Windows 上 `pnpm format:ratchet` / `pnpm check:all` 直接崩在 `[format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL`**：`scripts/check-format.cjs` 自己拼了 pnpm 可执行名（`process.platform === "win32" ? "pnpm.cmd" : "pnpm"`），而那正是判据里早已判定「Node 起不来」的批处理形态（批处理只有 cmd.exe 会解释）。同族脚本的失败形态更静默 —— `check-reformat-only.cjs` 的 prettier 兜底档同样写死了平台分叉，一旦走到那一档，每个文件都退回「无法判定」，「格式化与行为改动分离」的门禁一声不吭地失效。
+- **把「Node 起 pnpm」收成唯一出口**：`scripts/launcher-core/shell.mjs` 新增 `runPnpmSync()`（同步跑一条 `pnpm …`，形参只给 pnpm 后面的参数），与既有的 `pnpmInvocation()` 共同承担形态判定。`check-format.cjs`、`check-reformat-only.cjs`、`check-app-port-vectors.cjs`、`repair-imports.cjs`、`heal-db.cjs`、`db-push.mjs`、`quality-gate.mjs`、`run-tests.mjs`、`generate-docs.mjs`、`build-desktop.mjs` 全部改走它。
+- **失败出口不再把「命令没起来」读成「跑完了」**：上述脚本原先只报一句 `无法执行 prettier:`（不带成因）或干脆 `status ?? 0`。现在统一打印 `error.code`、**实际命令**与自查入口 `pnpm check:toolchain`；`heal-db.cjs` 过去用 `cmd /c pnpm …`（POSIX 上 `cmd` 不存在，整条自愈路径等于不执行），`repair-imports.cjs` 的 `execSync("pnpm exec tsc …")` 起不来时会静默拿到空输出、被读成「没有断链」，两处一并改掉。
+- **回归护栏改为按形态全仓扫描**（`tests/dev-launcher-toolchain-gate.test.ts`）：`scripts/**` 里出现 `pnpm.cmd` 字面量、按平台三元拼可执行名、或裸起一个 pnpm 而没有复用同一处判据，即失败 —— 不再依赖一张会漂移的文件清单（它当场抓出了漏改的 `repair-imports.cjs` 与 `heal-db.cjs`）。

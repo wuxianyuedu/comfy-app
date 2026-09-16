@@ -20,11 +20,12 @@
 // 丢弃既有数据时它会直接执行而不询问**——那时请先在副本上确认，或改用
 // `pnpm db:generate` + `pnpm db:migrate` 审阅 SQL 后再应用（见
 // docs/standards/launch-and-build.md §9.1）。
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+
+import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -65,18 +66,23 @@ function fail(message) {
 
 process.stdout.write(`[db:push] 同步 schema → ${dbPath}\n`);
 
-const result = spawnSync(
-  "pnpm",
-  ["exec", "drizzle-kit", "push", "--force"],
-  { cwd: root, stdio: "inherit" },
-);
+// pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：写死 `pnpm`
+// 在 Windows 上选中的是 Node 起不来的形态，而 `status` 会是 null —— 本脚本刻意
+// 不看退出码，于是「命令没起来」会被下面那句「库里表数为 0」的复核捕获并报成
+// 「drizzle-kit 无 TTY」的误导现场（ISSUE #638 同族）。
+const result = runPnpmSync(["exec", "drizzle-kit", "push", "--force"], {
+  cwd: root,
+  stdio: "inherit",
+  timeoutMs: 600_000,
+});
 
 // 注意：这里**刻意不看 result.status**。drizzle-kit 在无 TTY 上正是「报错但
 // exit 0」，退出码在这条链路上不是事实来源；下面直接查库。
 const tables = countUserTables();
 if (tables <= 0) {
-  const hint =
-    result.status === 0
+  const hint = result.error
+    ? `起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}；实际命令：${result.command} ${result.args.join(" ")}。`
+    : result.status === 0
       ? "drizzle-kit 报告成功，但库里的用户表数为 0 —— 典型的「无 TTY 交互提示被静默吞掉」。"
       : `drizzle-kit 退出码 ${result.status ?? "?"}，且库里的用户表数为 0。`;
   fail(

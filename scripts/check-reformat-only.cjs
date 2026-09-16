@@ -58,6 +58,24 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync, spawnSync } = require("node:child_process");
+// pnpm 可执行形态的唯一判据（scripts/launcher-core/shell.mjs 的 runPnpmSync）。
+// 这里曾是**第二份**平台判据（`process.platform === "win32" ? "pnpm.cmd" : "pnpm"`）：
+// Windows 上批处理 Node 起不来（EINVAL），一旦走到这一档，「纯格式化」判定就对每个
+// 文件退回「无法判定」—— 门禁一声不吭地失效（ISSUE #638 同族）。
+// 判据模块是 ESM，.cjs 只能动态 import()，故声明为惰性句柄、由 main 先加载。
+let runPnpmSync = null;
+async function loadShell() {
+  if (runPnpmSync) return runPnpmSync;
+  try {
+    ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
+  } catch (e) {
+    console.error(
+      `[reformat] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${e.message}`,
+    );
+    process.exit(2);
+  }
+  return runPnpmSync;
+}
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
@@ -199,14 +217,39 @@ function resolveRunner() {
 /** prettier 的调用前缀(入口路径 / 兜底命令),两个口径共用。 */
 function runnerPrefix() {
   const r = resolveRunner();
-  const cmd =
-    r.kind === "entry"
-      ? process.execPath
-      : process.platform === "win32"
-        ? "pnpm.cmd"
-        : "pnpm";
+  const cmd = r.kind === "entry" ? process.execPath : "pnpm";
   const head = r.kind === "entry" ? [r.entry] : ["exec", "prettier"];
-  return { cmd, head, cwd: r.cwd };
+  return { kind: r.kind, cmd, head, cwd: r.cwd };
+}
+
+/**
+ * 起一次 prettier。两档共用一处出口:
+ *   · `entry` 档起的是当前 Node 运行时(跨平台无分支);
+ *   · 兜底档起的是 pnpm —— 只能经 `runPnpmSync` 拿可执行形态(判据收在
+ *     `launcher-core/shell.mjs`),不许自己拼 `pnpm.cmd` 之类的平台后缀:
+ *     Windows 上批处理文件只有 cmd.exe 会解释,Node 起它必 EINVAL,
+ *     而这一档的失败形态是**静默**的(每个文件都退回「无法判定」)。
+ */
+function runPrettier(args, cwd, input) {
+  const { kind, head } = runnerPrefix();
+  if (kind === "entry") {
+    return spawnSync(process.execPath, [...head, ...args], {
+      cwd,
+      input,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  }
+  if (typeof runPnpmSync !== "function") {
+    throw new Error(
+      "pnpm 形态判据未加载（runPnpmSync 不可用）—— 调用方需先 await loadShell()",
+    );
+  }
+  return runPnpmSync([...head, ...args], {
+    cwd,
+    timeoutMs: 600_000,
+    ...(input === undefined ? {} : { input }),
+  });
 }
 
 /**
@@ -231,12 +274,8 @@ function formatMany(entries) {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
     }
-    const { cmd, head, cwd } = runnerPrefix();
-    const res = spawnSync(cmd, [...head, "--write", dir], {
-      cwd,
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    });
+    const { cwd } = runnerPrefix();
+    const res = runPrettier(["--write", dir], cwd);
     // prettier 整批失败(起不来 / 配置写错):返回空列表,调用方全部退回 stdin ——
     // 退回是把判据降级而不是把它改写成「没格式化」,不会静默放过。
     const out = new Map();
@@ -262,13 +301,8 @@ function formatMany(entries) {
  */
 function formatOne(text, file) {
   const ext = path.extname(file).slice(1);
-  const { cmd, head, cwd } = runnerPrefix();
-  const res = spawnSync(cmd, [...head, "--stdin-filepath", `probe.${ext}`], {
-    cwd,
-    input: text,
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const { cwd } = runnerPrefix();
+  const res = runPrettier(["--stdin-filepath", `probe.${ext}`], cwd, text);
   if (res.error || typeof res.stdout !== "string" || res.status !== 0)
     return null;
   return res.stdout;
@@ -324,7 +358,8 @@ function collectPairs(files, beforeRev, readAfter) {
   return out;
 }
 
-function main() {
+async function main() {
+  await loadShell();
   /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
    *  「拆成两次提交」在这里不是可选动作 —— 上游的形态已经定死在历史里，本地
    *  无法把一次 merge 的重排与行为改动分开。判据取 `MERGE_HEAD` 是否存在：
@@ -472,4 +507,9 @@ if (require.main === module) main();
  * 锁「批量结果里没被改过的文件也必须回落到 stdin 口径」—— 用桩替换掉 prettier
  * 就锁不住这条，因为被锁的正是「谁来给答案」。
  */
-module.exports = { collectChangedFiles, classifyReformatOnly, LIMIT, SOURCE_RE };
+module.exports = {
+  collectChangedFiles,
+  classifyReformatOnly,
+  LIMIT,
+  SOURCE_RE,
+};

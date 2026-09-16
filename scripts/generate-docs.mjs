@@ -17,36 +17,43 @@
  * 用法：
  *   node scripts/generate-docs.mjs
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { whichCommand } from "./launcher-core/shell.mjs";
+import { runPnpmSync } from "./launcher-core/shell.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * 跑一条 `pnpm run <script>`，返回退出码；`null` = 前置条件不满足（已打印原因）。
+ *
+ * pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：这里曾拿
+ * `whichCommand("pnpm")` 的裸路径直接 spawn —— Windows 上命中的可能是
+ * **批处理**形态（只有 cmd.exe 解释它，Node 起它 EINVAL）；能跑的 `.ps1` 形态
+ * 还得连 PowerShell 宿主与 `-File` 参数一起给，那件事只有 `pnpmInvocation()`
+ * 知道（ISSUE #638）。
+ */
 function runPnpm(script) {
-  const commands = [
-    { label: "node", cmd: whichCommand("node"), args: ["-v"] },
-    { label: "pnpm", cmd: whichCommand("pnpm"), args: ["-v"] },
-  ];
-  for (const c of commands) {
-    if (!c.cmd) {
-      console.error(`[ERROR] 未找到 ${c.label}（${c.label === "pnpm" ? "需 corepack enable" : "请安装 https://nodejs.org/ 的 LTS"}）。`);
-      return null;
-    }
-  }
   if (!fs.existsSync(path.join(ROOT, "node_modules", ".bin"))) {
-    console.error("[ERROR] 未检测到 node_modules/.bin，请先在项目根执行：pnpm install");
+    console.error(
+      "[ERROR] 未检测到 node_modules/.bin，请先在项目根执行：pnpm install",
+    );
     return null;
   }
-  return spawnSync(whichCommand("pnpm"), ["run", script], {
-    cwd: ROOT,
-    stdio: "inherit",
-    windowsHide: true,
-  }).status ?? 1;
+  const result = runPnpmSync(["run", script], { cwd: ROOT, stdio: "inherit" });
+  if (result.error) {
+    console.error(
+      `[ERROR] 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
+    );
+    console.error(
+      `[INFO] 实际命令：${result.command} ${result.args.join(" ")}`,
+    );
+    console.error("[INFO] 自查：pnpm check:toolchain");
+    return null;
+  }
+  return result.status ?? 1;
 }
 
 function main() {
@@ -55,7 +62,9 @@ function main() {
   if (check === null) return 1;
   if (check !== 0) {
     console.error(`[ERROR] 文档引用校验未通过（exit ${check}）。`);
-    console.log("[INFO] 请按上方报错，检查编辑文档里的占位符 / 裸值 / 路径是否与权威源一致。");
+    console.log(
+      "[INFO] 请按上方报错，检查编辑文档里的占位符 / 裸值 / 路径是否与权威源一致。",
+    );
     return check;
   }
   console.log("[OK]   文档引用一致性通过");
@@ -65,7 +74,9 @@ function main() {
   if (render === null) return 1;
   if (render !== 0) {
     console.error(`[ERROR] 文档生成失败（exit ${render}）。`);
-    console.log("[INFO] 请确认权威源文件存在、doc-facts.cjs 的 extract 规则能读到值。");
+    console.log(
+      "[INFO] 请确认权威源文件存在、doc-facts.cjs 的 extract 规则能读到值。",
+    );
     return render;
   }
   console.log("[OK]   原文文档已生成到 docs/generated/");
