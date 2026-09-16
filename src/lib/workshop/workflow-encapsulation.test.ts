@@ -249,6 +249,43 @@ describe("classifyWorkshopPin", () => {
     expect(classifyWorkshopPin(entry)).toBe(expected);
   });
 
+  it("图内角色先于名字：同一对文本编码节点靠 role 分清正负（ISSUE #611）", () => {
+    /* 真实文生图里两个 CLIPTextEncode 的 pin 名与显示名完全一样（都叫 text /
+     * 「文本」），名字层面分不出正负 —— 只有导入图沿 KSampler 连线链推出的
+     * role 说得清。缺了它，工坊封装页与画布节点页都不会列出「负向提示词」口。 */
+    expect(
+      classifyWorkshopPin({
+        direction: "input",
+        kind: "widget",
+        nodeId: "6",
+        name: "text",
+        type: "STRING",
+        role: "positive",
+      }),
+    ).toBe("prompt");
+    expect(
+      classifyWorkshopPin({
+        direction: "input",
+        kind: "widget",
+        nodeId: "7",
+        name: "text",
+        type: "STRING",
+        role: "negative",
+      }),
+    ).toBe("negative");
+    /* 图片口的角色不影响判定（采样器的 negative conditioning 与 LoadImage 无关）。 */
+    expect(
+      classifyWorkshopPin({
+        direction: "input",
+        kind: "widget",
+        nodeId: "8",
+        name: "image",
+        type: "IMAGE",
+        role: "negative",
+      }),
+    ).toBe("reference-image");
+  });
+
   it("宽度判定优先于提示词启发式（避免泛化文本抢走尺寸口）", () => {
     expect(
       classifyWorkshopPin({

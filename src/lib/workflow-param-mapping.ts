@@ -2,9 +2,8 @@
  *
  * ISSUE #145 把工作流库里的自定义工作流封装成"只对外暴露提示词/尺寸/参考图"。
  * 但对外参数（工坊侧）与工作流内部真正的 pin 之间，需要一个**作者可编辑**的
- * 对应关系：同一个「提示词」对外口，可能落在 CLIPTextEncode.text、也可能落在
- * 自定义节点的 prompt 槽；「尺寸」可能是一对 width/height，也可能是一个
- * resolution_preset。
+ * 对应关系：同一个「提示词」对外口可能落在 CLIPTextEncode.text 或自定义节点的
+ * prompt 槽；「尺寸」可能是一对 width/height，也可能是一个 resolution_preset。
  *
  * 本模块只做三件纯事（无 React、无 IO，规范 §17.2 第②层）：
  *   1. `buildParamEntries`  把服务端富化的 workflowIO 归并成「按节点分组的对外
@@ -12,17 +11,14 @@
  *      节点的一个参数），而不是两行；
  *   2. `autoMapEntries`     给每个对外参数条目**自动**挑一个目标端口（默认连线
  *      状态）。判定顺序即优先级，与工坊封装（workflow-encapsulation）同口径；
- *   3. `applyParamMapping`  把映射落到运行时载荷上：确定性的 `workflowInputs`
- *      三元组 + 端口级自动映射。
+ *   3. `applyParamMapping`  把映射落到运行时载荷上（`workflowInputs` 三元组）。
  *
  * 落库位置：沿用既有的 `paramMap` JSON 列，`source` 命名空间下**只按模式**存放
- * 作者连过的线，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`，
- * `null` = 作者显式断开）。不新增表结构。
+ * 作者连过的线，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`）。
  *
- * 为什么没有「与模式无关的覆盖」：落点覆盖是作者针对某个模式做的，
- * 不存在脱离模式的语境；留一个通用层只会让「这条覆盖到底哪个模式在生效」变成
- * 需要推理的问题，两套键空间互相覆盖也正是丢覆盖的历史根因。因此没有选中模式
- * 时**写入是空操作**，每条覆盖都归属一个模式。
+ * 为什么没有「与模式无关的覆盖」：留一个通用层只会让「这条覆盖到底哪个模式在
+ * 生效」变成需要推理的问题，两套键空间互相覆盖也正是丢覆盖的历史根因。因此没有
+ * 选中模式时**写入是空操作**，每条覆盖都归属一个模式。
  *
  * 本模块**只产出数据**：条目的落点默认由 `autoMapEntries` 按名字自动判定，
  * 运行期由 `applyParamMapping` 按这张表严格落值。工作流库「画布节点」页签上的
@@ -134,8 +130,12 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   other: "参数",
 };
 
+/** 条目名 + 显示名（小写）。图内角色（`role`）折算成同义关键词并进同一串：同一对
+ *  CLIPTextEncode 的 pin 名与显示名一样，只有导入图沿 KSampler 连线链推出的角色分得出
+ *  正负（ISSUE #611）；并进这里则 `classifyPin` 与自动落点同源，不会两边各判一套。 */
 function searchText(e: WorkflowIOEntry): string {
-  return `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
+  const r = e.role === "negative" ? "negative" : e.role ? "prompt" : "";
+  return `${e.name ?? ""} ${e.label ?? ""} ${r}`.toLowerCase();
 }
 
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);

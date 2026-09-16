@@ -25,7 +25,10 @@ import {
   getWorkflowRunStoreSnapshot,
   subscribeWorkflowRunStore,
 } from "@/lib/workflow-run-store";
-import type { WorkflowRunMeta } from "@/lib/workflow-run-store";
+import {
+  runLogSourceLabel,
+  type WorkflowRunMeta,
+} from "@/lib/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
 
@@ -185,6 +188,11 @@ export function WorkflowRunLogModal({
                 title={run.workflowName}
               >
                 {run.workflowName}
+              </span>
+            )}
+            {run && (
+              <span className="bg-subtle text-ink-faint rounded-full px-1.5 py-px text-[10px] font-medium">
+                {runLogSourceLabel(run.source)}
               </span>
             )}
             {run && (

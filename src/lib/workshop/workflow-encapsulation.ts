@@ -120,8 +120,12 @@ export interface EncapsulatedInputs {
 }
 
 /** 名称/标签统一小写后的搜索文本。 */
+/** 条目名 + 显示名（小写）。图内角色（`role`）折算成同义关键词并进同一串：
+ *  同一对 CLIPTextEncode 的 pin 名与显示名一样，只有导入图沿 KSampler 连线链推出
+ *  的角色分得出正负（ISSUE #611），名字层面看不出来。 */
 function searchText(e: WorkflowIOEntry): string {
-  return `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
+  const role = e.role === "negative" ? "negative" : e.role ? "prompt" : "";
+  return `${e.name ?? ""} ${e.label ?? ""} ${role}`.toLowerCase();
 }
 
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);

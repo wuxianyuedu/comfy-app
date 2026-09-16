@@ -47,6 +47,18 @@ export interface WorkflowIOEntry {
    *  子图定义里扫一遍」的巧合兜底 —— 后者在同名内部 id 或定义缺失时会静默失效
    *  （表现为「改了参数没生效」）。顶层勾选的条目没有本字段。 */
   hostNodeId?: string;
+  /** 图内**语义角色**：由导入图的 KSampler `positive`/`negative` 连线链推出来的
+   *  正向 / 反向文本编码节点（见 `comfyui/workflow.ts` 的 `detectParamMap`）。
+   *
+   *  为什么必须有它：ComfyUI 的同一对 CLIPTextEncode 两个 pin 都叫 `text`、
+   *  显示名都是「文本」，靠 pin 名 / 标签**分不出正负**——只有采样器上的
+   *  `positive` / `negative` 两条 conditioning 连线才说得清。缺了它，「负向
+   *  提示词」这条契约口就永远判不出来，工作流库「画布节点」页签也因此少一张
+   *  负向卡片（ISSUE #611：明明配了负面提示词，画布节点上看不到）。
+   *
+   *  取值只在**能确定**时给出（顶层节点命中 `paramMap.positiveNode` /
+   *  `negativeNode` 才写），推断不出就不写 —— 宁可不显示，也不猜错正负。 */
+  role?: "positive" | "negative";
   /** 本层槽位上**作者写的**业务名（与槽位名不同才有值）。
    *
    *  富化链里它排在通用翻译（`localized`）之后，故不参与显示；但它是判定
