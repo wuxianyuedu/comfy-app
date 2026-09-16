@@ -24,13 +24,35 @@
  *   CNB 在推送层锁定分支(create-branch-lock)只能阻止**推送**,拦不住本地
  *   直接提交后再推送;本地门槛是这条链路里唯一能在「提交那一刻」给反馈的位置。
  *
+ * 判据的**场景判据**(为什么不能借用 CNB_PULL_REQUEST):
+ *   服务端复核的调用方是 .cnb.yml 的 pull_request 流水线,那里 CNB_PULL_REQUEST
+ *   为 true,但 PR 的**预合并提交**在容器里 HEAD 的分支名不是 master —— 抓不到
+ *   「源分支就是 master」这件事。而触发者可能把 .cnb.yml 里的那一行删掉(PR 类
+ *   事件是「不可信事件」,流水线配置取自源分支),因此本脚本必须自己独立判定,
+ *   不能依赖流水线里的那条命令还在。
+ *
  * 用法:
  *   node scripts/check-branch-guard.cjs          # 提交场景检查(违规即阻断)
  *   node scripts/check-branch-guard.cjs --status # 只看当前分支现状
+ *   node scripts/check-branch-guard.cjs --pr-check # PR 源分支复核(--ci-alias 的同义词)
+ *   node scripts/check-branch-guard.cjs --ci-alias # 同上,供 .cnb.yml 显式声明
  */
+/**
+ * 判据版本 —— 本值一变,「旧版本挡下了什么」就有缺口:.cnb.yml 里那条调用行属于
+ * PR 类「不可信事件」的配置(取自源分支),可能被人删掉。回归测试
+ * tests/cnb-pipeline-gates.test.ts 用它核对 .cnb.yml 的调用——守卫排在第 1 条,
+ * 版本不符时真的会被拦下,而不是「看起来还在跑」。
+ */
+const GUARD_VERSION = "2";
 const { execFileSync } = require("node:child_process");
 
-/** 受保护的主分支名 —— 与 .github/workflows/ci.yml 的触发分支、规范 §13.6 一致。 */
+/**
+ * 受保护的主分支名 —— 与 .cnb.yml 的触发分支、规范 §13.6 一致。
+ *
+ * 平台层**不许**用 `git create-branch-lock`(locked: true):它锁的是整个分支的
+ * 写入,连 PR 合并一起拦掉,master 一旦被锁任何 PR 都无法合并。要「禁直接 push、
+ * 但放行 PR 合并」只有「保护分支 + 禁直接 push + 需要评审批准」这一条路。
+ */
 const PROTECTED_BRANCH = "master";
 
 /** 在仓库内跑一条 git 命令;失败时回 ""(钩子在裸仓库/浅克隆里可能取不到值)。 */
@@ -107,6 +129,15 @@ function main() {
       ",父提交数 " + result.parents + " → " + result.reason
     );
     return;
+  }
+
+  // --pr-check / --ci-alias:服务端复核的调用形态。判据与本地钩子完全相同——
+  // 同一个脚本、同一份 evaluate(),不另写一条「CI 专用」的分支名判断。
+  if (process.argv.includes("--pr-check") || process.argv.includes("--ci-alias")) {
+    console.log(
+      "[branch-guard] v" + GUARD_VERSION + " PR 源分支复核:分支 " +
+      (result.branch || "(detached)") + ",父提交数 " + result.parents
+    );
   }
 
   if (result.blocked) {

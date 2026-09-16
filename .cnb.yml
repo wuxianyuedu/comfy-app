@@ -1,0 +1,227 @@
+# CNB 云原生构建流水线 —— 本仓库 CI 的**唯一事实来源**
+#
+# 与 .github/workflows/ci.yml 的关系:本仓库跑在 CNB 上,平台只读仓库根的
+# .cnb.yml,不读 .github/workflows/——那份 27 步门禁在平台上从未被触发过一次
+# (构建历史里只有 issue.comment@npc / api_trigger,push 与 pull_request 均为 0)。
+# 因此门禁整体迁到本文件,原文件删除:留着它会让人照着改一个不生效的文件。
+#
+# 迁移口径(逐条对齐,不许丢步):
+#   - runs-on: ubuntu-latest        → runner.tags: cnb:arch:amd64
+#   - actions/setup-node + cache    → docker.image: node:24(工具链自带,不再 setup)
+#   - actions/checkout              → 默认克隆,无需声明
+#   - actions/cache                 → docker.volumes 的节点缓存
+#   - apt-get install build-essential → 不再需要:node:24 镜像自带 make/gcc/g++
+#     (better-sqlite3 的原生模块安装会走 node-gyp rebuild;仍保留镜像自带的兜底)
+#   - upload-artifact               → cnbcool/attachments(仅失败时上传,allowFailure)
+#   - pnpm/action-setup             → 不声明 version:读 package.json 的 packageManager
+#
+# 触发:master 的 push 与 pull_request。分支保护 + 禁直接 push 在**平台设置**里配,
+# 不要用 create-branch-lock(它会把 PR 合并一起拦死,见规范 §13.6.1)。
+#
+# pull_request 是「不可信事件」,流水线配置取自源分支:触发者可以改本文件、
+# 把门禁删掉。因此「源分支不能是 master」这条不能只靠本文件里的一行命令——
+# scripts/check-branch-guard.cjs 自己独立判定(不读 CNB_PULL_REQUEST),且被排在
+# 安装之后的第一条:删掉它就等于让流水线当场失败,而不是「静默不检查」。
+
+# YAML 锚点:push 与 pull_request 共用同一份门禁清单,避免两处各写一套而慢慢漂移。
+# 覆盖根键时锚点里的键会被整体替换,故每个事件都写出完整的 runner / docker /
+# retries,不做跨键的对象合并。
+.pipeline: &pipeline
+  name: 质量门禁
+  runner:
+    tags: cnb:arch:amd64
+    # 全量 vitest(3192 个用例)+ next build + Playwright 同节点串行,
+    # 核数写死避免「分配到的节点规格随扩缩容变化」把耗时读成回归。
+    cpus: 8
+  docker:
+    image: node:24
+    # 节点本地缓存(不可跨节点,节点是 3 选 1 的动态池):命中即省掉全量重装。
+    # 数据卷路径不许有包含关系(平台校验会拒),故只声明两个平级目录:
+    #   /root/.local/share/pnpm/store —— pnpm 内容寻址 store
+    #   /root/.cache                —— Playwright 浏览器等按 XDG 落盘的缓存
+    # 刻意**不**声明 /root/.pnpm-store:pnpm 12 的默认 store 落在上面那个
+    # XDG 路径,声明一个不会被读到的目录只会让人以为缓存生效了。
+    volumes:
+      - main:/root/.local/share/pnpm/store:copy-on-write
+      - /root/.cache
+  # 门禁步骤多、单步耗时长(vitest / build / Playwright 各自都在分钟级),
+  # 默认无输出超时会误杀,故显式放宽。
+  retries: 0
+  env:
+    # 与 .github/workflows/ci.yml 对齐:CI 无真实密钥,用占位值过 src/env.js 校验。
+    # BETTER_AUTH_SECRET 必须一并注入(SKIP_ENV_VALIDATION 只绕过 src/env.js,
+    # 绕过不了 better-auth 自己的生产校验:缺失 → 退回 DEFAULT_SECRET 抛错 →
+    # createTRPCContext() 抛错 → 所有 authedProcedure 全灭,设置页整页读不出来)。
+    # 该值只用于 CI 冒烟,不参与任何真实部署。tests/cnb-pipeline-gates.test.ts
+    # 把「设了 SKIP_ENV_VALIDATION 就必须有 BETTER_AUTH_SECRET」锁成可失败断言。
+    SKIP_ENV_VALIDATION: "1"
+    BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+    # 避免 corepack 在非交互环境下为拉取 pnpm 版本而等待输入。
+    CI: "true"
+  stages:
+    # ── 安装 ──
+    # 门禁用 pnpm(AGENTS 硬规则 1:npm 11 在本项目解析 typescript 别名链会崩)。
+    # --frozen-lockfile 保证装的就是锁文件里的版本。
+    - name: Install dependencies
+      script: |
+        corepack enable
+        pnpm install --frozen-lockfile
+
+    # ── 分支保护 ──
+    # 守在最前:分支不对时后续检查的结果最后都会被丢弃(与 pre-commit 同序)。
+    # 与 .githooks/pre-commit 用的是**同一个** scripts/check-branch-guard.cjs,
+    # 不另写一份「CI 专用」的分支名判断(会漂移的判据只许定义一次)。
+    - name: 分支守卫
+      script: node scripts/check-branch-guard.cjs --pr-check
+
+    # ── 建库 ──
+    # 门禁此前从不建库,于是「跑起来的应用要有库」这条路径没有任何自动检查在验:
+    # `pnpm build` 只证明「没有库也能构建」。走 scripts/db-push.mjs——它复核库里
+    # 到底有没有表,失败即非零退出。后面的 E2E 要真的读到库(见 e2e/smoke.spec.ts
+    # 的「数据库链路」一组),故必须放在最前。
+    - name: 同步数据库表结构
+      script: pnpm run db:push
+
+    # ── 类型 / 静态检查 ──
+    - name: 类型检查
+      script: pnpm run typecheck
+
+    - name: ESLint 零警告
+      script: pnpm exec eslint . --max-warnings 0
+
+    # ── 测试 ──
+    - name: 单元测试
+      script: pnpm run test
+
+    # 覆盖率棘轮(vitest.config.ts 的目录阈值)——只跑一遍即得覆盖率,
+    # 故与上面的 test 合并为一步,省一次全量执行。
+    - name: 覆盖率棘轮
+      script: pnpm run test:coverage
+
+    # ── 结构 / 一致性硬规则 ──
+    # 顶层浮层(fixed + inset-0)必须让出窗口标题行,否则页签与窗口按钮被盖住。
+    - name: 标题行让位
+      script: node scripts/check-title-bar-clearance.cjs
+
+    # 文件命名/组织硬规则(§12.6/§12.8/§12.11/§12.12):R7/R8 Windows 入口
+    # .ps1 化与 BOM、R9 根目录不放双击入口、R10 注释禁历史流水、R11 代理约定名、
+    # R12 源码禁内嵌控制字符。--strict 让 R5 的超 900 行文件从「只提醒」升级为棘轮。
+    - name: 文件结构硬规则
+      script: node scripts/check-file-structure.cjs --strict
+
+    # 跨平台动作对照(§9.5):对照表里每个动作两侧脚本都真实存在;会失效的清单
+    # (KNOWN_FAILED_FILES)只定义一次。启动编排曾因两侧静默分叉栽过一次。
+    - name: 跨平台动作对照
+      script: node scripts/check-ps1-consistency.mjs
+
+    # ComfyUI 端口口径一致性(§5/§12.14):默认端口单点定义、连接侧与拉起侧共用
+    # 同一常量。分叉的表现是静默连到另一个实例(现象是上传失败/端口漂移)。
+    - name: ComfyUI 端口口径
+      script: node scripts/check-comfyui-port-contract.cjs
+
+    # 视图层不得动态注入 <style>(03 §3.5):代码分割后会被多份 chunk 各自注入。
+    - name: 内联样式注入
+      script: node scripts/check-inline-style.cjs
+
+    # 跨文件重复块(§12.12):同一能力的两份实现逐行重合 ≥75% 即失败。
+    - name: 跨文件重复块
+      script: node scripts/check-code-duplication.cjs --strict
+
+    # 函数长度棘轮(§12.13):超 400 行的函数按文件记账,只许降不许升。
+    - name: 函数长度棘轮 TS
+      script: node scripts/check-function-length.cjs --strict
+
+    # Rust 壳函数长度棘轮(§12.13.1):阈值 120,同样走棘轮。
+    - name: 函数长度棘轮 Rust
+      script: node scripts/check-rust-function-length.cjs --strict
+
+    # 模块循环依赖棘轮(§12.7):环的症状是「import 顺序变了就 undefined is not a
+    # function」,排查成本极高,故把「无环」做成棘轮。
+    - name: 模块循环依赖棘轮
+      script: node scripts/check-circular-deps.cjs --strict
+
+    # 端口推导四语言一致性(§1.1):四侧读同一份共享向量,任一侧漂移即失败。
+    - name: 端口推导跨语言一致性
+      script: node scripts/check-app-port-vectors.cjs
+
+    # CHANGELOG 碎片形态(§13.10.5):条目写 changelog.d/<issue号>-<slug>.md。
+    - name: CHANGELOG 碎片
+      script: node scripts/check-changelog-fragments.cjs
+
+    # 主题色扫描棘轮(03 §3.6.1):未豁免的写死色值只许降不许升。
+    - name: 主题色扫描棘轮
+      script: node scripts/check-theme-colors.cjs --strict
+
+    # UI/逻辑分离棘轮(§17):新增 fetch / vanillaApi / tRPC hook 进视图层即失败。
+    - name: UI/逻辑分离棘轮
+      script: node scripts/check-ui-logic-separation.cjs --strict
+
+    # src/lib 的 Node-only 声明与可达性(§18.4):判据走依赖图,不用「扫到 fs 就
+    # 要求 server-only」——后者会误伤纯 Node 宿主(kill-process-tree 的入口是
+    # 一句 throw,加上去 scripts/*.mjs 的启动编排直接崩)。
+    - name: lib Node-only 声明
+      script: pnpm exec vitest run tests/lib-node-only-declarations.test.ts
+
+    # prettier 格式棘轮(§13.5):基线只许下降,新增脏文件即失败;
+    # --strict 要求治理后必须收紧基线,否则「等基线整改完再接入」永远不会发生。
+    - name: prettier 格式棘轮
+      script: node scripts/check-format.cjs --strict
+
+    # 格式化提交与行为改动分离(§13.5.2):squash 合并后 master 上只剩一个提交,
+    # 本地不拆就再没机会补——CI 必须复核一次。
+    - name: 格式化提交分离
+      script: node scripts/check-reformat-only.cjs
+
+    # core 骨架三处「唯一事实源」(§18.8):日志只有一条通道、仓储只有一种取法、
+    # config 不再承诺「集中配置」。这三条此前只写在注释里,而注释与现状恰好相反。
+    - name: core 骨架单一事实源
+      script: pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+
+    # src/lib 的零消费值导出棘轮(§12.16):只认值导出,按符号记账。
+    - name: 零消费导出棘轮
+      script: node scripts/check-dead-exports.cjs --strict
+
+    # core 出口纪律与基类纯度(§18.8):barrel 曾是四个 export *(而全库只有 2 处
+    # 真的这样导入),基类曾在构造路径里打日志、把口径钉死并连带加载 pino。
+    - name: core 出口纪律与基类纯度
+      script: pnpm exec vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+
+    # ── 构建与产物 ──
+    # src/env.js 在 build/dev 期校验;CI 无真实密钥,用 pipeline 级 env 的占位值。
+    - name: 生产构建
+      script: pnpm run build
+
+    # .next/standalone 的产物级护栏(§7.2):真去数产物里有没有测试文件 / 变更碎片 /
+    # 文档,有没有缺 Next 自带的运行时脚本(缺件的表现是「页面正常、接口全 500」)。
+    # 「清单还在」不等于「清单生效」,必须有一条构建后的检查去数文件。
+    - name: standalone 产物护栏
+      script: node scripts/check-standalone-contents.cjs
+
+    # ── E2E(仅 @critical 关键流程)──
+    # 注意**不要**设 SKIP_ENV_VALIDATION 以外的捷径:前面的 db:push 已建好表,
+    # 这里跑的用例要能真的读到库,否则「库没建」这类退化又会从门禁视野里消失。
+    # 不需要额外 apt-get install --with-deps:node:24 镜像的 Debian 骨架里
+    # 只差共享库,缺了会在下面这步当场报出缺哪个包,比预先装一长串更可归因。
+    - name: 安装 Playwright 浏览器
+      script: pnpm exec playwright install --with-deps chromium
+
+    - name: E2E 关键流程
+      script: pnpm exec playwright test --grep @critical
+
+  # 失败时才上传报告(对齐 upload-artifact 的 if: failure())。allowFailure:
+  # 上传失败不该把一次「测试红」改写成「上传红」,掩盖真正的现场。
+  failStages:
+    - name: 上传 Playwright 报告
+      allowFailure: true
+      image: cnbcool/attachments:latest
+      settings:
+        type: UPLOAD
+        attachments:
+          - playwright-report
+        ttl: 7
+
+master:
+  push:
+    - <<: *pipeline
+  pull_request:
+    - <<: *pipeline

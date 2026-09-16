@@ -212,6 +212,10 @@ const FACTS = [
   { key: "path.rebuild-static", kind: "path", source: "tools/build/rebuild-static.ps1" },
   { key: "path.build-tauri-release", kind: "path", source: "tools/build/build-tauri-release.ps1" },
   { key: "path.nvmrc", kind: "path", source: ".nvmrc" },
+  // CI 的唯一事实来源：门禁清单只写在 .cnb.yml 一处，文档（11.7 / 13.5）只做导航。
+  // 登记为 path 类是为了「文件被改名 / 挪走 / 删掉」时当场失败，而不是等下一次
+  // 有人照着文档去改一个不存在的文件（本 key 的由来正是这种情况）。
+  { key: "path.cnb.ci", kind: "path", source: ".cnb.yml" },
 ];
 
 /* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────
