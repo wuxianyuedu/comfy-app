@@ -1,51 +1,46 @@
 // Shared helper: synthesize a first frame for local text-to-video by running a
-// txt2img pass on the local ComfyUI instance, then uploading the result into
-// ComfyUI's input dir so the WAN image-to-video graph can consume it. No cloud,
+// text-to-image pass on the local ComfyUI instance, then uploading the result
+// into ComfyUI's input dir so the image-to-video graph can consume it. No cloud,
 // no authorization — fully local.
+//
+// 图片这一跳没有内置模板（内置 txt2img 与 `__PROMPT__` 系列 token 替换已移除）：
+// 调用方必须给一个**工作流库工作流 id**（图类、配好对外参数），本模块按工坊
+// 的封装口径下发 提示词 / 尺寸，其余参数用工作流默认值。
 
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
-import { taskRepository } from "@/lib/core/repository";
-import { buildAndValidate } from "./workflow";
-import { enqueue, subscribe } from "./enqueue";
+import type { SizeSpec } from "@/lib/size-presets";
+import { createWorkflowRunTask } from "@/lib/workshop/workflow-run.server";
+import { subscribe } from "./enqueue";
 import { uploadImage } from "./client";
 
 export async function synthesizeFirstFrame(opts: {
   userId: string;
+  /** 用来合成首帧的**图类**工作流库工作流 id。 */
+  workflowId: string;
   prompt: string;
   negative?: string;
-  size?: string;
+  size?: SizeSpec;
+  projectId?: string | null;
 }): Promise<string> {
-  const { userId, prompt, negative, size } = opts;
-  const built = await buildAndValidate("txt2img", {
-    prompt,
-    negative,
-    size: size ?? "832x480",
-    steps: 25,
-    cfg: 7,
-    sampler: "euler",
-    scheduler: "normal",
-    count: 1,
-  });
-  if (!built.ok || !built.prompt)
-    throw new Error(built.error ?? "首帧构图失败");
-
-  const task = await taskRepository.createQueued({
+  const { userId, workflowId, prompt, negative, size, projectId } = opts;
+  const { taskId } = await createWorkflowRunTask({
     userId,
-    type: "TXT2IMG",
-    prompt,
-    negativePrompt: negative ?? null,
-    params: {},
-    workflowName: "txt2img",
+    workflowId,
+    projectId: projectId ?? null,
+    values: {
+      prompt,
+      ...(negative !== undefined ? { negativePrompt: negative } : {}),
+      ...(size !== undefined ? { size } : {}),
+    },
   });
-  enqueue({ taskId: task.id, prompt: built.prompt });
 
-  const localPath = await waitForImage(task.id);
+  const localPath = await waitForImage(taskId);
   const rel = localPath.replace(/^\/api\//, ""); // "generated/<id>/img_0.png"
   const abs = path.join(process.cwd(), "public", rel);
   const buf = await fs.readFile(abs);
-  const res = await uploadImage(buf, `ff_${task.id}.png`, "input");
+  const res = await uploadImage(buf, `ff_${taskId}.png`, "input");
   if (!res.name) throw new Error("首帧上传失败");
   return res.name;
 }

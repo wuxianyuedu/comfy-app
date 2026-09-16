@@ -30,8 +30,6 @@ import type { Character } from "@/lib/workshop/types";
 export interface CharacterPortraitContext {
   session: PortraitSession;
   actions: PortraitSessionActions;
-  /** 本地通道当前 Checkpoint（右侧「生成资源」里切换） */
-  checkpoint: string;
   /** API 直连通道的脱敏配置（远端通道的门禁） */
   apiChannels: ApiChannelsView | null;
   /** 工作流库可选项（本地通道按模型标签挑选已封装的生图工作流）。 */
@@ -46,14 +44,8 @@ interface Props {
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {
-  const {
-    session,
-    actions,
-    checkpoint,
-    apiChannels,
-    workflows,
-    onOpenApiSettings,
-  } = portrait;
+  const { session, actions, apiChannels, workflows, onOpenApiSettings } =
+    portrait;
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
@@ -67,14 +59,12 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
     session.remoteModel || (remoteImageModels[0] ?? "");
   const remoteReady =
     apiChannels?.image.configured === true || remoteImageModels.length > 0;
-  /* 本地通道的「模型」= 工作流库里配置好对外参数的生图工作流（按模型标签展示）；
-   * 未选工作流时回落到内置 txt2img（需要 Checkpoint）。 */
+  /* 本地通道的「模型」= 工作库里配置好对外参数的生图工作流（按模型标签展示）。
+   * 没有内置模板可回落：未选工作流时本地通道不可用（见下方门禁提示）。 */
   const localWorkflows = workflows.filter(
     (w) => w.category === "image" && w.encapsulationReady,
   );
-  const localOptionLabels: Record<string, string> = {
-    __builtin__: `内置文生图${checkpoint ? ` · ${checkpoint}` : ""}`,
-  };
+  const localOptionLabels: Record<string, string> = {};
   const tagCounts = new Map<string, number>();
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
@@ -88,9 +78,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         : tag
       : w.name;
   }
-  const localOptions = ["__builtin__", ...localWorkflows.map((w) => w.id)];
-  const localBlocked =
-    session.channel === "local" && !session.localWorkflowId && !checkpoint;
+  const localOptions = localWorkflows.map((w) => w.id);
+  const localBlocked = session.channel === "local" && !session.localWorkflowId;
   const remoteBlocked = session.channel === "remote" && !remoteReady;
   const hasPrompt = !!character.positivePrompt.trim();
   const canGenerate =
@@ -136,12 +125,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         </div>
         {session.channel === "local" && (
           <DarkSelect
-            value={session.localWorkflowId || "__builtin__"}
-            onChange={(value) =>
-              actions.patch({
-                localWorkflowId: value === "__builtin__" ? "" : value,
-              })
-            }
+            value={session.localWorkflowId}
+            onChange={(value) => actions.patch({ localWorkflowId: value })}
             options={localOptions}
             labels={localOptionLabels}
             placeholder="选择本地生图模型"
@@ -215,15 +200,13 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       </div>
 
       {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
-      {session.channel === "local" &&
-        !session.localWorkflowId &&
-        !checkpoint && (
-          <p className="text-muted-foreground text-[11px]">
-            内置文生图需要先选 Checkpoint ——
-            在上方下拉改选工作流库模型（需在库里
-            配置好对外参数），或到右侧「生成资源」选一个本地 Checkpoint。
-          </p>
-        )}
+      {session.channel === "local" && !session.localWorkflowId && (
+        <p className="text-muted-foreground text-[11px]">
+          本地通道需要先在上方下拉选一个工作流库模型（需在库里配置好对外参数）。
+          没有内置工作流可回落 ——
+          工作流库里还没有可用的生图工作流时，可切到「远端 API」通道。
+        </p>
+      )}
       {session.channel === "remote" && !remoteReady && (
         <p className="flex flex-wrap items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400">
           <Icon name="info" size={11} />

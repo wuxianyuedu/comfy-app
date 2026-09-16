@@ -499,7 +499,7 @@ export function sizeSpecDims(
   );
 }
 
-/** 尺寸表达 → "宽x高"。**只**给内置工作流（txt2img / img2video）与只认 WxH 的
+/** 尺寸表达 → "宽x高"。**只**给仍只认 WxH 的老接口（远端 API 通道）与
  *  远端接口用；工作流库的工作流不吃字符串。 */
 export function sizeSpecToWxH(
   spec: SizeSpec,
@@ -540,7 +540,7 @@ export function sizeSpecMultiple(
 /** 尺寸表达 → 远端通道认的「比例 + 百万像素 + 倍数」三元组。
  *
  *  只认这个形状的是 OpenAI 兼容图像的通道（`aspect_ratio` / `megapixels` /
- *  `multiple` 三个字段名），与内置工作流要的 `"WxH"` 是两套口径，同源在这里
+ *  `multiple` 三个字段名），与只认 `"WxH"` 的老接口是两套口径，同源在这里
  *  算 —— 两边各拼一次就会漂移（比例取短标签、百万像素取实际总像素还是幂次
  *  近似，任一处不同就是「设置页显示 A、请求发的是 B」）。 */
 export function sizeSpecToRelay(

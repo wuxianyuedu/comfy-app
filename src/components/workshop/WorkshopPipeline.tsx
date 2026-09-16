@@ -32,7 +32,6 @@ export function WorkshopPipeline() {
       scenes: controller.scenes,
       characters: controller.characters,
       shots: controller.shots,
-      checkpoint: controller.checkpoint,
     }),
     getMeta: () => controller.meta,
     setMeta: (patch) => controller.setMeta((prev) => ({ ...prev, ...patch })),
@@ -74,9 +73,6 @@ export function WorkshopPipeline() {
           <WorkshopStageBody controller={controller} />
           <WorkshopAside
             missing={controller.missing}
-            checkpoints={controller.checkpoints}
-            checkpoint={controller.checkpoint}
-            onCheckpointChange={controller.setCheckpoint}
             workflowOptions={controller.workflowOptions}
             workflowId={controller.workflowId}
             onWorkflowChange={controller.setWorkflowId}
