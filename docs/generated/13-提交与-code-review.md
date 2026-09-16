@@ -107,20 +107,54 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 ### 13.5 CI 门禁
 
-**唯一事实来源**：`.github/workflows/ci.yml`（2026-09-04 对齐 #7）。改门禁改这个文件，
-本文档与 [11.7](11-测试与可观测性.md#117-ci-质量门禁) 同步更新即可，不要三处各写一套。
+**唯一事实来源**：`.cnb.yml`（仓库根，单条流水线 `质量门禁`，触发 master 的
+`push` 与 `pull_request`）。改门禁改这个文件，本文档与
+[11.7](11-测试与可观测性.md#117-ci-质量门禁) 同步更新即可，不要三处各写一套。
+
+> **为什么不是 `.github/workflows/ci.yml`**：本仓库跑在 CNB 平台上，平台只读仓库根的
+> `.cnb.yml`。那份 27 步的 GitHub workflow **从未被触发过一次**（构建历史里只有
+> `issue.comment@npc` / `api_trigger`，`push` 与 `pull_request` 均为 0）——它是死代码，
+> 留着只会让人照着改一个不生效的文件。门禁已整体迁到 `.cnb.yml`，原文件删除。
+> 回归护栏：`tests/cnb-pipeline-gates.test.ts`（清单一条不许丢 + 原文件不许回潮）。
+
+平台侧只**新增**了一件事：`.cnb.yml`。GitHub Actions 的 `runs-on` / `setup-node` /
+`actions/cache` / `actions/upload-artifact` 分别对应 CNB 的
+`runner.tags` / `docker.image` / `docker.volumes` / `cnbcool/attachments` 插件；
+`actions/checkout` 无需声明（CNB 默认克隆代码）。
 
 ```
-PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
-✅ Branch guard                   # PR 源分支不能是 master（见 13.6）
-✅ pnpm install --frozen-lockfile
-✅ pnpm run typecheck             # tsc --noEmit
+PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 master，30 步串行）：
+✅ corepack enable && pnpm install --frozen-lockfile
+✅ node scripts/check-branch-guard.cjs --pr-check --target master   # PR 源分支不能是 master（见 13.6）
+✅ pnpm run db:push                # 建表；后面 E2E 要真的读到库（见 11.7）
+✅ pnpm run typecheck              # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test                  # vitest run
-✅ node scripts/check-file-structure.cjs  # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
-✅ pnpm run test:coverage         # 覆盖率棘轮（vitest.config.ts 的目录阈值）
-✅ pnpm run build                 # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
+✅ pnpm run test                   # vitest run
+✅ pnpm run test:coverage          # 覆盖率棘轮（vitest.config.ts 的目录阈值）
+✅ node scripts/check-title-bar-clearance.cjs
+✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
+✅ node scripts/check-ps1-consistency.mjs           # 跨平台动作对照（§9.5）
+✅ node scripts/check-comfyui-port-contract.cjs     # ComfyUI 端口口径（launch-and-build §5）
+✅ node scripts/check-inline-style.cjs              # 视图层不得动态注入 <style>（见 03 §3.5）
+✅ node scripts/check-code-duplication.cjs --strict # 跨文件重复块（§12.12）
+✅ node scripts/check-function-length.cjs --strict  # 函数长度棘轮 TS（§12.13）
+✅ node scripts/check-rust-function-length.cjs --strict  # 函数长度棘轮 Rust（§12.13.1）
+✅ node scripts/check-circular-deps.cjs --strict    # 模块循环依赖棘轮（§12.7）
+✅ node scripts/check-app-port-vectors.cjs          # 端口推导跨语言一致性（launch-and-build §1.1）
+✅ node scripts/check-changelog-fragments.cjs       # CHANGELOG 碎片形态（13.10.5）
+✅ node scripts/check-theme-colors.cjs --strict     # 主题色扫描棘轮（03 §3.6.1）
+✅ node scripts/check-ui-logic-separation.cjs --strict  # UI/逻辑分离棘轮（17）
+✅ vitest run tests/lib-node-only-declarations.test.ts  # src/lib Node-only 声明（18 §18.4）
+✅ node scripts/check-format.cjs --strict           # prettier 格式棘轮（见 13.5.1）
+✅ node scripts/check-reformat-only.cjs             # 格式化提交与行为改动分离（见 13.5.2）
+✅ vitest run tests/single-logger-channel…（core 骨架单一事实源，18 §18.8）
+✅ node scripts/check-dead-exports.cjs --strict     # src/lib 零消费值导出棘轮（§12.16）
+✅ vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+✅ pnpm run build                  # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
+✅ node scripts/check-standalone-contents.cjs       # standalone 产物级护栏（07 §7.2）
+✅ pnpm exec playwright install --with-deps chromium
 ✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
+失败时（failStages）：上传 playwright-report 为 commit 附件（allowFailure）
 ```
 
 **规则**：
@@ -144,6 +178,12 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 ✅ node scripts/check-code-duplication.cjs   # 跨文件重复块棘轮（见 12 §12.12）
 ✅ node scripts/check-function-length.cjs    # 函数长度棘轮 TS/TSX（见 12 §12.13）
 ✅ node scripts/check-rust-function-length.cjs # 函数长度棘轮 Rust 壳（见 12 §12.13.1）
+✅ vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts
+   tests/core-spine-single-source.test.ts   # core 骨架单一事实源（见 18 §18.8）
+✅ node scripts/check-circular-deps.cjs      # 模块循环依赖棘轮（见 12 §12.7）
+✅ vitest run tests/lib-node-only-declarations.test.ts # src/lib Node-only 声明（见 18 §18.4）
+✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
+✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ```
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
@@ -154,11 +194,93 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
   别名链会崩溃（`Class extends value undefined`）。
 - **E2E 用 `@critical` tag 圈定关键流程**：新增冒烟用例若属于「合并前必须验证的
   主流程」，标题带上 `@critical`；非关键用例不阻断合并。
-- **`format:check`（prettier）暂未纳入门禁**：全库基线未过 prettier，一次性格式化
-  会产生与功能无关的全文件 diff（违反 [13.7](#137-换行符与提交噪声lf)）。待基线整改
-  后单独接入，接入时同步删掉 ci.yml 里对应注释。
+- **prettier 已接入，但走「棘轮」而不是「全库必须过」**：见下面 13.5.1 / 13.5.2。
 - 新增含 postinstall 构建脚本的依赖，同步 `pnpm-workspace.yaml` 的 `allowBuilds`
   （AGENTS.md 硬规则 7），否则非交互 `pnpm install` 会 exit 1。
+
+#### 13.5.1 prettier 格式棘轮（ISSUE #575 第 9 项）
+
+`format:check` 是**唯一长期没有纳入门禁**的既有质量命令。原因很实在：全库
+**576 个文件**未过 prettier，一次性 `--write` 会产生与本次改动无关的全文件 diff
+（违反 [13.7](#137-换行符与提交噪声lf)，评审无法从 diff 里看出改了什么）。
+但「等基线整改完再接入」的代价是**每个新文件都可以带着任意格式进来**，存量只增
+不减，那一天永远不会到。
+
+判据因此改为**基线 + 只许下降**（`scripts/check-format.cjs`，与重复块 / 函数长度 /
+文件行数 / 环依赖同口径）：
+
+| 情形 | 结果 |
+|---|---|
+| 新增未过 prettier 的文件 | **阻断** |
+| 存量文件从干净变脏 | **阻断**（它落在基线外） |
+| 治理有进展（未过文件变少） | 提示执行 `--update` 收紧；CI `--strict` 下**未收紧即失败** |
+| `--update` 试图把新增的脏文件写进基线 | **拒绝**（棘轮只许收紧） |
+
+两个刻意的设计：
+
+- **按文件记账，不记全局计数。** 计数只约束总量 —— 修好 3 个、弄坏 4 个，总数变大
+  才失败，弄坏的那 3 个无人知晓。文件级记账下「把干净的文件弄脏」当场失败，而
+  「这个文件此前是干净的」本身就是一个可断言的事实。
+- **白名单是形态（glob），不是文件列表。** `scripts/**`、`tests/**`、`e2e/**`、
+  根级配置是**高频 churn 路径**（每次排障都要改一遍），把它们纳入棘轮会让每一次
+  排障提交都顺带产生格式 diff。用 glob 表达「这类文件暂不纳入」不会漂移，且新增
+  这类文件时**自动**落在白名单里。豁免不进棘轮计数。
+
+**存量文件怎么治理**：单独立项、单独一个 PR，对一批文件跑
+`pnpm exec prettier --write <文件>`，提交后 `node scripts/check-format.cjs --update`
+收紧基线。**禁止**在功能提交里顺手做（见 13.5.2）。
+
+#### 13.5.2 格式化提交与行为改动分离（同批）
+
+格式棘轮只判「文件干不干净」，管不住「顺手全库 `format:write`」—— 后者会把一次
+真实改动埋在几百个文件的重排里，`git blame` 当场失效、评审看不出改了什么。
+`scripts/check-reformat-only.cjs` 判**这次提交的形态**：
+
+- 某文件的改动若「把改动前的**整份文件**交给 prettier 重排，结果逐字等于改动后」，
+  即记为**纯格式化文件**；
+- 一次提交里纯格式化文件 ≥ **10** 个 → 阻断，并打印可照抄的拆分命令。
+
+四个实现上的硬口径（都踩过）：
+
+1. **必须比整份文件，不能比 `git diff` 的 hunk 片段**。片段不是完整的语法单元，
+   单独交给 prettier 会 `SyntaxError` —— 那样每个文件都「无法判定」，门禁静默失效
+   （实测：`<p className=...>` 片段报 `'>' expected`）。
+2. **判据必须用真 formatter，不能是「抹掉空白后比对」**。前者覆盖 prettier 的
+   **重新断行**（超宽对象拆成多行）与 `prettier-plugin-tailwindcss` 的**类名重排**
+   （`mt-1 text-sm` → `text-sm mt-1`），后两类在抹空白口径下都看不见（实测漏报）。
+3. **阈值取 10 而不是 1**。改一行时顺手格式化同文件是正常操作，拦在 1 会让门禁
+   变成「每次提交都要拆两次」的噪声源 —— 那样的门禁活不过一周。10 个以上文件
+   同时「只动格式」已经不是顺手，而是一次全库 / 全目录格式化。
+4. **「prettier 没改这个文件」与「prettier 跳过了这个文件」不是一回事，判据必须
+   以后者能落到实处的那个口径为准**。批量口径（一次 `prettier --write <临时目录>`）
+   是性能要求：逐文件起 prettier 的成本在改动文件数上线性叠加，12 个文件就约 5s，
+   正好顶穿 vitest 默认的 `testTimeout`（现场是别的门禁用例报
+   `Test timed out in 5000ms`，看起来像「测试写得慢」）。但批量结果里「这个文件
+   没出现在改写清单里」同时覆盖两件事，而只有前者能推出「这次提交不是纯格式化」：
+
+   | 没出现在清单里 | 真结论 | 判据 |
+   |---|---|---|
+   | 内容本来就规范 | 不是纯格式化 | 「本来规范」也是结论 |
+   | 被 prettier 的忽略规则跳过 | **没有结论** | 必须退回逐文件 stdin 再判 |
+
+   忽略规则**以 cwd 为根读 `.gitignore`**，而且命中目录名时连**显式点名**的路径
+   也一并跳过（`--write <file>` 静默返回空输出、退出码 0）。`git check-ignore`
+   **不能**代判：实测它对**已跟踪**的路径报「未被忽略」，而 prettier 照样跳过 ——
+   两者语义不同，借用它等于换了一套判据。真实先例：`.workbuddy/skills/build-guard/
+   guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化」（该目录后来随
+   #623/#636 删除）。**批量失败**（prettier 起不来 / 配置写错）同样是「没有结论」，
+   退回兜底而不是把结论改写成「没格式化」。
+
+   兜底的代价只在「批量确实没改写它」时付出（正常提交里一个文件都不会多起进程），
+   所以这条既没有放宽判据、也没有把成本放回去。
+   `tests/check-reformat-only.test.ts` 的「批量口径的缺项退回逐文件 stdin 判定」
+   一组用真 prettier 锁住它（反向验证：拿掉兜底即失败）。
+
+判据是**保守**的：重排后只要有一个字符不同就当成真实改动 —— 宁可漏报（放行一次
+没拆开的提交）也不误伤（把真实改动判成格式化而阻断）。
+
+**CI 也要跑**：squash 合并后 `master` 上只剩一个提交，「拆成两次提交」在本地不做
+就再没有机会补，而它造成的后果（blame 失真）是永久性的。
 
 ### 13.6 分支与合并策略
 
@@ -179,7 +301,7 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 |----|------|--------|---------|
 | 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
 | 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
-| 服务端 | `.github/workflows/ci.yml` 的 `Branch guard` 步骤 | **源分支是 `master` 的 PR** | 不能 |
+| 服务端 | `.cnb.yml` 的「分支守卫」步骤（`scripts/check-branch-guard.cjs --pr-check`） | **源分支是 `master` 的 PR** | 不能 |
 
 **⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
 （仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，
@@ -214,11 +336,25 @@ git push origin HEAD                  # 推送并创建 PR
 
 > 规则自测：`tests/check-branch-guard.test.ts`（临时仓库跑真脚本：分支提交放行、
 > master 直提阻断并给出搬迁出口、master 合并提交放行、非 git 目录不崩、
-> 钩子里守卫排在第 1 步）。
+> 钩子里守卫排在第 1 步；另有 `--pr-check` 的三种拓扑与「取不到目标分支时保守放行」）。
 >
-> **分级口径**：上面的本地钩子与 CI 步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
+> **分级口径**：上面的本地钩子与流水线步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
 > 平台层的分支保护是「防误操作」的兜底（拦的是**直接 push**）。两者判据不同、不可互相替代：
 > 只有平台保护挡不住 `--no-verify` 的本地提交，只有本地钩子挡不住别的检出直推。
+>
+> **服务端这一侧是「不可信事件」，判据必须自持**：`pull_request` 类事件的流水线配置
+> 取自**源分支**——触发者可以把 `.cnb.yml` 里那行 `check-branch-guard.cjs` 删掉。
+> 因此守卫脚本自己独立判定（不读 `CNB_PULL_REQUEST`、不依赖流水线里的任何外部事实），
+> 而且**紧跟在依赖安装之后**：删了它就等于当场失败，而不是「静默不检查」。
+> `tests/cnb-pipeline-gates.test.ts` 锁住这两点（守卫顺序 + 调用形态 + 判据版本一致）。
+>
+> **服务端的判据与本地不是同一条**（踩过）：CNB 在 `pull_request` 事件上 checkout 的是
+> **预合并提交**，容器里 `symbolic-ref HEAD` 恒等于**目标分支**——照搬本地那条
+> 「HEAD 在 `master` 上 = 直连主干」会把**每一条正常 PR 都拦死**（PR #633 第一次跑就是这么红的）。
+> 服务端改判**提交拓扑**：`git rev-list --count origin/master..HEAD`
+> —— `> 0` 说明源分支确有超出目标分支的提交（正常 PR）；`= 0` 说明源分支就是目标分支
+> （平台允许创建 source=master 的 PR，正是要拦的场景）。判据与分支叫什么名字无关。
+> 三种拓扑（领先 / 预合并 / 完全同步）由 `tests/check-branch-guard.test.ts` 用**真仓库**跑。
 
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 

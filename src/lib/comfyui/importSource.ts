@@ -7,27 +7,35 @@
 // so editing the workflow in ComfyUI and saving the same file is reflected on
 // the next refresh without a manual re-import.
 //
-// This module centralises the "read a local file → parse/convert → normalised
-// fields" pipeline so both the POST (first import) and GET (live re-import)
-// paths share identical logic.
+// This module centralises the "read a local file → parse → normalised fields"
+// pipeline so both the POST (first import) and GET (live re-import) paths share
+// identical logic.
+//
+// **两种格式地位同等，入库不做格式互转**：API 格式落 `graph`、工作流(RAW)
+// 格式落 `rawJson`，两列各自最多一份、各自可空。执行侧两条路都认（见
+// `resolveExecutionInput`），所以 RAW 不需要（也不该）在导入时被转成 API 图
+// —— 无 ComfyUI 可达时的启发式转换结果本身就是错的，存下来只会让画布与运行
+// 都跑一份错图。
 
 import "server-only";
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
 import { logger } from "~/lib/core/logger";
 import {
+  asRawWorkflow,
   detectFormat,
-  convertRawToApi,
-  fallbackRawToApi,
-  type ConversionResult,
-  type RawWorkflow,
+  extractPositions,
 } from "@/lib/comfyui/raw";
 import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "@/lib/workflow-types";
 import { detectParamMap } from "@/lib/comfyui/workflow";
 
 export interface ParsedWorkflow {
+  /** API 格式导入件（检测为 `api` 时才有，否则空对象）。 */
   apiGraph: Record<string, unknown>;
+  /** 工作流(RAW)格式导入件（检测为 `raw` 时才有，否则 null）。 */
   rawJson: unknown;
+  /** 节点坐标：RAW 自带 `pos` 时原样取出；API 格式没有坐标（null，由客户端
+   *  自动布局兜底）。它**不是**「转换出来的 API 图」的副产品，两种格式各自成立。 */
   positions: Record<string, [number, number]> | null;
   taskType: string;
   paramMap: Record<string, string> | null;
@@ -94,7 +102,7 @@ export async function parseWorkflowContent(
     );
   }
 
-  let apiGraph: Record<string, unknown>;
+  let apiGraph: Record<string, unknown> = {};
   let positions: Record<string, [number, number]> | null = null;
   let rawJson: unknown = null;
   const warnings: string[] = [];
@@ -112,24 +120,16 @@ export async function parseWorkflowContent(
 
     apiGraph = graph;
   } else {
+    /* 工作流(RAW)格式：**原件入库，不转 API 图**。
+     *
+     * 历史做法是导入时把 raw 转成 API 图存进 `graph`（转换失败再回落启发式），
+     * 存错图的代价由用户承担：无 ComfyUI 可达时启发式按类名猜控件顺序，猜错
+     * 就是一份能打开、跑起来结果不对的图。执行侧本来就有 comfy-cli 直接吃 raw
+     * 的路（它按节点类定义做权威转换），入库再转一次是多余且有害的一步。 */
     rawJson = candidate;
-    let result: ConversionResult;
-    try {
-      result = await convertRawToApi(candidate as unknown as RawWorkflow);
-    } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      logger.warn(
-        `[importSource] /object_info convert failed, using fallback: ${errMsg}`,
-      );
-      result = fallbackRawToApi(candidate as unknown as RawWorkflow);
-    }
-    apiGraph = result.graph;
-    positions =
-      Object.keys(result.positions).length > 0 ? result.positions : null;
-    warnings.push(...result.warnings);
-    if (Object.keys(apiGraph).length === 0) {
-      throw new Error("原始工作流转换失败：未能解析出任何节点");
-    }
+    const rawView = asRawWorkflow(candidate);
+    const extracted = rawView ? extractPositions(rawView) : {};
+    positions = Object.keys(extracted).length > 0 ? extracted : null;
   }
 
   /* 不再自动推断 taskType —— 旧逻辑用
@@ -147,7 +147,11 @@ export async function parseWorkflowContent(
     );
   }
 
-  const paramMap = detectParamMap(apiGraph);
+  /* RAW 导入没有 API 图可判落点 → 留空，由画布 / 工作流编辑器按 RAW 视图
+   *  （`rawInputsById`）判。角色节点映射（positiveNode / negativeNode…）此时
+   *  没有意义，硬判会给出指向不存在节点的映射，反而让运行期取不到值。 */
+  const paramMap =
+    Object.keys(apiGraph).length > 0 ? detectParamMap(apiGraph) : null;
 
   return {
     apiGraph,

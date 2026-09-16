@@ -86,11 +86,11 @@ export interface LibraryWire {
   /** 输入侧：落点的 ioKey；输出侧：取值那一行的 ioKey。 */
   targetIoKey: string;
   namespace: "param" | "output";
-  /** 作者改过（实线）—— 否则是自动判定的默认线（虚线）。 */
+  /** 是否是作者画的线（实线）—— 库里不存在「猜出来的」默认线。 */
   manual: boolean;
 }
 
-/** 边的样式口径：自动判定画虚线、作者改过画实线（与编辑器画布同一套语义）。 */
+/** 边的样式口径：作者画过的线画实线、未连过的画虚线（与编辑器画布同一套语义）。 */
 export function libraryEdgeStyle(manual: boolean): {
   stroke: string;
   strokeWidth: number;
@@ -107,9 +107,9 @@ export function libraryEdgeStyle(manual: boolean): {
       };
 }
 
-/** 自动判定落点的描边色（与编辑器画布一致）。 */
+/** 默认取值来源的描边色（输出侧「没被作者改过」的线；输入侧的线一律实线）。 */
 export const AUTO_STROKE = "#64748b";
-/** 作者改过的线的描边色。 */
+/** 作者画过的线的描边色。 */
 export const MANUAL_STROKE = "#a78bfa";
 /** 拖动中的预览线描边色（React Flow 的 connection line）。 */
 export const DRAG_STROKE = "#c4b5fd";

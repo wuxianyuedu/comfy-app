@@ -99,6 +99,10 @@ const io: WorkflowIOMap = {
   },
 };
 
+/** 作者画过的线：把「尺寸」连到组合控件覆盖的 width 行上。
+ *  落点只由作者画的线决定 —— 不显式给线就没有任何落点。 */
+const SIZE_WIRED = { source: { "mode:T2I": { size: "5::widget::width" } } };
+
 function renderPreview(paramMap: Record<string, unknown>) {
   const onPatch = vi.fn();
   const view = render(
@@ -358,7 +362,7 @@ describe("尺寸各项各自可取外部值", () => {
      *  渲染本身由 React Flow 负责，jsdom 量不到 handleBounds。 */
     const paramCards = deriveLibraryParamCards({
       io,
-      paramMap: {},
+      paramMap: SIZE_WIRED,
       mode: "T2I",
     });
     const edges = deriveLibraryEdges(paramCards.wires, []);

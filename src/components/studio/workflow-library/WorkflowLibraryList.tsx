@@ -214,8 +214,11 @@ function WorkflowListItem({
             {workflow.name}
           </span>
           {!usable && (
-            <span className="shrink-0 rounded bg-red-500/12 px-1 py-px text-[9px] text-red-700 dark:text-red-300">
-              不可执行
+            <span
+              title="既没有 API 图也没有工作流(RAW)原件 —— 两列都为空"
+              className="shrink-0 rounded bg-red-500/12 px-1 py-px text-[9px] text-red-700 dark:text-red-300"
+            >
+              无可执行内容
             </span>
           )}
           {usable &&

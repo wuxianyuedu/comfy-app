@@ -317,6 +317,19 @@ export function nextReferenceImageId(
 
 export type ModeContractOutput = "image" | "video" | "audio";
 
+/** 一个契约口在**这一模式下**是否必备。
+ *
+ *  必备 = 工坊/运行环节少不得它：缺了它这条工作流在工坊里驱动不起来（也是
+ *  「这条流能不能跑」的判据 —— 与工作流的可执行性是两个问题，别混）。
+ *
+ *  **为什么做成配置而不是写死**：以前判据是代码里一句「id === "prompt"」，
+ *  于是「负向提示词要不要必备」「时长对视频是不是必备」这类问题的答案只能靠改
+ *  代码。用户口径是「哪个是必备的应该能配」（ISSUE #632）—— 现在它随契约走，
+ *  在「模式契约」编辑器里按模式勾选。
+ *
+ *  没勾任何口 = 这条模式没有必备口（工坊不因缺某个口而判它不可用）。 */
+export type ModeContractRequired = ModeContractInputId[];
+
 /** 一种模式的统一输入 / 输出契约（工坊对外口径）。 */
 export interface ModeContract {
   /** 工作流库定义的模式码（T2I / I2I / D2I … T2V / I2V …）。 */
@@ -325,14 +338,59 @@ export interface ModeContract {
   inputs: ModeContractInputId[];
   /** 统一输出类别。 */
   output: ModeContractOutput;
+  /** 必备口（有序子集；缺省 = 内置默认，见 `requiredInputsFor`）。
+   *
+   *  用 `undefined` 而不是空数组表达「没配过」：内置默认（提示词）与「用户
+   *  主动清空了必备口」是两个不同的状态，用空数组一锅端会让「我明明取消勾选了」
+   *  与「我还没配过」读起来一样。 */
+  required?: ModeContractRequired;
+}
+
+/** 内置的必备口判定（未在注册表里配过时用它）。
+ *
+ *  提示词是所有生成模式的必备口：工坊的每条链路都是「一段提示词 → 一次生成」，
+ *  没有承载提示词的端口，这条工作流在工坊里根本驱动不起来。其余口不预设必备
+ *  —— 它们是可选的补充（负向 / 首尾帧 / 参考图 / 尺寸由工作流默认值兜底）。 */
+export function builtInRequiredInputs(
+  inputs: readonly ModeContractInputId[],
+): ModeContractRequired {
+  return inputs.filter((id) => id === "prompt");
+}
+
+/** 某契约生效的必备口：配过用配过的，没配过用内置默认。
+ *
+ *  入参收 `string[]`（不是 `ModeContractInputId[]`）：调用方拿到的口子清单常常
+ *  来自展示派生（`ContractEntryDisplay[]` 的 `id: string`），为了一次判空去反向
+ *  断言类型没有意义 —— 非契约 id 本来就落不进必备判据（会被 `inputs` 过滤掉）。 */
+export function requiredInputsFor(contract: {
+  inputs: readonly string[];
+  required?: readonly string[];
+}): ModeContractRequired {
+  const source =
+    contract.required ??
+    builtInRequiredInputs(
+      contract.inputs.filter((id): id is ModeContractInputId =>
+        isModeContractInputId(id),
+      ),
+    );
+  /* 必备口必须是本契约里存在的口：契约里删掉某口之后，残留的 required 条目会
+   *  让「缺了必备口」永远为真（页面提示一个已经不存在的口缺落点）。 */
+  return source.filter(
+    (id): id is ModeContractInputId =>
+      isModeContractInputId(id) && contract.inputs.includes(id),
+  );
 }
 
 /** 内置默认契约（未在注册表里改过的模式用它）。 */
 export function builtInModeContract(mode: string): ModeContract {
+  const inputs = exposedParamsForMode(mode).map(
+    (d) => d.id as ModeContractInputId,
+  );
   return {
     mode: mode.trim().toUpperCase(),
-    inputs: exposedParamsForMode(mode).map((d) => d.id as ModeContractInputId),
+    inputs,
     output: outputKindForMode(mode),
+    required: builtInRequiredInputs(inputs),
   };
 }
 
@@ -356,13 +414,26 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
       isModeContractInputId(i),
     );
     if (inputs.length === 0) continue;
+    /* 必备口：只收契约里真的存在的口（`required` 缺失 = 没配过 → 存 undefined，
+     *  由 `requiredInputsFor` 回落内置默认）。 */
+    const required = Array.isArray(rec.required)
+      ? rec.required.filter(
+          (i): i is ModeContractInputId =>
+            isModeContractInputId(i) && inputs.includes(i),
+        )
+      : undefined;
     const rawOutput = typeof rec.output === "string" ? rec.output : "";
     const output: ModeContractOutput =
       rawOutput === "video" || rawOutput === "audio"
         ? rawOutput
         : outputKindForMode(mode);
     seen.add(mode);
-    out.push({ mode, inputs, output });
+    out.push({
+      mode,
+      inputs,
+      output,
+      ...(required !== undefined ? { required } : {}),
+    });
   }
   return out;
 }
