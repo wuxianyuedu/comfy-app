@@ -201,3 +201,44 @@ function Assert-ShellNotRunning {
     Log ""
     return 1
 }
+
+# 打包启动器前确认启动器自身没在跑。
+#
+# 为什么单独一步：`build-launcher*.ps1` 的产物是**整个目录**（`start-tauri\` 或
+# `start-tauri-dev\` 等，onedir 布局），`Remove-Item -Recurse -Force` 删不掉被运行中
+# 进程占用的 `_internal\*.dll`。旧实现只把失败原因写成一句「可能被其他程序占用（如
+# start-tauri.exe 仍在运行）」，却没有查任何进程表——用户看到的现场恰好是「我已经
+# 关掉窗口了」（关的是桌面壳，启动器自己作为独立 exe 还在跑），于是提示既指不出是谁
+# 占着，也给不出可执行的动作（ISSUE #621）。
+#
+# 判据与 Assert-ShellNotRunning 的「陈旧壳」一致：按 exe **真实路径**落在本仓库的
+# 三个启动器产物目录算命中，别处的同名进程一律不算。这里不自动回收——启动器是用户
+# 刚双击过的入口（关掉它的启动画面 = 放弃本次启动），构建侧替用户做这个决定不合适；
+# 而且它与壳不同，不存在「无主孤儿」这种判据（窗口是它自己的）。
+#
+# 返回 0 = 没有启动器在跑，可以继续打包；1 = 命中占用，调用方应中止并提示用户。
+function Assert-LauncherNotRunning {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ProjectRoot,
+        [string]$Purpose = "打包启动器"
+    )
+
+    $running = @(Get-RunningLauncher -ProjectRoot $ProjectRoot)
+    if ($running.Count -eq 0) { return 0 }
+
+    Log ""
+    Log ("[错误] {0}：本仓库的启动器仍在运行，产物目录被它占用。" -f $Purpose)
+    Log ""
+    Log "  原因：启动器（start-tauri*.exe）是独立进程，关掉它的启动画面 / 桌面窗口并不会"
+    Log "        让它自己退出；只要它还在跑，产物目录里的 _internal\*.dll 就被锁住，"
+    Log "        无法删除重建（就是刚才那句「无法清理 start-tauri」）。"
+    Log ""
+    foreach ($p in $running) { Log ("  正在运行的启动器：PID {0}  {1}" -f $p.Id, $p.Path) }
+    Log ""
+    Log "  请先结束上面的启动器进程（关掉它的启动画面 / 控制台窗口），再重新运行本构建。"
+    Log "  若窗口已关掉、只剩进程，执行：taskkill /PID <上面的 PID> /T /F"
+    Log "  （别用任务管理器单杀：它拉起的 dev server / 壳会残留占端口，见规范 §3。）"
+    Log ""
+    return 1
+}
