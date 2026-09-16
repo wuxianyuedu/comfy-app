@@ -50,6 +50,8 @@ import { SaveExportButton } from "./SaveExportButton";
 import {
   LOG_ROW_SINGLE,
   layoutRows,
+  pinPlan,
+  pinScrollTop,
   scrollHeightOf,
   visibleRange,
 } from "./log-virtual";
@@ -638,6 +640,9 @@ export function LogPanel() {
   const baselineRef = useRef(0);
   /* 上一次贴底落在页面里的序号；仅用于「有新增才滚」的比较（不参与可见输出）。 */
   const appliedRef = useRef(-1);
+  /* 上一次贴底**自己**写入的 `scrollTop`：据此判定「用户有没有接管滚动」
+   * （见 `log-virtual` 的 `pinShouldYield`），是记账值，不进 state。 */
+  const appliedTopRef = useRef(0);
   const [wrap, setWrap] = useState(true);
   const [wide, setWide] = useState(false);
 
@@ -743,22 +748,14 @@ export function LogPanel() {
 
   /* ── 贴底：只追到「基线」，不再追着最新跑（ISSUE #262 复审）────────────
    *
-   * 旧行为是「时间线一变就 scrollTop = scrollHeight」，配一条「用户是不是在底部」
-   * 的判定。判据本身没错，错的是它**每两秒就成立一次**：日志上限 2000 条时几乎
-   * 每轮轮询都有新行，于是内容每隔两秒整体上移一次，用户刚框住的文本立刻被滚动
-   * 冲掉（甚至根本框不到）。
+   * 旧行为是「时间线一变就 scrollTop = scrollHeight」，而它**每两秒就成立一次**
+   * （几乎每轮轮询都有新行），于是内容每隔两秒整体上移一次，用户刚框住的文本立刻
+   * 被滚动冲掉。现在只在**贴着底**时把「已读水位」（基线）钉住，新行在下面累积，
+   * 腾出的空间交给页脚的「有 N 条新的日志 · 回到最新」。任何一层成立都不动滚动
+   * 位置：不在第 1 页（在看历史）/ 用户没贴着底（自己滚走了）/ 正在框选日志文本。
    *
-   * 现在分三层，任何一层成立都不动滚动位置：
-   *   1. 不在第 1 页（在看历史）——历史页的内容本来就不该变；
-   *   2. 用户没贴着底（自己上滚了）——同上，回到底部才重新贴；
-   *   3. **用户正在日志正文里框选文本**——按 `selectionInsideLogs` 判定。
-   *
-   * 贴底时也不再滚到最新，而是滚到「基线」：面板打开 / 用户滚回底部 / 换页那一刻
-   * 已看过的最后一条。新行在下面累积，腾出的空间交给页脚的
-   * 「有 N 条新的日志 · 回到最新」这个显式出口。
-   *
-   * 实现上**只在 effect 里读写 ref**：这些是「上一次贴到哪」的记账值，用 state
-   * 承载会让贴底本身触发一次重渲染，正好落进「滚动 → 重渲染 → 再滚动」的循环。
+   * 位置怎么算是纯逻辑（见 `log-virtual` 的贴底一组）；这里只读写 ref，不用 state
+   * ——用 state 承载会让贴底本身触发重渲染，落进「滚动 → 重渲染 → 再滚动」的循环。
    */
   useEffect(() => {
     if (!isOpen) {
@@ -778,32 +775,32 @@ export function LogPanel() {
      * ——这正是「刚选中就被刷新弄没」的最后一环（前两环在 store：贴底基线）。 */
     if (selectionInsideLogs(currentSelection())) return;
 
-    /* 贴底目标 = max(基线上一次落点, 已追到哪)，并钳到本页最后一条：
-     * 保证新行一条条露出来（不跳空），又不会被后面的新行无限拖走。 */
-    const bottomIndex = visibleLogs.length - 1;
-    const targetIndex = Math.max(
-      0,
-      Math.min(baselineRef.current, bottomIndex),
-      Math.min(appliedRef.current, bottomIndex),
-    );
+    /* 目标行 + 「用户有没有接管滚动」的判据都在 `log-virtual` 的 `pinPlan`：
+     * 用户自己滚到别处（例如滚到底看最新）时返回 `null`，本轮不动他的位置。 */
+    const targetIndex = pinPlan({
+      baseline: baselineRef.current,
+      applied: appliedRef.current,
+      bottomIndex: visibleLogs.length - 1,
+      scrollTop: el.scrollTop,
+      appliedTop: appliedTopRef.current,
+    });
+    if (targetIndex === null) return;
+    /* 拿得到真实节点就用它的几何；**虚拟化下窗口外的行不在 DOM 里**，此时按
+     * 估算位置滚把目标行带进窗口，下一轮再按真实高度对齐。两处都没有就什么都不
+     * 做（下一轮还会再来），绝不能乱滚。 */
     const target = el.querySelector<HTMLElement>(
       `[data-log-index="${targetIndex}"]`,
     );
-    if (!target) {
-      /* **虚拟化之后目标行可能没被渲染**（窗口外的行不在 DOM 里）。此时改按
-       * 估算位置滚——`rows[targetIndex]` 的上边缘减去一个视口，把目标行带进窗口，
-       * 下一轮 effect 就能找到真实节点并按它的实际高度对齐。找不到就什么都不做
-       * （下一轮还会再来），绝不能乱滚。 */
-      const row = rows[targetIndex];
-      if (!row) return;
-      el.scrollTop = Math.max(0, row.start - el.clientHeight + row.size);
-      appliedRef.current = targetIndex;
-      return;
-    }
-    el.scrollTop = Math.max(
-      0,
-      target.offsetTop + target.offsetHeight - el.clientHeight,
+    const row = rows[targetIndex];
+    if (!target && !row) return;
+    const next = pinScrollTop(
+      target
+        ? { offsetTop: target.offsetTop, offsetHeight: target.offsetHeight }
+        : { start: row!.start, size: row!.size },
+      el.clientHeight,
     );
+    el.scrollTop = next;
+    appliedTopRef.current = next;
     appliedRef.current = targetIndex;
   }, [
     isOpen,
@@ -851,9 +848,10 @@ export function LogPanel() {
      * 只读 ref 会出现「滚了但不重渲染、内容不更新」。 */
     setScrollTop(el.scrollTop);
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
-    /* 用户回到（或离开）底部：贴底基线跟着当前页的内容重取，从此他看的是
-     * 「自己停下时那一段」，而不是被新日志推着走的最新一段。 */
-    if (nearBottom && !autoScroll) {
+    /* 贴着底 = 用户要看最新，基线就取末条（面板打开时 `autoScroll` 已是 true，
+     * 若再要求 `!autoScroll` 则「从顶部滚到底」永远进不来，基线停在 0，下一轮
+     * 轮询会把用户按回顶部）。 */
+    if (nearBottom) {
       baselineRef.current = appliedRef.current = Math.max(
         0,
         visibleLogs.length - 1,

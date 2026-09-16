@@ -16,6 +16,9 @@ import {
   estimateRowHeight,
   firstVisibleRow,
   layoutRows,
+  pinPlan,
+  pinScrollTop,
+  pinTargetIndex,
   scrollHeightOf,
   visibleRange,
   type RowLayout,
@@ -156,5 +159,66 @@ describe("滚动条总高", () => {
   it("取不到 / 负数一律当 0（绝不能给出负高度）", () => {
     expect(scrollHeightOf(Number.NaN).height).toBe(0);
     expect(scrollHeightOf(-100).height).toBe(0);
+  });
+});
+
+/* ISSUE #637：贴底（pin）的位置算术抽到本模块后，判据可以脱离 DOM 断言。
+ * 真实浏览器里的现象（「滚到底看最新」被下一轮轮询按回顶部）由 e2e 兜住。 */
+describe("贴底目标", () => {
+  it("取基线与「已追到哪」的较大者，并钳到本页末条", () => {
+    expect(pinTargetIndex(0, -1, 1999)).toBe(0);
+    expect(pinTargetIndex(50, 10, 1999)).toBe(50);
+    expect(pinTargetIndex(10, 50, 1999)).toBe(50);
+    expect(pinTargetIndex(9999, 0, 1999)).toBe(1999);
+    expect(pinTargetIndex(-5, -9, 1999)).toBe(0);
+  });
+});
+
+describe("贴底该不该动", () => {
+  const base = {
+    baseline: 0,
+    applied: 0,
+    bottomIndex: 1999,
+    scrollTop: 0,
+    appliedTop: 0,
+  };
+
+  it("目标行变了就动（打开面板 / 回到最新 / 换页）", () => {
+    expect(pinPlan({ ...base, baseline: 1999 })).toBe(1999);
+    expect(pinPlan({ ...base, applied: -1 })).toBe(0);
+  });
+
+  it("目标行没变、位置仍是自己写的 → 按原位置钉住", () => {
+    expect(pinPlan(base)).toBe(0);
+  });
+
+  it("用户已把位置滚到别处 → 不动（滚到底看最新不被按回顶部）", () => {
+    expect(pinPlan({ ...base, scrollTop: 53482 })).toBeNull();
+  });
+
+  it("容差 1px：浏览器取整造成的分毫差不算「用户接管」", () => {
+    expect(pinPlan({ ...base, scrollTop: 1 })).toBe(0);
+    expect(pinPlan({ ...base, scrollTop: 54 })).toBeNull();
+  });
+});
+
+describe("贴底要写入的 scrollTop", () => {
+  it("按真实节点几何让目标行贴住视口底边", () => {
+    expect(pinScrollTop({ offsetTop: 2700, offsetHeight: 27 }, 500)).toBe(2227);
+  });
+
+  it("按估算位置（目标行未渲染时的兜底）同样贴住底边", () => {
+    expect(pinScrollTop({ start: 2700, size: 27 }, 500)).toBe(2227);
+  });
+
+  it("顶部的行给出 0（不出现负 scrollTop）", () => {
+    expect(pinScrollTop({ offsetTop: 0, offsetHeight: 27 }, 500)).toBe(0);
+  });
+
+  it("视口高度取不到时按 0 处理，且绝不给出负数", () => {
+    expect(pinScrollTop({ offsetTop: 10, offsetHeight: 0 }, Number.NaN)).toBe(
+      10,
+    );
+    expect(pinScrollTop({ start: 0, size: 0 }, -100)).toBe(0);
   });
 });
