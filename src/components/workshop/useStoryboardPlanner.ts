@@ -10,13 +10,13 @@
  */
 
 import { useState } from "react";
-import type { Shot, Scene, Character, StyleRef } from "@/lib/workshop/types";
+import type { Shot, Scene, Character, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotPrompt,
   buildShotNegative,
   mergeParams,
-} from "@/lib/workshop/prompt-builder";
-import { workshopUid } from "@/lib/workshop/script-parser";
+} from "~/lib/workshop/prompt-builder";
+import { workshopUid } from "~/lib/workshop/script-parser";
 import {
   buildExtractShotsMessages,
   buildShotsFromEntries,
@@ -25,22 +25,22 @@ import {
   parseExtractedShots,
   parseImportedCharacterCards,
   parseShotDrafts,
-} from "@/lib/workshop/script-parse";
-import type { ShotEntry } from "@/lib/workshop/script-parse";
-import type { ExtractChannel } from "@/components/workshop/ExtractToolbar";
-import { parseChannelOption } from "@/components/workshop/ExtractToolbar";
-import { useLLM } from "@/components/workshop/LLMContext";
+} from "~/lib/workshop/script-parse";
+import type { ShotEntry } from "~/lib/workshop/script-parse";
+import type { ExtractChannel } from "~/components/workshop/ExtractToolbar";
+import { parseChannelOption } from "~/components/workshop/ExtractToolbar";
+import { useLLM } from "~/components/workshop/LLMContext";
 import {
   useExtractSession,
   type ExtractSession,
   type ExtractSessionActions,
-} from "@/components/workshop/hooks/use-workshop-pipeline";
-import { streamChat } from "@/lib/llm/browser";
+} from "~/components/workshop/hooks/use-workshop-pipeline";
+import { streamChat } from "~/lib/llm/browser";
 import {
   formatRequestMessages,
   makeExtractLog,
-} from "@/lib/workshop/extraction-log";
-import { buildStoryboardMessages, parseStoryboard } from "@/lib/llm/prompts";
+} from "~/lib/workshop/extraction-log";
+import { buildStoryboardMessages, parseStoryboard } from "~/lib/llm/prompts";
 import { errorMessage } from "~/lib/error-message";
 
 /** 判断导入内容是否为 JSON(分镜/角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */

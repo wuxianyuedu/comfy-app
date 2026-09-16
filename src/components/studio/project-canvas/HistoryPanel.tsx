@@ -11,7 +11,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { MediaThumbnail } from "@/components/studio/ui/MediaThumbnail";
+import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
 import { useHistoryPanel } from "./hooks/use-history-panel";
 import {
   FILTER_TABS,
@@ -22,7 +22,7 @@ import {
   titleOf,
   type HistoryScope,
   type TaskMediaType,
-} from "@/lib/project-canvas/history-panel-types";
+} from "~/lib/project-canvas/history-panel-types";
 
 function KindIcon({ kind }: { kind: TaskMediaType }) {
   if (kind === "video") return <Video size={16} strokeWidth={1.8} />;

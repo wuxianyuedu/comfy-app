@@ -15,15 +15,15 @@ import {
   type RawNodeInput,
   type RawNode,
   type RawSubgraphDef,
-} from "@/lib/comfyui/raw";
-import { inferIsMultiline } from "@/lib/comfyui/types";
+} from "~/lib/comfyui/raw";
+import { inferIsMultiline } from "~/lib/comfyui/types";
 import { logger } from "~/lib/core/logger";
 import {
   type DetailNodeView,
   type RawInputEntry,
   type RawNodeMeta,
   type RawOutputEntry,
-} from "@/lib/comfyui/workflow-detail-raw";
+} from "~/lib/comfyui/workflow-detail-raw";
 
 /* IMAGE-input thumbnail preview (narrowed in ).
  * Mirrors the parent route.  We surface the LoadImage upstream filename as

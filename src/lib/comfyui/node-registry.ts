@@ -7,7 +7,7 @@
  */
 
 import type { NodeTypeConfig, FieldDef } from "./node-config";
-import { CUSTOM_NODE_TYPES } from "@/config/custom-nodes";
+import { CUSTOM_NODE_TYPES } from "~/config/custom-nodes";
 
 /* ── Shared field definitions (reused across node types) ── */
 const F = {

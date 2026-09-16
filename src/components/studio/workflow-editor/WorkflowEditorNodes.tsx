@@ -3,9 +3,9 @@
  * WorkflowNoteNode 及其共享常量、workflowNodeTypes / workflowEdgeTypes。 */
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { portColor } from "@/lib/comfyui/types";
-import { renderMarkdown } from "@/lib/comfyui/markdown";
-import { WorkflowEdge } from "@/components/studio/canvas/WorkflowEdge";
+import { portColor } from "~/lib/comfyui/types";
+import { renderMarkdown } from "~/lib/comfyui/markdown";
+import { WorkflowEdge } from "~/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
 import type {

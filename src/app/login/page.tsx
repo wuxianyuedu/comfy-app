@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Zap } from "lucide-react";
 import { authClient } from "~/server/better-auth/client";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 
 type Mode = "signin" | "register";
 

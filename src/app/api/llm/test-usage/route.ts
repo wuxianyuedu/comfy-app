@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
+import { getServerUser } from "~/lib/auth-server";
 import {
   SUBMIT_PENDING_DETAIL,
   USAGE_TEST_KINDS,
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * POST /api/llm/test-usage —— 按用途（chat / image / video）发起**一次真实调用**。
  *
  * 请求解析、连接参数回落（弹窗内填的 → 条目已保存的 → 全局）与上游调用都在
- * `@/lib/llm/usage-test.server`，与「继续等待」路由（`./query`）逐字共用一份
+ * `~/lib/llm/usage-test.server`，与「继续等待」路由（`./query`）逐字共用一份
  * —— 两个动作对同一上游必须发出同一形状的请求，密钥解析也必须同一口径。
  *
  * 生视频走任务制时：内置一轮轮询（VIDEO_POLL_TOTAL_MS），仍未就绪即以

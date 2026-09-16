@@ -18,7 +18,7 @@ import {
   type ReadySettingsPageController,
 } from "../hooks/use-settings-page";
 import type { TaskType } from "~/lib/llm/types";
-import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
+import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 import {
   STATUS_ROW_CLASS,

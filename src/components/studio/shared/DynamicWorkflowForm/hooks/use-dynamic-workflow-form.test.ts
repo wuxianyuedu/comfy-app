@@ -12,11 +12,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/project-canvas/canvas-api", () => ({
+vi.mock("~/lib/project-canvas/canvas-api", () => ({
   uploadImageFile: vi.fn(),
 }));
 
-import { uploadImageFile } from "@/lib/project-canvas/canvas-api";
+import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
 import type {
   WorkflowIOEntry,
   WorkflowIOMap,

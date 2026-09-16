@@ -16,8 +16,8 @@ import {
   type RawNode,
   type RawSubgraphDef,
   type RawWorkflow,
-} from "@/lib/comfyui/raw";
-import { inferInputType, inferIsMultiline } from "@/lib/comfyui/types";
+} from "~/lib/comfyui/raw";
+import { inferInputType, inferIsMultiline } from "~/lib/comfyui/types";
 
 /* ── RAW 解析结果共享形状（workflow-detail-io / workflow-subgraph-parse 复用）── */
 

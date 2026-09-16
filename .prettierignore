@@ -1,0 +1,13 @@
+# prettier 工具层忽略清单（prettier 3 默认读 cwd 的 .gitignore 与 .prettierignore）。
+#
+# 为什么这里要写一条 git 已经忽略的路径：prettier **只按 cwd（仓库根）读 .gitignore**，
+# 嵌套的 .gitignore 它看不到。全仓库只有一处嵌套忽略文件 `src-tauri/.gitignore`，
+# 它按 cargo 约定写着 `/target/`（`cargo new` 会生成同样的文件，不宜搬走），于是
+# 构建过一次的检出里 `target` 下的生成脚本会被 `pnpm format:check` 与
+# `scripts/check-format.cjs` 的 `**/*.{ts,tsx,js,jsx,mdx}` 扫到 —— 本文件补上这个盲区。
+#
+# 与 scripts/check-format.cjs 的 IGNORE_GLOBS 是两层，各管一件事：
+#   · 本文件 = 工具层：prettier 自身不再列出这些路径（format:check 也不再报）；
+#   · IGNORE_GLOBS = 棘轮白名单：即使有人用 --ignore-path 覆盖忽略规则，
+#     格式棘轮也不会把它算进「未过格式」的账。
+src-tauri/target/

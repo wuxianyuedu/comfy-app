@@ -193,11 +193,17 @@ lib（纯函数） ← 任意层
 
 #### 4.4.6 className 合并
 
-复杂组件使用 `cn()` 工具（`src/lib/utils.ts`）。
+复杂组件使用 `cn()` 工具，**单一入口 `src/lib/utils.ts`**（内容是一句
+`export { cn } from "cn"`）。
 
-- 当前 `cn()` 为轻量实现：过滤 falsy + 展平一层数组。
-- **后续应迁移到 `clsx` + `tailwind-merge`**，以正确处理冲突类名（如 `p-2` vs `p-4`）。
+- `cn()` 由 **`cn@0.3.0`** 提供：接受 `clsx` 的三种入参形态（条件串 / 数组 / 对象），
+  并**负责冲突类合并**（`cn("p-2 p-4")` → `p-4`），无需再套 `clsx` + `tailwind-merge`。
+  项目自定义的 Tailwind v4 括号语法（`w-(--panel-right-width)`）同样参与合并。
+- 入口保持「只 re-export」的形态：**不要在 `src/lib/utils.ts` 里加第二个工具函数**。
+  95 处调用点全部经 `~/lib/utils` 取 `cn`，加东西会让这个入口变成「什么都往里塞」的桶。
 - 调用方传入 `className` 时，必须放到 `cn()` 最后，确保可覆盖默认样式。
+- 该契约由 `src/lib/utils.test.ts` 钉住（三种入参形态 / 冲突类后者胜出 / v4 括号语法）；
+  升级或更换实现时先跑它。
 
 ### 4.5 文案与注释
 
@@ -439,7 +445,7 @@ pnpm build && pnpm start   # 生产预览
   Arch 用 `base-devel`。
 - better-sqlite3@13 内置各平台 prebuild 二进制，装好工具链后通常命中 prebuild 无需本地编译，
   编译脚本仅兜底；此步骤是低成本保险，保证 CI 任意情况都能装完依赖。
-- CI 侧的构建镜像（`.cnb.yml` 的 `node:24`，Debian 骨架）自带 make/gcc/g++，
-  不需要额外的安装步骤；缺工具链的表现是 `pnpm install --frozen-lockfile` 当场失败，
-  而不是「装完了但跑不起来」。详见
+- 若日后启用平台侧流水线，构建镜像务必挑带编译工具的（`node:24` 的 Debian 骨架就自带
+  make/gcc/g++），不必额外安装；缺工具链的表现是 `pnpm install --frozen-lockfile`
+  当场失败，而不是「装完了但跑不起来」。详见
   [15.6](standards/15-附录.md#156-疑难排查记录随问题归档对齐主规范-11) 对应条目。

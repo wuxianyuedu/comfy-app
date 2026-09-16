@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
-import { getServerUser } from "@/lib/auth-server";
+import { getServerUser } from "~/lib/auth-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

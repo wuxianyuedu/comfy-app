@@ -12,7 +12,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 
-import { AuthError, toErrorEnvelope, normalizeError } from "@/lib/core/errors";
+import { AuthError, toErrorEnvelope, normalizeError } from "~/lib/core/errors";
 
 /**
  * 把任意异常映射为 REST 错误响应。

@@ -5,13 +5,13 @@
 //   POST /api/workshop-local/prepare  { image: string }  → { filename }
 import { type NextRequest, NextResponse } from "next/server";
 
-import { requireServerUser } from "@/lib/auth-server";
-import { uploadImage } from "@/lib/comfyui/client";
-import { isRecord } from "@/lib/workshop/api-channel-shared";
+import { requireServerUser } from "~/lib/auth-server";
+import { uploadImage } from "~/lib/comfyui/client";
+import { isRecord } from "~/lib/workshop/api-channel-shared";
 import {
   resolveMediaBytes,
   strField,
-} from "@/lib/workshop/media-source.server";
+} from "~/lib/workshop/media-source.server";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 

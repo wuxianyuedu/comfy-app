@@ -13,11 +13,11 @@ import "server-only";
 import { promises as fs, readFileSync } from "fs";
 import path from "path";
 
-import { remoteModelRepository } from "@/lib/core/repository";
+import { remoteModelRepository } from "~/lib/core/repository";
 import {
   type RemoteModeAdapter,
   type WorkshopInputType,
-} from "@/lib/workshop/model-mode-contract";
+} from "~/lib/workshop/model-mode-contract";
 
 import {
   callImageGeneration,

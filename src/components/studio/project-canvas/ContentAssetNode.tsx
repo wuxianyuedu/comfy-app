@@ -2,10 +2,10 @@
 
 import React from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { Icon } from "@/components/ui/icon";
-import { WaterFillProgress } from "@/components/studio/ui/WaterFillProgress";
+import { Icon } from "~/components/ui/icon";
+import { WaterFillProgress } from "~/components/studio/ui/WaterFillProgress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
-import type { CanvasNodeData } from "@/lib/project-canvas/canvas-types";
+import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）

@@ -17,7 +17,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { MediaThumbnail as MediaThumb } from "@/components/studio/ui/MediaThumbnail";
+import { MediaThumbnail as MediaThumb } from "~/components/studio/ui/MediaThumbnail";
 import { useState } from "react";
 
 import {

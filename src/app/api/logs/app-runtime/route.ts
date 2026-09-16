@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
+import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
 
 /**
  * 应用运行日志写入端点（客户端 → 服务端）。

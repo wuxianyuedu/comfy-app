@@ -3,10 +3,10 @@ import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import {
   modelRepository,
   userModelConfigRepository,
-} from "@/lib/core/repository";
-import { syncModels, modelCountsByFolder } from "@/lib/models";
-import { listModelFolders, comfyBase } from "@/lib/comfyui/client";
-import { folderMeta } from "@/lib/model-types";
+} from "~/lib/core/repository";
+import { syncModels, modelCountsByFolder } from "~/lib/models";
+import { listModelFolders, comfyBase } from "~/lib/comfyui/client";
+import { folderMeta } from "~/lib/model-types";
 
 export const modelRouter = createTRPCRouter({
   /** GET /api/models — public model list */

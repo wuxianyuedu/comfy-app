@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "./ui/MediaThumbnail";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 import {
   fetchVideoTasks,
   submitGeneration,
   type VideoTask,
-} from "@/lib/video-queue-client";
+} from "~/lib/video-queue-client";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 /* ── Video Queue Modal — wired to real VIDEO tasks ──

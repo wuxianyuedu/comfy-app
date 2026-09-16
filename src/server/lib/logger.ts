@@ -5,7 +5,7 @@ import {
   redactSecretShaped,
   type PinoLogger,
   type PinoLoggerOptions,
-} from "@/lib/core/logger";
+} from "~/lib/core/logger";
 
 /**
  * 服务端日志出口 —— 日志**实现**的唯一出处是 `src/lib/core/logger.ts`。

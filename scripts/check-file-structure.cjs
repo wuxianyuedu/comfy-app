@@ -36,6 +36,10 @@
  *       曾经用来做「占位符」的 NUL 哨兵(规范 12.11)是它的来源,现已改为
  *       可打印形式;本条防回潮。
  * 违反 R1-R4、R7-R12 以退出码 1 阻断提交。
+ *
+ * R13（import 别名只有一种前缀 `~`，ISSUE #640）由**独立脚本**
+ * `scripts/check-import-alias.cjs` 承担，不在这里实现：判据是「模块说明符的前缀」，
+ * 与文件命名/位置无关，混进本文件的 R1-R12 只会让两套口径互相干扰。
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -59,8 +63,14 @@ const FILE_SIZE_BASELINE = path.join(__dirname, ".file-size-baseline.json");
  *  判据一变,旧数字与新计数就不是同一个量 —— 不做标记的重记会被读成「有人放宽棘轮」。
  *
  *  R5_RULE_VERSION 3 变更:行数比对改为按 `baselineRev` **同口径重数**(见下),
- *  不再拿不同「格式时代」的绝对行数直接相减。 */
-const R5_RULE_VERSION = 3;
+ *  不再拿不同「格式时代」的绝对行数直接相减。
+ *
+ *  R5_RULE_VERSION 4 变更:基线里被记的修订号不可达时,不再拿记录值顶替着比
+ *  —— 那等于退回版本 3 要消灭的「跨格式时代相减」,且报错会把「基线过期」误报成
+ *  「文件变大」。现在这一支直接指向「重记基线」;记录值也随之一次性重置为
+ *  **当前内容**的同口径行数(版本 3 的重记没把这条陷阱一起堵上,存量数字仍
+ *  停在另一个格式时代的源码上)。 */
+const R5_RULE_VERSION = 4;
 
 /* ── R5 的行数口径:不同「格式时代」的绝对行数不可直接比较 ──
  * 基线里的数字是在**记它的那个格式口径**的源码上数出来的。而「数行数」这件事
@@ -87,7 +97,12 @@ const R5_RULE_VERSION = 3;
  *
  * 为什么不用「全仓整体行数比」换算:实测不行。prettier 是**逐文件**重排,各文件
  * 的展开倍率差异极大(同一批文件里既有 0.958 也有 1.130),全仓比例约等于 1.0,
- * 换算后对 `LogPanel.tsx` 仍判「变大 136 行」——即该口径解决不了它要解决的问题。 */
+ * 换算后对 `LogPanel.tsx` 仍判「变大 136 行」——即该口径解决不了它要解决的问题。
+ *
+ * 「取不到基线修订号」这一支有个陷阱:它同时覆盖「真新增的文件」与「基线修订号
+ * 已经不可达的存量文件」——后者是**基线自身过期**,不是文件变大,而退回记录值会
+ * 把它判成「继续变大」。故判据拆成两支,并把「修订号是否可用」直接写进报错,
+ * 见 `BASELINE_REV_USABLE` 与下面的两条 problems。 */
 
 /** 取当前 HEAD 的修订号,写进基线供日后「同口径重数」用。
  *  git 不可用 / 不在检出里时返回 null(退回记录值,不阻断)。 */
@@ -108,6 +123,36 @@ function linesAtRev(rev, rel) {
   if (res.status !== 0 || typeof res.stdout !== "string") return null;
   return res.stdout.split("\n").length;
 }
+
+/* ── 基线修订号必须仍可达 ──
+ * 「按 baselineRev 同口径重数」有个前提:**那个提交还在当前检出里**。合并提交删掉
+ * 被并入的分支后,基线记的修订号(通常是某个分支提交)会变成不可达对象,下一次
+ * `git gc` 就把它清掉 —— 此后 `git show <rev>:<file>` 一律失败,同口径重数静默
+ * 退化成「拿记录值直接比」,而记录值记在**另一个格式时代**的源码上(见上)。
+ *
+ * 现场:`LogPanel.tsx` 的基线 988 记于一个已被合并吸收、不再有 ref 指向的分支提交,
+ * 而按今天的计数口径、今天的内容重数是 993 行 —— 这个文件**一个字都没改**却天天
+ * 判红,且报错写作「R5 超限文件继续变大」,与真实原因(基线修订号不可达)毫无关系。
+ *
+ * 所以查基线前先确认**基线里那个**修订号真的能被重数:取不到就报出来、指向
+ * 「重记基线」,而不是悄悄退回记录值把红判成「文件变大了」。 */
+const BASELINE_REV = (function readBaselineRev() {
+  if (!fs.existsSync(FILE_SIZE_BASELINE)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(FILE_SIZE_BASELINE, "utf8")).baselineRev;
+  } catch {
+    /* 基线损坏由棘轮那一支报「基线文件缺失 / 不可解析」,这里不重复报。 */
+    return null;
+  }
+})();
+
+/** 基线修订号能不能真的拿去重数(在当前检出里可达)。 */
+const BASELINE_REV_USABLE =
+  typeof BASELINE_REV === "string" &&
+  BASELINE_REV.length > 0 &&
+  spawnSync("git", ["cat-file", "-e", BASELINE_REV + "^{commit}"], {
+    encoding: "utf8",
+  }).status === 0;
 
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
@@ -462,7 +507,9 @@ const SCAN_EXCLUDED = [
    *  取不到(旧基线 / 文件当时不存在 / git 不可用)时退回基线上的记录值 ——
    *  退回是「按历史行为比」,只会更严,不会漏放。 */
   const baseLinesOf = (f, recorded) =>
-    linesAtRev(prev?.baselineRev, f) ?? recorded;
+    linesAtRev(BASELINE_REV_USABLE ? prev?.baselineRev : null, f) ?? recorded;
+  /** 基线修订号存在却不可达 ⇒ 同口径重数做不了,只能退回记录值(见文件头)。 */
+  const baseRevMissing = Boolean(prev?.baselineRev) && !BASELINE_REV_USABLE;
 
   if (UPDATE) {
     const prevTotal = prevFiles ? Object.keys(prevFiles).length : 0;
@@ -522,6 +569,12 @@ const SCAN_EXCLUDED = [
             ",一次性重记】"
           : ""),
     );
+    if (!BASELINE_REV_USABLE) {
+      console.warn(
+        "[structure] 警告:新记的基线修订号在本检出里取不到 —— 同口径重数会退化成\n" +
+          "  拿记录值直接比。浅克隆 / 只取单分支的 CI 请先 git fetch --unshallow。",
+      );
+    }
     return;
   }
 
@@ -547,6 +600,23 @@ const SCAN_EXCLUDED = [
       );
     } else if (oversizedFiles[f] > baseLinesOf(f, base)) {
       const baseline = baseLinesOf(f, base);
+      /* 取不到基线修订号 ⇒ 比的是「两个格式时代的绝对行数」,差值不构成判据。
+       * 把这支单独报出来:它的可行动作是**重记基线**,不是拆文件。 */
+      if (baseRevMissing) {
+        problems.push(
+          "R5 基线修订号 " +
+            prev.baselineRev +
+            " 在本检出里取不到(" +
+            f +
+            " → 记录值 " +
+            base +
+            " → 当前 " +
+            oversizedFiles[f] +
+            " 行)。同口径重数无法进行,比的是两个格式时代的绝对行数 —— " +
+            "先补历史(git fetch --unshallow),再执行 node scripts/check-file-structure.cjs --update 重记基线(规范 §12.13.3)",
+        );
+        continue;
+      }
       problems.push(
         "R5 超限文件继续变大(" +
           f +

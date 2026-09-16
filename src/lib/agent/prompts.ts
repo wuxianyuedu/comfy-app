@@ -3,7 +3,7 @@
 // 用本文件的 prompt 约束模型输出一段 JSON 指令序列，
 // 前端解析后逐条执行 —— 这是 TAPD 需求点名的 MVP 方式。
 
-import type { WorkshopDraftDto } from "@/lib/workshop/draft-sync-shared";
+import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** 把项目状态快照拼成给模型的上下文（供工具决策参考）。 */
 export function formatDraftContext(draft: WorkshopDraftDto): string {

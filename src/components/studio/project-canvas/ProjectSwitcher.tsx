@@ -4,7 +4,7 @@
  *  switcher (button + dropdown).  Controlled by the parent — all menu /
  *  rename state lives in useProjectManager and is threaded through props.
  */
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 interface ProjectSwitcherProps {

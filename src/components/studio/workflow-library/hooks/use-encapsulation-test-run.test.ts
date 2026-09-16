@@ -14,7 +14,7 @@ const watchSettle = {
   message: undefined as string | undefined,
 };
 
-vi.mock("@/lib/workshop/generation-client", () => ({
+vi.mock("~/lib/workshop/generation-client", () => ({
   buildLibraryWorkflowInput: vi.fn().mockResolvedValue({
     input: { workflow: "wf1" },
     unmatched: [],
@@ -41,7 +41,7 @@ vi.mock("@/lib/workshop/generation-client", () => ({
   ),
 }));
 
-import { clearAllWorkflowRuns, getWorkflowRun } from "@/lib/workflow-run-store";
+import { clearAllWorkflowRuns, getWorkflowRun } from "~/lib/workflow-run-store";
 import { useEncapsulationTestRun } from "./use-encapsulation-test-run";
 
 afterEach(() => {
@@ -101,7 +101,7 @@ describe("useEncapsulationTestRun", () => {
     result.current.run({});
     await waitFor(() => expect(result.current.running).toBe(false));
     const { startLocalGenerate } =
-      await import("@/lib/workshop/generation-client");
+      await import("~/lib/workshop/generation-client");
     expect(vi.mocked(startLocalGenerate)).toHaveBeenCalledTimes(1);
   });
 });

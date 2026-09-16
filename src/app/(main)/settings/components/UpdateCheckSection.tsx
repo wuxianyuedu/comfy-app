@@ -13,7 +13,7 @@
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useState } from "react";
 
-import { useUpdateCheckStore } from "@/components/update-check/update-check-store";
+import { useUpdateCheckStore } from "~/components/update-check/update-check-store";
 
 import { Card } from "./SettingsPrimitives";
 

@@ -14,13 +14,13 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import type { Edge } from "@xyflow/react";
-import type { CanvasNodeType } from "@/lib/project-canvas/canvas-types";
+import type { CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import {
   clearActiveIfDraft,
   isEmptyDraftName,
   reapEmptyProject,
   upsertProject,
-} from "@/lib/project-canvas/canvas-store";
+} from "~/lib/project-canvas/canvas-store";
 
 export interface UseProjectPersistenceParams {
   projectId: string | null;

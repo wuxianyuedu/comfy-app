@@ -31,8 +31,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { APP_RUNTIME_LOG, NEXTJS_LOG_DIR } from "@/lib/log-paths";
-import { appendSessionBanner } from "@/lib/session-banner.server";
+import { APP_RUNTIME_LOG, NEXTJS_LOG_DIR } from "~/lib/log-paths";
+import { appendSessionBanner } from "~/lib/session-banner.server";
 
 export const PANEL_LOG_PREFIX = "nextjs-panel-";
 

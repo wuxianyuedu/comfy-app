@@ -24,7 +24,10 @@
  *   CNB 在推送层锁定分支(create-branch-lock)只能阻止**推送**,拦不住本地
  *   直接提交后再推送;本地门槛是这条链路里唯一能在「提交那一刻」给反馈的位置。
  *
- * 服务端复核(--pr-check,用户 .cnb.yml 的 pull_request 流水线):
+ * 服务端复核(--pr-check,平台侧 pull_request 流水线调用):
+ *   注意:平台侧流水线配置(.cnb.yml)已按额度约束删除(ISSUE #623,见规范 13.5.3),
+ *   本形态目前**没有调用方**——保留是因为它是判据本身(三种拓扑由
+ *   tests/check-branch-guard.test.ts 用真仓库跑),日后重启平台侧直接用。
  *   这里的判据**不能复用上面的「分支名」**:CNB 在 pull_request 事件上 checkout 的
  *   是**预合并提交**(gh merge 语义),容器里 HEAD 的分支名是**目标分支**(实测
  *   `symbolic-ref HEAD` = master、父提交数 1)——照搬会 100% 误报「直接向 master 提交」。
@@ -37,26 +40,37 @@
  *
  *   用拓扑(而不是分支名)判,是因为平台**允许**创建 source=master 的 PR ——
  *   那正是本条要拦的场景,而「这是不是 PR 事件」回答不了它。
- *   触发者也能把 .cnb.yml 里的那一行删掉(PR 类事件是「不可信事件」,流水线配置
- *   取自源分支),因此判定必须自持:删了它就是让流水线当场失败,而不是静默不检查。
+ *   触发者也能把流水线里的那一行删掉(PR 类事件是「不可信事件」,流水线配置取自
+ *   源分支),因此判定必须自持:删了它就是让流水线当场失败,而不是静默不检查。
+ *
+ * 服务端复核之二(--merge-commit,平台侧 push 流水线调用):
+ *   同样已无调用方(见上),保留作判据与日后复用。
+ *   master 的 push 事件上 HEAD 就是落到主干的那个提交,「HEAD 在 master 上 = 直连
+ *   主干」会把每一次正常的 PR 合并都拦下。push 事件只该问一件事:这次落到 master 的
+ *   提交能不能被认定为「PR 合并的结果」。**不能**只判「父提交数 > 1」:规范 §13.6
+ *   优先 Squash Merge,squash 提交只有 1 个父,与直推在拓扑上同形,拿它当判据会把
+ *   每一次正常合并都判红(正是这条流水线此前**每一次 push 都是红的**的原因)。
+ *   判据见 evaluateLanding():合并提交 / 提交信息带 PR 关联 → 放行;
+ *   两者都不满足时保守放行(直推的真正拦截在平台分支保护,见规范 §13.6.1)。
  *
  * 用法:
  *   node scripts/check-branch-guard.cjs              # 提交场景检查(违规即阻断)
  *   node scripts/check-branch-guard.cjs --status     # 只看当前分支现状
  *   node scripts/check-branch-guard.cjs --pre-commit # 显式声明提交场景
  *   node scripts/check-branch-guard.cjs --pr-check   # 服务端复核:源分支不能是目标分支
+ *   node scripts/check-branch-guard.cjs --merge-commit # 服务端复核:落到 master 的合并形态
  */
 /**
- * 判据版本 —— 本值一变,「旧版本挡下了什么」就有缺口:.cnb.yml 里那条调用行属于
- * PR 类「不可信事件」的配置(取自源分支),可能被人删掉。回归测试
- * tests/cnb-pipeline-gates.test.ts 用它核对 .cnb.yml 的调用——守卫排在第 1 条,
- * 版本不符时真的会被拦下,而不是「看起来还在跑」。
+ * 判据版本 —— 本值一变,「旧版本挡下了什么」就有缺口:平台侧那条调用行属于
+ * PR 类「不可信事件」的配置(取自源分支),可能被人删掉。调用方必须同时核这个
+ * 版本号(守卫要排在第 1 条,版本不符时真的会被拦下,而不是「看起来还在跑」)。
+ * 平台侧流水线删除后核对方随之消失(见规范 13.5.3),重启时按这条口径补上核对。
  */
-const GUARD_VERSION = "2";
+const GUARD_VERSION = "3";
 const { execFileSync } = require("node:child_process");
 
 /**
- * 受保护的主分支名 —— 与 .cnb.yml 的触发分支、规范 §13.6 一致。
+ * 受保护的主分支名 —— 与规范 §13.6 一致。
  *
  * 平台层**不许**用 `git create-branch-lock`(locked: true):它锁的是整个分支的
  * 写入,连 PR 合并一起拦掉,master 一旦被锁任何 PR 都无法合并。要「禁直接 push、
@@ -207,9 +221,71 @@ function printBlockedTip(branch) {
   console.error("[branch-guard] 若确实是 PR 合并提交被误判:确认 HEAD 有 2 个父提交后走 --no-verify 并说明原因。");
 }
 
+/**
+ * 服务端复核(--merge-commit / push 事件):判「落到 master 的这次提交,
+ * 是不是一个可以被认定为 PR 合并结果的形态」。
+ *
+ * **判据为什么不能只看「父提交数 > 1」**:本仓库规范 §13.6 明确「优先
+ * **Squash Merge**(保持主干线性、单 PR 单提交)」。squash 落库的提交**只有 1 个父**
+ * (上一个 master tip),与「本地直连主干提交」在拓扑上**完全同形** ——
+ * 拿「父提交数 > 1」当判据,等于把规范里推荐的那种合并方式每次都判红。
+ * 实测现场:master 从 611150b 到 8a9efb3 的**每一个** push 构建都红在这一步,
+ * 而它一次真正的绕过都没抓到 —— 一条永远在响、却从不指向真问题的告警,
+ * 只会训练人忽略它。
+ *
+ * **平台事实里没有「这个提交是不是 PR 合出来的」**:push 事件的
+ * `CNB_BEFORE_SHA`(推送前的分支 tip)在 squash 与直推两种情形下取值规则相同,
+ * 拓扑上无从区分。能证明「走没走 PR」的事实有两条:
+ *   ① 提交拓扑是合并提交(`parents > 1`)—— merge commit 合并在平台侧必然留下这个形态;
+ *   ② 提交信息带 PR 关联(`PR-URL: #NNN` 等)—— squash / rebase 合并在平台侧
+ *      都会把 PR 号写进 message(实测 master 上每个 squash 提交都有 `PR-URL`)。
+ * 两条都不满足时无法证明走了 PR,按「保守放行 + 留痕」处理,而不是误报:
+ * 判据无从命中时不该阻断(与 `--pr-check` 里「取不到目标分支 → 保守放行」同一口径)。
+ *
+ * 这一处放宽**不削弱**「禁止直连主干」:真正的防线是平台侧的**分支保护**
+ * (保护分支 + 禁止直接 push + 需要评审批准,见规范 §13.6.1)——直推根本进不来,
+ * 能进来的就只有 PR 合并。本条 push 复核是「形态留痕」,不是那条防线本身。
+ */
+function evaluateLanding() {
+  const parents = parentCount();
+
+  // ① 合并提交:平台按 merge commit 合并时留下的形态,必是 PR 合并。
+  if (parents > 1) {
+    return {
+      blocked: false,
+      parents,
+      mode: "merge commit",
+      reason: "HEAD 有 " + parents + " 个父提交(PR 合并提交)",
+    };
+  }
+
+  // ② 单父提交:可能是 squash / rebase 合并(规范推荐的形态),也可能是直推。
+  //    用提交信息里的 PR 关联来区分 —— 平台合并 PR 时会把 PR 号写进 message。
+  const message = git(["log", "-1", "--format=%B", "HEAD"]);
+  const prRef = message.match(/(?:^|\n)\s*(?:PR-URL:\s*\S+|#[0-9]+)/);
+  if (prRef) {
+    return {
+      blocked: false,
+      parents,
+      mode: "squash/rebase",
+      reason: "HEAD 是单父提交,但提交信息带 PR 关联(" + prRef[0].trim() + "),认定为 PR 合并",
+    };
+  }
+
+  // ③ 单父且无 PR 关联:无法证明走过 PR,但也不能证明没走(平台形态可能再变)。
+  //    保守放行并留痕 —— 直推的真正拦截在平台分支保护,这里不再叠加会误报的判据。
+  return {
+    blocked: false,
+    parents,
+    mode: "unknown",
+    reason: "单父提交且提交信息无 PR 关联,无法从形态认定;直推拦截由平台分支保护负责(保守放行)",
+  };
+}
+
 function main() {
   const statusOnly = process.argv.includes("--status");
   const result = evaluate();
+  const mergeCommit = process.argv.includes("--merge-commit");
 
   if (statusOnly) {
     console.log(
@@ -239,6 +315,19 @@ function main() {
       process.exit(1);
     }
     console.log("[branch-guard] OK(" + pr.reason + ")");
+    return;
+  }
+
+  if (mergeCommit) {
+    // push 事件复核:判据见 evaluateLanding()。先按分支分流,不在受保护分支上时
+    // 这条判据无从命中,不该误报。
+    if (result.branch !== PROTECTED_BRANCH) {
+      console.log("[branch-guard] OK(不在 " + PROTECTED_BRANCH + " 上,push 复核不适用)");
+      return;
+    }
+    const landing = evaluateLanding();
+    console.log("[branch-guard] v" + GUARD_VERSION + " push 复核:HEAD 父提交数 " + landing.parents + ",合并方式 " + landing.mode);
+    console.log("[branch-guard] OK(" + landing.reason + ")");
     return;
   }
 

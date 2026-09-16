@@ -4,7 +4,7 @@
  */
 import "server-only";
 
-import { db } from "@/lib/db";
+import { db } from "~/lib/db";
 import { task, taskImage, type Task } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";

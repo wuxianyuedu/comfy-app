@@ -1,5 +1,5 @@
-import { MediaThumbnail } from "@/components/studio/ui/MediaThumbnail";
-import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
+import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
+import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
 
 import type { TaskItem } from "./history-types";
 import { STATUS_STYLE, timeAgo } from "./history-utils";

@@ -15,24 +15,24 @@
  * parsing).  This file keeps only the orchestration + caching layers.
  */
 import { TRPCError } from "@trpc/server";
-import { workflowTemplateRepository } from "@/lib/core/repository";
-import { detectParamMap } from "@/lib/comfyui/workflow";
+import { workflowTemplateRepository } from "~/lib/core/repository";
+import { detectParamMap } from "~/lib/comfyui/workflow";
 import {
   asRawWorkflow,
   asRecord,
   extractPositions,
   toStringValue,
   type ApiWorkflowNode,
-} from "@/lib/comfyui/raw";
+} from "~/lib/comfyui/raw";
 import {
   cacheJson,
   cacheDel,
   cacheDelPrefix,
   cachePeek,
-} from "@/lib/server-cache";
-import { parseModesJson } from "@/lib/workflow-types";
-import { createObjectInfoResolvers } from "@/lib/comfyui/workflow-detail-combo";
-import { inferIsMultiline } from "@/lib/comfyui/types";
+} from "~/lib/server-cache";
+import { parseModesJson } from "~/lib/workflow-types";
+import { createObjectInfoResolvers } from "~/lib/comfyui/workflow-detail-combo";
+import { inferIsMultiline } from "~/lib/comfyui/types";
 import {
   buildRawInputs,
   buildRawNodeMeta,
@@ -42,17 +42,17 @@ import {
   type DetailNodeView,
   type RawNodeMeta,
   type RawViewPacket,
-} from "@/lib/comfyui/workflow-detail-raw";
+} from "~/lib/comfyui/workflow-detail-raw";
 import {
   hasExecutableWorkflow,
   hasGraphContent,
   hasRawContent,
-} from "@/lib/comfyui/execution-shape";
+} from "~/lib/comfyui/execution-shape";
 import {
   enrichWorkflowIO,
   type WorkflowIOEntry,
   type WorkflowIORawEntry,
-} from "@/lib/comfyui/workflow-detail-io";
+} from "~/lib/comfyui/workflow-detail-io";
 import {
   parseSubgraphLinks,
   boundarySlotsByNode,
@@ -63,7 +63,7 @@ import {
   extractSubgraphAnnotations,
   type BoundaryLink,
   type BoundaryPin,
-} from "@/lib/comfyui/workflow-subgraph-parse";
+} from "~/lib/comfyui/workflow-subgraph-parse";
 
 /** workflowIO 条目（enrichWorkflowIO 的返回形状 + kind 收窄为客户端契约的
  *  联合类型）。`kind` 是 IO-edit 模式写入的三桶语义标记（param/widget/
@@ -538,7 +538,7 @@ export async function buildWorkflowDetailFull(
   );
   if (meta?.sourcePath) {
     sourcePath = meta.sourcePath;
-    const { reimportFromSource } = await import("@/lib/comfyui/importSource");
+    const { reimportFromSource } = await import("~/lib/comfyui/importSource");
     const re = await reimportFromSource({
       sourcePath: meta.sourcePath,
       sourceMtime: meta.sourceMtime,

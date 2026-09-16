@@ -8,23 +8,23 @@
 
 import React from "react";
 
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { Icon } from "@/components/ui/icon";
-import { ShotSizePicker } from "@/components/workshop/ShotSizePicker";
-import { useLLM } from "@/components/workshop/LLMContext";
-import { fetchGenerationLogs } from "@/lib/workshop/generation-log-client";
-import type { PersistableGenerationLog } from "@/lib/workshop/generation-log-client";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { Icon } from "~/components/ui/icon";
+import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
+import { useLLM } from "~/components/workshop/LLMContext";
+import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
+import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import type {
   PortraitSession,
   PortraitSessionActions,
-} from "@/components/workshop/hooks/use-character-portrait";
-import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
-import type { WorkshopWorkflowOption } from "@/lib/workshop/generation-client";
+} from "~/components/workshop/hooks/use-character-portrait";
+import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
+import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 import {
   PORTRAIT_SOURCE_LABELS,
   portraitCandidates,
-} from "@/lib/workshop/character-portrait";
-import type { Character } from "@/lib/workshop/types";
+} from "~/lib/workshop/character-portrait";
+import type { Character } from "~/lib/workshop/types";
 
 /** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
 export interface CharacterPortraitContext {
@@ -238,18 +238,29 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 正在用 {session.modelLabel || "当前通道"} 生成定妆照…
               </p>
               <div className="bg-elevated h-1 w-full overflow-hidden rounded-full">
-                <div
-                  className="bg-primary h-full rounded-full transition-all"
-                  style={{ width: `${Math.max(4, session.progress)}%` }}
-                />
+                {session.progress === null ? (
+                  /* 通道不提供进度（远端一次性请求）：脉动条表示「进行中」，
+                     不拿 0 装成 4% 的确定性进度。 */
+                  <div className="bg-primary h-full w-full animate-pulse rounded-full" />
+                ) : (
+                  <div
+                    className="bg-primary h-full rounded-full transition-all"
+                    style={{ width: `${Math.max(4, session.progress)}%` }}
+                  />
+                )}
               </div>
             </>
           )}
           {session.status && !session.error && (
-            <p className="text-primary text-[11px]">{session.status}</p>
+            <p role="status" className="text-primary text-[11px]">
+              {session.status}
+            </p>
           )}
           {session.error && (
-            <p className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+            <p
+              role="alert"
+              className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300"
+            >
               {session.error}
             </p>
           )}

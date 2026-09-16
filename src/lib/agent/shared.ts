@@ -1,7 +1,7 @@
 // ── Agent 模块的共享线上协议类型 ─────────────────────────
 // 同时被服务端 handler（server.ts）、客户端 client.ts 引用，
 // 保证两端只对齐一份契约。纯类型，无副作用。
-import type { WorkshopDraftDto } from "@/lib/workshop/draft-sync-shared";
+import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** Agent 对话中的消息类型（与服务端/浏览器共享）。 */
 export type AgentMessageLike =
