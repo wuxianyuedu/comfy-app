@@ -1,0 +1,7 @@
+## Fixed
+
+- **Windows 上一键初始化必失败：`pnpm install` 的 `postinstall` 用了只有 POSIX 能跑的 shell**。原实现是 `sh scripts/install-git-hooks.sh || true`，而 `postinstall` 在 Windows 上由 **cmd.exe 语义**执行 —— `sh` 与 `|| true` 两处都报「不是内部或外部命令」，postinstall 非零退出 → pnpm 以 `ERR_PNPM_EXECUTOR_LIFECYCLE_SCRIPT_FAILED` 收尾，双击 `tools/start/run-local.ps1` 的初始化当场卡死，而提示里的「请检查网络后重试」照做永远修不好（CI 在 Linux 上跑，这条在流水线上一直没红过）。现在接钩子的实现是纯 Node 的 `scripts/install-git-hooks.mjs`（不在 git 检出 / 设置失败都只提示、以 0 退出，绝不阻断安装），`postinstall` 逐字改成 `node scripts/install-git-hooks.mjs`；判据机器化在 `launcher-core/node-runner.mjs::checkPostinstall()`（postinstall 必须逐字指向该入口，且不得出现 `sh x` / `bash` / `||` / `&&` / `source` / `npm`）。
+
+- **「拉了更新没重装依赖」被当成「已就绪」而跳过安装，报错落在业务模块上**。启动前的依赖判据此前只看 `node_modules` 在不在（`.modules.yaml` + `.bin/next`），而「装了」与「装的是当前 lockfile」是两件事：新依赖缺席时，用户看到的是一堆 `Cannot find module`，与「依赖没装」这句结论完全不像 —— 重新双击入口会显示「依赖已就绪」并把问题留在原地。现在启动编排器比对 `node_modules/.pnpm/lock.yaml` 与仓库 `pnpm-lock.yaml`（`lockfileDrift()`），漂移才用 `pnpmInvocation(["install"])` 补装，并用 `verifyInstall()`（`.modules.yaml` + 关键依赖目录 + lockfile 一致）**复核目标状态**——不看退出码；复核不通过即非零退出 + 可行动提示，不再出现「显示已就绪但起不来」。lockfile 一致时不再无条件重装一遍（正常路径上纯等待）。
+
+- **Windows 桌面启动器解析 `node` 时可能选中「调度不了」的形态**。`shutil.which("node")` 按 `PATHEXT` 找**存在的文件**，命中 `.cmd` / corepack 的无扩展名 shim 后直接交给 `Popen` 起 —— 这两种在 Windows 上必失败（批处理只有 cmd.exe 会解释、无扩展名 shim 可能不是 PE 镜像），而终端里 `node -v` 明明是通的。现在候选按「`.exe` / 无扩展名优先，`.cmd`/`.bat` 垫底且经 `cmd.exe /c` 起」排序，并对选中形态**真起一次确认**；确认不了就返回空，让调用方给可行动提示，而不是拉起一个必然失败的进程。

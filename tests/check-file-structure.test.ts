@@ -34,8 +34,7 @@ import {
 import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it, vi
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
@@ -79,7 +78,10 @@ beforeEach(() => {
   mkdirSync(join(workdir, "tools", "build"), { recursive: true });
   /* R11 的默认前提：Next 16 代理约定文件在 src/ 根。真实仓库里它一直在，
    * 所以「干净工作区放行」这类基线用例必须带上它，否则测的不是真实形态。 */
-  writeFileSync(join(workdir, "src", "proxy.ts"), "export function proxy() {}\n");
+  writeFileSync(
+    join(workdir, "src", "proxy.ts"),
+    "export function proxy() {}\n",
+  );
 });
 
 afterEach(() => {
@@ -236,7 +238,6 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       writeFileSync(abs, "export function proxy() {}\n");
     };
 
-
     it("src/proxy.ts 存在时放行（约定名不被 R2 kebab 规则误伤）", () => {
       writeProxy("src/proxy.ts");
       const { code, output } = run();
@@ -282,7 +283,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     };
 
     it("内嵌 NUL 字节被阻断", () => {
-      writeSrc("a.ts", 'export const SENTINEL = "' + NUL + 'CODE0' + NUL + '";\n');
+      writeSrc(
+        "a.ts",
+        'export const SENTINEL = "' + NUL + "CODE0" + NUL + '";\n',
+      );
       const { code, output } = run();
       expect(code).toBe(1);
       expect(output).toContain("R12");
@@ -307,7 +311,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("普通注释里的中文与 emoji 不是控制字符，放行", () => {
-      writeSrc("d.ts", "// 哨兵 → 用可打印形式，别用真的 NUL 字节 ✅\nexport const d = 4;\n");
+      writeSrc(
+        "d.ts",
+        "// 哨兵 → 用可打印形式，别用真的 NUL 字节 ✅\nexport const d = 4;\n",
+      );
       const { code, output } = run();
       expect(code).toBe(0);
       expect(output).not.toContain("R12");
@@ -326,7 +333,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     const writeLines = (rel: string, lines: number) => {
       const abs = join(workdir, rel);
       mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, Array.from({ length: lines }, () => "// x").join("\n"));
+      writeFileSync(
+        abs,
+        Array.from({ length: lines }, () => "// x").join("\n"),
+      );
     };
 
     it("src/app 下的超长视图进入提醒（只提示不阻断）", () => {
@@ -359,7 +369,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("测试文件不进拆分候选（用例体量不是可维护性信号）", () => {
-      writeLines("src/app/(main)/settings/hooks/use-settings-page.test.ts", 901);
+      writeLines(
+        "src/app/(main)/settings/hooks/use-settings-page.test.ts",
+        901,
+      );
       const { code, output } = run();
       expect(code).toBe(0);
       expect(output).not.toContain("拆分候选");
@@ -374,7 +387,10 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     const writeLines = (rel: string, lines: number) => {
       const abs = join(workdir, rel);
       mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, Array.from({ length: lines }, () => "// x").join("\n"));
+      writeFileSync(
+        abs,
+        Array.from({ length: lines }, () => "// x").join("\n"),
+      );
     };
     /* 写基线（键为仓库相对路径，值为行数）。
      * 路径与脚本同级 —— 本测试把脚本**拷到工作区根**（`__dirname` = 工作区根），
@@ -383,7 +399,11 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     const writeBaseline = (files: Record<string, number>) => {
       writeFileSync(
         BASELINE(),
-        JSON.stringify({ threshold: 900, total: Object.keys(files).length, files }, null, 2),
+        JSON.stringify(
+          { threshold: 900, total: Object.keys(files).length, files },
+          null,
+          2,
+        ),
       );
     };
 
@@ -447,6 +467,115 @@ describe("check-file-structure.cjs（提交门槛）", () => {
         files: Record<string, number>;
       };
       expect(written.files).toEqual({ "src/lib/huge.ts": 1000 });
+    });
+
+    /* ── 行数按 baselineRev 同口径重数（ISSUE #637）──
+     * 现场：`LogPanel.tsx` 的基线 1102 记于全库 prettier 治理**之前**；治理后同一
+     * 文件（一个字没改）已是 1236 行。此后任何人**一行都不碰它**，CI 也报
+     * 「R5 超限文件继续变大（1102 → 1236）」—— 棘轮把「格式口径变化」读成了
+     * 「这次改动让文件变大」，而作者无从下手。
+     *
+     * 修法：基线自带记它那一刻的 `baselineRev`，比对前按**今天的计数口径**重数
+     * 基线版本的内容 —— 判据变成「这个文件在**同口径**下比基线那一刻多没多」。
+     * 下面用真 git 仓库造出「基线版本」与「当前」两态。 */
+    describe("R5 行数口径随 baselineRev 重数（ISSUE #637）", () => {
+      const git = (...args: string[]) => {
+        execFileSync("git", args, { cwd: workdir, stdio: "ignore" });
+      };
+      const writeBaselineAtRev = (
+        files: Record<string, number>,
+        rev: string,
+      ) => {
+        writeFileSync(
+          BASELINE(),
+          JSON.stringify(
+            {
+              threshold: 900,
+              ruleVersion: 3,
+              baselineRev: rev,
+              total: Object.keys(files).length,
+              files,
+            },
+            null,
+            2,
+          ),
+        );
+      };
+      const head = () =>
+        execFileSync("git", ["rev-parse", "HEAD"], {
+          cwd: workdir,
+          encoding: "utf8",
+        }).trim();
+      /** 造一个「基线那一刻」的提交，返回它的修订号。 */
+      const commitAs = (rel: string, lines: number, message: string) => {
+        writeLines(rel, lines);
+        git("add", "-A");
+        git("commit", "-qm", message);
+        return head();
+      };
+
+      /* 脚本要 `git show <rev>:<file>` 取基线版本内容，故逐条自建仓库；
+       * `workdir` 由 beforeEach 给出。 */
+      beforeEach(() => {
+        git("init", "-q");
+        git("config", "user.email", "t@example.com");
+        git("config", "user.name", "t");
+        git("config", "commit.gpgsign", "false");
+      });
+
+      it("基线数字记少了、内容未变 → 按同口径重数后放行（不误报）", () => {
+        /* 基线那一刻文件是 1000 行，但基线里记成 900（旧口径 / 手工记漏）。
+         * 旧判据会拿 1000 > 900 直接判「这次改动让它变大」—— 而当前 1000 行与
+         * 基线版本逐行相同，压根没人动过它。 */
+        const rev = commitAs("src/lib/huge.ts", 1000, "baseline");
+        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
+
+        const { code, output } = runWith(["--strict"]);
+        expect(code).toBe(0);
+        expect(output).toContain("[structure] OK");
+      });
+
+      it("内容未变 → 放行；再真加 20 行 → 阻断（同口径比较不放过真实膨胀）", () => {
+        const rev = commitAs("src/lib/huge.ts", 1000, "baseline");
+        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
+        /* ① 一个字没改：同口径重数得 1000，与当前 1000 持平 → 放行。 */
+        expect(runWith(["--strict"]).code).toBe(0);
+        /* ② 真加了 20 行：1000 → 1020，同口径下 1020 > 1000 → 阻断。 */
+        writeLines("src/lib/huge.ts", 1020);
+        const { code, output } = runWith(["--strict"]);
+        expect(code).toBe(1);
+        expect(output).toContain("R5 超限文件继续变大");
+      });
+
+      it("基线版本里没有该文件（本次新增）→ 退回记录值，不静默漏放", () => {
+        const rev = commitAs("src/lib/other.ts", 10, "empty baseline");
+        writeLines("src/lib/huge.ts", 1000);
+        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
+
+        const { code, output } = runWith(["--strict"]);
+        expect(code).toBe(1);
+        expect(output).toContain("R5 超限文件继续变大");
+      });
+
+      it("基线缺 baselineRev（旧基线）→ 退回记录值，行为与历史一致", () => {
+        writeLines("src/lib/huge.ts", 1000);
+        writeBaseline({ "src/lib/huge.ts": 1000 });
+        const { code, output } = runWith(["--strict"]);
+        expect(code).toBe(0);
+        expect(output).toContain("[structure] OK");
+      });
+
+      it("--update 记下 baselineRev（供日后同口径重数）", () => {
+        writeLines("src/lib/huge.ts", 1000);
+        git("add", "-A");
+        git("commit", "-qm", "seed");
+        const rev = head();
+        expect(runWith(["--update"]).code).toBe(0);
+        const written = JSON.parse(readFileSync(BASELINE(), "utf8")) as {
+          baselineRev?: string;
+        };
+        expect(written.baselineRev).toBe(rev);
+      });
     });
   });
 });
@@ -1166,7 +1295,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     const focus = readFileSync(FOCUS_SCRIPT, "utf8");
     // ① 启动器：启动页一可见就拉一次（one-shot，只做一次）
     expect(launcher).toContain("def spawn_splash_front(");
-    expect(launcher).toMatch(/if not splash_front_done and find_tauri_window\(\):/);
+    expect(launcher).toMatch(
+      /if not splash_front_done and find_tauri_window\(\):/,
+    );
     expect(launcher).toContain("splash_front_done = True");
     // ② 判据在复核脚本里，复用已验证可靠的前台手段（Alt + AttachThreadInput）
     expect(focus).toContain("def should_front_splash(");
@@ -1354,7 +1485,10 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     // 主窗走的是另两份 capability，一并守住「这条权限是每窗各自声明的」
     for (const name of ["default.json", "remote.json"]) {
       expect(
-        readFileSync(join(process.cwd(), "src-tauri", "capabilities", name), "utf8"),
+        readFileSync(
+          join(process.cwd(), "src-tauri", "capabilities", name),
+          "utf8",
+        ),
       ).toContain('"core:window:allow-start-dragging"');
     }
   });
@@ -1371,11 +1505,14 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     const rust = readFileSync(LIB_RS, "utf8");
     expect(rust).toContain("fn set_splash_compact");
     // 新增应用命令要三处同步：build.rs / capabilities（否则运行期 not allowed by ACL）
-    expect(readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8")).toContain(
-      '"set_splash_compact"',
-    );
     expect(
-      readFileSync(join(process.cwd(), "src-tauri", "capabilities", "splash.json"), "utf8"),
+      readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8"),
+    ).toContain('"set_splash_compact"');
+    expect(
+      readFileSync(
+        join(process.cwd(), "src-tauri", "capabilities", "splash.json"),
+        "utf8",
+      ),
     ).toContain('"allow-set-splash-compact"');
   });
 
@@ -1397,8 +1534,12 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
     // 内联 onclick 是「脚本没跑到绑定」时的第二道；两条路必须汇到同一个入口
     expect(html).toContain("window.__splashWinAction");
-    expect(html).toMatch(/onclick="window\.__splashWinAction && window\.__splashWinAction\('minimize'\)"/);
-    expect(html).toMatch(/onclick="window\.__splashWinAction && window\.__splashWinAction\('close'\)"/);
+    expect(html).toMatch(
+      /onclick="window\.__splashWinAction && window\.__splashWinAction\('minimize'\)"/,
+    );
+    expect(html).toMatch(
+      /onclick="window\.__splashWinAction && window\.__splashWinAction\('close'\)"/,
+    );
     expect(html).toContain("performWinAction");
     // 按钮容器整体也不拖拽（个别按钮漏标 no-drag 时的第二层保险）
     const buttonsCss = html.slice(
@@ -1421,9 +1562,9 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(rust).toContain("win_minimize,");
     expect(rust).toContain("win_close,");
 
-    expect(readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8")).toContain(
-      '"win_close"',
-    );
+    expect(
+      readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8"),
+    ).toContain('"win_close"');
     const splashCap = readFileSync(
       join(process.cwd(), "src-tauri", "capabilities", "splash.json"),
       "utf8",

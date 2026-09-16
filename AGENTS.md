@@ -92,7 +92,7 @@
 7. **提交必须通过 `.githooks/pre-commit`**（分支守卫 + 结构检查 + tsc + eslint +
    UI/逻辑分离棘轮 + CHANGELOG 碎片，全部走 `pnpm exec`）。钩子失败先修代码，
    禁止 `--no-verify` 绕过进历史。钩子由 `pnpm install` 自动接上
-   （`package.json` postinstall → `scripts/install-git-hooks.sh` 写
+   （`package.json` postinstall → `scripts/install-git-hooks.mjs` 写
    `core.hooksPath=.githooks`）；未生效时手动 `git config core.hooksPath .githooks`。
 8. **新增含 postinstall 构建脚本的依赖**：同步更新 `pnpm-workspace.yaml`
    的 `allowBuilds`，否则非交互模式 `pnpm install` 会 exit 1。
