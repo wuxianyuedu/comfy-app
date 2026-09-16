@@ -8,11 +8,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { cancelTask } from "@/lib/task-cancel-client";
+import { cancelTask } from "~/lib/task-cancel-client";
 
 import { useCancelTask } from "./use-cancel-task";
 
-vi.mock("@/lib/task-cancel-client", () => ({ cancelTask: vi.fn() }));
+vi.mock("~/lib/task-cancel-client", () => ({ cancelTask: vi.fn() }));
 
 const mockedCancel = vi.mocked(cancelTask);
 

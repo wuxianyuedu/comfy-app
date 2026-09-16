@@ -10,7 +10,7 @@
  * 兜底记录的形状与内置记录一致 —— 而不是逐个断言具体值（那会把表变成快照）。
  */
 import { describe, expect, it } from "vitest";
-import { CUSTOM_NODE_TYPES } from "@/config/custom-nodes";
+import { CUSTOM_NODE_TYPES } from "~/config/custom-nodes";
 import {
   NODE_TYPE_REGISTRY,
   getNodeConfig,

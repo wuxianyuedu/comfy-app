@@ -13,7 +13,7 @@ import {
   defaultEndpointPathForMode,
   parseRemoteModeAdapters,
   type RemoteModeAdapter,
-} from "@/lib/workshop/model-mode-contract";
+} from "~/lib/workshop/model-mode-contract";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { api } from "~/trpc/react";
 

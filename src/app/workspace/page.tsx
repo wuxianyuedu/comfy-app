@@ -8,59 +8,59 @@ import {
   HomePage,
   WorkspaceNav,
   AuroraBackground,
-} from "@/components/studio";
-import type { RecentProject, WorkspaceView } from "@/components/studio";
-import { WorkshopPipeline } from "@/components/workshop/WorkshopPipeline";
-import { ShellTabs } from "@/components/studio/ShellTabs";
+} from "~/components/studio";
+import type { RecentProject, WorkspaceView } from "~/components/studio";
+import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
+import { ShellTabs } from "~/components/studio/ShellTabs";
 import {
   listProjects,
   setActive,
   reapAllEmptyDrafts,
-} from "@/lib/project-canvas/canvas-store";
+} from "~/lib/project-canvas/canvas-store";
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
 /* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
 const SettingsOverlay = dynamic(
   () =>
-    import("@/components/settings/SettingsOverlay").then(
+    import("~/components/settings/SettingsOverlay").then(
       (mod) => mod.SettingsOverlay,
     ),
   { ssr: false },
 );
 
 const WorksGallery = dynamic(
-  () => import("@/components/studio").then((mod) => mod.WorksGallery),
+  () => import("~/components/studio").then((mod) => mod.WorksGallery),
   { ssr: false },
 );
 const ProjectOutputs = dynamic(
-  () => import("@/components/studio").then((mod) => mod.ProjectOutputs),
+  () => import("~/components/studio").then((mod) => mod.ProjectOutputs),
   { ssr: false },
 );
 const ModelLibrary = dynamic(
-  () => import("@/components/studio").then((mod) => mod.ModelLibrary),
+  () => import("~/components/studio").then((mod) => mod.ModelLibrary),
   { ssr: false },
 );
 const HistoryList = dynamic(
-  () => import("@/components/studio").then((mod) => mod.HistoryList),
+  () => import("~/components/studio").then((mod) => mod.HistoryList),
   { ssr: false },
 );
 const TrainingStudio = dynamic(
-  () => import("@/components/studio").then((mod) => mod.TrainingStudio),
+  () => import("~/components/studio").then((mod) => mod.TrainingStudio),
   { ssr: false },
 );
 const WorkflowLibrary = dynamic(
-  () => import("@/components/studio").then((mod) => mod.WorkflowLibrary),
+  () => import("~/components/studio").then((mod) => mod.WorkflowLibrary),
   { ssr: false },
 );
 
 /* Lazy-load the heavier canvas/film editors (ReactFlow etc.) on the client. */
 const FilmStudio = dynamic(
-  () => import("@/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
+  () => import("~/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
   { ssr: false },
 );
 const ProjectCanvas = dynamic(
   () =>
-    import("@/components/studio/ProjectCanvas").then(
+    import("~/components/studio/ProjectCanvas").then(
       (mod) => mod.ProjectCanvas,
     ),
   { ssr: false },

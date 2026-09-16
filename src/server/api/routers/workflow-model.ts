@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { workflowModelTagRepository } from "@/lib/core/repository";
+import { workflowModelTagRepository } from "~/lib/core/repository";
 
 export const workflowModelRouter = createTRPCRouter({
   /** GET /api/workflow-models — tag library */

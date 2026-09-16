@@ -5,8 +5,8 @@ import React, { useState } from "react";
 import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
-import { portColor, inferIsMultiline } from "@/lib/comfyui/types";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { portColor, inferIsMultiline } from "~/lib/comfyui/types";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
 /** COMBO inputs additionally carry their option list (stamped by the import

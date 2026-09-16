@@ -14,7 +14,7 @@ import {
   refreshCustomNodes,
   getCustomNodesManifest,
   type ManifestNodeRaw,
-} from "@/config/custom-nodes";
+} from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
 import type {
   DiscoveredSubpkg,

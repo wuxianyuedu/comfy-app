@@ -17,7 +17,7 @@ import path from "node:path";
 import {
   appendSessionBanner,
   buildSessionBanner,
-} from "@/lib/session-banner.server";
+} from "~/lib/session-banner.server";
 
 let tmpDir: string;
 let logFile: string;

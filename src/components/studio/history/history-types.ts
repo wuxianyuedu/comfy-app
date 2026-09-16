@@ -1,4 +1,4 @@
-import type { ValidationError } from "@/lib/comfyui/validation";
+import type { ValidationError } from "~/lib/comfyui/validation";
 import { type RouterOutputs } from "~/trpc/react";
 
 export interface TaskItem {

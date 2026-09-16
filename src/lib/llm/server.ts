@@ -3,8 +3,8 @@ import type { ZodType } from "zod";
 import {
   llmConfigRepository,
   remoteModelRepository,
-} from "@/lib/core/repository";
-import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
+} from "~/lib/core/repository";
+import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import {
   resolveTaskTemperature,
   splitExtraModels,

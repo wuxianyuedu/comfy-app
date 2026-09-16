@@ -3,7 +3,7 @@
 // 发起信息、模型输入、流式输出与最终结果逐条记录下来，
 // 前端 ExtractToolbar 把日志渲染为可折叠面板，跑完也不清空。
 // 纯类型 + 纯函数，无 React 依赖（对齐 lib/ 层约束）。
-import type { LLMMessage } from "@/lib/llm/types";
+import type { LLMMessage } from "~/lib/llm/types";
 
 /** 一次模型提取执行的执行阶段。 */
 export type ExtractLogKind =

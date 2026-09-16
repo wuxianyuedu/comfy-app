@@ -1,21 +1,21 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { DynamicWorkflowForm } from "@/components/studio/shared/DynamicWorkflowForm";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { DynamicWorkflowForm } from "~/components/studio/shared/DynamicWorkflowForm";
 /* 直接引基础件与结果卡（不再经 CanvasNode 目录 barrel）：barrel 会 re-export
  * `CanvasNode`，而 CanvasNode.tsx 又渲染本组件 —— 经 barrel 就成了
  * `CanvasNode → ImageGenerationPanel → index → CanvasNode` 的循环（规范 12.7）。 */
 import { Field, btnCls } from "./CanvasNode/CanvasNodePrimitives";
 import { ResultCard } from "./CanvasNode/ResultCard";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { WorkflowModesState } from "./WorkflowNode";
-import type { CanvasNodeData } from "@/lib/project-canvas/canvas-types";
+import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import {
   IMAGE_WORKFLOW_TYPES,
   VIDEO_WORKFLOW_TYPES,
   normalizeTaskType,
-} from "@/lib/workflow-types";
+} from "~/lib/workflow-types";
 import { setActiveTaskId } from "./activeTask";
 import { useCancelTask } from "./hooks/use-cancel-task";
 

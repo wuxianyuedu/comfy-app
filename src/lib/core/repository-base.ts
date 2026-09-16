@@ -36,7 +36,7 @@
 import "server-only";
 
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db } from "~/lib/db";
 import type { AnySQLiteColumn, AnySQLiteTable } from "drizzle-orm/sqlite-core";
 import { NotFoundError } from "./errors";
 import type { Task, TaskImage } from "~/server/db/schema";

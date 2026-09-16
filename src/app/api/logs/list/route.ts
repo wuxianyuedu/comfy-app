@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireServerUser } from "@/lib/auth-server";
+import { requireServerUser } from "~/lib/auth-server";
 import fs from "node:fs";
 import path from "node:path";
 import { unauthorizedResponse } from "~/server/lib/error-response";

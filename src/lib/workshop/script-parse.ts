@@ -3,8 +3,8 @@
 // 「本地模型 / 配置API」通道复用既有 LLM 调用链(streamChat → /api/llm),
 // 本文件只提供 prompt 构建与 JSON 回复解析(provider 由组件层透传)。
 
-import type { LLMMessage } from "@/lib/llm/types";
-import { extractJsonArray } from "@/lib/llm/parse";
+import type { LLMMessage } from "~/lib/llm/types";
+import { extractJsonArray } from "~/lib/llm/parse";
 import type { Character, Scene, Shot, ShotType, StyleRef } from "./types";
 import {
   buildCharacterNegative,

@@ -10,7 +10,7 @@
 import React from "react";
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
-import { markdownToHtml } from "@/lib/comfyui/markdown";
+import { markdownToHtml } from "~/lib/comfyui/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { LLMStatusChip } from "~/components/workshop/LLMContext";
 import { SCROLLBAR_VISIBLE_CLASSES } from "~/components/workshop/ScriptMarkdownEditor.parts";

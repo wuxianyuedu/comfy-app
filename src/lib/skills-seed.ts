@@ -11,7 +11,7 @@
  *
  * @module skills-seed
  */
-import type { SkillSeed } from "@/lib/core/repository-skill";
+import type { SkillSeed } from "~/lib/core/repository-skill";
 
 /** 内置技能种子数据。 */
 export const BUILTIN_SKILLS: SkillSeed[] = [

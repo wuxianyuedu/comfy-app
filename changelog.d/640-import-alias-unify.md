@@ -1,0 +1,3 @@
+## Changed
+
+- **import 别名统一为 `~` 前缀，并加门禁钉住（ISSUE #640）**：本仓库的别名约定是 `~`（`tsconfig.json` / `components.json` 均如此），但 `tsconfig.json` 的 `paths` 里同时留着 create-t3-app 脚手架带来的 `@/*` —— 于是 `@/` 也能编译、也能跑、类型也对，**写错的代价是零**，漂移面积只会自己变大（本次治理时点：`@/` 629 处 / `~/` 2500+ 处）。`src/**` 与 `e2e/**` 的 629 处静态 import、动态 `import()`、`vi.mock()` 说明符，以及 22 处解释旧写法的注释引用，全部改为 `~/`。新增 `scripts/check-import-alias.cjs`（R13）在 pre-commit 与 CI 拦截回潮，回归测试 `tests/check-import-alias.test.ts` 覆盖「该拦的拦、注释不误伤」。高发区是 `src/components/ui/**` —— `shadcn add` 生成的组件默认写 `@/`，而 ui/ 是「工具生成、尽量不手改」的目录。规范正文见文档集 [12 §12.8.0](../docs/standards/12-代码组织与文件结构.md) 与 [16 §16.3](../docs/standards/16-shadcn-ui与表单校验.md)。

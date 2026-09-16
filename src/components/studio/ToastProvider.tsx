@@ -9,7 +9,7 @@ import React, {
   useMemo,
 } from "react";
 import { X } from "lucide-react";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 
 type ToastKind = "success" | "error" | "info" | "loading";
 

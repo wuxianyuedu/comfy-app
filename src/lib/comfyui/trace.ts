@@ -32,8 +32,8 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 
-import { redactSecretShaped } from "@/lib/core/redact-secret";
-import { COMFYUI_TRACE_LOG } from "@/lib/log-paths";
+import { redactSecretShaped } from "~/lib/core/redact-secret";
+import { COMFYUI_TRACE_LOG } from "~/lib/log-paths";
 
 /** trace 子组件：同一 trace 文件中用来区分消息来自哪条通道。 */
 export type TraceChannel = "cli" | "ws" | "http" | "history" | "session";

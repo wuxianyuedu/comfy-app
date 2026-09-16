@@ -233,7 +233,7 @@ export function resolveTaskTemperature(opts: {
 
 export interface LLMConfig {
   provider: LLMProviderType;
-  /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `@/lib/endpoints`
+  /** OpenAI-compatible base URL: 本机 Ollama 默认值见 `~/lib/endpoints`
    *  （`OLLAMA_DEFAULT_BASE_URL`），也可以指向任意远端 `https://…/v1`。 */
   baseUrl: string;
   model: string;

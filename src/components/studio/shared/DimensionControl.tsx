@@ -14,7 +14,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-import { NumberField } from "@/components/studio/ui/NumberField";
+import { NumberField } from "~/components/studio/ui/NumberField";
 import {
   CLARITY_SUBGROUP_OF_KIND,
   DEFAULT_ALIGN_MULTIPLE,

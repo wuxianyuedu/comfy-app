@@ -13,11 +13,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { errorMessage } from "@/lib/error-message";
+import { errorMessage } from "~/lib/error-message";
 import {
   fetchHistoryTasks,
   probeGlobalTaskCount,
-} from "@/lib/project-canvas/history-panel-client";
+} from "~/lib/project-canvas/history-panel-client";
 import {
   countActive,
   type DisplayMode,
@@ -25,7 +25,7 @@ import {
   type HistoryScope,
   type HistoryTaskRow,
   type TaskMediaType,
-} from "@/lib/project-canvas/history-panel-types";
+} from "~/lib/project-canvas/history-panel-types";
 
 /** 主列表一次取多少条。画布侧栏不做分页，80 条足够滚动浏览。 */
 const TAKE = 80;

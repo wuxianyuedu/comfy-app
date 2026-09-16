@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import type { OptionGroup } from "@/lib/workshop/character-options";
+import type { OptionGroup } from "~/lib/workshop/character-options";
 
 /**
  * AttributeMultiSelect —— 角色属性穷举式多选下拉。

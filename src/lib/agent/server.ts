@@ -5,8 +5,8 @@
 // 本文件不执行工具 —— 工具执行在浏览器端（工坊 controller 里）。
 import "server-only";
 
-import { completeLLM, completeLLMTools, getLLMConfig } from "@/lib/llm/server";
-import type { LLMConfig, LLMMessage, LLMTool } from "@/lib/llm/types";
+import { completeLLM, completeLLMTools, getLLMConfig } from "~/lib/llm/server";
+import type { LLMConfig, LLMMessage, LLMTool } from "~/lib/llm/types";
 
 import type { AgentChatRequest, AgentChatResponse } from "./shared";
 import {

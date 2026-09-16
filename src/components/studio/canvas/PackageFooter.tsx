@@ -34,8 +34,8 @@
  * height. `pointer-events:none` so it never intercepts drag gestures.
  */
 
-import type { NodeTypeConfig } from "@/lib/comfyui/node-config";
-import { getCustomNodePackage } from "@/config/custom-nodes";
+import type { NodeTypeConfig } from "~/lib/comfyui/node-config";
+import { getCustomNodePackage } from "~/config/custom-nodes";
 
 export function PackageFooter({
   config,

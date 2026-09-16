@@ -3,10 +3,10 @@
 // 提示词重算纯函数。覆盖规范 §11 要求的纯函数 + 逻辑测试。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { LLMMessage } from "@/lib/llm/types";
+import type { LLMMessage } from "~/lib/llm/types";
 import type { WorkshopSessionState } from "./types";
 import type { WorkshopLLMConfig } from "./llm";
-import type { Character, Shot } from "@/lib/workshop/types";
+import type { Character, Shot } from "~/lib/workshop/types";
 import type { CreateSessionInput } from "./repository";
 
 const { store } = vi.hoisted(() => ({

@@ -4,7 +4,7 @@
  */
 import "server-only";
 
-import { db } from "@/lib/db";
+import { db } from "~/lib/db";
 import { project, type Project } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, desc } from "drizzle-orm";

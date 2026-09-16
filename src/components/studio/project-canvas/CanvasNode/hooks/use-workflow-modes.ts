@@ -10,9 +10,9 @@
 "use client";
 
 import { useCallback } from "react";
-import { errorMessage } from "@/lib/error-message";
-import { patchWorkflow } from "@/lib/workflow-mutations";
-import type { WorkflowModesState } from "@/components/studio/project-canvas/WorkflowNode";
+import { errorMessage } from "~/lib/error-message";
+import { patchWorkflow } from "~/lib/workflow-mutations";
+import type { WorkflowModesState } from "~/components/studio/project-canvas/WorkflowNode";
 
 export interface UseWorkflowModesArgs {
   workflowId?: string;

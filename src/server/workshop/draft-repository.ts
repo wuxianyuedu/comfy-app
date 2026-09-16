@@ -3,16 +3,16 @@
 // 该表与 AI/MCP 用的 workshopSession 并列，互不污染：id 直接复用前端
 // 生成的 wsp_* 项目 id，应用重启后稳定不变，天然支持多项目按 id upsert。
 import { desc, eq } from "drizzle-orm";
-import type { Character, Scene, Shot } from "@/lib/workshop/types";
+import type { Character, Scene, Shot } from "~/lib/workshop/types";
 import {
   parseDraftDto,
   type WorkshopDraftDto,
-} from "@/lib/workshop/draft-sync-shared";
+} from "~/lib/workshop/draft-sync-shared";
 import {
   workshopDraft,
   type WorkshopDraft as WorkshopDraftRow,
   type WorkshopDraftInsert,
-} from "@/server/db/schema";
+} from "~/server/db/schema";
 import { workshopDb } from "./db";
 
 /** 纯函数：线上草稿 → 可写行（不含 id / 时间戳）。 */
