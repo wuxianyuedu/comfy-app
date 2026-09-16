@@ -32,7 +32,11 @@ const filmRepo = vi.hoisted(() => ({
   ),
 }));
 type ShotRow = { id: string; taskId: string | null };
-type CreatedShot = { order: number; params: Record<string, unknown>; prompt: string };
+type CreatedShot = {
+  order: number;
+  params: Record<string, unknown>;
+  prompt: string;
+};
 
 const shotRepo = vi.hoisted(() => ({
   createMany: vi.fn<(filmId: string, shots: CreatedShot[]) => Promise<void>>(
@@ -60,7 +64,11 @@ vi.mock("@/lib/core/repository", () => ({
   taskRepository: taskRepo,
 }));
 vi.mock("@/lib/workshop/workflow-run.server", () => ({
-  createWorkflowRunTask: vi.fn(async () => ({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
+  createWorkflowRunTask: vi.fn(async () => ({
+    taskId: "task-1",
+    workflowName: "wf",
+    taskType: "T2V",
+  })),
 }));
 const cancelTaskMock = vi.hoisted(() =>
   vi.fn(async (_taskId: string) => undefined),
@@ -77,7 +85,9 @@ vi.mock("@/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
 }));
 const llmConfig = vi.hoisted(() => vi.fn(async () => ({})));
-const llmStructured = vi.hoisted(() => vi.fn<() => Promise<unknown[]>>(async () => []));
+const llmStructured = vi.hoisted(() =>
+  vi.fn<() => Promise<unknown[]>>(async () => []),
+);
 vi.mock("@/lib/llm/server", () => ({
   getLLMConfig: llmConfig,
   completeLLMStructured: llmStructured,
@@ -174,7 +184,10 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
 
     await composeFilm("f1");
 
-    expect(filmRepo.markFailed).toHaveBeenCalledWith("f1", "没有可用的镜头视频");
+    expect(filmRepo.markFailed).toHaveBeenCalledWith(
+      "f1",
+      "没有可用的镜头视频",
+    );
   });
 });
 

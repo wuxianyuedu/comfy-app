@@ -34,8 +34,7 @@ export function WorkshopPipeline() {
       shots: controller.shots,
     }),
     getMeta: () => controller.meta,
-    setMeta: (patch) =>
-      controller.setMeta((prev) => ({ ...prev, ...patch })),
+    setMeta: (patch) => controller.setMeta((prev) => ({ ...prev, ...patch })),
     setScriptMarkdown: (markdown) => controller.setScriptMarkdown(markdown),
     getScriptMarkdown: () => controller.scriptMarkdown,
     getCharacters: () => controller.characters,

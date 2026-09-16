@@ -54,11 +54,15 @@ export function VideoStudio({
   const apiReady = apiChannels?.video.configured === true;
   const doneCount = shots.filter((s) => !!s.clipUrl).length;
   const pending = shots.filter(
-    (s) => !s.clipUrl && (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
+    (s) =>
+      !s.clipUrl &&
+      (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
   );
 
   function patchShot(id: string, p: Partial<Shot>) {
-    onShotsChange((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
+    onShotsChange((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...p } : s)),
+    );
   }
 
   function setShotError(id: string, message: string | undefined) {
@@ -87,17 +91,23 @@ export function VideoStudio({
         },
       });
       // Safety valve: video renders are slow, but never wedge the batch loop.
-      const timeout = setTimeout(() => {
-        close();
-        patchShot(shotId, { clipStatus: "failed" });
-        setShotError(shotId, "任务超时(30 分钟无响应)");
-        resolve();
-      }, 30 * 60 * 1000);
+      const timeout = setTimeout(
+        () => {
+          close();
+          patchShot(shotId, { clipStatus: "failed" });
+          setShotError(shotId, "任务超时(30 分钟无响应)");
+          resolve();
+        },
+        30 * 60 * 1000,
+      );
     });
   }
 
   /** Poll an async API video task until it resolves or times out (~10 min). */
-  async function pollApiVideo(shotId: string, remoteTaskId: string): Promise<void> {
+  async function pollApiVideo(
+    shotId: string,
+    remoteTaskId: string,
+  ): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 3000));
@@ -203,7 +213,8 @@ export function VideoStudio({
 
       {shots.length === 0 ? (
         <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          暂无镜头数据。请先完成「场景分镜」— 镜头时长与运动强度会自动带入本阶段。
+          暂无镜头数据。请先完成「场景分镜」—
+          镜头时长与运动强度会自动带入本阶段。
         </div>
       ) : (
         <div className="space-y-3">
@@ -225,14 +236,15 @@ export function VideoStudio({
 
       {shots.length > 0 && (
         <p className="text-muted-foreground text-[11px]">
-          已完成 {doneCount}/{shots.length} 片段 — 片段与首帧会自动进入「成片合成」时间线;可随时回来重跑单个镜头。
+          已完成 {doneCount}/{shots.length} 片段 —
+          片段与首帧会自动进入「成片合成」时间线;可随时回来重跑单个镜头。
         </p>
       )}
       {shots.length > 0 && (
         <button
           type="button"
           onClick={onPrevStage}
-          className="text-muted-foreground hover:text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 rounded-lg px-3 py-1.5 text-xs"
         >
           ← 回镜头生图
         </button>
@@ -240,4 +252,3 @@ export function VideoStudio({
     </div>
   );
 }
-

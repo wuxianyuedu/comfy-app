@@ -42,15 +42,30 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
-const KIND_STYLE: Record<ToastKind, { ring: string; icon: string; iconColor: string }> = {
-  success: { ring: "border-emerald-500/30", icon: "check", iconColor: "text-emerald-700 dark:text-emerald-400" },
-  error: { ring: "border-red-500/30", icon: "close", iconColor: "text-red-700 dark:text-red-400" },
-  info: { ring: "border-violet-500/30", icon: "info", iconColor: "text-violet-700 dark:text-violet-400" },
+const KIND_STYLE: Record<
+  ToastKind,
+  { ring: string; icon: string; iconColor: string }
+> = {
+  success: {
+    ring: "border-emerald-500/30",
+    icon: "check",
+    iconColor: "text-emerald-700 dark:text-emerald-400",
+  },
+  error: {
+    ring: "border-red-500/30",
+    icon: "close",
+    iconColor: "text-red-700 dark:text-red-400",
+  },
+  info: {
+    ring: "border-violet-500/30",
+    icon: "info",
+    iconColor: "text-violet-700 dark:text-violet-400",
+  },
   loading: {
-      ring: "border-border-strong",
-      icon: "loader",
-      iconColor: "text-ink-soft animate-spin",
-    },
+    ring: "border-border-strong",
+    icon: "loader",
+    iconColor: "text-ink-soft animate-spin",
+  },
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -73,11 +88,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       if (duration && duration > 0) {
         timers.current.set(
           id,
-          setTimeout(() => dismiss(id), duration)
+          setTimeout(() => dismiss(id), duration),
         );
       }
     },
-    [dismiss]
+    [dismiss],
   );
 
   const toast = useCallback(
@@ -87,15 +102,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       schedule(id, t.duration ?? (t.kind === "loading" ? 0 : 3200));
       return id;
     },
-    [schedule]
+    [schedule],
   );
 
   const update = useCallback(
     (id: string, patch: Partial<Omit<ToastItem, "id">>) => {
-      setItems((prev) => prev.map((prev) =>(prev.id === id ? { ...prev, ...patch } : prev)));
+      setItems((prev) =>
+        prev.map((prev) => (prev.id === id ? { ...prev, ...patch } : prev)),
+      );
       if (patch.duration !== undefined) schedule(id, patch.duration);
     },
-    [schedule]
+    [schedule],
   );
 
   const value = useMemo<ToastContextValue>(
@@ -112,34 +129,37 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       update,
       dismiss,
     }),
-    [toast, update, dismiss]
+    [toast, update, dismiss],
   );
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-8 right-5 z-100 flex w-[340px] flex-col gap-2.5">
-        {items.map((item) =>
-{
+      <div className="pointer-events-none fixed right-5 bottom-8 z-100 flex w-[340px] flex-col gap-2.5">
+        {items.map((item) => {
           const st = KIND_STYLE[item.kind];
           return (
             <div
               key={item.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel/95 p-3.5 shadow-xl shadow-black/8 dark:shadow-black/40 backdrop-blur-md transition-all`}
+              className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel/95 p-3.5 shadow-xl shadow-black/8 backdrop-blur-md transition-all dark:shadow-black/40`}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
                 <Icon name={st.icon} size={16} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink-bright">{item.title}</p>
+                <p className="text-ink-bright text-sm font-semibold">
+                  {item.title}
+                </p>
                 {item.description && (
-                  <p className="mt-0.5 break-words text-xs text-ink-soft">{item.description}</p>
+                  <p className="text-ink-soft mt-0.5 text-xs break-words">
+                    {item.description}
+                  </p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => dismiss(item.id)}
-                className="text-ink-muted transition-colors hover:text-ink-bright"
+                className="text-ink-muted hover:text-ink-bright transition-colors"
                 aria-label="关闭"
               >
                 <X size={14} />

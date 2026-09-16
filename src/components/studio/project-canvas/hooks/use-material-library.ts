@@ -122,9 +122,12 @@ export function useMaterialLibrary({
       }
     };
 
-    const t = setTimeout(() => {
-      void run();
-    }, q ? SEARCH_DEBOUNCE_MS : 0);
+    const t = setTimeout(
+      () => {
+        void run();
+      },
+      q ? SEARCH_DEBOUNCE_MS : 0,
+    );
     return () => {
       cancelled = true;
       clearTimeout(t);
@@ -172,17 +175,18 @@ export function useMaterialLibrary({
   const searching = search.trim().length > 0;
   const showItems = searching || folder !== null;
 
-  const breadcrumbSegments: Array<{ label: string; key: string | null }> = searching
-    ? [{ label: `搜索结果 · ${items.length}`, key: null }]
-    : folder
-      ? [
-          { label: "全部", key: null },
-          {
-            label: folders.find((fld) => fld.id === folder)?.name ?? folder,
-            key: folder,
-          },
-        ]
-      : [{ label: "全部", key: null }];
+  const breadcrumbSegments: Array<{ label: string; key: string | null }> =
+    searching
+      ? [{ label: `搜索结果 · ${items.length}`, key: null }]
+      : folder
+        ? [
+            { label: "全部", key: null },
+            {
+              label: folders.find((fld) => fld.id === folder)?.name ?? folder,
+              key: folder,
+            },
+          ]
+        : [{ label: "全部", key: null }];
 
   return {
     scope,

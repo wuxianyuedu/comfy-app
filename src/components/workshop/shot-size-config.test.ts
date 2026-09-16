@@ -26,12 +26,18 @@ describe("shot-size-config", () => {
 
   it("同一档位在图片 / 视频场景取不同的值（1k：1024 vs 1280 长边）", () => {
     /* 16:9 + 1k：图片场景按 AI 出图口径 1024×576，视频场景按行业标准 1280×720。 */
-    expect(shotSizeToParam(state({ ratio: "16:9 横屏" }), "image")).toBe("1024x576");
-    expect(shotSizeToParam(state({ ratio: "16:9 横屏" }), "video")).toBe("1280x720");
+    expect(shotSizeToParam(state({ ratio: "16:9 横屏" }), "image")).toBe(
+      "1024x576",
+    );
+    expect(shotSizeToParam(state({ ratio: "16:9 横屏" }), "video")).toBe(
+      "1280x720",
+    );
   });
 
   it("16:9 + 1M 像素（64 对齐）保持总像素预算", () => {
-    const { width, height } = shotSizeToDims(state({ ratio: "16:9 横屏", clarity: "1M" }));
+    const { width, height } = shotSizeToDims(
+      state({ ratio: "16:9 横屏", clarity: "1M" }),
+    );
     expect(width * height).toBeGreaterThanOrEqual(1_000_000);
     expect(width / height).toBeGreaterThan(1.5);
     expect(width / height).toBeLessThan(2);
@@ -40,8 +46,12 @@ describe("shot-size-config", () => {
   });
 
   it("倍数改变百万像素档的宽高网格（8 / 64 吸附到不同档）", () => {
-    const fine = shotSizeToDims(state({ ratio: "16:9 横屏", clarity: "1M", multiple: 8 }));
-    const coarse = shotSizeToDims(state({ ratio: "16:9 横屏", clarity: "1M", multiple: 64 }));
+    const fine = shotSizeToDims(
+      state({ ratio: "16:9 横屏", clarity: "1M", multiple: 8 }),
+    );
+    const coarse = shotSizeToDims(
+      state({ ratio: "16:9 横屏", clarity: "1M", multiple: 64 }),
+    );
     expect(fine.width % 8).toBe(0);
     expect(coarse.width % 64).toBe(0);
     expect(fine).not.toEqual(coarse);
@@ -80,7 +90,9 @@ describe("shot-size-config", () => {
 
   it("摘要：分辨率档只说「比例 + 像素」，百万像素档追加倍数", () => {
     expect(shotSizeSummary(state())).toBe("3:4 / 1k");
-    expect(shotSizeSummary(state({ clarity: "2M", multiple: 32 }))).toBe("3:4 / 2M / 32");
+    expect(shotSizeSummary(state({ clarity: "2M", multiple: 32 }))).toBe(
+      "3:4 / 2M / 32",
+    );
   });
 
   it("子类判定区分分辨率与百万像素", () => {

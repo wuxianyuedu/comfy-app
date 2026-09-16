@@ -16,7 +16,11 @@
 import { NextResponse } from "next/server";
 
 import { requireServerUser } from "@/lib/auth-server";
-import { probeComfyUi, ensureComfyUiReady, COMFYUI_AUTOSTART_TIMEOUT_MS } from "@/lib/comfyui/lifecycle";
+import {
+  probeComfyUi,
+  ensureComfyUiReady,
+  COMFYUI_AUTOSTART_TIMEOUT_MS,
+} from "@/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -35,7 +39,12 @@ export async function POST() {
   }
 
   const up = await probeComfyUi(1_500);
-  if (up) return NextResponse.json({ ok: true, base: up, detail: "ComfyUI 已在运行" });
+  if (up)
+    return NextResponse.json({
+      ok: true,
+      base: up,
+      detail: "ComfyUI 已在运行",
+    });
 
   try {
     const r = await ensureComfyUiReady({
@@ -44,14 +53,23 @@ export async function POST() {
       // 否则请求挂死、reaper 的启动窗口也会被一起拉长。
       onLog: (msg) => logger.info(`[comfyui-ensure] ${msg}`),
     });
-    if (r.ok) return NextResponse.json({ ok: true, base: r.base, detail: r.detail });
+    if (r.ok)
+      return NextResponse.json({ ok: true, base: r.base, detail: r.detail });
     return NextResponse.json(
-      { ok: false, pending: true, detail: r.detail, timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS },
+      {
+        ok: false,
+        pending: true,
+        detail: r.detail,
+        timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS,
+      },
       { status: 202 },
     );
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     logger.error(`[comfyui-ensure] 启动失败：${detail}`);
-    return NextResponse.json({ ok: false, pending: false, detail }, { status: 503 });
+    return NextResponse.json(
+      { ok: false, pending: false, detail },
+      { status: 503 },
+    );
   }
 }

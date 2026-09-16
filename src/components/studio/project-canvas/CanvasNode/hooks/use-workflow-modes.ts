@@ -50,7 +50,7 @@ export function useWorkflowModes({
         onFailed(errorMessage(err, "保存模式失败，请重试"));
       }
     },
-    [workflowId, modes, setModes, onFailed]
+    [workflowId, modes, setModes, onFailed],
   );
 
   return { saveModes };

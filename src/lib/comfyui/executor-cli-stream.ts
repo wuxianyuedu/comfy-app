@@ -33,7 +33,12 @@ import type { ValidationError } from "./validation";
 import type { JsonRecord } from "./raw-overrides";
 
 /** 单次 trace 落盘的注入点（测试可换成数组收集）。 */
-export type TraceFn = (kind: string, taskId: string, msg: string, data?: unknown) => void;
+export type TraceFn = (
+  kind: string,
+  taskId: string,
+  msg: string,
+  data?: unknown,
+) => void;
 
 /** 非 JSON 行进入面板的上限（避免 verbose 输出刷屏）。 */
 export const MAX_NON_JSON_LINES = 20;
@@ -76,7 +81,8 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
       return ne;
     }
     for (const v of Object.values(node)) {
-      if (v && typeof v === "object") stack.push({ node: v as JsonRecord, d: d + 1 });
+      if (v && typeof v === "object")
+        stack.push({ node: v as JsonRecord, d: d + 1 });
     }
   }
   return undefined;

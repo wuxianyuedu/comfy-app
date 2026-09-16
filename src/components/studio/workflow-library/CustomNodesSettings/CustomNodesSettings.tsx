@@ -20,7 +20,7 @@ export function CustomNodesSettings() {
         <button
           type="button"
           onClick={() => ctrl.setOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+          className="bg-primary flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
           title="从 ComfyUI 安装目录的 custom_nodes 导入自定义节点（服务端只读、绝不修改这些目录里的任何文件）"
         >
           <span>{"\u{1F4E6}"}</span>
@@ -30,28 +30,34 @@ export function CustomNodesSettings() {
 
       {ctrl.open && (
         <div
-          className={overlayClass("modal", "z-50 grid place-items-center bg-canvas-deep p-4")}
+          className={overlayClass(
+            "modal",
+            "bg-canvas-deep z-50 grid place-items-center p-4",
+          )}
           onClick={() => ctrl.setOpen(false)}
         >
           <div
             ref={dialogRef}
-            className="w-full max-w-3xl rounded-2xl border border-border bg-surface p-5"
+            className="border-border bg-surface w-full max-w-3xl rounded-2xl border p-5"
             onClick={(event) => event.stopPropagation()}
             style={{ maxHeight: "92vh", overflowY: "auto" }}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-ink">导入自定义节点</h3>
+              <h3 className="text-ink text-base font-semibold">
+                导入自定义节点
+              </h3>
               <button
                 onClick={() => ctrl.setOpen(false)}
-                className="rounded-lg px-2 py-1 text-muted-foreground hover:bg-subtle hover:text-ink"
+                className="text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg px-2 py-1"
               >
                 关闭
               </button>
             </div>
 
-            <p className="mb-3 text-xs text-muted-foreground">
-              节点目录自动取自 设置 → 创作后端 中配置的 ComfyUI
-              路径下的 <code className="font-mono">custom_nodes</code> 目录，无需手动填写。
+            <p className="text-muted-foreground mb-3 text-xs">
+              节点目录自动取自 设置 → 创作后端 中配置的 ComfyUI 路径下的{" "}
+              <code className="font-mono">custom_nodes</code>{" "}
+              目录，无需手动填写。
             </p>
 
             <NodesTab ctrl={ctrl} />

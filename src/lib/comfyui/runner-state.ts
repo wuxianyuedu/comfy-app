@@ -12,8 +12,6 @@
 
 //
 
-
-
 import "server-only";
 import { EventEmitter } from "events";
 
@@ -21,15 +19,11 @@ import type WebSocket from "ws";
 
 import { taskRepository } from "../core/repository";
 
-
-
 export const CLIENT_ID = process.env.COMFY_CLIENT_ID ?? "comfy-app-web";
 
 export const MAX_CONCURRENCY = 1; // single GPU — serial execution
 
 export const JOB_TIMEOUT_MS = 5 * 60 * 1000;
-
-
 
 /** ComfyUI 先发 `executing:null` / `execution_success`，随后才把结果写进 history。
 
@@ -39,15 +33,11 @@ export const HISTORY_RETRIES = 12;
 
 export const HISTORY_RETRY_DELAY_MS = 250;
 
-
-
 /** WS 断线重连退避（毫秒），指数增长到上限。 */
 
 export const RECONNECT_BASE_MS = 1000;
 
 export const RECONNECT_MAX_MS = 15000;
-
-
 
 /**
 
@@ -63,14 +53,13 @@ export const RECONNECT_MAX_MS = 15000;
 
 export const WS_PATHS = ["/api/ws", "/ws"];
 
-
-
-export type RawWorkflowOverride = { nodeId: string; name: string; value?: unknown };
-
-
+export type RawWorkflowOverride = {
+  nodeId: string;
+  name: string;
+  value?: unknown;
+};
 
 export type Job = {
-
   taskId: string;
 
   prompt?: Record<string, unknown>;
@@ -82,13 +71,9 @@ export type Job = {
   /** Canvas `workflowInputs` injected into the raw json before execution. */
 
   overrides?: RawWorkflowOverride[];
-
 };
 
-
-
 export type LogEntry = {
-
   t: number; // epoch ms
 
   level: "info" | "progress" | "warn" | "error" | "success";
@@ -104,24 +89,17 @@ export type LogEntry = {
    *  part of the entry so SSE replays carry it too. */
 
   src?: string;
-
 };
 
-
-
 export type TaskEvent =
-
   | {
       type: "progress";
       progress: number;
       /** 当前正在执行的 ComfyUI 节点与步数（progress 消息自带；UI 用于节点级进度展示） */
       node?: { id: string; label?: string; value: number; max: number };
     }
-
   | { type: "done"; images: unknown[] }
-
   | { type: "error"; error: string }
-
   | { type: "log"; entry: LogEntry }
 
   /* synthetic "state" event re-emitted
@@ -137,9 +115,7 @@ export type TaskEvent =
    *  "state" event triggers the same patch() path that heals
 
    *  the "stuck generating" UI. */
-
   | {
-
       type: "state";
 
       status: string;
@@ -149,13 +125,9 @@ export type TaskEvent =
       error?: string | null;
 
       validationErrors?: unknown[] | null;
-
     };
 
-
-
 export type RunnerState = {
-
   ws: WebSocket | null;
 
   queue: Job[];
@@ -230,25 +202,17 @@ export type RunnerState = {
    *  防止心跳每 3s 触发 processQueue（WS 未 OPEN 时提前返回）对同一任务反复刷同一行。
    *  任务真正出队 / WS 打开后清除，以便下次重连窗口能重新提示。 */
   wsWaitLogged: Set<string>;
-
 };
-
-
 
 const globalObj = globalThis as unknown as { comfyRunner?: RunnerState };
 
-
-
 export function state(): RunnerState {
-
   if (!globalObj.comfyRunner) {
-
     const emitter = new EventEmitter();
 
     emitter.setMaxListeners(0);
 
     globalObj.comfyRunner = {
-
       ws: null,
 
       queue: [],
@@ -283,82 +247,46 @@ export function state(): RunnerState {
       executedWorkflow: new Map(),
 
       wsWaitLogged: new Set(),
-
     };
-
   }
 
   return globalObj.comfyRunner;
-
 }
 
-
-
 function callerLoc(): string {
-
   try {
-
-
     const stack = new Error().stack;
-
 
     if (!stack) return "";
 
-
     const lines = stack.split("\n");
-
 
     // lines[0] = "Error", lines[1] = "    at log (…)", lines[2] = real caller.
 
-
- 
-// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const frame = lines[2] || lines[1] || "";
-
 
     const match = /\(([^():]+):(\d+):(\d+)\)/.exec(frame);
 
-
     if (match) {
-
-
       const file = match[1]!.split(/[\\/]/).pop() ?? match[1]!;
 
-
       return `${file}:${match[2]}`;
-
-
     }
-
 
     const m2 = /at\s+(\S+):(\d+):(\d+)/.exec(frame);
 
-
     if (m2) {
-
-
       const file = m2[1]!.split(/[\\/]/).pop() ?? m2[1]!;
 
-
       return `${file}:${m2[2]}`;
-
-
     }
 
-
     return "";
-
-
   } catch {
-
-
     return "";
-
   }
-
 }
-
-
 
 // Append a structured log entry: keep in-memory + emit to live subscribers +
 
@@ -395,33 +323,20 @@ function callerLoc(): string {
 // guarantees we don't starve the DB during sustained emission.
 
 export function log(taskId: string, level: LogEntry["level"], msg: string) {
-
-
   const store = state();
-
 
   const entry: LogEntry = { t: Date.now(), level, msg, src: callerLoc() };
 
-
   const arr = store.logs.get(taskId) ?? [];
-
 
   arr.push(entry);
 
-
   store.logs.set(taskId, arr);
-
 
   store.emitter.emit(taskId, { type: "log", entry });
 
-
   schedulePersistLogs(taskId);
-
-
 }
-
-
-
 
 // per-taskId debounced DB writer. Each task
 
@@ -438,14 +353,12 @@ const PERSIST_DEBOUNCE_MS = 200;
 const PERSIST_MAX_DELAY_MS = 1500;
 
 const persistTimers = new Map<
-
   string,
-
-  { debounce: ReturnType<typeof setTimeout>; maxDelay: ReturnType<typeof setTimeout> }
-
+  {
+    debounce: ReturnType<typeof setTimeout>;
+    maxDelay: ReturnType<typeof setTimeout>;
+  }
 >();
-
-
 
 /** 取消某个任务的「日志落库」防抖定时器（若存在）。
  *
@@ -460,7 +373,6 @@ const persistTimers = new Map<
  *  生产语义同理：任务被丢弃 / 重跑时先把上一次的落库排期掐掉，避免**旧日志
  *  覆盖新日志**（`persistLogs` 是整包 `replaceLogs`，不是在末尾追加）。 */
 export function cancelPersistLogs(taskId: string): void {
-
   const pending = persistTimers.get(taskId);
 
   if (!pending) return;
@@ -470,78 +382,59 @@ export function cancelPersistLogs(taskId: string): void {
   clearTimeout(pending.maxDelay);
 
   persistTimers.delete(taskId);
-
 }
 
 export function schedulePersistLogs(taskId: string) {
-
   if (!taskId) return;
 
   const existing = persistTimers.get(taskId);
 
   if (existing) {
-
     // Reset only the debounce timer; the max-delay watchdog stays armed.
 
     clearTimeout(existing.debounce);
 
     existing.debounce = setTimeout(() => {
-
       const cur = persistTimers.get(taskId);
 
       if (cur) {
-
         clearTimeout(cur.maxDelay);
 
         persistTimers.delete(taskId);
-
       }
 
       void persistLogs(taskId);
-
     }, PERSIST_DEBOUNCE_MS);
 
     return;
-
   }
 
   const debounce = setTimeout(() => {
-
     const cur = persistTimers.get(taskId);
 
     if (cur) {
-
       clearTimeout(cur.maxDelay);
 
       persistTimers.delete(taskId);
-
     }
 
     void persistLogs(taskId);
-
   }, PERSIST_DEBOUNCE_MS);
 
   const maxDelay = setTimeout(() => {
-
     const cur = persistTimers.get(taskId);
 
     if (cur) {
-
       clearTimeout(cur.debounce);
 
       persistTimers.delete(taskId);
-
     }
 
     void persistLogs(taskId);
-
   }, PERSIST_MAX_DELAY_MS);
 
   persistTimers.set(taskId, { debounce, maxDelay });
-
 }
-
-
 
 /**
  * 抢占任务的终态。
@@ -581,7 +474,6 @@ export function clearFinalize(taskId: string): void {
 }
 
 export async function persistLogs(taskId: string) {
-
   // a debounced write is now racing the terminal
 
   // `await persistLogs(taskId)` call.  Cancel the pending timers so the
@@ -591,18 +483,14 @@ export async function persistLogs(taskId: string) {
   const pending = persistTimers.get(taskId);
 
   if (pending) {
-
     clearTimeout(pending.debounce);
 
     clearTimeout(pending.maxDelay);
 
     persistTimers.delete(taskId);
-
   }
 
   const arr = state().logs.get(taskId) ?? [];
 
   await taskRepository.replaceLogs(taskId, arr);
-
 }
-

@@ -23,8 +23,13 @@ export function SelectedToolbar({
   const btn =
     "nodrag nopan text-ink-soft hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-full text-[13px] transition-colors";
   return (
-    <div className="nodrag nopan border-border-strong bg-panel absolute -top-12 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full border]/95 px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
-      <button type="button" title="删除节点 (Delete)" onClick={onDelete} className={`${btn} text-rose-700 dark:text-rose-300 hover:bg-rose-500/15`}>
+    <div className="nodrag nopan border-border-strong bg-panel border]/95 absolute -top-12 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
+      <button
+        type="button"
+        title="删除节点 (Delete)"
+        onClick={onDelete}
+        className={`${btn} text-rose-700 hover:bg-rose-500/15 dark:text-rose-300`}
+      >
         ⌫
       </button>
       <button type="button" title="节点信息" className={btn}>
@@ -33,7 +38,12 @@ export function SelectedToolbar({
       <button type="button" title="主题色" className={btn}>
         ●
       </button>
-      <button type="button" title="聚焦此节点" onClick={onFocusNode} className={btn}>
+      <button
+        type="button"
+        title="聚焦此节点"
+        onClick={onFocusNode}
+        className={btn}
+      >
         ⛶
       </button>
       <button type="button" title="撤销" className={btn}>
@@ -60,13 +70,9 @@ export function OutputRowPort({
   const outputs = wfIO ? splitWorkflowIO(wfIO).outputs : [];
   const o = outputs[0];
   const fallbackType: string =
-    kind === "video" ? "VIDEO" :
-    kind === "script" ? "STRING" :
-    "IMAGE";
+    kind === "video" ? "VIDEO" : kind === "script" ? "STRING" : "IMAGE";
   const fallbackLabel: string =
-    kind === "video" ? "视频" :
-    kind === "script" ? "结果" :
-    "图像";
+    kind === "video" ? "视频" : kind === "script" ? "结果" : "图像";
   const outLabel = o ? ioLabel(o, outputs) : fallbackLabel;
   const outType = o?.type ?? fallbackType;
   const outKey = o?.ioKey ?? "output";
@@ -85,7 +91,7 @@ export function OutputRowPort({
       />
       <div className="flex h-5 items-center justify-end gap-1.5 px-[14px] pt-1.5">
         <span
-          className="min-w-0 truncate text-[12px] font-semibold text-ink-bright"
+          className="text-ink-bright min-w-0 truncate text-[12px] font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}
           title={`IO 输出 · ${outLabel}${outType ? ` · ${outType}` : ""}`}
         >

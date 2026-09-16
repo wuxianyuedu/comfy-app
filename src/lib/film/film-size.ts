@@ -9,7 +9,10 @@ import { DEFAULT_SIZE_SPEC, type SizeSpec } from "@/lib/size-presets";
 /** 成片画幅默认值：视频场景 16:9 1k（= 1280×720，与历史默认逐字相同）。
  *
  *  用户在「尺寸表配置」里改过视频场景的 16:9 1k，成片画幅跟着改。 */
-export const FILM_COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
+export const FILM_COMPOSE_SIZE: SizeSpec = {
+  ...DEFAULT_SIZE_SPEC,
+  ratio: "16:9 横屏",
+};
 
 /** 单镜视频的**尺寸表达兜底**（镜头没带尺寸时用）。
  *

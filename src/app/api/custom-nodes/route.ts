@@ -21,13 +21,22 @@ import { readEnvVar } from "@/lib/envfile";
 import { requireServerUser } from "@/lib/auth-server";
 import { AppError } from "@/lib/core/errors";
 import { errorMessage } from "~/lib/error-message";
-import { errorResponse, unauthorizedResponse } from "~/server/lib/error-response";
+import {
+  errorResponse,
+  unauthorizedResponse,
+} from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MANIFEST = path.join(process.cwd(), "src/generated/customNodes.manifest.json");
-const REPORT = path.join(process.cwd(), "src/generated/customNodes.report.json");
+const MANIFEST = path.join(
+  process.cwd(),
+  "src/generated/customNodes.manifest.json",
+);
+const REPORT = path.join(
+  process.cwd(),
+  "src/generated/customNodes.report.json",
+);
 
 /* ── 外部 JSON 的窄化工具(替代原 any)───────────────────────────
  * manifest / report / python stdout 都是外部输入,统一 unknown 进、守卫窄化读;
@@ -37,7 +46,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /** 等价原 `src?.[key] ?? fallback`:值非 null/undefined 时原样返回,类型由调用处声明。 */
-function jsonField<T>(src: Record<string, unknown> | null | undefined, key: string, fallback: T): T {
+function jsonField<T>(
+  src: Record<string, unknown> | null | undefined,
+  key: string,
+  fallback: T,
+): T {
   const v: unknown = src?.[key];
   return (v ?? fallback) as T;
 }
@@ -60,7 +73,10 @@ interface ManifestPackageSummary {
  *  主路径：设置里配置的 ComfyUI 安装根下的 `custom_nodes` 目录（自动推导）。
  *  `.env` 的 CUSTOM_NODES_PATH 仍作为覆盖/补充项保留（向后兼容）。 */
 function getPaths(): string[] {
-  const derived = deriveComfyuiSubdir(getSettingsSync().comfyuiPath, "custom_nodes");
+  const derived = deriveComfyuiSubdir(
+    getSettingsSync().comfyuiPath,
+    "custom_nodes",
+  );
   const extra = (readEnvVar("CUSTOM_NODES_PATH") ?? "")
     .split(",")
     .map((part) => part.trim())
@@ -94,9 +110,13 @@ function readManifestSummary() {
     if (!isRecord(parsed)) return null;
     const m = parsed;
     const pkgs: ManifestPackageSummary[] = [];
-    const pmap: Record<string, unknown> = isRecord(m.packages) ? m.packages : {};
+    const pmap: Record<string, unknown> = isRecord(m.packages)
+      ? m.packages
+      : {};
     for (const [name, info] of Object.entries(pmap)) {
-      const fields: Record<string, unknown> | undefined = isRecord(info) ? info : undefined;
+      const fields: Record<string, unknown> | undefined = isRecord(info)
+        ? info
+        : undefined;
       pkgs.push({
         name,
         path: jsonField(fields, "path", ""),
@@ -113,7 +133,9 @@ function readManifestSummary() {
     const sources: string[] = jsonField<string[]>(m, "sources", []);
     return {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
-      totalNodes: Object.keys(jsonField<Record<string, unknown>>(m, "nodes", {})).length,
+      totalNodes: Object.keys(
+        jsonField<Record<string, unknown>>(m, "nodes", {}),
+      ).length,
       packages: pkgs,
       missingPaths: [] as string[],
       parseErrors: jsonField<unknown[]>(m, "parseErrors", []),
@@ -141,7 +163,7 @@ function pathKey(p: string): string {
  *  which discovered subpackages have already been parsed and whether the
  *  on-disk content has changed since (status: loaded / outdated / error / missing). */
 function buildPathMap(
-  summary: ReturnType<typeof readManifestSummary>
+  summary: ReturnType<typeof readManifestSummary>,
 ): Record<string, ManifestPackageSummary> {
   if (!summary) return {};
   const out: Record<string, ManifestPackageSummary> = {};
@@ -162,11 +184,25 @@ function runDiscover(parentDirs: readonly unknown[]): unknown[] {
     try {
       // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
       // 断言只为恢复静态类型,不改运行时取值。
-      const args = ["-u", "scripts/parse_custom_nodes.py", ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir as string])];
-      const out = spawnSync(/*turbopackIgnore: true*/ py, args, { cwd: process.cwd(), env: process.env, encoding: "utf-8" });
+      const args = [
+        "-u",
+        "scripts/parse_custom_nodes.py",
+        ...parentDirs.flatMap((parentDir) => [
+          "--discover-parent",
+          parentDir as string,
+        ]),
+      ];
+      const out = spawnSync(/*turbopackIgnore: true*/ py, args, {
+        cwd: process.cwd(),
+        env: process.env,
+        encoding: "utf-8",
+      });
       if (out.status === 0 && out.stdout) {
         const parsed: unknown = JSON.parse(out.stdout);
-        const pkgs: unknown[] = isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : [];
+        const pkgs: unknown[] =
+          isRecord(parsed) && Array.isArray(parsed.packages)
+            ? parsed.packages
+            : [];
         discoverCache.set(key, { at: Date.now(), result: pkgs });
         return pkgs;
       }
@@ -197,11 +233,16 @@ interface DiscoverProgressFields {
 
 function runDiscoverStreaming(
   parent: string,
-  send: (obj: unknown) => void
+  send: (obj: unknown) => void,
 ): Promise<unknown[]> {
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
-    send({ type: "discover_done", parent, packages: cached.result, cached: true });
+    send({
+      type: "discover_done",
+      parent,
+      packages: cached.result,
+      cached: true,
+    });
     return Promise.resolve(cached.result);
   }
 
@@ -215,16 +256,25 @@ function runDiscoverStreaming(
       if (i >= pyCandidates.length) {
         if (!resolved) {
           resolved = true;
-          send({ type: "progress", parent, phase: "scan", msg: "⚠️ 未找到 Python 解释器" });
+          send({
+            type: "progress",
+            parent,
+            phase: "scan",
+            msg: "⚠️ 未找到 Python 解释器",
+          });
           resolve([]);
         }
         return;
       }
       const py = pyCandidates[i]!;
-      const cp = spawn(/*turbopackIgnore: true*/ py, ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent], {
-        cwd: process.cwd(),
-        env: process.env,
-      });
+      const cp = spawn(
+        /*turbopackIgnore: true*/ py,
+        ["-u", "scripts/parse_custom_nodes.py", "--discover-parent", parent],
+        {
+          cwd: process.cwd(),
+          env: process.env,
+        },
+      );
 
       let buf = "";
       cp.stdout.on("data", (d: Buffer) => {
@@ -276,7 +326,12 @@ function runDiscoverStreaming(
         }
       });
       cp.stderr.on("data", (d: Buffer) => {
-        send({ type: "progress", parent, phase: "scan", msg: "⚠️ " + d.toString().trim() });
+        send({
+          type: "progress",
+          parent,
+          phase: "scan",
+          msg: "⚠️ " + d.toString().trim(),
+        });
       });
 
       cp.on("error", (e: NodeJS.ErrnoException) => {
@@ -287,7 +342,12 @@ function runDiscoverStreaming(
         }
         if (!resolved) {
           resolved = true;
-          send({ type: "progress", parent, phase: "scan", msg: "⚠️ 启动解析进程失败：" + e.message });
+          send({
+            type: "progress",
+            parent,
+            phase: "scan",
+            msg: "⚠️ 启动解析进程失败：" + e.message,
+          });
           resolve([]);
         }
       });
@@ -300,15 +360,30 @@ function runDiscoverStreaming(
           return;
         }
         try {
-          const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
-          const pkgs: unknown[] = isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : [];
+          const parsed: unknown = finalJson
+            ? JSON.parse(finalJson)
+            : { packages: [] };
+          const pkgs: unknown[] =
+            isRecord(parsed) && Array.isArray(parsed.packages)
+              ? parsed.packages
+              : [];
           discoverCache.set(parent, { at: Date.now(), result: pkgs });
           resolved = true;
-          send({ type: "discover_done", parent, packages: pkgs, cached: false });
+          send({
+            type: "discover_done",
+            parent,
+            packages: pkgs,
+            cached: false,
+          });
           resolve(pkgs);
         } catch {
           resolved = true;
-          send({ type: "progress", parent, phase: "scan", msg: "⚠️ 解析失败，退出码 " + code });
+          send({
+            type: "progress",
+            parent,
+            phase: "scan",
+            msg: "⚠️ 解析失败，退出码 " + code,
+          });
           resolve([]);
         }
       });
@@ -329,7 +404,14 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
 
       const pyCandidates = ["python3", "python", "py"];
-      const args = ["-u", "scripts/parse_custom_nodes.py", "--out", MANIFEST, "--report-out", REPORT];
+      const args = [
+        "-u",
+        "scripts/parse_custom_nodes.py",
+        "--out",
+        MANIFEST,
+        "--report-out",
+        REPORT,
+      ];
       if (onlyPkgs?.length) {
         args.push("--only-pkgs", onlyPkgs.join(","));
       } else {
@@ -340,13 +422,26 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
 
       const tryRun = () => {
         if (i >= pyCandidates.length) {
-          send({ type: "log", level: "error", msg: "未找到 Python 解释器（已尝试 python3 / python / py）" });
-          send({ type: "done", ok: false, report: null, stderr: "no python interpreter", exitCode: null });
+          send({
+            type: "log",
+            level: "error",
+            msg: "未找到 Python 解释器（已尝试 python3 / python / py）",
+          });
+          send({
+            type: "done",
+            ok: false,
+            report: null,
+            stderr: "no python interpreter",
+            exitCode: null,
+          });
           controller.close();
           return;
         }
         const py = pyCandidates[i]!;
-        const cp = spawn(/*turbopackIgnore: true*/ py, args, { cwd: process.cwd(), env: process.env });
+        const cp = spawn(/*turbopackIgnore: true*/ py, args, {
+          cwd: process.cwd(),
+          env: process.env,
+        });
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
           if (e.code === "ENOENT") {
@@ -356,12 +451,25 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
           }
           if (closed) return;
           closed = true;
-          send({ type: "log", level: "error", msg: "启动解析进程失败：" + e.message });
-          send({ type: "done", ok: false, report: null, stderr: e.message, exitCode: null });
+          send({
+            type: "log",
+            level: "error",
+            msg: "启动解析进程失败：" + e.message,
+          });
+          send({
+            type: "done",
+            ok: false,
+            report: null,
+            stderr: e.message,
+            exitCode: null,
+          });
           controller.close();
         });
 
-        const pipeLogs = (s: NodeJS.ReadableStream, defaultLevel: "info" | "error" = "info") => {
+        const pipeLogs = (
+          s: NodeJS.ReadableStream,
+          defaultLevel: "info" | "error" = "info",
+        ) => {
           let chunk = "";
           s.on("data", (d: Buffer) => {
             chunk += d.toString();
@@ -369,11 +477,13 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
             while ((nl = chunk.indexOf("\n")) >= 0) {
               const line = chunk.slice(0, nl);
               chunk = chunk.slice(nl + 1);
-              if (line.trim()) send({ type: "log", level: defaultLevel, msg: line });
+              if (line.trim())
+                send({ type: "log", level: defaultLevel, msg: line });
             }
           });
           s.on("end", () => {
-            if (chunk.trim()) send({ type: "log", level: defaultLevel, msg: chunk.trim() });
+            if (chunk.trim())
+              send({ type: "log", level: defaultLevel, msg: chunk.trim() });
           });
         };
         // stdout from the parser = normal progress (green info).
@@ -394,11 +504,18 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
           }
           let report: unknown = null;
           try {
-            if (fs.existsSync(REPORT)) report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
+            if (fs.existsSync(REPORT))
+              report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
           } catch {
             report = null;
           }
-          send({ type: "done", ok: !!report, report, stderr: "", exitCode: code });
+          send({
+            type: "done",
+            ok: !!report,
+            report,
+            stderr: "",
+            exitCode: code,
+          });
           controller.close();
         });
       };
@@ -430,7 +547,11 @@ export async function GET() {
     return await buildGetResponse();
   } catch (e) {
     return errorResponse(
-      new AppError(errorMessage(e, "读取配置失败"), "custom_nodes.read_failed", 500)
+      new AppError(
+        errorMessage(e, "读取配置失败"),
+        "custom_nodes.read_failed",
+        500,
+      ),
     );
   }
 }
@@ -451,11 +572,12 @@ async function buildGetResponse(): Promise<Response> {
 
   // Cache hit on every parent → return JSON immediately (no progress needed).
   // Otherwise we stream ndjson so the UI can render a live progress bar.
-  const allCached = paths.length > 0 && paths.every((path) =>
-{
-    const c = discoverCache.get(path);
-    return c && Date.now() - c.at < 5000;
-  });
+  const allCached =
+    paths.length > 0 &&
+    paths.every((path) => {
+      const c = discoverCache.get(path);
+      return c && Date.now() - c.at < 5000;
+    });
   // include localWorkflowPaths in both branches so the
   // settings dialog can hydrate its companion field even when there's no
   // CUSTOM_NODES_PATH configured (the cold path).
@@ -483,7 +605,12 @@ async function buildGetResponse(): Promise<Response> {
         const discoveredByParent: Record<string, unknown[]> = {};
         for (let idx = 0; idx < paths.length; idx++) {
           const parent = paths[idx];
-          send({ type: "progress", parent, phase: "queue", msg: `📂 [${idx + 1}/${paths.length}] ${parent}` });
+          send({
+            type: "progress",
+            parent,
+            phase: "queue",
+            msg: `📂 [${idx + 1}/${paths.length}] ${parent}`,
+          });
           const pkgs = await runDiscoverStreaming(parent!, send);
           discoveredByParent[parent!] = pkgs;
         }
@@ -540,15 +667,20 @@ export async function POST(req: NextRequest) {
   if (action === "parse") {
     const paths = getPaths();
     // 仅做 join(",") 透传给子进程,元素类型无需收窄(与原 any 行为逐字一致)。
-    const onlyPkgs: readonly unknown[] | undefined = Array.isArray(rec.packages) ? rec.packages : undefined;
+    const onlyPkgs: readonly unknown[] | undefined = Array.isArray(rec.packages)
+      ? rec.packages
+      : undefined;
     if (onlyPkgs?.length) {
       // subset parse — no need for CUSTOM_NODES_PATH to be set
       return streamParse(paths, onlyPkgs);
     }
     if (paths.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "CUSTOM_NODES_PATH 未配置（请先填写自定义节点目录）" },
-        { status: 400 }
+        {
+          ok: false,
+          error: "CUSTOM_NODES_PATH 未配置（请先填写自定义节点目录）",
+        },
+        { status: 400 },
       );
     }
     // Stream live progress logs, then the final report, as NDJSON.
@@ -561,5 +693,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, packages: result });
   }
 
-  return NextResponse.json({ ok: false, error: "unknown action" }, { status: 400 });
+  return NextResponse.json(
+    { ok: false, error: "unknown action" },
+    { status: 400 },
+  );
 }

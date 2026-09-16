@@ -107,7 +107,9 @@ export function MessageCenterPanel() {
             消息中心
           </span>
           <span className="text-ink-muted text-[12px]">
-            {messages.length ? `${messages.length} 条 · ${unread} 条未读` : "暂无消息"}
+            {messages.length
+              ? `${messages.length} 条 · ${unread} 条未读`
+              : "暂无消息"}
           </span>
         </div>
 
@@ -125,7 +127,7 @@ export function MessageCenterPanel() {
             type="button"
             onClick={clear}
             disabled={messages.length === 0}
-            className="text-ink-soft flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors hover:bg-rose-500/10 hover:text-rose-800 dark:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-rose-300"
+            className="text-ink-soft flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors hover:bg-rose-500/10 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-40 dark:text-rose-300 dark:hover:text-rose-300"
           >
             <Trash2 size={14} />
             清空
@@ -158,7 +160,9 @@ export function MessageCenterPanel() {
                   key={m.id}
                   onClick={() => markRead(m.id)}
                   className={`bg-subtle/60 hover:bg-subtle cursor-pointer rounded-xl border p-3.5 transition-colors ${
-                    m.read ? "border-border-subtle opacity-70" : `${meta.ring} border`
+                    m.read
+                      ? "border-border-subtle opacity-70"
+                      : `${meta.ring} border`
                   }`}
                 >
                   <div className="flex items-start gap-3">

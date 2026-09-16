@@ -28,9 +28,13 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 export async function GET(req: NextRequest) {
   await getServerUser();
 
-  const provider = req.nextUrl.searchParams.get("provider") === "remote" ? "remote" : "local";
+  const provider =
+    req.nextUrl.searchParams.get("provider") === "remote" ? "remote" : "local";
   const rawModel = req.nextUrl.searchParams.get("model");
-  const model = typeof rawModel === "string" && rawModel.trim() !== "" ? rawModel.trim() : "";
+  const model =
+    typeof rawModel === "string" && rawModel.trim() !== ""
+      ? rawModel.trim()
+      : "";
   // 仅远端探测按所选模型解析独立连接参数；本地候选没有独立 baseUrl，传 model
   // 反而可能误命中同名的远端条目，故本地一律不带 model。
   const cfg = await getLLMConfig({
@@ -62,16 +66,26 @@ export async function GET(req: NextRequest) {
     if (provider === "local" && /\/v1\/?$/.test(cfg.baseUrl)) {
       const tagsUrl = `${cfg.baseUrl.replace(/\/v1\/?$/, "")}/api/tags`;
       try {
-        const tagsRes = await fetch(tagsUrl, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+        const tagsRes = await fetch(tagsUrl, {
+          signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+        });
         if (tagsRes.ok) {
           const parsed: unknown = await tagsRes.json();
           const rawList = isRecord(parsed) ? parsed.models : undefined;
           const models = Array.isArray(rawList)
             ? rawList
-                .map((m) => (isRecord(m) && typeof m.name === "string" ? m.name.trim() : ""))
+                .map((m) =>
+                  isRecord(m) && typeof m.name === "string"
+                    ? m.name.trim()
+                    : "",
+                )
                 .filter((n) => n !== "")
             : [];
-          return NextResponse.json({ ok: true, models, detail: `共 ${models.length} 个本地模型` });
+          return NextResponse.json({
+            ok: true,
+            models,
+            detail: `共 ${models.length} 个本地模型`,
+          });
         }
       } catch {
         // /api/tags 不存在或超时 → 继续走 OpenAI 兼容 /models
@@ -89,7 +103,9 @@ export async function GET(req: NextRequest) {
     }
     const parsed: unknown = await res.json();
     // OpenAI 兼容 /models → { data: [{ id }] }；Ollama /api/tags → { models: [{ name }] }
-    const rawList = isRecord(parsed) ? (parsed.data ?? parsed.models) : undefined;
+    const rawList = isRecord(parsed)
+      ? (parsed.data ?? parsed.models)
+      : undefined;
     const models = Array.isArray(rawList)
       ? rawList
           .map((m) => {
@@ -102,7 +118,11 @@ export async function GET(req: NextRequest) {
           })
           .filter((n) => n !== "")
       : [];
-    return NextResponse.json({ ok: true, models, detail: `共 ${models.length} 个模型` });
+    return NextResponse.json({
+      ok: true,
+      models,
+      detail: `共 ${models.length} 个模型`,
+    });
   } catch (e) {
     // 网络层 TypeError（如 fetch failed / ECONNREFUSED）翻译成可操作的人话，
     // 避免用户在工坊只看到一句生硬的 `fetch failed`。

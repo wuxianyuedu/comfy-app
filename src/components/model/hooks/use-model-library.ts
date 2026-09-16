@@ -58,7 +58,8 @@ export function useModelLibrary(): ModelLibraryController {
     void vanillaApi.model.list
       .query(params)
       .then((data) => {
-        if (!cancelled) setModels((data.models ?? []) as unknown as ModelCardData[]);
+        if (!cancelled)
+          setModels((data.models ?? []) as unknown as ModelCardData[]);
       })
       .catch(() => {
         /* 拉取失败保留上一次列表，不让页面弹空白 */

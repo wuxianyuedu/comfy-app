@@ -12,7 +12,9 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     skill: { list: { query: vi.fn().mockResolvedValue({ skills: [] }) } },
     film: {
-      list: { query: vi.fn().mockResolvedValue({ films: [], ffmpegAvailable: false }) },
+      list: {
+        query: vi.fn().mockResolvedValue({ films: [], ffmpegAvailable: false }),
+      },
       detail: { query: vi.fn().mockResolvedValue(null) },
       create: { mutate: vi.fn().mockResolvedValue({ id: "f-1" }) },
       start: { mutate: vi.fn().mockResolvedValue({}) },

@@ -13,7 +13,7 @@ export const skillRouter = createTRPCRouter({
           q: z.string().optional(),
           all: z.boolean().optional(),
         })
-        .optional()
+        .optional(),
     )
     .query(async ({ input }) => {
       await skillRepository.ensureBuiltIns(BUILTIN_SKILLS);
@@ -22,8 +22,7 @@ export const skillRouter = createTRPCRouter({
         q: input?.q?.trim() ?? undefined,
         includeInactive: input?.all === true,
       });
-      const parsed = skills.map((skill) =>
-{
+      const parsed = skills.map((skill) => {
         const obj = skill as unknown as Record<string, unknown>;
         let tags: unknown = [];
         try {
@@ -36,7 +35,8 @@ export const skillRouter = createTRPCRouter({
       const categories = await skillRepository.groupByActiveCategory();
       return {
         skills: parsed,
-        categories: categories.map((category) =>({          id: category.category,
+        categories: categories.map((category) => ({
+          id: category.category,
           label: CATEGORY_LABELS[category.category] ?? category.category,
           count: category.count,
         })),
@@ -48,7 +48,11 @@ export const skillRouter = createTRPCRouter({
     .input(
       z.object({
         name: z.string().min(1).max(60),
-        slug: z.string().min(1).max(80).regex(/^[a-z0-9-]+$/),
+        slug: z
+          .string()
+          .min(1)
+          .max(80)
+          .regex(/^[a-z0-9-]+$/),
         description: z.string().min(1).max(200),
         icon: z.string().default("sparkles"),
         category: z.string().default("style"),
@@ -59,7 +63,7 @@ export const skillRouter = createTRPCRouter({
         tags: z.array(z.string()).default([]),
         coverUrl: z.string().optional(),
         sortOrder: z.number().int().default(0),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const existing = await skillRepository.findBySlug(input.slug);

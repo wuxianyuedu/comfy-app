@@ -35,10 +35,16 @@ describe("useWorkflowModes", () => {
     );
 
     await act(async () => {
-      await result.current.saveModes({ modes: ["默认", "高清"], defaultMode: "高清" });
+      await result.current.saveModes({
+        modes: ["默认", "高清"],
+        defaultMode: "高清",
+      });
     });
 
-    expect(setModes).toHaveBeenCalledWith({ modes: ["默认", "高清"], defaultMode: "高清" });
+    expect(setModes).toHaveBeenCalledWith({
+      modes: ["默认", "高清"],
+      defaultMode: "高清",
+    });
     expect(mockedPatch).toHaveBeenCalledWith({
       id: "wf-1",
       modes: ["默认", "高清"],
@@ -53,11 +59,19 @@ describe("useWorkflowModes", () => {
     const onFailed = vi.fn();
     const previous = { modes: ["默认"], defaultMode: "默认" };
     const { result } = renderHook(() =>
-      useWorkflowModes({ workflowId: "wf-1", modes: previous, setModes, onFailed }),
+      useWorkflowModes({
+        workflowId: "wf-1",
+        modes: previous,
+        setModes,
+        onFailed,
+      }),
     );
 
     await act(async () => {
-      await result.current.saveModes({ modes: ["默认", "高清"], defaultMode: "高清" });
+      await result.current.saveModes({
+        modes: ["默认", "高清"],
+        defaultMode: "高清",
+      });
     });
 
     expect(setModes).toHaveBeenLastCalledWith(previous);
@@ -68,7 +82,12 @@ describe("useWorkflowModes", () => {
     mockedPatch.mockRejectedValue({ code: "INTERNAL" });
     const onFailed = vi.fn();
     const { result } = renderHook(() =>
-      useWorkflowModes({ workflowId: "wf-1", modes: null, setModes: vi.fn(), onFailed }),
+      useWorkflowModes({
+        workflowId: "wf-1",
+        modes: null,
+        setModes: vi.fn(),
+        onFailed,
+      }),
     );
 
     await act(async () => {
@@ -82,7 +101,12 @@ describe("useWorkflowModes", () => {
     mockedPatch.mockRejectedValue(new Error("网络错误"));
     const setModes = vi.fn();
     const { result } = renderHook(() =>
-      useWorkflowModes({ workflowId: "wf-1", modes: null, setModes, onFailed: vi.fn() }),
+      useWorkflowModes({
+        workflowId: "wf-1",
+        modes: null,
+        setModes,
+        onFailed: vi.fn(),
+      }),
     );
 
     await act(async () => {
@@ -96,7 +120,12 @@ describe("useWorkflowModes", () => {
     const setModes = vi.fn();
     const onFailed = vi.fn();
     const { result } = renderHook(() =>
-      useWorkflowModes({ workflowId: undefined, modes: null, setModes, onFailed }),
+      useWorkflowModes({
+        workflowId: undefined,
+        modes: null,
+        setModes,
+        onFailed,
+      }),
     );
 
     await act(async () => {

@@ -616,7 +616,8 @@ export function WorkflowCanvasNodePreview({
                 )}
                 onSeedModeChange={
                   onSeedModeChange
-                    ? (ioKey: string, mode: string) => onSeedModeChange(ioKey, mode)
+                    ? (ioKey: string, mode: string) =>
+                        onSeedModeChange(ioKey, mode)
                     : undefined
                 }
                 workflowId={workflowId}
@@ -645,15 +646,17 @@ export function WorkflowCanvasNodePreview({
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
         <div className="w-[380px]" aria-live="polite">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-ink-faint">
+          <div className="text-ink-faint mb-1 flex items-center justify-between text-[11px]">
             <span>
               {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
               {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
             </span>
-            <span className="font-medium text-violet-700 dark:text-violet-300">{pct}%</span>
+            <span className="font-medium text-violet-700 dark:text-violet-300">
+              {pct}%
+            </span>
           </div>
           <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2"
+            className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full"
             role="progressbar"
             aria-valuenow={pct}
             aria-valuemin={0}
@@ -670,11 +673,11 @@ export function WorkflowCanvasNodePreview({
       {/* 运行结果图 */}
       {resultUrl && (
         <div className="w-[380px]">
-          <p className="mb-1 text-[11px] text-ink-faint">运行结果</p>
+          <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
           <img
             src={resultUrl}
             alt="运行结果"
-            className="w-full rounded-xl border border-border"
+            className="border-border w-full rounded-xl border"
           />
         </div>
       )}
@@ -699,7 +702,7 @@ export function WorkflowCanvasNodePreview({
             <button
               type="button"
               onClick={() => setUploadNotice(null)}
-              className="shrink-0 rounded px-1 text-amber-800 dark:text-amber-300/70 transition-colors hover:text-amber-800"
+              className="shrink-0 rounded px-1 text-amber-800 transition-colors hover:text-amber-800 dark:text-amber-300/70"
               aria-label="关闭上传提示"
             >
               ✕
@@ -724,16 +727,16 @@ export function WorkflowCanvasNodePreview({
             setLogOpen(true);
           }}
           data-testid="wflib-log-open"
-          className="flex w-[380px] items-center justify-between rounded-xl border border-border bg-panel-deep px-3 py-2 text-left transition-colors hover:border-border-strong"
+          className="border-border bg-panel-deep hover:border-border-strong flex w-[380px] items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors"
           title="打开执行日志"
         >
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-ink-strong">
+          <span className="text-ink-strong flex items-center gap-1.5 text-[11px] font-medium">
             执行日志
             {running && (
               <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
             )}
           </span>
-          <span className="text-[10.5px] text-ink-fainter">
+          <span className="text-ink-fainter text-[10.5px]">
             {activeRun
               ? activeRun.status === "done"
                 ? "上次已完成"

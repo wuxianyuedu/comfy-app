@@ -19,13 +19,23 @@ export interface WorkflowLibraryDetailProps {
   /** 用户级全局模型标签库（用于类型/模型编辑器）。 */
   allModelTags?: { id: string; name: string; count: number }[];
   /** 持久化类型（modes + defaultMode）。 */
-  onPatchModes?: (id: string, modes: string[], defaultMode: string) => Promise<void>;
+  onPatchModes?: (
+    id: string,
+    modes: string[],
+    defaultMode: string,
+  ) => Promise<void>;
   /** 持久化模型标签绑定。 */
   onPatchModelTags?: (id: string, names: string[]) => Promise<void>;
   /** 整体落库 workflowIO（预览面板的 seed「控件后行为」等参数级配置）。 */
-  onPatchWorkflowIO?: (id: string, workflowIO: Record<string, unknown>) => Promise<void>;
+  onPatchWorkflowIO?: (
+    id: string,
+    workflowIO: Record<string, unknown>,
+  ) => Promise<void>;
   /** 整体落库 paramMap（预览面板拖圆点改对外参数落点）。 */
-  onPatchParamMap?: (id: string, paramMap: Record<string, unknown>) => Promise<void>;
+  onPatchParamMap?: (
+    id: string,
+    paramMap: Record<string, unknown>,
+  ) => Promise<void>;
   onUse: (id: string, meta?: { name: string; taskType: string }) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string, name: string) => void;
@@ -56,7 +66,7 @@ export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
  *  导入拿不到原始文件时才回退到可执行图，并置 `isApiFallback` 让弹层如实标注。 */
 export function buildSourceData(
   workflow: WorkflowRow,
-  template: DetailTemplate | null | undefined
+  template: DetailTemplate | null | undefined,
 ): SourceModalData | null {
   if (!template) return null;
   return {

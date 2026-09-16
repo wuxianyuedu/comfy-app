@@ -58,7 +58,9 @@ export function useHistoryPanel({
   projectId,
 }: UseHistoryPanelArgs): HistoryPanelController {
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  const [scope, setScope] = useState<HistoryScope>(projectId ? "project" : "all");
+  const [scope, setScope] = useState<HistoryScope>(
+    projectId ? "project" : "all",
+  );
   const [display, setDisplay] = useState<DisplayMode>("list");
 
   const [tasks, setTasks] = useState<HistoryTaskRow[]>([]);
@@ -76,7 +78,11 @@ export function useHistoryPanel({
     const run = async () => {
       setLoading(true);
       setError(null);
-      const params: { take: number; projectId?: string; media?: TaskMediaType } = { take: TAKE };
+      const params: {
+        take: number;
+        projectId?: string;
+        media?: TaskMediaType;
+      } = { take: TAKE };
       if (scope === "project" && projectId) params.projectId = projectId;
       /* "all" 不是服务端认识的 media 枚举，只在筛选非全部时才带上。 */
       if (filter !== "all") params.media = filter;
@@ -100,7 +106,13 @@ export function useHistoryPanel({
 
   /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
   useEffect(() => {
-    if (scope !== "project" || loading || tasks.length > 0 || globalCount !== null) return;
+    if (
+      scope !== "project" ||
+      loading ||
+      tasks.length > 0 ||
+      globalCount !== null
+    )
+      return;
     let cancelled = false;
     void probeGlobalTaskCount().then((count) => {
       if (cancelled) return;

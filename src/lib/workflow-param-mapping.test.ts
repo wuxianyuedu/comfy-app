@@ -27,7 +27,7 @@ import {
 function pin(
   nodeId: string,
   name: string,
-  extra: Partial<WorkflowIOMap[string]> = {}
+  extra: Partial<WorkflowIOMap[string]> = {},
 ): WorkflowIOMap[string] {
   return {
     direction: "input",
@@ -43,15 +43,23 @@ describe("classifyPin", () => {
   it("负面优先于正向、首尾帧优先于普通参考图", () => {
     expect(classifyPin(pin("1", "negative_prompt"))).toBe("negative");
     expect(classifyPin(pin("1", "positive_prompt"))).toBe("prompt");
-    expect(classifyPin(pin("1", "first_frame", { type: "IMAGE" }))).toBe("first-frame");
-    expect(classifyPin(pin("1", "last_frame", { type: "IMAGE" }))).toBe("last-frame");
-    expect(classifyPin(pin("1", "ref_image", { type: "IMAGE" }))).toBe("reference-image");
+    expect(classifyPin(pin("1", "first_frame", { type: "IMAGE" }))).toBe(
+      "first-frame",
+    );
+    expect(classifyPin(pin("1", "last_frame", { type: "IMAGE" }))).toBe(
+      "last-frame",
+    );
+    expect(classifyPin(pin("1", "ref_image", { type: "IMAGE" }))).toBe(
+      "reference-image",
+    );
   });
 
   it("时长口认 duration / length / frames，但帧率不算时长", () => {
     expect(classifyPin(pin("1", "duration", { type: "INT" }))).toBe("duration");
     expect(classifyPin(pin("1", "length", { type: "INT" }))).toBe("duration");
-    expect(classifyPin(pin("1", "num_frames", { type: "INT" }))).toBe("duration");
+    expect(classifyPin(pin("1", "num_frames", { type: "INT" }))).toBe(
+      "duration",
+    );
     expect(classifyPin(pin("1", "fps", { type: "INT" }))).toBe("other");
   });
 });
@@ -72,7 +80,9 @@ describe("pinAcceptsEntry —— 手工拖线的类型闸门", () => {
   });
 
   it("「尺寸」口接受宽/高/宽高比/像素量，但不吃提示词行", () => {
-    expect(pinAcceptsEntry("size", pin("5", "width", { type: "INT" }))).toBe(true);
+    expect(pinAcceptsEntry("size", pin("5", "width", { type: "INT" }))).toBe(
+      true,
+    );
     expect(pinAcceptsEntry("size", aspect)).toBe(true);
     expect(pinAcceptsEntry("size", promptRow)).toBe(false);
   });
@@ -89,16 +99,29 @@ describe("pinAcceptsEntry —— 手工拖线的类型闸门", () => {
   });
 
   it("尺寸类先于提示词判定（base_width 这类下划线命名也认）", () => {
-    expect(classifyPin(pin("1", "base_width", { type: "INT" }))).toBe("size-width");
-    expect(classifyPin(pin("1", "height", { type: "INT" }))).toBe("size-height");
+    expect(classifyPin(pin("1", "base_width", { type: "INT" }))).toBe(
+      "size-width",
+    );
+    expect(classifyPin(pin("1", "height", { type: "INT" }))).toBe(
+      "size-height",
+    );
     expect(classifyPin(pin("1", "aspect_ratio"))).toBe("size-aspect");
-    expect(classifyPin(pin("1", "prompt_width_of_thing", { type: "INT" }))).toBe("prompt");
+    expect(
+      classifyPin(pin("1", "prompt_width_of_thing", { type: "INT" })),
+    ).toBe("prompt");
   });
 
   it("连线型端口与输出不算对外参数", () => {
-    expect(classifyPin(pin("1", "model", { kind: "param", type: "MODEL" }))).toBe("other");
     expect(
-      classifyPin({ direction: "output", kind: "output", nodeId: "1", name: "IMAGE" })
+      classifyPin(pin("1", "model", { kind: "param", type: "MODEL" })),
+    ).toBe("other");
+    expect(
+      classifyPin({
+        direction: "output",
+        kind: "output",
+        nodeId: "1",
+        name: "IMAGE",
+      }),
     ).toBe("other");
   });
 });
@@ -107,7 +130,10 @@ describe("buildParamEntries", () => {
   it("按节点 + 分类归并：同一节点的多个端口 = 一个对外参数", () => {
     const io: WorkflowIOMap = {
       "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
-      "5::widget::height": pin("5", "height", { type: "INT", defaultValue: 512 }),
+      "5::widget::height": pin("5", "height", {
+        type: "INT",
+        defaultValue: 512,
+      }),
       "5::widget::steps": pin("5", "steps", { type: "INT", defaultValue: 20 }),
       "9::widget::text": pin("9", "text", { label: "正向提示词" }),
     };
@@ -116,8 +142,14 @@ describe("buildParamEntries", () => {
     const height = entries.find((entry) => entry.id === "5|size-height");
     expect(width?.pins.map((item) => item.name)).toEqual(["width"]);
     expect(height?.pins.map((item) => item.name)).toEqual(["height"]);
-    expect(entries.find((entry) => entry.id === "5|other")?.pins.map((item) => item.name)).toEqual(["steps"]);
-    expect(entries.find((entry) => entry.id === "9|prompt")?.label).toBe("正向提示词");
+    expect(
+      entries
+        .find((entry) => entry.id === "5|other")
+        ?.pins.map((item) => item.name),
+    ).toEqual(["steps"]);
+    expect(entries.find((entry) => entry.id === "9|prompt")?.label).toBe(
+      "正向提示词",
+    );
   });
 });
 
@@ -132,7 +164,9 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
   };
 
   it("条目只来自契约：工作流内部参数（步数 / CFG…）不再是「对外参数」", () => {
-    const ids = buildParamEntries(io, undefined, { mode: "T2I" }).map((entry) => entry.id);
+    const ids = buildParamEntries(io, undefined, { mode: "T2I" }).map(
+      (entry) => entry.id,
+    );
     expect(ids).toEqual(["prompt", "size"]);
   });
 
@@ -149,10 +183,14 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       "11::widget::image": pin("11", "first_frame", { type: "IMAGE" }),
     };
     expect(
-      buildParamEntries(videoIO, undefined, { mode: "I2V" }).map((entry) => entry.id),
+      buildParamEntries(videoIO, undefined, { mode: "I2V" }).map(
+        (entry) => entry.id,
+      ),
     ).toEqual(["prompt", "first-frame", "size", "duration"]);
     expect(
-      buildParamEntries(videoIO, undefined, { mode: "T2I" }).map((entry) => entry.id),
+      buildParamEntries(videoIO, undefined, { mode: "T2I" }).map(
+        (entry) => entry.id,
+      ),
     ).toEqual(["prompt", "size"]);
   });
 
@@ -160,7 +198,9 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
     const internalOnly: WorkflowIOMap = {
       "5::widget::steps": pin("5", "steps", { type: "INT", defaultValue: 20 }),
     };
-    expect(buildParamEntries(internalOnly, undefined, { mode: "T2I" })).toEqual([]);
+    expect(buildParamEntries(internalOnly, undefined, { mode: "T2I" })).toEqual(
+      [],
+    );
   });
 
   it("卡片名是契约里的统一名，不跟着工作流端口名走", () => {
@@ -174,8 +214,15 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
   });
 
   it("不传 mode 时保持旧的「按节点 + 分类」聚类", () => {
-    const ids = buildParamEntries(io).map((entry) => entry.id).sort();
-    expect(ids).toEqual(["5|other", "5|size-height", "5|size-width", "9|prompt"]);
+    const ids = buildParamEntries(io)
+      .map((entry) => entry.id)
+      .sort();
+    expect(ids).toEqual([
+      "5|other",
+      "5|size-height",
+      "5|size-width",
+      "9|prompt",
+    ]);
   });
 });
 
@@ -183,8 +230,14 @@ describe("autoMapEntries", () => {
   it("默认连线：命中的分类优先，未命中退回该节点第一个有默认值的标量口", () => {
     const io: WorkflowIOMap = {
       "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
-      "9::widget::text": pin("9", "text", { type: "STRING", defaultValue: "hi" }),
-      "9::widget::mystery": pin("9", "mystery", { type: "INT", defaultValue: 7 }),
+      "9::widget::text": pin("9", "text", {
+        type: "STRING",
+        defaultValue: "hi",
+      }),
+      "9::widget::mystery": pin("9", "mystery", {
+        type: "INT",
+        defaultValue: 7,
+      }),
     };
     const entries = buildParamEntries(io);
     const auto = autoMapEntries(entries, io);
@@ -197,7 +250,9 @@ describe("autoMapEntries", () => {
 
   it("长默认值的文本口（CLIPTextEncode 的 text）判为提示词", () => {
     const long = "a very long positive prompt describing the scene in detail";
-    const io: WorkflowIOMap = { "9::widget::text": pin("9", "text", { defaultValue: long }) };
+    const io: WorkflowIOMap = {
+      "9::widget::text": pin("9", "text", { defaultValue: long }),
+    };
     const entries = buildParamEntries(io);
     expect(entries[0]?.cls).toBe("prompt");
     expect(autoMapEntries(entries, io)["9|prompt"]).toBe("9::widget::text");
@@ -222,29 +277,48 @@ describe("resolveMapping — 作者画的线优先于默认连线状态", () => 
   const entryId = entries[0]!.id;
 
   it("没有作者画的线时用默认连线状态（自动映射）", () => {
-    expect(resolveMapping(entries, io, null, "T2I")[entryId]).toBe("5::widget::width");
+    expect(resolveMapping(entries, io, null, "T2I")[entryId]).toBe(
+      "5::widget::width",
+    );
   });
 
   it("作者画的线覆盖默认连线状态", () => {
-    const mapping = { manualByMode: { T2I: { [entryId]: "5::widget::resolution" } } };
-    expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe("5::widget::resolution");
+    const mapping = {
+      manualByMode: { T2I: { [entryId]: "5::widget::resolution" } },
+    };
+    expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe(
+      "5::widget::resolution",
+    );
     /* 另一个模式回到默认连线状态 —— 线是按模式分开的。 */
-    expect(resolveMapping(entries, io, mapping, "I2I")[entryId]).toBe("5::widget::width");
+    expect(resolveMapping(entries, io, mapping, "I2I")[entryId]).toBe(
+      "5::widget::width",
+    );
   });
 
   it("没有模式时一律用默认连线状态（不存在脱离模式的线）", () => {
-    const mapping = { manualByMode: { T2I: { [entryId]: "5::widget::resolution" } } };
-    expect(resolveMapping(entries, io, mapping, null)[entryId]).toBe("5::widget::width");
+    const mapping = {
+      manualByMode: { T2I: { [entryId]: "5::widget::resolution" } },
+    };
+    expect(resolveMapping(entries, io, mapping, null)[entryId]).toBe(
+      "5::widget::width",
+    );
   });
 
   it("某模式下显式断开 → 该模式「未连线」，其它模式不受影响", () => {
     const mapping = { manualByMode: { I2I: { [entryId]: null } } };
     expect(resolveMapping(entries, io, mapping, "I2I")[entryId]).toBeNull();
-    expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe("5::widget::width");
+    expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe(
+      "5::widget::width",
+    );
   });
 
   it("mapping.auto 可以显式带入默认连线状态（避免各层各算一遍）", () => {
-    const resolved = resolveMapping(entries, null, { auto: { [entryId]: "5::widget::width" } }, "T2I");
+    const resolved = resolveMapping(
+      entries,
+      null,
+      { auto: { [entryId]: "5::widget::width" } },
+      "T2I",
+    );
     expect(resolved[entryId]).toBe("5::widget::width");
   });
 });
@@ -256,7 +330,9 @@ describe("默认连线状态的判定与恢复默认", () => {
   const entryId = buildParamEntries(io)[0]!.id;
 
   it("isDefaultMapping：没有该模式的线才是默认", () => {
-    const mapping = { manualByMode: { T2I: { [entryId]: "5::widget::width" } } };
+    const mapping = {
+      manualByMode: { T2I: { [entryId]: "5::widget::width" } },
+    };
     expect(isDefaultMapping(mapping, entryId, "T2I")).toBe(false);
     expect(isDefaultMapping(mapping, entryId, "I2I")).toBe(true);
     /* 没有模式 = 不承认任何线 = 永远是默认。 */
@@ -286,14 +362,18 @@ describe("默认连线状态的判定与恢复默认", () => {
 
 describe("parseParamMapping / serializeParamMapping", () => {
   it("往返：只写 source 命名空间，其余键原样保留", () => {
-    const mapping = { manualByMode: { I2I: { "5|size-width": "5::widget::resolution" } } };
+    const mapping = {
+      manualByMode: { I2I: { "5|size-width": "5::widget::resolution" } },
+    };
     const merged = serializeParamMapping(mapping, { positiveNode: "9" });
     expect(merged.positiveNode).toBe("9");
     expect(merged.source).toEqual({
       "mode:I2I": { "5|size-width": "5::widget::resolution" },
     });
     const parsed = parseParamMapping(merged);
-    expect(parsed.manualByMode).toEqual({ I2I: { "5|size-width": "5::widget::resolution" } });
+    expect(parsed.manualByMode).toEqual({
+      I2I: { "5|size-width": "5::widget::resolution" },
+    });
     /* 往返之后 resolveMapping 必须仍然认得出来（曾经这里丢了按模式的线）。 */
     const io: WorkflowIOMap = {
       "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
@@ -301,7 +381,7 @@ describe("parseParamMapping / serializeParamMapping", () => {
     };
     const entries = buildParamEntries(io);
     expect(resolveMapping(entries, io, parsed, "I2I")["5|size-width"]).toBe(
-      "5::widget::resolution"
+      "5::widget::resolution",
     );
   });
 
@@ -326,9 +406,11 @@ describe("parseParamMapping / serializeParamMapping", () => {
   it("某模式显式断开（null）能往返保存", () => {
     const merged = serializeParamMapping(
       { manualByMode: { I2I: { "5|size-width": null } } },
-      {}
+      {},
     );
-    expect(parseParamMapping(merged).manualByMode).toEqual({ I2I: { "5|size-width": null } });
+    expect(parseParamMapping(merged).manualByMode).toEqual({
+      I2I: { "5|size-width": null },
+    });
   });
 
   it("空模式表不落库", () => {
@@ -349,7 +431,11 @@ describe("applyParamMapping — 运行期落值", () => {
     const { inputs } = applyParamMapping({
       io,
       entries,
-      mapping: { manualByMode: { T2I: { "5|size-width": "5::widget::width", "5|other": null } } },
+      mapping: {
+        manualByMode: {
+          T2I: { "5|size-width": "5::widget::width", "5|other": null },
+        },
+      },
       values: { "5|size-width": 1024 },
       mode: "T2I",
     });
@@ -360,7 +446,12 @@ describe("applyParamMapping — 运行期落值", () => {
 
   it("没有线的对外参数：按默认值兜底", () => {
     const entries = buildParamEntries(io);
-    const { inputs } = applyParamMapping({ io, entries, mapping: null, values: {} });
+    const { inputs } = applyParamMapping({
+      io,
+      entries,
+      mapping: null,
+      values: {},
+    });
     expect(inputs.find((item) => item.name === "text")?.value).toBe("built-in");
     expect(inputs.find((item) => item.name === "steps")?.value).toBe(20);
   });
@@ -370,7 +461,9 @@ describe("applyParamMapping — 运行期落值", () => {
     const { inputs, unmatched } = applyParamMapping({
       io,
       entries,
-      mapping: { manualByMode: { T2I: { "5|size-width": null, "5|other": null } } },
+      mapping: {
+        manualByMode: { T2I: { "5|size-width": null, "5|other": null } },
+      },
       values: { "5|size-width": 1024 },
       mode: "T2I",
     });
@@ -383,7 +476,9 @@ describe("applyParamMapping — 运行期落值", () => {
     const { inputs } = applyParamMapping({
       io,
       entries,
-      mapping: { manualByMode: { I2I: { "5|size-width": null, "5|other": null } } },
+      mapping: {
+        manualByMode: { I2I: { "5|size-width": null, "5|other": null } },
+      },
       values: { "5|size-width": 1024 },
       mode: "T2I",
     });
@@ -400,7 +495,9 @@ describe("applyParamMapping — 运行期落值", () => {
       values: { size: 1024 },
       mode: "T2I",
     });
-    expect(byContract.inputs.find((item) => item.name === "width")?.value).toBe(1024);
+    expect(byContract.inputs.find((item) => item.name === "width")?.value).toBe(
+      1024,
+    );
     /* 运行期表单按 ioKey 给（DynamicWorkflowForm 的行键就是 ioKey）。 */
     const byPinKey = applyParamMapping({
       io,
@@ -409,7 +506,9 @@ describe("applyParamMapping — 运行期落值", () => {
       values: { "5::widget::width": 768 },
       mode: "T2I",
     });
-    expect(byPinKey.inputs.find((item) => item.name === "width")?.value).toBe(768);
+    expect(byPinKey.inputs.find((item) => item.name === "width")?.value).toBe(
+      768,
+    );
   });
 
   it("契约条目：改版前落库的 `<节点 id>|<分类>` 键仍算作者的线", () => {
@@ -442,7 +541,9 @@ describe("applyParamMapping — 运行期落值", () => {
 
 describe("buildSourceOverrides", () => {
   it("产出「对外参数 id → 目标 ioKey」的覆盖表（含 null 断开）", () => {
-    const io: WorkflowIOMap = { "5::widget::width": pin("5", "width", { type: "INT" }) };
+    const io: WorkflowIOMap = {
+      "5::widget::width": pin("5", "width", { type: "INT" }),
+    };
     const overrides = buildSourceOverrides(buildParamEntries(io), io, null);
     expect(overrides["5|size-width"]).toBe("5::widget::width");
   });
@@ -455,7 +556,9 @@ describe("runtimeNodeId — 运行期节点 id 还原", () => {
 
   it("子图内部勾选用宿主 id 拼成 comfy-cli 展开后的 `host:inner`", () => {
     expect(runtimeNodeId({ nodeId: "1670", hostNodeId: "4" })).toBe("4:1670");
-    expect(runtimeNodeId({ nodeId: "1670", hostNodeId: "4:5" })).toBe("4:5:1670");
+    expect(runtimeNodeId({ nodeId: "1670", hostNodeId: "4:5" })).toBe(
+      "4:5:1670",
+    );
   });
 
   it("已经是拼接形式（旧数据）时不重复拼", () => {
@@ -500,7 +603,9 @@ describe("handleIdForIoKey / ioKeyForHandle — 两个键空间互转（ISSUE #3
 
   it("pin 名含 `::` 时不会被切错", () => {
     /* 天真实现（split("::") 取末段）会得到 "name"，与渲染的 handle id 不符。 */
-    expect(handleIdForIoKey(map, "7::widget::weird::name")).toBe(map["7::widget::weird::name"]!.name);
+    expect(handleIdForIoKey(map, "7::widget::weird::name")).toBe(
+      map["7::widget::weird::name"]!.name,
+    );
   });
 
   it("查不到（条目已移除 / io 未就绪）回 null，调用方据此不画线", () => {
@@ -511,7 +616,9 @@ describe("handleIdForIoKey / ioKeyForHandle — 两个键空间互转（ISSUE #3
 
   it("逆向：handle id + 节点 id → ioKey", () => {
     expect(ioKeyForHandle(map, "1512", "value")).toBe("1512::widget::value");
-    expect(ioKeyForHandle(map, "7", "weird::name")).toBe("7::widget::weird::name");
+    expect(ioKeyForHandle(map, "7", "weird::name")).toBe(
+      "7::widget::weird::name",
+    );
     /* 节点对不上 / handle 不存在 → null（合法性闸门据此拒绝）。 */
     expect(ioKeyForHandle(map, "23", "value")).toBeNull();
     expect(ioKeyForHandle(map, "1512", "nope")).toBeNull();
@@ -608,7 +715,12 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
       "aspect_ratio",
       "megapixels",
     ]);
-    expect(ports.map((port) => port.type)).toEqual(["INT", "INT", "COMBO", "FLOAT"]);
+    expect(ports.map((port) => port.type)).toEqual([
+      "INT",
+      "INT",
+      "COMBO",
+      "FLOAT",
+    ]);
     /* `connected` = 端口在工作流里真实存在（不是「已连上」）—— 候选端口都存在。 */
     expect(ports.every((port) => port.connected)).toBe(true);
     /* 每颗点自带 handle id（= 该端口的 ioKey）：拖哪颗就连到哪个候选。 */
@@ -633,7 +745,12 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
       "aspect_ratio",
       "megapixels",
     ]);
-    expect(ports.map((port) => port.active)).toEqual([false, true, false, false]);
+    expect(ports.map((port) => port.active)).toEqual([
+      false,
+      true,
+      false,
+      false,
+    ]);
     expect(defaultOutputPortIndex(ports)).toBe(1);
   });
 
@@ -651,7 +768,12 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     const empty = { ...prompt, pins: [] };
     const ports = paramOutputPorts(empty, outIo, null);
     expect(ports).toHaveLength(1);
-    expect(ports[0]).toMatchObject({ name: "提示词", type: "*", connected: false, ioKey: "" });
+    expect(ports[0]).toMatchObject({
+      name: "提示词",
+      type: "*",
+      connected: false,
+      ioKey: "",
+    });
     /* 端点的 handle id 退到契约展示名：没有可落的地方，但卡片仍画得出端点。 */
     expect(ports[0]!.handleId).toBe("提示词");
   });
@@ -719,9 +841,9 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
       "5::widget::megapixels",
     ]);
     /* 自动判定挑中的那一颗标 active（卡片上实心，其余淡一档）。 */
-    expect(wired.filter((item) => item.active).map((item) => item.ioKey)).toEqual([
-      "5::widget::aspect_ratio",
-    ]);
+    expect(
+      wired.filter((item) => item.active).map((item) => item.ioKey),
+    ).toEqual(["5::widget::aspect_ratio"]);
   });
 
   it("作者手工改过落点：只画他指定的那一条", () => {

@@ -29,9 +29,7 @@ export function formatDraftContext(draft: WorkshopDraftDto): string {
     `梗概：${meta.logline || "无"}`,
     `角色卡：${charCount} 个${charNames ? `（${charNames}）` : ""}`,
     `分镜镜头：${shotCount} 个（图 ${imageDone} / 视频 ${clipDone}）`,
-    scriptPreview
-      ? `剧本（节选）：\n${scriptPreview}`
-      : "剧本：暂无",
+    scriptPreview ? `剧本（节选）：\n${scriptPreview}` : "剧本：暂无",
   ].join("\n");
 }
 
@@ -82,7 +80,9 @@ export const AGENT_FALLBACK_SYSTEM_PROMPT = `你是 ComfyAPP 工坊的「创作�
 → {"action": "generate_script", "idea": "夏天海边重逢，一对旧友在多年后相遇，温暖治愈的故事"}`;
 
 /** 把模型返回的 JSON 文本归一成指令对象（宽松解析，兼容围栏 / 前后缀文字）。 */
-export function parseJsonInstruction(text: string): Record<string, unknown> | null {
+export function parseJsonInstruction(
+  text: string,
+): Record<string, unknown> | null {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return null;
   // Strip ```json ... ``` code fences.

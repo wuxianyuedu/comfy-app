@@ -96,14 +96,23 @@ export function useProjectManager(options: UseProjectManagerOptions) {
       setActive(id);
       setProjectId(proj.id);
       setProjectName(proj.name);
-      setNodes((proj.nodes) ?? []);
+      setNodes(proj.nodes ?? []);
       setEdges(proj.edges ?? []);
       closeMenus();
       requestFitView();
     },
     /* setActive 是 canvas-store 的模块级导出，引用恒定，属于 outer scope，
      *  放进依赖数组会被 react-hooks/exhaustive-deps 判为不必要依赖。 */
-    [getCurrent, persistNow, setProjectId, setProjectName, setNodes, setEdges, closeMenus, requestFitView]
+    [
+      getCurrent,
+      persistNow,
+      setProjectId,
+      setProjectName,
+      setNodes,
+      setEdges,
+      closeMenus,
+      requestFitView,
+    ],
   );
 
   const newProject = useCallback(() => {
@@ -120,7 +129,14 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     setEdges([]);
     setProjects(listProjects());
     setProjMenu(false);
-  }, [getCurrent, persistNow, setProjectId, setProjectName, setNodes, setEdges]);
+  }, [
+    getCurrent,
+    persistNow,
+    setProjectId,
+    setProjectName,
+    setNodes,
+    setEdges,
+  ]);
 
   const deleteCurrent = useCallback(() => {
     const { pid } = getCurrent();
@@ -141,12 +157,19 @@ export function useProjectManager(options: UseProjectManagerOptions) {
       setActive(id);
       setProjectId(proj.id);
       setProjectName(proj.name);
-      setNodes((proj.nodes) ?? []);
+      setNodes(proj.nodes ?? []);
       setEdges(proj.edges ?? []);
       closeMenus();
       requestFitView();
     },
-    [setProjectId, setProjectName, setNodes, setEdges, closeMenus, requestFitView]
+    [
+      setProjectId,
+      setProjectName,
+      setNodes,
+      setEdges,
+      closeMenus,
+      requestFitView,
+    ],
   );
 
   /** 删除确认弹窗的实际动作。 */
@@ -170,7 +193,14 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     setProjects(listProjects());
     setProjMenu(false);
     setConfirmDelete(false);
-  }, [getCurrent, loadProject, setProjectId, setProjectName, setNodes, setEdges]);
+  }, [
+    getCurrent,
+    loadProject,
+    setProjectId,
+    setProjectName,
+    setNodes,
+    setEdges,
+  ]);
 
   const startRename = useCallback(() => {
     setRenameVal(getCurrent().name);
@@ -191,7 +221,10 @@ export function useProjectManager(options: UseProjectManagerOptions) {
     persistNow(finalName);
     // 自动重命名要让用户知道「灵感」为何变成「灵感_2」。
     if (finalName !== baseName) {
-      toast.info("已自动添加后缀", `项目名「${baseName}」已被占用，已保存为「${finalName}」。`);
+      toast.info(
+        "已自动添加后缀",
+        `项目名「${baseName}」已被占用，已保存为「${finalName}」。`,
+      );
     }
     setRenaming(false);
     setProjMenu(false);

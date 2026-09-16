@@ -57,15 +57,15 @@ export function DetailBody({
   return (
     <>
       {activeTab === "canvas" && (
-        <div className="flex h-full min-h-[420px] flex-col rounded-2xl border border-border bg-panel-deep p-1">
+        <div className="border-border bg-panel-deep flex h-full min-h-[420px] flex-col rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium text-ink-faint">
+            <span className="text-ink-faint text-xs font-medium">
               画布样式预览（与项目画布节点一致，可直接运行调试）
             </span>
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/10"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300"
             >
               <Maximize2 className="h-3 w-3" />
               在编辑器中打开
@@ -105,18 +105,25 @@ export function DetailBody({
           displayName={workflow.modelTags?.[0] ?? workflow.name}
           workflowIO={workflowIO}
           paramMap={paramMap}
-          mode={workflow.defaultMode ?? workflow.taskType ?? workflow.modes?.[0] ?? null}
+          mode={
+            workflow.defaultMode ??
+            workflow.taskType ??
+            workflow.modes?.[0] ??
+            null
+          }
         />
       )}
 
       {activeTab === "source" && (
-        <div className="rounded-2xl border border-border bg-panel-deep p-1">
+        <div className="border-border bg-panel-deep rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-xs font-medium text-ink-faint">
-              {sourceData?.isApiFallback ? "可执行图（无原始文件）" : "原始导入 JSON"}
+            <span className="text-ink-faint text-xs font-medium">
+              {sourceData?.isApiFallback
+                ? "可执行图（无原始文件）"
+                : "原始导入 JSON"}
             </span>
           </div>
-          <div className="max-h-[70vh] overflow-auto rounded-xl bg-canvas-deep">
+          <div className="bg-canvas-deep max-h-[70vh] overflow-auto rounded-xl">
             {sourceData?.source != null ? (
               <JsonViewer
                 data={sourceData.source}
@@ -124,7 +131,9 @@ export function DetailBody({
                 initialCollapsedDepth={2}
               />
             ) : (
-              <p className="px-4 py-10 text-center text-xs text-ink-fainter">暂无源文件数据</p>
+              <p className="text-ink-fainter px-4 py-10 text-center text-xs">
+                暂无源文件数据
+              </p>
             )}
           </div>
         </div>

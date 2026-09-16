@@ -17,14 +17,14 @@ export type { FieldType };
 
 /** 编辑器参数行定义（旧的「参数编辑器」FieldDef，现仅作字段规格复用）。 */
 export interface FieldDef {
-  key: string;          // input key in ComfyUI inputs object
-  label: string;        // display name
+  key: string; // input key in ComfyUI inputs object
+  label: string; // display name
   type: FieldType;
-  options?: string[];   // for select type
+  options?: string[]; // for select type
   placeholder?: string;
-  multiline?: boolean;   // for text type
-  hidden?: boolean;     // don't show in editor (e.g. internal wiring)
-  group?: string;       // section grouping
+  multiline?: boolean; // for text type
+  hidden?: boolean; // don't show in editor (e.g. internal wiring)
+  group?: string; // section grouping
   /** Numeric bounds (mirrors ComfyUI INPUT_TYPES min/max/step). */
   min?: number;
   max?: number;
@@ -36,26 +36,34 @@ export interface FieldDef {
 
 /* ── Port spec (from custom-node manifest) ── */
 export interface PortSpec {
-  name: string;             // input/output name
-  type: string;             // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
-  widget?: FieldType;       // editor widget (absent for pure connection ports)
-  options?: string[];       // for COMBO
-  default?: unknown;        // default value (for value chip / placeholder)
+  name: string; // input/output name
+  type: string; // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
+  widget?: FieldType; // editor widget (absent for pure connection ports)
+  options?: string[]; // for COMBO
+  default?: unknown; // default value (for value chip / placeholder)
   required: boolean;
 }
 
 /* ── Node type registry — maps class_type → display info + field specs ── */
 export interface NodeTypeConfig {
-  label: string;            // default Chinese label
-  color: string;            // accent color (CSS var or hex)
-  icon?: string;            // emoji or unicode symbol (for non-emoji env)
-  category: "input" | "process" | "output" | "model" | "conditioning" | "latent" | "image" | "custom";
+  label: string; // default Chinese label
+  color: string; // accent color (CSS var or hex)
+  icon?: string; // emoji or unicode symbol (for non-emoji env)
+  category:
+    | "input"
+    | "process"
+    | "output"
+    | "model"
+    | "conditioning"
+    | "latent"
+    | "image"
+    | "custom";
   defaultFields: FieldDef[];
-  width: number;            // node card width in px
-  height: number;           // min height
+  width: number; // node card width in px
+  height: number; // min height
   /* custom-node support (populated from customNodes manifest) */
   custom?: boolean;
-  rawCategory?: string;     // original ComfyUI category string
+  rawCategory?: string; // original ComfyUI category string
   inputsSpec?: PortSpec[];
   outputsSpec?: PortSpec[];
   /** OUTPUT_NODE === true：终端节点（后端仍执行，只是不向下游传值）。 */

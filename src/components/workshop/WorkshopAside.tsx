@@ -120,7 +120,7 @@ export function WorkshopAside({
       {/* Missing materials */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="mb-3 flex items-center gap-2">
-          <span className="grid h-[22px] w-[22px] place-items-center rounded-lg bg-amber/20 text-[13px] font-bold text-amber">
+          <span className="bg-amber/20 text-amber grid h-[22px] w-[22px] place-items-center rounded-lg text-[13px] font-bold">
             !
           </span>
           <span className="text-ink text-[13px] font-semibold">
@@ -134,7 +134,9 @@ export function WorkshopAside({
                 className="h-2.5 w-2.5 rounded-full"
                 style={{ background: item.color }}
               />
-              <span className="text-ink flex-1 text-[12.5px]">{item.label}</span>
+              <span className="text-ink flex-1 text-[12.5px]">
+                {item.label}
+              </span>
               <span className="text-faint text-[11px]">
                 {item.need > 0 ? `${item.need} 项待补` : "✓ 已完成"}
               </span>
@@ -145,7 +147,7 @@ export function WorkshopAside({
           type="button"
           onClick={onGoScript}
           variant="ghost"
-          className="mt-3 w-full rounded-lg bg-amber/10 py-2.5 text-xs font-semibold text-amber hover:bg-amber/15"
+          className="bg-amber/10 text-amber hover:bg-amber/15 mt-3 w-full rounded-lg py-2.5 text-xs font-semibold"
         >
           补齐缺失素材 →
         </Button>
@@ -179,7 +181,7 @@ export function WorkshopAside({
           type="button"
           variant="ghost"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground mt-3 w-full rounded-lg bg-subtle py-2.5 text-xs hover:bg-surface-2"
+          className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
         >
           配置模型适配（远端生图 / 视频）
         </Button>
@@ -197,7 +199,7 @@ export function WorkshopAside({
               <span className="text-ink flex-1 truncate text-[12.5px]">
                 {name}
               </span>
-              <span className="text-faint rounded-md bg-subtle px-2 py-1 text-[10.5px]">
+              <span className="text-faint bg-subtle rounded-md px-2 py-1 text-[10.5px]">
                 {tag}
               </span>
             </div>
@@ -206,7 +208,7 @@ export function WorkshopAside({
         <Button
           type="button"
           variant="ghost"
-          className="text-muted-foreground mt-3 w-full rounded-lg bg-subtle py-2.5 text-xs hover:bg-surface-2"
+          className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
         >
           + 导入素材
         </Button>

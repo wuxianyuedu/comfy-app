@@ -103,7 +103,8 @@ function PortDot({
   /** 距 wrapper 顶部 px（按 Ardot 实测绝对位置） */
   top: number;
 }) {
-  const stroke = side === "right" ? "var(--color-card)" : "var(--color-border-strong)";
+  const stroke =
+    side === "right" ? "var(--color-card)" : "var(--color-border-strong)";
   return (
     <span
       aria-hidden
@@ -132,9 +133,9 @@ function PortRowString({
 }) {
   return (
     <div className="flex h-[86px] flex-col gap-[6px] py-[6px]">
-      <div className="flex h-4 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
+      <div className="flex h-4 items-center justify-between gap-2.5 pr-[14px] pl-[14px]">
         <span
-          className="text-[12px] font-medium text-ink-bright"
+          className="text-ink-bright text-[12px] font-medium"
           style={{ fontFamily: "var(--font-sans)" }}
         >
           {label}
@@ -145,7 +146,7 @@ function PortRowString({
         readOnly
         rows={2}
         defaultValue={value}
-        className="bg-canvas-deep text-ink-soft mx-[14px] h-[52px] resize-none rounded-md border border-border-subtle px-2.5 py-2 text-[11px] leading-relaxed text-ink-soft outline-none"
+        className="bg-canvas-deep text-ink-soft border-border-subtle text-ink-soft mx-[14px] h-[52px] resize-none rounded-md border px-2.5 py-2 text-[11px] leading-relaxed outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
@@ -163,9 +164,9 @@ function PortRowInt({
   value: string;
 }) {
   return (
-    <div className="flex h-[33px] items-center gap-2.5 pl-[14px] pr-[14px]">
+    <div className="flex h-[33px] items-center gap-2.5 pr-[14px] pl-[14px]">
       <span
-        className="text-[12px] font-medium text-ink-bright"
+        className="text-ink-bright text-[12px] font-medium"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -174,7 +175,7 @@ function PortRowInt({
       <input
         readOnly
         defaultValue={value}
-        className="h-[21px] w-[140px] rounded border border-border-strong bg-canvas-deep px-2 text-right text-[12px] tabular-nums text-ink-bright outline-none"
+        className="border-border-strong bg-canvas-deep text-ink-bright h-[21px] w-[140px] rounded border px-2 text-right text-[12px] tabular-nums outline-none"
         style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
@@ -183,18 +184,12 @@ function PortRowInt({
 }
 
 /* ── 输出端口行（28h：spacer + label + chip + pr 让出右端点位置） ── */
-function PortRowOutput({
-  label,
-  type,
-}: {
-  label: string;
-  type: string;
-}) {
+function PortRowOutput({ label, type }: { label: string; type: string }) {
   return (
-    <div className="flex h-7 items-center gap-2.5 pl-[14px] pr-[14px]">
+    <div className="flex h-7 items-center gap-2.5 pr-[14px] pl-[14px]">
       <div className="flex-1" />
       <span
-        className="text-[12px] font-medium text-ink-bright"
+        className="text-ink-bright text-[12px] font-medium"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {label}
@@ -218,30 +213,31 @@ export function WorkflowNodeArdot() {
   return (
     <div className="relative w-[340px]">
       {/* ── Card 自身（overflow-hidden 保护底部 ActionBtn 圆角）── */}
-      <div className="relative rounded-[14px] border border-border-strong bg-card overflow-hidden">
+      <div className="border-border-strong bg-card relative overflow-hidden rounded-[14px] border">
         {/* ── CardHeader 340×32 ── */}
-        <div className="flex h-8 items-center justify-between gap-2.5 pl-[14px] pr-[14px]">
+        <div className="flex h-8 items-center justify-between gap-2.5 pr-[14px] pl-[14px]">
           <div className="flex items-center gap-2.5">
             <span
               aria-label="类型 工作流"
-              className="flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold text-primary"
-              style={{ background: "var(--color-node-accent)", fontFamily: "var(--font-sans)" }}
+              className="text-primary flex h-7 w-7 items-center justify-center rounded-[14px] text-[14px] font-bold"
+              style={{
+                background: "var(--color-node-accent)",
+                fontFamily: "var(--font-sans)",
+              }}
             >
               W
             </span>
             <span
-              className="text-[14px] font-bold text-ink-bright"
+              className="text-ink-bright text-[14px] font-bold"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               自定义工作流
             </span>
           </div>
-          <div
-            className="flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] bg-node-accent px-2"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          <div className="bg-node-accent flex h-5 shrink-0 items-center gap-[5px] rounded-[11px] px-2">
+            <span className="bg-primary h-1.5 w-1.5 rounded-full" />
             <span
-              className="text-[10px] font-medium text-ink-soft"
+              className="text-ink-soft text-[10px] font-medium"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               待开始
@@ -250,15 +246,15 @@ export function WorkflowNodeArdot() {
         </div>
 
         {/* ── Divider 340×1 ── */}
-        <div className="h-px bg-border-strong" />
+        <div className="bg-border-strong h-px" />
 
         {/* ── WorkflowChipRow 340×44（chip 24h 居中）── */}
         {/* 顺序：本机（位置）→ image_z_image_int8（名称）→ T2I（类型，最右） */}
-        <div className="flex h-11 items-center gap-1.5 pl-[14px] pr-[14px]">
+        <div className="flex h-11 items-center gap-1.5 pr-[14px] pl-[14px]">
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
           <button
             type="button"
-            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 text-[12px]"
+            className="border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
           >
             <span
               aria-hidden
@@ -270,33 +266,51 @@ export function WorkflowNodeArdot() {
             >
               本机
             </span>
-            <span aria-hidden className="shrink-0 text-ink-icon" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span
+              aria-hidden
+              className="text-ink-icon shrink-0"
+              style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+            >
+              ▾
+            </span>
           </button>
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
           <button
             type="button"
-            className="flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-primary/35 bg-node-accent px-2.5 text-[12px]"
+            className="border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
           >
             <span
-              className="min-w-0 flex-1 truncate text-left font-semibold text-ink-bright"
+              className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
               style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
             >
               image_z_image_int8
             </span>
-            <span aria-hidden className="shrink-0 text-ink-icon" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span
+              aria-hidden
+              className="text-ink-icon shrink-0"
+              style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+            >
+              ▾
+            </span>
           </button>
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
           <button
             type="button"
-            className="flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/55 bg-node-accent px-2.5 text-[12px]"
+            className="border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
           >
             <span
-              className="font-medium text-ink-bright"
+              className="text-ink-bright font-medium"
               style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
             >
               T2I
             </span>
-            <span aria-hidden className="shrink-0 text-ink-muted" style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}>▾</span>
+            <span
+              aria-hidden
+              className="text-ink-muted shrink-0"
+              style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+            >
+              ▾
+            </span>
           </button>
         </div>
 
@@ -323,10 +337,11 @@ export function WorkflowNodeArdot() {
         {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
         <button
           type="button"
-          className="flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r from-primary to-accent text-[13px] font-bold text-white"
+          className="from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r text-[13px] font-bold text-white"
           style={{
             fontFamily: "var(--font-sans)",
-            boxShadow: "0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent)",
+            boxShadow:
+              "0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent)",
           }}
         >
           ▶ 用此工作流生成
@@ -336,9 +351,9 @@ export function WorkflowNodeArdot() {
       {/* ── 端点层（外层 wrapper 的 absolute 子元素，骑跨 Card 边框）──
           y 坐标按 Ardot 实测（3:161/3:162/3:163 + 输出行 y=282 h=28, 圆心 296） */}
       <div className="pointer-events-none absolute inset-0">
-        <PortDot side="left"  top={91}  color={portColor("STRING")} />
-        <PortDot side="left"  top={177} color={portColor("STRING")} />
-        <PortDot side="left"  top={265} color={portColor("INT")} />
+        <PortDot side="left" top={91} color={portColor("STRING")} />
+        <PortDot side="left" top={177} color={portColor("STRING")} />
+        <PortDot side="left" top={265} color={portColor("INT")} />
         <PortDot side="right" top={296} color={portColor("IMAGE")} />
       </div>
     </div>

@@ -9,54 +9,61 @@ import {
   WorkspaceNav,
   AuroraBackground,
 } from "@/components/studio";
-import type {
-  RecentProject,
-  WorkspaceView,
-} from "@/components/studio";
+import type { RecentProject, WorkspaceView } from "@/components/studio";
 import { WorkshopPipeline } from "@/components/workshop/WorkshopPipeline";
 import { ShellTabs } from "@/components/studio/ShellTabs";
-import { listProjects, setActive, reapAllEmptyDrafts } from "@/lib/project-canvas/canvas-store";
+import {
+  listProjects,
+  setActive,
+  reapAllEmptyDrafts,
+} from "@/lib/project-canvas/canvas-store";
 
 /* ── Lazy-load view components so the initial bundle stays small ── */
 /* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
 const SettingsOverlay = dynamic(
-  () => import("@/components/settings/SettingsOverlay").then((mod) => mod.SettingsOverlay),
-  { ssr: false }
+  () =>
+    import("@/components/settings/SettingsOverlay").then(
+      (mod) => mod.SettingsOverlay,
+    ),
+  { ssr: false },
 );
 
 const WorksGallery = dynamic(
   () => import("@/components/studio").then((mod) => mod.WorksGallery),
-  { ssr: false }
+  { ssr: false },
 );
 const ProjectOutputs = dynamic(
   () => import("@/components/studio").then((mod) => mod.ProjectOutputs),
-  { ssr: false }
+  { ssr: false },
 );
 const ModelLibrary = dynamic(
   () => import("@/components/studio").then((mod) => mod.ModelLibrary),
-  { ssr: false }
+  { ssr: false },
 );
 const HistoryList = dynamic(
   () => import("@/components/studio").then((mod) => mod.HistoryList),
-  { ssr: false }
+  { ssr: false },
 );
 const TrainingStudio = dynamic(
   () => import("@/components/studio").then((mod) => mod.TrainingStudio),
-  { ssr: false }
+  { ssr: false },
 );
 const WorkflowLibrary = dynamic(
   () => import("@/components/studio").then((mod) => mod.WorkflowLibrary),
-  { ssr: false }
+  { ssr: false },
 );
 
 /* Lazy-load the heavier canvas/film editors (ReactFlow etc.) on the client. */
 const FilmStudio = dynamic(
   () => import("@/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
-  { ssr: false }
+  { ssr: false },
 );
 const ProjectCanvas = dynamic(
-  () => import("@/components/studio/ProjectCanvas").then((mod) => mod.ProjectCanvas),
-  { ssr: false }
+  () =>
+    import("@/components/studio/ProjectCanvas").then(
+      (mod) => mod.ProjectCanvas,
+    ),
+  { ssr: false },
 );
 
 /* ── Workspace Page — Updream-style full-screen editor ── */
@@ -195,7 +202,7 @@ export default function WorkspacePage() {
                   : "空画布",
               thumbnails: [],
             };
-          })
+          }),
       );
     };
     compute();
@@ -206,9 +213,12 @@ export default function WorkspacePage() {
   }, [recentsKey]);
 
   // ── Handlers ──
-  const handleNavSelect = useCallback((id: WorkspaceView) => {
-    navigateTo(id);
-  }, [navigateTo]);
+  const handleNavSelect = useCallback(
+    (id: WorkspaceView) => {
+      navigateTo(id);
+    },
+    [navigateTo],
+  );
 
   const handleNewProject = useCallback(() => {
     // Opening "新建项目" drops the user into a fresh, named canvas project
@@ -223,7 +233,7 @@ export default function WorkspacePage() {
       setActive(id);
       navigateTo("canvas");
     },
-    [navigateTo]
+    [navigateTo],
   );
 
   const handleHomeNavigate = useCallback(
@@ -233,7 +243,7 @@ export default function WorkspacePage() {
       if (view === "home") return;
       navigateTo(view);
     },
-    [navigateTo]
+    [navigateTo],
   );
 
   // HomePage "查看全部" → switch to the "项目" (works) tab.
@@ -252,7 +262,7 @@ export default function WorkspacePage() {
         router.push(`/create/${id}`);
       }
     },
-    [navigateTo, router]
+    [navigateTo, router],
   );
 
   // "使用" a workflow from the Workflow Library → jump to the infinite canvas
@@ -266,7 +276,7 @@ export default function WorkspacePage() {
       });
       navigateTo("canvas");
     },
-    [navigateTo]
+    [navigateTo],
   );
 
   // ── Home 模式为整页独立视图；其余模式共用左侧导航 + 中央内容 ──
@@ -276,7 +286,12 @@ export default function WorkspacePage() {
   const renderCenter = () => {
     switch (viewMode) {
       case "works":
-        return <WorksGallery onOpenTask={handleOpenProject} onOpenCanvasProject={handleOpenCanvasProject} />;
+        return (
+          <WorksGallery
+            onOpenTask={handleOpenProject}
+            onOpenCanvasProject={handleOpenCanvasProject}
+          />
+        );
 
       case "models":
         return <ModelLibrary />;
@@ -321,8 +336,8 @@ export default function WorkspacePage() {
   return (
     <ShellTabs>
       <>
-      {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
-      {viewMode === "home" ? (
+        {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
+        {viewMode === "home" ? (
           <>
             <HomePage
               onNewProject={handleNewProject}
@@ -334,11 +349,17 @@ export default function WorkspacePage() {
               onShowAllProjects={handleShowAllProjects}
               onOpenSettings={openSettings}
             />
-            <VideoQueueModal open={videoQueueOpen} onClose={() => setVideoQueueOpen(false)} />
+            <VideoQueueModal
+              open={videoQueueOpen}
+              onClose={() => setVideoQueueOpen(false)}
+            />
           </>
         ) : (
           <>
-            <div className="flex h-full w-full overflow-hidden bg-canvas text-ink" style={{ fontFamily: "var(--font-sans)" }}>
+            <div
+              className="bg-canvas text-ink flex h-full w-full overflow-hidden"
+              style={{ fontFamily: "var(--font-sans)" }}
+            >
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
 
@@ -361,13 +382,12 @@ export default function WorkspacePage() {
                   router.push(`/create/${id}`);
                 }}
               />
-
             </div>
           </>
         )}
 
-      {/* 设置 overlay：仅打开时挂载。置于最顶层，不卸载下方 workspace 组件树。 */}
-      {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
+        {/* 设置 overlay：仅打开时挂载。置于最顶层，不卸载下方 workspace 组件树。 */}
+        {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
       </>
     </ShellTabs>
   );

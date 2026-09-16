@@ -145,11 +145,12 @@ export async function runEnsureLaunch(input: {
       PYTHONIOENCODING: "utf-8",
       PYTHONUTF8: "1",
     },
-    deadline:
-      input.timeoutMs != null ? Date.now() + input.timeoutMs : null,
+    deadline: input.timeoutMs != null ? Date.now() + input.timeoutMs : null,
     timeoutDetail: `ComfyUI 启动超过 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`,
   };
-  return keepAlive ? launchKeepAliveMode(host, ctx) : launchBoundMode(host, ctx);
+  return keepAlive
+    ? launchKeepAliveMode(host, ctx)
+    : launchBoundMode(host, ctx);
 }
 
 /**
@@ -161,7 +162,8 @@ async function launchKeepAliveMode(
   ctx: EnsureCtx,
 ): Promise<EnsureResult> {
   const { note, plan, args, stdioEnv, deadline, timeoutDetail } = ctx;
-  const { st, appendRuntimeLog, appendSessionBanner, clearComfyStopping } = host;
+  const { st, appendRuntimeLog, appendSessionBanner, clearComfyStopping } =
+    host;
   // 保活：脱离进程树。没有直连 stdio/exit，但把 stdout/stderr 重定向到
   // 按次命名的文件里，等待循环会增量跟随进 comfyui-runtime.log ——
   // 保活模式下「启动日志」面板不再空白，完整输出也留得下文件。
@@ -304,7 +306,8 @@ async function launchBoundMode(
   ctx: EnsureCtx,
 ): Promise<EnsureResult> {
   const { note, plan, args, stdioEnv, deadline, timeoutDetail } = ctx;
-  const { st, appendRuntimeLog, appendSessionBanner, clearComfyStopping } = host;
+  const { st, appendRuntimeLog, appendSessionBanner, clearComfyStopping } =
+    host;
   let child: ReturnType<typeof spawn>;
   try {
     child = spawn(plan.cmd, args, {

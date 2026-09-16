@@ -3,7 +3,7 @@
 exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台外壳 1`] = `
 <div>
   <div
-    class="flex h-full w-full flex-col overflow-hidden bg-canvas"
+    class="bg-canvas flex h-full w-full flex-col overflow-hidden"
     style="font-family: var(--font-sans);"
   >
     <div
@@ -11,16 +11,16 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
       class="pointer-events-none absolute inset-0 overflow-hidden"
     >
       <div
-        class="absolute right-[-10%] top-[-20%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        class="absolute top-[-20%] right-[-10%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         style="background: radial-gradient(circle, rgba(139, 92, 246, 0.42) 0%, rgba(139, 92, 246, 0) 70%);"
       />
       <div
-        class="absolute left-[-15%] bottom-[15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        class="absolute bottom-[15%] left-[-15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         style="background: radial-gradient(circle, rgba(34, 211, 238, 0.28) 0%, rgba(34, 211, 238, 0) 70%);"
       />
     </div>
     <header
-      class="relative z-10 flex shrink-0 items-center gap-3 border-b border-border-subtle bg-panel/88 px-4 py-0 backdrop-blur-md"
+      class="border-border-subtle bg-panel/88 relative z-10 flex shrink-0 items-center gap-3 border-b px-4 py-0 backdrop-blur-md"
     >
       <div
         class="flex items-center gap-2"
@@ -31,16 +31,16 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           未命名成片
         </span>
         <span
-          class="text-xs text-ink-fainter"
+          class="text-ink-fainter text-xs"
         >
           · 视频成片工作室
         </span>
       </div>
       <div
-        class="h-5 w-px bg-surface-2"
+        class="bg-surface-2 h-5 w-px"
       />
       <button
-        class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-subtle hover:text-ink-strong"
+        class="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
         title="撤销"
         type="button"
       >
@@ -66,7 +66,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         </svg>
       </button>
       <button
-        class="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-subtle hover:text-ink-strong"
+        class="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
         title="重做"
         type="button"
       >
@@ -114,7 +114,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         class="w-3"
       />
       <span
-        class="text-[11px] text-ink-faintest"
+        class="text-ink-faintest text-[11px]"
       >
         时间轴缩放
       </span>
@@ -130,21 +130,21 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
       class="relative z-10 flex min-h-0 flex-1 overflow-hidden"
     >
       <aside
-        class="flex w-[260px] shrink-0 flex-col border-r border-border-subtle bg-panel-deep/85 backdrop-blur-sm"
+        class="border-border-subtle bg-panel-deep/85 flex w-[260px] shrink-0 flex-col border-r backdrop-blur-sm"
       >
         <div
-          class="flex h-11 items-center justify-between border-b border-border-subtle px-4"
+          class="border-border-subtle flex h-11 items-center justify-between border-b px-4"
         >
           <div
             class="flex items-center gap-2"
           >
             <span
-              class="text-[13px] font-semibold text-ink-field"
+              class="text-ink-field text-[13px] font-semibold"
             >
               分镜列表
             </span>
             <span
-              class="text-[11px] text-ink-fainter"
+              class="text-ink-fainter text-[11px]"
             >
               3
                镜头
@@ -159,7 +159,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           </button>
         </div>
         <div
-          class="flex-1 overflow-y-auto p-2 space-y-1.5"
+          class="flex-1 space-y-1.5 overflow-y-auto p-2"
         >
           <button
             class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all border-violet-500/40 bg-violet-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
@@ -182,17 +182,17 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                 class="mt-1 flex items-center gap-2"
               >
                 <span
-                  class="text-[10px] text-ink-faintest"
+                  class="text-ink-faintest text-[10px]"
                 >
                   00:03.2
                 </span>
                 <span
-                  class="text-[10px] text-ink-faintest"
+                  class="text-ink-faintest text-[10px]"
                 >
                   ·
                 </span>
                 <span
-                  class="text-[10px] text-ink-fainter"
+                  class="text-ink-fainter text-[10px]"
                 >
                   文生图首帧
                 </span>
@@ -205,7 +205,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
           </button>
           <button
-            class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all border-transparent bg-card hover:border-border hover:bg-subtle"
+            class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
             type="button"
           >
             <div
@@ -225,17 +225,17 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                 class="mt-1 flex items-center gap-2"
               >
                 <span
-                  class="text-[10px] text-ink-faintest"
+                  class="text-ink-faintest text-[10px]"
                 >
                   00:05.0
                 </span>
                 <span
-                  class="text-[10px] text-ink-faintest"
+                  class="text-ink-faintest text-[10px]"
                 >
                   ·
                 </span>
                 <span
-                  class="text-[10px] text-ink-fainter"
+                  class="text-ink-fainter text-[10px]"
                 >
                   图生视频
                 </span>
@@ -248,7 +248,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
           </button>
           <button
-            class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all border-transparent bg-card hover:border-border hover:bg-subtle"
+            class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
             type="button"
           >
             <div
@@ -268,17 +268,17 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
                 class="mt-1 flex items-center gap-2"
               >
                 <span
-                  class="text-[10px] text-ink-faintest"
+                  class="text-ink-faintest text-[10px]"
                 >
                   00:01.5
                 </span>
                 <span
-                  class="text-[10px] text-ink-faintest"
+                  class="text-ink-faintest text-[10px]"
                 >
                   ·
                 </span>
                 <span
-                  class="text-[10px] text-ink-fainter"
+                  class="text-ink-fainter text-[10px]"
                 >
                   自动转场
                 </span>
@@ -296,10 +296,10 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         class="relative flex min-w-0 flex-1 flex-col overflow-hidden p-5 pb-3"
       >
         <div
-          class="relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-border-subtle bg-canvas-deep"
+          class="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border"
         >
           <span
-            class="text-ink-faintest absolute top-2.5 left-3 rounded bg-canvas-deep px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm"
+            class="text-ink-faintest bg-canvas-deep absolute top-2.5 left-3 rounded px-2 py-0.5 font-mono text-[10px] backdrop-blur-sm"
           >
             16:9 / 1k
              · 
@@ -307,7 +307,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             fps
           </span>
           <button
-            class="border-border-strong flex h-16 w-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/6 dark:shadow-black/30 transition-all hover:scale-105 hover:bg-black/55 active:scale-95"
+            class="border-border-strong flex h-16 w-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
             title="播放"
             type="button"
           >
@@ -324,43 +324,43 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           </button>
         </div>
         <div
-          class="mt-auto rounded-xl border border-border-subtle bg-panel-deep/90 p-3 backdrop-blur-sm"
+          class="border-border-subtle bg-panel-deep/90 mt-auto rounded-xl border p-3 backdrop-blur-sm"
         >
           <div
             class="mb-2 flex items-center justify-between px-1"
           >
             <span
-              class="text-[10px] font-mono text-ink-faintest"
+              class="text-ink-faintest font-mono text-[10px]"
             >
               00:00
             </span>
             <span
-              class="text-[10px] font-mono text-ink-faintest"
+              class="text-ink-faintest font-mono text-[10px]"
             >
               00:05
             </span>
             <span
-              class="text-[10px] font-mono text-ink-faintest"
+              class="text-ink-faintest font-mono text-[10px]"
             >
               00:10
             </span>
           </div>
           <div
-            class="space-y-1 relative"
+            class="relative space-y-1"
           >
             <div
               class="pointer-events-none absolute bottom-0 z-10 w-[2px] bg-red-400/80"
               style="left: 180px; top: 0px; height: 100%;"
             >
               <div
-                class="absolute left-[-7px] -top-1 h-[10px] w-4 rounded-sm bg-red-400/80"
+                class="absolute -top-1 left-[-7px] h-[10px] w-4 rounded-sm bg-red-400/80"
               />
             </div>
             <div
-              class="flex h-11 items-center gap-2 rounded-md bg-subtle px-2"
+              class="bg-subtle flex h-11 items-center gap-2 rounded-md px-2"
             >
               <span
-                class="w-12 shrink-0 text-[10px] text-ink-faint"
+                class="text-ink-faint w-12 shrink-0 text-[10px]"
               >
                 视频轨
               </span>
@@ -393,12 +393,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               class="flex h-9 items-center gap-2 rounded-md px-2"
             >
               <span
-                class="w-12 shrink-0 text-[10px] text-ink-fainter"
+                class="text-ink-fainter w-12 shrink-0 text-[10px]"
               >
                 字幕轨
               </span>
               <div
-                class="flex h-6 flex-1 items-center rounded bg-emerald-400/15 px-2.5 ring-1 ring-inset ring-emerald-400/25"
+                class="flex h-6 flex-1 items-center rounded bg-emerald-400/15 px-2.5 ring-1 ring-emerald-400/25 ring-inset"
                 style="width: 280px;"
               >
                 <span
@@ -412,7 +412,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
               class="flex h-9 items-center gap-2 rounded-md px-2"
             >
               <span
-                class="w-12 shrink-0 text-[10px] text-ink-fainter"
+                class="text-ink-fainter w-12 shrink-0 text-[10px]"
               >
                 BGM
               </span>
@@ -446,13 +446,13 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         </div>
       </main>
       <aside
-        class="flex w-[280px] shrink-0 flex-col border-l border-border-subtle bg-panel-deep/85 backdrop-blur-sm"
+        class="border-border-subtle bg-panel-deep/85 flex w-[280px] shrink-0 flex-col border-l backdrop-blur-sm"
       >
         <div
-          class="flex h-11 items-center border-b border-border-subtle px-4"
+          class="border-border-subtle flex h-11 items-center border-b px-4"
         >
           <span
-            class="text-[13px] font-semibold text-ink-field"
+            class="text-ink-field text-[13px] font-semibold"
           >
             镜头属性
           </span>
@@ -464,12 +464,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               镜头名称
             </span>
             <input
-              class="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              class="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               value="开场 · 城市全景"
             />
           </label>
@@ -477,12 +477,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               时长 (秒)
             </span>
             <input
-              class="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              class="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               max="30"
               min="0.5"
               step="0.1"
@@ -494,12 +494,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               生成模式
             </span>
             <div
-              class="flex h-9 items-center rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field"
+              class="border-border bg-subtle text-ink-field flex h-9 items-center rounded-lg border px-3 text-[13px]"
             >
               图生视频 (Wan I2V)
             </div>
@@ -508,12 +508,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               转场效果
             </span>
             <div
-              class="flex h-9 items-center rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-strong"
+              class="border-border bg-subtle text-ink-strong flex h-9 items-center rounded-lg border px-3 text-[13px]"
             >
               溶解过渡 (Cross Dissolve)
             </div>
@@ -522,12 +522,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               提示词 / 描述
             </span>
             <textarea
-              class="w-full resize-none rounded-lg border border-border bg-subtle px-3 py-2 text-[12px] leading-relaxed text-ink-fainter outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              class="border-border bg-subtle text-ink-fainter w-full resize-none rounded-lg border px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               rows="3"
             >
               城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…
@@ -540,12 +540,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               剧本 / 创意
             </span>
             <textarea
-              class="w-full resize-none rounded-lg border border-border bg-subtle px-3 py-2 text-[12px] leading-relaxed text-ink-fainter outline-none placeholder:text-ink-faintest focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              class="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest w-full resize-none rounded-lg border px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               placeholder="支持一句话自动分镜…"
               rows="3"
             >
@@ -597,7 +597,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="flex cursor-pointer items-center justify-between rounded-lg border border-border bg-canvas/60 px-3 py-2.5"
           >
             <span
-              class="text-sm text-ink-field"
+              class="text-ink-field text-sm"
             >
               烧录字幕
             </span>
@@ -609,7 +609,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           </label>
           <div>
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               背景音乐（可选）
             </span>
@@ -623,20 +623,20 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
       </aside>
     </div>
     <footer
-      class="relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t border-border-subtle bg-panel-deep/95 backdrop-blur-sm"
+      class="border-border-subtle bg-panel-deep/95 relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm"
     >
       <span
         class="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40"
       />
       <span
-        class="text-[11px] text-ink-muted"
+        class="text-ink-muted text-[11px]"
       >
         ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用
       </span>
     </footer>
   </div>
   <div
-    class="pointer-events-none fixed bottom-8 right-5 z-100 flex w-[340px] flex-col gap-2.5"
+    class="pointer-events-none fixed right-5 bottom-8 z-100 flex w-[340px] flex-col gap-2.5"
   />
 </div>
 `;

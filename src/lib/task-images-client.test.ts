@@ -32,7 +32,9 @@ describe("fetchTaskImages", () => {
   });
 
   it("缺 id / isCover 时兜底为空串与 false，而不是整条丢弃", async () => {
-    taskDetailQuery.mockResolvedValue({ images: [{ localPath: "/outputs/b.png" }] });
+    taskDetailQuery.mockResolvedValue({
+      images: [{ localPath: "/outputs/b.png" }],
+    });
     expect(await fetchTaskImages("t-1")).toEqual([
       { id: "", localPath: "/outputs/b.png", isCover: false },
     ]);

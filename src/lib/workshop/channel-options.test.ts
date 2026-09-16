@@ -27,7 +27,11 @@ describe("channel-options 通道编解码", () => {
   });
 
   it("本地 / 远端通道编解码互逆，模型名含冒号也不丢", () => {
-    for (const value of ["local::llama3", "remote::qwen3:14b", "remote::qwen3:14b-instruct-q4_K_M"]) {
+    for (const value of [
+      "local::llama3",
+      "remote::qwen3:14b",
+      "remote::qwen3:14b-instruct-q4_K_M",
+    ]) {
       const { channel, model } = parseChannelOption(value);
       expect(channelOptionValue(channel, model)).toBe(value);
     }
@@ -52,7 +56,10 @@ describe("channel-options 独立选择与全局配置的换算", () => {
       provider: "remote",
       model: "qwen3:14b",
     });
-    expect(resolveChannelSelection("", null)).toEqual({ provider: "local", model: "" });
+    expect(resolveChannelSelection("", null)).toEqual({
+      provider: "local",
+      model: "",
+    });
   });
 
   it("脏值解析出工具通道时按本地兜底（生成类下拉没有工具通道）", () => {
@@ -64,9 +71,13 @@ describe("channel-options 独立选择与全局配置的换算", () => {
 
   it("展示值：已选择回显所选值，未选择跟随全局配置", () => {
     const config = makeConfig({ provider: "local", model: "llama3" });
-    expect(channelSelectionDisplayValue("remote::qwen3:14b", config)).toBe("remote::qwen3:14b");
+    expect(channelSelectionDisplayValue("remote::qwen3:14b", config)).toBe(
+      "remote::qwen3:14b",
+    );
     expect(channelSelectionDisplayValue("", config)).toBe("local::llama3");
-    expect(channelSelectionDisplayValue("", makeConfig({ model: "" }))).toBe("");
+    expect(channelSelectionDisplayValue("", makeConfig({ model: "" }))).toBe(
+      "",
+    );
     expect(channelSelectionDisplayValue("", null)).toBe("");
   });
 });

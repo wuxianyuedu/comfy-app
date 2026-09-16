@@ -92,7 +92,10 @@ export function BrowserStatusBar() {
       aria-label="底部状态栏"
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        <Lock size={11} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <Lock
+          size={11}
+          className="shrink-0 text-emerald-600 dark:text-emerald-400"
+        />
         <span className="text-ink-fainter shrink-0">安全</span>
         <span
           className="text-ink-soft truncate"

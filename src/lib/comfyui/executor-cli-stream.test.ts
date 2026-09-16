@@ -27,7 +27,9 @@ describe("findNodeErrorsCarrier（深搜结构化校验错误）", () => {
   });
 
   it("命中 error.node_errors / 顶层 node_errors（防御性位置）", () => {
-    expect(findNodeErrorsCarrier({ error: { node_errors: { a: 1 } } })).toEqual({ a: 1 });
+    expect(findNodeErrorsCarrier({ error: { node_errors: { a: 1 } } })).toEqual(
+      { a: 1 },
+    );
     expect(findNodeErrorsCarrier({ node_errors: { b: 2 } })).toEqual({ b: 2 });
   });
 
@@ -52,7 +54,9 @@ describe("envelopeErrorMessage（message → hint → 兜底）", () => {
 });
 
 describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
-  const mk = (over: Partial<Parameters<typeof createCliEnvelopeParser>[0]> = {}) => {
+  const mk = (
+    over: Partial<Parameters<typeof createCliEnvelopeParser>[0]> = {},
+  ) => {
     const onPromptId = vi.fn();
     const onProgress = vi.fn();
     const finish = vi.fn();
@@ -158,7 +162,10 @@ describe("createCliFinisher（完成 / 失败收口）", () => {
     f(false, {
       type: "envelope",
       ok: false,
-      error: { message: "bad", details: { node_errors: [{ node_id: "3", errors: [] }] } },
+      error: {
+        message: "bad",
+        details: { node_errors: [{ node_id: "3", errors: [] }] },
+      },
     });
     expect(complete).not.toHaveBeenCalled();
     expect(fail).toHaveBeenCalled();

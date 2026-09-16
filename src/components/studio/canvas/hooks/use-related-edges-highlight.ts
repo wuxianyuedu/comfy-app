@@ -82,14 +82,14 @@ function portFocusEquals(
  *  （工作流节点 `WorkflowNodeData` / 项目画布 `CanvasNodeData`），而这里写入的
  *  只是 data 上的一个旁路字段（结构上兼容）。调用方若拿着更窄的 setter，需要显式
  *  说明这次写入不改变节点类型 —— 见 ProjectCanvas 的传参处。 */
-export type NodeTableWriter = (
-  updater: (nodes: Node[]) => Node[],
-) => void;
+export type NodeTableWriter = (updater: (nodes: Node[]) => Node[]) => void;
 
 /** 从边 data 读回关注级别（没标记过 → "none"）。 */
 export function readEdgeFocusRole(edge: Pick<Edge, "data">): EdgeFocusRole {
   const role = edge.data?.[EDGE_FOCUS_DATA_KEY];
-  return role === "upstream" || role === "downstream" || role === "related" ? role : "none";
+  return role === "upstream" || role === "downstream" || role === "related"
+    ? role
+    : "none";
 }
 
 export interface UseRelatedEdgesHighlightOptions {
@@ -139,7 +139,10 @@ export function useRelatedEdgesHighlight(
         const role: EdgeFocusRole = skip
           ? "none"
           : resolveEdgeFocus({
-              endpoints: { source: edge.source ?? null, target: edge.target ?? null },
+              endpoints: {
+                source: edge.source ?? null,
+                target: edge.target ?? null,
+              },
               resolveNodeId,
               isSelected,
             });
@@ -168,7 +171,11 @@ export function useRelatedEdgesHighlight(
         }
         return {
           ...edge,
-          data: { ...rest, [EDGE_FOCUS_DATA_KEY]: role, [EDGE_FOCUS_ACTIVE_KEY]: true },
+          data: {
+            ...rest,
+            [EDGE_FOCUS_DATA_KEY]: role,
+            [EDGE_FOCUS_ACTIVE_KEY]: true,
+          },
         };
       });
       return changed ? next : currentEdges;
@@ -189,13 +196,14 @@ export function useRelatedEdgesHighlight(
         const nextTable: Record<string, EdgeFocusRole> = {};
         if (bucket) {
           bucket.upstream.forEach((handle) => (nextTable[handle] = "upstream"));
-          bucket.downstream.forEach((handle) => (nextTable[handle] = "downstream"));
+          bucket.downstream.forEach(
+            (handle) => (nextTable[handle] = "downstream"),
+          );
           bucket.related.forEach((handle) => (nextTable[handle] = "related"));
         }
         const data = node.data as Record<string, unknown> | undefined;
         const previousTable = data?.[NODE_PORT_FOCUS_DATA_KEY] as
-          | Record<string, EdgeFocusRole>
-          | undefined;
+          Record<string, EdgeFocusRole> | undefined;
         /* 没有端口标记且本来就没有字段 → 原样返回，不制造无意义的新对象。 */
         const previousActive = data?.[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
         const activeUpToDate = focusActive ? previousActive : !previousActive;
@@ -206,7 +214,8 @@ export function useRelatedEdgesHighlight(
           activeUpToDate
         )
           return node;
-        if (portFocusEquals(previousTable, nextTable) && activeUpToDate) return node;
+        if (portFocusEquals(previousTable, nextTable) && activeUpToDate)
+          return node;
         changed = true;
         const rest = { ...(data ?? {}) };
         delete rest[NODE_PORT_FOCUS_DATA_KEY];
@@ -217,7 +226,10 @@ export function useRelatedEdgesHighlight(
             if (!data) return node;
             return { ...node, data: rest };
           }
-          return { ...node, data: { ...rest, [NODE_PORT_FOCUS_ACTIVE_KEY]: true } };
+          return {
+            ...node,
+            data: { ...rest, [NODE_PORT_FOCUS_ACTIVE_KEY]: true },
+          };
         }
         return {
           ...node,
@@ -246,7 +258,10 @@ export function useRelatedEdgesHighlight(
       /* 边表签名参与进来：端口行级别由边表算出，连线增删（含「连上 / 断开某一行」）
        * 必须重算，否则新连上的行不会亮、断开的行仍然亮着。 */
       const edgeSignature = state.edges
-        .map((edge) => `${edge.source}>${edge.sourceHandle ?? ""}~${edge.target}>${edge.targetHandle ?? ""}`)
+        .map(
+          (edge) =>
+            `${edge.source}>${edge.sourceHandle ?? ""}~${edge.target}>${edge.targetHandle ?? ""}`,
+        )
         .sort()
         .join(",");
       return `${ids.sort().join(",")}|${edgeSignature}`;

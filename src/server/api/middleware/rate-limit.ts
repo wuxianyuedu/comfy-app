@@ -37,7 +37,9 @@ export function checkRateLimit(
   }
 
   // 滑出窗口的旧时间戳剔除
-  entry.timestamps = entry.timestamps.filter((timestamp) => now - timestamp < windowMs);
+  entry.timestamps = entry.timestamps.filter(
+    (timestamp) => now - timestamp < windowMs,
+  );
 
   if (entry.timestamps.length >= max) {
     return false;
@@ -48,7 +50,9 @@ export function checkRateLimit(
   // 防御：桶数量过大时做一次全量清理
   if (buckets.size > MAX_BUCKETS) {
     for (const [k, v] of buckets) {
-      v.timestamps = v.timestamps.filter((timestamp) => now - timestamp < windowMs);
+      v.timestamps = v.timestamps.filter(
+        (timestamp) => now - timestamp < windowMs,
+      );
       if (v.timestamps.length === 0) buckets.delete(k);
     }
   }

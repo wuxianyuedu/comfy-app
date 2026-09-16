@@ -84,7 +84,9 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
   };
 
   it("优先显示内部真实字段的业务名，而不是本层别名 value_1", () => {
-    const { container } = renderNode(<WorkflowSubgraphNode data={wrapperData} />);
+    const { container } = renderNode(
+      <WorkflowSubgraphNode data={wrapperData} />,
+    );
     expect(screen.getByText("随机种子")).toBeInTheDocument();
     // 内部字段没有 label/localized 时退到字段名，而不是别名。
     expect(screen.getByText("steps")).toBeInTheDocument();
@@ -112,7 +114,9 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
     };
     const stores = makeStores();
     renderNode(<WorkflowSubgraphNode data={data} />, stores);
-    expect(document.querySelector('[data-handleid="out:IMAGE"]')).not.toBeNull();
+    expect(
+      document.querySelector('[data-handleid="out:IMAGE"]'),
+    ).not.toBeNull();
     stores.io.setState({ ioEditMode: true });
     renderNode(<WorkflowSubgraphNode data={data} />, stores);
     const handles = document.querySelectorAll('[data-handleid="out:IMAGE"]');

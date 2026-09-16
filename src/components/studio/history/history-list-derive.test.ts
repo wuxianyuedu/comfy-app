@@ -30,7 +30,10 @@ function daysAgo(days: number): string {
 }
 
 describe("filterTasks", () => {
-  const tasks = [task("a", "SUCCEEDED", daysAgo(0)), task("b", "FAILED", daysAgo(0))];
+  const tasks = [
+    task("a", "SUCCEEDED", daysAgo(0)),
+    task("b", "FAILED", daysAgo(0)),
+  ];
 
   it("ALL 不过滤", () => {
     expect(filterTasks(tasks, "ALL")).toHaveLength(2);
@@ -47,7 +50,10 @@ describe("filterTasks", () => {
 });
 
 describe("sortTasks", () => {
-  const tasks = [task("old", "SUCCEEDED", daysAgo(3)), task("new", "SUCCEEDED", daysAgo(0))];
+  const tasks = [
+    task("old", "SUCCEEDED", daysAgo(3)),
+    task("new", "SUCCEEDED", daysAgo(0)),
+  ];
 
   it("newest 时间倒序", () => {
     expect(sortTasks(tasks, "newest").map((t) => t.id)).toEqual(["new", "old"]);
@@ -102,7 +108,13 @@ describe("groupByDate", () => {
 
 describe("paginateGroups", () => {
   const groups = [
-    { key: "今天", items: [task("a", "SUCCEEDED", daysAgo(0)), task("b", "SUCCEEDED", daysAgo(0))] },
+    {
+      key: "今天",
+      items: [
+        task("a", "SUCCEEDED", daysAgo(0)),
+        task("b", "SUCCEEDED", daysAgo(0)),
+      ],
+    },
     { key: "昨天", items: [task("c", "SUCCEEDED", daysAgo(1))] },
   ];
 

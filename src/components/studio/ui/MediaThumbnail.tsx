@@ -25,9 +25,25 @@ export const MediaThumbnail = React.memo(function MediaThumbnail({
   if (!src) return null;
   if (isVideo(src)) {
     return (
-      <video src={src} className={className} autoPlay={autoPlay} muted={muted} loop={loop} playsInline preload="metadata" />
+      <video
+        src={src}
+        className={className}
+        autoPlay={autoPlay}
+        muted={muted}
+        loop={loop}
+        playsInline
+        preload="metadata"
+      />
     );
   }
-   
-  return <img src={src} alt={alt} className={className} loading="lazy" decoding="async" />;
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      decoding="async"
+    />
+  );
 });

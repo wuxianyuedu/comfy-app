@@ -405,8 +405,7 @@ export function buildCustomWorkflow(
   if (params.checkpoint && map.checkpointNode) {
     const ck = asGraphNode(out[map.checkpointNode]);
     const inputs = ck?.inputs;
-    if (inputs?.ckpt_name !== undefined)
-      inputs.ckpt_name = params.checkpoint;
+    if (inputs?.ckpt_name !== undefined) inputs.ckpt_name = params.checkpoint;
   }
 
   const seedNum = params.seed;
@@ -416,8 +415,7 @@ export function buildCustomWorkflow(
     if (samplerNode?.inputs) {
       const inputs = samplerNode.inputs;
 
-      if (typeof params.steps === "number")
-        inputs.steps = params.steps;
+      if (typeof params.steps === "number") inputs.steps = params.steps;
 
       if (typeof params.cfg === "number") inputs.cfg = params.cfg;
 

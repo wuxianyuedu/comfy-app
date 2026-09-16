@@ -9,11 +9,19 @@ import { renderMarkdown } from "@/lib/comfyui/markdown";
 import { WorkflowEdge } from "@/components/studio/canvas/WorkflowEdge";
 import { FlowNode } from "../canvas/WorkflowNode";
 import { WorkflowSubgraphNode } from "../canvas/WorkflowSubgraphNode";
-import type { WorkflowGroupData, WorkflowIoPortData, WorkflowNoteData } from "../workflow-types";
+import type {
+  WorkflowGroupData,
+  WorkflowIoPortData,
+  WorkflowNoteData,
+} from "../workflow-types";
 import { NODE_TITLE_H, lightenHex, hexToRgba, mixHex } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
 
-export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }: { data: WorkflowGroupData }) {
+export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
+  data,
+}: {
+  data: WorkflowGroupData;
+}) {
   /* title is now a "tab" inside the top-left corner of the
    *  frame (was floating ABOVE the box at `top-[-16px]` — looked detached
    *  and competed with adjacent note headers).  The tab's bg picks up
@@ -38,12 +46,14 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }:
    *  the tint. */
   const fill = hexToRgba(data.color, 0.12);
   const border = hexToRgba(data.color, 0.55);
-  const titleBg = hexToRgba(data.color, 0.30);
+  const titleBg = hexToRgba(data.color, 0.3);
   const titleCol = lightenHex(data.color, 0.4);
   const draggable = !!data.draggable;
   return (
     <div
-      className={"relative h-full w-full rounded-md " + (draggable ? "cursor-move" : "")}
+      className={
+        "relative h-full w-full rounded-md " + (draggable ? "cursor-move" : "")
+      }
       style={{
         background: fill,
         border: `1.5px solid ${border}`,
@@ -52,7 +62,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({ data }:
     >
       {data.title ? (
         <div
-          className="absolute top-0 left-2 rounded-b px-1.5 py-[1px] text-[11px] font-semibold leading-tight"
+          className="absolute top-0 left-2 rounded-b px-1.5 py-[1px] text-[11px] leading-tight font-semibold"
           style={{
             color: titleCol,
             background: titleBg,
@@ -108,7 +118,11 @@ export const GROUP_PAD_Y_BOTTOM = 10;
  *  staying distinct from the inner FlowNode / WorkflowSubgraphNode cards. */
 export const GROUP_RAIL_COLOR = "#a855f7";
 
-export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data }: { data: WorkflowIoPortData }) {
+export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
+  data,
+}: {
+  data: WorkflowIoPortData;
+}) {
   const isInput = data.direction === "input";
   const isBoth = data.direction === "both";
   /* The handle dot colour tracks the port type, matching the row dot
@@ -144,7 +158,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
        *  absolutely via the `Position` prop, so changing flex `justify-…`
        *  only moves the visible label/value — the dot stays anchored to
        *  its side of the wfGroup. */
-      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4] text-ink-bright/90`}
+      className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4]`}
       style={{
         width: IO_PORT_WIDTH,
         background: "transparent",
@@ -162,7 +176,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
           handle sits on the LEFT edge of the label (also toward the
           middle column).  The "in" / "out" ids stay so the edges in
           `buildEdges` can resolve a stable handle name. */}
-      {(!isInput || isBoth) ? (
+      {!isInput || isBoth ? (
         <Handle
           type="target"
           position={Position.Left}
@@ -190,11 +204,11 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
         {data.title}
       </span>
       {valueStr ? (
-        <span className="text-amber-700 dark:text-amber-300/90 font-mono text-[10px] tabular-nums shrink-0">
+        <span className="shrink-0 font-mono text-[10px] text-amber-700 tabular-nums dark:text-amber-300/90">
           {valueStr}
         </span>
       ) : null}
-      {(isInput || isBoth) ? (
+      {isInput || isBoth ? (
         <Handle
           type="source"
           position={Position.Right}
@@ -216,7 +230,11 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({ data 
  * Notes are draggable (the whole node acts as a drag handle) so users can
  * reposition annotations freely; the markdown body still renders links/scroll
  * without blocking the underlying graph where the note doesn't cover it. */
-export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: { data: WorkflowNoteData }) {
+export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
+  data,
+}: {
+  data: WorkflowNoteData;
+}) {
   /* Note background is fully OPAQUE — a baked tint of `data.color` into the
    *  canvas.  The base colour matters: with the canvas and the note sharing a
    *  base, a dark note colour like `#432` produced a computed bg only ~12 RGB
@@ -240,7 +258,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
    *  `data.color` 是用户给的**内容色**（note 自身的颜色），不用改；要改的是
    *  「这个内容色叠在什么表面上」——基准写死深色的话，浅色下便签仍是一块暗色。 */
   const noteTintBase = useCssColorToken("--color-note-tint-base", "#22222c");
-  const bg = mixHex(noteTintBase, data.color, 0.20);
+  const bg = mixHex(noteTintBase, data.color, 0.2);
   const border = mixHex(noteTintBase, data.color, 0.65);
   const titleBg = mixHex(noteTintBase, data.color, 0.65);
   const titleText = lightenHex(data.color, 0.7);
@@ -254,9 +272,9 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
         background: bg,
         border: `2.5px solid ${border}`,
         boxShadow:
-          `0 0 0 4px ${border}55, ` +       /* 33 % alpha outer ring */
-          `0 0 14px 2px ${border}33, ` +     /* soft colour glow */
-          `0 8px 18px var(--color-shadow-strong)`, /* drop shadow */
+          `0 0 0 4px ${border}55, ` /* 33 % alpha outer ring */ +
+          `0 0 14px 2px ${border}33, ` /* soft colour glow */ +
+          `0 8px 18px var(--color-shadow-strong)` /* drop shadow */,
       }}
     >
       {data.title && (
@@ -266,7 +284,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
          *  height here is what keeps the markdown body at exactly the
          *  authored size instead of losing a title bar's worth of rows. */
         <div
-          className="flex shrink-0 items-center gap-1.5 px-2.5 text-[11.5px] font-bold leading-tight"
+          className="flex shrink-0 items-center gap-1.5 px-2.5 text-[11.5px] leading-tight font-bold"
           style={{
             height: NODE_TITLE_H,
             background: titleBg,
@@ -306,7 +324,13 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({ data }: {
  *  已收敛到工作流库详情的「画布节点」页签（卡片列 + 连线层，见
  *  workflow-library/WorkflowParamCardColumn 与 WorkflowParamWires）。勾选 IO
  *  只写 workflowIO / paramMap，不再产生任何画布节点。 */
-export const workflowNodeTypes = { wfNode: FlowNode, wfNote: WorkflowNoteNode, wfGroup: WorkflowGroupNode, wfSubgraph: WorkflowSubgraphNode, wfIoPort: WorkflowIoPortNode };
+export const workflowNodeTypes = {
+  wfNode: FlowNode,
+  wfNote: WorkflowNoteNode,
+  wfGroup: WorkflowGroupNode,
+  wfSubgraph: WorkflowSubgraphNode,
+  wfIoPort: WorkflowIoPortNode,
+};
 // Custom edge renderer — rounder bezier (curvature 0.85) + ComfyUI-style
 // white hub dot at the curve midpoint.  Defined at module scope so React
 // Flow doesn't re-register edgeTypes on every render.

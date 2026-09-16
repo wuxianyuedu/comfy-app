@@ -31,8 +31,14 @@ export function useLLM(): LLMContextValue {
 }
 
 export function LLMProvider({ children }: { children: React.ReactNode }) {
-  const { config, localModels, remoteModels, remoteImageModels, loading, refresh } =
-    useLLMConfig();
+  const {
+    config,
+    localModels,
+    remoteModels,
+    remoteImageModels,
+    loading,
+    refresh,
+  } = useLLMConfig();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -182,7 +188,13 @@ function LLMSettingsModal({
           { role: "system", content: "你是测试助手，只回复 OK。" },
           { role: "user", content: "ping" },
         ],
-        opts: { provider, baseUrl, model: activeModel, temperature: 0.2, maxTokens: 16 },
+        opts: {
+          provider,
+          baseUrl,
+          model: activeModel,
+          temperature: 0.2,
+          maxTokens: 16,
+        },
       });
       setMsg({ kind: "ok", text: `连接成功：${out.slice(0, 60)}` });
     } catch (e: unknown) {
@@ -196,7 +208,7 @@ function LLMSettingsModal({
     <div
       className={overlayClass(
         "modal",
-        "z-50 grid place-items-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-canvas-deep",
+        "bg-canvas-deep dark:bg-canvas-deep z-50 grid place-items-center p-4 backdrop-blur-sm",
       )}
       onClick={onClose}
     >
@@ -275,7 +287,9 @@ function LLMSettingsModal({
                 />
                 <span className="flex-1 truncate">{name}</span>
                 {provider === "local" && (
-                  <span className="text-muted-foreground text-[10px]">本地</span>
+                  <span className="text-muted-foreground text-[10px]">
+                    本地
+                  </span>
                 )}
               </button>
             ))}

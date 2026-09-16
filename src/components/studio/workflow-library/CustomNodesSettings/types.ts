@@ -26,11 +26,11 @@ export interface ParseReport {
 }
 
 export interface DiscoveredSubpkg {
-  path: string;        // absolute directory
+  path: string; // absolute directory
   name: string;
-  parent: string;      // absolute parent
+  parent: string; // absolute parent
   exists: boolean;
-  isLeaf: boolean;     // true = scanned dir is itself a package (no .py with NODE_CLASS_MAPPINGS inside)
+  isLeaf: boolean; // true = scanned dir is itself a package (no .py with NODE_CLASS_MAPPINGS inside)
   fileCount: number;
   packageFileCount: number;
   sizeBytes: number;
@@ -73,7 +73,12 @@ export interface SettingsResp {
  *  loaded manifest entry at the same path. */
 export type RowState =
   | { kind: "loaded"; savedHash: string; nodeCount: number }
-  | { kind: "outdated"; savedHash: string; savedNodeCount: number; diskHash: string }
+  | {
+      kind: "outdated";
+      savedHash: string;
+      savedNodeCount: number;
+      diskHash: string;
+    }
   | { kind: "unimported" }
   | { kind: "error"; reason: string }
   | { kind: "missing" }
@@ -85,10 +90,10 @@ export type RowState =
  * The progress bar fill switches: indeterminate (CSS animation) during scan,
  * then snaps to a determined K/M when scan announces `total=M`. */
 export type ParseProgress = {
-  phase: "queue" | "scan" | "hash" | "";  // which stage we're in
-  done: number;        // packages processed (only meaningful in hash phase)
-  total: number;       // packages total (0 during scan until announced)
-  discovered: number;  // packages discovered so far (only meaningful in scan phase)
-  parent: string;      // current parent path
-  msg: string;         // latest human-readable sub-message
+  phase: "queue" | "scan" | "hash" | ""; // which stage we're in
+  done: number; // packages processed (only meaningful in hash phase)
+  total: number; // packages total (0 during scan until announced)
+  discovered: number; // packages discovered so far (only meaningful in scan phase)
+  parent: string; // current parent path
+  msg: string; // latest human-readable sub-message
 };

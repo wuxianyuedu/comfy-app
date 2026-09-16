@@ -47,7 +47,8 @@ function safeHref(raw: string): string | null {
   // Allowed: http(s), mailto, relative/absolute paths
   if (/^(https?:|mailto:|\/|#)/i.test(trimmed)) return trimmed;
   // Bare hostname without scheme → treat as https
-  if (/^[\w-]+(\.[\w-]+)+/.test(trimmed) && !/[\s"'<>]/.test(trimmed)) return "https://" + trimmed;
+  if (/^[\w-]+(\.[\w-]+)+/.test(trimmed) && !/[\s"'<>]/.test(trimmed))
+    return "https://" + trimmed;
   return null;
 }
 
@@ -67,15 +68,15 @@ export function markdownToHtml(text: string): string {
     if (fence) {
       const code: string[] = [];
       i++;
-      while (i < lines.length && !(lines[i]!).startsWith("```")) {
+      while (i < lines.length && !lines[i]!.startsWith("```")) {
         code.push(lines[i]!);
         i++;
       }
       i++; // skip closing ```
       out.push(
         `<pre style="background:var(--color-md-code-bg);border:1px solid var(--color-md-border);border-radius:4px;padding:6px 8px;margin:6px 0;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;line-height:1.45;"><code>${escapeHtml(
-          code.join("\n")
-        )}</code></pre>`
+          code.join("\n"),
+        )}</code></pre>`,
       );
       continue;
     }
@@ -87,7 +88,7 @@ export function markdownToHtml(text: string): string {
       const txt = renderInline(escapeHtml(heading[2]!));
       const sizes = ["18px", "16px", "14px", "12.5px"];
       out.push(
-        `<h${level + 1} style="font-weight:700;margin:8px 0 4px;font-size:${sizes[level - 1]!};color:var(--color-ink-bright);">${txt}</h${level + 1}>`
+        `<h${level + 1} style="font-weight:700;margin:8px 0 4px;font-size:${sizes[level - 1]!};color:var(--color-ink-bright);">${txt}</h${level + 1}>`,
       );
       i++;
       continue;
@@ -95,7 +96,9 @@ export function markdownToHtml(text: string): string {
 
     // Horizontal rule
     if (/^(\*\*\*|---|___)\s*$/.test(line)) {
-      out.push('<hr style="border:none;border-top:1px solid var(--color-md-border);margin:8px 0;">');
+      out.push(
+        '<hr style="border:none;border-top:1px solid var(--color-md-border);margin:8px 0;">',
+      );
       i++;
       continue;
     }
@@ -109,8 +112,8 @@ export function markdownToHtml(text: string): string {
       }
       out.push(
         `<blockquote style="border-left:3px solid var(--color-md-quote-border);padding:2px 0 2px 8px;margin:6px 0;color:var(--color-ink-soft);">${renderInline(
-          escapeHtml(body.join("\n"))
-        )}</blockquote>`
+          escapeHtml(body.join("\n")),
+        )}</blockquote>`,
       );
       continue;
     }
@@ -120,18 +123,30 @@ export function markdownToHtml(text: string): string {
     //  that contains at least one `|` and whose next line is a separator;
     //  the row before that line (if it also starts with `|`) is the
     //  header.  Body rows keep coming until a blank / non-pipe line.
-    if (line.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1]!)) {
+    if (
+      line.includes("|") &&
+      i + 1 < lines.length &&
+      isTableSeparator(lines[i + 1]!)
+    ) {
       // Walk back to capture the header line, in case the caller's parser
       //  fed us a chunk that started mid-table.
       let headerIdx = i;
-      while (headerIdx > 0 && (lines[headerIdx - 1]!).includes('|') && !isTableSeparator(lines[headerIdx - 1]!)) {
+      while (
+        headerIdx > 0 &&
+        lines[headerIdx - 1]!.includes("|") &&
+        !isTableSeparator(lines[headerIdx - 1]!)
+      ) {
         headerIdx--;
       }
       const headerCells = splitRow(lines[headerIdx]!);
       const sepCells = splitRow(lines[headerIdx + 1]!);
       const bodyRows: string[][] = [];
       let j = headerIdx + 2;
-      while (j < lines.length && lines[j]!.includes("|") && !isTableSeparator(lines[j]!)) {
+      while (
+        j < lines.length &&
+        lines[j]!.includes("|") &&
+        !isTableSeparator(lines[j]!)
+      ) {
         bodyRows.push(splitRow(lines[j]!));
         j++;
       }
@@ -149,8 +164,11 @@ export function markdownToHtml(text: string): string {
       }
       out.push(
         `<ul style="margin:4px 0 4px 18px;padding:0;list-style-type:disc;">${items
-          .map((it) => `<li style="margin:2px 0;">${renderInline(escapeHtml(it))}</li>`)
-          .join("")}</ul>`
+          .map(
+            (it) =>
+              `<li style="margin:2px 0;">${renderInline(escapeHtml(it))}</li>`,
+          )
+          .join("")}</ul>`,
       );
       continue;
     }
@@ -167,18 +185,21 @@ export function markdownToHtml(text: string): string {
       i < lines.length &&
       lines[i]!.trim() !== "" &&
       !/^(#{1,4}\s|```|>\s?|\*\*\*|---|___|[-*]\s+)/.test(lines[i]!) &&
-      !(lines[i]!.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1]!))
+      !(
+        lines[i]!.includes("|") &&
+        i + 1 < lines.length &&
+        isTableSeparator(lines[i + 1]!)
+      )
     ) {
       para.push(lines[i]!);
       i++;
     }
     out.push(
-      `<p style="margin:4px 0;line-height:1.5;">${renderInline(escapeHtml(para.join("\n")))}</p>`
+      `<p style="margin:4px 0;line-height:1.5;">${renderInline(escapeHtml(para.join("\n")))}</p>`,
     );
   }
 
   return out.join("");
-
 }
 
 /** Apply inline replacements (bold, italic, code, link, safe HTML) to an
@@ -204,7 +225,7 @@ function renderInline(escapedText: string): string {
   let text = escapedText.replace(/`([^`]+?)`/g, (_, c) => {
     const idx = codeStash.length;
     codeStash.push(
-      `<code style="background:var(--color-md-inline-code-bg);border:1px solid var(--color-md-border);padding:0 3px;border-radius:3px;font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${c}</code>`
+      `<code style="background:var(--color-md-inline-code-bg);border:1px solid var(--color-md-border);padding:0 3px;border-radius:3px;font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${c}</code>`,
     );
     return `<${idx}>`;
   });
@@ -236,7 +257,7 @@ function renderInline(escapedText: string): string {
  *  lower-case; values are [openTag, closeTag] for wrapping tags, or a
  *  single-string sentinel for self-closing void elements. */
 const SAFE_INLINE_HTML: Record<string, readonly [string, string] | string> = {
-  br: "<br />",          // void element — <br>, <br/>, <br /> all → <br />
+  br: "<br />", // void element — <br>, <br/>, <br /> all → <br />
   b: ["<b>", "</b>"],
   strong: ["<strong>", "</strong>"],
   i: ["<i>", "</i>"],
@@ -256,17 +277,14 @@ const SAFE_INLINE_HTML: Record<string, readonly [string, string] | string> = {
  *  `&lt;br&gt;` etc., not raw `<br>`.  Anything that isn't on the
  *  allow-list remains escaped, keeping the output XSS-safe. */
 function renderSafeInlineHtml(escapedText: string): string {
-
   // Self-closing void elements first.  Match `<br>`, `<br/>`, `<br />`,
 
   //  and their uppercase variants — but only for tags in the allow-list.
 
   let text = escapedText.replace(
-
     /&lt;\s*([A-Za-z][A-Za-z0-9]*)\s*\/?\s*&gt;/g,
 
     (whole, tag) => {
-
       const key = tag.toLowerCase();
 
       const entry = SAFE_INLINE_HTML[key];
@@ -274,19 +292,15 @@ function renderSafeInlineHtml(escapedText: string): string {
       if (typeof entry === "string") return entry; // self-closing
 
       return whole; // wrapping tag — handled by the next pass
-
-    }
-
+    },
   );
 
   // Wrapping tags: <b>…</b>, <strong>…</strong>, <em>…</em>, etc.
 
   text = text.replace(
-
     /&lt;\s*(\/?)\s*([A-Za-z][A-Za-z0-9]*)\s*&gt;/g,
 
     (whole, slash, tag) => {
-
       const key = tag.toLowerCase();
 
       const entry = SAFE_INLINE_HTML[key];
@@ -294,15 +308,11 @@ function renderSafeInlineHtml(escapedText: string): string {
       if (typeof entry !== "object") return whole; // not a wrapping tag we know
 
       return slash ? entry[1] : entry[0];
-
-    }
-
+    },
   );
 
   return text;
-
 }
-
 
 /** Quick helper for callers: render as a string suitable for
  *  `dangerouslySetInnerHTML`. */
@@ -321,7 +331,7 @@ function isTableSeparator(line: string): boolean {
   if (!line?.includes("|")) return false;
   const cells = splitRow(line);
   if (cells.length === 0) return false;
-  return cells.every((cell) =>/^:?-{3,}:?$/.test(cell.trim()));
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()));
 }
 
 /** Split a `| a | b | c |` row into cells.  Leading/trailing empty cells
@@ -341,18 +351,31 @@ function splitRow(line: string): string[] {
  *  `renderInline` so **bold**, `code`, [links] etc. work inside cells.
  *  We always left-align — alignment colons in the separator line are
  *  accepted for parsing compatibility but not honoured visually. */
-function renderTable(headerCells: string[], bodyRows: string[][], sepCells: string[]): string {
-  const colCount = Math.max(headerCells.length, sepCells.length, ...bodyRows.map((bodyRow) => bodyRow.length));
-  const padCell = (c: string | undefined) => (c ?? "");
-  const head = headerCells.map((headerCell) => `<th style="padding:4px 8px;border:1px solid var(--color-md-border);background:var(--color-md-inline-code-bg);font-weight:600;color:var(--color-ink-bright);text-align:left;vertical-align:top;">${renderInline(escapeHtml(padCell(headerCell)))}</th>`).join("");
+function renderTable(
+  headerCells: string[],
+  bodyRows: string[][],
+  sepCells: string[],
+): string {
+  const colCount = Math.max(
+    headerCells.length,
+    sepCells.length,
+    ...bodyRows.map((bodyRow) => bodyRow.length),
+  );
+  const padCell = (c: string | undefined) => c ?? "";
+  const head = headerCells
+    .map(
+      (headerCell) =>
+        `<th style="padding:4px 8px;border:1px solid var(--color-md-border);background:var(--color-md-inline-code-bg);font-weight:600;color:var(--color-ink-bright);text-align:left;vertical-align:top;">${renderInline(escapeHtml(padCell(headerCell)))}</th>`,
+    )
+    .join("");
   const rows = bodyRows
     .map((row) => {
       const cells: string[] = [];
       for (let k = 0; k < colCount; k++) {
         cells.push(
           `<td style="padding:4px 8px;border:1px solid var(--color-md-border);color:var(--color-ink-subtle);text-align:left;vertical-align:top;">${renderInline(
-            escapeHtml(padCell(row[k]))
-          )}</td>`
+            escapeHtml(padCell(row[k])),
+          )}</td>`,
         );
       }
       return `<tr>${cells.join("")}</tr>`;

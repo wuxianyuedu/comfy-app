@@ -55,17 +55,17 @@ export function WorkflowLibraryList({
 }: WorkflowLibraryListProps) {
   const empty = workflows.length === 0 && pendingRows.length === 0;
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-r border-border-subtle bg-panel-deep">
+    <div className="border-border-subtle bg-panel-deep flex h-full w-80 shrink-0 flex-col border-r">
       {/* 搜索栏 */}
-      <div className="border-b border-border-subtle p-3">
+      <div className="border-border-subtle border-b p-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-ink-fainter" />
+          <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="搜索工作流名称…"
-            className="h-8 w-full rounded-lg border border-border bg-subtle pr-3 pl-8 text-xs text-ink-bright placeholder:text-ink-fainter focus:border-violet-500/40 focus:bg-subtle focus:outline-none"
+            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-subtle h-8 w-full rounded-lg border pr-3 pl-8 text-xs focus:border-violet-500/40 focus:outline-none"
           />
         </div>
       </div>
@@ -112,8 +112,8 @@ export function WorkflowLibraryList({
             description={
               search
                 ? "换个关键词，或清空搜索框看全部。"
-                : localRootsHint ??
-                  "点右上角「导入工作流」粘贴 JSON，或在设置里配置本地工作流目录后自动扫描。"
+                : (localRootsHint ??
+                  "点右上角「导入工作流」粘贴 JSON，或在设置里配置本地工作流目录后自动扫描。")
             }
           />
         ) : (
@@ -131,7 +131,7 @@ export function WorkflowLibraryList({
 
         {/* 未载入的本地工作流排在已载入之后 */}
         {pendingRows.length > 0 && (
-          <div className="mb-3 mt-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
+          <div className="mt-3 mb-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
             <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-700 dark:text-cyan-300/80">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
               未载入的本地工作流
@@ -142,15 +142,15 @@ export function WorkflowLibraryList({
                   <button
                     type="button"
                     onClick={() => onLoadPending?.(pending)}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-border-subtle bg-subtle px-2.5 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10"
+                    className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10"
                   >
                     <span
-                      className="truncate text-[11px] text-ink-strong"
+                      className="text-ink-strong truncate text-[11px]"
                       title={pending.name}
                     >
                       {pending.name}
                     </span>
-                    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] text-cyan-700 dark:text-cyan-300">
+                    <span className="inline-flex shrink-0 items-center gap-1 text-[10px] whitespace-nowrap text-cyan-700 dark:text-cyan-300">
                       <Download className="h-3 w-3" />
                       载入
                     </span>
@@ -163,7 +163,7 @@ export function WorkflowLibraryList({
       </div>
 
       {/* 底部计数 */}
-      <div className="border-t border-border-subtle px-3 py-2 text-[10px] text-ink-fainter">
+      <div className="border-border-subtle text-ink-fainter border-t px-3 py-2 text-[10px]">
         共 {workflows.length + pendingRows.length} 个工作流
         {pendingRows.length > 0 ? `（${pendingRows.length} 个未载入）` : ""}
       </div>
@@ -199,7 +199,7 @@ function WorkflowListItem({
           "w-full rounded-lg border px-2 py-1.5 text-left transition-all",
           selected
             ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
-            : "border-transparent bg-subtle hover:border-border hover:bg-subtle",
+            : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
         ].join(" ")}
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
@@ -207,7 +207,7 @@ function WorkflowListItem({
           <span
             className={[
               "min-w-0 flex-1 truncate text-[12px] leading-tight font-medium",
-              isTech ? "font-mono text-ink-strong" : "text-ink-bright",
+              isTech ? "text-ink-strong font-mono" : "text-ink-bright",
             ].join(" ")}
             title={workflow.name}
           >
@@ -250,14 +250,14 @@ function WorkflowListItem({
             {workflow.modelTags?.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="max-w-[72px] truncate rounded-full border border-border bg-subtle px-1.5 py-0.5 text-[9px] text-ink-faint"
+                className="border-border bg-subtle text-ink-faint max-w-[72px] truncate rounded-full border px-1.5 py-0.5 text-[9px]"
                 title={tag}
               >
                 {tag}
               </span>
             ))}
             {(workflow.modelTags?.length ?? 0) > 2 && (
-              <span className="shrink-0 text-[9px] text-ink-fainter">
+              <span className="text-ink-fainter shrink-0 text-[9px]">
                 +{(workflow.modelTags?.length ?? 0) - 2}
               </span>
             )}

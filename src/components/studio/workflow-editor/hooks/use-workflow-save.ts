@@ -26,20 +26,27 @@ export interface WorkflowSaverMutateOptions {
 export interface WorkflowSaver {
   /** 触发即忘：布局重置 / 拖拽落盘这类不需要等结果的写。
    *  `options.onError` 可选，用于把失败暴露给用户（见规则 #4）。 */
-  mutate: (input: WorkflowSaveInput, options?: WorkflowSaverMutateOptions) => void;
+  mutate: (
+    input: WorkflowSaveInput,
+    options?: WorkflowSaverMutateOptions,
+  ) => void;
   /** 需要知道成败的写（点「保存」后要关弹窗或报错），调用方用 try/catch 接成败，
    *  所以这条路径不重复提供 onError 通道。返回 tRPC 的真实输出类型，不丢类型安全。 */
-  mutateAsync: (input: WorkflowSaveInput) => Promise<RouterOutputs["workflow"]["update"]>;
+  mutateAsync: (
+    input: WorkflowSaveInput,
+  ) => Promise<RouterOutputs["workflow"]["update"]>;
 }
 
 export function useWorkflowSaveMutation(): WorkflowSaver {
   const mutation = api.workflow.update.useMutation();
   return useMemo(
     () => ({
-      mutate: (input: WorkflowSaveInput, options?: WorkflowSaverMutateOptions) =>
-        mutation.mutate(input, options),
+      mutate: (
+        input: WorkflowSaveInput,
+        options?: WorkflowSaverMutateOptions,
+      ) => mutation.mutate(input, options),
       mutateAsync: (input: WorkflowSaveInput) => mutation.mutateAsync(input),
     }),
-    [mutation]
+    [mutation],
   );
 }

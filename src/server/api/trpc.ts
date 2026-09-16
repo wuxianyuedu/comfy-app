@@ -112,7 +112,10 @@ type SlowBucket = { at: number; count: number };
 
 const G_KEY = "__trpcSlowQueryBuckets_v1";
 const buckets = (() => {
-  const g = globalThis as unknown as Record<string, Map<string, SlowBucket> | undefined>;
+  const g = globalThis as unknown as Record<
+    string,
+    Map<string, SlowBucket> | undefined
+  >;
   g[G_KEY] ??= new Map<string, SlowBucket>();
   return g[G_KEY];
 })();
@@ -200,7 +203,11 @@ export const authedProcedure = t.procedure
           name: "体验用户",
           password: "demo-not-used",
         });
-        demoUserCache = { id: demo.id, email: demo.email, name: demo.name ?? null };
+        demoUserCache = {
+          id: demo.id,
+          email: demo.email,
+          name: demo.name ?? null,
+        };
       }
       user = demoUserCache;
     }
@@ -213,13 +220,15 @@ export const authedProcedure = t.procedure
  * 对敏感操作（提权、删除、导出等）按 userId/IP 做滑动窗口限流，
  * 防脚本暴力调用。默认 10 秒窗口内 20 次，超限返回 429。
  */
-export const rateLimitedProcedure = authedProcedure.use(async ({ ctx, next }) => {
-  const key = ctx.user.id ?? ctx.headers.get("x-forwarded-for") ?? "anon";
-  if (!checkRateLimit(key)) {
-    throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: "请求过于频繁，请稍后再试",
-    });
-  }
-  return next({ ctx });
-});
+export const rateLimitedProcedure = authedProcedure.use(
+  async ({ ctx, next }) => {
+    const key = ctx.user.id ?? ctx.headers.get("x-forwarded-for") ?? "anon";
+    if (!checkRateLimit(key)) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: "请求过于频繁，请稍后再试",
+      });
+    }
+    return next({ ctx });
+  },
+);

@@ -24,7 +24,7 @@ export class ProjectRepository extends DrizzleRepository<Project> {
 
   async upsertForUser(
     userId: string,
-    data: { id: string; name: string; nodes?: unknown; edges?: unknown }
+    data: { id: string; name: string; nodes?: unknown; edges?: unknown },
   ): Promise<Project> {
     const existing = await db
       .select()
@@ -38,8 +38,8 @@ export class ProjectRepository extends DrizzleRepository<Project> {
           id: data.id,
           userId,
           name: data.name,
-          nodes: (data.nodes ?? "[]"),
-          edges: (data.edges ?? "[]"),
+          nodes: data.nodes ?? "[]",
+          edges: data.edges ?? "[]",
         })
         .returning();
       return rows[0]!;
@@ -48,8 +48,8 @@ export class ProjectRepository extends DrizzleRepository<Project> {
       .update(project)
       .set({
         name: data.name,
-        nodes: (data.nodes ?? "[]"),
-        edges: (data.edges ?? "[]"),
+        nodes: data.nodes ?? "[]",
+        edges: data.edges ?? "[]",
         updatedAt: new Date(),
       })
       .where(eq(project.id, data.id))

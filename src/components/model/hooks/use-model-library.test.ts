@@ -35,7 +35,9 @@ function card(id: string, type = "CHECKPOINT") {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vanilla.model.list.query.mockResolvedValue({ models: [card("1"), card("2", "LORA")] });
+  vanilla.model.list.query.mockResolvedValue({
+    models: [card("1"), card("2", "LORA")],
+  });
   vanilla.model.sync.mutate.mockResolvedValue({ ok: true, count: 2 });
 });
 
@@ -74,7 +76,9 @@ describe("useModelLibrary", () => {
       result.current.setType("LORA");
     });
     await waitFor(() =>
-      expect(vanilla.model.list.query).toHaveBeenLastCalledWith({ type: "LORA" }),
+      expect(vanilla.model.list.query).toHaveBeenLastCalledWith({
+        type: "LORA",
+      }),
     );
   });
 
@@ -87,7 +91,10 @@ describe("useModelLibrary", () => {
       result.current.setQ("xl");
     });
     await waitFor(() =>
-      expect(vanilla.model.list.query).toHaveBeenLastCalledWith({ type: "LORA", q: "xl" }),
+      expect(vanilla.model.list.query).toHaveBeenLastCalledWith({
+        type: "LORA",
+        q: "xl",
+      }),
     );
   });
 

@@ -47,16 +47,23 @@ function pickOffset(sx: number, sy: number, tx: number, ty: number) {
   const dx = Math.abs(tx - sx);
   const dy = Math.abs(ty - sy);
   const longAxis = Math.max(dx, dy);
-  const mag = Math.max(MIN_OFFSET, Math.min(MAX_OFFSET, longAxis * OFFSET_RATIO));
+  const mag = Math.max(
+    MIN_OFFSET,
+    Math.min(MAX_OFFSET, longAxis * OFFSET_RATIO),
+  );
   return mag;
 }
 
 /** Cubic-bezier midpoint at t = 0.5. */
 function bezierMidpoint(
-  p0x: number, p0y: number,
-  p1x: number, p1y: number,
-  p2x: number, p2y: number,
-  p3x: number, p3y: number,
+  p0x: number,
+  p0y: number,
+  p1x: number,
+  p1y: number,
+  p2x: number,
+  p2y: number,
+  p3x: number,
+  p3y: number,
 ): [number, number] {
   const x = (p0x + 3 * p1x + 3 * p2x + p3x) / 8;
   const y = (p0y + 3 * p1y + 3 * p2y + p3y) / 8;
@@ -128,10 +135,14 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
 
   const edgePath = `M ${sourceX},${sourceY} C ${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`;
   const [labelX, labelY] = bezierMidpoint(
-    sourceX, sourceY,
-    c1x, c1y,
-    c2x, c2y,
-    targetX, targetY,
+    sourceX,
+    sourceY,
+    c1x,
+    c1y,
+    c2x,
+    c2y,
+    targetX,
+    targetY,
   );
 
   /* 选中节点的相关连线：加粗 + 提亮，其余连线在选中态下降噪，让「这个节点连到

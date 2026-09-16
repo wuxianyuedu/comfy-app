@@ -22,7 +22,9 @@ import { AuthError, toErrorEnvelope, normalizeError } from "@/lib/core/errors";
  */
 export function errorResponse(err: unknown): NextResponse {
   const appErr = normalizeError(err);
-  return NextResponse.json(toErrorEnvelope(appErr), { status: appErr.httpStatus });
+  return NextResponse.json(toErrorEnvelope(appErr), {
+    status: appErr.httpStatus,
+  });
 }
 
 /** 401 结构化信封（= `AuthError` 的默认 code / message）。 */

@@ -130,7 +130,9 @@ export function installStreamCapture(): void {
     ): boolean {
       try {
         const text =
-          typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf-8");
+          typeof chunk === "string"
+            ? chunk
+            : Buffer.from(chunk).toString("utf-8");
         safeAppend(filePath, text);
       } catch {
         /* 转录失败不吞掉输出本身 */

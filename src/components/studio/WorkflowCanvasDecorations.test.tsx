@@ -17,9 +17,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
 
-import { CANVAS_BG, CanvasGrid, GRID_FINE_FADE_ZOOM } from "./WorkflowCanvasDecorations";
-import { DEFAULT_CANVAS_SETTINGS, type CanvasSettings } from "./canvas/WorkflowCanvasSettings";
-import { GRID_BASE_LAYER_ID, GRID_MAJOR_LAYER_ID, GRID_MINOR_LAYER_ID } from "./canvas/workflow-canvas-grid";
+import {
+  CANVAS_BG,
+  CanvasGrid,
+  GRID_FINE_FADE_ZOOM,
+} from "./WorkflowCanvasDecorations";
+import {
+  DEFAULT_CANVAS_SETTINGS,
+  type CanvasSettings,
+} from "./canvas/WorkflowCanvasSettings";
+import {
+  GRID_BASE_LAYER_ID,
+  GRID_MAJOR_LAYER_ID,
+  GRID_MINOR_LAYER_ID,
+} from "./canvas/workflow-canvas-grid";
 
 afterEach(cleanup);
 
@@ -44,8 +55,12 @@ function hasLayer(container: HTMLElement, layerId: string): boolean {
 
 /** 底色层实际下发的画布背景色（React Flow 把它写成 CSS 变量）。 */
 function baseColor(container: HTMLElement): string {
-  const svg = Array.from(container.querySelectorAll("svg.react-flow__background")).find((el) =>
-    Array.from(el.querySelectorAll("pattern")).some((p) => p.id.endsWith(GRID_BASE_LAYER_ID)),
+  const svg = Array.from(
+    container.querySelectorAll("svg.react-flow__background"),
+  ).find((el) =>
+    Array.from(el.querySelectorAll("pattern")).some((p) =>
+      p.id.endsWith(GRID_BASE_LAYER_ID),
+    ),
   );
   return svg?.getAttribute("style") ?? "";
 }

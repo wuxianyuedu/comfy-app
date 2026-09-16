@@ -23,7 +23,8 @@ function wireInput(
 
 /** 输出端点只要求 WorkflowIOEntry + ioKey。 */
 function output(
-  over: Partial<WorkflowIOEntry> & Pick<WorkflowIOEntry, "name"> & { ioKey: string },
+  over: Partial<WorkflowIOEntry> &
+    Pick<WorkflowIOEntry, "name"> & { ioKey: string },
 ): WorkflowIOEntry & { ioKey: string } {
   return {
     direction: "output",
@@ -44,7 +45,14 @@ function headerCount(): string {
 
 describe("IoEndpointsSection", () => {
   it("空态:仅渲染分段头且 count 为 0,无 chip、无「输出端点」", () => {
-    render(<IoEndpointsSection wireInputs={[]} inputs={[]} outputs={[]} showOutputs />);
+    render(
+      <IoEndpointsSection
+        wireInputs={[]}
+        inputs={[]}
+        outputs={[]}
+        showOutputs
+      />,
+    );
     expect(screen.getByText("I/O 端点")).toBeInTheDocument();
     expect(headerCount()).toBe("0");
     expect(screen.queryByText("输出端点")).not.toBeInTheDocument();
@@ -55,9 +63,21 @@ describe("IoEndpointsSection", () => {
     render(
       <IoEndpointsSection
         wireInputs={[
-          wireInput({ ioKey: "10::param::positive", name: "positive", label: "正向提示", type: "CONDITIONING", nodeTitle: "K采样器" }),
+          wireInput({
+            ioKey: "10::param::positive",
+            name: "positive",
+            label: "正向提示",
+            type: "CONDITIONING",
+            nodeTitle: "K采样器",
+          }),
         ]}
-        inputs={[wireInput({ ioKey: "10::param::positive", name: "positive", label: "正向提示" })]}
+        inputs={[
+          wireInput({
+            ioKey: "10::param::positive",
+            name: "positive",
+            label: "正向提示",
+          }),
+        ]}
         outputs={[]}
         showOutputs={false}
       />,
@@ -65,14 +85,21 @@ describe("IoEndpointsSection", () => {
     expect(headerCount()).toBe("1");
     expect(screen.getByText("正向提示")).toBeInTheDocument();
     expect(screen.getByText("CONDITIONING")).toBeInTheDocument();
-    expect(screen.getByTitle("K采样器 · positive · 仅可通过连线输入")).toBeInTheDocument();
+    expect(
+      screen.getByTitle("K采样器 · positive · 仅可通过连线输入"),
+    ).toBeInTheDocument();
   });
 
   it("ioLabel 冲突回退:多个 entry 共用同一 label 时改用 name 区分", () => {
     const w1 = wireInput({ ioKey: "a", name: "inputImage", label: "图像" });
     const w2 = wireInput({ ioKey: "b", name: "outputImage", label: "图像" });
     render(
-      <IoEndpointsSection wireInputs={[w1, w2]} inputs={[w1, w2]} outputs={[]} showOutputs={false} />,
+      <IoEndpointsSection
+        wireInputs={[w1, w2]}
+        inputs={[w1, w2]}
+        outputs={[]}
+        showOutputs={false}
+      />,
     );
     // label 相同 → 都回退为各自的 name,而不是重复显示「图像」
     expect(screen.getByText("inputImage")).toBeInTheDocument();
@@ -85,7 +112,9 @@ describe("IoEndpointsSection", () => {
       <IoEndpointsSection
         wireInputs={[wireInput({ ioKey: "a", name: "model" })]}
         inputs={[wireInput({ ioKey: "a", name: "model" })]}
-        outputs={[output({ ioKey: "o1", name: "IMAGE_FINAL", label: "最终图像" })]}
+        outputs={[
+          output({ ioKey: "o1", name: "IMAGE_FINAL", label: "最终图像" }),
+        ]}
         showOutputs={false}
       />,
     );
@@ -99,7 +128,14 @@ describe("IoEndpointsSection", () => {
       <IoEndpointsSection
         wireInputs={[]}
         inputs={[]}
-        outputs={[output({ ioKey: "o1", name: "IMAGE_FINAL", label: "最终图像", type: "IMAGE" })]}
+        outputs={[
+          output({
+            ioKey: "o1",
+            name: "IMAGE_FINAL",
+            label: "最终图像",
+            type: "IMAGE",
+          }),
+        ]}
         showOutputs
       />,
     );

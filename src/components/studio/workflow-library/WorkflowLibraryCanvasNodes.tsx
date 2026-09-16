@@ -23,9 +23,8 @@ import { PortHandle } from "../shared/WorkflowPortHandle";
 /** 三列节点的渲染内容（类型收在纯 `.ts` 里，hooks 层也要引用它）。 */
 export type { LibraryNodeContent };
 
-export const LibraryNodeContentContext = createContext<LibraryNodeContent | null>(
-  null,
-);
+export const LibraryNodeContentContext =
+  createContext<LibraryNodeContent | null>(null);
 
 /** 取三列的渲染内容；不在画布里（直接单测某个节点）时返回 null。 */
 function useLibraryNodeContent(): LibraryNodeContent | null {
@@ -40,36 +39,42 @@ function useLibraryNodeContent(): LibraryNodeContent | null {
 export function LibraryParamsNode(_props: NodeProps) {
   const content = useLibraryNodeContent()?.params;
   if (!content) return null;
-  const { cards, canWire, contractEntries, selectedEntryId, onSelect, onReset } =
-    content;
+  const {
+    cards,
+    canWire,
+    contractEntries,
+    selectedEntryId,
+    onSelect,
+    onReset,
+  } = content;
   return (
     <div data-testid="wflib-canvas-node-params">
-    <WorkflowParamCardColumn
-      entries={cards.entries}
-      contractEntries={contractEntries}
-      resolved={cards.resolved}
-      io={cards.io}
-      canWire={canWire}
-      selectedEntryId={selectedEntryId}
-      onSelect={onSelect}
-      isManual={cards.isManual}
-      onReset={onReset}
-      reachableKeys={cards.reachableKeys}
-      endpoint={(port) => (
-        <PortHandle
-          id={port.handleId}
-          dir="out"
-          type={port.type}
-          style={{
-            right: -(12 + 6),
-            top: "50%",
-            transform: "translateY(-50%)",
-            /* 已连接的圆点实心、未连接的淡一档（与旧口径一致）。 */
-            opacity: port.active ? 1 : 0.55,
-          }}
-        />
-      )}
-    />
+      <WorkflowParamCardColumn
+        entries={cards.entries}
+        contractEntries={contractEntries}
+        resolved={cards.resolved}
+        io={cards.io}
+        canWire={canWire}
+        selectedEntryId={selectedEntryId}
+        onSelect={onSelect}
+        isManual={cards.isManual}
+        onReset={onReset}
+        reachableKeys={cards.reachableKeys}
+        endpoint={(port) => (
+          <PortHandle
+            id={port.handleId}
+            dir="out"
+            type={port.type}
+            style={{
+              right: -(12 + 6),
+              top: "50%",
+              transform: "translateY(-50%)",
+              /* 已连接的圆点实心、未连接的淡一档（与旧口径一致）。 */
+              opacity: port.active ? 1 : 0.55,
+            }}
+          />
+        )}
+      />
     </div>
   );
 }
@@ -82,27 +87,27 @@ export function LibraryOutputsNode(_props: NodeProps) {
   const { cards, canWire, selectedOutputId, onSelect, onReset } = content;
   return (
     <div data-testid="wflib-canvas-node-outputs">
-    <WorkflowOutputParamCardColumn
-      outputs={cards.outputs}
-      resolved={cards.resolved}
-      canWire={canWire}
-      selectedOutputId={selectedOutputId}
-      onSelect={onSelect}
-      isManual={cards.isManual}
-      onReset={onReset}
-      endpoint={(port) => (
-        <PortHandle
-          id={port.handleId}
-          dir="in"
-          type={port.type}
-          style={{
-            left: -(12 + 6),
-            top: "50%",
-            transform: "translateY(-50%)",
-          }}
-        />
-      )}
-    />
+      <WorkflowOutputParamCardColumn
+        outputs={cards.outputs}
+        resolved={cards.resolved}
+        canWire={canWire}
+        selectedOutputId={selectedOutputId}
+        onSelect={onSelect}
+        isManual={cards.isManual}
+        onReset={onReset}
+        endpoint={(port) => (
+          <PortHandle
+            id={port.handleId}
+            dir="in"
+            type={port.type}
+            style={{
+              left: -(12 + 6),
+              top: "50%",
+              transform: "translateY(-50%)",
+            }}
+          />
+        )}
+      />
     </div>
   );
 }

@@ -55,7 +55,11 @@ vi.mock("@/lib/comfyui/enqueue", () => ({
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { generateRouter } from "~/server/api/routers/generate";
-import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedUser,
+  seedWorkflowTemplate,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(generateRouter);
@@ -110,12 +114,14 @@ describe("generate.generate（工作流库工作流）", () => {
     };
     expect(job.taskId).toBe(res.taskId);
     expect(job.rawJson).toBeDefined();
-    expect(job.overrides).toEqual([{ nodeId: "1", name: "text", value: "a cat" }]);
+    expect(job.overrides).toEqual([
+      { nodeId: "1", name: "text", value: "a cat" },
+    ]);
   });
 
   it("工作流不存在且无 canvasGraph → 抛 Workflow not found（不入队）", async () => {
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "no-such-workflow" })
+      createCaller(makeCtx()).generate({ workflow: "no-such-workflow" }),
     ).rejects.toThrow("Workflow not found");
     expect(enqueueMock).not.toHaveBeenCalled();
     expect(tdb.$tables.tasks).toHaveLength(0);
@@ -124,7 +130,7 @@ describe("generate.generate（工作流库工作流）", () => {
   it("Zod 校验失败：超长 prompt / 空 workflow → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(
-      caller.generate({ workflow: "wf-lib", prompt: "x".repeat(2001) })
+      caller.generate({ workflow: "wf-lib", prompt: "x".repeat(2001) }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(caller.generate({ workflow: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -201,18 +207,25 @@ describe("generate.generate（自定义工作流）", () => {
     // graph 列 NOT NULL，「空图」在库里的形态就是空对象 {}
     seedWorkflowTemplate(tdb, { id: "wf-empty", userId: "user-a", graph: {} });
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-empty" })
+      createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
     ).rejects.toThrow("Workflow graph is empty");
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 
   it("越权/不存在：非本人且不存在的 workflow → 'Workflow not found'", async () => {
-    seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b", graph: CUSTOM_GRAPH });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-b",
+      userId: "user-b",
+      graph: CUSTOM_GRAPH,
+    });
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-b", canvasGraph: undefined })
+      createCaller(makeCtx()).generate({
+        workflow: "wf-b",
+        canvasGraph: undefined,
+      }),
     ).rejects.toThrow("Workflow not found");
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-missing" })
+      createCaller(makeCtx()).generate({ workflow: "wf-missing" }),
     ).rejects.toThrow("Workflow not found");
     expect(tdb.$tables.tasks).toHaveLength(0);
   });

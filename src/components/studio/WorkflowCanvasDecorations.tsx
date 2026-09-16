@@ -1,7 +1,12 @@
 "use client";
 /* Extracted canvas decoration components — originally inside WorkflowCanvasEditor.tsx. */
 import React, { useState, useRef, useMemo } from "react";
-import { useReactFlow, useStore, Background, BackgroundVariant } from "@xyflow/react";
+import {
+  useReactFlow,
+  useStore,
+  Background,
+  BackgroundVariant,
+} from "@xyflow/react";
 import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
 import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
 import {
@@ -74,7 +79,13 @@ export function CanvasGrid({
       )}
       {/* 底色层：**唯一一个恒常渲染**的网格层（它自己就是画布的底色）。
           细线在主参考线之前渲染（都会被后画的层盖在上方），顺序不影响观感。 */}
-      <Background id={GRID_BASE_LAYER_ID} variant={BackgroundVariant.Dots} gap={1e6} color="transparent" bgColor={CANVAS_BG} />
+      <Background
+        id={GRID_BASE_LAYER_ID}
+        variant={BackgroundVariant.Dots}
+        gap={1e6}
+        color="transparent"
+        bgColor={CANVAS_BG}
+      />
       {settings.showGrid && (
         /* Major reference lines always land at `gridGap * 10` to keep the
          *  1:10 ratio users expect; only their alpha + width are tunable. */
@@ -132,7 +143,11 @@ export function ZoomIndicator({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [dragging, setDragging] = useState(false);
-  const dragRef = useRef<{ startY: number; startZoom: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    startY: number;
+    startZoom: number;
+    moved: boolean;
+  } | null>(null);
   const justDraggedRef = useRef(false);
 
   const pct = Math.round(zoom * 100);
@@ -201,7 +216,7 @@ export function ZoomIndicator({
           }
         }}
         title="输入缩放百分比后回车"
-        className="absolute right-3 top-3 z-6 h-7 w-16 rounded-md border border-purple-400/60 bg-panel px-2 text-right text-[11px] font-medium tabular-nums text-ink-bright shadow-lg outline-none"
+        className="bg-panel text-ink-bright absolute top-3 right-3 z-6 h-7 w-16 rounded-md border border-purple-400/60 px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
       />
     );
   }
@@ -218,7 +233,7 @@ export function ZoomIndicator({
         beginEdit();
       }}
       title="点击输入缩放倍数，或按住上下拖动调整"
-      className={`pointer-events-auto absolute right-3 top-3 z-6 select-none rounded-md border border-border-strong bg-panel/90 px-2.5 py-1 text-[11px] font-medium tabular-nums tracking-tight text-ink-soft shadow-lg backdrop-blur-sm transition-colors hover:border-white/25 hover:text-ink-bright ${
+      className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 rounded-md border px-2.5 py-1 text-[11px] font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm transition-colors select-none hover:border-white/25 ${
         dragging ? "cursor-grabbing border-purple-400/50" : "cursor-ns-resize"
       }`}
     >
@@ -252,7 +267,8 @@ export function CanvasRulers({
 
   // World X of each visible major vertical line → screen X.
   const xLabels = useMemo(() => {
-    if (zoom <= 0.01 || !width) return [] as { world: number; screen: number }[];
+    if (zoom <= 0.01 || !width)
+      return [] as { world: number; screen: number }[];
     const start = Math.floor(-tx / zoom / labelStep) * labelStep;
     const end = Math.ceil((width - tx) / zoom / labelStep) * labelStep;
     const out: { world: number; screen: number }[] = [];
@@ -266,7 +282,8 @@ export function CanvasRulers({
 
   // World Y of each visible major horizontal line → screen Y.
   const yLabels = useMemo(() => {
-    if (zoom <= 0.01 || !height) return [] as { world: number; screen: number }[];
+    if (zoom <= 0.01 || !height)
+      return [] as { world: number; screen: number }[];
     const start = Math.floor(-ty / zoom / labelStep) * labelStep;
     const end = Math.ceil((height - ty) / zoom / labelStep) * labelStep;
     const out: { world: number; screen: number }[] = [];

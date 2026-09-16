@@ -1,7 +1,11 @@
 "use client";
 
 import { Icon } from "@/components/ui/icon";
-import { NODE_META, type CanvasNodeData, type NodeKind } from "@/lib/project-canvas/canvas-types";
+import {
+  NODE_META,
+  type CanvasNodeData,
+  type NodeKind,
+} from "@/lib/project-canvas/canvas-types";
 import { isVideo as isVideoSource } from "@/lib/media-kind";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 
@@ -29,7 +33,8 @@ export function ResultCard({
 }) {
   /* 业务事实（节点类型 / 产出元数据）与文件事实（扩展名）分层判断：扩展名那份
    * 判据收敛在 `media-kind.ts`（ISSUE #571），视图层不再自带第四份正则。 */
-  const isVideo = kind === "video" || mediaType === "video" || isVideoSource(path);
+  const isVideo =
+    kind === "video" || mediaType === "video" || isVideoSource(path);
   const src = path?.startsWith("/") ? path : path ? `/${path}` : undefined;
   const meta = NODE_META[kind];
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串名视为无输出，需用 || 回退到 meta.label
@@ -46,14 +51,41 @@ export function ResultCard({
         </div>
         {/* Edit toolbar */}
         <div className="border-border-strong bg-canvas-deep flex items-center justify-center gap-1 border-b px-2 py-1.5">
-          <button type="button" title="字号减小" className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium">A-</button>
-          <button type="button" title="字号增大" className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium">A+</button>
-          <span className="bg-border-strong mx-1 h-3 w-px" />
-          <button type="button" title="编辑" className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]">
-            <Icon name="pen" size={11} className="mr-1 inline align-[-1px]" />编辑
+          <button
+            type="button"
+            title="字号减小"
+            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium"
+          >
+            A-
           </button>
-          <button type="button" title="下载" onClick={() => text && navigator.clipboard?.writeText(text)} className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]">
-            <Icon name="download" size={11} className="mr-1 inline align-[-1px]" />下载
+          <button
+            type="button"
+            title="字号增大"
+            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium"
+          >
+            A+
+          </button>
+          <span className="bg-border-strong mx-1 h-3 w-px" />
+          <button
+            type="button"
+            title="编辑"
+            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]"
+          >
+            <Icon name="pen" size={11} className="mr-1 inline align-[-1px]" />
+            编辑
+          </button>
+          <button
+            type="button"
+            title="下载"
+            onClick={() => text && navigator.clipboard?.writeText(text)}
+            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]"
+          >
+            <Icon
+              name="download"
+              size={11}
+              className="mr-1 inline align-[-1px]"
+            />
+            下载
           </button>
         </div>
         <div className="text-ink-bright max-h-56 overflow-auto p-3 text-[12px] leading-relaxed">
@@ -63,8 +95,13 @@ export function ResultCard({
           }
         </div>
         <div className="border-border-strong flex items-center justify-center border-t py-2">
-          <button type="button" onClick={onReplace} className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors">
-            <Icon name="refresh" size={11} />替换
+          <button
+            type="button"
+            onClick={onReplace}
+            className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors"
+          >
+            <Icon name="refresh" size={11} />
+            替换
           </button>
         </div>
       </div>
@@ -79,7 +116,7 @@ export function ResultCard({
         <NodeChip kind={kind} name={displayName} size="sm" />
         <StatusBadge status={status} />
       </div>
-      <div className="relative flex aspect-video items-center justify-center bg-linear-to-br from-subtle to-canvas-deep">
+      <div className="from-subtle to-canvas-deep relative flex aspect-video items-center justify-center bg-linear-to-br">
         {!src ? (
           <Icon
             name={isVideo ? "film" : "image"}
@@ -87,15 +124,30 @@ export function ResultCard({
             className="text-ink-fainter"
           />
         ) : isVideo ? (
-          <video src={src} controls autoPlay loop muted className="max-h-56 w-full object-contain" />
+          <video
+            src={src}
+            controls
+            autoPlay
+            loop
+            muted
+            className="max-h-56 w-full object-contain"
+          />
         ) : (
-           
-          <img src={src} alt="result" className="max-h-56 w-full object-contain" />
+          <img
+            src={src}
+            alt="result"
+            className="max-h-56 w-full object-contain"
+          />
         )}
       </div>
       <div className="border-border-strong flex items-center justify-center border-t py-2">
-        <button type="button" onClick={onReplace} className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors">
-          <Icon name="refresh" size={11} />替换
+        <button
+          type="button"
+          onClick={onReplace}
+          className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors"
+        >
+          <Icon name="refresh" size={11} />
+          替换
         </button>
       </div>
     </div>

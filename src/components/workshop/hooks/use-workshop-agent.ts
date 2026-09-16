@@ -10,10 +10,7 @@
 import React from "react";
 import { sendAgentMessage } from "@/lib/agent/client";
 import type { AgentMessageLike, AgentChatResponse } from "@/lib/agent/shared";
-import {
-  resolveAgentTool,
-  type AgentToolHandlers,
-} from "@/lib/agent/executor";
+import { resolveAgentTool, type AgentToolHandlers } from "@/lib/agent/executor";
 
 export type { AgentToolHandlers };
 
@@ -113,7 +110,11 @@ export function useWorkshopAgent(
   const executeOneTool = React.useCallback(
     async (call: { id: string; name: string; arguments: string }) => {
       const runId = toolRunId();
-      const tool = resolveAgentTool(call.name, call.arguments, handlersRef.current);
+      const tool = resolveAgentTool(
+        call.name,
+        call.arguments,
+        handlersRef.current,
+      );
       const run: AgentToolRun = {
         id: runId,
         toolName: call.name,
@@ -181,7 +182,10 @@ export function useWorkshopAgent(
         });
 
         // 纯文本回复（无工具调用）→ 结束本轮
-        if (response.reply && !(response.tool_calls && response.tool_calls.length > 0)) {
+        if (
+          response.reply &&
+          !(response.tool_calls && response.tool_calls.length > 0)
+        ) {
           pushMsg({
             id: agentMsgId(),
             role: "assistant",

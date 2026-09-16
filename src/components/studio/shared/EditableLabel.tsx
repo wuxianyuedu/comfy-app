@@ -38,7 +38,7 @@ export function EditableLabel({
        *  text-ink-bright font-Inter'` 视觉严格对齐，让 inputs 与 outputs 在同一节点内
        *  拥有相同字体权重的 label。 */
       <span
-        className="group flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] font-semibold text-ink-bright"
+        className="group text-ink-bright flex min-w-0 flex-1 items-center gap-1 truncate text-[12px] font-semibold"
         style={{ fontFamily: "var(--font-sans)" }}
         title={title}
       >
@@ -55,7 +55,7 @@ export function EditableLabel({
             }}
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
-            className="nodrag nopan min-w-0 flex-1 cursor-text truncate text-left text-[12px] font-semibold text-ink-bright transition-colors hover:text-ink-strong"
+            className="nodrag nopan text-ink-bright hover:text-ink-strong min-w-0 flex-1 cursor-text truncate text-left text-[12px] font-semibold transition-colors"
             style={{ fontFamily: "var(--font-sans)" }}
           >
             {label}
@@ -103,7 +103,7 @@ export function EditableLabel({
         title={title}
         /* 与展示态字体一致 — text-[12px] font-semibold
          *  text-ink-bright + 'Inter'，避免编辑切回展示态时出现字重跳变。 */
-        className="nodrag nopan w-32 max-w-full min-w-0 shrink rounded border border-violet-400/40 bg-subtle px-1.5 py-px text-[12px] font-semibold text-ink-bright outline-none focus:border-violet-400/70"
+        className="nodrag nopan bg-subtle text-ink-bright w-32 max-w-full min-w-0 shrink rounded border border-violet-400/40 px-1.5 py-px text-[12px] font-semibold outline-none focus:border-violet-400/70"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </span>

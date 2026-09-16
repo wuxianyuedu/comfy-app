@@ -49,14 +49,17 @@ export interface Repository<T extends Identifiable> {
  *
  * @typeParam T 实体类型（需满足 {@link Identifiable}，通常为 `InferSelectModel`）
  */
-export class DrizzleRepository<T extends Identifiable> implements Repository<T> {
+export class DrizzleRepository<
+  T extends Identifiable,
+> implements Repository<T> {
   constructor(
     protected readonly table: AnySQLiteTable,
-    protected readonly idColumn?: AnySQLiteColumn
+    protected readonly idColumn?: AnySQLiteColumn,
   ) {}
 
   private get id() {
-    return (this.idColumn ?? (this.table as unknown as Record<string, AnySQLiteColumn>).id)!;
+    return (this.idColumn ??
+      (this.table as unknown as Record<string, AnySQLiteColumn>).id)!;
   }
 
   async findById(id: string): Promise<T | null> {

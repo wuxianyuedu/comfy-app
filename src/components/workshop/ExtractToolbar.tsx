@@ -96,9 +96,9 @@ export function ExtractToolbar({
 
   /* 执行日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
-  const [history, setHistory] = React.useState<PersistableGenerationLog[] | null>(
-    null,
-  );
+  const [history, setHistory] = React.useState<
+    PersistableGenerationLog[] | null
+  >(null);
   const loadHistory = () => {
     if (!logStage) return;
     setHistoryOpen(true);

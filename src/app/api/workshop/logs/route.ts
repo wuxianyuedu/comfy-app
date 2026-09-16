@@ -30,15 +30,22 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
   }
-  const rec = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+  const rec = (typeof body === "object" && body !== null ? body : {}) as Record<
+    string,
+    unknown
+  >;
   const stage = parseGenerationLogStage(rec.stage);
   if (!stage) {
     return NextResponse.json(
-      { error: `stage 必须是 ${Object.keys(GENERATION_LOG_STAGE_LABELS).join(" / ")} 之一` },
+      {
+        error: `stage 必须是 ${Object.keys(GENERATION_LOG_STAGE_LABELS).join(" / ")} 之一`,
+      },
       { status: 400 },
     );
   }
-  const entries: unknown[] = Array.isArray(rec.entries) ? rec.entries.slice(0, 200) : [];
+  const entries: unknown[] = Array.isArray(rec.entries)
+    ? rec.entries.slice(0, 200)
+    : [];
   const saved = await appendGenerationLogs(stage, entries);
   return NextResponse.json({ saved });
 }
@@ -51,11 +58,16 @@ export async function GET(req: NextRequest) {
   const stage = parseGenerationLogStage(req.nextUrl.searchParams.get("stage"));
   if (!stage) {
     return NextResponse.json(
-      { error: `stage 必须是 ${Object.keys(GENERATION_LOG_STAGE_LABELS).join(" / ")} 之一` },
+      {
+        error: `stage 必须是 ${Object.keys(GENERATION_LOG_STAGE_LABELS).join(" / ")} 之一`,
+      },
       { status: 400 },
     );
   }
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? "100");
-  const entries = await readGenerationLogs(stage, Number.isFinite(limit) ? limit : 100);
+  const entries = await readGenerationLogs(
+    stage,
+    Number.isFinite(limit) ? limit : 100,
+  );
   return NextResponse.json({ entries });
 }

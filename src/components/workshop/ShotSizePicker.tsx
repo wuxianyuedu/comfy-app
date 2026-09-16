@@ -85,7 +85,10 @@ export function ShotSizePicker({
           label: String(option),
         })),
         onChange: (multiple) =>
-          onChange({ ...state, multiple: normalizeAlignMultiple(Number(multiple)) }),
+          onChange({
+            ...state,
+            multiple: normalizeAlignMultiple(Number(multiple)),
+          }),
       });
     }
     return list;
@@ -108,7 +111,7 @@ export function ShotSizePicker({
             >
               尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
             </button>
-            <span className="text-[10px] text-ink-faint">
+            <span className="text-ink-faint text-[10px]">
               {clarityKind === "megapixel"
                 ? "总像素预算，宽高按倍数对齐"
                 : "宽高按场景尺寸表取值"}
@@ -117,7 +120,10 @@ export function ShotSizePicker({
         }
       />
       {tableOpen && (
-        <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />
+        <SizePresetTableModal
+          scene={scene}
+          onClose={() => setTableOpen(false)}
+        />
       )}
     </>
   );

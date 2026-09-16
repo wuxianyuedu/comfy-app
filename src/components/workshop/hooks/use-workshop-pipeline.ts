@@ -464,7 +464,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
   const [styles, setStyles] = React.useState<StyleRef[]>([]);
   /* 工坊可用的工作流库工作流 + 当前选择（ISSUE #145）：本地通道的唯一来源。 */
-  const [workflowOptions, setWorkflowOptions] = React.useState<WorkshopWorkflowOption[]>([]);
+  const [workflowOptions, setWorkflowOptions] = React.useState<
+    WorkshopWorkflowOption[]
+  >([]);
   const [workflowId, setWorkflowId] = React.useState(
     () => loadWorkshopDraftOnce()?.workflowId ?? "",
   );
@@ -797,7 +799,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     // API 直连通道(生图/视频)的脱敏配置视图;失败按未配置处理。
     void fetchApiChannels().then(setApiChannels);
     // 工作流库列表：工坊「生成资源」里可选择用哪个工作流生成（ISSUE #145）。
-    void fetchWorkshopWorkflows().then(setWorkflowOptions).catch(() => undefined);
+    void fetchWorkshopWorkflows()
+      .then(setWorkflowOptions)
+      .catch(() => undefined);
   }, []);
 
   /** 提示条自动消失，避免需要用户手动关闭的瞬时噪声。 */
@@ -960,7 +964,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     () => setApiSettingsOpen(false),
     [],
   );
-  const openModeContract = React.useCallback(() => setModeContractOpen(true), []);
+  const openModeContract = React.useCallback(
+    () => setModeContractOpen(true),
+    [],
+  );
   const closeModeContract = React.useCallback(
     () => setModeContractOpen(false),
     [],

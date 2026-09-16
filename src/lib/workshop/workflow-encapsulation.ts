@@ -131,7 +131,9 @@ function isImagePin(e: WorkflowIOEntry): boolean {
   const type = (e.type ?? "").toUpperCase();
   if (IMAGE_TYPES.has(type)) return true;
   // 自定义节点常把上传槽声明成 STRING / 无类型，名字带 upload / image 也算。
-  return /upload|image|参考图|首帧|尾帧|first_?frame|last_?frame/.test(searchText(e));
+  return /upload|image|参考图|首帧|尾帧|first_?frame|last_?frame/.test(
+    searchText(e),
+  );
 }
 
 /** 是否像「负面提示词」。必须排在正向提示词之前判定。 */
@@ -160,20 +162,24 @@ function isPromptPin(e: WorkflowIOEntry): boolean {
 /** 产出「首帧」的节点类名（WAN / LTX 系各家命名不一致，用前缀+包含匹配）。 */
 function isFirstFrameClass(classType: string): boolean {
   return /^(comfyui[-_ ]?)?loadimage.*first|^loadimage.*start_?frame|first_?frame|start_?frame/i.test(
-    classType
+    classType,
   );
 }
 
 /** 产出「尾帧」的节点类名。 */
 function isLastFrameClass(classType: string): boolean {
-  return /^(comfyui[-_ ]?)?loadimage.*last|last_?frame|end_?frame/i.test(classType);
+  return /^(comfyui[-_ ]?)?loadimage.*last|last_?frame|end_?frame/i.test(
+    classType,
+  );
 }
 
 function isFramesPin(e: WorkflowIOEntry): boolean {
   const text = searchText(e);
   /* 先排除「每秒帧数」，它是 fps 不是时长。 */
   if (/fps|帧率|每秒帧/.test(text)) return false;
-  return /(^|[^a-z])frames?([^a-z]|$)|length|duration|num_?frames|视频帧|帧数|时长|秒数/.test(text);
+  return /(^|[^a-z])frames?([^a-z]|$)|length|duration|num_?frames|视频帧|帧数|时长|秒数/.test(
+    text,
+  );
 }
 
 function isFpsPin(e: WorkflowIOEntry): boolean {
@@ -191,10 +197,16 @@ export function classifyVideoPin(e: WorkflowIOEntry): VideoPinRole {
   const text = searchText(e);
 
   if (isImagePin(e)) {
-    if (isLastFrameClass(classType) || /last_?frame|尾帧|结束帧|末帧/.test(text)) {
+    if (
+      isLastFrameClass(classType) ||
+      /last_?frame|尾帧|结束帧|末帧/.test(text)
+    ) {
       return "last-frame";
     }
-    if (isFirstFrameClass(classType) || /first_?frame|首帧|起始帧|初始帧/.test(text)) {
+    if (
+      isFirstFrameClass(classType) ||
+      /first_?frame|首帧|起始帧|初始帧/.test(text)
+    ) {
       return "first-frame";
     }
     /* 泛化的图片加载节点（LoadImage / ImageLoader）：只声明了「一张图」，
@@ -291,10 +303,12 @@ function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
  *  4. 候选里有非数字项 → 不猜，返回 undefined，由调用方退回端口默认值。 */
 function matchDurationOption(
   entry: WorkflowIOEntry,
-  value: number
+  value: number,
 ): number | string | undefined {
   const options = Array.isArray(entry.options)
-    ? entry.options.filter((option): option is string => typeof option === "string")
+    ? entry.options.filter(
+        (option): option is string => typeof option === "string",
+      )
     : [];
   if (options.length === 0) return value;
   const wanted = String(value);
@@ -326,7 +340,8 @@ function matchDurationOption(
  * （image/video）—— 那层分类是工作流库的展示维度，不是生成模式的判据。 */
 
 /** 视频类模式码（前缀式，兼容 T2V / TI2V / FLF2V / FMF2V / S2V / V2V …）。 */
-const VIDEO_MODE_RE = /^(t2v|i2v|ti2v|flf2v|fl2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
+const VIDEO_MODE_RE =
+  /^(t2v|i2v|ti2v|flf2v|fl2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
 
 /** 该模式码是否属于视频生成。 */
 export function isVideoMode(code: string | null | undefined): boolean {
@@ -356,7 +371,7 @@ function classifyAll(io: WorkflowIOMap): Map<string, WorkshopPinClass> {
 
 function pickFirst(
   classified: Map<string, WorkshopPinClass>,
-  cls: WorkshopPinClass
+  cls: WorkshopPinClass,
 ): string | undefined {
   for (const [key, value] of classified) {
     if (value === cls) return key;
@@ -375,12 +390,14 @@ function pickFirst(
  *  3. 都没有（端口没声明候选 / 无法解析）→ 返回 undefined，交由调用方退回默认值。 */
 export function matchAspectOption(
   entry: WorkflowIOEntry,
-  aspect: string | undefined
+  aspect: string | undefined,
 ): string | undefined {
   if (typeof aspect !== "string" || !aspect.trim()) return undefined;
   const wanted = aspect.trim();
   const options = Array.isArray(entry.options)
-    ? entry.options.filter((option): option is string => typeof option === "string")
+    ? entry.options.filter(
+        (option): option is string => typeof option === "string",
+      )
     : [];
   const exact = options.find((option) => option.trim() === wanted);
   if (exact !== undefined) return exact;
@@ -447,7 +464,7 @@ export function megapixelsForSize(
 export function buildEncapsulatedInputs(
   io: WorkflowIOMap | null | undefined,
   mode: string | null | undefined,
-  values: WorkshopExposedValues
+  values: WorkshopExposedValues,
 ): EncapsulatedInputs {
   const workflowInputs: { nodeId: string; name: string; value: unknown }[] = [];
   const exposed: Record<string, WorkshopPinClass> = {};
@@ -462,7 +479,9 @@ export function buildEncapsulatedInputs(
   /* 尺寸：工坊给的是「比例 + 分辨率」或「比例 + 百万像素 + 倍数」，宽高按当前
    *  模式的场景表算（图 / 视频的 1k 不是同一组值）。 */
   const sizeSpec = values.size ? normalizeSizeSpec(values.size) : null;
-  const sizeDims = sizeSpec ? sizeSpecDims(sizeSpec, sceneFromMode(mode)) : null;
+  const sizeDims = sizeSpec
+    ? sizeSpecDims(sizeSpec, sceneFromMode(mode))
+    : null;
   const refs = values.referenceImages ?? [];
   const refImage = refs[0];
   const firstFrame = values.firstFrame ?? refImage;
@@ -479,13 +498,16 @@ export function buildEncapsulatedInputs(
 
   const userValueFor = (
     cls: WorkshopPinClass,
-    ioEntry: WorkflowIOEntry
+    ioEntry: WorkflowIOEntry,
   ): { matched: boolean; value: unknown } => {
     switch (cls) {
       case "prompt":
         return { matched: values.prompt !== undefined, value: values.prompt };
       case "negative":
-        return { matched: values.negativePrompt !== undefined, value: values.negativePrompt };
+        return {
+          matched: values.negativePrompt !== undefined,
+          value: values.negativePrompt,
+        };
       /* 宽 / 高：由「比例 + 档位」按场景尺寸表现算（尺寸表是唯一口径，
        *  不再从 WxH 字符串里劈）。 */
       case "size-width":
@@ -506,14 +528,18 @@ export function buildEncapsulatedInputs(
       case "size-megapixels":
         return {
           matched: sizeSpec !== null,
-          value: sizeSpec ? sizeSpecMegapixels(sizeSpec, sceneFromMode(mode)) : undefined,
+          value: sizeSpec
+            ? sizeSpecMegapixels(sizeSpec, sceneFromMode(mode))
+            : undefined,
         };
       /* 倍数：与「百万像素」同属「比例 + 百万像素 + 倍数」一类，工坊派值
        *  （分辨率档由能整除两侧的最大候选反推）。 */
       case "size-multiple":
         return {
           matched: sizeSpec !== null,
-          value: sizeSpec ? sizeSpecMultiple(sizeSpec, sceneFromMode(mode)) : undefined,
+          value: sizeSpec
+            ? sizeSpecMultiple(sizeSpec, sceneFromMode(mode))
+            : undefined,
         };
       case "first-frame":
         return { matched: firstFrame !== undefined, value: firstFrame };
@@ -543,9 +569,15 @@ export function buildEncapsulatedInputs(
       const { matched, value } = userValueFor(cls, entry);
       // 用户给了值就用用户值；否则与内部参数一样回退默认值。
       const finalValue =
-        matched && value !== undefined ? value : resolveEntryDefault(entry, mode);
+        matched && value !== undefined
+          ? value
+          : resolveEntryDefault(entry, mode);
       if (finalValue !== undefined) {
-        workflowInputs.push({ nodeId: entry.nodeId, name: entry.name, value: finalValue });
+        workflowInputs.push({
+          nodeId: entry.nodeId,
+          name: entry.name,
+          value: finalValue,
+        });
       }
       continue;
     }
@@ -553,12 +585,17 @@ export function buildEncapsulatedInputs(
     const fallback = resolveEntryDefault(entry, mode);
     internalKeys.push(key);
     if (fallback !== undefined) {
-      workflowInputs.push({ nodeId: entry.nodeId, name: entry.name, value: fallback });
+      workflowInputs.push({
+        nodeId: entry.nodeId,
+        name: entry.name,
+        value: fallback,
+      });
     }
   }
 
   // 用户给了值却没有对应 pin → 如实报告，不沉默丢弃。
-  if (values.prompt !== undefined && !pickFirst(classified, "prompt")) unmatched.push("prompt");
+  if (values.prompt !== undefined && !pickFirst(classified, "prompt"))
+    unmatched.push("prompt");
   if (values.negativePrompt !== undefined && !pickFirst(classified, "negative"))
     unmatched.push("negativePrompt");
   /* 尺寸：宽 / 高 / 比例 / 像素量任一类端口接住就不算没落下去（工作流用哪种口径
@@ -569,8 +606,10 @@ export function buildEncapsulatedInputs(
   /* 参考图：首帧槽（含普通参考图槽）都没有，才算没落下去。
    * 首尾帧工作流的 referenceImages[0] 会落到首帧槽，不该报 unmatched。 */
   const hasImageSlot =
-    pickFirst(classified, "reference-image") ?? pickFirst(classified, "first-frame");
-  if (refImage !== undefined && !hasImageSlot) unmatched.push("referenceImages");
+    pickFirst(classified, "reference-image") ??
+    pickFirst(classified, "first-frame");
+  if (refImage !== undefined && !hasImageSlot)
+    unmatched.push("referenceImages");
   if (lastFrame !== undefined && !pickFirst(classified, "last-frame"))
     unmatched.push("lastFrame");
 

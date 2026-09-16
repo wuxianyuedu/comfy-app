@@ -61,7 +61,7 @@ export function DetailHeader({
   const modes = workflow.modes ?? [];
 
   return (
-    <div className="border-b border-border-subtle px-5 py-4">
+    <div className="border-border-subtle border-b px-5 py-4">
       {/* 标题区与操作按钮组同排。窗口窄 / 详情面板被挤窄时**整组按钮换到第二行**，
           而不是被挤出去裁掉：面板根容器是 `overflow-hidden`，按钮组一旦溢出右侧就
           直接消失（此前 `shrink-0` + 无 `flex-wrap` 的形态下，小屏看不到「删除」这
@@ -76,7 +76,7 @@ export function DetailHeader({
           <h2
             className={[
               "truncate text-lg font-semibold",
-              isTechnical ? "font-mono text-ink-strong" : "text-ink",
+              isTechnical ? "text-ink-strong font-mono" : "text-ink",
             ].join(" ")}
             title={workflow.name}
           >
@@ -93,14 +93,18 @@ export function DetailHeader({
                 title={
                   modes.length > 1
                     ? "该工作流支持多种模式，点击查看全部"
-                    : (modes[0] ? `${modeLabel(modes[0])}（${modes[0]}）` : undefined)
+                    : modes[0]
+                      ? `${modeLabel(modes[0])}（${modes[0]}）`
+                      : undefined
                 }
-                className={modes.length > 1 ? "cursor-pointer" : "cursor-default"}
+                className={
+                  modes.length > 1 ? "cursor-pointer" : "cursor-default"
+                }
               >
                 <TaskTypeChip taskType={workflow.taskType} />
               </button>
               {showAllModes && modes.length > 1 && (
-                <div className="absolute left-0 top-full z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border border-border bg-panel p-1.5 shadow-xl">
+                <div className="border-border bg-panel absolute top-full left-0 z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl">
                   {modes.map((code) => (
                     <span
                       key={code}
@@ -121,7 +125,7 @@ export function DetailHeader({
             {(workflow.modelTags ?? []).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full border border-border bg-subtle px-2 py-0.5 text-[10px] text-ink-faint"
+                className="border-border bg-subtle text-ink-faint rounded-full border px-2 py-0.5 text-[10px]"
               >
                 {tag}
               </span>
@@ -157,7 +161,11 @@ export function DetailHeader({
             onClick={onUse}
             icon={<Plus className="h-3.5 w-3.5" />}
             label="导入画布"
-            title={usable ? "把该工作流导入项目画布" : "当前工作流缺少可执行格式，无法导入"}
+            title={
+              usable
+                ? "把该工作流导入项目画布"
+                : "当前工作流缺少可执行格式，无法导入"
+            }
             disabled={!usable}
           />
           {/* 模型标签绑定：与导入画布同款描边样式，点开多选管理 */}
@@ -172,7 +180,9 @@ export function DetailHeader({
             <ActionButton
               onClick={onResync}
               icon={
-                <RefreshCw className={`h-3.5 w-3.5 ${busyResync ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${busyResync ? "animate-spin" : ""}`}
+                />
               }
               label={busyResync ? "同步中" : "同步"}
               disabled={busyResync}

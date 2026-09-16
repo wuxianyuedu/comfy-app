@@ -131,7 +131,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           <h2 className="text-ink text-[17px] font-semibold">{stageTitle}</h2>
           <p className="text-muted-foreground mt-1 text-[12px]">{stageDesc}</p>
         </div>
-        <span className="text-muted-foreground shrink-0 rounded-full bg-subtle px-3 py-1 text-[11px]">
+        <span className="text-muted-foreground bg-subtle shrink-0 rounded-full px-3 py-1 text-[11px]">
           阶段 {stageIndex} / {STAGE_DEFS.length}
         </span>
       </div>
@@ -162,7 +162,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 <h3 className="text-ink text-[14px] font-semibold">剧本内容</h3>
                 <div className="flex items-center gap-2">
                   {scenes.length > 0 && (
-                    <span className="text-muted-foreground rounded-lg bg-subtle px-3 py-1 text-[11px]">
+                    <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
                       场景 {scenes.length}
                     </span>
                   )}
@@ -177,7 +177,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 </div>
               </div>
               <div
-                className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg max-h-[480px] rounded-xl p-4 text-[13px] leading-7 text-ink-subtle`}
+                className={`${SCROLLBAR_VISIBLE_CLASSES} bg-bg text-ink-subtle max-h-[480px] rounded-xl p-4 text-[13px] leading-7`}
                 dangerouslySetInnerHTML={{
                   __html: markdownToHtml(scriptMarkdown),
                 }}
@@ -201,7 +201,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                       type="button"
                       variant="ghost"
                       onClick={() => scriptFileRef.current?.click()}
-                      className="text-ink rounded-lg bg-subtle px-4 py-1.5 text-xs font-medium hover:bg-surface-2"
+                      className="text-ink bg-subtle hover:bg-surface-2 rounded-lg px-4 py-1.5 text-xs font-medium"
                     >
                       导入剧本
                     </Button>
@@ -289,7 +289,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               type="button"
               variant="ghost"
               onClick={() => setTab("shots")}
-              className="text-ink h-auto rounded-xl bg-subtle px-6 py-3 text-[13px] font-semibold hover:bg-surface-2"
+              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-6 py-3 text-[13px] font-semibold"
             >
               下一阶段 →
             </Button>
@@ -330,7 +330,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink text-[14px] font-semibold">生图工具</h3>
-              <span className="text-muted-foreground rounded-lg bg-subtle px-3 py-1 text-[11px]">
+              <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
                 图 {imageDoneCount}/{shots.length}
               </span>
             </div>
@@ -360,7 +360,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink text-[14px] font-semibold">视频工具</h3>
-              <span className="text-muted-foreground rounded-lg bg-subtle px-3 py-1 text-[11px]">
+              <span className="text-muted-foreground bg-subtle rounded-lg px-3 py-1 text-[11px]">
                 片段 {clipDoneCount}/{shots.length}
               </span>
             </div>

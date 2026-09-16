@@ -6,10 +6,8 @@ import {
   callChat,
   callImage,
   callVideo,
-  isRecord,
-  normalizeEndpointPath,
   parseExtraJson,
-  resolveUpstream,
+  readUsageTestPrologue,
   saveMediaToLocalTemp,
   strField,
 } from "~/lib/llm/usage-test.server";
@@ -34,32 +32,31 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   await getServerUser();
 
-  const body: unknown = await req.json().catch(() => ({}));
-  const rec = isRecord(body) ? body : {};
+  /* 读 body / 取条目名 / 解析连接参数与「继续等待」路由同一份实现（§12.12）。 */
+  const prologue = await readUsageTestPrologue(req);
+  if (!prologue.ok)
+    return NextResponse.json({ ok: false, detail: prologue.detail });
+  const { name, rec, up } = prologue;
+
   const kind = strField(rec, "kind");
-  const name = strField(rec, "name");
   const prompt = strField(rec, "prompt");
   const size = strField(rec, "size");
   const extraJson = strField(rec, "extraJson");
 
   if (!(USAGE_TEST_KINDS as readonly string[]).includes(kind)) {
-    return NextResponse.json({ ok: false, detail: `未知用途：${kind || "(空)"}` });
+    return NextResponse.json({
+      ok: false,
+      detail: `未知用途：${kind || "(空)"}`,
+    });
   }
-  if (!name) return NextResponse.json({ ok: false, detail: "缺少模型名" });
   if (!prompt) return NextResponse.json({ ok: false, detail: "请填写提示词" });
 
   // 条目名即模型参数值（设置页清单按模型名建条目）
   const model = name;
-  const up = await resolveUpstream(
-    name,
-    strField(rec, "baseUrl"),
-    strField(rec, "apiKey"),
-    normalizeEndpointPath(strField(rec, "path")),
-  );
-  if ("error" in up) return NextResponse.json({ ok: false, detail: up.error });
 
   const parsedExtra = parseExtraJson(extraJson);
-  if (!parsedExtra.ok) return NextResponse.json({ ok: false, detail: parsedExtra.detail });
+  if (!parsedExtra.ok)
+    return NextResponse.json({ ok: false, detail: parsedExtra.detail });
   const { extra } = parsedExtra;
 
   const startedAt = Date.now();

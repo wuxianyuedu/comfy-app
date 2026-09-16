@@ -2,7 +2,13 @@
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { MOTION_LABELS, TRANSITION_LABELS, type MotionLevel, type Shot, type Transition } from "@/lib/workshop/types";
+import {
+  MOTION_LABELS,
+  TRANSITION_LABELS,
+  type MotionLevel,
+  type Shot,
+  type Transition,
+} from "@/lib/workshop/types";
 
 interface Props {
   shots: Shot[];
@@ -40,18 +46,32 @@ export function motionPromptSuffix(motion: MotionLevel | undefined): string {
  * sequential preview player, per-shot duration & transition editing, and a
  * composition-plan export (JSON) as the pipeline's final artifact.
  */
-export function FinalComposer({ shots, title, onShotsChange, onRendered, rendered }: Props) {
+export function FinalComposer({
+  shots,
+  title,
+  onShotsChange,
+  onRendered,
+  rendered,
+}: Props) {
   const [playing, setPlaying] = React.useState(false);
   const [currentIdx, setCurrentIdx] = React.useState(0);
-  const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const timeline: TimelineEntry[] = shots.map((shot) => ({
     shot,
-    duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
+    duration:
+      typeof shot.duration === "number" && shot.duration > 0
+        ? shot.duration
+        : 4,
   }));
 
   const clipsDone = timeline.filter((entry) => entry.shot.clipUrl).length;
-  const totalDuration = timeline.reduce((acc, entry) => acc + entry.duration, 0);
+  const totalDuration = timeline.reduce(
+    (acc, entry) => acc + entry.duration,
+    0,
+  );
   const current = timeline[currentIdx];
 
   React.useEffect(() => {
@@ -74,7 +94,10 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
       const next = timeline[idx + 1];
       if (next && !next.shot.clipUrl && next.shot.imageUrl) {
         // Still frame fallback: hold for the shot duration.
-        imageTimerRef.current = setTimeout(() => advance(), next.duration * 1000);
+        imageTimerRef.current = setTimeout(
+          () => advance(),
+          next.duration * 1000,
+        );
       }
       return idx + 1;
     });
@@ -87,7 +110,10 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
     setCurrentIdx(0);
     setPlaying(true);
     if (first && !first.shot.clipUrl && first.shot.imageUrl) {
-      imageTimerRef.current = setTimeout(() => advance(), first.duration * 1000);
+      imageTimerRef.current = setTimeout(
+        () => advance(),
+        first.duration * 1000,
+      );
     }
   }
 
@@ -123,7 +149,9 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
         dialogue: entry.shot.dialogue ?? "",
       })),
     };
-    const blob = new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(plan, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -136,7 +164,9 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
   if (shots.length === 0) {
     return (
       <div className="border-border bg-surface rounded-2xl border border-dashed p-8 text-center">
-        <p className="text-muted-foreground text-sm">暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。</p>
+        <p className="text-muted-foreground text-sm">
+          暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。
+        </p>
       </div>
     );
   }
@@ -163,17 +193,24 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
             <button
               type="button"
               onClick={startPlayback}
-              disabled={clipsDone === 0 && timeline.every((entry) => !entry.shot.imageUrl)}
+              disabled={
+                clipsDone === 0 &&
+                timeline.every((entry) => !entry.shot.imageUrl)
+              }
               className="bg-primary rounded-xl px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
             >
-              <Icon name="play" size={13} className="mr-1 inline align-[-2px]" />
+              <Icon
+                name="play"
+                size={13}
+                className="mr-1 inline align-[-2px]"
+              />
               串播预览
             </button>
           ) : (
             <button
               type="button"
               onClick={stopPlayback}
-              className="text-ink rounded-xl bg-subtle px-4 py-2 text-xs font-semibold hover:bg-surface-2"
+              className="text-ink bg-subtle hover:bg-surface-2 rounded-xl px-4 py-2 text-xs font-semibold"
             >
               停止
             </button>
@@ -199,7 +236,8 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
         <div className="border-border bg-surface rounded-2xl border p-4">
           <div className="text-muted-foreground mb-2 flex items-center justify-between text-[11px]">
             <span>
-              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} / {String(timeline.length).padStart(2, "0")}
+              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /{" "}
+              {String(timeline.length).padStart(2, "0")}
             </span>
             <span>{current.shot.sceneHeading}</span>
           </div>
@@ -214,14 +252,21 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                 className="max-h-[420px] w-full"
               />
             ) : current.shot.imageUrl ? (
-               
-              <img src={current.shot.imageUrl} alt={current.shot.sceneHeading} className="max-h-[420px] w-full object-contain" />
+              <img
+                src={current.shot.imageUrl}
+                alt={current.shot.sceneHeading}
+                className="max-h-[420px] w-full object-contain"
+              />
             ) : (
-              <span className="text-muted-foreground text-xs">该镜头缺少画面，已跳过</span>
+              <span className="text-muted-foreground text-xs">
+                该镜头缺少画面，已跳过
+              </span>
             )}
           </div>
           {current.shot.dialogue && (
-            <p className="text-ink mt-2 text-center text-[12.5px]">{current.shot.dialogue}</p>
+            <p className="text-ink mt-2 text-center text-[12.5px]">
+              {current.shot.dialogue}
+            </p>
           )}
         </div>
       )}
@@ -243,8 +288,11 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
               </span>
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
                 {shot.imageUrl ? (
-                   
-                  <img src={shot.imageUrl} alt={shot.sceneHeading} className="h-full w-full object-cover" />
+                  <img
+                    src={shot.imageUrl}
+                    alt={shot.sceneHeading}
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <div className="text-muted-foreground grid h-full place-items-center">
                     <Icon name="image" size={16} />
@@ -252,43 +300,64 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-ink truncate text-xs font-medium">{shot.sceneHeading}</div>
+                <div className="text-ink truncate text-xs font-medium">
+                  {shot.sceneHeading}
+                </div>
                 <div className="text-muted-foreground mt-0.5 truncate text-[10.5px]">
-                  {shot.clipUrl ? "片段就绪" : shot.imageUrl ? "待生成视频（以静帧占位）" : "待生成画面"}
+                  {shot.clipUrl
+                    ? "片段就绪"
+                    : shot.imageUrl
+                      ? "待生成视频（以静帧占位）"
+                      : "待生成画面"}
                   {shot.dialogue ? ` · 字幕: ${shot.dialogue}` : ""}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <label className="block">
-                  <span className="text-muted-foreground mb-0.5 block text-[10px]">时长(s)</span>
+                  <span className="text-muted-foreground mb-0.5 block text-[10px]">
+                    时长(s)
+                  </span>
                   <input
                     type="number"
                     min={1}
                     max={20}
                     value={entry.duration}
                     onChange={(event) =>
-                      updateShot(shot.id, { duration: Math.max(1, Math.min(20, Number(event.target.value) || 4)) })
+                      updateShot(shot.id, {
+                        duration: Math.max(
+                          1,
+                          Math.min(20, Number(event.target.value) || 4),
+                        ),
+                      })
                     }
-                    className="border-border bg-bg text-ink w-14 rounded-md border px-2 py-1 text-xs outline-none focus:border-primary"
+                    className="border-border bg-bg text-ink focus:border-primary w-14 rounded-md border px-2 py-1 text-xs outline-none"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-muted-foreground mb-0.5 block text-[10px]">转场</span>
+                  <span className="text-muted-foreground mb-0.5 block text-[10px]">
+                    转场
+                  </span>
                   <DarkSelect
                     className="!bg-subtle !border-border text-xs"
                     value={shot.transition ?? "cut"}
-                    onChange={(value) => updateShot(shot.id, { transition: value as Transition })}
+                    onChange={(value) =>
+                      updateShot(shot.id, { transition: value as Transition })
+                    }
                     options={TRANSITIONS}
                     labels={TRANSITION_LABELS}
                     placeholder="转场"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-muted-foreground mb-0.5 block text-[10px]">运动</span>
+                  <span className="text-muted-foreground mb-0.5 block text-[10px]">
+                    运动
+                  </span>
                   <DarkSelect
                     className="!bg-subtle !border-border text-xs"
                     value={shot.motion ?? "medium"}
-                    onChange={(value) => updateShot(shot.id, { motion: value as MotionLevel })}
+                    onChange={(value) =>
+                      updateShot(shot.id, { motion: value as MotionLevel })
+                    }
                     options={MOTIONS}
                     labels={MOTION_LABELS}
                     placeholder="运动"
@@ -301,8 +370,9 @@ export function FinalComposer({ shots, title, onShotsChange, onRendered, rendere
       </div>
 
       {clipsDone < timeline.length && (
-        <div className="text-muted-foreground rounded-xl bg-subtle px-3 py-2 text-xs">
-          {timeline.length - clipsDone} 个镜头还没有视频片段 — 可回到「视频生成」补齐；导出清单时缺片段镜头将以静帧占位。
+        <div className="text-muted-foreground bg-subtle rounded-xl px-3 py-2 text-xs">
+          {timeline.length - clipsDone} 个镜头还没有视频片段 —
+          可回到「视频生成」补齐；导出清单时缺片段镜头将以静帧占位。
         </div>
       )}
     </div>

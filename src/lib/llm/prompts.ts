@@ -28,7 +28,7 @@ export const SCRIPT_MD_SYSTEM = `你是一位专业影视编剧助手。用户�
 
 export function buildScriptMarkdownMessages(
   meta: Pick<ProjectMeta, "type" | "tone" | "logline">,
-  idea: string
+  idea: string,
 ): LLMMessage[] {
   const user = `项目类型：${meta.type}
 基调/情绪：${meta.tone || "未指定"}
@@ -44,7 +44,7 @@ ${idea}`;
 /** 模板生成（离线）：把灵感/粗稿按固定模板拼成可编辑的剧本骨架，不调用模型。 */
 export function buildScriptTemplate(
   meta: Pick<ProjectMeta, "type" | "tone" | "logline">,
-  idea: string
+  idea: string,
 ): string {
   const metaLines = [
     meta.tone?.trim() ? `- 基调：${meta.tone.trim()}` : "",
@@ -109,21 +109,16 @@ export interface RawCharacter {
 }
 
 export function parseCharacter(text: string): RawCharacter {
-
   const obj = (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
-
     appearance: asText(obj.appearance),
 
     costume: asText(obj.costume),
 
     personality: asText(obj.personality),
-
   };
-
 }
-
 
 // Generate a full character card from a one-line brief.
 export const CHARACTER_FROM_BRIEF_SYSTEM = `你是角色设定助手。用户会给一句角色设定或灵感，请生成一个完整的、可用于 AI 绘画的视觉角色卡。
@@ -143,11 +138,9 @@ export interface RawCharacterFull extends RawCharacter {
 }
 
 export function parseCharacterFull(text: string): RawCharacterFull {
-
   const obj = (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
-
     name: asText(obj.name, "未命名角色"),
 
     appearance: asText(obj.appearance),
@@ -155,11 +148,8 @@ export function parseCharacterFull(text: string): RawCharacterFull {
     costume: asText(obj.costume),
 
     personality: asText(obj.personality),
-
   };
-
 }
-
 
 // ─────────────────────────────────────────────────────────────
 // Storyboard planning
@@ -183,7 +173,7 @@ export const STORYBOARD_SYSTEM = `你是分镜师。给定一个场景描述和�
 export function buildStoryboardMessages(
   scene: Pick<Scene, "heading" | "location" | "time" | "action" | "dialogue">,
   characterNames: string[],
-  styleName?: string
+  styleName?: string,
 ): LLMMessage[] {
   const user = `艺术风格：${styleName ?? "默认"}
 可选角色名单：${characterNames.join("、") || "（无）"}
@@ -208,27 +198,19 @@ export interface RawShot {
 
 export function parseStoryboard(text: string): RawShot[] {
   const data = extractJsonArray(text);
-  return data.map((datum) =>
-{
-
+  return data.map((datum) => {
     const obj = (datum ?? {}) as Record<string, unknown>;
 
     const st = asText(obj.shotType, "medium") as ShotType;
 
     return {
-
-      shotType: (SHOT_TYPES.includes(st) ? st : "medium"),
+      shotType: SHOT_TYPES.includes(st) ? st : "medium",
 
       description: asText(obj.description, ""),
 
       characterNames: Array.isArray(obj.characterNames)
-
         ? (obj.characterNames as unknown[]).map(String)
-
         : [],
-
     };
-
   });
-
 }

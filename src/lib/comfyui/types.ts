@@ -14,33 +14,33 @@
 
 /* ── Port colour per data type (matches ComfyUI's litegraph palette) ── */
 export const PORT_COLORS: Record<string, string> = {
-  MODEL:         "#7C5CFF",
-  CONDITIONING:  "#FF6B6B",
-  LATENT:        "#9B59FF",
-  IMAGE:         "#3FBF7F",
-  VAE:           "#FFA15C",
-  CLIP:          "#FFD93D",
-  CONTROL_NET:   "#3F8FDF",
-  MASK:          "#1F9F1F",
-  STYLE_MODEL:   "#C7A93D",
+  MODEL: "#7C5CFF",
+  CONDITIONING: "#FF6B6B",
+  LATENT: "#9B59FF",
+  IMAGE: "#3FBF7F",
+  VAE: "#FFA15C",
+  CLIP: "#FFD93D",
+  CONTROL_NET: "#3F8FDF",
+  MASK: "#1F9F1F",
+  STYLE_MODEL: "#C7A93D",
   UPSCALE_MODEL: "#236C36",
-  SAM_MODEL:     "#A93D3D",
-  GLIGEN:        "#FF6B6B",
-  AUDIO:         "#A93D3D",
-  VOICE:         "#A93D3D",
-  MOTION_DATA:   "#1F77B4",
-  MESH:          "#1F77B4",
-  POSE:          "#1F77B4",
-  BBOX:          "#A93D3D",
-  SEGS:          "#A93D3D",
-  INT:           "#3CA018",
-  FLOAT:         "#3CA018",
-  NUMBER:        "#3CA018",
-  STRING:        "#3CA018",
-  COMBO:         "#3CA018",
-  BOOLEAN:       "#3CA018",
+  SAM_MODEL: "#A93D3D",
+  GLIGEN: "#FF6B6B",
+  AUDIO: "#A93D3D",
+  VOICE: "#A93D3D",
+  MOTION_DATA: "#1F77B4",
+  MESH: "#1F77B4",
+  POSE: "#1F77B4",
+  BBOX: "#A93D3D",
+  SEGS: "#A93D3D",
+  INT: "#3CA018",
+  FLOAT: "#3CA018",
+  NUMBER: "#3CA018",
+  STRING: "#3CA018",
+  COMBO: "#3CA018",
+  BOOLEAN: "#3CA018",
   /* fallback: muted gray */
-  UNKNOWN:       "#7C7C8A",
+  UNKNOWN: "#7C7C8A",
 };
 
 export const DEFAULT_PORT_COLOR = "#7C7C8A";
@@ -75,117 +75,116 @@ export function portLabel(type: string | undefined | null): string {
  *    still colour edges correctly. */
 const OUTPUT_TYPES: Record<string, string[]> = {
   /* Loaders */
-  CheckpointLoaderSimple:          ["MODEL", "CLIP", "VAE"],
-  CheckpointLoader:                ["MODEL", "CLIP", "VAE"],
-  UNETLoader:                      ["MODEL"],
-  UNetLoader:                      ["MODEL"],
-  CLIPLoader:                      ["CLIP"],
-  DualCLIPLoader:                  ["CLIP", "CLIP"],
-  TripleCLIPLoader:                ["CLIP", "CLIP", "CLIP"],
-  VAELoader:                       ["VAE"],
-  ControlNetLoader:                ["CONTROL_NET"],
-  DiffControlNetLoader:            ["CONTROL_NET"],
-  StyleModelLoader:                ["STYLE_MODEL"],
-  GLIGENLoader:                    ["GLIGEN"],
-  UpscaleModelLoader:              ["UPSCALE_MODEL"],
-  LoraLoader:                      ["MODEL", "CLIP"],
-  LoraLoaderModelOnly:             ["MODEL"],
-  LoRAStacker:                     ["MODEL"],
-  HypernetworkLoader:              ["MODEL"],
+  CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
+  CheckpointLoader: ["MODEL", "CLIP", "VAE"],
+  UNETLoader: ["MODEL"],
+  UNetLoader: ["MODEL"],
+  CLIPLoader: ["CLIP"],
+  DualCLIPLoader: ["CLIP", "CLIP"],
+  TripleCLIPLoader: ["CLIP", "CLIP", "CLIP"],
+  VAELoader: ["VAE"],
+  ControlNetLoader: ["CONTROL_NET"],
+  DiffControlNetLoader: ["CONTROL_NET"],
+  StyleModelLoader: ["STYLE_MODEL"],
+  GLIGENLoader: ["GLIGEN"],
+  UpscaleModelLoader: ["UPSCALE_MODEL"],
+  LoraLoader: ["MODEL", "CLIP"],
+  LoraLoaderModelOnly: ["MODEL"],
+  LoRAStacker: ["MODEL"],
+  HypernetworkLoader: ["MODEL"],
   /* Samplers */
-  KSampler:                        ["LATENT"],
-  KSamplerAdvanced:                ["LATENT"],
-  KSamplerSelect:                  ["LATENT"],
-  SamplerCustom:                   ["LATENT", "VAE"],
-  SamplerCustomAdvanced:           ["LATENT", "VAE"],
-  SamplerDpmppEulerAncestralCFG:   ["LATENT"],
+  KSampler: ["LATENT"],
+  KSamplerAdvanced: ["LATENT"],
+  KSamplerSelect: ["LATENT"],
+  SamplerCustom: ["LATENT", "VAE"],
+  SamplerCustomAdvanced: ["LATENT", "VAE"],
+  SamplerDpmppEulerAncestralCFG: ["LATENT"],
   /* Latent */
-  EmptyLatentImage:                ["LATENT"],
-  EmptyLatentAudio:                ["AUDIO"],
-  EmptyImage:                      ["IMAGE"],
-  VAEDecode:                       ["IMAGE"],
-  VAEDecodeTiled:                  ["IMAGE"],
-  VAEEncode:                       ["LATENT"],
-  VAEEncodeTiled:                  ["LATENT"],
-  VAEEncodeForInpaint:             ["LATENT"],
-  LatentRotate:                    ["LATENT"],
-  LatentFlip:                      ["LATENT"],
-  LatentComposite:                 ["LATENT"],
-  LatentCompositeMasked:           ["LATENT"],
-  SetLatentNoiseMask:              ["LATENT"],
-  LatentCrop:                      ["LATENT"],
-  LatentBlend:                     ["LATENT"],
-  LatentFromBatch:                 ["LATENT"],
-  RepeatLatentBatch:               ["LATENT"],
-  LatentBatch:                     ["LATENT"],
-  LatentInterpolate:               ["LATENT"],
-  LatentUpfactor:                  ["LATENT"],
-  LatentUpscale:                   ["LATENT"],
-  LatentUpscaleBy:                 ["LATENT"],
+  EmptyLatentImage: ["LATENT"],
+  EmptyLatentAudio: ["AUDIO"],
+  EmptyImage: ["IMAGE"],
+  VAEDecode: ["IMAGE"],
+  VAEDecodeTiled: ["IMAGE"],
+  VAEEncode: ["LATENT"],
+  VAEEncodeTiled: ["LATENT"],
+  VAEEncodeForInpaint: ["LATENT"],
+  LatentRotate: ["LATENT"],
+  LatentFlip: ["LATENT"],
+  LatentComposite: ["LATENT"],
+  LatentCompositeMasked: ["LATENT"],
+  SetLatentNoiseMask: ["LATENT"],
+  LatentCrop: ["LATENT"],
+  LatentBlend: ["LATENT"],
+  LatentFromBatch: ["LATENT"],
+  RepeatLatentBatch: ["LATENT"],
+  LatentBatch: ["LATENT"],
+  LatentInterpolate: ["LATENT"],
+  LatentUpfactor: ["LATENT"],
+  LatentUpscale: ["LATENT"],
+  LatentUpscaleBy: ["LATENT"],
   /* Image */
-  LoadImage:                       ["IMAGE", "MASK"],
-  LoadImageMask:                   ["IMAGE", "MASK"],
-  SaveImage:                       [],
-  PreviewImage:                    [],
-  ImageScale:                      ["IMAGE"],
-  ImageScaleBy:                    ["IMAGE"],
-  ImageScaleToTotalPixels:         ["IMAGE"],
-  ImageUpscaleWithModel:           ["IMAGE"],
-  ImageBatch:                      ["IMAGE"],
-  ImageRepeat:                     ["IMAGE"],
-  ImageFromBatch:                  ["IMAGE"],
-  ImagePadForOutpaint:             ["IMAGE", "MASK"],
-  ImageComposite:                  ["IMAGE"],
-  ImageCompositeMasked:            ["IMAGE"],
-  ImageBlend:                      ["IMAGE"],
-  ImageInvert:                     ["IMAGE"],
-  ImageRGBToYUV:                   ["IMAGE", "MASK"],
-  ImageYUVToRGB:                   ["IMAGE"],
-  ImageColorToMask:                ["MASK"],
-  ImageColorToMaskV2:              ["MASK"],
-  ImageMaskToImage:                ["IMAGE"],
-  ImageToMask:                     ["MASK"],
-  MaskToImage:                     ["IMAGE"],
-  SolidMask:                       ["MASK"],
-  InvertMask:                      ["MASK"],
-  CropMask:                        ["MASK"],
-  MaskComposite:                   ["MASK"],
-  FeatherMask:                     ["MASK"],
-  GrowMask:                        ["MASK"],
-  ThresholdMask:                   ["MASK"],
+  LoadImage: ["IMAGE", "MASK"],
+  LoadImageMask: ["IMAGE", "MASK"],
+  SaveImage: [],
+  PreviewImage: [],
+  ImageScale: ["IMAGE"],
+  ImageScaleBy: ["IMAGE"],
+  ImageScaleToTotalPixels: ["IMAGE"],
+  ImageUpscaleWithModel: ["IMAGE"],
+  ImageBatch: ["IMAGE"],
+  ImageRepeat: ["IMAGE"],
+  ImageFromBatch: ["IMAGE"],
+  ImagePadForOutpaint: ["IMAGE", "MASK"],
+  ImageComposite: ["IMAGE"],
+  ImageCompositeMasked: ["IMAGE"],
+  ImageBlend: ["IMAGE"],
+  ImageInvert: ["IMAGE"],
+  ImageRGBToYUV: ["IMAGE", "MASK"],
+  ImageYUVToRGB: ["IMAGE"],
+  ImageColorToMask: ["MASK"],
+  ImageColorToMaskV2: ["MASK"],
+  ImageMaskToImage: ["IMAGE"],
+  ImageToMask: ["MASK"],
+  MaskToImage: ["IMAGE"],
+  SolidMask: ["MASK"],
+  InvertMask: ["MASK"],
+  CropMask: ["MASK"],
+  MaskComposite: ["MASK"],
+  FeatherMask: ["MASK"],
+  GrowMask: ["MASK"],
+  ThresholdMask: ["MASK"],
   /* Conditioning */
-  CLIPTextEncode:                  ["CONDITIONING"],
-  CLIPTextEncodeSDXL:              ["CONDITIONING", "CONDITIONING"],
-  CLIPTextEncodeSDXLRefiner:       ["CONDITIONING"],
-  ConditioningCombine:             ["CONDITIONING"],
-  ConditioningAverage:             ["CONDITIONING"],
-  ConditioningConcat:              ["CONDITIONING"],
-  ConditioningSetArea:             ["CONDITIONING"],
-  ConditioningSetAreaStrength:     ["CONDITIONING"],
-  ConditioningSetMask:             ["CONDITIONING"],
-  ControlNetApply:                 ["CONDITIONING"],
-  ControlNetApplyAdvanced:         ["CONDITIONING", "CONDITIONING"],
-  ApplyStyleModel:                 ["CONDITIONING"],
-  ApplyControlNet:                 ["CONDITIONING"],
+  CLIPTextEncode: ["CONDITIONING"],
+  CLIPTextEncodeSDXL: ["CONDITIONING", "CONDITIONING"],
+  CLIPTextEncodeSDXLRefiner: ["CONDITIONING"],
+  ConditioningCombine: ["CONDITIONING"],
+  ConditioningAverage: ["CONDITIONING"],
+  ConditioningConcat: ["CONDITIONING"],
+  ConditioningSetArea: ["CONDITIONING"],
+  ConditioningSetAreaStrength: ["CONDITIONING"],
+  ConditioningSetMask: ["CONDITIONING"],
+  ControlNetApply: ["CONDITIONING"],
+  ControlNetApplyAdvanced: ["CONDITIONING", "CONDITIONING"],
+  ApplyStyleModel: ["CONDITIONING"],
+  ApplyControlNet: ["CONDITIONING"],
   /* Misc */
-  ConditioningZeroOut:             ["CONDITIONING"],
-  ConditioningTimestepRange:       ["CONDITIONING"],
+  ConditioningZeroOut: ["CONDITIONING"],
+  ConditioningTimestepRange: ["CONDITIONING"],
   /* Audio (some ComfyUI audio extensions) */
-  VAEDecodeAudio:                  ["AUDIO"],
-  SaveAudio:                       [],
-  LoadAudio:                       ["AUDIO"],
+  VAEDecodeAudio: ["AUDIO"],
+  SaveAudio: [],
+  LoadAudio: ["AUDIO"],
   /* Wan / I2V / T2V  ── typical WanVideoWrapper node names */
-  WanVideoSampler:                 ["LATENT"],
-  WanVideoDecode:                  ["IMAGE"],
-  WanVideoImageToVideoEncode:      ["LATENT"],
-  WanVideoTextEncode:              ["CONDITIONING"],
-  WanVideoModelLoader:             ["MODEL", "CLIP", "VAE"],
-  WanVideoT5TextEncode:            ["CONDITIONING"],
+  WanVideoSampler: ["LATENT"],
+  WanVideoDecode: ["IMAGE"],
+  WanVideoImageToVideoEncode: ["LATENT"],
+  WanVideoTextEncode: ["CONDITIONING"],
+  WanVideoModelLoader: ["MODEL", "CLIP", "VAE"],
+  WanVideoT5TextEncode: ["CONDITIONING"],
 };
 
 /** Get the data type produced by a class's nth output slot. */
 export function inferOutputType(classType: string, slot: number): string {
-
   const types = OUTPUT_TYPES[classType];
 
   if (types && slot >= 0 && slot < types.length) return types[slot]!;
@@ -201,7 +200,6 @@ export function inferOutputType(classType: string, slot: number): string {
   const lower = classType.toLowerCase();
 
   if (slot === 0) {
-
     if (lower.startsWith("empty") && lower.includes("latent")) return "LATENT";
 
     if (lower.startsWith("empty") && lower.includes("image")) return "IMAGE";
@@ -210,21 +208,28 @@ export function inferOutputType(classType: string, slot: number): string {
 
     if (lower.startsWith("empty")) return "LATENT";
 
-    if (lower.includes("modelsampling") || lower.includes("modelloader") ||
-
-        lower.includes("patchmodel") || lower.includes("ipadapter") ||
-
-        lower.includes("rescalemodel") || lower.includes("modelsubpatch") ||
-
-        lower === "modelmerge" || lower.startsWith("modelload") ||
-
-        lower.startsWith("modelsamp"))
-
+    if (
+      lower.includes("modelsampling") ||
+      lower.includes("modelloader") ||
+      lower.includes("patchmodel") ||
+      lower.includes("ipadapter") ||
+      lower.includes("rescalemodel") ||
+      lower.includes("modelsubpatch") ||
+      lower === "modelmerge" ||
+      lower.startsWith("modelload") ||
+      lower.startsWith("modelsamp")
+    )
       return "MODEL";
 
-    if (lower.includes("dualclip") || lower.includes("tripleclip")) return "CLIP";
+    if (lower.includes("dualclip") || lower.includes("tripleclip"))
+      return "CLIP";
 
-    if (lower.includes("clip") && !lower.includes("textencode") && !lower.includes("applyclip")) return "CLIP";
+    if (
+      lower.includes("clip") &&
+      !lower.includes("textencode") &&
+      !lower.includes("applyclip")
+    )
+      return "CLIP";
 
     if (lower.includes("vae") && lower.includes("decode")) return "IMAGE";
 
@@ -232,58 +237,74 @@ export function inferOutputType(classType: string, slot: number): string {
 
     if (lower.includes("vae")) return "VAE";
 
-    if ((lower.includes("controlnet") || lower.includes("applycontrol")) && lower.includes("apply")) return "CONDITIONING";
+    if (
+      (lower.includes("controlnet") || lower.includes("applycontrol")) &&
+      lower.includes("apply")
+    )
+      return "CONDITIONING";
 
     if (lower.includes("controlnet")) return "CONTROL_NET";
 
-    if (lower.includes("upscale") && lower.includes("model")) return "UPSCALE_MODEL";
+    if (lower.includes("upscale") && lower.includes("model"))
+      return "UPSCALE_MODEL";
 
     if (lower.includes("upscale")) return "IMAGE";
 
-    if (lower.includes("style") && lower.includes("model")) return "STYLE_MODEL";
+    if (lower.includes("style") && lower.includes("model"))
+      return "STYLE_MODEL";
 
-    if (lower.includes("style") && lower.includes("apply")) return "CONDITIONING";
+    if (lower.includes("style") && lower.includes("apply"))
+      return "CONDITIONING";
 
-    if (lower.includes("ksampler") || (lower.includes("sampler") && !lower.includes("custom"))) return "LATENT";
+    if (
+      lower.includes("ksampler") ||
+      (lower.includes("sampler") && !lower.includes("custom"))
+    )
+      return "LATENT";
 
-    if (lower.includes("textencode") || lower.includes("conditioning")) return "CONDITIONING";
+    if (lower.includes("textencode") || lower.includes("conditioning"))
+      return "CONDITIONING";
 
-    if (lower.includes("loadimage") || lower.includes("loadmask")) return "IMAGE";
+    if (lower.includes("loadimage") || lower.includes("loadmask"))
+      return "IMAGE";
 
-    if (lower.includes("imagescale") || lower.includes("imagebatch") || lower.includes("imagecomposite") || lower.startsWith("image")) return "IMAGE";
+    if (
+      lower.includes("imagescale") ||
+      lower.includes("imagebatch") ||
+      lower.includes("imagecomposite") ||
+      lower.startsWith("image")
+    )
+      return "IMAGE";
 
     if (lower.includes("latent")) return "LATENT";
 
     if (lower.includes("audio") || lower.includes("sound")) return "AUDIO";
-
   }
 
   return "UNKNOWN";
-
 }
-
 
 /* ── Per-class *input* type table.  This is a small but high-signal
  *    lookup for the most-used nodes; fall through to heuristic
  *    `inferInputTypeByName` for everything else. */
 const INPUT_TYPES: Record<string, Record<string, string>> = {
   KSampler: {
-    model:        "MODEL",
-    positive:     "CONDITIONING",
-    negative:     "CONDITIONING",
+    model: "MODEL",
+    positive: "CONDITIONING",
+    negative: "CONDITIONING",
     latent_image: "LATENT",
-    seed:         "INT",
-    steps:        "INT",
-    cfg:          "FLOAT",
-    denoise:      "FLOAT",
+    seed: "INT",
+    steps: "INT",
+    cfg: "FLOAT",
+    denoise: "FLOAT",
     sampler_name: "COMBO",
-    scheduler:    "COMBO",
-    control:      "CONTROL_NET",
+    scheduler: "COMBO",
+    control: "CONTROL_NET",
   },
   KSamplerAdvanced: {
-    model:        "MODEL",
-    positive:     "CONDITIONING",
-    negative:     "CONDITIONING",
+    model: "MODEL",
+    positive: "CONDITIONING",
+    negative: "CONDITIONING",
     latent_image: "LATENT",
   },
   CLIPTextEncode: {
@@ -291,12 +312,12 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
     text: "STRING",
   },
   CLIPTextEncodeSDXL: {
-    clip_g:    "CLIP",
-    clip_l:    "CLIP",
-    width:     "INT",
-    height:    "INT",
-    text_g:    "STRING",
-    text_l:    "STRING",
+    clip_g: "CLIP",
+    clip_l: "CLIP",
+    width: "INT",
+    height: "INT",
+    text_g: "STRING",
+    text_l: "STRING",
   },
   CheckpointLoaderSimple: {
     ckpt_name: "COMBO",
@@ -310,12 +331,12 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
   },
   CLIPLoader: {
     clip_name: "COMBO",
-    type:      "COMBO",
+    type: "COMBO",
   },
   DualCLIPLoader: {
-    clip_name1:  "COMBO",
-    clip_name2:  "COMBO",
-    type:        "COMBO",
+    clip_name1: "COMBO",
+    clip_name2: "COMBO",
+    type: "COMBO",
   },
   VAELoader: {
     vae_name: "COMBO",
@@ -325,68 +346,68 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
   },
   VAEDecode: {
     samples: "LATENT",
-    vae:     "VAE",
+    vae: "VAE",
   },
   VAEEncode: {
     pixels: "IMAGE",
-    vae:    "VAE",
+    vae: "VAE",
   },
   EmptyLatentImage: {
-    width:      "INT",
-    height:     "INT",
+    width: "INT",
+    height: "INT",
     batch_size: "INT",
   },
   LoadImage: {
-    image:     "COMBO",
-    upload:    "IMAGE",
+    image: "COMBO",
+    upload: "IMAGE",
   },
   SaveImage: {
     filename_prefix: "STRING",
-    images:          "IMAGE",
+    images: "IMAGE",
   },
   LoraLoader: {
-    model:           "MODEL",
-    clip:            "CLIP",
-    lora_name:       "COMBO",
-    strength_model:  "FLOAT",
-    strength_clip:   "FLOAT",
+    model: "MODEL",
+    clip: "CLIP",
+    lora_name: "COMBO",
+    strength_model: "FLOAT",
+    strength_clip: "FLOAT",
   },
   ControlNetApply: {
-    conditioning:    "CONDITIONING",
-    control_net:     "CONTROL_NET",
-    image:           "IMAGE",
-    strength:        "FLOAT",
+    conditioning: "CONDITIONING",
+    control_net: "CONTROL_NET",
+    image: "IMAGE",
+    strength: "FLOAT",
   },
   ConditioningCombine: {
     conditioning_1: "CONDITIONING",
     conditioning_2: "CONDITIONING",
   },
   ConditioningAverage: {
-    conditioning_to:  "CONDITIONING",
+    conditioning_to: "CONDITIONING",
     conditioning_from: "CONDITIONING",
     conditioning_to_strength: "FLOAT",
   },
   ImageScale: {
-    image:      "IMAGE",
+    image: "IMAGE",
     upscale_method: "COMBO",
-    width:      "INT",
-    height:     "INT",
-    crop:       "COMBO",
+    width: "INT",
+    height: "INT",
+    crop: "COMBO",
   },
   ImageUpscaleWithModel: {
     upscale_model: "UPSCALE_MODEL",
-    image:         "IMAGE",
+    image: "IMAGE",
   },
   LatentUpscale: {
-    samples:     "LATENT",
+    samples: "LATENT",
     upscale_method: "COMBO",
-    width:       "INT",
-    height:      "INT",
-    crop:        "COMBO",
+    width: "INT",
+    height: "INT",
+    crop: "COMBO",
   },
   SetLatentNoiseMask: {
     samples: "LATENT",
-    mask:    "MASK",
+    mask: "MASK",
   },
 };
 
@@ -396,7 +417,7 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
 export function inferInputType(
   classType: string,
   inputName: string,
-  value?: unknown
+  value?: unknown,
 ): string {
   const fromTable = INPUT_TYPES[classType]?.[inputName];
   if (fromTable) return fromTable;
@@ -413,26 +434,51 @@ export function inferInputType(
 
 /** Heuristic over the input name alone. */
 export function inferInputTypeByName(name: string): string {
-
   const lower = name.toLowerCase();
 
   if (lower === "model" || lower.includes("model")) return "MODEL";
 
-  if (lower === "clip" || lower === "clip_g" || lower === "clip_l" || lower === "clip_name") return "CLIP";
+  if (
+    lower === "clip" ||
+    lower === "clip_g" ||
+    lower === "clip_l" ||
+    lower === "clip_name"
+  )
+    return "CLIP";
 
   if (lower === "vae" || lower === "vae_name") return "VAE";
 
-  if (lower === "positive" || lower === "negative" || lower === "conditioning" || lower.startsWith("cond")) return "CONDITIONING";
+  if (
+    lower === "positive" ||
+    lower === "negative" ||
+    lower === "conditioning" ||
+    lower.startsWith("cond")
+  )
+    return "CONDITIONING";
 
-  if (lower === "latent" || lower === "latent_image" || lower === "samples" || lower.endsWith("_latent")) return "LATENT";
+  if (
+    lower === "latent" ||
+    lower === "latent_image" ||
+    lower === "samples" ||
+    lower.endsWith("_latent")
+  )
+    return "LATENT";
 
-  if (lower === "image" || lower === "images" || lower === "pixels" || lower === "output_image") return "IMAGE";
+  if (
+    lower === "image" ||
+    lower === "images" ||
+    lower === "pixels" ||
+    lower === "output_image"
+  )
+    return "IMAGE";
 
   if (lower === "mask" || lower.endsWith("_mask")) return "MASK";
 
-  if (lower === "control_net" || lower.endsWith("_controlnet")) return "CONTROL_NET";
+  if (lower === "control_net" || lower.endsWith("_controlnet"))
+    return "CONTROL_NET";
 
-  if (lower === "upscale_model" || lower === "model_name") return "UPSCALE_MODEL";
+  if (lower === "upscale_model" || lower === "model_name")
+    return "UPSCALE_MODEL";
 
   if (lower === "audio" || lower === "waveform") return "AUDIO";
 
@@ -442,24 +488,59 @@ export function inferInputTypeByName(name: string): string {
 
   if (lower === "steps" || lower === "step") return "INT";
 
-  if (lower === "cfg" || lower === "denoise" || lower === "strength" || lower === "scale" || lower.includes("strength")) return "FLOAT";
+  if (
+    lower === "cfg" ||
+    lower === "denoise" ||
+    lower === "strength" ||
+    lower === "scale" ||
+    lower.includes("strength")
+  )
+    return "FLOAT";
 
-  if (lower === "width" || lower === "height" || lower === "batch_size" || lower.endsWith("_size") || lower.endsWith("_count")) return "INT";
+  if (
+    lower === "width" ||
+    lower === "height" ||
+    lower === "batch_size" ||
+    lower.endsWith("_size") ||
+    lower.endsWith("_count")
+  )
+    return "INT";
 
-  if (lower === "sampler_name" || lower === "scheduler" || lower === "method" || lower.endsWith("_method")) return "COMBO";
+  if (
+    lower === "sampler_name" ||
+    lower === "scheduler" ||
+    lower === "method" ||
+    lower.endsWith("_method")
+  )
+    return "COMBO";
 
-  if (lower.endsWith("_name") || lower === "filename_prefix" || lower === "ckpt_name") return "COMBO";
+  if (
+    lower.endsWith("_name") ||
+    lower === "filename_prefix" ||
+    lower === "ckpt_name"
+  )
+    return "COMBO";
 
-  if (lower === "text" || lower.endsWith("_text") || lower === "prompt" || lower === "negative_prompt") return "STRING";
+  if (
+    lower === "text" ||
+    lower.endsWith("_text") ||
+    lower === "prompt" ||
+    lower === "negative_prompt"
+  )
+    return "STRING";
 
-  if (lower === "noise_mask" || lower === "return_with_leftover_noise") return "COMBO";
+  if (lower === "noise_mask" || lower === "return_with_leftover_noise")
+    return "COMBO";
 
-  if (lower === "start_at_step" || lower === "end_at_step" || lower === "return_with_leftover_noise") return "COMBO";
+  if (
+    lower === "start_at_step" ||
+    lower === "end_at_step" ||
+    lower === "return_with_leftover_noise"
+  )
+    return "COMBO";
 
   return "UNKNOWN";
-
 }
-
 
 /* ── Multiline STRING detection ────────────────────────────
  *
@@ -523,7 +604,7 @@ const MULTILINE_NAME_HINT = /(prompt|text|caption|描述|提示)/i;
 export function inferIsMultiline(
   classType: string | undefined,
   name: string,
-  defaultValue?: unknown
+  defaultValue?: unknown,
 ): boolean {
   /* Single-line exclusion first — `filename_prefix` is a STRING but
    * ComfyUI renders it as a one-line input.  Beats both the static table
@@ -550,7 +631,7 @@ export function inferIsMultiline(
  *  small type label on the right side of a connection row. */
 export function edgeType(
   srcClass: string | undefined,
-  srcSlot: number
+  srcSlot: number,
 ): string {
   if (!srcClass) return "UNKNOWN";
   return inferOutputType(srcClass, srcSlot);

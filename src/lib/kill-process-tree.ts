@@ -77,7 +77,10 @@ export function isWindowsPlatform(
  * 用 `ps -o pgid= -p <pid>`：`=` 去掉表头，输出只剩一个数字。
  * 这是 POSIX 必备命令，不像 `lsof` / `pstree` 属于发行版可选。
  */
-export function readPgid(pid: number, timeoutMs = 2000): Promise<number | null> {
+export function readPgid(
+  pid: number,
+  timeoutMs = 2000,
+): Promise<number | null> {
   return new Promise((resolve) => {
     execFile(
       "ps",
@@ -133,7 +136,8 @@ async function killPosix(
 
   // 1) 向 OS 问「这个 pid 属于哪个进程组」——不猜。
   const pgid = await readPgid(pid);
-  const sharesCallerGroup = pgid !== null && ownPgid !== null && pgid === ownPgid;
+  const sharesCallerGroup =
+    pgid !== null && ownPgid !== null && pgid === ownPgid;
 
   if (pgid !== null && !sharesCallerGroup) {
     try {
@@ -171,7 +175,6 @@ async function killPosix(
   }
 }
 
-
 /**
  * 用官方 shell 插件托管的 sidecar 句柄回收整棵进程树（可从 Rust 壳调用）。
  *
@@ -188,7 +191,6 @@ export interface KillHostedChildOptions {
   kill: () => void;
 }
 
-
 /** 按**映像名**回收整棵树（目标不是本进程直接子进程、只拿得到名字时用）。
  *
  *  Windows：`taskkill /IM <name> /T /F`；POSIX：`pkill -x <name>`（精确匹配
@@ -197,7 +199,9 @@ export interface KillHostedChildOptions {
  *  与 `killProcessTree` 同属硬规则 3 的执行面：散在业务路由里各写一遍平台判据
  *  与命令，才是历史「单杀留孤儿」反复出现的原因。
  */
-export async function killProcessTreeByImage(image: string): Promise<KillProcessTreeResult> {
+export async function killProcessTreeByImage(
+  image: string,
+): Promise<KillProcessTreeResult> {
   if (!image.trim()) return { ok: false, via: "无映像名（跳过）" };
   if (isWindowsPlatform()) {
     return { ok: true, via: spawnTaskkill(windowsKillArgs(image, "image")) };
@@ -209,7 +213,10 @@ export async function killProcessTreeByImage(image: string): Promise<KillProcess
       resolve({ ok: false, via: `pkill -x ${image} 失败（${error.message}）` }),
     );
     child.on("close", (code) =>
-      resolve({ ok: code === 0 || code === 1, via: `pkill -x ${image}（exit=${code}）` }),
+      resolve({
+        ok: code === 0 || code === 1,
+        via: `pkill -x ${image}（exit=${code}）`,
+      }),
     );
   });
 }
@@ -229,12 +236,20 @@ export function windowsTaskkillPath(): string {
 }
 
 /** 构造 Windows 的回收命令参数（tree = `/PID <pid> /T /F`，image = `/IM <name> /T /F`）。 */
-export function windowsKillArgs(target: string, mode: KillProcessTreeMode): string[] {
-  return mode === "image" ? ["/IM", target, "/T", "/F"] : ["/PID", target, "/T", "/F"];
+export function windowsKillArgs(
+  target: string,
+  mode: KillProcessTreeMode,
+): string[] {
+  return mode === "image"
+    ? ["/IM", target, "/T", "/F"]
+    : ["/PID", target, "/T", "/F"];
 }
 
 /** 发起一次 taskkill（异步派发，不阻塞；调用方随后自行探测确认）。 */
-export function spawnTaskkill(args: string[], onDone?: (ok: boolean) => void): string {
+export function spawnTaskkill(
+  args: string[],
+  onDone?: (ok: boolean) => void,
+): string {
   const exe = windowsTaskkillPath();
   const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
   child.on("error", () => onDone?.(false));
@@ -248,17 +263,24 @@ export function spawnTaskkill(args: string[], onDone?: (ok: boolean) => void): s
  *  进程组信号），**再**用本模块的判据补一刀按 pid 的整树回收 —— 插件负责
  *  「快、跟随平台」，本模块负责「不漏」。两步都失败才算失败，且返回 `via`
  *  让壳日志能说明到底走了哪条路。 */
-export function killHostedChild(opts: KillHostedChildOptions): KillProcessTreeResult {
+export function killHostedChild(
+  opts: KillHostedChildOptions,
+): KillProcessTreeResult {
   const attempts: string[] = [];
   try {
     opts.kill();
     attempts.push("shell-plugin");
   } catch (error) {
-    attempts.push(`shell-plugin 失败（${error instanceof Error ? error.message : String(error)}）`);
+    attempts.push(
+      `shell-plugin 失败（${error instanceof Error ? error.message : String(error)}）`,
+    );
   }
   const direct = killProcessTreeSync({ pid: opts.handle, force: true });
   attempts.push(direct.via);
-  return { ok: direct.ok || attempts[0] === "shell-plugin", via: attempts.join(" → ") };
+  return {
+    ok: direct.ok || attempts[0] === "shell-plugin",
+    via: attempts.join(" → "),
+  };
 }
 
 /**
@@ -288,7 +310,10 @@ export async function killProcessTree(
  */
 export async function killProcessTreeWith(
   opts: KillProcessTreeOptions,
-  { windows = isWindowsPlatform(), image = "" }: { windows?: boolean; image?: string },
+  {
+    windows = isWindowsPlatform(),
+    image = "",
+  }: { windows?: boolean; image?: string },
 ): Promise<KillProcessTreeResult> {
   const { pid, detached = false, force = false, mode = "tree" } = opts;
   if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
@@ -323,7 +348,8 @@ export function killProcessTreeSync(
   const pgid = readPgidSync(pid);
   const ownPgid = readPgidSync(process.pid);
   // 与调用者同组时禁走组路径（否则会连带杀掉应用自己，见 killPosix 注释）。
-  const sharesCallerGroup = pgid !== null && ownPgid !== null && pgid === ownPgid;
+  const sharesCallerGroup =
+    pgid !== null && ownPgid !== null && pgid === ownPgid;
 
   if (pgid !== null && !sharesCallerGroup) {
     try {

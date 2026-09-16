@@ -39,7 +39,9 @@ export interface DevServerStatus {
   title: string;
 }
 
-export function deriveDevServerStatus(input: DevServerStatusInput): DevServerStatus {
+export function deriveDevServerStatus(
+  input: DevServerStatusInput,
+): DevServerStatus {
   const { everOnline, lastProbeOk, restarted, lastRestartAt } = input;
 
   if (!lastProbeOk && everOnline) {

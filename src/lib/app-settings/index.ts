@@ -21,7 +21,6 @@
  * 落盘默认值，因此全新安装开箱可用。文件被 git 忽略（本机配置）。
  */
 
-
 export type AppSettings = {
   trainerUrl: string;
   comfyLorasDir: string;
@@ -31,7 +30,7 @@ export type AppSettings = {
    *   - 便携版：<path>\python_embeded\python.exe + <path>\main.py
    *   - 桌面版：配置「实例根」（如 ComfyUI-Installs\ComfyUI2）——
    *     <path>\standalone-env\python.exe + <path>\ComfyUI\main.py
-     *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
+   *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
    *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py
    * 配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。
    */

@@ -6,10 +6,7 @@
 
 import { Icon } from "@/components/ui/icon";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type {
-  SourceFilter,
-  TypeFilter,
-} from "./workflow-library-config";
+import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 
 export interface ModelTagCount {
   id: string;
@@ -48,14 +45,15 @@ const TYPE_LABELS: Record<TypeFilter, string> = {
 /** 计数徽标（ DarkSelect 的 labels 支持 ReactNode）。 */
 function CountBadge({ count }: { count: number }) {
   return (
-    <span className="ml-2 shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] tabular-nums text-ink-faint">
+    <span className="bg-surface-2 text-ink-faint ml-2 shrink-0 rounded-full px-1.5 text-[11px] tabular-nums">
       {count}
     </span>
   );
 }
 
 /** 筛选触发按钮的统一样式：宽度收紧，靠内容自适应。 */
-const TRIGGER_CLS = "w-auto min-w-[104px] gap-x-1 rounded-full px-3 py-1 text-xs";
+const TRIGGER_CLS =
+  "w-auto min-w-[104px] gap-x-1 rounded-full px-3 py-1 text-xs";
 
 export function WorkflowLibraryFilters({
   sourceFilter,
@@ -157,7 +155,7 @@ export function WorkflowLibraryFilters({
       <button
         type="button"
         onClick={onManageModels}
-        className="flex items-center gap-1.5 rounded-full border border-border-strong px-3 py-1.5 text-xs font-medium text-ink-strong transition-colors hover:bg-subtle"
+        className="border-border-strong text-ink-strong hover:bg-subtle flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
         title="管理模型标签库"
       >
         <Icon name="tag" className="h-3.5 w-3.5" />

@@ -92,26 +92,23 @@ export function CanvasArea({
     return () => window.removeEventListener("pointerdown", handler);
   }, [menu]);
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      setMenu({ x: e.clientX, y: e.clientY });
-    },
-    []
-  );
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  }, []);
 
   const handleAction = useCallback(
     (id: string) => {
       setMenu(null);
       onContextAction?.(id);
     },
-    [onContextAction]
+    [onContextAction],
   );
 
   return (
     <div
       ref={containerRef}
-      className={`relative flex h-full w-full overflow-hidden bg-canvas ${className}`}
+      className={`bg-canvas relative flex h-full w-full overflow-hidden ${className}`}
       onContextMenu={handleContextMenu}
     >
       {/* Canvas content */}
@@ -120,12 +117,12 @@ export function CanvasArea({
       {/* ── Context Menu ── */}
       {menu && (
         <div
-          className="fixed z-9999 min-w-[200px] rounded-xl border border-border-strong bg-panel py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md"
+          className="border-border-strong bg-panel fixed z-9999 min-w-[200px] rounded-xl border py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md"
           style={{ left: menu.x, top: menu.y }}
         >
           {contextItems.map((item) =>
             item.divider ? (
-              <div key={item.id} className="my-1 h-px bg-border-strong" />
+              <div key={item.id} className="bg-border-strong my-1 h-px" />
             ) : (
               <button
                 key={item.id}
@@ -134,23 +131,23 @@ export function CanvasArea({
                 onClick={() => handleAction(item.id)}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors ${
                   item.disabled
-                    ? "cursor-not-allowed text-ink-fainter"
+                    ? "text-ink-fainter cursor-not-allowed"
                     : item.danger
-                    ? "text-red-700 hover:bg-red-500/10 dark:text-red-400"
-                    : "text-ink-strong hover:bg-subtle"
+                      ? "text-red-700 hover:bg-red-500/10 dark:text-red-400"
+                      : "text-ink-strong hover:bg-subtle"
                 }`}
               >
-                <span className="shrink-0 text-ink-fainter">{item.icon}</span>
+                <span className="text-ink-fainter shrink-0">{item.icon}</span>
                 {item.label}
               </button>
-            )
+            ),
           )}
         </div>
       )}
 
       {/* ── Bottom Toolbar ── */}
       <div className="absolute bottom-3 left-1/2 z-50 -translate-x-1/2">
-        <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-panel/95 px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
+        <div className="border-border-strong bg-panel/95 flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
           {/* Send / Run button */}
           <ToolbarButton
             title="执行"
@@ -163,29 +160,41 @@ export function CanvasArea({
           <ToolbarDivider />
 
           {/* Zoom out */}
-          <ToolbarButton title="缩小" onClick={() => onZoomChange?.(Math.max(10, zoom - 10))}>
+          <ToolbarButton
+            title="缩小"
+            onClick={() => onZoomChange?.(Math.max(10, zoom - 10))}
+          >
             −
           </ToolbarButton>
 
           {/* Zoom level */}
-          <span className="min-w-[48px] text-center text-xs text-ink-muted tabular-nums">
+          <span className="text-ink-muted min-w-[48px] text-center text-xs tabular-nums">
             {zoom}%
           </span>
 
           {/* Zoom in */}
-          <ToolbarButton title="放大" onClick={() => onZoomChange?.(Math.min(400, zoom + 10))}>
+          <ToolbarButton
+            title="放大"
+            onClick={() => onZoomChange?.(Math.min(400, zoom + 10))}
+          >
             +
           </ToolbarButton>
 
           <ToolbarDivider />
 
           {/* Fit screen */}
-          <ToolbarButton title="适应屏幕" onClick={() => onContextAction?.("fit-view")}>
+          <ToolbarButton
+            title="适应屏幕"
+            onClick={() => onContextAction?.("fit-view")}
+          >
             <Maximize size={13} />
           </ToolbarButton>
 
           {/* Toggle visibility */}
-          <ToolbarButton title="显示/隐藏" onClick={() => onContextAction?.("toggle-visibility")}>
+          <ToolbarButton
+            title="显示/隐藏"
+            onClick={() => onContextAction?.("toggle-visibility")}
+          >
             <Eye size={13} />
           </ToolbarButton>
 
@@ -213,7 +222,7 @@ export function CanvasArea({
           onClick={() => onMinimapToggle?.(!minimapVisible)}
           className={`absolute bottom-3 left-3 z-40 flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors ${
             minimapVisible
-              ? "border-violet-500/30 bg-violet-500/10 text-ink-strong"
+              ? "text-ink-strong border-violet-500/30 bg-violet-500/10"
               : "border-border-strong bg-panel/85 text-ink-fainter hover:text-ink-strong"
           } backdrop-blur-sm`}
         >
@@ -255,7 +264,7 @@ function ToolbarButton({
 }
 
 function ToolbarDivider() {
-  return <div className="mx-0.5 h-4 w-px bg-border-strong" />;
+  return <div className="bg-border-strong mx-0.5 h-4 w-px" />;
 }
 
 /* ── Menu Icons ──────────────────────────────────────── */

@@ -68,7 +68,7 @@ export function specToField(s: PortSpec): FieldDef {
   return {
     key: s.name,
     label: s.name,
-    type: (s.widget!) ?? "string",
+    type: s.widget! ?? "string",
     options: s.options,
     /* 与 String(s.default) 运行时一致（default 来自 manifest JSON，无 symbol），
      * 收窄以满足 no-base-to-string。 */
@@ -234,8 +234,10 @@ export async function getCustomNodesManifest(
     if (!res.ok) return null;
     const data: unknown = await res.json();
     if (
-      !data || typeof data !== "object" ||
-      !("nodes" in data) || !data.nodes
+      !data ||
+      typeof data !== "object" ||
+      !("nodes" in data) ||
+      !data.nodes
     ) {
       return null;
     }
@@ -262,7 +264,8 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     Object.assign(CUSTOM_NODE_TYPES, next);
     // Mirror the package origin map so ComfyNode can render the bottom-left
     // footer without re-parsing the manifest.
-    for (const k of Object.keys(CUSTOM_NODE_PACKAGE)) delete CUSTOM_NODE_PACKAGE[k];
+    for (const k of Object.keys(CUSTOM_NODE_PACKAGE))
+      delete CUSTOM_NODE_PACKAGE[k];
     Object.assign(CUSTOM_NODE_PACKAGE, nextPackages);
     // Notify live views (canvas menu, etc.) that the registry mutated.
     // Guarded for SSR — the broadcaster and the subscribers only run in the

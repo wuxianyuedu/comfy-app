@@ -1,4 +1,3 @@
-
 /**
  * Client-safe workflow graph preview helpers.
  *

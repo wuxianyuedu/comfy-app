@@ -9,10 +9,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 
-import {
-  parseModeContracts,
-  type ModeContract,
-} from "./model-mode-contract";
+import { parseModeContracts, type ModeContract } from "./model-mode-contract";
 
 const FILE = path.join(process.cwd(), "data", "workshop-mode-contracts.json");
 

@@ -1,11 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/auth-server";
 import {
-  isRecord,
-  normalizeEndpointPath,
   pendingDetail,
   queryVideoTask,
-  resolveUpstream,
+  readUsageTestPrologue,
   saveMediaToLocalTemp,
   strField,
 } from "~/lib/llm/usage-test.server";
@@ -31,22 +29,19 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   await getServerUser();
 
-  const body: unknown = await req.json().catch(() => ({}));
-  const rec = isRecord(body) ? body : {};
-  const name = strField(rec, "name");
+  /* 读 body / 取条目名 / 解析连接参数与提交路由同一份实现（§12.12）。 */
+  const prologue = await readUsageTestPrologue(req);
+  if (!prologue.ok)
+    return NextResponse.json({ ok: false, detail: prologue.detail });
+  const { name, rec, up } = prologue;
   const model = name; // 条目名即模型参数值（与提交路由一致）
   const taskId = strField(rec, "taskId");
 
-  if (!name) return NextResponse.json({ ok: false, detail: "缺少模型名" });
-  if (!taskId) return NextResponse.json({ ok: false, detail: "缺少任务 ID，无法继续查询" });
-
-  const up = await resolveUpstream(
-    name,
-    strField(rec, "baseUrl"),
-    strField(rec, "apiKey"),
-    normalizeEndpointPath(strField(rec, "path")),
-  );
-  if ("error" in up) return NextResponse.json({ ok: false, detail: up.error });
+  if (!taskId)
+    return NextResponse.json({
+      ok: false,
+      detail: "缺少任务 ID，无法继续查询",
+    });
 
   const startedAt = Date.now();
   try {

@@ -89,8 +89,11 @@ export async function queryInstanceByPath(
   //    main.py，① 必然落空。先试 setup 登记的启动器，再试解释器候选。
   const classify = classifyComfyInstall(root);
   const registered = readRegisteredLauncher(classify.instanceRoot ?? root);
-  const candidates: { cmd: string; via: string; source: InstanceDiscoverySource }[] =
-    [];
+  const candidates: {
+    cmd: string;
+    via: string;
+    source: InstanceDiscoverySource;
+  }[] = [];
   if (registered) {
     candidates.push({
       cmd: registered,

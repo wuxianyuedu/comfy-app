@@ -46,9 +46,7 @@ export const WORKSHOP_INPUT_TYPES = [
 
 export type WorkshopInputType = (typeof WORKSHOP_INPUT_TYPES)[number]["type"];
 
-const INPUT_TYPE_SET = new Set<string>(
-  WORKSHOP_INPUT_TYPES.map((t) => t.type),
-);
+const INPUT_TYPE_SET = new Set<string>(WORKSHOP_INPUT_TYPES.map((t) => t.type));
 
 export function isWorkshopInputType(v: unknown): v is WorkshopInputType {
   return typeof v === "string" && INPUT_TYPE_SET.has(v);
@@ -109,7 +107,11 @@ export function defaultInputsForMode(mode: string): Array<{
     case "M2I":
       return [...base, { type: "mask", field: "mask_image" }, ...size];
     case "INPAINT":
-      return [...base, { type: "image", field: "image" }, { type: "mask", field: "mask" }];
+      return [
+        ...base,
+        { type: "image", field: "image" },
+        { type: "mask", field: "mask" },
+      ];
     case "OUTPAINT":
       return [...base, { type: "image", field: "image" }, ...size];
     default:
@@ -152,9 +154,15 @@ export function outputKindForMode(mode: string): "image" | "video" | "audio" {
 /** 该模式是否为「图生」类（输入里带控制图 / 参考图）。 */
 export function modeUsesControlImage(mode: string): boolean {
   return defaultInputsForMode(mode).some((i) =>
-    ["image", "first-frame", "mask", "depth", "pose", "lineart", "edge"].includes(
-      i.type,
-    ),
+    [
+      "image",
+      "first-frame",
+      "mask",
+      "depth",
+      "pose",
+      "lineart",
+      "edge",
+    ].includes(i.type),
   );
 }
 
@@ -166,7 +174,8 @@ export function parseRemoteModeAdapters(raw: unknown): RemoteModeAdapter[] {
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
-    const mode = typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
+    const mode =
+      typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
     if (!mode || seen.has(mode)) continue;
     const inputs: Array<{ type: WorkshopInputType; field: string }> = [];
     if (Array.isArray(rec.inputs)) {
@@ -239,18 +248,24 @@ export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "negative", label: EXPOSED_PARAM_DISPLAY_LABEL.negative },
   { type: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size },
   { type: "duration", label: EXPOSED_PARAM_DISPLAY_LABEL.duration },
-  { type: "reference-image", label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"] },
+  {
+    type: "reference-image",
+    label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],
+  },
   { type: "first-frame", label: EXPOSED_PARAM_DISPLAY_LABEL["first-frame"] },
   { type: "last-frame", label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"] },
 ] as const;
 
-export type ModeContractInputType = (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
+export type ModeContractInputType =
+  (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
 
 const MODE_CONTRACT_INPUT_SET = new Set<string>(
   MODE_CONTRACT_INPUT_TYPES.map((t) => t.type),
 );
 
-export function isModeContractInputType(v: unknown): v is ModeContractInputType {
+export function isModeContractInputType(
+  v: unknown,
+): v is ModeContractInputType {
   return typeof v === "string" && MODE_CONTRACT_INPUT_SET.has(v);
 }
 
@@ -264,7 +279,8 @@ export function modeContractInputLabel(type: ModeContractInputType): string {
  *  与适配器侧的 WorkshopInputType 是**两套 id**，别混用：适配器口按接口请求体
  *  分得更细（契约的「尺寸」在适配器层拆成 aspect-ratio + megapixels + multiple），
  *  契约口是工坊对用户的统一口径（尺寸 / 参考图）。 */
-export type ModeContractInputId = ModeContractInputType | `reference-image-${number}`;
+export type ModeContractInputId =
+  ModeContractInputType | `reference-image-${number}`;
 
 export function isModeContractInputId(v: unknown): v is ModeContractInputId {
   if (typeof v !== "string") return false;
@@ -332,7 +348,8 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
-    const mode = typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
+    const mode =
+      typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
     if (!mode || seen.has(mode)) continue;
     const rawInputs = Array.isArray(rec.inputs) ? rec.inputs : [];
     const inputs = rawInputs.filter((i): i is ModeContractInputId =>

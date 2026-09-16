@@ -43,7 +43,10 @@ export async function POST(req: NextRequest) {
   const model = typeof rawModel === "string" ? rawModel.trim() : "";
 
   if (!baseUrl) {
-    return NextResponse.json({ ok: false, detail: "接口地址为空，请先填写或保存 Base URL" });
+    return NextResponse.json({
+      ok: false,
+      detail: "接口地址为空，请先填写或保存 Base URL",
+    });
   }
 
   /** 剥掉末段资源路径（/images、/videos 等）得到上一层 base。
@@ -56,9 +59,15 @@ export async function POST(req: NextRequest) {
       if (segs.length === 0) return null;
       const last = segs[segs.length - 1]?.toLowerCase() ?? "";
       if (
-        !["images", "videos", "chat", "completions", "embeddings", "audio", "moderations"].includes(
-          last,
-        )
+        ![
+          "images",
+          "videos",
+          "chat",
+          "completions",
+          "embeddings",
+          "audio",
+          "moderations",
+        ].includes(last)
       ) {
         return null;
       }
@@ -107,7 +116,9 @@ export async function POST(req: NextRequest) {
     const rawList = isRecord(parsed) ? parsed.data : undefined;
     const models = Array.isArray(rawList)
       ? rawList
-          .map((m) => (isRecord(m) && typeof m.id === "string" ? m.id.trim() : ""))
+          .map((m) =>
+            isRecord(m) && typeof m.id === "string" ? m.id.trim() : "",
+          )
           .filter((n) => n !== "")
       : [];
     let detail = `连接成功，服务端共 ${models.length} 个模型`;
@@ -119,6 +130,9 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, detail, models });
   } catch (e) {
-    return NextResponse.json({ ok: false, detail: errorMessage(e, "连接失败") });
+    return NextResponse.json({
+      ok: false,
+      detail: errorMessage(e, "连接失败"),
+    });
   }
 }

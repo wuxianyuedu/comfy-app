@@ -11,12 +11,40 @@ export const PSEUDO_FROST_NOISE_URL =
  *  React-Flow-applied `minWidth` without any layout gymnastics.  Each blob
  *  uses its own `filter: blur(Npx)` so the silhouette stays soft even when
  *  the user's CSS `transform: scale(...)` is applied via parent zoom. */
-export const PSEUDO_FROST_BLOBS: { left: string; top: string; w: string; h: string; alphaKey: "primary" | "secondary" | "cool" | "warm" | "shadow"; blurPx: number }[] = [
-  { left: "6%",  top: "10%", w: "58%", h: "42%", alphaKey: "primary",   blurPx: 28 },
-  { left: "18%", top: "62%", w: "62%", h: "32%", alphaKey: "secondary", blurPx: 22 },
-  { left: "62%", top: "6%",  w: "40%", h: "50%", alphaKey: "cool",      blurPx: 32 },
-  { left: "30%", top: "30%", w: "32%", h: "32%", alphaKey: "warm",      blurPx: 18 },
-  { left: "66%", top: "56%", w: "30%", h: "34%", alphaKey: "shadow",    blurPx: 24 },
+export const PSEUDO_FROST_BLOBS: {
+  left: string;
+  top: string;
+  w: string;
+  h: string;
+  alphaKey: "primary" | "secondary" | "cool" | "warm" | "shadow";
+  blurPx: number;
+}[] = [
+  {
+    left: "6%",
+    top: "10%",
+    w: "58%",
+    h: "42%",
+    alphaKey: "primary",
+    blurPx: 28,
+  },
+  {
+    left: "18%",
+    top: "62%",
+    w: "62%",
+    h: "32%",
+    alphaKey: "secondary",
+    blurPx: 22,
+  },
+  { left: "62%", top: "6%", w: "40%", h: "50%", alphaKey: "cool", blurPx: 32 },
+  { left: "30%", top: "30%", w: "32%", h: "32%", alphaKey: "warm", blurPx: 18 },
+  {
+    left: "66%",
+    top: "56%",
+    w: "30%",
+    h: "34%",
+    alphaKey: "shadow",
+    blurPx: 24,
+  },
 ];
 
 /** Build the per-mode colour table consumed by `PSEUDO_FROST_BLOBS.alphaKey`.
@@ -79,7 +107,15 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
  *  large — sampled backdrop is shown.  The blur radius is divided by the same
  *  scale so the effective on-screen blur stays ≈ 6px at every zoom.  Result:
  *  a genuine blurred view of the real canvas, with NO tiling at any zoom. */
-export function NodeFrost({ zoom, color, nodeMode }: { zoom: number; color: string | null; nodeMode: number }) {
+export function NodeFrost({
+  zoom,
+  color,
+  nodeMode,
+}: {
+  zoom: number;
+  color: string | null;
+  nodeMode: number;
+}) {
   if (!color || nodeMode === 0) return null;
   // Hold the on-screen footprint ≥ the node's zoom=1 size.
   const scale = Math.max(1, 1 / Math.max(zoom, 0.01));
@@ -114,7 +150,13 @@ export function NodeFrost({ zoom, color, nodeMode }: { zoom: number; color: stri
  *  a frosted layer react to zoom changes (their on-screen frost size must
  *  follow the viewport), and ordinary nodes stay put while zooming.
  * ------------------------------------------------------------------------- */
-export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
+export function FrostLayer({
+  color,
+  nodeMode,
+}: {
+  color: string | null;
+  nodeMode: number;
+}) {
   const zoom = useStore((state) => state.transform[2]);
   return <NodeFrost zoom={zoom} color={color} nodeMode={nodeMode} />;
 }

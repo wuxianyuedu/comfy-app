@@ -36,7 +36,7 @@ export const filmRouter = createTRPCRouter({
         videoWorkflowId: z.string().optional(),
         /** 文生视频镜头合成首帧用的图类工作流 id。 */
         imageWorkflowId: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       /* 建片（含分镜）收在 orchestrator 里：分镜解析 + 逐镜 params（帧数 / 帧率 /

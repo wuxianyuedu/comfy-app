@@ -10,7 +10,11 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     model: { list: { query: vi.fn().mockResolvedValue({ models: [] }) } },
     train: {
-      list: { query: vi.fn().mockResolvedValue({ jobs: [], backendConfigured: false }) },
+      list: {
+        query: vi
+          .fn()
+          .mockResolvedValue({ jobs: [], backendConfigured: false }),
+      },
       create: { mutate: vi.fn().mockResolvedValue({ id: "t-1" }) },
       cancel: { mutate: vi.fn().mockResolvedValue({}) },
     },

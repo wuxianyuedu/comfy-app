@@ -13,7 +13,10 @@
  *
  * 因此显示名以 ②（本地 label）为准：它就是画布上作者认得的那个名字，
  * 未被重命名时也是 IO 面板重命名框里显示的名字；缺失时才依次回退 ① → ③。 */
-import { ioLabel, type WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
+import {
+  ioLabel,
+  type WorkflowIOEntry,
+} from "~/components/studio/shared/workflow-io";
 import { sanitizeComboLabel } from "~/components/studio/workflow-utils";
 
 /** 本地勾选态在显示名上真正携带的字段（`toggleIO` 写入的 label +
@@ -74,7 +77,7 @@ function cleanName(value: string | undefined | null): string {
  *  一律返回 false。 */
 export function isWrapperAliasName(
   name: string | undefined | null,
-  classType?: string
+  classType?: string,
 ): boolean {
   const slot = cleanName(name);
   if (!slot) return false;
@@ -88,10 +91,12 @@ export function isWrapperAliasName(
  *  ComfyUI 不在这里放插件类名。用它区分「槽位名是平台自动编号的别名」
  *  （只能是机器名）与「槽位名是插件作者定的 pin 名」（可能是作者手写的
  *  任意字符串，不能当机器名清掉）。 */
-export function isSubgraphWrapperClassType(classType: string | undefined): boolean {
+export function isSubgraphWrapperClassType(
+  classType: string | undefined,
+): boolean {
   if (!classType) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    classType.trim()
+    classType.trim(),
   );
 }
 
@@ -121,7 +126,10 @@ export function isSubgraphWrapperClassType(classType: string | undefined): boole
  *  两个别的来源**都**指不出另一个名字、且槽位名不像自动编号别名时，无从判定，
  *  原样保留 —— 宁可留着旧值，也不误删作者命名。作者手写的名字永远不满足前提
  *  （它不等于 pin 名），因此不会被误伤。 */
-export function isMachineName(candidate: string | undefined, facts: ExposedNameFacts): boolean {
+export function isMachineName(
+  candidate: string | undefined,
+  facts: ExposedNameFacts,
+): boolean {
   const local = cleanName(candidate);
   const base = cleanName(facts.name);
   if (!local || !base) return false;
@@ -150,7 +158,7 @@ export function isStaleExposedAlias(
   aliasBase: string | undefined,
   enrichedLabel?: string,
   slotLabel?: string,
-  classType?: string
+  classType?: string,
 ): boolean {
   if (label === undefined || aliasBase === undefined) return false;
   const local = cleanName(label);
@@ -158,7 +166,12 @@ export function isStaleExposedAlias(
   if (!local || !base) return false;
   /* 本地存的不是这个 pin 的名字 → 不可能是这个 pin 的机器名。 */
   if (local !== base) return false;
-  return isMachineName(label, { name: aliasBase, enrichedLabel, slotLabel, classType });
+  return isMachineName(label, {
+    name: aliasBase,
+    enrichedLabel,
+    slotLabel,
+    classType,
+  });
 }
 
 /** 一个已暴露条目的显示名，与画布上该 pin 的标签逐字一致。
@@ -175,7 +188,7 @@ export function isStaleExposedAlias(
 export function resolveExposedLabel(
   local: ExposedLabelSource | undefined | null,
   enriched: WorkflowIOEntry | undefined | null,
-  fallbackName: string
+  fallbackName: string,
 ): string {
   const localLabel = cleanName(local?.label);
   const enrichedLabel = enriched ? cleanName(ioLabel(enriched)) : "";
@@ -183,7 +196,9 @@ export function resolveExposedLabel(
   const facts: ExposedNameFacts = {
     name: base,
     enrichedLabel,
-    ...(enriched?.slotLabel ? { slotLabel: cleanName(enriched.slotLabel) } : {}),
+    ...(enriched?.slotLabel
+      ? { slotLabel: cleanName(enriched.slotLabel) }
+      : {}),
     ...(enriched?.classType ? { classType: enriched.classType } : {}),
   };
   /* ① 本地那串明显是机器名：让位，走富化链。 */
@@ -206,8 +221,8 @@ export function resolveExposedLabel(
  *  「本地没重命名过」的情形（此时取富化名，没有富化名再回退原始 pin 名）。
  *  `type` 单独处理：本地缺省时保留富化类型，否则控件会从 select 退化成文本框。 */
 export function mergeExposedEntry<T extends WorkflowIOEntry>(
-  local: ExposedLabelSource & Partial<WorkflowIOEntry> | undefined | null,
-  enriched: T
+  local: (ExposedLabelSource & Partial<WorkflowIOEntry>) | undefined | null,
+  enriched: T,
 ): T {
   return {
     ...enriched,
@@ -265,7 +280,7 @@ export function enrichFromViewNodes(
         }[];
       }[]
     | null
-    | undefined
+    | undefined,
 ): Record<string, WorkflowIOEntry> {
   const out: Record<string, WorkflowIOEntry> = {};
   for (const node of nodes ?? []) {
@@ -284,7 +299,9 @@ export function enrichFromViewNodes(
         name: input.name,
         label,
         type: input.type ?? "*",
-        ...(input.multiline !== undefined ? { multiline: input.multiline } : {}),
+        ...(input.multiline !== undefined
+          ? { multiline: input.multiline }
+          : {}),
         ...(value !== undefined ? { defaultValue: value } : {}),
         ...(node.class_type ? { classType: node.class_type } : {}),
       };

@@ -63,9 +63,9 @@ describe("模式契约口 id 值域", () => {
     expect(nextReferenceImageId(["prompt", "reference-image", "size"])).toBe(
       "reference-image-2",
     );
-    expect(
-      nextReferenceImageId(["reference-image", "reference-image-2"]),
-    ).toBe("reference-image-3");
+    expect(nextReferenceImageId(["reference-image", "reference-image-2"])).toBe(
+      "reference-image-3",
+    );
   });
 
   it("时长口：视频模式内置契约带，生图模式不带", () => {
@@ -149,7 +149,9 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
     ]);
     const entries = modeContractEntries("t2i", stored);
     expect(entries.map((e) => e.id)).toEqual(["prompt", "reference-image-2"]);
-    expect(entries[1]?.label).toBe(exposedParamDisplayLabel("reference-image-2"));
+    expect(entries[1]?.label).toBe(
+      exposedParamDisplayLabel("reference-image-2"),
+    );
   });
 
   it("模式大小写不敏感（注册表按大写存）", () => {

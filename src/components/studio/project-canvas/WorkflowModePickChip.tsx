@@ -82,7 +82,7 @@ export function WorkflowModePickChip({
         type="button"
         onClick={() => setOpen((value) => !value)}
         disabled={disabled}
-        className={`nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-primary/55 bg-node-accent px-2.5 text-[12px] ${
+        className={`nodrag nopan border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] ${
           disabled ? "opacity-50" : ""
         }`}
       >
@@ -95,7 +95,7 @@ export function WorkflowModePickChip({
         {/* 不再显示 +N 徽章 — 弹层只列工作流实际支持的 N 个模式，
          *  trigger 只展示当前默认，没必要再用 +N 暗示"还有几个未展示" */}
         <span
-          className={`shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-ink-muted shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -120,7 +120,7 @@ export function WorkflowModePickChip({
           >
             {/* 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
             {items.length === 0 ? (
-              <div className="px-3 py-3 text-center text-[11px] text-ink-muted">
+              <div className="text-ink-muted px-3 py-3 text-center text-[11px]">
                 该工作流没有声明可用模式
               </div>
             ) : (

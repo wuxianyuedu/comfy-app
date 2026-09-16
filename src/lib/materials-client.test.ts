@@ -3,9 +3,18 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { deleteMaterial, fetchMaterials, readMaterialError, uploadMaterial } from "./materials-client";
+import {
+  deleteMaterial,
+  fetchMaterials,
+  readMaterialError,
+  uploadMaterial,
+} from "./materials-client";
 
-function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 400): Response {
+function jsonResponse(
+  body: unknown,
+  ok = true,
+  status = ok ? 200 : 400,
+): Response {
   return { ok, status, json: async () => body } as unknown as Response;
 }
 
@@ -15,7 +24,10 @@ function callArgs(fetchMock: ReturnType<typeof vi.fn>): {
   init?: RequestInit;
 } {
   const first = fetchMock.mock.calls[0] ?? [];
-  return { url: String(first[0] ?? ""), init: first[1] as RequestInit | undefined };
+  return {
+    url: String(first[0] ?? ""),
+    init: first[1] as RequestInit | undefined,
+  };
 }
 
 function item(over: Record<string, unknown> = {}) {
@@ -51,7 +63,10 @@ describe("readMaterialError", () => {
 describe("fetchMaterials", () => {
   it("返回收窄后的 folders 与 items", async () => {
     const fetchMock = vi.fn(async () =>
-      jsonResponse({ folders: [{ id: "ref", name: "参考素材", count: 1 }], items: [item()] }),
+      jsonResponse({
+        folders: [{ id: "ref", name: "参考素材", count: 1 }],
+        items: [item()],
+      }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -66,7 +81,9 @@ describe("fetchMaterials", () => {
   });
 
   it("搜索优先于 folder：有 q 时不带 folder 参数", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ folders: [], items: [] }));
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ folders: [], items: [] }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     await fetchMaterials({ scope: "cross", folder: "ref", q: "角色" });
     const { url } = callArgs(fetchMock);
@@ -79,19 +96,29 @@ describe("fetchMaterials", () => {
       "fetch",
       vi.fn(async () => jsonResponse({ error: "无权限" }, false, 403)),
     );
-    await expect(fetchMaterials({ scope: "project" })).rejects.toThrow("无权限");
+    await expect(fetchMaterials({ scope: "project" })).rejects.toThrow(
+      "无权限",
+    );
   });
 
   it("响应不 ok 且无 error 字段时用状态码兜底", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, false, 500)));
-    await expect(fetchMaterials({ scope: "project" })).rejects.toThrow("请求失败 (500)");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({}, false, 500)),
+    );
+    await expect(fetchMaterials({ scope: "project" })).rejects.toThrow(
+      "请求失败 (500)",
+    );
   });
 
   it("丢弃形状不符的条目，不把脏数据喂给视图", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        jsonResponse({ folders: [{ id: "ref" }], items: [item(), { id: "bad" }, "nope"] }),
+        jsonResponse({
+          folders: [{ id: "ref" }],
+          items: [item(), { id: "bad" }, "nope"],
+        }),
       ),
     );
     const res = await fetchMaterials({ scope: "project" });
@@ -110,7 +137,9 @@ describe("fetchMaterials", () => {
         },
       })),
     );
-    await expect(fetchMaterials({ scope: "project" })).rejects.toThrow("请求失败 (500)");
+    await expect(fetchMaterials({ scope: "project" })).rejects.toThrow(
+      "请求失败 (500)",
+    );
   });
 });
 
@@ -119,15 +148,23 @@ describe("uploadMaterial", () => {
     const fetchMock = vi.fn(async () => jsonResponse({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await uploadMaterial(new File(["x"], "a.png"), { folder: "ref", projectId: "p-1" });
+    await uploadMaterial(new File(["x"], "a.png"), {
+      folder: "ref",
+      projectId: "p-1",
+    });
     const fd1 = callArgs(fetchMock).init?.body as FormData;
     expect(fd1.get("folder")).toBe("ref");
     expect(fd1.get("projectId")).toBe("p-1");
     expect(fd1.get("shared")).toBeNull();
 
-    await uploadMaterial(new File(["x"], "b.png"), { folder: "ref", projectId: null });
-    const fd2 = ((fetchMock.mock.calls[1] as unknown[] | undefined)?.[1] as RequestInit | undefined)
-      ?.body as FormData;
+    await uploadMaterial(new File(["x"], "b.png"), {
+      folder: "ref",
+      projectId: null,
+    });
+    const fd2 = (
+      (fetchMock.mock.calls[1] as unknown[] | undefined)?.[1] as
+        RequestInit | undefined
+    )?.body as FormData;
     expect(fd2.get("shared")).toBe("true");
   });
 

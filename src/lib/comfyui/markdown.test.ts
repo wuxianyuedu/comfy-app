@@ -40,7 +40,7 @@ describe("markdownToHtml", () => {
   });
 
   it("XSS：事件属性所在标签被整体转义", () => {
-    const html = markdownToHtml('<img src=x onerror=alert(1)>');
+    const html = markdownToHtml("<img src=x onerror=alert(1)>");
     // 整个 <img> 被转义为文本，不产生可执行标签
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;img");

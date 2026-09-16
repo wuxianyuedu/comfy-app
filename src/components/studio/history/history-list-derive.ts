@@ -13,7 +13,9 @@ export interface TaskGroup {
 
 /** 筛选：ALL 表示不过滤。 */
 export function filterTasks(tasks: TaskItem[], filter: FilterKey): TaskItem[] {
-  return filter === "ALL" ? tasks : tasks.filter((task) => task.status === filter);
+  return filter === "ALL"
+    ? tasks
+    : tasks.filter((task) => task.status === filter);
 }
 
 /** 排序：newest 时间倒序，oldest 时间正序。返回新数组，不改入参。 */
@@ -28,7 +30,8 @@ export function sortTasks(tasks: TaskItem[], sort: SortKey): TaskItem[] {
 /** 各状态计数：ALL 为总数，其余按 status 累加。 */
 export function countByStatus(tasks: TaskItem[]): Record<string, number> {
   const countsMap: Record<string, number> = { ALL: tasks.length };
-  for (const task of tasks) countsMap[task.status] = (countsMap[task.status] ?? 0) + 1;
+  for (const task of tasks)
+    countsMap[task.status] = (countsMap[task.status] ?? 0) + 1;
   return countsMap;
 }
 
@@ -40,7 +43,10 @@ export function groupByDate(tasks: TaskItem[]): TaskGroup[] {
     if (!bucketMap.has(bucket)) bucketMap.set(bucket, []);
     bucketMap.get(bucket)!.push(task);
   }
-  return Array.from(bucketMap.entries()).map(([key, items]) => ({ key, items }));
+  return Array.from(bucketMap.entries()).map(([key, items]) => ({
+    key,
+    items,
+  }));
 }
 
 /**
@@ -57,11 +63,19 @@ export function paginateGroups(
   for (const group of groups) {
     if (remaining <= 0) break;
     const sliced = group.items.slice(0, remaining);
-    if (sliced.length > 0) visibleGroups.push({ key: group.key, items: sliced });
+    if (sliced.length > 0)
+      visibleGroups.push({ key: group.key, items: sliced });
     remaining -= group.items.length;
   }
-  const visibleTotal = visibleGroups.reduce((sum, group) => sum + group.items.length, 0);
-  return { visibleGroups, visibleTotal, canLoadMore: visibleTotal < total(groups) };
+  const visibleTotal = visibleGroups.reduce(
+    (sum, group) => sum + group.items.length,
+    0,
+  );
+  return {
+    visibleGroups,
+    visibleTotal,
+    canLoadMore: visibleTotal < total(groups),
+  };
 }
 
 function total(groups: TaskGroup[]): number {
@@ -74,7 +88,13 @@ export function emptyStateText(
   filterLabel: string,
 ): { title: string; hint: string } {
   if (filter === "ALL") {
-    return { title: "暂无任务记录", hint: "在创作台生成内容后，历史记录会显示在这里。" };
+    return {
+      title: "暂无任务记录",
+      hint: "在创作台生成内容后，历史记录会显示在这里。",
+    };
   }
-  return { title: `暂无${filterLabel}任务`, hint: "切换到「全部」可查看所有任务。" };
+  return {
+    title: `暂无${filterLabel}任务`,
+    hint: "切换到「全部」可查看所有任务。",
+  };
 }

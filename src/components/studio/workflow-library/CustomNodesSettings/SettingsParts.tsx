@@ -27,13 +27,15 @@ export function PortRow({
   // ComfyUI uses a fixed cyan-ish for outputs, category-derived for inputs.
   const dotColor = isOut ? "#06B6D4" : color;
   return (
-    <div className={`flex min-w-0 items-center gap-1 ${isOut ? "flex-row-reverse" : ""}`}>
+    <div
+      className={`flex min-w-0 items-center gap-1 ${isOut ? "flex-row-reverse" : ""}`}
+    >
       <span
         className="inline-block shrink-0 rounded-full"
         style={{ width: 7, height: 7, background: dotColor }}
       />
       <span
-        className="rounded px-1 text-[7.5px] font-bold uppercase leading-tight"
+        className="rounded px-1 text-[7.5px] leading-tight font-bold uppercase"
         style={{
           color,
           border: `1px solid ${color}66`,
@@ -133,10 +135,12 @@ export function ManifestSummary({
   summary: NonNullable<SettingsResp["summary"]>;
 }) {
   return (
-    <div className="mb-4 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted-foreground">
+    <div className="border-border bg-bg text-muted-foreground mb-4 rounded-lg border px-3 py-2 text-xs">
       当前清单：共 <b className="text-ink">{summary.totalNodes}</b> 个节点类型
       {summary.generatedAt ? ` · 生成于 ${summary.generatedAt}` : ""}
-      {summary.missingPaths?.length ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到` : ""}
+      {summary.missingPaths?.length
+        ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到`
+        : ""}
     </div>
   );
 }
@@ -144,31 +148,37 @@ export function ManifestSummary({
 /** Two-phase parse progress banner (scan → hash) — lifted verbatim from the
  *  main component's "nodes" tab render. Rendered only while `loading` and no
  *  summary exists yet (the caller keeps that condition). */
-export function ParseProgressBanner({
-  progress,
-}: {
-  progress: ParseProgress;
-}) {
+export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
   return (
-    <div className="mb-4 rounded-lg border border-dashed border-border bg-bg/50 px-3 py-3 text-xs text-muted-foreground">
+    <div className="border-border bg-bg/50 text-muted-foreground mb-4 rounded-lg border border-dashed px-3 py-3 text-xs">
       {/* Top line: current phase, with package counter (the user's
           primary interest). The .py file count is gone — they
           explicitly said it isn't useful. */}
       <div className="flex items-center gap-2">
-        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
+        <span className="bg-primary inline-block h-2 w-2 animate-pulse rounded-full" />
         {progress.phase === "hash" && progress.total > 0 ? (
           <span className="text-ink">
-            🔎 正在处理 <span className="font-mono">{progress.done}/{progress.total}</span> 个节点包
+            🔎 正在处理{" "}
+            <span className="font-mono">
+              {progress.done}/{progress.total}
+            </span>{" "}
+            个节点包
             {progress.parent && (
-              <span className="ml-2 truncate font-mono text-[11px] text-muted-foreground" title={progress.parent}>
+              <span
+                className="text-muted-foreground ml-2 truncate font-mono text-[11px]"
+                title={progress.parent}
+              >
                 · {progress.parent.split(/[\\/]/).slice(-2).join("/")}
               </span>
             )}
           </span>
         ) : progress.phase === "scan" && progress.discovered > 0 ? (
           <span className="text-ink">
-            📦 已发现 <span className="font-mono">{progress.discovered}</span> 个节点包
-            <span className="ml-2 text-muted-foreground text-[11px]">（总数待定，正在扫描…）</span>
+            📦 已发现 <span className="font-mono">{progress.discovered}</span>{" "}
+            个节点包
+            <span className="text-muted-foreground ml-2 text-[11px]">
+              （总数待定，正在扫描…）
+            </span>
           </span>
         ) : (
           <span>首次扫描目录中的节点包…</span>
@@ -178,10 +188,10 @@ export function ParseProgressBanner({
           K/M during hash. `progress.total > 0` only flips true at
           the end of the file walk when the parser announces M, so
           the bar cleanly transitions scan→hash. */}
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
+      <div className="bg-surface-2 mt-2 h-1.5 overflow-hidden rounded-full">
         {progress.phase === "hash" && progress.total > 0 ? (
           <div
-            className="h-full bg-primary transition-all duration-300 ease-out"
+            className="bg-primary h-full transition-all duration-300 ease-out"
             style={{
               width: `${Math.min(100, (progress.done / progress.total) * 100)}%`,
             }}
@@ -189,7 +199,7 @@ export function ParseProgressBanner({
         ) : (
           // Indeterminate progress: animated stripes moving left→right
           <div
-            className="h-full w-1/3 bg-primary"
+            className="bg-primary h-full w-1/3"
             style={{
               animation: "progressStripe 1.4s ease-in-out infinite",
             }}
@@ -198,7 +208,7 @@ export function ParseProgressBanner({
       </div>
       {progress.msg && (
         <div
-          className="mt-1.5 truncate font-mono text-[10px] text-muted-foreground"
+          className="text-muted-foreground mt-1.5 truncate font-mono text-[10px]"
           title={progress.msg}
         >
           {progress.msg}
@@ -225,28 +235,36 @@ export function ParseConsole({
   return (
     <div ref={logsRef} className="mb-4">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">解析日志</span>
+        <span className="text-muted-foreground text-xs font-medium">
+          解析日志
+        </span>
         {parsing && (
-          <span className="flex items-center gap-1.5 text-xs text-primary">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
+          <span className="text-primary flex items-center gap-1.5 text-xs">
+            <span className="bg-primary inline-block h-2 w-2 animate-pulse rounded-full" />
             解析中…
           </span>
         )}
       </div>
       {logs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-bg/30 p-3 text-center text-[11px] text-muted-foreground">
-          {parsing ? "等待第一条日志…" : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
+        <div className="border-border bg-bg/30 text-muted-foreground rounded-lg border border-dashed p-3 text-center text-[11px]">
+          {parsing
+            ? "等待第一条日志…"
+            : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
         </div>
       ) : (
         <div
           ref={consoleRef}
-          className="h-48 overflow-y-auto rounded-lg border border-border bg-black/70 p-3 font-mono text-[11px] leading-relaxed"
+          className="border-border h-48 overflow-y-auto rounded-lg border bg-black/70 p-3 font-mono text-[11px] leading-relaxed"
         >
           {logs.map((log, idx) => (
             <div
               key={`log-${idx}`}
               data-log-row
-              className={log.level === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-300/90"}
+              className={
+                log.level === "error"
+                  ? "text-red-700 dark:text-red-400"
+                  : "text-emerald-700 dark:text-emerald-300/90"
+              }
             >
               {log.msg}
             </div>
@@ -264,8 +282,8 @@ export function ReportCards({ report }: { report: ParseReport }) {
   return (
     <div className="mt-2">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-ink">最近解析结果</span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-ink text-sm font-medium">最近解析结果</span>
+        <span className="text-muted-foreground text-xs">
           {report.mode === "subset"
             ? `增量 +${report.addedNodes ?? 0}`
             : `${report.pathCount} 个目录 · ${report.totalNodes} 个节点`}
@@ -276,11 +294,14 @@ export function ReportCards({ report }: { report: ParseReport }) {
         {(report.packages ?? []).map((pkg) => {
           const st = STATUS_STYLE[pkg.status] ?? STATUS_STYLE.ok;
           return (
-            <div key={pkg.name} className="rounded-xl border border-border bg-bg p-3">
+            <div
+              key={pkg.name}
+              className="border-border bg-bg rounded-xl border p-3"
+            >
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-ink">{pkg.name}</span>
+                    <span className="text-ink font-medium">{pkg.name}</span>
                     <span
                       className="rounded-full px-2 py-0.5 text-[11px] font-medium"
                       style={{ background: st!.bg, color: st!.fg }}
@@ -288,15 +309,23 @@ export function ReportCards({ report }: { report: ParseReport }) {
                       {st!.label}
                     </span>
                   </div>
-                  <div className="truncate font-mono text-[11px] text-muted-foreground" title={pkg.path}>
+                  <div
+                    className="text-muted-foreground truncate font-mono text-[11px]"
+                    title={pkg.path}
+                  >
                     {pkg.path}
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-lg font-semibold" style={{ color: st!.fg }}>
+                  <div
+                    className="text-lg font-semibold"
+                    style={{ color: st!.fg }}
+                  >
                     {pkg.nodeCount}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">节点类型</div>
+                  <div className="text-muted-foreground text-[11px]">
+                    节点类型
+                  </div>
                 </div>
               </div>
               {pkg.nodeTypes?.length > 0 && (
@@ -304,13 +333,13 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
                     <span
                       key={ct}
-                      className="rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+                      className="bg-subtle text-muted-foreground rounded-md px-1.5 py-0.5 font-mono text-[11px]"
                     >
                       {ct}
                     </span>
                   ))}
                   {pkg.nodeTypes.length > 24 && (
-                    <span className="rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                    <span className="bg-subtle text-muted-foreground rounded-md px-1.5 py-0.5 font-mono text-[11px]">
                       +{pkg.nodeTypes.length - 24}
                     </span>
                   )}
@@ -319,7 +348,10 @@ export function ReportCards({ report }: { report: ParseReport }) {
               {pkg.errors?.length > 0 && (
                 <div className="mt-2 space-y-1">
                   {pkg.errors.map((er, j) => (
-                    <div key={j} className="font-mono text-[11px] text-red-700 dark:text-red-400">
+                    <div
+                      key={j}
+                      className="font-mono text-[11px] text-red-700 dark:text-red-400"
+                    >
                       ⚠ {er.file}: {er.error}
                     </div>
                   ))}

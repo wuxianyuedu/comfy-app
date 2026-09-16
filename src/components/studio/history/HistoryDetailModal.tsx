@@ -69,14 +69,17 @@ export function HistoryDetailModal({
 
   return (
     <div
-      className={overlayClass("modal", "z-90 flex items-center justify-center bg-canvas-deep p-4 backdrop-blur-sm sm:p-6 dark:bg-black/80")}
+      className={overlayClass(
+        "modal",
+        "bg-canvas-deep z-90 flex items-center justify-center p-4 backdrop-blur-sm sm:p-6 dark:bg-black/80",
+      )}
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-node"
+        className="border-border bg-node flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative flex items-center justify-between gap-3 border-b border-border-subtle px-5 py-3">
+        <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-5 py-3">
           <h3 className="u-title">任务详情</h3>
           <div className="flex items-center gap-2">
             <button
@@ -86,7 +89,7 @@ export function HistoryDetailModal({
                 if (!current?.id) return;
                 void actions.openFolder(current.id);
               }}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] text-ink-strong transition-colors hover:border-border-strong hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              className="border-border text-ink-strong hover:border-border-strong hover:text-ink inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
               title="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
             >
               <Folder size={12} />
@@ -94,11 +97,11 @@ export function HistoryDetailModal({
             </button>
             {actions.folderPopover && (
               <div
-                className="absolute top-[52px] right-5 z-10 w-[min(440px,calc(100vw-40px))] rounded-lg border border-border bg-panel-deep p-3 shadow-xl"
+                className="border-border bg-panel-deep absolute top-[52px] right-5 z-10 w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-ink-strong">
+                  <span className="text-ink-strong text-[11px] font-medium">
                     📂 在资源管理器中打开
                   </span>
                   <button
@@ -119,7 +122,10 @@ export function HistoryDetailModal({
                       scripts\install-comfyapp-helper.ps1
                     </code>{" "}
                     注册
-                    <code className="text-amber-700 dark:text-amber-300"> comfyapp://</code>{" "}
+                    <code className="text-amber-700 dark:text-amber-300">
+                      {" "}
+                      comfyapp://
+                    </code>{" "}
                     协议（仅本机、无需管理员）， 或直接{" "}
                     <a
                       href="/api/helper/install"
@@ -141,7 +147,7 @@ export function HistoryDetailModal({
                   <button
                     type="button"
                     onClick={() => void actions.copyPath()}
-                    className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:border-emerald-500/60 hover:text-emerald-700 dark:text-emerald-300"
+                    className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-700 hover:border-emerald-500/60 hover:text-emerald-700 dark:text-emerald-300"
                   >
                     📋 复制路径
                   </button>
@@ -157,13 +163,13 @@ export function HistoryDetailModal({
                     if (!current?.id) return;
                     void actions.downloadWorkflow(current.id);
                   }}
-                  className="rounded-md border border-border px-2.5 py-1 text-[11px] text-ink-strong transition-colors hover:border-border-strong hover:text-ink disabled:opacity-40"
+                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink rounded-md border px-2.5 py-1 text-[11px] transition-colors disabled:opacity-40"
                   title="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
                 >
                   下载工作流
                 </button>
                 <span
-                  className="hidden rounded bg-subtle px-1.5 py-0.5 text-[10px] text-ink-muted sm:inline"
+                  className="bg-subtle text-ink-muted hidden rounded px-1.5 py-0.5 text-[10px] sm:inline"
                   title={sourceLabel}
                 >
                   {sourceLabel}
@@ -181,7 +187,7 @@ export function HistoryDetailModal({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {detailLoading ? (
-            <p className="text-sm text-ink-muted">加载中…</p>
+            <p className="text-ink-muted text-sm">加载中…</p>
           ) : current ? (
             <div className="space-y-4">
               {current.images?.length > 0 ? (
@@ -189,7 +195,7 @@ export function HistoryDetailModal({
                   {current.images.map((img) => (
                     <div
                       key={img.localPath}
-                      className="group relative overflow-hidden rounded-xl border border-border-subtle"
+                      className="group border-border-subtle relative overflow-hidden rounded-xl border"
                     >
                       <MediaThumbnail
                         src={img.localPath}
@@ -201,7 +207,7 @@ export function HistoryDetailModal({
                       <a
                         href={img.localPath}
                         download
-                        className="absolute right-2 bottom-2 rounded bg-surface-2 px-2 py-0.5 text-[11px] text-ink opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-2"
+                        className="bg-surface-2 text-ink hover:bg-surface-2 absolute right-2 bottom-2 rounded px-2 py-0.5 text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
                       >
                         {isVideo(img.localPath) ? "下载视频" : "下载"}
                       </a>
@@ -209,25 +215,25 @@ export function HistoryDetailModal({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-ink-muted">该任务没有生成图像。</p>
+                <p className="text-ink-muted text-sm">该任务没有生成图像。</p>
               )}
 
               {showPrompt && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-ink-faint">
+                  <p className="text-ink-faint mb-1 text-xs font-semibold">
                     正向提示词
                   </p>
-                  <p className="text-sm break-words whitespace-pre-wrap text-ink-strong">
+                  <p className="text-ink-strong text-sm break-words whitespace-pre-wrap">
                     {prompt}
                   </p>
                 </div>
               )}
               {negativePrompt && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-ink-faint">
+                  <p className="text-ink-faint mb-1 text-xs font-semibold">
                     反向提示词
                   </p>
-                  <p className="text-sm break-words whitespace-pre-wrap text-ink-faint">
+                  <p className="text-ink-faint text-sm break-words whitespace-pre-wrap">
                     {negativePrompt}
                   </p>
                 </div>
@@ -235,24 +241,24 @@ export function HistoryDetailModal({
 
               {genValues.length === 0 ? (
                 /* 空态说明：让用户一眼知道是工作流没暴露参数，不是系统 bug。 */
-                <div className="rounded-lg border border-dashed border-border bg-card px-3 py-2.5 text-xs text-ink-muted">
+                <div className="border-border bg-card text-ink-muted rounded-lg border border-dashed px-3 py-2.5 text-xs">
                   本任务所用工作流未暴露常见生成参数（seed/steps/cfg
                   等在节点硬编码默认值中）。
                   如需查看完整参数，请展开下方的「原始 JSON」。
                 </div>
               ) : (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-ink-faint">
+                  <p className="text-ink-faint mb-1 text-xs font-semibold">
                     生成参数
                   </p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border border-border-subtle bg-card p-3 sm:grid-cols-3">
+                  <div className="border-border-subtle bg-card grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border p-3 sm:grid-cols-3">
                     {genValues.map((item) => (
                       <div key={item.label} className="flex flex-col gap-0.5">
                         <div className="flex items-baseline gap-2">
-                          <span className="shrink-0 text-[11px] text-ink-muted">
+                          <span className="text-ink-muted shrink-0 text-[11px]">
                             {item.label}
                           </span>
-                          <span className="min-w-0 font-mono text-[12px] break-words text-ink-bright">
+                          <span className="text-ink-bright min-w-0 font-mono text-[12px] break-words">
                             {typeof item.value === "string" ||
                             typeof item.value === "number"
                               ? String(item.value)
@@ -260,7 +266,7 @@ export function HistoryDetailModal({
                           </span>
                         </div>
                         {item.hint && (
-                          <span className="pl-0.5 text-[10px] leading-tight text-ink-muted/80">
+                          <span className="text-ink-muted/80 pl-0.5 text-[10px] leading-tight">
                             {item.hint}
                           </span>
                         )}
@@ -268,7 +274,7 @@ export function HistoryDetailModal({
                     ))}
                   </div>
                   {genValues.some((item) => item.hint) && (
-                    <p className="mt-1 text-[10px] leading-relaxed text-ink-muted">
+                    <p className="text-ink-muted mt-1 text-[10px] leading-relaxed">
                       注：种子字段在 control_after_generate=randomize
                       时为默认值，非本次执行的真实种子。
                     </p>
@@ -284,12 +290,12 @@ export function HistoryDetailModal({
 
               {hasParams && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-ink-faint">
+                  <p className="text-ink-faint mb-1 text-xs font-semibold">
                     参数
                   </p>
 
                   {paramRows.length > 0 && (
-                    <div className="mb-2 overflow-hidden rounded-lg border border-border-subtle">
+                    <div className="border-border-subtle mb-2 overflow-hidden rounded-lg border">
                       <table className="w-full text-[11px]">
                         <tbody>
                           {paramRows.map((input, i) => (
@@ -301,15 +307,15 @@ export function HistoryDetailModal({
                                 ":" +
                                 i
                               }
-                              className="border-b border-border-subtle last:border-b-0"
+                              className="border-border-subtle border-b last:border-b-0"
                             >
                               <td
-                                className="w-[36%] max-w-[180px] shrink-0 truncate border-r border-border-subtle bg-card px-2.5 py-1.5 align-top font-mono text-violet-700 dark:text-violet-300"
+                                className="border-border-subtle bg-card w-[36%] max-w-[180px] shrink-0 truncate border-r px-2.5 py-1.5 align-top font-mono text-violet-700 dark:text-violet-300"
                                 title={input.name}
                               >
                                 {input.name}
                               </td>
-                              <td className="px-2.5 py-1.5 break-words text-ink-bright">
+                              <td className="text-ink-bright px-2.5 py-1.5 break-words">
                                 {typeof input.value === "string"
                                   ? input.value
                                   : JSON.stringify(input.value)}
@@ -323,12 +329,12 @@ export function HistoryDetailModal({
 
                   {topLevelEntries.length > 0 && (
                     <details className="border-border-subtle bg-canvas-deep rounded-lg border">
-                      <summary className="cursor-pointer px-3 py-1.5 text-[11px] text-ink-muted select-none hover:text-ink-strong">
+                      <summary className="text-ink-muted hover:text-ink-strong cursor-pointer px-3 py-1.5 text-[11px] select-none">
                         原始 JSON ·{" "}
                         {topLevelEntries.length + (paramRows.length ? 1 : 0)}{" "}
                         个字段
                       </summary>
-                      <pre className="max-w-full border-t border-border-subtle p-3 text-[11px] break-all whitespace-pre-wrap text-ink-faint">
+                      <pre className="border-border-subtle text-ink-faint max-w-full border-t p-3 text-[11px] break-all whitespace-pre-wrap">
                         {JSON.stringify(
                           Object.fromEntries(topLevelEntries),
                           null,
@@ -341,7 +347,7 @@ export function HistoryDetailModal({
               )}
             </div>
           ) : (
-            <p className="text-sm text-ink-muted">未找到任务。</p>
+            <p className="text-ink-muted text-sm">未找到任务。</p>
           )}
         </div>
       </div>

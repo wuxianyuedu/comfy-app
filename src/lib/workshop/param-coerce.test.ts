@@ -7,7 +7,7 @@ describe("paramString", () => {
     expect(paramString("euler", "dpmpp_2m")).toBe("euler");
   });
 
-  it("空串落回缺省——参数表里的 \"\" 是「用户清空了输入框」，不是有效值", () => {
+  it('空串落回缺省——参数表里的 "" 是「用户清空了输入框」，不是有效值', () => {
     expect(paramString("", "normal")).toBe("normal");
   });
 

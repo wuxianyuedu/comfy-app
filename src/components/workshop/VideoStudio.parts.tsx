@@ -75,7 +75,7 @@ export function ChannelSwitch({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs"
         >
           <Icon name="settings" size={12} />
           API 通道设置
@@ -106,7 +106,7 @@ export function ChannelSwitch({
         <button
           type="button"
           onClick={onNextStage}
-          className="text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs font-medium hover:bg-surface-2"
+          className="text-ink bg-subtle hover:bg-surface-2 rounded-lg px-3 py-1.5 text-xs font-medium"
         >
           去合成 →
         </button>
@@ -114,16 +114,17 @@ export function ChannelSwitch({
 
       {/* Channel-specific gating hints (gentle, stage stays usable) */}
       {channel === "local" && (
-        <div className="text-muted-foreground rounded-lg bg-subtle px-3 py-2 text-xs">
+        <div className="text-muted-foreground bg-subtle rounded-lg px-3 py-2 text-xs">
           {workflowSelected
             ? "本地通道使用右侧「生成资源」里选定的视频工作流；工坊只暴露 提示词 / 尺寸 / 首帧，其余参数（步数、采样器、时长…）一律取工作流默认值。已生成的镜头图会自动上传为首帧。"
             : "本地通道需要先在右侧「生成资源」选择一个视频工作流（工作流库）。没有内置视频工作流可回落。已生成的镜头图会自动上传为首帧。"}
         </div>
       )}
       {channel === "api" && !apiReady && (
-        <div className="flex items-center gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
+        <div className="bg-amber/10 text-amber flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
           <Icon name="info" size={12} />
-          API 视频通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key 后即可使用。
+          API 视频通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key
+          后即可使用。
         </div>
       )}
     </>
@@ -131,17 +132,42 @@ export function ChannelSwitch({
 }
 
 /* ── Status pill for a shot's clip generation ── */
-export function ClipBadge({ status }: { status: NonNullable<Shot["clipStatus"]> }) {
-  const map: Record<NonNullable<Shot["clipStatus"]>, { label: string; cls: string }> = {
+export function ClipBadge({
+  status,
+}: {
+  status: NonNullable<Shot["clipStatus"]>;
+}) {
+  const map: Record<
+    NonNullable<Shot["clipStatus"]>,
+    { label: string; cls: string }
+  > = {
     idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: { label: "排队中", cls: "bg-amber-100 text-amber-800 dark:text-amber-300" },
-    running: { label: "生成中", cls: "bg-blue-100 text-blue-800 dark:text-blue-300" },
-    done: { label: "片段就绪", cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300" },
+    queued: {
+      label: "排队中",
+      cls: "bg-amber-100 text-amber-800 dark:text-amber-300",
+    },
+    running: {
+      label: "生成中",
+      cls: "bg-blue-100 text-blue-800 dark:text-blue-300",
+    },
+    done: {
+      label: "片段就绪",
+      cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
+    },
     failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
-    stale: { label: "待更新", cls: "bg-red-100 text-red-800 dark:text-red-300" },
+    stale: {
+      label: "待更新",
+      cls: "bg-red-100 text-red-800 dark:text-red-300",
+    },
   };
   const s = map[status];
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>;
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}
+    >
+      {s.label}
+    </span>
+  );
 }
 
 /* ── One shot row: first frame, prompt, duration/motion controls, generate ── */
@@ -171,14 +197,18 @@ export function ShotCard({
         <span className="bg-primary-soft text-primary grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
           {shot.index}
         </span>
-        <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
+        <span className="text-muted-foreground truncate text-xs">
+          {shot.sceneHeading}
+        </span>
         <ClipBadge status={clipStatus} />
         {clipStatus === "running" && (
           <span className="text-muted-foreground text-[10px]">
             {progress > 0 ? `${Math.round(progress)}%` : "排队中…"}
           </span>
         )}
-        <span className="text-faint ml-auto text-[10px]">{channel === "local" ? "本地" : "API"}</span>
+        <span className="text-faint ml-auto text-[10px]">
+          {channel === "local" ? "本地" : "API"}
+        </span>
       </div>
 
       {clipStatus === "running" && (
@@ -194,7 +224,11 @@ export function ShotCard({
         {/* First frame (auto-prefilled from 镜头生图) */}
         <div className="bg-elevated border-border h-16 w-24 shrink-0 overflow-hidden rounded-lg border">
           {shot.imageUrl ? (
-            <img src={shot.imageUrl} alt={shot.sceneHeading} className="h-full w-full object-cover" />
+            <img
+              src={shot.imageUrl}
+              alt={shot.sceneHeading}
+              className="h-full w-full object-cover"
+            />
           ) : (
             <div className="text-muted-foreground grid h-full place-items-center">
               <Icon name="image" size={14} />
@@ -212,13 +246,20 @@ export function ShotCard({
                 type="number"
                 min={1}
                 max={20}
-                value={typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 5}
+                value={
+                  typeof shot.duration === "number" && shot.duration > 0
+                    ? shot.duration
+                    : 5
+                }
                 onChange={(e) =>
                   onPatch({
-                    duration: Math.max(1, Math.min(20, Number(e.target.value) || 5)),
+                    duration: Math.max(
+                      1,
+                      Math.min(20, Number(e.target.value) || 5),
+                    ),
                   })
                 }
-                className="border-border bg-bg text-ink w-14 rounded-md border px-2 py-0.5 text-[11px] outline-none focus:border-primary"
+                className="border-border bg-bg text-ink focus:border-primary w-14 rounded-md border px-2 py-0.5 text-[11px] outline-none"
               />
             </label>
             <label className="flex items-center gap-1 text-[11px]">
@@ -232,25 +273,38 @@ export function ShotCard({
                 placeholder="运动"
               />
             </label>
-            <span className="text-faint text-[10px]">{framesFor(shot, fps)} 帧</span>
+            <span className="text-faint text-[10px]">
+              {framesFor(shot, fps)} 帧
+            </span>
           </div>
         </div>
         <button
           type="button"
           onClick={onGenerate}
-          disabled={clipStatus === "running" || !videoPrompt(shot) || (channel === "api" && !apiReady)}
+          disabled={
+            clipStatus === "running" ||
+            !videoPrompt(shot) ||
+            (channel === "api" && !apiReady)
+          }
           className="bg-primary/90 shrink-0 rounded-lg px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
         >
-          {clipStatus === "running" ? "生成中…" : shot.clipUrl ? "重新生成" : "生成片段"}
+          {clipStatus === "running"
+            ? "生成中…"
+            : shot.clipUrl
+              ? "重新生成"
+              : "生成片段"}
         </button>
       </div>
 
       {error && (
-        <p className="mt-2 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">{error}</p>
+        <p className="mt-2 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+          {error}
+        </p>
       )}
       {!shot.imageUrl && !error && (
         <p className="text-muted-foreground mt-2 text-[10.5px]">
-          该镜头暂无画面 — 将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
+          该镜头暂无画面 —
+          将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
         </p>
       )}
 

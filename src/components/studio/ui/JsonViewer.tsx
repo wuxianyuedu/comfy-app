@@ -35,12 +35,7 @@ import { Icon } from "@/components/ui/icon";
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
 type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [k: string]: JsonValue };
+  null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
@@ -79,7 +74,7 @@ function collectHits(root: JsonValue, query: string): Path[] {
     // object
     for (const k of Object.keys(node)) {
       if (k.toLowerCase().includes(q)) hits.push([...path, k]);
-      visit((node)[k]!, [...path, k]);
+      visit(node[k]!, [...path, k]);
     }
   };
 
@@ -152,7 +147,7 @@ function applyHighlights(
   body: HTMLElement,
   hits: Path[],
   hitIndex: number,
-  query: string
+  query: string,
 ) {
   clearPreviousHighlights(body);
   if (!query || hits.length === 0) return;
@@ -163,7 +158,7 @@ function applyHighlights(
   // 我们用一次"dry walk" 收集所有 lenArray (per textnode) 然后再 walk 替换.
 
   // ── 收集所有叶子 textNode 的命中数 (顺序 = 命中顺序) ──
-  const walker = (document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
       if (!parent) return NodeFilter.FILTER_REJECT;
@@ -180,7 +175,7 @@ function applyHighlights(
       }
       return NodeFilter.FILTER_REJECT;
     },
-  }));
+  });
 
   type HitNode = { node: Text; count: number };
   const targets: HitNode[] = [];
@@ -272,7 +267,10 @@ export function JsonViewer({
   // 树容器 ref (供 highlight + scroll 使用)
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const hits = useMemo(() => collectHits(data as JsonValue, query.trim()), [data, query]);
+  const hits = useMemo(
+    () => collectHits(data as JsonValue, query.trim()),
+    [data, query],
+  );
 
   // 数据 / query 变化: 重置 hitIndex（render 阶段同步，避免 effect 级联渲染）
   const [prevQuery, setPrevQuery] = useState(query);
@@ -297,7 +295,7 @@ export function JsonViewer({
     if (!bodyRef.current || hits.length === 0) return;
     const raf = requestAnimationFrame(() => {
       const el = bodyRef.current?.querySelector(
-        "mark.jv-hit-sub[data-jv-active-hit]"
+        "mark.jv-hit-sub[data-jv-active-hit]",
       ) as HTMLElement | null;
       if (!el) return;
       el.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -326,7 +324,7 @@ export function JsonViewer({
       if (hits.length === 0) return;
       setHitIndex((index) => (index + dir + hits.length) % hits.length);
     },
-    [hits.length]
+    [hits.length],
   );
 
   const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -354,7 +352,8 @@ export function JsonViewer({
 
   // ── 渲染 ──
   // collapseObjectsAfterLength: initialCollapsedDepth=0 → 不折叠, 否则按深度折叠
-  const collapseThreshold = initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
+  const collapseThreshold =
+    initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
 
   return (
     <div className="bg-panel-deep flex h-full min-h-0 flex-col">

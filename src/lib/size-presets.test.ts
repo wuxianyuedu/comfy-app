@@ -35,19 +35,43 @@ import {
 describe("size-presets：分辨率表", () => {
   it("图片与视频两个场景的 1k/2k/4k 取不同的值", () => {
     /* 图片场景（AI 出图）：长边 1024 / 2048 / 3840。 */
-    expect(resolutionDims("image", 16 / 9, "1k")).toEqual({ width: 1024, height: 576 });
-    expect(resolutionDims("image", 16 / 9, "2k")).toEqual({ width: 2048, height: 1152 });
-    expect(resolutionDims("image", 16 / 9, "4k")).toEqual({ width: 3840, height: 2160 });
+    expect(resolutionDims("image", 16 / 9, "1k")).toEqual({
+      width: 1024,
+      height: 576,
+    });
+    expect(resolutionDims("image", 16 / 9, "2k")).toEqual({
+      width: 2048,
+      height: 1152,
+    });
+    expect(resolutionDims("image", 16 / 9, "4k")).toEqual({
+      width: 3840,
+      height: 2160,
+    });
 
     /* 视频场景（显示器 / 视频行业标准）：2K = 2560×1440，4K UHD = 3840×2160。 */
-    expect(resolutionDims("video", 16 / 9, "1k")).toEqual({ width: 1280, height: 720 });
-    expect(resolutionDims("video", 16 / 9, "2k")).toEqual({ width: 2560, height: 1440 });
-    expect(resolutionDims("video", 16 / 9, "4k")).toEqual({ width: 3840, height: 2160 });
+    expect(resolutionDims("video", 16 / 9, "1k")).toEqual({
+      width: 1280,
+      height: 720,
+    });
+    expect(resolutionDims("video", 16 / 9, "2k")).toEqual({
+      width: 2560,
+      height: 1440,
+    });
+    expect(resolutionDims("video", 16 / 9, "4k")).toEqual({
+      width: 3840,
+      height: 2160,
+    });
   });
 
   it("竖屏比例按同一行取竖版宽高，不靠调用方求倒数", () => {
-    expect(resolutionDims("image", 3 / 4, "1k")).toEqual({ width: 768, height: 1024 });
-    expect(resolutionDims("video", 9 / 16, "2k")).toEqual({ width: 1440, height: 2560 });
+    expect(resolutionDims("image", 3 / 4, "1k")).toEqual({
+      width: 768,
+      height: 1024,
+    });
+    expect(resolutionDims("video", 9 / 16, "2k")).toEqual({
+      width: 1440,
+      height: 2560,
+    });
   });
 
   it("自定义比例落到最接近的预设行", () => {
@@ -143,9 +167,9 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
 
   it("摘要与默认值：分辨率档只说比例 + 档位，百万像素档追加倍数", () => {
     expect(sizeSpecSummary(DEFAULT_SIZE_SPEC)).toBe("3:4 / 1k");
-    expect(sizeSpecSummary({ ...DEFAULT_SIZE_SPEC, clarity: "2M", multiple: 32 })).toBe(
-      "3:4 / 2M / 32",
-    );
+    expect(
+      sizeSpecSummary({ ...DEFAULT_SIZE_SPEC, clarity: "2M", multiple: 32 }),
+    ).toBe("3:4 / 2M / 32");
   });
 
   it("反解：「WxH」字符串 / 宽高 → 尺寸表达（老数据回读）", () => {
@@ -167,7 +191,9 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     });
     /* 脏值/空值回退默认，不抛错。 */
     expect(sizeSpecFromText("")).toEqual(DEFAULT_SIZE_SPEC);
-    expect(normalizeSizeSpec({ ratio: "42:1", clarity: "999k" })).toEqual(DEFAULT_SIZE_SPEC);
+    expect(normalizeSizeSpec({ ratio: "42:1", clarity: "999k" })).toEqual(
+      DEFAULT_SIZE_SPEC,
+    );
   });
 
   it("toSizeSpec / normalizeSizeSpec：外部写法（短比例标签 / 旧字符串 / 对象）都收得下", () => {
@@ -182,7 +208,9 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     ).toEqual({ ratio: "16:9 横屏", clarity: "2M", multiple: 32 });
 
     /* toSizeSpec：对象 / "WxH" 字符串 / 脏值三态都归一。 */
-    expect(toSizeSpec({ ratio: "1:1 正方", clarity: "2k", multiple: 8 })).toEqual({
+    expect(
+      toSizeSpec({ ratio: "1:1 正方", clarity: "2k", multiple: 8 }),
+    ).toEqual({
       ratio: "1:1 正方",
       clarity: "2k",
       multiple: 8,
@@ -199,9 +227,9 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     expect(
       aspectLabelForDims(1080, 1920, ["1:1 (Square)", "16:9 (Widescreen)"]),
     ).toBeNull();
-    expect(aspectLabelForDims(1280, 720, ["1:1 (Square)", "16:9 (Widescreen)"])).toBe(
-      "16:9 (Widescreen)",
-    );
+    expect(
+      aspectLabelForDims(1280, 720, ["1:1 (Square)", "16:9 (Widescreen)"]),
+    ).toBe("16:9 (Widescreen)");
     expect(aspectLabelForDims(0, 0)).toBeNull();
   });
 });

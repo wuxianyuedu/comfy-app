@@ -171,7 +171,10 @@ export async function ensureDrizzleStudioUp(
     // 含 node_modules 的项目根，保证它能解析自身传递依赖。
     const nodeExe = process.execPath;
     const args = [bin, "studio", "--port", String(port), "--host", "127.0.0.1"];
-    appendSessionBanner("start", `▶ Drizzle Studio 启动会话  ${localTimestamp()}`);
+    appendSessionBanner(
+      "start",
+      `▶ Drizzle Studio 启动会话  ${localTimestamp()}`,
+    );
     note(`Drizzle Studio 未运行，按解析路径启动：${nodeExe} ${args.join(" ")}`);
     let child: ReturnType<typeof spawn>;
     try {

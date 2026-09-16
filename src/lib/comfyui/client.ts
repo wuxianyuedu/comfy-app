@@ -52,7 +52,10 @@ function probeTargets(configuredPort: number): { port: number; url: string }[] {
     return { port, url: comfyUiBaseUrl(port) };
   });
   if (!targets.some((t) => t.port === COMFY_WINDOW_PORT)) {
-    targets.push({ port: COMFY_WINDOW_PORT, url: comfyUiBaseUrl(COMFY_WINDOW_PORT) });
+    targets.push({
+      port: COMFY_WINDOW_PORT,
+      url: comfyUiBaseUrl(COMFY_WINDOW_PORT),
+    });
   }
   return targets;
 }
@@ -114,15 +117,12 @@ export function resetProbeMissLog(): void {
  */
 function forceIpv4Host(raw: string): string {
   try {
-
     const url = new URL(raw);
 
     if (url.hostname === "localhost") url.hostname = LOOPBACK_HOST;
 
     return url.toString().replace(/\/$/, "");
-
   } catch {
-
     return raw;
   }
 }
@@ -163,7 +163,9 @@ export async function resolveComfyBase(): Promise<string> {
             : COMFYUI_DEFAULT_PORT,
         ),
     );
-  } catch { url = new URL(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)); }
+  } catch {
+    url = new URL(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT));
+  }
   const host = url.hostname === "localhost" ? LOOPBACK_HOST : url.hostname;
   const configuredPort =
     settings.comfyuiPort && settings.comfyuiPort > 0
@@ -220,9 +222,10 @@ export async function resolveComfyBase(): Promise<string> {
    * 走到这里的前提是「问不到实例进程」——要么没配 comfyuiPath，要么按路径没
    * 命中（含查询失败/不可信），要么实例确实不是这个路径起的。 */
   if (await probePort(host, configuredPort)) {
-    _resolvedBase = host === LOOPBACK_HOST
-      ? comfyUiBaseUrl(configuredPort)
-      : `http://${host}:${configuredPort}`;
+    _resolvedBase =
+      host === LOOPBACK_HOST
+        ? comfyUiBaseUrl(configuredPort)
+        : `http://${host}:${configuredPort}`;
     logger.info(`[comfyui] Connected on configured port :${configuredPort}`);
     return _resolvedBase;
   }
@@ -296,8 +299,6 @@ export async function probeComfyBase(): Promise<string | null> {
   }
 }
 
-
-
 /**
  * Synchronous version — returns cached value or raw config (no probing).
  * Use this for non-critical reads where latency matters more than accuracy.
@@ -340,7 +341,7 @@ export type PromptResult = {
 
 export async function postPrompt(
   prompt: unknown,
-  clientId: string
+  clientId: string,
 ): Promise<PromptResult> {
   const base = await resolveComfyBase();
   const res = await fetch(`${base}/api/prompt`, {
@@ -351,7 +352,9 @@ export async function postPrompt(
   return (await res.json()) as PromptResult;
 }
 
-export async function getHistory(promptId: string): Promise<Record<string, unknown>> {
+export async function getHistory(
+  promptId: string,
+): Promise<Record<string, unknown>> {
   const res = await fetch(`${comfyBase()}/api/history/${promptId}`);
   return (await res.json()) as Record<string, unknown>;
 }
@@ -359,9 +362,8 @@ export async function getHistory(promptId: string): Promise<Record<string, unkno
 export async function getView(
   filename: string,
   subfolder: string,
-  type: string
+  type: string,
 ): Promise<Buffer> {
-
   const url = new URL(`${comfyBase()}/api/view`);
 
   url.searchParams.set("filename", filename);
@@ -375,14 +377,14 @@ export async function getView(
   if (!res.ok) throw new Error(`getView failed: ${res.status}`);
 
   return Buffer.from(await res.arrayBuffer());
-
 }
-
 
 // Returns the list of real filenames on disk for a model folder.
 export async function listModels(folder: string): Promise<string[]> {
   try {
-    const res = await fetch(`${comfyBase()}/api/models/${encodeURIComponent(folder)}`);
+    const res = await fetch(
+      `${comfyBase()}/api/models/${encodeURIComponent(folder)}`,
+    );
     if (!res.ok) return [];
     const data = (await res.json()) as string[];
     return Array.isArray(data) ? data : [];
@@ -409,7 +411,9 @@ export async function listModelFolders(): Promise<string[]> {
     });
     if (!res.ok) return [];
     const data = (await res.json()) as string[];
-    return Array.isArray(data) ? data.filter((datum) => typeof datum === "string" && datum.length > 0) : [];
+    return Array.isArray(data)
+      ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
+      : [];
   } catch {
     return [];
   }
@@ -418,7 +422,7 @@ export async function listModelFolders(): Promise<string[]> {
 export async function uploadImage(
   buffer: Buffer,
   filename: string,
-  type = "input"
+  type = "input",
 ): Promise<{ name?: string }> {
   const base = await resolveComfyBase();
   const form = new FormData();
@@ -429,7 +433,9 @@ export async function uploadImage(
     body: form,
   });
   if (!res.ok) {
-    throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
+    throw new Error(
+      `ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`,
+    );
   }
   return (await res.json()) as { name?: string };
 }

@@ -79,8 +79,14 @@ export function isPlainRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /** 把一份可能残缺的配置归一化：字符串字段取默认、path 强制根相对。 */
-export function sanitizeChannel(raw: unknown, fallback: ApiChannelStored): ApiChannelStored {
-  const src = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+export function sanitizeChannel(
+  raw: unknown,
+  fallback: ApiChannelStored,
+): ApiChannelStored {
+  const src = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
+    string,
+    unknown
+  >;
   const str = (key: string): string | undefined => {
     const v: unknown = src[key];
     return typeof v === "string" ? v : undefined;
@@ -99,7 +105,9 @@ export function sanitizeChannel(raw: unknown, fallback: ApiChannelStored): ApiCh
 /** 按环境变量拼出两个通道的默认配置（两个入口共用同一套变量名）。 */
 export type EnvLike = Record<string, string | undefined>;
 
-export function defaultChannelsFromEnv(env: EnvLike = process.env): WorkshopApiSettings {
+export function defaultChannelsFromEnv(
+  env: EnvLike = process.env,
+): WorkshopApiSettings {
   return {
     image: {
       baseUrl: env.WORKSHOP_API_IMAGE_BASE ?? "",
@@ -181,7 +189,10 @@ function pickStringByPath(payload: unknown, fieldPath?: string): string | null {
 
 /** 生图请求体（无适配器时的 OpenAI 兼容默认映射）。
  *  空串显式归一为 undefined（省略字段）——用 `??` 会把 "" 原样送进 payload。 */
-function defaultImageBody(req: ApiImageRequest, model: string): Record<string, unknown> {
+function defaultImageBody(
+  req: ApiImageRequest,
+  model: string,
+): Record<string, unknown> {
   return {
     model: model === "" ? undefined : model,
     prompt: req.prompt,
@@ -193,7 +204,10 @@ function defaultImageBody(req: ApiImageRequest, model: string): Record<string, u
 }
 
 /** 视频提交请求体（同步 / 异步上游共用；image 双写兼容两种命名）。 */
-function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, unknown> {
+function videoBody(
+  req: ApiVideoSubmitRequest,
+  model: string,
+): Record<string, unknown> {
   return {
     model: model === "" ? undefined : model,
     prompt: req.prompt,
@@ -225,7 +239,10 @@ export interface ApiChannelFetchOptions {
 export async function callImageGeneration(
   req: ApiImageRequest,
   channel: ApiChannelStored,
-  resolveTarget: (req: ApiImageRequest, channel: ApiChannelStored) => ApiUpstreamTarget | null,
+  resolveTarget: (
+    req: ApiImageRequest,
+    channel: ApiChannelStored,
+  ) => ApiUpstreamTarget | null,
   options: ApiChannelFetchOptions = {},
 ): Promise<string> {
   const target = resolveTarget(req, channel) ?? {
@@ -243,20 +260,28 @@ export async function callImageGeneration(
     res = await fetch(target.endpoint, {
       method: "POST",
       headers: target.apiKey
-        ? { "Content-Type": "application/json", Authorization: `Bearer ${target.apiKey}` }
+        ? {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${target.apiKey}`,
+          }
         : { "Content-Type": "application/json" },
-      body: JSON.stringify(options.bodyOverride ?? defaultImageBody(req, target.model)),
+      body: JSON.stringify(
+        options.bodyOverride ?? defaultImageBody(req, target.model),
+      ),
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (e) {
-    throw new Error(`API 生图请求失败: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(
+      `API 生图请求失败: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) throw upstreamError("API 生图失败", res.status, payload);
   /* 适配器指定了结果字段：只认那个字段（不再做通配提取，避免取到无关的
    * 同名字段）。命中即返回，未命中回落通配提取——与既有行为一致。 */
   const picked = pickStringByPath(payload, options.outputField);
-  const url = picked ?? extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
+  const url =
+    picked ?? extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
   if (!url) throw new Error("API 生图响应中未找到图片 URL / b64 数据");
   return url;
 }
@@ -267,7 +292,8 @@ export async function callVideoSubmit(
   channel: ApiChannelStored,
   options: ApiChannelFetchOptions = {},
 ): Promise<ApiVideoSubmitResult> {
-  if (!channel.baseUrl) throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
+  if (!channel.baseUrl)
+    throw new Error("API 视频通道未配置：请先填写 Base URL 与 API Key");
   let res: Response;
   try {
     res = await fetch(endpointFor(channel), {
@@ -277,7 +303,9 @@ export async function callVideoSubmit(
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (e) {
-    throw new Error(`API 视频提交失败: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(
+      `API 视频提交失败: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) throw upstreamError("API 视频提交失败", res.status, payload);
@@ -303,7 +331,9 @@ export async function callVideoPoll(
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
   } catch (e) {
-    throw new Error(`API 视频轮询失败: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(
+      `API 视频轮询失败: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) throw upstreamError("API 视频轮询失败", res.status, payload);

@@ -85,19 +85,15 @@ const FOLDER_TO_FIELDS: Record<string, string[]> = (() => {
  * Returns directory names (which ARE the model types).
  */
 export function modelFoldersForField(field: string): string[] {
-
   if (!field) return [];
 
   const exact = FIELD_TO_FOLDERS[field];
 
   if (exact) return exact;
 
-
-
   const lowerField = field.toLowerCase();
 
   const rules: [RegExp, string[]][] = [
-
     [/ckpt/, ["checkpoints"]],
 
     [/unet|diffusion/, ["unet", "diffusion_models"]],
@@ -126,7 +122,10 @@ export function modelFoldersForField(field: string): string[] {
 
     [/instantid/, ["instantid"]],
 
-    [/animatediff|motion_model/, ["animatediff_models", "animatediff_motion_lora"]],
+    [
+      /animatediff|motion_model/,
+      ["animatediff_models", "animatediff_motion_lora"],
+    ],
 
     [/insightface/, ["insightface"]],
 
@@ -137,50 +136,120 @@ export function modelFoldersForField(field: string): string[] {
     [/pose/, ["pose"]],
 
     [/\bmodel\b/, ["checkpoints"]],
-
   ];
 
   for (const [re, folders] of rules) {
-
     if (re.test(lowerField)) return folders;
-
   }
 
   return [];
-
 }
-
 
 /** Curated display metadata for the well-known ComfyUI directories. */
 const FOLDER_META: Record<string, { label: string; color: string }> = {
-  checkpoints: { label: "Checkpoint", color: "text-violet-700 dark:text-violet-300 bg-violet-500/15" },
-  loras: { label: "LoRA", color: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15" },
+  checkpoints: {
+    label: "Checkpoint",
+    color: "text-violet-700 dark:text-violet-300 bg-violet-500/15",
+  },
+  loras: {
+    label: "LoRA",
+    color: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15",
+  },
   vae: { label: "VAE", color: "text-sky-700 dark:text-sky-300 bg-sky-500/15" },
-  clip: { label: "CLIP", color: "text-teal-700 dark:text-teal-300 bg-teal-500/15" },
-  clip_vision: { label: "CLIP Vision", color: "text-teal-700 dark:text-teal-300 bg-teal-500/15" },
-  text_encoders: { label: "Text Encoder", color: "text-teal-700 dark:text-teal-300 bg-teal-500/15" },
-  unet: { label: "UNet", color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15" },
-  diffusion_models: { label: "Diffusion Models", color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15" },
-  diffusers: { label: "Diffusers", color: "text-indigo-700 dark:text-indigo-300 bg-indigo-500/15" },
-  controlnet: { label: "ControlNet", color: "text-amber-700 dark:text-amber-300 bg-amber-500/15" },
+  clip: {
+    label: "CLIP",
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+  },
+  clip_vision: {
+    label: "CLIP Vision",
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+  },
+  text_encoders: {
+    label: "Text Encoder",
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+  },
+  unet: {
+    label: "UNet",
+    color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
+  },
+  diffusion_models: {
+    label: "Diffusion Models",
+    color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
+  },
+  diffusers: {
+    label: "Diffusers",
+    color: "text-indigo-700 dark:text-indigo-300 bg-indigo-500/15",
+  },
+  controlnet: {
+    label: "ControlNet",
+    color: "text-amber-700 dark:text-amber-300 bg-amber-500/15",
+  },
   embeddings: { label: "Embedding", color: "text-pink-600 bg-pink-500/15" },
-  upscale_models: { label: "Upscale", color: "text-rose-700 dark:text-rose-300 bg-rose-500/15" },
-  ipadapter: { label: "IP-Adapter", color: "text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-500/15" },
-  style_models: { label: "Style", color: "text-orange-700 dark:text-orange-300 bg-orange-500/15" },
-  hypernetworks: { label: "Hypernetwork", color: "text-lime-600 bg-lime-500/15" },
-  gligen: { label: "GLIGEN", color: "text-purple-700 dark:text-purple-300 bg-purple-500/15" },
-  photomaker: { label: "PhotoMaker", color: "text-orange-700 dark:text-orange-300 bg-orange-500/15" },
-  instantid: { label: "InstantID", color: "text-orange-700 dark:text-orange-300 bg-orange-500/15" },
-  animatediff_models: { label: "AnimateDiff", color: "text-blue-700 dark:text-blue-300 bg-blue-500/15" },
-  animatediff_motion_lora: { label: "AnimateDiff LoRA", color: "text-blue-700 dark:text-blue-300 bg-blue-500/15" },
-  insightface: { label: "InsightFace", color: "text-red-700 dark:text-red-300 bg-red-500/15" },
-  ultralytics: { label: "Ultralytics", color: "text-red-700 dark:text-red-300 bg-red-500/15" },
+  upscale_models: {
+    label: "Upscale",
+    color: "text-rose-700 dark:text-rose-300 bg-rose-500/15",
+  },
+  ipadapter: {
+    label: "IP-Adapter",
+    color: "text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-500/15",
+  },
+  style_models: {
+    label: "Style",
+    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
+  },
+  hypernetworks: {
+    label: "Hypernetwork",
+    color: "text-lime-600 bg-lime-500/15",
+  },
+  gligen: {
+    label: "GLIGEN",
+    color: "text-purple-700 dark:text-purple-300 bg-purple-500/15",
+  },
+  photomaker: {
+    label: "PhotoMaker",
+    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
+  },
+  instantid: {
+    label: "InstantID",
+    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
+  },
+  animatediff_models: {
+    label: "AnimateDiff",
+    color: "text-blue-700 dark:text-blue-300 bg-blue-500/15",
+  },
+  animatediff_motion_lora: {
+    label: "AnimateDiff LoRA",
+    color: "text-blue-700 dark:text-blue-300 bg-blue-500/15",
+  },
+  insightface: {
+    label: "InsightFace",
+    color: "text-red-700 dark:text-red-300 bg-red-500/15",
+  },
+  ultralytics: {
+    label: "Ultralytics",
+    color: "text-red-700 dark:text-red-300 bg-red-500/15",
+  },
   sam: { label: "SAM", color: "text-red-700 dark:text-red-300 bg-red-500/15" },
-  liveportrait: { label: "LivePortrait", color: "text-yellow-700 dark:text-yellow-300 bg-yellow-500/15" },
-  pose: { label: "Pose", color: "text-slate-700 dark:text-slate-300 bg-slate-500/15" },
-  adetailer: { label: "ADetailer", color: "text-red-700 dark:text-red-300 bg-red-500/15" },
-  blip: { label: "BLIP", color: "text-teal-700 dark:text-teal-300 bg-teal-500/15" },
-  background_removal: { label: "Background Removal", color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15" },
+  liveportrait: {
+    label: "LivePortrait",
+    color: "text-yellow-700 dark:text-yellow-300 bg-yellow-500/15",
+  },
+  pose: {
+    label: "Pose",
+    color: "text-slate-700 dark:text-slate-300 bg-slate-500/15",
+  },
+  adetailer: {
+    label: "ADetailer",
+    color: "text-red-700 dark:text-red-300 bg-red-500/15",
+  },
+  blip: {
+    label: "BLIP",
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+  },
+  background_removal: {
+    label: "Background Removal",
+    color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
+  },
 };
 
 const FALLBACK_PALETTE = [
@@ -197,15 +266,12 @@ const FALLBACK_PALETTE = [
 ];
 
 function hashString(s: string): number {
-
   let hash = 0;
 
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) | 0;
 
   return Math.abs(hash);
-
 }
-
 
 /** Display metadata for a directory name (curated label / color or derived). */
 export function folderMeta(folder: string): { label: string; color: string } {

@@ -23,15 +23,14 @@ interface CacheStore {
 const MAX_ENTRIES = 256;
 
 function getStore(): CacheStore {
-
-  const globalObj = globalThis as unknown as { __comfyServerCache?: CacheStore };
+  const globalObj = globalThis as unknown as {
+    __comfyServerCache?: CacheStore;
+  };
 
   globalObj.__comfyServerCache ??= { map: new Map(), max: MAX_ENTRIES };
 
   return globalObj.__comfyServerCache;
-
 }
-
 
 /**
  * Return a cached value if still fresh, otherwise call `build` (which may be
@@ -40,7 +39,7 @@ function getStore(): CacheStore {
 export async function cacheJson<T>(
   key: string,
   ttlMs: number,
-  build: () => T | Promise<T>
+  build: () => T | Promise<T>,
 ): Promise<T> {
   const store = getStore();
   const now = Date.now();

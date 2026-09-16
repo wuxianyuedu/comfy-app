@@ -38,7 +38,10 @@ import {
   layoutLibraryNodes,
   type LibraryNodeContent,
 } from "../workflow-library-wire-graph";
-import type { LibraryParamCards, ParamCardWire } from "../workflow-library-param-cards";
+import type {
+  LibraryParamCards,
+  ParamCardWire,
+} from "../workflow-library-param-cards";
 
 /** 三列节点的节点类型名（注册表在视图里，见 `WorkflowLibraryCanvasNodes`）。 */
 export const LIB_NODE_TYPES = {

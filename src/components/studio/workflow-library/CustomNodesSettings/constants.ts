@@ -5,7 +5,14 @@ import type { RowState } from "./types";
 
 export const ROW_STATE_PRESET: Record<
   RowState["kind"],
-  { bg: string; fg: string; label: string; chip: string; btn: string; btnLabel: string }
+  {
+    bg: string;
+    fg: string;
+    label: string;
+    chip: string;
+    btn: string;
+    btnLabel: string;
+  }
 > = {
   loaded: {
     bg: "rgba(16,185,129,0.10)",
@@ -57,9 +64,16 @@ export const ROW_STATE_PRESET: Record<
   },
 };
 
-export const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
+export const STATUS_STYLE: Record<
+  string,
+  { bg: string; fg: string; label: string }
+> = {
   ok: { bg: "rgba(16,185,129,0.15)", fg: "#10B981", label: "已加载" },
   missing: { bg: "rgba(245,158,11,0.18)", fg: "#F59E0B", label: "目录不存在" },
   error: { bg: "rgba(239,68,68,0.18)", fg: "#EF4444", label: "解析出错" },
-  empty: { bg: "rgba(107,114,128,0.18)", fg: "#9CA3AF", label: "无 NODE_CLASS_MAPPINGS" },
+  empty: {
+    bg: "rgba(107,114,128,0.18)",
+    fg: "#9CA3AF",
+    label: "无 NODE_CLASS_MAPPINGS",
+  },
 };

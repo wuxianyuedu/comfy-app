@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     if (!rel) {
       return NextResponse.json(
         { content: "", size: 0, error: "missing file" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     ) {
       return NextResponse.json(
         { content: "", size: 0, error: "invalid or missing file" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
         size: 0,
         error: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

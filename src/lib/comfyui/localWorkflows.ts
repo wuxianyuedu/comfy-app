@@ -23,9 +23,7 @@
  */
 import "server-only";
 import fs from "node:fs";
-import {
-  createHash,
-} from "node:crypto";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 export interface LocalWorkflowFile {
@@ -147,27 +145,20 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
       return;
     }
     for (const ent of entries) {
-
       const fullPath = path.join(dir, ent);
 
       let st;
 
       try {
-
         st = fs.statSync(fullPath);
-
       } catch {
-
         continue;
-
       }
 
       if (st.isDirectory()) {
-
         if (recursive) visit(fullPath);
 
         continue;
-
       }
 
       if (!st.isFile()) continue;
@@ -175,7 +166,6 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
       if (!/\.(json|workflow)$/i.test(ent)) continue;
 
       out.push({
-
         absPath: path.resolve(fullPath),
 
         name: ent,
@@ -187,11 +177,8 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
         mtimeMs: st.mtimeMs,
 
         ...stampRoot(),
-
       });
-
     }
-
   };
   try {
     visit(abs);
@@ -216,14 +203,13 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
  *    absolute path (so the user can list overlapping roots without duplicates). */
 export function scanLocalWorkflowRoots(
   rawPaths: string[],
-  opts: { recursive?: boolean } = {}
+  opts: { recursive?: boolean } = {},
 ): { roots: ScannedRoot[]; allFiles: LocalWorkflowFile[] } {
   const recursive = !!opts.recursive;
   const seen = new Set<string>();
   const allFiles: LocalWorkflowFile[] = [];
   const roots: ScannedRoot[] = [];
   for (const p of rawPaths) {
-
     const trimmed = p.trim();
 
     if (!trimmed) continue;
@@ -233,7 +219,6 @@ export function scanLocalWorkflowRoots(
     roots.push(r);
 
     for (const file of r.files) {
-
       if (!file.absPath) continue;
 
       const key = pathKey(file.absPath);
@@ -243,9 +228,7 @@ export function scanLocalWorkflowRoots(
       seen.add(key);
 
       allFiles.push(file);
-
     }
-
   }
 
   return { roots, allFiles };
@@ -285,7 +268,9 @@ export interface LocalChecksumEntry {
 /** Compute the checksum of a single file by streaming its contents.
  *  Resolves to `null` on any read error (permission, vanished, etc.) so
  *  the caller can skip it without aborting the whole scan. */
-function checksumOfFile(absPath: string): Promise<{ checksum: string; mtimeMs: number } | null> {
+function checksumOfFile(
+  absPath: string,
+): Promise<{ checksum: string; mtimeMs: number } | null> {
   return new Promise((resolve) => {
     try {
       const stat = fs.statSync(absPath);
@@ -294,7 +279,12 @@ function checksumOfFile(absPath: string): Promise<{ checksum: string; mtimeMs: n
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
       stream.on("data", (chunk) => hash.update(chunk as string));
       stream.on("error", () => resolve(null));
-      stream.on("end", () => resolve({ checksum: hash.digest("hex").slice(0, 16), mtimeMs: stat.mtimeMs }));
+      stream.on("end", () =>
+        resolve({
+          checksum: hash.digest("hex").slice(0, 16),
+          mtimeMs: stat.mtimeMs,
+        }),
+      );
     } catch {
       resolve(null);
     }
@@ -306,7 +296,7 @@ function checksumOfFile(absPath: string): Promise<{ checksum: string; mtimeMs: n
  *  array when no roots are configured (or every scan fails).  Errors
  *  accessing individual files are swallowed (best-effort). */
 export async function scanLocalWorkflowChecksums(
-  rawPaths: string[]
+  rawPaths: string[],
 ): Promise<LocalChecksumEntry[]> {
   const { allFiles } = scanLocalWorkflowRoots(rawPaths);
   const out: LocalChecksumEntry[] = [];
@@ -315,33 +305,27 @@ export async function scanLocalWorkflowChecksums(
   let cursor = 0;
   async function worker() {
     while (cursor < allFiles.length) {
-
-
       const i = cursor++;
-
 
       const file = allFiles[i]!;
 
-
       if (!file.absPath) continue;
-
 
       const result = await checksumOfFile(file.absPath);
 
-
       if (result) {
-
-
-        out.push({ absPath: file.absPath, checksum: result.checksum, mtimeMs: result.mtimeMs });
-
-
+        out.push({
+          absPath: file.absPath,
+          checksum: result.checksum,
+          mtimeMs: result.mtimeMs,
+        });
       }
-
-
     }
-
-
   }
-  await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL, allFiles.length) }, () => worker()));
+  await Promise.all(
+    Array.from({ length: Math.min(MAX_PARALLEL, allFiles.length) }, () =>
+      worker(),
+    ),
+  );
   return out;
 }

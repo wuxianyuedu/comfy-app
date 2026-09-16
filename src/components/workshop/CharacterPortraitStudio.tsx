@@ -44,7 +44,8 @@ interface Props {
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {
-  const { session, actions, apiChannels, workflows, onOpenApiSettings } = portrait;
+  const { session, actions, apiChannels, workflows, onOpenApiSettings } =
+    portrait;
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
@@ -82,13 +83,17 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const remoteBlocked = session.channel === "remote" && !remoteReady;
   const hasPrompt = !!character.positivePrompt.trim();
   const canGenerate =
-    hasPrompt && !session.busy && !session.importing && !localBlocked && !remoteBlocked;
+    hasPrompt &&
+    !session.busy &&
+    !session.importing &&
+    !localBlocked &&
+    !remoteBlocked;
 
   /* 生成日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
-  const [history, setHistory] = React.useState<PersistableGenerationLog[] | null>(
-    null,
-  );
+  const [history, setHistory] = React.useState<
+    PersistableGenerationLog[] | null
+  >(null);
   const loadHistory = () => {
     setHistoryOpen(true);
     if (history) return;
@@ -157,7 +162,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   ? {
                       localWorkflowId: session.localWorkflowId,
                       localLabel:
-                        localOptionLabels[session.localWorkflowId] ?? "库工作流",
+                        localOptionLabels[session.localWorkflowId] ??
+                        "库工作流",
                     }
                   : undefined,
             )
@@ -165,7 +171,11 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           disabled={!canGenerate}
           className="bg-primary rounded-md px-3 py-1.5 text-[11px] font-medium text-white transition-opacity disabled:opacity-40"
         >
-          {busy ? "生成中…" : candidates.length > 0 ? "再生成一张" : "生成定妆照"}
+          {busy
+            ? "生成中…"
+            : candidates.length > 0
+              ? "再生成一张"
+              : "生成定妆照"}
         </button>
         <button
           type="button"
@@ -193,7 +203,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       {session.channel === "local" && !session.localWorkflowId && (
         <p className="text-muted-foreground text-[11px]">
           本地通道需要先在上方下拉选一个工作流库模型（需在库里配置好对外参数）。
-          没有内置工作流可回落 —— 工作流库里还没有可用的生图工作流时，可切到「远端 API」通道。
+          没有内置工作流可回落 ——
+          工作流库里还没有可用的生图工作流时，可切到「远端 API」通道。
         </p>
       )}
       {session.channel === "remote" && !remoteReady && (
@@ -214,7 +225,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       )}
       {!hasPrompt && (
         <p className="text-muted-foreground text-[11px]">
-          该角色还没有生成提示词：先在下方补全外貌 / 服装等信息，提示词会自动合成。
+          该角色还没有生成提示词：先在下方补全外貌 /
+          服装等信息，提示词会自动合成。
         </p>
       )}
 
@@ -245,7 +257,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             <details className="bg-bg/60 rounded-md px-2 py-1" open={busy}>
               <summary className="text-primary flex cursor-pointer items-center gap-2 text-[10px] select-none">
                 <span>
-                  生成过程{session.log.length > 0 ? `（${session.log.length} 条）` : ""}
+                  生成过程
+                  {session.log.length > 0 ? `（${session.log.length} 条）` : ""}
                 </span>
                 <button
                   type="button"
@@ -283,7 +296,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     历史日志（含此前会话，保存在 log/workshop/）
                   </p>
                   {history === null ? (
-                    <p className="text-muted-foreground text-[10.5px]">加载中…</p>
+                    <p className="text-muted-foreground text-[10.5px]">
+                      加载中…
+                    </p>
                   ) : history.length === 0 ? (
                     <p className="text-muted-foreground text-[10.5px]">
                       还没有落盘的历史日志。
@@ -319,7 +334,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
       {/* 候选：历次生成与导入的图都在这里，点一张即定为定妆照 */}
       {candidates.length === 0 ? (
         <p className="text-muted-foreground mt-2 text-[11px]">
-          还没有定妆照 —— 生成或导入后可在这里挑一张定为定妆照，后续分镜图会以它作参考图。
+          还没有定妆照 ——
+          生成或导入后可在这里挑一张定为定妆照，后续分镜图会以它作参考图。
         </p>
       ) : (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -337,7 +353,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                       : `把这张（${PORTRAIT_SOURCE_LABELS[candidate.source]}）设为定妆照`
                   }
                   className={`block overflow-hidden rounded-lg border-2 transition-colors ${
-                    selected ? "border-primary" : "border-border hover:border-primary/60"
+                    selected
+                      ? "border-primary"
+                      : "border-border hover:border-primary/60"
                   }`}
                 >
                   <img
@@ -351,7 +369,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   {PORTRAIT_SOURCE_LABELS[candidate.source]}
                 </span>
                 {selected && (
-                  <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-primary px-1 text-[9px] text-white">
+                  <span className="bg-primary pointer-events-none absolute right-1 bottom-1 rounded px-1 text-[9px] text-white">
                     定妆照
                   </span>
                 )}
@@ -360,7 +378,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   onClick={() => actions.remove(character.id, candidate.url)}
                   disabled={session.busy || session.importing}
                   aria-label="删除这张定妆照候选"
-                  className="text-muted-foreground hover:text-red-700 dark:text-red-300 dark:hover:text-red-400 absolute -top-1.5 -right-1.5 rounded-full bg-black/70 px-1 text-[10px] disabled:opacity-40"
+                  className="text-muted-foreground absolute -top-1.5 -right-1.5 rounded-full bg-black/70 px-1 text-[10px] hover:text-red-700 disabled:opacity-40 dark:text-red-300 dark:hover:text-red-400"
                 >
                   ✕
                 </button>

@@ -24,7 +24,9 @@ export function FlowNodeCollapsedAnchors({
 }: FlowNodeCollapsedAnchorsProps) {
   // Connected inputs (wire tuple `[]`) and connected outputs stay anchored.
   const connectedInputs = orderedEntries.filter(([, v]) => Array.isArray(v));
-  const connectedOutputs = outputs.filter(([n]) => data.connectedOutputs?.has(n));
+  const connectedOutputs = outputs.filter(([n]) =>
+    data.connectedOutputs?.has(n),
+  );
   // Cylinder visual height scales with port count, clamped 16px..64px so
   // it never bleeds past the icon/title bar.
   const cylH = (count: number) => Math.min(64, Math.max(16, 12 + count * 4));
@@ -80,7 +82,8 @@ export function FlowNodeCollapsedAnchors({
        *  geometry never breaks when toggling collapse.  Hidden via
        *  opacity:0 but `isConnectable:false` to avoid accidental wires. */}
       {connectedInputs.map(([k], idx) => {
-        const inputType = (data.rawInputs?.find((raw) => raw.name === k)?.type) ?? "*";
+        const inputType =
+          data.rawInputs?.find((raw) => raw.name === k)?.type ?? "*";
         const col = portColor(inputType);
         const total = connectedInputs.length;
         const offset = total > 1 ? (idx - (total - 1) / 2) * 6 : 0;

@@ -9,7 +9,9 @@ import type { WorkshopLLMConfig } from "./llm";
 import type { Character, Shot } from "@/lib/workshop/types";
 import type { CreateSessionInput } from "./repository";
 
-const { store } = vi.hoisted(() => ({ store: new Map<string, WorkshopSessionState>() }));
+const { store } = vi.hoisted(() => ({
+  store: new Map<string, WorkshopSessionState>(),
+}));
 
 vi.mock("./repository", () => {
   const createSession = vi.fn(async (input: CreateSessionInput = {}) => {
@@ -18,7 +20,8 @@ vi.mock("./repository", () => {
       idea: input.idea ?? "",
       meta: {
         title: input.title ?? "未命名工坊项目",
-        type: (input.type ?? "short_video") as WorkshopSessionState["meta"]["type"],
+        type: (input.type ??
+          "short_video") as WorkshopSessionState["meta"]["type"],
         tone: input.tone ?? "",
         logline: input.logline ?? "",
         scriptMarkdown: "",
@@ -41,7 +44,13 @@ vi.mock("./repository", () => {
     store.delete(id);
     return had;
   });
-  return { createSession, getSession, updateState, listSessions, deleteSession };
+  return {
+    createSession,
+    getSession,
+    updateState,
+    listSessions,
+    deleteSession,
+  };
 });
 
 vi.mock("./llm", () => ({
@@ -52,29 +61,50 @@ vi.mock("./llm", () => ({
     temperature: 0.7,
     maxTokens: 100,
   })),
-  completeWorkshopLLM: vi.fn(async (_cfg: WorkshopLLMConfig, messages: LLMMessage[]): Promise<string> => {
-    const sys = messages[0]?.content ?? "";
-    if (sys.includes("编剧")) {
-      return "# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。";
-    }
-    if (sys.includes("剧本分析师")) {
-      return JSON.stringify([
-        { name: "小满", ageGender: "女,20岁", appearance: "短发", costume: "红裙", personality: "活泼", styleTags: ["厚涂"] },
-      ]);
-    }
-    if (sys.includes("分镜师")) {
-      return JSON.stringify([
-        { sceneHeading: "场景1 · 咖啡馆", shotType: "wide", description: "全景", characterNames: ["小满"], dialogue: "" },
-      ]);
-    }
-    return "";
-  }),
+  completeWorkshopLLM: vi.fn(
+    async (
+      _cfg: WorkshopLLMConfig,
+      messages: LLMMessage[],
+    ): Promise<string> => {
+      const sys = messages[0]?.content ?? "";
+      if (sys.includes("编剧")) {
+        return "# 场景1 · 咖啡馆\nΔ 小满走进咖啡馆。\nV1 小满：今天天气真好。";
+      }
+      if (sys.includes("剧本分析师")) {
+        return JSON.stringify([
+          {
+            name: "小满",
+            ageGender: "女,20岁",
+            appearance: "短发",
+            costume: "红裙",
+            personality: "活泼",
+            styleTags: ["厚涂"],
+          },
+        ]);
+      }
+      if (sys.includes("分镜师")) {
+        return JSON.stringify([
+          {
+            sceneHeading: "场景1 · 咖啡馆",
+            shotType: "wide",
+            description: "全景",
+            characterNames: ["小满"],
+            dialogue: "",
+          },
+        ]);
+      }
+      return "";
+    },
+  ),
 }));
 
 vi.mock("./api-channel", () => ({
   generateImageViaApi: vi.fn(async () => "http://img/1.png"),
   submitVideoViaApi: vi.fn(async () => ({ remoteTaskId: "task123" })),
-  pollVideoViaApi: vi.fn(async () => ({ url: "http://vid/1.mp4", pending: false })),
+  pollVideoViaApi: vi.fn(async () => ({
+    url: "http://vid/1.mp4",
+    pending: false,
+  })),
   resolveMediaDataUrl: vi.fn(async (ref: string) => ref),
 }));
 
@@ -172,7 +202,10 @@ describe("workshop orchestrator 全流程", () => {
     await orchestrator.extractCharacters(id);
     const board = await orchestrator.buildStoryboard(id);
     const shot = board.shots[0]!;
-    const r = await orchestrator.generateImage(id, { shotId: shot.id, channel: "comfyui" });
+    const r = await orchestrator.generateImage(id, {
+      shotId: shot.id,
+      channel: "comfyui",
+    });
     expect(r.url).toBe("file://comfy/1.png");
     const after = await orchestrator.getSession(id);
     expect(after?.shots[0]?.imageUrl).toBe("file://comfy/1.png");
@@ -186,7 +219,11 @@ describe("workshop orchestrator 全流程", () => {
     const board = await orchestrator.buildStoryboard(id);
     const shot = board.shots[0]!;
     await orchestrator.generateImage(id, { shotId: shot.id }); // api 通道填 imageUrl
-    const r = await orchestrator.submitVideo(id, { shotId: shot.id, channel: "comfyui", useFirstFrame: true });
+    const r = await orchestrator.submitVideo(id, {
+      shotId: shot.id,
+      channel: "comfyui",
+      useFirstFrame: true,
+    });
     expect(r.url).toBe("file://comfy/v.mp4");
     const after = await orchestrator.getSession(id);
     expect(after?.shots[0]?.clipUrl).toBe("file://comfy/v.mp4");
