@@ -36,6 +36,22 @@ describe("workflow-types taxonomy", () => {
     expect(imgs.length).toBe(IMAGE_WORKFLOW_TYPES.length);
     expect(imgs.every((item) => item.category === "image")).toBe(true);
   });
+
+  it("没有重复 label（同义 code 漏删会让面板出现两条同名条目）", () => {
+    // 「首尾帧生视频」曾同时挂着 FLF2V 与 FL2V，模式选择器 / 模式契约里各出一行。
+    // 唯一性按 (category, label) 判：跨类别的同名 label 是允许的。
+    const keys = ALL_WORKFLOW_TYPES.map((t) => `${t.category}:${t.label}`);
+    const dupes = keys.filter((k, i) => keys.indexOf(k) !== i);
+    expect(dupes).toEqual([]);
+  });
+
+  it("首尾帧只保留 FLF2V，旧 FL2V 不再作为模式出现", () => {
+    const firstLast = ALL_WORKFLOW_TYPES.filter(
+      (t) => t.label === "首尾帧生视频",
+    );
+    expect(firstLast.map((t) => t.code)).toEqual(["FLF2V"]);
+    expect(getWorkflowType("FL2V")).toBeUndefined();
+  });
 });
 
 describe("normalizeTaskType", () => {
@@ -64,5 +80,11 @@ describe("normalizeTaskType", () => {
   it("未知/自定义类型 trim 后原样透传", () => {
     expect(normalizeTaskType("custom-xyz")).toBe("custom-xyz");
     expect(normalizeTaskType("  custom-xyz ")).toBe("custom-xyz");
+  });
+
+  it("已删除的 FL2V 归一到 FLF2V（库里存量数据仍能拿到模式端口）", () => {
+    expect(normalizeTaskType("FL2V")).toBe("FLF2V");
+    expect(normalizeTaskType("fl2v")).toBe("FLF2V");
+    expect(normalizeTaskType("  Fl2V ")).toBe("FLF2V");
   });
 });

@@ -76,9 +76,13 @@ export function useFilmStudio(): FilmStudioController {
   const [frames] = useState(FILM_FRAMES_PER_SHOT);
 
   const [script, setScript] = useState(DEFAULT_SCRIPT);
-  const [videoWorkflows, setVideoWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [videoWorkflows, setVideoWorkflows] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [videoWorkflowId, setVideoWorkflowId] = useState("");
-  const [imageWorkflows, setImageWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [imageWorkflows, setImageWorkflows] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [imageWorkflowId, setImageWorkflowId] = useState("");
   const [subtitleOn, setSubtitleOn] = useState(true);
   const [bgmName, setBgmName] = useState<string | null>(null);
@@ -144,8 +148,11 @@ export function useFilmStudio(): FilmStudioController {
             wfRows.flatMap((raw) => {
               if (typeof raw !== "object" || raw === null) return [];
               const wf = raw as Record<string, unknown>;
-              if (typeof wf.id !== "string" || typeof wf.name !== "string") return [];
-              return wf.typeCategory === category ? [{ id: wf.id, name: wf.name }] : [];
+              if (typeof wf.id !== "string" || typeof wf.name !== "string")
+                return [];
+              return wf.typeCategory === category
+                ? [{ id: wf.id, name: wf.name }]
+                : [];
             });
           setVideoWorkflows(pick("video"));
           setImageWorkflows(pick("image"));

@@ -135,7 +135,10 @@ export function VideoStudio({
     /* 本地通道没有内置模板可回落：必须先在工作流库选好一个视频工作流。
      * 门禁放在入口，避免带着空 workflow id 去拉详情。 */
     if (channel === "local" && !workflowId) {
-      setShotError(shot.id, "本地通道需要先在右侧「生成资源」选择一个视频工作流；或切到远端 API 通道");
+      setShotError(
+        shot.id,
+        "本地通道需要先在右侧「生成资源」选择一个视频工作流；或切到远端 API 通道",
+      );
       return;
     }
     setShotError(shot.id, undefined);

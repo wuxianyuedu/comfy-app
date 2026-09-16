@@ -121,7 +121,7 @@ export function defaultInputsForMode(mode: string): Array<{
     if (/^I2V$/.test(code)) {
       return [{ type: "image", field: "image" }, ...base, durationRow];
     }
-    if (/^(FLF2V|FL2V|FMF2V)$/.test(code)) {
+    if (/^(FLF2V|FMF2V)$/.test(code)) {
       return [
         { type: "first-frame", field: "first_frame" },
         { type: "last-frame", field: "last_frame" },
