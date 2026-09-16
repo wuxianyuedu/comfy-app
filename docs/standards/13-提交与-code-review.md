@@ -151,8 +151,10 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 ✅ git status --porcelain > /tmp/wt-check/before.txt   # 工作区基线（供「工作区对账」比对）
 ✅ pnpm run typecheck              # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test:coverage          # 全量 vitest **只跑一遍**：覆盖率棘轮 + 上报平台
+✅ pnpm run test:coverage          # 全量 vitest **只跑一遍**：用例 + 覆盖率棘轮
                                   # （vitest.config.ts 的目录阈值；见 13.5.3）
+✅ type: testing:coverage          # 覆盖率上报，**紧跟其后的一步**：同一步里 script 与
+                                  # type 是并行任务，插件会在报告产出前就报错退出（见 11.7）
 ✅ node scripts/check-title-bar-clearance.cjs
 ✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs           # 跨平台动作对照（§9.5）
@@ -324,6 +326,7 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 |---|---|---|
 | 门禁只挂 `pull_request`，`push` 只留合并形态复核 | 砍掉「同一份代码的第二遍」 | 无（合并提交不引入新代码，见 13.5） |
 | `test` 与 `test:coverage` 合并成 `pnpm run test:coverage` | 全量 vitest 从两遍变一遍 | 无（覆盖率本来就跟着这一次运行出） |
+| 覆盖率上报拆成测试**之后**的独立一步 | 让插件的查找顺序成立 | 无（同一步里二者并行，插件必然先撞上「没有报告」） |
 | `docker.volumes` 声明 pnpm store 与 `/root/.cache` | 命中即省掉全量重装、Playwright 浏览器下载 | 节点级缓存不跨节点（3 选 1 的动态池），有时不命中 |
 
 **一条永远在响的告警也是噪声**：`push` 侧那条形态复核此前按「父提交数 > 1」判，

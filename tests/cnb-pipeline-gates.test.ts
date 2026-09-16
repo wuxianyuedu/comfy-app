@@ -174,9 +174,9 @@ describe("CNB 门禁清单：一条不许丢", () => {
     "pnpm run db:push": "同步数据库表结构",
     "pnpm run typecheck": "类型检查",
     "pnpm exec eslint . --max-warnings 0": "ESLint 零警告",
-    // test 与 test:coverage 合并为一步：全量 vitest 只跑一遍，
-    // 覆盖率走平台插件挂在同一次运行上（跑两遍 = 时长与核时都翻倍）。
-    "pnpm run test": "单元测试与覆盖率",
+    // test 与 test:coverage 合并为一步：全量 vitest 只跑一遍（`test:coverage`
+    // 一次运行即产出覆盖率报告），跑两遍 = 时长与核时都翻倍。
+    "pnpm run test": "单元测试",
     "check-title-bar-clearance.cjs": "标题行让位",
     "check-file-structure.cjs --strict": "文件结构硬规则",
     "check-ps1-consistency.mjs": "跨平台动作对照",
@@ -194,7 +194,9 @@ describe("CNB 门禁清单：一条不许丢", () => {
     "tests/lib-node-only-declarations.test.ts": "lib Node-only 声明",
     "check-format.cjs --strict": "prettier 格式棘轮",
     "check-reformat-only.cjs": "格式化提交分离",
-    "pnpm run test:coverage": "单元测试与覆盖率",
+    // 覆盖率上报是**后置的独立一步**：同一个 stage 里的 script 与 type 是
+    // 两个并行任务，合并时插件会在测试还没写出报告前就去找文件并报错退出。
+    "pnpm run test:coverage": "覆盖率上报",
     "pnpm run build": "生产构建",
     "check-standalone-contents.cjs": "standalone 产物护栏",
     "playwright install": "安装 Playwright 浏览器",
@@ -294,7 +296,28 @@ describe("覆盖率上报：插件的 pattern 必须真的有文件产出", () =
 
   it("门禁里确实挂着 testing:coverage 插件（否则本组判据失去对象）", () => {
     expect(coverageStep, "找不到 testing:coverage 步骤").not.toBe("");
-    expect(coverageStep).toContain("pnpm run test:coverage");
+  });
+
+  /**
+   * 覆盖率上报**必须**是排在「单元测试」之后的独立一步。
+   *
+   * 同一个 stage 里的 `script` 与 `type` 是**两个并行任务**：`testing:coverage`
+   * 容器在测试还在跑、`coverage/` 还没产出时就开始找报告文件，而
+   * `breakIfNoCoverage` 缺省为 `true` —— 找不到即报错退出（实测该步 1~2s 内失败，
+   * 而 vitest 本地要 73s）。现场是整条门禁在测试这一步中断，报错行落在与本意
+   * 无关的位置。合并回一步 = 这条回归立刻复发，故锁住「后置且独立」。
+   */
+  it("覆盖率上报是排在单元测试之后的独立一步（并行会拿不到报告）", () => {
+    const names = steps.map((s) => s.name);
+    const testAt = names.indexOf("单元测试");
+    const reportAt = names.indexOf("覆盖率上报");
+    expect(testAt, "找不到「单元测试」步骤").toBeGreaterThan(-1);
+    expect(reportAt, "找不到「覆盖率上报」步骤").toBeGreaterThan(-1);
+    expect(reportAt, "覆盖率上报必须排在单元测试之后").toBeGreaterThan(testAt);
+    // 测试步只跑用例，不挂插件：挂了就又变成并行。
+    const testStep = steps.find((s) => s.name === "单元测试")?.body ?? "";
+    expect(testStep).toContain("pnpm run test:coverage");
+    expect(testStep).not.toContain("type: testing:coverage");
   });
 
   it("插件 pattern 指的那份报告，vitest 的 reporter 真的会产出", () => {

@@ -123,17 +123,34 @@
     script: pnpm exec eslint . --max-warnings 0
 
   # ── 测试 ──
-  # 全量 vitest 只跑**一遍**:覆盖率走插件挂在同一次运行上。
-  # 此前 test 与 test:coverage 是两步、同一套用例跑两遍(时长翻倍 → 核时翻倍),
-  # 而现在还能顺带把覆盖率上报给平台(仓库「洞察」页可看曲线)。
-  # 判据强度不变:`pnpm run test:coverage`(只跑一遍即得覆盖率)本来就是这一条
-  # 的替代口径,阈值仍由 vitest.config.ts 的目录阈值守着。
-  - name: 单元测试与覆盖率
+  # 全量 vitest 只跑**一遍**:`test:coverage` 一次运行即产出覆盖率报告
+  # (此前 test 与 test:coverage 是两步、同一套用例跑两遍,时长与核时都翻倍)。
+  # 判据强度不变,阈值仍由 vitest.config.ts 的目录阈值守着。
+  - name: 单元测试
     script: pnpm run test:coverage
+
+  # ── 覆盖率上报 ──
+  # **必须是独立的一步,不能与上面的测试合并成同一步。**
+  # 同一个 stage 里的 `script` 与 `type` 是**两个并行任务**:`testing:coverage`
+  # 容器在测试还在跑、`coverage/` 尚未产出时就开始找报告文件,而
+  # `breakIfNoCoverage` 缺省为 `true` —— 找不到即报错退出。
+  # 现场:该步在 1~2s 内失败(vitest 本地要 73s),日志是
+  # `Error: 没有找到覆盖率报告文件`,整条门禁在测试这一步中断,
+  # 而 vitest 其实一次都没跑完;报错行还落在与本意无关的位置。
+  # 探针实测(同一份"找不到报告"的日志):`breakIfNoCoverage: false` 时该任务
+  # 返回 0 —— 说明失败正是由这个缺省值触发的,而不是报告路径写错。
+  #
+  # 拆成后置一步即可让顺序成立:上一步写完 `coverage/lcov.info`,这一步才去找它。
+  - name: 覆盖率上报
     type: testing:coverage
     options:
-      # lcov 是平台可识别的三种格式之一(vitest 的 coverage.reporter)。
+      # 平台可识别的三种格式之一(vitest 的 coverage.reporter 已含 lcov)。
+      # 报告格式是两处必须对上的口径:插件读**磁盘上的文件**,文件由
+      # vitest.config.ts 的 reporter 决定要不要产出,只改一侧不会红。
       pattern: coverage/lcov.info
+      # 缺省 true 时"没找到报告"会把构建判红。上面已经保证报告先产出,
+      # 这里**保持缺省**就是要让"vitest 没产出报告"真的红掉 ——
+      # 那是必须修的故障,不该被静默放过。
       # 注意:这里**不能**填 lines / diffLines。平台阈值是绝对百分比,而本仓库
       # 走的是「按目录记门槛 + 棘轮」的口径(各目录不同,整体百分比会先撞在
       # 低摊薄目录上),填错会要么形同虚设、要么把正常 PR 拦死。
