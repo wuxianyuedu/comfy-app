@@ -23,12 +23,16 @@ export default defineConfig({
     // 新目录覆盖后加入下表。全库 3% 的整体数字仅作信息参考,不设全局门槛。
     coverage: {
       provider: "v8",
-      // lcov 是**平台侧要的**那份：CI 的「单元测试与覆盖率」步骤走
-      // `testing:coverage` 插件读 `coverage/lcov.info`（见 .cnb.yml 与
-      // docs/standards/11 §覆盖率棘轮）。此前只出 text + json-summary，
-      // 插件在本步开始后 1.8s 就以「没有找到覆盖率报告文件」退出——
-      // 报告格式是两处**必须对上**的口径，只改一侧等于整条覆盖率上报静默失效。
-      // text 留给人读（本地/CI 日志），json-summary 留给本地看目录汇总。
+      // 三种格式各有明确用途，别按「没人看就删掉」精简：
+      //   text          —— 人读（终端日志）；
+      //   json-summary  —— 本地看目录汇总；
+      //   lcov          —— 机器读的那份。平台侧流水线曾用 `testing:coverage` 插件
+      //                    读 `coverage/lcov.info`（ISSUE #623 后该流水线已删除，
+      //                    见 docs/standards/13 §13.5.3）。保留 lcov 是因为它是
+      //                    「覆盖率接任何外部工具」的通用入口，且删掉会让
+      //                    日后重启上报时重新踩一遍「插件找不到报告文件」那个坑
+      //                    ——当时的现场是插件 1.8s 就退出，而报错完全指不出是
+      //                    reporter 少配了一项。
       reporter: ["text", "json-summary", "lcov"],
       include: ["src/server/api/middleware/**", "src/lib/**"],
       exclude: ["src/lib/**/*.test.ts"],

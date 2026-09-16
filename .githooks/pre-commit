@@ -11,9 +11,11 @@ echo "[pre-commit] 1/24 master 分支提交守卫"
 node scripts/check-branch-guard.cjs || exit 1
 
 echo "[pre-commit] 2/24 文件结构硬规则（R1-R6/R7-R12）"
-# R5 的棘轮（超 900 行文件）只在 CI 以 --strict 判定:本地这一步保持「只提醒」,
-# 与其余棘轮（重复块 / 函数长度 / 主题色）的本地口径一致 —— 被拦下的动作
-# 要求拆分文件,不适合在本地每次提交都挡一次。
+# R5 的棘轮（超 900 行文件）需要 --strict 才判定,这里保持「只提醒」,与其余棘轮
+# （重复块 / 函数长度 / 主题色）的本地口径一致 —— 被拦下的动作要求拆分文件,
+# 不适合在本地每次提交都挡一次。
+# ⚠️ 遗留：平台侧流水线（.cnb.yml）删除后,R5 棘轮的 --strict 判定**当前没有执行者**
+# （规范 13.5.3）。要恢复它,先按提示把超基线的文件拆到位,再给这一步加上 --strict。
 node scripts/check-file-structure.cjs || exit 1
 
 # 2026-09-15(ISSUE #562): 跨平台动作对照表（规范 §9.5）。
@@ -37,10 +39,12 @@ node scripts/check-title-bar-clearance.cjs || exit 1
 echo "[pre-commit] 6/24 tsc --noEmit"
 pnpm exec tsc --noEmit || exit 1
 
-# 2026-09-10(ISSUE #322): 与 CI 的 .cnb.yml「ESLint 零警告」对齐为**零警告**口径。
-# 此前本地只判「无 error」，CI 判 --max-warnings 0 —— 结果是 warning 能在本地
-# 顺利进历史，直到 CI 才被拦下（复核返工）。规范 11.7 / 13.5 的门禁是零警告，
-# 本地与 CI 必须同一口径。
+# 2026-09-10(ISSUE #322): eslint 统一为**零警告**口径。
+# 此前本地只判「无 error」，而门禁另一侧判 --max-warnings 0 —— 结果是 warning
+# 能在本地顺利进历史，直到更晚才被拦下（复核返工）。规范 11.7 / 13.5 的门禁
+# 一律零警告，本地与其它运行位置必须同一口径。
+# 平台侧流水线（.cnb.yml）已按额度约束删除（ISSUE #623），这条钩子现在是
+# **唯一**跑门禁的地方 —— 见规范 13.5 / 13.5.3。
 echo "[pre-commit] 7/24 eslint（零警告）"
 pnpm exec eslint . --max-warnings 0 || exit 1
 
@@ -147,7 +151,7 @@ pnpm exec vitest run tests/lib-node-only-declarations.test.ts || exit 1
 # 一次性 --write 会产生与本次改动无关的全文件 diff(违反 §13.7)。但「等基线
 # 整改完再接入」的代价是每个新文件都能带任意格式进来,存量只增不减,那一天
 # 永远不会到。判据改为**基线 + 只许下降**:新增脏文件即阻断,存量修掉后
-# 提示收紧基线(CI 用 --strict 要求必须收紧)。
+# 提示收紧基线(--strict 下要求必须收紧)。
 echo "[pre-commit] 21/24 prettier 格式棘轮"
 node scripts/check-format.cjs || exit 1
 
