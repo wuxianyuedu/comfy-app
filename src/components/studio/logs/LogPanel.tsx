@@ -48,6 +48,12 @@ import { useLogPanel } from "./LogProvider";
 import { formatTime } from "./log-format";
 import { SaveExportButton } from "./SaveExportButton";
 import {
+  LOG_ROW_SINGLE,
+  layoutRows,
+  scrollHeightOf,
+  visibleRange,
+} from "./log-virtual";
+import {
   LOG_PANEL_OVERLAY_Z_CLASS,
   LOG_PANEL_POPUP_Z_CLASS,
 } from "./log-panel-layers";
@@ -360,17 +366,32 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
   );
 }
 
+/**
+ * 一行日志。
+ *
+ * `height` 由**虚拟窗口**给出（`log-virtual` 的估算高度），这里写成内联样式：
+ * 估算与 `leading-snug` 的实际行高必须同口径，否则累计误差会让滚动位置与
+ * 内容错开（行高常量见 `LOG_ROW_SINGLE` / `LOG_ROW_LINE`）。
+ *
+ * 同时 `overflow-hidden`：高度被钉死之后，内容若比估算的高就会溢到下一行上，
+ * 把两行叠在一起（不换行时尤其明显）。
+ */
 const LogRow = memo(function LogRow({
   entry,
   wrap,
   keyword,
+  style,
 }: {
   entry: LogEntry;
   wrap: boolean;
   keyword: string;
+  style: React.CSSProperties;
 }) {
   return (
-    <div className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug">
+    <div
+      style={style}
+      className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 py-1 font-mono text-[13px] leading-snug"
+    >
       <time
         dateTime={new Date(entry.time).toISOString()}
         className="text-ink-muted shrink-0 tabular-nums"
@@ -620,6 +641,26 @@ export function LogPanel() {
   const [wrap, setWrap] = useState(true);
   const [wide, setWide] = useState(false);
 
+  /* ── 虚拟窗口（ISSUE #609 八审：「切到 1000+ 的页签有明显卡顿」）────────
+   *
+   * 满页 2000 行一次性挂进 DOM 时，节点数约 1.5 万（每行还有若干分片 span），
+   * 切页那一刻的布局成本就是用户感知到的卡顿。规范 02 §2.6 要求大列表虚拟
+   * 滚动，这里只渲染视口内的几十行。
+   *
+   * 三个状态驱动的都是「**怎么算**」而不是「渲染什么」，因此都进 ref/state
+   * 的轻量档：
+   *   - `viewport`：滚动视口高度与可视宽度（软换行的容量用它算）；
+   *   - `scrollTop`：滚动位置（`onScroll` 里直接读 `el.scrollTop`）；
+   *   - 行位置表由 `pageLogs` + `wrap` 推出，随它们一起 memo。
+   *
+   * 为什么把 `scrollTop` 放进 state 而不是只读 ref：窗口区间是渲染结果的一部分
+   * （不是副作用），放进 ref 会让「滚动 → 不重渲染 → 内容不更新」。每帧一次
+   * `setState` 在 React 18 的批处理下只重渲染**列表容器**（行本身是 memo 的），
+   * 实测远低于一帧预算。
+   */
+  const [viewport, setViewport] = useState({ height: 0, width: 0 });
+  const [scrollTop, setScrollTop] = useState(0);
+
   /* 分页在**过滤后的时间线**上做（时间倒序，第 1 页最新）。页码越界时钳回，
    * 并把 store 里的 page 一并归位，避免「看着第 1 页、state 里却是第 9 页」。 */
   const {
@@ -654,9 +695,51 @@ export function LogPanel() {
   /* 连续重复行折叠只影响显示（见 log-store 的 dedupeRepeats），不改时间线。 */
   const pageLogs = useMemo(() => dedupeRepeats(visibleLogs), [visibleLogs]);
 
+  /* ── 行位置表 + 视口窗口 ────────────────────────────────────────────
+   *
+   * 位置表按**整页**算（单调前缀和）：`start[i]` 必须对得上前面所有行高之和，
+   * 否则 `translateY` 与滚动条会各说各话。2000 行的乘法远低于一帧预算。
+   *
+   * `viewport.width` 为 0（首帧未量到 / jsdom 不做布局）时 `layoutRows` 只按
+   * 显式换行估高——宁可少估，也不瞎估。 */
+  const { rows, totalSize } = useMemo(
+    () => layoutRows(pageLogs, wrap, wrap ? viewport.width : 0),
+    [pageLogs, wrap, viewport.width],
+  );
+  const { height: scrollHeight } = scrollHeightOf(totalSize);
+  /* 量不到视口高度（jsdom 不做布局 / 首帧测量之前）就**整页渲染**：虚拟化是
+   * 性能优化，不该变成「内容看不见」的判据——取不到值时说「全都要」最安全，
+   * 与改动前的行为一致。jsdom 里的单测正是走这一支。 */
+  const rowWindow = useMemo(() => {
+    if (viewport.height <= 0) {
+      return { start: 0, end: pageLogs.length, entries: pageLogs };
+    }
+    const range = visibleRange(rows, scrollTop, viewport.height);
+    return {
+      start: range.start,
+      end: range.end,
+      entries: pageLogs.slice(range.start, range.end),
+    };
+  }, [rows, scrollTop, viewport.height, pageLogs]);
+
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage, setPage]);
+
+  /* 换页时把滚动位置收回头部，并同步 `scrollTop` 状态。
+   *
+   * 虚拟化之前不需要这一步：整页都在 DOM 里，浏览器自己会把超出的 `scrollTop`
+   * 钳回范围内。现在「渲染哪一段」由 `scrollTop` **算**出来，若它还停在上一页
+   * 的纵深上（比如第 2 页滚到 30000px、翻到只有 8 行的第 3 页），算出的窗口会
+   * 一路滑到末尾，用户看到的是「翻页后内容跑到一半、顶部空着」。
+   *
+   * `safePage` 是钳过边界的真实页码（见 selectPageLogs），据此判定「真的换了页」。 */
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    setScrollTop(0);
+  }, [safePage]);
 
   /* ── 贴底：只追到「基线」，不再追着最新跑（ISSUE #262 复审）────────────
    *
@@ -706,7 +789,17 @@ export function LogPanel() {
     const target = el.querySelector<HTMLElement>(
       `[data-log-index="${targetIndex}"]`,
     );
-    if (!target) return;
+    if (!target) {
+      /* **虚拟化之后目标行可能没被渲染**（窗口外的行不在 DOM 里）。此时改按
+       * 估算位置滚——`rows[targetIndex]` 的上边缘减去一个视口，把目标行带进窗口，
+       * 下一轮 effect 就能找到真实节点并按它的实际高度对齐。找不到就什么都不做
+       * （下一轮还会再来），绝不能乱滚。 */
+      const row = rows[targetIndex];
+      if (!row) return;
+      el.scrollTop = Math.max(0, row.start - el.clientHeight + row.size);
+      appliedRef.current = targetIndex;
+      return;
+    }
     el.scrollTop = Math.max(
       0,
       target.offsetTop + target.offsetHeight - el.clientHeight,
@@ -719,11 +812,44 @@ export function LogPanel() {
     revision,
     followResetAt,
     visibleLogs.length,
+    rows,
   ]);
+
+  /* 视口尺寸（滚动视口高度 + 可供正文使用的宽度）。
+   *
+   * 高度决定**渲染几行**；宽度决定**软换行估几行**（见 log-virtual 的
+   * `countLines`）。两者都必须重新量：面板可以加宽（标题栏的「加宽」按钮）、
+   * 窗口可以缩放、正文列还会随滚动条出现而变窄。
+   *
+   * 用 ResizeObserver 而不是 window 的 resize：加宽按钮改的是元素宽度，
+   * 窗口尺寸一点没变。观测不到（jsdom / 老浏览器）时不额外退化——量出来恒为
+   * 0 已经会让下面的窗口逻辑走「整页渲染」那一支，行为与改动前一致。 */
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const measure = () => {
+      const next = {
+        height: el.clientHeight,
+        width: el.clientWidth,
+      };
+      setViewport((prev) =>
+        prev.height === next.height && prev.width === next.width ? prev : next,
+      );
+    };
+    measure();
+    setScrollTop(el.scrollTop);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isOpen]);
 
   const onScroll = () => {
     const el = bodyRef.current;
     if (!el) return;
+    /* 滚动位置是**渲染输入**（决定窗口取哪一段），因此进 state 而不是只留 ref：
+     * 只读 ref 会出现「滚了但不重渲染、内容不更新」。 */
+    setScrollTop(el.scrollTop);
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
     /* 用户回到（或离开）底部：贴底基线跟着当前页的内容重取，从此他看的是
      * 「自己停下时那一段」，而不是被新日志推着走的最新一段。 */
@@ -956,14 +1082,40 @@ export function LogPanel() {
               {total === 0 ? "暂无匹配的日志" : "本页无内容"}
             </div>
           ) : (
-            <div className="flex flex-col">
-              {/* `data-log-index`：贴底要知道「滚到哪一行」，而不是「滚到
-                  最底下」——两者差的就是用户还没看的那批新日志。 */}
-              {pageLogs.map((entry, index) => (
-                <div key={entry.id} data-log-index={index}>
-                  <LogRow entry={entry} wrap={wrap} keyword={search} />
-                </div>
-              ))}
+            /* 虚拟窗口：外层撑出**估算总高**（滚动条长度与真实内容一致），
+               内层 `translateY` 到当前窗口的起点——只挂视口内的行。 */
+            <div
+              style={{ height: `${scrollHeight}px` }}
+              className="relative w-full"
+            >
+              <div
+                style={{
+                  transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,
+                }}
+                className="absolute top-0 left-0 w-full"
+              >
+                {/* `data-log-index`：贴底要知道「滚到哪一行」，而不是「滚到
+                    最底下」——两者差的就是用户还没看的那批新日志。序号必须是
+                    **页内绝对序号**：虚拟化之后窗口外的行不在 DOM 里，贴底找
+                    不到节点时会退化为「滚到窗口末尾」。 */}
+                {rowWindow.entries.map((entry, offset) => {
+                  const index = rowWindow.start + offset;
+                  return (
+                    <div key={entry.id} data-log-index={index}>
+                      <LogRow
+                        entry={entry}
+                        wrap={wrap}
+                        keyword={search}
+                        /* 显式高度 = 估算高度：两者不同口径时误差会累积，
+                           滚动位置与内容就错开了（见 log-virtual 的常量）。 */
+                        style={{
+                          height: `${rows[index]?.size ?? LOG_ROW_SINGLE}px`,
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
