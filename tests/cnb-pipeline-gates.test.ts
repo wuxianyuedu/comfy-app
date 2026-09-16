@@ -27,21 +27,65 @@ const GUARD_SCRIPT = readFileSync(
   "utf8",
 );
 
-/** 从 `.cnb.yml` 里切出每个 `- name:` 步骤（到下一个同级 `- name:` 或文件末）。 */
-function stepBlocks(src: string): { name: string; body: string }[] {
-  const re = /^ {4}- name: (.+)$/gm;
-  const marks: { name: string; start: number }[] = [];
+/** 单个 `- name:` 步骤。 */
+type Step = { name: string; body: string };
+
+/**
+ * 从 `.cnb.yml` 里切出步骤。
+ *
+ * 必须按**缩进**切：门禁清单挂在一个 YAML 锚点（`&gates`）下，锚点行本身也在
+ * 根级（缩进 2 的 `- name:` 是流水线自己的名字）。只认一种缩进会把锚点里的
+ * 清单整段切开，于是「清单一条不许丢」这条判据自己先失效。
+ */
+function stepBlocks(src: string, indent = 2): Step[] {
+  const re = /^( *)- name: (.+)$/gm;
+  const marks: { name: string; start: number; indent: number }[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(src)) !== null) {
-    marks.push({ name: (m[1] ?? "").trim(), start: m.index });
+    marks.push({ name: (m[2] ?? "").trim(), start: m.index, indent: (m[1] ?? "").length });
   }
-  return marks.map((mk, i) => ({
-    name: mk.name,
-    body: src.slice(mk.start, marks[i + 1]?.start ?? src.length),
-  }));
+  return marks
+    .filter((mk) => mk.indent === indent)
+    .map((mk, i, list) => ({
+      name: mk.name,
+      body: src.slice(mk.start, list[i + 1]?.start ?? src.length),
+    }));
 }
 
-const steps = stepBlocks(cnb);
+/** 挂 YAML 锚点的清单（缩进 2）。 */
+const gates = stepBlocks(cnb, 2);
+/** 锚点 `&gates` 的名字不参与核对：展开处才是步骤。 */
+const steps = gates;
+
+/**
+ * `.cnb.yml` 的两条流水线：`pull_request` 跑全套门禁，`push` 只跑合并形态复核。
+ *
+ * 为什么要有这条口径（ISSUE #623 第二问）：核时 = 节点规格 × 运行时长，
+ * 8 核跑一小时就是 8 核时，而免费额度是 160 核时/月。**同一个 stages 锚点同时
+ * 挂给两个事件**（`<<: *pipeline`）时，每一次 PR 合并都会在 master 上再跑一遍
+ * 全套——那不是平台行为，是配置写重了，而且没人会从构建历史里发现（两条都绿）。
+ */
+describe("两条流水线：门禁只在 pull_request 上跑，push 只复核合并形态", () => {
+  it("pull_request 挂的是全套门禁清单", () => {
+    // 逐行比而不是塞一条跨行正则：多行正则里的 `*` / `{6}` 与 YAML 缩进叠在一起时，
+    // 读的人（与写的人）都得在心里先跑一遍转义。
+    const lines = cnb.split("\n");
+    const at = lines.findIndex((l) => l === "  pull_request:");
+    expect(at, ".cnb.yml 里找不到 pull_request 事件").toBeGreaterThan(-1);
+    expect(lines.slice(at, at + 4)).toEqual([
+      "  pull_request:",
+      "    - <<: *common",
+      "      name: 质量门禁",
+      "      stages: *gates",
+    ]);
+  });
+
+  it("push 的合并形态复核是硬判据，且不与其他步骤共用 stages", () => {
+    const pushSteps = stepBlocks(cnb, 8);
+    expect(pushSteps.map((s) => s.name)).toEqual(["合并形态复核"]);
+    expect(pushSteps[0]?.body).toContain("scripts/check-branch-guard.cjs --merge-commit");
+  });
+});
 
 /**
  * 平台侧只读 `.cnb.yml`：`.github/workflows/ci.yml` 一旦被重新引入，
@@ -62,10 +106,19 @@ describe("平台配置：CNB 是唯一事实来源", () => {
     expect(cnb).toMatch(/^ {2}pull_request:$/m);
   });
 
-  it("两个事件共用同一份门禁清单（锚点，不各写一套）", () => {
+  it("runner / docker 等公共项走锚点，不两处各抄一套", () => {
     // 覆盖根键时锚点里的键会被整体替换，故每个事件都写出完整的 runner / docker /
-    // retries；共用的是 stages 清单本身（两处 `<<: *pipeline`）。
-    expect(cnb.match(/<<: \*pipeline/g)?.length).toBe(2);
+    // retries（两处 `<<: *common`）；stage 清单**不**通过锚点共用——
+    // 共用 stages 就等于给 push 也挂上全套门禁，见下面「两条流水线」那一组。
+    expect(cnb.match(/<<: \*common/g)?.length).toBe(2);
+    expect(/^ {2}pull_request:$/m.test(cnb)).toBe(true);
+    expect(/^ {2}push:$/m.test(cnb)).toBe(true);
+  });
+
+  it("步骤清单挂在锚点上，且锚点里的步骤数与展开处一致", () => {
+    // 锚点 `&gates` 是清单的唯一出处；两处各写一份必然漂移。
+    expect(cnb).toMatch(/^\.gates: &gates$/m);
+    expect(cnb).toMatch(/^ {6}stages: \*gates$/m);
   });
 });
 
@@ -83,7 +136,9 @@ describe("CNB 门禁清单：一条不许丢", () => {
     "pnpm run db:push": "同步数据库表结构",
     "pnpm run typecheck": "类型检查",
     "pnpm exec eslint . --max-warnings 0": "ESLint 零警告",
-    "pnpm run test": "单元测试",
+    // test 与 test:coverage 合并为一步：全量 vitest 只跑一遍，
+    // 覆盖率走平台插件挂在同一次运行上（跑两遍 = 时长与核时都翻倍）。
+    "pnpm run test": "单元测试与覆盖率",
     "check-title-bar-clearance.cjs": "标题行让位",
     "check-file-structure.cjs --strict": "文件结构硬规则",
     "check-ps1-consistency.mjs": "跨平台动作对照",
@@ -101,7 +156,7 @@ describe("CNB 门禁清单：一条不许丢", () => {
     "tests/lib-node-only-declarations.test.ts": "lib Node-only 声明",
     "check-format.cjs --strict": "prettier 格式棘轮",
     "check-reformat-only.cjs": "格式化提交分离",
-    "pnpm run test:coverage": "覆盖率棘轮",
+    "pnpm run test:coverage": "单元测试与覆盖率",
     "pnpm run build": "生产构建",
     "check-standalone-contents.cjs": "standalone 产物护栏",
     "playwright install": "安装 Playwright 浏览器",
@@ -163,6 +218,11 @@ describe("CNB 门禁清单：一条不许丢", () => {
     expect(upload).toContain("allowFailure: true");
     expect(upload).toContain("ttl: 7");
   });
+
+  it("playwright-report 在两个事件上都是 failStages 的必传产物（allowFailure 不能是空传）", () => {
+    // 上传清单退化成空不会有任何构建红，只会让人以为「失败了会留现场」。
+    expect(cnb).toContain("- playwright-report");
+  });
 });
 
 describe("分支守卫：不可信事件也不许靠流水线里的那行命令", () => {
@@ -215,7 +275,8 @@ describe("分支守卫：不可信事件也不许靠流水线里的那行命令"
 });
 
 describe("流水线：SKIP_ENV_VALIDATION 必须与 BETTER_AUTH_SECRET 成对", () => {
-  const pipelineEnv = cnb.slice(cnb.indexOf("env:"), cnb.indexOf("stages:"));
+  // env 挂在锚点 `.common` 下（两个事件的公共项），切到锚点段落结束为止。
+  const pipelineEnv = cnb.slice(cnb.indexOf("env:"), cnb.indexOf("\n.gates: &gates"));
 
   it("确实设了 SKIP_ENV_VALIDATION（否则本用例失去对象）", () => {
     expect(steps.some((s) => s.body.includes("SKIP_ENV_VALIDATION"))).toBe(true);
