@@ -116,6 +116,14 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 「只挂 `pull_request`、`push` 只留合并形态复核」，并把 `test` 与
 > `test:coverage` 合成一步 —— 每次 PR 的核时约减半，但**额度仍然不够**。
 > 三条降配口径与「不要用的路子」保留在 13.5.3，供日后额度充裕时参考。
+>
+> **删前修出的一条判据（留作记录，日后重启时直接用）**：`push` 侧的合并形态复核
+> （`node scripts/check-branch-guard.cjs --merge-commit`）**必须认得 Squash Merge**
+> ——squash 落到 `master` 的提交只有 **1 个父**，与「本地直连主干提交」在拓扑上
+> 同形。此前判据是「父提交数 > 1 才算合并」，后果是 `master` 的 push 复核**每一次
+> 都是红的**（`611150b`…`8a9efb3` 全部命中），却一次真正的绕过都没抓到。现在判据是
+> 「合并提交 **或** 提交信息带 PR 关联（平台 squash 时写下的 `PR-URL: #NNN`）」，
+> 两者都不满足时**保守放行**；服务端形态随 `.cnb.yml` 一同保留（见 13.6.1）。
 
 **现状（唯一的一层）**
 
@@ -123,6 +131,12 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 |----|------|--------|---------|
 | 本地 | `.githooks/pre-commit`（24 步） | 分支守卫 + 结构硬规则 + tsc + eslint + 各棘轮 | 只能 `--no-verify`（进历史，Review 可见） |
 | 平台（push 保护） | CNB **分支保护设置** | `master` 的直接 push（放行 PR 合并） | 需管理员改设置 |
+
+> **服务端形态的判据本身仍在**：`scripts/check-branch-guard.cjs` 的
+> `--pr-check` / `--merge-commit` 两个服务端形态随 `.cnb.yml` 一起失去了调用方，
+> 但判据本身保留 —— `tests/check-branch-guard.test.ts` 用真仓库跑三种拓扑，
+> 日后重启平台侧直接可用（见 13.6.1）。其中 `--merge-commit` 必须认得 squash，
+> 理由见上面 `⚠️` 那段。
 
 ```
 本地提交前必须通过（.githooks/pre-commit，24 步）：
@@ -279,12 +293,13 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 |---|---|---|
 | 门禁只挂 `pull_request`，`push` 只留合并形态复核 | 砍掉「同一份代码的第二遍」 | 无（合并提交不引入新代码） |
 | `test` 与 `test:coverage` 合并成 `pnpm run test:coverage` | 全量 vitest 从两遍变一遍 | 无（覆盖率本来就跟着这一次运行出） |
-| `docker.volumes` 声明 pnpm store 与 `/root/.cache` | 命中即省掉全量重装、Playwright 浏览器下载 | 节点级缓存不跨节点，有时不命中 |
 
-三条都做了，**额度仍然不够** —— 因为它们的量级是「减半」，而缺口是「一个数量级」。
-真正把额度归零只有一条路：**不跑**。这就是删除 `.cnb.yml` 的理由。
-
-**当时判定「不要用」的路子**（今天仍然成立，别再试）：
+> **服务端那两层随 `.cnb.yml` 一起下线了**（ISSUE #623，理由见 13.5.3）。
+> `scripts/check-branch-guard.cjs` 仍保留 `--pr-check` / `--merge-commit` 两个
+> 服务端形态 —— 它们是**判据本身**（`tests/check-branch-guard.test.ts` 用真仓库
+> 跑三种拓扑），日后重启平台侧流水线时直接用，不必重写。`--merge-commit` 判的是
+> 「落到 `master` 的能不能被认定为 PR 合并的形态」（合并提交 **或** 提交信息带
+> `PR-URL: #NNN`），两者都不满足时保守放行 —— 为什么不能只判「父提交数 > 1」见 13.5。
 
 - **不要调小 `runner.cpus` 省额度** —— 核时 = 核数 × 时长，核数减半时长通常翻倍，
   净效果接近零；还会拉长墙钟时间、放大超时风险。
@@ -340,7 +355,9 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > **服务端那两层随 `.cnb.yml` 一起下线了**（ISSUE #623，理由见 13.5.3）。
 > `scripts/check-branch-guard.cjs` 仍保留 `--pr-check` / `--merge-commit` 两个
 > 服务端形态 —— 它们是**判据本身**（`tests/check-branch-guard.test.ts` 用真仓库
-> 跑三种拓扑），日后重启平台侧流水线时直接用，不必重写。
+> 跑三种拓扑），日后重启平台侧流水线时直接用，不必重写。`--merge-commit` 判的是
+> 「落到 `master` 的能不能被认定为 PR 合并的形态」（合并提交 **或** 提交信息带
+> `PR-URL: #NNN`），两者都不满足时保守放行 —— 为什么不能只判「父提交数 > 1」见 13.5。
 
 **⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
 （仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，

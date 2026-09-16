@@ -28,6 +28,13 @@
   `scripts/check-branch-guard.cjs` 里所有指向 `.cnb.yml` 的表述同步改写；
   `vitest.config.ts` 的 `lcov` reporter **保留**并补写它的用途 ——
   删掉会让日后重启上报时重新踩一遍「插件找不到报告文件」那个坑。
-- **合并 master 时补记一条同源口径**（来自 #641）：`script` 与 `type:` 必须写在
-  同一条 step 上，藏在 `type` 底下的 `stages` 里会被平台静默丢掉。规范 11 与
-  这条口径一并留成 **`.cnb.yml` 删除后的记录**，日后重启上报时按它写。
+- **合并 master 时折入两条同源口径**（来自 #641 / #646，一并留成 `.cnb.yml`
+  删除后的记录，日后重启上报时按它们写）：① 覆盖率上报必须是**排在单元测试之后
+  的独立 stage** —— 同一个 stage 里的 `script` 与 `type` 是两个**并行任务**，
+  插件容器会在 `coverage/` 尚未产出时就找报告，而 `breakIfNoCoverage` 缺省为
+  `true`，找不到即退出；② 报告格式（`coverage.reporter` ↔ 插件 `pattern`）两处
+  必须对上，只改一侧不会红。规范 11 与这两条口径同步留档。
+- **折入 `--merge-commit` 的服务端形态**（来自 #646）：判据改为「合并提交 **或**
+  提交信息带 `PR-URL: #NNN`」，单父且无 PR 关联时保守放行 —— 只判「父提交数 > 1」
+  会把规范 §13.6 优先的 Squash Merge 每次都判红。`GUARD_VERSION` 随之为 `3`，
+  规范 13.5 / 13.6.1 记下这条口径。
