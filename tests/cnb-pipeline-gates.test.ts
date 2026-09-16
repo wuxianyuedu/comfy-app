@@ -347,27 +347,46 @@ describe("覆盖率上报：插件的 pattern 必须真的有文件产出", () =
   });
 
   /**
-   * 上报步骤必须**自己**把用例跑出来（script 与 type 写在同一个 step 上）。
+   * 用例必须在**上报之前**真的跑完，且上报步骤不许把 script 藏在 `type:` 底下的 `stages:`。
    *
-   * 这是 PR #641 最直接的现场：那条流水线把 `script: pnpm run test:coverage` 与
-   * `type: testing:coverage` 写在**同一个 step** 上时是对的；写成「一个 step 只有
-   * type，type 底下再嵌一层 stages 放 script」时，平台只解析那层 `stages`、
-   * **静默丢掉** vitest 那一句 —— 插件在本步开始 1.8s 后以
-   * 「没有找到覆盖率报告文件」退出（构建日志里 vitest 根本没跑），整条流水线判红。
+   * 这条判据把两个各自独立的现场一起锁住，两者都会以同一句话收场
+   * （插件报「没有找到覆盖率报告文件」）：
    *
-   * 判据不去比对 YAML 排版，只锁**语义**：上报读的是磁盘上的报告文件，而文件只有
-   * 跑完用例才有，所以「跑用例」这件事必须与上报处在**同一条 step** 上，
-   * 且那条 step 自己带 `script`。
+   * ① **不许把 script 藏进 `type:` 底下的 `stages:`**（PR #641 的现场）：
+   *    平台解析带 `type:` 的 step 时只认那一步**自带的** `script`，嵌套的那层
+   *    `stages` 会被静默丢掉 —— 构建日志里 vitest 根本没有运行痕迹。
+   *    判据不去比对 YAML 排版，只锁「`testing:coverage` 这条 step 底下不许有 `stages:`」。
+   *
+   * ② **上报必须排在用例之后**：`script:` 与 `type:` 写在**同一条 step** 上时，
+   *    二者在平台侧是**两个并行任务** —— 插件容器在用例还在跑、`coverage/` 尚未
+   *    产出时就开始找报告文件，而 `breakIfNoCoverage` 缺省为 `true`，找不到即退出。
+   *    实测该步 1~2s 内失败，而 vitest 要 60s+，整条门禁在测试这一步中断。
+   *    因此「跑用例」与「上报」拆成**两个相邻 step**（用例在前），顺序成立。
+   *
+   * 所以判据是组合的：用例在上报之前跑完（按 step 顺序），且上报那一步不带 `stages`。
+   * 只锁「同一 step」会与本仓库实际验证过的拆分布局冲突 —— 拆分版在真实构建里
+   * 让插件拿到了 `/workspace/coverage/lcov.info`（行覆盖率 63.48%），是可行的形态。
    */
-  it("上报步骤自己带 script 跑用例，不把 script 藏进 type 底下的 stages", () => {
-    expect(coverageStep, "testing:coverage 这一步没有 script：插件读不到用例产出的报告").toMatch(
-      /^ {4}script: .*test:coverage$/m,
-    );
+  it("用例在上报之前跑完，且上报步骤不许把 script 藏进 type 底下的 stages", () => {
+    // ① 上报那一步底下不许嵌 stages（平台会静默丢掉同 step 的 script）。
     expect(
       coverageStep,
       "testing:coverage 这一步底下又嵌了一层 stages —— 平台只解析那层 stages，" +
         "同 step 的 script 会被静默丢掉，插件将看到「没有找到覆盖率报告文件」",
     ).not.toMatch(/^ {4}stages:/m);
+
+    // ② 用例必须真的在上报之前跑：要么同一步自带 script（顺序天然成立），
+    //    要么排在前面某一步里（拆分布局）。
+    const runsTestsInSameStep = /^ {4}script: .*test:coverage$/m.test(coverageStep);
+    const coverageIndex = steps.findIndex((s) => s.body.includes("type: testing:coverage"));
+    const testsBefore = steps
+      .slice(0, coverageIndex)
+      .some((s) => s.body.includes("pnpm run test:coverage"));
+    expect(
+      runsTestsInSameStep || testsBefore,
+      "上报之前没有跑过用例：插件读的是磁盘上的报告文件，" +
+        "而文件只有跑完用例才有（同一步自带 script，或排在前面的某一步）",
+    ).toBe(true);
   });
 
   it("阈值口径仍留在 vitest 侧，平台侧不许填 lines / diffLines", () => {
