@@ -32,6 +32,24 @@ export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
   error: "border-rose-500/20 bg-rose-500/15 text-rose-700 dark:text-rose-400",
 };
 
+/**
+ * 级别按钮**选中态**的样式（用户反馈第 1 条：「浅色主题看不到选中的是哪一项」）。
+ *
+ * 此前选中态只有一个 `bg-subtle`——而浅色主题下 `--color-subtle`（#f7f8fa）与
+ * 行头底色 `--color-surface-1`（#f7f8fa）**是同一个值**，于是「选中」在浅色下
+ * 完全不可见（深色下分别是 #141419 / #16161c，也只是勉强能看出）。
+ *
+ * 现在选中态由三层同时表达，任何一层单独失效都还读得出「选中的是它」：
+ *   1. **底色** = 主色调淡底（`bg-primary/12`，浅深两态都由 token 推导）；
+ *   2. **描边** = `ring-1 ring-primary/45`（底色被主题调近似白时描边仍在）；
+ *   3. **字重** = `font-semibold`（由标签文字继承）。
+ *
+ * 级别色**不参与**选中判定（级别配色表照常挂在按钮上）：它表达的是「这一格
+ * 是哪一类」，与「当前看的是哪一类」是两件事。
+ */
+export const FILTER_SELECTED_STYLES =
+  "bg-primary/12 ring-1 ring-primary/45 font-semibold";
+
 /** 日志级别的正文配色（视图与测试共用同一份表）。两态各自取值。 */
 export const LEVEL_TEXT_STYLES: Record<LogLevel, string> = {
   debug: "text-ink-soft",

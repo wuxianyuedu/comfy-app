@@ -88,6 +88,47 @@ export async function fetchLogFileContent(
   return data.content ?? null;
 }
 
+/* ── 日志导出到本地文件（客户端 → 服务端）─────────────────────────────
+ * 面板的「保存到本地」经 `POST /api/logs/export` 由服务端写进 `log/exports/`，
+ * 并把路径回给面板显示（见该端点的说明：桌面壳里浏览器下载不保证落盘）。
+ */
+
+/** 导出的结果：成功时给出服务端写下的**绝对路径**与相对 `log/` 的路径。 */
+export interface SavedLogExport {
+  ok: boolean;
+  path?: string;
+  relativePath?: string;
+  bytes?: number;
+  error?: string;
+}
+
+/**
+ * 把一段日志文本保存到本机 `log/exports/`。
+ *
+ * `label` 只用于文件名可读性（服务端有白名单兜底）；内容由调用方给定。
+ * 失败返回 `{ ok: false }` 而不是抛错——面板据此显示「保存失败」，
+ * 不阻塞日志面板本身。
+ */
+export async function saveLogExport(
+  label: string,
+  content: string,
+): Promise<SavedLogExport> {
+  try {
+    const res = await fetch("/api/logs/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, content }),
+    });
+    const data = (await res.json()) as SavedLogExport;
+    return data;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "network",
+    };
+  }
+}
+
 /* ── 应用运行日志写入（客户端 → 服务端）──────────────────────────────
  * `src/lib/app-runtime-log.ts` 是 Node-only 模块（顶层 import node:fs），
  * 客户端逻辑层（如设置页）需要把「静默失败」补记进 app-runtime.log 供日志
