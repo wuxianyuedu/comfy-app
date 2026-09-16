@@ -108,7 +108,10 @@ pnpm dlx shadcn@latest add dialog form input select
 ```
 
 - 生成后校验：文件名 kebab；导入路径用 `~/components/ui/<name>`。
-- shadcn CLI 默认可能写 `@/` 别名；本仓库用 `~`，保持 `~/components/ui/<name>` 一致，避免别名漂移。
+- shadcn CLI 默认写 `@/` 别名（`components.json` 的 alias 是 `~/`，CLI 生成的
+  组件仍可能带 `@/`）；本仓库用 `~`，生成后**顺手把 `@/` 改成 `~/`**，
+  保持 `~/components/ui/<name>` 一致。这条不再靠人记：`scripts/check-import-alias.cjs`（R13，见 [12 §12.8.0](12-代码组织与文件结构.md#1280-import-别名只有一种-issue-640机器强制)）
+  会在提交阶段拦下 —— 而 `ui/` 是「工具生成、尽量不手改」的目录，正是漂移的高发区。
 - 不要从 radix 版 shadcn 仓库复制组件；遇到缺失原语用 `shadcn add` 生成 base-ui 版。
 
 ## 16.4 表单方案：shadcn Form + react-hook-form + Zod（schema 驱动 + 自动校验）
