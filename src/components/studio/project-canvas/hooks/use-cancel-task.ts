@@ -12,8 +12,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { errorMessage } from "@/lib/error-message";
-import { cancelTask } from "@/lib/task-cancel-client";
+import { errorMessage } from "~/lib/error-message";
+import { cancelTask } from "~/lib/task-cancel-client";
 
 export interface UseCancelTaskArgs {
   /** 当前要取消的任务 id（可能还没就绪 —— 见下方取消回调注释）。 */

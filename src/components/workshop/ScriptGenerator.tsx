@@ -1,21 +1,21 @@
 "use client";
 import React from "react";
-import { Icon } from "@/components/ui/icon";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type { ProjectMeta, ProjectType } from "@/lib/workshop/types";
-import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
-import { useLLM } from "@/components/workshop/LLMContext";
-import { ExtractModelSelect } from "@/components/workshop/ExtractModelSelect";
+import { Icon } from "~/components/ui/icon";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import type { ProjectMeta, ProjectType } from "~/lib/workshop/types";
+import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
+import { useLLM } from "~/components/workshop/LLMContext";
+import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
 import {
   channelProviderLabel,
   channelSelectionDisplayValue,
   resolveChannelSelection,
-} from "@/lib/workshop/channel-options";
-import { streamChat } from "@/lib/llm/browser";
+} from "~/lib/workshop/channel-options";
+import { streamChat } from "~/lib/llm/browser";
 import {
   buildScriptMarkdownMessages,
   buildScriptTemplate,
-} from "@/lib/llm/prompts";
+} from "~/lib/llm/prompts";
 import { errorMessage } from "~/lib/error-message";
 
 interface Props {

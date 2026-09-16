@@ -2,8 +2,8 @@
 /* Video group field renderer — extracted from GroupedControls.tsx.
  * Renders one friendly field per detected sub-widget (length / aspect /
  * quality), switching between preset dropdowns and native controls. */
-import { NumberField } from "@/components/studio/ui/NumberField";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { NumberField } from "~/components/studio/ui/NumberField";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
   numericBounds,
   DIM_RATIO_PRESETS,

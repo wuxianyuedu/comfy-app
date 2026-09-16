@@ -15,7 +15,7 @@
 
 import type { RefObject } from "react";
 
-import type { WorkflowIOEntry } from "@/components/studio/shared/workflow-io";
+import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { modeLabel } from "./workflow-library-config";
 import { WorkflowNodeOutputsRow } from "../shared/WorkflowNodeParts";

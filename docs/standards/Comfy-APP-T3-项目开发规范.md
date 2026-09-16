@@ -193,11 +193,17 @@ lib（纯函数） ← 任意层
 
 #### 4.4.6 className 合并
 
-复杂组件使用 `cn()` 工具（`src/lib/utils.ts`）。
+复杂组件使用 `cn()` 工具，**单一入口 `src/lib/utils.ts`**（内容是一句
+`export { cn } from "cn"`）。
 
-- 当前 `cn()` 为轻量实现：过滤 falsy + 展平一层数组。
-- **后续应迁移到 `clsx` + `tailwind-merge`**，以正确处理冲突类名（如 `p-2` vs `p-4`）。
+- `cn()` 由 **`cn@0.3.0`** 提供：接受 `clsx` 的三种入参形态（条件串 / 数组 / 对象），
+  并**负责冲突类合并**（`cn("p-2 p-4")` → `p-4`），无需再套 `clsx` + `tailwind-merge`。
+  项目自定义的 Tailwind v4 括号语法（`w-(--panel-right-width)`）同样参与合并。
+- 入口保持「只 re-export」的形态：**不要在 `src/lib/utils.ts` 里加第二个工具函数**。
+  95 处调用点全部经 `~/lib/utils` 取 `cn`，加东西会让这个入口变成「什么都往里塞」的桶。
 - 调用方传入 `className` 时，必须放到 `cn()` 最后，确保可覆盖默认样式。
+- 该契约由 `src/lib/utils.test.ts` 钉住（三种入参形态 / 冲突类后者胜出 / v4 括号语法）；
+  升级或更换实现时先跑它。
 
 ### 4.5 文案与注释
 

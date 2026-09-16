@@ -1,14 +1,14 @@
 import type * as LoggerModule from "~/lib/core/logger";
-import type * as EnvfileModule from "@/lib/envfile";
-import type * as AppSettingsModule from "@/lib/app-settings/app-settings.server";
-import type * as ImportSourceModule from "@/lib/comfyui/importSource";
+import type * as EnvfileModule from "~/lib/envfile";
+import type * as AppSettingsModule from "~/lib/app-settings/app-settings.server";
+import type * as ImportSourceModule from "~/lib/comfyui/importSource";
 /**
  * workflow.router 集成测试。
  *
  * mock 边界：~/server/db（内存 Prisma 替身，见 tests/helpers/test-db.ts）、
  * ~/server/better-auth（getSession）、~/lib/core/logger（静音）、
- * @/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
- * @/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）。
+ * ~/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
+ * ~/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）。
  * 其余（repository、workflow-types、workflow.ts、workflow-detail、
  * localWorkflows、raw 的 detectFormat/extractPositions）全部走真实实现 —— 导入链
  * 里**不再有**「转 API 图」这一步，所以不需要再 mock 转换器。
@@ -32,7 +32,7 @@ vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-vi.mock("@/lib/envfile", async (importOriginal) => ({
+vi.mock("~/lib/envfile", async (importOriginal) => ({
   ...(await importOriginal<typeof EnvfileModule>()),
   readEnvVar: vi.fn(() => null),
 }));
@@ -40,7 +40,7 @@ vi.mock("@/lib/envfile", async (importOriginal) => ({
  * 每台机器各一份：不抹掉这层，判据就随开发机的真实安装目录而变（本机装了
  * ComfyUI 时 localRoots 非空，空库用例会假失败）。这里保留其余字段的真实取值，
  * 只把 comfyuiPath 清空。 */
-vi.mock("@/lib/app-settings/app-settings.server", async (importOriginal) => {
+vi.mock("~/lib/app-settings/app-settings.server", async (importOriginal) => {
   const mod = await importOriginal<typeof AppSettingsModule>();
   return {
     ...mod,
@@ -50,7 +50,7 @@ vi.mock("@/lib/app-settings/app-settings.server", async (importOriginal) => {
     })),
   };
 });
-vi.mock("@/lib/comfyui/importSource", async (importOriginal) => ({
+vi.mock("~/lib/comfyui/importSource", async (importOriginal) => ({
   ...(await importOriginal<typeof ImportSourceModule>()),
   importFromLocalPath: vi.fn(),
   reimportFromSource: vi.fn(),
@@ -61,7 +61,7 @@ import { workflowRouter } from "~/server/api/routers/workflow";
 import {
   importFromLocalPath,
   reimportFromSource,
-} from "@/lib/comfyui/importSource";
+} from "~/lib/comfyui/importSource";
 import {
   getTestDb,
   seedUser,

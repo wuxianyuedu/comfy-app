@@ -16,19 +16,19 @@ import {
   filmShotRepository,
   skillRepository,
   taskRepository,
-} from "@/lib/core/repository";
-import { cancelTask } from "@/lib/comfyui/enqueue";
-import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
-import { createWorkflowRunTask } from "@/lib/workshop/workflow-run.server";
-import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
-import { sizeSpecDims, toSizeSpec } from "@/lib/size-presets";
+} from "~/lib/core/repository";
+import { cancelTask } from "~/lib/comfyui/enqueue";
+import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
+import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
+import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
+import { sizeSpecDims, toSizeSpec } from "~/lib/size-presets";
 import {
   FILM_COMPOSE_SIZE,
   NATIVE_SHOT_VIDEO_SIZE,
-} from "@/lib/film/film-size";
+} from "~/lib/film/film-size";
 import { z } from "zod";
-import { getLLMConfig, completeLLMStructured } from "@/lib/llm/server";
-import type { ProjectType } from "@/lib/workshop/types";
+import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
+import type { ProjectType } from "~/lib/workshop/types";
 import { errorMessage } from "~/lib/error-message";
 
 export type FilmStatus =

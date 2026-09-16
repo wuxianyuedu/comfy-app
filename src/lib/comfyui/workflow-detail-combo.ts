@@ -10,9 +10,9 @@
  * a free-text box.  Missing / unreachable → undefined → graceful fallback
  * to a plain text control.
  */
-import { fetchObjectInfo } from "@/lib/comfyui/raw";
-import { localModelFileNames } from "@/lib/models";
-import { modelFoldersForField } from "@/lib/model-types";
+import { fetchObjectInfo } from "~/lib/comfyui/raw";
+import { localModelFileNames } from "~/lib/models";
+import { modelFoldersForField } from "~/lib/model-types";
 
 /** Candidate-list extraction from an object_info spec tuple.
  *  旧形态：`[["option-a", "option-b"], {...extra}]`（head 即选项数组）。

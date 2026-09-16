@@ -57,13 +57,13 @@ const skillRepo = vi.hoisted(() => ({
   findBySlug: vi.fn(async (_slug: string) => null),
 }));
 
-vi.mock("@/lib/core/repository", () => ({
+vi.mock("~/lib/core/repository", () => ({
   filmRepository: filmRepo,
   filmShotRepository: shotRepo,
   skillRepository: skillRepo,
   taskRepository: taskRepo,
 }));
-vi.mock("@/lib/workshop/workflow-run.server", () => ({
+vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: vi.fn(async () => ({
     taskId: "task-1",
     workflowName: "wf",
@@ -74,21 +74,21 @@ const cancelTaskMock = vi.hoisted(() =>
   vi.fn(async (_taskId: string) => undefined),
 );
 const enqueueMock = vi.hoisted(() => vi.fn((_payload: unknown) => undefined));
-vi.mock("@/lib/comfyui/enqueue", () => ({
+vi.mock("~/lib/comfyui/enqueue", () => ({
   enqueue: enqueueMock,
   cancelTask: cancelTaskMock,
 }));
-vi.mock("@/lib/comfyui/firstframe", () => ({
+vi.mock("~/lib/comfyui/firstframe", () => ({
   synthesizeFirstFrame: vi.fn(async () => "firstframe.png"),
 }));
-vi.mock("@/lib/workshop/script-parser", () => ({
+vi.mock("~/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
 }));
 const llmConfig = vi.hoisted(() => vi.fn(async () => ({})));
 const llmStructured = vi.hoisted(() =>
   vi.fn<() => Promise<unknown[]>>(async () => []),
 );
-vi.mock("@/lib/llm/server", () => ({
+vi.mock("~/lib/llm/server", () => ({
   getLLMConfig: llmConfig,
   completeLLMStructured: llmStructured,
 }));
@@ -232,7 +232,7 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
   it("LLM 不可用时回退到工坊分镜解析（离线也要能建片）", async () => {
     filmRepo.create.mockResolvedValue({ id: "f-offline" });
     llmStructured.mockRejectedValue(new Error("no llm"));
-    const { parseIdeaToScenes } = await import("@/lib/workshop/script-parser");
+    const { parseIdeaToScenes } = await import("~/lib/workshop/script-parser");
     vi.mocked(parseIdeaToScenes).mockReturnValue([
       { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
     ] as unknown as ReturnType<typeof parseIdeaToScenes>);

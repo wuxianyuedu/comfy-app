@@ -14,16 +14,16 @@
  *
  * 两条取用口径（**不要混用**）
  * --------------------------
- *   1. **生产代码**一律走**深路径**：`@/lib/core/repository`、`@/lib/core/errors`、
- *      `@/lib/core/logger`、`@/lib/core/config`。
+ *   1. **生产代码**一律走**深路径**：`~/lib/core/repository`、`~/lib/core/errors`、
+ *      `~/lib/core/logger`、`~/lib/core/config`。
  *   2. **只有在「类型 + 值」都来自同一层、且确实需要它们的合集时**才用本别名
- *      `@/lib/core`（现存一处：`src/lib/skills-seed.ts` 取 `SkillSeed`）。
+ *      `~/lib/core`（现存一处：`src/lib/skills-seed.ts` 取 `SkillSeed`）。
  *      新代码请优先写深路径 —— 别名会让人看不出「这个模块到底依赖了哪一份」。
  *
  * 为什么本文件不再 `export *`
  * --------------------------
  * 这里曾是四个 `export *` 转发的 barrel，注释里还写着「所有 server 端模块统一
- * `import { ... } from "@/lib/core"`」——而实测**全库只有 2 处**真的这样导入，
+ * `import { ... } from "~/lib/core"`」——而实测**全库只有 2 处**真的这样导入，
  * 其中一处只是借道取一个类型。代价却是实打实的：
  *
  *   · **一条假承诺**：注释说「都从这里取」，实际口径是深路径，下一个人照着
@@ -62,5 +62,5 @@
  *
  * @module core
  */
-/** 内置技能种子的形状（定义处 `@/lib/core/repository-skill`，见 `skills-seed.ts`）。 */
+/** 内置技能种子的形状（定义处 `~/lib/core/repository-skill`，见 `skills-seed.ts`）。 */
 export type { SkillSeed } from "./repository-skill";

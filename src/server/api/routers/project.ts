@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { projectRepository, taskRepository } from "@/lib/core/repository";
+import { projectRepository, taskRepository } from "~/lib/core/repository";
 
 export const projectRouter = createTRPCRouter({
   /** GET /api/projects */

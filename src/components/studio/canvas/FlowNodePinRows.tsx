@@ -6,8 +6,8 @@
  * filling trailing rows alone.  Handles are ALWAYS rendered regardless of
  * wire state ("dot stays on permanently" rule). */
 import { Handle, Position } from "@xyflow/react";
-import { portColor } from "@/lib/comfyui/types";
-import { friendlyInputName } from "@/lib/comfyui/node-titles";
+import { portColor } from "~/lib/comfyui/types";
+import { friendlyInputName } from "~/lib/comfyui/node-titles";
 import { sanitizeComboLabel } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";

@@ -5,8 +5,8 @@ import {
   authedProcedure,
   rateLimitedProcedure,
 } from "~/server/api/trpc";
-import { taskRepository } from "@/lib/core/repository";
-import { kindOf } from "@/lib/media-kind";
+import { taskRepository } from "~/lib/core/repository";
+import { kindOf } from "~/lib/media-kind";
 
 /* 扩展名判据已收敛到 `media-kind.ts`（ISSUE #571）。此前这里自带一份清单，
  * 且与 `lib/media.ts` 的注释**直接矛盾**——那边明确写「gif 不是视频，`<video>`

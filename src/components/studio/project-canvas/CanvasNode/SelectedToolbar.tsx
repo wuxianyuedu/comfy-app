@@ -1,12 +1,12 @@
 "use client";
 
-import { PortHandle } from "@/components/studio/shared/DynamicWorkflowForm";
+import { PortHandle } from "~/components/studio/shared/DynamicWorkflowForm";
 import {
   ioLabel,
   splitWorkflowIO,
   typeDisplay,
   type WorkflowIOMap,
-} from "@/components/studio/shared/workflow-io";
+} from "~/components/studio/shared/workflow-io";
 
 /* ── Floating toolbar shown only when the node is selected ──
  *  Matches the landed design spec: a compact pill above the node with

@@ -1,7 +1,7 @@
 // Executor 纯逻辑单测：验证工具解析与基础操作。
 import { describe, expect, it } from "vitest";
 import { resolveAgentTool } from "./executor";
-import type { WorkshopDraftDto } from "@/lib/workshop/draft-sync-shared";
+import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** 内存 mock handlers（避免动态 import 链与真实 LLM 调用）。 */
 function makeMockContext() {

@@ -1,19 +1,19 @@
 "use client";
 import React from "react";
-import { Icon } from "@/components/ui/icon";
-import type { Character, Scene, Shot, StyleRef } from "@/lib/workshop/types";
+import { Icon } from "~/components/ui/icon";
+import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotNegative,
   buildShotPrompt,
-} from "@/lib/workshop/prompt-builder";
+} from "~/lib/workshop/prompt-builder";
 import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
   startLocalGenerate,
   watchTask,
   type GenerateInput,
-} from "@/lib/workshop/generation-client";
-import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
+} from "~/lib/workshop/generation-client";
+import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
   parseShotSize,
   shotSizeToParam,

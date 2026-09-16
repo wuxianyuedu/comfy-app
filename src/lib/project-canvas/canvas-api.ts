@@ -7,11 +7,11 @@
  * 失败一律「抛出带中文文案的 Error」，由调用方（hook）决定提示形态。
  */
 
-import { waitForComfyReady } from "@/lib/comfy-readiness-client";
+import { waitForComfyReady } from "~/lib/comfy-readiness-client";
 import {
   parseValidationErrorsJson,
   type ValidationError,
-} from "@/lib/comfyui/validation";
+} from "~/lib/comfyui/validation";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 

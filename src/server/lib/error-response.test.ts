@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AuthError, NotFoundError } from "@/lib/core/errors";
+import { AuthError, NotFoundError } from "~/lib/core/errors";
 import { errorResponse, unauthorizedResponse } from "./error-response";
 
 describe("errorResponse", () => {

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireServerUser } from "@/lib/auth-server";
-import { uploadImage, comfyBase } from "@/lib/comfyui/client";
-import { ensureComfyUiReady } from "@/lib/comfyui/lifecycle";
+import { requireServerUser } from "~/lib/auth-server";
+import { uploadImage, comfyBase } from "~/lib/comfyui/client";
+import { ensureComfyUiReady } from "~/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";

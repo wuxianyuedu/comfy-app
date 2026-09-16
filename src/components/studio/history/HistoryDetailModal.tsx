@@ -1,11 +1,11 @@
 import { Folder, X } from "lucide-react";
 
-import { MediaThumbnail } from "@/components/studio/ui/MediaThumbnail";
-import { isVideo } from "@/lib/media";
+import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
+import { isVideo } from "~/lib/media";
 import {
   fetchTaskWorkflow,
   openTaskFolder,
-} from "@/lib/history-detail-actions";
+} from "~/lib/history-detail-actions";
 
 import {
   deriveGenValues,

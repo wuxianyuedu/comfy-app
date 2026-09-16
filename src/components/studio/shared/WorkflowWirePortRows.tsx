@@ -8,7 +8,7 @@ import {
   type ControlKind,
   type WorkflowIOEntry,
 } from "./workflow-io";
-import { NumberField } from "@/components/studio/ui/NumberField";
+import { NumberField } from "~/components/studio/ui/NumberField";
 import { PortHandle, portChipStyle } from "./WorkflowPortHandle";
 import { AutoResizeTextarea } from "./WorkflowFormTextarea";
 import { isSeedLike, SeedModeButton } from "./WorkflowSeedModeButton";

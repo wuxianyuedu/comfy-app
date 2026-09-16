@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
-import { requireServerUser } from "@/lib/auth-server";
+import { requireServerUser } from "~/lib/auth-server";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**

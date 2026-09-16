@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
+import { getServerUser } from "~/lib/auth-server";
 import {
   pendingDetail,
   queryVideoTask,
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  *
  * 关键：本路由只查既有任务，**绝不重新提交** —— 不会重复扣费 / 生成第二个视频。
  * 连接参数与密钥解析、轮询地址形状与超时口径都与提交路由同一份实现
- *（`@/lib/llm/usage-test.server`），避免「一处改了另一处没改」的行为分叉。
+ *（`~/lib/llm/usage-test.server`），避免「一处改了另一处没改」的行为分叉。
  *
  * 失败一律 200 + `{ ok:false, detail }`，前端按 detail 展示降级文案。
  */

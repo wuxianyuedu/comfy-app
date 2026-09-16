@@ -8,12 +8,12 @@ import type {
   ProjectMeta,
   Scene,
   Shot,
-} from "@/lib/workshop/types";
+} from "~/lib/workshop/types";
 import {
   workshopSession,
   type WorkshopSession,
   type WorkshopSessionInsert,
-} from "@/server/db/schema";
+} from "~/server/db/schema";
 import { workshopDb } from "./db";
 import type { WorkshopSessionState, WorkshopSessionSummary } from "./types";
 

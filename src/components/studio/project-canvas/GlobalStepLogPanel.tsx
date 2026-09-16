@@ -16,7 +16,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
 import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
-import type { ValidationError } from "@/lib/comfyui/validation";
+import type { ValidationError } from "~/lib/comfyui/validation";
 import type { StepLogEntry } from "./stepLogCache";
 import {
   appendStepLog,
@@ -28,7 +28,7 @@ import {
 } from "./stepLogCache";
 import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
-import { ValidationErrorList } from "@/components/studio/shared/ValidationErrorList";
+import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
 

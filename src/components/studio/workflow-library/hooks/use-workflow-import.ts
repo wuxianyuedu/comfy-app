@@ -9,7 +9,7 @@
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import { type api } from "~/trpc/react";
-import { detectWorkflowFormat } from "@/lib/workflow-format";
+import { detectWorkflowFormat } from "~/lib/workflow-format";
 
 export interface UseWorkflowImportArgs {
   createMut: ReturnType<typeof api.workflow.create.useMutation>;

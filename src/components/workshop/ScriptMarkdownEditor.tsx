@@ -2,7 +2,7 @@
 
 import React from "react";
 import { X, FileText } from "lucide-react";
-import { markdownToHtml } from "@/lib/comfyui/markdown";
+import { markdownToHtml } from "~/lib/comfyui/markdown";
 import {
   normalizeMarkdown,
   buildOutline,

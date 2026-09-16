@@ -42,8 +42,8 @@
  */
 import pino, { type DestinationStream, type LoggerOptions } from "pino";
 
-import { appRuntimeLog } from "@/lib/app-runtime-log";
-import { redactSecretShaped } from "@/lib/core/redact-secret";
+import { appRuntimeLog } from "~/lib/app-runtime-log";
+import { redactSecretShaped } from "~/lib/core/redact-secret";
 
 /**
  * 值形状守卫实现见 `./redact-secret`（零框架依赖的纯逻辑）。
