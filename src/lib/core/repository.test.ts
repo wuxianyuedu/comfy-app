@@ -87,6 +87,33 @@ describe("DrizzleRepository 基类", () => {
     await expect(projectRepository.delete("p1")).resolves.toBeUndefined();
   });
 
+  it("显式传入的 id 列优先于 table.id（基类不假定两者同名）", async () => {
+    // 基类的两个分支必须都被走到：`idColumn` 显式给出时走它，缺省才回落
+    // `table.id`。用 Project 表 + 明确的主键列构造一个独立实例 —— 表对象与
+    // 列对象来自同一张表，但契约是「传入哪列就按哪列定位」。
+    const { project } = await import("~/server/db/schema");
+    const repo = new DrizzleRepository<{ id: string; name: string }>(
+      project,
+      project.id,
+    );
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    await projectRepository.upsertForUser("u1", {
+      id: "p-explicit",
+      name: "显式主键列",
+      nodes: "[]",
+      edges: "[]",
+    });
+
+    expect((await repo.findById("p-explicit"))?.name).toBe("显式主键列");
+    // update 走的是同一条 `this.id` 取值路径：命中则更新、未命中抛 NotFoundError
+    expect((await repo.update("p-explicit", { name: "改名" })).name).toBe(
+      "改名",
+    );
+    await expect(repo.update("nope", { name: "x" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
   it("未显式传 id 列时从表定义里取 `id`（基类默认分支）", async () => {
     const repo = new DrizzleRepository<{ id: string; name: string }>(
       (await import("~/server/db/schema")).workflowModelTag,
