@@ -82,11 +82,23 @@ export default defineConfig({
           statements: 15,
           branches: 10,
         },
+        // 从「40/35/40/35」抬到实测值：仓储层（`repository-*.ts` 共 12 个模块，
+        // 占本目录分母的绝对大头）此前**零覆盖**。补法不是逐个 mock，而是让测试
+        // 走 `tests/helpers/test-db.ts` 的**内存 SQLite + 真 Drizzle** —— 这一层的
+        // 正确性全在「SQL 怎么写」上（count(列) vs count(*)、onConflictDoUpdate 的
+        // target、and() 里 undefined 的短路、JSON 列的加解密顺序），mock 断言到不了。
+        // 补测试时实测出 3 处真缺陷（详见 changelog 碎片）：
+        //   · `listByUser` 只给 skip 不给 take 时生成 `… offset ?`（少 LIMIT），
+        //     better-sqlite3 抛 near "offset": syntax error → 调用方拿 500；
+        //   · `FilmRepository.listByUser` 用 count(*) 配 LEFT JOIN，没镜头的成片
+        //     显示「1 镜」（同坑在 repository-model-tag 已修过一次）；
+        //   · 分页两条分支（普通 select / relational query）口径不一致，后者
+        //     根本无法表达「不限条数只跳过」。
         "src/lib/core/**": {
-          lines: 40,
-          functions: 35,
-          statements: 40,
-          branches: 35,
+          lines: 90,
+          functions: 85,
+          statements: 90,
+          branches: 90,
         },
         // 从「全 0」抬到实测值：`lifecycle` 的探测 / 定位 / 启停判决进了用例
         // （端口应答三态、找不到 drizzle-kit、不是本应用拉起的就不乱杀）。
@@ -122,11 +134,19 @@ export default defineConfig({
         //   · `browser`（曾 2.1/0）：SSE 跨 chunk 半个 JSON 的拼帧、坏帧跳过、
         //     非 2xx 必须抛错。
         // 数字仍取「实测值向下取整到 5 的倍数」，只升不降（§18.6）。
+        //
+        // 从「55/55/55/50」抬到实测值：`server.ts`（435 行的**唯一 LLM 出口**：
+        // 三层配置叠加、四条补全路径、网络失败翻译）与 `usage-test.server.ts`
+        // （设置页「测试」弹窗的服务端共享实现）此前**零覆盖**，两个客户端模块
+        // （`model-catalog-client` / `usage-test-client`）也是 0。补测试时顺手修掉
+        // 一处用户可见的文案缺陷：上游返回非 JSON 体（网关 HTML 错误页）时，
+        // 错误提示拼成 **`HTTP 503：HTTP 503`** —— 状态码说两遍，真实原因一个字
+        // 都没带上；另有 `model-catalog-client` 把全空白模型名放进下拉。
         "src/lib/llm/**": {
-          lines: 55,
-          functions: 55,
-          statements: 55,
-          branches: 50,
+          lines: 90,
+          functions: 85,
+          statements: 90,
+          branches: 85,
         },
         "src/lib/project-canvas/**": {
           lines: 70,

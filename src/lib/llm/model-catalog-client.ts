@@ -35,9 +35,14 @@ async function getModels(
     return {
       ok: json.ok === true,
       models: Array.isArray(json.models)
-        ? json.models.filter(
-            (m): m is string => typeof m === "string" && m !== "",
-          )
+        ? json.models
+            // 只判 `m !== ""` 会把**全空白**的名字放进来（上游偶尔给出
+            // `"   "` 这种占位），下拉里就多一个选不中、显示为空的条目。
+            // 这里按 trim 后是否为空来筛，并顺手去掉两边空白（显示与再上行
+            // 都干净）。
+            .filter((m): m is string => typeof m === "string")
+            .map((m) => m.trim())
+            .filter((m) => m !== "")
         : [],
       detail:
         typeof json.detail === "string"
