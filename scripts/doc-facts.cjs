@@ -44,6 +44,9 @@ const SCOPED_DOCS = [
   "docs/standards/17-UI与逻辑分离.md",
   "docs/standards/18-lib层规范.md",
   // 全量：guides 规范指南（不含 reviews 评审归档、api 自动生成、superpowers 设计归档、audits 过程文件）
+  // 功能流程图：与规范同样纳入，保证图里引用的路径 / 值不会随源码静默过期。
+  "docs/guides/feature-workshop-flow.md",
+  "docs/guides/feature-workflow-library-flow.md",
   "docs/guides/DEV-QUERIES.md",
   "docs/guides/PRODUCTION-GAPS.md",
   "docs/guides/TESTING.md",

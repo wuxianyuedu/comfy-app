@@ -22,6 +22,8 @@ AIGC:
 |---|---|---|---|
 | 项目开发规范（主规范 v1.0） | [Comfy-APP-T3-项目开发规范.md](standards/Comfy-APP-T3-项目开发规范.md) | 高层强制基准：技术栈选型、架构分层、命名硬约束、Git 工作流、性能总则、测试门禁、安全、文档、构建发布、疑难排查 | **强制总纲**（与文档集冲突时以主规范最新版为准） |
 | 前端工程规范文档集（standards v1.2） | [standards/README.md](standards/README.md) | 前端工程深度细则：状态管理、性能、样式、组件设计、类型安全、a11y、日志、异步、路由、错误处理、测试、代码组织、提交与 Code Review、反模式、附录 | **强制细则**（与主规范冲突时以主规范为准） |
+| 功能流程图 · 工坊 | [guides/feature-workshop-flow.md](guides/feature-workshop-flow.md) | 工坊全链路流程：六阶段主干 / 两条生成通道 / 草稿持久化 / 服务端编排 / 失败出口（**先看流程图把控方向，再看判据表核对实现**） | **功能方向口径**（改工坊流程时以本图为准） |
+| 功能流程图 · 工作流库 | [guides/feature-workflow-library-flow.md](guides/feature-workflow-library-flow.md) | 工作流库全链路流程：列表与磁盘跟踪 / 三条导入路径 / 详情三页签 / 对外参数落点 / 就地运行 / 交付给谁 | **功能方向口径**（改工作流库流程时以本图为准） |
 | 测试说明 | [TESTING.md](guides/TESTING.md) | 单测聚焦范围与测试体系说明 | 配套 |
 | 拉取更新后环境同步指南 | [guides/sync-after-pull.md](guides/sync-after-pull.md) | 远端改了 pnpm 配置/依赖后，本地拉取代码如何同步环境 | 配套 |
 | 应用内「页面跑着旧代码」处置指南 | [guide-stale-code.md](guide-stale-code.md) | 应用长开期间拉到新代码后白屏/功能失效：怎么判断、怎么一次修好 | 配套 |
@@ -120,6 +122,9 @@ AIGC:
 ## 6. 使用路径
 
 - **日常开发**：先读主规范对应章节（总纲约束）→ 再进文档集对应章节看代码示例（第 3 节映射）。
+- **核对某个功能的方向对不对**：先看对应的**功能流程图**（工坊 / 工作流库），
+  按图确认流向与阶段边界，再看图后的判据表逐条核对实现落点；两篇都是
+  `pnpm doc:check` 纳管文档，图里引用的路径与值不会静默过期。
 - **说术语/写 Issue/起 PR 标题**：先查 [术语表](glossary.md)——`画布`/`节点`/`运行`/`项目`/`视图` 这类一词多指的词必须带限定词（判别口诀见 glossary §2）。
 - **提交前自查**：按 [13.1 提交前自查清单](standards/13-提交与-code-review.md#131-提交前自查清单) 逐条对照；换行符 LF 与 git-lfs 参数见 [13.7/13.8](standards/13-提交与-code-review.md#137-换行符与提交噪声lf)。
 - **Code Review**：对照 [14 反模式速查表](standards/14-反模式速查表.md) + [13.4 Review 维度](standards/13-提交与-code-review.md#134-code-review-重点维度) 逐项检查。
