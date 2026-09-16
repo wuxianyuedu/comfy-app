@@ -267,7 +267,7 @@ describe("classifyWorkshopPin", () => {
 
 describe("视频模式判定", () => {
   it("视频模式码前缀命中，图类模式码不命中", () => {
-    for (const code of ["T2V", "I2V", "TI2V", "FLF2V", "FL2V", "S2V", "V2V"]) {
+    for (const code of ["T2V", "I2V", "TI2V", "FLF2V", "S2V", "V2V"]) {
       expect(isVideoMode(code)).toBe(true);
     }
     for (const code of [

@@ -195,16 +195,8 @@ export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
     label: "首尾帧生视频",
     category: "video",
     subCategory: "生成",
-    description: "Wan/LTX/Bernini 用",
-    isGenerative: true,
-  },
-  {
-    code: "FL2V",
-    fullName: "First-Last-Frame-to-Video",
-    label: "首尾帧生视频",
-    category: "video",
-    subCategory: "生成",
-    description: "同 FLF2V（简写）",
+    description:
+      "Wan/LTX/Bernini 用（首尾帧只此一个 code，旧 FL2V 已归一至此）",
     isGenerative: true,
   },
   {
@@ -423,15 +415,25 @@ const CODE_BY_LOWER = new Map<string, string>(
   ALL_WORKFLOW_TYPES.map((def) => [def.code.toLowerCase(), def.code]),
 );
 
+/** 已删除的规范 code → 现存 code 的别名表（去重后必须留一份迁移判据）。
+ *
+ *  「首尾帧生视频」曾同时存在 FLF2V 与 FL2V 两个同义 code，面板上出现两条同名
+ *  条目，已删除 FL2V 只留 FLF2V（见别名表下方归一）。库里若已按旧 code 落过
+ *  taskType / modes，必须在读取侧归一到 FLF2V，否则该工作流会被判成「未知模式」
+ *  而丢掉模式端口。 */
+const RETIRED_CODE_ALIASES = new Map<string, string>([["fl2v", "FLF2V"]]);
+
 /** 将用户/前端输入的任务类型码归一到规范 code（大小写不敏感）。
  *
  *  数据自始即使用规范 code 写入，此函数不再承担历史旧值（TXT2IMG 等）的
- *  映射兼容——只把输入统一成规范大小写；非规范的自定义类型按原样透传。
+ *  映射兼容——只把输入统一成规范大小写；已删 code 按 RETIRED_CODE_ALIASES
+ *  归一到现存 code；非规范的自定义类型按原样透传。
  */
 export function normalizeTaskType(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return trimmed;
-  return CODE_BY_LOWER.get(trimmed.toLowerCase()) ?? trimmed;
+  const lower = trimmed.toLowerCase();
+  return CODE_BY_LOWER.get(lower) ?? RETIRED_CODE_ALIASES.get(lower) ?? trimmed;
 }
 
 /** 一个工作流「当前生效的模式」—— 三处消费方（画布节点 / 工作流库 / 编辑器）
