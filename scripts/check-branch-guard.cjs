@@ -40,11 +40,18 @@
  *   触发者也能把 .cnb.yml 里的那一行删掉(PR 类事件是「不可信事件」,流水线配置
  *   取自源分支),因此判定必须自持:删了它就是让流水线当场失败,而不是静默不检查。
  *
+ * 服务端复核之二(--merge-commit,用户 .cnb.yml 的 push 流水线):
+ *   master 的 push 事件上 HEAD **就是**合并提交,「HEAD 在 master 上 = 直连主干」
+ *   会把每一次正常的 PR 合并都拦下。push 事件只该问一件事:这次落到 master 的
+ *   是不是**合并提交**。父提交数 > 1 → 放行(PR 合并的正常形态);
+ *   ≤ 1 → 说明有变更绕过 PR 写进了主干(--no-verify 就能做到),正是要拦的。
+ *
  * 用法:
  *   node scripts/check-branch-guard.cjs              # 提交场景检查(违规即阻断)
  *   node scripts/check-branch-guard.cjs --status     # 只看当前分支现状
  *   node scripts/check-branch-guard.cjs --pre-commit # 显式声明提交场景
  *   node scripts/check-branch-guard.cjs --pr-check   # 服务端复核:源分支不能是目标分支
+ *   node scripts/check-branch-guard.cjs --merge-commit # 服务端复核:落到 master 的必须是合并提交
  */
 /**
  * 判据版本 —— 本值一变,「旧版本挡下了什么」就有缺口:.cnb.yml 里那条调用行属于
@@ -210,6 +217,7 @@ function printBlockedTip(branch) {
 function main() {
   const statusOnly = process.argv.includes("--status");
   const result = evaluate();
+  const mergeCommit = process.argv.includes("--merge-commit");
 
   if (statusOnly) {
     console.log(
@@ -240,6 +248,23 @@ function main() {
     }
     console.log("[branch-guard] OK(" + pr.reason + ")");
     return;
+  }
+
+  if (mergeCommit) {
+    // master 的 push 事件上 HEAD 就是合并提交:PR 已经合进来了,判据换成「合并提交即放行」。
+    // 先按分支分流:不在受保护分支上时这条判据无从命中,不该误报。
+    if (result.branch !== PROTECTED_BRANCH) {
+      console.log("[branch-guard] OK(不在 " + PROTECTED_BRANCH + " 上,push 复核不适用)");
+      return;
+    }
+    if (result.parents > 1) {
+      console.log("[branch-guard] v" + GUARD_VERSION + " push 复核:HEAD 有 " + result.parents + " 个父提交(PR 合并提交) → 放行");
+      return;
+    }
+    console.error("");
+    console.error("[branch-guard] 阻断:master 上出现非合并提交(" + result.reason + "),规范 13.6。");
+    console.error("[branch-guard] 这说明有变更绕过了 PR:本地门槛可被 --no-verify 绕过,平台侧请确认分支保护已开启。");
+    process.exit(1);
   }
 
   if (result.blocked) {

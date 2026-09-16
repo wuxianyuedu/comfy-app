@@ -185,6 +185,35 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("目标分支 master");
   });
 
+  /* ── --merge-commit:master 的 push 事件复核 ───────────────────────── */
+
+  it("--merge-commit:master 上的合并提交 → 放行(push 事件上 HEAD 就是合并提交)", () => {
+    git(["checkout", "-q", "-b", "feat/merge-me"]);
+    writeFileSync(join(workdir, "feature.txt"), "feature\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "feat: feature"]);
+    git(["checkout", "-q", "master"]);
+    git(["merge", "--no-ff", "--no-edit", "-q", "feat/merge-me"]);
+    const { code, output } = run(["--merge-commit"]);
+    expect(code).toBe(0);
+    expect(output).toContain("PR 合并提交");
+  });
+
+  it("--merge-commit:master 上的非合并提交 → 阻断(变更绕过了 PR)", () => {
+    // 默认判据在 master 上也会拦,这条锁的是「push 复核形态也拦」——
+    // 否则 .cnb.yml 的 push 流水线会把每一条正常 PR 合并都判红。
+    const { code, output } = run(["--merge-commit"]);
+    expect(code).toBe(1);
+    expect(output).toContain("非合并提交");
+    expect(output).toContain("绕过了 PR");
+  });
+
+  it("--merge-commit:工作分支上提交 → 放行(不误报)", () => {
+    git(["checkout", "-q", "-b", "feat/push"]);
+    const { code } = run(["--merge-commit"]);
+    expect(code).toBe(0);
+  });
+
   it("pre-commit 钩子把守卫放在第一步(顺序错了会先跑一堆必然白费的门禁)", () => {
     const hookPath = join(process.cwd(), ".githooks", "pre-commit");
     copyFileSync(hookPath, join(workdir, "pre-commit"));
