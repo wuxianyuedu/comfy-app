@@ -152,7 +152,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 目录                        | lines | functions | statements | branches | 实测 trend                                                                                                                    |
 | --------------------------- | ----- | --------- | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `src/lib/agent/**`          | 20    | 20        | 15         | 10       | 18.9 / 21.7 / 12.9                                                                                                            |
-| `src/lib/core/**`           | 90    | 85        | 90         | 90       | 94.6 / 96.5 / 90.8（仓储层 12 个模块接内存 SQLite 真库用例后从 42.7 抬起，见 §18.12）                                        |
+| `src/lib/core/**`           | 95    | 95        | 90         | 90       | 96.9 / 96.5 / 94.8（仓储层 12 个模块接内存 SQLite 真库用例后从 42.7 抬起，见 §18.12；barrel / 基类收口后门槛再抬一次，见 §18.8） |
 | `src/lib/drizzle-studio/**` | 40    | 35        | 35         | 35       | 41.1 / 37.2 / 39.1                                                                                                            |
 | `src/lib/film/**`           | 40    | 55        | 40         | 30       | 40.4 / 33.2 / 40.9（编排判决面进用例后从 7.5 抬起）                                                                           |
 | `src/lib/llm/**`            | 90    | 85        | 90         | 85       | 97.5 / 96.6 / 89.7（`server.ts` 唯一 LLM 出口与 `usage-test.server.ts` 从 0 覆盖接入用例后，从 55.3 再次抬起）              |
@@ -206,6 +206,19 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 配置     | `core/config.ts` 是**类型契约 + 默认值**，不承诺「集中配置」             | `tests/core-spine-single-source.test.ts`（禁承诺句式；默认值必须取自 `CONFIG_ENV_DEFAULTS` / `endpoints.ts`） |
 
 三条判据都已接入 `.githooks/pre-commit`（第 17 步）与 CI（`Core spine single source`）。
+
+**另外两处「注释与现状相反」也已收口**（ISSUE #565，pre-commit 第 23 步 / CI
+`Core barrel & repository base discipline`，详细口径见 §12.17）：
+
+| 位置                      | 曾经的注释承诺                              | 现状与判据                                                                                         |
+| ------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `core/index.ts`（barrel） | 「所有 server 端模块统一从这里 import」      | 实测只有 2 处这样导入，口径是**深路径**；改为具名转发，禁 `export *`，转出符号必须有消费方           |
+| `core/repository-base.ts` | （无承诺，但 `create` 里真的打了一条日志）   | 基类不做横切：不引日志实现、不引上层，留痕由**子类按语义**记（`tests/repository-base-purity.test.ts`） |
+
+`core/index.ts` 为什么不许 `export *` 还有一个结构性理由：`core/logger` 依赖同层的
+`lib/app-runtime-log` → `lib/log-paths`，若 `log-paths` 从 barrel 取用就形成
+`index → logger → … → index` —— 而 §12.7 的环检测只认**真实存在的边**，抓不到这种
+「一写就成环」的潜在组合（回归测试用合成图把它钉住）。
 
 **两条诊断通道已并入唯一通道（不再豁免）**：`generation-log.server.ts` 的
 `console.warn` 改走 `core/logger`（消息文案不变，额外获得脱敏与 ERROR 镜像）；
@@ -342,6 +355,9 @@ import」—— 那只是把同一条边换个写法（`core/logger` 当时仍�
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
 - 要取仓储：**直接 import**（`@/lib/core/repository`），别再找容器 —— 它已按 18.8 移除。
+- **取 core 里任何东西都走深路径**（`@/lib/core/repository` / `errors` / `logger` / `config`）；
+  `@/lib/core` 这个别名只保留「类型 + 值确实来自同一层」的用法（现存一处取 `SkillSeed`），
+  **不要往 barrel 里加 `export *`**（§12.17）。
 - 要写日志：**实现只有一处**（`@/lib/core/logger`，不带 `server-only` 因它被纯 Node
   宿主共用）；`@/server/lib/logger` 是转发层，服务端既有导入照旧可用。**不要直接
   `console.*`**（会绕开脱敏与面板镜像），也**不要新建第二条通道**（`import pino`

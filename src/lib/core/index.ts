@@ -1,19 +1,45 @@
 /**
- * `core/index.ts` — 架构核心层统一出口（barrel）
+ * `core/index.ts` — 架构核心层的**深路径入口别名**（barrel）
  * ===========================================================================
  *
  * 本目录是 Comfy-APP 的**架构基座**，承载跨切面、与业务无关的通用能力：
  *
- * | 模块          | 提供                                   | 设计模式/意图        |
- * |---------------|----------------------------------------|---------------------|
- * | `errors`      | `AppError` 类树 + 归一化/信封            | 统一错误契约         |
- * | `logger`      | `createLogger` 结构化日志（pino 薄封装） | 横切关注点           |
- * | `repository`  | `Repository` 接口 + `PrismaRepository`  | Repository 模式     |
- * | `config`      | `config` 集中类型化配置                 | Config 模式         |
+ * | 模块            | 提供                                    | 设计模式 / 意图      |
+ * |-----------------|-----------------------------------------|----------------------|
+ * | `errors`        | `AppError` 类树 + 归一化 / 错误信封      | 统一错误契约         |
+ * | `logger`        | 日志唯一实现（pino + 脱敏 + 面板镜像）   | 横切关注点           |
+ * | `repository`    | `Repository` 接口 + Drizzle 泛型基类     | Repository 模式      |
+ * | `config`        | 类型契约 + 默认值                       | Config 模式          |
+ * | `redact-secret` | 密钥值形状守卫（两条落盘通道共用）       | 脱敏单一事实源       |
  *
- * 约定：所有 server 端模块统一 `import { ... } from "@/lib/core"`；
- * 仓储一律**直接 import 具体单例**（`@/lib/core/repository`）——本仓库不再有
- * 服务容器（见下）。
+ * 两条取用口径（**不要混用**）
+ * --------------------------
+ *   1. **生产代码**一律走**深路径**：`@/lib/core/repository`、`@/lib/core/errors`、
+ *      `@/lib/core/logger`、`@/lib/core/config`。
+ *   2. **只有在「类型 + 值」都来自同一层、且确实需要它们的合集时**才用本别名
+ *      `@/lib/core`（现存一处：`src/lib/skills-seed.ts` 取 `SkillSeed`）。
+ *      新代码请优先写深路径 —— 别名会让人看不出「这个模块到底依赖了哪一份」。
+ *
+ * 为什么本文件不再 `export *`
+ * --------------------------
+ * 这里曾是四个 `export *` 转发的 barrel，注释里还写着「所有 server 端模块统一
+ * `import { ... } from "@/lib/core"`」——而实测**全库只有 2 处**真的这样导入，
+ * 其中一处只是借道取一个类型。代价却是实打实的：
+ *
+ *   · **一条假承诺**：注释说「都从这里取」，实际口径是深路径，下一个人照着
+ *     注释写就会多出一种取法（与 `container` 的教训同款：两种取用方式并存，
+ *     只有一种是既成形态）；
+ *   · **一个同层环**：`logger.ts` → `app-runtime-log.ts` → `log-paths.ts`（同层），
+ *     而 `log-paths.ts` 若从本 barrel 取用就会形成 `index → logger → … → index`
+ *     的环。环检测（`scripts/check-circular-deps.cjs`）只认**真实存在的边**，
+ *     所以它此前并不报红 —— 一个「靠没人这么写」才不成立的环，是排查成本最高
+ *     的那一类（症状是 import 顺序变了就 `undefined`）。
+ *   · **一条静默的加载链**：`export *` 让每个引用方都强制加载整层（pino + zod +
+ *     Drizzle 表定义 + `server-only`），与本模块自述的「通用能力出口」相反。
+ *
+ * 现在改为**具名转发**，只保留唯一在用的符号，并写明每一份的深路径。新增符号
+ * 必须同时给出消费方 —— 没有消费方的转发正是「零消费导出」判据
+ * （`scripts/check-dead-exports.cjs`，规范 §12.16）要拦的那种抽象。
  *
  * 为什么没有 eventBus
  * ------------------
@@ -36,7 +62,5 @@
  *
  * @module core
  */
-export * from "./errors";
-export * from "./logger";
-export * from "./repository";
-export * from "./config";
+/** 内置技能种子的形状（定义处 `@/lib/core/repository-skill`，见 `skills-seed.ts`）。 */
+export type { SkillSeed } from "./repository-skill";
