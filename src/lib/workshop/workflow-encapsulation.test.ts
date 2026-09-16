@@ -249,10 +249,10 @@ describe("classifyWorkshopPin", () => {
     expect(classifyWorkshopPin(entry)).toBe(expected);
   });
 
-  it("图内角色先于名字：同一对文本编码节点靠 role 分清正负（ISSUE #611）", () => {
+  it("不在这一层做图内推导：两行同名的 `text` 都判不出正负", () => {
     /* 真实文生图里两个 CLIPTextEncode 的 pin 名与显示名完全一样（都叫 text /
-     * 「文本」），名字层面分不出正负 —— 只有导入图沿 KSampler 连线链推出的
-     * role 说得清。缺了它，工坊封装页与画布节点页都不会列出「负向提示词」口。 */
+     *  「文本」）。工坊的对外参数是**契约**，判不出名字就交给契约兜底
+     *  （用户给的值按契约 id 落点），不靠图内推导替作者猜哪一行是负向。 */
     expect(
       classifyWorkshopPin({
         direction: "input",
@@ -260,20 +260,19 @@ describe("classifyWorkshopPin", () => {
         nodeId: "6",
         name: "text",
         type: "STRING",
-        role: "positive",
       }),
-    ).toBe("prompt");
+    ).toBe("internal");
+    /* 名字里写了负向才认。 */
     expect(
       classifyWorkshopPin({
         direction: "input",
         kind: "widget",
         nodeId: "7",
-        name: "text",
+        name: "negative_prompt",
         type: "STRING",
-        role: "negative",
       }),
     ).toBe("negative");
-    /* 图片口的角色不影响判定（采样器的 negative conditioning 与 LoadImage 无关）。 */
+    /* 图片口按图片判。 */
     expect(
       classifyWorkshopPin({
         direction: "input",
@@ -281,7 +280,6 @@ describe("classifyWorkshopPin", () => {
         nodeId: "8",
         name: "image",
         type: "IMAGE",
-        role: "negative",
       }),
     ).toBe("reference-image");
   });
