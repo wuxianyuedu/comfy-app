@@ -1077,6 +1077,32 @@ fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
   }
 }
 
+/// 为什么 main 窗上必须调 `disable_drag_drop_handler`：不调，应用内拖不进图片 /
+/// 工作流，而浏览器整窗打开同一个 ComfyUI 地址却是好的（ISSUE #616 的现场）。
+///
+/// 成因：宿主窗口默认挂着 **WebView2 的原生拖放处理器**（wry 的
+/// `drag_drop_handler_enabled`，默认 true；tauri 的
+/// `WebviewWindowBuilder::disable_drag_drop_handler` 的官方说明就是
+/// 「Disables the drag and drop handler. **This is required to use HTML5 drag and
+/// drop APIs on the frontend on Windows.**」）。它一接手，Chromium 就不再走自己
+/// 的拖放路径：`dragover` / `drop` **不派发到 DOM**，文件被换成 wry 的回调
+/// `on_drag_drop` —— 而本应用没有注册它，于是「拖进去一点反应都没有」。
+/// 页签里的 ComfyUI 完全靠 `drop` 事件的 `dataTransfer.files`，它自己并不知道
+/// 被壳托管着，所以看起来就是这个功能在应用里坏了（浏览器整窗打开没有这层壳，
+/// 因此正常——这条对照就是最好的判据）。
+///
+/// 为什么在**宿主**窗口上关：命中测试落在宿主那个 WebView（`main`）上，iframe
+/// 只是它内部的一块区域，被拖进来的文件由宿主这一层决定交给 DOM 还是交给原生
+/// 处理器。ComfyUI 自己的独立窗口（`open_comfyui_window` 建的 `comfyui` 窗）
+/// 不承载 iframe，保留默认。
+///
+/// 为什么可以放心关（本应用的壳侧**不消费**原生拖放）：窗口内没有一处需要原生
+/// 文件拖入——项目画布与工作流库的拖放都是页内拖元素（自定义 dataTransfer），
+/// 与文件拖入无关；壳侧也没有注册 `on_drag_drop`，`tauri://drag-drop` 事件
+/// 无人监听。关掉它是纯收益：DOM 恢复正常拖放语义，同时少一层原生处理器。
+/// **改回默认值 = 重新引入本缺陷**，门禁把它钉在
+/// `tests/comfyui-embed-csp.test.ts`（同族还有页签内嵌的 CSP 放行断言）。
+
 /// 创建隐藏待命的「应用」窗口（label="main"），并挂上「页面加载完成即交换窗口」回调。
 ///
 /// main 停在 about:blank，等启动页探测到后端就绪后经 navigate_to_app 导航；真正
@@ -1108,6 +1134,11 @@ fn create_main_window(app: &mut tauri::App) -> tauri::Result<()> {
     // 显式唤起（托盘 / 二次启动 / 启动器判决给前台）仍走 set_focus()，
     // 不受本标记影响。
     .focused(false)
+    // 关掉 WebView2 的**原生拖放拦截**：不关，页签里的 ComfyUI 收不到 HTML5
+    // 拖放事件，图片/工作流拖进去毫无反应（浏览器整窗打开同一地址却正常）。
+    // 判据与查证方式见 `main_window_native_drag_disabled`（函数注释里写全了
+    // 「为什么 wry 的默认值是 true」与改回默认值的后果）。
+    .disable_drag_drop_handler()
     .on_page_load(move |_win, payload| {
       if payload.event() == tauri::webview::PageLoadEvent::Finished {
         on_main_page_finished(&app_handle_for_page, payload.url().clone());
