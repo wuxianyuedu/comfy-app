@@ -1,6 +1,6 @@
 import { getSession } from "~/server/better-auth/server";
 import { getSettingsSync } from "./app-settings/app-settings.server";
-import { userRepository } from "./core";
+import { userRepository } from "./core/repository";
 
 export type ServerUser = { id: string; email: string; name: string | null };
 

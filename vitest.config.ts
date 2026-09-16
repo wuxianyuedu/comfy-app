@@ -94,9 +94,15 @@ export default defineConfig({
         //     显示「1 镜」（同坑在 repository-model-tag 已修过一次）；
         //   · 分页两条分支（普通 select / relational query）口径不一致，后者
         //     根本无法表达「不限条数只跳过」。
+        // 从「90/85/90/90」抬到实测值（ISSUE #565 续）：两条「注释与现状相反」
+        // 的骨架都收了口 —— `core/index.ts` 的 `export *` 改为具名转发（它此前
+        // 让每个引用方连带加载整层）、`repository-base.ts` 去掉基类里的日志
+        // （留痕归子类按语义记）。后者顺带补上了 `idColumn` 显式分支的用例，
+        // 基类行覆盖 80% → 84.6%，目录整体 lines 96.9 / functions 96.5、statements 94.8、branches 90.6。
+        // 口径仍是「实测值向下取整到 5 的倍数，只升不降」（§18.6）。
         "src/lib/core/**": {
-          lines: 90,
-          functions: 85,
+          lines: 95,
+          functions: 95,
           statements: 90,
           branches: 90,
         },
