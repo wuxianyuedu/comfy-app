@@ -22,7 +22,6 @@ const row: WorkshopDraftRow = {
   scenes: [],
   characters: [],
   shots: [],
-  checkpoint: "model.safetensors",
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-02"),
 };
@@ -33,7 +32,6 @@ describe("draft-repository 映射", () => {
     expect(dto.meta.title).toBe("未命名项目");
     expect(dto.meta.tone).toBe("悬疑");
     expect(dto.scriptMarkdown).toContain("场景1");
-    expect(dto.checkpoint).toBe("model.safetensors");
   });
 
   it("draftToRow 反向映射", () => {

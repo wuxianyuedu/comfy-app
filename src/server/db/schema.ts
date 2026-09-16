@@ -595,7 +595,6 @@ export const workshopDraft = sqliteTable(
     scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
     characters: text("characters", { mode: "json" }).notNull().default("[]"),
     shots: text("shots", { mode: "json" }).notNull().default("[]"),
-    checkpoint: text("checkpoint").notNull().default(""),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

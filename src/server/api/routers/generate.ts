@@ -7,12 +7,7 @@ import {
   taskRepository,
   workflowTemplateRepository,
 } from "@/lib/core/repository";
-import {
-  buildAndValidate,
-  buildCustomWorkflow,
-  type ParamMap,
-} from "@/lib/comfyui/workflow";
-import { getWorkflow } from "@/lib/comfyui/_meta";
+import { buildCustomWorkflow, type ParamMap } from "@/lib/comfyui/workflow";
 import { enqueue } from "@/lib/comfyui/enqueue";
 
 /** ComfyUI API-format graph(Export (API Format)):nodeId → node。
@@ -37,7 +32,6 @@ function asParamMap(v: unknown): ParamMap | null {
   return v;
 }
 
-const LoraSchema = z.object({ name: z.string(), weight: z.number() });
 const WorkflowInputSchema = z.object({
   nodeId: z.string(),
   name: z.string(),
@@ -45,29 +39,17 @@ const WorkflowInputSchema = z.object({
 });
 
 export const GenerateSchema = z.object({
+  /** 工作流库工作流 id（内置模板已移除，这里是唯一的工作流来源）。 */
   workflow: z.string().min(1),
+  /** 提示词 / 反向提示词：供历史列表与任务标题（参数真值走 workflowInputs）。 */
   prompt: z.string().max(2000).optional(),
   negative: z.string().max(2000).optional(),
-  checkpoint: z.string().optional(),
-  loras: z.array(LoraSchema).optional(),
-  sampler: z.string().optional(),
-  scheduler: z.string().optional(),
-  steps: z.number().int().min(1).max(100).optional(),
-  cfg: z.number().min(0).max(30).optional(),
-  size: z.string().optional(),
-  count: z.number().int().min(1).max(8).optional(),
-  seed: z.number().int().optional(),
-  denoise: z.number().min(0).max(1).optional(),
+  /** 参考图 / 首末帧文件名（已在 ComfyUI input 目录）。 */
   inputImage: z.string().optional(),
-  mask: z.string().optional(),
-  upscaleModel: z.string().optional(),
-  frames: z.number().int().min(1).max(1000).optional(),
-  fps: z.number().int().min(1).max(120).optional(),
-  wanModel: z.string().optional(),
-  wanVae: z.string().optional(),
-  t5Model: z.string().optional(),
   firstFrame: z.string().optional(),
   lastFrame: z.string().optional(),
+  /** 视频时长：帧数（按秒表达的口由 workflowInputs 里的 duration 落下）。 */
+  frames: z.number().int().min(1).max(1000).optional(),
   paramMap: z.record(z.string(), z.string()).optional(),
   workflowInputs: z.array(WorkflowInputSchema).optional(),
   // 画布导出的 ComfyUI API-format graph:节点值形状动态,按规约收口为 unknown。
@@ -82,85 +64,69 @@ export const generateRouter = createTRPCRouter({
     .input(GenerateSchema)
     .mutation(async ({ ctx, input }) => {
       const data = input;
-      const count = data.count ?? 1;
 
+      // 工作流的**唯一来源**是工作流库（内置模板 + __PROMPT__ token 替换已移除）。
+      const tpl = await workflowTemplateRepository.findByIdForUser(
+        ctx.user.id,
+        data.workflow,
+      );
+      if (!tpl && !data.canvasGraph) {
+        throw new Error("Workflow not found");
+      }
+      const workflowName = tpl?.name ?? data.workflow;
+      const taskType = tpl?.taskType ?? "TXT2IMG";
+
+      // Raw UI-format json executes via comfy-cli (expands subgraphs).
+      if (tpl?.rawJson && !data.canvasGraph) {
+        const task = await taskRepository.createQueued({
+          userId: ctx.user.id,
+          type: taskType,
+          prompt: data.prompt ?? "",
+          negativePrompt: data.negative,
+          params: data,
+          workflowName,
+          projectId: data.projectId ?? null,
+          referenceImages: data.referenceImages?.length
+            ? data.referenceImages
+            : undefined,
+        });
+        enqueue({
+          taskId: task.id,
+          rawJson: tpl.rawJson,
+          overrides: data.workflowInputs,
+        });
+        generateRuntimeLog.info(`生成任务已入队 ${task.id}`, {
+          type: taskType,
+          workflow: workflowName,
+        });
+        return { taskId: task.id };
+      }
+
+      // Canvas-edited graph or API-only import.
+      // 空对象也算空图：模板 graph 列 NOT NULL，导入失败/空导出会落 `{}`，
+      // 此时拿去构建会静默产出一个空 prompt 任务（提交到 ComfyUI 才失败，
+      // 用户侧无提示），故与 null 同等对待。
+      const graph = data.canvasGraph ?? asGraph(tpl?.graph);
+      if (!graph || Object.keys(graph).length === 0) {
+        throw new Error("Workflow graph is empty");
+      }
       let built: {
         ok: boolean;
         prompt?: Record<string, unknown>;
         error?: string;
       };
-      let workflowName: string;
-      let taskType: string;
-
-      const builtin = getWorkflow(data.workflow);
-      if (builtin) {
-        // Built-in workflow template (token-based).
-        built = await buildAndValidate(data.workflow, { ...data, count });
-        workflowName = data.workflow;
-        taskType = builtin.taskType;
-      } else {
-        // Custom workflow imported from ComfyUI "Export (API Format)".
-        const tpl = await workflowTemplateRepository.findByIdForUser(
-          ctx.user.id,
-          data.workflow,
-        );
-        if (!tpl && !data.canvasGraph) {
-          throw new Error("Workflow not found");
-        }
-        workflowName = tpl?.name ?? data.workflow;
-        taskType = tpl?.taskType ?? "TXT2IMG";
-
-        // Raw UI-format json executes via comfy-cli (expands subgraphs).
-        if (tpl?.rawJson && !data.canvasGraph) {
-          const task = await taskRepository.createQueued({
-            userId: ctx.user.id,
-            type: taskType,
-            prompt: data.prompt ?? "",
-            negativePrompt: data.negative,
-            params: data,
-            workflowName,
-            projectId: data.projectId ?? null,
-            referenceImages: data.referenceImages?.length
-              ? data.referenceImages
-              : undefined,
-          });
-          enqueue({
-            taskId: task.id,
-            rawJson: tpl.rawJson,
-            overrides: data.workflowInputs,
-          });
-          generateRuntimeLog.info(`生成任务已入队 ${task.id}`, {
-            type: taskType,
-            workflow: workflowName,
-          });
-          return { taskId: task.id };
-        }
-
-        // Canvas-edited graph or API-only import.
-        // 空对象也算空图：模板 graph 列 NOT NULL，导入失败/空导出会落 `{}`，
-        // 此时拿去构建会静默产出一个空 prompt 任务（提交到 ComfyUI 才失败，
-        // 用户侧无提示），故与 null 同等对待。
-        const graph = data.canvasGraph ?? asGraph(tpl?.graph);
-        if (!graph || Object.keys(graph).length === 0) {
-          throw new Error("Workflow graph is empty");
-        }
-        try {
-          built = {
-            ok: true,
-            prompt: buildCustomWorkflow(
-              graph,
-              { ...data, count },
-              data.paramMap ?? asParamMap(tpl?.paramMap),
-            ),
-          };
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "Workflow build failed";
-          throw new Error(msg);
-        }
-      }
-
-      if (!built.ok || !built.prompt) {
-        throw new Error(built.error ?? "Workflow build failed");
+      try {
+        built = {
+          ok: true,
+          prompt: buildCustomWorkflow(
+            graph,
+            data,
+            data.paramMap ?? asParamMap(tpl?.paramMap),
+          ),
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Workflow build failed";
+        throw new Error(msg);
       }
 
       const task = await taskRepository.createQueued({

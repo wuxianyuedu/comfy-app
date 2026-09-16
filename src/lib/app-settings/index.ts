@@ -21,11 +21,8 @@
  * 落盘默认值，因此全新安装开箱可用。文件被 git 忽略（本机配置）。
  */
 
-export type VideoWorkflowPref = "auto" | "txt2video" | "img2video";
-
 export type AppSettings = {
   trainerUrl: string;
-  defaultVideoWorkflow: VideoWorkflowPref;
   comfyLorasDir: string;
   /**
    * ComfyUI 安装目录。
@@ -79,7 +76,6 @@ export type AppSettings = {
 
 export const DEFAULTS: AppSettings = {
   trainerUrl: process.env.LORA_TRAINER_URL ?? "",
-  defaultVideoWorkflow: "auto",
   comfyLorasDir: process.env.COMFY_LORAS_DIR ?? "",
   comfyuiPath: process.env.COMFYUI_PATH ?? "",
   comfyuiExtraArgs: "",

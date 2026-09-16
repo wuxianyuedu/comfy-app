@@ -5,7 +5,6 @@ import { migrateExitDefaults, type AppSettings } from "./app-settings.server";
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
   return {
     trainerUrl: "",
-    defaultVideoWorkflow: "auto",
     comfyLorasDir: "",
     comfyuiPath: "",
     comfyuiExtraArgs: "",

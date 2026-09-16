@@ -14,8 +14,11 @@ export const FILM_COMPOSE_SIZE: SizeSpec = {
   ratio: "16:9 横屏",
 };
 
-/** 单镜视频的**底模原生分辨率**（Wan2.x 这类视频模型按 832×480 训练 / 推理最稳）。
+/** 单镜视频的**尺寸表达兜底**（镜头没带尺寸时用）。
  *
- *  刻意不换成尺寸表的档位：它不是「比例 + 档位」表达，而是模型自身的输入规格
- *  （换成 1280×720 会明显掉质量）。只在镜头没带尺寸时兜底。 */
-export const NATIVE_SHOT_VIDEO_SIZE = "832x480";
+ *  与「成片画幅」分开：单镜按视频场景的 1k 档派值，成片再按 `FILM_COMPOSE_SIZE`
+ *  缩放（两件事，别共用一个常量）。 */
+export const NATIVE_SHOT_VIDEO_SIZE: SizeSpec = {
+  ...DEFAULT_SIZE_SPEC,
+  ratio: "16:9 横屏",
+};
