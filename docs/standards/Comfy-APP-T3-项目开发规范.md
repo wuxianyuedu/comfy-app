@@ -330,12 +330,13 @@ CHANGELOG 写**对外差异**。完整细则见
 |---|---|---|
 | 类型 | `pnpm typecheck`（tsc --noEmit） | 零错误 |
 | Lint | `pnpm lint`（eslint 9） | 零 error |
-| 格式 | `pnpm format:check`（prettier） | 零 diff |
+| 格式 | `pnpm format:check`（prettier，全量）／`pnpm format:ratchet`（门禁口径） | 新增文件零 diff；存量 576 个走棘轮（只减不增），见文档集 13 §13.5.1 |
 | 单测 | `pnpm test`（vitest） | 全绿；纯函数必须覆盖 |
 | 生产构建 | `pnpm build`（next build） | 涉及构建链改动时必跑 |
 
 - 单测聚焦纯函数与可单元化的业务逻辑（见 `docs/guides/TESTING.md`）；API 文档由 `pnpm docs`（typedoc）生成。
 - 提交门槛最低要求：`typecheck` + 相关单测通过。
+- **格式化与行为改动必须分成两次提交**：一次提交里「过一遍 prettier 就变成另一种写法」的文件 ≥ 10 个即阻断（`scripts/check-reformat-only.cjs`），避免 `git blame` 被全文件重排冲掉。见文档集 13 §13.5.2。
 
 ---
 

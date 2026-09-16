@@ -187,7 +187,7 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | ~~`lib` 的 Node-only 声明与可达性无判据~~ | #572 第 1 项 | **已落地**：`scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts`（声明缺失 / 假声明 / 真进浏览器图 三条判据），`src/lib` 内 58 个 Node 内建 import 全部声明完毕 |
 | ~~`lib` 子域覆盖率零门槛~~ | #572 第 5 项 | **已落地**：`vitest.config.ts` 增加 `src/lib/{agent,core,drizzle-studio,film,llm,project-canvas,workshop}/**` 七条门槛，取实测值向下取整到 5 的倍数、只升不降（§18.6） |
 | ~~`app-settings.ts` 混装「纯派生 + fs IO + 默认端口再导出」~~ | #569 第 5 项 | **已落地**：拆成 `app-settings/index.ts`（纯）+ `app-settings/app-settings.server.ts`（IO），默认端口的唯一出口回到 `@/lib/endpoints`；端口门禁改为**反向**断言「app-settings 不得再转手该常量」 |
-| prettier 未接入门禁           | #575 第 9 项 | 一次性格式化 600+ 文件是巨型噪声 diff，与 §13.7「禁止无关全文件变更」冲突，须单独立项分路径接入                           |
+| ~~prettier 未接入门禁~~       | #575 第 9 项 | **已落地**：改为**格式棘轮**（`scripts/check-format.cjs`，基线 576 个文件只许下降）+ 「格式化提交与行为改动分离」（`scripts/check-reformat-only.cjs`）。分路径 = 白名单按 glob 表达（`scripts/` `tests/` `e2e/` 与根级配置豁免），见 13 §13.5.1 / §13.5.2 |
 | `lib` 直读 `process.env` 收口 | #568         | **已裁决**：不收口，改为删掉 `config.ts` 的误导性承诺（见 18.8）|
 | ~~`drizzle-studio/**` 覆盖率 0~~ | #572 第 5 项 | **已落地**：`lifecycle` 的探测 / 定位 / 启停判决进用例，目录 0% → 41%，门槛随之从 0 抬到 40（见 18.6）|
 | ~~`film/**` 只有两个纯函数文件被覆盖~~ | #572 第 5 项 | **已落地**：编排判决面（取消撤任务 / 合成前置条件 / 镜头参数与画幅折算）进用例，7.5% → 40%，门槛从 5 抬到 40（见 18.6）|

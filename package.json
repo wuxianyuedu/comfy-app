@@ -16,6 +16,8 @@
     "dev": "node scripts/dev.mjs",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
+    "format:ratchet": "node scripts/check-format.cjs",
+    "format:reformat-guard": "node scripts/check-reformat-only.cjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "postinstall": "sh scripts/install-git-hooks.sh || true",
