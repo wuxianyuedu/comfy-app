@@ -213,6 +213,17 @@ jobs:
         # 纳入只会把判据变成噪音），按符号记棘轮、只许降不许升。
         run: node scripts/check-dead-exports.cjs --strict
 
+      - name: Core barrel & repository base discipline
+        # core 的出口纪律与基类纯度（ISSUE #565）。两处此前都只写在注释里、没有判据：
+        #   · `core/index.ts` 曾是四个 `export *` 的 barrel，注释写着「所有 server 端
+        #     模块都从这里取」—— 而全库只有 2 处真的这样导入。假承诺的代价是下一个人
+        #     照着写就多出一种取法（与已删除的 container 同款教训），且 `export *`
+        #     会让 `index → logger → app-runtime-log → log-paths → index` 这种环变成
+        #     「靠没人这么写才不成立」（环检测只认真实存在的边，抓不到它）。
+        #   · `repository-base.ts` 曾在基类里打一条日志：口径被钉在基类、子类只能另加
+        #     一条，且没有日志设施的宿主（测试 / 纯 Node 脚本）连带加载 pino 与写盘镜像。
+        run: pnpm exec vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+
       - name: Coverage
         # 覆盖率棘轮（vitest.config.ts）：middleware/lib 目录按真实水平设硬门槛
         run: pnpm run test:coverage
