@@ -190,6 +190,42 @@ describe("库内映射编辑", () => {
   });
 });
 
+describe("画布铺满：背景板（ISSUE #596）", () => {
+  /* 用户口径：「全屏时，下方区域有空白却不是画布」。
+   *
+   * 画布的缩放由 React Flow 的 `fitView` 按节点包围盒算 —— 卡片比视口矮时它只会
+   * 放大到内容高度，画布底边以下就落回面板底色。三列之上垫的那层背景板把包围盒
+   * 撑到「视口与内容取大」，最优缩放因此只能是「等比铺满视口」的那个值。
+   *
+   * 背景板必须是**透明、不可交互**的：它只是底，不能抢走卡片与表单的点击 / 拖动。 */
+  it("三列之下有一层背景板节点，且它不抢交互", () => {
+    const { container } = renderPreview({});
+    const backdrop = container.querySelector(
+      '[data-testid="wflib-canvas-backdrop"]',
+    );
+    expect(backdrop, "画布应有一层撑满高度的背景板").toBeTruthy();
+
+    /* 它的节点外壳不可选中 / 不可拖动 —— React Flow 只在为真时挂上这两个类，
+     * 都不出现即「都不是」。否则画布上会多出一块能点、能拖的空面板。 */
+    const wrapper = backdrop!.closest(".react-flow__node")!;
+    expect(wrapper.className).not.toContain("selectable");
+    expect(wrapper.className).not.toContain("draggable");
+    /* 声明尺寸给的是撑满视口的那个值，容器才会铺到面板底边。 */
+    expect(backdrop!.className).toContain("h-full");
+  });
+
+  it("背景板垫在三列之下，不遮挡卡片（DOM 顺序在前的那个先画）", () => {
+    const { container } = renderPreview({});
+    const nodes = Array.from(
+      container.querySelectorAll(".react-flow__node"),
+    ).map((el) => el.getAttribute("data-id"));
+    const backdropIndex = nodes.indexOf("lib:backdrop");
+    const paramsIndex = nodes.indexOf("lib:params");
+    expect(backdropIndex).toBeGreaterThanOrEqual(0);
+    expect(paramsIndex).toBeGreaterThan(backdropIndex);
+  });
+});
+
 describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
   it("宿主卡片的输出行带 <Handle>（红框里的那一行）", () => {
     /* 用户口径：「红框中的输出端口也要有端口圆点」。项目画布上的输出行一直有
