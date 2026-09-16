@@ -103,6 +103,16 @@ function headRev() {
 
 /** 按**今天的行数口径**重数 `rev` 里该文件的行数;取不到返回 null。
  *  行数口径与主扫描(collectSplitHints)逐字一致:`split("\n").length`。 */
+/** 该修订号在当前检出里能不能取到(commit 对象是否存在)。
+ *  基线记录的是「写它那一刻的 HEAD」,历史被改写 / 分支被 squash 掉之后可能不可达。 */
+function gitRevExists(rev) {
+  if (!rev) return false;
+  const res = spawnSync("git", ["rev-parse", "--verify", "--quiet", rev + "^{commit}"], {
+    encoding: "utf8",
+  });
+  return res.status === 0 && typeof res.stdout === "string" && res.stdout.trim() !== "";
+}
+
 function linesAtRev(rev, rel) {
   if (!rev) return null;
   const res = spawnSync("git", ["show", rev + ":" + rel], {
@@ -468,19 +478,72 @@ const SCAN_EXCLUDED = [
   const baseLinesOf = (f, recorded) =>
     linesAtRev(prev?.baselineRev, f) ?? recorded;
 
+  /* ── baselineRev 不可达时,「同口径重数」整条失效 ──
+   * 基线记录的 `baselineRev` 是**写基线那一刻的 HEAD**。它一旦变得不可达
+   * (历史被改写 / 那条分支后来被 squash 掉),`linesAtRev` 就恒返回 null,
+   * `baseLinesOf` 于是每次都退回**记录值**;而记录值是「另一个行数口径时代」
+   * 的数字,与今天的计数不是同一个量 —— 判据会把口径差读成「这次改动让文件变大」。
+   *
+   * 现场(ISSUE #654):基线记 `baselineRev: 116666fab…`,该提交在任何 ref 上
+   * 都不可达(`git cat-file` 取不到,CI 检出同样取不到)。按今天的口径,
+   * `LogPanel.tsx` 在写基线的那次提交(7b5e1ab)时就**已经**是 993 行,
+   * 而记录值是 988 —— 判据恒报「988 → 993 变大」,`--update` 又按设计拒绝放宽,
+   * 于是**自 7b5e1ab 起任何 PR 都过不了这一步**,而它并没有指向任何真实膨胀。
+   *
+   * 判据:`baselineRev` 不可达时,「同口径重数」这条前提不成立,不能拿记录值
+   * 冒充同口径基线 —— 那样只会误报。此时**报告并按「无法判定」处理**(保守放行),
+   * 同时明确要求重记基线(`--update`),而不是继续拿陈旧数字阻断提交。
+   * 只对**真的取不到 baselineRev** 的情形生效:能取到时口径照旧(该拦的仍拦)。 */
+  const baselineRev = prev?.baselineRev ?? null;
+  /* 判「这个修订号还在不在」必须问 **commit 对象**在不在:
+   * 不能用 `git show <rev>:<path>` 探 —— 那问的是「该路径在那个修订里有没有」,
+   * 拿一个不是树内路径的探针(如 `.`)去问会**恒为真**(它当然不在树里),
+   * 于是「不可达」被判成「可达」,整条兜底又静默失效。
+   * `rev^{commit}` 直接校验对象存在性,是这条判据该问的问题。 */
+  const baselineRevResolvable = baselineRev ? gitRevExists(baselineRev) : true;
+  /* 三种情形要分开,不能混为一谈:
+   *   · 基线**缺** `baselineRev`(旧基线)→ 沿用历史行为:退回记录值比对
+   *     (判据更严,不误放;由下一次 `--update` 补上修订号),**不跳过**;
+   *   · `baselineRev` 记了且**可达** → 正常同口径重数;
+   *   · `baselineRev` 记了但**不可达** → 记录值来自另一个计数口径时代,
+   *     拿它相减必然误报,「同口径重数」这条前提不成立 → **跳过**(见下)。
+   * 只有第三种才是「无法判定」;把它与「旧基线」混在一起会让旧基线的既有
+   * 用例(与历史行为)一起变味。 */
+  const baselineRevMissing = !baselineRev;
+  const baselineRevUsable =
+    baselineRevMissing || baselineRevResolvable;
+  if (prevFiles && baselineRev && !baselineRevResolvable && !UPDATE) {
+    console.error(
+      "[structure] R5 基线里的 `baselineRev` 已不可达(" +
+        baselineRev +
+        ")," + "\n  「按同口径重数」无法进行 —— 记录值是另一个计数口径时代的数字," +
+        "\n  直接拿它与当前行数相减会把「格式口径差」误读成「这次改动让文件变大」。",
+    );
+    console.error(
+      "[structure] 本次**跳过** R5 棘轮(无法判定,不误报)。请重记基线:" +
+        "\n  node scripts/check-file-structure.cjs --update",
+    );
+  }
+
   if (UPDATE) {
     const prevTotal = prevFiles ? Object.keys(prevFiles).length : 0;
     /* 棘轮只许下降;唯一例外是判据版本抬升(旧数字与新计数不是同一个量)。 */
     const ruleChanged =
       Boolean(prevFiles) && prev.ruleVersion !== R5_RULE_VERSION;
-    const grew = prevFiles
+    /* baselineRev 不可达 => 记录值与今天的计数不是同一个量,不能拿它判「变大」。
+     * 这种情形与「判据版本抬升」同性质:需要一次性重记,而不是拒绝放宽。
+     * (拒绝的话棘轮就永久卡死:既判不了、又改不动,见 ISSUE #654。) */
+    const countsIncomparable = !baselineRevUsable;
+    const grew = prevFiles && baselineRevUsable
       ? names.filter((f) => f in prevFiles && oversizedFiles[f] > prevFiles[f])
       : [];
-    const added = prevFiles ? names.filter((f) => !(f in prevFiles)) : [];
+    const added =
+      prevFiles && baselineRevUsable ? names.filter((f) => !(f in prevFiles)) : [];
     if (
       prevFiles &&
       (grew.length || added.length || names.length > prevTotal) &&
-      !ruleChanged
+      !ruleChanged &&
+      !countsIncomparable
     ) {
       console.error(
         "[structure] 拒绝放宽 R5 基线(棘轮只许下降):" +
@@ -524,7 +587,11 @@ const SCAN_EXCLUDED = [
             " → " +
             R5_RULE_VERSION +
             ",一次性重记】"
-          : ""),
+          : countsIncomparable
+            ? "【原 baselineRev " +
+              baselineRev +
+              " 不可达,按当前检出重记】"
+            : ""),
     );
     return;
   }
@@ -534,6 +601,16 @@ const SCAN_EXCLUDED = [
   if (!prevFiles) {
     problems.push(
       "R5 基线文件缺失:先执行 node scripts/check-file-structure.cjs --update",
+    );
+    return;
+  }
+  // 「同口径重数」的前提是 baselineRev 取得到。取不到时记录值与今天的计数
+  // 不是同一个量,再拿它相减只会把口径差误报成「变大」(见上面 baselineRevUsable)。
+  // 此时跳过 R5 并提示重记基线,而不是误报阻断。
+  if (!baselineRevUsable) {
+    console.log(
+      "[structure] R5 棘轮已跳过(基线 baselineRev 不可达,无法同口径重数;" +
+        "执行 --update 重记基线后恢复判定)",
     );
     return;
   }

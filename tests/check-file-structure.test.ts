@@ -576,6 +576,49 @@ describe("check-file-structure.cjs（提交门槛）", () => {
         };
         expect(written.baselineRev).toBe(rev);
       });
+
+      /**
+       * `baselineRev` 不可达时不许把「口径差」误报成「变大」（ISSUE #654）。
+       *
+       * 基线记的是「写它那一刻的 HEAD」。它一旦不可达（历史被改写 / 那条分支
+       * 后来被 squash 掉），`git show <rev>:<file>` 恒失败，「同口径重数」整条
+       * 失效、退回**另一个计数口径时代**的记录值 —— 判据于是把口径差读成
+       * 「这次改动让文件变大」，而 `--update` 又按设计拒绝放宽，棘轮永久卡死。
+       *
+       * 实测现场：基线 `baselineRev: 116666fab…` 在任何 ref 上都不可达，
+       * `master` 因此**每个 PR 都过不了这一步**（#651 / #652 / #653 均如此）。
+       */
+      it("baselineRev 不可达 → 跳过并提示重记，不误报「变大」", () => {
+        writeLines("src/lib/huge.ts", 1000);
+        writeBaselineAtRev(
+          { "src/lib/huge.ts": 900 },
+          "0000000000000000000000000000000000000000",
+        );
+        const { code, output } = runWith(["--strict"]);
+        expect(code, "不可达时不该阻断（判据无法成立）").toBe(0);
+        expect(output).toContain("跳过");
+        expect(output).not.toContain("R5 超限文件继续变大");
+      });
+
+      it("baselineRev 不可达时 --update 能重记（否则棘轮永久卡死）", () => {
+        writeLines("src/lib/huge.ts", 1000);
+        git("add", "-A");
+        git("commit", "-qm", "seed");
+        const rev = head();
+        writeBaselineAtRev(
+          { "src/lib/huge.ts": 900 },
+          "0000000000000000000000000000000000000000",
+        );
+        expect(runWith(["--update"]).code).toBe(0);
+        const written = JSON.parse(readFileSync(BASELINE(), "utf8")) as {
+          baselineRev?: string;
+          files?: Record<string, number>;
+        };
+        expect(written.baselineRev, "重记后应指向可取的修订号").toBe(rev);
+        expect(written.files?.["src/lib/huge.ts"]).toBe(1000);
+        // 重记之后判据恢复：同一份内容不再报错。
+        expect(runWith(["--strict"]).code).toBe(0);
+      });
     });
   });
 });
