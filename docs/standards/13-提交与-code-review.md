@@ -104,20 +104,54 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 ### 13.5 CI 门禁
 
-**唯一事实来源**：`.github/workflows/ci.yml`（2026-09-04 对齐 #7）。改门禁改这个文件，
-本文档与 [11.7](11-测试与可观测性.md#117-ci-质量门禁) 同步更新即可，不要三处各写一套。
+**唯一事实来源**：`.cnb.yml`（仓库根，单条流水线 `质量门禁`，触发 master 的
+`push` 与 `pull_request`）。改门禁改这个文件，本文档与
+[11.7](11-测试与可观测性.md#117-ci-质量门禁) 同步更新即可，不要三处各写一套。
+
+> **为什么不是 `.github/workflows/ci.yml`**：本仓库跑在 CNB 平台上，平台只读仓库根的
+> `.cnb.yml`。那份 27 步的 GitHub workflow **从未被触发过一次**（构建历史里只有
+> `issue.comment@npc` / `api_trigger`，`push` 与 `pull_request` 均为 0）——它是死代码，
+> 留着只会让人照着改一个不生效的文件。门禁已整体迁到 `.cnb.yml`，原文件删除。
+> 回归护栏：`tests/cnb-pipeline-gates.test.ts`（清单一条不许丢 + 原文件不许回潮）。
+
+平台侧只**新增**了一件事：`.cnb.yml`。GitHub Actions 的 `runs-on` / `setup-node` /
+`actions/cache` / `actions/upload-artifact` 分别对应 CNB 的
+`runner.tags` / `docker.image` / `docker.volumes` / `cnbcool/attachments` 插件；
+`actions/checkout` 无需声明（CNB 默认克隆代码）。
 
 ```
-PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
-✅ Branch guard                   # PR 源分支不能是 master（见 13.6）
-✅ pnpm install --frozen-lockfile
-✅ pnpm run typecheck             # tsc --noEmit
+PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 master，30 步串行）：
+✅ corepack enable && pnpm install --frozen-lockfile
+✅ node scripts/check-branch-guard.cjs --pr-check --target master   # PR 源分支不能是 master（见 13.6）
+✅ pnpm run db:push                # 建表；后面 E2E 要真的读到库（见 11.7）
+✅ pnpm run typecheck              # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test                  # vitest run
-✅ node scripts/check-file-structure.cjs  # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
-✅ pnpm run test:coverage         # 覆盖率棘轮（vitest.config.ts 的目录阈值）
-✅ pnpm run build                 # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
+✅ pnpm run test                   # vitest run
+✅ pnpm run test:coverage          # 覆盖率棘轮（vitest.config.ts 的目录阈值）
+✅ node scripts/check-title-bar-clearance.cjs
+✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
+✅ node scripts/check-ps1-consistency.mjs           # 跨平台动作对照（§9.5）
+✅ node scripts/check-comfyui-port-contract.cjs     # ComfyUI 端口口径（launch-and-build §5）
+✅ node scripts/check-inline-style.cjs              # 视图层不得动态注入 <style>（见 03 §3.5）
+✅ node scripts/check-code-duplication.cjs --strict # 跨文件重复块（§12.12）
+✅ node scripts/check-function-length.cjs --strict  # 函数长度棘轮 TS（§12.13）
+✅ node scripts/check-rust-function-length.cjs --strict  # 函数长度棘轮 Rust（§12.13.1）
+✅ node scripts/check-circular-deps.cjs --strict    # 模块循环依赖棘轮（§12.7）
+✅ node scripts/check-app-port-vectors.cjs          # 端口推导跨语言一致性（launch-and-build §1.1）
+✅ node scripts/check-changelog-fragments.cjs       # CHANGELOG 碎片形态（13.10.5）
+✅ node scripts/check-theme-colors.cjs --strict     # 主题色扫描棘轮（03 §3.6.1）
+✅ node scripts/check-ui-logic-separation.cjs --strict  # UI/逻辑分离棘轮（17）
+✅ vitest run tests/lib-node-only-declarations.test.ts  # src/lib Node-only 声明（18 §18.4）
+✅ node scripts/check-format.cjs --strict           # prettier 格式棘轮（见 13.5.1）
+✅ node scripts/check-reformat-only.cjs             # 格式化提交与行为改动分离（见 13.5.2）
+✅ vitest run tests/single-logger-channel…（core 骨架单一事实源，18 §18.8）
+✅ node scripts/check-dead-exports.cjs --strict     # src/lib 零消费值导出棘轮（§12.16）
+✅ vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+✅ pnpm run build                  # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
+✅ node scripts/check-standalone-contents.cjs       # standalone 产物级护栏（07 §7.2）
+✅ pnpm exec playwright install --with-deps chromium
 ✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
+失败时（failStages）：上传 playwright-report 为 commit 附件（allowFailure）
 ```
 
 **规则**：
@@ -240,7 +274,7 @@ PR 合并前必须通过（ci.yml job: quality，触发分支 master）：
 |----|------|--------|---------|
 | 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
 | 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
-| 服务端 | `.github/workflows/ci.yml` 的 `Branch guard` 步骤 | **源分支是 `master` 的 PR** | 不能 |
+| 服务端 | `.cnb.yml` 的「分支守卫」步骤（`scripts/check-branch-guard.cjs --pr-check`） | **源分支是 `master` 的 PR** | 不能 |
 
 **⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
 （仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，
@@ -275,11 +309,25 @@ git push origin HEAD                  # 推送并创建 PR
 
 > 规则自测：`tests/check-branch-guard.test.ts`（临时仓库跑真脚本：分支提交放行、
 > master 直提阻断并给出搬迁出口、master 合并提交放行、非 git 目录不崩、
-> 钩子里守卫排在第 1 步）。
+> 钩子里守卫排在第 1 步；另有 `--pr-check` 的三种拓扑与「取不到目标分支时保守放行」）。
 >
-> **分级口径**：上面的本地钩子与 CI 步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
+> **分级口径**：上面的本地钩子与流水线步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
 > 平台层的分支保护是「防误操作」的兜底（拦的是**直接 push**）。两者判据不同、不可互相替代：
 > 只有平台保护挡不住 `--no-verify` 的本地提交，只有本地钩子挡不住别的检出直推。
+>
+> **服务端这一侧是「不可信事件」，判据必须自持**：`pull_request` 类事件的流水线配置
+> 取自**源分支**——触发者可以把 `.cnb.yml` 里那行 `check-branch-guard.cjs` 删掉。
+> 因此守卫脚本自己独立判定（不读 `CNB_PULL_REQUEST`、不依赖流水线里的任何外部事实），
+> 而且**紧跟在依赖安装之后**：删了它就等于当场失败，而不是「静默不检查」。
+> `tests/cnb-pipeline-gates.test.ts` 锁住这两点（守卫顺序 + 调用形态 + 判据版本一致）。
+>
+> **服务端的判据与本地不是同一条**（踩过）：CNB 在 `pull_request` 事件上 checkout 的是
+> **预合并提交**，容器里 `symbolic-ref HEAD` 恒等于**目标分支**——照搬本地那条
+> 「HEAD 在 `master` 上 = 直连主干」会把**每一条正常 PR 都拦死**（PR #633 第一次跑就是这么红的）。
+> 服务端改判**提交拓扑**：`git rev-list --count origin/master..HEAD`
+> —— `> 0` 说明源分支确有超出目标分支的提交（正常 PR）；`= 0` 说明源分支就是目标分支
+> （平台允许创建 source=master 的 PR，正是要拦的场景）。判据与分支叫什么名字无关。
+> 三种拓扑（领先 / 预合并 / 完全同步）由 `tests/check-branch-guard.test.ts` 用**真仓库**跑。
 
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 

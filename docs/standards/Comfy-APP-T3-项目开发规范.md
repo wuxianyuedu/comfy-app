@@ -439,5 +439,7 @@ pnpm build && pnpm start   # 生产预览
   Arch 用 `base-devel`。
 - better-sqlite3@13 内置各平台 prebuild 二进制，装好工具链后通常命中 prebuild 无需本地编译，
   编译脚本仅兜底；此步骤是低成本保险，保证 CI 任意情况都能装完依赖。
-- CI 已在 `.github/workflows/ci.yml` 的依赖安装前显式安装该工具链；详见
+- CI 侧的构建镜像（`.cnb.yml` 的 `node:24`，Debian 骨架）自带 make/gcc/g++，
+  不需要额外的安装步骤；缺工具链的表现是 `pnpm install --frozen-lockfile` 当场失败，
+  而不是「装完了但跑不起来」。详见
   [15.6](standards/15-附录.md#156-疑难排查记录随问题归档对齐主规范-11) 对应条目。

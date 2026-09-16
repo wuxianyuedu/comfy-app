@@ -13,6 +13,14 @@
  *   - 分支上提交          → 放行
  *   - master 上直接提交    → 阻断,且提示里给出「怎么把提交搬走」
  *   - master 上合并提交    → 放行(PR 合并在平台侧完成,不该被本地门槛二次阻挡)
+ *
+ * 另覆盖服务端复核(`--pr-check`)。它的判据**不能**复用「分支名」:CNB 在
+ * pull_request 事件上 checkout 的是**预合并提交**,容器里 `symbolic-ref HEAD` 恒等于
+ * 目标分支——照搬「HEAD 在 master 上就是直连主干」会把每一条正常 PR 都拦死
+ * (PR #633 第一次跑就是这么红的)。所以这里用真仓库把三种拓扑都跑一遍:
+ *   - 源分支领先目标分支            → 放行
+ *   - 源分支归并过目标分支(预合并)   → 放行
+ *   - 源分支与目标分支完全同步       → 阻断(平台允许创建 source=master 的 PR)
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -122,6 +130,59 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     } finally {
       rmSync(bare, { recursive: true, force: true });
     }
+  });
+
+  /* ── --pr-check:服务端复核 ─────────────────────────────────────────── */
+
+  it("--pr-check:源分支领先目标分支 → 放行(正常 PR)", () => {
+    git(["checkout", "-q", "-b", "feat/pr"]);
+    writeFileSync(join(workdir, "feature.txt"), "feature\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "feat: feature"]);
+    const { code, output } = run(["--pr-check", "--target", "master"]);
+    expect(code).toBe(0);
+    expect(output).toContain("不在 master 上");
+  });
+
+  it("--pr-check:目标分支还在推进、源分支已归并它(CNB 预合并形态)→ 放行", () => {
+    git(["checkout", "-q", "-b", "feat/pr"]);
+    writeFileSync(join(workdir, "feature.txt"), "feature\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "feat: feature"]);
+    git(["checkout", "-q", "master"]);
+    writeFileSync(join(workdir, "advance.txt"), "advance\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "chore: advance"]);
+    git(["checkout", "-q", "feat/pr"]);
+    git(["merge", "--no-ff", "--no-edit", "-q", "master"]);
+    const { code, output } = run(["--pr-check", "--target", "master"]);
+    expect(code).toBe(0);
+    expect(output).toContain("[branch-guard] OK");
+  });
+
+  it("--pr-check:源分支没有任何超出目标分支的提交 → 阻断(源分支就是 master)", () => {
+    // 平台允许创建 source=master 的 PR,这正是本条要拦的场景。
+    git(["checkout", "-q", "-b", "sync-with-master"]);
+    const { code, output } = run(["--pr-check", "--target", "master"]);
+    expect(code).toBe(1);
+    expect(output).toContain("源分支就是 master");
+    expect(output).toContain("git checkout -b");
+  });
+
+  it("--pr-check:取不到目标分支 → 保守放行,不误报", () => {
+    const { code, output } = run(["--pr-check", "--target", "release/nope"]);
+    expect(code).toBe(0);
+    expect(output).toContain("保守放行");
+  });
+
+  it("--pr-check 缺省目标分支是 master(不靠环境变量,参数缺省也判得动)", () => {
+    git(["checkout", "-q", "-b", "feat/pr"]);
+    writeFileSync(join(workdir, "feature.txt"), "feature\n");
+    git(["add", "."]);
+    git(["commit", "-qm", "feat: feature"]);
+    const { code, output } = run(["--pr-check"]);
+    expect(code).toBe(0);
+    expect(output).toContain("目标分支 master");
   });
 
   it("pre-commit 钩子把守卫放在第一步(顺序错了会先跑一堆必然白费的门禁)", () => {
