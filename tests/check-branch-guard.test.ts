@@ -201,7 +201,8 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
 
   it("--merge-commit:master 上的非合并提交 → 阻断(变更绕过了 PR)", () => {
     // 默认判据在 master 上也会拦,这条锁的是「push 复核形态也拦」——
-    // 否则 .cnb.yml 的 push 流水线会把每一条正常 PR 合并都判红。
+    // 否则任何在 push 事件上调用它的流水线都会把每一条正常 PR 合并都判红
+    //(平台侧流水线已删除,该形态暂无调用方,判据本身留着见规范 13.5.3)。
     const { code, output } = run(["--merge-commit"]);
     expect(code).toBe(1);
     expect(output).toContain("非合并提交");
