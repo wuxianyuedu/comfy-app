@@ -23,12 +23,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/* 这些用例每条都要在临时仓库里**真起子进程**（`git init` + add/commit，
- * 再 spawn 一次门禁脚本；门禁自己还要 spawn prettier），5s 的默认用例超时不够用：
- * CI 上剩余 261 个文件并行跑时，首条用例实测被击穿（`Test timed out in 5000ms`），
- * 而单跑或低负载下同样代码只要 0.2~0.3s —— 是超时口径问题，不是功能问题。
- * 与 tests/check-branch-guard.test.ts / tests/check-reformat-only.test.ts 同口径的
- * 整文件放宽，只影响本文件，不掩盖其它文件的真实挂起（那些文件仍有各自的门槛）。 */
+/* 每条用例都要在临时工作区里真跑 git（init / add / commit）并**真起 prettier**
+ * —— 门禁按 glob 各调一次 `prettier --list-different`，实测单次约 300~550ms。
+ * 默认 5s 的用例超时在本机是「刚好够用」，CI 全量并行满载时会直接被击穿：现场
+ * 是 `Test timed out in 5000ms`，且报错会落在**调度顺序**排在后面的任意一条用例
+ * 上（看起来像「某条用例写得慢」，实际是整条固定成本顶着上限跑）。
+ *
+ * 这一点与 `check-reformat-only.test.ts` 是同一根因、同一处方：那条门禁早先把
+ * 「每条用例起十几个 prettier」收敛成「整批一次」，这里没有可收敛的调用数（每个
+ * 用例都要建一个独立的仓库 + 基线），所以只能把整文件的超时放宽。放宽只影响本
+ * 文件，不掩盖本文件内真实的挂起（30s 仍远小于任何真实死锁的暴露时间）。 */
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const SCRIPT = join(process.cwd(), "scripts", "check-format.cjs");

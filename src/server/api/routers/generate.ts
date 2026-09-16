@@ -9,21 +9,7 @@ import {
 } from "@/lib/core/repository";
 import { buildCustomWorkflow, type ParamMap } from "@/lib/comfyui/workflow";
 import { enqueue } from "@/lib/comfyui/enqueue";
-
-/** ComfyUI API-format graph(Export (API Format)):nodeId → node。
- *  最小精确形状:buildCustomWorkflow 只对节点整体深拷贝并回填 inputs,
- *  字段值类型多样,故 inputs 值收口为 unknown(不入本文件以外的共享类型)。 */
-type ApiGraph = Record<
-  string,
-  { class_type?: unknown; inputs?: Record<string, unknown> }
->;
-
-/** Prisma Json 列(graph)→ 预期形状。仅排除 null/标量;原 `as any` 同样把任何
- *  对象/数组原样透传给 buildCustomWorkflow,数组因此也放行,保持运行时一致。 */
-function asGraph(v: unknown): ApiGraph | null {
-  if (typeof v !== "object" || v === null) return null;
-  return v as ApiGraph;
-}
+import { resolveExecutionPayload } from "@/lib/comfyui/execution-shape";
 
 /** Prisma Json 列(paramMap)→ ParamMap。仅排除 null/标量,其余原样透传
  *  (object 已可赋给全可选属性的 ParamMap,无需断言)。 */
@@ -76,8 +62,18 @@ export const generateRouter = createTRPCRouter({
       const workflowName = tpl?.name ?? data.workflow;
       const taskType = tpl?.taskType ?? "TXT2IMG";
 
-      // Raw UI-format json executes via comfy-cli (expands subgraphs).
-      if (tpl?.rawJson && !data.canvasGraph) {
+      /* 送哪一份执行载荷，只按**这条工作流自己是什么格式**判（两者地位同等，
+       * 判据收在 `resolveExecutionPayload`，与服务端编排同一份）：
+       *   · RAW 原件 → comfy-cli 做权威 UI→API 转换（顺带展开子图）；
+       *   · API 图   → 直接 POST /prompt。
+       * 画布编辑过的图（`canvasGraph`）是第三种来源：它是用户在画布上现改的
+       * API 图，优先于库里存的任意一份。 */
+      const payload = data.canvasGraph
+        ? ({ kind: "api", graph: data.canvasGraph } as const)
+        : tpl
+          ? resolveExecutionPayload(tpl)
+          : null;
+      if (payload?.kind === "raw") {
         const task = await taskRepository.createQueued({
           userId: ctx.user.id,
           type: taskType,
@@ -92,7 +88,7 @@ export const generateRouter = createTRPCRouter({
         });
         enqueue({
           taskId: task.id,
-          rawJson: tpl.rawJson,
+          rawJson: payload.rawJson,
           overrides: data.workflowInputs,
         });
         generateRuntimeLog.info(`生成任务已入队 ${task.id}`, {
@@ -102,13 +98,15 @@ export const generateRouter = createTRPCRouter({
         return { taskId: task.id };
       }
 
-      // Canvas-edited graph or API-only import.
+      // Canvas-edited graph or API-format import.
       // 空对象也算空图：模板 graph 列 NOT NULL，导入失败/空导出会落 `{}`，
       // 此时拿去构建会静默产出一个空 prompt 任务（提交到 ComfyUI 才失败，
       // 用户侧无提示），故与 null 同等对待。
-      const graph = data.canvasGraph ?? asGraph(tpl?.graph);
+      const graph = payload?.kind === "api" ? payload.graph : null;
       if (!graph || Object.keys(graph).length === 0) {
-        throw new Error("Workflow graph is empty");
+        throw new Error(
+          "工作流没有可执行内容（graph 与 rawJson 都为空）：请重新导入该工作流",
+        );
       }
       let built: {
         ok: boolean;

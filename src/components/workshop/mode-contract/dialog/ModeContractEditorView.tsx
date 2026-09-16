@@ -121,6 +121,12 @@ export function ModeContractEditorView({
               为每个口配落点，远端模型在「模型适配」里为每个口配请求字段）
             </p>
             <p className="text-muted-foreground/80 text-[10px]">
+              「必备」表示这条模式**少不得**这个口：本地工作流缺它的落点时，
+              「工坊封装」会判为未配置（工坊驱动不起来）。哪些口必备按模式配，
+              不写死在代码里 ——
+              例如纯文生图把「提示词」勾必备、「负向提示词」不勾。
+            </p>
+            <p className="text-muted-foreground/80 text-[10px]">
               「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 +
               分辨率（1k / 2k / 4k），或 比例 + 百万像素 + 倍数（8 / 16 / 32 /
               64）。选「分辨率」时工坊按场景尺寸表换算成「百万像素 + 倍数」
@@ -139,15 +145,28 @@ export function ModeContractEditorView({
                       id={input}
                     />
                   </span>
-                  <button
-                    type="button"
-                    disabled={input === "prompt"}
-                    onClick={() => controller.removeInput(input)}
-                    className="text-muted-foreground/60 px-1 text-xs hover:text-red-700 disabled:opacity-30 dark:text-red-300 dark:hover:text-red-400"
-                    aria-label={`移除 ${modeContractInputIdLabel(input)}`}
-                  >
-                    ✕
-                  </button>
+                  <span className="flex items-center gap-2">
+                    <label
+                      className="text-muted-foreground flex cursor-pointer items-center gap-1 text-[10px]"
+                      title="必备口：本地工作流缺它的落点时，工坊里驱动不起来"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={controller.isRequired(input)}
+                        onChange={() => controller.toggleRequired(input)}
+                        className="accent-primary h-3 w-3"
+                      />
+                      必备
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => controller.removeInput(input)}
+                      className="text-muted-foreground/60 px-1 text-xs hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                      aria-label={`移除 ${modeContractInputIdLabel(input)}`}
+                    >
+                      ✕
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>
@@ -198,6 +217,12 @@ export function ModeContractEditorView({
               <p className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">
                 契约里没有「提示词」口 —— 工坊生成的提示词将无处可落，
                 保存后该模式无法被工坊驱动。
+              </p>
+            )}
+            {!controller.hasAnyRequired && (
+              <p className="rounded-lg bg-amber-100 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">
+                一个必备口都没勾 —— 这条模式下任何工作流都会被判为「工坊可用」，
+                缺任何口都不再提示。若你不是有意如此，给承载生成输入的那个口勾上。
               </p>
             )}
             {saved && (

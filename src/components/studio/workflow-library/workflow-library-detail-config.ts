@@ -63,7 +63,10 @@ export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
 }
 
 /** 「源文件」优先展示磁盘上的原始导入 JSON（用户当初导入的那个文件），纯 API
- *  导入拿不到原始文件时才回退到可执行图，并置 `isApiFallback` 让弹层如实标注。 */
+ *  导入（本身就没有原件）才回退到 API 图，并置 `isApiFallback` 让弹层如实标注。
+ *
+ *  注意这里没有「哪种格式更好」的含义：两者地位同等、都能执行，只是原件更接近
+ *  作者当初在 ComfyUI 里存下的那一份（带节点坐标与控件值）。 */
 export function buildSourceData(
   workflow: WorkflowRow,
   template: DetailTemplate | null | undefined,

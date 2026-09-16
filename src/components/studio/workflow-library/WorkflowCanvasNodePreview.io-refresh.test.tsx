@@ -230,7 +230,15 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         workflowName="测试工作流"
         taskType="t2i"
         workflowIO={promptSizeIO()}
-        paramMap={{}}
+        /* 落点只由**作者画的线**决定：不给线就是未配置，行尾不该有徽标。 */
+        paramMap={{
+          source: {
+            "mode:T2I": {
+              prompt: "9::widget::positive_prompt",
+              size: "5::widget::aspect_ratio",
+            },
+          },
+        }}
         usable
         defaultMode="T2I"
       />,
@@ -258,7 +266,14 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         workflowName="测试工作流"
         taskType="t2i"
         workflowIO={promptSizeIO()}
-        paramMap={{ source: { "mode:T2I": { [promptEntry.id]: null } } }}
+        paramMap={{
+          source: {
+            "mode:T2I": {
+              [promptEntry.id]: null,
+              size: "5::widget::aspect_ratio",
+            },
+          },
+        }}
         usable
         defaultMode="T2I"
       />,

@@ -15,7 +15,10 @@ import {
   type EncapsulationEntryStatus,
 } from "@/lib/workshop/workshop-encapsulation-status";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
-import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
+import {
+  modeContractEntries,
+  requiredInputsFor,
+} from "@/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow-types";
 import {
   DEFAULT_SHOT_SIZE,
@@ -57,6 +60,18 @@ export function WorkshopEncapsulationPanel({
    * `modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
    * （ISSUE #596：两个页签各读各的，口径就对不上了）。 */
   const { contracts: storedContracts } = useModeContracts();
+  /* 必备口来自模式契约（可配置，「模式契约」编辑器里勾选的那个勾）——本页的
+   *  「能不能用」判据读它，不再写死「提示词」。 */
+  const requiredInputs = React.useMemo(
+    () =>
+      requiredInputsFor({
+        inputs: modeContractEntries(mode, storedContracts).map((e) => e.id),
+        required: storedContracts.find(
+          (c) => c.mode === (mode ?? "").toUpperCase(),
+        )?.required,
+      }),
+    [mode, storedContracts],
+  );
   const status = React.useMemo(
     () =>
       deriveEncapsulationStatus({
@@ -64,8 +79,9 @@ export function WorkshopEncapsulationPanel({
         paramMap,
         mode: mode ?? null,
         contractEntries: modeContractEntries(mode, storedContracts),
+        requiredInputs,
       }),
-    [workflowIO, paramMap, mode, storedContracts],
+    [workflowIO, paramMap, mode, storedContracts, requiredInputs],
   );
 
   /* 流程测试的对外输入（与工坊同口径）：提示词 / 负向 / 尺寸。 */
@@ -132,10 +148,10 @@ export function WorkshopEncapsulationPanel({
       </div>
       {!status.ready && (
         <p className="rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
-          提示词口还没落到任何端口 —— 工坊（角色卡定妆照 /
-          镜头生图）无法驱动这条
-          工作流。到「画布节点」页签把「提示词」卡片的圆点拖到工作流里承载提示词的
-          那一行参数上（或使用自动判定），再回这里跑流程测试。
+          {status.missingRequired.join("、") || "必备口"}还没落到任何端口 ——
+          工坊（角色卡定妆照 / 镜头生图）无法驱动这条
+          工作流。到「画布节点」页签把
+          对应卡片的圆点拖到工作流里承载它的那一行参数上，再回这里跑流程测试。
         </p>
       )}
 
@@ -215,7 +231,7 @@ export function WorkshopEncapsulationPanel({
               title={
                 status.ready
                   ? undefined
-                  : "提示词口未落到端口，工坊无法驱动这条工作流"
+                  : `${status.missingRequired.join("、") || "必备口"}未落到端口，工坊无法驱动这条工作流`
               }
               className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
             >

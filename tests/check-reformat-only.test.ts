@@ -16,15 +16,23 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-reformat-only.cjs");
+
+/* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 prettier
+ * （门禁按「整批一次 prettier」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
+ * 5s 的用例超时在全量并行满载时会被击穿（CI 实测过一次 `Test timed out in 5000ms`，
+ * 报在 `tests/check-format.test.ts` 的同类用例上）。整文件放宽到 30s——只影响本文件，
+ * 不掩盖其它文件的真实挂起。 */
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 /**
  * prettier 的 **JS 入口**（不是 `node_modules/.bin/prettier`）。
@@ -147,6 +155,12 @@ function seedDirty(n: number): string[] {
   }
   commit("base");
   return files;
+}
+
+/** 建一个空的基线提交：只在「判定与门禁现场无关」的用例里用（它们不需要脏文件）。 */
+function seedEmpty(): void {
+  write("src/lib/keep.ts", "export const KEEP = 1;\n");
+  commit("base");
 }
 
 describe("格式化提交与行为改动分离", { timeout: 60_000 }, () => {
@@ -308,6 +322,145 @@ describe(
     });
   },
 );
+
+describe(
+  "判定成本：整批一次 prettier，不按文件各起一次",
+  { timeout: 60_000 },
+  () => {
+    /* 这条用例守的是一条**真实发生过的**失效：早先的实现对每个文件各起一次
+     * `prettier --stdin-filepath`，而 prettier 的启动 + 插件加载是主要成本
+     * （实测单文件约 400ms，与文件大小几乎无关）—— 12 个文件 ≈ 5s，正好把
+     * vitest 默认的 testTimeout 顶穿。现场表现是 `Test timed out in 5000ms`，
+     * 报在别的门禁用例上，看起来像「测试写得慢」，实际是门禁自身的调用形态
+     * 在文件数上线性叠加（真人「批量格式化」提交改几十个文件时只会更慢）。
+     *
+     * 判据用**计数**而不是耗时：耗时在负载波动下必然抖动，而「prettier 起了
+     * 几次」是确定的。整批口径下 batch 恰好一次（外加退回 stdin 的兜底，正常
+     * 路径上为 0），逐文件口径下是「文件数 + 1」。用包装脚本记调用次数，
+     * 断言与阈值无关的形态：次数远小于文件数。 */
+    it("12 个文件的改动 → prettier 调用次数远小于文件数（整批口径）", () => {
+      seedDirty(12);
+      for (let i = 0; i < 12; i++) formatInPlace(`src/lib/dirty-${i}.ts`);
+      commit("format only");
+
+      const real = require.resolve("prettier/bin/prettier.cjs", {
+        paths: [process.cwd()],
+      });
+      const wrapper = join(configDir, "prettier-count.cjs");
+      const counter = join(configDir, "prettier-calls.txt");
+      writeFileSync(
+        wrapper,
+        [
+          'const { appendFileSync } = require("node:fs");',
+          `appendFileSync(${JSON.stringify(counter)}, "call\\n");`,
+          `require(${JSON.stringify(real)});`,
+        ].join("\n"),
+      );
+      // 把 wrapper 放到临时仓库的 node_modules 下：脚本按「向上找 node_modules」
+      // 解析 prettier，命中它即等于「prettier 被起了几次」+1。
+      rmSync(join(workdir, "node_modules"), { recursive: true, force: true });
+      mkdirSync(join(workdir, "node_modules", "prettier", "bin"), {
+        recursive: true,
+      });
+      copyFileSync(
+        wrapper,
+        join(workdir, "node_modules", "prettier", "bin", "prettier.cjs"),
+      );
+      symlinkSync(
+        join(process.cwd(), "node_modules", "prettier-plugin-tailwindcss"),
+        join(workdir, "node_modules", "prettier-plugin-tailwindcss"),
+        "dir",
+      );
+      writeFileSync(
+        join(workdir, "node_modules", "prettier", "package.json"),
+        '{"name":"prettier","version":"0.0.0"}',
+      );
+      writeFileSync(join(workdir, ".gitignore"), "node_modules\n");
+
+      const r = run();
+      expect(r.code).toBe(1);
+      expect(r.output).toContain("纯格式化 12 个");
+
+      const calls = readFileSync(counter, "utf8").trim().split("\n").length;
+      // 逐文件口径下这里会是 13；整批口径下是 1（兜底最多再补几次）。
+      expect(calls).toBeLessThanOrEqual(3);
+    });
+  },
+);
+
+/**
+ * 「批量结果里没被 prettier 改过」不是一个结论，而是**两件事**叠在一起：
+ * 文件本来就规范，或 prettier 自己的 ignore 规则把它跳过了。只有前者能推出
+ * 「这次提交不是纯格式化」。这组用例锁的就是「后者必须回落到 stdin 口径」——
+ * 判据漏掉它，纯格式化提交会被放行（`git blame` 永久失真，正是本门禁存在的理由）。
+ *
+ * 真起 prettier 而不打桩：被锁的正是「谁来给答案」，桩一打就锁不住了。
+ */
+describe("批量口径的缺项退回逐文件 stdin 判定", { timeout: 60_000 }, () => {
+  /* 「批量结果里没被 prettier 改过」不是一个结论，而是**两件事**叠在一起：
+   * 文件本来就规范，或 prettier 自己的忽略规则把它跳过了。只有前者能推出
+   * 「这次提交不是纯格式化」—— 判据漏掉后者，纯格式化提交会被放行，
+   * `git blame` 永久失真（正是本门禁存在的理由）。
+   *
+   * 忽略规则的判据必须取 prettier 自己的那一套（它以 cwd 为根读 `.gitignore`），
+   * 不能用 `git check-ignore` 代判 —— 实测两者不一致：目录名被 `.gitignore`
+   * 命中时，prettier 连**显式点名**的路径也一并跳过（`--write <file>` 静默返回
+   * 空输出），而 `git check-ignore` 对**已跟踪**的路径报「未被忽略」。真实历史
+   * 里的形态正是这样（`.workbuddy/skills/build-guard/guard.js` 被格式化后，
+   * 在 #619 的合并提交里落成了「纯格式化」）。
+   *
+   * 判据本体是「谁来给答案」：`classifyReformatOnly` 会真起 prettier，用桩就锁不住。
+   */
+  it("落在 prettier 忽略路径下的源码被跳过 → 仍按 stdin 口径判为纯格式化", () => {
+    seedEmpty();
+    write(".gitignore", "node_modules\n.workbuddy\n");
+    commit("ignore the dir");
+
+    // 这一批全部落在被忽略的目录下：批量口径一个都不会回读（`--write <dir>`
+    // 整目录跳过它），于是每个文件都只剩「本来就规范」这一种解释 —— 而 stdin
+    // 口径明明白白给出「prettier 会把它改成下面那样」。真结论是后者。
+    const before = "export const P={a:1,\n\n\n  b:2};\n";
+    const after = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+    write(".workbuddy/probe.ts", before);
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("../scripts/check-reformat-only.cjs") as {
+      classifyReformatOnly: (
+        entries: Array<{ file: string; before: string; after: string }>,
+      ) => Set<string>;
+    };
+    const verdict = mod.classifyReformatOnly([
+      { file: ".workbuddy/probe.ts", before, after },
+    ]);
+    expect(
+      [...verdict],
+      "文件没出现在批量结果里 —— 那不代表「它本来就规范」，仍要按 stdin 口径判",
+    ).toEqual([".workbuddy/probe.ts"]);
+  });
+
+  it("批量口径判为「本来就规范」的文件不再起 stdin（常见路径不为兜底付账）", () => {
+    seedEmpty();
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("../scripts/check-reformat-only.cjs") as {
+      classifyReformatOnly: (
+        entries: Array<{ file: string; before: string; after: string }>,
+      ) => Set<string>;
+    };
+    // 改动前的内容**已经规范**：prettier 不会改写它，批量结果里没有这项，
+    // 但它本来就没有「被跳过」的可能（不在忽略路径下），兜底不该被触发 ——
+    // 判定为「不是纯格式化」靠的是 stdin 给的回文与改动后不同。
+    const clean = "export const P = { a: 1, b: 2 };\n";
+    const changed = "export const P = { a: 1, b: 3 };\n";
+    expect([...mod.classifyReformatOnly([{ file: "src/lib/p.ts", before: clean, after: changed }])]).toEqual([]);
+    // 同一个文件若是「改动前就不规范、改动后是它的规范形态」→ 纯格式化。
+    const messy = "export const P={a:1,\n\n\n  b:2};\n";
+    const tidy = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
+    expect([...mod.classifyReformatOnly([{ file: "src/lib/p.ts", before: messy, after: tidy }])]).toEqual([
+      "src/lib/p.ts",
+    ]);
+  });
+});
 
 describe("补丁解析（纯函数，不跑 git）", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports

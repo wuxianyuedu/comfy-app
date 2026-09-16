@@ -130,10 +130,11 @@ export function DetailHeader({
                 {tag}
               </span>
             ))}
-            {/* 缺少可执行图时提前标注，而不是等用户点了「生成」才报错。 */}
+            {/* 两列都为空时提前标注，而不是等用户点了「生成」才报错。
+                正常导入不会落到这里：raw 与 api 地位同等，任一列有内容即可执行。 */}
             {!usable && (
               <span className="rounded bg-red-500/12 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">
-                不可执行
+                无可执行内容
               </span>
             )}
             {canResync && (
@@ -164,7 +165,7 @@ export function DetailHeader({
             title={
               usable
                 ? "把该工作流导入项目画布"
-                : "当前工作流缺少可执行格式，无法导入"
+                : "当前工作流既没有 API 图也没有工作流(RAW)原件，无法导入"
             }
             disabled={!usable}
           />

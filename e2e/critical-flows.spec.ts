@@ -542,15 +542,25 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .evaluate((el) => el.parentElement!.parentElement!.style.height);
       expect(spacerHeight).toBe(`${ROWS * 27}px`);
 
-      /* ③ 滚到底能看到**最后一行**（虚拟化的经典翻车是「滚不到底」）。 */
+      /* ③ 滚到底真的能到**本页最后一行**（虚拟化的经典翻车是「滚不到底」：
+       * 窗口算错时会停在中途，用户怎么拉都看不到页尾）。
+       *
+       * 判据钉在**页内绝对序号**上（`data-log-index`），而不是某一行的文案：
+       * 面板开着的时候轮询还在往时间线追加，第 1 页可能被锚定在旧位置（页脚会说
+       * 「有 N 条新的日志」）——那时页尾本来就不是「事件 1999」那条。序号是页内
+       * 位置，窗口一变它仍指着同一行，既不受轮询影响，也正是贴底逻辑用的同一份
+       * 口径（§7.28.3 第 1 条）。 */
       await page.locator(".custom-scrollbar").evaluate((el) => {
         el.scrollTop = el.scrollHeight;
       });
-      await expect(
-        page
-          .locator("[data-log-text]", { hasText: `事件 ${ROWS - 1}` })
-          .first(),
-      ).toBeVisible();
+      await expect
+        .poll(async () =>
+          page
+            .locator("[data-log-index]")
+            .last()
+            .getAttribute("data-log-index"),
+        )
+        .toBe(String(ROWS - 1));
 
       /* ④ 切页那一刻的耗时：满页 2000 行一次性渲染在真实 Chromium 里是几百
        * 毫秒量级（用户读到的就是「明显卡顿」）。虚拟化之后只剩几十行，

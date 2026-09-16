@@ -203,22 +203,16 @@ describe("贴底该不该动", () => {
 });
 
 describe("贴底要写入的 scrollTop", () => {
-  it("按真实节点几何让目标行贴住视口底边", () => {
-    expect(pinScrollTop({ offsetTop: 2700, offsetHeight: 27 }, 500)).toBe(2227);
-  });
-
-  it("按估算位置（目标行未渲染时的兜底）同样贴住底边", () => {
+  it("按位置表让目标行贴住视口底边", () => {
     expect(pinScrollTop({ start: 2700, size: 27 }, 500)).toBe(2227);
   });
 
   it("顶部的行给出 0（不出现负 scrollTop）", () => {
-    expect(pinScrollTop({ offsetTop: 0, offsetHeight: 27 }, 500)).toBe(0);
+    expect(pinScrollTop({ start: 0, size: 27 }, 500)).toBe(0);
   });
 
   it("视口高度取不到时按 0 处理，且绝不给出负数", () => {
-    expect(pinScrollTop({ offsetTop: 10, offsetHeight: 0 }, Number.NaN)).toBe(
-      10,
-    );
+    expect(pinScrollTop({ start: 10, size: 0 }, Number.NaN)).toBe(10);
     expect(pinScrollTop({ start: 0, size: 0 }, -100)).toBe(0);
   });
 });

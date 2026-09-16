@@ -62,20 +62,19 @@ export interface WorkflowRow {
    *  global tag library, e.g. ["z-image","wan2.2"]).  Returned by
    *  GET /api/workflows.  Drives the library card chips + model filter. */
   modelTags?: string[];
-  /** Independent booleans.  `hasApi` controls whether the
-   *  workflow is actually executable; `hasRaw` is informational and lets
-   *  the UI offer source-view / download-merged-bundle for RAW imports. */
+  /** 两列各自有没有内容 —— **只用于如实标注**，不判可执行性（raw 与 api
+   *  地位同等，见下 `usable`）。 */
   hasApi?: boolean;
   hasRaw?: boolean;
-  /** Where the executable graph came from.
-   *   - "user": the user explicitly exported API Format from ComfyUI
-   *   - "derived": auto-derived from rawJson via convertRawToApi
-   *   - null: no API at all (only RAW was imported, graph was empty)
-   *  The card and the source modal both use this to honestly label
-   *  the API badge so users aren't surprised that "我只导入了 raw"
-   *  still shows an API badge. */
-  apiOrigin?: "user" | "derived" | null;
-  /** Convenience union of the two flags: true ⇔ has an executable graph. */
+  /** API 列从哪来（服务端富化下发）。
+   *   - "user"：用户自己导出的 API 格式
+   *   - "derived"：早年导入 RAW 时转出来存下的
+   *   - null：没有 API 列（只有 RAW 的工作流就是这样，**它照样能跑**）
+   *  与可执行性无关，只用来在源文件页签 / 卡片来源徽标上说清这一列是哪来的。 */
+  apiSource?: string | null;
+  /** 这条工作流有没有可执行内容 —— **raw 或 api 任有一列有内容即可**。
+   *  RAW 由 comfy-cli 直接执行（它按节点类定义做权威转换），所以
+   *  「只有 rawJson、没有 graph」是完整可用的工作流，不是残缺态。 */
   usable?: boolean;
   /** "raw" if the user originally imported the UI/raw format (positions
    *  preserved).  "api" otherwise.  This is kept as a legacy hint — UI
@@ -115,30 +114,36 @@ export interface WorkflowRow {
   diskRenamedTo?: string | null;
 }
 
-/** Resolve the three independent UI booleans + apiOrigin when the server
- *  only sent the legacy single `format` tag.  Treats `format:"raw"` as
- *  "definitely has RAW, has API" — defaults `hasApi=true` because older
- *  imports always went through the raw→api converter.  New callers should
- *  pass `hasApi/hasRaw/apiOrigin` directly. */
+/** 解析「这条工作流可执行吗、两列各有什么」。
+ *
+ *  **可用性判据 = 有可执行的列之一**（`usable`，服务端富化时已按同一份口径算好）。
+ *  服务端没带 `usable` 的老路径（早期 `format` 单标记）按 `format` 反推：两种格式
+ *  都可执行，所以只要有一行就是可执行的 —— 「有没有内容」在列表里本来就等价于
+ *  「列表里出现了这一行」。 */
 export function deriveFormatFlags(row: WorkflowRow): {
   hasApi: boolean;
   hasRaw: boolean;
-  apiOrigin: "user" | "derived" | null;
+  apiSource: string | null;
   usable: boolean;
 } {
-  if (typeof row.hasApi === "boolean" || typeof row.hasRaw === "boolean") {
-    const hasApi = row.hasApi ?? true;
+  if (
+    typeof row.hasApi === "boolean" ||
+    typeof row.hasRaw === "boolean" ||
+    typeof row.usable === "boolean"
+  ) {
     const hasRaw = row.hasRaw ?? row.format === "raw";
-    const apiOrigin: "user" | "derived" | null =
-      row.apiOrigin ?? (hasApi ? (hasRaw ? "derived" : "user") : null);
-    // 一个工作流只保留一种格式。可用性仅取决于是否有可执行 graph。
-    const usable = hasApi;
-    return { hasApi, hasRaw, apiOrigin, usable };
+    const hasApi = row.hasApi ?? !hasRaw;
+    return {
+      hasApi,
+      hasRaw,
+      apiSource: row.apiSource ?? null,
+      usable: row.usable ?? (hasApi || hasRaw),
+    };
   }
   return {
-    hasApi: true,
+    hasApi: row.format !== "raw",
     hasRaw: row.format === "raw",
-    apiOrigin: row.format === "raw" ? "derived" : "user",
+    apiSource: null,
     usable: true,
   };
 }

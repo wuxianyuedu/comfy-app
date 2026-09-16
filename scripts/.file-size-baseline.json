@@ -7,7 +7,7 @@
   "total": 11,
   "files": {
     "src/app/(main)/settings/hooks/use-settings-page.ts": 1450,
-    "src/components/studio/logs/LogPanel.tsx": 1236,
+    "src/components/studio/logs/LogPanel.tsx": 988,
     "src/components/studio/logs/log-store.ts": 1550,
     "src/components/studio/shared/workflow-io.ts": 994,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 957,

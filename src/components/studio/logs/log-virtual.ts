@@ -234,24 +234,30 @@ export function pinTargetIndex(
 /**
  * 贴底要写入的 `scrollTop`：让目标行**贴住视口底边**。
  *
- * `row` 给的是估算位置（目标行**没被渲染**时的兜底：虚拟化下窗口外的行不在
- * DOM 里）；`element` 给的是真实节点几何（拿得到时优先用，估算误差不累积）。
- * 两者都以「底边对齐」为准，取不到就给 0。
+ * 几何**只取自位置表** `rows[...]`（`{ start, size }`，即 {@link layoutRows} 的
+ * 那一份）。理由有两条，都踩过：
+ *
+ *   1. 位置表是 `translateY`（渲染）与滚动条（总高）共用的**同一份口径**。拿真实
+ *      节点的 `offsetTop + offsetHeight` 量是第二套坐标，两套会在窗口边界上分叉；
+ *   2. 虚拟化之后行的 `offsetParent` 是那层 `translateY` 过的内层容器，`offsetTop`
+ *      回答的是「它在**当前窗口**里的位置」而不是「它在整页内容里的位置」。拿它算
+ *      `scrollTop` 会把视口拉回**窗口起点** —— 用户滚到底立刻被推回去，2000 行的
+ *      页尾永远够不到（e2e 抓到的「滚不到底」正是它）。
+ *
+ * 目标行在窗口外时它根本不在 DOM 里，这一支天然也走同一张表：把目标行带进窗口，
+ * 下一轮 effect 按同一张表对齐 —— 两轮同解，不再有「真实节点」与「估算位置」两套坐标。
+ *
+ * 视口高度取不到（jsdom / 首帧）时按 0 处理：`Math.max(0, NaN)` 是 NaN，交给
+ * `scrollTop` 会被静默忽略（位置不更新）。
  */
 export function pinScrollTop(
-  geometry:
-    | { start: number; size: number }
-    | { offsetTop: number; offsetHeight: number },
+  geometry: { start: number; size: number },
   viewportHeight: number,
 ): number {
-  const top = "start" in geometry ? geometry.start : geometry.offsetTop;
-  const height = "size" in geometry ? geometry.size : geometry.offsetHeight;
-  /* 视口高度取不到（jsdom / 首帧）时按 0 处理：`Math.max(0, NaN)` 是 NaN，
-   * 交给 `scrollTop` 会被静默忽略（位置不更新）。 */
   const viewport = Number.isFinite(viewportHeight)
     ? Math.max(0, viewportHeight)
     : 0;
-  const next = top + height - viewport;
+  const next = geometry.start + geometry.size - viewport;
   return Number.isFinite(next) ? Math.max(0, next) : 0;
 }
 
