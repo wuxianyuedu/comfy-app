@@ -723,6 +723,86 @@ describe("LogPanel 日志面板", () => {
     expect(await screen.findByText("已复制")).toBeInTheDocument();
   });
 
+  it("选中的类别在浅色/深色主题下都看得出（不是只差一个近乎同值的底色）", () => {
+    seed(3);
+    render(<LogPanel />);
+    /* 选中态此前只有 `bg-subtle`——而浅色主题下它与行头底色（surface-1）是
+     * 同一个值 #f7f8fa，于是「选中的是哪一项」在浅色下完全看不出来（ISSUE #609
+     * 第 1 条）。判据落在**类**上：底色 + 描边 + 字重三层里至少底色与描边
+     * 都换成了主色调，任何一层单独失效仍读得出选中。 */
+    const selected = levelButton("全部");
+    expect(selected.getAttribute("aria-pressed")).toBe("true");
+    expect(selected.className).toContain("bg-primary/12");
+    expect(selected.className).toContain("ring-primary/45");
+    expect(selected.className).toContain("font-semibold");
+
+    /* 未选中的按钮不得带这三样（否则「选中」就没有区分度了）。 */
+    const unselected = levelButton("警告");
+    expect(unselected.getAttribute("aria-pressed")).toBe("false");
+    expect(unselected.className).not.toContain("bg-primary/12");
+    expect(unselected.className).not.toContain("ring-primary/45");
+  });
+
+  it("复制的是**当前筛选**的全部日志，不是整个面板的行", async () => {
+    /* 两类来源各若干行：用户先把来源收窄到「应用运行」，再按复制——期望拿到的
+     * 只有这一类（ISSUE #609 第 2 条：「复制日志，需要只复制当前选择类型的
+     * 全部日志」）。 */
+    act(() =>
+      useLogStore
+        .getState()
+        .appendFileLogs([
+          makeEntry(1, { origin: "app-runtime", message: "要复制的运行日志" }),
+          makeEntry(2, { origin: "dev", message: "不该被复制的启动日志" }),
+        ]),
+    );
+    render(<LogPanel />);
+    const user = userEvent.setup();
+    act(() => useLogStore.getState().setOrigin("app-runtime"));
+
+    await user.click(
+      screen.getByRole("button", { name: "复制当前筛选的全部日志" }),
+    );
+    const written = await navigator.clipboard.readText();
+    expect(written).toContain("要复制的运行日志");
+    expect(written).not.toContain("不该被复制的启动日志");
+  });
+
+  it("「保存到本地」把当前筛选写进 log/exports/ 并报出路径", async () => {
+    /* 面板此前只有浏览器下载：桌面壳里是否落盘由宿主决定，用户点完常常本地
+     * 什么都没有（ISSUE #609 第 3 条）。这里断言接线——点一下会把当前筛选的
+     * 文本 POST 给导出端点，并把服务端回的路径显示出来。 */
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        path: "F:\\proj\\log\\exports\\logs-all-20260101-100000.txt",
+        relativePath: "exports/logs-all-20260101-100000.txt",
+        bytes: 42,
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      seed(2);
+      render(<LogPanel />);
+      const user = userEvent.setup();
+      await user.click(
+        screen.getByRole("button", {
+          name: "保存当前筛选的全部日志到本地文件",
+        }),
+      );
+      expect(await screen.findByText(/exports\//)).toBeInTheDocument();
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [
+        string,
+        { body: string },
+      ];
+      expect(url).toBe("/api/logs/export");
+      const sent = JSON.parse(init.body) as { content?: string };
+      expect(sent.content).toContain("事件");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("复制失败时如实说失败，不谎报「已复制」", async () => {
     act(() =>
       useLogStore
