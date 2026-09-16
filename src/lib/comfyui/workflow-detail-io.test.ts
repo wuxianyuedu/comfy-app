@@ -306,6 +306,96 @@ describe("enrichWorkflowIO — classType（产出节点类名）", () => {
   });
 });
 
+describe("enrichWorkflowIO — 图内语义角色 role（ISSUE #611）", () => {
+  it("顶层正 / 反向文本编码节点按 paramMap 投影出 role", async () => {
+    /* 同一对 CLIPTextEncode 的 pin 名与显示名完全一样（都叫 text / 「文本」），
+     * 名字层面分不出正负 —— 角色只能来自导入图沿 KSampler 的 positive /
+     * negative 连线链推出的 paramMap。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "6::widget::text": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "6",
+            name: "text",
+          },
+          "7::widget::text": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "text",
+          },
+          "5::widget::width": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "5",
+            name: "width",
+          },
+        },
+        { paramMap: { positiveNode: "6", negativeNode: "7" } },
+      ),
+    );
+    expect(result["6::widget::text"]!.role).toBe("positive");
+    expect(result["7::widget::text"]!.role).toBe("negative");
+    /* 不在正 / 反向节点上的条目不下发 role（宁可不显示，也不猜错）。 */
+    expect(result["5::widget::width"]!.role).toBeUndefined();
+  });
+
+  it("paramMap 的 id 是 UUID 形态时按前缀宽容匹配（与 canonicalNodeId 同源）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "7::widget::text": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "text",
+          },
+        },
+        {
+          paramMap: {
+            positiveNode: "6",
+            negativeNode: "7-abcdef00-1111-2222-3333-444444444444",
+          },
+        },
+      ),
+    );
+    expect(result["7::widget::text"]!.role).toBe("negative");
+  });
+
+  it("没有 paramMap（老数据 / API-only 未判定）时不下发 role", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "6::widget::text": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "6",
+          name: "text",
+        },
+      }),
+    );
+    expect(result["6::widget::text"]!.role).toBeUndefined();
+  });
+
+  it("输出条目不带 role（角色只对输入口有意义）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "9::output::images": {
+            direction: "output",
+            kind: "output",
+            nodeId: "9",
+            name: "images",
+          },
+        },
+        { paramMap: { positiveNode: "9", negativeNode: "9" } },
+      ),
+    );
+    expect(result["9::output::images"]!.role).toBeUndefined();
+  });
+});
+
 describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（ISSUE #349）", () => {
   const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
   const wrapperParams = (rawExtra?: Record<string, unknown>) =>

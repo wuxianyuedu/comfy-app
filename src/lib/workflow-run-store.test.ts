@@ -11,6 +11,7 @@ import {
   failWorkflowRun,
   patchWorkflowRun,
   registerWorkflowRun,
+  runLogSourceLabel,
 } from "./workflow-run-store";
 
 afterEach(clearAllWorkflowRuns);
@@ -170,6 +171,51 @@ describe("workflow-run-store", () => {
   it("failWorkflowRun 对未登记的 taskId 静默无操作", () => {
     expect(() => failWorkflowRun("missing", "boom")).not.toThrow();
     expect(getWorkflowRun("missing")).toBeNull();
+  });
+
+  it("运行来源标记与展示名（两个入口共用一个执行视角，ISSUE #611）", () => {
+    registerWorkflowRun({
+      taskId: "a",
+      workflowId: "wf1",
+      workflowName: "n",
+      taskType: "t",
+      startedAt: 1,
+      source: "canvas-node",
+    });
+    expect(getWorkflowRun("a")?.source).toBe("canvas-node");
+    expect(runLogSourceLabel("canvas-node")).toContain("画布节点");
+    expect(runLogSourceLabel("encapsulation-test")).toContain("工坊封装");
+    /* 早期落库的记录没有 source —— 一律按画布节点就地运行呈现。 */
+    expect(runLogSourceLabel(undefined)).toContain("画布节点");
+  });
+
+  it("两个入口的运行时序互不干扰：登记表同时容纳两边的任务（ISSUE #611）", () => {
+    /* 「画布节点」与「工坊封装」是同一份封装口径的两次运行，都登记进本表。
+     * 一边在跑不该挡住另一边登记 —— 两边各自拿到自己的 taskId 与日志。 */
+    registerWorkflowRun({
+      taskId: "canvas",
+      workflowId: "wf1",
+      workflowName: "n",
+      taskType: "t2i",
+      startedAt: 1,
+      status: "running",
+      source: "canvas-node",
+    });
+    registerWorkflowRun({
+      taskId: "test",
+      workflowId: "wf1",
+      workflowName: "n",
+      taskType: "t2i",
+      startedAt: 2,
+      status: "running",
+      source: "encapsulation-test",
+    });
+    appendWorkflowRunLog("canvas", { t: 1, level: "info", msg: "画布节点" });
+    appendWorkflowRunLog("test", { t: 1, level: "info", msg: "流程测试" });
+    expect(getWorkflowRun("canvas")?.logs).toHaveLength(1);
+    expect(getWorkflowRun("test")?.logs).toHaveLength(1);
+    expect(getWorkflowRun("canvas")?.logs?.[0]?.msg).toBe("画布节点");
+    expect(getWorkflowRun("test")?.logs?.[0]?.msg).toBe("流程测试");
   });
 
   it("localStorage 写穿：清空后重 hydrate 不再恢复（clear 移除存储）", () => {

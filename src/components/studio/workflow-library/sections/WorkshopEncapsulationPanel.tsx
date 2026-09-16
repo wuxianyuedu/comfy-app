@@ -11,11 +11,6 @@ import React from "react";
 
 import { ShotSizePicker } from "@/components/workshop/ShotSizePicker";
 import {
-  buildLibraryWorkflowInput,
-  startLocalGenerate,
-  watchTask,
-} from "@/lib/workshop/generation-client";
-import {
   deriveEncapsulationStatus,
   type EncapsulationEntryStatus,
 } from "@/lib/workshop/workshop-encapsulation-status";
@@ -27,6 +22,9 @@ import {
   type ShotSizeState,
 } from "@/components/workshop/shot-size-config";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
+import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
+import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
 
 interface WorkshopEncapsulationPanelProps {
   workflowId: string;
@@ -76,11 +74,10 @@ export function WorkshopEncapsulationPanel({
   );
   const [negative, setNegative] = React.useState("");
   const [size, setSize] = React.useState<ShotSizeState>(DEFAULT_SHOT_SIZE);
-  const [running, setRunning] = React.useState(false);
-  const [progress, setProgress] = React.useState(0);
-  const [logLines, setLogLines] = React.useState<string[]>([]);
-  const [resultUrl, setResultUrl] = React.useState<string | null>(null);
-  const [testError, setTestError] = React.useState("");
+  /* 全屏执行日志弹窗开关 —— 与「画布节点」页签同一扇门（WorkflowRunLogModal）
+   *  同一份运行登记表（workflow-run-store）。两个页签不再是两套各占一个执行
+   *  视角的日志（ISSUE #611）。 */
+  const [logOpen, setLogOpen] = React.useState(false);
 
   const entryById = React.useMemo(
     () => new Map(status.entries.map((e) => [e.id, e])),
@@ -89,46 +86,23 @@ export function WorkshopEncapsulationPanel({
   const negativeEntry = entryById.get("negative");
   const sizeEntry = entryById.get("size");
   const promptEntry = entryById.get("prompt");
-  const runTest = React.useCallback(async () => {
-    if (running || !status.ready) return;
-    setRunning(true);
-    setProgress(0);
-    setLogLines([]);
-    setResultUrl(null);
-    setTestError("");
-    try {
-      const { input } = await buildLibraryWorkflowInput(workflowId, {
-        prompt,
-        ...(negative.trim() ? { negativePrompt: negative.trim() } : {}),
-        /* 库工作流吃尺寸表达（比例 + 档位 [+ 倍数]），不下发 "WxH" 字符串。 */
-        size,
-      });
-      const taskId = await startLocalGenerate(input);
-      await new Promise<void>((resolve) => {
-        let imageUrl: string | null = null;
-        watchTask(taskId, {
-          onProgress: (pct) => setProgress(pct),
-          onLog: (entry) => {
-            if (entry.level === "progress") return;
-            setLogLines((prev) => [...prev, entry.msg].slice(-100));
-          },
-          onOutput: (output) => {
-            if (output.kind !== "video" && !imageUrl) imageUrl = output.url;
-          },
-          onSettled: (result) => {
-            if (!result.ok) setTestError(result.message ?? "流程测试失败");
-            else if (imageUrl) setResultUrl(imageUrl);
-            else setTestError("任务完成但没有产出图片");
-            resolve();
-          },
-        });
-      });
-    } catch (e) {
-      setTestError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setRunning(false);
-    }
-  }, [running, status.ready, workflowId, prompt, negative, size]);
+  /* 流程测试的运行编排（规范 §17.2 第②层）：与画布节点那次运行共用同一份
+   *  运行登记表与日志弹窗，只是带自己的来源标记。视图这里只消费 controller。 */
+  const test = useEncapsulationTestRun({
+    workflowId,
+    workflowName: displayName,
+    mode: mode ?? null,
+  });
+
+  const runTest = () => {
+    if (test.running || !status.ready) return;
+    test.run({
+      prompt,
+      ...(negative.trim() ? { negativePrompt: negative.trim() } : {}),
+      /* 库工作流吃尺寸表达（比例 + 档位 [+ 倍数]），不下发 "WxH" 字符串。 */
+      size,
+    });
+  };
 
   return (
     <div className="border-border bg-panel-deep mx-auto max-w-2xl space-y-4 rounded-2xl border p-4">
@@ -230,14 +204,14 @@ export function WorkshopEncapsulationPanel({
             <ShotSizePicker
               value={size}
               onChange={setSize}
-              disabled={running}
+              disabled={test.running}
             />
           )}
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void runTest()}
-              disabled={running || !status.ready}
+              onClick={runTest}
+              disabled={test.running || !status.ready}
               title={
                 status.ready
                   ? undefined
@@ -245,37 +219,41 @@ export function WorkshopEncapsulationPanel({
               }
               className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
             >
-              {running ? "测试中…" : "执行流程测试"}
+              {test.running ? "测试中…" : "执行流程测试"}
             </button>
+            {/* 执行日志入口与「画布节点」页签**同一扇门**：同一份运行登记表、
+                同一个全屏弹窗。两个页签共用一个执行视图，不再「一个在跑、另
+                一个像执行不了」，也不必在各自的区域里展示两套日志（ISSUE #611）。 */}
+            <WorkflowRunLogButton
+              workflowId={workflowId}
+              taskId={test.taskId}
+              running={test.running}
+              onOpen={() => setLogOpen(true)}
+            />
             <span className="text-muted-foreground text-[11px]">
               会真实调用本机 ComfyUI 生成一张图
             </span>
           </div>
-          {running && (
+          {test.running && (
             <div className="bg-elevated h-1 w-full overflow-hidden rounded-full">
               <div
                 className="bg-primary h-full rounded-full transition-all"
-                style={{ width: `${Math.max(4, progress)}%` }}
+                style={{ width: `${Math.max(4, test.progress)}%` }}
               />
             </div>
           )}
-          {testError && (
+          {test.error && (
             <p className="rounded-lg bg-red-100 px-3 py-2 text-[11px] text-red-800 dark:text-red-300">
-              {testError}
+              {test.error}
             </p>
           )}
-          {logLines.length > 0 && (
-            <pre className="bg-bg/70 text-muted-foreground max-h-32 overflow-y-auto rounded px-2 py-1.5 text-[10.5px] leading-relaxed break-all whitespace-pre-wrap">
-              {logLines.join("\n")}
-            </pre>
-          )}
-          {resultUrl && (
+          {test.resultUrl && (
             <div className="space-y-1">
               <p className="text-primary text-[11px]">
                 流程测试通过 —— {displayName} 在工坊中可用。
               </p>
               <img
-                src={resultUrl}
+                src={test.resultUrl}
                 alt="流程测试产物"
                 className="border-border max-h-56 rounded-lg border"
               />
@@ -286,6 +264,15 @@ export function WorkshopEncapsulationPanel({
           </p>
         </div>
       </div>
+
+      {/* 全屏执行日志弹窗：与「画布节点」页签同一个组件、同一份运行登记表。 */}
+      <WorkflowRunLogModal
+        open={logOpen}
+        workflowId={workflowId}
+        viewTaskId={test.taskId}
+        onViewTaskIdChange={() => undefined}
+        onClose={() => setLogOpen(false)}
+      />
     </div>
   );
 }
