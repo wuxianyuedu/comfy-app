@@ -17,7 +17,6 @@ export interface WorkshopDraftDto {
   scenes: Scene[];
   characters: Character[];
   shots: Shot[];
-  checkpoint: string;
 }
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。 */
@@ -44,7 +43,6 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       ? (obj.characters as Character[])
       : [],
     shots: Array.isArray(obj.shots) ? (obj.shots as Shot[]) : [],
-    checkpoint: typeof obj.checkpoint === "string" ? obj.checkpoint : "",
   };
 }
 

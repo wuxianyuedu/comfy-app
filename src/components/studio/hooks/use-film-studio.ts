@@ -30,6 +30,14 @@ import {
 export interface FilmStudioController {
   /* 成片参数（目前为常量，保留 setter 以便后续开放编辑） */
   title: string;
+  /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
+  videoWorkflows: { id: string; name: string }[];
+  videoWorkflowId: string;
+  setVideoWorkflowId: (value: string) => void;
+  /** 工作流库里可选的图类工作流（文生视频镜头合成首帧用；可选）。 */
+  imageWorkflows: { id: string; name: string }[];
+  imageWorkflowId: string;
+  setImageWorkflowId: (value: string) => void;
   /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。 */
   size: SizeSpec;
   /** 预览区展示的帧率。 */
@@ -68,6 +76,10 @@ export function useFilmStudio(): FilmStudioController {
   const [frames] = useState(FILM_FRAMES_PER_SHOT);
 
   const [script, setScript] = useState(DEFAULT_SCRIPT);
+  const [videoWorkflows, setVideoWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [videoWorkflowId, setVideoWorkflowId] = useState("");
+  const [imageWorkflows, setImageWorkflows] = useState<{ id: string; name: string }[]>([]);
+  const [imageWorkflowId, setImageWorkflowId] = useState("");
   const [subtitleOn, setSubtitleOn] = useState(true);
   const [bgmName, setBgmName] = useState<string | null>(null);
   const [ffmpegAvailable, setFfmpegAvailable] = useState(true);
@@ -116,11 +128,25 @@ export function useFilmStudio(): FilmStudioController {
     const t = setTimeout(() => {
       void (async () => {
         try {
-          const [sData, fData] = await Promise.all([
+          const [sData, fData, wData] = await Promise.all([
             vanillaApi.skill.list.query(),
             vanillaApi.film.list.query(),
+            vanillaApi.workflow.list.query({}),
           ]);
           if (cancelled) return;
+          /* 工作流库列表：按内容类别分栏，逐镜生成只能选视频工作流、
+           * 合成首帧只能选图类工作流（内置模板已移除）。 */
+          const rawWorkflows: unknown = wData;
+          const wfRows = Array.isArray(rawWorkflows) ? rawWorkflows : [];
+          const pick = (category: "video" | "image") =>
+            wfRows.flatMap((raw) => {
+              if (typeof raw !== "object" || raw === null) return [];
+              const wf = raw as Record<string, unknown>;
+              if (typeof wf.id !== "string" || typeof wf.name !== "string") return [];
+              return wf.typeCategory === category ? [{ id: wf.id, name: wf.name }] : [];
+            });
+          setVideoWorkflows(pick("video"));
+          setImageWorkflows(pick("image"));
           // skill.list 返回 `{...record, tags}` 行（router 的 spread 丢了索引签名），
           // 故按 record 视图读 slug/name；断言而非强转，畸形负载的行为与原先一致。
           const rawList: unknown = sData.skills;
@@ -164,6 +190,8 @@ export function useFilmStudio(): FilmStudioController {
         framesPerShot: frames,
         subtitleOn,
         bgmName,
+        ...(videoWorkflowId ? { videoWorkflowId } : {}),
+        ...(imageWorkflowId ? { imageWorkflowId } : {}),
       });
       await vanillaApi.film.start.mutate({ id });
       await fetchDetail(id);
@@ -183,6 +211,8 @@ export function useFilmStudio(): FilmStudioController {
     frames,
     subtitleOn,
     bgmName,
+    videoWorkflowId,
+    imageWorkflowId,
     stopPoll,
     fetchDetail,
     toastError,
@@ -230,6 +260,12 @@ export function useFilmStudio(): FilmStudioController {
 
   return {
     title,
+    videoWorkflows,
+    videoWorkflowId,
+    setVideoWorkflowId,
+    imageWorkflows,
+    imageWorkflowId,
+    setImageWorkflowId,
     size,
     fps,
     script,

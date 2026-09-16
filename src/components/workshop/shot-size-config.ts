@@ -7,8 +7,8 @@
  *
  *  本模块只留工坊用得到的三件事：
  *    ① 老数据回读（草稿里存的 "832x1216" 这类 WxH 字符串 → 尺寸表达）；
- *    ② 两条**只认老形状**的出口：内置工作流（txt2img / img2video）要的 `"WxH"`
- *       字符串、远端 API 通道要的「比例 + 百万像素 + 倍数」字段名；
+ *    ② 一条**只认老形状**的出口：远端 API 通道要的「比例 + 百万像素 + 倍数」
+ *       字段名（另有 `shotSizeToParam` 保留给只读 "WxH" 的老接口）；
  *    ③ 生成按钮旁的紧凑摘要。
  *
  *  下发到**工作流库的工作流**时不经过这里：把 `ShotSizeState` 直接交给封装层
@@ -65,8 +65,8 @@ export function clarityPresetOf(label: string): SizeClarityPreset {
   return clarityPresetOfLabel(label);
 }
 
-/** 内置工作流（txt2img / img2video…）接的就是 "WxH" 字符串 —— 只此一路还在用
- *  字符串表达，工作流库的工作流不走这里。 */
+/** 尺寸表达 → "WxH" 字符串：只服务仍只认字符串的老接口（远端 API 通道的兼容
+ *  字段）。工作流库的工作流不走这里 —— 尺寸由封装层逐端口派值。 */
 export function shotSizeToParam(state: ShotSizeState, scene: SizeScene = "image"): string {
   return sizeSpecToWxH(state, scene);
 }

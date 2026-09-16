@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-15",
+  "generatedAt": "2026-09-16",
   "note": "未过 prettier 的文件（棘轮只许下降）。新增文件必须格式干净；存量格式化后重跑 --update 收紧。白名单见 scripts/check-format.cjs 的 IGNORE_GLOBS。",
   "files": {
     "src/app/(main)/me/works/page.tsx": true,
@@ -375,7 +375,6 @@
     "src/lib/comfy-embed.test.ts": true,
     "src/lib/comfy-readiness-client.test.ts": true,
     "src/lib/comfy-readiness-client.ts": true,
-    "src/lib/comfyui/_meta.ts": true,
     "src/lib/comfyui/cli-procs-singleton.test.ts": true,
     "src/lib/comfyui/client.test.ts": true,
     "src/lib/comfyui/client.ts": true,

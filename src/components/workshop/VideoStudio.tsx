@@ -17,11 +17,8 @@ import { errorMessage } from "~/lib/error-message";
 
 interface Props {
   shots: Shot[];
-  checkpoints: string[];
-  checkpoint: string;
-  onCheckpointChange: (name: string) => void;
-  /** 选定的视频工作流 id；空串 = 内置 img2video / txt2video。
-   *  非空时按封装口径只暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
+  /** 选定的视频工作流 id：本地通道的唯一可执行来源（内置模板已移除）。
+   *  按封装口径暴露 提示词 / 尺寸 / 首帧，其余参数用工作流默认值。 */
   workflowId: string;
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
@@ -41,9 +38,6 @@ type Channel = "local" | "api";
  */
 export function VideoStudio({
   shots,
-  checkpoints,
-  checkpoint,
-  onCheckpointChange,
   workflowId,
   apiChannels,
   onOpenApiSettings,
@@ -128,6 +122,12 @@ export function VideoStudio({
       setShotError(shot.id, "提示词为空,请先回上一阶段补全镜头信息");
       return;
     }
+    /* 本地通道没有内置模板可回落：必须先在工作流库选好一个视频工作流。
+     * 门禁放在入口，避免带着空 workflow id 去拉详情。 */
+    if (channel === "local" && !workflowId) {
+      setShotError(shot.id, "本地通道需要先在右侧「生成资源」选择一个视频工作流；或切到远端 API 通道");
+      return;
+    }
     setShotError(shot.id, undefined);
     patchShot(shot.id, { clipStatus: "running" });
     const frames = framesFor(shot, fps);
@@ -137,31 +137,21 @@ export function VideoStudio({
         const inputImage = shot.imageUrl
           ? await prepareLocalInputImage(shot.imageUrl)
           : undefined;
-        /* 选定工作流库工作流时，按封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，
-         * 其余参数用工作流默认值；否则用内置 img2video / txt2video。
-         * 时长口按落点端口自己的单位取值：按帧表达的端口给 frames，按秒表达的
-         * 给 duration —— 这里已经按当前 fps 折算好，封装层不再猜 fps。 */
-        const input: GenerateInput = workflowId
-          ? (
-              await buildLibraryWorkflowInput(workflowId, {
-                prompt,
-                negativePrompt: shot.negativePrompt || undefined,
-                ...(inputImage ? { firstFrame: inputImage } : {}),
-                ...(typeof shot.duration === "number" && shot.duration > 0
-                  ? { duration: shot.duration }
-                  : {}),
-                frames,
-              })
-            ).input
-          : {
-              workflow: inputImage ? "img2video" : "txt2video",
-              prompt,
-              negative: shot.negativePrompt || undefined,
-              checkpoint: checkpoint || undefined,
-              frames,
-              fps,
-              ...(inputImage ? { inputImage } : {}),
-            };
+        /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个视频工作流
+         *（封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值）。
+         * 见 generateClip 入口的门禁。 */
+        const input: GenerateInput = (
+          await buildLibraryWorkflowInput(workflowId, {
+            prompt,
+            negativePrompt: shot.negativePrompt || undefined,
+            ...(inputImage ? { firstFrame: inputImage } : {}),
+            ...(typeof shot.duration === "number" && shot.duration > 0
+              ? { duration: shot.duration }
+              : {}),
+            frames,
+          })
+        ).input;
+
         const taskId = await startLocalGenerate(input);
         await runLocalTask(shot.id, taskId);
       } else {
@@ -201,9 +191,6 @@ export function VideoStudio({
         onChannelChange={setChannel}
         apiChannels={apiChannels}
         apiReady={apiReady}
-        checkpoints={checkpoints}
-        checkpoint={checkpoint}
-        onCheckpointChange={onCheckpointChange}
         workflowSelected={!!workflowId}
         fps={fps}
         onFpsChange={setFps}

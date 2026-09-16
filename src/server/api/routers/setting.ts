@@ -37,7 +37,6 @@ export const settingRouter = createTRPCRouter({
           .string()
           .refine((url) => url === "" || /^https?:\/\//.test(url))
           .optional(),
-        defaultVideoWorkflow: z.enum(["auto", "txt2video", "img2video"]).optional(),
         comfyLorasDir: z.string().optional(),
         comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),

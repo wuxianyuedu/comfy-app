@@ -143,7 +143,7 @@ export function FilmStudio() {
         <button
           type="button"
           onClick={() => void c.create()}
-          disabled={c.loading}
+          disabled={c.loading || !c.videoWorkflowId}
           className="bg-subtle flex items-center gap-1.5 rounded-lg border border-violet-500/35 px-3.5 py-1.5 text-xs font-semibold text-violet-700 transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50 dark:text-violet-400"
         >
           {c.loading ? "启动中…" : "导出成片"}
@@ -407,6 +407,57 @@ export function FilmStudio() {
                 placeholder="支持一句话自动分镜…"
                 className="w-full resize-none rounded-lg border border-border bg-subtle px-3 py-2 text-[12px] leading-relaxed text-ink-fainter outline-none placeholder:text-ink-faintest focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
+            </label>
+
+            {/* 逐镜生成用的工作流（内置模板已移除，必须从工作流库选） */}
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] text-ink-faint">
+                视频工作流（工作流库）
+              </span>
+              <select
+                value={c.videoWorkflowId}
+                onChange={(event) => c.setVideoWorkflowId(event.target.value)}
+                className="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              >
+                <option value="">
+                  {c.videoWorkflows.length
+                    ? "选择视频工作流…"
+                    : "工作流库里还没有视频工作流"}
+                </option>
+                {c.videoWorkflows.map((wf) => (
+                  <option key={wf.id} value={wf.id}>
+                    {wf.name}
+                  </option>
+                ))}
+              </select>
+              {!c.videoWorkflowId && (
+                <span className="text-ink-fainter mt-1 block text-[10.5px]">
+                  没有内置视频工作流可回落 —— 请先在工作室「工作流库」导入并配好对外参数。
+                </span>
+              )}
+            </label>
+
+            {/* 文生视频镜头合成首帧用的图类工作流（镜头自带首帧时不需要） */}
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] text-ink-faint">
+                首帧合成工作流（可选，工作流库）
+              </span>
+              <select
+                value={c.imageWorkflowId}
+                onChange={(event) => c.setImageWorkflowId(event.target.value)}
+                className="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              >
+                <option value="">
+                  {c.imageWorkflows.length
+                    ? "不需要 / 未选择"
+                    : "工作流库里还没有图类工作流"}
+                </option>
+                {c.imageWorkflows.map((wf) => (
+                  <option key={wf.id} value={wf.id}>
+                    {wf.name}
+                  </option>
+                ))}
+              </select>
             </label>
 
             {/* Subtitle toggle */}

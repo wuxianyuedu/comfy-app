@@ -59,8 +59,9 @@ vi.mock("@/lib/core/repository", () => ({
   skillRepository: skillRepo,
   taskRepository: taskRepo,
 }));
-vi.mock("@/lib/comfyui/workflow", () => ({ buildAndValidate: vi.fn() }));
-vi.mock("@/lib/comfyui/_meta", () => ({ getWorkflow: vi.fn(() => ({ taskType: "video" })) }));
+vi.mock("@/lib/workshop/workflow-run.server", () => ({
+  createWorkflowRunTask: vi.fn(async () => ({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
+}));
 const cancelTaskMock = vi.hoisted(() =>
   vi.fn(async (_taskId: string) => undefined),
 );
@@ -71,9 +72,6 @@ vi.mock("@/lib/comfyui/enqueue", () => ({
 }));
 vi.mock("@/lib/comfyui/firstframe", () => ({
   synthesizeFirstFrame: vi.fn(async () => "firstframe.png"),
-}));
-vi.mock("@/lib/app-settings/app-settings.server", () => ({
-  getSettingsSync: vi.fn(() => ({ defaultVideoWorkflow: "auto" })),
 }));
 vi.mock("@/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
@@ -181,7 +179,7 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
 });
 
 describe("createFilm — 镜头参数与画幅的折算口径", () => {
-  it("内置视频工作流只吃 WxH：写进镜头 params 的 size 是折算后的像素串", async () => {
+  it("镜头 params 带工作流库 id 与尺寸表达（不再折算成 WxH 像素串）", async () => {
     filmRepo.create.mockResolvedValue({ id: "f-new" });
     llmStructured.mockResolvedValue([
       { heading: "场景1", action: "海边", dialogue: "", shotCount: 2 },
@@ -193,6 +191,8 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
       script: "一个关于月球的故事",
       framesPerShot: 33,
       fps: 12,
+      videoWorkflowId: "wf-video",
+      imageWorkflowId: "wf-image",
     });
 
     expect(r.id).toBe("f-new");
@@ -201,12 +201,13 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     const [filmId, shots] = shotRepo.createMany.mock.calls[0]!;
     expect(filmId).toBe("f-new");
     expect(shots).toHaveLength(2);
-    // 镜头侧：帧数 / 帧率 / 工作流写进 params，size 是 "WxH"
+    // 镜头侧：帧数 / 帧率 / 工作流库 id 写进 params，size 是尺寸表达
     for (const shot of shots) {
       expect(shot.params.frames).toBe(33);
       expect(shot.params.fps).toBe(12);
-      expect(shot.params.workflow).toBe("txt2video");
-      expect(String(shot.params.size)).toMatch(/^\d+x\d+$/);
+      expect(shot.params.videoWorkflowId).toBe("wf-video");
+      expect(shot.params.imageWorkflowId).toBe("wf-image");
+      expect(shot.params.size).toMatchObject({ ratio: "16:9 横屏" });
     }
     // 镜头顺序连续（order 从 0 起，收口时按它排序/上报进度）
     expect(shots.map((s) => s.order)).toEqual([0, 1]);
@@ -231,7 +232,7 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     expect(shots[0]!.prompt).toContain("台词");
   });
 
-  it("镜头画幅折算走视频场景表，不用图片场景（两套 1k 值不同）", async () => {
+  it("镜头尺寸沿用成片画幅的尺寸表达（不再折算 WxH / 视频场景表）", async () => {
     filmRepo.create.mockResolvedValue({ id: "f-size" });
     llmStructured.mockResolvedValue([
       { heading: "场景", action: "动作", dialogue: "", shotCount: 1 },
@@ -241,9 +242,9 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
 
     const [, shots] = shotRepo.createMany.mock.calls[0]!;
     const size = shots[0]!.params.size;
-    // 视频场景 16:9 1k = 1280x720（图片场景 1k 是另一套值，不相等）
-    expect(size).toBe("1280x720");
-    // 兜底常量仍在（镜头没带尺寸时用）
-    expect(NATIVE_SHOT_VIDEO_SIZE).toBe("832x480");
+    // 成片画幅默认的视频场景 16:9 1k，原样存尺寸表达 —— 像素由工作流派生
+    expect(size).toMatchObject({ ratio: "16:9 横屏", clarity: "1k" });
+    // 兜底常量是尺寸表达（镜头没带尺寸时用）
+    expect(NATIVE_SHOT_VIDEO_SIZE).toMatchObject({ ratio: "16:9 横屏" });
   });
 });

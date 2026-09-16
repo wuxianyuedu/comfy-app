@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { getWorkflow } from "@/lib/comfyui/_meta";
 import { useMyWorks } from "./hooks/use-my-works";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -45,8 +44,9 @@ export default function MyWorks() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {data.map((task) => {
             const st = STATUS[task.status] ?? STATUS.QUEUED!;
-            const wf =
-              getWorkflow(task.workflowName)?.label ?? task.workflowName;
+            /* 工作流名直接展示：内置模板（含中文 label 表）已移除，任务行存的
+             *  workflowName 就是工作流库里的名字。 */
+            const wf = task.workflowName;
             return (
               <div
                 key={task.id}

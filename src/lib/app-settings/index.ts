@@ -22,11 +22,8 @@
  */
 
 
-export type VideoWorkflowPref = "auto" | "txt2video" | "img2video";
-
 export type AppSettings = {
   trainerUrl: string;
-  defaultVideoWorkflow: VideoWorkflowPref;
   comfyLorasDir: string;
   /**
    * ComfyUI 安装目录。
@@ -80,7 +77,6 @@ export type AppSettings = {
 
 export const DEFAULTS: AppSettings = {
   trainerUrl: process.env.LORA_TRAINER_URL ?? "",
-  defaultVideoWorkflow: "auto",
   comfyLorasDir: process.env.COMFY_LORAS_DIR ?? "",
   comfyuiPath: process.env.COMFYUI_PATH ?? "",
   comfyuiExtraArgs: "",

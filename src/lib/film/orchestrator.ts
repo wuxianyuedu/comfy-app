@@ -4,8 +4,8 @@
 //   (reusing the ComfyUI video workflow) → ffmpeg concat (+ subtitles / BGM)
 //   → a single finished film.
 //
-// Reuses buildAndValidate + enqueue so each shot goes through the exact same
-// pipeline as the manual "video" tab.
+// Each shot goes through the same library-workflow chain as the manual "video"
+// tab (workflow library id + encapsulation), so no built-in template is needed.
 
 import "server-only";
 import { spawn } from "child_process";
@@ -17,13 +17,11 @@ import {
   skillRepository,
   taskRepository,
 } from "@/lib/core/repository";
-import { buildAndValidate } from "@/lib/comfyui/workflow";
-import { getWorkflow } from "@/lib/comfyui/_meta";
-import { enqueue, cancelTask } from "@/lib/comfyui/enqueue";
+import { cancelTask } from "@/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "@/lib/comfyui/firstframe";
-import { getSettingsSync } from "@/lib/app-settings/app-settings.server";
+import { createWorkflowRunTask } from "@/lib/workshop/workflow-run.server";
 import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
-import { sizeSpecDims, sizeSpecToWxH, toSizeSpec } from "@/lib/size-presets";
+import { sizeSpecDims, toSizeSpec } from "@/lib/size-presets";
 import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE } from "@/lib/film/film-size";
 import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "@/lib/llm/server";
@@ -60,6 +58,10 @@ export interface CreateFilmInput {
   framesPerShot?: number;
   subtitleOn?: boolean;
   bgmName?: string | null;
+  /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
+  videoWorkflowId?: string | null;
+  /** 文生视频镜头合成首帧用的**图类工作流 id**；镜头自带首帧时不需要。 */
+  imageWorkflowId?: string | null;
 }
 
 
@@ -171,10 +173,10 @@ async function parseScriptToShots(
 
 // ── create ─────────────────────────────────────────────────
 export async function createFilm(input: CreateFilmInput) {
-  /* 成片画幅按尺寸表达存（数据库那一列是文本，存 JSON）；镜头侧仍拿 "WxH" ——
-   * 内置视频工作流只认字符串（token __W__/__H__）。 */
+  /* 成片画幅按尺寸表达存（数据库那一列是文本，存 JSON）；镜头侧存同一份尺寸表达
+   * （工作流库工作流由封装层逐端口派值，不再折算成 "WxH"）。 */
   const sizeSpec = toSizeSpec(input.size ?? FILM_COMPOSE_SIZE);
-  const shotSize = sizeSpecToWxH(sizeSpec, "video");
+  const shotSize = sizeSpec;
   const fps = input.fps ?? 16;
   const framesPerShot = input.framesPerShot ?? 49;
 
@@ -195,7 +197,8 @@ export async function createFilm(input: CreateFilmInput) {
     styleNegative
   );
 
-  const wf = await pickVideoWorkflow();
+  const videoWorkflowId = input.videoWorkflowId ?? "";
+  const imageWorkflowId = input.imageWorkflowId ?? "";
 
   const film = await filmRepository.create({
     userId: input.userId,
@@ -218,7 +221,8 @@ export async function createFilm(input: CreateFilmInput) {
         frames: framesPerShot,
         fps,
         size: shotSize,
-        workflow: wf,
+        videoWorkflowId,
+        imageWorkflowId,
       };
       return {
         order: shot.order,
@@ -234,110 +238,59 @@ export async function createFilm(input: CreateFilmInput) {
   return { id: film.id, shots: shots.length };
 }
 
-// ── pick the video workflow ───────────────────────────────
-// Local-only: the machine ships with a WAN image-to-video checkpoint but no
-// text-to-video checkpoint, so text-to-video auto-synthesizes a first frame
-// and feeds it to the same I2V graph. An explicit choice in app settings wins.
-async function pickVideoWorkflow(): Promise<"txt2video" | "img2video"> {
-  const pref = getSettingsSync().defaultVideoWorkflow;
-  if (pref === "txt2video" || pref === "img2video") return pref;
-  // default "auto" → text-to-video (first frame is synthesized locally)
-  return "txt2video";
-}
-
-// ── generate one video shot via the existing pipeline ──────
-// Both text-to-video and image-to-video run through the local WAN I2V graph.
-// Text-to-video shots without a supplied first frame get one synthesized from
-// the prompt via a local txt2img pass (no cloud, no authorization).
+// ── 生成一个视频镜头 ──────────────────────────────────────
+// 视频这一跳没有内置模板（内置 img2video / txt2video 与 `__PROMPT__` 系列
+// token 替换已移除）：镜头 params 里必须带**工作流库视频工作流 id**。
+// 没有首帧时，用同一份 params 里的**图类工作流 id** 本地合成一张再喂给视频图。
 async function generateVideoShot(
   userId: string,
-  shot: { prompt: string; negative?: string | null; params?: unknown }
+  shot: { prompt: string; negative?: string | null; params?: unknown },
 ): Promise<string> {
-
   const params = (shot.params ?? {}) as Record<string, unknown>;
 
-  const wf: "txt2video" | "img2video" =
+  const videoWorkflowId =
+    typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
+  if (!videoWorkflowId) {
+    throw new Error("镜头缺少「工作流库视频工作流 id」，无法本地生成");
+  }
 
-    params.workflow === "img2video" ? "img2video" : "txt2video";
-
-  const meta = getWorkflow("img2video")!;
-
-  const size = (params.size ?? NATIVE_SHOT_VIDEO_SIZE) as string;
+  const size = toSizeSpec(params.size ?? NATIVE_SHOT_VIDEO_SIZE);
 
   // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
-  // 下方合成首帧分支，与原 any 行为逐值一致。
+  // 下方合成首帧分支。
   let inputImage = (params.inputImage ?? params.firstFrame ?? null) as string;
 
   if (!inputImage) {
-
+    const imageWorkflowId =
+      typeof params.imageWorkflowId === "string" ? params.imageWorkflowId : "";
+    if (!imageWorkflowId) {
+      throw new Error(
+        "镜头缺少首帧，且没有配置「工作流库图类工作流 id」可用于合成首帧",
+      );
+    }
     inputImage = await synthesizeFirstFrame({
-
       userId,
-
+      workflowId: imageWorkflowId,
       prompt: shot.prompt,
-
       negative: shot.negative ?? undefined,
-
       size,
-
     });
-
   }
 
-
-
-  const built = await buildAndValidate("img2video", {
-
-    prompt: shot.prompt,
-
-    negative: shot.negative ?? undefined,
-
-    inputImage,
-
-    frames: (params.frames ?? 81) as number,
-
-    fps: (params.fps ?? 16) as number,
-
-    size,
-
-    steps: 25,
-
-    cfg: 6,
-
-    sampler: "euler",
-
-    scheduler: "unipc",
-
-    count: 1,
-
-  });
-
-  if (!built.ok || !built.prompt) throw new Error(built.error ?? "工作流构建失败");
-
-
-
-  const task = await taskRepository.createQueued({
-
+  const { taskId } = await createWorkflowRunTask({
     userId,
-
-    type: meta.taskType,
-
-    prompt: shot.prompt,
-
-    negativePrompt: shot.negative ?? null,
-
-    params: { workflow: wf, ...params },
-
-    workflowName: wf,
-
+    workflowId: videoWorkflowId,
+    values: {
+      prompt: shot.prompt,
+      ...(shot.negative ? { negativePrompt: shot.negative } : {}),
+      firstFrame: inputImage,
+      frames: (params.frames ?? 81) as number,
+      size,
+    },
   });
 
-  enqueue({ taskId: task.id, prompt: built.prompt });
-
-  return task.id;
-
+  return taskId;
 }
-
 
 // ── start (autopilot) ───────────────────────────────────────
 export async function startFilm(id: string) {

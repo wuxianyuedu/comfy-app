@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { filmRepository } from "@/lib/core/repository";
-import { toSizeSpec } from "@/lib/size-presets";
 import { FILM_COMPOSE_SIZE } from "@/lib/film/film-size";
 
 /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）。老口径的 "1280x720"
@@ -33,23 +32,31 @@ export const filmRouter = createTRPCRouter({
         framesPerShot: z.number().int().positive().optional(),
         subtitleOn: z.boolean().optional(),
         bgmName: z.string().nullable().optional(),
+        /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
+        videoWorkflowId: z.string().optional(),
+        /** 文生视频镜头合成首帧用的图类工作流 id。 */
+        imageWorkflowId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const film = await filmRepository.create({
+      /* 建片（含分镜）收在 orchestrator 里：分镜解析 + 逐镜 params（帧数 / 帧率 /
+       * 尺寸表达 / 工作流库 id）与画幅折算只此一处，路由不再各写一份。 */
+      const { createFilm } = await import("@/lib/film/orchestrator");
+      const { id, shots } = await createFilm({
         userId: ctx.user.id,
         title: input.title,
         script: input.script,
         type: input.type,
         styleSlug: input.styleSlug,
-        /* 列是文本：存尺寸表达的 JSON（读的时候由 `toSizeSpec` 兼容老字符串）。 */
-        size: JSON.stringify(toSizeSpec(input.size ?? FILM_COMPOSE_SIZE)),
-        fps: input.fps ?? 24,
-        framesPerShot: input.framesPerShot ?? 60,
-        subtitleOn: input.subtitleOn ?? true,
+        size: input.size ?? FILM_COMPOSE_SIZE,
+        fps: input.fps,
+        framesPerShot: input.framesPerShot,
+        subtitleOn: input.subtitleOn,
         bgmName: input.bgmName,
+        videoWorkflowId: input.videoWorkflowId,
+        imageWorkflowId: input.imageWorkflowId,
       });
-      return { id: film.id };
+      return { id, shots };
     }),
 
   /** GET /api/film/[id] */

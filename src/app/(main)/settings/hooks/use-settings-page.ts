@@ -60,7 +60,6 @@ import { api } from "~/trpc/react";
 
 export type Settings = {
   trainerUrl: string;
-  defaultVideoWorkflow: "auto" | "txt2video" | "img2video";
   comfyLorasDir: string;
   comfyuiPath: string;
   comfyuiExtraArgs: string;

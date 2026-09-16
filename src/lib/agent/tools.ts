@@ -124,7 +124,7 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
     function: {
       name: "generate_shot_images",
       description:
-        "为当前全部（或指定）镜头生成本地 ComfyUI 图片。依赖 checkpoint 已配置，默认用本地 txt2img 工作流。",
+        "为当前全部（或指定）镜头生成本地 ComfyUI 图片。依赖工作流库里已有配好对外参数的图类工作流。",
       parameters: {
         type: "object",
         properties: {

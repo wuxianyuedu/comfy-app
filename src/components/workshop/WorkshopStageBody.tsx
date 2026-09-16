@@ -83,10 +83,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     shots,
     setShots,
     styles,
-    checkpoints,
-    checkpoint,
     workflowOptions,
-    setCheckpoint,
     workflowId,
     videoWorkflowId,
     apiChannels,
@@ -271,7 +268,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 portrait={{
                   session: characterPortrait,
                   actions: characterPortraitActions,
-                  checkpoint,
                   apiChannels,
                   workflows: workflowOptions,
                   onOpenApiSettings: openApiSettings,
@@ -344,9 +340,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                 scenes={scenes}
                 characters={characters}
                 styles={styles}
-                checkpoints={checkpoints}
-                checkpoint={checkpoint}
-                onCheckpointChange={setCheckpoint}
                 workflowId={workflowId}
                 apiChannels={apiChannels}
                 onOpenApiSettings={openApiSettings}
@@ -374,9 +367,6 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             <React.Suspense fallback={<StageFallback />}>
               <LazyVideoStudio
                 shots={shots}
-                checkpoints={checkpoints}
-                checkpoint={checkpoint}
-                onCheckpointChange={setCheckpoint}
                 workflowId={videoWorkflowId}
                 apiChannels={apiChannels}
                 onOpenApiSettings={openApiSettings}

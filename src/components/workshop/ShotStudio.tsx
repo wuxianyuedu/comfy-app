@@ -19,22 +19,14 @@ import {
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
 import { errorMessage } from "~/lib/error-message";
-import {
-  DEFAULT_GEN_PARAMS,
-  paramInt,
-  paramNumber,
-  paramString,
-} from "~/lib/workshop/param-coerce";
+import { paramString } from "~/lib/workshop/param-coerce";
 
 interface Props {
   shots: Shot[];
   scenes: Scene[];
   characters: Character[];
   styles: StyleRef[];
-  checkpoints: string[];
-  checkpoint: string;
-  onCheckpointChange: (name: string) => void;
-  /** 选定的工作流库工作流 id；空串 = 内置 txt2img（ISSUE #145）。 */
+  /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
   workflowId: string;
   /** Masked API channel config; image channel gate comes from here. */
   apiChannels: ApiChannelsView | null;
@@ -58,9 +50,6 @@ export function ShotStudio({
   scenes,
   characters,
   styles,
-  checkpoints,
-  checkpoint,
-  onCheckpointChange,
   workflowId,
   apiChannels,
   onOpenApiSettings,
@@ -152,6 +141,12 @@ export function ShotStudio({
       setShotError(shot.id, "提示词为空,请先填写或完成上一阶段提取");
       return;
     }
+    /* 本地通道没有内置模板可回落：必须先在工作流库选好一个生图工作流。
+     * 门禁放在入口，避免带着空 workflow id 去拉详情（会得到一条无落点的请求）。 */
+    if (channel === "local" && !workflowId) {
+      setShotError(shot.id, "本地通道需要先在右侧「生成资源」选择一个生图工作流；或切到远端 API 通道");
+      return;
+    }
     setShotError(shot.id, undefined);
     patchShot(shot.id, { status: "running" });
     try {
@@ -163,32 +158,17 @@ export function ShotStudio({
             ? shot.params.size
             : shotSize,
         );
-        /* 选定工作流库工作流时，按 ISSUE #145 只暴露 提示词 / 尺寸 / 参考图，
-         * 其余参数用工作流默认值；否则用内置 txt2img。
-         *
-         * 尺寸对这两条通路表达不同：内置 txt2img 接的是 WxH 字符串（由尺寸表达
-         * 折算），工作流库的工作流直接吃「比例 + 分辨率 / 比例 + 百万像素 + 倍数」，
-         * 宽高由封装层按场景尺寸表现算。 */
-        const input: GenerateInput = workflowId
-          ? (
-              await buildLibraryWorkflowInput(workflowId, {
-                prompt: shot.prompt,
-                negativePrompt: shot.negativePrompt || undefined,
-                size: sizeSpec,
-              })
-            ).input
-          : {
-              workflow: "txt2img",
-              prompt: shot.prompt,
-              negative: shot.negativePrompt || undefined,
-              checkpoint: checkpoint || undefined,
-              steps: paramInt(shot.params.steps, DEFAULT_GEN_PARAMS.steps),
-              cfg: paramNumber(shot.params.cfg, DEFAULT_GEN_PARAMS.cfg),
-              sampler: paramString(shot.params.sampler, DEFAULT_GEN_PARAMS.sampler),
-              scheduler: paramString(shot.params.scheduler, DEFAULT_GEN_PARAMS.scheduler),
-              size: shotSizeToParam(sizeSpec),
-              count: 1,
-            };
+        /* 没有内置模板作为回落：本地通道必须先在工作流库选好一个生图工作流
+         *（封装口径只暴露 提示词 / 尺寸 / 参考图，其余走工作流默认值），否则
+         * 没有可执行的图。见 generateShot 入口的门禁。 */
+        const input: GenerateInput = (
+          await buildLibraryWorkflowInput(workflowId, {
+            prompt: shot.prompt,
+            negativePrompt: shot.negativePrompt || undefined,
+            size: sizeSpec,
+          })
+        ).input;
+
         const taskId = await startLocalGenerate(input);
         patchShot(shot.id, { taskId, status: "running" });
         await runLocalTask(shot.id, taskId);
@@ -266,27 +246,10 @@ export function ShotStudio({
           <span className="text-muted-foreground">尺寸</span>
           <ShotSizePicker value={shotSize} onChange={setShotSize} disabled={batchRunning} />
         </div>
-        {channel === "local" && checkpoints.length > 0 && (
-          <label className="ml-auto flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Checkpoint</span>
-            <select
-              value={checkpoint}
-              onChange={(e) => onCheckpointChange(e.target.value)}
-              className="border-border bg-bg text-ink max-w-[220px] rounded-lg border px-2 py-1 text-xs outline-none"
-            >
-              <option value="">选择模型…</option>
-              {checkpoints.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         <button
           type="button"
           onClick={() => void generateBatch()}
-          disabled={batchRunning || pending.length === 0 || (channel === "local" && !checkpoint) || (channel === "api" && !apiReady)}
+          disabled={batchRunning || pending.length === 0 || (channel === "local" && !workflowId) || (channel === "api" && !apiReady)}
           className="bg-primary ml-auto rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
         >
           {batchRunning ? "批量生成中…" : `批量生图 (${pending.length})`}
@@ -301,9 +264,9 @@ export function ShotStudio({
       </div>
 
       {/* Channel-specific gating hints (gentle, stage stays usable) */}
-      {channel === "local" && !checkpoint && (
+      {channel === "local" && !workflowId && (
         <div className="text-muted-foreground rounded-lg bg-subtle px-3 py-2 text-xs">
-          本地通道需要选择 Checkpoint(ComfyUI 需在本机运行)。生成任务走与画布一致的本地工作流链路。
+          本地通道需要先在右侧「生成资源」选择一个生图工作流（工作流库，需配好对外参数；ComfyUI 需在本机运行）。生成任务走与画布一致的本地工作流链路。
         </div>
       )}
       {channel === "api" && !apiReady && (
@@ -358,7 +321,7 @@ export function ShotStudio({
                   <button
                     type="button"
                     onClick={() => void generateShot(shot)}
-                    disabled={shot.status === "running" || !shot.prompt || (channel === "local" && !checkpoint) || (channel === "api" && !apiReady)}
+                    disabled={shot.status === "running" || !shot.prompt || (channel === "local" && !workflowId) || (channel === "api" && !apiReady)}
                     className="bg-primary/90 rounded-lg px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
                   >
                     {shot.status === "running" ? "生成中…" : shot.imageUrl ? "重新生成" : "生成此镜头"}

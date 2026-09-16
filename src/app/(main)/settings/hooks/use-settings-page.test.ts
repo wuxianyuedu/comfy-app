@@ -97,7 +97,6 @@ const startMock = vi.mocked(startOllama);
 
 const SETTINGS: Settings = {
   trainerUrl: "",
-  defaultVideoWorkflow: "auto",
   comfyLorasDir: "",
   comfyuiPath: "D:/ComfyUI",
   comfyuiExtraArgs: "",

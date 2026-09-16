@@ -18,7 +18,6 @@ import {
   type PortraitLogEntry,
 } from "~/lib/workshop/character-portrait";
 import {
-  generateLocalPortrait,
   generateRemotePortrait,
   generateWorkflowPortrait,
   importPortraitFile,
@@ -46,7 +45,8 @@ export interface PortraitSession {
   channel: PortraitChannel;
   /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
   remoteModel: string;
-  /** 本地通道使用的工作流（工作流库中已配置对外参数的条目；空串 = 内置 txt2img） */
+  /** 本地通道使用的工作流（工作流库中已配置对外参数的条目）—— 本地通道的
+   *  唯一可执行来源（内置模板已移除），空串 = 未选。 */
   localWorkflowId: string;
   /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
   size: ShotSizeState;
@@ -104,12 +104,10 @@ function initialSession(): PortraitSession {
 
 export function useCharacterPortrait(opts: {
   setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
-  /** 本地通道当前选定的 checkpoint（右侧「生成资源」里切换） */
-  checkpoint: string;
   /** 工坊项目 id：导入的定妆照落到素材库的本项目目录 */
   projectId: string;
 }): [PortraitSession, PortraitSessionActions] {
-  const { setCharacters, checkpoint, projectId } = opts;
+  const { setCharacters, projectId } = opts;
   const [session, setSession] = React.useState<PortraitSession>(initialSession);
 
   const patch = React.useCallback(
@@ -189,14 +187,14 @@ export function useCharacterPortrait(opts: {
       const localWorkflowId = (
         overrides?.localWorkflowId ?? session.localWorkflowId
       ).trim();
-      /* 本地通道二选一：库工作流（自带封装，不依赖 Checkpoint）或内置 txt2img
-       *（需要 Checkpoint）。两者都没有才拦下，与区块的门禁提示同一口径。 */
-      if (channel === "local" && !localWorkflowId && !checkpoint) {
+      /* 本地通道没有内置模板可回落：必须先选好一个工作流库工作流（自带封装）。
+       * 与区块的门禁提示同一口径。 */
+      if (channel === "local" && !localWorkflowId) {
         setSession((prev) => ({
           ...prev,
           status: "",
           error:
-            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数），或到右侧「生成资源」选一个本地 Checkpoint",
+            "本地通道需要先选模型：上方下拉选工作流库模型（需在库里配置好对外参数）",
         }));
         return;
       }
@@ -207,9 +205,7 @@ export function useCharacterPortrait(opts: {
       const localLabel = (overrides?.localLabel ?? "").trim();
       const modelLabel =
         channel === "local"
-          ? localWorkflowId
-            ? `本地 · ${localLabel || "库工作流"}`
-            : `本地 · ${checkpoint}`
+          ? `本地 · ${localLabel || "库工作流"}`
           : remoteModel
             ? `远端 API · ${remoteModel}`
             : "远端 API";
@@ -236,31 +232,10 @@ export function useCharacterPortrait(opts: {
       };
       try {
         if (channel === "local") {
-          const { taskId, url } = localWorkflowId
-            ? await generateWorkflowPortrait(
-                req,
-                { workflowId: localWorkflowId },
-                {
-                  onProgress: (pct) =>
-                    setSession((prev) =>
-                      prev.focusCharacterId === character.id
-                        ? { ...prev, progress: pct }
-                        : prev,
-                    ),
-                  onLog: (entry) => {
-                    if (entry.level === "progress") return;
-                    appendLog(
-                      makePortraitLog(
-                        entry.level === "error" ? "error" : "info",
-                        entry.msg,
-                      ),
-                    );
-                  },
-                },
-              )
-            : await generateLocalPortrait(
-                req,
-                { checkpoint, params: character.params },
+          /* 本地通道只有库工作流这条路：内置 txt2img（+ Checkpoint）已移除。 */
+          const { taskId, url } = await generateWorkflowPortrait(
+            req,
+            { workflowId: localWorkflowId },
             {
               onProgress: (pct) =>
                 setSession((prev) =>
@@ -268,7 +243,6 @@ export function useCharacterPortrait(opts: {
                     ? { ...prev, progress: pct }
                     : prev,
                 ),
-              /* 逐步骤日志量很大，只保留有信息量的行（进度百分比用进度条表达）。 */
               onLog: (entry) => {
                 if (entry.level === "progress") return;
                 appendLog(
@@ -283,7 +257,7 @@ export function useCharacterPortrait(opts: {
           addCandidate(character.id, {
             url,
             source: "local",
-            model: checkpoint,
+            ...(localLabel ? { model: localLabel } : {}),
             taskId,
             createdAt: Date.now(),
           });
@@ -331,7 +305,6 @@ export function useCharacterPortrait(opts: {
       session.size,
       session.remoteModel,
       session.localWorkflowId,
-      checkpoint,
       projectId,
       addCandidate,
       appendLog,

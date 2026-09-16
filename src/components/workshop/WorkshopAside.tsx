@@ -25,16 +25,14 @@ import type { MissingItem } from "~/components/workshop/stage-config";
  *  选定后工坊只暴露 提示词 / 尺寸 / 参考图(首帧)，其余参数用工作流默认值。 */
 function WorkshopWorkflowSelect({
   label,
-  builtinLabel,
-  builtinPlaceholder,
+  placeholder,
   category,
   options,
   value,
   onChange,
 }: {
   label: string;
-  builtinLabel: string;
-  builtinPlaceholder: string;
+  placeholder: string;
   category: WorkshopWorkflowCategory;
   options: WorkshopWorkflowOption[];
   value: string;
@@ -46,20 +44,14 @@ function WorkshopWorkflowSelect({
       <span className="text-muted-foreground mb-1 block text-[11px]">
         {label}
       </span>
-      <Select
-        value={value || "__builtin__"}
-        onValueChange={(next) =>
-          onChange(next === "__builtin__" ? "" : (next ?? ""))
-        }
-      >
+      <Select value={value} onValueChange={(next) => onChange(next ?? "")}>
         <SelectTrigger
           size="sm"
           className="border-border bg-bg text-ink w-full text-xs"
         >
-          <SelectValue placeholder={builtinPlaceholder} />
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__builtin__">{builtinLabel}</SelectItem>
           {scoped.map((option) => (
             <SelectItem key={option.id} value={option.id}>
               {option.name}
@@ -80,15 +72,12 @@ function WorkshopWorkflowSelect({
 
 interface WorkshopAsideProps {
   missing: MissingItem[];
-  checkpoints: string[];
-  checkpoint: string;
-  onCheckpointChange: (value: string) => void;
-  /** 工作流库里的可选工作流（ISSUE #145）；空 id = 内置 txt2img。
+  /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
    *  按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
   workflowOptions: WorkshopWorkflowOption[];
   workflowId: string;
   onWorkflowChange: (value: string) => void;
-  /** 视频通道选定的工作流 id；空串 = 内置 img2video / txt2video。 */
+  /** 视频通道选定的工作流 id。 */
   videoWorkflowId: string;
   onVideoWorkflowChange: (value: string) => void;
   apiChannels: ApiChannelsView | null;
@@ -101,9 +90,6 @@ interface WorkshopAsideProps {
 
 export function WorkshopAside({
   missing,
-  checkpoints,
-  checkpoint,
-  onCheckpointChange,
   workflowOptions,
   workflowId,
   onWorkflowChange,
@@ -165,7 +151,7 @@ export function WorkshopAside({
         </Button>
       </div>
 
-      {/* Generation resources: local checkpoint for the ComfyUI chain */}
+      {/* 生成资源：本地 ComfyUI 链路唯一可执行来源 = 工作流库工作流 */}
       <div className="border-border bg-surface rounded-2xl border p-4">
         <div className="text-ink mb-3 flex items-center justify-between text-[13px] font-semibold">
           生成资源
@@ -173,34 +159,9 @@ export function WorkshopAside({
             {anyChannelConfigured ? "远端模型已适配" : "远端模型未适配"}
           </span>
         </div>
-        <label className="block">
-          <span className="text-muted-foreground mb-1 block text-[11px]">
-            本地 Checkpoint（生图工作流）
-          </span>
-          {/* base-ui 的 value 可为 null（清空选择）；工坊用空串表示「未选模型」 */}
-          <Select
-            value={checkpoint}
-            onValueChange={(value) => onCheckpointChange(value ?? "")}
-          >
-            <SelectTrigger
-              size="sm"
-              className="border-border bg-bg text-ink w-full text-xs"
-            >
-              <SelectValue placeholder="选择模型…" />
-            </SelectTrigger>
-            <SelectContent>
-              {checkpoints.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
         <WorkshopWorkflowSelect
           label="生图工作流（工作流库）"
-          builtinLabel="内置 txt2img（默认）"
-          builtinPlaceholder="内置 txt2img…"
+          placeholder="选择生图工作流…"
           category="image"
           options={workflowOptions}
           value={workflowId}
@@ -208,8 +169,7 @@ export function WorkshopAside({
         />
         <WorkshopWorkflowSelect
           label="视频工作流（工作流库）"
-          builtinLabel="内置 img2video / txt2video（默认）"
-          builtinPlaceholder="内置视频工作流…"
+          placeholder="选择视频工作流…"
           category="video"
           options={workflowOptions}
           value={videoWorkflowId}

@@ -23,7 +23,6 @@ export function draftToRow(draft: WorkshopDraftDto): Partial<WorkshopDraftInsert
     scenes: draft.scenes,
     characters: draft.characters,
     shots: draft.shots,
-    checkpoint: draft.checkpoint ?? "",
   };
 }
 
@@ -41,7 +40,6 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
     scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
     characters: Array.isArray(row.characters) ? (row.characters as Character[]) : [],
     shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
-    checkpoint: row.checkpoint,
   });
 }
 
@@ -108,7 +106,6 @@ export async function upsertDraft(
     scenes: draft.scenes,
     characters: draft.characters,
     shots: draft.shots,
-    checkpoint: draft.checkpoint ?? "",
   };
   await workshopDb.insert(workshopDraft).values(insertRow);
 }

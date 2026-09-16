@@ -16,7 +16,6 @@ import {
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "@/components/studio/shared/workflow-io";
-import { sizeSpecToWxH, toSizeSpec } from "@/lib/size-presets";
 import { type CanvasNodeData, defaultData } from "@/lib/project-canvas/canvas-types";
 import { makeNodeId } from "@/lib/project-canvas/canvas-helpers";
 import {
@@ -291,87 +290,10 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
       return;
     }
 
-    if (!d.prompt.trim()) {
-      patch({ error: "请输入提示词", status: "error" });
-      return;
-    }
-    /* reset progress to 0 so the overlay starts
-     *  from the bottom (same reasoning as the workflow branch above). */
-    patch({ status: "running", error: undefined, progress: 0 });
-    /* see workflow run above; hoist payload so catch can snapshot. */
-    let payload: Record<string, unknown> | null = null;
-    try {
-      payload = {
-        prompt: d.prompt,
-        negative: d.negative || undefined,
-        /* 节点存的是尺寸表达；内置工作流只认 "WxH"，在这里折算（旧数据里
-         * 存的字符串由 `toSizeSpec` 归一）。 */
-        size: sizeSpecToWxH(toSizeSpec(d.size), d.kind === "video" ? "video" : "image"),
-        steps: d.steps,
-        cfg: d.cfg,
-      };
-      if (d.seed.trim()) payload.seed = Number(d.seed);
-      // 项目级产出：归属到当前画布项目 + 记录参考图。
-      payload.projectId = getActiveId() ?? undefined;
-      const refs = collectReferenceImages(d);
-      if (refs.length) payload.referenceImages = refs;
-      if (d.kind === "image") {
-        payload.workflow = d.mode === "img2img" ? "img2img" : "txt2img";
-        if (d.mode === "img2img" && d.inputImage) payload.inputImage = d.inputImage;
-      } else {
-        payload.workflow =
-          d.mode === "t2v" ? "txt2video" : d.mode === "flf" ? "flfvideo" : "img2video";
-        payload.frames = d.frames;
-        payload.fps = d.fps;
-        if (d.mode === "i2v" && d.inputImage) payload.inputImage = d.inputImage;
-        if (d.mode === "flf") {
-          payload.firstFrame = d.firstFrame;
-          payload.lastFrame = d.lastFrame;
-        }
-      }
-      const taskId = await startGenerate(payload);
-      patch({ taskId });
-      const result = await pollTask(taskId);
-      if (isTaskSuccess(result)) {
-        patch({
-          status: "done",
-          resultPath: result.localPath,
-          resultMediaType: result.mediaType,
-        });
-        // Broadcast so downstream (connected) nodes can auto-consume this output.
-        window.dispatchEvent(
-          new CustomEvent("canvas:produce", {
-            detail: {
-              id,
-              resultPath: result.localPath,
-              resultMediaType: result.mediaType,
-            },
-          })
-        );
-      } else {
-        patch({
-          status: "error",
-          error: result.error,
-          taskId: result.taskId,
-          errorStatus: result.status,
-          /* 结构化校验错误落节点数据 */
-          validationErrors: result.validationErrors,
-          errorContext: {
-            request: result.params ?? payload,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      }
-    } catch (e: unknown) {
-      patch({
-        status: "error",
-        error: catchMessage(e),
-        errorContext: {
-          request: payload,
-          timestamp: new Date().toISOString(),
-        },
-      });
-    }
+    /* 内置模板已移除：画布上的生图 / 生视频节点与自定义工作流节点走同一条
+     *  「工作流库工作流」分支。没有选中工作流时给出可行动的指引，而不是回落到
+     *  内置模板（那条通路已随 __PROMPT__ / __SEED__ token 替换一起删除）。 */
+    patch({ error: "请先选择工作流（工作流库模型）", status: "error" });
   };
 
   /* Error-panel retry: re-run the task with the payload recorded in the

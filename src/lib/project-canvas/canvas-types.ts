@@ -167,7 +167,7 @@ export interface StrictCanvasNodeData {
   mode: string; // image: txt2img | img2img ; video: t2v | i2v | flf
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见 `lib/size-presets`）。
    *
-   *  下发内置工作流时才折算成 "WxH"（`sizeSpecToWxH`）；工作流节点的尺寸本来就由
+   *  发往只认字符串的老接口时才折算成 "WxH"（`sizeSpecToWxH`）；工作流节点的尺寸本来就由
    *  它自己暴露的尺寸口决定（画布上的组合控件走同一套尺寸表），这个字段只服务
    *  「没选工作流」的内置通道。
    *
@@ -292,7 +292,7 @@ export function isCanvasNode(
 /* ── Sizes ──
  *  尺寸不再有「画布专用候选表」：全项目只有两种表达（比例 + 分辨率 /
  *  比例 + 百万像素 + 倍数），档位与换算都在 `lib/size-presets`。节点数据里存的是
- *  尺寸表达本身（`CanvasNodeData.size`），下发内置工作流时再折算成它认的 "WxH"。 */
+ *  尺寸表达本身（`CanvasNodeData.size`），由工作流封装层逐端口派值。 */
 
 /* ── Node palette metadata ── */
 export const NODE_META: Record<
