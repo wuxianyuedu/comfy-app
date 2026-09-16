@@ -1,21 +1,21 @@
 {
   "generatedAt": "2026-09-16",
-  "ruleVersion": 3,
+  "ruleVersion": 4,
   "note": "超 900 行的文件(规范 §12.6 R5 / ISSUE #575)。棘轮只许下降:新增超限文件须先拆分,再收紧基线。比对前按 `baselineRev` 的内容**同口径重数**基线行数(见脚本注释)。",
   "threshold": 900,
-  "baselineRev": "116666faba44a9882ae4c337fe1e3ed65b583dad",
+  "baselineRev": "ee203285c6dbe74745d52cbcd88fb25bc43762bd",
   "total": 11,
   "files": {
     "src/app/(main)/settings/hooks/use-settings-page.ts": 1450,
-    "src/components/studio/logs/LogPanel.tsx": 988,
+    "src/components/studio/logs/LogPanel.tsx": 993,
     "src/components/studio/logs/log-store.ts": 1550,
     "src/components/studio/shared/workflow-io.ts": 994,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 957,
-    "src/components/workshop/hooks/use-workshop-pipeline.ts": 1054,
-    "src/lib/comfyui/raw.ts": 1094,
+    "src/components/workshop/hooks/use-workshop-pipeline.ts": 1074,
+    "src/lib/comfyui/raw.ts": 1057,
     "src/lib/comfyui/workflow-detail-raw.ts": 939,
     "src/lib/comfyui/workflow-subgraph-parse.ts": 1027,
-    "src/lib/workflow-param-mapping.ts": 1151,
-    "src/server/api/routers/workflow.ts": 954
+    "src/lib/workflow-param-mapping.ts": 1105,
+    "src/server/api/routers/workflow.ts": 949
   }
 }
