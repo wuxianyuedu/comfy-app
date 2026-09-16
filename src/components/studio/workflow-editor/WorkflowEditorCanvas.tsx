@@ -1,10 +1,7 @@
-/* Extracted ReactFlow canvas from WorkflowEditorInner (wf-editor-inner.tsx).
- *
- *  The canvas lives inside the relative container that also hosts the
- *  subgraph-loading overlay / IO-edit hint / IO preview panel (those stay
- *  in the parent so they can be layered above the flow via z-index).
- *  `fitView` is intentionally NOT set here — the parent drives the initial
- *  viewport in a useEffect to enforce a minimum zoom of 0.35. */
+/* 画布置于相对定位容器内，该容器同时承载子图加载遮罩 / IO 编辑提示 / IO 预览
+ *  面板（这些留在父层，以便通过 z-index 叠在画布之上）。
+ *  `fitView` 有意不在此设置 —— 初始视口由父层在 useEffect 中驱动，以强制
+ *  最小缩放 0.35。 */
 "use client";
 
 import React, { useCallback } from "react";
@@ -65,6 +62,22 @@ export function isEdgeHandleCullingNoise(args: {
  *  because of a fresh callback identity. */
 const ROLE_COLOR_BY_KEY = new Map(PORT_ROLES.map((r) => [r.key, r.color]));
 
+/* 默认连线选项（模块级常量，避免每次渲染重建对象 —— 见规范 §6.1）。
+ * `deletable` / `reconnectable` 默认 false：React Flow 默认 true 会给每条边提前
+ * 挂交互管线，130+ 节点图里即便绝大多数边从未被碰也是每帧开销；首次点击边
+ * （父层 onEdgeClick）才翻成可交互，普通边保持惰性、把预算留给拖拽/平移/缩放。
+ * stroke 用 `--color-edge-default` token（紫，与端口/类别色系一致），不写死 rgba。 */
+const DEFAULT_EDGE_OPTIONS = {
+  type: "default",
+  animated: false,
+  deletable: false,
+  reconnectable: false,
+  style: {
+    stroke: "var(--color-edge-default)",
+    strokeWidth: 2.5,
+  },
+};
+
 export interface WorkflowEditorCanvasProps {
   nodes: Node[];
   edges: Edge[];
@@ -115,7 +128,7 @@ export function WorkflowEditorCanvas({
    *  callback reference while nodes are dragged. */
   const miniMapNodeColor = useCallback((node: Node) => {
     const d = node.data as WorkflowNodeData | undefined;
-    return (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "#333";
+    return (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ?? "var(--color-ink-faint)";
   }, []);
 
   /* 选中节点 → 相关连线高亮（上下游加粗）。标记写在 edges 的 data 上，
@@ -192,29 +205,7 @@ export function WorkflowEditorCanvas({
        *  → see useEffect above; tight 0.10 + 0.35 zoom floor. */
       minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
       maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
-      defaultEdgeOptions={{
-        type: "default",
-        animated: false,
-        /* lazily activate edge interactivity. `deletable` /
-         * `reconnectable` default to true, which makes React Flow attach
-         * interaction plumbing to EVERY edge up front.  For 130+ node
-         * graphs that is a measurable per-frame cost even though almost
-         * every edge is never touched.  We default both to false and flip
-         * them on the first time the user clicks an edge (onEdgeClick in
-         * the parent), so ordinary edges stay inert and the graph keeps
-         * its full drag/pan/zoom budget. */
-        deletable: false,
-        reconnectable: false,
-        style: {
-          /* bump opacity 0.85→1 and strokeWidth 2→2.5
-           *  so the default `default`-typed edges look identical to
-           *  `wf` edges (WorkflowEdge).  Previously the default was the
-           *  silent fallback when the edge type wasn't set, leaving
-           *  some wires visually faded vs the rest. */
-          stroke: "rgba(167,139,250,1)",
-          strokeWidth: 2.5,
-        },
-      }}
+      defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
       proOptions={{ hideAttribution: true }}
     >
       {/* Grid background — 20px cells with a heavier rule every

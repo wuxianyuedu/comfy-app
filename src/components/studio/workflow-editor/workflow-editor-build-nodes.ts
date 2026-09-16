@@ -1,7 +1,5 @@
-/* Extracted initialNodes builder from WorkflowEditorInner (wf-editor-inner.tsx).
- *  Pure function — takes the derived context object and returns the React
- *  Flow node array.  No hooks / no component state: the caller owns the
- *  useMemo (see buildInitialNodes usage in wf-editor-inner.tsx). */
+/* 纯函数：接收派生上下文对象，返回 React Flow 节点数组。无 hook / 无组件状态，
+ * useMemo 由调用方持有（见 wf-editor-inner.tsx 中的 buildInitialNodes 用法）。 */
 import type { Node } from "@xyflow/react";
 import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
 import { MODE_KEY_PREFIX } from "@/lib/workflow-param-mapping";
@@ -310,7 +308,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  this file (IO_PORT_HEIGHT / PORT_ROW_GAP / GROUP_*) so both the
      *  layout pass below and the WfIoPortNode renderer stay in sync. */
 
-    /* ── Boundary pins → wfGroup(wfIoPort …) (late) ──
+    /* ── Boundary pins → wfGroup(wfIoPort …) ──
      *
      *  The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
      *  支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
@@ -424,7 +422,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
      *  bbox-anchored defaults.  `savedGroupPos` may already contain a
      *  user-moved position from a previous session — honour it.
      *
-     *  (final): instead of forcing both rails into a
+     *  Instead of forcing both rails into a
      *  bbox-aligned vertical column, anchor each group at the raw
      *  coordinates ComfyUI stored on `boundaryPins.inputs[i].pos` /
      *  `boundaryPins.outputs[i].pos`.  These are the absolute canvas

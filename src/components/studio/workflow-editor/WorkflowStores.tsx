@@ -1,6 +1,6 @@
 "use client";
 /* ════════════════════════════════════════════════════════════════════════
- *  wf-stores.ts — Zustand 状态层（P2：替代 3 个 React Context）
+ *  wf-stores.ts — Zustand 状态层（替代 3 个 React Context）
  * ────────────────────────────────────────────────────────────────────────
  *  把 wf-contexts.tsx 里的 3 个画布 Context（IOEditContext、
  *  RgthreeGroupsContext、NodeJsonViewerContext）从 React Context 迁移到

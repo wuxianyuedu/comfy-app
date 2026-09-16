@@ -56,8 +56,7 @@ export interface WorkflowPersistenceArgs {
 }
 
 /**
- * Layout snapshot / reset / save / drag-persist logic for the workflow
- * editor.  Extracted from wf-editor-inner.tsx to isolate persistence concerns.
+ * 工作流编辑器的布局快照 / 重置 / 保存 / 拖拽落盘逻辑。
  */
 export function useWorkflowPersistence({
   workflowId,

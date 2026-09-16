@@ -31,6 +31,7 @@
   --color-canvas: #f6f7f9; /* 画布/工作区背景 (light default) */
   --color-port-surface: #ffffff; /* 端口圆点的载体色：节点表面（浅色） */
   --color-edge-hub-dot: #52525b; /* 连线中点圆点（浅色画布上的深点） (light default) */
+  --color-edge-default: #a78bfa; /* 默认连线描边（紫，与端口/类别色系一致） (light default) */
   --color-port-halo-ring: rgb(0 0 0 / 0.45); /* 端口内圈高光（强档） (light default) */
   --color-port-halo-ring-weak: rgb(0 0 0 / 0.22); /* 端口内圈高光（常规档） (light default) */
   /* 便签节点内 Markdown 渲染色（markdown.ts 内联 style 直接引用） */
@@ -73,6 +74,7 @@
   --color-accent-soft: #ec4899; /* accent (light default) */
   /* 画布浮层投影：浅色下不能再用 55% 黑（看着像脏污），改成中性深灰。 */
   --color-shadow-strong: rgb(0 0 0 / 0.18); /* 浮层重投影 (light default) */
+  --shadow-card: 0 4px 20px rgb(0 0 0 / 0.18); /* 浮层卡片投影 (light default) */
   /* 便签（Note）身体色的混色基准：用户给的 note 颜色是内容语义色，
      基准必须跟主题走，否则浅色下便签仍是一块暗色。 */
   --color-note-tint-base: #ffffff; /* note 混色基准 (light default) */
@@ -164,6 +166,7 @@
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
+  --shadow-card: 0 4px 20px rgb(0 0 0 / 0.55); /* 浮层卡片投影（深色档） */
   --color-note-tint-base: #22222c; /* note 混色基准 */
   --color-node-mix-base: #16161e; /* 子图标题栏混色基准 */
   /* ── shadcn 语义 token 映射到项目品牌色板（全面接管主题） ── */
