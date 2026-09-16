@@ -576,6 +576,53 @@ describe("check-file-structure.cjs（提交门槛）", () => {
         };
         expect(written.baselineRev).toBe(rev);
       });
+
+      /* ── 基线修订号不可达（ISSUE #653）──
+       * 现场：基线的 `baselineRev` 记的是**分支提交**，合并后失去 ref 指向；下一次
+       * `git gc` 把它清掉，`git show <rev>:<file>` 从此一律失败 —— 同口径重数静默
+       * 退化成「拿记录值直接比」，而记录值记在另一个格式时代的源码上。表现是**一个字
+       * 都没改的文件天天判红**，报错却写「R5 超限文件继续变大」。
+       *
+       * 判据修成两支：修订号可用 → 同口径重数（上面的用例）；不可达 → 直接报
+       * 「基线修订号取不到」，可行动作是重记基线，而不是拆文件。 */
+      it("基线修订号不可达 → 报「取不到」并指向重记基线，不误报成文件变大", () => {
+        writeLines("src/lib/huge.ts", 1000);
+        git("add", "-A");
+        git("commit", "-qm", "seed");
+        /* 记录值比当前小（基线的那个格式时代数得少），修订号却取不到。 */
+        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, "0".repeat(40));
+
+        const { code, output } = runWith(["--strict"]);
+        expect(code).toBe(1);
+        expect(output).toContain("R5 基线修订号");
+        expect(output).toContain("取不到");
+        expect(output).toContain("--update 重记基线");
+        /* 关键：不再把它说成「这个文件变大了」——那是另一支判据。 */
+        expect(output).not.toContain("R5 超限文件继续变大");
+      });
+
+      it("基线修订号不可达且内容真变大 → 同样只指向重记基线（不放行也不误报）", () => {
+        writeLines("src/lib/huge.ts", 1000);
+        git("add", "-A");
+        git("commit", "-qm", "seed");
+        writeBaselineAtRev({ "src/lib/huge.ts": 990 }, "f".repeat(40));
+        writeLines("src/lib/huge.ts", 1200);
+
+        const { code, output } = runWith(["--strict"]);
+        expect(code).toBe(1);
+        expect(output).toContain("R5 基线修订号");
+        expect(output).toContain("取不到");
+      });
+
+      it("基线修订号可达 → 走同口径重数那一支（不落进「取不到」）", () => {
+        const rev = commitAs("src/lib/huge.ts", 1000, "baseline");
+        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
+        writeLines("src/lib/huge.ts", 1020);
+        const { code, output } = runWith(["--strict"]);
+        expect(code).toBe(1);
+        expect(output).toContain("R5 超限文件继续变大");
+        expect(output).not.toContain("取不到");
+      });
     });
   });
 });
