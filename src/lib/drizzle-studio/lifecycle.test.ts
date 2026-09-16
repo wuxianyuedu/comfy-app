@@ -55,6 +55,7 @@ import {
   isDrizzleStudioStarting,
   openDrizzleStudio,
   probeDrizzleStudio,
+  resetDrizzleStudioProbeCache,
   resolveDrizzleKitBin,
   stopDrizzleStudio,
 } from "./lifecycle";
@@ -85,6 +86,8 @@ beforeEach(() => {
   killProcessTreeMock.mockResolvedValue({ ok: true, via: "stub" });
   openUrlMock.mockReset();
   openUrlMock.mockResolvedValue({ ok: true, detail: "opened" });
+  // 探测结论是模块级缓存（同步状态读它），不清会让用例之间互相污染。
+  resetDrizzleStudioProbeCache();
   mockConnect(false);
 });
 
@@ -168,5 +171,29 @@ describe("状态查询", () => {
     expect(st.starting).toBe(false);
     expect(st.port).toBe(DRIZZLE_STUDIO_DEFAULT_PORT);
     expect(st.pid).toBeUndefined();
+  });
+
+  it("同步状态反映最近一次探测结论（不是恒 false）", async () => {
+    // 此前 `getDrizzleStudioStatus()` 直接 `up: false` —— 「端口上确实有实例在跑、
+    // 但不是本应用拉起的」这种情形会被读成「未运行」。现在缓存最近一次探测结论。
+    mockConnect(true);
+    expect(await probeDrizzleStudio()).toBe(true);
+    expect(getDrizzleStudioStatus().up).toBe(true);
+  });
+
+  it("缓存过期后回落到 false（不把陈旧结论当现状）", async () => {
+    mockConnect(true);
+    await probeDrizzleStudio();
+    expect(getDrizzleStudioStatus().up).toBe(true);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(Date.now() + 10_000));
+    expect(getDrizzleStudioStatus().up).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("非默认端口的探测结论不污染默认端口的状态", async () => {
+    mockConnect(true);
+    await probeDrizzleStudio(9999);
+    expect(getDrizzleStudioStatus().up).toBe(false);
   });
 });

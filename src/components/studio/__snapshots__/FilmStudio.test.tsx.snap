@@ -556,12 +556,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               视频工作流（工作流库）
             </span>
             <select
-              class="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              class="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
             >
               <option
                 value=""
@@ -579,12 +579,12 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             class="block"
           >
             <span
-              class="mb-1.5 block text-[11px] text-ink-faint"
+              class="text-ink-faint mb-1.5 block text-[11px]"
             >
               首帧合成工作流（可选，工作流库）
             </span>
             <select
-              class="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              class="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
             >
               <option
                 value=""
@@ -594,7 +594,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </select>
           </label>
           <label
-            class="flex cursor-pointer items-center justify-between rounded-lg border border-border bg-canvas/60 px-3 py-2.5"
+            class="border-border bg-canvas/60 flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5"
           >
             <span
               class="text-ink-field text-sm"
