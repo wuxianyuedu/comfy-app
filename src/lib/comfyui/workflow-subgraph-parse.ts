@@ -450,6 +450,10 @@ export function buildSubgraphGraph(
         /* parity: stamp `multiline` on STRING inputs the helper flags,
          *  so short prompt inputs don't degrade to one-line chips.
          *
+         *  这里是**同步**构建，读不到 object_info 的 `{"multiline": true}`
+         *  声明（声明只能异步查）—— 因此只盖「值很长」那条数据判据，
+         *  声明由调用方 `buildSubgraphDetail` 在构建之后补盖一次。
+         *
          *  removed the IMAGE-input `imageRef` propagation
          *  for the same reason as the parent route — downstream IMAGE
          *  consumers would only re-display the un-scaled / un-encoded
@@ -460,8 +464,7 @@ export function buildSubgraphGraph(
           inp.type === "STRING" &&
           widgetValue !== undefined
         ) {
-          if (inferIsMultiline(rn.type, inp.name, widgetValue))
-            entry.multiline = true;
+          if (inferIsMultiline(undefined, widgetValue)) entry.multiline = true;
         }
         rawInputs.push(entry);
         if (isConn) {

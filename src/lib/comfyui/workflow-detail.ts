@@ -31,7 +31,8 @@ import {
   cachePeek,
 } from "@/lib/server-cache";
 import { parseModesJson } from "@/lib/workflow-types";
-import { createComboResolver } from "@/lib/comfyui/workflow-detail-combo";
+import { createObjectInfoResolvers } from "@/lib/comfyui/workflow-detail-combo";
+import { inferIsMultiline } from "@/lib/comfyui/types";
 import {
   buildRawInputs,
   buildRawNodeMeta,
@@ -161,6 +162,11 @@ async function buildWorkflowDetailJson(input: {
     field: string,
   ) => Promise<string[] | undefined>;
   comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的类型事实）。 */
+  multilineForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<boolean | undefined>;
   sourcePath: string | null;
   sourceChanged: boolean;
   sourceMissing: boolean;
@@ -169,6 +175,7 @@ async function buildWorkflowDetailJson(input: {
     tpl,
     comboOptionsForClassField,
     comboOptionsForFieldName,
+    multilineForClassField,
     sourcePath,
     sourceChanged,
     sourceMissing,
@@ -228,6 +235,7 @@ async function buildWorkflowDetailJson(input: {
   const { rawInputsById, sizeById } = await buildRawInputs(
     raw,
     comboOptionsForClassField,
+    multilineForClassField,
   );
 
   /* Sparse raw-node metadata — only enough for the canvas editor to render
@@ -346,6 +354,7 @@ async function buildWorkflowDetailJson(input: {
     nodeTypeById: buildNodeTypeMap(raw),
     comboOptionsForClassField,
     comboOptionsForFieldName,
+    multilineForClassField,
   });
 
   /* ── Groups (ComfyUI frame rectangles) ──
@@ -490,8 +499,11 @@ export async function buildWorkflowDetailFull(
    * render a real <select> instead of a free-text box.  Missing /
    * unreachable → undefined → graceful fallback to a plain text control.
    * Implementation lives in workflow-detail-combo.ts. */
-  const { comboOptionsForClassField, comboOptionsForFieldName } =
-    createComboResolver();
+  const {
+    comboOptionsForClassField,
+    comboOptionsForFieldName,
+    multilineForClassField,
+  } = createObjectInfoResolvers();
 
   /* ?_bust=1 query flag forces the in-memory LRU to be
    *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
@@ -593,6 +605,7 @@ export async function buildWorkflowDetailFull(
       tpl,
       comboOptionsForClassField,
       comboOptionsForFieldName,
+      multilineForClassField,
       sourcePath,
       sourceChanged,
       sourceMissing,
@@ -666,7 +679,11 @@ export async function buildSubgraphDetail(
    * writes), so we cache the already-serialized JSON string by user+id+uid.
    * TTL is longer than the top-level detail because subgraphs change even
    * less often. */
-  const detailJson = await cacheJson(cacheKey, 120_000, () => {
+  /* 本路由只用到 object_info 解析器的「声明型多行」查询（子图内部节点的
+   *  STRING 是否 `{"multiline": true}`）；COMBO 候选仍由顶层详情路由负责。 */
+  const { multilineForClassField } = createObjectInfoResolvers();
+
+  const detailJson = await cacheJson(cacheKey, 120_000, async () => {
     /* Sentinal-link indexing + inner-node graph transform + boundary rails
      * all live in workflow-subgraph-parse.ts (see module docs there). */
     const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
@@ -678,6 +695,24 @@ export async function buildSubgraphDetail(
       linkById,
       boundarySlotsByNode(boundaryLinkInfoById),
     );
+    /* 子图内部 STRING 输入的多行判定：`buildSubgraphGraph` 是同步的，读不到
+     *  object_info 的声明 —— 就地补盖一次。判据仍只有 `inferIsMultiline`
+     *  一处（「值很长」那条它已经盖过），不补的话短提示词的内部节点会退化成
+     *  单行输入。 */
+    for (const [nodeId, entries] of Object.entries(sg.rawInputsById)) {
+      const classType = sg.graph[nodeId]?.class_type;
+      for (const entry of entries) {
+        if (entry.type !== "STRING" || entry.multiline) continue;
+        if (
+          inferIsMultiline(
+            await multilineForClassField(classType, entry.name),
+            entry.widgetValue,
+          )
+        ) {
+          entry.multiline = true;
+        }
+      }
+    }
     /* 子图暴露口的作者名（proxyWidgets 被隔离时长名字的来源），随节点下发给
      *  客户端「就地派生富化」用 —— 顶层富化在这里也在场，直接按
      *  `节点id::widget::槽位名` 预先打进内层节点的 raw_inputs（见下）。

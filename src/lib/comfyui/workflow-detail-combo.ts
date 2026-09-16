@@ -41,19 +41,28 @@ const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
   return undefined;
 };
 
-/** Factory that returns a fresh COMBO resolver closure.
+/** Factory that returns fresh object_info-backed resolvers。
  *
  *  The object_info cache lives inside the returned instance (mirroring the
  *  original per-request closure in workflow-detail.ts): each build starts
  *  with a cold `_comboObjectInfo` so a long-lived process never pins a stale
  *  object_info snapshot across requests.
- */
-export function createComboResolver(): {
+ *
+ *  两类解析共用这一次 fetch（同一份对象、同一个缓存）：
+ *    · `comboOptionsFor*` —— COMBO 候选表；
+ *    · `multilineForClassField` —— STRING 输入是否声明了
+ *      `{"multiline": true}`（多行文本框的**类型事实**，见 types.ts 的
+ *      `inferIsMultiline`）。 */
+export function createObjectInfoResolvers(): {
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
   ) => Promise<string[] | undefined>;
   comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  multilineForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<boolean | undefined>;
 } {
   let _comboObjectInfo: Awaited<ReturnType<typeof fetchObjectInfo>> | undefined;
   const ensureObjectInfo = async () => {
@@ -74,20 +83,27 @@ export function createComboResolver(): {
    * and de-duplicated + sorted; if neither yields anything we return
    * `undefined` so the consumer falls back to a plain text control.
    */
+  /** 某 class 某字段在 object_info 里的原始 spec（`[类型, 选项对象, …]`）。
+   *  查不到（未注册 / 该字段不存在 / ComfyUI 未启动）时 undefined。 */
+  const specForClassField = async (
+    classType: string | undefined,
+    field: string,
+  ): Promise<unknown> => {
+    if (!classType) return undefined;
+    const oi = await ensureObjectInfo();
+    if (!oi) return undefined;
+    const def = oi[classType];
+    if (!def?.input) return undefined;
+    return def.input.required?.[field] ?? def.input.optional?.[field];
+  };
+
   const comboOptionsForClassField = async (
     classType: string | undefined,
     field: string,
   ): Promise<string[] | undefined> => {
     const [specOpts, localOpts] = await Promise.all([
-      (async () => {
-        if (!classType) return undefined;
-        const oi = await ensureObjectInfo();
-        if (!oi) return undefined;
-        const def = oi[classType];
-        if (!def?.input) return undefined;
-        const spec = def.input.required?.[field] ?? def.input.optional?.[field];
-        return comboOptionsFromSpec(spec);
-      })(),
+      (async () =>
+        comboOptionsFromSpec(await specForClassField(classType, field)))(),
       localModelFileNames(modelFoldersForField(field)),
     ]);
 
@@ -140,5 +156,25 @@ export function createComboResolver(): {
       : undefined;
   };
 
-  return { comboOptionsForClassField, comboOptionsForFieldName };
+  /** STRING 输入是否声明了 `{"multiline": true}`（多行文本框的类型事实）。
+   *
+   *  与 COMBO 候选读的是同一份 object_info 缓存，所以每个请求仍只 fetch 一次。
+   *  查不到时返回 `undefined`（而不是 false）：调用方据此退回「值很长」这条
+   *  数据判据，不会因为「没查到声明」就把长文本框降级成单行。 */
+  const multilineForClassField = async (
+    classType: string | undefined,
+    field: string,
+  ): Promise<boolean | undefined> => {
+    const spec = await specForClassField(classType, field);
+    if (!Array.isArray(spec)) return undefined;
+    const extra: unknown = spec[1];
+    if (extra == null || typeof extra !== "object") return undefined;
+    return (extra as Record<string, unknown>).multiline === true;
+  };
+
+  return {
+    comboOptionsForClassField,
+    comboOptionsForFieldName,
+    multilineForClassField,
+  };
 }
