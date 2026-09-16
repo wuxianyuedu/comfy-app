@@ -122,6 +122,45 @@ function readRawEnv(): Record<string, unknown> {
 }
 
 /**
+ * 环境变量里的**布尔字面量**解析（`REAPER_ENABLED` / `DEBUG_MODE_DEFAULT`）。
+ *
+ * 不用 `z.coerce.boolean()`：它等价于 `Boolean(value)`，按 **JS 真值**判断 ——
+ * 而 `Boolean("false") === true`、`Boolean("0") === true`，于是按惯例写
+ * `REAPER_ENABLED=false` **关不掉 reaper**，且没有任何提示。reaper 会**杀进程**，
+ * 「想关掉但其实没关掉」的代价比一般配置项高得多。
+ *
+ * 认的形态（大小写不敏感，两侧空白先去掉）：真 = `1` / `true` / `yes` / `on`，
+ * 假 = `0` / `false` / `no` / `off`，空串视为「没给」（落 default）。
+ * **其余一律 fail-fast 且报出字段名**：拼错成 `ture` / `enable` 时静默取真值，
+ * 等于把上面那个缺陷换个写法再犯一次 —— 宁可启动就报错，也不要一个猜错的开关。
+ */
+const ENV_BOOL_TRUE = new Set(["1", "true", "yes", "on"]);
+const ENV_BOOL_FALSE = new Set(["0", "false", "no", "off"]);
+
+/**
+ * 把一个可选的环境变量字符串解析成布尔。
+ *
+ * 非法值走的是「两个分支都不匹配」而不是在 transform 里抛异常 —— zod **不捕获**
+ * transform 抛出的异常，它会让 `safeParse` 直接 throw 出去，于是 `buildConfig()`
+ * 的 fail-fast 分支被绕过、错误信息也丢掉了字段名。
+ */
+function envBool(field: string) {
+  const normalize = (raw: string): string | false =>
+    ENV_BOOL_TRUE.has(raw) ? "true" : ENV_BOOL_FALSE.has(raw) ? "false" : false;
+
+  return z
+    .string()
+    .optional()
+    .transform((raw) => (raw === undefined ? "" : raw.trim().toLowerCase()))
+    .refine((raw) => raw === "" || normalize(raw) !== false, {
+      message: "期望布尔字面量（true/false/1/0/yes/no/on/off），实际值非法",
+    })
+    .transform((raw) => (raw === "" ? undefined : normalize(raw) === "true"))
+    .pipe(z.boolean().default(true))
+    .describe(field);
+}
+
+/**
  * 配置 schema。每个字段都带默认值或宽松校验，确保任意部署环境都不会因缺变量而崩溃；
  * 仅对「格式正确性」做硬校验（如 URL 形态），非法则 fail-fast。
  */
@@ -139,8 +178,10 @@ const configSchema = z.object({
     .positive()
     .max(65535)
     .default(CONFIG_ENV_DEFAULTS.port),
-  reaperEnabled: z.coerce.boolean().default(true),
-  debugModeDefault: z.coerce.boolean().default(false),
+  /* 开关型配置用 envBool() 解析字面量，不用 z.coerce.boolean() —— 后者按 JS
+   * 真值判断，`REAPER_ENABLED=false` 会被读成 true（见 envBool 的说明）。 */
+  reaperEnabled: envBool("REAPER_ENABLED"),
+  debugModeDefault: envBool("DEBUG_MODE_DEFAULT").default(false),
 });
 
 /** 由原始 env 解析出强类型配置；失败时抛出可读错误（fail-fast）。 */

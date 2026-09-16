@@ -204,6 +204,15 @@ jobs:
         # 30+ 处直接读 process.env）—— 于是「照着注释写」的人会再多一条口径。
         run: pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
 
+      - name: Dead export ratchet
+        # `src/lib` 的零消费值导出（规范 §12.16 / ISSUE #573 第 9 项）。
+        # §12.15 给了「死代码该接线还是该删」的口径，但它只有口径、没有判据 ——
+        # 那批 `Result` / 7 个零 `new` 调用点的错误类 / `eventBus` 全是人工读出来
+        # 的。判据只扫 `src/lib/**` 且只认**值导出**（`type` / `interface` 不看：
+        # 「导出但零外部引用」的 566 个清单里 90% 是同文件内使用的 props 类型，
+        # 纳入只会把判据变成噪音），按符号记棘轮、只许降不许升。
+        run: node scripts/check-dead-exports.cjs --strict
+
       - name: Coverage
         # 覆盖率棘轮（vitest.config.ts）：middleware/lib 目录按真实水平设硬门槛
         run: pnpm run test:coverage

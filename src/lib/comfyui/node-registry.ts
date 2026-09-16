@@ -348,7 +348,7 @@ export function getNodeConfig(classType: string): NodeTypeConfig {
     NODE_TYPE_REGISTRY[classType] ?? {
       label: classType,
       color: "#6B7280",
-      icon: "\u{2699}\uFE0F}",
+      icon: "\u{2699}\uFE0F",
       category: "process",
       width: 200,
       height: 70,
