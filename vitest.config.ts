@@ -23,7 +23,13 @@ export default defineConfig({
     // 新目录覆盖后加入下表。全库 3% 的整体数字仅作信息参考,不设全局门槛。
     coverage: {
       provider: "v8",
-      reporter: ["text", "json-summary"],
+      // lcov 是**平台侧要的**那份：CI 的「单元测试与覆盖率」步骤走
+      // `testing:coverage` 插件读 `coverage/lcov.info`（见 .cnb.yml 与
+      // docs/standards/11 §覆盖率棘轮）。此前只出 text + json-summary，
+      // 插件在本步开始后 1.8s 就以「没有找到覆盖率报告文件」退出——
+      // 报告格式是两处**必须对上**的口径，只改一侧等于整条覆盖率上报静默失效。
+      // text 留给人读（本地/CI 日志），json-summary 留给本地看目录汇总。
+      reporter: ["text", "json-summary", "lcov"],
       include: ["src/server/api/middleware/**", "src/lib/**"],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {

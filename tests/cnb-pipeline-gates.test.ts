@@ -225,6 +225,65 @@ describe("CNB 门禁清单：一条不许丢", () => {
   });
 });
 
+describe("覆盖率上报：插件的 pattern 必须真的有文件产出", () => {
+  /**
+   * `testing:coverage` 插件读的是**磁盘上的报告文件**，而报告由 vitest 的
+   * `coverage.reporter` 决定格式 —— 两处必须对上，且**只改一侧不会红**：
+   * PR #641 把门禁切成插件上报后，插件在本步开始 1.8s 就以
+   * 「没有找到覆盖率报告文件」退出（vitest 只配了 text + json-summary，
+   * 而插件要的是 lcov.info），整条覆盖率上报与核时收益当场静默失效。
+   *
+   * 判据不去逐字比对 YAML（那会随排版漂移），只锁**契约本身**：
+   * 插件声明的 pattern 后缀，必须在 vitest 的 reporter 列表里有对应的产出格式。
+   */
+  const VITEST = readFileSync(join(process.cwd(), "vitest.config.ts"), "utf8");
+
+  /** 插件可识别的报告格式 → vitest reporter 名。见 docs.cnb.cool testing:coverage。 */
+  const REPORTER_FOR_FORMAT: Record<string, string> = {
+    ".info": "lcov",
+    "json-summary": "json-summary",
+    ".json": "json",
+    "jacoco": "jacoco",
+  };
+
+  const coverageStep =
+    steps.find((s) => s.body.includes("type: testing:coverage"))?.body ?? "";
+
+  it("门禁里确实挂着 testing:coverage 插件（否则本组判据失去对象）", () => {
+    expect(coverageStep, "找不到 testing:coverage 步骤").not.toBe("");
+    expect(coverageStep).toContain("pnpm run test:coverage");
+  });
+
+  it("插件 pattern 指的那份报告，vitest 的 reporter 真的会产出", () => {
+    const pattern = /^\s+pattern:\s*(\S+)\s*$/m.exec(coverageStep)?.[1];
+    expect(pattern, "testing:coverage 步骤没有声明 pattern").toBeDefined();
+    expect(pattern, "pattern 必须相对工作目录指向 coverage 目录").toContain("coverage/");
+
+    // 从 pattern 后缀反查 vitest 该开哪个 reporter。
+    const format = Object.keys(REPORTER_FOR_FORMAT).find((k) => (pattern ?? "").endsWith(k));
+    expect(
+      format,
+      `pattern「${pattern}」的后缀不是插件可识别的格式（lcov / json / json-summary / jacoco / golang）`,
+    ).toBeDefined();
+
+    const reporter = REPORTER_FOR_FORMAT[format ?? ""] ?? "";
+    const reportersLine = /reporter:\s*\[([^\]]*)\]/.exec(VITEST)?.[1] ?? "";
+    expect(
+      reportersLine,
+      `vitest.config.ts 的 coverage.reporter 里没有「${reporter}」——` +
+        `插件读 ${pattern}，而 vitest 不会产出这份文件：` +
+        `CI 会在本步以「没有找到覆盖率报告文件」退出（PR #641 的实际现场）`,
+    ).toContain(`"${reporter}"`);
+  });
+
+  it("阈值口径仍留在 vitest 侧，平台侧不许填 lines / diffLines", () => {
+    // 平台阈值是绝对百分比，本仓库走的是「按目录设门槛」的口径（11 §覆盖率棘轮），
+    // 两套数字放一起要么形同虚设、要么把正常 PR 拦死。
+    expect(coverageStep).not.toMatch(/^\s+(lines|diffLines):/m);
+    expect(VITEST).toContain("thresholds:");
+  });
+});
+
 describe("分支守卫：不可信事件也不许靠流水线里的那行命令", () => {
   it("守卫排在所有检查步骤之前（安装之后的第 2 步）", () => {
     const names = steps.map((s) => s.name);
