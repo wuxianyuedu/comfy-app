@@ -185,7 +185,7 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
   **钩子由 `pnpm install` 自动接上**（`package.json` 的 postinstall →
-  `scripts/install-git-hooks.sh` 写 `core.hooksPath=.githooks`，幂等）；装了依赖但
+  `scripts/install-git-hooks.mjs` 写 `core.hooksPath=.githooks`，幂等）；装了依赖但
   `git config core.hooksPath` 仍为空时手动执行一次即可。
 - **一律 pnpm，禁止 npm/npx**（AGENTS.md 硬规则 1）：npm 在本项目解析 typescript
   别名链会崩溃（`Class extends value undefined`）。
