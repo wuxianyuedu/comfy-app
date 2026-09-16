@@ -59,6 +59,15 @@ export async function probeDrizzleStudio(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
   timeoutMs = 1500,
 ): Promise<boolean> {
+  const up = await probeDrizzleStudioRaw(port, timeoutMs);
+  rememberProbe(port, up);
+  return up;
+}
+
+async function probeDrizzleStudioRaw(
+  port: number,
+  timeoutMs: number,
+): Promise<boolean> {
   try {
     return await new Promise((resolve) => {
       const sock = connect({ host: "127.0.0.1", port });
@@ -302,11 +311,42 @@ export function isDrizzleStudioStarting(): boolean {
   return !!st.starting;
 }
 
+/**
+ * 端口可达性结果的短 TTL 缓存。
+ *
+ * `getDrizzleStudioStatus` 是**同步**函数（可达性只能异步问），此前它直接返回
+ * `up: false` —— 于是「端口上确实有实例在跑、但不是本应用拉起的」会被读成
+ * 「未运行」，调用方据此去重拉一个（或反过来以为无实例可关）。现在把最近一次
+ * 探测结论缓存下来供同步读取；缓存缺失或过期时按 `false` 返回。
+ */
+const PROBE_TTL_MS = 2000;
+let probeCache: { at: number; up: boolean } | null = null;
+
+/** 记录一次异步探测结论（供同步状态读取）。 */
+function rememberProbe(port: number, up: boolean): void {
+  if (port !== DRIZZLE_STUDIO_DEFAULT_PORT) return;
+  probeCache = { at: Date.now(), up };
+}
+
+/**
+ * 清掉探测缓存（**测试用**）。
+ *
+ * 缓存是模块级状态，而用例之间共享同一个模块实例 —— 不清会让「上一个用例探测到
+ * 可达」泄漏到下一个用例，表现为随机的假绿/假红。生产代码不需要调用它。
+ */
+export function resetDrizzleStudioProbeCache(): void {
+  probeCache = null;
+}
+
 export function getDrizzleStudioStatus(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
 ): DrizzleStudioStatus {
+  const fresh =
+    probeCache && Date.now() - probeCache.at < PROBE_TTL_MS
+      ? probeCache.up
+      : false;
   return {
-    up: false,
+    up: fresh,
     port,
     starting: isDrizzleStudioStarting(),
     pid: st.child?.pid,

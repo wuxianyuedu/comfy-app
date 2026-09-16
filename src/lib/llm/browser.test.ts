@@ -118,14 +118,32 @@ describe("streamChat", () => {
     expect(onToken).not.toHaveBeenCalled();
   });
 
-  it("末帧没有换行符时被丢弃 —— 这是现存缺陷，本用例钉住现状", async () => {
+  it("末帧没有换行符时仍被冲刷出来（末字不丢）", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => okStream(['data: {"token":"tail"}'])),
     );
-    // 读取循环 `break` 之后再没有冲刷 `buffer`，所以末帧（缺 `\n`）整条丢掉。
-    // 用户可见表现：回答最后一个字丢了。修复见 ISSUE 回报，本批不改源码。
-    expect(await streamChat({ messages: [] })).toBe("");
+    // 读取循环 `break` 之后必须再冲刷一次缓冲：末帧常常没有换行符，此前整条被
+    // 丢弃，用户可见表现是「回答最后一个字丢了」。现在流结束后按结尾帧处理。
+    expect(await streamChat({ messages: [] })).toBe("tail");
+  });
+
+  it("末帧无换行 + 跨 chunk 半个 JSON 也拼得回来", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        okStream(['data: {"token":"前半"}\ndata: {"tok', 'en":"末尾"}']),
+      ),
+    );
+    expect(await streamChat({ messages: [] })).toBe("前半末尾");
+  });
+
+  it("流正常结束且末帧带换行时不多算/不重复", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => okStream(['data: {"token":"a"}\ndata: [DONE]\n'])),
+    );
+    expect(await streamChat({ messages: [] })).toBe("a");
   });
 
   it("服务端返回非 2xx 时抛出响应文本，不静默返回空串", async () => {
@@ -152,7 +170,7 @@ describe("streamChat", () => {
     await expect(streamChat({ messages: [] })).rejects.toThrow();
   });
 
-  it("帧内 error 字段被吞掉、半截正文当成功返回 —— 这是现存缺陷，本用例钉住现状", async () => {
+  it("帧内 error 字段必须抛出，而不是把半截正文当成功返回", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -162,12 +180,23 @@ describe("streamChat", () => {
         ]),
       ),
     );
-    // `json.error` 抛出的 Error 会被下面的 catch 重新捕获，而 catch 只在
-    // 消息命中 /LLM|请求|fetch/i 时才 rethrow —— "上游鉴权失败" 不命中，
-    // 于是错误被静默丢弃、`"前半"` 作为**正常回答**返回。用户看到的是
-    // 「模型答到一半就没了」，而界面上没有任何报错。
-    // 修复见 ISSUE 回报，本批不改源码。
-    await expect(streamChat({ messages: [] })).resolves.toBe("前半");
+    // 此前 `json.error` 抛出的 Error 会被下面的 catch 重新捕获，而 catch 只在
+    // 消息命中 /LLM|请求|fetch/i 时才 rethrow —— "上游鉴权失败" 不命中，于是
+    // 错误被静默丢弃、`"前半"` 作为**正常回答**返回（用户看到「模型答到一半就
+    // 没了」，界面上没有任何报错）。现在语义错误一律中断整条流。
+    await expect(streamChat({ messages: [] })).rejects.toThrow("上游鉴权失败");
+  });
+
+  it("error 帧即使空串也不当成功（空值不是「没有错误」）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        okStream(['data: {"error":""}\n', 'data: {"token":"ok"}\n']),
+      ),
+    );
+    // 空串 error 视为「没有值」，与 `lib/error-message` 对空串的口径一致：
+    // 不能因为 `""` 是假值就把整条流当成正常。
+    expect(await streamChat({ messages: [] })).toBe("ok");
   });
 
   it("纯语法坏帧被忽略（不因为一行坏 JSON 中断整条回答）", async () => {

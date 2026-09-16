@@ -149,28 +149,46 @@ describe("comfyuiBaseUrl", () => {
   });
 });
 
-describe("开关型配置", () => {
-  it("「false」字面量被解析为 true —— 这是现存缺陷，本用例钉住现状", async () => {
-    process.env.REAPER_ENABLED = "false";
-    const { config } = await loadConfig();
-    // `z.coerce.boolean()` 等价于 `Boolean(value)`，而 `Boolean("false") === true`
-    // —— 它按 **JS 真值**而非「常见环境变量字符串」布尔字面量解析。
-    // 于是按惯例写 `REAPER_ENABLED=false` **无法关闭** reaper，且没有任何提示。
-    // 修复见 ISSUE 回报，本批不改源码。
-    expect(config.features.reaperEnabled).toBe(true);
-  });
+describe("开关型配置（按布尔字面量解析，不按 JS 真值）", () => {
+  /* 这一组曾钉住一个现存缺陷：`z.coerce.boolean()` 等价 `Boolean(value)`，
+   * 而 `Boolean("false") === true` —— 按惯例写 `REAPER_ENABLED=false` **关不掉
+   * reaper**，且没有任何提示。reaper 会杀进程，误判代价高，故改为字面量解析。 */
+  it.each(["false", "FALSE", " 0 ", "no", "off"])(
+    "REAPER_ENABLED=%s 关闭 reaper",
+    async (raw) => {
+      process.env.REAPER_ENABLED = raw;
+      const { config } = await loadConfig();
+      expect(config.features.reaperEnabled).toBe(false);
+    },
+  );
 
-  it('"0" 同样被解析为 true（同一缺陷的另一面）', async () => {
-    process.env.REAPER_ENABLED = "0";
-    const { config } = await loadConfig();
-    expect(config.features.reaperEnabled).toBe(true);
-  });
+  it.each(["true", "TRUE", " 1 ", "yes", "on"])(
+    "REAPER_ENABLED=%s 打开 reaper",
+    async (raw) => {
+      process.env.REAPER_ENABLED = raw;
+      const { config } = await loadConfig();
+      expect(config.features.reaperEnabled).toBe(true);
+    },
+  );
 
-  it("空串是唯一能被解析为 false 的写法（未设置的等价形态）", async () => {
+  it("空串视为「没给」→ 落默认值（不是 false）", async () => {
     process.env.REAPER_ENABLED = "";
     const { config } = await loadConfig();
-    expect(config.features.reaperEnabled).toBe(false);
+    expect(config.features.reaperEnabled).toBe(true);
   });
+
+  it("未设置 → 默认打开", async () => {
+    const { config } = await loadConfig();
+    expect(config.features.reaperEnabled).toBe(true);
+  });
+
+  it.each(["ture", "enable", "2"])(
+    "REAPER_ENABLED=%s 拼错即 fail-fast（带字段名），不静默取真值",
+    async (raw) => {
+      process.env.REAPER_ENABLED = raw;
+      await expect(loadConfig()).rejects.toThrow(/reaperEnabled/);
+    },
+  );
 
   it("DEBUG_MODE_DEFAULT=true 打开调试抽屉默认值", async () => {
     process.env.DEBUG_MODE_DEFAULT = "true";
