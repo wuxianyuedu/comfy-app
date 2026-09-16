@@ -122,6 +122,13 @@ beforeEach(() => {
   configDir = mkdtempSync(join(tmpdir(), "reformat-cfg-"));
   mkdirSync(join(workdir, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, join(workdir, "scripts", "check-reformat-only.cjs"));
+  // pnpm 形态判据模块按**相对脚本的路径**动态导入（scripts/launcher-core/shell.mjs）：
+  // 临时仓库里没有它，缺了脚本会以 exit 2 结束 —— 那验的是「能不能加载」而不是本门禁。
+  mkdirSync(join(workdir, "scripts", "launcher-core"), { recursive: true });
+  symlinkSync(
+    join(process.cwd(), "scripts", "launcher-core", "shell.mjs"),
+    join(workdir, "scripts", "launcher-core", "shell.mjs"),
+  );
   mkdirSync(join(workdir, "src", "lib"), { recursive: true });
   // 临时仓库也要能解析 prettier：真实场景里门禁在**源码仓库**里跑（node_modules
   // 就在旁边），临时仓库没有 —— 软链过来最贴近真实的解析路径，也让脚本的

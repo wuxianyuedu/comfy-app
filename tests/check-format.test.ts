@@ -17,6 +17,7 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -85,6 +86,14 @@ beforeEach(() => {
   mkdirSync(join(workdir, "src", "lib"), { recursive: true });
   // 脚本与基线同目录（脚本按 __dirname 找基线），与真实布局 scripts/ 一致。
   copyFileSync(SCRIPT, join(workdir, "scripts", "check-format.cjs"));
+  // pnpm 形态判据模块按**相对脚本的路径**动态导入（scripts/launcher-core/shell.mjs）：
+  // 临时工作区里没有它，缺了就会以 exit 2 结束 —— 那验的是「脚本能不能加载」，
+  // 而不是本脚本的棘轮判定。软链一份，与真实布局一致。
+  mkdirSync(join(workdir, "scripts", "launcher-core"), { recursive: true });
+  symlinkSync(
+    join(process.cwd(), "scripts", "launcher-core", "shell.mjs"),
+    join(workdir, "scripts", "launcher-core", "shell.mjs"),
+  );
   git("init", "-q");
   git("config", "user.email", "t@local");
   git("config", "user.name", "t");
