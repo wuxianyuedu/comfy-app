@@ -42,7 +42,11 @@ function stepBlocks(src: string, indent = 2): Step[] {
   const marks: { name: string; start: number; indent: number }[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(src)) !== null) {
-    marks.push({ name: (m[2] ?? "").trim(), start: m.index, indent: (m[1] ?? "").length });
+    marks.push({
+      name: (m[2] ?? "").trim(),
+      start: m.index,
+      indent: (m[1] ?? "").length,
+    });
   }
   return marks
     .filter((mk) => mk.indent === indent)
@@ -83,7 +87,41 @@ describe("两条流水线：门禁只在 pull_request 上跑，push 只复核合
   it("push 的合并形态复核是硬判据，且不与其他步骤共用 stages", () => {
     const pushSteps = stepBlocks(cnb, 8);
     expect(pushSteps.map((s) => s.name)).toEqual(["合并形态复核"]);
-    expect(pushSteps[0]?.body).toContain("scripts/check-branch-guard.cjs --merge-commit");
+    expect(pushSteps[0]?.body).toContain(
+      "scripts/check-branch-guard.cjs --merge-commit",
+    );
+  });
+
+  /**
+   * push 复核**必须**能认 squash 形态。
+   *
+   * 规范 §13.6 优先 Squash Merge：squash 落到 master 的提交**只有 1 个父**，
+   * 与「本地直连主干提交」在拓扑上同形。若这条复核退回「父提交数 > 1 才算
+   * 合并」，它就会对每一次正常合并都判红 —— 实测后果是 master 的 push 流水线
+   * **每一次都是红的**，而它并没有抓到过任何一次真正的绕过。一条永远在响、
+   * 却从不指向真问题的告警只会训练人忽略它。
+   *
+   * 这里锁住判据本身：脚本里必须存在「单父也放行」的分支，不得只剩拓扑判据。
+   */
+  it("push 复核认 squash：脚本不得退回「父提交数 > 1 才算合并」", () => {
+    // 判据集中在 evaluateLanding() 里，**只看函数体**：
+    // 整份脚本里 `PR-URL` / `保守放行` 还会出现在注释与别处，拿全文断言等于
+    // 判据可以「只在注释里存在」——那正是这条护栏要防的静默失效。
+    const start = GUARD_SCRIPT.indexOf("function evaluateLanding()");
+    expect(start, "check-branch-guard.cjs 里找不到 evaluateLanding()").toBeGreaterThan(-1);
+    const end = GUARD_SCRIPT.indexOf("\nfunction main()", start);
+    const body = GUARD_SCRIPT.slice(start, end === -1 ? undefined : end);
+
+    // ① 必须能认 squash：单父场景要有一条放行出口，不能落到「非合并提交 → 阻断」。
+    expect(body).toContain("squash");
+    // ② 判别单父提交是否走过 PR 的可核实痕迹：平台 squash 时写进 message 的 PR 关联。
+    expect(body).toMatch(/PR-URL/);
+    // ③ 提交信息要真被读到（只提常量不算数）。
+    expect(body).toContain("--format=%B");
+    // ④ 三者都不满足时要保守放行，而不是退回阻断（判据无从命中时不该误报）。
+    expect(body).toContain("保守放行");
+    // ⑤ 反向：函数体里不许出现「非合并提交」这种「单父即阻断」的措辞。
+    expect(body).not.toContain("非合并提交");
   });
 });
 
@@ -163,13 +201,16 @@ describe("CNB 门禁清单：一条不许丢", () => {
     "playwright test --grep @critical": "E2E 关键流程",
   };
 
-  it.each(Object.keys(MIGRATED))("迁移前的「%s」在 .cnb.yml 里仍有承载步骤", (cmd) => {
-    expect(
-      steps.map((s) => s.name),
-      `迁移前的步骤「${cmd}」在 .cnb.yml 里找不到对应的 stage——` +
-        `少一步不会让构建变红，只会永久少一类回归信号`,
-    ).toContain(MIGRATED[cmd]);
-  });
+  it.each(Object.keys(MIGRATED))(
+    "迁移前的「%s」在 .cnb.yml 里仍有承载步骤",
+    (cmd) => {
+      expect(
+        steps.map((s) => s.name),
+        `迁移前的步骤「${cmd}」在 .cnb.yml 里找不到对应的 stage——` +
+          `少一步不会让构建变红，只会永久少一类回归信号`,
+      ).toContain(MIGRATED[cmd]);
+    },
+  );
 
   const find = (name: string) => steps.find((s) => s.name === name)?.body ?? "";
 
@@ -205,7 +246,9 @@ describe("CNB 门禁清单：一条不许丢", () => {
       .split("\n")
       .filter((l) => /^\s+(script|corepack|pnpm)/.test(l));
     for (const line of scriptLines) {
-      expect(line, `流水线里出现 npm/npx：${line}`).not.toMatch(/\bnpm\b|\bnpx\b/);
+      expect(line, `流水线里出现 npm/npx：${line}`).not.toMatch(
+        /\bnpm\b|\bnpx\b/,
+      );
     }
   });
 
@@ -243,7 +286,7 @@ describe("覆盖率上报：插件的 pattern 必须真的有文件产出", () =
     ".info": "lcov",
     "json-summary": "json-summary",
     ".json": "json",
-    "jacoco": "jacoco",
+    jacoco: "jacoco",
   };
 
   const coverageStep =
@@ -257,10 +300,14 @@ describe("覆盖率上报：插件的 pattern 必须真的有文件产出", () =
   it("插件 pattern 指的那份报告，vitest 的 reporter 真的会产出", () => {
     const pattern = /^\s+pattern:\s*(\S+)\s*$/m.exec(coverageStep)?.[1];
     expect(pattern, "testing:coverage 步骤没有声明 pattern").toBeDefined();
-    expect(pattern, "pattern 必须相对工作目录指向 coverage 目录").toContain("coverage/");
+    expect(pattern, "pattern 必须相对工作目录指向 coverage 目录").toContain(
+      "coverage/",
+    );
 
     // 从 pattern 后缀反查 vitest 该开哪个 reporter。
-    const format = Object.keys(REPORTER_FOR_FORMAT).find((k) => (pattern ?? "").endsWith(k));
+    const format = Object.keys(REPORTER_FOR_FORMAT).find((k) =>
+      (pattern ?? "").endsWith(k),
+    );
     expect(
       format,
       `pattern「${pattern}」的后缀不是插件可识别的格式（lcov / json / json-summary / jacoco / golang）`,
@@ -305,7 +352,10 @@ describe("分支守卫：不可信事件也不许靠流水线里的那行命令"
 
   it("判据版本与脚本一致（版本一变，调用行必须跟着改）", () => {
     const version = /const GUARD_VERSION = "(\d+)"/.exec(GUARD_SCRIPT)?.[1];
-    expect(version, "check-branch-guard.cjs 里找不到 GUARD_VERSION").toBeDefined();
+    expect(
+      version,
+      "check-branch-guard.cjs 里找不到 GUARD_VERSION",
+    ).toBeDefined();
     expect(GUARD_SCRIPT).toContain(`"[branch-guard] v" + GUARD_VERSION`);
   });
 
@@ -335,10 +385,15 @@ describe("分支守卫：不可信事件也不许靠流水线里的那行命令"
 
 describe("流水线：SKIP_ENV_VALIDATION 必须与 BETTER_AUTH_SECRET 成对", () => {
   // env 挂在锚点 `.common` 下（两个事件的公共项），切到锚点段落结束为止。
-  const pipelineEnv = cnb.slice(cnb.indexOf("env:"), cnb.indexOf("\n.gates: &gates"));
+  const pipelineEnv = cnb.slice(
+    cnb.indexOf("env:"),
+    cnb.indexOf("\n.gates: &gates"),
+  );
 
   it("确实设了 SKIP_ENV_VALIDATION（否则本用例失去对象）", () => {
-    expect(steps.some((s) => s.body.includes("SKIP_ENV_VALIDATION"))).toBe(true);
+    expect(steps.some((s) => s.body.includes("SKIP_ENV_VALIDATION"))).toBe(
+      true,
+    );
   });
 
   it("pipeline 级 env 同时注入 BETTER_AUTH_SECRET", () => {
@@ -347,8 +402,12 @@ describe("流水线：SKIP_ENV_VALIDATION 必须与 BETTER_AUTH_SECRET 成对", 
     // 下缺失该值 → 退回内置 DEFAULT_SECRET 并抛「You are using the default secret」
     // → createTRPCContext() 抛错 → 所有 authedProcedure 全灭（设置页整页读不出来），
     // 3 条 @critical 用例会集体挂在同一个 helper 上（ISSUE #489）。
-    const envVars = [...pipelineEnv.matchAll(/^ {4}([A-Z0-9_]+):/gm)].map((x) => x[1]);
-    expect(envVars, "pipeline 级没有可解析的 env 键").toContain("SKIP_ENV_VALIDATION");
+    const envVars = [...pipelineEnv.matchAll(/^ {4}([A-Z0-9_]+):/gm)].map(
+      (x) => x[1],
+    );
+    expect(envVars, "pipeline 级没有可解析的 env 键").toContain(
+      "SKIP_ENV_VALIDATION",
+    );
     expect(
       envVars,
       "设了 SKIP_ENV_VALIDATION 却没注入 BETTER_AUTH_SECRET：" +
@@ -360,9 +419,15 @@ describe("流水线：SKIP_ENV_VALIDATION 必须与 BETTER_AUTH_SECRET 成对", 
     const values = [...cnb.matchAll(/BETTER_AUTH_SECRET:\s*"([^"]+)"/g)].map(
       (x) => x[1] ?? "",
     );
-    expect(values.length, "CNB 流水线里没有出现 BETTER_AUTH_SECRET 的值").toBeGreaterThan(0);
+    expect(
+      values.length,
+      "CNB 流水线里没有出现 BETTER_AUTH_SECRET 的值",
+    ).toBeGreaterThan(0);
     for (const v of values) {
-      expect(v.length, `BETTER_AUTH_SECRET 占位值不足 32 字符：${v.length}`).toBeGreaterThanOrEqual(32);
+      expect(
+        v.length,
+        `BETTER_AUTH_SECRET 占位值不足 32 字符：${v.length}`,
+      ).toBeGreaterThanOrEqual(32);
     }
   });
 });
