@@ -122,7 +122,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 ```
 PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 master，30 步串行）：
 ✅ corepack enable && pnpm install --frozen-lockfile
-✅ node scripts/check-branch-guard.cjs --pr-check   # PR 源分支不能是 master（见 13.6）
+✅ node scripts/check-branch-guard.cjs --pr-check --target master   # PR 源分支不能是 master（见 13.6）
 ✅ pnpm run db:push                # 建表；后面 E2E 要真的读到库（见 11.7）
 ✅ pnpm run typecheck              # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
@@ -309,7 +309,7 @@ git push origin HEAD                  # 推送并创建 PR
 
 > 规则自测：`tests/check-branch-guard.test.ts`（临时仓库跑真脚本：分支提交放行、
 > master 直提阻断并给出搬迁出口、master 合并提交放行、非 git 目录不崩、
-> 钩子里守卫排在第 1 步）。
+> 钩子里守卫排在第 1 步；另有 `--pr-check` 的三种拓扑与「取不到目标分支时保守放行」）。
 >
 > **分级口径**：上面的本地钩子与流水线步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
 > 平台层的分支保护是「防误操作」的兜底（拦的是**直接 push**）。两者判据不同、不可互相替代：
@@ -318,8 +318,16 @@ git push origin HEAD                  # 推送并创建 PR
 > **服务端这一侧是「不可信事件」，判据必须自持**：`pull_request` 类事件的流水线配置
 > 取自**源分支**——触发者可以把 `.cnb.yml` 里那行 `check-branch-guard.cjs` 删掉。
 > 因此守卫脚本自己独立判定（不读 `CNB_PULL_REQUEST`、不依赖流水线里的任何外部事实），
-> 而且**排在第 1 条**：删了它就等于让第 1 条失败，而不是「静默不检查」。
+> 而且**紧跟在依赖安装之后**：删了它就等于当场失败，而不是「静默不检查」。
 > `tests/cnb-pipeline-gates.test.ts` 锁住这两点（守卫顺序 + 调用形态 + 判据版本一致）。
+>
+> **服务端的判据与本地不是同一条**（踩过）：CNB 在 `pull_request` 事件上 checkout 的是
+> **预合并提交**，容器里 `symbolic-ref HEAD` 恒等于**目标分支**——照搬本地那条
+> 「HEAD 在 `master` 上 = 直连主干」会把**每一条正常 PR 都拦死**（PR #633 第一次跑就是这么红的）。
+> 服务端改判**提交拓扑**：`git rev-list --count origin/master..HEAD`
+> —— `> 0` 说明源分支确有超出目标分支的提交（正常 PR）；`= 0` 说明源分支就是目标分支
+> （平台允许创建 source=master 的 PR，正是要拦的场景）。判据与分支叫什么名字无关。
+> 三种拓扑（领先 / 预合并 / 完全同步）由 `tests/check-branch-guard.test.ts` 用**真仓库**跑。
 
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 

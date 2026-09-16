@@ -71,8 +71,10 @@
     # 守在最前:分支不对时后续检查的结果最后都会被丢弃(与 pre-commit 同序)。
     # 与 .githooks/pre-commit 用的是**同一个** scripts/check-branch-guard.cjs,
     # 不另写一份「CI 专用」的分支名判断(会漂移的判据只许定义一次)。
+    # --target master 由配置写死传入:判定要的是**分支名**,而流水线里的
+    # CNB_PULL_REQUEST_TARGET_SHA 是 sha——拿它当 branch 用会静默失效。
     - name: 分支守卫
-      script: node scripts/check-branch-guard.cjs --pr-check
+      script: node scripts/check-branch-guard.cjs --pr-check --target master
 
     # ── 建库 ──
     # 门禁此前从不建库,于是「跑起来的应用要有库」这条路径没有任何自动检查在验:

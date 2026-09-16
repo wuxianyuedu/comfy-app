@@ -24,18 +24,27 @@
  *   CNB 在推送层锁定分支(create-branch-lock)只能阻止**推送**,拦不住本地
  *   直接提交后再推送;本地门槛是这条链路里唯一能在「提交那一刻」给反馈的位置。
  *
- * 判据的**场景判据**(为什么不能借用 CNB_PULL_REQUEST):
- *   服务端复核的调用方是 .cnb.yml 的 pull_request 流水线,那里 CNB_PULL_REQUEST
- *   为 true,但 PR 的**预合并提交**在容器里 HEAD 的分支名不是 master —— 抓不到
- *   「源分支就是 master」这件事。而触发者可能把 .cnb.yml 里的那一行删掉(PR 类
- *   事件是「不可信事件」,流水线配置取自源分支),因此本脚本必须自己独立判定,
- *   不能依赖流水线里的那条命令还在。
+ * 服务端复核(--pr-check,用户 .cnb.yml 的 pull_request 流水线):
+ *   这里的判据**不能复用上面的「分支名」**:CNB 在 pull_request 事件上 checkout 的
+ *   是**预合并提交**(gh merge 语义),容器里 HEAD 的分支名是**目标分支**(实测
+ *   `symbolic-ref HEAD` = master、父提交数 1)——照搬会 100% 误报「直接向 master 提交」。
+ *   可用的、且不受「源分支名」影响的 git 事实是 git 在合并提交里写下的
+ *   `Merge: <target> <source>`:把它与 **PR 目标分支**(CNB_PULL_REQUEST_TARGET_SHA
+ *   指向的那条分支,由调用方传入)比对,即可判定「源分支 == 目标分支」。
+ *   - 没有 `Merge:` 行(树内合并 / 非合并提交)→ 放行:PR 一定带源分支,
+ *     缺这行说明上游的 checkout 形态变了,不误报;
+ *   - 只有一个 `Merge:` 行(fast-forward / rebase 预合并)→ 无法区分,放行并说明。
+ *
+ *   用拓扑(而不是分支名)判,是因为平台**允许**创建 source=master 的 PR ——
+ *   那正是本条要拦的场景,而「这是不是 PR 事件」回答不了它。
+ *   触发者也能把 .cnb.yml 里的那一行删掉(PR 类事件是「不可信事件」,流水线配置
+ *   取自源分支),因此判定必须自持:删了它就是让流水线当场失败,而不是静默不检查。
  *
  * 用法:
- *   node scripts/check-branch-guard.cjs          # 提交场景检查(违规即阻断)
- *   node scripts/check-branch-guard.cjs --status # 只看当前分支现状
- *   node scripts/check-branch-guard.cjs --pr-check # PR 源分支复核(--ci-alias 的同义词)
- *   node scripts/check-branch-guard.cjs --ci-alias # 同上,供 .cnb.yml 显式声明
+ *   node scripts/check-branch-guard.cjs              # 提交场景检查(违规即阻断)
+ *   node scripts/check-branch-guard.cjs --status     # 只看当前分支现状
+ *   node scripts/check-branch-guard.cjs --pre-commit # 显式声明提交场景
+ *   node scripts/check-branch-guard.cjs --pr-check   # 服务端复核:源分支不能是目标分支
  */
 /**
  * 判据版本 —— 本值一变,「旧版本挡下了什么」就有缺口:.cnb.yml 里那条调用行属于
@@ -62,6 +71,16 @@ function git(args) {
   } catch {
     return "";
   }
+}
+
+/** 取 `--key value` / `--key=value` 形态的入参;缺省返回 ""。 */
+function argValue(key) {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === key) return argv[i + 1] || "";
+    if (argv[i].startsWith(key + "=")) return argv[i].slice(key.length + 1);
+  }
+  return "";
 }
 
 /** 当前 HEAD 的分支名;处于分离 HEAD(detached)时为 ""。 */
@@ -103,6 +122,75 @@ function evaluate() {
   };
 }
 
+/**
+ * 服务端复核(--pr-check):判「PR 的源分支有没有超出目标分支的提交」。
+ *
+ * **为什么不能复用上面的「分支名」判据**:CNB 在 pull_request 事件上 checkout 的是
+ * **预合并提交**(把目标分支合进源分支的临时提交),容器里 `symbolic-ref HEAD` 恒等于
+ * **目标分支**(实测 `master`)——照搬「HEAD 在 master 上就是直连主干」会 100% 误报,
+ * 把每一条正常 PR 都拦死(PR #633 第一次跑就是这么红的,见 Issue #623 的构建记录)。
+ *
+ * **为什么不用 `Merge:` 行**:git 在合并提交里只写**两个父的 sha**,不写分支名
+ * (`Merge: 1284c48 d2d76e8`)。`git name-rev` 能从 sha 反查分支名,但它按可达性猜,
+ * 目标分支与源分支互相归并过之后两边都能反查到同一个名字——判据会随拓扑漂移,
+ * 不是事实。
+ *
+ * **实际可用的判据是拓扑**:问「源分支相对目标分支有没有**独有**的提交」。
+ * `git rev-list --count <目标分支>..HEAD`:
+ *   - `> 0` → 源分支确有超出目标分支的提交 → 这是一个真实的 PR → 放行;
+ *   - `= 0` → 源分支没有任何超出目标分支的提交,即它就是目标分支(或其祖先)
+ *     → 这正是本条要拦的场景(平台允许创建 source=master 的 PR)→ 阻断。
+ * 判据只用提交拓扑,与分支叫什么名字无关,也不受预合并形态影响。
+ *
+ * 目标分支由调用方经 `--target <branch>` 传入(缺省 `master`)。
+ *
+ * 边界(都取保守放行,理由与本地钩子一致:判据无从命中时不该误报):
+ *   - 目标分支在本地取不到(浅克隆 / 单分支检出)→ 判不了,放行并说明;
+ *   - HEAD 本身就是目标分支的 tip(`= 0` 的另一种成因是「源分支落后目标分支」,
+ *     平台允许这种 PR,它的意义是让 CI 在落后分支上重跑)→ 只有当 `origin/<目标分支>`
+ *     也在本地且 HEAD 是它的祖先时才放行;否则按上面的口径阻断。
+ */
+function evaluatePr(targetBranch) {
+  const branch = currentBranch();
+  const parents = parentCount();
+  const target = targetBranch || PROTECTED_BRANCH;
+
+  /** 目标分支的引用:优先 `origin/<target>`(容器里只有这一份),再退回本地同名分支。 */
+  const targetRef = ["origin/" + target, target].find((ref) => git(["rev-parse", "--verify", "--quiet", ref]));
+
+  return judgePrByAhead(target, targetRef, { branch, parents });
+}
+
+/** 把「源分支是否超出目标分支」这一步单独拆出来,便于直接断言(不需要造仓库)。 */
+function judgePrByAhead(target, targetRef, ctx) {
+  if (!targetRef) {
+    return {
+      ...ctx,
+      blocked: false,
+      reason: "本地取不到目标分支 " + target + "(浅克隆 / 单分支检出),无法判定(保守放行)",
+    };
+  }
+  const aheadRaw = git(["rev-list", "--count", targetRef + "..HEAD"]);
+  const ahead = Number.parseInt(aheadRaw, 10);
+  if (!Number.isFinite(ahead)) {
+    return { ...ctx, blocked: false, reason: "无法计算 " + targetRef + "..HEAD 的提交数(保守放行)" };
+  }
+  if (ahead > 0) {
+    return {
+      ...ctx,
+      blocked: false,
+      ahead,
+      reason: "源分支有 " + ahead + " 个提交不在 " + target + " 上(正常 PR)",
+    };
+  }
+  return {
+    ...ctx,
+    blocked: true,
+    ahead,
+    reason: "源分支没有任何超出 " + target + " 的提交 —— 源分支就是 " + target,
+  };
+}
+
 /** 阻断时打印人类可读的出口(怎么改),不只报错。 */
 function printBlockedTip(branch) {
   console.error("");
@@ -131,13 +219,27 @@ function main() {
     return;
   }
 
-  // --pr-check / --ci-alias:服务端复核的调用形态。判据与本地钩子完全相同——
-  // 同一个脚本、同一份 evaluate(),不另写一条「CI 专用」的分支名判断。
-  if (process.argv.includes("--pr-check") || process.argv.includes("--ci-alias")) {
+  // --pr-check:服务端复核。判据与本地钩子**不同**(见 evaluatePr 的说明):
+  // 这里 HEAD 是预合并提交,分支名恒等于目标分支,只能按提交拓扑判。
+  if (process.argv.includes("--pr-check")) {
+    const target = argValue("--target") || PROTECTED_BRANCH;
+    const pr = evaluatePr(target);
     console.log(
-      "[branch-guard] v" + GUARD_VERSION + " PR 源分支复核:分支 " +
-      (result.branch || "(detached)") + ",父提交数 " + result.parents
+      "[branch-guard] v" + GUARD_VERSION + " PR 源分支复核:HEAD 分支 " +
+      (pr.branch || "(detached)") + ",父提交数 " + pr.parents +
+      ",目标分支 " + target
     );
+    if (pr.blocked) {
+      console.error("");
+      console.error("[branch-guard] 阻断:" + pr.reason + "(规范 13.6)。");
+      console.error("[branch-guard] " + PROTECTED_BRANCH + " 只接受「分支开发 → PR → 评审 → 合并」的变更。");
+      console.error("[branch-guard] 把改动放到一条特性分支上再开 PR:");
+      console.error("[branch-guard]   git checkout -b feat/<简短描述>     # 新建工作分支");
+      console.error("[branch-guard]   git push origin HEAD                # 推送并创建 PR");
+      process.exit(1);
+    }
+    console.log("[branch-guard] OK(" + pr.reason + ")");
+    return;
   }
 
   if (result.blocked) {

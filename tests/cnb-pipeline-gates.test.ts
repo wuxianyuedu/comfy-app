@@ -173,12 +173,13 @@ describe("分支守卫：不可信事件也不许靠流水线里的那行命令"
     expect(names.indexOf("分支守卫")).toBe(1);
   });
 
-  it("调用的是同一脚本的 PR 复核形态（判据不另写一份）", () => {
-    expect(steps.find((s) => s.name === "分支守卫")?.body).toContain(
-      "node scripts/check-branch-guard.cjs --pr-check",
-    );
-    // 该调用形态必须在脚本侧真的被识别，否则就是「看起来在跑，实际走了默认分支」。
-    expect(GUARD_SCRIPT).toContain('--pr-check');
+  it("调用的是同一脚本的 PR 复核形态，并显式传入目标分支", () => {
+    const body = steps.find((s) => s.name === "分支守卫")?.body ?? "";
+    expect(body).toContain("node scripts/check-branch-guard.cjs --pr-check");
+    // 目标分支必须由配置写死传入：CNB_PULL_REQUEST_TARGET_SHA 是一个 sha 而不是
+    // 分支名，拿它当 branch 用会静默失效（没有判据能发现「传进来的不是分支名」）。
+    expect(body).toContain("--target master");
+    expect(GUARD_SCRIPT).toContain("--pr-check");
   });
 
   it("判据版本与脚本一致（版本一变，调用行必须跟着改）", () => {
@@ -187,7 +188,7 @@ describe("分支守卫：不可信事件也不许靠流水线里的那行命令"
     expect(GUARD_SCRIPT).toContain(`"[branch-guard] v" + GUARD_VERSION`);
   });
 
-  it("脚本自己独立判定源分支，不读 CNB_PULL_REQUEST 之类的外部事实", () => {
+  it("脚本自己独立判定，不读 CNB_PULL_REQUEST 之类的外部事实", () => {
     // pull_request 事件的流水线配置取自源分支：触发者能删掉 .cnb.yml 里的调用行。
     // 守卫必须是「删了就红」，不能是「删了就静默不检查」。
     // 只判「有没有读这个变量」：注释里提到它是为了说明**为什么不读**（见脚本文档块），
@@ -198,6 +199,16 @@ describe("分支守卫：不可信事件也不许靠流水线里的那行命令"
     expect(executable).not.toContain("CNB_PULL_REQUEST");
     expect(executable).not.toContain("process.env");
     expect(GUARD_SCRIPT).toContain("PROTECTED_BRANCH");
+  });
+
+  it("服务端判据不依赖分支名（HEAD 在预合并提交上恒等于目标分支）", () => {
+    // CNB 在 pull_request 上 checkout 的是预合并提交，容器里 symbolic-ref HEAD
+    // 恒等于目标分支——照搬本地那条「HEAD 在 master 上 = 直连主干」会把每一条
+    // 正常 PR 都拦死（PR #633 第一次跑就是这么红的）。
+    const fn = GUARD_SCRIPT.slice(GUARD_SCRIPT.indexOf("function evaluatePr"));
+    expect(fn).not.toContain("currentBranch() !== PROTECTED_BRANCH");
+    expect(fn).toContain("rev-list");
+    // 拓扑判据由 tests/check-branch-guard.test.ts 用真仓库跑三种形态。
   });
 });
 

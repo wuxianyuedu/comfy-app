@@ -12,9 +12,13 @@
   锁成可失败断言——`.cnb.yml` 是一条三十步清单，删掉一行不会让构建变红，只会永久
   少一类回归信号。
 - **分支守卫的判据自持**：`pull_request` 属 CNB 的「不可信事件」，流水线配置取自源分支
-  （触发者能删掉那行调用）。`scripts/check-branch-guard.cjs` 因此自己独立判定源分支
-  （不读 `CNB_PULL_REQUEST`），并新增 `--pr-check` 调用形态与判据版本号；`.cnb.yml`
-  把它排在**第 1 条**，删掉即失败。
+  （触发者能删掉那行调用）。`scripts/check-branch-guard.cjs` 因此自己独立判定
+  （不读 `CNB_PULL_REQUEST`），并新增 `--pr-check --target master` 调用形态与判据版本号；
+  `.cnb.yml` 把它排在依赖安装之后的第一条，删掉即失败。
+  **服务端判的是提交拓扑，不是分支名**：CNB 在 `pull_request` 上 checkout 的是预合并提交，
+  容器里 `symbolic-ref HEAD` 恒等于目标分支——照搬本地那条「HEAD 在 master 上 = 直连主干」
+  会把每一条正常 PR 都拦死（本 PR 第一次跑就是这么红的）。现在改判
+  `git rev-list --count origin/master..HEAD`：`> 0` = 正常 PR，`= 0` = 源分支就是目标分支。
 - **文档同步**：`docs/standards/11` §11.7、`13` §13.5/§13.6.1、`12` §12.8、`15` §15.6、
   主规范 §11.2 与 `.githooks/pre-commit` 里所有「CI 唯一事实来源 = `.github/workflows/ci.yml`」
   的口径改为 `.cnb.yml`；新增事实 `path.cnb.ci`（`docs/reference-facts.md` +
