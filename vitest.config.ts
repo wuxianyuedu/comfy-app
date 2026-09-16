@@ -8,7 +8,10 @@ export default defineConfig({
       "~": path.resolve(import.meta.dirname, "src"),
       // server-only 包在 vitest node 环境会抛错（它就是干这个的）；
       // 数据访问层的硬约束在 Next 构建期仍然生效，测试里换空实现。
-      "server-only": path.resolve(import.meta.dirname, "tests/stubs/server-only.ts"),
+      "server-only": path.resolve(
+        import.meta.dirname,
+        "tests/stubs/server-only.ts",
+      ),
     },
   },
   test: {
@@ -109,11 +112,21 @@ export default defineConfig({
           statements: 40,
           branches: 30,
         },
+        // 从「30/30/30/25」抬到实测值：四组低覆盖文件进了用例 ——
+        //   · `secrets`（曾 9.5/0/0）：GCM 往返 + 每次新 IV + 篡改密文/换密钥
+        //     返回 null 而不抛错 + 密钥文件 0600 落盘 + env / 进程内随机兜底；
+        //   · `video-task-util`（曾 0）：轮询两候选、窗口耗尽报 pending、单次
+        //     失败不终止、模型名路径穿越清洗、落盘失败一律静默；
+        //   · `prompts`（曾 13.5/0）：模型不听话（围栏 / 前言 / 越界景别 /
+        //     非字符串字段）时全部走兜底而非 `[object Object]`；
+        //   · `browser`（曾 2.1/0）：SSE 跨 chunk 半个 JSON 的拼帧、坏帧跳过、
+        //     非 2xx 必须抛错。
+        // 数字仍取「实测值向下取整到 5 的倍数」，只升不降（§18.6）。
         "src/lib/llm/**": {
-          lines: 30,
-          functions: 30,
-          statements: 30,
-          branches: 25,
+          lines: 55,
+          functions: 55,
+          statements: 55,
+          branches: 50,
         },
         "src/lib/project-canvas/**": {
           lines: 70,
