@@ -56,7 +56,13 @@ afterEach(() => {
 });
 
 /** 造一个「Windows 上的 pnpm」目录：corepack 的三个文件同名不同扩展。 */
-function makeWindowsPnpmDir(options: { shim?: "broken" | "working" | "none"; ps1?: boolean; cmd?: boolean } = {}) {
+function makeWindowsPnpmDir(
+  options: {
+    shim?: "broken" | "working" | "none";
+    ps1?: boolean;
+    cmd?: boolean;
+  } = {},
+) {
   const dir = path.join(tmp, "bin");
   fs.mkdirSync(dir, { recursive: true });
   if (options.shim === "broken") {
@@ -76,12 +82,18 @@ function makeWindowsPnpmDir(options: { shim?: "broken" | "working" | "none"; ps1
     fs.writeFileSync(path.join(dir, "pnpm.ps1"), "Write-Output '12.4.1'\n");
   }
   if (options.cmd) {
-    fs.writeFileSync(path.join(dir, "pnpm.CMD"), "@ECHO off\r\necho 12.4.1\r\n");
+    fs.writeFileSync(
+      path.join(dir, "pnpm.CMD"),
+      "@ECHO off\r\necho 12.4.1\r\n",
+    );
   }
   return dir;
 }
 
-const WIN_ENV = (dir: string) => ({ PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" });
+const WIN_ENV = (dir: string) => ({
+  PATH: dir,
+  PATHEXT: ".COM;.EXE;.BAT;.CMD",
+});
 
 /** 造一个「假的 PowerShell 宿主」：`powershellHost()` 只认二进制形态（MZ 头）。 */
 function makePowerShellHost(dir: string) {
@@ -140,7 +152,9 @@ describe("whichCommand 只认「真的能跑」的候选", () => {
   it("不可执行的 shim 不会被选中（旧实现在此选中它 → EACCES）", () => {
     const dir = makeWindowsPnpmDir({ shim: "broken", cmd: true });
     // 不可执行的 shim：明确排除。
-    expect(whichCommand("pnpm", { env: WIN_ENV(dir), platform: "win32" })).toBeNull();
+    expect(
+      whichCommand("pnpm", { env: WIN_ENV(dir), platform: "win32" }),
+    ).toBeNull();
   });
 
   it("能跑的 shim 会被选中（不会被垫底的 .CMD 抢走）", () => {
@@ -180,7 +194,10 @@ describe("批处理形态不再被当成「可用」（ISSUE #576 第二轮，�
     const dir = makeInstalledPnpmDir({ ps1: false });
     const cmd = path.join(dir, "pnpm.CMD");
     expect(executableKind(cmd)).toBe("batch");
-    const usable = usableCommand(cmd, ["--version"], { env: WIN_ENV(dir), platform: "win32" });
+    const usable = usableCommand(cmd, ["--version"], {
+      env: WIN_ENV(dir),
+      platform: "win32",
+    });
     expect(usable.ok).toBe(false);
     // 拒绝的理由是形态（而不是拿 `exit=?` 交差），上层据此才拼得出人话。
     expect(usable.reason).toBe("batch-script");
@@ -189,9 +206,15 @@ describe("批处理形态不再被当成「可用」（ISSUE #576 第二轮，�
   it("同目录的 `.ps1` 就是回退：经 PowerShell 宿主起，不再报「未发现可回退形态」", () => {
     const dir = makeInstalledPnpmDir();
     const hostDir = makePowerShellHost(path.join(tmp, "host"));
-    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const env = {
+      PATH: `${dir}${path.delimiter}${hostDir}`,
+      PATHEXT: ".COM;.EXE;.BAT;.CMD",
+    };
     const cmd = path.join(dir, "pnpm.CMD");
-    const usable = usableCommand(cmd, ["--version"], { env, platform: "win32" });
+    const usable = usableCommand(cmd, ["--version"], {
+      env,
+      platform: "win32",
+    });
     expect(usable.ok).toBe(true);
     expect(usable.command).toBe(path.join(hostDir, "pwsh.EXE"));
     expect(usable.prefixArgs).toEqual([
@@ -206,7 +229,10 @@ describe("批处理形态不再被当成「可用」（ISSUE #576 第二轮，�
   it("起服务/探测走同一个形态：commandInvocation 把 `.CMD` 映射到宿主 + `.ps1`", () => {
     const dir = makeInstalledPnpmDir();
     const hostDir = makePowerShellHost(path.join(tmp, "host"));
-    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const env = {
+      PATH: `${dir}${path.delimiter}${hostDir}`,
+      PATHEXT: ".COM;.EXE;.BAT;.CMD",
+    };
     const invocation = commandInvocation(path.join(dir, "pnpm.CMD"), ["-v"], {
       env,
       platform: "win32",
@@ -224,8 +250,14 @@ describe("批处理形态不再被当成「可用」（ISSUE #576 第二轮，�
     // 造一个名字明显不对的同胞：`pnpm.CMD.ps1`。它**不该**被当成回退目标。
     fs.writeFileSync(path.join(dir, "pnpm.CMD.ps1"), "Write-Output '1'\n");
     const hostDir = makePowerShellHost(path.join(tmp, "host"));
-    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
-    const usable = usableCommand(path.join(dir, "pnpm.CMD"), ["--version"], { env, platform: "win32" });
+    const env = {
+      PATH: `${dir}${path.delimiter}${hostDir}`,
+      PATHEXT: ".COM;.EXE;.BAT;.CMD",
+    };
+    const usable = usableCommand(path.join(dir, "pnpm.CMD"), ["--version"], {
+      env,
+      platform: "win32",
+    });
     expect(usable.ok).toBe(false);
     expect(usable.reason).toBe("batch-script");
   });
@@ -256,7 +288,10 @@ describe("探测结果区分成因（probePnpm / probeCommand）", () => {
 
   it("命令能起但报错退出：reason=exit-nonzero 且带出实际输出", () => {
     const script = path.join(tmp, "pnpm");
-    fs.writeFileSync(script, "#!/bin/sh\necho 'Failed to switch pnpm to pnpm@9.9.9 ENOENT' >&2\nexit 1\n");
+    fs.writeFileSync(
+      script,
+      "#!/bin/sh\necho 'Failed to switch pnpm to pnpm@9.9.9 ENOENT' >&2\nexit 1\n",
+    );
     fs.chmodSync(script, 0o755);
     const probe = probeCommand(script);
     expect(probe.ok).toBe(false);
@@ -285,7 +320,9 @@ describe("修复提示与自愈判据", () => {
   it("版本号解析自 package.json 的 packageManager（没有 <项目版本> 占位符）", () => {
     const expected = packageManagerVersion(ROOT);
     expect(expected, "package.json 必须声明 packageManager").toBeTruthy();
-    const tip = buildTip(probePnpm({ env: { PATH: tmp }, platform: "linux" }), { expected });
+    const tip = buildTip(probePnpm({ env: { PATH: tmp }, platform: "linux" }), {
+      expected,
+    });
     expect(tip).toContain(`corepack prepare pnpm@${expected} --activate`);
     expect(tip).not.toContain("<项目版本>");
   });
@@ -320,7 +357,10 @@ describe("修复提示与自愈判据", () => {
 });
 
 describe("编排器与启动页的接线契约", () => {
-  const launcher = fs.readFileSync(path.join(ROOT, "scripts", "dev-launcher.mjs"), "utf8");
+  const launcher = fs.readFileSync(
+    path.join(ROOT, "scripts", "dev-launcher.mjs"),
+    "utf8",
+  );
   const splash = fs.readFileSync(
     path.join(ROOT, "src-tauri", "splash-assets", "splash.html"),
     "utf8",
@@ -338,7 +378,7 @@ describe("编排器与启动页的接线契约", () => {
   it("门禁失败时把多行提示交给启动页（message 只放一行结论）", () => {
     const run = launcher.slice(
       launcher.indexOf("const gateProblem = runToolchainGate(ROOT)"),
-      launcher.indexOf("log(\"工具链门禁：pnpm 可用"),
+      launcher.indexOf('log("工具链门禁：pnpm 可用'),
     );
     expect(run).toContain("staleShell: gateProblem");
     expect(run).toContain('gateProblem.split("\\n")[0]');
@@ -358,10 +398,14 @@ describe("编排器与启动页的接线契约", () => {
   });
 
   it("自查入口是跨平台薄壳，且登记在 package.json 与 §9.5 对照表", () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
+    ) as {
       scripts: Record<string, string>;
     };
-    expect(pkg.scripts["check:toolchain"]).toBe("node scripts/check-pnpm-available.mjs");
+    expect(pkg.scripts["check:toolchain"]).toBe(
+      "node scripts/check-pnpm-available.mjs",
+    );
     const selfCheck = fs.readFileSync(
       path.join(ROOT, "scripts", "check-pnpm-available.mjs"),
       "utf8",
@@ -380,18 +424,26 @@ describe("编排器与启动页的接线契约", () => {
 /** 真跑自查脚本：可用 → 0；PATH 上没有 pnpm → 非 0 且打印修复动作。 */
 describe("pnpm check:toolchain 真跑", () => {
   it("当前环境（pnpm 可用）退出 0 并报告版本", () => {
-    const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-pnpm-available.mjs")], {
-      encoding: "utf8",
-    });
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      {
+        encoding: "utf8",
+      },
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain("pnpm 可用");
   });
 
   it("pnpm 不可用时非零退出，并给出含版本号的修复命令", () => {
-    const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-pnpm-available.mjs")], {
-      encoding: "utf8",
-      env: { ...process.env, PATH: tmp, PATHEXT: "" },
-    });
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      {
+        encoding: "utf8",
+        env: { ...process.env, PATH: tmp, PATHEXT: "" },
+      },
+    );
     expect(r.status).not.toBe(0);
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out).toContain("corepack");
@@ -434,7 +486,9 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
       [
         "#!/bin/sh",
         `if [ "$1" = "--version" ]; then echo 0.34.0; exit 0; fi`,
-        options.aligns ? `: > "${marker}"` : `echo "prepare failed" >&2; exit 1`,
+        options.aligns
+          ? `: > "${marker}"`
+          : `echo "prepare failed" >&2; exit 1`,
         "exit 0",
         "",
       ].join("\n"),
@@ -453,7 +507,9 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
   }
 
   it("对齐成功：报已对齐（带前后版本号），不留下「你只能自己修」的 WARN", () => {
-    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
+    const { status, out } = runSelfCheck(
+      makeAlignableToolchain({ aligns: true }),
+    );
     expect(status).toBe(0);
     expect(out).toContain("已对齐");
     expect(out).toContain("10.34.5");
@@ -462,14 +518,20 @@ describe("pnpm check:toolchain：版本不一致时复用启动器的对齐口�
   });
 
   it("对齐失败：复核后才 WARN，并给出手动命令（版本号取自 package.json）", () => {
-    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: false }));
+    const { status, out } = runSelfCheck(
+      makeAlignableToolchain({ aligns: false }),
+    );
     expect(status).toBe(0); // 与启动器一致：版本不一致不阻断
     expect(out).toContain("自动对齐未生效");
-    expect(out).toContain(`corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`);
+    expect(out).toContain(
+      `corepack prepare pnpm@${packageManagerVersion(ROOT)} --activate`,
+    );
   });
 
   it("node_modules 未装时点出下一道门禁，不让「[OK] pnpm 可用」被读成「可以启动了」", () => {
-    const { status, out } = runSelfCheck(makeAlignableToolchain({ aligns: true }));
+    const { status, out } = runSelfCheck(
+      makeAlignableToolchain({ aligns: true }),
+    );
     expect(status).toBe(0);
     // 本仓库测试环境两态都可能（CI 装了 / 干净检出没装），只钉「不存在假装没事」：
     // 未装时必须出现 node_modules 的 WARN 与修复动作。
@@ -519,9 +581,13 @@ describe("pnpm check:toolchain：打印探测身份，版本漂移可自解释",
   });
 
   it("自检打印「选中的 pnpm」一行（版本漂移的先查对象）", () => {
-    const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-pnpm-available.mjs")], {
-      encoding: "utf8",
-    });
+    const r = spawnSync(
+      process.execPath,
+      [path.join(ROOT, "scripts", "check-pnpm-available.mjs")],
+      {
+        encoding: "utf8",
+      },
+    );
     expect(r.status, r.stderr).toBe(0);
     expect(`${r.stdout ?? ""}${r.stderr ?? ""}`).toContain("选中的 pnpm：");
   });
@@ -552,7 +618,10 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     // 宿主在同机 PATH 上（判据只认二进制形态的 pwsh/powershell）。
     const dir = makeInstalledPnpmDir();
     const hostDir = makePowerShellHost(path.join(tmp, "host"));
-    const env = { PATH: `${dir}${path.delimiter}${hostDir}`, PATHEXT: ".COM;.EXE;.BAT;.CMD" };
+    const env = {
+      PATH: `${dir}${path.delimiter}${hostDir}`,
+      PATHEXT: ".COM;.EXE;.BAT;.CMD",
+    };
     const args = ["exec", "next", "dev", "--turbo", "-p", "3734"];
     const inv = pnpmInvocation(args, { env, platform: "win32" });
     expect(inv, "PATH 上有可用形态时必须给出调用方式").not.toBeNull();
@@ -579,21 +648,103 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
 
   it("POSIX 上不退化为 pnpm.cmd（判据不按平台分叉）", () => {
     const dir = makeWindowsPnpmDir({ shim: "working" });
-    const inv = pnpmInvocation(["dev"], { env: { PATH: dir }, platform: "linux" });
+    const inv = pnpmInvocation(["dev"], {
+      env: { PATH: dir },
+      platform: "linux",
+    });
     expect(inv).not.toBeNull();
     expect(inv!.command).toBe(path.join(dir, "pnpm"));
   });
 
   it("dev.mjs / start.mjs / analyze-bundle.mjs 不再各自拼 pnpm 可执行名", () => {
-    for (const rel of ["scripts/dev.mjs", "scripts/start.mjs", "scripts/analyze-bundle.mjs"]) {
+    for (const rel of [
+      "scripts/dev.mjs",
+      "scripts/start.mjs",
+      "scripts/analyze-bundle.mjs",
+    ]) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain("pnpmInvocation");
+      expect(src, `${rel}: 必须复用 pnpmInvocation`).toContain(
+        "pnpmInvocation",
+      );
       // 写死平台后缀的旧写法必须消失（它是这条缺陷的形态本身）
       expect(src, `${rel}: 不得再写死 pnpm.cmd`).not.toContain('"pnpm.cmd"');
       expect(src, `${rel}: 不得再按平台三元表达式拼可执行名`).not.toMatch(
         /win32"\s*\?\s*"pnpm/,
       );
     }
+  });
+
+  /**
+   * 全仓范围：**任何**由 Node 去起 pnpm 的地方都必须经同一处形态判据（ISSUE #638）。
+   *
+   * 前一条用例只钉住三个**服务类**入口；而门禁与工具脚本（`check-format.cjs`
+   * `check-reformat-only.cjs` / `check-app-port-vectors.cjs` / `heal-db.cjs` /
+   * `db-push.mjs` / `run-tests.mjs` / `quality-gate.mjs` / `generate-docs.mjs` /
+   * `build-desktop.mjs`）当时**都没进这份清单**，于是同一个坑换了地方复发：
+   *
+   *   [format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL
+   *
+   * `check-format.cjs` 里写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`
+   * —— 那正是 §2.1.1 早已判定「Node 起不来」的批处理形态。`pnpm format:ratchet`
+   * 是格式棘轮入口，也是 `pnpm check:all` 的一环，于是 Windows 上提交门槛直接崩。
+   *
+   * 判据按**形态**扫，不按文件白名单：`pnpm.cmd` 字面量、「按平台三元的 pnpm 可执行名」、
+   * 以及**裸 spawn/exec 一个 pnpm**（没有 `pnpmInvocation` / `runPnpmSync`）。
+   * 「会静默失效的清单只许定义一次」——所以这里用扫描而不是再列一张会漂移的文件清单。
+   */
+  it("全仓 scripts/**：由 Node 起 pnpm 一律经 shell.mjs 的形态判据", () => {
+    const offenders: string[] = [];
+    const walk = (dir: string): string[] => {
+      const out: string[] = [];
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          if (["node_modules", "__pycache__"].includes(e.name)) continue;
+          out.push(...walk(full));
+        } else out.push(full);
+      }
+      return out;
+    };
+
+    for (const abs of walk(path.join(ROOT, "scripts"))) {
+      if (!/\.(mjs|cjs|ts)$/.test(abs)) continue;
+      const rel = path.relative(ROOT, abs).split(path.sep).join("/");
+      // 判据模块自己：它必须写出这些形态（否则「起不来」这件事无法被表达）。
+      if (rel === "scripts/launcher-core/shell.mjs") continue;
+      const raw = fs.readFileSync(abs, "utf8");
+      // 注释里会**引用**旧写法作反面说明，判据只看代码（与 dev.mjs 那条同口径）。
+      const code = raw
+        .split("\n")
+        .map((line) =>
+          line.replace(/^\s*\/\/.*$/, "").replace(/([^:])\/\/.*$/, "$1"),
+        )
+        .join("\n");
+
+      // ① 写死平台后缀 / 按平台三元拼可执行名 —— 形态本身就是缺陷。
+      if (/"pnpm\.cmd"|'pnpm\.cmd'/.test(code))
+        offenders.push(`${rel}: 写死了 pnpm.cmd`);
+      if (/win32"?\s*\?\s*"pnpm/.test(code))
+        offenders.push(`${rel}: 按平台三元拼 pnpm 可执行名`);
+
+      // ② 裸 spawn/exec 一个 pnpm 名字（无论有没有扩展名）而没走同一处判据。
+      //    `runPnpmSync` / `pnpmInvocation` 是**唯一**被允许的起 pnpm 的方式。
+      const usesShared = /pnpmInvocation|runPnpmSync/.test(code);
+      const spawnsByName =
+        /(?:spawn|spawnSync|exec|execSync|execFile|execFileSync)\s*\(\s*["'`]pnpm/i.test(
+          code,
+        );
+      if (spawnsByName && !usesShared) {
+        offenders.push(
+          `${rel}: 直接起 pnpm —— 必须复用 pnpmInvocation / runPnpmSync`,
+        );
+      }
+    }
+
+    expect(
+      offenders,
+      "这些文件自己在拼 pnpm 可执行名（Windows 上会选中 Node 起不来的批处理形态）：\n" +
+        offenders.map((o) => `  · ${o}`).join("\n"),
+    ).toEqual([]);
   });
 
   it("dev.mjs：spawn 失败（命令起不来）必须非零退出，且把 error.code 与真实命令打出来", () => {
@@ -610,6 +761,8 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
     expect(code, "不得再出现 ?? 0 吞掉「没起来」").not.toMatch(
       /exit\(result\.status\s*\?\?\s*0\)/,
     );
-    expect(code, "status 为 null 必须与非零退出分开").toContain("result.status === null");
+    expect(code, "status 为 null 必须与非零退出分开").toContain(
+      "result.status === null",
+    );
   });
 });

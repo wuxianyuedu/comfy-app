@@ -40,6 +40,24 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+// pnpm 可执行形态的唯一判据（见 scripts/launcher-core/shell.mjs 的 runPnpmSync）。
+// 门禁脚本是 .cjs，而判据模块是 ESM：`require()` 拿不到它，必须用动态 import() ——
+// 那件事让**整个脚本**变成异步，因此下面所有逻辑都被包进 `async function main()`
+// 由末尾统一调用（顶层不再有 `process.exit` / `console` 的同步收尾）。
+let runPnpmSync = null;
+/** 动态加载判据模块（ESM）。只加载一次；加载失败时以非零码退出并给出可行动提示。 */
+async function loadShell() {
+  if (runPnpmSync) return runPnpmSync;
+  try {
+    ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
+  } catch (e) {
+    console.error(
+      `[format] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${e.message}`,
+    );
+    process.exit(2);
+  }
+  return runPnpmSync;
+}
 
 /* 扫描根取 cwd:门禁在仓库根被调用,而 prettier / git 都按 cwd 解析仓库
  * (与 check-circular-deps.cjs 同口径)。基线取 __dirname 旁,与脚本同目录。 */
@@ -128,13 +146,31 @@ function isIgnored(rel) {
 function collectUnformatted() {
   const found = new Set();
   for (const glob of GLOBS) {
-    const res = spawnSync(
-      process.platform === "win32" ? "pnpm.cmd" : "pnpm",
-      ["exec", "prettier", "--list-different", "--cache", "--cache-location", CACHE_DIR, glob],
-      { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    // pnpm 的可执行形态由 launcher-core/shell.mjs 一处判定（规范 §2.1.1 / §9.5）：
+    // 这里曾写死 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`，而 Windows 上
+    // 批处理只有 cmd.exe 会解释、Node 起它必然 EINVAL —— 提交门槛直接崩在
+    // `[format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL`（ISSUE #638）。
+    const res = runPnpmSync(
+      [
+        "exec",
+        "prettier",
+        "--list-different",
+        "--cache",
+        "--cache-location",
+        CACHE_DIR,
+        glob,
+      ],
+      { cwd: ROOT, timeoutMs: 600_000 },
     );
     if (res.error) {
-      console.error(`[format] 无法执行 prettier:${res.error.message}`);
+      // 「命令压根没起来」与「prettier 报错退出」分开报：前者 stderr 通常是空的，
+      // 只说一句 `无法执行 prettier:` 会让根因（选错了 pnpm 形态）看起来像
+      // 「prettier 坏了」。
+      console.error(
+        `[format] 无法执行 prettier（${res.error.code ?? "UNKNOWN"}）：${res.error.message}\n` +
+          `[format]   实际命令：${res.command} ${res.args.join(" ")}\n` +
+          `[format]   先跑 pnpm check:toolchain 看选中的 pnpm 形态。`,
+      );
       process.exit(2);
     }
     // `--list-different` 在「存在差异」时返回 1、无差异返回 0;其余非零码才是
@@ -142,7 +178,9 @@ function collectUnformatted() {
     // 读成「全库文件都未格式化」。
     const code = res.status ?? 1;
     if (code !== 0 && code !== 1) {
-      console.error(`[format] prettier 执行失败(exit ${code}):\n${res.stderr || res.stdout || ""}`);
+      console.error(
+        `[format] prettier 执行失败(exit ${code}):\n${res.stderr || res.stdout || ""}`,
+      );
       process.exit(2);
     }
     for (const line of (res.stdout || "").split("\n")) {
@@ -170,13 +208,20 @@ function readBaseline() {
  */
 function baselineUntracked() {
   const rel = path.relative(ROOT, BASELINE);
-  const res = spawnSync("git", ["ls-files", "--error-unmatch", rel], { cwd: ROOT, encoding: "utf8" });
-  if (res.status !== 0) return `[format] 基线未被 git 跟踪:${rel}（棘轮文件必须入库）`;
+  const res = spawnSync("git", ["ls-files", "--error-unmatch", rel], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.status !== 0)
+    return `[format] 基线未被 git 跟踪:${rel}（棘轮文件必须入库）`;
   return null;
 }
 
-function main() {
-  console.log("[format] 运行 prettier --list-different（首次较慢，之后走缓存）…");
+async function main() {
+  await loadShell();
+  console.log(
+    "[format] 运行 prettier --list-different（首次较慢，之后走缓存）…",
+  );
   const current = collectUnformatted();
   const prev = readBaseline();
   const prevFiles = prev && prev.files ? prev.files : null;
@@ -224,7 +269,9 @@ function main() {
   }
 
   if (!prevFiles) {
-    console.error("[format] 基线文件缺失:先执行 node scripts/check-format.cjs --update");
+    console.error(
+      "[format] 基线文件缺失:先执行 node scripts/check-format.cjs --update",
+    );
     process.exit(1);
   }
 

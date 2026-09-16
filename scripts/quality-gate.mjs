@@ -25,7 +25,7 @@ import { spawnSync } from "node:child_process";
 
 import { diffLockfiles, isEmptyDiff } from "./lockfile/lock-diff.mjs";
 import { renderDriftReport } from "./lockfile/render-lock-diff.mjs";
-import { whichCommand } from "./launcher-core/shell.mjs";
+import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -45,8 +45,14 @@ const GATES = {
    * 就是过了，而格式棘轮要求「你今天新增的文件必须干净」。只写在 pre-commit 里
    * 的话，用 `--no-verify` 或被未启用钩子的检出提交就绕过去了 —— 那恰好是它要防的。
    */
-  format: { label: "Prettier format ratchet", args: ["../scripts/check-format.cjs"] },
-  test: { label: "Vitest full run (excluding known baseline failures)", args: ["exec", "vitest", "run"] },
+  format: {
+    label: "Prettier format ratchet",
+    args: ["../scripts/check-format.cjs"],
+  },
+  test: {
+    label: "Vitest full run (excluding known baseline failures)",
+    args: ["exec", "vitest", "run"],
+  },
 };
 
 function parseArgs(argv) {
@@ -74,11 +80,15 @@ function fail(msg) {
  */
 function dependencyDrift() {
   const nm = path.join(ROOT, "node_modules");
-  if (!fs.existsSync(nm)) return { drift: true, reason: "node_modules 完全没装过" };
+  if (!fs.existsSync(nm))
+    return { drift: true, reason: "node_modules 完全没装过" };
   const installedLock = path.join(nm, ".pnpm", "lock.yaml");
   const rootLock = path.join(ROOT, "pnpm-lock.yaml");
   if (!fs.existsSync(installedLock)) {
-    return { drift: true, reason: "没有 node_modules/.pnpm/lock.yaml（install 中断或残缺）" };
+    return {
+      drift: true,
+      reason: "没有 node_modules/.pnpm/lock.yaml（install 中断或残缺）",
+    };
   }
   if (!fs.existsSync(rootLock)) return { drift: false, reason: "" };
   const diff = diffLockfiles(
@@ -89,17 +99,35 @@ function dependencyDrift() {
 }
 
 /** 跑一条门禁；返回退出码。 */
-/** 解析要用的 pnpm（Windows 上认 PATHEXT，`spawn("pnpm")` 会 ENOENT）。 */
+/**
+ * 解析要用的 pnpm —— **形态与 args 一起**给出来，不返回裸可执行名。
+ *
+ * 这里曾是本仓库第 N 个各写一份的 pnpm 解析点：`whichCommand("pnpm")` 只解决
+ * 「PATH 上哪个文件」，而 Windows 上那个文件可能是核心形态起不来的 `.cmd`
+ * （批处理只有 cmd.exe 解释，Node 起它 EINVAL）—— 真正能跑的是同目录经
+ * PowerShell 宿主的 `.ps1`，`spawnSync` 还得连宿主与 `-File` 参数一起给。
+ * 判据只在 `pnpmInvocation()` 一处（规范 §2.1.1 / §9.5），这里不自己拼。
+ *
+ * @returns {{ command: string, prefixArgs: string[] } | null}
+ */
 function resolvePnpm() {
-  const pnpm = whichCommand("pnpm");
-  if (pnpm) return pnpm;
-  fail("未找到 pnpm 命令（需 corepack enable）。");
-  console.log("        修复：corepack enable && corepack prepare pnpm@<packageManager 版本> --activate");
+  const invocation = pnpmInvocation([]);
+  if (invocation)
+    return { command: invocation.command, prefixArgs: invocation.args };
+  fail("PATH 上找不到可用的 pnpm —— 门禁无法运行。");
+  console.log(
+    "        自查：pnpm check:toolchain（会打印选中的形态与探测结果）",
+  );
+  console.log(
+    "        修复：corepack enable && corepack prepare pnpm@<packageManager 版本> --activate",
+  );
   return null;
 }
 
 function runGate(pnpm, key) {
   const gate = GATES[key];
+  /** 实际的命令行形态：宿主（`.ps1` 形态时是 pwsh/powershell）+ pnpm 参数。 */
+  const invocation = (args) => [pnpm.command, ...pnpm.prefixArgs, ...args];
   // 门禁脚本是 `node scripts/xxx.cjs` 而不是 pnpm 子命令：用 node 直接跑，
   // 免得再套一层 pnpm exec（那层只带来解析开销与 Windows 的 .cmd 差异）。
   if (gate.args[0]?.endsWith(".cjs")) {
@@ -127,7 +155,21 @@ function runGate(pnpm, key) {
   console.log("");
   console.log(`==> ${gate.label}`);
   console.log(`>>> pnpm ${args.map((a) => `"${a}"`).join(" ")}`);
-  const result = spawnSync(pnpm, args, { cwd: ROOT, stdio: "inherit", windowsHide: true });
+  const [command, ...argv] = invocation(args);
+  const result = spawnSync(command, argv, {
+    cwd: ROOT,
+    stdio: "inherit",
+    windowsHide: true,
+  });
+  // 「命令没起来」与「跑完但非零退出」分开报：前者 stderr 通常是空的，
+  // `status ?? 1` 只给一个退出码等于没说原因（ISSUE #576 的形态）。
+  if (result.error) {
+    fail(
+      `起 ${command} 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
+    );
+    console.log(`        实际命令：${command} ${argv.join(" ")}`);
+    return 1;
+  }
   const code = result.status ?? 1;
   if (code === 0) console.log(`  [OK] ${gate.label} passed`);
   else console.log(`  [FAIL] ${gate.label} failed (exit ${code})`);
@@ -139,7 +181,9 @@ function main() {
   const keys = mode === "all" ? Object.keys(GATES) : [mode];
   for (const k of keys) {
     if (!GATES[k]) {
-      fail(`未知门禁：${mode}（可选：${Object.keys(GATES).join(" / ")} / all）`);
+      fail(
+        `未知门禁：${mode}（可选：${Object.keys(GATES).join(" / ")} / all）`,
+      );
       return 2;
     }
   }
@@ -150,10 +194,15 @@ function main() {
     console.log("==> 依赖一致性预检");
     fail(`依赖与 pnpm-lock.yaml 不一致（${drift.reason}）。`);
     if (drift.diff) {
-      console.log("  差异明细（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）：");
-      for (const line of renderDriftReport(drift.diff, { maxPerSection: 8 })) console.log(line);
+      console.log(
+        "  差异明细（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）：",
+      );
+      for (const line of renderDriftReport(drift.diff, { maxPerSection: 8 }))
+        console.log(line);
     }
-    console.log("        请先关闭所有正在运行的本项目窗口（dev server 会锁住原生模块），");
+    console.log(
+      "        请先关闭所有正在运行的本项目窗口（dev server 会锁住原生模块），",
+    );
     console.log("        然后在项目根目录执行：pnpm install");
     console.log("        详见 docs/guides/sync-after-pull.md");
     console.log("");

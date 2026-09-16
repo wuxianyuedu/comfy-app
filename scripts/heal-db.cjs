@@ -15,10 +15,20 @@
 //      - 索引已存在（index ... already exists）→ 把 push 计划里的全部 CREATE INDEX 以
 //        IF NOT EXISTS 幂等方式补齐到当前表上，使下次 push 无需重建表、不再重复建索引；
 //   4) 清理临时表后重试，直至成功或达到尝试上限。
-const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const D = require("better-sqlite3");
+
+// pnpm 可执行形态的唯一判据（scripts/launcher-core/shell.mjs 的 runPnpmSync）。
+// 这里曾写 `spawnSync("cmd", ["/c", "pnpm", ...])` —— 那不只是「Windows 专属」，
+// 在 POSIX 上 `cmd` 根本不存在（整条自愈路径静默失效）；而 `/c` 又经 shell 语义，
+// 「命令没起来」与「push 报错退出」混在一起。判据模块是 ESM，.cjs 用动态 import()。
+let runPnpmSync = null;
+async function loadShell() {
+  if (runPnpmSync) return runPnpmSync;
+  ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
+  return runPnpmSync;
+}
 
 const root = path.join(__dirname, "..");
 const dbPath = path.join(root, "db.sqlite");
@@ -27,7 +37,9 @@ function clearTempTables() {
   if (!fs.existsSync(dbPath)) return;
   const db = new D(dbPath);
   const tbls = db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '__new_%'")
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '__new_%'",
+    )
     .all()
     .map((r) => r.name);
   for (const t of tbls) {
@@ -41,11 +53,9 @@ function clearTempTables() {
 }
 
 function runPush() {
-  // 用 cmd /c 包裹，与 dev-launcher.ps1 一致（Windows 下 pnpm 是 .cmd）
-  return spawnSync("cmd", ["/c", "pnpm", "exec", "drizzle-kit", "push", "--force"], {
+  return runPnpmSync(["exec", "drizzle-kit", "push", "--force"], {
     cwd: root,
-    encoding: "utf8",
-    maxBuffer: 1 << 26,
+    timeoutMs: 600_000,
   });
 }
 
@@ -57,14 +67,17 @@ function healMissingColumn(out) {
     'INSERT\\s+INTO\\s+[`"]__new_(\\w+)[`"]\\s*\\([\\s\\S]*?\\)\\s*SELECT[\\s\\S]*?[`"]' +
       col +
       '[`"]',
-    "i"
+    "i",
   );
   const tblMatch = out.match(re);
   if (!tblMatch) return false;
   const table = tblMatch[1];
   const db = new D(dbPath);
   const cur = new Set(
-    db.prepare('PRAGMA table_info("' + table + '")').all().map((c) => c.name)
+    db
+      .prepare('PRAGMA table_info("' + table + '")')
+      .all()
+      .map((c) => c.name),
   );
   if (cur.has(col)) {
     db.close();
@@ -94,7 +107,15 @@ function healIndexes(out) {
     seen.add(key);
     try {
       db.exec(
-        "CREATE " + unique + 'INDEX IF NOT EXISTS "' + idx + '" ON "' + tbl + '" (' + cols + ")"
+        "CREATE " +
+          unique +
+          'INDEX IF NOT EXISTS "' +
+          idx +
+          '" ON "' +
+          tbl +
+          '" (' +
+          cols +
+          ")",
       );
       changed = true;
     } catch (e) {
@@ -106,26 +127,43 @@ function healIndexes(out) {
   return changed;
 }
 
-clearTempTables();
-let res = runPush();
-let out = (res.stdout || "") + (res.stderr || "");
-let attempts = 0;
-const MAX = 4;
-while (res.status !== 0 && attempts < MAX) {
-  const healedCol = healMissingColumn(out); // 先补列，索引才能建得上
-  const healedIdx = healIndexes(out);
-  if (!healedCol && !healedIdx) break;
+async function main() {
+  await loadShell();
+
   clearTempTables();
-  res = runPush();
-  out = (res.stdout || "") + (res.stderr || "");
-  attempts++;
+  let res = runPush();
+  // 「命令压根没起来」必须与「push 报错退出」分开：前者的 stdout/stderr 通常是空的，
+  // 下面那轮「按报错自愈」会反复无效重试，最后只说一句「仍失败：」（无内容）。
+  // 它在 ISSUE #638 的现场就是 EINVAL —— 起不来的永远是那个命令形态。
+  if (res.error) {
+    console.error(
+      `[heal] 起 pnpm 失败（${res.error.code ?? "UNKNOWN"}）：${res.error.message}\n` +
+        `[heal]   实际命令：${res.command} ${res.args.join(" ")}\n` +
+        `[heal]   先跑 pnpm check:toolchain 看选中的 pnpm 形态。`,
+    );
+    process.exit(1);
+  }
+  let out = (res.stdout || "") + (res.stderr || "");
+  let attempts = 0;
+  const MAX = 4;
+  while (res.status !== 0 && attempts < MAX) {
+    const healedCol = healMissingColumn(out); // 先补列，索引才能建得上
+    const healedIdx = healIndexes(out);
+    if (!healedCol && !healedIdx) break;
+    clearTempTables();
+    res = runPush();
+    out = (res.stdout || "") + (res.stderr || "");
+    attempts++;
+  }
+
+  if (res.status === 0) {
+    console.log("[heal] drizzle-kit push 成功");
+    process.exit(0);
+  } else {
+    console.error("[heal] drizzle-kit push 仍失败：");
+    console.error(out.slice(-2000));
+    process.exit(1);
+  }
 }
 
-if (res.status === 0) {
-  console.log("[heal] drizzle-kit push 成功");
-  process.exit(0);
-} else {
-  console.error("[heal] drizzle-kit push 仍失败：");
-  console.error(out.slice(-2000));
-  process.exit(1);
-}
+main();

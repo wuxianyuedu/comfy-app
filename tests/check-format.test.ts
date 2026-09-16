@@ -12,7 +12,14 @@
  * 规范：docs/standards/13-提交与-code-review.md §13.5
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,7 +77,7 @@ function git(...args: string[]): void {
 }
 
 // 脏内容：多余空格 + 多余空行，prettier 一定会改它。
-const DIRTY = 'export const PROBE={a:1,\n\n\n  b:2};\n';
+const DIRTY = "export const PROBE={a:1,\n\n\n  b:2};\n";
 const CLEAN = "export const PROBE = { a: 1, b: 2 };\n";
 
 beforeEach(() => {
@@ -79,6 +86,14 @@ beforeEach(() => {
   mkdirSync(join(workdir, "src", "lib"), { recursive: true });
   // 脚本与基线同目录（脚本按 __dirname 找基线），与真实布局 scripts/ 一致。
   copyFileSync(SCRIPT, join(workdir, "scripts", "check-format.cjs"));
+  // pnpm 形态判据模块按**相对脚本的路径**动态导入（scripts/launcher-core/shell.mjs）：
+  // 临时工作区里没有它，缺了就会以 exit 2 结束 —— 那验的是「脚本能不能加载」，
+  // 而不是本脚本的棘轮判定。软链一份，与真实布局一致。
+  mkdirSync(join(workdir, "scripts", "launcher-core"), { recursive: true });
+  symlinkSync(
+    join(process.cwd(), "scripts", "launcher-core", "shell.mjs"),
+    join(workdir, "scripts", "launcher-core", "shell.mjs"),
+  );
   git("init", "-q");
   git("config", "user.email", "t@local");
   git("config", "user.name", "t");
@@ -96,7 +111,11 @@ afterEach(() => {
 function seedBaseline(files: string[]): void {
   writeFileSync(
     join(workdir, "scripts", ".format-baseline.json"),
-    JSON.stringify({ files: Object.fromEntries(files.map((f) => [f, true])) }, null, 2),
+    JSON.stringify(
+      { files: Object.fromEntries(files.map((f) => [f, true])) },
+      null,
+      2,
+    ),
   );
   git("add", "-A");
   git("commit", "-qm", "baseline");
@@ -164,7 +183,10 @@ describe("prettier 格式棘轮", () => {
 
   it("基线未被 git 跟踪 → 阻断（棘轮文件必须入库，否则 CI 上会缺失）", () => {
     write("src/lib/keep.ts", CLEAN);
-    writeFileSync(join(workdir, "scripts", ".format-baseline.json"), JSON.stringify({ files: {} }));
+    writeFileSync(
+      join(workdir, "scripts", ".format-baseline.json"),
+      JSON.stringify({ files: {} }),
+    );
     const r = run();
     expect(r.code).toBe(1);
     expect(r.output).toContain("未被 git 跟踪");
