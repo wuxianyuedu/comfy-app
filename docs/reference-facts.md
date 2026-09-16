@@ -126,6 +126,9 @@
 > - **standards 规范正文**：`01`~`17` 章其余各篇（含路径/规范描述）
 > - **guides 规范指南**：`DEV-QUERIES.md`、`PRODUCTION-GAPS.md`、`TESTING.md`、
 >   `sync-after-pull.md`
+> - **guides 功能流程图**：`feature-workshop-flow.md`、`feature-workflow-library-flow.md`
+>   （与规范同样纳入：图里出现的路径 / 值若与源码脱钩，读者会照着**一张过期的图**
+>   把控方向，比没有这张图更糟）
 >
 > **不纳入**：`docs/audits/`（过程文件）、`docs/api/`（TypeDoc 自动生成）、
 > `docs/superpowers/`（设计归档）、`docs/generated/`（本体系自动生成产物）。
