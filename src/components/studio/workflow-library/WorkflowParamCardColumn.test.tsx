@@ -61,12 +61,13 @@ describe("WorkflowParamCardColumn", () => {
       />,
     );
     for (const entry of entries) {
-      expect(
-        container.querySelector(`[data-testid="param-node-${entry.id}"]`),
-      ).toBeTruthy();
+      const card = container.querySelector(
+        `[data-testid="param-node-${entry.id}"]`,
+      );
+      expect(card).toBeTruthy();
+      /* 卡片头与端口行读的是同一个名字，所以按卡片作用域断言，不按全屏唯一文本查。 */
+      expect(card!.textContent).toContain(entry.label);
     }
-    expect(screen.getByText("提示词")).toBeTruthy();
-    expect(screen.getByText("高度")).toBeTruthy();
   });
 
   it("卡片头取契约口清单的展示名（与「工坊封装」页签同一份）—— ISSUE #596", () => {
@@ -90,10 +91,11 @@ describe("WorkflowParamCardColumn", () => {
         io={io}
       />,
     );
-    expect(screen.getByText("提示词")).toBeTruthy();
+    /* 标题与端口行都用契约口清单的展示名；工作流里那个名字一处都不出现。 */
+    expect(screen.getAllByText("提示词").length).toBeGreaterThan(0);
     expect(
-      screen.getByText("尺寸（比例 + 分辨率 / (百万像素 + 倍数)）"),
-    ).toBeTruthy();
+      screen.getAllByText("尺寸（比例 + 分辨率 / (百万像素 + 倍数)）").length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("工作流里的端口名")).toBeNull();
   });
 
@@ -113,27 +115,31 @@ describe("WorkflowParamCardColumn", () => {
       `[data-testid="param-node-${promptCard.id}"]`,
     )!;
     expect(card.textContent).not.toContain("→ positive_prompt");
-    /* 落点名走在带类型的输出端口那一行（贴着端点）。 */
-    expect(
-      screen.getByTestId(`param-node-out-${promptCard.id}-0`).textContent,
-    ).toContain("positive_prompt");
+    /* 端口行只说「这个对外参数是什么、出去是什么类型」；落到工作流的哪一行
+     *  （pin 名）退到行的 title 提示里可查 —— 行上不写工作流内部名。 */
+    const row = screen.getByTestId(`param-node-out-${promptCard.id}-0`);
+    expect(row.textContent).toContain("提示词");
+    expect(row.textContent).toContain("STRING");
+    expect(row.textContent).not.toContain("positive_prompt");
+    expect(row.getAttribute("title")).toContain("positive_prompt");
   });
 
-  it("多端口条目仍在端口行尾标落点（多行之间要能区分）", () => {
-    const { container } = render(
+  it("端口行显示对外参数自己的名字，落点 pin 名只在 title 里可查", () => {
+    render(
       <WorkflowParamCardColumn
         entries={entries}
         resolved={wiredFor(entries)}
         io={io}
       />,
     );
-    /* 只有「尺寸」是同一个落点覆盖多个候选端口的口子；它把落点标在行尾。 */
+    /* 同一张卡片的标题与端口行说同一个名字（「高度」）；ComfyUI 内部的 pin 名
+     * （`height`）不落在行文字上，只作为「落到哪一行」的提示留在 title。 */
     const sizeCard = entries.find((entry) => entry.cls === "size-height")!;
     expect(sizeCard.pins.length).toBe(1);
-    const card = container.querySelector(
-      `[data-testid="param-node-${sizeCard.id}"]`,
-    )!;
-    expect(card.textContent).toContain("height");
+    const row = screen.getByTestId(`param-node-out-${sizeCard.id}-0`);
+    expect(row.textContent).toContain("高度");
+    expect(row.textContent).not.toContain("height");
+    expect(row.getAttribute("title")).toContain("height");
   });
 
   it("卡片带**有类型**的输出端口（提示词 → STRING）—— ISSUE #355 复审", () => {

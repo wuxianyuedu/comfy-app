@@ -271,6 +271,14 @@ function classesForContractParam(param: string): readonly ParamClass[] {
 export interface ParamOutputPort {
   /** 端口自身的名字（落到哪个 pin）。 */
   name: string;
+  /** 卡片行上**显示**的名字；缺省 = `name`。
+   *
+   *  对外**输入**卡片给的是这个对外参数自己的名字（「提示词」「尺寸」）：
+   *  这一行说「这个口是什么、出去是什么类型」，落到工作流的哪一行由连线表达
+   *  —— 行上写 `value` / `text_1` 这类 ComfyUI 内部 pin 名，读起来与作者在
+   *  ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 `name` / `title`
+   *  里可查。对外**输出**卡片不给（那里端口名就是作者要看的名字）。 */
+  display?: string;
   /** 声明类型（大写，如 STRING / INT / COMBO）；未知为 `*`。 */
   type: string;
   /** 是否已经落到了工作流里真实存在的端口。 */
@@ -309,7 +317,12 @@ export function paramOutputPorts(
   io: WorkflowIOMap | null | undefined,
   resolvedTarget: string | null | undefined,
   reachableKeys?: ReadonlySet<string>,
+  /** 行上显示的对外参数名。给的是**调用方那一份**（卡片列会先用契约口清单的
+   *  展示名覆盖 `entry.label`，见 ISSUE #596）—— 两处各取一份会让同一张卡片的
+   *  标题与端口行说两个名字。缺省 = `entry.label`。 */
+  displayName?: string,
 ): ParamOutputPort[] {
+  const rowLabel = displayName ?? entry.label;
   const toPort = (
     ioKey: string,
     name: string,
@@ -318,6 +331,9 @@ export function paramOutputPorts(
     active: boolean,
   ): ParamOutputPort => ({
     name: name || entry.label,
+    /* 行上只写这个对外参数自己的名字：落到工作流的哪一行由连线表达，
+     *  pin 名（`value` / `text_1`）退到行的 `title` 提示里。 */
+    display: rowLabel,
     type: portTypeDisplay(type),
     connected,
     ioKey,
