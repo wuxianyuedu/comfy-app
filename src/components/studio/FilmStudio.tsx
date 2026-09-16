@@ -539,13 +539,13 @@ export function FilmStudio() {
 
             {/* 逐镜生成用的工作流（内置模板已移除，必须从工作流库选） */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-ink-faint">
+              <span className="text-ink-faint mb-1.5 block text-[11px]">
                 视频工作流（工作流库）
               </span>
               <select
                 value={c.videoWorkflowId}
                 onChange={(event) => c.setVideoWorkflowId(event.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               >
                 <option value="">
                   {c.videoWorkflows.length
@@ -560,20 +560,21 @@ export function FilmStudio() {
               </select>
               {!c.videoWorkflowId && (
                 <span className="text-ink-fainter mt-1 block text-[10.5px]">
-                  没有内置视频工作流可回落 —— 请先在工作室「工作流库」导入并配好对外参数。
+                  没有内置视频工作流可回落 ——
+                  请先在工作室「工作流库」导入并配好对外参数。
                 </span>
               )}
             </label>
 
             {/* 文生视频镜头合成首帧用的图类工作流（镜头自带首帧时不需要） */}
             <label className="block">
-              <span className="mb-1.5 block text-[11px] text-ink-faint">
+              <span className="text-ink-faint mb-1.5 block text-[11px]">
                 首帧合成工作流（可选，工作流库）
               </span>
               <select
                 value={c.imageWorkflowId}
                 onChange={(event) => c.setImageWorkflowId(event.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-subtle px-3 text-[13px] text-ink-field outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               >
                 <option value="">
                   {c.imageWorkflows.length

@@ -109,10 +109,10 @@ export function ImageGenerationPanel({
     //    因为中文 "图生视频" 后面可能不带 "I2V" 字样）
     if (/图生视频|IMG2VIDEO/.test(rawName)) return "I2V";
     if (/文生视频|TXT2VIDEO/.test(rawName)) return "T2V";
-    if (/首尾帧视频|FLFVIDEO|FLF2V/.test(up)) return "FLF2V";
+    if (/首尾帧视频|FLFVIDEO|FLF2V|FL2V/.test(up)) return "FLF2V";
     if (/视频转视频|V2V/.test(up)) return "V2V";
     if (rawName.includes("图生视频") || up.includes("I2V")) return "I2V";
-    if (/FL2V|FMF2V/.test(up)) return "FL2V";
+    if (up.includes("FMF2V")) return "FMF2V";
     if (up.includes("T2V")) return "T2V";
     if (up.includes("S2V")) return "S2V";
     if (up.includes("R2V")) return "R2V";

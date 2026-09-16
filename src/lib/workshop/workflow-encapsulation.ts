@@ -335,13 +335,13 @@ function matchDurationOption(
 /* ── 视频模式判定 ──
  *
  * 工坊的视频通道有两个模式：文生视频（无首帧）与图生视频（有首帧）。
- * 模式码就是工作流库的 taskType / modes（T2V / I2V / TI2V / FLF2V / FL2V /
+ * 模式码就是工作流库的 taskType / modes（T2V / I2V / TI2V / FLF2V /
  * S2V …）。判定刻意只看这套码，不看工作流的 taskType 之上再包一层「内容分类」
  * （image/video）—— 那层分类是工作流库的展示维度，不是生成模式的判据。 */
 
 /** 视频类模式码（前缀式，兼容 T2V / TI2V / FLF2V / FMF2V / S2V / V2V …）。 */
 const VIDEO_MODE_RE =
-  /^(t2v|i2v|ti2v|flf2v|fl2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
+  /^(t2v|i2v|ti2v|flf2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
 
 /** 该模式码是否属于视频生成。 */
 export function isVideoMode(code: string | null | undefined): boolean {
@@ -351,13 +351,13 @@ export function isVideoMode(code: string | null | undefined): boolean {
 /** 该模式是否自带首帧图（图生视频 / 图文生视频 / 首尾帧）。 */
 export function modeUsesFirstFrame(code: string | null | undefined): boolean {
   if (typeof code !== "string") return false;
-  return /^(i2v|ti2v|flf2v|fl2v|fmf2v|r2v|s2v|ia2v)$/i.test(code.trim());
+  return /^(i2v|ti2v|flf2v|fmf2v|r2v|s2v|ia2v)$/i.test(code.trim());
 }
 
 /** 该模式是否需要尾帧图（首尾帧视频）。 */
 export function modeUsesLastFrame(code: string | null | undefined): boolean {
   if (typeof code !== "string") return false;
-  return /^(flf2v|fl2v|fmf2v)$/i.test(code.trim());
+  return /^(flf2v|fmf2v)$/i.test(code.trim());
 }
 
 /** 把一组 IO 条目按 ioKey → 分类整理；同一分类出现多个时取首个（稳定顺序）。 */
