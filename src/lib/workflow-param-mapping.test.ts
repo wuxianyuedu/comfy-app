@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 import {
   applyParamMapping,
-  autoMapEntries,
   buildParamEntries,
   buildSourceOverrides,
   classifyPin,
@@ -248,49 +247,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
   });
 });
 
-describe("autoMapEntries", () => {
-  it("默认连线：命中的分类优先，未命中退回该节点第一个有默认值的标量口", () => {
-    const io: WorkflowIOMap = {
-      "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
-      "9::widget::text": pin("9", "text", {
-        type: "STRING",
-        defaultValue: "hi",
-      }),
-      "9::widget::mystery": pin("9", "mystery", {
-        type: "INT",
-        defaultValue: 7,
-      }),
-    };
-    const entries = buildParamEntries(io);
-    const auto = autoMapEntries(entries, io);
-    expect(auto["5|size-width"]).toBe("5::widget::width");
-    /* 短文本（<40 字符）不算提示词，与 `mystery` 一起归进同节点的「参数」，
-     * 自动映射取该分类里第一个有默认值的标量口。 */
-    expect(auto["9|other"]).toBe("9::widget::text");
-    expect(auto["9|other"]).toBeDefined();
-  });
-
-  it("长默认值的文本口（CLIPTextEncode 的 text）判为提示词", () => {
-    const long = "a very long positive prompt describing the scene in detail";
-    const io: WorkflowIOMap = {
-      "9::widget::text": pin("9", "text", { defaultValue: long }),
-    };
-    const entries = buildParamEntries(io);
-    expect(entries[0]?.cls).toBe("prompt");
-    expect(autoMapEntries(entries, io)["9|prompt"]).toBe("9::widget::text");
-  });
-
-  it("连线型端口不可作为落点", () => {
-    const io: WorkflowIOMap = {
-      "5::widget::model": pin("5", "model", { kind: "param", type: "MODEL" }),
-      "5::widget::steps": pin("5", "steps", { type: "INT", defaultValue: 20 }),
-    };
-    const auto = autoMapEntries(buildParamEntries(io), io);
-    expect(auto["5|other"]).toBe("5::widget::steps");
-  });
-});
-
-describe("resolveMapping — 作者画的线优先于默认连线状态", () => {
+describe("resolveMapping — 落点只由作者画的线决定", () => {
   const io: WorkflowIOMap = {
     "5::widget::width": pin("5", "width", { type: "INT", defaultValue: 512 }),
     "5::widget::resolution": pin("5", "resolution", { type: "COMBO" }),
@@ -298,50 +255,48 @@ describe("resolveMapping — 作者画的线优先于默认连线状态", () => 
   const entries = buildParamEntries(io);
   const entryId = entries[0]!.id;
 
-  it("没有作者画的线时用默认连线状态（自动映射）", () => {
-    expect(resolveMapping(entries, io, null, "T2I")[entryId]).toBe(
-      "5::widget::width",
+  it("没有任何线 → 空表（未配置），不再替作者猜一个落点", () => {
+    expect(resolveMapping(entries, io, null, "T2I")).toEqual({});
+    expect(resolveMapping(entries, io, { manualByMode: {} }, "T2I")).toEqual(
+      {},
     );
   });
 
-  it("作者画的线覆盖默认连线状态", () => {
+  it("作者画的线就是落点", () => {
     const mapping = {
       manualByMode: { T2I: { [entryId]: "5::widget::resolution" } },
     };
     expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe(
       "5::widget::resolution",
     );
-    /* 另一个模式回到默认连线状态 —— 线是按模式分开的。 */
-    expect(resolveMapping(entries, io, mapping, "I2I")[entryId]).toBe(
-      "5::widget::width",
-    );
+    /* 另一个模式没有线 → 未配置（线是按模式分开的）。 */
+    expect(
+      resolveMapping(entries, io, mapping, "I2I")[entryId],
+    ).toBeUndefined();
   });
 
-  it("没有模式时一律用默认连线状态（不存在脱离模式的线）", () => {
+  it("没有模式时不承认任何线（不存在脱离模式的线）", () => {
     const mapping = {
       manualByMode: { T2I: { [entryId]: "5::widget::resolution" } },
     };
-    expect(resolveMapping(entries, io, mapping, null)[entryId]).toBe(
-      "5::widget::width",
-    );
+    expect(resolveMapping(entries, io, mapping, null)).toEqual({});
   });
 
-  it("某模式下显式断开 → 该模式「未连线」，其它模式不受影响", () => {
+  it("某模式下显式断开 → 该模式「未连线」（null 与「没连过」区分开）", () => {
     const mapping = { manualByMode: { I2I: { [entryId]: null } } };
     expect(resolveMapping(entries, io, mapping, "I2I")[entryId]).toBeNull();
-    expect(resolveMapping(entries, io, mapping, "T2I")[entryId]).toBe(
-      "5::widget::width",
-    );
+    expect(
+      resolveMapping(entries, io, mapping, "T2I")[entryId],
+    ).toBeUndefined();
   });
 
-  it("mapping.auto 可以显式带入默认连线状态（避免各层各算一遍）", () => {
-    const resolved = resolveMapping(
-      entries,
-      null,
-      { auto: { [entryId]: "5::widget::width" } },
-      "T2I",
-    );
-    expect(resolved[entryId]).toBe("5::widget::width");
+  it("落点端口已不存在（改名 / 移除）→ 按未配置处理，不让线静默落空", () => {
+    const mapping = {
+      manualByMode: { T2I: { [entryId]: "5::widget::gone" } },
+    };
+    expect(
+      resolveMapping(entries, io, mapping, "T2I")[entryId],
+    ).toBeUndefined();
   });
 });
 
@@ -455,18 +410,16 @@ describe("applyParamMapping — 运行期落值", () => {
       entries,
       mapping: {
         manualByMode: {
-          T2I: { "5|size-width": "5::widget::width", "5|other": null },
+          T2I: { "5|size-width": "5::widget::width" },
         },
       },
       values: { "5|size-width": 1024 },
       mode: "T2I",
     });
     expect(inputs.find((item) => item.name === "width")?.value).toBe(1024);
-    /* 「5|other」也画过线（断成 null），故该节点其余端口不再兜底。 */
-    expect(inputs.some((item) => item.name === "steps")).toBe(false);
   });
 
-  it("没有线的对外参数：按默认值兜底", () => {
+  it("没有线的对外参数：按默认值兜底（用户不改就用工作流默认值）", () => {
     const entries = buildParamEntries(io);
     const { inputs } = applyParamMapping({
       io,
@@ -478,42 +431,60 @@ describe("applyParamMapping — 运行期落值", () => {
     expect(inputs.find((item) => item.name === "steps")?.value).toBe(20);
   });
 
+  it("没连过的对外参数给了值 → 如实进 unmatched，不替作者挑一个端口", () => {
+    const entries = buildParamEntries(io);
+    const { inputs, unmatched } = applyParamMapping({
+      io,
+      entries,
+      mapping: null,
+      values: { "5|size-width": 1024 },
+    });
+    expect(unmatched).toContain("5|size-width");
+    expect(inputs.find((item) => item.name === "width")?.value).toBe(512);
+  });
+
   it("显式断开（null）的对外参数：用户值如实录进 unmatched，不凭空落端口", () => {
     const entries = buildParamEntries(io);
     const { inputs, unmatched } = applyParamMapping({
       io,
       entries,
       mapping: {
-        manualByMode: { T2I: { "5|size-width": null, "5|other": null } },
+        manualByMode: { T2I: { "5|size-width": null } },
       },
       values: { "5|size-width": 1024 },
       mode: "T2I",
     });
     expect(unmatched).toContain("5|size-width");
-    expect(inputs.find((item) => item.name === "width")).toBeUndefined();
+    /* 断开的只是「外部值往这落」，工作流自己的默认值照旧下发。 */
+    expect(inputs.find((item) => item.name === "width")?.value).toBe(512);
   });
 
   it("另一模式的线不影响本模式（模式线只在该模式生效）", () => {
     const entries = buildParamEntries(io);
-    const { inputs } = applyParamMapping({
+    const { inputs, unmatched } = applyParamMapping({
       io,
       entries,
       mapping: {
-        manualByMode: { I2I: { "5|size-width": null, "5|other": null } },
+        manualByMode: { I2I: { "5|size-width": "5::widget::width" } },
       },
       values: { "5|size-width": 1024 },
       mode: "T2I",
     });
-    expect(inputs.find((item) => item.name === "width")?.value).toBe(1024);
+    /* 本模式没有线 → 值落不上，如实记进 unmatched。 */
+    expect(unmatched).toContain("5|size-width");
+    expect(inputs.find((item) => item.name === "width")?.value).toBe(512);
   });
 
-  it("契约条目：值可以按契约 id（工坊侧）或 ioKey（运行期表单）给", () => {
+  it("契约条目：作者按契约 id 画线后，值可以按契约 id（工坊侧）或 ioKey（运行期表单）给", () => {
     const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+    const mapping = {
+      manualByMode: { T2I: { size: "5::widget::width" } },
+    };
     /* 工坊侧按契约 id 给。 */
     const byContract = applyParamMapping({
       io,
       entries,
-      mapping: null,
+      mapping,
       values: { size: 1024 },
       mode: "T2I",
     });
@@ -524,7 +495,7 @@ describe("applyParamMapping — 运行期落值", () => {
     const byPinKey = applyParamMapping({
       io,
       entries,
-      mapping: null,
+      mapping,
       values: { "5::widget::width": 768 },
       mode: "T2I",
     });
@@ -546,7 +517,7 @@ describe("applyParamMapping — 运行期落值", () => {
     expect(inputs.find((item) => item.name === "width")?.value).not.toBe(1024);
   });
 
-  it("与旧行为对齐：全默认连线状态下的默认值兜底 =「每个暴露 pin 都下发」", () => {
+  it("未连线时默认值兜底 =「每个暴露 pin 都下发」", () => {
     const { inputs } = applyParamMapping({
       io,
       entries: buildParamEntries(io),
@@ -566,8 +537,20 @@ describe("buildSourceOverrides", () => {
     const io: WorkflowIOMap = {
       "5::widget::width": pin("5", "width", { type: "INT" }),
     };
-    const overrides = buildSourceOverrides(buildParamEntries(io), io, null);
+    const mapping = {
+      manualByMode: { T2I: { "5|size-width": "5::widget::width" } },
+    };
+    const overrides = buildSourceOverrides(
+      buildParamEntries(io),
+      io,
+      mapping,
+      "T2I",
+    );
     expect(overrides["5|size-width"]).toBe("5::widget::width");
+    /* 没有线 → 表里没有这个口（未配置，不是「断成 null」）。 */
+    expect(
+      buildSourceOverrides(buildParamEntries(io), io, null, "T2I"),
+    ).toEqual({});
   });
 });
 
@@ -602,8 +585,11 @@ describe("applyParamMapping — 子图内部条目的运行期节点 id", () => 
     const { inputs } = applyParamMapping({
       io: innerIo,
       entries,
-      mapping: null,
+      mapping: {
+        manualByMode: { T2I: { "1670|other": "1670::widget::value" } },
+      },
       values: { "1670|other": 33 },
+      mode: "T2I",
     });
     expect(inputs).toEqual([{ nodeId: "4:1670", name: "value", value: 33 }]);
   });
@@ -845,7 +831,7 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
     "5::widget::height",
   ]);
 
-  it("默认状态：组合控件覆盖的每个候选端口各一条线", () => {
+  it("作者把尺寸连到组合控件上：该控件覆盖的每个端口各一条线", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
       (entry) => entry.id === "size",
     )!;
@@ -868,7 +854,7 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
     ).toEqual(["5::widget::aspect_ratio"]);
   });
 
-  it("作者手工改过落点：只画他指定的那一条", () => {
+  it("作者把线连到组合控件里的某个端口 → 该控件覆盖的端口一起画", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
       (entry) => entry.id === "size",
     )!;
@@ -879,8 +865,32 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
       manual: true,
       groupedKeys: grouped,
     });
-    /* 手工落点意味着该模式下这个口只往那一个端口供值（运行期同口径），其余
-     *  端口回到工作流自身的默认值 —— 这时再画线就是谎报。 */
+    /* 这几行由同一块控件录入（宽高比 / 像素量 / 宽高），作者把它连到这块控件上
+     *  就等于这几行都取自这一个口 —— 只画一条会让其余几项读作「没接上」。 */
+    expect(wired.map((item) => item.ioKey)).toEqual([
+      "5::widget::width",
+      "5::widget::height",
+      "5::widget::aspect_ratio",
+      "5::widget::megapixels",
+    ]);
+    /* 只有作者指定的那一颗是 active（卡片上实心）。 */
+    expect(
+      wired.filter((item) => item.active).map((item) => item.ioKey),
+    ).toEqual(["5::widget::megapixels"]);
+  });
+
+  it("作者连到普通端口（不属于任何组合控件）：只画那一条", () => {
+    const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
+      (entry) => entry.id === "size",
+    )!;
+    const wired = wiredTargetsForEntry({
+      entry: size,
+      io: sizeIo,
+      target: "5::widget::megapixels",
+      manual: true,
+      /* 宿主表单这一帧没有把组合控件画出来 → 就是一条普通的线。 */
+      groupedKeys: new Set<string>(),
+    });
     expect(wired.map((item) => item.ioKey)).toEqual(["5::widget::megapixels"]);
   });
 
@@ -968,19 +978,29 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
       io: sizeIo,
       entries,
       /* 作者把那几条线都连到同一个「尺寸」口上（库里/画布上拖出来的线）。 */
-      mapping: { manualByMode: { T2I: { size: "5::widget::megapixels" } } },
-      values: { size: "1024x1024" },
+      mapping: {
+        manualByMode: {
+          T2I: {
+            size: "5::widget::megapixels",
+          },
+        },
+      },
+      values: { size: "1920x1080" },
       mode: "T2I",
       groupedKeys,
     });
-    /* 手工落点只往它指定的那一个端口供值（运行期同口径：其余端口回工作流默认值）。 */
-    expect(inputs.find((item) => item.name === "megapixels")?.value).toBe(1);
-    expect(inputs.some((item) => item.name === "aspect_ratio")).toBe(false);
+    /* 这几行由同一块控件录入 → 同一个外部尺寸逐个派生成各自认的形状；
+     *  不属于那条线的行回工作流默认值。 */
+    expect(inputs.find((item) => item.name === "megapixels")?.value).toBe(2);
+    expect(inputs.find((item) => item.name === "aspect_ratio")?.value).toBe(
+      "16:9",
+    );
+    expect(inputs.find((item) => item.name === "width")?.value).toBe(1920);
   });
 
-  it("默认连线状态下多个端口都拿到值（一对外参数对多端口）", () => {
+  it("默认（未连线）时按工作流默认值兜底，不拿外部尺寸硬塞", () => {
     const entries = buildParamEntries(sizeIo, undefined, { mode: "T2I" });
-    const { inputs } = applyParamMapping({
+    const { inputs, unmatched } = applyParamMapping({
       io: sizeIo,
       entries,
       mapping: null,
@@ -990,8 +1010,10 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
     });
     const byName = new Map(inputs.map((item) => [item.name, item.value]));
     expect(byName.get("aspect_ratio")).toBe("16:9");
-    expect(byName.get("megapixels")).toBe(2);
-    expect(byName.get("width")).toBe(1920);
+    expect(byName.get("megapixels")).toBe(1);
+    expect(byName.get("width")).toBe(1024);
+    /* 没有线 → 外部给的尺寸落不上，如实记进 unmatched。 */
+    expect(unmatched).toContain("size");
   });
 
   it("比例不在端口声明的候选里 → 不写非法值，退回默认值", () => {
@@ -1003,13 +1025,18 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
       }),
     };
     const entries = buildParamEntries(narrow, undefined, { mode: "T2I" });
-    const { inputs } = applyParamMapping({
+    const { inputs, unmatched } = applyParamMapping({
       io: narrow,
       entries,
-      mapping: null,
+      mapping: {
+        manualByMode: { T2I: { size: "5::widget::aspect_ratio" } },
+      },
       values: { size: "1024x1024" },
       mode: "T2I",
     });
+    /* 形状算不出来（1:1 不在这个端口的候选里）→ 不写非法值，外部值如实进
+     * unmatched；该端口照旧下发工作流自己的默认值。 */
+    expect(unmatched).toContain("size");
     expect(inputs.find((item) => item.name === "aspect_ratio")?.value).toBe(
       "4:3",
     );
@@ -1023,10 +1050,15 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
       }),
     };
     const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+    const promptEntry = entries.find((entry) => entry.id === "prompt")!;
     const { inputs } = applyParamMapping({
       io,
       entries,
-      mapping: null,
+      mapping: {
+        manualByMode: {
+          T2I: { prompt: promptEntry.pins[0]!.ioKey },
+        },
+      },
       values: { prompt: "一只猫" },
       mode: "T2I",
     });

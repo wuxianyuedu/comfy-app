@@ -27,7 +27,7 @@ export interface ParamWiringController {
   isManual: (entryId: string) => boolean;
   /** 拖线落上：把某个对外参数连到 ioKey（写入后立即回读）。 */
   connect: (entryId: string, ioKey: string) => void;
-  /** 断开：该对外参数在这个模式下显式断线（不再回到自动判定）。 */
+  /** 断开：该对外参数在这个模式下显式断线（不再落任何端口）。 */
   disconnect: (entryId: string) => void;
   /** 恢复默认：撤销该对外参数在当前模式下的手工线。 */
   resetToAuto: (entryId: string) => void;

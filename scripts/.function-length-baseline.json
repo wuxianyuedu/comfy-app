@@ -2,7 +2,7 @@
   "generatedAt": "2026-09-16",
   "ruleVersion": 3,
   "note": "超过 400 行的函数计数（规范 §12.13，判据版本 3）。棘轮只许下降：新增巨型函数须先拆分，再收紧基线。",
-  "total": 22,
+  "total": 21,
   "files": {
     "src/app/(main)/settings/hooks/use-settings-page.ts": 1,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 1,
@@ -10,21 +10,20 @@
     "src/components/studio/canvas/WorkflowSubgraphNode.tsx": 1,
     "src/components/studio/workflow-editor/workflow-editor-build-nodes.ts": 1,
     "src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx": 1,
+    "src/components/studio/logs/LogPanel.tsx": 1,
+    "src/components/studio/FilmStudio.tsx": 1,
     "src/components/workshop/hooks/use-workshop-pipeline.ts": 1,
     "src/components/workshop/CharacterDesigner.tsx": 1,
-    "src/components/studio/FilmStudio.tsx": 1,
+    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": 1,
     "src/components/studio/workflow-library/CustomNodesSettings/hooks/use-custom-nodes-settings.ts": 1,
-    "src/components/studio/logs/LogPanel.tsx": 1,
     "src/components/studio/ProjectCanvas.tsx": 1,
     "src/lib/comfyui/workflow-detail-raw.ts": 1,
     "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": 1,
-    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": 1,
     "src/components/studio/WorkflowNodeJsonPopover.tsx": 1,
     "src/components/studio/ProjectOutputs.tsx": 1,
     "src/components/workshop/useStoryboardPlanner.ts": 1,
     "src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx": 1,
     "src/components/studio/ui/MultiModeSelect.tsx": 1,
-    "src/components/studio/shared/AspectMegapixelControl.tsx": 1,
-    "src/components/studio/project-canvas/CanvasNode/hooks/use-generate.ts": 1
+    "src/components/studio/shared/AspectMegapixelControl.tsx": 1
   }
 }

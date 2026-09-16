@@ -45,14 +45,15 @@ export interface LibraryParamCards {
   io: WorkflowIOMap | null;
   /** 该对外参数在当前模式下是否被作者改过（决定卡片头 ↺ 的可用性）。 */
   isManual: (entryId: string) => boolean;
-  /** 当前模式下「条目 → 目标 ioKey」的生效落点（作者改过的优先于自动判定）。 */
+  /** 当前模式下「条目 → 目标 ioKey」的生效落点（**只来自作者画的线**）。 */
   resolved: Record<string, string | null>;
   /** 每个被落到的一行（ioKey）→ 落到它的对外参数名，按条目顺序取第一个。
    *  宿主卡片的参数行据此在行尾标出「这一行属于哪个对外参数」。 */
   ownersByPin: Record<string, string>;
   /** 卡片圆点端点 → 宿主行 的只读连线（卡片列右侧的小圆点与宿主卡片上被落
-   *  到的那一行之间）。自动判定画虚线、作者改过画实线，与编辑器画布同一套
-   *  语义 —— 库里不画线的话，圆点就只是一颗装饰点，读者答不出它连到哪。 */
+   *  到的那一行之间）。连线一律是作者画的那条（库里不给「猜出来的」线），
+   *  与编辑器画布同一套语义 —— 库里不画线的话，圆点就只是一颗装饰点，
+   *  读者答不出它连到哪。 */
   wires: ParamCardWire[];
   /** **真的画出了线**的那些卡片圆点（`<条目 id>?<handle id>`）。
    *
@@ -90,8 +91,8 @@ export interface ParamCardWire {
 /** 从 workflowIO + paramMap 派生库内画布所需的归属数据。
  *
  *  模式取工作流的 defaultMode —— 与编辑器同一份口径：只有归属某个模式的落点
- *  才成立（`source.mode:<模式>`）。没有模式时带出的 resolved 仍是自动判定结果
- *  （供卡片与行标呈现），但没有任何「作者改过的落点」。 */
+ *  才成立（`source.mode:<模式>`）。没有模式时不承认任何线 —— 落点全空，
+ *  卡片如实显示成「未配置」。 */
 export function deriveLibraryParamCards(args: {
   io: WorkflowIOMap | null | undefined;
   paramMap: Record<string, unknown> | null | undefined;
@@ -110,11 +111,9 @@ export function deriveLibraryParamCards(args: {
    * **契约口一律常驻**：显示与否只由契约决定，与工作流内部长什么样无关；工作流
    * 只决定每张卡落到哪一行端口，落不到就如实显示成「未配置」。 */
   const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
-  /* paramMap 里没有 `auto` 字段（它不是持久化字段）——现算一份自动判定，
-   * 与编辑器 useParamMapping 里的 auto 同源（autoMapEntries）。 */
+  /* 落点只由作者画的线决定（`resolveMapping` 只认 `manualByMode`）：没有线就是
+   * 未配置。这里不做任何「猜一个落点」的兜底 —— 猜错了比不显示更难被发现。 */
   const parsed = parseParamMapping(paramMap);
-  /* 落点只由「作者画过的线（键 = 契约口径的 `negative`）+ 端口名判据」决定：
-   *  没有历史键的兼容读取，也不做任何兜底推断 —— 判不出来就是未配置。 */
   const resolved = resolveMapping(entries, io, parsed, mode ?? null);
 
   const ownersByPin: Record<string, string> = {};
@@ -124,17 +123,17 @@ export function deriveLibraryParamCards(args: {
     /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
      *  画一条通向某处的线反而误导。 */
     if (!target) continue;
-    /* 「作者改过」的口径与编辑器同一份（manualTargetFor）：该模式下这一条目
-     *  确实有一条手工线 —— 显式断开也算改过，只是那时不画线。 */
+    /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
+     *  —— 所以这条线一定是「作者连的」（库里的线一律实线，没有「猜出来的虚线」）。 */
     const manual =
       manualTargetFor(parsed, entry.id, mode ?? null) !== undefined;
     /* 线要从**对应的那一颗圆点**出发：卡片上一个候选一颗点，取该端口的
      *  handle id（与编辑器画布同口径）。
      *
      *  默认状态下「尺寸」这类口是**一对多**的（宽高比 / 像素量 / 倍数由同一块
-     *  组合控件录入），每个端口各一条线 —— 只画自动判定挑中的那一条，会让
-     *  「尺寸」看着只有一个出口（ISSUE #355：「尺寸现在有三个参数，就应该可以
-     *  连三条线出来」）。作者手工指定落点后只画他指定的那一条。 */
+     *  组合控件录入），作者把「尺寸」连到这块控件上时这几行都算接上了 ——
+     *  只画其中一条会让「尺寸」看着只有一个出口（ISSUE #355：「尺寸现在有三个
+     *  参数，就应该可以连三条线出来」）。 */
     for (const wired of wiredTargetsForEntry({
       entry,
       io,
@@ -208,8 +207,8 @@ export function deriveLibraryParamCards(args: {
  *    · `wires`：宿主**取值行**的圆点 → 卡片自己的圆点（方向仍是从左往右画），
  *      断开的口不画线（悬空即「没接」）。
  *
- *  线恒为**自动**口径（`manual` 恒 false）之外的区分靠实线/虚线表达「这一行是
- *  不是作者改过的取值来源」。 */
+ *  输出侧同样**只认作者画过的线**：没连过的回落读做「工作流自带的那一行」，
+ *  但那条线不叫「猜出来的落点」，它是输出行自己的默认取值来源。 */
 /** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
 export interface LibraryOutputCards {
   outputs: (WorkflowIOEntry & { ioKey: string })[];

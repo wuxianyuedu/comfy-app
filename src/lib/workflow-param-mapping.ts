@@ -9,9 +9,15 @@
  *   1. `buildParamEntries`  把服务端富化的 workflowIO 归并成「按节点分组的对外
  *      参数条目」——同一节点上的多个 pin 是**同一个对外参数**（提示词 = 一个
  *      节点的一个参数），而不是两行；
- *   2. `autoMapEntries`     给每个对外参数条目**自动**挑一个目标端口（默认连线
- *      状态）。判定顺序即优先级，与工坊封装（workflow-encapsulation）同口径；
+ *   2. `resolveMapping`     读出**作者画的线**（`paramMap.source.mode:<模式>`）：
+ *      某个口落在哪一行，只由这条线决定；
  *   3. `applyParamMapping`  把映射落到运行时载荷上（`workflowInputs` 三元组）。
+ *
+ * **落点完全依赖作者画线，没有「猜一个默认落点」这回事**（ISSUE #632）：曾经的
+ * `autoMapEntries` 按端口名字启发式给每个口挑一行，命中不了就退到「该节点上第一个
+ * 标量口」。问题是**猜错的时候用户无从察觉** —— 页面默认显示的落点看着就像作者
+ * 自己连的，跑起来值落到别处。作者画的线永远比猜得准，所以猜的那一层整条去掉：
+ * 没有线就是**未配置**（如实显示），要么作者连，要么这个口本来就不需要。
  *
  * 落库位置：沿用既有的 `paramMap` JSON 列，`source` 命名空间下**只按模式**存放
  * 作者连过的线，键写作 `source.mode:<模式>`（值 = `{ <entryId>: ioKey | null }`）。
@@ -20,11 +26,10 @@
  * 生效」变成需要推理的问题，两套键空间互相覆盖也正是丢覆盖的历史根因。因此没有
  * 选中模式时**写入是空操作**，每条覆盖都归属一个模式。
  *
- * 本模块**只产出数据**：条目的落点默认由 `autoMapEntries` 按名字自动判定，
- * 运行期由 `applyParamMapping` 按这张表严格落值。工作流库「画布节点」页签上的
- * 三列 React Flow 节点（卡片列 / 宿主卡片 / 输出卡片列）是同一份数据的视图
- * （`workflow-library-param-cards` + `WorkflowLibraryCanvas`）—— 拖线即编辑
- * 落点，映射没有第二套界面。
+ * 本模块**只产出数据**：运行期由 `applyParamMapping` 按作者画的线严格落值（没
+ * 有线就不落）。工作流库「画布节点」页签上的三列 React Flow 节点（卡片列 /
+ * 宿主卡片 / 输出卡片列）是同一份数据的视图（`workflow-library-param-cards` +
+ * `WorkflowLibraryCanvas`）—— 拖线即编辑落点，映射没有第二套界面。
  */
 
 import {
@@ -93,7 +98,7 @@ export interface ParamEntry {
   /** 展示名：契约里的统一名（与具体工作流无关）。 */
   label: string;
   /** 该契约口子在当前工作流里的候选端口（ioKey 保持 workflowIO 的原始键）。
-   *  自动判定从中挑一个作为默认落点；作者也可以在画布上改成别的端口。 */
+   *  作者从这些候选里拖一条线选中一个作为落点。 */
   pins: { ioKey: string; name: string; type: string; defaultValue: unknown }[];
 }
 
@@ -276,7 +281,7 @@ export interface ParamOutputPort {
    *  画布上等于**该端口的 ioKey**（与宿主行 handle 同名）；库里那层只读连线按
    *  端口名找锚点，故两者都用得到。 */
   handleId: string;
-  /** 是否为**当前生效落点**（连线即连到它；未连线时是自动判定会挑中的那个）。 */
+  /** 是否为**当前生效落点**（作者连上的那一颗；未连线时全为 false）。 */
   active: boolean;
 }
 
@@ -293,7 +298,7 @@ function fallbackHandleId(entry: ParamEntry): string {
 
 /** 一个对外参数卡片的**输出端口**（每个候选落点一颗，见上方说明）。
  *
- *  `resolvedTarget` = 该口子当前生效的落点 ioKey（作者连过的优先，否则自动判定）：
+ *  `resolvedTarget` = 该口子当前生效的落点 ioKey（就是作者连过的那条线）：
  *  · 有落点 → 只给一颗点（连到哪就只连得到哪，避免一张卡画出多条线）；
  *  · 无落点 → 逐个列出候选端口，每颗点连同名的 handle。
  *
@@ -367,14 +372,15 @@ export function paramOutputPorts(
  *  为什么不是一个端口：像「尺寸」这样的对外参数**由多个端口共同组成** ——
  *  宽高比 / 像素量由同一块组合控件录入（`inferGroups` 的 `groupedKeys`），
  *  宽 / 高同理。默认状态下这几个端口都取自这一个对外参数，画面上就该各有一条线；
- *  只画「自动判定挑中的那一个」会让「尺寸」看着只有一个出口
+ *  只画其中一条会让「尺寸」看着只有一个出口
  *  （ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
  *
- *  作者手工指定落点后**只画他指定的那一条**：手工落点意味着该模式下这个口只往
- *  那一个端口供值（运行期 `applyParamMapping` 同口径），其余端口回到工作流自身
- *  的默认值 —— 这时再画线就是谎报。
+ *  落点**只能来自作者画的线**（没有线就没有落点，见 `resolveMapping`）：作者连
+ *  的普通端口只画那一条；连到组合控件覆盖的端口上时，该控件覆盖的其余端口一起
+ *  画出来（它们是同一块控件录入的同一件事）—— 其余端口回到工作流自身的默认值，
+ *  这时再画线就是谎报。
  *
- *  `active` 标出「自动判定挑中的那个 / 作者指定的那个」，供卡片上的实心圆点使用。 */
+ *  `active` 标出「作者连上的那个」，供卡片上的实心圆点使用。 */
 export function wiredTargetsForEntry(args: {
   entry: ParamEntry;
   /** workflowIO：判定候选端口是否真的存在（候选可能来自过期的 IO 快照）。 */
@@ -395,7 +401,11 @@ export function wiredTargetsForEntry(args: {
   allCandidates?: boolean;
 }): { ioKey: string; active: boolean }[] {
   const { entry, io, target, manual, groupedKeys, allCandidates } = args;
-  /* 视图口径：不挑「当前落点」，把候选逐个报出来（落在哪个哪个就是 active）。 */
+  /* 视图口径：不挑「当前落点」，把候选逐个报出来（落在哪个哪个就是 active）。
+   *
+   *  这里的「候选」= 该口在当前工作流里**真的存在的可落点端口**（不是猜出来的
+   *  落点）：卡片上每颗圆点都是作者可以拖过去连的一行。没连线的口一颗圆点都不
+   *  高亮（`active` 全 false），「未配置」就看得见。 */
   if (allCandidates) {
     const candidates = (
       io ? entry.pins.filter((pin) => !!io[pin.ioKey]) : entry.pins
@@ -407,7 +417,9 @@ export function wiredTargetsForEntry(args: {
     return candidates;
   }
   if (!target) return [];
-  if (manual) return [{ ioKey: target, active: true }];
+  /* 作者手画的线：只画他连的那一条（一个口连一个端口）。 */
+  if (manual && !groupedKeys?.has(target))
+    return [{ ioKey: target, active: true }];
   /* 落点落在组合控件里 → 该控件覆盖、且属于这个条目的端口全都算「接上了」。
    *  候选端口取自条目的 pins；给了 io 时只保留真的存在的那些（过期快照里的
    *  端口画不出线来）。 */
@@ -426,6 +438,9 @@ export function wiredTargetsForEntry(args: {
 /** 某个条目在某个 ioKey 上「用哪个 handle 连」——库内画布卡片按**端口名**给
  *  圆点打锚点（`paramOutputPorts` 的 `handleId`），所以连线也必须按端口名对齐
  *  那一颗点，否则同一个条目下多条线会全部落到第一颗点上。 */
+/* 注：一条映射线**一定**要么来自作者画的线（`manual` 为真）、要么落在作者连上的
+ * 那个组合控件上 —— 落点本身不可能凭空产生（见 `resolveMapping`：没有线就没有
+ * 落点）。所以上面那段之后只剩「manual」与「组合控件」两个分支要照顾。 */
 export function wireHandleIdForIoKey(
   io: WorkflowIOMap | null | undefined,
   entry: ParamEntry,
@@ -438,10 +453,10 @@ export function wireHandleIdForIoKey(
   );
 }
 
-/** 该对外参数在某个模式下的**默认落点端口**（`auto`）。
+/** 卡片端点列表里哪一颗是「当前生效落点」（没有则退回第一颗）。
  *
- *  默认连线的端点排在候选第一位，颜色与实心点一致；作者改过落点后第一颗就是
- *  他连的那颗。缺省（没有模式语境）时退到候选首项。 */
+ *  作者连过线的口，第一颗就是他那条线指向的端口；未连线时没有 `active`，
+ *  退回首项（卡片上不会因此谎报「已连上」——`active` 与「是否已连」是两件事）。 */
 export function defaultOutputPortIndex(
   ports: readonly ParamOutputPort[],
 ): number {
@@ -577,32 +592,6 @@ function buildLegacyEntries(
     .map((item) => item.entry);
 }
 
-/* ── 自动映射 ──
- * 每个对外参数条目自动挑一个目标端口。工坊封装的启发式只认「提示词 / 尺寸 /
- * 参考图」三样，这里补齐「其他」分类：优先落在**该节点上已有默认值**的标量口
- * （作者勾出来就是想让它可调），否则退回该节点上第一个标量口。 */
-const AUTO_MAPPABLE: Record<ParamClass, (e: WorkflowIOEntry) => boolean> = {
-  prompt: (e) => /prompt|提示词|描述词/i.test(searchText(e)),
-  negative: (e) => /negative|负向|负面|反向/i.test(searchText(e)),
-  /* 聚合值本身不参与逐端口判定（真正跑的是 SIZE_CLASSES 里的四个分类）。 */
-  size: () => false,
-  "size-width": (e) =>
-    /^(width|base_width|w|宽度|横向)$/.test(searchText(e).trim()),
-  "size-height": (e) =>
-    /^(height|base_height|h|高度|纵向)$/.test(searchText(e).trim()),
-  "size-aspect": (e) => /aspect_?ratio|宽高比|纵横比|比例/.test(searchText(e)),
-  "size-megapixels": (e) => /megapixel|百万像素|\b像素\b/.test(searchText(e)),
-  "reference-image": (e) => isImagePin(e),
-  "first-frame": (e) => isImagePin(e),
-  "last-frame": (e) => isImagePin(e),
-  duration: (e) =>
-    !/fps|frame_?rate|帧率|每秒帧/.test(searchText(e)) &&
-    /duration|length|num_?frames|frame_?count|frames?|时长|秒数|帧数/.test(
-      searchText(e),
-    ),
-  other: () => true,
-};
-
 /** 一个端口是否可直接接标量值（连线型端口不可作为对外参数的落点）。 */
 function isScalarPin(i: { type: string }): boolean {
   const t = (i.type ?? "").toUpperCase();
@@ -624,51 +613,11 @@ function isScalarPin(i: { type: string }): boolean {
   ]).has(t);
 }
 
-/** 自动映射：每个对外参数 → 目标端口（默认连线状态，可被手工覆盖）。 */
-export function autoMapEntries(
-  entries: readonly ParamEntry[],
-  io: WorkflowIOMap | null | undefined,
-): Record<string, string | null> {
-  const map: Record<string, string | null> = {};
-  for (const entry of entries) {
-    let chosen: string | null = null;
-    /* 契约聚合口子（`size`）本身不是一个分类：候选端口来自它接受的若干分类
-     *  （宽 / 高 / 宽高比 / 像素量），逐个按各自的名字启发式判定。 */
-    const predicates = candidateClasses(entry.cls).map(
-      (cls) => AUTO_MAPPABLE[cls] ?? (() => false),
-    );
-    for (const pin of entry.pins) {
-      const raw = io?.[pin.ioKey];
-      if (!raw || !isScalarPin(pin)) continue;
-      if (predicates.some((predicate) => predicate(raw))) {
-        chosen = pin.ioKey;
-        break;
-      }
-    }
-    /* 分类启发式没命中（脚本/自定义工作流的 pin 名不按套路来）时，退回到
-     * 「该节点上第一个已有默认值的标量口」——默认连线状态仍然可用，
-     * 而不是空着让作者从零手工连。 */
-    if (!chosen) {
-      const withDefault = entry.pins.find((pin) => {
-        const raw = io?.[pin.ioKey];
-        return (
-          raw &&
-          isScalarPin(pin) &&
-          resolveEntryDefault(raw, null) !== undefined
-        );
-      });
-      chosen = (withDefault ?? entry.pins.find(isScalarPin))?.ioKey ?? null;
-    }
-    map[entry.id] = chosen;
-  }
-  return map;
-}
-
 /* ── 历史键的兼容读取 ──
  *
  * 统一参数表的键曾经是 `<节点 id>|<分类>`（`5|size-width`）——那是「按工作流
  * 聚类」时代的产物。现在键变成契约口子（`size` / `prompt`…），作者当年连过的
- * 线若只按新键去查会落空，表现就是「改了落点没生效」（不报错，静默回到自动）。
+ * 线若只按新键去查会落空，表现就是「改了落点没生效」（不报错，静默显示成「未配置」）。
  * 因此解析映射时把旧键一并当作候选：只读、不写，落库一律用新键。 */
 function legacyEntryIds(entry: ParamEntry): string[] {
   const nodeIds = new Set<string>();
@@ -713,37 +662,37 @@ export type ParamMappingByMode = Record<string, Record<string, string | null>>;
 export interface ParamMapping {
   /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
   manualByMode?: ParamMappingByMode;
-  /** 服务端富化时算出的**默认连线状态**（`entryId → ioKey`）。
-   *
-   *  它不是持久化字段，也不参与序列化：读取时由 `buildParamEntries` +
-   *  `autoMapEntries` 现算一份填进来。存在的意义是让「解析 / 应用 / 展示」
-   *  三处共用同一份自动映射结果 —— 自动映射依赖 workflowIO，而后者由调用方
-   *  单独持有，统一在这里收口可以避免各层各算一遍、算出不一致的默认线。 */
-  auto?: Record<string, string | null>;
   /** 作者改过的「对外参数名」（ioKey → 名字）。 */
   labels?: Record<string, string>;
 }
 
 /** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。
  *
- *  优先级：该模式作者画的线（含显式 `null` = 断开） > 默认连线状态（自动映射）。
+ *  **判据只有一条：作者在这个模式里画的线**（`manualByMode[mode]`）。没有线
+ *  的口子**不出现在结果里** —— 调用方按「取不到 = 未配置」如实呈现，绝不替作者
+ *  猜一个落点（见文件头：猜错了用户看不出来）。
+ *
  *  `manualByMode` 的形状是 `{ [mode]: { [entryId]: ioKey | null } }` —— 按
  *  **模式**归拢，与落库的 `source.mode:<模式>` 一一对应；查一次即得该模式下
- *  所有被作者改过的线。 */
+ *  所有被作者改过的线。显式 `null`（作者断开）**保留在结果里**（值就是 `null`），
+ *  它与「没连过」在语义上不同：前者是「这条口故意不接」，后者是「还没配」。
+ *  `io` 只用于**校验落点仍然存在**（端口被改名 / 移除后，一条指向不存在端口的
+ *  线会让运行期静默落不到值 —— 这种线按未配置处理，与画布上画不出线一致）。 */
 export function resolveMapping(
   entries: readonly ParamEntry[],
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
 ): Record<string, string | null> {
-  const auto = mapping?.auto ?? autoMapEntries(entries, io);
-  const out: Record<string, string | null> = { ...auto };
+  const out: Record<string, string | null> = {};
   const manual: Record<string, string | null> = mode
     ? (mapping?.manualByMode?.[mode] ?? {})
     : {};
   for (const entry of entries) {
     const hit = manualTargetForEntryRaw(manual, entry);
-    if (hit.found) out[entry.id] = hit.target;
+    if (!hit.found) continue;
+    if (hit.target !== null && io && !io[hit.target]) continue;
+    out[entry.id] = hit.target;
   }
   return out;
 }
@@ -802,7 +751,7 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
 /** 把映射序列化回 `paramMap` 可落库的形状。
  *
  *  按模式归拢写 `source.mode:<模式> = { <entryId>: ioKey | null }`；`null`
- *  表示该模式下作者显式断开，必须一起落库，否则刷新后会被自动映射复活。
+ *  表示该模式下作者显式断开，必须一起落库 —— 不落的话刷新后它就成了「还没连过」。
  *  `source` 之外的键原样保留（paramMap 里还有 positiveNode 等其它命名空间）。 */
 export function serializeParamMapping(
   mapping: ParamMapping,
@@ -838,7 +787,7 @@ export function isDefaultMapping(
  *
  *  画布上的卡片拿到的是一条 `ParamEntry` 而不是一个裸 id，用它查才能把
  *  「当年按 `<节点>|<分类>` 落库的线」也算进来 —— 否则作者改过的落点在契约改版
- *  后会静默回到自动判定。 */
+ *  后会静默变成「未配置」）。 */
 export function manualTargetForEntry(
   mapping: ParamMapping | null | undefined,
   entry: ParamEntry,
@@ -877,7 +826,6 @@ export function clearModeWiring(
     manualByMode: { ...(mapping?.manualByMode ?? {}) },
     labels: { ...(mapping?.labels ?? {}) },
   };
-  if (out.auto) out.auto = mapping?.auto;
   if (mode) delete out.manualByMode![mode];
   return out;
 }
@@ -1026,11 +974,11 @@ function sizeValueForPin(
 
 /** 把映射落到运行时载荷：对外值 → `workflowInputs` 三元组。
  *
- *  · 有映射：只覆盖被映射的那个口（作者显式画的线说了算，避免把整节点默认值
- *    硬塞进去盖掉图内其它逻辑）；
- *  · 没映射（未连线）：该节点全部标量口按默认值兜底 —— 与旧
- *    `toWorkflowInputsPayload` 的「暴露 pin 全量下发」行为等价，
- *    按节点聚类后不会重复下发；用户已显式给值的对外口不参与兜底。 */
+ *  · 作者画过线的口：用户值只落到那条线指向的端口（线说了算，避免把整节点默认值
+ *    硬塞进去盖掉图内其它逻辑）；作者显式断开（`null`）→ 值落不上，如实进
+ *    `unmatched`；
+ *  · 没画线的口：**不认用户值**（没有落点可落，不替作者猜），只按工作流默认值
+ *    兜底 —— 与「未连线的口就用工作流自己的默认值」一致。 */
 export function applyParamMapping(args: {
   io: WorkflowIOMap | null | undefined;
   entries: readonly ParamEntry[];
@@ -1039,17 +987,12 @@ export function applyParamMapping(args: {
   mode?: string | null;
   /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）。
    *
-   *  带「尺寸」这类一对外参数对多端口的口子时必传：默认状态下它接到的是
-   *  组合控件覆盖的那几个端口，值要逐端口派生成各自认的形状（宽高比 / 像素量）。
-   *  不传时按单端口处理（老调用方行为不变）。 */
+   *  作者把「尺寸」这类口连到组合控件覆盖的某个端口时，值要派生成那个端口认的
+   *  形状（宽高比 / 像素量）；不传时按单端口处理。 */
   groupedKeys?: ReadonlySet<string>;
 }): { inputs: MappedInput[]; unmatched: string[] } {
   const { io, entries, mapping, values, mode, groupedKeys } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
-  /* 作者手工连了线的对外口（含"手工断开"）与纯自动映射要分开对待：
-   *   · 手工：用户值只落到那个端口，该节点其余端口不再兜底（作者的线说了算）；
-   *   · 自动（默认连线状态）：与"没连线"同义 —— 用户值落自动挑中的端口，
-   *     其余端口照旧默认值兜底，语义等价于旧的「暴露 pin 全量下发」。 */
   const inputs: MappedInput[] = [];
   const unmatched: string[] = [];
   const seen = new Set<string>();
@@ -1062,12 +1005,16 @@ export function applyParamMapping(args: {
     inputs.push({ nodeId: runtimeNodeId(raw), name: raw.name, value });
   };
 
-  /* ① 用户给了值的统一口子：落到它连着的那个端口。没连线（或作者显式断开）
-   *    → 如实记进 unmatched，绝不凭空挑一个端口顶上去。
+  /* ①② 同一趟遍历：先看「用户给了值的口」落到哪，再给**没落上的口**按工作流默认值
+   *   兜底。分两趟会让「这条口到底该不该兜底」在第二趟重新判一遍，而那个判据与
+   *   第一趟的实际结果极易走散 —— 例如落点存在但尺寸形状算不出：第一趟没落上、
+   *   第二趟却因为「有落点」跳过兜底，参数两边都不下发（提交给 ComfyUI 的载荷里
+   *   凭空少一格）。一趟走完，`suppliedEntries` 是唯一判据。
    *
-   *    `values` 有两个来源：工坊侧按**契约 id**（`prompt` / `size`）给值；运行期
-   *    表单按 **ioKey** 给值（DynamicWorkflowForm 的行键）。两者都要接住 ——
-   *    只认一种就会让另一种静默失效（表现为「改了没生效」）。 */
+   *   `values` 有两个来源：工坊侧按**契约 id**（`prompt` / `size`）给值；运行期
+   *   表单按 **ioKey** 给值（DynamicWorkflowForm 的行键）。两者都要接住 ——
+   *   只认一种就会让另一种静默失效（表现为「改了没生效」）。 */
+  const suppliedEntries = new Set<string>();
   for (const entry of entries) {
     const byContract = values[entry.id];
     const byPinKeys = entry.pins
@@ -1075,11 +1022,10 @@ export function applyParamMapping(args: {
       .find((value) => value !== undefined);
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) continue;
-    /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量由同一
-     * 块控件录入，默认状态下几个端口都取自这一个口）。这时要把同一个对外值
-     * 派生成每个端口各自认的形状，逐个下发 —— 只往「自动判定挑中的那一个」写，
-     * 用户在图上连出来的另外两条线就从外部拿不到值（ISSUE #355：「尺寸那三项
-     * 每一项都需要从外部获取值」）。 */
+    /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量由同一块控件
+     *  录入，作者把这几条线都连到同一个口上）。这时要把同一个对外值派生成每个
+     *  端口各自认的形状，逐个下发 —— 只往其中一条线写，作者连出来的另外两条就
+     *  从外部拿不到值（ISSUE #355：「尺寸那三项每一项都需要从外部获取值」）。 */
     const targets = wiredTargetsForEntry({
       entry,
       io,
@@ -1088,20 +1034,28 @@ export function applyParamMapping(args: {
       groupedKeys,
     });
     let pushed = false;
-    for (const wired of targets) {
-      if (!io?.[wired.ioKey]) continue;
-      const perPort = sizeValueForPin(io, entry, wired.ioKey, supplied);
+    for (const target of targets) {
+      if (!io?.[target.ioKey]) continue;
+      const perPort = sizeValueForPin(io, entry, target.ioKey, supplied);
       if (perPort === undefined) continue;
-      push(wired.ioKey, perPort);
+      push(target.ioKey, perPort);
       pushed = true;
     }
-    if (!pushed) unmatched.push(entry.id);
+    /* 有落点但**没落上**（端口已消失 / 尺寸形状算不出）也要如实记 —— 否则用户
+     * 改了值、任务跑出来还是旧值，而界面上没有任何地方说「这个口没接上」。 */
+    if (pushed) suppliedEntries.add(entry.id);
+    else unmatched.push(entry.id);
   }
 
-  /* ② 未连线/仅自动映射的统一口子：按默认值兜底（「用户不改就用工作流默认值」）。
-   *    作者手工连了线的口跳过 —— 用户值已经写在那个端口上，再塞默认值只会打架。 */
+  /* ② 用户值**真的落到了**端口的口子跳过兜底：用户值就写在那几行上，再塞默认值
+   *    只会打架。
+   *
+   *    其余全部兜底 —— 作者没连过的口（未配置）、连了但被显式断开的、以及落点
+   *    因端口改名而失效的，都按工作流自己的默认值下发。这是「用户没改就用工作流
+   *    默认值」的本意，也保证一条历史遗留的断线不会把参数从提交载荷里整个抹掉
+   *    （任务跑出来缺参数，用户却看不到任何提示）。 */
   for (const entry of entries) {
-    if (!isDefaultMappingForEntry(mapping, entry, mode)) continue;
+    if (suppliedEntries.has(entry.id)) continue;
     for (const pin of entry.pins) {
       const raw = io?.[pin.ioKey];
       if (!raw || !isScalarPin(pin)) continue;

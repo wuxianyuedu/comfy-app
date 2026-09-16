@@ -16,9 +16,14 @@
  *
  * 本模块负责：
  *   - detectFormat：自动识别 JSON 是哪种格式
- *   - convertRawToApi：将原始 → API（通过 ComfyUI /object_info 获取 widget→input 映射）
  *   - extractPositions：从原始格式抽取每个节点的 (x,y)
- *   - fallbackRawToApi：ComfyUI 不可达时的启发式映射（针对已知常用节点类）
+ *   - fallbackRawToApi：raw → API 图的**画布呈现**用转换（纯离线启发式，不发网络
+ *     请求；导入与执行都不用它 —— 见该函数上方说明）
+ *
+ * 两种格式**地位同等**：API 格式落 `graph` 直接执行，RAW 格式落 `rawJson` 交
+ * comfy-cli 执行（它按节点类定义做权威的 UI→API 转换）。所以本模块**不再提供**
+ * 「带 /object_info 的转换」那条路：它唯一的用途曾是导入时把 raw 转成 API 图存库，
+ * 而那件事已经被证明是有害的（ISSUE #632）。
  */
 
 import { comfyBase } from "./client";
@@ -546,15 +551,9 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
   return out;
 }
 
-/** Full input order — widgets + connections interleaved in display order.
- *  Used to translate link `dst_slot` → input name. Must include optional
- *  inputs too, otherwise dst_slot indices for optional connection inputs miss. */
-function resolveFullOrder(cls: ObjectInfoClassDef | undefined): string[] {
-  if (!cls) return [];
-  const req = cls.input_order?.required ?? [];
-  const opt = cls.input_order?.optional ?? [];
-  return [...req, ...opt];
-}
+/* `resolveFullOrder`（带 /object_info 的完整输入序）已随 `convertRawToApi` 一起
+ * 删除：它只服务那条「导入时把 raw 转成 API 图」的路，而那条路已取消（ISSUE
+ * #632）。剩余调用方（`buildRawView`）走的是离线启发式 `FALLBACK_FULL`。 */
 
 /** Fallback widget mapping for common classes when /object_info is unavailable.
  *  The order here is the display order of WIDGET inputs only (connections
@@ -856,51 +855,15 @@ function buildApiGraph(
   return graph;
 }
 
-/** Best-effort conversion: raw → api. Returns empty graph + warning when unparseable. */
-export async function convertRawToApi(
-  raw: RawWorkflow,
-): Promise<ConversionResult> {
-  const warnings: string[] = [];
-  const positions = extractPositions(raw);
-  const graph: Record<string, ApiWorkflowNode> = {};
-
-  if (!Array.isArray(raw.nodes) || raw.nodes.length === 0) {
-    return {
-      graph,
-      positions,
-      warnings: ["raw.nodes 为空"],
-      usedObjectInfo: false,
-    };
-  }
-
-  // Try to fetch /object_info for accurate widget/connection mapping.
-  const info = await fetchObjectInfo();
-  const usedObjectInfo = !!info;
-
-  // Two parallel maps: widget-only (for widgets_values) and full-order (for links).
-  const widgetOrder = new Map<string, string[]>();
-  const fullOrder = new Map<string, string[]>();
-  if (info) {
-    for (const [clsName, def] of Object.entries(info)) {
-      widgetOrder.set(clsName, resolveWidgetOrder(def));
-      fullOrder.set(clsName, resolveFullOrder(def));
-    }
-  } else {
-    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS))
-      widgetOrder.set(clsName, list);
-    for (const [clsName, list] of Object.entries(FALLBACK_FULL))
-      fullOrder.set(clsName, list);
-    warnings.push(
-      "ComfyUI /object_info 不可达，使用启发式 widget 映射（部分字段可能错位）",
-    );
-  }
-
-  Object.assign(graph, buildApiGraph(raw, widgetOrder, fullOrder, warnings));
-
-  return { graph, positions, warnings, usedObjectInfo };
-}
-
-/** Synchronous variant using only the fallback heuristics — used for offline import. */
+/** raw → API 图（**只用于画布呈现**，不参与导入/执行）。
+ *
+ *  谁在用：`workflow-detail-raw` 的 `buildRawView` —— 存库的 `graph` 在部分工作流
+ *  里被拆平成 `N:xx`，RAW 布局要的是一份**保留 subgraph wrapper** 的视图，于是
+ *  从 `rawJson` 现派生一份。纯离线启发式、不发网络请求。
+ *
+ *  **不要再把它接回导入链**：执行侧 raw 由 comfy-cli 按节点类定义做权威转换
+ *  （`resolveExecutionPayload` 优先送 rawJson），入库存一份启发式猜出来的 API 图
+ *  只会让画布与运行都跑错图（ISSUE #632）。 */
 export function fallbackRawToApi(raw: RawWorkflow): ConversionResult {
   const warnings: string[] = [
     "使用 fallback widget 映射（未尝试连接 ComfyUI）",

@@ -86,6 +86,11 @@ export const llmRouter = createTRPCRouter({
               )
               .min(1),
             output: z.enum(["image", "video", "audio"]),
+            /* 该模式的必备口（缺了它这条流在工坊里驱动不起来）。缺省 =
+             * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
+            required: z
+              .array(z.string().refine(isModeContractInputId))
+              .optional(),
           }),
         ),
       }),
