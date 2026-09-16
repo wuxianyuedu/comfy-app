@@ -28,7 +28,7 @@ import {
   startLocalGenerate,
   watchTask,
   type TaskProgressNode,
-} from "@/lib/workshop/generation-client";
+} from "~/lib/workshop/generation-client";
 import {
   appendWorkflowRunLog,
   failWorkflowRun,
@@ -37,7 +37,7 @@ import {
   patchWorkflowRun,
   registerWorkflowRun,
   subscribeWorkflowRunStore,
-} from "@/lib/workflow-run-store";
+} from "~/lib/workflow-run-store";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   defaultInputValues,
@@ -50,26 +50,26 @@ import {
   toWorkflowInputsPayload,
   type WorkflowIOMap,
 } from "../shared/workflow-io";
-import { seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
+import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
 import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
-} from "@/lib/workflow-param-mapping";
+} from "~/lib/workflow-param-mapping";
 import {
   applyOutputBindingEdit,
   canApplyOutputBindingEdit,
   clearOutputBindingEdit,
-} from "@/lib/workflow-output-binding";
+} from "~/lib/workflow-output-binding";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
-import { resolveWorkflowMode } from "@/lib/workflow-types";
+import { resolveWorkflowMode } from "~/lib/workflow-types";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
 } from "./workflow-library-param-cards";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
-import { modeContractEntries } from "@/lib/workshop/model-mode-contract";
+import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";

@@ -16,8 +16,8 @@
  */
 
 import React from "react";
-import { ioLabel, typeDisplay } from "@/components/studio/shared/workflow-io";
-import type { WorkflowIOEntry } from "@/components/studio/shared/workflow-io";
+import { ioLabel, typeDisplay } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
 
 /** 卡片外壳：与 CanvasNode 持有的外壳完全一致（无 overflow-hidden，
  *  保护端点骑跨；底部按钮自带 rounded-b-[14px] 贴合圆角）。 */

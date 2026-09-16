@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { type Post } from "~/server/db/schema";
-import { postRepository } from "@/lib/core/repository";
+import { postRepository } from "~/lib/core/repository";
 
 export const postRouter = createTRPCRouter({
   // (OWASP A01): demo scaffold query no longer public — list/read

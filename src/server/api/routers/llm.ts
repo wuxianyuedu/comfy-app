@@ -5,18 +5,18 @@ import {
   completeLLM,
   ensureRemoteStorageMigrated,
   getConfigForClient,
-} from "@/lib/llm/server";
-import { splitExtraModels } from "@/lib/llm/types";
-import { remoteModelRepository } from "@/lib/core/repository";
+} from "~/lib/llm/server";
+import { splitExtraModels } from "~/lib/llm/types";
+import { remoteModelRepository } from "~/lib/core/repository";
 import {
   isModeContractInputId,
   parseRemoteModeAdapters,
   WORKSHOP_INPUT_TYPES,
-} from "@/lib/workshop/model-mode-contract";
+} from "~/lib/workshop/model-mode-contract";
 import {
   loadModeContracts,
   saveModeContracts,
-} from "@/lib/workshop/mode-contract.server";
+} from "~/lib/workshop/mode-contract.server";
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
@@ -150,7 +150,7 @@ export const llmRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const { llmConfigRepository, remoteModelRepository } =
-        await import("@/lib/core/repository");
+        await import("~/lib/core/repository");
       await ensureRemoteStorageMigrated();
       // option C：远端模型与本地候选分开存。把提交的候选清单按类型拆分：
       //   字符串 → llmConfig.extraModels（本地候选，无 apiKey）

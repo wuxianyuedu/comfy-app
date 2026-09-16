@@ -5,7 +5,7 @@ import {
   NODE_META,
   STATUS_LABEL,
   type NodeKind,
-} from "@/lib/project-canvas/canvas-types";
+} from "~/lib/project-canvas/canvas-types";
 
 /* ── Small shared UI primitives ── */
 export const btnCls =

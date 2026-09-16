@@ -10,7 +10,7 @@ import {
   defaultData,
   type CanvasNodeData,
   type CanvasNodeType,
-} from "@/lib/project-canvas/canvas-types";
+} from "~/lib/project-canvas/canvas-types";
 
 // vitest globals: false 下 RTL 不会自动 cleanup,需手动注册
 afterEach(cleanup);

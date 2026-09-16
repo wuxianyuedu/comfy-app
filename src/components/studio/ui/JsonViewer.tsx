@@ -31,7 +31,7 @@ import {
 } from "react";
 import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
 type JsonValue =

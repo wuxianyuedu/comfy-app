@@ -102,7 +102,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
   it("服务端出口是转发层，不再自带第二份实现", () => {
     const src = readFileSync(join(SRC, "server", "lib", "logger.ts"), "utf8");
     // 正向：确实从地基侧取实现
-    expect(src).toMatch(/from\s+["']@\/lib\/core\/logger["']/);
+    expect(src).toMatch(/from\s+["']~\/lib\/core\/logger["']/);
     // 反向：pino 的构造与脱敏路径不许在本文件里再来一份
     expect(src).not.toMatch(/from\s+["']pino["']/);
     expect(src).not.toMatch(/createPinoLogger\s*\(/);
@@ -127,7 +127,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     // 判据：`comfyui/trace.ts` 直写文件、不经 pino —— 它必须自己调用共享守卫，
     // 否则「原始回执里的密钥明文落盘」这条在 §7.18.2.1 之后仍然成立。
     const src = readFileSync(join(SRC, "lib", "comfyui", "trace.ts"), "utf8");
-    expect(src).toMatch(/from\s+["']@\/lib\/core\/redact-secret["']/);
+    expect(src).toMatch(/from\s+["']~\/lib\/core\/redact-secret["']/);
     expect(stripComments(src)).toMatch(/redactSecretShaped\(/);
     // 反向：路径上不许再出现第二份守卫实现（PEM/JWT 判据各写一份 = 孪生对）
     expect(src).not.toMatch(/BEGIN \[A-Z \]\*PRIVATE KEY/);

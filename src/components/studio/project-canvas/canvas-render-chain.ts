@@ -22,7 +22,7 @@
  */
 
 import type { RenderChainModule } from "../debug/DebugChainFooter";
-import type { NodeKind } from "@/lib/project-canvas/canvas-types";
+import type { NodeKind } from "~/lib/project-canvas/canvas-types";
 
 /** 项目画布所有节点共用的渲染链路（不随 kind 变化）。
  *  scope: canvas=画布级（容器/编排/状态层），node=节点级（节点渲染/类型）。 */

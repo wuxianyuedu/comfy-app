@@ -4,7 +4,7 @@
 // 纯展示组件：消费 useWorkshopAgent hook 返回的 controller，
 // 渲染「对话消息区 + 工作过程面板 + 输入框」。无业务逻辑。
 import React from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 import type {
   WorkshopAgentController,
   AgentToolRun,

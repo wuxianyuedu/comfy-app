@@ -1,8 +1,8 @@
 "use client";
 
-import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
-import { Icon } from "@/components/ui/icon";
-import { folderMeta, getFolderTooltip } from "@/lib/model-types";
+import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
+import { Icon } from "~/components/ui/icon";
+import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";
 import { useModelLibrary } from "./hooks/use-model-library";

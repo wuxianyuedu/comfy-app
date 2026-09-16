@@ -1,7 +1,7 @@
 // ── 工坊 Agent 工具执行器（纯逻辑模块）────────────────────
 // 把 Agent tool_call 映射成对工坊 controller 的实际操作。
 // 本模块不直接持有 React state —— 所有数据读写经 handlers 回调完成。
-import type { WorkshopDraftDto } from "@/lib/workshop/draft-sync-shared";
+import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** Agent 执行工具时需要调用的 controller 操作。 */
 export interface AgentToolHandlers {
@@ -238,8 +238,8 @@ export function resolveAgentTool(
         execute: async () => {
           const meta = hd.getMeta();
           const { buildScriptMarkdownMessages } =
-            await import("@/lib/llm/prompts");
-          const { streamChat } = await import("@/lib/llm/browser");
+            await import("~/lib/llm/prompts");
+          const { streamChat } = await import("~/lib/llm/browser");
           let full = "";
           await streamChat({
             messages: buildScriptMarkdownMessages(meta, idea),
@@ -273,7 +273,7 @@ export function resolveAgentTool(
           if (!currentScript.trim()) {
             return { ok: false, summary: "当前剧本为空，请先生成剧本" };
           }
-          const { streamChat } = await import("@/lib/llm/browser");
+          const { streamChat } = await import("~/lib/llm/browser");
           const full = await streamChat({
             messages: [
               {
@@ -309,7 +309,7 @@ ${currentScript.slice(0, 8000)}`,
           if (!script.trim()) {
             return { ok: false, summary: "当前无剧本内容，请先生成剧本" };
           }
-          const { streamChat } = await import("@/lib/llm/browser");
+          const { streamChat } = await import("~/lib/llm/browser");
           const full = await streamChat({
             messages: [
               {
@@ -333,7 +333,7 @@ ${script.slice(0, 8000)}`,
           const newOnes = chars.filter((c) => !names.has(c.name));
           // 模型只给名字/外貌等文本字段，补齐 Character 的其余必填字段
           // （与 add_character 一致），否则写进 draft 的是残缺角色卡。
-          const { workshopUid } = await import("@/lib/workshop/script-parser");
+          const { workshopUid } = await import("~/lib/workshop/script-parser");
           const created = newOnes.map((c) => ({
             id: workshopUid("char"),
             name: c.name,
@@ -371,15 +371,15 @@ ${script.slice(0, 8000)}`,
             return { ok: false, summary: `角色「${charName}」已存在` };
           }
           const { buildCharacterFromBriefMessages } =
-            await import("@/lib/llm/prompts");
-          const { streamChat } = await import("@/lib/llm/browser");
+            await import("~/lib/llm/prompts");
+          const { streamChat } = await import("~/lib/llm/browser");
           const full = await streamChat({
             messages: buildCharacterFromBriefMessages(
               desc ? `${charName}：${desc}` : charName,
             ),
           });
           const parsed = parseCharacterFull(full);
-          const { workshopUid } = await import("@/lib/workshop/script-parser");
+          const { workshopUid } = await import("~/lib/workshop/script-parser");
           const character = {
             id: workshopUid("char"),
             name: charName,
@@ -410,7 +410,7 @@ ${script.slice(0, 8000)}`,
           if (!script.trim()) {
             return { ok: false, summary: "当前无剧本内容，请先生成剧本" };
           }
-          const { streamChat } = await import("@/lib/llm/browser");
+          const { streamChat } = await import("~/lib/llm/browser");
           const full = await streamChat({
             messages: [
               {
@@ -433,7 +433,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
             return { ok: false, summary: "未能解析出分镜镜头" };
           }
           const existing = hd.getShots();
-          const { workshopUid } = await import("@/lib/workshop/script-parser");
+          const { workshopUid } = await import("~/lib/workshop/script-parser");
           const mapped = shots.map((s) => ({
             id: workshopUid("shot"),
             index: 0,

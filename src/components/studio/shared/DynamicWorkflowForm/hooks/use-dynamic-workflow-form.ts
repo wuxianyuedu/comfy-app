@@ -6,7 +6,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent, RefObject } from "react";
 
-import { uploadImageFile } from "@/lib/project-canvas/canvas-api";
+import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
 import {
   filterVisibleInMode,
   inferGroups,

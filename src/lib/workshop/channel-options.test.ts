@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { LLMConfigView } from "@/lib/llm/types";
+import type { LLMConfigView } from "~/lib/llm/types";
 import {
   channelOptionValue,
   channelProviderLabel,

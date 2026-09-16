@@ -6,11 +6,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { patchWorkflow } from "@/lib/workflow-mutations";
+import { patchWorkflow } from "~/lib/workflow-mutations";
 
 import { useWorkflowModes } from "./use-workflow-modes";
 
-vi.mock("@/lib/workflow-mutations", () => ({ patchWorkflow: vi.fn() }));
+vi.mock("~/lib/workflow-mutations", () => ({ patchWorkflow: vi.fn() }));
 
 const mockedPatch = vi.mocked(patchWorkflow);
 

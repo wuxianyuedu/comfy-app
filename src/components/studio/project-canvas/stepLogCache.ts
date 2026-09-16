@@ -35,7 +35,7 @@
  *
  * ───────────────────────────────────────────────────────────────────── */
 
-import type { ValidationError } from "@/lib/comfyui/validation";
+import type { ValidationError } from "~/lib/comfyui/validation";
 
 /* StepLogEntry is re-exported from this module so ImageGenerationPanel
  * can import both the type and the cache helpers without creating a

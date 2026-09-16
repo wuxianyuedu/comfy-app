@@ -24,14 +24,14 @@ import {
   buildLibraryWorkflowInput,
   startLocalGenerate,
   watchTask,
-} from "@/lib/workshop/generation-client";
+} from "~/lib/workshop/generation-client";
 import {
   appendWorkflowRunLog,
   failWorkflowRun,
   patchWorkflowRun,
   registerWorkflowRun,
-} from "@/lib/workflow-run-store";
-import type { SizeSpec } from "@/lib/size-presets";
+} from "~/lib/workflow-run-store";
+import type { SizeSpec } from "~/lib/size-presets";
 
 export interface EncapsulationTestRunArgs {
   workflowId: string;

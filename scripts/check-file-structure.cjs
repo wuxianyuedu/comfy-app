@@ -36,6 +36,10 @@
  *       曾经用来做「占位符」的 NUL 哨兵(规范 12.11)是它的来源,现已改为
  *       可打印形式;本条防回潮。
  * 违反 R1-R4、R7-R12 以退出码 1 阻断提交。
+ *
+ * R13（import 别名只有一种前缀 `~`，ISSUE #640）由**独立脚本**
+ * `scripts/check-import-alias.cjs` 承担，不在这里实现：判据是「模块说明符的前缀」，
+ * 与文件命名/位置无关，混进本文件的 R1-R12 只会让两套口径互相干扰。
  */
 const fs = require("node:fs");
 const path = require("node:path");

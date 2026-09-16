@@ -13,11 +13,11 @@ import "server-only";
 import {
   taskRepository,
   workflowTemplateRepository,
-} from "@/lib/core/repository";
-import { enqueue } from "@/lib/comfyui/enqueue";
-import { resolveExecutionPayload } from "@/lib/comfyui/execution-shape";
-import { parseModesJson } from "@/lib/workflow-types";
-import type { WorkflowIOMap } from "@/lib/workflow-io-types";
+} from "~/lib/core/repository";
+import { enqueue } from "~/lib/comfyui/enqueue";
+import { resolveExecutionPayload } from "~/lib/comfyui/execution-shape";
+import { parseModesJson } from "~/lib/workflow-types";
+import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 import {
   buildEncapsulatedInputs,
   type WorkshopExposedValues,

@@ -1,13 +1,13 @@
 "use client";
 
-import { Icon } from "@/components/ui/icon";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { Icon } from "~/components/ui/icon";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
   MOTION_LABELS,
   type MotionLevel,
   type Shot,
-} from "@/lib/workshop/types";
-import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
+} from "~/lib/workshop/types";
+import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 
 const FPS_OPTIONS = ["8", "12", "16", "24"];

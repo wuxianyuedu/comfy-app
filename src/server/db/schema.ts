@@ -28,7 +28,7 @@ import {
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import { type InferSelectModel, type InferInsertModel } from "drizzle-orm";
-import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
+import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 // ── 自定义 DateTime 列（ISO 字符串，兼容 Prisma 存储）─────────────
 const dateNotNull = customType<{ data: Date; driverData: string }>({

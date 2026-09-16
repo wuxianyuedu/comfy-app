@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { uploadBgm } from "~/lib/film/bgm-client";
 import { errorMessage } from "~/lib/error-message";
-import type { SizeSpec } from "@/lib/size-presets";
+import type { SizeSpec } from "~/lib/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
 
 import { useToast } from "../ToastProvider";

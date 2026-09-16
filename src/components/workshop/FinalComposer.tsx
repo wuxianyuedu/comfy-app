@@ -1,14 +1,14 @@
 "use client";
 import React from "react";
-import { Icon } from "@/components/ui/icon";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { Icon } from "~/components/ui/icon";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
   MOTION_LABELS,
   TRANSITION_LABELS,
   type MotionLevel,
   type Shot,
   type Transition,
-} from "@/lib/workshop/types";
+} from "~/lib/workshop/types";
 
 interface Props {
   shots: Shot[];

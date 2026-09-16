@@ -1,44 +1,44 @@
 "use client";
 import React from "react";
 import { Trash } from "lucide-react";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { Icon } from "@/components/ui/icon";
-import { AttributeMultiSelect } from "@/components/workshop/AttributeMultiSelect";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { Icon } from "~/components/ui/icon";
+import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
 import {
   CHARACTER_ATTRIBUTES,
   type AttributeOptionSet,
-} from "@/lib/workshop/character-options";
-import type { Character, StyleRef } from "@/lib/workshop/types";
+} from "~/lib/workshop/character-options";
+import type { Character, StyleRef } from "~/lib/workshop/types";
 import {
   buildCharacterPrompt,
   buildCharacterNegative,
-} from "@/lib/workshop/prompt-builder";
-import { workshopUid } from "@/lib/workshop/script-parser";
+} from "~/lib/workshop/prompt-builder";
+import { workshopUid } from "~/lib/workshop/script-parser";
 import {
   type ExtractChannel,
   ExtractToolbar,
   parseChannelOption,
-} from "@/components/workshop/ExtractToolbar";
-import { ExtractModelSelect } from "@/components/workshop/ExtractModelSelect";
+} from "~/components/workshop/ExtractToolbar";
+import { ExtractModelSelect } from "~/components/workshop/ExtractModelSelect";
 import {
   CharacterPortraitStudio,
   type CharacterPortraitContext,
-} from "@/components/workshop/CharacterPortraitStudio";
+} from "~/components/workshop/CharacterPortraitStudio";
 import {
   channelProviderLabel,
   channelSelectionDisplayValue,
   resolveChannelSelection,
-} from "@/lib/workshop/channel-options";
+} from "~/lib/workshop/channel-options";
 import {
   buildExtractCharactersMessages,
   mergeCharacterDrafts,
   parseCharacterEntries,
   parseExtractedCharacters,
   parseImportedCharacterCards,
-} from "@/lib/workshop/script-parse";
-import type { ParsedCharacterDraft } from "@/lib/workshop/script-parse";
+} from "~/lib/workshop/script-parse";
+import type { ParsedCharacterDraft } from "~/lib/workshop/script-parse";
 import { errorMessage } from "~/lib/error-message";
-import { useLLM } from "@/components/workshop/LLMContext";
+import { useLLM } from "~/components/workshop/LLMContext";
 import {
   useExtractSession,
   type ExtractSession,
@@ -47,14 +47,14 @@ import {
 import {
   formatRequestMessages,
   makeExtractLog,
-} from "@/lib/workshop/extraction-log";
-import { streamChat } from "@/lib/llm/browser";
+} from "~/lib/workshop/extraction-log";
+import { streamChat } from "~/lib/llm/browser";
 import {
   buildCharacterMessages,
   buildCharacterFromBriefMessages,
   parseCharacter,
   parseCharacterFull,
-} from "@/lib/llm/prompts";
+} from "~/lib/llm/prompts";
 
 interface Props {
   characters: Character[];

@@ -1,15 +1,15 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
+import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
 
 const generateRuntimeLog = createAppRuntimeLogger("generate");
 import {
   taskRepository,
   workflowTemplateRepository,
-} from "@/lib/core/repository";
-import { buildCustomWorkflow, type ParamMap } from "@/lib/comfyui/workflow";
-import { enqueue } from "@/lib/comfyui/enqueue";
-import { resolveExecutionPayload } from "@/lib/comfyui/execution-shape";
+} from "~/lib/core/repository";
+import { buildCustomWorkflow, type ParamMap } from "~/lib/comfyui/workflow";
+import { enqueue } from "~/lib/comfyui/enqueue";
+import { resolveExecutionPayload } from "~/lib/comfyui/execution-shape";
 
 /** Prisma Json 列(paramMap)→ ParamMap。仅排除 null/标量,其余原样透传
  *  (object 已可赋给全可选属性的 ParamMap,无需断言)。 */

@@ -16,8 +16,8 @@
  */
 
 import type { RenderChainModule } from "../debug/DebugChainFooter";
-import { NODE_TYPE_REGISTRY } from "@/lib/comfyui/node-registry";
-import { isCustomNode, getCustomNodePackage } from "@/config/custom-nodes";
+import { NODE_TYPE_REGISTRY } from "~/lib/comfyui/node-registry";
+import { isCustomNode, getCustomNodePackage } from "~/config/custom-nodes";
 
 /** 工作流画布所有节点共用的渲染链路（不随 classType 变化） */
 const WF_COMMON: RenderChainModule[] = [

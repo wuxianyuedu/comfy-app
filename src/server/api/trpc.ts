@@ -15,10 +15,10 @@ import { ZodError } from "zod";
 
 import { auth } from "~/server/better-auth";
 import { db } from "~/server/db";
-import { userRepository } from "@/lib/core/repository";
+import { userRepository } from "~/lib/core/repository";
 import { checkRateLimit } from "~/server/api/middleware/rate-limit";
 import { logger } from "~/server/lib/logger";
-import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
+import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
 
 const trpcRuntimeLog = createAppRuntimeLogger("trpc");
 

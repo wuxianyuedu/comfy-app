@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { loraTrainingJobRepository } from "@/lib/core/repository";
-import { enqueueTraining, isTrainerConfigured } from "@/lib/comfyui/trainer";
-import { getSettingsSync } from "@/lib/app-settings/app-settings.server";
+import { loraTrainingJobRepository } from "~/lib/core/repository";
+import { enqueueTraining, isTrainerConfigured } from "~/lib/comfyui/trainer";
+import { getSettingsSync } from "~/lib/app-settings/app-settings.server";
 
 export const trainRouter = createTRPCRouter({
   /** GET /api/train */
@@ -82,7 +82,7 @@ export const trainRouter = createTRPCRouter({
         { id: true, status: true },
       );
       if (!job) throw new Error("Training job not found");
-      const { cancelTraining } = await import("@/lib/comfyui/trainer");
+      const { cancelTraining } = await import("~/lib/comfyui/trainer");
       await cancelTraining(job.id);
       return { ok: true };
     }),

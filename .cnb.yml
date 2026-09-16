@@ -116,6 +116,12 @@
     - name: 跨平台动作对照
       script: node scripts/check-ps1-consistency.mjs
 
+    # import 别名统一(§12.2 / §16.2):本仓库约定 `~` 前缀,但 tsconfig 的 paths
+    # 同时留着脚手架带来的 `@/*` —— 写错的代价是零(能编译、能跑),所以只有机器
+    # 判据挡得住漂移。shadcn add 生成的 ui/ 组件默认写 `@/`,是漂移的高发区。
+    - name: import 别名统一
+      script: node scripts/check-import-alias.cjs
+
     # ComfyUI 端口口径一致性(§5/§12.14):默认端口单点定义、连接侧与拉起侧共用
     # 同一常量。分叉的表现是静默连到另一个实例(现象是上传失败/端口漂移)。
     - name: ComfyUI 端口口径

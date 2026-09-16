@@ -1,5 +1,5 @@
 // ── Workshop MCP 本地 API 通道（纯 Node 入口）─────────────────────────
-// 与 `@/lib/workshop/api-channel.server` 是同一套能力的两个入口：那个跑在
+// 与 `~/lib/workshop/api-channel.server` 是同一套能力的两个入口：那个跑在
 // Next 里、必须 `import "server-only"`（配置与 apiKey 不能进浏览器包），
 // 这个跑在 MCP stdio 里、**不能**碰 server-only（非 Next 环境直接抛错）。
 //
@@ -21,7 +21,7 @@ import {
   type ApiVideoSubmitRequest,
   type ApiVideoSubmitResult,
   type WorkshopApiSettings,
-} from "@/lib/workshop/api-channel-core";
+} from "~/lib/workshop/api-channel-core";
 
 const FILE = path.join(process.cwd(), "data", WORKSHOP_API_SETTINGS_FILE);
 
