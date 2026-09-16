@@ -181,15 +181,36 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       (entry) => entry.id,
     );
     /* 契约口一律常驻：工作流里没有 `negative` 那一行也照样列出这一口
-     *  （落点为空 = 未配置），显示与否不跟着工作流内容走。 */
-    expect(ids).toEqual(["prompt", "negative", "size"]);
+     *  （落点为空 = 未配置），显示与否不跟着工作流内容走。
+     *  「尺寸」在映射层是四个子口（形态由作者连线声明，见 SIZE_SUB_IDS）。 */
+    expect(ids).toEqual([
+      "prompt",
+      "negative",
+      "size-width",
+      "size-height",
+      "size-aspect",
+      "size-megapixels",
+      "size-resolution",
+      "size-multiple",
+    ]);
   });
 
-  it("「尺寸」是一个口子：宽 / 高 / 宽高比 / 像素量都算它的候选落点", () => {
-    const size = buildParamEntries(io, undefined, { mode: "T2I" }).find(
-      (entry) => entry.id === "size",
-    )!;
-    expect(size.pins.map((item) => item.name)).toEqual(["width", "height"]);
+  it("「尺寸」摊成四个子口：候选按类型收，形态由作者连线声明", () => {
+    const entries = buildParamEntries(io, undefined, { mode: "T2I" });
+    const width = entries.find((entry) => entry.id === "size-width")!;
+    /* 三个数值口（width / height / steps）都是候选 —— **按类型收，不看名字**：
+     * 「这个口是宽度」由作者把它连到「尺寸 · 宽」来声明，不由端口名判定。 */
+    expect(width.pins.map((item) => item.name)).toEqual([
+      "width",
+      "height",
+      "steps",
+    ]);
+    expect(width.label).toBe("尺寸 · 宽度");
+    expect(entries.find((entry) => entry.id === "size-aspect")!.pins).toEqual(
+      width.pins,
+    );
+    /* 名字像「尺寸」的口不再被单独摘出来：形态由子口身份给出，端口名不参与。 */
+    expect(width.cls).toBe("size-width");
   });
 
   it("按模式给口子：单图生视频多一个首帧，文生图没有", () => {
@@ -201,12 +222,32 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       buildParamEntries(videoIO, undefined, { mode: "I2V" }).map(
         (entry) => entry.id,
       ),
-    ).toEqual(["prompt", "negative", "first-frame", "size", "duration"]);
+    ).toEqual([
+      "prompt",
+      "negative",
+      "first-frame",
+      "size-width",
+      "size-height",
+      "size-aspect",
+      "size-megapixels",
+      "size-resolution",
+      "size-multiple",
+      "duration",
+    ]);
     expect(
       buildParamEntries(videoIO, undefined, { mode: "T2I" }).map(
         (entry) => entry.id,
       ),
-    ).toEqual(["prompt", "negative", "size"]);
+    ).toEqual([
+      "prompt",
+      "negative",
+      "size-width",
+      "size-height",
+      "size-aspect",
+      "size-megapixels",
+      "size-resolution",
+      "size-multiple",
+    ]);
   });
 
   it("工作流一个可落点端口都没有时，契约口照样列出（零候选 = 未配置）", () => {
@@ -216,12 +257,25 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
     const entries = buildParamEntries(internalOnly, undefined, {
       mode: "T2I",
     });
-    expect(entries.map((entry) => entry.id)).toEqual([
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    expect(Array.from(byId.keys())).toEqual([
       "prompt",
       "negative",
-      "size",
+      "size-width",
+      "size-height",
+      "size-aspect",
+      "size-megapixels",
+      "size-resolution",
+      "size-multiple",
     ]);
-    expect(entries.every((entry) => entry.pins.length === 0)).toBe(true);
+    /* 没有可落点的口如实零候选（未配置）。 */
+    expect(byId.get("prompt")!.pins).toEqual([]);
+    expect(byId.get("negative")!.pins).toEqual([]);
+    /* 尺寸的候选按类型收 —— steps 是 INT，所以它也在候选里（选对选错由作者
+     * 连的那条线负责，这正是「不猜形态」的代价与前提）。 */
+    expect(byId.get("size-width")!.pins.map((item) => item.name)).toEqual([
+      "steps",
+    ]);
   });
 
   it("卡片名是契约里的统一名，不跟着工作流端口名走", () => {
@@ -703,7 +757,7 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
 
   it("同一个口落到不同类型就有不同类型（尺寸 → COMBO 预设口）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
-    const size = entries.find((entry) => entry.id === "size")!;
+    const size = entries.find((entry) => entry.id === "size-aspect")!;
     const byName = (name: string) =>
       paramOutputPorts(size, outIo, "5::widget::width").find(
         (port) => port.name === name,
@@ -714,7 +768,7 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
 
   it("**每个候选都给端口** —— 尺寸有几个候选就有几颗点（ISSUE #355 复审）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
-    const size = entries.find((entry) => entry.id === "size")!;
+    const size = entries.find((entry) => entry.id === "size-aspect")!;
     const ports = paramOutputPorts(size, outIo, null);
     /* 宽 / 高 / 宽高比 / 像素量 四个候选 → 四颗端点，而不是一颗。 */
     expect(ports.map((port) => port.name)).toEqual([
@@ -731,6 +785,8 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     ]);
     /* `connected` = 端口在工作流里真实存在（不是「已连上」）—— 候选端口都存在。 */
     expect(ports.every((port) => port.connected)).toBe(true);
+    /* 行上显示的是**这个子口自己的名字**（卡片行不写 ComfyUI 内部 pin 名）。 */
+    expect(ports.every((port) => port.display === "尺寸 · 宽高比")).toBe(true);
     /* 每颗点自带 handle id（= 该端口的 ioKey）：拖哪颗就连到哪个候选。 */
     expect(ports.map((port) => port.handleId)).toEqual([
       "width",
@@ -745,7 +801,7 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     /* 「尺寸只有一个比例口，像素数哪去了」：卡片要把每个候选的出口都摆出来，
      *  拖哪一颗就连到哪个候选；当前落点那一颗标实心。 */
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
-    const size = entries.find((entry) => entry.id === "size")!;
+    const size = entries.find((entry) => entry.id === "size-aspect")!;
     const ports = paramOutputPorts(size, outIo, "5::widget::height");
     expect(ports.map((port) => port.name)).toEqual([
       "width",
@@ -799,7 +855,7 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
 
   it("生效落点排在可识别的位置（第一颗即连上的那颗）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
-    const size = entries.find((entry) => entry.id === "size")!;
+    const size = entries.find((entry) => entry.id === "size-aspect")!;
     const ports = paramOutputPorts(size, outIo, "5::widget::height");
     expect(defaultOutputPortIndex(ports)).toBe(1);
     expect(ports[1]!.name).toBe("height");
@@ -831,32 +887,29 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
     "5::widget::height",
   ]);
 
-  it("作者把尺寸连到组合控件上：该控件覆盖的每个端口各一条线", () => {
+  it("尺寸子口只画自己那一条线：形态由子口声明，不按组合控件摊开", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
-      (entry) => entry.id === "size",
+      (entry) => entry.id === "size-aspect",
     )!;
     const wired = wiredTargetsForEntry({
       entry: size,
       io: sizeIo,
       target: "5::widget::aspect_ratio",
-      manual: false,
+      manual: true,
       groupedKeys: grouped,
     });
+    /* 拆分之前「尺寸」是一个口，落到组合控件上要把兄弟口一起画出来（否则读作
+     *  「这几项没接上」）。现在四种形态各有自己的子口 —— 「尺寸 · 宽高比」只
+     *  往它连的那一行写；把兄弟口也算上会让宽度值被写进像素量那一行。 */
     expect(wired.map((item) => item.ioKey)).toEqual([
-      "5::widget::width",
-      "5::widget::height",
       "5::widget::aspect_ratio",
-      "5::widget::megapixels",
     ]);
-    /* 自动判定挑中的那一颗标 active（卡片上实心，其余淡一档）。 */
-    expect(
-      wired.filter((item) => item.active).map((item) => item.ioKey),
-    ).toEqual(["5::widget::aspect_ratio"]);
+    expect(wired[0]!.active).toBe(true);
   });
 
-  it("作者把线连到组合控件里的某个端口 → 该控件覆盖的端口一起画", () => {
+  it("作者把子口连到组合控件里的某个端口：仍只画那一条", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
-      (entry) => entry.id === "size",
+      (entry) => entry.id === "size-megapixels",
     )!;
     const wired = wiredTargetsForEntry({
       entry: size,
@@ -865,23 +918,13 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
       manual: true,
       groupedKeys: grouped,
     });
-    /* 这几行由同一块控件录入（宽高比 / 像素量 / 宽高），作者把它连到这块控件上
-     *  就等于这几行都取自这一个口 —— 只画一条会让其余几项读作「没接上」。 */
-    expect(wired.map((item) => item.ioKey)).toEqual([
-      "5::widget::width",
-      "5::widget::height",
-      "5::widget::aspect_ratio",
-      "5::widget::megapixels",
-    ]);
-    /* 只有作者指定的那一颗是 active（卡片上实心）。 */
-    expect(
-      wired.filter((item) => item.active).map((item) => item.ioKey),
-    ).toEqual(["5::widget::megapixels"]);
+    expect(wired.map((item) => item.ioKey)).toEqual(["5::widget::megapixels"]);
+    expect(wired[0]!.active).toBe(true);
   });
 
   it("作者连到普通端口（不属于任何组合控件）：只画那一条", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
-      (entry) => entry.id === "size",
+      (entry) => entry.id === "size-aspect",
     )!;
     const wired = wiredTargetsForEntry({
       entry: size,
@@ -896,7 +939,7 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
 
   it("未连线 / 显式断开 → 一条都不画", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
-      (entry) => entry.id === "size",
+      (entry) => entry.id === "size-aspect",
     )!;
     expect(
       wiredTargetsForEntry({
@@ -931,7 +974,7 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪些端口", 
 
   it("落点不在组合控件里时按单条线处理（没有可摊开的一组端口）", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
-      (entry) => entry.id === "size",
+      (entry) => entry.id === "size-aspect",
     )!;
     const wired = wiredTargetsForEntry({
       entry: size,
@@ -972,16 +1015,18 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
   };
   const groupedKeys = new Set(Object.keys(sizeIo));
 
-  it("同一个「尺寸」口接到多个端口时，逐个派生成各自认的形状", () => {
+  it("尺寸的每个子口各连一行：同一个外部尺寸逐个派生成各自认的形状", () => {
     const entries = buildParamEntries(sizeIo, undefined, { mode: "T2I" });
     const { inputs } = applyParamMapping({
       io: sizeIo,
       entries,
-      /* 作者把那几条线都连到同一个「尺寸」口上（库里/画布上拖出来的线）。 */
+      /* 形态由作者连到哪个子口声明（老数据里那条 `size` 线由迁移逻辑归到子口）。 */
       mapping: {
         manualByMode: {
           T2I: {
-            size: "5::widget::megapixels",
+            "size-megapixels": "5::widget::megapixels",
+            "size-aspect": "5::widget::aspect_ratio",
+            "size-width": "5::widget::width",
           },
         },
       },
@@ -989,8 +1034,7 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
       mode: "T2I",
       groupedKeys,
     });
-    /* 这几行由同一块控件录入 → 同一个外部尺寸逐个派生成各自认的形状；
-     *  不属于那条线的行回工作流默认值。 */
+    /* 同一个外部尺寸按各自子口的形态派出去：像素量、比例标签、宽。 */
     expect(inputs.find((item) => item.name === "megapixels")?.value).toBe(2);
     expect(inputs.find((item) => item.name === "aspect_ratio")?.value).toBe(
       "16:9",
@@ -998,7 +1042,21 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
     expect(inputs.find((item) => item.name === "width")?.value).toBe(1920);
   });
 
-  it("默认（未连线）时按工作流默认值兜底，不拿外部尺寸硬塞", () => {
+  it("存量迁移：老数据里那条 `size` 线按落点形态归到对应子口", () => {
+    const entries = buildParamEntries(sizeIo, undefined, { mode: "T2I" });
+    const { inputs } = applyParamMapping({
+      io: sizeIo,
+      entries,
+      /* 拆分之前「尺寸」只有一个键，形态是从端口名判出来的 —— 迁移时只读地
+       *  判一次，把这条老线归到「尺寸 · 宽度」上，作者不必重连。 */
+      mapping: { manualByMode: { T2I: { size: "5::widget::width" } } },
+      values: { size: "1920x1080" },
+      mode: "T2I",
+    });
+    expect(inputs.find((item) => item.name === "width")?.value).toBe(1920);
+  });
+
+  it("尺寸子口没连线 → 不下发（未配置），外部尺寸值如实进 unmatched", () => {
     const entries = buildParamEntries(sizeIo, undefined, { mode: "T2I" });
     const { inputs, unmatched } = applyParamMapping({
       io: sizeIo,
@@ -1008,15 +1066,21 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
       mode: "T2I",
       groupedKeys,
     });
-    const byName = new Map(inputs.map((item) => [item.name, item.value]));
-    expect(byName.get("aspect_ratio")).toBe("16:9");
-    expect(byName.get("megapixels")).toBe(1);
-    expect(byName.get("width")).toBe(1024);
-    /* 没有线 → 外部给的尺寸落不上，如实记进 unmatched。 */
-    expect(unmatched).toContain("size");
+    /* 尺寸子口的候选是**按类型**收来的全部数值口，逐个下发它们的工作流默认值会
+     * 把作者没连过的行一起写进载荷 —— 所以一行都不下发（工作流图内默认值照常
+     * 生效），用户给的尺寸如实进 unmatched。 */
+    expect(inputs).toEqual([]);
+    expect(unmatched).toEqual([
+      "size-width",
+      "size-height",
+      "size-aspect",
+      "size-megapixels",
+      "size-resolution",
+      "size-multiple",
+    ]);
   });
 
-  it("比例不在端口声明的候选里 → 不写非法值，退回默认值", () => {
+  it("比例不在端口声明的候选里 → 不写非法值，也不兜底（图内默认值生效）", () => {
     const narrow: WorkflowIOMap = {
       "5::widget::aspect_ratio": pin("5", "aspect_ratio", {
         type: "COMBO",
@@ -1029,17 +1093,15 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
       io: narrow,
       entries,
       mapping: {
-        manualByMode: { T2I: { size: "5::widget::aspect_ratio" } },
+        manualByMode: { T2I: { "size-aspect": "5::widget::aspect_ratio" } },
       },
       values: { size: "1024x1024" },
       mode: "T2I",
     });
-    /* 形状算不出来（1:1 不在这个端口的候选里）→ 不写非法值，外部值如实进
-     * unmatched；该端口照旧下发工作流自己的默认值。 */
-    expect(unmatched).toContain("size");
-    expect(inputs.find((item) => item.name === "aspect_ratio")?.value).toBe(
-      "4:3",
-    );
+    /* 形状算不出来（1:1 不在这个端口的候选里）→ 不写非法值；子口不兜底候选，
+     *  于是这一行不下发，ComfyUI 用图内默认值（4:3）。 */
+    expect(unmatched).toContain("size-aspect");
+    expect(inputs.find((item) => item.name === "aspect_ratio")).toBeUndefined();
   });
 
   it("非尺寸口原样透传（提示词在所有落点上同形）", () => {

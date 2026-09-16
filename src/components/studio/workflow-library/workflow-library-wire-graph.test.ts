@@ -185,8 +185,8 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
     ).toBe(false);
   });
 
-  it("尺寸口 → 宽高比：放行（尺寸接受宽 / 高 / 宽高比 / 像素量四类）", () => {
-    const sizeEntry = entries.find((entry) => entry.id === "size")!;
+  it("尺寸子口 → 宽高比：放行（候选按类型收，形态由子口声明）", () => {
+    const sizeEntry = entries.find((entry) => entry.id === "size-aspect")!;
     expect(
       allowed({
         source: LIB_NODE_PARAMS,

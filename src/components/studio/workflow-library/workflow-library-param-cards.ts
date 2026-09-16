@@ -19,7 +19,6 @@
 
 import {
   buildParamEntries,
-  manualTargetFor,
   parseParamMapping,
   resolveMapping,
   wireHandleIdForIoKey,
@@ -124,9 +123,10 @@ export function deriveLibraryParamCards(args: {
      *  画一条通向某处的线反而误导。 */
     if (!target) continue;
     /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
-     *  —— 所以这条线一定是「作者连的」（库里的线一律实线，没有「猜出来的虚线」）。 */
-    const manual =
-      manualTargetFor(parsed, entry.id, mode ?? null) !== undefined;
+     *  —— 所以这条线一定是「作者连的」（库里的线一律实线，没有「猜出来的虚线」）。
+     *  用 `resolved` 而不是直接查键：存量那条 `size` 线在解析时被归到对应子口，
+     *  按老键查会把作者画过的线读成「没连过」。 */
+    const manual = true;
     /* 线要从**对应的那一颗圆点**出发：卡片上一个候选一颗点，取该端口的
      *  handle id（与编辑器画布同口径）。
      *
@@ -184,8 +184,8 @@ export function deriveLibraryParamCards(args: {
   return {
     entries,
     io: io ?? null,
-    isManual: (entryId: string) =>
-      manualTargetFor(parsed, entryId, mode ?? null) !== undefined,
+    /* 有落点 = 作者画过线（存量那条 `size` 线在解析时已归到对应子口，也算）。 */
+    isManual: (entryId: string) => !!resolved[entryId],
     resolved,
     ownersByPin,
     wires,
