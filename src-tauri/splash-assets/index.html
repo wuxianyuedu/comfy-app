@@ -46,14 +46,14 @@
     /* 标题行：品牌 + 窗口按钮（最小化 / 关闭）。
        窗口本身关了原生装饰（decorations: false），系统标题栏与那三个按钮
        都不再存在，这两个按钮就是启动期唯一的最小化 / 关闭入口。
-       整条是拖拽区，按钮用 -webkit-app-region: no-drag 排除，点击不会被
-       拖拽吞掉（与主窗口自定义标题行同一套约定）。 */
+       「哪块能拖」由页面脚本显式接管（见 startSplashDrag）：落点不在交互件
+       上就调 startDragging()。交互件这里同时用 -webkit-app-region: no-drag
+       标出来，与脚本判据同源（与主窗口自定义标题行同一套约定）。 */
     .titlebar {
       display: flex;
       align-items: center;
       gap: 10px;
       margin: 0 0 10px;
-      -webkit-app-region: drag;
     }
     .brand {
       font-size: 17px;
@@ -172,6 +172,7 @@
       opacity: 0.7;
     }
     .log-toggle {
+      -webkit-app-region: no-drag;
       background: transparent;
       border: 1px solid rgba(255, 255, 255, 0.14);
       color: var(--muted);
@@ -190,6 +191,9 @@
        更多行；窗口被用户拉大时也不会在面板下方留空白。 */
     .log-panel {
       display: none;
+      /* 日志面板里要能选中复制现场（见 pre 的 user-select: text），
+         所以整块不参与拖拽，否则按住一拖就把窗口带走了。 */
+      -webkit-app-region: no-drag;
       margin-top: 12px;
       background: #0B0A12;
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -432,6 +436,52 @@
     const closeBtn = $('btn-close');
     if (minBtn) minBtn.addEventListener('click', () => void performWinAction('minimize'));
     if (closeBtn) closeBtn.addEventListener('click', () => void performWinAction('close'));
+
+    // ── 拖动窗口 ──
+    // 窗口关了原生装饰（decorations: false），系统标题栏连同它的拖拽区一起消失，
+    // 「能拖」只能由页面自己给。此前只有 .titlebar 一条是拖拽区——十几像素高、
+    // 右侧还被按钮占掉，按到窗口其余任何地方都不动，用户看到的就是「拖不动」。
+    //
+    // 现在改由这条脚本统一接管：按主键且落点不在交互件上，就调 startDragging()，
+    // 于是整窗（含面板内边距）都能拖。为什么不用 CSS -webkit-app-region: drag：
+    // 非客户区判定在各 WebView 引擎上并不一致（主窗正是因此走的
+    // window-controls-client 里的同款 startDragging 调用），显式调用是一条唯一
+    // 判据，也才好把「哪块能拖」与下面那条 ACL 权限绑在一起。
+    //
+    // 第二个成因是权限：启动页来自内嵌本地源，而 core:default **不含**
+    // allow-start-dragging —— 未授权时拖拽会被 ACL 静默拒绝，页面看起来完全正常，
+    // 就是按住不动。权限声明在 capabilities/splash.json（与主窗同一条）。
+    //
+    // 判定口径与主窗口 title-bar-derive 的 isDragRegionTarget 一致：
+    // 落点落在 button/a/input/textarea/select/[data-no-drag] 上就不拖，
+    // 按钮点击与日志文本的选中复制才不会被拖拽吞掉。
+    const INTERACTIVE_SELECTOR = 'button, a, input, textarea, select, [data-no-drag]';
+
+    /** 按住窗口任意非交互区域即开始拖动。 */
+    async function startSplashDrag(event) {
+      const target = event && event.target;
+      if (target && typeof target.closest === 'function' && target.closest(INTERACTIVE_SELECTOR)) {
+        return;
+      }
+      const win = currentWindow();
+      if (!win || typeof win.startDragging !== 'function') {
+        // 壳过期（老壳没有 window API）时给出可见提示，而不是静默「拖不动」。
+        noticeWindowAction('拖动失败：当前壳缺少窗口命令，请更新（重编壳 / 重新打包启动器）');
+        return;
+      }
+      try {
+        await win.startDragging();
+      } catch (e) {
+        console.warn('startDragging failed:', e);
+        noticeWindowAction('拖动失败：当前壳缺少窗口命令，请更新（重编壳 / 重新打包启动器）');
+      }
+    }
+
+    // pointerdown 只在主键时接管（右键 / 中键不拖窗口）。
+    document.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      void startSplashDrag(e);
+    });
 
     // 「壳命令是否就位」不做启动期探测：invoke 命令就是真的执行（调 win_minimize
     // 会真的把窗口最小化），启动页会一出现就自己缩进任务栏。壳是否过期由用户
