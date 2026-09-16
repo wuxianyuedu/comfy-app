@@ -14,7 +14,7 @@
     "src/lib/comfyui/raw.ts": 1094,
     "src/lib/comfyui/workflow-detail-raw.ts": 939,
     "src/lib/comfyui/workflow-subgraph-parse.ts": 1027,
-    "src/lib/workflow-param-mapping.ts": 1145,
+    "src/lib/workflow-param-mapping.ts": 1162,
     "src/server/api/routers/workflow.ts": 954
   }
 }

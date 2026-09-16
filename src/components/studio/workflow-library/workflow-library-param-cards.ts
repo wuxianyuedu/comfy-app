@@ -31,6 +31,7 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
 } from "~/components/studio/shared/workflow-io";
+import { applyNegativeSlotFallback } from "./workflow-negative-slot";
 import {
   defaultOutputSource,
   hasManualOutputBinding,
@@ -108,15 +109,41 @@ export function deriveLibraryParamCards(args: {
   const { io, paramMap, mode, groupedKeys, reachableKeys } = args;
   /* 契约驱动：卡片列 = 该模式统一对外暴露的参数（提示词 / 尺寸 / 首帧…），
    * 与具体工作流无关；工作流只决定每张卡落到哪一行端口。 */
-  const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
+  const entries = buildParamEntries(io, undefined, {
+    mode: mode ?? null,
+    /* 「负向提示词」是可选契约口：工作流没有承接它的一行时不摆卡片。但**判据只该
+     * 看工作流的能力**（有没有可承接提示词的文本编码节点），不该看它内部长什么样
+     * —— 本函数下面的 `applyNegativeSlotFallback` 正是要拿这条「零候选」的口去
+     * 图内文本编码节点里找出该落的那一行（ISSUE #620）。 */
+    keepOptional: true,
+  });
+  /* 「负向提示词」候选兜底（ISSUE #620）：工坊的统一配置口里没有对应端口时**不
+   * 显示**（可选口），而判据只该看工作流的**能力**（有没有承接提示词的文本编码
+   * 节点），不该看它内部长什么样。`classifyPin` 判不出负向时，用图内文本节点的
+   * 手工线 / 序号兜底把候选补到契约口上 —— 两个页签读的正是这里，因此
+   * 「画布节点」与「工坊封装」不会一边有一边没有。
+   *
+   *  必须**先兜底再解析落点**：兜底给这一口补上候选之后，解析才会把自动连线状态
+   *  落到那一行上（反过来做的话，卡片上的一行会显示成「未配置」）。 */
   /* paramMap 里没有 `auto` 字段（它不是持久化字段）——现算一份自动判定，
    * 与编辑器 useParamMapping 里的 auto 同源（autoMapEntries）。 */
   const parsed = parseParamMapping(paramMap);
-  const resolved = resolveMapping(entries, io, parsed, mode ?? null);
+  const entriesWithFallback = applyNegativeSlotFallback({
+    entries,
+    io,
+    parsed,
+    mode: mode ?? null,
+  });
+  const resolved = resolveMapping(
+    entriesWithFallback,
+    io,
+    parsed,
+    mode ?? null,
+  );
 
   const ownersByPin: Record<string, string> = {};
   const wires: LibraryParamCards["wires"] = [];
-  for (const entry of entries) {
+  for (const entry of entriesWithFallback) {
     const target = resolved[entry.id];
     /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
      *  画一条通向某处的线反而误导。 */
@@ -180,7 +207,7 @@ export function deriveLibraryParamCards(args: {
   );
 
   return {
-    entries,
+    entries: entriesWithFallback,
     io: io ?? null,
     isManual: (entryId: string) =>
       manualTargetFor(parsed, entryId, mode ?? null) !== undefined,

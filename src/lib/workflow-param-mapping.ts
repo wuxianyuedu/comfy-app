@@ -38,6 +38,7 @@ import {
 } from "~/lib/workflow-exposed-params";
 import { megapixelsForSize } from "~/lib/workshop/workflow-encapsulation";
 import { aspectLabelForDims } from "~/lib/size-presets";
+import { roleKeyword } from "~/lib/workflow-text-role";
 
 /* ── 对外参数分类 ──
  * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
@@ -132,10 +133,10 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
 
 /** 条目名 + 显示名（小写）。图内角色（`role`）折算成同义关键词并进同一串：同一对
  *  CLIPTextEncode 的 pin 名与显示名一样，只有导入图沿 KSampler 连线链推出的角色分得出
- *  正负（ISSUE #611）；并进这里则 `classifyPin` 与自动落点同源，不会两边各判一套。 */
+ *  正负（ISSUE #611）；并进这里则 `classifyPin` 与自动落点同源，不会两边各判一套。
+ *  关键词池收在 `~/lib/workflow-text-role`，与工坊封装同一份（ISSUE #620）。 */
 function searchText(e: WorkflowIOEntry): string {
-  const r = e.role === "negative" ? "negative" : e.role ? "prompt" : "";
-  return `${e.name ?? ""} ${e.label ?? ""} ${r}`.toLowerCase();
+  return `${e.name ?? ""} ${e.label ?? ""} ${roleKeyword(e.role)}`.toLowerCase();
 }
 
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
@@ -464,10 +465,15 @@ export function defaultOutputPortIndex(
 export function buildParamEntries(
   io: WorkflowIOMap | null | undefined,
   labels?: Record<string, string>,
-  options?: { mode?: string | null },
+  options?: { mode?: string | null; keepOptional?: boolean },
 ): ParamEntry[] {
   if (options != null && "mode" in options) {
-    return buildContractEntries(io, labels, options.mode ?? null);
+    return buildContractEntries(
+      io,
+      labels,
+      options.mode ?? null,
+      options.keepOptional ?? false,
+    );
   }
   return buildLegacyEntries(io, labels);
 }
@@ -477,6 +483,7 @@ function buildContractEntries(
   io: WorkflowIOMap | null | undefined,
   labels: Record<string, string> | undefined,
   mode: string | null,
+  keepEmptyOptional: boolean,
 ): ParamEntry[] {
   /* 先把工作流里所有可对外落点的端口按分类归拢（同一分类可命中多个端口）。 */
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
@@ -505,8 +512,18 @@ function buildContractEntries(
     const pins = classesForContractParam(def.id).flatMap(
       (cls) => pinsByClass.get(cls) ?? [],
     );
-    /* 可选口子（负面提示词 / 第二张参考图）工作流没有对应端口就不摆出来。 */
-    if (pins.length === 0 && (def.optional || !hasAnyPin)) continue;
+    /* 可选口子（负面提示词 / 第二张参考图）工作流没有对应端口就不摆出来。
+     *
+     *  `keepOptional` 例外：调用方自己要拿这条口做**候选兜底**（见
+     *  `~/lib/workflow-text-role` 与工作流库的 `deriveLibraryParamCards`）——
+     *  它需要看到「这一口现在没有候选」才能去图内文本编码节点里找出该落的那一行。
+     *  兜底不认「工作流连任何可落点的端口都没有」的情形（`!hasAnyPin`）：那种工作流
+     *  本来就没有可承接的端口，摆一张连不上任何东西的卡片只会误导。 */
+    if (
+      pins.length === 0 &&
+      ((def.optional && !keepEmptyOptional) || !hasAnyPin)
+    )
+      continue;
     if (out.some((entry) => entry.id === def.id)) continue;
     const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
     out.push({

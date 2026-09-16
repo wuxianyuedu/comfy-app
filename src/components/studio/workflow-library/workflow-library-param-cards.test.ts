@@ -495,3 +495,180 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     expect(wires).toHaveLength(0);
   });
 });
+
+/* ── ISSUE #620：负向提示词是工坊的**统一配置口**，显示与否与工作流内容无关 ── */
+
+/** 「正向写死在自己的 CLIPTextEncode、负向接在第三方节点上」的典型 T2I 工作流。 */
+const negativeViaThirdPartyIo: WorkflowIOMap = {
+  "9::widget::text": {
+    direction: "input",
+    kind: "widget",
+    nodeId: "9",
+    nodeTitle: "CLIP Text Encode",
+    name: "text",
+    label: "文本",
+    type: "STRING",
+    classType: "CLIPTextEncode",
+    role: "positive",
+    isTextNode: true,
+    defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+  },
+  /* 承载负向的是第三方节点：既没有 negative 的名字，也拿不到 role。 */
+  "77::widget::negative_prompt_text": {
+    direction: "input",
+    kind: "widget",
+    nodeId: "77",
+    nodeTitle: "Prompt Enhancer",
+    name: "value",
+    label: "文本",
+    type: "STRING",
+    defaultValue: "lowres, watermark",
+  },
+  "5::widget::width": {
+    direction: "input",
+    kind: "widget",
+    nodeId: "5",
+    name: "width",
+    type: "INT",
+    defaultValue: 512,
+  },
+};
+
+describe("deriveLibraryParamCards — 负向提示词候选兜底（ISSUE #620）", () => {
+  it("图内判不出图内角色时，按图内文本编码节点顺序兜底出负向口", () => {
+    const twoTextNodes = structuredClone(negativeViaThirdPartyIo);
+    /* 第二个文本编码节点（图内顺序里的负向位）—— 名字同样是 `text`。 */
+    twoTextNodes["88::widget::text"] = {
+      direction: "input",
+      kind: "widget",
+      nodeId: "88",
+      nodeTitle: "CLIP Text Encode",
+      name: "text",
+      label: "文本",
+      type: "STRING",
+      classType: "CLIPTextEncode",
+      isTextNode: true,
+      defaultValue: "lowres, watermark",
+    };
+    const { entries, resolved } = deriveLibraryParamCards({
+      io: twoTextNodes,
+      paramMap: {},
+      mode: "T2I",
+    });
+    const negative = entries.find((entry) => entry.id === "negative");
+    /* 两个页签共读这份派生：负向卡片在「画布节点」出现，也就一定在
+     * 「工坊封装」出现（后者经 deriveEncapsulationStatus 读同一份契约口）。 */
+    expect(negative).toBeDefined();
+    expect(resolved.negative).toBe("88::widget::text");
+  });
+
+  it("作者把负向口手工连到第三方节点的行上时以手工线为准，且固定显示", () => {
+    const { entries, resolved } = deriveLibraryParamCards({
+      io: negativeViaThirdPartyIo,
+      paramMap: {
+        source: {
+          "mode:T2I": { negative: "77::widget::negative_prompt_text" },
+        },
+      },
+      mode: "T2I",
+    });
+    expect(entries.some((entry) => entry.id === "negative")).toBe(true);
+    expect(resolved.negative).toBe("77::widget::negative_prompt_text");
+  });
+
+  it("工作流只有提示词口（无第二个文本节点）时显式不显示，不凭空编一个负向口", () => {
+    const onlyPrompt: WorkflowIOMap = {
+      "9::widget::text": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "9",
+        name: "text",
+        type: "STRING",
+        classType: "CLIPTextEncode",
+        role: "positive",
+        isTextNode: true,
+        defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+      },
+    };
+    const { entries } = deriveLibraryParamCards({
+      io: onlyPrompt,
+      paramMap: {},
+      mode: "T2I",
+    });
+    expect(entries.some((entry) => entry.id === "negative")).toBe(false);
+  });
+
+  it("名字里写了负向时按名字认（作者命名优先于图内顺序）", () => {
+    const named: WorkflowIOMap = {
+      ...negativeViaThirdPartyIo,
+      "5::widget::negative_prompt": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "negative_prompt",
+        type: "STRING",
+        defaultValue: "lowres",
+      },
+    };
+    const { resolved } = deriveLibraryParamCards({
+      io: named,
+      paramMap: {},
+      mode: "T2I",
+    });
+    expect(resolved.negative).toBe("5::widget::negative_prompt");
+  });
+});
+
+/* ── 两个页签共读同一份事实：负向提示词口在「工坊封装」页签的呈现 ── */
+
+describe("deriveEncapsulationStatus — 与画布节点页签同一份负向口（ISSUE #620）", () => {
+  it("图内判不出负向角色时，工坊封装把候选兜底到同一行并显式标出未配置", async () => {
+    const { deriveEncapsulationStatus } =
+      await import("~/lib/workshop/workshop-encapsulation-status");
+    const io: WorkflowIOMap = {
+      "9::widget::text": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "9",
+        name: "text",
+        label: "文本",
+        type: "STRING",
+        classType: "CLIPTextEncode",
+        role: "positive",
+        isTextNode: true,
+        defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+      },
+      "88::widget::text": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "88",
+        name: "text",
+        label: "文本",
+        type: "STRING",
+        classType: "CLIPTextEncode",
+        isTextNode: true,
+        defaultValue: "lowres, watermark",
+      },
+      "5::widget::width": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "width",
+        type: "INT",
+        defaultValue: 512,
+      },
+    };
+    const status = deriveEncapsulationStatus({
+      io,
+      paramMap: {},
+      mode: "T2I",
+    });
+    const negative = status.entries.find((entry) => entry.id === "negative");
+    /* 工坊封装页签的落点来自它自己的「契约口 → 端口」解析（不经工作流库那份
+     * 派生），因此这里断言的是**契约口本身在场**且指向同一行 —— 两个页签
+     * 列出的是同一套口子，不会一边有一边没有。 */
+    expect(negative).toBeDefined();
+    expect(negative!.targetIoKey).toBe(null);
+    expect(negative!.label).toBe("负向提示词");
+  });
+});
