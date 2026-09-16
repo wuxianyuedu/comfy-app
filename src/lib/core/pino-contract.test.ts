@@ -8,7 +8,7 @@ import {
   redactSecretShaped,
   REDACT_PATHS,
 } from "~/lib/core/logger";
-import { createAppRuntimeLogger } from "@/lib/app-runtime-log";
+import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
 
 /**
  * 日志「格式 + 脱敏」契约测试（原 `src/server/lib/logger.test.ts`）。

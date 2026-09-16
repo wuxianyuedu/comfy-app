@@ -16,8 +16,8 @@ import {
   type CanvasNodeData,
   type CanvasNodeType,
   NODE_META,
-} from "@/lib/project-canvas/canvas-types";
-import { Icon } from "@/components/ui/icon";
+} from "~/lib/project-canvas/canvas-types";
+import { Icon } from "~/components/ui/icon";
 import { useWorkflowModes } from "./hooks/use-workflow-modes";
 import { DebugChainFooter } from "../../debug/DebugChainFooter";
 import { getProjectCanvasRenderChain } from "../canvas-render-chain";
@@ -32,7 +32,7 @@ import { useFileUpload } from "./hooks/use-file-upload";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
 import { ErrorPanel } from "./ErrorPanel";
-import { resolveWorkflowMode } from "@/lib/workflow-types";
+import { resolveWorkflowMode } from "~/lib/workflow-types";
 
 export const CanvasNode = React.memo(function CanvasNode({
   id,

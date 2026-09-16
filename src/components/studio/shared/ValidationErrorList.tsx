@@ -7,7 +7,7 @@
 // Theme-agnostic: each caller wraps it in its own colored container
 // (rose for the canvas error panel, red for the history card).
 
-import type { ValidationError } from "@/lib/comfyui/validation";
+import type { ValidationError } from "~/lib/comfyui/validation";
 
 export function ValidationErrorList({
   errors,

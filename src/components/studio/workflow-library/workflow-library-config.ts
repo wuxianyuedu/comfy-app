@@ -5,9 +5,9 @@
  * 视图 / hook 一律从这里取类型与派生，不再各自重算一遍。
  */
 
-import type { WorkflowPreview as WorkflowPreviewT } from "@/lib/comfyui/workflow";
-import type { WorkflowIOMap } from "@/components/studio/shared/workflow-io";
-import { getWorkflowType, normalizeTaskType } from "@/lib/workflow-types";
+import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
+import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import { getWorkflowType, normalizeTaskType } from "~/lib/workflow-types";
 
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
 export interface LocalWorkflowRoot {
@@ -163,8 +163,8 @@ export function deriveSyncFlags(row: WorkflowRow): {
   return { dirty, missing, canResync: dirty };
 }
 
-/* ── detectWorkflowFormat：实现已抽到 @/lib/workflow-format 供服务端复用 ──
- * Implementation lives in @/lib/workflow-format so the server-side
+/* ── detectWorkflowFormat：实现已抽到 ~/lib/workflow-format 供服务端复用 ──
+ * Implementation lives in ~/lib/workflow-format so the server-side
  * PATCH endpoint can validate the same JSON shape (drag-to-upgrade). */
 
 /** ComfyUI default filenames start with a "date_slug" prefix and contain only

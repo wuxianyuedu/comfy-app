@@ -3,7 +3,7 @@
 // 与 700 行的网络和状态代码混在一起；抽出来后视图文件只剩渲染，
 // 视觉常量也可以被工具/测试直接引用。
 
-import { FILM_COMPOSE_SIZE } from "@/lib/film/film-size";
+import { FILM_COMPOSE_SIZE } from "~/lib/film/film-size";
 
 /* ── 类型（与后端 Prisma 行的 UI 视图一致，保持对外 API 不变）── */
 

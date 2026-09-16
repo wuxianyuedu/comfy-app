@@ -36,9 +36,14 @@
  *       曾经用来做「占位符」的 NUL 哨兵(规范 12.11)是它的来源,现已改为
  *       可打印形式;本条防回潮。
  * 违反 R1-R4、R7-R12 以退出码 1 阻断提交。
+ *
+ * R13（import 别名只有一种前缀 `~`，ISSUE #640）由**独立脚本**
+ * `scripts/check-import-alias.cjs` 承担，不在这里实现：判据是「模块说明符的前缀」，
+ * 与文件命名/位置无关，混进本文件的 R1-R12 只会让两套口径互相干扰。
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 const problems = [];
 const splitHints = [];
@@ -55,8 +60,59 @@ const FILE_SIZE_BASELINE = path.join(__dirname, ".file-size-baseline.json");
 /** R5 棘轮的**判据版本**:只有「数行数的口径」本身变了(例如全库 prettier 治理
  *  拆行、整体抬高行长口径)才允许 `--update` 一次性重记,其余情况数字只许下降。
  *  理由与 check-function-length.cjs 的 RULE_VERSION 同源:基线是「该判据下的计数」,
- *  判据一变,旧数字与新计数就不是同一个量 —— 不做标记的重记会被读成「有人放宽棘轮」。 */
-const R5_RULE_VERSION = 2;
+ *  判据一变,旧数字与新计数就不是同一个量 —— 不做标记的重记会被读成「有人放宽棘轮」。
+ *
+ *  R5_RULE_VERSION 3 变更:行数比对改为按 `baselineRev` **同口径重数**(见下),
+ *  不再拿不同「格式时代」的绝对行数直接相减。 */
+const R5_RULE_VERSION = 3;
+
+/* ── R5 的行数口径:不同「格式时代」的绝对行数不可直接比较 ──
+ * 基线里的数字是在**记它的那个格式口径**的源码上数出来的。而「数行数」这件事
+ * 不做归一化(逐行状态机,不重排、不合并行长),于是同一段逻辑的行数完全取决于
+ * 它写得多紧凑 —— 一次全库 prettier 治理(把紧凑的单行参数表 / 对象字面量展开、
+ * 按宽度拆行)就能让「一个字都没改」的文件凭空多出几十行。
+ *
+ * 实例(ISSUE #637):`LogPanel.tsx` 的基线 1102 记于 prettier 治理**之前**;
+ * 治理后同一文件(内容未增)已是 1236 行。此后任何人**一行都不改它**,CI 也会报
+ * 「R5 超限文件继续变大(1102 → 1236)」—— 棘轮把「格式口径变化」读成了「这次
+ * 改动让文件变大」,而作者根本无从下手(要他为了过门禁把已格式化的文件再压缩回
+ * 1102 行,等于让门禁否掉 §13 的 prettier 口径)。
+ *
+ * 修法:**基线自带记它那一刻的修订号**,比对前先把「基线数字」按那个修订号的
+ * 源码重新数一遍 —— 即同口径重数,而不是拿两个时代的绝对行数相减。
+ *   · 基线记录 `baselineRev`;
+ *   · 比对时用 `git show <rev>:<file>` 取基线版本的文件内容,按**今天同一套
+ *     逐行计数**重新数出 `baseLines`,再与当前行数比较;
+ *   · 文件在基线版本里不存在(git 取不到)→ 退回基线上的记录值(不误报);
+ *   · 基线缺 `baselineRev`(旧基线)→ 退回基线上的记录值(与历史行为一致),
+ *     由下一次 `--update` 补上。
+ * 判据是「这个文件在**同口径**下比基线那一刻多没多」——格式时代造成的系统性差异
+ * 被自动吸收,而真实的膨胀(有人往文件里加代码)照旧阻断。
+ *
+ * 为什么不用「全仓整体行数比」换算:实测不行。prettier 是**逐文件**重排,各文件
+ * 的展开倍率差异极大(同一批文件里既有 0.958 也有 1.130),全仓比例约等于 1.0,
+ * 换算后对 `LogPanel.tsx` 仍判「变大 136 行」——即该口径解决不了它要解决的问题。 */
+
+/** 取当前 HEAD 的修订号,写进基线供日后「同口径重数」用。
+ *  git 不可用 / 不在检出里时返回 null(退回记录值,不阻断)。 */
+function headRev() {
+  const res = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  return res.stdout.trim() || null;
+}
+
+/** 按**今天的行数口径**重数 `rev` 里该文件的行数;取不到返回 null。
+ *  行数口径与主扫描(collectSplitHints)逐字一致:`split("\n").length`。 */
+function linesAtRev(rev, rel) {
+  if (!rev) return null;
+  const res = spawnSync("git", ["show", rev + ":" + rel], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  return res.stdout.split("\n").length;
+}
+
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
@@ -81,8 +137,19 @@ const R2_EXEMPT = new Set(["src/proxy.ts"]);
 
 // Next.js App Router 保留文件名(框架强制小写,不可改名)——src/app 下豁免
 const NEXT_RESERVED = new Set([
-  "page", "layout", "error", "global-error", "loading", "not-found",
-  "template", "default", "route", "manifest", "robots", "sitemap", "icon",
+  "page",
+  "layout",
+  "error",
+  "global-error",
+  "loading",
+  "not-found",
+  "template",
+  "default",
+  "route",
+  "manifest",
+  "robots",
+  "sitemap",
+  "icon",
 ]);
 // 库官方惯例文件(目录约定)
 const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
@@ -90,42 +157,56 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
 (function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name).split(path.sep).join("/");
-    if (e.isDirectory()) { walk(p); continue; }
+    if (e.isDirectory()) {
+      walk(p);
+      continue;
+    }
     if (!/\.(tsx?|mjs|cjs|js)$/.test(e.name)) continue;
     const rel = p;
     // shadcn/ui 官方约定:组件文件 kebab-case(button.tsx/dialog.tsx),
     // 与本项目 R1(PascalCase)相反——本脚本对 src/components/ui/ 硬强制 kebab
     // (禁止大写开头,§12.6),不再豁免。
     const isUiDir = rel.startsWith("src/components/ui/");
-    const base = e.name.replace(/\.(tsx?|mjs|cjs|js)$/, "").replace(/\.test$/, "");
+    const base = e.name
+      .replace(/\.(tsx?|mjs|cjs|js)$/, "")
+      .replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) problems.push("R3 时间戳备份文件:" + rel);
     /* R11 的位置判据:Next 约定文件只允许出现在 src/ 根。放进 app/ 或更深
      * 的目录 Next 不会加载 —— 文件在、代理不在,构建期毫无提示。 */
     if (base === "proxy" || base === "middleware") {
       const canonical = "src/" + base + ".ts";
       if (rel !== canonical)
-        problems.push("R11 Next 约定文件位置错:" + rel + "(须在 " + canonical + ")");
+        problems.push(
+          "R11 Next 约定文件位置错:" + rel + "(须在 " + canonical + ")",
+        );
     }
-    if (/^\/\* eslint-disable @typescript-eslint\/no-explicit-any/.test(
-      fs.readFileSync(p, "utf8").split("\n")[0] || "",
-    ))
-      problems.push("R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):" + rel);
+    if (
+      /^\/\* eslint-disable @typescript-eslint\/no-explicit-any/.test(
+        fs.readFileSync(p, "utf8").split("\n")[0] || "",
+      )
+    )
+      problems.push(
+        "R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):" + rel,
+      );
     if (/\.(tsx|mjs|cjs|js)$/.test(e.name) && rel.startsWith("src/")) {
       if (e.name.endsWith(".tsx")) {
         /* §12.6:目录索引 index.tsx 是 barrel,不承载组件实现,不受 R1 约束。
          *  src/components/ui/ 采用 shadcn 官方 kebab-case 约定(§12.6),
          *  故 ui/ 下组件文件须 kebab-case(禁止 PascalCase)。 */
         const isDirectoryIndex = base === "index";
-        const reserved = (rel.startsWith("src/app/") && NEXT_RESERVED.has(base))
-          || CONVENTION_EXEMPT.has(rel)
-          || isDirectoryIndex;
+        const reserved =
+          (rel.startsWith("src/app/") && NEXT_RESERVED.has(base)) ||
+          CONVENTION_EXEMPT.has(rel) ||
+          isDirectoryIndex;
         if (isUiDir) {
           // shadcn 约定:kebab-case,禁止大写开头
-          if (/^[A-Z]/.test(base)) problems.push("R1(ui) 组件文件须 kebab-case:" + rel);
+          if (/^[A-Z]/.test(base))
+            problems.push("R1(ui) 组件文件须 kebab-case:" + rel);
         } else if (!reserved && !/^[A-Z]/.test(base)) {
           problems.push("R1 组件文件须 PascalCase:" + rel);
         }
-        if (rel.startsWith("src/lib/")) problems.push("R4 lib 下禁止 .tsx:" + rel);
+        if (rel.startsWith("src/lib/"))
+          problems.push("R4 lib 下禁止 .tsx:" + rel);
       } else if (e.name.endsWith(".ts") && !e.name.endsWith(".d.ts")) {
         // ui/ 下 .ts 模块同样须 kebab-case(shadcn 约定)
         if (/^[A-Z]/.test(base) && !R2_EXEMPT.has(rel))
@@ -154,7 +235,8 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
         continue;
       }
       if (!/\.(ts|tsx|mjs|cjs|js)$/.test(e.name)) continue;
-      if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || /\.d\.ts$/.test(e.name)) continue;
+      if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || /\.d\.ts$/.test(e.name))
+        continue;
       const lines = fs.readFileSync(p, "utf8").split("\n").length;
       if (lines > SPLIT_HINT_LINES) {
         splitHints.push(p + " (" + lines + " 行,建议拆分)");
@@ -169,35 +251,61 @@ const CONVENTION_EXEMPT = new Set(["src/trpc/react.tsx"]);
 // 以及 target(可能包含第三方 Rust 产物)。用相对路径前缀判断,避免按目录名
 // 误伤 tools/registry 这类同名但受规范的目录。
 const SCAN_EXCLUDED = [
-  'node_modules/', '.git/', '.next/', 'coverage/', 'generated/', 'temp/',
-  'python-venv/', 'log/', 'build-launcher/', 'dist/', 'docs/',
-  'playwright-report/', '.workbuddy/',
-  'src-tauri/target/', 'src-tauri/static/', 'start-tauri/', 'start-tauri-dev/',
-  'start-tauri-standalone/', 'build-launcher-dev/', 'build-launcher-standalone/',
+  "node_modules/",
+  ".git/",
+  ".next/",
+  "coverage/",
+  "generated/",
+  "temp/",
+  "python-venv/",
+  "log/",
+  "build-launcher/",
+  "dist/",
+  "docs/",
+  "playwright-report/",
+  ".workbuddy/",
+  "src-tauri/target/",
+  "src-tauri/static/",
+  "start-tauri/",
+  "start-tauri-dev/",
+  "start-tauri-standalone/",
+  "build-launcher-dev/",
+  "build-launcher-standalone/",
 ];
 (function walkScripts(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name).split(path.sep).join('/');
-    const rel = p.startsWith('./') ? p.slice(2) : p;
+    const p = path.join(dir, e.name).split(path.sep).join("/");
+    const rel = p.startsWith("./") ? p.slice(2) : p;
     if (e.isDirectory()) {
-      if (SCAN_EXCLUDED.some((d) => rel === d.slice(0, -1) || rel.startsWith(d))) continue;
+      if (
+        SCAN_EXCLUDED.some((d) => rel === d.slice(0, -1) || rel.startsWith(d))
+      )
+        continue;
       walkScripts(p);
       continue;
     }
     if (FORBIDDEN_SCRIPT_EXT.test(e.name)) {
-      problems.push('R7 Windows 入口须 .ps1(禁用 .bat/.cmd/.vbs):' + rel);
+      problems.push("R7 Windows 入口须 .ps1(禁用 .bat/.cmd/.vbs):" + rel);
       continue;
     }
-    if (!e.name.toLowerCase().endsWith('.ps1')) continue;
+    if (!e.name.toLowerCase().endsWith(".ps1")) continue;
     if (!BOM_REQUIRED_DIRS.some((d) => rel.startsWith(d))) continue;
     const buf = fs.readFileSync(p);
-    if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) continue;
+    if (
+      buf.length >= 3 &&
+      buf[0] === 0xef &&
+      buf[1] === 0xbb &&
+      buf[2] === 0xbf
+    )
+      continue;
     // 无 BOM:只有含非 ASCII 字符(中文提示)的脚本才会被 PS5.1 按 GBK 误解码
-    if (NON_ASCII.test(buf.toString('utf8'))) {
-      problems.push('R8 含中文的 .ps1 须以 UTF-8 BOM 保存(否则 PS5.1 按 GBK 解码):' + rel);
+    if (NON_ASCII.test(buf.toString("utf8"))) {
+      problems.push(
+        "R8 含中文的 .ps1 须以 UTF-8 BOM 保存(否则 PS5.1 按 GBK 解码):" + rel,
+      );
     }
   }
-})('.');
+})(".");
 
 // ── R9:根目录禁止散落 .ps1 双击入口(ISSUE #29) ──
 // 背景:6 个根入口(start-web/run-local/verify-quality/start-tauri/
@@ -206,11 +314,12 @@ const SCAN_EXCLUDED = [
 // tools/start/,与 tools/build/、tools/registry/、tools/studio/ 同构。
 // 这里只拦 .ps1——其它后缀的根文件(配置/文档)不受约束,避免过度收紧。
 (function checkRootEntries() {
-  for (const e of fs.readdirSync('.', { withFileTypes: true })) {
+  for (const e of fs.readdirSync(".", { withFileTypes: true })) {
     if (!e.isFile()) continue;
-    if (!e.name.toLowerCase().endsWith('.ps1')) continue;
+    if (!e.name.toLowerCase().endsWith(".ps1")) continue;
     problems.push(
-      'R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):' + e.name,
+      "R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):" +
+        e.name,
     );
   }
 })();
@@ -222,29 +331,39 @@ const SCAN_EXCLUDED = [
   const files = [];
   (function walkComments(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      const p = path.join(dir, e.name).split(path.sep).join('/');
-      if (e.isDirectory()) { walkComments(p); continue; }
+      const p = path.join(dir, e.name).split(path.sep).join("/");
+      if (e.isDirectory()) {
+        walkComments(p);
+        continue;
+      }
       if (/\.(ts|tsx)$/.test(e.name)) files.push(p);
     }
-  })('src');
+  })("src");
   for (const rel of files) {
-    const lines = fs.readFileSync(rel, 'utf8').split('\n');
+    const lines = fs.readFileSync(rel, "utf8").split("\n");
     lines.forEach((l, i) => {
       const t = l.trim();
       const isComment =
-        t.startsWith('//') || t.startsWith('/*') || t.startsWith('*') || t.startsWith('{/*');
+        t.startsWith("//") ||
+        t.startsWith("/*") ||
+        t.startsWith("*") ||
+        t.startsWith("{/*");
       if (!isComment) return;
       // 一行里可能同时有日期与编号,逐个报出来,便于一次改干净
       const found = new Set();
       for (const re of [HISTORY_DATE, HISTORY_TAG, HISTORY_TASK]) {
-        for (const m of l.matchAll(new RegExp(re.source, 'g'))) {
-          if (m[0] !== '') found.add(m[0]);
+        for (const m of l.matchAll(new RegExp(re.source, "g"))) {
+          if (m[0] !== "") found.add(m[0]);
         }
       }
       for (const hit of found) {
         problems.push(
-          'R10 注释禁止历史流水(日期 / 编号 / 批次号归 git):' +
-            rel + ':' + (i + 1) + ' → ' + hit,
+          "R10 注释禁止历史流水(日期 / 编号 / 批次号归 git):" +
+            rel +
+            ":" +
+            (i + 1) +
+            " → " +
+            hit,
         );
       }
     });
@@ -262,10 +381,18 @@ const SCAN_EXCLUDED = [
   const proxyPath = "src/proxy.ts";
   const legacyPath = "src/middleware.ts";
   if (!fs.existsSync(proxyPath)) {
-    problems.push("R11 缺少 Next 16 代理约定文件:" + proxyPath + "(middleware 已废弃,勿删除本文件)");
+    problems.push(
+      "R11 缺少 Next 16 代理约定文件:" +
+        proxyPath +
+        "(middleware 已废弃,勿删除本文件)",
+    );
   }
   if (fs.existsSync(legacyPath)) {
-    problems.push("R11 middleware 约定名已废弃(Next 16):" + legacyPath + " → 改名为 src/proxy.ts");
+    problems.push(
+      "R11 middleware 约定名已废弃(Next 16):" +
+        legacyPath +
+        " → 改名为 src/proxy.ts",
+    );
   }
 })();
 
@@ -291,7 +418,10 @@ const SCAN_EXCLUDED = [
   (function walkControl(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name).split(path.sep).join("/");
-      if (e.isDirectory()) { walkControl(p); continue; }
+      if (e.isDirectory()) {
+        walkControl(p);
+        continue;
+      }
       if (/\.(ts|tsx)$/.test(e.name)) files.push(p);
     }
   })("src");
@@ -306,8 +436,13 @@ const SCAN_EXCLUDED = [
       }
       for (const hit of hits) {
         problems.push(
-          "R12 源码禁止内嵌控制字符(" + rel + ":" + (i + 1) + " → " + hit +
-          ")。改可打印哨兵,见规范 §12.11;若确需 NUL 请显式写成转义 `\\u0000`",
+          "R12 源码禁止内嵌控制字符(" +
+            rel +
+            ":" +
+            (i + 1) +
+            " → " +
+            hit +
+            ")。改可打印哨兵,见规范 §12.11;若确需 NUL 请显式写成转义 `\\u0000`",
         );
       }
     });
@@ -317,7 +452,7 @@ const SCAN_EXCLUDED = [
 // ── R5 棘轮(ISSUE #575 第 8 项) ──
 // 默认只提醒;`--strict`(CI)下按 `scripts/.file-size-baseline.json` 判定:
 //   ① 基线里没有的超限文件 = 新增 → 阻断;
-//   ② 基线里已有但行数变大 → 阻断(文件还在长);
+//   ② 基线里已有但配额(基线行数 × 行数口径换算比)被突破 → 阻断(文件还在长);
 //   ③ 基线里已有但已降到阈值内/行数变小 → 提示收紧基线(不阻断,避免打断提交)。
 // 反模式:只在输出里打一行「建议拆分」。提醒与阻断的区别就是「有没有人为它返工」——
 // 900 行以上的文件在本仓库只增不减(11 个存量),正是「只提醒」的直接结果。
@@ -327,16 +462,26 @@ const SCAN_EXCLUDED = [
     ? JSON.parse(fs.readFileSync(FILE_SIZE_BASELINE, "utf8"))
     : null;
   const prevFiles = prev?.files ?? null;
+  /** 基线里这个文件的**同口径行数**:按 baselineRev 的内容、今天的计数口径重数。
+   *  取不到(旧基线 / 文件当时不存在 / git 不可用)时退回基线上的记录值 ——
+   *  退回是「按历史行为比」,只会更严,不会漏放。 */
+  const baseLinesOf = (f, recorded) =>
+    linesAtRev(prev?.baselineRev, f) ?? recorded;
 
   if (UPDATE) {
     const prevTotal = prevFiles ? Object.keys(prevFiles).length : 0;
     /* 棘轮只许下降;唯一例外是判据版本抬升(旧数字与新计数不是同一个量)。 */
-    const ruleChanged = Boolean(prevFiles) && prev.ruleVersion !== R5_RULE_VERSION;
+    const ruleChanged =
+      Boolean(prevFiles) && prev.ruleVersion !== R5_RULE_VERSION;
     const grew = prevFiles
       ? names.filter((f) => f in prevFiles && oversizedFiles[f] > prevFiles[f])
       : [];
     const added = prevFiles ? names.filter((f) => !(f in prevFiles)) : [];
-    if (prevFiles && (grew.length || added.length || names.length > prevTotal) && !ruleChanged) {
+    if (
+      prevFiles &&
+      (grew.length || added.length || names.length > prevTotal) &&
+      !ruleChanged
+    ) {
       console.error(
         "[structure] 拒绝放宽 R5 基线(棘轮只许下降):" +
           (grew.length ? " 变大 " + grew.join(", ") : "") +
@@ -355,9 +500,13 @@ const SCAN_EXCLUDED = [
           generatedAt: new Date().toISOString().slice(0, 10),
           ruleVersion: R5_RULE_VERSION,
           note:
-            "超 " + SPLIT_HINT_LINES + " 行的文件(规范 §12.6 R5 / ISSUE #575)。" +
-            "棘轮只许下降:新增超限文件须先拆分,再收紧基线。",
+            "超 " +
+            SPLIT_HINT_LINES +
+            " 行的文件(规范 §12.6 R5 / ISSUE #575)。" +
+            "棘轮只许下降:新增超限文件须先拆分,再收紧基线。" +
+            "比对前按 `baselineRev` 的内容**同口径重数**基线行数(见脚本注释)。",
           threshold: SPLIT_HINT_LINES,
+          baselineRev: headRev(),
           total: names.length,
           files: Object.fromEntries(names.map((f) => [f, oversizedFiles[f]])),
         },
@@ -370,7 +519,11 @@ const SCAN_EXCLUDED = [
         names.length +
         " 个超限文件(scripts/.file-size-baseline.json)" +
         (ruleChanged
-          ? "【判据版本 " + (prev.ruleVersion ?? "?") + " → " + R5_RULE_VERSION + ",一次性重记】"
+          ? "【判据版本 " +
+            (prev.ruleVersion ?? "?") +
+            " → " +
+            R5_RULE_VERSION +
+            ",一次性重记】"
           : ""),
     );
     return;
@@ -388,35 +541,59 @@ const SCAN_EXCLUDED = [
     const base = prevFiles[f];
     if (base === undefined) {
       problems.push(
-        "R5 新增超限文件(" + f + " → " + oversizedFiles[f] + " 行,阈值 " +
-        SPLIT_HINT_LINES + ")。先拆分,再收紧基线(规范 §12.6 R5)",
+        "R5 新增超限文件(" +
+          f +
+          " → " +
+          oversizedFiles[f] +
+          " 行,阈值 " +
+          SPLIT_HINT_LINES +
+          ")。先拆分,再收紧基线(规范 §12.6 R5)",
       );
-    } else if (oversizedFiles[f] > base) {
+    } else if (oversizedFiles[f] > baseLinesOf(f, base)) {
+      const baseline = baseLinesOf(f, base);
       problems.push(
-        "R5 超限文件继续变大(" + f + " → " + base + " → " + oversizedFiles[f] +
-        " 行)。拆分或收紧基线(规范 §12.6 R5)",
+        "R5 超限文件继续变大(" +
+          f +
+          " → " +
+          base +
+          " → " +
+          oversizedFiles[f] +
+          " 行" +
+          (baseline === base ? "" : ";按同口径重数基线为 " + baseline + " 行") +
+          ")。拆分或收紧基线(规范 §12.6 R5)",
       );
     }
   }
-  const shrunk = names.filter((f) => prevFiles[f] !== undefined && oversizedFiles[f] < prevFiles[f]);
+  const shrunk = names.filter(
+    (f) =>
+      prevFiles[f] !== undefined &&
+      oversizedFiles[f] < baseLinesOf(f, prevFiles[f]),
+  );
   const removed = Object.keys(prevFiles).filter((f) => !(f in oversizedFiles));
   if (shrunk.length || removed.length) {
     console.log(
       "[structure] R5 基线可收紧(执行 --update):" +
-      [...shrunk, ...removed].map((f) => "\n  · " + f).join(""),
+        [...shrunk, ...removed].map((f) => "\n  · " + f).join(""),
     );
   }
 })();
 
 if (splitHints.length) {
   console.log(
-    "[structure] 拆分候选" + (STRICT ? "" : "(仅提醒)") + ":\n  " + splitHints.join("\n  "),
+    "[structure] 拆分候选" +
+      (STRICT ? "" : "(仅提醒)") +
+      ":\n  " +
+      splitHints.join("\n  "),
   );
 }
 if (problems.length) {
   console.error("[structure] 违规(阻断提交):\n  " + problems.join("\n  "));
-  console.error("规范见 docs/standards/12-代码组织与文件结构.md §12.6/§12.8/§12.11");
-  console.error("      以及 docs/standards/launch-and-build.md §8(Windows 入口 .ps1 化)");
+  console.error(
+    "规范见 docs/standards/12-代码组织与文件结构.md §12.6/§12.8/§12.11",
+  );
+  console.error(
+    "      以及 docs/standards/launch-and-build.md §8(Windows 入口 .ps1 化)",
+  );
   process.exit(1);
 }
 console.log("[structure] OK");

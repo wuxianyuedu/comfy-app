@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
-import { requireServerUser } from "@/lib/auth-server";
+import { requireServerUser } from "~/lib/auth-server";
 import { logger } from "~/server/lib/logger";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
@@ -16,7 +16,7 @@ import {
   sanitizeFileName,
   sanitizeScope,
   type MaterialItem,
-} from "@/lib/materials";
+} from "~/lib/materials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

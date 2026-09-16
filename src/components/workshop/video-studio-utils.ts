@@ -1,5 +1,5 @@
-import type { Shot } from "@/lib/workshop/types";
-import { motionPromptSuffix } from "@/components/workshop/FinalComposer";
+import type { Shot } from "~/lib/workshop/types";
+import { motionPromptSuffix } from "~/components/workshop/FinalComposer";
 
 /** 镜头时长(秒) → 视频帧数(WAN 工作流常用 4-6 秒窗口)。 */
 export function framesFor(shot: Shot, fps: number): number {

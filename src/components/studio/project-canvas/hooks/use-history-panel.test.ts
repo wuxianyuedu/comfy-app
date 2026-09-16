@@ -11,11 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fetchHistoryTasks,
   probeGlobalTaskCount,
-} from "@/lib/project-canvas/history-panel-client";
+} from "~/lib/project-canvas/history-panel-client";
 
 import { useHistoryPanel } from "./use-history-panel";
 
-vi.mock("@/lib/project-canvas/history-panel-client", () => ({
+vi.mock("~/lib/project-canvas/history-panel-client", () => ({
   fetchHistoryTasks: vi.fn(),
   probeGlobalTaskCount: vi.fn(),
 }));

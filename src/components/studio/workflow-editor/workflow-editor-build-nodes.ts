@@ -1,8 +1,8 @@
 /* 纯函数：接收派生上下文对象，返回 React Flow 节点数组。无 hook / 无组件状态，
  * useMemo 由调用方持有（见 wf-editor-inner.tsx 中的 buildInitialNodes 用法）。 */
 import type { Node } from "@xyflow/react";
-import { friendlyNodeTitle } from "@/lib/comfyui/node-titles";
-import { MODE_KEY_PREFIX } from "@/lib/workflow-param-mapping";
+import { friendlyNodeTitle } from "~/lib/comfyui/node-titles";
+import { MODE_KEY_PREFIX } from "~/lib/workflow-param-mapping";
 import type {
   RawInputMeta,
   ComfyGraphNode,

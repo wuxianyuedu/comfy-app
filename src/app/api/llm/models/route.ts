@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
-import { describeFetchFailure, getLLMConfig } from "@/lib/llm/server";
+import { getServerUser } from "~/lib/auth-server";
+import { describeFetchFailure, getLLMConfig } from "~/lib/llm/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

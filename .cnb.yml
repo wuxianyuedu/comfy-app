@@ -11,27 +11,47 @@
 #   - actions/checkout              → 默认克隆,无需声明
 #   - actions/cache                 → docker.volumes 的节点缓存
 #   - apt-get install build-essential → 不再需要:node:24 镜像自带 make/gcc/g++
-#     (better-sqlite3 的原生模块安装会走 node-gyp rebuild;仍保留镜像自带的兜底)
 #   - upload-artifact               → cnbcool/attachments(仅失败时上传,allowFailure)
 #   - pnpm/action-setup             → 不声明 version:读 package.json 的 packageManager
 #
-# 触发:master 的 push 与 pull_request。分支保护 + 禁直接 push 在**平台设置**里配,
-# 不要用 create-branch-lock(它会把 PR 合并一起拦死,见规范 §13.6.1)。
+# ── 两条流水线:谁在什么事件上跑 ────────────────────────────────────────────
+#
+#   质量门禁        pull_request(不合并就不该结束,全部 30 步)
+#   master 合并复核  push(PR 已经合进来了,只复核「真的是 PR 合并进来的」)
+#
+# 为什么 push 不再重复跑整套门禁:platform 计费按「节点规格 × 运行时长」,
+# 8 核跑一小时就是 8 核时,而社区版云原生构建的免费额度是 160 核时/月
+# (docs.cnb.cool/zh/pricing)。同一份提交在 pull_request 上刚跑过一次全套,
+# 合并动作本身不产生新的代码,再跑一遍等于把额度花在「同一份代码的第二遍」上。
+# 合并提交是**在平台上按被门禁验过的源分支 SHA 生成的**,不引入新代码,
+# 因此 push 侧只保留一条「合并形态」复核(见下),不再整轮重跑。
+#
+# ── 合并动作本身会不会触发 pull_request 流水线 ────────────────────────────
+#
+# 不会。平台的事件只认「PR 创建 / 重新打开 / 源分支 push / 评审」这几件事
+# (docs.cnb.cool/zh/build/trigger-rule):点「合并」触发的是
+# pull_request.merged(以及 master 的 push),不触发 pull_request 本身。
+# 因此合并动作的固定开销就是本文件里的 push 那一条,**不会**再跑一遍 30 步。
+#
+# 反过来,本仓库的 .cnb.yml 锚点 `&pipeline` **同时**挂给两个事件,而
+# `<<: *pipeline` 里带的是整套 stages —— 上面那条结论因此被自己废掉:
+# 每一次 PR 合并都会在 master 上再跑一遍全套。这不是平台的行为,是配置写重了。
 #
 # pull_request 是「不可信事件」,流水线配置取自源分支:触发者可以改本文件、
 # 把门禁删掉。因此「源分支不能是 master」这条不能只靠本文件里的一行命令——
 # scripts/check-branch-guard.cjs 自己独立判定(不读 CNB_PULL_REQUEST),且被排在
 # 安装之后的第一条:删掉它就等于让流水线当场失败,而不是「静默不检查」。
 
-# YAML 锚点:push 与 pull_request 共用同一份门禁清单,避免两处各写一套而慢慢漂移。
-# 覆盖根键时锚点里的键会被整体替换,故每个事件都写出完整的 runner / docker /
-# retries,不做跨键的对象合并。
-.pipeline: &pipeline
-  name: 质量门禁
+# YAML 锚点:只抽出两个事件**真正共用**的部分(runner / docker / retries)。
+# 刻意不共用 stages:`<<: *pipeline` 会把 stages 一起带过去,那正是「push 也跑
+# 整套门禁」的来源。覆盖根键时锚点里的键会被整体替换,故每个事件都写出完整形态。
+.common: &common
   runner:
     tags: cnb:arch:amd64
     # 全量 vitest(3192 个用例)+ next build + Playwright 同节点串行,
     # 核数写死避免「分配到的节点规格随扩缩容变化」把耗时读成回归。
+    # 代价口径:8 核 × 1 小时 = 8 核时。调小核数不省额度(核时 = 核数 × 时长,
+    # 核数减半时长通常翻倍),省额度只能靠「少跑一遍」「少一步」「命中缓存」。
     cpus: 8
   docker:
     image: node:24
@@ -58,160 +78,217 @@
     BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
     # 避免 corepack 在非交互环境下为拉取 pnpm 版本而等待输入。
     CI: "true"
-  stages:
-    # ── 安装 ──
-    # 门禁用 pnpm(AGENTS 硬规则 1:npm 11 在本项目解析 typescript 别名链会崩)。
-    # --frozen-lockfile 保证装的就是锁文件里的版本。
-    - name: Install dependencies
-      script: |
-        corepack enable
-        pnpm install --frozen-lockfile
 
-    # ── 分支保护 ──
-    # 守在最前:分支不对时后续检查的结果最后都会被丢弃(与 pre-commit 同序)。
-    # 与 .githooks/pre-commit 用的是**同一个** scripts/check-branch-guard.cjs,
-    # 不另写一份「CI 专用」的分支名判断(会漂移的判据只许定义一次)。
-    # --target master 由配置写死传入:判定要的是**分支名**,而流水线里的
-    # CNB_PULL_REQUEST_TARGET_SHA 是 sha——拿它当 branch 用会静默失效。
-    - name: 分支守卫
-      script: node scripts/check-branch-guard.cjs --pr-check --target master
+# 门禁清单:一条都不许丢(tests/cnb-pipeline-gates.test.ts 逐条核对)。
+.gates: &gates
+  # ── 安装 ──
+  # 门禁用 pnpm(AGENTS 硬规则 1:npm 11 在本项目解析 typescript 别名链会崩)。
+  # --frozen-lockfile 保证装的就是锁文件里的版本。
+  - name: Install dependencies
+    script: |
+      corepack enable
+      pnpm install --frozen-lockfile
 
-    # ── 建库 ──
-    # 门禁此前从不建库,于是「跑起来的应用要有库」这条路径没有任何自动检查在验:
-    # `pnpm build` 只证明「没有库也能构建」。走 scripts/db-push.mjs——它复核库里
-    # 到底有没有表,失败即非零退出。后面的 E2E 要真的读到库(见 e2e/smoke.spec.ts
-    # 的「数据库链路」一组),故必须放在最前。
-    - name: 同步数据库表结构
-      script: pnpm run db:push
+  # ── 分支保护 ──
+  # 守在最前:分支不对时后续检查的结果最后都会被丢弃(与 pre-commit 同序)。
+  # 与 .githooks/pre-commit 用的是**同一个** scripts/check-branch-guard.cjs,
+  # 不另写一份「CI 专用」的分支名判断(会漂移的判据只许定义一次)。
+  # --target master 由配置写死传入:判定要的是**分支名**,而流水线里的
+  # CNB_PULL_REQUEST_TARGET_SHA 是 sha——拿它当 branch 用会静默失效。
+  - name: 分支守卫
+    script: node scripts/check-branch-guard.cjs --pr-check --target master
 
-    # ── 类型 / 静态检查 ──
-    - name: 类型检查
-      script: pnpm run typecheck
+  # ── 建库 ──
+  # 门禁此前从不建库,于是「跑起来的应用要有库」这条路径没有任何自动检查在验:
+  # `pnpm build` 只证明「没有库也能构建」。走 scripts/db-push.mjs——它复核库里
+  # 到底有没有表,失败即非零退出。后面的 E2E 要真的读到库(见 e2e/smoke.spec.ts
+  # 的「数据库链路」一组),故必须放在最前。
+  - name: 同步数据库表结构
+    script: pnpm run db:push
 
-    - name: ESLint 零警告
-      script: pnpm exec eslint . --max-warnings 0
+  # ── 类型 / 静态检查 ──
+  # tsc 与 eslint 跑之前先留一份「未化妆的工作区」指纹(见下面的对账步骤):
+  # 后面那批「改了文件」的门禁都靠它区分「工具写的」与「本来就没格式化」。
+  - name: 记录工作区基线
+    script: |
+      rm -rf /tmp/wt-check
+      mkdir -p /tmp/wt-check
+      git status --porcelain > /tmp/wt-check/before.txt
+      # 只写 /tmp:仓库内任何位置落文件都会污染后面的格式棘轮与「工作区干净」判据。
 
-    # ── 测试 ──
-    - name: 单元测试
-      script: pnpm run test
+  - name: 类型检查
+    script: pnpm run typecheck
 
-    # 覆盖率棘轮(vitest.config.ts 的目录阈值)——只跑一遍即得覆盖率,
-    # 故与上面的 test 合并为一步,省一次全量执行。
-    - name: 覆盖率棘轮
-      script: pnpm run test:coverage
+  - name: ESLint 零警告
+    script: pnpm exec eslint . --max-warnings 0
 
-    # ── 结构 / 一致性硬规则 ──
-    # 顶层浮层(fixed + inset-0)必须让出窗口标题行,否则页签与窗口按钮被盖住。
-    - name: 标题行让位
-      script: node scripts/check-title-bar-clearance.cjs
+  # ── 测试 ──
+  # 全量 vitest 只跑**一遍**:覆盖率走插件挂在同一次运行上。
+  # 此前 test 与 test:coverage 是两步、同一套用例跑两遍(时长翻倍 → 核时翻倍),
+  # 而现在还能顺带把覆盖率上报给平台(仓库「洞察」页可看曲线)。
+  # 判据强度不变:`pnpm run test:coverage`(只跑一遍即得覆盖率)本来就是这一条
+  # 的替代口径,阈值仍由 vitest.config.ts 的目录阈值守着。
+  - name: 单元测试与覆盖率
+    script: pnpm run test:coverage
+    type: testing:coverage
+    options:
+      # lcov 是平台可识别的三种格式之一(vitest 的 coverage.reporter)。
+      pattern: coverage/lcov.info
+      # 注意:这里**不能**填 lines / diffLines。平台阈值是绝对百分比,而本仓库
+      # 走的是「按目录记门槛 + 棘轮」的口径(各目录不同,整体百分比会先撞在
+      # 低摊薄目录上),填错会要么形同虚设、要么把正常 PR 拦死。
 
-    # 文件命名/组织硬规则(§12.6/§12.8/§12.11/§12.12):R7/R8 Windows 入口
-    # .ps1 化与 BOM、R9 根目录不放双击入口、R10 注释禁历史流水、R11 代理约定名、
-    # R12 源码禁内嵌控制字符。--strict 让 R5 的超 900 行文件从「只提醒」升级为棘轮。
-    - name: 文件结构硬规则
-      script: node scripts/check-file-structure.cjs --strict
+  # ── 结构 / 一致性硬规则 ──
+  # 顶层浮层(fixed + inset-0)必须让出窗口标题行,否则页签与窗口按钮被盖住。
+  - name: 标题行让位
+    script: node scripts/check-title-bar-clearance.cjs
 
-    # 跨平台动作对照(§9.5):对照表里每个动作两侧脚本都真实存在;会失效的清单
-    # (KNOWN_FAILED_FILES)只定义一次。启动编排曾因两侧静默分叉栽过一次。
-    - name: 跨平台动作对照
-      script: node scripts/check-ps1-consistency.mjs
+  # 文件命名/组织硬规则(§12.6/§12.8/§12.11/§12.12):R7/R8 Windows 入口
+  # .ps1 化与 BOM、R9 根目录不放双击入口、R10 注释禁历史流水、R11 代理约定名、
+  # R12 源码禁内嵌控制字符。--strict 让 R5 的超 900 行文件从「只提醒」升级为棘轮。
+  - name: 文件结构硬规则
+    script: node scripts/check-file-structure.cjs --strict
 
-    # ComfyUI 端口口径一致性(§5/§12.14):默认端口单点定义、连接侧与拉起侧共用
-    # 同一常量。分叉的表现是静默连到另一个实例(现象是上传失败/端口漂移)。
-    - name: ComfyUI 端口口径
-      script: node scripts/check-comfyui-port-contract.cjs
+  # 跨平台动作对照(§9.5):对照表里每个动作两侧脚本都真实存在;会失效的清单
+  # (KNOWN_FAILED_FILES)只定义一次。启动编排曾因两侧静默分叉栽过一次。
+  - name: 跨平台动作对照
+    script: node scripts/check-ps1-consistency.mjs
 
-    # 视图层不得动态注入 <style>(03 §3.5):代码分割后会被多份 chunk 各自注入。
-    - name: 内联样式注入
-      script: node scripts/check-inline-style.cjs
+  # import 别名统一(§12.2 / §16.2):本仓库约定 `~` 前缀,但 tsconfig 的 paths
+  # 同时留着脚手架带来的 `@/*` —— 写错的代价是零(能编译、能跑),所以只有机器
+  # 判据挡得住漂移。shadcn add 生成的 ui/ 组件默认写 `@/`,是漂移的高发区。
+  - name: import 别名统一
+    script: node scripts/check-import-alias.cjs
 
-    # 跨文件重复块(§12.12):同一能力的两份实现逐行重合 ≥75% 即失败。
-    - name: 跨文件重复块
-      script: node scripts/check-code-duplication.cjs --strict
+  # ComfyUI 端口口径一致性(§5/§12.14):默认端口单点定义、连接侧与拉起侧共用
+  # 同一常量。分叉的表现是静默连到另一个实例(现象是上传失败/端口漂移)。
+  - name: ComfyUI 端口口径
+    script: node scripts/check-comfyui-port-contract.cjs
 
-    # 函数长度棘轮(§12.13):超 400 行的函数按文件记账,只许降不许升。
-    - name: 函数长度棘轮 TS
-      script: node scripts/check-function-length.cjs --strict
+  # 视图层不得动态注入 <style>(03 §3.5):代码分割后会被多份 chunk 各自注入。
+  - name: 内联样式注入
+    script: node scripts/check-inline-style.cjs
 
-    # Rust 壳函数长度棘轮(§12.13.1):阈值 120,同样走棘轮。
-    - name: 函数长度棘轮 Rust
-      script: node scripts/check-rust-function-length.cjs --strict
+  # 跨文件重复块(§12.12):同一能力的两份实现逐行重合 ≥75% 即失败。
+  - name: 跨文件重复块
+    script: node scripts/check-code-duplication.cjs --strict
 
-    # 模块循环依赖棘轮(§12.7):环的症状是「import 顺序变了就 undefined is not a
-    # function」,排查成本极高,故把「无环」做成棘轮。
-    - name: 模块循环依赖棘轮
-      script: node scripts/check-circular-deps.cjs --strict
+  # 函数长度棘轮(§12.13):超 400 行的函数按文件记账,只许降不许升。
+  - name: 函数长度棘轮 TS
+    script: node scripts/check-function-length.cjs --strict
 
-    # 端口推导四语言一致性(§1.1):四侧读同一份共享向量,任一侧漂移即失败。
-    - name: 端口推导跨语言一致性
-      script: node scripts/check-app-port-vectors.cjs
+  # Rust 壳函数长度棘轮(§12.13.1):阈值 120,同样走棘轮。
+  - name: 函数长度棘轮 Rust
+    script: node scripts/check-rust-function-length.cjs --strict
 
-    # CHANGELOG 碎片形态(§13.10.5):条目写 changelog.d/<issue号>-<slug>.md。
-    - name: CHANGELOG 碎片
-      script: node scripts/check-changelog-fragments.cjs
+  # 模块循环依赖棘轮(§12.7):环的症状是「import 顺序变了就 undefined is not a
+  # function」,排查成本极高,故把「无环」做成棘轮。
+  - name: 模块循环依赖棘轮
+    script: node scripts/check-circular-deps.cjs --strict
 
-    # 主题色扫描棘轮(03 §3.6.1):未豁免的写死色值只许降不许升。
-    - name: 主题色扫描棘轮
-      script: node scripts/check-theme-colors.cjs --strict
+  # 端口推导四语言一致性(§1.1):四侧读同一份共享向量,任一侧漂移即失败。
+  - name: 端口推导跨语言一致性
+    script: node scripts/check-app-port-vectors.cjs
 
-    # UI/逻辑分离棘轮(§17):新增 fetch / vanillaApi / tRPC hook 进视图层即失败。
-    - name: UI/逻辑分离棘轮
-      script: node scripts/check-ui-logic-separation.cjs --strict
+  # CHANGELOG 碎片形态(§13.10.5):条目写 changelog.d/<issue号>-<slug>.md。
+  - name: CHANGELOG 碎片
+    script: node scripts/check-changelog-fragments.cjs
 
-    # src/lib 的 Node-only 声明与可达性(§18.4):判据走依赖图,不用「扫到 fs 就
-    # 要求 server-only」——后者会误伤纯 Node 宿主(kill-process-tree 的入口是
-    # 一句 throw,加上去 scripts/*.mjs 的启动编排直接崩)。
-    - name: lib Node-only 声明
-      script: pnpm exec vitest run tests/lib-node-only-declarations.test.ts
+  # 主题色扫描棘轮(03 §3.6.1):未豁免的写死色值只许降不许升。
+  - name: 主题色扫描棘轮
+    script: node scripts/check-theme-colors.cjs --strict
 
-    # prettier 格式棘轮(§13.5):基线只许下降,新增脏文件即失败;
-    # --strict 要求治理后必须收紧基线,否则「等基线整改完再接入」永远不会发生。
-    - name: prettier 格式棘轮
-      script: node scripts/check-format.cjs --strict
+  # UI/逻辑分离棘轮(§17):新增 fetch / vanillaApi / tRPC hook 进视图层即失败。
+  - name: UI/逻辑分离棘轮
+    script: node scripts/check-ui-logic-separation.cjs --strict
 
-    # 格式化提交与行为改动分离(§13.5.2):squash 合并后 master 上只剩一个提交,
-    # 本地不拆就再没机会补——CI 必须复核一次。
-    - name: 格式化提交分离
-      script: node scripts/check-reformat-only.cjs
+  # src/lib 的 Node-only 声明与可达性(§18.4):判据走依赖图,不用「扫到 fs 就
+  # 要求 server-only」——后者会误伤纯 Node 宿主(kill-process-tree 的入口是
+  # 一句 throw,加上去 scripts/*.mjs 的启动编排直接崩)。
+  - name: lib Node-only 声明
+    script: pnpm exec vitest run tests/lib-node-only-declarations.test.ts
 
-    # core 骨架三处「唯一事实源」(§18.8):日志只有一条通道、仓储只有一种取法、
-    # config 不再承诺「集中配置」。这三条此前只写在注释里,而注释与现状恰好相反。
-    - name: core 骨架单一事实源
-      script: pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
+  # prettier 格式棘轮(§13.5):基线只许下降,新增脏文件即失败;
+  # --strict 要求治理后必须收紧基线,否则「等基线整改完再接入」永远不会发生。
+  - name: prettier 格式棘轮
+    script: node scripts/check-format.cjs --strict
 
-    # src/lib 的零消费值导出棘轮(§12.16):只认值导出,按符号记账。
-    - name: 零消费导出棘轮
-      script: node scripts/check-dead-exports.cjs --strict
+  # 格式化提交与行为改动分离(§13.5.2):squash 合并后 master 上只剩一个提交,
+  # 本地不拆就再没机会补——CI 必须复核一次。
+  - name: 格式化提交分离
+    script: node scripts/check-reformat-only.cjs
 
-    # core 出口纪律与基类纯度(§18.8):barrel 曾是四个 export *(而全库只有 2 处
-    # 真的这样导入),基类曾在构造路径里打日志、把口径钉死并连带加载 pino。
-    - name: core 出口纪律与基类纯度
-      script: pnpm exec vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+  # 工作区对账:上面两步会**就地改写文件**(prettier 格式棘轮按需 --write、
+  # 格式化分离判定会 touch 工作区),而「工作区干不干净」本身是一条覆盖不到
+  # 的判据(脏工作区只说明了后面这些步骤在什么基础上做的判断)。
+  # 这里只报「相对本步开始前多了哪些改动」,不报「工作区不干净」——
+  # CI 检出本来就可能带脏文件,把它当失败等于制造无关的红。
+  - name: 工作区对账
+    script: |
+      git status --porcelain > /tmp/wt-check/after.txt
+      if ! diff -q /tmp/wt-check/before.txt /tmp/wt-check/after.txt >/dev/null; then
+        echo "以下路径在这批门禁执行期间又被改动了(说明有步骤在写文件):"
+        diff /tmp/wt-check/before.txt /tmp/wt-check/after.txt || true
+      fi
 
-    # ── 构建与产物 ──
-    # src/env.js 在 build/dev 期校验;CI 无真实密钥,用 pipeline 级 env 的占位值。
-    - name: 生产构建
-      script: pnpm run build
+  # core 骨架三处「唯一事实源」(§18.8):日志只有一条通道、仓储只有一种取法、
+  # config 不再承诺「集中配置」。这三条此前只写在注释里,而注释与现状恰好相反。
+  - name: core 骨架单一事实源
+    script: pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
 
-    # .next/standalone 的产物级护栏(§7.2):真去数产物里有没有测试文件 / 变更碎片 /
-    # 文档,有没有缺 Next 自带的运行时脚本(缺件的表现是「页面正常、接口全 500」)。
-    # 「清单还在」不等于「清单生效」,必须有一条构建后的检查去数文件。
-    - name: standalone 产物护栏
-      script: node scripts/check-standalone-contents.cjs
+  # src/lib 的零消费值导出棘轮(§12.16):只认值导出,按符号记账。
+  - name: 零消费导出棘轮
+    script: node scripts/check-dead-exports.cjs --strict
 
-    # ── E2E(仅 @critical 关键流程)──
-    # 注意**不要**设 SKIP_ENV_VALIDATION 以外的捷径:前面的 db:push 已建好表,
-    # 这里跑的用例要能真的读到库,否则「库没建」这类退化又会从门禁视野里消失。
-    # 不需要额外 apt-get install --with-deps:node:24 镜像的 Debian 骨架里
-    # 只差共享库,缺了会在下面这步当场报出缺哪个包,比预先装一长串更可归因。
-    - name: 安装 Playwright 浏览器
-      script: pnpm exec playwright install --with-deps chromium
+  # core 出口纪律与基类纯度(§18.8):barrel 曾是四个 export *(而全库只有 2 处
+  # 真的这样导入),基类曾在构造路径里打日志、把口径钉死并连带加载 pino。
+  - name: core 出口纪律与基类纯度
+    script: pnpm exec vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
 
-    - name: E2E 关键流程
-      script: pnpm exec playwright test --grep @critical
+  # ── 构建与产物 ──
+  # src/env.js 在 build/dev 期校验;CI 无真实密钥,用 pipeline 级 env 的占位值。
+  - name: 生产构建
+    script: pnpm run build
+
+  # .next/standalone 的产物级护栏(§7.2):真去数产物里有没有测试文件 / 变更碎片 /
+  # 文档,有没有缺 Next 自带的运行时脚本(缺件的表现是「页面正常、接口全 500」)。
+  # 「清单还在」不等于「清单生效」,必须有一条构建后的检查去数文件。
+  - name: standalone 产物护栏
+    script: node scripts/check-standalone-contents.cjs
+
+  # ── E2E(仅 @critical 关键流程)──
+  # 注意**不要**设 SKIP_ENV_VALIDATION 以外的捷径:前面的 db:push 已建好表,
+  # 这里跑的用例要能真的读到库,否则「库没建」这类退化又会从门禁视野里消失。
+  # 不需要额外 apt-get install --with-deps:node:24 镜像的 Debian 骨架里
+  # 只差共享库,缺了会在下面这步当场报出缺哪个包,比预先装一长串更可归因。
+  - name: 安装 Playwright 浏览器
+    script: pnpm exec playwright install --with-deps chromium
+
+  - name: E2E 关键流程
+    script: pnpm exec playwright test --grep @critical
+
+master:
+  # PR 端的全套门禁:PR 不合并就不该结束,这里一步不省。
+  pull_request:
+    - <<: *common
+      name: 质量门禁
+      stages: *gates
+
+  # 合并后的 push:不重跑全套。合并提交由平台按**已被门禁验过的源分支 SHA**
+  # 生成,不引入新代码;再跑一遍 30 步只是把同一份代码的第二遍算进核时。
+  # 保留的这条是形态复核:落到 master 的必须是合并提交。若出现非合并提交
+  # (本地 --no-verify 就能做到),说明有变更绕过了 PR 与门禁 —— 那要拦下。
+  push:
+    - <<: *common
+      name: master 合并复核
+      stages:
+        - name: 合并形态复核
+          script: node scripts/check-branch-guard.cjs --merge-commit
 
   # 失败时才上传报告(对齐 upload-artifact 的 if: failure())。allowFailure:
   # 上传失败不该把一次「测试红」改写成「上传红」,掩盖真正的现场。
+  # 挂在 push 上(而不是挂在两条流水线上各写一份):一次合并失败时真正要看的
+  # 是 PR 那条记录的现场,而 push 侧的现场同样值得留一份;两条各写一份会漂移。
   failStages:
     - name: 上传 Playwright 报告
       allowFailure: true
@@ -221,9 +298,3 @@
         attachments:
           - playwright-report
         ttl: 7
-
-master:
-  push:
-    - <<: *pipeline
-  pull_request:
-    - <<: *pipeline

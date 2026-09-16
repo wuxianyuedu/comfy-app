@@ -3,7 +3,7 @@ import { createElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
-import type { WorkflowDetail } from "@/components/studio/workflow-types";
+import type { WorkflowDetail } from "~/components/studio/workflow-types";
 import { ToastProvider } from "../../ToastProvider";
 import { useWorkflowPersistence } from "./use-workflow-persistence";
 

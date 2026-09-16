@@ -52,12 +52,22 @@ import {
   preparePnpm,
   probePnpm,
 } from "./launcher-core/corepack.mjs";
-import { commandInvocation, isWindows, spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
+import {
+  commandInvocation,
+  isWindows,
+  pnpmInvocation,
+  runSync,
+  spawnInGroup,
+  whichCommand,
+} from "./launcher-core/shell.mjs";
 import {
   checkNodeModules,
+  lockfileDrift,
   pruneTimestampedLogs,
   syncNextCache,
+  verifyInstall,
 } from "./launcher-core/worktree.mjs";
+import { renderDriftReport } from "./lockfile/render-lock-diff.mjs";
 import {
   clearSession,
   isSessionOwnerAlive,
@@ -79,7 +89,7 @@ export { orchestratePnpm, probePnpm, packageManagerVersion } from "./launcher-co
 export function pnpmToolchainTip() {
   return lastPnpmTip;
 }
-export { configFingerprint, syncNextCache, checkNodeModules } from "./launcher-core/worktree.mjs";
+export { configFingerprint, syncNextCache, checkNodeModules, lockfileDrift, verifyInstall } from "./launcher-core/worktree.mjs";
 export { waitForReady, readTail, fileHasMarker, writeLaunchStatus } from "./launcher-core/orchestrator.mjs";
 export { listeningPidsOnPort, pidBelongsToRoot, processCwd } from "./launcher-core/procs.mjs";
 
@@ -692,6 +702,21 @@ export async function run(argv = process.argv.slice(2)) {
   }
   log("工具链门禁：pnpm 可用、node_modules 已安装", "OK");
 
+  // 1.5) 依赖与 lockfile 对齐：拉了更新但没重装时，`node_modules` 是「在但陈旧」的，
+  //      报错会落在业务模块解析失败上，与「依赖没装」这句结论长得完全不一样。
+  //      判据是 lockfile 的**实质差异**（`lockfileDrift`），差异明细复用
+  //      scripts/lockfile/ 的既有实现（唯一出处，质量门禁同源）。
+  const syncProblem = await syncDependencies(ROOT, { status });
+  if (syncProblem) {
+    log(syncProblem, "ERROR");
+    status("error", 1, syncProblem.split("\n")[0] ?? "依赖未对齐", {
+      error: true,
+      staleShell: syncProblem,
+    });
+    return 1;
+  }
+  log("依赖与 lockfile 一致（无需补装）", "OK");
+
   // 2) 端口（单一事实源：app-port.mjs，绝不在这里重算）
   const port = portOrNull ?? resolveAppPort(ROOT);
   currentPort = port;
@@ -823,6 +848,70 @@ export async function run(argv = process.argv.slice(2)) {
   }
   await shutdown(exitCode);
   return exitCode;
+}
+
+// ── 依赖与 lockfile 对齐（启动前的补装）─────────────────────────────────────
+//
+// 「装了」与「装的是不是当前 lockfile」是两件事：拉了更新（新依赖进 lockfile）后
+// 没重装时，`.modules.yaml` 与 `.bin/next` 都在 → 被当成「已就绪」跳过安装，而
+// 真正的新依赖缺席 —— 用户看到的是一堆「Cannot find module」，而日志里没有任何
+// 「依赖没装」的线索（重新双击入口还会显示「依赖已就绪」）。
+//
+// 补装用 `pnpm install`（不是 `--frozen-lockfile`：漂移的正是「lockfile 比
+// node_modules 新」，冻结只会立刻失败）。**安装结果看复核，不看退出码**
+// （§9.2 第 4 条：`drizzle-kit push` 那条「报错 + exit 0 + 留空库」是同一族的坑）：
+// 复核走 `verifyInstall()`（`.modules.yaml` + 关键依赖目录 + lockfile 一致），
+// 判据是「目标状态有没有达成」，不是进程怎么退的。
+
+/** 补装依赖（仅当 lockfile 漂移时）；返回 null = 无需补装或补装成功。
+ *
+ *  @param {string} root
+ *  @param {{ status?: ((phase: string, progress: number, message: string, extra?: object) => void) | null,
+ *            staleShell?: string | null }} [deps]
+ *  @returns {Promise<string | null>} 失败原因（null = 通过）
+ */
+export async function syncDependencies(root, deps = {}) {
+  const status = deps.status ?? null;
+  const staleShell = deps.staleShell ?? null;
+  const drift = lockfileDrift(root);
+  if (drift.state === "fresh") return null;
+  if (drift.state === "no-lockfile") {
+    return "找不到仓库 pnpm-lock.yaml —— 检出可能不完整，请重新克隆后再试。";
+  }
+  const firstInstall = drift.state === "no-install";
+  log(
+    firstInstall
+      ? "node_modules 尚未完整安装，正在执行 pnpm install（首次较久，请勿关闭窗口）…"
+      : "检测到依赖与 lockfile 不一致（拉了更新后未重装），正在补装依赖…",
+    "WARN",
+  );
+  if (drift.diff) {
+    // 「不一致」只说了一半，用户接着要问的正是「哪儿不一致」（ISSUE #550）。
+    log("依赖与 lockfile 的不一致明细（仓库 lockfile 对比最近一次安装用的那份）：", "INFO");
+    for (const line of renderDriftReport(drift.diff, { maxPerSection: 8 })) log(line, "INFO");
+  }
+  status?.("deps-install", 0.03, "正在补装依赖（pnpm install）…", { staleShell });
+
+  const invocation = pnpmInvocation(["install"]);
+  if (!invocation) {
+    return "pnpm 不在 PATH 上，无法补装依赖（先执行 corepack enable）。";
+  }
+  const result = runSync(invocation.command, invocation.args, {
+    cwd: root,
+    timeoutMs: 30 * 60_000,
+  });
+  const tail = (result.stdout + result.stderr).trim().split("\n").slice(-15).join("\n");
+  if (tail) log(`pnpm install 输出尾部：\n${tail}`, result.ok ? "INFO" : "ERROR");
+
+  const verdict = verifyInstall(root);
+  if (!verdict.ok) {
+    return (
+      `依赖补装后仍未就绪：${verdict.reason}\n` +
+      "本次安装的输出可在上方日志里查看；修复后重新启动即可（不要只重试不改动）。"
+    );
+  }
+  log("依赖补装完成并已复核（.modules.yaml + 关键依赖 + lockfile 一致）", "OK");
+  return null;
 }
 
 /** 起 dev server：`pnpm dev -p <port> -H <host>`（端口由 app-port.mjs 解析后显式传入，

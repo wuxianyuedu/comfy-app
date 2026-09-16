@@ -10,6 +10,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+// 两份 lockfile 的**实质**差异（唯一实现，与质量门禁 / diff-cli 同源）。
+// 纯逻辑模块（无 IO、无副作用），静态 import 不带来平台或加载顺序问题。
+import { diffLockfiles, isEmptyDiff } from "../lockfile/lock-diff.mjs";
+
 /** 进指纹的文件（与 .ps1 的 $targets 同一份清单）。 */
 export const FINGERPRINT_FILES = [
   "next.config.js",
@@ -182,4 +186,71 @@ export function pruneTimestampedLogs(dir, prefixes, keep = 5) {
       }
     }
   }
+}
+
+// ── 依赖与 lockfile 漂移（「拉了新代码但没重装依赖」）───────────────────────────
+//
+// 为什么必须判「漂移」而不是「装没装」：`node_modules` 的存在与「装的是不是当前
+// lockfile」是两件事。拉了更新（新依赖进 lockfile）后没重装时，`.modules.yaml`
+// 与 `.bin/next` 都在 → 被当成「已就绪」，而真正的新依赖缺席，报错落在**业务模块
+// 解析失败**上，与「依赖没装」这句结论长得完全不一样。
+//
+// 判据：pnpm 会把**最近一次成功安装**用的 lockfile 复制到
+// `node_modules/.pnpm/lock.yaml`。差异明细复用 `scripts/lockfile/lock-diff.mjs`
+// （唯一实现，质量门禁同源）。
+
+/**
+ * lockfile 漂移判定。
+ *
+ * 判据是 `diffLockfiles()` 的**实质差异**（`isEmptyDiff`），**不是字节相等**：
+ * pnpm 写进 `node_modules/.pnpm/lock.yaml` 的那份与仓库根那份必然不同形（少了
+ * YAML 文档头 `---`、`settings:` 段落位置不同；实测干净安装后两份 12300 / 12142 行、
+ * 首行就不同）。用哈希比对会让**每次启动都判成漂移并重装一遍** —— 正是本条要消灭的
+ * 静默浪费；而实质性 diff 只看顶层字段 / importer 依赖 / packages / snapshots 的
+ * 增删改，注释、空行、条目顺序都不算差异。
+ *
+ * @param {string} root
+ * @returns {{ state: "fresh" | "no-install" | "no-lockfile" | "drift",
+ *             modulesLock: string | null,
+ *             diff?: import("../lockfile/lock-diff.d.mts").LockDiff | null }}
+ */
+export function lockfileDrift(root) {
+  const repoLock = path.join(root, "pnpm-lock.yaml");
+  const modulesLock = path.join(root, "node_modules", ".pnpm", "lock.yaml");
+  if (!fs.existsSync(repoLock)) return { state: "no-lockfile", modulesLock: null };
+  if (!fs.existsSync(modulesLock)) return { state: "no-install", modulesLock: null };
+  try {
+    const diff = diffLockfiles(
+      fs.readFileSync(modulesLock, "utf8"),
+      fs.readFileSync(repoLock, "utf8"),
+    );
+    return { state: isEmptyDiff(diff) ? "fresh" : "drift", modulesLock, diff };
+  } catch {
+    return { state: "no-install", modulesLock: null };
+  }
+}
+
+/** 「依赖真的可用」的复核入口：只认产物，不认退出码。
+ *
+ *  pnpm 在 postinstall / 目录写入失败时会给非零退出，但那不是唯一形态：
+ *  `.modules.yaml` + 关键依赖目录 + 「安装时 lockfile 与仓库 lockfile 实质一致」
+ *  才是「依赖真的可用」的最小充分条件（§9.2 第 4 条：判据不看退出码）。
+ *
+ * @param {string} root
+ * @returns {{ ok: boolean, reason: string }}
+ */
+export function verifyInstall(root) {
+  const modules = checkNodeModules(root);
+  if (!modules.healthy) return { ok: false, reason: modules.reasons.join("；") };
+  const drift = lockfileDrift(root);
+  if (drift.state !== "fresh") {
+    return {
+      ok: false,
+      reason:
+        drift.state === "drift"
+          ? "node_modules/.pnpm/lock.yaml 与仓库 pnpm-lock.yaml 仍不一致"
+          : "拿不到安装时 lockfile（node_modules/.pnpm/lock.yaml）",
+    };
+  }
+  return { ok: true, reason: "" };
 }

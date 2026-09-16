@@ -25,9 +25,9 @@ import {
   asRawWorkflow,
   detectFormat,
   extractPositions,
-} from "@/lib/comfyui/raw";
-import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "@/lib/workflow-types";
-import { detectParamMap } from "@/lib/comfyui/workflow";
+} from "~/lib/comfyui/raw";
+import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "~/lib/workflow-types";
+import { detectParamMap } from "~/lib/comfyui/workflow";
 
 export interface ParsedWorkflow {
   /** API 格式导入件（检测为 `api` 时才有，否则空对象）。 */

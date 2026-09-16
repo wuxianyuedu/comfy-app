@@ -11,10 +11,10 @@ import {
   sizeSpecFromText,
   toSizeSpec,
   type SizeSpec,
-} from "@/lib/size-presets";
-import type { ProjectMeta } from "@/lib/workshop/types";
-import { saveComfySettings } from "@/server/workshop/comfyui";
-import * as orchestrator from "@/server/workshop/orchestrator";
+} from "~/lib/size-presets";
+import type { ProjectMeta } from "~/lib/workshop/types";
+import { saveComfySettings } from "~/server/workshop/comfyui";
+import * as orchestrator from "~/server/workshop/orchestrator";
 
 /** 尺寸参数（两种类别任选其一）：
  *   · 比例 + 分辨率          —— `ratio` + `clarity`（"1k"/"2k"/"4k"）；

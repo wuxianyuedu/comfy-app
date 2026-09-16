@@ -4,7 +4,7 @@
  */
 import "server-only";
 
-import { db } from "@/lib/db";
+import { db } from "~/lib/db";
 import {
   workflowModelTag,
   workflowModelTagToWorkflowTemplate,

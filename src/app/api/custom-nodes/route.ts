@@ -16,10 +16,10 @@ import {
   deriveComfyuiSubdir,
   deriveComfyuiWorkflowsDir,
   getSettingsSync,
-} from "@/lib/app-settings/app-settings.server";
-import { readEnvVar } from "@/lib/envfile";
-import { requireServerUser } from "@/lib/auth-server";
-import { AppError } from "@/lib/core/errors";
+} from "~/lib/app-settings/app-settings.server";
+import { readEnvVar } from "~/lib/envfile";
+import { requireServerUser } from "~/lib/auth-server";
+import { AppError } from "~/lib/core/errors";
 import { errorMessage } from "~/lib/error-message";
 import {
   errorResponse,

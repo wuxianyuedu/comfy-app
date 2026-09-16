@@ -12,7 +12,7 @@
  * `node:fs`。浏览器侧的类型与 fetch 见 `usage-test-client.ts`。
  */
 
-import { getLLMConfig } from "@/lib/llm/server";
+import { getLLMConfig } from "~/lib/llm/server";
 import { errorMessage } from "~/lib/error-message";
 import {
   extractBase64DataUrl,

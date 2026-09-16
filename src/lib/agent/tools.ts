@@ -6,7 +6,7 @@
 //
 // 纯定义，无副作用，不需要 zod —— 直接以 OpenAI function calling
 // 的 JSON Schema 形状声明，单一来源维护。
-import type { LLMTool } from "@/lib/llm/types";
+import type { LLMTool } from "~/lib/llm/types";
 
 /** 工坊 Agent 的全部工具定义（OpenAI function calling 格式）。 */
 export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [

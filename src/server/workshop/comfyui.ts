@@ -6,8 +6,8 @@
 // 支持 {{prompt}}/{{negative}}/{{image}} 占位替换，从而与任意已安装模型解耦。
 import { randomUUID } from "node:crypto";
 
-import { COMFYUI_DEFAULT_PORT } from "@/lib/endpoints";
-import { comfyUiBaseUrl, LOOPBACK_HOST } from "@/lib/endpoints";
+import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
+import { comfyUiBaseUrl, LOOPBACK_HOST } from "~/lib/endpoints";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -15,7 +15,7 @@ import {
   DEFAULT_SIZE_SPEC,
   sizeSpecDims,
   type SizeSpec,
-} from "@/lib/size-presets";
+} from "~/lib/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
 const SETTINGS_FILE = path.join(

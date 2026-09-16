@@ -5,12 +5,12 @@
 // never returned to the browser — matching the LLM config contract.
 import { type NextRequest, NextResponse } from "next/server";
 
-import { requireServerUser } from "@/lib/auth-server";
+import { requireServerUser } from "~/lib/auth-server";
 import {
   getMaskedChannels,
   saveWorkshopApiSettings,
-} from "@/lib/workshop/api-channel.server";
-import { isRecord } from "@/lib/workshop/api-channel-shared";
+} from "~/lib/workshop/api-channel.server";
+import { isRecord } from "~/lib/workshop/api-channel-shared";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 

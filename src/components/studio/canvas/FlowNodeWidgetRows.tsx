@@ -8,8 +8,8 @@ import {
   portColor,
   inferInputType,
   inferIsMultiline,
-} from "@/lib/comfyui/types";
-import { friendlyInputName } from "@/lib/comfyui/node-titles";
+} from "~/lib/comfyui/types";
+import { friendlyInputName } from "~/lib/comfyui/node-titles";
 import {
   renderWidgetValue,
   valueCellColor,

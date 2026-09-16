@@ -20,7 +20,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy } from "lucide-react";
 
 import { PageLoading } from "~/components/ui/page-loading";
-import { SettingsShell } from "@/components/settings/SettingsShell";
+import { SettingsShell } from "~/components/settings/SettingsShell";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
 
 import { SettingsPageView } from "./SettingsPageView";

@@ -6,11 +6,11 @@
 // 鉴权沿用 requireServerUser（单机本地演示可回落默认用户）。
 
 import { type NextRequest, NextResponse } from "next/server";
-import { requireServerUser } from "@/lib/auth-server";
-import { handleAgentChat } from "@/lib/agent/server";
-import { parseDraftDto } from "@/lib/workshop/draft-sync-shared";
-import { isRecord } from "@/lib/workshop/api-channel-shared";
-import type { AgentChatRequest } from "@/lib/agent/shared";
+import { requireServerUser } from "~/lib/auth-server";
+import { handleAgentChat } from "~/lib/agent/server";
+import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
+import { isRecord } from "~/lib/workshop/api-channel-shared";
+import type { AgentChatRequest } from "~/lib/agent/shared";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 

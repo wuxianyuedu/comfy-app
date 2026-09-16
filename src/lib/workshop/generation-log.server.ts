@@ -10,8 +10,8 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 
-import { createLogger } from "@/lib/core/logger";
-import { WORKSHOP_LOG_DIR } from "@/lib/log-paths";
+import { createLogger } from "~/lib/core/logger";
+import { WORKSHOP_LOG_DIR } from "~/lib/log-paths";
 import {
   generationLogFileName,
   normalizeGenerationLogEntry,

@@ -5,16 +5,16 @@
 // 刷新即失；这里统一落 log/workshop/（按天分文件），供界面回看历史。
 import { type NextRequest, NextResponse } from "next/server";
 
-import { requireServerUser } from "@/lib/auth-server";
+import { requireServerUser } from "~/lib/auth-server";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   GENERATION_LOG_STAGE_LABELS,
   parseGenerationLogStage,
-} from "@/lib/workshop/generation-log";
+} from "~/lib/workshop/generation-log";
 import {
   appendGenerationLogs,
   readGenerationLogs,
-} from "@/lib/workshop/generation-log.server";
+} from "~/lib/workshop/generation-log.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

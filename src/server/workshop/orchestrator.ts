@@ -3,8 +3,8 @@
 // 供 MCP 工具与（未来的）界面共享调用。仅依赖本目录下的本地模块 +
 // 纯函数模块（script-parser / script-parse / prompt-builder），不触碰
 // `server-only` / `~/env`，故 stdio 与 Next HTTP 双 transport 共用。
-import type { Character, ProjectMeta, Scene, Shot } from "@/lib/workshop/types";
-import { parseIdeaToScenes } from "@/lib/workshop/script-parser";
+import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
+import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
 import {
   buildExtractCharactersMessages,
   buildExtractShotsMessages,
@@ -12,14 +12,14 @@ import {
   mergeCharacterDrafts,
   parseExtractedCharacters,
   parseExtractedShots,
-} from "@/lib/workshop/script-parse";
+} from "~/lib/workshop/script-parse";
 import {
   buildCharacterNegative,
   buildCharacterPrompt,
   buildShotNegative,
   buildShotPrompt,
-} from "@/lib/workshop/prompt-builder";
-import { sizeSpecToWxH, type SizeSpec } from "@/lib/size-presets";
+} from "~/lib/workshop/prompt-builder";
+import { sizeSpecToWxH, type SizeSpec } from "~/lib/size-presets";
 import {
   generateImageViaApi,
   pollVideoViaApi,

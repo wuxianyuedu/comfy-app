@@ -8,7 +8,7 @@
 // 本测试覆盖「导入剧本 → 卸载(切页签) → 重挂载(切回)」内容应保留。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
-import { useWorkshopPipeline } from "@/components/workshop/hooks/use-workshop-pipeline";
+import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { generateWorkflowPortrait } from "~/lib/workshop/character-portrait-client";
 import type { Character } from "~/lib/workshop/types";
 

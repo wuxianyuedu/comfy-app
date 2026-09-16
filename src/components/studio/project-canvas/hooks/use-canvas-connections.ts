@@ -14,12 +14,12 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { addEdge, type Connection, type Edge } from "@xyflow/react";
-import { applyPropagationToNodes } from "@/lib/project-canvas/canvas-helpers";
-import { importOutputAsInput } from "@/lib/project-canvas/canvas-api";
+import { applyPropagationToNodes } from "~/lib/project-canvas/canvas-helpers";
+import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import {
   isCanvasNode,
   type CanvasNodeType,
-} from "@/lib/project-canvas/canvas-types";
+} from "~/lib/project-canvas/canvas-types";
 
 export interface UseCanvasConnectionsArgs {
   nodesRef: { current: CanvasNodeType[] };

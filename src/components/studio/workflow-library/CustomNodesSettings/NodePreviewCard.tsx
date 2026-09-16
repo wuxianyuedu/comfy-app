@@ -5,7 +5,7 @@
  * `||` 才是本场景的正确语义。与 parsing.ts 同一判断。 */
 "use client";
 
-import { colorFor, type ManifestNodeRaw } from "@/config/custom-nodes";
+import { colorFor, type ManifestNodeRaw } from "~/config/custom-nodes";
 import { PortRow, WidgetValueChip } from "./SettingsParts";
 
 /* ──────────────────────────────────────────────────────────────────────── */

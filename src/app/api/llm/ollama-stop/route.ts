@@ -1,17 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
+import { getServerUser } from "~/lib/auth-server";
 import fs from "node:fs";
 import path from "node:path";
-import { OLLAMA_RUNTIME_LOG } from "@/lib/log-paths";
-import { appendSessionBanner as appendSessionBannerToFile } from "@/lib/session-banner.server";
-import { OLLAMA_DEFAULT_PORT } from "@/lib/endpoints";
-import { killProcessTreeByImage } from "@/lib/kill-process-tree";
+import { OLLAMA_RUNTIME_LOG } from "~/lib/log-paths";
+import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
+import { OLLAMA_DEFAULT_PORT } from "~/lib/endpoints";
+import { killProcessTreeByImage } from "~/lib/kill-process-tree";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Ollama 默认端口；与 ollama-start 路由保持一致。 */
-/* 端口取自 `@/lib/endpoints` 的单一事实源 —— 它同时被设置页 placeholder、
+/* 端口取自 `~/lib/endpoints` 的单一事实源 —— 它同时被设置页 placeholder、
  *  llmConfig 的入库默认值与 MCP 侧 LLM 兜底读取，本地再写一个字面量就又是一处
  *  「改漏就静默分叉」的落点。 */
 const OLLAMA_PORT = OLLAMA_DEFAULT_PORT;

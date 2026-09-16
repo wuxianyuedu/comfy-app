@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { skillRepository } from "@/lib/core/repository";
-import { BUILTIN_SKILLS, CATEGORY_LABELS } from "@/lib/skills-seed";
+import { skillRepository } from "~/lib/core/repository";
+import { BUILTIN_SKILLS, CATEGORY_LABELS } from "~/lib/skills-seed";
 
 export const skillRouter = createTRPCRouter({
   /** GET /api/skills — public, with category summary */

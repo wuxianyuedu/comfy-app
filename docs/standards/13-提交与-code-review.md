@@ -104,9 +104,25 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 ### 13.5 CI 门禁
 
-**唯一事实来源**：`.cnb.yml`（仓库根，单条流水线 `质量门禁`，触发 master 的
-`push` 与 `pull_request`）。改门禁改这个文件，本文档与
+**唯一事实来源**：`.cnb.yml`（仓库根）。两条流水线：`质量门禁` 挂 master 的
+`pull_request`，`master 合并复核` 挂 master 的 `push`。改门禁改这个文件，本文档与
 [11.7](11-测试与可观测性.md#117-ci-质量门禁) 同步更新即可，不要三处各写一套。
+
+> **门禁只在 `pull_request` 上跑：`push` 不再重复一遍**（ISSUE #623）。
+> 计费口径是「节点规格 × 运行时长」——8 核跑一小时就是 8 核时，而社区版
+> 云原生构建的免费额度是 **160 核时/月**。此前 `push` 与 `pull_request` 通过
+> 同一个 YAML 锚点（`<<: *pipeline`）共用整份 `stages`，于是**每一次 PR 合并
+> 都会在 master 上把 30 步再跑一遍**：同一份代码、第二遍核时，而两条记录都是
+> 绿的，没人会从构建历史里发现。
+>
+> 合并提交是平台**按被门禁验过的源分支 SHA** 生成的（不引入新代码），因此
+> `push` 侧只保留一条形态复核：`node scripts/check-branch-guard.cjs --merge-commit`
+> —— 落到 master 的必须是合并提交；父提交数 ≤ 1 说明有变更绕过 PR 写进了主干
+> （本地 `--no-verify` 就能做到），那正是要拦的。
+> 回归护栏：`tests/cnb-pipeline-gates.test.ts` 的「两条流水线」一组。
+>
+> **PR 的 `pull_request` 流水线一条不能丢**：它是「不合并就不该结束」的那道门，
+> 省核时的办法是别把同一份检查跑两遍，不是把检查删掉（见下面 13.5.3）。
 
 > **为什么不是 `.github/workflows/ci.yml`**：本仓库跑在 CNB 平台上，平台只读仓库根的
 > `.cnb.yml`。那份 27 步的 GitHub workflow **从未被触发过一次**（构建历史里只有
@@ -124,10 +140,11 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 ✅ corepack enable && pnpm install --frozen-lockfile
 ✅ node scripts/check-branch-guard.cjs --pr-check --target master   # PR 源分支不能是 master（见 13.6）
 ✅ pnpm run db:push                # 建表；后面 E2E 要真的读到库（见 11.7）
+✅ git status --porcelain > /tmp/wt-check/before.txt   # 工作区基线（供「工作区对账」比对）
 ✅ pnpm run typecheck              # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test                   # vitest run
-✅ pnpm run test:coverage          # 覆盖率棘轮（vitest.config.ts 的目录阈值）
+✅ pnpm run test:coverage          # 全量 vitest **只跑一遍**：覆盖率棘轮 + 上报平台
+                                  # （vitest.config.ts 的目录阈值；见 13.5.3）
 ✅ node scripts/check-title-bar-clearance.cjs
 ✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs           # 跨平台动作对照（§9.5）
@@ -144,6 +161,7 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 ✅ vitest run tests/lib-node-only-declarations.test.ts  # src/lib Node-only 声明（18 §18.4）
 ✅ node scripts/check-format.cjs --strict           # prettier 格式棘轮（见 13.5.1）
 ✅ node scripts/check-reformat-only.cjs             # 格式化提交与行为改动分离（见 13.5.2）
+✅ 工作区对账：diff 上面那份 before/after，只报「这批门禁执行期间被改动的路径」
 ✅ vitest run tests/single-logger-channel…（core 骨架单一事实源，18 §18.8）
 ✅ node scripts/check-dead-exports.cjs --strict     # src/lib 零消费值导出棘轮（§12.16）
 ✅ vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
@@ -152,6 +170,9 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 ✅ pnpm exec playwright install --with-deps chromium
 ✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
 失败时（failStages）：上传 playwright-report 为 commit 附件（allowFailure）
+
+合并后（.cnb.yml 流水线「master 合并复核」）：
+✅ node scripts/check-branch-guard.cjs --merge-commit   # 落到 master 的必须是合并提交
 ```
 
 **规则**：
@@ -185,7 +206,7 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 
   任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
   **钩子由 `pnpm install` 自动接上**（`package.json` 的 postinstall →
-  `scripts/install-git-hooks.sh` 写 `core.hooksPath=.githooks`，幂等）；装了依赖但
+  `scripts/install-git-hooks.mjs` 写 `core.hooksPath=.githooks`，幂等）；装了依赖但
   `git config core.hooksPath` 仍为空时手动执行一次即可。
 - **一律 pnpm，禁止 npm/npx**（AGENTS.md 硬规则 1）：npm 在本项目解析 typescript
   别名链会崩溃（`Class extends value undefined`）。
@@ -279,6 +300,42 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 **CI 也要跑**：squash 合并后 `master` 上只剩一个提交，「拆成两次提交」在本地不做
 就再没有机会补，而它造成的后果（blame 失真）是永久性的。
 
+#### 13.5.3 核时预算：同一份检查只跑一遍（ISSUE #623）
+
+社区版云原生构建的免费额度是 **160 核时/月**（`docs.cnb.cool/zh/pricing`），
+计量口径是「每 5 分钟冻结一次，冻结量 = 5 min × 节点规格」。本流水线声明 `cpus: 8`，
+跑满一小时就是 8 核时 —— 一次合并前后各跑一遍全套，一个月几十次 PR 就能把额度吃光。
+
+**省额度只有三条路**（都没动判据强度）：
+
+| 做法 | 省什么 | 代价 |
+|---|---|---|
+| 门禁只挂 `pull_request`，`push` 只留合并形态复核 | 砍掉「同一份代码的第二遍」 | 无（合并提交不引入新代码，见 13.5） |
+| `test` 与 `test:coverage` 合并成 `pnpm run test:coverage` | 全量 vitest 从两遍变一遍 | 无（覆盖率本来就跟着这一次运行出） |
+| `docker.volumes` 声明 pnpm store 与 `/root/.cache` | 命中即省掉全量重装、Playwright 浏览器下载 | 节点级缓存不跨节点（3 选 1 的动态池），有时不命中 |
+
+**不要用的路子**（都会把门禁变成噪声或静默失效）：
+
+- **不要调小 `runner.cpus` 省额度** —— 核时 = 核数 × 时长，核数减半时长通常翻倍，
+  净效果接近零；而 8 核是「vitest / build / Playwright 串行」的实测规格，
+  调小反而拉长墙钟时间、放大超时风险。
+- **不要把 `pull_request` 换成 `pull_request.target`（或再加一份 `ifModify`）**：
+  这些事件**都不过滤「同一个 PR 的连续 push」**。想在 PR 上省，靠的是下一轮迭代
+  的 `cancel-in-progress`（`pull_request.action == synchronize` 时掐掉上一条），
+  而不是少一个事件。
+- **不要往 `ifModify` 里塞「改了哪些文件」来跳过门禁**：本仓库改动边界是跨目录的
+  （`src/lib` 牵动 `scripts` / `tests` / 文档），任何 write 过滤都会制造「这次没跑、
+  但看起来跑了」的静默盲区。
+- **不要 commit 一个「依赖预热镜像」的 Dockerfile 来换缓存**：那会把
+  `.cnb.yml` 的 `pnpm install` 语义改成「交给缓存镜像」，而缓存镜像的版本键
+  （`sha1(Dockerfile + versionBy + buildArgs + target + arch)`）与 `pnpm-lock.yaml`
+  之间没有任何判据会在漂移时报警。node_modules 随依赖更新频繁失效，命中率低、
+  风险高，不划算。
+
+**额度兜底不建议做**：平台在**预冻结阶段**检测到额度不足就会立即终止任务
+（每 5 分钟一次），因此「先跑起来再被掐掉」是别人的现场而不是本仓库要处理的分支；
+在 YAML 里写额度守卫反而要多一个会漂移的判据。
+
 ### 13.6 分支与合并策略
 
 - 功能分支：`feat/<short-desc>`；修复分支：`fix/<issue-id>-<desc>`。
@@ -298,7 +355,8 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 |----|------|--------|---------|
 | 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
 | 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
-| 服务端 | `.cnb.yml` 的「分支守卫」步骤（`scripts/check-branch-guard.cjs --pr-check`） | **源分支是 `master` 的 PR** | 不能 |
+| 服务端（PR） | `.cnb.yml` 的「分支守卫」步骤（`scripts/check-branch-guard.cjs --pr-check`） | **源分支是 `master` 的 PR** | 不能 |
+| 服务端（合并后） | `.cnb.yml` 流水线「master 合并复核」的「合并形态复核」（`scripts/check-branch-guard.cjs --merge-commit`） | **落到 `master` 的非合并提交**（变更绕过 PR 的形态） | 不能 |
 
 **⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
 （仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，

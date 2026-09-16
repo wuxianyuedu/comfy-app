@@ -1,4 +1,4 @@
-import type { LLMConfigView, LLMProviderType } from "@/lib/llm/types";
+import type { LLMConfigView, LLMProviderType } from "~/lib/llm/types";
 
 /** 模型通道：①工具（内置规则，不调用模型）②本地模型 ③远端 API —— 单下拉三分组 */
 export type ExtractChannel = "tool" | "local" | "remote";
