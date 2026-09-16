@@ -42,6 +42,7 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
 } from "~/lib/workflow-io-types";
+import { roleKeyword } from "~/lib/workflow-text-role";
 
 /** 工坊对外暴露的三类控件。`internal` = 不暴露，走默认值。 */
 export type WorkshopPinClass =
@@ -119,13 +120,12 @@ export interface EncapsulatedInputs {
   unmatched: (keyof WorkshopExposedValues)[];
 }
 
-/** 名称/标签统一小写后的搜索文本。 */
 /** 条目名 + 显示名（小写）。图内角色（`role`）折算成同义关键词并进同一串：
  *  同一对 CLIPTextEncode 的 pin 名与显示名一样，只有导入图沿 KSampler 连线链推出
- *  的角色分得出正负（ISSUE #611），名字层面看不出来。 */
+ *  的角色分得出正负（ISSUE #611），名字层面看不出来。
+ *  关键词池收在 `~/lib/workflow-text-role`，与对外参数映射同一份（ISSUE #620）。 */
 function searchText(e: WorkflowIOEntry): string {
-  const role = e.role === "negative" ? "negative" : e.role ? "prompt" : "";
-  return `${e.name ?? ""} ${e.label ?? ""} ${role}`.toLowerCase();
+  return `${e.name ?? ""} ${e.label ?? ""} ${roleKeyword(e.role)}`.toLowerCase();
 }
 
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
