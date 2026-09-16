@@ -117,9 +117,17 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 >
 > 合并提交是平台**按被门禁验过的源分支 SHA** 生成的（不引入新代码），因此
 > `push` 侧只保留一条形态复核：`node scripts/check-branch-guard.cjs --merge-commit`
-> —— 落到 master 的必须是合并提交；父提交数 ≤ 1 说明有变更绕过 PR 写进了主干
-> （本地 `--no-verify` 就能做到），那正是要拦的。
+> —— 落到 master 的必须是 **PR 合并出来的形态**。
 > 回归护栏：`tests/cnb-pipeline-gates.test.ts` 的「两条流水线」一组。
+>
+> ⚠️ **这条复核必须认得 Squash Merge**（本节 13.6 优先 squash）：squash 落到
+> `master` 的提交只有 **1 个父**，与「本地直连主干提交」在拓扑上同形。此前这里
+> 的判据是「父提交数 > 1 才算合并」，后果是 **`master` 的 push 流水线每一次都是
+> 红的**（`611150b`…`8a9efb3` 全部命中），却一次真正的绕过都没抓到 ——
+> 一条永远在响、又从不指向真问题的告警只会训练人忽略它。现在的判据是
+> 「合并提交 **或** 提交信息带 PR 关联（平台 squash 时写下的 `PR-URL: #NNN`）」，
+> 两者都不满足时**保守放行**。真正的直推拦截在下面 §13.6.1 的**平台分支保护**，
+> 不在这条形态复核上。
 >
 > **PR 的 `pull_request` 流水线一条不能丢**：它是「不合并就不该结束」的那道门，
 > 省核时的办法是别把同一份检查跑两遍，不是把检查删掉（见下面 13.5.3）。
@@ -143,8 +151,10 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 ✅ git status --porcelain > /tmp/wt-check/before.txt   # 工作区基线（供「工作区对账」比对）
 ✅ pnpm run typecheck              # tsc --noEmit
 ✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test:coverage          # 全量 vitest **只跑一遍**：覆盖率棘轮 + 上报平台
+✅ pnpm run test:coverage          # 全量 vitest **只跑一遍**：用例 + 覆盖率棘轮
                                   # （vitest.config.ts 的目录阈值；见 13.5.3）
+✅ type: testing:coverage          # 覆盖率上报，**紧跟其后的一步**：同一步里 script 与
+                                  # type 是并行任务，插件会在报告产出前就报错退出（见 11.7）
 ✅ node scripts/check-title-bar-clearance.cjs
 ✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
 ✅ node scripts/check-ps1-consistency.mjs           # 跨平台动作对照（§9.5）
@@ -316,7 +326,14 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 |---|---|---|
 | 门禁只挂 `pull_request`，`push` 只留合并形态复核 | 砍掉「同一份代码的第二遍」 | 无（合并提交不引入新代码，见 13.5） |
 | `test` 与 `test:coverage` 合并成 `pnpm run test:coverage` | 全量 vitest 从两遍变一遍 | 无（覆盖率本来就跟着这一次运行出） |
+| 覆盖率上报拆成测试**之后**的独立一步 | 让插件的查找顺序成立 | 无（同一步里二者并行，插件必然先撞上「没有报告」） |
 | `docker.volumes` 声明 pnpm store 与 `/root/.cache` | 命中即省掉全量重装、Playwright 浏览器下载 | 节点级缓存不跨节点（3 选 1 的动态池），有时不命中 |
+
+**一条永远在响的告警也是噪声**：`push` 侧那条形态复核此前按「父提交数 > 1」判，
+而本仓库优先 Squash Merge（§13.6），squash 提交恒为单父 —— 于是它**每一次都红**，
+却从未指向真问题。门禁的价值是「红 = 真有问题」，一条恒红的判据等于把这条复核
+从视野里删掉（还会让人习惯性忽略该流水线的红）。判据要与本仓库**实际采用的合并
+方式**对齐，改了合并策略就要同步改判据（见 13.5 与 §13.6.1 的说明）。
 
 **不要用的路子**（都会把门禁变成噪声或静默失效）：
 
@@ -360,7 +377,7 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 | 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
 | 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
 | 服务端（PR） | `.cnb.yml` 的「分支守卫」步骤（`scripts/check-branch-guard.cjs --pr-check`） | **源分支是 `master` 的 PR** | 不能 |
-| 服务端（合并后） | `.cnb.yml` 流水线「master 合并复核」的「合并形态复核」（`scripts/check-branch-guard.cjs --merge-commit`） | **落到 `master` 的非合并提交**（变更绕过 PR 的形态） | 不能 |
+| 服务端（合并后） | `.cnb.yml` 流水线「master 合并复核」的「合并形态复核」（`scripts/check-branch-guard.cjs --merge-commit`） | **落到 `master` 的非 PR 合并形态**（既非合并提交、提交信息也无 PR 关联）—— 记进构建日志留痕 | 不能 |
 
 **⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
 （仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，
