@@ -28,3 +28,6 @@
   `scripts/check-branch-guard.cjs` 里所有指向 `.cnb.yml` 的表述同步改写；
   `vitest.config.ts` 的 `lcov` reporter **保留**并补写它的用途 ——
   删掉会让日后重启上报时重新踩一遍「插件找不到报告文件」那个坑。
+- **合并 master 时补记一条同源口径**（来自 #641）：`script` 与 `type:` 必须写在
+  同一条 step 上，藏在 `type` 底下的 `stages` 里会被平台静默丢掉。规范 11 与
+  这条口径一并留成 **`.cnb.yml` 删除后的记录**，日后重启上报时按它写。
