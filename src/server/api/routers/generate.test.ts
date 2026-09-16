@@ -57,7 +57,11 @@ vi.mock("@/lib/comfyui/client", () => ({ listModels: listModelsMock }));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { generateRouter } from "~/server/api/routers/generate";
-import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedUser,
+  seedWorkflowTemplate,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(generateRouter);
@@ -111,7 +115,7 @@ describe("generate.generate（内置工作流）", () => {
       createCaller(makeCtx()).generate({
         workflow: "txt2img",
         checkpoint: "other.safetensors",
-      })
+      }),
     ).rejects.toThrow("模型不可用或文件名不匹配");
     expect(enqueueMock).not.toHaveBeenCalled();
     expect(tdb.$tables.tasks).toHaveLength(0);
@@ -120,18 +124,21 @@ describe("generate.generate（内置工作流）", () => {
   it("Zod 校验失败：steps/count/超长 prompt/非法 loras → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(
-      caller.generate({ workflow: "txt2img", steps: 0 })
+      caller.generate({ workflow: "txt2img", steps: 0 }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(
-      caller.generate({ workflow: "txt2img", count: 9 })
+      caller.generate({ workflow: "txt2img", count: 9 }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(
-      caller.generate({ workflow: "txt2img", prompt: "x".repeat(2001) })
+      caller.generate({ workflow: "txt2img", prompt: "x".repeat(2001) }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     // 运行时缺 weight 字段 → Zod 校验失败（类型层刻意绕过以构造非法输入）
-    const badLora = { name: "a" } as unknown as { name: string; weight: number };
+    const badLora = { name: "a" } as unknown as {
+      name: string;
+      weight: number;
+    };
     await expect(
-      caller.generate({ workflow: "txt2img", loras: [badLora] })
+      caller.generate({ workflow: "txt2img", loras: [badLora] }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(caller.generate({ workflow: "" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -212,18 +219,25 @@ describe("generate.generate（自定义工作流）", () => {
     // graph 列 NOT NULL，「空图」在库里的形态就是空对象 {}
     seedWorkflowTemplate(tdb, { id: "wf-empty", userId: "user-a", graph: {} });
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-empty" })
+      createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
     ).rejects.toThrow("Workflow graph is empty");
     expect(enqueueMock).not.toHaveBeenCalled();
   });
 
   it("越权/不存在：非本人且不存在的 workflow → 'Workflow not found'", async () => {
-    seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b", graph: CUSTOM_GRAPH });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-b",
+      userId: "user-b",
+      graph: CUSTOM_GRAPH,
+    });
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-b", canvasGraph: undefined })
+      createCaller(makeCtx()).generate({
+        workflow: "wf-b",
+        canvasGraph: undefined,
+      }),
     ).rejects.toThrow("Workflow not found");
     await expect(
-      createCaller(makeCtx()).generate({ workflow: "wf-missing" })
+      createCaller(makeCtx()).generate({ workflow: "wf-missing" }),
     ).rejects.toThrow("Workflow not found");
     expect(tdb.$tables.tasks).toHaveLength(0);
   });

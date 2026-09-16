@@ -193,7 +193,10 @@ export function DebugChainFooter({
       {openFile &&
         createPortal(
           <div
-            className={overlayClass("modal", "z-100 flex items-center justify-center")}
+            className={overlayClass(
+              "modal",
+              "z-100 flex items-center justify-center",
+            )}
             role="presentation"
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
@@ -209,18 +212,21 @@ export function DebugChainFooter({
             <div
               role="dialog"
               aria-label="源码查看"
-              className="relative flex max-h-[78vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-2xl border border-border-strong bg-panel shadow-2xl"
+              className="border-border-strong bg-panel relative flex max-h-[78vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-2xl border shadow-2xl"
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
             >
               {/* 头部：路径 + 操作按钮 */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-strong px-4 py-3">
+              <div className="border-border-strong flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden className="text-[14px] text-amber-700 dark:text-amber-300/90">
+                  <span
+                    aria-hidden
+                    className="text-[14px] text-amber-700 dark:text-amber-300/90"
+                  >
                     ◈
                   </span>
                   <code
-                    className="truncate font-mono text-[12px] text-ink-bright"
+                    className="text-ink-bright truncate font-mono text-[12px]"
                     title={openFile}
                   >
                     {openFile}
@@ -231,7 +237,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && openInVscode(source.absolutePath)}
                     disabled={!source}
-                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-400/20 dark:text-sky-200 disabled:opacity-40"
+                    className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-400/20 disabled:opacity-40 dark:text-sky-200"
                     title="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
                   >
                     在 VSCode 打开
@@ -239,7 +245,7 @@ export function DebugChainFooter({
                   <button
                     type="button"
                     onClick={() => copyText(openFile)}
-                    className="rounded-md border border-border-strong bg-subtle px-2.5 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
+                    className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors"
                     title="复制完整相对路径"
                   >
                     复制路径
@@ -248,7 +254,7 @@ export function DebugChainFooter({
                     type="button"
                     onClick={() => source && copyText(source.content)}
                     disabled={!source}
-                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-400/20 dark:text-amber-200 disabled:opacity-40"
+                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-400/20 disabled:opacity-40 dark:text-amber-200"
                     title="复制全部源码"
                   >
                     复制代码
@@ -257,16 +263,16 @@ export function DebugChainFooter({
                     type="button"
                     onClick={closeModal}
                     aria-label="关闭"
-                    className="rounded-md border border-border-strong bg-subtle px-2 py-1 text-[11px] text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink-bright"
+                    className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-2 py-1 text-[11px] transition-colors"
                   >
                     ✕
                   </button>
                 </div>
               </div>
               {/* 内容区 */}
-              <div className="min-h-0 flex-1 overflow-auto bg-canvas-deep p-0">
+              <div className="bg-canvas-deep min-h-0 flex-1 overflow-auto p-0">
                 {loading && (
-                  <div className="flex items-center justify-center gap-2 py-10 text-[12px] text-ink-soft">
+                  <div className="text-ink-soft flex items-center justify-center gap-2 py-10 text-[12px]">
                     <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-400/40 border-t-amber-300" />
                     正在读取源码…
                   </div>
@@ -278,7 +284,7 @@ export function DebugChainFooter({
                 )}
                 {!loading && source && (
                   <div className="flex flex-col">
-                    <div className="flex shrink-0 items-center justify-between border-border-subtle bg-subtle border-b px-4 py-1.5 font-mono text-[10.5px] text-ink-muted">
+                    <div className="border-border-subtle bg-subtle text-ink-muted flex shrink-0 items-center justify-between border-b px-4 py-1.5 font-mono text-[10.5px]">
                       <span>{source.size.toLocaleString()} 字符</span>
                       <span>{source.modifiedAt}</span>
                     </div>

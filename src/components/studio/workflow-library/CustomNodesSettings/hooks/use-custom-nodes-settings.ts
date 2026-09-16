@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+  type RefObject,
+} from "react";
 import {
   refreshCustomNodes,
   getCustomNodesManifest,
@@ -45,8 +54,19 @@ type RowState = ReturnType<typeof deriveRowState>;
 
 export interface ParentBlock {
   parent: string;
-  subs: { sub: DiscoveredSubpkg; saved: SummaryPkg | undefined; state: RowState }[];
-  cnt: { loaded: number; outdated: number; unimported: number; error: number; missing: number; empty: number };
+  subs: {
+    sub: DiscoveredSubpkg;
+    saved: SummaryPkg | undefined;
+    state: RowState;
+  }[];
+  cnt: {
+    loaded: number;
+    outdated: number;
+    unimported: number;
+    error: number;
+    missing: number;
+    empty: number;
+  };
   total: number;
 }
 
@@ -80,7 +100,12 @@ export interface CustomNodesSettingsController {
   onParseSingle: (pkgPath: string) => Promise<void>;
   onParseAllParent: (parent: string) => Promise<void>;
   parentBlocks: ParentBlock[];
-  totalAcrossParents: { loaded: number; outdated: number; unimported: number; total: number };
+  totalAcrossParents: {
+    loaded: number;
+    outdated: number;
+    unimported: number;
+    total: number;
+  };
 }
 
 export function useCustomNodesSettings(): CustomNodesSettingsController {
@@ -92,14 +117,27 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // ParseProgress）：scan 阶段 discovered 增长、total 未知；hash 阶段 done/total
   // 为已处理包数。进度条在 scan 期间用 CSS 动画（indeterminate），scan 宣布
   // total=M 时切换为确定的百分比。
-  const [progress, setProgress] = useState<ParseProgress>({ phase: "", done: 0, total: 0, discovered: 0, parent: "", msg: "" });
+  const [progress, setProgress] = useState<ParseProgress>({
+    phase: "",
+    done: 0,
+    total: 0,
+    discovered: 0,
+    parent: "",
+    msg: "",
+  });
   const [parsing, setParsing] = useState(false);
-  const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>({});
+  const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>(
+    {},
+  );
   const [report, setReport] = useState<ParseReport | null>(null);
   const [summary, setSummary] = useState<SettingsResp["summary"]>(null);
-  const [discoveredByParent, setDiscoveredByParent] = useState<Record<string, DiscoveredSubpkg[]>>({});
+  const [discoveredByParent, setDiscoveredByParent] = useState<
+    Record<string, DiscoveredSubpkg[]>
+  >({});
   const [byPath, setByPath] = useState<Record<string, SummaryPkg>>({});
-  const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
+  const [expandedParents, setExpandedParents] = useState<
+    Record<string, boolean>
+  >({});
 
   const [logs, setLogs] = useState<{ level: string; msg: string }[]>([]);
   const consoleRef = useRef<HTMLDivElement>(null);
@@ -120,20 +158,28 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 原始 manifest（classType → 完整 spec），独立于 refreshCustomNodes() 填充的
   // 注册表：即使对话框刚打开、尚无消费者调用 refresh，也能渲染预览卡片。每次解析
   // 后重新拉取，使新导入的包无需硬刷新即可显示节点。
-  const [manifestByNode, setManifestByNode] = useState<Record<string, ManifestNodeRaw>>({});
+  const [manifestByNode, setManifestByNode] = useState<
+    Record<string, ManifestNodeRaw>
+  >({});
   // 每个子包：内联节点列表是否展开？
-  const [expandedNodeList, setExpandedNodeList] = useState<Record<string, boolean>>({});
+  const [expandedNodeList, setExpandedNodeList] = useState<
+    Record<string, boolean>
+  >({});
   // 每个 classType：节点预览卡是否展开显示端口+控件？默认折叠 —— 一个 146 节点的
   // 包会产生海量叶子，全展开会过度膨胀。
   const [nodeExpanded, setNodeExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const stillParsing =
-      parsing || Object.values(perPkgParsing).some(Boolean);
+    const stillParsing = parsing || Object.values(perPkgParsing).some(Boolean);
     if (stillParsing) {
-      if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-    } else if (logs.some((log) => log.level === "error" || log.msg.includes("✗"))) {
-      const idx = logs.findIndex((log) => log.level === "error" || log.msg.includes("✗"));
+      if (consoleRef.current)
+        consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    } else if (
+      logs.some((log) => log.level === "error" || log.msg.includes("✗"))
+    ) {
+      const idx = logs.findIndex(
+        (log) => log.level === "error" || log.msg.includes("✗"),
+      );
       requestAnimationFrame(() => {
         const console_ = consoleRef.current;
         if (!console_) return;
@@ -143,7 +189,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         // 相对面板自身计算 scrollTop：`target.offsetTop` 量的是最近定位祖先，
         // 而本面板没有 position:relative，会回退到更高层的 fixed 包装，得到乱值。
         // getBoundingClientRect + 面板自身 rect + 其 scrollTop 才是正确的面板内偏移。
-        const targetTop = target.getBoundingClientRect().top - console_.getBoundingClientRect().top;
+        const targetTop =
+          target.getBoundingClientRect().top -
+          console_.getBoundingClientRect().top;
         console_.scrollTop = Math.max(0, console_.scrollTop + targetTop - 8);
       });
     }
@@ -228,10 +276,21 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
           if (!line.trim()) continue;
           // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
           let ev: SettingsStreamEvent;
-          try { ev = JSON.parse(line) as SettingsStreamEvent; } catch { continue; }
+          try {
+            ev = JSON.parse(line) as SettingsStreamEvent;
+          } catch {
+            continue;
+          }
           if (ev.type === "discover_start") {
             paths.push(...(ev.parents ?? []));
-            setProgress({ phase: "queue", done: 0, total: 0, discovered: 0, parent: "", msg: "准备扫描…" });
+            setProgress({
+              phase: "queue",
+              done: 0,
+              total: 0,
+              discovered: 0,
+              parent: "",
+              msg: "准备扫描…",
+            });
           } else if (ev.type === "progress") {
             setProgress((progress) => {
               // 用最新事件告知的值。total/done/discovered 仅当事件确实携带时才更新
@@ -246,7 +305,8 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
               if (ev.phase === "scan") next.phase = "scan";
               if (ev.phase === "hash") next.phase = "hash";
               if (ev.msg) next.msg = ev.msg;
-              if (typeof ev.discovered === "number") next.discovered = ev.discovered;
+              if (typeof ev.discovered === "number")
+                next.discovered = ev.discovered;
               if (typeof ev.total === "number") next.total = ev.total;
               if (typeof ev.done === "number") next.done = ev.done;
               return next;
@@ -294,7 +354,14 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
       setTimeout(() => {
         if (!aliveRef.current) return;
-        setProgress({ phase: "", done: 0, total: 0, discovered: 0, parent: "", msg: "" });
+        setProgress({
+          phase: "",
+          done: 0,
+          total: 0,
+          discovered: 0,
+          parent: "",
+          msg: "",
+        });
       }, 800);
     }
   }, []);
@@ -303,7 +370,14 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const reloadFromServer = useCallback(() => {
     setLoading(true);
     setSaveErr(null);
-    setProgress({ phase: "", done: 0, total: 0, discovered: 0, parent: "", msg: "" });
+    setProgress({
+      phase: "",
+      done: 0,
+      total: 0,
+      discovered: 0,
+      parent: "",
+      msg: "",
+    });
     return fetchSettings();
   }, [fetchSettings]);
 
@@ -332,7 +406,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
   async function readNdjson(
     res: Response,
-    onDone: (report: ParseReport | null, ok: boolean) => Promise<void> | void
+    onDone: (report: ParseReport | null, ok: boolean) => Promise<void> | void,
   ) {
     if (!res.body) {
       void onDone(null, false);
@@ -354,7 +428,10 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         try {
           const obj = JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
-            setLogs((prev) => [...prev, { level: obj.level ?? "info", msg: obj.msg ?? "" }]);
+            setLogs((prev) => [
+              ...prev,
+              { level: obj.level ?? "info", msg: obj.msg ?? "" },
+            ]);
           } else if (obj.type === "done") {
             void onDone(obj.report ?? null, !!obj.ok);
           }
@@ -371,7 +448,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
   async function onParseAll() {
     if (savedPaths.length === 0) {
-      setError_("未找到自定义节点目录 —— 请先在设置 → 创作后端 中配置 ComfyUI 安装路径");
+      setError_(
+        "未找到自定义节点目录 —— 请先在设置 → 创作后端 中配置 ComfyUI 安装路径",
+      );
       return;
     }
     setParsing(true);
@@ -469,7 +548,14 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         const saved = byPath[pathKey(sub.path)];
         return { sub, saved, state: deriveRowState(sub, saved) };
       });
-      const cnt = { loaded: 0, outdated: 0, unimported: 0, error: 0, missing: 0, empty: 0 };
+      const cnt = {
+        loaded: 0,
+        outdated: 0,
+        unimported: 0,
+        error: 0,
+        missing: 0,
+        empty: 0,
+      };
       for (const e of enriched) cnt[e.state.kind] += 1;
       return { parent, subs: enriched, cnt, total: enriched.length };
     });

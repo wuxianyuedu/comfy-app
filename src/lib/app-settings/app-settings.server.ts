@@ -11,7 +11,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { DEFAULTS, migrateExitDefaults, type AppSettings, type ExitPolicy } from "./index";
+import {
+  DEFAULTS,
+  migrateExitDefaults,
+  type AppSettings,
+  type ExitPolicy,
+} from "./index";
 
 export * from "./index";
 export type { AppSettings, ExitPolicy };
@@ -28,7 +33,7 @@ const SETTINGS_FILE = path.join(process.cwd(), "data", "app-settings.json");
  *  「字符串推导」，实际是一次 fs 探测，留在纯模块里会让纯模块重新带上 fs。 */
 export function deriveComfyuiSubdir(
   comfyuiPath: string,
-  subdir: "custom_nodes" | "workflows"
+  subdir: "custom_nodes" | "workflows",
 ): string | null {
   const root = (comfyuiPath ?? "").trim();
   if (!root) return null;
@@ -82,8 +87,13 @@ let cache: AppSettings | null = null;
 export function getSettingsSync(): AppSettings {
   if (cache) return cache;
   try {
-    const raw = fs.readFileSync(/*turbopackIgnore: true*/ SETTINGS_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<AppSettings> & { comfyuiUrl?: string };
+    const raw = fs.readFileSync(
+      /*turbopackIgnore: true*/ SETTINGS_FILE,
+      "utf-8",
+    );
+    const parsed = JSON.parse(raw) as Partial<AppSettings> & {
+      comfyuiUrl?: string;
+    };
     /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；
      * 从旧文件里剥掉，下次保存时彻底从磁盘消失。 */
     delete parsed.comfyuiUrl;
@@ -99,7 +109,9 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 /** Merge a partial update and persist. Returns the full, updated settings. */
-export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
+export async function saveSettings(
+  partial: Partial<AppSettings>,
+): Promise<AppSettings> {
   const next: AppSettings = { ...getSettingsSync(), ...partial };
   cache = next;
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });

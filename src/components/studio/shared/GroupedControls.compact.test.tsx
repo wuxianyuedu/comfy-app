@@ -61,7 +61,12 @@ function widgets(): EnrichedWidget[] {
   return Object.entries(io).map(([ioKey, entry]) => ({
     ...entry,
     ioKey,
-    control: entry.type === "COMBO" ? "select" : entry.type === "INT" ? "int" : "float",
+    control:
+      entry.type === "COMBO"
+        ? "select"
+        : entry.type === "INT"
+          ? "int"
+          : "float",
   }));
 }
 
@@ -85,7 +90,9 @@ describe("画布 / 库内的组合参数控件", () => {
     /* 用户口径：「改回之前的样式」「改成之前带有下拉菜单的样式」—— 控件本体
      *  必须还在，且是那块带下拉的控件（触发器 + 下拉面板）。 */
     const column = renderCompact();
-    expect(column.querySelector('[aria-label="选择比例、像素与倍数"]')).toBeTruthy();
+    expect(
+      column.querySelector('[aria-label="选择比例、像素与倍数"]'),
+    ).toBeTruthy();
     expect(column.querySelector('[aria-haspopup="listbox"]')).toBeTruthy();
   });
 
@@ -98,7 +105,7 @@ describe("画布 / 库内的组合参数控件", () => {
       const row = column.querySelector(`[data-io-key="${ioKey}"]`);
       expect(row, `${ioKey} 应当以参数行形态出现在框外`).toBeTruthy();
       /* 行外层的组合框（带圆角的边框那一块）不能是它的祖先。 */
-      expect(row!.closest('[data-grouped-box]')).toBeNull();
+      expect(row!.closest("[data-grouped-box]")).toBeNull();
       const dot = row!.querySelector(`[data-port-dot="${ioKey}"]`);
       expect(dot, `${ioKey} 行左侧应当有大端点`).toBeTruthy();
       expect((dot as HTMLElement).style.width).toBe("12px");
@@ -112,7 +119,7 @@ describe("画布 / 库内的组合参数控件", () => {
     const column = renderCompact();
     const outer = column.querySelector(".flex.justify-end");
     expect(outer).toBeTruthy();
-    const box = column.querySelector('[data-grouped-box]');
+    const box = column.querySelector("[data-grouped-box]");
     expect(box).toBeTruthy();
     /* 框在右、参数行在左：框是外层的第二个子元素。 */
     expect(outer!.lastElementChild).toBe(box);
@@ -143,11 +150,12 @@ describe("画布 / 库内的组合参数控件", () => {
     /* 「组合控件的宽度缩小，现在占满了空间」：`w-fit` + 上限，宽度跟随内容；
      *  下拉触发器另给一档固定宽度，不再拽满整行。 */
     const column = renderCompact();
-    const box = column.querySelector('[data-grouped-box]');
+    const box = column.querySelector("[data-grouped-box]");
     expect(box).toBeTruthy();
     expect(box!.className).toContain("w-fit");
     expect(box!.className).toContain("max-w-full");
-    const triggerBox = column.querySelector('[aria-label="选择比例、像素与倍数"]')!
+    const triggerBox = column
+      .querySelector('[aria-label="选择比例、像素与倍数"]')!
       .closest("div.w-\\[168px\\]");
     expect(triggerBox).toBeTruthy();
   });

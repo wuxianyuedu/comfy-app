@@ -84,7 +84,9 @@ function touch(id: string, next: StepLogPanelState) {
 }
 
 /** Load the persisted state for a taskId, or null if none. */
-export function loadStepLogPanelState(taskId: string | null | undefined): StepLogPanelState | null {
+export function loadStepLogPanelState(
+  taskId: string | null | undefined,
+): StepLogPanelState | null {
   if (!taskId) return null;
   return cache.get(taskId) ?? null;
 }
@@ -92,7 +94,10 @@ export function loadStepLogPanelState(taskId: string | null | undefined): StepLo
 /** Overwrite the persisted state for a taskId.  Useful for tests and
  *  for cases where the panel wants to reset (e.g. user picks a new
  *  workflow — there is no such flow today, but keep the escape hatch). */
-export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): void {
+export function saveStepLogPanelState(
+  taskId: string,
+  next: StepLogPanelState,
+): void {
   if (!taskId) return;
   touch(taskId, next);
 }
@@ -100,16 +105,24 @@ export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): 
 /** Drop the entry for a taskId.  Used when the task truly finishes and
  *  the user doesn't want stale UI state to come back next time they
  *  click the same node — we don't yet, but the API is here. */
-export function clearStepLogPanelState(taskId: string | null | undefined): void {
+export function clearStepLogPanelState(
+  taskId: string | null | undefined,
+): void {
   if (!taskId) return;
   cache.delete(taskId);
 }
 
 /** Append a single log entry to the cached state, creating the entry
  *  if needed.  Returns the updated state (same reference if a no-op). */
-export function appendStepLog(taskId: string | null | undefined, entry: StepLogEntry): StepLogPanelState | null {
+export function appendStepLog(
+  taskId: string | null | undefined,
+  entry: StepLogEntry,
+): StepLogPanelState | null {
   if (!taskId) return null;
-  const prev = cache.get(taskId) ?? { logs: [] as StepLogEntry[], validationErrors: null };
+  const prev = cache.get(taskId) ?? {
+    logs: [] as StepLogEntry[],
+    validationErrors: null,
+  };
   // Dedupe on (t, msg) — mirrors the SSE dedupe in ImageGenerationPanel.
   if (prev.logs.some((log) => log.t === entry.t && log.msg === entry.msg)) {
     return prev;
@@ -126,10 +139,13 @@ export function appendStepLog(taskId: string | null | undefined, entry: StepLogE
  *  entry if missing). */
 export function setStepLogValidationErrors(
   taskId: string | null | undefined,
-  errs: ValidationError[] | null
+  errs: ValidationError[] | null,
 ): void {
   if (!taskId) return;
-  const prev = cache.get(taskId) ?? { logs: [] as StepLogEntry[], validationErrors: null };
+  const prev = cache.get(taskId) ?? {
+    logs: [] as StepLogEntry[],
+    validationErrors: null,
+  };
   touch(taskId, { logs: prev.logs, validationErrors: errs });
 }
 
@@ -139,10 +155,13 @@ export function setStepLogValidationErrors(
  *  instead of forcing the user to read a truncated 14-char id. */
 export function patchStepLogMeta(
   taskId: string | null | undefined,
-  meta: { workflowName?: string; status?: string; nodeId?: string }
+  meta: { workflowName?: string; status?: string; nodeId?: string },
 ): void {
   if (!taskId) return;
-  const prev = cache.get(taskId) ?? { logs: [] as StepLogEntry[], validationErrors: null };
+  const prev = cache.get(taskId) ?? {
+    logs: [] as StepLogEntry[],
+    validationErrors: null,
+  };
   touch(taskId, {
     logs: prev.logs,
     validationErrors: prev.validationErrors,

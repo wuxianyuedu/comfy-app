@@ -8,11 +8,7 @@ export type ModelOpt = { id: string; fileName: string; name: string };
 export type TrainLogEntry = { t: number; level: string; msg: string };
 
 export type TrainJobStatus =
-  | "QUEUED"
-  | "RUNNING"
-  | "DONE"
-  | "FAILED"
-  | "CANCELLED";
+  "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "CANCELLED";
 
 export type TrainJob = {
   id: string;
@@ -66,7 +62,12 @@ export interface TrainJobInput {
 export const JOBS_POLL_MS = 4000;
 
 export const OPTIMIZERS = ["AdamW8bit", "AdamW", "Lion", "SGD"];
-export const SCHEDULERS = ["cosine", "constant", "linear", "constant_with_warmup"];
+export const SCHEDULERS = [
+  "cosine",
+  "constant",
+  "linear",
+  "constant_with_warmup",
+];
 export const RESOLUTIONS = [512, 768, 1024];
 
 /** 表单默认值：提交成功后会重置回这些值（原组件行为，不可改）。 */
@@ -87,10 +88,22 @@ export const STATUS_META: Record<
   { label: string; cls: string }
 > = {
   QUEUED: { label: "等待中", cls: "text-ink-soft bg-surface-2" },
-  RUNNING: { label: "训练中", cls: "text-violet-700 dark:text-violet-300 bg-violet-500/15" },
-  DONE: { label: "已完成", cls: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15" },
-  FAILED: { label: "失败", cls: "text-red-700 dark:text-red-300 bg-red-500/15" },
-  CANCELLED: { label: "已取消", cls: "text-amber-700 dark:text-amber-300 bg-amber-500/15" },
+  RUNNING: {
+    label: "训练中",
+    cls: "text-violet-700 dark:text-violet-300 bg-violet-500/15",
+  },
+  DONE: {
+    label: "已完成",
+    cls: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15",
+  },
+  FAILED: {
+    label: "失败",
+    cls: "text-red-700 dark:text-red-300 bg-red-500/15",
+  },
+  CANCELLED: {
+    label: "已取消",
+    cls: "text-amber-700 dark:text-amber-300 bg-amber-500/15",
+  },
 };
 
 /** 未知状态（后端新增枚举）一律按「等待中」渲染，不崩、不留空白。 */
@@ -116,7 +129,10 @@ export function pickActiveJob(jobs: TrainJob[]): TrainJob | null {
  * 顺序即原组件的提示顺序（名称 → 底模 → 触发词 → 数据集）。
  */
 export function validateTrainForm(
-  form: Pick<TrainJobInput, "name" | "baseModel" | "triggerWord" | "datasetImages">,
+  form: Pick<
+    TrainJobInput,
+    "name" | "baseModel" | "triggerWord" | "datasetImages"
+  >,
 ): string | null {
   if (!form.name.trim()) return "请填写任务名称";
   if (!form.baseModel) return "请选择底模（Checkpoint）";
@@ -145,7 +161,10 @@ export function fillBlankCaptions(
 export function toDatasetPayload(
   items: DatasetItem[],
 ): { name: string; caption: string }[] {
-  return items.map((item) => ({ name: item.name, caption: item.caption.trim() }));
+  return items.map((item) => ({
+    name: item.name,
+    caption: item.caption.trim(),
+  }));
 }
 
 /* ── Loss 曲线的合成几何（设计稿固定形状，与真实训练数据无关）── */

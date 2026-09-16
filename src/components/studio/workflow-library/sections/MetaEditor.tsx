@@ -12,7 +12,9 @@ import { overlayClass } from "~/lib/full-screen-layer";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Set<string>>(() => new Set(meta.modelTags));
+  const [draft, setDraft] = useState<Set<string>>(
+    () => new Set(meta.modelTags),
+  );
   const [newName, setNewName] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -61,11 +63,15 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex max-w-[260px] items-center gap-1.5 rounded-lg border border-border bg-subtle px-2.5 py-1.5 text-[11px] font-medium text-ink-strong transition-colors hover:bg-surface-2 hover:text-ink"
+        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex max-w-[260px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
         title={`${label}（点击管理模型标签绑定）`}
       >
         <span className="truncate">{label}</span>
-        <span className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        <span
+          className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          ▾
+        </span>
       </button>
 
       {open &&
@@ -75,18 +81,21 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
             ref={popRef}
             role="dialog"
             aria-label="模型标签编辑器"
-            className={overlayClass("modal", "z-50 flex items-start justify-center bg-canvas-deep p-4 pt-24")}
+            className={overlayClass(
+              "modal",
+              "bg-canvas-deep z-50 flex items-start justify-center p-4 pt-24",
+            )}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) setOpen(false);
             }}
           >
-            <div className="w-80 rounded-xl border border-border bg-card p-3 shadow-2xl">
-              <p className="mb-2 text-xs font-medium text-ink-bright">
+            <div className="border-border bg-card w-80 rounded-xl border p-3 shadow-2xl">
+              <p className="text-ink-bright mb-2 text-xs font-medium">
                 绑定模型标签（{draft.size}）
               </p>
               <div className="mb-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
                 {knownNames.length === 0 && (
-                  <p className="px-2 py-1.5 text-[11px] leading-relaxed text-ink-muted">
+                  <p className="text-ink-muted px-2 py-1.5 text-[11px] leading-relaxed">
                     全局标签库为空，可直接在下方输入新标签（保存时自动入库）。
                   </p>
                 )}
@@ -132,14 +141,14 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                     }
                   }}
                   placeholder="新增标签，如 z-image"
-                  className="h-7 min-w-0 flex-1 rounded-md border border-border bg-subtle px-2 text-xs text-ink-bright placeholder:text-ink-muted focus:border-fuchsia-400/40 focus:outline-none"
+                  className="border-border bg-subtle text-ink-bright placeholder:text-ink-muted h-7 min-w-0 flex-1 rounded-md border px-2 text-xs focus:border-fuchsia-400/40 focus:outline-none"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="flex-1 rounded-md bg-subtle px-3 py-1.5 text-xs text-ink-strong transition-colors hover:bg-surface-2"
+                  className="bg-subtle text-ink-strong hover:bg-surface-2 flex-1 rounded-md px-3 py-1.5 text-xs transition-colors"
                 >
                   取消
                 </button>

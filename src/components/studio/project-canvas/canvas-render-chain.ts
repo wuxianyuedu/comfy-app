@@ -27,44 +27,96 @@ import type { NodeKind } from "@/lib/project-canvas/canvas-types";
 /** 项目画布所有节点共用的渲染链路（不随 kind 变化）。
  *  scope: canvas=画布级（容器/编排/状态层），node=节点级（节点渲染/类型）。 */
 const CANVAS_COMMON: RenderChainModule[] = [
-  { file: "src/components/studio/ProjectCanvas.tsx", label: "ProjectCanvas", scope: "canvas" },
-  { file: "src/components/studio/project-canvas/CanvasNode.tsx", label: "CanvasNode", scope: "node" },
-  { file: "src/lib/project-canvas/canvas-types.ts", label: "canvas-types", scope: "node" },
-  { file: "src/lib/project-canvas/canvas-store.ts", label: "canvas-store", scope: "canvas" },
+  {
+    file: "src/components/studio/ProjectCanvas.tsx",
+    label: "ProjectCanvas",
+    scope: "canvas",
+  },
+  {
+    file: "src/components/studio/project-canvas/CanvasNode.tsx",
+    label: "CanvasNode",
+    scope: "node",
+  },
+  {
+    file: "src/lib/project-canvas/canvas-types.ts",
+    label: "canvas-types",
+    scope: "node",
+  },
+  {
+    file: "src/lib/project-canvas/canvas-store.ts",
+    label: "canvas-store",
+    scope: "canvas",
+  },
 ];
 
 /** 按 kind 追加的渲染链路（不含公共链路） */
 const KIND_CHAIN: Record<NodeKind | "workflowArdot", RenderChainModule[]> = {
   workflow: [
-    { file: "src/components/studio/project-canvas/WorkflowNode.tsx", label: "WorkflowNode" },
-    { file: "src/components/studio/shared/workflow-io.ts", label: "workflow-io" },
+    {
+      file: "src/components/studio/project-canvas/WorkflowNode.tsx",
+      label: "WorkflowNode",
+    },
+    {
+      file: "src/components/studio/shared/workflow-io.ts",
+      label: "workflow-io",
+    },
   ],
   workflowArdot: [
-    { file: "src/components/studio/project-canvas/WorkflowNodeArdot.tsx", label: "WorkflowNodeArdot" },
+    {
+      file: "src/components/studio/project-canvas/WorkflowNodeArdot.tsx",
+      label: "WorkflowNodeArdot",
+    },
   ],
   image: [
-    { file: "src/components/studio/project-canvas/ImageGenerationPanel.tsx", label: "ImageGenerationPanel" },
-    { file: "src/lib/project-canvas/canvas-helpers.ts", label: "canvas-helpers" },
+    {
+      file: "src/components/studio/project-canvas/ImageGenerationPanel.tsx",
+      label: "ImageGenerationPanel",
+    },
+    {
+      file: "src/lib/project-canvas/canvas-helpers.ts",
+      label: "canvas-helpers",
+    },
   ],
   video: [
-    { file: "src/components/studio/project-canvas/ImageGenerationPanel.tsx", label: "ImageGenerationPanel" },
-    { file: "src/lib/project-canvas/canvas-helpers.ts", label: "canvas-helpers" },
+    {
+      file: "src/components/studio/project-canvas/ImageGenerationPanel.tsx",
+      label: "ImageGenerationPanel",
+    },
+    {
+      file: "src/lib/project-canvas/canvas-helpers.ts",
+      label: "canvas-helpers",
+    },
   ],
   script: [
-    { file: "src/lib/project-canvas/canvas-helpers.ts", label: "canvas-helpers" },
+    {
+      file: "src/lib/project-canvas/canvas-helpers.ts",
+      label: "canvas-helpers",
+    },
   ],
   agent: [
     { file: "src/lib/agent/agentic.ts", label: "agentic" },
-    { file: "src/lib/project-canvas/canvas-helpers.ts", label: "canvas-helpers" },
+    {
+      file: "src/lib/project-canvas/canvas-helpers.ts",
+      label: "canvas-helpers",
+    },
   ],
   text: [
-    { file: "src/components/studio/project-canvas/ContentAssetNode.tsx", label: "ContentAssetNode" },
+    {
+      file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
+      label: "ContentAssetNode",
+    },
   ],
   picture: [
-    { file: "src/components/studio/project-canvas/ContentAssetNode.tsx", label: "ContentAssetNode" },
+    {
+      file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
+      label: "ContentAssetNode",
+    },
   ],
   movie: [
-    { file: "src/components/studio/project-canvas/ContentAssetNode.tsx", label: "ContentAssetNode" },
+    {
+      file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
+      label: "ContentAssetNode",
+    },
   ],
 };
 

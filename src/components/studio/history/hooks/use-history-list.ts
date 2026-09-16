@@ -107,7 +107,7 @@ export function useHistoryList(): HistoryListController {
 
   const detailQ = api.task.detail.useQuery(
     { id: detailId ?? "" },
-    { enabled: !!detailId }
+    { enabled: !!detailId },
   );
   /* 详情直接派生自查询结果：detailId 切换时 isPending 自动为 true、data 为 null，
      open 清空逻辑不再需要本地镜像 state。 */
@@ -115,7 +115,8 @@ export function useHistoryList(): HistoryListController {
   const detailLoading = detailQ.isPending;
   /** 工作流默认值兜底 —— 来自 /api/tasks/[id] 的 workflowHints 子字段。 */
   const workflowHints = detailQ.isSuccess
-    ? (detailQ.data as { workflowHints?: unknown } | null | undefined)?.workflowHints ?? null
+    ? ((detailQ.data as { workflowHints?: unknown } | null | undefined)
+        ?.workflowHints ?? null)
     : null;
 
   const filtered = useMemo(
@@ -136,7 +137,10 @@ export function useHistoryList(): HistoryListController {
     setFilter(filterKey);
     setDisplayCount(PAGE_SIZE);
   }, []);
-  const loadMore = useCallback(() => setDisplayCount((count) => count + PAGE_SIZE), []);
+  const loadMore = useCallback(
+    () => setDisplayCount((count) => count + PAGE_SIZE),
+    [],
+  );
 
   const cancelTask = api.task.cancel.useMutation();
   const deleteTask = api.task.delete.useMutation();
@@ -151,7 +155,7 @@ export function useHistoryList(): HistoryListController {
       }
       refresh();
     },
-    [cancelTask, refresh, toast]
+    [cancelTask, refresh, toast],
   );
 
   const remove = useCallback(
@@ -164,14 +168,16 @@ export function useHistoryList(): HistoryListController {
         queryClient.setQueryData(
           getQueryKey(api.task.list),
           (old: { tasks: Array<{ id: string }> } | undefined) =>
-            old ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) } : old
+            old
+              ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) }
+              : old,
         );
         if (detailId === id) setDetailId(null);
       } catch {
         toast.error("删除失败");
       }
     },
-    [deleteTask, detailId, toast, queryClient]
+    [deleteTask, detailId, toast, queryClient],
   );
 
   const retry = useCallback(
@@ -183,12 +189,14 @@ export function useHistoryList(): HistoryListController {
         const params = JSON.stringify(task.params ?? {}, null, 2);
         try {
           await navigator.clipboard?.writeText(
-            `prompt: ${task.prompt ?? ""}\nworkflow: ${task.workflowName}\ntype: ${task.type}\nparams: ${params}`
+            `prompt: ${task.prompt ?? ""}\nworkflow: ${task.workflowName}\ntype: ${task.type}\nparams: ${params}`,
           );
         } catch {
           /* noop */
         }
-        toast.info("后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑");
+        toast.info(
+          "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
+        );
       } catch {
         toast.error("网络错误，重试请求未发送");
       } finally {
@@ -196,7 +204,7 @@ export function useHistoryList(): HistoryListController {
         refresh();
       }
     },
-    [refresh, toast]
+    [refresh, toast],
   );
 
   return {

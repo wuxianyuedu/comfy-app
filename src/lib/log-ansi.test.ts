@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  parseAnsiSegments,
-  parseOllamaLogText,
-  stripAnsi,
-} from "./log-ansi";
+import { parseAnsiSegments, parseOllamaLogText, stripAnsi } from "./log-ansi";
 
 describe("stripAnsi", () => {
   it("剥掉 SGR 颜色序列与 \\r，保留正文", () => {
@@ -79,7 +75,7 @@ describe("parseAnsiSegments", () => {
 describe("parseOllamaLogText（logrus 纯文本语义上色）", () => {
   it("level=INFO 行：时间戳前缀调暗、level 绿色、正文默认", () => {
     const segments = parseOllamaLogText(
-      "[2026-09-06 14:27:22] [err] time=2026-09-06T14:27:22+08:00 level=INFO source=routes.go:2008 msg=\"Listening on 127.0.0.1:11434\"",
+      '[2026-09-06 14:27:22] [err] time=2026-09-06T14:27:22+08:00 level=INFO source=routes.go:2008 msg="Listening on 127.0.0.1:11434"',
     );
     const dim = segments.find((s) => s.styles?.includes("dim"));
     expect(dim?.text).toContain("[2026-09-06 14:27:22]");
@@ -99,8 +95,12 @@ describe("parseOllamaLogText（logrus 纯文本语义上色）", () => {
   });
 
   it("level=WARN 黄色；行间保留换行", () => {
-    const segments = parseOllamaLogText('level=WARN msg="a"\nlevel=WARN msg="b"');
-    expect(segments.filter((s) => s.styles?.includes("yellow"))).toHaveLength(2);
+    const segments = parseOllamaLogText(
+      'level=WARN msg="a"\nlevel=WARN msg="b"',
+    );
+    expect(segments.filter((s) => s.styles?.includes("yellow"))).toHaveLength(
+      2,
+    );
     expect(segments.filter((s) => s.text === "\n")).toHaveLength(1);
   });
 });

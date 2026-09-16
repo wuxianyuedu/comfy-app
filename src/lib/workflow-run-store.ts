@@ -110,7 +110,9 @@ export function registerWorkflowRun(meta: WorkflowRunMeta): void {
 /** patch 已登记运行的状态 / 结果 / 错误。 */
 export function patchWorkflowRun(
   taskId: string,
-  patch: Partial<Pick<WorkflowRunMeta, "status" | "resultUrl" | "errorMessage">>,
+  patch: Partial<
+    Pick<WorkflowRunMeta, "status" | "resultUrl" | "errorMessage">
+  >,
 ): void {
   const prev = runs.get(taskId);
   if (!prev) return;
@@ -138,9 +140,14 @@ export function failWorkflowRun(taskId: string, message: string): void {
     (last.msg === reason || last.msg.includes(reason));
   const nextLogs = duplicatedAsLogLine
     ? logs
-    : [...logs, { t: Date.now(), level: "error" as const, msg: `✗ 生成失败：${reason}` }].slice(
-        -MAX_LOGS,
-      );
+    : [
+        ...logs,
+        {
+          t: Date.now(),
+          level: "error" as const,
+          msg: `✗ 生成失败：${reason}`,
+        },
+      ].slice(-MAX_LOGS);
   touch({ ...prev, status: "failed", errorMessage: reason, logs: nextLogs });
 }
 
@@ -156,14 +163,17 @@ export function latestActiveWorkflowRun(): WorkflowRunMeta | null {
   for (const meta of runs.values()) {
     if (!latest || meta.startedAt > latest.startedAt) latest = meta;
     if (meta.status === "running" || !meta.status) {
-      if (!latestActive || meta.startedAt > latestActive.startedAt) latestActive = meta;
+      if (!latestActive || meta.startedAt > latestActive.startedAt)
+        latestActive = meta;
     }
   }
   return latestActive ?? latest;
 }
 
 /** 查找某个工作流最近的一次运行（重开窗口恢复视角用）。 */
-export function latestRunForWorkflow(workflowId: string): WorkflowRunMeta | null {
+export function latestRunForWorkflow(
+  workflowId: string,
+): WorkflowRunMeta | null {
   let found: WorkflowRunMeta | null = null;
   for (const meta of runs.values()) {
     if (meta.workflowId !== workflowId) continue;

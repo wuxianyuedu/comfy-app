@@ -1,8 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getLLMConfig, completeLLM, completeLLMTools, streamLLM } from "@/lib/llm/server";
+import {
+  getLLMConfig,
+  completeLLM,
+  completeLLMTools,
+  streamLLM,
+} from "@/lib/llm/server";
 import { requireServerUser } from "@/lib/auth-server";
 import { errorMessage } from "~/lib/error-message";
-import { TASK_TYPES, type LLMMessage, type LLMRequestOptions, type LLMProviderType, type TaskType } from "@/lib/llm/types";
+import {
+  TASK_TYPES,
+  type LLMMessage,
+  type LLMRequestOptions,
+  type LLMProviderType,
+  type TaskType,
+} from "@/lib/llm/types";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -13,7 +24,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 const BodySchema = {
-  parse(body: unknown): { messages: LLMMessage[]; stream: boolean; opts: LLMRequestOptions } {
+  parse(body: unknown): {
+    messages: LLMMessage[];
+    stream: boolean;
+    opts: LLMRequestOptions;
+  } {
     const rec: Record<string, unknown> = isRecord(body) ? body : {};
     if (!Array.isArray(rec.messages) || rec.messages.length === 0) {
       throw new Error("messages 不能为空");
@@ -21,10 +36,22 @@ const BodySchema = {
     const rawMessages: unknown[] = rec.messages;
     const messages: LLMMessage[] = rawMessages.map((m: unknown) => {
       // 逐元素断言为最小形状;null/undefined 元素在属性访问处抛 TypeError → 400,与原 any 版一致。
-      const entry = m as { role?: unknown; content?: unknown; tool_calls?: unknown; tool_call_id?: unknown };
+      const entry = m as {
+        role?: unknown;
+        content?: unknown;
+        tool_calls?: unknown;
+        tool_call_id?: unknown;
+      };
       // 用 unknown 局部变量承接 `??` 结果,避免 String() 落在真值窄化后的 `{}` 类型上。
       const rawContent: unknown = entry.content ?? "";
-      const role = entry.role === "assistant" ? "assistant" : entry.role === "user" ? "user" : entry.role === "tool" ? "tool" : "system";
+      const role =
+        entry.role === "assistant"
+          ? "assistant"
+          : entry.role === "user"
+            ? "user"
+            : entry.role === "tool"
+              ? "tool"
+              : "system";
       const base: LLMMessage = { role, content: String(rawContent) };
       // 透传 tool_calls（assistant 消息带）与 tool_call_id（tool 消息带）
       if (role === "assistant" && Array.isArray(entry.tool_calls)) {
@@ -66,7 +93,10 @@ export async function POST(req: NextRequest) {
     const body: unknown = await req.json();
     parsed = BodySchema.parse(body);
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "请求格式错误") }, { status: 400 });
+    return NextResponse.json(
+      { error: errorMessage(e, "请求格式错误") },
+      { status: 400 },
+    );
   }
 
   const cfg = await getLLMConfig(parsed.opts);
@@ -76,13 +106,23 @@ export async function POST(req: NextRequest) {
     try {
       // 带 tools 参数时走工具调用链路，返回 tool_calls（Agent 场景）
       if (parsed.opts.tools?.length) {
-        const result = await completeLLMTools(cfg, parsed.messages, parsed.opts.tools);
-        return NextResponse.json({ content: result.content, tool_calls: result.toolCalls });
+        const result = await completeLLMTools(
+          cfg,
+          parsed.messages,
+          parsed.opts.tools,
+        );
+        return NextResponse.json({
+          content: result.content,
+          tool_calls: result.toolCalls,
+        });
       }
       const content = await completeLLM(cfg, parsed.messages);
       return NextResponse.json({ content });
     } catch (e) {
-      return NextResponse.json({ error: errorMessage(e, "LLM 调用失败") }, { status: 502 });
+      return NextResponse.json(
+        { error: errorMessage(e, "LLM 调用失败") },
+        { status: 502 },
+      );
     }
   }
 
@@ -93,13 +133,15 @@ export async function POST(req: NextRequest) {
       try {
         await streamLLM(cfg, parsed.messages, (token) => {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ token })}\n\n`)
+            encoder.encode(`data: ${JSON.stringify({ token })}\n\n`),
           );
         });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } catch (e) {
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: errorMessage(e, "LLM 调用失败") })}\n\n`)
+          encoder.encode(
+            `data: ${JSON.stringify({ error: errorMessage(e, "LLM 调用失败") })}\n\n`,
+          ),
         );
       } finally {
         controller.close();

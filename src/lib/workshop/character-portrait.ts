@@ -61,7 +61,9 @@ export function normalizePortrait(raw: unknown): CharacterPortrait | null {
     url,
     source: isPortraitSource(candidate.source) ? candidate.source : "import",
     createdAt:
-      typeof createdAt === "number" && Number.isFinite(createdAt) ? createdAt : 0,
+      typeof createdAt === "number" && Number.isFinite(createdAt)
+        ? createdAt
+        : 0,
     ...(typeof candidate.model === "string" && candidate.model
       ? { model: candidate.model }
       : {}),
@@ -101,7 +103,10 @@ export function withPortraitCandidate(
 }
 
 /** 把候选里的一张定为定妆照（不在候选里则原样返回，避免写入悬空地址）。 */
-export function withSelectedPortrait(character: Character, url: string): Character {
+export function withSelectedPortrait(
+  character: Character,
+  url: string,
+): Character {
   if (!portraitCandidates(character).some((item) => item.url === url)) {
     return character;
   }

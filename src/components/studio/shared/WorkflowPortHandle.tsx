@@ -11,13 +11,20 @@ import { Handle, Position, useNodeId } from "@xyflow/react";
  * border so half sits outside the node, exactly like the workflow canvas. */
 const PORT_STROKE = "#4D4D59";
 const PORT_IMG = new Set(["IMAGE", "MASK"]);
-const PORT_VID = new Set(["VIDEO", "VHS_FILENAMES", "VHS_VIDEOINFO", "VHS_AUDIO", "AUDIO"]);
+const PORT_VID = new Set([
+  "VIDEO",
+  "VHS_FILENAMES",
+  "VHS_VIDEOINFO",
+  "VHS_AUDIO",
+  "AUDIO",
+]);
 
 function portColorFor(type?: string): string {
   const t = (type ?? "").toUpperCase();
   if (PORT_IMG.has(t)) return "#7C5CFC";
   if (PORT_VID.has(t)) return "#FF5CA8";
-  if (t === "STRING" || t === "INT" || t === "FLOAT" || t === "NUMBER") return "#9A9AAD";
+  if (t === "STRING" || t === "INT" || t === "FLOAT" || t === "NUMBER")
+    return "#9A9AAD";
   if (t === "BOOLEAN" || t === "BOOL") return "#67E89D";
   return "#5BC6FF";
 }
@@ -55,7 +62,10 @@ const KNOWN_CHIP_TYPES = new Set([
   "*",
 ]);
 
-export function normalizeTypeChip(raw: string | undefined, fallback = "INT"): string {
+export function normalizeTypeChip(
+  raw: string | undefined,
+  fallback = "INT",
+): string {
   const rawTrimmed = (raw ?? "").trim();
   const t = rawTrimmed.toUpperCase();
   if (t.length === 0) return fallback;
@@ -65,10 +75,24 @@ export function normalizeTypeChip(raw: string | undefined, fallback = "INT"): st
   return rawTrimmed === t ? fallback : t;
 }
 
-export function portChipStyle(type?: string): { background: string; color: string; border?: string } {
+export function portChipStyle(type?: string): {
+  background: string;
+  color: string;
+  border?: string;
+} {
   const t = normalizeTypeChip(type);
-  if (PORT_IMG.has(t)) return { background: "#1E1A2E", color: "#7C5CFC", border: "1px solid rgba(124,92,252,0.4)" };
-  if (PORT_VID.has(t)) return { background: "#331A28", color: "#FF5CA8", border: "1px solid rgba(255,92,168,0.4)" };
+  if (PORT_IMG.has(t))
+    return {
+      background: "#1E1A2E",
+      color: "#7C5CFC",
+      border: "1px solid rgba(124,92,252,0.4)",
+    };
+  if (PORT_VID.has(t))
+    return {
+      background: "#331A28",
+      color: "#FF5CA8",
+      border: "1px solid rgba(255,92,168,0.4)",
+    };
   return { background: "#26262E", color: "#9A9AAD" };
 }
 

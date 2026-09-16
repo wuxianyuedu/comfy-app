@@ -14,7 +14,10 @@ export const postRouter = createTRPCRouter({
   create: authedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .mutation(async ({ ctx, input }): Promise<Post> => {
-      return postRepository.create({ name: input.name, createdById: ctx.user.id });
+      return postRepository.create({
+        name: input.name,
+        createdById: ctx.user.id,
+      });
     }),
 
   getSecretMessage: authedProcedure.query(() => {

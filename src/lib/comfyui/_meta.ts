@@ -118,7 +118,8 @@ export const WORKFLOWS: Record<string, WorkflowMeta> = {
       frames: 81,
       fps: 16,
       shift: 8,
-      wanModel: "DaSiWa WAN 2.2 I2V 14B SnatchKiss v11.0 HIGH FP8 - Wan2.2.safetensors",
+      wanModel:
+        "DaSiWa WAN 2.2 I2V 14B SnatchKiss v11.0 HIGH FP8 - Wan2.2.safetensors",
       wanVae: "wan_2.1_vae.safetensors",
       t5Model: "umt5-xxl-enc-bf16.safetensors",
     },
@@ -149,7 +150,8 @@ export const WORKFLOWS: Record<string, WorkflowMeta> = {
       frames: 81,
       fps: 16,
       shift: 8,
-      wanModel: "DaSiWa WAN 2.2 I2V 14B SnatchKiss v11.0 HIGH FP8 - Wan2.2.safetensors",
+      wanModel:
+        "DaSiWa WAN 2.2 I2V 14B SnatchKiss v11.0 HIGH FP8 - Wan2.2.safetensors",
       wanVae: "wan_2.1_vae.safetensors",
       t5Model: "umt5-xxl-enc-bf16.safetensors",
     },
@@ -181,7 +183,8 @@ export const WORKFLOWS: Record<string, WorkflowMeta> = {
       frames: 81,
       fps: 16,
       shift: 8,
-      wanModel: "DaSiWa WAN 2.2 I2V 14B SnatchKiss v11.0 HIGH FP8 - Wan2.2.safetensors",
+      wanModel:
+        "DaSiWa WAN 2.2 I2V 14B SnatchKiss v11.0 HIGH FP8 - Wan2.2.safetensors",
       wanVae: "wan_2.1_vae.safetensors",
       t5Model: "umt5-xxl-enc-bf16.safetensors",
     },

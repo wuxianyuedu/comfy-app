@@ -18,7 +18,8 @@ export interface StatusStyle {
 export const STATUS_STYLE: Record<string, StatusStyle> = {
   QUEUED: {
     label: "排队中",
-    pillCls: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 border-dashed",
+    pillCls:
+      "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 border-dashed",
     accentCls: "border-l-cyan-500",
     cardBorderCls: "border-cyan-500/30 border-dashed",
     isActive: true,
@@ -71,8 +72,7 @@ export function suggestFix(err?: string | null): string {
     return "建议：检查提示词是否为空或包含非法字符。";
   if (/out of memory|OOM|cuda/i.test(err))
     return "建议：降低 batch size / 分辨率，或切换到更小的模型。";
-  if (/queue/i.test(err))
-    return "建议：清空 ComfyUI 队列或重启服务后重试。";
+  if (/queue/i.test(err)) return "建议：清空 ComfyUI 队列或重启服务后重试。";
   return `建议：复制错误码到 ComfyUI 控制台查日志：${err.slice(0, 40)}${err.length > 40 ? "…" : ""}`;
 }
 

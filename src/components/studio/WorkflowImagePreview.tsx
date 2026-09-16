@@ -16,7 +16,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   if (!ref) {
     return (
       <div className="flex flex-col gap-1">
-        <div className="truncate text-[11px] text-ink-soft" title={label}>
+        <div className="text-ink-soft truncate text-[11px]" title={label}>
           {label}
         </div>
         <div className="border-border-strong bg-canvas-deep text-ink-soft flex h-[110px] items-center justify-center rounded-md border border-dashed text-[11px]">
@@ -26,11 +26,11 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
     );
   }
   const src = `/api/images?filename=${encodeURIComponent(ref.filename)}&subfolder=${encodeURIComponent(
-    ref.subfolder
+    ref.subfolder,
   )}&type=${encodeURIComponent(ref.type)}`;
   return (
     <div className="flex flex-col gap-1">
-      <div className="truncate text-[11px] text-ink-soft" title={label}>
+      <div className="text-ink-soft truncate text-[11px]" title={label}>
         {label}
       </div>
       <div className="border-border-strong bg-canvas-deep overflow-hidden rounded-md border">
@@ -39,7 +39,6 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
             图片不可用
           </div>
         ) : (
-           
           <img
             src={src}
             alt={ref.filename}

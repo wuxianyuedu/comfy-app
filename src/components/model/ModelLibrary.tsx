@@ -23,8 +23,7 @@ export function ModelLibrary() {
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        {FILTERS.map((FILTERS) =>
-(
+        {FILTERS.map((FILTERS) => (
           <button
             key={FILTERS.key}
             onClick={() => c.setType(FILTERS.key)}
@@ -41,12 +40,12 @@ export function ModelLibrary() {
           value={c.q}
           onChange={(event) => c.setQ(event.target.value)}
           placeholder="搜索模型…"
-          className="ml-auto h-9 w-44 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary sm:w-56"
+          className="border-border bg-surface focus:border-primary ml-auto h-9 w-44 rounded-lg border px-3 text-sm outline-none sm:w-56"
         />
         <button
           onClick={() => void c.sync()}
           disabled={c.syncing}
-          className="h-9 rounded-lg border border-border px-3 text-sm text-muted-foreground transition-colors hover:text-ink disabled:opacity-50"
+          className="border-border text-muted-foreground hover:text-ink h-9 rounded-lg border px-3 text-sm transition-colors disabled:opacity-50"
         >
           {c.syncing ? "同步中…" : "同步模型"}
         </button>
@@ -55,17 +54,19 @@ export function ModelLibrary() {
       {c.loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={`skeleton-${i}`} className="aspect-[4/3] animate-pulse rounded-xl bg-subtle" />
+            <div
+              key={`skeleton-${i}`}
+              className="bg-subtle aspect-[4/3] animate-pulse rounded-xl"
+            />
           ))}
         </div>
       ) : c.models.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
+        <div className="border-border text-muted-foreground rounded-xl border border-dashed p-12 text-center">
           暂无可用的本地模型。请确认 ComfyUI 已启动，然后点击「同步模型」。
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {c.models.map((model) =>
-(
+          {c.models.map((model) => (
             <ModelCard key={model.id} model={model} />
           ))}
         </div>

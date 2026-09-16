@@ -100,34 +100,52 @@ export function NodePreviewCard({
       </div>
 
       {!data ? (
-        <div className="px-2.5 py-1.5 text-[10px] italic text-muted-foreground">
+        <div className="text-muted-foreground px-2.5 py-1.5 text-[10px] italic">
           清单中未找到该节点（可能解析后未重导入此包）
         </div>
       ) : !expanded ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5 text-[10px] text-ink-muted">
+        <div className="text-ink-muted flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5 text-[10px]">
           <span>
-            <span className="font-mono text-ink-bright">{typed.length}</span> typed
+            <span className="text-ink-bright font-mono">{typed.length}</span>{" "}
+            typed
           </span>
           <span>
-            <span className="font-mono text-ink-bright">{widgets.length}</span> widget
+            <span className="text-ink-bright font-mono">{widgets.length}</span>{" "}
+            widget
           </span>
           <span>
-            <span className="font-mono text-ink-bright">{outputs.length}</span> output
+            <span className="text-ink-bright font-mono">{outputs.length}</span>{" "}
+            output
           </span>
         </div>
       ) : (
-        <div className="px-2.5 pb-2 pt-1.5">
+        <div className="px-2.5 pt-1.5 pb-2">
           {/* Zone 1 — typed ports (inputs left, outputs right) */}
           {(typed.length > 0 || outputs.length > 0) && (
-            <div className="mb-1.5 grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+            <div
+              className="mb-1.5 grid"
+              style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}
+            >
               <div className="flex flex-col gap-[3px]">
                 {typed.map((i, idx) => (
-                  <PortRow key={`ti-${idx}`} side="in" color={color} type={i.type} name={i.name} />
+                  <PortRow
+                    key={`ti-${idx}`}
+                    side="in"
+                    color={color}
+                    type={i.type}
+                    name={i.name}
+                  />
                 ))}
               </div>
               <div className="flex flex-col items-end gap-[3px]">
                 {outputs.map((output, idx) => (
-                  <PortRow key={`to-${idx}`} side="out" color={color} type={output.type} name={output.name} />
+                  <PortRow
+                    key={`to-${idx}`}
+                    side="out"
+                    color={color}
+                    type={output.type}
+                    name={output.name}
+                  />
                 ))}
               </div>
             </div>
@@ -140,33 +158,46 @@ export function NodePreviewCard({
               style={{ borderColor: "var(--color-border-subtle)" }}
             >
               {widgets.slice(0, 32).map((widget, idx) => (
-                <div key={`w-${idx}`} className="flex items-center gap-1.5 text-[10.5px]">
+                <div
+                  key={`w-${idx}`}
+                  className="flex items-center gap-1.5 text-[10.5px]"
+                >
                   <span
                     className="inline-block shrink-0 rounded-full"
-                    style={{ width: 6, height: 6, background: color, opacity: 0.7 }}
+                    style={{
+                      width: 6,
+                      height: 6,
+                      background: color,
+                      opacity: 0.7,
+                    }}
                   />
                   <span
-                    className="min-w-0 flex-1 truncate text-ink-soft"
+                    className="text-ink-soft min-w-0 flex-1 truncate"
                     title={widget.name}
                   >
                     {widget.name}
                   </span>
-                  <WidgetValueChip widget={widget.widget ?? null} value={widget.default} />
+                  <WidgetValueChip
+                    widget={widget.widget ?? null}
+                    value={widget.default}
+                  />
                 </div>
               ))}
               {widgets.length > 32 && (
-                <div className="pl-3 text-[10px] text-muted-foreground">
+                <div className="text-muted-foreground pl-3 text-[10px]">
                   … +{widgets.length - 32} more
                 </div>
               )}
             </div>
           )}
 
-          {typed.length === 0 && widgets.length === 0 && outputs.length === 0 && (
-            <div className="py-1 text-center text-[10px] italic text-muted-foreground">
-              无输入 / 输出参数
-            </div>
-          )}
+          {typed.length === 0 &&
+            widgets.length === 0 &&
+            outputs.length === 0 && (
+              <div className="text-muted-foreground py-1 text-center text-[10px] italic">
+                无输入 / 输出参数
+              </div>
+            )}
         </div>
       )}
     </div>

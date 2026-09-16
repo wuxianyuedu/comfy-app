@@ -64,7 +64,10 @@ export async function saveApiChannels(
     throw new Error("无法连接服务器");
   }
 
-  const data = (await res.json().catch(() => ({}))) as { error?: unknown; channels?: unknown };
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    channels?: unknown;
+  };
   if (!res.ok) throw new Error(readApiErrorMessage(data) ?? "保存失败");
   if (!isChannelsView(data.channels)) {
     throw new Error("保存失败：服务端返回的通道配置格式不正确");

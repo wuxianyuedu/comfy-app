@@ -18,7 +18,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { getSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn<(args: { headers: Headers }) => Promise<unknown>>(
-    async () => null
+    async () => null,
   ),
 }));
 
@@ -45,7 +45,10 @@ vi.mock("@/lib/app-settings/app-settings.server", async (importOriginal) => {
   const mod = await importOriginal<typeof AppSettingsModule>();
   return {
     ...mod,
-    getSettingsSync: vi.fn(() => ({ ...mod.getSettingsSync(), comfyuiPath: "" })),
+    getSettingsSync: vi.fn(() => ({
+      ...mod.getSettingsSync(),
+      comfyuiPath: "",
+    })),
   };
 });
 vi.mock("@/lib/comfyui/importSource", async (importOriginal) => ({
@@ -66,14 +69,21 @@ import {
   importFromLocalPath,
   reimportFromSource,
 } from "@/lib/comfyui/importSource";
-import { getTestDb, seedUser, seedWorkflowTemplate } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedUser,
+  seedWorkflowTemplate,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(workflowRouter);
 const tdb = getTestDb();
 
 const API_GRAPH = {
-  "1": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: "a.safetensors" } },
+  "1": {
+    class_type: "CheckpointLoaderSimple",
+    inputs: { ckpt_name: "a.safetensors" },
+  },
   "2": { class_type: "CLIPTextEncode", inputs: { text: "hello" } },
   "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } },
 };
@@ -118,7 +128,11 @@ describe("workflow.list", () => {
       createdAt: new Date(2000),
     });
     // 他人工作流不得出现
-    seedWorkflowTemplate(tdb, { id: "wf-other", userId: "user-b", name: "Other" });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-other",
+      userId: "user-b",
+      name: "Other",
+    });
 
     const res = await createCaller(makeCtx()).list();
 
@@ -144,16 +158,32 @@ describe("workflow.list", () => {
 
   it("type 过滤命中任务类型", async () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedWorkflowTemplate(tdb, { id: "wf-img", userId: "user-a", taskType: "T2I" });
-    seedWorkflowTemplate(tdb, { id: "wf-video", userId: "user-a", taskType: "T2V" });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-img",
+      userId: "user-a",
+      taskType: "T2I",
+    });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-video",
+      userId: "user-a",
+      taskType: "T2V",
+    });
     const res = await createCaller(makeCtx()).list({ type: "T2V" });
     expect(res.workflows.map((w) => w.id)).toEqual(["wf-video"]);
   });
 
   it("category 过滤（video → T2V/I2V 等 code 的 in 查询）", async () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-    seedWorkflowTemplate(tdb, { id: "wf-img", userId: "user-a", taskType: "T2I" });
-    seedWorkflowTemplate(tdb, { id: "wf-video", userId: "user-a", taskType: "T2V" });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-img",
+      userId: "user-a",
+      taskType: "T2I",
+    });
+    seedWorkflowTemplate(tdb, {
+      id: "wf-video",
+      userId: "user-a",
+      taskType: "T2V",
+    });
     const res = await createCaller(makeCtx()).list({ category: "video" });
     expect(res.workflows.map((w) => w.id)).toEqual(["wf-video"]);
   });
@@ -196,7 +226,7 @@ describe("workflow.create", () => {
   it("显式 format=api 但节点缺 class_type → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(
-      caller.create({ format: "api", graph: { "1": { inputs: {} } } })
+      caller.create({ format: "api", graph: { "1": { inputs: {} } } }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
@@ -208,7 +238,7 @@ describe("workflow.create", () => {
 
   it("无法识别的格式 → BAD_REQUEST", async () => {
     await expect(
-      createCaller(makeCtx()).create({ graph: { foo: "bar" } })
+      createCaller(makeCtx()).create({ graph: { foo: "bar" } }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
@@ -250,15 +280,20 @@ describe("workflow.create", () => {
   });
 
   it("本地文件导入失败 → BAD_REQUEST（透传错误消息）", async () => {
-    vi.mocked(importFromLocalPath).mockRejectedValueOnce(new Error("文件不存在"));
+    vi.mocked(importFromLocalPath).mockRejectedValueOnce(
+      new Error("文件不存在"),
+    );
     await expect(
-      createCaller(makeCtx()).create({ sourcePath: "C:/wf/missing.json" })
+      createCaller(makeCtx()).create({ sourcePath: "C:/wf/missing.json" }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST", message: "文件不存在" });
   });
 
   it("Zod 校验：name 超长 → BAD_REQUEST", async () => {
     await expect(
-      createCaller(makeCtx()).create({ name: "x".repeat(201), graph: API_GRAPH })
+      createCaller(makeCtx()).create({
+        name: "x".repeat(201),
+        graph: API_GRAPH,
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
@@ -303,7 +338,10 @@ describe("workflow.update", () => {
       userId: "user-a",
       name: "Old",
       taskType: "T2I",
-      rawJson: { nodes: [{ id: "1", type: "KSampler", pos: [9, 9] }], links: [] },
+      rawJson: {
+        nodes: [{ id: "1", type: "KSampler", pos: [9, 9] }],
+        links: [],
+      },
       positions: { "5": [0, 0] },
     });
     const res = await createCaller(makeCtx()).update({
@@ -349,10 +387,14 @@ describe("workflow.update", () => {
     seedUser(tdb, { id: "user-b", email: "b@test.dev" });
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
-    await expect(caller.update({ id: "nope", name: "X" })).rejects.toMatchObject({
+    await expect(
+      caller.update({ id: "nope", name: "X" }),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(caller.update({ id: "wf-b", name: "X" })).rejects.toMatchObject({
+    await expect(
+      caller.update({ id: "wf-b", name: "X" }),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -361,15 +403,23 @@ describe("workflow.update", () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-reset-top",
       userId: "user-a",
-      rawJson: { nodes: [{ id: "1", type: "KSampler", pos: [9, 9] }], links: [] },
+      rawJson: {
+        nodes: [{ id: "1", type: "KSampler", pos: [9, 9] }],
+        links: [],
+      },
       positions: {
         "1": [111, 222],
         "grp:bpin:inputs": [0, 0],
         "4:1670": [1000, 1000],
       },
     });
-    await createCaller(makeCtx()).update({ id: "wf-reset-top", resetPositionsScope: "" });
-    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-top")!;
+    await createCaller(makeCtx()).update({
+      id: "wf-reset-top",
+      resetPositionsScope: "",
+    });
+    const row = tdb.$tables.workflowTemplates.find(
+      (r) => r.id === "wf-reset-top",
+    )!;
     expect(row.positions).toEqual({ "4:1670": [1000, 1000] });
   });
 
@@ -385,8 +435,13 @@ describe("workflow.update", () => {
         "9:1670": [700, 700],
       },
     });
-    await createCaller(makeCtx()).update({ id: "wf-reset-sub", resetPositionsScope: "4" });
-    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-sub")!;
+    await createCaller(makeCtx()).update({
+      id: "wf-reset-sub",
+      resetPositionsScope: "4",
+    });
+    const row = tdb.$tables.workflowTemplates.find(
+      (r) => r.id === "wf-reset-sub",
+    )!;
     expect(row.positions).toEqual({
       "4": [10, 10],
       "4:5:1670": [500, 500],
@@ -400,8 +455,13 @@ describe("workflow.update", () => {
       userId: "user-a",
       positions: { "1": [1, 1] },
     });
-    await createCaller(makeCtx()).update({ id: "wf-reset-empty", resetPositionsScope: "" });
-    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-empty")!;
+    await createCaller(makeCtx()).update({
+      id: "wf-reset-empty",
+      resetPositionsScope: "",
+    });
+    const row = tdb.$tables.workflowTemplates.find(
+      (r) => r.id === "wf-reset-empty",
+    )!;
     expect(row.positions).toBeNull();
   });
 
@@ -416,14 +476,19 @@ describe("workflow.update", () => {
       resetPositionsScope: "",
       positions: { "1": [999, 999] },
     });
-    const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-reset-excl")!;
+    const row = tdb.$tables.workflowTemplates.find(
+      (r) => r.id === "wf-reset-excl",
+    )!;
     expect(row.positions).toBeNull();
   });
 
   it("upgradeFromApi 非 API 格式 → BAD_REQUEST", async () => {
     seedWorkflowTemplate(tdb, { id: "wf-1", userId: "user-a" });
     await expect(
-      createCaller(makeCtx()).update({ id: "wf-1", upgradeFromApi: { nodes: [] } })
+      createCaller(makeCtx()).update({
+        id: "wf-1",
+        upgradeFromApi: { nodes: [] },
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
@@ -438,7 +503,9 @@ describe("workflow.delete", () => {
     seedWorkflowTemplate(tdb, { id: "wf-b", userId: "user-b" });
     const caller = createCaller(makeCtx());
     expect(await caller.delete({ id: "wf-1" })).toEqual({ ok: true });
-    expect(tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")).toBeUndefined();
+    expect(
+      tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1"),
+    ).toBeUndefined();
     await expect(caller.delete({ id: "wf-1" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
@@ -499,12 +566,17 @@ describe("workflow.resync", () => {
     expect(row.sourceMtime).toBe(200);
     expect(row.graph).toEqual(API_GRAPH);
     expect(reimportFromSource).toHaveBeenCalledWith(
-      expect.objectContaining({ sourcePath: "C:/wf/a.json", sourceChecksum: "chk-1" })
+      expect.objectContaining({
+        sourcePath: "C:/wf/a.json",
+        sourceChecksum: "chk-1",
+      }),
     );
   });
 
   it("模板不存在 → NOT_FOUND", async () => {
-    await expect(createCaller(makeCtx()).resync({ id: "nope" })).rejects.toMatchObject({
+    await expect(
+      createCaller(makeCtx()).resync({ id: "nope" }),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
@@ -518,7 +590,7 @@ describe("workflow 鉴权分支", () => {
     const res = await caller.list();
     expect(res.workflows).toEqual([]);
     const demo = tdb.$tables.users.find(
-      (u) => u.email === (process.env.DEMO_USER_EMAIL ?? "demo@comfy.app")
+      (u) => u.email === (process.env.DEMO_USER_EMAIL ?? "demo@comfy.app"),
     );
     expect(demo).toBeDefined();
   });
@@ -529,7 +601,11 @@ describe("workflow 鉴权分支", () => {
       user: { id: "auth-1", email: "sess@test.dev", name: "Sess" },
     });
     const ctx = await createTRPCContext({ headers: new Headers() });
-    expect(ctx.user).toEqual({ id: "db-u1", email: "sess@test.dev", name: "Sess" });
+    expect(ctx.user).toEqual({
+      id: "db-u1",
+      email: "sess@test.dev",
+      name: "Sess",
+    });
   });
 
   it("createTRPCContext：无 session → user 为 null", async () => {

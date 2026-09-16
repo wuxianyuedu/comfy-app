@@ -134,7 +134,11 @@ export function exposedParamsForMode(
         label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"],
       });
     }
-    out.push({ cls: "size", id: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size });
+    out.push({
+      cls: "size",
+      id: "size",
+      label: EXPOSED_PARAM_DISPLAY_LABEL.size,
+    });
     /* 视频还有时长口（秒）。落点由契约映射决定（duration / length / frames 类
      * 端口都算），值由调用方按该端口的单位折算后落下去。 */
     out.push({
@@ -160,7 +164,11 @@ export function exposedParamsForMode(
       });
     }
   }
-  out.push({ cls: "size", id: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size });
+  out.push({
+    cls: "size",
+    id: "size",
+    label: EXPOSED_PARAM_DISPLAY_LABEL.size,
+  });
   return out;
 }
 
@@ -172,7 +180,8 @@ export function exposedParamDisplayLabel(id: string): string {
   const cls = exposedClassOf(id);
   if (!cls) return id;
   const slot = referenceImageSlotIndex(id);
-  if (slot > 1) return `${EXPOSED_PARAM_DISPLAY_LABEL["reference-image"]} ${slot}`;
+  if (slot > 1)
+    return `${EXPOSED_PARAM_DISPLAY_LABEL["reference-image"]} ${slot}`;
   return EXPOSED_PARAM_DISPLAY_LABEL[cls];
 }
 

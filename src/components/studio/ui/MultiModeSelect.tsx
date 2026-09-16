@@ -111,7 +111,9 @@ export function MultiModeSelect({
       setDraftDefault(defaultMode);
       setQuery("");
       // Open on the category of the first selected mode (falls back to image).
-      const firstSelected = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
+      const firstSelected = ALL_WORKFLOW_TYPES.find((type) =>
+        modes.includes(type.code),
+      );
       setActiveTab(firstSelected?.category ?? "image");
     }
     prevOpenRef.current = open;
@@ -154,14 +156,14 @@ export function MultiModeSelect({
       const desiredWidth = Math.max(rect.width, POPOVER_MIN_WIDTH);
       const maxAllowedWidth = Math.max(
         0,
-        window.innerWidth - VIEWPORT_MARGIN * 2
+        window.innerWidth - VIEWPORT_MARGIN * 2,
       );
       const popoverWidth = Math.min(desiredWidth, maxAllowedWidth);
       let left = rect.left;
       if (left + popoverWidth > window.innerWidth - VIEWPORT_MARGIN) {
         left = Math.max(
           VIEWPORT_MARGIN,
-          window.innerWidth - VIEWPORT_MARGIN - popoverWidth
+          window.innerWidth - VIEWPORT_MARGIN - popoverWidth,
         );
       }
       const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
@@ -185,20 +187,17 @@ export function MultiModeSelect({
     };
   }, [open]);
 
-  const toggle = useCallback(
-    (code: string) => {
-      setDraft((prev) => {
-        const next = new Set(prev);
-        if (next.has(code)) {
-          next.delete(code);
-        } else {
-          next.add(code);
-        }
-        return next;
-      });
-    },
-    []
-  );
+  const toggle = useCallback((code: string) => {
+    setDraft((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) {
+        next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return next;
+    });
+  }, []);
 
   const handleSave = useCallback(() => {
     const arr = Array.from(draft);
@@ -231,20 +230,24 @@ export function MultiModeSelect({
         (type.fullName.toLowerCase().includes(lowerQuery) ?? false)
       );
     });
-    const groupedMap: Partial<Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>> = {};
+    const groupedMap: Partial<
+      Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>
+    > = {};
     for (const type of filtered) {
       (groupedMap[type.category] ??= []).push(type);
     }
     return groupedMap;
   }, [query]);
 
-  const firstSelected = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
+  const firstSelected = ALL_WORKFLOW_TYPES.find((type) =>
+    modes.includes(type.code),
+  );
   const mainLabel = firstSelected ? firstSelected.label : "选择模式";
   const plusN = Math.max(0, modes.length - 1);
 
   return (
     <span
-      className={`inline-flex items-center gap-1 ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+      className={`inline-flex items-center gap-1 ${disabled ? "pointer-events-none opacity-50" : ""}`}
       ref={triggerRef}
     >
       {/* main chip — clicking opens the popover */}
@@ -257,9 +260,7 @@ export function MultiModeSelect({
         title={`当前 ${modes.length} 种模式 · 点击管理`}
         className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all hover:brightness-110 ${accent.pill} ${accent.text} ${className}`}
       >
-        <span>
-          {modes.length === 0 ? "选择模式" : mainLabel}
-        </span>
+        <span>{modes.length === 0 ? "选择模式" : mainLabel}</span>
         <svg
           className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           width="10"
@@ -322,44 +323,46 @@ export function MultiModeSelect({
                     handleSave();
                   }
                 }}
-                className="bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-surface-2 w-full rounded-md px-2.5 py-1.5 text-sm outline-none transition-colors focus:ring-1 focus:ring-violet-500/30"
+                className="bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-surface-2 w-full rounded-md px-2.5 py-1.5 text-sm transition-colors outline-none focus:ring-1 focus:ring-violet-500/30"
               />
             </div>
 
             {/* tabs — switchable 图像 / 视频 / 音频 */}
             <div className="border-border-subtle flex items-center gap-1 border-b px-2 pt-2">
-              {(
-                ["image", "video", "audio"] as WorkflowCategory[]
-              ).map((cat) => {
-                const selCount = (grouped[cat] ?? []).filter((type) =>
-                  draft.has(type.code)
-                ).length;
-                const isActive = activeTab === cat;
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setActiveTab(cat)}
-                    className={`relative flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold transition-colors ${
-                      isActive
-                        ? `${CATEGORY_TEXT[cat]} bg-surface-2`
-                        : "text-ink-muted hover:text-ink-strong"
-                    }`}
-                  >
-                    {CATEGORY_LABEL[cat]}
-                    {selCount > 0 && (
-                      <span className={`ml-1 text-[10px] ${CATEGORY_TEXT[cat]}`}>
-                        {selCount}
-                      </span>
-                    )}
-                    {isActive && (
-                      <span
-                        className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
-                      />
-                    )}
-                  </button>
-                );
-              })}
+              {(["image", "video", "audio"] as WorkflowCategory[]).map(
+                (cat) => {
+                  const selCount = (grouped[cat] ?? []).filter((type) =>
+                    draft.has(type.code),
+                  ).length;
+                  const isActive = activeTab === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setActiveTab(cat)}
+                      className={`relative flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold transition-colors ${
+                        isActive
+                          ? `${CATEGORY_TEXT[cat]} bg-surface-2`
+                          : "text-ink-muted hover:text-ink-strong"
+                      }`}
+                    >
+                      {CATEGORY_LABEL[cat]}
+                      {selCount > 0 && (
+                        <span
+                          className={`ml-1 text-[10px] ${CATEGORY_TEXT[cat]}`}
+                        >
+                          {selCount}
+                        </span>
+                      )}
+                      {isActive && (
+                        <span
+                          className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
+                        />
+                      )}
+                    </button>
+                  );
+                },
+              )}
             </div>
 
             {/* list — only the active tab's category */}
@@ -469,13 +472,13 @@ export function MultiModeSelect({
                 type="button"
                 onClick={handleSave}
                 disabled={draft.size === 0}
-                className="flex-1 rounded-md bg-violet-500/90 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-muted"
+                className="disabled:bg-surface-2 disabled:text-ink-muted flex-1 rounded-md bg-violet-500/90 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed"
               >
                 保存（{draft.size}）
               </button>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </span>
   );

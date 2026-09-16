@@ -199,7 +199,11 @@ describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", 
      * <span>（控件）——两侧都不是行本身，来源键只能靠起手现场记下的那个。 */
     const fromRow = rowFor("1::widget::first");
     const toRow = rowFor("1::widget::third");
-    nativeDrag(fromRow.querySelector("button")!, "dragstart", "1::widget::first");
+    nativeDrag(
+      fromRow.querySelector("button")!,
+      "dragstart",
+      "1::widget::first",
+    );
     nativeDrag(toRow.querySelector("span")!, "dragover", "1::widget::third");
     nativeDrag(toRow.querySelector("span")!, "drop", "1::widget::third");
     act(refresh);

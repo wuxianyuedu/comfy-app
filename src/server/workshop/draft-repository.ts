@@ -4,7 +4,10 @@
 // 生成的 wsp_* 项目 id，应用重启后稳定不变，天然支持多项目按 id upsert。
 import { desc, eq } from "drizzle-orm";
 import type { Character, Scene, Shot } from "@/lib/workshop/types";
-import { parseDraftDto, type WorkshopDraftDto } from "@/lib/workshop/draft-sync-shared";
+import {
+  parseDraftDto,
+  type WorkshopDraftDto,
+} from "@/lib/workshop/draft-sync-shared";
 import {
   workshopDraft,
   type WorkshopDraft as WorkshopDraftRow,
@@ -13,7 +16,9 @@ import {
 import { workshopDb } from "./db";
 
 /** 纯函数：线上草稿 → 可写行（不含 id / 时间戳）。 */
-export function draftToRow(draft: WorkshopDraftDto): Partial<WorkshopDraftInsert> {
+export function draftToRow(
+  draft: WorkshopDraftDto,
+): Partial<WorkshopDraftInsert> {
   return {
     title: draft.meta.title ?? "",
     type: draft.meta.type ?? "short_video",
@@ -39,7 +44,9 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
     },
     scriptMarkdown: row.scriptMarkdown,
     scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters) ? (row.characters as Character[]) : [],
+    characters: Array.isArray(row.characters)
+      ? (row.characters as Character[])
+      : [],
     shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
     checkpoint: row.checkpoint,
   });
@@ -68,15 +75,27 @@ export async function listDraftsByUser(
 ): Promise<DraftSummary[]> {
   const rows = userId
     ? await workshopDb
-        .select({ id: workshopDraft.id, title: workshopDraft.title, updatedAt: workshopDraft.updatedAt })
+        .select({
+          id: workshopDraft.id,
+          title: workshopDraft.title,
+          updatedAt: workshopDraft.updatedAt,
+        })
         .from(workshopDraft)
         .where(eq(workshopDraft.userId, userId))
         .orderBy(desc(workshopDraft.updatedAt))
     : await workshopDb
-        .select({ id: workshopDraft.id, title: workshopDraft.title, updatedAt: workshopDraft.updatedAt })
+        .select({
+          id: workshopDraft.id,
+          title: workshopDraft.title,
+          updatedAt: workshopDraft.updatedAt,
+        })
         .from(workshopDraft)
         .orderBy(desc(workshopDraft.updatedAt));
-  return rows.map((r) => ({ id: r.id, title: r.title, updatedAt: r.updatedAt.toISOString() }));
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    updatedAt: r.updatedAt.toISOString(),
+  }));
 }
 
 /** 新增或覆盖某项目的镜像（写穿式：前端每次自动保存都 upsert）。 */

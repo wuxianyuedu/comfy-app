@@ -48,7 +48,7 @@ export type HistoryListParams = {
 /** 拉取任务列表。响应行的 mediaType 由服务端 inferMediaType 给出，
  *  但 Prisma Json 列不可信，这里逐条收窄：缺 mediaType 的行按 image 兜底。 */
 export async function fetchHistoryTasks(
-  params: HistoryListParams
+  params: HistoryListParams,
 ): Promise<HistoryTaskRow[]> {
   const data = await vanillaApi.task.list.query(params);
   return parseHistoryRows(data.tasks);

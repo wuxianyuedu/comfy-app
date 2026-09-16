@@ -201,14 +201,10 @@ export function ProjectOutputs() {
             <select
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
-              className="border-border-strong bg-subtle text-ink-soft focus:border-violet-500/40 rounded-lg border px-3 py-2 text-xs outline-none"
+              className="border-border-strong bg-subtle text-ink-soft rounded-lg border px-3 py-2 text-xs outline-none focus:border-violet-500/40"
             >
               {projects.map((project) => (
-                <option
-                  key={project.id}
-                  value={project.id}
-                  className="bg-node"
-                >
+                <option key={project.id} value={project.id} className="bg-node">
                   {project.name ?? "未命名项目"}
                 </option>
               ))}
@@ -294,7 +290,7 @@ export function ProjectOutputs() {
                     )}
 
                     {isVideoOut && (
-                      <span className="absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2 ring-border-strong">
+                      <span className="ring-border-strong absolute top-1/2 left-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-violet-500/90 ring-2">
                         <svg
                           width="24"
                           height="24"
@@ -338,7 +334,7 @@ export function ProjectOutputs() {
         <>
           {/* 遮罩 + 抽屉都从标题行下方起：顶部让出应用页签栏（ISSUE #310） */}
           <div
-            className="top-title-bar fixed right-0 bottom-0 left-0 z-80 bg-canvas-deep dark:bg-canvas-deep"
+            className="top-title-bar bg-canvas-deep dark:bg-canvas-deep fixed right-0 bottom-0 left-0 z-80"
             onClick={() => setSelectedId(null)}
           />
           <aside className="top-title-bar bg-node border-border-strong fixed right-0 bottom-0 z-90 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l shadow-2xl shadow-black/10 dark:shadow-black/50">

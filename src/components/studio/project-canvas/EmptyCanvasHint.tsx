@@ -16,7 +16,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   if (loading) {
     return (
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <div className="border-border-strong flex flex-col items-center gap-3 rounded-3xl border bg-linear-to-br from-subtle to-canvas-deep px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
+        <div className="border-border-strong from-subtle to-canvas-deep flex flex-col items-center gap-3 rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
           <Icon
             name="loader"
             size={40}
@@ -29,7 +29,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   }
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-      <div className="border-border-strong rounded-3xl border bg-linear-to-br from-subtle to-canvas-deep px-12 py-10 shadow-2xl shadow-black/10 backdrop-bl dark:shadow-black/40ur-md">
+      <div className="border-border-strong from-subtle to-canvas-deep backdrop-bl dark:shadow-black/40ur-md rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/10">
         <div className="mb-3 flex justify-center gap-2">
           <span
             className="inline-block h-10 w-10 rounded-xl shadow-lg"

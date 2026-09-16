@@ -76,9 +76,13 @@ export function useTrainingStudio(): TrainingStudioController {
   const [resolution, setResolution] = useState<number>(DEFAULTS.resolution);
   const [steps, setSteps] = useState<number>(DEFAULTS.steps);
   const [batchSize, setBatchSize] = useState<number>(DEFAULTS.batchSize);
-  const [learningRate, setLearningRate] = useState<number>(DEFAULTS.learningRate);
+  const [learningRate, setLearningRate] = useState<number>(
+    DEFAULTS.learningRate,
+  );
   const [rankDim, setRankDim] = useState<number>(DEFAULTS.rankDim);
-  const [networkAlpha, setNetworkAlpha] = useState<number>(DEFAULTS.networkAlpha);
+  const [networkAlpha, setNetworkAlpha] = useState<number>(
+    DEFAULTS.networkAlpha,
+  );
   const [optimizer, setOptimizer] = useState<string>(DEFAULTS.optimizer);
   const [scheduler, setScheduler] = useState<string>(DEFAULTS.scheduler);
   const [seed, setSeed] = useState<number>(DEFAULTS.seed);
@@ -91,7 +95,9 @@ export function useTrainingStudio(): TrainingStudioController {
   const loadModels = useCallback(() => {
     void vanillaApi.model.list
       .query({ type: "CHECKPOINT" })
-      .then((data) => setCheckpoints((data.models ?? []) as unknown as ModelOpt[]))
+      .then((data) =>
+        setCheckpoints((data.models ?? []) as unknown as ModelOpt[]),
+      )
       .catch(() => {
         /* 底模拉取失败静默忽略：下拉只是空，不阻塞训练 */
       });
@@ -118,25 +124,22 @@ export function useTrainingStudio(): TrainingStudioController {
   }, [loadModels, loadJobs]);
 
   /* ── 数据集上传：逐张串行，失败即停并把错误抛给用户 ── */
-  const upload = useCallback(
-    async (files: FileList | null) => {
-      const list = Array.from(files ?? []);
-      if (list.length === 0) return;
-      setUploading(true);
-      setError(null);
-      try {
-        for (const file of list) {
-          const name = await uploadDatasetImage(file);
-          setDataset((prev) => [...prev, { name, caption: "" }]);
-        }
-      } catch (e) {
-        setError(errorMessage(e, "上传失败"));
-      } finally {
-        setUploading(false);
+  const upload = useCallback(async (files: FileList | null) => {
+    const list = Array.from(files ?? []);
+    if (list.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of list) {
+        const name = await uploadDatasetImage(file);
+        setDataset((prev) => [...prev, { name, caption: "" }]);
       }
-    },
-    [],
-  );
+    } catch (e) {
+      setError(errorMessage(e, "上传失败"));
+    } finally {
+      setUploading(false);
+    }
+  }, []);
 
   const fillBlank = useCallback(() => {
     setDataset((prev) => fillBlankCaptions(prev, triggerWord));

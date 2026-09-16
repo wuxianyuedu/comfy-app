@@ -69,7 +69,7 @@ export interface WorkflowIOEnrichParams {
   nodeTypeById: Record<string, string>;
   comboOptionsForClassField: (
     classType: string | undefined,
-    field: string
+    field: string,
   ) => Promise<string[] | undefined>;
   comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
 }
@@ -90,9 +90,13 @@ function optionRatio(label: string): number | null {
  * undefined（调用方丢弃该覆盖，回退合法 defaultValue）。候选表缺失
  * （ComfyUI 离线）时不动——此时无从判定合法性，交由表单原样编辑。
  */
-function reconcileOptionValue(value: unknown, options: string[] | undefined): unknown {
+function reconcileOptionValue(
+  value: unknown,
+  options: string[] | undefined,
+): unknown {
   if (!options || options.length === 0) return value;
-  if (typeof value !== "string" || value === "" || options.includes(value)) return value;
+  if (typeof value !== "string" || value === "" || options.includes(value))
+    return value;
   const ratio = optionRatio(value);
   if (ratio !== null) {
     const byRatio = options.find((option) => {
@@ -104,7 +108,8 @@ function reconcileOptionValue(value: unknown, options: string[] | undefined): un
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
   const target = norm(value);
   return options.find(
-    (option) => norm(option).startsWith(target) || target.startsWith(norm(option))
+    (option) =>
+      norm(option).startsWith(target) || target.startsWith(norm(option)),
   );
 }
 
@@ -165,7 +170,7 @@ export interface WorkflowIOEntry {
 /** Enrich the stored IO selection into a self-describing record (see the
  *  module doc for field semantics).  Pure — only depends on its params. */
 export async function enrichWorkflowIO(
-  params: WorkflowIOEnrichParams
+  params: WorkflowIOEnrichParams,
 ): Promise<Record<string, WorkflowIOEntry>> {
   const {
     workflowIORaw,
@@ -207,7 +212,7 @@ export async function enrichWorkflowIO(
     const full = String(v.nodeId);
     const canonicalNodeId = (() => {
       const metaById: Record<string, boolean> = Object.fromEntries(
-        rawNodeMeta.map((meta) => [meta.id, true])
+        rawNodeMeta.map((meta) => [meta.id, true]),
       );
       const dicts: Record<string, unknown>[] = [rawInputsById, metaById, graph];
       for (const dict of dicts) {
@@ -219,14 +224,21 @@ export async function enrichWorkflowIO(
        * collides with `9b9009e44`. */
       for (const dict of dicts) {
         if (!dict) continue;
-        const hit = Object.keys(dict).find((key) => key.length > full.length && key.startsWith(full) && key.charAt(full.length) === "-");
+        const hit = Object.keys(dict).find(
+          (key) =>
+            key.length > full.length &&
+            key.startsWith(full) &&
+            key.charAt(full.length) === "-",
+        );
         if (hit) return hit;
       }
       return full;
     })();
 
     if (v.direction === "output") {
-      const meta = rawNodeMeta.find((rawNodeMeta) => rawNodeMeta.id === canonicalNodeId);
+      const meta = rawNodeMeta.find(
+        (rawNodeMeta) => rawNodeMeta.id === canonicalNodeId,
+      );
       const out = meta?.outputs.find((output) => output.name === v.name);
       if (out) {
         type = out.type || "*";
@@ -256,14 +268,24 @@ export async function enrichWorkflowIO(
           /* 候选名字集合：真实槽位名 + 内部字段名 + 本层作者名 + 内部作者名。
            *  「恰好只有一个暴露槽位认领这个名字」才认 —— 多插槽节点上同名者
            *  不止一行时宁可放过，也不把别的槽位的 label 安到这一行。 */
-          const names = [raw.name, raw.proxyField?.field, raw.label, raw.proxyField?.label];
+          const names = [
+            raw.name,
+            raw.proxyField?.field,
+            raw.label,
+            raw.proxyField?.label,
+          ];
           if (!names.includes(v.name)) return false;
-          return inputEntries.filter((other) => {
-            if (!other.widget) return false;
-            return [other.name, other.proxyField?.field, other.label, other.proxyField?.label].includes(
-              v.name
-            );
-          }).length === 1;
+          return (
+            inputEntries.filter((other) => {
+              if (!other.widget) return false;
+              return [
+                other.name,
+                other.proxyField?.field,
+                other.label,
+                other.proxyField?.label,
+              ].includes(v.name);
+            }).length === 1
+          );
         }) ??
         inputEntries.find((raw) => raw.proxyField?.field === v.name) ??
         /* 勾选点落在子图内层视图（下钻后的画布）时，落库 nodeId 是内部节点，
@@ -304,7 +326,10 @@ export async function enrichWorkflowIO(
         const authorSlotLabel =
           ri.label !== undefined && ri.label !== ri.name ? ri.label : undefined;
         const authorFacingName =
-          f?.label ?? (f?.localized !== ri.name ? f?.localized : undefined) ?? f?.field ?? authorSlotLabel;
+          f?.label ??
+          (f?.localized !== ri.name ? f?.localized : undefined) ??
+          f?.field ??
+          authorSlotLabel;
         /* 存量/机器名：勾选那一刻会把「画布显示名」写进 label，而修复前某些
          *  路径写进去的其实是原始槽位名（封装节点的别名 `value_1`，或普通节点
          *  的 pin 名 `image`）。这串东西不是作者的命名，不该把作者名压掉 ——
@@ -322,7 +347,10 @@ export async function enrichWorkflowIO(
           (f?.localized !== ri.name ? f?.localized : undefined) ??
           authorSlotLabel ??
           (f?.field !== ri.name ? f?.field : undefined);
-        if (candidateSlotLabel !== undefined && candidateSlotLabel !== ri.name) {
+        if (
+          candidateSlotLabel !== undefined &&
+          candidateSlotLabel !== ri.name
+        ) {
           slotLabel = candidateSlotLabel;
         }
 
@@ -362,7 +390,10 @@ export async function enrichWorkflowIO(
         if (ri?.comboOptions) {
           options = ri.comboOptions;
         } else {
-          const byClass = await comboOptionsForClassField(nodeTypeById[canonicalNodeId], v.name);
+          const byClass = await comboOptionsForClassField(
+            nodeTypeById[canonicalNodeId],
+            v.name,
+          );
           /* wrapper nodes (esp. `comfy-core` subgraphs whose
            *  `properties.proxyWidgets` is absent/quarantined) can't resolve the
            *  internal class, so the class lookup above returns nothing.  Fall
@@ -373,8 +404,6 @@ export async function enrichWorkflowIO(
       }
     }
 
-
-
     /* 存量清洗：作者覆盖值 / 模式默认值可能是在候选表缺失或过期时写入的
      *  （如简写 "16:9"），不在服务器候选表里——照原样展示，用户再怎么选
      *  提交的仍是脏值。这里在 GET 重建时就地对齐（见 reconcileOptionValue），
@@ -382,7 +411,12 @@ export async function enrichWorkflowIO(
      *  清洗只作用于本次响应；用户保存后 PATCH 自然落库清洗结果。 */
     const cleanedValue = reconcileOptionValue(v.value, options);
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
-    if (v.modes != null && typeof v.modes === "object" && options && options.length > 0) {
+    if (
+      v.modes != null &&
+      typeof v.modes === "object" &&
+      options &&
+      options.length > 0
+    ) {
       let touched = false;
       const next: Record<string, WorkflowIOModeOverride> = {};
       for (const [mode, override] of Object.entries(v.modes)) {
@@ -434,7 +468,8 @@ export async function enrichWorkflowIO(
       ...(defaultValue !== undefined ? { defaultValue } : {}),
       ...(options ? { options } : {}),
       ...(classType !== undefined ? { classType } : {}),
-      nodeTitle: nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
+      nodeTitle:
+        nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
       ...(type === "STRING" &&
       (MULTILINE_HINT.test(v.name) ||
         MULTILINE_HINT.test(String(label ?? "")) ||

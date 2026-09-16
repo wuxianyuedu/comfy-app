@@ -22,7 +22,9 @@ vi.mock("../core/repository", () => ({
     finalizeFromReaper: vi.fn().mockResolvedValue(undefined),
   },
 }));
-vi.mock("./lifecycle", () => ({ isComfyStarting: vi.fn().mockReturnValue(false) }));
+vi.mock("./lifecycle", () => ({
+  isComfyStarting: vi.fn().mockReturnValue(false),
+}));
 vi.mock("./client", () => ({
   resolveComfyBase: vi.fn().mockResolvedValue("http://127.0.0.1:8188"),
 }));
@@ -40,7 +42,13 @@ import { cancelPersistLogs, state } from "./runner-state";
  * @typescript-eslint/unbound-method。这里把「断言用的 mock」集中在一处，
  * 用显式类型标注的取值函数暴露，调用点保持可读。 */
 type MockedFn = ReturnType<typeof vi.fn>;
-function repoMock(name: "listStaleQueued" | "listStaleRunning" | "finalizeFailure" | "finalizeFromReaper"): MockedFn {
+function repoMock(
+  name:
+    | "listStaleQueued"
+    | "listStaleRunning"
+    | "finalizeFailure"
+    | "finalizeFromReaper",
+): MockedFn {
   // 同上：模块被 vi.mock 后这些属性是 vi.fn()，取值即取 mock 函数本身，
   // 不涉及 `this`——unbound-method 在此为误报。
   // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -117,13 +125,16 @@ function stubComfyIdle() {
     "fetch",
     vi.fn(async (url: string) => {
       if (String(url).includes("/queue")) {
-        return new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), { status: 200 });
+        return new Response(
+          JSON.stringify({ queue_running: [], queue_pending: [] }),
+          { status: 200 },
+        );
       }
       if (String(url).includes("/history")) {
         return new Response(JSON.stringify({}), { status: 200 });
       }
       throw new Error(`unexpected fetch: ${url}`);
-    })
+    }),
   );
 }
 
@@ -149,7 +160,9 @@ afterEach(() => {
 /* reaper.ts 目前只导出 isTaskClaimedInProcess，两条 sweeper 是模块私有。
  * 为了让判决矩阵可被直接断言（不受 30s 定时器摆布），这里经动态 import
  * 取出内部实现——仅测试用，不改变生产导出面。 */
-async function loadReaper(): Promise<ReaperInternals & { isTaskClaimedInProcess: unknown }> {
+async function loadReaper(): Promise<
+  ReaperInternals & { isTaskClaimedInProcess: unknown }
+> {
   const mod = (await import("./reaper")) as unknown as ReaperInternals & {
     isTaskClaimedInProcess: unknown;
   };
@@ -159,7 +172,10 @@ async function loadReaper(): Promise<ReaperInternals & { isTaskClaimedInProcess:
 describe("QUEUED reaper 判决矩阵", () => {
   it("真孤儿（无任何 in-memory 足迹）→ 判 FAILED 并写入可行动原因", async () => {
     const reaper = await loadReaper();
-    expect(reaper.reapStaleQueuedTasks, "reapStaleQueuedTasks 应对测试可见").toBeTypeOf("function");
+    expect(
+      reaper.reapStaleQueuedTasks,
+      "reapStaleQueuedTasks 应对测试可见",
+    ).toBeTypeOf("function");
     repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-orphan")]);
 
     await reaper.reapStaleQueuedTasks!();
@@ -182,29 +198,43 @@ describe("QUEUED reaper 判决矩阵", () => {
       vi.fn(async (url: string) => {
         if (String(url).includes("/queue")) {
           return new Response(
-            JSON.stringify({ queue_running: [{ prompt_id: "p-x" }], queue_pending: [] }),
-            { status: 200 }
+            JSON.stringify({
+              queue_running: [{ prompt_id: "p-x" }],
+              queue_pending: [],
+            }),
+            { status: 200 },
           );
         }
         throw new Error(`unexpected fetch: ${url}`);
-      })
+      }),
     );
 
     await reaper.reapStaleQueuedTasks!();
 
     expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
-    expect(logsOf("t-inflight").some((m) => m.includes("仍有正在执行/排队的工作流"))).toBe(true);
+    expect(
+      logsOf("t-inflight").some((m) => m.includes("仍有正在执行/排队的工作流")),
+    ).toBe(true);
   });
 
   it("ComfyUI 不可达（无法确认）→ 不回收，本轮放行等下次对账", async () => {
     const reaper = await loadReaper();
     repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-unreachable")]);
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("ECONNREFUSED"); }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("ECONNREFUSED");
+      }),
+    );
 
     await reaper.reapStaleQueuedTasks!();
 
     expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
-    expect(logsOf("t-unreachable").some((m) => m.includes("无法确认任务是否仍由 ComfyUI 执行"))).toBe(true);
+    expect(
+      logsOf("t-unreachable").some((m) =>
+        m.includes("无法确认任务是否仍由 ComfyUI 执行"),
+      ),
+    ).toBe(true);
   });
 
   it("ComfyUI 队列空且无 prompt_id 线索 → 判孤儿（历史里别的条目不算「在跑」）", async () => {
@@ -216,13 +246,21 @@ describe("QUEUED reaper 判决矩阵", () => {
       "fetch",
       vi.fn(async (url: string) => {
         if (String(url).includes("/queue")) {
-          return new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), { status: 200 });
+          return new Response(
+            JSON.stringify({ queue_running: [], queue_pending: [] }),
+            { status: 200 },
+          );
         }
         if (String(url).includes("/history")) {
-          return new Response(JSON.stringify({ "p-old-unrelated": { status: { completed: true } } }), { status: 200 });
+          return new Response(
+            JSON.stringify({
+              "p-old-unrelated": { status: { completed: true } },
+            }),
+            { status: 200 },
+          );
         }
         throw new Error(`unexpected fetch: ${url}`);
-      })
+      }),
     );
 
     await reaper.reapStaleQueuedTasks!();
@@ -232,9 +270,15 @@ describe("QUEUED reaper 判决矩阵", () => {
 
   it("外部证据每个 tick 只探一次（不按行重复网络请求）", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleQueued").mockResolvedValue([queuedRow("t-a"), queuedRow("t-b")]);
-    const fetchSpy = vi.fn(async () =>
-      new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), { status: 200 })
+    repoMock("listStaleQueued").mockResolvedValue([
+      queuedRow("t-a"),
+      queuedRow("t-b"),
+    ]);
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), {
+          status: 200,
+        }),
     );
     vi.stubGlobal("fetch", fetchSpy);
 
@@ -251,7 +295,9 @@ describe("QUEUED reaper 判决矩阵", () => {
     await reaper.reapStaleQueuedTasks!();
 
     expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
-    expect(logsOf("t-queued").some((m) => m.includes("仍在当前进程的执行链中"))).toBe(true);
+    expect(
+      logsOf("t-queued").some((m) => m.includes("仍在当前进程的执行链中")),
+    ).toBe(true);
   });
 
   it("comfy-cli 子进程正在驱动（promptId 未回传）→ 跳过回收", async () => {
@@ -282,7 +328,9 @@ describe("QUEUED reaper 判决矩阵", () => {
     await reaper.reapStaleQueuedTasks!();
 
     expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
-    expect(logsOf("t-boot").some((m) => m.includes("ComfyUI 自动启动"))).toBe(true);
+    expect(logsOf("t-boot").some((m) => m.includes("ComfyUI 自动启动"))).toBe(
+      true,
+    );
   });
 
   it("同一任务被并发 tick 重复认领 → 只收口一次（不出现重复 FAILED 日志）", async () => {
@@ -308,7 +356,9 @@ describe("QUEUED reaper 判决矩阵", () => {
      *  executor 稍后写入的真实原因在「执行日志 / 应用日志」两处互相矛盾）。 */
     expect(repoMock("finalizeFailure")).not.toHaveBeenCalled();
     expect(logsOf("t-settled").some((m) => m.includes("卡在队列"))).toBe(false);
-    expect(logsOf("t-settled").some((m) => m.includes("仍在当前进程的执行链中"))).toBe(true);
+    expect(
+      logsOf("t-settled").some((m) => m.includes("仍在当前进程的执行链中")),
+    ).toBe(true);
   });
 
   it("真孤儿被回收后 s.finalized 落锁 → 同进程再次 tick 不再重复写库", async () => {
@@ -338,18 +388,21 @@ describe("QUEUED reaper 判决矩阵", () => {
 describe("RUNNING reaper 判决矩阵", () => {
   function mockFetchOnce(routes: { history?: Response; queue?: Response }) {
     let call = 0;
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      call += 1;
-      if (String(url).includes("/history/")) {
-        if (!routes.history) throw new Error("network down");
-        return routes.history;
-      }
-      if (String(url).includes("/queue")) {
-        if (!routes.queue) throw new Error("network down");
-        return routes.queue;
-      }
-      throw new Error(`unexpected fetch: ${url} (call ${call})`);
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        call += 1;
+        if (String(url).includes("/history/")) {
+          if (!routes.history) throw new Error("network down");
+          return routes.history;
+        }
+        if (String(url).includes("/queue")) {
+          if (!routes.queue) throw new Error("network down");
+          return routes.queue;
+        }
+        throw new Error(`unexpected fetch: ${url} (call ${call})`);
+      }),
+    );
   }
 
   function json(body: unknown, status = 200) {
@@ -359,18 +412,28 @@ describe("RUNNING reaper 判决矩阵", () => {
   it("/history 有条目且无错 → 判 SUCCEEDED", async () => {
     const reaper = await loadReaper();
     repoMock("listStaleRunning").mockResolvedValue([runningRow("t-ok", "p-1")]);
-    mockFetchOnce({ history: json({ "p-1": { status: { completed: true } } }) });
+    mockFetchOnce({
+      history: json({ "p-1": { status: { completed: true } } }),
+    });
 
     await reaper.reapStaleRunningTasks!();
 
-    expect(repoMock("finalizeFromReaper")).toHaveBeenCalledWith("t-ok", "SUCCEEDED", null);
+    expect(repoMock("finalizeFromReaper")).toHaveBeenCalledWith(
+      "t-ok",
+      "SUCCEEDED",
+      null,
+    );
   });
 
   it("/history 有条目且 errored → 判 FAILED 并带上 execution_error 原文", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-err", "p-2")]);
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-err", "p-2"),
+    ]);
     mockFetchOnce({
-      history: json({ "p-2": { status: { errored: true }, error: { message: "OOM" } } }),
+      history: json({
+        "p-2": { status: { errored: true }, error: { message: "OOM" } },
+      }),
     });
 
     await reaper.reapStaleRunningTasks!();
@@ -382,7 +445,9 @@ describe("RUNNING reaper 判决矩阵", () => {
 
   it("/history 空 + /queue 也没有该 prompt → 判 FAILED orphan（重启后无人监控）", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-lost", "p-3")]);
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-lost", "p-3"),
+    ]);
     mockFetchOnce({
       history: json({}),
       queue: json({ queue_running: [], queue_pending: [] }),
@@ -397,7 +462,9 @@ describe("RUNNING reaper 判决矩阵", () => {
 
   it("/history 空但 /queue 仍在排队 → 判 unknown，不动任务（下次 tick 再对账）", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-wait", "p-4")]);
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-wait", "p-4"),
+    ]);
     mockFetchOnce({
       history: json({}),
       queue: json({ queue_pending: [{ prompt_id: "p-4" }] }),
@@ -411,7 +478,9 @@ describe("RUNNING reaper 判决矩阵", () => {
 
   it("/history 返回 404 → 判 FAILED（ComfyUI 侧无此 prompt 的历史）", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-404", "p-5")]);
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-404", "p-5"),
+    ]);
     mockFetchOnce({ history: json({ error: "not found" }, 404) });
 
     await reaper.reapStaleRunningTasks!();
@@ -422,7 +491,9 @@ describe("RUNNING reaper 判决矩阵", () => {
 
   it("ComfyUI 不可达（网络错误）→ 判 unknown，不动任务（不能把网络抖动当任务失败）", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-net", "p-6")]);
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-net", "p-6"),
+    ]);
     mockFetchOnce({});
 
     await reaper.reapStaleRunningTasks!();
@@ -433,7 +504,9 @@ describe("RUNNING reaper 判决矩阵", () => {
   it("prompt 仍被本进程的内存映射认领 → 直接跳过（进程没重启，任务在正常执行）", async () => {
     const reaper = await loadReaper();
     state().promptToTask.set("p-7", "t-alive");
-    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-alive", "p-7")]);
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-alive", "p-7"),
+    ]);
     mockFetchOnce({ history: json({}) });
 
     await reaper.reapStaleRunningTasks!();
@@ -443,8 +516,12 @@ describe("RUNNING reaper 判决矩阵", () => {
 
   it("终态已落库（s.finalized）→ RUNNING 对账跳过，不覆盖已有失败原因", async () => {
     const reaper = await loadReaper();
-    repoMock("listStaleRunning").mockResolvedValue([runningRow("t-done", "p-9")]);
-    mockFetchOnce({ history: json({ "p-9": { status: { completed: true } } }) });
+    repoMock("listStaleRunning").mockResolvedValue([
+      runningRow("t-done", "p-9"),
+    ]);
+    mockFetchOnce({
+      history: json({ "p-9": { status: { completed: true } } }),
+    });
     state().finalized.add("t-done");
 
     await reaper.reapStaleRunningTasks!();

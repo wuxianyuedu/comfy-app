@@ -32,7 +32,7 @@ export function WorkflowModelFilterChip({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="nodrag nopan flex h-6 shrink-0 items-center gap-1.5 rounded-lg border border-accent/35 bg-node-accent px-2.5 text-[12px]"
+        className="nodrag nopan border-accent/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
         title={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       >
         <span
@@ -41,13 +41,13 @@ export function WorkflowModelFilterChip({
           }`}
         />
         <span
-          className="max-w-[80px] truncate font-semibold text-accent-soft"
+          className="text-accent-soft max-w-[80px] truncate font-semibold"
           style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
         >
           {label}
         </span>
         <span
-          className={`shrink-0 text-ink-icon transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-ink-icon shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
         >
           ▾
@@ -86,7 +86,11 @@ export function WorkflowModelFilterChip({
             >
               <span className="bg-accent h-1.5 w-1.5 rounded-full" />
               <span className="flex-1">全部模型</span>
-              {value === "all" && <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>}
+              {value === "all" && (
+                <span className="text-fuchsia-700 dark:text-fuchsia-300">
+                  ✓
+                </span>
+              )}
             </button>
             {tags.length === 0 && (
               <div className="text-ink-muted px-3 py-2 text-[10px]">
@@ -116,7 +120,11 @@ export function WorkflowModelFilterChip({
                   <span className="text-ink-muted text-[9px] tabular-nums">
                     {tag.count}
                   </span>
-                  {sel && <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>}
+                  {sel && (
+                    <span className="text-fuchsia-700 dark:text-fuchsia-300">
+                      ✓
+                    </span>
+                  )}
                 </button>
               );
             })}

@@ -24,13 +24,7 @@
  */
 export { connect } from "./executor-ws";
 export { processQueue } from "./executor-scheduler";
-export {
-  cliProcs,
-  applyRawOverrides,
-} from "./executor-cli";
-export {
-  collectOutputs,
-  extractRuntimeParams,
-} from "./executor-outputs";
+export { cliProcs, applyRawOverrides } from "./executor-cli";
+export { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 export type { CollectedOutputs, RuntimeParams } from "./executor-outputs";
 export { friendlyError } from "./executor-errors";

@@ -41,8 +41,8 @@ export function WorkflowLibraryDetailView({
 
   if (!workflow) {
     return (
-      <div className="flex h-full flex-col items-center justify-center text-ink-fainter">
-        <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-subtle">
+      <div className="text-ink-fainter flex h-full flex-col items-center justify-center">
+        <div className="border-border bg-subtle mb-3 flex h-16 w-16 items-center justify-center rounded-2xl border">
           <ExternalLink className="h-7 w-7 opacity-40" />
         </div>
         <p className="text-sm">在左侧选择一个工作流查看详情</p>
@@ -51,7 +51,7 @@ export function WorkflowLibraryDetailView({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-panel-deep">
+    <div className="bg-panel-deep flex h-full flex-col overflow-hidden">
       <DetailHeader
         workflow={workflow}
         usable={usable}
@@ -69,7 +69,7 @@ export function WorkflowLibraryDetailView({
         meta={metaEditor}
       />
 
-      <div className="flex border-b border-border-subtle px-5">
+      <div className="border-border-subtle flex border-b px-5">
         {DETAIL_TABS.map((tab) => (
           <TabButton
             key={tab.key}

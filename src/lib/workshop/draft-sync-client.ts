@@ -29,7 +29,9 @@ export async function fetchServerDraft(
   projectId: string,
 ): Promise<WorkshopDraftDto | null> {
   try {
-    const res = await fetch(`/api/workshop/draft?project=${encodeURIComponent(projectId)}`);
+    const res = await fetch(
+      `/api/workshop/draft?project=${encodeURIComponent(projectId)}`,
+    );
     if (!res.ok) return null;
     const data: unknown = await res.json();
     if (
@@ -64,9 +66,12 @@ export async function pushServerDraft(
 /** 删除某项目服务端镜像（前端删项目时一并清理）。静默失败不影响本地。 */
 export async function deleteServerDraft(projectId: string): Promise<void> {
   try {
-    await fetch(`/api/workshop/draft?project=${encodeURIComponent(projectId)}`, {
-      method: "DELETE",
-    });
+    await fetch(
+      `/api/workshop/draft?project=${encodeURIComponent(projectId)}`,
+      {
+        method: "DELETE",
+      },
+    );
   } catch {
     /* 忽略 */
   }

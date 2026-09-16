@@ -51,13 +51,14 @@ const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
 export function createComboResolver(): {
   comboOptionsForClassField: (
     classType: string | undefined,
-    field: string
+    field: string,
   ) => Promise<string[] | undefined>;
   comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
 } {
   let _comboObjectInfo: Awaited<ReturnType<typeof fetchObjectInfo>> | undefined;
   const ensureObjectInfo = async () => {
-    if (_comboObjectInfo === undefined) _comboObjectInfo = await fetchObjectInfo();
+    if (_comboObjectInfo === undefined)
+      _comboObjectInfo = await fetchObjectInfo();
     return _comboObjectInfo;
   };
 
@@ -75,7 +76,7 @@ export function createComboResolver(): {
    */
   const comboOptionsForClassField = async (
     classType: string | undefined,
-    field: string
+    field: string,
   ): Promise<string[] | undefined> => {
     const [specOpts, localOpts] = await Promise.all([
       (async () => {
@@ -84,9 +85,7 @@ export function createComboResolver(): {
         if (!oi) return undefined;
         const def = oi[classType];
         if (!def?.input) return undefined;
-        const spec =
-          def.input.required?.[field] ??
-          def.input.optional?.[field];
+        const spec = def.input.required?.[field] ?? def.input.optional?.[field];
         return comboOptionsFromSpec(spec);
       })(),
       localModelFileNames(modelFoldersForField(field)),
@@ -96,7 +95,9 @@ export function createComboResolver(): {
     if (specOpts) for (const o of specOpts) merged.add(o);
     for (const o of localOpts) merged.add(o);
     const out = Array.from(merged);
-    return out.length ? out.sort((left, right) => left.localeCompare(right)) : undefined;
+    return out.length
+      ? out.sort((left, right) => left.localeCompare(right))
+      : undefined;
   };
 
   /**
@@ -114,7 +115,7 @@ export function createComboResolver(): {
    * scan is cheap on repeated calls.
    */
   const comboOptionsForFieldName = async (
-    field: string
+    field: string,
   ): Promise<string[] | undefined> => {
     const oi = await ensureObjectInfo();
     if (!oi) return undefined;
@@ -123,9 +124,7 @@ export function createComboResolver(): {
     for (const def of Object.values(oi)) {
       const inp = def.input;
       if (!inp) continue;
-      const spec =
-        inp.required?.[field] ??
-        inp.optional?.[field];
+      const spec = inp.required?.[field] ?? inp.optional?.[field];
       const opts = comboOptionsFromSpec(spec);
       if (opts) {
         found = true;
@@ -133,9 +132,12 @@ export function createComboResolver(): {
       }
     }
     if (!found) return undefined;
-    for (const o of await localModelFileNames(modelFoldersForField(field))) merged.add(o);
+    for (const o of await localModelFileNames(modelFoldersForField(field)))
+      merged.add(o);
     const out = Array.from(merged);
-    return out.length ? out.sort((left, right) => left.localeCompare(right)) : undefined;
+    return out.length
+      ? out.sort((left, right) => left.localeCompare(right))
+      : undefined;
   };
 
   return { comboOptionsForClassField, comboOptionsForFieldName };

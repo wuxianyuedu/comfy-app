@@ -13,7 +13,7 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
     >
       <button
         aria-label="折叠子图"
-        class="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors e/15"
+        class="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
         style="pointer-events: auto;"
         title="折叠"
         type="button"
@@ -42,14 +42,14 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
         S
       </span>
       <span
-        class="text-ink-bright min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-wide"
+        class="text-ink-bright min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide select-none"
         title="我的子图"
       >
         我的子图
       </span>
       <button
         aria-label="查看节点 #10 的原始 JSON 数据"
-        class="nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-violet-700 transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-900 dark:text-violet-200 dark:hover:text-violet-50 focus:outline-none focus:ring-1 focus:ring-violet-400/40"
+        class="nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold tracking-wider text-violet-700 uppercase transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-900 focus:ring-1 focus:ring-violet-400/40 focus:outline-none dark:text-violet-200 dark:hover:text-violet-50"
         data-node-id-chip="10"
         data-variant="subgraph"
         title="查看节点 10 在工作流 JSON 中的原始数据"

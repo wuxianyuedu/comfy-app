@@ -16,20 +16,21 @@ export interface ApiChannelKindMeta {
   modelPlaceholder: string;
 }
 
-export const API_CHANNEL_KIND_META: Record<ApiChannelKind, ApiChannelKindMeta> = {
-  image: {
-    title: "生图 API",
-    hint: "OpenAI 兼容 images 接口（POST {baseUrl}{path}），如 https://api.openai.com/v1 + /images/generations。",
-    pathPlaceholder: "/images/generations",
-    modelPlaceholder: "gpt-image-1",
-  },
-  video: {
-    title: "视频 API",
-    hint: "视频生成端点：支持同步返回视频 URL，或提交后返回任务 ID（系统自动按 GET {baseUrl}/{taskId} 轮询）。",
-    pathPlaceholder: "/videos/generations",
-    modelPlaceholder: "Provider 模型 ID",
-  },
-};
+export const API_CHANNEL_KIND_META: Record<ApiChannelKind, ApiChannelKindMeta> =
+  {
+    image: {
+      title: "生图 API",
+      hint: "OpenAI 兼容 images 接口（POST {baseUrl}{path}），如 https://api.openai.com/v1 + /images/generations。",
+      pathPlaceholder: "/images/generations",
+      modelPlaceholder: "gpt-image-1",
+    },
+    video: {
+      title: "视频 API",
+      hint: "视频生成端点：支持同步返回视频 URL，或提交后返回任务 ID（系统自动按 GET {baseUrl}/{taskId} 轮询）。",
+      pathPlaceholder: "/videos/generations",
+      modelPlaceholder: "Provider 模型 ID",
+    },
+  };
 
 /** 新建草稿时的默认请求路径（用户从空表单起步也点得动）。 */
 export const API_CHANNEL_DEFAULT_PATH: Record<ApiChannelKind, string> = {

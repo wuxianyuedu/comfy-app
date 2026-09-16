@@ -17,7 +17,10 @@ import {
   type WorkflowIOMap,
 } from "@/components/studio/shared/workflow-io";
 import { sizeSpecToWxH, toSizeSpec } from "@/lib/size-presets";
-import { type CanvasNodeData, defaultData } from "@/lib/project-canvas/canvas-types";
+import {
+  type CanvasNodeData,
+  defaultData,
+} from "@/lib/project-canvas/canvas-types";
 import { makeNodeId } from "@/lib/project-canvas/canvas-helpers";
 import {
   importOutputAsInput,
@@ -28,7 +31,10 @@ import {
 import { getActiveId } from "@/lib/project-canvas/canvas-store";
 import { setActiveTaskId } from "@/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
-import { collectReferenceImages, seedModeOverrides } from "@/components/studio/project-canvas/CanvasNode/helpers";
+import {
+  collectReferenceImages,
+  seedModeOverrides,
+} from "@/components/studio/project-canvas/CanvasNode/helpers";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -65,7 +71,17 @@ export interface UseGenerateArgs {
   getNode: (id: string) => Node | undefined;
 }
 
-export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, setEdges, getNode }: UseGenerateArgs) {
+export function useGenerate({
+  id,
+  d,
+  patch,
+  wfIO,
+  wfParamMap,
+  wfMode,
+  setNodes,
+  setEdges,
+  getNode,
+}: UseGenerateArgs) {
   /* mount-time reconcile — if the node was
    *  loaded with stale `status="running"` (e.g. dev server restarted
    *  while a generation was in flight, or the user closed/reopened the
@@ -85,7 +101,9 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
     void (async () => {
       try {
         if (cancelled) return;
-        const t = await vanillaApi.task.detail.query({ id: taskIdForReconcile });
+        const t = await vanillaApi.task.detail.query({
+          id: taskIdForReconcile,
+        });
         if (cancelled || !t?.status) return;
         if (t.status === "RUNNING") {
           // Legitimately still running on another runner — leave the node as-is.
@@ -101,7 +119,8 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
         } else if (t.status === "FAILED" || t.status === "CANCELLED") {
           patch({
             status: "error",
-            error: t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
+            error:
+              t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
             progress: 0,
           });
         }
@@ -110,7 +129,9 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
          *  will catch up if the user re-triggers / the runner resumes. */
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     /* patch is stable (setNodes setter + id) — intentionally omitted to avoid
      * re-firing; we only want one reconcile per (status="running", taskId). */
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,7 +140,11 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
   /* ── image / video generation ── */
   const runGenerate = async () => {
     // ── user-uploaded workflow node: run the chosen WorkflowTemplate ──
-    if (d.kind === "workflow" || ((d.kind === "image" || d.kind === "video" || d.kind === "picture") && d.workflowId)) {
+    if (
+      d.kind === "workflow" ||
+      ((d.kind === "image" || d.kind === "video" || d.kind === "picture") &&
+        d.workflowId)
+    ) {
       if (!d.workflowId) {
         patch({ error: "请先选择工作流", status: "error" });
         return;
@@ -157,7 +182,10 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
         const baseInputs =
           mapped && mapped.inputs.length > 0
             ? mapped.inputs
-            : toWorkflowInputsPayload(wfIO ?? undefined, d.workflowInputs ?? {});
+            : toWorkflowInputsPayload(
+                wfIO ?? undefined,
+                d.workflowInputs ?? {},
+              );
         const cagInputs = seedModeOverrides(wfIO ?? null, d.seedModes);
         payload = {
           workflow: d.workflowId,
@@ -177,7 +205,9 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
         const taskId = await startGenerate(payload);
         patch({ taskId });
         setActiveTaskId(taskId, id);
-        const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
+        const result = await pollTask(taskId, undefined, (progress) =>
+          patch({ progress }),
+        );
         if (isTaskSuccess(result)) {
           // picture 节点 = 图片资产本身，生成结果直接
           //  写回本节点 mediaPath（ContentAssetBody 据此预览），不另起下游节点。
@@ -197,8 +227,12 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
             });
             window.dispatchEvent(
               new CustomEvent("canvas:produce", {
-                detail: { id, resultPath: result.localPath, resultMediaType: result.mediaType },
-              })
+                detail: {
+                  id,
+                  resultPath: result.localPath,
+                  resultMediaType: result.mediaType,
+                },
+              }),
             );
             return;
           }
@@ -211,9 +245,11 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
             const cur = getNode(id);
             const base = cur?.position ?? { x: 0, y: 0 };
             const isVideoOut =
-              outputTargetKind(wfIO ?? undefined, d.workflowTaskType) === "video";
+              outputTargetKind(wfIO ?? undefined, d.workflowTaskType) ===
+              "video";
             // 主输出 ioKey（自动连线用，必须与该节点渲染的 output 句柄 id 一致）
-            const outIoKey = splitWorkflowIO(wfIO ?? undefined).outputs[0]?.ioKey ?? "output";
+            const outIoKey =
+              splitWorkflowIO(wfIO ?? undefined).outputs[0]?.ioKey ?? "output";
             let imported: string | null = null;
             if (!isVideoOut && result.mediaType !== "video") {
               try {
@@ -222,23 +258,27 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
                 imported = null;
               }
             }
-            const sinkData =
-              isVideoOut
-                ? {
-                    ...defaultData("video"),
-                    resultPath: result.localPath,
-                    resultMediaType: result.mediaType,
-                  }
-                : {
-                    ...defaultData("image"),
-                    resultPath: result.localPath,
-                    resultMediaType: result.mediaType,
-                    inputImage: imported ?? null,
-                    mode: imported ? "img2img" : "txt2img",
-                  };
+            const sinkData = isVideoOut
+              ? {
+                  ...defaultData("video"),
+                  resultPath: result.localPath,
+                  resultMediaType: result.mediaType,
+                }
+              : {
+                  ...defaultData("image"),
+                  resultPath: result.localPath,
+                  resultMediaType: result.mediaType,
+                  inputImage: imported ?? null,
+                  mode: imported ? "img2img" : "txt2img",
+                };
             setNodes((nds) => [
               ...nds,
-              { id: nid, type: "canvasNode", position: { x: base.x + 340, y: base.y }, data: sinkData },
+              {
+                id: nid,
+                type: "canvasNode",
+                position: { x: base.x + 340, y: base.y },
+                data: sinkData,
+              },
             ]);
             setEdges((eds) => [
               ...eds,
@@ -260,8 +300,12 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
           });
           window.dispatchEvent(
             new CustomEvent("canvas:produce", {
-              detail: { id, resultPath: result.localPath, resultMediaType: result.mediaType },
-            })
+              detail: {
+                id,
+                resultPath: result.localPath,
+                resultMediaType: result.mediaType,
+              },
+            }),
           );
         } else {
           patch({
@@ -306,7 +350,10 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
         negative: d.negative || undefined,
         /* 节点存的是尺寸表达；内置工作流只认 "WxH"，在这里折算（旧数据里
          * 存的字符串由 `toSizeSpec` 归一）。 */
-        size: sizeSpecToWxH(toSizeSpec(d.size), d.kind === "video" ? "video" : "image"),
+        size: sizeSpecToWxH(
+          toSizeSpec(d.size),
+          d.kind === "video" ? "video" : "image",
+        ),
         steps: d.steps,
         cfg: d.cfg,
       };
@@ -317,10 +364,15 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
       if (refs.length) payload.referenceImages = refs;
       if (d.kind === "image") {
         payload.workflow = d.mode === "img2img" ? "img2img" : "txt2img";
-        if (d.mode === "img2img" && d.inputImage) payload.inputImage = d.inputImage;
+        if (d.mode === "img2img" && d.inputImage)
+          payload.inputImage = d.inputImage;
       } else {
         payload.workflow =
-          d.mode === "t2v" ? "txt2video" : d.mode === "flf" ? "flfvideo" : "img2video";
+          d.mode === "t2v"
+            ? "txt2video"
+            : d.mode === "flf"
+              ? "flfvideo"
+              : "img2video";
         payload.frames = d.frames;
         payload.fps = d.fps;
         if (d.mode === "i2v" && d.inputImage) payload.inputImage = d.inputImage;
@@ -346,7 +398,7 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
               resultPath: result.localPath,
               resultMediaType: result.mediaType,
             },
-          })
+          }),
         );
       } else {
         patch({
@@ -385,7 +437,9 @@ export function useGenerate({ id, d, patch, wfIO, wfParamMap, wfMode, setNodes, 
       const taskId = await startGenerate(req as Record<string, unknown>);
       patch({ taskId });
       setActiveTaskId(taskId, id);
-      const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
+      const result = await pollTask(taskId, undefined, (progress) =>
+        patch({ progress }),
+      );
       if (isTaskSuccess(result)) {
         patch({
           status: "done",

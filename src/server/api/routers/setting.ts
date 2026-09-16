@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getSettings, getSettingsSync, saveSettings } from "@/lib/app-settings/app-settings.server";
+import {
+  getSettings,
+  getSettingsSync,
+  saveSettings,
+} from "@/lib/app-settings/app-settings.server";
 import {
   clearComfyAutoStartFailure,
   clearComfyManualStop,
@@ -37,14 +41,16 @@ export const settingRouter = createTRPCRouter({
           .string()
           .refine((url) => url === "" || /^https?:\/\//.test(url))
           .optional(),
-        defaultVideoWorkflow: z.enum(["auto", "txt2video", "img2video"]).optional(),
+        defaultVideoWorkflow: z
+          .enum(["auto", "txt2video", "img2video"])
+          .optional(),
         comfyLorasDir: z.string().optional(),
         comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),
         comfyuiAutoStart: z.boolean().optional(),
         exitKillComfyui: z.boolean().optional(),
         exitKillOllama: z.boolean().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       await saveSettings(input);
@@ -54,7 +60,10 @@ export const settingRouter = createTRPCRouter({
       // 改「安装路径 / 启动参数」是把上次「启动失败」的成因改掉了：清掉
       // 「失败后不再重试」的闩锁，让自动启动重新尝试（否则用户修好了路径，
       // 却因为老闩锁一直不重试，还得再手动点一次启动）（ISSUE #335）。
-      if (input.comfyuiPath !== undefined || input.comfyuiExtraArgs !== undefined) {
+      if (
+        input.comfyuiPath !== undefined ||
+        input.comfyuiExtraArgs !== undefined
+      ) {
         clearComfyAutoStartFailure();
       }
       const settings = await getSettings();
@@ -106,11 +115,18 @@ export const settingRouter = createTRPCRouter({
    *  不传 timeoutMs = 不设硬超时——冷加载慢没有准数，误报「启动超时」时
    *  ComfyUI 随后就绪了；用户看得到实时启动日志，可随时手动关闭中止。 */
   comfyStart: authedProcedure
-    .input(z.object({ timeoutMs: z.number().int().min(5000).max(600000).optional() }))
+    .input(
+      z.object({
+        timeoutMs: z.number().int().min(5000).max(600000).optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
       // 手动启动＝用户明确要求拉起：manual:true 会先清掉「手动关闭后不自动
       // 启动」闩锁，确保这次手动启动不被上次手动关闭拦住（ISSUE #290）。
-      const r = await ensureComfyUiReady({ timeoutMs: input.timeoutMs, manual: true });
+      const r = await ensureComfyUiReady({
+        timeoutMs: input.timeoutMs,
+        manual: true,
+      });
       return r;
     }),
 

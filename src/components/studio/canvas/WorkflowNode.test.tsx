@@ -33,7 +33,10 @@ function makeStores(): WFStores {
   };
 }
 
-function renderFlowNode(data: WorkflowNodeData, stores: WFStores = makeStores()): WFStores {
+function renderFlowNode(
+  data: WorkflowNodeData,
+  stores: WFStores = makeStores(),
+): WFStores {
   renderWithFlow(
     <WFStoresProvider stores={stores}>
       <FlowNode data={data} />
@@ -87,18 +90,26 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
   it("点击折叠按钮隐藏主体行，aria-label 翻转为「展开节点」", async () => {
     renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
     await userEvent.click(screen.getByRole("button", { name: "折叠节点" }));
-    expect(screen.getByRole("button", { name: "展开节点" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "展开节点" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("主采样器")).toBeInTheDocument(); // 标题栏保留
     expect(document.querySelector('[data-input-key="seed"]')).toBeNull(); // widget 区隐藏
     expect(document.querySelector('[data-pin-input="model"]')).toBeNull(); // TOP PINS 隐藏
   });
 
   it("flags.collapsed=true 时初始折叠，再点击恢复展开（用户切换接管状态）", async () => {
-    renderFlowNode(nodeData({ rawInputs: RAW_INPUTS, flags: { collapsed: true } }));
-    expect(screen.getByRole("button", { name: "展开节点" })).toBeInTheDocument();
+    renderFlowNode(
+      nodeData({ rawInputs: RAW_INPUTS, flags: { collapsed: true } }),
+    );
+    expect(
+      screen.getByRole("button", { name: "展开节点" }),
+    ).toBeInTheDocument();
     expect(document.querySelector('[data-input-key="seed"]')).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "展开节点" }));
-    expect(screen.getByRole("button", { name: "折叠节点" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "折叠节点" }),
+    ).toBeInTheDocument();
     expect(document.querySelector('[data-input-key="seed"]')).not.toBeNull();
     expect(screen.getByTitle("42")).toBeInTheDocument();
   });
@@ -107,7 +118,9 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
    * 边（error#008），画布上表现为「这个节点的输出没有连线」（ISSUE #394）。 */
   it("IO 编辑模式下输出端点仍在，仅视觉降级", () => {
     const stores = renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
-    expect(document.querySelector('[data-handleid="out:LATENT"]')).not.toBeNull();
+    expect(
+      document.querySelector('[data-handleid="out:LATENT"]'),
+    ).not.toBeNull();
     stores.io.setState({ ioEditMode: true });
     renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }), stores);
     const handles = document.querySelectorAll('[data-handleid="out:LATENT"]');

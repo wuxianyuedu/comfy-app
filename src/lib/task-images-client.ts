@@ -19,7 +19,7 @@ export interface TaskGalleryImage {
 
 /** 拉取任务的产出图片列表。失败由调用方决定（相册场景是静默降级）。 */
 export async function fetchTaskImages(
-  taskId: string
+  taskId: string,
 ): Promise<TaskGalleryImage[]> {
   const task = await vanillaApi.task.detail.query({ id: taskId });
   const rawImages = (task.images ?? []) as unknown as {

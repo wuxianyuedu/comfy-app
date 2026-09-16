@@ -53,7 +53,9 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
         dirty,
       );
       if (dirty && !wasDirty && onDirtyRef.current) {
-        onDirtyRef.current(payload.groups.filter((g) => g.dirty).map((g) => ({ ...g })));
+        onDirtyRef.current(
+          payload.groups.filter((g) => g.dirty).map((g) => ({ ...g })),
+        );
       }
       return true;
     } finally {

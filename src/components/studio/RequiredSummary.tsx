@@ -30,7 +30,7 @@ export function RequiredSummary({
       <span className="rounded border border-red-400/40 bg-red-500/15 px-1.5 py-px font-mono text-[10px] text-red-700 dark:text-red-300">
         必填 {counts.required}
       </span>
-      <span className="rounded border border-border-strong bg-subtle px-1.5 py-px font-mono text-[10px] text-ink-soft">
+      <span className="border-border-strong bg-subtle text-ink-soft rounded border px-1.5 py-px font-mono text-[10px]">
         可选 {counts.optional}
       </span>
     </span>

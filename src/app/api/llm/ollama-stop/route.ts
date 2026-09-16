@@ -30,7 +30,11 @@ function localTimestamp(): string {
 function appendOllamaLog(line: string): void {
   try {
     fs.mkdirSync(path.dirname(OLLAMA_RUNTIME_LOG), { recursive: true });
-    fs.appendFileSync(OLLAMA_RUNTIME_LOG, `${localTimestamp()} ${line}\n`, "utf-8");
+    fs.appendFileSync(
+      OLLAMA_RUNTIME_LOG,
+      `${localTimestamp()} ${line}\n`,
+      "utf-8",
+    );
   } catch {
     /* 日志失败不影响主流程 */
   }
@@ -87,8 +91,5 @@ export async function POST(_req: NextRequest) {
   }
   const msg = "关闭命令已发送，但 Ollama 仍在响应，请手动确认进程已退出";
   appendOllamaLog(`[err] ${msg}`);
-  return NextResponse.json(
-    { ok: false, detail: msg },
-    { status: 500 },
-  );
+  return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
 }

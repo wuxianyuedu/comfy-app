@@ -53,7 +53,9 @@ function renderSize(width: number, height: number) {
     />,
   );
   fireEvent.click(container.querySelector('[aria-label="选择比例与像素"]')!);
-  return Array.from(screen.queryAllByRole("option")).map((el) => el.textContent ?? "");
+  return Array.from(screen.queryAllByRole("option")).map(
+    (el) => el.textContent ?? "",
+  );
 }
 
 describe("尺寸控件的两类表达", () => {
@@ -73,7 +75,8 @@ describe("尺寸控件的两类表达", () => {
   it("百万像素档出现「倍数」，候选为 8/16/32/64", () => {
     /* 1856×1088 = 16:9 下 2M 档经 64 对齐后的宽高 → 回读落在百万像素 2M。 */
     const labels = renderSize(1856, 1088);
-    for (const multiple of ["8", "16", "32", "64"]) expect(labels).toContain(multiple);
+    for (const multiple of ["8", "16", "32", "64"])
+      expect(labels).toContain(multiple);
     expect(screen.getByText("倍数")).toBeTruthy();
   });
 });

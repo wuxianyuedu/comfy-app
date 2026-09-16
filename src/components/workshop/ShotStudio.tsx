@@ -2,7 +2,10 @@
 import React from "react";
 import { Icon } from "@/components/ui/icon";
 import type { Character, Scene, Shot, StyleRef } from "@/lib/workshop/types";
-import { buildShotNegative, buildShotPrompt } from "@/lib/workshop/prompt-builder";
+import {
+  buildShotNegative,
+  buildShotPrompt,
+} from "@/lib/workshop/prompt-builder";
 import {
   apiGenerateImage,
   buildLibraryWorkflowInput,
@@ -98,19 +101,24 @@ export function ShotStudio({
       prev.map((shot) => {
         if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
         const scene = scenes.find((sc) => sc.id === shot.sceneId);
-        const chars = characters.filter((c) => shot.characterIds.includes(c.id));
+        const chars = characters.filter((c) =>
+          shot.characterIds.includes(c.id),
+        );
         const style = styles.find((st) => st.slug === shot.skillSlug);
         return {
           ...shot,
           prompt: buildShotPrompt(shot, scene, chars, style),
-          negativePrompt: shot.negativePrompt || buildShotNegative(chars, style),
+          negativePrompt:
+            shot.negativePrompt || buildShotNegative(chars, style),
         };
       }),
     );
   }, [shots, scenes, characters, styles, onShotsChange]);
 
   function patchShot(id: string, p: Partial<Shot>) {
-    onShotsChange((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
+    onShotsChange((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...p } : s)),
+    );
   }
 
   function setShotError(id: string, message: string | undefined) {
@@ -138,12 +146,15 @@ export function ShotStudio({
         },
       });
       // Safety valve: never wedge the batch loop on a silent stream.
-      const timeout = setTimeout(() => {
-        close();
-        patchShot(shotId, { status: "failed" });
-        setShotError(shotId, "任务超时(30 分钟无响应)");
-        resolve();
-      }, 30 * 60 * 1000);
+      const timeout = setTimeout(
+        () => {
+          close();
+          patchShot(shotId, { status: "failed" });
+          setShotError(shotId, "任务超时(30 分钟无响应)");
+          resolve();
+        },
+        30 * 60 * 1000,
+      );
     });
   }
 
@@ -184,8 +195,14 @@ export function ShotStudio({
               checkpoint: checkpoint || undefined,
               steps: paramInt(shot.params.steps, DEFAULT_GEN_PARAMS.steps),
               cfg: paramNumber(shot.params.cfg, DEFAULT_GEN_PARAMS.cfg),
-              sampler: paramString(shot.params.sampler, DEFAULT_GEN_PARAMS.sampler),
-              scheduler: paramString(shot.params.scheduler, DEFAULT_GEN_PARAMS.scheduler),
+              sampler: paramString(
+                shot.params.sampler,
+                DEFAULT_GEN_PARAMS.sampler,
+              ),
+              scheduler: paramString(
+                shot.params.scheduler,
+                DEFAULT_GEN_PARAMS.scheduler,
+              ),
               size: shotSizeToParam(sizeSpec),
               count: 1,
             };
@@ -196,9 +213,10 @@ export function ShotStudio({
         const url = await apiGenerateImage({
           prompt: shot.prompt,
           negative: shot.negativePrompt || undefined,
-          size: shot.params.size !== undefined && shot.params.size !== ""
-            ? paramString(shot.params.size, shotSizeToParam(shotSize))
-            : shotSizeToParam(shotSize),
+          size:
+            shot.params.size !== undefined && shot.params.size !== ""
+              ? paramString(shot.params.size, shotSizeToParam(shotSize))
+              : shotSizeToParam(shotSize),
           mode: "T2I",
           /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
            * （透传 "1k" 这类档位名对远端没有意义）。 */
@@ -255,7 +273,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink flex items-center gap-1 rounded-lg bg-subtle px-3 py-1.5 text-xs hover:bg-surface-2"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs"
         >
           <Icon name="settings" size={12} />
           API 通道设置
@@ -264,7 +282,11 @@ export function ShotStudio({
             会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">尺寸</span>
-          <ShotSizePicker value={shotSize} onChange={setShotSize} disabled={batchRunning} />
+          <ShotSizePicker
+            value={shotSize}
+            onChange={setShotSize}
+            disabled={batchRunning}
+          />
         </div>
         {channel === "local" && checkpoints.length > 0 && (
           <label className="ml-auto flex items-center gap-2 text-xs">
@@ -286,7 +308,12 @@ export function ShotStudio({
         <button
           type="button"
           onClick={() => void generateBatch()}
-          disabled={batchRunning || pending.length === 0 || (channel === "local" && !checkpoint) || (channel === "api" && !apiReady)}
+          disabled={
+            batchRunning ||
+            pending.length === 0 ||
+            (channel === "local" && !checkpoint) ||
+            (channel === "api" && !apiReady)
+          }
           className="bg-primary ml-auto rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
         >
           {batchRunning ? "批量生成中…" : `批量生图 (${pending.length})`}
@@ -294,7 +321,7 @@ export function ShotStudio({
         <button
           type="button"
           onClick={onNextStage}
-          className="text-ink rounded-lg bg-subtle px-3 py-1.5 text-xs font-medium hover:bg-surface-2"
+          className="text-ink bg-subtle hover:bg-surface-2 rounded-lg px-3 py-1.5 text-xs font-medium"
         >
           下一阶段 →
         </button>
@@ -302,20 +329,23 @@ export function ShotStudio({
 
       {/* Channel-specific gating hints (gentle, stage stays usable) */}
       {channel === "local" && !checkpoint && (
-        <div className="text-muted-foreground rounded-lg bg-subtle px-3 py-2 text-xs">
-          本地通道需要选择 Checkpoint(ComfyUI 需在本机运行)。生成任务走与画布一致的本地工作流链路。
+        <div className="text-muted-foreground bg-subtle rounded-lg px-3 py-2 text-xs">
+          本地通道需要选择 Checkpoint(ComfyUI
+          需在本机运行)。生成任务走与画布一致的本地工作流链路。
         </div>
       )}
       {channel === "api" && !apiReady && (
-        <div className="flex items-center gap-2 rounded-lg bg-amber/10 px-3 py-2 text-xs text-amber">
+        <div className="bg-amber/10 text-amber flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
           <Icon name="info" size={12} />
-          API 生图通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key 后即可使用。
+          API 生图通道未配置 — 点击上方「API 通道设置」填写 Base URL 与 API Key
+          后即可使用。
         </div>
       )}
 
       {shots.length === 0 ? (
         <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">
-          暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。
+          暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 —
+          镜头提示词会自动带入本阶段。
         </div>
       ) : (
         <div className="space-y-3">
@@ -323,22 +353,34 @@ export function ShotStudio({
             const p = progress[shot.id] ?? 0;
             const err = errors[shot.id];
             return (
-              <div key={shot.id} className="border-border bg-surface rounded-xl border p-4">
+              <div
+                key={shot.id}
+                className="border-border bg-surface rounded-xl border p-4"
+              >
                 <div className="mb-2 flex items-center gap-2">
                   <span className="bg-primary-soft text-primary grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold">
                     {shot.index}
                   </span>
-                  <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
+                  <span className="text-muted-foreground truncate text-xs">
+                    {shot.sceneHeading}
+                  </span>
                   <StatusBadge status={shot.status} />
                   {busyCount > 0 && shot.status === "running" && (
-                    <span className="text-muted-foreground text-[10px]">{p > 0 ? `${Math.round(p)}%` : "排队中…"}</span>
+                    <span className="text-muted-foreground text-[10px]">
+                      {p > 0 ? `${Math.round(p)}%` : "排队中…"}
+                    </span>
                   )}
-                  <span className="text-faint ml-auto text-[10px]">{channel === "local" ? "本地" : "API"}</span>
+                  <span className="text-faint ml-auto text-[10px]">
+                    {channel === "local" ? "本地" : "API"}
+                  </span>
                 </div>
 
                 {shot.status === "running" && (
                   <div className="bg-elevated mb-2 h-1 w-full overflow-hidden rounded-full">
-                    <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${Math.max(4, p)}%` }} />
+                    <div
+                      className="bg-primary h-full rounded-full transition-all"
+                      style={{ width: `${Math.max(4, p)}%` }}
+                    />
                   </div>
                 )}
 
@@ -352,19 +394,34 @@ export function ShotStudio({
                   className="border-border bg-bg text-ink focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
                   placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
                 />
-                {err && <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">{err}</p>}
+                {err && (
+                  <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+                    {err}
+                  </p>
+                )}
 
                 <div className="mt-2 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => void generateShot(shot)}
-                    disabled={shot.status === "running" || !shot.prompt || (channel === "local" && !checkpoint) || (channel === "api" && !apiReady)}
+                    disabled={
+                      shot.status === "running" ||
+                      !shot.prompt ||
+                      (channel === "local" && !checkpoint) ||
+                      (channel === "api" && !apiReady)
+                    }
                     className="bg-primary/90 rounded-lg px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
                   >
-                    {shot.status === "running" ? "生成中…" : shot.imageUrl ? "重新生成" : "生成此镜头"}
+                    {shot.status === "running"
+                      ? "生成中…"
+                      : shot.imageUrl
+                        ? "重新生成"
+                        : "生成此镜头"}
                   </button>
                   {shot.taskId && (
-                    <span className="text-faint truncate text-[10px]">任务 {shot.taskId.slice(0, 12)}…</span>
+                    <span className="text-faint truncate text-[10px]">
+                      任务 {shot.taskId.slice(0, 12)}…
+                    </span>
                   )}
                 </div>
 
@@ -383,7 +440,8 @@ export function ShotStudio({
 
       {shots.length > 0 && (
         <p className="text-muted-foreground text-[11px]">
-          已生成 {doneCount}/{shots.length} 镜 — 图片会自动作为下一阶段「视频生成」的首帧;缺失镜头仍可回上一阶段补齐。
+          已生成 {doneCount}/{shots.length} 镜 —
+          图片会自动作为下一阶段「视频生成」的首帧;缺失镜头仍可回上一阶段补齐。
         </p>
       )}
     </div>
@@ -393,12 +451,30 @@ export function ShotStudio({
 function StatusBadge({ status }: { status: Shot["status"] }) {
   const map: Record<Shot["status"], { label: string; cls: string }> = {
     idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: { label: "排队中", cls: "bg-amber-100 text-amber-800 dark:text-amber-300" },
-    running: { label: "生成中", cls: "bg-blue-100 text-blue-800 dark:text-blue-300" },
-    done: { label: "已完成", cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300" },
+    queued: {
+      label: "排队中",
+      cls: "bg-amber-100 text-amber-800 dark:text-amber-300",
+    },
+    running: {
+      label: "生成中",
+      cls: "bg-blue-100 text-blue-800 dark:text-blue-300",
+    },
+    done: {
+      label: "已完成",
+      cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
+    },
     failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
-    stale: { label: "待更新", cls: "bg-red-100 text-red-800 dark:text-red-300" },
+    stale: {
+      label: "待更新",
+      cls: "bg-red-100 text-red-800 dark:text-red-300",
+    },
   };
   const s = map[status];
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>;
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}
+    >
+      {s.label}
+    </span>
+  );
 }

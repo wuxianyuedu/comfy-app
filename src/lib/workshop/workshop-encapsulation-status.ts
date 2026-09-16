@@ -113,11 +113,10 @@ export function deriveEncapsulationStatus(args: {
       manual: manual !== undefined && manual !== null,
     };
   });
-  const ordered = Array.from(
-    new Map(mapped.map((e) => [e.id, e])).values(),
-  );
+  const ordered = Array.from(new Map(mapped.map((e) => [e.id, e])).values());
   const resolvedCount = ordered.filter((e) => e.targetIoKey !== null).length;
-  const prompt = mapped.find((e) => e.id === "prompt");  return {
+  const prompt = mapped.find((e) => e.id === "prompt");
+  return {
     entries: ordered,
     ready: (prompt?.targetIoKey ?? null) !== null,
     resolvedCount,

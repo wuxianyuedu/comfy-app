@@ -74,7 +74,7 @@ function TitleBarTab({
           onActivate(tab.id);
         }
       }}
-      className={`group flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r border-border-subtle px-3 text-sm transition-colors ${
+      className={`group border-border-subtle flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r px-3 text-sm transition-colors ${
         active
           ? "bg-canvas text-ink-bright"
           : "text-ink-muted hover:bg-subtle/70 hover:text-ink-strong"
@@ -90,7 +90,7 @@ function TitleBarTab({
             e.stopPropagation();
             onClose(tab.id);
           }}
-          className="rounded p-0.5 text-ink-fainter hover:bg-subtle hover:text-ink-strong"
+          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded p-0.5"
         >
           <X size={13} />
         </button>
@@ -127,7 +127,7 @@ function WindowButton({
       title={label}
       data-no-drag
       onClick={onClick}
-      className={`flex h-full w-11 items-center justify-center text-ink-soft transition-colors ${
+      className={`text-ink-soft flex h-full w-11 items-center justify-center transition-colors ${
         danger
           ? "hover:bg-red-500 hover:text-white"
           : "hover:bg-subtle hover:text-ink-bright"
@@ -167,30 +167,50 @@ export function TitleBarTabs({
     };
   }, []);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    // 只响应主键；点在页签/按钮上时不拖动。
-    if (e.button !== 0) return;
-    if (!isDragRegionTarget(e.target as unknown as { closest?: (s: string) => unknown })) return;
-    void startWindowDrag();
-  }, []);
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // 只响应主键；点在页签/按钮上时不拖动。
+      if (e.button !== 0) return;
+      if (
+        !isDragRegionTarget(
+          e.target as unknown as { closest?: (s: string) => unknown },
+        )
+      )
+        return;
+      void startWindowDrag();
+    },
+    [],
+  );
 
-  const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragRegionTarget(e.target as unknown as { closest?: (s: string) => unknown })) return;
-    void toggleMaximizeWindow().then((next) => {
-      if (next !== null) setMaximized(next);
-    });
-  }, []);
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (
+        !isDragRegionTarget(
+          e.target as unknown as { closest?: (s: string) => unknown },
+        )
+      )
+        return;
+      void toggleMaximizeWindow().then((next) => {
+        if (next !== null) setMaximized(next);
+      });
+    },
+    [],
+  );
 
   const maximizeKind = resolveMaximizeButtonKind(maximized);
 
   return (
     <div
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} shrink-0 items-stretch border-b border-border-subtle bg-panel select-none`}
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
     >
       {/* 页签区：与标题行同一横条 */}
-      <div role="tablist" aria-label="应用页签" className="flex items-stretch overflow-x-auto">
+      <div
+        role="tablist"
+        aria-label="应用页签"
+        className="flex items-stretch overflow-x-auto"
+      >
         {tabs.map((tab) => (
           <TitleBarTab
             key={tab.id}

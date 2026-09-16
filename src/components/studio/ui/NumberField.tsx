@@ -48,7 +48,7 @@ export function NumberField({
 
   const fmt = useCallback(
     (v: number) => (decimalPlaces > 0 ? v.toFixed(decimalPlaces) : String(v)),
-    [decimalPlaces]
+    [decimalPlaces],
   );
 
   const clamp = useCallback(
@@ -56,7 +56,7 @@ export function NumberField({
       const rounded = Math.round(v / step) * step;
       return Math.min(max, Math.max(min, rounded));
     },
-    [min, max, step]
+    [min, max, step],
   );
 
   const commitText = useCallback(
@@ -64,7 +64,7 @@ export function NumberField({
       const n = parseFloat(text);
       if (!isNaN(n)) onChange(clamp(n));
     },
-    [clamp, onChange]
+    [clamp, onChange],
   );
 
   const decr = useCallback(() => {
@@ -79,12 +79,15 @@ export function NumberField({
   return (
     <div
       className={`nodrag nopan border-border bg-subtle flex items-center gap-0 rounded-lg border transition-opacity ${
-        disabled ? "opacity-40 pointer-events-none" : ""
+        disabled ? "pointer-events-none opacity-40" : ""
       } ${className ?? ""}`}
     >
       <button
         type="button"
-        onMouseDown={(event) => { event.preventDefault(); decr(); }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          decr();
+        }}
         disabled={disabled || value <= min}
         className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
         title={`减少 ${step}`}
@@ -115,11 +118,14 @@ export function NumberField({
           }
         }}
         disabled={disabled}
-        className="text-ink-bright h-[24px] min-w-[36px] flex-1 bg-transparent py-0 text-center font-mono text-xs outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-40"
+        className="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-center font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         type="button"
-        onMouseDown={(event) => { event.preventDefault(); incr(); }}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          incr();
+        }}
         disabled={disabled || value >= max}
         className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
         title={`增加 ${step}`}

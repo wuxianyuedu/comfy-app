@@ -308,7 +308,6 @@ describe("mediaDefaultExt", () => {
   });
 });
 
-
 describe("buildVideoPollUrls", () => {
   it("REST 风格：任务 ID 拼在端点目录后", () => {
     const { rest, agnes } = buildVideoPollUrls(

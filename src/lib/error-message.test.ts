@@ -75,8 +75,13 @@ describe("tRPC 传输层包装文案让位给服务端原文", () => {
   });
 
   it("顶层与 shape 相同时不重复取，仍走翻译", () => {
-    const e = { message: "Failed to fetch", shape: { message: "Failed to fetch" } };
-    expect(errorMessage(e, "兜底")).toBe("网络请求失败，请检查应用服务是否正在运行");
+    const e = {
+      message: "Failed to fetch",
+      shape: { message: "Failed to fetch" },
+    };
+    expect(errorMessage(e, "兜底")).toBe(
+      "网络请求失败，请检查应用服务是否正在运行",
+    );
   });
 
   it("只有顶层 abort 包装、没有服务端原文时，翻译成可读提示", () => {
@@ -122,7 +127,12 @@ describe("rawErrorDetail 保留原始报错供排查", () => {
   it("stack 只取头几行，不把整份堆栈塞进日志", () => {
     const e = {
       message: "boom",
-      stack: ["boom", "at a (x.ts:1:1)", "at b (y.ts:2:2)", "at c (z.ts:3:3)"].join("\n"),
+      stack: [
+        "boom",
+        "at a (x.ts:1:1)",
+        "at b (y.ts:2:2)",
+        "at c (z.ts:3:3)",
+      ].join("\n"),
     };
     const out = rawErrorDetail(e);
     // 头 3 行留在日志里，更深的帧不进（日志只需能定位入口）

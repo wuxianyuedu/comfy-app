@@ -71,8 +71,15 @@ describe("默认落点", () => {
 describe("读写往返", () => {
   it("写入后读回来是那个落点，且其它命名空间原样保留", () => {
     const next = applyOutputBindingEdit(
-      { positiveNode: "9", source: { "mode:T2I": { prompt: "9::widget::text" } } },
-      { outputIoKey: "9::output::MASK", ioKey: "9::output::IMAGE", mode: "T2I" },
+      {
+        positiveNode: "9",
+        source: { "mode:T2I": { prompt: "9::widget::text" } },
+      },
+      {
+        outputIoKey: "9::output::MASK",
+        ioKey: "9::output::IMAGE",
+        mode: "T2I",
+      },
     );
     expect(manualOutputSource(next, "9::output::MASK", "T2I")).toBe(
       "9::output::IMAGE",
@@ -120,7 +127,9 @@ describe("读写往返", () => {
       mode: "T2I",
     });
     const cleared = clearOutputBindingEdit(next, "9::output::IMAGE", "T2I");
-    expect(manualOutputSource(cleared, "9::output::IMAGE", "T2I")).toBeUndefined();
+    expect(
+      manualOutputSource(cleared, "9::output::IMAGE", "T2I"),
+    ).toBeUndefined();
     expect(manualOutputSource(cleared, "9::output::MASK", "T2I")).toBe(
       "9::output::IMAGE",
     );
@@ -136,7 +145,9 @@ describe("落点解析", () => {
       "9::output::IMAGE",
     );
     /* 排在后面的输出没连过就是「悬空」—— 不给它硬凑一个来源。 */
-    expect(resolveOutputSource(null, outputs[1]!, outputs, "T2I", io)).toBeNull();
+    expect(
+      resolveOutputSource(null, outputs[1]!, outputs, "T2I", io),
+    ).toBeNull();
   });
 
   it("连到别的输出行 → 就是那一行", () => {
@@ -156,7 +167,9 @@ describe("落点解析", () => {
       ioKey: "9::output::GONE",
       mode: "T2I",
     });
-    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io)).toBeNull();
+    expect(
+      resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io),
+    ).toBeNull();
   });
 
   it("别的模式的覆盖不影响当前模式", () => {
@@ -165,7 +178,9 @@ describe("落点解析", () => {
       ioKey: "9::output::IMAGE",
       mode: "T2V",
     });
-    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io)).toBeNull();
+    expect(
+      resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io),
+    ).toBeNull();
     expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2V", io)).toBe(
       "9::output::IMAGE",
     );
@@ -200,7 +215,11 @@ describe("可落库判定", () => {
   });
 
   it("断开只需要有模式", () => {
-    expect(canApplyOutputBindingEdit({ ioKey: null, mode: "T2I" }, io)).toBe(true);
-    expect(canApplyOutputBindingEdit({ ioKey: null, mode: null }, io)).toBe(false);
+    expect(canApplyOutputBindingEdit({ ioKey: null, mode: "T2I" }, io)).toBe(
+      true,
+    );
+    expect(canApplyOutputBindingEdit({ ioKey: null, mode: null }, io)).toBe(
+      false,
+    );
   });
 });

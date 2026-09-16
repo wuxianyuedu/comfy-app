@@ -45,7 +45,10 @@ import {
   type Tab,
 } from "~/components/workshop/stage-config";
 
-import { parseShotSize, shotSizeToParam } from "~/components/workshop/shot-size-config";
+import {
+  parseShotSize,
+  shotSizeToParam,
+} from "~/components/workshop/shot-size-config";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
@@ -484,7 +487,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     () => loadWorkshopDraftOnce()?.checkpoint ?? "",
   );
   /* 工坊可用的工作流库工作流 + 当前选择（ISSUE #145）。空 id = 内置 txt2img。 */
-  const [workflowOptions, setWorkflowOptions] = React.useState<WorkshopWorkflowOption[]>([]);
+  const [workflowOptions, setWorkflowOptions] = React.useState<
+    WorkshopWorkflowOption[]
+  >([]);
   const [workflowId, setWorkflowId] = React.useState(
     () => loadWorkshopDraftOnce()?.workflowId ?? "",
   );
@@ -832,7 +837,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     // API 直连通道(生图/视频)的脱敏配置视图;失败按未配置处理。
     void fetchApiChannels().then(setApiChannels);
     // 工作流库列表：工坊「生成资源」里可选择用哪个工作流生成（ISSUE #145）。
-    void fetchWorkshopWorkflows().then(setWorkflowOptions).catch(() => undefined);
+    void fetchWorkshopWorkflows()
+      .then(setWorkflowOptions)
+      .catch(() => undefined);
   }, []);
 
   /** 提示条自动消失，避免需要用户手动关闭的瞬时噪声。 */
@@ -873,7 +880,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         steps: paramInt(shot.params.steps, DEFAULT_GEN_PARAMS.steps),
         cfg: paramNumber(shot.params.cfg, DEFAULT_GEN_PARAMS.cfg),
         sampler: paramString(shot.params.sampler, DEFAULT_GEN_PARAMS.sampler),
-        scheduler: paramString(shot.params.scheduler, DEFAULT_GEN_PARAMS.scheduler),
+        scheduler: paramString(
+          shot.params.scheduler,
+          DEFAULT_GEN_PARAMS.scheduler,
+        ),
         size: shotSizeToParam(sizeSpec),
         count: 1,
       };
@@ -1010,7 +1020,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     () => setApiSettingsOpen(false),
     [],
   );
-  const openModeContract = React.useCallback(() => setModeContractOpen(true), []);
+  const openModeContract = React.useCallback(
+    () => setModeContractOpen(true),
+    [],
+  );
   const closeModeContract = React.useCallback(
     () => setModeContractOpen(false),
     [],

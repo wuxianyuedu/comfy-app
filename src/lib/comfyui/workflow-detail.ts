@@ -24,7 +24,12 @@ import {
   toStringValue,
   type ApiWorkflowNode,
 } from "@/lib/comfyui/raw";
-import { cacheJson, cacheDel, cacheDelPrefix, cachePeek } from "@/lib/server-cache";
+import {
+  cacheJson,
+  cacheDel,
+  cacheDelPrefix,
+  cachePeek,
+} from "@/lib/server-cache";
 import { parseModesJson } from "@/lib/workflow-types";
 import { createComboResolver } from "@/lib/comfyui/workflow-detail-combo";
 import {
@@ -135,7 +140,6 @@ export interface WorkflowDetailFull {
   boundaryLinks?: BoundaryLink[];
 }
 
-
 /** 把已读出的工作流行转换成下发给客户端的序列化 JSON。
  *
  *  这是 `buildWorkflowDetailFull` 里那段 278 行 `cacheJson` 闭包的正身：闭包体
@@ -199,7 +203,8 @@ async function buildWorkflowDetailJson(input: {
    *      ignored. */
   const positionsFromRaw =
     raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
-  const tplPositions = (tpl.positions as Record<string, [number, number]>) ?? {};
+  const tplPositions =
+    (tpl.positions as Record<string, [number, number]>) ?? {};
   const effectivePositions: Record<string, [number, number]> = {
     ...positionsFromRaw,
     ...tplPositions,
@@ -208,7 +213,8 @@ async function buildWorkflowDetailJson(input: {
    * whole graph rather than treat an empty object as "use these (none)
    * positions".  Return null so the client-side sparse guard kicks in
    * and falls through cleanly. */
-  const positions = Object.keys(effectivePositions).length > 0 ? effectivePositions : null;
+  const positions =
+    Object.keys(effectivePositions).length > 0 ? effectivePositions : null;
 
   /* Per-node input metadata + exact ComfyUI box sizes (see
    * workflow-detail-raw.ts buildRawInputs for the full semantics —
@@ -216,7 +222,7 @@ async function buildWorkflowDetailJson(input: {
    * COMBO resolution). */
   const { rawInputsById, sizeById } = await buildRawInputs(
     raw,
-    comboOptionsForClassField
+    comboOptionsForClassField,
   );
 
   /* Sparse raw-node metadata — only enough for the canvas editor to render
@@ -252,7 +258,9 @@ async function buildWorkflowDetailJson(input: {
       const subs = raw.definitions.subgraphs;
       let def = subs[classType];
       if (!def) {
-        const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
+        const matchKey = Object.keys(subs).find(
+          (key) => subs[key]?.id === classType,
+        );
         if (matchKey) def = subs[matchKey];
       }
       if (def && typeof def.name === "string" && def.name.trim()) {
@@ -285,11 +293,15 @@ async function buildWorkflowDetailJson(input: {
    * ComfyUI 自身画布一致。fallbackRawToApi 走离线启发式、不发网络请求。 */
   const rawView = buildRawView(raw, rawInputsById, sizeById);
 
-  const paramMap = (tpl.paramMap as Record<string, string>) ?? detectParamMap(graph);
+  const paramMap =
+    (tpl.paramMap as Record<string, string>) ?? detectParamMap(graph);
   // User-curated exposure selection: which node params/widgets/outputs are
   // exposed as the workflow's external inputs/outputs.  (ioKey is
   // `${nodeId}::${kind}::${name}`; see the canvas editor's IO-edit mode.)
-  const workflowIORaw = (asRecord(tpl.workflowIO) ?? {}) as Record<string, WorkflowIORawEntry>;
+  const workflowIORaw = (asRecord(tpl.workflowIO) ?? {}) as Record<
+    string,
+    WorkflowIORawEntry
+  >;
 
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
@@ -342,18 +354,25 @@ async function buildWorkflowDetailJson(input: {
       const rec = asRecord(g);
       if (!rec) return;
       const bounds: unknown[] =
-        Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
+        Array.isArray(rec.bounding) && rec.bounding.length >= 4
+          ? rec.bounding
+          : [0, 0, 0, 0];
       groups.push({
         id: toStringValue(rec.id ?? `g-${idx}`),
         title: typeof rec.title === "string" ? rec.title : "",
-        bounding: [Number(bounds[0]) || 0, Number(bounds[1]) || 0, Number(bounds[2]) || 0, Number(bounds[3]) || 0],
+        bounding: [
+          Number(bounds[0]) || 0,
+          Number(bounds[1]) || 0,
+          Number(bounds[2]) || 0,
+          Number(bounds[3]) || 0,
+        ],
         color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
         /* Group bypass state. Forwarded so rgthree's
          *  `Fast Groups Bypasser` runtime UI can reflect — and toggle —
          *  the `flags.bypass` of every matched group via PATCH.  Stored
          *  on the group's `flags` object in rawJson, same place
          *  ComfyUI's own frontend reads it. */
-        bypass: !!(asRecord(rec.flags)?.bypass),
+        bypass: !!asRecord(rec.flags)?.bypass,
       });
     });
   }
@@ -365,7 +384,8 @@ async function buildWorkflowDetailJson(input: {
     raw.nodes.forEach((n) => {
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) return;
       const pos = Array.isArray(n.pos) && n.pos.length >= 2 ? n.pos : [0, 0];
-      const size = Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
+      const size =
+        Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
       const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
       const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
       // ComfyUI's Note node may carry an explicit `title` field (newer
@@ -442,12 +462,14 @@ async function buildWorkflowDetailJson(input: {
   });
 }
 
-
 /** 丢弃某个工作流已缓存的详情（顶层 + 它的全部子图视图）。
  *
  *  PATCH 之后必须调用：服务端详情缓存 TTL 30s，不主动清的话客户端就算重新
  *  拉 `detailFull` 也会拿回改动前的富化 IO，界面看起来像「改了没生效」。 */
-export function invalidateWorkflowDetailCache(userId: string, id: string): void {
+export function invalidateWorkflowDetailCache(
+  userId: string,
+  id: string,
+): void {
   cacheDel(`wf:${userId}:${id}`);
   cacheDelPrefix(`sg:${userId}:${id}:`);
 }
@@ -455,7 +477,7 @@ export function invalidateWorkflowDetailCache(userId: string, id: string): void 
 export async function buildWorkflowDetailFull(
   userId: string,
   id: string,
-  opts: { bust?: boolean } = {}
+  opts: { bust?: boolean } = {},
 ): Promise<WorkflowDetailFull> {
   const cacheKey = `wf:${userId}:${id}`;
 
@@ -501,7 +523,7 @@ export async function buildWorkflowDetailFull(
       sourceMtime: true,
       sourceChecksum: true,
       taskType: true,
-    }
+    },
   );
   if (meta?.sourcePath) {
     sourcePath = meta.sourcePath;
@@ -556,9 +578,10 @@ export async function buildWorkflowDetailFull(
       rawJson: true,
       positions: true,
       apiSource: true,
-    }
+    },
   );
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  if (!tpl)
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
   /* The transform below is pure (depends only on tpl.graph / tpl.rawJson /
    * tpl.positions which never change between writes), so we cache the already
@@ -580,7 +603,6 @@ export async function buildWorkflowDetailFull(
   return JSON.parse(detailJson) as WorkflowDetailFull;
 }
 
-
 export async function buildSubgraphDetail(
   userId: string,
   id: string,
@@ -588,7 +610,7 @@ export async function buildSubgraphDetail(
   /** 宿主链前缀（`4` / `4:5`）。拖拽落库时子图内部节点用的是 `宿主:内部`
    *  拼接键，读回时必须按同一个口径还原，否则子图里拖过的位置在下次打开
    *  时全部退回原始坐标。 */
-  hostId = ""
+  hostId = "",
 ): Promise<WorkflowDetailFull> {
   const cacheKey = `sg:${userId}:${id}:${uid}:${hostId}`;
 
@@ -599,20 +621,28 @@ export async function buildSubgraphDetail(
     return JSON.parse(cached) as WorkflowDetailFull;
   }
 
-  const tpl = await workflowTemplateRepository.findByIdForUserSelect(userId, id, {
-    id: true,
-    name: true,
-    taskType: true,
-    graph: true,
-    rawJson: true,
-    positions: true,
-    paramMap: true,
-  });
-  if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+  const tpl = await workflowTemplateRepository.findByIdForUserSelect(
+    userId,
+    id,
+    {
+      id: true,
+      name: true,
+      taskType: true,
+      graph: true,
+      rawJson: true,
+      positions: true,
+      paramMap: true,
+    },
+  );
+  if (!tpl)
+    throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
   const raw = asRawWorkflow(tpl.rawJson);
   if (!raw?.definitions?.subgraphs) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "该工作流没有内嵌子工作流" });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "该工作流没有内嵌子工作流",
+    });
   }
 
   // Subgraph definitions may be keyed by either the UUID or a numeric id;
@@ -621,11 +651,16 @@ export async function buildSubgraphDetail(
   let sub = subgraphs[uid];
   if (!sub) {
     // Try matching by .id field
-    const matchUid = Object.keys(subgraphs).find((key) => subgraphs[key]?.id === uid);
+    const matchUid = Object.keys(subgraphs).find(
+      (key) => subgraphs[key]?.id === uid,
+    );
     if (matchUid) sub = subgraphs[matchUid];
   }
   if (!sub) {
-    throw new TRPCError({ code: "NOT_FOUND", message: `未找到子工作流 ${uid.slice(0, 8)}` });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `未找到子工作流 ${uid.slice(0, 8)}`,
+    });
   }
 
   /* The subgraph transform depends only on tpl.rawJson (immutable between
@@ -642,7 +677,7 @@ export async function buildSubgraphDetail(
     const sg = buildSubgraphGraph(
       sub,
       linkById,
-      boundarySlotsByNode(boundaryLinkInfoById)
+      boundarySlotsByNode(boundaryLinkInfoById),
     );
     /* 子图暴露口的作者名（proxyWidgets 被隔离时长名字的来源），随节点下发给
      *  客户端「就地派生富化」用 —— 顶层富化在这里也在场，直接按
@@ -666,16 +701,21 @@ export async function buildSubgraphDetail(
       boundaryLinkInfoById,
       pinIdByLinkId,
       sg.inputNameByNodeSlot,
-      sg.outputNameByNodeSlot
+      sg.outputNameByNodeSlot,
     );
     /* 被丢掉的边界连线必须留下可诊断的痕迹：否则「这条线没画出来」在界面上
      *  只是一个安静的空白，排障时既不知道是哪条边、也无从判断是数据问题还是
      *  渲染问题（规范 10 §10.3.1：降级不得静默）。 */
-    reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, boundaryLinks);
+    reportDroppedBoundaryLinks(
+      sub,
+      boundaryLinkInfoById,
+      pinIdByLinkId,
+      boundaryLinks,
+    );
     const ann = extractSubgraphAnnotations(
       sub,
       (tpl.positions as Record<string, [number, number]>) ?? {},
-      hostId
+      hostId,
     );
 
     return JSON.stringify({

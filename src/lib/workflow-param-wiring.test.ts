@@ -100,13 +100,21 @@ describe("applyWireEdit", () => {
   });
 
   it("显式断开也落库（null）——不落的话刷新后会被自动判定复活", () => {
-    const next = applyWireEdit({}, { entryId: "prompt", ioKey: null, mode: "T2I" });
-    expect(parseParamMapping(next).manualByMode).toEqual({ T2I: { prompt: null } });
+    const next = applyWireEdit(
+      {},
+      { entryId: "prompt", ioKey: null, mode: "T2I" },
+    );
+    expect(parseParamMapping(next).manualByMode).toEqual({
+      T2I: { prompt: null },
+    });
   });
 
   it("paramMap 里其它命名空间原样保留（不改别人写进去的东西）", () => {
     const next = applyWireEdit(
-      { positiveNode: "9", source: { "mode:OTHER": { prompt: "9::widget::text" } } },
+      {
+        positiveNode: "9",
+        source: { "mode:OTHER": { prompt: "9::widget::text" } },
+      },
       { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
     );
     expect(next.positiveNode).toBe("9");
@@ -139,7 +147,10 @@ describe("hasWireEdit / clearWireEdit", () => {
       { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
     );
     expect(hasWireEdit(changed, "size", "T2I")).toBe(true);
-    const off = applyWireEdit({}, { entryId: "size", ioKey: null, mode: "T2I" });
+    const off = applyWireEdit(
+      {},
+      { entryId: "size", ioKey: null, mode: "T2I" },
+    );
     expect(hasWireEdit(off, "size", "T2I")).toBe(true);
   });
 
@@ -171,12 +182,7 @@ describe("hasWireEdit / clearWireEdit", () => {
 });
 
 describe("resolveDropTarget", () => {
-  const rect = (
-    left: number,
-    top: number,
-    width: number,
-    height: number,
-  ) => ({
+  const rect = (left: number, top: number, width: number, height: number) => ({
     left,
     top,
     right: left + width,

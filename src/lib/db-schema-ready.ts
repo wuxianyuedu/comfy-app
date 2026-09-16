@@ -95,7 +95,9 @@ export function probeSchemaSync(databaseUrl?: string): SchemaReadiness {
     });
     try {
       const row = db
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+        )
         .get(SENTINEL_TABLE);
       return row ? "ready" : "missing";
     } finally {

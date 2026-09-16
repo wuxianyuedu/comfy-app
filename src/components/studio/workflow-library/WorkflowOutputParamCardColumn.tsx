@@ -44,7 +44,11 @@ export interface WorkflowOutputParamCardColumnProps {
   isManual?: (ioKey: string) => boolean;
   onReset?: (ioKey: string) => void;
   /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
-  endpoint?: (port: { name: string; type: string; handleId: string }) => ReactNode;
+  endpoint?: (port: {
+    name: string;
+    type: string;
+    handleId: string;
+  }) => ReactNode;
 }
 
 export function WorkflowOutputParamCardColumn({
@@ -66,7 +70,7 @@ export function WorkflowOutputParamCardColumn({
       aria-label="对外输出参数"
       data-testid="workflow-output-param-column"
     >
-      <p className="px-0.5 text-[11px] font-medium text-ink-faint">
+      <p className="text-ink-faint px-0.5 text-[11px] font-medium">
         {canWire ? "对外输出参数 · 拖圆点改取值行" : "对外输出参数"}
       </p>
       {outputs.map((output) => {

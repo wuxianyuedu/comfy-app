@@ -3,12 +3,7 @@
 // webview 存储重置而丢失。此模块定义「前端草稿 ↔ 服务端镜像」共用的线上结构
 // 与纯校验函数，同时被客户端 hook 与服务端 route/repository 引用，保证两侧
 // 只对齐一份契约（风格对齐 api-channel-shared.ts —— 纯函数、客户端可安全 import）。
-import type {
-  Character,
-  ProjectMeta,
-  Scene,
-  Shot,
-} from "~/lib/workshop/types";
+import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
 export interface WorkshopDraftDto {
@@ -23,7 +18,9 @@ export interface WorkshopDraftDto {
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。 */
 export function parseDraftDto(raw: unknown): WorkshopDraftDto {
   const obj =
-    typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+    typeof raw === "object" && raw !== null
+      ? (raw as Record<string, unknown>)
+      : {};
   const meta =
     typeof obj.meta === "object" && obj.meta !== null
       ? (obj.meta as Record<string, unknown>)
@@ -35,7 +32,9 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       tone: typeof meta.tone === "string" ? meta.tone : "",
       logline: typeof meta.logline === "string" ? meta.logline : "",
       scriptMarkdown:
-        typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
+        typeof meta.scriptMarkdown === "string"
+          ? meta.scriptMarkdown
+          : undefined,
     },
     scriptMarkdown:
       typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
@@ -68,5 +67,7 @@ const PROJECT_TYPES = [
 ] as const;
 
 function isProjectType(v: unknown): v is ProjectMeta["type"] {
-  return typeof v === "string" && (PROJECT_TYPES as readonly string[]).includes(v);
+  return (
+    typeof v === "string" && (PROJECT_TYPES as readonly string[]).includes(v)
+  );
 }

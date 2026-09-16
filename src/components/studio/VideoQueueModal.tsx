@@ -22,8 +22,16 @@ const STATUS_META: Record<
   { icon: string; label: string; cls: string }
 > = {
   QUEUED: { icon: "hourglass", label: "排队中", cls: "text-ink-muted" },
-  RUNNING: { icon: "zap", label: "生成中", cls: "text-amber-600 dark:text-amber-400" },
-  SUCCEEDED: { icon: "check", label: "已完成", cls: "text-emerald-600 dark:text-emerald-400" },
+  RUNNING: {
+    icon: "zap",
+    label: "生成中",
+    cls: "text-amber-600 dark:text-amber-400",
+  },
+  SUCCEEDED: {
+    icon: "check",
+    label: "已完成",
+    cls: "text-emerald-600 dark:text-emerald-400",
+  },
   FAILED: { icon: "x", label: "失败", cls: "text-red-600 dark:text-red-400" },
   CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
 };
@@ -131,7 +139,12 @@ export function VideoQueueModal({
   ).length;
 
   return (
-    <div className={overlayClass("modal", "z-9998 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60")}>
+    <div
+      className={overlayClass(
+        "modal",
+        "z-9998 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60",
+      )}
+    >
       <div className="bg-node border-border-strong flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50">
         {/* Header */}
         <div className="border-border-strong flex items-center justify-between border-b px-5 py-3.5">
@@ -264,7 +277,7 @@ export function VideoQueueModal({
                           <a
                             href={task.video}
                             download
-                            className="rounded-md bg-violet-500/20 px-2.5 py-1 text-[11px] text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/30"
+                            className="rounded-md bg-violet-500/20 px-2.5 py-1 text-[11px] text-violet-700 transition-colors hover:bg-violet-500/30 dark:text-violet-300"
                           >
                             下载
                           </a>
@@ -276,8 +289,8 @@ export function VideoQueueModal({
               )}
               {error && (
                 <p className="text-center text-xs text-red-700 dark:text-red-400">
-            {error}
-          </p>
+                  {error}
+                </p>
               )}
             </div>
           ) : (
@@ -308,7 +321,7 @@ export function VideoQueueModal({
                       }
                       rows={2}
                       placeholder="分镜提示词，含镜头运动描述…"
-                      className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 resize-none rounded-lg border px-3 py-2 text-xs outline-noneray-600 focus:border-violet-500/40"
+                      className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter outline-noneray-600 min-w-0 flex-1 resize-none rounded-lg border px-3 py-2 text-xs focus:border-violet-500/40"
                     />
                     <button
                       type="button"
@@ -361,8 +374,8 @@ export function VideoQueueModal({
 
               {error && (
                 <p className="text-center text-xs text-red-700 dark:text-red-400">
-            {error}
-          </p>
+                  {error}
+                </p>
               )}
             </div>
           )}

@@ -32,7 +32,9 @@ const WF_COMMON: RenderChainModule[] = [
  * 自定义节点（扩展包）追加 customNodes manifest 与后端 route；
  * 其余 classType（note / subgraph / 未注册）只返回公共链路。
  */
-export function getWorkflowRenderChainModules(classType: string): RenderChainModule[] {
+export function getWorkflowRenderChainModules(
+  classType: string,
+): RenderChainModule[] {
   const chain = [...WF_COMMON];
 
   if (isCustomNode(classType)) {

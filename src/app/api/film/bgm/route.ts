@@ -21,19 +21,21 @@ export async function POST(req: NextRequest) {
   const user = await getServerUser();
   void user;
   const form = await req.formData().catch(() => null);
-  if (!form) return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
+  if (!form)
+    return NextResponse.json({ error: "表单解析失败" }, { status: 400 });
   const file = form.get("file");
-  if (!(file instanceof File)) return NextResponse.json({ error: "未找到文件" }, { status: 400 });
+  if (!(file instanceof File))
+    return NextResponse.json({ error: "未找到文件" }, { status: 400 });
   if (!ALLOWED_MIME.has(file.type)) {
     return NextResponse.json(
       { error: "仅支持 MP3 / WAV / M4A / OGG 音频" },
-      { status: 400 }
+      { status: 400 },
     );
   }
   if (file.size > MAX_UPLOAD_BYTES) {
     return NextResponse.json(
       { error: "音频大小不能超过 100MB" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

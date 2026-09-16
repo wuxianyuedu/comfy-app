@@ -79,7 +79,7 @@ export interface WorkflowLibraryDetailController {
 }
 
 export function useWorkflowLibraryDetail(
-  props: WorkflowLibraryDetailProps
+  props: WorkflowLibraryDetailProps,
 ): WorkflowLibraryDetailController {
   const {
     workflow,
@@ -107,7 +107,7 @@ export function useWorkflowLibraryDetail(
    * 做 early return —— 空态交给视图渲染。 */
   const detailQuery = api.workflow.detail.useQuery(
     { id: workflow?.id ?? "" },
-    { enabled: !!workflow }
+    { enabled: !!workflow },
   );
 
   const template = detailQuery.data?.template;
@@ -119,7 +119,7 @@ export function useWorkflowLibraryDetail(
    * graph 等仍用轻量 template，patchSeedMode 也继续以原始列为底稿。 */
   const enrichedQuery = api.workflow.detailFull.useQuery(
     { id: workflow?.id ?? "" },
-    { enabled: !!workflow }
+    { enabled: !!workflow },
   );
 
   /* 就绪条件：当前选中工作流已排空过一次详情请求的数据（或错误）。
@@ -142,12 +142,12 @@ export function useWorkflowLibraryDetail(
     () =>
       normalizeWorkflowIO(enrichedQuery.data?.workflowIO) ??
       normalizeWorkflowIO(template?.workflowIO),
-    [enrichedQuery.data, template]
+    [enrichedQuery.data, template],
   );
 
   const sourceData = useMemo(
     () => (workflow ? buildSourceData(workflow, template) : null),
-    [workflow, template]
+    [workflow, template],
   );
 
   /* paramMap 只有「画布节点」页签的对外参数标注用得上：以轻量 template 为底
@@ -164,7 +164,7 @@ export function useWorkflowLibraryDetail(
       workflow
         ? deriveFormatFlags(workflow)
         : { hasApi: false, hasRaw: false, apiOrigin: null, usable: false },
-    [workflow]
+    [workflow],
   );
 
   const syncFlags = useMemo(
@@ -172,14 +172,17 @@ export function useWorkflowLibraryDetail(
       workflow
         ? deriveSyncFlags(workflow)
         : { dirty: false, missing: false, canResync: false },
-    [workflow]
+    [workflow],
   );
 
   const actions = useMemo<WorkflowLibraryDetailActions>(
     () => ({
       use: () => {
         if (!workflow) return;
-        onUse(workflow.id, { name: workflow.name, taskType: workflow.taskType });
+        onUse(workflow.id, {
+          name: workflow.name,
+          taskType: workflow.taskType,
+        });
       },
       edit: () => {
         if (workflow) onEdit(workflow.id);
@@ -194,7 +197,7 @@ export function useWorkflowLibraryDetail(
         if (workflow) onResync(workflow.id, workflow.name);
       },
     }),
-    [workflow, onUse, onEdit, onDelete, onDownload, onResync]
+    [workflow, onUse, onEdit, onDelete, onDownload, onResync],
   );
 
   const metaEditor = useMemo<MetaEditorController>(
@@ -208,7 +211,9 @@ export function useWorkflowLibraryDetail(
       defaultMode: workflow?.defaultMode ?? workflow?.taskType ?? "",
       modelTags: workflow?.modelTags ?? [],
       allModelTags,
-      busy: !!workflow && (bundleBusy === workflow.id || resyncBusy === workflow.id),
+      busy:
+        !!workflow &&
+        (bundleBusy === workflow.id || resyncBusy === workflow.id),
       patchModes: async (modes, defaultMode) => {
         if (!workflow || !onPatchModes) return;
         await onPatchModes(workflow.id, modes, defaultMode);
@@ -236,7 +241,17 @@ export function useWorkflowLibraryDetail(
         await onPatchWorkflowIO(workflow.id, next);
       },
     }),
-    [workflow, allModelTags, bundleBusy, resyncBusy, onPatchModes, onPatchModelTags, onPatchWorkflowIO, onPatchParamMap, template],
+    [
+      workflow,
+      allModelTags,
+      bundleBusy,
+      resyncBusy,
+      onPatchModes,
+      onPatchModelTags,
+      onPatchWorkflowIO,
+      onPatchParamMap,
+      template,
+    ],
   );
 
   return {

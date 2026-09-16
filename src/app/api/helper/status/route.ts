@@ -16,7 +16,7 @@ export async function GET() {
   const installer = path.join(
     process.cwd(),
     "scripts",
-    "install-comfyapp-helper.ps1"
+    "install-comfyapp-helper.ps1",
   );
   return NextResponse.json({
     platform: process.platform,

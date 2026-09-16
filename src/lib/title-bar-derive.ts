@@ -32,7 +32,9 @@ export function isDragRegionTarget(
 export type WindowButtonKind = "minimize" | "maximize" | "restore" | "close";
 
 /** 按当前最大化状态给出「最大化 / 还原」按钮语义。 */
-export function resolveMaximizeButtonKind(maximized: boolean): "maximize" | "restore" {
+export function resolveMaximizeButtonKind(
+  maximized: boolean,
+): "maximize" | "restore" {
   return maximized ? "restore" : "maximize";
 }
 

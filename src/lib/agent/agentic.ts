@@ -50,18 +50,18 @@ const MULTITURN_SYSTEM = `你是一个 AI 创作引导助手，帮助用户用 C
      "params": {"steps": 25, "cfg": 7, "sampler": "euler", "scheduler": "normal", "size": "1024x1024"}
    }}`;
 
-function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec {
-
+function offlineIdea(
+  text: string,
+  kind: "image" | "video" = "image",
+): AgentSpec {
   const trimmed = text.trim();
 
   return {
-
     prompt: `${trimmed}，电影级构图，细节丰富，光影自然，8k 高清`,
 
     negative: "低质量，模糊，变形，水印，多余文字",
 
     params: {
-
       steps: 25,
 
       cfg: kind === "video" ? 6 : 7,
@@ -71,17 +71,13 @@ function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec
       scheduler: "normal",
 
       size: kind === "video" ? "832x480" : "1024x1024",
-
     },
 
     skillHint: "",
 
     kind,
-
   };
-
 }
-
 
 function detectKind(msgs: string[]): "image" | "video" | null {
   for (const m of msgs) {
@@ -95,13 +91,21 @@ function detectKind(msgs: string[]): "image" | "video" | null {
 
 /** Scripted multi-turn fallback used when no LLM is configured. */
 function offlineAgent(history: ChatMessage[]): AgentTurnResult {
-  const userMsgs = history.filter((history) => history.role === "user").map((msg) => msg.content);
+  const userMsgs = history
+    .filter((history) => history.role === "user")
+    .map((msg) => msg.content);
   if (userMsgs.length === 0) {
-    return { reply: "你好！想生成【图片】还是【视频】？简单描述下主题就行～", ready: false };
+    return {
+      reply: "你好！想生成【图片】还是【视频】？简单描述下主题就行～",
+      ready: false,
+    };
   }
   const kind = detectKind(userMsgs);
   if (!kind) {
-    return { reply: "明白～那你想生成的是【图片】还是【视频】呢？", ready: false };
+    return {
+      reply: "明白～那你想生成的是【图片】还是【视频】呢？",
+      ready: false,
+    };
   }
   if (userMsgs.length < 2) {
     return {
@@ -126,7 +130,9 @@ type RawSpec = {
   negative?: unknown;
   kind?: unknown;
   skillHint?: unknown;
-  params?: Partial<Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>>;
+  params?: Partial<
+    Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>
+  >;
 };
 
 function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
@@ -139,7 +145,8 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
       steps: typeof params.steps === "number" ? params.steps : undefined,
       cfg: typeof params.cfg === "number" ? params.cfg : undefined,
       sampler: typeof params.sampler === "string" ? params.sampler : undefined,
-      scheduler: typeof params.scheduler === "string" ? params.scheduler : undefined,
+      scheduler:
+        typeof params.scheduler === "string" ? params.scheduler : undefined,
       size: typeof params.size === "string" ? params.size : undefined,
     },
     skillHint: typeof s?.skillHint === "string" ? s.skillHint : undefined,
@@ -151,7 +158,9 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
  * @param history full conversation so far (user/assistant messages only; the
  *                 system prompt is injected internally).
  */
-export async function chatAgent(history: ChatMessage[]): Promise<AgentTurnResult> {
+export async function chatAgent(
+  history: ChatMessage[],
+): Promise<AgentTurnResult> {
   const sysMsg: ChatMessage = { role: "system", content: MULTITURN_SYSTEM };
   try {
     const res = await fetch("/api/llm", {

@@ -50,7 +50,10 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
         }
         // Pure-connection inputs carry no widget value — emit an array so
         // the conn/widget splitter keeps them as wire rows with a Handle.
-        return [rawInput.name, rawInput.isConnection ? [] : ""] as [string, unknown];
+        return [rawInput.name, rawInput.isConnection ? [] : ""] as [
+          string,
+          unknown,
+        ];
       });
     }
     const fromGraph = Object.entries(data.inputs ?? {});
@@ -82,7 +85,7 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   // LoadImage's synthetic `preview: true` entry qualifies.
   const imagePreviewEntries = useMemo(
     () => (data.rawInputs ?? []).filter((raw) => raw.preview === true),
-    [data.rawInputs]
+    [data.rawInputs],
   );
 
   // Output ports: static table → raw outputs[] (only place custom-node
@@ -91,7 +94,9 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
     const staticOuts = Object.entries(inferOutputTypeAll(data.classType));
     if (staticOuts.length > 0) return staticOuts;
     if (data.rawOutputs && data.rawOutputs.length > 0) {
-      return data.rawOutputs.map((rawOutput) => [rawOutput.name, rawOutput.type] as [string, string]);
+      return data.rawOutputs.map(
+        (rawOutput) => [rawOutput.name, rawOutput.type] as [string, string],
+      );
     }
     return [];
   }, [data.classType, data.rawOutputs]);

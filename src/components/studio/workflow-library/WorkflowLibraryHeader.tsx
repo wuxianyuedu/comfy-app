@@ -6,10 +6,7 @@
 import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
-import type {
-  SourceFilter,
-  TypeFilter,
-} from "./workflow-library-config";
+import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
 interface WorkflowLibraryHeaderProps {
@@ -40,8 +37,8 @@ export function WorkflowLibraryHeader({
   onManageModels,
 }: WorkflowLibraryHeaderProps) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border-subtle px-5 py-2.5">
-      <h1 className="font-title text-lg font-bold text-ink">工作流库</h1>
+    <div className="border-border-subtle flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-5 py-2.5">
+      <h1 className="font-title text-ink text-lg font-bold">工作流库</h1>
 
       {/* 紧凑筛选下拉：紧跟标题右侧 */}
       <WorkflowLibraryFilters

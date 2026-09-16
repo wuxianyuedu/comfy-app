@@ -34,7 +34,9 @@ describe("parseProcNetTcpListeners", () => {
 
   it("容忍表头缺失 / 空行 / 字段不足的脏输入", () => {
     expect(parseProcNetTcpListeners("")).toEqual(new Map());
-    expect(parseProcNetTcpListeners("garbage line\n\n   \n")).toEqual(new Map());
+    expect(parseProcNetTcpListeners("garbage line\n\n   \n")).toEqual(
+      new Map(),
+    );
   });
 
   it("IPv6 行（local_address 更长）同样能取到端口", () => {

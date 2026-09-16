@@ -27,9 +27,9 @@ describe("guessMediaKind", () => {
 
 describe("extractBase64DataUrl", () => {
   it("已带 data: 前缀原样返回", () => {
-    expect(extractBase64DataUrl({ b64_json: "data:image/png;base64,AAA" })).toBe(
-      "data:image/png;base64,AAA",
-    );
+    expect(
+      extractBase64DataUrl({ b64_json: "data:image/png;base64,AAA" }),
+    ).toBe("data:image/png;base64,AAA");
   });
 
   it("裸 base64 包裹为默认 mime", () => {
@@ -69,7 +69,6 @@ describe("extractSavedOutputs", () => {
   });
 });
 
-
 describe("resolveImagesGenerationsEndpoint", () => {
   it("Base URL 三种形态都拼出正确的生图端点（不重复拼接）", () => {
     // 只到根（常见 OpenAI 兼容写法）
@@ -81,9 +80,9 @@ describe("resolveImagesGenerationsEndpoint", () => {
       "https://x.com/v1/images/generations",
     );
     // 已含完整动作段 → 原样（回归：曾被再拼一次打到 /v1/images/images/generations）
-    expect(resolveImagesGenerationsEndpoint("https://x.com/v1/images/generations")).toBe(
-      "https://x.com/v1/images/generations",
-    );
+    expect(
+      resolveImagesGenerationsEndpoint("https://x.com/v1/images/generations"),
+    ).toBe("https://x.com/v1/images/generations");
     // 尾部斜杠归一
     expect(resolveImagesGenerationsEndpoint("https://x.com/v1/")).toBe(
       "https://x.com/v1/images/generations",

@@ -42,7 +42,10 @@ export interface ModelTagsController {
 }
 
 /** 把父组件的快照并入本地列表：只补本地没有的，不覆盖已有的。 */
-export function mergeTagSnapshots(local: TagItem[], snapshot: TagItem[]): TagItem[] {
+export function mergeTagSnapshots(
+  local: TagItem[],
+  snapshot: TagItem[],
+): TagItem[] {
   const localNames = new Set(local.map((tag) => tag.name));
   const fresh = snapshot.filter((tag) => !localNames.has(tag.name));
   return fresh.length > 0 ? [...fresh, ...local] : local;
@@ -153,7 +156,9 @@ export function useModelTags({
         setError(null);
         // 本地先换名，让弹窗立刻反映重命名，不等父组件 onChanged 的往返。
         setTags((prev) =>
-          prev.map((tag) => (tag.name === oldName ? { ...tag, name: trimmed } : tag)),
+          prev.map((tag) =>
+            tag.name === oldName ? { ...tag, name: trimmed } : tag,
+          ),
         );
         await refresh();
         onChanged?.();

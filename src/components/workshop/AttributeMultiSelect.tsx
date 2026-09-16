@@ -222,7 +222,7 @@ export function AttributeMultiSelect({
               width: pos.width,
               zIndex: 9999,
             }}
-            className="border-border overflow-hidden rounded-lg border bg-card shadow-lg shadow-black/8 dark:shadow-black/40"
+            className="border-border bg-card overflow-hidden rounded-lg border shadow-lg shadow-black/8 dark:shadow-black/40"
           >
             {/* 搜索 */}
             <div className="border-border flex items-center gap-1.5 border-b px-2 py-1.5">

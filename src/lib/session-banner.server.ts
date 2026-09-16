@@ -64,7 +64,13 @@ export function buildSessionBanner(
   const reset = "\x1b[0m";
   /* 首尾各一个空行：`["", …, ""]` join 后 → `\n<bar>\n  <title>\n<bar>\n`，
    * 再补一个尾部 `\n` 收口，形成「空行 / bar / 标题 / bar / 空行」的呼吸感。 */
-  const lines = ["", `${color}${bar}${reset}`, `${color}  ${title}${reset}`, `${color}${bar}${reset}`, ""];
+  const lines = [
+    "",
+    `${color}${bar}${reset}`,
+    `${color}  ${title}${reset}`,
+    `${color}${bar}${reset}`,
+    "",
+  ];
   return `${lines.join("\n")}\n`;
 }
 

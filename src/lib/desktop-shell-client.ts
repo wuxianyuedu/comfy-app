@@ -13,10 +13,7 @@ const SHELL_INTERNALS_KEY = "__TAURI_INTERNALS__";
 /** 是否运行在 Tauri 壳里（WebView）。浏览器环境无对应全局标记。 */
 export function isDesktopShell(): boolean {
   if (typeof window === "undefined") return false;
-  return (
-    SHELL_INTERNALS_KEY in window ||
-    "__TAURI__" in window
-  );
+  return SHELL_INTERNALS_KEY in window || "__TAURI__" in window;
 }
 
 /* 注：这里曾有一个 `openUrlInShell` —— 调 Rust `open_comfyui_window` 在壳内

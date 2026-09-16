@@ -94,9 +94,10 @@ export function upsertProject(p: CanvasProject): void {
 
 export function deleteProject(id: string): void {
   if (typeof localStorage === "undefined") return; // SSR guard
-  const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []).filter(
-    (project) => project.id !== id
-  );
+  const all = safeParse<CanvasProject[]>(
+    localStorage.getItem(INDEX_KEY),
+    [],
+  ).filter((project) => project.id !== id);
   localStorage.setItem(INDEX_KEY, JSON.stringify(all));
   if (getActiveId() === id) localStorage.removeItem(ACTIVE_KEY);
   emitChanged();
@@ -128,7 +129,7 @@ export async function hydrateFromServer(): Promise<void> {
     }>;
     const localAll = safeParse<CanvasProject[]>(
       localStorage.getItem(INDEX_KEY),
-      []
+      [],
     );
     const byId = new Map(localAll.map((localAll) => [localAll.id, localAll]));
     let changed = false;
@@ -154,7 +155,7 @@ export async function hydrateFromServer(): Promise<void> {
     }
     if (changed || localAll.length > 0) {
       const merged = [...byId.values()].sort(
-        (left, right) => right.updatedAt - left.updatedAt
+        (left, right) => right.updatedAt - left.updatedAt,
       );
       localStorage.setItem(INDEX_KEY, JSON.stringify(merged));
       emitChanged();
@@ -195,10 +196,7 @@ export function getAllProjectNames(excludeId?: string): Set<string> {
 }
 
 /** Convenience predicate: is `name` already taken by another project? */
-export function isProjectNameTaken(
-  name: string,
-  excludeId?: string
-): boolean {
+export function isProjectNameTaken(name: string, excludeId?: string): boolean {
   const taken = getAllProjectNames(excludeId);
   return taken.has(name.trim());
 }
@@ -216,7 +214,7 @@ export function isProjectNameTaken(
  */
 export function findNextAvailableName(
   base: string,
-  excludeId?: string
+  excludeId?: string,
 ): string {
   const baseClean = base.trim() || EMPTY_DRAFT_NAME;
   const taken = getAllProjectNames(excludeId);
@@ -226,7 +224,7 @@ export function findNextAvailableName(
   // already named a project "灵感_3" and we start from "灵感_3", we'd
   // otherwise collide with it instead of finding the next free slot.
   let suffix = 2;
-   
+
   while (true) {
     const candidate = `${baseClean}_${suffix}`;
     if (!taken.has(candidate)) return candidate;
@@ -329,12 +327,15 @@ export function reapAllEmptyDrafts(): number {
     (project) =>
       project.name !== EMPTY_DRAFT_NAME ||
       (project.nodes?.length ?? 0) > 0 ||
-      (project.edges?.length ?? 0) > 0
+      (project.edges?.length ?? 0) > 0,
   );
   const removed = all.length - survivors.length;
   if (removed > 0) {
     localStorage.setItem(INDEX_KEY, JSON.stringify(survivors));
-    if (getActiveId() && !survivors.some((survivor) => survivor.id === getActiveId())) {
+    if (
+      getActiveId() &&
+      !survivors.some((survivor) => survivor.id === getActiveId())
+    ) {
       localStorage.removeItem(ACTIVE_KEY);
     }
     emitChanged();

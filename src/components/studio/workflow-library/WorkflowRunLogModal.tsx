@@ -12,7 +12,13 @@
  * 任务订阅逻辑在 use-workflow-run-task.ts（§17 UI/逻辑分离）。
  */
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
 import type { TaskLogEntry } from "@/lib/workshop/generation-client";
 import {
@@ -28,17 +34,24 @@ type Level = TaskLogEntry["level"];
 const LEVEL_STYLES: Record<Level, string> = {
   error: "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/20",
   warn: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20",
-  success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
-  progress: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/20",
+  success:
+    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  progress:
+    "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/20",
   info: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
 };
 function levelLabel(level: Level): string {
   switch (level) {
-    case "error": return "ERROR";
-    case "warn": return "WARN";
-    case "success": return "OK";
-    case "progress": return "PROG";
-    default: return "INFO";
+    case "error":
+      return "ERROR";
+    case "warn":
+      return "WARN";
+    case "success":
+      return "OK";
+    case "progress":
+      return "PROG";
+    default:
+      return "INFO";
   }
 }
 /* 与应用日志同款，带毫秒。 */
@@ -97,7 +110,8 @@ export function WorkflowRunLogModal({
   }, [viewTaskId, runs, onViewTaskIdChange]);
 
   const run: WorkflowRunMeta | null = useMemo(
-    () => (viewTaskId ? runs.find((r) => r.taskId === viewTaskId) ?? null : null),
+    () =>
+      viewTaskId ? (runs.find((r) => r.taskId === viewTaskId) ?? null) : null,
     [viewTaskId, runs],
   );
   const logs = run?.logs ?? [];
@@ -123,14 +137,19 @@ export function WorkflowRunLogModal({
   if (!open) return null;
 
   const visibleAll = logs.slice(-300);
-  const visible = filter === "all" ? visibleAll : visibleAll.filter((l) => l.level === filter);
+  const visible =
+    filter === "all"
+      ? visibleAll
+      : visibleAll.filter((l) => l.level === filter);
   const status = run?.status ?? "running";
   const statusLabel =
     status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
   const statusClass =
-    status === "failed" ? "bg-red-500/20 text-red-700 dark:text-red-300"
-    : status === "done" ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-    : "bg-violet-500/20 text-violet-700 dark:text-violet-300";
+    status === "failed"
+      ? "bg-red-500/20 text-red-700 dark:text-red-300"
+      : status === "done"
+        ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+        : "bg-violet-500/20 text-violet-700 dark:text-violet-300";
 
   const onCancel = () => {
     void cancel();
@@ -138,27 +157,40 @@ export function WorkflowRunLogModal({
 
   return (
     <div
-      className={overlayClass("modal", "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm")}
+      className={overlayClass(
+        "modal",
+        "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm",
+      )}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
       data-testid="wflib-log-modal"
     >
-      <div className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} flex-col overflow-hidden rounded-2xl border border-border bg-panel shadow-2xl shadow-black/12 dark:shadow-black/60`}>
+      <div
+        className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60`}
+      >
         {/* Header */}
-        <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
+        <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
           <div className="flex min-w-0 items-center gap-2">
-            <FileText size={16} className="shrink-0 text-violet-700 dark:text-violet-400" />
-            <span className="truncate text-[15px] font-semibold text-ink">
+            <FileText
+              size={16}
+              className="shrink-0 text-violet-700 dark:text-violet-400"
+            />
+            <span className="text-ink truncate text-[15px] font-semibold">
               执行日志
             </span>
             {run && (
-              <span className="max-w-[220px] truncate text-[11px] text-ink-muted" title={run.workflowName}>
+              <span
+                className="text-ink-muted max-w-[220px] truncate text-[11px]"
+                title={run.workflowName}
+              >
                 {run.workflowName}
               </span>
             )}
             {run && (
-              <span className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}>
+              <span
+                className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}
+              >
                 {statusLabel}
               </span>
             )}
@@ -172,7 +204,7 @@ export function WorkflowRunLogModal({
                 disabled={cancelling}
                 title="取消当前查看的任务"
                 data-testid="wflib-log-cancel"
-                className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700 dark:text-red-300/90 transition-colors hover:bg-red-500/15 disabled:opacity-50"
+                className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700 transition-colors hover:bg-red-500/15 disabled:opacity-50 dark:text-red-300/90"
               >
                 {cancelling ? "× 取消中…" : "× 取消"}
               </button>
@@ -180,13 +212,20 @@ export function WorkflowRunLogModal({
             {runs.length > 1 && (
               <select
                 value={viewTaskId ?? ""}
-                onChange={(event) => onViewTaskIdChange(event.target.value || null)}
-                className="max-w-[200px] truncate rounded-md border border-border bg-panel px-1.5 py-0.5 text-[10.5px] text-ink-strong outline-none"
+                onChange={(event) =>
+                  onViewTaskIdChange(event.target.value || null)
+                }
+                className="border-border bg-panel text-ink-strong max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
                 title="切换查看的任务"
               >
                 {runs.map((r) => (
                   <option key={r.taskId} value={r.taskId}>
-                    {r.workflowName} · {r.status === "done" ? "完成" : r.status === "failed" ? "失败" : "运行中"}
+                    {r.workflowName} ·{" "}
+                    {r.status === "done"
+                      ? "完成"
+                      : r.status === "failed"
+                        ? "失败"
+                        : "运行中"}
                   </option>
                 ))}
               </select>
@@ -195,7 +234,7 @@ export function WorkflowRunLogModal({
               type="button"
               onClick={() => setWide((w) => !w)}
               title={wide ? "收缩" : "加宽"}
-              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-subtle hover:text-ink-strong"
+              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md p-1.5 transition-colors"
             >
               {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
@@ -203,7 +242,7 @@ export function WorkflowRunLogModal({
               type="button"
               onClick={onClose}
               title="关闭"
-              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-subtle hover:text-ink-strong"
+              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md p-1.5 transition-colors"
             >
               <X size={16} />
             </button>
@@ -211,7 +250,7 @@ export function WorkflowRunLogModal({
         </div>
 
         {/* Level filter bar */}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-1.5">
+        <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
           <div className="flex items-center gap-1">
             {FILTER_LABELS.map((option) => {
               const count =
@@ -231,12 +270,14 @@ export function WorkflowRunLogModal({
                   }`}
                 >
                   {option.label}
-                  <span className="ml-1 text-[11px] text-ink-fainter">{count}</span>
+                  <span className="text-ink-fainter ml-1 text-[11px]">
+                    {count}
+                  </span>
                 </button>
               );
             })}
           </div>
-          <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-ink-faint">
+          <label className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
             <input
               type="checkbox"
               checked={autoscroll}
@@ -250,16 +291,18 @@ export function WorkflowRunLogModal({
         {/* Log body */}
         <div
           ref={scrollerRef}
-          className="custom-scrollbar flex-1 overflow-y-auto bg-panel-deep/60"
+          className="custom-scrollbar bg-panel-deep/60 flex-1 overflow-y-auto"
         >
           {run?.errorMessage && (
             <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700 dark:text-red-300/90">
-              <div className="break-words whitespace-pre-wrap">{run.errorMessage}</div>
+              <div className="break-words whitespace-pre-wrap">
+                {run.errorMessage}
+              </div>
             </div>
           )}
 
           {visible.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-[13px] text-ink-fainter">
+            <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
               <FileText size={32} strokeWidth={1.5} className="opacity-30" />
               {run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
             </div>
@@ -270,19 +313,21 @@ export function WorkflowRunLogModal({
                   key={`${log.t}:${index}`}
                   data-testid="wflib-modal-log-line"
                   data-level={log.level}
-                  className="flex items-start gap-2.5 border-b border-border-subtle px-4 py-1 font-mono text-[13px] leading-snug hover:bg-card"
+                  className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
                 >
-                  <span className="shrink-0 text-ink-muted">{fmtTime(log.t)}</span>
+                  <span className="text-ink-muted shrink-0">
+                    {fmtTime(log.t)}
+                  </span>
                   <span
                     className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
                   >
                     {levelLabel(log.level)}
                   </span>
-                  <span className="min-w-0 flex-1 break-words whitespace-pre-wrap text-ink-strong">
+                  <span className="text-ink-strong min-w-0 flex-1 break-words whitespace-pre-wrap">
                     {log.msg}
                   </span>
                   {log.src && (
-                    <span className="max-w-[200px] shrink-0 truncate text-[11px] text-ink-fainter hover:text-ink-faint">
+                    <span className="text-ink-fainter hover:text-ink-faint max-w-[200px] shrink-0 truncate text-[11px]">
                       {log.src}
                     </span>
                   )}
@@ -293,7 +338,7 @@ export function WorkflowRunLogModal({
         </div>
 
         {/* Footer */}
-        <div className="flex h-9 shrink-0 items-center justify-between border-t border-border bg-card px-4 text-[12px] text-ink-muted">
+        <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
           <span>
             显示 {visible.length} / 总计 {visibleAll.length} 条
           </span>
@@ -306,5 +351,9 @@ export function WorkflowRunLogModal({
 
 /* useSyncExternalStore 的局部包装：让本文件保持单一 import 来源。 */
 function useSyncExternalStoreShim() {
-  return useSyncExternalStore(subscribeWorkflowRunStore, getWorkflowRunStoreSnapshot, getWorkflowRunStoreSnapshot);
+  return useSyncExternalStore(
+    subscribeWorkflowRunStore,
+    getWorkflowRunStoreSnapshot,
+    getWorkflowRunStoreSnapshot,
+  );
 }

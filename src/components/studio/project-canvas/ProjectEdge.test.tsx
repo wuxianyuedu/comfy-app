@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import type { EdgeProps } from "@xyflow/react";
 import { ProjectEdge } from "./ProjectEdge";
-import { EDGE_FOCUS_ACTIVE_KEY, EDGE_FOCUS_DATA_KEY } from "../canvas/hooks/use-related-edges-highlight";
+import {
+  EDGE_FOCUS_ACTIVE_KEY,
+  EDGE_FOCUS_DATA_KEY,
+} from "../canvas/hooks/use-related-edges-highlight";
 
 afterEach(cleanup);
 
@@ -57,7 +60,9 @@ describe("ProjectEdge 选中态样式", () => {
   });
 
   it("相关连线：加粗到 4px 并提亮，渐变本身不被替换", () => {
-    const { width, opacity, style } = wireStyle({ [EDGE_FOCUS_DATA_KEY]: "upstream" });
+    const { width, opacity, style } = wireStyle({
+      [EDGE_FOCUS_DATA_KEY]: "upstream",
+    });
     expect(width).toBe(4);
     expect(opacity).toBe(1);
     /* 提亮走 filter（对渐变同样生效），而不是换成平面色 —— 画布的品牌观感

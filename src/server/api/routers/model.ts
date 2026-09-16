@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { modelRepository, userModelConfigRepository } from "@/lib/core/repository";
+import {
+  modelRepository,
+  userModelConfigRepository,
+} from "@/lib/core/repository";
 import { syncModels, modelCountsByFolder } from "@/lib/models";
 import { listModelFolders, comfyBase } from "@/lib/comfyui/client";
 import { folderMeta } from "@/lib/model-types";
@@ -8,7 +11,11 @@ import { folderMeta } from "@/lib/model-types";
 export const modelRouter = createTRPCRouter({
   /** GET /api/models — public model list */
   list: authedProcedure
-    .input(z.object({ type: z.string().optional(), q: z.string().optional() }).optional())
+    .input(
+      z
+        .object({ type: z.string().optional(), q: z.string().optional() })
+        .optional(),
+    )
     .query(async ({ input }) => {
       const models = await modelRepository.list(input ?? {});
       return { models };
@@ -28,17 +35,20 @@ export const modelRouter = createTRPCRouter({
       modelCountsByFolder(),
     ]);
     const overrides = new Map(rows.map((row) => [row.folder, row]));
-    const folders = comfyFolders.slice().sort().map((folder) => {
-      const ov = overrides.get(folder);
-      return {
-        folder,
-        type: folder,
-        label: folderMeta(folder).label,
-        enabled: ov?.enabled ?? false,
-        hasConfig: Boolean(ov),
-        count: counts[folder] ?? 0,
-      };
-    });
+    const folders = comfyFolders
+      .slice()
+      .sort()
+      .map((folder) => {
+        const ov = overrides.get(folder);
+        return {
+          folder,
+          type: folder,
+          label: folderMeta(folder).label,
+          enabled: ov?.enabled ?? false,
+          hasConfig: Boolean(ov),
+          count: counts[folder] ?? 0,
+        };
+      });
     const comfyReachable = await fetch(comfyBase(), {
       signal: AbortSignal.timeout(3000),
     })
@@ -54,17 +64,20 @@ export const modelRouter = createTRPCRouter({
         folder: z.string().min(1),
         enabled: z.boolean(),
         label: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       if (input.enabled) {
         await userModelConfigRepository.addOrEnable(
           ctx.user.id,
           input.folder,
-          input.label ?? null
+          input.label ?? null,
         );
       } else {
-        await userModelConfigRepository.deleteForUser(ctx.user.id, input.folder);
+        await userModelConfigRepository.deleteForUser(
+          ctx.user.id,
+          input.folder,
+        );
       }
       return { ok: true };
     }),

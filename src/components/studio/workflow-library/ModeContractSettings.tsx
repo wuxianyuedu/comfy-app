@@ -20,7 +20,7 @@ export function ModeContractSettings() {
         type="button"
         onClick={() => setOpen(true)}
         title="配置每种模式对外有哪些统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器"
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-subtle px-3 py-2 text-sm font-medium text-ink-strong transition-colors hover:bg-surface-2 hover:text-ink-bright"
+        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
       >
         <span>{"\u{1F9E9}"}</span>
         <span>模式契约</span>

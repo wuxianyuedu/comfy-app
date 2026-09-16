@@ -19,7 +19,12 @@ describe("shell-tabs-store 应用级页签状态", () => {
   });
 
   it("openTab 新增页签并激活", () => {
-    useShellTabs.getState().openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });
+    useShellTabs.getState().openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: "http://127.0.0.1:8188",
+      closable: true,
+    });
     const s = useShellTabs.getState();
     expect(s.tabs).toHaveLength(2);
     expect(s.tabs[1]!.id).toBe("comfyui");
@@ -29,8 +34,18 @@ describe("shell-tabs-store 应用级页签状态", () => {
 
   it("openTab 使用稳定 id 时复用已有页签（不叠出重复）", () => {
     const st = useShellTabs.getState();
-    st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });
-    st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8189", closable: true });
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: "http://127.0.0.1:8188",
+      closable: true,
+    });
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: "http://127.0.0.1:8189",
+      closable: true,
+    });
     const s = useShellTabs.getState();
     expect(s.tabs).toHaveLength(2);
     expect(s.tabs[1]!.url).toBe("http://127.0.0.1:8189");
@@ -39,14 +54,24 @@ describe("shell-tabs-store 应用级页签状态", () => {
 
   it("activateTab 切换激活页签", () => {
     const st = useShellTabs.getState();
-    st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: "http://127.0.0.1:8188",
+      closable: true,
+    });
     useShellTabs.getState().activateTab(MAIN_TAB_ID);
     expect(useShellTabs.getState().activeTabId).toBe(MAIN_TAB_ID);
   });
 
   it("closeTab 关闭页签并回退到相邻页签", () => {
     const st = useShellTabs.getState();
-    st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: "http://127.0.0.1:8188",
+      closable: true,
+    });
     useShellTabs.getState().closeTab("comfyui");
     const s = useShellTabs.getState();
     expect(s.tabs).toHaveLength(1);
@@ -95,13 +120,23 @@ describe("shell-tabs-store 应用级页签状态", () => {
       closable: true,
       blockedUrl: "http://127.0.0.1:8188",
     });
-    st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: "http://127.0.0.1:8188",
+      closable: true,
+    });
     expect(useShellTabs.getState().tabs[1]!.blockedUrl).toBeNull();
   });
 
   it("updateTab 更新页签标题/地址", () => {
     const st = useShellTabs.getState();
-    st.openTab({ id: "comfyui", label: "ComfyUI", url: "http://127.0.0.1:8188", closable: true });
+    st.openTab({
+      id: "comfyui",
+      label: "ComfyUI",
+      url: "http://127.0.0.1:8188",
+      closable: true,
+    });
     useShellTabs.getState().updateTab("comfyui", { label: "ComfyUI 2" });
     const s = useShellTabs.getState();
     expect(s.tabs[1]!.label).toBe("ComfyUI 2");

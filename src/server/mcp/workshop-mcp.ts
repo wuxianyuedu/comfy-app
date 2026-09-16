@@ -7,7 +7,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { sizeSpecFromText, toSizeSpec, type SizeSpec } from "@/lib/size-presets";
+import {
+  sizeSpecFromText,
+  toSizeSpec,
+  type SizeSpec,
+} from "@/lib/size-presets";
 import type { ProjectMeta } from "@/lib/workshop/types";
 import { saveComfySettings } from "@/server/workshop/comfyui";
 import * as orchestrator from "@/server/workshop/orchestrator";
@@ -34,7 +38,9 @@ const sizeArgs = {
   size: z
     .string()
     .optional()
-    .describe('老口径尺寸「宽x高」，如 "1024x1024"（能用 ratio + clarity 就别用它）'),
+    .describe(
+      '老口径尺寸「宽x高」，如 "1024x1024"（能用 ratio + clarity 就别用它）',
+    ),
 };
 
 /** 工具入参 → 尺寸表达；一个都没给时返回 undefined（各通道走自己的默认档）。 */
@@ -45,7 +51,11 @@ function sizeSpecOf(args: {
   size?: string;
 }): SizeSpec | undefined {
   if (args.ratio || args.clarity || args.multiple !== undefined) {
-    return toSizeSpec({ ratio: args.ratio, clarity: args.clarity, multiple: args.multiple });
+    return toSizeSpec({
+      ratio: args.ratio,
+      clarity: args.clarity,
+      multiple: args.multiple,
+    });
   }
   if (args.size) return sizeSpecFromText(args.size);
   return undefined;
@@ -75,14 +85,27 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_create_session",
     {
       title: "创建工坊会话",
-      description: "创建一个新的工坊创作会话，返回 sessionId。可附带标题、类型、基调、梗概与灵感。",
+      description:
+        "创建一个新的工坊创作会话，返回 sessionId。可附带标题、类型、基调、梗概与灵感。",
       inputSchema: {
         title: z.string().optional().describe("项目标题"),
-        type: z.string().optional().describe("项目类型：short_video/micro_film/animation/ad/comic/other"),
+        type: z
+          .string()
+          .optional()
+          .describe(
+            "项目类型：short_video/micro_film/animation/ad/comic/other",
+          ),
         tone: z.string().optional().describe("基调，如「温暖治愈」"),
         logline: z.string().optional().describe("一句话梗概"),
-        idea: z.string().optional().describe("灵感 / 梗概，后续可由 LLM 扩写为剧本"),
-        userId: z.string().nullable().optional().describe("可选：关联用户 id（AI 会话通常留空）"),
+        idea: z
+          .string()
+          .optional()
+          .describe("灵感 / 梗概，后续可由 LLM 扩写为剧本"),
+        userId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("可选：关联用户 id（AI 会话通常留空）"),
       },
     },
     async (args) => {
@@ -112,7 +135,8 @@ export function buildWorkshopMcpServer(): McpServer {
     "workshop_get_session",
     {
       title: "获取会话完整状态",
-      description: "返回某会话的完整流水线状态（idea / 剧本 / 场景 / 角色 / 分镜 / 阶段）。",
+      description:
+        "返回某会话的完整流水线状态（idea / 剧本 / 场景 / 角色 / 分镜 / 阶段）。",
       inputSchema: { sessionId: z.string().describe("会话 id") },
     },
     async (args) => {
@@ -129,7 +153,8 @@ export function buildWorkshopMcpServer(): McpServer {
       description: "删除一个工坊会话。",
       inputSchema: { sessionId: z.string().describe("会话 id") },
     },
-    async (args) => json({ deleted: await orchestrator.deleteSession(args.sessionId) }),
+    async (args) =>
+      json({ deleted: await orchestrator.deleteSession(args.sessionId) }),
   );
 
   server.registerTool(
@@ -145,12 +170,15 @@ export function buildWorkshopMcpServer(): McpServer {
         logline: z.string().optional(),
       },
     },
-    async (args) => json(await orchestrator.setMeta(args.sessionId, {
-      title: args.title,
-      type: args.type as ProjectMeta["type"] | undefined,
-      tone: args.tone,
-      logline: args.logline,
-    })),
+    async (args) =>
+      json(
+        await orchestrator.setMeta(args.sessionId, {
+          title: args.title,
+          type: args.type as ProjectMeta["type"] | undefined,
+          tone: args.tone,
+          logline: args.logline,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -158,7 +186,10 @@ export function buildWorkshopMcpServer(): McpServer {
     {
       title: "设置灵感",
       description: "写入 / 覆盖灵感文本（后续用于 generate_script）。",
-      inputSchema: { sessionId: z.string(), idea: z.string().describe("灵感 / 梗概") },
+      inputSchema: {
+        sessionId: z.string(),
+        idea: z.string().describe("灵感 / 梗概"),
+      },
     },
     async (args) => json(await orchestrator.setIdea(args.sessionId, args.idea)),
   );
@@ -184,7 +215,14 @@ export function buildWorkshopMcpServer(): McpServer {
         parse: z.boolean().optional().describe("是否同步解析场景，默认 true"),
       },
     },
-    async (args) => json(await orchestrator.setScript(args.sessionId, args.markdown, args.parse ?? true)),
+    async (args) =>
+      json(
+        await orchestrator.setScript(
+          args.sessionId,
+          args.markdown,
+          args.parse ?? true,
+        ),
+      ),
   );
 
   server.registerTool(
@@ -207,14 +245,21 @@ export function buildWorkshopMcpServer(): McpServer {
         characters: z.array(z.any()).describe("Character 数组"),
       },
     },
-    async (args) => json(await orchestrator.setCharacters(args.sessionId, args.characters as never)),
+    async (args) =>
+      json(
+        await orchestrator.setCharacters(
+          args.sessionId,
+          args.characters as never,
+        ),
+      ),
   );
 
   server.registerTool(
     "workshop_build_storyboard",
     {
       title: "拆分分镜",
-      description: "调用 LLM 把剧本拆为镜头序列，自动匹配场景与角色并重算提示词。",
+      description:
+        "调用 LLM 把剧本拆为镜头序列，自动匹配场景与角色并重算提示词。",
       inputSchema: { sessionId: z.string() },
     },
     async (args) => json(await orchestrator.buildStoryboard(args.sessionId)),
@@ -230,55 +275,81 @@ export function buildWorkshopMcpServer(): McpServer {
         shots: z.array(z.any()).describe("Shot 数组"),
       },
     },
-    async (args) => json(await orchestrator.setStoryboard(args.sessionId, args.shots as never)),
+    async (args) =>
+      json(
+        await orchestrator.setStoryboard(args.sessionId, args.shots as never),
+      ),
   );
 
   server.registerTool(
     "workshop_generate_image",
     {
       title: "生图",
-      description: "为某个镜头或角色生成图片。channel 默认 \"api\"；\"comfyui\" 走本地 ComfyUI（需 ComfyUI 在运行，可选 data/workshop-comfy-settings.json 的 imageWorkflow 模板，默认内置 SDXL txt2img 图）。尺寸用「比例 + 分辨率（1k/2k/4k）」或「比例 + 百万像素（1M/2M/4M）+ 倍数」表达，具体像素按图片场景尺寸表算。",
+      description:
+        '为某个镜头或角色生成图片。channel 默认 "api"；"comfyui" 走本地 ComfyUI（需 ComfyUI 在运行，可选 data/workshop-comfy-settings.json 的 imageWorkflow 模板，默认内置 SDXL txt2img 图）。尺寸用「比例 + 分辨率（1k/2k/4k）」或「比例 + 百万像素（1M/2M/4M）+ 倍数」表达，具体像素按图片场景尺寸表算。',
       inputSchema: {
         sessionId: z.string(),
-        shotId: z.string().optional().describe("目标镜头 id（与 characterId 二选一）"),
-        characterId: z.string().optional().describe("目标角色 id（与 shotId 二选一）"),
-        channel: z.enum(["api", "comfyui"]).optional().describe("生图通道，默认 api"),
+        shotId: z
+          .string()
+          .optional()
+          .describe("目标镜头 id（与 characterId 二选一）"),
+        characterId: z
+          .string()
+          .optional()
+          .describe("目标角色 id（与 shotId 二选一）"),
+        channel: z
+          .enum(["api", "comfyui"])
+          .optional()
+          .describe("生图通道，默认 api"),
         ...sizeArgs,
       },
     },
-    async (args) => json(await orchestrator.generateImage(args.sessionId, {
-      shotId: args.shotId,
-      characterId: args.characterId,
-      channel: args.channel,
-      size: sizeSpecOf(args),
-    })),
+    async (args) =>
+      json(
+        await orchestrator.generateImage(args.sessionId, {
+          shotId: args.shotId,
+          characterId: args.characterId,
+          channel: args.channel,
+          size: sizeSpecOf(args),
+        }),
+      ),
   );
 
   server.registerTool(
     "workshop_submit_video",
     {
       title: "提交视频生成",
-      description: "为镜头提交图生视频 / 文生视频任务（channel 默认 \"api\"）。可指定首帧图。",
+      description:
+        '为镜头提交图生视频 / 文生视频任务（channel 默认 "api"）。可指定首帧图。',
       inputSchema: {
         sessionId: z.string(),
         shotId: z.string().describe("目标镜头 id"),
-        channel: z.enum(["api", "comfyui"]).optional().describe("生视频通道，默认 api"),
+        channel: z
+          .enum(["api", "comfyui"])
+          .optional()
+          .describe("生视频通道，默认 api"),
         prompt: z.string().optional().describe("视频提示词，默认用镜头描述"),
         negative: z.string().optional(),
         frames: z.number().optional(),
         fps: z.number().optional(),
-        useFirstFrame: z.boolean().optional().describe("是否用该镜头已生成的图片作为首帧"),
+        useFirstFrame: z
+          .boolean()
+          .optional()
+          .describe("是否用该镜头已生成的图片作为首帧"),
       },
     },
-    async (args) => json(await orchestrator.submitVideo(args.sessionId, {
-      shotId: args.shotId,
-      channel: args.channel,
-      prompt: args.prompt,
-      negative: args.negative,
-      frames: args.frames,
-      fps: args.fps,
-      useFirstFrame: args.useFirstFrame,
-    })),
+    async (args) =>
+      json(
+        await orchestrator.submitVideo(args.sessionId, {
+          shotId: args.shotId,
+          channel: args.channel,
+          prompt: args.prompt,
+          negative: args.negative,
+          frames: args.frames,
+          fps: args.fps,
+          useFirstFrame: args.useFirstFrame,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -286,23 +357,39 @@ export function buildWorkshopMcpServer(): McpServer {
     {
       title: "轮询视频任务",
       description: "轮询某个镜头的异步视频任务状态；完成时回写 clipUrl。",
-      inputSchema: { sessionId: z.string(), shotId: z.string().describe("目标镜头 id") },
+      inputSchema: {
+        sessionId: z.string(),
+        shotId: z.string().describe("目标镜头 id"),
+      },
     },
-    async (args) => json(await orchestrator.pollVideo(args.sessionId, args.shotId)),
+    async (args) =>
+      json(await orchestrator.pollVideo(args.sessionId, args.shotId)),
   );
 
   server.registerTool(
     "workshop_compose_final",
     {
       title: "成片合成",
-      description: "把分镜按序合成为成片：写出合成清单（JSON）。render=true 且 ffmpeg 可用时额外合成 mp4。",
+      description:
+        "把分镜按序合成为成片：写出合成清单（JSON）。render=true 且 ffmpeg 可用时额外合成 mp4。",
       inputSchema: {
         sessionId: z.string(),
-        render: z.boolean().optional().describe("是否调用 ffmpeg 合成 mp4（需本地片段为文件路径），默认 false"),
+        render: z
+          .boolean()
+          .optional()
+          .describe(
+            "是否调用 ffmpeg 合成 mp4（需本地片段为文件路径），默认 false",
+          ),
         title: z.string().optional().describe("成片标题，默认用会话标题"),
       },
     },
-    async (args) => json(await orchestrator.composeFinal(args.sessionId, { render: args.render, title: args.title })),
+    async (args) =>
+      json(
+        await orchestrator.composeFinal(args.sessionId, {
+          render: args.render,
+          title: args.title,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -312,16 +399,34 @@ export function buildWorkshopMcpServer(): McpServer {
       description:
         "保存 ComfyUI 通道配置：默认 SDXL txt2img 之外的自定义图（ComfyUI API 格式，支持 {{prompt}}/{{negative}}/{{image}} 占位）与 i2v 视频图。视频通道必须有 videoWorkflow 才能用。",
       inputSchema: {
-        checkpoint: z.string().optional().describe("默认 txt2img 使用的模型文件名，如 sd_xl_base_1.0.safetensors"),
-        imageWorkflow: z.unknown().optional().describe("自定义生图工作流（ComfyUI API 格式图，含 {{prompt}}/{{negative}}）"),
-        videoWorkflow: z.unknown().optional().describe("自定义图生视频工作流（含 {{prompt}}/{{negative}}/{{image}}）"),
+        checkpoint: z
+          .string()
+          .optional()
+          .describe(
+            "默认 txt2img 使用的模型文件名，如 sd_xl_base_1.0.safetensors",
+          ),
+        imageWorkflow: z
+          .unknown()
+          .optional()
+          .describe(
+            "自定义生图工作流（ComfyUI API 格式图，含 {{prompt}}/{{negative}}）",
+          ),
+        videoWorkflow: z
+          .unknown()
+          .optional()
+          .describe(
+            "自定义图生视频工作流（含 {{prompt}}/{{negative}}/{{image}}）",
+          ),
       },
     },
-    async (args) => json(await saveComfySettings({
-      checkpoint: args.checkpoint,
-      imageWorkflow: args.imageWorkflow,
-      videoWorkflow: args.videoWorkflow,
-    })),
+    async (args) =>
+      json(
+        await saveComfySettings({
+          checkpoint: args.checkpoint,
+          imageWorkflow: args.imageWorkflow,
+          videoWorkflow: args.videoWorkflow,
+        }),
+      ),
   );
 
   return server;

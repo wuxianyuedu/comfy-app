@@ -2,7 +2,10 @@
 
 import React from "react";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { fetchLocalModels, fetchRemoteModels } from "@/lib/llm/model-catalog-client";
+import {
+  fetchLocalModels,
+  fetchRemoteModels,
+} from "@/lib/llm/model-catalog-client";
 import { useLLM } from "@/components/workshop/LLMContext";
 import {
   channelOptionValue,
@@ -19,7 +22,9 @@ function optionLabel(name: string, badge: string): React.ReactNode {
   return (
     <span className="flex w-full items-center">
       <span className="min-w-0 flex-1 truncate">{name}</span>
-      <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">{badge}</span>
+      <span className="text-muted-foreground ml-2 shrink-0 text-[10px]">
+        {badge}
+      </span>
     </span>
   );
 }
@@ -67,9 +72,7 @@ export function ExtractModelSelect({
       if (cancelled) return;
       setAvailByKey((prev) => ({
         ...prev,
-        [selKey]: res.ok
-          ? { kind: "ok" }
-          : { kind: "err", detail: res.detail },
+        [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
       }));
     });
     return () => {
@@ -116,7 +119,8 @@ export function ExtractModelSelect({
     } else if (selAvail?.kind === "err") {
       hint = (
         <p className="mt-1 text-[11px] leading-relaxed text-red-700 dark:text-red-400">
-          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 / 配置正确后再试。
+          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 /
+          配置正确后再试。
         </p>
       );
     }

@@ -28,6 +28,8 @@ describe("EmptyStateHint", () => {
     expect(screen.getByText(/自定义提示/)).toBeInTheDocument();
     expect(screen.getByText("加粗部分")).toBeInTheDocument();
     // 默认文案不再出现
-    expect(screen.queryByText(/该工作流尚未标记对外参数/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/该工作流尚未标记对外参数/),
+    ).not.toBeInTheDocument();
   });
 });

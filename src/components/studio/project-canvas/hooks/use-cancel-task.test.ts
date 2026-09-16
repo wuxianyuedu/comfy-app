@@ -68,7 +68,7 @@ describe("useCancelTask", () => {
     expect(onFailed).toHaveBeenCalledWith("取消请求异常：未知错误");
   });
 
-  it("空 message 的 Error 也走兜底（new Error(\"\") 不该渲染空白提示条）", async () => {
+  it('空 message 的 Error 也走兜底（new Error("") 不该渲染空白提示条）', async () => {
     mockedCancel.mockRejectedValue(new Error(""));
     const onFailed = vi.fn();
     const { result } = renderHook(() =>
@@ -117,7 +117,10 @@ describe("useCancelTask", () => {
   it("取消期间 cancelling 为 true，返回后复位（按钮靠它禁用防重复点击）", async () => {
     let resolve!: () => void;
     mockedCancel.mockImplementation(
-      () => new Promise<void>((res) => { resolve = res; }),
+      () =>
+        new Promise<void>((res) => {
+          resolve = res;
+        }),
     );
     const onFailed = vi.fn();
     const { result } = renderHook(() =>

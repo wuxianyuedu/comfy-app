@@ -3,7 +3,11 @@
  * Collapse toggle + status dot + title + per-node IO checkbox + #id chip
  * + role badge.  Pinned to NODE_TITLE_H like ComfyUI's title bar. */
 import { colorToRgba, NODE_TITLE_H } from "../workflow-utils";
-import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
+import {
+  IoCheckbox,
+  NodeIdChip,
+  type IOEditContextValue,
+} from "./IOEditContext";
 import type { WorkflowNodeData, IoRef } from "../workflow-types";
 import type { NodePalette } from "./workflow-node-palette";
 
@@ -58,7 +62,7 @@ export function FlowNodeHeader({
           onToggleCollapsed();
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors e/15"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
         style={{ pointerEvents: "auto" }}
       >
         <svg
@@ -82,12 +86,17 @@ export function FlowNodeHeader({
       </button>
       <span
         className="inline-block h-2 w-2 shrink-0 rounded-full"
-        style={{ background: palette.dotBg, boxShadow: `0 0 6px ${palette.dotBg}` }}
+        style={{
+          background: palette.dotBg,
+          boxShadow: `0 0 6px ${palette.dotBg}`,
+        }}
       />
       <span
         className="flex-1 truncate text-[12px] font-medium tracking-wide"
         style={{ color: palette.titleColor }}
-        title={data.title && data.title !== displayTitle ? data.title : displayTitle}
+        title={
+          data.title && data.title !== displayTitle ? data.title : displayTitle
+        }
       >
         {displayTitle}
       </span>
@@ -97,20 +106,22 @@ export function FlowNodeHeader({
       {io?.ioEditMode && outputs.length > 0 && (
         <IoCheckbox
           io={io}
-          ioRef={{
-            nodeId: data.nodeId,
-            hostNodeId: data.hostNodeId,
-            name: outputs[0]![0],
-            kind: "output",
-            direction: "output",
-            // Prefer the rawJson output label / zh localized_name so the IO
-            // preview shows the meaningful name (e.g. IMAGE_FINAL) instead
-            // of the bare port key (`images`).
-            label:
-              data.rawOutputs?.[0]?.label ??
-              data.rawOutputs?.[0]?.localized ??
-              outputs[0]![0],
-          } satisfies IoRef}
+          ioRef={
+            {
+              nodeId: data.nodeId,
+              hostNodeId: data.hostNodeId,
+              name: outputs[0]![0],
+              kind: "output",
+              direction: "output",
+              // Prefer the rawJson output label / zh localized_name so the IO
+              // preview shows the meaningful name (e.g. IMAGE_FINAL) instead
+              // of the bare port key (`images`).
+              label:
+                data.rawOutputs?.[0]?.label ??
+                data.rawOutputs?.[0]?.localized ??
+                outputs[0]![0],
+            } satisfies IoRef
+          }
         />
       )}
       {/* Right-aligned `#<nodeId>` chip — click opens the NodeJsonPopover.
@@ -119,7 +130,10 @@ export function FlowNodeHeader({
       {role && (
         <span
           className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium"
-          style={{ background: colorToRgba(role.color, 0.25), color: role.color }}
+          style={{
+            background: colorToRgba(role.color, 0.25),
+            color: role.color,
+          }}
         >
           {role.label}
         </span>

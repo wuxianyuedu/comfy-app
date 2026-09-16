@@ -74,11 +74,11 @@ export function RequiredChips({
         return (
           <span
             key={pin.ioKey}
-            className="flex items-center gap-1 rounded border border-border-strong bg-canvas-deep px-1.5 py-0.5"
+            className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded border px-1.5 py-0.5"
             data-dimension-pin={pin.ioKey}
           >
             <span
-              className="max-w-[80px] truncate text-[10px] text-ink-soft"
+              className="text-ink-soft max-w-[80px] truncate text-[10px]"
               title={pin.label ?? pin.name}
             >
               {pin.label ?? pin.name}
@@ -94,8 +94,8 @@ export function RequiredChips({
                 }
                 className={`nodrag nopan rounded px-1.5 py-px text-[10px] font-medium transition-colors ${
                   required
-                    ? "border border-red-400/40 bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/25"
-                    : "border border-border-strong bg-subtle text-ink-muted hover:bg-subtle hover:text-ink-soft"
+                    ? "border border-red-400/40 bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-300"
+                    : "border-border-strong bg-subtle text-ink-muted hover:bg-subtle hover:text-ink-soft border"
                 }`}
               >
                 {required ? "必填" : "可选"}
@@ -142,7 +142,7 @@ export function SizeTableFooter({
       <button
         type="button"
         onClick={onOpen}
-        className="nodrag nopan rounded-md border border-border-strong px-2 py-1 text-[10px] text-ink-muted transition-colors hover:bg-subtle hover:text-ink-bright"
+        className="nodrag nopan border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md border px-2 py-1 text-[10px] transition-colors"
       >
         尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
       </button>

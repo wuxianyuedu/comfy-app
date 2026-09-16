@@ -457,8 +457,10 @@ export function CharacterDesigner({
         </div>
         {config && !genSel && (
           <p className="text-muted-foreground mt-2 text-[11px]">
-            未手动选择模型时，沿用全局配置（当前：{channelProviderLabel(config.provider)} ·{" "}
-            {config.model || "未选模型"}）。点下拉可切换本次生成的 本地/远端 模型。
+            未手动选择模型时，沿用全局配置（当前：
+            {channelProviderLabel(config.provider)} ·{" "}
+            {config.model || "未选模型"}）。点下拉可切换本次生成的 本地/远端
+            模型。
           </p>
         )}
         {!config && (
@@ -681,7 +683,10 @@ export function CharacterDesigner({
 
               {/* 定妆照：按上方提示词生成 / 导入，多次结果留作候选供挑选 */}
               {portrait && (
-                <CharacterPortraitStudio character={character} portrait={portrait} />
+                <CharacterPortraitStudio
+                  character={character}
+                  portrait={portrait}
+                />
               )}
             </div>
           ))}

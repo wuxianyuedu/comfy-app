@@ -1,14 +1,9 @@
- 
 "use client";
 
-import {
-  ReactFlowProvider,
-} from "@xyflow/react";
+import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-
 import { ErrorBoundary } from "@/components/ui/error-boundary";
-
 
 import { WorkflowEditorInner } from "../workflow-editor/WorkflowEditorInner";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
@@ -29,12 +24,12 @@ function EditorCrashFallback({
   return (
     <FullScreenLayer
       zClass="z-60"
-      className="flex items-center justify-center bg-canvas"
+      className="bg-canvas flex items-center justify-center"
     >
       <div className="w-[min(560px,90vw)] rounded-2xl border border-red-500/25 bg-red-500/5 p-6">
         <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-            编辑器渲染出错
-          </p>
+          编辑器渲染出错
+        </p>
         <p className="text-ink-soft mt-2 text-xs leading-relaxed break-all">
           {error?.message ?? "未知错误（详见控制台 componentStack）"}
         </p>
@@ -65,7 +60,9 @@ export function WorkflowCanvasEditor({
 
   return (
     <ErrorBoundary
-      fallback={(error) => <EditorCrashFallback error={error} onClose={onClose} />}
+      fallback={(error) => (
+        <EditorCrashFallback error={error} onClose={onClose} />
+      )}
       onError={(error) => {
         console.error("[WorkflowCanvasEditor] 渲染异常，编辑器已降级", error);
       }}

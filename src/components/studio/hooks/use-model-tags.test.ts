@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { vanillaApi } from "~/trpc/vanilla";
 
-import { type TagItem, mergeTagSnapshots, useModelTags } from "./use-model-tags";
+import {
+  type TagItem,
+  mergeTagSnapshots,
+  useModelTags,
+} from "./use-model-tags";
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
@@ -43,8 +47,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   vanilla.workflowModel.list.query.mockResolvedValue({ tags: SERVER_TAGS });
   vanilla.workflowModel.create.mutate.mockResolvedValue({ tag: tag("new") });
-  vanilla.workflowModel.delete.mutate.mockResolvedValue({ ok: true, deleted: true });
-  vanilla.workflowModel.rename.mutate.mockResolvedValue({ tag: tag("renamed") });
+  vanilla.workflowModel.delete.mutate.mockResolvedValue({
+    ok: true,
+    deleted: true,
+  });
+  vanilla.workflowModel.rename.mutate.mockResolvedValue({
+    tag: tag("renamed"),
+  });
 });
 
 afterEach(cleanup);
@@ -52,10 +61,9 @@ afterEach(cleanup);
 describe("mergeTagSnapshots（纯函数：props 合并规则）", () => {
   it("只补本地没有的标签，不覆盖本地已有的", () => {
     const local = [tag("z-image", 9)];
-    expect(mergeTagSnapshots(local, [tag("z-image", 2), tag("wan2.2", 1)])).toEqual([
-      tag("wan2.2", 1),
-      tag("z-image", 9),
-    ]);
+    expect(
+      mergeTagSnapshots(local, [tag("z-image", 2), tag("wan2.2", 1)]),
+    ).toEqual([tag("wan2.2", 1), tag("z-image", 9)]);
   });
 
   it("快照没带来新东西时原样返回（引用不变，避免无谓 re-render）", () => {
@@ -80,7 +88,9 @@ describe("useModelTags", () => {
     );
     rerender({ tags: [tag("z-image", 99), tag("wan2.2", 1)] });
     // 本地已有 z-image：计数保持 1（不让旧/新快照改掉本地状态）
-    expect(result.current.tags.find((t) => t.name === "z-image")?.count).toBe(1);
+    expect(result.current.tags.find((t) => t.name === "z-image")?.count).toBe(
+      1,
+    );
     expect(result.current.tags.some((t) => t.name === "wan2.2")).toBe(true);
   });
 
@@ -97,15 +107,22 @@ describe("useModelTags", () => {
 
   it("addTag：成功后清空草稿、刷新列表并回调父组件", async () => {
     const onChanged = vi.fn();
-    const { result } = renderHook(() => useModelTags({ initialTags: [], onChanged }));
+    const { result } = renderHook(() =>
+      useModelTags({ initialTags: [], onChanged }),
+    );
     act(() => result.current.setDraft("  z-image  "));
     await act(async () => {
       await result.current.addTag();
     });
-    expect(vanilla.workflowModel.create.mutate).toHaveBeenCalledWith({ name: "z-image" });
+    expect(vanilla.workflowModel.create.mutate).toHaveBeenCalledWith({
+      name: "z-image",
+    });
     expect(result.current.draft).toBe("");
     await waitFor(() =>
-      expect(result.current.tags.map((t) => t.name)).toEqual(["z-image", "wan2.2"]),
+      expect(result.current.tags.map((t) => t.name)).toEqual([
+        "z-image",
+        "wan2.2",
+      ]),
     );
     expect(onChanged).toHaveBeenCalled();
   });
@@ -131,7 +148,9 @@ describe("useModelTags", () => {
   });
 
   it("addTag 抛错：错误文案可读（失败路径必须有出口）", async () => {
-    vanilla.workflowModel.create.mutate.mockRejectedValue(new Error("标签名过长"));
+    vanilla.workflowModel.create.mutate.mockRejectedValue(
+      new Error("标签名过长"),
+    );
     const { result } = renderHook(() => useModelTags({ initialTags: [] }));
     act(() => result.current.setDraft("x"));
     await act(async () => {
@@ -148,7 +167,9 @@ describe("useModelTags", () => {
       await result.current.deleteTag("z-image", 0);
     });
     expect(confirmSpy).not.toHaveBeenCalled();
-    expect(vanilla.workflowModel.delete.mutate).toHaveBeenCalledWith({ name: "z-image" });
+    expect(vanilla.workflowModel.delete.mutate).toHaveBeenCalledWith({
+      name: "z-image",
+    });
     confirmSpy.mockRestore();
   });
 
@@ -158,7 +179,9 @@ describe("useModelTags", () => {
     await act(async () => {
       await result.current.deleteTag("z-image", 3);
     });
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("已绑定 3 个工作流"));
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining("已绑定 3 个工作流"),
+    );
     expect(vanilla.workflowModel.delete.mutate).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });

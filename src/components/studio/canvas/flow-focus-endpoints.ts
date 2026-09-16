@@ -213,10 +213,7 @@ export interface ResolvePortFocusArgs {
 }
 
 /** 端口行的实际 Handle id：输出侧的 `out:` 前缀在这里补全，避免各处各写一遍。 */
-export function portHandleId(
-  side: "source" | "target",
-  name: string,
-): string {
+export function portHandleId(side: "source" | "target", name: string): string {
   if (side !== "source") return name;
   return name.startsWith(OUTPUT_PORT_HANDLE_PREFIX)
     ? name
@@ -240,14 +237,13 @@ function assignPortRole(
   handle: string,
   role: PortFocusRole,
 ): void {
-  const decided =
-    bucket.upstream.has(handle)
-      ? "upstream"
-      : bucket.downstream.has(handle)
-        ? "downstream"
-        : bucket.related.has(handle)
-          ? "related"
-          : null;
+  const decided = bucket.upstream.has(handle)
+    ? "upstream"
+    : bucket.downstream.has(handle)
+      ? "downstream"
+      : bucket.related.has(handle)
+        ? "related"
+        : null;
   const next: PortFocusRole =
     decided === "upstream"
       ? "upstream"
@@ -291,8 +287,12 @@ export function resolvePortFocusRoles({
 
   for (const connection of connections) {
     if (connection.paramMap === true) continue;
-    const source = connection.source ? resolveSourceId(connection.source) : null;
-    const target = connection.target ? resolveTargetId(connection.target) : null;
+    const source = connection.source
+      ? resolveSourceId(connection.source)
+      : null;
+    const target = connection.target
+      ? resolveTargetId(connection.target)
+      : null;
     const sourceSelected = source !== null && selectedIds.has(source);
     const targetSelected = target !== null && selectedIds.has(target);
     if (!sourceSelected && !targetSelected) continue;
@@ -312,7 +312,11 @@ export function resolvePortFocusRoles({
       assignPortRole(bucket(target), targetHandle, role);
     }
     if (source !== null && sourceHandle) {
-      assignPortRole(bucket(source), portHandleId("source", sourceHandle), role);
+      assignPortRole(
+        bucket(source),
+        portHandleId("source", sourceHandle),
+        role,
+      );
     }
   }
 

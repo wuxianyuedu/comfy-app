@@ -18,13 +18,21 @@ import { getWorkflowRenderChainModules } from "./workflow-render-chain";
 import { useDebugStore } from "../debug/debug-store";
 import { NODE_TITLE_H, resolveNodePackage } from "../workflow-utils";
 import { FrontendOnlyBadge } from "../RequiredSummary";
-import { RgthreeFastGroupsBypasserBody, RgthreePowerLoraLoaderBody, RgthreeLabelBody } from "./RgthreeBodies";
+import {
+  RgthreeFastGroupsBypasserBody,
+  RgthreePowerLoraLoaderBody,
+  RgthreeLabelBody,
+} from "./RgthreeBodies";
 import { FrostLayer } from "./NodeFrost";
 import { WorkflowImagePreview } from "../WorkflowImagePreview";
 import { useIOEditContext } from "./IOEditContext";
 import { useHoverElevation } from "../workflow-editor/HoverElevation";
 import { useFlowNodeEntries } from "./workflow-node-entries";
-import { computeNodePalette, DARK_PALETTE_BASE, LIGHT_PALETTE_BASE } from "./workflow-node-palette";
+import {
+  computeNodePalette,
+  DARK_PALETTE_BASE,
+  LIGHT_PALETTE_BASE,
+} from "./workflow-node-palette";
 import { FlowNodeHeader } from "./FlowNodeHeader";
 import { FlowNodeCollapsedAnchors } from "./FlowNodeCollapsedAnchors";
 import { FlowNodePinRows } from "./FlowNodePinRows";
@@ -32,17 +40,47 @@ import { FlowNodeWidgetRows } from "./FlowNodeWidgetRows";
 import type { WorkflowNodeData } from "../workflow-types";
 
 /** Node role palette definitions (assignedRole → label + accent colour). */
-export const PORT_ROLES: { key: string; label: string; color: string; bg: string }[] = [
-  { key: "positiveNode",   label: "正向提示词", color: "#a78bfa", bg: "rgba(167,139,250,0.15)" },
-  { key: "negativeNode",   label: "反向提示词", color: "#f87171", bg: "rgba(248,113,113,0.15)" },
-  { key: "checkpointNode", label: "模型(Checkpoint)", color: "#60a5fa", bg: "rgba(96,165,250,0.15)" },
-  { key: "samplerNode",    label: "采样器",       color: "#fb923c", bg: "rgba(251,146,60,0.15)" },
-  { key: "inputImageNode", label: "输入图像",      color: "#22d3ee", bg: "rgba(34,211,238,0.15)" },
+export const PORT_ROLES: {
+  key: string;
+  label: string;
+  color: string;
+  bg: string;
+}[] = [
+  {
+    key: "positiveNode",
+    label: "正向提示词",
+    color: "#a78bfa",
+    bg: "rgba(167,139,250,0.15)",
+  },
+  {
+    key: "negativeNode",
+    label: "反向提示词",
+    color: "#f87171",
+    bg: "rgba(248,113,113,0.15)",
+  },
+  {
+    key: "checkpointNode",
+    label: "模型(Checkpoint)",
+    color: "#60a5fa",
+    bg: "rgba(96,165,250,0.15)",
+  },
+  {
+    key: "samplerNode",
+    label: "采样器",
+    color: "#fb923c",
+    bg: "rgba(251,146,60,0.15)",
+  },
+  {
+    key: "inputImageNode",
+    label: "输入图像",
+    color: "#22d3ee",
+    bg: "rgba(34,211,238,0.15)",
+  },
 ];
 
 /* ── Node data for the flow canvas (must satisfy Record<string, unknown> for @xyflow/react) ── */
 export const INPUT_ROW_HEIGHT = 22; // px per input row (matches the py-1 + text-[11px] row)
-export const HEADER_TOTAL = 60;     // header (32) + #id bar (22) + small breathing room (6)
+export const HEADER_TOTAL = 60; // header (32) + #id bar (22) + small breathing room (6)
 
 /* (Note: we used to override `<Handle top: ...>` with these constants to
  *  line Handles up with their rows.  We no longer do that — React Flow
@@ -56,7 +94,9 @@ export const FlowNode = React.memo(function FlowNode({
   data: WorkflowNodeData;
   selected?: boolean;
 }) {
-  const role = PORT_ROLES.find((PORT_ROLES) => PORT_ROLES.key === data.assignedRole);
+  const role = PORT_ROLES.find(
+    (PORT_ROLES) => PORT_ROLES.key === data.assignedRole,
+  );
   const io = useIOEditContext();
   /* viewport zoom is NO LONGER subscribed here — the zoom read
    *  lives inside <FrostLayer> so only frosted nodes re-render while zooming. */
@@ -77,7 +117,7 @@ export const FlowNode = React.memo(function FlowNode({
   const palette = computeNodePalette(
     data,
     role,
-    resolvedTheme === "light" ? LIGHT_PALETTE_BASE : DARK_PALETTE_BASE
+    resolvedTheme === "light" ? LIGHT_PALETTE_BASE : DARK_PALETTE_BASE,
   );
 
   /* Collapsed state (ComfyUI LiteGraph flag `flags.collapsed`).  The
@@ -85,7 +125,7 @@ export const FlowNode = React.memo(function FlowNode({
    *  the state thereafter (a naive `dataCollapsed || userCollapsed` could
    *  never re-expand an initially-collapsed node). */
   const [userCollapsed, setUserCollapsed] = useState<boolean>(
-    data.flags?.collapsed === true
+    data.flags?.collapsed === true,
   );
   const isCollapsed = userCollapsed;
 
@@ -115,10 +155,18 @@ export const FlowNode = React.memo(function FlowNode({
         // and shrinks to the title bar when collapsed.
         width: hasSize ? data.size?.w : undefined,
         height: "auto",
-        minWidth: hasSize ? data.size?.w : (entries.outputs.length > 0 ? 268 : 248),
+        minWidth: hasSize
+          ? data.size?.w
+          : entries.outputs.length > 0
+            ? 268
+            : 248,
         // data.size.h is BODY CONTENT height; the outer div includes
         // the pinned NODE_TITLE_H title bar, so the floor is content + title.
-        minHeight: isCollapsed ? NODE_TITLE_H : (hasSize ? (data.size?.h ?? 0) + NODE_TITLE_H : undefined),
+        minHeight: isCollapsed
+          ? NODE_TITLE_H
+          : hasSize
+            ? (data.size?.h ?? 0) + NODE_TITLE_H
+            : undefined,
         // No maxWidth cap — ComfyUI lets the user resize the node box freely.
         borderColor: palette.nodeBorder,
         // Mode (bypass/disabled) nodes tint via <FrostLayer> + real blur, so
@@ -130,7 +178,9 @@ export const FlowNode = React.memo(function FlowNode({
         outlineOffset: selected ? "2px" : undefined,
       }}
     >
-      {palette.modeColor && palette.nodeMode !== 0 && <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />}
+      {palette.modeColor && palette.nodeMode !== 0 && (
+        <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
+      )}
       {/* Header — pinned to NODE_TITLE_H (litegraph's NODE_TITLE_HEIGHT).
        *  Suppressed entirely for rgthree Label nodes (see `isLabel`). */}
       {!isLabel && (
@@ -158,27 +208,31 @@ export const FlowNode = React.memo(function FlowNode({
 
       {/* TOP PINS section — pure-connection inputs paired with outputs on
        *  shared rows.  Hidden when collapsed. */}
-      {!isCollapsed && (entries.uniqueConnEntries.length > 0 || entries.outputs.length > 0) && (
-        <FlowNodePinRows
-          data={data}
-          io={io}
-          rawMeta={entries.rawMeta}
-          uniqueConnEntries={entries.uniqueConnEntries}
-          outputs={entries.outputs}
-        />
-      )}
+      {!isCollapsed &&
+        (entries.uniqueConnEntries.length > 0 ||
+          entries.outputs.length > 0) && (
+          <FlowNodePinRows
+            data={data}
+            io={io}
+            rawMeta={entries.rawMeta}
+            uniqueConnEntries={entries.uniqueConnEntries}
+            outputs={entries.outputs}
+          />
+        )}
 
       {/* Widget inputs section — knobs only.  Skipped for Power Lora
        *  Loader (renders its own stack) and hidden when collapsed. */}
-      {!isCollapsed && entries.visibleWidgetEntries.length > 0 && !isPowerLoraLoader && (
-        <FlowNodeWidgetRows
-          data={data}
-          io={io}
-          rawMeta={entries.rawMeta}
-          visibleWidgetEntries={entries.visibleWidgetEntries}
-          hasSize={hasSize}
-        />
-      )}
+      {!isCollapsed &&
+        entries.visibleWidgetEntries.length > 0 &&
+        !isPowerLoraLoader && (
+          <FlowNodeWidgetRows
+            data={data}
+            io={io}
+            rawMeta={entries.rawMeta}
+            visibleWidgetEntries={entries.visibleWidgetEntries}
+            hasSize={hasSize}
+          />
+        )}
 
       {/* rgthree Fast Groups Bypasser runtime body — one toggle row per
        *  group matching `matchTitle` (PATCH → rawJson write). */}
@@ -199,14 +253,17 @@ export const FlowNode = React.memo(function FlowNode({
       {/* rgthree Label runtime body — paints the title in `properties`
        *  styles, filling the (header-less) card. */}
       {isLabel && (
-        <RgthreeLabelBody text={data.title} properties={data.properties ?? {}} />
+        <RgthreeLabelBody
+          text={data.title}
+          properties={data.properties ?? {}}
+        />
       )}
 
       {/* IMAGE-input inline thumbnail preview — every rawInput
        *  carrying `preview: true` (LoadImage family) gets a ComfyUI-style
        *  preview at the node-body tail. */}
       {!isCollapsed && entries.imagePreviewEntries.length > 0 && (
-        <div className="flex flex-col gap-2 px-2 pb-2 pt-1">
+        <div className="flex flex-col gap-2 px-2 pt-1 pb-2">
           {entries.imagePreviewEntries.map((entry) => (
             <WorkflowImagePreview key={entry.name} entry={entry} />
           ))}
@@ -220,16 +277,17 @@ export const FlowNode = React.memo(function FlowNode({
        *  （各类 Loader / EmptyLatentImage …）本就没有入端口，左侧挂一颗
        *  孤零零的圆点看起来像渲染 bug。改为完全透明 + isConnectable=false：
        *  连线锚点能力保留（避免既有 fallback 边断开），视觉上不再出现。 */}
-      {entries.uniqueConnEntries.length === 0 && entries.uniqueWidgetEntries.length === 0 && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          id="__default_in"
-          isConnectable={false}
-          className="!h-2.5 !w-2.5 !border-0"
-          style={{ left: -5, opacity: 0, pointerEvents: "none" }}
-        />
-      )}
+      {entries.uniqueConnEntries.length === 0 &&
+        entries.uniqueWidgetEntries.length === 0 && (
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="__default_in"
+            isConnectable={false}
+            className="!h-2.5 !w-2.5 !border-0"
+            style={{ left: -5, opacity: 0, pointerEvents: "none" }}
+          />
+        )}
 
       {/* Generic source handle — always present but invisible so edges that
        *  can't resolve a precise "out:<name>" handle still anchor. */}
@@ -255,7 +313,9 @@ export const FlowNode = React.memo(function FlowNode({
       {/* 调试模式 — 非折叠时在 PackageFooter 下方渲染渲染链路
        *  模块标签（仅 debugMode 开启时由 DebugChainFooter 自行显示）。 */}
       {!isCollapsed && debugMode && (
-        <DebugChainFooter modules={getWorkflowRenderChainModules(data.classType)} />
+        <DebugChainFooter
+          modules={getWorkflowRenderChainModules(data.classType)}
+        />
       )}
     </div>
   );

@@ -121,7 +121,10 @@ export function ModalDialog({
       aria-modal="true"
       aria-labelledby={titleId}
       onClick={onClose}
-      className={overlayClass("modal", "z-200 flex items-center justify-center bg-canvas-deep px-4 backdrop-blur-sm dark:bg-black/65")}
+      className={overlayClass(
+        "modal",
+        "bg-canvas-deep z-200 flex items-center justify-center px-4 backdrop-blur-sm dark:bg-black/65",
+      )}
     >
       <div
         onClick={stop}
@@ -148,12 +151,12 @@ export function ModalDialog({
           <div className="min-w-0 flex-1">
             <h2
               id={titleId}
-              className="text-ink text-[15px] font-semibold leading-tight"
+              className="text-ink text-[15px] leading-tight font-semibold"
             >
               {title}
             </h2>
             {description && (
-              <div className="text-ink-faint mt-1.5 whitespace-pre-line text-[13px] leading-relaxed">
+              <div className="text-ink-faint mt-1.5 text-[13px] leading-relaxed whitespace-pre-line">
                 {description}
               </div>
             )}
@@ -188,6 +191,6 @@ export function ModalDialog({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

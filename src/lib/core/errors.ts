@@ -50,7 +50,7 @@ export class AppError extends Error {
     message: string,
     code = "internal",
     httpStatus = 500,
-    details?: unknown
+    details?: unknown,
   ) {
     super(message);
     this.name = new.target.name;
@@ -67,7 +67,7 @@ export class AuthError extends AppError {
   constructor(
     message = "未登录或会话已失效",
     code = "auth.required",
-    details?: unknown
+    details?: unknown,
   ) {
     super(message, code, 401, details);
   }
@@ -88,8 +88,7 @@ export class NotFoundError extends AppError {
 export function normalizeError(err: unknown): AppError {
   if (err instanceof AppError) return err;
 
-  const message =
-    err instanceof Error ? err.message : "未知内部错误";
+  const message = err instanceof Error ? err.message : "未知内部错误";
   return new AppError(message, "internal", 500);
 }
 

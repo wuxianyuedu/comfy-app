@@ -96,7 +96,9 @@ export function DynamicWorkflowFormView({
     /* 多模式：行内「必填 / 可选」与 seed「控件后行为」按当前 mode 解析，
      *  显示模式覆盖值而非条目全局值。mode 为空时 rowEntry === entry（旧行为）。 */
     const rowEntry: EnrichedWidget =
-      mode && (entry.modes?.[mode]?.required !== undefined || entry.modes?.[mode]?.seedMode !== undefined)
+      mode &&
+      (entry.modes?.[mode]?.required !== undefined ||
+        entry.modes?.[mode]?.seedMode !== undefined)
         ? {
             ...entry,
             required: resolveEntryRequired(entry, mode),
@@ -104,50 +106,65 @@ export function DynamicWorkflowFormView({
           }
         : entry;
     return (
-    <WidgetInputRow
-      key={rowEntry.ioKey}
-      entry={rowEntry}
-      allPins={allPins}
-      value={values[entry.ioKey]}
-      compact={compact}
-      disabled={disabled}
-      uploading={uploading && uploadTarget === entry.ioKey}
-      seedMode={seedModes?.[entry.ioKey]}
-      onSeedModeChange={
-        onSeedModeChange ? (mode: string) => onSeedModeChange(entry.ioKey, mode) : undefined
-      }
-      onValueChange={(next: unknown) => set(entry.ioKey, next)}
-      onPickFile={() => pickFile(entry.ioKey)}
-      onLabelChange={
-        onLabelChange ? (label: string) => onLabelChange(entry.ioKey, label) : undefined
-      }
-      onRequiredChange={
-        onRequiredChange
-          ? (required: boolean) => onRequiredChange(entry.ioKey, required)
-          : undefined
-      }
-      visible={
-        visibilityMode ? (entry.modes?.[visibilityMode]?.visible ?? true) : undefined
-      }
-      onVisibilityChange={
-        onVisibilityChange && visibilityMode
-          ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
-          : undefined
-      }
-      dimmed={!!visibilityMode && rowEntry.modes?.[visibilityMode]?.visible === false}
-      withHandle={withHandle}
-      /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
-       * 节点重名很常见），用 ioKey 当 handle id 才会接到「那一行」而不是「同名的
-       * 另一行」。 */
-      handleId={entry.ioKey}
-      trailing={rowTrailing?.(entry)}
-    />
+      <WidgetInputRow
+        key={rowEntry.ioKey}
+        entry={rowEntry}
+        allPins={allPins}
+        value={values[entry.ioKey]}
+        compact={compact}
+        disabled={disabled}
+        uploading={uploading && uploadTarget === entry.ioKey}
+        seedMode={seedModes?.[entry.ioKey]}
+        onSeedModeChange={
+          onSeedModeChange
+            ? (mode: string) => onSeedModeChange(entry.ioKey, mode)
+            : undefined
+        }
+        onValueChange={(next: unknown) => set(entry.ioKey, next)}
+        onPickFile={() => pickFile(entry.ioKey)}
+        onLabelChange={
+          onLabelChange
+            ? (label: string) => onLabelChange(entry.ioKey, label)
+            : undefined
+        }
+        onRequiredChange={
+          onRequiredChange
+            ? (required: boolean) => onRequiredChange(entry.ioKey, required)
+            : undefined
+        }
+        visible={
+          visibilityMode
+            ? (entry.modes?.[visibilityMode]?.visible ?? true)
+            : undefined
+        }
+        onVisibilityChange={
+          onVisibilityChange && visibilityMode
+            ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
+            : undefined
+        }
+        dimmed={
+          !!visibilityMode &&
+          rowEntry.modes?.[visibilityMode]?.visible === false
+        }
+        withHandle={withHandle}
+        /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
+         * 节点重名很常见），用 ioKey 当 handle id 才会接到「那一行」而不是「同名的
+         * 另一行」。 */
+        handleId={entry.ioKey}
+        trailing={rowTrailing?.(entry)}
+      />
     );
   };
 
   return (
     <div className={compact ? "space-y-0" : "space-y-3"}>
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onFile}
+      />
 
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
           用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
@@ -175,7 +192,9 @@ export function DynamicWorkflowFormView({
 
             const isDragging = draggingKey === entry.ioKey;
             const isDropTarget =
-              dragOverKey === entry.ioKey && !!draggingKey && draggingKey !== entry.ioKey;
+              dragOverKey === entry.ioKey &&
+              !!draggingKey &&
+              draggingKey !== entry.ioKey;
 
             return (
               <div
@@ -194,7 +213,7 @@ export function DynamicWorkflowFormView({
                 {/* 手柄只是视觉提示（真正可拖来自父层的 draggable）；它自身
                  *  pointer-events-none，点击会落到下面的输入框上。 */}
                 <div
-                  className="pointer-events-none absolute right-1 top-1/2 z-5 -translate-y-1/2 select-none text-[10px] leading-[6px] text-white/30"
+                  className="pointer-events-none absolute top-1/2 right-1 z-5 -translate-y-1/2 text-[10px] leading-[6px] text-white/30 select-none"
                   aria-hidden
                 >
                   ⋮⋮

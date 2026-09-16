@@ -19,10 +19,7 @@ import {
   workshopInputLabel,
   type WorkshopInputType,
 } from "@/lib/workshop/model-mode-contract";
-import {
-  ALL_WORKFLOW_TYPES,
-  getWorkflowType,
-} from "~/lib/workflow-types";
+import { ALL_WORKFLOW_TYPES, getWorkflowType } from "~/lib/workflow-types";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { useModelAdapters } from "./hooks/use-model-adapters";
 
@@ -45,7 +42,9 @@ function LabelWithId({ label, id }: { label: string; id: string }) {
   return (
     <>
       {label}
-      <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">{id}</span>
+      <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
+        {id}
+      </span>
     </>
   );
 }
@@ -84,7 +83,7 @@ export function WorkshopModelAdapterModal({
     <div
       className={overlayClass(
         "modal",
-        "z-50 grid place-items-center bg-canvas-deep p-4 backdrop-blur-sm dark:bg-canvas-deep",
+        "bg-canvas-deep dark:bg-canvas-deep z-50 grid place-items-center p-4 backdrop-blur-sm",
       )}
       onClick={onClose}
     >
@@ -96,7 +95,8 @@ export function WorkshopModelAdapterModal({
           <div>
             <h3 className="text-ink-strong text-sm font-semibold">模型适配</h3>
             <p className="text-muted-foreground mt-0.5 text-[11px]">
-              为远端模型配置工坊各模式下的输入 / 输出：统一输入（提示词、宽高比、
+              为远端模型配置工坊各模式下的输入 /
+              输出：统一输入（提示词、宽高比、
               百万像素、倍数、图片…）映射到该接口请求体的字段名，产物按字段路径提取。
             </p>
           </div>
@@ -120,8 +120,8 @@ export function WorkshopModelAdapterModal({
               <p className="text-muted-foreground text-xs">加载中…</p>
             ) : candidates.length === 0 ? (
               <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-                还没有远端模型 —— 到「设置 → 模型」添加 kind=图片 / 视频 的远端条目后，
-                回来为它配置各模式的输入输出。
+                还没有远端模型 —— 到「设置 → 模型」添加 kind=图片 / 视频
+                的远端条目后， 回来为它配置各模式的输入输出。
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -164,7 +164,9 @@ export function WorkshopModelAdapterModal({
                         type="button"
                         aria-label={`移除模式 ${modeLabel(a.mode)}`}
                         onClick={() =>
-                          setDraft((prev) => prev.filter((x) => x.mode !== a.mode))
+                          setDraft((prev) =>
+                            prev.filter((x) => x.mode !== a.mode),
+                          )
                         }
                         className="text-muted-foreground/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
                       >
@@ -252,7 +254,10 @@ export function WorkshopModelAdapterModal({
                   </p>
                   <div className="space-y-1.5">
                     {a.inputs.map((row, i) => (
-                      <div key={`${a.mode}-${row.type}-${i}`} className="flex items-center gap-1.5">
+                      <div
+                        key={`${a.mode}-${row.type}-${i}`}
+                        className="flex items-center gap-1.5"
+                      >
                         <select
                           value={row.type}
                           onChange={(event) =>
@@ -261,7 +266,8 @@ export function WorkshopModelAdapterModal({
                               inputs: x.inputs.map((r, j) =>
                                 j === i
                                   ? {
-                                      type: event.target.value as WorkshopInputType,
+                                      type: event.target
+                                        .value as WorkshopInputType,
                                       field: r.field,
                                     }
                                   : r,
@@ -276,14 +282,18 @@ export function WorkshopModelAdapterModal({
                             </option>
                           ))}
                         </select>
-                        <span className="text-muted-foreground text-[10px]">→</span>
+                        <span className="text-muted-foreground text-[10px]">
+                          →
+                        </span>
                         <input
                           value={row.field}
                           onChange={(event) =>
                             updateAdapter(a.mode, (x) => ({
                               ...x,
                               inputs: x.inputs.map((r, j) =>
-                                j === i ? { ...r, field: event.target.value } : r,
+                                j === i
+                                  ? { ...r, field: event.target.value }
+                                  : r,
                               ),
                             }))
                           }
@@ -299,7 +309,7 @@ export function WorkshopModelAdapterModal({
                               inputs: x.inputs.filter((_, j) => j !== i),
                             }))
                           }
-                          className="text-muted-foreground/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400 px-1 text-xs"
+                          className="text-muted-foreground/60 px-1 text-xs hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
                         >
                           ✕
                         </button>
@@ -311,21 +321,26 @@ export function WorkshopModelAdapterModal({
                         updateAdapter(a.mode, (x) => {
                           const used = new Set(x.inputs.map((r) => r.type));
                           const next =
-                            WORKSHOP_INPUT_TYPES.find((t) => !used.has(t.type)) ??
-                            WORKSHOP_INPUT_TYPES[0];
+                            WORKSHOP_INPUT_TYPES.find(
+                              (t) => !used.has(t.type),
+                            ) ?? WORKSHOP_INPUT_TYPES[0];
                           return {
                             ...x,
-                            inputs: [...x.inputs, { type: next.type, field: next.type }],
+                            inputs: [
+                              ...x.inputs,
+                              { type: next.type, field: next.type },
+                            ],
                           };
                         })
                       }
-                      className="text-primary hover:bg-primary/10 rounded border border-dashed border-primary/40 px-2 py-0.5 text-[11px]"
+                      className="text-primary hover:bg-primary/10 border-primary/40 rounded border border-dashed px-2 py-0.5 text-[11px]"
                     >
                       ＋ 添加输入映射
                     </button>
                   </div>
                   <label className="text-muted-foreground mt-2 mb-1 block text-[10px]">
-                    产物字段路径（响应 JSON 内，如 url / data.0.url；留空走通用提取）
+                    产物字段路径（响应 JSON 内，如 url /
+                    data.0.url；留空走通用提取）
                   </label>
                   <input
                     value={a.outputField}

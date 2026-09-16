@@ -45,13 +45,19 @@ export async function POST(req: NextRequest) {
   if (isRecord(body.image)) patch.image = body.image;
   if (isRecord(body.video)) patch.video = body.video;
   if (patch.image === undefined && patch.video === undefined) {
-    return NextResponse.json({ error: "缺少 image / video 配置" }, { status: 400 });
+    return NextResponse.json(
+      { error: "缺少 image / video 配置" },
+      { status: 400 },
+    );
   }
 
   try {
     await saveWorkshopApiSettings(patch);
     return NextResponse.json({ channels: getMaskedChannels() });
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "保存失败") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "保存失败") },
+      { status: 500 },
+    );
   }
 }

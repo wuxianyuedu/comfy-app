@@ -17,7 +17,10 @@
 
 import React from "react";
 import { BaseEdge, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
-import { shouldDimEdge, type EdgeFocusRole } from "../canvas/flow-focus-endpoints";
+import {
+  shouldDimEdge,
+  type EdgeFocusRole,
+} from "../canvas/flow-focus-endpoints";
 import { readEdgeFocusRole } from "../canvas/hooks/use-related-edges-highlight";
 
 export const ProjectEdge = React.memo(function ProjectEdge(props: EdgeProps) {

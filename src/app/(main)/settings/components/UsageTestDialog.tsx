@@ -138,11 +138,11 @@ export function UsageTestDialog({
             </p>
           )}
 
-      {usageTest.kind === "video" && (
-        <UsageVideoModeQuickPick d={d} usageTest={usageTest} />
-      )}
+          {usageTest.kind === "video" && (
+            <UsageVideoModeQuickPick d={d} usageTest={usageTest} />
+          )}
 
-      <UsageFieldEditor d={d} usageTest={usageTest} />
+          <UsageFieldEditor d={d} usageTest={usageTest} />
 
           {(usageTest.kind === "image" || usageTest.kind === "video") && (
             <div className="mb-3">
@@ -201,14 +201,14 @@ export function UsageTestDialog({
             </p>
           )}
 
-      {usageTest.result && !usageTest.running && (
-        <UsageTestResultPanel
-          c={c}
-          d={d}
-          usageTest={usageTest}
-          result={usageTest.result}
-        />
-      )}
+          {usageTest.result && !usageTest.running && (
+            <UsageTestResultPanel
+              c={c}
+              d={d}
+              usageTest={usageTest}
+              result={usageTest.result}
+            />
+          )}
 
           <div className="mt-4 flex justify-end gap-2">
             <button
@@ -261,8 +261,7 @@ function UsageVideoModeQuickPick({
               (f) => f.key === "mode",
             )?.value;
             const active =
-              modeValue?.trim() === m &&
-              !isModeValueBroken(modeValue ?? "");
+              modeValue?.trim() === m && !isModeValueBroken(modeValue ?? "");
             return (
               <button
                 key={m}
@@ -292,8 +291,7 @@ function UsageVideoModeQuickPick({
           ) : null;
         })}
         {usageTest.fields.map((f) => {
-          if (f.key !== "mode" || !isModeValueBroken(f.value))
-            return null;
+          if (f.key !== "mode" || !isModeValueBroken(f.value)) return null;
           const i = usageTest.fields.indexOf(f);
           return (
             <div
@@ -301,10 +299,9 @@ function UsageVideoModeQuickPick({
               className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
             >
               <p>
-                ⚠ mode 的值被图片/链接覆盖了——这正是「reference
-                选中消失」和 400 invalid mode 的原因。点下方按钮把图搬到
-                images 行，或直接把输入框改回 text / keyframe /
-                reference。
+                ⚠ mode 的值被图片/链接覆盖了——这正是「reference 选中消失」和 400
+                invalid mode 的原因。点下方按钮把图搬到 images
+                行，或直接把输入框改回 text / keyframe / reference。
               </p>
               {isPreviewableUrl(f.value) && (
                 <button
@@ -420,9 +417,7 @@ function UsageFieldEditor({
                   ✕
                 </button>
               </div>
-              {isPreviewableUrl(f.value) && (
-                <FieldImagePreview src={f.value} />
-              )}
+              {isPreviewableUrl(f.value) && <FieldImagePreview src={f.value} />}
             </div>
           );
         })}
@@ -477,9 +472,7 @@ function UsageTestResultPanel({
             {result.videoUrl && (
               <button
                 type="button"
-                onClick={() =>
-                  void c.openExternalUrl(result.videoUrl ?? "")
-                }
+                onClick={() => void c.openExternalUrl(result.videoUrl ?? "")}
                 className="text-primary hover:text-primary-hover inline-flex items-center gap-1 text-xs font-medium underline-offset-2 hover:underline"
                 title="在系统默认浏览器中打开生成的视频"
               >
@@ -492,39 +485,35 @@ function UsageTestResultPanel({
                 title="本次产出的内容已在本地 temp 子目录保存一份"
               >
                 已保存到本地：
-                <span className="font-mono">
-                  {result.savedPath}
-                </span>
+                <span className="font-mono">{result.savedPath}</span>
               </p>
             )}
-            {result.pending &&
-              result.taskId &&
-              !usageTest.querying && (
-                <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-                  <p className="font-medium">
-                    ⏳ 视频仍在生成中（不是失败），已提交到提供方，
-                    生成通常需数十秒到几分钟。
-                  </p>
-                  <p className="text-muted-foreground mt-1 break-all">
-                    任务 ID：{result.taskId}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void d.continueUsageWait()}
-                    disabled={usageTest.querying}
-                    className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
-                  >
-                    {usageTest.querying ? (
-                      <>
-                        <Loader2 size={12} className="animate-spin" />
-                        等待中…
-                      </>
-                    ) : (
-                      "继续等待并获取结果"
-                    )}
-                  </button>
-                </div>
-              )}
+            {result.pending && result.taskId && !usageTest.querying && (
+              <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                <p className="font-medium">
+                  ⏳ 视频仍在生成中（不是失败），已提交到提供方，
+                  生成通常需数十秒到几分钟。
+                </p>
+                <p className="text-muted-foreground mt-1 break-all">
+                  任务 ID：{result.taskId}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void d.continueUsageWait()}
+                  disabled={usageTest.querying}
+                  className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
+                >
+                  {usageTest.querying ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      等待中…
+                    </>
+                  ) : (
+                    "继续等待并获取结果"
+                  )}
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <p className="rounded-lg bg-red-100 px-3 py-2 text-xs break-all text-red-700 dark:bg-red-500/10 dark:text-red-300">

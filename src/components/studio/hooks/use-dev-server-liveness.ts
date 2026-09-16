@@ -75,9 +75,7 @@ function writeSession(key: string, value: string): void {
   }
 }
 
-type ProbeResult =
-  | { ok: true; bootId: string }
-  | { ok: false; bootId: null };
+type ProbeResult = { ok: true; bootId: string } | { ok: false; bootId: null };
 
 /** 单次探测：读取 dev server 当前 bootId。任何 HTTP 响应（含应用层错误码）
  *  说明进程在；仅网络层失败（reject）视为不可达。 */
