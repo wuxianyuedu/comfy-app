@@ -38,7 +38,6 @@ import {
 } from "~/lib/workflow-exposed-params";
 import { megapixelsForSize } from "~/lib/workshop/workflow-encapsulation";
 import { aspectLabelForDims } from "~/lib/size-presets";
-import { roleKeyword } from "~/lib/workflow-text-role";
 
 /* ── 对外参数分类 ──
  * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
@@ -131,12 +130,13 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   other: "参数",
 };
 
-/** 条目名 + 显示名（小写）。图内角色（`role`）折算成同义关键词并进同一串：同一对
- *  CLIPTextEncode 的 pin 名与显示名一样，只有导入图沿 KSampler 连线链推出的角色分得出
- *  正负（ISSUE #611）；并进这里则 `classifyPin` 与自动落点同源，不会两边各判一套。
- *  关键词池收在 `~/lib/workflow-text-role`，与工坊封装同一份（ISSUE #620）。 */
+/** 条目名 + 显示名（小写）。
+ *
+ *  **判据只有这一处事实来源：作者自己写下的名字**（端口名 + 显示名）。这里刻意
+ *  不看 `role` 之类的图内推导，也不看节点类名 —— 对外有哪些参数由契约表决定，
+ *  工作流只决定每一口落到哪一行（见 `buildParamEntries`）。 */
 function searchText(e: WorkflowIOEntry): string {
-  return `${e.name ?? ""} ${e.label ?? ""} ${roleKeyword(e.role)}`.toLowerCase();
+  return `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
 }
 
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
@@ -458,22 +458,18 @@ export function defaultOutputPortIndex(
  *  工作流只决定「每个统一参数落到哪一行端口」。
  *
  *  · `mode` 给出时按契约过滤：契约里没有的口子（步数 / CFG / 采样器…）一律不出现；
- *  · `optional` 的口子（如负面提示词）只有工作流确实有对应端口时才出现，
- *    不给每个工作流都摆一张死卡片；
+ *  · **契约口一律常驻**：契约列了哪些对外参数就返回哪些，工作流能不能承接是
+ *    **落点**问题（`pins` 为空 ⇒ 如实显示成「未配置」），不是「这一口存不存在」
+ *    的问题。这里不判断工作流的能力；
  *  · 不传 `mode` 时保持旧的「按节点 + 分类」聚类（供没有模式语境的调用方使用）。
  */
 export function buildParamEntries(
   io: WorkflowIOMap | null | undefined,
   labels?: Record<string, string>,
-  options?: { mode?: string | null; keepOptional?: boolean },
+  options?: { mode?: string | null },
 ): ParamEntry[] {
   if (options != null && "mode" in options) {
-    return buildContractEntries(
-      io,
-      labels,
-      options.mode ?? null,
-      options.keepOptional ?? false,
-    );
+    return buildContractEntries(io, labels, options.mode ?? null);
   }
   return buildLegacyEntries(io, labels);
 }
@@ -483,47 +479,14 @@ function buildContractEntries(
   io: WorkflowIOMap | null | undefined,
   labels: Record<string, string> | undefined,
   mode: string | null,
-  keepEmptyOptional: boolean,
 ): ParamEntry[] {
-  /* 先把工作流里所有可对外落点的端口按分类归拢（同一分类可命中多个端口）。 */
-  const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
-  for (const [ioKey, raw] of Object.entries(io ?? {})) {
-    const entry = raw as WorkflowIOEntry | undefined;
-    if (entry?.direction !== "input" || entry.kind !== "widget") continue;
-    const cls = classifyPin(entry);
-    if (cls === "other") continue;
-    const list = pinsByClass.get(cls) ?? [];
-    list.push({
-      ioKey,
-      name: entry.name,
-      type: entry.type ?? "*",
-      defaultValue: entry.defaultValue,
-    });
-    pinsByClass.set(cls, list);
-  }
-
-  /* 工作流一个可落点的端口都没有（io 为空 / 全是内部参数）时，契约里那些
-   * 「有候选端口才能连」的口子一并省掉 —— 摆一排连不上任何东西的卡片只会
-   * 让用户以为「这个工作流有提示词口」。 */
-  const hasAnyPin = pinsByClass.size > 0;
+  const pinsByClass = classifyPins(io);
 
   const out: ParamEntry[] = [];
   for (const def of exposedParamsForMode(mode)) {
     const pins = classesForContractParam(def.id).flatMap(
       (cls) => pinsByClass.get(cls) ?? [],
     );
-    /* 可选口子（负面提示词 / 第二张参考图）工作流没有对应端口就不摆出来。
-     *
-     *  `keepOptional` 例外：调用方自己要拿这条口做**候选兜底**（见
-     *  `~/lib/workflow-text-role` 与工作流库的 `deriveLibraryParamCards`）——
-     *  它需要看到「这一口现在没有候选」才能去图内文本编码节点里找出该落的那一行。
-     *  兜底不认「工作流连任何可落点的端口都没有」的情形（`!hasAnyPin`）：那种工作流
-     *  本来就没有可承接的端口，摆一张连不上任何东西的卡片只会误导。 */
-    if (
-      pins.length === 0 &&
-      ((def.optional && !keepEmptyOptional) || !hasAnyPin)
-    )
-      continue;
     if (out.some((entry) => entry.id === def.id)) continue;
     const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
     out.push({
@@ -541,6 +504,32 @@ function buildContractEntries(
     });
   }
   return out;
+}
+
+/** 工作流里**可对外落点**的输入口，按分类归拢（同一分类可命中多个端口）。
+ *
+ *  这是「这个工作流能承接什么」的**唯一**判定处，只回答一个事实问题：某个
+ *  对外参数现在能落到哪几行上。它不参与「对外有哪些参数」的决策 —— 那是契约表
+ *  的事（`exposedParamsForMode`），判据里不含任何推导。 */
+function classifyPins(
+  io: WorkflowIOMap | null | undefined,
+): Map<ParamClass, ParamEntry["pins"]> {
+  const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
+  for (const [ioKey, raw] of Object.entries(io ?? {})) {
+    const entry = raw as WorkflowIOEntry | undefined;
+    if (entry?.direction !== "input" || entry.kind !== "widget") continue;
+    const cls = classifyPin(entry);
+    if (cls === "other") continue;
+    const list = pinsByClass.get(cls) ?? [];
+    list.push({
+      ioKey,
+      name: entry.name,
+      type: entry.type ?? "*",
+      defaultValue: entry.defaultValue,
+    });
+    pinsByClass.set(cls, list);
+  }
+  return pinsByClass;
 }
 
 /** 无模式语境下的旧聚类（按节点 + 分类）—— 只有拿不到模式的调用方会走这里。 */

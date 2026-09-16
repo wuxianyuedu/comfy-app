@@ -29,7 +29,6 @@ import {
   type RawNodeMeta,
 } from "@/lib/comfyui/workflow-detail-raw";
 import { type WorkflowIOModeOverride } from "~/lib/workflow-io-types";
-import { isTextEncoderClass } from "~/lib/workflow-text-role";
 
 const MULTILINE_HINT = /(prompt|text|caption|描述|提示)/i;
 
@@ -66,10 +65,6 @@ export interface WorkflowIOEnrichParams {
   innerInputsById?: Record<string, RawInputEntry[]>;
   rawNodeMeta: RawNodeMeta[];
   graph: Record<string, unknown>;
-  /** 图内正 / 反向文本编码节点的 id（`detectParamMap` 沿 KSampler 的
-   *  `positive` / `negative` 连线链推出）。给出时把角色投影到条目上
-   *  （`role`），让「负向提示词」这类只靠 pin 名分不出来的口可被判出。 */
-  paramMap?: { positiveNode?: string; negativeNode?: string };
   nodeTitleById: Record<string, string>;
   nodeTypeById: Record<string, string>;
   comboOptionsForClassField: (
@@ -163,14 +158,6 @@ export interface WorkflowIOEntry {
    *  （`value_1`）时，仅凭显示的 label 无从判断本层有没有作者命名，而这里能。
    *  没有它，同名条目在写入时会被当成作者命名固化回库（ISSUE #349）。 */
   slotLabel?: string;
-  /** 该条目是否出自图内的**文本编码节点**（类名带 `TextEncode`）—— 客户端在
-   *  `role` 判不出来时据此做有限兜底（见 `~/lib/workflow-io-types`）。 */
-  isTextNode?: boolean;
-  /** 图内语义角色（正向 / 反向文本编码节点）—— 由导入图的 `paramMap`
-   *  （`detectParamMap`：沿 KSampler 的 `positive` / `negative` 连线链推出）
-   *  投影而来。同一对 CLIPTextEncode 的 pin 名与显示名完全一样，只有这条信息
-   *  能分清正负（见 `~/lib/workflow-io-types` 的 `WorkflowIOEntry.role`）。 */
-  role?: "positive" | "negative";
   /** 富化链现在给这个条目的显示名（`label → localized → name` 之外还含子图
    *  内部字段业务名）。
    *
@@ -191,7 +178,6 @@ export async function enrichWorkflowIO(
     innerInputsById,
     rawNodeMeta,
     graph,
-    paramMap,
     nodeTitleById,
     nodeTypeById,
     comboOptionsForClassField,
@@ -199,11 +185,6 @@ export async function enrichWorkflowIO(
   } = params;
 
   const workflowIO: Record<string, WorkflowIOEntry> = {};
-
-  /* 顶层正 / 反向文本编码节点 id（子图内部 id 不在 `paramMap` 的键空间里，
-   *  比对时按字符串取，命中才给角色）。 */
-  const positiveNodeId = paramMap?.positiveNode;
-  const negativeNodeId = paramMap?.negativeNode;
 
   for (const [ioKey, v] of Object.entries(workflowIORaw)) {
     if (!v || typeof v !== "object") continue;
@@ -254,20 +235,6 @@ export async function enrichWorkflowIO(
       }
       return full;
     })();
-
-    /* 图内语义角色：`paramMap` 里的 id 可能是 UUID / React Flow 短 id 两种形态
-     *  （与 `canonicalNodeId` 的宽容匹配同源），故按「逐字或前缀即同一节点」比。
-     *  只有确实落在正 / 反向节点上的条目才拿到角色。 */
-    const sameNode = (a: string, b: string | undefined): boolean =>
-      !!b && (a === b || a.startsWith(`${b}-`) || b.startsWith(`${a}-`));
-    const role: "positive" | "negative" | undefined = sameNode(
-      canonicalNodeId,
-      negativeNodeId,
-    )
-      ? "negative"
-      : sameNode(canonicalNodeId, positiveNodeId)
-        ? "positive"
-        : undefined;
 
     if (v.direction === "output") {
       const meta = rawNodeMeta.find(
@@ -492,10 +459,6 @@ export async function enrichWorkflowIO(
           ? graphClassType
           : undefined;
 
-    /* 图内文本编码节点（`CLIPTextEncode` / `TextEncodeQwenImageEdit…`）：
-     *  客户端在 `role` 判不出时据此收窄提示词候选（见 `~/lib/workflow-text-role`）。 */
-    const isTextNode = isTextEncoderClass(classType);
-
     workflowIO[ioKey] = {
       direction: v.direction,
       kind: v.kind,
@@ -546,11 +509,6 @@ export async function enrichWorkflowIO(
       /* 富化链最终给出的显示名 —— 客户端拿它 + 上面两个字段一起判「本地存的那串
        *  是不是机器 pin 名」。只作判定事实源，客户端显示仍按自己的合并链取。 */
       ...(label !== undefined ? { enrichedLabel: label } : {}),
-      /* 图内语义角色：只对**顶层节点**成立（`paramMap` 是顶层图的判定，子图
-       *  内部的 id 不在它的键空间里），且只在能确定时写。 */
-      ...(v.direction === "input" && role !== undefined ? { role } : {}),
-      /* 文本编码节点标记只在**输入**口上下发 —— 输出口没有提示词语义。 */
-      ...(v.direction === "input" && isTextNode ? { isTextNode } : {}),
     };
   }
 

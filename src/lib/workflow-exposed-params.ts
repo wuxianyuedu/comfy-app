@@ -11,6 +11,13 @@
  * 展示顺序）。工作流只决定「每个统一参数落到哪一行端口」（见
  * `workflow-param-mapping` 的映射模型），不决定「对外有哪些参数」。
  *
+ * **契约口一律常驻，判据里不含任何「工作流能不能承接」的推导**：契约列了哪些
+ * 对外参数，页面就显示哪些，落点为空就如实显示成「未配置」（作者在库里把这一口
+ * 连到工作流的哪一行，是**落点**问题，不是「这一口存不存在」的问题）。此前负向
+ * 提示词被标成「可选口」，只有工作流内部被推出负向角色（或名字里写了 negative）
+ * 时才出现 —— 显示与否跟着工作流内容走，同一件事在两个页签上还对不上
+ * （ISSUE #620）。
+ *
  * 无 React、无 IO（规范 §17.2 第①层），可直接单测。
  */
 
@@ -41,8 +48,6 @@ export interface ExposedParamDef {
   id: string;
   /** 对外展示名（与具体工作流无关）。 */
   label: string;
-  /** 可选参数：只有工作流确实有对应端口时才出现，避免给每个工作流都摆一张死卡片。 */
-  optional?: boolean;
 }
 
 /** 统一对外参数的**基础名**。
@@ -115,7 +120,6 @@ export function exposedParamsForMode(
       cls: "negative",
       id: "negative",
       label: EXPOSED_PARAM_DISPLAY_LABEL.negative,
-      optional: true,
     },
   ];
 
