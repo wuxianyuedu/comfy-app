@@ -122,8 +122,7 @@ export interface WorkflowDetailLoaderArgs {
 }
 
 /**
- * Owns the workflow-detail loading + subgraph drill-in/out navigation for
- * the workflow editor.  Extracted from wf-editor-inner.tsx (P4 split).
+ * 持有工作流详情加载 + 子图下钻/返回导航的逻辑。
  */
 export function useWorkflowDetailLoader({
   workflowId,
@@ -271,7 +270,7 @@ export function useWorkflowDetailLoader({
               applyDetailState(data, isSubgraph);
             }
           })
-          .catch(() => undefined);
+          .catch((e) => console.warn("[we] 后台刷新详情失败", e));
         return;
       }
 

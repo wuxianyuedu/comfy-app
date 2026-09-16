@@ -54,6 +54,7 @@
  *   node scripts/check-reformat-only.cjs --range A..B
  *   node scripts/check-reformat-only.cjs --strict   # 阈值降为 1(排查/盘点用)
  */
+const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync, spawnSync } = require("node:child_process");
 
@@ -234,6 +235,20 @@ function isStagedReformatOnly(headRev, file) {
 }
 
 function main() {
+  /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
+   *  「拆成两次提交」在这里不是可选动作 —— 上游的形态已经定死在历史里，本地
+   *  无法把一次 merge 的重排与行为改动分开。判据取 `MERGE_HEAD` 是否存在：
+   *  pre-commit 在合并提交对象生成**之前**运行，此时 `.git/MERGE_HEAD` 由
+   *  `git merge` 写入、合并完成后删除，正是「本次提交是合并提交」的唯一事实源。
+   *  仅当**没有**走 `--range`（CI 盘点按范围判，与合并现场无关）时豁免。 */
+  const mergeHeadPresent = fs.existsSync(path.join(ROOT, ".git", "MERGE_HEAD"));
+  if (!process.argv.includes("--range") && mergeHeadPresent) {
+    console.log(
+      "[reformat] 合并提交（MERGE_HEAD 存在），跳过「格式化与行为改动分离」判定",
+    );
+    return;
+  }
+
   const args = process.argv.slice(2);
   const limit = args.includes("--strict") ? 1 : LIMIT;
   const rangeIdx = args.indexOf("--range");

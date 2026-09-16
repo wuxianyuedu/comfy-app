@@ -1,9 +1,7 @@
 "use client";
-/* Extracted from wf-editor-inner.tsx (P4 refactor).  The editor's top bar:
- * breadcrumb, stats, IO toggles, JSON viewer, reset
- * and save buttons.  IO-related state is read straight from the Zustand
- * IOEditStore (getIOEditApi / useIOEditStore) — same pattern as
- * WorkflowEditorBody — so only workflow/view/nav props are threaded in. */
+/* 工作流编辑器顶栏：面包屑、统计、IO 开关、JSON 查看器、重置与保存按钮。
+ * IO 相关状态直接读 Zustand IOEditStore（getIOEditApi / useIOEditStore，
+ * 与 WorkflowEditorBody 同模式），因此本组件只接收 workflow/view/nav 类 props。 */
 import React, { useCallback } from "react";
 import { ArrowLeft, RotateCw } from "lucide-react";
 import type { WorkflowDetail } from "../workflow-types";
@@ -139,8 +137,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   void fetchDetail();
                 }
               }}
-              className="text-ink-bright font-title truncate text-[18px] leading-tight font-bold tracking-tight transition-colors hover:text-violet-700 dark:text-violet-300"
-              style={{ maxWidth: 280 }}
+              className="text-ink-bright font-title max-w-70 truncate text-[18px] leading-tight font-bold tracking-tight transition-colors hover:text-violet-700 dark:text-violet-300"
               title={
                 subgraphStack.length
                   ? `${rootWorkflowName || detail.name}（返回顶层工作流）`
@@ -251,7 +248,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           </p>
           {detail.sourcePath ? (
             detail.sourceMissing ? (
-              <p className="bg-red-500/7.000000000000001 mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 px-2 py-1 text-[11px] text-red-700 dark:text-red-300">
+              <p className="mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-700 dark:text-red-300">
                 <span className="font-semibold">本地文件已丢失：</span>
                 <span className="truncate font-mono">{detail.sourcePath}</span>
                 <span className="ml-1 shrink-0 text-red-700/80 dark:text-red-400/80">
@@ -259,7 +256,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                 </span>
               </p>
             ) : detail.sourceChanged ? (
-              <p className="bg-emerald-500/7.000000000000001 mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
+              <p className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
                 <span className="font-semibold">已从本地文件刷新最新内容</span>
                 <span className="truncate font-mono text-emerald-700/80 dark:text-emerald-400/80">
                   {detail.sourcePath}

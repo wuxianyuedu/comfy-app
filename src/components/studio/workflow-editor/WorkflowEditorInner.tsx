@@ -288,7 +288,7 @@ function WorkflowEditorBody({
    *  manifest is already cached server-side after the first parse, so
    *  this is one cheap roundtrip per page open. */
   useEffect(() => {
-    refreshCustomNodes().catch(() => undefined);
+    refreshCustomNodes().catch((e) => console.warn("[we] 节点清单刷新失败", e));
   }, []);
   /* Subgraph navigation stack.  Empty while viewing the top-level workflow.
    *  Each entry is {uid, name} for breadcrumb display; clicking a crumb
@@ -940,7 +940,7 @@ function WorkflowEditorBody({
             派生数据由 `sourceModalData` (useMemo) 给出:
               - 顶层 detail: graph/rawJson 来自 detail
               - sub 视图: graph 来自 sub-detail, rawJson 切自父
-                rawJson.definitions.subgraphs[uid] (R42 修复)
+                rawJson.definitions.subgraphs[uid]
             关闭则清空 viewJsonOpen。 */}
         {viewJsonOpen && sourceModalData && (
           <SourceModal

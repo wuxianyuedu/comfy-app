@@ -1,7 +1,6 @@
 "use client";
-/* Extracted node renderers + registries from wf-editor-inner.tsx:
- * WorkflowGroupNode / WorkflowIoPortNode / WorkflowNoteNode + shared constants +
- * workflowNodeTypes / workflowEdgeTypes. */
+/* 工作流画布的节点渲染器与注册表：WorkflowGroupNode / WorkflowIoPortNode /
+ * WorkflowNoteNode 及其共享常量、workflowNodeTypes / workflowEdgeTypes。 */
 import React, { useMemo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "@/lib/comfyui/types";
@@ -80,7 +79,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
   );
 });
 
-/* ── IO boundary port node (late v3) ──
+/* ── IO boundary port node ──
  * Compact label-only rendering for nodes sitting on a subgraph's INPUTS
  * or OUTPUTS boundary (i.e. nodes whose input is fed by the -10 sentinel
  * or whose output is consumed by the -20 sentinel).  Reference image:
@@ -113,7 +112,7 @@ export const GROUP_TITLE_BAR = 24;
 /** Vertical padding at the bottom of a wfGroup. */
 export const GROUP_PAD_Y_BOTTOM = 10;
 /** Border + title-chip colour for the INPUTS / OUTPUTS wfGroups wrapping
- *  the boundary pins (late). A muted purple so the group
+ *  the boundary pins. A muted purple so the group
  *  frames read clearly against the canvas while still
  *  staying distinct from the inner FlowNode / WorkflowSubgraphNode cards. */
 export const GROUP_RAIL_COLOR = "#a855f7";
@@ -150,7 +149,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
     : data.title;
   return (
     <div
-      /* late — input panels right-align their label so the
+      /* input panels right-align their label so the
        *  name hugs the right-edge handle dot, matching the user-supplied
        *  reference (`noise_seed  ●`, `noise_seed 1  ●`, ...).  Output
        *  panels stay left-aligned so their label hugs the LEFT-edge
@@ -166,7 +165,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
       }}
       title={`${hoverLabel}${data.type ? ` · ${data.type}` : ""}${valueStr ? ` · ${valueStr}` : ""}`}
     >
-      {/* Boundary-pin signal model (flipped late):
+      {/* Boundary-pin signal model:
           pins face the *centre* of the canvas so the wires run short and
           straight.  INPUT pin ("in") carries data INTO the subgraph
           (React Flow `type="source"` — it supplies the inner node's
