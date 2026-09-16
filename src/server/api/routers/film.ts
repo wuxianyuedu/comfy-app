@@ -33,7 +33,7 @@ export const filmRouter = createTRPCRouter({
         framesPerShot: z.number().int().positive().optional(),
         subtitleOn: z.boolean().optional(),
         bgmName: z.string().nullable().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const film = await filmRepository.create({

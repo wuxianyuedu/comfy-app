@@ -29,11 +29,11 @@ export function WorkspaceNav({
   onOpenSettings,
 }: WorkspaceNavProps) {
   return (
-    <nav className="flex h-full w-[64px] shrink-0 flex-col items-center gap-1 border-r border-border-subtle bg-canvas/85 py-4 backdrop-blur-sm">
+    <nav className="border-border-subtle bg-canvas/85 flex h-full w-[64px] shrink-0 flex-col items-center gap-1 border-r py-4 backdrop-blur-sm">
       {/* Logo / Brand mark */}
       <Link
         href="/workspace"
-        className="mb-5 flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/12 text-violet-700 dark:text-violet-400 ring-1 ring-violet-500/30"
+        className="mb-5 flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/12 text-violet-700 ring-1 ring-violet-500/30 dark:text-violet-400"
         title="Comfy-APP"
       >
         <Layers size={20} />
@@ -53,7 +53,7 @@ export function WorkspaceNav({
                 ? "bg-primary/16 text-ink-bright shadow-sm shadow-black/5 dark:shadow-black/5"
                 : isEnabled
                   ? "text-ink-muted hover:bg-subtle hover:text-ink-strong"
-                  : "cursor-not-allowed text-ink-fainter opacity-50"
+                  : "text-ink-fainter cursor-not-allowed opacity-50"
             }`}
             title={isEnabled ? item.label : `${item.label}（即将推出）`}
             aria-current={isActive ? "page" : undefined}
@@ -61,7 +61,11 @@ export function WorkspaceNav({
             {item.icon}
             <span
               className={`mt-0.5 text-[10px] leading-none ${
-                isActive ? "text-ink-bright" : isEnabled ? "text-ink-fainter group-hover:text-ink-strong" : "text-ink-fainter"
+                isActive
+                  ? "text-ink-bright"
+                  : isEnabled
+                    ? "text-ink-fainter group-hover:text-ink-strong"
+                    : "text-ink-fainter"
               }`}
             >
               {item.label}
@@ -78,7 +82,7 @@ export function WorkspaceNav({
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-ink-muted transition-colors hover:bg-subtle hover:text-ink-strong"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-9 w-9 items-center justify-center rounded-xl transition-colors"
           title="设置"
         >
           <Settings size={17} strokeWidth={1.8} />
@@ -86,7 +90,7 @@ export function WorkspaceNav({
       ) : (
         <Link
           href="/settings"
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-ink-muted transition-colors hover:bg-subtle hover:text-ink-strong"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-9 w-9 items-center justify-center rounded-xl transition-colors"
           title="设置"
         >
           <Settings size={17} strokeWidth={1.8} />

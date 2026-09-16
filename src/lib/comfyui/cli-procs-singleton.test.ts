@@ -22,7 +22,9 @@ vi.mock("./runner-state", () => ({
   log: vi.fn(),
 }));
 vi.mock("./executor-finalize", () => ({ complete: vi.fn(), fail: vi.fn() }));
-vi.mock("~/lib/core/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock("~/lib/core/logger", () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
 
 describe("cliProcs — 进程级单例（HMR 安全）", () => {
   it("模块重新求值后拿到同一个 Map，在飞任务不丢句柄", async () => {

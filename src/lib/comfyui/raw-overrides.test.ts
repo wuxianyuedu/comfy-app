@@ -57,11 +57,22 @@ function nestedRaw() {
   };
 }
 
-function widgetsOf(raw: unknown, subgraphUid: string, innerId: string): unknown[] {
+function widgetsOf(
+  raw: unknown,
+  subgraphUid: string,
+  innerId: string,
+): unknown[] {
   const r = raw as {
-    definitions: { subgraphs: Record<string, { nodes: { id: string; widgets_values: unknown[] }[] }> };
+    definitions: {
+      subgraphs: Record<
+        string,
+        { nodes: { id: string; widgets_values: unknown[] }[] }
+      >;
+    };
   };
-  const node = r.definitions.subgraphs[subgraphUid]!.nodes.find((n) => n.id === innerId)!;
+  const node = r.definitions.subgraphs[subgraphUid]!.nodes.find(
+    (n) => n.id === innerId,
+  )!;
   return node.widgets_values;
 }
 

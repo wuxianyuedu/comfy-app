@@ -247,7 +247,8 @@ export function colorizeLogrusLine(line: string): AnsiSegment[] | null {
   const head = line.slice(0, levelIdx);
   const segments: AnsiSegment[] = [];
   const dimLen = LOGRUS_DIM_PREFIX_RE.exec(head)?.[0].length ?? 0;
-  if (dimLen > 0) segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
+  if (dimLen > 0)
+    segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
   if (head.length > dimLen) segments.push({ text: head.slice(dimLen) });
   segments.push({
     text: levelToken,

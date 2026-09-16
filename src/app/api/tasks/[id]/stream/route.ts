@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> },
 ) {
   const params = await ctx.params;
   const id = params.id;
@@ -44,7 +44,9 @@ export async function GET(
         .then((task) => {
           if (task) {
             // logs 是 Prisma Json 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
-            const existing: unknown[] = Array.isArray(task.logs) ? task.logs : [];
+            const existing: unknown[] = Array.isArray(task.logs)
+              ? task.logs
+              : [];
             // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
             // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。enqueue()/processQueue()
             // 在 startGenerate 返回前、前端 EventSource 尚未订阅时就会输出

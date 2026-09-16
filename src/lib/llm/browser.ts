@@ -15,7 +15,12 @@ interface ChatArgs {
  * key, so the browser never sees it. SSE chunks are shaped `{ token }` and a
  * final `[DONE]` marker ends the stream.
  */
-export async function streamChat({ messages, opts, onToken, signal }: ChatArgs): Promise<string> {
+export async function streamChat({
+  messages,
+  opts,
+  onToken,
+  signal,
+}: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -64,7 +69,10 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
 }
 
 /** Non-streaming one-shot chat. */
-export async function completeChat({ messages, opts }: ChatArgs): Promise<string> {
+export async function completeChat({
+  messages,
+  opts,
+}: ChatArgs): Promise<string> {
   const res = await fetch("/api/llm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -87,9 +95,11 @@ export interface RemoteProbeResult {
  * baseUrl / apiKey 留空时由服务端回落到已保存的全局配置（「留空则用全局」语义）。
  * 任何失败都返回 ok:false + 可读 detail，不抛异常——探测失败不是硬错误。
  */
-export async function probeRemoteApi(
-  input: { baseUrl?: string; apiKey?: string; model?: string },
-): Promise<RemoteProbeResult> {
+export async function probeRemoteApi(input: {
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+}): Promise<RemoteProbeResult> {
   let res: Response;
   try {
     res = await fetch("/api/llm/test", {
@@ -98,7 +108,10 @@ export async function probeRemoteApi(
       body: JSON.stringify(input),
     });
   } catch (e) {
-    return { ok: false, detail: e instanceof Error ? e.message : "网络请求失败" };
+    return {
+      ok: false,
+      detail: e instanceof Error ? e.message : "网络请求失败",
+    };
   }
   const json = (await res.json().catch(() => ({}))) as {
     ok?: unknown;
@@ -116,7 +129,9 @@ export async function probeRemoteApi(
     ok: json.ok === true,
     detail,
     models: Array.isArray(json.models)
-      ? json.models.filter((m): m is string => typeof m === "string" && m !== "")
+      ? json.models.filter(
+          (m): m is string => typeof m === "string" && m !== "",
+        )
       : undefined,
   };
 }

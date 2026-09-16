@@ -56,7 +56,7 @@ interface ShikiToken {
 type ShikiHighlighter = {
   codeToTokensBase: (
     code: string,
-    options: { lang: string; theme: string }
+    options: { lang: string; theme: string },
   ) => ShikiToken[][];
 };
 
@@ -124,14 +124,21 @@ function PlainCodeBlock({ code }: { code: string }) {
   );
 }
 
-export function CodeBlock({ code, language }: { code: string; language: string }) {
+export function CodeBlock({
+  code,
+  language,
+}: {
+  code: string;
+  language: string;
+}) {
   const [tokens, setTokens] = useState<ShikiToken[][] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /* 语法高亮主题必须跟应用主题走：只在 `one-dark-pro` 上高亮时，Light 下
      代码是「暗色主题的 token 色」压在浅底上（关键字/注释对比度极低）。
      `resolvedTheme` 首帧可能为 undefined —— 按 Dark 起步（默认主题）。 */
   const { resolvedTheme } = useTheme();
-  const shikiTheme = resolvedTheme === "light" ? "github-light" : "one-dark-pro";
+  const shikiTheme =
+    resolvedTheme === "light" ? "github-light" : "one-dark-pro";
 
   useEffect(() => {
     let cancelled = false;

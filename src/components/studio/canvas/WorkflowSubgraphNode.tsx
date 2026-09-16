@@ -5,18 +5,19 @@ import React, { useState } from "react";
 import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
-import {
-  portColor, inferIsMultiline,
-} from "@/lib/comfyui/types";
+import { portColor, inferIsMultiline } from "@/lib/comfyui/types";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type { WorkflowSubgraphData, RawInputMeta,
-} from "../workflow-types";
+import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
 /** COMBO inputs additionally carry their option list (stamped by the import
  *  pipeline; not part of the shared RawInputMeta contract). */
 type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
-import { valueCellColor,
-  renderSubgraphWidgetValue, sanitizeComboLabel, NODE_TITLE_H, hexToRgba, 
+import {
+  valueCellColor,
+  renderSubgraphWidgetValue,
+  sanitizeComboLabel,
+  NODE_TITLE_H,
+  hexToRgba,
 } from "../workflow-utils";
 import { FrostLayer } from "./NodeFrost";
 import { StringTextarea } from "../StringTextarea";
@@ -24,7 +25,13 @@ import { useIOEditContext, IoCheckbox } from "./IOEditContext";
 import { SubgraphHeader } from "./SubgraphHeader";
 import { useHoverElevation } from "../workflow-editor/HoverElevation";
 import { resolveAnchorCylinder } from "./workflow-node-palette";
-export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ data, selected }: { data: WorkflowSubgraphData; selected?: boolean }) {
+export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
+  data,
+  selected,
+}: {
+  data: WorkflowSubgraphData;
+  selected?: boolean;
+}) {
   const io = useIOEditContext();
   /* 悬浮置顶：与 FlowNode 同一套语义（ISSUE #400）—— 鼠标指着的子图卡片
    *  也要压住连线。状态在本节点内，悬浮进出不影响其余节点。 */
@@ -53,9 +60,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
    *  as WorkflowNode — counter-scaled by 1/zoom to avoid Chromium's low-zoom
    *  re-tile artefact.  <PseudoFrostLayer> stays an unused fallback. */
   const accent =
-    nodeMode === 4 ? "#ec4899" :
-    nodeMode === 2 ? "#6b7280" :
-    "#7C5CFC";  // subgraph default purple identity (mode 0)
+    nodeMode === 4 ? "#ec4899" : nodeMode === 2 ? "#6b7280" : "#7C5CFC"; // subgraph default purple identity (mode 0)
 
   /* Same box semantics as WorkflowNode: when the imported config carries an
    *  explicit size, the root div is forced to width/height: 100% (see the
@@ -72,7 +77,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
    *  initially-collapsed subgraph can still be expanded by the toggle
    *  (same `true || anything` trap as WorkflowNode — must not OR them). */
   const [userCollapsed, setUserCollapsed] = useState<boolean>(
-    data.flags?.collapsed === true
+    data.flags?.collapsed === true,
   );
   const isCollapsed = userCollapsed;
 
@@ -132,10 +137,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
    * splitter and routes every exposed widget slot into the WIDGET
    * zone so the LABEL | VALUE rows render as inline widgets. */
   const connInputs = cleanedInputs.filter(
-    ({ inp }) => !inp.widget && !inp.isConnection
+    ({ inp }) => !inp.widget && !inp.isConnection,
   );
   const widgetInputs = cleanedInputs.filter(
-    ({ inp }) => !!inp.widget || inp.isConnection === true
+    ({ inp }) => !!inp.widget || inp.isConnection === true,
   );
 
   /* Top Pins rows: every declared input port AND every output port is a
@@ -167,7 +172,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         //  so the total floor is content + title = size[1] + 30.  Mirrors
         //  WorkflowNode's fix so the card fills the React Flow box instead of
         //  rendering short by 30px.
-        minHeight: isCollapsed ? NODE_TITLE_H : (data.size ? (data.size.h ?? 0) + NODE_TITLE_H : undefined),
+        minHeight: isCollapsed
+          ? NODE_TITLE_H
+          : data.size
+            ? (data.size.h ?? 0) + NODE_TITLE_H
+            : undefined,
         // No maxWidth cap here either: ComfyUI lets the user resize the
         //  subgraph box freely, and we must respect whatever `size` the
         //  config carries (a hard 320 cap would clip wider subgraph
@@ -183,7 +192,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
         outlineOffset: selected ? "2px" : undefined,
       }}
     >
-      {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
+      {accent && nodeMode !== 0 && (
+        <FrostLayer color={accent} nodeMode={nodeMode} />
+      )}
       {/* Header — purple accent (subgraph identity).  Same NODE_TITLE_H as
        *  the regular WorkflowNode header so titled nodes line up on the grid. */}
       <SubgraphHeader
@@ -217,86 +228,101 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
        *  RIGHT whenever the wrapper declares any output.  Invisible
        *  per-port <Handle>s sit underneath so live wire geometry is
        *  preserved across toggle. */}
-      {isCollapsed && (() => {
-        const wiredInputs = connInputs.filter(({ inp }) => data.connectedInputs?.has(inp.name));
-        const wiredOutputs = cleanedOutputs.filter(({ out }) => data.connectedOutputs?.has(out.name));
-        const cylH = (count: number) =>
-          Math.min(64, Math.max(16, 12 + count * 4));
-        return (
-          <>
-            {wiredInputs.length > 0 && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute"
-                style={{
-                  left: -3,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: 6,
-                  height: cylH(wiredInputs.length),
-                  borderRadius: 999,
-                  background: anchor.gradient,
-                  border: anchor.border,
-                  boxShadow: anchor.boxShadow,
-                  zIndex: 10,
-                }}
-              />
-            )}
-            {cleanedOutputs.length > 0 && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute"
-                style={{
-                  right: -3,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: 6,
-                  height: cylH(cleanedOutputs.length),
-                  borderRadius: 999,
-                  background: anchor.gradient,
-                  border: anchor.border,
-                  boxShadow: anchor.boxShadow,
-                  zIndex: 10,
-                }}
-              />
-            )}
-            {wiredInputs.map(({ inp, label }, idx) => {
-              const col = portColor(inp.type ?? "*");
-              const total = wiredInputs.length;
-              const offset = total > 1 ? (idx - (total - 1) / 2) * 6 : 0;
-              return (
-                <Handle
-                  key={`collapsed-sub-in-${inp.name}-${idx}`}
-                  type="target"
-                  position={Position.Left}
-                  id={inp.name}
-                  isConnectable={false}
-                  className="!h-2 !w-2 !rounded-full"
-                  style={{ left: 0, top: `calc(50% + ${offset}px)`, background: col, opacity: 0 }}
-                  title={`${label} (${inp.type})`}
+      {isCollapsed &&
+        (() => {
+          const wiredInputs = connInputs.filter(({ inp }) =>
+            data.connectedInputs?.has(inp.name),
+          );
+          const wiredOutputs = cleanedOutputs.filter(({ out }) =>
+            data.connectedOutputs?.has(out.name),
+          );
+          const cylH = (count: number) =>
+            Math.min(64, Math.max(16, 12 + count * 4));
+          return (
+            <>
+              {wiredInputs.length > 0 && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute"
+                  style={{
+                    left: -3,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 6,
+                    height: cylH(wiredInputs.length),
+                    borderRadius: 999,
+                    background: anchor.gradient,
+                    border: anchor.border,
+                    boxShadow: anchor.boxShadow,
+                    zIndex: 10,
+                  }}
                 />
-              );
-            })}
-            {wiredOutputs.map(({ out, display }, idx) => {
-              const col = portColor(out.type ?? "*");
-              const total = wiredOutputs.length;
-              const offset = total > 1 ? (idx - (total - 1) / 2) * 6 : 0;
-              return (
-                <Handle
-                  key={`collapsed-sub-out-${out.name}-${idx}`}
-                  type="source"
-                  position={Position.Right}
-                  id={`out:${out.name}`}
-                  isConnectable={false}
-                  className="!h-2 !w-2 !rounded-full"
-                  style={{ right: 0, top: `calc(50% + ${offset}px)`, background: col, opacity: 0 }}
-                  title={`${display} (${out.type})`}
+              )}
+              {cleanedOutputs.length > 0 && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute"
+                  style={{
+                    right: -3,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 6,
+                    height: cylH(cleanedOutputs.length),
+                    borderRadius: 999,
+                    background: anchor.gradient,
+                    border: anchor.border,
+                    boxShadow: anchor.boxShadow,
+                    zIndex: 10,
+                  }}
                 />
-              );
-            })}
-          </>
-        );
-      })()}
+              )}
+              {wiredInputs.map(({ inp, label }, idx) => {
+                const col = portColor(inp.type ?? "*");
+                const total = wiredInputs.length;
+                const offset = total > 1 ? (idx - (total - 1) / 2) * 6 : 0;
+                return (
+                  <Handle
+                    key={`collapsed-sub-in-${inp.name}-${idx}`}
+                    type="target"
+                    position={Position.Left}
+                    id={inp.name}
+                    isConnectable={false}
+                    className="!h-2 !w-2 !rounded-full"
+                    style={{
+                      left: 0,
+                      top: `calc(50% + ${offset}px)`,
+                      background: col,
+                      opacity: 0,
+                    }}
+                    title={`${label} (${inp.type})`}
+                  />
+                );
+              })}
+              {wiredOutputs.map(({ out, display }, idx) => {
+                const col = portColor(out.type ?? "*");
+                const total = wiredOutputs.length;
+                const offset = total > 1 ? (idx - (total - 1) / 2) * 6 : 0;
+                return (
+                  <Handle
+                    key={`collapsed-sub-out-${out.name}-${idx}`}
+                    type="source"
+                    position={Position.Right}
+                    id={`out:${out.name}`}
+                    isConnectable={false}
+                    className="!h-2 !w-2 !rounded-full"
+                    style={{
+                      right: 0,
+                      top: `calc(50% + ${offset}px)`,
+                      background: col,
+                      opacity: 0,
+                    }}
+                    title={`${display} (${out.type})`}
+                  />
+                );
+              })}
+            </>
+          );
+        })()}
 
       {/* TOP PINS zone — pure-connection input ports (left dot) zipped with
        *  exposed output ports (right dot) on shared rows, exactly like a
@@ -308,50 +334,53 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
           className="border-border-strong border-b py-0.5"
           style={{ background: "var(--color-subtle)" }}
         >
-            {Array.from({ length: pinRows }).map((_, rowIdx) => {
-              const inEntry = connInputs[rowIdx];
-              const outEntry = cleanedOutputs[rowIdx];
-              const inInp = inEntry?.inp;
-              const outMeta = outEntry?.out;
-              const inName = inInp?.name;
-              const outName = outMeta?.name;
-              const inType = inInp?.type ?? "*";
-              const outType = outMeta?.type ?? "*";
-              const inCol = portColor(inType);
-              const outCol = portColor(outType);
-              const inLabel = inEntry?.label ?? "";
-              const outDisplay = outEntry?.display ?? "";
-              return (
-                <div
-                  key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-                  /* long boundary-port labels wrap onto
-                   *  multiple lines instead of being clipped to 22 px.  See
-                   *  the WorkflowNode inline-branch comment for full rationale. */
-                  className="relative flex min-h-[22px] h-auto items-center pl-5 pr-5 py-0.5 text-[11px]"
-                  data-sub-pin-input={inName}
-                  data-sub-pin-output={outName}
-                >
-                  {inEntry && (
-                    <>
-                      <Handle
-                        type="target"
-                        position={Position.Left}
-                        id={inName}
-                        isConnectable={false}
-                        className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
-                        style={{
-                          left: 5,
-                          background: inCol,
-                          boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                        }}
-                        title={`${inLabel} (${inType})`}
-                      />
-                      {/* Subgraph boundary inputs that already have an incoming
-                       *  wire from the parent workflow (or are themselves a
-                       *  sentinel boundary link) get their value upstream — they
-                       *  cannot be exposed as workflow inputs.  Skip the checkbox
-                       *  for connected slots. */}
-                      {io?.ioEditMode && inName && !inInp?.isConnection && !inInp?.isBoundary && (
+          {Array.from({ length: pinRows }).map((_, rowIdx) => {
+            const inEntry = connInputs[rowIdx];
+            const outEntry = cleanedOutputs[rowIdx];
+            const inInp = inEntry?.inp;
+            const outMeta = outEntry?.out;
+            const inName = inInp?.name;
+            const outName = outMeta?.name;
+            const inType = inInp?.type ?? "*";
+            const outType = outMeta?.type ?? "*";
+            const inCol = portColor(inType);
+            const outCol = portColor(outType);
+            const inLabel = inEntry?.label ?? "";
+            const outDisplay = outEntry?.display ?? "";
+            return (
+              <div
+                key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
+                /* long boundary-port labels wrap onto
+                 *  multiple lines instead of being clipped to 22 px.  See
+                 *  the WorkflowNode inline-branch comment for full rationale. */
+                className="relative flex h-auto min-h-[22px] items-center py-0.5 pr-5 pl-5 text-[11px]"
+                data-sub-pin-input={inName}
+                data-sub-pin-output={outName}
+              >
+                {inEntry && (
+                  <>
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={inName}
+                      isConnectable={false}
+                      className="!border-port-surface !h-2.5 !w-2.5 !rounded-full !border"
+                      style={{
+                        left: 5,
+                        background: inCol,
+                        boxShadow: `0 0 6px ${inCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
+                      }}
+                      title={`${inLabel} (${inType})`}
+                    />
+                    {/* Subgraph boundary inputs that already have an incoming
+                     *  wire from the parent workflow (or are themselves a
+                     *  sentinel boundary link) get their value upstream — they
+                     *  cannot be exposed as workflow inputs.  Skip the checkbox
+                     *  for connected slots. */}
+                    {io?.ioEditMode &&
+                      inName &&
+                      !inInp?.isConnection &&
+                      !inInp?.isBoundary && (
                         <IoCheckbox
                           io={io}
                           ioRef={{
@@ -369,60 +398,60 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                           }}
                         />
                       )}
-                      <span
-                        /* drop `truncate` so a long
-                         *  boundary-port label (e.g. the Settings wrapper's
-                         *  `Model: True = 🟡 Safetensors | False = 🟣 GGUF`
-                         *  BOOLEAN widget) wraps onto multiple lines
-                         *  instead of being clipped.  Full text stays
-                         *  available via the native `title` tooltip. */
-                        className="text-ink-bright min-w-0 flex-1 text-left text-[11px] break-words whitespace-normal"
-                        title={`${inLabel} (${inType})`}
-                      >
-                        {inLabel}
-                      </span>
-                    </>
-                  )}
-                  {outEntry && (
-                    <>
-                      <span
-                        /* same wrap fix as the
-                         *  boundary-input branch above. */
-                        className="text-ink-bright min-w-0 flex-1 text-right text-[11px] break-words whitespace-normal"
-                        title={`${outDisplay} (${outType})`}
-                      >
-                        {outDisplay}
-                      </span>
-                      {/* per-PORT output checkbox removed;
-                       *  workflow outputs are node-identified.  The per-node output
-                       *  checkbox now lives in the subgraph node header. */}
-                      {/* 输出端点**任何视图模式下都必须挂载** —— 同
-                       *  FlowNodePinRows：它同时是下游 `out:<name>` 边的锚点，
-                       *  条件不渲染会让 React Flow 解析不到 handle 而丢掉整条边
-                       *  （error#008），画布上表现为「输出没有连线」。
-                       *  IO 编辑模式下改用「缩到几乎不可见」代替「不渲染」。 */}
-                      <Handle
-                        type="source"
-                        position={Position.Right}
-                        id={`out:${outName}`}
-                        isConnectable={false}
-                        className="!rounded-full !border !border-port-surface"
-                        style={{
-                          right: 5,
-                          background: outCol,
-                          boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
-                          ...(io?.ioEditMode
-                            ? { width: 4, height: 4, opacity: 0.35, right: 0 }
-                            : { width: 10, height: 10 }),
-                        }}
-                        title={`${outDisplay} (${outType})`}
-                      />
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    <span
+                      /* drop `truncate` so a long
+                       *  boundary-port label (e.g. the Settings wrapper's
+                       *  `Model: True = 🟡 Safetensors | False = 🟣 GGUF`
+                       *  BOOLEAN widget) wraps onto multiple lines
+                       *  instead of being clipped.  Full text stays
+                       *  available via the native `title` tooltip. */
+                      className="text-ink-bright min-w-0 flex-1 text-left text-[11px] break-words whitespace-normal"
+                      title={`${inLabel} (${inType})`}
+                    >
+                      {inLabel}
+                    </span>
+                  </>
+                )}
+                {outEntry && (
+                  <>
+                    <span
+                      /* same wrap fix as the
+                       *  boundary-input branch above. */
+                      className="text-ink-bright min-w-0 flex-1 text-right text-[11px] break-words whitespace-normal"
+                      title={`${outDisplay} (${outType})`}
+                    >
+                      {outDisplay}
+                    </span>
+                    {/* per-PORT output checkbox removed;
+                     *  workflow outputs are node-identified.  The per-node output
+                     *  checkbox now lives in the subgraph node header. */}
+                    {/* 输出端点**任何视图模式下都必须挂载** —— 同
+                     *  FlowNodePinRows：它同时是下游 `out:<name>` 边的锚点，
+                     *  条件不渲染会让 React Flow 解析不到 handle 而丢掉整条边
+                     *  （error#008），画布上表现为「输出没有连线」。
+                     *  IO 编辑模式下改用「缩到几乎不可见」代替「不渲染」。 */}
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id={`out:${outName}`}
+                      isConnectable={false}
+                      className="!border-port-surface !rounded-full !border"
+                      style={{
+                        right: 5,
+                        background: outCol,
+                        boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
+                        ...(io?.ioEditMode
+                          ? { width: 4, height: 4, opacity: 0.35, right: 0 }
+                          : { width: 10, height: 10 }),
+                      }}
+                      title={`${outDisplay} (${outType})`}
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* WIDGET zone — exposed wrapper widget inputs as LABEL | VALUE rows.
@@ -447,10 +476,16 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
             const isStringWidget =
               !isConn &&
               inp.type === "STRING" &&
-              (inferIsMultiline(data.classType as string | undefined, inp.name, stringText) ||
+              (inferIsMultiline(
+                data.classType as string | undefined,
+                inp.name,
+                stringText,
+              ) ||
                 stringText.length >= 32 ||
                 stringText.includes("\n"));
-            const displayValue = isStringWidget ? "" : renderSubgraphWidgetValue(v);
+            const displayValue = isStringWidget
+              ? ""
+              : renderSubgraphWidgetValue(v);
             return (
               <div
                 key={`sub-w-${inp.name}-${i}`}
@@ -464,12 +499,12 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                        *  WorkflowNode) had the same title-and-value-
                        *  on-one-row + maxHeight-capped regression; see
                        *  the WorkflowNode branch comment for the full rationale. */
-                      "group relative flex min-h-0 flex-1 flex-col gap-1.5 pl-5 pr-2 py-1.5 text-[11px]"
-                    /* long widget labels wrap onto
-                     *  multiple lines instead of being clipped to 22 px.
-                     *  See the WorkflowNode inline-branch comment for full
-                     *  rationale. */
-                    : "group relative flex min-h-[22px] h-auto items-center gap-1.5 pl-5 pr-2 py-0.5 text-[11px]"
+                      "group relative flex min-h-0 flex-1 flex-col gap-1.5 py-1.5 pr-2 pl-5 text-[11px]"
+                    : /* long widget labels wrap onto
+                       *  multiple lines instead of being clipped to 22 px.
+                       *  See the WorkflowNode inline-branch comment for full
+                       *  rationale. */
+                      "group relative flex h-auto min-h-[22px] items-center gap-1.5 py-0.5 pr-2 pl-5 text-[11px]"
                 }
                 data-sub-widget-name={inp.name}
                 data-sub-widget-value={String(v)}
@@ -480,7 +515,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                     position={Position.Left}
                     id={inp.name}
                     isConnectable={false}
-                    className="!h-2.5 !w-2.5 !rounded-full !border !border-port-surface"
+                    className="!border-port-surface !h-2.5 !w-2.5 !rounded-full !border"
                     style={{
                       left: 5,
                       background: typeCol,
@@ -517,21 +552,30 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                   <>
                     {inp.type === "COMBO" &&
                     Array.isArray((inp as ComboInputMeta).comboOptions) &&
-                    ((inp as ComboInputMeta).comboOptions as unknown[]).length > 0 ? (
+                    ((inp as ComboInputMeta).comboOptions as unknown[]).length >
+                      0 ? (
                       <>
                         <span
                           /* drop `truncate` so a long
                            *  subgraph-wrapper COMBO widget label wraps
                            *  onto multiple lines instead of being clipped
                            *  (same fix as the WorkflowNode inline branch). */
-                          className="min-w-0 shrink whitespace-normal break-words text-left text-[11px]"
-                          style={{ flex: "0 1 auto", color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
+                          className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
+                          style={{
+                            flex: "0 1 auto",
+                            color: isConn
+                              ? "var(--color-ink-strong)"
+                              : "var(--color-ink-subtle)",
+                          }}
                           title={label}
                         >
                           {label}
                         </span>
                         {/* Vertical 1px divider between label and value. */}
-                        <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
+                        <span
+                          className="bg-border-strong h-2 w-px shrink-0"
+                          aria-hidden
+                        />
                         {/* COMBO widget on the workflow canvas
                          *  renders as a display-only DarkSelect — it shows the
                          *  currently-selected model as a dropdown shell, but
@@ -543,9 +587,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         <DarkSelect
                           value={typeof v === "string" ? v : ""}
                           onChange={() => undefined}
-                          options={(inp as ComboInputMeta).comboOptions as string[]}
+                          options={
+                            (inp as ComboInputMeta).comboOptions as string[]
+                          }
                           disabled
-                          className="!h-[22px] !py-0 !text-[11px] flex-1 min-w-0"
+                          className="!h-[22px] min-w-0 flex-1 !py-0 !text-[11px]"
                           popoverMinWidth={220}
                         />
                       </>
@@ -556,8 +602,13 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                            *  subgraph-wrapper widget label wraps onto
                            *  multiple lines instead of being clipped
                            *  (same fix as the WorkflowNode inline branch). */
-                          className="min-w-0 shrink whitespace-normal break-words text-left text-[11px]"
-                          style={{ flex: "0 1 auto", color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
+                          className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
+                          style={{
+                            flex: "0 1 auto",
+                            color: isConn
+                              ? "var(--color-ink-strong)"
+                              : "var(--color-ink-subtle)",
+                          }}
                           title={label}
                         >
                           {label}
@@ -567,7 +618,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                          *  fade to transparent) instead of a hard bar — reads as
                          *  a column hint rather than a "cut the row in half" line.
                          *  Width still 1px so it doesn't claim row real estate. */}
-                        <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
+                        <span
+                          className="bg-border-strong h-2 w-px shrink-0"
+                          aria-hidden
+                        />
                         <span
                           className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                           style={{
@@ -628,13 +682,20 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                         /* drop `truncate` from the
                          *  subgraph STRING-stacked row label too — same
                          *  rationale as the WorkflowNode inline branch. */
-                        className="shrink-0 whitespace-normal break-words text-left text-[11px]"
-                        style={{ color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)" }}
+                        className="shrink-0 text-left text-[11px] break-words whitespace-normal"
+                        style={{
+                          color: isConn
+                            ? "var(--color-ink-strong)"
+                            : "var(--color-ink-subtle)",
+                        }}
                         title={label}
                       >
                         {label}
                       </span>
-                      <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
+                      <span
+                        className="bg-border-strong h-2 w-px shrink-0"
+                        aria-hidden
+                      />
                       <span
                         className="text-ink-muted text-right text-[10px] tracking-wider uppercase"
                         title={`STRING · ${stringText.length} chars`}
@@ -643,7 +704,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
                       </span>
                     </div>
                     {stringText.length > 0 ? (
-                      <StringTextarea value={stringText} mono hasSize={hasSize} />
+                      <StringTextarea
+                        value={stringText}
+                        mono
+                        hasSize={hasSize}
+                      />
                     ) : (
                       <div
                         className="border-border-strong bg-canvas-deep text-ink-fainter flex-1 rounded border px-2 py-1.5 text-[10.5px] leading-snug"
@@ -662,4 +727,3 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({ d
     </div>
   );
 });
-

@@ -94,9 +94,7 @@ function parseList(body: unknown): MaterialListResult {
   const itemsRaw = body.items;
   return {
     folders: Array.isArray(foldersRaw) ? foldersRaw.filter(isFolder) : [],
-    items: Array.isArray(itemsRaw)
-      ? itemsRaw.filter(isItem)
-      : [],
+    items: Array.isArray(itemsRaw) ? itemsRaw.filter(isItem) : [],
   };
 }
 
@@ -112,7 +110,8 @@ export async function fetchMaterials(
 
   const res = await fetch(`${ENDPOINT}?${params.toString()}`);
   const body = await readJson(res);
-  if (!res.ok) throw new Error(readMaterialError(body) ?? `请求失败 (${res.status})`);
+  if (!res.ok)
+    throw new Error(readMaterialError(body) ?? `请求失败 (${res.status})`);
   return parseList(body);
 }
 
@@ -129,7 +128,8 @@ async function postMaterial(
 
   const res = await fetch(ENDPOINT, { method: "POST", body: fd });
   const body = await readJson(res);
-  if (!res.ok) throw new Error(readMaterialError(body) ?? `上传失败 (${res.status})`);
+  if (!res.ok)
+    throw new Error(readMaterialError(body) ?? `上传失败 (${res.status})`);
   return body;
 }
 
@@ -163,7 +163,8 @@ export async function uploadMaterialItem(
   return {
     url,
     id: isRecord(item) && typeof item.id === "string" ? item.id : url,
-    name: isRecord(item) && typeof item.name === "string" ? item.name : file.name,
+    name:
+      isRecord(item) && typeof item.name === "string" ? item.name : file.name,
   };
 }
 
@@ -173,5 +174,6 @@ export async function deleteMaterial(id: string): Promise<void> {
     method: "DELETE",
   });
   const body = await readJson(res);
-  if (!res.ok) throw new Error(readMaterialError(body) ?? `删除失败 (${res.status})`);
+  if (!res.ok)
+    throw new Error(readMaterialError(body) ?? `删除失败 (${res.status})`);
 }

@@ -17,11 +17,7 @@
  * @module comfyui/executor-history
  */
 import { getHistory, resolveComfyBase } from "./client";
-import {
-  HISTORY_RETRIES,
-  HISTORY_RETRY_DELAY_MS,
-  state,
-} from "./runner-state";
+import { HISTORY_RETRIES, HISTORY_RETRY_DELAY_MS, state } from "./runner-state";
 import { queueTraceSummary, trace } from "./trace";
 
 /**
@@ -38,7 +34,6 @@ export type ComfyHistoryEntry = {
   };
   prompt?: unknown;
 };
-
 
 /** 轮询 history —— ComfyUI 是「先广播完成、后写 history」，直接读会扑空。
  *

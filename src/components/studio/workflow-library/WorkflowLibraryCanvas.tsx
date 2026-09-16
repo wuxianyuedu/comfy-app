@@ -175,60 +175,60 @@ function WorkflowLibraryCanvasInner({
 
   return (
     <div
-      className="relative h-[460px] w-full overflow-hidden rounded-xl border border-border-subtle bg-panel-deep"
+      className="border-border-subtle bg-panel-deep relative h-[460px] w-full overflow-hidden rounded-xl border"
       data-testid="wflib-canvas"
     >
       <LibraryNodeContentContext.Provider value={flow.nodeContent}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={NODE_TYPES}
-        defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-        onConnect={flow.onConnect}
-        onConnectEnd={flow.onConnectEnd}
-        isValidConnection={flow.isValidConnection}
-        /* 点空白 = 取消选中（与「点一条线选中它对应的口」互补）。 */
-        onPaneClick={() => {
-          onSelectParam(null);
-          onSelectOutput(null);
-        }}
-        /* 库里三个节点全是卡片与表单：裁剪省不下什么，却要接一份 error#008
-         *  过滤（见文件头说明）—— 直接关掉。 */
-        onlyRenderVisibleElements={false}
-        minZoom={0.2}
-        maxZoom={2}
-        panOnDrag
-        zoomOnScroll
-        /* 站点默认 `fitView` 会把三列收进视野；用户随后可自由平移缩放。 */
-        fitView
-        fitViewOptions={{ padding: 0.12 }}
-        proOptions={{ hideAttribution: true }}
-        /* 节点**可拖**（React Flow 用它给 `.react-flow__node` 打开命中与指针事件
-         *  —— 关掉它，卡片列与宿主卡片整块变成 `pointer-events: none`，表单输入、
-         *  圆点、按钮全部点不动，Playwright / RTL 也会直接报「元素不可交互」）。
-         *  `nodeDragThreshold` 把误拖阈值调到 6px：从输入框上按下再抬手的抖动
-         *  不会被当成拖动。
-         *
-         *  三列是固定布局，拖散了看不出「哪一列是哪一列」—— 所以用「拖完吸附回
-         *  布局位置」兜住（见 onNodeDragStop）：手势在、位置不回退。 */
-        nodesDraggable
-        nodeDragThreshold={6}
-        onNodeDragStop={resetNodePositions}
-        nodesConnectable={canWire}
-        elementsSelectable={false}
-        data-testid="wflib-canvas-flow"
-      >
-        {/* 网格背景与编辑器画布同一套（浅色细格），只给「这是一块画布」的观感 ——
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={NODE_TYPES}
+          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+          onConnect={flow.onConnect}
+          onConnectEnd={flow.onConnectEnd}
+          isValidConnection={flow.isValidConnection}
+          /* 点空白 = 取消选中（与「点一条线选中它对应的口」互补）。 */
+          onPaneClick={() => {
+            onSelectParam(null);
+            onSelectOutput(null);
+          }}
+          /* 库里三个节点全是卡片与表单：裁剪省不下什么，却要接一份 error#008
+           *  过滤（见文件头说明）—— 直接关掉。 */
+          onlyRenderVisibleElements={false}
+          minZoom={0.2}
+          maxZoom={2}
+          panOnDrag
+          zoomOnScroll
+          /* 站点默认 `fitView` 会把三列收进视野；用户随后可自由平移缩放。 */
+          fitView
+          fitViewOptions={{ padding: 0.12 }}
+          proOptions={{ hideAttribution: true }}
+          /* 节点**可拖**（React Flow 用它给 `.react-flow__node` 打开命中与指针事件
+           *  —— 关掉它，卡片列与宿主卡片整块变成 `pointer-events: none`，表单输入、
+           *  圆点、按钮全部点不动，Playwright / RTL 也会直接报「元素不可交互」）。
+           *  `nodeDragThreshold` 把误拖阈值调到 6px：从输入框上按下再抬手的抖动
+           *  不会被当成拖动。
+           *
+           *  三列是固定布局，拖散了看不出「哪一列是哪一列」—— 所以用「拖完吸附回
+           *  布局位置」兜住（见 onNodeDragStop）：手势在、位置不回退。 */
+          nodesDraggable
+          nodeDragThreshold={6}
+          onNodeDragStop={resetNodePositions}
+          nodesConnectable={canWire}
+          elementsSelectable={false}
+          data-testid="wflib-canvas-flow"
+        >
+          {/* 网格背景与编辑器画布同一套（浅色细格），只给「这是一块画布」的观感 ——
             不做尺寸表与标尺，库里不需要。 */}
-        <Background
-          variant={BackgroundVariant.Lines}
-          gap={20}
-          size={1}
-          color="var(--color-canvas-grid-line, rgba(148,163,184,0.14))"
-        />
-      </ReactFlow>
+          <Background
+            variant={BackgroundVariant.Lines}
+            gap={20}
+            size={1}
+            color="var(--color-canvas-grid-line, rgba(148,163,184,0.14))"
+          />
+        </ReactFlow>
       </LibraryNodeContentContext.Provider>
       {/* 落点失败的原因：贴在画布左下角，4 秒后自己消失（不只读，可直接重试）。
           上一版由自绘连线层给出，换 React Flow 后由 `onConnectEnd` 补回来 ——

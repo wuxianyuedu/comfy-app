@@ -10,7 +10,12 @@ import { applyPropagationToNodes, makeNodeId } from "./canvas-helpers";
 /** 构造最小画布节点：applyPropagationToNodes 只读 id / type / data，
  *  其余 React Flow 字段（position 等）与传播逻辑无关。 */
 function node(id: string, data: Partial<CanvasNodeData>): CanvasNodeType {
-  return { id, type: "canvasNode", data, position: { x: 0, y: 0 } } as CanvasNodeType;
+  return {
+    id,
+    type: "canvasNode",
+    data,
+    position: { x: 0, y: 0 },
+  } as CanvasNodeType;
 }
 
 const ardotNode: CanvasNodeType = {
@@ -149,7 +154,10 @@ describe("applyPropagationToNodes", () => {
 
   it("seed / steps / cfg 按 handle 分派，空值不覆盖", () => {
     const src = node("s", { kind: "image", steps: 30, cfg: 7.5, seed: "42" });
-    const withEmptySeed: CanvasNodeData = { ...(src.data as CanvasNodeData), seed: "" };
+    const withEmptySeed: CanvasNodeData = {
+      ...(src.data as CanvasNodeData),
+      seed: "",
+    };
     const targets = [
       node("t1", { kind: "image", steps: 1 }),
       node("t2", { kind: "image", cfg: 1 }),

@@ -9,18 +9,26 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import {
-  decryptSecret,
-  encryptSecret,
-} from "@/lib/llm/secrets";
+import { decryptSecret, encryptSecret } from "@/lib/llm/secrets";
 import type { RawExtraModel } from "@/lib/llm/types";
-import { user, llmConfig, remoteModel, type User, type LlmConfig, type RemoteModel } from "~/server/db/schema";
+import {
+  user,
+  llmConfig,
+  remoteModel,
+  type User,
+  type LlmConfig,
+  type RemoteModel,
+} from "~/server/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import type { RemoteModelKind } from "@/lib/llm/types";
 
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
-    const rows = await db.select().from(user).where(eq(user.email, email)).limit(1);
+    const rows = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1);
     return rows[0] ?? null;
   }
 
@@ -34,12 +42,20 @@ export class UserRepository {
   }
 
   async updateEmail(id: string, email: string): Promise<User> {
-    const rows = await db.update(user).set({ email }).where(eq(user.id, id)).returning();
+    const rows = await db
+      .update(user)
+      .set({ email })
+      .where(eq(user.id, id))
+      .returning();
     return rows[0]!;
   }
 
   async updatePassword(id: string, password: string): Promise<User> {
-    const rows = await db.update(user).set({ password }).where(eq(user.id, id)).returning();
+    const rows = await db
+      .update(user)
+      .set({ password })
+      .where(eq(user.id, id))
+      .returning();
     return rows[0]!;
   }
 }
@@ -66,14 +82,19 @@ function decryptRow(row: LlmConfig): LlmConfig {
 function encryptInput(
   apiKey: string | null | undefined,
   extraModels: RawExtraModel[] | null | undefined,
-): { apiKey: string | null | undefined; extraModels: RawExtraModel[] | null | undefined } {
+): {
+  apiKey: string | null | undefined;
+  extraModels: RawExtraModel[] | null | undefined;
+} {
   const encKey = encryptSecret(apiKey ?? null);
   const encExtra = extraModels
     ? extraModels.map((item) => {
         if (typeof item === "object" && item !== null && "apiKey" in item) {
           return {
             ...item,
-            apiKey: encryptSecret(typeof item.apiKey === "string" ? item.apiKey : null),
+            apiKey: encryptSecret(
+              typeof item.apiKey === "string" ? item.apiKey : null,
+            ),
           };
         }
         return item;
@@ -132,7 +153,8 @@ export class LlmConfigRepository {
     if (input.extraModels !== undefined) patch.extraModels = extraModelsJson;
     if (input.apiKey !== undefined) patch.apiKey = enc.apiKey ?? null;
     if (input.temperature !== undefined) patch.temperature = input.temperature;
-    if (input.temperatureByTask !== undefined) patch.temperatureByTask = taskJson;
+    if (input.temperatureByTask !== undefined)
+      patch.temperatureByTask = taskJson;
     if (input.maxTokens !== undefined) patch.maxTokens = input.maxTokens;
     const rows = await db
       .update(llmConfig)
@@ -143,7 +165,10 @@ export class LlmConfigRepository {
   }
 }
 
-import { parseRemoteModeAdapters, type RemoteModeAdapter } from "@/lib/workshop/model-mode-contract";
+import {
+  parseRemoteModeAdapters,
+  type RemoteModeAdapter,
+} from "@/lib/workshop/model-mode-contract";
 import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
 
 // ── 远端独立模型仓储（option C：远端模型独立成表，不与本地 ollama 候选混存）──
@@ -173,12 +198,14 @@ export class RemoteModelRepository {
    *   库里存在但本次未给出 → 删除。
    * 设置页保存整份远端清单时调用，保证服务端只认这一份真相。
    */
-  async replaceAll(entries: Array<{
-    name: string;
-    baseUrl?: string | null;
-    apiKey?: string | null;
-    kind?: RemoteModelKind | null;
-  }>): Promise<RemoteModel[]> {
+  async replaceAll(
+    entries: Array<{
+      name: string;
+      baseUrl?: string | null;
+      apiKey?: string | null;
+      kind?: RemoteModelKind | null;
+    }>,
+  ): Promise<RemoteModel[]> {
     const seen = new Set<string>();
     const cleaned: Array<{
       name: string;
@@ -200,9 +227,12 @@ export class RemoteModelRepository {
     const rows = await this.list();
     const removed = rows.filter((r) => !seen.has(r.name));
     if (removed.length > 0) {
-      await db
-        .delete(remoteModel)
-        .where(inArray(remoteModel.name, removed.map((r) => r.name)));
+      await db.delete(remoteModel).where(
+        inArray(
+          remoteModel.name,
+          removed.map((r) => r.name),
+        ),
+      );
     }
     const adaptersByName = new Map(
       rows.map((r) => [r.name, r.workshopAdapters]),
@@ -221,7 +251,9 @@ export class RemoteModelRepository {
           })
           .where(eq(remoteModel.id, existing.id));
       } else {
-        await db.insert(remoteModel).values({ ...e, workshopAdapters: carriedAdapters });
+        await db
+          .insert(remoteModel)
+          .values({ ...e, workshopAdapters: carriedAdapters });
       }
     }
     return this.list();
@@ -235,10 +267,7 @@ export class RemoteModelRepository {
   }
 
   /** 保存某条远端模型的工坊模式适配器（整份覆盖）。模型不存在返回空数组。 */
-  async saveWorkshopAdapters(
-    name: string,
-    adapters: RemoteModeAdapter[],
-  ) {
+  async saveWorkshopAdapters(name: string, adapters: RemoteModeAdapter[]) {
     const row = await this.findByName(name);
     if (!row) return [];
     await db

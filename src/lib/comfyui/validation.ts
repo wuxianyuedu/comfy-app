@@ -38,7 +38,9 @@ const validationErrorSchema = z.object({
 });
 
 /** 校验并收窄 Prisma Json 列里的 validationErrors；不合法返回 undefined。 */
-export function parseValidationErrorsJson(raw: unknown): ValidationError[] | undefined {
+export function parseValidationErrorsJson(
+  raw: unknown,
+): ValidationError[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const out: ValidationError[] = [];
   for (const item of raw) {
@@ -81,11 +83,13 @@ export interface ValidationError {
  *  returned `[]` and the per-field 6-item list never rendered. */
 export function extractValidationErrors(
   res: unknown,
-  graph?: Record<string, unknown>
+  graph?: Record<string, unknown>,
 ): ValidationError[] {
   // 外部输入一律 unknown + 收窄：res 可能是 carrier 对象 / 列表 / 任意 JSON。
   const resObj =
-    typeof res === "object" && res !== null ? (res as Record<string, unknown>) : undefined;
+    typeof res === "object" && res !== null
+      ? (res as Record<string, unknown>)
+      : undefined;
   let ne: unknown = resObj?.node_errors;
   // `res` is the LIST carrier directly (comfy-cli envelope path).
   const isListCarrier =
@@ -94,11 +98,16 @@ export function extractValidationErrors(
     res.some((r: unknown): boolean => {
       if (!r || typeof r !== "object") return false;
       const rec = r as Record<string, unknown>;
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-      return !!(rec.node_id || rec.class_type || rec.input_errors || rec.message);
+      // 这几个字段可能是空字符串，必须用 `||` 判空（`??` 只挡 null/undefined）；
+      // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
+      return (
+        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+        !!(rec.node_id || rec.class_type || rec.input_errors || rec.message)
+      );
     });
   if (
-    (!ne || (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
+    (!ne ||
+      (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
     isListCarrier
   ) {
     ne = res;
@@ -126,14 +135,16 @@ export function extractValidationErrors(
       "";
     const inputErrors = errRec?.input_errors;
     if (inputErrors && typeof inputErrors === "object") {
-      for (const [field, v] of Object.entries(inputErrors as Record<string, unknown>)) {
-
+      for (const [field, v] of Object.entries(
+        inputErrors as Record<string, unknown>,
+      )) {
         const message =
           typeof v === "string"
             ? v
             : ((v as { message?: string })?.message ??
-              (v as { details?: string })?.details ??
-              JSON.stringify(v)) || "配置错误";
+                (v as { details?: string })?.details ??
+                JSON.stringify(v)) ||
+              "配置错误";
         out.push({ nodeId: nid, classType, field, message });
       }
     } else if (typeof errRec?.message === "string") {
@@ -157,7 +168,7 @@ export function extractValidationErrors(
  *  or `null`) back into a typed array.  Defensive: a corrupt / non-array
  *  payload yields `null` so callers can fall back to the `error` string. */
 export function parseValidationErrors(
-  raw: string | null | undefined
+  raw: string | null | undefined,
 ): ValidationError[] | null {
   if (!raw) return null;
   try {

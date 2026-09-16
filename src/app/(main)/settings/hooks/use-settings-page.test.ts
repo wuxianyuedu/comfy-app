@@ -82,9 +82,15 @@ vi.mock("~/lib/log-file-client", () => {
       source: string,
       offset: number,
     ): Promise<{ content: string; size: number; offset: number } | null> => {
-      const res = await fetch(`/api/logs/current?source=${source}&offset=${offset}`);
+      const res = await fetch(
+        `/api/logs/current?source=${source}&offset=${offset}`,
+      );
       if (!res.ok) return null;
-      return (await res.json()) as { content: string; size: number; offset: number };
+      return (await res.json()) as {
+        content: string;
+        size: number;
+        offset: number;
+      };
     },
   );
   return {
@@ -475,9 +481,9 @@ describe("useSettingsPage", () => {
     expect(result.current.hasError).toBe(true);
     expect(result.current.serveState).toBeNull();
     expect(result.current.errorText).toContain("数据库被锁");
-    const errors = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
-      (c) => c.level === "error",
-    );
+    const errors = (
+      runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
+    ).filter((c) => c.level === "error");
     expect(errors.length).toBe(1);
     expect(errors[0]?.msg).toContain("数据库被锁");
 
@@ -485,9 +491,9 @@ describe("useSettingsPage", () => {
     await act(async () => {
       result.current.retry();
     });
-    const errorsAfter = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
-      (c) => c.level === "error",
-    );
+    const errorsAfter = (
+      runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
+    ).filter((c) => c.level === "error");
     expect(errorsAfter.length).toBe(1);
   });
 
@@ -600,7 +606,10 @@ describe("useSettingsPage", () => {
     );
 
     const entry = (
-      runtimeLogCalls as unknown as Array<{ level: string; fields?: { query?: string } }>
+      runtimeLogCalls as unknown as Array<{
+        level: string;
+        fields?: { query?: string };
+      }>
     ).find((c) => c.level === "error");
     expect(entry?.fields?.query).toContain("setting.get");
     expect(entry?.fields?.query).toContain("llm.configGet");
@@ -859,7 +868,9 @@ describe("useSettingsPage", () => {
       await result.current.refreshDbStudioLog();
     });
     expect(result.current.dbStudioLogText).toContain("[spawn] pid=456");
-    expect(result.current.dbStudioLogText).toContain("Drizzle Studio is running");
+    expect(result.current.dbStudioLogText).toContain(
+      "Drizzle Studio is running",
+    );
     expect(result.current.dbStudioLogActive).toBe(false);
   });
 
@@ -875,7 +886,7 @@ describe("useSettingsPage", () => {
         }
         return HttpResponse.json({
           content:
-            "[spawn] pid=789 cmd=ollama.exe args=[\"serve\"]\n[out] starting ollama serve\n[state] Ollama 已关闭\n",
+            '[spawn] pid=789 cmd=ollama.exe args=["serve"]\n[out] starting ollama serve\n[state] Ollama 已关闭\n',
           size: 4096,
           offset: 0,
         });
@@ -901,9 +912,7 @@ describe("useSettingsPage", () => {
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
 
-    await waitFor(() =>
-      expect(result.current.dbStudioStatus).toBeNull(),
-    );
+    await waitFor(() => expect(result.current.dbStudioStatus).toBeNull());
     /* 状态降级为 null（等同「未运行」）：启动不被锁死，可正常发起 */
     await act(async () => {
       await result.current.startDbStudio();

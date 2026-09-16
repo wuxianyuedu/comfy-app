@@ -442,7 +442,9 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     });
     const moved = deriveLibraryOutputCards({ io: two, paramMap, mode: "T2I" });
     expect(moved.resolved["9::output::MASK"]).toBe("9::output::IMAGE");
-    expect(moved.wires.find((w) => w.entryId === "9::output::MASK")!.manual).toBe(true);
+    expect(
+      moved.wires.find((w) => w.entryId === "9::output::MASK")!.manual,
+    ).toBe(true);
     expect(moved.isManual("9::output::MASK")).toBe(true);
     /* 别的模式不受影响。 */
     expect(

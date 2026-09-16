@@ -65,7 +65,11 @@ export function libraryEdgeOwner(
   const rest = parts.slice(2).join(":");
   const sep = rest.indexOf("?");
   if (sep < 0) return null;
-  return { namespace, entryId: rest.slice(0, sep), handleId: rest.slice(sep + 1) };
+  return {
+    namespace,
+    entryId: rest.slice(0, sep),
+    handleId: rest.slice(sep + 1),
+  };
 }
 
 /** 一条库内边的两端锚点（来自映射表）。 */
@@ -88,7 +92,12 @@ export function libraryEdgeStyle(manual: boolean): {
 } {
   return manual
     ? { stroke: MANUAL_STROKE, strokeWidth: 2.5, opacity: 1 }
-    : { stroke: AUTO_STROKE, strokeWidth: 2, strokeDasharray: "6 4", opacity: 0.75 };
+    : {
+        stroke: AUTO_STROKE,
+        strokeWidth: 2,
+        strokeDasharray: "6 4",
+        opacity: 0.75,
+      };
 }
 
 /** 自动判定落点的描边色（与编辑器画布一致）。 */
@@ -100,7 +109,6 @@ export const DRAG_STROKE = "#c4b5fd";
 
 /** 选中一条线时的高亮色（两侧卡片与线同时提亮）。 */
 export const SELECTED_STROKE = "#c4b5fd";
-
 
 /** 三列节点的首帧布局尺寸（px）。 */
 export interface LibraryNodeSizing {

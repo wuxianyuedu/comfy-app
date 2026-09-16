@@ -38,21 +38,27 @@ export function ModelCard({ model }: { model: ModelCardData }) {
   const grad = GRADIENTS[hash(model.id) % GRADIENTS.length];
   return (
     <Link href={`/models/${model.id}`} className="group block">
-      <div className="relative overflow-hidden rounded-xl border border-border bg-surface transition-shadow group-hover:shadow-[0_8px_30px_rgba(20,20,40,0.10)]">
+      <div className="border-border bg-surface relative overflow-hidden rounded-xl border transition-shadow group-hover:shadow-[0_8px_30px_rgba(20,20,40,0.10)]">
         <div className="relative aspect-[4/3] w-full overflow-hidden">
           {model.cover ? (
-             
-            <img src={model.cover} alt={model.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+            <img
+              src={model.cover}
+              alt={model.name}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
           ) : (
-            <div className="h-full w-full transition-transform duration-300 group-hover:scale-105" style={{ background: grad }} />
+            <div
+              className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+              style={{ background: grad }}
+            />
           )}
-          <span className="absolute left-2 top-2 rounded-md bg-black/45 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
+          <span className="absolute top-2 left-2 rounded-md bg-black/45 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
             {TYPE_LABEL[model.type] ?? model.type}
           </span>
         </div>
         <div className="p-3">
           <p className="u-title truncate">{model.name}</p>
-          <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+          <div className="text-muted-foreground mt-1 flex items-center justify-between text-xs">
             <span>{model.baseModel ?? "SDXL"}</span>
             <span>
               {model.uses ? `${model.uses} 用` : ""}

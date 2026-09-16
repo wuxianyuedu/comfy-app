@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { getLLMConfig, completeLLM, ensureRemoteStorageMigrated, getConfigForClient } from "@/lib/llm/server";
+import {
+  getLLMConfig,
+  completeLLM,
+  ensureRemoteStorageMigrated,
+  getConfigForClient,
+} from "@/lib/llm/server";
 import { splitExtraModels } from "@/lib/llm/types";
 import { remoteModelRepository } from "@/lib/core/repository";
 import {
@@ -15,7 +20,9 @@ import {
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
-  type: z.enum(WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]]),
+  type: z.enum(
+    WORKSHOP_INPUT_TYPES.map((t) => t.type) as [string, ...string[]],
+  ),
   field: z.string().min(1),
 });
 const adapterSchema = z.object({
@@ -26,7 +33,13 @@ const adapterSchema = z.object({
 });
 
 /** 合法的任务类型 key（用于温度覆盖） */
-const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative"] as const;
+const taskTypeKeys = [
+  "txt2img",
+  "img2video",
+  "chat",
+  "code",
+  "creative",
+] as const;
 
 /** 候选模型条目：兼容旧纯名字字符串与新对象（远端条目可带独立接口 / 密钥） */
 const extraModelsSchema = z.array(
@@ -88,7 +101,9 @@ export const llmRouter = createTRPCRouter({
   workshopAdaptersGet: authedProcedure
     .input(z.object({ name: z.string().min(1) }))
     .query(async ({ input }) => {
-      const adapters = await remoteModelRepository.getWorkshopAdapters(input.name);
+      const adapters = await remoteModelRepository.getWorkshopAdapters(
+        input.name,
+      );
       return { adapters };
     }),
 
@@ -122,12 +137,15 @@ export const llmRouter = createTRPCRouter({
         /** 候选清单：字符串=本地 ollama 候选；对象=远端独立模型（写入 remoteModel 表） */
         extraModels: extraModelsSchema.optional(),
         temperature: z.number().optional(),
-        temperatureByTask: z.record(z.enum(taskTypeKeys), z.number()).optional(),
+        temperatureByTask: z
+          .record(z.enum(taskTypeKeys), z.number())
+          .optional(),
         maxTokens: z.number().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      const { llmConfigRepository, remoteModelRepository } = await import("@/lib/core/repository");
+      const { llmConfigRepository, remoteModelRepository } =
+        await import("@/lib/core/repository");
       await ensureRemoteStorageMigrated();
       // option C：远端模型与本地候选分开存。把提交的候选清单按类型拆分：
       //   字符串 → llmConfig.extraModels（本地候选，无 apiKey）
@@ -154,14 +172,14 @@ export const llmRouter = createTRPCRouter({
           z.object({
             role: z.enum(["system", "user", "assistant"]),
             content: z.string(),
-          })
+          }),
         ),
         provider: z.enum(["local", "remote"]).optional(),
         model: z.string().optional(),
         temperature: z.number().optional(),
         maxTokens: z.number().optional(),
         taskType: z.enum(taskTypeKeys).optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const cfg = await getLLMConfig({

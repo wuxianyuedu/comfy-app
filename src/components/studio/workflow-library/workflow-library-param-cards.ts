@@ -236,8 +236,7 @@ export function deriveLibraryOutputCards(args: {
   const outputKeys = new Set(outputs.map((item) => item.ioKey));
   for (const output of outputs) {
     const target = resolveOutputSource(paramMap, output, outputs, mode, io);
-    resolved[output.ioKey] =
-      target && outputKeys.has(target) ? target : null;
+    resolved[output.ioKey] = target && outputKeys.has(target) ? target : null;
   }
   for (const output of outputs) {
     const target = resolved[output.ioKey];
@@ -288,4 +287,3 @@ export function outputWireDotId(
   const name = (output.name ?? "").trim();
   return name || "输出";
 }
-

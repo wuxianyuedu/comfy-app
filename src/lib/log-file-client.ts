@@ -77,8 +77,12 @@ export async function fetchLogFileList(): Promise<LogFileInfo[]> {
 }
 
 /** 读取某个归档日志文件的全量内容（路径由 /api/logs/list 给出，服务端做越界校验）。 */
-export async function fetchLogFileContent(relativePath: string): Promise<string | null> {
-  const res = await fetch(`/api/logs/history?file=${encodeURIComponent(relativePath)}`);
+export async function fetchLogFileContent(
+  relativePath: string,
+): Promise<string | null> {
+  const res = await fetch(
+    `/api/logs/history?file=${encodeURIComponent(relativePath)}`,
+  );
   if (!res.ok) return null;
   const data = (await res.json()) as { content?: string };
   return data.content ?? null;

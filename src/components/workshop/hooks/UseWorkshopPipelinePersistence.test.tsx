@@ -55,7 +55,9 @@ describe("useWorkshopPipeline 剧本持久化回归", () => {
     const key = `comfyapp.workshop.draft.${projectId}.v1`;
     const stored: string | null = localStorage.getItem(key);
     expect(stored).toBeTruthy();
-    expect((JSON.parse(stored!) as { scriptMarkdown: string }).scriptMarkdown).toBe(SCRIPT);
+    expect(
+      (JSON.parse(stored!) as { scriptMarkdown: string }).scriptMarkdown,
+    ).toBe(SCRIPT);
 
     // 切回剧本页 → 组件重挂载，剧本应恢复而非清空
     const second = renderHook(() => useWorkshopPipeline());

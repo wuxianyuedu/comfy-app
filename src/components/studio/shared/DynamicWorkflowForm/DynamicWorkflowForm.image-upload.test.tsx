@@ -48,7 +48,7 @@ function renderForm(values: Record<string, unknown> = {}) {
       values={values}
       onChange={onChange}
       showOutputs
-    />
+    />,
   );
   return { onChange };
 }
@@ -56,7 +56,9 @@ function renderForm(values: Record<string, unknown> = {}) {
 describe("DynamicWorkflowForm — 图片上传位（ISSUE #311）", () => {
   it("上传槽渲染成上传按钮（不再是只能敲文件名的文本框）", () => {
     renderForm();
-    const button = screen.getByRole("button", { name: /上传 choose 1st frame to upload/ });
+    const button = screen.getByRole("button", {
+      name: /上传 choose 1st frame to upload/,
+    });
     expect(button).toBeInTheDocument();
     expect(button.tagName).toBe("BUTTON");
   });
@@ -75,12 +77,16 @@ describe("DynamicWorkflowForm — 图片上传位（ISSUE #311）", () => {
   it("上传成功后回填的文件名会展示出来", () => {
     renderForm({ "23::widget::upload": "uploaded-frame.png" });
     expect(screen.getByText(/已选：uploaded-frame\.png/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /上传 choose 1st frame to upload/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /上传 choose 1st frame to upload/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("上传按钮可点击（未禁用时）", () => {
     renderForm();
-    const button = screen.getByRole("button", { name: /上传 choose 1st frame to upload/ });
+    const button = screen.getByRole("button", {
+      name: /上传 choose 1st frame to upload/,
+    });
     expect(() => fireEvent.click(button)).not.toThrow();
   });
 });

@@ -51,7 +51,7 @@ export class SkillRepository extends DrizzleRepository<Skill> {
         isBuiltIn: true,
         isActive: true,
         tags: JSON.stringify(s.tags),
-      }))
+      })),
     );
   }
 
@@ -62,14 +62,15 @@ export class SkillRepository extends DrizzleRepository<Skill> {
   }): Promise<Skill[]> {
     const conditions = [];
     if (!opts.includeInactive) conditions.push(eq(skill.isActive, true));
-    if (opts.category && opts.category !== "all") conditions.push(eq(skill.category, opts.category));
+    if (opts.category && opts.category !== "all")
+      conditions.push(eq(skill.category, opts.category));
     if (opts.q) {
       conditions.push(
         or(
           like(skill.name, `%${opts.q}%`),
           like(skill.description, `%${opts.q}%`),
-          like(skill.tags, `%${opts.q}%`)
-        )!
+          like(skill.tags, `%${opts.q}%`),
+        )!,
       );
     }
     return db
@@ -79,7 +80,9 @@ export class SkillRepository extends DrizzleRepository<Skill> {
       .orderBy(asc(skill.sortOrder), desc(skill.createdAt));
   }
 
-  async groupByActiveCategory(): Promise<Array<{ category: string; count: number }>> {
+  async groupByActiveCategory(): Promise<
+    Array<{ category: string; count: number }>
+  > {
     const rows = await db
       .select({ category: skill.category, count: count() })
       .from(skill)
@@ -89,7 +92,11 @@ export class SkillRepository extends DrizzleRepository<Skill> {
   }
 
   async findBySlug(slug: string): Promise<Skill | null> {
-    const rows = await db.select().from(skill).where(eq(skill.slug, slug)).limit(1);
+    const rows = await db
+      .select()
+      .from(skill)
+      .where(eq(skill.slug, slug))
+      .limit(1);
     return rows[0] ?? null;
   }
 

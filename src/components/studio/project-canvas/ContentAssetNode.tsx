@@ -1,4 +1,3 @@
- 
 "use client";
 
 import React from "react";
@@ -75,7 +74,7 @@ export function ContentAssetBody({
           type="button"
           onClick={() => textareaRef.current?.focus()}
           title="编辑文本"
-          className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105"
+          className="absolute right-3 bottom-3 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105"
           style={{ background: accent }}
         >
           <Icon name="pen" size={16} />
@@ -99,12 +98,16 @@ export function ContentAssetBody({
     <div className="relative">
       {mediaSrc ? (
         isPic ? (
-           
           <img
             src={mediaSrc}
             alt={data.mediaName ?? "参考图"}
             className="border-border-strong bg-canvas-deep h-[260px] w-full rounded-xl border object-cover"
-            onClick={() => { if (imageCount > 1) { gallery.setIndex(0); gallery.setOpen(true); } }}
+            onClick={() => {
+              if (imageCount > 1) {
+                gallery.setIndex(0);
+                gallery.setOpen(true);
+              }
+            }}
             style={imageCount > 1 ? { cursor: "pointer" } : undefined}
           />
         ) : (
@@ -151,11 +154,15 @@ export function ContentAssetBody({
           onMouseDown={(event) => event.stopPropagation()}
           className={`nodrag nopan text-ink-soft flex h-[260px] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed transition-colors ${
             isDropOver
-              ? "bg-violet-500/10 text-ink-bright border-violet-500/70"
+              ? "text-ink-bright border-violet-500/70 bg-violet-500/10"
               : "border-ink-fainter bg-canvas-deep hover:text-ink-bright hover:border-ink-soft"
           }`}
         >
-          <Icon name={isPic ? "image" : "film"} size={38} className="opacity-60" />
+          <Icon
+            name={isPic ? "image" : "film"}
+            size={38}
+            className="opacity-60"
+          />
           <span className="text-[12px]">
             {isPic ? "拖入上传图片" : "拖入上传视频"}
           </span>
@@ -170,7 +177,7 @@ export function ContentAssetBody({
         type="button"
         onClick={() => onPickMedia(isPic ? "picture" : "movie")}
         title={isPic ? "上传图片" : "上传视频"}
-        className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105"
+        className="absolute right-3 bottom-3 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105"
         style={{ background: accent }}
       >
         <Icon name="plus" size={18} />
@@ -180,8 +187,11 @@ export function ContentAssetBody({
       {imageCount > 1 && mediaSrc && (
         <button
           type="button"
-          onClick={() => { gallery.setIndex(0); gallery.setOpen(true); }}
-          className="absolute right-2.5 top-2.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-black/70 px-1.5 text-[10px] font-medium tabular-nums text-white/90 shadow-md backdrop-blur-sm ring-1 ring-white/10 transition-colors hover:bg-violet-500/80 hover:text-white"
+          onClick={() => {
+            gallery.setIndex(0);
+            gallery.setOpen(true);
+          }}
+          className="absolute top-2.5 right-2.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-black/70 px-1.5 text-[10px] font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm transition-colors hover:bg-violet-500/80 hover:text-white"
           title={`查看全部 ${imageCount} 张图片`}
         >
           {imageCount}
@@ -193,7 +203,7 @@ export function ContentAssetBody({
         <div
           className={overlayClass(
             "modal",
-            "z-100 flex items-center justify-center bg-canvas-deep backdrop-blur-sm dark:bg-black/80",
+            "bg-canvas-deep z-100 flex items-center justify-center backdrop-blur-sm dark:bg-black/80",
           )}
           onClick={() => gallery.setOpen(false)}
           role="dialog"
@@ -203,7 +213,10 @@ export function ContentAssetBody({
           {/* 关闭按钮 */}
           <button
             type="button"
-            onClick={(event) => { event.stopPropagation(); gallery.setOpen(false); }}
+            onClick={(event) => {
+              event.stopPropagation();
+              gallery.setOpen(false);
+            }}
             className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:text-white"
             title="关闭"
           >
@@ -225,7 +238,10 @@ export function ContentAssetBody({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  gallery.setIndex((index) => (index - 1 + galleryImages.length) % galleryImages.length);
+                  gallery.setIndex(
+                    (index) =>
+                      (index - 1 + galleryImages.length) % galleryImages.length,
+                  );
                 }}
                 disabled={galleryImages.length <= 1}
                 className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:text-white disabled:opacity-30"
@@ -237,7 +253,9 @@ export function ContentAssetBody({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  gallery.setIndex((index) => (index + 1) % galleryImages.length);
+                  gallery.setIndex(
+                    (index) => (index + 1) % galleryImages.length,
+                  );
                 }}
                 disabled={galleryImages.length <= 1}
                 className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:text-white disabled:opacity-30"
@@ -247,7 +265,7 @@ export function ContentAssetBody({
               </button>
               {/* 底部计数 + 缩略条 */}
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">
-                <span className="rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium tabular-ns text-white/90 backdrop-blur-sm">
+                <span className="tabular-ns rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm">
                   {gallery.index + 1} / {galleryImages.length}
                 </span>
                 <div className="bg-subtle flex gap-1.5 overflow-hidden rounded-full p-1 backdrop-blur-sm">

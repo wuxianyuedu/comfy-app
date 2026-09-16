@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  authedProcedure,
+  rateLimitedProcedure,
+} from "~/server/api/trpc";
 import { taskRepository } from "@/lib/core/repository";
 import { kindOf } from "@/lib/media-kind";
 
@@ -10,7 +14,7 @@ import { kindOf } from "@/lib/media-kind";
 function inferMediaType(
   coverPath: string | null,
   coverMediaType: string | null,
-  taskType: string
+  taskType: string,
 ): "image" | "video" | "audio" {
   /* 文件事实（扩展名）优先于元数据（mediaType），元数据优先于任务类型推断：
    * 越靠前的来源越接近「磁盘上到底是什么」。 */
@@ -35,14 +39,19 @@ export const taskRouter = createTRPCRouter({
           media: z.enum(["image", "video", "audio"]).optional(),
           status: z.string().optional(),
         })
-        .default({ take: 60 })
+        .default({ take: 60 }),
     )
     .query(async ({ ctx, input }) => {
       const statusList = input.status
-        ? input.status.split(",").map((status) => status.trim().toUpperCase()).filter(Boolean)
+        ? input.status
+            .split(",")
+            .map((status) => status.trim().toUpperCase())
+            .filter(Boolean)
         : undefined;
 
-      const overFetch = input.media ? Math.min(input.take * 4, 400) : input.take;
+      const overFetch = input.media
+        ? Math.min(input.take * 4, 400)
+        : input.take;
 
       const tasks = await taskRepository.listByUser(ctx.user.id, {
         projectId: input.projectId ?? undefined,
@@ -51,10 +60,10 @@ export const taskRouter = createTRPCRouter({
         includeImages: true,
       });
 
-      let list = tasks.map((task) =>
-{
+      let list = tasks.map((task) => {
         const p = (task.params ?? {}) as Record<string, unknown>;
-        const checkpoint = typeof p.checkpoint === "string" ? p.checkpoint : null;
+        const checkpoint =
+          typeof p.checkpoint === "string" ? p.checkpoint : null;
         const cover = task.images[0]?.localPath ?? null;
         const coverMediaType = task.images[0]?.mediaType ?? null;
         return {
@@ -157,9 +166,11 @@ export const taskRouter = createTRPCRouter({
     .query(async ({ input }) => {
       const task = await taskRepository.findSnapshotById(input.id);
       if (!task) throw new Error("Task not found");
-      const snap = task.workflowSnapshot as
-        | { workflow?: unknown; capturedAt?: string; source?: string }
-        | null;
+      const snap = task.workflowSnapshot as {
+        workflow?: unknown;
+        capturedAt?: string;
+        source?: string;
+      } | null;
       return {
         workflow: snap?.workflow ?? null,
         source: snap?.source ?? null,
@@ -179,11 +190,17 @@ export const taskRouter = createTRPCRouter({
       const fsPromises = await import("fs/promises");
       const path = await import("path");
       for (const img of task.images) {
-        const full = path.join(process.cwd(), "public", img.localPath.replace(/^\//, ""));
+        const full = path.join(
+          process.cwd(),
+          "public",
+          img.localPath.replace(/^\//, ""),
+        );
         fsPromises.unlink(full).catch(() => undefined);
       }
       const dir = path.join(process.cwd(), "public", "generated", input.id);
-      fsPromises.rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      fsPromises
+        .rm(dir, { recursive: true, force: true })
+        .catch(() => undefined);
       await taskRepository.delete(input.id);
       return { ok: true };
     }),

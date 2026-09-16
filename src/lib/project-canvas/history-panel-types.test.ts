@@ -38,7 +38,9 @@ describe("titleOf", () => {
   });
 
   it("提示词只有空白时视为空，回落到工作流名", () => {
-    expect(titleOf(row({ prompt: "   ", workflowName: "文生图" }))).toBe("文生图");
+    expect(titleOf(row({ prompt: "   ", workflowName: "文生图" }))).toBe(
+      "文生图",
+    );
   });
 
   it("两者都空时回落到任务 id 前 12 位", () => {
@@ -57,9 +59,15 @@ describe("timeAgo", () => {
   });
 
   it("分钟内 / 小时内 / 天内分档", () => {
-    expect(timeAgo(new Date(Date.now() - 5 * 60_000).toISOString())).toBe("5 分钟前");
-    expect(timeAgo(new Date(Date.now() - 3 * 3_600_000).toISOString())).toBe("3 小时前");
-    expect(timeAgo(new Date(Date.now() - 5 * 86_400_000).toISOString())).toBe("5 天前");
+    expect(timeAgo(new Date(Date.now() - 5 * 60_000).toISOString())).toBe(
+      "5 分钟前",
+    );
+    expect(timeAgo(new Date(Date.now() - 3 * 3_600_000).toISOString())).toBe(
+      "3 小时前",
+    );
+    expect(timeAgo(new Date(Date.now() - 5 * 86_400_000).toISOString())).toBe(
+      "5 天前",
+    );
   });
 
   it("超过 30 天落到具体日期（不再是「xx 天前」）", () => {
@@ -90,16 +98,24 @@ describe("countActive", () => {
 
 describe("isDraggableCover", () => {
   it("image / video 有封面才可拖到画布", () => {
-    expect(isDraggableCover(row({ cover: "/a.png", mediaType: "image" }))).toBe(true);
-    expect(isDraggableCover(row({ cover: "/a.mp4", mediaType: "video" }))).toBe(true);
+    expect(isDraggableCover(row({ cover: "/a.png", mediaType: "image" }))).toBe(
+      true,
+    );
+    expect(isDraggableCover(row({ cover: "/a.mp4", mediaType: "video" }))).toBe(
+      true,
+    );
   });
 
   it("audio 不可拖（没有可视封面）", () => {
-    expect(isDraggableCover(row({ cover: "/a.mp3", mediaType: "audio" }))).toBe(false);
+    expect(isDraggableCover(row({ cover: "/a.mp3", mediaType: "audio" }))).toBe(
+      false,
+    );
   });
 
   it("无封面一律不可拖", () => {
-    expect(isDraggableCover(row({ cover: null, mediaType: "image" }))).toBe(false);
+    expect(isDraggableCover(row({ cover: null, mediaType: "image" }))).toBe(
+      false,
+    );
   });
 });
 

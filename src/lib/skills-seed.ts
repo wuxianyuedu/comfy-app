@@ -87,8 +87,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "style",
     promptTemplate:
       "Classical Wuxian Cyberpunk fusion, ancient Chinese martial arts meets neon dystopia, holographic projections on traditional architecture, glowing katana, rain-soaked streets with pagodas, neon calligraphy, blade runner meets Jin Yong",
-    negativePrompt:
-      "bright daylight, cheerful, cartoon, flat, dull colors",
+    negativePrompt: "bright daylight, cheerful, cartoon, flat, dull colors",
     defaultParams: {
       steps: 30,
       cfg: 7.5,
@@ -150,8 +149,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "style",
     promptTemplate:
       "Watercolor fairytale illustration, wet-on-wet technique, dreamy soft glow, children book aesthetic, pastel rainbow hues, whimsical details, paper texture, gentle color bleeding, magical atmosphere",
-    negativePrompt:
-      "sharp, digital, photorealistic, dark, gloomy, harsh lines",
+    negativePrompt: "sharp, digital, photorealistic, dark, gloomy, harsh lines",
     defaultParams: {
       steps: 30,
       cfg: 7.5,
@@ -171,8 +169,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "style",
     promptTemplate:
       "Cyberpunk cityscape, neon-lit rain night, towering skyscrapers with holographic advertisements, high-tech low-life, Blade Runner atmosphere, wet streets reflecting neon signs, flying vehicles, dystopian future, volumetric lighting",
-    negativePrompt:
-      "daylight, natural, rural, pastel, soft, cheerful",
+    negativePrompt: "daylight, natural, rural, pastel, soft, cheerful",
     defaultParams: {
       steps: 30,
       cfg: 7.5,
@@ -215,8 +212,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "photo",
     promptTemplate:
       "Vintage Kodak Portra film aesthetic, natural film grain, light leak effects, nostalgic 90s atmosphere, warm faded tones, analog photography look, slight vignette, authentic color science",
-    negativePrompt:
-      "digital, sharp, clean, modern, oversaturated, neon",
+    negativePrompt: "digital, sharp, clean, modern, oversaturated, neon",
     defaultParams: {
       steps: 25,
       cfg: 6.5,
@@ -238,8 +234,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "comic",
     promptTemplate:
       "Comic storyboard panel, manga-style dynamic action lines, speed effect, dramatic perspective, black-and-white ink with screentone, professional comic layout, expressive character poses, narrative flow",
-    negativePrompt:
-      "color, realistic, photo, 3D render, messy, unclear",
+    negativePrompt: "color, realistic, photo, 3D render, messy, unclear",
     defaultParams: {
       steps: 28,
       cfg: 7,

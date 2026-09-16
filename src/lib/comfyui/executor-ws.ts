@@ -70,7 +70,6 @@ function nodeLabel(classType?: string): string {
   return map[classType ?? ""] ?? classType ?? "未知节点";
 }
 
-
 /**
  * 把一条执行日志同时打到当前队列里所有等待任务上。
  *
@@ -392,7 +391,6 @@ async function handleMessage(raw: string) {
     await fail(taskId, promptId, data.exception_message ?? "执行错误");
   }
 }
-
 
 /**
  * （重）启动任务的看门狗定时器。

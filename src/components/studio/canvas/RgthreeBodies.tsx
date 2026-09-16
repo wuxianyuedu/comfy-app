@@ -29,7 +29,7 @@ export function RgthreeFastGroupsBypasserBody({
         return (
           <div
             key={group.id}
-            className="group relative flex h-[22px] items-center gap-1.5 pl-2 pr-2 text-[11px]"
+            className="group relative flex h-[22px] items-center gap-1.5 pr-2 pl-2 text-[11px]"
           >
             <span
               className={`min-w-0 shrink truncate text-left text-[11px] ${
@@ -119,7 +119,11 @@ export function RgthreeFastGroupsBypasserBody({
  *   • efficiency-nodes' SetNode / GetNode — its pkg has no on-disk marker
  *     in our install and its nodes carry no `cnr_id`, so we hard-code the
  *     attribution. */
-export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) {
+export function RgthreePowerLoraLoaderBody({
+  widgets,
+}: {
+  widgets: unknown[];
+}) {
   const fmtStrength = (v: unknown): string | undefined => {
     if (typeof v === "number") {
       // ComfyUI strips trailing zeros ("1.00" → "1", "0.85" stays).
@@ -134,7 +138,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
   // Per-lora rows: filter out the header widget and empty placeholders.
   // Row shape is pack-dependent (bare filename string or a widget record).
   type PowerLoraWidget = string | Record<string, unknown>;
-  const loras: PowerLoraWidget[] = ((widgets ?? []) as PowerLoraWidget[]).filter((widget) => {
+  const loras: PowerLoraWidget[] = (
+    (widgets ?? []) as PowerLoraWidget[]
+  ).filter((widget) => {
     if (widget === null || widget === undefined) return false;
     if (typeof widget !== "object" || Array.isArray(widget)) {
       return typeof widget === "string" && widget.length > 0; // bare lora filename
@@ -145,7 +151,7 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
   });
 
   return (
-    <div className="flex w-full flex-col gap-[3px] px-1 pb-1 pt-0.5">
+    <div className="flex w-full flex-col gap-[3px] px-1 pt-0.5 pb-1">
       {/* Lora Stack section header — always drawn (matches rgthree even on
        *  empty stacks, so the author can always add a lora below it). */}
       <div
@@ -198,9 +204,12 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
           const name =
             typeof widget === "string"
               ? widget
-              : ((rec?.name ?? rec?.lora_name ?? rec?.model_name) as string | undefined) ?? "";
+              : (((rec?.name ?? rec?.lora_name ?? rec?.model_name) as
+                  string | undefined) ?? "");
           const modelStr = isObj
-            ? fmtStrength(rec?.model_strength ?? rec?.model_str ?? rec?.strength)
+            ? fmtStrength(
+                rec?.model_strength ?? rec?.model_str ?? rec?.strength,
+              )
             : undefined;
           const clipStr = isObj
             ? fmtStrength(rec?.clip_strength ?? rec?.clip_str)
@@ -214,7 +223,9 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: unknown[] }) 
               <span
                 className="min-widget-0 flex-1 truncate"
                 style={{
-                  color: name ? "var(--color-ink-bright)" : "var(--color-ink-fainter)",
+                  color: name
+                    ? "var(--color-ink-bright)"
+                    : "var(--color-ink-fainter)",
                 }}
                 title={name}
               >
@@ -286,7 +297,8 @@ export function RgthreeLabelBody({
 }) {
   const p = properties ?? {};
   const fontSize = typeof p.fontSize === "number" ? p.fontSize : 24;
-  const fontFamily = typeof p.fontFamily === "string" ? p.fontFamily : "sans-serif";
+  const fontFamily =
+    typeof p.fontFamily === "string" ? p.fontFamily : "sans-serif";
   const fontColor = typeof p.fontColor === "string" ? p.fontColor : "#ffffff";
   const textAlign =
     p.textAlign === "center" || p.textAlign === "right" ? p.textAlign : "left";

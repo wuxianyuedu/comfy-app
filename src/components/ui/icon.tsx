@@ -148,7 +148,9 @@ export interface IconProps extends Omit<LucideProps, "name"> {
 
 /** Renders a flat lucide icon from a string key. Returns null if key unknown. */
 export function Icon({ name, size = 16, className, ...rest }: IconProps) {
-  const Cmp: LucideIcon | undefined = name ? ICON_MAP[name.toLowerCase()] : undefined;
+  const Cmp: LucideIcon | undefined = name
+    ? ICON_MAP[name.toLowerCase()]
+    : undefined;
   if (!Cmp) return null;
   return <Cmp size={size} className={className} aria-hidden {...rest} />;
 }

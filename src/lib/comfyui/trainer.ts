@@ -30,22 +30,22 @@ import path from "path";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 
 function trainerUrl(): string {
-
   const settings = getSettingsSync();
 
-  return (settings.trainerUrl || (process.env.LORA_TRAINER_URL ?? "")).replace(/\/$/, "");
-
+  return (settings.trainerUrl || (process.env.LORA_TRAINER_URL ?? "")).replace(
+    /\/$/,
+    "",
+  );
 }
-
 
 function comfyLorasDir(): string {
-
   const settings = getSettingsSync();
 
-  return settings.comfyLorasDir || (process.env.COMFY_LORAS_DIR ?? path.join(process.cwd(), "models", "loras"));
-
+  return (
+    settings.comfyLorasDir ||
+    (process.env.COMFY_LORAS_DIR ?? path.join(process.cwd(), "models", "loras"))
+  );
 }
-
 
 export type TrainLogEntry = {
   t: number;
@@ -76,8 +76,16 @@ export function isTrainerConfigured(): boolean {
   return trainerUrl().length > 0;
 }
 
-async function appendLog(jobId: string, level: TrainLogEntry["level"], msg: string) {
-  await loraTrainingJobRepository.appendLog(jobId, { t: Date.now(), level, msg });
+async function appendLog(
+  jobId: string,
+  level: TrainLogEntry["level"],
+  msg: string,
+) {
+  await loraTrainingJobRepository.appendLog(jobId, {
+    t: Date.now(),
+    level,
+    msg,
+  });
 }
 
 /**
@@ -94,14 +102,14 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   spec.captions = Object.fromEntries(
     (spec.datasetImages ?? [])
       .filter((item) => item?.caption?.trim())
-      .map((item) => [item.name, item.caption!.trim()])
+      .map((item) => [item.name, item.caption!.trim()]),
   );
 
   if (!trainerUrl()) {
     await appendLog(
       jobId,
       "warn",
-      "训练后端未配置：在「设置 → 偏好」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后即开始真实训练。任务已暂存。"
+      "训练后端未配置：在「设置 → 偏好」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后即开始真实训练。任务已暂存。",
     );
     return; // stays QUEUED
   }
@@ -159,9 +167,12 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
   }
 }
 
-async function finishJob(spec: TrainJobSpec, outputName?: string): Promise<void> {
+async function finishJob(
+  spec: TrainJobSpec,
+  outputName?: string,
+): Promise<void> {
   const finalName =
-// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     outputName ||
     `${spec.name.replace(/[^\w一-龥-]+/g, "_")}_r${spec.rankDim}.safetensors`;
 
@@ -175,7 +186,11 @@ async function finishJob(spec: TrainJobSpec, outputName?: string): Promise<void>
   });
 
   await loraTrainingJobRepository.markDone(spec.id, finalName);
-  await appendLog(spec.id, "success", `训练完成，LoRA 已产出：${finalName}（可在创作台 LoRA 中选择使用）`);
+  await appendLog(
+    spec.id,
+    "success",
+    `训练完成，LoRA 已产出：${finalName}（可在创作台 LoRA 中选择使用）`,
+  );
 }
 
 async function failJob(jobId: string, error: string): Promise<void> {
@@ -186,11 +201,18 @@ async function failJob(jobId: string, error: string): Promise<void> {
 export async function cancelTraining(jobId: string): Promise<void> {
   const job = await loraTrainingJobRepository.findStatusById(jobId);
   if (!job) return;
-  if (job.status === "DONE" || job.status === "FAILED" || job.status === "CANCELLED") return;
+  if (
+    job.status === "DONE" ||
+    job.status === "FAILED" ||
+    job.status === "CANCELLED"
+  )
+    return;
 
   if (trainerUrl()) {
     try {
-      await fetch(`${trainerUrl()}/train/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+      await fetch(`${trainerUrl()}/train/${encodeURIComponent(jobId)}`, {
+        method: "DELETE",
+      });
     } catch {
       /* best-effort */
     }

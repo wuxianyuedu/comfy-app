@@ -30,12 +30,15 @@ const killProcessTreeMock = vi.hoisted(() =>
 vi.mock("~/lib/kill-process-tree", () => ({
   killProcessTree: killProcessTreeMock,
 }));
-const openUrlMock = vi.hoisted(() => vi.fn(async () => ({ ok: true, detail: "opened" })));
+const openUrlMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, detail: "opened" })),
+);
 vi.mock("~/lib/open-in-browser", () => ({ openUrlInBrowser: openUrlMock }));
 
 /* 日志：落盘路径换到临时目录，且别让运行日志真的写进仓库 log/。 */
 vi.mock("~/lib/log-paths", () => ({
-  DRIZZLE_STUDIO_RUNTIME_LOG: "/tmp/drizzle-studio-test/drizzle-studio-runtime.log",
+  DRIZZLE_STUDIO_RUNTIME_LOG:
+    "/tmp/drizzle-studio-test/drizzle-studio-runtime.log",
   SERVICES_LOG_DIR: "/tmp/drizzle-studio-test",
 }));
 vi.mock("~/lib/session-banner.server", () => ({

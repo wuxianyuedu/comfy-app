@@ -15,8 +15,12 @@ describe("message-center-store 消息中心状态", () => {
   });
 
   it("push 新增未读消息并排到最前", () => {
-    useMessageCenterStore.getState().push({ kind: "update", title: "A", body: "a" });
-    useMessageCenterStore.getState().push({ kind: "restart", title: "B", body: "b" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "A", body: "a" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "restart", title: "B", body: "b" });
     const { messages } = useMessageCenterStore.getState();
     expect(messages).toHaveLength(2);
     // 最新在前
@@ -36,8 +40,12 @@ describe("message-center-store 消息中心状态", () => {
   });
 
   it("markRead 仅将目标消息置为已读", () => {
-    useMessageCenterStore.getState().push({ kind: "update", title: "A", body: "a" });
-    useMessageCenterStore.getState().push({ kind: "update", title: "B", body: "b" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "A", body: "a" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "B", body: "b" });
     const first = useMessageCenterStore.getState().messages[0]!;
     useMessageCenterStore.getState().markRead(first.id);
     const { messages } = useMessageCenterStore.getState();
@@ -46,23 +54,33 @@ describe("message-center-store 消息中心状态", () => {
   });
 
   it("markAllRead 全部置为已读", () => {
-    useMessageCenterStore.getState().push({ kind: "update", title: "A", body: "a" });
-    useMessageCenterStore.getState().push({ kind: "update", title: "B", body: "b" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "A", body: "a" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "B", body: "b" });
     useMessageCenterStore.getState().markAllRead();
     const { messages } = useMessageCenterStore.getState();
     expect(messages.every((m) => m.read)).toBe(true);
   });
 
   it("remove 删除指定消息", () => {
-    useMessageCenterStore.getState().push({ kind: "update", title: "A", body: "a" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "A", body: "a" });
     const first = useMessageCenterStore.getState().messages[0]!;
     useMessageCenterStore.getState().remove(first.id);
     expect(useMessageCenterStore.getState().messages).toHaveLength(0);
   });
 
   it("clear 清空全部消息", () => {
-    useMessageCenterStore.getState().push({ kind: "update", title: "A", body: "a" });
-    useMessageCenterStore.getState().push({ kind: "update", title: "B", body: "b" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "A", body: "a" });
+    useMessageCenterStore
+      .getState()
+      .push({ kind: "update", title: "B", body: "b" });
     useMessageCenterStore.getState().clear();
     expect(useMessageCenterStore.getState().messages).toEqual([]);
   });

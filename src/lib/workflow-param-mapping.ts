@@ -1142,4 +1142,3 @@ export const PARAM_NODE_DOT_OFFSET = -(
   PARAM_NODE_PAD_Y +
   PARAM_NODE_DOT_SIZE / 2
 );
-

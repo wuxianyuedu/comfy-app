@@ -262,7 +262,7 @@ function applySubgraphInteriorOverrides(
   raw: JsonRecord,
   wrapper: RawUiNode,
   wrapperId: string,
-  entries: { name: string; value: unknown }[]
+  entries: { name: string; value: unknown }[],
 ): void {
   const classType = typeof wrapper.type === "string" ? wrapper.type : undefined;
   if (!classType) return;
@@ -298,7 +298,8 @@ function applySubgraphInteriorOverrides(
   }
   for (const inp of wrapper.inputs ?? []) {
     if (typeof inp?.name !== "string") continue;
-    if (defNames.has(inp.name)) defInputNameByWrapperName.set(inp.name, inp.name);
+    if (defNames.has(inp.name))
+      defInputNameByWrapperName.set(inp.name, inp.name);
   }
 
   /* 子图定义输入名 → 内层 (nodeId, slot) */

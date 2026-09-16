@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRawInputs, buildInnerNodeInputs } from "@/lib/comfyui/workflow-detail-raw";
+import {
+  buildRawInputs,
+  buildInnerNodeInputs,
+} from "@/lib/comfyui/workflow-detail-raw";
 import type { RawWorkflow } from "@/lib/comfyui/raw";
 
 const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
@@ -16,11 +19,28 @@ const wrapperWorkflow = {
       type: WRAPPER,
       pos: [0, 0],
       size: [300, 200],
-      properties: { proxyWidgets: [["12", "seed"], ["12", "steps"]] },
+      properties: {
+        proxyWidgets: [
+          ["12", "seed"],
+          ["12", "steps"],
+        ],
+      },
       widgets_values: [],
       inputs: [
-        { name: "value_1", type: "INT", link: null, widget: { name: "value_1" }, idx: 0 },
-        { name: "value_2", type: "INT", link: null, widget: { name: "value_2" }, idx: 1 },
+        {
+          name: "value_1",
+          type: "INT",
+          link: null,
+          widget: { name: "value_1" },
+          idx: 0,
+        },
+        {
+          name: "value_2",
+          type: "INT",
+          link: null,
+          widget: { name: "value_2" },
+          idx: 1,
+        },
       ],
       outputs: [{ name: "LATENT", type: "LATENT", links: [] }],
     },
@@ -37,8 +57,18 @@ const wrapperWorkflow = {
             type: "KSampler",
             inputs: [
               { name: "model", type: "MODEL" },
-              { name: "seed", type: "INT", widget: { name: "seed" }, label: "随机种子" },
-              { name: "steps", type: "INT", widget: { name: "steps" }, localized_name: "步数" },
+              {
+                name: "seed",
+                type: "INT",
+                widget: { name: "seed" },
+                label: "随机种子",
+              },
+              {
+                name: "steps",
+                type: "INT",
+                widget: { name: "steps" },
+                localized_name: "步数",
+              },
             ],
             widgets_values: [12345, "fixed", 20],
             outputs: [{ name: "LATENT", type: "LATENT", links: [] }],
@@ -46,8 +76,20 @@ const wrapperWorkflow = {
         ],
         links: [],
         inputs: [
-          { id: "pin-a", name: "value_1", type: "INT", pos: [0, 0], linkIds: [] },
-          { id: "pin-b", name: "value_2", type: "INT", pos: [0, 50], linkIds: [] },
+          {
+            id: "pin-a",
+            name: "value_1",
+            type: "INT",
+            pos: [0, 0],
+            linkIds: [],
+          },
+          {
+            id: "pin-b",
+            name: "value_2",
+            type: "INT",
+            pos: [0, 50],
+            linkIds: [],
+          },
         ],
         outputs: [],
       },
@@ -89,7 +131,9 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
           id: 7,
           type: "KSampler",
           pos: [0, 0],
-          inputs: [{ name: "seed", type: "INT", link: null, widget: { name: "seed" } }],
+          inputs: [
+            { name: "seed", type: "INT", link: null, widget: { name: "seed" } },
+          ],
           widgets_values: [42],
         },
       ],
@@ -100,12 +144,17 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
   });
 
   it("proxyWidgets 指向的内部节点缺失时仍记下字段名（比别名有信息量）", async () => {
-    const broken = JSON.parse(JSON.stringify(wrapperWorkflow)) as unknown as RawWorkflow;
+    const broken = JSON.parse(
+      JSON.stringify(wrapperWorkflow),
+    ) as unknown as RawWorkflow;
     const subs = broken.definitions!.subgraphs!;
     const key = Object.keys(subs)[0]!;
     subs[key]!.nodes = [];
     const { rawInputsById } = await buildRawInputs(broken, noCombo);
-    expect(rawInputsById["1"]![0]!.proxyField).toEqual({ nodeId: "12", field: "seed" });
+    expect(rawInputsById["1"]![0]!.proxyField).toEqual({
+      nodeId: "12",
+      field: "seed",
+    });
   });
 });
 
@@ -120,8 +169,18 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
         type: WRAPPER,
         pos: [0, 0],
         inputs: [
-          { name: "value_1", type: "INT", link: null, widget: { name: "value_1" } },
-          { name: "value_2", type: "INT", link: null, widget: { name: "value_2" } },
+          {
+            name: "value_1",
+            type: "INT",
+            link: null,
+            widget: { name: "value_1" },
+          },
+          {
+            name: "value_2",
+            type: "INT",
+            link: null,
+            widget: { name: "value_2" },
+          },
         ],
         outputs: [],
         properties: { proxyWidgetErrorQuarantine: [["12", "seed"]] },
@@ -155,7 +214,9 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
   });
 
   it("作者真在本层写了别的名字时以本层为准，边界 pin 不覆盖", async () => {
-    const own = JSON.parse(JSON.stringify(quarantined)) as unknown as RawWorkflow;
+    const own = JSON.parse(
+      JSON.stringify(quarantined),
+    ) as unknown as RawWorkflow;
     own.nodes[0]!.inputs![0]!.label = "我的种子";
     const { rawInputsById } = await buildRawInputs(own, noCombo);
     expect(rawInputsById["4"]![0]!.label).toBe("我的种子");
@@ -168,7 +229,14 @@ describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收�
         {
           id: 7,
           type: "PrimitiveInt",
-          inputs: [{ name: "value_1", type: "INT", link: null, widget: { name: "value_1" } }],
+          inputs: [
+            {
+              name: "value_1",
+              type: "INT",
+              link: null,
+              widget: { name: "value_1" },
+            },
+          ],
           widgets_values: [1],
         },
       ],
@@ -190,7 +258,9 @@ describe("buildInnerNodeInputs — 子图内部节点输入索引", () => {
     /* widgets_values[0] 属于 seed；seed 家族多占一个
      *  control_after_generate 槽，故 steps 取到下标 2。 */
     expect(seed!.widgetValue).toBe(12345);
-    expect(inner["12"]!.find((input) => input.name === "steps")!.widgetValue).toBe(20);
+    expect(
+      inner["12"]!.find((input) => input.name === "steps")!.widgetValue,
+    ).toBe(20);
   });
 
   it("没有子图定义时返回空表", () => {
@@ -220,8 +290,10 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
 
   it("对象形态 proxyWidgets（键即槽位名）也能解析出内部字段", async () => {
     const { rawInputsById } = await buildRawInputs(
-      withProxy({ proxyWidgets: { value_1: ["12", "seed"], value_2: ["12", "steps"] } }),
-      noCombo
+      withProxy({
+        proxyWidgets: { value_1: ["12", "seed"], value_2: ["12", "steps"] },
+      }),
+      noCombo,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField?.field).toBe("seed");
@@ -233,8 +305,10 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
      *  才能把 value_1 对回它自己的目标（ISSUE #349：value_1 一直是 PrimitiveInt
      *  的 `value`，不是 KSampler 的 seed）。 */
     const { rawInputsById } = await buildRawInputs(
-      withProxy({ proxyWidgets: { value_2: ["12", "steps"], value_1: ["12", "seed"] } }),
-      noCombo
+      withProxy({
+        proxyWidgets: { value_2: ["12", "steps"], value_1: ["12", "seed"] },
+      }),
+      noCombo,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.name).toBe("value_1");
@@ -248,7 +322,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
      *  否则第二个槽位会顶着第一个槽位的字段名，显示名彻底错位。 */
     const { rawInputsById } = await buildRawInputs(
       withProxy({ proxyWidgets: [["12", "seed"]] }),
-      noCombo
+      noCombo,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField?.field).toBe("seed");
@@ -257,8 +331,10 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
 
   it("畸形条目（长度不足 / 键对不上任何槽位）被安全忽略", async () => {
     const { rawInputsById } = await buildRawInputs(
-      withProxy({ proxyWidgets: [["12"], ["12", "steps"], ["12", "seed"]].slice(0, 2) }),
-      noCombo
+      withProxy({
+        proxyWidgets: [["12"], ["12", "steps"], ["12", "seed"]].slice(0, 2),
+      }),
+      noCombo,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField?.field).toBe("steps");
@@ -268,7 +344,7 @@ describe("buildRawInputs — proxyWidgets 的键形态与配对（ISSUE #349）"
   it("没有 proxyWidgets（被隔离）时行为与旧版一致：只留别名，不猜字段", async () => {
     const { rawInputsById } = await buildRawInputs(
       withProxy({ proxyWidgetErrorQuarantine: [["12", "seed"]] }),
-      noCombo
+      noCombo,
     );
     const entries = rawInputsById["1"]!;
     expect(entries[0]!.proxyField).toBeUndefined();

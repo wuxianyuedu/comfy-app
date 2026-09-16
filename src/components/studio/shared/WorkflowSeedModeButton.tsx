@@ -228,7 +228,7 @@ export function SeedModeButton({
         setOpen((value) => !value);
       }}
       onMouseDown={(event) => event.stopPropagation()}
-      className="nodrag nopan flex h-[30px] shrink-0 items-center gap-1 rounded-md border border-border-strong bg-canvas-deep px-2 text-[11px] font-medium text-ink-soft transition-colors hover:border-primary/40 hover:text-ink-bright"
+      className="nodrag nopan border-border-strong bg-canvas-deep text-ink-soft hover:border-primary/40 hover:text-ink-bright flex h-[30px] shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors"
       title="控件后行为 · CONTROL AFTER GENERATE"
     >
       <span className="truncate">{current}</span>
@@ -269,7 +269,7 @@ export function SeedModeButton({
           />
           <div
             ref={popRef}
-            className="nodrag nopan fixed overflow-hidden rounded-xl border border-border-strong bg-card p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
+            className="nodrag nopan border-border-strong bg-card fixed overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
             style={{
               zIndex: 9999,
               width: POPOVER_WIDTH,
@@ -283,13 +283,11 @@ export function SeedModeButton({
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="space-y-0.5">
-              <h4 className="text-[12px] font-semibold text-ink-bright">
+              <h4 className="text-ink-bright text-[12px] font-semibold">
                 控件后行为{" "}
-                <span className="text-ink-muted">
-                  · CONTROL AFTER GENERATE
-                </span>
+                <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
               </h4>
-              <p className="text-[10.5px] leading-relaxed text-ink-muted">
+              <p className="text-ink-muted text-[10.5px] leading-relaxed">
                 seed / 类似数值 widget 点击数字弹出 4 选 1 切换面板
               </p>
             </div>
@@ -308,12 +306,10 @@ export function SeedModeButton({
                     className={`nodrag nopan flex w-full items-center gap-2.5 rounded-lg border px-2 py-1.5 text-left transition-colors ${
                       selected
                         ? "border-primary/40 bg-node-accent"
-                        : "border-transparent hover:bg-subtle"
+                        : "hover:bg-subtle border-transparent"
                     }`}
                   >
-                    <span
-                      className="bg-node-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                    >
+                    <span className="bg-node-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
                       <SeedModeIcon value={SEED_MODES.value} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col">
@@ -322,7 +318,7 @@ export function SeedModeButton({
                       >
                         {SEED_MODES.label}
                       </span>
-                      <span className="truncate text-[10.5px] leading-snug text-ink-muted">
+                      <span className="text-ink-muted truncate text-[10.5px] leading-snug">
                         {SEED_MODES.hint}
                       </span>
                     </span>
@@ -334,7 +330,7 @@ export function SeedModeButton({
                       }`}
                     >
                       {selected && (
-                        <span className="block h-full w-full rounded-full ring-2 ring-card" />
+                        <span className="ring-card block h-full w-full rounded-full ring-2" />
                       )}
                     </span>
                   </button>

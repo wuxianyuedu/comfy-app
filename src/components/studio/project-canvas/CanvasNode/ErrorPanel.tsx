@@ -61,7 +61,10 @@ export function ErrorPanel({
 
   /* Auto-expand on structured / actionable errors so the suggestion +
    *  request-payload sections are visible without an extra click. */
-  const shouldAutoExpand = shouldAutoExpandError(error, validationErrors?.length ?? 0);
+  const shouldAutoExpand = shouldAutoExpandError(
+    error,
+    validationErrors?.length ?? 0,
+  );
   /* Auto-expand on actionable errors (adjusted during render, React 19
    *  pattern). */
   const [prevErrCtx, setPrevErrCtx] = useState(`${status}|${shouldAutoExpand}`);
@@ -74,7 +77,10 @@ export function ErrorPanel({
   /* Pattern-match the error text to surface a one-line actionable hint.
    *  Returns null if we don't recognize the failure shape (UI keeps the
    *  generic raw-error block instead of making up bad advice). */
-  const errorSuggestion: string | null = useMemo(() => suggestForError(error), [error]);
+  const errorSuggestion: string | null = useMemo(
+    () => suggestForError(error),
+    [error],
+  );
 
   /* Hidden entirely when the node isn't showing an actionable error. Kept
    *  after the hooks (instead of gating the mount in the parent) so the
@@ -170,11 +176,13 @@ export function ErrorPanel({
                                     }
                                   })(),
                             request: errorContext?.request ?? null,
-                            ts: errorContext?.timestamp ?? new Date().toISOString(),
+                            ts:
+                              errorContext?.timestamp ??
+                              new Date().toISOString(),
                           },
                           null,
-                          2
-                        )
+                          2,
+                        ),
                       );
                     } catch {
                       /* clipboard unavailable — silent; user can still
@@ -195,147 +203,158 @@ export function ErrorPanel({
            *  full context don't lose vertical space. */}
           {!errExpanded && (validationErrors?.length ?? 0) > 0 && (
             <p className="nodrag nopan mt-1 text-[10px] font-medium text-rose-700 dark:text-rose-300">
-              发现 {(validationErrors ?? []).length} 项节点配置错误（点击 ▼ 查看明细）
+              发现 {(validationErrors ?? []).length} 项节点配置错误（点击 ▼
+              查看明细）
             </p>
           )}
           {!errExpanded && (
-            <p className="nodrag nopan mt-1 line-clamp-2 break-words text-[10px] text-rose-700/90 dark:text-rose-300/80">
+            <p className="nodrag nopan mt-1 line-clamp-2 text-[10px] break-words text-rose-700/90 dark:text-rose-300/80">
               {typeof error === "string"
                 ? error.replace(/\n/g, " ").slice(0, 200)
                 : "（点击 ▼ 展开查看完整错误）"}
             </p>
           )}
 
-          {errExpanded && (() => {
-            // 重做失败面板，把「执行了什么」结构化展示。
-            //
-            // Defensive coerce: `d.error` is typed `string`
-            // but legacy rows / older code paths may have stored the
-            // literal "[object Object]" (e.g. buildPromptError pre-
-            // used `String(res.error)`) or a structured object slipped
-            // through a race.  We (1) detect the literal garbage-string
-            // sentinel, (2) JSON-stringify real objects, (3) fall back
-            // to a generic "no detail" message.  The expanded <pre>
-            // never shows literal `[object Object]`.
-            const raw = error;
-            let errText = "(no error detail)";
-            if (typeof raw === "string") {
-              const trimmed = raw.trim();
-              if (
-                trimmed &&
-                trimmed !== "[object Object]" &&
-                trimmed !== "[unserializable error]"
-              ) {
-                errText = trimmed;
+          {errExpanded &&
+            (() => {
+              // 重做失败面板，把「执行了什么」结构化展示。
+              //
+              // Defensive coerce: `d.error` is typed `string`
+              // but legacy rows / older code paths may have stored the
+              // literal "[object Object]" (e.g. buildPromptError pre-
+              // used `String(res.error)`) or a structured object slipped
+              // through a race.  We (1) detect the literal garbage-string
+              // sentinel, (2) JSON-stringify real objects, (3) fall back
+              // to a generic "no detail" message.  The expanded <pre>
+              // never shows literal `[object Object]`.
+              const raw = error;
+              let errText = "(no error detail)";
+              if (typeof raw === "string") {
+                const trimmed = raw.trim();
+                if (
+                  trimmed &&
+                  trimmed !== "[object Object]" &&
+                  trimmed !== "[unserializable error]"
+                ) {
+                  errText = trimmed;
+                }
+              } else if (raw && typeof raw === "object") {
+                try {
+                  errText = JSON.stringify(raw, null, 2);
+                } catch {
+                  errText = String(raw);
+                }
               }
-            } else if (raw && typeof raw === "object") {
-              try {
-                errText = JSON.stringify(raw, null, 2);
-              } catch {
-                errText = String(raw);
-              }
-            }
 
-            const ts = (() => {
-              const t = errorContext?.timestamp;
-              if (!t) return null;
-              const dt = new Date(t);
-              if (Number.isNaN(dt.getTime())) return t;
-              return dt.toLocaleString("zh-CN", { hour12: false });
-            })();
-            const hasCtx =
-              Boolean(taskId) ||
-              Boolean(ts) ||
-              Boolean(errorContext?.request) ||
-              Boolean(errorSuggestion);
+              const ts = (() => {
+                const t = errorContext?.timestamp;
+                if (!t) return null;
+                const dt = new Date(t);
+                if (Number.isNaN(dt.getTime())) return t;
+                return dt.toLocaleString("zh-CN", { hour12: false });
+              })();
+              const hasCtx =
+                Boolean(taskId) ||
+                Boolean(ts) ||
+                Boolean(errorContext?.request) ||
+                Boolean(errorSuggestion);
 
-            return (
-              <div className="nodrag nopan mt-1.5 space-y-1.5">
-                {/* 0) 结构化校验错误：精确指出哪个节点哪个字段 */}
-                {(validationErrors?.length ?? 0) > 0 && (
-                  <div className="rounded border border-rose-400/25 bg-rose-500/10 px-2 py-1.5">
-                    <div className="mb-1 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
-                      节点配置校验（{(validationErrors ?? []).length} 项）
+              return (
+                <div className="nodrag nopan mt-1.5 space-y-1.5">
+                  {/* 0) 结构化校验错误：精确指出哪个节点哪个字段 */}
+                  {(validationErrors?.length ?? 0) > 0 && (
+                    <div className="rounded border border-rose-400/25 bg-rose-500/10 px-2 py-1.5">
+                      <div className="mb-1 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
+                        节点配置校验（{(validationErrors ?? []).length} 项）
+                      </div>
+                      <ValidationErrorList
+                        errors={validationErrors}
+                        className="text-rose-700/90 dark:text-rose-300/80"
+                      />
                     </div>
-                    <ValidationErrorList errors={validationErrors} className="text-rose-700/90 dark:text-rose-300/80" />
-                  </div>
-                )}
-                {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
-                {hasCtx && (
-                  <div className="border-rose-400/15 bg-canvas-deep grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1 text-[10px]">
-                    {taskId && (
-                      <>
-                        <span className="text-rose-700 dark:text-rose-300/60">taskId</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void navigator.clipboard
-                              .writeText(taskId)
-                              .catch(() => undefined)
-                          }
-                          className="nodrag nopan min-w-0 truncate text-left font-mono text-rose-700/90 hover:text-rose-900 dark:text-rose-300/80 dark:hover:text-rose-100"
-                          title="点击复制 taskId"
-                        >
-                          {taskId}
-                        </button>
-                      </>
-                    )}
-                    {ts && (
-                      <>
-                        <span className="text-rose-700 dark:text-rose-300/60">时间</span>
-                        <span className="truncate text-rose-700/90 dark:text-rose-300/80">{ts}</span>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* 2) 自动建议 — 正则推断的纠错提示 */}
-                {errorSuggestion && (
-                  <div className="rounded border border-amber-400/25 bg-amber-500/8 px-2 py-1 text-[10px] leading-relaxed text-amber-800 dark:text-amber-200">
-                    <span className="mr-1 font-semibold text-amber-700 dark:text-amber-300">
-                      建议
-                    </span>
-                    {errorSuggestion}
-                  </div>
-                )}
-
-                {/* 3) 请求参数快照 */}
-                {errorContext?.request ? (
-                  <details className="text-[10px]" open>
-                    <summary className="cursor-pointer select-none text-rose-700 hover:text-rose-900 dark:text-rose-300/70 dark:hover:text-rose-200">
-                      请求参数
-                    </summary>
-                    <pre className="border-rose-400/15 bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] whitespace-pre-wrap leading-tight text-rose-700/90 dark:text-rose-300/85">
-                      {typeof errorContext.request === "string"
-                        ? errorContext.request
-                        : (() => {
-                            try {
-                              return JSON.stringify(
-                                errorContext.request,
-                                null,
-                                2
-                              );
-                            } catch {
-                              // eslint-disable-next-line @typescript-eslint/no-base-to-string -- request 非字符串且 JSON 序列化失败时兜底展示原始对象
-                              return String(errorContext.request);
+                  )}
+                  {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
+                  {hasCtx && (
+                    <div className="bg-canvas-deep grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border border-rose-400/15 px-1.5 py-1 text-[10px]">
+                      {taskId && (
+                        <>
+                          <span className="text-rose-700 dark:text-rose-300/60">
+                            taskId
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void navigator.clipboard
+                                .writeText(taskId)
+                                .catch(() => undefined)
                             }
-                          })()}
+                            className="nodrag nopan min-w-0 truncate text-left font-mono text-rose-700/90 hover:text-rose-900 dark:text-rose-300/80 dark:hover:text-rose-100"
+                            title="点击复制 taskId"
+                          >
+                            {taskId}
+                          </button>
+                        </>
+                      )}
+                      {ts && (
+                        <>
+                          <span className="text-rose-700 dark:text-rose-300/60">
+                            时间
+                          </span>
+                          <span className="truncate text-rose-700/90 dark:text-rose-300/80">
+                            {ts}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 2) 自动建议 — 正则推断的纠错提示 */}
+                  {errorSuggestion && (
+                    <div className="rounded border border-amber-400/25 bg-amber-500/8 px-2 py-1 text-[10px] leading-relaxed text-amber-800 dark:text-amber-200">
+                      <span className="mr-1 font-semibold text-amber-700 dark:text-amber-300">
+                        建议
+                      </span>
+                      {errorSuggestion}
+                    </div>
+                  )}
+
+                  {/* 3) 请求参数快照 */}
+                  {errorContext?.request ? (
+                    <details className="text-[10px]" open>
+                      <summary className="cursor-pointer text-rose-700 select-none hover:text-rose-900 dark:text-rose-300/70 dark:hover:text-rose-200">
+                        请求参数
+                      </summary>
+                      <pre className="bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border border-rose-400/15 p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap text-rose-700/90 dark:text-rose-300/85">
+                        {typeof errorContext.request === "string"
+                          ? errorContext.request
+                          : (() => {
+                              try {
+                                return JSON.stringify(
+                                  errorContext.request,
+                                  null,
+                                  2,
+                                );
+                              } catch {
+                                // eslint-disable-next-line @typescript-eslint/no-base-to-string -- request 非字符串且 JSON 序列化失败时兜底展示原始对象
+                                return String(errorContext.request);
+                              }
+                            })()}
+                      </pre>
+                    </details>
+                  ) : null}
+
+                  {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
+                  <details className="text-[10px]" open>
+                    <summary className="cursor-pointer text-rose-700 select-none hover:text-rose-900 dark:text-rose-300/70 dark:hover:text-rose-200">
+                      原始错误
+                    </summary>
+                    <pre className="bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border border-rose-400/15 p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap text-rose-700/90 dark:text-rose-300/85">
+                      {errText}
                     </pre>
                   </details>
-                ) : null}
-
-                {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
-                <details className="text-[10px]" open>
-                  <summary className="cursor-pointer select-none text-rose-700 hover:text-rose-900 dark:text-rose-300/70 dark:hover:text-rose-200">
-                    原始错误
-                  </summary>
-                  <pre className="border-rose-400/15 bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] whitespace-pre-wrap leading-tight text-rose-700/90 dark:text-rose-300/85">
-                    {errText}
-                  </pre>
-                </details>
-              </div>
-            );
-          })()}
+                </div>
+              );
+            })()}
         </div>
       </div>
     </div>

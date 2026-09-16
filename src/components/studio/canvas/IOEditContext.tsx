@@ -54,7 +54,9 @@ export function useIOEditContext() {
   const toggleIORequired = useIOEditStore((state) => state.toggleIORequired);
   const reorderIO = useIOEditStore((state) => state.reorderIO);
   const setIOValues = useIOEditStore((state) => state.setIOValues);
-  const resetIOPreviewValues = useIOEditStore((state) => state.resetIOPreviewValues);
+  const resetIOPreviewValues = useIOEditStore(
+    (state) => state.resetIOPreviewValues,
+  );
   return {
     ioEditMode,
     ioPreviewOpen,
@@ -73,7 +75,13 @@ export type IOEditContextValue = ReturnType<typeof useIOEditContext>;
  *  NodeIdChip — 节点头部 `#id` 章，点击弹出 JSON 查看器。
  *  原实现 `useContext(NodeJsonViewerContext)`；现改用 store hook `useNodeJsonViewer`。
  * ──────────────────────────────────────────────────────────────────────── */
-export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node" | "subgraph" }) {
+export function NodeIdChip({
+  nodeId,
+  variant,
+}: {
+  nodeId: string;
+  variant: "node" | "subgraph";
+}) {
   const viewerApi = useNodeJsonViewer();
   const ref = React.useRef<HTMLButtonElement | null>(null);
   const requestShow = viewerApi.requestShow;
@@ -103,11 +111,13 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
       aria-label={`查看节点 #${nodeId} 的原始 JSON 数据`}
       className={
         variant === "subgraph"
-          ? "nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold uppercase tracking-wider text-violet-700 transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-900 dark:text-violet-200 dark:hover:text-violet-50 focus:outline-none focus:ring-1 focus:ring-violet-400/40"
-          : "nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-cyan-400/45 bg-cyan-500/15 px-1 font-mono text-[9.5px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/25 hover:text-cyan-900 dark:text-cyan-200 dark:hover:text-cyan-50 focus:outline-none focus:ring-1 focus:ring-cyan-400/40"
+          ? "nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold tracking-wider text-violet-700 uppercase transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-900 focus:ring-1 focus:ring-violet-400/40 focus:outline-none dark:text-violet-200 dark:hover:text-violet-50"
+          : "nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-cyan-400/45 bg-cyan-500/15 px-1 font-mono text-[9.5px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/25 hover:text-cyan-900 focus:ring-1 focus:ring-cyan-400/40 focus:outline-none dark:text-cyan-200 dark:hover:text-cyan-50"
       }
     >
-      <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>🔍</span>
+      <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>
+        🔍
+      </span>
       <span>#{nodeId}</span>
     </button>
   );
@@ -132,7 +142,11 @@ export function IoCheckbox({
       onChange={() => io.toggleIO(ioRef)}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
-      title={checked ? `已暴露为工作流${dirLabel}` : `点击将其暴露为工作流${dirLabel}`}
+      title={
+        checked
+          ? `已暴露为工作流${dirLabel}`
+          : `点击将其暴露为工作流${dirLabel}`
+      }
       style={{
         width: 13,
         height: 13,

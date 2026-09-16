@@ -7,10 +7,11 @@ import type { RawWorkflow } from "./raw";
 /** Minimal valid params; individual tests override the fields they need. */
 function makeParams(
   workflowIORaw: Record<string, unknown>,
-  extra?: Partial<WorkflowIOEnrichParams>
+  extra?: Partial<WorkflowIOEnrichParams>,
 ): WorkflowIOEnrichParams {
   return {
-    workflowIORaw: workflowIORaw as unknown as WorkflowIOEnrichParams["workflowIORaw"],
+    workflowIORaw:
+      workflowIORaw as unknown as WorkflowIOEnrichParams["workflowIORaw"],
     rawInputsById: {},
     rawNodeMeta: [],
     graph: {},
@@ -46,8 +47,8 @@ describe("enrichWorkflowIO — 存储 kind 透传（新格式）", () => {
               },
             ],
           },
-        }
-      )
+        },
+      ),
     );
     const entry = result["7::widget::seed"]!;
     expect(entry).toBeDefined();
@@ -78,8 +79,8 @@ describe("enrichWorkflowIO — 存储 kind 透传（新格式）", () => {
               },
             ],
           },
-        }
-      )
+        },
+      ),
     );
     const entry = result["7::param::model"]!;
     expect(entry).toBeDefined();
@@ -102,8 +103,8 @@ describe("enrichWorkflowIO — 存储 kind 透传（新格式）", () => {
           graph: {
             "7": { inputs: { steps: 20 } },
           },
-        }
-      )
+        },
+      ),
     );
     const entry = result["7::widget::steps"]!;
     expect(entry.kind).toBe("widget");
@@ -120,7 +121,7 @@ describe("enrichWorkflowIO — 存储 kind 透传（新格式）", () => {
           nodeId: "7",
           name: "image",
         },
-      })
+      }),
     );
     const entry = result["7::output::image"]!;
     expect(entry).toBeDefined();
@@ -142,7 +143,7 @@ describe("enrichWorkflowIO — 存储 kind 透传（新格式）", () => {
           nodeId: "7",
           name: "seed",
         },
-      })
+      }),
     );
     expect(result["7::param::model"]?.kind).toBe("param");
     expect(result["7::widget::seed"]?.kind).toBe("widget");
@@ -187,7 +188,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           name: "aspect_ratio",
           modes: { T2I: { defaultValue: "16:9" } },
         },
-      })
+      }),
     );
     const modes = result["94::widget::aspect_ratio"]!.modes as Record<
       string,
@@ -207,12 +208,13 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           value: "16:9 (Widescreen)",
           modes: { T2I: { defaultValue: "4:3 (Standard)" } },
         },
-      })
+      }),
     );
     const entry = result["94::widget::aspect_ratio"]!;
     expect(entry.value).toBe("16:9 (Widescreen)");
     expect(
-      (entry.modes as Record<string, { defaultValue?: unknown }>).T2I!.defaultValue
+      (entry.modes as Record<string, { defaultValue?: unknown }>).T2I!
+        .defaultValue,
     ).toBe("4:3 (Standard)");
   });
 
@@ -226,7 +228,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           name: "aspect_ratio",
           value: "竖版高清",
         },
-      })
+      }),
     );
     const entry = result["94::widget::aspect_ratio"]!;
     /* 「竖版高清」解析不出宽高比、前缀也匹配不上任何候选 → 覆盖被丢弃。 */
@@ -243,7 +245,7 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           name: "aspect_ratio",
           value: "16:9",
         },
-      })
+      }),
     );
     expect(result["94::widget::aspect_ratio"]!.value).toBe("16:9");
   });
@@ -266,8 +268,8 @@ describe("enrichWorkflowIO — classType（产出节点类名）", () => {
           // 取 raw 的 —— 它才是 ComfyUI 里真实的 class。
           nodeTypeById: { "20": "LoadImageFirstFrame" },
           graph: { "20": { class_type: "LoadImage", inputs: {} } },
-        }
-      )
+        },
+      ),
     );
     expect(result["20::widget::image"]!.classType).toBe("LoadImageFirstFrame");
   });
@@ -283,8 +285,8 @@ describe("enrichWorkflowIO — classType（产出节点类名）", () => {
             name: "image",
           },
         },
-        { graph: { "21": { class_type: "LoadImageLastFrame", inputs: {} } } }
-      )
+        { graph: { "21": { class_type: "LoadImageLastFrame", inputs: {} } } },
+      ),
     );
     expect(result["21::widget::image"]!.classType).toBe("LoadImageLastFrame");
   });
@@ -298,7 +300,7 @@ describe("enrichWorkflowIO — classType（产出节点类名）", () => {
           nodeId: "22",
           name: "image",
         },
-      })
+      }),
     );
     expect(result["22::widget::image"]!.classType).toBeUndefined();
   });
@@ -332,14 +334,14 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
         graph: { "1": { class_type: WRAPPER, inputs: {} } },
         nodeTypeById: { "1": WRAPPER },
         nodeTitleById: { "1": "Sampler" },
-      }
+      },
     );
 
   it("用内部真实字段的业务名，而不是本层别名 value_1", async () => {
     const result = await enrichWorkflowIO(
       wrapperParams({
         proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
-      })
+      }),
     );
     expect(result["1::widget::value_1"]!.label).toBe("随机种子");
     expect(result["1::widget::value_1"]!.type).toBe("INT");
@@ -348,12 +350,14 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
 
   it("内部字段没有 label 时退到 localized，再退到字段名（不是别名）", async () => {
     const byLocalized = await enrichWorkflowIO(
-      wrapperParams({ proxyField: { nodeId: "12", field: "seed", localized: "种子" } })
+      wrapperParams({
+        proxyField: { nodeId: "12", field: "seed", localized: "种子" },
+      }),
     );
     expect(byLocalized["1::widget::value_1"]!.label).toBe("种子");
 
     const byField = await enrichWorkflowIO(
-      wrapperParams({ proxyField: { nodeId: "12", field: "seed" } })
+      wrapperParams({ proxyField: { nodeId: "12", field: "seed" } }),
     );
     expect(byField["1::widget::value_1"]!.label).toBe("seed");
   });
@@ -383,8 +387,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
               },
             ],
           },
-        }
-      )
+        },
+      ),
     );
     expect(result["1::widget::value_1"]!.label).toBe("我的种子");
   });
@@ -416,8 +420,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
               },
             ],
           },
-        }
-      )
+        },
+      ),
     );
     expect(result["1::widget::value_1"]!.label).toBe("随机种子");
   });
@@ -447,16 +451,14 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
               },
             ],
           },
-        }
-      )
+        },
+      ),
     );
     expect(result["7::widget::seed"]!.label).toBe("seed");
   });
 
   it("没有 proxyField（普通节点 / 未解析出代理）时行为与旧版一致", async () => {
-    const result = await enrichWorkflowIO(
-      wrapperParams({ label: "Steps" })
-    );
+    const result = await enrichWorkflowIO(wrapperParams({ label: "Steps" }));
     expect(result["1::widget::value_1"]!.label).toBe("Steps");
   });
 
@@ -485,8 +487,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
             ],
           },
           graph: { "1": { class_type: WRAPPER, inputs: {} } },
-        }
-      )
+        },
+      ),
     );
     expect(result["1::widget::seed"]!.label).toBe("随机种子");
     expect(result["1::widget::seed"]!.defaultValue).toBe(7);
@@ -523,8 +525,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
           },
           graph: { "9": { class_type: WRAPPER, inputs: {} } },
           nodeTypeById: { "9": WRAPPER },
-        }
-      )
+        },
+      ),
     );
     expect(result["9::widget::value_1"]!.label).toBe("Seed");
     expect(result["9::widget::value_1"]!.type).toBe("INT");
@@ -558,8 +560,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
           },
           graph: { "9": { class_type: WRAPPER, inputs: {} } },
           nodeTypeById: { "9": WRAPPER },
-        }
-      )
+        },
+      ),
     );
     expect(result["9::widget::value_1"]!.label).toBe("我的种子");
   });
@@ -594,8 +596,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
           },
           graph: { "7": { class_type: "KSampler", inputs: {} } },
           nodeTypeById: { "7": "KSampler" },
-        }
-      )
+        },
+      ),
     );
     expect(result["7::widget::seed"]!.label).toBe("seed");
   });
@@ -631,8 +633,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
           },
           graph: { "24": { class_type: "LoadImage", inputs: {} } },
           nodeTypeById: { "24": "LoadImage" },
-        }
-      )
+        },
+      ),
     );
     expect(result["24::widget::image"]!.label).toBe("Last Frame Image");
   });
@@ -664,8 +666,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
           },
           graph: { "24": { class_type: "LoadImage", inputs: {} } },
           nodeTypeById: { "24": "LoadImage" },
-        }
-      )
+        },
+      ),
     );
     expect(result["24::widget::image"]!.label).toBe("尾帧图");
   });
@@ -702,8 +704,8 @@ describe("enrichWorkflowIO — 子图内部节点（下钻视图勾选）的兜�
           },
           graph: {},
           nodeTypeById: {},
-        }
-      )
+        },
+      ),
     );
     const entry = result["1670::widget::value"]!;
     expect(entry.label).toBe("Seed");
@@ -725,18 +727,30 @@ describe("enrichWorkflowIO — 子图内部节点（下钻视图勾选）的兜�
         {
           rawInputsById: {
             "1670": [
-              { name: "value", label: "顶层名", type: "FLOAT", isConnection: false, widget: { name: "value" } },
+              {
+                name: "value",
+                label: "顶层名",
+                type: "FLOAT",
+                isConnection: false,
+                widget: { name: "value" },
+              },
             ],
           },
           innerInputsById: {
             "1670": [
-              { name: "value", label: "内层名", type: "INT", isConnection: false, widget: { name: "value" } },
+              {
+                name: "value",
+                label: "内层名",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value" },
+              },
             ],
           },
           graph: {},
           nodeTypeById: {},
-        }
-      )
+        },
+      ),
     );
     const entry = result["1670::widget::value"]!;
     expect(entry.label).toBe("顶层名");
@@ -759,7 +773,12 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
           id: 1512,
           type: WRAPPER_UUID,
           inputs: [
-            { name: "image", label: "image_first_frame", type: "IMAGE", link: 4418 },
+            {
+              name: "image",
+              label: "image_first_frame",
+              type: "IMAGE",
+              link: 4418,
+            },
             {
               name: "enabled",
               label: "WAN22: True = Safetensors",
@@ -767,7 +786,13 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
               widget: { name: "enabled" },
               link: null,
             },
-            { name: "value_1", label: "Seed", type: "INT", widget: { name: "value_1" }, link: null },
+            {
+              name: "value_1",
+              label: "Seed",
+              type: "INT",
+              widget: { name: "value_1" },
+              link: null,
+            },
             {
               name: "value_2",
               label: "Seconds",
@@ -801,8 +826,8 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
           rawInputsById,
           graph: { "1512": { class_type: WRAPPER_UUID, inputs: {} } },
           nodeTypeById: { "1512": WRAPPER_UUID },
-        }
-      )
+        },
+      ),
     );
     expect(io["1512::widget::value_1"]!.label).toBe("Seed");
     expect(io["1512::widget::value_1"]!.type).toBe("INT");
@@ -823,7 +848,14 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
       {
         id: 4,
         type: WRAPPER_UUID,
-        inputs: [{ name: "value_1", type: "INT", widget: { name: "value_1" }, link: null }],
+        inputs: [
+          {
+            name: "value_1",
+            type: "INT",
+            widget: { name: "value_1" },
+            link: null,
+          },
+        ],
         outputs: [],
         properties: { proxyWidgetErrorQuarantine: [["1670", "value"]] },
         widgets_values: [],
@@ -859,8 +891,8 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
           rawInputsById,
           graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
           nodeTypeById: { "4": WRAPPER_UUID },
-        }
-      )
+        },
+      ),
     );
     const entry = io["4::widget::value_1"]!;
     expect(entry.label).toBe("Seed");
@@ -872,8 +904,13 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
 
   it("子图边界 pin 也没写作者名时，别名判据由 classType 承担", async () => {
     const noLabels = JSON.parse(JSON.stringify(raw)) as unknown as RawWorkflow;
-    noLabels.definitions!.subgraphs![0]!.inputs = [{ name: "value_1", type: "INT" }];
-    const { rawInputsById } = await buildRawInputs(noLabels, async () => undefined);
+    noLabels.definitions!.subgraphs![0]!.inputs = [
+      { name: "value_1", type: "INT" },
+    ];
+    const { rawInputsById } = await buildRawInputs(
+      noLabels,
+      async () => undefined,
+    );
     const io = await enrichWorkflowIO(
       makeParams(
         {
@@ -889,8 +926,8 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
           rawInputsById,
           graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
           nodeTypeById: { "4": WRAPPER_UUID },
-        }
-      )
+        },
+      ),
     );
     expect(io["4::widget::value_1"]!.classType).toBe(WRAPPER_UUID);
   });
@@ -901,13 +938,20 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
     const { rawInputsById } = await buildRawInputs(own, async () => undefined);
     const io = await enrichWorkflowIO(
       makeParams(
-        { "4::widget::value_1": { direction: "input", kind: "widget", nodeId: "4", name: "value_1" } },
+        {
+          "4::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "4",
+            name: "value_1",
+          },
+        },
         {
           rawInputsById,
           graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
           nodeTypeById: { "4": WRAPPER_UUID },
-        }
-      )
+        },
+      ),
     );
     expect(io["4::widget::value_1"]!.label).toBe("我的种子");
   });
@@ -929,11 +973,17 @@ describe("enrichWorkflowIO — hostNodeId 透传", () => {
         {
           innerInputsById: {
             "1670": [
-              { name: "value", type: "INT", isConnection: false, widget: { name: "value" }, widgetValue: 1 },
+              {
+                name: "value",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "value" },
+                widgetValue: 1,
+              },
             ],
           },
-        }
-      )
+        },
+      ),
     );
     const entry = result["1670::widget::value"]!;
     expect(entry.hostNodeId).toBe("4");
@@ -943,8 +993,13 @@ describe("enrichWorkflowIO — hostNodeId 透传", () => {
   it("顶层条目没有宿主 id 时不凭空补一个", async () => {
     const result = await enrichWorkflowIO(
       makeParams({
-        "5::widget::width": { direction: "input", kind: "widget", nodeId: "5", name: "width" },
-      })
+        "5::widget::width": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "5",
+          name: "width",
+        },
+      }),
     );
     expect(result["5::widget::width"]!.hostNodeId).toBeUndefined();
   });
@@ -984,13 +1039,20 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
     const { rawInputsById } = await buildRawInputs(raw, async () => undefined);
     const io = await enrichWorkflowIO(
       makeParams(
-        { "9::widget::value_1": { direction: "input", kind: "widget", nodeId: "9", name: "value_1" } },
+        {
+          "9::widget::value_1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "9",
+            name: "value_1",
+          },
+        },
         {
           rawInputsById,
           graph: { "9": { class_type: WRAPPER_UUID, inputs: {} } },
           nodeTypeById: { "9": WRAPPER_UUID },
-        }
-      )
+        },
+      ),
     );
     /* 显示名取到作者写在槽位上的 label（"Seed"）—— label 排在现代链的
      *  localized 之前。无论如何，作者名必须随条目下发成 slotLabel。 */
@@ -1004,7 +1066,15 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
         {
           id: 24,
           type: "LoadImage",
-          inputs: [{ name: "image", localized_name: "图像", type: "COMBO", widget: { name: "image" }, link: null }],
+          inputs: [
+            {
+              name: "image",
+              localized_name: "图像",
+              type: "COMBO",
+              widget: { name: "image" },
+              link: null,
+            },
+          ],
           widgets_values: ["a.png"],
           properties: {},
         },
@@ -1012,17 +1082,29 @@ describe("enrichWorkflowIO — slotLabel 下发（别名判定的第二判据）
       links: [],
       definitions: { subgraphs: [] },
     } as unknown as RawWorkflow;
-    const { rawInputsById } = await buildRawInputs(plain, async () => undefined);
+    const { rawInputsById } = await buildRawInputs(
+      plain,
+      async () => undefined,
+    );
     const io = await enrichWorkflowIO(
       makeParams(
-        { "24::widget::image": { direction: "input", kind: "widget", nodeId: "24", name: "image" } },
-        { rawInputsById, graph: { "24": { class_type: "LoadImage", inputs: {} } } }
-      )
+        {
+          "24::widget::image": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "24",
+            name: "image",
+          },
+        },
+        {
+          rawInputsById,
+          graph: { "24": { class_type: "LoadImage", inputs: {} } },
+        },
+      ),
     );
     expect(io["24::widget::image"]!.slotLabel).toBeUndefined();
   });
 });
-
 
 describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #349）", () => {
   /** 图一那条工作流的形状：wrapper 槽位 `value_1` → 内部 `PrimitiveInt.value`，
@@ -1041,11 +1123,13 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
       {
         rawInputsById: { "4": [wrapperRow] },
         graph: { "4": { class_type: "uuid-wrapper", inputs: {} } },
-      }
+      },
     );
 
   it("随条目下发富化名（enrichedLabel），供客户端做别名判定", async () => {
-    const result = await enrichWorkflowIO(wrapperParams("4::widget::value_1", "value_1"));
+    const result = await enrichWorkflowIO(
+      wrapperParams("4::widget::value_1", "value_1"),
+    );
     expect(result["4::widget::value_1"]!.enrichedLabel).toBe("1");
     expect(result["4::widget::value_1"]!.label).toBe("1");
   });
@@ -1056,7 +1140,14 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
      *  退化成那串脏值（用户截图里的「名字变成 1」）。 */
     const result = await enrichWorkflowIO(
       makeParams(
-        { "4::widget::Seed": { direction: "input", kind: "widget", nodeId: "4", name: "Seed" } },
+        {
+          "4::widget::Seed": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "4",
+            name: "Seed",
+          },
+        },
         {
           rawInputsById: {
             "4": [
@@ -1068,8 +1159,8 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
             ],
           },
           graph: { "4": { class_type: "uuid-wrapper", inputs: {} } },
-        }
-      )
+        },
+      ),
     );
     const entry = result["4::widget::Seed"]!;
     expect(entry.type).toBe("INT");
@@ -1082,16 +1173,35 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
      *  宁可这一条少一个名字，也不把别的槽位的 label 安到它头上。 */
     const result = await enrichWorkflowIO(
       makeParams(
-        { "7::widget::1": { direction: "input", kind: "widget", nodeId: "7", name: "1" } },
+        {
+          "7::widget::1": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "1",
+          },
+        },
         {
           rawInputsById: {
             "7": [
-              { name: "seed", type: "INT", isConnection: false, widget: { name: "seed" }, widgetValue: 1 },
-              { name: "steps", type: "INT", isConnection: false, widget: { name: "steps" }, widgetValue: 20 },
+              {
+                name: "seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "seed" },
+                widgetValue: 1,
+              },
+              {
+                name: "steps",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "steps" },
+                widgetValue: 20,
+              },
             ],
           },
-        }
-      )
+        },
+      ),
     );
     expect(result["7::widget::1"]!.label).toBe("1");
   });

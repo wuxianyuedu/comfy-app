@@ -132,8 +132,12 @@ describe("边的两端与 handle 取值", () => {
   it("自动线画虚线、作者改过的画实线（与编辑器画布同一套语义）", () => {
     const auto = buildInputEdge(inputWire);
     const manual = buildInputEdge({ ...inputWire, manual: true });
-    expect((auto.style as { strokeDasharray?: string }).strokeDasharray).toBe("6 4");
-    expect((manual.style as { strokeDasharray?: string }).strokeDasharray).toBeUndefined();
+    expect((auto.style as { strokeDasharray?: string }).strokeDasharray).toBe(
+      "6 4",
+    );
+    expect(
+      (manual.style as { strokeDasharray?: string }).strokeDasharray,
+    ).toBeUndefined();
   });
 
   it("两侧一起派生：几条 wire 就几条边", () => {

@@ -64,8 +64,14 @@ export function NodeJsonPopover({
   getView: (nodeId: string) => RawNodeView | null;
   onDismiss: () => void;
 }) {
-  const json = useMemo(() => getJson(request.nodeId), [getJson, request.nodeId]);
-  const nodeView = useMemo(() => getView?.(request.nodeId) ?? null, [getView, request.nodeId]);
+  const json = useMemo(
+    () => getJson(request.nodeId),
+    [getJson, request.nodeId],
+  );
+  const nodeView = useMemo(
+    () => getView?.(request.nodeId) ?? null,
+    [getView, request.nodeId],
+  );
   const [tab, setTab] = useState<"saved" | "view">("view");
   const viewObj = useMemo<RawNodeJson | null>(() => {
     if (!nodeView) return null;
@@ -100,13 +106,17 @@ export function NodeJsonPopover({
   }, [nodeView]);
   const pretty = useMemo(() => {
     if (tab === "saved") {
-      return json ? JSON.stringify(json, null, 2) : "（节点详情尚未加载 — 等待 detail.ready）";
+      return json
+        ? JSON.stringify(json, null, 2)
+        : "（节点详情尚未加载 — 等待 detail.ready）";
     }
     if (viewObj) return JSON.stringify(viewObj, null, 2);
     if (json) {
       const thin: RawNodeJson = {};
-      if (typeof json.class_type === "string") thin.class_type = json.class_type;
-      if (json.inputs && typeof json.inputs === "object") thin.inputs = json.inputs;
+      if (typeof json.class_type === "string")
+        thin.class_type = json.class_type;
+      if (json.inputs && typeof json.inputs === "object")
+        thin.inputs = json.inputs;
       if (json._meta && Object.keys(json._meta).length) thin._meta = json._meta;
       if (Object.keys(thin).length) return JSON.stringify(thin, null, 2);
     }
@@ -114,7 +124,7 @@ export function NodeJsonPopover({
   }, [tab, json, viewObj]);
   const [copied, setCopied] = useState(false);
   const [position, setPosition] = useState<{ left: number; top: number }>(() =>
-    computePos(request.anchorRect)
+    computePos(request.anchorRect),
   );
   useEffect(() => {
     const update = () => setPosition(computePos(request.anchorRect));
@@ -155,7 +165,7 @@ export function NodeJsonPopover({
         } finally {
           document.body.removeChild(ta);
         }
-      }
+      },
     );
   };
   const accent =
@@ -163,16 +173,15 @@ export function NodeJsonPopover({
   /** 带透明度的 accent —— `var()` 不能拼 hex alpha，走 color-mix。 */
   const accentAlpha = (percent: number) =>
     `color-mix(in srgb, ${accent} ${percent}%, transparent)`;
-  const nodeClass = (json?.class_type ?? "?");
-  const nodeMode = (
+  const nodeClass = json?.class_type ?? "?";
+  const nodeMode =
     typeof nodeView?.raw?.mode === "number"
       ? nodeView.raw.mode
       : typeof json?._meta?.mode === "number"
         ? json._meta.mode
         : typeof json?.mode === "number"
           ? json.mode
-          : 0
-  );
+          : 0;
   const modeLabel =
     nodeMode === 4 ? "Bypass" : nodeMode === 2 ? "Disabled" : "Normal";
   const modeColor =
@@ -236,7 +245,14 @@ export function NodeJsonPopover({
                 borderBottom: "1px solid var(--color-border-subtle)",
               }}
             >
-              <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  minWidth: 0,
+                  flex: 1,
+                }}
+              >
                 <div
                   style={{
                     display: "flex",
@@ -351,9 +367,7 @@ export function NodeJsonPopover({
                       background: active
                         ? accentAlpha(13)
                         : "var(--color-subtle)",
-                      color: active
-                        ? "var(--color-ink)"
-                        : "var(--color-muted)",
+                      color: active ? "var(--color-ink)" : "var(--color-muted)",
                       cursor: "pointer",
                       transition: "all 120ms ease",
                     }}
@@ -373,38 +387,76 @@ export function NodeJsonPopover({
                 borderBottom: "1px solid var(--color-border-subtle)",
               }}
             >
-              <Chip color={modeColor} label={`mode ${nodeMode} · ${modeLabel}`} />
+              <Chip
+                color={modeColor}
+                label={`mode ${nodeMode} · ${modeLabel}`}
+              />
               {tab === "saved" ? (
                 <>
                   {json && "widgets_values" in json && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`widgets: ${json.widgets_values?.length ?? 0} 项`} />
+                    <Chip
+                      color={CHIP_NEUTRAL_COLOR}
+                      label={`widgets: ${json.widgets_values?.length ?? 0} 项`}
+                    />
                   )}
                   {json && "inputs" in json && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`inputs: ${Object.keys(json.inputs ?? {}).length} 个`} />
+                    <Chip
+                      color={CHIP_NEUTRAL_COLOR}
+                      label={`inputs: ${Object.keys(json.inputs ?? {}).length} 个`}
+                    />
                   )}
                   {json && "outputs" in json && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`outputs: ${json.outputs?.length ?? 0} 个`} />
+                    <Chip
+                      color={CHIP_NEUTRAL_COLOR}
+                      label={`outputs: ${json.outputs?.length ?? 0} 个`}
+                    />
                   )}
-                  {!json && <Chip color="var(--color-warning)" label="节点未在 graph 中" />}
+                  {!json && (
+                    <Chip
+                      color="var(--color-warning)"
+                      label="节点未在 graph 中"
+                    />
+                  )}
                 </>
               ) : (
                 <>
                   {viewObj?.inputs && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`inputs: ${Object.keys(viewObj.inputs ?? {}).length} 个`} />
+                    <Chip
+                      color={CHIP_NEUTRAL_COLOR}
+                      label={`inputs: ${Object.keys(viewObj.inputs ?? {}).length} 个`}
+                    />
                   )}
                   {viewObj?.outputs && Array.isArray(viewObj.outputs) && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`outputs: ${(viewObj.outputs).length} 个`} />
+                    <Chip
+                      color={CHIP_NEUTRAL_COLOR}
+                      label={`outputs: ${viewObj.outputs.length} 个`}
+                    />
                   )}
-                  {viewObj?.widgets_values && Array.isArray(viewObj.widgets_values) && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`widgets: ${(viewObj.widgets_values).length} 项`} />
-                  )}
+                  {viewObj?.widgets_values &&
+                    Array.isArray(viewObj.widgets_values) && (
+                      <Chip
+                        color={CHIP_NEUTRAL_COLOR}
+                        label={`widgets: ${viewObj.widgets_values.length} 项`}
+                      />
+                    )}
                   {viewObj?.properties && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`properties: ${Object.keys(viewObj.properties ?? {}).length} 项`} />
+                    <Chip
+                      color={CHIP_NEUTRAL_COLOR}
+                      label={`properties: ${Object.keys(viewObj.properties ?? {}).length} 项`}
+                    />
                   )}
                   {viewObj?.pos && Array.isArray(viewObj.pos) && (
-                    <Chip color={CHIP_NEUTRAL_COLOR} label={`pos: ${viewObj.pos.map((num) => Math.round(num)).join(", ")}`} />
+                    <Chip
+                      color={CHIP_NEUTRAL_COLOR}
+                      label={`pos: ${viewObj.pos.map((num) => Math.round(num)).join(", ")}`}
+                    />
                   )}
-                  {!viewObj && <Chip color="var(--color-warning)" label="无画布态数据 — 纯 API 工作流" />}
+                  {!viewObj && (
+                    <Chip
+                      color="var(--color-warning)"
+                      label="无画布态数据 — 纯 API 工作流"
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -445,6 +497,6 @@ export function NodeJsonPopover({
             </div>
           </div>
         </>,
-        document.body
+        document.body,
       );
 }

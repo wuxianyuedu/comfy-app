@@ -4,7 +4,11 @@
  * quality), switching between preset dropdowns and native controls. */
 import { NumberField } from "@/components/studio/ui/NumberField";
 import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { numericBounds, DIM_RATIO_PRESETS, type EnrichedWidget } from "./workflow-io";
+import {
+  numericBounds,
+  DIM_RATIO_PRESETS,
+  type EnrichedWidget,
+} from "./workflow-io";
 import { Field } from "./StyleSwitcher";
 import {
   VIDEO_DURATION_PRESETS,
@@ -32,9 +36,16 @@ function VideoField({
   const label = roleLabel(role);
 
   // COMBO with resolved candidates → always a select (both paradigms).
-  if (entry.control === "select" && Array.isArray(entry.options) && entry.options.length > 0) {
+  if (
+    entry.control === "select" &&
+    Array.isArray(entry.options) &&
+    entry.options.length > 0
+  ) {
     const opts = entry.options;
-    const val = typeof current === "string" && opts.includes(current) ? current : opts[0]!;
+    const val =
+      typeof current === "string" && opts.includes(current)
+        ? current
+        : opts[0]!;
     return (
       <Field label={label}>
         <DarkSelect
@@ -52,7 +63,9 @@ function VideoField({
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
       const cur = Number(current ?? entry.defaultValue ?? presets[0]!.value);
-      const val = presets.find((preset) => preset.value === cur)?.label ?? presets[0]!.label;
+      const val =
+        presets.find((preset) => preset.value === cur)?.label ??
+        presets[0]!.label;
       return (
         <Field label={label}>
           <DarkSelect
@@ -70,7 +83,9 @@ function VideoField({
     if (role === "quality") {
       const presets = VIDEO_QUALITY_PRESETS;
       const cur = Number(current ?? entry.defaultValue ?? presets[0]!.value);
-      const val = presets.find((preset) => preset.value === cur)?.label ?? presets[0]!.label;
+      const val =
+        presets.find((preset) => preset.value === cur)?.label ??
+        presets[0]!.label;
       return (
         <Field label={label}>
           <DarkSelect
@@ -89,7 +104,9 @@ function VideoField({
       // numeric aspect → ratio presets writing the float ratio
       const presets = DIM_RATIO_PRESETS;
       const cur = Number(current ?? entry.defaultValue ?? presets[0]!.ratio);
-      const val = presets.find((preset) => Math.abs(preset.ratio - cur) < 0.05)?.label ?? presets[0]!.label;
+      const val =
+        presets.find((preset) => Math.abs(preset.ratio - cur) < 0.05)?.label ??
+        presets[0]!.label;
       return (
         <Field label={label}>
           <DarkSelect
@@ -131,7 +148,7 @@ function VideoField({
       <input
         value={str}
         disabled={disabled}
-        className="nodrag nopan w-full rounded-md bg-canvas-deep px-2.5 py-2 text-[11px] text-ink-soft outline-none focus:ring-1 focus:ring-primary/40"
+        className="nodrag nopan bg-canvas-deep text-ink-soft focus:ring-primary/40 w-full rounded-md px-2.5 py-2 text-[11px] outline-none focus:ring-1"
         onChange={(event) => set(entry.ioKey, event.target.value)}
       />
     </Field>

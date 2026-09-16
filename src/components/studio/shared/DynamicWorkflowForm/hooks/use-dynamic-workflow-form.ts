@@ -70,7 +70,7 @@ export interface DynamicWorkflowFormController {
 }
 
 export function useDynamicWorkflowForm(
-  props: DynamicWorkflowFormProps
+  props: DynamicWorkflowFormProps,
 ): DynamicWorkflowFormController {
   /* 逐字段取出回调：React Compiler 不接受依赖写成 `props.x` 之外的可选链，
    * 也让 deps 表读起来是具体字段而不是整个 props 对象。 */
@@ -96,9 +96,8 @@ export function useDynamicWorkflowForm(
   );
 
   const { wireInputs, widgetInputs, outputs } = useMemo(
-    () =>
-      splitWorkflowIO(io),
-    [io]
+    () => splitWorkflowIO(io),
+    [io],
   );
 
   /* 多模式：按当前模式过滤掉 `visible === false` 的行。
@@ -110,19 +109,19 @@ export function useDynamicWorkflowForm(
   const visibilityFilterMode = props.showHiddenInMode ? null : mode;
   const shownWireInputs = useMemo(
     () => filterVisibleInMode(wireInputs, visibilityFilterMode),
-    [wireInputs, visibilityFilterMode]
+    [wireInputs, visibilityFilterMode],
   );
   const shownWidgetInputs = useMemo(
     () => filterVisibleInMode(widgetInputs, visibilityFilterMode),
-    [widgetInputs, visibilityFilterMode]
+    [widgetInputs, visibilityFilterMode],
   );
   const shownOutputs = useMemo(
     () => filterVisibleInMode(outputs, visibilityFilterMode),
-    [outputs, visibilityFilterMode]
+    [outputs, visibilityFilterMode],
   );
   const inputs = useMemo(
     () => [...shownWireInputs, ...shownWidgetInputs],
-    [shownWireInputs, shownWidgetInputs]
+    [shownWireInputs, shownWidgetInputs],
   );
 
   /* Coupled widget groups (dimension = width + height; video = length +
@@ -130,7 +129,10 @@ export function useDynamicWorkflowForm(
    * rendered by `GroupedControls` instead — a single dropdown switches
    * between 分别填写 and the friendly preset paradigm.  `groupedKeys` is the
    * set of ioKeys the groups consume. */
-  const groups = useMemo(() => inferGroups(shownWidgetInputs), [shownWidgetInputs]);
+  const groups = useMemo(
+    () => inferGroups(shownWidgetInputs),
+    [shownWidgetInputs],
+  );
   const { groupedKeys } = groups;
 
   /* Port rows = wire inputs + numeric widgets (seed/steps/cfg …).  Numeric
@@ -146,10 +148,10 @@ export function useDynamicWorkflowForm(
         (widgetInput) =>
           isNumericWidget(widgetInput) &&
           !groupedKeys.has(widgetInput.ioKey) &&
-          !isAuthoringEdit
+          !isAuthoringEdit,
       ),
     ],
-    [shownWireInputs, shownWidgetInputs, groupedKeys, isAuthoringEdit]
+    [shownWireInputs, shownWidgetInputs, groupedKeys, isAuthoringEdit],
   );
 
   const widgetSectionEntries = useMemo(
@@ -157,9 +159,9 @@ export function useDynamicWorkflowForm(
       shownWidgetInputs.filter(
         (widgetInput) =>
           !groupedKeys.has(widgetInput.ioKey) &&
-          (isAuthoringEdit || !isNumericWidget(widgetInput))
+          (isAuthoringEdit || !isNumericWidget(widgetInput)),
       ),
-    [shownWidgetInputs, groupedKeys, isAuthoringEdit]
+    [shownWidgetInputs, groupedKeys, isAuthoringEdit],
   );
 
   /* Drag state is deliberately component-local (not in workflow-io.ts or any
@@ -251,7 +253,7 @@ export function useDynamicWorkflowForm(
 
   const set = useCallback(
     (ioKey: string, value: unknown) => onChange({ ...values, [ioKey]: value }),
-    [values, onChange]
+    [values, onChange],
   );
 
   const pickFile = useCallback((ioKey: string) => {
@@ -283,7 +285,7 @@ export function useDynamicWorkflowForm(
         setUploadTarget(null);
       }
     },
-    [uploadTarget, set, onUploadError, onUploadProgress]
+    [uploadTarget, set, onUploadError, onUploadProgress],
   );
 
   return {

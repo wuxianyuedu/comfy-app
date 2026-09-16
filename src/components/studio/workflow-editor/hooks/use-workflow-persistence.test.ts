@@ -81,10 +81,12 @@ function renderReset(args: {
 }
 
 /** 从 setDetail 的 updater 里取出写回的 positions。 */
-function readWrittenPositions(setDetail: ReturnType<typeof vi.fn>, detail: WorkflowDetail) {
+function readWrittenPositions(
+  setDetail: ReturnType<typeof vi.fn>,
+  detail: WorkflowDetail,
+) {
   const updater = setDetail.mock.calls.at(-1)?.[0] as
-    | ((prev: WorkflowDetail | null) => WorkflowDetail | null)
-    | undefined;
+    ((prev: WorkflowDetail | null) => WorkflowDetail | null) | undefined;
   if (!updater) return undefined;
   return updater(detail)?.positions;
 }
@@ -147,7 +149,10 @@ describe("resetLayout", () => {
     expect(readWrittenPositions(setDetail, detail)).toEqual({
       "4:1670": [1000, 1000],
     });
-    expect(mutate.mock.calls[0]![0]).toEqual({ id: "wf-1", resetPositionsScope: "" });
+    expect(mutate.mock.calls[0]![0]).toEqual({
+      id: "wf-1",
+      resetPositionsScope: "",
+    });
   });
 
   it("没有坐标覆盖时重置是空操作（不发请求、不产生多余状态）", () => {
@@ -182,8 +187,8 @@ describe("resetLayout · 子图 id 命名空间", () => {
     act(() =>
       result.current.onNodeDragStop(
         {},
-        { id: "1001", type: "wfNode", position: { x: 30, y: 0 }, data: {} }
-      )
+        { id: "1001", type: "wfNode", position: { x: 30, y: 0 }, data: {} },
+      ),
     );
 
     /* 锚点反演：wfNode 的 y 要加回 NODE_TITLE_H(30)。 */
@@ -207,8 +212,8 @@ describe("resetLayout · 子图 id 命名空间", () => {
     act(() =>
       result.current.onNodeDragStop(
         {},
-        { id: "1670", type: "wfNode", position: { x: 10, y: 20 }, data: {} }
-      )
+        { id: "1670", type: "wfNode", position: { x: 10, y: 20 }, data: {} },
+      ),
     );
 
     expect(mutate.mock.calls.at(-1)![0]).toMatchObject({

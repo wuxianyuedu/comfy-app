@@ -50,9 +50,7 @@ export async function POST(request: Request) {
     // 截断超长消息；fields 仅保留可序列化的标量/对象（由 logger 内部 stringify）。
     const msg = body.msg.slice(0, MAX_MSG_LEN);
     const fields =
-      body.fields && typeof body.fields === "object"
-        ? body.fields
-        : undefined;
+      body.fields && typeof body.fields === "object" ? body.fields : undefined;
 
     const log = createAppRuntimeLogger(ns);
     log[level as "info" | "warn" | "error"](msg, fields);

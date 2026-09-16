@@ -4,9 +4,18 @@
  * live in FlowNodePinRows; this section renders the scalar/object inputs
  * with their values, including STRING multiline textareas. */
 import { Handle, Position } from "@xyflow/react";
-import { portColor, inferInputType, inferIsMultiline } from "@/lib/comfyui/types";
+import {
+  portColor,
+  inferInputType,
+  inferIsMultiline,
+} from "@/lib/comfyui/types";
 import { friendlyInputName } from "@/lib/comfyui/node-titles";
-import { renderWidgetValue, valueCellColor, withAlpha, sanitizeComboLabel } from "../workflow-utils";
+import {
+  renderWidgetValue,
+  valueCellColor,
+  withAlpha,
+  sanitizeComboLabel,
+} from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
 import { StringTextarea } from "../StringTextarea";
 import {
@@ -48,7 +57,8 @@ export function FlowNodeWidgetRows({
         const isConn = rawMeta[k]?.isConnection === true;
         // Boundary wire: wrapper-exposes-this-slot sentinel (origin_id -10).
         const isBoundary =
-          rawMeta[k]?.isBoundary === true || data.boundaryInputs?.has(k) === true;
+          rawMeta[k]?.isBoundary === true ||
+          data.boundaryInputs?.has(k) === true;
         // Type always inferred from the JS-typed scalar value (wire-tuple
         // edgeType paths live in the top pins section).
         const inputType = inferInputType(data.classType, k, v);
@@ -93,9 +103,9 @@ export function FlowNodeWidgetRows({
             data-input-type={inputType}
             className={
               isStringWidget
-                ? "group relative flex min-h-0 flex-1 flex-col gap-1.5 pl-5 pr-2 py-1.5 text-[11px]"
-                // min-h-[22px] h-auto lets long labels wrap.
-                : "group relative flex min-h-[22px] h-auto items-center gap-1.5 pl-5 pr-2 py-0.5 text-[11px]"
+                ? "group relative flex min-h-0 flex-1 flex-col gap-1.5 py-1.5 pr-2 pl-5 text-[11px]"
+                : // min-h-[22px] h-auto lets long labels wrap.
+                  "group relative flex h-auto min-h-[22px] items-center gap-1.5 py-0.5 pr-2 pl-5 text-[11px]"
             }
             /* 相关行提亮背景、无关行整行压暗（与 FlowNodePinRows 同一张表）。 */
             style={{ background: tone.background, opacity: tone.opacity }}
@@ -121,7 +131,8 @@ export function FlowNodeWidgetRows({
                   isConn || isBoundary
                     ? portDotGlow(typeCol, tone.dotGlowStrong)
                     : undefined,
-                borderColor: isConn || isBoundary ? "var(--color-canvas)" : "transparent",
+                borderColor:
+                  isConn || isBoundary ? "var(--color-canvas)" : "transparent",
               }}
               title={`${k} (${inputType})`}
             />
@@ -143,7 +154,7 @@ export function FlowNodeWidgetRows({
                   />
                 )}
                 <span
-                  className="shrink-0 whitespace-normal break-words text-left text-[11px]"
+                  className="shrink-0 text-left text-[11px] break-words whitespace-normal"
                   style={{
                     /* 提亮档统一走表里的色；其余行沿用「连线行比普通行重一档」的
                      * 既有口径（`ink-strong` / `ink-subtle`）。 */
@@ -177,7 +188,7 @@ export function FlowNodeWidgetRows({
                   />
                 )}
                 <span
-                  className="min-w-0 shrink whitespace-normal break-words text-left text-[11px]"
+                  className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
                   style={{
                     flex: "0 1 auto",
                     color: tone.background
@@ -209,7 +220,9 @@ export function FlowNodeWidgetRows({
                     className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                     style={{
                       flex: "1 1 0",
-                      color: isConn ? withAlpha(valueCellColor(v)) : valueCellColor(v),
+                      color: isConn
+                        ? withAlpha(valueCellColor(v))
+                        : valueCellColor(v),
                     }}
                     title={String(v)}
                   >

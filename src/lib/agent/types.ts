@@ -62,9 +62,10 @@ export function parseToolCalls(raw: unknown): AgentToolCall[] {
     const rec = item as Record<string, unknown>;
     const id = typeof rec.id === "string" ? rec.id : "";
     if (!id) continue;
-    const fn = typeof rec.function === "object" && rec.function !== null
-      ? (rec.function as Record<string, unknown>)
-      : null;
+    const fn =
+      typeof rec.function === "object" && rec.function !== null
+        ? (rec.function as Record<string, unknown>)
+        : null;
     if (!fn) continue;
     const name = typeof fn.name === "string" ? fn.name : "";
     const args = typeof fn.arguments === "string" ? fn.arguments : "";
@@ -85,7 +86,11 @@ export function normalizeAgentMessages(raw: unknown): AgentMessage[] {
     if (role === "user" || role === "assistant") {
       if (role === "assistant") {
         const calls = parseToolCalls(rec.tool_calls);
-        out.push(calls.length > 0 ? { role, content, tool_calls: calls } : { role, content });
+        out.push(
+          calls.length > 0
+            ? { role, content, tool_calls: calls }
+            : { role, content },
+        );
       } else {
         out.push({ role, content });
       }

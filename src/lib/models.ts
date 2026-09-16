@@ -3,21 +3,23 @@ import { modelRepository, userModelConfigRepository } from "./core/repository";
 import { type ModelType } from "./model-types";
 
 export function baseFromName(name: string): string {
-
   const lower = name.toLowerCase();
 
   if (lower.includes("illustrious") || lower.includes("sdxl")) return "SDXL";
 
   if (lower.includes("flux")) return "Flux";
 
-  if (lower.includes("sd1.5") || lower.includes("sd_1.5") || lower.includes("sd15")) return "SD1.5";
+  if (
+    lower.includes("sd1.5") ||
+    lower.includes("sd_1.5") ||
+    lower.includes("sd15")
+  )
+    return "SD1.5";
 
   if (lower.includes("pony")) return "Pony";
 
   return "未知";
-
 }
-
 
 /** Strip extension so a stored fileName becomes the loadable ComfyUI name. */
 export function stripExt(fileName: string): string {
@@ -35,7 +37,9 @@ export function stripExt(fileName: string): string {
  */
 async function isComfyReachable(): Promise<boolean> {
   try {
-    const res = await fetch(`${comfyBase()}/system_stats`, { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(`${comfyBase()}/system_stats`, {
+      signal: AbortSignal.timeout(1500),
+    });
     return res.ok;
   } catch {
     return false;
@@ -88,7 +92,13 @@ export async function syncModels(userId?: string): Promise<number> {
     const files = await listModels(folder);
     for (const fileName of files) {
       const name = stripExt(fileName);
-      scanned.push({ folder, fileName, type: folder, name, baseModel: baseFromName(name) });
+      scanned.push({
+        folder,
+        fileName,
+        type: folder,
+        name,
+        baseModel: baseFromName(name),
+      });
     }
   }
 
@@ -118,7 +128,9 @@ export async function syncModels(userId?: string): Promise<number> {
  * ComfyUI's COMBO candidates are the exact `/api/models/<folder>` entries —
  * e.g. `waiIllustriousSDXL_v170.safetensors`.
  */
-export async function localModelFileNames(folders: string[]): Promise<string[]> {
+export async function localModelFileNames(
+  folders: string[],
+): Promise<string[]> {
   if (!folders.length) return [];
   const enabled = await userModelConfigRepository.listEnabledFolders();
   const wanted = new Set(folders);

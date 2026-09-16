@@ -34,12 +34,22 @@ const mockRouter = t.router({
   model: t.router({
     list: t.procedure.query(() => {
       if (behavior.listError) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: behavior.listError });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.listError,
+        });
       }
       return { models: behavior.models };
     }),
-    sync: t.procedure.mutation(() => ({ ok: true, count: behavior.models.length })),
-    configList: t.procedure.query(() => ({ folders: [], rows: [], comfyReachable: true })),
+    sync: t.procedure.mutation(() => ({
+      ok: true,
+      count: behavior.models.length,
+    })),
+    configList: t.procedure.query(() => ({
+      folders: [],
+      rows: [],
+      comfyReachable: true,
+    })),
     configSave: t.procedure.mutation(() => ({ ok: true })),
     configDelete: t.procedure.mutation(() => ({ ok: true })),
   }),
@@ -77,9 +87,15 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
     expect(screen.getByText("加载中…")).toBeInTheDocument();
 
     // data 态：MSW 返回后出现模型文件名行
-    await waitFor(() => expect(screen.getByText("dreamshaper-xl.safetensors")).toBeInTheDocument(), {
-      timeout: 3000,
-    });
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText("dreamshaper-xl.safetensors"),
+        ).toBeInTheDocument(),
+      {
+        timeout: 3000,
+      },
+    );
     // 模型库标题区域
     expect(screen.getByText("模型库")).toBeInTheDocument();
   });

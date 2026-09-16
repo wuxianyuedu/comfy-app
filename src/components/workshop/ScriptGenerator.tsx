@@ -94,35 +94,47 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   return (
     <div className="space-y-5">
       {/* ── 项目信息（类型 / 基调 / 梗概，供生成时参考）── */}
-      <section className="rounded-xl border border-border bg-surface p-4">
+      <section className="border-border bg-surface rounded-xl border p-4">
         <h3 className="u-title mb-3">项目信息</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted-foreground">类型</span>
+            <span className="text-muted-foreground mb-1 block text-xs">
+              类型
+            </span>
             <DarkSelect
               className="!bg-subtle !border-border text-sm"
               value={meta.type}
-              onChange={(value) => onMetaChange({ ...meta, type: value as ProjectType })}
+              onChange={(value) =>
+                onMetaChange({ ...meta, type: value as ProjectType })
+              }
               options={PROJECT_TYPES}
               labels={PROJECT_TYPE_LABELS as Record<string, string>}
               placeholder="选择类型"
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted-foreground">基调 / 情绪</span>
+            <span className="text-muted-foreground mb-1 block text-xs">
+              基调 / 情绪
+            </span>
             <input
               value={meta.tone}
-              onChange={(event) => onMetaChange({ ...meta, tone: event.target.value })}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+              onChange={(event) =>
+                onMetaChange({ ...meta, tone: event.target.value })
+              }
+              className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
               placeholder="温暖治愈 / 悬疑紧张 / 史诗感"
             />
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs text-muted-foreground">一句话梗概</span>
+            <span className="text-muted-foreground mb-1 block text-xs">
+              一句话梗概
+            </span>
             <input
               value={meta.logline}
-              onChange={(event) => onMetaChange({ ...meta, logline: event.target.value })}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+              onChange={(event) =>
+                onMetaChange({ ...meta, logline: event.target.value })
+              }
+              className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
               placeholder="一个关于…的故事"
             />
           </label>
@@ -130,10 +142,15 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       </section>
 
       {/* ── 生成剧本 ── */}
-      <section className="rounded-xl border border-primary-soft bg-primary-soft/30 p-4">
+      <section className="border-primary-soft bg-primary-soft/30 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="flex items-center text-sm font-semibold text-primary">
-            <Icon name="sparkles" size={14} className="mr-1.5 inline align-[-2px]" />生成剧本
+          <h3 className="text-primary flex items-center text-sm font-semibold">
+            <Icon
+              name="sparkles"
+              size={14}
+              className="mr-1.5 inline align-[-2px]"
+            />
+            生成剧本
           </h3>
           {/* 与角色卡一致：本次生成可独立选择 本地 / 远端 的哪个模型 */}
           <ExtractModelSelect
@@ -147,7 +164,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             value={idea}
             onChange={(event) => setIdea(event.target.value)}
             rows={3}
-            className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-primary"
+            className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
             placeholder="输入一句话灵感或粘贴一段粗稿，直接生成完整剧本…"
           />
           <div className="flex flex-wrap gap-2">
@@ -155,7 +172,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               type="button"
               onClick={handleStructure}
               disabled={!idea.trim() || aiBusy}
-              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-subtle disabled:opacity-40"
+              className="border-border text-ink hover:bg-subtle rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-40"
             >
               模板生成（离线）
             </button>
@@ -163,13 +180,24 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               type="button"
               onClick={handleAI}
               disabled={!idea.trim() || aiBusy}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+              className="bg-primary rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
             >
-              {aiBusy ? "AI 生成中…" : (<><Icon name="sparkles" size={13} className="mr-1 inline align-[-2px]" />AI 生成剧本</>)}
+              {aiBusy ? (
+                "AI 生成中…"
+              ) : (
+                <>
+                  <Icon
+                    name="sparkles"
+                    size={13}
+                    className="mr-1 inline align-[-2px]"
+                  />
+                  AI 生成剧本
+                </>
+              )}
             </button>
           </div>
           {aiBusy && aiDraft && (
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-bg p-3 text-xs leading-relaxed text-ink/80">
+            <pre className="bg-bg text-ink/80 max-h-48 overflow-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap">
               {aiDraft}
             </pre>
           )}
@@ -182,14 +210,17 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             <p className="text-primary text-xs">{aiStatus}</p>
           )}
           {!config && !aiBusy && (
-            <p className="text-xs text-muted-foreground">
-              未配置 LLM，AI 生成将不可用（仍可用「模板生成」）。可在右上角「LLM 设置」中接入本地或远端模型。
+            <p className="text-muted-foreground text-xs">
+              未配置 LLM，AI 生成将不可用（仍可用「模板生成」）。可在右上角「LLM
+              设置」中接入本地或远端模型。
             </p>
           )}
           {config && !genSel && (
-            <p className="text-xs text-muted-foreground">
-              未手动选择模型时，沿用全局配置（当前：{channelProviderLabel(config.provider)} ·{" "}
-              {config.model || "未选模型"}）。点上方下拉可切换本次生成的 本地/远端 模型。
+            <p className="text-muted-foreground text-xs">
+              未手动选择模型时，沿用全局配置（当前：
+              {channelProviderLabel(config.provider)} ·{" "}
+              {config.model || "未选模型"}）。点上方下拉可切换本次生成的
+              本地/远端 模型。
             </p>
           )}
         </div>

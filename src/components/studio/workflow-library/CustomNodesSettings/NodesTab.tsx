@@ -30,13 +30,13 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
   return (
     <>
       {/* 节点目录只读展示：由设置的 ComfyUI 路径自动推导，不再支持手动配置 */}
-      <section className="mb-4 rounded-xl border border-border bg-bg p-4">
+      <section className="border-border bg-bg mb-4 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between">
-          <label className="block text-sm font-medium text-ink">
+          <label className="text-ink block text-sm font-medium">
             自定义节点目录
           </label>
           <span
-            className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-success-strong/18 text-success-strong"
+            className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5 text-[10px] font-medium"
             title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
           >
             🔒 只读
@@ -47,7 +47,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             {savedPaths.map((path) => (
               <div
                 key={path}
-                className="truncate rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-ink"
+                className="border-border bg-surface text-ink truncate rounded-lg border px-3 py-2 font-mono text-xs"
                 title={path}
               >
                 {path}
@@ -55,40 +55,41 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI
             安装路径，目录会自动推导为{" "}
-            <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>。
+            <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>
+            。
           </p>
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
-          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            {saveErr && <span className="text-red-700 dark:text-red-400">⚠ {saveErr}</span>}
+          <div className="text-muted-foreground flex flex-wrap items-center gap-2">
+            {saveErr && (
+              <span className="text-red-700 dark:text-red-400">
+                ⚠ {saveErr}
+              </span>
+            )}
             {/* Directory overview chips — show totals + outdated count when any subpackage is detected. */}
             {totalAcrossParents.total > 0 && (
               <>
-                <span className="rounded-full bg-subtle px-2 py-0.5 text-ink">
+                <span className="bg-subtle text-ink rounded-full px-2 py-0.5">
                   总览 {totalAcrossParents.total} 个子包
                 </span>
                 {totalAcrossParents.loaded > 0 && (
-                  <span
-                    className="rounded-full px-2 py-0.5 font-medium bg-success-strong/18 text-success-strong"
-                  >
+                  <span className="bg-success-strong/18 text-success-strong rounded-full px-2 py-0.5 font-medium">
                     ✓ 已加载 {totalAcrossParents.loaded}
                   </span>
                 )}
                 {totalAcrossParents.outdated > 0 && (
-                  <span
-                    className="rounded-full px-2 py-0.5 font-medium bg-warning/22 text-warning"
-                  >
+                  <span className="bg-warning/22 text-warning rounded-full px-2 py-0.5 font-medium">
                     ↻ 有更新 {totalAcrossParents.outdated}
                   </span>
                 )}
               </>
             )}
             {!saveErr && loading && (
-              <span className="flex items-center gap-1.5 text-muted-foreground">
-                <span className="inline-block h-2 w-2 animate-spin rounded-full border border-muted border-t-transparent" />
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <span className="border-muted inline-block h-2 w-2 animate-spin rounded-full border border-t-transparent" />
                 加载中…
               </span>
             )}
@@ -96,7 +97,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           <button
             onClick={onParseAll}
             disabled={parsing || savedPaths.length === 0}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="bg-primary rounded-lg px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {parsing ? "解析全部中…" : "▶ 解析全部"}
           </button>
@@ -104,27 +105,23 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
       </section>
 
       {/* Live manifest summary */}
-      {summary && (
-        <ManifestSummary summary={summary} />
-      )}
-      {loading && !summary && (
-        <ParseProgressBanner progress={progress} />
-      )}
+      {summary && <ManifestSummary summary={summary} />}
+      {loading && !summary && <ParseProgressBanner progress={progress} />}
 
       {/* Group-by-parent collapsible view. Each top-level dir is its own
           block; subpackages inside a block can be hidden / shown via the
           chevron so the user can focus on one source tree at a time. */}
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-medium text-ink">
+          <span className="text-ink text-sm font-medium">
             可导入的节点包
             {totalAcrossParents.outdated > 0 && (
-              <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium bg-warning/18 text-warning">
+              <span className="bg-warning/18 text-warning ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium">
                 ↻ {totalAcrossParents.outdated} 个有更新
               </span>
             )}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             共 {totalAcrossParents.total} 个子包
             {savedPaths.length > 0
               ? ` · 已加载 ${totalAcrossParents.loaded + totalAcrossParents.outdated}/${totalAcrossParents.total}`
@@ -132,16 +129,20 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           </span>
         </div>
         {savedPaths.length === 0 && !loading && (
-          <div className="rounded-lg border border-dashed border-border bg-bg/50 p-4 text-center text-xs text-muted-foreground">
+          <div className="border-border bg-bg/50 text-muted-foreground rounded-lg border border-dashed p-4 text-center text-xs">
             配置 ComfyUI 安装路径后，会自动发现其下的节点包。
           </div>
         )}
         <div className="space-y-2">
           {parentBlocks.map(({ parent, subs, cnt, total }) => {
             const isOpen = !!expandedParents[parent];
-            const parentParsed = total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
+            const parentParsed =
+              total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
             return (
-              <div key={parent} className="rounded-xl border border-border bg-bg">
+              <div
+                key={parent}
+                className="border-border bg-bg rounded-xl border"
+              >
                 {/* Parent header — clickable to toggle.
                     IMPORTANT: must NOT be a <button>, because the row contains a
                     nested action <button> ("解析本目录"). Nested <button> in HTML
@@ -150,52 +151,60 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 <div
                   role="button"
                   tabIndex={0}
-                  onClick={() => setExpandedParents((parents) => ({ ...parents, [parent]: !parents[parent] }))}
+                  onClick={() =>
+                    setExpandedParents((parents) => ({
+                      ...parents,
+                      [parent]: !parents[parent],
+                    }))
+                  }
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      setExpandedParents((parents) => ({ ...parents, [parent]: !parents[parent] }));
+                      setExpandedParents((parents) => ({
+                        ...parents,
+                        [parent]: !parents[parent],
+                      }));
                     }
                   }}
-                  className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left hover:bg-subtle"
+                  className="hover:bg-subtle flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="text-muted-foreground font-mono text-xs">
                         {isOpen ? "▾" : "▸"}
                       </span>
-                      <span className="font-medium text-ink">📁</span>
+                      <span className="text-ink font-medium">📁</span>
                       <span
-                        className="truncate font-mono text-[12px] text-ink"
+                        className="text-ink truncate font-mono text-[12px]"
                         title={parent}
                       >
                         {parent}
                       </span>
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
                       <span>{total} 个子包</span>
                       {cnt.loaded > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5 bg-success-strong/18 text-success-strong">
+                        <span className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5">
                           ✓ {cnt.loaded}
                         </span>
                       )}
                       {cnt.outdated > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5 bg-warning/20 text-warning">
+                        <span className="bg-warning/20 text-warning rounded-full px-1.5 py-0.5">
                           ↻ {cnt.outdated}
                         </span>
                       )}
                       {cnt.unimported > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5 bg-gray-500/20 text-gray-700 dark:text-gray-300">
+                        <span className="rounded-full bg-gray-500/20 px-1.5 py-0.5 text-gray-700 dark:text-gray-300">
                           {cnt.unimported} 未导入
                         </span>
                       )}
                       {cnt.error > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5 bg-red-500/18 text-red-700 dark:text-red-300">
+                        <span className="rounded-full bg-red-500/18 px-1.5 py-0.5 text-red-700 dark:text-red-300">
                           ⚠ {cnt.error}
                         </span>
                       )}
                       {cnt.missing > 0 && (
-                        <span className="rounded-full px-1.5 py-0.5 bg-warning/20 text-warning">
+                        <span className="bg-warning/20 text-warning rounded-full px-1.5 py-0.5">
                           ⚠ {cnt.missing} 不存在
                         </span>
                       )}
@@ -208,9 +217,17 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                         event.stopPropagation();
                         void onParseAllParent(parent);
                       }}
-                      disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
-                      className="rounded-lg border border-border bg-bg px-3 py-1 text-[11px] font-medium text-ink hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
-                      title={parentParsed && cnt.outdated === 0 ? "已加载、无更新" : "重新解析此目录下所有子包"}
+                      disabled={
+                        !!parsing ||
+                        total === 0 ||
+                        (parentParsed && cnt.outdated === 0)
+                      }
+                      className="border-border bg-bg text-ink hover:bg-subtle rounded-lg border px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      title={
+                        parentParsed && cnt.outdated === 0
+                          ? "已加载、无更新"
+                          : "重新解析此目录下所有子包"
+                      }
                     >
                       {parsing ? "…" : "解析本目录"}
                     </button>
@@ -219,15 +236,16 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
 
                 {/* Subpackages — only when expanded */}
                 {isOpen && subs.length > 0 && (
-                  <div className="border-t border-border bg-surface/50 p-2">
+                  <div className="border-border bg-surface/50 border-t p-2">
                     <div className="space-y-1.5">
                       {subs.map(({ sub, saved, state }) => {
                         const preset = ROW_STATE_PRESET[state.kind];
-                        const toolTip = state.kind === "outdated"
-                          ? `上次解析保存的 hash ${state.savedHash.slice(0, 8)}… / 当前磁盘 hash ${state.diskHash.slice(0, 8)}…（节点源文件有改动）`
-                          : state.kind === "loaded"
-                          ? `内容未变（hash ${state.savedHash.slice(0, 8)}…）`
-                          : sub.path;
+                        const toolTip =
+                          state.kind === "outdated"
+                            ? `上次解析保存的 hash ${state.savedHash.slice(0, 8)}… / 当前磁盘 hash ${state.diskHash.slice(0, 8)}…（节点源文件有改动）`
+                            : state.kind === "loaded"
+                              ? `内容未变（hash ${state.savedHash.slice(0, 8)}…）`
+                              : sub.path;
                         const nodeCount =
                           state.kind === "loaded" || state.kind === "outdated"
                             ? state.kind === "loaded"
@@ -244,25 +262,38 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                         return (
                           <div key={sub.path}>
                             <div
-                              className="flex items-center justify-between gap-2 rounded-lg border bg-bg p-2 pl-3"
-                              style={{ borderColor: preset.fg + "30", background: preset.bg }}
+                              className="bg-bg flex items-center justify-between gap-2 rounded-lg border p-2 pl-3"
+                              style={{
+                                borderColor: preset.fg + "30",
+                                background: preset.bg,
+                              }}
                               title={toolTip}
                             >
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="font-medium text-ink">{sub.name}</span>
+                                  <span className="text-ink font-medium">
+                                    {sub.name}
+                                  </span>
                                   <span
-                                    className={"rounded-full border px-2 py-0.5 text-[10px] font-medium " + preset.chip}
+                                    className={
+                                      "rounded-full border px-2 py-0.5 text-[10px] font-medium " +
+                                      preset.chip
+                                    }
                                     style={{ color: preset.fg }}
                                   >
-                                    {state.kind === "loaded" && saved?.parsedAt ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}` : preset.label}
+                                    {state.kind === "loaded" && saved?.parsedAt
+                                      ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
+                                      : preset.label}
                                   </span>
                                 </div>
-                                <div className="truncate font-mono text-[10px] text-muted-foreground" title={sub.path}>
+                                <div
+                                  className="text-muted-foreground truncate font-mono text-[10px]"
+                                  title={sub.path}
+                                >
                                   {sub.path}
                                 </div>
                               </div>
-                              <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                              <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
                                 {nodesAreLoaded ? (
                                   <div
                                     role="button"
@@ -275,7 +306,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                       }));
                                     }}
                                     onKeyDown={(event) => {
-                                      if (event.key === "Enter" || event.key === " ") {
+                                      if (
+                                        event.key === "Enter" ||
+                                        event.key === " "
+                                      ) {
                                         event.preventDefault();
                                         event.stopPropagation();
                                         setExpandedNodeList((nodeList) => ({
@@ -284,7 +318,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                         }));
                                       }
                                     }}
-                                    className="cursor-pointer rounded-md px-1.5 py-1 text-right transition-colors hover:bg-subtle"
+                                    className="hover:bg-subtle cursor-pointer rounded-md px-1.5 py-1 text-right transition-colors"
                                     title={
                                       nodeListOpen
                                         ? "收起节点列表"
@@ -292,10 +326,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                     }
                                   >
                                     <div className="flex items-center justify-end gap-1">
-                                      <span className="font-mono text-sm font-semibold text-ink">
+                                      <span className="text-ink font-mono text-sm font-semibold">
                                         {nodeCount}
                                       </span>
-                                      <span className="text-[10px] text-muted-foreground">
+                                      <span className="text-muted-foreground text-[10px]">
                                         {nodeListOpen ? "▾" : "▸"}
                                       </span>
                                     </div>
@@ -303,7 +337,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   </div>
                                 ) : (
                                   <div className="text-right">
-                                    <div className="font-mono text-sm font-semibold text-ink">
+                                    <div className="text-ink font-mono text-sm font-semibold">
                                       {nodeCount}
                                     </div>
                                     <div className="text-[10px]">映射文件</div>
@@ -318,9 +352,14 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                     state.kind === "missing" ||
                                     state.kind === "empty"
                                   }
-                                  className={"rounded-md px-3 py-1.5 text-xs font-medium " + preset.btn}
+                                  className={
+                                    "rounded-md px-3 py-1.5 text-xs font-medium " +
+                                    preset.btn
+                                  }
                                 >
-                                  {perPkgParsing[sub.path] ? "解析中…" : preset.btnLabel}
+                                  {perPkgParsing[sub.path]
+                                    ? "解析中…"
+                                    : preset.btnLabel}
                                 </button>
                               </div>
                             </div>
@@ -330,11 +369,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 a 146-node package stays scannable. */}
                             {nodesAreLoaded && nodeListOpen && (
                               <div
-                                className="ml-3 mt-1 space-y-1 border-l-2 border-dashed py-1 pl-3"
+                                className="mt-1 ml-3 space-y-1 border-l-2 border-dashed py-1 pl-3"
                                 style={{ borderColor: preset.fg + "30" }}
                               >
                                 {nodeTypeList.length === 0 ? (
-                                  <div className="text-[10px] italic text-muted-foreground">
+                                  <div className="text-muted-foreground text-[10px] italic">
                                     此包的清单中没有列出节点类型
                                   </div>
                                 ) : (
@@ -362,7 +401,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                   </div>
                 )}
                 {isOpen && subs.length === 0 && (
-                  <div className="border-t border-border bg-surface/50 p-3 text-center text-[11px] text-muted-foreground">
+                  <div className="border-border bg-surface/50 text-muted-foreground border-t p-3 text-center text-[11px]">
                     这个目录下没有发现包含 NODE_CLASS_MAPPINGS 的子包
                   </div>
                 )}

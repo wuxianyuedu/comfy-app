@@ -35,7 +35,8 @@ export function paramString(value: unknown, fallback: string): string {
  *  空串要显式拦掉再解析：`Number("")` 是 **0** 而不是 NaN，直接解析会把
  *  「用户清空了步数输入框」变成「步数 = 0」（画面全黑），而不是回落到缺省值。 */
 export function paramNumber(value: unknown, fallback: number): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : fallback;
   if (typeof value !== "string" || !value.trim()) return fallback;
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;

@@ -67,7 +67,7 @@ export async function processQueue() {
       job.taskId,
       "info",
       `输入参数（workflowInputs，${job.overrides.length} 项）：\n` +
-        JSON.stringify(job.overrides, null, 2)
+        JSON.stringify(job.overrides, null, 2),
     );
   }
 
@@ -99,7 +99,7 @@ export async function processQueue() {
           log(
             job.taskId,
             "error",
-            `finalizeFailure 二次失败：${inner instanceof Error ? inner.message : String(inner)}`
+            `finalizeFailure 二次失败：${inner instanceof Error ? inner.message : String(inner)}`,
           );
           if (s.startedAt.has(job.taskId)) s.startedAt.delete(job.taskId);
           s.lastNodeByTask.delete(job.taskId);
@@ -124,7 +124,7 @@ export async function processQueue() {
         job.taskId,
         "info",
         `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点` +
-          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : "")
+          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""),
       );
     }
     // explicit pre-submit log so the user
@@ -133,7 +133,11 @@ export async function processQueue() {
     // the user only ever sees the post-submit "✓ 已接收" line, which
     // makes it impossible to tell whether the request was ever sent.
     const nodeCount = Object.keys(prep.graph).length;
-    log(job.taskId, "info", `→ 准备提交到 ComfyUI /prompt（${nodeCount} 节点）`);
+    log(
+      job.taskId,
+      "info",
+      `→ 准备提交到 ComfyUI /prompt（${nodeCount} 节点）`,
+    );
     const res = await postPrompt(prep.graph, CLIENT_ID);
     if (res.error || (res.node_errors && Object.keys(res.node_errors).length)) {
       // carry the flattened `node_errors` into the task
@@ -154,7 +158,7 @@ export async function processQueue() {
         log(
           job.taskId,
           "error",
-          `✗ ComfyUI 报 ${validationErrors.length} 条校验错误（见下方逐条 + 红框清单）`
+          `✗ ComfyUI 报 ${validationErrors.length} 条校验错误（见下方逐条 + 红框清单）`,
         );
         validationErrors.slice(0, 12).forEach((ve) => {
           log(
@@ -162,14 +166,14 @@ export async function processQueue() {
             "error",
             `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}` +
               (ve.field ? ` · 字段 ${ve.field}` : "") +
-              `：${ve.message}`
+              `：${ve.message}`,
           );
         });
         if (validationErrors.length > 12) {
           log(
             job.taskId,
             "error",
-            `  …还有 ${validationErrors.length - 12} 条（请查看红框 / 重新执行工作流查看完整清单）`
+            `  …还有 ${validationErrors.length - 12} 条（请查看红框 / 重新执行工作流查看完整清单）`,
           );
         }
       }
@@ -177,7 +181,7 @@ export async function processQueue() {
         job.taskId,
         "",
         buildPromptError(res, prep.graph),
-        validationErrors
+        validationErrors,
       );
       return;
     }
@@ -189,13 +193,17 @@ export async function processQueue() {
     // richer post-submit log so the user
     // can correlate the prompt_id they see in the panel with the
     // /history/{prompt_id} ComfyUI URL when investigating hangs.
-    log(job.taskId, "info", `✓ ComfyUI 已接收（prompt_id: ${promptId}），等待首个 executing 事件…`);
+    log(
+      job.taskId,
+      "info",
+      `✓ ComfyUI 已接收（prompt_id: ${promptId}），等待首个 executing 事件…`,
+    );
     armWatchdog(job.taskId, promptId);
   } catch (e) {
     await fail(
       job.taskId,
       "",
-      (e as { message?: unknown } | null | undefined)?.message ?? "提交失败"
+      (e as { message?: unknown } | null | undefined)?.message ?? "提交失败",
     );
   }
 }
@@ -233,7 +241,9 @@ function startHeartbeat() {
         void processQueue();
       }
     } catch (err) {
-      logger.warn(`[comfyui] heartbeat processQueue 失败：${err instanceof Error ? err.message : String(err)}`);
+      logger.warn(
+        `[comfyui] heartbeat processQueue 失败：${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }, HEARTBEAT_MS);
 }

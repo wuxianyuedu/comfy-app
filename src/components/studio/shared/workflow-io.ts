@@ -119,13 +119,20 @@ function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
     return Number.isInteger(e.defaultValue) ? "int" : "float";
   }
   const search = `${e.name} ${e.label ?? ""}`.toLowerCase();
-  if (e.name.toLowerCase() === "aspect_ratio" || /\baspect_ratio\b/.test(search)) {
+  if (
+    e.name.toLowerCase() === "aspect_ratio" ||
+    /\baspect_ratio\b/.test(search)
+  ) {
     return Array.isArray(e.options) && e.options.length > 0 ? "select" : "text";
   }
-  if (e.name.toLowerCase() === "megapixels" || /megapixel|百万像素/.test(search)) return "float";
+  if (
+    e.name.toLowerCase() === "megapixels" ||
+    /megapixel|百万像素/.test(search)
+  )
+    return "float";
   if (
     /\b(width|height|size|resolution|steps|seed|cfg|denoise|strength|scale|weight|batch|count|frames|length|duration|multiple|倍数)\b/.test(
-      search
+      search,
     )
   ) {
     return "int";
@@ -178,13 +185,15 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
     if (e.multiline) return "textarea";
     /* A long current value is a strong hint this is a prompt box even when
      * the server heuristic missed the name. */
-    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40) return "textarea";
+    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40)
+      return "textarea";
     return "text";
   }
   if (type === "*") {
     if (e.multiline) return "textarea";
     /* A long current value is a strong hint this is a prompt box. */
-    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40) return "textarea";
+    if (typeof e.defaultValue === "string" && e.defaultValue.length > 40)
+      return "textarea";
     const inferred = inferControlFromName(e);
     if (inferred) return inferred;
     return "text";
@@ -192,7 +201,8 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
   /* 已声明但未在白名单里的类型（自定义节点的 `AUDIO` / `VIDEO` / 厂商私有
    *  枚举…）：只要控件位带着标量就仍以文本可编辑，避免整行退化成「只接受
    *  连线」的哑端口 —— 那是「用户勾了却改不了」的观感来源。 */
-  if (typeof e.defaultValue === "string" || typeof e.defaultValue === "number") return "text";
+  if (typeof e.defaultValue === "string" || typeof e.defaultValue === "number")
+    return "text";
   /* Truly untypable pin (no scalar, no upload semantics) → a wire. */
   return "link";
 }
@@ -206,14 +216,18 @@ export function numericBounds(e: WorkflowIOEntry): {
 } {
   const name = `${e.name} ${e.label ?? ""}`.toLowerCase();
   const isFloat = (e.type ?? "").toUpperCase() === "FLOAT";
-  if (/seed|noise_seed/.test(name)) return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
-  if (name.includes('steps')) return { min: 1, max: 200, step: 1, decimalPlaces: 0 };
-  if (/^cfg|cfg$|guidance/.test(name)) return { min: 0, max: 30, step: 0.5, decimalPlaces: 1 };
+  if (/seed|noise_seed/.test(name))
+    return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
+  if (name.includes("steps"))
+    return { min: 1, max: 200, step: 1, decimalPlaces: 0 };
+  if (/^cfg|cfg$|guidance/.test(name))
+    return { min: 0, max: 30, step: 0.5, decimalPlaces: 1 };
   if (/denoise|strength|weight|scale|ratio/.test(name))
     return { min: 0, max: 2, step: 0.05, decimalPlaces: 2 };
   if (/width|height|size|resolution/.test(name))
     return { min: 64, max: 4096, step: 64, decimalPlaces: 0 };
-  if (/batch|count|frames|length/.test(name)) return { min: 1, max: 512, step: 1, decimalPlaces: 0 };
+  if (/batch|count|frames|length/.test(name))
+    return { min: 1, max: 512, step: 1, decimalPlaces: 0 };
   return isFloat
     ? { min: 0, max: 1000, step: 0.1, decimalPlaces: 2 }
     : { min: 0, max: 1_000_000, step: 1, decimalPlaces: 0 };
@@ -235,7 +249,9 @@ function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
   const aKey = (a as { ioKey?: string }).ioKey;
   const bKey = (b as { ioKey?: string }).ioKey;
   if (aKey !== undefined && bKey !== undefined) return aKey === bKey;
-  return a.nodeId === b.nodeId && a.direction === b.direction && a.name === b.name;
+  return (
+    a.nodeId === b.nodeId && a.direction === b.direction && a.name === b.name
+  );
 }
 
 /** 名字是不是 ComfyUI 给子工作流槽位自动编号出的机器别名（`value_1` / 裸序号）。
@@ -270,12 +286,15 @@ function isMachineAliasName(name: string | undefined): boolean {
  * Without `allEntries` the function returns the same `label || name`
  * behaviour the rest of the app already relies on, so existing callers
  * in CreatePanel / CanvasNode keep working. */
-export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntry[]): string {
-  const candidate = (e.label?.trim()) ?? e.name;
+export function ioLabel(
+  e: WorkflowIOEntry,
+  allEntries?: readonly WorkflowIOEntry[],
+): string {
+  const candidate = e.label?.trim() ?? e.name;
   if (allEntries && allEntries.length > 1) {
     for (const entry of allEntries) {
       if (isSamePin(entry, e)) continue;
-      const other = (entry.label?.trim()) ?? entry.name;
+      const other = entry.label?.trim() ?? entry.name;
       if (other !== candidate) continue;
       /* 撞名：换一个能区分的标记。机器别名（封装槽位 `value_N` / 裸序号）是
        *  平台编号产物，不是给用户看的名字，宁可退回宿主标题也不显示它。 */
@@ -314,9 +333,7 @@ export function ioLabel(e: WorkflowIOEntry, allEntries?: readonly WorkflowIOEntr
  *
  *  `inputs` is kept as a flat concatenation of wireInputs + widgetInputs
  *  so consumers that don't yet distinguish the two groups keep working. */
-export function splitWorkflowIO(
-  io: WorkflowIOMap | undefined | null
-): {
+export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   /** Inputs that have no widget — must be wired from another node's output.
    *  In ComfyUI these are the "typed-only" ports (positive_prompt, MODEL,
    *  CLIP, …).  Rendered as read-only chips. */
@@ -328,8 +345,14 @@ export function splitWorkflowIO(
   inputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
   outputs: (WorkflowIOEntry & { ioKey: string })[];
 } {
-  const wireInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[] = [];
-  const widgetInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[] = [];
+  const wireInputs: (WorkflowIOEntry & {
+    ioKey: string;
+    control: ControlKind;
+  })[] = [];
+  const widgetInputs: (WorkflowIOEntry & {
+    ioKey: string;
+    control: ControlKind;
+  })[] = [];
   const outputs: (WorkflowIOEntry & { ioKey: string })[] = [];
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
     if (!entry || typeof entry !== "object") continue;
@@ -357,7 +380,10 @@ export function splitWorkflowIO(
    *  IO preview keeps "wire + widget inputs above, outputs below" and the
    *  user only reorders within those groups, which is what the design
    *  intent of the preview panel calls for. */
-  const byDisplayOrder = (itemA: { displayOrder?: number }, itemB: { displayOrder?: number }) => {
+  const byDisplayOrder = (
+    itemA: { displayOrder?: number },
+    itemB: { displayOrder?: number },
+  ) => {
     const ao = itemA.displayOrder;
     const bo = itemB.displayOrder;
     if (ao === bo) return 0;
@@ -396,7 +422,7 @@ export function filterVisibleInMode<
  */
 export function outputTargetKind(
   io: WorkflowIOMap | undefined | null,
-  taskType?: string | null
+  taskType?: string | null,
 ): "image" | "video" {
   const { outputs } = splitWorkflowIO(io);
   for (const output of outputs) {
@@ -407,7 +433,8 @@ export function outputTargetKind(
     if (IMAGE_TYPES.has((output.type ?? "").toUpperCase())) return "image";
   }
   const tt = (taskType ?? "").toLowerCase();
-  if (tt.includes("video") || tt === "t2v" || tt === "i2v" || tt === "flfvideo") return "video";
+  if (tt.includes("video") || tt === "t2v" || tt === "i2v" || tt === "flfvideo")
+    return "video";
   return "image";
 }
 
@@ -419,7 +446,7 @@ export function outputTargetKind(
  *  给 ComfyUI 的 payload 会缺字段。隐藏只影响展示层（filterVisibleInMode）。 */
 export function defaultInputValues(
   io: WorkflowIOMap | undefined | null,
-  mode?: string | null
+  mode?: string | null,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const { inputs } = splitWorkflowIO(io);
@@ -433,8 +460,10 @@ export function defaultInputValues(
     const resolved = resolveEntryDefault(entry, mode);
     if (resolved !== undefined) out[entry.ioKey] = resolved;
     else if (entry.control === "switch") out[entry.ioKey] = false;
-    else if (entry.control === "int" || entry.control === "float") out[entry.ioKey] = numericBounds(entry).min;
-    else if (entry.control === "textarea" || entry.control === "text") out[entry.ioKey] = "";
+    else if (entry.control === "int" || entry.control === "float")
+      out[entry.ioKey] = numericBounds(entry).min;
+    else if (entry.control === "textarea" || entry.control === "text")
+      out[entry.ioKey] = "";
   }
   return out;
 }
@@ -447,7 +476,7 @@ export function defaultInputValues(
 export function reconcileInputValues(
   io: WorkflowIOMap | undefined | null,
   stored: Record<string, unknown> | undefined,
-  mode?: string | null
+  mode?: string | null,
 ): Record<string, unknown> {
   const base = defaultInputValues(io, mode);
   if (!stored) return base;
@@ -476,7 +505,7 @@ export function reconcileInputValues(
 export function mergeRefreshedDefaults(
   current: Record<string, unknown>,
   baseline: Record<string, unknown>,
-  fresh: Record<string, unknown>
+  fresh: Record<string, unknown>,
 ): Record<string, unknown> | null {
   const out: Record<string, unknown> = {};
   let changed = false;
@@ -484,7 +513,8 @@ export function mergeRefreshedDefaults(
     /* 基线里没有的键 = 新暴露的 pin（作者刚勾选），按「未覆盖」处理，
      * 直接采用默认值，否则它会以 undefined 留在表单里。 */
     const inBaseline = Object.prototype.hasOwnProperty.call(baseline, key);
-    const untouched = !inBaseline || (key in current && current[key] === baseline[key]);
+    const untouched =
+      !inBaseline || (key in current && current[key] === baseline[key]);
     out[key] = untouched ? fresh[key] : current[key];
     if (out[key] !== current[key]) changed = true;
   }
@@ -504,7 +534,7 @@ export function mergeRefreshedDefaults(
  */
 export function toWorkflowInputsPayload(
   io: WorkflowIOMap | undefined | null,
-  values: Record<string, unknown>
+  values: Record<string, unknown>,
 ): { nodeId: string; name: string; value: unknown }[] {
   const { inputs } = splitWorkflowIO(io);
   const payload: { nodeId: string; name: string; value: unknown }[] = [];
@@ -516,7 +546,11 @@ export function toWorkflowInputsPayload(
     if (value === undefined || value === "") continue;
     /* 运行期节点 id：子图内部勾选的条目把落库的宿主 id 拼成 comfy-cli 展开后的
      * `host:inner` 形式（见 runtimeNodeId），顶层勾选原样下发。 */
-    payload.push({ nodeId: runtimeNodeId(entry), name: entry.name, value: value });
+    payload.push({
+      nodeId: runtimeNodeId(entry),
+      name: entry.name,
+      value: value,
+    });
   }
   return payload;
 }
@@ -547,7 +581,7 @@ export function isInputFilled(value: unknown): boolean {
 export function getMissingRequiredInputs(
   io: WorkflowIOMap | undefined | null,
   values: Record<string, unknown>,
-  mode?: string | null
+  mode?: string | null,
 ): string[] {
   if (!io) return [];
   const out: string[] = [];
@@ -581,7 +615,10 @@ export function getMissingRequiredInputs(
  * ───────────────────────────────────────────────────────────────────────── */
 
 /** Enriched widget entry as produced by `splitWorkflowIO().widgetInputs`. */
-export type EnrichedWidget = WorkflowIOEntry & { ioKey: string; control: ControlKind };
+export type EnrichedWidget = WorkflowIOEntry & {
+  ioKey: string;
+  control: ControlKind;
+};
 
 export interface DimensionGroup {
   kind: "dimension";
@@ -623,7 +660,8 @@ export type InferredGroup = DimensionGroup | VideoGroup;
  */
 
 /** 比例预设（与 `SIZE_RATIO_PRESETS` 同源；保留旧名以免全库改 import）。 */
-export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] = SIZE_RATIO_PRESETS;
+export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] =
+  SIZE_RATIO_PRESETS;
 
 /** 「像素」大类下的两个子类：分辨率（1k/2k/4k）与百万像素（1M/2M/4M）。
  *
@@ -645,12 +683,14 @@ export const DIM_CLARITY_PRESETS: DimClarityPreset[] = SIZE_CLARITY_PRESETS.map(
     ...(preset.megapixels !== undefined
       ? { totalPixels: preset.megapixels * 1_000_000 }
       : {}),
-  })
+  }),
 );
 
 /** 「像素」大类下两个子类的显示名（与 `size-presets` 同一份）。 */
-export const CLARITY_SUBGROUP_OF_KIND: Record<DimClarityPreset["kind"], string> =
-  CLARITY_SUBGROUP_LABELS;
+export const CLARITY_SUBGROUP_OF_KIND: Record<
+  DimClarityPreset["kind"],
+  string
+> = CLARITY_SUBGROUP_LABELS;
 
 export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
 
@@ -665,7 +705,11 @@ export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
  *  ratio from a workflow-specific label string, so a workflow whose node
  *  spells the option differently ("16:9 宽屏", "16:9") still highlights
  *  the right chip instead of silently falling back to "自定义". */
-export const ASPECT_RATIO_LABEL_PRESETS: { label: string; value: string; ratio: number }[] = [
+export const ASPECT_RATIO_LABEL_PRESETS: {
+  label: string;
+  value: string;
+  ratio: number;
+}[] = [
   { label: "1:1", value: "1:1 (Square)", ratio: 1 },
   { label: "4:3", value: "4:3 (Standard)", ratio: 4 / 3 },
   { label: "3:2", value: "3:2 (Photo)", ratio: 3 / 2 },
@@ -688,7 +732,8 @@ export function parseRatioFromLabel(value: string): number | null {
   if (!match) return null;
   const w = Number(match[1]);
   const h = Number(match[2]);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0)
+    return null;
   return w / h;
 }
 
@@ -707,7 +752,7 @@ export function dimsForRatio(
   presetOrBase: DimClarityPreset | number,
   alignMultiple: number = DEFAULT_ALIGN_MULTIPLE,
   scene: SizeScene = "image",
-  table?: SizePresetTable
+  table?: SizePresetTable,
 ): { width: number; height: number } {
   /* Guard against a degenerate / missing ratio: NaN / 0 / negative falls
    * back to a 1:1 square so the form still gets a finite answer. */
@@ -716,8 +761,14 @@ export function dimsForRatio(
   if (typeof presetOrBase === "number") {
     const horizontal = safeRatio >= 1;
     return {
-      width: Math.max(1, Math.round(horizontal ? presetOrBase : presetOrBase * safeRatio)),
-      height: Math.max(1, Math.round(horizontal ? presetOrBase / safeRatio : presetOrBase)),
+      width: Math.max(
+        1,
+        Math.round(horizontal ? presetOrBase : presetOrBase * safeRatio),
+      ),
+      height: Math.max(
+        1,
+        Math.round(horizontal ? presetOrBase / safeRatio : presetOrBase),
+      ),
     };
   }
 
@@ -729,7 +780,7 @@ export function dimsForRatio(
   return megapixelDims(
     safeRatio,
     (presetOrBase.totalPixels ?? 1_000_000) / 1_000_000,
-    normalizeAlignMultiple(alignMultiple)
+    normalizeAlignMultiple(alignMultiple),
   );
 }
 
@@ -744,9 +795,14 @@ export function pickClarityPreset(
   height: number,
   alignMultiple: number = DEFAULT_ALIGN_MULTIPLE,
   scene: SizeScene = "image",
-  table?: SizePresetTable
+  table?: SizePresetTable,
 ): DimClarityPreset {
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
     return DIM_CLARITY_PRESETS[0]!;
   }
   const alignM = normalizeAlignMultiple(alignMultiple);
@@ -754,7 +810,13 @@ export function pickClarityPreset(
   let best: DimClarityPreset = DIM_CLARITY_PRESETS[0]!;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const preset of DIM_CLARITY_PRESETS) {
-    const { width: dw, height: dh } = dimsForRatio(ratio, preset, alignM, scene, table);
+    const { width: dw, height: dh } = dimsForRatio(
+      ratio,
+      preset,
+      alignM,
+      scene,
+      table,
+    );
     const dist = Math.abs(width - dw) + Math.abs(height - dh);
     if (dist < bestDist) {
       best = preset;
@@ -768,7 +830,7 @@ export function pickClarityPreset(
 function isDimWidth(e: EnrichedWidget): boolean {
   const name = (e.name || "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (name.includes('width')) return true;
+  if (name.includes("width")) return true;
   if (label === "宽度" || label === "横" || label === "横向") return true;
   if (name === "宽") return true;
   return false;
@@ -787,8 +849,10 @@ function isDimHeight(e: EnrichedWidget): boolean {
 function isDimAspect(e: EnrichedWidget): boolean {
   const name = (e.name || "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name)) return true;
-  if (label === "宽高比" || label.includes("比例") || label.includes("纵横")) return true;
+  if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name))
+    return true;
+  if (label === "宽高比" || label.includes("比例") || label.includes("纵横"))
+    return true;
   return false;
 }
 function isDimMegapixels(e: EnrichedWidget): boolean {
@@ -801,7 +865,8 @@ function isDimMegapixels(e: EnrichedWidget): boolean {
 function isDimMultiple(e: EnrichedWidget): boolean {
   const name = (e.name || "").toLowerCase();
   const label = e.label ?? "";
-  if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name)) return true;
+  if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name))
+    return true;
   if (label.includes("倍数") || label.includes("倍率")) return true;
   return false;
 }
@@ -825,12 +890,18 @@ function isVideoQuality(e: EnrichedWidget): boolean {
  *    • aspect_ratio + megapixels → renders a "比例 + 像素" quick picker that
  *      writes directly into the two exposed widgets (e.g. ResolutionSelector).
  */
-export function inferDimensionGroup(widgets: EnrichedWidget[]): DimensionGroup | null {
+export function inferDimensionGroup(
+  widgets: EnrichedWidget[],
+): DimensionGroup | null {
   const widthWidgets = widgets.filter(
-    (entry) => (entry.control === "int" || entry.control === "float") && isDimWidth(entry)
+    (entry) =>
+      (entry.control === "int" || entry.control === "float") &&
+      isDimWidth(entry),
   );
   const heightWidgets = widgets.filter(
-    (entry) => (entry.control === "int" || entry.control === "float") && isDimHeight(entry)
+    (entry) =>
+      (entry.control === "int" || entry.control === "float") &&
+      isDimHeight(entry),
   );
   if (widthWidgets.length > 0 && heightWidgets.length > 0) {
     const width = widthWidgets[0]!;
@@ -859,7 +930,7 @@ export function inferDimensionGroup(widgets: EnrichedWidget[]): DimensionGroup |
       (w) =>
         w.ioKey !== aspect.ioKey &&
         w.ioKey !== megapixels.ioKey &&
-        isDimMultiple(w)
+        isDimMultiple(w),
     );
     return {
       kind: "dimension",
@@ -882,7 +953,7 @@ export function inferVideoGroup(widgets: EnrichedWidget[]): VideoGroup | null {
   if (asp.length === 0 && quality.length === 0) return null;
   return {
     kind: "video",
-    groupId: `video:${len[0]!.ioKey}|${(asp[0]?.ioKey) ?? ""}|${(quality[0]?.ioKey) ?? ""}`,
+    groupId: `video:${len[0]!.ioKey}|${asp[0]?.ioKey ?? ""}|${quality[0]?.ioKey ?? ""}`,
     length: len[0],
     aspect: asp[0],
     quality: quality[0],

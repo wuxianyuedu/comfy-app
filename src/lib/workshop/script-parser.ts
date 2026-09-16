@@ -15,19 +15,23 @@ function uid(prefix = "id"): string {
  */
 export function parseIdeaToScenes(
   raw: string,
-  meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">
+  meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,
 ): Scene[] {
   const text = raw.trim();
   if (!text) return [];
 
   // Single short idea → expand with a simple 3-act template
-  const hasStructure = /\n\s*\n/.test(text) || /场景\d|场\s*\d|SCENE/i.test(text);
+  const hasStructure =
+    /\n\s*\n/.test(text) || /场景\d|场\s*\d|SCENE/i.test(text);
   if (!hasStructure && text.length < 120) {
     return expandIdea(text, meta);
   }
 
   // Split by blank lines first, fall back to explicit scene markers
-  let blocks = text.split(/\n\s*\n+/).map((block) => block.trim()).filter(Boolean);
+  let blocks = text
+    .split(/\n\s*\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean);
   if (blocks.length === 1) {
     blocks = text
       .split(/(?=场景\s*\d+|场\s*\d+|SCENE\s*\d+)/i)
@@ -36,11 +40,16 @@ export function parseIdeaToScenes(
   }
 
   return blocks.map((block, i) => {
-    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+    const lines = block
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
     const first = lines[0] ?? "";
     const isHeading = /^(场景|场|SCENE)\s*\d+/i.test(first);
     const heading = isHeading ? first : `场景${i + 1} · ${first.slice(0, 12)}`;
-    const body = isHeading ? lines.slice(1).join("\n") : lines.slice(1).join("\n");
+    const body = isHeading
+      ? lines.slice(1).join("\n")
+      : lines.slice(1).join("\n");
     const { location, time } = extractMeta(first + " " + body);
     return {
       id: uid("scene"),
@@ -57,41 +66,43 @@ export function parseIdeaToScenes(
 /** Expand a single logline into a 3-beat scene using project tone */
 function expandIdea(
   idea: string,
-  meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">
+  meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,
 ): Scene[] {
   const tone = meta.tone || "温暖治愈";
   const type = meta.type || "short_video";
   const base = idea.replace(/[。.！!？?\s]+$/, "");
 
-  const template: Array<Partial<Scene> & { action: string; dialogue: string }> = [
-    {
-      heading: "场景1 · 开端",
-      location: "室内",
-      time: "白天",
-      action: `镜头缓缓推进，${base}。环境氛围${tone}，用光影交代人物处境。`,
-      dialogue: `（旁白）故事，从这一刻开始。`,
-      shotCount: 2,
-    },
-    {
-      heading: "场景2 · 发展",
-      location: "室外",
-      time: "黄昏",
-      action: `冲突浮现，${base}的转折点在${tone}的基调中展开，人物做出关键选择。`,
-      dialogue: `（对白）你确定要这么做吗？`,
-      shotCount: 3,
-    },
-    {
-      heading: "场景3 · 高潮/结尾",
-      location: "室内",
-      time: "夜晚",
-      action: `情绪到达顶点，${base}迎来收束，留下余韵。`,
-      dialogue: `（旁白）有些故事，注定被记住。`,
-      shotCount: 2,
-    },
-  ];
+  const template: Array<Partial<Scene> & { action: string; dialogue: string }> =
+    [
+      {
+        heading: "场景1 · 开端",
+        location: "室内",
+        time: "白天",
+        action: `镜头缓缓推进，${base}。环境氛围${tone}，用光影交代人物处境。`,
+        dialogue: `（旁白）故事，从这一刻开始。`,
+        shotCount: 2,
+      },
+      {
+        heading: "场景2 · 发展",
+        location: "室外",
+        time: "黄昏",
+        action: `冲突浮现，${base}的转折点在${tone}的基调中展开，人物做出关键选择。`,
+        dialogue: `（对白）你确定要这么做吗？`,
+        shotCount: 3,
+      },
+      {
+        heading: "场景3 · 高潮/结尾",
+        location: "室内",
+        time: "夜晚",
+        action: `情绪到达顶点，${base}迎来收束，留下余韵。`,
+        dialogue: `（旁白）有些故事，注定被记住。`,
+        shotCount: 2,
+      },
+    ];
 
   void type;
-  return template.map((template) =>({    id: uid("scene"),
+  return template.map((template) => ({
+    id: uid("scene"),
     heading: template.heading!,
     location: template.location!,
     time: template.time!,
@@ -102,8 +113,12 @@ function expandIdea(
 }
 
 function extractMeta(text: string): { location: string; time: string } {
-  const locMatch = /(咖啡馆|办公室|街道|房间|实验室|森林|海边|城市|学校|医院|城堡|太空|车内|室外|室内|山顶|车站)/.exec(text);
-  const timeMatch = /(清晨|早晨|上午|中午|下午|黄昏|傍晚|夜晚|深夜|黎明|白天|月夜)/.exec(text);
+  const locMatch =
+    /(咖啡馆|办公室|街道|房间|实验室|森林|海边|城市|学校|医院|城堡|太空|车内|室外|室内|山顶|车站)/.exec(
+      text,
+    );
+  const timeMatch =
+    /(清晨|早晨|上午|中午|下午|黄昏|傍晚|夜晚|深夜|黎明|白天|月夜)/.exec(text);
   return {
     location: locMatch ? locMatch[1]! : "未指定",
     time: timeMatch ? timeMatch[1]! : "未指定",

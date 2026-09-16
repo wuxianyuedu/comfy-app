@@ -71,7 +71,10 @@ beforeEach(() => {
   vanilla.model.list.query.mockResolvedValue({
     models: [{ id: "m1", fileName: "sd15.safetensors", name: "SD1.5" }],
   });
-  vanilla.train.list.query.mockResolvedValue({ jobs: [], backendConfigured: true });
+  vanilla.train.list.query.mockResolvedValue({
+    jobs: [],
+    backendConfigured: true,
+  });
   vanilla.train.create.mutate.mockResolvedValue({ id: "t-1" });
   vanilla.train.cancel.mutate.mockResolvedValue({ ok: true });
   mockedUpload.mockResolvedValue("comfyapp_1.png");
@@ -80,16 +83,18 @@ beforeEach(() => {
 afterEach(cleanup);
 
 /** 填一份能过校验的表单（名称 + 底模 + 触发词 + 一张图） */
-async function fillValidForm(
-  result: { current: ReturnType<typeof useTrainingStudio> },
-) {
+async function fillValidForm(result: {
+  current: ReturnType<typeof useTrainingStudio>;
+}) {
   await act(async () => {
     result.current.setName("水墨风格");
     result.current.setBaseModel("sd15.safetensors");
     result.current.setTriggerWord("somecjkstyle");
   });
   await act(async () => {
-    await result.current.upload([new File(["x"], "a.png")] as unknown as FileList);
+    await result.current.upload([
+      new File(["x"], "a.png"),
+    ] as unknown as FileList);
   });
 }
 
@@ -97,7 +102,9 @@ describe("useTrainingStudio", () => {
   it("挂载即拉底模（CHECKPOINT）与任务列表，并带上后端就绪状态", async () => {
     const { result } = renderHook(() => useTrainingStudio());
     await waitFor(() => expect(vanilla.model.list.query).toHaveBeenCalled());
-    expect(vanilla.model.list.query).toHaveBeenCalledWith({ type: "CHECKPOINT" });
+    expect(vanilla.model.list.query).toHaveBeenCalledWith({
+      type: "CHECKPOINT",
+    });
     expect(vanilla.train.list.query).toHaveBeenCalled();
     await waitFor(() => expect(result.current.checkpoints).toHaveLength(1));
     expect(result.current.backendConfigured).toBe(true);
@@ -112,9 +119,7 @@ describe("useTrainingStudio", () => {
 
   it("逐张上传：多文件串行，全部进 dataset 且 caption 为空", async () => {
     const { result } = renderHook(() => useTrainingStudio());
-    mockedUpload
-      .mockResolvedValueOnce("a.png")
-      .mockResolvedValueOnce("b.png");
+    mockedUpload.mockResolvedValueOnce("a.png").mockResolvedValueOnce("b.png");
     await act(async () => {
       await result.current.upload([
         new File(["x"], "a.png"),
@@ -157,11 +162,15 @@ describe("useTrainingStudio", () => {
       result.current.setTriggerWord("somecjkstyle");
     });
     await act(async () => {
-      await result.current.upload([new File(["x"], "a.png")] as unknown as FileList);
+      await result.current.upload([
+        new File(["x"], "a.png"),
+      ] as unknown as FileList);
     });
     await act(async () => {
       result.current.setDataset((prev) => [{ ...prev[0]!, caption: "手写的" }]);
-      await result.current.upload([new File(["x"], "b.png")] as unknown as FileList);
+      await result.current.upload([
+        new File(["x"], "b.png"),
+      ] as unknown as FileList);
     });
     await act(async () => {
       result.current.fillBlank();

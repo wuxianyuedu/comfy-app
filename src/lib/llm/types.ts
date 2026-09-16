@@ -8,11 +8,36 @@ export type LLMProviderType = "local" | "remote";
  *  `defaultTemperature` 是该任务类型未配置覆盖时的推荐默认值（取 hint 区间中位），
  *  不再一律回落到全局 0.7。 */
 export const TASK_TYPES = {
-  txt2img: { label: "文生图", desc: "严谨确定，保证输出稳定可复现", hint: "0.1~0.3", defaultTemperature: 0.2 },
-  img2video: { label: "图生视频", desc: "中低随机性，平衡连贯性与变化", hint: "0.3~0.5", defaultTemperature: 0.4 },
-  chat: { label: "对话聊天", desc: "自然平衡，日常交互默认档位", hint: "0.6~0.8", defaultTemperature: 0.7 },
-  code: { label: "代码生成", desc: "极低随机性，输出精确符合语法", hint: "0.05~0.2", defaultTemperature: 0.1 },
-  creative: { label: "创意写作", desc: "高发散性，激发灵感与多样性", hint: "0.9~1.2", defaultTemperature: 1.0 },
+  txt2img: {
+    label: "文生图",
+    desc: "严谨确定，保证输出稳定可复现",
+    hint: "0.1~0.3",
+    defaultTemperature: 0.2,
+  },
+  img2video: {
+    label: "图生视频",
+    desc: "中低随机性，平衡连贯性与变化",
+    hint: "0.3~0.5",
+    defaultTemperature: 0.4,
+  },
+  chat: {
+    label: "对话聊天",
+    desc: "自然平衡，日常交互默认档位",
+    hint: "0.6~0.8",
+    defaultTemperature: 0.7,
+  },
+  code: {
+    label: "代码生成",
+    desc: "极低随机性，输出精确符合语法",
+    hint: "0.05~0.2",
+    defaultTemperature: 0.1,
+  },
+  creative: {
+    label: "创意写作",
+    desc: "高发散性，激发灵感与多样性",
+    hint: "0.9~1.2",
+    defaultTemperature: 1.0,
+  },
 } as const;
 
 export type TaskType = keyof typeof TASK_TYPES;
@@ -45,7 +70,8 @@ export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
   const kinds: readonly string[] = REMOTE_MODEL_KINDS;
   for (const item of raw) {
     if (typeof item === "string") {
-      if (item.trim() !== "") out.push({ name: item, baseUrl: null, apiKey: null, kind: null });
+      if (item.trim() !== "")
+        out.push({ name: item, baseUrl: null, apiKey: null, kind: null });
       continue;
     }
     if (typeof item !== "object" || item === null) continue;
@@ -55,9 +81,18 @@ export function normalizeExtraModels(raw: unknown): RemoteModelEntry[] {
     const kind: unknown = rec.kind;
     out.push({
       name,
-      baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
-      apiKey: typeof rec.apiKey === "string" && rec.apiKey.trim() !== "" ? rec.apiKey : null,
-      kind: typeof kind === "string" && kinds.includes(kind) ? (kind as RemoteModelKind) : null,
+      baseUrl:
+        typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
+          ? rec.baseUrl
+          : null,
+      apiKey:
+        typeof rec.apiKey === "string" && rec.apiKey.trim() !== ""
+          ? rec.apiKey
+          : null,
+      kind:
+        typeof kind === "string" && kinds.includes(kind)
+          ? (kind as RemoteModelKind)
+          : null,
     });
   }
   return out;
@@ -99,10 +134,19 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
     const kind: unknown = rec.kind;
     remoteEntries.push({
       name,
-      baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
-      apiKey: typeof rec.apiKey === "string" && rec.apiKey.trim() !== "" ? rec.apiKey : null,
-      kind: typeof kind === "string" && REMOTE_MODEL_KINDS.includes(kind as RemoteModelKind)
-        ? (kind as RemoteModelKind) : null,
+      baseUrl:
+        typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== ""
+          ? rec.baseUrl
+          : null,
+      apiKey:
+        typeof rec.apiKey === "string" && rec.apiKey.trim() !== ""
+          ? rec.apiKey
+          : null,
+      kind:
+        typeof kind === "string" &&
+        REMOTE_MODEL_KINDS.includes(kind as RemoteModelKind)
+          ? (kind as RemoteModelKind)
+          : null,
     });
   }
   return { localNames, remoteEntries };
@@ -113,7 +157,9 @@ export function splitExtraModels(raw: unknown): ExtraModelSplit {
  * 回环服务；真远端模型不会用回环地址访问。与服务端 describeFetchFailure 的判定一致。
  */
 export function isLoopbackBaseUrl(url: string): boolean {
-  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(String(url ?? "").trim());
+  return /^(https?:\/\/)?(localhost|127\.|\[::1\])/i.test(
+    String(url ?? "").trim(),
+  );
 }
 
 /** 判定一个「远端条目」是否为误存的本地 ollama。
@@ -246,7 +292,6 @@ export interface LLMToolCall {
     arguments: string;
   };
 }
-
 
 /** 工坊阶段的 key —— 供按阶段挑选模型 / 提示各阶段能力 */
 export const WORKSHOP_STAGES = [

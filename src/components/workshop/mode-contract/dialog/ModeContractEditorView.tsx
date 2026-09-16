@@ -24,7 +24,9 @@ function LabelWithId({ label, id }: { label: string; id: string }) {
   return (
     <>
       {label}
-      <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">{id}</span>
+      <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
+        {id}
+      </span>
     </>
   );
 }
@@ -34,7 +36,8 @@ export function ModeContractEditorView({
 }: {
   controller: ModeContractEditorController;
 }) {
-  const { mode, draft, stored, saving, saved, nextReferenceImageId } = controller;
+  const { mode, draft, stored, saving, saved, nextReferenceImageId } =
+    controller;
 
   return (
     <>
@@ -42,7 +45,8 @@ export function ModeContractEditorView({
         <div>
           <h3 className="text-ink-strong text-sm font-semibold">模式契约</h3>
           <p className="text-muted-foreground mt-0.5 text-[11px]">
-            每种模式的统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器。
+            每种模式的统一输入 / 输出 ——
+            本地工作流按它配落点，远端模型按它建适配器。
             契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。
           </p>
         </div>
@@ -62,11 +66,15 @@ export function ModeContractEditorView({
             选择要配置的模式（与工作流库同一定义）
           </p>
           {CONTRACT_MODE_GROUPS.map((group) => {
-            const modes = CONTRACT_MODES.filter((t) => t.category === group.category);
+            const modes = CONTRACT_MODES.filter(
+              (t) => t.category === group.category,
+            );
             if (modes.length === 0) return null;
             return (
               <div key={group.category} className="mb-1.5">
-                <p className="text-muted-foreground mb-1 text-[10px]">{group.label}</p>
+                <p className="text-muted-foreground mb-1 text-[10px]">
+                  {group.label}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {modes.map((t) => (
                     <button
@@ -79,9 +87,14 @@ export function ModeContractEditorView({
                           : "border-border text-muted-foreground hover:bg-subtle"
                       }`}
                     >
-                      <LabelWithId label={contractModeLabel(t.code)} id={t.code} />
+                      <LabelWithId
+                        label={contractModeLabel(t.code)}
+                        id={t.code}
+                      />
                       {isModeContractCustomized(t.code, stored) && (
-                        <span className="text-primary/70 ml-1 text-[10px]">已改</span>
+                        <span className="text-primary/70 ml-1 text-[10px]">
+                          已改
+                        </span>
                       )}
                     </button>
                   ))}
@@ -121,13 +134,16 @@ export function ModeContractEditorView({
                 >
                   <span className="text-ink text-[11px]">
                     {i + 1}.{" "}
-                    <LabelWithId label={modeContractInputIdLabel(input)} id={input} />
+                    <LabelWithId
+                      label={modeContractInputIdLabel(input)}
+                      id={input}
+                    />
                   </span>
                   <button
                     type="button"
                     disabled={input === "prompt"}
                     onClick={() => controller.removeInput(input)}
-                    className="text-muted-foreground/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400 px-1 text-xs disabled:opacity-30"
+                    className="text-muted-foreground/60 px-1 text-xs hover:text-red-700 disabled:opacity-30 dark:text-red-300 dark:hover:text-red-400"
                     aria-label={`移除 ${modeContractInputIdLabel(input)}`}
                   >
                     ✕
@@ -141,9 +157,10 @@ export function ModeContractEditorView({
                   key={type}
                   type="button"
                   onClick={() => controller.appendInput(type)}
-                  className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-primary/40 px-2 py-0.5 text-[11px]"
+                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 rounded border border-dashed px-2 py-0.5 text-[11px]"
                 >
-                  ＋ <LabelWithId label={modeContractInputLabel(type)} id={type} />
+                  ＋{" "}
+                  <LabelWithId label={modeContractInputLabel(type)} id={type} />
                 </button>
               ))}
               {nextReferenceImageId && (
@@ -151,7 +168,7 @@ export function ModeContractEditorView({
                   type="button"
                   title="参考图不设数量上限，可继续追加"
                   onClick={() => controller.appendInput(nextReferenceImageId)}
-                  className="border-primary text-primary hover:bg-primary/10 rounded border border-dashed border-primary/40 px-2 py-0.5 text-[11px]"
+                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 rounded border border-dashed px-2 py-0.5 text-[11px]"
                 >
                   ＋{" "}
                   <LabelWithId
@@ -166,7 +183,9 @@ export function ModeContractEditorView({
               <select
                 value={draft.output}
                 onChange={(event) =>
-                  controller.setOutput(event.target.value as ModeContract["output"])
+                  controller.setOutput(
+                    event.target.value as ModeContract["output"],
+                  )
                 }
                 className="border-border bg-bg text-ink rounded-lg border px-2 py-1 text-[11px]"
               >

@@ -8,19 +8,9 @@ import { FILM_COMPOSE_SIZE } from "@/lib/film/film-size";
 /* ── 类型（与后端 Prisma 行的 UI 视图一致，保持对外 API 不变）── */
 
 export type FilmStatus =
-  | "PARSING"
-  | "GENERATING"
-  | "COMPOSING"
-  | "DONE"
-  | "FAILED"
-  | "CANCELLED";
+  "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
 
-export type ShotStatus =
-  | "IDLE"
-  | "QUEUED"
-  | "RUNNING"
-  | "SUCCEEDED"
-  | "FAILED";
+export type ShotStatus = "IDLE" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
 export type ShotMode = "txt2img" | "img2video" | "transition";
 
@@ -157,10 +147,26 @@ export const STATUS_BADGE: Record<
   { bg: string; text: string; label: string }
 > = {
   IDLE: { bg: "bg-subtle", text: "text-ink-fainter", label: "待处理" },
-  QUEUED: { bg: "bg-amber-500/15", text: "text-amber-700 dark:text-amber-300", label: "排队中" },
-  RUNNING: { bg: "bg-violet-500/15", text: "text-violet-700 dark:text-violet-300", label: "生成中" },
-  SUCCEEDED: { bg: "bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-300", label: "完成" },
-  FAILED: { bg: "bg-rose-500/15", text: "text-rose-700 dark:text-rose-300", label: "失败" },
+  QUEUED: {
+    bg: "bg-amber-500/15",
+    text: "text-amber-700 dark:text-amber-300",
+    label: "排队中",
+  },
+  RUNNING: {
+    bg: "bg-violet-500/15",
+    text: "text-violet-700 dark:text-violet-300",
+    label: "生成中",
+  },
+  SUCCEEDED: {
+    bg: "bg-emerald-500/15",
+    text: "text-emerald-700 dark:text-emerald-300",
+    label: "完成",
+  },
+  FAILED: {
+    bg: "bg-rose-500/15",
+    text: "text-rose-700 dark:text-rose-300",
+    label: "失败",
+  },
 };
 
 export const STAGE_LABEL: Record<FilmStatus, string> = {
@@ -174,5 +180,7 @@ export const STAGE_LABEL: Record<FilmStatus, string> = {
 
 /** 成片是否仍在推进（决定进度条与「取消」按钮的显隐）。 */
 export function isFilmRunning(status: FilmStatus): boolean {
-  return status === "GENERATING" || status === "COMPOSING" || status === "PARSING";
+  return (
+    status === "GENERATING" || status === "COMPOSING" || status === "PARSING"
+  );
 }

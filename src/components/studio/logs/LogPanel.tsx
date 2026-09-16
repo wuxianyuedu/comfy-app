@@ -181,7 +181,8 @@ const LEVEL_LABEL_STYLES: Record<LogFilter, string> = {
   debug: "text-ink-muted hover:text-ink",
   info: "text-cyan-700 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-200",
   warn: "text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200",
-  error: "text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200",
+  error:
+    "text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200",
 };
 
 const FILTER_LABELS: { label: string; value: LogFilter }[] = [
@@ -360,7 +361,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
        * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
       className={`shrink-0 self-center rounded p-1 transition-opacity ${
         state === "idle"
-          ? "hover:bg-subtle hover:text-ink focus-visible:opacity-100 opacity-0 group-hover:opacity-100"
+          ? "hover:bg-subtle hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
           : "opacity-100"
       } ${
         state === "done"
@@ -801,7 +802,10 @@ export function LogPanel() {
             「控件数量固定、宽度不定」行头的标准解法。 */}
         <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
           <div className="flex shrink-0 items-center gap-2">
-            <FileText size={16} className="shrink-0 text-violet-700 dark:text-violet-400" />
+            <FileText
+              size={16}
+              className="shrink-0 text-violet-700 dark:text-violet-400"
+            />
             {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
                 （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
             <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
@@ -850,9 +854,7 @@ export function LogPanel() {
                  * 留着它等于给省略号留后门。横向溢出由行头的 `flex-wrap`
                  * （容器 `min-w-56` 是折行判据）接住。 */
                 className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${
-                  filter === option.value
-                    ? "bg-subtle"
-                    : "hover:bg-subtle/70"
+                  filter === option.value ? "bg-subtle" : "hover:bg-subtle/70"
                 } ${LEVEL_LABEL_STYLES[option.value]}`}
                 title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
               >
@@ -880,7 +882,7 @@ export function LogPanel() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="搜索日志（支持命中高亮）..."
-              className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter focus:border-violet-500/40 h-8 w-full rounded-lg border pr-7 pl-8 text-[13px] outline-none"
+              className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter h-8 w-full rounded-lg border pr-7 pl-8 text-[13px] outline-none focus:border-violet-500/40"
             />
             {search && (
               <button

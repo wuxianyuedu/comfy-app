@@ -18,7 +18,8 @@ let activeTaskId: string | null = null;
 const taskNodeMap = new Map<string, string>();
 
 export function setActiveTaskId(id: string | null, nodeId?: string): void {
-  if (activeTaskId === id && (!id || !nodeId || taskNodeMap.get(id) === nodeId)) return;
+  if (activeTaskId === id && (!id || !nodeId || taskNodeMap.get(id) === nodeId))
+    return;
   activeTaskId = id;
   if (id && nodeId) {
     taskNodeMap.set(id, nodeId);
@@ -31,7 +32,9 @@ export function getActiveTaskId(): string | null {
 }
 
 /** 查询某个 taskId 是由哪个画布节点触发的。 */
-export function getNodeIdByTaskId(taskId: string | null | undefined): string | null {
+export function getNodeIdByTaskId(
+  taskId: string | null | undefined,
+): string | null {
   if (!taskId) return null;
   return taskNodeMap.get(taskId) ?? null;
 }

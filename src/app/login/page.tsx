@@ -49,7 +49,9 @@ export default function LoginPage() {
 
       if (signInError) {
         setError(
-          mode === "register" ? "注册成功，但自动登录失败，请重试" : "邮箱或密码错误",
+          mode === "register"
+            ? "注册成功，但自动登录失败，请重试"
+            : "邮箱或密码错误",
         );
         setLoading(false);
         return;
@@ -78,23 +80,35 @@ export default function LoginPage() {
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 -right-32 h-[640px] w-[640px] rounded-full opacity-[0.14] blur-[120px] dark:opacity-70"
-        style={{ background: "radial-gradient(circle, rgba(124,92,252,0.45), transparent 70%)" }}
+        style={{
+          background:
+            "radial-gradient(circle, rgba(124,92,252,0.45), transparent 70%)",
+        }}
       />
       <div
         aria-hidden
         className="pointer-events-none absolute -bottom-40 -left-32 h-[560px] w-[560px] rounded-full opacity-10 blur-[110px] dark:opacity-60"
-        style={{ background: "radial-gradient(circle, rgba(46,167,255,0.25), transparent 70%)" }}
+        style={{
+          background:
+            "radial-gradient(circle, rgba(46,167,255,0.25), transparent 70%)",
+        }}
       />
       <div
         aria-hidden
         className="pointer-events-none absolute top-1/3 left-1/2 h-[360px] w-[360px] rounded-full opacity-[0.08] blur-[90px] dark:opacity-40"
-        style={{ background: "radial-gradient(circle, rgba(19,221,196,0.16), transparent 70%)" }}
+        style={{
+          background:
+            "radial-gradient(circle, rgba(19,221,196,0.16), transparent 70%)",
+        }}
       />
 
       <div className="border-border-subtle bg-surface/90 shadow-ink/5 dark:border-border-strong relative w-full max-w-[440px] rounded-[20px] border p-9 shadow-[0_8px_40px] backdrop-blur-xl">
         {/* Brand */}
-        <Link href="/" className="mb-7 flex items-center justify-center gap-2 font-semibold">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-white">
+        <Link
+          href="/"
+          className="mb-7 flex items-center justify-center gap-2 font-semibold"
+        >
+          <span className="bg-primary grid h-9 w-9 place-items-center rounded-lg text-white">
             <BoltIcon />
           </span>
           <span className="text-ink-bright text-xl tracking-tight">
@@ -178,7 +192,9 @@ export default function LoginPage() {
             value={password}
             onChange={setPassword}
             placeholder={mode === "register" ? "至少 8 位" : "请输入密码"}
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
+            autoComplete={
+              mode === "register" ? "new-password" : "current-password"
+            }
             right={
               <button
                 type="button"
@@ -202,7 +218,11 @@ export default function LoginPage() {
             <div className="text-right">
               <button
                 type="button"
-                onClick={() => setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员")}
+                onClick={() =>
+                  setNotice(
+                    "本地账号密码重置功能即将上线，如需帮助请联系管理员",
+                  )
+                }
                 className="text-primary/90 hover:text-primary text-sm transition-colors"
               >
                 忘记密码?
@@ -213,7 +233,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-hover disabled:opacity-60"
+            className="bg-primary hover:bg-primary-hover w-full rounded-xl py-3 text-sm font-semibold text-white transition-colors disabled:opacity-60"
           >
             {loading ? "处理中…" : mode === "signin" ? "登录" : "创建并登录"}
           </button>
@@ -228,14 +248,18 @@ export default function LoginPage() {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")}
+            onClick={() =>
+              setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")
+            }
             className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter rounded-xl border py-2.5 text-sm font-medium transition-colors"
           >
             GitHub
           </button>
           <button
             type="button"
-            onClick={() => setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")}
+            onClick={() =>
+              setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")
+            }
             className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter rounded-xl border py-2.5 text-sm font-medium transition-colors"
           >
             Google
@@ -283,7 +307,7 @@ function Field({
           className="border-border-strong bg-subtle text-ink placeholder:text-ink-fainter focus:border-primary/50 w-full rounded-xl border px-3.5 py-3 pr-11 text-sm focus:outline-none"
         />
         {right && (
-          <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+          <div className="absolute top-1/2 right-1.5 -translate-y-1/2">
             {right}
           </div>
         )}

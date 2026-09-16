@@ -53,7 +53,11 @@ beforeAll(() => {
 afterEach(cleanup);
 
 const asNodes = (ids: readonly string[]): Node[] =>
-  ids.map((id, index) => ({ id, position: { x: index * 200, y: 0 }, data: {} }));
+  ids.map((id, index) => ({
+    id,
+    position: { x: index * 200, y: 0 },
+    data: {},
+  }));
 
 /** 1 → 2 → 3：选中 2 时，e-1-2 是上游、e-2-3 是下游。 */
 const EDGES: Edge[] = [
@@ -95,12 +99,18 @@ function Stage({
   const store = useStoreApi();
   /* useEdgesState / useNodesState 的 setter 本身稳定，包一层是为了满足 hook
    * 依赖写法（且让「未传 setNodes」的老调用方行为不变）。 */
-  const applyEdges = useCallback((updater: (current: Edge[]) => Edge[]) => {
-    setEdges(updater);
-  }, [setEdges]);
-  const applyNodes = useCallback((updater: (current: Node[]) => Node[]) => {
-    setNodes(updater);
-  }, [setNodes]);
+  const applyEdges = useCallback(
+    (updater: (current: Edge[]) => Edge[]) => {
+      setEdges(updater);
+    },
+    [setEdges],
+  );
+  const applyNodes = useCallback(
+    (updater: (current: Node[]) => Node[]) => {
+      setNodes(updater);
+    },
+    [setNodes],
+  );
   useRelatedEdgesHighlight(applyEdges, { resolveNodeId, setNodes: applyNodes });
 
   const select = useCallback(
@@ -133,7 +143,12 @@ function Stage({
 
   return (
     <div style={{ width: 800, height: 600, position: "relative" }}>
-      <ReactFlow nodes={nodes} edges={currentEdges} onEdgesChange={onEdgesChange} fitView={false}>
+      <ReactFlow
+        nodes={nodes}
+        edges={currentEdges}
+        onEdgesChange={onEdgesChange}
+        fitView={false}
+      >
         <div data-testid="canvas-ready" />
       </ReactFlow>
     </div>
@@ -189,10 +204,18 @@ describe("readEdgeFocusRole", () => {
   it("未标记 / 非法值都归零，只认三种关注级别", () => {
     expect(readEdgeFocusRole({ data: undefined })).toBe("none");
     expect(readEdgeFocusRole({ data: {} })).toBe("none");
-    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "nonsense" } })).toBe("none");
-    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "upstream" } })).toBe("upstream");
-    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "downstream" } })).toBe("downstream");
-    expect(readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "related" } })).toBe("related");
+    expect(
+      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "nonsense" } }),
+    ).toBe("none");
+    expect(
+      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "upstream" } }),
+    ).toBe("upstream");
+    expect(
+      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "downstream" } }),
+    ).toBe("downstream");
+    expect(
+      readEdgeFocusRole({ data: { [EDGE_FOCUS_DATA_KEY]: "related" } }),
+    ).toBe("related");
   });
 });
 
@@ -224,7 +247,9 @@ describe("useRelatedEdgesHighlight 写回端口行级别", () => {
       edges: [{ id: "e-1-2", source: "1", target: "2", targetHandle: "seed" }],
     });
     toggleSelected(sink, "2", true);
-    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe("upstream");
+    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe(
+      "upstream",
+    );
 
     toggleSelected(sink, "2", false);
     for (const node of sink.nodes) {
@@ -239,7 +264,9 @@ describe("useRelatedEdgesHighlight 写回端口行级别", () => {
       edges: [{ id: "e-1-2", source: "1", target: "2", targetHandle: "seed" }],
     });
     toggleSelected(sink, "2", true);
-    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe("upstream");
+    expect(readPortFocusRole(nodeById(sink, "2").data, "seed")).toBe(
+      "upstream",
+    );
 
     act(() => {
       sink.dropEdge("e-1-2");
@@ -296,10 +323,13 @@ describe("useRelatedEdgesHighlight", () => {
       /* 锚点 `anchor:2` 归位到节点 2；`anchor:1` / `anchor:3` 刻意解析不出去 ——
        * 正是折叠态下那些「看似没有对应节点」的端点，判据必须仍能靠剩下的一端
        * 认出相关性。 */
-      resolveNodeId: (visualNodeId) => (visualNodeId === "anchor:2" ? "2" : null),
+      resolveNodeId: (visualNodeId) =>
+        visualNodeId === "anchor:2" ? "2" : null,
     });
     toggleSelected(sink, "2", true);
     expect(readEdgeFocusRole(edgeById(sink, "e-anchor-in"))).toBe("upstream");
-    expect(readEdgeFocusRole(edgeById(sink, "e-anchor-out"))).toBe("downstream");
+    expect(readEdgeFocusRole(edgeById(sink, "e-anchor-out"))).toBe(
+      "downstream",
+    );
   });
 });

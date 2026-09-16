@@ -16,7 +16,7 @@ import {
 
 async function resolveScopes(
   scopeMode: string | null,
-  projectId: string | null
+  projectId: string | null,
 ): Promise<string[]> {
   if (scopeMode === "cross") {
     const all = await listScopes();
@@ -39,7 +39,7 @@ export const materialRouter = createTRPCRouter({
           folder: z.string().optional(),
           q: z.string().optional(),
         })
-        .optional()
+        .optional(),
     )
     .query(async ({ input }) => {
       const projectId = sanitizeScope(input?.projectId ?? null);
@@ -50,7 +50,8 @@ export const materialRouter = createTRPCRouter({
       const scopes = await resolveScopes(scopeMode, projectId);
 
       const byFolder = await collectByFolder(scopes);
-      const folders = MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) =>({        id: MATERIAL_FOLDERS.id,
+      const folders = MATERIAL_FOLDERS.map((MATERIAL_FOLDERS) => ({
+        id: MATERIAL_FOLDERS.id,
         name: MATERIAL_FOLDERS.name,
         count: byFolder.get(MATERIAL_FOLDERS.id)?.length ?? 0,
       }));
@@ -58,7 +59,8 @@ export const materialRouter = createTRPCRouter({
       let items: MaterialItem[] = [];
       if (q) {
         const pool: MaterialItem[] = [];
-        for (const f of MATERIAL_FOLDERS) pool.push(...(byFolder.get(f.id) ?? []));
+        for (const f of MATERIAL_FOLDERS)
+          pool.push(...(byFolder.get(f.id) ?? []));
         items = pool.filter((it) => it.name.toLowerCase().includes(q));
       } else if (folder) {
         if (!isValidFolder(folder)) {
@@ -79,12 +81,13 @@ export const materialRouter = createTRPCRouter({
         folder: z.string().default("docs"),
         projectId: z.string().optional(),
         scope: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const folder = input.folder;
       if (!isValidFolder(folder)) throw new Error("Invalid folder");
-      const scope = sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
+      const scope =
+        sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
       const fileName = sanitizeFileName(input.name);
       if (!fileName) throw new Error("Invalid file name");
 
@@ -105,11 +108,12 @@ export const materialRouter = createTRPCRouter({
         folder: z.string().default("docs"),
         projectId: z.string().optional(),
         scope: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       if (!isValidFolder(input.folder)) throw new Error("Invalid folder");
-      const scope = sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
+      const scope =
+        sanitizeScope(input.projectId ?? input.scope ?? null) ?? SHARED_SCOPE;
       const fileName = sanitizeFileName(input.name);
       if (!fileName) throw new Error("Invalid file name");
 

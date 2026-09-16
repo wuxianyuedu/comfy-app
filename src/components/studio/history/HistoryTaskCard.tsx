@@ -31,7 +31,7 @@ export function HistoryTaskCard({
     <div
       key={task.id}
       className={
-        "group relative overflow-hidden rounded-2xl border bg-card pl-5 pr-3 py-3 transition-all hover:bg-subtle border-l-4 " +
+        "group bg-card hover:bg-subtle relative overflow-hidden rounded-2xl border border-l-4 py-3 pr-3 pl-5 transition-all " +
         st.accentCls +
         " " +
         st.cardBorderCls
@@ -40,7 +40,7 @@ export function HistoryTaskCard({
       {/* 左缘 accent 额外强调（border-l-4 已在父级，再叠一层高亮条） */}
       <div
         className={
-          "absolute left-0 top-0 bottom-0 w-1 " +
+          "absolute top-0 bottom-0 left-0 w-1 " +
           (task.status === "SUCCEEDED"
             ? "bg-emerald-500"
             : task.status === "RUNNING"
@@ -58,7 +58,7 @@ export function HistoryTaskCard({
         {/* ── 缩略图 ── */}
         <button
           onClick={() => onOpenDetail(task.id)}
-          className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-panel-deep"
+          className="bg-panel-deep relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl"
           aria-label="查看任务详情"
         >
           {task.cover ? (
@@ -70,7 +70,7 @@ export function HistoryTaskCard({
               loop
             />
           ) : (
-            <span className="text-xs text-ink-fainter">
+            <span className="text-ink-fainter text-xs">
               {task.status === "FAILED" ? "失败" : "无图"}
             </span>
           )}
@@ -90,20 +90,29 @@ export function HistoryTaskCard({
         </button>
 
         {/* ── 主体信息 ── */}
-        <div className="min-w-0 flex-1 cursor-pointer" onClick={() => onOpenDetail(task.id)}>
+        <div
+          className="min-w-0 flex-1 cursor-pointer"
+          onClick={() => onOpenDetail(task.id)}
+        >
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.pillCls}`}>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.pillCls}`}
+            >
               {st.label}
             </span>
             {st.showProgress && (
-              <span className="text-[10px] tabular-nums text-violet-700 dark:text-violet-400">
+              <span className="text-[10px] text-violet-700 tabular-nums dark:text-violet-400">
                 {Math.floor(progress)}%
               </span>
             )}
-            <span className="truncate text-xs text-ink-muted">{task.workflowName}</span>
-            <span className="shrink-0 text-xs text-ink-fainter">· {timeAgo(task.createdAt)}</span>
+            <span className="text-ink-muted truncate text-xs">
+              {task.workflowName}
+            </span>
+            <span className="text-ink-fainter shrink-0 text-xs">
+              · {timeAgo(task.createdAt)}
+            </span>
           </div>
-          <p className="mt-1 line-clamp-1 text-sm text-ink-strong">
+          <p className="text-ink-strong mt-1 line-clamp-1 text-sm">
             {task.prompt || "（无提示词）"}
           </p>
           {task.status === "FAILED" && task.error && (
@@ -119,11 +128,14 @@ export function HistoryTaskCard({
               )}
               {/* 结构化校验错误逐字段列表 */}
               {task.validationErrors && task.validationErrors.length > 0 && (
-                <div className="border-red-400/20 bg-canvas-deep mt-1.5 rounded border px-2 py-1.5">
+                <div className="bg-canvas-deep mt-1.5 rounded border border-red-400/20 px-2 py-1.5">
                   <div className="mb-1 text-[10px] font-semibold text-red-700 dark:text-red-400">
                     节点配置校验（{task.validationErrors.length} 项）
                   </div>
-                  <ValidationErrorList errors={task.validationErrors} className="text-red-600/90 dark:text-red-400/90" />
+                  <ValidationErrorList
+                    errors={task.validationErrors}
+                    className="text-red-600/90 dark:text-red-400/90"
+                  />
                 </div>
               )}
             </div>
@@ -136,7 +148,7 @@ export function HistoryTaskCard({
             {st.isActive && (
               <button
                 onClick={() => onCancel(task.id)}
-                className="rounded-lg border border-amber-500/30 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                className="rounded-lg border border-amber-500/30 px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
               >
                 取消
               </button>
@@ -145,14 +157,14 @@ export function HistoryTaskCard({
               <button
                 onClick={() => onRetry(task)}
                 disabled={retrying}
-                className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs text-violet-700 dark:text-violet-300 hover:bg-violet-500/20 disabled:opacity-50"
+                className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs text-violet-700 hover:bg-violet-500/20 disabled:opacity-50 dark:text-violet-300"
               >
                 {retrying ? "提交中…" : "↻ 重试"}
               </button>
             )}
             <button
               onClick={() => onRemove(task.id)}
-              className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs text-red-700 dark:text-red-300 hover:bg-red-500/10"
+              className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs text-red-700 hover:bg-red-500/10 dark:text-red-300"
             >
               删除
             </button>

@@ -11,7 +11,11 @@
  */
 
 import type { LogLevel } from "./log-store";
-import { colorizeLogrusLine, parseAnsiSegments, type AnsiStyleKey } from "@/lib/log-ansi";
+import {
+  colorizeLogrusLine,
+  parseAnsiSegments,
+  type AnsiStyleKey,
+} from "@/lib/log-ansi";
 
 /** 行文本里识别出的词法分片。`style` 为空 = 按级别默认色渲染。 */
 export interface RowToken {
@@ -177,6 +181,6 @@ function nodeIsLogText(node: Node): boolean {
     node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
   return Boolean(
     element?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`) ??
-      element?.parentElement?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`),
+    element?.parentElement?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`),
   );
 }

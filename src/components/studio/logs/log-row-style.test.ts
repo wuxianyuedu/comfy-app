@@ -29,7 +29,8 @@ function renderRows(): { inRow: Text; outside: Text } {
     <p id="other">页面里别的文本</p>
   `;
   return {
-    inRow: document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!.firstChild as Text,
+    inRow: document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!
+      .firstChild as Text,
     outside: document.querySelector("#other")!.firstChild as Text,
   };
 }
@@ -69,7 +70,12 @@ describe("selectionInsideLogs 选区是否落在日志正文里", () => {
   it("取不到选区（jsdom / 无选区 API）→ false，不因此整体关掉贴底", () => {
     expect(selectionInsideLogs(null)).toBe(false);
     expect(
-      selectionInsideLogs({ rangeCount: 0, anchorNode: null, focusNode: null, isCollapsed: false }),
+      selectionInsideLogs({
+        rangeCount: 0,
+        anchorNode: null,
+        focusNode: null,
+        isCollapsed: false,
+      }),
     ).toBe(false);
   });
 });

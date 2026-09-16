@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_GEN_PARAMS, paramInt, paramNumber, paramString } from "./param-coerce";
+import {
+  DEFAULT_GEN_PARAMS,
+  paramInt,
+  paramNumber,
+  paramString,
+} from "./param-coerce";
 
 describe("paramString", () => {
   it("字符串原样返回", () => {
     expect(paramString("euler", "dpmpp_2m")).toBe("euler");
   });
 
-  it("空串落回缺省——参数表里的 \"\" 是「用户清空了输入框」，不是有效值", () => {
+  it('空串落回缺省——参数表里的 "" 是「用户清空了输入框」，不是有效值', () => {
     expect(paramString("", "normal")).toBe("normal");
   });
 

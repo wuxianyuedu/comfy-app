@@ -321,7 +321,14 @@ function DimensionSizeControl({
       });
     }
     return list;
-  }, [ratio, clarity, clarityKind, alignMultiple, applyPreset, handleAlignChange]);
+  }, [
+    ratio,
+    clarity,
+    clarityKind,
+    alignMultiple,
+    applyPreset,
+    handleAlignChange,
+  ]);
 
   return (
     <div className="space-y-2.5">
@@ -331,12 +338,12 @@ function DimensionSizeControl({
       <div
         className={
           narrow
-            ? "w-fit max-w-full rounded-lg border border-accent/30 bg-accent/4 p-2"
-            : "rounded-lg border border-accent/30 bg-accent/4 p-2.5"
+            ? "border-accent/30 bg-accent/4 w-fit max-w-full rounded-lg border p-2"
+            : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
         }
       >
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[10px] font-semibold tracking-wider text-accent uppercase">
+          <span className="text-accent shrink-0 text-[10px] font-semibold tracking-wider uppercase">
             比例 + 像素
           </span>
           <div className={narrow ? "w-[112px] min-w-0" : "min-w-0 flex-1"}>
@@ -350,7 +357,7 @@ function DimensionSizeControl({
                   scene={scene}
                   onOpen={() => setTableOpen(true)}
                   extra={
-                    <span className="text-[10px] text-ink-faint">
+                    <span className="text-ink-faint text-[10px]">
                       {CLARITY_HINT[clarityKind]}
                     </span>
                   }
@@ -403,7 +410,10 @@ function DimensionSizeControl({
       )}
 
       {tableOpen && (
-        <SizePresetTableModal scene={scene} onClose={() => setTableOpen(false)} />
+        <SizePresetTableModal
+          scene={scene}
+          onClose={() => setTableOpen(false)}
+        />
       )}
     </div>
   );

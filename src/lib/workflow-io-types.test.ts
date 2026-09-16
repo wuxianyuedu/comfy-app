@@ -40,7 +40,9 @@ describe("resolveEntryRequired — required 的模式覆盖两级回退", () => 
 
 describe("resolveEntrySeedMode — seedMode 的模式覆盖两级回退", () => {
   it("无 mode 时回退条目级 seedMode", () => {
-    expect(resolveEntrySeedMode(entry({ seedMode: "increment" }))).toBe("increment");
+    expect(resolveEntrySeedMode(entry({ seedMode: "increment" }))).toBe(
+      "increment",
+    );
     expect(resolveEntrySeedMode(entry())).toBeUndefined();
   });
 

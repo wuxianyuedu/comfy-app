@@ -47,7 +47,10 @@ export interface ResolvedMedia {
  * Load image bytes from a data URL, a locally generated path, or an absolute
  * http(s) URL. Throws with a readable message when the source is unusable.
  */
-export async function resolveMediaBytes(src: string, _origin: string): Promise<ResolvedMedia> {
+export async function resolveMediaBytes(
+  src: string,
+  _origin: string,
+): Promise<ResolvedMedia> {
   if (src.startsWith("data:")) {
     const comma = src.indexOf(",");
     if (comma < 0) throw new Error("data URL 格式无效");
@@ -83,7 +86,9 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
     const mime = res.headers.get("content-type")?.split(";")[0] ?? undefined;
     return {
       buffer,
-      mime: mime?.startsWith("image/") ? mime : mimeForExt(path.extname(new URL(src).pathname).replace(".", "")),
+      mime: mime?.startsWith("image/")
+        ? mime
+        : mimeForExt(path.extname(new URL(src).pathname).replace(".", "")),
     };
   }
 
@@ -91,7 +96,10 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
 }
 
 /** Same as resolveMediaBytes but returning an inline data URL (for remote APIs). */
-export async function resolveMediaDataUrl(src: string, _origin: string): Promise<string> {
+export async function resolveMediaDataUrl(
+  src: string,
+  _origin: string,
+): Promise<string> {
   const { buffer, mime } = await resolveMediaBytes(src, _origin);
   return `data:${mime};base64,${buffer.toString("base64")}`;
 }
@@ -107,13 +115,21 @@ export async function readUpstreamJson(res: Response): Promise<unknown> {
 }
 
 /** Pick string fields off an unknown body with defaults (request guards). */
-export function strField(rec: Record<string, unknown>, key: string): string | undefined {
+export function strField(
+  rec: Record<string, unknown>,
+  key: string,
+): string | undefined {
   const v: unknown = rec[key];
   return typeof v === "string" && v.trim().length > 0 ? v : undefined;
 }
 
 /** Pick a bounded integer field off an unknown body. */
-export function intField(rec: Record<string, unknown>, key: string, min: number, max: number): number | undefined {
+export function intField(
+  rec: Record<string, unknown>,
+  key: string,
+  min: number,
+  max: number,
+): number | undefined {
   const v: unknown = rec[key];
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
   if (!Number.isFinite(n)) return undefined;

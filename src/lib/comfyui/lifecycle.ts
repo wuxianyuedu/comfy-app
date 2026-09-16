@@ -233,7 +233,10 @@ export async function stopComfyUiProcess(): Promise<{
   // detached 取实际拉起方式：bound（本进程 spawn）为 false；keepAlive 的 POSIX
   // 分支是 `spawn({detached:true})`（组长），无句柄的接管场景也按 guard 时的
   // 标记传 —— 只有传对它才能命中 `kill(-pid)` 的进程组路径。
-  const kill = await killProcessTree({ pid, detached: st.childDetached === true });
+  const kill = await killProcessTree({
+    pid,
+    detached: st.childDetached === true,
+  });
   appendRuntimeLog(`[stop] 回收进程树：${kill.via}`);
   if (st.child === child) {
     st.child = undefined;
@@ -571,7 +574,6 @@ function appendRuntimeLog(line: string): void {
 function appendSessionBanner(kind: "start" | "end", title: string): void {
   appendSessionBannerToFile(COMFYUI_RUNTIME_LOG, kind, title);
 }
-
 
 /**
  * 确保 ComfyUI 可用：可达则直接返回；不可达且配置了路径 + 自动启动时，

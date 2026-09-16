@@ -34,7 +34,9 @@ export type WorkflowFormat = "api" | "raw";
  *  Record 视图，否则 null。对应旧 any 代码 `x?.prop` / `Object.keys(x ?? {})`
  *  的运行时语义。 */
 export function asRecord(v: unknown): Record<string, unknown> | null {
-  return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+  return typeof v === "object" && v !== null
+    ? (v as Record<string, unknown>)
+    : null;
 }
 
 /** 严格普通对象守卫（排除数组）—— 用于 groups / pins 等逐条收窄。 */
@@ -235,7 +237,9 @@ export function detectFormat(json: unknown): WorkflowFormat | null {
   // API format: any top-level value has class_type + inputs
   const apiHit = Object.values(obj).some((value) => {
     const v = asRecord(value);
-    return !!v && typeof v.class_type === "string" && typeof v.inputs === "object";
+    return (
+      !!v && typeof v.class_type === "string" && typeof v.inputs === "object"
+    );
   });
   if (apiHit) return "api";
   // Raw format: has `nodes` array + each node has `type` (not class_type)
@@ -255,7 +259,9 @@ export function detectFormat(json: unknown): WorkflowFormat | null {
  * 2) 从原始格式抽取节点坐标 (用于编辑器初始布局)
  * ────────────────────────────────────────────────────────────────────── */
 
-export function extractPositions(raw: RawWorkflow): Record<string, [number, number]> {
+export function extractPositions(
+  raw: RawWorkflow,
+): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {};
   if (!Array.isArray(raw.nodes)) return out;
   for (const n of raw.nodes) {
@@ -297,7 +303,10 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
       for (const inner of innerNodes) {
         if (inner && Array.isArray(inner.pos) && inner.pos.length >= 2) {
           const iId = String(inner.id);
-          out[`${wId}:${iId}`] = [Number(inner.pos[0]) || 0, Number(inner.pos[1]) || 0];
+          out[`${wId}:${iId}`] = [
+            Number(inner.pos[0]) || 0,
+            Number(inner.pos[1]) || 0,
+          ];
         }
       }
     }
@@ -318,7 +327,8 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
  *   "sampler_name": [["euler", "euler_ancestral", …], {}]   ← COMBO：首项是候选数组
  * 少数新版（V3 schema）会给对象形式 `{ type: "INT", … }`，这里两种都兼容。
  */
-type ObjectInfoInputSpec = [unknown, Record<string, unknown>?] | Record<string, unknown>;
+type ObjectInfoInputSpec =
+  [unknown, Record<string, unknown>?] | Record<string, unknown>;
 
 interface ObjectInfoClassDef {
   input_order?: { required?: string[]; optional?: string[] };
@@ -342,13 +352,11 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
     return { type: typeof head === "string" ? head : null, options };
   }
   if (spec && typeof spec === "object") {
-
-    const type = (spec).type;
+    const type = spec.type;
 
     if (Array.isArray(type)) return { type: "COMBO", options: spec };
 
     if (typeof type === "string") return { type: type, options: spec };
-
   }
 
   return { type: null, options: {} };
@@ -394,7 +402,8 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
  *  of: INT, FLOAT, STRING, BOOLEAN, COMBO.  Connection types (MODEL, LATENT,
  *  IMAGE, CONDITIONING, CLIP, …) are excluded because their values come from
  *  `links`, not from `widgets_values`. */
-const CONNECTION_TYPE_RE = /^(MODEL|LATENT|IMAGE|IMAGE_TENSOR|MASK|CONDITIONING|CLIP|CLIP_VISION|CLIP_VISION_OUTPUT|VAE|MODEL_PATCH|GLIGEN|UPSCALE_MODEL|STYLE_MODEL|CONTROL_NET|SIGMAS|NOISE|SAMPLER|MASKED_IMAGE|IMAGE_3D|MESH|VOXEL|MESH_HOLDER|LATENT_3D|LOAD_3D|LATENT_4D|AUDIO|VIDEO|INT_ARRAY|FLOAT_ARRAY|STRING_ARRAY|TRANSFORMERS_MODEL_TENSOR|MT5|MT5_MODEL|CLIP_MODEL|UNET|UNET_TIMESTEP_EMBEDDING)$/i;
+const CONNECTION_TYPE_RE =
+  /^(MODEL|LATENT|IMAGE|IMAGE_TENSOR|MASK|CONDITIONING|CLIP|CLIP_VISION|CLIP_VISION_OUTPUT|VAE|MODEL_PATCH|GLIGEN|UPSCALE_MODEL|STYLE_MODEL|CONTROL_NET|SIGMAS|NOISE|SAMPLER|MASKED_IMAGE|IMAGE_3D|MESH|VOXEL|MESH_HOLDER|LATENT_3D|LOAD_3D|LATENT_4D|AUDIO|VIDEO|INT_ARRAY|FLOAT_ARRAY|STRING_ARRAY|TRANSFORMERS_MODEL_TENSOR|MT5|MT5_MODEL|CLIP_MODEL|UNET|UNET_TIMESTEP_EMBEDDING)$/i;
 
 /**
  * ComfyUI 前端会在 seed 类 INT 控件后面**自动插入**一个 `control_after_generate`
@@ -405,9 +414,15 @@ const CONNECTION_TYPE_RE = /^(MODEL|LATENT|IMAGE|IMAGE_TENSOR|MASK|CONDITIONING|
 const CONTROL_SENTINEL = "__control_after_generate__";
 const SEED_WIDGET_NAMES = new Set(["seed", "noise_seed"]);
 
-function hasControlAfterGenerate(name: string, type: string, options: Record<string, unknown>): boolean {
+function hasControlAfterGenerate(
+  name: string,
+  type: string,
+  options: Record<string, unknown>,
+): boolean {
   if (type !== "INT") return false;
-  return SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true;
+  return (
+    SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true
+  );
 }
 
 /**
@@ -425,7 +440,7 @@ function hasControlAfterGenerate(name: string, type: string, options: Record<str
  */
 export function pairWidgetValues(
   inputs: RawNodeInput[],
-  widgetsValues: unknown[]
+  widgetsValues: unknown[],
 ): Record<string, unknown> {
   // 规范 widget 顺序：按 raw inputs[] 顺序收集 widget 名，并在每个
   // seed/noise_seed INT 控件后插入 CONTROL_SENTINEL（正是 ComfyUI 序列化
@@ -435,7 +450,10 @@ export function pairWidgetValues(
     const wname = inp?.widget?.name;
     if (typeof wname !== "string") continue;
     order.push(wname);
-    if (SEED_WIDGET_NAMES.has(wname) && (inp.type === "INT" || inp.type === undefined)) {
+    if (
+      SEED_WIDGET_NAMES.has(wname) &&
+      (inp.type === "INT" || inp.type === undefined)
+    ) {
       order.push(CONTROL_SENTINEL);
     }
   }
@@ -456,7 +474,9 @@ export function pairWidgetValues(
  *  画布之前只按 raw 节点 `inputs[]` 里的 `widget` 标记配对控件值，
  *  而 ComfyUI **默认不会把未「转成输入」的控件写进 inputs[]** —— 于是
  *  CLIPTextEncode 的提示词、各类 Loader 的模型名整段丢失，节点上一个参数都不显示。 */
-export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>> {
+export async function fetchWidgetOrderTable(): Promise<
+  Record<string, string[]>
+> {
   const info = await fetchObjectInfo();
   const table: Record<string, string[]> = {};
   if (info) {
@@ -464,7 +484,8 @@ export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>>
       table[clsName] = resolveWidgetOrder(def);
     }
   } else {
-    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS)) table[clsName] = list;
+    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS))
+      table[clsName] = list;
   }
   return table;
 }
@@ -478,9 +499,10 @@ export async function fetchWidgetOrderTable(): Promise<Record<string, string[]>>
  *  旧的游标配对，保证不引入新的错位。 */
 export function mapWidgetValuesByOrder(
   widgetOrder: string[] | undefined,
-  widgetsValues: unknown[]
+  widgetsValues: unknown[],
 ): { name: string; value: unknown }[] | null {
-  if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0) return null;
+  if (!widgetOrder || widgetOrder.length === 0 || widgetsValues.length === 0)
+    return null;
   const bare = widgetOrder.filter((name) => name !== CONTROL_SENTINEL);
   const names =
     widgetsValues.length === widgetOrder.length
@@ -514,7 +536,8 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
     // forceInput 的标量输入被渲染成插槽，同样不占 widgets_values 的位置。
     if (options?.forceInput === true) return;
     out.push(name);
-    if (hasControlAfterGenerate(name, type, options)) out.push(CONTROL_SENTINEL);
+    if (hasControlAfterGenerate(name, type, options))
+      out.push(CONTROL_SENTINEL);
   };
   // widgets_values = required 全部 widget + optional 全部 widget 按顺序扁平化，
   // 只取 required 会从第一个 optional 起错位（VHS_VideoCombine / SaveAnimatedWEBP / KJNodes）。
@@ -537,7 +560,15 @@ function resolveFullOrder(cls: ObjectInfoClassDef | undefined): string[] {
  *  The order here is the display order of WIDGET inputs only (connections
  *  excluded) — that matches how `widgets_values` is serialized on disk. */
 const FALLBACK_WIDGETS: Record<string, string[]> = {
-  KSampler: ["seed", CONTROL_SENTINEL, "steps", "cfg", "sampler_name", "scheduler", "denoise"],
+  KSampler: [
+    "seed",
+    CONTROL_SENTINEL,
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "denoise",
+  ],
   KSamplerAdvanced: [
     "add_noise",
     "noise_seed",
@@ -575,11 +606,32 @@ const FALLBACK_WIDGETS: Record<string, string[]> = {
 
 /** Fallback FULL input order (widgets + connections) for slot→name mapping. */
 const FALLBACK_FULL: Record<string, string[]> = {
-  KSampler: ["model", "positive", "negative", "latent_image", "seed", "steps", "cfg", "sampler_name", "scheduler", "denoise"],
+  KSampler: [
+    "model",
+    "positive",
+    "negative",
+    "latent_image",
+    "seed",
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "denoise",
+  ],
   KSamplerAdvanced: [
-    "model", "positive", "negative", "latent_image",
-    "add_noise", "noise_seed", "steps", "cfg", "sampler_name", "scheduler",
-    "start_at_step", "end_at_step", "return_with_leftover_noise",
+    "model",
+    "positive",
+    "negative",
+    "latent_image",
+    "add_noise",
+    "noise_seed",
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "start_at_step",
+    "end_at_step",
+    "return_with_leftover_noise",
   ],
   CLIPTextEncode: ["clip", "text"],
   CheckpointLoaderSimple: ["ckpt_name"],
@@ -647,7 +699,7 @@ function buildLinkMap(raw: RawWorkflow): Map<number, LinkRef> {
  */
 function indexNodes(
   raw: RawWorkflow,
-  fullOrder: Map<string, string[]>
+  fullOrder: Map<string, string[]>,
 ): Map<string, IndexedNode> {
   const byId = new Map<string, IndexedNode>();
   for (const n of raw.nodes) {
@@ -685,7 +737,9 @@ function indexNodes(
       raw: n,
       inputs: slots,
       outputTypes: Array.isArray(n.outputs)
-        ? n.outputs.map((output) => (output && typeof output.type === "string" ? output.type : ""))
+        ? n.outputs.map((output) =>
+            output && typeof output.type === "string" ? output.type : "",
+          )
         : [],
     });
   }
@@ -699,7 +753,7 @@ function applyWidgets(
   clsType: string,
   id: string,
   warnings: string[],
-  inputs: Record<string, unknown>
+  inputs: Record<string, unknown>,
 ) {
   const widgets = Array.isArray(node.widgets_values) ? node.widgets_values : [];
   if (!widgets.length) return;
@@ -709,9 +763,13 @@ function applyWidgets(
   }
   // 老版本前端存的 widgets_values 里没有 control_after_generate 这一格。
   // 用长度精确匹配挑顺序，避免「多补一格」反而把所有值推错位。
-  const bare = widgetNames.filter((widgetName) => widgetName !== CONTROL_SENTINEL);
+  const bare = widgetNames.filter(
+    (widgetName) => widgetName !== CONTROL_SENTINEL,
+  );
   const names =
-    bare.length !== widgetNames.length && widgets.length === bare.length ? bare : widgetNames;
+    bare.length !== widgetNames.length && widgets.length === bare.length
+      ? bare
+      : widgetNames;
 
   for (let i = 0; i < widgets.length && i < names.length; i++) {
     const key = names[i];
@@ -725,7 +783,7 @@ function buildApiGraph(
   raw: RawWorkflow,
   widgetOrder: Map<string, string[]>,
   fullOrder: Map<string, string[]>,
-  warnings: string[]
+  warnings: string[],
 ): Record<string, ApiWorkflowNode> {
   const graph: Record<string, ApiWorkflowNode> = {};
   const linkMap = buildLinkMap(raw);
@@ -735,13 +793,22 @@ function buildApiGraph(
   for (const idx of index.values()) {
     const inputs: Record<string, unknown> = {};
 
-    applyWidgets(idx.raw, widgetOrder.get(idx.type) ?? [], idx.type, idx.id, warnings, inputs);
+    applyWidgets(
+      idx.raw,
+      widgetOrder.get(idx.type) ?? [],
+      idx.type,
+      idx.id,
+      warnings,
+      inputs,
+    );
 
     for (const slot of idx.inputs) {
       if (slot.link == null) continue;
       const ref = linkMap.get(slot.link);
       if (!ref) {
-        warnings.push(`${idx.type}#${idx.id}：入参 ${slot.name} 的 link=${slot.link} 不在 links 表中`);
+        warnings.push(
+          `${idx.type}#${idx.id}：入参 ${slot.name} 的 link=${slot.link} 不在 links 表中`,
+        );
         continue;
       }
       inputs[slot.name] = [ref.originId, ref.originSlot];
@@ -755,7 +822,9 @@ function buildApiGraph(
     if (idx.virtual) meta.virtual = true;
 
     const skipped =
-      idx.virtual || idx.mode === NODE_MODE_BYPASS || idx.mode === NODE_MODE_NEVER;
+      idx.virtual ||
+      idx.mode === NODE_MODE_BYPASS ||
+      idx.mode === NODE_MODE_NEVER;
     if (skipped) {
       inactive += 1;
       meta.inputOrder = idx.inputs.map((input) => input.name);
@@ -764,13 +833,12 @@ function buildApiGraph(
       if (Object.keys(types).length) meta.inputTypes = types;
       if (idx.outputTypes.length) meta.outputTypes = idx.outputTypes;
       if (idx.type === "PrimitiveNode") {
-
-        const value = Array.isArray(idx.raw.widgets_values) ? idx.raw.widgets_values[0] : undefined;
+        const value = Array.isArray(idx.raw.widgets_values)
+          ? idx.raw.widgets_values[0]
+          : undefined;
 
         if (value !== undefined) meta.value = value;
-
       }
-
     }
 
     graph[idx.id] = {
@@ -782,20 +850,27 @@ function buildApiGraph(
 
   if (inactive > 0) {
     warnings.push(
-      `${inactive} 个节点为 bypass / 静音 / 中转节点：已保留在图中供画布展示，提交执行时会被剔除并穿透连线`
+      `${inactive} 个节点为 bypass / 静音 / 中转节点：已保留在图中供画布展示，提交执行时会被剔除并穿透连线`,
     );
   }
   return graph;
 }
 
 /** Best-effort conversion: raw → api. Returns empty graph + warning when unparseable. */
-export async function convertRawToApi(raw: RawWorkflow): Promise<ConversionResult> {
+export async function convertRawToApi(
+  raw: RawWorkflow,
+): Promise<ConversionResult> {
   const warnings: string[] = [];
   const positions = extractPositions(raw);
   const graph: Record<string, ApiWorkflowNode> = {};
 
   if (!Array.isArray(raw.nodes) || raw.nodes.length === 0) {
-    return { graph, positions, warnings: ["raw.nodes 为空"], usedObjectInfo: false };
+    return {
+      graph,
+      positions,
+      warnings: ["raw.nodes 为空"],
+      usedObjectInfo: false,
+    };
   }
 
   // Try to fetch /object_info for accurate widget/connection mapping.
@@ -811,9 +886,13 @@ export async function convertRawToApi(raw: RawWorkflow): Promise<ConversionResul
       fullOrder.set(clsName, resolveFullOrder(def));
     }
   } else {
-    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS)) widgetOrder.set(clsName, list);
-    for (const [clsName, list] of Object.entries(FALLBACK_FULL)) fullOrder.set(clsName, list);
-    warnings.push("ComfyUI /object_info 不可达，使用启发式 widget 映射（部分字段可能错位）");
+    for (const [clsName, list] of Object.entries(FALLBACK_WIDGETS))
+      widgetOrder.set(clsName, list);
+    for (const [clsName, list] of Object.entries(FALLBACK_FULL))
+      fullOrder.set(clsName, list);
+    warnings.push(
+      "ComfyUI /object_info 不可达，使用启发式 widget 映射（部分字段可能错位）",
+    );
   }
 
   Object.assign(graph, buildApiGraph(raw, widgetOrder, fullOrder, warnings));
@@ -823,12 +902,17 @@ export async function convertRawToApi(raw: RawWorkflow): Promise<ConversionResul
 
 /** Synchronous variant using only the fallback heuristics — used for offline import. */
 export function fallbackRawToApi(raw: RawWorkflow): ConversionResult {
-  const warnings: string[] = ["使用 fallback widget 映射（未尝试连接 ComfyUI）"];
+  const warnings: string[] = [
+    "使用 fallback widget 映射（未尝试连接 ComfyUI）",
+  ];
   const positions = extractPositions(raw);
   const graph: Record<string, ApiWorkflowNode> = {};
-  if (!Array.isArray(raw.nodes)) return { graph, positions, warnings, usedObjectInfo: false };
+  if (!Array.isArray(raw.nodes))
+    return { graph, positions, warnings, usedObjectInfo: false };
 
-  const widgetOrder = new Map<string, string[]>(Object.entries(FALLBACK_WIDGETS));
+  const widgetOrder = new Map<string, string[]>(
+    Object.entries(FALLBACK_WIDGETS),
+  );
   const fullOrder = new Map<string, string[]>(Object.entries(FALLBACK_FULL));
   Object.assign(graph, buildApiGraph(raw, widgetOrder, fullOrder, warnings));
   return { graph, positions, warnings, usedObjectInfo: false };
@@ -857,7 +941,7 @@ export interface ExecutionPrep {
 /** 判断一个 input 值是否为连线引用 `[nodeId, slot]`（且目标节点真实存在）。 */
 function isLinkRef(
   v: unknown,
-  graph: Record<string, unknown>
+  graph: Record<string, unknown>,
 ): v is [string | number, number] {
   return (
     Array.isArray(v) &&
@@ -869,10 +953,11 @@ function isLinkRef(
 }
 
 type ResolvedOrigin =
-  | { kind: "link"; value: [string, number] }
-  | { kind: "value"; value: unknown };
+  { kind: "link"; value: [string, number] } | { kind: "value"; value: unknown };
 
-export function prepareGraphForExecution(input: Record<string, unknown>): ExecutionPrep {
+export function prepareGraphForExecution(
+  input: Record<string, unknown>,
+): ExecutionPrep {
   /* 存库 graph 来自 JSON：先把每个节点一次性收窄成稳定视图（值仍逐字透传），
    * 后续 walk / 剔除逻辑都读写视图，不再到处 unknown。 */
   interface PrepEntry {
@@ -888,7 +973,11 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     const rec = asRecord(n);
     if (!rec) continue;
     const meta = asRecord(rec._meta) ?? {};
-    graph[id] = { classType: rec.class_type as string, inputs: asRecord(rec.inputs) ?? {}, meta };
+    graph[id] = {
+      classType: rec.class_type as string,
+      inputs: asRecord(rec.inputs) ?? {},
+      meta,
+    };
     const mode = Number(meta.mode ?? NODE_MODE_ALWAYS);
     if (
       mode === NODE_MODE_NEVER ||
@@ -902,11 +991,16 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
   const inactive = new Set(removed);
 
   /** 沿着被剔除的节点向上游走，直到落到一个真正会执行的节点。 */
-  function walk(originId: string, originSlot: number, depth: number): ResolvedOrigin | null {
+  function walk(
+    originId: string,
+    originSlot: number,
+    depth: number,
+  ): ResolvedOrigin | null {
     if (depth > 64) return null; // 环保护
     const node = graph[originId];
     if (!node) return null;
-    if (!inactive.has(originId)) return { kind: "link", value: [originId, originSlot] };
+    if (!inactive.has(originId))
+      return { kind: "link", value: [originId, originSlot] };
 
     const meta = node.meta;
     // 静音节点不透传：下游这一路直接断掉（与 ComfyUI 行为一致）。
@@ -941,18 +1035,20 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     }
 
     for (const nm of candidates) {
-
       const value = node.inputs[nm];
 
       if (!isLinkRef(value, graph)) continue;
 
       const typeOfNm = types[nm];
-      if (wanted && typeof typeOfNm === "string" && typeOfNm.toUpperCase() !== wanted.toUpperCase()) continue;
+      if (
+        wanted &&
+        typeof typeOfNm === "string" &&
+        typeOfNm.toUpperCase() !== wanted.toUpperCase()
+      )
+        continue;
 
       return walk(String(value[0]), Number(value[1]), depth + 1);
-
     }
-
 
     // 类型信息缺失（老工作流没存 type）时：只有一条入线就直接穿过去。
     const linked = candidates.filter((nm) => isLinkRef(node.inputs[nm], graph));
@@ -986,7 +1082,11 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     const titleRaw = n.meta.title;
     const title = typeof titleRaw === "string" ? titleRaw : undefined;
     // 只保留官方认可的 `_meta.title`，本地字段一律不外发。
-    out[id] = { class_type: n.classType, inputs, ...(title ? { _meta: { title } } : {}) };
+    out[id] = {
+      class_type: n.classType,
+      inputs,
+      ...(title ? { _meta: { title } } : {}),
+    };
   }
 
   return { graph: out, removed, droppedInputs };
