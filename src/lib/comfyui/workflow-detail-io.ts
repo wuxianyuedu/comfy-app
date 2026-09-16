@@ -24,13 +24,12 @@
  * the downstream node is an image or a video node).
  */
 import { asRecord } from "~/lib/comfyui/raw";
+import { inferIsMultiline } from "~/lib/comfyui/types";
 import {
   type RawInputEntry,
   type RawNodeMeta,
 } from "~/lib/comfyui/workflow-detail-raw";
 import { type WorkflowIOModeOverride } from "~/lib/workflow-io-types";
-
-const MULTILINE_HINT = /(prompt|text|caption|描述|提示)/i;
 
 export interface WorkflowIORawEntry {
   direction: "input" | "output";
@@ -72,6 +71,12 @@ export interface WorkflowIOEnrichParams {
     field: string,
   ) => Promise<string[] | undefined>;
   comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的类型事实）。
+   *  查不到返回 `undefined` —— 判定退到「值很长」这条数据判据，不猜名字。 */
+  multilineForClassField: (
+    classType: string | undefined,
+    field: string,
+  ) => Promise<boolean | undefined>;
 }
 
 /** 从 "16:9 (Widescreen)" / "16:9" 抽宽高比；抽不出返回 null。 */
@@ -182,6 +187,7 @@ export async function enrichWorkflowIO(
     nodeTypeById,
     comboOptionsForClassField,
     comboOptionsForFieldName,
+    multilineForClassField,
   } = params;
 
   const workflowIO: Record<string, WorkflowIOEntry> = {};
@@ -207,8 +213,9 @@ export async function enrichWorkflowIO(
     // Without this leniency the lookup falls through to type="*" + undefined
     // defaultValue, which silently degrades every dynamic form to single-line
     // text inputs (no textarea for prompts, no switch / number / file widget),
-    // because the enrichment never reaches MULTILINE_HINT or the long-string
-    // fallback.  See controlForEntry() in src/components/studio/shared/workflow-io.ts.
+    // because the enrichment never reaches the declared-multiline lookup or
+    // the long-string fallback.  See controlForEntry() in
+    // src/components/studio/shared/workflow-io.ts.
     // Returns the CANONICAL key in whatever shape the data lives in.
     const full = String(v.nodeId);
     const canonicalNodeId = (() => {
@@ -471,10 +478,15 @@ export async function enrichWorkflowIO(
       ...(classType !== undefined ? { classType } : {}),
       nodeTitle:
         nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
+      /* 多行 = 节点自己声明的 `("STRING", {"multiline": true})`（查 object_info），
+       *  查不到时只剩「值很长」这条数据判据 —— 不再按字段名/显示名猜：
+       *  `prompt_width_of_thing` 这类单行输入不会被升级成 textarea，作者改过名的
+       *  提示词框也不会因为名字里没「prompt」而掉回单行。 */
       ...(type === "STRING" &&
-      (MULTILINE_HINT.test(v.name) ||
-        MULTILINE_HINT.test(String(label ?? "")) ||
-        (typeof defaultValue === "string" && defaultValue.length > 40))
+      inferIsMultiline(
+        await multilineForClassField(classType, v.name),
+        defaultValue,
+      )
         ? { multiline: true }
         : {}),
       /* pass the user-defined displayOrder

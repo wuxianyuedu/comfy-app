@@ -544,86 +544,31 @@ export function inferInputTypeByName(name: string): string {
 
 /* ── Multiline STRING detection ────────────────────────────
  *
- *  ComfyUI's native STRING widget is rendered as a textarea (multiline) when
- *  the upstream Python `INPUT_TYPES()` for the node sets `multiline: True`
- *  on that input.  Examples:
+ *  ComfyUI renders a STRING widget as a textarea when the node's Python
+ *  `INPUT_TYPES()` declares the option on that input:
  *
- *      "text":      (IO.STRING, {"multiline": True, "dynamic_prompts": True})
- *      "text_g":    (IO.STRING, {"multiline": True})
- *      "filename_prefix": ("STRING", {"default": "ComfyUI"})   ← single line
+ *      "value": (IO.STRING, {"multiline": True})     ← PrimitiveStringMultiline
+ *      "text":  (IO.STRING, {"multiline": True, "dynamic_prompts": True})
+ *      "filename_prefix": ("STRING", {"default": "ComfyUI"})   ← 单行
  *
- *  The frontend widget renderer reads this flag from `node.widgets[i].config
- *  .multiline` — but our project's saved rawJson is almost always API format
- *  (the user is required to "Save (API Format)" so the workflow remains
- *  usable), and API format drops `widgets[]` / `inputs[]`, so the flag
- *  arrives at us as nothing.
+ *  这是**声明的类型事实**，只能从 /api/object_info 读到（节点自己不带）。
+ *  因此这里只接受调用方查到的声明标志，不再按 name / label 猜 —— 「叫 prompt
+ *  的就是多行」会让 `prompt_width_of_thing` 这类名字把单行输入升级成 textarea，
+ *  也会让改了名的提示词框掉回单行（用户口径：「不要用名字判断，看类型声明」）。
  *
- *  Curate layer mitigation (route.ts:400, MULTILINE_HINT) only fills the
- *  workflowIO enrichment key — it never reaches the WorkflowNode / WorkflowSubgraphNode
- *  widgetEntries renderer, which is what users actually see when the canvas
- *  zooms into a workflow.  So we backfill here:
+ *  唯一保留的非声明判据是**当前值长度**：ComfyUI 未启动 / 纯 API 导入时读不到
+ *  object_info，此时长文本仍是可靠信号（它不是名字，是数据）。阈值与表单侧
+ *  `controlForEntry` 的 > 40 一致，两条路径据此收敛。
  *
- *    1.  Static known-multi map  (hand-curated for ComfyUI's own nodes)
- *    2.  Excluded single-line list (filename_prefix etc. — look like text
- *        inputs but are short labels, not prompts)
- *    3.  Name heuristic  (mirrors MULTILINE_HINT in route.ts so workflowIO
- *        and widgetEntries agree)
- *    4.  Length heuristic (long strings clearly meant to be paragraphs)
- *
- *  Returns true when the input should render as a textarea.  Consumers:
- *    • WorkflowNode  — `isStringWidget` (canvas-edit widget section)
- *    • WorkflowSubgraphNode  — same (subgraph wrapper inputs)
- *    • Already wired up in DynamicWorkflowForm via `controlForEntry`'s
- *      workflowIO.multiline field — we keep this helper as the source of
- *      truth so both paths converge.
- */
-const MULTILINE_INPUTS: Record<string, Set<string>> = {
-  CLIPTextEncode: new Set(["text"]),
-  CLIPTextEncodeSDXL: new Set(["text_g", "text_l"]),
-  CLIPTextEncodeSDXLRefiner: new Set(["text", "text_1"]),
-  // rgthree / common custom packs that ship textbook multiline prompt inputs.
-  "Power Lora Loader (rgthree)": new Set(["model_str", "lora_str"]),
-  // Anything added here MUST be ComfyUI's own node input — never a custom
-  // pack whose field names change every release.
-};
-
-/** ComfyUI STRING inputs that LOOK like text but stay single-line in the
- *  native UI.  Excluded explicitly so the name heuristic below never
- *  wrongly upgrades them. */
-const SINGLE_LINE_NAMES = new Set<string>([
-  "filename_prefix",
-  "ckpt_name",
-  "model_name",
-  "lora_name",
-]);
-
-/** Mirror of route.ts:400 — kept in sync so DynamicWorkflowForm (workflowIO
- *  path) and WorkflowNode widgetEntries agree on what counts as a prompt. */
-const MULTILINE_NAME_HINT = /(prompt|text|caption|描述|提示)/i;
-
+ *  消费者：WorkflowNode / WorkflowSubgraphNode 的 `isStringWidget`、
+ *  DynamicWorkflowForm（经 workflowIO.multiline）。画布那两个直接读服务端盖章的
+ *  `rawMeta[k].multiline`，不自己重算。 */
 export function inferIsMultiline(
-  classType: string | undefined,
-  name: string,
+  declaredMultiline: boolean | undefined,
   defaultValue?: unknown,
 ): boolean {
-  /* Single-line exclusion first — `filename_prefix` is a STRING but
-   * ComfyUI renders it as a one-line input.  Beats both the static table
-   * and the name heuristic. */
-  if (SINGLE_LINE_NAMES.has(name)) return false;
-
-  /* 1. Static known-multi map. */
-  if (classType && MULTILINE_INPUTS[classType]?.has(name)) return true;
-
-  /* 3. Name heuristic — covers custom nodes whose (classType, name) we
-   *    don't statically know, but whose label / name reads as text. */
-  if (MULTILINE_NAME_HINT.test(name)) return true;
-
-  /* 4. Length heuristic — a long current default is a strong signal this
-   *    slot is used as a paragraph rather than a label. Mirrors the
-   *    threshold in `controlForEntry` (> 40 chars). */
-  if (typeof defaultValue === "string" && defaultValue.length > 40) return true;
-
-  return false;
+  if (declaredMultiline === true) return true;
+  return typeof defaultValue === "string" && defaultValue.length > 40;
 }
 
 /** Given a connection target, return the *output* type that the source
