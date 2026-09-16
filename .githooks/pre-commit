@@ -37,7 +37,7 @@ node scripts/check-title-bar-clearance.cjs || exit 1
 echo "[pre-commit] 6/23 tsc --noEmit"
 pnpm exec tsc --noEmit || exit 1
 
-# 2026-09-10(ISSUE #322): 与 CI 的 .github/workflows/ci.yml 对齐为**零警告**口径。
+# 2026-09-10(ISSUE #322): 与 CI 的 .cnb.yml「ESLint 零警告」对齐为**零警告**口径。
 # 此前本地只判「无 error」，CI 判 --max-warnings 0 —— 结果是 warning 能在本地
 # 顺利进历史，直到 CI 才被拦下（复核返工）。规范 11.7 / 13.5 的门禁是零警告，
 # 本地与 CI 必须同一口径。
