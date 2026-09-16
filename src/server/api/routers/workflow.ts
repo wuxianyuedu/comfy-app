@@ -12,6 +12,7 @@ import {
 import {
   reimportFromSource,
   importFromLocalPath,
+  parseWorkflowContent,
 } from "@/lib/comfyui/importSource";
 import { readEnvVar } from "@/lib/envfile";
 import {
@@ -29,13 +30,41 @@ import {
   buildSubgraphDetail,
   invalidateWorkflowDetailCache,
 } from "@/lib/comfyui/workflow-detail";
+import { detectFormat } from "@/lib/comfyui/raw";
 import {
-  detectFormat,
-  convertRawToApi,
-  fallbackRawToApi,
-  type ConversionResult,
-  type RawWorkflow,
-} from "@/lib/comfyui/raw";
+  hasExecutableWorkflow,
+  hasGraphContent,
+  hasRawContent,
+} from "@/lib/comfyui/execution-shape";
+
+/** 列表行下发给前端的三件「可执行形态」事实 —— 判据全在
+ *  `@/lib/comfyui/execution-shape`（raw 与 api 地位同等，任一列有内容即可执行）。
+ *
+ *  · `usable`：这条工作流能不能跑；
+ *  · `hasApi` / `hasRaw`：两列各自有没有内容（如实标注，不判可用性）；
+ *  · `format`：**原件**是哪一种（源文件页签 / 卡片上这么说）；
+ *  · `apiSource`：API 列从哪来（`user` = 用户导出；`derived` = 早年导入 RAW 时
+ *    转出来存下的；null = 没有 API 列 —— 只有 RAW 的工作流就是这样，它照样能跑）。 */
+function executionShapeOf(row: {
+  graph: unknown;
+  rawJson: unknown;
+  apiSource?: unknown;
+}): {
+  hasApi: boolean;
+  hasRaw: boolean;
+  usable: boolean;
+  apiSource: string | null;
+  format: "raw" | "api";
+} {
+  const hasRaw = hasRawContent(row.rawJson);
+  return {
+    hasApi: hasGraphContent(row.graph),
+    hasRaw,
+    usable: hasExecutableWorkflow(row),
+    apiSource: typeof row.apiSource === "string" ? row.apiSource : null,
+    format: hasRaw ? "raw" : "api",
+  };
+}
 import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 import {
   normalizeTaskType,
@@ -89,7 +118,7 @@ interface LocalPendingRow {
   isGenerative: boolean;
   hasApi: boolean;
   hasRaw: boolean;
-  apiOrigin: null;
+  apiSource: null;
   usable: boolean;
   format: "api";
   preview: { nodes: unknown[]; edges: unknown[]; w: number; h: number };
@@ -308,15 +337,7 @@ export const workflowRouter = createTRPCRouter({
           !Array.isArray(list.graph)
             ? (list.graph as Record<string, unknown>)
             : null;
-        const hasApi = !!graphObj && Object.keys(graphObj).length > 0;
-        const hasRaw = !!list.rawJson;
-        const apiOrigin: "user" | "derived" | null = hasApi
-          ? list.apiSource === "user"
-            ? "user"
-            : hasRaw
-              ? "derived"
-              : "user"
-          : null;
+        const exec = executionShapeOf(list);
 
         let diskMtimeSec: number | null = null;
         let diskDirty = false;
@@ -350,11 +371,7 @@ export const workflowRouter = createTRPCRouter({
           typeCategory: def?.category ?? "image",
           typeDescription: def?.description ?? "",
           isGenerative: def?.isGenerative ?? true,
-          hasApi,
-          hasRaw,
-          apiOrigin,
-          usable: hasApi,
-          format: hasRaw ? ("raw" as const) : ("api" as const),
+          ...exec,
           preview: buildWorkflowPreview(graphObj ?? {}),
           workflowIO:
             list.workflowIO &&
@@ -404,7 +421,7 @@ export const workflowRouter = createTRPCRouter({
             isGenerative: false,
             hasApi: false,
             hasRaw: false,
-            apiOrigin: null,
+            apiSource: null,
             usable: false,
             format: "api",
             preview: { nodes: [], edges: [], w: 0, h: 0 },
@@ -548,46 +565,24 @@ export const workflowRouter = createTRPCRouter({
         });
       }
 
-      let apiGraph: Record<string, unknown>;
-      let positions: Record<string, [number, number]> | null = null;
-      let rawJson: unknown = null;
-      const warnings: string[] = [];
-
-      if (detected === "api") {
-        const g = candidate as Record<string, unknown>;
-        const looksLikeGraph = Object.values(g).some(
-          (node) => node && typeof node === "object" && "class_type" in node,
-        );
-        if (!looksLikeGraph) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "不是有效的 ComfyUI API 工作流（未找到节点 class_type）。",
-          });
-        }
-        apiGraph = g;
-      } else {
-        rawJson = candidate;
-        let result: ConversionResult;
-        try {
-          result = await convertRawToApi(candidate as RawWorkflow);
-        } catch (e: unknown) {
-          logger.warn(
-            `[workflow] /object_info convert failed, using fallback: ${e instanceof Error ? e.message : String(e)}`,
-          );
-          result = fallbackRawToApi(candidate as RawWorkflow);
-        }
-        apiGraph = result.graph;
-        positions =
-          Object.keys(result.positions).length > 0 ? result.positions : null;
-        warnings.push(...result.warnings);
-
-        if (Object.keys(apiGraph).length === 0) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "原始工作流转换失败：未能解析出任何节点。",
-          });
-        }
+      /* 与本地文件导入走**同一条链**（`parseWorkflowContent`）：两处各写一份
+       * 「识别 → 落哪一列」的判据，迟早分叉（历史教训：一条链转 API 图、另一条
+       * 不转，同一个文件从两条入口进来得到两种结果）。 */
+      let parsed: Awaited<ReturnType<typeof parseWorkflowContent>>;
+      try {
+        parsed = await parseWorkflowContent(JSON.stringify(candidate), {
+          explicitFormat,
+        });
+      } catch (e: unknown) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: e instanceof Error ? e.message : "工作流解析失败",
+        });
       }
+      const apiGraph = parsed.apiGraph;
+      const rawJson = parsed.rawJson;
+      const positions = parsed.positions;
+      const warnings = [...parsed.warnings];
 
       const name = String(body.name ?? "未命名工作流").slice(0, 80);
       const modes =

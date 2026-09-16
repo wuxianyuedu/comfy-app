@@ -941,6 +941,65 @@ describe("LogPanel 日志面板", () => {
     }
   });
 
+  /* 贴底滚动的落点必须取自**位置表**，不能量 DOM 节点。
+   *
+   * 用户侧的形态是「滚到底就再也回不去底」：虚拟化之后行的 `offsetParent` 是那层
+   * `translateY` 过的内层容器，`offsetTop` 量到的是「它在**当前窗口**里的位置」；
+   * 拿它算 `scrollTop` 会把视口拉回窗口起点（e2e 里表现为滚到底只渲染到第 44 行，
+   * 2000 行的页尾永远够不到）。
+   *
+   * jsdom 里 `offsetTop` / `offsetHeight` 恒为 0，`clientHeight` 被下面这些用例
+   * 显式量成 600——按节点量出来的落点会恒等于 `max(0, 0 + 0 - 600) = 0`，与
+   * 位置表算出来的页尾位置相差一个整页。这条判据正是两者的分界线。 */
+  it("贴底按位置表滚动：落点能到本页最后一行，而不是退回窗口起点", () => {
+    useSmallPage(200);
+    seed(200);
+
+    const prototype: object = Object.getPrototypeOf(
+      document.createElement("div"),
+    ) as object;
+    const heights = Object.getOwnPropertyDescriptor(prototype, "clientHeight");
+    const widths = Object.getOwnPropertyDescriptor(prototype, "clientWidth");
+    Object.defineProperty(prototype, "clientHeight", {
+      configurable: true,
+      get: () => 600,
+    });
+    Object.defineProperty(prototype, "clientWidth", {
+      configurable: true,
+      get: () => 1100,
+    });
+    try {
+      const { container } = render(<LogPanel />);
+      const scroller =
+        container.querySelector<HTMLElement>(".custom-scrollbar")!;
+
+      /* 用户滚到最底：贴底基线跟着取到当前页最后一条，effect 据此定位。 */
+      scroller.scrollTop = 200 * LOG_ROW_SINGLE;
+      act(() => {
+        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+
+      /* 页尾那一行的下边缘在内容里的位置 = 200 × 27；落点必须是它减去一个视口
+       * （600），也就是远大于 0 的一个值。按节点量的话这里恒为 0。 */
+      const expected = 200 * LOG_ROW_SINGLE - 600;
+      expect(scroller.scrollTop).toBe(expected);
+      /* 窗口也真的跟着走到了页尾。 */
+      const lastIndex = Number(
+        container
+          .querySelectorAll("[data-log-index]")
+          [
+            container.querySelectorAll("[data-log-index]").length - 1
+          ]!.getAttribute("data-log-index"),
+      );
+      expect(lastIndex).toBe(199);
+    } finally {
+      if (heights) Object.defineProperty(prototype, "clientHeight", heights);
+      else Reflect.deleteProperty(prototype, "clientHeight");
+      if (widths) Object.defineProperty(prototype, "clientWidth", widths);
+      else Reflect.deleteProperty(prototype, "clientWidth");
+    }
+  });
+
   /* ISSUE #360 复审：候选列表要能当表读，且每项都要写清「切过去有多少」。
      这是全文唯一真正展开下拉的用例，且刻意排在最后：base-ui 的弹层关闭要等过渡
      结束（jsdom 不会派发那个事件），展开过一次就会给后续用例留下一份没摘除的

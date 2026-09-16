@@ -68,7 +68,7 @@ export function applyWireEdit(
   mapping.manualByMode![mode] = {
     ...(mapping.manualByMode![mode] ?? {}),
     [edit.entryId]: edit.ioKey,
-    /* 显式断开也落库（`null`）—— 不落的话刷新后会被自动判定复活。 */
+    /* 显式断开也落库（`null`）—— 不落的话刷新后就变成「还没连过」。 */
   };
   return serializeParamMapping(mapping, base);
 }
@@ -85,7 +85,7 @@ export function hasWireEdit(
   return !!byEntry && Object.prototype.hasOwnProperty.call(byEntry, entryId);
 }
 
-/** 撤销某个对外参数在这个模式下的手工线（回到自动判定）。
+/** 撤销某个对外参数在这个模式下的手工线（回到「未配置」）。
  *
  *  与 `applyWireEdit({ ioKey: ... })` 的区别：那个是「改成另一条线」，这个是
  *  「这条线不再由作者指定」—— 卡片的「恢复默认」用它。 */

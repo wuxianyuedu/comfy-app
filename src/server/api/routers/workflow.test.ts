@@ -2,17 +2,16 @@ import type * as LoggerModule from "~/lib/core/logger";
 import type * as EnvfileModule from "@/lib/envfile";
 import type * as AppSettingsModule from "@/lib/app-settings/app-settings.server";
 import type * as ImportSourceModule from "@/lib/comfyui/importSource";
-import type * as RawModule from "@/lib/comfyui/raw";
 /**
  * workflow.router 集成测试。
  *
  * mock 边界：~/server/db（内存 Prisma 替身，见 tests/helpers/test-db.ts）、
  * ~/server/better-auth（getSession）、~/lib/core/logger（静音）、
  * @/lib/envfile（屏蔽真实 .env 的 LOCAL_WORKFLOWS_PATH）、
- * @/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）、
- * @/lib/comfyui/raw（convertRawToApi 需要访问 ComfyUI /object_info， mock 后走
- * 路由自身的 fallback 分支）。其余（repository、workflow-types、workflow.ts、
- * workflow-detail、localWorkflows、raw 的 detectFormat/fallback）全部走真实实现。
+ * @/lib/comfyui/importSource（本地文件导入/重导入，避免真实磁盘依赖）。
+ * 其余（repository、workflow-types、workflow.ts、workflow-detail、
+ * localWorkflows、raw 的 detectFormat/extractPositions）全部走真实实现 —— 导入链
+ * 里**不再有**「转 API 图」这一步，所以不需要再 mock 转换器。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -55,12 +54,6 @@ vi.mock("@/lib/comfyui/importSource", async (importOriginal) => ({
   ...(await importOriginal<typeof ImportSourceModule>()),
   importFromLocalPath: vi.fn(),
   reimportFromSource: vi.fn(),
-}));
-vi.mock("@/lib/comfyui/raw", async (importOriginal) => ({
-  ...(await importOriginal<typeof RawModule>()),
-  convertRawToApi: vi.fn(async () => {
-    throw new Error("object_info unreachable");
-  }),
 }));
 
 import { createCallerFactory, createTRPCContext } from "~/server/api/trpc";
@@ -106,7 +99,7 @@ describe("workflow.list", () => {
     expect(res.localRoots).toBeNull();
   });
 
-  it("按用户隔离返回并完成 enrichment（hasApi/hasRaw/format/typeLabel/modelTags）", async () => {
+  it("按用户隔离返回并完成 enrichment（hasApi/hasRaw/usable/format/typeLabel/modelTags）", async () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
     seedUser(tdb, { id: "user-b", email: "b@test.dev" });
     const rawOnly = seedWorkflowTemplate(tdb, {
@@ -143,15 +136,18 @@ describe("workflow.list", () => {
     expect(apiRow.hasRaw).toBe(false);
     expect(apiRow.usable).toBe(true);
     expect(apiRow.format).toBe("api");
-    expect(apiRow.apiOrigin).toBe("user");
+    expect(apiRow.apiSource).toBeNull();
     expect(apiRow.modelTags).toEqual(["SDXL"]);
     expect(apiRow.sourceRoot).toBeUndefined();
+    /* 只有 RAW（graph 为空）**照样可执行** —— raw 与 api 地位同等，RAW 由
+     *  comfy-cli 直接吃。此前这里断言 usable=false（把「没有 API 图」当成了
+     *  「不能跑」），会把纯 RAW 的工作流在卡片上标成不可执行。 */
     const rawRow = res.workflows[1]!;
     expect(rawRow.hasApi).toBe(false);
     expect(rawRow.hasRaw).toBe(true);
-    expect(rawRow.usable).toBe(false);
+    expect(rawRow.usable).toBe(true);
     expect(rawRow.format).toBe("raw");
-    expect(rawRow.apiOrigin).toBeNull();
+    expect(rawRow.apiSource).toBeNull();
     expect(rawRow.id).toBe(rawOnly.id);
     expect(apiRow.id).toBe(apiOnly.id);
   });
@@ -242,19 +238,22 @@ describe("workflow.create", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("raw 格式：convertRawToApi 失败时走 fallback 分支并保留 rawJson/positions/warnings", async () => {
+  it("raw 格式：原件入库、不转 API 图，坐标与 rawJson 一起留下", async () => {
+    /* RAW 与 API 两种格式地位同等：RAW 由 comfy-cli 直接执行（它按节点类定义做
+     * 权威转换），导入时**不做格式互转** —— 无 ComfyUI 可达时的启发式转换结果
+     * 本身就是猜的，存进 `graph` 只会让画布与运行都跑一份错图。 */
     const raw = { nodes: [{ id: 1, type: "KSampler", pos: [10, 20] }] };
-    // convertRawToApi 被 mock 为 reject → 路由内部 catch → fallbackRawToApi
     const res = await createCaller(makeCtx()).create({
       raw,
       name: "Raw Import",
     });
     expect(res.format).toBe("raw");
     expect(res.hasPositions).toBe(true);
-    expect(res.warnings).toBeDefined();
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === res.id);
     expect(row?.rawJson).toEqual(raw);
-    expect(row?.graph).toBeTruthy();
+    /* graph 列 NOT NULL，但没有可写的内容 → 落空对象（= 没有 API 图）。 */
+    expect(row?.graph).toEqual({});
+    expect(row?.positions).toEqual({ "1": [10, 20] });
   });
 
   it("本地文件导入：成功路径（名称回退为文件名）", async () => {

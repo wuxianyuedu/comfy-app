@@ -55,11 +55,21 @@ const IO: WorkflowIOMap = {
   },
 };
 
+/** 作者画过的线（落点只由它决定）：把提示词与尺寸各连到一行上。 */
+const WIRED = {
+  manualByMode: {
+    t2i: {
+      prompt: "positive_prompt",
+      size: "aspect_ratio",
+    },
+  },
+};
+
 describe("deriveEncapsulationStatus", () => {
-  it("自动判定：提示词口落到端口 → ready，尺寸聚合为宽高比+百万像素控件", () => {
+  it("作者画过线：必备口有落点 → ready，尺寸聚合为宽高比+百万像素控件", () => {
     const status = deriveEncapsulationStatus({
       io: IO,
-      paramMap: null,
+      paramMap: WIRED,
       mode: "t2i",
     });
     expect(status.ready).toBe(true);
@@ -72,6 +82,39 @@ describe("deriveEncapsulationStatus", () => {
     expect(size?.targetIoKey).not.toBeNull();
     // 内部参数（steps）不在契约口里
     expect(status.entries.find((e) => e.id === "steps")).toBeUndefined();
+  });
+
+  it("没有作者画的线 → 未配置（不再替作者猜落点）", () => {
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: null,
+      mode: "t2i",
+    });
+    expect(status.ready).toBe(false);
+    expect(status.missingRequired.length).toBeGreaterThan(0);
+    expect(status.entries.every((e) => e.targetIoKey === null)).toBe(true);
+  });
+
+  it("必备口可配置：把「提示词」从必备里去掉后，缺它也算 ready", () => {
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: null,
+      mode: "t2i",
+      requiredInputs: [],
+    });
+    expect(status.ready).toBe(true);
+    expect(status.missingRequired).toEqual([]);
+  });
+
+  it("必备口可配置：把「尺寸」也设成必备后，缺它就不 ready", () => {
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: { manualByMode: { t2i: { prompt: "positive_prompt" } } },
+      mode: "t2i",
+      requiredInputs: ["prompt", "size"],
+    });
+    expect(status.ready).toBe(false);
+    expect(status.missingRequired).toEqual([SIZE_LABEL]);
   });
 
   it("没有提示词口 → 未配置（工坊无法驱动），缺失口显式可见", () => {
@@ -88,7 +131,7 @@ describe("deriveEncapsulationStatus", () => {
     expect(status.missingLabels).toContain(SIZE_LABEL);
   });
 
-  it("作者落点覆盖（paramMap.manualByMode）优先于自动判定", () => {
+  it("作者画的线就是落点（可连到任意一行）", () => {
     const status = deriveEncapsulationStatus({
       io: IO,
       paramMap: {
@@ -118,7 +161,7 @@ describe("deriveEncapsulationStatus：契约注册表覆盖", () => {
   it("传入已配置契约时按它显式列口（含内置契约没有的自定义口）", () => {
     const status = deriveEncapsulationStatus({
       io: IO,
-      paramMap: null,
+      paramMap: WIRED,
       mode: "t2i",
       contractEntries: [
         { id: "prompt", label: "提示词", control: "text" },
@@ -152,9 +195,7 @@ describe("契约口展示名的单一出处", () => {
       io: IO,
       paramMap: null,
       mode: "T2I",
-      contractEntries: [
-        { id: "size", label: "随便写的名字", control: "size" },
-      ],
+      contractEntries: [{ id: "size", label: "随便写的名字", control: "size" }],
     });
     expect(status.entries.find((e) => e.id === "size")?.label).toBe(
       exposedParamDisplayLabel("size"),

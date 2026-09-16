@@ -43,6 +43,11 @@ import {
   type RawViewPacket,
 } from "@/lib/comfyui/workflow-detail-raw";
 import {
+  hasExecutableWorkflow,
+  hasGraphContent,
+  hasRawContent,
+} from "@/lib/comfyui/execution-shape";
+import {
   enrichWorkflowIO,
   type WorkflowIOEntry,
   type WorkflowIORawEntry,
@@ -122,7 +127,7 @@ export interface WorkflowDetailFull {
   hasApi?: boolean;
   hasRaw?: boolean;
   usable?: boolean;
-  apiOrigin?: "user" | "derived" | null;
+  apiSource?: string | null;
   sourcePath?: string | null;
   sourceChanged?: boolean;
   sourceMissing?: boolean;
@@ -403,25 +408,16 @@ async function buildWorkflowDetailJson(input: {
     });
   }
 
-  /* Independent booleans — pre-the API conflated "has rawJson"
-   *  with "raw format" (i.e. `format:"raw"` could mean either both API+RAW
-   *  OR only RAW-without-API).  These flags let the UI render the correct
-   *  badge / disable the 使用 button when API is missing.  `apiOrigin` is
-   *  computed alongside so the UI can honestly label whether the graph
-   *  came from a user-initiated API export or was auto-derived from raw. */
-  const detailHasApi = !!graph && Object.keys(graph).length > 0;
-  const detailHasRaw = !!raw;
-  /* apiSource === "user" overrides the hasRaw heuristic
-   *  when the user has explicitly drag-upgraded this workflow with a real
-   *  API JSON, it counts as user-imported even if rawJson is also kept
-   *  (rawJson is retained for viewing, graph is the real execution source). */
-  const detailApiOrigin: "user" | "derived" | null = detailHasApi
-    ? tpl.apiSource === "user"
-      ? "user"
-      : detailHasRaw
-        ? "derived"
-        : "user"
-    : null;
+  /* 两种格式地位同等：`graph`（API）与 `rawJson`（工作流 / RAW）都能执行 ——
+   * RAW 由 comfy-cli 直接吃（它按节点类定义做权威转换），不需要先转成 API 图。
+   * 因此这里只如实报「两列各自有没有内容」，可执行性是两者的并集，没有
+   * 「必须有 API 图」这回事（判据的唯一出处 `hasExecutableWorkflow`）。 */
+  const detailHasApi = hasGraphContent(graph);
+  const detailHasRaw = hasRawContent(raw);
+  const detailUsable = hasExecutableWorkflow({
+    graph,
+    rawJson: tpl.rawJson,
+  });
   return JSON.stringify({
     id: tpl.id,
     name: tpl.name,
@@ -452,8 +448,11 @@ async function buildWorkflowDetailJson(input: {
     format: detailHasRaw ? "raw" : "api",
     hasApi: detailHasApi,
     hasRaw: detailHasRaw,
-    usable: detailHasApi,
-    apiOrigin: detailApiOrigin,
+    usable: detailUsable,
+    /** API 列从哪来（`user` = 用户导出 API 格式；`derived` = 早年导入时转出来的；
+     *  null = 没有 API 列）。**与可执行性无关** —— 只有 RAW 的工作流 apiSource
+     *  为 null，照样可执行。 */
+    apiSource: typeof tpl.apiSource === "string" ? tpl.apiSource : null,
     sourcePath,
     sourceChanged,
     sourceMissing,

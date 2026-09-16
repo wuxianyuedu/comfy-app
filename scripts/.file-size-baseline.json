@@ -5,16 +5,16 @@
   "threshold": 900,
   "total": 11,
   "files": {
-    "src/app/(main)/settings/hooks/use-settings-page.ts": 1451,
-    "src/components/studio/logs/LogPanel.tsx": 1102,
-    "src/components/studio/logs/log-store.ts": 1579,
+    "src/app/(main)/settings/hooks/use-settings-page.ts": 1450,
+    "src/components/studio/logs/LogPanel.tsx": 988,
+    "src/components/studio/logs/log-store.ts": 1550,
     "src/components/studio/shared/workflow-io.ts": 994,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 957,
-    "src/components/workshop/hooks/use-workshop-pipeline.ts": 1113,
+    "src/components/workshop/hooks/use-workshop-pipeline.ts": 1054,
     "src/lib/comfyui/raw.ts": 1094,
     "src/lib/comfyui/workflow-detail-raw.ts": 939,
     "src/lib/comfyui/workflow-subgraph-parse.ts": 1027,
-    "src/lib/workflow-param-mapping.ts": 1162,
+    "src/lib/workflow-param-mapping.ts": 1151,
     "src/server/api/routers/workflow.ts": 954
   }
 }

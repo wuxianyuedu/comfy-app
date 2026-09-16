@@ -66,100 +66,70 @@ describe("deriveLocalRootsHint 空列表原因", () => {
 });
 
 describe("deriveFormatFlags 格式标志推导", () => {
-  it("新字段齐全时透传 hasApi/hasRaw/apiOrigin", () => {
+  it("新字段齐全时透传 hasApi/hasRaw/usable/apiSource", () => {
     expect(
       deriveFormatFlags(
-        makeRow({ hasApi: true, hasRaw: false, apiOrigin: "user" }),
+        makeRow({
+          hasApi: false,
+          hasRaw: true,
+          apiSource: null,
+          usable: true,
+        }),
       ),
-    ).toEqual({ hasApi: true, hasRaw: false, apiOrigin: "user", usable: true });
+    ).toEqual({ hasApi: false, hasRaw: true, apiSource: null, usable: true });
   });
 
-  it("hasApi=false 时 usable=false 且未给 apiOrigin 时推断为 null", () => {
-    expect(deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true }))).toEqual(
-      {
-        hasApi: false,
-        hasRaw: true,
-        apiOrigin: null,
-        usable: false,
-      },
-    );
+  it("只有 RAW（graph 为空）仍然可执行 —— 两列地位同等", () => {
+    expect(
+      deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true, usable: true })),
+    ).toEqual({ hasApi: false, hasRaw: true, apiSource: null, usable: true });
   });
 
-  it("同时有 API 与 RAW 且未给 apiOrigin 时推断为 derived", () => {
-    expect(deriveFormatFlags(makeRow({ hasApi: true, hasRaw: true }))).toEqual({
-      hasApi: true,
-      hasRaw: true,
-      apiOrigin: "derived",
-      usable: true,
-    });
-  });
-
-  it("仅有 API 且未给 apiOrigin 时推断为 user", () => {
-    expect(deriveFormatFlags(makeRow({ hasApi: true, hasRaw: false }))).toEqual(
-      {
-        hasApi: true,
-        hasRaw: false,
-        apiOrigin: "user",
-        usable: true,
-      },
-    );
-  });
-
-  it("hasApi 显式 false 但给了 apiOrigin 时保留给定值", () => {
+  it("两列都为空时才不可执行", () => {
     expect(
       deriveFormatFlags(
-        makeRow({ hasApi: false, hasRaw: true, apiOrigin: "user" }),
+        makeRow({ hasApi: false, hasRaw: false, usable: false }),
       ),
-    ).toEqual({
-      hasApi: false,
-      hasRaw: true,
-      apiOrigin: "user",
-      usable: false,
-    });
+    ).toEqual({ hasApi: false, hasRaw: false, apiSource: null, usable: false });
   });
 
-  it("缺省的一侧按规则回填:hasApi 默认 true,hasRaw 按 format 推断", () => {
-    // 只给 hasApi=false → hasRaw 回填自 format:"raw"
+  it("服务端没给 usable 时按两列回填（任一有内容即可执行）", () => {
+    // 只给 hasApi=false → hasRaw 回填自 format:"raw" → 可执行
     expect(
       deriveFormatFlags(makeRow({ hasApi: false, format: "raw" })),
-    ).toEqual({
+    ).toEqual({ hasApi: false, hasRaw: true, apiSource: null, usable: true });
+    // 只给 hasRaw=true → hasApi 回填 false（format 非 raw）
+    expect(deriveFormatFlags(makeRow({ hasRaw: true }))).toEqual({
       hasApi: false,
       hasRaw: true,
-      apiOrigin: null,
-      usable: false,
-    });
-    // 只给 hasRaw=true → hasApi 回填 true
-    expect(deriveFormatFlags(makeRow({ hasRaw: true }))).toEqual({
-      hasApi: true,
-      hasRaw: true,
-      apiOrigin: "derived",
+      apiSource: null,
       usable: true,
     });
   });
 
-  it("仅传 legacy format=raw 时视为有 RAW、可执行、来源 derived", () => {
+  it("仅传 legacy format=raw 时视为只有 RAW，但照样可执行", () => {
     expect(deriveFormatFlags(makeRow({ format: "raw" }))).toEqual({
-      hasApi: true,
+      hasApi: false,
       hasRaw: true,
-      apiOrigin: "derived",
+      apiSource: null,
       usable: true,
     });
   });
 
-  it("仅传 legacy format=api 时 hasRaw=false 且来源 user", () => {
+  it("仅传 legacy format=api 时 hasRaw=false", () => {
     expect(deriveFormatFlags(makeRow({ format: "api" }))).toEqual({
       hasApi: true,
       hasRaw: false,
-      apiOrigin: "user",
+      apiSource: null,
       usable: true,
     });
   });
 
-  it("无任何格式信息时默认可执行且来源 user", () => {
+  it("无任何格式信息时视为有 API 列、可执行", () => {
     expect(deriveFormatFlags(makeRow())).toEqual({
       hasApi: true,
       hasRaw: false,
-      apiOrigin: "user",
+      apiSource: null,
       usable: true,
     });
   });
@@ -169,7 +139,7 @@ describe("deriveFormatFlags 格式标志推导", () => {
       deriveFormatFlags(
         makeRow({ format: "raw", hasApi: true, hasRaw: false }),
       ),
-    ).toEqual({ hasApi: true, hasRaw: false, apiOrigin: "user", usable: true });
+    ).toEqual({ hasApi: true, hasRaw: false, apiSource: null, usable: true });
   });
 });
 

@@ -73,6 +73,9 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     sourceMtime?: number | null;
     modes?: string[];
     defaultMode?: string | null;
+    /** API 列从哪来：`user` = 用户导出 API 格式；`derived` = 早年导入 RAW 时
+     *  转出来存下的。只有 API 格式导入才写（RAW 导入不产 API 图）。 */
+    apiSource?: "user" | "derived" | null;
   }): Promise<WorkflowTemplate> {
     const rows = await db
       .insert(workflowTemplate)
@@ -89,6 +92,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
         sourceMtime: input.sourceMtime ?? undefined,
         modes: input.modes?.length ? JSON.stringify(input.modes) : "[]",
         defaultMode: input.defaultMode ?? undefined,
+        apiSource: input.apiSource ?? undefined,
       })
       .returning();
     return rows[0]!;

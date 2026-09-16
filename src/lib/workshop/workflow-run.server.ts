@@ -15,6 +15,7 @@ import {
   workflowTemplateRepository,
 } from "@/lib/core/repository";
 import { enqueue } from "@/lib/comfyui/enqueue";
+import { resolveExecutionPayload } from "@/lib/comfyui/execution-shape";
 import { parseModesJson } from "@/lib/workflow-types";
 import type { WorkflowIOMap } from "@/lib/workflow-io-types";
 import {
@@ -76,18 +77,28 @@ export async function createWorkflowRunTask(
     projectId: input.projectId ?? null,
   });
 
-  /* Raw UI 图（comfy-cli 展开子图）与 API 图两条路径，与 generate 路由同一判据：
-   * 有 rawJson 才能让 comfy-cli 做 UI→API 转换；否则用库里已拆平的 graph。 */
-  if (tpl.rawJson) {
+  /* raw / api 两条路径地位同等，送哪一份由**这条工作流自己是什么格式**决定
+   * （判据收在 `resolveExecutionPayload`，与 generate 路由同一份）：
+   *   · RAW 原件 → comfy-cli 做 UI→API 转换 + 子图展开；
+   *   · API 图   → 直接 POST /prompt。
+   * 两列都没有时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
+   * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。 */
+  const payload = resolveExecutionPayload(tpl);
+  if (!payload) {
+    throw new Error(
+      `工作流没有可执行内容（graph 与 rawJson 都为空）：${tpl.name}`,
+    );
+  }
+  if (payload.kind === "raw") {
     enqueue({
       taskId: task.id,
-      rawJson: tpl.rawJson,
+      rawJson: payload.rawJson,
       overrides: workflowInputs,
     });
   } else {
     enqueue({
       taskId: task.id,
-      prompt: buildPromptFromGraph(tpl.graph, workflowInputs),
+      prompt: buildPromptFromGraph(payload.graph, workflowInputs),
     });
   }
   return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
