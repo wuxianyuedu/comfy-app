@@ -693,6 +693,76 @@ Write-Output ("|END")
     },
   );
 
+  /**
+   * ISSUE #621：发布构建第二步（打包 start-tauri.exe）在清理产物时报
+   * 「无法清理 start-tauri，可能被其他程序占用（如 start-tauri.exe 仍在运行）」，
+   * 而用户刚刚关掉的是**桌面窗口**——启动器自己是独立 exe，关窗并不让它退出，
+   * 它继续锁着 `start-tauri\_internal\*.dll`。旧提示既指不出是谁占着（没查进程表），
+   * 动作也不对（叫用户去关一个已经关了的窗口）。
+   *
+   * 现在打包脚本编译/打包前先经 `Assert-LauncherNotRunning` 自查启动器，命中即
+   * 点名 PID + 给 `taskkill /PID <pid> /T /F`；这里锁住「哪些进程算命中」。
+   */
+  const assertLauncherScript = (procsJson: string): string =>
+    guardScript(procsJson).replace(
+      "function Log { param([string]$Msg) Write-Output $Msg }",
+      "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
+    ) +
+    `
+$code = Assert-LauncherNotRunning -ProjectRoot $root -Purpose "打包启动器"
+Write-Output ("CODE=" + $code)
+Write-Output ("|END")
+`;
+
+  it.skipIf(!psExe)("启动器在跑时打包被拦下，并点名 PID（ISSUE #621）", () => {
+    const root = process.cwd();
+    const json = JSON.stringify([
+      {
+        Id: 811,
+        Path: join(root, "start-tauri", "start-tauri.exe"),
+        Cmd: "",
+        Name: "start-tauri.exe",
+      },
+    ]);
+    const out = runGuard(assertLauncherScript(json));
+    expect(out).toContain("CODE=1");
+    expect(out).toContain("正在运行的启动器：PID 811");
+    expect(out).toContain("taskkill /PID <上面的 PID> /T /F");
+  });
+
+  it.skipIf(!psExe)(
+    "没有启动器在跑时打包照常继续，别处的同名进程不算占用",
+    () => {
+      const json = JSON.stringify([
+        {
+          Id: 821,
+          Path: "D:\\other\\start-tauri.exe",
+          Cmd: "",
+          Name: "start-tauri.exe",
+        },
+        { Id: 822, Path: "D:\\other\\app.exe", Cmd: "", Name: "app.exe" },
+      ]);
+      const out = runGuard(assertLauncherScript(json));
+      expect(out).toContain("CODE=0");
+      expect(out).not.toContain("正在运行的启动器");
+    },
+  );
+
+  it.skipIf(!psExe)("三个启动器产物目录（-dev / -standalone）都算占用", () => {
+    const root = process.cwd();
+    const json = JSON.stringify([
+      {
+        Id: 831,
+        Path: join(root, "start-tauri-dev", "start-tauri-dev.exe"),
+        Cmd: "",
+        Name: "start-tauri-dev.exe",
+      },
+    ]);
+    const out = runGuard(assertLauncherScript(json));
+    expect(out).toContain("CODE=1");
+    expect(out).toContain("PID 831");
+  });
+
   it.skipIf(!psExe)(
     "启动器进程的命中同样按 exe 真实路径，别处的同名进程不算",
     () => {

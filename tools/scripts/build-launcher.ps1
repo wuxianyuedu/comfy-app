@@ -5,6 +5,7 @@ $TOOLS_DIR = Split-Path -Parent $PSScriptRoot
 $PROJECT_ROOT = Split-Path -Parent $TOOLS_DIR
 Set-Location $PROJECT_ROOT
 . "$PSScriptRoot\Log-Common.ps1"
+. "$PSScriptRoot\Build-Guard.ps1"
 Initialize-Log "build-launcher.log"
 
 Log "=========================================================="
@@ -30,14 +31,24 @@ if (-not (Test-Command pyinstaller)) {
     exit 1
 }
 
-Log "[1/3] 环境检查"
+Log "[1/4] 环境检查"
 $pyVer = python --version 2>&1
 $piVer = pyinstaller --version 2>&1
 Log "  Python      : $pyVer"
 Log "  PyInstaller : $piVer"
 Log ""
 
-Log "[2/3] 清理旧产物..."
+Log "[2/4] 前置检查：启动器自身是否仍在运行"
+# 产物目录（start-tauri\ 等）里被运行中的启动器占住的 _internal\*.dll 删不掉，
+# 旧实现只把这个根因写成一句「可能被其他程序占用」——用户关掉的是桌面壳，
+# 启动器自己还在跑，照提示去关窗口永远清理不掉。见 Build-Guard.ps1 的说明。
+if ((Assert-LauncherNotRunning -ProjectRoot $PROJECT_ROOT -Purpose "打包启动器") -ne 0) {
+    exit 1
+}
+Log "  未发现正在运行的启动器，继续。"
+Log ""
+
+Log "[3/4] 清理旧产物..."
 $startTauriDir = Join-Path $PROJECT_ROOT "start-tauri"
 $buildLauncherDir = Join-Path $PROJECT_ROOT "build-launcher"
 if (Test-Path $startTauriDir) {
@@ -45,8 +56,11 @@ if (Test-Path $startTauriDir) {
         Remove-Item -Recurse -Force $startTauriDir -ErrorAction Stop
     } catch {
         Log ""
-        Log "[错误] 无法清理 start-tauri，可能被其他程序占用（如 start-tauri.exe 仍在运行）。"
-        Log "        请手动关闭占用程序后重试。"
+        Log "[错误] 无法清理 start-tauri：目录里的文件被其他程序占用。"
+        Log "        最常见的是本仓库启动器 start-tauri.exe 仍在运行（关掉它的启动画面才会退出）。"
+        Log "        自查：Get-Process start-tauri -ErrorAction SilentlyContinue"
+        Log "        结束：taskkill /IM start-tauri.exe /T /F"
+        Log "        若确认没有同名进程，则是权限问题（提权残留的 pyinstaller / 杀毒软件），重启后重试。"
         exit 1
     }
 }
@@ -63,7 +77,7 @@ if (Test-Path $buildLauncherDir) {
 Log '      已清理 start-tauri\ 与 build-launcher\'
 Log ""
 
-Log "[3/3] 开始打包（onedir 模式，耗时约 1-3 分钟）..."
+Log "[4/4] 开始打包（onedir 模式，耗时约 1-3 分钟）..."
 $packWatch = Start-LogStopwatch
 $specPath = Join-Path $TOOLS_DIR "start-tauri.spec"
 Invoke-Logged "pyinstaller --clean --noconfirm --distpath . --workpath build-launcher $specPath"
