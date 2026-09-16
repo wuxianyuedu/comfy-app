@@ -578,9 +578,11 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
     });
     const negative = entries.find((entry) => entry.id === "negative");
     expect(negative).toBeDefined();
-    /* 不推导、不兜底：落点为空就是未配置，等作者在库里连线。 */
+    /* 不推导、不兜底：落点为空就是未配置，等作者在库里连线。
+     *  候选**按类型**收（负向与提示词同族，STRING 行都是候选，作者把哪一行拖给
+     *  它、哪一行才落）—— 名字里没写 negative 不再等于「这一口没有可落点」。 */
     expect(resolved.negative ?? null).toBeNull();
-    expect(negative!.pins).toHaveLength(0);
+    expect(negative!.pins.map((pin) => pin.name)).toEqual(["text"]);
   });
 
   it("契约里根本没有可落点的端口时也照样显示契约口", () => {
@@ -634,7 +636,8 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
     });
     expect(legacy.resolved.negative ?? null).toBeNull();
     const negative = legacy.entries.find((entry) => entry.id === "negative")!;
-    expect(negative.pins).toHaveLength(0);
+    /* 候选照旧按类型给（作者要能拖线），但历史键不会替它把落点填上。 */
+    expect(negative.pins.map((pin) => pin.name)).toEqual(["text"]);
   });
 
   it("作者显式断开 → 未配置，不被自动落点复活", () => {

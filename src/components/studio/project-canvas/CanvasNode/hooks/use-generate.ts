@@ -10,7 +10,6 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import {
-  inferGroups,
   outputTargetKind,
   toWorkflowInputsPayload,
   splitWorkflowIO,
@@ -165,9 +164,6 @@ export function useGenerate({
          *  端口上时，值要逐端口派生成各自认的形状 —— 不传这份集合，多端口只能按
          *  单端口处理，「尺寸」另外几条线就从外部拿不到值（ISSUE #355）。判定与
          *  表单同一份（`inferGroups`），不另算一遍避免漂移。 */
-        const groupedKeys = wfIO
-          ? inferGroups(splitWorkflowIO(wfIO).widgetInputs).groupedKeys
-          : undefined;
         const mapped = wfIO
           ? applyParamMapping({
               io: wfIO,
@@ -175,7 +171,6 @@ export function useGenerate({
               mapping: parseParamMapping(wfParamMap ?? d.paramMap),
               values: d.workflowInputs ?? {},
               mode,
-              groupedKeys,
             })
           : null;
         const baseInputs =

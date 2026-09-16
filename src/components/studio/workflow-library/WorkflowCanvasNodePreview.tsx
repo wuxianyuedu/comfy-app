@@ -328,7 +328,6 @@ export function WorkflowCanvasNodePreview({
             mapping: parseParamMapping(wiring.effectiveParamMap),
             values,
             mode: effectiveMode,
-            groupedKeys,
           })
         : null;
       const workflowInputs =
