@@ -107,6 +107,7 @@
 | `path.rebuild-static` | 重建 static 入口 | `tools/build/rebuild-static.ps1` | 入口薄壳（逻辑在 tools/scripts/） |
 | `path.build-tauri-release` | 重编壳 + 打包 | `tools/build/build-tauri-release.ps1` | 重编壳入口 |
 | `path.nvmrc` | Node 版本 | `.nvmrc` | Node LTS 约定 |
+| `path.cnb.ci` | **CI 唯一事实来源** | `.cnb.yml` | 平台只读仓库根的它；门禁清单与分条理由都在这一个文件里，规范正文（11.7 / 13.5）只做导航。此前指向的 `.github/workflows/ci.yml` 已删除（CNB 不读该目录，那份 workflow 从未被触发过一次） |
 
 ---
 
