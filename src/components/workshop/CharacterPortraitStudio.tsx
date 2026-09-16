@@ -238,18 +238,29 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 正在用 {session.modelLabel || "当前通道"} 生成定妆照…
               </p>
               <div className="bg-elevated h-1 w-full overflow-hidden rounded-full">
-                <div
-                  className="bg-primary h-full rounded-full transition-all"
-                  style={{ width: `${Math.max(4, session.progress)}%` }}
-                />
+                {session.progress === null ? (
+                  /* 通道不提供进度（远端一次性请求）：脉动条表示「进行中」，
+                     不拿 0 装成 4% 的确定性进度。 */
+                  <div className="bg-primary h-full w-full animate-pulse rounded-full" />
+                ) : (
+                  <div
+                    className="bg-primary h-full rounded-full transition-all"
+                    style={{ width: `${Math.max(4, session.progress)}%` }}
+                  />
+                )}
               </div>
             </>
           )}
           {session.status && !session.error && (
-            <p className="text-primary text-[11px]">{session.status}</p>
+            <p role="status" className="text-primary text-[11px]">
+              {session.status}
+            </p>
           )}
           {session.error && (
-            <p className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+            <p
+              role="alert"
+              className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300"
+            >
               {session.error}
             </p>
           )}
