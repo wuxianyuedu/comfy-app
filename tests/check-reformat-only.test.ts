@@ -16,15 +16,23 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-reformat-only.cjs");
+
+/* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 prettier
+ * （门禁按「整批一次 prettier」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
+ * 5s 的用例超时在全量并行满载时会被击穿（CI 实测过一次 `Test timed out in 5000ms`，
+ * 报在 `tests/check-format.test.ts` 的同类用例上）。整文件放宽到 30s——只影响本文件，
+ * 不掩盖其它文件的真实挂起。 */
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 /**
  * prettier 的 **JS 入口**（不是 `node_modules/.bin/prettier`）。
@@ -305,6 +313,71 @@ describe(
       const r = run(["--range", "HEAD~1..HEAD"]);
       expect(r.code).toBe(1);
       expect(r.output).toContain("纯格式化 12 个");
+    });
+  },
+);
+
+describe(
+  "判定成本：整批一次 prettier，不按文件各起一次",
+  { timeout: 60_000 },
+  () => {
+    /* 这条用例守的是一条**真实发生过的**失效：早先的实现对每个文件各起一次
+     * `prettier --stdin-filepath`，而 prettier 的启动 + 插件加载是主要成本
+     * （实测单文件约 400ms，与文件大小几乎无关）—— 12 个文件 ≈ 5s，正好把
+     * vitest 默认的 testTimeout 顶穿。现场表现是 `Test timed out in 5000ms`，
+     * 报在别的门禁用例上，看起来像「测试写得慢」，实际是门禁自身的调用形态
+     * 在文件数上线性叠加（真人「批量格式化」提交改几十个文件时只会更慢）。
+     *
+     * 判据用**计数**而不是耗时：耗时在负载波动下必然抖动，而「prettier 起了
+     * 几次」是确定的。整批口径下 batch 恰好一次（外加退回 stdin 的兜底，正常
+     * 路径上为 0），逐文件口径下是「文件数 + 1」。用包装脚本记调用次数，
+     * 断言与阈值无关的形态：次数远小于文件数。 */
+    it("12 个文件的改动 → prettier 调用次数远小于文件数（整批口径）", () => {
+      seedDirty(12);
+      for (let i = 0; i < 12; i++) formatInPlace(`src/lib/dirty-${i}.ts`);
+      commit("format only");
+
+      const real = require.resolve("prettier/bin/prettier.cjs", {
+        paths: [process.cwd()],
+      });
+      const wrapper = join(configDir, "prettier-count.cjs");
+      const counter = join(configDir, "prettier-calls.txt");
+      writeFileSync(
+        wrapper,
+        [
+          'const { appendFileSync } = require("node:fs");',
+          `appendFileSync(${JSON.stringify(counter)}, "call\\n");`,
+          `require(${JSON.stringify(real)});`,
+        ].join("\n"),
+      );
+      // 把 wrapper 放到临时仓库的 node_modules 下：脚本按「向上找 node_modules」
+      // 解析 prettier，命中它即等于「prettier 被起了几次」+1。
+      rmSync(join(workdir, "node_modules"), { recursive: true, force: true });
+      mkdirSync(join(workdir, "node_modules", "prettier", "bin"), {
+        recursive: true,
+      });
+      copyFileSync(
+        wrapper,
+        join(workdir, "node_modules", "prettier", "bin", "prettier.cjs"),
+      );
+      symlinkSync(
+        join(process.cwd(), "node_modules", "prettier-plugin-tailwindcss"),
+        join(workdir, "node_modules", "prettier-plugin-tailwindcss"),
+        "dir",
+      );
+      writeFileSync(
+        join(workdir, "node_modules", "prettier", "package.json"),
+        '{"name":"prettier","version":"0.0.0"}',
+      );
+      writeFileSync(join(workdir, ".gitignore"), "node_modules\n");
+
+      const r = run();
+      expect(r.code).toBe(1);
+      expect(r.output).toContain("纯格式化 12 个");
+
+      const calls = readFileSync(counter, "utf8").trim().split("\n").length;
+      // 逐文件口径下这里会是 13；整批口径下是 1（兜底最多再补几次）。
+      expect(calls).toBeLessThanOrEqual(3);
     });
   },
 );

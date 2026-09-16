@@ -55,6 +55,7 @@
  *   node scripts/check-reformat-only.cjs --strict   # 阈值降为 1(排查/盘点用)
  */
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { execFileSync, spawnSync } = require("node:child_process");
 
@@ -117,12 +118,34 @@ function collectChangedFiles(patch) {
 }
 
 /**
- * 用 prettier 重排整份文件,返回规范形态;prettier 跑不起来时返回 null。
+ * 批量把「改动前的整份文件」交给 prettier 重排,返回 `路径 → 规范形态`。
+ *
+ * **为什么是「一次 prettier 调用处理全部文件」而不是逐文件**:
+ * prettier 的启动 + 插件加载是主要成本(prettier 与
+ * `prettier-plugin-tailwindcss` 各自要跑一遍 ESM 加载,实测单文件约 400ms,
+ * 与文件大小几乎无关)。逐文件 stdin 在这条门禁上会线性叠加:一次改动 12 个
+ * 文件 → 约 5s,PR 改了 100 个文件 → 约 40s。真实用户提交的「批量格式化」
+ * 提交正好是这种形态,而 CI 的 vitest 默认 testTimeout 是 5s —— 本脚本被
+ * `tests/check-reformat-only.test.ts` 以子进程复跑,于是**门禁本身**在 CI 上
+ * 偶发超时(现场是 `Test timed out in 5000ms`,看起来像测试写得慢,实际是
+ * 每条用例都要起十几个 prettier)。
+ *
+ * 批量口径必须与逐文件 stdin **逐字等价**,所以不是「就地 --write 原文件」,而是:
+ *   ① 把「改动前的内容」写进一个临时目录的文件树(保持原文件相对路径——
+ *      prettier 按路径选 parser、按 `.prettierignore` 筛文件,相对路径丢了
+ *      就等于换了一套判据);
+ *   ② 一次 `prettier --list-different --write <tmpdir>`,让 prettier 自己走
+ *      与 `format:check` 同一套配置发现;
+ *   ③ 回读临时目录里的最终内容。
+ * 拿不到结果(**没有被 prettier 改写**)的文件退回逐文件 stdin 再判一次:
+ * `--list-different` 的清单是 prettier **自己**的筛选结果,而退回逐文件正是
+ * 「本文件被 .prettierignore / 无 parser 排除了,但门禁仍有结论」的兜底。
+ * 这一步只在「结果缺项」时发生,常见路径上一次都不会走到。
  *
  * **不能带 `--cache`**:prettier 明确拒绝「stdin + cache」的组合
  * (`--cache cannot be used when formatting stdin`),带上去会拿到空输出 ——
  * 那种失败看起来像「这个文件不是格式化出来的」(每个文件都判成真实改动),
- * 于是整条门禁一声不吭地失效。这里逐次调用、不缓存。
+ * 于是整条门禁一声不吭地失效。这里同样不缓存。
  *
  * **prettier 从脚本自身所在仓库解析**(`HERE`),不是从 cwd:门禁被
  * `tests/check-reformat-only.test.ts` 在**临时仓库**里复跑(那里的 cwd 没有
@@ -138,14 +161,6 @@ let runner = undefined;
  *
  * 从**脚本所在目录开始向上找**（`node_modules` 的常规解析方式），找到就用仓库
  * 内的 prettier；一路到根都没有时退回 `pnpm exec prettier`。
- *
- * 为什么不能只靠 cwd 或 `pnpm exec`：门禁会被 `tests/check-reformat-only.test.ts`
- * 在**临时仓库**里复跑（脚本被拷进去、cwd 也在那里），而 prettier 与它的插件装在
- * **源码仓库**的 node_modules 里 —— 临时仓库一个都没有。这时 `pnpm exec` 会直接
- * 报「Command "prettier" not found」，`formatFile` 对每个文件都返回 null，
- * 于是所有文件都判成「不是格式化」：门禁一声不吭地失效（本仓库最忌讳的失败形态）。
- * 向上找 + 兜底解析让两种情况都能跑起来：CI / pre-commit 命中第一档（就是本仓库），
- * 复跑场景命中第二档（上溯到源码仓库）。
  */
 function resolveRunner() {
   if (runner !== undefined) return runner;
@@ -176,21 +191,59 @@ function resolveRunner() {
   return runner;
 }
 
-function formatFile(text, file) {
+/** prettier 的调用前缀(入口路径 / 兜底命令),两个口径共用。 */
+function runnerPrefix() {
   const r = resolveRunner();
-  const ext = path.extname(file).slice(1);
-  const args =
-    r.kind === "entry"
-      ? [r.entry, "--stdin-filepath", `probe.${ext}`]
-      : ["exec", "prettier", "--stdin-filepath", `probe.${ext}`];
   const cmd =
     r.kind === "entry"
       ? process.execPath
       : process.platform === "win32"
         ? "pnpm.cmd"
         : "pnpm";
-  const res = spawnSync(cmd, args, {
-    cwd: r.cwd,
+  const head = r.kind === "entry" ? [r.entry] : ["exec", "prettier"];
+  return { cmd, head, cwd: r.cwd };
+}
+
+/**
+ * 一次 prettier 调用把整批「改动前内容」重排完。
+ *
+ * 返回 `相对路径 → 规范形态`;该批里**没有被 prettier 碰过**的文件不出现在
+ * 结果里(由调用方逐文件退回 stdin 兜底)。
+ */
+function formatMany(entries) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reformat-ref-"));
+  try {
+    for (const { file, text } of entries) {
+      const target = path.join(dir, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, text);
+    }
+    const { cmd, head, cwd } = runnerPrefix();
+    const res = spawnSync(cmd, [...head, "--write", dir], {
+      cwd,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    // prettier 整批失败(起不来 / 配置写错):返回空映射,调用方全部退回 stdin ——
+    // 退回是把判据降级而不是把它改写成「没格式化」,不会静默放过。
+    const out = new Map();
+    if (res.error || res.status !== 0) return { ok: false, out };
+    for (const { file, text } of entries) {
+      const after = fs.readFileSync(path.join(dir, file), "utf8");
+      if (after !== text) out.set(file, after);
+    }
+    return { ok: true, out };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** 逐文件 stdin 兜底:prietter 整批没跑起来 / 该文件不在批量结果里时用。 */
+function formatOne(text, file) {
+  const ext = path.extname(file).slice(1);
+  const { cmd, head, cwd } = runnerPrefix();
+  const res = spawnSync(cmd, [...head, "--stdin-filepath", `probe.${ext}`], {
+    cwd,
     input: text,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
@@ -201,37 +254,49 @@ function formatFile(text, file) {
 }
 
 /**
- * 判断 `before` 版本的文件是否「过一遍 prettier 就变成 after 版本」。
+ * 判断一批文件里哪些「过一遍 prettier 就变成改动后的内容」。
+ *
+ * 输入是 `{ file, before, after }`(同一批走一条 prettier 路径,避免每文件一次
+ * 启动开销),输出是其中判为纯格式化的文件名集合。
  *
  * 两侧都按行尾归一化后比较:prettier 会按配置统一行尾,而仓库里混有 CRLF 的
  * 历史文件(§13.7)—— 把行尾算成差异会让这些文件永远判成「真实改动」。
  */
-function isReformatOnly(beforeRev, afterRev, file) {
-  const before = gitOrEmpty(["show", `${beforeRev}:${file}`]);
-  const after = gitOrEmpty(["show", `${afterRev}:${file}`]);
-  return compareReformatted(before, after, file);
-}
-
-/** 判据本体(与「内容从哪来」解耦):`before` 过一遍 prettier 是否逐字变成 `after`。 */
-function compareReformatted(before, after, file) {
-  // 任一侧取不到(新增 / 删除 / 改名)→ 不判定:本门禁只判「既有的文件被重排」。
-  if (!before || !after) return false;
-
-  const formatted = formatFile(before, file);
-  if (formatted === null) return false;
-
+function classifyReformatOnly(entries) {
   const norm = (s) => s.replace(/\r\n/g, "\n").trimEnd();
-  return norm(formatted) === norm(after);
+  const pending = entries.filter((e) => e.before && e.after);
+  const { out } = formatMany(
+    pending.map((e) => ({ file: e.file, text: e.before })),
+  );
+
+  const reformatOnly = new Set();
+  for (const e of pending) {
+    // 批量结果里没有 → 该文件没被 prettier 改写(已被规范)或不在 prettier 的
+    // 视野里,逐文件再判一次;逐文件也拿不到结论就按「真实改动」保守放行。
+    const formatted = out.has(e.file)
+      ? out.get(e.file)
+      : formatOne(e.before, e.file);
+    if (formatted === null) continue;
+    if (norm(formatted) === norm(e.after)) reformatOnly.add(e.file);
+  }
+  return reformatOnly;
 }
 
 /**
- * 暂存区口径:改动前取 `HEAD:<path>`,改动后取 `:<path>`(index)。
- * 新增文件在 HEAD 里不存在 → 任一侧为空即跳过(纯新增不是「重排既有文件」)。
+ * 收集「建议比对」的一批文件:两侧内容都取得到(新增 / 删除 / 改名不判定 ——
+ * 本门禁只判「既有的文件被重排」)。
+ *
+ * `beforeRev` 是改动前的版本;`after` 的取法由调用方决定(某个 rev 或 index)。
  */
-function isStagedReformatOnly(headRev, file) {
-  const before = gitOrEmpty(["show", `${headRev}:${file}`]);
-  const after = gitOrEmpty(["show", `:${file}`]);
-  return compareReformatted(before, after, file);
+function collectPairs(files, beforeRev, readAfter) {
+  const out = [];
+  for (const f of files) {
+    const before = gitOrEmpty(["show", `${beforeRev}:${f.after}`]);
+    const after = readAfter(f);
+    if (!before || !after) continue;
+    out.push({ file: f.after, before, after });
+  }
+  return out;
 }
 
 function main() {
@@ -285,26 +350,25 @@ function main() {
       return;
     }
     const files = collectChangedFiles(patch);
-    const reformatOnly = files.filter((f) =>
-      isReformatOnly(beforeRev, afterRev, f.after),
+    const pairs = collectPairs(files, beforeRev, (f) =>
+      gitOrEmpty(["show", `${afterRev}:${f.after}`]),
     );
-    report(files, reformatOnly, limit);
+    report(files, classifyReformatOnly(pairs), limit);
     return;
   }
 
-  const [afterRev, beforeRev] = range
-    ? (() => {
-        const [a, b] = range.split("..");
-        return [b, a];
-      })()
+  /* `--range <before>..<after>` 的两侧:改动前的内容从 `before` 取,改动后的
+   * 从 `after` 取。暂存区口径下两者都是 `HEAD`(改动后在 index 里,见下)。 */
+  const [rangeBefore, rangeAfter] = range
+    ? range.split("..")
     : ["HEAD", "HEAD"];
 
   if (
     range &&
-    gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === ""
+    gitOrEmpty(["rev-parse", "--verify", "--quiet", rangeBefore]).trim() === ""
   ) {
     console.log(
-      `[reformat] 无可比父提交（${beforeRev} 不存在，首次提交或浅克隆），跳过`,
+      `[reformat] 无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆），跳过`,
     );
     return;
   }
@@ -314,7 +378,7 @@ function main() {
         "diff",
         "--no-color",
         "--unified=0",
-        `${beforeRev}..${afterRev}`,
+        `${rangeBefore}..${rangeAfter}`,
       ])
     : staged;
 
@@ -324,31 +388,32 @@ function main() {
   }
 
   /* 暂存区口径下,「改动后」的内容在 index 里而不是某个 rev —— 新增文件的
-   * 改动前版本不存在(该文件在 HEAD 里没有),所以用空串表示,由 isReformatOnly
+   * 改动前版本不存在(该文件在 HEAD 里没有),所以内容取空串,由 collectPairs
    * 按「任一侧取不到就不判定」跳过(纯新增不算格式化)。 */
   const files = collectChangedFiles(patch);
-  const reformatOnly = files.filter((f) =>
-    isStagedReformatOnly(beforeRev, f.after),
+  const pairs = collectPairs(files, rangeBefore, (f) =>
+    // 暂存区口径:改动后的内容在 index 里,`:<path>` 正是它的取法。
+    gitOrEmpty(["show", range ? `${rangeAfter}:${f.after}` : `:${f.after}`]),
   );
-
-  report(files, reformatOnly, limit);
+  report(files, classifyReformatOnly(pairs), limit);
 }
 
 /** 输出结论并按阈值决定是否阻断(两个口径共用,避免两份会各自漂移的判定)。 */
 function report(files, reformatOnly, limit) {
   console.log(
-    `[reformat] 本次提交改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.length} 个（阈值 ${limit}）`,
+    `[reformat] 本次提交改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）`,
   );
 
-  if (reformatOnly.length >= limit) {
+  if (reformatOnly.size >= limit) {
     console.error(
-      `\n[reformat] 本次提交混入了 ${reformatOnly.length} 个「只改格式」的文件（规范 §13.5）:\n` +
-        reformatOnly
+      `\n[reformat] 本次提交混入了 ${reformatOnly.size} 个「只改格式」的文件（规范 §13.5）:\n` +
+        [...reformatOnly]
+          .sort()
           .slice(0, 20)
           .map((f) => `  · ${f.after}`)
           .join("\n") +
-        (reformatOnly.length > 20
-          ? `\n  … 其余 ${reformatOnly.length - 20} 个省略`
+        (reformatOnly.size > 20
+          ? `\n  … 其余 ${reformatOnly.size - 20} 个省略`
           : "") +
         "\n\n  为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效," +
         "\n  评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。" +
@@ -364,12 +429,10 @@ function report(files, reformatOnly, limit) {
     process.exit(1);
   }
 
-  if (reformatOnly.length > 0) {
+  if (reformatOnly.size > 0) {
     console.log(
-      `  （未达阈值，放行）${reformatOnly
-        .slice(0, 5)
-        .map((f) => f.after)
-        .join(", ")}` + (reformatOnly.length > 5 ? " …" : ""),
+      `  （未达阈值，放行）${[...reformatOnly].sort().slice(0, 5).join(", ")}` +
+        (reformatOnly.size > 5 ? " …" : ""),
     );
   }
   console.log("[reformat] OK");
@@ -378,4 +441,4 @@ function report(files, reformatOnly, limit) {
 if (require.main === module) main();
 
 /** 供测试直接引用:纯判定函数（不执行 git / prettier）。 */
-module.exports = { collectChangedFiles, compareReformatted, LIMIT, SOURCE_RE };
+module.exports = { collectChangedFiles, LIMIT, SOURCE_RE };
