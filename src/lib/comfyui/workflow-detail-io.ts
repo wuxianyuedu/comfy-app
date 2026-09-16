@@ -29,6 +29,7 @@ import {
   type RawNodeMeta,
 } from "@/lib/comfyui/workflow-detail-raw";
 import { type WorkflowIOModeOverride } from "~/lib/workflow-io-types";
+import { isTextEncoderClass } from "~/lib/workflow-text-role";
 
 const MULTILINE_HINT = /(prompt|text|caption|描述|提示)/i;
 
@@ -162,6 +163,9 @@ export interface WorkflowIOEntry {
    *  （`value_1`）时，仅凭显示的 label 无从判断本层有没有作者命名，而这里能。
    *  没有它，同名条目在写入时会被当成作者命名固化回库（ISSUE #349）。 */
   slotLabel?: string;
+  /** 该条目是否出自图内的**文本编码节点**（类名带 `TextEncode`）—— 客户端在
+   *  `role` 判不出来时据此做有限兜底（见 `~/lib/workflow-io-types`）。 */
+  isTextNode?: boolean;
   /** 图内语义角色（正向 / 反向文本编码节点）—— 由导入图的 `paramMap`
    *  （`detectParamMap`：沿 KSampler 的 `positive` / `negative` 连线链推出）
    *  投影而来。同一对 CLIPTextEncode 的 pin 名与显示名完全一样，只有这条信息
@@ -488,6 +492,10 @@ export async function enrichWorkflowIO(
           ? graphClassType
           : undefined;
 
+    /* 图内文本编码节点（`CLIPTextEncode` / `TextEncodeQwenImageEdit…`）：
+     *  客户端在 `role` 判不出时据此收窄提示词候选（见 `~/lib/workflow-text-role`）。 */
+    const isTextNode = isTextEncoderClass(classType);
+
     workflowIO[ioKey] = {
       direction: v.direction,
       kind: v.kind,
@@ -541,6 +549,8 @@ export async function enrichWorkflowIO(
       /* 图内语义角色：只对**顶层节点**成立（`paramMap` 是顶层图的判定，子图
        *  内部的 id 不在它的键空间里），且只在能确定时写。 */
       ...(v.direction === "input" && role !== undefined ? { role } : {}),
+      /* 文本编码节点标记只在**输入**口上下发 —— 输出口没有提示词语义。 */
+      ...(v.direction === "input" && isTextNode ? { isTextNode } : {}),
     };
   }
 

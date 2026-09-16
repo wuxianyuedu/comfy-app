@@ -378,6 +378,61 @@ describe("enrichWorkflowIO — 图内语义角色 role（ISSUE #611）", () => {
     expect(result["6::widget::text"]!.role).toBeUndefined();
   });
 
+  it("文本编码节点标记 isTextNode 只对输入口下发（ISSUE #620）", async () => {
+    /* 客户端在 `role` 判不出来时，靠这一标记把提示词候选收窄到图内的文本编码
+     * 节点上做有限兜底（正向写死在自己的 CLIPTextEncode、负向接在第三方节点上
+     * 的 T2I 工作流是常规做法）。 */
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "6::widget::text": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "6",
+            name: "text",
+          },
+          "77::widget::value": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "77",
+            name: "value",
+          },
+          "9::output::images": {
+            direction: "output",
+            kind: "output",
+            nodeId: "9",
+            name: "images",
+          },
+        },
+        {
+          nodeTypeById: {
+            "6": "CLIPTextEncode",
+            "77": "PromptEnhancer",
+            "9": "SaveImage",
+          },
+        },
+      ),
+    );
+    expect(result["6::widget::text"]!.isTextNode).toBe(true);
+    /* 第三方节点不是文本编码节点；输出口一律不带（输出没有提示词语义）。 */
+    expect(result["77::widget::value"]!.isTextNode).toBeUndefined();
+    expect(result["9::output::images"]!.isTextNode).toBeUndefined();
+  });
+
+  it("类名拿不到时不标 isTextNode（宁可不兜底，也不凭猜）", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "6::widget::text": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "6",
+          name: "text",
+        },
+      }),
+    );
+    expect(result["6::widget::text"]!.isTextNode).toBeUndefined();
+  });
+
   it("输出条目不带 role（角色只对输入口有意义）", async () => {
     const result = await enrichWorkflowIO(
       makeParams(
