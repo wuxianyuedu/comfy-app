@@ -31,7 +31,6 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
 } from "~/components/studio/shared/workflow-io";
-import { applyNegativeSlotFallback } from "./workflow-negative-slot";
 import {
   defaultOutputSource,
   hasManualOutputBinding,
@@ -107,8 +106,6 @@ export function deriveLibraryParamCards(args: {
   reachableKeys?: ReadonlySet<string>;
 }): LibraryParamCards {
   const { io, paramMap, mode, groupedKeys, reachableKeys } = args;
-  /* 契约驱动：卡片列 = 该模式统一对外暴露的参数（提示词 / 尺寸 / 首帧…），
-   * 与具体工作流无关；工作流只决定每张卡落到哪一行端口。 */
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
    * **契约口一律常驻**：显示与否只由契约决定，与工作流内部长什么样无关；工作流
    * 只决定每张卡落到哪一行端口，落不到就如实显示成「未配置」。 */
@@ -116,25 +113,13 @@ export function deriveLibraryParamCards(args: {
   /* paramMap 里没有 `auto` 字段（它不是持久化字段）——现算一份自动判定，
    * 与编辑器 useParamMapping 里的 auto 同源（autoMapEntries）。 */
   const parsed = parseParamMapping(paramMap);
-  /* 契约口的候选只由「端口名判据 + 作者画过的线」构成（含历史键
-   * `<节点 id>|negative` 的兼容读取），这里只把历史键翻译回候选端口；解析落点
-   * 必须在它之后（否则作者当年的落点会被当成没画过）。 */
-  const entriesWithFallback = applyNegativeSlotFallback({
-    entries,
-    io,
-    parsed,
-    mode: mode ?? null,
-  });
-  const resolved = resolveMapping(
-    entriesWithFallback,
-    io,
-    parsed,
-    mode ?? null,
-  );
+  /* 落点只由「作者画过的线（键 = 契约口径的 `negative`）+ 端口名判据」决定：
+   *  没有历史键的兼容读取，也不做任何兜底推断 —— 判不出来就是未配置。 */
+  const resolved = resolveMapping(entries, io, parsed, mode ?? null);
 
   const ownersByPin: Record<string, string> = {};
   const wires: LibraryParamCards["wires"] = [];
-  for (const entry of entriesWithFallback) {
+  for (const entry of entries) {
     const target = resolved[entry.id];
     /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
      *  画一条通向某处的线反而误导。 */
@@ -198,7 +183,7 @@ export function deriveLibraryParamCards(args: {
   );
 
   return {
-    entries: entriesWithFallback,
+    entries,
     io: io ?? null,
     isManual: (entryId: string) =>
       manualTargetFor(parsed, entryId, mode ?? null) !== undefined,

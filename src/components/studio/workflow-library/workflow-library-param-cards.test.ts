@@ -560,7 +560,7 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
     ]);
   });
 
-  it("作者把负向口连到某一行时以手工线为准（含历史键 `<节点 id>|negative`）", () => {
+  it("作者把负向口连到某一行时以手工线为准（键 = 契约口径的 negative）", () => {
     const named: WorkflowIOMap = {
       ...negativeLessIo,
       "77::widget::negative_prompt": {
@@ -578,19 +578,26 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
       mode: "T2I",
     });
     expect(auto.resolved.negative).toBe("77::widget::negative_prompt");
+    const manual = deriveLibraryParamCards({
+      io: negativeLessIo,
+      paramMap: { source: { "mode:T2I": { negative: "9::widget::text" } } },
+      mode: "T2I",
+    });
+    expect(manual.resolved.negative).toBe("9::widget::text");
+  });
 
-    /* 历史键（按节点聚类时代落库的形状）照样解析得出，否则作者当年连好的线
-     *  会被当成没画过、自动落点把它挪回名字判据命中的那一行。这里把名字判据
-     *  那一行去掉，让落点只能来自历史键 —— 断言的正是兼容读取这一条。 */
-    const unnamed: WorkflowIOMap = { ...negativeLessIo };
+  it("历史键 <节点 id>|negative 不再被读取（没有兼容，也没有兜底）", () => {
+    /* 兼容读取会让「判不出来」被历史落库的旧键悄悄填上：旧键属于按节点聚类
+     *  时代的键空间，作者当年连的那条线现在已经无从判定属于哪个模式口径 ——
+     *  读它等于让一个本应显示「未配置」的口凭空多出落点。 */
     const legacy = deriveLibraryParamCards({
-      io: unnamed,
+      io: negativeLessIo,
       paramMap: { source: { "mode:T2I": { "5|negative": "9::widget::text" } } },
       mode: "T2I",
     });
-    expect(legacy.resolved.negative).toBe("9::widget::text");
-    /* 落点确实生效了 —— 卡片上那一行不是「未配置」。 */
-    expect(legacy.entries.find((e) => e.id === "negative")).toBeDefined();
+    expect(legacy.resolved.negative ?? null).toBeNull();
+    const negative = legacy.entries.find((entry) => entry.id === "negative")!;
+    expect(negative.pins).toHaveLength(0);
   });
 
   it("作者显式断开 → 未配置，不被自动落点复活", () => {
