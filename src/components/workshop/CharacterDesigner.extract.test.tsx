@@ -6,10 +6,10 @@
 // 返回的 res.list 通过 onCharactersChange 上抛，导致提取"成功"但列表不刷新。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { CharacterDesigner } from "@/components/workshop/CharacterDesigner";
-import type { Character } from "@/lib/workshop/types";
+import { CharacterDesigner } from "~/components/workshop/CharacterDesigner";
+import type { Character } from "~/lib/workshop/types";
 
-vi.mock("@/components/workshop/LLMContext", () => ({
+vi.mock("~/components/workshop/LLMContext", () => ({
   useLLM: () => ({
     config: null,
     localModels: [],

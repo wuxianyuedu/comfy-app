@@ -20,15 +20,15 @@ import {
   useSyncExternalStore,
 } from "react";
 import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
-import type { TaskLogEntry } from "@/lib/workshop/generation-client";
+import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
   getWorkflowRunStoreSnapshot,
   subscribeWorkflowRunStore,
-} from "@/lib/workflow-run-store";
+} from "~/lib/workflow-run-store";
 import {
   runLogSourceLabel,
   type WorkflowRunMeta,
-} from "@/lib/workflow-run-store";
+} from "~/lib/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
 

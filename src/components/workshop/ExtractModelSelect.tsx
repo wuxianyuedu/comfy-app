@@ -1,17 +1,17 @@
 "use client";
 
 import React from "react";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
   fetchLocalModels,
   fetchRemoteModels,
-} from "@/lib/llm/model-catalog-client";
-import { useLLM } from "@/components/workshop/LLMContext";
+} from "~/lib/llm/model-catalog-client";
+import { useLLM } from "~/components/workshop/LLMContext";
 import {
   channelOptionValue,
   parseChannelOption,
   type ExtractChannel,
-} from "@/lib/workshop/channel-options";
+} from "~/lib/workshop/channel-options";
 
 /** 兼容既有 import：通道编码 / 解析已迁至 lib/workshop/channel-options（纯函数，可单测）。 */
 export { channelOptionValue, parseChannelOption };

@@ -6,8 +6,8 @@
  *  drag-and-drop pre-fill path (handleDroppedFile) can populate the same
  *  fields before the panel opens.  Behaviour is unchanged.
  */
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { MultiModeSelect } from "@/components/studio/ui/MultiModeSelect";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;

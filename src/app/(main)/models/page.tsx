@@ -1,5 +1,5 @@
-import { ModelLibrary } from "@/components/model/ModelLibrary";
-import { ButtonLink } from "@/components/ui/button";
+import { ModelLibrary } from "~/components/model/ModelLibrary";
+import { ButtonLink } from "~/components/ui/button";
 
 export const metadata = { title: "模型库 · Comfy-APP" };
 

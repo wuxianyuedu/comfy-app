@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { isVideo } from "@/lib/media";
+import { isVideo } from "~/lib/media";
 
 /**
  * Renders a media thumbnail that plays video inline or shows an image.

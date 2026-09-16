@@ -13,7 +13,7 @@ import {
   requiredInputsFor,
   type ModeContract,
   type ModeContractInputId,
-} from "@/lib/workshop/model-mode-contract";
+} from "~/lib/workshop/model-mode-contract";
 import { effectiveModeContract } from "../mode-contract-config";
 import { useModeContracts } from "./use-mode-contracts";
 

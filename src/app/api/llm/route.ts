@@ -4,8 +4,8 @@ import {
   completeLLM,
   completeLLMTools,
   streamLLM,
-} from "@/lib/llm/server";
-import { requireServerUser } from "@/lib/auth-server";
+} from "~/lib/llm/server";
+import { requireServerUser } from "~/lib/auth-server";
 import { errorMessage } from "~/lib/error-message";
 import {
   TASK_TYPES,
@@ -13,7 +13,7 @@ import {
   type LLMRequestOptions,
   type LLMProviderType,
   type TaskType,
-} from "@/lib/llm/types";
+} from "~/lib/llm/types";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";

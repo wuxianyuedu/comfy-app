@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import { MediaThumbnail as MediaThumb } from "@/components/studio/ui/MediaThumbnail";
-import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
+import { MediaThumbnail as MediaThumb } from "~/components/studio/ui/MediaThumbnail";
+import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
 import {
   getActiveId,
   listProjects,
   type CanvasProject,
-} from "@/lib/project-canvas/canvas-store";
+} from "~/lib/project-canvas/canvas-store";
 import {
   type ProjectOutputImage,
   useProjectOutputs,

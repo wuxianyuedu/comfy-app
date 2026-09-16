@@ -9,7 +9,7 @@ import {
   type WorkflowRow,
 } from "./workflow-library-config";
 import { TaskTypeChip } from "../ui/TaskTypeChip";
-import { deriveEncapsulationStatus } from "@/lib/workshop/workshop-encapsulation-status";
+import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "../ui/SourceTag";
 import { EmptyState } from "../ui/EmptyState";
 

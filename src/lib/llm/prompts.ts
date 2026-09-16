@@ -1,5 +1,5 @@
-import type { ProjectMeta, Scene, ShotType } from "@/lib/workshop/types";
-import { PROJECT_TYPE_LABELS } from "@/lib/workshop/types";
+import type { ProjectMeta, Scene, ShotType } from "~/lib/workshop/types";
+import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
 import type { LLMMessage } from "./types";
 import { extractJson, extractJsonArray } from "./parse";
 

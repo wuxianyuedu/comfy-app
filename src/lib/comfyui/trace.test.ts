@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { redactSecretShaped } from "@/lib/core/redact-secret";
+import { redactSecretShaped } from "~/lib/core/redact-secret";
 import {
   TRACE_MAX_LINE,
   traceStringify,

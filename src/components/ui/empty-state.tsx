@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "~/lib/utils";
 
 /**
  * EmptyState — 空状态占位。统一"无数据"视觉，替代散落的

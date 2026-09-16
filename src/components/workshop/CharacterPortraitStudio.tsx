@@ -8,23 +8,23 @@
 
 import React from "react";
 
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { Icon } from "@/components/ui/icon";
-import { ShotSizePicker } from "@/components/workshop/ShotSizePicker";
-import { useLLM } from "@/components/workshop/LLMContext";
-import { fetchGenerationLogs } from "@/lib/workshop/generation-log-client";
-import type { PersistableGenerationLog } from "@/lib/workshop/generation-log-client";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { Icon } from "~/components/ui/icon";
+import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
+import { useLLM } from "~/components/workshop/LLMContext";
+import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
+import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 import type {
   PortraitSession,
   PortraitSessionActions,
-} from "@/components/workshop/hooks/use-character-portrait";
-import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
-import type { WorkshopWorkflowOption } from "@/lib/workshop/generation-client";
+} from "~/components/workshop/hooks/use-character-portrait";
+import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
+import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 import {
   PORTRAIT_SOURCE_LABELS,
   portraitCandidates,
-} from "@/lib/workshop/character-portrait";
-import type { Character } from "@/lib/workshop/types";
+} from "~/lib/workshop/character-portrait";
+import type { Character } from "~/lib/workshop/types";
 
 /** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
 export interface CharacterPortraitContext {

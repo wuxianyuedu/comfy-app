@@ -2,8 +2,8 @@
 
 import React, { useCallback, useRef, useState } from "react";
 import { Upload } from "lucide-react";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import { NumberField } from "@/components/studio/ui/NumberField";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { NumberField } from "~/components/studio/ui/NumberField";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 

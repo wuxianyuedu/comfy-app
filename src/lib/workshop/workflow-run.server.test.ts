@@ -21,7 +21,7 @@ vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../tests/helpers/test-db");
   return { db: createTestDb() };
 });
-vi.mock("@/lib/comfyui/enqueue", () => ({
+vi.mock("~/lib/comfyui/enqueue", () => ({
   enqueue: enqueueMock,
   subscribe: vi.fn(),
   getLogs: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock("@/lib/comfyui/enqueue", () => ({
 }));
 /* `repository` 是 server-only 的 Drizzle 实现（import 即读库），本用例只想验
  * 编排判决，故两个仓储整体换桩（与 film/orchestrator.test.ts 同一口径）。 */
-vi.mock("@/lib/core/repository", () => ({
+vi.mock("~/lib/core/repository", () => ({
   workflowTemplateRepository: wfRepoStub,
   taskRepository: taskRepo,
 }));

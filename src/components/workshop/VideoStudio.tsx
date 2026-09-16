@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import type { Shot } from "@/lib/workshop/types";
+import type { Shot } from "~/lib/workshop/types";
 import {
   apiPollVideo,
   apiSubmitVideo,
@@ -9,8 +9,8 @@ import {
   startLocalGenerate,
   watchTask,
   type GenerateInput,
-} from "@/lib/workshop/generation-client";
-import type { ApiChannelsView } from "@/lib/workshop/api-channel-shared";
+} from "~/lib/workshop/generation-client";
+import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 import { errorMessage } from "~/lib/error-message";

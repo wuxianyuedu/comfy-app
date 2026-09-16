@@ -4,7 +4,7 @@
  */
 import "server-only";
 
-import { db } from "@/lib/db";
+import { db } from "~/lib/db";
 import { filmProject, filmShot, type FilmProject } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, desc, asc, inArray, isNotNull, count } from "drizzle-orm";

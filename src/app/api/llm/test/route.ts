@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
-import { getLLMConfig } from "@/lib/llm/server";
+import { getServerUser } from "~/lib/auth-server";
+import { getLLMConfig } from "~/lib/llm/server";
 import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";

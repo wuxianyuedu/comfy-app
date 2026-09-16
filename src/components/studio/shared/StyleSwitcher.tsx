@@ -1,7 +1,7 @@
 "use client";
 /* StyleSwitcher + shared atomic form primitives — extracted from GroupedControls.tsx. */
 import React from "react";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 
 export type GroupStyle = "split" | "preset";
 

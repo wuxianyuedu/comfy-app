@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "~/lib/utils";
 
 /**
  * StatusBadge — 状态徽章。把业务状态字符串映射为统一的

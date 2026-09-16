@@ -12,8 +12,8 @@ import {
   DEFAULT_SIZE_SPEC,
   sizeSpecToWxH,
   type SizeSpec,
-} from "@/lib/size-presets";
-import type { Shot } from "@/lib/workshop/types";
+} from "~/lib/size-presets";
+import type { Shot } from "~/lib/workshop/types";
 
 const COMPOSE_DIR = path.join(process.cwd(), "data", "workshop-compositions");
 const execFileP = promisify(execFile);
