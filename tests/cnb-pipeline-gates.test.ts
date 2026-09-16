@@ -276,6 +276,30 @@ describe("覆盖率上报：插件的 pattern 必须真的有文件产出", () =
     ).toContain(`"${reporter}"`);
   });
 
+  /**
+   * 上报步骤必须**自己**把用例跑出来（script 与 type 写在同一个 step 上）。
+   *
+   * 这是 PR #641 最直接的现场：那条流水线把 `script: pnpm run test:coverage` 与
+   * `type: testing:coverage` 写在**同一个 step** 上时是对的；写成「一个 step 只有
+   * type，type 底下再嵌一层 stages 放 script」时，平台只解析那层 `stages`、
+   * **静默丢掉** vitest 那一句 —— 插件在本步开始 1.8s 后以
+   * 「没有找到覆盖率报告文件」退出（构建日志里 vitest 根本没跑），整条流水线判红。
+   *
+   * 判据不去比对 YAML 排版，只锁**语义**：上报读的是磁盘上的报告文件，而文件只有
+   * 跑完用例才有，所以「跑用例」这件事必须与上报处在**同一条 step** 上，
+   * 且那条 step 自己带 `script`。
+   */
+  it("上报步骤自己带 script 跑用例，不把 script 藏进 type 底下的 stages", () => {
+    expect(coverageStep, "testing:coverage 这一步没有 script：插件读不到用例产出的报告").toMatch(
+      /^ {4}script: .*test:coverage$/m,
+    );
+    expect(
+      coverageStep,
+      "testing:coverage 这一步底下又嵌了一层 stages —— 平台只解析那层 stages，" +
+        "同 step 的 script 会被静默丢掉，插件将看到「没有找到覆盖率报告文件」",
+    ).not.toMatch(/^ {4}stages:/m);
+  });
+
   it("阈值口径仍留在 vitest 侧，平台侧不许填 lines / diffLines", () => {
     // 平台阈值是绝对百分比，本仓库走的是「按目录设门槛」的口径（11 §覆盖率棘轮），
     // 两套数字放一起要么形同虚设、要么把正常 PR 拦死。
