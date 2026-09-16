@@ -64,8 +64,11 @@ flowchart TD
 
 **流向要点（方向是否正确就看这四条）**：
 
-1. **一份工作流只有一种格式**：入库时统一落成可执行的 API 图（`graph`），
-   `rawJson` 只是原始导入件（用于源文件页签、定位与下载）。
+1. **「一种格式」指的是运行口径，不是入库必须有 API 图**：同一条模板行里
+   `graph` / `rawJson` 两列各自最多一份，**可以只有 `rawJson` 而 `graph` 为空**
+   —— 只导入了工作流(RAW)格式、转换又没解析出节点时就是这样。这种行**照样入库**，
+   只是 `usable = false`（标「不可执行」，生成入口置灰）。`rawJson` 同时是
+   源文件页签（原始 JSON）与磁盘定位的来源，不是只留档的副产物。
 2. **磁盘 ↔ 库是「跟踪」关系而非拷贝**：来自本地文件的工作流记住 `sourcePath`，
    文件变了可同步回来；库删了不动磁盘文件。
 3. **「对外参数」是契约，不是工作流的能力**：契约口一律常驻（提示词 / 负向提示词 /
@@ -106,7 +109,7 @@ flowchart LR
 
 ---
 
-## 4. 入库：三条导入路径
+## 4. 入库：两列各自成说（图与原始件都只是「列」，不是门槛）
 
 ```mermaid
 flowchart TD
@@ -115,26 +118,29 @@ flowchart TD
   PATH -->|本地待载入项 ⤓| LOCAL["单文件导入（记住 sourcePath）"]
   PATH -->|模型标签 / 类型编辑| PATCH["PATCH 更新已有行"]
 
-  DETECT -->|API 格式| API["直接用 graph"]
-  DETECT -->|工作流(RAW)格式| RAW["convertRawToApi<br/>失败回落 fallbackRawToApi + warnings"]
+  DETECT -->|API 格式| API["graph = 该 JSON<br/>rawJson = 空"]
+  DETECT -->|工作流(RAW)格式| RAW["rawJson = 该 JSON<br/>再转 graph：convertRawToApi<br/>失败回落 fallbackRawToApi + warnings"]
+  LOCAL --> PARSE["与上同一条识别/转换链<br/>（同一份 parseWorkflowContent）"]
   API --> PERSIST["入库"]
   RAW --> PERSIST
-  LOCAL --> PERSIST
-  PERSIST --> DB["workflowTemplate"]
-  PERSIST --> PM["detectParamMap：初判落点"]
+  PARSE --> PERSIST
+  PERSIST --> DB["workflowTemplate<br/>graph 可空 / rawJson 可空"]
+  PERSIST --> PM["detectParamMap(可空 graph)：初判落点"]
   PERSIST --> IO["workflowIO：对外 IO 条目"]
 ```
 
 | 判据 | 实现 |
 |---|---|
-| 支持哪些格式 | ComfyUI「导出(API格式)」与「导出(工作流格式)」（RAW 会转成 API 图） |
-| 只有 RAW 的导入能不能跑 | `hasApi` 判定可执行性；只有 RAW（graph 为空）时 `usable = false`，卡片如实标注来源 |
-| 三种标记的含义 | `hasApi`（可执行）/ `hasRaw`（有原始件）/ `apiOrigin`（图来自用户导出还是转换派生） |
+| 支持哪些格式 | ComfyUI「导出(API格式)」与「导出(工作流格式)」；本地文件走**同一条**识别/转换链（`parseWorkflowContent`） |
+| **入库时能不能只有 `rawJson`** | **能。** `graph` 只写「转换成功的结果」：RAW 转换后 `graph` 为空时**不报错、不写空图**，落一行 `graph` 为空 + `rawJson` 原件的模板，`usable = false`。库里不预留空图列，靠 `graph` 非空判定可执行 |
+| **什么情况下会被拒** | 只拒**格式识别不出来**（既无 `class_type`、也无 raw 特征）的 JSON。拒的是「不能识别」，不是「没有 API 图」 |
+| 三种标记的含义 | `hasApi`（有可执行图）/ `hasRaw`（有原始件）/ `apiOrigin`（图来自用户导出 `user` 还是转换派生 `derived`；无图 = `null`） |
 | 「本地」还是「在线」 | 有 `sourcePath` = local（跟踪磁盘文件）；否则 online（粘贴 / 纯 API） |
 | 转换告警去哪了 | 导入响应里的 `warnings` → 导入面板提示，不静默丢弃 |
 
-**红线**：识别不出格式（既无 `class_type` 也无 raw 的 `type + pos`）时**必须报错**，
-不许落一条空图 —— 空图会在生成时变成一个空提示词任务，用户侧完全无提示。
+**红线**：①只有 `rawJson` 的导入**必须入库并如实标注**（卡片「不可执行」+ 生成按钮
+置灰），不许当成导入失败；②**不许把空图写进 `graph`** —— `detectParamMap()` 对空对象
+会返回空落点，之后每次生成都会变成一个空提示词任务，用户侧完全没有提示。
 
 ---
 
@@ -197,8 +203,13 @@ flowchart LR
 
 | 判据 | 实现 |
 |---|---|
-| 展示哪个 JSON | 优先磁盘原始导入件（`rawJson`）；纯 API 导入没有原始件时回退到可执行图，并**如实标注**是回退 |
+| 展示哪个 JSON | 优先原始导入件（`rawJson`）；纯 API 导入没有原始件时回退到可执行图，并**如实标注**是回退（`isApiFallback`） |
+| **下载的是哪一份** | 下载走**可执行图**（`detailFull` 的 `graph`），不是 `rawJson`；`graph` 为空的纯 RAW 行会提示「graph 为空」 |
 | 详情加载态的判据 | 「当前选中行的详情还没到过」，而不是 `isLoading`（避免换行时闪一屏占位） |
+
+> **两列各自的出口**：`rawJson` 供「看原始件」（源文件页签）与磁盘定位（`sourcePath`）；
+> 可执行图供「跑与下载」。任何一处**都不要假设另一列也在** —— 只有 API 的行没有
+> `rawJson`、只有 `rawJson` 的行没有可执行图，两种都真实存在（见 §4）。
 
 ---
 
@@ -241,7 +252,7 @@ flowchart LR
 | 消费者 | 取什么 | 判据 |
 |---|---|---|
 | 工坊（生图 / 视频 / 定妆照） | `workflowIO` + 模式码 + 封装就绪 | 内容类别页签按 image / video 分栏；素材按 `typeCategory` 富化 |
-| 项目画布 | 完整 API 图 + `paramMap` | 「使用」动作把待落下节点的 id 交给画布 |
+| 项目画布 | 可执行图 + `paramMap` | 「使用」动作把待落下节点的 id 交给画布；`usable = false`（无可执行图）时按钮置灰 |
 | 工作流编辑器 | 图 + 位置 + 原始件 | 编辑器是**整个界面**，图区是「工作流编辑器画布」 |
 
 **红线**：模式码（`taskType` / `modes` / `defaultMode`）是工坊与库之间**唯一的生成模式判据**，
@@ -271,6 +282,8 @@ flowchart LR
 | 空列表 | 三类可归因文案（见 §3） | `localRootsHint` |
 | 磁盘文件已不存在 | 「文件已不存在」标记（不给同步按钮） | `diskMissing` |
 | 导入格式无法识别 | 导入面板报错，不入库 | `create` 的 BAD_REQUEST |
+| 只导入 RAW、转换不出节点 | **正常入库**（无可执行图），卡片标「不可执行」、生成入口置灰 | `usable = false` |
+| 无可执行图的工作流点下载 | 「下载失败：graph 为空」（如实报，不静默失败） | `downloadJson` 的判空 |
 | 详情缓存过期 | —（PATCH 主动失效缓存，不靠等 TTL） | `invalidateWorkflowDetailCache` |
 
 ---
@@ -280,6 +293,7 @@ flowchart LR
 - [ ] 改对外参数契约 → 同步 [工坊流程 §6/§7](feature-workshop-flow.md)（同一份契约的两端）
 - [ ] 新增页签 / 卡片列 → 更新 `DETAIL_TABS` 与本文 §5 流程图
 - [ ] 改列表字段 / 磁盘跟踪判据 → 同步 `WorkflowRow` 与本文 §3
+- [ ] 改导入 / 转换链 → 同步本文 §4；**保持「转换不出节点时落 `rawJson` 而不写空图」**，别把路由与 `parseWorkflowContent` 两条链改出两套判据
 - [ ] 新增运行入口 → 必须登记进**同一份**运行登记表（否则又会出现「两个执行视角」）
 - [ ] 改动任何 `src/lib/**` → 先读 [规范 18](../standards/18-lib层规范.md)
 - [ ] 文档改动后跑 `pnpm doc:gen`（先 `doc:check` 后 `doc:render`）
