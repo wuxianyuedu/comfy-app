@@ -14,7 +14,6 @@
  *
  * 产物被 src-tauri/.gitignore 忽略，不入库。
  */
-import { execSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -27,8 +26,11 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 // 开发机私有输入（.env / db.sqlite*）的剔除清单与实现：与 `pnpm build` 的
 // 收尾步骤共用同一份，避免两处清单各写一套后静默漂移。
@@ -46,12 +48,18 @@ const binDir = join(root, "src-tauri", "binaries");
 
 function targetTriple() {
   if (process.platform === "win32") {
-    return process.arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
+    return process.arch === "arm64"
+      ? "aarch64-pc-windows-msvc"
+      : "x86_64-pc-windows-msvc";
   }
   if (process.platform === "darwin") {
-    return process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
+    return process.arch === "arm64"
+      ? "aarch64-apple-darwin"
+      : "x86_64-apple-darwin";
   }
-  return process.arch === "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu";
+  return process.arch === "arm64"
+    ? "aarch64-unknown-linux-gnu"
+    : "x86_64-unknown-linux-gnu";
 }
 
 /**
@@ -101,9 +109,32 @@ function dirSize(dir) {
 
 // ── 1/4 next build（standalone）────────────────────────────
 console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）...");
-execSync("pnpm build", { stdio: "inherit", cwd: root });
+// pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：`execSync("pnpm …")`
+// 走的是 shell，Windows 上选中批处理形态时同样起不来，而 shell 语义让「命令没起来」
+// 与「跑完但失败」更难分辨。派生子进程一律经 pnpmInvocation，不自己拼可执行名。
+{
+  const invocation = pnpmInvocation(["build"]);
+  if (!invocation) {
+    fail("PATH 上找不到可用的 pnpm（先跑 pnpm check:toolchain 自查）。");
+  }
+  const build = spawnSync(invocation.command, invocation.args, {
+    stdio: "inherit",
+    cwd: root,
+    windowsHide: true,
+  });
+  if (build.error) {
+    fail(
+      `起 pnpm 失败（${build.error.code ?? "UNKNOWN"}）：${build.error.message}；` +
+        `实际命令：${invocation.command} ${invocation.args.join(" ")}`,
+    );
+  }
+  if (build.status !== 0)
+    fail(`pnpm build 失败（exit ${build.status ?? "?"}）。`);
+}
 if (!existsSync(join(nextOut, "server.js"))) {
-  fail(".next/standalone/server.js 不存在，请确认 next.config.js 已配置 output: 'standalone'");
+  fail(
+    ".next/standalone/server.js 不存在，请确认 next.config.js 已配置 output: 'standalone'",
+  );
 }
 
 // ── 2/4 组装 src-tauri/static ──────────────────────────────
@@ -118,18 +149,24 @@ mkdirSync(staticDir, { recursive: true });
 // 入口就会在运行时 ENOENT，而表现只是「双击没反应」。
 // 清单与白名单同源：scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS。
 const launcherDestDir = join(staticDir, "scripts");
-for (const launcherFile of RUNTIME_SCRIPTS.filter((name) => name.endsWith(".mjs"))) {
+for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
+  name.endsWith(".mjs"),
+)) {
   const launcherSrc = join(root, "scripts", launcherFile);
   if (!existsSync(launcherSrc)) {
     // 白名单里面写了但源文件不在 = 清单漂移。静默跳过会让桌面包里的编排器
     // 在运行时 ENOENT，而表现只是「双击没反应」，所以这里直接失败。
-    fail(`白名单登记的运行期脚本不存在：scripts/${launcherFile}（与 RUNTIME_SCRIPTS 不同步）`);
+    fail(
+      `白名单登记的运行期脚本不存在：scripts/${launcherFile}（与 RUNTIME_SCRIPTS 不同步）`,
+    );
   }
   // 白名单条目允许是相对路径（`launcher-core/procs.mjs`）：目标子目录要先建出来。
   const dest = join(launcherDestDir, launcherFile);
   mkdirSync(dirname(dest), { recursive: true });
   copyFileSync(launcherSrc, dest);
-  console.log(`[build-desktop]   §10.2 已自动同步 scripts/${launcherFile} → static/scripts/${launcherFile}`);
+  console.log(
+    `[build-desktop]   §10.2 已自动同步 scripts/${launcherFile} → static/scripts/${launcherFile}`,
+  );
 }
 
 cpSync(nextOut, staticDir, { recursive: true, dereference: true }); // server.js + 裁剪 node_modules（解引用 symlink，避免 Windows 无开发者权限时 EPERM）
@@ -140,18 +177,35 @@ cpSync(nextOut, staticDir, { recursive: true, dereference: true }); // server.js
 // 整仓库副本被带进 static 进而嵌入 exe。注意：node_modules/.cache 单独清理，
 // 不能整体删除 node_modules（standalone 运行时必需裁剪版）。
 const STATIC_NOISE = new Set([
-  ".git", ".workbuddy", "coverage", "docs", "tests", "test-results",
-  "e2e", "tools", "log", "temp", "run", "dist", "python-venv",
-  "generated", "src-tauri",
+  ".git",
+  ".workbuddy",
+  "coverage",
+  "docs",
+  "tests",
+  "test-results",
+  "e2e",
+  "tools",
+  "log",
+  "temp",
+  "run",
+  "dist",
+  "python-venv",
+  "generated",
+  "src-tauri",
 ]);
 for (const name of STATIC_NOISE) {
   const p = join(staticDir, name);
   if (existsSync(p)) {
     rmSync(p, { recursive: true, force: true });
-    console.log(`[build-desktop]   §整治 已剔除 tracing 噪声目录 static/${name}`);
+    console.log(
+      `[build-desktop]   §整治 已剔除 tracing 噪声目录 static/${name}`,
+    );
   }
 }
-rmSync(join(staticDir, "node_modules", ".cache"), { recursive: true, force: true });
+rmSync(join(staticDir, "node_modules", ".cache"), {
+  recursive: true,
+  force: true,
+});
 
 // ── 2.2 分发卫生：剔除开发机私有输入（.env / db.sqlite*）──
 // 清单与实现收在 scripts/standalone-private-inputs.mjs（`pnpm build` 的收尾
@@ -168,7 +222,9 @@ rmSync(join(staticDir, "node_modules", ".cache"), { recursive: true, force: true
 // 因此这里**显式删除**这两类文件（含 SQLite 的 WAL/SHM 边车文件）：
 // 分发产物必须是「干净安装」，配置文件由用户侧自行提供。
 stripPrivateInputs(staticDir, (name) => {
-  console.log(`[build-desktop]   §分发卫生 已剔除开发机私有输入 static/${name}`);
+  console.log(
+    `[build-desktop]   §分发卫生 已剔除开发机私有输入 static/${name}`,
+  );
 });
 // 开发期文件与内部门禁脚本同理：`next build` 的全项目 tracking 会把 AGENTS.md /
 // CHANGELOG.md / 各 *.config.* 与 **整套 scripts/**（含 16 个 *.cjs 门禁脚本）
@@ -177,7 +233,9 @@ stripPrivateInputs(staticDir, (name) => {
 stripDevArtifacts(staticDir, (name) => {
   console.log(`[build-desktop]   §分发卫生 已剔除开发期文件 static/${name}`);
 });
-cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), { recursive: true });
+cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), {
+  recursive: true,
+});
 if (existsSync(join(root, "public"))) {
   cpSync(join(root, "public"), join(staticDir, "public"), { recursive: true });
 }
@@ -198,16 +256,22 @@ if (existsSync(splashSrc)) {
   mkdirSync(splashDistDir, { recursive: true });
   copyFileSync(splashSrc, join(splashDistDir, "splash.html"));
   copyFileSync(splashSrc, join(splashDistDir, "index.html"));
-  console.log("[build-desktop]   已同步启动页 → src-tauri/splash-assets/（frontendDist，编译期嵌入）");
+  console.log(
+    "[build-desktop]   已同步启动页 → src-tauri/splash-assets/（frontendDist，编译期嵌入）",
+  );
 }
 
 // fallback index.html：与 splash.html 内容一致，避免直接访问根路径时出现旧 spinner
-const splashHtml = existsSync(splashSrc) ? readFileSync(splashSrc, "utf8") : `<!DOCTYPE html>
+const splashHtml = existsSync(splashSrc)
+  ? readFileSync(splashSrc, "utf8")
+  : `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Comfy APP</title></head>
 <body style="background:#0A0A0F;color:#E5E5E7;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,sans-serif;">Comfy APP 正在启动…</body></html>`;
 writeFileSync(join(staticDir, "index.html"), splashHtml, "utf8");
 
-console.log("[build-desktop]   static 组装完成（standalone + .next/static + public + splash.html + index.html fallback）");
+console.log(
+  "[build-desktop]   static 组装完成（standalone + .next/static + public + splash.html + index.html fallback）",
+);
 
 // ── 2.5 §整治：体积护栏 ──
 // 若 static 仍超过阈值，说明 Next standalone file tracing 再次失控（把整仓库
@@ -217,7 +281,10 @@ const totalMB = dirSize(staticDir) / 1024 / 1024;
 if (totalMB / 1024 > MAX_STATIC_GB) {
   const top = readdirSync(staticDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
-    .map((e) => ({ name: e.name, mb: dirSize(join(staticDir, e.name)) / 1024 / 1024 }))
+    .map((e) => ({
+      name: e.name,
+      mb: dirSize(join(staticDir, e.name)) / 1024 / 1024,
+    }))
     .sort((a, b) => b.mb - a.mb)
     .slice(0, 8);
   fail(
@@ -227,7 +294,9 @@ if (totalMB / 1024 > MAX_STATIC_GB) {
       "。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。",
   );
 }
-console.log(`[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈值 ${MAX_STATIC_GB}GB）`);
+console.log(
+  `[build-desktop]   static 体积 ${totalMB.toFixed(1)}MB（护栏阈值 ${MAX_STATIC_GB}GB）`,
+);
 
 // ── 3/4 Node 运行时 sidecar ────────────────────────────────
 console.log("[build-desktop] 3/4 复制 Node 运行时为 sidecar ...");
@@ -239,7 +308,9 @@ copyFileSync(process.execPath, sidecar);
 if (process.platform !== "win32") {
   chmodSync(sidecar, 0o755);
 }
-console.log(`[build-desktop]   sidecar: ${sidecar} (${(statSync(sidecar).size / 1024 / 1024).toFixed(1)} MB)`);
+console.log(
+  `[build-desktop]   sidecar: ${sidecar} (${(statSync(sidecar).size / 1024 / 1024).toFixed(1)} MB)`,
+);
 
 // ── 4/4 完成 ───────────────────────────────────────────────
 console.log("[build-desktop] 4/4 完成。请执行 pnpm tauri build 打出安装包。");

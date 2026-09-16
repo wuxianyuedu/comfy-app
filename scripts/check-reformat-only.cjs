@@ -57,6 +57,24 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync, spawnSync } = require("node:child_process");
+// pnpm 可执行形态的唯一判据（scripts/launcher-core/shell.mjs 的 runPnpmSync）。
+// 这里曾是**第二份**平台判据（`process.platform === "win32" ? "pnpm.cmd" : "pnpm"`）：
+// Windows 上批处理 Node 起不来（EINVAL），一旦走到这一档，「纯格式化」判定就对每个
+// 文件退回「无法判定」—— 门禁一声不吭地失效（ISSUE #638 同族）。
+// 判据模块是 ESM，.cjs 只能动态 import()，故声明为惰性句柄、由 main 先加载。
+let runPnpmSync = null;
+async function loadShell() {
+  if (runPnpmSync) return runPnpmSync;
+  try {
+    ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
+  } catch (e) {
+    console.error(
+      `[reformat] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${e.message}`,
+    );
+    process.exit(2);
+  }
+  return runPnpmSync;
+}
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
@@ -183,18 +201,17 @@ function formatFile(text, file) {
     r.kind === "entry"
       ? [r.entry, "--stdin-filepath", `probe.${ext}`]
       : ["exec", "prettier", "--stdin-filepath", `probe.${ext}`];
-  const cmd =
+  // 两档都经同一处判据：`entry` 档起的是当前 Node 运行时（跨平台无分支），
+  // 兜底档起的是 pnpm —— 后者必须复用 runPnpmSync，不许自己拼可执行名。
+  const res =
     r.kind === "entry"
-      ? process.execPath
-      : process.platform === "win32"
-        ? "pnpm.cmd"
-        : "pnpm";
-  const res = spawnSync(cmd, args, {
-    cwd: r.cwd,
-    input: text,
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
+      ? spawnSync(process.execPath, args, {
+          cwd: r.cwd,
+          input: text,
+          encoding: "utf8",
+          maxBuffer: 64 * 1024 * 1024,
+        })
+      : runPnpmSync(args, { cwd: r.cwd, timeoutMs: 600_000 });
   if (res.error || typeof res.stdout !== "string" || res.status !== 0)
     return null;
   return res.stdout;
@@ -234,7 +251,8 @@ function isStagedReformatOnly(headRev, file) {
   return compareReformatted(before, after, file);
 }
 
-function main() {
+async function main() {
+  await loadShell();
   /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
    *  「拆成两次提交」在这里不是可选动作 —— 上游的形态已经定死在历史里，本地
    *  无法把一次 merge 的重排与行为改动分开。判据取 `MERGE_HEAD` 是否存在：

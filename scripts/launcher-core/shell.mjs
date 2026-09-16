@@ -57,8 +57,13 @@ export function isWindows(platform = process.platform) {
  * @param {WhichCommandOptions} [options]
  * @returns {string | null}
  */
-export function whichCommand(name, { env = process.env, platform = process.platform } = {}) {
-  const dirs = String(env.PATH ?? "").split(path.delimiter).filter(Boolean);
+export function whichCommand(
+  name,
+  { env = process.env, platform = process.platform } = {},
+) {
+  const dirs = String(env.PATH ?? "")
+    .split(path.delimiter)
+    .filter(Boolean);
   const exts = executableExts(env, platform);
   for (const dir of dirs) {
     for (const ext of exts) {
@@ -157,7 +162,8 @@ export function executableKind(candidate) {
     if (text.startsWith("#!")) return "shebang";
     // 批处理：以 `@` 起头（`@echo off` / `@SETLOCAL`），或 `:label` / `echo off`。
     // 只认开头，不看扩展名 —— `.cmd` 只是命名习惯，内容才是判据。
-    if (/^@?\s*(echo|setlocal)\b/i.test(text) || /^@/.test(text)) return "batch";
+    if (/^@?\s*(echo|setlocal)\b/i.test(text) || /^@/.test(text))
+      return "batch";
     // 可打印 ASCII 起头 → 文本脚本；其余按二进制（含 Windows 的 MZ 头）。
     return /^[\x09\x0a\x0d\x20-\x7e]{2}$/.test(text) ? "script" : "binary";
   } catch {
@@ -189,12 +195,21 @@ export function executableKind(candidate) {
  * @param {WhichCommandOptions} [options] env / platform 可注入，供单测与「模拟另一平台」
  * @returns {CommandUsability}
  */
-export function usableCommand(candidate, probeArgs = ["--version"], { env = process.env, platform = process.platform } = {}) {
+export function usableCommand(
+  candidate,
+  probeArgs = ["--version"],
+  { env = process.env, platform = process.platform } = {},
+) {
   const kind = executableKind(candidate);
   try {
     fs.accessSync(candidate, fs.constants.X_OK);
   } catch {
-    return { ok: false, command: candidate, prefixArgs: [], reason: "no-exec-permission" };
+    return {
+      ok: false,
+      command: candidate,
+      prefixArgs: [],
+      reason: "no-exec-permission",
+    };
   }
   // **批处理（`.cmd` / `.bat`）在 Windows 上不由「真起一次」来判**：它只有 cmd.exe
   // 会解释，Node 起它必然失败（实测 `EINVAL`）。此前把它与 `.ps1` 混成同一种
@@ -206,16 +221,32 @@ export function usableCommand(candidate, probeArgs = ["--version"], { env = proc
   if (isWindows(platform) && kind === "batch") {
     const fallback = siblingFallback(candidate, { env, platform });
     if (fallback) return fallback;
-    return { ok: false, command: candidate, prefixArgs: [], reason: "batch-script" };
+    return {
+      ok: false,
+      command: candidate,
+      prefixArgs: [],
+      reason: "batch-script",
+    };
   }
-  const probe = spawnSync(candidate, probeArgs, { stdio: "ignore", windowsHide: true, timeout: 10_000 });
+  const probe = spawnSync(candidate, probeArgs, {
+    stdio: "ignore",
+    windowsHide: true,
+    timeout: 10_000,
+  });
   /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
-  const code = /** @type {NodeJS.ErrnoException | undefined} */ (probe.error)?.code;
-  if (!code) return { ok: true, command: candidate, prefixArgs: [], reason: null };
+  const code = /** @type {NodeJS.ErrnoException | undefined} */ (probe.error)
+    ?.code;
+  if (!code)
+    return { ok: true, command: candidate, prefixArgs: [], reason: null };
 
   const fallback = siblingFallback(candidate, { env, platform });
   if (fallback) return fallback;
-  return { ok: false, command: candidate, prefixArgs: [], reason: String(code) };
+  return {
+    ok: false,
+    command: candidate,
+    prefixArgs: [],
+    reason: String(code),
+  };
 }
 
 /** 同目录回退形态：**同名的 `.ps1`**（经 PowerShell 宿主）。
@@ -230,7 +261,10 @@ export function usableCommand(candidate, probeArgs = ["--version"], { env = proc
  *  `pnpm.ps1`，批处理是 `pnpm.CMD` → `pnpm.ps1`（不是 `pnpm.CMD.ps1`）。
  *  只按字符串拼接会让 `.CMD` 一侧的回退永远找不到，等于没修。 */
 /** @param {string} candidate @param {WhichCommandOptions} [options] @returns {CommandUsability | null} */
-function siblingFallback(candidate, { env = process.env, platform = process.platform } = {}) {
+function siblingFallback(
+  candidate,
+  { env = process.env, platform = process.platform } = {},
+) {
   const ext = path.extname(candidate);
   const script = (ext ? candidate.slice(0, -ext.length) : candidate) + ".ps1";
   if (!isFile(script)) return null;
@@ -249,14 +283,20 @@ function siblingFallback(candidate, { env = process.env, platform = process.plat
  * @param {WhichCommandOptions} [options]
  * @returns {string | null}
  */
-export function powershellHost({ env = process.env, platform = process.platform } = {}) {
+export function powershellHost({
+  env = process.env,
+  platform = process.platform,
+} = {}) {
   if (!isWindows(platform)) return null;
   for (const name of ["pwsh", "powershell"]) {
     const exts = executableExts(env, platform).map((ext) => ext || ".EXE");
-    for (const dir of String(env.PATH ?? "").split(path.delimiter).filter(Boolean)) {
+    for (const dir of String(env.PATH ?? "")
+      .split(path.delimiter)
+      .filter(Boolean)) {
       for (const ext of exts) {
         const candidate = path.join(dir, name + ext);
-        if (isFile(candidate) && executableKind(candidate) === "binary") return candidate;
+        if (isFile(candidate) && executableKind(candidate) === "binary")
+          return candidate;
       }
     }
   }
@@ -269,7 +309,11 @@ export function powershellHost({ env = process.env, platform = process.platform 
  * @param {WhichCommandOptions} [options] env / platform 可注入，供单测与「模拟另一平台」
  * @returns {{ command: string, prefixArgs: string[] }}
  */
-export function commandInvocation(candidate, probeArgs = ["--version"], { env = process.env, platform = process.platform } = {}) {
+export function commandInvocation(
+  candidate,
+  probeArgs = ["--version"],
+  { env = process.env, platform = process.platform } = {},
+) {
   const usable = usableCommand(candidate, probeArgs, { env, platform });
   return usable.ok
     ? { command: usable.command, prefixArgs: usable.prefixArgs }
@@ -293,7 +337,10 @@ export function commandInvocation(candidate, probeArgs = ["--version"], { env = 
  * @returns {{ command: string, args: string[], candidate: string, viaHost: boolean } | null}
  *   `null` = PATH 上没有任何可用的 pnpm 形态（调用方必须给出可见出口，不能静默 `null → 0`）
  */
-export function pnpmInvocation(args = [], { env = process.env, platform = process.platform, name = "pnpm" } = {}) {
+export function pnpmInvocation(
+  args = [],
+  { env = process.env, platform = process.platform, name = "pnpm" } = {},
+) {
   const candidate = whichCommand(name, { env, platform });
   if (!candidate) return null;
   const probe = ["-v"];
@@ -364,7 +411,11 @@ export function spawnInGroup({
  * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, stdio?: "pipe"|"inherit"|"ignore" }} [options]
  * @returns {{ ok: boolean, stdout: string, stderr: string, status: number | null }}
  */
-export function runSync(command, args = [], { cwd, env, timeoutMs = 600_000, stdio = "pipe" } = {}) {
+export function runSync(
+  command,
+  args = [],
+  { cwd, env, timeoutMs = 600_000, stdio = "pipe" } = {},
+) {
   const result = spawnSync(command, args, {
     cwd,
     env,
@@ -379,5 +430,82 @@ export function runSync(command, args = [], { cwd, env, timeoutMs = 600_000, std
     stdout: String(result.stdout ?? ""),
     stderr: String(result.stderr ?? ""),
     status: result.status ?? null,
+  };
+}
+
+/**
+ * 同步跑一条 `pnpm …` 命令，形态由 `pnpmInvocation()` 一处判定。
+ *
+ * 存在的理由：`pnpmInvocation` 只解决了「**服务**怎么起」（`dev.mjs` / `start.mjs`
+ * / `dev-launcher.mjs`），而**门禁与工具脚本**仍在自己拼可执行名 —— `check-format.cjs`
+ * 写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`。那条判据在 Windows 上
+ * 必错：批处理只有 cmd.exe 会解释，Node 起它直接 `EINVAL`（`res.error.code`），
+ * 于是 `pnpm format:ratchet` / `check:all` 在提交门槛上直接崩 ——
+ * `node scripts/check-format.cjs` 只打印一句
+ * `[format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL` 就 exit 2
+ * （ISSUE #638）。同一条坑在 §2.1.1 已解决过三次，这里是第四次，所以不再逐处修，
+ * 而是把「同步跑一条 pnpm」也收成**唯一出口**。
+ *
+ * 契约（与既有 `pnpmInvocation` 一致）：
+ *   · 调用方只给 pnpm 后面的参数，不拼可执行名、不按平台分叉；
+ *   · 命令压根没起来（`spawnSync` 的 `error` / `status === null`）必须与「跑完但
+ *     非零退出」分开报 —— 前者 stderr 通常是空的，只报退出码等于没说原因，
+ *     而旧写法 `status ?? 0` 会把它读成**成功**（ISSUE #576 的形态）。
+ *
+ * @param {string[]} [args] 接在 pnpm 后面的参数
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number,
+ *           stdio?: "pipe"|"inherit"|"ignore", name?: string, platform?: NodeJS.Platform }} [options]
+ * @returns {{ ok: boolean, stdout: string, stderr: string, status: number | null,
+ *             error: NodeJS.ErrnoException | null, command: string, args: string[] }}
+ *   `status === null && error` = 命令没起来（判据是 `error`，不是退出码）
+ */
+export function runPnpmSync(
+  args = [],
+  {
+    cwd,
+    env = process.env,
+    timeoutMs = 600_000,
+    stdio = "pipe",
+    name = "pnpm",
+    platform = process.platform,
+  } = {},
+) {
+  const invocation = pnpmInvocation(args, { env, platform, name });
+  if (!invocation) {
+    return {
+      ok: false,
+      stdout: "",
+      stderr:
+        `PATH 上找不到可用的 pnpm（未发现 ${name} 的任何可执行形态）。\n` +
+        "  自查：pnpm check:toolchain（或 node scripts/check-pnpm-available.mjs）",
+      status: null,
+      error: Object.assign(new Error(`${name} not found on PATH`), {
+        code: "ENOENT",
+      }),
+      command: name,
+      args,
+    };
+  }
+  const result = spawnSync(invocation.command, invocation.args, {
+    cwd,
+    env,
+    encoding: "utf8",
+    timeout: timeoutMs,
+    windowsHide: true,
+    shell: false,
+    stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
+  });
+  const error = /** @type {NodeJS.ErrnoException | null} */ (
+    result.error ?? null
+  );
+  return {
+    ok: !error && result.status === 0,
+    stdout: String(result.stdout ?? ""),
+    stderr: String(result.stderr ?? ""),
+    // 「没起来」时 status 为 null：保留 null 而不是 `?? 0`，调用方必须显式分流。
+    status: error ? null : (result.status ?? null),
+    error,
+    command: invocation.command,
+    args: invocation.args,
   };
 }

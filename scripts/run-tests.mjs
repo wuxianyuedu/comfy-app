@@ -23,13 +23,12 @@
  *   node scripts/run-tests.mjs src/lib/media.test.ts
  *   node scripts/run-tests.mjs -- --reporter=verbose
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { whichCommand } from "./launcher-core/shell.mjs";
+import { runPnpmSync } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -53,13 +52,6 @@ function main() {
     console.log("        [INFO] 请先在项目根目录执行：pnpm install");
     return 1;
   }
-  const pnpm = whichCommand("pnpm");
-  if (!pnpm) {
-    console.error("[ERROR] 未找到 pnpm 命令（需 corepack enable）。");
-    console.log("        [INFO] 修复：corepack enable && corepack prepare pnpm@<packageManager 版本> --activate");
-    return 1;
-  }
-
   const args = ["exec", "vitest", "run"];
   if (passthrough.length > 0) {
     console.log(
@@ -68,17 +60,39 @@ function main() {
     args.push(...passthrough);
   } else if (full) {
     if (KNOWN_FAILED_FILES.length > 0) {
-      console.log(`[INFO] 全量模式：已知基线失败文件一并运行（${KNOWN_FAILED_FILES.join(" / ")}）。`);
+      console.log(
+        `[INFO] 全量模式：已知基线失败文件一并运行（${KNOWN_FAILED_FILES.join(" / ")}）。`,
+      );
     }
   } else if (KNOWN_FAILED_FILES.length > 0) {
-    console.log(`[INFO] 排除已知基线失败文件：${KNOWN_FAILED_FILES.join(" / ")}`);
+    console.log(
+      `[INFO] 排除已知基线失败文件：${KNOWN_FAILED_FILES.join(" / ")}`,
+    );
     for (const f of KNOWN_FAILED_FILES) args.push("--exclude", f);
   }
 
   console.log("");
   console.log(`>>> pnpm ${args.map((a) => `"${a}"`).join(" ")}`);
   console.log("");
-  const result = spawnSync(pnpm, args, { cwd: ROOT, stdio: "inherit", windowsHide: true });
+  // pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：这里曾拿
+  // `whichCommand("pnpm")` 的裸路径直接 spawn —— Windows 上它可能是 Node 起不来的
+  // `.cmd`（EINVAL，只有 cmd.exe 解释批处理），而能跑的是同目录经 PowerShell 宿主的
+  // `.ps1`，宿主与 `-File` 参数必须一起给（ISSUE #638）。
+  const result = runPnpmSync(args, {
+    cwd: ROOT,
+    stdio: "inherit",
+    timeoutMs: 3_600_000,
+  });
+  if (result.error) {
+    console.error(
+      `[ERROR] 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
+    );
+    console.log(
+      `        [INFO] 实际命令：${result.command} ${result.args.join(" ")}`,
+    );
+    console.log("        [INFO] 自查：pnpm check:toolchain");
+    return 1;
+  }
   const code = result.status ?? 1;
   console.log("");
   if (code === 0) console.log("[OK] vitest 全部通过。");
