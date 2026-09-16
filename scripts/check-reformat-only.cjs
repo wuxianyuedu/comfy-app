@@ -41,8 +41,16 @@
  * 为什么 CI 也要跑:squash 合并后 master 上只剩一个提交,「拆成两次提交」在本地
  * 不做就再没有机会补,而它造成的后果(blame 失真)是永久性的。
  *
+ * **pre-commit 看的是「暂存区」，不是 HEAD**：这个脚本接在 `.githooks/pre-commit`
+ * 里,而 pre-commit 在提交对象生成**之前**运行 —— 此时 `HEAD` 仍是上一次提交。
+ * 早先的实现无条件取 `HEAD~1..HEAD`,于是它判的其实是**上一次提交**：本次暂存内容
+ * 一个都没参与,而只要上一次恰好是格式化提交(例如 master 上的存量治理),门禁就会
+ * 把那次已合并的提交当成「本次」拦下,后续每个提交都过不去。
+ * 所以默认口径改为「有暂存改动就判暂存区,否则判 HEAD 这一次提交」——
+ * CI(`--range`)与本地盘点的行为都不变,pre-commit 拿到的是它真正该看的东西。
+ *
  * 用法:
- *   node scripts/check-reformat-only.cjs            # 检查 HEAD 这一次提交
+ *   node scripts/check-reformat-only.cjs            # 判暂存区；无暂存改动则判 HEAD
  *   node scripts/check-reformat-only.cjs --range A..B
  *   node scripts/check-reformat-only.cjs --strict   # 阈值降为 1(排查/盘点用)
  */
@@ -66,13 +74,24 @@ function git(args) {
   // 必须显式给 cwd：不给的话 git 会沿「脚本所在进程」的 cwd 向上找仓库，
   // 于是门禁检查的是**调用者所在的仓库**而不是被检查的那个 —— 在临时仓库里
   // 复跑时表现为「看了另一个仓库的历史」，判定结果与现场无关。
-  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return execFileSync("git", args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    // 「对象不存在」是可预期的跳过分支,git 的 `fatal:` 不该冒充门禁的失败输出。
+    stdio: ["ignore", "pipe", "ignore"],
+  });
 }
 
 function gitOrEmpty(args) {
   try {
     return git(args);
   } catch {
+    /* 「取不到」是**预期分支**而不是异常:新增文件在 HEAD 里本就不存在,
+     * `git show HEAD:<新文件>` 会以非零码退出。默认实现会把它连同 git 自己的
+     * `fatal: path ... does not exist in 'HEAD'` 一起打到 stderr —— 那种输出
+     * 看起来像门禁自己崩了,会诱导人去排查一个正常的跳过分支。
+     * 所以这里显式吞掉子进程输出,只保留「拿不到 = 空串」这一条语义。 */
     return "";
   }
 }
@@ -163,14 +182,20 @@ function formatFile(text, file) {
     r.kind === "entry"
       ? [r.entry, "--stdin-filepath", `probe.${ext}`]
       : ["exec", "prettier", "--stdin-filepath", `probe.${ext}`];
-  const cmd = r.kind === "entry" ? process.execPath : process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const cmd =
+    r.kind === "entry"
+      ? process.execPath
+      : process.platform === "win32"
+        ? "pnpm.cmd"
+        : "pnpm";
   const res = spawnSync(cmd, args, {
     cwd: r.cwd,
     input: text,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  if (res.error || typeof res.stdout !== "string" || res.status !== 0) return null;
+  if (res.error || typeof res.stdout !== "string" || res.status !== 0)
+    return null;
   return res.stdout;
 }
 
@@ -183,6 +208,11 @@ function formatFile(text, file) {
 function isReformatOnly(beforeRev, afterRev, file) {
   const before = gitOrEmpty(["show", `${beforeRev}:${file}`]);
   const after = gitOrEmpty(["show", `${afterRev}:${file}`]);
+  return compareReformatted(before, after, file);
+}
+
+/** 判据本体(与「内容从哪来」解耦):`before` 过一遍 prettier 是否逐字变成 `after`。 */
+function compareReformatted(before, after, file) {
   // 任一侧取不到(新增 / 删除 / 改名)→ 不判定:本门禁只判「既有的文件被重排」。
   if (!before || !after) return false;
 
@@ -193,34 +223,104 @@ function isReformatOnly(beforeRev, afterRev, file) {
   return norm(formatted) === norm(after);
 }
 
+/**
+ * 暂存区口径:改动前取 `HEAD:<path>`,改动后取 `:<path>`(index)。
+ * 新增文件在 HEAD 里不存在 → 任一侧为空即跳过(纯新增不是「重排既有文件」)。
+ */
+function isStagedReformatOnly(headRev, file) {
+  const before = gitOrEmpty(["show", `${headRev}:${file}`]);
+  const after = gitOrEmpty(["show", `:${file}`]);
+  return compareReformatted(before, after, file);
+}
+
 function main() {
   const args = process.argv.slice(2);
   const limit = args.includes("--strict") ? 1 : LIMIT;
   const rangeIdx = args.indexOf("--range");
   const range = rangeIdx >= 0 ? args[rangeIdx + 1] : null;
 
+  /* 默认口径(无 --range):**优先判暂存区**。
+   * pre-commit 在提交对象生成之前运行,`HEAD~1..HEAD` 指向的是上一次提交 ——
+   * 判它等于本次提交完全没被检查(见文件头)。`git diff --cached` 正是「本次将要
+   * 提交的内容」,且它的 diff 基线是 HEAD,与 `git show HEAD:<path>` 天然对齐。 */
+  const staged = range
+    ? ""
+    : gitOrEmpty(["diff", "--cached", "--no-color", "--unified=0"]);
+
+  if (!range && !staged.trim()) {
+    /* 没有暂存改动:回落到「判 HEAD 这一次提交」(本地事后复盘 / CI 之外的用法)。
+     * 此时基准是 HEAD~1,与改动前版本一致。 */
+    const [afterRev, beforeRev] = ["HEAD", "HEAD~1"];
+    if (
+      gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === ""
+    ) {
+      console.log(
+        `[reformat] 无可比父提交（${beforeRev} 不存在，首次提交或浅克隆），跳过`,
+      );
+      return;
+    }
+    const patch = gitOrEmpty([
+      "diff",
+      "--no-color",
+      "--unified=0",
+      `${beforeRev}..${afterRev}`,
+    ]);
+    if (!patch.trim()) {
+      console.log("[reformat] 本次提交没有文件改动，跳过");
+      return;
+    }
+    const files = collectChangedFiles(patch);
+    const reformatOnly = files.filter((f) =>
+      isReformatOnly(beforeRev, afterRev, f.after),
+    );
+    report(files, reformatOnly, limit);
+    return;
+  }
+
   const [afterRev, beforeRev] = range
     ? (() => {
         const [a, b] = range.split("..");
         return [b, a];
       })()
-    : ["HEAD", "HEAD~1"];
+    : ["HEAD", "HEAD"];
 
-  // 浅克隆 / 首次提交时父提交不存在:没有可比的基准,不做断言。
-  if (gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === "") {
-    console.log(`[reformat] 无可比父提交（${beforeRev} 不存在，首次提交或浅克隆），跳过`);
+  if (
+    range &&
+    gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === ""
+  ) {
+    console.log(
+      `[reformat] 无可比父提交（${beforeRev} 不存在，首次提交或浅克隆），跳过`,
+    );
     return;
   }
 
-  const patch = gitOrEmpty(["diff", "--no-color", "--unified=0", `${beforeRev}..${afterRev}`]);
+  const patch = range
+    ? gitOrEmpty([
+        "diff",
+        "--no-color",
+        "--unified=0",
+        `${beforeRev}..${afterRev}`,
+      ])
+    : staged;
+
   if (!patch.trim()) {
     console.log("[reformat] 本次提交没有文件改动，跳过");
     return;
   }
 
+  /* 暂存区口径下,「改动后」的内容在 index 里而不是某个 rev —— 新增文件的
+   * 改动前版本不存在(该文件在 HEAD 里没有),所以用空串表示,由 isReformatOnly
+   * 按「任一侧取不到就不判定」跳过(纯新增不算格式化)。 */
   const files = collectChangedFiles(patch);
-  const reformatOnly = files.filter((f) => isReformatOnly(beforeRev, afterRev, f.after));
+  const reformatOnly = files.filter((f) =>
+    isStagedReformatOnly(beforeRev, f.after),
+  );
 
+  report(files, reformatOnly, limit);
+}
+
+/** 输出结论并按阈值决定是否阻断(两个口径共用,避免两份会各自漂移的判定)。 */
+function report(files, reformatOnly, limit) {
   console.log(
     `[reformat] 本次提交改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.length} 个（阈值 ${limit}）`,
   );
@@ -232,7 +332,9 @@ function main() {
           .slice(0, 20)
           .map((f) => `  · ${f.after}`)
           .join("\n") +
-        (reformatOnly.length > 20 ? `\n  … 其余 ${reformatOnly.length - 20} 个省略` : "") +
+        (reformatOnly.length > 20
+          ? `\n  … 其余 ${reformatOnly.length - 20} 个省略`
+          : "") +
         "\n\n  为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效," +
         "\n  评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。" +
         "\n\n  修法:拆成两次提交。" +
@@ -261,4 +363,4 @@ function main() {
 if (require.main === module) main();
 
 /** 供测试直接引用:纯判定函数（不执行 git / prettier）。 */
-module.exports = { collectChangedFiles, LIMIT, SOURCE_RE };
+module.exports = { collectChangedFiles, compareReformatted, LIMIT, SOURCE_RE };
