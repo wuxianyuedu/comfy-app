@@ -193,6 +193,8 @@
 |------|---------------------|
 | 双击 `tools/start/run-local.ps1` 提示「找不到 node」 | Node.js 没装或装完没重启电脑，先完成 4.1 |
 | 双击 `tools/start/run-local.ps1` 报 `pnpm` 相关错误 | 可先手动重装依赖：在项目根打开终端执行 `pnpm install` 再双击启动 |
+| 双击 `tools/start/run-local.ps1` 时 `pnpm install` 失败，报 `'sh' is not recognized as an internal or external command` / `ERR_PNPM_EXECUTOR_LIFECYCLE_SCRIPT_FAILED` | 旧版本用 `sh` 起安装后的钩子脚本，而 Windows 的 cmd 没有 `sh`（ISSUE #636）。**先拉取最新代码**（改成纯 Node 入口后即可正常安装）；仍失败再按上一条处理 |
+| 再双击 `tools/start/run-local.ps1` 直接显示「依赖已就绪、跳过安装」，但应用仍起不来 | 依赖**装过**但可能不是当前代码要求的版本（拉了更新没重装）。启动器现在会比对 lockfile 并自动补装、补装后复核；若报「依赖补装后仍未就绪」，照提示删掉 `node_modules` 后重新双击本脚本 |
 | 应用一直开着、期间拉到新代码，打开某功能变成白屏 / 点了没反应（控制台报 `xxx is not a function`） | 「界面比代码旧」：已打开的界面不会因代码变化重建自己。**按 `Ctrl+R` 重载一次即恢复**；仍不行就关掉应用重新双击启动入口。详见 [`guide-stale-code.md`](guide-stale-code.md) |
 | 团队更新了代码后启动报错 / 拉取更新后怎么同步环境 | 见 [`guides/sync-after-pull.md`](guides/sync-after-pull.md)：先关掉运行中的窗口，重双击 `tools/start/run-local.ps1`；报 pnpm 相关错误则删 `node_modules` 后重双击 |
 | 启动时提示「pnpm 版本不匹配 / pnpm 有更新」 | 启动器会自动检测并在必要时用 corepack 对齐，**通常无需手动操作**；若自动对齐失败，窗口/日志会给出提示，手动执行一次 `corepack enable && corepack prepare pnpm@12.4.1 --activate`（版本号以提示为准）即可 |

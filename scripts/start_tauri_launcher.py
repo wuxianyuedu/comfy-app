@@ -1926,12 +1926,75 @@ def _warn_if_stale_shell(project_root: str) -> str:
 
 
 def _node_exe() -> str:
-    """解析 node 可执行文件（不硬编码安装路径）。"""
-    for name in ("node", "node.exe"):
+    """解析 node 可执行文件（不硬编码安装路径，但**不选调度不了的形态**）。
+
+    为什么不能用 `shutil.which("node")` 一把梭（ISSUE #636 同族）：`which` 是按
+    `PATHEXT` 找**存在的文件**，命中后交给 `subprocess.Popen` 起 —— 而 bat/cmd 由
+    `CreateProcess` 起不来（`EINVAL`、Windows 上的批处理只有 cmd.exe 会解释它），
+    corepack 那类**无扩展名**的 shim 也可能因为不是 PE 镜像而失败。三种形态里只有
+    「真的能跑起来」的那个可用，判据与 Node 侧 `launcher-core/shell.mjs` 同口径：
+    `.exe` / 不带扩展名（真的 PE 或已配好文件关联）优先，`.cmd` / `.bat` 垫底且
+    必须经 `cmd.exe /c` 起。
+
+    返回的是「可直接交给 Popen 的命令」——可能是 `cmd.exe` 配 `/c <bat>`，
+    调用方按 `[exe] + node_args` 使用。
+    """
+    candidates: list[str] = []
+    for name in ("node", "node.exe", "node.cmd", "node.bat"):
         found = shutil.which(name)
-        if found:
-            return found
-    return ""
+        if found and found not in candidates:
+            candidates.append(found)
+    if not candidates:
+        return ""
+
+    def rank(path: str) -> int:
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".exe":
+            return 0
+        if ext == "":
+            return 1
+        return 2  # .cmd / .bat：只能经 cmd.exe
+
+    best = min(candidates, key=rank)
+    ext = os.path.splitext(best)[1].lower()
+    if ext in (".cmd", ".bat"):
+        comspec = os.environ.get("ComSpec") or "cmd.exe"
+        if _is_node_usable([comspec, "/c", best]):
+            return comspec
+        return ""
+    if not _is_node_usable([best, "--version"]):
+        # 存在但调度不了（不是 PE 镜像 / 权限不对）：宁可为空让调用方给可见出口，
+        # 也不要拉起一个必然 EINVAL 的进程。
+        return ""
+    return best
+
+
+def _is_node_usable(argv: list[str]) -> bool:
+    """真起一次确认「这个形态能跑」（判据与 Node 侧 usableCommand 同口径）。"""
+    try:
+        proc = subprocess.run(
+            argv,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+def _node_argv(node: str, node_args: list[str]) -> list[str]:
+    """把 node 命令与脚本参数拼成 Popen 的 argv（bat/cmd 形态要经 cmd.exe）。
+
+    `cmd /c node <args>`：由 cmd.exe 自己按 PATHEXT 解析 `node`，与用户在终端敲
+    `node <args>` 同语义 —— 而 `cmd.exe` 的参数是 `subprocess.list2cmdline` 拼的
+    带引号形式，`/c` 后面的整串会被 cmd 重新解析一次，这是它能工作、Node 的
+    `spawn` 不能的原因。
+    """
+    if os.path.splitext(node)[1].lower() in (".cmd", ".bat"):
+        return [node, "/c", "node", *node_args]
+    return [node, *node_args]
 
 
 def _shell_exe(project_root: str) -> str:
@@ -1992,7 +2055,7 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
         out = open(out_path, "a", encoding="utf-8", buffering=1)
         err = open(err_path, "a", encoding="utf-8", buffering=1)
         return subprocess.Popen(
-            [node] + node_args,
+            _node_argv(node, node_args),
             cwd=project_root,
             stdin=subprocess.DEVNULL,
             stdout=out,

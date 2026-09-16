@@ -20,7 +20,7 @@
     "format:reformat-guard": "node scripts/check-reformat-only.cjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "postinstall": "sh scripts/install-git-hooks.sh || true",
+    "postinstall": "node scripts/install-git-hooks.mjs",
     "preview": "node scripts/start.mjs",
     "start": "node scripts/start.mjs",
     "test": "vitest run",

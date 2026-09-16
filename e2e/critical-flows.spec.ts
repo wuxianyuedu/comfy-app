@@ -491,8 +491,16 @@ test.describe("应用页签与全屏视图 @critical", () => {
     }) => {
       await stubBackend(page);
       const ROWS = 2000;
+      /* 夹具的**时刻锚点必须在路由外取一次**（不能在 handler 里每轮 `Date.now()`）。
+       *
+       * 轮询会反复打这个路由，而真实服务端按 `offset` 只回**新增**内容——同一个
+       * 文件区间重读出的行时刻不变，客户端按 `(时刻, 级别, 正文)` 去重后时间线
+       * 稳定。夹具若每轮重算锚点，整批 2000 行的时刻都会平移，去重全部失效，
+       * 时间线每 2s 净增 2000 条（且新旧两批在时刻上交错），「滚到底看最后一行」
+       * 就落到哪一批上全看轮询次数与 `Date.now()` 的抖动——断言与虚拟化本身
+       * 无关，却会随机器快慢乱红。锚点固定后夹具与真实服务端同语义。 */
+      const start = Date.now() - ROWS * 1000;
       await page.route("**/api/logs/current**", async (route: Route) => {
-        const start = Date.now() - ROWS * 1000;
         const p = (n: number, l = 2) => String(n).padStart(l, "0");
         const fmt = (ms: number) => {
           const d = new Date(ms);

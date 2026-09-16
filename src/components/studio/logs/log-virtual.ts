@@ -31,6 +31,11 @@
  * `scrollHeight` 上限内（§2.1.1 第 3 条的兜底）——误差只影响滚动条长度，
  * 不会让内容跑到视口外。
  *
+ * ── 贴底（pin）为什么也在这里（ISSUE #637）───────────────────────────
+ * 「滚不到底」的根因是视图每轮轮询把 `scrollTop` 写回基线，而那条算术
+ * （目标行序号 / 该不该动 / 写多深）是纯的：放在这里可以脱离 DOM 断言，
+ * 视图只剩「问 DOM 拿目标节点几何」。判据与陷阱见 §7.28.5。
+ *
  * @module logs/log-virtual
  */
 
@@ -198,4 +203,89 @@ export function scrollHeightOf(estimated: number): {
     return { height: estimated, compressed: false };
   }
   return { height: LOG_SCROLL_MAX, compressed: true };
+}
+
+/* ── 贴底（pin）：新日志到达时把「已读水位」钉住 ────────────────────────
+ *
+ * 面板贴底时不追最新，只把**基线**（用户读到的最后一条）钉在原地，新行在它
+ * 下面累积——见 `LogPanel` 的贴底 effect（ISSUE #262 复审）。三个判据在这里
+ * 抽成纯函数：位置算得对是**可见结果**的前提（「滚不到底」正是这里算歪的），
+ * 而 DOM 只提供「目标行有没有渲染 / 它的几何」，不该把算术留在视图里。
+ */
+
+/**
+ * 贴底目标行的**页内序号**：`max(基线, 已追到哪)`，并钳到本页最后一条。
+ *
+ * 取 max 是为了「新行一条条露出来」（不跳空），钳到末条是为了不被后面的新行
+ * 无限拖走。
+ */
+export function pinTargetIndex(
+  baseline: number,
+  applied: number,
+  bottomIndex: number,
+): number {
+  return Math.max(
+    0,
+    Math.min(baseline, bottomIndex),
+    Math.min(applied, bottomIndex),
+  );
+}
+
+/**
+ * 贴底要写入的 `scrollTop`：让目标行**贴住视口底边**。
+ *
+ * 几何**只取自位置表** `rows[...]`（`{ start, size }`，即 {@link layoutRows} 的
+ * 那一份）。理由有两条，都踩过：
+ *
+ *   1. 位置表是 `translateY`（渲染）与滚动条（总高）共用的**同一份口径**。拿真实
+ *      节点的 `offsetTop + offsetHeight` 量是第二套坐标，两套会在窗口边界上分叉；
+ *   2. 虚拟化之后行的 `offsetParent` 是那层 `translateY` 过的内层容器，`offsetTop`
+ *      回答的是「它在**当前窗口**里的位置」而不是「它在整页内容里的位置」。拿它算
+ *      `scrollTop` 会把视口拉回**窗口起点** —— 用户滚到底立刻被推回去，2000 行的
+ *      页尾永远够不到（e2e 抓到的「滚不到底」正是它）。
+ *
+ * 目标行在窗口外时它根本不在 DOM 里，这一支天然也走同一张表：把目标行带进窗口，
+ * 下一轮 effect 按同一张表对齐 —— 两轮同解，不再有「真实节点」与「估算位置」两套坐标。
+ *
+ * 视口高度取不到（jsdom / 首帧）时按 0 处理：`Math.max(0, NaN)` 是 NaN，交给
+ * `scrollTop` 会被静默忽略（位置不更新）。
+ */
+export function pinScrollTop(
+  geometry: { start: number; size: number },
+  viewportHeight: number,
+): number {
+  const viewport = Number.isFinite(viewportHeight)
+    ? Math.max(0, viewportHeight)
+    : 0;
+  const next = geometry.start + geometry.size - viewport;
+  return Number.isFinite(next) ? Math.max(0, next) : 0;
+}
+
+/**
+ * 贴底这一轮**该不该动、动到哪一行**：返回目标行序号，`null` 表示本轮不动。
+ *
+ * 两层判据：
+ *   1. 目标 = {@link pinTargetIndex}（基线/已追到哪取大，钳到末条）；
+ *   2. **用户接管了滚动就不动** —— 当前位置 (`scrollTop`) 已不是本 effect 上次
+ *      写入的 (`appliedTop`)，说明用户自己滚到了别处（例如滚到底看最新）。贴底
+ *      只负责新日志到达时钉住已读水位，不负责把用户按回水位；覆盖他的位置会把
+ *      「滚不到底」做成常态（本仓库 e2e 抓到的那条回归）。容差 1px：浏览器会把
+ *      小数位取整，同一位置的读写不必逐位相等。
+ */
+export function pinPlan(input: {
+  baseline: number;
+  applied: number;
+  bottomIndex: number;
+  scrollTop: number;
+  appliedTop: number;
+}): number | null {
+  const targetIndex = pinTargetIndex(
+    input.baseline,
+    input.applied,
+    input.bottomIndex,
+  );
+  const userTookOver =
+    input.applied === targetIndex &&
+    Math.abs(input.scrollTop - input.appliedTop) > 1;
+  return userTookOver ? null : targetIndex;
 }
