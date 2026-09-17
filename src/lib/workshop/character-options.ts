@@ -336,18 +336,3 @@ export const CHARACTER_ATTRIBUTES: AttributeOptionSet[] = [
   { id: "temperament", label: "气质", groups: TEMPERAMENT_OPTIONS },
   { id: "styleTags", label: "风格", groups: STYLE_TAG_OPTIONS },
 ];
-
-/** 展平某维度全部可选值（去重） */
-export function flattenOptions(groups: OptionGroup[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const g of groups) {
-    for (const opt of g.options) {
-      if (!seen.has(opt)) {
-        seen.add(opt);
-        out.push(opt);
-      }
-    }
-  }
-  return out;
-}

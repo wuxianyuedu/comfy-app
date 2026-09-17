@@ -10,6 +10,7 @@ import {
   DEV_LAUNCHER_LOG,
   DRIZZLE_STUDIO_RUNTIME_LOG,
   NEXTJS_LOG_DIR,
+  NEXTJS_PANEL_LOG_PREFIX,
   OLLAMA_RUNTIME_LOG,
   START_TAURI_LAUNCHER_LOG,
   APP_RUNTIME_LOG,
@@ -30,7 +31,10 @@ function panelCaptureLog(): string | null {
     const entries = fs
       .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
       .filter(
-        (name) => name.startsWith("nextjs-panel-") && name.endsWith(".log"),
+        /* 前缀的唯一出处是 `log-paths`（`capture-streams.server.ts` 用它命名
+         *  转录文件）——这里手抄一份字面量就是同一件事的第二个名字（§12.14）。 */
+        (name) =>
+          name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"),
       )
       .sort();
     const latest = entries[entries.length - 1];

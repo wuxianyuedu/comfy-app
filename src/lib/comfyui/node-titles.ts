@@ -247,29 +247,7 @@ const INPUT_LABELS: Record<string, string> = {
   noise: "噪声",
   sigmas: "sigmas",
 };
-/** Some ComfyUI nodes surface the `label` as the human name with snake_case
- *  English flavour; map the recurring subgraph wrapper labels too. */
-const SUBGRAPH_LABELS: Record<string, string> = {
-  positive_prompt: "正面提示词",
-  negative_prompt: "反向提示词",
-  width: "宽度",
-  height: "高度",
-  steps: "采样步数",
-  cfg: "CFG",
-  seed: "随机种子",
-  unet_name: "UNet",
-  clip_name: "CLIP",
-  vae_name: "VAE",
-  control_after_generate: "生成后控制",
-  upscale_method: "缩放方法",
-};
 export function friendlyInputName(name: string): string {
   if (!name) return "";
   return INPUT_LABELS[name] ?? name;
-}
-/** Friendly label for a Subgraph wrapper's `label` field, which is the
- *  user-facing name ComfyUI gave that exposed port.  Falls back to
- *  friendlyInputName() and ultimately to the raw key. */
-export function friendlySubgraphLabel(name: string): string {
-  return SUBGRAPH_LABELS[name] ?? friendlyInputName(name) ?? name;
 }
