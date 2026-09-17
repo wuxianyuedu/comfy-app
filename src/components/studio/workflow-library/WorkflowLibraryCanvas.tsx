@@ -205,7 +205,18 @@ function WorkflowLibraryCanvasInner({
    * `LibraryNodeContentContext` 下发，节点组件直接读最新那一份
    * （view 组件本来就在同一个渲染树里，引用天然是最新的）。 */
   const [nodes, setNodes, onNodesChange] = useNodesState(flow.defaultNodes);
-  const [edges, , onEdgesChange] = useEdgesState(flow.defaultEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(flow.defaultEdges);
+
+  /* 派生出来的边**同步进 React Flow**：`useEdgesState` 只在挂载时取初值，不同步
+   *  的话，库内新拖出来的线（写入 → paramMap 生效 → wires 重新派生）永远进不了
+   *  画布 —— 用户看到的就是「一松手线就消失」（写入本身是成功的，见
+   *  `deriveLibraryParamCards` 的用例）。
+   *
+   *  依赖是 `flow.defaultEdges` 的**引用**：它由 wires 派生（useMemo），只在真的
+   *  变化时换新数组，因此这条 effect 不会每帧触发。 */
+  useEffect(() => {
+    setEdges(flow.defaultEdges);
+  }, [flow.defaultEdges, setEdges]);
 
   /* 背景板尺寸随容器变化（窗口缩放 / 左右分栏拖动），而 React Flow 只在挂载时
    * 读 `nodes`（不受控画布）—— 尺寸变了要把新尺寸同步进去，否则画布还停在旧

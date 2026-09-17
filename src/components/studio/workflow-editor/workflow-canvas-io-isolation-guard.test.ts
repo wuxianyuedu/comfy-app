@@ -233,22 +233,24 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     expect(mapping).toContain("exposedParamsForMode");
   });
 
-  it("库内按端口名找圆点锚点，落点仍在 ioKey 键空间（两者不混）", () => {
+  it("库内卡片圆点的 handle id 与落点**同键空间**（都是 ioKey）", () => {
     const cards = stripComments(
       readFileSync(
         path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"),
         "utf8",
       ),
     );
-    /* 落点是 ioKey；圆点锚点是端口名 —— 两者之间由 `wireHandleIdForIoKey` 换算，
-     * 库内不许各写一套字符串拼装。 */
+    /* 锚点就是落点（ioKey），尺寸卡取子口 id —— 库内不许各写一套字符串拼装。
+     * 「按端口名换算」那一层已删除：同名 pin（两个节点各一行 `text`）会在同一个
+     *  节点里撞出重复 handle id，React Flow 只认第一颗（拖不出线 / 连不上）。 */
     expect(cards).toContain("wiredTargetsForEntry");
-    expect(cards).toContain("wireHandleIdForIoKey");
+    expect(cards).toMatch(/handleId:[\s\S]{0,80}wired\.ioKey/);
     const mapping = readFileSync(
       path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
       "utf8",
     );
     expect(mapping).toContain("export function wiredTargetsForEntry");
-    expect(mapping).toContain("wireHandleIdForIoKey");
+    /* 换算那一层已删除（函数定义不该再存在）。 */
+    expect(mapping).not.toContain("export function wireHandleIdForIoKey");
   });
 });

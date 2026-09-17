@@ -562,7 +562,10 @@ export function WorkflowCanvasNodePreview({
         /* 卡片头的 ↺：尺寸是一张卡（六行形态），一键恢复要把六个子口的线都撤掉
          * —— 只撤其中一条会让卡片看着「还有线」。其余条目就是它自己那一个键。 */
         onResetParam={(id) => {
-          for (const form of sizeGroupIds(id)) wiring.resetToAuto(form);
+          /* 尺寸卡头一次撤六行形态：必须**一次算一次落库**（`resetMany`）——
+           *  逐条 `resetToAuto` 会各自从同一份旧值出发，后一次覆盖前一次，
+           *  用户看到的就是「重置清不掉」。 */
+          wiring.resetMany(sizeGroupIds(id));
         }}
         onResetOutput={outputWiring.reset}
         onConnect={

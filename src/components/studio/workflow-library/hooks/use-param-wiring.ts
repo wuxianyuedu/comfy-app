@@ -31,6 +31,12 @@ export interface ParamWiringController {
   disconnect: (entryId: string) => void;
   /** 恢复默认：撤销该对外参数在当前模式下的手工线。 */
   resetToAuto: (entryId: string) => void;
+  /** 一次撤销**多个**条目的手工线（尺寸卡头一次撤六行形态）。
+   *
+   *  必须是一次计算 + 一次落库：逐个调 `resetToAuto` 时每一次都基于同一份**旧**
+   *  值算新表，后一次会把前一次的删除覆盖回去 —— 表现就是「重置清不掉」
+   *  （用户口径：尺寸那三项线变成固定连线，重置也清不掉）。 */
+  resetMany: (entryIds: readonly string[]) => void;
   /** **生效的 paramMap** = 已落库的那一份叠上本轮本地改动。
    *
    *  卡片列与连线必须都读这一份：只读落库那份的话，用户刚拖出来的线要等一次
@@ -100,12 +106,28 @@ export function useParamWiring({
     [activeMode, commit, effective],
   );
 
+  /* 批量撤销：**逐条在同一个中间结果上删**，最后一次提交。逐个调 `resetToAuto`
+   *  会各自从同一份 `effective` 出发，后一次把前一次的结果覆盖掉（只清掉最后一
+   *  条目）—— 用户看到的正是「重置清不掉」。 */
+  const resetMany = useCallback(
+    (entryIds: readonly string[]) => {
+      if (!activeMode || entryIds.length === 0) return;
+      let next = effective;
+      for (const entryId of entryIds) {
+        next = clearWireEdit(next, entryId, activeMode);
+      }
+      commit(next);
+    },
+    [activeMode, commit, effective],
+  );
+
   return {
     mode: activeMode,
     isManual,
     connect,
     disconnect,
     resetToAuto,
+    resetMany,
     effectiveParamMap: effective,
   };
 }

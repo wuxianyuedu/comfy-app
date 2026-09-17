@@ -762,7 +762,8 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
       type: "STRING",
       connected: true,
       ioKey: "9::widget::text",
-      handleId: "positive_prompt",
+      /* 端点锚点 = 落点 ioKey（全图唯一）；端口名仍留在 `name` 里做显示。 */
+      handleId: "9::widget::text",
       active: true,
     });
   });
@@ -801,10 +802,10 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     expect(ports.every((port) => port.display === "尺寸 · 宽高比")).toBe(true);
     /* 每颗点自带 handle id（= 该端口的 ioKey）：拖哪颗就连到哪个候选。 */
     expect(ports.map((port) => port.handleId)).toEqual([
-      "width",
-      "height",
-      "aspect_ratio",
-      "megapixels",
+      "5::widget::width",
+      "5::widget::height",
+      "5::widget::aspect_ratio",
+      "5::widget::megapixels",
     ]);
     expect(ports.every((port) => !port.active)).toBe(true);
   });
@@ -850,8 +851,9 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
       connected: false,
       ioKey: "",
     });
-    /* 端点的 handle id 退到契约展示名：没有可落的地方，但卡片仍画得出端点。 */
-    expect(ports[0]!.handleId).toBe("提示词");
+    /* 端点的 handle id 退到**契约 id**（同一节点内仍唯一）：没有可落的地方，
+     *  但卡片仍画得出端点。 */
+    expect(ports[0]!.handleId).toBe("prompt");
   });
 
   it("落点指向已不存在的端口时列候选、不留一颗悬空点", () => {
