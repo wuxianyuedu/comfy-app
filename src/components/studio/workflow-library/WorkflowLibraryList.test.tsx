@@ -3,10 +3,10 @@
 // 数据」与「真的没有工作流」长得一模一样——这里锁住两者不再可混淆。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
-import type { WorkflowRow } from "./workflow-library-config";
+import type { PendingRow, WorkflowRow } from "./workflow-library-config";
 
 afterEach(cleanup);
 
@@ -71,5 +71,67 @@ describe("WorkflowLibraryList 三态区分", () => {
     expect(screen.getByText("演示工作流")).toBeInTheDocument();
     expect(screen.queryByText("还没有工作流")).toBeNull();
     expect(screen.queryByText("正在加载工作流…")).toBeNull();
+  });
+});
+
+// 未载入的本地工作流：整行曾整体是 <button>，点哪儿都直接载入 —— 用户只是想
+// 看看名字就会误触。行为约定改为「载入动作只挂在右侧按钮上」。
+describe("未载入的本地工作流：只有右侧按钮能载入", () => {
+  const pending: PendingRow = {
+    id: "pending-1",
+    name: "分镜剧照洗图_Qwen-Edit-2511",
+    sourcePath: "D:/Comfy-Desktop/workflows/story.json",
+  };
+
+  it("点击整行（名称）不载入", () => {
+    const onLoadPending = vi.fn();
+    renderList({ pendingRows: [pending], onLoadPending });
+
+    fireEvent.click(screen.getByText(pending.name));
+
+    expect(onLoadPending).not.toHaveBeenCalled();
+  });
+
+  it("点击右侧「载入」按钮才载入该行", () => {
+    const onLoadPending = vi.fn();
+    renderList({ pendingRows: [pending], onLoadPending });
+
+    fireEvent.click(screen.getByRole("button", { name: "载入" }));
+
+    expect(onLoadPending).toHaveBeenCalledTimes(1);
+    expect(onLoadPending).toHaveBeenCalledWith(pending);
+  });
+
+  it("载入中：按钮禁用并改文案，避免重复载入同一份文件", () => {
+    const onLoadPending = vi.fn();
+    renderList({
+      pendingRows: [pending],
+      onLoadPending,
+      pendingLoading: { [pending.id]: true },
+    });
+
+    const button = screen.getByRole("button", { name: /载入中/ });
+    expect(button).toBeDisabled();
+
+    fireEvent.click(button);
+    expect(onLoadPending).not.toHaveBeenCalled();
+  });
+});
+
+// 整片列表侧栏是拖入 JSON 的投放区 —— 拖动中要有「松开即可」的提示，
+// 读取失败也要在这片区域给出可见原因（否则用户只会觉得「拖了没反应」）。
+describe("列表侧栏的拖入导入提示", () => {
+  it("拖动中：显示投放提示", () => {
+    renderList({ dragActive: true });
+
+    expect(screen.getByText("松开即可读取该工作流 JSON")).toBeInTheDocument();
+  });
+
+  it("文件读取失败：把原因显示在列表上", () => {
+    renderList({ fileErr: "JSON 解析失败：不是合法的工作流 JSON" });
+
+    expect(
+      screen.getByText(/JSON 解析失败：不是合法的工作流 JSON/),
+    ).toBeInTheDocument();
   });
 });

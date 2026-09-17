@@ -128,6 +128,14 @@ export function WorkflowLibrary({
           stalled={c.loadStalled}
           onRefresh={c.refresh}
           localRootsHint={c.localRootsHint}
+          /* 拖入 JSON 导入：整片列表侧栏就是投放区（与导入面板同一漏斗）。 */
+          dragActive={c.importState.listDragActive}
+          onDragOver={c.importState.onListDragOver}
+          onDragEnter={c.importState.onListDragEnter}
+          onDragLeave={c.importState.onListDragLeave}
+          onDrop={c.importState.onListDrop}
+          fileErr={c.importState.dropErr}
+          pendingLoading={c.pendingLoading}
         />
         {/* `min-w-0` 必须有：详情面板是弹性项，默认 `min-width: auto` 会让它**不
             肯窄于内容的最小宽度**（面板里的画布预览、卡片列都不小），于是整行宽度

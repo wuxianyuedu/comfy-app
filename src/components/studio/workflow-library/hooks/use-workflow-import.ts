@@ -16,6 +16,50 @@ export interface UseWorkflowImportArgs {
   load: () => Promise<void> | void;
 }
 
+/** 拖放投放区：只认带 `Files` 的拖动（否则文本选择拖动也会点亮高亮）。
+ *  计数器抵消子元素冒泡产生的 leave —— 没有它，光标掠过子元素时高亮会闪。
+ *  多文件 / 空投递在这里统一给出可展示的错误；列表区与导入面板两个投放区共用。 */
+function useDropZone(
+  onFile: (file: File) => void | Promise<void>,
+  onError: (message: string) => void,
+) {
+  const counterRef = useRef(0);
+  const [active, setActive] = useState(false);
+
+  const onDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+  const onDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    counterRef.current += 1;
+    setActive(true);
+  }, []);
+  const onDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    counterRef.current = Math.max(0, counterRef.current - 1);
+    if (counterRef.current === 0) setActive(false);
+  }, []);
+  const onDrop = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      counterRef.current = 0;
+      setActive(false);
+      const files = Array.from(event.dataTransfer.files ?? []);
+      if (files.length === 0) return;
+      if (files.length > 1) {
+        onError(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
+        return;
+      }
+      void onFile(files[0]!);
+    },
+    [onError, onFile],
+  );
+
+  return { active, onDragOver, onDragEnter, onDragLeave, onDrop };
+}
+
 export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   // ── Import panel state ──
   const [showImport, setShowImport] = useState(false);
@@ -34,14 +78,15 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   // real toggle so a click shows/hides the explanation.
   const [showHelpTip, setShowHelpTip] = useState(false);
 
-  // 恢复 drag-and-drop 导入（当时移除 drag-drop 是
-  // 因为本地工作流只能从配置路径导入；现在用户在「本地工作流」tab 把任意
-  // JSON 文件拖进来 → 自动识别格式 → 弹出导入面板让用户确认 → 走现有
-  // POST /api/workflows 链路入库）。
-  // dragActive 控制整片列表区域的虚线高亮；dropErr 用于「文件解析失败」
-  // 时的悬浮错误条（3 秒后自隐）。
-  const [dragActive, setDragActive] = useState(false);
+  // 文件导入的两个入口：拖入（列表区 / 导入面板，见下方 useDropZone）与面板里的
+  // 「选择文件」。两者共用同一条前处理漏斗（handlePickedFile）→ 自动识别格式 →
+  // 弹出导入面板让用户确认 → 走现有 POST /api/workflows 链路入库。
+  // dropErr 是两个入口共用的可见错误出口（4 秒后自隐）。
   const [dropErr, setDropErr] = useState<string | null>(null);
+  const showFileError = useCallback((message: string) => {
+    setDropErr(message);
+    setTimeout(() => setDropErr(null), 4000);
+  }, []);
 
   const handleImport = useCallback(async () => {
     setImportErr("");
@@ -95,138 +140,103 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     createMut,
   ]);
 
-  // drag-and-drop a workflow JSON onto the list area →
-  // parse → auto-detect format → pre-fill the existing import panel and
-  // open it so the user can confirm name/type/format before POSTing.
-  // This intentionally reuses the manual "粘贴 JSON" flow (handleImport
-  // above) so all validation, warnings, and error surfaces stay
-  // consistent with the copy-paste path. Only the front of the funnel
-  // (file → text → JSON → state) is new.
-  const handleDroppedFile = useCallback(async (file: File) => {
-    setDropErr(null);
-    if (file.size > 5 * 1024 * 1024) {
-      setDropErr(
-        `文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），单次拖入上限 5 MB`,
-      );
-      setTimeout(() => setDropErr(null), 4000);
-      return;
-    }
-    let text: string;
-    try {
-      text = await file.text();
-    } catch (e: unknown) {
-      setDropErr(
-        "无法读取文件：" +
-          (e instanceof Error ? e.message : JSON.stringify(e ?? null)),
-      );
-      setTimeout(() => setDropErr(null), 4000);
-      return;
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      setDropErr("JSON 解析失败：不是合法的工作流 JSON");
-      setTimeout(() => setDropErr(null), 4000);
-      return;
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      setDropErr("不是有效的工作流 JSON（应为对象）");
-      setTimeout(() => setDropErr(null), 4000);
-      return;
-    }
-    const detected = detectWorkflowFormat(parsed);
-    if (!detected) {
-      setDropErr("无法识别的工作流格式：既不是 API 也不是 LiteGraph RAW");
-      setTimeout(() => setDropErr(null), 4000);
-      return;
-    }
-    // Auto-name from filename (strip extension).
-    const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
-    setImportName(baseName || "未命名工作流");
-    setImportFormat(detected); // already "api" | "raw"
-    setImportJson(text);
-    setImportErr("");
-    setImportWarn([]);
-    setShowImport(true);
-    // Best-effort mode hint: if the JSON hints at image-to-image
-    // (upscale / inpaint / img2img), suggest I2I as default; otherwise T2I.
-    try {
-      let suggested = "T2I";
-      const obj = parsed as Record<string, unknown>;
-      if (detected === "api") {
-        for (const v of Object.values(obj)) {
-          const ct =
-            v && typeof v === "object"
-              ? (v as { class_type?: unknown }).class_type
-              : undefined;
-          if (
-            typeof ct === "string" &&
-            /image|upscale|inpaint|edit/i.test(ct)
-          ) {
-            suggested = "I2I";
-            break;
-          }
-        }
-      } else if (detected === "raw") {
-        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as unknown[]) : [];
-        for (const n of nodes) {
-          const t =
-            n && typeof n === "object"
-              ? (n as { type?: unknown }).type
-              : undefined;
-          if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
-            suggested = "I2I";
-            break;
-          }
-        }
-      }
-      setImportModes([suggested]);
-      setImportDefaultMode(suggested);
-    } catch {
-      /* swallow — keep default */
-    }
-  }, []);
-
-  // drag event handlers bound on the list container.
-  // onDragOver: must preventDefault to allow drop; only light up when
-  // something with `Files` type is being dragged (so text-selection drags
-  // don't trigger the highlight). The drag counter on onDragLeave is
-  // needed because bubbling from child elements (cards) fires leave events
-  // even though the cursor is still inside the drop zone — we walk up
-  // to the container's own enter/leave cycle via the counter.
-  const dragCounterRef = useRef(0);
-  const onListDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
-    if (!e.dataTransfer.types.includes("Files")) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-  }, []);
-  const onListDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
-    if (!e.dataTransfer.types.includes("Files")) return;
-    dragCounterRef.current += 1;
-    setDragActive(true);
-  }, []);
-  const onListDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
-    if (!e.dataTransfer.types.includes("Files")) return;
-    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
-    if (dragCounterRef.current === 0) setDragActive(false);
-  }, []);
-  const onListDrop = useCallback(
-    async (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      dragCounterRef.current = 0;
-      setDragActive(false);
-      const files = Array.from(e.dataTransfer.files ?? []);
-      if (files.length === 0) return;
-      if (files.length > 1) {
-        setDropErr(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
-        setTimeout(() => setDropErr(null), 4000);
+  /** 文件入口的统一前处理漏斗（拖入 / 「选择文件」共用）：读文本 → JSON 解析 →
+   *  识别格式 → 预填导入面板并打开，让用户确认名称 / 模式 / 格式后再提交。
+   *  刻意复用 `handleImport`（粘贴 JSON）那条提交链路，因此校验、告警与错误出口
+   *  与粘贴路径完全一致；失败一律经 `showFileError` 落到可见错误条。 */
+  const handlePickedFile = useCallback(
+    async (file: File) => {
+      setDropErr(null);
+      if (file.size > 5 * 1024 * 1024) {
+        showFileError(
+          `文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），单次导入上限 5 MB`,
+        );
         return;
       }
-      await handleDroppedFile(files[0]!);
+      let text: string;
+      try {
+        text = await file.text();
+      } catch (e: unknown) {
+        showFileError(
+          "无法读取文件：" +
+            (e instanceof Error ? e.message : JSON.stringify(e ?? null)),
+        );
+        return;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        showFileError("JSON 解析失败：不是合法的工作流 JSON");
+        return;
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        showFileError("不是有效的工作流 JSON（应为对象）");
+        return;
+      }
+      const detected = detectWorkflowFormat(parsed);
+      if (!detected) {
+        showFileError("无法识别的工作流格式：既不是 API 也不是 LiteGraph RAW");
+        return;
+      }
+      // Auto-name from filename (strip extension).
+      const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
+      setImportName(baseName || "未命名工作流");
+      setImportFormat(detected); // already "api" | "raw"
+      setImportJson(text);
+      setImportErr("");
+      setImportWarn([]);
+      setShowImport(true);
+      // Best-effort mode hint: if the JSON hints at image-to-image
+      // (upscale / inpaint / img2img), suggest I2I as default; otherwise T2I.
+      try {
+        let suggested = "T2I";
+        const obj = parsed as Record<string, unknown>;
+        if (detected === "api") {
+          for (const v of Object.values(obj)) {
+            const ct =
+              v && typeof v === "object"
+                ? (v as { class_type?: unknown }).class_type
+                : undefined;
+            if (
+              typeof ct === "string" &&
+              /image|upscale|inpaint|edit/i.test(ct)
+            ) {
+              suggested = "I2I";
+              break;
+            }
+          }
+        } else if (detected === "raw") {
+          const nodes = Array.isArray(obj.nodes)
+            ? (obj.nodes as unknown[])
+            : [];
+          for (const n of nodes) {
+            const t =
+              n && typeof n === "object"
+                ? (n as { type?: unknown }).type
+                : undefined;
+            if (
+              typeof t === "string" &&
+              /image|upscale|inpaint|edit/i.test(t)
+            ) {
+              suggested = "I2I";
+              break;
+            }
+          }
+        }
+        setImportModes([suggested]);
+        setImportDefaultMode(suggested);
+      } catch {
+        /* swallow — keep default */
+      }
     },
-    [handleDroppedFile],
+    [showFileError],
   );
+
+  // 两个投放区共用同一套拖放交互与同一个文件漏斗：列表侧栏（工作流库整片区域）
+  // 与导入面板（面板打开时可直接把文件拖进面板）。
+  const listDropZone = useDropZone(handlePickedFile, showFileError);
+  const panelDropZone = useDropZone(handlePickedFile, showFileError);
 
   return {
     showImport,
@@ -246,13 +256,21 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     importWarn,
     showHelpTip,
     setShowHelpTip,
-    dragActive,
     dropErr,
-    setDropErr,
     handleImport,
-    onListDragOver,
-    onListDragEnter,
-    onListDragLeave,
-    onListDrop,
+    /** 拖入 / 「选择文件」共用的文件漏斗（视图从 input 取到 File 后调它）。 */
+    handlePickedFile,
+    /* 列表侧栏投放区 */
+    listDragActive: listDropZone.active,
+    onListDragOver: listDropZone.onDragOver,
+    onListDragEnter: listDropZone.onDragEnter,
+    onListDragLeave: listDropZone.onDragLeave,
+    onListDrop: listDropZone.onDrop,
+    /* 导入面板投放区 */
+    panelDragActive: panelDropZone.active,
+    onPanelDragOver: panelDropZone.onDragOver,
+    onPanelDragEnter: panelDropZone.onDragEnter,
+    onPanelDragLeave: panelDropZone.onDragLeave,
+    onPanelDrop: panelDropZone.onDrop,
   };
 }
