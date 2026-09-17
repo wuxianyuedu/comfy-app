@@ -48,6 +48,7 @@ import {
 import { parseShotSize } from "~/components/workshop/shot-size-config";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
+import { emptyProject } from "~/lib/workshop/script-parser";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import { errorMessage } from "~/lib/error-message";
 import {
@@ -64,12 +65,10 @@ import {
 const PROJECTS_INDEX_KEY = "comfyapp.workshop.projects.v1";
 const LEGACY_DRAFT_KEY = "comfyapp.workshop.draft.v1";
 
-const DEFAULT_META: ProjectMeta = {
-  title: "未命名项目",
-  type: "short_video",
-  tone: "",
-  logline: "",
-};
+/* 默认项目元信息不在视图层写一份：`emptyProject()` 是「新项目的初始 meta」
+ *  的唯一出处（工坊 `script-parser`），这里照抄一份就是同一件事的两个名字 ——
+ *  改文案时只改一处是运气，不是判据（§12.14 默认值不得各处硬编码）。 */
+const DEFAULT_META: ProjectMeta = emptyProject();
 
 /** 自动保存的工坊状态（恢复时逐字段校验类型，损坏则按全新状态继续）。 */
 interface WorkshopDraft {

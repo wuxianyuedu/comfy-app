@@ -2,9 +2,25 @@ import "server-only";
 import path from "path";
 
 /* ── log/ 目录布局的唯一事实来源 ────────────────────────────────────────
- * 任何需要在 Node 侧读写日志文件的代码都从这里取路径，禁止手拼
- * path.join(process.cwd(), "log", …)。布局总表见
+ * 任何需要在 **Node 侧（应用服务内）** 读写日志文件的代码都从这里取路径，
+ * 禁止手拼 path.join(process.cwd(), "log", …)。布局总表见
  * docs/standards/launch-and-build.md §4。
+ *
+ * ## 「唯一事实来源」的边界要说清楚（ISSUE #565 复议）
+ *
+ * 「唯一」指的是**同一条链路上**：本模块服务应用服务（Next）侧；启动编排
+ * （`scripts/launcher-core/log.mjs`，纯 Node 宿主）与 Windows 工具脚本
+ * （`tools/scripts/Log-Common.ps1`）各自持有自己那半边的布局表 —— 前者是
+ * `.mjs`（由启动器动态加载 TS 会连带 `server-only` 的 throw 一起崩），
+ * 后者是 PowerShell（根本读不了 TS）。它们**不是**本模块的消费方，
+ * 也不该被本模块「代为声明」。
+ *
+ * 此前这里额外导出了 `TOOLS_LOG_DIR` / `ARCHIVE_LOG_DIR` /
+ * `DEV_LAUNCHER_STDOUT_LOG` / `DEV_LAUNCHER_STDERR_LOG` /
+ * `NEXTJS_PANEL_LOG_GLOB` 五个常量，实测全库零消费 —— 真正的写入方是上面那
+ * 两套脚本，各自按自己的字面量拼路径。留着它们只会让读代码的人以为「改这里
+ * 就能改布局」，实际改了什么也不会发生（§12.15 第二条「保留必须写得出谁在
+ * 什么时候会用」，写不出即删）。
  */
 
 /** 日志根目录（<项目根>/log）。 */
@@ -19,14 +35,8 @@ export const NEXTJS_LOG_DIR = path.join(LOG_ROOT, "nextjs");
 /** 常驻服务运行时日志（追加写；设置页日志面板跟随读取）。 */
 export const SERVICES_LOG_DIR = path.join(LOG_ROOT, "services");
 
-/** 构建与工具脚本日志（tools/scripts/Log-Common.ps1、setup 脚本）。 */
-export const TOOLS_LOG_DIR = path.join(LOG_ROOT, "tools");
-
 /** 工坊生成执行日志（角色卡提取 / 分镜拆解 / 定妆照生成，按天分文件追加）。 */
 export const WORKSHOP_LOG_DIR = path.join(LOG_ROOT, "workshop");
-
-/** dev-launcher 历史归档（按年月分目录）。 */
-export const ARCHIVE_LOG_DIR = path.join(LOG_ROOT, "archive");
 
 // ── 启动链路（launcher/）──
 /** python 双击启动器的链路日志。 */
@@ -40,16 +50,6 @@ export const DEV_LAUNCHER_LOG = path.join(LAUNCHER_LOG_DIR, "dev-launcher.log");
 export const DEV_LAUNCHER_CURRENT_SENTINEL = path.join(
   LAUNCHER_LOG_DIR,
   "dev-launcher-current.txt",
-);
-/** python 启动器对 dev-launcher（pwsh）的 stdout 重定向。 */
-export const DEV_LAUNCHER_STDOUT_LOG = path.join(
-  LAUNCHER_LOG_DIR,
-  "dev-launcher-stdout.log",
-);
-/** python 启动器对 dev-launcher（pwsh）的 stderr 重定向（启动失败先看这里）。 */
-export const DEV_LAUNCHER_STDERR_LOG = path.join(
-  LAUNCHER_LOG_DIR,
-  "dev-launcher-stderr.log",
 );
 
 // ── 常驻服务（services/）──
@@ -104,6 +104,3 @@ export const LOG_EXPORT_DIR = path.join(LOG_ROOT, "exports");
  * `nextjs-stdout-*` / `nextjs-stderr-*` 的口径一致：保留最近 5 份。
  */
 export const NEXTJS_PANEL_LOG_PREFIX = "nextjs-panel-";
-
-/** 匹配本次（或任意一次）运行的应用服务转录文件。 */
-export const NEXTJS_PANEL_LOG_GLOB = `${NEXTJS_PANEL_LOG_PREFIX}*.log`;

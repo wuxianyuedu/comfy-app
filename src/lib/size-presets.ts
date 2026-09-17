@@ -181,14 +181,6 @@ export function sceneFromMode(mode: string | null | undefined): SizeScene {
   return "image";
 }
 
-/** 由任意表达式（如模式名 / 任务类型）推场景，视频关键词命中即视频。 */
-export function sceneFromText(text: string | null | undefined): SizeScene {
-  const raw = (text ?? "").trim();
-  if (!raw) return "image";
-  if (/video|t2v|i2v|flf|首尾帧/i.test(raw)) return "video";
-  return sceneFromMode(raw);
-}
-
 /** 与目标比例最接近的比例预设（表行键）。 */
 export function nearestRatioPreset(ratio: number): SizeRatioPreset {
   const target = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
@@ -231,22 +223,6 @@ export function resolutionDims(
   return safe >= 1
     ? dims(longEdge, Math.max(1, Math.round(longEdge / safe)))
     : dims(Math.max(1, Math.round(longEdge * safe)), longEdge);
-}
-
-/** 查表：某场景下某比例行的「分辨率档 → 宽高」整行。 */
-export function resolutionRow(
-  scene: SizeScene,
-  ratioLabel: string,
-  table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
-): Record<ResolutionTier, SizeDims> {
-  const row = table[scene]?.[ratioLabel];
-  if (row) return row;
-  const ratio = ratioOfLabel(ratioLabel);
-  return {
-    "1k": resolutionDims(scene, ratio, "1k", table),
-    "2k": resolutionDims(scene, ratio, "2k", table),
-    "4k": resolutionDims(scene, ratio, "4k", table),
-  };
 }
 
 /** 长边像素（横屏取宽、竖屏取高）。 */

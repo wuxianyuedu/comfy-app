@@ -31,10 +31,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { APP_RUNTIME_LOG, NEXTJS_LOG_DIR } from "~/lib/log-paths";
+import {
+  APP_RUNTIME_LOG,
+  NEXTJS_LOG_DIR,
+  NEXTJS_PANEL_LOG_PREFIX,
+} from "~/lib/log-paths";
 import { appendSessionBanner } from "~/lib/session-banner.server";
-
-export const PANEL_LOG_PREFIX = "nextjs-panel-";
 
 /** 转录文件的绝对路径（单例，模块仅执行一次）。 */
 let target: string | null = null;
@@ -49,7 +51,7 @@ export function panelCaptureLogPath(): string {
   } catch {
     /* 极端环境下取不到也照写，文件名退化为固定值 */
   }
-  target = path.join(NEXTJS_LOG_DIR, `${PANEL_LOG_PREFIX}${boot}.log`);
+  target = path.join(NEXTJS_LOG_DIR, `${NEXTJS_PANEL_LOG_PREFIX}${boot}.log`);
   return target;
 }
 

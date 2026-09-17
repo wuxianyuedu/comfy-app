@@ -1,5 +1,5 @@
 /* ── 项目画布的网络客户端（第②层的网络部分）─────────────────────────────
- * 上传 / 启动生成 / 轮询任务 / LLM 剧本扩写四个请求集中在这里，视图层
+ * 上传 / 启动生成 / 轮询任务三个请求集中在这里，视图层
  * （components/studio/project-canvas/**）不再直接 fetch 或调 vanillaApi
  * ——规范 17 §17.2：视图禁 IO，逻辑进 hooks 或 <domain>-client/api。
  *
@@ -250,60 +250,4 @@ export async function pollTask(
  *  making the failure branch type-safe. */
 export function isTaskSuccess(r: TaskResult | TaskFailure): r is TaskResult {
   return typeof (r as TaskResult).localPath === "string";
-}
-
-/** Expand a theme/梗概 into a structured script via the LLM, with offline fallback. */
-export async function runScript(theme: string): Promise<string> {
-  try {
-    const res = await fetch("/api/llm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: "system",
-            content:
-              "你是一个专业编剧助手。用户给出一个主题或梗概，请扩写成一份带有场景划分的中文短片剧本，每个场景包含：场景标题、画面描述、台词要点。语言生动、有画面感。",
-          },
-          { role: "user", content: theme },
-        ],
-        temperature: 0.85,
-        maxTokens: 1400,
-      }),
-    });
-    if (res.ok) {
-      const d: unknown = await res.json();
-      const obj =
-        typeof d === "object" && d !== null
-          ? (d as Record<string, unknown>)
-          : null;
-      const choices = obj?.choices;
-      const choiceContent =
-        Array.isArray(choices) &&
-        typeof choices[0] === "object" &&
-        choices[0] !== null
-          ? (choices[0] as { message?: { content?: unknown } }).message?.content
-          : undefined;
-      const c =
-        typeof obj?.content === "string"
-          ? obj.content
-          : typeof choiceContent === "string"
-            ? choiceContent
-            : "";
-      if (c.trim()) return c.trim();
-    }
-  } catch {
-    /* fall through to offline */
-  }
-  return `【场景一】
-画面：清晨的城市还在沉睡，主角背着行囊走出老旧的公寓。
-台词：今天，一切重新开始。
-
-【场景二】
-画面：地铁站台，主角遇见一位神秘的同行者。
-台词：你也去那边吗？一起走吧。
-
-【场景三】
-画面：黄昏的山顶，两人回望来路，灯火渐起。
-台词：原来坚持本身就是风景。`;
 }
