@@ -5,6 +5,7 @@
  * router (src/server/api/routers/workflow.ts). Living in `src/lib/` keeps the
  * server from crossing the boundary into `components/`.
  */
+import { z } from "zod";
 
 /** One exposed pin, as returned by GET /api/workflows/[id]. */
 export interface WorkflowIOEntry {
@@ -70,6 +71,28 @@ export interface WorkflowIOModeOverride {
 }
 
 export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
+
+/* ── 形状契约（外部输入边界，规范 §5.5）──────────────────────────────────
+ * workflowIO **列的解析**。schema 放在类型旁边（同一处定义、同一处演进），
+ * 消费方（tRPC 路由）只调用 `parseWorkflowIOMap`，不自己复制判据。 */
+/** 条目的**身份字段**是硬约束（写入侧一定带这四个）；`.loose()` 是关键 ——
+ *  富化字段（label / type / defaultValue / modes / hostNodeId / slotLabel …）
+ *  必须原样留下，剥键会让工作流库列表上的显示名与控件类型整片退化。
+ *  形状不符的条目丢弃：换作盲转型（`as unknown as WorkflowIOMap`），坏条目会
+ *  一路流到下游某个 `.name` 读取点才炸，报错位置离成因很远。 */
+const WorkflowIOEntrySchema = z.looseObject({
+  direction: z.union([z.literal("input"), z.literal("output")]),
+  kind: z.string(),
+  nodeId: z.string(),
+  name: z.string(),
+});
+const WorkflowIOMapSchema = z.record(z.string(), WorkflowIOEntrySchema);
+
+/** 解析 workflowIO 列（DB JSON 列）；非对象 / 形状不符 → 空表。 */
+export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
+  const parsed = WorkflowIOMapSchema.safeParse(value);
+  return parsed.success ? parsed.data : {};
+}
 
 /** 该参数在指定模式下是否可见。未开启模式（mode 为空）时一律可见。
  *

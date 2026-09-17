@@ -1,4 +1,5 @@
 import { linkTargetId } from "./workflow-preview";
+import { coerceApiInputValue } from "./raw-overrides";
 import type { RawWorkflowOverride } from "./runner-state";
 
 export type LoraSpec = { name: string; weight: number };
@@ -459,18 +460,7 @@ export function buildCustomWorkflow(
 
       const cur = node.inputs[it.name];
 
-      let assigned: unknown = value;
-
-      if (
-        typeof cur === "number" &&
-        typeof value === "string" &&
-        value.trim() !== "" &&
-        !Number.isNaN(Number(value))
-      ) {
-        assigned = Number(value);
-      }
-
-      node.inputs[it.name] = assigned;
+      node.inputs[it.name] = coerceApiInputValue(cur, value);
     }
   }
 

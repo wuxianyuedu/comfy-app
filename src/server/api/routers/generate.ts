@@ -65,7 +65,7 @@ export const generateRouter = createTRPCRouter({
       /* 送哪一份执行载荷，只按**这条工作流自己是什么格式**判（两者地位同等，
        * 判据收在 `resolveExecutionPayload`，与服务端编排同一份）：
        *   · RAW 原件 → comfy-cli 做权威 UI→API 转换（顺带展开子图）；
-       *   · API 图   → 直接 POST /prompt。
+       *   · API 图   → 同样交 comfy-cli 提交（它对 API 格式直接提交）。
        * 画布编辑过的图（`canvasGraph`）是第三种来源：它是用户在画布上现改的
        * API 图，优先于库里存的任意一份。 */
       const payload = data.canvasGraph
@@ -140,7 +140,15 @@ export const generateRouter = createTRPCRouter({
           : undefined,
       });
 
-      enqueue({ taskId: task.id, prompt: built.prompt });
+      /* 画布覆盖项两条路都要带：`buildCustomWorkflow` 先做结构注入（提示词 /
+       * 采样器 / 已勾选落点），`overrides` 再在执行点兜一遍（`applyApiOverrides`
+       * 处理「不进载荷的前端控件」如 control_after_generate）。与 RAW 路径同一份
+       * 数组、同一套语义（见 `raw-overrides` 的模块注释）。 */
+      enqueue({
+        taskId: task.id,
+        prompt: built.prompt,
+        overrides: data.workflowInputs,
+      });
       return { taskId: task.id };
     }),
 });

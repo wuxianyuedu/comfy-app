@@ -332,26 +332,6 @@ export function toWsBase(httpBase: string): string {
   return httpBase.replace(/^http(s?):\/\//i, (_m, s) => `ws${s}://`);
 }
 
-export type PromptResult = {
-  prompt_id?: string;
-  number?: number;
-  node_errors?: Record<string, unknown>;
-  error?: string;
-};
-
-export async function postPrompt(
-  prompt: unknown,
-  clientId: string,
-): Promise<PromptResult> {
-  const base = await resolveComfyBase();
-  const res = await fetch(`${base}/api/prompt`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, client_id: clientId }),
-  });
-  return (await res.json()) as PromptResult;
-}
-
 export async function getHistory(
   promptId: string,
 ): Promise<Record<string, unknown>> {

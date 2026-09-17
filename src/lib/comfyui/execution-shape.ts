@@ -5,8 +5,11 @@
  *   · 工作流(RAW / UI)格式 —— ComfyUI 前端存盘的那种（`nodes` + `links` +
  *     `widgets_values`）。`comfyui-cli` 直接吃它：cli 按节点类定义做权威的
  *     UI→API 转换并展开子图。库里的 `rawJson` 列就是它。
- *   · API 格式 —— `{ "<id>": { class_type, inputs } }`，可直接 POST /api/prompt。
- *     库里的 `graph` 列就是它。
+ *   · API 格式 —— `{ "<id>": { class_type, inputs } }`。库里的 `graph` 列就是它。
+ *
+ * **两种载荷最终都经 comfy-cli 提交**（`comfy run --workflow` 两种都吃）：
+ * RAW 由 cli 做 UI→API 转换，API 由 cli 直接提交（提交前的旁路/静音收拾见
+ * `execution-graph.ts`）。这里的 `kind` 只描述**载荷格式**，不描述传输通道。
  *
  * 因此「这条工作流能不能跑」= **两列任有一列有内容**，而不是「有没有 API 图」
  * （后者把 RAW 导入判成了不可执行 —— 用户看到卡片挂着「不可执行」、生成按钮
@@ -54,7 +57,7 @@ export function hasExecutableWorkflow(shapes: ExecutionShapes): boolean {
   return hasGraphContent(shapes.graph) || hasRawContent(shapes.rawJson);
 }
 
-/** 执行载荷：交给 comfy-cli 的 raw 原件，或直接 POST 的 API 图，二选一。 */
+/** 执行载荷：交给 comfy-cli 的 raw 原件，或 API 图，二选一。 */
 export type ExecutionPayload =
   | { kind: "raw"; rawJson: unknown }
   | { kind: "api"; graph: Record<string, unknown> };

@@ -20,6 +20,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
+import { z } from "zod";
 import { logger } from "~/lib/core/logger";
 import {
   asRawWorkflow,
@@ -28,6 +29,31 @@ import {
 } from "~/lib/comfyui/raw";
 import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "~/lib/workflow-types";
 import { detectParamMap } from "~/lib/comfyui/workflow";
+
+/* ── 外部工作流 JSON 的形状契约（导入边界，规范 §5.5）──────────────────────
+ * 「这是哪种格式」仍由 `detectFormat` 判 —— 它是「两列地位同等」这条判据的
+ * 唯一定义处，不在这里再写一遍。本组 schema 只回答**落到库里的东西是什么形状**：
+ * 判据说是 API，就必须真的有一批带 `class_type` 的节点；说是 RAW，就必须真的有
+ * 非空 `nodes[]`（且每个节点带 `type`）。
+ *
+ * 用 `.loose()`（保留未知键）而不是剥键：RAW 原件要**逐字落库**（groups /
+ * definitions / extra / 各节点私有字段都得原样留着），任何剥键都会让「重新下载
+ * 源文件」拿到一份被改过的 JSON。 */
+const ApiGraphSchema = z
+  .record(z.string(), z.unknown())
+  .refine(
+    (graph) =>
+      Object.values(graph).some(
+        (node) =>
+          node !== null &&
+          typeof node === "object" &&
+          typeof (node as { class_type?: unknown }).class_type === "string",
+      ),
+    { message: "不是有效的 ComfyUI API 工作流（未找到节点 class_type）" },
+  );
+const RawWorkflowSchema = z.looseObject({
+  nodes: z.array(z.looseObject({ type: z.string() })).min(1),
+});
 
 export interface ParsedWorkflow {
   /** API 格式导入件（检测为 `api` 时才有，否则空对象）。 */
@@ -108,17 +134,11 @@ export async function parseWorkflowContent(
   const warnings: string[] = [];
 
   if (detected === "api") {
-    const graph = candidate as Record<string, unknown>;
-
-    const looksLikeGraph = Object.values(graph).some(
-      (node) => node && typeof node === "object" && "class_type" in node,
-    );
-
-    if (!looksLikeGraph) {
+    const parsed = ApiGraphSchema.safeParse(candidate);
+    if (!parsed.success) {
       throw new Error("不是有效的 ComfyUI API 工作流（未找到节点 class_type）");
     }
-
-    apiGraph = graph;
+    apiGraph = parsed.data;
   } else {
     /* 工作流(RAW)格式：**原件入库，不转 API 图**。
      *
@@ -126,8 +146,14 @@ export async function parseWorkflowContent(
      * 存错图的代价由用户承担：无 ComfyUI 可达时启发式按类名猜控件顺序，猜错
      * 就是一份能打开、跑起来结果不对的图。执行侧本来就有 comfy-cli 直接吃 raw
      * 的路（它按节点类定义做权威转换），入库再转一次是多余且有害的一步。 */
-    rawJson = candidate;
-    const rawView = asRawWorkflow(candidate);
+    const parsed = RawWorkflowSchema.safeParse(candidate);
+    if (!parsed.success) {
+      throw new Error(
+        "不是有效的工作流(RAW) JSON：缺少节点数组 nodes[]（或节点缺少 type 字段）",
+      );
+    }
+    rawJson = parsed.data;
+    const rawView = asRawWorkflow(parsed.data);
     const extracted = rawView ? extractPositions(rawView) : {};
     positions = Object.keys(extracted).length > 0 ? extracted : null;
   }
