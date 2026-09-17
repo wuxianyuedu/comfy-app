@@ -107,7 +107,7 @@ vi.mock("child_process", async (importOriginal) => ({
 }));
 
 import { cancelFilm, composeFilm, createFilm } from "./orchestrator";
-import { NATIVE_SHOT_VIDEO_SIZE } from "./film-size";
+import { NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
 
 beforeEach(() => {
   vi.clearAllMocks();
