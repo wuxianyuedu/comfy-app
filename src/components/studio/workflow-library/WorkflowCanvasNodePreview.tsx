@@ -17,13 +17,7 @@
  * 映射**在这里可编辑（三列 React Flow 画布，见 WorkflowLibraryCanvas）。
  */
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   startLocalGenerate,
   watchTask,
@@ -32,11 +26,9 @@ import {
 import {
   appendWorkflowRunLog,
   failWorkflowRun,
-  getWorkflowRunStoreSnapshot,
   latestRunForWorkflow,
   patchWorkflowRun,
   registerWorkflowRun,
-  subscribeWorkflowRunStore,
 } from "~/lib/workflow-run-store";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
@@ -74,8 +66,6 @@ import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
-import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
-import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import { WorkflowNodeActionButton } from "../shared/WorkflowNodeParts";
 
 type Phase =
@@ -128,14 +118,11 @@ export function WorkflowCanvasNodePreview({
   const resultUrlRef = useRef<string | null>(null);
   /* 当前运行对应的 taskId；挂到 store 后窗口关闭再打开仍能恢复。 */
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  /* 全屏执行日志弹窗开关。 */
-  const [logOpen, setLogOpen] = useState(false);
   /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
   const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
   /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
    *  「按 ⌫ 断的是哪一根」说不清）。 */
   const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
-  const [viewTaskId, setViewTaskId] = useState<string | null>(null);
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
    * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
@@ -186,11 +173,6 @@ export function WorkflowCanvasNodePreview({
   /* 重开窗口恢复：若 store 里有本工作流仍在运行的登记，恢复「生成中」视角。
    * 恢复走惰性初始化（useState 的初始化函数在挂载时读 store），避免 effect
    * 里同步 setState 的级联渲染。 */
-  const storeSnapshot = useSyncExternalStore(
-    subscribeWorkflowRunStore,
-    getWorkflowRunStoreSnapshot,
-    getWorkflowRunStoreSnapshot,
-  );
   const resumedRef = useRef(false);
   useEffect(() => {
     if (resumedRef.current) return;
@@ -344,8 +326,7 @@ export function WorkflowCanvasNodePreview({
       });
       setPhase({ kind: "running", pct: 0 });
       setActiveTaskId(taskId);
-      setViewTaskId(taskId);
-      /* 登记运行记录；日志弹窗不再自动打开，由用户点「执行日志」查看。 */
+      /* 登记运行记录；日志弹窗不再自动打开，由用户点详情头部的「执行日志」查看。 */
       registerWorkflowRun({
         taskId,
         workflowId,
@@ -395,11 +376,6 @@ export function WorkflowCanvasNodePreview({
   const pct = phase.kind === "running" ? phase.pct : 0;
   const nodeLabel =
     phase.kind === "running" && phase.node?.label ? phase.node.label : null;
-  /* 运行态/日志按「当前工作流」隔离：切到哪个工作流就展示哪个工作流的运行，
-   * 不再把别的工作流的运行串到本节点上。currentRuns 取本工作流记录（新→旧）。 */
-  const currentRuns = storeSnapshot.runs.filter(
-    (r) => r.workflowId === workflowId,
-  );
 
   /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
    * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
@@ -543,8 +519,6 @@ export function WorkflowCanvasNodePreview({
       workflowIO,
     ],
   );
-
-  const activeRun = currentRuns[0] ?? null;
 
   return (
     /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
@@ -725,27 +699,9 @@ export function WorkflowCanvasNodePreview({
         </p>
       )}
 
-      {/* 执行日志入口：与「工坊封装」页签**同一扇门**（同一个按钮组件、同一份
-       *  运行登记表、同一个全屏弹窗）。有运行记录即显示（跨窗口存活）。 */}
-      <WorkflowRunLogButton
-        workflowId={workflowId}
-        taskId={activeRun?.taskId ?? null}
-        running={running}
-        onOpen={() => {
-          /* 打开日志默认定位到本工作流最近一次运行（切到的工作流独立展示）。 */
-          if (!viewTaskId && activeRun) setViewTaskId(activeRun.taskId);
-          setLogOpen(true);
-        }}
-      />
-
-      {/* 全屏执行日志弹窗：与项目画布 GlobalStepLogPanel 同款交互。 */}
-      <WorkflowRunLogModal
-        open={logOpen}
-        workflowId={workflowId}
-        viewTaskId={viewTaskId}
-        onViewTaskIdChange={setViewTaskId}
-        onClose={() => setLogOpen(false)}
-      />
+      {/* 执行日志入口不在这里 —— 它是**详情头部**的一扇固定门（DetailHeader）：
+          两个页签共用同一份运行登记表与同一个全屏弹窗，位置不再随页签 / 有没有
+          跑过而变化（ISSUE #611 与「入口位置固定」）。 */}
     </div>
   );
 }

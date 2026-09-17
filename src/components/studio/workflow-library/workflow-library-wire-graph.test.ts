@@ -94,14 +94,12 @@ describe("边的两端与 handle 取值", () => {
     targetIoKey: "9::widget::positive_prompt",
     handleId: "positive_prompt",
     grouped: false,
-    manual: false,
   };
   const outputWire: ParamCardWire = {
     entryId: "5::output::IMAGE",
     targetIoKey: "5::output::IMAGE",
     handleId: "images",
     grouped: false,
-    manual: true,
     kind: "hostToParam",
   };
 
@@ -132,15 +130,18 @@ describe("边的两端与 handle 取值", () => {
     expect(edge.sourceHandle).not.toContain("::");
   });
 
-  it("自动线画虚线、作者改过的画实线（与编辑器画布同一套语义）", () => {
-    const auto = buildInputEdge(inputWire);
-    const manual = buildInputEdge({ ...inputWire, manual: true });
-    expect((auto.style as { strokeDasharray?: string }).strokeDasharray).toBe(
-      "6 4",
-    );
-    expect(
-      (manual.style as { strokeDasharray?: string }).strokeDasharray,
-    ).toBeUndefined();
+  it("库里的线一律实线（未连过的不画线，见 param-cards 的用例）", () => {
+    /* 用户口径：这里是编辑对外参数的界面，「未连过就不要连」—— 所以库里没有
+     *  「默认线」这一档样式，两条边都按实线画。 */
+    for (const edge of [
+      buildInputEdge(inputWire),
+      buildOutputEdge(outputWire),
+    ]) {
+      expect(
+        (edge.style as { strokeDasharray?: string }).strokeDasharray,
+      ).toBeUndefined();
+      expect(edge.style).toMatchObject({ strokeWidth: 2.5, opacity: 1 });
+    }
   });
 
   it("两侧一起派生：几条 wire 就几条边", () => {

@@ -86,31 +86,21 @@ export interface LibraryWire {
   /** 输入侧：落点的 ioKey；输出侧：取值那一行的 ioKey。 */
   targetIoKey: string;
   namespace: "param" | "output";
-  /** 是否是作者画的线（实线）—— 库里不存在「猜出来的」默认线。 */
-  manual: boolean;
 }
 
-/** 边的样式口径：作者画过的线画实线、未连过的画虚线（与编辑器画布同一套语义）。 */
-export function libraryEdgeStyle(manual: boolean): {
-  stroke: string;
-  strokeWidth: number;
-  strokeDasharray?: string;
-  opacity: number;
-} {
-  return manual
-    ? { stroke: MANUAL_STROKE, strokeWidth: 2.5, opacity: 1 }
-    : {
-        stroke: AUTO_STROKE,
-        strokeWidth: 2,
-        strokeDasharray: "6 4",
-        opacity: 0.75,
-      };
-}
-
-/** 默认取值来源的描边色（输出侧「没被作者改过」的线；输入侧的线一律实线）。 */
-export const AUTO_STROKE = "#64748b";
 /** 作者画过的线的描边色。 */
 export const MANUAL_STROKE = "#a78bfa";
+/** 库里一条边的样式：**一律是作者画过的线**（实线）。
+ *
+ *  库里不画「猜出来的」默认线 —— 未连过的口根本不画线（用户口径：这是**编辑对外
+ *  参数**的界面，「未连过就不要连」），所以没有虚线分支，也没有「默认线」那一档
+ *  描边色。默认落点仍算在 `resolved` 里（卡片与运行期读它），只是不在画布上画
+ *  一条虚线占位。 */
+export const LIBRARY_EDGE_STYLE = {
+  stroke: MANUAL_STROKE,
+  strokeWidth: 2.5,
+  opacity: 1,
+} as const;
 /** 拖动中的预览线描边色（React Flow 的 connection line）。 */
 export const DRAG_STROKE = "#c4b5fd";
 

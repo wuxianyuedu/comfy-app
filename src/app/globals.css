@@ -274,7 +274,7 @@
    `lib/comfyui/node-registry.ts`、`CanvasNodePrimitives.tsx`（`PORT_STYLE`）、
    `WorkflowPortHandle.tsx`、`canvas-types.ts`、`workflow-param-mapping-ui.ts`、
    `workflow-library/workflow-library-wire-graph.ts`（连线状态色常量
-   `AUTO_STROKE` / `MANUAL_STROKE` / `DRAG_STROKE` / `SELECTED_STROKE`：
+   `MANUAL_STROKE` / `DRAG_STROKE` / `SELECTED_STROKE`：
    一条边画的是「这条线是什么状态」，同属内容自身的颜色）
    等处**成组出现**的端口类型色 / 节点类别色 / 参数分组色（约 320 处）。
 

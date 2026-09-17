@@ -13,7 +13,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import type { WorkflowRow } from "./workflow-library-config";
 import type { MetaEditorController } from "./hooks/use-workflow-library-detail";
@@ -84,6 +84,30 @@ describe("详情头部：窄屏不丢按钮", () => {
     renderHeader();
     expect(screen.getByTestId("detail-title-block").className).toContain(
       "min-w-[180px]",
+    );
+  });
+});
+
+describe("详情头部：执行日志入口固定在这一排", () => {
+  const ROOT = path.resolve(__dirname);
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+  it("没跑过也显示入口，点开是全屏日志弹窗（入口不随有没有跑过而变）", () => {
+    renderHeader();
+    const open = screen.getByTestId("wflib-log-open");
+    expect(open.textContent).toContain("暂无运行");
+    fireEvent.click(open);
+    expect(screen.getByTestId("wflib-log-modal")).toBeTruthy();
+  });
+
+  it("入口只有头部一处：两个页签里各放一个入口的旧形态不再回来", () => {
+    /* 用户口径：入口要放在详情头部这一排。页签里再各挂一个会让「门」重新变成
+     *  两处（ISSUE #611 的旧形态），位置也继续随页签 / 有无运行记录变化。 */
+    expect(read("sections/WorkshopEncapsulationPanel.tsx")).not.toContain(
+      "WorkflowRunLogButton",
+    );
+    expect(read("WorkflowCanvasNodePreview.tsx")).not.toContain(
+      "WorkflowRunLogButton",
     );
   });
 });
