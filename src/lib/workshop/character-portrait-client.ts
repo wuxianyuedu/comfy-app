@@ -4,7 +4,7 @@
 //   · 远端：/api/workshop-api/generate 的 image 通道（OpenAI 兼容 images/generations）
 //   · 导入：素材库「角色」分类（/api/materials），落盘后拿到可引用的本地地址
 
-import { uploadMaterialItem } from "@/lib/materials-client";
+import { uploadMaterialItem } from "~/lib/materials-client";
 import {
   sizeSpecToRelay,
   sizeSpecToWxH,

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
-import { describeFetchFailure, getLLMConfig } from "@/lib/llm/server";
+import { currentServerUser } from "~/server/auth/request-user";
+import { describeFetchFailure, getLLMConfig } from "~/lib/llm/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * 展示降级文案而不是让整页报错。
  */
 export async function GET(req: NextRequest) {
-  await getServerUser();
+  await currentServerUser();
 
   const provider =
     req.nextUrl.searchParams.get("provider") === "remote" ? "remote" : "local";

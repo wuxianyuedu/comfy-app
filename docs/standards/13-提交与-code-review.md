@@ -102,64 +102,44 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 | **React 19 lint** | 无 `set-state-in-effect` 违规；无文件级 eslint-disable 掩盖 |
 | **提交卫生** | 换行符 LF 无增量混用；无 git-lfs 挂起残留；单 PR 单语义，无混入无关文件 |
 
-### 13.5 CI 门禁
+### 13.5 CI 门禁（平台侧**当前未启用**）
 
-**唯一事实来源**：`.cnb.yml`（仓库根，单条流水线 `质量门禁`，触发 master 的
-`push` 与 `pull_request`）。改门禁改这个文件，本文档与
-[11.7](11-测试与可观测性.md#117-ci-质量门禁) 同步更新即可，不要三处各写一套。
+**`.cnb.yml` 已删除，平台侧不跑任何流水线**（ISSUE #623）。这不是「门禁没了」，
+而是「门禁只剩本地那一层」——请连带读完 13.5.3 的代价说明再动手。
 
-> **为什么不是 `.github/workflows/ci.yml`**：本仓库跑在 CNB 平台上，平台只读仓库根的
-> `.cnb.yml`。那份 27 步的 GitHub workflow **从未被触发过一次**（构建历史里只有
-> `issue.comment@npc` / `api_trigger`，`push` 与 `pull_request` 均为 0）——它是死代码，
-> 留着只会让人照着改一个不生效的文件。门禁已整体迁到 `.cnb.yml`，原文件删除。
-> 回归护栏：`tests/cnb-pipeline-gates.test.ts`（清单一条不许丢 + 原文件不许回潮）。
+> **为什么删**：社区版云原生构建免费额度 **160 核时/月**，计量口径是
+> 「节点规格 × 运行时长」。本流水线声明 `cpus: 8`，一次 PR（门禁 + 合并复核）
+> 实测量级接近 1 核时，几十次 PR 就把额度吃光 —— 属于**用不起**，
+> 而不是「跑得慢」。删除是恢复「提交不再花额度」的**唯一**零成本做法。
+>
+> **删前走过的降配路径**（都留在历史里，别再走一遍）：把门禁拆成
+> 「只挂 `pull_request`、`push` 只留合并形态复核」，并把 `test` 与
+> `test:coverage` 合成一步 —— 每次 PR 的核时约减半，但**额度仍然不够**。
+> 三条降配口径与「不要用的路子」保留在 13.5.3，供日后额度充裕时参考。
+>
+> **删前修出的一条判据（留作记录，日后重启时直接用）**：`push` 侧的合并形态复核
+> （`node scripts/check-branch-guard.cjs --merge-commit`）**必须认得 Squash Merge**
+> ——squash 落到 `master` 的提交只有 **1 个父**，与「本地直连主干提交」在拓扑上
+> 同形。此前判据是「父提交数 > 1 才算合并」，后果是 `master` 的 push 复核**每一次
+> 都是红的**（`611150b`…`8a9efb3` 全部命中），却一次真正的绕过都没抓到。现在判据是
+> 「合并提交 **或** 提交信息带 PR 关联（平台 squash 时写下的 `PR-URL: #NNN`）」，
+> 两者都不满足时**保守放行**；服务端形态随 `.cnb.yml` 一同保留（见 13.6.1）。
 
-平台侧只**新增**了一件事：`.cnb.yml`。GitHub Actions 的 `runs-on` / `setup-node` /
-`actions/cache` / `actions/upload-artifact` 分别对应 CNB 的
-`runner.tags` / `docker.image` / `docker.volumes` / `cnbcool/attachments` 插件；
-`actions/checkout` 无需声明（CNB 默认克隆代码）。
+**现状（唯一的一层）**
 
-```
-PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 master，30 步串行）：
-✅ corepack enable && pnpm install --frozen-lockfile
-✅ node scripts/check-branch-guard.cjs --pr-check --target master   # PR 源分支不能是 master（见 13.6）
-✅ pnpm run db:push                # 建表；后面 E2E 要真的读到库（见 11.7）
-✅ pnpm run typecheck              # tsc --noEmit
-✅ pnpm exec eslint . --max-warnings 0
-✅ pnpm run test                   # vitest run
-✅ pnpm run test:coverage          # 覆盖率棘轮（vitest.config.ts 的目录阈值）
-✅ node scripts/check-title-bar-clearance.cjs
-✅ node scripts/check-file-structure.cjs --strict   # 命名/组织硬规则 R1-R4/R7-R12（§12.8/§12.11）
-✅ node scripts/check-ps1-consistency.mjs           # 跨平台动作对照（§9.5）
-✅ node scripts/check-comfyui-port-contract.cjs     # ComfyUI 端口口径（launch-and-build §5）
-✅ node scripts/check-inline-style.cjs              # 视图层不得动态注入 <style>（见 03 §3.5）
-✅ node scripts/check-code-duplication.cjs --strict # 跨文件重复块（§12.12）
-✅ node scripts/check-function-length.cjs --strict  # 函数长度棘轮 TS（§12.13）
-✅ node scripts/check-rust-function-length.cjs --strict  # 函数长度棘轮 Rust（§12.13.1）
-✅ node scripts/check-circular-deps.cjs --strict    # 模块循环依赖棘轮（§12.7）
-✅ node scripts/check-app-port-vectors.cjs          # 端口推导跨语言一致性（launch-and-build §1.1）
-✅ node scripts/check-changelog-fragments.cjs       # CHANGELOG 碎片形态（13.10.5）
-✅ node scripts/check-theme-colors.cjs --strict     # 主题色扫描棘轮（03 §3.6.1）
-✅ node scripts/check-ui-logic-separation.cjs --strict  # UI/逻辑分离棘轮（17）
-✅ vitest run tests/lib-node-only-declarations.test.ts  # src/lib Node-only 声明（18 §18.4）
-✅ node scripts/check-format.cjs --strict           # prettier 格式棘轮（见 13.5.1）
-✅ node scripts/check-reformat-only.cjs             # 格式化提交与行为改动分离（见 13.5.2）
-✅ vitest run tests/single-logger-channel…（core 骨架单一事实源，18 §18.8）
-✅ node scripts/check-dead-exports.cjs --strict     # src/lib 零消费值导出棘轮（§12.16）
-✅ vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
-✅ pnpm run build                  # SKIP_ENV_VALIDATION=1（CI 无真实密钥）
-✅ node scripts/check-standalone-contents.cjs       # standalone 产物级护栏（07 §7.2）
-✅ pnpm exec playwright install --with-deps chromium
-✅ pnpm exec playwright test --grep @critical   # 只跑 @critical 关键流程
-失败时（failStages）：上传 playwright-report 为 commit 附件（allowFailure）
-```
+| 层 | 位置 | 拦什么 | 能绕过吗 |
+|----|------|--------|---------|
+| 本地 | `.githooks/pre-commit`（24 步） | 分支守卫 + 结构硬规则 + tsc + eslint + 各棘轮 | 只能 `--no-verify`（进历史，Review 可见） |
+| 平台（push 保护） | CNB **分支保护设置** | `master` 的直接 push（放行 PR 合并） | 需管理员改设置 |
 
-**规则**：
-
-- CI 失败阻断合并；**本地提交门槛已实装**——`.githooks/pre-commit`（经
-  `git config core.hooksPath .githooks` 启用）依次跑：
+> **服务端形态的判据本身仍在**：`scripts/check-branch-guard.cjs` 的
+> `--pr-check` / `--merge-commit` 两个服务端形态随 `.cnb.yml` 一起失去了调用方，
+> 但判据本身保留 —— `tests/check-branch-guard.test.ts` 用真仓库跑三种拓扑，
+> 日后重启平台侧直接可用（见 13.6.1）。其中 `--merge-commit` 必须认得 squash，
+> 理由见上面 `⚠️` 那段。
 
 ```
+本地提交前必须通过（.githooks/pre-commit，24 步）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
@@ -183,17 +163,35 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
 ```
 
-  任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
+> **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
+> `check-standalone-contents.cjs` / E2E `@critical` / `db:push` / R5 的 `--strict`）：
+> 它们是「按需召唤」那一层 —— 由人 @ 评审 NPC 唤起，或在改动命中对应范围时手动跑，
+> 逐条登记在 13.5.4。**不要**把它们塞回每次 commit。
+
+**平台侧仍需一步人工动作**：把 `master` 配成**保护分支**（禁直接 push + 要求 PR）。
+**别用** `git create-branch-lock` —— 它锁整分支写入，会把 PR 合并一起拦死（见 13.6.1）。
+
+**规则**：
+
+- 门禁清单只在 `.githooks/pre-commit` 一处（上面那份清单就是全文）。`package.json`
+  里的单项脚本（`pnpm run typecheck` / `test:coverage` / `build` 等）是「本地怎么
+  手动跑一遍全套」的入口；新增 / 修改门禁脚本时**同时**加进钩子 —— 平台侧已经不会再
+  兜底，「只在 CI 里跑」的脚本等于没有任何机器判据在维护它。
   **钩子由 `pnpm install` 自动接上**（`package.json` 的 postinstall →
   `scripts/install-git-hooks.mjs` 写 `core.hooksPath=.githooks`，幂等）；装了依赖但
   `git config core.hooksPath` 仍为空时手动执行一次即可。
+- 任一步失败即阻断提交；紧急绕过用 `git commit --no-verify`（会留在历史上，慎用）。
 - **一律 pnpm，禁止 npm/npx**（AGENTS.md 硬规则 1）：npm 在本项目解析 typescript
   别名链会崩溃（`Class extends value undefined`）。
-- **E2E 用 `@critical` tag 圈定关键流程**：新增冒烟用例若属于「合并前必须验证的
-  主流程」，标题带上 `@critical`；非关键用例不阻断合并。
-- **prettier 已接入，但走「棘轮」而不是「全库必须过」**：见下面 13.5.1 / 13.5.2。
+- **E2E 用 `@critical` tag 圈定关键流程**：新增冒烟用例若属于「必须验证的主流程」，
+  标题带上 `@critical`（平台侧已无 CI，E2E 由本地按需跑：
+  `pnpm exec playwright test --grep @critical`）。
+- **prettier 走「棘轮」而不是「全库必须过」**：见下面 13.5.1 / 13.5.2。
 - 新增含 postinstall 构建脚本的依赖，同步 `pnpm-workspace.yaml` 的 `allowBuilds`
   （AGENTS.md 硬规则 7），否则非交互 `pnpm install` 会 exit 1。
+- 历史口径：`.github/workflows/ci.yml`（27 步）在 CNB 上**从未被触发过一次**，已删；
+  `.cnb.yml`（30 步）曾经跑起来过，现已按额度约束删除。两份配置都不在仓库里，
+  **不要再从它们复制门禁清单**。
 
 #### 13.5.1 prettier 格式棘轮（ISSUE #575 第 9 项）
 
@@ -210,7 +208,7 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 |---|---|
 | 新增未过 prettier 的文件 | **阻断** |
 | 存量文件从干净变脏 | **阻断**（它落在基线外） |
-| 治理有进展（未过文件变少） | 提示执行 `--update` 收紧；CI `--strict` 下**未收紧即失败** |
+| 治理有进展（未过文件变少） | 提示执行 `--update` 收紧；门禁带 `--strict` 时**未收紧即失败** |
 | `--update` 试图把新增的脏文件写进基线 | **拒绝**（棘轮只许收紧） |
 
 两个刻意的设计：
@@ -218,10 +216,14 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 - **按文件记账，不记全局计数。** 计数只约束总量 —— 修好 3 个、弄坏 4 个，总数变大
   才失败，弄坏的那 3 个无人知晓。文件级记账下「把干净的文件弄脏」当场失败，而
   「这个文件此前是干净的」本身就是一个可断言的事实。
-- **白名单是形态（glob），不是文件列表。** `scripts/**`、`tests/**`、`e2e/**`、
-  根级配置是**高频 churn 路径**（每次排障都要改一遍），把它们纳入棘轮会让每一次
-  排障提交都顺带产生格式 diff。用 glob 表达「这类文件暂不纳入」不会漂移，且新增
-  这类文件时**自动**落在白名单里。豁免不进棘轮计数。
+- **白名单是形态（glob），不是文件列表。** 第一类是**高频 churn 路径** ——
+  `scripts/**`、`tests/**`、`e2e/**`、根级配置（每次排障都要改一遍），把它们纳入
+  棘轮会让每一次排障提交都顺带产生格式 diff。第二类是**非源码产物** ——
+  `src-tauri/target/**`（`cargo build` 输出，由嵌套的 `src-tauri/.gitignore`
+  忽略）：prettier 只按仓库根读 `.gitignore`，看不到嵌套忽略文件，构建过一次的
+  检出会拿 `target/**/out/__global-api-script.js` 阻断每一次提交。用 glob 表达
+  「这类文件暂不纳入」不会漂移，且新增这类文件时**自动**落在白名单里。
+  豁免不进棘轮计数。
 
 **存量文件怎么治理**：单独立项、单独一个 PR，对一批文件跑
 `pnpm exec prettier --write <文件>`，提交后 `node scripts/check-format.cjs --update`
@@ -276,8 +278,104 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 判据是**保守**的：重排后只要有一个字符不同就当成真实改动 —— 宁可漏报（放行一次
 没拆开的提交）也不误伤（把真实改动判成格式化而阻断）。
 
-**CI 也要跑**：squash 合并后 `master` 上只剩一个提交，「拆成两次提交」在本地不做
-就再没有机会补，而它造成的后果（blame 失真）是永久性的。
+**这道判据此前只在 CI 上跑**（平台侧现已删除，见 13.5）：squash 合并后 `master` 上
+只剩一个提交，「拆成两次提交」在本地不做就再没有机会补，而它造成的后果
+（blame 失真）是永久性的。现在它排在 `.githooks/pre-commit` 里，提交那一刻就拦住。
+
+#### 13.5.3 核时预算与「为什么平台侧被关掉」（ISSUE #623）
+
+**结论：本仓库用不起平台侧流水线，`.cnb.yml` 已删除。** 这一节留的是**决策记录**——
+日后额度问题时别再从头推一遍，也**不要**再把配置贴回去。
+
+计量口径：社区版云原生构建免费额度 **160 核时/月**，按「每 5 分钟冻结一次，
+冻结量 = 5 min × 节点规格」计（`docs.cnb.cool/zh/pricing`）。本仓库是
+`vitest（3200+ 用例）+ next build + Playwright` 串行，节点规格写死 `cpus: 8`，
+跑满一小时就是 8 核时 —— **一个月约二十次 PR 就能把额度吃光**。
+
+**曾经做到的降配（已随删除一同废止，仅作记录）**
+
+| 做法 | 省什么 | 代价 |
+|---|---|---|
+| 门禁只挂 `pull_request`，`push` 只留合并形态复核 | 砍掉「同一份代码的第二遍」 | 无（合并提交不引入新代码） |
+| `test` 与 `test:coverage` 合并成 `pnpm run test:coverage` | 全量 vitest 从两遍变一遍 | 无（覆盖率本来就跟着这一次运行出） |
+
+> **服务端那两层随 `.cnb.yml` 一起下线了**（ISSUE #623，理由见 13.5.3）。
+> `scripts/check-branch-guard.cjs` 仍保留 `--pr-check` / `--merge-commit` 两个
+> 服务端形态 —— 它们是**判据本身**（`tests/check-branch-guard.test.ts` 用真仓库
+> 跑三种拓扑），日后重启平台侧流水线时直接用，不必重写。`--merge-commit` 判的是
+> 「落到 `master` 的能不能被认定为 PR 合并的形态」（合并提交 **或** 提交信息带
+> `PR-URL: #NNN`），两者都不满足时保守放行 —— 为什么不能只判「父提交数 > 1」见 13.5。
+
+- **不要调小 `runner.cpus` 省额度** —— 核时 = 核数 × 时长，核数减半时长通常翻倍，
+  净效果接近零；还会拉长墙钟时间、放大超时风险。
+- **不要靠 `pull_request.target` / `ifModify` 之类的 write 过滤跳步**：本仓库改动
+  边界跨目录（`src/lib` 牵动 `scripts` / `tests` / 文档），任何过滤都制造
+  「这次没跑、但看起来跑了」的静默盲区 —— 正是 AGENTS 硬规则最反对的形态。
+- **不要 commit 一个「依赖预热镜像」的 Dockerfile 换缓存**：那会把 `pnpm install`
+  的语义改成「交给缓存镜像」，而缓存镜像的版本键与 `pnpm-lock.yaml` 之间没有任何
+  判据会在漂移时报警。
+
+**关掉之后谁来守门禁**：`.githooks/pre-commit`（24 步，见 13.5）。它与平台侧那套
+**大部分同源**（同一批 `scripts/check-*.cjs` 与契约测试），差别有两层：
+
+1. **它只保护「启用了钩子、且没加 `--no-verify`」的检出** ——
+   别的检出直推 `master` 不再有任何服务端复核，只能靠平台的分支保护设置拦。
+2. **原来只在 CI 上跑的那几步，现在没有执行者**（逐条登记，别让它们静默消失）：
+
+| 判据 | 原来的落点 | 现状 |
+|---|---|---|
+| 全量单测 + 覆盖率门槛（`pnpm run test:coverage`，3000+ 用例） | CI 第 6 步 | **无自动执行者**。按需手动跑；提交门槛里只有少量契约测试（见 13.5 清单第 16/18/20/24 步） |
+| `pnpm run build` + `check-standalone-contents.cjs`（产物级护栏） | CI 第 27/28 步 | **无自动执行者**。改构建 / 产物相关的东西后手动跑 |
+| E2E `playwright test --grep @critical` | CI 第 30 步 | **无自动执行者**。按需手动跑 |
+| `db:push` 建库 | CI 第 3 步 | 只在手动跑 E2E 前需要 |
+| R5 超 900 行文件棘轮（`check-file-structure.cjs --strict` 的那一半） | CI 第 8 步 | 本地这一步不带 `--strict`，**棘轮当前无执行者**（`.githooks/pre-commit` 里有 ⚠️ 标注） |
+| `pnpm doc:check`（文档引用与权威源一致） | 平台侧从不跑，仅在 `pnpm doc:gen` 内部作为第 1 步 | 本地钩子里没有它，**改了文档/权威源后需手动跑**（`pnpm doc:check` / `pnpm doc:gen`） |
+
+> 这张表是**有意留下的欠账**，不是遗漏：把全量 3000+ 用例塞进每次 commit 会让本地
+> 提交慢到没人愿意用，而那正是当初把它放去 CI 的原因。**去处不是把配置贴回去**，
+> 而是 13.5.4 的「按需召唤」：在 PR / Issue 里 `@` 对应 NPC 唤起一轮，不 `@` 就不跑。
+
+
+#### 13.5.4 「按需召唤」的那一层（ISSUE #656）
+
+13.5.3 那张表登记的是「**没有自动执行者**」的判据。没有执行者不等于没有出路 ——
+出路是**把它们从「没人跑」改成「有人按需跑」**，用平台自带的 NPC 触发机制，
+而不是把 `.cnb.yml` 贴回去。
+
+**结论：这一层不写任何配置，因此不花核时。**「PR 评审」不是一条流水线，而是
+**按需召唤的 NPC**：在 Issue / PR 里 `@` 对应 NPC 即触发一轮评审，不 `@` 就一次都不跑。
+
+**为什么这比 `.cnb.yml` 更值**（ISSUE #623 的结论仍然成立、没有被推翻）：
+
+| | 平台流水线（已删） | 按需召唤 NPC（本节） |
+|---|---|---|
+| 谁能触发 | 任何 push / PR 事件，**无条件** | 人 `@` 哪一个 NPC |
+| 核时 | 每次事件 ≈ 1 核时 × `cpus: 8` | 只在 `@` 时消耗；平时为 0 |
+| 代价 | 一个月几十次 PR 就吃光 160 核时 | 无配置、无事件、无必然消耗 |
+
+**机制**：平台把 Issue / PR 评论里的 `@npc/<slug>(<name>)` 解析成
+`issue.comment@npc` 事件并召唤该 NPC —— 仓库里**不需要**任何文件承载它。
+本仓库的 `.cnb.yml` 删除后仍能被 `@CodeBuddy` 唤起跑本轮任务，就是这个机制在生效
+（构建历史里 `issue.comment@npc` 一直是唯一被真实触发过的形态）。因此在
+**不新增仓库根配置、不注册任何事件**的前提下，本仓库就已经有了一条「按需 CI」：
+
+| 想验证什么 | 怎么做 | 对应 13.5 清单里的哪一步 |
+|---|---|---|
+| 代码评审（语义判断） | 在 PR / Issue 里 `@` 评审 NPC | 不在机器清单里，是**人**的那一层 |
+| 全量单测 + 覆盖率门槛 | `@` NPC 跑 `pnpm run test:coverage` | 第 16/18/20/24 步之外的欠账 |
+| 产物级护栏 | 改动构建 / 产物后 `@` 跑 `pnpm run build` + `check-standalone-contents.cjs` | 欠账条目 2 |
+| E2E 关键流程 | `@` 跑 `pnpm exec playwright test --grep @critical`（先 `db:push`） | 欠账条目 3/4 |
+| R5 行数棘轮 | `@` 跑 `check-file-structure.cjs --strict` | 欠账条目 5 |
+
+**边界（不要做过头）**：
+
+- **这不是把门禁从本地搬回平台**。机器判据仍然只在 `.githooks/pre-commit`
+  （13.5 的清单，24 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
+- **不要为它写 `.cnb.yml`**。`pull_request` / `push` 类事件是**无条件执行**的，
+  写下去就又回到 13.5.3 的额度结论；「每天只跑一次」这种节流平台也不支持
+  （无「今天跑过就跳过」的判据，见 13.5.3）。
+- **不要在自动触发的流水线里 `@` NPC**：`@` 是**人的动作**。把它写进流水线
+  等于按事件触发，绕回被删掉的形态。
 
 ### 13.6 分支与合并策略
 
@@ -291,14 +389,20 @@ PR 合并前必须通过（.cnb.yml 流水线「质量门禁」，触发分支 m
 
 只用「禁止直接 push」约束不住主干：本地 `git commit` 到 `master` 完全不经过任何
 检查，而 `--no-verify` 与「新克隆没启用钩子」都能让提交门槛形同虚设，等发现时
-绕过评审与 CI 的变更已经躺在所有人的基线里。因此本仓库把「不在 master 上提交」
+绕过评审的变更已经躺在所有人的基线里。因此本仓库把「不在 master 上提交」
 做成三层防线（ISSUE #492）：
 
 | 层 | 位置 | 拦什么 | 能绕过吗 |
 |----|------|--------|---------|
 | 平台 | CNB **分支保护设置**（保护分支 + 禁止直接 push，要求 PR） | `master` 的**直接 push**，**放行 PR 合并** | 需管理员改设置（本身就要权限） |
 | 本地 | `.githooks/pre-commit` 第 1 步跑 `scripts/check-branch-guard.cjs` | `master` 上的**每一次本地提交** | 只能 `--no-verify`（进历史，Review 可见） |
-| 服务端 | `.cnb.yml` 的「分支守卫」步骤（`scripts/check-branch-guard.cjs --pr-check`） | **源分支是 `master` 的 PR** | 不能 |
+
+> **服务端那两层随 `.cnb.yml` 一起下线了**（ISSUE #623，理由见 13.5.3）。
+> `scripts/check-branch-guard.cjs` 仍保留 `--pr-check` / `--merge-commit` 两个
+> 服务端形态 —— 它们是**判据本身**（`tests/check-branch-guard.test.ts` 用真仓库
+> 跑三种拓扑），日后重启平台侧流水线时直接用，不必重写。`--merge-commit` 判的是
+> 「落到 `master` 的能不能被认定为 PR 合并的形态」（合并提交 **或** 提交信息带
+> `PR-URL: #NNN`），两者都不满足时保守放行 —— 为什么不能只判「父提交数 > 1」见 13.5。
 
 **⚠️ 平台层必须用「分支保护」，不能用「分支锁」**：`git create-branch-lock`
 （仓库设置里 `locked: true`）锁的是**整个分支的写入**——它连 **PR 合并**一起拦掉，
@@ -335,20 +439,19 @@ git push origin HEAD                  # 推送并创建 PR
 > master 直提阻断并给出搬迁出口、master 合并提交放行、非 git 目录不崩、
 > 钩子里守卫排在第 1 步；另有 `--pr-check` 的三种拓扑与「取不到目标分支时保守放行」）。
 >
-> **分级口径**：上面的本地钩子与流水线步骤才是「判据」所在（拦的是**提交**与**PR 源分支**）；
-> 平台层的分支保护是「防误操作」的兜底（拦的是**直接 push**）。两者判据不同、不可互相替代：
-> 只有平台保护挡不住 `--no-verify` 的本地提交，只有本地钩子挡不住别的检出直推。
+> **分级口径**：本地钩子拦的是**提交**，平台层的分支保护拦的是**直接 push**
+> —— 两者判据不同、不可互相替代：只有平台保护挡不住 `--no-verify` 的本地提交，
+> 只有本地钩子挡不住别的检出直推（平台侧流水线已下线，见 13.5.3）。
 >
-> **服务端这一侧是「不可信事件」，判据必须自持**：`pull_request` 类事件的流水线配置
-> 取自**源分支**——触发者可以把 `.cnb.yml` 里那行 `check-branch-guard.cjs` 删掉。
-> 因此守卫脚本自己独立判定（不读 `CNB_PULL_REQUEST`、不依赖流水线里的任何外部事实），
-> 而且**紧跟在依赖安装之后**：删了它就等于当场失败，而不是「静默不检查」。
-> `tests/cnb-pipeline-gates.test.ts` 锁住这两点（守卫顺序 + 调用形态 + 判据版本一致）。
+> **服务端形态为什么还留着**：`pull_request` 类事件的流水线配置取自**源分支**，
+> 属「不可信事件」——触发者本可以把那行 `check-branch-guard.cjs` 删掉。因此脚本里
+> 的服务端判定**自持**（不读 `CNB_PULL_REQUEST`、不依赖任何外部事实），
+> 日后重启平台侧时把它排在第一道即可，删掉就是当场失败而不是「静默不检查」。
 >
 > **服务端的判据与本地不是同一条**（踩过）：CNB 在 `pull_request` 事件上 checkout 的是
 > **预合并提交**，容器里 `symbolic-ref HEAD` 恒等于**目标分支**——照搬本地那条
 > 「HEAD 在 `master` 上 = 直连主干」会把**每一条正常 PR 都拦死**（PR #633 第一次跑就是这么红的）。
-> 服务端改判**提交拓扑**：`git rev-list --count origin/master..HEAD`
+> 服务端因此判**提交拓扑**：`git rev-list --count origin/master..HEAD`
 > —— `> 0` 说明源分支确有超出目标分支的提交（正常 PR）；`= 0` 说明源分支就是目标分支
 > （平台允许创建 source=master 的 PR，正是要拦的场景）。判据与分支叫什么名字无关。
 > 三种拓扑（领先 / 预合并 / 完全同步）由 `tests/check-branch-guard.test.ts` 用**真仓库**跑。
@@ -458,7 +561,7 @@ changelog.d/408-changelog-conflict-free.md
 **门禁与工具**
 
 ```bash
-node scripts/check-changelog-fragments.cjs          # 校验碎片形态(pre-commit 与 CI 自动跑)
+node scripts/check-changelog-fragments.cjs          # 校验碎片形态(pre-commit 自动跑)
 node scripts/merge-changelog-fragments.mjs          # 并入 [Unreleased] 并删除碎片
 node scripts/merge-changelog-fragments.mjs --check  # 只预览,不落盘
 node scripts/merge-changelog-fragments.mjs --release 0.2.0   # 并入并把 [Unreleased] 定版

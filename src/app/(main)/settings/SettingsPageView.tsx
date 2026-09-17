@@ -8,7 +8,7 @@
  * `hooks/use-remote-model-dialogs.ts`（第②层），提交校验与网络都在 controller。
  */
 
-import { SettingsShell } from "@/components/settings/SettingsShell";
+import { SettingsShell } from "~/components/settings/SettingsShell";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
 import { AppearanceSection } from "./components/AppearanceSection";

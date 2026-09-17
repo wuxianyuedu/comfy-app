@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
-import { taskRepository } from "@/lib/core/repository";
-import { getLogs, subscribe } from "@/lib/comfyui/enqueue";
-import type { TaskEvent } from "@/lib/comfyui/runner-state";
-import { parseValidationErrors } from "@/lib/comfyui/validation";
+import { currentServerUser } from "~/server/auth/request-user";
+import { taskRepository } from "~/lib/core/repository";
+import { getLogs, subscribe } from "~/lib/comfyui/enqueue";
+import type { TaskEvent } from "~/lib/comfyui/runner-state";
+import { parseValidationErrors } from "~/lib/comfyui/validation";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ export async function GET(
 
   // native Route Handler — replaces the legacy `defineRoute`
   // wrapper.  Auth contract is kept identical (401 structured envelope).
-  const user = await getServerUser();
+  const user = await currentServerUser();
   if (!user?.id) {
     return unauthorizedResponse();
   }

@@ -31,11 +31,11 @@ import {
   NODE_META,
   defaultData,
   type NodeKind,
-} from "@/lib/project-canvas/canvas-types";
+} from "~/lib/project-canvas/canvas-types";
 import {
   makeFitViewScheduler,
   makeNodeId,
-} from "@/lib/project-canvas/canvas-helpers";
+} from "~/lib/project-canvas/canvas-helpers";
 import {
   createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
   hydrateFromServer,
@@ -45,7 +45,7 @@ import {
   setActive,
   getActiveId,
   type CanvasProject,
-} from "@/lib/project-canvas/canvas-store";
+} from "~/lib/project-canvas/canvas-store";
 import { useProjectPersistence } from "./project-canvas/hooks/use-project-persistence";
 import { useProjectManager } from "./project-canvas/hooks/use-project-manager";
 import { useCanvasConnections } from "./project-canvas/hooks/use-canvas-connections";

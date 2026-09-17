@@ -25,11 +25,11 @@ import { cleanup, render, screen } from "@testing-library/react";
 vi.mock("~/components/workshop/mode-contract/hooks/use-mode-contracts", () => ({
   useModeContracts: () => ({ contracts: [], loading: false, save: vi.fn() }),
 }));
-vi.mock("@/lib/workshop/generation-client", () => ({
+vi.mock("~/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
   watchTask: vi.fn(),
 }));
-vi.mock("@/lib/workflow-run-store", () => {
+vi.mock("~/lib/workflow-run-store", () => {
   const snapshot = { runs: [] };
   return {
     appendWorkflowRunLog: vi.fn(),

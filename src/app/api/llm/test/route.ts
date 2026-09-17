@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "@/lib/auth-server";
-import { getLLMConfig } from "@/lib/llm/server";
+import { currentServerUser } from "~/server/auth/request-user";
+import { getLLMConfig } from "~/lib/llm/server";
 import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
@@ -23,7 +23,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * 探测失败不是硬错误：一律 200 + { ok, detail }，前端按 detail 展示降级文案。
  */
 export async function POST(req: NextRequest) {
-  await getServerUser();
+  await currentServerUser();
 
   const body: unknown = await req.json().catch(() => ({}));
   const rec = isRecord(body) ? body : {};

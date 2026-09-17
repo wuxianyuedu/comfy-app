@@ -1,8 +1,8 @@
 "use client";
 import React from "react";
-import { completeChat } from "@/lib/llm/browser";
-import { Icon } from "@/components/ui/icon";
-import type { LLMConfigView } from "@/lib/llm/types";
+import { completeChat } from "~/lib/llm/browser";
+import { Icon } from "~/components/ui/icon";
+import type { LLMConfigView } from "~/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { errorMessage } from "~/lib/error-message";

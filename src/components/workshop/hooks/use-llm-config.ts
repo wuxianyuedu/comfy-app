@@ -11,7 +11,7 @@ import {
   splitExtraModels,
   type LLMConfigView,
   type RemoteModelKind,
-} from "@/lib/llm/types";
+} from "~/lib/llm/types";
 import { api } from "~/trpc/react";
 
 /** 判断远端模型是否为文本生成(对话)可用类型。

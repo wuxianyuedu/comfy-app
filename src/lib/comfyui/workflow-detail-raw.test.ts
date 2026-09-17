@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildRawInputs,
   buildInnerNodeInputs,
-} from "@/lib/comfyui/workflow-detail-raw";
-import type { RawWorkflow } from "@/lib/comfyui/raw";
+} from "~/lib/comfyui/workflow-detail-raw";
+import type { RawWorkflow } from "~/lib/comfyui/raw";
 
 const WRAPPER = "aaaaaaaa-1111-2222-3333-444444444444";
 

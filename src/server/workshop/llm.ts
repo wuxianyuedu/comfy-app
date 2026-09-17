@@ -1,12 +1,12 @@
 // ── Workshop MCP 本地 LLM 调用 ─────────────────────────────────
-// 不依赖 @/lib/llm/server（后者 import "server-only" 会在纯 Node 抛错）。
+// 不依赖 ~/lib/llm/server（后者 import "server-only" 会在纯 Node 抛错）。
 // 从环境变量读取默认值，并可被 `llmConfig` 表里的用户设置覆盖（与界面
 // 设置 UI 共享同一张表，复用 workshopDb 读取，不触碰 `~/env`）。
-import { decryptSecret } from "@/lib/llm/secrets";
-import type { LLMMessage } from "@/lib/llm/types";
-import { llmConfig } from "@/server/db/schema";
+import { decryptSecret } from "~/lib/llm/secrets";
+import type { LLMMessage } from "~/lib/llm/types";
+import { llmConfig } from "~/server/db/schema";
 import { workshopDb } from "./db";
-import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
+import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 export interface WorkshopLLMConfig {
   baseUrl: string;

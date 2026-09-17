@@ -17,11 +17,11 @@ import userEvent from "@testing-library/user-event";
 vi.mock("~/components/workshop/mode-contract/hooks/use-mode-contracts", () => ({
   useModeContracts: () => ({ contracts: [], loading: false, save: vi.fn() }),
 }));
-vi.mock("@/lib/workshop/generation-client", () => ({
+vi.mock("~/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
   watchTask: vi.fn(),
 }));
-vi.mock("@/lib/workflow-run-store", () => {
+vi.mock("~/lib/workflow-run-store", () => {
   /* 快照必须引用稳定：每次返回新对象会让 useSyncExternalStore 判定「一直在
    * 变」，触发无限重渲染（"Maximum update depth exceeded"）。 */
   const snapshot = { runs: [] };

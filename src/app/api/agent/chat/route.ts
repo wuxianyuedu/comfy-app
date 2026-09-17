@@ -3,14 +3,14 @@
 //   • 模型纯文本回复（无工具调用）
 //   • tool_calls 列表（前端执行后再回灌）
 //   • JSON 指令序列回退（模型不支持 tools 时）
-// 鉴权沿用 requireServerUser（单机本地演示可回落默认用户）。
+// 鉴权沿用 requireRequestUser（单机本地演示可回落默认用户）。
 
 import { type NextRequest, NextResponse } from "next/server";
-import { requireServerUser } from "@/lib/auth-server";
-import { handleAgentChat } from "@/lib/agent/server";
-import { parseDraftDto } from "@/lib/workshop/draft-sync-shared";
-import { isRecord } from "@/lib/workshop/api-channel-shared";
-import type { AgentChatRequest } from "@/lib/agent/shared";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { handleAgentChat } from "~/lib/agent/server";
+import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
+import { isRecord } from "~/lib/workshop/api-channel-shared";
+import type { AgentChatRequest } from "~/lib/agent/shared";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -18,7 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

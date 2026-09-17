@@ -19,7 +19,7 @@ import type { Dispatch, SetStateAction } from "react";
 import {
   fetchTaskImages,
   type TaskGalleryImage,
-} from "@/lib/task-images-client";
+} from "~/lib/task-images-client";
 
 export interface UseContentAssetGalleryArgs {
   taskId?: string | null;

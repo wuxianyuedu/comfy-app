@@ -3,9 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { clampLogTime, resolveSessionStart } from "@/lib/log-session-scope";
+import { clampLogTime, resolveSessionStart } from "~/lib/log-session-scope";
 // fileMtimeMs 是 Node-only IO，拆到 .server 模块（客户端 bundle 不得含 node:fs）。
-import { fileMtimeMs } from "@/lib/log-session-scope.server";
+import { fileMtimeMs } from "~/lib/log-session-scope.server";
 
 const BASE = 1_700_000_000_000; // 任意固定时刻，避免测试依赖真实时间
 

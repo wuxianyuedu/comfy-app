@@ -4,8 +4,8 @@ import {
   completeLLM,
   completeLLMTools,
   streamLLM,
-} from "@/lib/llm/server";
-import { requireServerUser } from "@/lib/auth-server";
+} from "~/lib/llm/server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import { errorMessage } from "~/lib/error-message";
 import {
   TASK_TYPES,
@@ -13,7 +13,7 @@ import {
   type LLMRequestOptions,
   type LLMProviderType,
   type TaskType,
-} from "@/lib/llm/types";
+} from "~/lib/llm/types";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -83,7 +83,7 @@ const BodySchema = {
 };
 
 export async function POST(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

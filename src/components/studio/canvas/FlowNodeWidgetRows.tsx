@@ -4,8 +4,8 @@
  * live in FlowNodePinRows; this section renders the scalar/object inputs
  * with their values, including STRING multiline textareas. */
 import { Handle, Position } from "@xyflow/react";
-import { portColor, inferInputType } from "@/lib/comfyui/types";
-import { friendlyInputName } from "@/lib/comfyui/node-titles";
+import { portColor, inferInputType } from "~/lib/comfyui/types";
+import { friendlyInputName } from "~/lib/comfyui/node-titles";
 import {
   renderWidgetValue,
   valueCellColor,

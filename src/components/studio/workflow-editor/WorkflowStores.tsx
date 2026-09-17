@@ -41,8 +41,8 @@ import type {
 import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
 import { rectToAnchor } from "../workflow-utils";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
-import { patchWorkflowSilently } from "@/lib/workflow-mutations";
-import { reportStaleStoreAction } from "@/lib/stale-store-notify";
+import { patchWorkflowSilently } from "~/lib/workflow-mutations";
+import { reportStaleStoreAction } from "~/lib/stale-store-notify";
 
 /* ───────────────────────────────────────────────────────────────────────
  *  IOEdit store

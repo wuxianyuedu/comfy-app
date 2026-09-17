@@ -515,6 +515,18 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     projectId: activeProjectId,
   });
 
+  /** 定妆照任务期间禁止换项目。
+   *
+   *  换项目会用目标项目的草稿替换 `characters`，发起时那张角色卡已不在列表里，
+   *  在途的结果只能丢弃 —— 而一次本机定妆照要跑几分钟，白跑不可接受。故拦下并
+   *  给出可见出口（notice），而不是让项目切换器无声失效。
+   *  返回 true 表示已拦下（调用方直接 return）。 */
+  const blockedByPortraitTask = React.useCallback((): boolean => {
+    if (!characterPortrait.busy && !characterPortrait.importing) return false;
+    setNotice("定妆照正在生成，请等这一次跑完再切换项目");
+    return true;
+  }, [characterPortrait.busy, characterPortrait.importing]);
+
   /** 当前全部可持久化内容（落盘、切换前保存都用它）。 */
   const currentDraft = React.useCallback(
     (): WorkshopDraft => ({
@@ -578,6 +590,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const switchProject = React.useCallback(
     (id: string) => {
       if (id === activeProjectId) return;
+      if (blockedByPortraitTask()) return;
       /* 先把当前内容同步落盘（localStorage + 服务端）：否则防抖中的定时器醒来会把
        * 旧内容写到新项目上，且切走前最后一改若未及服务端可能在崩溃时丢失。 */
       const outgoing = currentDraft();
@@ -613,11 +626,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       projectsIndex.items,
       snapshotActiveInto,
       applyDraft,
+      blockedByPortraitTask,
     ],
   );
 
   const createProject = React.useCallback(
     (title?: string) => {
+      /* 新建项目同样会把 activeId 切到新项目（见 blockedByPortraitTask）。 */
+      if (blockedByPortraitTask()) return;
       const outgoing = currentDraft();
       writeDraft(activeProjectId, outgoing);
       void pushServerDraft(activeProjectId, outgoing);
@@ -649,6 +665,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       projectsIndex.items,
       snapshotActiveInto,
       applyDraft,
+      blockedByPortraitTask,
     ],
   );
 
@@ -674,6 +691,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     (id: string) => {
       /* 至少保留一个项目，避免工坊变成没有可编辑对象的空壳。 */
       if (projectsIndex.items.length <= 1) return;
+      /* 删掉的若是当前项目，activeId 会跳到别的项目（同样替换 characters）：
+       * 与切换同口径拦下；删别的项目不动当前项目，不必拦。 */
+      if (id === projectsIndex.activeId && blockedByPortraitTask()) return;
       const items = projectsIndex.items.filter((item) => item.id !== id);
       let activeId = projectsIndex.activeId;
       if (activeId === id) {
@@ -692,7 +712,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       setProjectsIndex(next);
       invalidateDraftCache();
     },
-    [projectsIndex, applyDraft],
+    [projectsIndex, applyDraft, blockedByPortraitTask],
   );
 
   /* 自动保存只写当前项目的键；索引里的标题在切换 / 新建时快照，

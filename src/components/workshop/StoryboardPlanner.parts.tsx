@@ -1,9 +1,9 @@
 "use client";
 
 import { Trash } from "lucide-react";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
-import type { Shot, ShotType, Character, StyleRef } from "@/lib/workshop/types";
-import { SHOT_TYPE_LABELS } from "@/lib/workshop/types";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
+import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
 import type { ShotProgress } from "./useStoryboardPlanner";
 
 const SHOT_TYPES: ShotType[] = [

@@ -8,9 +8,9 @@
 //   3. 把工具结果回灌模型，继续循环直至模型直接回复用户
 // 视图层（AgentOverlay.tsx）只消费本 hook 返回的 controller。
 import React from "react";
-import { sendAgentMessage } from "@/lib/agent/client";
-import type { AgentMessageLike, AgentChatResponse } from "@/lib/agent/shared";
-import { resolveAgentTool, type AgentToolHandlers } from "@/lib/agent/executor";
+import { sendAgentMessage } from "~/lib/agent/client";
+import type { AgentMessageLike, AgentChatResponse } from "~/lib/agent/shared";
+import { resolveAgentTool, type AgentToolHandlers } from "~/lib/agent/executor";
 
 export type { AgentToolHandlers };
 

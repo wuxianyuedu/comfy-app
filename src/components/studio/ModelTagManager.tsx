@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 import { overlayClass } from "~/lib/full-screen-layer";

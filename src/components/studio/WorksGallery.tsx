@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useToast } from "./ToastProvider";
-import { AuroraBackground } from "@/components/studio/ui/AuroraBackground";
+import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
 import {
   listProjects,
   reapAllEmptyDrafts,
   deleteProject,
   type CanvasProject,
-} from "@/lib/project-canvas/canvas-store";
-import { ModalDialog } from "@/components/studio/ui/ModalDialog";
+} from "~/lib/project-canvas/canvas-store";
+import { ModalDialog } from "~/components/studio/ui/ModalDialog";
 
 /**
  * 项目页面（"所有项目"标签）— 仅展示本地画布项目。

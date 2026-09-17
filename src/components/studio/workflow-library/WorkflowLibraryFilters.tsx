@@ -4,8 +4,8 @@
 // 由页头「工作流库」标题右侧统一收纳，减少垂直空间占用。
 // 计数以徽标形式并入每个选项行；「管理模型」作为模型下拉的固定末项入口。
 
-import { Icon } from "@/components/ui/icon";
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { Icon } from "~/components/ui/icon";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 
 export interface ModelTagCount {

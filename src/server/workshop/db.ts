@@ -1,5 +1,5 @@
 // ── Workshop MCP 本地 DB 客户端 ────────────────────────────────
-// 独立的 better-sqlite3 连接（与 Next 进程的 @/server/db 解耦），
+// 独立的 better-sqlite3 连接（与 Next 进程的 ~/server/db 解耦），
 // 这样 MCP stdio / 独立 HTTP 进程无需启动 Next、也不触碰 `~/env`。
 // 复用同一份 schema（含 workshopSession 表），数据库文件路径锚定
 // 与 drizzle-kit push 一致（相对进程 CWD 解析），避免 Windows 盘符根错误。
@@ -9,9 +9,9 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
-import { tracingIgnoreArgs } from "@/lib/tracing-ignore";
+import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "@/server/db/schema";
+import * as schema from "~/server/db/schema";
 
 /** 未配置 `DATABASE_URL` 时与 drizzle-kit 同锚点的兜底库文件（相对进程 CWD）。 */
 const DEFAULT_DB_FILE = "./db.sqlite";

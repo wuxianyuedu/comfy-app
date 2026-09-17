@@ -4,14 +4,14 @@ import React from "react";
 import {
   ExtractModelSelect,
   parseChannelOption,
-} from "@/components/workshop/ExtractModelSelect";
-import type { ExtractLogEntry } from "@/lib/workshop/extraction-log";
-import { fetchGenerationLogs } from "@/lib/workshop/generation-log-client";
-import type { GenerationLogStage } from "@/lib/workshop/generation-log";
-import type { PersistableGenerationLog } from "@/lib/workshop/generation-log-client";
+} from "~/components/workshop/ExtractModelSelect";
+import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
+import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
+import type { GenerationLogStage } from "~/lib/workshop/generation-log";
+import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-client";
 
 /** @deprecated 兼容既有 import：通道类型已迁至 ExtractModelSelect */
-export type { ExtractChannel } from "@/components/workshop/ExtractModelSelect";
+export type { ExtractChannel } from "~/components/workshop/ExtractModelSelect";
 
 /** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。 */
 function logBadge(kind: ExtractLogEntry["kind"]): string {

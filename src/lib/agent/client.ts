@@ -1,7 +1,7 @@
 // ── Agent 浏览器端 API 客户端 ─────────────────────────────
 // 视图层不直接 fetch —— 组件把消息 + 项目快照交给本模块，
 // 由它发起 POST /api/agent/chat 并解析返回结构。
-import { isRecord } from "@/lib/workshop/api-channel-shared";
+import { isRecord } from "~/lib/workshop/api-channel-shared";
 import type { AgentChatRequest, AgentChatResponse } from "./shared";
 
 /** 向 Agent 服务端发送一轮消息，返回响应（reply / tool_calls / fallback）。 */

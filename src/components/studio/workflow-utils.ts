@@ -1,8 +1,8 @@
 "use client";
 /* Extracted pure module-level helpers — originally declared inside
  * WorkflowCanvasEditor.tsx.  No JSX, no React hooks. */
-import { getCustomNodePackage } from "@/config/custom-nodes";
-import { edgeType, portColor, edgeTypeByInputName } from "@/lib/comfyui/types";
+import { getCustomNodePackage } from "~/config/custom-nodes";
+import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
 import type { Node, Edge } from "@xyflow/react";
 import type {
   ComfyGraphNode,

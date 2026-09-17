@@ -26,6 +26,14 @@
  * 提交都顺带产生格式 diff。用 glob 表达「这类文件暂不纳入」不会漂移,且新增这类
  * 文件时自动落在白名单里(不误报)。豁免不进棘轮计数。
  *
+ * 白名单里的第二类是**非源码产物**:`src-tauri/target/` 下是 `cargo build` 的输出
+ * (Rust 壳),由**嵌套的** `src-tauri/.gitignore` 忽略。prettier 只按 cwd(仓库根)
+ * 读 `.gitignore`,嵌套的忽略文件它看不到 —— 于是构建过一次的检出会把 target 下的
+ * 生成脚本(out/__global-api-script.js)判成「新增未过格式的文件」,阻断每一次提交
+ * (ISSUE #638 修好 pnpm 启动形态后本门禁才第一次真正扫到全库,这条才暴露;CI 的
+ * 干净检出没有 target 目录,所以只有开发机踩得到)。产物既不该被格式化 ——
+ * 下一次构建会覆盖它,也不该进棘轮计数。
+ *
  * 为什么逐个 glob 调 prettier 而不是一次性:需要把 glob 交给 shell 展开或引号
  * 透传,而 Windows 上 cmd/pwsh 的展开语义与 POSIX 不同;逐个 glob 调用对平台
  * 无感,且 prettier 的 `--cache` 让重复调用几乎零成本。
@@ -71,7 +79,7 @@ const REPORT_ONLY = ARGS.has("--report");
 /** 扫描范围与 package.json 的 format:check 逐字一致。 */
 const GLOBS = ["**/*.{ts,tsx,js,jsx,mdx}"];
 
-/** 白名单(glob,相对仓库根):高频 churn 路径,见文件头注释。 */
+/** 白名单(glob,相对仓库根):① 高频 churn 路径;② 非源码产物(构建输出)。见文件头注释。 */
 const IGNORE_GLOBS = [
   "scripts/**",
   "tests/**",
@@ -80,6 +88,8 @@ const IGNORE_GLOBS = [
   "public/**",
   "docs/api/**",
   "docs/generated/**",
+  /* ② 非源码产物:Rust 壳的构建输出(被嵌套的 src-tauri/.gitignore 忽略)。 */
+  "src-tauri/target/**",
   "*.config.{js,ts,mjs,cjs}",
   "*.js",
 ];

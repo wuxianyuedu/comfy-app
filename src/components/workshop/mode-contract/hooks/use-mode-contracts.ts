@@ -12,7 +12,7 @@ import { useCallback, useState } from "react";
 import {
   parseModeContracts,
   type ModeContract,
-} from "@/lib/workshop/model-mode-contract";
+} from "~/lib/workshop/model-mode-contract";
 import { api } from "~/trpc/react";
 
 export function useModeContracts() {

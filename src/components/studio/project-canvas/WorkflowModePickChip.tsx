@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "@xyflow/react";
-import { ALL_WORKFLOW_TYPES } from "@/lib/workflow-types";
+import { ALL_WORKFLOW_TYPES } from "~/lib/workflow-types";
 import { usePopoverDismiss, usePopoverPosition } from "./workflow-node-popover";
 
 interface WorkflowModePickChipProps {

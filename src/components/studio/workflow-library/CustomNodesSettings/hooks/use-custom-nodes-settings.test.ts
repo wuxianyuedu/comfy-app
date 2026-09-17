@@ -12,7 +12,7 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/config/custom-nodes", () => ({
+vi.mock("~/config/custom-nodes", () => ({
   refreshCustomNodes: vi.fn().mockResolvedValue(undefined),
   getCustomNodesManifest: vi.fn().mockResolvedValue(null),
 }));
@@ -20,7 +20,7 @@ vi.mock("@/config/custom-nodes", () => ({
 import {
   getCustomNodesManifest,
   refreshCustomNodes,
-} from "@/config/custom-nodes";
+} from "~/config/custom-nodes";
 import { useCustomNodesSettings } from "./use-custom-nodes-settings";
 
 const mockedManifest = vi.mocked(getCustomNodesManifest);

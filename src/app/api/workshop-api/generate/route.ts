@@ -9,18 +9,18 @@
 // extraction helpers.
 import { type NextRequest, NextResponse } from "next/server";
 
-import { requireServerUser } from "@/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import {
   generateImageViaApi,
   pollVideoViaApi,
   submitVideoViaApi,
-} from "@/lib/workshop/api-channel.server";
-import { isRecord } from "@/lib/workshop/api-channel-shared";
+} from "~/lib/workshop/api-channel.server";
+import { isRecord } from "~/lib/workshop/api-channel-shared";
 import {
   intField,
   resolveMediaDataUrl,
   strField,
-} from "@/lib/workshop/media-source.server";
+} from "~/lib/workshop/media-source.server";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -28,7 +28,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

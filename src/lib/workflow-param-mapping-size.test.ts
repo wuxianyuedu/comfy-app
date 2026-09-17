@@ -19,8 +19,8 @@ import {
   buildParamEntries,
   isSizeDetermined,
   SIZE_SUB_IDS,
-} from "@/lib/workflow-param-mapping";
-import { deriveEncapsulationStatus } from "@/lib/workshop/workshop-encapsulation-status";
+} from "~/lib/workflow-param-mapping";
+import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 
 /** 一个「比例 + 分辨率 / 像素量 + 倍数 / 宽高」都齐的分辨率选择器。 */

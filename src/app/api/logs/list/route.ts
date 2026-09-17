@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireServerUser } from "@/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import fs from "node:fs";
 import path from "node:path";
 import { unauthorizedResponse } from "~/server/lib/error-response";
@@ -36,7 +36,7 @@ function scanLogFiles(dir: string, base: string): LogFileInfo[] {
 }
 
 export async function GET() {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

@@ -8,7 +8,7 @@
  * `useRemoteModelDialogs`（第②层）承载，视图只渲染与触发。
  */
 
-import { DarkSelect } from "@/components/studio/ui/DarkSelect";
+import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
   REMOTE_MODEL_KINDS,
   REMOTE_MODEL_KIND_LABELS,

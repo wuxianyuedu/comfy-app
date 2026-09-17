@@ -7,7 +7,7 @@
  * when toggling. */
 import { Handle, Position } from "@xyflow/react";
 import { useTheme } from "next-themes";
-import { portColor } from "@/lib/comfyui/types";
+import { portColor } from "~/lib/comfyui/types";
 import { resolveAnchorCylinder } from "./workflow-node-palette";
 import type { WorkflowNodeData } from "../workflow-types";
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { Icon } from "@/components/ui/icon";
-import { ExtractToolbar } from "@/components/workshop/ExtractToolbar";
+import { Icon } from "~/components/ui/icon";
+import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
 import { useStoryboardPlanner, type Props } from "./useStoryboardPlanner";
 import { ShotRow } from "./StoryboardPlanner.parts";
 

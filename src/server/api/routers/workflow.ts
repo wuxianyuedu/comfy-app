@@ -8,37 +8,37 @@ import { logger } from "~/server/lib/logger";
 import {
   workflowTemplateRepository,
   workflowModelTagRepository,
-} from "@/lib/core/repository";
+} from "~/lib/core/repository";
 import {
   reimportFromSource,
   importFromLocalPath,
   parseWorkflowContent,
-} from "@/lib/comfyui/importSource";
-import { readEnvVar } from "@/lib/envfile";
+} from "~/lib/comfyui/importSource";
+import { readEnvVar } from "~/lib/envfile";
 import {
   deriveComfyuiWorkflowsDir,
   getSettingsSync,
-} from "@/lib/app-settings/app-settings.server";
+} from "~/lib/app-settings/app-settings.server";
 import {
   scanLocalWorkflowRoots,
   scanLocalWorkflowChecksums,
   type LocalWorkflowFile,
-} from "@/lib/comfyui/localWorkflows";
-import { buildWorkflowPreview, detectParamMap } from "@/lib/comfyui/workflow";
+} from "~/lib/comfyui/localWorkflows";
+import { buildWorkflowPreview, detectParamMap } from "~/lib/comfyui/workflow";
 import {
   buildWorkflowDetailFull,
   buildSubgraphDetail,
   invalidateWorkflowDetailCache,
-} from "@/lib/comfyui/workflow-detail";
-import { detectFormat } from "@/lib/comfyui/raw";
+} from "~/lib/comfyui/workflow-detail";
+import { detectFormat } from "~/lib/comfyui/raw";
 import {
   hasExecutableWorkflow,
   hasGraphContent,
   hasRawContent,
-} from "@/lib/comfyui/execution-shape";
+} from "~/lib/comfyui/execution-shape";
 
 /** 列表行下发给前端的三件「可执行形态」事实 —— 判据全在
- *  `@/lib/comfyui/execution-shape`（raw 与 api 地位同等，任一列有内容即可执行）。
+ *  `~/lib/comfyui/execution-shape`（raw 与 api 地位同等，任一列有内容即可执行）。
  *
  *  · `usable`：这条工作流能不能跑；
  *  · `hasApi` / `hasRaw`：两列各自有没有内容（如实标注，不判可用性）；
@@ -73,7 +73,7 @@ import {
   getWorkflowTypesByCategory,
   parseModesJson,
   serializeModesJson,
-} from "@/lib/workflow-types";
+} from "~/lib/workflow-types";
 import { createHash } from "node:crypto";
 import path from "node:path";
 

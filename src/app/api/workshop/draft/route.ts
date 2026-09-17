@@ -4,21 +4,21 @@
 //   DELETE /api/workshop/draft?project=<wsp_*> → { ok: true }
 // 目的：工坊界面编辑的剧本/角色/分镜不再只落浏览器 localStorage —— 每次
 // 自动保存也写穿到本地 db.sqlite 的 workshopDraft 表，清缓存也不丢。
-// 鉴权沿用 requireServerUser（未开启登录门槛时回落本地演示用户，单机照常可用）。
+// 鉴权沿用 requireRequestUser（未开启登录门槛时回落本地演示用户，单机照常可用）。
 import { type NextRequest, NextResponse } from "next/server";
 
-import { requireServerUser } from "@/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import {
   parseDraftDto,
   draftHasContent,
-} from "@/lib/workshop/draft-sync-shared";
-import { isRecord } from "@/lib/workshop/api-channel-shared";
+} from "~/lib/workshop/draft-sync-shared";
+import { isRecord } from "~/lib/workshop/api-channel-shared";
 import {
   deleteDraft,
   getDraft,
   listDraftsByUser,
   upsertDraft,
-} from "@/server/workshop/draft-repository";
+} from "~/server/workshop/draft-repository";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -34,7 +34,7 @@ function projectIdFrom(q: string | null): string | null {
 }
 
 export async function GET(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) return UNAUTHORIZED();
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
   try {
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) return UNAUTHORIZED();
 
   let body: unknown;
@@ -87,7 +87,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) return UNAUTHORIZED();
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
   if (!project) {

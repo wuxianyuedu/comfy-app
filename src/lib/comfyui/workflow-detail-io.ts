@@ -23,12 +23,12 @@
  * and the canvas auto-spawn logic (first output's `type` decides whether
  * the downstream node is an image or a video node).
  */
-import { asRecord } from "@/lib/comfyui/raw";
-import { inferIsMultiline } from "@/lib/comfyui/types";
+import { asRecord } from "~/lib/comfyui/raw";
+import { inferIsMultiline } from "~/lib/comfyui/types";
 import {
   type RawInputEntry,
   type RawNodeMeta,
-} from "@/lib/comfyui/workflow-detail-raw";
+} from "~/lib/comfyui/workflow-detail-raw";
 import { type WorkflowIOModeOverride } from "~/lib/workflow-io-types";
 
 export interface WorkflowIORawEntry {

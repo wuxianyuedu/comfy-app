@@ -27,7 +27,10 @@
  *     ⇒ 消除这批依赖 = 把 `server/lib/logger` 的实现在两个**同层**模块之间
  *       合并/下沉（`lib/core/logger` ⇄ `server/lib/logger`），新增已无事可做。
  *   · 目标 `src/server/better-auth/server.ts`（`lib/auth-server.ts`）属另一种
- *     情形（Next 请求上下文，无法下沉），留待专项裁决。
+ *     情形（Next 请求上下文，无法下沉）。它**已按「消息/判决分离」消除**：
+ *     `lib/auth-server.ts` 改为「会话 → 用户」的纯判决（会话由调用方传入），
+ *     读会话的唯一落点搬到 `src/server/auth/request-user.ts`（`src/server/**`
+ *     本来就是服务端物，不存在越界）。清单因此**归零**。
  *
  * 口径：源码串 + 目标文件路径。正则剥掉块注释，行注释只剥 `//` 开头的那一
  * 种，因此文件末尾的 `// from "~/server/lib/logger"` 这类说明**仍会被计入** ——
@@ -98,12 +101,14 @@ const SERVER_OWNED_RE = /^src\/server\/(?!db\/schema\.ts|db\.ts)/;
  * `import { logger } from "~/lib/core/logger"` —— 方向由 `lib → server` 变回
  * `lib → lib`，不再是越界。
  *
- * 剩下这一条属另一种情形：better-auth 的会话读取需要 **Next 请求上下文**
- * （`headers()` / cookies），无法下沉到 `lib`，留待专项裁决。
+ * 最后一条（better-auth 会话读取需 **Next 请求上下文**，无法下沉）也已消除，
+ * 做法见 `src/server/auth/request-user.ts` 的头注：`lib` 侧只保留
+ * 「会话 → 用户」的判决并把会话作为**入参**，读会话的落点搬到 `src/server/**`。
+ *
+ * 因此清单现在是**空的** —— 这正是本用例要守住的终态：`src/lib` 里任何一处
+ * 新增的 `lib → server` 依赖都必须先裁决，而不是「反正有一条已登记」。
  */
-const REGISTERED: Record<string, string> = {
-  "src/lib/auth-server.ts": "src/server/better-auth/server.ts",
-};
+const REGISTERED: Record<string, string> = {};
 
 type Edge = { from: string; to: string };
 /** 边的唯一标识。**必须带上目标**：只按源文件判「是否登记过」会把该文件此后
@@ -182,10 +187,33 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
     ).toEqual(["src/lib/comfyui/client.ts -> src/server/lib/brand-new.ts"]);
   });
 
-  it("扫描器本身有效：能识别登记项里的真实依赖边（反向验证）", () => {
+  it("扫描器本身有效：能识别真实依赖边，且不误伤同层引用（反向验证）", () => {
+    // 清单归零之后，「当前清单为空」不再能证明扫描器在工作 —— 一个永远返回空
+    // 的扫描器会让上面两条断言全绿。所以这里**注入一段与现状无关的源码**，
+    // 直接验证 `stripComments` + `SPECIFIER_RE` + `resolveSpec` 这条链真的能
+    // 从源码串解析到仓库内的 server 目标。
+    const probe = `
+      import { getSession } from "~/server/better-auth/server";
+      // import { logger } from "~/server/lib/logger";
+    `;
+    const specs = [...stripComments(probe).matchAll(SPECIFIER_RE)].map((m) => m[1]);
+    expect(specs, "解析器必须能认出 from 说明符").toEqual([
+      "~/server/better-auth/server",
+    ]);
+    // 整行 `//` 注释被剥掉（否则说明性路径会被误判成依赖）
+    expect(specs).not.toContain("~/server/lib/logger");
+    // 说明符能解析到仓库内的真实文件（不是「永远返回 null」）
+    expect(resolveSpec("~/server/better-auth/server")).toBe(
+      "src/server/better-auth/server.ts",
+    );
+    // 数据层同层引用（`lib/core/**` → `~/server/db/schema`）被 SERVER_OWNED_RE 排除，
+    // 不入清单 —— 这条守的是「判据不是一律禁止」
+    expect(SERVER_OWNED_RE.test("src/server/db/schema.ts")).toBe(false);
+    expect(SERVER_OWNED_RE.test("src/server/better-auth/server.ts")).toBe(true);
+
+    // 现实面：那条越界边确实已经不存在了
     const live = new Set(collectEdges().map(key));
-    // 取一条必然存在的既有边，确认解析逻辑不是「永远返回空」
-    expect(live.has("src/lib/auth-server.ts -> src/server/better-auth/server.ts")).toBe(true);
+    expect(live.has("src/lib/auth-server.ts -> src/server/better-auth/server.ts")).toBe(false);
     // 日志方向已归位：`lib` 侧不再依赖 server 的日志实现（实现合并到 lib 侧）
     expect(live.has("src/lib/comfyui/client.ts -> src/server/lib/logger.ts")).toBe(false);
     // 数据层（`lib/core` / `lib/db`）取 Drizzle 表定义属同层引用，不入本清单

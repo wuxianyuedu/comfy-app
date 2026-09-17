@@ -15,12 +15,12 @@
 //   503 { ok: false, pending: false, ... }  → 启动失败或本进程不可探活
 import { NextResponse } from "next/server";
 
-import { requireServerUser } from "@/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import {
   probeComfyUi,
   ensureComfyUiReady,
   COMFYUI_AUTOSTART_TIMEOUT_MS,
-} from "@/lib/comfyui/lifecycle";
+} from "~/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -33,7 +33,7 @@ export const dynamic = "force-dynamic";
 const ENSURE_WAIT_MS = 8_000;
 
 export async function POST() {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

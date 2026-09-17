@@ -8,9 +8,9 @@
  */
 import "server-only";
 
-import { db } from "@/lib/db";
-import { decryptSecret, encryptSecret } from "@/lib/llm/secrets";
-import type { RawExtraModel } from "@/lib/llm/types";
+import { db } from "~/lib/db";
+import { decryptSecret, encryptSecret } from "~/lib/llm/secrets";
+import type { RawExtraModel } from "~/lib/llm/types";
 import {
   user,
   llmConfig,
@@ -20,7 +20,7 @@ import {
   type RemoteModel,
 } from "~/server/db/schema";
 import { eq, inArray } from "drizzle-orm";
-import type { RemoteModelKind } from "@/lib/llm/types";
+import type { RemoteModelKind } from "~/lib/llm/types";
 
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
@@ -168,8 +168,8 @@ export class LlmConfigRepository {
 import {
   parseRemoteModeAdapters,
   type RemoteModeAdapter,
-} from "@/lib/workshop/model-mode-contract";
-import { OLLAMA_DEFAULT_BASE_URL } from "@/lib/endpoints";
+} from "~/lib/workshop/model-mode-contract";
+import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 // ── 远端独立模型仓储（option C：远端模型独立成表，不与本地 ollama 候选混存）──
 export class RemoteModelRepository {

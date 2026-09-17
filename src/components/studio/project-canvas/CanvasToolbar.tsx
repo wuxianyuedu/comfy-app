@@ -3,7 +3,7 @@
 /** extracted from ProjectCanvas's floating toolbar
  *  (fit view / export JSON / clear canvas).  Pure presentational.
  */
-import { Icon } from "@/components/ui/icon";
+import { Icon } from "~/components/ui/icon";
 
 interface CanvasToolbarProps {
   onFitView: () => void;

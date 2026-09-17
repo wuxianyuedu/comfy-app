@@ -4,7 +4,7 @@ import {
   getSettings,
   getSettingsSync,
   saveSettings,
-} from "@/lib/app-settings/app-settings.server";
+} from "~/lib/app-settings/app-settings.server";
 import {
   clearComfyAutoStartFailure,
   clearComfyManualStop,
@@ -12,9 +12,9 @@ import {
   getComfyUiStatus,
   openComfyUi,
   stopComfyUiProcess,
-} from "@/lib/comfyui/lifecycle";
-import { classifyComfyInstall } from "@/lib/comfyui/instance-kind";
-import { decideComfyTabOpen, probeComfyEmbeddable } from "@/lib/comfy-embed";
+} from "~/lib/comfyui/lifecycle";
+import { classifyComfyInstall } from "~/lib/comfyui/instance-kind";
+import { decideComfyTabOpen, probeComfyEmbeddable } from "~/lib/comfy-embed";
 import {
   ensureDrizzleStudioUp,
   isDrizzleStudioStarting,
@@ -22,8 +22,8 @@ import {
   probeDrizzleStudio,
   stopDrizzleStudio,
   DRIZZLE_STUDIO_DEFAULT_PORT,
-} from "@/lib/drizzle-studio/lifecycle";
-import { openUrlInBrowser } from "@/lib/open-in-browser";
+} from "~/lib/drizzle-studio/lifecycle";
+import { openUrlInBrowser } from "~/lib/open-in-browser";
 
 export const settingRouter = createTRPCRouter({
   /** GET /api/settings */

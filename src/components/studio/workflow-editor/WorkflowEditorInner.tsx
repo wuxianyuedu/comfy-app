@@ -19,7 +19,7 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { refreshCustomNodes } from "@/config/custom-nodes";
+import { refreshCustomNodes } from "~/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
 import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
 import { buildEdges } from "../workflow-utils";

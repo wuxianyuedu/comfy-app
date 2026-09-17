@@ -4,7 +4,7 @@
  */
 
 import type { Edge } from "@xyflow/react";
-import type { CanvasNodeType } from "@/lib/project-canvas/canvas-types";
+import type { CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import { vanillaApi } from "~/trpc/vanilla";
 
 export interface CanvasProject {

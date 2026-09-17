@@ -14,30 +14,30 @@ import {
   toWorkflowInputsPayload,
   splitWorkflowIO,
   type WorkflowIOMap,
-} from "@/components/studio/shared/workflow-io";
+} from "~/components/studio/shared/workflow-io";
 import {
   type CanvasNodeData,
   defaultData,
-} from "@/lib/project-canvas/canvas-types";
-import { makeNodeId } from "@/lib/project-canvas/canvas-helpers";
+} from "~/lib/project-canvas/canvas-types";
+import { makeNodeId } from "~/lib/project-canvas/canvas-helpers";
 import {
   importOutputAsInput,
   startGenerate,
   pollTask,
   isTaskSuccess,
-} from "@/lib/project-canvas/canvas-api";
-import { getActiveId } from "@/lib/project-canvas/canvas-store";
-import { setActiveTaskId } from "@/components/studio/project-canvas/activeTask";
+} from "~/lib/project-canvas/canvas-api";
+import { getActiveId } from "~/lib/project-canvas/canvas-store";
+import { setActiveTaskId } from "~/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import {
   collectReferenceImages,
   seedModeOverrides,
-} from "@/components/studio/project-canvas/CanvasNode/helpers";
+} from "~/components/studio/project-canvas/CanvasNode/helpers";
 import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
-} from "@/lib/workflow-param-mapping";
+} from "~/lib/workflow-param-mapping";
 
 /** catch 抛出值（unknown）→ 与旧 `e?.message ?? String(e)` 逐值等价的错误文案：
  *  带 string message 的对象取 message（Error 实例即此路径），其余走 String(v)

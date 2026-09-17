@@ -192,12 +192,19 @@ describe("prettier 格式棘轮", () => {
     expect(r.output).toContain("未被 git 跟踪");
   });
 
-  it("测试 / 脚本 / 根级配置落在白名单里 → 不误报", () => {
+  it("测试 / 脚本 / 根级配置 / 非源码产物落在白名单里 → 不误报", () => {
     seedBaseline([]);
     // 白名单是「形态」而不是文件列表：新增的这类文件自动豁免。
     write("tests/fresh.test.ts", DIRTY);
     write("scripts/fresh.mjs", DIRTY);
     write("e2e/fresh.spec.ts", DIRTY);
+    /* Rust 壳的构建输出：它被**嵌套的** src-tauri/.gitignore 忽略，而 prettier 只
+     * 按仓库根读 .gitignore —— 不进白名单就会拿它阻断每一次提交（ISSUE #638 修好
+     * pnpm 启动形态后本门禁第一次真正扫到全库时暴露的现象）。 */
+    write(
+      "src-tauri/target/debug/build/app-1/out/__global-api-script.js",
+      DIRTY,
+    );
     const r = run();
     expect(r.code).toBe(0);
   });
@@ -217,6 +224,10 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     ["docs/api/assets/main.js", true],
     ["next.config.js", true],
     ["vitest.config.ts", true],
+    // 非源码产物（Rust 壳构建输出）豁免；glob 锚在 src-tauri 下，不是「任何 target 目录」
+    ["src-tauri/target/release/build/app-x/out/__global-api-script.js", true],
+    ["src-tauri/src/main.rs", false],
+    ["src/lib/target/keep.ts", false],
     ["src/lib/endpoints.ts", false],
     ["src/components/ui/button.tsx", false],
     ["src/app/api/health/route.ts", false],

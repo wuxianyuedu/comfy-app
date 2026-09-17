@@ -3,7 +3,7 @@
 import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { ErrorBoundary } from "~/components/ui/error-boundary";
 
 import { WorkflowEditorInner } from "../workflow-editor/WorkflowEditorInner";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
