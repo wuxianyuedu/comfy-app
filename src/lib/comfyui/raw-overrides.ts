@@ -1,24 +1,41 @@
 /**
- * `raw-overrides.ts` — raw UI-format 工作流的 canvas 覆盖注入（纯函数）
+ * `raw-overrides.ts` — 两种载荷的 canvas 覆盖注入（纯函数）
  * ===========================================================================
  *
- * 从 executor-cli.ts 抽出的「把 canvas `workflowInputs` 注入 raw UI json」
- * 纯逻辑模块。不依赖数据库 / 网络，可独立单测。
+ * 从 executor-cli.ts 抽出的「把 canvas `workflowInputs` 注入执行载荷」纯逻辑
+ * 模块。不依赖数据库 / 网络，可独立单测。
  *
- * 供 executor-cli 的 comfy-cli 提交路径在写临时工作流文件前调用
- * {@link applyRawOverrides}，把前端下发的 `(nodeId, name, value)` 覆盖项写进
- * raw 节点的 `widgets_values`。
+ * 供 executor-cli 的 comfy-cli 提交路径在写临时工作流文件前调用，把前端下发的
+ * `(nodeId, name, value)` 覆盖项写进载荷。**两种格式走同一套语义**，只是落点
+ * 不同（这是「api 也要注入画布覆盖」的落地处）：
+ *   - RAW UI-format → {@link applyRawOverrides}：值躺在 `widgets_values` 下标里，
+ *     要按控件名反查到下标（并跳过 seed 的 `control_after_generate` 哨兵槽）；
+ *   - API 图        → {@link applyApiOverrides}：`inputs` 是命名 map，按名字直接写。
  *
- * 子图（subgraph）wrapper 的覆盖项会额外同步到内层节点：wrapper 只是把内层
- * 控件「提升」出来的宿主，真正参与 UI→API 转换的是内层节点的
+ * raw 侧的子图（subgraph）wrapper 覆盖项会额外同步到内层节点：wrapper 只是把
+ * 内层控件「提升」出来的宿主，真正参与 UI→API 转换的是内层节点的
  * `widgets_values`（comfy-cli 展开子图后读的是内层值），只改 wrapper 不改内层
  * 会让覆盖在转换阶段被内层默认值覆盖回去。
  *
  * @module comfyui/raw-overrides
  */
 
+import { z } from "zod";
+
 /** 任意 JSON 对象的宽松视图（外部输入的中间层窄化用）。 */
 export type JsonRecord = Record<string, unknown>;
+
+/* ── 形状契约（外部输入边界，规范 §5.5）────────────────────────────────
+ * 本模块只对「**身份字段**」做硬约束 —— 节点 / 子图定义要能被查表找到，靠的
+ * 就是 `id`。其余字段（`inputs` / `widgets_values` / `nodes` / `links`）刻意
+ * 保持宽松：它们是**用户可扩展且各版本漂移**的结构，把 schema 收紧会让「一个
+ * 字段形态不认识」升级成「整条覆盖项静默不生效」—— 那正是 ISSUE #349 反复
+ * 修的那类症状（改了参数没反应，且没有任何报错）。所以这里用「校验身份 +
+ * 逐字段容错读取」，而不是「整条结构一次校验通过才认」。 */
+const UiNodeIdentitySchema = z.looseObject({
+  id: z.union([z.string(), z.number()]),
+});
+const SubgraphIdentitySchema = z.looseObject({ id: z.string() });
 
 /** 前端下发的工作流覆盖项（nodeId / name / value）。 */
 export type RawWorkflowOverride = {
@@ -60,13 +77,9 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
   const findInNodes = (nodes: unknown, id: string): RawUiNode | null => {
     if (!Array.isArray(nodes)) return null;
     for (const x of nodes) {
-      if (
-        x != null &&
-        typeof x === "object" &&
-        String((x as JsonRecord).id) === id
-      ) {
-        return x as RawUiNode;
-      }
+      const parsed = UiNodeIdentitySchema.safeParse(x);
+      if (!parsed.success) continue;
+      if (String(parsed.data.id) === id) return parsed.data;
     }
     return null;
   };
@@ -235,10 +248,9 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
       ? Object.values(subs)
       : [];
   for (const sg of list) {
-    if (sg == null || typeof sg !== "object") continue;
-    const sub = sg as RawSubgraph;
-    const uid = typeof sub.id === "string" ? sub.id : undefined;
-    if (uid) out.set(uid, sub);
+    const parsed = SubgraphIdentitySchema.safeParse(sg);
+    if (!parsed.success) continue;
+    out.set(parsed.data.id, parsed.data);
   }
   return out;
 }
@@ -272,11 +284,9 @@ function applySubgraphInteriorOverrides(
   const innerNodes = Array.isArray(sub.nodes) ? sub.nodes : [];
   const innerById = new Map<string, RawUiNode>();
   for (const n of innerNodes) {
-    if (n == null || typeof n !== "object") continue;
-    const node = n as RawUiNode;
-    if (node.id == null) continue;
-    if (typeof node.id !== "string" && typeof node.id !== "number") continue;
-    innerById.set(String(node.id), node);
+    const parsed = UiNodeIdentitySchema.safeParse(n);
+    if (!parsed.success) continue;
+    innerById.set(String(parsed.data.id), parsed.data);
   }
 
   const linksById = new Map<string, SubgraphLink>();
@@ -366,6 +376,77 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) slot++;
   }
   return -1;
+}
+
+/** 数值入参不要被字符串覆盖：已有值是数字、新值是可解析的数字串 → 取数字。
+ *
+ *  ComfyUI 对数值型入参收到字符串会拒单（或按 0 处理），而动态表单的值一路都是
+ *  string。`buildCustomWorkflow` / `buildPromptFromGraph` / `applyApiOverrides`
+ *  三处必须同口径，因此抽到这里只定义一次。 */
+export function coerceApiInputValue(current: unknown, value: unknown): unknown {
+  if (typeof current === "number" && typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed !== "" && !Number.isNaN(Number(trimmed)))
+      return Number(trimmed);
+  }
+  return value;
+}
+
+/** API 格式图里 seed 类入参的名字（与 raw 侧的 SEED_WIDGET_NAMES 同口径）。 */
+const SEED_INPUT_NAMES = ["seed", "noise_seed"];
+/** 前端专有的随机化控件名（不是 ComfyUI 的入参）。 */
+const CONTROL_AFTER_GENERATE = "control_after_generate";
+
+/** Best-effort injection of canvas `workflowInputs` into an **API-format** graph.
+ *
+ *  与 {@link applyRawOverrides} 同一套语义（`(nodeId, name, value)` 覆盖项、
+ *  数值收窄、`control_after_generate=randomize` 兜底铸新种子），差别只在落点：
+ *  API 图的 `inputs` 是命名 map，按名字直接写即可，没有下标可错位。
+ *
+ *  `control_after_generate` **不入载荷**：它是 ComfyUI 前端的控件概念，后端
+ *  `/prompt` 不认（前端在序列化 prompt 时把它解析成具体 seed）。所以这里先把它
+ *  从入参里摘掉，再按模式处理 seed —— `randomize` 铸一个新种子写给 seed 入参
+ *  （与 raw 路径在「没有哨兵槽」时的做法一致），其余模式保持 seed 原值。
+ *
+ *  图本身不变（不修改入参对象），返回一份深拷贝。 */
+export function applyApiOverrides(
+  graph: unknown,
+  overrides?: RawWorkflowOverride[],
+): JsonRecord {
+  if (graph == null || typeof graph !== "object" || Array.isArray(graph))
+    return {};
+  const out = JSON.parse(JSON.stringify(graph)) as JsonRecord;
+  if (!overrides?.length) return out;
+
+  for (const ov of overrides) {
+    if (!ov?.nodeId || ov.value === undefined) continue;
+    const nodeRaw = out[ov.nodeId];
+    if (
+      nodeRaw == null ||
+      typeof nodeRaw !== "object" ||
+      Array.isArray(nodeRaw)
+    )
+      continue;
+    const inputsRaw = (nodeRaw as JsonRecord).inputs;
+    if (
+      inputsRaw == null ||
+      typeof inputsRaw !== "object" ||
+      Array.isArray(inputsRaw)
+    )
+      continue;
+    const inputs = inputsRaw as JsonRecord;
+
+    if (ov.name === CONTROL_AFTER_GENERATE) {
+      delete inputs[CONTROL_AFTER_GENERATE];
+      if (ov.value !== "randomize") continue;
+      const seedKey = SEED_INPUT_NAMES.find((name) => name in inputs);
+      if (seedKey) inputs[seedKey] = randomSeed();
+      continue;
+    }
+
+    inputs[ov.name] = coerceApiInputValue(inputs[ov.name], ov.value);
+  }
+  return out;
 }
 
 /** Best-effort injection of canvas `workflowInputs` into the raw UI json. */

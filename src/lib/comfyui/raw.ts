@@ -1,31 +1,37 @@
 /**
- * ComfyUI 工作流「原始 / API」双格式兼容层
+ * ComfyUI 工作流「原始 / 控件顺序」兼容层
  *
- * ComfyUI 提供两种 JSON 表达同一个工作流：
+ * ComfyUI 提供两种 JSON 表达同一个工作流，**两者地位同等**：
  *
- *   1) API 格式 (执行用)
+ *   1) API 格式
  *      ─────────────────
  *      { "3": { class_type: "KSampler", inputs: { seed: 123, steps: 20, ... } }, ... }
- *      节点按 id 平铺，inputs 是结构化的命名参数，可直接 POST 到 /api/prompt。
+ *      节点按 id 平铺，inputs 是结构化的命名参数。库里的 `graph` 列就是它。
  *
- *   2) 原始 UI 格式 (存档用)
+ *   2) 原始 UI 格式（工作流 / RAW）
  *      ─────────────────
  *      { last_node_id, last_link_id, nodes: [ { id, type, pos:[x,y], size:[w,h],
  *           widgets_values:[...] }, ... ], links: [ [id, src, srcSlot, dst, dstSlot, type] ] }
- *      这是 ComfyUI 前端保存在磁盘的格式，含节点坐标信息。
+ *      这是 ComfyUI 前端保存在磁盘的格式，含节点坐标信息。库里的 `rawJson`
+ *      列就是它，执行时交给 comfy-cli（它按节点类定义做权威的 UI→API 转换）。
  *
- * 本模块负责：
- *   - detectFormat：自动识别 JSON 是哪种格式
- *   - extractPositions：从原始格式抽取每个节点的 (x,y)
- *   - fallbackRawToApi：raw → API 图的**画布呈现**用转换（纯离线启发式，不发网络
- *     请求；导入与执行都不用它 —— 见该函数上方说明）
+ * 本模块**只回答三个问题**：
+ *   - {@link detectFormat}      这段 JSON 是哪种格式；
+ *   - {@link extractPositions}  RAW 的节点坐标在哪；
+ *   - RAW 节点的控件**叫什么名字**（{@link pairWidgetValues} /
+ *     {@link fetchWidgetOrderTable} / {@link mapWidgetValuesByOrder}）——
+ *     画布要把 `widgets_values` 的下标还原成可读参数名。
  *
- * 两种格式**地位同等**：API 格式落 `graph` 直接执行，RAW 格式落 `rawJson` 交
- * comfy-cli 执行（它按节点类定义做权威的 UI→API 转换）。所以本模块**不再提供**
- * 「带 /object_info 的转换」那条路：它唯一的用途曾是导入时把 raw 转成 API 图存库，
- * 而那件事已经被证明是有害的（ISSUE #632）。
+ * 本模块**不再**做任何「raw → API 图」的转换：
+ *   - 入库存图由导入件自己决定（API 原件落 `graph`、RAW 原件落 `rawJson`）；
+ *   - 执行由 comfy-cli 做权威转换（RAW）或直接提交（API）；
+ *   - 画布视图需要的派生在 `raw-view-graph.ts`，提交前的图收拾在
+ *     `execution-graph.ts`。
+ *   「导入时把 raw 转成 API 图存库」已被证明有害（ISSUE #632）：无 ComfyUI
+ *   可达时按类名猜控件顺序，猜错就是一份能打开、跑起来结果不对的图。
  */
 
+import { z } from "zod";
 import { comfyBase } from "./client";
 
 export type WorkflowFormat = "api" | "raw";
@@ -108,6 +114,7 @@ export interface RawNode {
   /**
    * LiteGraph 执行模式：0=ALWAYS(正常) 1=ON_EVENT 2=NEVER(静音) 3=ON_TRIGGER 4=BYPASS。
    * ComfyUI 前端在导出 prompt 时会剔除 2/4 的节点，4 还要把连线「穿透」过去。
+   * 提交前的这步收拾见 `execution-graph.ts`。
    */
   mode?: number;
   /** 节点控件值的有序数组，含义由 class_type 决定 */
@@ -122,28 +129,6 @@ export interface RawNode {
   flags?: Record<string, unknown>;
   /** 其余动态字段（color 等），按需 typeof 守卫后读取 */
   [k: string]: unknown;
-}
-
-/* ── LiteGraph 节点模式 ── */
-export const NODE_MODE_ALWAYS = 0;
-export const NODE_MODE_NEVER = 2; // 静音 mute：不执行、不穿透
-export const NODE_MODE_BYPASS = 4; // 旁路 bypass：不执行、连线按类型穿透
-
-/**
- * 纯前端节点（isVirtualNode）：它们从不进入 /prompt，只负责搬运连线或数值。
- * ComfyUI 前端在 graphToPrompt 阶段就把它们解析掉了。
- */
-const VIRTUAL_NODE_TYPES = new Set([
-  "Reroute",
-  "RerouteNode",
-  "Reroute (rgthree)",
-  "PrimitiveNode",
-  "Note",
-  "MarkdownNote",
-]);
-
-export function isVirtualNodeType(type: string): boolean {
-  return VIRTUAL_NODE_TYPES.has(type);
 }
 
 export interface RawWorkflow {
@@ -187,9 +172,36 @@ export interface RawSubgraphDef {
   [k: string]: unknown;
 }
 
+/* ── 子图定义内部的形状契约（外部输入边界，规范 §5.5）────────────────────
+ * schema 放在 `RawSubgraphDef` 的声明处（同一处定义、同一处演进），消费方
+ * `workflow-subgraph-parse` 只负责调用，不再自己写一套判据。
+ *
+ * 两条都刻意只硬约束「身份字段」，其余保持宽松 —— 它们是**用户可扩展且各版本
+ * 漂移**的结构，收紧会把「一个字段形态不认识」升级成「整条数据被丢掉」，而丢掉
+ * 的后果是静默的（画布上少一根线 / 边界口凭空消失，没有任何报错）。 */
+
+/** 子图内部连线条目（`definitions.subgraphs[u].links` 的对象形态）。
+ *  `id` 必须存在（它是查表的键）；端点用 `number | string`，读取点各自判
+ *  `Number.isFinite` —— 畸形数据里它们是字符串或缺失是常态。 */
+export const SubgraphLinkSchema = z.looseObject({
+  id: z.union([z.number(), z.string()]),
+  origin_id: z.union([z.number(), z.string()]).optional(),
+  origin_slot: z.union([z.number(), z.string()]).optional(),
+  target_id: z.union([z.number(), z.string()]).optional(),
+  target_slot: z.union([z.number(), z.string()]).optional(),
+  type: z.unknown().optional(),
+});
+
+/** 暴露口 pin（`definitions.subgraphs[u].inputs / .outputs`）。
+ *  只要求 `id` 是非空字符串（没有 id 的条目无法回填 boundaryLinks）；不同
+ *  ComfyUI 版本对「这个 pin 关联了哪些连线」用过三种键名（`linkIds` / `link` /
+ *  `links`），所以那些字段一律不设 schema。 */
+export const SubgraphPinSchema = z.looseObject({ id: z.string().min(1) });
+
 /**
- * `_meta` 的官方用途只有 `title`。这里额外携带的字段**仅用于本地存储与画布展示**，
- * 在 `prepareGraphForExecution()` 里会被整体剥掉，绝不会发给 ComfyUI。
+ * `_meta` 的官方用途只有 `title`。这里额外携带的字段**仅用于本地存储 / 画布
+ * 展示与提交前穿透**，在 `execution-graph.prepareGraphForExecution()` 里会被
+ * 剥到只剩 `title`，绝不外发给 ComfyUI。
  */
 export interface ApiNodeMeta {
   title?: string;
@@ -214,14 +226,6 @@ export interface ApiWorkflowNode {
   _meta?: ApiNodeMeta;
   /** 部分导出携带的其余动态字段（如旧 rgthree 导出的 type） */
   [k: string]: unknown;
-}
-
-export interface ConversionResult {
-  graph: Record<string, ApiWorkflowNode>;
-  positions: Record<string, [number, number]>;
-  warnings: string[];
-  /** True if we used the /object_info mapping; false if we fell back to heuristics. */
-  usedObjectInfo: boolean;
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -314,7 +318,12 @@ export function extractPositions(
 }
 
 /* ──────────────────────────────────────────────────────────────────────
- * 3) 把 raw 转换为 api (用于执行 /prompt)
+ * 3) 控件名顺序：把 RAW 的 widgets_values 下标还原成可读参数名
+ *
+ * 只服务**画布展示**：ComfyUI 默认不把未「转成输入」的控件写进 raw 节点
+ * `inputs[]`，于是 CLIPTextEncode 的提示词、各类 Loader 的模型名在下标直读时
+ * 整段错位/丢失。这里按节点类定义拿到权威顺序，拿不到就退回内置表。
+ * 不参与任何格式转换（见文件头）。
  * ────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -363,6 +372,22 @@ function readInputSpec(spec: ObjectInfoInputSpec | undefined): {
 
 type ObjectInfo = Record<string, ObjectInfoClassDef>;
 
+/** `/object_info` 响应的**形状契约**（外部 HTTP 边界，规范 §5.5）。
+ *
+ *  只校验我们真正依赖的那两层：顶层是「类名 → 类定义」的 map，且每个类定义是
+ *  对象。类定义**内部**（`input` / `input_order` 里几十种 spec 形态）刻意不深验：
+ *
+ *   ① 那份响应实测约 4.7MB、几百个类；深验要为每个字段建结果对象，代价按量级
+ *      放大，而它已经在 20s 超时边上（见下方注释里的实测 5.2s）；
+ *   ② 内部字段的读取点本就按形态兜底（`readInputSpec` / `resolveWidgetOrder`
+ *      认元组与对象两种写法），拿不准的 spec 最坏只让某个控件退回文本框，
+ *      不会把别的类带崩。
+ *
+ *  这一层挡住的是**真正的失败形态**：上游没就绪时返回 HTML 错误页 / 空串 /
+ *  数组 —— 它们在旧写法 `as ObjectInfo` 下会被当成「一份没有类的定义表」，
+ *  表现为所有 COMBO 静默退化成文本框，且没有任何日志。 */
+const ObjectInfoEnvelopeSchema = z.record(z.string(), z.looseObject({}));
+
 /** Fetch ComfyUI node-class definitions (cached for 5 minutes) */
 let _objectInfoCache: { at: number; data: ObjectInfo } | null = null;
 /** 失败负缓存时间戳：ComfyUI 不可达时每次 detail/subgraph 请求都会白等
@@ -387,7 +412,14 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
       signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as ObjectInfo;
+    const parsed = ObjectInfoEnvelopeSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      /* 形状不可用 ⇒ 与「拿不到」同一条降级路径（含负缓存），不让坏响应
+       * 变成「一份没有类的定义表」这种看不出成因的空表。 */
+      _objectInfoFailedAt = Date.now();
+      return null;
+    }
+    const data = parsed.data as ObjectInfo;
     _objectInfoCache = { at: Date.now(), data };
     return data;
   } catch {
@@ -408,7 +440,7 @@ const CONNECTION_TYPE_RE =
  * ComfyUI 前端会在 seed 类 INT 控件后面**自动插入**一个 `control_after_generate`
  * 伪控件（fixed / increment / decrement / randomize），它同样会被序列化进
  * `widgets_values`。不补上这一格，后面所有 widget 都会整体错位一位。
- * 用哨兵名占位，写回 API graph 时跳过（ComfyUI 的 INPUT_TYPES 里并没有它）。
+ * 用哨兵名占位，读取点按名字跳过（ComfyUI 的 INPUT_TYPES 里并没有它）。
  */
 const CONTROL_SENTINEL = "__control_after_generate__";
 const SEED_WIDGET_NAMES = new Set(["seed", "noise_seed"]);
@@ -466,9 +498,9 @@ export function pairWidgetValues(
 
 /** 画布 raw_inputs 配对用的「classType → 控件名顺序表」。
  *
- *  与 {@link convertRawToApi} 内部使用的 `widgetOrder` 同源：object_info 可达时
- *  逐类解析，否则退回内置的 {@link FALLBACK_WIDGETS}。表中每一项对应
- *  `widgets_values` 的一个下标（含 control_after_generate 哨兵槽）。
+ *  object_info 可达时逐类解析，否则退回内置的 {@link FALLBACK_WIDGETS}。
+ *  表中每一项对应 `widgets_values` 的一个下标（含 control_after_generate
+ *  哨兵槽）。
  *
  *  画布之前只按 raw 节点 `inputs[]` 里的 `widget` 标记配对控件值，
  *  而 ComfyUI **默认不会把未「转成输入」的控件写进 inputs[]** —— 于是
@@ -492,7 +524,7 @@ export async function fetchWidgetOrderTable(): Promise<
 /** 把一整个 `widgets_values` 按类定义的控件顺序还原成「控件名 → 值」列表。
  *
  *  老版本 ComfyUI 前端不写 control_after_generate，故长度对不上时自动退到
- *  「无哨兵」顺序（与 {@link applyWidgets} 的 bare/names 选择一致）。
+ *  「无哨兵」顺序。
  *
  *  顺序未知 / 长度仍对不上（自定义节点动态控件）→ 返回 null，调用方退回
  *  旧的游标配对，保证不引入新的错位。 */
@@ -545,10 +577,6 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
   return out;
 }
 
-/* `resolveFullOrder`（带 /object_info 的完整输入序）已随 `convertRawToApi` 一起
- * 删除：它只服务那条「导入时把 raw 转成 API 图」的路，而那条路已取消（ISSUE
- * #632）。剩余调用方（`buildRawView`）走的是离线启发式 `FALLBACK_FULL`。 */
-
 /** Fallback widget mapping for common classes when /object_info is unavailable.
  *  The order here is the display order of WIDGET inputs only (connections
  *  excluded) — that matches how `widgets_values` is serialized on disk. */
@@ -596,455 +624,3 @@ const FALLBACK_WIDGETS: Record<string, string[]> = {
   ControlNetLoader: ["control_net_name"],
   UpscaleModelLoader: ["upscale_model_name"],
 };
-
-/** Fallback FULL input order (widgets + connections) for slot→name mapping. */
-const FALLBACK_FULL: Record<string, string[]> = {
-  KSampler: [
-    "model",
-    "positive",
-    "negative",
-    "latent_image",
-    "seed",
-    "steps",
-    "cfg",
-    "sampler_name",
-    "scheduler",
-    "denoise",
-  ],
-  KSamplerAdvanced: [
-    "model",
-    "positive",
-    "negative",
-    "latent_image",
-    "add_noise",
-    "noise_seed",
-    "steps",
-    "cfg",
-    "sampler_name",
-    "scheduler",
-    "start_at_step",
-    "end_at_step",
-    "return_with_leftover_noise",
-  ],
-  CLIPTextEncode: ["clip", "text"],
-  CheckpointLoaderSimple: ["ckpt_name"],
-  LoraLoader: ["model", "clip", "lora_name", "strength_model", "strength_clip"],
-  LoraLoaderModelOnly: ["model", "lora_name", "strength_model"],
-  EmptyLatentImage: ["width", "height", "batch_size"],
-  VAEEncode: ["pixels", "vae"],
-  VAEDecode: ["samples", "vae"],
-  SaveImage: ["images", "filename_prefix"],
-  LoadImage: ["image"],
-  VAELoader: ["vae_name"],
-  UNETLoader: ["unet_name", "weight_dtype"],
-  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
-};
-
-/* ──────────────────────────────────────────────────────────────────────
- * 3.1) 节点索引 —— 抹平 raw 的两种连线表达
- * ────────────────────────────────────────────────────────────────────── */
-
-interface NodeInputSlot {
-  name: string;
-  type?: string;
-  /** raw.links 里的 link id；null 表示该槽位没有接线 */
-  link: number | null;
-}
-
-interface IndexedNode {
-  id: string;
-  type: string;
-  mode: number;
-  virtual: boolean;
-  raw: RawNode;
-  /** 按槽位顺序排列，索引即 slot index */
-  inputs: NodeInputSlot[];
-  outputTypes: string[];
-}
-
-interface LinkRef {
-  originId: string;
-  originSlot: number;
-  type?: string;
-}
-
-/** link id → 起点。每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]。 */
-function buildLinkMap(raw: RawWorkflow): Map<number, LinkRef> {
-  const map = new Map<number, LinkRef>();
-  for (const l of raw.links ?? []) {
-    if (!Array.isArray(l) || l.length < 5) continue;
-    map.set(Number(l[0]), {
-      originId: String(l[1]),
-      originSlot: Number(l[2]),
-      type: typeof l[5] === "string" ? l[5] : undefined,
-    });
-  }
-  return map;
-}
-
-/**
- * 建立节点索引。
- *
- * 入参槽位**优先取节点自带的 `inputs[]`**（含 name/type/link，与 ComfyUI 前端
- * 读的字段完全一致）；只有节点没有 `inputs[]` 时，才退回「按 slot 序号查
- * input_order」的猜测路径 —— 后者在「widget 转 input」的工作流里必然错位，
- * 所以能不用就不用。
- */
-function indexNodes(
-  raw: RawWorkflow,
-  fullOrder: Map<string, string[]>,
-): Map<string, IndexedNode> {
-  const byId = new Map<string, IndexedNode>();
-  for (const n of raw.nodes) {
-    const id = String(n.id);
-    const type = String(n.type);
-    const slots: NodeInputSlot[] = [];
-
-    if (Array.isArray(n.inputs) && n.inputs.length) {
-      for (const inp of n.inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
-        slots.push({
-          name: inp.name,
-          type: typeof inp.type === "string" ? inp.type : undefined,
-          link: inp.link == null ? null : Number(inp.link),
-        });
-      }
-    } else {
-      const order = fullOrder.get(type) ?? [];
-      for (const name of order) slots.push({ name, link: null });
-      for (const l of raw.links ?? []) {
-        if (!Array.isArray(l) || l.length < 5) continue;
-        if (String(l[3]) !== id) continue;
-        const slot = slots[Number(l[4])];
-        if (!slot) continue;
-        slot.link = Number(l[0]);
-        if (typeof l[5] === "string") slot.type = l[5];
-      }
-    }
-
-    byId.set(id, {
-      id,
-      type,
-      mode: Number(n.mode ?? NODE_MODE_ALWAYS),
-      virtual: isVirtualNodeType(type),
-      raw: n,
-      inputs: slots,
-      outputTypes: Array.isArray(n.outputs)
-        ? n.outputs.map((output) =>
-            output && typeof output.type === "string" ? output.type : "",
-          )
-        : [],
-    });
-  }
-  return byId;
-}
-
-/** 把 widgets_values 按 widget 顺序摊平成命名参数。 */
-function applyWidgets(
-  node: RawNode,
-  widgetNames: string[],
-  clsType: string,
-  id: string,
-  warnings: string[],
-  inputs: Record<string, unknown>,
-) {
-  const widgets = Array.isArray(node.widgets_values) ? node.widgets_values : [];
-  if (!widgets.length) return;
-  if (!widgetNames.length) {
-    warnings.push(`${clsType}#${id}：未知节点类，widget 值无法还原为命名参数`);
-    return;
-  }
-  // 老版本前端存的 widgets_values 里没有 control_after_generate 这一格。
-  // 用长度精确匹配挑顺序，避免「多补一格」反而把所有值推错位。
-  const bare = widgetNames.filter(
-    (widgetName) => widgetName !== CONTROL_SENTINEL,
-  );
-  const names =
-    bare.length !== widgetNames.length && widgets.length === bare.length
-      ? bare
-      : widgetNames;
-
-  for (let i = 0; i < widgets.length && i < names.length; i++) {
-    const key = names[i];
-    if (key === CONTROL_SENTINEL) continue; // 伪控件，不是真实 input
-    inputs[key!] = widgets[i]!;
-  }
-}
-
-/** raw → API 的公共主体，convertRawToApi / fallbackRawToApi 共用。 */
-function buildApiGraph(
-  raw: RawWorkflow,
-  widgetOrder: Map<string, string[]>,
-  fullOrder: Map<string, string[]>,
-  warnings: string[],
-): Record<string, ApiWorkflowNode> {
-  const graph: Record<string, ApiWorkflowNode> = {};
-  const linkMap = buildLinkMap(raw);
-  const index = indexNodes(raw, fullOrder);
-  let inactive = 0;
-
-  for (const idx of index.values()) {
-    const inputs: Record<string, unknown> = {};
-
-    applyWidgets(
-      idx.raw,
-      widgetOrder.get(idx.type) ?? [],
-      idx.type,
-      idx.id,
-      warnings,
-      inputs,
-    );
-
-    for (const slot of idx.inputs) {
-      if (slot.link == null) continue;
-      const ref = linkMap.get(slot.link);
-      if (!ref) {
-        warnings.push(
-          `${idx.type}#${idx.id}：入参 ${slot.name} 的 link=${slot.link} 不在 links 表中`,
-        );
-        continue;
-      }
-      inputs[slot.name] = [ref.originId, ref.originSlot];
-    }
-
-    // `_meta` 只在本地存储/画布使用，执行前会被 prepareGraphForExecution 剥掉。
-    const meta: ApiNodeMeta = {};
-    const title = idx.raw.title ?? idx.raw.properties?.title;
-    if (title) meta.title = toStringValue(title);
-    if (idx.mode !== NODE_MODE_ALWAYS) meta.mode = idx.mode;
-    if (idx.virtual) meta.virtual = true;
-
-    const skipped =
-      idx.virtual ||
-      idx.mode === NODE_MODE_BYPASS ||
-      idx.mode === NODE_MODE_NEVER;
-    if (skipped) {
-      inactive += 1;
-      meta.inputOrder = idx.inputs.map((input) => input.name);
-      const types: Record<string, string> = {};
-      for (const s of idx.inputs) if (s.type) types[s.name] = s.type;
-      if (Object.keys(types).length) meta.inputTypes = types;
-      if (idx.outputTypes.length) meta.outputTypes = idx.outputTypes;
-      if (idx.type === "PrimitiveNode") {
-        const value = Array.isArray(idx.raw.widgets_values)
-          ? idx.raw.widgets_values[0]
-          : undefined;
-
-        if (value !== undefined) meta.value = value;
-      }
-    }
-
-    graph[idx.id] = {
-      class_type: idx.type,
-      inputs,
-      ...(Object.keys(meta).length ? { _meta: meta } : {}),
-    };
-  }
-
-  if (inactive > 0) {
-    warnings.push(
-      `${inactive} 个节点为 bypass / 静音 / 中转节点：已保留在图中供画布展示，提交执行时会被剔除并穿透连线`,
-    );
-  }
-  return graph;
-}
-
-/** raw → API 图（**只用于画布呈现**，不参与导入/执行）。
- *
- *  谁在用：`workflow-detail-raw` 的 `buildRawView` —— 存库的 `graph` 在部分工作流
- *  里被拆平成 `N:xx`，RAW 布局要的是一份**保留 subgraph wrapper** 的视图，于是
- *  从 `rawJson` 现派生一份。纯离线启发式、不发网络请求。
- *
- *  **不要再把它接回导入链**：执行侧 raw 由 comfy-cli 按节点类定义做权威转换
- *  （`resolveExecutionPayload` 优先送 rawJson），入库存一份启发式猜出来的 API 图
- *  只会让画布与运行都跑错图（ISSUE #632）。 */
-export function fallbackRawToApi(raw: RawWorkflow): ConversionResult {
-  const warnings: string[] = [
-    "使用 fallback widget 映射（未尝试连接 ComfyUI）",
-  ];
-  const positions = extractPositions(raw);
-  const graph: Record<string, ApiWorkflowNode> = {};
-  if (!Array.isArray(raw.nodes))
-    return { graph, positions, warnings, usedObjectInfo: false };
-
-  const widgetOrder = new Map<string, string[]>(
-    Object.entries(FALLBACK_WIDGETS),
-  );
-  const fullOrder = new Map<string, string[]>(Object.entries(FALLBACK_FULL));
-  Object.assign(graph, buildApiGraph(raw, widgetOrder, fullOrder, warnings));
-  return { graph, positions, warnings, usedObjectInfo: false };
-}
-
-/* ──────────────────────────────────────────────────────────────────────
- * 4) 执行前的最后一道处理：对齐 ComfyUI 前端的 graphToPrompt
- *
- * ComfyUI 提交 prompt 时并不是原样发送画布：
- *   - mode 2（静音）/ mode 4（旁路）的节点**不会出现在 prompt 里**；
- *   - 旁路节点的连线要「穿透」——按类型在它自己的入参里找同类型的上游；
- *   - Reroute / PrimitiveNode / Note 这类纯前端节点同样不入 prompt，
- *     Reroute 透传连线，PrimitiveNode 把字面量灌给下游。
- *
- * 存库的 graph 保留全部节点（画布要画出来），执行前才跑这一遍。
- * ────────────────────────────────────────────────────────────────────── */
-
-export interface ExecutionPrep {
-  graph: Record<string, ApiWorkflowNode>;
-  /** 被剔除的节点 id（bypass / 静音 / 纯前端节点） */
-  removed: string[];
-  /** 因上游被静音而彻底断链、只能丢弃的入参数量 */
-  droppedInputs: number;
-}
-
-/** 判断一个 input 值是否为连线引用 `[nodeId, slot]`（且目标节点真实存在）。 */
-function isLinkRef(
-  v: unknown,
-  graph: Record<string, unknown>,
-): v is [string | number, number] {
-  return (
-    Array.isArray(v) &&
-    v.length === 2 &&
-    typeof v[1] === "number" &&
-    (typeof v[0] === "string" || typeof v[0] === "number") &&
-    !!graph[String(v[0])]
-  );
-}
-
-type ResolvedOrigin =
-  { kind: "link"; value: [string, number] } | { kind: "value"; value: unknown };
-
-export function prepareGraphForExecution(
-  input: Record<string, unknown>,
-): ExecutionPrep {
-  /* 存库 graph 来自 JSON：先把每个节点一次性收窄成稳定视图（值仍逐字透传），
-   * 后续 walk / 剔除逻辑都读写视图，不再到处 unknown。 */
-  interface PrepEntry {
-    /** 运行时恒为 string；保持原值逐字透传（断言仅在编译期） */
-    classType: string;
-    inputs: Record<string, unknown>;
-    meta: Record<string, unknown>;
-  }
-  const graph: Record<string, PrepEntry> = {};
-
-  const removed: string[] = [];
-  for (const [id, n] of Object.entries(input ?? {})) {
-    const rec = asRecord(n);
-    if (!rec) continue;
-    const meta = asRecord(rec._meta) ?? {};
-    graph[id] = {
-      classType: rec.class_type as string,
-      inputs: asRecord(rec.inputs) ?? {},
-      meta,
-    };
-    const mode = Number(meta.mode ?? NODE_MODE_ALWAYS);
-    if (
-      mode === NODE_MODE_NEVER ||
-      mode === NODE_MODE_BYPASS ||
-      meta.virtual === true ||
-      (typeof rec.class_type === "string" && isVirtualNodeType(rec.class_type))
-    ) {
-      removed.push(id);
-    }
-  }
-  const inactive = new Set(removed);
-
-  /** 沿着被剔除的节点向上游走，直到落到一个真正会执行的节点。 */
-  function walk(
-    originId: string,
-    originSlot: number,
-    depth: number,
-  ): ResolvedOrigin | null {
-    if (depth > 64) return null; // 环保护
-    const node = graph[originId];
-    if (!node) return null;
-    if (!inactive.has(originId))
-      return { kind: "link", value: [originId, originSlot] };
-
-    const meta = node.meta;
-    // 静音节点不透传：下游这一路直接断掉（与 ComfyUI 行为一致）。
-    if (Number(meta.mode ?? NODE_MODE_ALWAYS) === NODE_MODE_NEVER) return null;
-    // PrimitiveNode：把字面量直接内联给下游。
-    const literal = meta.value;
-    if (literal !== undefined) return { kind: "value", value: literal };
-
-    const orderRaw = meta.inputOrder;
-    const order: string[] = Array.isArray(orderRaw)
-      ? orderRaw.map((x: unknown) => String(x))
-      : Object.keys(node.inputs);
-    const types = asRecord(meta.inputTypes) ?? {};
-    const outTypes = meta.outputTypes;
-    const wanted =
-      Array.isArray(outTypes) && typeof outTypes[originSlot] === "string"
-        ? outTypes[originSlot]
-        : undefined;
-
-    // ComfyUI 的顺序：先试与输出槽同序号的入参，再遍历其余入参做类型匹配。
-    const seen = new Set<string>();
-    const candidates: string[] = [];
-    const sameSlot = order[originSlot];
-    if (sameSlot) {
-      candidates.push(sameSlot);
-      seen.add(sameSlot);
-    }
-    for (const nm of order) {
-      if (seen.has(nm)) continue;
-      candidates.push(nm);
-      seen.add(nm);
-    }
-
-    for (const nm of candidates) {
-      const value = node.inputs[nm];
-
-      if (!isLinkRef(value, graph)) continue;
-
-      const typeOfNm = types[nm];
-      if (
-        wanted &&
-        typeof typeOfNm === "string" &&
-        typeOfNm.toUpperCase() !== wanted.toUpperCase()
-      )
-        continue;
-
-      return walk(String(value[0]), Number(value[1]), depth + 1);
-    }
-
-    // 类型信息缺失（老工作流没存 type）时：只有一条入线就直接穿过去。
-    const linked = candidates.filter((nm) => isLinkRef(node.inputs[nm], graph));
-    if (linked.length === 1) {
-      const value = node.inputs[linked[0]!];
-      if (isLinkRef(value, graph)) {
-        return walk(String(value[0]), Number(value[1]), depth + 1);
-      }
-    }
-
-    return null;
-  }
-
-  const out: Record<string, ApiWorkflowNode> = {};
-  let droppedInputs = 0;
-
-  for (const [id, n] of Object.entries(graph)) {
-    const inputs: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(n.inputs)) {
-      if (!isLinkRef(v, graph)) {
-        inputs[k] = v;
-        continue;
-      }
-      const resolved = walk(String(v[0]), Number(v[1]), 0);
-      if (!resolved) {
-        droppedInputs += 1;
-        continue;
-      }
-      inputs[k] = resolved.value;
-    }
-    const titleRaw = n.meta.title;
-    const title = typeof titleRaw === "string" ? titleRaw : undefined;
-    // 只保留官方认可的 `_meta.title`，本地字段一律不外发。
-    out[id] = {
-      class_type: n.classType,
-      inputs,
-      ...(title ? { _meta: { title } } : {}),
-    };
-  }
-
-  return { graph: out, removed, droppedInputs };
-}

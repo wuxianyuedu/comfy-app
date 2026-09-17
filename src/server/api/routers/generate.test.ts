@@ -166,6 +166,34 @@ describe("generate.generate（自定义工作流）", () => {
     expect(job.prompt["1"]?.inputs.text).toBe("hello");
   });
 
+  it("canvasGraph + workflowInputs：同一份数组也进 overrides（执行点再兜一遍前端专有控件）", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "wf-ov",
+      userId: "user-a",
+      name: "My Custom",
+      taskType: "T2I",
+      graph: CUSTOM_GRAPH,
+    });
+    await createCaller(makeCtx()).generate({
+      workflow: "wf-ov",
+      prompt: "hello",
+      canvasGraph: CUSTOM_GRAPH,
+      paramMap: { positiveNode: "1", samplerNode: "2" },
+      workflowInputs: [{ nodeId: "1", name: "text", value: "hello" }],
+    });
+
+    const job = enqueueMock.mock.calls[0]?.[0] as {
+      overrides?: unknown;
+      prompt: Record<string, { inputs: Record<string, unknown> }>;
+    };
+    /* 结构注入（buildCustomWorkflow）与执行点注入（applyApiOverrides）吃同一份
+     * 数组 —— 后者负责 control_after_generate 这类「不入载荷」的前端控件。 */
+    expect(job.overrides).toEqual([
+      { nodeId: "1", name: "text", value: "hello" },
+    ]);
+    expect(job.prompt["1"]?.inputs.text).toBe("hello");
+  });
+
   it("模板 rawJson（无 canvasGraph）→ comfy-cli 原始执行路径（rawJson + overrides 入队）", async () => {
     const rawJson = { nodes: [{ id: "1", type: "KSampler" }] };
     seedWorkflowTemplate(tdb, {

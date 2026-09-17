@@ -9,7 +9,6 @@
  */
 import {
   extractPositions,
-  fallbackRawToApi,
   fetchWidgetOrderTable,
   mapWidgetValuesByOrder,
   type ApiWorkflowNode,
@@ -17,6 +16,7 @@ import {
   type RawSubgraphDef,
   type RawWorkflow,
 } from "~/lib/comfyui/raw";
+import { buildRawViewGraph } from "~/lib/comfyui/raw-view-graph";
 import { inferInputType, inferIsMultiline } from "~/lib/comfyui/types";
 
 /* ── RAW 解析结果共享形状（workflow-detail-io / workflow-subgraph-parse 复用）── */
@@ -897,7 +897,8 @@ export function buildInnerNodeInputs(
  * 这种情况下画布 RAW 布局会显示 17 个被炸开的节点，而用户期望的是 5 个
  * 原始 ComfyUI 节点（含 wrapper 紫色整卡）。这里直接从 rawJson 再派生一份
  * `rawView`（保留 subgraph wrapper），让 RAW 布局与 wrapper-form 兄弟、与
- * ComfyUI 自身画布一致。fallbackRawToApi 走离线启发式、不发网络请求。 */
+ * ComfyUI 自身画布一致。派生在 `raw-view-graph.ts`：纯离线、不发网络请求，
+ * 也**不是**格式转换（见该模块文件头）。 */
 export function buildRawView(
   raw: RawWorkflow | null,
   rawInputsById: Record<string, RawInputEntry[]>,
@@ -905,8 +906,7 @@ export function buildRawView(
 ): RawViewPacket | null {
   let rawView: RawViewPacket | null = null;
   if (raw && Array.isArray(raw.nodes)) {
-    const rawConv = fallbackRawToApi(raw);
-    const rawGraph = rawConv.graph;
+    const rawGraph = buildRawViewGraph(raw);
     const rawViewNodes: DetailNodeView[] = Object.entries(rawGraph).map(
       ([nodeId, n]) => {
         /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
@@ -945,7 +945,7 @@ export function buildRawView(
         };
       },
     );
-    const rawViewPositions = rawConv.positions ?? extractPositions(raw);
+    const rawViewPositions = extractPositions(raw);
     rawView = {
       nodes: rawViewNodes,
       positions: rawViewPositions,
