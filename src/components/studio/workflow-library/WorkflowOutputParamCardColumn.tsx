@@ -24,7 +24,7 @@ import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
 import type { ReactNode } from "react";
 
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";
-import { outputWireDotId } from "./workflow-library-param-cards";
+import { outputPortLabel } from "./workflow-library-param-cards";
 
 /** 卡片宽度：与左侧输入卡片同宽，两列夹着宿主卡片时仍放得下。 */
 const CARD_WIDTH = 200;
@@ -78,10 +78,11 @@ export function WorkflowOutputParamCardColumn({
          *  自身的名字 + 类型 —— 与左侧输入卡片同构（头说「这是谁」，体说「它由
          *  哪些端口组成」）。 */
         const title = outputCardLabel(output);
-        /* 端口名与连线锚点的 handle id 用**同一份算式**（`outputWireDotId`）：
-         *  两处各算一遍时空名 / 空白会一边锚 `输出`、一边找空串，线量不到锚点就
-         *  整条不画（ISSUE #355：「images 和对外输出参数之间无法连线」）。 */
-        const portName = outputWireDotId(output);
+        /* 显示名与锚点是**两件事**：名字是端口自己的名字（空 / 空白 → 「输出」）；
+         *  锚点（handle id）用**输出的 ioKey** —— 它全图唯一，也就是落库键
+         *  （`onConnect` 拿到的只有 handle id，直接取用）。 */
+        const portLabel = outputPortLabel(output);
+        const handleId = output.ioKey;
         const type = output.type ?? "*";
         const manual = !!isManual?.(output.ioKey);
         return (
@@ -107,24 +108,23 @@ export function WorkflowOutputParamCardColumn({
             side="left"
             outputPorts={[
               {
-                name: portName,
+                name: portLabel,
                 type,
                 /* 未连过（作者没改过这个口的取值行）在画布上**没有线** —— 这里也
                  *  不再报「已连接」：端口名跟着淡一档，与「这颗点有没有线」同一份
                  *  事实（`manual`，见 `deriveLibraryOutputCards`）。 */
                 connected: manual,
                 ioKey: output.ioKey,
-                /* 库里那层边的卡片端按**端口名**取 handle id（与输入卡片刻度
-                 *  一致，见 `outputWireDotId`）。 */
-                handleId: portName,
+                /* 锚点 = 输出的 ioKey（与边两端同一份取值）。 */
+                handleId,
                 active: manual || resolved?.[output.ioKey] === undefined,
               },
             ]}
             endpoint={() =>
               endpoint?.({
-                name: portName,
+                name: portLabel,
                 type,
-                handleId: portName,
+                handleId,
               })
             }
           />

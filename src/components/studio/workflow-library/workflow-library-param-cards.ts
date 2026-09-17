@@ -21,7 +21,6 @@ import {
   buildParamEntries,
   parseParamMapping,
   resolveMapping,
-  SIZE_SUB_IDS,
   wiredTargetsForEntry,
   type ParamEntry,
 } from "~/lib/workflow-param-mapping";
@@ -61,10 +60,6 @@ export interface LibraryParamCards {
    *  上色，带线的圆点看着反而是断的（用户口径：「这里连线断开了是什么原因」，
    *  ISSUE #355）。 */
   wiredDotKeys: Set<string>;
-  /** 宿主卡片此刻真的画得出来的端口（见 `deriveLibraryParamCards` 的入参
-   *  `reachableKeys`；缺省 = 不收窄）。卡片上的候选圆点按它收窄，
-   *  与连线用同一份事实。 */
-  reachableKeys?: ReadonlySet<string>;
   /** 对外**输出**参数在当前模式下的落点（输出口 ioKey → 取值的那一行 ioKey）。
    *  卡片与连线都要读这一份：与 `resolved` 对输入侧的作用对称。 */
   outputResolved?: Record<string, string | null>;
@@ -97,14 +92,8 @@ export function deriveLibraryParamCards(args: {
   mode: string | null | undefined;
   /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
   groupedKeys?: ReadonlySet<string>;
-  /** 宿主卡片此刻**真的画得出来、连得上**的那几行（ioKey 集合）。
-   *
-   *  给定时卡片上的候选圆点收窄到这些行：画不出端点的端口不给拖 —— 拖过去
-   *  也只会落不上（用户看到的就是「点击端点拉线出现禁用标记」）。缺省 = 不
-   *  收窄（老调用方行为不变）。 */
-  reachableKeys?: ReadonlySet<string>;
 }): LibraryParamCards {
-  const { io, paramMap, mode, groupedKeys, reachableKeys } = args;
+  const { io, paramMap, mode, groupedKeys } = args;
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
    * **契约口一律常驻**：显示与否只由契约决定，与工作流内部长什么样无关；工作流
    * 只决定每张卡落到哪一行端口，落不到就如实显示成「未配置」。 */
@@ -133,14 +122,10 @@ export function deriveLibraryParamCards(args: {
       wires.push({
         entryId: entry.id,
         targetIoKey: wired.ioKey,
-        /* 库内卡片圆点的 handle id 与落点**同键空间**（ioKey）—— 同一口子摊成
-         *  多条线时，每条对到自己那一颗圆点；用端口名会让同一个节点里的同名 pin
-         *  （两个节点各一行 `text`）撞成同一颗点，线全落到第一颗上。
-         *
-         *  尺寸是例外：六张子卡合成一张（行 = 形态，见 `WorkflowParamCardColumn`），
-         *  所以它的圆点 handle 就是**子口 id** —— 六个子口摆的是同一份候选（按类型
-         *  收），按 ioKey 对齐会让六行都指向同一个落点。 */
-        handleId: SIZE_SUB_IDS.includes(entry.cls) ? entry.id : wired.ioKey,
+        /* 卡片圆点的 handle id = **条目 id**（与 `paramOutputPorts` 同口径）：
+         *  一个口一颗点，条目 id 在同一画布节点内天然唯一 —— 尺寸卡的六行各是子口
+         *  id，普通卡就是契约口 id，两边都由它表达「线从哪张卡出发」。 */
+        handleId: entry.id,
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
       });
       if (ownersByPin[wired.ioKey]) continue;
@@ -148,10 +133,9 @@ export function deriveLibraryParamCards(args: {
     }
   }
 
-  /* 「画了线的圆点」= 上面逐条产出的线本身（`handleId` 与卡片锚点同口径）。 */
-  const wiredDotKeys = new Set(
-    wires.map((item) => `${item.entryId}?${item.handleId}`),
-  );
+  /* 「画了线的圆点」= 上面逐条产出的线本身。handle id 就是卡片锚点标识
+   *  （普通卡含条目 id，尺寸卡是子口 id），不再另拼一份前缀。 */
+  const wiredDotKeys = new Set(wires.map((item) => item.handleId));
 
   return {
     entries,
@@ -162,7 +146,6 @@ export function deriveLibraryParamCards(args: {
     ownersByPin,
     wires,
     wiredDotKeys,
-    reachableKeys,
   };
 }
 
@@ -226,11 +209,10 @@ export function deriveLibraryOutputCards(args: {
     wires.push({
       entryId: output.ioKey,
       targetIoKey: target,
-      /* handle id 与卡片圆点上的锚点**同一份算式**（见 `outputWireDotId`）：
-       *  两处各算一遍时，端口名为空 / 带空白就会一边锚 `输出`、一边找空串 ——
-       *  线量不到锚点，整条不画，用户看到的正是「images 和对外输出参数之间
-       *  无法连线」（ISSUE #355）。 */
-      handleId: outputWireDotId(output),
+      /* handle id = 输出的 **ioKey**：卡片锚点与线两端同一份取值。它全图唯一，
+       *  也就是落库键（`onConnect` 直接取用）—— 用端口名当锚点会在两个输出口
+       *  同名 / 名字为空时撞车，线量不到锚点整条不画（ISSUE #355）。 */
+      handleId: output.ioKey,
       grouped: false,
       kind: "hostToParam",
     });
@@ -255,16 +237,11 @@ export function hasManualLibraryOutput(args: {
 
 export { defaultOutputSource };
 
-/** 对外输出卡片上那颗圆点的 **handle id**（= 连线锚点里 `?` 后面的那一段）。
+/** 对外输出卡片端口行的**显示名**（端口自己的名字；空 / 空白 → 「输出」）。
  *
- *  输入卡片用「端口名」当 handle（见 `ParamOutputPort.handleId`），输出卡片对称
- *  沿用同一口径。输出端口名可能是空串 / 带空白（作者没给 name 的旧数据），这时
- *  退回卡片标题「输出」—— 与 `WorkflowOutputParamCardColumn` 里 `portName` 的
- *  算式**必须逐字一致**：锚点值与导线两端各算一遍，任何一处漏了 trim / 兜底，
- *  线就量不到锚点、整条不画。 */
-export function outputWireDotId(
-  output: WorkflowIOEntry & { ioKey: string },
-): string {
+ *  它与锚点（handle id）是**两件事**：锚点用 `output.ioKey`（全图唯一、也是落库
+ *  键）；显示名只是给作者看的，旧数据里作者可能没给 name。 */
+export function outputPortLabel(output: { name?: string | null }): string {
   const name = (output.name ?? "").trim();
   return name || "输出";
 }

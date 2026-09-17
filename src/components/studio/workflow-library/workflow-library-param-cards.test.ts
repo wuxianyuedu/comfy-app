@@ -215,11 +215,9 @@ describe("deriveLibraryParamCards", () => {
     }
   });
 
-  it("每个候选落点都给一条只读连线：卡片圆点 → 宿主行", () => {
+  it("作者连过的口各留一条只读连线：卡片圆点 → 宿主行", () => {
     /* 圆点不给线就只是一颗装饰点：读者答不出「提示词这个口连到哪一行」。
-     *  多候选口子（尺寸）是「每一个能连的候选各一条线」—— 卡片上每个候选都有
-     *  圆点，线只画一条的话，其余几项读作「没接上」（ISSUE #355：「宽高比 + 百万
-     *  像素这两项都需要能导入到工作流中，2 条线都要能连出去」）。 */
+     *  一个口一颗点、一条线 —— 线从哪张卡出发由 handle id（= 条目 id）说清。 */
     const { wires } = deriveLibraryParamCards({
       io,
       paramMap: {
@@ -237,15 +235,14 @@ describe("deriveLibraryParamCards", () => {
         {
           entryId: promptEntry.id,
           targetIoKey: "9::widget::text",
-          /* 线从**被落到的那颗圆点**出发：handle id = 落点 ioKey（全图唯一；端口名
-           *  会让两个节点各自的 `text` 行撞成同一颗点）。 */
-          handleId: "9::widget::text",
+          /* 线从**这张卡**出发：handle id = 条目 id（一卡一颗点，天然唯一）。 */
+          handleId: promptEntry.id,
           grouped: false,
         },
         {
           entryId: sizeEntry.id,
           targetIoKey: "5::widget::width",
-          /* 尺寸那张卡的行 = 形态，所以 handle 是**子口 id**（不是端口名）。 */
+          /* 尺寸那张卡的行 = 形态，handle 就是**子口 id**（= 条目 id）。 */
           handleId: sizeEntry.id,
           grouped: false,
         },
@@ -398,6 +395,19 @@ describe("deriveLibraryParamCards", () => {
 });
 
 describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () => {
+  it("负向提示词的线从它自己那张卡出发（两卡候选相同也不互相顶）", () => {
+    /* 用户口径：「负面提示词连线还是会从提示词那连出来」—— 两张卡的候选行是同一
+     *  批（都吃 text 族），handle id（= 条目 id）就是分得开它们的那个字段。 */
+    const { wires } = deriveLibraryParamCards({
+      io,
+      paramMap: {
+        source: { "mode:T2I": { negative: "9::widget::text" } },
+      },
+      mode: "T2I",
+    });
+    expect(wires.map((wire) => wire.handleId)).toEqual(["negative"]);
+  });
+
   it("每个候选各一条线，wiredDotKeys 与线一一对应", () => {
     /* 视图按它判断「这颗圆点该不该画成已连接」：库内每个候选各画一条线，若还按
      *  「生效落点才实心」上色，带线的圆点看着反而是断的（ISSUE #355：「这里连线
@@ -420,7 +430,8 @@ describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () 
     });
     expect(wires.length).toBeGreaterThan(0);
     for (const wire of wires) {
-      expect(wiredDotKeys.has(`${wire.entryId}?${wire.handleId}`)).toBe(true);
+      /* handle id 本身就是卡片上的锚点标识（普通卡含条目 id）。 */
+      expect(wiredDotKeys.has(wire.handleId)).toBe(true);
     }
     expect(wiredDotKeys.size).toBe(wires.length);
   });
@@ -505,7 +516,7 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     expect(wires).toHaveLength(0);
   });
 
-  it("输出端口名为空时 handle 退回「输出」—— 与卡片锚点同一算式", () => {
+  it("输出端口名为空时锚点仍是 ioKey（显示名才退回「输出」）", () => {
     /* 两个地方各算一遍 handle，任何一处漏了 trim / 兜底，锚点与导线就对不上，
      *  线量不到锚点、整条不画（ISSUE #355：「images 和对外输出参数之间无法
      *  连线」）。作者把它连到自己那一行，让线真的画出来 —— 要看的就是这条线的
@@ -530,7 +541,8 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
       paramMap,
       mode: "T2I",
     });
-    expect(wires[0]!.handleId).toBe("输出");
+    /* 锚点 = 输出的 ioKey（全图唯一、也就是落库键）—— 名字为空不影响它。 */
+    expect(wires[0]!.handleId).toBe("9::output::EMPTY");
   });
 
   it("没有输出时两张表都是空的（视图据此不渲染右列）", () => {

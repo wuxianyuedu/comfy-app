@@ -217,11 +217,11 @@ export function WorkflowParamCard({
             style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
             title={
-              /* 行上显示的是对外参数自己的名字（`display`）；落到工作流的哪一行
-               *  （pin 名 = `name`）在这里可查 —— 显示与落点是两件事。 */
-              port.display && port.display !== port.name
-                ? `${side === "left" ? "输入端口" : "输出端口"} ${port.display} → 落到 ${port.name} · ${port.type}`
-                : `${side === "left" ? "输入端口" : "输出端口"} ${port.name} · ${port.type}`
+              /* 行上显示的是对外参数自己的名字（`display`）；**落到工作流的哪一行**
+               *  在这里可查（`ioKey`）—— 显示与落点是两件事，行上不写内部键。 */
+              port.ioKey
+                ? `${side === "left" ? "输入端口" : "输出端口"} ${port.display ?? port.name} · ${port.type} → 落到 ${port.ioKey}`
+                : `${side === "left" ? "输入端口" : "输出端口"} ${port.display ?? port.name} · ${port.type}`
             }
           >
             {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：

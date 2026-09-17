@@ -32,7 +32,11 @@ import {
   deriveLibraryEdges,
   libraryConnectionAllowed,
 } from "./hooks/use-library-wire-flow";
-import type { ParamCardWire } from "./workflow-library-param-cards";
+import { applyWireEdit } from "~/lib/workflow-param-wiring";
+import {
+  deriveLibraryParamCards,
+  type ParamCardWire,
+} from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
   "9::widget::positive_prompt": {
@@ -163,26 +167,25 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
   }) => libraryConnectionAllowed(connection, { io, entries });
 
   it("提示词口 → 提示词行：放行", () => {
-    const promptEntry = entries.find((entry) => entry.id === "prompt")!;
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        /* 圆点 handle id = **ioKey**（全图唯一；端口名会让两个节点各自的 `text`
-         *  行在同一张卡片上撞成同一颗点）。 */
-        sourceHandle: promptEntry.pins[0]!.ioKey,
+        /* 圆点 handle id = `<条目 id>?<落点 ioKey>`（卡片锚点，见
+         *  `paramOutputPorts`）—— 同一个画布节点里唯一：提示词与负向提示词的候选
+         *  行相同，不带条目 id 会互相顶。 */
+        sourceHandle: "prompt",
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(true);
   });
 
   it("提示词口 → 宽高比（尺寸行）：拒绝 —— 那是条运行期取不到值的假线", () => {
-    const promptEntry = entries.find((entry) => entry.id === "prompt")!;
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        sourceHandle: promptEntry.pins[0]!.ioKey,
+        sourceHandle: "prompt",
         targetHandle: "5::widget::aspect_ratio",
       }),
     ).toBe(false);
@@ -245,6 +248,21 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(false);
+  });
+});
+
+describe("handle id 就是条目 id（拖线落库的那条链）", () => {
+  it("`onConnect` 拿到的 handle id 直接就是落库键", () => {
+    /* 一个口一颗点：普通卡是契约口 id（`prompt` / `negative`），尺寸卡是子口 id
+     *  （`size-aspect`）—— 两者都是落库键，不再需要任何解析（回归：此前 handle id
+     *  带落点段，落库时若整串写进去，`resolveMapping` 就查不到了）。 */
+    const next = applyWireEdit(
+      {},
+      { entryId: "size-aspect", ioKey: "5::widget::aspect_ratio", mode: "T2I" },
+    );
+    const cards = deriveLibraryParamCards({ io, paramMap: next, mode: "T2I" });
+    expect(cards.resolved["size-aspect"]).toBe("5::widget::aspect_ratio");
+    expect(cards.wires.map((wire) => wire.handleId)).toEqual(["size-aspect"]);
   });
 });
 

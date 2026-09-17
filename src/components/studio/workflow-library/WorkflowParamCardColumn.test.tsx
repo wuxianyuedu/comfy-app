@@ -145,13 +145,13 @@ describe("WorkflowParamCardColumn", () => {
       `[data-testid="param-node-${promptCard.id}"]`,
     )!;
     expect(card.textContent).not.toContain("→ positive_prompt");
-    /* 端口行只说「这个对外参数是什么、出去是什么类型」；落到工作流的哪一行
-     *  （pin 名）退到行的 title 提示里可查 —— 行上不写工作流内部名。 */
+    /* 端口行只说「这个对外参数是什么、出去是什么类型」；**落到工作流的哪一行**
+     *  退到行的 title 提示里可查（`ioKey`）—— 行上不写工作流内部键。 */
     const row = screen.getByTestId(`param-node-out-${promptCard.id}-0`);
     expect(row.textContent).toContain("提示词");
     expect(row.textContent).toContain("STRING");
     expect(row.textContent).not.toContain("positive_prompt");
-    expect(row.getAttribute("title")).toContain("positive_prompt");
+    expect(row.getAttribute("title")).toContain("9::widget::text");
   });
 
   it("端口行显示对外参数自己的名字，落点 pin 名只在 title 里可查", () => {
@@ -182,10 +182,11 @@ describe("WorkflowParamCardColumn", () => {
     expect(
       screen.getByTestId(`param-node-out-type-${promptCard.id}-0`).textContent,
     ).toBe("STRING");
-    /* 尺寸合成一张卡后，类型的来源是**它连上的那一行**：第 1 行是「尺寸 · 高度」，
-     * 连到 INT 的 height 那一格。 */
+    /* 尺寸合成一张卡后，类型**恒为该形态自己的类型**、不随落点变（用户口径：
+     *  「尺寸上是什么类型就显示什么类型，不要跟连接的参数类型变换」）——
+     *  第 2 行是「尺寸 · 高度」，即使它连到 INT 的 height 那一格，也显示 FLOAT。 */
     expect(screen.getByTestId("param-node-out-type-size-1").textContent).toBe(
-      "INT",
+      "FLOAT",
     );
   });
 
@@ -208,11 +209,8 @@ describe("WorkflowParamCardColumn", () => {
       />,
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
-    /* 端点的 handle id = **落点 ioKey**（全图唯一）—— 用端口名会在同一张卡片上
-     *  撞出重复 handle（两个节点各有一行 `text` 时最明显）。 */
-    const dot = container.querySelector(
-      `[data-endpoint-handle="9::widget::text"]`,
-    );
+    /* 端点的 handle id = **条目 id**（一个口一颗点；同一个画布节点里天然唯一）。 */
+    const dot = container.querySelector(`[data-endpoint-handle="prompt"]`);
     expect(dot).toBeTruthy();
     /* 端点必须落在输出端口行内（行是 absolute 的锚），而不是卡片上随便一处。 */
     const outputRow = screen.getByTestId(`param-node-out-${promptCard.id}-0`);
@@ -259,10 +257,8 @@ describe("WorkflowParamCardColumn", () => {
       const handles = [...card.querySelectorAll("[data-endpoint-handle]")].map(
         (el) => el.getAttribute("data-endpoint-handle"),
       );
-      expect(handles, `${cardId} 卡应有两颗端点`).toHaveLength(2);
-      expect(new Set(handles).size, `${cardId} 卡内的端点 id 必须唯一`).toBe(
-        handles.length,
-      );
+      /* 一个口一颗点：每张卡一颗，锚点就是它自己的条目 id —— 两卡不再共用候选 id。 */
+      expect(handles, `${cardId} 卡应有一颗端点`).toEqual([cardId]);
     }
   });
 
