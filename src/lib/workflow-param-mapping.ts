@@ -234,24 +234,6 @@ export function familyOfClass(cls: ParamClass): PinFamily | null {
   return CLASS_FAMILY[cls] ?? null;
 }
 
-/** **存量迁移专用**：拆分之前「尺寸」只有一个键（`size`），形态是按端口名判出来
- *  的（`width` → 宽、`aspect_ratio` → 宽高比…）。读旧数据时用同一张名字表把那条
- *  老线归到对应子口，作者不必重连。
- *
- *  只服务**旧键的读取**：候选、闸门、新落点一律不看名字（见 `pinFamily`）。 */
-function legacySizeFormOf(entry: WorkflowIOEntry): ParamClass | null {
-  const text = `${entry.name ?? ""} ${entry.label ?? ""}`.toLowerCase();
-  if (/宽度|横向/.test(text) || /^(width|base_width|w)$/.test(text.trim())) {
-    return "size-width";
-  }
-  if (/高度|纵向/.test(text) || /^(height|base_height|h)$/.test(text.trim())) {
-    return "size-height";
-  }
-  if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
-  if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
-  return null;
-}
-
 /** 该分类是否属于「尺寸」语义（含契约聚合值 `"size"` 本身）。 */
 function isSizeClass(cls: ParamClass): boolean {
   return cls === "size" || SIZE_CLASSES.includes(cls);
@@ -462,9 +444,9 @@ export function wiredTargetsForEntry(args: {
 /** 某个条目在某个 ioKey 上「用哪个 handle 连」——库内画布卡片按**端口名**给
  *  圆点打锚点（`paramOutputPorts` 的 `handleId`），所以连线也必须按端口名对齐
  *  那一颗点，否则同一个条目下多条线会全部落到第一颗点上。 */
-/* 注：一条映射线**一定**要么来自作者画的线（`manual` 为真）、要么落在作者连上的
- * 那个组合控件上 —— 落点本身不可能凭空产生（见 `resolveMapping`：没有线就没有
- * 落点）。所以上面那段之后只剩「manual」与「组合控件」两个分支要照顾。 */
+/* 注：一条映射线**一定**来自作者画的线 —— 落点本身不可能凭空产生（见
+ *  `resolveMapping`：没有线就没有落点）；也没有「组合控件摊开成多条线」这回事
+ *  （每个条目只画它连上的那一条）。 */
 export function wireHandleIdForIoKey(
   io: WorkflowIOMap | null | undefined,
   entry: ParamEntry,
@@ -662,18 +644,9 @@ export function resolveMapping(
   mode?: string | null,
 ): Record<string, string | null> {
   const out: Record<string, string | null> = {};
-  /* 复制一份再读：下面要给存量「尺寸」线补一个子口键，别写回调用方持有的那份。 */
-  const manual: Record<string, string | null> = {
-    ...(mode ? (mapping?.manualByMode?.[mode] ?? {}) : {}),
-  };
-  /* 存量迁移：拆分之前「尺寸」只有一个键（`size`），形态是从端口名判出来的。
-   * 现在形态由子口身份给出 —— 把那条老线按它指向的端口的旧分类归到对应子口上
-   * （只读、不回写落库；作者下次改这条线时才写成新键）。 */
-  const legacySize = manual.size;
-  if (typeof legacySize === "string" && io?.[legacySize]) {
-    const form = legacySizeFormOf(io[legacySize]);
-    if (form) manual[form] = legacySize;
-  }
+  /* 只读一份（本函数不再给任何旧键补位，没有要写回的东西）。 */
+  const manual: Record<string, string | null> =
+    (mode ? mapping?.manualByMode?.[mode] : undefined) ?? {};
   for (const entry of entries) {
     const hit = manualTargetForEntryRaw(manual, entry);
     if (!hit.found) continue;

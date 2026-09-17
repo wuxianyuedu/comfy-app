@@ -41,7 +41,11 @@ describe("canApplyWireEdit", () => {
   it("有模式且落点真实存在 → 受理", () => {
     expect(
       canApplyWireEdit(
-        { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+        {
+          entryId: "size-megapixels",
+          ioKey: "5::widget::megapixels",
+          mode: "T2I",
+        },
         io,
       ),
     ).toBe(true);
@@ -50,7 +54,11 @@ describe("canApplyWireEdit", () => {
   it("没有模式 → 拒绝（落点覆盖必须归属一个模式）", () => {
     expect(
       canApplyWireEdit(
-        { entryId: "size", ioKey: "5::widget::megapixels", mode: null },
+        {
+          entryId: "size-megapixels",
+          ioKey: "5::widget::megapixels",
+          mode: null,
+        },
         io,
       ),
     ).toBe(false);
@@ -59,7 +67,7 @@ describe("canApplyWireEdit", () => {
   it("落点不在 workflowIO 里 → 拒绝（否则画得出线、运行期落不到值）", () => {
     expect(
       canApplyWireEdit(
-        { entryId: "size", ioKey: "9::widget::不存在", mode: "T2I" },
+        { entryId: "size-megapixels", ioKey: "9::widget::不存在", mode: "T2I" },
         io,
       ),
     ).toBe(false);
@@ -67,7 +75,10 @@ describe("canApplyWireEdit", () => {
 
   it("显式断开只要有模式就受理（不需要落点存在）", () => {
     expect(
-      canApplyWireEdit({ entryId: "size", ioKey: null, mode: "T2I" }, io),
+      canApplyWireEdit(
+        { entryId: "size-megapixels", ioKey: null, mode: "T2I" },
+        io,
+      ),
     ).toBe(true);
   });
 });
@@ -76,26 +87,30 @@ describe("applyWireEdit", () => {
   it("写入形状与编辑器一致：source.mode:<模式> = { <entryId>: ioKey }", () => {
     const next = applyWireEdit(
       {},
-      { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+      {
+        entryId: "size-megapixels",
+        ioKey: "5::widget::megapixels",
+        mode: "T2I",
+      },
     );
     expect(parseParamMapping(next).manualByMode).toEqual({
-      T2I: { size: "5::widget::megapixels" },
+      T2I: { "size-megapixels": "5::widget::megapixels" },
     });
   });
 
   it("不同模式互不影响（各写各的那一份）", () => {
     const first = applyWireEdit(
       {},
-      { entryId: "size", ioKey: "5::widget::aspect_ratio", mode: "T2I" },
+      { entryId: "size-aspect", ioKey: "5::widget::aspect_ratio", mode: "T2I" },
     );
     const second = applyWireEdit(first, {
-      entryId: "size",
+      entryId: "size-megapixels",
       ioKey: "5::widget::megapixels",
       mode: "I2I",
     });
     expect(parseParamMapping(second).manualByMode).toEqual({
-      T2I: { size: "5::widget::aspect_ratio" },
-      I2I: { size: "5::widget::megapixels" },
+      T2I: { "size-aspect": "5::widget::aspect_ratio" },
+      I2I: { "size-megapixels": "5::widget::megapixels" },
     });
   });
 
@@ -115,27 +130,31 @@ describe("applyWireEdit", () => {
         positiveNode: "9",
         source: { "mode:OTHER": { prompt: "9::widget::text" } },
       },
-      { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+      {
+        entryId: "size-megapixels",
+        ioKey: "5::widget::megapixels",
+        mode: "T2I",
+      },
     );
     expect(next.positiveNode).toBe("9");
     expect(parseParamMapping(next).manualByMode).toEqual({
       OTHER: { prompt: "9::widget::text" },
-      T2I: { size: "5::widget::megapixels" },
+      T2I: { "size-megapixels": "5::widget::megapixels" },
     });
   });
 
   it("连续改两次同一口子 → 只留最后一次（改落点不是叠加）", () => {
     const first = applyWireEdit(
       {},
-      { entryId: "size", ioKey: "5::widget::aspect_ratio", mode: "T2I" },
+      { entryId: "size-aspect", ioKey: "5::widget::aspect_ratio", mode: "T2I" },
     );
     const second = applyWireEdit(first, {
-      entryId: "size",
+      entryId: "size-aspect",
       ioKey: "5::widget::megapixels",
       mode: "T2I",
     });
     expect(parseParamMapping(second).manualByMode).toEqual({
-      T2I: { size: "5::widget::megapixels" },
+      T2I: { "size-aspect": "5::widget::megapixels" },
     });
   });
 });
@@ -144,39 +163,51 @@ describe("hasWireEdit / clearWireEdit", () => {
   it("作者改过（含显式断开）算改过", () => {
     const changed = applyWireEdit(
       {},
-      { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+      {
+        entryId: "size-megapixels",
+        ioKey: "5::widget::megapixels",
+        mode: "T2I",
+      },
     );
-    expect(hasWireEdit(changed, "size", "T2I")).toBe(true);
+    expect(hasWireEdit(changed, "size-megapixels", "T2I")).toBe(true);
     const off = applyWireEdit(
       {},
-      { entryId: "size", ioKey: null, mode: "T2I" },
+      { entryId: "size-megapixels", ioKey: null, mode: "T2I" },
     );
-    expect(hasWireEdit(off, "size", "T2I")).toBe(true);
+    expect(hasWireEdit(off, "size-megapixels", "T2I")).toBe(true);
   });
 
   it("没有模式时永远不算改过（没有可查的命名空间）", () => {
-    expect(hasWireEdit({}, "size", null)).toBe(false);
+    expect(hasWireEdit({}, "size-megapixels", null)).toBe(false);
   });
 
   it("恢复默认把该口的手工线整条清掉，别的口与别的模式保留", () => {
     const base = applyWireEdit(
       applyWireEdit(
         {},
-        { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+        {
+          entryId: "size-megapixels",
+          ioKey: "5::widget::megapixels",
+          mode: "T2I",
+        },
       ),
       { entryId: "prompt", ioKey: null, mode: "T2I" },
     );
-    const cleared = clearWireEdit(base, "size", "T2I");
-    expect(hasWireEdit(cleared, "size", "T2I")).toBe(false);
+    const cleared = clearWireEdit(base, "size-megapixels", "T2I");
+    expect(hasWireEdit(cleared, "size-megapixels", "T2I")).toBe(false);
     expect(hasWireEdit(cleared, "prompt", "T2I")).toBe(true);
   });
 
   it("清掉最后一个口子时该模式的整条覆盖消失（不留空壳）", () => {
     const base = applyWireEdit(
       {},
-      { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+      {
+        entryId: "size-megapixels",
+        ioKey: "5::widget::megapixels",
+        mode: "T2I",
+      },
     );
-    const cleared = clearWireEdit(base, "size", "T2I");
+    const cleared = clearWireEdit(base, "size-megapixels", "T2I");
     expect(parseParamMapping(cleared).manualByMode).toEqual({});
   });
 });

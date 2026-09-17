@@ -343,7 +343,9 @@ describe("deriveLibraryParamCards", () => {
     };
     const { wires } = deriveLibraryParamCards({
       io: groupedIO,
-      paramMap: { source: { "mode:T2I": { size: "5::widget::width" } } },
+      paramMap: {
+        source: { "mode:T2I": { "size-width": "5::widget::width" } },
+      },
       mode: "T2I",
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
@@ -384,7 +386,7 @@ describe("deriveLibraryParamCards", () => {
     const { wires } = deriveLibraryParamCards({
       io: groupedIO,
       paramMap: {
-        source: { "mode:T2I": { size: "5::widget::megapixels" } },
+        source: { "mode:T2I": { "size-megapixels": "5::widget::megapixels" } },
       },
       mode: "T2I",
       groupedKeys: new Set(Object.keys(groupedIO)),

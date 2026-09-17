@@ -515,7 +515,7 @@ describe("applyParamMapping — 运行期落值", () => {
   it("契约条目：作者按契约 id 画线后，值可以按契约 id（工坊侧）或 ioKey（运行期表单）给", () => {
     const entries = buildParamEntries(io, undefined, { mode: "T2I" });
     const mapping = {
-      manualByMode: { T2I: { size: "5::widget::width" } },
+      manualByMode: { T2I: { "size-width": "5::widget::width" } },
     };
     /* 工坊侧按契约 id 给。 */
     const byContract = applyParamMapping({
@@ -955,18 +955,20 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
     expect(inputs.find((item) => item.name === "width")?.value).toBe(1920);
   });
 
-  it("存量迁移：老数据里那条 `size` 线按落点形态归到对应子口", () => {
+  it("老数据里那条 `size` 键不再被采纳（未配置，作者重连）", () => {
     const entries = buildParamEntries(sizeIo, undefined, { mode: "T2I" });
-    const { inputs } = applyParamMapping({
+    const { inputs, unmatched } = applyParamMapping({
       io: sizeIo,
       entries,
-      /* 拆分之前「尺寸」只有一个键，形态是从端口名判出来的 —— 迁移时只读地
-       *  判一次，把这条老线归到「尺寸 · 宽度」上，作者不必重连。 */
+      /* 拆分之前「尺寸」只有一个键、形态是从端口名判出来的。那条老线**不**再被
+       *  采纳：形态只由子口身份声明，名字表（连存量迁移用的那张）一并删除 ——
+       *  六个子口都显示未配置，作者在库里重连一次即可。 */
       mapping: { manualByMode: { T2I: { size: "5::widget::width" } } },
       values: { size: "1920x1080" },
       mode: "T2I",
     });
-    expect(inputs.find((item) => item.name === "width")?.value).toBe(1920);
+    expect(inputs).toEqual([]);
+    expect(unmatched).toContain("size-width");
   });
 
   it("尺寸子口没连线 → 不下发（未配置），外部尺寸值如实进 unmatched", () => {

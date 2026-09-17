@@ -245,7 +245,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
           source: {
             "mode:T2I": {
               prompt: "9::widget::positive_prompt",
-              size: "5::widget::aspect_ratio",
+              "size-aspect": "5::widget::aspect_ratio",
             },
           },
         }}
@@ -281,7 +281,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
           source: {
             "mode:T2I": {
               [promptEntry.id]: null,
-              size: "5::widget::aspect_ratio",
+              "size-aspect": "5::widget::aspect_ratio",
             },
           },
         }}

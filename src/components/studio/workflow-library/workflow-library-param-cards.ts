@@ -124,30 +124,14 @@ export function deriveLibraryParamCards(args: {
     if (!target) continue;
     /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
      *  —— 所以这条线一定是「作者连的」（库里的线一律实线，没有「猜出来的虚线」）。
-     *  用 `resolved` 而不是直接查键：存量那条 `size` 线在解析时被归到对应子口，
-     *  按老键查会把作者画过的线读成「没连过」。 */
+     *  用 `resolved` 而不是直接查键：解析时已把作者画的线归到契约 id 上（含
+     *  `<节点 id>|<分类>` 历史键），按裸键查会把作者画过的线读成「没连过」。 */
     const manual = true;
-    /* 线要从**对应的那一颗圆点**出发：卡片上一个候选一颗点，取该端口的
-     *  handle id（与编辑器画布同口径）。
-     *
-     *  默认状态下「尺寸」这类口是**一对多**的（宽高比 / 像素量 / 倍数由同一块
-     *  组合控件录入），作者把「尺寸」连到这块控件上时这几行都算接上了 ——
-     *  只画其中一条会让「尺寸」看着只有一个出口（ISSUE #355：「尺寸现在有三个
-     *  参数，就应该可以连三条线出来」）。 */
     /* 线只画作者连上的那一条 —— 候选是**按类型**收的（同族几个口子互相重叠），
      *  逐条画出来会把兄弟口子的落点也画到本口名下。候选圆点照给（每个都能拖），
-     *  见 `paramOutputPorts`。 */
+     *  见 `paramOutputPorts`；线从对应的那一颗圆点出发（`handleId` 取端口名，
+     *  与卡片锚点同口径）。 */
     for (const wired of wiredTargetsForEntry({ target })) {
-      /* 宿主卡片上画不出来的行连不出线（端点画在一颗落不上去的句柄上只会误导）。
-       *  **当前生效落点永远画**：它就是这条映射本身，画不出来会让卡片看着像「没连上」。
-       *  收窄只作用于「一对外参数摊开来的其余端口」（组合控件里那几个兄弟口）。 */
-      if (
-        reachableKeys &&
-        reachableKeys.size > 0 &&
-        wired.ioKey !== target &&
-        !reachableKeys.has(wired.ioKey)
-      )
-        continue;
       wires.push({
         entryId: entry.id,
         targetIoKey: wired.ioKey,
@@ -172,7 +156,7 @@ export function deriveLibraryParamCards(args: {
   return {
     entries,
     io: io ?? null,
-    /* 有落点 = 作者画过线（存量那条 `size` 线在解析时已归到对应子口，也算）。 */
+    /* 有落点 = 作者画过线（以 `resolveMapping` 的解析结果为准）。 */
     isManual: (entryId: string) => !!resolved[entryId],
     resolved,
     ownersByPin,

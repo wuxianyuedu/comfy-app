@@ -99,9 +99,11 @@ const io: WorkflowIOMap = {
   },
 };
 
-/** 作者画过的线：把「尺寸」连到组合控件覆盖的 width 行上。
+/** 作者画过的线：「尺寸 · 宽度」连到 width 那一行（形态由子口声明）。
  *  落点只由作者画的线决定 —— 不显式给线就没有任何落点。 */
-const SIZE_WIRED = { source: { "mode:T2I": { size: "5::widget::width" } } };
+const SIZE_WIRED = {
+  source: { "mode:T2I": { "size-width": "5::widget::width" } },
+};
 
 function renderPreview(paramMap: Record<string, unknown>) {
   const onPatch = vi.fn();
@@ -149,20 +151,24 @@ describe("库内映射编辑", () => {
     const parsed = parseParamMapping(
       applyWireEdit(
         {},
-        { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+        {
+          entryId: "size-megapixels",
+          ioKey: "5::widget::megapixels",
+          mode: "T2I",
+        },
       ),
     );
     expect(parsed.manualByMode).toEqual({
-      T2I: { size: "5::widget::megapixels" },
+      T2I: { "size-megapixels": "5::widget::megapixels" },
     });
   });
 
   it("落库后的 paramMap 读回来：卡片头「恢复默认」可用", () => {
     renderPreview({
-      source: { "mode:T2I": { size: "5::widget::megapixels" } },
+      source: { "mode:T2I": { "size-megapixels": "5::widget::megapixels" } },
     });
-    /* 老数据里那条 `size` 线按落点形态归到「尺寸 · 像素量」子口 —— 卡片头出现
-     *  「恢复默认」（只有作者真的改过这条线时才可用）。 */
+    /* 作者把「尺寸 · 像素量」连到 megapixels 那一行 —— 卡片头出现「恢复默认」
+     *  （只有作者真的改过这条线时才可用）。 */
     const reset = screen.getByTestId("param-node-reset-size-megapixels");
     expect(reset.hasAttribute("disabled")).toBe(false);
   });
