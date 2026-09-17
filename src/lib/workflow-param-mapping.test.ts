@@ -410,6 +410,31 @@ describe("parseParamMapping / serializeParamMapping", () => {
     );
   });
 
+  it("拆分前那个单键 `size` 线被丢弃 —— 不再原样往返", () => {
+    const parsed = parseParamMapping({
+      source: {
+        "mode:T2I": { size: "5::widget::width", prompt: "9::widget::text" },
+      },
+    });
+    /* 同一个模式表里其余口子的线照旧。（`size` 不是任何入口的 id：契约里的
+     *  「尺寸」在映射层就是六个子口。） */
+    expect(parsed.manualByMode).toEqual({
+      T2I: { prompt: "9::widget::text" },
+    });
+    /* 再落库时它不会回来 —— 库里那个键从此消失，不需要额外迁移。 */
+    expect(serializeParamMapping(parsed, {})).toEqual({
+      source: { "mode:T2I": { prompt: "9::widget::text" } },
+    });
+  });
+
+  it("整个模式表只剩那个 `size` 键时整条消失（不留空壳）", () => {
+    const parsed = parseParamMapping({
+      source: { "mode:T2I": { size: "5::widget::width" } },
+    });
+    expect(parsed.manualByMode).toEqual({});
+    expect(serializeParamMapping(parsed, {})).toEqual({ source: {} });
+  });
+
   it("没有 `mode:` 前缀的键一律丢弃（通用手工线已取消）", () => {
     const parsed = parseParamMapping({
       source: {

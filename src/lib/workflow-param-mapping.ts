@@ -672,12 +672,22 @@ export function manualTargetFor(
   return undefined;
 }
 
+/** 拆分前「尺寸」在映射表里的**单键**（落点形态靠端口名推）。
+ *
+ *  现在形态由子口身份声明（`SIZE_SUB_IDS`：`size-width` / `size-aspect`…），
+ *  这个键不再有任何写入入口（`entry.id` 只会是子口 id）—— `parseParamMapping`
+ *  读到即丢，下一次落库它就从 `paramMap` 里消失，不必等一次手工迁移。 */
+const LEGACY_SIZE_ENTRY_ID = "size";
+
 /** 从持久化的 `paramMap` 反序列化映射。
  *
  *  只认 `source.mode:<模式> = { <entryId>: ioKey | null }` 这一种形状（与
  *  serializeParamMapping 一一对应）。没有 `mode:` 前缀的键（通用手工线的历史
  *  形状，如 `source.<entryId>`）一律**丢弃**：那些无模式的线在新模型里没有
  *  生效语境，留着只会让「这条线哪个模式用」无从判定。
+ *
+ *  拆分前落库的单键 `size` 线同样丢弃（见 `LEGACY_SIZE_ENTRY_ID`）：形态现在
+ *  只由子口身份声明，那个键谁都读不到，留着只会在库里原样往返。
  *
  *  畸形数据（数字 / 数组 / 非对象模式表）同样丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
@@ -698,6 +708,9 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
     for (const [entryId, target] of Object.entries(
       value as Record<string, unknown>,
     )) {
+      /* 存量清理：那个键没有任何入口能再写出来，读到即丢（下面 `byEntry` 里没它，
+       *  序列化自然也不会把它写回去）。 */
+      if (entryId === LEGACY_SIZE_ENTRY_ID) continue;
       if (typeof target === "string") byEntry[entryId] = target;
       /* 显式的 null = 作者把这条线断开了，属于合法状态。 */
       else if (target === null) byEntry[entryId] = null;
