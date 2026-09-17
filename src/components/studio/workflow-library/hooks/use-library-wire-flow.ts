@@ -186,8 +186,8 @@ export function useLibraryWireFlow({
     (connection: Connection) => {
       const { source, target, sourceHandle, targetHandle } = connection;
       if (!sourceHandle || !targetHandle) return;
-      /* 卡片起手：handle id 就是该口的条目标识（左列按端口名、右列按输出口
-       *  ioKey），落点取另一端。 */
+      /* 左列卡片起手：handle id 就是**条目 id**（落库键），落点取另一端（宿主行的
+       *  ioKey）；右列输出卡的 handle id 就是输出口的 ioKey，同样是落库键。 */
       if (source === LIB_NODE_PARAMS && target === LIB_NODE_HOST) {
         connect?.(sourceHandle, targetHandle);
         return;
@@ -355,18 +355,13 @@ export function deriveLibraryEdges(
  *  库里给卡片圆点的 handle id 是**端口名**（`paramOutputPorts` 的 `handleId`），
  *  而契约条目的 id 是 `prompt` / `size` 这类键 —— 两者不是一回事，闸门必须按
  *  端口名反查条目。查不到（端口已从 IO 移除 / 过期快照）时拒绝连线。 */
+/** handle id 就是**条目 id**：一个口一颗点（见 `paramOutputPorts`），条目 id 在
+ *  同一个画布节点内天然唯一（尺寸卡的六行各是子口 id，普通卡就是契约口 id）。 */
 function entryForHandle(
   entries: readonly ParamEntry[],
   handleId: string,
 ): ParamEntry | null {
-  for (const entry of entries) {
-    /* 尺寸卡的行：handle id = 子口 id（一行 = 一个形态）。 */
-    if (entry.id === handleId) return entry;
-    /* 其余卡片：handle id = 落点 ioKey（全图唯一）。用端口名认会让「两个节点各
-     *  有一行 `text`」的两张卡片落到同一个条目上 —— 提示词与负向提示词互相顶。 */
-    if (entry.pins.some((pin) => pin.ioKey === handleId)) return entry;
-  }
-  return null;
+  return entries.find((item) => item.id === handleId) ?? null;
 }
 
 /** 输入侧一条边：左列卡片圆点 → 宿主卡片的落点行。 */

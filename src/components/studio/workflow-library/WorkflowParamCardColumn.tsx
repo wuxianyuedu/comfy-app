@@ -4,9 +4,11 @@
  *
  * 每个对外参数一张卡片（视觉本体复用 workflow-editor/WorkflowParamCard）：
  *   · 卡片头是参数名（作者在编辑器里勾选/改名后的那个名字）；
- *   · 卡片体逐行列出它包含的端口名与类型，端口行尾标出该端口落到宿主卡片的
- *     哪一行参数（只有一个端口时标「→ <参数名>」）；
- *   · 卡片右侧有一颗**带类型的小圆点端点**（输出端口）。
+ *   · 卡片体一行：**这个口自己的名字 + 类型**（未连线用口自己的类型，连上后是
+ *     落点那一行的类型；落到哪一行在行的 `title` 里可查）；
+ *   · 卡片右侧**一颗**带类型的小圆点端点 —— **一个口一颗点**（落点由线的另一端
+ *     声明：拖到宿主哪一行就是哪一行）。尺寸是唯一的多行卡片：一行 = 一个形态，
+ *     每行一颗点，handle 取子口 id。
  *   · 卡片**可连线**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从圆点按下
  *     并拖到宿主卡片上的某一行即改落点，卡片头的 ↺ 撤销该口的手工线。
  *
@@ -21,7 +23,6 @@
 
 import {
   paramOutputPorts,
-  portTypeDisplay,
   sizeGroupIds,
   sizeSubLabel,
   sizeSubTypeDisplay,
@@ -60,10 +61,7 @@ export interface WorkflowParamCardColumnProps {
   /** 该对外参数在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual?: (entryId: string) => boolean;
   onReset?: (entryId: string) => void;
-  /** 宿主卡片此刻真的画得出来的端口（ioKey 集合）—— 候选圆点按它收窄：
-   *  画不出端点的端口不给拖，拖过去也落不上。缺省 = 不收窄。 */
-  reachableKeys?: ReadonlySet<string>;
-  /** 端点槽位（每个候选端口一颗）：消费方注入 `<Handle>` 或只读圆点。 */
+  /** 端点槽位：消费方注入 `<Handle>` 或只读圆点。 */
   endpoint?: (port: ParamOutputPort, index: number) => ReactNode;
 }
 
@@ -77,7 +75,6 @@ export function WorkflowParamCardColumn({
   onSelect,
   isManual,
   onReset,
-  reachableKeys,
   endpoint,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
@@ -134,18 +131,14 @@ export function WorkflowParamCardColumn({
                * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
               outputPorts={forms.map((item) => {
                 const target = resolved[item.id] ?? null;
-                const raw = target ? io?.[target] : undefined;
-                /* 类型：连过就看**落点那一行**的真实类型；没连过看这个形态语义上
-                 *  固定的类型（用户口径：宽度 / 高度 / 像素量 = FLOAT，分辨率档 /
-                 *  倍数 = INT，宽高比 = COMBO）。此前未连过时只从落点取，取不到
-                 *  就退成 `*` —— 用户看到的正是「这几个都是固定类型的为什么显示
-                 *  星号」。 */
+                /* 类型**恒为这个形态自己的类型**，不随落点变（用户口径：「尺寸上是
+                 *  什么类型就显示什么类型，不要跟连接的参数类型变换」）。
+                 *  宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，宽高比 =
+                 *  COMBO（见 `sizeSubTypeDisplay`）。 */
                 return {
                   name: item.id,
                   display: sizeSubLabel(item.cls),
-                  type: target
-                    ? portTypeDisplay(raw?.type)
-                    : sizeSubTypeDisplay(item.cls),
+                  type: sizeSubTypeDisplay(item.cls),
                   connected: !!target,
                   ioKey: target ?? "",
                   handleId: item.id,
@@ -186,13 +179,12 @@ export function WorkflowParamCardColumn({
             readOnly={!canWire}
             canReset={canWire && !!isManual?.(entry.id)}
             onReset={canWire ? () => onReset?.(entry.id) : undefined}
-            /* 带类型的输出端口：与编辑器同一份派生（类型跟着落点走），库里也
-             * 读得到「提示词 → STRING」。 */
+            /* **一个口一颗点**：卡片只说「这个口对外是什么」（名字 + 类型），
+             *  落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
             outputPorts={paramOutputPorts(
               entry,
               io,
               resolved[entry.id],
-              reachableKeys,
               cardLabel,
             )}
             /* 右侧小圆点端点：**每个候选一颗圆点**（与编辑器画布同口径）。

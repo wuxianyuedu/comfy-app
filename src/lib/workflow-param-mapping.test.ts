@@ -9,11 +9,11 @@ import {
   clearModeWiring,
   handleIdForIoKey,
   hasManualWiring,
+  classPinType,
   ioKeyForHandle,
   isDefaultMapping,
   paramOutputPorts,
   pinFamily,
-  defaultOutputPortIndex,
   parseParamMapping,
   pinAcceptsEntry,
   portTypeDisplay,
@@ -122,19 +122,24 @@ describe("pinAcceptsEntry —— 手工拖线的类型闸门", () => {
   });
 
   it("尺寸族按类型收候选 —— 端口名怎么起都不影响", () => {
-    /* 名字不再参与判定：是数值行就是尺寸子口的候选，「这一行是宽还是比例」由
-     *  作者连到哪个子口声明（`base_width` / `prompt_width_of_thing` 一视同仁）。 */
+    /* 名字不再参与判定：是数值行就是数值形态子口的候选，「这一行是宽还是比例」
+     *  由作者连到哪个子口声明（`base_width` / `prompt_width_of_thing` 一视同仁）。 */
     expect(
       pinAcceptsEntry("size-width", pin("1", "base_width", { type: "INT" })),
     ).toBe(true);
     expect(
       pinAcceptsEntry("size-width", pin("1", "prompt_width_of_thing")),
     ).toBe(false);
+    /* 宽高比是**候选表**（COMBO）语义：数值行不接受它，COMBO 行才接受
+     *  （用户口径：「现在宽高比能连到百万像素，这是不行的」）。 */
     expect(
       pinAcceptsEntry(
         "size-aspect",
         pin("1", "prompt_width_of_thing", { type: "INT" }),
       ),
+    ).toBe(false);
+    expect(
+      pinAcceptsEntry("size-aspect", pin("1", "aspect", { type: "COMBO" })),
     ).toBe(true);
     expect(pinAcceptsEntry("size-aspect", promptRow)).toBe(false);
   });
@@ -752,127 +757,116 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     },
   };
 
-  it("类型与端口名取自**真正落到的端口**（提示词落到 text 就是 STRING）", () => {
+  it("一个口一颗点：名字与类型都是**这个口自己的**", () => {
+    /* 用户口径：「提示词不是就应该有一个输出端口吗，每个候选落点一颗有什么意义」。
+     *  卡片只说这个口对外是什么；落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
+    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
+    const prompt = entries.find((entry) => entry.id === "prompt")!;
+    const ports = paramOutputPorts(prompt, outIo, null);
+    expect(ports).toHaveLength(1);
+    expect(ports[0]).toMatchObject({
+      name: prompt.label,
+      display: prompt.label,
+      /* 未连线：显示这个口自己的类型（按族），不是 `*`。 */
+      type: "STRING",
+      connected: false,
+      ioKey: "",
+      handleId: "prompt",
+      active: false,
+    });
+  });
+
+  it("有落点时：类型与 ioKey 都跟着落点那一行走", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const prompt = entries.find((entry) => entry.id === "prompt")!;
     const ports = paramOutputPorts(prompt, outIo, "9::widget::text");
     expect(ports).toHaveLength(1);
     expect(ports[0]).toMatchObject({
-      name: "positive_prompt",
       type: "STRING",
       connected: true,
       ioKey: "9::widget::text",
-      /* 端点锚点 = 落点 ioKey（全图唯一）；端口名仍留在 `name` 里做显示。 */
-      handleId: "9::widget::text",
+      handleId: "prompt",
       active: true,
     });
   });
 
-  it("同一个口落到不同类型就有不同类型（尺寸 → COMBO 预设口）", () => {
+  it("同一个口落到不同类型就显示不同类型（类型跟着落点走）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const size = entries.find((entry) => entry.id === "size-aspect")!;
-    const byName = (name: string) =>
-      paramOutputPorts(size, outIo, "5::widget::width").find(
-        (port) => port.name === name,
-      )!;
-    expect(byName("width").type).toBe("INT");
-    expect(byName("aspect_ratio").type).toBe("COMBO");
+    const onWidth = paramOutputPorts(size, outIo, "5::widget::width")[0]!;
+    const onAspect = paramOutputPorts(
+      size,
+      outIo,
+      "5::widget::aspect_ratio",
+    )[0]!;
+    expect(onWidth.type).toBe("INT");
+    expect(onAspect.type).toBe("COMBO");
   });
 
-  it("**每个候选都给端口** —— 尺寸有几个候选就有几颗点（ISSUE #355 复审）", () => {
+  it("**一个口一颗点**：不逐候选摆点（尺寸子口也一样）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const size = entries.find((entry) => entry.id === "size-aspect")!;
     const ports = paramOutputPorts(size, outIo, null);
-    /* 宽 / 高 / 宽高比 / 像素量 四个候选 → 四颗端点，而不是一颗。 */
-    expect(ports.map((port) => port.name)).toEqual([
-      "width",
-      "height",
-      "aspect_ratio",
-      "megapixels",
-    ]);
-    expect(ports.map((port) => port.type)).toEqual([
-      "INT",
-      "INT",
-      "COMBO",
-      "FLOAT",
-    ]);
-    /* `connected` = 端口在工作流里真实存在（不是「已连上」）—— 候选端口都存在。 */
-    expect(ports.every((port) => port.connected)).toBe(true);
-    /* 行上显示的是**这个子口自己的名字**（卡片行不写 ComfyUI 内部 pin 名）。 */
-    expect(ports.every((port) => port.display === "尺寸 · 宽高比")).toBe(true);
-    /* 每颗点自带 handle id（= 该端口的 ioKey）：拖哪颗就连到哪个候选。 */
-    expect(ports.map((port) => port.handleId)).toEqual([
-      "5::widget::width",
-      "5::widget::height",
-      "5::widget::aspect_ratio",
-      "5::widget::megapixels",
-    ]);
-    expect(ports.every((port) => !port.active)).toBe(true);
+    expect(ports).toHaveLength(1);
+    /* 未连线：显示这个子口**形态语义上的**类型（见 `sizeSubTypeDisplay`）。 */
+    expect(ports[0]).toMatchObject({
+      type: "COMBO",
+      connected: false,
+      ioKey: "",
+      handleId: "size-aspect",
+      active: false,
+    });
   });
 
-  it("**已有落点时仍列出全部候选**，生效那颗标 active（ISSUE #355 复审）", () => {
-    /* 「尺寸只有一个比例口，像素数哪去了」：卡片要把每个候选的出口都摆出来，
-     *  拖哪一颗就连到哪个候选；当前落点那一颗标实心。 */
+  it("已有落点：仍是那一颗点，标 active、ioKey 指向落点", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const size = entries.find((entry) => entry.id === "size-aspect")!;
     const ports = paramOutputPorts(size, outIo, "5::widget::height");
-    expect(ports.map((port) => port.name)).toEqual([
-      "width",
-      "height",
-      "aspect_ratio",
-      "megapixels",
-    ]);
-    expect(ports.map((port) => port.active)).toEqual([
-      false,
-      true,
-      false,
-      false,
-    ]);
-    expect(defaultOutputPortIndex(ports)).toBe(1);
+    expect(ports).toHaveLength(1);
+    expect(ports[0]).toMatchObject({
+      type: "INT",
+      connected: true,
+      ioKey: "5::widget::height",
+      handleId: "size-aspect",
+      active: true,
+    });
   });
 
-  it("未连线时端口名就是候选端口名，不谎报类型", () => {
-    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
-    const prompt = entries.find((entry) => entry.id === "prompt")!;
-    const ports = paramOutputPorts(prompt, outIo, null);
-    expect(ports.map((port) => port.connected)).toEqual([true]);
-    expect(ports[0]!.type).toBe("STRING");
-  });
-
-  it("一个候选都没有（工作流没有可落点端口）→ 一条占位，卡片仍画得出端点", () => {
+  it("没有候选端口也不影响：卡片仍有一颗点（ioKey 为空 = 还没落到任何行）", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const prompt = entries.find((entry) => entry.id === "prompt")!;
     const empty = { ...prompt, pins: [] };
     const ports = paramOutputPorts(empty, outIo, null);
     expect(ports).toHaveLength(1);
     expect(ports[0]).toMatchObject({
-      name: "提示词",
-      type: "*",
+      name: prompt.label,
+      type: "STRING",
       connected: false,
       ioKey: "",
+      handleId: "prompt",
     });
-    /* 端点的 handle id 退到**契约 id**（同一节点内仍唯一）：没有可落的地方，
-     *  但卡片仍画得出端点。 */
-    expect(ports[0]!.handleId).toBe("prompt");
   });
 
-  it("落点指向已不存在的端口时列候选、不留一颗悬空点", () => {
+  it("落点指向已不存在的端口：如实带着那个 ioKey，类型退回口自己的类型", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const prompt = entries.find((entry) => entry.id === "prompt")!;
     const ports = paramOutputPorts(prompt, outIo, "9::widget::gone");
-    /* 端口已从 IO 里移除 → 那个落点画不出端点（io 里查不到类型/名字）。此时照
-     * 常列出工作流里真实存在的候选，而不是凭空造一颗标着 active 的点。 */
-    expect(ports.map((port) => port.name)).toEqual(["positive_prompt"]);
-    expect(ports[0]!.ioKey).toBe("9::widget::text");
-    expect(ports[0]!.active).toBe(false);
+    expect(ports).toHaveLength(1);
+    expect(ports[0]).toMatchObject({
+      ioKey: "9::widget::gone",
+      type: "STRING",
+      connected: true,
+      handleId: "prompt",
+    });
   });
 
-  it("生效落点排在可识别的位置（第一颗即连上的那颗）", () => {
-    const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
-    const size = entries.find((entry) => entry.id === "size-aspect")!;
-    const ports = paramOutputPorts(size, outIo, "5::widget::height");
-    expect(defaultOutputPortIndex(ports)).toBe(1);
-    expect(ports[1]!.name).toBe("height");
+  it("classPinType：按端口族给口自己的类型（尺寸子口按形态）", () => {
+    expect(classPinType("prompt")).toBe("STRING");
+    expect(classPinType("reference-image")).toBe("IMAGE");
+    expect(classPinType("duration")).toBe("NUMBER");
+    expect(classPinType("size-aspect")).toBe("COMBO");
+    expect(classPinType("size-width")).toBe("FLOAT");
+    expect(classPinType("other")).toBe("*");
   });
 
   it("portTypeDisplay：声明类型原样大写，缺省 *", () => {
@@ -905,28 +899,25 @@ describe("wiredTargetsForEntry — 一个对外参数当前接到哪个端口", 
     expect(wiredTargetsForEntry({ target: undefined })).toEqual([]);
   });
 
-  it("尺寸子口的候选圆点照旧给全 —— 线只画一条，点是另一回事", () => {
+  it("候选仍是该族全部数值行（作者从哪一行拖都行），但卡片只有一颗点", () => {
     const size = buildParamEntries(sizeIo, undefined, { mode: "T2I" }).find(
       (entry) => entry.id === "size-aspect",
     )!;
-    /* 候选 = 该族全部数值行（作者从哪一行拖都行）。 */
+    /* 候选 = 该族全部数值行。 */
     expect(size.pins.map((item) => item.name).sort()).toEqual([
       "aspect_ratio",
       "height",
       "megapixels",
       "width",
     ]);
-    /* 每个候选一颗圆点，落点那颗标 active。 */
+    /* 一个口一颗点：落点是哪一行由 `ioKey` 说，不再逐候选摆点。 */
     const ports = paramOutputPorts(size, sizeIo, "5::widget::aspect_ratio");
-    expect(ports.map((port) => port.ioKey)).toEqual([
-      "5::widget::aspect_ratio",
-      "5::widget::megapixels",
-      "5::widget::width",
-      "5::widget::height",
-    ]);
-    expect(
-      ports.filter((port) => port.active).map((port) => port.ioKey),
-    ).toEqual(["5::widget::aspect_ratio"]);
+    expect(ports).toHaveLength(1);
+    expect(ports[0]).toMatchObject({
+      ioKey: "5::widget::aspect_ratio",
+      handleId: "size-aspect",
+      active: true,
+    });
   });
 });
 

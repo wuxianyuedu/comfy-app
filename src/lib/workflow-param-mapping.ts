@@ -267,7 +267,13 @@ export function pinAcceptsEntry(
 ): boolean {
   const family = familyOfClass(cls);
   if (!family) return false;
-  return pinFamily(ioEntry) === family;
+  if (pinFamily(ioEntry) !== family) return false;
+  const accepted = acceptedPinTypesFor(cls);
+  if (!accepted) return true;
+  const type = (ioEntry?.type ?? "").trim().toUpperCase();
+  /* 类型未知（缺省 / `*`）：放行 —— 拿不到事实时不替作者做决定。 */
+  if (!type || type === "*") return true;
+  return accepted.includes(type);
 }
 
 /** 某个条目在**历史键**里的候选分类（旧键空间是 `<节点 id>|<分类>`）。
@@ -326,17 +332,16 @@ export interface ParamOutputPort {
    *  这一行说「这个口是什么、出去是什么类型」，落到工作流的哪一行由连线表达
    *  —— 行上写 `value` / `text_1` 这类 ComfyUI 内部 pin 名，读起来与作者在
    *  ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 `name` / `title`
-   *  里可查。对外**输出**卡片不给（那里端口名就是作者要看的名字）。 */
+   *  里可查（`ioKey`）。对外**输出**卡片不给（那里端口名就是作者要看的名字）。 */
   display?: string;
   /** 声明类型（大写，如 STRING / INT / COMBO）；未知为 `*`。 */
   type: string;
   /** 是否已经落到了工作流里真实存在的端口。 */
   connected: boolean;
-  /** 该端口对应的 ioKey（工作流内部键；`""` = 端口本身不存在，占位用）。 */
+  /** 落点（工作流内部键 `<nodeId>::<kind>::<name>`）；`""` = 还没落到任何行。 */
   ioKey: string;
-  /** React Flow 的 handle id —— 连线的起点标识。
-   *  画布上等于**该端口的 ioKey**（与宿主行 handle 同名）；库里那层只读连线按
-   *  端口名找锚点，故两者都用得到。 */
+  /** React Flow 的 handle id —— 连线的起点标识，**库内 = 条目 id**（一卡一颗点，
+   *  同一画布节点内天然唯一）；画布宿主行那一侧的 handle 才是 ioKey。 */
   handleId: string;
   /** 是否为**当前生效落点**（作者连上的那一颗；未连线时全为 false）。 */
   active: boolean;
@@ -348,114 +353,97 @@ export function portTypeDisplay(type: string | undefined | null): string {
   return t.length > 0 ? t : "*";
 }
 
-/** 尺寸子口**未连线时**展示的类型（用户口径：每个形态的语义类型是固定的）：
+/** 数值端口的三类声明（尺寸的数值形态都能落在这几类行上）。 */
+const NUMERIC_PORT_TYPES = ["INT", "FLOAT", "NUMBER"] as const;
+
+/** 尺寸子口的**规格表**：展示类型 + 可接受的端口类型（一处定义，展示与闸门同源）。
  *
- *   · 宽度 / 高度 / 像素量 → `FLOAT`（宽高与百万像素是连续量）；
- *   · 分辨率档 / 倍数 → `INT`；
- *   · 宽高比 → `COMBO`（候选表）。
+ *  · **展示类型**（用户口径）：宽度 / 高度 / 像素量 = `FLOAT`，分辨率档 / 倍数 =
+ *    `INT`，宽高比 = `COMBO`。卡片行**恒显示**它，不随落点变化（用户口径：
+ *    「对外参数卡片的类型都要显示是固定的…不要跟连接的参数类型变换」）。
+ *  · **可接受的端口类型**（闸门）：数值形态之间互通（声明成 INT 还是 FLOAT 由
+ *    工作流决定），宽高比只接 `COMBO` —— 「宽高比能连到百万像素」这类线不再放行
+ *    （用户口径：「这是不行的」）。
  *
- *  形态（谁连到哪一行）仍由作者连线声明，连上之后卡片显示**落点那一行的真实
- *  类型**（落点是 INT 就显示 INT）—— 这张表只在「还没连过、无从取落点类型」时
- *  生效，替代此前的候选类型集合与更早的 `*`。 */
-const SIZE_SUB_TYPE: Record<string, string> = {
-  "size-width": "FLOAT",
-  "size-height": "FLOAT",
-  "size-megapixels": "FLOAT",
-  "size-resolution": "INT",
-  "size-multiple": "INT",
-  "size-aspect": "COMBO",
+ *  类型未知（缺省 / `*`）的端口一律放行：拿不到事实时不替作者做决定。 */
+const SIZE_SUB_SPEC: Record<
+  string,
+  { display: string; accepts: readonly string[] }
+> = {
+  "size-width": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
+  "size-height": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
+  "size-megapixels": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
+  "size-resolution": { display: "INT", accepts: NUMERIC_PORT_TYPES },
+  "size-multiple": { display: "INT", accepts: NUMERIC_PORT_TYPES },
+  "size-aspect": { display: "COMBO", accepts: ["COMBO"] },
 };
 
-/** 尺寸子口未连线时的展示类型（见 `SIZE_SUB_TYPE`）。 */
+/** 尺寸子口展示的类型（见 `SIZE_SUB_SPEC`）—— 不论有没有落点都是它。 */
 export function sizeSubTypeDisplay(cls: ParamClass): string {
-  return SIZE_SUB_TYPE[cls] ?? portTypeDisplay(undefined);
+  return SIZE_SUB_SPEC[cls]?.display ?? portTypeDisplay(undefined);
 }
 
-/** 未连线时的端口名：契约展示名（卡片上不谎报成一个不存在的 pin 名）。 */
-function fallbackHandleId(entry: ParamEntry): string {
-  return entry.id || entry.label;
+/** 尺寸子口接受的端口类型（`undefined` = 不是尺寸子口，闸门按类型族判即可）。 */
+function acceptedPinTypesFor(cls: ParamClass): readonly string[] | undefined {
+  return SIZE_SUB_SPEC[cls]?.accepts;
 }
 
-/** 一个对外参数卡片的**输出端口**（每个候选落点一颗，见上方说明）。
+/** 一个对外口**自己的**类型（按它接受的端口族给）—— 未连线时卡片上显示它，
+ *  不显示 `*`，也不随落点变。尺寸六子口另有形态表（见 `sizeSubTypeDisplay`）。 */
+const FAMILY_TYPE: Record<PinFamily, string> = {
+  text: "STRING",
+  image: "IMAGE",
+  number: "NUMBER",
+};
+
+/** 一个对外口自己的类型展示名：尺寸子口按**形态**固定（见 `SIZE_SUB_SPEC`），
+ *  其余按端口族（见 `FAMILY_TYPE`）。 */
+export function classPinType(cls: ParamClass): string {
+  const sub = SIZE_SUB_SPEC[cls]?.display;
+  if (sub) return sub;
+  const family = familyOfClass(cls);
+  return family ? FAMILY_TYPE[family] : "*";
+}
+
+/** 一个对外参数卡片的**输出端口**（**一个口一颗点**）。
  *
- *  `resolvedTarget` = 该口子当前生效的落点 ioKey（就是作者连过的那条线）：
- *  · 有落点 → 只给一颗点（连到哪就只连得到哪，避免一张卡画出多条线）；
- *  · 无落点 → 逐个列出候选端口，每颗点连同名的 handle。
+ *  卡片只说「这个口对外是什么」（名字 + 类型），**落点由线的另一端声明** —— 拖
+ *  这颗点连到宿主的哪一行，这个口就落到哪一行。与尺寸卡「一行 = 一个形态，落点
+ *  由另一端声明」同构。
  *
- *  未连线且一个候选都没有（工作流里没有可落点的端口）时给一条占位端口，卡片仍
- *  画得出端点 —— `handleId` 退到契约名，`ioKey` 为空（没有可落的地方）。 */
+ *  早前这里是「每个候选落点一颗点」（未连线时逐候选列行）：那只在「尺寸」还是
+ *  一个**聚合条目**时成立（候选是宽 / 高 / 比例 / 像素量这些语义不同的行，作者要
+ *  在卡片上挑）；尺寸摊成六个子口之后，普通卡逐候选摆点只会把同一族的行重复列
+ *  一遍，还把 handle id 撞成一堆同名点（用户口径：「提示词不是就应该有一个输出端
+ *  口吗，每个候选落点一颗有什么意义」）。
+ *
+ *  `handleId` = **条目 id**：一卡一颗点，条目 id 在同一画布节点内天然唯一（尺寸卡
+ *  的六行各是子口 id，同样唯一）；落点不再需要由 handle id 携带。 */
 export function paramOutputPorts(
   entry: ParamEntry,
   io: WorkflowIOMap | null | undefined,
   resolvedTarget: string | null | undefined,
-  reachableKeys?: ReadonlySet<string>,
   /** 行上显示的对外参数名。给的是**调用方那一份**（卡片列会先用契约口清单的
    *  展示名覆盖 `entry.label`，见 ISSUE #596）—— 两处各取一份会让同一张卡片的
    *  标题与端口行说两个名字。缺省 = `entry.label`。 */
   displayName?: string,
 ): ParamOutputPort[] {
-  const rowLabel = displayName ?? entry.label;
-  const toPort = (
-    ioKey: string,
-    name: string,
-    type: string | undefined,
-    connected: boolean,
-    active: boolean,
-  ): ParamOutputPort => ({
-    name: name || entry.label,
-    /* 行上只写这个对外参数自己的名字：落到工作流的哪一行由连线表达，
-     *  pin 名（`value` / `text_1`）退到行的 `title` 提示里。 */
-    display: rowLabel,
-    type: portTypeDisplay(type),
-    connected,
-    ioKey,
-    /* 端点锚点用 **ioKey**：它全图唯一。用端口名当 handle id 会在同一个节点里
-     *  撞出多颗同名点 —— 提示词与负向提示词的两行都叫 `text`（两个节点各一行），
-     *  同一张卡片上于是出现四颗 `text` 点，React Flow 只认第一颗：用户看到的就是
-     *  「拖不出线 / 连不上」（同类：两个节点各有 `image`）。
-     *  尺寸卡例外：一行 = 一个形态，handle id 取子口 id（见卡片列）。 */
-    handleId: ioKey || fallbackHandleId(entry),
-    active,
-  });
-
   const target = resolvedTarget ?? null;
-  /* **每个候选端口一颗圆点**（不论当前有没有落点）：同一张「尺寸」卡片要把
-   *  宽 / 高 / 宽高比 / 像素量各自的出口都摆出来，作者拖哪一颗就连到
-   *  哪个候选（ISSUE #355：「尺寸这里不是有多个输出端口吗，现在怎么还是一个
-   *  比例」）。只列「当前生效落点」那一颗的话，卡片上就只剩一根线可以拉，
-   *  其余候选连端点都没有。
-   *
-   *  `reachableKeys` 给的是「宿主卡片上真的画得出来、连得上的那一行」的 ioKey
-   *  集合（组合控件折叠成逐行参数之后，露出来的行就是全部可连行）。给定时只列
-   *  这些候选 —— 端点画在一颗落不上去的句柄上，拖过去只会被闸门判成非法，用户
-   *  看到的就是「点击端点拉线出现禁用标记」。集合缺省（调用方拿不到宿主表单的
-   *  折叠结果）时保持原样，不擅自藏候选。
-   *
-   *  生效落点若不在候选里（历史数据 / 端口已从 IO 里移除）也要补一颗并标 active
-   *  —— 否则「当前落点」在卡片上凭空消失，读者答不出这个口现在连着哪。 */
-  const candidates =
-    reachableKeys && reachableKeys.size > 0
-      ? entry.pins.filter((pin) => reachableKeys.has(pin.ioKey))
-      : entry.pins;
-  const targetRaw = target ? io?.[target] : undefined;
-  const targetInCandidates =
-    !!target && candidates.some((pin) => pin.ioKey === target);
-  if (candidates.length > 0) {
-    const ports = candidates.map((pin) =>
-      toPort(pin.ioKey, pin.name, pin.type, true, pin.ioKey === target),
-    );
-    if (target && targetRaw && !targetInCandidates) {
-      ports.unshift(toPort(target, targetRaw.name, targetRaw.type, true, true));
-    }
-    return ports;
-  }
-  /* 连候选都没有：有生效落点时仍给那一颗（如实呈现当前落点），否则退到占位
-   * 端口 —— 卡片始终画得出端点。 */
-  if (target && targetRaw) {
-    return [toPort(target, targetRaw.name, targetRaw.type, true, true)];
-  }
-  /* ③ 连候选都没有：占位端口，卡片仍画得出端点（没有可落的地方）。 */
-  return [toPort("", entry.label, undefined, false, false)];
+  const raw = target ? io?.[target] : undefined;
+  return [
+    {
+      name: entry.label,
+      /* 行上只写这个对外参数自己的名字；落到工作流的哪一行由线表达（`ioKey`
+       *  在行的 title 里可查）。 */
+      display: displayName ?? entry.label,
+      /* 有落点 → 落点那一行的真实类型；没有 → 这个口自己的类型（按族）。 */
+      type: raw ? portTypeDisplay(raw.type) : classPinType(entry.cls),
+      connected: !!target,
+      ioKey: target ?? "",
+      handleId: entry.id,
+      active: !!target,
+    },
+  ];
 }
 
 /** 一个对外参数当前**接到哪个端口** —— 只报作者连上的那一条。
@@ -488,17 +476,6 @@ export function wiredTargetsForEntry(args: {
  *  id），因此两端不需要任何换算函数 —— 这也是原先那个「按端口名换算」的口径
  *  被删掉的原因：同名 pin（两个节点各有一行 `text`）会在同一节点里撞出重复
  *  handle id。 */
-
-/** 卡片端点列表里哪一颗是「当前生效落点」（没有则退回第一颗）。
- *
- *  作者连过线的口，第一颗就是他那条线指向的端口；未连线时没有 `active`，
- *  退回首项（卡片上不会因此谎报「已连上」——`active` 与「是否已连」是两件事）。 */
-export function defaultOutputPortIndex(
-  ports: readonly ParamOutputPort[],
-): number {
-  const index = ports.findIndex((port) => port.active);
-  return index >= 0 ? index : 0;
-}
 
 /** 把 IO 条目聚合成**统一对外参数**条目（顺序 = 契约顺序，与工作流无关）。
  *

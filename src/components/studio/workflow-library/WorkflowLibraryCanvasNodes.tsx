@@ -59,7 +59,6 @@ export function LibraryParamsNode(_props: NodeProps) {
         onSelect={onSelect}
         isManual={cards.isManual}
         onReset={onReset}
-        reachableKeys={cards.reachableKeys}
         endpoint={(port) => (
           <PortHandle
             id={port.handleId}

@@ -16,7 +16,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
 import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
-import { outputWireDotId } from "./workflow-library-param-cards";
+import { outputPortLabel } from "./workflow-library-param-cards";
 
 /* vitest globals: false 下 RTL 不会自动 cleanup，需手动注册。 */
 afterEach(cleanup);
@@ -70,7 +70,7 @@ describe("WorkflowOutputParamCardColumn", () => {
     expect(screen.getByText("生成图")).toBeTruthy();
   });
 
-  it("端点在卡片**左**缘（线从宿主输出行进来），handle id 是端口名", () => {
+  it("端点在卡片**左**缘（线从宿主输出行进来），handle id 是输出的 ioKey", () => {
     const { container } = render(
       <WorkflowOutputParamCardColumn
         outputs={outputs}
@@ -82,7 +82,9 @@ describe("WorkflowOutputParamCardColumn", () => {
         )}
       />,
     );
-    const dot = container.querySelector('[data-endpoint-handle="images"]')!;
+    const dot = container.querySelector(
+      '[data-endpoint-handle="9::output::IMAGE"]',
+    )!;
     expect(dot).toBeTruthy();
     /* 端点槽位在名字与类型**之前**（DOM 顺序 = 视觉顺序，圆点在左）。 */
     const row = screen.getByTestId("param-node-out-9::output::IMAGE-0");
@@ -153,13 +155,14 @@ describe("WorkflowOutputParamCardColumn", () => {
       />,
     );
     expect(
-      container.querySelector('[data-endpoint-handle="images"]'),
+      container.querySelector('[data-endpoint-handle="9::output::IMAGE"]'),
     ).toBeTruthy();
   });
 
-  it("端口名为空 / 带空白时 handle id 退回「输出」—— 与连线派生同一份算式", () => {
-    /* handle id 与边的两端各算一遍：任何一处漏了 trim / 兜底，边就量不到
-     *  handleBounds、整条不画（用户口径：「images 和对外输出参数之间无法连线」，
+  it("端口名为空 / 带空白时**显示名**退回「输出」，锚点仍是输出的 ioKey", () => {
+    /* 显示名与锚点是两件事：名字可以是空 / 带空白（作者没给 name 的旧数据），
+     *  锚点必须是唯一的 ioKey —— 用名字当锚点会在两个口同名时撞车，线量不到
+     *  handleBounds 就整条不画（用户口径：「images 和对外输出参数之间无法连线」，
      *  ISSUE #355）。 */
     const nameless = [
       { ...outputs[0]!, name: "   ", ioKey: "9::output::EMPTY" },
@@ -171,9 +174,10 @@ describe("WorkflowOutputParamCardColumn", () => {
       />,
     );
     const dot = container.querySelector("[data-endpoint-handle]")!;
-    expect(dot.getAttribute("data-endpoint-handle")).toBe(
-      outputWireDotId(nameless[0]!),
-    );
-    expect(outputWireDotId(nameless[0]!)).toBe("输出");
+    expect(dot.getAttribute("data-endpoint-handle")).toBe("9::output::EMPTY");
+    expect(outputPortLabel(nameless[0]!)).toBe("输出");
+    expect(
+      screen.getByTestId("param-node-out-9::output::EMPTY-0").textContent,
+    ).toContain("输出");
   });
 });
