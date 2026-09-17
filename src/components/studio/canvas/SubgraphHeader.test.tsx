@@ -54,7 +54,7 @@ const base = {
   isCollapsed: false,
 };
 
-const OUTPUT_REF = { name: "IMAGE_FINAL", label: "最终图像" };
+const OUTPUT_REF = { name: "IMAGE_FINAL" };
 
 describe("SubgraphHeader", () => {
   it("渲染标题、S 徽标与 subgraph 变体的节点 ID chip", () => {
@@ -180,8 +180,11 @@ describe("SubgraphHeader", () => {
     ).toMatchObject({
       name: "IMAGE_FINAL",
       kind: "output",
-      label: "最终图像",
+      /* 显示名不进库：条目只记身份，名字由富化链一处给。 */
     });
+    expect(
+      stores.io.getState().workflowIO["42::output::IMAGE_FINAL"]!.label,
+    ).toBeUndefined();
     expect(checkbox).toHaveAttribute("title", "已暴露为工作流输出");
   });
 });

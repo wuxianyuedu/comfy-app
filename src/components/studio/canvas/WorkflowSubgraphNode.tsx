@@ -207,16 +207,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         io={io}
         outputRef={
           cleanedOutputs.length > 0
-            ? {
-                name: cleanedOutputs[0]!.out.name,
-                // forward the subgraph wrapper's output label
-                // (e.g. business `IMAGE_FINAL`) so it reaches the IO
-                // preview unchanged.
-                label:
-                  cleanedOutputs[0]!.out.label ??
-                  cleanedOutputs[0]!.out.localized ??
-                  cleanedOutputs[0]!.out.name,
-              }
+            ? { name: cleanedOutputs[0]!.out.name }
             : null
         }
       />
@@ -389,12 +380,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                             name: inName,
                             kind: "param",
                             direction: "input",
-                            // forward the boundary port's
-                            // display label (already resolved into
-                            // `inLabel` above) so the IO preview shows
-                            // the meaningful name instead of the raw
-                            // wrapper port key.
-                            label: inLabel || inName,
                           }}
                         />
                       )}
@@ -535,10 +520,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       name: inp.name,
                       kind: "widget",
                       direction: "input",
-                      // forward the SAME resolved display name the row
-                      // shows (内部字段业务名 → 本层 label/localized → 别名),
-                      // 这样 IO 面板初值与画布逐字一致（ISSUE #349）。
-                      label: label || inp.name,
                     }}
                   />
                 )}
@@ -666,9 +647,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                             name: inp.name,
                             kind: "widget",
                             direction: "input",
-                            // 同 compact 行：转发已解析好的显示名
-                            // （内部字段业务名 → 本层 label/localized → 别名）。
-                            label: label || inp.name,
                           }}
                         />
                       )}

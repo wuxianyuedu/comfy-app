@@ -216,7 +216,13 @@ export function WorkflowParamCard({
             }`}
             style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
-            title={`${side === "left" ? "输入端口" : "输出端口"} ${port.name} · ${port.type}`}
+            title={
+              /* 行上显示的是对外参数自己的名字（`display`）；落到工作流的哪一行
+               *  （pin 名 = `name`）在这里可查 —— 显示与落点是两件事。 */
+              port.display && port.display !== port.name
+                ? `${side === "left" ? "输入端口" : "输出端口"} ${port.display} → 落到 ${port.name} · ${port.type}`
+                : `${side === "left" ? "输入端口" : "输出端口"} ${port.name} · ${port.type}`
+            }
           >
             {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：
                 圆点在左时槽位在前（DOM 顺序 = 视觉顺序），在右时槽位在后。 */}
@@ -226,7 +232,7 @@ export function WorkflowParamCard({
                 port.connected ? "text-ink-soft" : "text-ink-fainter"
               }`}
             >
-              {port.name}
+              {port.display ?? port.name}
             </span>
             <span
               className="shrink-0 rounded px-1 font-mono text-[9px] leading-[14px]"

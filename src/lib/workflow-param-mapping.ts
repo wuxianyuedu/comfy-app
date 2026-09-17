@@ -32,17 +32,21 @@
  * `WorkflowLibraryCanvas`）—— 拖线即编辑落点，映射没有第二套界面。
  */
 
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
 import {
-  resolveEntryDefault,
-  type WorkflowIOEntry,
-  type WorkflowIOMap,
-} from "~/lib/workflow-io-types";
-import {
+  EXPOSED_PARAM_LABEL,
   exposedParamDisplayLabel,
   exposedParamsForMode,
 } from "~/lib/workflow-exposed-params";
 import { megapixelsForSize } from "~/lib/workshop/workflow-encapsulation";
-import { aspectLabelForDims } from "~/lib/size-presets";
+import {
+  alignMultipleOf,
+  aspectLabelForDims,
+  resolutionTierOf,
+  resolutionTierOfLabel,
+  sceneFromMode,
+  type SizeScene,
+} from "~/lib/size-presets";
 
 /* ── 对外参数分类 ──
  * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
@@ -60,6 +64,12 @@ export type ParamClass =
   | "size-height"
   | "size-aspect"
   | "size-megapixels"
+  /** 分辨率档（`1k` / `2k` / `4k`）：端口自己的候选就是档位标签，值由宽高反解
+   *  出档位再匹配它的候选（见 `size-presets` 的 `resolutionTierOf`）。 */
+  | "size-resolution"
+  /** 宽高对齐倍数（8 / 16 / 32 / 64）：**像素量档定出宽高必需** ——
+   *  「比例 + 像素量」只给出总像素，要落到具体宽高还得知道两侧吸附到哪个网格。 */
+  | "size-multiple"
   | "reference-image"
   | "first-frame"
   | "last-frame"
@@ -72,7 +82,23 @@ export const SIZE_CLASSES: readonly ParamClass[] = [
   "size-height",
   "size-aspect",
   "size-megapixels",
+  "size-resolution",
+  "size-multiple",
 ];
+
+/** 「尺寸」在映射层的四个**子口 id**（与 `SIZE_CLASSES` 同名）。
+ *
+ *  对外契约里「尺寸」仍是一个口（工坊给一个 `"832x1216"`，见
+ *  `workflow-exposed-params`）；但落点形态由**作者连到哪个子口**声明 ——
+ *  `width` / `aspect_ratio` / `resolution_preset` 这类名字猜形态会静默落错形状
+ *  （把像素串写进比例口），所以形态不再从端口名推。 */
+export const SIZE_SUB_IDS: readonly ParamClass[] = SIZE_CLASSES;
+
+/** 某个尺寸子口的显示名（`尺寸 · 宽高比`）。
+ *
+ *  基础名取自契约表（`EXPOSED_PARAM_LABEL.size`，「尺寸」这四个字的唯一出处），
+ *  形态词取自本模块的 `CLASS_FALLBACK_LABEL` —— 组合出来的一句话对每个子口都是
+ *  唯一的，作者在卡片列上一眼能分辨自己连的是哪一形态。 */
 
 /** 一个「对外参数」（= 契约里的一个统一口子，落到工作流的某个端口上）。
  *
@@ -128,6 +154,8 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "size-height": "高度",
   "size-aspect": "宽高比",
   "size-megapixels": "像素量",
+  "size-resolution": "分辨率档",
+  "size-multiple": "倍数",
   "reference-image": exposedParamDisplayLabel("reference-image"),
   "first-frame": exposedParamDisplayLabel("first-frame"),
   "last-frame": exposedParamDisplayLabel("last-frame"),
@@ -135,85 +163,75 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   other: "参数",
 };
 
-/** 条目名 + 显示名（小写）。
+/** 某个尺寸子口的显示名（`尺寸 · 宽高比`）。
  *
- *  **判据只有这一处事实来源：作者自己写下的名字**（端口名 + 显示名）。这里刻意
- *  不看 `role` 之类的图内推导，也不看节点类名 —— 对外有哪些参数由契约表决定，
- *  工作流只决定每一口落到哪一行（见 `buildParamEntries`）。 */
-function searchText(e: WorkflowIOEntry): string {
-  return `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
+ *  基础名取自契约表（`EXPOSED_PARAM_LABEL.size`，「尺寸」这四个字的唯一出处），
+ *  形态词取自上面的 `CLASS_FALLBACK_LABEL` —— 组合出来的一句话对每个子口都是唯一
+ *  的，作者在卡片列上一眼能分辨自己连的是哪一形态。 */
+export function sizeSubLabel(cls: ParamClass): string {
+  return `${EXPOSED_PARAM_LABEL.size} · ${CLASS_FALLBACK_LABEL[cls]}`;
 }
 
+/* ── 端口分类：只看**声明类型** ──
+ *
+ * 一个端口能当哪些对外参数的落点，由它的**声明类型**定族，不看名字：端口名随
+ * 工作流改版漂移（`base_width` / `横向` / `1:1 比例`…），类型不会；而按名字判错
+ * 的时候用户无从察觉（判成「尺寸 · 宽」的一个普通数值口被静默写成宽度）。名字
+ * 启发式（`searchText` 那套正则）整条删除。
+ *
+ * 同一族的几个对外参数**共享同一份候选**：提示词 / 负向提示词都收 STRING 行，
+ * 参考图 / 首帧 / 尾帧都收图片行，尺寸六个子口与「时长」都收数值行 —— **谁是谁
+ * 由作者的连线声明**（与「尺寸形态由子口声明」同一口径，ISSUE #632：不猜落点）。 */
+
+/** 端口的**类型族** —— 同一族共享一份候选落点。 */
+export type PinFamily =
+  /** STRING 文本行。 */
+  | "text"
+  /** 图片系（IMAGE / MASK / IMAGEUPLOAD）。 */
+  | "image"
+  /** 数值 / 候选表（INT / FLOAT / NUMBER / COMBO / 未知类型）。 */
+  | "number";
+
+const TEXT_TYPES = new Set(["STRING", "TEXT"]);
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
+const NUMBER_TYPES = new Set(["INT", "FLOAT", "NUMBER", "COMBO", "*"]);
 
-/* ── 分类判定 ──
- * 顺序即优先级：负面先于正向，首/尾帧先于普通参考图，尺寸类先于提示词
- * （避免 "width" 之类被泛化的文本启发式抢走）。与工坊封装同口径。 */
-const FIRST_FRAME_HINT =
-  /first[_\s-]?frame|首帧|起始帧|第一帧|image_?1|start_?image/;
-const LAST_FRAME_HINT = /last[_\s-]?frame|尾帧|结束帧|末帧|image_?2|end_?image/;
-
-function isImagePin(e: WorkflowIOEntry): boolean {
-  const type = (e.type ?? "").toUpperCase();
-  if (IMAGE_TYPES.has(type)) return true;
-  return /upload|image|参考图|首帧|尾帧|first_?frame|last_?frame/.test(
-    searchText(e),
-  );
+/** 端口按声明类型归族（`null` = 不能当任何对外参数的落点：连线型端口、输出口）。 */
+export function pinFamily(
+  e: WorkflowIOEntry | null | undefined,
+): PinFamily | null {
+  if (e?.direction !== "input" || e.kind !== "widget") return null;
+  const type = (e.type ?? "*").toUpperCase();
+  if (TEXT_TYPES.has(type)) return "text";
+  if (IMAGE_TYPES.has(type)) return "image";
+  if (NUMBER_TYPES.has(type)) return "number";
+  return null;
 }
 
-/** 导出给工坊封装复用：把已有对外条目的分类映射到 ParamClass。 */
-export function classifyPin(e: WorkflowIOEntry): ParamClass {
-  if (e?.direction !== "input" || e.kind !== "widget") return "other";
-  const text = searchText(e);
-  if (isImagePin(e)) {
-    if (LAST_FRAME_HINT.test(text)) return "last-frame";
-    if (FIRST_FRAME_HINT.test(text)) return "first-frame";
-    return "reference-image";
-  }
-  if (/negative|负向|负面|反向/.test(text)) return "negative";
-  /* 尺寸名必须"干净"——`prompt_width_of_thing` 这类把 width 当词根的名字不算
-   * 尺寸口（真实工作流里 width/height 从不带其它业务词）。 */
-  if (
-    /^(width|base_width|w|宽度|横向)$/.test(text.trim()) ||
-    /宽度|横向/.test(text)
-  ) {
-    return "size-width";
-  }
-  if (
-    /^(height|base_height|h|高度|纵向)$/.test(text.trim()) ||
-    /高度|纵向/.test(text)
-  ) {
-    return "size-height";
-  }
-  if (/aspect_?ratio|宽高比|纵横比|比例/.test(text)) return "size-aspect";
-  if (/megapixel|百万像素|\b像素\b/.test(text)) return "size-megapixels";
-  /* 时长 / 帧数：先排掉 fps（帧率不是时长），再认 duration / length / frames
-   * 与中文「时长 / 秒数 / 帧数」。视频模式的「时长」口按此落到这类端口上。 */
-  if (
-    !/fps|frame_?rate|帧率|每秒帧/.test(text) &&
-    /duration|length|num_?frames|frame_?count|frames?|时长|秒数|帧数/.test(text)
-  ) {
-    return "duration";
-  }
-  if (/prompt|提示词|描述词|描述/.test(text)) return "prompt";
-  /* 无类型但默认值很长（>40 字符）的文本一般是提示词框 —— 与工作流库的控件
-   * 推导启发式（workflow-encapsulation / workflow-detail-io）保持一致，
-   * 否则 CLIPTextEncode 的 `text` 这类"名字不含 prompt"的口会被判成普通参数。 */
-  if (
-    (e.type ?? "").toUpperCase() === "STRING" &&
-    typeof e.defaultValue === "string" &&
-    e.defaultValue.length > 40
-  ) {
-    return "prompt";
-  }
-  return "other";
-}
+/** 每个对外参数类落在哪一族。
+ *
+ *  `size` 是**聚合值**（对外只报一个「尺寸」，映射层摊成六个子口）—— 它和六个
+ *  子口一样只吃数值行；`other` 是工作流内部参数，不接受任何端口。 */
+const CLASS_FAMILY: Record<ParamClass, PinFamily | null> = {
+  prompt: "text",
+  negative: "text",
+  size: "number",
+  "size-width": "number",
+  "size-height": "number",
+  "size-aspect": "number",
+  "size-megapixels": "number",
+  "size-resolution": "number",
+  "size-multiple": "number",
+  "reference-image": "image",
+  "first-frame": "image",
+  "last-frame": "image",
+  duration: "number",
+  other: null,
+};
 
-/** 端口分类 → 契约里的统一参数口子（`null` = 不是对外参数，属工作流内部）。 */
-function contractParamFor(cls: ParamClass): string | null {
-  if (cls === "other") return null;
-  if (isSizeClass(cls)) return "size";
-  return cls;
+/** 某个对外参数类接受的端口族（`null` = 不接受任何端口）。 */
+export function familyOfClass(cls: ParamClass): PinFamily | null {
+  return CLASS_FAMILY[cls] ?? null;
 }
 
 /** 该分类是否属于「尺寸」语义（含契约聚合值 `"size"` 本身）。 */
@@ -223,31 +241,49 @@ function isSizeClass(cls: ParamClass): boolean {
 
 /** 手工拖线的**类型闸门**：该契约口能不能落到这个端口上。
  *
- *  判据与自动落点同源 —— 条目**接受的端口分类**（`candidateClasses`：`size`
- *  对应宽 / 高 / 宽高比 / 像素量，其余各自一类）里必须包含这个端口自己的分类
- *  （`classifyPin`）。自动落点本来就按这套谓词挑端口，手工拖线若不过这道闸门，
- *  就会出现「提示词拖到宽高比也连上了」：写进去的映射运行期根本取不到值，用户
- *  看到的是一条假线（提示词口只有一个 STRING 口，宽高比是 COMBO 尺寸口）。 */
+ *  判据只有一条：**同族**（`familyOfClass` vs `pinFamily`）—— 端口叫什么名字不
+ *  参与判定。自动候选本来就是按这一族收的；手工拖线若不过这道闸门，就会出现
+ *  「提示词拖到宽高比也连上了」：写进去的映射运行期根本取不到值（提示词只吃
+ *  STRING 行，宽高比是数值行）。
+ *
+ *  同族的兄弟口（提示词 vs 负向提示词、首帧 vs 尾帧、尺寸各子口）互相之间不作
+ *  区分 —— 谁是谁由作者连线声明，不由端口名猜。 */
 export function pinAcceptsEntry(
   cls: ParamClass,
   ioEntry: WorkflowIOEntry | null | undefined,
 ): boolean {
-  if (!ioEntry) return false;
-  const target = classifyPin(ioEntry);
-  if (target === "other") return false;
-  return candidateClasses(cls).includes(target);
+  const family = familyOfClass(cls);
+  if (!family) return false;
+  return pinFamily(ioEntry) === family;
 }
 
-/** 某个条目接受哪些端口分类（`"size"` 对应宽/高/宽高比/像素量四种）。 */
+/** 某个条目在**历史键**里的候选分类（旧键空间是 `<节点 id>|<分类>`）。
+ *
+ *  旧键按当时的名字分类写下来，所以只回它自己那一类 —— 多回几类会把别的口子
+ *  当年连过的线读到本口上来。 */
 export function candidateClasses(cls: ParamClass): readonly ParamClass[] {
-  return isSizeClass(cls) ? SIZE_CLASSES : [cls];
+  return [cls];
 }
 
-/** 该契约口子接受的端口分类。 */
-function classesForContractParam(param: string): readonly ParamClass[] {
-  if (param === "size") return SIZE_CLASSES;
-  if (/^reference-image($|-)/.test(param)) return ["reference-image"];
-  return [param as ParamClass];
+/** 「尺寸」在当前模式下是否**已经能定出宽高** —— 工坊能不能跑得起来的前提。
+ *
+ *  工坊只送一个尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数），要落到工作流上
+ *  必须能算出宽高，所以四个子口里得凑出能解出 W/H 的一组：
+ *    · 宽度 + 高度（两个子口都连上）；
+ *    · 宽高比 + （像素量 或 分辨率档）。
+ *  只连其中一个（只有宽度、只有比例…）解不出另一维 —— 不算配置完成：状态显示
+ *  未配置，「缺了它不能跑」的清单里带上它。 */
+export function isSizeDetermined(
+  resolved: Record<string, string | null | undefined>,
+): boolean {
+  const wired = (cls: ParamClass) => Boolean(resolved[cls]);
+  if (wired("size-width") && wired("size-height")) return true;
+  if (!wired("size-aspect")) return false;
+  /* 分辨率档自己就能定宽高（档位表给出确切宽高）。 */
+  if (wired("size-resolution")) return true;
+  /* 像素量档只有总像素：还要倍数（两侧吸附到哪个网格）才解得出宽高 ——
+   * 「比例 + 像素量 + 倍数」是工坊那一类尺寸表达的三段，缺一段定不出来。 */
+  return wired("size-megapixels") && wired("size-multiple");
 }
 
 /* ── 输出端口 ──
@@ -271,6 +307,14 @@ function classesForContractParam(param: string): readonly ParamClass[] {
 export interface ParamOutputPort {
   /** 端口自身的名字（落到哪个 pin）。 */
   name: string;
+  /** 卡片行上**显示**的名字；缺省 = `name`。
+   *
+   *  对外**输入**卡片给的是这个对外参数自己的名字（「提示词」「尺寸」）：
+   *  这一行说「这个口是什么、出去是什么类型」，落到工作流的哪一行由连线表达
+   *  —— 行上写 `value` / `text_1` 这类 ComfyUI 内部 pin 名，读起来与作者在
+   *  ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 `name` / `title`
+   *  里可查。对外**输出**卡片不给（那里端口名就是作者要看的名字）。 */
+  display?: string;
   /** 声明类型（大写，如 STRING / INT / COMBO）；未知为 `*`。 */
   type: string;
   /** 是否已经落到了工作流里真实存在的端口。 */
@@ -309,7 +353,12 @@ export function paramOutputPorts(
   io: WorkflowIOMap | null | undefined,
   resolvedTarget: string | null | undefined,
   reachableKeys?: ReadonlySet<string>,
+  /** 行上显示的对外参数名。给的是**调用方那一份**（卡片列会先用契约口清单的
+   *  展示名覆盖 `entry.label`，见 ISSUE #596）—— 两处各取一份会让同一张卡片的
+   *  标题与端口行说两个名字。缺省 = `entry.label`。 */
+  displayName?: string,
 ): ParamOutputPort[] {
+  const rowLabel = displayName ?? entry.label;
   const toPort = (
     ioKey: string,
     name: string,
@@ -318,6 +367,9 @@ export function paramOutputPorts(
     active: boolean,
   ): ParamOutputPort => ({
     name: name || entry.label,
+    /* 行上只写这个对外参数自己的名字：落到工作流的哪一行由连线表达，
+     *  pin 名（`value` / `text_1`）退到行的 `title` 提示里。 */
+    display: rowLabel,
     type: portTypeDisplay(type),
     connected,
     ioKey,
@@ -367,80 +419,34 @@ export function paramOutputPorts(
   return [toPort("", entry.label, undefined, false, false)];
 }
 
-/** 一个对外参数当前**接到哪些端口**（默认状态可以是「一对多」）。
+/** 一个对外参数当前**接到哪个端口** —— 只报作者连上的那一条。
  *
- *  为什么不是一个端口：像「尺寸」这样的对外参数**由多个端口共同组成** ——
- *  宽高比 / 像素量由同一块组合控件录入（`inferGroups` 的 `groupedKeys`），
- *  宽 / 高同理。默认状态下这几个端口都取自这一个对外参数，画面上就该各有一条线；
- *  只画其中一条会让「尺寸」看着只有一个出口
- *  （ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」）。
+ *  为什么不是「一对多」：候选是**按类型**收来的（一族一份，见 `pinFamily`），
+ *  同族几个口子的候选集合互相重叠（每个数值行都是「尺寸 · 宽」的候选）。逐条
+ *  列出来会让一张卡画出十来条线，还把兄弟口子的落点在图上画到这个口名下。
+ *  「尺寸 · 宽高比」连的是哪一行，只由它自己那一条线说。
  *
- *  落点**只能来自作者画的线**（没有线就没有落点，见 `resolveMapping`）：作者连
- *  的普通端口只画那一条；连到组合控件覆盖的端口上时，该控件覆盖的其余端口一起
- *  画出来（它们是同一块控件录入的同一件事）—— 其余端口回到工作流自身的默认值，
- *  这时再画线就是谎报。
+ *  这与「候选圆点照给」是两件事：圆点给全部候选（作者要能拖，见
+ *  `paramOutputPorts`），**线只画连上的那条**。
+ *
+ *  落点**只能来自作者画的线**（没有线就没有落点，见 `resolveMapping`）；没有
+ *  落点就报空（未配置，如实呈现）。
  *
  *  `active` 标出「作者连上的那个」，供卡片上的实心圆点使用。 */
 export function wiredTargetsForEntry(args: {
-  entry: ParamEntry;
-  /** workflowIO：判定候选端口是否真的存在（候选可能来自过期的 IO 快照）。 */
-  io?: WorkflowIOMap | null | undefined;
   /** 当前模式下这个条目的落点（`resolveMapping` 的结果；`null` = 未连线/断开）。 */
   target: string | null | undefined;
-  /** 作者是否手工改过这个口（`isDefaultMappingForEntry` 的取反）。 */
-  manual: boolean;
-  /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）；缺省时不做一对多。 */
-  groupedKeys?: ReadonlySet<string>;
-  /** 是否**连每一个候选端口都算一条线**（视图侧口径，与运行期无关）。
-   *
-   *  缺省 `false` = 只报「当前生效落点」那一个（运行期派值、编辑器连线用这个
-   *  口径：手工落点意味着该口只往那一个端口供值）。给 `true` 时把该条目全部
-   *  可落点逐个报出来 —— 库内画布卡片给每个候选都画了圆点（每个都能拖线改落点），
-   *  线就该逐条画出来；点有、线没有，读作「这几项没接上」（ISSUE #355：「宽高比
-   *  和百万像素这两项都需要能导入到工作流中，2 条线都要能连出去」）。 */
-  allCandidates?: boolean;
 }): { ioKey: string; active: boolean }[] {
-  const { entry, io, target, manual, groupedKeys, allCandidates } = args;
-  /* 视图口径：不挑「当前落点」，把候选逐个报出来（落在哪个哪个就是 active）。
-   *
-   *  这里的「候选」= 该口在当前工作流里**真的存在的可落点端口**（不是猜出来的
-   *  落点）：卡片上每颗圆点都是作者可以拖过去连的一行。没连线的口一颗圆点都不
-   *  高亮（`active` 全 false），「未配置」就看得见。 */
-  if (allCandidates) {
-    const candidates = (
-      io ? entry.pins.filter((pin) => !!io[pin.ioKey]) : entry.pins
-    ).map((pin) => ({ ioKey: pin.ioKey, active: pin.ioKey === target }));
-    /* 生效落点不在候选里（历史数据 / 端口已从 IO 移除）也要补一条并标 active
-     *  —— 否则「当前落点」在图上凭空消失，读者答不出这个口现在连着哪。 */
-    if (target && !candidates.some((c) => c.ioKey === target))
-      candidates.unshift({ ioKey: target, active: true });
-    return candidates;
-  }
-  if (!target) return [];
-  /* 作者手画的线：只画他连的那一条（一个口连一个端口）。 */
-  if (manual && !groupedKeys?.has(target))
-    return [{ ioKey: target, active: true }];
-  /* 落点落在组合控件里 → 该控件覆盖、且属于这个条目的端口全都算「接上了」。
-   *  候选端口取自条目的 pins；给了 io 时只保留真的存在的那些（过期快照里的
-   *  端口画不出线来）。 */
-  if (groupedKeys?.has(target)) {
-    const siblings = entry.pins.filter(
-      (pin) => groupedKeys.has(pin.ioKey) && (!io || !!io[pin.ioKey]),
-    );
-    const keys =
-      siblings.length > 0 ? siblings.map((pin) => pin.ioKey) : [target];
-    if (!keys.includes(target)) keys.unshift(target);
-    return keys.map((ioKey) => ({ ioKey, active: ioKey === target }));
-  }
-  return [{ ioKey: target, active: true }];
+  /* 只报作者连上的那一条 —— 候选圆点由 `paramOutputPorts` 照给，两件事分开。 */
+  return args.target ? [{ ioKey: args.target, active: true }] : [];
 }
 
 /** 某个条目在某个 ioKey 上「用哪个 handle 连」——库内画布卡片按**端口名**给
  *  圆点打锚点（`paramOutputPorts` 的 `handleId`），所以连线也必须按端口名对齐
  *  那一颗点，否则同一个条目下多条线会全部落到第一颗点上。 */
-/* 注：一条映射线**一定**要么来自作者画的线（`manual` 为真）、要么落在作者连上的
- * 那个组合控件上 —— 落点本身不可能凭空产生（见 `resolveMapping`：没有线就没有
- * 落点）。所以上面那段之后只剩「manual」与「组合控件」两个分支要照顾。 */
+/* 注：一条映射线**一定**来自作者画的线 —— 落点本身不可能凭空产生（见
+ *  `resolveMapping`：没有线就没有落点）；也没有「组合控件摊开成多条线」这回事
+ *  （每个条目只画它连上的那一条）。 */
 export function wireHandleIdForIoKey(
   io: WorkflowIOMap | null | undefined,
   entry: ParamEntry,
@@ -483,10 +489,10 @@ export function buildParamEntries(
   labels?: Record<string, string>,
   options?: { mode?: string | null },
 ): ParamEntry[] {
-  if (options != null && "mode" in options) {
-    return buildContractEntries(io, labels, options.mode ?? null);
-  }
-  return buildLegacyEntries(io, labels);
+  /* 只有一条构造路径：契约（按模式）。没有模式语境时退到最保守的一套
+   *  （提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除 —— 对外有
+   *  哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是「对外参数」。 */
+  return buildContractEntries(io, labels, options?.mode ?? null);
 }
 
 /** 契约驱动的条目构造（有模式语境时的唯一路径）。 */
@@ -499,24 +505,29 @@ function buildContractEntries(
 
   const out: ParamEntry[] = [];
   for (const def of exposedParamsForMode(mode)) {
-    const pins = classesForContractParam(def.id).flatMap(
-      (cls) => pinsByClass.get(cls) ?? [],
-    );
-    if (out.some((entry) => entry.id === def.id)) continue;
-    const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
-    out.push({
-      id: def.id,
-      /* 落点由映射表决定，`nodeId` 不带宿主节点（分组展示不需要它）。 */
-      nodeId: "",
-      /* 卡片挂载 / 连线需要宿主节点 id：取候选端口所属的节点（首个候选）。
-       * 契约条目跨节点的情况不存在（一个口子落到一个节点的某一行），首个候选
-       * 即最近可用近似。 */
-      hostNodeId: nodeIdOfIoKey(pins[0]?.ioKey ?? ""),
-      nodeTitle: "",
-      cls: def.cls,
-      label: override ?? def.label,
-      pins,
-    });
+    /* 「尺寸」在映射层摊成四个子口（`SIZE_SUB_IDS`）：形态由作者连到哪个子口
+     * 声明，不再从端口名里猜。对外契约仍是那一个「尺寸」口 —— 工坊送来的
+     * `values.size` 由运行期按子口身份派成各自认的形状（见 sizeValueForPin）。 */
+    const ids: readonly string[] = def.cls === "size" ? SIZE_SUB_IDS : [def.id];
+    for (const id of ids) {
+      if (out.some((entry) => entry.id === id)) continue;
+      const cls = (def.cls === "size" ? id : def.cls) as ParamClass;
+      const pins = pinsByClass.get(cls) ?? [];
+      const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
+      out.push({
+        id,
+        /* 落点由映射表决定，`nodeId` 不带宿主节点（分组展示不需要它）。 */
+        nodeId: "",
+        /* 卡片挂载 / 连线需要宿主节点 id：取候选端口所属的节点（首个候选）。
+         * 契约条目跨节点的情况不存在（一个口子落到一个节点的某一行），首个候选
+         * 即最近可用近似。 */
+        hostNodeId: nodeIdOfIoKey(pins[0]?.ioKey ?? ""),
+        nodeTitle: "",
+        cls,
+        label: override ?? (def.cls === "size" ? sizeSubLabel(cls) : def.label),
+        pins,
+      });
+    }
   }
   return out;
 }
@@ -529,88 +540,36 @@ function buildContractEntries(
 function classifyPins(
   io: WorkflowIOMap | null | undefined,
 ): Map<ParamClass, ParamEntry["pins"]> {
-  const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
+  /** 三份**按类型**收的候选池：一族一份，族内所有对外参数共享。
+   *
+   *  形态 / 正负 / 首尾都由作者连线声明，所以每个口都摆出它那一族的全部候选，
+   *  作者连哪一行、那一行就是它的落点。按名字筛候选等于替作者认定「这个口是
+   *  宽度 / 这个口是正向」——那正是要消掉的那层猜测。 */
+  const pools: Record<PinFamily, ParamEntry["pins"]> = {
+    text: [],
+    image: [],
+    number: [],
+  };
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
     const entry = raw as WorkflowIOEntry | undefined;
-    if (entry?.direction !== "input" || entry.kind !== "widget") continue;
-    const cls = classifyPin(entry);
-    if (cls === "other") continue;
-    const list = pinsByClass.get(cls) ?? [];
-    list.push({
+    const family = pinFamily(entry);
+    if (!family) continue;
+    pools[family].push({
       ioKey,
-      name: entry.name,
-      type: entry.type ?? "*",
-      defaultValue: entry.defaultValue,
+      name: entry!.name,
+      type: entry!.type ?? "*",
+      defaultValue: entry!.defaultValue,
     });
-    pinsByClass.set(cls, list);
+  }
+  const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
+  for (const klass of Object.keys(CLASS_FAMILY) as ParamClass[]) {
+    /* 聚合值 `size` 不单独摆候选：契约层把它摊成六个子口。 */
+    if (klass === "size") continue;
+    const family = CLASS_FAMILY[klass];
+    if (!family || pools[family].length === 0) continue;
+    pinsByClass.set(klass, [...pools[family]]);
   }
   return pinsByClass;
-}
-
-/** 无模式语境下的旧聚类（按节点 + 分类）—— 只有拿不到模式的调用方会走这里。 */
-function buildLegacyEntries(
-  io: WorkflowIOMap | null | undefined,
-  labels?: Record<string, string>,
-): ParamEntry[] {
-  const byNode = new Map<string, { entry: ParamEntry; order: number }>();
-  let order = 0;
-  for (const [ioKey, raw] of Object.entries(io ?? {})) {
-    const entry = raw as WorkflowIOEntry | undefined;
-    if (entry?.direction !== "input" || entry.kind !== "widget") continue;
-    const cls = classifyPin(entry);
-    const key = `${entry.nodeId}|${cls}`;
-    const pin = {
-      ioKey,
-      name: entry.name,
-      type: entry.type ?? "*",
-      defaultValue: entry.defaultValue,
-    };
-    const existing = byNode.get(key);
-    if (existing) {
-      existing.entry.pins.push(pin);
-      if (entry.displayOrder !== undefined)
-        existing.order = Math.min(existing.order, order);
-      continue;
-    }
-    const override = labels?.[ioKey];
-    byNode.set(key, {
-      order,
-      entry: {
-        id: key,
-        nodeId: entry.nodeId,
-        hostNodeId: entry.nodeId,
-        nodeTitle: entry.nodeTitle ?? "",
-        cls,
-        label: override ?? entry.label ?? CLASS_FALLBACK_LABEL[cls],
-        pins: [pin],
-      },
-    });
-    order += 1;
-  }
-  return [...byNode.values()]
-    .sort((a, b) => a.order - b.order)
-    .map((item) => item.entry);
-}
-
-/** 一个端口是否可直接接标量值（连线型端口不可作为对外参数的落点）。 */
-function isScalarPin(i: { type: string }): boolean {
-  const t = (i.type ?? "").toUpperCase();
-  if (!t || t === "*") return true;
-  return !new Set([
-    "MODEL",
-    "CLIP",
-    "VAE",
-    "CONDITIONING",
-    "LATENT",
-    "CONTROL_NET",
-    "SAMPLER",
-    "SIGMAS",
-    "GUIDER",
-    "NOISE",
-    "CLIP_VISION",
-    "STYLE_MODEL",
-    "UPSCALE_MODEL",
-  ]).has(t);
 }
 
 /* ── 历史键的兼容读取 ──
@@ -685,9 +644,9 @@ export function resolveMapping(
   mode?: string | null,
 ): Record<string, string | null> {
   const out: Record<string, string | null> = {};
-  const manual: Record<string, string | null> = mode
-    ? (mapping?.manualByMode?.[mode] ?? {})
-    : {};
+  /* 只读一份（本函数不再给任何旧键补位，没有要写回的东西）。 */
+  const manual: Record<string, string | null> =
+    (mode ? mapping?.manualByMode?.[mode] : undefined) ?? {};
   for (const entry of entries) {
     const hit = manualTargetForEntryRaw(manual, entry);
     if (!hit.found) continue;
@@ -713,12 +672,22 @@ export function manualTargetFor(
   return undefined;
 }
 
+/** 拆分前「尺寸」在映射表里的**单键**（落点形态靠端口名推）。
+ *
+ *  现在形态由子口身份声明（`SIZE_SUB_IDS`：`size-width` / `size-aspect`…），
+ *  这个键不再有任何写入入口（`entry.id` 只会是子口 id）—— `parseParamMapping`
+ *  读到即丢，下一次落库它就从 `paramMap` 里消失，不必等一次手工迁移。 */
+const LEGACY_SIZE_ENTRY_ID = "size";
+
 /** 从持久化的 `paramMap` 反序列化映射。
  *
  *  只认 `source.mode:<模式> = { <entryId>: ioKey | null }` 这一种形状（与
  *  serializeParamMapping 一一对应）。没有 `mode:` 前缀的键（通用手工线的历史
  *  形状，如 `source.<entryId>`）一律**丢弃**：那些无模式的线在新模型里没有
  *  生效语境，留着只会让「这条线哪个模式用」无从判定。
+ *
+ *  拆分前落库的单键 `size` 线同样丢弃（见 `LEGACY_SIZE_ENTRY_ID`）：形态现在
+ *  只由子口身份声明，那个键谁都读不到，留着只会在库里原样往返。
  *
  *  畸形数据（数字 / 数组 / 非对象模式表）同样丢弃——画布容不下脏数据。 */
 export function parseParamMapping(paramMap: unknown): ParamMapping {
@@ -739,6 +708,9 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
     for (const [entryId, target] of Object.entries(
       value as Record<string, unknown>,
     )) {
+      /* 存量清理：那个键没有任何入口能再写出来，读到即丢（下面 `byEntry` 里没它，
+       *  序列化自然也不会把它写回去）。 */
+      if (entryId === LEGACY_SIZE_ENTRY_ID) continue;
       if (typeof target === "string") byEntry[entryId] = target;
       /* 显式的 null = 作者把这条线断开了，属于合法状态。 */
       else if (target === null) byEntry[entryId] = null;
@@ -783,30 +755,6 @@ export function isDefaultMapping(
   return manualTargetFor(mapping, entryId, mode) === undefined;
 }
 
-/** 同 `manualTargetFor`，但按**条目**查（含历史键兼容读取）。
- *
- *  画布上的卡片拿到的是一条 `ParamEntry` 而不是一个裸 id，用它查才能把
- *  「当年按 `<节点>|<分类>` 落库的线」也算进来 —— 否则作者改过的落点在契约改版
- *  后会静默变成「未配置」）。 */
-export function manualTargetForEntry(
-  mapping: ParamMapping | null | undefined,
-  entry: ParamEntry,
-  mode?: string | null,
-): string | null | undefined {
-  if (!mode) return undefined;
-  const hit = manualTargetForEntryRaw(mapping?.manualByMode?.[mode], entry);
-  return hit.found ? hit.target : undefined;
-}
-
-/** 同 `isDefaultMapping`，但按条目查（含历史键兼容读取）。 */
-export function isDefaultMappingForEntry(
-  mapping: ParamMapping | null | undefined,
-  entry: ParamEntry,
-  mode?: string | null,
-): boolean {
-  return manualTargetForEntry(mapping, entry, mode) === undefined;
-}
-
 /** 该模式下是否有任何对外参数被作者改过线（画布级的「恢复默认」开关依据）。 */
 export function hasManualWiring(
   mapping: ParamMapping | null | undefined,
@@ -828,16 +776,6 @@ export function clearModeWiring(
   };
   if (mode) delete out.manualByMode![mode];
   return out;
-}
-
-/** 从已有的 workflowIO 反查某个端口的对外参数 id（用于把旧数据接进新模型）。 */
-export function entryIdForPin(
-  io: WorkflowIOMap | null | undefined,
-  ioKey: string,
-): string | null {
-  const raw = io?.[ioKey];
-  if (!raw) return null;
-  return contractParamFor(classifyPin(raw));
 }
 
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow
@@ -945,15 +883,19 @@ function sizeValueForPin(
   entry: ParamEntry,
   ioKey: string,
   supplied: unknown,
+  /** 场景（图片 / 视频）：`1k` 在两种场景下不是同一组宽高，反解档位要按场景查表。 */
+  scene: SizeScene,
 ): unknown {
-  if (entry.cls !== "size") return supplied;
+  if (!isSizeClass(entry.cls)) return supplied;
   const raw = io?.[ioKey];
   if (!raw) return supplied;
   const dims = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(String(supplied).trim());
   if (!dims) return supplied;
   const width = Number(dims[1]);
   const height = Number(dims[2]);
-  switch (classifyPin(raw)) {
+  /* 形状由**子口身份**给出：作者连的是「尺寸 · 宽高比」，值就按比例标签派 ——
+   * 端口叫什么名字不参与判定。 */
+  switch (entry.cls) {
     case "size-width":
       return width;
     case "size-height":
@@ -961,6 +903,22 @@ function sizeValueForPin(
     case "size-aspect": {
       const label = aspectLabelForDims(width, height, raw.options);
       return label ?? undefined;
+    }
+    case "size-resolution": {
+      const tier = resolutionTierOf(scene, width, height);
+      if (!tier) return undefined;
+      const options = Array.isArray(raw.options) ? raw.options : [];
+      if (options.length === 0) return tier;
+      /* 端口声明了自己的候选（`1k` / `1K` / …）→ 挑与档位同名的那个。挑不到就
+       *  不写：写一个不在候选里的值只会被 ComfyUI 静默回落到第一个选项。 */
+      return options.find((option) => resolutionTierOfLabel(option) === tier);
+    }
+    case "size-multiple": {
+      /* 倍数：由宽高反推能整除两侧的最大候选（与工坊 `sizeSpecMultiple` 同源）。 */
+      const multiple = alignMultipleOf({ width, height });
+      const options = Array.isArray(raw.options) ? raw.options : [];
+      if (options.length === 0) return multiple;
+      return options.find((option) => Number(option) === multiple);
     }
     case "size-megapixels": {
       const mp = megapixelsForSize(width, height, raw.defaultValue);
@@ -985,13 +943,8 @@ export function applyParamMapping(args: {
   mapping: ParamMapping | null | undefined;
   values: Record<string, unknown>;
   mode?: string | null;
-  /** 组合控件覆盖到的端口（`inferGroups(...).groupedKeys`）。
-   *
-   *  作者把「尺寸」这类口连到组合控件覆盖的某个端口时，值要派生成那个端口认的
-   *  形状（宽高比 / 像素量）；不传时按单端口处理。 */
-  groupedKeys?: ReadonlySet<string>;
 }): { inputs: MappedInput[]; unmatched: string[] } {
-  const { io, entries, mapping, values, mode, groupedKeys } = args;
+  const { io, entries, mapping, values, mode } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
   const inputs: MappedInput[] = [];
   const unmatched: string[] = [];
@@ -1016,27 +969,33 @@ export function applyParamMapping(args: {
    *   只认一种就会让另一种静默失效（表现为「改了没生效」）。 */
   const suppliedEntries = new Set<string>();
   for (const entry of entries) {
-    const byContract = values[entry.id];
-    const byPinKeys = entry.pins
-      .map((pin) => values[pin.ioKey])
-      .find((value) => value !== undefined);
+    const byContract =
+      values[entry.id] ??
+      /* 尺寸的对外值只有一个（工坊按契约 id `size` 给 `"832x1216"`），四个子口
+       * 各自按自己的形态取用它。 */
+      (isSizeClass(entry.cls) ? values.size : undefined);
+    /* 候选按类型收 ⇒ 候选集合是**重叠**的（同族几个口子摆的是同一份候选），只有
+     *  **落点那一行**的值才属于这个口子 —— 否则用户在参数面板改了「步数」，会被
+     *  当成「尺寸 · 宽」写进宽度那一行。 */
+    const target = resolved[entry.id];
+    const byPinKeys = target ? values[target] : undefined;
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) continue;
     /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量由同一块控件
      *  录入，作者把这几条线都连到同一个口上）。这时要把同一个对外值派生成每个
      *  端口各自认的形状，逐个下发 —— 只往其中一条线写，作者连出来的另外两条就
      *  从外部拿不到值（ISSUE #355：「尺寸那三项每一项都需要从外部获取值」）。 */
-    const targets = wiredTargetsForEntry({
-      entry,
-      io,
-      target: resolved[entry.id],
-      manual: !isDefaultMappingForEntry(mapping, entry, mode),
-      groupedKeys,
-    });
+    const targets = wiredTargetsForEntry({ target });
     let pushed = false;
     for (const target of targets) {
       if (!io?.[target.ioKey]) continue;
-      const perPort = sizeValueForPin(io, entry, target.ioKey, supplied);
+      const perPort = sizeValueForPin(
+        io,
+        entry,
+        target.ioKey,
+        supplied,
+        sceneFromMode(mode),
+      );
       if (perPort === undefined) continue;
       push(target.ioKey, perPort);
       pushed = true;
@@ -1047,23 +1006,10 @@ export function applyParamMapping(args: {
     else unmatched.push(entry.id);
   }
 
-  /* ② 用户值**真的落到了**端口的口子跳过兜底：用户值就写在那几行上，再塞默认值
-   *    只会打架。
-   *
-   *    其余全部兜底 —— 作者没连过的口（未配置）、连了但被显式断开的、以及落点
-   *    因端口改名而失效的，都按工作流自己的默认值下发。这是「用户没改就用工作流
-   *    默认值」的本意，也保证一条历史遗留的断线不会把参数从提交载荷里整个抹掉
-   *    （任务跑出来缺参数，用户却看不到任何提示）。 */
-  for (const entry of entries) {
-    if (suppliedEntries.has(entry.id)) continue;
-    for (const pin of entry.pins) {
-      const raw = io?.[pin.ioKey];
-      if (!raw || !isScalarPin(pin)) continue;
-      const fallback = resolveEntryDefault(raw, mode);
-      if (fallback !== undefined) push(pin.ioKey, fallback);
-    }
-  }
-
+  /* 不兜底候选：候选是**按类型**收来的（同族几个口子摆的是同一份候选：宽 / 高 /
+   *  比例 / 像素量与步数 / CFG 混在一起），逐个下发它们的工作流默认值会把作者
+   *  没连过的口一起写进载荷。连线的意义就是声明落点 —— 没连就是「未配置」，
+   *  工作流图内自带的默认值照旧生效。 */
   return { inputs, unmatched };
 }
 
