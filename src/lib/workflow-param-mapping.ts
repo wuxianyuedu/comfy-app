@@ -172,6 +172,19 @@ export function sizeSubLabel(cls: ParamClass): string {
   return `${EXPOSED_PARAM_LABEL.size} · ${CLASS_FALLBACK_LABEL[cls]}`;
 }
 
+/** 「尺寸」那一张卡片 ↔ 它在映射表里的键：卡片 id 是聚合值 `size`（对外只报一个
+ *  尺寸口），映射键是六个子口。
+ *
+ *  卡片列把它渲染成**一张卡**（六行形态各一颗圆点，见 `WorkflowParamCardColumn`），
+ *  而连线、落点、↺ 恢复默认都按子口走 —— 这层换算就是两者的桥：
+ *  `sizeGroupIds("size")` 给出全部六个键，`sizeGroupIds(<子口 id>)` 回它自己。 */
+export function sizeGroupIds(
+  id: string | null | undefined,
+): readonly ParamClass[] {
+  if (!id) return [];
+  return id === "size" ? SIZE_SUB_IDS : [id as ParamClass];
+}
+
 /* ── 端口分类：只看**声明类型** ──
  *
  * 一个端口能当哪些对外参数的落点，由它的**声明类型**定族，不看名字：端口名随
@@ -1015,9 +1028,8 @@ export function applyParamMapping(args: {
 
 /* ── 对外参数卡片的视觉常量（纯派生，无 React / 无 IO） ──
  *
- * 卡片本体 `WorkflowParamCard` 与两侧卡片列（`WorkflowParamCardColumn` /
- * `WorkflowOutputParamCardColumn`）共用这几个尺寸。谁都不许自己再写一套字面量：
- * 卡片高度与圆点位置各写一份，线就会连到卡片外面去。
+ * 卡片本体 `WorkflowParamCard` 用这里的行高常量。谁都不许自己再写一套字面量：
+ * 卡片高度各写一份，线就会连到卡片外面去。
  *
  * **画布几何（节点 id 前缀 / 卡片坐标 / 卡片高度推算）已随编辑器卡片一起删除**：
  * 卡片现在只出现在工作流库详情的「画布节点」页签，位置与三列布局由 React Flow
@@ -1027,24 +1039,13 @@ export function applyParamMapping(args: {
 
 /** 卡片头（标题）行高。 */
 export const PARAM_NODE_HEADER_H = 26;
-/** 端口行行高。 */
-export const PARAM_NODE_ROW_H = 22;
-/** 卡片上下留白。 */
-export const PARAM_NODE_PAD_Y = 8;
 
-/** 输出端口区的行高 —— 与端口行同口径（视觉上就是一行带类型徽标的端口）。 */
-export const PARAM_NODE_OUTPUT_ROW_H = PARAM_NODE_ROW_H;
-
-/** 卡片右侧那颗**输出端点小圆点**的直径。 */
-export const PARAM_NODE_DOT_SIZE = 12;
-
-/** 圆点相对输出端口行右沿的偏移（负值 = 半颗圆点探出卡片）。
+/** 输出端口区的行高（视觉上就是一行带类型徽标的端口）。
  *
- *  输出端口行带 `px-2`（8px）内边距，而行是端点定位的锚 —— 要让圆心正好骑跨
- *  卡片右缘（与项目画布的 PortHandle「半圆在外」一致），偏移必须是
- *  `-(行内边距 + 半颗圆点)`。输入列与输出列都用这个值，圆点不会一边贴边、
- *  一边内缩。 */
-export const PARAM_NODE_DOT_OFFSET = -(
-  PARAM_NODE_PAD_Y +
-  PARAM_NODE_DOT_SIZE / 2
-);
+ *  此前这里还有 `PARAM_NODE_ROW_H` / `PARAM_NODE_PAD_Y` / `PARAM_NODE_DOT_SIZE`
+ *  / `PARAM_NODE_DOT_OFFSET` 四个常量，实测全库（含测试）零消费 —— 它们描述
+ *  的是「输入列与输出列的卡片列布局」，而那套布局早已随编辑器卡片一起删除
+ *  （见本段的文件头注释），只剩输出端口行还在用。按 §12.15 第三条删除：
+ *  需要时再引入，代价远低于长期维护一批「看起来在管几何、实际谁都读不到」的
+ *  常量。 */
+export const PARAM_NODE_OUTPUT_ROW_H = 22;

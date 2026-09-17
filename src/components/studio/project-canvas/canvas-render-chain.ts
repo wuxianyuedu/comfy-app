@@ -9,7 +9,6 @@
  *    （节点渲染器）、src/lib/project-canvas/canvas-types.ts（节点类型/元数据）、
  *    src/lib/project-canvas/canvas-store.ts（项目数据持久化）
  *  - workflow：追加 WorkflowNode.tsx + shared/workflow-io.ts
- *  - workflowArdot：追加 WorkflowNodeArdot.tsx（ardot 场景变体）
  *  - image / video：追加 ImageGenerationPanel.tsx +
  *    src/lib/project-canvas/canvas-helpers.ts（startGenerate / pollTask）
  *  - script：追加 src/lib/project-canvas/canvas-helpers.ts（runScript）
@@ -50,7 +49,7 @@ const CANVAS_COMMON: RenderChainModule[] = [
 ];
 
 /** 按 kind 追加的渲染链路（不含公共链路） */
-const KIND_CHAIN: Record<NodeKind | "workflowArdot", RenderChainModule[]> = {
+const KIND_CHAIN: Record<NodeKind, RenderChainModule[]> = {
   workflow: [
     {
       file: "src/components/studio/project-canvas/WorkflowNode.tsx",
@@ -59,12 +58,6 @@ const KIND_CHAIN: Record<NodeKind | "workflowArdot", RenderChainModule[]> = {
     {
       file: "src/components/studio/shared/workflow-io.ts",
       label: "workflow-io",
-    },
-  ],
-  workflowArdot: [
-    {
-      file: "src/components/studio/project-canvas/WorkflowNodeArdot.tsx",
-      label: "WorkflowNodeArdot",
     },
   ],
   image: [
@@ -125,7 +118,7 @@ const KIND_CHAIN: Record<NodeKind | "workflowArdot", RenderChainModule[]> = {
  * 未知 kind 只返回公共链路（设计文档错误处理：未知 kind → 只显示公共链路）。
  */
 export function getProjectCanvasRenderChain(
-  kind: NodeKind | "workflowArdot",
+  kind: NodeKind,
 ): RenderChainModule[] {
   const extra = KIND_CHAIN[kind];
   if (!extra) return [...CANVAS_COMMON];

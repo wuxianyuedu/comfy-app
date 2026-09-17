@@ -109,7 +109,10 @@ export function WorkflowOutputParamCardColumn({
               {
                 name: portName,
                 type,
-                connected: true,
+                /* 未连过（作者没改过这个口的取值行）在画布上**没有线** —— 这里也
+                 *  不再报「已连接」：端口名跟着淡一档，与「这颗点有没有线」同一份
+                 *  事实（`manual`，见 `deriveLibraryOutputCards`）。 */
+                connected: manual,
                 ioKey: output.ioKey,
                 /* 库里那层边的卡片端按**端口名**取 handle id（与输入卡片刻度
                  *  一致，见 `outputWireDotId`）。 */

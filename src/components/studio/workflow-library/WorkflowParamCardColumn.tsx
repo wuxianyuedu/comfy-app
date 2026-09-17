@@ -21,6 +21,10 @@
 
 import {
   paramOutputPorts,
+  portTypeDisplay,
+  sizeGroupIds,
+  sizeSubLabel,
+  SIZE_SUB_IDS,
   type ParamEntry,
   type ParamOutputPort,
 } from "~/lib/workflow-param-mapping";
@@ -88,6 +92,62 @@ export function WorkflowParamCardColumn({
         {canWire ? "对外参数 · 拖圆点改落点" : "对外参数"}
       </p>
       {entries.map((entry) => {
+        /* 尺寸在映射层是六个子口（形态由作者声明），但**卡片只有一张**：六行形态、
+         * 每行一颗圆点，不再并排六张卡（用户口径：「尺寸这里不要显示这么多节点，
+         * 尺寸只显示一个节点」）。只在第一个子口的位置画这一张，其余跳过。 */
+        if (SIZE_SUB_IDS.includes(entry.cls)) {
+          const forms = entries.filter((item) =>
+            SIZE_SUB_IDS.includes(item.cls),
+          );
+          if (entry !== forms[0]) return null;
+          const first = forms[0];
+          const sizeLabel =
+            contractEntries?.find((item) => item.id === "size")?.label ??
+            sizeSubLabel("size");
+          return (
+            <WorkflowParamCard
+              key="size"
+              /* 选中的可能是这张卡（`size`）或它的某一条线（子口 id）：两种都点亮。 */
+              selected={sizeGroupIds(selectedEntryId).some((id) =>
+                SIZE_SUB_IDS.includes(id),
+              )}
+              onSelect={onSelect ? () => onSelect("size") : undefined}
+              entryId="size"
+              cls="size"
+              label={sizeLabel}
+              idLabel="size"
+              classLabel={paramClassStyle("size").label}
+              hostNodeId={first.hostNodeId || first.nodeId}
+              width={CARD_WIDTH}
+              canWire={canWire}
+              readOnly={!canWire}
+              canReset={canWire && SIZE_SUB_IDS.some((id) => !!isManual?.(id))}
+              /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（尺寸是一张卡，
+               * 只撤其中一条会让卡片看着「还有线」）。 */
+              onReset={
+                canWire
+                  ? () => SIZE_SUB_IDS.forEach((id) => onReset?.(id))
+                  : undefined
+              }
+              /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
+               * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
+              outputPorts={forms.map((item) => {
+                const target = resolved[item.id] ?? null;
+                const raw = target ? io?.[target] : undefined;
+                return {
+                  name: item.id,
+                  display: sizeSubLabel(item.cls),
+                  type: portTypeDisplay(raw?.type),
+                  connected: !!target,
+                  ioKey: target ?? "",
+                  handleId: item.id,
+                  active: !!target,
+                };
+              })}
+              endpoint={endpoint}
+            />
+          );
+        }
         const style = paramClassStyle(entry.cls);
         /* 这张卡片的名字只有一份：卡片头的标题与端口行都读它（见下方
          * `outputPorts` 的 `displayName`）—— 两处各取一份会让同一张卡片说

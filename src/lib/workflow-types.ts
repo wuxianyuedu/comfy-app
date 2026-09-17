@@ -459,61 +459,6 @@ export function resolveWorkflowMode(args: {
   return null;
 }
 
-/** 根据图中节点自动推断工作流类型 */
-export function inferWorkflowTypeFromGraph(
-  graph: Record<string, unknown>,
-): string {
-  const nodeClasses = new Set(
-    Object.values(graph)
-      .map((n) => {
-        const classType = (n as { class_type?: string } | null | undefined)
-          ?.class_type;
-        return typeof classType === "string" ? classType : "";
-      })
-      .filter(Boolean),
-  );
-
-  // Video detection
-  if (
-    nodeClasses.has("WanVideoSampler") ||
-    nodeClasses.has("VideoLinearScaleUniform")
-  ) {
-    if (nodeClasses.has("LoadImage")) return "I2V";
-    if (nodeClasses.has("WanVideoImageToVideoEncode")) return "TI2V";
-    return "T2V";
-  }
-
-  // Image-to-image
-  if (nodeClasses.has("VAEEncode") && nodeClasses.has("LoadImage")) {
-    if (nodeClasses.has("VAEInpaint") || nodeClasses.has("SetLatentNoiseMask"))
-      return "Inpaint";
-    return "I2I";
-  }
-
-  // ControlNet variants
-  if (nodeClasses.has("ControlNetApply")) {
-    if (
-      nodeClasses.has("CannyEdgePreprocessor") ||
-      nodeClasses.has("CannyEdgeDetection")
-    )
-      return "E2I";
-    if (nodeClasses.has("DepthAnythingPreprocessor")) return "D2I";
-    if (nodeClasses.has("OpenPosePreprocessor")) return "P2I";
-    return "R2I";
-  }
-
-  // Upscale
-  if (
-    nodeClasses.has("ImageUpscaleWithModel") ||
-    nodeClasses.has("UpscaleModelLoader")
-  ) {
-    return "Upscale";
-  }
-
-  // Default: text-to-image
-  return "T2I";
-}
-
 /* ── 多模式 JSON 编解码────────────────────────────
  * SQLite 不支持 Prisma 标量数组，故 WorkflowTemplate.modes 存为
  * JSON 字符串（与 Skill.tags 同构）。下面两个函数统一在「DB 列 ↔

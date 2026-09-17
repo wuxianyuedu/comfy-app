@@ -257,32 +257,6 @@ export function spawnTaskkill(
   return `${exe} ${args.join(" ")}`;
 }
 
-/** 回收 sidecar 的整棵进程树（跨平台）。
- *
- *  实现取向：**先**让插件自己的机制回收（Windows 走 Job/任务终止、POSIX 走
- *  进程组信号），**再**用本模块的判据补一刀按 pid 的整树回收 —— 插件负责
- *  「快、跟随平台」，本模块负责「不漏」。两步都失败才算失败，且返回 `via`
- *  让壳日志能说明到底走了哪条路。 */
-export function killHostedChild(
-  opts: KillHostedChildOptions,
-): KillProcessTreeResult {
-  const attempts: string[] = [];
-  try {
-    opts.kill();
-    attempts.push("shell-plugin");
-  } catch (error) {
-    attempts.push(
-      `shell-plugin 失败（${error instanceof Error ? error.message : String(error)}）`,
-    );
-  }
-  const direct = killProcessTreeSync({ pid: opts.handle, force: true });
-  attempts.push(direct.via);
-  return {
-    ok: direct.ok || attempts[0] === "shell-plugin",
-    via: attempts.join(" → "),
-  };
-}
-
 /**
  * 回收一棵进程树。
  *

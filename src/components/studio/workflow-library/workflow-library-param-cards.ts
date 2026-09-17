@@ -21,6 +21,7 @@ import {
   buildParamEntries,
   parseParamMapping,
   resolveMapping,
+  SIZE_SUB_IDS,
   wireHandleIdForIoKey,
   wiredTargetsForEntry,
   type ParamEntry,
@@ -84,7 +85,6 @@ export interface ParamCardWire {
   /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
    *  端点锚在整块控件上，线指向那一格。 */
   grouped: boolean;
-  manual: boolean;
 }
 
 /** 从 workflowIO + paramMap 派生库内画布所需的归属数据。
@@ -123,10 +123,9 @@ export function deriveLibraryParamCards(args: {
      *  画一条通向某处的线反而误导。 */
     if (!target) continue;
     /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
-     *  —— 所以这条线一定是「作者连的」（库里的线一律实线，没有「猜出来的虚线」）。
-     *  用 `resolved` 而不是直接查键：解析时已把作者画的线归到契约 id 上（含
-     *  `<节点 id>|<分类>` 历史键），按裸键查会把作者画过的线读成「没连过」。 */
-    const manual = true;
+     *  —— 所以这条线一定是「作者连的」。用 `resolved` 而不是直接查键：解析时已把
+     *  作者画的线归到契约 id 上（含 `<节点 id>|<分类>` 历史键），按裸键查会把作者
+     *  画过的线读成「没连过」。 */
     /* 线只画作者连上的那一条 —— 候选是**按类型**收的（同族几个口子互相重叠），
      *  逐条画出来会把兄弟口子的落点也画到本口名下。候选圆点照给（每个都能拖），
      *  见 `paramOutputPorts`；线从对应的那一颗圆点出发（`handleId` 取端口名，
@@ -138,10 +137,15 @@ export function deriveLibraryParamCards(args: {
         /* 库内这层按**端口名**找卡片上的圆点锚点（`paramOutputPorts` 的
          *  `handleId` 就是端口名）；ioKey 是运行期/落库的键空间，两者不能混。
          *  同一口子摊成多条线时，每条必须对到自己那一颗圆点（都退到 ioKey 就会
-         *  让第二、三条线落回第一颗点上）。 */
-        handleId: wireHandleIdForIoKey(io, entry, wired.ioKey),
+         *  让第二、三条线落回第一颗点上）。
+         *
+         *  尺寸是例外：六张子卡合成一张（行 = 形态，见 `WorkflowParamCardColumn`），
+         *  所以它的圆点 handle 就是**子口 id** —— 六个子口摆的是同一份候选（按类型
+         *  收），按端口名对齐会让六行都指向第一颗点。 */
+        handleId: SIZE_SUB_IDS.includes(entry.cls)
+          ? entry.id
+          : wireHandleIdForIoKey(io, entry, wired.ioKey),
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
-        manual,
       });
       if (ownersByPin[wired.ioKey]) continue;
       ownersByPin[wired.ioKey] = entry.label;
@@ -177,10 +181,11 @@ export function deriveLibraryParamCards(args: {
  *  因此返回值比输入侧多两样：
  *    · `resolved`：输出口 → 取值那一行（作者连过的优先，否则它自己那一行）；
  *    · `wires`：宿主**取值行**的圆点 → 卡片自己的圆点（方向仍是从左往右画），
- *      断开的口不画线（悬空即「没接」）。
+ *      且**只有作者真改过取值行的口才画** —— 未连过的不画、作者断开的口也不画
+ *      （用户口径：这是**编辑对外参数**的界面，「未连过就不要连」）。
  *
- *  输出侧同样**只认作者画过的线**：没连过的回落读做「工作流自带的那一行」，
- *  但那条线不叫「猜出来的落点」，它是输出行自己的默认取值来源。 */
+ *  默认取值来源（`resolved` 里的那个回落值）仍然保留：卡片与运行期要读它；只是
+ *  画布上不再拿一条虚线表示「这是默认线」—— 未连过就是没有线。 */
 /** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
 export interface LibraryOutputCards {
   outputs: (WorkflowIOEntry & { ioKey: string })[];
@@ -215,6 +220,13 @@ export function deriveLibraryOutputCards(args: {
   for (const output of outputs) {
     const target = resolved[output.ioKey];
     if (!target) continue;
+    /* 未连过（作者没改过这个输出口的取值行）→ **不画线**。
+     *
+     * 用户口径：这是**编辑对外参数**的界面，未连过就不要连 —— 默认取值来源仍算在
+     * `resolved` 里（卡片与运行期读它），但画布上不再画一条虚线占位。库里因此
+     * 只剩作者真连过的实线（见 `LIBRARY_EDGE_STYLE`）。 */
+    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined)
+      continue;
     wires.push({
       entryId: output.ioKey,
       targetIoKey: target,
@@ -224,7 +236,6 @@ export function deriveLibraryOutputCards(args: {
        *  无法连线」（ISSUE #355）。 */
       handleId: outputWireDotId(output),
       grouped: false,
-      manual: manualOutputSource(paramMap, output.ioKey, mode) !== undefined,
       kind: "hostToParam",
     });
   }
