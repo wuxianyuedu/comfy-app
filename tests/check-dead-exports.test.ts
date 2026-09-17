@@ -1,6 +1,7 @@
 /**
  * 提交门槛自检：把 scripts/check-dead-exports.cjs 当成黑盒跑在临时工作区上，
- * 验证「src/lib 的零消费值导出」这条规范（§12.16）真的会阻断提交。
+ * 验证「地基层（src/lib + src/trpc）的零消费值导出」这条规范（§12.16）
+ * 真的会阻断提交。
  *
  * 规范：docs/standards/12-代码组织与文件结构.md §12.16（ISSUE #573 第 9 项）
  *
@@ -49,7 +50,7 @@ function write(rel: string, content: string): void {
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "dead-exports-gate-"));
   copyFileSync(SCRIPT, join(workdir, "check-dead-exports.cjs"));
-  for (const d of ["src/lib", "src/components", "scripts", "tests"]) {
+  for (const d of ["src/lib", "src/trpc", "src/components", "scripts", "tests"]) {
     mkdirSync(join(workdir, d), { recursive: true });
   }
 });
@@ -108,10 +109,34 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     expect(output).toContain("src/lib/alias.ts#renamed");
   });
 
-  it("扫描范围只到 src/lib：components 的零消费导出不报", () => {
+  it("扫描范围是地基层：components 的零消费导出不报", () => {
     write(
       "src/components/view.tsx",
       "export function Labelled(): null {\n  return null;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(0);
+    expect(output).toContain("无新增零消费导出");
+  });
+
+  it("src/trpc 也在扫描范围内：零消费的客户端入口导出被阻断", () => {
+    write(
+      "src/trpc/server.ts",
+      "export const orphanApi = { ping: () => 1 };\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("src/trpc/server.ts#orphanApi");
+  });
+
+  it("src/trpc 里被消费的导出放行（客户端入口层与 lib 同一口径）", () => {
+    write(
+      "src/trpc/react.tsx",
+      "export const api = { ping: () => 1 };\n",
+    );
+    write(
+      "src/components/consumer.ts",
+      'import { api } from "~/trpc/react";\nexport const x = api.ping();\n',
     );
     const { code, output } = run();
     expect(code).toBe(0);

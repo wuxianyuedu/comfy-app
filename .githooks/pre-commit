@@ -167,12 +167,14 @@ node scripts/check-format.cjs || exit 1
 echo "[pre-commit] 22/24 格式化提交与行为改动分离"
 node scripts/check-reformat-only.cjs || exit 1
 
-# 2026-09-16(ISSUE #573 第 9 项 / 规范 §12.16): src/lib 的零消费值导出。
+# 2026-09-16(ISSUE #573 第 9 项 / 规范 §12.16): 地基层(src/lib + src/trpc)的零消费值导出。
 # §12.15 给了「死代码该接线还是该删」的口径，但**没有判据** —— 那批 Result /
 # 零 new 调用点的错误类 / eventBus 全是人工读出来的，读完就又开始长。这条只认
 # **值导出**（type/interface 不算：566 个「零引用」里 90% 是同文件内使用的 props
 # 类型，纳入只是噪音），按符号记棘轮、只许降不许升，登记项反向核对。
-echo "[pre-commit] 23/24 src/lib 零消费导出棘轮"
+# ISSUE #565 把扫描范围从 src/lib 扩到 src/trpc:server.ts(RSC 的 api +
+# HydrateClient 整条链路)全库零引用却长期活着，正因为原判据只扫 lib。
+echo "[pre-commit] 23/24 地基层(src/lib + src/trpc)零消费导出棘轮"
 node scripts/check-dead-exports.cjs || exit 1
 
 # 2026-09-16(ISSUE #565): core 的「出口纪律」与基类纯度。

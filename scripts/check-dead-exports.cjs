@@ -11,7 +11,8 @@
  * 判据(实测「导出但零外部引用」566 个 —— 绝大多数是同文件内使用的 props 类型，
  * 因此**不是**「导出即死」)：
  *
- *   只扫 `src/lib/**`，且只认**值导出**（函数 / 常量 / 类 / 枚举）——
+ *   只扫「地基层」（`src/lib/**` + `src/trpc/**`，见下），且只认**值导出**
+ *   （函数 / 常量 / 类 / 枚举）——
  *   `type` / `interface` 一律不看：它们大多是「同文件内使用的 props 类型」，
  *   正是那份 566 个清单里 90% 的来源，纳入只会把判据变成噪音。
  *   值导出在 `src/**`、`scripts/**`、`e2e/**`、`tests/**` 里除了自己的声明处
@@ -21,10 +22,12 @@
  * 棘轮只许降不许升。登记项会**反向核对** —— 某个符号后来被接上线（或删掉），
  * 基线里那条必须跟着删，否则清单里会躺着一批已失效的条目（§18.4 的同款要求）。
  *
- * 为什么扫 `src/lib/**` 而不是全 `src/**`：`src/components/**` 的 `export` 大量
- * 供 shadcn 式「同域消费」与 barrel 转发，判据在那里必然误报；而 `src/lib` 是
- * 唯一被 `server` / `components` / `app` 共同依赖的地基，「零消费」在那里才是真
- * 问题（§18.2）。
+ * 为什么只扫「地基层」而不是全 `src/**`：`src/components/**` 的 `export` 大量
+ * 供 shadcn 式「同域消费」与 barrel 转发，判据在那里必然误报；`src/lib` 与
+ * `src/trpc` 才是被 `server` / `components` / `app` 共同依赖的地基，「零消费」
+ * 在那里才是真问题（§18.2）。`src/trpc` 是 ISSUE #565 补进来的：`server.ts`
+ * （RSC 的 api + HydrateClient 整条链路）全库零引用却长期活着，正因为原判据
+ * 只扫 `src/lib` —— 客户端入口那个目录里躺着一条死链路，没有任何机器判据管它。
  *
  * 用法:
  *   node scripts/check-dead-exports.cjs           # 检查(棘轮)
@@ -43,8 +46,8 @@ const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
 const REPORT_ONLY = ARGS.has("--report");
 
-/** 扫描范围:只看 lib 层(见头注)。 */
-const SCAN_ROOT = path.join(SRC, "lib");
+/** 扫描范围:地基层(见头注)——lib 纯工具层 + trpc 客户端入口层。 */
+const SCAN_ROOTS = [path.join(SRC, "lib"), path.join(SRC, "trpc")];
 /** 引用方范围:应用源码 + 门槛脚本 + e2e。 */
 const USAGE_ROOTS = ["src", "scripts", "e2e", "tests"];
 const SKIP_RE = /\.(test|spec)\.(ts|tsx)$|\.d\.ts$/;
@@ -114,7 +117,8 @@ function collect() {
   const corpus = usageCorpus();
   const dead = [];
   const checkedFiles = [];
-  for (const file of walk(SCAN_ROOT)) {
+  const files = SCAN_ROOTS.flatMap((root) => walk(root));
+  for (const file of files) {
     const rel = toPosix(path.relative(ROOT, file));
     if (SKIP_RE.test(rel)) continue;
     const src = stripComments(fs.readFileSync(file, "utf8"));
@@ -135,7 +139,7 @@ function main() {
 
   if (REPORT_ONLY) {
     console.log(
-      `扫描 ${checkedFiles} 个 src/lib 模块:零消费导出 ${dead.length} 个`,
+      `扫描 ${checkedFiles} 个地基模块(src/lib + src/trpc):零消费导出 ${dead.length} 个`,
     );
     for (const d of dead) console.log(`  · ${d}`);
     return;
@@ -154,7 +158,7 @@ function main() {
       BASELINE,
       `${JSON.stringify(
         {
-          note: "src/lib 零消费值导出棘轮(规范 12.16);只许降不许升。--update 收紧。",
+          note: "地基层(src/lib + src/trpc)零消费值导出棘轮(规范 12.16);只许降不许升。--update 收紧。",
           symbols: dead,
         },
         null,
@@ -169,7 +173,7 @@ function main() {
   let failed = false;
   if (added.length) {
     console.error(
-      `✗ 新增 ${added.length} 个零消费导出(src/lib 的值导出必须在生产路径被引用):`,
+      `✗ 新增 ${added.length} 个零消费导出(地基层 src/lib + src/trpc 的值导出必须在生产路径被引用):`,
     );
     for (const d of added) console.error(`    ${d}`);
     console.error(
