@@ -31,9 +31,9 @@ vi.mock("~/lib/log-paths", async () => {
 });
 
 /* 鉴权在单机模式下会回落演示用户（要读库），这里直接放行：本用例断言的是
- * 落盘契约，不是鉴权（鉴权由 requireServerUser 自身覆盖）。 */
-vi.mock("~/lib/auth-server", () => ({
-  requireServerUser: async () => ({
+ * 落盘契约，不是鉴权（鉴权由 requireRequestUser 自身覆盖）。 */
+vi.mock("~/server/auth/request-user", () => ({
+  requireRequestUser: async () => ({
     id: "u1",
     email: "t@example.com",
     name: null,

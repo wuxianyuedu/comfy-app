@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
-import { requireServerUser } from "~/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**
@@ -35,7 +35,7 @@ const ALLOWED_EXT = new Set([
 ]);
 
 export async function GET(request: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

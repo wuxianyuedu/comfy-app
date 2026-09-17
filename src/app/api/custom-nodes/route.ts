@@ -18,7 +18,7 @@ import {
   getSettingsSync,
 } from "~/lib/app-settings/app-settings.server";
 import { readEnvVar } from "~/lib/envfile";
-import { requireServerUser } from "~/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
 import { errorMessage } from "~/lib/error-message";
 import {
@@ -534,7 +534,7 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
 }
 
 export async function GET() {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }
@@ -643,7 +643,7 @@ async function buildGetResponse(): Promise<Response> {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }
