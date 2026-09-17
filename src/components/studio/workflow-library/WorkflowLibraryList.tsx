@@ -1,5 +1,6 @@
 "use client";
 
+import type { DragEventHandler } from "react";
 import { AlertTriangle, Loader2, Search, Download } from "lucide-react";
 import {
   deriveFormatFlags,
@@ -30,6 +31,18 @@ interface WorkflowLibraryListProps {
   /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
    *  非空时用它替换默认空态文案，说明「为什么是空」。 */
   localRootsHint?: string | null;
+  /** 拖入 JSON 导入：整片列表侧栏就是投放区，这里接管高亮与投放事件
+   *  （与导入面板共用同一个文件漏斗，见 useWorkflowImport）。 */
+  dragActive?: boolean;
+  onDragOver?: DragEventHandler<HTMLDivElement>;
+  onDragEnter?: DragEventHandler<HTMLDivElement>;
+  onDragLeave?: DragEventHandler<HTMLDivElement>;
+  onDrop?: DragEventHandler<HTMLDivElement>;
+  /** 文件入口（拖入）失败的可读原因。 */
+  fileErr?: string | null;
+  /** 单个待载入项的「载入中」标志（按 id 查表）：载入按钮据此禁用并改文案，
+   *  避免重复点击把同一份磁盘文件重复载入。 */
+  pendingLoading?: Record<string, boolean>;
 }
 
 /**
@@ -52,10 +65,27 @@ export function WorkflowLibraryList({
   stalled = false,
   onRefresh,
   localRootsHint = null,
+  dragActive = false,
+  onDragOver,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+  fileErr = null,
+  pendingLoading = {},
 }: WorkflowLibraryListProps) {
   const empty = workflows.length === 0 && pendingRows.length === 0;
   return (
-    <div className="border-border-subtle bg-panel-deep flex h-full w-80 shrink-0 flex-col border-r">
+    <div
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={[
+        "border-border-subtle bg-panel-deep flex h-full w-80 shrink-0 flex-col border-r",
+        /* 拖入高亮用 outline：不参与布局，不会让列表在拖拽时抖一下。 */
+        dragActive ? "outline-2 -outline-offset-2 outline-cyan-400/60" : "",
+      ].join(" ")}
+    >
       {/* 搜索栏 */}
       <div className="border-border-subtle border-b p-3">
         <div className="relative">
@@ -69,6 +99,17 @@ export function WorkflowLibraryList({
           />
         </div>
       </div>
+
+      {dragActive && (
+        <p className="border-b border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-center text-[11px] text-cyan-700 dark:text-cyan-300">
+          松开即可读取该工作流 JSON
+        </p>
+      )}
+      {fileErr && (
+        <p className="border-b border-red-500/25 bg-red-500/8 px-3 py-1.5 text-[11px] text-red-700 dark:text-red-300">
+          ⚠ {fileErr}
+        </p>
+      )}
 
       {/* 列表：已载入工作流排在前 */}
       <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
@@ -137,26 +178,33 @@ export function WorkflowLibraryList({
               未载入的本地工作流
             </p>
             <ul className="space-y-1">
-              {pendingRows.map((pending) => (
-                <li key={pending.id}>
-                  <button
-                    type="button"
-                    onClick={() => onLoadPending?.(pending)}
-                    className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10"
-                  >
-                    <span
-                      className="text-ink-strong truncate text-[11px]"
-                      title={pending.name}
-                    >
-                      {pending.name}
-                    </span>
-                    <span className="inline-flex shrink-0 items-center gap-1 text-[10px] whitespace-nowrap text-cyan-700 dark:text-cyan-300">
-                      <Download className="h-3 w-3" />
-                      载入
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {pendingRows.map((pending) => {
+                const loadingPending = !!pendingLoading[pending.id];
+                /* 整行不可点：点击即载入会被误触（只想看看名字 / 选中某一行的
+                 * 用户会顺手点上去），因此载入动作只挂在右侧按钮上。 */
+                return (
+                  <li key={pending.id}>
+                    <div className="border-border-subtle bg-subtle flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2">
+                      <span
+                        className="text-ink-strong truncate text-[11px]"
+                        title={pending.name}
+                      >
+                        {pending.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onLoadPending?.(pending)}
+                        disabled={loadingPending}
+                        title={`载入「${pending.name}」`}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap text-cyan-700 transition-colors hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-cyan-300"
+                      >
+                        <Download className="h-3 w-3" />
+                        {loadingPending ? "载入中…" : "载入"}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
