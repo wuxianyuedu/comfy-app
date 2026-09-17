@@ -10,6 +10,8 @@
 import {
   asRecord,
   pairWidgetValues,
+  SubgraphLinkSchema,
+  SubgraphPinSchema,
   toStringValue,
   type ApiWorkflowNode,
   type RawNodeInput,
@@ -118,8 +120,9 @@ export function parseSubgraphLinks(sub: RawSubgraphDef): {
   const boundaryLinkInfoById: Record<number, BoundaryLinkInfo> = {};
 
   for (const lk of Array.isArray(sub.links) ? sub.links : []) {
-    const rec = asRecord(lk);
-    if (!rec) continue;
+    const parsed = SubgraphLinkSchema.safeParse(lk);
+    if (!parsed.success) continue;
+    const rec = parsed.data;
     const id = Number(rec.id);
     if (!Number.isFinite(id)) continue;
     const originId = Number(rec.origin_id);
@@ -740,10 +743,10 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
     : [];
 
   const normalizePin = (p: unknown): BoundaryPin | null => {
-    const rec = asRecord(p);
-    if (!rec) return null;
-    const id = typeof rec.id === "string" ? rec.id : "";
-    if (!id) return null;
+    const parsed = SubgraphPinSchema.safeParse(p);
+    if (!parsed.success) return null;
+    const rec = parsed.data;
+    const id = rec.id;
     const posRaw: unknown[] = Array.isArray(rec.pos) ? rec.pos : [0, 0];
     const pos: [number, number] = [
       Number(posRaw[0]) || 0,

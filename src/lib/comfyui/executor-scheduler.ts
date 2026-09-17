@@ -3,27 +3,23 @@
  * ===========================================================================
  *
  * 从 executor.ts 拆出的「调度器」模块（batch 4）：
- *   - {@link processQueue}      出队 + 提交 ComfyUI /prompt（含 raw 路径分流）
+ *   - {@link processQueue}      出队 + 提交（两种格式统一交 comfy-cli）
  *   - startHeartbeat            3s 安全网心跳，防止边缘场景队列卡死
  *
- * 提交的两种路径：
- *   - API 格式 graph（常规）：prepareGraphForExecution → postPrompt
- *   - raw UI-format（liblib 子图）：交给 executor-cli 的 executeViaComfyCli
+ * 提交**只有一条路径**：{@link executeViaComfyCli}。RAW 原件由 cli 做权威的
+ * UI→API 转换与子图展开，API 图由 cli 直接提交（提交前的旁路/静音收拾在
+ * executor-cli 里完成）。此前 API 走 postPrompt、RAW 走 cli，两条路径各自
+ * 维护一套提交与报错口径，同一份工作流换个格式就有不同的文案。
  *
  * @module comfyui/executor-scheduler
  */
 import WebSocket from "ws";
-import { taskRepository } from "../core/repository";
 import { logger } from "~/lib/core/logger";
-import { postPrompt } from "./client";
-import { prepareGraphForExecution } from "./raw";
-import { extractValidationErrors } from "./validation";
-import { state, log, CLIENT_ID, MAX_CONCURRENCY } from "./runner-state";
+import { state, log, MAX_CONCURRENCY } from "./runner-state";
 import { registerQueueKick } from "./executor-continuation";
 import { executeViaComfyCli } from "./executor-cli";
-import { fail, finalizeFailure } from "./executor-finalize";
-import { connect, armWatchdog } from "./executor-ws";
-import { buildPromptError } from "./executor-errors";
+import { finalizeFailure } from "./executor-finalize";
+import { connect } from "./executor-ws";
 
 /* 把「续跑出队」注册进叶子总线（唯一注册点，规范 12.7 断环）：
  * 收口侧（finalize / ws）此前直接 import 本模块的 processQueue，形成
@@ -71,141 +67,33 @@ export async function processQueue() {
     );
   }
 
-  try {
-    // raw UI-format 工作流（含 liblib 子图 wrapper）：交给 comfy-cli 做
-    // UI→API 转换 + 子图展开，原生客户端 graphToPrompt，绕开 UUID class_type。
-    // the previous `void executeViaComfyCli(job)`
-    // (no .catch) was a *latent* active-slot deadlock.  If
-    // `executeViaComfyCli` rejected synchronously (resolveComfyBase
-    // throw, writeFile EACCES, spawn ENOENT on a missing Python
-    // binary…), the rejection became an unhandled promise, no
-    // fail()/finalizeFailure() ever ran, and `s.active` stayed
-    // pegged at 1 forever.  That pegged slot then blocked every
-    // later enqueue — task visible in the UI as "QUEUED 0%",
-    // stuck indefinitely.  We now `.catch` the rejection and
-    // funnel it through the same `finalizeFailure` path that
-    // every other failure mode uses, so `s.active--` always fires
-    // and the next queued job gets a chance.
-    if (job.rawJson) {
-      void executeViaComfyCli(job).catch(async (err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log(job.taskId, "error", `raw 工作流启动异常：${msg}`);
-        try {
-          await finalizeFailure(job.taskId, "", msg);
-        } catch (inner) {
-          /* finalizeFailure may itself throw (DB down) — don't
-           *  recurse into another catch, just log and release
-           *  the slot manually so the queue keeps moving. */
-          log(
-            job.taskId,
-            "error",
-            `finalizeFailure 二次失败：${inner instanceof Error ? inner.message : String(inner)}`,
-          );
-          if (s.startedAt.has(job.taskId)) s.startedAt.delete(job.taskId);
-          s.lastNodeByTask.delete(job.taskId);
-          s.active = Math.max(0, s.active - 1);
-          void processQueue();
-        }
-      });
-      return;
-    }
-    // 提交前剔除 bypass / mute / 纯前端节点(Reroute/Primitive/Note)，
-    // 并对连线做穿透，严格对齐 ComfyUI 真实执行语义（P1：mode/Reroute）。
-    const prep = prepareGraphForExecution(job.prompt!);
-    // 记下本次实际提交给 ComfyUI 的 graph（已展开、已穿透），
-    // 任务完成落盘为 workflow.json 供完整复现。
-    s.executedWorkflow.set(job.taskId, prep.graph);
-    if (!Object.keys(prep.graph).length) {
-      await fail(job.taskId, "", "工作流没有可执行的节点（可能全部被禁用）");
-      return;
-    }
-    if (prep.removed.length) {
+  /* 两种格式统一交给 comfy-cli（见模块头注释）。
+   *
+   * fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
+   * throw、writeFile EACCES、spawn ENOENT on a missing Python binary…），不加
+   * `.catch` 会变成 unhandled rejection —— 没有任何 fail()/finalizeFailure()
+   * 跑过，`s.active` 永远停在 1，此后所有 enqueue 都被这个假占用的槽位堵死
+   * （界面表现：任务永远 QUEUED 0%）。所以必须把 rejection 兜进统一收口路径。 */
+  void executeViaComfyCli(job).catch(async (err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    log(job.taskId, "error", `工作流启动异常：${msg}`);
+    try {
+      await finalizeFailure(job.taskId, "", msg);
+    } catch (inner) {
+      /* finalizeFailure may itself throw (DB down) — don't recurse into
+       * another catch, just log and release the slot manually so the
+       * queue keeps moving. */
       log(
         job.taskId,
-        "info",
-        `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点` +
-          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""),
+        "error",
+        `finalizeFailure 二次失败：${inner instanceof Error ? inner.message : String(inner)}`,
       );
+      if (s.startedAt.has(job.taskId)) s.startedAt.delete(job.taskId);
+      s.lastNodeByTask.delete(job.taskId);
+      s.active = Math.max(0, s.active - 1);
+      void processQueue();
     }
-    // explicit pre-submit log so the user
-    // sees a clear "→ 提交" line right before the HTTP POST to
-    // ComfyUI.  Useful when /prompt hangs or rejects — without this
-    // the user only ever sees the post-submit "✓ 已接收" line, which
-    // makes it impossible to tell whether the request was ever sent.
-    const nodeCount = Object.keys(prep.graph).length;
-    log(
-      job.taskId,
-      "info",
-      `→ 准备提交到 ComfyUI /prompt（${nodeCount} 节点）`,
-    );
-    const res = await postPrompt(prep.graph, CLIENT_ID);
-    if (res.error || (res.node_errors && Object.keys(res.node_errors).length)) {
-      // carry the flattened `node_errors` into the task
-      // so the UI can show "节点 X · 字段 Y：消息" instead of just the
-      // "Workflow has N validation error(s)" summary.
-      const validationErrors = extractValidationErrors(res, prep.graph);
-      // mirror the raw-path branch's behaviour
-      // (lines 1199-1224) — surface the structured list as per-line
-      // log entries so the user sees "节点 X (KSampler) · 字段 cfg：…"
-      // in the log panel *before* the closing "✗ 生成失败" line, and
-      // not just the English summary from `buildPromptError`.  Without
-      // this, a user staring at the panel saw one line ("✗ 生成失败:
-      // Workflow has 6 validation error(s) against server") and no
-      // way to identify which of the 6 fields to fix.  Capped at 12 to
-      // match the raw branch and avoid blowing up the DB row when a
-      // workflow drifts badly.
-      if (validationErrors.length) {
-        log(
-          job.taskId,
-          "error",
-          `✗ ComfyUI 报 ${validationErrors.length} 条校验错误（见下方逐条 + 红框清单）`,
-        );
-        validationErrors.slice(0, 12).forEach((ve) => {
-          log(
-            job.taskId,
-            "error",
-            `  · 节点 ${ve.nodeId}${ve.classType ? ` (${ve.classType})` : ""}` +
-              (ve.field ? ` · 字段 ${ve.field}` : "") +
-              `：${ve.message}`,
-          );
-        });
-        if (validationErrors.length > 12) {
-          log(
-            job.taskId,
-            "error",
-            `  …还有 ${validationErrors.length - 12} 条（请查看红框 / 重新执行工作流查看完整清单）`,
-          );
-        }
-      }
-      await fail(
-        job.taskId,
-        "",
-        buildPromptError(res, prep.graph),
-        validationErrors,
-      );
-      return;
-    }
-    // prompt_id 缺失时保持原行为（undefined 透传给 markRunning / watchdog），
-    // 这里仅做类型收口，不改变运行时取值。
-    const promptId = res.prompt_id!;
-    s.promptToTask.set(promptId, job.taskId);
-    await taskRepository.markRunning(job.taskId, promptId);
-    // richer post-submit log so the user
-    // can correlate the prompt_id they see in the panel with the
-    // /history/{prompt_id} ComfyUI URL when investigating hangs.
-    log(
-      job.taskId,
-      "info",
-      `✓ ComfyUI 已接收（prompt_id: ${promptId}），等待首个 executing 事件…`,
-    );
-    armWatchdog(job.taskId, promptId);
-  } catch (e) {
-    await fail(
-      job.taskId,
-      "",
-      (e as { message?: unknown } | null | undefined)?.message ?? "提交失败",
-    );
-  }
+  });
 }
 
 /* safety-net heartbeat. `processQueue()`

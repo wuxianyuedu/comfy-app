@@ -16,6 +16,7 @@ import {
 } from "~/lib/core/repository";
 import { enqueue } from "~/lib/comfyui/enqueue";
 import { resolveExecutionPayload } from "~/lib/comfyui/execution-shape";
+import { coerceApiInputValue } from "~/lib/comfyui/raw-overrides";
 import { parseModesJson } from "~/lib/workflow-types";
 import type { WorkflowIOMap } from "~/lib/workflow-io-types";
 import {
@@ -80,7 +81,7 @@ export async function createWorkflowRunTask(
   /* raw / api 两条路径地位同等，送哪一份由**这条工作流自己是什么格式**决定
    * （判据收在 `resolveExecutionPayload`，与 generate 路由同一份）：
    *   · RAW 原件 → comfy-cli 做 UI→API 转换 + 子图展开；
-   *   · API 图   → 直接 POST /prompt。
+   *   · API 图   → 同样交 comfy-cli 提交（它对 API 格式直接提交）。
    * 两列都没有时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
    * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。 */
   const payload = resolveExecutionPayload(tpl);
@@ -99,6 +100,9 @@ export async function createWorkflowRunTask(
     enqueue({
       taskId: task.id,
       prompt: buildPromptFromGraph(payload.graph, workflowInputs),
+      /* 与 RAW 路径同一份覆盖数组、同一套语义：执行点还会再兜一遍
+       * （`applyApiOverrides`，处理 control_after_generate 这类前端专有控件）。 */
+      overrides: workflowInputs,
     });
   }
   return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
@@ -121,14 +125,9 @@ function buildPromptFromGraph(
   for (const it of overrides) {
     const node = out[it.nodeId];
     if (!node?.inputs || it.value === undefined) continue;
-    const current = node.inputs[it.name];
-    node.inputs[it.name] =
-      typeof current === "number" &&
-      typeof it.value === "string" &&
-      it.value.trim() !== "" &&
-      !Number.isNaN(Number(it.value))
-        ? Number(it.value)
-        : it.value;
+    /* 数值收窄与另外两处（buildCustomWorkflow / applyApiOverrides）同口径，
+     * 实现只定义一次（`coerceApiInputValue`）。 */
+    node.inputs[it.name] = coerceApiInputValue(node.inputs[it.name], it.value);
   }
   return out;
 }

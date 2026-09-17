@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from "vitest";
 
-import { applyRawOverrides } from "./raw-overrides";
+import { applyApiOverrides, applyRawOverrides } from "./raw-overrides";
 
 const INNER_UUID = "9b9009e4-2d3d-445f-9be5-6063f465757e";
 const NESTED_UUID = "11112222-2d3d-445f-9be5-6063f465757e";
@@ -135,5 +135,93 @@ describe("resolveRawNode — 拼接 id 逐层下钻", () => {
 
     /* 旧数据只存内部 id：为已在库的行保留兜底，找得到就落值。 */
     expect(widgetsOf(result, INNER_UUID, "1670")).toEqual([3]);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * API 格式载荷的画布覆盖注入。
+ *
+ * API 图的 `inputs` 是命名 map（不是 widgets_values 下标），所以「按名字写」
+ * 本身不会错位；需要验证的是两条与 raw 侧对齐的语义：
+ *   ① 数值入参不能被字符串覆盖（ComfyUI 对数值输入收到字符串会拒单）；
+ *   ② `control_after_generate` 是前端概念、不入载荷 —— randomize 兜底铸新 seed，
+ *      其余模式只把它摘掉。
+ * ───────────────────────────────────────────────────────────────────────── */
+
+type ApiGraph = Record<
+  string,
+  { class_type: string; inputs: Record<string, unknown> }
+>;
+
+function apiGraphWithSampler(): ApiGraph {
+  return {
+    "3": {
+      class_type: "KSampler",
+      inputs: { seed: 111, steps: 20, cfg: 4, positive: ["6", 0] },
+    },
+  };
+}
+
+describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
+  it("值写进命名入参；数值入参的字符串值被收窄成数字", () => {
+    const out = applyApiOverrides(apiGraphWithSampler(), [
+      { nodeId: "3", name: "steps", value: "30" },
+    ]) as ApiGraph;
+
+    expect(out["3"]!.inputs.steps).toBe(30);
+    /* 其余入参（含连线元组）原样保留。 */
+    expect(out["3"]!.inputs.cfg).toBe(4);
+    expect(out["3"]!.inputs.positive).toEqual(["6", 0]);
+  });
+
+  it("空串不参与数值收窄（清空输入框 = 没有值，不能把 steps 写成 0）", () => {
+    const out = applyApiOverrides(apiGraphWithSampler(), [
+      { nodeId: "3", name: "steps", value: "" },
+    ]) as ApiGraph;
+
+    expect(out["3"]!.inputs.steps).toBe("");
+  });
+
+  it("control_after_generate=randomize：铸新 seed 且该键不入载荷", () => {
+    const out = applyApiOverrides(apiGraphWithSampler(), [
+      { nodeId: "3", name: "control_after_generate", value: "randomize" },
+    ]) as ApiGraph;
+
+    expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
+    const seed = out["3"]!.inputs.seed;
+    expect(typeof seed).toBe("number");
+    expect(seed).not.toBe(111);
+  });
+
+  it("control_after_generate=fixed：只摘键，seed 保持原值", () => {
+    const out = applyApiOverrides(apiGraphWithSampler(), [
+      { nodeId: "3", name: "control_after_generate", value: "fixed" },
+    ]) as ApiGraph;
+
+    expect(out["3"]!.inputs.control_after_generate).toBeUndefined();
+    expect(out["3"]!.inputs.seed).toBe(111);
+  });
+
+  it("节点不存在 / 无 inputs 时原样返回，不抛错", () => {
+    const graph: Record<string, unknown> = {
+      "3": { class_type: "KSampler", inputs: { seed: 1 } },
+      "4": { class_type: "Note" },
+    };
+    const out = applyApiOverrides(graph, [
+      { nodeId: "999", name: "seed", value: 7 },
+      { nodeId: "4", name: "seed", value: 7 },
+    ]) as Record<string, { inputs?: Record<string, unknown> }>;
+
+    expect(out["3"]!.inputs!.seed).toBe(1);
+    expect(out["4"]!.inputs).toBeUndefined();
+  });
+
+  it("非对象输入（null / 数组）返回空对象而不是抛错", () => {
+    expect(
+      applyApiOverrides(null, [{ nodeId: "3", name: "seed", value: 1 }]),
+    ).toEqual({});
+    expect(
+      applyApiOverrides([], [{ nodeId: "3", name: "seed", value: 1 }]),
+    ).toEqual({});
   });
 });

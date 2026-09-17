@@ -1,15 +1,21 @@
 /**
- * `executor-cli.ts` — comfy-cli 执行路径（raw UI-format 工作流）
+ * `executor-cli.ts` — comfy-cli 执行路径（**两种格式统一**）
  * ===========================================================================
  *
  * 从 executor.ts 拆出的「comfy-cli 提交路径」模块（batch 4）：
  *   - {@link cliProcs}          正在运行的 comfy-cli 子进程表（供取消）
- *   - {@link executeViaComfyCli} raw UI-format 工作流提交 + stdout 事件收割
+ *   - {@link executeViaComfyCli} 工作流提交 + stdout 事件收割
  *   - {@link applyRawOverrides}  把 canvas 的 workflowInputs 注入 raw json
  *
- * Raw UI-format workflows（liblib subgraph wrapper 的 `rawJson` 带 UUID
- * `class_type`）无法直接 POST 给 ComfyUI，交给 comfy-cli 做客户端侧
- * UI→API 转换 + 子图展开；成功/失败统一走 executor-finalize 的收口。
+ * **两种格式都经 comfy-cli**（`comfy run --workflow` 两种都吃：API 格式是它的
+ * 默认输入，UI-format 由它自动做权威的 UI→API 转换并展开子图）：
+ *   - RAW 原件：注入画布覆盖 → 剔除无后端实现的纯 UI 控制节点 → 交 cli；
+ *   - API 图  ：剔除 bypass / 静音 / 纯前端节点并穿透连线（见 execution-graph）
+ *               → 交 cli **直接提交**。
+ * 统一的好处是提交、校验错误、日志口径只有一套（此前 API 走 postPrompt，
+ * 同一份工作流换个格式就有不同的报错文案）。
+ *
+ * 成功/失败统一走 executor-finalize 的收口。
  *
  * @module comfyui/executor-cli
  */
@@ -28,7 +34,12 @@ import {
   createCliFinisher,
   createCliStderrSink,
 } from "./executor-cli-stream";
-import { applyRawOverrides, type JsonRecord } from "./raw-overrides";
+import { prepareGraphForExecution } from "./execution-graph";
+import {
+  applyApiOverrides,
+  applyRawOverrides,
+  type JsonRecord,
+} from "./raw-overrides";
 import { trace } from "./trace";
 import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 
@@ -115,12 +126,20 @@ function stripUiOnlyNodes(raw: JsonRecord): JsonRecord {
 
 export async function executeViaComfyCli(job: Job) {
   const s = state();
-  const { taskId, rawJson, overrides } = job;
+  const { taskId, rawJson, prompt, overrides } = job;
+  /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
+  const isRaw = rawJson != null;
   // the entry line of the raw path so the
   // user can see in the log panel exactly which method is handling
   // their task.  Before this it was silent until the first stdout
   // JSON event arrived (often 5-30s in, the Python venv boot).
-  log(taskId, "info", `→ executeViaComfyCli 入口（raw UI-format）`);
+  log(
+    taskId,
+    "info",
+    isRaw
+      ? `→ executeViaComfyCli 入口（RAW UI-format，由 comfy-cli 做 UI→API 转换）`
+      : `→ executeViaComfyCli 入口（API 图，由 comfy-cli 直接提交）`,
+  );
   const base = await resolveComfyBase();
   let host = "127.0.0.1";
   let port = COMFYUI_DEFAULT_PORT;
@@ -133,20 +152,45 @@ export async function executeViaComfyCli(job: Job) {
   }
   log(taskId, "info", `ComfyUI 目标：${host}:${port}（${base}）`);
 
-  let patched = applyRawOverrides(rawJson, overrides);
-  const nodeCountBefore = Array.isArray(patched.nodes)
-    ? patched.nodes.length
-    : 0;
-  patched = stripUiOnlyNodes(patched);
-  const nodeCountAfter = Array.isArray(patched.nodes)
-    ? patched.nodes.length
-    : 0;
-  if (nodeCountAfter !== nodeCountBefore) {
-    log(
-      taskId,
-      "info",
-      `已剔除 ${nodeCountBefore - nodeCountAfter} 个纯 UI 控制节点（无后端实现），避免 comfy-cli 校验失败`,
-    );
+  let patched: JsonRecord;
+  if (isRaw) {
+    patched = applyRawOverrides(rawJson, overrides);
+    const nodeCountBefore = Array.isArray(patched.nodes)
+      ? patched.nodes.length
+      : 0;
+    patched = stripUiOnlyNodes(patched);
+    const nodeCountAfter = Array.isArray(patched.nodes)
+      ? patched.nodes.length
+      : 0;
+    if (nodeCountAfter !== nodeCountBefore) {
+      log(
+        taskId,
+        "info",
+        `已剔除 ${nodeCountBefore - nodeCountAfter} 个纯 UI 控制节点（无后端实现），避免 comfy-cli 校验失败`,
+      );
+    }
+  } else {
+    /* API 图：comfy-cli 对 API 格式是原样提交，**既不会应用画布覆盖，也不会做
+     * 前端语义**（剔除 bypass / 静音节点、穿透断掉的连线）——两者都在这里做。
+     *
+     * 顺序不能反：先注入覆盖、再收拾图。被旁路/静音的节点会被收拾掉，写给它们的
+     * 覆盖项本就该随之丢弃（它们不会执行）。 */
+    const withOverrides = applyApiOverrides(prompt, overrides);
+    const prep = prepareGraphForExecution(withOverrides);
+    if (!Object.keys(prep.graph).length) {
+      log(taskId, "error", "工作流没有可执行的节点（可能全部被禁用）");
+      void fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）");
+      return;
+    }
+    if (prep.removed.length) {
+      log(
+        taskId,
+        "info",
+        `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点` +
+          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""),
+      );
+    }
+    patched = prep.graph;
   }
   /* 临时工作流文件统一放到项目根目录 temp/comfy-cli/，便于清理和跨平台管理。 */
   const tmpDir = path.join(process.cwd(), "temp", "comfy-cli");
@@ -154,8 +198,8 @@ export async function executeViaComfyCli(job: Job) {
   const tmpFile = path.join(tmpDir, `wf-${taskId}.json`);
   log(taskId, "info", `写入临时工作流文件：${tmpFile}`);
   await fs.writeFile(tmpFile, JSON.stringify(patched), "utf-8");
-  // 记下本次实际提交给 ComfyUI 的 workflow（liblib
-  // subgraph 未展开格式），任务完成落盘为 workflow.json 供完整复现。
+  // 记下本次实际提交出去的工作流：RAW 是（覆盖 + 剔除后的）未展开原件，
+  // API 是（剔除/穿透后的）图。任务完成落盘为 workflow.json 供完整复现。
   s.executedWorkflow.set(taskId, patched);
   log(
     taskId,
@@ -219,7 +263,11 @@ export async function executeViaComfyCli(job: Job) {
   // surface the literal comfy-cli command so
   // the user (and we, on support) can reproduce the exact invocation
   // from the log panel without digging through devtools.
-  log(taskId, "info", `comfy-cli 执行 raw 工作流（${host}:${port}）`);
+  log(
+    taskId,
+    "info",
+    `comfy-cli 执行${isRaw ? " raw 工作流（UI→API 转换）" : " API 工作流"}（${host}:${port}）`,
+  );
   log(taskId, "info", `  ${pyName} ${args.join(" ")}`);
   /* ISSUE #216：把完整命令行写进 trace，便于在支持现场原样复现。 */
   trace("cli", taskId, "启动 comfy-cli", {
@@ -234,13 +282,21 @@ export async function executeViaComfyCli(job: Job) {
   // boot.  Without this, the first log on a raw submission was
   // "comfy-cli 执行 raw 工作流" + a long silence, which looks
   // indistinguishable from a hang.
-  log(taskId, "info", `→ 启动 comfy-cli 进程（raw UI-format → API 转换）`);
+  log(
+    taskId,
+    "info",
+    isRaw
+      ? `→ 启动 comfy-cli 进程（raw UI-format → API 转换）`
+      : `→ 启动 comfy-cli 进程（API 图直接提交）`,
+  );
   s.emitter.emit(taskId, {
     type: "log",
     entry: {
       t: Date.now(),
       level: "info",
-      msg: "已使用 comfy-cli 提交 raw 工作流",
+      msg: isRaw
+        ? "已使用 comfy-cli 提交 raw 工作流"
+        : "已使用 comfy-cli 提交 API 工作流",
     },
   });
 

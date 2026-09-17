@@ -65,7 +65,10 @@ function executionShapeOf(row: {
     format: hasRaw ? "raw" : "api",
   };
 }
-import type { WorkflowIOMap } from "~/lib/workflow-io-types";
+import {
+  type WorkflowIOMap,
+  parseWorkflowIOMap,
+} from "~/lib/workflow-io-types";
 import {
   normalizeTaskType,
   VALID_TASK_TYPE_CODES,
@@ -373,12 +376,7 @@ export const workflowRouter = createTRPCRouter({
           isGenerative: def?.isGenerative ?? true,
           ...exec,
           preview: buildWorkflowPreview(graphObj ?? {}),
-          workflowIO:
-            list.workflowIO &&
-            typeof list.workflowIO === "object" &&
-            !Array.isArray(list.workflowIO)
-              ? (list.workflowIO as unknown as WorkflowIOMap)
-              : {},
+          workflowIO: parseWorkflowIOMap(list.workflowIO),
           modelTags: tagsByName.get(list.id) ?? [],
           sourceMtimeSec:
             typeof list.sourceMtime === "number" ? list.sourceMtime : null,
