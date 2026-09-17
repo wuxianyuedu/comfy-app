@@ -1,5 +1,5 @@
 {
-  "note": "src/lib 零消费值导出棘轮(规范 12.16);只许降不许升。--update 收紧。",
+  "note": "地基层(src/lib + src/trpc)零消费值导出棘轮(规范 12.16);只许降不许升。--update 收紧。",
   "symbols": [
     "src/lib/agent/types.ts#normalizeAgentMessages",
     "src/lib/comfyui/instance-kind.ts#hasDesktopMarker",
@@ -29,7 +29,6 @@
     "src/lib/size-presets.ts#resolutionRow",
     "src/lib/size-presets.ts#sceneFromText",
     "src/lib/workflow-param-mapping.ts#PARAM_NODE_DOT_OFFSET",
-    "src/lib/workflow-param-mapping.ts#entryIdForPin",
     "src/lib/workflow-types.ts#inferWorkflowTypeFromGraph",
     "src/lib/workshop/character-options.ts#flattenOptions",
     "src/lib/workshop/model-mode-contract.ts#modeUsesControlImage",
