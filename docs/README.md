@@ -115,7 +115,7 @@ AIGC:
 | 15 | [附录](standards/15-附录.md) | 技术栈速查、组件评分、ADR、命令速查、新成员路径、疑难索引 |
 | 16 | [shadcn/ui 与表单校验](standards/16-shadcn-ui与表单校验.md) | ui/ 定位、四层范式（controller hook + 纯展示）、表单方案 |
 | 17 | [UI 与逻辑分离](standards/17-UI与逻辑分离.md) | 分离判定、棘轮护栏脚本、全库分批推进计划与落地记录 |
-| 18 | [lib 层规范](standards/18-lib层规范.md) | `src/lib` 的边界与门禁：分层 element、Node-only 声明规则、文件/函数长度棘轮、覆盖率里程碑 |
+| 18 | [lib 层规范](standards/18-lib层规范.md) | `src/lib` 的边界与门禁：分层 element、Node-only 声明规则、文件/函数长度棘轮、覆盖率里程碑、`lib → server` 登记清单（**已归零**） |
 
 ---
 

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireServerUser } from "~/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import { uploadImage, comfyBase } from "~/lib/comfyui/client";
 import { ensureComfyUiReady } from "~/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
@@ -27,7 +27,7 @@ const ALLOWED_MIME = new Set([
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getServerUser } from "~/lib/auth-server";
+import { currentServerUser } from "~/server/auth/request-user";
 import { getExitPolicy } from "~/lib/app-settings/app-settings.server";
 import { spawnManaged, waitForDetachMediator } from "~/lib/process-launch";
 import { OLLAMA_RUNTIME_LOG } from "~/lib/log-paths";
@@ -247,7 +247,7 @@ async function spawnOllamaServe(
  * 就绪探测：检查 11434 端口是否开始接受连接。
  */
 export async function GET(_req: NextRequest) {
-  await getServerUser();
+  await currentServerUser();
   const ready = await probeOllamaPort();
   return NextResponse.json({ ready });
 }
@@ -266,7 +266,7 @@ export async function GET(_req: NextRequest) {
  * 6. 启动过程与 stdout/stderr 写入 log/services/ollama-runtime.log（设置页可查看）
  */
 export async function POST(_req: NextRequest) {
-  await getServerUser();
+  await currentServerUser();
 
   // ── 已在运行就直接返回 ──
   if (await probeOllamaPort()) {
