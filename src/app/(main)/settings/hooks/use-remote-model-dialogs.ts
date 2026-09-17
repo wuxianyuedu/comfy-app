@@ -18,6 +18,7 @@ import {
   defaultVideoFields,
   hasUsageFieldKey,
   isMediaField,
+  sanitizeModeValue,
   usageFieldsToJson,
   usageTestDraftKey,
   videoModeHidesMedia,
@@ -464,12 +465,16 @@ export function useRemoteModelDialogs(
   }
 
   /** mode 行被图片覆盖时的自愈：把图片搬到 images 行（没有则新建），
-   *  mode 值复位为 text——图片不丢、mode 可见可改。 */
+   *  mode 值复位为 text——图片不丢、mode 可见可改。
+   *
+   *  「复位成什么」不在视图层写死：`sanitizeModeValue` 是「坏值 → 可再改的
+   *  值」的唯一出口（同名卡片在 `UsageTestDialog` 里按同一个函数判「已损坏」），
+   *  这里手抄一份 `"text"` 就是同一件事的两个名字（§12.14）。 */
   function rescueMediaFromMode(index: number, url: string) {
     setUsageTest((prev) => {
       if (!prev) return prev;
       const fields = prev.fields.map((f, i) =>
-        i === index ? { ...f, value: "text" } : f,
+        i === index ? { ...f, value: sanitizeModeValue(f.value) } : f,
       );
       const emptyImgRow = fields.findIndex(
         (f) => f.key.trim() === "images" && f.value.trim() === "",

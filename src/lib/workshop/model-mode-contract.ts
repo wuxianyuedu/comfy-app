@@ -151,21 +151,6 @@ export function outputKindForMode(mode: string): "image" | "video" | "audio" {
   return "image";
 }
 
-/** 该模式是否为「图生」类（输入里带控制图 / 参考图）。 */
-export function modeUsesControlImage(mode: string): boolean {
-  return defaultInputsForMode(mode).some((i) =>
-    [
-      "image",
-      "first-frame",
-      "mask",
-      "depth",
-      "pose",
-      "lineart",
-      "edge",
-    ].includes(i.type),
-  );
-}
-
 /** 归一化适配器数组（丢弃非法项：无模式 / 无字段映射）。 */
 export function parseRemoteModeAdapters(raw: unknown): RemoteModeAdapter[] {
   if (!Array.isArray(raw)) return [];

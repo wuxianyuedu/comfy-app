@@ -160,8 +160,3 @@ export function resetSizePresetScene(scene: SizeScene): void {
       : { ...snapshot, video: fresh.video },
   );
 }
-
-/** 两个场景的整表恢复默认。 */
-export function resetSizePresetTable(): void {
-  commit(mergeTable(null));
-}

@@ -34,14 +34,6 @@ export type ComfyInstallClassify = {
   instanceIdFile: string | null;
 };
 
-/** 目录是否带桌面版标记文件（`.comfyui-desktop-*` / `manifest.json`）。 */
-export function hasDesktopMarker(
-  dir: string,
-  exists: (p: string) => boolean = fs.existsSync,
-): boolean {
-  return !!pickDesktopFile(dir, exists);
-}
-
 /** 从目录里找出桌面标记文件路径（优先 .comfyui-desktop-*，作为实例 ID 源）。 */
 function pickDesktopFile(
   dir: string,
@@ -169,12 +161,4 @@ export function classifyComfyInstall(
 /** 标记文件是否可作为实例 ID 的读取源（只有 .comfyui-desktop-* 是 ID 文件）。 */
 function isInstanceIdSource(file: string): boolean {
   return /\.comfyui-desktop-\d+$/.test(path.basename(file));
-}
-
-/** 仅当目录确实判定为桌面实例时为 true（供设置页形态徽标）。 */
-export function isDesktopInstall(
-  installDir: string,
-  exists: (p: string) => boolean = fs.existsSync,
-): boolean {
-  return classifyComfyInstall(installDir, exists).kind === "desktop";
 }
