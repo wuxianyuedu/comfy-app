@@ -30,13 +30,13 @@ import {
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { pinAcceptsEntry, type ParamEntry } from "~/lib/workflow-param-mapping";
 import {
+  LIBRARY_EDGE_STYLE,
   LIB_NODE_BACKDROP,
   LIB_NODE_HOST,
   LIB_NODE_OUTPUTS,
   LIB_NODE_PARAMS,
   libraryBackdropSize,
   libraryEdgeId,
-  libraryEdgeStyle,
   layoutLibraryNodes,
   type LibraryNodeContent,
 } from "../workflow-library-wire-graph";
@@ -370,7 +370,8 @@ export function buildInputEdge(wire: ParamCardWire): Edge {
     /* 圆点按端口名打锚点（一个候选一颗），边必须从**被落到的那一颗**出发。 */
     sourceHandle: wire.handleId,
     targetHandle: wire.targetIoKey,
-    style: libraryEdgeStyle(wire.manual),
+    /* 库里的线一律是作者画的（实线）：未连过的口不画线，见 `deriveLibraryOutputCards`。 */
+    style: { ...LIBRARY_EDGE_STYLE },
     selectable: false,
     focusable: false,
   };
@@ -384,7 +385,8 @@ export function buildOutputEdge(wire: ParamCardWire): Edge {
     target: LIB_NODE_OUTPUTS,
     sourceHandle: wire.targetIoKey,
     targetHandle: wire.handleId,
-    style: libraryEdgeStyle(wire.manual),
+    /* 库里的线一律是作者画的（实线）：未连过的口不画线，见 `deriveLibraryOutputCards`。 */
+    style: { ...LIBRARY_EDGE_STYLE },
     selectable: false,
     focusable: false,
   };

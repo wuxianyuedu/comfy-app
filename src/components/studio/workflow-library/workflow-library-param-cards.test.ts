@@ -240,7 +240,6 @@ describe("deriveLibraryParamCards", () => {
           /* 线从**被落到的那颗圆点**出发：handle id = 端口名（库里按端口名找点）。 */
           handleId: "positive_prompt",
           grouped: false,
-          manual: true,
         },
         {
           entryId: sizeEntry.id,
@@ -248,7 +247,6 @@ describe("deriveLibraryParamCards", () => {
           /* 尺寸那张卡的行 = 形态，所以 handle 是**子口 id**（不是端口名）。 */
           handleId: sizeEntry.id,
           grouped: false,
-          manual: true,
         },
       ]),
     );
@@ -263,7 +261,7 @@ describe("deriveLibraryParamCards", () => {
     expect(wires).toHaveLength(0);
   });
 
-  it("作者画的线标 manual（实线）", () => {
+  it("只有作者画过的口才留线（库里不画「猜出来的」线）", () => {
     const { wires } = deriveLibraryParamCards({
       io,
       paramMap: {
@@ -271,7 +269,7 @@ describe("deriveLibraryParamCards", () => {
       },
       mode: "T2I",
     });
-    expect(wires.find((w) => w.entryId === promptEntry.id)!.manual).toBe(true);
+    expect(wires.find((w) => w.entryId === promptEntry.id)).toBeTruthy();
     expect(wires.some((w) => w.entryId === sizeEntry.id)).toBe(false);
   });
 
@@ -352,11 +350,9 @@ describe("deriveLibraryParamCards", () => {
     expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::width"]);
     /* 尺寸那张卡的行 = 形态，圆点 handle 就是**子口 id**（卡片与边同一份算式）。 */
     expect(wires.map((wire) => wire.handleId)).toEqual(["size-width"]);
-    /* 这条线来自作者画的那一条（实线口径）。 */
-    expect(wires.every((wire) => wire.manual === true)).toBe(true);
   });
 
-  it("作者把子口连到某一行后：只留那一条，且标 manual", () => {
+  it("作者把子口连到某一行后：只留那一条", () => {
     const groupedIO: WorkflowIOMap = {
       "5::widget::aspect_ratio": {
         direction: "input",
@@ -395,7 +391,6 @@ describe("deriveLibraryParamCards", () => {
     expect(wires.map((wire) => wire.targetIoKey)).toEqual([
       "5::widget::megapixels",
     ]);
-    expect(wires.map((wire) => wire.manual)).toEqual([true]);
     /* 线从**被落到的那一行**出发：尺寸卡的行 = 形态，handle 就是子口 id。 */
     expect(wires.map((wire) => wire.handleId)).toEqual(["size-megapixels"]);
   });
@@ -448,19 +443,12 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     expect(outputs.map((output) => output.ioKey)).toEqual(["9::output::IMAGE"]);
   });
 
-  it("每个输出一条线：宿主输出行 → 卡片（默认虚线的口径）", () => {
-    const { wires } = deriveLibraryOutputCards({ io: outIO });
-    expect(wires).toEqual([
-      {
-        entryId: "9::output::IMAGE",
-        targetIoKey: "9::output::IMAGE",
-        handleId: "images",
-        grouped: false,
-        manual: false,
-        /* 方向与输入侧相反：线从**宿主卡片的输出行**出发，收在对外输出卡片上。 */
-        kind: "hostToParam",
-      },
-    ]);
+  it("未连过就不画线（用户口径：编辑对外参数时「未连过就不要连」）", () => {
+    const { wires, resolved } = deriveLibraryOutputCards({ io: outIO });
+    /* 默认取值来源照旧算出来（卡片与运行期读 `resolved`），但画布上不画它 ——
+     * 库里只剩下作者真连过的实线，不再有一条虚线占位。 */
+    expect(resolved["9::output::IMAGE"]).toBe("9::output::IMAGE");
+    expect(wires).toHaveLength(0);
   });
 
   it("默认取值行 = 工作流自己那一行；改过之后按覆盖表解析", () => {
@@ -488,9 +476,10 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     });
     const moved = deriveLibraryOutputCards({ io: two, paramMap, mode: "T2I" });
     expect(moved.resolved["9::output::MASK"]).toBe("9::output::IMAGE");
-    expect(
-      moved.wires.find((w) => w.entryId === "9::output::MASK")!.manual,
-    ).toBe(true);
+    /* 作者改过的那一个口才画线（未连过的不画，见上一条用例）。 */
+    expect(moved.wires.map((wire) => wire.entryId)).toEqual([
+      "9::output::MASK",
+    ]);
     expect(moved.isManual("9::output::MASK")).toBe(true);
     /* 别的模式不受影响。 */
     expect(
@@ -518,7 +507,8 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
   it("输出端口名为空时 handle 退回「输出」—— 与卡片锚点同一算式", () => {
     /* 两个地方各算一遍 handle，任何一处漏了 trim / 兜底，锚点与导线就对不上，
      *  线量不到锚点、整条不画（ISSUE #355：「images 和对外输出参数之间无法
-     *  连线」）。 */
+     *  连线」）。作者把它连到自己那一行，让线真的画出来 —— 要看的就是这条线的
+     *  handle。 */
     const nameless: WorkflowIOMap = {
       "9::output::EMPTY": {
         direction: "output",
@@ -529,7 +519,16 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
         type: "IMAGE",
       },
     };
-    const { wires } = deriveLibraryOutputCards({ io: nameless });
+    const paramMap = applyOutputBindingEdit(null, {
+      outputIoKey: "9::output::EMPTY",
+      ioKey: "9::output::EMPTY",
+      mode: "T2I",
+    });
+    const { wires } = deriveLibraryOutputCards({
+      io: nameless,
+      paramMap,
+      mode: "T2I",
+    });
     expect(wires[0]!.handleId).toBe("输出");
   });
 
