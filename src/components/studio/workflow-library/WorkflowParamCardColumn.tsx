@@ -89,6 +89,12 @@ export function WorkflowParamCardColumn({
       </p>
       {entries.map((entry) => {
         const style = paramClassStyle(entry.cls);
+        /* 这张卡片的名字只有一份：卡片头的标题与端口行都读它（见下方
+         * `outputPorts` 的 `displayName`）—— 两处各取一份会让同一张卡片说
+         * 两个名字（标题「提示词」、行上却写着工作流里的端口名）。 */
+        const cardLabel =
+          contractEntries?.find((item) => item.id === entry.id)?.label ??
+          entry.label;
         return (
           <WorkflowParamCard
             key={entry.id}
@@ -98,10 +104,7 @@ export function WorkflowParamCardColumn({
             onSelect={onSelect ? () => onSelect(entry.id) : undefined}
             entryId={entry.id}
             cls={entry.cls}
-            label={
-              contractEntries?.find((item) => item.id === entry.id)?.label ??
-              entry.label
-            }
+            label={cardLabel}
             /* 与「工坊封装」页签同口径：名字后面标出契约口 id（`prompt` /
                `size` / `reference-image-2`…），配置与日志里认的是 id。 */
             idLabel={entry.id}
@@ -122,6 +125,7 @@ export function WorkflowParamCardColumn({
               io,
               resolved[entry.id],
               reachableKeys,
+              cardLabel,
             )}
             /* 右侧小圆点端点：**每个候选一颗圆点**（与编辑器画布同口径）。
              *

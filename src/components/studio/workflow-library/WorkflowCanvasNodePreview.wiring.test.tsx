@@ -99,9 +99,11 @@ const io: WorkflowIOMap = {
   },
 };
 
-/** 作者画过的线：把「尺寸」连到组合控件覆盖的 width 行上。
+/** 作者画过的线：「尺寸 · 宽度」连到 width 那一行（形态由子口声明）。
  *  落点只由作者画的线决定 —— 不显式给线就没有任何落点。 */
-const SIZE_WIRED = { source: { "mode:T2I": { size: "5::widget::width" } } };
+const SIZE_WIRED = {
+  source: { "mode:T2I": { "size-width": "5::widget::width" } },
+};
 
 function renderPreview(paramMap: Record<string, unknown>) {
   const onPatch = vi.fn();
@@ -149,26 +151,31 @@ describe("库内映射编辑", () => {
     const parsed = parseParamMapping(
       applyWireEdit(
         {},
-        { entryId: "size", ioKey: "5::widget::megapixels", mode: "T2I" },
+        {
+          entryId: "size-megapixels",
+          ioKey: "5::widget::megapixels",
+          mode: "T2I",
+        },
       ),
     );
     expect(parsed.manualByMode).toEqual({
-      T2I: { size: "5::widget::megapixels" },
+      T2I: { "size-megapixels": "5::widget::megapixels" },
     });
   });
 
   it("落库后的 paramMap 读回来：卡片头「恢复默认」可用", () => {
     renderPreview({
-      source: { "mode:T2I": { size: "5::widget::megapixels" } },
+      source: { "mode:T2I": { "size-megapixels": "5::widget::megapixels" } },
     });
-    /* 卡片头出现「恢复默认」（只有作者真的改过这条线时才可用）。 */
-    const reset = screen.getByTestId("param-node-reset-size");
+    /* 作者把「尺寸 · 像素量」连到 megapixels 那一行 —— 卡片头出现「恢复默认」
+     *  （只有作者真的改过这条线时才可用）。 */
+    const reset = screen.getByTestId("param-node-reset-size-megapixels");
     expect(reset.hasAttribute("disabled")).toBe(false);
   });
 
   it("没改过时「恢复默认」不可用（点了不会有变化）", () => {
     renderPreview({});
-    const reset = screen.getByTestId("param-node-reset-size");
+    const reset = screen.getByTestId("param-node-reset-size-megapixels");
     expect(reset.hasAttribute("disabled")).toBe(true);
   });
 
@@ -352,24 +359,39 @@ describe("尺寸各项各自可取外部值", () => {
     }
   });
 
-  it("每个候选各派生出一条边（宽高比与百万像素都要能连出去）", () => {
+  it("每个子口各派生出一条边（宽高比与百万像素都要能连出去）", () => {
     /* ISSUE #355 复审：截图里「尺寸」卡片有宽高比 / 百万像素两颗圆点，画面上
      *  却只有一条线通到宿主卡片 —— 用户要的是「这两项都需要能导入到工作流中，
      *  所以 2 条线都要能连出去」。
+     *
+     *  拆分之后六种形态各有自己的子口（`SIZE_WIRED` 那条老 `size` 线按落点形态
+     *  归到「尺寸 · 宽度」），每个子口连到哪一行就派生哪一条边 —— 三条线各画各的。
      *
      *  ISSUE #529 之后这件事是**纯派生**：几条该画的线就有几条 edge，id 里带
      *  handle（`libwire:param:<条目>?<handle>`）。这里断言派生结果 —— 边的
      *  渲染本身由 React Flow 负责，jsdom 量不到 handleBounds。 */
     const paramCards = deriveLibraryParamCards({
       io,
-      paramMap: SIZE_WIRED,
+      paramMap: {
+        source: {
+          "mode:T2I": {
+            ...SIZE_WIRED.source["mode:T2I"],
+            "size-aspect": "5::widget::aspect_ratio",
+            "size-megapixels": "5::widget::megapixels",
+          },
+        },
+      },
       mode: "T2I",
     });
     const edges = deriveLibraryEdges(paramCards.wires, []);
-    for (const handle of ["aspect_ratio", "megapixels", "width"]) {
+    for (const [entryId, handle] of [
+      ["size-width", "width"],
+      ["size-aspect", "aspect_ratio"],
+      ["size-megapixels", "megapixels"],
+    ] as const) {
       expect(
-        edges.find((edge) => edge.id === `libwire:param:size?${handle}`),
-        `尺寸的 ${handle} 应各有一条边`,
+        edges.find((edge) => edge.id === `libwire:param:${entryId}?${handle}`),
+        `${entryId} 应各有一条边`,
       ).toBeTruthy();
     }
   });

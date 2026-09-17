@@ -94,15 +94,19 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
     expect(container.textContent).not.toContain("value_2");
   });
 
-  it("勾选时透传的业务名与行上显示的一致（IO 面板不再对不上）", () => {
+  it("勾选只落身份字段：显示名不进库（由富化链一处给）", () => {
     const stores = makeStores();
     stores.io.setState({ ioEditMode: true });
     renderNode(<WorkflowSubgraphNode data={wrapperData} />, stores);
+    /* 行上显示的是内部真实字段的业务名（「随机种子」）——它不再被抄进条目：
+     *  画布与 IO 面板两处都由同一份富化事实取名，不存在「抄了一份所以对不上」。 */
+    expect(screen.getByText("随机种子")).toBeInTheDocument();
     const boxes = screen.getAllByTitle(/暴露为工作流/);
     boxes[0]!.click();
     const entries = Object.values(stores.io.getState().workflowIO);
     expect(entries).toHaveLength(1);
-    expect(entries[0]!.label).toBe("随机种子");
+    expect(entries[0]!.label).toBeUndefined();
+    expect(entries[0]!.name).toBe("value_1");
   });
   /* 同 WorkflowNode：输出端点是下游 `out:<name>` 边的锚点，IO 编辑模式下
    * 不能卸载，只能降级视觉（ISSUE #394）。 */

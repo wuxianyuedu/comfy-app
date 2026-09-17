@@ -158,18 +158,10 @@ export interface WorkflowIOEntry {
   hostNodeId?: string;
   /** 本层槽位上**作者写的**业务名（`label`，且与槽位名不同才有值）。
    *
-   *  富化链把它排在 `localized` 之后（通用翻译会盖住它），但它是判定
-   *  「本地存的那串是不是机器生成的槽位名」的第二判据：富化名恰好停在槽位名
-   *  （`value_1`）时，仅凭显示的 label 无从判断本层有没有作者命名，而这里能。
-   *  没有它，同名条目在写入时会被当成作者命名固化回库（ISSUE #349）。 */
+   *  随条目下发的**事实字段**：富化链把它排在 `localized` 之后（通用翻译会
+   *  盖住它），所以显示名算不到它；但消费方想要「作者在本层槽位上写的名字」
+   *  时，只有这里有。 */
   slotLabel?: string;
-  /** 富化链现在给这个条目的显示名（`label → localized → name` 之外还含子图
-   *  内部字段业务名）。
-   *
-   *  客户端只用它做**别名判定的事实源**：本地 label 是不是一串机器 pin 名，
-   *  要拿真实 pin 名 + 本层作者名 + 这里的富化名三者互相印证，缺一处就可能
-   *  把机器名当成作者命名（ISSUE #349）。 */
-  enrichedLabel?: string;
 }
 
 /** Enrich the stored IO selection into a self-describing record (see the
@@ -312,44 +304,13 @@ export async function enrichWorkflowIO(
          *  非封装节点没有 proxyField，行为与旧版逐值等价：作者 label →
          *  localized → pin 名。 */
         const f = ri.proxyField;
-        /* 存量数据：勾选那一刻会把「画布显示名」写进 label。修复前封装节点
-         *  的显示名就是别名（value_1），库存 label 里于是躺着一串机器生成的
-         *  名字，它并不是作者的命名，不该把内部字段的业务名压掉。label 恰好
-         *  等于别名槽位名（`ri.name`）时视为未命名——作者手写的名字几乎不可能
-         *  与机器别名逐字相同，因此不会误伤；普通节点没有这一分支，行为与旧版
-         *  逐值等价。
-         *
-         *  别名判定不能只看 proxyField：`properties.proxyWidgets` 会因导出缺
-         *  失被 ComfyUI 隔离（`proxyWidgetErrorQuarantine`），此时 proxyField
-         *  为空，但 wrapper 本层 inputs[] 仍带作者写的 label（"Seed"）。只按
-         *  proxyField 判定会让这类工作流的存量别名永远清不掉（ISSUE #349）。
-         *  故以「class_type 是 UUID 的封装节点」为准，只要本层还找得到与槽位
-         *  名不同的作者 label/localized，就认得出这是一串机器别名。 */
-        /* 作者在本层槽位上写的**英文业务名**（`label`）—— 它是判定「库存
-         *  label 是不是一串机器生成的槽位名」的唯一可靠基准。刻意不用
-         *  `localized`：那是 ComfyUI 的通用翻译（`seed` → "随机种"），拿它
-         *  去压作者手写的名字会误伤。
-         *
-         *  封装节点还要额外认内部真实字段（`proxyField`）。 */
+        /* 本层作者名（随条目下发的**事实字段**，见 WorkflowIOEntry.slotLabel）：
+         *  只在真能解析到**非别名**的业务名时才算数 —— 内部字段名（proxyField）
+         *  也足以说明业务语义，故按 f.label → f.localized → ri.label → f.field
+         *  取第一个不同于槽位名的值。刻意不用 `localized`：那是 ComfyUI 的通用
+         *  翻译（`seed` → "随机种"），拿它去压作者手写的名字会误伤。 */
         const authorSlotLabel =
           ri.label !== undefined && ri.label !== ri.name ? ri.label : undefined;
-        const authorFacingName =
-          f?.label ??
-          (f?.localized !== ri.name ? f?.localized : undefined) ??
-          f?.field ??
-          authorSlotLabel;
-        /* 存量/机器名：勾选那一刻会把「画布显示名」写进 label，而修复前某些
-         *  路径写进去的其实是原始槽位名（封装节点的别名 `value_1`，或普通节点
-         *  的 pin 名 `image`）。这串东西不是作者的命名，不该把作者名压掉 ——
-         *  ISSUE #349：`image` 挡住了 `Last Frame Image`。
-         *
-         *  判定：label 恰好等于本层槽位名，且本层/内部确实带一个不同的作者
-         *  业务名。作者把参数重命名成与 pin 名逐字相同（且 raw 里另有一个
-         *  业务名）的概率极低，因此不会误伤。 */
-        /* 本层作者名（下发给客户端做别名判定，见 WorkflowIOEntry.slotLabel）：
-         *  与 `authorFacingName` 同源取值，但只在真能解析到**非别名**的业务名
-         *  时才算数 —— 内部字段名（proxyField）也足以说明业务语义，故按
-         *  f.label → f.localized → ri.label → f.field 取第一个不同于槽位名的值。 */
         const candidateSlotLabel =
           f?.label ??
           (f?.localized !== ri.name ? f?.localized : undefined) ??
@@ -362,13 +323,11 @@ export async function enrichWorkflowIO(
           slotLabel = candidateSlotLabel;
         }
 
-        const staleAlias =
-          label !== undefined &&
-          label === ri.name &&
-          authorFacingName !== undefined &&
-          authorFacingName !== ri.name;
+        /* 库里存着的 label 就是作者的显式重命名（勾选不再抄画布的名字进库，
+         *  唯一写入点是面板的改名框）—— 直读，不做任何「像不像机器名」的让位
+         *  判断。作者想在面板里覆盖本层 raw label，写进去的就是它。 */
         label =
-          (staleAlias ? undefined : label) ??
+          label ??
           f?.label ??
           f?.localized ??
           ri.label ??
@@ -518,9 +477,6 @@ export async function enrichWorkflowIO(
       /* 本层作者名：只在真的与槽位名不同时下发，避免给「label 就是 pin 名」
        *  的普通节点塞一份无信息量的副本。 */
       ...(slotLabel !== undefined ? { slotLabel } : {}),
-      /* 富化链最终给出的显示名 —— 客户端拿它 + 上面两个字段一起判「本地存的那串
-       *  是不是机器 pin 名」。只作判定事实源，客户端显示仍按自己的合并链取。 */
-      ...(label !== undefined ? { enrichedLabel: label } : {}),
     };
   }
 

@@ -14,8 +14,11 @@
 
 import {
   buildParamEntries,
+  isSizeDetermined,
   manualTargetFor,
+  parseParamMapping,
   resolveMapping,
+  SIZE_SUB_IDS,
 } from "~/lib/workflow-param-mapping";
 import {
   exposedParamDisplayLabel,
@@ -103,8 +106,14 @@ export function deriveEncapsulationStatus(args: {
   requiredInputs?: readonly string[];
 }): EncapsulationStatus {
   const { io, paramMap, mode, contractEntries, requiredInputs } = args;
+  /* 调用方（封装面板 / 库列表 / 生成前预检）传的是**存库原始形状**
+   *  （`{ source: { "mode:X": {…} } }`），而下游 `resolveMapping` /
+   *  `manualTargetFor` 只认解析后的 `ParamMapping` —— 没有这一次解析，落点
+   *  一个都读不到（每个契约口都被读成「未配置」、`ready` 恒 false）。
+   *  `parseParamMapping` 对畸形 / 空值也返回空表，不会抛。 */
+  const mapping = parseParamMapping(paramMap);
   const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
-  const resolved = resolveMapping(entries, io, paramMap, mode ?? null);
+  const resolved = resolveMapping(entries, io, mapping, mode ?? null);
   /* 契约口必须显式可见：工作流缺对应端口时 buildParamEntries 会整口省略，
    * 但「未配置」恰恰要在这里现形（否则用户看不到缺了什么、也不知道为什么
    * 工坊驱动不了）。按契约清单补齐缺失口（落点 null）。 */
@@ -119,15 +128,41 @@ export function deriveEncapsulationStatus(args: {
       label: d.label,
       control: controlFor(d.id),
     }));
+  /* 「尺寸」在映射层是四个子口（宽 / 高 / 宽高比 / 像素量 / 分辨率档，见
+   *  workflow-param-mapping 的 `SIZE_SUB_IDS`）：**能定出宽高**才算配置完成
+   *  （宽+高，或 比例+（像素量 / 分辨率档））—— 只连一个子口解不出另一维，
+   *  工坊那边跑不起来，这里就如实显示成未配置。 */
+  /* 逐子口取落点：本函数两个调用方（封装面板 / 生成前的预检）传的都是**存库原始
+   *  形状**的 paramMap，而 `resolved` 只认已解析的映射表 —— 所以这里走
+   *  `manualTargetFor`（它自己解析），`resolved` 只作补充（调用方已解析时更快）。 */
+  const sizeWired: Record<string, string | null | undefined> = {};
+  for (const id of SIZE_SUB_IDS) {
+    sizeWired[id] = resolved[id] ?? manualTargetFor(mapping, id, mode ?? null);
+  }
+  const sizeDetermined = isSizeDetermined(sizeWired);
+  const sizeSubTarget = (): string | null => {
+    for (const id of SIZE_SUB_IDS) {
+      const hit = sizeWired[id];
+      if (hit) return hit;
+    }
+    return null;
+  };
   const mapped: EncapsulationEntryStatus[] = canonical.map((slot) => {
-    const manual = manualTargetFor(paramMap, slot.id, mode ?? null);
-    const target = resolved[slot.id] ?? (manual !== undefined ? manual : null);
+    const manual = manualTargetFor(mapping, slot.id, mode ?? null);
+    const isSizeSlot = slot.id === "size";
+    const target = isSizeSlot
+      ? sizeDetermined
+        ? (sizeSubTarget() ?? manual ?? null)
+        : null
+      : (resolved[slot.id] ?? (manual !== undefined ? manual : null));
     return {
       id: slot.id,
       label: displayLabel(slot.id),
       control: slot.control,
       targetIoKey: target,
-      manual: manual !== undefined && manual !== null,
+      manual: isSizeSlot
+        ? target !== null
+        : manual !== undefined && manual !== null,
     };
   });
   const ordered = Array.from(new Map(mapped.map((e) => [e.id, e])).values());
@@ -147,6 +182,17 @@ export function deriveEncapsulationStatus(args: {
   const missingRequired = ordered
     .filter((e) => required.includes(e.id) && e.targetIoKey === null)
     .map((e) => e.label);
+  /* 「尺寸」另有一条判据：定不出宽高就不许跑（见 `isSizeDetermined`）。缺的这一
+   * 项要出现在「缺了它不能跑」的清单里，否则用户看到的是一个「看起来配好了」
+   * 的尺寸口，跑起来却拿不到宽高。 */
+  const sizeSlot = ordered.find((e) => e.id === "size");
+  if (
+    sizeSlot &&
+    !sizeDetermined &&
+    !missingRequired.includes(sizeSlot.label)
+  ) {
+    missingRequired.push(sizeSlot.label);
+  }
   return {
     entries: ordered,
     ready: missingRequired.length === 0,

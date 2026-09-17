@@ -113,13 +113,6 @@ export function FlowNodeHeader({
               name: outputs[0]![0],
               kind: "output",
               direction: "output",
-              // Prefer the rawJson output label / zh localized_name so the IO
-              // preview shows the meaningful name (e.g. IMAGE_FINAL) instead
-              // of the bare port key (`images`).
-              label:
-                data.rawOutputs?.[0]?.label ??
-                data.rawOutputs?.[0]?.localized ??
-                outputs[0]![0],
             } satisfies IoRef
           }
         />
