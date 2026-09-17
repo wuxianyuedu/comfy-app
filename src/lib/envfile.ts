@@ -46,33 +46,3 @@ export function readEnvVar(key: string): string | null {
 
   return null;
 }
-
-/** Write (or update) a single var in `.env`, preserving the rest of the file. */
-export function writeEnvVar(key: string, value: string): void {
-  const fullPath = envPath(".env");
-
-  let lines: string[] = [];
-
-  if (fs.existsSync(fullPath))
-    lines = fs.readFileSync(fullPath, "utf-8").split("\n");
-
-  const idx = lines.findIndex((line) =>
-    new RegExp(`^\\s*${key}\\s*=`).exec(line),
-  );
-
-  const newLine = `${key}=${value}`;
-
-  if (idx >= 0) {
-    lines[idx] = newLine;
-  } else {
-    if (lines.length && lines[lines.length - 1]!.trim() !== "") lines.push("");
-
-    lines.push(newLine);
-  }
-
-  // Join with \n and ensure a single trailing newline.
-
-  const out = lines.join("\n").replace(/\n+$/, "") + "\n";
-
-  fs.writeFileSync(fullPath, out, "utf-8");
-}

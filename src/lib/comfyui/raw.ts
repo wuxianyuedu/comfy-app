@@ -49,12 +49,6 @@ export function isJsonObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** JSON 数组守卫：Array.isArray(unknown) 会把元素窄化成 any，这里统一收敛为
- *  unknown[]，避免 Number/String 调用点触发 no-unsafe-argument。 */
-export function asUnknownArray(v: unknown): unknown[] {
-  return Array.isArray(v) ? (v as unknown[]) : [];
-}
-
 /** DB Json 列 / JSON.parse 产物 → RawWorkflow 视图。根不是普通对象时返回
  *  null（下游均有 `Array.isArray(raw.nodes)` 类守卫，路径与旧代码等价）。 */
 export function asRawWorkflow(v: unknown): RawWorkflow | null {

@@ -258,7 +258,7 @@ export function createProject(name?: string): CanvasProject {
  * The project becomes "real" the moment the user makes a real change
  * (drag/add/connect/rename): the auto-persist effect in ProjectCanvas will
  * detect `nodes.length === 0 && edges.length === 0 === false` and call
- * `commitDraftProject`, which performs the actual upsert + emitChanged.
+ * `upsertProject`, which performs the actual upsert + emitChanged.
  *
  * If the user leaves the canvas with the draft still empty,
  * `reapEmptyDraft` deletes it from the active id (it was never in the
@@ -275,16 +275,6 @@ export function createDraftProject(name?: string): CanvasProject {
   setActive(p.id);
   emitChanged(); // so homepage re-reads the (unchanged) index
   return p;
-}
-
-/**
- * Persist a draft (or already-existing) project to the index.  Equivalent
- * to `upsertProject` semantically — they share the same emission path —
- * but named explicitly to signal "this is the FIRST time a draft is
- * becoming real".  Pair with `createDraftProject`.
- */
-export function commitDraftProject(p: CanvasProject): void {
-  upsertProject(p);
 }
 
 /**

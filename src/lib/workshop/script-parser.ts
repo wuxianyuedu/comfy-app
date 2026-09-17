@@ -133,18 +133,6 @@ function estimateShots(text: string): number {
   return 4;
 }
 
-export function newScene(index: number): Scene {
-  return {
-    id: uid("scene"),
-    heading: `场景${index} · 新场景`,
-    location: "",
-    time: "",
-    action: "",
-    dialogue: "",
-    shotCount: 2,
-  };
-}
-
 export function emptyProject(type: ProjectType = "short_video"): ProjectMeta {
   return { title: "未命名项目", type, tone: "", logline: "" };
 }

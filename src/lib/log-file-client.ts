@@ -69,25 +69,6 @@ export interface LogFileInfo {
   size: number;
 }
 
-export async function fetchLogFileList(): Promise<LogFileInfo[]> {
-  const res = await fetch("/api/logs/list");
-  if (!res.ok) return [];
-  const data = (await res.json()) as { files?: LogFileInfo[] };
-  return data.files ?? [];
-}
-
-/** 读取某个归档日志文件的全量内容（路径由 /api/logs/list 给出，服务端做越界校验）。 */
-export async function fetchLogFileContent(
-  relativePath: string,
-): Promise<string | null> {
-  const res = await fetch(
-    `/api/logs/history?file=${encodeURIComponent(relativePath)}`,
-  );
-  if (!res.ok) return null;
-  const data = (await res.json()) as { content?: string };
-  return data.content ?? null;
-}
-
 /* ── 日志导出到本地文件（客户端 → 服务端）─────────────────────────────
  * 面板的「保存到本地」经 `POST /api/logs/export` 由服务端写进 `log/exports/`，
  * 并把路径回给面板显示（见该端点的说明：桌面壳里浏览器下载不保证落盘）。
