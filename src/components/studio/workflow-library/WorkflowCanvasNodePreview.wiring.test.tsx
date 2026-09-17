@@ -15,8 +15,10 @@
  *
  * 运行相关的副作用（生成 / SSE / 日志弹窗）打桩，避免在 jsdom 里真发请求。 */
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 /* 模式契约注册表（工坊封装 / 画布节点共读的那一份）打桩：
  * 预览现在也读它（卡片头与「工坊封装」页签同一份措辞），jsdom 里没有 tRPC
@@ -43,7 +45,7 @@ vi.mock("~/lib/workflow-run-store", () => {
 vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { parseParamMapping } from "~/lib/workflow-param-mapping";
+import { parseParamMapping, SIZE_SUB_IDS } from "~/lib/workflow-param-mapping";
 import { applyWireEdit } from "~/lib/workflow-param-wiring";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 import { deriveLibraryParamCards } from "./workflow-library-param-cards";
@@ -105,9 +107,11 @@ const SIZE_WIRED = {
   source: { "mode:T2I": { "size-width": "5::widget::width" } },
 };
 
-function renderPreview(paramMap: Record<string, unknown>) {
-  const onPatch = vi.fn();
-  const view = render(
+function previewElement(
+  paramMap: Record<string, unknown>,
+  onPatch: (next: Record<string, unknown>) => void | Promise<void>,
+) {
+  return (
     <WorkflowCanvasNodePreview
       workflowId="wf-1"
       workflowName="测试工作流"
@@ -117,8 +121,13 @@ function renderPreview(paramMap: Record<string, unknown>) {
       usable
       defaultMode="T2I"
       onPatchParamMap={onPatch}
-    />,
+    />
   );
+}
+
+function renderPreview(paramMap: Record<string, unknown>) {
+  const onPatch = vi.fn<(next: Record<string, unknown>) => void>();
+  const view = render(previewElement(paramMap, onPatch));
   return { ...view, onPatch };
 }
 
@@ -179,6 +188,25 @@ describe("库内映射编辑", () => {
     expect(reset.hasAttribute("disabled")).toBe(true);
   });
 
+  it("尺寸卡头 ↺ 一次清掉六条形态线（一次落库，「重置清不掉」不复现）", () => {
+    /* 用户口径：「尺寸那三项线现在变成固定连线了，我重置也清不掉」。
+     *  成因：卡片头逐个上抛六个子口，消费方每收到一个就从**同一份旧值**算一次新
+     *  表并落库 —— 后一次把前一次的删除覆盖回去，只有最后一条真的清掉了。 */
+    const sixWired = {
+      source: {
+        "mode:T2I": Object.fromEntries(
+          SIZE_SUB_IDS.map((id) => [id, "5::widget::width"]),
+        ),
+      },
+    };
+    const { onPatch } = renderPreview(sixWired);
+    fireEvent.click(screen.getByTestId("param-node-reset-size"));
+    /* 一次落库：`mode:T2I` 整段消失（六条线一起撤）。 */
+    expect(onPatch).toHaveBeenCalledTimes(1);
+    const next = onPatch.mock.calls[0]![0];
+    expect(parseParamMapping(next).manualByMode).toEqual({});
+  });
+
   it("有模式 → 卡片可连线；没有模式 → 不可（写入无归属）", () => {
     /* 落点覆盖必须归属一个模式 —— 没有模式时写入是无归属的空操作，卡片不给拖
      *  （`canWire=false`）。判据：卡片列的提示文案。 */
@@ -198,6 +226,69 @@ describe("库内映射编辑", () => {
       />,
     );
     expect(screen.getByText("对外参数")).toBeTruthy();
+  });
+});
+
+describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
+  const ROOT = path.resolve(__dirname);
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+  /* 用户口径：「这几个都是固定类型的为什么显示星号，线连不上，一松手线就消失。」
+   *
+   * 两个症状各对应一处：
+   *   ① 行的类型只从**落点**取 —— 未连过时 `io[target]` 无从取，徽标退成 `*`；
+   *   ② 边集合是画布挂载时的快照（`useEdgesState` 的初值 + 挂载时派生一次），
+   *      新写入的线进不了画布 —— 松手即消失（写入本身是成功的）。 */
+  it("未连过的行显示形态固定的类型，而不是星号", () => {
+    /* 用户口径：宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，
+     *  宽高比 = COMBO（形态语义固定；连上之后改显示落点那一行的真实类型）。 */
+    const expectedByCls: Record<string, string> = {
+      "size-width": "FLOAT",
+      "size-height": "FLOAT",
+      "size-megapixels": "FLOAT",
+      "size-resolution": "INT",
+      "size-multiple": "INT",
+      "size-aspect": "COMBO",
+    };
+    const { container } = renderPreview({});
+    SIZE_SUB_IDS.forEach((cls, index) => {
+      const badge = container.querySelector(
+        `[data-testid="param-node-out-type-size-${index}"]`,
+      );
+      expect(badge?.textContent, `${cls} 行的类型`).toBe(expectedByCls[cls]);
+      expect(badge?.textContent, `${cls} 行不该显示星号`).not.toBe("*");
+    });
+  });
+
+  it("连线两端锚点都在：卡片行（起手）与宿主数值行（落点）", () => {
+    const { container } = renderPreview({});
+    /* 少任一端，松手时都落不上（画布会提示「松手时不在任何端口上」）。 */
+    expect(
+      container.querySelector(
+        '[data-handleid="size-megapixels"][data-nodeid="lib:params"]',
+      ),
+      "起手端：尺寸卡「像素量」那一行",
+    ).toBeTruthy();
+    expect(
+      container.querySelector(
+        '[data-handleid="5::widget::megapixels"][data-nodeid="lib:host"]',
+      ),
+      "落点端：宿主卡片上那一行（handle id = ioKey）",
+    ).toBeTruthy();
+  });
+
+  it("边集合跟随派生（新写入的线必须能进画布）", () => {
+    /* 这条只能锁**源码形态**：jsdom 里 React Flow 渲染不出边（`ResizeObserver` 是
+     *  桩、量不到 handleBounds，首帧带线的渲染也数不到 `.react-flow__edge`），
+     *  所以这里钉的是两处必需形态：
+     *   · `defaultEdges` 跟着 wires **重新派生**（不是挂载时算一次）；
+     *   · 画布把派生出来的边**写回 edges 状态**。
+     *  缺任一处，写入成功的线永远进不了画布 —— 用户看到的就是「一松手线就消失」。 */
+    const flow = read("hooks/use-library-wire-flow.ts");
+    expect(flow).toMatch(
+      /deriveLibraryEdges\(paramCards\.wires, outputWires\)/,
+    );
+    const canvas = read("WorkflowLibraryCanvas.tsx");
+    expect(canvas).toMatch(/setEdges\(flow\.defaultEdges\)/);
   });
 });
 

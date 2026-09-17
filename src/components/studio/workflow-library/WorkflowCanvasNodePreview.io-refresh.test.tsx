@@ -318,14 +318,16 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    /* 左列卡片的 handle id：普通口是候选端口名，尺寸那张卡是**子口 id**（卡的每
-     *  一行 = 一个形态）。 */
+    /* 左列卡片的 handle id：普通口是**落点 ioKey**（全图唯一 —— 用端口名会让
+     *  两个节点各自的 `text` 行在同一张卡片上撞成同一颗点），尺寸那张卡是
+     *  **子口 id**（卡的每一行 = 一个形态）。 */
+    const params = container.querySelector(
+      '[data-testid="wflib-canvas-node-params"]',
+    )!;
     expect(
-      container.querySelector('[data-handleid="positive_prompt"]'),
+      params.querySelector('[data-handleid="9::widget::positive_prompt"]'),
     ).toBeTruthy();
-    expect(
-      container.querySelector('[data-handleid="size-aspect"]'),
-    ).toBeTruthy();
+    expect(params.querySelector('[data-handleid="size-aspect"]')).toBeTruthy();
     /* 宿主卡片的两端都在（连线的另一端）：提示词是普通参数行，
      *  宽高比则落在组合控件那一格上（比例/像素由同一块控件录入）。 */
     const host = container.querySelector(

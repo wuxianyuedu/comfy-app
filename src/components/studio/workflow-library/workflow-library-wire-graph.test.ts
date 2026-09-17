@@ -168,7 +168,9 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        sourceHandle: promptEntry.pins[0]!.name,
+        /* 圆点 handle id = **ioKey**（全图唯一；端口名会让两个节点各自的 `text`
+         *  行在同一张卡片上撞成同一颗点）。 */
+        sourceHandle: promptEntry.pins[0]!.ioKey,
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(true);
@@ -180,7 +182,7 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        sourceHandle: promptEntry.pins[0]!.name,
+        sourceHandle: promptEntry.pins[0]!.ioKey,
         targetHandle: "5::widget::aspect_ratio",
       }),
     ).toBe(false);
@@ -192,7 +194,8 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        sourceHandle: sizeEntry.pins[0]!.name,
+        /* 尺寸卡的行 = 形态：handle id 是**子口 id**（它是同一张卡上的行标识）。 */
+        sourceHandle: sizeEntry.id,
         targetHandle: "5::widget::aspect_ratio",
       }),
     ).toBe(true);

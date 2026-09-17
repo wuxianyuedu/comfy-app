@@ -237,8 +237,9 @@ describe("deriveLibraryParamCards", () => {
         {
           entryId: promptEntry.id,
           targetIoKey: "9::widget::text",
-          /* 线从**被落到的那颗圆点**出发：handle id = 端口名（库里按端口名找点）。 */
-          handleId: "positive_prompt",
+          /* 线从**被落到的那颗圆点**出发：handle id = 落点 ioKey（全图唯一；端口名
+           *  会让两个节点各自的 `text` 行撞成同一颗点）。 */
+          handleId: "9::widget::text",
           grouped: false,
         },
         {
