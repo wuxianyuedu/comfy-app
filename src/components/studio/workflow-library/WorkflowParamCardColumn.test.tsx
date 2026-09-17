@@ -208,13 +208,62 @@ describe("WorkflowParamCardColumn", () => {
       />,
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
+    /* 端点的 handle id = **落点 ioKey**（全图唯一）—— 用端口名会在同一张卡片上
+     *  撞出重复 handle（两个节点各有一行 `text` 时最明显）。 */
     const dot = container.querySelector(
-      `[data-endpoint-handle="positive_prompt"]`,
+      `[data-endpoint-handle="9::widget::text"]`,
     );
     expect(dot).toBeTruthy();
     /* 端点必须落在输出端口行内（行是 absolute 的锚），而不是卡片上随便一处。 */
     const outputRow = screen.getByTestId(`param-node-out-${promptCard.id}-0`);
     expect(outputRow.contains(dot)).toBe(true);
+  });
+
+  it("两个节点各有一行同名 pin（`text`）时，同一张卡内的端点 id 不撞", () => {
+    /* 用户口径：「提示词连不上 / 负向提示词拖不出线」。成因是同节点内 handle id
+     *  重复：两张卡的候选都是那两行 `text`，而端点此前按**端口名**取 id ——
+     *  React Flow 只认第一颗，第二颗拖着没反应。 */
+    const dupIo: WorkflowIOMap = {
+      "6::widget::text": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "6",
+        name: "text",
+        label: "正向",
+        type: "STRING",
+        defaultValue: "a",
+      },
+      "9::widget::text": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "9",
+        name: "text",
+        label: "负向",
+        type: "STRING",
+        defaultValue: "b",
+      },
+    };
+    const dupEntries = buildParamEntries(dupIo, undefined, { mode: "T2I" });
+    const { container } = render(
+      <WorkflowParamCardColumn
+        entries={dupEntries}
+        resolved={{}}
+        io={dupIo}
+        endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
+      />,
+    );
+    for (const cardId of ["prompt", "negative"]) {
+      const card = container.querySelector(
+        `[data-testid="param-node-${cardId}"]`,
+      )!;
+      const handles = [...card.querySelectorAll("[data-endpoint-handle]")].map(
+        (el) => el.getAttribute("data-endpoint-handle"),
+      );
+      expect(handles, `${cardId} 卡应有两颗端点`).toHaveLength(2);
+      expect(new Set(handles).size, `${cardId} 卡内的端点 id 必须唯一`).toBe(
+        handles.length,
+      );
+    }
   });
 
   it("尺寸只有一张卡，卡内六行形态各一颗端点", () => {

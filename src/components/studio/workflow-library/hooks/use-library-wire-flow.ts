@@ -154,10 +154,15 @@ export function useLibraryWireFlow({
       ),
     [backdropWidth, backdropHeight],
   );
+  /* 边的**集合**跟随派生：改落点（含库内本地 overlay）、恢复默认、换模式之后，
+   *  新写入的线要能进画布。只在挂载时派生一次的话，写入成功的线永远进不了画布
+   *  —— 用户看到的就是「松手线就消失」（ISSUE #355 复审）。
+   *
+   *  节点集合仍是固定的（三列布局，见 `defaultNodes` 的说明）：节点内部是整张
+   *  表单，逐帧重建代价高；边只是几条线，重建无妨。 */
   const defaultEdges = useMemo(
     () => deriveLibraryEdges(paramCards.wires, outputWires),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在挂载时派生
-    [],
+    [paramCards.wires, outputWires],
   );
 
   /* ── 类型闸门（第 2 步的核心）──
@@ -355,8 +360,11 @@ function entryForHandle(
   handleId: string,
 ): ParamEntry | null {
   for (const entry of entries) {
+    /* 尺寸卡的行：handle id = 子口 id（一行 = 一个形态）。 */
     if (entry.id === handleId) return entry;
-    if (entry.pins.some((pin) => pin.name === handleId)) return entry;
+    /* 其余卡片：handle id = 落点 ioKey（全图唯一）。用端口名认会让「两个节点各
+     *  有一行 `text`」的两张卡片落到同一个条目上 —— 提示词与负向提示词互相顶。 */
+    if (entry.pins.some((pin) => pin.ioKey === handleId)) return entry;
   }
   return null;
 }

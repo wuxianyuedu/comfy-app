@@ -348,6 +348,29 @@ export function portTypeDisplay(type: string | undefined | null): string {
   return t.length > 0 ? t : "*";
 }
 
+/** 尺寸子口**未连线时**展示的类型（用户口径：每个形态的语义类型是固定的）：
+ *
+ *   · 宽度 / 高度 / 像素量 → `FLOAT`（宽高与百万像素是连续量）；
+ *   · 分辨率档 / 倍数 → `INT`；
+ *   · 宽高比 → `COMBO`（候选表）。
+ *
+ *  形态（谁连到哪一行）仍由作者连线声明，连上之后卡片显示**落点那一行的真实
+ *  类型**（落点是 INT 就显示 INT）—— 这张表只在「还没连过、无从取落点类型」时
+ *  生效，替代此前的候选类型集合与更早的 `*`。 */
+const SIZE_SUB_TYPE: Record<string, string> = {
+  "size-width": "FLOAT",
+  "size-height": "FLOAT",
+  "size-megapixels": "FLOAT",
+  "size-resolution": "INT",
+  "size-multiple": "INT",
+  "size-aspect": "COMBO",
+};
+
+/** 尺寸子口未连线时的展示类型（见 `SIZE_SUB_TYPE`）。 */
+export function sizeSubTypeDisplay(cls: ParamClass): string {
+  return SIZE_SUB_TYPE[cls] ?? portTypeDisplay(undefined);
+}
+
 /** 未连线时的端口名：契约展示名（卡片上不谎报成一个不存在的 pin 名）。 */
 function fallbackHandleId(entry: ParamEntry): string {
   return entry.id || entry.label;
@@ -386,9 +409,12 @@ export function paramOutputPorts(
     type: portTypeDisplay(type),
     connected,
     ioKey,
-    /* 库内连线层按「端口名」找圆点锚点（一张卡上一个候选一颗点），所以 handle id
-     * 取端口名；落点本身仍是 ioKey 键空间（`ioKey` 字段），两者不能混。 */
-    handleId: name || fallbackHandleId(entry),
+    /* 端点锚点用 **ioKey**：它全图唯一。用端口名当 handle id 会在同一个节点里
+     *  撞出多颗同名点 —— 提示词与负向提示词的两行都叫 `text`（两个节点各一行），
+     *  同一张卡片上于是出现四颗 `text` 点，React Flow 只认第一颗：用户看到的就是
+     *  「拖不出线 / 连不上」（同类：两个节点各有 `image`）。
+     *  尺寸卡例外：一行 = 一个形态，handle id 取子口 id（见卡片列）。 */
+    handleId: ioKey || fallbackHandleId(entry),
     active,
   });
 
@@ -454,23 +480,14 @@ export function wiredTargetsForEntry(args: {
   return args.target ? [{ ioKey: args.target, active: true }] : [];
 }
 
-/** 某个条目在某个 ioKey 上「用哪个 handle 连」——库内画布卡片按**端口名**给
- *  圆点打锚点（`paramOutputPorts` 的 `handleId`），所以连线也必须按端口名对齐
- *  那一颗点，否则同一个条目下多条线会全部落到第一颗点上。 */
 /* 注：一条映射线**一定**来自作者画的线 —— 落点本身不可能凭空产生（见
  *  `resolveMapping`：没有线就没有落点）；也没有「组合控件摊开成多条线」这回事
- *  （每个条目只画它连上的那一条）。 */
-export function wireHandleIdForIoKey(
-  io: WorkflowIOMap | null | undefined,
-  entry: ParamEntry,
-  ioKey: string,
-): string {
-  return (
-    io?.[ioKey]?.name ??
-    entry.pins.find((pin) => pin.ioKey === ioKey)?.name ??
-    ioKey
-  );
-}
+ *  （每个条目只画它连上的那一条）。
+ *
+ *  库内卡片圆点的 handle id 与落点**同键空间**（都是 ioKey，只有尺寸卡取子口
+ *  id），因此两端不需要任何换算函数 —— 这也是原先那个「按端口名换算」的口径
+ *  被删掉的原因：同名 pin（两个节点各有一行 `text`）会在同一节点里撞出重复
+ *  handle id。 */
 
 /** 卡片端点列表里哪一颗是「当前生效落点」（没有则退回第一颗）。
  *
@@ -797,8 +814,8 @@ export function clearModeWiring(
  *  ⚠️ 现状：画布渲染侧**直接用 ioKey 当 handle id**（见 WidgetInputRow 的
  *  `handleId`）。`pin 名` 这个旧口径在「两个节点
  *  有同名 pin」时会让边接到同名 handle 的第一处 —— 表现就是「线连到了别的节点
- *  上」。库里那层（`wireHandleIdForIoKey`）按 pin 名给卡片圆点取 handle id，
- *  画布手势一律走 ioKey。
+ *  上」。库内卡片圆点（`paramOutputPorts` 的 `handleId`）同样取 ioKey（尺寸卡取
+ *  子口 id），两处同键空间、不再需要换算函数。
  *
  *  两个键空间必须分清（ISSUE #374）：
  *   · ioKey（`<nodeId>::<kind>::<name>`）是 workflowIO 的字典键，运行期

@@ -24,6 +24,7 @@ import {
   portTypeDisplay,
   sizeGroupIds,
   sizeSubLabel,
+  sizeSubTypeDisplay,
   SIZE_SUB_IDS,
   type ParamEntry,
   type ParamOutputPort,
@@ -123,21 +124,28 @@ export function WorkflowParamCardColumn({
               readOnly={!canWire}
               canReset={canWire && SIZE_SUB_IDS.some((id) => !!isManual?.(id))}
               /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（尺寸是一张卡，
-               * 只撤其中一条会让卡片看着「还有线」）。 */
-              onReset={
-                canWire
-                  ? () => SIZE_SUB_IDS.forEach((id) => onReset?.(id))
-                  : undefined
-              }
+               * 只撤其中一条会让卡片看着「还有线」）。
+               *
+               *  上抛的是聚合 id `size` —— 由消费方**一次**展开成六个子口交给
+               *  `resetMany`。在这里逐个上抛的话，消费方每收到一个就落一次库，
+               *  后一次会把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
+              onReset={canWire ? () => onReset?.("size") : undefined}
               /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
                * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
               outputPorts={forms.map((item) => {
                 const target = resolved[item.id] ?? null;
                 const raw = target ? io?.[target] : undefined;
+                /* 类型：连过就看**落点那一行**的真实类型；没连过看这个形态语义上
+                 *  固定的类型（用户口径：宽度 / 高度 / 像素量 = FLOAT，分辨率档 /
+                 *  倍数 = INT，宽高比 = COMBO）。此前未连过时只从落点取，取不到
+                 *  就退成 `*` —— 用户看到的正是「这几个都是固定类型的为什么显示
+                 *  星号」。 */
                 return {
                   name: item.id,
                   display: sizeSubLabel(item.cls),
-                  type: portTypeDisplay(raw?.type),
+                  type: target
+                    ? portTypeDisplay(raw?.type)
+                    : sizeSubTypeDisplay(item.cls),
                   connected: !!target,
                   ioKey: target ?? "",
                   handleId: item.id,
