@@ -21,6 +21,7 @@ import {
   buildParamEntries,
   parseParamMapping,
   resolveMapping,
+  SIZE_SUB_IDS,
   wireHandleIdForIoKey,
   wiredTargetsForEntry,
   type ParamEntry,
@@ -138,8 +139,14 @@ export function deriveLibraryParamCards(args: {
         /* 库内这层按**端口名**找卡片上的圆点锚点（`paramOutputPorts` 的
          *  `handleId` 就是端口名）；ioKey 是运行期/落库的键空间，两者不能混。
          *  同一口子摊成多条线时，每条必须对到自己那一颗圆点（都退到 ioKey 就会
-         *  让第二、三条线落回第一颗点上）。 */
-        handleId: wireHandleIdForIoKey(io, entry, wired.ioKey),
+         *  让第二、三条线落回第一颗点上）。
+         *
+         *  尺寸是例外：六张子卡合成一张（行 = 形态，见 `WorkflowParamCardColumn`），
+         *  所以它的圆点 handle 就是**子口 id** —— 六个子口摆的是同一份候选（按类型
+         *  收），按端口名对齐会让六行都指向第一颗点。 */
+        handleId: SIZE_SUB_IDS.includes(entry.cls)
+          ? entry.id
+          : wireHandleIdForIoKey(io, entry, wired.ioKey),
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
         manual,
       });

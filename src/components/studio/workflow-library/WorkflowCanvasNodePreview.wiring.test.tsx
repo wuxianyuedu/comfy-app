@@ -133,13 +133,13 @@ describe("库内映射编辑", () => {
   it("卡片圆点是真正的 <Handle>（画布的连线手势认得它）", () => {
     const { container } = renderPreview({});
     const dot = container.querySelector(
-      '[data-handleid="megapixels"][data-nodeid="lib:params"]',
+      '[data-handleid="size-megapixels"][data-nodeid="lib:params"]',
     );
-    expect(dot, "尺寸卡的像素量出口应有一颗可连的 handle").toBeTruthy();
+    expect(dot, "尺寸卡「像素量」那一行应有一颗可连的 handle").toBeTruthy();
     /* 它是 source（线从这里出发去宿主卡片），不是装饰圆点。 */
     expect(
       container.querySelector(
-        '.react-flow__handle.source[data-handleid="megapixels"]',
+        '.react-flow__handle.source[data-handleid="size-megapixels"]',
       ),
     ).toBeTruthy();
   });
@@ -168,14 +168,14 @@ describe("库内映射编辑", () => {
       source: { "mode:T2I": { "size-megapixels": "5::widget::megapixels" } },
     });
     /* 作者把「尺寸 · 像素量」连到 megapixels 那一行 —— 卡片头出现「恢复默认」
-     *  （只有作者真的改过这条线时才可用）。 */
-    const reset = screen.getByTestId("param-node-reset-size-megapixels");
+     *  （尺寸是一张卡，↺ 撤掉的是它六行里的线）。 */
+    const reset = screen.getByTestId("param-node-reset-size");
     expect(reset.hasAttribute("disabled")).toBe(false);
   });
 
   it("没改过时「恢复默认」不可用（点了不会有变化）", () => {
     renderPreview({});
-    const reset = screen.getByTestId("param-node-reset-size-megapixels");
+    const reset = screen.getByTestId("param-node-reset-size");
     expect(reset.hasAttribute("disabled")).toBe(true);
   });
 
@@ -347,9 +347,9 @@ describe("画布视口（由 React Flow 承担）", () => {
 });
 
 describe("尺寸各项各自可取外部值", () => {
-  it("每项各有一颗 handle，且候选收窄到宿主卡片真的画出来的行", () => {
+  it("尺寸卡的六行形态各有一颗 handle（合成一张卡后仍逐行可连）", () => {
     const { container } = renderPreview({});
-    for (const handle of ["aspect_ratio", "megapixels", "width"]) {
+    for (const handle of ["size-aspect", "size-megapixels", "size-width"]) {
       expect(
         container.querySelector(
           `.react-flow__handle.source[data-handleid="${handle}"]`,
@@ -384,13 +384,10 @@ describe("尺寸各项各自可取外部值", () => {
       mode: "T2I",
     });
     const edges = deriveLibraryEdges(paramCards.wires, []);
-    for (const [entryId, handle] of [
-      ["size-width", "width"],
-      ["size-aspect", "aspect_ratio"],
-      ["size-megapixels", "megapixels"],
-    ] as const) {
+    /* 尺寸那张卡的行 = 形态，所以圆点 handle 就是**子口 id**（卡片与边同一份算式）。 */
+    for (const entryId of ["size-width", "size-aspect", "size-megapixels"]) {
       expect(
-        edges.find((edge) => edge.id === `libwire:param:${entryId}?${handle}`),
+        edges.find((edge) => edge.id === `libwire:param:${entryId}?${entryId}`),
         `${entryId} 应各有一条边`,
       ).toBeTruthy();
     }

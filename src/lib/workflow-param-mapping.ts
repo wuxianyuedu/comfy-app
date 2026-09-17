@@ -172,6 +172,19 @@ export function sizeSubLabel(cls: ParamClass): string {
   return `${EXPOSED_PARAM_LABEL.size} · ${CLASS_FALLBACK_LABEL[cls]}`;
 }
 
+/** 「尺寸」那一张卡片 ↔ 它在映射表里的键：卡片 id 是聚合值 `size`（对外只报一个
+ *  尺寸口），映射键是六个子口。
+ *
+ *  卡片列把它渲染成**一张卡**（六行形态各一颗圆点，见 `WorkflowParamCardColumn`），
+ *  而连线、落点、↺ 恢复默认都按子口走 —— 这层换算就是两者的桥：
+ *  `sizeGroupIds("size")` 给出全部六个键，`sizeGroupIds(<子口 id>)` 回它自己。 */
+export function sizeGroupIds(
+  id: string | null | undefined,
+): readonly ParamClass[] {
+  if (!id) return [];
+  return id === "size" ? SIZE_SUB_IDS : [id as ParamClass];
+}
+
 /* ── 端口分类：只看**声明类型** ──
  *
  * 一个端口能当哪些对外参数的落点，由它的**声明类型**定族，不看名字：端口名随

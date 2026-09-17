@@ -55,6 +55,7 @@ import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
+  sizeGroupIds,
 } from "~/lib/workflow-param-mapping";
 import {
   applyOutputBindingEdit,
@@ -584,7 +585,11 @@ export function WorkflowCanvasNodePreview({
           setSelectedOutputId(id);
           if (id) setSelectedParamId(null);
         }}
-        onResetParam={wiring.resetToAuto}
+        /* 卡片头的 ↺：尺寸是一张卡（六行形态），一键恢复要把六个子口的线都撤掉
+         * —— 只撤其中一条会让卡片看着「还有线」。其余条目就是它自己那一个键。 */
+        onResetParam={(id) => {
+          for (const form of sizeGroupIds(id)) wiring.resetToAuto(form);
+        }}
         onResetOutput={outputWiring.reset}
         onConnect={
           effectiveMode && onPatchParamMap ? wiring.connect : undefined

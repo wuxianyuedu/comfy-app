@@ -9,7 +9,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { buildParamEntries } from "~/lib/workflow-param-mapping";
+import {
+  buildParamEntries,
+  sizeSubLabel,
+  SIZE_SUB_IDS,
+} from "~/lib/workflow-param-mapping";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 
@@ -40,19 +44,31 @@ const io: WorkflowIOMap = {
 
 const entries = buildParamEntries(io);
 
-/** 作者画过的线（每条口连到它的第一个候选端口）—— 落点只由作者画的线决定，
+/** 尺寸的子口按形态连到同名的那一行（真实工作流就是一条形态一行）。 */
+const SIZE_PIN_NAME: Record<string, string> = {
+  "size-width": "width",
+  "size-height": "height",
+  "size-aspect": "aspect_ratio",
+  "size-megapixels": "megapixels",
+};
+
+/** 作者画过的线（尺寸按形态连、其余连第一个候选）—— 落点只由作者画的线决定，
  *  没有线就是「未配置」，所以这里必须显式给（不再是自动判定）。 */
-function wiredFor(list: { id: string; pins: { ioKey: string }[] }[]) {
+function wiredFor(
+  list: { id: string; pins: { ioKey: string; name: string }[] }[],
+) {
   const out: Record<string, string> = {};
   for (const entry of list) {
-    const pin = entry.pins[0];
+    const pin =
+      entry.pins.find((item) => item.name === SIZE_PIN_NAME[entry.id]) ??
+      entry.pins[0];
     if (pin) out[entry.id] = pin.ioKey;
   }
   return out;
 }
 
 describe("WorkflowParamCardColumn", () => {
-  it("每个对外参数一张卡片，卡片头是它的名字", () => {
+  it("每个对外参数一张卡片（尺寸的六行形态合成一张），卡片头是它的名字", () => {
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
@@ -61,12 +77,26 @@ describe("WorkflowParamCardColumn", () => {
       />,
     );
     for (const entry of entries) {
+      /* 尺寸：六行形态共用一张卡（`param-node-size`），下面单独断言。 */
+      if (SIZE_SUB_IDS.includes(entry.cls)) continue;
       const card = container.querySelector(
         `[data-testid="param-node-${entry.id}"]`,
       );
       expect(card).toBeTruthy();
       /* 卡片头与端口行读的是同一个名字，所以按卡片作用域断言，不按全屏唯一文本查。 */
       expect(card!.textContent).toContain(entry.label);
+    }
+    /* 一张「尺寸」卡 + 卡内六行形态；六个子口不再各占一张卡。 */
+    expect(
+      container.querySelector('[data-testid="param-node-size"]'),
+    ).toBeTruthy();
+    for (const [index, form] of SIZE_SUB_IDS.entries()) {
+      expect(
+        screen.getByTestId(`param-node-out-size-${index}`).textContent,
+      ).toContain(sizeSubLabel(form));
+    }
+    for (const form of SIZE_SUB_IDS) {
+      expect(screen.queryByTestId(`param-node-${form}`)).toBeNull();
     }
   });
 
@@ -132,11 +162,9 @@ describe("WorkflowParamCardColumn", () => {
         io={io}
       />,
     );
-    /* 同一张卡片的标题与端口行说同一个名字（「高度」）；ComfyUI 内部的 pin 名
+    /* 尺寸合成一张卡：行 = 形态（「尺寸 · 高度」）；ComfyUI 内部的 pin 名
      * （`height`）不落在行文字上，只作为「落到哪一行」的提示留在 title。 */
-    const sizeCard = entries.find((entry) => entry.cls === "size-height")!;
-    expect(sizeCard.pins.length).toBe(1);
-    const row = screen.getByTestId(`param-node-out-${sizeCard.id}-0`);
+    const row = screen.getByTestId("param-node-out-size-1");
     expect(row.textContent).toContain("高度");
     expect(row.textContent).not.toContain("height");
     expect(row.getAttribute("title")).toContain("height");
@@ -154,10 +182,11 @@ describe("WorkflowParamCardColumn", () => {
     expect(
       screen.getByTestId(`param-node-out-type-${promptCard.id}-0`).textContent,
     ).toBe("STRING");
-    const heightCard = entries.find((entry) => entry.cls === "size-height")!;
-    expect(
-      screen.getByTestId(`param-node-out-type-${heightCard.id}-0`).textContent,
-    ).toBe("INT");
+    /* 尺寸合成一张卡后，类型的来源是**它连上的那一行**：第 1 行是「尺寸 · 高度」，
+     * 连到 INT 的 height 那一格。 */
+    expect(screen.getByTestId("param-node-out-type-size-1").textContent).toBe(
+      "INT",
+    );
   });
 
   it("每张卡片右侧有一颗小圆点端点（可与宿主卡片上的参数相连）", () => {
@@ -188,11 +217,9 @@ describe("WorkflowParamCardColumn", () => {
     expect(outputRow.contains(dot)).toBe(true);
   });
 
-  it("**每个候选一颗**端点 —— 尺寸不再只有一个出口（ISSUE #355 复审）", () => {
-    /* 未连线时输出端口行逐个列出候选（尺寸 = 宽/高/宽高比/像素量），每一行都是
-     * 能接到的那一个候选口，各画一颗点；只给第一行画点会让「尺寸」看着只有一个
-     * 出口 —— 那正是用户这轮截图指出的问题。 */
-    const sizeCard = entries.find((entry) => entry.cls === "size-height")!;
+  it("尺寸只有一张卡，卡内六行形态各一颗端点", () => {
+    /* 「尺寸这里不要显示这么多节点，尺寸只显示一个节点」——六行形态挤在一张卡里，
+     * 每行一颗圆点：作者拖哪一行，哪一个形态就落到他松手的那一行上。 */
     const { container } = render(
       <WorkflowParamCardColumn
         entries={entries}
@@ -203,16 +230,12 @@ describe("WorkflowParamCardColumn", () => {
         )}
       />,
     );
-    /* 每个候选一颗端点：卡片上「尺寸」那一项的候选端口都各有一颗。 */
-    const dots = container.querySelectorAll("[data-node-handle]");
-    expect(dots.length).toBeGreaterThan(0);
-    for (const pin of sizeCard.pins) {
+    for (const form of SIZE_SUB_IDS) {
       expect(
-        container.querySelector(`[data-node-handle="${pin.name}"]`),
-        `候选 ${pin.name} 应有自己的端点`,
+        container.querySelector(`[data-node-handle="${form}"]`),
+        `形态 ${form} 应有自己的端点`,
       ).toBeTruthy();
     }
-    expect(sizeCard.pins.length).toBeGreaterThan(0);
   });
 
   it("库里没有对外参数时不渲染卡片列", () => {
