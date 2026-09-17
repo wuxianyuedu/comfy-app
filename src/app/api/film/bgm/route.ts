@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
-import { getServerUser } from "~/lib/auth-server";
+import { currentServerUser } from "~/server/auth/request-user";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ const ALLOWED_MIME = new Set([
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const user = await getServerUser();
+  const user = await currentServerUser();
   void user;
   const form = await req.formData().catch(() => null);
   if (!form)
