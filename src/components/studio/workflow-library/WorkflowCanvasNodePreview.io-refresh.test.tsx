@@ -202,7 +202,9 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       container.querySelector('[data-testid="workflow-param-card-column"]'),
     ).toBeTruthy();
     expect(screen.getByTestId("param-node-prompt")).toBeTruthy();
-    /* 尺寸在映射层是六个子口（形态由作者连线声明），各占一张卡。 */
+    /* 尺寸：六行形态合成**一张卡**（`param-node-size`），不再并排六个节点
+     * （用户口径：「尺寸这里不要显示这么多节点，尺寸只显示一个节点」）。 */
+    expect(screen.getByTestId("param-node-size")).toBeTruthy();
     for (const id of [
       "size-width",
       "size-height",
@@ -211,7 +213,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       "size-resolution",
       "size-multiple",
     ]) {
-      expect(screen.getByTestId(`param-node-${id}`)).toBeTruthy();
+      expect(screen.queryByTestId(`param-node-${id}`)).toBeNull();
     }
     /* 工作流内部参数（步数 / CFG…）不再是「对外参数」——契约里没有它们。 */
     expect(screen.queryByTestId("param-node-other")).toBeNull();
@@ -257,8 +259,8 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     const tags = [
       ...container.querySelectorAll('[data-testid="wflib-param-owner"]'),
     ];
-    /* 徽标文案 = 这个对外参数自己的名字（尺寸在映射层是子口，老键 `size` 由迁移
-     *  逻辑按落点形态归到「尺寸 · 宽高比」）。按同一份派生取值断言，不写字面量。 */
+    /* 徽标文案 = 这个对外参数自己的名字（尺寸在映射层是子口，卡片上「尺寸 ·
+     *  宽高比」那一行属于它）。按同一份派生取值断言，不写字面量。 */
     const sizeAspect = buildParamEntries(promptSizeIO(), undefined, {
       mode: "T2I",
     }).find((entry) => entry.id === "size-aspect")!;
@@ -316,12 +318,13 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
         defaultMode="T2I"
       />,
     );
-    /* 一个候选一颗 handle：左列卡片的 handle id 就是该候选端口的名字。 */
+    /* 左列卡片的 handle id：普通口是候选端口名，尺寸那张卡是**子口 id**（卡的每
+     *  一行 = 一个形态）。 */
     expect(
       container.querySelector('[data-handleid="positive_prompt"]'),
     ).toBeTruthy();
     expect(
-      container.querySelector('[data-handleid="aspect_ratio"]'),
+      container.querySelector('[data-handleid="size-aspect"]'),
     ).toBeTruthy();
     /* 宿主卡片的两端都在（连线的另一端）：提示词是普通参数行，
      *  宽高比则落在组合控件那一格上（比例/像素由同一块控件录入）。 */
@@ -494,7 +497,8 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
     ).toBeTruthy();
     expect(screen.getByTestId("param-node-prompt")).toBeTruthy();
     expect(screen.getByTestId("param-node-negative")).toBeTruthy();
-    /* 尺寸在映射层是六个子口（形态由作者连线声明），各占一张卡。 */
+    /* 尺寸：六行形态合成**一张卡**（契约口常驻，落点全空 = 未配置）。 */
+    expect(screen.getByTestId("param-node-size")).toBeTruthy();
     for (const id of [
       "size-width",
       "size-height",
@@ -503,7 +507,7 @@ describe("WorkflowCanvasNodePreview — 对外参数卡片列", () => {
       "size-resolution",
       "size-multiple",
     ]) {
-      expect(screen.getByTestId(`param-node-${id}`)).toBeTruthy();
+      expect(screen.queryByTestId(`param-node-${id}`)).toBeNull();
     }
   });
 });

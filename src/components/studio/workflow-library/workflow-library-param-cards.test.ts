@@ -245,7 +245,8 @@ describe("deriveLibraryParamCards", () => {
         {
           entryId: sizeEntry.id,
           targetIoKey: "5::widget::width",
-          handleId: "width",
+          /* 尺寸那张卡的行 = 形态，所以 handle 是**子口 id**（不是端口名）。 */
+          handleId: sizeEntry.id,
           grouped: false,
           manual: true,
         },
@@ -313,8 +314,7 @@ describe("deriveLibraryParamCards", () => {
     /* 拆分之前「尺寸」是一个口，落到组合控件上要把兄弟口一起画出来，否则「宽高比
      *  + 像素量」那几项读作没接上（ISSUE #355）。现在六种形态各有自己的子口 ——
      *  「尺寸 · 宽度」只往它连的那一行画；把兄弟口也算上会让宽度值被写进比例 /
-     *  像素量那几行。老数据里那条 `size` 键由迁移逻辑归到对应子口（本用例的
-     *  paramMap 就是老键，顺带守住这条迁移）。 */
+     *  像素量那几行。 */
     const groupedIO: WorkflowIOMap = {
       "5::widget::aspect_ratio": {
         direction: "input",
@@ -350,8 +350,8 @@ describe("deriveLibraryParamCards", () => {
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
     expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::width"]);
-    /* 库里按**端口名**找卡片圆点锚点（不是 ioKey）。 */
-    expect(wires.map((wire) => wire.handleId)).toEqual(["width"]);
+    /* 尺寸那张卡的行 = 形态，圆点 handle 就是**子口 id**（卡片与边同一份算式）。 */
+    expect(wires.map((wire) => wire.handleId)).toEqual(["size-width"]);
     /* 这条线来自作者画的那一条（实线口径）。 */
     expect(wires.every((wire) => wire.manual === true)).toBe(true);
   });
@@ -391,17 +391,13 @@ describe("deriveLibraryParamCards", () => {
       mode: "T2I",
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
-    /* 子口只画它连的那一条（老键 `size` 由迁移逻辑按落点形态归到「尺寸 · 像素量」）。 */
+    /* 子口只画它连的那一条（形态由子口身份声明）。 */
     expect(wires.map((wire) => wire.targetIoKey)).toEqual([
       "5::widget::megapixels",
     ]);
     expect(wires.map((wire) => wire.manual)).toEqual([true]);
-    /* 线从**被落到的那一颗圆点**出发：handle 按端口名各归各位。 */
-    expect(
-      wires.every(
-        (wire) => wire.handleId === wire.targetIoKey.split("::").pop(),
-      ),
-    ).toBe(true);
+    /* 线从**被落到的那一行**出发：尺寸卡的行 = 形态，handle 就是子口 id。 */
+    expect(wires.map((wire) => wire.handleId)).toEqual(["size-megapixels"]);
   });
 });
 
