@@ -5,7 +5,7 @@ import {
   completeLLMTools,
   streamLLM,
 } from "~/lib/llm/server";
-import { requireServerUser } from "~/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import { errorMessage } from "~/lib/error-message";
 import {
   TASK_TYPES,
@@ -83,7 +83,7 @@ const BodySchema = {
 };
 
 export async function POST(req: NextRequest) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }
