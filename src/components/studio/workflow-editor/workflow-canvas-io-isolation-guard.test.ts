@@ -233,18 +233,19 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     expect(mapping).toContain("exposedParamsForMode");
   });
 
-  it("库内卡片圆点的 handle id 与落点**同键空间**（都是 ioKey）", () => {
+  it("库内卡片圆点的 handle id 卡内唯一（`<条目 id>?<落点 ioKey>`）", () => {
     const cards = stripComments(
       readFileSync(
         path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"),
         "utf8",
       ),
     );
-    /* 锚点就是落点（ioKey），尺寸卡取子口 id —— 库内不许各写一套字符串拼装。
-     * 「按端口名换算」那一层已删除：同名 pin（两个节点各一行 `text`）会在同一个
-     *  节点里撞出重复 handle id，React Flow 只认第一颗（拖不出线 / 连不上）。 */
+    /* 锚点带上**条目 id**：三列卡片列是同一个 React Flow 节点，而提示词与负向
+     *  提示词的候选行完全相同（都吃 text 族）—— 只用端口名或只用 ioKey 都会撞车，
+     *  React Flow 只认第一颗（用户口径：「负向提示词的线从提示词那连出来」）。
+     *  尺寸卡取子口 id（卡内唯一的行标识）；库内不许各写一套字符串拼装。 */
     expect(cards).toContain("wiredTargetsForEntry");
-    expect(cards).toMatch(/handleId:[\s\S]{0,80}wired\.ioKey/);
+    expect(cards).toMatch(/handleId:[\s\S]{0,120}wired\.ioKey/);
     const mapping = readFileSync(
       path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
       "utf8",

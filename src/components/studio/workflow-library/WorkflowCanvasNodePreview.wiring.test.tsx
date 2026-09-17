@@ -357,7 +357,7 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
     expect(card.textContent).toContain("images");
     /* 端点在行首（圆点在左）：卡片的左缘才是「线从宿主进来」的那一侧。 */
     const dot = column.querySelector(
-      '.react-flow__handle.target[data-handleid="images"]',
+      '.react-flow__handle.target[data-handleid="5::output::IMAGE"]',
     )!;
     expect(dot).toBeTruthy();
     expect(
@@ -376,9 +376,11 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
         '[data-testid^="param-node-reset"]',
       )!.disabled,
     ).toBe(true);
-    /* 但端点本身在（可拖）—— 端点由画布的节点注入。 */
+    /* 但端点本身在（可拖）—— 端点由画布的节点注入；锚点 = 输出口的 ioKey。 */
     expect(
-      container.querySelector('.react-flow__handle[data-handleid="images"]'),
+      container.querySelector(
+        '.react-flow__handle[data-handleid="5::output::IMAGE"]',
+      ),
     ).toBeTruthy();
   });
 

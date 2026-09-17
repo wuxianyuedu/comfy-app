@@ -37,7 +37,6 @@ import {
   inferGroups,
   mergeRefreshedDefaults,
   resolveEntrySeedMode,
-  filterVisibleInMode,
   splitWorkflowIO,
   toWorkflowInputsPayload,
   type WorkflowIOMap,
@@ -247,26 +246,6 @@ export function WorkflowCanvasNodePreview({
     [workflowIO],
   );
 
-  /* 宿主卡片此刻**真的画得出来**的端口（ioKey 集合）。
-   *
-   *  它是「这个端口现在连得上」的事实源：卡片上的候选端点按它收窄 —— 画不出
-   *  端点的端口不给拖（拖过去也只会被画布闸门拒绝，用户看到的就是「点击端点
-   *  拉线出现禁用标记」）。
-   *
-   *  口径与宿主表单**同一份**（不是另算一遍）：`splitWorkflowIO` 拆出输入 →
-   *  `filterVisibleInMode` 按当前模式去掉隐藏项 → 组合控件接管的端口也算画得出来
-   *  （窄版控件把它们摆成逐行参数，各有端点）。纯派生：不必等 DOM 测量，也不会在
-   *  渲染里读 ref。 */
-  const reachableKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const entry of splitWorkflowIO(workflowIO).inputs) {
-      if (!filterVisibleInMode([entry], effectiveMode).length) continue;
-      keys.add(entry.ioKey);
-    }
-    for (const ioKey of groupedKeys) keys.add(ioKey);
-    return keys;
-  }, [workflowIO, effectiveMode, groupedKeys]);
-
   /* seed 类参数的「控件后行为」：按生效模式解析（模式覆盖优先，回退条目全局）。
    *  没有模式时与旧行为一致，只读条目全局 seedMode。 */
   const seedModes = useMemo(() => {
@@ -421,17 +400,8 @@ export function WorkflowCanvasNodePreview({
         paramMap: wiring.effectiveParamMap,
         mode: effectiveMode,
         groupedKeys,
-        /* 候选端点收窄到「宿主卡片此刻真的画得出来的行」——画不出端点的端口不给
-         * 拖，拖过去也落不上（与编辑器画布的 `reachableKeys` 同一口径）。 */
-        reachableKeys,
       }),
-    [
-      workflowIO,
-      wiring.effectiveParamMap,
-      effectiveMode,
-      groupedKeys,
-      reachableKeys,
-    ],
+    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys],
   );
   /* ── 对外输出参数（右列）──
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
