@@ -6,6 +6,8 @@
  *  drag-and-drop pre-fill path (handleDroppedFile) can populate the same
  *  fields before the panel opens.  Behaviour is unchanged.
  */
+import { useRef } from "react";
+
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
@@ -39,10 +41,29 @@ export function WorkflowImportPanel({
     importWarn,
     showHelpTip,
     setShowHelpTip,
+    dropErr,
+    handlePickedFile,
+    panelDragActive,
+    onPanelDragOver,
+    onPanelDragEnter,
+    onPanelDragLeave,
+    onPanelDrop,
   } = state;
 
+  /* 隐藏的文件输入框由视图持有 ref（§17.6.4：ref 留在视图层，hook 只回数据）——
+   * 「选择文件」按钮只是替用户点一下它，文件本身仍交给同一个漏斗处理。 */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   return (
-    <div className="border-border-strong bg-subtle mb-6 rounded-2xl border p-5">
+    <div
+      onDragOver={onPanelDragOver}
+      onDragEnter={onPanelDragEnter}
+      onDragLeave={onPanelDragLeave}
+      onDrop={onPanelDrop}
+      className={`border-border-strong bg-subtle mb-6 rounded-2xl border p-5 transition-colors ${
+        panelDragActive ? "border-violet-400/70 bg-violet-500/5" : ""
+      }`}
+    >
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-ink-bright text-sm font-semibold">
           导入 ComfyUI 工作流
@@ -56,6 +77,12 @@ export function WorkflowImportPanel({
           ✕
         </button>
       </div>
+
+      {panelDragActive && (
+        <p className="text-ink-soft mb-3 rounded-lg border border-dashed border-violet-400/50 px-3 py-2 text-center text-xs">
+          松开即可读取该 JSON 文件
+        </p>
+      )}
 
       {/* Common: name + mode */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
@@ -126,6 +153,34 @@ export function WorkflowImportPanel({
           </span>
         </div>
       </div>
+      {/* 文件入口：与拖入共用同一个漏斗（读文件 → 识别格式 → 预填面板）。 */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-ink-muted text-xs">
+          把 ComfyUI 导出的 <code className="font-mono">.json</code>{" "}
+          拖到面板任意位置，或
+        </span>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="border-border-strong bg-subtle text-ink-soft rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-violet-400/40 hover:text-violet-700 dark:hover:text-violet-200"
+        >
+          选择文件…
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,.workflow,application/json"
+          aria-label="选择工作流 JSON 文件"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            /* 清空 value：否则连续选同一个文件不会再触发 change。 */
+            event.target.value = "";
+            if (file) void handlePickedFile(file);
+          }}
+        />
+      </div>
+
       <div className="mt-3">
         <textarea
           value={importJson}
@@ -136,6 +191,12 @@ export function WorkflowImportPanel({
         />
       </div>
 
+      {/* 文件入口（拖入 / 选择）失败的可读原因，与粘贴路径的 importErr 分开两条。 */}
+      {dropErr && (
+        <p className="mt-2 text-xs text-red-700 dark:text-red-400">
+          ⚠ {dropErr}
+        </p>
+      )}
       {importErr && (
         <p className="mt-2 text-xs text-red-700 dark:text-red-400">
           {importErr}
