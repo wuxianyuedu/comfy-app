@@ -34,7 +34,7 @@ export default defineConfig({
       //                    ——当时的现场是插件 1.8s 就退出，而报错完全指不出是
       //                    reporter 少配了一项。
       reporter: ["text", "json-summary", "lcov"],
-      include: ["src/server/api/middleware/**", "src/lib/**"],
+      include: ["src/server/api/middleware/**", "src/server/film/**", "src/lib/**"],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
         "src/server/api/middleware/**": {
@@ -86,11 +86,22 @@ export default defineConfig({
          *      （`drizzle-studio` 就是这么从 0 抬到 40 的）。
          *
          * 统计口径与表格里的 `lib/<domain>` 行一致（v8 按目录聚合）。 */
+        // 从「20/20/15/10」抬到实测值：三条**从未被覆盖**的用户路径进了用例 ——
+        //   · `agentic.ts`（0 → 100）：多轮引导的离线状态机（空历史 / 没说类型 /
+        //     信息不足 / 出方案）与 LLM 路径的「模型返回畸形 JSON / 空回复 /
+        //     缺 spec 却自称 ready」处置；
+        //   · `client.ts`（0 → 100）：坏 tool_call 过滤（空 id 会让执行层串台）、
+        //     非 2xx 错误信封解包、响应体不是 JSON 时的不炸路径；
+        //   · `server.ts`（0 → 97.8）：两条协议（tools / JSON 指令回退）的选路与
+        //     「action 未登记就不交给执行层」的闸门、消息窄化（伪造 system 被丢弃）。
+        // 目录实测 77.96/70.05/82.6/81.26，取向下取整到 5 的倍数（只升不降，§18.6）。
+        // `shared.ts` / `types.ts` 是纯类型文件（v8 记 0%），因此目录整体低于
+        // 各实现文件的实测值 —— 门槛取目录口径。
         "src/lib/agent/**": {
-          lines: 20,
-          functions: 20,
-          statements: 15,
-          branches: 10,
+          lines: 80,
+          functions: 80,
+          statements: 75,
+          branches: 70,
         },
         // 从「40/35/40/35」抬到实测值：仓储层（`repository-*.ts` 共 12 个模块，
         // 占本目录分母的绝对大头）此前**零覆盖**。补法不是逐个 mock，而是让测试
@@ -124,21 +135,30 @@ export default defineConfig({
           statements: 35,
           branches: 35,
         },
-        // 从「5/10/5/5」抬到实测值：编排的判决面（取消撤任务、合成前置条件、
-        // 镜头参数与画幅折算）进了用例，不再只有两个纯函数文件被覆盖。
-        //
-        // `lines` 取 39 而不是 40：v8 的 `lines` 是**按源码行**统计的，而全库
-        // prettier 治理把 `orchestrator.ts` 里若干单行写法拆成多行，同一批语句
-        // 落在更多行上 —— 分子（被覆盖行 77）不变、分母 214 → 220，
-        // 百分比因此从 35.98% 掉到 35.00%。**语句口径 245/87 = 35.51% 两个版本
-        // 完全一致**，即这不是覆盖率下降而是行数口径随源码行数变化。
-        // 因此这里对齐到「按语句口径换算出的同一水平」，其余三项（functions /
-        // statements / branches）保持不动 —— 棘轮指的是测试强度，不是行数巧合。
+        // 编排（`orchestrator.ts`）已按 ISSUE #572 第 2 项迁到
+        // `src/server/film/**`（服务端领域编排只被 `film` router 消费，与既有
+        // `src/server/workshop/orchestrator.ts` 同一落点）。`src/lib/film/**`
+        // 因此只剩纯函数（`film-size` 尺寸折算、`bgm-client` 网络客户端），
+        // 实测 100/93.75/100/100 —— 门槛随之抬到实测值（只升不降，§18.6）。
         "src/lib/film/**": {
-          lines: 39,
-          functions: 55,
-          statements: 40,
-          branches: 30,
+          lines: 100,
+          functions: 90,
+          statements: 100,
+          branches: 90,
+        },
+        // `src/server/film/**` 随迁入首次纳入覆盖率门槛（此前它不在
+        // `coverage.include` 里，整个服务端编排块**零门槛**）。数值取实测值
+        // 向下取整到 5 的倍数（35.12/28.9/53.33/34.4），只升不降。
+        //
+        // 为什么不是更高：它的分母是整条「分镜 → 逐镜生成 → ffmpeg 合成」链路，
+        // 未覆盖部分是真的起进程 / 拉工作流 / 等轮询的分支 —— 硬抬门槛会让无关
+        // 提交变红（§18.6）。补它的正确方法是给编排判决面（镜头参数折算 / 合成
+        // 前置条件 / 取消撤销）继续加用例，届时同批上调这里。
+        "src/server/film/**": {
+          lines: 30,
+          functions: 50,
+          statements: 35,
+          branches: 25,
         },
         // 从「30/30/30/25」抬到实测值：四组低覆盖文件进了用例 ——
         //   · `secrets`（曾 9.5/0/0）：GCM 往返 + 每次新 IV + 篡改密文/换密钥
