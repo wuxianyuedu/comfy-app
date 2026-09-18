@@ -287,8 +287,8 @@ export function modeContractInputIdLabel(id: ModeContractInputId): string {
   return exposedParamDisplayLabel(id);
 }
 
-/** 下一个可追加的参考图口 id —— 参考图不设数量上限，每次追加下一个序号槽
- *  （`reference-image` → `reference-image-2` → `-3` …）。 */
+/* 下一个可追加的参考图口 id —— 参考图不设数量上限，每次追加下一个序号槽
+ *（`reference-image` 之后是 `reference-image-2`、`-3`，依次递增）。 */
 export function nextReferenceImageId(
   inputs: readonly ModeContractInputId[],
 ): ModeContractInputId {

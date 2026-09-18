@@ -125,9 +125,9 @@ export function sitePackagesDirs(
  *     ComfyUI/ 子目录）。
  *   - ComfyUI Desktop 实例根：目录含 ComfyUI/ 子目录（main.py 在其中）
  *     与 standalone-env/（运行时解释器）。例如：
- *       ComfyUI-Installs/ComfyUI2/
- *       ├── ComfyUI/main.py
- *       └── standalone-env/python.exe
+ *       ComfyUI-Installs/ComfyUI2/          ← 实例根
+ *       ├── ComfyUI/main.py                 ← 源码目录
+ *       └── standalone-env/python.exe       ← 运行时解释器
  *     把 comfyuiPath 配到实例根即可，无需精确到源码子目录。
  *   也兼容反向配置（把 comfyuiPath 指向实例内的 ComfyUI/ 源码根）——
  *   解释器会向上到父级实例根查找。

@@ -45,7 +45,7 @@ export const GenerateSchema = z.object({
 });
 
 export const generateRouter = createTRPCRouter({
-  /** POST /api/generate */
+  /* POST /api/generate —— 新建 */
   generate: authedProcedure
     .input(GenerateSchema)
     .mutation(async ({ ctx, input }) => {
@@ -98,7 +98,7 @@ export const generateRouter = createTRPCRouter({
         return { taskId: task.id };
       }
 
-      // Canvas-edited graph or API-format import.
+      // 画布编辑过的图，或导入的 API 格式图。
       // 空对象也算空图：模板 graph 列 NOT NULL，导入失败/空导出会落 `{}`，
       // 此时拿去构建会静默产出一个空 prompt 任务（提交到 ComfyUI 才失败，
       // 用户侧无提示），故与 null 同等对待。

@@ -1,6 +1,6 @@
 /**
  * `repository-user.ts` — User 与 LlmConfig 仓储（Drizzle 版）
- * @module core/repository-user
+ * @module core/repository-user — User 与 LlmConfig 仓储（Drizzle 版）
  *
  * LlmConfig 是唯一存 API Key 的配置表。为避免密钥以明文落盘（本地 SQLite 可被
  * 直接读取），仓库在此层对 DB 字节做 AES-256-GCM 加密：落库前加密、读取后解密，

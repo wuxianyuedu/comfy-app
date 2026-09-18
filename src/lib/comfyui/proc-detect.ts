@@ -125,8 +125,8 @@ export async function findPidForMainPyDetailed(
 }
 
 /** 解析 `/proc/net/tcp{,6}` 里 state=0A（LISTEN）的项。
- *  返回 inode → 端口 的映射。格式：
- *  `sl local_address rem_address st ... uid timeout inode`
+ *  返回 inode → 端口 的映射。行格式依次是：
+ *  序号、本端地址、对端地址、状态、队列、计时器、uid、超时、inode。
  *  端口是 `地址:端口` 里冒号后的 4 位十六进制（大端序的端口号）。 */
 export function parseProcNetTcpListeners(content: string): Map<string, number> {
   const out = new Map<string, number>();

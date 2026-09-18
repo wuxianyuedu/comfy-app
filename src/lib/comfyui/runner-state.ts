@@ -1,14 +1,14 @@
-// Internal shared state + log persistence for the comfyui runner layer.
+// // comfyui 执行层内部共享状态 + 日志落盘。
 
 //
 
-// Split of the legacy single-file `runner.ts` into enqueue / executor /
+// // 由历史单文件 `runner.ts` 拆分而来（拆成 enqueue / executor / reaper）。
 
-// reaper.  This module holds the *singleton runtime state* and the *log
+// // 本模块持有那几个子模块共享的**单例运行时状态**与**日志基建**。
 
-// infrastructure* that those sub-modules share.  It is NOT a public API
+// // 它**不是**对外 API —— 外部代码请从 enqueue.ts 取公开入口。
 
-// surface — external code imports the public entry points from enqueue.ts.
+// // 模块边界见 docs/standards/18-lib层规范.md。
 
 //
 
@@ -64,11 +64,11 @@ export type Job = {
 
   prompt?: Record<string, unknown>;
 
-  /** Raw UI-format json (with subgraph wrappers) — executed via comfy-cli. */
+  /** /** 原始 UI 格式的 JSON（含子图 wrapper）—— 走 comfy-cli 执行。 */
 
   rawJson?: unknown;
 
-  /** Canvas `workflowInputs` injected into the raw json before execution. */
+  /** /** 执行前注入到原始 JSON 里的画布 `workflowInputs`。 */
 
   overrides?: RawWorkflowOverride[];
 };
@@ -80,13 +80,13 @@ export type LogEntry = {
 
   msg: string;
 
-  /** caller source ("file:line") captured at
+  /** /** 发日志时捕获的调用方位置（"文件:行"）：让调试面板能显示每行日志
 
-   *  emit time so the debug panel can show *which code path* produced
+   *  来自哪条代码路径。跳过捕获时为空。它作为条目的一部分一并落盘，
 
-   *  each log line.  Empty when capture was skipped.  Persisted as
+   *  因此 SSE 重放也带着它（实现见 log() 与 callerLoc()）。
 
-   *  part of the entry so SSE replays carry it too. */
+   *  不捕获时这里为空字符串。 */
 
   src?: string;
 };
@@ -102,19 +102,19 @@ export type TaskEvent =
   | { type: "error"; error: string }
   | { type: "log"; entry: LogEntry }
 
-  /* synthetic "state" event re-emitted
+  /* /* 合成的 "state" 事件：由 cancelTask() / finalizeFailure() 两条路径补发，
 
-   *  from cancelTask() / finalizeFailure() paths that would
+   *  它们否则只会更新数据库，不通知 SSE 订阅方。
 
-   *  otherwise only update the DB without notifying the SSE
+   *  前端读取的字段与初始 /api/tasks/[id]/stream GET 响应体完全一致，
 
-   *  subscriber.  The frontend reads the same fields it reads
+   *  因此 "state" 事件会触发同一条 patch() 路径，
 
-   *  from the initial /api/tasks/[id]/stream GET body, so a
+   *  把「卡在生成中」的 UI 治好。
 
-   *  "state" event triggers the same patch() path that heals
+   *  顺序与 finalizeFailure 保持一致：先 state，后 error。
 
-   *  the "stuck generating" UI. */
+   *  （取消路径的完整说明见 enqueue.ts 的 cancelTask。） */
   | {
       type: "state";
 
@@ -146,25 +146,25 @@ export type RunnerState = {
 
   lastLogPct: Map<string, number>;
 
-  /** per-node completion tracking. When
+  /** /** 按节点记录完成情况。ComfyUI 发 `executing` 且 `data.node !== null` 时，
 
-   *  ComfyUI emits `executing` with `data.node !== null` we record the
+   *  把（节点 id, classType）记在这里；下一条 `executing` 的 node 为 null
 
-   *  (node, classType) here; on the next `executing` with `data.node
+   *  到达时，用记录下来的值打出「✔ 节点 X (classType) 完成」。
 
-   *  === null` we log "✔ 节点 X (classType) 完成" using the recorded
+   *  这样日志面板给用户的是按节点的时间线，而不只是「开始了」的标记。
 
-   *  values.  This gives the user a clear per-node timeline in the
+   *  仅 API 格式路径需要这一对日志；comfy-cli 路径自己会打（见 executor-ws）。
 
-   *  log panel, not just "started" markers. */
+   *  */
 
   lastNodeByTask: Map<string, { node: string; classType: string; t: number }>;
 
-  /** task start time (epoch ms), used to
+  /** /** 任务开始时间（epoch 毫秒），用于完成时打「总耗时 Xs」。
 
-   *  emit "总耗时 Xs" at completion.  Set in enqueue(), cleared in
+   *  在 enqueue() 里写入，在 complete() / fail() / cancelTask() 里清除。
 
-   *  complete() / fail() / cancelTask(). */
+   *  （缺失时说明任务来自上一次服务端生命周期。） */
 
   startedAt: Map<string, number>;
 
@@ -261,7 +261,7 @@ function callerLoc(): string {
 
     const lines = stack.split("\n");
 
-    // lines[0] = "Error", lines[1] = "    at log (…)", lines[2] = real caller.
+    // 栈的形状：lines[0] 是 "Error"，lines[1] 是 " at log (…)"，lines[2] 才是真正的调用方。
 
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const frame = lines[2] || lines[1] || "";
@@ -288,39 +288,39 @@ function callerLoc(): string {
   }
 }
 
-// Append a structured log entry: keep in-memory + emit to live subscribers +
+// 追加一条结构化日志：留内存 + 推给实时订阅方 + 防抖落库，
 
-// debounce-persist to DB so SSE replay covers everything.
-
-//
-
-// the original `log()` only pushed to in-memory
-
-// `s.logs` and the EventEmitter.  `persistLogs()` was called only at
-
-// terminal points (complete / finalizeFailure).  That meant any log
-
-// emitted *before* the frontend opened EventSource (which only happens
-
-// AFTER `/api/generate` returns taskId and `d.taskId` is patched) was
-
-// invisible: the emit landed on no subscriber, and SSE's initial
-
-// `Task.logs` replay found an empty array.  Symptom in the panel: a long
-
-// silence between "📡 已订阅" and the first server-side line — the user
-
-// couldn't tell what the runner was doing.
+// 让 SSE 重放能覆盖全部内容。
 
 //
 
-// Fix: persist to DB on every log, but coalesce via 200ms debounce so
+// 原先的 `log()` 只推到内存的 `s.logs` 与 EventEmitter，
 
-// high-frequency bursts (per-node ▶/✔ pairs during execution) collapse
+// 而 `persistLogs()` 只在终结点（complete / finalizeFailure）被调用。
 
-// to ~1 write instead of one per entry.  A 1500ms safety flush
+// 于是「前端打开 EventSource 之前发出的日志」全都不可见
 
-// guarantees we don't starve the DB during sustained emission.
+// （EventSource 只在 /api/generate 返回 taskId、
+
+// 前端把 d.taskId 补上之后才会打开）：
+
+// 那些 emit 落在没有订阅者的时刻，
+
+// SSE 首次回放 `Task.logs` 又只拿到空数组。
+
+// 面板上的表现是：「📡 已订阅」之后长时间静默，
+
+// 用户看不出执行器在干什么。
+
+//
+
+// 修法：每条日志都落库，但用 200ms 防抖合并写入 ——
+
+// 高频突发（执行期间的按节点 ▶/✔ 成对日志）因此收敛成约 1 次写，
+
+// 而不是每条一次。另有 1500ms 保底刷盘，
+
+// 保证持续输出时不会把数据库写饿。
 
 export function log(taskId: string, level: LogEntry["level"], msg: string) {
   const store = state();
@@ -338,15 +338,15 @@ export function log(taskId: string, level: LogEntry["level"], msg: string) {
   schedulePersistLogs(taskId);
 }
 
-// per-taskId debounced DB writer. Each task
+// 每个 taskId 一个防抖落库器。一个任务最多只有一次待写；
 
-// gets at most one pending write; subsequent `log()` calls within the
+// 防抖窗口内后续的 `log()` 调用会重置计时器。
 
-// debounce window reset the timer.  The "max delay" watchdog guarantees
+// 「最长延迟」看门狗保证持续输出（例如按节点 ▶/✔ 的突发）
 
-// sustained emission (e.g. the per-node ▶/✔ burst) still reaches the DB
+// 仍能在约 1.5s 内落库，SSE 重放因此能及时拿到。
 
-// within ~1.5s so SSE replays pick it up promptly.
+// （每条都写会把数据库写爆，所以必须合并。）
 
 const PERSIST_DEBOUNCE_MS = 200;
 
@@ -390,7 +390,7 @@ export function schedulePersistLogs(taskId: string) {
   const existing = persistTimers.get(taskId);
 
   if (existing) {
-    // Reset only the debounce timer; the max-delay watchdog stays armed.
+    // 只重置防抖计时器；最长延迟看门狗继续保持武装。
 
     clearTimeout(existing.debounce);
 
@@ -474,11 +474,11 @@ export function clearFinalize(taskId: string): void {
 }
 
 export async function persistLogs(taskId: string) {
-  // a debounced write is now racing the terminal
+  // 此时防抖写与终结点的 `await persistLogs(taskId)` 调用在竞争。
 
-  // `await persistLogs(taskId)` call.  Cancel the pending timers so the
+  // 取消防抖计时器，让最终这次同步刷盘
 
-  // final synchronous flush is the one and only write for this task.
+  // 成为该任务**唯一**的写入。
 
   const pending = persistTimers.get(taskId);
 

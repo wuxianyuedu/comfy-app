@@ -1,6 +1,6 @@
 /**
  * `repository-task.ts` — Task 业务仓储（Drizzle 版）
- * @module core/repository-task
+ * @module core/repository-task — Task 业务仓储（Drizzle 版）
  */
 import "server-only";
 

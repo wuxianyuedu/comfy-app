@@ -1,6 +1,6 @@
 /**
  * `repository-skill.ts` — Skill 业务仓储（Drizzle 版）
- * @module core/repository-skill
+ * @module core/repository-skill — Skill 业务仓储（Drizzle 版）
  */
 import "server-only";
 

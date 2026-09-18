@@ -14,7 +14,7 @@
  *
  * 共享类型也在这里（§18：需要被多个 lib 模块共用的类型下沉到类型模块）。
  *
- * @module comfyui/executor-history
+ * @module comfyui/executor-history — /history 轮询与队列现场（执行链的**叶子**诊断模块）
  */
 import { getHistory, resolveComfyBase } from "./client";
 import { HISTORY_RETRIES, HISTORY_RETRY_DELAY_MS, state } from "./runner-state";

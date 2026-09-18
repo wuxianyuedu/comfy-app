@@ -1,6 +1,6 @@
-/* ── Canvas project persistence (named, multiple projects) ──
- * Replaces the old single-draft localStorage key with a project index so the
- * user can keep several named canvases and switch between them safely.
+/* ── 画布项目持久化（可命名、可多个） ──
+ * 用一套「项目索引」取代旧的单草稿 localStorage 键，
+ * 让用户可以保留多个命名画布并安全切换。
  */
 
 import type { Edge } from "@xyflow/react";
@@ -18,9 +18,9 @@ export interface CanvasProject {
 
 const INDEX_KEY = "comfyapp.canvas.projects.v1";
 const ACTIVE_KEY = "comfyapp.canvas.active.v1";
-/** Event name fired on every canvas-store mutation (upsert/delete/create).
- *  Pages listening (e.g. workspace home) re-read the store to refresh
- *  dependent views (recent projects, switcher labels, etc.). */
+/* 每次画布仓库变更（upsert / delete / create）都会广播的事件名。
+ * 订阅它的页面（例如工作区首页）会重读仓库，刷新依赖它的视图
+ *（最近项目、切换器标签等）。 */
 const CHANGED_EVENT = "comfyapp:canvas-store-changed";
 
 function emitChanged() {
@@ -50,12 +50,10 @@ export function getProject(id: string): CanvasProject | null {
   return all.find((all) => all.id === id) ?? null;
 }
 
-/**
- * Write-through to the server.  Best-effort: failures are swallowed so a
- * flaky network / server never blocks the local-first UI.  Called from
- * `upsertProject` on every meaningful mutation, so the server copy stays
- * in sync across ports / devices (localStorage alone is per-origin and
- * silently loses data when you switch ports, e.g. 3100 → 3102).
+/* 直写到服务端。尽力而为：失败被吞掉，网络/服务端不稳时绝不阻塞本地优先的界面。
+ * 每次有意义的变更都会从 `upsertProject` 调它，于是服务端副本在换端口 / 换设备时
+ * 也保持同步（单靠 localStorage 是按来源隔离的，换端口时数据会静默丢失，
+ * 例如从 3100 换到 3102）。
  */
 async function persistProjectToServer(p: CanvasProject): Promise<void> {
   if (typeof window === "undefined") return;
@@ -67,12 +65,11 @@ async function persistProjectToServer(p: CanvasProject): Promise<void> {
       edges: p.edges ?? [],
     });
   } catch {
-    /* offline / server down — localStorage already has it */
+    /* 离线或服务端挂了 —— localStorage 里已经有了 */
   }
 }
 
-/**
- * Hard-delete on the server (best-effort).  Mirrors `deleteProject`.
+/* 在服务端硬删除（尽力而为）。与 `deleteProject` 对应。
  */
 function deleteProjectOnServer(id: string): void {
   if (typeof window === "undefined") return;
@@ -88,7 +85,7 @@ export function upsertProject(p: CanvasProject): void {
   else all.push(next);
   localStorage.setItem(INDEX_KEY, JSON.stringify(all));
   emitChanged();
-  // Mirror to the server (durable, cross-origin store). Non-blocking.
+  // 同步到服务端（持久、跨来源的存储）。不阻塞。
   void persistProjectToServer(next);
 }
 
@@ -101,18 +98,17 @@ export function deleteProject(id: string): void {
   localStorage.setItem(INDEX_KEY, JSON.stringify(all));
   if (getActiveId() === id) localStorage.removeItem(ACTIVE_KEY);
   emitChanged();
-  // Best-effort mirror delete on the server.
+  // 尽力在服务端也删掉。
   deleteProjectOnServer(id);
 }
 
-/**
- * Pull the server-side project list and reconcile with localStorage:
- *   - Server project wins when its `updatedAt` is newer than the local copy
- *     (covers switching ports / devices where localStorage was empty/stale).
- *   - Local-only projects (never synced) are pushed up to the server so the
- *     existing data isn't lost on the first visit after this fix ships.
- * Called once on canvas mount, before the active project is read, so the
- * merged index is what the canvas loads from.
+/* 拉取服务端的项目列表，并与 localStorage 对账：
+ *   - 服务端项目的 `updatedAt` 比本地新时以服务端为准
+ *    （覆盖「换端口 / 换设备后本地为空或是旧数据」的情形）。
+ *   - 只存在于本地的项目（从未同步过）会被推上服务端，
+ *     让本次修复上线后第一次访问时既有数据不丢。
+ * 画布挂载时调一次，且在读取当前活动项目之前 ——
+ * 于是画布加载的是合并后的索引。
  */
 let hydrated = false;
 export async function hydrateFromServer(): Promise<void> {
@@ -147,7 +143,7 @@ export async function hydrateFromServer(): Promise<void> {
         changed = true;
       }
     }
-    // Push local-only projects up (migration of pre-fix data).
+    // 把只存在于本地的项目推上去（迁移修复前的数据）。
     for (const lp of localAll) {
       if (!serverProjects.some((sp) => sp.id === lp.id)) {
         void persistProjectToServer(lp);
@@ -165,28 +161,25 @@ export async function hydrateFromServer(): Promise<void> {
   }
 }
 
-/** Default name used for freshly-created draft projects.  Used as a
- *  sentinel by `reapEmptyProject`: a project is considered an empty
- *  draft (and safe to reap) iff it has zero nodes/edges AND its name
- *  matches this literal.  User-named empty projects (where the user
- *  intentionally saved an empty canvas) are NOT reaped. */
+/* 新建草稿项目的默认名。它同时是 `reapEmptyProject` 用的哨兵：
+ * 只有当项目「零节点零连线**且**名字等于该字面量」时，
+ * 才算是可安全回收的空草稿。
+ * 用户自己命名的空项目（他确实有意保存了一个空画布）**不会**被回收。 */
 export const EMPTY_DRAFT_NAMES = ["未命名"] as const;
 export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 
-/** True iff `name` is the empty-draft sentinel name.  Use this instead of
- *  hard-coding `"未命名"` at every reap guard, so the default name stays
- *  in sync from a single source of truth. */
+/* 当且仅当 `name` 是空草稿哨兵名时为真。用它代替在每个回收判据里
+ * 硬编码「未命名」，让默认名只有一处事实源、不会漂移。 */
 export function isEmptyDraftName(name: string | undefined | null): boolean {
   if (!name) return false;
   return name === EMPTY_DRAFT_NAME;
 }
 
 /**
- * Returns the set of all names currently in use by projects in the
- * index.  Caller can then check `taken.has(name.trim())` to detect a
- * name clash, and `findNextAvailableName(base)` to get a non-clashing
- * variant.  Excludes `excludeId` so a rename can probe "would I clash
- * with someone else if I used this name".
+ * 返回索引里所有项目当前已占用的名字集合。调用方据此检查
+ * `taken.has(name.trim())` 判断是否重名，或用 `findNextAvailableName(base)`
+ * 取一个不冲突的变体。`excludeId` 会被排除，
+ * 好让重命名场景能问「如果我用这个名字，会不会和别人撞」。
  */
 export function getAllProjectNames(excludeId?: string): Set<string> {
   const all = listProjects();
@@ -195,22 +188,22 @@ export function getAllProjectNames(excludeId?: string): Set<string> {
   return set;
 }
 
-/** Convenience predicate: is `name` already taken by another project? */
+/* 便捷判据：这个名字是否已被别的项目占用？ */
 export function isProjectNameTaken(name: string, excludeId?: string): boolean {
   const taken = getAllProjectNames(excludeId);
   return taken.has(name.trim());
 }
 
 /**
- * Return the next non-clashing variant of `base`:
- *   - If `base` itself is free, returns `base`.
- *   - Otherwise tries `base_2`, `base_3`, … until it finds a free one.
- *   - Example: with `taken = {"未命名", "未命名_2"}` and `base = "未命名"`
- *     this returns `"未命名_3"`.
- *   - Empty / whitespace-only base falls back to `EMPTY_DRAFT_NAME`.
+ * 返回 `base` 的下一个不冲突变体：
+ *   - `base` 本身就空闲 → 直接返回 `base`。
+ *   - 否则依次试 `base_2`、`base_3` … 直到找到空闲的。
+ *   - 举例：当已占用的是「未命名」「未命名_2」，而 `base` 是「未命名」时，
+ *     这里返回「未命名_3」。
+ *   - `base` 为空或只有空白 → 回落到 `EMPTY_DRAFT_NAME`。
  *
- *  Uses the index alone; safe to call before mutation because the upsert
- *  in `commitRename` / `upsertProject` runs synchronously after this.
+ * 只看索引；在变更之前调用是安全的，
+ * 因为 `commitRename` / `upsertProject` 里的 upsert 紧跟在它之后同步执行。
  */
 export function findNextAvailableName(
   base: string,
@@ -219,10 +212,10 @@ export function findNextAvailableName(
   const baseClean = base.trim() || EMPTY_DRAFT_NAME;
   const taken = getAllProjectNames(excludeId);
   if (!taken.has(baseClean)) return baseClean;
-  // Match a trailing "_<digits>" on the candidate suffix to avoid an
-  // endless loop if the base itself ends with "_<n>" — e.g. if the user
+  // 匹配候选后缀末尾的「_<数字>」，避免 base 本身以「_<n>」结尾时
+  // 陷入死循环 —— 例如用户
   // already named a project "灵感_3" and we start from "灵感_3", we'd
-  // otherwise collide with it instead of finding the next free slot.
+  // 否则会一直与它相撞，而不是找到下一个空闲槽位。
   let suffix = 2;
 
   while (true) {
@@ -230,7 +223,7 @@ export function findNextAvailableName(
     if (!taken.has(candidate)) return candidate;
     suffix += 1;
     if (suffix > 9999) {
-      // Pathological: 10000 collisions.  Just append a timestamp slice.
+      // 病态情形：撞了 10000 次。直接粘一段时间戳切片。
       return `${baseClean}_${Date.now().toString(36).slice(-4)}`;
     }
   }
@@ -250,19 +243,17 @@ export function createProject(name?: string): CanvasProject {
 }
 
 /**
- * Create a project that ONLY lives in active-id state — it is NOT written
- * to the project index.  Use this when the user lands on a fresh canvas
- * ("新建项目"), so visiting the canvas and walking away without doing
- * anything doesn't pollute the recent-projects list with empty drafts.
+ * 创建一个**只存在于 active-id 状态**的项目 —— 它**不**写进项目索引。
+ * 用户点「新建项目」落到一张全新画布时用它：这样只是打开画布又走开、
+ * 什么都没做的话，不会用空草稿污染「最近项目」列表。
  *
- * The project becomes "real" the moment the user makes a real change
- * (drag/add/connect/rename): the auto-persist effect in ProjectCanvas will
- * detect `nodes.length === 0 && edges.length === 0 === false` and call
- * `upsertProject`, which performs the actual upsert + emitChanged.
+ * 用户一旦做出真实改动（拖拽 / 添加 / 连线 / 重命名），它就会「转正」：
+ * ProjectCanvas 的自动持久化副作用会发现
+ * `nodes.length === 0 && edges.length === 0` 不成立，随即调用 `upsertProject`，
+ * 真正落库并广播变更。
  *
- * If the user leaves the canvas with the draft still empty,
- * `reapEmptyDraft` deletes it from the active id (it was never in the
- * index in the first place).
+ * 若用户离开时草稿仍是空的，`reapEmptyDraft` 会把它从 active id 里删掉
+ *（它本来就不在索引里）。
  */
 export function createDraftProject(name?: string): CanvasProject {
   const p: CanvasProject = {
@@ -278,8 +269,8 @@ export function createDraftProject(name?: string): CanvasProject {
 }
 
 /**
- * Forget the active draft project id without touching the index.  Call
- * when the user walks away from a fresh canvas they never wrote to.
+ * 忘掉当前草稿项目的 id，但不动索引。
+ * 用户离开一张从未写过内容的崭新画布时调用。
  */
 export function clearActiveIfDraft(pid: string): void {
   if (typeof localStorage === "undefined") return;
@@ -287,11 +278,9 @@ export function clearActiveIfDraft(pid: string): void {
 }
 
 /**
- * Remove a project from the index iff it is an empty default-named
- * project (see `EMPTY_DRAFT_NAME`).  Returns true when something was
- * reaped.  Already-named / non-empty projects are NEVER reaped, so an
- * intentional blank canvas the user named "空白灵感板" survives a reap
- * pass.
+ * 当且仅当该项目是「空 + 默认名」时（见 `EMPTY_DRAFT_NAME`）从索引里移除它。
+ * 确实回收了才返回 true。已命名 / 非空的项目**从不**被回收 ——
+ * 于是用户特意命名成「空白灵感板」的空画布能在清回收中活下来。
  */
 export function reapEmptyProject(pid: string): boolean {
   if (typeof localStorage === "undefined") return false;
@@ -305,10 +294,9 @@ export function reapEmptyProject(pid: string): boolean {
 }
 
 /**
- * Sweep the project index for stale empty drafts that earlier versions
- * of the editor (or users who came back from a previous session before
- * this fix) may have left behind.  Returns the number of entries removed.
- * Call once on canvas mount and once on homepage mount.
+ * 清扫项目索引里遗留的空草稿 —— 可能是旧版编辑器留下的，
+ * 也可能是用户在本次修复前回访时留下的。返回移除的条数。
+ * 画布挂载时调一次，首页挂载时再调一次。
  */
 export function reapAllEmptyDrafts(): number {
   if (typeof localStorage === "undefined") return 0;

@@ -1,7 +1,6 @@
-// Shared helper: synthesize a first frame for local text-to-video by running a
-// text-to-image pass on the local ComfyUI instance, then uploading the result
-// into ComfyUI's input dir so the image-to-video graph can consume it. No cloud,
-// no authorization — fully local.
+/* 共享助手：为本机文生视频合成首帧 —— 先在本机 ComfyUI 上跑一遍文生图，
+ * 再把结果上传进 ComfyUI 的 input 目录，供图生视频的工作流消费。
+ * 不走云、不需要授权 —— 全程本地。 */
 //
 // 图片这一跳没有内置模板（内置 txt2img 与 `__PROMPT__` 系列 token 替换已移除）：
 // 调用方必须给一个**工作流库工作流 id**（图类、配好对外参数），本模块按工坊
@@ -44,8 +43,7 @@ export async function synthesizeFirstFrame(opts: {
   if (!res.name) throw new Error("首帧上传失败");
   return res.name;
 }
-
-// Resolve with the first generated image's local path, or reject on error/timeout.
+// 成功时以第一张生成图的本地路径 resolve；出错或超时则 reject。
 function waitForImage(taskId: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(

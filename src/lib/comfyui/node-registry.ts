@@ -9,7 +9,7 @@
 import type { NodeTypeConfig, FieldDef } from "./node-config";
 import { CUSTOM_NODE_TYPES } from "~/config/custom-nodes";
 
-/* ── Shared field definitions (reused across node types) ── */
+/* ── 共享字段定义（在多种节点类型之间复用） ── */
 const F = {
   text: (key: string, label: string, opts?: Partial<FieldDef>): FieldDef => ({
     key,
@@ -60,7 +60,7 @@ const F = {
   }),
 };
 
-// Mirrors ComfyUI's built-in KSampler sampler/scheduler names (comfy/samplers.py).
+// 与 ComfyUI 内置 KSampler 的 sampler / scheduler 名字对齐（见 comfy/samplers.py）。
 const SAMPLERS = [
   "euler",
   "euler_ancestral",
@@ -101,7 +101,7 @@ const SCHEDULERS = [
   "kl_optimal",
 ];
 
-/** Registry: class_type → NodeTypeConfig */
+/* 注册表：把 class_type 映射到 NodeTypeConfig。 */
 export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
   /* ── Model ── */
   CheckpointLoaderSimple: {
@@ -314,7 +314,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
     ],
   },
 
-  /* ── ControlNet / etc (common extensions) ── */
+  /* ── ControlNet 等常见扩展 ── */
   ControlNetApply: {
     label: "ControlNet 应用",
     color: "#14B8A6", // teal
@@ -340,7 +340,7 @@ export const NODE_TYPE_REGISTRY: Record<string, NodeTypeConfig> = {
 };
 
 /**
- * Get config for a class_type; returns a generic fallback for unknown types.
+ * 取某个 class_type 的配置；未知类型返回通用兜底配置。
  */
 export function getNodeConfig(classType: string): NodeTypeConfig {
   return (
@@ -357,8 +357,8 @@ export function getNodeConfig(classType: string): NodeTypeConfig {
   );
 }
 
-/** All known class_type names (built-in + parsed custom nodes). Recomputed on
- *  call so newly-parsed custom nodes appear without a restart. */
+/* 所有已知的 class_type 名字（内置 + 解析出的自定义节点）。
+ * 每次调用都重新计算，因此新解析出来的自定义节点不必重启就能出现。 */
 export function getAllNodeTypes(): string[] {
   return Object.keys({
     ...NODE_TYPE_REGISTRY,

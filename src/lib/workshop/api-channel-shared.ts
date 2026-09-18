@@ -1,38 +1,38 @@
-// ── Workshop API channel: shared types + pure extraction helpers ──────────
+// ── 工坊 API 通道：共享类型 + 纯提取助手 ────────────────────────────────
 // The workshop pipeline's 镜头生图 / 视频生成 stages support two channels:
-//   • local  — the existing ComfyUI workflow chain (tRPC generate + SSE)
-//   • api    — a user-configured OpenAI-compatible HTTP endpoint
-// This module holds the wire types and response-shape extraction helpers so
-// both the server relay routes and client components agree on one contract.
-// Pure functions only — safe to import from client components.
+//   • local —— 现有的 ComfyUI 工作流链路（tRPC generate + SSE）
+//   • api   —— 用户自己配的 OpenAI 兼容 HTTP 端点
+// 本模块持有传输层类型与「响应形状提取」助手，
+// 让服务端中继路由与客户端组件对同一份契约达成一致。
+// 全是纯函数 —— 客户端组件导入它是安全的。
 
-/** Which generation stage an API channel serves. */
+/* 某个 API 通道服务哪个生成阶段。 */
 export type ApiChannelKind = "image" | "video";
 
-/** Masked per-channel config as seen by the browser (apiKey never leaves the server). */
+/* 浏览器看到的「每通道配置」（已脱敏；apiKey 从不离开服务端）。 */
 export interface ApiChannelView {
-  /** baseUrl + (for video) a reachable endpoint are configured → channel usable. */
+  /* 配好了 baseUrl（视频还要配到可用的端点）→ 该通道可用。 */
   configured: boolean;
   baseUrl: string;
-  /** Request path appended to baseUrl, e.g. "/images/generations". */
+  /* 追加到 baseUrl 后面的请求路径，例如 "/images/generations"。 */
   path: string;
   model: string;
   hasApiKey: boolean;
 }
 
-/** Masked view for both channels, keyed by kind. */
+/* 两个通道的脱敏视图，按通道种类作键。 */
 export type ApiChannelsView = Record<ApiChannelKind, ApiChannelView>;
 
-/** Partial channel config accepted by the config save endpoint. */
+/* 配置保存接口接受的局部通道配置。 */
 export interface ApiChannelSaveInput {
   baseUrl?: string;
   path?: string;
   model?: string;
-  /** Omit to keep the stored key; empty string clears it. */
+  /* 不传表示保留已存的密钥；传空串表示清除它。 */
   apiKey?: string;
 }
 
-/** Nested channel config as persisted server-side (data/workshop-api-settings.json). */
+/* 服务端落库的嵌套通道配置（存于 data/workshop-api-settings.json）。 */
 export interface ApiChannelStored {
   baseUrl: string;
   path: string;
@@ -40,20 +40,20 @@ export interface ApiChannelStored {
   apiKey: string;
 }
 
-/** Narrow an unknown value to a plain object (the only guard the relay needs). */
+/* 把 unknown 收窄成纯对象（中继层唯一需要的守卫）。 */
 export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
 const MAX_EXTRACT_DEPTH = 8;
-/** URL-ish values longer than this are almost certainly not URLs (keys like
- *  `prompt` are intentionally not probed, but stay defensive). */
+/* 超过这个长度的「像 URL 的值」几乎肯定不是 URL
+ *（像 `prompt` 这类键是刻意不去探测的，但这里仍保持防御）。 */
 const MAX_URL_LENGTH = 2048;
 
 /**
- * Depth-first search for the first string value stored under one of `keys`.
- * Used to normalize heterogeneous upstream API responses (OpenAI images,
- * async task APIs, provider-specific envelopes) without hard-coding shapes.
+ * 深度优先搜索：在 `keys` 之一下面找到第一个字符串值。
+ * 用于归一化五花八门的上游 API 响应（OpenAI 图片、异步任务接口、
+ * 各家特有的信封结构），而不必硬编码每种形状。
  */
 export function findStringUnderKeys(
   value: unknown,
@@ -83,7 +83,7 @@ export function findStringUnderKeys(
   return null;
 }
 
-/** Keys commonly holding a direct media URL in generation responses. */
+/* 生成响应里常见「直接放媒体 URL」的键名。 */
 const MEDIA_URL_KEYS = [
   "url",
   "image_url",
@@ -100,7 +100,7 @@ const MEDIA_URL_KEYS = [
   "resultUrl",
 ];
 
-/** Keys commonly holding an async job/task identifier. */
+/* 生成响应里常见「放异步任务标识」的键名。 */
 const TASK_ID_KEYS = [
   "id",
   "task_id",
@@ -111,51 +111,51 @@ const TASK_ID_KEYS = [
   "requestId",
 ];
 
-/** Keys commonly holding base64 payloads (OpenAI images b64_json). */
+/* 常见「放 base64 载荷」的键名（例如 OpenAI 图片的 b64_json）。 */
 const B64_KEYS = ["b64_json", "b64Json", "image_base64", "base64"];
 
 /**
- * Extract a finished media URL from an upstream response (or poll result).
- * Returns null when the response carries no URL yet (async pending).
+ * 从上游响应（或轮询结果）里取出成品媒体的 URL。
+ * 响应里还没有 URL（异步任务尚未完成）时返回 null。
  */
 export function extractMediaUrl(payload: unknown): string | null {
   return findStringUnderKeys(payload, MEDIA_URL_KEYS);
 }
 
-/** Extract an async task id from an upstream submit response. */
+/* 从上游的提交响应里取出异步任务 id。 */
 export function extractRemoteTaskId(payload: unknown): string | null {
   return findStringUnderKeys(payload, TASK_ID_KEYS);
 }
 
-/** Extract a base64 media payload and wrap it as a data URL, or null. */
+/* 取出 base64 媒体载荷并包装成 data URL；取不到则为 null。 */
 export function extractBase64DataUrl(
   payload: unknown,
   mime = "image/png",
 ): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
   if (!b64) return null;
-  // Some providers inline a data URL already.
+  // 有些上游直接内联一个 data URL。
   if (b64.startsWith("data:")) return b64;
   return `data:${mime};base64,${b64}`;
 }
 
-/** Guess media kind from a file path/URL extension (SSE outputs carry both). */
+/* 按文件路径 / URL 的扩展名猜媒体类型（SSE 输出里两种都有）。 */
 export function guessMediaKind(pathOrUrl: string): "image" | "video" | "other" {
   if (/\.(mp4|webm|mov|mkv|avi|gif)(\?.*)?$/i.test(pathOrUrl)) return "video";
   if (/\.(png|jpe?g|webp|bmp|avif)(\?.*)?$/i.test(pathOrUrl)) return "image";
   return "other";
 }
 
-/** One saved output file from a finished task (SSE `done` frame). */
+/* 已完成任务的一个落盘产物文件（来自 SSE 的 `done` 帧）。 */
 export interface SavedOutput {
   url: string;
   kind: "image" | "video" | "other";
 }
 
 /**
- * Normalize a task's `done.images` payload (unknown[]) into URL + kind pairs.
- * Entries are historically either plain URL strings or `{ localPath, mediaType }`
- * records produced by executor-finalize.
+ * 把任务的 `done.images` 载荷（unknown[]）归一成「URL + 类型」对。
+ * 历史上条目要么是纯 URL 字符串，要么是 executor-finalize 产出的
+ * `{ localPath, mediaType }` 记录。
  */
 export function extractSavedOutputs(value: unknown): SavedOutput[] {
   const list = Array.isArray(value) ? value : [value];

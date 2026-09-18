@@ -171,10 +171,10 @@ function durationValueFor(args: {
 
 /** 工坊的对外值 → **契约口 id → 值**（映射层的入参形状）。
  *
- *  契约口 id 见 `workflow-exposed-params` 的 `exposedParamsForMode`
- *  （`prompt` / `negative` / `size` / `first-frame` / `last-frame` /
- *  `reference-image(-n)` / `duration`）—— 这些键与作者连线的键空间一致，映射层
- *  据此查落点。 */
+ *  契约口 id 见 `workflow-exposed-params` 的 `exposedParamsForMode`：
+ *  正向提示词（prompt）、反向提示词（negative）、尺寸（size）、
+ *  首帧（first-frame）、尾帧（last-frame）、参考图（reference-image，可带序号）、
+ *  时长（duration）—— 这些键与作者连线的键空间一致，映射层据此查落点。 */
 function toContractValues(args: {
   io: WorkflowIOMap;
   mode: string | null;

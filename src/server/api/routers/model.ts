@@ -9,7 +9,7 @@ import { listModelFolders, comfyBase } from "~/lib/comfyui/client";
 import { folderMeta } from "~/lib/model-types";
 
 export const modelRouter = createTRPCRouter({
-  /** GET /api/models — public model list */
+  /* GET /api/models —— 读：public model list */
   list: authedProcedure
     .input(
       z
@@ -21,13 +21,13 @@ export const modelRouter = createTRPCRouter({
       return { models };
     }),
 
-  /** POST /api/models/sync — rescan model folders */
+  /* POST /api/models/sync —— 新建：rescan model folders */
   sync: authedProcedure.mutation(async ({ ctx }) => {
     const count = await syncModels(ctx.user.id);
     return { ok: true, count };
   }),
 
-  /** GET /api/models/config — per-folder availability config */
+  /* GET /api/models/config —— 读：per-folder availability config */
   configList: authedProcedure.query(async ({ ctx }) => {
     const [rows, comfyFolders, counts] = await Promise.all([
       userModelConfigRepository.listByUser(ctx.user.id),
@@ -57,7 +57,7 @@ export const modelRouter = createTRPCRouter({
     return { folders, rows, comfyReachable };
   }),
 
-  /** PATCH /api/models/config — enable/disable a folder */
+  /* PATCH /api/models/config —— 局部更新：enable/disable a folder */
   configSave: authedProcedure
     .input(
       z.object({
@@ -82,7 +82,7 @@ export const modelRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  /** DELETE /api/models/config */
+  /* DELETE /api/models/config —— 删除 */
   configDelete: authedProcedure
     .input(z.object({ folder: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {

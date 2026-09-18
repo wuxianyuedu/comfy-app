@@ -29,7 +29,7 @@ async function resolveScopes(
 }
 
 export const materialRouter = createTRPCRouter({
-  /** GET /api/materials?projectId=&scope=&folder=&q= */
+  /* GET /api/materials?projectId=&scope=&folder=&q= —— 读 */
   list: authedProcedure
     .input(
       z
@@ -72,7 +72,7 @@ export const materialRouter = createTRPCRouter({
       return { folders, items };
     }),
 
-  /** POST /api/materials — save a text material file */
+  /* POST /api/materials —— 新建：save a text material file */
   save: authedProcedure
     .input(
       z.object({
@@ -100,7 +100,7 @@ export const materialRouter = createTRPCRouter({
       return { ok: true, path: filePath };
     }),
 
-  /** DELETE /api/materials?name=&folder=&projectId= */
+  /* DELETE /api/materials?name=&folder=&projectId= —— 删除 */
   delete: authedProcedure
     .input(
       z.object({

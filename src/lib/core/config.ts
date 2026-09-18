@@ -35,7 +35,7 @@
  * > 变量，默认值放这里；纯启动期路径（如 `COMFYUI_PATH`）就地读 `process.env`
  * > 并写清为何不收口，不要为了「看起来集中」把它硬塞进来。
  *
- * @module core/config
+ * @module core/config — 配置的**类型契约 + 默认值单一事实源**（不是「集中配置」）
  */
 import { z } from "zod";
 

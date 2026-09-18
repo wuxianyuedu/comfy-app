@@ -1,11 +1,11 @@
-// ── Workshop generation client: local ComfyUI chain + API relay ───────────
+// ── 工坊生成客户端：本地 ComfyUI 链路 + API 中继 ───────────────────────
 // The 镜头生图 / 视频生成 stages run on one of two channels:
-//   • local — tRPC generate mutation → ComfyUI task, watched over SSE
-//     (same chain the studio canvas uses: generate.generate + tasks stream)
-//   • api   — /api/workshop-api/generate relay (baseUrl/apiKey stay server-side,
-//     heterogeneous upstream shapes are normalized by api-channel-shared)
-// Client-side helpers shared by ShotStudio / VideoStudio / WorkshopPipeline.
-// Every network payload is narrowed with unknown guards (no assertions).
+//   • local —— tRPC 的 generate mutation → ComfyUI 任务，经 SSE 观察
+//    （与 studio 画布同一条链路：generate.generate + tasks 事件流）
+//   • api   —— /api/workshop-api/generate 中继（baseUrl / apiKey 留在服务端，
+//     五花八门的上游形状由 api-channel-shared 归一）
+// 这是 ShotStudio / VideoStudio / WorkshopPipeline 共用的客户端助手。
+// 每份网络载荷都用 unknown 守卫收窄（不做类型断言）。
 
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
@@ -27,10 +27,10 @@ import {
 } from "./workflow-encapsulation";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
-/** tRPC wire contract for the local (ComfyUI) generate mutation. */
+/* 本地（ComfyUI）生成 mutation 的 tRPC 传输契约。 */
 export type GenerateInput = RouterInputs["generate"]["generate"];
 
-/** Create a local ComfyUI generation task; resolves to the task id. */
+/* 创建一个本地 ComfyUI 生成任务；resolve 出任务 id。 */
 export async function startLocalGenerate(
   input: GenerateInput,
 ): Promise<string> {
@@ -213,13 +213,13 @@ export interface TaskWatchHandlers {
   onProgress?: (progress: number, node?: TaskProgressNode) => void;
   /** 每条执行步骤日志（SSE `log` 帧）。供调用方累积展示。 */
   onLog?: (entry: TaskLogEntry) => void;
-  /** Fired for each saved output file as the task completes. */
+  /* 任务完成过程中，每落盘一个产物文件就回调一次。 */
   onOutput?: (output: SavedOutput) => void;
-  /** Called exactly once when the task reaches a terminal state. */
+  /* 任务到达终态时**恰好**回调一次。 */
   onSettled: (result: { ok: boolean; message?: string }) => void;
 }
 
-/** Narrow an unknown SSE `log` frame payload to TaskLogEntry, or null. */
+/* 把 SSE `log` 帧的 unknown 载荷收窄成 TaskLogEntry；收窄不了则为 null。 */
 function narrowLogEntry(raw: unknown): TaskLogEntry | null {
   if (!isRecord(raw)) return null;
   const t = raw.t;
@@ -238,8 +238,8 @@ function narrowLogEntry(raw: unknown): TaskLogEntry | null {
 }
 
 /**
- * Subscribe to a task's SSE stream (`/api/tasks/:id/stream`) until it settles.
- * Returns a closer that tears the connection down early (cancel / unmount).
+ * 订阅某任务的 SSE 流（`/api/tasks/:id/stream`），直到它尘埃落定。
+ * 返回一个 closer，用于提前断掉连接（取消 / 组件卸载）。
  */
 export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
   const es = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/stream`);
@@ -282,7 +282,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
           h.onProgress?.(Math.max(0, Math.min(100, p)), node);
         }
         if (type === "state") {
-          // DB truth-poller re-emits terminal verdicts the emitter missed.
+          // 数据库侧的实情轮询会把发射器漏掉的终态结论补发一次。
           const st: unknown = msg.status;
           if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
             const err: unknown = msg.error;
@@ -314,11 +314,11 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
         settle(false, typeof err === "string" && err ? err : "生成失败");
       }
     } catch {
-      /* malformed SSE frame — ignore this message */
+      /* SSE 帧格式错误 —— 忽略这一条消息 */
     }
   };
   es.onerror = () => {
-    // Transient drops auto-reconnect; only a fully closed stream is terminal.
+    // 短暂断开会自动重连；只有流真正彻底关闭才算终态。
     if (es.readyState === EventSource.CLOSED) settle(false, "任务连接中断");
   };
   return () => {
@@ -327,10 +327,10 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
   };
 }
 
-// ── API relay channel ──────────────────────────────────────────────────────
+// ── API 中继通道 ──────────────────────────────────────────────────────
 
-/** Extract a readable message from a relay error envelope
- *  (`{ error: string }` or auth `{ error: { message } }`). */
+/* 从中继错误信封里取出可读信息
+ *（形如 `{ error: string }`，或鉴权失败时的 `{ error: { message } }`）。 */
 function relayErrorMessage(data: unknown, status: number): string {
   if (isRecord(data)) {
     const err: unknown = data.error;
@@ -359,9 +359,9 @@ async function postRelay(body: Record<string, unknown>): Promise<unknown> {
   return data;
 }
 
-/** API channel: one-shot image generation → usable image URL.
- *  model 传设置页远端模型名（remoteModel 表）时，服务端按该条目的连接参数
- *  生图；不传则回落到工坊 API 通道设置（旧行为）。 */
+/* API 通道：一次性图片生成 → 返回可用的图片 URL。
+ * 当 `model` 传的是设置页里的远端模型名（remoteModel 表）时，服务端按该条目的
+ * 连接参数生图；不传则回落到工坊 API 通道设置（旧行为）。 */
 export async function apiGenerateImage(req: {
   prompt: string;
   negative?: string;
@@ -399,17 +399,17 @@ export async function apiGenerateImage(req: {
 }
 
 export interface ApiVideoSubmitResult {
-  /** Finished video URL when the provider responds synchronously. */
+  /* 上游同步返回时给出的成品视频 URL。 */
   url?: string;
-  /** Async task id to poll via apiPollVideo otherwise. */
+  /* 否则用 apiPollVideo 轮询的异步任务 id。 */
   remoteTaskId?: string;
 }
 
-/** API channel: submit an (image-to-)video job. */
+/* API 通道：提交一个（图生）视频任务。 */
 export async function apiSubmitVideo(req: {
   prompt: string;
   negative?: string;
-  /** Reference first-frame (any resolvable source: /generated/…, data URL, http). */
+  /* 参考首帧（任何可解析的来源都行：/generated/… 、data URL、http）。 */
   image?: string;
   frames?: number;
   fps?: number;
@@ -433,7 +433,7 @@ export async function apiSubmitVideo(req: {
   return { url, remoteTaskId };
 }
 
-/** API channel: single poll of an async video task. */
+/* API 通道：对异步视频任务做一次轮询。 */
 export async function apiPollVideo(
   remoteTaskId: string,
 ): Promise<{ url?: string; pending: boolean }> {
@@ -443,8 +443,8 @@ export async function apiPollVideo(
   return { url, pending: !url };
 }
 
-/** Upload a generated / reference image into the local ComfyUI input dir so
- *  the video workflows' LoadImage nodes can consume it; returns the filename. */
+/* 把生成出/参考用的图片上传进本机 ComfyUI 的 input 目录，
+ * 好让视频工作流的 LoadImage 节点能消费它；返回文件名。 */
 export async function prepareLocalInputImage(image: string): Promise<string> {
   const res = await fetch("/api/workshop-local/prepare", {
     method: "POST",
@@ -480,8 +480,8 @@ function narrowChannel(v: unknown, fallbackPath: string): ApiChannelView {
   };
 }
 
-/** Masked view of both API channels; null when the config service is down
- *  (callers treat null as "unconfigured" and offer the settings modal). */
+/* 两个 API 通道的脱敏视图；配置服务不可用时为 null
+ *（调用方把 null 当作「未配置」，并弹出设置面板）。 */
 export async function fetchApiChannels(): Promise<ApiChannelsView | null> {
   try {
     const res = await fetch("/api/workshop-api/config");

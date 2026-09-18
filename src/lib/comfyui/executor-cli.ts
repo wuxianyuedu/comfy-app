@@ -17,7 +17,7 @@
  *
  * 成功/失败统一走 executor-finalize 的收口。
  *
- * @module comfyui/executor-cli
+ * @module comfyui/executor-cli — comfy-cli 执行路径（**两种格式统一**）
  */
 import "server-only";
 import { spawn } from "child_process";
@@ -112,7 +112,7 @@ function stripUiOnlyNodes(raw: JsonRecord): JsonRecord {
   if (removedIds.size === 0) return raw;
   raw.nodes = filtered;
   // 同时清理 LiteGraph links 中与被删节点相关的连接（格式：
-  // [linkId, originNodeId, originSlot, targetNodeId, targetSlot, type]）
+  // [linkId, originNodeId, originSlot, targetNodeId, targetSlot, type] 六元组）
   if (Array.isArray(raw.links)) {
     raw.links = raw.links.filter((link) => {
       if (!Array.isArray(link)) return true;
@@ -129,10 +129,9 @@ export async function executeViaComfyCli(job: Job) {
   const { taskId, rawJson, prompt, overrides } = job;
   /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
   const isRaw = rawJson != null;
-  // the entry line of the raw path so the
-  // user can see in the log panel exactly which method is handling
-  // their task.  Before this it was silent until the first stdout
-  // JSON event arrived (often 5-30s in, the Python venv boot).
+  /* RAW 路径的入口行：让用户在日志面板上直接看出「任务正由哪条路径处理」。
+   * 加这行之前，提交后要等第一条 stdout JSON 事件（常在 5–30s 之后，
+   * Python venv 启动完）才会安静结束 —— 面板上看不出是在跑还是卡住。 */
   log(
     taskId,
     "info",
@@ -260,9 +259,8 @@ export async function executeViaComfyCli(job: Job) {
     return;
   }
 
-  // surface the literal comfy-cli command so
-  // the user (and we, on support) can reproduce the exact invocation
-  // from the log panel without digging through devtools.
+  /* 把真实的 comfy-cli 命令打进日志：用户（以及支持现场）能直接从日志面板
+   * 复现这次调用，不必去翻 devtools。 */
   log(
     taskId,
     "info",
@@ -277,11 +275,9 @@ export async function executeViaComfyCli(job: Job) {
     port,
     workflowFile: tmpFile,
   });
-  // explicit pre-spawn line so the user
-  // sees a "→ 启动" marker before the (potentially slow) Python
-  // boot.  Without this, the first log on a raw submission was
-  // "comfy-cli 执行 raw 工作流" + a long silence, which looks
-  // indistinguishable from a hang.
+  /* 起进程前显式打一行：让用户在（可能很慢的）Python 启动之前先看到
+   * "→ 启动" 标记。没有这行时，raw 提交后的首条日志是
+   * "comfy-cli 执行 raw 工作流" 加一段长静默，看起来和卡死没有区别。 */
   log(
     taskId,
     "info",
@@ -365,8 +361,7 @@ export async function executeViaComfyCli(job: Job) {
   });
   child.stdout?.on("data", stdoutParser.sink);
 
-  // stream stderr live so Python tracebacks
-  // appear in the panel as they happen, instead of only at close().
+  // 实时透传 stderr：Python 的 traceback 一出现就进面板，而不是只在 close() 时汇总。
   // 行数上限 60（真实 traceback 一般 < 40 行）；click/Python 的
   // DeprecationWarning 噪声不占额度、计数后由 close 汇总，避免把真正的
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。

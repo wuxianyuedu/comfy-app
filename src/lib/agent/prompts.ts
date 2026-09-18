@@ -85,7 +85,7 @@ export function parseJsonInstruction(
 ): Record<string, unknown> | null {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return null;
-  // Strip ```json ... ``` code fences.
+  // 去掉 ```json ... ``` 这类代码围栏。
   const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
   const body = (fence ? fence[1]! : trimmed).trim();
   try {
@@ -95,7 +95,7 @@ export function parseJsonInstruction(
       ? (obj as Record<string, unknown>)
       : null;
   } catch {
-    // Try to find a JSON object substring if surrounding prose exists.
+    // 前后夹着散文时，尝试从中找出 JSON 对象的子串。
     const start = body.search(/\{/);
     const end = body.lastIndexOf("}");
     if (start >= 0 && end > start) {

@@ -17,7 +17,7 @@
  * - `seedUser` / `seedWorkflowTemplate` / `seedTask` / `seedProject` 用底层同步
  *   写入（better-sqlite3），保持与原同步 seed 调用一致。
  *
- * @module tests/helpers/test-db
+ * @module tests/helpers/test-db — Drizzle 内存测试库（测试基建，不触碰 src 源码）
  */
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";

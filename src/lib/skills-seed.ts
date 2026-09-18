@@ -9,7 +9,7 @@
  * 数据灵感来源：libtv-skills & screenshot 技能库（皮克斯/爆款拉片/新中式/
  * 武侠电幻/日系动漫/油画/水彩/赛博朋克/人像/胶片/漫画分镜/概念原画）。
  *
- * @module skills-seed
+ * @module skills-seed — 内置技能种子数据（纯数据模块，无副作用）
  */
 import type { SkillSeed } from "~/lib/core/repository-skill";
 

@@ -1,12 +1,12 @@
 /**
- * /api/custom-nodes
+ * /api/custom-nodes 路由
  *
- * GET  → { settings: { paths }, summary, lastReport }
- * POST → { action: "saveSettings" }                  deprecated: paths now derive from the ComfyUI install root
- *        { action: "parse" }                            runs the read-only AST parser, returns the per-package report
+ * GET  → 返回设置（paths）、清单摘要与上次解析报告。
+ * POST → { action: "saveSettings" } 已废弃：路径现在从 ComfyUI 安装根自动推导；
+ *        { action: "parse" } 跑只读的 AST 解析器，返回按包分组的报告。
  *
- * The parser NEVER modifies anything under the configured custom_nodes paths —
- * it only reads source text and writes the generated manifest + report.
+ * 解析器**绝不**改动已配置的 custom_nodes 路径下的任何东西 ——
+ * 它只读源码文本，只写生成出来的 manifest 与报告。
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { spawn, spawnSync } from "node:child_process";
@@ -69,7 +69,7 @@ interface ManifestPackageSummary {
   generatedAt: string | null;
 }
 
-/** Resolve the custom-node scan roots.
+/* 解析自定义节点的扫描根目录。
  *  主路径：设置里配置的 ComfyUI 安装根下的 `custom_nodes` 目录（自动推导）。
  *  `.env` 的 CUSTOM_NODES_PATH 仍作为覆盖/补充项保留（向后兼容）。 */
 function getPaths(): string[] {
@@ -84,11 +84,11 @@ function getPaths(): string[] {
   return derived ? [derived, ...extra] : extra;
 }
 
-/** companion roots for the local-workflow scanner — the directory(ies)
- *  workflow files are loaded from. 主路径：ComfyUI 安装根下的 `workflows`
- *  目录（自动推导）；`.env` 的 LOCAL_WORKFLOWS_PATH 作为补充覆盖项保留。
- *  The server NEVER writes to these; it's a pure read-only scanner
- *  (see localWorkflows.ts). */
+/* 本地工作流扫描器的「伴随根目录」—— 即工作流文件从哪些目录加载。
+ * 主路径：ComfyUI 安装根下的 `workflows` 目录（自动推导）；
+ * `.env` 的 LOCAL_WORKFLOWS_PATH 作为补充覆盖项保留。
+ * 服务端**绝不**往这些目录写东西；它只是一个只读扫描器
+ *（见 localWorkflows.ts）。 */
 function getLocalWorkflowPaths(): string[] {
   const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
@@ -98,9 +98,8 @@ function getLocalWorkflowPaths(): string[] {
   return derived ? [derived, ...extra] : extra;
 }
 
-/** Summarize the on-disk manifest for display. Also emits discovered subpackages
- *  for every parent path that was configured but is NOT yet a leaf package, so the
- *  UI can show "here are N subpackages inside this dir, parse them individually".
+/* 汇总磁盘上的 manifest 供界面展示。同时对每个「配了、但还不是叶子包」的父路径
+ * 输出探测到的子包，好让界面提示「这个目录下有 N 个子包，可以逐个解析」。
  */
 function readManifestSummary() {
   if (!fs.existsSync(MANIFEST)) return null;
@@ -146,10 +145,9 @@ function readManifestSummary() {
   }
 }
 
-/** Key for joining `summary.packages` and `discoveredByParent[*]` on the
- *  absolute filesystem path. Both sides resolve to absolute, then we lowercase
- *  and normalise path separators so Windows volume case (\?\…) doesn't
- *  mismatch. */
+/* 用绝对文件系统路径把 `summary.packages` 与 `discoveredByParent[*]` 关联起来的键。
+ * 两侧都解析成绝对路径，再统一转小写并归一化分隔符，
+ * 避免 Windows 的卷大小写（\?\… 这类前缀）造成对不上。 */
 function pathKey(p: string): string {
   if (!p) return "";
   try {
@@ -159,9 +157,9 @@ function pathKey(p: string): string {
   }
 }
 
-/** Build a `abs-path -> summary package` map the UI can use to detect
- *  which discovered subpackages have already been parsed and whether the
- *  on-disk content has changed since (status: loaded / outdated / error / missing). */
+/* 构建「绝对路径 → 摘要包」映射，让界面能判断探测到的子包中
+ * 哪些已经解析过、以及磁盘内容此后有没有变
+ *（状态取值：已载入 / 已过期 / 出错 / 缺失）。 */
 function buildPathMap(
   summary: ReturnType<typeof readManifestSummary>,
 ): Record<string, ManifestPackageSummary> {
@@ -173,8 +171,8 @@ function buildPathMap(
   return out;
 }
 
-/** Run the read-only `discover` mode for a list of parent dirs and return subpackages.
- *  Cached briefly because the UI calls this when the path input changes. */
+/* 对一组父目录跑只读的 `discover` 模式并返回子包。
+ * 做短暂缓存，因为界面上路径输入一变就会调它。 */
 const discoverCache = new Map<string, { at: number; result: unknown[] }>();
 function runDiscover(parentDirs: readonly unknown[]): unknown[] {
   const key = parentDirs.join("|");
@@ -207,19 +205,19 @@ function runDiscover(parentDirs: readonly unknown[]): unknown[] {
         return pkgs;
       }
     } catch {
-      // try next interpreter
+      // 换下一个解释器再试
     }
   }
   return [];
 }
 
-/** Stream variant of `runDiscover` — spawns the parser for ONE parent, forwards
- *  every PROGRESS:: line as a `{type:"progress"}` event, and resolves with the
- *  final pkgs list when the JSON line comes back. Cache hits short-circuit.
+/* `runDiscover` 的流式版本 —— 只为**一个**父目录起解析器进程，
+ * 把每条 PROGRESS:: 行转发成 `{type:"progress"}` 事件，
+ * 等到那行 JSON 回来时以最终的包列表 resolve。命中缓存则直接短路。
  *
- *  Output protocol (ndjson):
- *    {type:"progress", parent, phase:"scan"|"hash", msg?, discovered?, done?, total?}
- *    {type:"discover_done", parent, packages, cached:false}
+ * 输出协议（ndjson）：
+ *    {type:"progress", ...} 是进度事件（阶段 scan 或 hash，可带计数）
+ *    {type:"discover_done", parent, packages, cached:false} 是收尾事件
  */
 
 /** PROGRESS:: 行解析出的进度字段(msg + 可选计数,键由 kvRegex 决定)。 */
@@ -285,20 +283,18 @@ function runDiscoverStreaming(
           buf = buf.slice(nl + 1);
           if (!line.trim()) continue;
           if (line.startsWith("PROGRESS::")) {
-            // Format: PROGRESS::scan|msg=...|key=value|...  or
-            //         PROGRESS::hash|msg=...|done=K|total=M
-            // The `msg=` segment is the human-readable text shown in the UI
-            // sub-message. Other key=value pairs (discovered, done, total)
-            // drive the progress bar fill so the UI doesn't have to parse
-            // Chinese text.
+            // 行格式是 PROGRESS::scan|msg=...|key=value|...，
+            // 或 PROGRESS::hash|msg=...|done=K|total=M。
+            // 其中 `msg=` 那段是在界面副标题里显示的人读文本；
+            // 其它 key=value（discovered、done、total）用来驱动进度条填充，
+            // 这样界面不必去解析中文文本。
             const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
             if (!m) continue;
             const phase = m[1] as "scan" | "hash";
             const rest = m[2]!;
-            // Extract msg=... (may contain | inside if any; we treat
-            // everything up to the next |key= or end-of-line as the msg).
-            // Backward compat: old lines without `|msg=` use the entire
-            // rest as the msg.
+            // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
+            // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
+            // 向后兼容：没有 `|msg=` 的旧格式行，就把剩余部分整体当 msg。
             const fields: DiscoverProgressFields = { phase, msg: "" };
             const msgM = /\|?msg=([^|]*)/.exec(rest);
             if (msgM) {
@@ -317,10 +313,10 @@ function runDiscoverStreaming(
             }
             send({ type: "progress", parent, ...fields });
           } else if (line.startsWith("{")) {
-            // Last JSON line wins (the parser prints the result once at the end)
+            // 以最后一行为准（解析器只在末尾打印一次结果）
             finalJson = line;
           } else {
-            // Other log lines — surface as scan progress too
+            // 其它日志行 —— 也当作扫描进度透出去
             send({ type: "progress", parent, phase: "scan", msg: line });
           }
         }
@@ -393,9 +389,9 @@ function runDiscoverStreaming(
   });
 }
 
-/** Build a streaming response that pipes the parser's live logs, then the report.
- *  Pass `onlyPkgs` (specific subpackage paths) to do a subset/merge parse; otherwise
- *  `paths` is the full list of roots. */
+/* 构建流式响应：先把解析器的实时日志透出去，再给报告。
+ * 传 `onlyPkgs`（具体子包路径）表示做子集 / 合并解析；
+ * 否则 `paths` 就是完整的根目录列表。 */
 function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -486,11 +482,10 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
               send({ type: "log", level: defaultLevel, msg: chunk.trim() });
           });
         };
-        // stdout from the parser = normal progress (green info).
-        // stderr from the parser = errors (red); the parser writes SyntaxError /
-        // generic Exception messages to stderr via log_stderr() so the live
-        // console in the dialog renders them in red instead of being lost
-        // among 300+ successful file lines.
+        // 解析器的 stdout 是正常进度（绿色 info）。
+        // stderr 是错误（红色）—— 解析器把语法错误与一般异常经 log_stderr()
+        // 写到 stderr，让对话框里的实时控制台把它们渲染成红色，
+        // 而不是淹没在 300 多行成功记录里。
         pipeLogs(cp.stdout, "info");
         pipeLogs(cp.stderr, "error");
 
@@ -541,7 +536,7 @@ export async function GET() {
 
   /* 整个只读探测包进 try/catch：此前任何一处抛错（如目录状态读取失败）会让
    * Next 返回不带 settings 的错误体，前端直接崩在
-   * `Cannot read properties of undefined (reading 'paths')`，
+   * 前端会崩在「读取 undefined 的 paths 属性」这类报错上，
    * 真实原因反而看不到。现在错误以 { error } JSON 返回，前端可读展示。 */
   try {
     return await buildGetResponse();
@@ -570,17 +565,17 @@ async function buildGetResponse(): Promise<Response> {
   }
   const byPath = buildPathMap(summary);
 
-  // Cache hit on every parent → return JSON immediately (no progress needed).
-  // Otherwise we stream ndjson so the UI can render a live progress bar.
+  // 每个父目录都命中缓存 → 直接返回 JSON（无需进度）。
+  // 否则改为流式推 ndjson，让界面渲染实时进度条。
   const allCached =
     paths.length > 0 &&
     paths.every((path) => {
       const c = discoverCache.get(path);
       return c && Date.now() - c.at < 5000;
     });
-  // include localWorkflowPaths in both branches so the
-  // settings dialog can hydrate its companion field even when there's no
-  // CUSTOM_NODES_PATH configured (the cold path).
+  // 两条分支都带上 localWorkflowPaths，
+  // 好让设置对话框在没配 CUSTOM_NODES_PATH 时（冷路径）
+  // 也能填充那个伴随字段。
   const settings = { paths, localWorkflowPaths };
   if (allCached) {
     const discoveredByParent: Record<string, unknown[]> = {};
@@ -594,7 +589,7 @@ async function buildGetResponse(): Promise<Response> {
     });
   }
 
-  // Cold path (or no paths at all → nothing to discover): stream ndjson events.
+  // 冷路径（或一个路径都没有 → 没东西可探测）：流式推 ndjson 事件。
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -614,9 +609,8 @@ async function buildGetResponse(): Promise<Response> {
           const pkgs = await runDiscoverStreaming(parent!, send);
           discoveredByParent[parent!] = pkgs;
         }
-        // ship the companion LOCAL_WORKFLOWS_PATH list down the same
-        // stream so the dialog can render the local-workflow scan results
-        // at the same hydration point.
+        // 把伴随的 LOCAL_WORKFLOWS_PATH 列表沿同一条流送下去，
+        // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
           summary,
@@ -671,7 +665,7 @@ export async function POST(req: NextRequest) {
       ? rec.packages
       : undefined;
     if (onlyPkgs?.length) {
-      // subset parse — no need for CUSTOM_NODES_PATH to be set
+      // 子集解析 —— 不必先设置 CUSTOM_NODES_PATH
       return streamParse(paths, onlyPkgs);
     }
     if (paths.length === 0) {
@@ -683,7 +677,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    // Stream live progress logs, then the final report, as NDJSON.
+    // 先流式推实时进度日志，再推最终报告，整体用 NDJSON。
     return streamParse(paths);
   }
 

@@ -31,7 +31,7 @@
  * 不是「子类传的表与主键列对得上」。真正的判据在行为侧：`idColumn` 覆盖
  * `table.id` 时能否命中正确的行，由 `repository.test.ts` 的用例锁住。
  *
- * @module core/repository-base
+ * @module core/repository-base — Repository 模式的契约与泛型基类（Drizzle 版）
  */
 import "server-only";
 

@@ -3,13 +3,13 @@ import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { workflowModelTagRepository } from "~/lib/core/repository";
 
 export const workflowModelRouter = createTRPCRouter({
-  /** GET /api/workflow-models — tag library */
+  /* GET /api/workflow-models —— 读：tag library */
   list: authedProcedure.query(async ({ ctx }) => {
     const tags = await workflowModelTagRepository.listByUser(ctx.user.id);
     return { tags };
   }),
 
-  /** POST /api/workflow-models — create tag (idempotent) */
+  /* POST /api/workflow-models —— 新建：create tag (idempotent) */
   create: authedProcedure
     .input(z.object({ name: z.string().trim().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {
@@ -20,7 +20,7 @@ export const workflowModelRouter = createTRPCRouter({
       return { tag };
     }),
 
-  /** PATCH /api/workflow-models — rename tag */
+  /* PATCH /api/workflow-models —— 局部更新：rename tag */
   rename: authedProcedure
     .input(
       z.object({
@@ -49,7 +49,7 @@ export const workflowModelRouter = createTRPCRouter({
       return { ok: true, renamed: true, tag };
     }),
 
-  /** DELETE /api/workflow-models — delete tag (idempotent) */
+  /* DELETE /api/workflow-models —— 删除：delete tag (idempotent) */
   delete: authedProcedure
     .input(z.object({ name: z.string().trim().min(1) }))
     .mutation(async ({ ctx, input }) => {

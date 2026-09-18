@@ -24,7 +24,7 @@ describe("模式契约口 id 值域", () => {
   it("内置默认契约的每个口都被 isModeContractInputId 接受", () => {
     // 回归：modeContractsSave 曾按**适配器侧**的 WORKSHOP_INPUT_TYPES 校验契约口，
     // 保存含「尺寸 / 参考图」的契约直接被 zod 打回：
-    //   Invalid option: expected one of "prompt"|"negative"|"aspect-ratio"|…
+    //   报错原文形如：expected one of "prompt" | "negative" | "aspect-ratio" …
     const seen = new Set<string>();
     for (const mode of GENERATIVE_MODES) {
       for (const id of builtInModeContract(mode).inputs) {

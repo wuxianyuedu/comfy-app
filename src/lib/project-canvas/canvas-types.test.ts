@@ -8,9 +8,9 @@
  *
  * 现在拆成两层：
  *   - `StrictCanvasNodeData`：业务代码用它，字段名/类型写错立刻报错；
- *   - `CanvasNodeData = StrictCanvasNodeData & Record<string, unknown>`：
+ *   - `CanvasNodeData` 则等于「严格类型 & Record<string, unknown>」：
  *     只在交给 ReactFlow 的类型参数位置使用（它的 `Node<T>` 要求
- *     `T extends Record<string, unknown>`）。
+ *     `T extends Record<string, unknown>`，即带索引签名）。
  *
  * 本文件用 `@ts-expect-error` 把「拼错必须报错」钉死：如果有人把索引签名
  * 挪回严格声明里，下面的 `@ts-expect-error` 会因为「没有错误可抑制」而

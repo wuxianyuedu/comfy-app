@@ -4,11 +4,11 @@
  *
  * 从 executor.ts 拆出的纯函数模块（batch 4），无任何外部副作用：
  *   - {@link collectOutputs}     从 ComfyUI history 的 outputs 中收集
- *                                images / videos / audios / others / texts
+ *                                图像 / 视频 / 音频 / 其它 / 文本 五类产物
  *   - {@link extractRuntimeParams} 从 history prompt graph 抽取本次执行
  *                                实际使用的 KSampler 参数（真实 seed 等）
  *
- * @module comfyui/executor-outputs
+ * @module comfyui/executor-outputs — 产物收集与运行时参数提取（纯函数）
  */
 /** ComfyUI history 输出文件条目（images / videos / gifs / audios 及 3D 兜底）。 */
 export type CollectedOutputFile = {
@@ -44,10 +44,10 @@ export function collectOutputs(
       images.push(...(node.images as CollectedOutputFile[]));
     if (Array.isArray(node.videos))
       videos.push(...(node.videos as CollectedOutputFile[]));
-    // VHS_VideoCombine emits its files under `gifs` (mp4/gif/webm).
+    // VHS_VideoCombine 把文件发在 `gifs` 下（实际是 mp4/gif/webm）。
     if (Array.isArray(node.gifs))
       videos.push(...(node.gifs as CollectedOutputFile[]));
-    // SaveAudio / AudioComposite emit under `audios`.
+    // SaveAudio 与 AudioComposite 把文件发在 `audios` 下。
     if (Array.isArray(node.audios))
       audios.push(...(node.audios as CollectedOutputFile[]));
     // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
@@ -93,9 +93,9 @@ export function collectOutputs(
  *
  * 形态参考（来自 0.33.1 history entry.prompt[2]）：
  *   "76:69": {
- *     "class_type": "KSampler",
- *     "inputs": { "seed": 941524759465139, "steps": 25, "cfg": 4, "denoise": 0.7, ... }
- *   }
+ *     "class_type": "KSampler",   // 节点类型
+ *     "inputs": { "seed": 941524759465139, "steps": 25, "cfg": 4, ... }  // 真实 seed 等
+ *   }   // 上面 inputs 里就是本次真实执行用的参数
  *
  * 取 graph 顺序第一个 KSampler/KSamplerAdvanced 为主采样器。返回值所有字段都可能
  * 为 `undefined`，调用方自行决定是否覆盖请求默认值。

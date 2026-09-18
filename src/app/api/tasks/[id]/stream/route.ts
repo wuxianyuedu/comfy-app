@@ -15,8 +15,8 @@ export async function GET(
   const params = await ctx.params;
   const id = params.id;
 
-  // native Route Handler — replaces the legacy `defineRoute`
-  // wrapper.  Auth contract is kept identical (401 structured envelope).
+  // 原生 Route Handler —— 取代了旧的 `defineRoute` 包装器。
+  // 鉴权契约保持一致（未登录时返回结构化的 401 信封）。
   const user = await currentServerUser();
   if (!user?.id) {
     return unauthorizedResponse();
@@ -29,16 +29,15 @@ export async function GET(
       const send = (obj: unknown) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
 
-      /* shared by the initial replay send
-       *  below and the DB-poller below.  Both must read/write
-       *  through the same variable so the poller doesn't re-fire
-       *  the same status immediately after the initial send. */
+      /* 下面「初始回放」与「数据库实情轮询」两处共用。
+       * 两者必须读写同一个变量，否则轮询会在初始发送之后
+       * 立刻把同一个状态再发一遍。 */
       const lastSent: { status: string; progress: number } = {
         status: "",
         progress: 0,
       };
 
-      // Initial state (covers tasks already finished before subscribe).
+      // 初始状态（覆盖「订阅之前任务就已经结束」的情形）。
       taskRepository
         .findById(id)
         .then((task) => {
@@ -61,18 +60,16 @@ export async function GET(
             // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
             // 而看不到失败原因（任务在 SSE 建立前就已终态时必现）。
             replaySrc.forEach((entry) => send({ type: "log", entry }));
-            // forward structured validation errors so
-            //  consumers (CreatePanel) can render a per-field list instead of
-            //  the English summary in `error`.
+            // 把结构化校验错误透出去，好让消费方（CreatePanel）
+            // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
             send({
               type: "state",
               status: task.status,
               progress: task.progress,
               error: task.error,
               validationErrors: parseValidationErrors(task.validationErrors),
-              /* forward workflowName so the
-               *  GlobalStepLogPanel task-switcher can label the entry
-               *  ("<name> · STATUS") instead of a bare 14-char id. */
+              /* 把 workflowName 透出去，好让 GlobalStepLogPanel 的任务切换器
+               * 用「<名称> · 状态」给条目打标签，而不是一个光秃秃的 14 字符 id。 */
               workflowName: task.workflowName,
             });
             lastSent.status = task.status;
@@ -89,43 +86,37 @@ export async function GET(
           try {
             controller.close();
           } catch {
-            /* SSE already closed — ignore */
+            /* SSE 已关闭 —— 忽略 */
           }
           unsub();
         }
       });
 
-      /* SSE heartbeat. Without periodic
-       *  bytes the OS / load balancer / proxy can silently close the
-       *  socket after 30-60s of apparent idle (common for tasks in
-       *  QUEUED where no `log` event fires for minutes), and the
-       *  browser-side EventSource then auto-reconnects — flooding the
-       *  UI with 📡 / ⚪ "已订阅 / 任务状态" client logs while
-       *  nothing actually changed.  An SSE comment line `: hb\n\n`
-       *  is invisible to the EventSource onmessage handler but
-       *  refreshes the kernel TCP idle timer.  15s is well under most
-       *  proxy idle timeouts (typically 30-60s).  Cleared on abort. */
+      /* SSE 心跳。若长时间没有字节流动，操作系统 / 负载均衡 / 代理会在看似空闲
+       * 30–60s 后悄悄掐掉这个 socket（QUEUED 中的任务很常见：可能几分钟都没有
+       * `log` 事件），随后浏览器侧的 EventSource 会自动重连 ——
+       * 于是界面被「📡 / ⚪ 已订阅 / 任务状态」这类客户端日志刷屏，
+       * 而实际上什么都没变。SSE 注释行 `: hb\n\n` 对 EventSource 的
+       * onmessage 处理器不可见，却能刷新内核的 TCP 空闲计时器。
+       * 15s 远小于多数代理的空闲超时（通常 30–60s）。abort 时清除。 */
       const hbId = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
         } catch {
-          /* controller closed — clear and bail */
+          /* controller 已关闭 —— 清掉定时器并退出 */
           clearInterval(hbId);
         }
       }, 15000);
 
-      /* DB truth-poller. The runner's
-       *  in-memory `emitter` only fires for events *the runner
-       *  itself produces* (progress/log/done/error).  External
-       *  status changes — cancelTask() (which only wrote the DB
-       *  before this commit), instrumentation.ts reconciling a
-       *  zombie RUNNING task, or any other code path that mutates
-       *  Task.status — never reach the SSE subscriber.  Polling
-       *  every 3s re-emits a `state` event when the DB's status /
-       *  progress changes since the last sent snapshot, so the
-       *  frontend's d.status cannot get stuck even if a code path
-       *  forgets to call emitter.emit().  Closed on abort; capped
-       *  to one poll in-flight to avoid pile-up. */
+      /* 数据库「实情」轮询。执行器内存里的 `emitter` 只为
+       * **执行器自己产生**的事件发消息（progress / log / done / error）。
+       * 外部导致的状态变化 —— cancelTask()（在此次修复前它只写数据库）、
+       * instrumentation.ts 对「僵尸 RUNNING」任务的对账，
+       * 或任何其它改 Task.status 的代码路径 —— 都到不了 SSE 订阅方。
+       * 这里每 3s 轮一次：只要数据库里的状态 / 进度与上次发出的快照不同，
+       * 就补发一个 `state` 事件，于是即使某条代码路径忘了调 emitter.emit()，
+       * 前端的 d.status 也不会卡住。abort 时关闭；
+       * 同时最多只允许一次轮询在途，避免堆积。 */
       let polling = false;
       const pollId = setInterval(() => {
         if (polling) return;
@@ -165,7 +156,7 @@ export async function GET(
             }
           })
           .catch(() => {
-            /* DB blip — try again next tick */
+            /* 数据库抖了一下 —— 下一个 tick 再试 */
           })
           .finally(() => {
             polling = false;
@@ -176,17 +167,17 @@ export async function GET(
         try {
           clearInterval(hbId);
         } catch {
-          /* interval already cleared — ignore */
+          /* 定时器已经清过了 —— 忽略 */
         }
         try {
           clearInterval(pollId);
         } catch {
-          /* interval already cleared — ignore */
+          /* 定时器已经清过了 —— 忽略 */
         }
         try {
           controller.close();
         } catch {
-          /* stream already closed — ignore */
+          /* 流已经关了 —— 忽略 */
         }
         unsub();
       });

@@ -1,10 +1,10 @@
 /**
- * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
- * 1. You want to modify request context (see Part 1).
- * 2. You want to create a new middleware or type of procedure (see Part 3).
+ * 除非属于下面两种情况，你大概不需要改这个文件：
+ * 1. 想改请求上下文（见「1. 上下文」一节）。
+ * 2. 想新增中间件或某一类 procedure（见「3. procedure 类型」一节）。
  *
- * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
- * need to use are documented accordingly near the end.
+ * 一句话说明：所有 tRPC 服务端的东西都在这里创建并接线；
+ * 你需要的各个部件在文件末尾都有对应的说明。
  */
 
 import "server-only";
@@ -31,9 +31,9 @@ export interface TRPCUser {
 /**
  * 1. CONTEXT
  *
- * Resolves the current user from the better-auth session (if available).
- * The `authedProcedure` middleware handles demo-user fallback for local
- * single-user mode – the context itself only resolves real sessions.
+ * 从 better-auth 的会话里解析当前用户（有会话的话）。
+ * 本地单用户模式的「演示用户兜底」由 `authedProcedure` 中间件处理 ——
+ * 上下文本身只解析真实会话。
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   const session = await auth.api.getSession({
@@ -87,7 +87,7 @@ export const createCallerFactory = t.createCallerFactory;
 export const createTRPCRouter = t.router;
 
 /**
- * Middleware for timing procedure execution.
+ * 给 procedure 执行计时的中间件。
  *
  * 面板可见日志只在「出问题」时才写：调用失败或耗时超过阈值视为问题。
  * 正常成功的调用仅走 pino `logger.debug`（落在 nextjs 文件日志，方便诊断），
@@ -175,27 +175,27 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
 });
 
 /**
- * Public (unauthenticated) procedure – ctx.user may be null.
+ * 公开（不需登录）的 procedure —— ctx.user 可能为 null。
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
-// Demo-user memoization for local single-user mode
+// 本地单用户模式下的演示用户缓存
 const DEMO_EMAIL = process.env.DEMO_USER_EMAIL ?? "demo@comfy.app";
 let demoUserCache: TRPCUser | null = null;
 
 /**
- * Authed (authenticated + demo fallback) procedure.
+ * 需要登录（并带演示用户兜底）的 procedure。
  *
- * Guarantees ctx.user is non-null.  In local single-user mode (no session),
- * falls back to a lazily-created demo user.  Shares the same auth semantics
- * as `getServerUser()` used by the remaining REST route handlers.
+ * 保证 ctx.user 不为 null。在本地单用户模式（没有会话）下，
+ * 回落到一个惰性创建的演示用户。鉴权语义与其余 REST 路由处理器用的
+ * `getServerUser()` 一致。
  */
 export const authedProcedure = t.procedure
   .use(timingMiddleware)
   .use(async ({ ctx, next }) => {
     let user = ctx.user;
     if (!user) {
-      // Demo fallback
+      // 演示用户兜底
       if (!demoUserCache) {
         let demo = await userRepository.findByEmail(DEMO_EMAIL);
         demo ??= await userRepository.createUser({
@@ -215,7 +215,7 @@ export const authedProcedure = t.procedure
   });
 
 /**
- * Rate-limited authed procedure.
+ * 带限流的「需登录」procedure。
  *
  * 对敏感操作（提权、删除、导出等）按 userId/IP 做滑动窗口限流，
  * 防脚本暴力调用。默认 10 秒窗口内 20 次，超限返回 429。

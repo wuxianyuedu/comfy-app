@@ -9,7 +9,7 @@
  * 消息的终态处理（complete / fail）在 {@link ./executor-finalize}，
  * 队列调度（processQueue）在 {@link ./executor-scheduler}，本层只做路由。
  *
- * @module comfyui/executor-ws
+ * @module comfyui/executor-ws — WS 连接 / 消息处理 / 看门狗（executor 的通道层）
  */
 import WebSocket from "ws";
 import { taskRepository } from "../core/repository";
@@ -280,7 +280,7 @@ async function handleMessage(raw: string) {
   }
 
   if (signal === "node-started") {
-    // A node started executing — surface it in the log for transparency.
+    // 某节点开始执行 —— 打进日志，让进度对用户透明。
     const graph: Record<string, unknown> | undefined =
       s.promptByTask.get(taskId);
     const graphNode = graph?.[String(data.node)];
@@ -297,10 +297,9 @@ async function handleMessage(raw: string) {
           ? (classTypeRaw as string)
           : undefined;
     const nodeId = String(data.node);
-    // remember this node so we can log its
-    // completion when ComfyUI emits the next `executing` with
-    // `data.node === null`.  This turns a "▶ KSampler" line into a
-    // proper "▶ KSampler → ✔ KSampler" pair.
+    /* 记下这个节点，等 ComfyUI 下一条 `executing` 把 `data.node` 发成 null 时，
+     * 就能补上它的完成行 —— 于是日志从孤零零一行 "▶ KSampler"，变成
+     * "▶ KSampler → ✔ KSampler" 的成对时间线。 */
     s.lastNodeByTask.set(taskId, {
       node: nodeId,
       classType: classType ?? "",
@@ -314,12 +313,10 @@ async function handleMessage(raw: string) {
     return;
   }
 
-  // when ComfyUI signals the previous node
-  // finished (executing → null node) and we have a recorded
-  // lastNodeByTask entry, surface a "✔ 完成" line so the user sees
-  // a per-node timeline.  Only do this for the API-format path
-  // (where data.node is a string id); comfy-cli emits its own
-  // "▶ 节点 N/total" lines via executeViaComfyCli.
+  /* ComfyUI 用「executing → node 为 null」表示上一个节点跑完。此时若
+   * lastNodeByTask 里有记录，就补一行 "✔ 完成"，让用户看到按节点的时间线。
+   * 只对 API 格式这条路做 —— comfy-cli 路径自己会在 executeViaComfyCli
+   * 里打 "▶ 节点 N/total"。 */
   if (signal === "node-finished") {
     const last = s.lastNodeByTask.get(taskId);
     if (last) {
@@ -366,7 +363,7 @@ async function handleMessage(raw: string) {
     }
     s.emitter.emit(taskId, { type: "progress", progress: pct, node });
 
-    // Throttled milestone log so the panel stays readable.
+    // 里程碑日志做节流，避免面板被刷得读不动。
     const last = s.lastLogPct.get(taskId) ?? -1;
     if (pct - last >= 25 || pct === 100) {
       s.lastLogPct.set(taskId, pct);
@@ -375,8 +372,8 @@ async function handleMessage(raw: string) {
     return;
   }
 
-  // Completion: standard ComfyUI uses `executing` with node===null; the
-  // kaytool build (v0.28) emits `execution_success` instead.
+  /* 完成信号有两条口径：标准 ComfyUI 发 `executing` 且 node 为 null；
+   * kaytool 构建（v0.28）改发 `execution_success`。两者都要认。 */
   if (signal === "completion") {
     await complete(taskId, promptId);
   } else if (signal === "error") {

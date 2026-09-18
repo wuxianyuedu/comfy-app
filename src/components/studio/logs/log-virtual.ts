@@ -36,7 +36,7 @@
  * （目标行序号 / 该不该动 / 写多深）是纯的：放在这里可以脱离 DOM 断言，
  * 视图只剩「问 DOM 拿目标节点几何」。判据与陷阱见 §7.28.5。
  *
- * @module logs/log-virtual
+ * @module logs/log-virtual — 日志面板的**虚拟滚动窗口**（纯逻辑，无 React、无 DOM）
  */
 
 /**
