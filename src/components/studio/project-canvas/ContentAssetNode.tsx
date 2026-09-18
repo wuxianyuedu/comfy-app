@@ -3,6 +3,7 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { WaterFillProgress } from "~/components/studio/ui/WaterFillProgress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
@@ -41,9 +42,8 @@ export function ContentAssetBody({
   onPatch: (p: Partial<CanvasNodeData>) => void;
   onPickMedia: (k: "picture" | "movie") => void;
   /* drag-and-drop upload onto the dashed area.
-   *  Previously the area was a <button> with onClick={onPickMedia};
-   *  user wants the dashed area to be drop-only — file picker is now only
-   *  reachable from the bottom-right FAB. */
+   *  该区域**曾**是带 onClick={onPickMedia} 的按钮元素；用户希望虚线区
+   *  只接受拖放 —— 文件选择器现在只能从右下角 FAB 触发。 */
   onUploadFile?: (file: File) => void | Promise<void>;
   status?: CanvasNodeData["status"];
   progress?: number;
@@ -70,15 +70,16 @@ export function ContentAssetBody({
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           onChange={(event) => onPatch({ content: event.target.value })}
         />
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-lg"
           onClick={() => textareaRef.current?.focus()}
           title="编辑文本"
-          className="absolute right-3 bottom-3 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105"
+          className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
           style={{ background: accent }}
         >
           <Icon name="pen" size={16} />
-        </button>
+        </Button>
       </div>
     );
   }
@@ -119,7 +120,7 @@ export function ContentAssetBody({
         )
       ) : (
         /* 虚线大区改为 drop-only。
-         *  - 不再是 <button>，所以点击**不会**触发文件选择器（用户要的就是这点）。
+         *  - 不再是按钮元素，所以点击**不会**触发文件选择器（用户要的就是这点）。
          *  - 仍然需要 `nodrag nopan` + onPointerDown/onMouseDown stopPropagation，
          *    否则 React Flow v12 节点 wrapper 在 mousedown 时进入 drag-suspect
          *    状态会吞掉 drop 事件。
@@ -173,29 +174,31 @@ export function ContentAssetBody({
        *  整个预览区但不拦截 FAB / 拖入 / 点击。FAB 是后渲染的兄弟节点，
        *  视觉上自然压在覆盖层之上。 */}
       {status === "running" && <WaterFillProgress progress={progress ?? 0} />}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon-lg"
         onClick={() => onPickMedia(isPic ? "picture" : "movie")}
         title={isPic ? "上传图片" : "上传视频"}
-        className="absolute right-3 bottom-3 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105"
+        className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
         style={{ background: accent }}
       >
         <Icon name="plus" size={18} />
-      </button>
+      </Button>
 
       {/* 多图数量标签（右上角） */}
       {imageCount > 1 && mediaSrc && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={() => {
             gallery.setIndex(0);
             gallery.setOpen(true);
           }}
-          className="absolute top-2.5 right-2.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-black/70 px-1.5 text-[10px] font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm transition-colors hover:bg-violet-500/80 hover:text-white"
+          className="absolute top-2.5 right-2.5 h-auto min-w-[20px] rounded-full bg-black/70 px-1.5 text-[10px] font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 backdrop-blur-sm hover:bg-violet-500/80 hover:text-white"
           title={`查看全部 ${imageCount} 张图片`}
         >
           {imageCount}
-        </button>
+        </Button>
       )}
 
       {/* ── 画廊覆盖层 ── */}
@@ -211,17 +214,18 @@ export function ContentAssetBody({
           aria-label="图片画廊"
         >
           {/* 关闭按钮 */}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={(event) => {
               event.stopPropagation();
               gallery.setOpen(false);
             }}
-            className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:text-white"
+            className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-4 right-4 rounded-full hover:text-white"
             title="关闭"
           >
             <X size={16} />
-          </button>
+          </Button>
 
           {/* 主图 */}
           <img
@@ -234,8 +238,9 @@ export function ContentAssetBody({
           {/* 左右切换 + 计数 */}
           {galleryImages.length > 1 && (
             <>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-lg"
                 onClick={(event) => {
                   event.stopPropagation();
                   gallery.setIndex(
@@ -244,13 +249,14 @@ export function ContentAssetBody({
                   );
                 }}
                 disabled={galleryImages.length <= 1}
-                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:text-white disabled:opacity-30"
+                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 left-4 -translate-y-1/2 rounded-full hover:text-white"
                 title="上一张"
               >
                 <ChevronLeft size={18} />
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-lg"
                 onClick={(event) => {
                   event.stopPropagation();
                   gallery.setIndex(
@@ -258,11 +264,11 @@ export function ContentAssetBody({
                   );
                 }}
                 disabled={galleryImages.length <= 1}
-                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:text-white disabled:opacity-30"
+                className="bg-subtle text-ink-soft hover:bg-surface-2 absolute top-1/2 right-4 -translate-y-1/2 rounded-full hover:text-white"
                 title="下一张"
               >
                 <ChevronRight size={18} />
-              </button>
+              </Button>
               {/* 底部计数 + 缩略条 */}
               <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3">
                 <span className="tabular-ns rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm">
@@ -270,14 +276,15 @@ export function ContentAssetBody({
                 </span>
                 <div className="bg-subtle flex gap-1.5 overflow-hidden rounded-full p-1 backdrop-blur-sm">
                   {galleryImages.map((img, i) => (
-                    <button
+                    <Button
                       key={img.id}
-                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={(event) => {
                         event.stopPropagation();
                         gallery.setIndex(i);
                       }}
-                      className={`h-6 w-6 shrink-0 overflow-hidden rounded-full border-2 transition-all ${
+                      className={`h-auto w-6 shrink-0 overflow-hidden rounded-full border-2 p-0 hover:bg-transparent ${
                         i === gallery.index
                           ? "border-violet-400 opacity-100"
                           : "border-transparent opacity-50 hover:opacity-80"
@@ -289,7 +296,7 @@ export function ContentAssetBody({
                         alt=""
                         className="h-full w-full object-cover"
                       />
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>

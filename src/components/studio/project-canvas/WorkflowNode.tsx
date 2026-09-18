@@ -51,6 +51,7 @@ import {
   type WorkflowSourceFilter,
   type WorkflowModesState,
 } from "./workflow-node-types";
+import { Button } from "~/components/ui/button";
 import { WorkflowSourceFilterChip } from "./WorkflowSourceFilterChip";
 import { WorkflowModelFilterChip } from "./WorkflowModelFilterChip";
 import { WorkflowPickChip } from "./WorkflowPickChip";
@@ -308,15 +309,15 @@ export function WorkflowNode({
       )}
 
       {/* 生成按钮：全宽渐变，底部圆角贴合 Card（Card 无 overflow-hidden，故按钮自带 rounded-b） */}
-      <button
-        type="button"
+      <Button
+        variant="primary-solid"
         disabled={d.status === "running"}
         onClick={onGenerate}
         className="nodrag nopan from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 rounded-b-[14px] bg-linear-to-r text-[13px] font-bold text-white shadow-[0_4px_12px_rgba(124,92,252,0.35)] transition-opacity hover:opacity-95 disabled:opacity-40"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {d.status === "running" ? "生成中…" : "▶ 用此工作流生成"}
-      </button>
+      </Button>
     </>
   );
 }

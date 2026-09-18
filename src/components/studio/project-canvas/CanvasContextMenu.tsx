@@ -1,10 +1,10 @@
 "use client";
 
-/** extracted from ProjectCanvas's right-click context
- *  menu.  Pure presentational — the caller owns `menu` state and the
- *  node-creation actions.
+/** 从 ProjectCanvas 抽出的右键上下文菜单。纯展示组件 —— `menu` 状态与
+ *  建节点动作都由调用方持有。
  */
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { NODE_META, type NodeKind } from "~/lib/project-canvas/canvas-types";
 import { overlayClass } from "~/lib/full-screen-layer";
 
@@ -39,11 +39,11 @@ export function CanvasContextMenu({
         style={{ left: x, top: y }}
       >
         {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           data-canvas-node-kind="workflow-ardot"
           onClick={onPickTest}
-          className="from-primary/15 to-accent/10 text-ink-bright hover:from-primary/25 hover:to-accent/15 flex w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r px-2 py-1.5 text-left text-[12px] transition-colors"
+          className="from-primary/15 to-accent/10 text-ink-bright hover:from-primary/25 hover:to-accent/15 flex h-auto w-full items-center gap-2 rounded-lg border border-violet-400/30 bg-linear-to-r px-2 py-1.5 text-left text-[12px] font-normal transition-colors"
         >
           <span
             className="flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-bold text-white"
@@ -59,7 +59,7 @@ export function CanvasContextMenu({
               纯视觉 · 对齐 Ardot 稿（无运行时）
             </span>
           </span>
-        </button>
+        </Button>
 
         <div className="bg-border-strong my-1 h-px" />
         <div className="text-ink-muted px-2 py-1 text-[10px] tracking-wider uppercase">
@@ -68,12 +68,12 @@ export function CanvasContextMenu({
         {(Object.keys(NODE_META) as NodeKind[]).map((kind) => {
           const meta = NODE_META[kind];
           return (
-            <button
+            <Button
               key={kind}
-              type="button"
+              variant="ghost"
               data-canvas-node-kind={kind}
               onClick={() => onPick(kind)}
-              className="text-ink-bright hover:bg-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
+              className="text-ink-bright hover:bg-subtle flex h-auto w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] font-normal transition-colors"
             >
               <Icon
                 name={meta.icon}
@@ -84,7 +84,7 @@ export function CanvasContextMenu({
                 <span className="font-medium">{meta.label}</span>
                 <span className="text-ink-muted text-[10px]">{meta.desc}</span>
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>

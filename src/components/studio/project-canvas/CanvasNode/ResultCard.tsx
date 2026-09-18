@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import {
   NODE_META,
   type CanvasNodeData,
@@ -51,34 +52,34 @@ export function ResultCard({
         </div>
         {/* Edit toolbar */}
         <div className="border-border-strong bg-canvas-deep flex items-center justify-center gap-1 border-b px-2 py-1.5">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             title="字号减小"
-            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium"
+            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
           >
             A-
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
             title="字号增大"
-            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px] font-medium"
+            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-medium"
           >
             A+
-          </button>
+          </Button>
           <span className="bg-border-strong mx-1 h-3 w-px" />
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             title="编辑"
-            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]"
+            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
           >
             <Icon name="pen" size={11} className="mr-1 inline align-[-1px]" />
             编辑
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
             title="下载"
             onClick={() => text && navigator.clipboard?.writeText(text)}
-            className="text-ink-soft hover:bg-subtle rounded-md px-2 py-1 text-[11px]"
+            className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
           >
             <Icon
               name="download"
@@ -86,7 +87,7 @@ export function ResultCard({
               className="mr-1 inline align-[-1px]"
             />
             下载
-          </button>
+          </Button>
         </div>
         <div className="text-ink-bright max-h-56 overflow-auto p-3 text-[12px] leading-relaxed">
           {
@@ -95,14 +96,14 @@ export function ResultCard({
           }
         </div>
         <div className="border-border-strong flex items-center justify-center border-t py-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={onReplace}
-            className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors"
+            className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-normal ring-1"
           >
             <Icon name="refresh" size={11} />
             替换
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -141,14 +142,14 @@ export function ResultCard({
         )}
       </div>
       <div className="border-border-strong flex items-center justify-center border-t py-2">
-        <button
-          type="button"
+        <Button
+          variant="outline"
           onClick={onReplace}
-          className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] ring-1 transition-colors"
+          className="bg-canvas-deep text-ink-bright ring-border-strong hover:bg-surface-2 flex h-auto items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-normal ring-1"
         >
           <Icon name="refresh" size={11} />
           替换
-        </button>
+        </Button>
       </div>
     </div>
   );

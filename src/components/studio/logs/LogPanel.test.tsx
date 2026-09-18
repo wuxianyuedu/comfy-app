@@ -464,20 +464,14 @@ describe("LogPanel 日志面板", () => {
     );
     render(<LogPanel />);
 
-    /* 颜色挂在按钮上、由标签文字继承（标签自身只管不换行）。 */
-    expect(levelButton("警告").className).toContain(
-      "text-amber-700 dark:text-amber-300",
-    );
-    expect(levelButton("错误").className).toContain(
-      "text-rose-700 dark:text-rose-300",
-    );
+    /* 颜色挂在按钮上、由标签文字继承（标签自身只管不换行）。
+     *  级别色走语义 token 而不是 Tailwind 原生调色板字面量（规范 §3.6.2 /
+     *  §16.2.4）：换品牌/状态色时调用处不用改。 */
+    expect(levelButton("警告").className).toContain("text-warning-strong");
+    expect(levelButton("错误").className).toContain("text-danger-strong");
     /* 其余级别不带这两个警示色（否则「警告黄」就不成立了）。 */
-    expect(levelButton("全部").className).not.toContain(
-      "text-amber-700 dark:text-amber-300",
-    );
-    expect(levelButton("信息").className).not.toContain(
-      "text-amber-700 dark:text-amber-300",
-    );
+    expect(levelButton("全部").className).not.toContain("text-warning-strong");
+    expect(levelButton("信息").className).not.toContain("text-warning-strong");
     /* 数字是中性灰、显式覆盖继承色，不跟着级别变色。 */
     for (const label of ["警告", "错误"]) {
       expect(levelButton(label).children[1]!.className).toContain(
