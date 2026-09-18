@@ -24,7 +24,7 @@ import path from "node:path";
  * @typedef {{ ok: boolean, command: string, prefixArgs: string[], reason: string | null }} CommandUsability
  */
 
-/** 是否是 Windows（与 src/lib/kill-process-tree.ts 同一判据）。 */
+/** 是否是 Windows（与 src/lib/process/kill-process-tree.ts 同一判据）。 */
 /**
  * @param {NodeJS.Platform} [platform]
  * @returns {boolean}

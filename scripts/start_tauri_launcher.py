@@ -2065,7 +2065,7 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
             # 对 onedir 模式同样有益：子进程不会误持 launcher 目录下的文件句柄。
             close_fds=True,
             # Windows 上无 POSIX 进程组概念（start_new_session 仅 POSIX 有效）。
-            # 进程树的隔离与回收由编排器负责：它走 src/lib/kill-process-tree.ts
+            # 进程树的隔离与回收由编排器负责：它走 src/lib/process/kill-process-tree.ts
             # （Windows taskkill /T /F，POSIX 进程组信号）。
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )

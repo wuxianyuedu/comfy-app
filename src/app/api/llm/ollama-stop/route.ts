@@ -60,7 +60,7 @@ async function ollamaUp(): Promise<boolean> {
  * 关闭 Ollama：官方 CLI 没有「退出 serve」的命令（`ollama stop <model>` 只停
  * 模型加载），所以进程级终止是唯一可靠的关闭方式。
  *
- * 终止**按映像名杀整棵树**，判据收在 `~/lib/kill-process-tree`（`mode: "image"`）：
+ * 终止**按映像名杀整棵树**，判据收在 `~/lib/process/kill-process-tree`（`mode: "image"`）：
  * Windows 映射到 `taskkill /IM ollama.exe /T /F`，POSIX 映射到 `pkill -x ollama`。
  * 本模块不再自己拼命令、也不自己摸 `process.platform` —— 按映像名杀同样是
  * 「杀整棵树」的一种，散在路由里就又是一处平台判据。

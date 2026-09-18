@@ -40,9 +40,6 @@ const SCRIPT = join(process.cwd(), "scripts", "check-file-structure.cjs");
 // 构建前置守卫：断言它真的能认出「路径落在本仓库 src-tauri\target\ 下的 app.exe」，
 // 而不是把同名的无关进程（如别处的 app.exe）当成目标壳误杀。
 const GUARD = join(process.cwd(), "tools", "scripts", "Build-Guard.ps1");
-// 启动链路的残留壳治理：dev-launcher.ps1 的 Get-RunningProjectShell / Stop-StaleProjectShell
-// 与构建守卫共用「exe 真实路径落在本仓库 target 下」这条判据。
-const LAUNCHER = join(process.cwd(), "scripts", "dev-launcher.ps1");
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
 let workdir = "";
@@ -737,7 +734,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   // 桩件查自身时如实回 `$PID`，查父进程时回 `opts.parent`。
   const guardScript = (
     procsJson: string,
-    opts: { parent?: string } = {},
+    opts: { parent?: string; processes?: unknown[] } = {},
   ): string => `
 $ErrorActionPreference = "Stop"
 function Log { param([string]$Msg) Write-Output $Msg }
@@ -759,10 +756,28 @@ function Get-CimInstance {
     [pscustomobject]@{ ProcessId = $r.Id; ExecutablePath = $r.Path; CommandLine = $r.Cmd }
   }
 }
+function Get-Process {
+  # 打桩进程表：Modules 是「文件被映射进了哪个进程」的判据，产物目录的占用者靠它查
+  # （见 Get-ProductDirHolder）。不桩掉就会去扫本机的真实进程表 —— 断言会随开发机
+  # 当下开着什么而变，红/绿不再可归因。
+  param([Parameter(ValueFromRemainingArguments = $true)]$Args)
+  $rows = '${JSON.stringify(opts.processes ?? [])}' | ConvertFrom-Json
+  foreach ($r in $rows) {
+    [pscustomobject]@{
+      Id = $r.Id
+      ProcessName = $r.Name
+      Path = $r.Path
+      Modules = @($r.Modules | ForEach-Object { [pscustomobject]@{ FileName = $_ } })
+    }
+  }
+}
 function taskkill {
   param([Parameter(ValueFromRemainingArguments = $true)]$Args)
   Write-Output ("KILL " + ($Args -join " "))
   $global:KILLED = [int]$global:KILLED + 1
+  # 记下参数形态：守卫把 taskkill 的**输出**重定向到 Out-Null，只看 KILL 行断言不到
+  # 「杀的是不是整棵树（/T /F）」，所以在桩件里留一份参数供断言。
+  $global:KILL_ARGS += ($Args -join " ")
   # 模拟回收：记住被杀掉的 PID，后续查询不再返回它们（否则「回收后复查」这条路
   # 在桩件里永远走不通，测不出守卫真实的继续/中止分支）
   if ($Args.Count -ge 2 -and $Args[0] -eq "/PID") {
@@ -771,6 +786,7 @@ function taskkill {
 }
 $global:KILLED_PIDS = @()
 $script:KILLED_PIDS = @()
+$global:KILL_ARGS = @()
 . "${GUARD}"
 $root = "${process.cwd()}"
 $hits = @(Get-RunningShellProcess -ProjectRoot $root)
@@ -844,6 +860,7 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
 $code = Assert-ShellNotRunning -ProjectRoot $root -Purpose "构建 release 壳"
 Write-Output ("CODE=" + $code)
 Write-Output ("KILLED=" + $global:KILLED)
+Write-Output ("KILLS=" + ($global:KILL_ARGS -join "|"))
 Write-Output ("|END")
 `;
 
@@ -864,6 +881,10 @@ Write-Output ("|END")
       expect(out).toContain("CODE=0");
       expect(out).toContain("KILLED=1");
       expect(out).toContain("回收陈旧桌面壳");
+      // 回收必须杀整棵树：单杀 leader 会留下它拉起的 node / next（占端口、锁产物）。
+      // 这条契约原先钉在 `dev-launcher.ps1` 的自有实现上，那份实现已收进本守卫，
+      // 断言随之搬到这里（旧用例测的函数早已不存在，只剩一句永远失败的断言）。
+      expect(out).toContain("KILLS=/PID 711 /T /F");
     },
   );
 
@@ -926,17 +947,30 @@ Write-Output ("|END")
    *
    * 现在打包脚本编译/打包前先经 `Assert-LauncherNotRunning` 自查启动器，命中即
    * 点名 PID + 给 `taskkill /PID <pid> /T /F`；这里锁住「哪些进程算命中」。
+   *
+   * 判据后来补了第二条（`-ProductDir`）：**占用者不一定启动器 exe 本身**。启动器拉起的
+   * dev server（node → pnpm → next）会把 `start-tauri\_internal\*.dll` 映射进自己的进程
+   * （实测 pnpm 侧的 VCRUNTIME140.dll 就取自产物目录），启动器异常退出后它们残留成孤儿，
+   * 目录照样删不掉 —— 而按 exe 名 / 路径判断的判据在这里查到 0 个启动器，于是清理失败，
+   * 提示还在猜「是不是启动器没关」，用户照做无效。
    */
-  const assertLauncherScript = (procsJson: string): string =>
-    guardScript(procsJson).replace(
-      "function Log { param([string]$Msg) Write-Output $Msg }",
-      "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
-    ) +
-    `
-$code = Assert-LauncherNotRunning -ProjectRoot $root -Purpose "打包启动器"
+  const assertLauncherScript = (
+    procsJson: string,
+    opts: { processes?: unknown[]; productDir?: string } = {},
+  ): string => {
+    const dirArg = opts.productDir ? ` -ProductDir "${opts.productDir}"` : "";
+    return (
+      guardScript(procsJson, { processes: opts.processes }).replace(
+        "function Log { param([string]$Msg) Write-Output $Msg }",
+        "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
+      ) +
+      `
+$code = Assert-LauncherNotRunning -ProjectRoot $root -Purpose "打包启动器"${dirArg}
 Write-Output ("CODE=" + $code)
 Write-Output ("|END")
-`;
+`
+    );
+  };
 
   it.skipIf(!psExe)("启动器在跑时打包被拦下，并点名 PID（ISSUE #621）", () => {
     const root = process.cwd();
@@ -1002,103 +1036,94 @@ Write-Output ("|END")
       expect(out).toContain("HITS=0");
     },
   );
-});
-
-describe("dev-launcher.ps1（桌面壳残留治理）", () => {
-  /**
-   * 锁住「启动前残壳回收」与「构建前置守卫」共用同一条判据：进程 exe 的可执行文件
-   * 路径落在本仓库 src-tauri\target\{release,debug}。旧实现按命令行（CommandLine -like
-   * "*<项目根>*"）筛选，而预编译壳是 dev-launcher 用 ProcessStartInfo（UseShellExecute
-   * =false）拉起的，命令行里不含项目根路径 → 残壳漏判、且下一次编译仍被它锁住产物。
-   */
-  const psExe = (() => {
-    for (const candidate of ["powershell", "pwsh"]) {
-      try {
-        execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
-    return "";
-  })();
-
-  // 注意：verdict 走 stdout（Write-Output），回收动作走 stderr（[Console]::Error）。
-  // PowerShell 7 里 Write-Host 的「信息流」会与管道重定向（2>&1）交互，导致紧随其后的
-  // Write-Output 被吞掉——用 stderr 记录动作，断言才稳定。
-  const runLauncher = (script: string): string => {
-    const proc = spawnSync(
-      psExe,
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
-      { encoding: "utf8" },
-    );
-    return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
-  };
-
-  // 打桩 Get-CimInstance（进程枚举）与 taskkill（回收动作）：只断言「认哪些进程、
-  // 对认出来的发了什么 kill」，不真的动本机进程。
-  const launcherScript = (procsJson: string): string => `
-$ErrorActionPreference = "Stop"
-function Log { param([string]$Msg) Write-Output $Msg }
-function Write-Log { param([string]$Message, [string]$Level = "INFO") [Console]::Error.WriteLine("[$Level] " + $Message) }
-function Get-CimInstance {
-  param([string]$ClassName, [string]$Filter)
-  $rows = '${procsJson}' | ConvertFrom-Json
-  foreach ($r in $rows) {
-    [pscustomobject]@{ ProcessId = $r.Id; ExecutablePath = $r.Path; CommandLine = $r.Cmd }
-  }
-}
-function taskkill { param([Parameter(ValueFromRemainingArguments = $true)]$Args) [Console]::Error.WriteLine("KILL " + ($Args -join " ")) }
-$statements = [System.Management.Automation.Language.Parser]::ParseFile("${LAUNCHER}", [ref]$null, [ref]$null).FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
-$block = $statements | Where-Object { $_.Name -in @("Test-ProjectShellPath", "Get-RunningProjectShell", "Stop-StaleProjectShell") }
-Invoke-Expression (($block | ForEach-Object { $_.Extent.Text }) -join "\`n")
-$root = "${process.cwd()}"
-$hits = @(Get-RunningProjectShell -Root $root)
-Write-Output ("HITS=" + $hits.Count)
-foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
-Stop-StaleProjectShell -Root $root
-`;
 
   it.skipIf(!psExe)(
-    "残留判定按 exe 真实路径：本仓库 target 下的壳命中，别处的同名进程不命中",
+    "启动器已退出、它拉起的 dev server 还在跑时同样中止，并点名真正的占用者",
     () => {
+      // 现场形态：启动器异常退出（本次即「编排器加载模块失败」），它拉起的 dev server
+      // 残留成孤儿，把 start-tauri\_internal\*.dll 映射在自己进程里。旧判据在这里查到
+      // 0 个启动器，打包一路走到 Remove-Item 才失败，且提示还在猜「启动器没关吧」。
       const root = process.cwd();
-      const json = JSON.stringify([
+      const productDir = join(root, "start-tauri");
+      const processes = [
         {
-          Id: 501,
-          Path: join(root, "src-tauri", "target", "release", "app.exe"),
-          Cmd: "",
+          Id: 921,
+          Name: "pnpm-native",
+          Path: "C:\\corepack\\pnpm-native.exe",
+          Modules: [join(productDir, "_internal", "VCRUNTIME140.dll")],
         },
-        { Id: 502, Path: "D:\\other\\app.exe", Cmd: `legacy ${root} app.exe` },
-        { Id: 503, Path: "", Cmd: "" },
-      ]);
-      const out = runLauncher(launcherScript(json));
-      expect(out).toContain("HITS=1");
-      expect(out).toContain("HIT=501");
-      expect(out).not.toContain("HIT=502");
-      expect(out).toContain("KILL /PID 501 /T /F");
+      ];
+      const out = runGuard(
+        assertLauncherScript(JSON.stringify([]), { processes, productDir }),
+      );
+      expect(out).toContain("CODE=1");
+      expect(out).toContain("正在占用的进程：PID 921");
+      expect(out).toContain(`← ${join(productDir, "_internal", "VCRUNTIME140.dll")}`);
+      expect(out).toContain("taskkill /PID 921 /T /F");
     },
   );
 
-  it.skipIf(!psExe)("回收残留壳必须杀整棵进程树（/T /F），不得单杀", () => {
-    const root = process.cwd();
-    const json = JSON.stringify([
-      {
-        Id: 601,
-        Path: join(root, "src-tauri", "target", "debug", "APP.EXE"),
-        Cmd: "",
-      },
-    ]);
-    const out = runLauncher(launcherScript(json));
-    expect(out).toContain("KILL /PID 601 /T /F");
-  });
+  it.skipIf(!psExe)(
+    "产物目录的占用只认「文件被映射进该进程」，别处的模块不算",
+    () => {
+      const root = process.cwd();
+      const productDir = join(root, "start-tauri");
+      const processes = [
+        {
+          Id: 931,
+          Name: "node",
+          Path: "D:\\nodejs\\node.exe",
+          Modules: ["C:\\Windows\\System32\\kernel32.dll", "D:\\nodejs\\node.dll"],
+        },
+      ];
+      const out = runGuard(
+        assertLauncherScript(JSON.stringify([]), { processes, productDir }),
+      );
+      expect(out).toContain("CODE=0");
+    },
+  );
 
-  it.skipIf(!psExe)("没有残壳时不产生任何 kill", () => {
-    const out = runLauncher(launcherScript(JSON.stringify([])));
-    expect(out).toContain("HITS=0");
-    expect(out).not.toContain("KILL ");
+  it.skipIf(!psExe)(
+    "启动器自己也在持有者名单里时不重复点名（同一个 PID 只报一次）",
+    () => {
+      const root = process.cwd();
+      const productDir = join(root, "start-tauri");
+      const launcherExe = join(productDir, "start-tauri.exe");
+      const processes = [
+        { Id: 811, Name: "start-tauri", Path: launcherExe, Modules: [launcherExe] },
+      ];
+      const json = JSON.stringify([
+        { Id: 811, Path: launcherExe, Cmd: "", Name: "start-tauri.exe" },
+      ]);
+      const out = runGuard(assertLauncherScript(json, { processes, productDir }));
+      expect(out).toContain("CODE=1");
+      expect(out).toContain("正在运行的启动器：PID 811");
+      expect(out).not.toContain("正在占用的进程");
+    },
+  );
+
+  it.skipIf(!psExe)("清理失败时同时给出真实异常与查出来的占用者", () => {
+    const root = process.cwd();
+    const productDir = join(root, "start-tauri");
+    const processes = [
+      {
+        Id: 941,
+        Name: "pnpm-native",
+        Path: "C:\\corepack\\pnpm-native.exe",
+        Modules: [join(productDir, "_internal", "VCRUNTIME140.dll")],
+      },
+    ];
+    const out = runGuard(
+      guardScript(JSON.stringify([]), { processes }) +
+        `
+Write-ProductDirLockHint -Purpose "打包启动器" -Name "start-tauri" -Directory "${productDir}" -Detail "另一个程序正在使用此文件，进程无法访问。"
+`,
+    );
+    expect(out).toContain("系统报错：另一个程序正在使用此文件，进程无法访问。");
+    expect(out).toContain("PID 941");
+    expect(out).toContain("taskkill /PID 941 /T /F");
+    // 查到占用者就不再给「权限问题 / 杀毒软件」那条分流（它是查不到人时的兜底）
+    expect(out).not.toContain("没有查到持有文件的进程");
   });
 });
 

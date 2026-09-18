@@ -48,7 +48,7 @@
 | lib 层边界与门禁 | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层） | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度棘轮 `check-file-structure.cjs --strict` |
 | lib 子域归属 | `src/lib/**`（新增模块、新建子域目录、搬目录） | §12.5.3 + §18.14；门禁 `check-file-structure.cjs` 的 R13′/R14 |
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs` | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs` |
-| 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
+| 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
 | 复用/去重与常量收口 | 抽共享模块、加/改默认地址与端口、写新的质量门禁 | §12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口） |
 
@@ -61,7 +61,7 @@
      `verifyDepsBeforeRun: false`
    - `next.config.js`：`experimental.useTypeScriptCli: false`
 3. **进程清理必须杀整棵树，且平台判据只有一处**：一律经
-   `src/lib/kill-process-tree.ts` 的 `killProcessTree()`（命令行入口
+   `src/lib/process/kill-process-tree.ts` 的 `killProcessTree()`（命令行入口
    `scripts/reap-process.mjs` 供非 TS 宿主调用；平台判据收在该模块，禁止在各处
    自己写 `taskkill` / `process.kill`）：Windows 走 `taskkill /PID <pid> /T /F`，
    POSIX 读目标 PGID 后向进程组发信号（拿不到组时单杀兜底）。禁止
@@ -247,7 +247,7 @@
     - **Node-only 三选一，不许「都没有」**（§18.4）：全部出口都只能服务端用 → `import
       "server-only"`；同领域的**服务端拆件**（把 IO 从纯逻辑里切出去）→ `.server.ts`
       后缀；**纯 Node 宿主**（由 `scripts/*.mjs` 动态加载）→ 两者都不加。
-      `src/lib/kill-process-tree.ts` 属第三类 —— 给它加 `server-only` 会让**启动编排
+      `src/lib/process/kill-process-tree.ts` 属第三类 —— 给它加 `server-only` 会让**启动编排
       直接崩**（`server-only` 的入口就是一句 `throw`，只有 Next 的 `react-server`
       条件才解析到空模块）。
     - **新增守卫前先查是否已有更强的那一条**：客户端打包安全已由

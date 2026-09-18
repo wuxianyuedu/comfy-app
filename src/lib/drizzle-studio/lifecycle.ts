@@ -253,7 +253,7 @@ export async function ensureDrizzleStudioUp(
 
 /**
  * 关闭 Drizzle Studio：杀整棵进程树。
- * 平台判据在 `~/lib/kill-process-tree`：Windows taskkill /PID /T /F，
+ * 平台判据在 `~/lib/process/kill-process-tree`：Windows taskkill /PID /T /F，
  * POSIX 杀进程组（AGENTS 硬规则 3，禁止单杀留孤儿）。
  */
 export async function stopDrizzleStudio(
