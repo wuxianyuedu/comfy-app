@@ -45,10 +45,14 @@ export async function probeComfyAtPort(port: number): Promise<string | null> {
 /** 对指定地址各发一次 `/system_stats`，通了返回该地址。 */
 export async function probeBaseOnce(base: string): Promise<string | null> {
   try {
-    const r = await fetch(`${base}/system_stats`, {
+    // 只发一次请求、不写会话缓存。存活判据是「端口有没有人应答」：**连上即存活**——
+    // 包括 GPU 显存不足时 `/system_stats` 返回的 HTTP 500（CUDA OOM）。过去用
+    // `r.ok` 把「接口异常」当「进程退出」，导致显存爆掉时设置页假报「未运行」
+    // （ISSUE #685：用户看到红点、以为 ComfyUI 退出了，实际进程还活着）。
+    await fetch(`${base}/system_stats`, {
       signal: AbortSignal.timeout(1500),
     });
-    return r.ok ? base : null;
+    return base;
   } catch {
     return null;
   }
