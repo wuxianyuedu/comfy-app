@@ -9,6 +9,7 @@
  */
 
 import type { RemoteModelKind } from "~/lib/llm/types";
+import { Button } from "~/components/ui/button";
 
 import { Card } from "./SettingsPrimitives";
 import { RemoteModelDialog } from "./RemoteModelDialog";
@@ -37,13 +38,13 @@ export function LlmRemoteSection({
       <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-ink/80 text-sm font-medium">{title}</span>
-          <button
-            type="button"
+          <Button
+            size="lg"
             onClick={() => d.openAddDialog(kind)}
-            className="bg-primary hover:bg-primary-hover rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+            className="h-auto rounded-lg px-3 py-1.5 text-xs font-semibold"
           >
             ＋ 添加模型
-          </button>
+          </Button>
         </div>
         {entries.length > 0 ? (
           <div className="space-y-1.5">
@@ -67,45 +68,51 @@ export function LlmRemoteSection({
                         </span>
                       )}
                     </span>
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="xs"
                       title="按该条目配置探测接口连通性（不生成、不耗额度）"
+                      disabled={!!thisProbe?.running}
                       onClick={() => void d.runEntryConnectionTest(entry)}
-                      className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
                     >
                       {thisProbe?.running ? "连接测试中…" : "测试连接"}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="xs"
                       title="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）"
                       onClick={() => d.openUsageTest(kind, entry)}
-                      className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
                     >
                       测试生成
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="xs"
                       title="编辑接口地址 / 密钥 / 名称"
                       onClick={() => d.openEditDialog(entry)}
-                      className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded border px-1.5 py-0.5 text-[11px] transition-colors"
+                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
                     >
                       编辑
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       title="移除该模型（即时保存）"
+                      aria-label={`移除模型 ${entry.name}`}
                       onClick={() => void c.removeRemoteModel(entry.name)}
-                      className="text-muted-foreground shrink-0 hover:text-rose-700 dark:text-rose-500"
+                      className="text-muted-foreground hover:text-danger-strong"
                     >
                       ✕
-                    </button>
+                    </Button>
                   </div>
                   {rowMsg && (
                     <div
                       className={`mr-1 ml-1 rounded border px-2 py-1 text-[11px] ${
                         rowMsg.kind === "ok"
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                          : "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                          ? "border-success/30 bg-success/10 text-success-strong"
+                          : "border-destructive/30 bg-destructive/10 text-danger-strong"
                       }`}
                     >
                       {rowMsg.text}

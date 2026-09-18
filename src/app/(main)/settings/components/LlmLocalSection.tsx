@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
 
 import {
   TEMPERATURE_TASKS,
@@ -19,13 +18,16 @@ import {
 } from "../hooks/use-settings-page";
 import type { TaskType } from "~/lib/llm/types";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
+import { StatusDot } from "~/components/ui/status-dot";
 
 import {
   STATUS_ROW_CLASS,
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { AnsiLogText, Btn, Card, Field } from "./SettingsPrimitives";
+import { AnsiLogText, StatusButton, Card, Field } from "./SettingsPrimitives";
 
 export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   /* 本地 Ollama 下任务温度是主配置区，默认展开。 */
@@ -71,7 +73,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       >
         {c.ollamaStatus === "checking" && (
           <>
-            <Loader2 size={14} className="text-muted-foreground animate-spin" />
+            <Spinner className="size-3.5" />
             <span className={`text-muted-foreground ${STATUS_TEXT_CLASS}`}>
               检测 Ollama 服务…
             </span>
@@ -79,7 +81,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         )}
         {c.ollamaStatus === "starting" && (
           <>
-            <Loader2 size={14} className="text-muted-foreground animate-spin" />
+            <Spinner className="size-3.5" />
             <span className={`text-muted-foreground ${STATUS_TEXT_CLASS}`}>
               Ollama 启动中，正在等待服务就绪…
             </span>
@@ -87,32 +89,32 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         )}
         {c.ollamaStatus === "up" && (
           <>
-            <span className="inline-block size-2 shrink-0 rounded-full bg-emerald-400" />
+            <StatusDot state="up" />
             <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
               Ollama 运行中（{c.ollamaModels.length} 个模型可用）
             </span>
-            <Btn
+            <StatusButton
               onClick={() => void c.stopOllama()}
               disabled={c.ollamaStopping}
-              className="ml-auto shrink-0"
+              className="ml-auto"
             >
               {c.ollamaStopping ? "关闭中…" : "关闭 Ollama"}
-            </Btn>
+            </StatusButton>
           </>
         )}
         {c.ollamaStatus === "down" && (
           <>
-            <span className="inline-block size-2 shrink-0 rounded-full bg-rose-400" />
+            <StatusDot state="down" />
             <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
               Ollama 未运行
             </span>
-            <Btn
+            <StatusButton
               onClick={() => void c.startOllama()}
               disabled={c.ollamaStarting}
-              className="ml-auto shrink-0"
+              className="ml-auto"
             >
               {c.ollamaStarting ? "启动中…" : "启动 Ollama"}
-            </Btn>
+            </StatusButton>
           </>
         )}
       </div>
@@ -126,29 +128,30 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
             启动日志（ollama-runtime.log）
             {c.ollamaLogActive && (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
-                <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+              <span className="text-success-strong inline-flex items-center gap-1.5 text-[10px] font-normal">
+                <StatusDot state="up" sizeClass="size-1.5" pulse />
                 跟随中
               </span>
             )}
           </span>
           <div className="flex items-center gap-2">
             {!logFollow && (
-              <button
-                type="button"
+              <Button
+                size="xs"
                 onClick={() => setLogFollow(true)}
-                className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
+                className="h-auto rounded px-2 py-0.5 text-[11px] font-medium"
               >
                 恢复自动滚动
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="xs"
               onClick={() => void c.refreshOllamaLog()}
-              className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
+              className="text-muted-foreground h-auto rounded px-2 py-0.5 text-[11px]"
             >
               刷新
-            </button>
+            </Button>
           </div>
         </div>
         <div
@@ -197,24 +200,26 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     model.name === c.drafts.llm.model ||
                     c.drafts.llm.localCandidates.includes(model.name);
                   return (
-                    <button
+                    <Button
                       key={model.name}
-                      type="button"
+                      variant="ghost"
+                      size="xs"
                       title={
                         model.name === c.drafts.llm.model
                           ? "当前模型（始终可用）"
                           : "勾选后工坊各阶段可直接切换"
                       }
+                      aria-pressed={checked}
                       onClick={() => c.toggleExtraModel(model.name)}
-                      className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                      className={`h-auto rounded-lg border px-2.5 py-1 text-xs ${
                         checked
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border text-muted-foreground hover:bg-subtle"
+                          ? "bg-primary/15 text-primary border-primary"
+                          : "text-muted-foreground hover:bg-subtle border-border"
                       }`}
                     >
                       {checked ? "✓ " : ""}
                       {model.name}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -246,10 +251,11 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       {/* 按任务类型配置温度 —— 远端调用同样按这套推荐默认取温度，
           但不在此暴露配置项 */}
       <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() => setShowTaskTemps((v) => !v)}
-          className="text-ink/80 hover:text-ink mb-3 flex w-full items-center justify-between text-sm font-medium"
+          aria-expanded={showTaskTemps}
+          className="text-ink/80 hover:text-ink mb-3 flex h-auto w-full items-center justify-between rounded-none px-0 text-sm font-medium"
         >
           <span>
             按任务类型配置温度
@@ -260,7 +266,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           <span className="text-muted-foreground">
             {showTaskTemps ? "▾" : "▸"}
           </span>
-        </button>
+        </Button>
         {showTaskTemps && (
           <div className="space-y-3">
             {TEMPERATURE_TASKS.map(([key, meta]) => {
@@ -284,7 +290,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                           已覆盖
                         </span>
                       ) : (
-                        <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="bg-success/10 text-success-strong rounded-full px-1.5 py-0.5 text-[10px] font-medium">
                           推荐
                         </span>
                       )}
@@ -294,17 +300,18 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     </p>
                   </div>
                   {isOverridden && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="xs"
                       title="恢复推荐默认"
                       onClick={() => {
                         clearTaskEdit(key);
                         c.setTaskTemperature(key, "");
                       }}
-                      className="border-border text-muted-foreground hover:bg-subtle rounded border px-1.5 py-0.5 text-[11px]"
+                      className="text-muted-foreground h-auto rounded px-1.5 py-0.5 text-[11px]"
                     >
                       ↺
-                    </button>
+                    </Button>
                   )}
                   <input
                     type="number"
@@ -326,9 +333,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         )}
       </div>
 
-      <Btn onClick={() => void c.saveLlm()} disabled={c.saving}>
+      <StatusButton onClick={() => void c.saveLlm()} disabled={c.saving}>
         保存 LLM 配置
-      </Btn>
+      </StatusButton>
     </Card>
   );
 }

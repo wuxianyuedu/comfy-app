@@ -8,7 +8,7 @@
  * controller 的 `drafts.settings` / `patchSettings` / `savePrefs`。
  */
 
-import { Btn, Card } from "./SettingsPrimitives";
+import { StatusButton, Card } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function ExitSection({ c }: { c: ReadySettingsPageController }) {
@@ -78,9 +78,9 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <Btn onClick={() => void c.savePrefs()} disabled={c.saving}>
+        <StatusButton onClick={() => void c.savePrefs()} disabled={c.saving}>
           保存偏好
-        </Btn>
+        </StatusButton>
       </div>
     </Card>
   );
