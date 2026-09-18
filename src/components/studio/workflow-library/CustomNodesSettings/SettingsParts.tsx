@@ -1,17 +1,17 @@
-/* Small presentational building blocks for the CustomNodesSettings dialog.
- * PortRow / WidgetValueChip moved verbatim from the original single-file
- * CustomNodesSettings.tsx; ManifestSummary / ParseProgressBanner / ParseConsole
- * / ReportCards are the low-entanglement JSX sections lifted out of the main
- * component's render (state is passed in explicitly via props). */
+/* CustomNodesSettings 弹窗的小型展示积木。
+ *  PortRow / WidgetValueChip 从原来的单文件
+ *  CustomNodesSettings.tsx 原样搬来；ManifestSummary / ParseProgressBanner / ParseConsole
+ *  / ReportCards 是从主组件 render 里提出来的低耦合 JSX 区块
+ *（状态经 props 显式传入）。 */
 
 import type { RefObject } from "react";
 import { STATUS_STYLE } from "./constants";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
 
-/** One row in the typed-ports zone — small coloured dot + uppercase type badge
- *  + port name. ComfyUI's actual nodes put the dot at the canvas edge and the
- *  name + type chip on the interior; we mirror that geometry so each port row
- *  reads at a glance which side of the node it belongs to. */
+/** 类型端口区的一行 —— 小彩点 + 大写类型章
+ *  + 端口名。ComfyUI 真实节点把圆点放在画布边缘、
+ *  把名字 + 类型章放在卡片内部；我们镜像这套几何，
+ *  好让每个端口行一眼读出它属于节点哪一侧。 */
 export function PortRow({
   side,
   color,
@@ -24,7 +24,7 @@ export function PortRow({
   name: string;
 }) {
   const isOut = side === "out";
-  // ComfyUI uses a fixed cyan-ish for outputs, category-derived for inputs.
+  // ComfyUI 给输出固定用青色调，输入则按类别派生。
   const dotColor = isOut ? "#06B6D4" : color;
   return (
     <div
@@ -57,10 +57,10 @@ export function PortRow({
   );
 }
 
-/** Right-aligned chip showing a widget's default value, styled by widget kind
- *  so the user can tell at a glance: strings / numbers / booleans / selects
- *  each get a distinct colour family. Mirrors how ComfyUI's own node renders
- *  the per-widget value chip. */
+/** 右对齐的章，显示 widget 的默认值，按 widget 类型着色，
+ *  好让用户一眼分辨：字符串 / 数字 / 布尔 / 下拉
+ *  各有一套截然不同的色系。镜像 ComfyUI 自己节点渲染
+ *  逐 widget 取值章的方式。 */
 
 /** 把 widget 值安全转成展示文本：对象走 JSON，null/undefined 给空串，其余 String。 */
 function widgetValueToText(v: unknown): string {
@@ -116,7 +116,7 @@ export function WidgetValueChip({
       </span>
     );
   }
-  // string / text / image / latent / unknown
+  // 字符串 / 文本 / 图片 / latent / 未知
   return (
     <span
       className="bg-canvas-deep text-ink-soft max-w-[140px] truncate rounded px-1.5 py-px font-mono text-[10px]"
@@ -127,8 +127,8 @@ export function WidgetValueChip({
   );
 }
 
-/** "当前清单" one-line manifest summary — lifted verbatim from the main
- *  component's "nodes" tab render. */
+/** 「当前清单」单行清单摘要 —— 从主组件
+ *  的「nodes」页签 render 原样提出。 */
 export function ManifestSummary({
   summary,
 }: {
@@ -145,15 +145,14 @@ export function ManifestSummary({
   );
 }
 
-/** Two-phase parse progress banner (scan → hash) — lifted verbatim from the
- *  main component's "nodes" tab render. Rendered only while `loading` and no
- *  summary exists yet (the caller keeps that condition). */
+/** 两阶段解析进度条（扫描 → 哈希）—— 从
+ *  主组件的「nodes」页签 render 原样提出。只在 `loading` 且尚无
+ *  摘要时渲染（条件由调用方维持）。 */
 export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
   return (
     <div className="border-border bg-bg/50 text-muted-foreground mb-4 rounded-lg border border-dashed px-3 py-3 text-xs">
-      {/* Top line: current phase, with package counter (the user's
-          primary interest). The .py file count is gone — they
-          explicitly said it isn't useful. */}
+      {/* 顶行：当前阶段 + 包计数（用户最关心的）。.py 文件数
+          已去掉 —— 用户明说它没用。 */}
       <div className="flex items-center gap-2">
         <span className="bg-primary inline-block h-2 w-2 animate-pulse rounded-full" />
         {progress.phase === "hash" && progress.total > 0 ? (
@@ -184,10 +183,10 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
           <span>首次扫描目录中的节点包…</span>
         )}
       </div>
-      {/* Bar: indeterminate (CSS stripes) during scan; determined
-          K/M during hash. `progress.total > 0` only flips true at
-          the end of the file walk when the parser announces M, so
-          the bar cleanly transitions scan→hash. */}
+      {/* 进度条：扫描阶段是不确定的（CSS 条纹）；哈希阶段是确定的
+          K/M。`progress.total > 0` 只在文件遍历结束、
+          解析器宣布 M 时才翻真，所以
+          进度条能干净地从扫描过渡到哈希。 */}
       <div className="bg-surface-2 mt-2 h-1.5 overflow-hidden rounded-full">
         {progress.phase === "hash" && progress.total > 0 ? (
           <div
@@ -197,7 +196,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
             }}
           />
         ) : (
-          // Indeterminate progress: animated stripes moving left→right
+          // 不确定进度：动效条纹自左向右移动
           <div
             className="bg-primary h-full w-1/3"
             style={{
@@ -218,9 +217,9 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
   );
 }
 
-/** Live parse console (log list) — lifted verbatim from the main component's
- *  "nodes" tab render. The two scroll refs belong to the main component's
- *  auto-scroll effects and are passed through unchanged. */
+/** 实时解析控制台（日志列表）—— 从主组件的
+ *  「nodes」页签 render 原样提出。两个滚动 ref 属于主组件的
+ *  自动滚动 effect，原样透传。 */
 export function ParseConsole({
   logs,
   parsing,
@@ -276,8 +275,8 @@ export function ParseConsole({
   );
 }
 
-/** Per-package report cards ("最近解析结果") — lifted verbatim from the main
- *  component's "nodes" tab render. */
+/** 按包的报告卡片（「最近解析结果」）—— 从主组件
+ *  的「nodes」页签 render 原样提出。 */
 export function ReportCards({ report }: { report: ParseReport }) {
   return (
     <div className="mt-2">
