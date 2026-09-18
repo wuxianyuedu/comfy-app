@@ -831,9 +831,12 @@ function WorkflowEditorBody({
           setEdges={setEdges}
           setNodes={setNodes}
         />
-        {/* Floating instruction tooltip */}{" "}
-        {/* Floating instruction tooltip */}
-        <div className="text-ink-soft pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] backdrop-blur-sm">
+        {/* Floating instruction tooltip —— 这条气泡是「固定暗色清单」条目 1
+           （叠在画布内容上的极小面积叠层），底色恒为 bg-black/60。
+           因此**文字也必须用固定浅色**：此前用随主题的 text-ink-soft，
+           浅色主题下它是深灰 (#52525b)，压在深色气泡上等于深底深字，
+           看不出这条提示（ISSUE #609 红框圈的那块）。 */}
+        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] text-gray-300 backdrop-blur-sm">
           点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
         </div>
         {/* right-edge canvas settings drawer.  Portaled to

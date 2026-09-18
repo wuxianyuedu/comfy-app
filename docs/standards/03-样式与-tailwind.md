@@ -214,7 +214,7 @@ import "@/styles/json-viewer.css";
 | `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档） | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                                                                                       |
 | `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                  | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                                                                                |
 | `lib/comfyui/markdown.ts` 内联 style（便签 Markdown）                             | `--color-md-*` token                                                                                                                                        |
-| 类型 chip 的载体底（`WorkflowNodeArdot` 写死 `#1E1A2E` / `#331A28`）              | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（chip 文字仍是类型色，底色是表面）                                                              |
+| 类型 chip 的载体底（`WorkflowNodeArdot` 与 `WorkflowPortHandle` 的 `portChipStyle` 都曾写死 `#1E1A2E` / `#331A28` / `#26262E`） | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（中性档用 `--color-border-strong`）；chip **文字**仍是类型色，**底色**是表面。同一形态在本仓库犯过两次（先只改了 `WorkflowNodeArdot`），改一处要同时扫 `portChipStyle` |
 | 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                      | `--color-panel/85` + `--color-shadow-strong`                                                                                                                |
 | 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）        | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`） |
 | 「本机 / 在线」状态点与文字（写死 `#33D499`）                                     | `--color-status-online`（浅色 = `#047857`，与 `emerald-700` 同值）                                                                                          |
@@ -340,6 +340,39 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 语义色类名本来就扫不到 —— 也就是说**本节的判据靠「不要在源码里写字面量」实现**：
 只要颜色是类名，`theme:check` 与改名/换 token 都不会有冲突。
 `EXEMPT_TABLES` / `EXEMPT_FIXED_DARK` 的豁免口径与 §3.6.1 完全一致。
+
+### 3.6.3 主题 token 的层叠顺序：浅色档不得用裸 `:root`
+
+**判据**：同一个元素的同名自定义属性出现两处声明时，**特异性相同则由源码顺序决定**。
+`<html>` 上同时有 `:root`（伪类，特异性 0-1-0）与 `.dark`（类，同为 0-1-0）——
+两者写在同一份样式表里时，**谁写在后面谁生效**。
+
+**因此：一个 token 的浅色档与深色档必须满足「浅色在前、深色在后」**，
+或者给浅色档一个在深色下**不匹配**的选择器（本项目用 `:root:not(.dark)`）。
+写成「深色档在前、浅色裸 `:root` 在后」时，浅色档会在深色下**恒定胜出**。
+
+```css
+/* ❌ 深色在前、浅色裸 :root 在后 → 深色下 --card 仍是 #ffffff */
+.dark { --card: #16161c; }
+:root { --card: #ffffff; }
+
+/* ✅ 浅色档在深色下不匹配 */
+.dark { --card: #16161c; }
+:root:not(.dark) { --card: #ffffff; }
+```
+
+**这类故障 tsc / eslint / 主题色扫描器都看不见**：扫描器扫的是**写死色值**，
+而这里的色值本身没问题，错的是 token 解析到了另一态。表现是「整套走该别名的
+utility 在两态里各有一态取错值」——`bg-card` 编出来是
+`background-color: var(--card)`（`@theme inline` 直接把别名内联进 utility），
+`--card` 取错，**所有** `bg-card` 表面一起错。
+
+- shadcn 语义别名（`--background` / `--foreground` / `--card` / `--popover` /
+  `--secondary` / `--muted` / `--border` / `--input` …）的浅色档统一收在
+  `globals.css` 末尾的 `:root:not(.dark) {}` 块，深色档在上方 `.dark {}` 块。
+- 新增别名时**不要**另起裸 `:root`；要么并入该块，要么自己保证在 `.dark` 之前。
+- 回归测试：`tests/theme-dark-token-cascade.test.ts`（真编译 `globals.css` +
+  jsdom 解级联，断言每个别名两态取值不同），逐条覆盖上表别名。
 
 ### 3.7 装饰性元素可访问性与性能
 
