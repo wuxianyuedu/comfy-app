@@ -10,7 +10,7 @@
  * 其余读写都经 controller（Ollama 状态 / 草稿 / 保存动作）。
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import {
   TEMPERATURE_TASKS,
@@ -27,7 +27,8 @@ import {
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { AnsiLogText, StatusButton, Card, Field } from "./SettingsPrimitives";
+import { StatusButton, Card, Field } from "./SettingsPrimitives";
+import { RuntimeLogBox } from "./RuntimeLogBox";
 
 export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   /* 本地 Ollama 下任务温度是主配置区，默认展开。 */
@@ -43,19 +44,6 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       delete next[task];
       return next;
     });
-
-  /* Ollama 启动日志的滚动跟随（同 ComfyUI / Drizzle Studio 的纯视觉偏好）。 */
-  const logBoxRef = useRef<HTMLDivElement>(null);
-  const [logFollow, setLogFollow] = useState(true);
-  useEffect(() => {
-    const el = logBoxRef.current;
-    if (el && logFollow) el.scrollTop = el.scrollHeight;
-  }, [c.ollamaLogText, logFollow]);
-  const onLogScroll = () => {
-    const el = logBoxRef.current;
-    if (!el) return;
-    setLogFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
-  };
 
   return (
     <Card title="本地模型（Ollama）">
@@ -121,56 +109,17 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
 
       {/* Ollama 启动日志：启动期间每秒跟随 log/services/ollama-runtime.log，
           让「启动中…」不再是黑盒（同 ComfyUI / Drizzle Studio 的用户
-          可见出口）。 */}
-
-      <div className="border-border bg-surface-1 mb-4 rounded-xl border">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
-            启动日志（ollama-runtime.log）
-            {c.ollamaLogActive && (
-              <span className="text-success-strong inline-flex items-center gap-1.5 text-[10px] font-normal">
-                <StatusDot state="up" sizeClass="size-1.5" pulse />
-                跟随中
-              </span>
-            )}
-          </span>
-          <div className="flex items-center gap-2">
-            {!logFollow && (
-              <Button
-                size="xs"
-                onClick={() => setLogFollow(true)}
-                className="h-auto rounded px-2 py-0.5 text-[11px] font-medium"
-              >
-                恢复自动滚动
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => void c.refreshOllamaLog()}
-              className="text-muted-foreground h-auto rounded px-2 py-0.5 text-[11px]"
-            >
-              刷新
-            </Button>
-          </div>
-        </div>
-        <div
-          ref={logBoxRef}
-          onScroll={onLogScroll}
-          className="border-border-subtle bg-canvas-deep text-ink-field custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg border px-3 py-2 font-mono text-[11px] leading-relaxed"
-        >
-          {c.ollamaLogText ? (
-            <span className="break-all whitespace-pre-wrap">
-              <AnsiLogText segments={c.ollamaLogSegments} />
-            </span>
-          ) : (
-            <span className="text-muted-foreground">
-              暂无日志 —— 点「启动 Ollama」后这里会实时输出拉起过程（spawn
-              参数、启动输出与退出状态）；也可点「刷新」查看 最近一次运行日志。
-            </span>
-          )}
-        </div>
-      </div>
+          可见出口）。下拉按「每次启动」切换、可全屏，见 RuntimeLogBox。 */}
+      <RuntimeLogBox
+        fileName="ollama-runtime.log"
+        log={c.ollamaLog}
+        emptyHint={
+          <>
+            暂无日志 —— 点「启动 Ollama」后这里会实时输出拉起过程（spawn
+            参数、启动输出与退出状态）；也可点「刷新」查看 最近一次运行日志。
+          </>
+        }
+      />
 
       {/* Model area — 探测到模型时用下拉 + 候选多选；否则退化为手填 */}
       {c.ollamaStatus === "up" && c.ollamaModels.length > 0 ? (

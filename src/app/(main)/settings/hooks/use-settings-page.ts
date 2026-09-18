@@ -25,16 +25,8 @@ import {
   downloadAndInstallUpdate,
   relaunchApp as relaunchAppClient,
 } from "~/lib/shell/app-update-client";
-import {
-  parseAnsiSegments,
-  parseOllamaLogText,
-  type AnsiSegment,
-} from "~/lib/log/log-ansi";
-import {
-  fetchFileLogSlice,
-  postAppRuntimeLog,
-  type FileLogSlice,
-} from "~/lib/log/log-file-client";
+import { parseOllamaLogText } from "~/lib/log/log-ansi";
+import { postAppRuntimeLog } from "~/lib/log/log-file-client";
 import {
   probeOllama as probeOllamaClient,
   startOllama as startOllamaClient,
@@ -57,6 +49,11 @@ import {
   type TaskType,
 } from "~/lib/llm/types";
 import { api } from "~/trpc/react";
+
+import {
+  useRuntimeLogSource,
+  type RuntimeLogController,
+} from "./use-runtime-log-source";
 
 export type Settings = {
   trainerUrl: string;
@@ -223,21 +220,11 @@ export interface SettingsPageController {
   openDbStudio: () => Promise<void>;
   /** 用系统默认浏览器打开生成的远程资源（视频等），桌面壳内替代 target=_blank */
   openExternalUrl: (url: string) => Promise<void>;
-  /* ComfyUI 启动日志（log/services/comfyui-runtime.log）：启动期间自动跟随，可手动刷新 */
-  comfyLogText: string;
-  comfyLogSegments: AnsiSegment[];
-  comfyLogActive: boolean;
-  refreshComfyLog: () => Promise<void>;
-  /* Drizzle Studio 启动日志（log/services/drizzle-studio-runtime.log）：同 ComfyUI，可跟随/刷新 */
-  dbStudioLogText: string;
-  dbStudioLogSegments: AnsiSegment[];
-  dbStudioLogActive: boolean;
-  refreshDbStudioLog: () => Promise<void>;
-  /* Ollama 启动日志（log/services/ollama-runtime.log）：同 ComfyUI，可跟随/刷新 */
-  ollamaLogText: string;
-  ollamaLogSegments: AnsiSegment[];
-  ollamaLogActive: boolean;
-  refreshOllamaLog: () => Promise<void>;
+  /* 启动日志（log/services/*-runtime.log）：三个分区共用同一套「按会话切分 +
+     跟随 + 刷新」的状态，见 use-runtime-log-source（视图只渲染）。 */
+  comfyLog: RuntimeLogController;
+  dbStudioLog: RuntimeLogController;
+  ollamaLog: RuntimeLogController;
   /* Ollama 关闭（启动已有 startOllama） */
   ollamaStopping: boolean;
   stopOllama: () => Promise<void>;
@@ -346,21 +333,6 @@ function writeSettingsCache(value: {
   } catch {
     /* 隐私模式 / 配额超限：放弃持久化，兜底退化为「仅本次会话有效」 */
   }
-}
-
-/* ── ComfyUI 启动日志 ─────────────────────────────────────
- * lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
- * log/services/comfyui-runtime.log；这里在启动期间每秒跟随其尾部。 */
-const COMFY_LOG_POLL_MS = 1000;
-/** 客户端保留上限：一次超长冷启动也不至于把内存吃穿。 */
-const COMFY_LOG_MAX_CHARS = 120_000;
-/** \r（Windows 行尾）在日志面板里只添乱；SGR 颜色序列保留给视图层渲染。 */
-const COMFY_LOG_CR_RE = /\r/g;
-
-function capComfyLog(text: string): string {
-  return text.length > COMFY_LOG_MAX_CHARS
-    ? text.slice(-COMFY_LOG_MAX_CHARS)
-    : text;
 }
 
 /**
@@ -865,173 +837,28 @@ export function useSettingsPage(): SettingsPageController {
     }
   }, []);
 
-  /* ── ComfyUI 启动日志 ─────────────────────────────────── */
-  const comfyLogOffsetRef = useRef(0);
-  const [comfyLogText, setComfyLogText] = useState("");
-  /* SGR 颜色序列解析成片段，视图层按样式渲染（Issue：启动日志显示颜色） */
-  const [comfyLogSegments, setComfyLogSegments] = useState<AnsiSegment[]>([]);
-  /* 启动进行中（本地动作或服务端自动拉起）即进入跟随轮询 */
+  /* ── 常驻服务启动日志（ComfyUI / Drizzle Studio / Ollama）─────────────
+   * 三条通道都是「追加不轮转」的文件（多次启动的行混在一起），服务端按会话
+   * 横幅切分后回「会话列表 + 选中会话正文」，见 use-runtime-log-source。
+   * `active` = 正在启动 → 每秒跟随本次启动；否则挂载 / 刷新时取一次。 */
   const comfyLogActive = comfyStarting || !!comfyStatusQ.data?.starting;
-
-  const applyComfyLogSlice = useCallback(
-    (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
-      setComfyLogText((prev) =>
-        capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
-      );
-      setComfyLogSegments((prev) => {
-        const incoming = parseAnsiSegments(cleaned);
-        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
-        return merged.length > 4000 ? merged.slice(-4000) : merged;
-      });
-    },
-    [],
-  );
-
-  const pullComfyLog = useCallback(
-    async (mode: "append" | "replace") => {
-      const slice = await fetchFileLogSlice(
-        "comfyui-runtime",
-        comfyLogOffsetRef.current,
-      );
-      if (!slice) return;
-      /* 服务端回到 0 且本地游标非 0 → 日志被清空/重置，整体替换而非追加 */
-      const replace =
-        mode === "replace" ||
-        (slice.offset === 0 && comfyLogOffsetRef.current > 0);
-      comfyLogOffsetRef.current = slice.size;
-      applyComfyLogSlice(replace ? "replace" : "append", slice);
-    },
-    [applyComfyLogSlice],
-  );
-
-  useEffect(() => {
-    if (!comfyLogActive) return;
-    void pullComfyLog("append");
-    const timer = setInterval(
-      () => void pullComfyLog("append"),
-      COMFY_LOG_POLL_MS,
-    );
-    return () => clearInterval(timer);
-  }, [comfyLogActive, pullComfyLog]);
-
-  const refreshComfyLog = useCallback(async () => {
-    comfyLogOffsetRef.current = 0;
-    await pullComfyLog("replace");
-  }, [pullComfyLog]);
-
-  /* ── Drizzle Studio 启动日志 ────────────────────────────
-   * drizzle-studio/lifecycle.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
-   * log/services/drizzle-studio-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI）。 */
-  const dbStudioLogOffsetRef = useRef(0);
-  const [dbStudioLogText, setDbStudioLogText] = useState("");
-  const [dbStudioLogSegments, setDbStudioLogSegments] = useState<AnsiSegment[]>(
-    [],
-  );
+  const comfyLog = useRuntimeLogSource({
+    source: "comfyui-runtime",
+    active: comfyLogActive,
+  });
   const dbStudioLogActive =
     dbStudioStarting || !!dbStudioStatusQ.data?.starting;
-
-  const applyDbStudioLogSlice = useCallback(
-    (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
-      setDbStudioLogText((prev) =>
-        capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
-      );
-      setDbStudioLogSegments((prev) => {
-        const incoming = parseAnsiSegments(cleaned);
-        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
-        return merged.length > 4000 ? merged.slice(-4000) : merged;
-      });
-    },
-    [],
-  );
-
-  const pullDbStudioLog = useCallback(
-    async (mode: "append" | "replace") => {
-      const slice = await fetchFileLogSlice(
-        "drizzle-studio-runtime",
-        dbStudioLogOffsetRef.current,
-      );
-      if (!slice) return;
-      const replace =
-        mode === "replace" ||
-        (slice.offset === 0 && dbStudioLogOffsetRef.current > 0);
-      dbStudioLogOffsetRef.current = slice.size;
-      applyDbStudioLogSlice(replace ? "replace" : "append", slice);
-    },
-    [applyDbStudioLogSlice],
-  );
-
-  useEffect(() => {
-    if (!dbStudioLogActive) return;
-    void pullDbStudioLog("append");
-    const timer = setInterval(
-      () => void pullDbStudioLog("append"),
-      COMFY_LOG_POLL_MS,
-    );
-    return () => clearInterval(timer);
-  }, [dbStudioLogActive, pullDbStudioLog]);
-
-  const refreshDbStudioLog = useCallback(async () => {
-    dbStudioLogOffsetRef.current = 0;
-    await pullDbStudioLog("replace");
-  }, [pullDbStudioLog]);
-
-  /* ── Ollama 启动日志 ─────────────────────────────────────
-   * ollama-start/route.ts 会把 spawn 参数与子进程 stdout/stderr 追加进
-   * log/services/ollama-runtime.log；这里在启动期间每秒跟随尾部（同 ComfyUI/Drizzle）。 */
-  const ollamaLogOffsetRef = useRef(0);
-  const [ollamaLogText, setOllamaLogText] = useState("");
-  /* SGR 颜色序列解析成片段，视图层按样式渲染（同 ComfyUI / Drizzle Studio） */
-  const [ollamaLogSegments, setOllamaLogSegments] = useState<AnsiSegment[]>([]);
+  const dbStudioLog = useRuntimeLogSource({
+    source: "drizzle-studio-runtime",
+    active: dbStudioLogActive,
+  });
   const ollamaLogActive = ollamaStarting || ollamaStatus === "starting";
-
-  const applyOllamaLogSlice = useCallback(
-    (mode: "append" | "replace", slice: FileLogSlice) => {
-      const cleaned = slice.content.replace(COMFY_LOG_CR_RE, "");
-      setOllamaLogText((prev) =>
-        capComfyLog(mode === "replace" ? cleaned : prev + cleaned),
-      );
-      setOllamaLogSegments((prev) => {
-        /* Ollama 落盘的是 logrus 纯文本（无 ANSI 码），按 level= 语义上色 */
-        const incoming = parseOllamaLogText(cleaned);
-        const merged = mode === "replace" ? incoming : [...prev, ...incoming];
-        return merged.length > 4000 ? merged.slice(-4000) : merged;
-      });
-    },
-    [],
-  );
-
-  const pullOllamaLog = useCallback(
-    async (mode: "append" | "replace") => {
-      const slice = await fetchFileLogSlice(
-        "ollama-runtime",
-        ollamaLogOffsetRef.current,
-      );
-      if (!slice) return;
-      const replace =
-        mode === "replace" ||
-        (slice.offset === 0 && ollamaLogOffsetRef.current > 0);
-      ollamaLogOffsetRef.current = slice.size;
-      applyOllamaLogSlice(replace ? "replace" : "append", slice);
-    },
-    [applyOllamaLogSlice],
-  );
-
-  useEffect(() => {
-    if (!ollamaLogActive) return;
-    void pullOllamaLog("append");
-    const timer = setInterval(
-      () => void pullOllamaLog("append"),
-      COMFY_LOG_POLL_MS,
-    );
-    return () => clearInterval(timer);
-  }, [ollamaLogActive, pullOllamaLog]);
-
-  const refreshOllamaLog = useCallback(async () => {
-    ollamaLogOffsetRef.current = 0;
-    await pullOllamaLog("replace");
-  }, [pullOllamaLog]);
+  const ollamaLog = useRuntimeLogSource({
+    source: "ollama-runtime",
+    active: ollamaLogActive,
+    /* Ollama 落盘的是 logrus 纯文本（无 ANSI 码），按 level= 语义上色 */
+    parse: parseOllamaLogText,
+  });
 
   const stopOllamaFn = useCallback(async () => {
     setOllamaStopping(true);
@@ -1412,18 +1239,9 @@ export function useSettingsPage(): SettingsPageController {
     stopDbStudio,
     openDbStudio,
     openExternalUrl,
-    comfyLogText,
-    comfyLogSegments,
-    comfyLogActive,
-    refreshComfyLog,
-    dbStudioLogText,
-    dbStudioLogSegments,
-    dbStudioLogActive,
-    refreshDbStudioLog,
-    ollamaLogText,
-    ollamaLogSegments,
-    ollamaLogActive,
-    refreshOllamaLog,
+    comfyLog: { ...comfyLog, active: comfyLogActive },
+    dbStudioLog: { ...dbStudioLog, active: dbStudioLogActive },
+    ollamaLog: { ...ollamaLog, active: ollamaLogActive },
     ollamaStopping,
     stopOllama: stopOllamaFn,
     saving,
