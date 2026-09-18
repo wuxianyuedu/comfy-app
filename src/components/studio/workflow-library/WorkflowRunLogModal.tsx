@@ -101,16 +101,24 @@ export function WorkflowRunLogModal({
     [snapshot.runs, workflowId],
   );
 
-  /* 未显式选择 / 指向了别的工作流的运行 → 落到当前工作流最近一次。 */
+  /* 面板**打开那一刻**裁决默认选中：优先「运行中」的会话（本次运行日志），
+   * 没有运行中的落到最近一次。打开之后不再自动切换 —— 用户手动翻旧记录不能
+   * 被弹回。此前的判据是「选中仍属于本工作流就不动」：viewTaskId 粘滞指向
+   * 上次看过的已完成运行时，哪怕有运行中的会话也永远不会切过去。 */
+  const openedRef = useRef(false);
   useEffect(() => {
-    const current = viewTaskId
-      ? runs.some((r) => r.taskId === viewTaskId)
-      : false;
-    const latest = runs[0];
-    if (!current && latest) {
-      onViewTaskIdChange(latest.taskId);
+    if (!open) {
+      openedRef.current = false;
+      return;
     }
-  }, [viewTaskId, runs, onViewTaskIdChange]);
+    if (openedRef.current) return;
+    openedRef.current = true;
+    const active = runs.find((r) => r.status === "running" || !r.status);
+    const target = active ?? runs[0];
+    if (target && target.taskId !== viewTaskId) {
+      onViewTaskIdChange(target.taskId);
+    }
+  }, [open, runs, viewTaskId, onViewTaskIdChange]);
 
   const run: WorkflowRunMeta | null = useMemo(
     () =>

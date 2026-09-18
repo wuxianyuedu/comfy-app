@@ -287,8 +287,9 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
      *   · 画布把派生出来的边**写回 edges 状态**。
      *  缺任一处，写入成功的线永远进不了画布 —— 用户看到的就是「一松手线就消失」。 */
     const flow = read("hooks/use-library-wire-flow.ts");
+    /* 参数逐行断言要容忍 prettier 折行（实参列表超行宽会被折成每参数一行）。 */
     expect(flow).toMatch(
-      /deriveLibraryEdges\(paramCards\.wires, outputWires, !!canWire, selectedEdgeIds\)/,
+      /deriveLibraryEdges\(\s*paramCards\.wires,\s*outputWires,\s*!!canWire,\s*selectedEdgeIds,?\s*\)/,
     );
     const canvas = read("WorkflowLibraryCanvas.tsx");
     expect(canvas).toMatch(/setEdges\(flow\.defaultEdges\)/);
