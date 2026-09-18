@@ -232,7 +232,7 @@ export function NodeJsonPopover({
                   alignItems: "center",
                   gap: 6,
                   fontSize: 11,
-                  color: "var(--color-muted)",
+                  color: "var(--color-ink-muted)",
                   textTransform: "uppercase",
                   letterSpacing: 0.6,
                 }}
@@ -286,7 +286,7 @@ export function NodeJsonPopover({
               style={{
                 background: "var(--color-subtle)",
                 border: "1px solid var(--color-border-strong)",
-                color: "var(--color-muted)",
+                color: "var(--color-ink-muted)",
               }}
               className="rounded-md text-[14px] leading-none"
             >
@@ -330,7 +330,9 @@ export function NodeJsonPopover({
                     background: active
                       ? accentAlpha(13)
                       : "var(--color-subtle)",
-                    color: active ? "var(--color-ink)" : "var(--color-muted)",
+                    color: active
+                      ? "var(--color-ink)"
+                      : "var(--color-ink-muted)",
                   }}
                   className="h-auto font-normal"
                 >
@@ -441,7 +443,7 @@ export function NodeJsonPopover({
             style={{
               padding: "6px 14px 8px",
               fontSize: 10.5,
-              color: "var(--color-muted)",
+              color: "var(--color-ink-muted)",
               borderTop: "1px solid var(--color-border-subtle)",
               display: "flex",
               justifyContent: "space-between",
