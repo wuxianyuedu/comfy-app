@@ -9,6 +9,7 @@
 import { useRef } from "react";
 
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { Button } from "~/components/ui/button";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
@@ -186,12 +187,12 @@ export function WorkflowImportPanel({
       </div>
 
       <div className="mt-3">
-        <textarea
+        <Textarea
           value={importJson}
           onChange={(event) => setImportJson(event.target.value)}
           rows={8}
           placeholder='API 格式: { "3": { "class_type": "KSampler", "inputs": {...} } }\n\n工作流格式: { "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
-          className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted w-full resize-none rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-violet-500/40"
+          className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted resize-none font-mono text-xs"
         />
       </div>
 

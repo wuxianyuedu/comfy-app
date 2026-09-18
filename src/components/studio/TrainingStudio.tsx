@@ -4,6 +4,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { NumberField } from "~/components/ui/number-field";
+import { RangeSlider } from "~/components/ui/range-slider";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -35,7 +36,7 @@ import {
 */
 
 const fieldClass =
-  "h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20";
+  "h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/20";
 const labelClass = "mb-1.5 block text-[11px] font-medium text-ink-faint";
 
 const RING_R = 36;
@@ -110,15 +111,15 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
         <div
           className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
             c.backendConfigured
-              ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400"
-              : "bg-amber-500/12 text-amber-700 dark:text-amber-400"
+              ? "bg-success-strong/12 text-success-strong"
+              : "bg-warning/12 text-warning-strong"
           }`}
         >
           <span
             className={`inline-block h-[7px] w-[7px] rounded-full ${
               c.backendConfigured
-                ? "bg-emerald-400 shadow-sm shadow-emerald-400/40"
-                : "bg-amber-400 shadow-sm shadow-amber-400/40"
+                ? "bg-success-strong shadow-success-strong/40 shadow-sm"
+                : "bg-warning shadow-warning/40 shadow-sm"
             }`}
           />
           {c.backendConfigured ? "训练后端已就绪" : "训练后端未配置"}
@@ -157,7 +158,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {/* 后端未配置横幅 */}
             {!c.backendConfigured && (
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+              <div className="border-warning/30 bg-warning/10 text-warning-strong rounded-lg border p-3 text-[11px] leading-relaxed">
                 <p className="mb-1 font-semibold">未配置训练后端</p>
                 {onOpenSettings ? (
                   <>
@@ -190,14 +191,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             {/* Upload zone */}
             <div
               onClick={() => fileRef.current?.click()}
-              className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-violet-500/35 bg-violet-500/6 px-3 py-5 text-center transition-colors hover:border-violet-500/55 hover:bg-violet-500/10"
+              className="border-primary-500/35 bg-primary-500/6 hover:border-primary-500/55 hover:bg-primary-500/10 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-3 py-5 text-center transition-colors"
             >
               <Upload
                 size={22}
                 strokeWidth={1.8}
                 color="var(--color-aurora-violet)"
               />
-              <p className="text-[12px] font-medium text-violet-700 dark:text-violet-400">
+              <p className="text-primary-strong text-[12px] font-medium">
                 {c.uploading ? "上传中…" : "点击或拖拽上传图片"}
               </p>
               <p className="text-ink-fainter text-[10px]">
@@ -257,7 +258,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                           )
                         }
                         placeholder="图片描述，如：a photo of somecjkstyle person"
-                        className="border-border bg-canvas-deep text-ink-bright min-w-0 flex-1 rounded border px-2 py-1 text-[11px] outline-none focus:border-violet-500/40"
+                        className="border-border bg-canvas-deep text-ink-bright focus:border-primary-500/40 min-w-0 flex-1 rounded border px-2 py-1 text-[11px] outline-none"
                       />
                       <Button
                         variant="ghost"
@@ -359,7 +360,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 </div>
                 <div>
                   <p className="text-ink-fainter text-[10px]">触发词</p>
-                  <p className="truncate text-[13px] font-medium text-violet-700 dark:text-violet-400">
+                  <p className="text-primary-strong truncate text-[13px] font-medium">
                     {activeJob?.triggerWord ?? "—"}
                   </p>
                 </div>
@@ -375,7 +376,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             {/* Progress bar */}
             <div className="bg-surface-2 mt-4 h-1.5 w-full overflow-hidden rounded-full">
               <div
-                className="h-full rounded-full bg-linear-to-r from-violet-500 to-cyan-400 transition-all"
+                className="from-primary-500 to-info h-full rounded-full bg-linear-to-r transition-all"
                 style={{ width: `${ringProgress}%` }}
               />
             </div>
@@ -389,11 +390,11 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               </span>
               <div className="text-ink-fainter flex items-center gap-3 text-[10px]">
                 <span className="flex items-center gap-1">
-                  <span className="inline-block h-[2px] w-3 bg-violet-400" />
+                  <span className="bg-primary-500 inline-block h-[2px] w-3" />
                   训练
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="inline-block h-[2px] w-3 bg-cyan-400" />
+                  <span className="bg-info inline-block h-[2px] w-3" />
                   验证
                 </span>
               </div>
@@ -468,7 +469,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                           </div>
                           <p className="text-ink-muted mt-1 text-[11px]">
                             {job.baseModel} · 触发词{" "}
-                            <span className="text-violet-700 dark:text-violet-400">
+                            <span className="text-primary-strong">
                               {job.triggerWord}
                             </span>{" "}
                             · {job.datasetImages?.length ?? 0} 张图 ·{" "}
@@ -510,26 +511,26 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                         job.status === "QUEUED") && (
                         <div className="bg-surface-2 mt-3 h-1.5 w-full overflow-hidden rounded-full">
                           <div
-                            className="h-full rounded-full bg-linear-to-r from-violet-500 to-cyan-400 transition-all"
+                            className="from-primary-500 to-info h-full rounded-full bg-linear-to-r transition-all"
                             style={{ width: `${job.progress}%` }}
                           />
                         </div>
                       )}
 
                       {job.status === "DONE" && job.outputName && (
-                        <p className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-400">
+                        <p className="text-success-strong mt-2 text-[11px]">
                           ✓ 已产出 LoRA：
                           <span className="font-mono">{job.outputName}</span> ·
                           已加入模型库，可在创作台 LoRA 中选择使用。
                         </p>
                       )}
                       {job.status === "FAILED" && job.error && (
-                        <p className="mt-2 text-[11px] text-red-700 dark:text-red-400">
+                        <p className="text-danger-strong mt-2 text-[11px]">
                           ✗ {job.error}
                         </p>
                       )}
                       {job.status === "QUEUED" && !c.backendConfigured && (
-                        <p className="mt-2 text-[11px] text-amber-700/80 dark:text-amber-600/80">
+                        <p className="text-warning-strong/80 mt-2 text-[11px]">
                           等待训练后端（未配置 LORA_TRAINER_URL）。
                         </p>
                       )}
@@ -544,13 +545,13 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                                 key={`${log.t}-${i}`}
                                 className={
                                   log.level === "error"
-                                    ? "text-red-600 dark:text-red-400"
+                                    ? "text-danger-strong"
                                     : log.level === "success"
-                                      ? "text-emerald-600 dark:text-emerald-400"
+                                      ? "text-success-strong"
                                       : log.level === "warn"
-                                        ? "text-amber-600 dark:text-amber-400"
+                                        ? "text-warning-strong"
                                         : log.level === "progress"
-                                          ? "text-violet-700 dark:text-violet-400"
+                                          ? "text-primary-strong"
                                           : "text-ink-faint"
                                 }
                               >
@@ -641,18 +642,17 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 <span className="text-ink-faint text-[11px] font-medium">
                   训练步数
                 </span>
-                <span className="text-[11px] font-medium text-violet-700 dark:text-violet-400">
+                <span className="text-primary-strong text-[11px] font-medium">
                   {c.form.steps}
                 </span>
               </div>
-              <input
-                type="range"
+              <RangeSlider
                 min={500}
                 max={4000}
                 step={100}
                 value={c.form.steps}
-                onChange={(event) => c.setSteps(Number(event.target.value))}
-                className="w-full accent-violet-500"
+                onChange={c.setSteps}
+                className="w-full"
               />
             </div>
 
@@ -661,17 +661,16 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 <span className="text-ink-faint text-[11px] font-medium">
                   批次大小
                 </span>
-                <span className="text-[11px] font-medium text-violet-700 dark:text-violet-400">
+                <span className="text-primary-strong text-[11px] font-medium">
                   {c.form.batchSize}
                 </span>
               </div>
-              <input
-                type="range"
+              <RangeSlider
                 min={1}
                 max={8}
                 value={c.form.batchSize}
-                onChange={(event) => c.setBatchSize(Number(event.target.value))}
-                className="w-full accent-violet-500"
+                onChange={c.setBatchSize}
+                className="w-full"
               />
             </div>
 
@@ -680,18 +679,17 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 <span className="text-ink-faint text-[11px] font-medium">
                   LoRA 维度 (rank)
                 </span>
-                <span className="text-[11px] font-medium text-violet-700 dark:text-violet-400">
+                <span className="text-primary-strong text-[11px] font-medium">
                   {c.form.rankDim}
                 </span>
               </div>
-              <input
-                type="range"
+              <RangeSlider
                 min={8}
                 max={128}
                 step={8}
                 value={c.form.rankDim}
-                onChange={(event) => c.setRankDim(Number(event.target.value))}
-                className="w-full accent-violet-500"
+                onChange={c.setRankDim}
+                className="w-full"
               />
             </div>
 
@@ -700,20 +698,17 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 <span className="text-ink-faint text-[11px] font-medium">
                   Alpha
                 </span>
-                <span className="text-[11px] font-medium text-violet-700 dark:text-violet-400">
+                <span className="text-primary-strong text-[11px] font-medium">
                   {c.form.networkAlpha}
                 </span>
               </div>
-              <input
-                type="range"
+              <RangeSlider
                 min={0}
                 max={128}
                 step={8}
                 value={c.form.networkAlpha}
-                onChange={(event) =>
-                  c.setNetworkAlpha(Number(event.target.value))
-                }
-                className="w-full accent-violet-500"
+                onChange={c.setNetworkAlpha}
+                className="w-full"
               />
             </div>
 
@@ -763,11 +758,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               />
             </div>
 
-            {c.error && (
-              <p className="text-xs text-red-600 dark:text-red-400">
-                {c.error}
-              </p>
-            )}
+            {c.error && <p className="text-danger-strong text-xs">{c.error}</p>}
 
             <Button
               variant="primary-solid"
@@ -786,7 +777,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
 
       {/* ── Status Bar ────────────────────────────── */}
       <footer className="border-border-subtle bg-panel-deep/95 relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
-        <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
+        <span className="bg-success-strong shadow-success-strong/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm" />
         <span className="text-ink-muted text-[11px]">
           ComfyUI·Kohya 就绪 · 本地算力 · 零授权
         </span>

@@ -122,15 +122,15 @@ export const VIDEO_CLIPS: TimelineClip[] = [
     id: "vc-1",
     label: "开场全景",
     width: 180,
-    colorClass: "from-violet-600 to-indigo-600",
-    textColorClass: "text-[#e0d4fc]",
+    colorClass: "from-primary-600 to-primary-500",
+    textColorClass: "text-primary-soft",
   },
   {
     id: "vc-2",
     label: "人物特写",
     width: 220,
-    colorClass: "from-amber-500 to-red-500",
-    textColorClass: "text-[#fce4c4]",
+    colorClass: "from-warning to-destructive",
+    textColorClass: "text-warning-soft",
   },
 ];
 

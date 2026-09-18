@@ -35,21 +35,15 @@ export function WorkflowSourceFilterChip({
         className="nodrag nopan border-primary/35 bg-overlay-accent-surface flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
       >
         <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{
-            background:
-              value === "all" ? "#8B7CFC" : isLocal ? "#33D499" : "#8B7CFC",
-          }}
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            isLocal ? "bg-status-online" : "bg-primary-strong"
+          }`}
         />
         <span
-          className={`font-semibold ${
-            value === "all"
-              ? "text-violet-700 dark:text-[#A78BFA]"
-              : isLocal
-                ? "text-emerald-700 dark:text-[#33D499]"
-                : "text-violet-700 dark:text-[#A78BFA]"
+          className={`text-[10px] font-semibold ${
+            isLocal ? "text-status-online" : "text-primary-strong"
           }`}
-          style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+          style={{ fontFamily: "var(--font-sans)" }}
         >
           {label}
         </span>
@@ -68,10 +62,10 @@ export function WorkflowSourceFilterChip({
       >
         {(
           [
-            { v: "all", label: "全部", dot: "#8B7CFC" },
-            { v: "local", label: "本机", dot: "#33D499" },
-            { v: "online", label: "在线", dot: "#8B7CFC" },
-          ] as { v: WorkflowSourceFilter; label: string; dot: string }[]
+            { v: "all", label: "全部", local: false },
+            { v: "local", label: "本机", local: true },
+            { v: "online", label: "在线", local: false },
+          ] as { v: WorkflowSourceFilter; label: string; local: boolean }[]
         ).map((option) => {
           const sel = option.v === value;
           return (
@@ -86,18 +80,17 @@ export function WorkflowSourceFilterChip({
               }}
               className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
                 sel
-                  ? "bg-violet-500/20 text-violet-700 dark:text-violet-200"
+                  ? "bg-primary-soft text-primary-strong"
                   : "text-ink-soft hover:bg-subtle"
               }`}
             >
               <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: option.dot }}
+                className={`h-1.5 w-1.5 rounded-full ${
+                  option.local ? "bg-status-online" : "bg-primary-strong"
+                }`}
               />
               <span className="flex-1">{option.label}</span>
-              {sel && (
-                <span className="text-violet-700 dark:text-violet-300">✓</span>
-              )}
+              {sel && <span className="text-primary-strong">✓</span>}
             </Button>
           );
         })}

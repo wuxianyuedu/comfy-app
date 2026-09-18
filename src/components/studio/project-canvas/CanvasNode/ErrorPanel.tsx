@@ -92,17 +92,17 @@ export function ErrorPanel({
   }
 
   return (
-    <div className="nodrag nopan border-t border-rose-500/30 bg-rose-500/6 px-3 py-2 text-[10.5px]">
+    <div className="nodrag nopan border-destructive/30 bg-destructive/6 border-t px-3 py-2 text-[10.5px]">
       <div className="flex items-start gap-1.5">
         <Icon
           name="alert"
           size={12}
-          className="mt-px shrink-0 text-rose-700 dark:text-rose-300"
+          className="text-danger-strong mt-px shrink-0"
         />
         <div className="min-w-0 flex-1">
           {/* 头部行：状态徽标 + 工作流名 + 动作 */}
           <div className="flex items-center justify-between gap-1.5">
-            <span className="min-w-0 truncate font-medium text-rose-700 dark:text-rose-300">
+            <span className="text-danger-strong min-w-0 truncate font-medium">
               {errorStatus === "TIMEOUT"
                 ? "轮询超时"
                 : errorStatus === "CANCELLED"
@@ -110,14 +110,14 @@ export function ErrorPanel({
                   : errorStatus
                     ? "生成失败"
                     : "未捕获异常"}
-              <span className="ml-1 text-rose-700 dark:text-rose-300/60">
+              <span className="text-danger-strong/60 ml-1">
                 · {errorStatus ? `task ${errorStatus}` : "client"}
               </span>
             </span>
             <div className="flex shrink-0 items-center gap-1">
               {kind === "workflow" && workflowName && (
                 <span
-                  className="rounded border border-rose-400/15 bg-rose-400/10 px-1.5 py-0.5 font-mono text-[9.5px] text-rose-700/90 dark:text-rose-300/80"
+                  className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]"
                   title="执行的工作流"
                 >
                   {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
@@ -137,7 +137,7 @@ export function ErrorPanel({
                   onClick={() => {
                     void onRetry(errorContext?.request);
                   }}
-                  className="h-auto rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 hover:bg-rose-500/10 dark:text-rose-300/80"
+                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
                   title="用相同参数重跑一次"
                 >
                   ↻ 重试
@@ -146,7 +146,7 @@ export function ErrorPanel({
               <Button
                 variant="outline"
                 onClick={() => setErrExpanded((value) => !value)}
-                className="h-auto rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 hover:bg-rose-500/10 dark:text-rose-300/80"
+                className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
                 title={errExpanded ? "收起错误详情" : "展开错误详情"}
               >
                 {errExpanded ? "▲" : "▼"}
@@ -190,7 +190,7 @@ export function ErrorPanel({
                     }
                   })();
                 }}
-                className="h-auto rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 hover:bg-rose-500/10 dark:text-rose-300/80"
+                className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
                 title="复制错误详情到剪贴板（含 taskId 与请求参数）"
               >
                 ⧉
@@ -202,13 +202,13 @@ export function ErrorPanel({
            *  既有的单行行为，不需要完整上下文的用户
            *  就不用占竖向空间。 */}
           {!errExpanded && (validationErrors?.length ?? 0) > 0 && (
-            <p className="nodrag nopan mt-1 text-[10px] font-medium text-rose-700 dark:text-rose-300">
+            <p className="nodrag nopan text-danger-strong mt-1 text-[10px] font-medium">
               发现 {(validationErrors ?? []).length} 项节点配置错误（点击 ▼
               查看明细）
             </p>
           )}
           {!errExpanded && (
-            <p className="nodrag nopan mt-1 line-clamp-2 text-[10px] break-words text-rose-700/90 dark:text-rose-300/80">
+            <p className="nodrag nopan text-danger-strong/80 mt-1 line-clamp-2 text-[10px] break-words">
               {typeof error === "string"
                 ? error.replace(/\n/g, " ").slice(0, 200)
                 : "（点击 ▼ 展开查看完整错误）"}
@@ -263,24 +263,22 @@ export function ErrorPanel({
                 <div className="nodrag nopan mt-1.5 space-y-1.5">
                   {/* 0) 结构化校验错误：精确指出哪个节点哪个字段 */}
                   {(validationErrors?.length ?? 0) > 0 && (
-                    <div className="rounded border border-rose-400/25 bg-rose-500/10 px-2 py-1.5">
-                      <div className="mb-1 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
+                    <div className="border-destructive/25 bg-destructive/10 rounded border px-2 py-1.5">
+                      <div className="text-danger-strong mb-1 text-[10px] font-semibold">
                         节点配置校验（{(validationErrors ?? []).length} 项）
                       </div>
                       <ValidationErrorList
                         errors={validationErrors}
-                        className="text-rose-700/90 dark:text-rose-300/80"
+                        className="text-danger-strong/80"
                       />
                     </div>
                   )}
                   {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
                   {hasCtx && (
-                    <div className="bg-canvas-deep grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border border-rose-400/15 px-1.5 py-1 text-[10px]">
+                    <div className="bg-canvas-deep border-destructive/15 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1 text-[10px]">
                       {taskId && (
                         <>
-                          <span className="text-rose-700 dark:text-rose-300/60">
-                            taskId
-                          </span>
+                          <span className="text-danger-strong/60">taskId</span>
                           <Button
                             variant="ghost"
                             onClick={() =>
@@ -288,7 +286,7 @@ export function ErrorPanel({
                                 .writeText(taskId)
                                 .catch(() => undefined)
                             }
-                            className="nodrag nopan h-auto min-w-0 truncate p-0 text-left font-mono font-normal text-rose-700/90 hover:bg-transparent hover:text-rose-900 dark:text-rose-300/80 dark:hover:text-rose-100"
+                            className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
                             title="点击复制 taskId"
                           >
                             {taskId}
@@ -297,10 +295,8 @@ export function ErrorPanel({
                       )}
                       {ts && (
                         <>
-                          <span className="text-rose-700 dark:text-rose-300/60">
-                            时间
-                          </span>
-                          <span className="truncate text-rose-700/90 dark:text-rose-300/80">
+                          <span className="text-danger-strong/60">时间</span>
+                          <span className="text-danger-strong/80 truncate">
                             {ts}
                           </span>
                         </>
@@ -310,8 +306,8 @@ export function ErrorPanel({
 
                   {/* 2) 自动建议 — 正则推断的纠错提示 */}
                   {errorSuggestion && (
-                    <div className="rounded border border-amber-400/25 bg-amber-500/8 px-2 py-1 text-[10px] leading-relaxed text-amber-800 dark:text-amber-200">
-                      <span className="mr-1 font-semibold text-amber-700 dark:text-amber-300">
+                    <div className="border-warning/25 bg-warning/8 text-warning-strong rounded border px-2 py-1 text-[10px] leading-relaxed">
+                      <span className="text-warning-strong mr-1 font-semibold">
                         建议
                       </span>
                       {errorSuggestion}
@@ -321,10 +317,10 @@ export function ErrorPanel({
                   {/* 3) 请求参数快照 */}
                   {errorContext?.request ? (
                     <details className="text-[10px]" open>
-                      <summary className="cursor-pointer text-rose-700 select-none hover:text-rose-900 dark:text-rose-300/70 dark:hover:text-rose-200">
+                      <summary className="text-danger-strong hover:text-danger-strong cursor-pointer select-none">
                         请求参数
                       </summary>
-                      <pre className="bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border border-rose-400/15 p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap text-rose-700/90 dark:text-rose-300/85">
+                      <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap">
                         {typeof errorContext.request === "string"
                           ? errorContext.request
                           : (() => {
@@ -345,10 +341,10 @@ export function ErrorPanel({
 
                   {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
                   <details className="text-[10px]" open>
-                    <summary className="cursor-pointer text-rose-700 select-none hover:text-rose-900 dark:text-rose-300/70 dark:hover:text-rose-200">
+                    <summary className="text-danger-strong hover:text-danger-strong cursor-pointer select-none">
                       原始错误
                     </summary>
-                    <pre className="bg-canvas-deep nodrag nopan mt-1 max-h-40 overflow-auto rounded border border-rose-400/15 p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap text-rose-700/90 dark:text-rose-300/85">
+                    <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap">
                       {errText}
                     </pre>
                   </details>

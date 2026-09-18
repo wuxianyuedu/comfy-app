@@ -215,9 +215,11 @@ const EXEMPT_TABLES = [
   },
   {
     file: "src/components/studio/workflow-form/DynamicWorkflowForm/constants.ts",
-    exports: ["ACCENT"],
+    exports: ["ACCENT", "SECTION_ACCENT", "PIN_ACCENT"],
     reason:
-      "动态表单控件类型色（ACCENT：image/select/int/float… 分组色常量表）",
+      "动态表单控件类型色（ACCENT：image/select/int/float… 分组色常量表），" +
+      "以及由它派生的段头两档（SECTION_ACCENT / PIN_ACCENT：此前在 " +
+      "GroupedControls 与 IoEndpointsSection 各写一份同值字面量）",
   },
   {
     file: "src/components/studio/workflow-library/WorkflowParamCardColumn.tsx",

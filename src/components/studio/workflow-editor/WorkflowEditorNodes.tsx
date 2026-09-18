@@ -224,7 +224,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
    *  （boxShadow + 4px 环）—— 即使文字已经读不清，
    *  用户仍能按颜色环**数出**那 17 条便签；再加高 z-index
    *  让便签浮在普通节点之上，不被分组遮住。 */
-  const noteTintBase = useCssColorToken("--color-note-tint-base", "#22222c");
+  const noteTintBase = useCssColorToken("--color-note-tint-base", "#ffffff");
   const bg = mixHex(noteTintBase, data.color, 0.2);
   const border = mixHex(noteTintBase, data.color, 0.65);
   const titleBg = mixHex(noteTintBase, data.color, 0.65);

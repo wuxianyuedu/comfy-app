@@ -49,19 +49,19 @@ const KIND_STYLE: Record<
   { ring: string; icon: string; iconColor: string }
 > = {
   success: {
-    ring: "border-emerald-500/30",
+    ring: "border-success-strong/30",
     icon: "check",
-    iconColor: "text-emerald-700 dark:text-emerald-400",
+    iconColor: "text-success-strong",
   },
   error: {
-    ring: "border-red-500/30",
+    ring: "border-destructive/30",
     icon: "close",
-    iconColor: "text-red-700 dark:text-red-400",
+    iconColor: "text-danger-strong",
   },
   info: {
-    ring: "border-violet-500/30",
+    ring: "border-primary-500/30",
     icon: "info",
-    iconColor: "text-violet-700 dark:text-violet-400",
+    iconColor: "text-primary-strong",
   },
   loading: {
     ring: "border-border-strong",
