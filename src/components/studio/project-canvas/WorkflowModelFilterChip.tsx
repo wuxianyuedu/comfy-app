@@ -1,7 +1,6 @@
 "use client";
 
-/** extracted from WorkflowNode.tsx — model-tag filter chip
- *  (Dropdown 4, ). Behaviour and visuals unchanged.
+/** 从 WorkflowNode.tsx 抽出的「模型标签筛选」chip（下拉 4）。行为与外观不变。
  */
 import { useState } from "react";
 import {
@@ -9,6 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { Button } from "~/components/ui/button";
 
 interface WorkflowModelFilterChipProps {
   value: string;
@@ -56,15 +56,15 @@ export function WorkflowModelFilterChip({
         aria-label="按模型筛选工作流"
         className="border-border-strong bg-card max-h-72 w-72 gap-0 overflow-y-auto py-1 shadow-2xl shadow-black/10 dark:shadow-fuchsia-500/20"
       >
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           role="option"
           aria-selected={value === "all"}
           onClick={() => {
             onChange("all");
             setOpen(false);
           }}
-          className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
+          className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
             value === "all"
               ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
               : "text-ink-soft hover:bg-subtle"
@@ -75,7 +75,7 @@ export function WorkflowModelFilterChip({
           {value === "all" && (
             <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>
           )}
-        </button>
+        </Button>
         {tags.length === 0 && (
           <div className="text-ink-muted px-3 py-2 text-[10px]">
             标签库为空，去工作流库「管理模型」添加
@@ -84,16 +84,16 @@ export function WorkflowModelFilterChip({
         {tags.map((tag) => {
           const sel = tag.name === value;
           return (
-            <button
+            <Button
               key={tag.id}
-              type="button"
+              variant="ghost"
               role="option"
               aria-selected={sel}
               onClick={() => {
                 onChange(tag.name);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
+              className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
                 sel
                   ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
                   : "text-ink-soft hover:bg-subtle"
@@ -109,7 +109,7 @@ export function WorkflowModelFilterChip({
                   ✓
                 </span>
               )}
-            </button>
+            </Button>
           );
         })}
       </PopoverContent>

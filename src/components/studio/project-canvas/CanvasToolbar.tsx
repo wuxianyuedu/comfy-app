@@ -4,6 +4,7 @@
  *  (fit view / export JSON / clear canvas).  Pure presentational.
  */
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 
 interface CanvasToolbarProps {
   onFitView: () => void;
@@ -11,8 +12,9 @@ interface CanvasToolbarProps {
   onClear: () => void;
 }
 
+/** 悬浮工具条上的三个文字动作共用同一套「幽灵」外观。 */
 const ghostTool =
-  "text-ink-soft hover:bg-subtle rounded-full px-3 py-1 text-[12px] transition-colors";
+  "text-ink-soft hover:bg-subtle h-auto rounded-full px-3 py-1 text-[12px] font-normal transition-colors";
 
 export function CanvasToolbar({
   onFitView,
@@ -26,18 +28,19 @@ export function CanvasToolbar({
         无限画布
       </span>
       <span className="bg-border-strong h-4 w-px" />
-      <button className={ghostTool} onClick={onFitView}>
+      <Button variant="ghost" className={ghostTool} onClick={onFitView}>
         适应视图
-      </button>
-      <button className={ghostTool} onClick={onExport}>
+      </Button>
+      <Button variant="ghost" className={ghostTool} onClick={onExport}>
         导出 JSON
-      </button>
-      <button
-        className={ghostTool + " hover:text-red-700 dark:text-red-300"}
+      </Button>
+      <Button
+        variant="ghost"
+        className={ghostTool + " hover:text-red-700 dark:hover:text-red-300"}
         onClick={onClear}
       >
         清空画布
-      </button>
+      </Button>
     </div>
   );
 }

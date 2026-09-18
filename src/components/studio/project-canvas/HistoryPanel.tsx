@@ -11,6 +11,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
 import { useHistoryPanel } from "./hooks/use-history-panel";
 import {
@@ -72,41 +73,45 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             {activeCount} 进行中
           </span>
         )}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={refresh}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-soft flex h-6 w-6 items-center justify-center rounded-md transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
           title="刷新"
         >
           <RefreshCw size={13} />
-        </button>
+        </Button>
         {/* 显示密度切换 */}
         <div className="bg-subtle flex items-center gap-0.5 rounded-lg p-0.5">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={() => setDisplay("grid")}
-            className={`rounded-md p-1 transition-colors ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
+            className={`h-auto rounded-md p-1 ${display === "grid" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="网格视图"
           >
             <LayoutGrid size={14} />
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={() => setDisplay("list")}
-            className={`rounded-md p-1 transition-colors ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
+            className={`h-auto rounded-md p-1 ${display === "list" ? "bg-surface-2 text-ink-bright" : "text-ink-muted hover:text-ink-soft"}`}
             title="列表视图"
           >
             <List size={14} />
-          </button>
+          </Button>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={onClose}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-soft flex h-6 w-6 items-center justify-center rounded-md transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
           title="关闭"
         >
           <X size={14} />
-        </button>
+        </Button>
       </div>
 
       {/* ── 作用域切换（仅在有项目时出现）── */}
@@ -116,18 +121,18 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             { id: "project" as HistoryScope, label: "本项目" },
             { id: "all" as HistoryScope, label: "全部" },
           ].map((scopeItem) => (
-            <button
+            <Button
               key={scopeItem.id}
-              type="button"
+              variant="ghost"
               onClick={() => setScope(scopeItem.id)}
-              className={`pb-2.5 text-[13px] font-medium transition-colors ${
+              className={`h-auto rounded-none px-0 pb-2.5 text-[13px] font-medium hover:bg-transparent ${
                 scope === scopeItem.id
                   ? "border-accent text-ink-bright border-b-2"
                   : "text-ink-muted hover:text-ink-soft"
               }`}
             >
               {scopeItem.label}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -135,18 +140,18 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {/* ── 类型筛选（pill）── */}
       <div className="flex gap-1.5 px-4 py-3">
         {FILTER_TABS.map((filterTab) => (
-          <button
+          <Button
             key={filterTab.id}
-            type="button"
+            variant="ghost"
             onClick={() => setFilter(filterTab.id)}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-all ${
+            className={`h-auto rounded-full px-3 py-1.5 text-[12px] font-medium ${
               filter === filterTab.id
                 ? "bg-surface-2 text-ink-bright ring-border-strong ring-1"
                 : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
             }`}
           >
             {filterTab.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -156,13 +161,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           <span className="min-w-0 flex-1 text-[11px] break-words text-red-700 dark:text-red-300">
             {error}
           </span>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={refresh}
-            className="shrink-0 text-[11px] text-red-700 underline transition-colors hover:text-red-900 dark:text-red-200 dark:hover:text-red-100"
+            className="h-auto shrink-0 text-[11px] text-red-700 underline hover:bg-transparent hover:text-red-900 dark:text-red-200 dark:hover:text-red-100"
           >
             重试
-          </button>
+          </Button>
         </div>
       )}
 
@@ -189,13 +194,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               {scope === "project" ? "本项目还没有生成记录" : "暂无历史记录"}
             </p>
             {scope === "project" && globalCount !== null && globalCount > 0 && (
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={() => setScope("all")}
-                className="border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright mt-3 rounded-lg border px-3 py-1.5 text-[11px] transition-colors"
+                className="border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright mt-3 h-auto rounded-lg px-3 py-1.5 text-[11px]"
               >
                 查看全部记录
-              </button>
+              </Button>
             )}
           </div>
         ) : display === "grid" ? (
@@ -251,8 +256,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     {titleOf(task)}
                   </p>
                   {onUse && task.cover && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={() =>
                         onUse({
                           id: task.id,
@@ -260,11 +266,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                           mediaType: task.mediaType,
                         })
                       }
-                      className="text-ink-soft absolute top-1 right-1 hidden h-6 w-6 items-center justify-center rounded bg-black/60 backdrop-blur transition-colors group-hover:flex hover:text-white"
+                      className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/60 backdrop-blur group-hover:flex hover:bg-black/60 hover:text-white"
                       title="加入画布"
                     >
                       <Plus size={12} strokeWidth={2.5} />
-                    </button>
+                    </Button>
                   )}
                 </div>
               );
@@ -342,8 +348,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
 
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
                     {onUse && task.cover && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() =>
                           onUse({
                             id: task.id,
@@ -351,11 +358,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                             mediaType: task.mediaType,
                           })
                         }
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
                         title="加入画布"
                       >
                         <Plus size={13} strokeWidth={2.5} />
-                      </button>
+                      </Button>
                     )}
                     {task.cover && (
                       <a

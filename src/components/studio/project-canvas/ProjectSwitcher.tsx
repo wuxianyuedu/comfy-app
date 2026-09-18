@@ -5,6 +5,7 @@
  *  rename state lives in useProjectManager and is threaded through props.
  */
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 interface ProjectSwitcherProps {
@@ -44,15 +45,16 @@ export function ProjectSwitcher({
 }: ProjectSwitcherProps) {
   return (
     <div className="relative">
-      <button
-        className="border-border-strong from-subtle to-surface-2 text-ink-bright flex items-center gap-2 rounded-full border bg-linear-to-br px-3.5 py-1.5 text-[12px] font-medium shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
+      <Button
+        variant="ghost"
+        className="border-border-strong from-subtle to-surface-2 text-ink-bright flex h-auto items-center gap-2 rounded-full border bg-linear-to-br px-3.5 py-1.5 text-[12px] font-medium shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-violet-400/40 hover:shadow-violet-500/15"
         onClick={onToggleMenu}
         title="项目列表"
       >
         <span className="text-violet-700 dark:text-violet-300">▦</span>
         <span className="max-w-[160px] truncate">{projectName}</span>
         <span className="text-ink-muted">▾</span>
-      </button>
+      </Button>
       {menuOpen && (
         <>
           <div
@@ -65,11 +67,11 @@ export function ProjectSwitcher({
             </div>
             <div className="max-h-56 overflow-auto">
               {projects.map((project) => (
-                <button
+                <Button
                   key={project.id}
-                  type="button"
+                  variant="ghost"
                   onClick={() => onSwitch(project.id)}
-                  className={`hover:bg-subtle flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
+                  className={`hover:bg-subtle flex h-auto w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[12px] font-normal transition-colors ${
                     project.id === projectId
                       ? "text-violet-700 dark:text-violet-300"
                       : "text-ink-bright"
@@ -81,7 +83,7 @@ export function ProjectSwitcher({
                       当前
                     </span>
                   )}
-                </button>
+                </Button>
               ))}
               {projects.length === 0 && (
                 <p className="text-ink-muted px-2 py-1.5 text-[11px]">
@@ -104,28 +106,30 @@ export function ProjectSwitcher({
                   placeholder="项目名称"
                 />
                 <div className="flex gap-1">
-                  <button
-                    type="button"
-                    className="flex-1 rounded-md bg-violet-500/90 px-2 py-1 text-[11px] text-white hover:bg-violet-500"
+                  <Button
+                    variant="primary-solid"
+                    size="xs"
+                    className="h-auto flex-1 rounded-md px-2 py-1 text-[11px]"
                     onClick={onCommitRename}
                   >
                     保存
-                  </button>
-                  <button
-                    type="button"
-                    className="border-border-strong text-ink-soft hover:bg-subtle flex-1 rounded-md border px-2 py-1 text-[11px]"
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="border-border-strong text-ink-soft hover:bg-subtle h-auto flex-1 rounded-md px-2 py-1 text-[11px]"
                     onClick={onCancelRename}
                   >
                     取消
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
                   onClick={onNew}
-                  className="text-ink-bright hover:bg-subtle rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
+                  className="text-ink-bright hover:bg-subtle h-auto w-full justify-start rounded-lg px-2 py-1.5 text-left text-[12px] font-normal transition-colors"
                 >
                   <Icon
                     name="plus"
@@ -133,11 +137,11 @@ export function ProjectSwitcher({
                     className="mr-1.5 inline align-[-2px]"
                   />
                   新建项目
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={onStartRename}
-                  className="text-ink-bright hover:bg-subtle rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
+                  className="text-ink-bright hover:bg-subtle h-auto w-full justify-start rounded-lg px-2 py-1.5 text-left text-[12px] font-normal transition-colors"
                 >
                   <Icon
                     name="pen"
@@ -145,11 +149,11 @@ export function ProjectSwitcher({
                     className="mr-1.5 inline align-[-2px]"
                   />
                   重命名当前
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={onDelete}
-                  className="rounded-lg px-2 py-1.5 text-left text-[12px] text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                  className="h-auto w-full justify-start rounded-lg px-2 py-1.5 text-left text-[12px] font-normal text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                 >
                   <Icon
                     name="trash"
@@ -157,7 +161,7 @@ export function ProjectSwitcher({
                     className="mr-1.5 inline align-[-2px]"
                   />
                   删除当前
-                </button>
+                </Button>
               </div>
             )}
           </div>

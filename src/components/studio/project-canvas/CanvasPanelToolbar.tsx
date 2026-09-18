@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Clock, Folder } from "lucide-react";
+import { Button } from "~/components/ui/button";
 
 export type CanvasPanelType = "materials" | "history" | null;
 
@@ -56,9 +57,9 @@ export function CanvasPanelToolbar({
       {items.map((item) => {
         const isActive = active === item.id;
         return (
-          <button
+          <Button
             key={item.id}
-            type="button"
+            variant="ghost"
             onClick={() => onSelect(isActive ? null : item.id)}
             title={item.label}
             className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
@@ -76,7 +77,7 @@ export function CanvasPanelToolbar({
             >
               {item.label}
             </span>
-          </button>
+          </Button>
         );
       })}
       {/* 分隔线 */}
