@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 
+import { Button } from "~/components/ui/button";
 import { ModelTagManager } from "../ModelTagManager";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
 import { WorkflowImportPanel } from "../WorkflowImportPanel";
@@ -96,13 +97,14 @@ export function WorkflowLibrary({
         <div className="flex items-start gap-2 border-b border-red-500/25 bg-red-500/8 px-5 py-2.5 text-[12px] text-red-700 dark:text-red-300">
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.actionError}</span>
-          <button
-            type="button"
+          <Button
+            variant="danger"
+            size="xs"
             onClick={c.refresh}
-            className="shrink-0 rounded-md border border-red-400/30 px-2 py-0.5 text-[11px] text-red-700 transition-colors hover:bg-red-500/15 dark:text-red-300"
+            className="h-auto shrink-0 rounded-md px-2 py-0.5 text-[11px]"
           >
             重试
-          </button>
+          </Button>
         </div>
       )}
 

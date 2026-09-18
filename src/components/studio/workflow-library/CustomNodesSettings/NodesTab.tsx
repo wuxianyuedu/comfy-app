@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "~/components/ui/button";
 import { ROW_STATE_PRESET } from "./constants";
 import { NodePreviewCard } from "./NodePreviewCard";
 import { ManifestSummary, ParseProgressBanner } from "./SettingsParts";
@@ -94,13 +95,13 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
               </span>
             )}
           </div>
-          <button
+          <Button
             onClick={onParseAll}
             disabled={parsing || savedPaths.length === 0}
-            className="bg-primary rounded-lg px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="h-auto rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90"
           >
             {parsing ? "解析全部中…" : "▶ 解析全部"}
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -144,10 +145,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 className="border-border bg-bg rounded-xl border"
               >
                 {/* Parent header — clickable to toggle.
-                    IMPORTANT: must NOT be a <button>, because the row contains a
-                    nested action <button> ("解析本目录"). Nested <button> in HTML
-                    is invalid and triggers React hydration errors. We use a div
-                    with role/keyboard handlers so a11y is preserved. */}
+                    IMPORTANT: must NOT be a native button element, because the
+                    row contains a nested action button ("解析本目录"). Nested
+                    button elements in HTML are invalid and trigger React
+                    hydration errors. We use a div with role/keyboard handlers so
+                    a11y is preserved. */}
                 <div
                   role="button"
                   tabIndex={0}
@@ -211,8 +213,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
                       onClick={(event) => {
                         event.stopPropagation();
                         void onParseAllParent(parent);
@@ -222,7 +224,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                         total === 0 ||
                         (parentParsed && cnt.outdated === 0)
                       }
-                      className="border-border bg-bg text-ink hover:bg-subtle rounded-lg border px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      className="border-border bg-bg text-ink hover:bg-subtle h-auto rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
                       title={
                         parentParsed && cnt.outdated === 0
                           ? "已加载、无更新"
@@ -230,7 +232,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       }
                     >
                       {parsing ? "…" : "解析本目录"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -343,8 +345,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                     <div className="text-[10px]">映射文件</div>
                                   </div>
                                 )}
-                                <button
-                                  type="button"
+                                <Button
+                                  variant="ghost"
                                   onClick={() => onParseSingle(sub.path)}
                                   disabled={
                                     !!perPkgParsing[sub.path] ||
@@ -360,7 +362,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   {perPkgParsing[sub.path]
                                     ? "解析中…"
                                     : preset.btnLabel}
-                                </button>
+                                </Button>
                               </div>
                             </div>
                             {/* Expandable ComfyUI-style node previews. Only

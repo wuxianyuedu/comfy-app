@@ -19,6 +19,32 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+        /* ── 语义色变体（ISSUE #672 / 规范 16 §16.2.4）──
+           这四组是「软底（tinted）」形态：实心色在浅底上当按钮底会盖住层级
+           关系，而视图里 400 处手写 `<button>` 的绝大多数正是软底徽标按钮
+           （`bg-*-500/10 text-*-700 dark:text-*-300`）。变体名取**语义角色**
+           不取色名：写 `variant="danger"` 而不是 `variant="red"`，换品牌色
+           时调用处不用改（§3.6.2）。
+           每一组的「文字档」都走 -strong token 而不是同一个色相的原色：
+           同一个琥珀 `#d97706` 当底色可以、当浅底上的文字色对比度不足。 */
+        primary:
+          "bg-primary-500/15 text-primary-strong hover:bg-primary-500/25 focus-visible:border-primary-500/40 focus-visible:ring-primary-500/20",
+        danger:
+          "bg-destructive/10 text-danger-strong hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+        success:
+          "bg-success/10 text-success-strong hover:bg-success/20 focus-visible:border-success/40 focus-visible:ring-success/20",
+        warning:
+          "bg-warning/10 text-warning-strong hover:bg-warning/20 focus-visible:border-warning/40 focus-visible:ring-warning/20",
+        info: "bg-info/10 text-info-strong hover:bg-info/20 focus-visible:border-info/40 focus-visible:ring-info/20",
+        /* 实心档：视图里的「主行动按钮」还有一种 `bg-<色>-500/90 text-white`，
+           它不属于上面的软底形态，故各出一支 -solid（仅品牌/危险/成功三色
+           在实测里有实心用法）。 */
+        "primary-solid":
+          "bg-primary-500 text-primary-foreground hover:bg-primary-600 focus-visible:border-primary-600 focus-visible:ring-primary-500/40",
+        "danger-solid":
+          "bg-destructive text-primary-foreground hover:bg-destructive/90 focus-visible:border-destructive focus-visible:ring-destructive/30",
+        "success-solid":
+          "bg-success text-primary-foreground hover:bg-success/90 focus-visible:border-success focus-visible:ring-success/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

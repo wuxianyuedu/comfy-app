@@ -10,6 +10,7 @@ import {
   type WorkflowRow,
 } from "./workflow-library-config";
 import { TaskTypeChip } from "../ui/TaskTypeChip";
+import { Button } from "~/components/ui/button";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "../ui/SourceTag";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -137,13 +138,14 @@ export function WorkflowLibraryList({
               </>
             }
             action={
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={onRefresh}
-                className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-1 text-[11px]"
+                className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-1 text-[11px]"
               >
                 重试
-              </button>
+              </Button>
             }
           />
         ) : empty ? (
@@ -191,16 +193,16 @@ export function WorkflowLibraryList({
                       >
                         {pending.name}
                       </span>
-                      <button
-                        type="button"
+                      <Button
+                        variant="info"
                         onClick={() => onLoadPending?.(pending)}
                         disabled={loadingPending}
                         title={`载入「${pending.name}」`}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap text-cyan-700 transition-colors hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-cyan-300"
+                        className="h-auto shrink-0 gap-1 rounded-md px-2 py-1 text-[10px] whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Download className="h-3 w-3" />
                         {loadingPending ? "载入中…" : "载入"}
-                      </button>
+                      </Button>
                     </div>
                   </li>
                 );
@@ -240,11 +242,11 @@ function WorkflowListItem({
 
   return (
     <li>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         onClick={onClick}
         className={[
-          "w-full rounded-lg border px-2 py-1.5 text-left transition-all",
+          "h-auto w-full rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
           selected
             ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
             : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
@@ -314,7 +316,7 @@ function WorkflowListItem({
             )}
           </div>
         )}
-      </button>
+      </Button>
     </li>
   );
 }

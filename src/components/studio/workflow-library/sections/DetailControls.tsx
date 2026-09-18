@@ -4,6 +4,8 @@
 
 import type { ReactNode } from "react";
 
+import { Button } from "~/components/ui/button";
+
 export function ActionButton({
   onClick,
   icon,
@@ -20,21 +22,21 @@ export function ActionButton({
   variant?: "default" | "danger";
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant={variant === "danger" ? "danger" : "outline"}
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
       className={[
-        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
+        "h-auto gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium",
         variant === "danger"
-          ? "border-red-500/20 bg-red-500/8 text-red-700 hover:bg-red-500/15 disabled:opacity-40 dark:text-red-300"
+          ? "border-destructive/20 disabled:opacity-40"
           : "border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright disabled:opacity-40",
       ].join(" ")}
     >
       {icon}
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -48,11 +50,11 @@ export function TabButton({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       onClick={onClick}
       className={[
-        "relative px-3 py-2.5 text-[12px] font-medium transition-colors",
+        "relative h-auto rounded-none px-3 py-2.5 text-[12px] font-medium",
         active ? "text-ink-bright" : "text-ink-fainter hover:text-ink-strong",
       ].join(" ")}
     >
@@ -60,6 +62,6 @@ export function TabButton({
       {active && (
         <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500" />
       )}
-    </button>
+    </Button>
   );
 }

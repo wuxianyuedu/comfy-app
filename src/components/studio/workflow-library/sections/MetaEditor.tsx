@@ -153,8 +153,9 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
             </Button>
             <Button
               type="button"
+              variant="primary-solid"
               onClick={() => void save()}
-              className="h-auto flex-1 rounded-md bg-fuchsia-500/90 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-fuchsia-500"
+              className="h-auto flex-1 rounded-md px-3 py-1.5 text-xs font-semibold"
             >
               保存
             </Button>

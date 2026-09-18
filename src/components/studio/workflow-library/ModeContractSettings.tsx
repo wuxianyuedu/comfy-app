@@ -10,21 +10,22 @@
 import { useState } from "react";
 
 import { ModeContractDialog } from "~/components/workshop/mode-contract/ModeContractDialog";
+import { Button } from "~/components/ui/button";
 
 export function ModeContractSettings() {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        variant="outline"
         onClick={() => setOpen(true)}
         title="配置每种模式对外有哪些统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器"
-        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright h-auto gap-2 rounded-lg px-3 py-2 text-sm font-medium"
       >
         <span>{"\u{1F9E9}"}</span>
         <span>模式契约</span>
-      </button>
+      </Button>
 
       {open && <ModeContractDialog onClose={() => setOpen(false)} />}
     </>

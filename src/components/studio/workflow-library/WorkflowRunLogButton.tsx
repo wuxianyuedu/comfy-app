@@ -13,6 +13,7 @@
  * `workflow-run-store`，不碰网络（规范 §17.2 第③层）。 */
 
 import { useMemo, useSyncExternalStore } from "react";
+import { Button } from "~/components/ui/button";
 
 import {
   getWorkflowRunStoreSnapshot,
@@ -75,14 +76,14 @@ export function WorkflowRunLogButton({
       : "暂无运行";
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
       onClick={onOpen}
       data-testid="wflib-log-open"
       title="打开执行日志"
       /* 与同排的「导入画布 / 编辑 / 源文件 / 下载」同款描边按钮（`ActionButton`
        *  的 default 变体）：这一排按钮是一组动作，不要一个深底一个浅底。 */
-      className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
+      className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright h-auto gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium"
     >
       <span className="text-ink-strong flex items-center gap-1.5 font-medium">
         执行日志
@@ -91,6 +92,6 @@ export function WorkflowRunLogButton({
         )}
       </span>
       <span className="text-ink-fainter text-[10.5px]">{statusText}</span>
-    </button>
+    </Button>
   );
 }

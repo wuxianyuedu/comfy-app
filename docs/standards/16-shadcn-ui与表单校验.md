@@ -107,13 +107,12 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 视图里手写 `<button>` 408 处、自建 `createPortal` 浮层 10 处、自写
 `animate-spin`/`animate-pulse` 40 处，同一套按钮/浮层/加载态在多个目录里各实现一份。
 
+（存量随治理逐批下降，当前值看 `pnpm ui:primitives:report` —— 写在正文里的
+数字是**首次扫描快照**，不是实时值，免得每完成一批就要改一遍正文。）
+
+
 本仓库的历史结论是**「只提醒 = 没有判据」**（§12.13 文件行数、§12.16 死代码同款），
 所以这里给计数棘轮：把存量冻结在基线，只许降不许升。
-
-**P2（浮层）已经清零** —— 10 处自建 `createPortal` 全部换成了 `ui/dialog` /
-`ui/popover` / `ui/sheet`，连同它们各自的「手写 Esc / 手写遮罩点击关闭 / 手写
-定位与滚动重定位」一起删掉。清零后这条判据从「棘轮」变成**硬闸**：新增任何
-自建 portal 浮层都会被直接阻断（基线里 P2 已无条目）。
 
 ```bash
 pnpm ui:primitives            # 检查（棘轮：只许降不许升，pre-commit 第 12 步）
@@ -124,11 +123,11 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 **三条判据**（`scripts/check-ui-primitives.cjs`，基线
 `scripts/.ui-primitives-baseline.json`）：
 
-| ID | 判据 | 应改用什么 | 现状 |
-|----|------|-----------|------|
-| **P1** | 视图层手写 `<button` | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体） | 364 处 / 108 文件（P3 分批） |
-| **P2** | 视图层自建 `createPortal(` 浮层 | `ui/dialog` / `ui/popover` / `ui/sheet` | **0 处（已清零）** |
-| **P3** | 视图层自写 `animate-spin` / `animate-pulse` | `ui/page-loading` / `ui/skeleton` / `ui/progress` | 36 处 / 23 文件 |
+| ID | 判据 | 应改用什么 |
+|----|------|-----------|
+| **P1** | 视图层手写 `<button` | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体） |
+| **P2** | 视图层自建 `createPortal(` 浮层 | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu` |
+| **P3** | 视图层自写 `animate-spin` / `animate-pulse` | `ui/page-loading` / `ui/skeleton` / `ui/progress` |
 
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
@@ -203,6 +202,48 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 属性多选下拉 | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位） | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner） |
 | 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元 | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除 |
 | 两个设置抽屉 | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`） |
+
+### 16.2.4.1 按钮的语义变体（P1 的前置条件）
+
+把 400 处手写 `<button>` 换成 `<Button>`，**前提是 `Button` 先有对应的语义
+变体** —— 否则替换只能靠 `className` 把原样式一字不差搬过去，那既没减少
+重复，也把「按钮该长什么样」的决定权继续留在调用处。实测视图里的手写按钮
+用的是 `violet / red / rose / emerald / amber / cyan` 六个色系，`Button` 原本
+只有 `default / outline / secondary / ghost / destructive / link`，缺口就在这里。
+
+现在 `ui/button.tsx` 的 `variant` 多出 8 支，**按语义角色命名、不按色名**
+（§3.6.2：换品牌色时调用处不用改）：
+
+| 变体 | 形态 | 对应视图里的手写写法 |
+|------|------|---------------------|
+| `primary` | 品牌软底 | `bg-violet-500/15 text-violet-700 dark:text-violet-300` |
+| `danger` | 危险软底 | `bg-red-500/10 text-red-700 dark:text-red-300` |
+| `success` | 成功软底 | `bg-emerald-500/10 text-emerald-700 dark:text-emerald-400` |
+| `warning` | 警告软底 | `bg-amber-500/10 text-amber-700 dark:text-amber-300` |
+| `info` | 信息软底 | `bg-cyan-500/10 text-cyan-700 dark:text-cyan-300` |
+| `primary-solid` | 品牌实心 | `bg-violet-500/90 text-white hover:bg-violet-500` |
+| `danger-solid` | 危险实心 | `bg-red-500 text-white` |
+| `success-solid` | 成功实心 | `bg-emerald-500 text-white` |
+
+三条口径：
+
+1. **软底是主力形态**（手写按钮的绝大多数是这个），实心只出实测用到的那三色；
+2. **每个软底变体的文字档走 `*-strong` token**，不是同色相原色：同一个琥珀
+   `#d97706` 当底色可以、当浅底上的文字色对比度不足 —— 这正是「写死字面量」
+   表达不了的那层区分（§3.6.2 末尾同款论证）；
+3. **既有六个变体一个不动**（`destructive` 仍是软底危险，与 `danger` 并存是
+   历史包袱：`destructive` 属 shadcn 名词空间、`danger` 属本项目的语义角色命名。
+   新代码用 `danger`，`destructive` 留待随 shadcn 基元一起收口）。
+
+**顺带修掉一颗哑弹**：`--color-success-strong` 一直存在，但
+`status-badge.tsx` 引用的 `text-warning-strong` **从未定义过** —— `QUEUED` /
+`PENDING` / `DRAFT` 三个状态因此渲染成无色（Tailwind 生成不出这个类，
+静默不报错）。本次补齐 `--color-warning-strong` / `--color-danger-strong` /
+`--color-info-strong` 两态取值。
+
+**机器判据**：`src/components/ui/button.test.tsx` —— 逐个钉住「这 8 支变体存在」
+「产出的类名不含任何 Tailwind 原生调色板字面量」「软底变体的文字走 `-strong`」，
+以及「既有 6 个变体仍在」。变体被删或改回写死色，这里先失败。
 
 ## 16.3 新增一个组件的标准动作
 
