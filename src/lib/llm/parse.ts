@@ -1,14 +1,14 @@
 /**
- * Extract a JSON value from an LLM response that may be wrapped in markdown
- * code fences or contain surrounding prose. Falls back to scanning for the
- * first [ or { and the matching last ] or }.
+ * 从 LLM 的回复里抽出一个 JSON 值 —— 回复可能被 Markdown 代码围栏包着，
+ * 也可能前后夹着散文。兜底做法是扫描第一个 `[` 或 `{`，
+ * 以及与之配对的最后一个 `]` 或 `}`。
  */
 export function extractJson(text: string): unknown {
   let trimmed = (text ?? "").trim();
 
   if (!trimmed) throw new Error("LLM 返回为空");
 
-  // Strip ```json ... ``` fences
+  // 去掉 ```json ... ``` 这类代码围栏
 
   const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
 
@@ -25,7 +25,7 @@ export function extractJson(text: string): unknown {
   return JSON.parse(trimmed);
 }
 
-/** Like extractJson but always returns an array (or throws). */
+/* 与 extractJson 相同，但一定返回数组（否则抛错）。 */
 export function extractJsonArray(text: string): unknown[] {
   const value = extractJson(text);
 

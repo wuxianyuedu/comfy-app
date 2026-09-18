@@ -1,6 +1,6 @@
-// ── Shared LLM types ─────────────────────────────────────────
-// Both local (Ollama / LM Studio / vLLM) and remote (OpenAI-compatible)
-// providers speak the OpenAI /v1/chat/completions protocol.
+// ── 共享的 LLM 类型 ─────────────────────────────────────
+// 本地（Ollama / LM Studio / vLLM）与远程（OpenAI 兼容）两类提供商，
+// 都讲 OpenAI 的 /v1/chat/completions 协议。
 
 export type LLMProviderType = "local" | "remote";
 
@@ -248,7 +248,7 @@ export interface LLMConfig {
   maxTokens: number;
 }
 
-/** Config shape sent to / shared with the browser (apiKey is masked). */
+/* 发送给浏览器 / 与浏览器共享的配置形状（apiKey 已脱敏）。 */
 export interface LLMConfigView {
   provider: LLMProviderType;
   baseUrl: string;
