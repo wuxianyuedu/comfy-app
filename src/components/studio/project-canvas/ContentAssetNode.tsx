@@ -8,6 +8,7 @@ import { WaterFillProgress } from "~/components/ui/water-fill-progress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
  * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
@@ -206,7 +207,7 @@ export function ContentAssetBody({
         <div
           className={overlayClass(
             "modal",
-            "bg-canvas-deep z-overlay flex items-center justify-center backdrop-blur-sm dark:bg-black/80",
+            `${zClass("modal")} bg-canvas-deep flex items-center justify-center backdrop-blur-sm dark:bg-black/80`,
           )}
           onClick={() => gallery.setOpen(false)}
           role="dialog"

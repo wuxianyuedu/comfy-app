@@ -12,6 +12,7 @@ import { WorkflowLibraryList } from "./WorkflowLibraryList";
 import { WorkflowLibraryDetail } from "./WorkflowLibraryDetail";
 import { useWorkflowLibrary } from "./hooks/use-workflow-library";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /**
  * 懒加载画布编辑器。它是个 7k 行的模块；把它挡在
@@ -27,7 +28,7 @@ const WorkflowCanvasEditor = dynamic(
     ssr: false,
     loading: () => (
       <FullScreenLayer
-        zClass="z-50"
+        zClass={zClass("modal")}
         className="bg-bg flex items-center justify-center"
       >
         <PageLoading label="加载工作流编辑器…" />

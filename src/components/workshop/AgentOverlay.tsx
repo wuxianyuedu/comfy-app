@@ -12,6 +12,7 @@ import type {
   WorkshopAgentController,
   AgentToolRun,
 } from "./hooks/use-workshop-agent";
+import { zClass } from "~/lib/shell/overlay-z";
 
 const GREETING =
   "你好！我是工坊的创作指挥助手。你可以直接用自然语言告诉我想做什么，我会帮你指挥整个创作流程。\n\n比如：\n• 「帮我写一个海边重逢的温暖短片剧本」\n• 「在现有剧本基础上提取主要角色」\n• 「把分镜规划出来」";
@@ -60,7 +61,9 @@ export function AgentOverlay({
       : messages;
 
   return (
-    <div className="border-border bg-panel-deep/95 fixed right-6 bottom-6 z-50 flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl">
+    <div
+      className={`border-border bg-panel-deep/95 fixed right-6 bottom-6 ${zClass("popup")} flex h-[560px] w-[440px] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl`}
+    >
       {/* Header */}
       <div className="border-border flex items-center gap-2 border-b px-4 py-3">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white">
@@ -226,7 +229,7 @@ export function AgentFab({ onOpen }: { onOpen: () => void }) {
     <Button
       variant="primary-solid"
       onClick={onOpen}
-      className="shadow-primary-500/20 fixed right-6 bottom-8 z-40 h-auto gap-2 rounded-full px-4 py-2.5 shadow-lg transition-transform hover:scale-105"
+      className={`shadow-primary-500/20 fixed right-6 bottom-8 ${zClass("popup")} h-auto gap-2 rounded-full px-4 py-2.5 shadow-lg transition-transform hover:scale-105`}
       aria-label="打开创作指挥 Agent"
     >
       <Icon name="bot" size={15} />

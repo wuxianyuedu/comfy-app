@@ -211,12 +211,12 @@ export function DynamicWorkflowFormView({
               >
                 {/* 插入指示线只画在目标行顶边 —— 若整段都画会造成频闪。 */}
                 {isDropTarget && (
-                  <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                  <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
                 )}
                 {/* 手柄只是视觉提示（真正可拖来自父层的 draggable）；它自身
                  *  pointer-events-none，点击会落到下面的输入框上。 */}
                 <div
-                  className="pointer-events-none absolute top-1/2 right-1 z-5 -translate-y-1/2 text-[10px] leading-[6px] text-white/30 select-none"
+                  className="z-base pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[10px] leading-[6px] text-white/30 select-none"
                   aria-hidden
                 >
                   ⋮⋮

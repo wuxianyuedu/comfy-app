@@ -1753,6 +1753,7 @@ sidecar」两种不同形态的失败。
 | `pnpm` 可用性自检与修复（工具链门禁的独立入口）      | `scripts/prepare-local-run.ps1`（第 2/3 步）          | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`）                                                                   |
 | `src/lib` 的 Node-only 声明与可达性（规范 §18.4）    | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`） |
 | UI 基元复用棘轮（规范 16 §16.2.3）                 | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/check-ui-primitives.cjs`（`pnpm ui:primitives`，契约测试 `tests/check-ui-primitives.test.ts`） |
+| 浮层层级刻度棘轮（规范 16 §16.2.5）                 | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/check-overlay-z.cjs`（`pnpm ui:overlay-z`，契约测试 `tests/check-overlay-z.test.ts`） |
 | prettier 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项） | `scripts/quality-gate.ps1`（`-Mode format`）          | `scripts/check-format.cjs`（`pnpm format:ratchet`，契约测试 `tests/check-format.test.ts`）                                     |
 | 格式化提交与行为改动分离（规范 §13.5）               | `scripts/quality-gate.ps1`（`-Mode format`）          | `scripts/check-reformat-only.cjs`（`pnpm format:reformat-guard`，契约测试 `tests/check-reformat-only.test.ts`）                |
 | `src/lib` 的零消费值导出棘轮（规范 §12.16）          | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）         |

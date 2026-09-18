@@ -21,6 +21,7 @@ import { SettingsShell } from "~/components/settings/SettingsShell";
 import { Button } from "~/components/ui/button";
 import { PageLoading } from "~/components/ui/page-loading";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 export interface SettingsOverlayProps {
   /** 由父组件保证只在需要时挂载本组件（open 恒为 true）。 */
@@ -40,7 +41,7 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
   /* ── Loading / error / not-ready 内容区三态（框架与分区导航始终秒开）── */
   if (c.isInitialLoad) {
     return (
-      <FullScreenLayer zClass="z-50" className="bg-bg">
+      <FullScreenLayer zClass={zClass("modal")} className="bg-bg">
         <SettingsShell {...frame}>
           <PageLoading className="bg-bg min-h-[60vh] pb-6" />
         </SettingsShell>
@@ -50,7 +51,7 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
 
   if (c.hasError) {
     return (
-      <FullScreenLayer zClass="z-50" className="bg-bg">
+      <FullScreenLayer zClass={zClass("modal")} className="bg-bg">
         <SettingsShell {...frame}>
           {/* 与独立路由 /settings 共用同一套降级视图：错误可展开/复制、
               引导打开日志面板（面板与文件日志都收了这条失败）。 */}
@@ -71,7 +72,7 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
 
   if (!c.drafts) {
     return (
-      <FullScreenLayer zClass="z-50" className="bg-bg">
+      <FullScreenLayer zClass={zClass("modal")} className="bg-bg">
         <SettingsShell {...frame}>
           {/* 同独立路由：兜底也要有「重试 + 日志面板」出口，不给死胡同文案 */}
           <div className="relative">
@@ -93,7 +94,7 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
   }
 
   return (
-    <FullScreenLayer zClass="z-50" className="bg-bg">
+    <FullScreenLayer zClass={zClass("modal")} className="bg-bg">
       <SettingsPageView
         c={{ ...c, drafts: c.drafts }}
         onClose={onClose}

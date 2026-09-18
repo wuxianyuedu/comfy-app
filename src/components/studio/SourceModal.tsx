@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /**
  * 查看源文件弹窗（只读）。
@@ -72,7 +73,7 @@ export function SourceModal({
     <div
       className={overlayClass(
         "modal",
-        "z-50 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60",
+        `${zClass("modal")} flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60`,
       )}
       onClick={onClose}
     >

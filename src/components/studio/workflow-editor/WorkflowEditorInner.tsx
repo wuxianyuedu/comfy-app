@@ -61,6 +61,7 @@ import {
   type Bounds,
   type FitBoundsNode,
 } from "./subgraph-viewport";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /* ── 画布网格 ──
  *  两层叠起来用原生 <Background> 实现，让网格随视口平移 / 缩放
@@ -640,7 +641,7 @@ function WorkflowEditorBody({
   if (loading) {
     return (
       <FullScreenLayer
-        zClass="z-50"
+        zClass={zClass("modal")}
         className="bg-canvas flex items-center justify-center pb-6"
       >
         <PageLoading label="加载工作流节点…" />
@@ -651,7 +652,7 @@ function WorkflowEditorBody({
   if (error || !detail) {
     return (
       <FullScreenLayer
-        zClass="z-50"
+        zClass={zClass("modal")}
         className="bg-canvas flex items-center justify-center pb-6"
       >
         <div className="text-center">
@@ -671,7 +672,10 @@ function WorkflowEditorBody({
   }
 
   return (
-    <FullScreenLayer zClass="z-50" className="bg-canvas flex flex-col pb-6">
+    <FullScreenLayer
+      zClass={zClass("modal")}
+      className="bg-canvas flex flex-col pb-6"
+    >
       {/* ── Top bar ── */}
       <WorkflowEditorTopBar
         onClose={onClose}
@@ -697,7 +701,7 @@ function WorkflowEditorBody({
          *  这就是要求的 UX：当前内容不变，然后
          *  一屏加载，再切到子图内容。 */}
         {subgraphLoading && (
-          <div className="bg-canvas-deep pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <div className="bg-canvas-deep z-base pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="bg-canvas/90 border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm dark:shadow-black/50">
               <PageLoading
                 label="加载子工作流…"
@@ -707,14 +711,14 @@ function WorkflowEditorBody({
           </div>
         )}
         {ioEditMode && (
-          <div className="border-warning/40 bg-warning/15 text-warning-strong pointer-events-none absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-full border px-4 py-1.5 text-[12px] font-medium shadow-lg backdrop-blur-sm">
+          <div className="border-warning/40 bg-warning/15 text-warning-strong z-canvas-ui pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1.5 text-[12px] font-medium shadow-lg backdrop-blur-sm">
             📌 IO
             编辑模式：勾选节点参数前的复选框，即可将其暴露为工作流的「输入」或「输出」
           </div>
         )}
         {/* 子工作流下钻失败：内联错误提示，父图保持可见（绝不回退到工作流库） */}
         {subgraphError && (
-          <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2">
+          <div className="z-canvas-max pointer-events-none absolute top-3 left-1/2 -translate-x-1/2">
             <div className="border-destructive/40 bg-destructive/15 text-danger-strong pointer-events-auto flex items-center gap-3 rounded-lg border px-4 py-2 text-[12px] shadow-lg backdrop-blur-sm">
               <span>⚠ {subgraphError}</span>
               <Button
@@ -738,7 +742,7 @@ function WorkflowEditorBody({
          *  匹配用户在运行时会看到的画布内渲染。
          *
          *  位置：右上角，约 360px 宽，max-h 会避开
-         *  底部工具栏。z-30，压在 MiniMap + Controls
+         *  底部工具栏。`z-canvas-max`，压在 MiniMap + Controls
          *  之上、保存 toast 之下。面板自身的指针事件
          *  是开着的；包裹层只在面板外侧的留白上等效于
          *  pointer-events:none（我们用一个 flex
@@ -815,7 +819,7 @@ function WorkflowEditorBody({
         </div>
         {/* 右边缘画布设置抽屉。面板自己把内容 portal 到
          *  document.body，好让它压在
-         *  WorkflowCanvasEditor 根遮罩栈（`z-50`）之上；只在
+         *  WorkflowCanvasEditor 根遮罩栈（`modal` 档）之上；只在
          *  点击齿轮按钮时渲染。 */}
         {canvasSettingsOpen && (
           <CanvasSettingsPanel

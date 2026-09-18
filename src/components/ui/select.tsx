@@ -78,8 +78,8 @@ function SelectContent({
     | "collisionAvoidance"
   > & {
     /* 定位层（portal 宿主）的额外 class。层级必须在**这一层**给：Popup 自己的
-       z-50 只在 positioner 建立的 stacking context 内部生效，改它不解决被
-       外层遮罩压住的问题。 */
+       层级只在 positioner 建立的 stacking context 内部生效，改它不解决被外层
+       遮罩压住的问题（清单见 §16.2.5 与 ISSUE #262）。 */
     positionerClassName?: string;
   }) {
   return (
@@ -94,9 +94,10 @@ function SelectContent({
            展开**（`side: "none"`），宁可让弹层自己滚动，也不要翻到上面去把头部
            顶到窗口外（ISSUE #262）。 */
         collisionAvoidance={collisionAvoidance}
-        /* 层级由调用方决定：模态弹窗里的下拉若固定 z-50，会被模态遮罩（z-99）
-           整块压住——弹层画得出来却**收不到指针事件**（ISSUE #262）。 */
-        className={cn("isolate z-50", positionerClassName)}
+        /* 层级默认取刻度表的 `popup` 档（规范 16 §16.2.5）：它高于 `modal`，
+           所以模态遮罩里的下拉不会被整块压住（弹层画得出来却**收不到指针事件**，
+           ISSUE #262）。调用方需要另行指定时用 positionerClassName 覆盖。 */
+        className={cn(positionerClassName ?? "z-popup isolate")}
       >
         <SelectPrimitive.Popup
           data-slot="select-content"

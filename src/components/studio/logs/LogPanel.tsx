@@ -218,8 +218,8 @@ function OriginSelect({
           {(selected) => ORIGIN_TEXT[asOriginFilter(selected)]}
         </SelectValue>
       </SelectTrigger>
-      {/* 弹层必须盖在日志面板之上：面板遮罩是 `z-99`（见本文件底部 overlayClass
-          的 z 参数），而 Select 的定位层默认只有 `z-50`——弹层照常画出来，却整块
+      {/* 弹层必须盖在日志面板之上：面板遮罩走刻度表的 `modal` 档（见本文件底部
+          overlayClass 的 z 参数），而 Select 的定位层若低于它——弹层照常画出来，却整块
           压在遮罩底下**收不到指针事件**。用户读到的现象就是「点了下拉看不到菜单」
           与「没法切换来源」，来源筛选因此形同失效（ISSUE #262）。
           层级给在定位层（positionerClassName）而不是 Popup：Popup 的 z 只在

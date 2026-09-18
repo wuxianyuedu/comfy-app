@@ -25,6 +25,6 @@ export function dialogBackdropClass(className?: string): string {
      覆盖后者的 `top: 0`，即遮罩从标题行下方开始（判据 ① 只看同一行）。 */
   return overlayClass(
     "modal",
-    `fixed top-title-bar inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs ${className ?? ""}`,
+    `fixed top-title-bar inset-0 z-modal bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs ${className ?? ""}`,
   );
 }

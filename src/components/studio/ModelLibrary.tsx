@@ -14,6 +14,7 @@ import {
   fmtSize,
 } from "./model-library-config";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /**
  * 工作室模型库 —— 视图层（规范 17 §17.2 第③层）。
@@ -201,7 +202,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
     <div
       className={overlayClass(
         "modal",
-        "z-50 flex items-center justify-center p-4",
+        `${zClass("modal")} flex items-center justify-center p-4`,
       )}
     >
       <div

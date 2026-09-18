@@ -32,6 +32,7 @@ import {
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
 type Level = TaskLogEntry["level"];
@@ -171,7 +172,7 @@ export function WorkflowRunLogModal({
     <div
       className={overlayClass(
         "modal",
-        "z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm",
+        `${zClass("modal")} flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm`,
       )}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();

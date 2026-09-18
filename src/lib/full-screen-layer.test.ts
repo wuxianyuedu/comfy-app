@@ -44,17 +44,17 @@ describe("全屏视图层定位（ISSUE #310 回归）", () => {
 
 describe("fullScreenLayerClass", () => {
   it("拼接定位 + z-index + 视图自身布局", () => {
-    expect(fullScreenLayerClass("z-50", "flex flex-col bg-bg")).toBe(
-      `${FULL_SCREEN_LAYER_CLASS} z-50 flex flex-col bg-bg`,
+    expect(fullScreenLayerClass("z-modal", "flex flex-col bg-bg")).toBe(
+      `${FULL_SCREEN_LAYER_CLASS} z-modal flex flex-col bg-bg`,
     );
   });
 
   it("zClass 与 extra 都可省，且不产生重复空格", () => {
-    expect(fullScreenLayerClass("z-10020")).toBe(
-      `${FULL_SCREEN_LAYER_CLASS} z-10020`,
+    expect(fullScreenLayerClass("z-toast")).toBe(
+      `${FULL_SCREEN_LAYER_CLASS} z-toast`,
     );
-    expect(fullScreenLayerClass("z-50", "")).toBe(
-      `${FULL_SCREEN_LAYER_CLASS} z-50`,
+    expect(fullScreenLayerClass("z-modal", "")).toBe(
+      `${FULL_SCREEN_LAYER_CLASS} z-modal`,
     );
   });
 });
@@ -74,8 +74,8 @@ describe("浮层让位判据（ISSUE #310 弹窗类回归）", () => {
   });
 
   it("overlayClass 拼接定位 + 其余 class，且不产生重复空格", () => {
-    expect(overlayClass("modal", "z-50 flex items-center bg-black/60")).toBe(
-      `${OVERLAY_POSITION_CLASS.modal} z-50 flex items-center bg-black/60`,
+    expect(overlayClass("modal", "z-modal flex items-center bg-black/60")).toBe(
+      `${OVERLAY_POSITION_CLASS.modal} z-modal flex items-center bg-black/60`,
     );
     expect(overlayClass("modal")).toBe(OVERLAY_POSITION_CLASS.modal);
   });
@@ -87,23 +87,23 @@ describe("blocksTitleBar：门禁用的「盖标题行」判定", () => {
     expect(blocksTitleBar(OVERLAY_POSITION_CLASS.modal)).toBe(false);
     // 让位后再加 z-index / 居中布局，仍属合规
     expect(
-      blocksTitleBar(overlayClass("modal", "z-50 flex items-center")),
+      blocksTitleBar(overlayClass("modal", "z-modal flex items-center")),
     ).toBe(false);
   });
 
   it("认出会让位的旧写法 fixed inset-0", () => {
     expect(
-      blocksTitleBar("fixed inset-0 z-99 flex items-center justify-center"),
+      blocksTitleBar("fixed inset-0 z-modal flex items-center justify-center"),
     ).toBe(true);
     expect(blocksTitleBar("fixed inset-0")).toBe(true);
-    expect(blocksTitleBar("  fixed   inset-0   z-50  ")).toBe(true);
+    expect(blocksTitleBar("  fixed   inset-0   z-modal  ")).toBe(true);
   });
 
   it("不误伤非顶层浮层：absolute / 局部定位 / 另一套尺寸", () => {
     // 只铺自己的定位祖先，够不到标题行
     expect(blocksTitleBar("absolute inset-0 pointer-events-none")).toBe(false);
     // 底层 app shell 的固定元素（如底部状态栏）不在选择器内
-    expect(blocksTitleBar("fixed bottom-0 left-0 right-0 z-40")).toBe(false);
+    expect(blocksTitleBar("fixed bottom-0 left-0 right-0 z-toast")).toBe(false);
     // 另给偏移的写法不是这两个词紧邻出现
     expect(blocksTitleBar("fixed top-2 inset-0")).toBe(false);
     expect(blocksTitleBar("fixed inset-x-0 top-0")).toBe(false);

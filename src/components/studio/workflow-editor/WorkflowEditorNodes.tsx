@@ -234,7 +234,7 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
   const html = useMemo(() => renderMarkdown(data.text), [data.text]);
   return (
     <div
-      className="relative z-5 flex h-full w-full cursor-move flex-col overflow-hidden rounded-md"
+      className="z-base relative flex h-full w-full cursor-move flex-col overflow-hidden rounded-md"
       style={{
         background: bg,
         border: `2.5px solid ${border}`,

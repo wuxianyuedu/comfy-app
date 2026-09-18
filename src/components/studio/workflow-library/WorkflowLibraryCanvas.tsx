@@ -409,7 +409,7 @@ function WorkflowLibraryCanvasInner({
           「拖了没反应」不许是静默的。 */}
       {flow.dropHint && (
         <div
-          className="pointer-events-none absolute bottom-2 left-2 z-20 max-w-[420px] rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-800 shadow-sm"
+          className="z-canvas-ui pointer-events-none absolute bottom-2 left-2 max-w-[420px] rounded-lg bg-amber-100 px-2.5 py-1.5 text-[11px] text-amber-800 shadow-sm"
           data-testid="wflib-wire-drop-hint"
         >
           没有连上：{flow.dropHint}
@@ -420,7 +420,7 @@ function WorkflowLibraryCanvasInner({
        * 边不可选、不显示此条。 */}
       {canWire && selectedEdgeIds.size > 0 && (
         <div
-          className="border-primary-500/40 bg-primary-500/15 text-primary-strong absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
+          className="border-primary-500/40 bg-primary-500/15 text-primary-strong z-canvas-ui absolute bottom-2 left-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
           data-testid="wflib-edge-delete-hint"
         >
           <span>已选中 {selectedEdgeIds.size} 条线</span>

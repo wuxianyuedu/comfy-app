@@ -16,6 +16,7 @@ import {
 } from "./ScriptMarkdownEditor.parts";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Button } from "~/components/ui/button";
+import { zClass } from "~/lib/shell/overlay-z";
 
 interface ScriptMarkdownEditorProps {
   title?: string;
@@ -279,7 +280,10 @@ export function ScriptMarkdownEditor({
   return (
     /* 全屏编辑弹层:底部 padding-bottom 6(24px) 为全局常驻的 BrowserStatusBar
        (fixed bottom-0 z-[100] h-6) 让位,避免底部「取消/保存」按钮被它盖住(ISSUE #35)。 */
-    <FullScreenLayer zClass="z-50" className="bg-canvas flex flex-col pb-6">
+    <FullScreenLayer
+      zClass={zClass("modal")}
+      className="bg-canvas flex flex-col pb-6"
+    >
       {/* Header */}
       <header className="border-border flex h-14 items-center justify-between border-b px-5">
         <div className="flex items-center gap-3">

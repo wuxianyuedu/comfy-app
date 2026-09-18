@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 interface DeleteWorkflowModalProps {
   pendingDelete: { id: string; name: string } | null;
@@ -49,7 +50,7 @@ export function DeleteWorkflowModal({
       onClick={() => !deleting && onBackdropClick()}
       className={overlayClass(
         "modal",
-        "z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm",
+        `${zClass("modal")} flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm`,
       )}
     >
       <div

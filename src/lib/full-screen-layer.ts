@@ -45,7 +45,8 @@ export const FULL_SCREEN_LAYER_CLASS = `fixed ${TITLE_BAR_TOP_CLASS} right-0 bot
 /**
  * 拼出全屏视图层的完整 class 串（定位 + z-index + 视图自身布局）。
  *
- * @param zClass  z-index 工具类（各视图层级不同，如 `z-50` / `z-10020`）
+ * @param zClass  z-index 工具类，取自浮层刻度表（规范 16 §16.2.5）：
+ *                 全屏视图走 `${zClass("modal")}`，调试类视图可再用 `Z.base`
  * @param extra   该视图自身的布局 class（`flex flex-col` / `bg-bg` 等）
  */
 export function fullScreenLayerClass(zClass: string, extra = ""): string {
@@ -77,7 +78,7 @@ export const OVERLAY_POSITION_CLASS: Record<OverlayKind, string> = {
  * 拼出浮层的定位 class 串（位置 + 形态自身的布局 class）。
  *
  * @param kind  浮层形态（`full` 全屏视图 / `modal` 模态弹窗、抽屉、遮罩）
- * @param extra 该浮层自身的布局 class（`z-50` / `flex items-center` / `bg-black/60`）
+ * @param extra 该浮层自身的布局 class（`flex items-center` / `bg-black/60`）
  */
 export function overlayClass(kind: OverlayKind, extra = ""): string {
   const parts = [OVERLAY_POSITION_CLASS[kind], extra.trim()];

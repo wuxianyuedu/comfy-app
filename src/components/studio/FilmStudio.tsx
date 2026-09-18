@@ -120,7 +120,7 @@ export function FilmStudio() {
       </div>
 
       {/* ── Top Toolbar ─────────────────────────────── */}
-      <header className="border-border-subtle bg-panel/88 relative z-10 flex shrink-0 items-center gap-3 border-b px-4 py-0 backdrop-blur-md">
+      <header className="border-border-subtle bg-panel/88 z-base relative flex shrink-0 items-center gap-3 border-b px-4 py-0 backdrop-blur-md">
         {/* Project name */}
         <div className="flex items-center gap-2">
           <span className="u-title">{c.title}</span>
@@ -200,7 +200,7 @@ export function FilmStudio() {
       </header>
 
       {/* ── 三栏主体 ───────────────────────── */}
-      <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
+      <div className="z-base relative flex min-h-0 flex-1 overflow-hidden">
         {/* ═══ 左：镜头列表面板（260px） ═══ */}
         <aside className="border-border-subtle bg-panel-deep/85 flex w-[260px] shrink-0 flex-col border-r backdrop-blur-sm">
           {/* Header */}
@@ -367,7 +367,7 @@ export function FilmStudio() {
             <div className="relative space-y-1">
               {/* Playhead */}
               <div
-                className="pointer-events-none absolute bottom-0 z-10 w-[2px] bg-red-400/80"
+                className="z-base pointer-events-none absolute bottom-0 w-[2px] bg-red-400/80"
                 style={{
                   left: `${Math.min(playheadPos, 600)}px`,
                   top: 0,
@@ -667,7 +667,7 @@ export function FilmStudio() {
       </div>
 
       {/* ── Status Bar ──────────────────────────────── */}
-      <footer className="border-border-subtle bg-panel-deep/95 relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
+      <footer className="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
         <span className="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40" />
         <span className="text-ink-muted text-[11px]">
           ComfyUI 本地已连接 · Wan I2V 视频模型就绪 · GPU 可用

@@ -12,6 +12,7 @@ import {
   type VideoTask,
 } from "~/lib/media/video-queue-client";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /* ── 视频队列弹窗 —— 接了真实的 VIDEO 任务 ──
   从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
@@ -144,7 +145,7 @@ export function VideoQueueModal({
     <div
       className={overlayClass(
         "modal",
-        "z-9998 flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60",
+        `${zClass("modal")} flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60`,
       )}
     >
       <div className="bg-node border-border-strong flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50">
