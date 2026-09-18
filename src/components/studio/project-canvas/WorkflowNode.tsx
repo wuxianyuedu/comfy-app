@@ -21,8 +21,8 @@
  *
  * 外壳（Card 圆角14、无 overflow-hidden 以保护 Handle 骑跨）由 CanvasNode 持有。
  *
- * 4 个 chip 与 popover 通用逻辑已拆出：
- *  - workflow-node-popover.ts        — 定位 / 外部点击关闭基元
+ * 4 个 chip 的浮层统一走 `~/components/ui/popover`（规范 16 §16.2.3 P2），
+ * 定位 / 外部点击关闭不再各写一份：
  *  - WorkflowSourceFilterChip.tsx    — 来源筛选 chip
  *  - WorkflowModelFilterChip.tsx     — 模型标签筛选 chip
  *  - WorkflowPickChip.tsx            — 工作流选择 chip

@@ -70,14 +70,16 @@ const EXEMPT_DIRS = [
   { re: /^src\/components\/ui\//, reason: "ui/ 基元自身实现" },
   {
     re: /^src\/components\/studio\/ui\//,
-    reason: "历史第二套 UI kit（去向是合并进 ui/，见规范 §16.2.3）",
+    reason:
+      "历史第二套 UI kit（INCLUDE_AT_LEVEL 里逐个目录开扫，见规范 §16.2.4 的分批计划）",
   },
   {
     re: /^src\/components\/studio\/shared\//,
-    reason: "同上：shared/ 里的通用件是 §16.2.3 的迁移对象",
+    reason: "同上：shared/ 里的通用件是 §16.2.4 的迁移对象",
   },
   { re: /\/hooks\//, reason: "§16.2.1 第②层（逻辑层），不算视图实现" },
 ];
+
 
 /* ── 三条判据 ────────────────────────────────────────────── */
 

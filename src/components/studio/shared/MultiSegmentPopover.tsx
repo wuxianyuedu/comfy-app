@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Z } from "~/lib/shell/overlay-z";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * redesign: a unified multi-section popover dropdown
@@ -203,7 +204,7 @@ function MultiSegmentPopoverInner({
               width: pos.width,
               maxHeight: "min(60vh, 460px)",
               overflowY: "auto",
-              zIndex: 9999,
+              zIndex: Z.overlay,
             }}
             className="bg-panel/95 ring-border-strong rounded-xl p-3 shadow-2xl ring-1 shadow-black/10 backdrop-blur-md dark:shadow-black/50"
             onMouseDown={(event) => event.stopPropagation()}

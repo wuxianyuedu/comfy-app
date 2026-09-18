@@ -33,42 +33,6 @@ export function rectToAnchor(
   };
 }
 
-/* Raw metadata the parent (`WorkflowCanvasEditor`) has already memoised
- *  at line 4948 — we accept it directly rather than recomputing from
- *  `detail.rawNodes` to avoid a second pass over the same array on every
- *  popover open. */
-export function computePos(rect: {
-  left: number;
-  top: number;
-  right: number;
-  width: number;
-  height: number;
-}): {
-  left: number;
-  top: number;
-} {
-  const POPOVER_W = 460;
-  const GAP = 8;
-  const INSET = 24;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  /* Place the popover's LEFT edge here.  Try RIGHT first; flip LEFT if
-   *  it would push past the viewport (i.e., chip-left + chip-width + gap
-   *  + popover-width > viewport - inset). */
-  const rightCandidate = rect.left + rect.width + GAP;
-  const leftFits = rightCandidate + POPOVER_W + INSET <= vw;
-  const left = leftFits
-    ? rightCandidate
-    : Math.max(INSET, rect.left - GAP - POPOVER_W);
-  /* Vertical center on chip — clamp so the popover stays inside vh with
-   *  a 24px top and bottom buffer (max-height 60vh is enforced in the
-   *  popover style — this just keeps the anchor near the chip). */
-  const chipCenter = rect.top + rect.height / 2;
-  const desiredTop = chipCenter - 32; // header is ~64px tall
-  const top = Math.min(Math.max(INSET, desiredTop), vh - INSET - 64);
-  return { left, top };
-}
-
 /* Small metadata chip used in the meta strip.  Plain styled span — no
  *  button semantics needed (clicking does nothing). */
 export const KNOWN_PACKAGE_HEURISTIC: Record<string, string> = {

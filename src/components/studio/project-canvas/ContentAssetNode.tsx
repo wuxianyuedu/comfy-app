@@ -203,7 +203,7 @@ export function ContentAssetBody({
         <div
           className={overlayClass(
             "modal",
-            "bg-canvas-deep z-100 flex items-center justify-center backdrop-blur-sm dark:bg-black/80",
+            "bg-canvas-deep z-overlay flex items-center justify-center backdrop-blur-sm dark:bg-black/80",
           )}
           onClick={() => gallery.setOpen(false)}
           role="dialog"

@@ -10,6 +10,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Z } from "~/lib/shell/overlay-z";
 
 /**
  * Dark-themed custom <select> replacement.
@@ -358,7 +359,7 @@ export function DarkSelect({
               left: pos.left,
               top: pos.top,
               width: pos.width,
-              zIndex: 9999,
+              zIndex: Z.overlay,
             }}
             className="border-border-strong bg-card max-h-60 overflow-y-auto rounded-lg border py-1 shadow-lg shadow-black/5 dark:shadow-black/40"
           >
@@ -397,7 +398,7 @@ export function DarkSelect({
                   ? pos.top + Math.min(listHeight, POPOVER_MAX_H) + 4
                   : pos.top - footerHeight - 4,
               width: pos.width,
-              zIndex: 9999,
+              zIndex: Z.overlay,
             }}
           >
             {footer}
