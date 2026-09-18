@@ -92,7 +92,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   const appendFileLogs = useLogStore((s) => s.appendFileLogs);
   const toggleOpen = useLogStore((s) => s.toggleOpen);
 
-  // ── Intercept console.* so logs appear in the panel ──
+  // ── 拦截 console.*，好让日志出现在面板里 ──
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -151,7 +151,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
   }, [addEntry]);
 
-  // ── Listen to Tauri backend log events (optional; no-op in browser) ──
+  // ── 监听 Tauri 后端日志事件（可选；浏览器里是空操作） ──
   useEffect(() => {
     if (typeof window === "undefined") return;
     let unlisten: (() => void) | undefined;
@@ -177,7 +177,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
           },
         );
       } catch {
-        // Not running inside Tauri — ignore.
+        // 不在 Tauri 里运行 —— 忽略。
       }
     };
 
@@ -185,7 +185,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     return () => unlisten?.();
   }, [addEntry]);
 
-  // ── Global uncaught errors & unhandled rejections → panel (source: "system") ──
+  // ── 全局未捕获错误与未处理 rejection → 面板（来源："system"） ──
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -206,7 +206,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
   }, [addEntry]);
 
-  // ── Load launcher log files: startup logs + ongoing dev-server output ──
+  // ── 加载启动器日志文件：启动日志 + 持续的 dev-server 输出 ──
   //
   // 增量读取靠服务端回传的字节游标（`data.size`）。此前把「本轮新增」错当成
   // 游标（`offsetsRef.current[source] = data.size` 看似对，但服务端在文件超出
@@ -323,7 +323,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     };
   }, [addEntry, appendFileLogs, setSessionStart, setBootId]);
 
-  // ── Keyboard shortcut: Ctrl+Shift+L ──
+  // ── 键盘快捷键：Ctrl+Shift+L ──
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handler = (e: KeyboardEvent) => {

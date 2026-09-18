@@ -1,10 +1,10 @@
 "use client";
 
-/** extracted from WorkflowLibrary's import-panel JSX.
- *  Fully controlled by the parent — all panel state lives in the
- *  useWorkflowImport hook and is threaded through `state` so the
- *  drag-and-drop pre-fill path (handleDroppedFile) can populate the same
- *  fields before the panel opens.  Behaviour is unchanged.
+/** 从 WorkflowLibrary 的导入面板 JSX 抽出。
+ *  完全受父级控制 —— 所有面板状态住在
+ *  useWorkflowImport hook 里并经 `state` 传入，好让
+ *  拖放预填路径（handleDroppedFile）能在面板打开前填充同样的
+ *  字段。行为不变。
  */
 import { useRef } from "react";
 
@@ -84,7 +84,7 @@ export function WorkflowImportPanel({
         </p>
       )}
 
-      {/* Common: name + mode */}
+      {/* 通用：名字 + 模式 */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
         <div>
           <label className="text-ink-soft mb-1 block text-xs font-medium">

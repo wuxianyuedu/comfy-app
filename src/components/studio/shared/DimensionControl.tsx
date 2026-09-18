@@ -378,15 +378,12 @@ function DimensionSizeControl({
         />
       </div>
 
-      {/* Width + Height — always visible, styled like any other node parameter
-          field (NumberField, two-column grid).  Picking a preset in the row
-          above writes the real W/H via applyPreset → setMany, so the
-          NumberFields below update live.  The stepper +/- matches the
-          user-pinned alignMultiple so the manual W/H nudge lands on the same
-          grid the megapixel clearity uses.
-          窄版不画宽高步进器：这两个端口在组合控件里由「比例 + 像素」推算，
-          它们各自的落点由这块控件承担（见 GroupedControls 的落点口径），
-          同一件事不在两处各放一份录入。 */}
+      {/* 宽 + 高 —— 始终可见，样式与别的节点参数字段一致
+          （NumberField，两列栅格）。上面一行里挑一个预设
+          会经 applyPreset → setMany 写入真实的 W/H，所以下面的
+          NumberField 会实时更新。步进器 +/- 遵循
+          用户钉住的对齐倍数，好让手动微调 W/H 落在
+          与百万像素清晰度同一张网格上。 */}
       {!narrow && (
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">
