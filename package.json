@@ -38,6 +38,8 @@
     "doc:check": "node scripts/check-doc-references.cjs",
     "theme:scan": "node scripts/check-theme-colors.cjs --report",
     "ui:primitives": "node scripts/check-ui-primitives.cjs",
+    "ui:overlay-z": "node scripts/check-overlay-z.cjs",
+    "ui:overlay-z:report": "node scripts/check-overlay-z.cjs --report",
     "ui:primitives:report": "node scripts/check-ui-primitives.cjs --report",
     "theme:check": "node scripts/check-theme-colors.cjs",
     "doc:render": "node scripts/render-doc-placeholders.cjs",

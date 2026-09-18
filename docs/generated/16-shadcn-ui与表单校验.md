@@ -154,31 +154,81 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
   撤掉的另一面是**目录不得复活**：归并完还得有个判据挡住「下一个人再
   `mkdir studio/ui` 起一套」，见 `tests/ui-kit-single-home.test.ts`。
 
-### 16.2.5 浮层层级只有两条刻度（ISSUE #672 P2）
+### 16.2.5 浮层层级是一张刻度表（ISSUE #672 P2 → P4，机器强制）
 
 浮层收拢过程中暴露出第二处不一致：**层级各处一套魔数**。同一件事（下拉浮层）
 在 `MultiSegmentPopover` 是 `9999`、`WorkflowSeedModeButton` 是 `9999` 配 `9998`
 遮罩、节点 JSON 浮层用 `9000`/`9001`，全屏抽屉散落 `10005`/`10020` ——
 谁也说不清「它比谁高」，新增一层只能再编一个更大的数。
 
-收敛为**两条刻度**（数值同时定义在 `globals.css` 的 `@theme` 与
-`src/lib/shell/overlay-z.ts`，两处必须一致）：
+P2 先把自搓浮层收进 `ui/` 原语、定下两条刻度；**P4 复查时余量里仍有 7 处
+自成一档**（`9998` / `z-[10000]` / `z-[10020]` / `z-80` / `z-60` / 全屏视图的
+`z-50` / `studio/logs` 的 `z-99`+`z-200`）。所以这里不再只定两条，而是**一张成体系
+的刻度表** —— 每一档都对得上一类真实存在的浮层关系，不是「把魔数换个名字」。
 
-| 刻度 | 值 | 用途 | 用法 |
-|------|----|------|------|
-| `Z.overlay` | 100 | 应用内浮层：下拉 / 抽屉 / 模态 / 调试面板 | class 用 `z-overlay`，行内用 `zIndex: Z.overlay` |
-| `Z.toast` | 1000 | 全局提示，恒在浮层之上 | class 用 `z-toast` |
+**数值同时定义在两处**（`src/app/globals.css` 的 `@theme` 供工具类，
+`src/lib/shell/overlay-z.ts` 供行内 `zIndex`），两处必须一致 —— 由
+`src/lib/shell/overlay-z.test.ts` 逐档钉住。`zClass(tone)` 由档名派生工具类名，
+不手抄第二份 `z-*` 字符串表。
 
-**`Z.overlay` 刻意不进 1000~1200 区间**：那是 React Flow 给节点选中态（约 1010）
-与悬浮态（1180，见 `globals.css`）留的位，应用浮层插进去会和节点争层级。
-画布内部元素的层级（节点 10 / 子图 11 / 子图内元素 0~5）**不属于**本刻度 ——
-它们只在 React Flow 的层叠上下文里比较，与全屏浮层不在同一维度。
+| 档 | 值 | 工具类 | 谁在这一档 | 判据 |
+|----|----|--------|-----------|------|
+| `Z.base` | 10 | `z-base` | **局部叠层下限**：画布节点内容 / 子图、卡片内遮罩、节点内浮标 | 参照点是**自己的定位祖先**，比较对象在容器内部 |
+| `Z.canvasUi` | 20 | `z-canvas-ui` | 画布 chrome：工具栏 / 侧栏 / 面板 / 角标提示 | 压过节点，但仍在**所处容器**那一层 |
+| `Z.canvasMax` | 30 | `z-canvas-max` | 画布最上层：IO 预览 / 底部工具栏 / 固定触发钮 | 压过 `canvasUi`，仍不越出容器 |
+| `Z.modal` | 90 | `z-modal` | **模态遮罩与抽屉**、全屏视图、消息中心 | 应用内的「顶」（`Z.overlay` 是它的旧名，同值） |
+| `Z.popup` | 100 | `z-popup` | **挂在 `body` 的浮层**：下拉 / 气泡 / 右键菜单 / 节点 JSON 浮层 | 由模态内的控件打开，**必须压过 `modal`** |
+| `Z.toast` | 1000 | `z-toast` | 全局提示、底部状态栏（应用级 chrome） | 任何浮层之上 |
 
-浮层遮罩的 class 串统一由 `src/components/ui/dialog-overlay.ts` 的
-`dialogBackdropClass()` 产出：`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的
-`SheetContent` 共用同一份，它同时承载「顶部让出标题行」的硬规则（ISSUE #310：
-遮罩曾铺满视口，把页签与窗口按钮一起盖住）。**内容层不再自绘遮罩** ——
-base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成两层。
+**三条判据（缺一条这张表就会退化回「一串更大的数」）**：
+
+1. **`modal` 刻意不进 1000~1200 区间**：那是 React Flow 给节点选中态（约 1010）
+   与悬浮态（1180，见 `globals.css`）留的位，应用模态插进去会和节点争层级。
+2. **`popup` 必须高于 `modal`**：`ui/select` / `ui/popover` / `ui/dropdown-menu` /
+   `ui/tooltip` 都是 portal 到 `body` 的，而它们常常**由模态内部的控件**打开。
+   低于模态 = 点得开、点不中（同 §16.2.4 的日志面板回归，ISSUE #262）。
+   `studio/logs` 的层级契约因此不再自成一档，直接取 `Z.modal` / `Z.popup`。
+3. **画布内部的层级属于本表，但只在容器内比较**：它们从 `base` 起排，是为了让
+   「同一个容器内部的关系有名字」，而不是「要和模态比高低」。跨容器比高低是
+   误用 —— 那些元素压根不在同一个层叠上下文里。
+
+**两条硬约束（不在表里的写法一律阻断）**：
+
+- 行内数字 `zIndex: 7` 与任意值写法 `z-[10000]`（规范 03 §3.2 已禁 arbitrary）
+  **全库清零**，属硬闸；
+- 刻度之外的**裸数字具名档**（`z-9999` / `z-80` / `z-99` …）按文件记棘轮、
+  只许降不许升 —— 写得出来就说明又编了一档。
+
+```bash
+pnpm ui:overlay-z            # 检查（棘轮 + Z1/Z2 硬闸，pre-commit 第 27 步）
+pnpm ui:overlay-z:report     # 只出清单（排批次用，不判失败）
+node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
+```
+
+**范围与豁免**（`scripts/check-overlay-z.cjs` 的 `SCAN_DIRS` / `EXEMPT_DIRS`，
+与本节同源）：扫 `src/components/**` + `src/app/**`；豁免
+`src/components/ui/**`（shadcn **工具生成、尽量不手改**的目录，§16.1 ——
+基元内部的 `z-50` 改成项目档会在下一次 `shadcn add` 被改回去，而机械换算
+只会算错：`z-50` 在工具生成的语义里是「弹层」，在刻度表里对应的是 `popup`，
+不是它数值上靠近的 `modal`）、`<feature>/hooks/**`（§16.2.1 第②层是逻辑层）、
+`*.test.*` / `__tests__/**`。
+
+**为什么豁免不是「灰区」**：`ui/` 里真正需要**语义正确**的那几处（`dialog` /
+`sheet` 是模态档，`popover` / `dropdown-menu` / `select` / `tooltip` 是弹层档，
+`dialog-overlay` 的遮罩是模态档）已经显式改成 `z-modal` / `z-popup`；剩下未改的
+`z-50` 是工具生成的形态，判据够不着它们，而**改了反而更危险**（会被重新生成覆盖）。
+
+**内容层的遮罩不在此列**：浮层遮罩的 class 串统一由
+`src/components/ui/dialog-overlay.ts` 的 `dialogBackdropClass()` 产出，
+`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的 `SheetContent` 共用同一份，
+它同时承载「顶部让出标题行」的硬规则（ISSUE #310：遮罩曾铺满视口，把页签与
+窗口按钮一起盖住）。**内容层不再自绘遮罩** —— base-ui 的 Backdrop 负责点遮罩
+关闭，自绘的那一份会与它叠成两层。
+
+**为什么 `lib/full-screen-layer.ts` 的 `overlayClass` 参数不变**：它是**定位**
+判据（顶部让出标题行），层级由调用方经 `zClass` 参数给 —— 两件事分开，才让
+「让位」这条硬规则（`check-title-bar-clearance.cjs`）不被层级改名牵动。
+P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`。
 
 ### 16.2.4 混合形态台账（现状，不是目标）
 

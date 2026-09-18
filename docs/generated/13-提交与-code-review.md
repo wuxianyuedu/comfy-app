@@ -142,7 +142,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 理由见上面 `⚠️` 那段。
 
 ```
-本地提交前必须通过（.githooks/pre-commit，26 步）：
+本地提交前必须通过（.githooks/pre-commit，27 步）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
@@ -153,6 +153,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 ✅ node scripts/check-changelog-fragments.cjs
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
 ✅ node scripts/check-ui-primitives.cjs      # UI 基元复用棘轮（见 16 §16.2.3）
+✅ node scripts/check-overlay-z.cjs          # 浮层层级刻度棘轮（见 16 §16.2.5）
 ✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
 ✅ node scripts/check-inline-style.cjs       # 视图层不得动态注入 <style>（见 03 §3.5）
@@ -375,7 +376,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 **边界（不要做过头）**：
 
 - **这不是把门禁从本地搬回平台**。机器判据仍然只在 `.githooks/pre-commit`
-  （13.5 的清单，26 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
+  （13.5 的清单，27 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
 - **不要为它写 `.cnb.yml`**。`pull_request` / `push` 类事件是**无条件执行**的，
   写下去就又回到 13.5.3 的额度结论；「每天只跑一次」这种节流平台也不支持
   （无「今天跑过就跳过」的判据，见 13.5.3）。
@@ -390,7 +391,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 （如 `12-代码组织与文件结构.md` 的 §12.4.6），而这类差异在 `pnpm doc:check` 眼里是
 「编辑态文档一切正确」，两个判据管的不是同一件事。
 
-判据排在 `.githooks/pre-commit` 第 26 步，与写入模式**共用同一份「源 → 生成物」计算**
+判据排在 `.githooks/pre-commit` 第 26 步（浮层刻度棘轮插在其后，第 27 步），与写入模式**共用同一份「源 → 生成物」计算**
 （`scripts/render-doc-placeholders.cjs` 的 `renderDocContent()`，只比对不写入）。
 报三个方向 —— 少报任何一个，漏掉的那类都会静默留在产物目录里：
 

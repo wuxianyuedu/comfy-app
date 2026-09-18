@@ -7,6 +7,7 @@ import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { errorMessage } from "~/lib/error-message";
 import { Button } from "~/components/ui/button";
+import { zClass } from "~/lib/shell/overlay-z";
 
 interface LLMContextValue {
   config: LLMConfigView | null;
@@ -210,7 +211,7 @@ function LLMSettingsModal({
     <div
       className={overlayClass(
         "modal",
-        "bg-canvas-deep dark:bg-canvas-deep z-50 grid place-items-center p-4 backdrop-blur-sm",
+        `${zClass("modal")} bg-canvas-deep dark:bg-canvas-deep grid place-items-center p-4 backdrop-blur-sm`,
       )}
       onClick={onClose}
     >

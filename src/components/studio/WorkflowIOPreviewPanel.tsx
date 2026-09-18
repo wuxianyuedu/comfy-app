@@ -18,7 +18,7 @@
  * 显示名以本地 label 为准，回退顺序见 `io-exposure.ts`（子工作流封装节点的
  * 富化名会落到包装槽位名 `value_1`，与画布上的业务名对不上）。
  *
- * 位置：右上角，占满画布高度，z-30。 */
+ * 位置：右上角，占满画布高度，`z-canvas-max`（规范 16 §16.2.5）。 */
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
@@ -182,7 +182,7 @@ export function WorkflowIoPreviewPanel({
     }`;
 
   return (
-    <div className="pointer-events-none absolute top-4 right-4 bottom-4 z-30 flex w-[520px] flex-col">
+    <div className="z-canvas-max pointer-events-none absolute top-4 right-4 bottom-4 flex w-[520px] flex-col">
       <div className="bg-panel/92 pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sky-400/30 shadow-2xl backdrop-blur-md">
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">

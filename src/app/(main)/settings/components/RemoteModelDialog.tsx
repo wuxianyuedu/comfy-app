@@ -22,6 +22,7 @@ import type {
   ModelDialog,
   RemoteModelDialogs,
 } from "../hooks/use-remote-model-dialogs";
+import { zClass } from "~/lib/shell/overlay-z";
 
 export function RemoteModelDialog({
   c,
@@ -38,7 +39,7 @@ export function RemoteModelDialog({
       <div
         className={overlayClass(
           "modal",
-          "bg-canvas-deep z-50 grid place-items-center p-4",
+          `${zClass("modal")} bg-canvas-deep grid place-items-center p-4`,
         )}
         onClick={() => d.closeDialog()}
       >

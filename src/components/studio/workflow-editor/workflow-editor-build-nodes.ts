@@ -1,7 +1,24 @@
+/**
+ * 画布节点内部的相对层级（**不是**视口刻度）。
+ *
+ * 这些值只在本容器的层叠上下文里比较：便签 / 组底板在节点之下（它们常被节点
+ * 压住，是背景板），普通节点 < 子图卡片（紫色描边要读得出来）< 宿主内部的
+ * 暴露口（必须浮在宿主卡片描边之上）。起点取 `Z.base`，逐档 +1。
+ */
+const GROUP_Z = Z.base;
+const NOTE_Z = Z.base + 5;
+const NODE_Z = Z.base;
+const SUBGRAPH_Z = Z.base + 1;
+const IO_PORT_Z = Z.base + 1;
+
 /* 纯函数：接收派生上下文对象，返回 React Flow 节点数组。无 hook / 无组件状态，
  * useMemo 由调用方持有（见 wf-editor-inner.tsx 中的 buildInitialNodes 用法）。 */
 import type { Node } from "@xyflow/react";
 import { friendlyNodeTitle } from "~/lib/comfyui/node-titles";
+/* 画布节点内部的层级不是视口刻度（规范 16 §16.2.5 第 3 条）：它们只在 React Flow
+ * 的层叠上下文里互相比较。数值取自 Z.base（局部叠层下限），相对关系保持在
+ * 本模块的常量里 —— 见下面 NODE_Z / SUBGRAPH_Z / NOTE_Z / GROUP_Z 的说明。 */
+import { Z } from "~/lib/shell/overlay-z";
 import { MODE_KEY_PREFIX } from "~/lib/workflow/workflow-param-mapping";
 import type {
   RawInputMeta,
@@ -149,7 +166,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     style: n.size
       ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H }
       : undefined,
-    zIndex: 10,
+    zIndex: NODE_Z,
     data: {
       nodeId: n.id,
       classType: n.class_type,
@@ -220,7 +237,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       // 卡片顶部 = 配置里的主体顶部 − NODE_TITLE_H，
       // 主体因此正好落在导入的 pos.y 上。
       position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
-      zIndex: 11, // 画在普通节点之上，紫色描边才读得出来
+      zIndex: SUBGRAPH_Z, // 画在普通节点之上，紫色描边才读得出来
       style: n.size
         ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H }
         : undefined,
@@ -274,7 +291,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         type: "wfGroup",
         position: { x, y },
         // 嵌套越深 zIndex 越高，但始终在便签 / 节点之下
-        zIndex: 1 + Math.min(groupDepth[group.id] ?? 0, 3),
+        zIndex: GROUP_Z + 1 + Math.min(groupDepth[group.id] ?? 0, 3),
         draggable: false,
         selectable: false,
         connectable: false,
@@ -300,7 +317,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         x: note.pos[0],
         y: note.pos[1] - (noteHasTitle ? NODE_ANCHOR_OFFSET_Y : 0),
       },
-      zIndex: 5,
+      zIndex: NOTE_Z,
       draggable: true,
       selectable: true,
       connectable: false,
@@ -357,7 +374,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     parentId,
     extent: "parent",
     position: { x: relX, y: relY },
-    zIndex: 11,
+    zIndex: IO_PORT_Z,
     draggable: false,
     selectable: true,
     connectable: false,
@@ -412,7 +429,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       id,
       type: "wfGroup",
       position: pos,
-      zIndex: 0,
+      zIndex: GROUP_Z,
       draggable: true,
       selectable: true,
       connectable: false,

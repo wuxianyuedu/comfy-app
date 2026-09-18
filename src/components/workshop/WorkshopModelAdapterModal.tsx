@@ -26,6 +26,7 @@ import {
 import { overlayClass } from "~/lib/full-screen-layer";
 import { Button } from "~/components/ui/button";
 import { useModelAdapters } from "./hooks/use-model-adapters";
+import { zClass } from "~/lib/shell/overlay-z";
 
 const MODE_GROUPS: Array<{
   category: "image" | "video" | "audio";
@@ -87,7 +88,7 @@ export function WorkshopModelAdapterModal({
     <div
       className={overlayClass(
         "modal",
-        "bg-canvas-deep dark:bg-canvas-deep z-50 grid place-items-center p-4 backdrop-blur-sm",
+        `bg-canvas-deep dark:bg-canvas-deep ${zClass("modal")} grid place-items-center p-4 backdrop-blur-sm`,
       )}
       onClick={onClose}
     >

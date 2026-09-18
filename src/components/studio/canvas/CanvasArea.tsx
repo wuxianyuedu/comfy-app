@@ -18,6 +18,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /* ── 画布区 + 右键菜单 + 底部工具栏 ────
   给内容（如 WorkflowCanvas）包上：
@@ -118,7 +119,7 @@ export function CanvasArea({
       {/* ── Context Menu ── */}
       {menu && (
         <div
-          className="border-border-strong bg-panel fixed z-9999 min-w-[200px] rounded-xl border py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md"
+          className={`border-border-strong bg-panel fixed ${zClass("popup")} min-w-[200px] rounded-xl border py-1.5 shadow-2xl shadow-black/20 backdrop-blur-md`}
           style={{ left: menu.x, top: menu.y }}
         >
           {contextItems.map((item) =>
@@ -147,7 +148,7 @@ export function CanvasArea({
       )}
 
       {/* ── Bottom Toolbar ── */}
-      <div className="absolute bottom-3 left-1/2 z-50 -translate-x-1/2">
+      <div className="z-canvas-ui absolute bottom-3 left-1/2 -translate-x-1/2">
         <div className="border-border-strong bg-panel/95 flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
           {/* 发送 / 运行按钮 */}
           <ToolbarButton
@@ -221,7 +222,7 @@ export function CanvasArea({
         <Button
           variant="outline"
           onClick={() => onMinimapToggle?.(!minimapVisible)}
-          className={`absolute bottom-3 left-3 z-40 flex h-8 gap-1.5 rounded-lg px-2.5 ${
+          className={`z-canvas-ui absolute bottom-3 left-3 flex h-8 gap-1.5 rounded-lg px-2.5 ${
             minimapVisible
               ? "text-ink-strong border-primary-500/30 bg-primary-500/10"
               : "border-border-strong bg-panel/85 text-ink-fainter hover:text-ink-strong"

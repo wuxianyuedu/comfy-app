@@ -16,6 +16,7 @@ import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { Button } from "~/components/ui/button";
+import { zClass } from "~/lib/shell/overlay-z";
 
 interface HistoryDetailModalProps {
   detailId: string | null;
@@ -72,7 +73,7 @@ export function HistoryDetailModal({
     <div
       className={overlayClass(
         "modal",
-        "bg-canvas-deep z-90 flex items-center justify-center p-4 backdrop-blur-sm sm:p-6 dark:bg-black/80",
+        `${zClass("modal")} bg-canvas-deep flex items-center justify-center p-4 backdrop-blur-sm sm:p-6 dark:bg-black/80`,
       )}
       onClick={onClose}
     >
@@ -99,7 +100,7 @@ export function HistoryDetailModal({
             </Button>
             {actions.folderPopover && (
               <div
-                className="border-border bg-panel-deep absolute top-[52px] right-5 z-10 w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl"
+                className={`border-border bg-panel-deep absolute top-[52px] right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="mb-2 flex items-center justify-between">

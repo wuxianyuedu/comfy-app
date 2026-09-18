@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
+import { Z } from "~/lib/shell/overlay-z";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
@@ -236,7 +237,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     background: anchor.gradient,
                     border: anchor.border,
                     boxShadow: anchor.boxShadow,
-                    zIndex: 10,
+                    zIndex: Z.base,
                   }}
                 />
               )}
@@ -254,7 +255,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     background: anchor.gradient,
                     border: anchor.border,
                     boxShadow: anchor.boxShadow,
-                    zIndex: 10,
+                    zIndex: Z.base,
                   }}
                 />
               )}

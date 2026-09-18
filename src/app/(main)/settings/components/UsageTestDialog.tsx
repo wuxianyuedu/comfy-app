@@ -33,6 +33,7 @@ import type {
   RemoteModelDialogs,
   UsageTestDialogState,
 } from "../hooks/use-remote-model-dialogs";
+import { zClass } from "~/lib/shell/overlay-z";
 
 const USAGE_TEST_KIND_LABELS: Record<UsageTestKind, string> = {
   chat: "文本",
@@ -54,7 +55,7 @@ export function UsageTestDialog({
       <div
         className={overlayClass(
           "modal",
-          "bg-canvas-deep z-50 grid place-items-center p-4",
+          `${zClass("modal")} bg-canvas-deep grid place-items-center p-4`,
         )}
         onClick={() => d.closeUsageTest()}
       >

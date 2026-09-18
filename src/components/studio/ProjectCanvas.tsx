@@ -464,7 +464,7 @@ function CanvasInner({
       </ReactFlow>
 
       {/* 项目切换器（左上角） */}
-      <div className="absolute top-3 left-3 z-20">
+      <div className="z-canvas-ui absolute top-3 left-3">
         <ProjectSwitcher
           projectName={projectName}
           projectId={projectId}
@@ -543,7 +543,7 @@ function CanvasInner({
       {/* ── 画布面板系统：工具栏 + 滑出面板 ── */}
       {activePanel ? (
         /* 面板打开时：工具栏紧贴面板左侧，同一 flex 容器内 */
-        <div className="absolute inset-y-0 left-0 z-20 flex">
+        <div className="z-canvas-ui absolute inset-y-0 left-0 flex">
           <CanvasPanelToolbar
             active={activePanel}
             onSelect={setActivePanel}

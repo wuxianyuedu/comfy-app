@@ -158,7 +158,7 @@ export function WirePortRows({
               className={`relative flex h-[33px] shrink-0 items-center gap-2.5 pr-[14px] pl-[14px] ${isDragging ? "opacity-50" : ""}`}
             >
               {isDropTarget && (
-                <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
               )}
               <PortHandle
                 id={wireInput.ioKey}
@@ -238,7 +238,7 @@ export function WirePortRows({
               dragOverKey === wireInput.ioKey &&
               draggingKey &&
               draggingKey !== wireInput.ioKey && (
-                <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
               )}
             <PortHandle
               id={wireInput.ioKey}
@@ -334,7 +334,7 @@ export function WirePortRows({
                   dragOverKey === output.ioKey &&
                   draggingKey &&
                   draggingKey !== output.ioKey && (
-                    <div className="pointer-events-none absolute inset-x-0 -top-px z-10 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                    <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
                   )}
                 <PortHandle
                   id={output.ioKey}

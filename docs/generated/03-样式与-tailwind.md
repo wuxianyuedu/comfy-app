@@ -100,15 +100,24 @@ const panelVariants = cva("rounded-2xl border transition-colors", {
 });
 ```
 
-### 3.3 Tooltip 必须加 z-index
+### 3.3 Tooltip 必须加 z-index —— 且取自刻度表
 
 ```tsx
 // ❌ 错误：tooltip 可能被右侧内容覆盖
 <span className="absolute left-full ml-2 ...">
 
-// ✅ 正确
+// ❌ 也不对：随手挑一个数，等于又编一档（谁也说不清它比谁高）
 <span className="absolute left-full z-50 ml-2 ...">
+
+// ✅ 正确：层级取自浮层刻度表（16 §16.2.5）
+<span className="absolute left-full z-popup ml-2 ...">
 ```
+
+**层级不是一个「随便挑个够大的数」的自由参数**：它是**刻度表**里的一档 ——
+`z-base` / `z-canvas-ui` / `z-canvas-max` / `z-modal` / `z-popup` / `z-toast`
+（行内写法用 `Z.*`，见 `src/lib/shell/overlay-z.ts`）。见
+[16 §16.2.5](16-shadcn-ui与表单校验.md#1625-浮层层级是一张刻度表issue-672-p2--p4机器强制)；
+写了表外的数由 `pnpm ui:overlay-z` 在提交阶段拦下。
 
 ### 3.4 图标统一用 lucide-react
 

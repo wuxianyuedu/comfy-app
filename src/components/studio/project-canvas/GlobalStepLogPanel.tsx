@@ -32,6 +32,7 @@ import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
  *  本面板消费的字段。`JSON.parse` 产出 `unknown`；下面的守卫
@@ -405,7 +406,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         onClick={() => setOpen(true)}
         title="打开执行日志"
         data-testid="step-log-trigger"
-        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto fixed top-16 right-3 z-30 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
+        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
       >
         <FileText size={12} />
         执行日志
@@ -420,7 +421,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <div
           className={overlayClass(
             "modal",
-            "bg-canvas-deep z-50 flex items-center justify-center p-4 backdrop-blur-sm dark:bg-black/60",
+            `${zClass("modal")} bg-canvas-deep flex items-center justify-center p-4 backdrop-blur-sm dark:bg-black/60`,
           )}
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);

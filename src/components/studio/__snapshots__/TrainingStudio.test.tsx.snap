@@ -22,7 +22,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       />
     </div>
     <header
-      class="border-border-subtle bg-panel/88 relative z-10 flex h-12 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md"
+      class="border-border-subtle bg-panel/88 z-base relative flex h-12 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md"
     >
       <div
         class="flex items-center gap-2"
@@ -59,7 +59,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       </button>
     </header>
     <div
-      class="relative z-10 flex min-h-0 flex-1 overflow-hidden"
+      class="z-base relative flex min-h-0 flex-1 overflow-hidden"
     >
       <aside
         class="border-border-subtle bg-panel-deep/85 flex w-[300px] shrink-0 flex-col border-r backdrop-blur-sm"
@@ -860,7 +860,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       </aside>
     </div>
     <footer
-      class="border-border-subtle bg-panel-deep/95 relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm"
+      class="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm"
     >
       <span
         class="bg-success-strong shadow-success-strong/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm"

@@ -9,6 +9,7 @@
 import { ModeContractEditorView } from "./dialog/ModeContractEditorView";
 import { useModeContractEditor } from "./hooks/use-mode-contract-editor";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 export function ModeContractDialog({ onClose }: { onClose: () => void }) {
   const controller = useModeContractEditor({ onClose });
@@ -17,7 +18,7 @@ export function ModeContractDialog({ onClose }: { onClose: () => void }) {
     <div
       className={overlayClass(
         "modal",
-        "bg-canvas-deep dark:bg-canvas-deep z-50 grid place-items-center p-4 backdrop-blur-sm",
+        `${zClass("modal")} bg-canvas-deep dark:bg-canvas-deep grid place-items-center p-4 backdrop-blur-sm`,
       )}
       onClick={onClose}
     >

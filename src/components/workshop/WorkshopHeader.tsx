@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopProjectSummary } from "./hooks/use-workshop-pipeline";
+import { zClass } from "~/lib/shell/overlay-z";
 
 interface WorkshopHeaderProps {
   title: string;
@@ -128,7 +129,9 @@ export function WorkshopHeader({
           </Button>
 
           {open && (
-            <div className="border-border bg-panel/98 absolute top-full left-0 z-50 mt-1.5 w-[280px] overflow-hidden rounded-xl border shadow-2xl backdrop-blur-md">
+            <div
+              className={`border-border bg-panel/98 absolute top-full left-0 ${zClass("popup")} mt-1.5 w-[280px] overflow-hidden rounded-xl border shadow-2xl backdrop-blur-md`}
+            >
               <div className="max-h-[280px] overflow-y-auto py-1">
                 {projects.map((p) => {
                   const active = p.id === activeProjectId;

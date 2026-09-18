@@ -5,12 +5,12 @@
  * 归第①层（配置 / 纯派生），可脱离浏览器直接断言。
  *
  * ── 背景（ISSUE #262 回归）──────────────────────────────────────────
- * 日志面板自己是一层**模态遮罩**（`z-99`，见 LogPanel 的 overlayClass）。面板里的
+ * 日志面板自己是一层**模态遮罩**（见 LogPanel 的 overlayClass）。面板里的
  * 来源下拉走 base-ui 的 `Portal`，弹层被挂到 `document.body` 下、与遮罩**平级**，
- * 而 shadcn 的 Select 默认只给 `z-50`。
+ * 而 shadcn 的 Select 默认只给 `z-50`（低于刻度表的 `modal` 档）。
  *
  * 结果不是「弹层没渲染」，而是：弹层**画出来了**（所以在 layers 面板里能看到、
- * 截图里也在），却被 `z-99` 的遮罩整块压住——指针事件全部落到遮罩/日志行上，
+ * 截图里也在），却被模态遮罩整块压住——指针事件全部落到遮罩/日志行上，
  * 弹层收不到任何点击。用户读到的现象有两条，而且是同一个根因：
  *   1. 「点下拉看不到下拉菜单」——看着像没弹出来，其实是弹在遮罩底下；
  *   2. 「没办法切换日志类型 / 日志没法翻页」——点不中选项，也算不上翻页。
@@ -20,27 +20,33 @@
  * 所以把它写成可断言的常量关系，而不是靠人记得「这里要改 z」。
  */
 
-/**
- * 日志面板遮罩（模态层）的 z-index。
- *
- * 面板是铺在应用内容之上的一层浮层：低于应用级 chrome（状态栏 `z-10000`），
- * 高于页面里的业务浮层。
- */
-export const LOG_PANEL_OVERLAY_Z = 99;
+import { Z, zClass } from "~/lib/shell/overlay-z";
 
 /**
- * 面板内 portal 弹层（下拉/气泡）定位层应使用的最小 z-index。
+ * 日志面板遮罩（模态层）的层级 = 浮层刻度表的 `modal` 档（规范 16 §16.2.5）。
  *
- * 契约是「**严格高于**遮罩」，这里取 `LOG_PANEL_OVERLAY_Z + 100` 留出一段余量：
- * 面板将来若要再插一层中间浮层（如二次确认），仍落在弹层之下，不必回头改这里。
+ * 面板是铺在应用内容之上的一层浮层：与全屏视图、抽屉、其它模态同档（「应用内的
+ * 顶」），高于画布 chrome（`canvasUi` / `canvasMax`）。此前这里自成一档 `z-99`，
+ * 与其余模态差了 9 个数 —— 同一件事（一条模态遮罩）在库里有两个值，正是
+ * §16.2.5 要收掉的那种「谁也说不清比谁高」。
  */
-export const LOG_PANEL_POPUP_Z = LOG_PANEL_OVERLAY_Z + 100;
+export const LOG_PANEL_OVERLAY_Z = Z.modal;
 
-/** 面板内 portal 弹层定位层用的 Tailwind class（z-200）。 */
-export const LOG_PANEL_POPUP_Z_CLASS = `z-${LOG_PANEL_POPUP_Z}`;
+/**
+ * 面板内 portal 弹层（下拉/气泡）定位层应使用的层级 = 刻度表的 `popup` 档。
+ *
+ * 契约是「**严格高于**遮罩」（相等也不行：同 z 时后写进 DOM 的遮罩会盖住弹层，
+ * 而那正是本契约要排除的「时灵时不灵」）—— `popup` 在刻度表里就在 `modal`
+ * 之上，因为挂在 body 的下拉本来就要压过打开它的那层模态（同款论证见
+ * §16.2.5 的 `popup > modal` 判据）。
+ */
+export const LOG_PANEL_POPUP_Z = Z.popup;
 
-/** 日志面板模态遮罩用的 Tailwind class（z-99）。 */
-export const LOG_PANEL_OVERLAY_Z_CLASS = `z-${LOG_PANEL_OVERLAY_Z}`;
+/** 面板内 portal 弹层定位层用的 Tailwind class（`z-popup`）。 */
+export const LOG_PANEL_POPUP_Z_CLASS = zClass("popup");
+
+/** 日志面板模态遮罩用的 Tailwind class（`z-modal`）。 */
+export const LOG_PANEL_OVERLAY_Z_CLASS = zClass("modal");
 
 /**
  * 弹层定位层的层级是否安全：**必须严格高于**面板遮罩。
@@ -55,9 +61,9 @@ export function isPopupLayerAboveOverlay(popupZ: number): boolean {
 /**
  * 从 class 串里解出 `z-<n>` 的层级值；没有这类 class 时返回 `null`。
  *
- * 只认纯数字形式（`z-200`），不认 `z-[200]` / 任意值——规范 03 §3.2 已把
- * 「Tailwind v4 用 `z-99` 而不是 `z-[99]`」定为硬约束，这里顺着同一条口径，
- * 免得门禁与样式规范各说各话。
+ * 只认**裸数字**形式（`z-200`），不认 `z-[200]` / 任意值（规范 03 §3.2 已禁），
+ * 也不认枚举档（`z-modal` / `z-popup`）—— 后者由 `zClass()` 生成、取值看
+ * `~/lib/shell/overlay-z` 的刻度表，不是本函数要解的形态。
  */
 export function parseZClass(className: string): number | null {
   const match = /(?:^|\s)z-(\d+)(?:\s|$)/.exec(className);

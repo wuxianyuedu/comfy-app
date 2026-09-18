@@ -12,6 +12,8 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { Z, zClass } from "~/lib/shell/overlay-z";
+
 import {
   LOG_PANEL_OVERLAY_Z,
   LOG_PANEL_OVERLAY_Z_CLASS,
@@ -35,20 +37,25 @@ describe("日志面板浮层层级契约", () => {
     expect(isPopupLayerAboveOverlay(Number.NaN)).toBe(false);
   });
 
-  it("生成的 class 与常量值一致，且能被解析回来", () => {
-    expect(LOG_PANEL_OVERLAY_Z_CLASS).toBe(`z-${LOG_PANEL_OVERLAY_Z}`);
-    expect(LOG_PANEL_POPUP_Z_CLASS).toBe(`z-${LOG_PANEL_POPUP_Z}`);
-    expect(parseZClass(LOG_PANEL_OVERLAY_Z_CLASS)).toBe(LOG_PANEL_OVERLAY_Z);
-    expect(parseZClass(LOG_PANEL_POPUP_Z_CLASS)).toBe(LOG_PANEL_POPUP_Z);
-    expect(
-      isPopupLayerAboveOverlay(parseZClass(LOG_PANEL_POPUP_Z_CLASS)!),
-    ).toBe(true);
+  it("两档都取自刻度表（规范 16 §16.2.5），且关系仍成立", () => {
+    /* P4 把这两档从「自成一档的 z-99 / z-200」改成刻度表的 modal / popup：
+       同一件事（一条模态遮罩 + 挂在它里面的下拉）在库里只该有一个值。 */
+    expect(LOG_PANEL_OVERLAY_Z).toBe(Z.modal);
+    expect(LOG_PANEL_POPUP_Z).toBe(Z.popup);
+    expect(LOG_PANEL_OVERLAY_Z_CLASS).toBe(zClass("modal"));
+    expect(LOG_PANEL_POPUP_Z_CLASS).toBe(zClass("popup"));
+    /* 面板遮罩用的 class 常量必须真的出现在面板上（不是只在测试里对得上） */
+    expect(LOG_PANEL_OVERLAY_Z_CLASS).toBe("z-modal");
+    expect(LOG_PANEL_POPUP_Z_CLASS).toBe("z-popup");
   });
 
-  it("解析器只认纯数字 z，不认任意值写法（对齐规范 03 §3.2）", () => {
+  it("解析器只认纯数字 z：不认任意值写法（规范 03 §3.2）与枚举档", () => {
     expect(parseZClass("z-[200]")).toBeNull();
     expect(parseZClass("flex items-center")).toBeNull();
     expect(parseZClass("")).toBeNull();
+    /* 枚举档由 zClass() 生成、取值看刻度表，不是本函数要解的形态 */
+    expect(parseZClass("z-modal")).toBeNull();
+    expect(parseZClass("z-popup")).toBeNull();
     /* 带前缀/后缀的邻居 class 不能被误读成层级 */
     expect(parseZClass("w-8 z-200 gap-2")).toBe(200);
     expect(parseZClass("hover:z-50")).toBeNull();
