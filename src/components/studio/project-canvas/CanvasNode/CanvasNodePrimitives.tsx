@@ -3,9 +3,11 @@ import { Handle, Position } from "@xyflow/react";
 import {
   type CanvasNodeData,
   NODE_META,
+  STATUS_BADGE_KEY,
   STATUS_LABEL,
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
+import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 
 /* ── 小型共享 UI 原语 ── */
 export const btnCls =
@@ -172,22 +174,16 @@ export function StatusDot({ status }: { status: CanvasNodeData["status"] }) {
 
 /* ── 状态徽标（文字标签） ──
  * 用在节点与结果卡的左上角头部行，好让用户
- * 一眼读出生命周期状态。颜色与状态圆点一致。 */
+ * 一眼读出生命周期状态。配色走 `ui/status-badge` 的同一份状态 → 语义 token
+ * 映射（规范 16 §16.2.4.5）—— 此前这里另写四档字面量配色，改状态色要点两遍名。 */
 export function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
-  const style =
-    status === "running"
-      ? "bg-amber-400/10 text-amber-700 dark:text-amber-300 border-amber-400/20"
-      : status === "done"
-        ? "bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 border-emerald-400/20"
-        : status === "error"
-          ? "bg-rose-400/10 text-rose-700 dark:text-rose-300 border-rose-400/20"
-          : "bg-subtle text-ink-soft border-border-strong";
   return (
-    <span
-      className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${style}`}
-    >
-      {STATUS_LABEL[status]}
-    </span>
+    <StatusBadgePrimitive
+      status={STATUS_BADGE_KEY[status]}
+      label={STATUS_LABEL[status]}
+      dot={false}
+      className="shrink-0 gap-0 rounded px-1.5 py-0.5 text-[10px]"
+    />
   );
 }
 

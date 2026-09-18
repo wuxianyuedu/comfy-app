@@ -299,12 +299,24 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
   `scripts/.theme-color-baseline.json`，新写的写死色值一律阻断；逐批治理后用
   `node scripts/check-theme-colors.cjs --update` 收紧基线（同 UI/逻辑分离棘轮
   的口径，见 17 章）。已接入 `.githooks/pre-commit` 与 CI。
-- **存量里混着「本该豁免的类型色」时怎么办**：余量 115 处里的多数落在
+- **存量里混着「本该豁免的类型色」时怎么办**：余量里曾有一大批落在
   `workflow-node-palette` / `workflow-utils` / `CanvasNodePrimitives` 这类
   **端口类型色 / 节点类别色常量表**上 —— 按上面的类型色例外**本可豁免**，
   只是从未登记。**别把它留在「未豁免存量」里**：那样它既不是豁免、也不是
   待治理项，两边都不算。「豁免必须显式」的另一面就是**存量必须逐条定性**，
   登记进 `EXEMPT_TABLES`（带理由）或就地 token 化。
+- **定性完毕的标志是基线归零**（ISSUE #672 已收口，`--report` 里未豁免
+  存量与基线条目都是 0）。零基线之后，**唯一能「让数字变漂亮又不改代码」的
+  动作就是多加一条豁免** —— 豁免不计入基线，登记完就再也不会出现在报告里。
+  所以 `tests/check-theme-colors.test.ts` 另钉一条：**每条豁免必须带说清
+  「为什么这行色值是内容自己的颜色」的理由**，不能一句「类型色」了事。
+- **两态外观常量表按类型色判**（新增口径）：`workflow-node-palette.ts` 的
+  `LIGHT/DARK_ANCHOR_CYLINDER`（锚点圆柱的金属渐变）与
+  `LIGHT/DARK_PALETTE_BASE`（混色数值基准，不是可见表面）整表登记豁免 ——
+  判据仍是「这行色值画的是什么」：画的是**圆柱本体**（内容），不是承载它的
+  表面。反过来，**底色写死成 `bg-[${color}/15]` 这类运行时模板不算豁免**：
+  Tailwind 的 JIT 扫不到它，那条 class 从来就没生效过（`HomePage` 的类别
+  底色就是此例，已改 `color-mix()` 现取）。
 
 ### 3.6.2 品牌/状态色必须走语义 token（ISSUE #672，机器强制）
 
@@ -324,6 +336,13 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 // ✅ 语义 token（token 自己两态取值，不必再手写 dark:）
 "border-primary-500/30 bg-primary-500/10 text-primary-strong";
 ```
+
+**状态徽标只有一处配色**（新增状态界面时照这个来）：状态 → 配色收在
+`ui/status-badge.tsx`，状态 → 圆点收在 `ui/status-dot.tsx`；**文案留在调用处**
+（同一个状态在不同界面叫法不同，那是业务文案，不是样式）。
+此前七个文件各写一份「状态 → 配色」表，同一个「已完成」在不同界面是
+`bg-emerald-500/15` / `bg-emerald-400/10` / `bg-emerald-100` 三种深浅 ——
+改一次状态色要点七遍名。规范 16 §16.2.4.5 是这件事的台账。
 
 **本项目已有的语义色 token**（新增前先查这张表，别再写死字面量）：
 

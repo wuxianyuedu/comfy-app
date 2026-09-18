@@ -2,6 +2,8 @@
 
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
+import { StatusBadge } from "~/components/ui/status-badge";
+import { cn } from "~/lib/utils";
 import { ROW_STATE_PRESET } from "./constants";
 import { NodePreviewCard } from "./NodePreviewCard";
 import { ManifestSummary, ParseProgressBanner } from "./SettingsParts";
@@ -263,11 +265,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                         return (
                           <div key={sub.path}>
                             <div
-                              className="bg-bg flex items-center justify-between gap-2 rounded-lg border p-2 pl-3"
-                              style={{
-                                borderColor: preset.fg + "30",
-                                background: preset.bg,
-                              }}
+                              className={cn(
+                                "flex items-center justify-between gap-2 rounded-lg border p-2 pl-3",
+                                preset.rowCls,
+                              )}
                               title={toolTip}
                             >
                               <div className="min-w-0 flex-1">
@@ -275,17 +276,16 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   <span className="text-ink font-medium">
                                     {sub.name}
                                   </span>
-                                  <span
-                                    className={
-                                      "rounded-full border px-2 py-0.5 text-[10px] font-medium " +
-                                      preset.chip
+                                  <StatusBadge
+                                    status={preset.status}
+                                    label={
+                                      state.kind === "loaded" && saved?.parsedAt
+                                        ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
+                                        : preset.label
                                     }
-                                    style={{ color: preset.fg }}
-                                  >
-                                    {state.kind === "loaded" && saved?.parsedAt
-                                      ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
-                                      : preset.label}
-                                  </span>
+                                    dot={false}
+                                    className="px-2 py-0.5 text-[10px]"
+                                  />
                                 </div>
                                 <div
                                   className="text-muted-foreground truncate font-mono text-[10px]"
@@ -353,10 +353,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                     state.kind === "missing" ||
                                     state.kind === "empty"
                                   }
-                                  className={
-                                    "rounded-md px-3 py-1.5 text-xs font-medium " +
-                                    preset.btn
-                                  }
+                                  className={cn(
+                                    "h-auto rounded-md px-3 py-1.5 text-xs font-medium",
+                                    preset.btn,
+                                  )}
                                 >
                                   {perPkgParsing[sub.path]
                                     ? "解析中…"
@@ -370,8 +370,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 一个 146 节点的包仍可扫读。 */}
                             {nodesAreLoaded && nodeListOpen && (
                               <div
-                                className="mt-1 ml-3 space-y-1 border-l-2 border-dashed py-1 pl-3"
-                                style={{ borderColor: preset.fg + "30" }}
+                                className={cn(
+                                  "mt-1 ml-3 space-y-1 border-l-2 border-dashed py-1 pl-3",
+                                  preset.railCls,
+                                )}
                               >
                                 {nodeTypeList.length === 0 ? (
                                   <div className="text-muted-foreground text-[10px] italic">

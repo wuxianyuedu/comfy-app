@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { StatusBadge } from "~/components/ui/status-badge";
 import {
   getActiveId,
   listProjects,
@@ -23,21 +24,14 @@ const TYPE_CHIP: Record<string, string> = {
   VIDEO: "视频",
 };
 
-const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  SUCCEEDED: {
-    label: "已完成",
-    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  },
-  FAILED: {
-    label: "失败",
-    cls: "bg-red-500/15 text-red-700 dark:text-red-400",
-  },
-  CANCELLED: { label: "已取消", cls: "bg-subtle text-ink-muted" },
-  QUEUED: { label: "排队中", cls: "bg-subtle text-ink-soft" },
-  RUNNING: {
-    label: "生成中",
-    cls: "bg-violet-500/20 text-violet-700 dark:text-violet-300",
-  },
+/* 状态文案（配色不走这里 —— 它是叠在缩略图上的角标，颜色由
+ * `ui/status-badge` 按同一份状态 → 语义 token 映射给出，见规范 16 §16.2.4.5）。 */
+const STATUS_LABEL: Record<string, string> = {
+  SUCCEEDED: "已完成",
+  FAILED: "失败",
+  CANCELLED: "已取消",
+  QUEUED: "排队中",
+  RUNNING: "生成中",
 };
 
 /** 参考图路径可能是 ComfyUI input 文件名（如 abc.png）或绝对 url 路径
@@ -264,7 +258,6 @@ export function ProjectOutputs() {
             {outputs.map((output) => {
               const c = taskCover(output.images);
               const isVideoOut = c?.mediaType === "video";
-              const st = STATUS_CHIP[output.status] ?? STATUS_CHIP.QUEUED;
               const active = selectedId === output.id;
               return (
                 <Button
@@ -310,11 +303,12 @@ export function ProjectOutputs() {
                         视频
                       </span>
                     )}
-                    <span
-                      className={`absolute top-2 left-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${st!.cls}`}
-                    >
-                      {st!.label}
-                    </span>
+                    <StatusBadge
+                      status={output.status}
+                      label={STATUS_LABEL[output.status] ?? output.status}
+                      dot={false}
+                      className="absolute top-2 left-2 px-2 py-0.5 text-[11px]"
+                    />
                   </div>
                   <div className="p-3">
                     <p className="text-ink-soft line-clamp-1 text-xs font-medium">

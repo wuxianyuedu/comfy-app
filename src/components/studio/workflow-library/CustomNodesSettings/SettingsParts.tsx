@@ -7,6 +7,7 @@
 import type { RefObject } from "react";
 import { STATUS_STYLE } from "./constants";
 import { StatusDot } from "~/components/ui/status-dot";
+import { StatusBadge } from "~/components/ui/status-badge";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
 
 /** 类型端口区的一行 —— 小彩点 + 大写类型章
@@ -26,6 +27,8 @@ export function PortRow({
 }) {
   const isOut = side === "out";
   // ComfyUI 给输出固定用青色调，输入则按类别派生。
+  // 输出侧的青色是「类型色」的近亲（见 constants.ts 的豁免登记），与
+  // `workflow-param-mapping-ui` 的 `PARAM_CLASS_COLOR` 同源。
   const dotColor = isOut ? "#06B6D4" : color;
   return (
     <div
@@ -302,12 +305,12 @@ export function ReportCards({ report }: { report: ParseReport }) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-ink font-medium">{pkg.name}</span>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                      style={{ background: st!.bg, color: st!.fg }}
-                    >
-                      {st!.label}
-                    </span>
+                    <StatusBadge
+                      status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
+                      label={st!.label}
+                      dot={false}
+                      className="px-2 py-0.5 text-[11px]"
+                    />
                   </div>
                   <div
                     className="text-muted-foreground truncate font-mono text-[11px]"
@@ -317,10 +320,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div
-                    className="text-lg font-semibold"
-                    style={{ color: st!.fg }}
-                  >
+                  <div className="text-ink-bright text-lg font-semibold">
                     {pkg.nodeCount}
                   </div>
                   <div className="text-muted-foreground text-[11px]">

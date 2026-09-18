@@ -279,6 +279,19 @@ export const STATUS_LABEL: Record<CanvasNodeData["status"], string> = {
   error: "生成失败",
 };
 
+/* 状态 → `ui/status-badge` 的状态键。
+ *
+ * 画布状态是小写词（`idle` / `running` / `done` / `error`，取自
+ * `StrictCanvasNodeData`），而 `StatusBadge` 认的是业务状态串（大写）。
+ * 映射写在这里而不是散在视图里：`CanvasNodePrimitives.StatusBadge` 与
+ * `ResultCard` 用的是同一套 —— 此前两处各写一份，改一处漏一片。 */
+export const STATUS_BADGE_KEY: Record<CanvasNodeData["status"], string> = {
+  idle: "IDLE",
+  running: "RUNNING",
+  done: "DONE",
+  error: "ERROR",
+};
+
 /* 为指定节点类型构造一份全新的节点数据对象。 */
 export function defaultData(kind: NodeKind): CanvasNodeData {
   const base: CanvasNodeData = {

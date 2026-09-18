@@ -15,6 +15,7 @@ import { Spinner } from "~/components/ui/page-loading";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "~/components/ui/source-tag";
 import { EmptyState } from "~/components/ui/empty-state";
+import { StatusDot } from "~/components/ui/status-dot";
 
 interface WorkflowLibraryListProps {
   workflows: WorkflowRow[];
@@ -176,7 +177,9 @@ export function WorkflowLibraryList({
         {pendingRows.length > 0 && (
           <div className="mt-3 mb-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
             <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-700 dark:text-cyan-300/80">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
+              {/* 状态点走 `ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
+                  `probing` 表达「还没载入、等待中」。 */}
+              <StatusDot state="probing" sizeClass="size-1.5" />
               未载入的本地工作流
             </p>
             <ul className="space-y-1">
