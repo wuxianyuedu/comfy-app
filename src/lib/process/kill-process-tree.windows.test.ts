@@ -116,27 +116,41 @@ describe("Windows 回收命令构造（唯一出处）", () => {
 });
 
 describe("Windows 分支真跑（注入同名可执行文件）", () => {
-  it("真的以 /PID <pid> /T /F 调起 taskkill", async () => {
-    const dir = tempDir();
-    const { exe, logFile } = fakeTaskkill(dir);
-    process.env.COMFYAPP_TASKKILL = exe;
-    const result = await killProcessTreeWith({ pid: 4321 }, { windows: true });
-    expect(result.ok).toBe(true);
-    expect(result.via).toContain("/PID 4321 /T /F");
-    expect(await readArgs(logFile)).toBe("/PID 4321 /T /F");
-  });
+  // 假 taskkill 在 Windows 上只能是 `.cmd`，而 Node 自 CVE-2024-27980 起**不能直接
+  // spawn 批处理**（EINVAL，必须经 cmd.exe）—— 这两条要的「参数真的发出去了」在
+  // Windows 上没有等价的可注入形态（需要真编一个 exe），因此它们在 Linux CI
+  // （shebang 脚本）上真跑，Windows 本地跳过。参数构造本身不依赖平台，由上面
+  // 「命令构造」用例在两端守着。
+  it.skipIf(process.platform === "win32")(
+    "真的以 /PID <pid> /T /F 调起 taskkill",
+    async () => {
+      const dir = tempDir();
+      const { exe, logFile } = fakeTaskkill(dir);
+      process.env.COMFYAPP_TASKKILL = exe;
+      const result = await killProcessTreeWith(
+        { pid: 4321 },
+        { windows: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.via).toContain("/PID 4321 /T /F");
+      expect(await readArgs(logFile)).toBe("/PID 4321 /T /F");
+    },
+  );
 
-  it("image 模式真的以 /IM <name> /T /F 调起 taskkill（Ollama 走这条）", async () => {
-    const dir = tempDir();
-    const { exe, logFile } = fakeTaskkill(dir);
-    process.env.COMFYAPP_TASKKILL = exe;
-    const result = await killProcessTreeWith(
-      { pid: 1, mode: "image" },
-      { windows: true, image: "ollama.exe" },
-    );
-    expect(result.via).toContain("/IM ollama.exe /T /F");
-    expect(await readArgs(logFile)).toBe("/IM ollama.exe /T /F");
-  });
+  it.skipIf(process.platform === "win32")(
+    "image 模式真的以 /IM <name> /T /F 调起 taskkill（Ollama 走这条）",
+    async () => {
+      const dir = tempDir();
+      const { exe, logFile } = fakeTaskkill(dir);
+      process.env.COMFYAPP_TASKKILL = exe;
+      const result = await killProcessTreeWith(
+        { pid: 1, mode: "image" },
+        { windows: true, image: "ollama.exe" },
+      );
+      expect(result.via).toContain("/IM ollama.exe /T /F");
+      expect(await readArgs(logFile)).toBe("/IM ollama.exe /T /F");
+    },
+  );
 
   it("空 target 直接返回 ok=false，不调 taskkill（禁止猜测性击杀）", async () => {
     const dir = tempDir();
@@ -146,5 +160,41 @@ describe("Windows 分支真跑（注入同名可执行文件）", () => {
       false,
     );
     expect(await readArgs(logFile, 300)).toBe("");
+  });
+});
+
+describe("回收命令的派发与等待（`wait`）", () => {
+  /**
+   * 「派发完就退出」的调用方（命令行入口 `scripts/reap-process.mjs`）必须等命令结束：
+   * Windows 上 taskkill 是独立进程，父进程立刻 exit 会把它一起带走 —— 现象是
+   * **打印了命令、退出码 0、目标进程却还在**（实测过：不等时目标存活，等 3s 后消失）。
+   * 这里用一个「一定跑得起来、但参数不合法」的真可执行文件（node 自己）当 taskkill：
+   * 它会立刻以非 0 退出，因此既验证「确实等到了结束」，也验证退出码进了 via。
+   */
+  it("wait=true 时等到命令结束，并把退出码写进 via", async () => {
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const result = await killProcessTreeWith(
+      { pid: 4321, wait: true },
+      { windows: true },
+    );
+    expect(result.via).toContain("/PID 4321 /T /F");
+    expect(result.via).toContain("非 0");
+    expect(result.ok).toBe(false);
+  });
+
+  it("wait=false（默认）只派发，不等结果", async () => {
+    process.env.COMFYAPP_TASKKILL = process.execPath;
+    const result = await killProcessTreeWith({ pid: 4321 }, { windows: true });
+    expect(result.via).toBe(`${process.execPath} /PID 4321 /T /F`);
+  });
+
+  it("命令起不来时返回 ok=false，不抛错（回收失败不打断调用方）", async () => {
+    process.env.COMFYAPP_TASKKILL = join(tempDir(), "not-a-taskkill");
+    const result = await killProcessTreeWith(
+      { pid: 4321, wait: true },
+      { windows: true },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.via).toContain("not-a-taskkill /PID 4321 /T /F");
   });
 });

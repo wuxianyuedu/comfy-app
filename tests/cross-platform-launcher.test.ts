@@ -76,23 +76,69 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     expect(scanPorts(3311)).toEqual([3311, 3312, 3313]);
   });
 
-  it(`进程组回收真跑：spawnInGroup 起的进程树被杀完不留孤儿`, async () => {
-    // 目标：一条带两个子进程的 shell —— 单杀 leader 会留下这两个子进程。
-    const marker = `comfyapp-tree-${Date.now()}`;
-    const child = spawnInGroup({
-      command: "sh",
-      args: ["-c", `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`],
-      cwd: process.cwd(),
-    });
-    expect(await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000)).toBe(true);
+  // 本用例真起 POSIX 进程组（`sh` + `ps -eo` 数残留）：Windows 上既没有 `sh` 也没有
+  // `ps`，跑起来只会得到 spawn ENOENT 这种与判据无关的红。Windows 那一侧由
+  // `src/lib/process/kill-process-tree.windows.test.ts` 真跑（断言 taskkill 参数形态）。
+  it.skipIf(process.platform === "win32")(
+    `进程组回收真跑：spawnInGroup 起的进程树被杀完不留孤儿`,
+    async () => {
+      // 目标：一条带两个子进程的 shell —— 单杀 leader 会留下这两个子进程。
+      const marker = `comfyapp-tree-${Date.now()}`;
+      const child = spawnInGroup({
+        command: "sh",
+        args: [
+          "-c",
+          `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`,
+        ],
+        cwd: process.cwd(),
+      });
+      expect(await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000)).toBe(true);
 
-    const result = await killProcessTree({ pid: child.pid!, detached: true });
-    expect(result.ok).toBe(true);
-    // 「整组」是判据：信号落到 -pgid，而不只是 leader。
-    expect(result.via).toContain("进程组");
+      const result = await killProcessTree({ pid: child.pid!, detached: true });
+      expect(result.ok).toBe(true);
+      // 「整组」是判据：信号落到 -pgid，而不只是 leader。
+      expect(result.via).toContain("进程组");
 
-    expect(await waitUntil(() => countMarkedProcesses(marker) === 0, 8000)).toBe(true);
-  }, 20_000);
+      expect(await waitUntil(() => countMarkedProcesses(marker) === 0, 8000)).toBe(true);
+    },
+    20_000,
+  );
+
+  // Windows 上 taskkill 是独立进程：回收入口「派发完就 exit」会被父进程的退出一起
+  // 带走，现象是**打印了命令、退出码 0、目标进程却还在**（实测）。这里真起一个长命
+  // 进程、真跑 `node scripts/reap-process.mjs <pid> --force`，再核实它**真的没了** ——
+  // 只断言「打印了命令」恰恰是这条兜底静默失效的原因。POSIX 分支是一次同步
+  // `process.kill`，不存在这个窗口，故只在 Windows 上跑。
+  it.skipIf(process.platform !== "win32")(
+    "reap-process.mjs 真的收掉目标进程（Windows：派发完不能立刻退出）",
+    async () => {
+      const child = spawnInGroup({
+        command: process.execPath,
+        args: ["-e", "setTimeout(() => {}, 60000)"],
+        cwd: process.cwd(),
+      });
+      const pid = child.pid;
+      expect(pid).toBeGreaterThan(0);
+
+      const out = execFileSync(
+        process.execPath,
+        [path.join("scripts", "reap-process.mjs"), String(pid), "--force"],
+        { cwd: process.cwd(), encoding: "utf8" },
+      );
+      expect(out).toContain(String(pid));
+
+      const gone = await waitUntil(() => {
+        try {
+          process.kill(pid!, 0);
+          return false;
+        } catch {
+          return true;
+        }
+      }, 8000);
+      expect(gone).toBe(true);
+    },
+    20_000,
+  );
 
   it("会话锚点：心跳新鲜 + PID 存活才算「上一位还活着」", () => {
     const root = makeTmp();
@@ -266,5 +312,62 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
       "utf8",
     );
     expect(build).toContain("sidecarFileName");
+  });
+});
+
+/**
+ * 目录迁移的静默失效面：`scripts/**` 用**运行时字符串**加载 `src/lib` 的 TS 模块
+ * （纯 Node 靠类型剥离加载，因此路径必须带 `.ts` 后缀），这种说明符不参与 `tsc` /
+ * `eslint` 的静态解析，模块换子域时它不会红，只在执行到那一行时抛
+ * ERR_MODULE_NOT_FOUND。实测代价：`kill-process-tree` 从 `src/lib/` 迁到
+ * `src/lib/process/` 后，回收进程树这条路径整体失效 —— 编排器在「回收上一次残留」这
+ * 一步就崩（启动器因此起不来），孤儿进程再没人收，而孤儿 dev server 正持有
+ * `start-tauri\_internal\*.dll`：打包启动器时 `Remove-Item` 删不掉产物目录，报出一句
+ * 与真因无关的「被其他程序占用」。
+ *
+ * 判据取**路径字面量本身**（不看 import 语法，字符串常量中转也照样管）：
+ * `scripts/` 下出现的每条相对 `../src/lib/` 的 `.ts` 路径都必须真实存在。
+ * 拼字符串的形态（把路径拆成数组再 `join`）搜不到 —— 那种写法已在两处说明符的注释里
+ * 明确禁止，代之以常量中转（它是字面量，tsc 也不误报 TS5097）。
+ */
+describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静默失效）", () => {
+  const ROOT = process.cwd();
+  /** 相对形态 + `.ts` 后缀：这两点都是在纯 Node 下真的能加载起来的前提。 */
+  const SPEC_LITERAL_RE = /["'`](\.\.\/src\/lib\/[^"'`\n]+\.ts)["'`]/g;
+
+  /** 剥掉块注释与整行 `//` 注释：注释里解释「为什么用动态 import」不该被当成说明符。 */
+  function stripComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  }
+
+  function scriptFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...scriptFiles(full));
+      else if (/\.(mjs|cjs|ts)$/.test(entry.name)) out.push(full);
+    }
+    return out;
+  }
+
+  it("都指向真实存在的文件（模块换子域时必须跟着改）", () => {
+    const offenders: string[] = [];
+    let checked = 0;
+    for (const abs of scriptFiles(path.join(ROOT, "scripts"))) {
+      const rel = path.relative(ROOT, abs).split(path.sep).join("/");
+      const source = stripComments(fs.readFileSync(abs, "utf8"));
+      for (const match of source.matchAll(SPEC_LITERAL_RE)) {
+        const specifier = match[1];
+        if (!specifier) continue;
+        checked += 1;
+        if (!fs.existsSync(path.resolve(path.dirname(abs), specifier))) {
+          offenders.push(`${rel} → ${specifier}`);
+        }
+      }
+    }
+    // 清单不能静默变空：`dev-launcher.mjs` 与 `reap-process.mjs` 各有一条，它们是
+    // 「回收残留进程树」的唯一入口 —— 扫不到就说明这条判据本身失效了。
+    expect(checked, "没有扫到任何 src/lib 路径字面量——判据失效").toBeGreaterThanOrEqual(2);
+    expect(offenders).toEqual([]);
   });
 });

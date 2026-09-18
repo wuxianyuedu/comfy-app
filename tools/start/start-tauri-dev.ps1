@@ -8,7 +8,7 @@ start-tauri-dev.ps1 — 无控制台窗口启动 Tauri 桌面壳（dev / tauri d
   - 走 pnpm tauri dev，Rust 壳现编译（debug，首次数分钟）；改 Rust 自动重载，
     适合开发桌面壳本身逻辑（lib.rs / 窗口配置）。
   - 关闭 Tauri 桌面窗口后，整棵进程树由编排器回收（Windows 走 taskkill /T /F、
-    POSIX 走进程组信号，判据收在 src/lib/kill-process-tree.ts）——
+    POSIX 走进程组信号，判据收在 src/lib/process/kill-process-tree.ts）——
     **入口与 dev-launcher.ps1 都不拼平台命令**，见 launch-and-build.md §3。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键

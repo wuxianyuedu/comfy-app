@@ -52,6 +52,14 @@ export interface KillProcessTreeOptions {
    *  （Windows `/IM <name>`、POSIX `pkill -x <name>`）。`image` 用于目标不是
    *  本进程的直接子进程、只拿得到名字的场景（如外部拉起的 Ollama serve）。 */
   mode?: KillProcessTreeMode;
+  /** 派发回收命令后是否**等到它真正结束**（默认 false = 只派发）。
+   *
+   *  服务生命周期不需要等：回收是尽力而为，随后由各自的「探测确认」收口。
+   *  但「派发完就退出」的调用方必须等 —— Windows 上 taskkill 是独立进程，
+   *  调用方立刻 `process.exit()` 会把还没跑起来的它一起带走，现象是
+   *  **打印了命令、退出码 0、目标进程却还在**（命令行入口
+   *  `scripts/reap-process.mjs` 正是这种形态）。 */
+  wait?: boolean;
 }
 
 /** 回收模式（见 `KillProcessTreeOptions.mode`）。 */
@@ -245,16 +253,25 @@ export function windowsKillArgs(
     : ["/PID", target, "/T", "/F"];
 }
 
-/** 发起一次 taskkill（异步派发，不阻塞；调用方随后自行探测确认）。 */
+/** 发起一次 taskkill（异步派发，不阻塞；调用方随后自行探测确认）。
+ *
+ *  spawn 会**同步抛错**的情形（目标不是可执行映像，如注入了一个批处理；
+ *  或命令名取不到）在这里一并收成 `onDone(false)`：本模块对外承诺「回收失败
+ *  不抛错」，让调用方按同一条路径处理（记 via、走自己的探测兜底）。 */
 export function spawnTaskkill(
   args: string[],
   onDone?: (ok: boolean) => void,
 ): string {
   const exe = windowsTaskkillPath();
-  const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
-  child.on("error", () => onDone?.(false));
-  child.on("close", (code) => onDone?.(code === 0));
-  return `${exe} ${args.join(" ")}`;
+  const via = `${exe} ${args.join(" ")}`;
+  try {
+    const child = spawn(exe, args, { stdio: "ignore", windowsHide: true });
+    child.on("error", () => onDone?.(false));
+    child.on("close", (code) => onDone?.(code === 0));
+  } catch {
+    onDone?.(false);
+  }
+  return via;
 }
 
 /**
@@ -289,14 +306,31 @@ export async function killProcessTreeWith(
     image = "",
   }: { windows?: boolean; image?: string },
 ): Promise<KillProcessTreeResult> {
-  const { pid, detached = false, force = false, mode = "tree" } = opts;
+  const {
+    pid,
+    detached = false,
+    force = false,
+    mode = "tree",
+    wait = false,
+  } = opts;
   if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
 
   if (windows) {
-    // taskkill 是异步派发：这里不等它退出，调用方随后用「探测确认」收尾
+    // taskkill 是异步派发：默认不等它退出，调用方随后用「探测确认」收尾
     // （与同步入口同一语义）。命令原文写进 via，便于运行日志给出可复现线索。
     const target = mode === "image" ? image : String(pid);
-    return { ok: true, via: spawnTaskkill(windowsKillArgs(target, mode)) };
+    const args = windowsKillArgs(target, mode);
+    if (!wait) return { ok: true, via: spawnTaskkill(args) };
+
+    // 等它结束（`wait: true`）：给「派发完立刻 exit」的调用方用 —— 否则那条命令
+    // 可能随父进程一起消失，让人以为已经回收。退出码同时写进 via（taskkill 对
+    // 「目标已不在」也返回非 0，因此这里只作线索，不据此判定成败）。
+    return await new Promise<KillProcessTreeResult>((resolve) => {
+      let via = "";
+      via = spawnTaskkill(args, (ok) => {
+        resolve({ ok, via: `${via}（exit ${ok ? "0" : "非 0"}）` });
+      });
+    });
   }
 
   return killPosix(pid, detached, force, await readOwnPgid());

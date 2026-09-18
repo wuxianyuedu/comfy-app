@@ -8,7 +8,7 @@
 //     另一侧」维持，而漏同步是静默的（`dev` 一侧长期没走端口契约就是这么来的）。
 //   · 编排的 90% 是平台无关的（预检 / 端口 / 缓存 / 就绪 / 日志 / 会话锚点），
 //     Windows 特有的只有**进程机制**（回收走 taskkill）与**入口形态**
-//     （双击 .ps1 / 启动器 exe）。前者收在 src/lib/kill-process-tree.ts，
+//     （双击 .ps1 / 启动器 exe）。前者收在 src/lib/process/kill-process-tree.ts，
 //     后者收在平台判据模块（scripts/launcher-core/*），本文件不再摸平台。
 //
 // 职责（与 .ps1 版逐项对齐，两侧同契约同产物）：
@@ -307,16 +307,24 @@ export function scanPorts(port) {
 }
 
 /**
- * 回收一棵进程树的**跨平台入口**（实现见 src/lib/kill-process-tree.ts，唯一出处）。
+ * 回收一棵进程树的**跨平台入口**（实现见 src/lib/process/kill-process-tree.ts，唯一出处）。
  *
- * 为什么不直接 `import "….ts"`：那是 TS 模块，在纯 Node 下需要运行时类型剥离
+ * 为什么不直接静态 `import "….ts"`：那是 TS 模块，在纯 Node 下需要运行时类型剥离
  * （Node ≥ 22.6 默认开启）。用动态 import 而非静态 import，是为了在旧 Node 上
  * 仍能给出可行动的报错，而不是让整个编排在加载阶段就崩。
+ *
+ * 说明符为什么经一个常量中转、不做成 `import("….ts")`：路径必须以 `.ts` 结尾
+ * （少了扩展名纯 Node 解析不到），而 tsc 对「字面量 import 带 .ts 扩展」只认 TS5097
+ * ——它没建模这条运行时约定。**中转的只是写法，路径本身仍是原样的字面量**：不拼
+ * 字符串、不裁扩展名，因此能被搜索到，也被 `tests/cross-platform-launcher.test.ts`
+ * 核对（拼字符串的形态正是它挡不住的那种：换目录时只在执行到这一行才炸）。
+ * 同一份说明符在 `scripts/reap-process.mjs`（非 TS 宿主用的命令行入口）里也有一处，
+ * 改路径时两处一起改。
  * @param {{ pid: number, detached?: boolean, force?: boolean }} options
  * @returns {Promise<{ ok: boolean, via: string }>}
  */
 export async function reapProcessTree(options) {
-  const specifier = ["..", "src", "lib", "kill-process-tree.ts"].join("/");
+  const specifier = "../src/lib/process/kill-process-tree.ts";
   const mod = await import(specifier);
   return mod.killProcessTree(options);
 }
