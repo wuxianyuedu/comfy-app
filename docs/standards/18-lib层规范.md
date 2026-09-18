@@ -15,7 +15,7 @@
 | 复杂度（文件） | `check-file-structure.cjs` R5               | **只提醒不阻断**（>900 行打一行「建议拆分」），于是文件只增不减                                                                                                                                       |
 | 复杂度（函数） | `check-function-length.cjs`                 | 覆盖**已声明的函数 + 无名字的块体**（IIFE / 回调 / 闭包，见 12 §12.13.2）；跨行签名（`React.memo(function …)`）也在射程内                                                                             |
 | 视图/逻辑分离  | `check-ui-logic-separation.cjs`             | **不覆盖**：只扫 `src/components/**` 与 `src/app/**`                                                                                                                                                  |
-| 客户端安全     | `tests/client-bundle-node-builtins.test.ts` | **覆盖**（从 `"use client"` 入口做可达性 DFS）—— 这条是既有且有效的                                                                                                                                   |
+| 客户端安全     | `scripts/lib-node-only-scan.mjs`（用例 `tests/client-bundle-node-builtins.test.ts` / `tests/lib-node-only-declarations.test.ts`） | **覆盖**：从**全 `src/**`** 的 `"use client"` 入口做可达性 DFS，且只在 `server-only` / `.server.ts` 处停（`"use client"` 继续走）—— 判据只有这一份实现，见 §18.13.1 |
 | 覆盖率         | `vitest.config.ts` `thresholds`             | `src/lib/**` 已纳入 `include`，但**只给 5 个文件**设了门槛                                                                                                                                            |
 | 格式           | prettier                                    | 未接入门禁（全库未过；`src/lib` 178 个）                                                                                                                                                              |
 
@@ -25,7 +25,7 @@
 
 `§12.1` 把 `lib/` 写作「纯工具函数（无 React、无服务端依赖）」—— 那是**理想**，
 现状是「跨端逻辑层」：它承载**全平台复用**的逻辑，其中既有纯函数，也有 Node-only
-的领域编排（`comfyui/**`、`film/orchestrator.ts`、`drizzle-studio/**`）。
+的领域编排（`comfyui/**`、`drizzle-studio/**`）；**只服务端消费**的领域编排收在 `src/server/<domain>/`（见 12 §12.5.2）。
 
 本章明确 `lib/` 的**边界**（比「纯工具」可执行得多）：
 
@@ -35,6 +35,7 @@
 | 浏览器与服务端共用的逻辑                        | `import` 视图层（`src/components/**`、`src/app/**`）     | `eslint.config.js` 的 `boundaries`：`lib` → `components` 阻断（18.3）     |
 | Node-only 领域编排（须声明，见 18.4）           | 反向依赖：被 `lib` 依赖的模块再回头依赖 `lib` 之外的视图 | 同上 + 规范 §12.7（循环依赖预防）                                         |
 | 网络客户端（`<domain>-client.ts`，§17.2 第②层） | 直接读 `process.env`（应收口，见 ISSUE #568）            | 本批次登记项，尚无机器判据                                                |
+| 子域目录（`lib/<domain>/**`）                    | 根目录散放普通模块（只有顶层单例可在根，见 §18.14）      | R13′ / R14（`check-file-structure.cjs`，§12.5.3）                          |
 
 > **为什么 lib 不得 import components**：`lib` 是被 `components` / `app` / `server`
 > 共同依赖的**地基**。地基反过来引视图，会让「谁在最底层」变成循环，也让 lib 模块
@@ -114,7 +115,7 @@
 
 | 形态                                     | 数量 | 例                                                                                                                                                                              |
 | ---------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `import "server-only"`                   | 53   | `comfyui/**` 执行链、`film/orchestrator.ts`、`drizzle-studio/lifecycle.ts`、`log-paths.ts`、`envfile.ts`、`materials.ts`                                                        |
+| `import "server-only"`                   | 53   | `comfyui/**` 执行链、`drizzle-studio/lifecycle.ts`、`log-paths.ts`、`envfile.ts`、`materials.ts`                                                        |
 | `.server.ts` 后缀                        | 5    | `log-session-scope.server.ts`、`capture-streams.server.ts`、`app-settings/app-settings.server.ts`、`workshop/{api-channel,generation-log,media-source,mode-contract}.server.ts` |
 | 两者都不加（纯 Node 宿主，**显式登记**） | 2    | `kill-process-tree.ts`（`scripts/*.mjs` 动态加载）、`llm/secrets.ts`（MCP 宿主与 Next 共用同一份密文实现）                                                                      |
 
@@ -151,13 +152,14 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 
 | 目录                        | lines | functions | statements | branches | 实测 trend                                                                                                                    |
 | --------------------------- | ----- | --------- | ---------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib/agent/**`          | 20    | 20        | 15         | 10       | 18.9 / 21.7 / 12.9                                                                                                            |
+| `src/lib/agent/**`          | 80    | 80        | 75         | 70       | 77.96 / 82.6 / 81.26（三条从未覆盖的用户路径补上用例后从 18.9 抬起，见 §18.13）                                             |
 | `src/lib/core/**`           | 95    | 95        | 90         | 90       | 96.9 / 96.5 / 94.8（仓储层 12 个模块接内存 SQLite 真库用例后从 42.7 抬起，见 §18.12；barrel / 基类收口后门槛再抬一次，见 §18.8） |
 | `src/lib/drizzle-studio/**` | 40    | 35        | 35         | 35       | 41.1 / 37.2 / 39.1                                                                                                            |
-| `src/lib/film/**`           | 40    | 55        | 40         | 30       | 40.4 / 33.2 / 40.9（编排判决面进用例后从 7.5 抬起）                                                                           |
+| `src/lib/film/**`           | 100   | 90        | 100        | 90       | 100 / 100 / 100（编排迁到 `src/server/film/**` 后本目录只剩纯函数，见 §18.13）                                                |
 | `src/lib/llm/**`            | 90    | 85        | 90         | 85       | 97.5 / 96.6 / 89.7（`server.ts` 唯一 LLM 出口与 `usage-test.server.ts` 从 0 覆盖接入用例后，从 55.3 再次抬起）              |
 | `src/lib/project-canvas/**` | 70    | 70        | 65         | 50       | 69.0 / 70.8 / 53.8                                                                                                            |
 | `src/lib/workshop/**`       | 65    | 70        | 65         | 55       | 65.8 / 70.3 / 59.3                                                                                                            |
+| `src/server/film/**`        | 30    | 50        | 35         | 25       | 34.4 / 53.3 / 35.1（**首次**纳入 `coverage.include`，此前整块服务端编排零门槛，见 §18.13）                                     |
 
 落地口径（与 §11.7 的覆盖率棘轮一致）：
 
@@ -180,8 +182,11 @@ node scripts/check-file-structure.cjs --update   # 拆分后收紧基线
 | 缺口                                                                                                    | Issue          | 为什么不在本章落地                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ~~`lib` 内循环依赖无判据~~                                                                              | #574           | **已落地**：`scripts/check-circular-deps.cjs` + 棘轮基线（见 §12.7），`src/lib` 实到 2 组环已消除                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ~~`lib` → `server` 越界无判据~~                                                                         | #569 第 6 项   | **已落地**：依赖逐个登记 + 「登记清单不许失效」双向判定（见 18.10）；日志那一批 10 条边已**归零**（见 18.10.1）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 零调用导出无判据                                                                                        | #573           | 现存「导出但零外部引用」566 个，**绝大多数是同文件内使用的 props 类型** —— 需要先定「什么算死代码」的判据（不是导出即算）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ~~`lib` → `server` 越界无判据~~                                                                         | #569 第 6 项   | **已落地且清单归零**：依赖逐个登记 + 「登记清单不许失效」双向判定（见 18.10）；日志那 10 条边在 18.10.1 归零，最后一条 `auth-server` 在 18.10.2 归零（会话改由调用方注入）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ~~零调用导出无判据~~                                                                                   | #573           | **已落地且基线归零**：`scripts/check-dead-exports.cjs` 按**符号**记账（只认值导出，棘轮只许降不许升），扫描范围 `src/lib` + `src/trpc`，消费方口径显式含「模块自己的测试文件」（见 12 §12.16）；34 条登记项按 §12.15 逐条复核后接线 3 / 删除 31，基线 `34 → 0`。清单为空之后靠 `--verify` 单条复核自证判据在工作                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ~~客户端可达图判据有两份实现、各差一块盲区~~                                                            | #569 第 2 项   | **已落地**：合并进 `scripts/lib-node-only-scan.mjs`（`reach()` 只在 `server-only` / `.server.ts` 处停），`client-bundle-node-builtins.test.ts` 改为消费它的 JSON + 两条真注入反向验证，见 §18.13.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ~~`film/orchestrator.ts`（只服务端消费的编排）留在 `lib/`~~                                             | #572 第 2 项   | **已落地**：迁到 `src/server/film/orchestrator.ts`（与 `server/workshop/orchestrator.ts` 同落点）；`src/server/film/**` 首次纳入 `coverage.include`，见 12 §12.5.2 与 §18.13.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ~~`lib/llm/**` 后缀「四套并存」~~                                                                       | #572 第 3 项   | **已核销**：按 §18.4 逐文件复核后四种各有归属（`server-only` / `.server.ts` / `"use client"` / 纯 Node 宿主登记），`<domain>/server.ts` + `<domain>/client.ts` 是领域入口对，见 §18.13.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ~~`IIFE` / 回调体不计函数长度~~                                                                         | #570 第 7–8 项 | **已落地**：判据纳入无名字块体 + 跨行签名（12 §12.13.2），基线按「判据版本」一次性重记（20 → 22，新增的 2 条为存量登记）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ~~`lib` 巨型函数未拆（`ensureComfyUiReady` / `executeViaComfyCli` / `cacheJson` 闭包 / drizzle IIFE）~~ | #570 第 1–6 项 | **已落地**：等待循环与事件回调抽成 `comfyui/lifecycle-wait.ts`（策略注入 + 具名纯函数）、comfy-cli 流解析收在 `comfyui/executor-cli-stream.ts`、`cacheJson` 闭包提为 `buildWorkflowDetailJson`、drizzle IIFE 复用同一套等待原语；基线随之收紧（22 → 20，见 12 §12.13）                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ~~`lib` 的 Node-only 声明与可达性无判据~~                                                               | #572 第 1 项   | **已落地**：`scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts`（声明缺失 / 假声明 / 真进浏览器图 三条判据），`src/lib` 内 58 个 Node 内建 import 全部声明完毕                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -285,8 +290,9 @@ import `server`」这条顺手漏了** —— 于是 `lib/comfyui/**` 与
 换个写法 —— 当时 `core/logger` 自身仍 import `server/lib/logger`。真正的消除要动
 **实现的归属**，见 18.10.1。
 
-> 登记清单里的 `lib/auth-server.ts` → `~/server/better-auth/server` 属另一种情形
-> （Next 请求上下文，无法下沉），留待专项裁决。
+> 最后一条（`lib/auth-server.ts` → `~/server/better-auth/server`）也已消除，做法是
+> **消息与判决分离**，见 18.10.2。**登记清单现在是空的** —— 这正是终态：`src/lib`
+> 里任何新增的 `lib → server` 边都必须先裁决，而不是「反正有一条已登记」。
 
 ### 18.10.1 日志那一批登记边已归零：实现合并到地基侧
 
@@ -314,6 +320,54 @@ import」—— 那只是把同一条边换个写法（`core/logger` 当时仍�
 改成**实现特征**——全 `src/**` 里 `import pino` 的文件只允许一个
 （`src/lib/core/logger.ts`）。谁再建第二条通道，那条断言立刻红；「谁是实现处」不再
 依赖文件名或注释，而是靠「谁在 import pino」这个事实。
+
+### 18.10.2 最后一条边怎么消除：会话从「自己取」改成「调用方注入」
+
+`lib/auth-server.ts` 的越界与日志那批**性质不同**，值得单列 —— 它把「分层」和
+「可观察性」两件事绑在了一起。
+
+**这条边挡住的不只是分层，还有测试。** `getSession` 内部是 `await headers()`，
+脱离 Next 请求上下文直接抛：
+
+```text
+Error: `headers` was called outside a request scope.
+       https://nextjs.org/docs/messages/next-dynamic-api-wrong-context
+```
+
+于是 `lib/auth-server.ts` 里那套「已登录取真实用户 / 未登录回落演示用户 /
+`loginRequired` 是唯一开关」的判决**一直写不出用例**：任何调用都会撞上上面这条
+错误（这不是 mock 能绕的 —— 它发生在 `getSession` 内部，早于任何返回值）。
+
+**改法是「消息与判决分离」**，四步：
+
+| 项                  | 之前                                                              | 现在                                                                        |
+| ------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `lib/auth-server.ts` | 自己 `import { getSession }`，判决与取会话混在一起                 | 只做**判决**：`getServerUser(session)` / `requireServerUser(session)` 会话入参 |
+| 读会话的落点         | `lib/auth-server.ts`（越界）                                       | `src/server/auth/request-user.ts`（`src/server/**` 本来就是服务端物）        |
+| REST route 取用      | `from "~/lib/auth-server"` 调 `requireServerUser()`                | `from "~/server/auth/request-user"` 调 `requireRequestUser()`（24 处）        |
+| `lib-server-imports` 登记清单 | 1 条                                                      | **0 条**                                                                     |
+
+**为什么不让 `lib/auth-server` 收 `headers` 参数**：那样 24 个 REST route 每处都要
+写一遍 `new Headers(await headers())`，等于把 Next 依赖摊回每一个路由；而 `getSession`
+内部已经 `await headers()` 且带 React `cache()`（同一次请求内去重），照旧复用它最省。
+所以分界划在「**谁碰请求上下文**」而不是「谁碰 headers 对象」。
+
+**顺带实测出一处真缺陷（已修）：演示用户缓存**越过**了数据库。** 原实现把解析结果
+记在模块级变量里，命中即返回、**不再查库**：
+
+```text
+第 1 次调用 id = wmnmuzub…（建行）→ 用户表被重建（drizzle-kit push 的 __new_X 流程，
+见 scripts/heal-db.cjs）→ 再调用仍返回 wmnmuzub…，而库里 0 行
+```
+
+返回一个**库里不存在**的 id，下游每处按 userId 写入（任务 / 工作流 / 素材）都会
+外键失败或留下孤儿行，而报错指向写入语句，看不出「这个用户是虚构的」。现在 memo
+的只是 **email**、实体每行都查库 —— 命中路径同样只有一次 `findByEmail`，而
+「缓存里有没有」不再与「库里有没有」分叉。判据在 `src/lib/auth-server.test.ts`
+（清空表后必须返回**库里真实存在**的 id，而不是「和上次一样」）。
+
+> 通用口径：**缓存的键可以记，缓存的值要能被证伪。** 记「用哪个 email」是配置，
+> 记「解析出来的 id」是数据 —— 配置不会变，数据会被重建、被删、被迁移。
 
 ## 18.11 仓储层怎么测：内存 SQLite 真库夹具（ISSUE #565）
 
@@ -351,6 +405,122 @@ import」—— 那只是把同一条边换个写法（`core/logger` 当时仍�
 > 现在两条路都产出「同一页 + 同一份 images」，并且用例把两**条**路都覆盖了 ——
 > 只测一条会让人以为另一条也对。
 
+## 18.13 本批（ISSUE #569 第 2 项 / #572 第 2–3 项）的落地记录
+
+### 18.13.1 判据只许有一份：客户端可达图的两份实现合并（#569 第 2 项）
+
+`client-bundle-node-builtins.test.ts`（ISSUE #317 的 P0 回归）与
+`scripts/lib-node-only-scan.mjs`（§18.4 的实现）各自把同一件事实现了一遍 ——
+「哪些算 Node 内建 / 怎么解析 import / 从哪几个入口做 DFS」。两者都在测试链里跑，
+谁也没发现对方，因为**它们的盲区不一样**（实测）：
+
+| 实现 | 入口集 | 遍历边界 | 盲区 |
+| --- | --- | --- | --- |
+| 旧 `.test.ts` | `src/app` + `src/components` 里的 `"use client"` | **穿过**任何声明 | `src/lib` / `src/trpc` 下的 4 个 `"use client"` 入口看不见 |
+| 旧 `scan.mjs` | 全 `src/**` 的 `"use client"` | 停在**任何**声明 | `"use client"` 不是服务端边界，停在它 ⇒ 只从它可达的模块看不见 |
+
+后者不是理论：`src/trpc/query-client.ts` **只**从 `src/trpc/react.tsx`（`"use client"`）
+可达 —— 把 Node 内建注进它，旧扫描器报「客户端可达 0」，旧用例报命中。两份判据互相
+补盲，谁也不包含谁。
+
+修法是**合并成一份**（§18.4 的判定反模式：新增守卫前先查是否已有更强的那一条，要补就
+补在同一个扫描器里）：
+
+- `scan.mjs` 的 `reach()` 改为只在 `server-only` / `.server.ts` 处停
+  （`isServerBoundary`），`"use client"` 继续走 —— 它是**同一张客户端图里的节点**，
+  不是边界；
+- `client-bundle-node-builtins.test.ts` 改为**消费** `scan.mjs --json`，不再自带
+  解析器；保留 `log-session-scope` 分层那条历史回归，并新增两条**真注入**的反向验证：
+  ① 把 Node 内建注进 `src/lib/shell-tabs-store.ts`（app/components 外的入口）必须命中；
+  ② 注进 `src/trpc/query-client.ts`（只从 `"use client"` 模块可达）必须命中。
+
+> 一句话：**判据的「入口集」与「边界」是两件事，别用一个实现名同时回答它们。**
+> 合并后扫描器才是那份唯一实现，用例只喂它输入、断言它的输出。
+
+### 18.13.2 只服务端消费的领域编排迁出 `lib/`（#572 第 2 项）
+
+`lib/film/orchestrator.ts`（724 行，`server-only`）的唯一消费方是
+`server/api/routers/film.ts` —— 没有任何跨端复用。它迁到 **`src/server/film/orchestrator.ts`**，
+与既有 `src/server/workshop/orchestrator.ts`（工坊服务端流水线）对齐；判据与反例
+见 12 §12.5.2。
+
+迁移的连带处理（都是必须做的，否则门禁会指着无关的地方）：
+
+- 4 处动态 import 说明符改为 `~/server/film/orchestrator`；测试迁到
+  `src/server/film/orchestrator.test.ts`（`film-size` 由相对路径改引 `~/lib/film/film-size`）；
+- `src/server/film/**` **首次**纳入 `coverage.include` —— 此前整块服务端编排
+  **零门槛**，这是「盲区是漏出来的、不是写出来的」的又一例；
+- `src/lib/film/**` 只剩纯函数，门槛从 39 抬到 100（§18.6）。
+
+### 18.13.3 `lib/llm/` 的「后缀四套并存」已不成立（#572 第 3 项）
+
+#572 当时记录 `llm/` 里 `server.ts` / `browser.ts` / `*-client.ts` / `*.server.ts`
+四套命名并存。按 §18.4 复核后，这四种各有其归属、**并不违反规则**：
+
+| 文件 | 形态 | §18.4 分类 |
+| --- | --- | --- |
+| `llm/server.ts`、`llm/video-task-util.ts` | `import "server-only"` | 第一类（全部出口只能服务端用） |
+| `llm/usage-test.server.ts` | `.server.ts` | 第二类（同领域的服务端拆件） |
+| `llm/browser.ts` | `"use client"` | 客户端侧 |
+| `llm/secrets.ts` | 无声明 | 第三类（纯 Node 宿主，已登记 —— MCP 与 Next 共用） |
+
+`<domain>/server.ts` + `<domain>/client.ts`（`agent/`、`comfyui/` 同形）是**领域入口对**，
+不是「后缀并存」。因此本条**无需改动**，登记为「已按 §18.4 对齐」。
+
+### 18.13.4 覆盖率爬坡：`lib/agent` 18.9 → 78（#565 持续项）
+
+补的是**判决面**，不是凑行数：
+
+- `agentic.ts`（0 → 100）：多轮引导的离线状态机四态（空历史 / 没说类型 / 信息不足 /
+  出方案）与 LLM 路径的「模型返回畸形 JSON / 空回复 / 自称 ready 却缺 spec」处置；
+- `client.ts`（0 → 100）：坏 `tool_call` 过滤（**空 id 会让执行层按 id 回传结果时串台**）、
+  非 2xx 错误信封解包、响应体不是 JSON 时的不炸路径；
+- `server.ts`（0 → 97.8）：两条协议（tools / JSON 指令回退）的选路、
+  「`action` 未登记就不交给执行层」的闸门、消息窄化（调用方伪造 `system` 被丢弃）。
+
+补测试时实测出 3 处**只登记不改**的现状（`agent/client.ts` 的数组体当成合法对象、
+`agent/server.ts` 的 `done` 分支不可达、`agent/executor.ts` 的模型内重名不去重）——
+「补测试」与「改行为」分开提交，否则说不清行为变化来自哪一侧。
+
+## 18.14 子域归属是门禁，不是目录审美（ISSUE #565）
+
+18.1 说 `src/lib` 曾是「四类门禁同时失效」的盲区。**域归属**是同一盲区的另一半，
+只是它靠「门禁是按目录清单声明的」这条机制渗出来的：覆盖率门槛按 `lib/<domain>/**`
+设（18.6），Node-only 声明按域记账（18.4），而**根目录压根不是一个域** ——
+它是一堆文件。
+
+所以这条不是「把文件摆整齐」，是**把上面两条门禁的记账单位补齐**：模块在根目录
+时，18.6 的门槛和 18.4 的登记都挂不到它身上。
+
+| 编号 | 判据 | 承担者 |
+| --- | --- | --- |
+| **R13′** | `src/lib` 根目录只放**顶层单例**（`DOMAIN_EXEMPT`），其余 `.ts` 必须有子域目录 | `scripts/check-file-structure.cjs` |
+| **R14** | 子域目录名必须在 `DOMAINS` 里登记 | 同上 |
+
+完整口径（含「顶层单例」的判别、迁移的连带检查、一次真实搬迁的记录）在
+[12 §12.5.3](12-代码组织与文件结构.md#1253-src-lib-的子域纪律与登记issue-565--580机器强制)，
+这里只说三条**为什么这样定**：
+
+**① 为什么不判「嵌套深度」**。看起来「叶子域不许再嵌套」是一条更整齐的判据，
+但它会立刻在两个地方失效：`comfyui/**` 与 `workshop/**` 自有子结构（执行链 / 通道），
+`core/**` 的平铺是「一个仓储一个文件」的刻意形态。机器判深度只会逼出 `admin/`
+这类**既说不出归属、又恰好绕过判据**的目录。判据只做两件能机器回答的事：
+「根目录有没有不该有的模块」（R13′）与「这个目录名登记过吗」（R14）。
+
+**② 为什么 R14 不是冗余**（它是让 R13′ 真正生效的那一半）。没有 R14，
+`mkdir src/lib/stuff && git mv …` 就自动绕过 R13′ —— 文件换个新目录名继续平铺，
+而新目录在 `vitest.config.ts` 里**没有任何门槛**（覆盖率默认 0 门槛）。R14 把
+「新增域」变回一次设计决定：登记的同时必须给出门槛值。
+
+**③ 为什么豁免清单要写成 `DOMAIN_EXEMPT` 而不是注释**。18.4 的判定反模式在这里
+同样适用：**会静默失效的清单只许定义一次**。豁免项写进注释，判据读不到它，
+下一个人照着「看一眼」的方式加模块，清单会与事实分叉且不报警。写成数据后，
+「这个模块为什么在根目录」有一个可机读的答案，新增一项就是一次显式编辑。
+
+> 与 18.10 / 18.6 的关系：本条**不改**依赖方向，也不改门槛值本身。它改的是
+> 「门槛能挂到谁身上」——根目录的模块此前**同时**逃开了 18.6 的覆盖率记账与
+> 18.4 的域级声明核对，这正是「盲区是漏出来的、不是写出来的」的又一例（§18.13.2）。
+
 ## 18.12 速查
 
 - 改 `src/lib/**` 前：先读本章 → 确认没碰 18.2 的禁止项 → 跑 18.5 的两条棘轮。
@@ -364,9 +534,19 @@ import」—— 那只是把同一条边换个写法（`core/logger` 当时仍�
   的文件只允许一个，见 18.10.1）。新增 lib → server 依赖仍会被
   `tests/lib-server-imports.test.ts` 拦下（见 18.10）。
 - `lib` 要共享类型给视图：**下沉类型模块到 `src/lib`**，不要在 lib 里 import components。
+- REST route 要鉴权：从 **`~/server/auth/request-user`** 取（`currentServerUser` /
+  `requireRequestUser`）；`~/lib/auth-server` 是**判决层**（会话入参），不要从 route 直接调它。
+  新增 `lib → server` 边仍会被 `tests/lib-server-imports.test.ts` 拦下，且该清单现在是**空的**
+  （§18.10 / §18.10.2）。
+- **只服务端消费**的领域编排：放 `src/server/<domain>/`（如 `server/film/orchestrator.ts`）；
+  服务端与其它宿主**共用同一份实现**时才留 `lib/`（见 12 §12.5.2）。
 - 拆出 Node-only 模块：按 18.4 的表选声明形态，别三个都试；自查
   `node scripts/lib-node-only-scan.mjs`（声明缺失 / 假声明 / 真进浏览器图 一次看完）。
-- 新增 `src/lib` 子域目录：同步在 `vitest.config.ts` 的 `thresholds` 里按**实测值**设门槛（18.6）。
+- 新增 `src/lib` 子域目录：**两件事必须同批** —— ① 在 `scripts/check-file-structure.cjs` 的
+  `DOMAINS` 登记（R14，未登记即阻断）；② 在 `vitest.config.ts` 的 `thresholds` 里按**实测值**
+  设门槛（18.6）。只做②会让门槛挂在一个「判据不认识」的目录上、只做①会让新域零门槛。
+- 模块该放哪个域：根目录只收**顶层单例**（唯一持有者 + 任何域消费，登记在 `DOMAIN_EXEMPT`），
+  其余一律进子域；叶子域**平铺**，不许再套 `admin/` `other/` `shared/` 这类杂物层（18.14）。
 - 需要新增守卫：**先查既有更强的那一条**（18.4 的判定反模式）。
 - 改 `src/lib/**` 的 import 前：想清楚依赖方向（§12.7）。要下沉叶子、还是回调注入？
   同目录内 `x → y` 与 `y → x` 同时存在就是环，`node scripts/check-circular-deps.cjs --report` 立即可见。

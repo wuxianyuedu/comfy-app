@@ -17,24 +17,24 @@ import { useTheme } from "next-themes";
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
-import { isDesktopShell } from "~/lib/desktop-shell-client";
-import { useShellTabs } from "~/lib/shell-tabs-store";
-import { openComfyTab } from "~/lib/comfy-tab-client";
+import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
+import { useShellTabs } from "~/lib/shell/shell-tabs-store";
+import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
 import {
   checkAppUpdate as checkAppUpdateClient,
   downloadAndInstallUpdate,
   relaunchApp as relaunchAppClient,
-} from "~/lib/app-update-client";
+} from "~/lib/shell/app-update-client";
 import {
   parseAnsiSegments,
   parseOllamaLogText,
   type AnsiSegment,
-} from "~/lib/log-ansi";
+} from "~/lib/log/log-ansi";
 import {
   fetchFileLogSlice,
   postAppRuntimeLog,
   type FileLogSlice,
-} from "~/lib/log-file-client";
+} from "~/lib/log/log-file-client";
 import {
   probeOllama as probeOllamaClient,
   startOllama as startOllamaClient,

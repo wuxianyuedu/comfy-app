@@ -19,13 +19,11 @@
 
 import {
   buildParamEntries,
-  manualTargetFor,
   parseParamMapping,
   resolveMapping,
-  wireHandleIdForIoKey,
   wiredTargetsForEntry,
   type ParamEntry,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   splitWorkflowIO,
   type WorkflowIOEntry,
@@ -36,7 +34,7 @@ import {
   hasManualOutputBinding,
   manualOutputSource,
   resolveOutputSource,
-} from "~/lib/workflow-output-binding";
+} from "~/lib/workflow/workflow-output-binding";
 
 export interface LibraryParamCards {
   /** 对外参数条目（稳定顺序）。 */
@@ -62,10 +60,6 @@ export interface LibraryParamCards {
    *  上色，带线的圆点看着反而是断的（用户口径：「这里连线断开了是什么原因」，
    *  ISSUE #355）。 */
   wiredDotKeys: Set<string>;
-  /** 宿主卡片此刻真的画得出来的端口（见 `deriveLibraryParamCards` 的入参
-   *  `reachableKeys`；缺省 = 不收窄）。卡片上的候选圆点按它收窄，
-   *  与连线用同一份事实。 */
-  reachableKeys?: ReadonlySet<string>;
   /** 对外**输出**参数在当前模式下的落点（输出口 ioKey → 取值的那一行 ioKey）。
    *  卡片与连线都要读这一份：与 `resolved` 对输入侧的作用对称。 */
   outputResolved?: Record<string, string | null>;
@@ -85,7 +79,6 @@ export interface ParamCardWire {
   /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
    *  端点锚在整块控件上，线指向那一格。 */
   grouped: boolean;
-  manual: boolean;
 }
 
 /** 从 workflowIO + paramMap 派生库内画布所需的归属数据。
@@ -99,14 +92,8 @@ export function deriveLibraryParamCards(args: {
   mode: string | null | undefined;
   /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
   groupedKeys?: ReadonlySet<string>;
-  /** 宿主卡片此刻**真的画得出来、连得上**的那几行（ioKey 集合）。
-   *
-   *  给定时卡片上的候选圆点收窄到这些行：画不出端点的端口不给拖 —— 拖过去
-   *  也只会落不上（用户看到的就是「点击端点拉线出现禁用标记」）。缺省 = 不
-   *  收窄（老调用方行为不变）。 */
-  reachableKeys?: ReadonlySet<string>;
 }): LibraryParamCards {
-  const { io, paramMap, mode, groupedKeys, reachableKeys } = args;
+  const { io, paramMap, mode, groupedKeys } = args;
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
    * **契约口一律常驻**：显示与否只由契约决定，与工作流内部长什么样无关；工作流
    * 只决定每张卡落到哪一行端口，落不到就如实显示成「未配置」。 */
@@ -124,73 +111,41 @@ export function deriveLibraryParamCards(args: {
      *  画一条通向某处的线反而误导。 */
     if (!target) continue;
     /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
-     *  —— 所以这条线一定是「作者连的」（库里的线一律实线，没有「猜出来的虚线」）。 */
-    const manual =
-      manualTargetFor(parsed, entry.id, mode ?? null) !== undefined;
-    /* 线要从**对应的那一颗圆点**出发：卡片上一个候选一颗点，取该端口的
-     *  handle id（与编辑器画布同口径）。
-     *
-     *  默认状态下「尺寸」这类口是**一对多**的（宽高比 / 像素量 / 倍数由同一块
-     *  组合控件录入），作者把「尺寸」连到这块控件上时这几行都算接上了 ——
-     *  只画其中一条会让「尺寸」看着只有一个出口（ISSUE #355：「尺寸现在有三个
-     *  参数，就应该可以连三条线出来」）。 */
-    for (const wired of wiredTargetsForEntry({
-      entry,
-      io,
-      target,
-      manual,
-      groupedKeys,
-      /** 库内**每一个能连的候选端口各画一条线**（与编辑器画布同口径）。
-       *
-       *  不给这个开关时这里只画「当前生效落点」那一条：「尺寸」这类口子落到
-       *  某个端口后，卡片上看着就只有一个出口 —— 用户要的是「宽高比 + 百万像素
-       *  这两项都需要能导入到工作流中，所以 2 条线都要能连出去」（ISSUE #355）。
-       *
-       *  库内卡片给每个候选都画了圆点（每个候选都能拖线改落点），线就该同样
-       *  逐条画出来：点有、线没有，读作「这几项没接上」。 */
-      allCandidates: true,
-    })) {
-      /* 宿主卡片上画不出来的行连不出线（端点画在一颗落不上去的句柄上只会误导）。
-       *  **当前生效落点永远画**：它就是这条映射本身，画不出来会让卡片看着像「没连上」。
-       *  收窄只作用于「一对外参数摊开来的其余端口」（组合控件里那几个兄弟口）。 */
-      if (
-        reachableKeys &&
-        reachableKeys.size > 0 &&
-        wired.ioKey !== target &&
-        !reachableKeys.has(wired.ioKey)
-      )
-        continue;
+     *  —— 所以这条线一定是「作者连的」。用 `resolved` 而不是直接查键：解析时已把
+     *  作者画的线归到契约 id 上（含 `<节点 id>|<分类>` 历史键），按裸键查会把作者
+     *  画过的线读成「没连过」。 */
+    /* 线只画作者连上的那一条 —— 候选是**按类型**收的（同族几个口子互相重叠），
+     *  逐条画出来会把兄弟口子的落点也画到本口名下。候选圆点照给（每个都能拖），
+     *  见 `paramOutputPorts`；线从对应的那一颗圆点出发（`handleId` 取端口名，
+     *  与卡片锚点同口径）。 */
+    for (const wired of wiredTargetsForEntry({ target })) {
       wires.push({
         entryId: entry.id,
         targetIoKey: wired.ioKey,
-        /* 库内这层按**端口名**找卡片上的圆点锚点（`paramOutputPorts` 的
-         *  `handleId` 就是端口名）；ioKey 是运行期/落库的键空间，两者不能混。
-         *  同一口子摊成多条线时，每条必须对到自己那一颗圆点（都退到 ioKey 就会
-         *  让第二、三条线落回第一颗点上）。 */
-        handleId: wireHandleIdForIoKey(io, entry, wired.ioKey),
+        /* 卡片圆点的 handle id = **条目 id**（与 `paramOutputPorts` 同口径）：
+         *  一个口一颗点，条目 id 在同一画布节点内天然唯一 —— 尺寸卡的六行各是子口
+         *  id，普通卡就是契约口 id，两边都由它表达「线从哪张卡出发」。 */
+        handleId: entry.id,
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
-        manual,
       });
       if (ownersByPin[wired.ioKey]) continue;
       ownersByPin[wired.ioKey] = entry.label;
     }
   }
 
-  /* 「画了线的圆点」= 上面逐条产出的线本身（`handleId` 与卡片锚点同口径）。 */
-  const wiredDotKeys = new Set(
-    wires.map((item) => `${item.entryId}?${item.handleId}`),
-  );
+  /* 「画了线的圆点」= 上面逐条产出的线本身。handle id 就是卡片锚点标识
+   *  （普通卡含条目 id，尺寸卡是子口 id），不再另拼一份前缀。 */
+  const wiredDotKeys = new Set(wires.map((item) => item.handleId));
 
   return {
     entries,
     io: io ?? null,
-    isManual: (entryId: string) =>
-      manualTargetFor(parsed, entryId, mode ?? null) !== undefined,
+    /* 有落点 = 作者画过线（以 `resolveMapping` 的解析结果为准）。 */
+    isManual: (entryId: string) => !!resolved[entryId],
     resolved,
     ownersByPin,
     wires,
     wiredDotKeys,
-    reachableKeys,
   };
 }
 
@@ -205,10 +160,11 @@ export function deriveLibraryParamCards(args: {
  *  因此返回值比输入侧多两样：
  *    · `resolved`：输出口 → 取值那一行（作者连过的优先，否则它自己那一行）；
  *    · `wires`：宿主**取值行**的圆点 → 卡片自己的圆点（方向仍是从左往右画），
- *      断开的口不画线（悬空即「没接」）。
+ *      且**只有作者真改过取值行的口才画** —— 未连过的不画、作者断开的口也不画
+ *      （用户口径：这是**编辑对外参数**的界面，「未连过就不要连」）。
  *
- *  输出侧同样**只认作者画过的线**：没连过的回落读做「工作流自带的那一行」，
- *  但那条线不叫「猜出来的落点」，它是输出行自己的默认取值来源。 */
+ *  默认取值来源（`resolved` 里的那个回落值）仍然保留：卡片与运行期要读它；只是
+ *  画布上不再拿一条虚线表示「这是默认线」—— 未连过就是没有线。 */
 /** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
 export interface LibraryOutputCards {
   outputs: (WorkflowIOEntry & { ioKey: string })[];
@@ -243,16 +199,21 @@ export function deriveLibraryOutputCards(args: {
   for (const output of outputs) {
     const target = resolved[output.ioKey];
     if (!target) continue;
+    /* 未连过（作者没改过这个输出口的取值行）→ **不画线**。
+     *
+     * 用户口径：这是**编辑对外参数**的界面，未连过就不要连 —— 默认取值来源仍算在
+     * `resolved` 里（卡片与运行期读它），但画布上不再画一条虚线占位。库里因此
+     * 只剩作者真连过的实线（见 `LIBRARY_EDGE_STYLE`）。 */
+    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined)
+      continue;
     wires.push({
       entryId: output.ioKey,
       targetIoKey: target,
-      /* handle id 与卡片圆点上的锚点**同一份算式**（见 `outputWireDotId`）：
-       *  两处各算一遍时，端口名为空 / 带空白就会一边锚 `输出`、一边找空串 ——
-       *  线量不到锚点，整条不画，用户看到的正是「images 和对外输出参数之间
-       *  无法连线」（ISSUE #355）。 */
-      handleId: outputWireDotId(output),
+      /* handle id = 输出的 **ioKey**：卡片锚点与线两端同一份取值。它全图唯一，
+       *  也就是落库键（`onConnect` 直接取用）—— 用端口名当锚点会在两个输出口
+       *  同名 / 名字为空时撞车，线量不到锚点整条不画（ISSUE #355）。 */
+      handleId: output.ioKey,
       grouped: false,
-      manual: manualOutputSource(paramMap, output.ioKey, mode) !== undefined,
       kind: "hostToParam",
     });
   }
@@ -276,16 +237,11 @@ export function hasManualLibraryOutput(args: {
 
 export { defaultOutputSource };
 
-/** 对外输出卡片上那颗圆点的 **handle id**（= 连线锚点里 `?` 后面的那一段）。
+/** 对外输出卡片端口行的**显示名**（端口自己的名字；空 / 空白 → 「输出」）。
  *
- *  输入卡片用「端口名」当 handle（见 `ParamOutputPort.handleId`），输出卡片对称
- *  沿用同一口径。输出端口名可能是空串 / 带空白（作者没给 name 的旧数据），这时
- *  退回卡片标题「输出」—— 与 `WorkflowOutputParamCardColumn` 里 `portName` 的
- *  算式**必须逐字一致**：锚点值与导线两端各算一遍，任何一处漏了 trim / 兜底，
- *  线就量不到锚点、整条不画。 */
-export function outputWireDotId(
-  output: WorkflowIOEntry & { ioKey: string },
-): string {
+ *  它与锚点（handle id）是**两件事**：锚点用 `output.ioKey`（全图唯一、也是落库
+ *  键）；显示名只是给作者看的，旧数据里作者可能没给 name。 */
+export function outputPortLabel(output: { name?: string | null }): string {
   const name = (output.name ?? "").trim();
   return name || "输出";
 }

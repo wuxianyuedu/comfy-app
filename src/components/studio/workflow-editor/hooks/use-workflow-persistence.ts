@@ -11,7 +11,10 @@ import {
   NODE_TITLE_H,
   extractNoteTitle,
 } from "~/components/studio/workflow-utils";
-import { MODE_KEY_PREFIX, runtimeNodeId } from "~/lib/workflow-param-mapping";
+import {
+  MODE_KEY_PREFIX,
+  runtimeNodeId,
+} from "~/lib/workflow/workflow-param-mapping";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 

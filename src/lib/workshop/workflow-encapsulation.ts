@@ -3,77 +3,42 @@
  * 工坊（镜头生图 / 视频生成）不该把工作流库里的全部参数摊给用户：一个
  * ComfyUI 工作流可能暴露几十个 widget（steps / cfg / sampler / 各种自定义
  * 节点参数），让编剧型用户逐个填是不合理的。ISSUE #145 的口径是：工坊对外
- * 只暴露「提示词 / 尺寸 / 参考图」三样，其余参数一律用工作流里的默认值
- * （`WorkflowIOEntry.defaultValue` / 作者覆盖 `value` / 模式默认值）。
+ * 只暴露「提示词 / 尺寸 / 参考图」三样，其余参数一律用工作流图内自带的值
+ * （工坊不下发）。
  *
- * 本模块只做「分类 + 组装」两件纯事：
- *   1. `classifyWorkshopPin` 判定一个 IO 条目属于工坊哪一类对外控件，或
- *      不属于（→ 内部参数，走默认值）；
- *   2. `buildEncapsulatedInputs` 把用户的 提示词/尺寸/参考图 落到被识别的
- *      pin 上，其余 pin 用 `resolveEntryDefault` 播种，产出可直接下发给
- *      `generate.generate` 的 `workflowInputs` 三元组。
+ * 本模块只做一件事：把工坊的对外值翻译成**契约口 id → 值**，交给映射层落到
+ * **作者连过线的端口**上（`applyParamMapping`，只认作者画的线）。
  *
- * 视频生成用的是同一套封装，只是对外表达不同（ISSUE #145 后续）：
- *   · 文生视频 —— 提示词 + 尺寸/时长；
- *   · 图生视频 —— 首帧参考图 + 提示词 + 尺寸/时长；
- *   · 首尾帧视频 —— 首帧 + 尾帧 + 提示词。
- * 差别在于「参考图落在哪个 pin」。ComfyUI 工作流里可能有三个 `LoadImage`
- * （首帧 / 尾帧 / 普通参考图），只看 pin 名分不出来，故引入 `VideoPinRole`
- * 与 `classifyVideoPin`：先按产出节点类名（LoadImageFirstFrame /
- * LoadImageLastFrame / LoadImage）判角色，再按 pin 名兜底，最后才回落到
- * 通用的「参考图」分类。视频模式码（taskType / modes）单独由 `isVideoMode`
- * 判定，不从内容类别码反推。
+ * **落点只认作者连的线**（用户口径：「工坊封装都靠手动连线，不靠名字约定」）：
+ * 某个口（提示词 / 首帧 / 尾帧 / 参考图…）落到工作流的哪一行，由工作流库里作者
+ * 拖出来的线声明 —— 与「画布节点」页签的就地运行、与封装状态派生
+ * （`workshop-encapsulation-status`）走的是同一份映射
+ * （`workflow-param-mapping` 的 `buildParamEntries` + `resolveMapping`）。
+ *
+ * 这里此前另有一套**按名字 / 节点类名猜槽位**的分类（`classifyWorkshopPin` /
+ * `classifyVideoPin`）：图片口是首帧还是尾帧看 `LoadImageFirstFrame` 这类类名、
+ * 看 pin 名里有没有「首帧」；尺寸落在宽还是高看名字里有没有 `width`。猜错的时候
+ * 用户无从察觉 —— 库里的线说连的是这个口，工坊却按名字把值落到别处。整套名字
+ * 启发式已删除：**没有线就是未配置**，如实进 `unmatched`。
  *
  * 无 React、无 IO（规范 §17.2 第②层），因此可直接单测。
  */
 
 import {
-  parseRatioFromText,
-  sceneFromMode,
   normalizeSizeSpec,
-  sizeSpecAspect,
-  sizeSpecDims,
-  sizeSpecMegapixels,
-  sizeSpecMultiple,
-  type SizeSpec,
-} from "~/lib/size-presets";
+  sceneFromMode,
+  sizeSpecToWxH,
+} from "~/lib/media/size-presets";
 import {
-  resolveEntryDefault,
-  type WorkflowIOEntry,
-  type WorkflowIOMap,
-} from "~/lib/workflow-io-types";
-
-/** 工坊对外暴露的三类控件。`internal` = 不暴露，走默认值。 */
-export type WorkshopPinClass =
-  | "prompt"
-  | "negative"
-  | "size-width"
-  | "size-height"
-  | "size-aspect"
-  | "size-megapixels"
-  /** 宽高对齐倍数（8/16/32/64）—— 「比例 + 百万像素 + 倍数」这一类尺寸表达
-   *  的第三段。存在时由工坊按当前选择派值，不再散落成需要用户手填的数字框。 */
-  | "size-multiple"
-  | "reference-image"
-  | "first-frame"
-  | "last-frame"
-  /** 视频：时长。按端口名分两种单位 —— 秒（duration / 时长 / 秒数）与
-   *  帧（length / num_frames / frames / 帧数），见 userValueFor 的取值。 */
-  | "duration"
-  | "internal";
-
-/** 镜头视频生成各模式在封装口径下对外暴露的角色。 */
-export type VideoPinRole =
-  | "prompt"
-  | "negative"
-  | "size-width"
-  | "size-height"
-  | "first-frame"
-  | "last-frame"
-  | "reference-image"
-  | "frames"
-  | "fps"
-  | "internal";
+  applyParamMapping,
+  buildParamEntries,
+  parseParamMapping,
+  resolveMapping,
+} from "~/lib/workflow/workflow-param-mapping";
+import type {
+  WorkflowIOEntry,
+  WorkflowIOMap,
+} from "~/lib/workflow/workflow-io-types";
 
 /** 工坊这一次生成要落下去的对外参数（全部可选）。
  *
@@ -81,230 +46,76 @@ export type VideoPinRole =
  *  文生视频只给 prompt / size，图生视频额外给 firstFrame，首尾帧再给 lastFrame。
  *
  *  **尺寸只按 `size-presets` 的两种表达给**（比例 + 分辨率 / 比例 + 百万像素 +
- *  倍数），不再收 "WxH" 字符串：宽 / 高由本层按场景尺寸表**算**出来（目标工作流
+ *  倍数），不填 "WxH" 字符串：宽 / 高由本层按场景尺寸表**算**出来（目标工作流
  *  要 width+height 时）—— 字符串反解回比例会落在两个预设之间，用户表现就是
- *  「选了 1k 却算出个怪尺寸」。 */
+ *  「选了 1k 却算出个怪尺寸」。
+ *
+ *  这些值是**工坊的业务语义**（镜头图 / 首帧 / 尾帧各是什么），与「落到工作流的
+ *  哪一行」是两件事：后者由作者在工作流库里的连线声明。 */
 export interface WorkshopExposedValues {
   prompt?: string;
   negativePrompt?: string;
   /** 尺寸：比例 + 分辨率 或 比例 + 百万像素 + 倍数（见 `lib/size-presets`）。
-   *  本层按当前模式推场景（图 / 视频）后逐端口派值：宽高、比例标签、百万像素、
-   *  对齐倍数各落各自认的形状。 */
-  size?: SizeSpec;
+   *  本层落到哪个尺寸端口由作者连线决定，值按该端口的形态派（宽高 / 比例标签 /
+   *  百万像素 / 分辨率档 / 对齐倍数）。 */
+  size?: SizeSpecValue;
   /** 参考图文件名（已上传到 ComfyUI 输入目录）。
-   *  按顺序填进工作流里的图片槽位；视频模式下首帧槽优先拿第一张。 */
+   *  按契约口顺序（`reference-image` / `reference-image-2`…）给值，各自落到作者
+   *  连的那一行；未连线的槽不落。 */
   referenceImages?: string[];
   /** 视频：首帧文件名。缺省时回退到 referenceImages[0]。 */
   firstFrame?: string;
   /** 视频：尾帧文件名（首尾帧工作流用）。 */
   lastFrame?: string;
-  /** 视频：时长（秒）。落在按秒表达的时长端口上（`duration` / `秒数` / `时长`）。 */
+  /** 视频：时长（秒）。落在作者连到「时长」口、且按秒表达的那个端口上
+   *  （`duration` / `seconds` / `时长`）。 */
   duration?: number;
   /** 视频：帧数。落在按帧表达的时长端口上（`length` / `num_frames` / `帧数`）。
    *
    *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
-   *  （见 VideoStudio 的 framesFor），这里不再猜 fps。 */
+   *  （见 VideoStudio 的 framesFor），这里不猜 fps。 */
   frames?: number;
+}
+
+/** 尺寸表达（结构上与 `lib/size-presets` 的 `SizeSpec` 一致）。
+ *
+ *  在类型上**不**从 size-presets 取 `SizeSpec`：本模块的入参来自调用方拼装的
+ *  plain object（工坊表单 / 服务端编排），用结构子集能少一层耦合；规范化由
+ *  `normalizeSizeSpec` 在运行期做。 */
+interface SizeSpecValue {
+  ratio?: unknown;
+  clarity?: unknown;
+  multiple?: unknown;
 }
 
 /** 一次封装的结果。 */
 export interface EncapsulatedInputs {
-  /** 下发给 generate.generate 的 workflowInputs。 */
+  /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
   workflowInputs: { nodeId: string; name: string; value: unknown }[];
-  /** 被识别为「对外」的 ioKey → 分类，供 UI 提示 / 调试。 */
-  exposed: Record<string, WorkshopPinClass>;
-  /** 走默认值的 ioKey（未暴露的内部参数）。 */
-  internalKeys: string[];
-  /** 用户给了值、但工作流里没有对应 pin 的字段（如工作流没有提示词输入）。 */
-  unmatched: (keyof WorkshopExposedValues)[];
+  /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
+   *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
+  unmatched: string[];
 }
 
-/** 条目名 + 显示名（小写）—— 分类判据只看作者写下的名字。
+/** 该时长端口按「帧」还是按「秒」表达。
  *
- *  这里刻意不看 `role` 之类的图内推导：对外参数是**工坊的契约**，工作流只决定
- *  每一口落到哪一行。判不出名字时工坊侧同样有契约兜底（见
- *  `buildEncapsulatedInputs` 的 `values` 按契约 id 落点）。 */
-function searchText(e: WorkflowIOEntry): string {
-  return `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
-}
-
-const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
-
-/** 是否像「参考图 / 首帧」这类可上传的图片输入。 */
-function isImagePin(e: WorkflowIOEntry): boolean {
-  const type = (e.type ?? "").toUpperCase();
-  if (IMAGE_TYPES.has(type)) return true;
-  // 自定义节点常把上传槽声明成 STRING / 无类型，名字带 upload / image 也算。
-  return /upload|image|参考图|首帧|尾帧|first_?frame|last_?frame/.test(
-    searchText(e),
-  );
-}
-
-/** 是否像「负面提示词」。必须排在正向提示词之前判定。 */
-function isNegativePin(e: WorkflowIOEntry): boolean {
-  return /negative|负向|负面|反向/.test(searchText(e));
-}
-
-/** 是否像「正向提示词」。 */
-function isPromptPin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  if (/prompt|提示词|描述词/.test(text)) return true;
-  // 无类型但默认值很长（>40 字符）的文本一般是提示词框，与工作流库
-  // 的控件推导启发式保持一致。
-  if (
-    (e.type ?? "").toUpperCase() === "STRING" &&
-    typeof e.defaultValue === "string" &&
-    e.defaultValue.length > 40
-  ) {
-    return true;
-  }
-  return false;
-}
-
-/* ── 视频侧：按模式把 IO 归类到「首帧 / 尾帧 / 参考图 / 时长」 ── */
-
-/** 产出「首帧」的节点类名（WAN / LTX 系各家命名不一致，用前缀+包含匹配）。 */
-function isFirstFrameClass(classType: string): boolean {
-  return /^(comfyui[-_ ]?)?loadimage.*first|^loadimage.*start_?frame|first_?frame|start_?frame/i.test(
-    classType,
-  );
-}
-
-/** 产出「尾帧」的节点类名。 */
-function isLastFrameClass(classType: string): boolean {
-  return /^(comfyui[-_ ]?)?loadimage.*last|last_?frame|end_?frame/i.test(
-    classType,
-  );
-}
-
-function isFramesPin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  /* 先排除「每秒帧数」，它是 fps 不是时长。 */
-  if (/fps|帧率|每秒帧/.test(text)) return false;
-  return /(^|[^a-z])frames?([^a-z]|$)|length|duration|num_?frames|视频帧|帧数|时长|秒数/.test(
-    text,
-  );
-}
-
-function isFpsPin(e: WorkflowIOEntry): boolean {
-  return /fps|frame_?rate|帧率|每秒帧/.test(searchText(e));
-}
-
-/** 按产出节点类名 + pin 名判定一个图片槽位在视频模式下的角色。
- *
- *  判定顺序即优先级：类名（ComfyUI 里真实存在的「FirstFrame / LastFrame 上传
- *  节点」最权威）→ pin 名 / 标签（作者写了「首帧」这类业务名）→ 普通参考图。 */
-export function classifyVideoPin(e: WorkflowIOEntry): VideoPinRole {
-  if (e?.direction !== "input") return "internal";
-  if (e.kind !== "widget") return "internal";
-  const classType = (e.classType ?? "").trim();
-  const text = searchText(e);
-
-  if (isImagePin(e)) {
-    if (
-      isLastFrameClass(classType) ||
-      /last_?frame|尾帧|结束帧|末帧/.test(text)
-    ) {
-      return "last-frame";
-    }
-    if (
-      isFirstFrameClass(classType) ||
-      /first_?frame|首帧|起始帧|初始帧/.test(text)
-    ) {
-      return "first-frame";
-    }
-    /* 泛化的图片加载节点（LoadImage / ImageLoader）：只声明了「一张图」，
-     *  既可能是首帧也可能是参考图 —— 归到 reference-image，由调用方按模式
-     *  决定要不要把首帧写进它（图生视频里它就是首帧）。 */
-    return "reference-image";
-  }
-  if (isNegativePin(e)) return "negative";
-  if (isWidthPin(e)) return "size-width";
-  if (isHeightPin(e)) return "size-height";
-  if (isFpsPin(e)) return "fps";
-  if (isFramesPin(e)) return "frames";
-  if (isPromptPin(e)) return "prompt";
-  return "internal";
-}
-
-function isWidthPin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  /* 用 `_` 也是词内字符：ComfyUI 常见 `base_width` / `width_2` 这类命名，
-   * `\bwidth\b` 匹配不到，故显式容忍下划线边界。 */
-  return /(^|[_\s])width([_\s]|$)|宽度|横向/.test(text);
-}
-
-function isHeightPin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  return /(^|[_\s])heig?ht([_\s]|$)|高度|纵向/.test(text);
-}
-
-function isAspectPin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  return /aspect_?ratio|宽高比|纵横比|比例/.test(text);
-}
-
-function isMegapixelsPin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  return /megapixel|百万像素|\b像素\b/.test(text);
-}
-
-/** 宽高对齐倍数端口（`multiple` / `alignment` / 标签「倍数」）。
- *
- *  刻意与 `isMegapixelsPin` 分开：它是尺寸表达的第三段，工坊按当前选择派值
- *  （分辨率档时由「哪些倍数能整除两侧」反推），而不是让用户再填一个数字。 */
-function isMultiplePin(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
-  return /(^|[_\s])multiple([_\s]|$)|alignment|倍数|倍率/.test(text);
-}
-
-/** 判定一个 IO 输入条目在工坊里属于哪一类对外控件。
- *
- *  仅对 `direction === "input"` 的条目有意义；输出与连线型输入一律 internal。
- *  判定顺序即优先级：负面提示词必须先于正向提示词，尺寸类必须先于提示词
- *  （避免 "width" 之类被泛化的文本启发式抢走）。 */
-export function classifyWorkshopPin(e: WorkflowIOEntry): WorkshopPinClass {
-  if (e?.direction !== "input") return "internal";
-  // 连线型端口（MODEL / CLIP / LATENT…）没有可填的标量，不对外。
-  if (e.kind !== "widget") return "internal";
-  if (isImagePin(e)) return classifyVideoPin(e) as WorkshopPinClass;
-  if (isNegativePin(e)) return "negative";
-  if (isWidthPin(e)) return "size-width";
-  if (isHeightPin(e)) return "size-height";
-  if (isMegapixelsPin(e)) return "size-megapixels";
-  if (isMultiplePin(e)) return "size-multiple";
-  if (isAspectPin(e)) return "size-aspect";
-  if (isDurationPin(e)) return "duration";
-  if (isPromptPin(e)) return "prompt";
-  return "internal";
-}
-
-/** 该端口是不是「时长」口（视频模式的对外时长落到它上面）。
- *
- *  先排掉帧率（帧率不是时长），再认 duration / length / frames / 帧数 / 秒数。 */
-function isDurationPin(e: WorkflowIOEntry): boolean {
-  if (isFpsPin(e)) return false;
-  return /duration|length|num_?frames|frame_?count|frames?|时长|秒数|帧数/.test(
-    searchText(e),
-  );
-}
-
-/** 该时长端口按「帧」还是按「秒」表达（ComfyUI 各家命名不统一）。 */
+ *  这一条**必须**看端口名：两种单位在类型上都是数字，没有别的判据（工坊的契约
+ *  只有一个「时长」口，落点由作者连线声明；单位是端口自己的事）。 */
 function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
-  const text = searchText(e);
+  const text = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   if (/duration|seconds?|secs?|秒/.test(text)) return false;
   return /frames?|num_?frames|frame_?count|length|帧数/.test(text);
 }
 
 /** 时长值 → 该时长端口**自己声明的**候选（只有 COMBO 端口需要这一步）。
  *
- *  与比例同一条约定：写一个不在候选里的值，ComfyUI 只会静默回落到第一个选项
- *  （用户看到的是「改了时长没生效」）。所以：
+ *  写一个不在候选里的值，ComfyUI 只会静默回落到第一个选项（用户看到的是
+ *  「改了时长没生效」）。所以：
  *  1. 端口没声明候选（普通数字口）→ 原样返回；
  *  2. 候选里有逐字命中的 → 用它（回写候选本身的类型，别把 "16" 写进去当字符串）；
  *  3. 候选全是数字但没逐字命中 → 取最接近的一档（时长是连续量，落到相邻档位是
  *     可预期的；直接丢掉反而让用户看到「给了 5 秒却还是默认长度」）；
- *  4. 候选里有非数字项 → 不猜，返回 undefined，由调用方退回端口默认值。 */
+ *  4. 候选里有非数字项 → 不猜，返回 undefined，调用方退回端口默认值。 */
 function matchDurationOption(
   entry: WorkflowIOEntry,
   value: number,
@@ -336,286 +147,157 @@ function matchDurationOption(
   return best ?? undefined;
 }
 
-/* ── 视频模式判定 ──
+/** 「时长」口这一次要落的值。
  *
- * 工坊的视频通道有两个模式：文生视频（无首帧）与图生视频（有首帧）。
- * 模式码就是工作流库的 taskType / modes（T2V / I2V / TI2V / FLF2V /
- * S2V …）。判定刻意只看这套码，不看工作流的 taskType 之上再包一层「内容分类」
- * （image/video）—— 那层分类是工作流库的展示维度，不是生成模式的判据。 */
-
-/** 视频类模式码（前缀式，兼容 T2V / TI2V / FLF2V / FMF2V / S2V / V2V …）。 */
-const VIDEO_MODE_RE =
-  /^(t2v|i2v|ti2v|flf2v|fmf2v|v2v|r2v|rv2v|vi2v|mv2v|vrc2v|ads2v|s2v|ia2v|a2v)$/i;
-
-/** 该模式码是否属于视频生成。 */
-export function isVideoMode(code: string | null | undefined): boolean {
-  return typeof code === "string" && VIDEO_MODE_RE.test(code.trim());
+ *  单位由**落点端口**声明（见 `durationPinUsesFrames`）；没落点时不折算（值反正
+ *  落不下去，`applyParamMapping` 会如实报 unmatched），只挑调用方给的那一个。 */
+function durationValueFor(args: {
+  io: WorkflowIOMap;
+  resolved: Record<string, string | null>;
+  values: WorkshopExposedValues;
+}): number | undefined {
+  const { io, resolved, values } = args;
+  const target = resolved.duration;
+  const port = target ? io[target] : undefined;
+  if (!port) return values.duration ?? values.frames;
+  const wantsFrames = durationPinUsesFrames(port);
+  const raw = wantsFrames
+    ? (values.frames ?? values.duration)
+    : (values.duration ?? values.frames);
+  if (raw === undefined) return undefined;
+  const matched = matchDurationOption(port, raw);
+  return typeof matched === "number" ? matched : undefined;
 }
 
-/** 该模式是否自带首帧图（图生视频 / 图文生视频 / 首尾帧）。 */
-export function modeUsesFirstFrame(code: string | null | undefined): boolean {
-  if (typeof code !== "string") return false;
-  return /^(i2v|ti2v|flf2v|fmf2v|r2v|s2v|ia2v)$/i.test(code.trim());
-}
+/** 工坊的对外值 → **契约口 id → 值**（映射层的入参形状）。
+ *
+ *  契约口 id 见 `workflow-exposed-params` 的 `exposedParamsForMode`
+ *  （`prompt` / `negative` / `size` / `first-frame` / `last-frame` /
+ *  `reference-image(-n)` / `duration`）—— 这些键与作者连线的键空间一致，映射层
+ *  据此查落点。 */
+function toContractValues(args: {
+  io: WorkflowIOMap;
+  mode: string | null;
+  values: WorkshopExposedValues;
+  resolved: Record<string, string | null>;
+  entries: readonly { id: string; cls: string }[];
+}): Record<string, unknown> {
+  const { io, mode, values, resolved, entries } = args;
+  const out: Record<string, unknown> = {};
 
-/** 该模式是否需要尾帧图（首尾帧视频）。 */
-export function modeUsesLastFrame(code: string | null | undefined): boolean {
-  if (typeof code !== "string") return false;
-  return /^(flf2v|fmf2v)$/i.test(code.trim());
-}
+  if (values.prompt !== undefined) out.prompt = values.prompt;
+  if (values.negativePrompt !== undefined) out.negative = values.negativePrompt;
 
-/** 把一组 IO 条目按 ioKey → 分类整理；同一分类出现多个时取首个（稳定顺序）。 */
-function classifyAll(io: WorkflowIOMap): Map<string, WorkshopPinClass> {
-  const out = new Map<string, WorkshopPinClass>();
-  for (const [key, entry] of Object.entries(io)) {
-    out.set(key, classifyWorkshopPin(entry));
+  /* 尺寸：工坊给的是「比例 + 档位（+ 倍数）」，映射层按**落点子口身份**派成各自
+   *  认的形状（宽 / 高 / 比例标签 / 像素量 / 分辨率档 / 倍数）—— 换算只此一处，
+   *  写成 "WxH" 是为了让两边的口径完全一致（映射层只吃这一种尺寸串）。 */
+  if (values.size !== undefined) {
+    out.size = sizeSpecToWxH(
+      normalizeSizeSpec(values.size),
+      sceneFromMode(mode),
+    );
   }
+
+  /* 图片：契约口 `first-frame` / `last-frame` / `reference-image(-n)` 各自落哪一行
+   *  由作者连线声明，这里只按工坊的业务语义给值。
+   *
+   *  首帧缺省回退第一张参考图（镜头图当首帧）—— 这是**工坊的调用契约**（视频通道
+   *  只有一路镜头图），不是「按位置猜工作流的槽位」：值仍只落到作者连给首帧口的
+   *  那一行上。 */
+  const refs = values.referenceImages ?? [];
+  const firstFrame = values.firstFrame ?? refs[0];
+  if (firstFrame !== undefined) out["first-frame"] = firstFrame;
+  if (values.lastFrame !== undefined) out["last-frame"] = values.lastFrame;
+  /* 参考图按契约顺序一一对应（第一张不带序号）。 */
+  const referenceIds = entries
+    .filter((entry) => entry.cls === "reference-image")
+    .map((entry) => entry.id);
+  referenceIds.forEach((id, index) => {
+    const ref = refs[index];
+    if (ref !== undefined) out[id] = ref;
+  });
+
+  const duration = durationValueFor({ io, resolved, values });
+  if (duration !== undefined) out.duration = duration;
+
   return out;
 }
 
-function pickFirst(
-  classified: Map<string, WorkshopPinClass>,
-  cls: WorkshopPinClass,
-): string | undefined {
-  for (const [key, value] of classified) {
-    if (value === cls) return key;
-  }
-  return undefined;
-}
-
-/** 工坊给的比例标签 → 某个 `aspect_ratio` 端口**自己声明的**候选值。
- *
- *  这类端口是 COMBO，写进去的值必须逐字命中它的 `options`（如
- *  `"16:9 (Widescreen)"`）；写一个自由文本只会让 ComfyUI 静默回落到第一个选项
- *  —— 用户看到的是「改了比例没生效」。因此按「先精确、再归一化比对」的顺序找：
- *
- *  1. `options` 里有与标签逐字相同的项 → 用它；
- *  2. 否则比归一化后的比例值（从选项串里解 `16:9` 这类比值），取最接近的一项；
- *  3. 都没有（端口没声明候选 / 无法解析）→ 返回 undefined，交由调用方退回默认值。 */
-export function matchAspectOption(
-  entry: WorkflowIOEntry,
-  aspect: string | undefined,
-): string | undefined {
-  if (typeof aspect !== "string" || !aspect.trim()) return undefined;
-  const wanted = aspect.trim();
-  const options = Array.isArray(entry.options)
-    ? entry.options.filter(
-        (option): option is string => typeof option === "string",
-      )
-    : [];
-  const exact = options.find((option) => option.trim() === wanted);
-  if (exact !== undefined) return exact;
-  /* COMBO 没声明候选（老数据 / 自定义节点）时按原样写 —— 那时没有「候选」可
-   * 违反，工坊的标准标签就是最合理的猜测。 */
-  if (options.length === 0) return wanted;
-  const wantedRatio = parseRatioFromText(wanted);
-  if (wantedRatio === null) return undefined;
-  let best: string | undefined;
-  let bestDist = Number.POSITIVE_INFINITY;
-  for (const option of options) {
-    const ratio = parseRatioFromText(option);
-    if (ratio === null) continue;
-    const dist = Math.abs(ratio - wantedRatio);
-    if (dist < bestDist) {
-      best = option;
-      bestDist = dist;
-    }
-  }
-  return best;
-}
-
-/** 工作流是否用「尺寸」语义接住了值（宽 / 高 / 比例 / 像素量 任一类端口存在）。 */
-function hasAnySizeSlot(classified: Map<string, WorkshopPinClass>): boolean {
-  return (
-    pickFirst(classified, "size-width") !== undefined ||
-    pickFirst(classified, "size-height") !== undefined ||
-    pickFirst(classified, "size-aspect") !== undefined ||
-    pickFirst(classified, "size-megapixels") !== undefined
-  );
-}
-
-/** 像素量（百万像素）：W×H / 1e6，按 pin 声明的小数精度取整。 */
-export function megapixelsForSize(
-  width: number,
-  height: number,
-  defaultValue?: unknown,
-): number | null {
-  if (!(width > 0) || !(height > 0)) return null;
-  const raw = (width * height) / 1_000_000;
-  if (!Number.isFinite(raw) || raw <= 0) return null;
-  /* 精度取默认值的小数位（`1.0` → 1 位；`1` → 0 位），工坊的 `1M` 这类
-   * 声明通常写 1.0，写 1.03 进去会被 pin 判成「不在候选内」。 */
-  const digits =
-    typeof defaultValue === "number" && !Number.isInteger(defaultValue) ? 1 : 0;
-  const factor = 10 ** digits;
-  const rounded = Math.round(raw * factor) / factor;
-  return rounded > 0 ? rounded : null;
-}
-
-/** 组装工坊对外参数 → workflowInputs。
+/** 组装工坊对外参数 → workflowInputs（**只落作者连过线的端口**）。
  *
  *  规则：
- *   • 被识别为对外控件的 pin：用户给了值就用用户值，没给就回退 `resolveEntryDefault`
- *     （即「用户不改就用工作流默认值」，与其它参数一致）；
- *   • 其余 pin（internal）：一律用默认值；
- *   • 没有默认值、用户也没给值的 pin：跳过（不产生 `undefined` 三元组）；
- *   • 用户给了值但工作流没有对应 pin：记进 `unmatched`，不凭空造 pin。
+ *   • 作者画过线的口：用户给了值就落到那条线指向的端口；线说了算；
+ *   • 没画线的口：**不认用户值**（没有落点可落，不替作者猜）—— 工作流图内自带的
+ *     默认值照旧生效，与「未连线的口就用工作流自己的默认值」一致；
+ *   • 用户给了值却落不下去（未连线 / 断开 / 端口已消失）：记进 `unmatched`，
+ *     不凭空造端口。
  *
- *  @param io      工作流详情里的 IO 映射（服务端已 enrich）。
- *  @param mode    当前模式码；影响默认值两级回退（模式 → 通用）。未开启模式传 null。
- *  @param values  工坊这次要落下去的对外参数。
+ *  @param io       工作流详情里的 IO 映射（服务端已 enrich）。
+ *  @param paramMap 作者的连线表（`paramMap` 原始形状，内部走 `parseParamMapping`）。
+ *  @param mode     当前模式码；连线按模式分开存放，未开启模式传 null。
+ *  @param values   工坊这次要落下去的对外参数。
  */
-export function buildEncapsulatedInputs(
-  io: WorkflowIOMap | null | undefined,
-  mode: string | null | undefined,
-  values: WorkshopExposedValues,
-): EncapsulatedInputs {
-  const workflowInputs: { nodeId: string; name: string; value: unknown }[] = [];
-  const exposed: Record<string, WorkshopPinClass> = {};
-  const internalKeys: string[] = [];
-  const unmatched: (keyof WorkshopExposedValues)[] = [];
-
+export function buildEncapsulatedInputs(args: {
+  io: WorkflowIOMap | null | undefined;
+  paramMap: unknown;
+  mode: string | null | undefined;
+  values: WorkshopExposedValues;
+}): EncapsulatedInputs {
+  const { io, paramMap, mode, values } = args;
   if (!io || typeof io !== "object") {
-    return { workflowInputs, exposed, internalKeys, unmatched };
+    return { workflowInputs: [], unmatched: [] };
   }
-
-  const classified = classifyAll(io);
-  /* 尺寸：工坊给的是「比例 + 分辨率」或「比例 + 百万像素 + 倍数」，宽高按当前
-   *  模式的场景表算（图 / 视频的 1k 不是同一组值）。 */
-  const sizeSpec = values.size ? normalizeSizeSpec(values.size) : null;
-  const sizeDims = sizeSpec
-    ? sizeSpecDims(sizeSpec, sceneFromMode(mode))
-    : null;
+  const effectiveMode = mode ?? null;
+  const entries = buildParamEntries(io, undefined, { mode: effectiveMode });
+  const mapping = parseParamMapping(paramMap);
+  const resolved = resolveMapping(entries, io, mapping, effectiveMode);
+  const { inputs, unmatched } = applyParamMapping({
+    io,
+    entries,
+    mapping,
+    values: toContractValues({
+      io,
+      mode: effectiveMode,
+      values,
+      resolved,
+      entries,
+    }),
+    mode: effectiveMode,
+  });
+  /* 「这个模式压根不暴露这个口」映射层看不见（它只遍历契约条目）：工坊给了图片 /
+   *  时长这类值、而契约里没有对应口时在这里补报 —— 否则用户会以为值已经下发下去
+   *  了（T2I 收到一张参考图就是这种情形）。 */
+  const reported = new Set(unmatched);
+  const hasEntry = (id: string) => entries.some((entry) => entry.id === id);
   const refs = values.referenceImages ?? [];
-  const refImage = refs[0];
-  const firstFrame = values.firstFrame ?? refImage;
-  const lastFrame = values.lastFrame;
-
-  /** 参考图槽位按出现顺序分给 inputImages（首帧槽优先拿第一张）。
-   *  多张图/多个槽时按序号一一对应，多出来的槽不再硬塞。 */
-  const slotIndex = { value: 0 };
-  const nextReference = (): string | undefined => {
-    const out = refs[slotIndex.value];
-    slotIndex.value += 1;
-    return out;
-  };
-
-  const userValueFor = (
-    cls: WorkshopPinClass,
-    ioEntry: WorkflowIOEntry,
-  ): { matched: boolean; value: unknown } => {
-    switch (cls) {
-      case "prompt":
-        return { matched: values.prompt !== undefined, value: values.prompt };
-      case "negative":
-        return {
-          matched: values.negativePrompt !== undefined,
-          value: values.negativePrompt,
-        };
-      /* 宽 / 高：由「比例 + 档位」按场景尺寸表现算（尺寸表是唯一口径，
-       *  不再从 WxH 字符串里劈）。 */
-      case "size-width":
-        return { matched: sizeDims !== null, value: sizeDims?.width };
-      case "size-height":
-        return { matched: sizeDims !== null, value: sizeDims?.height };
-      /* 比例：必须命中该端口自己声明的候选（COMBO options），否则视为没给 ——
-       *  写一个不在候选里的值只会让 ComfyUI 静默回落到第一个选项。 */
-      case "size-aspect": {
-        const aspect = matchAspectOption(
-          ioEntry,
-          sizeSpec ? sizeSpecAspect(sizeSpec) : undefined,
-        );
-        return { matched: aspect !== undefined, value: aspect };
-      }
-      /* 百万像素：分辨率档取该档宽高的实际总像素（不是幂次近似），
-       *  百万像素档原样透传档位值。 */
-      case "size-megapixels":
-        return {
-          matched: sizeSpec !== null,
-          value: sizeSpec
-            ? sizeSpecMegapixels(sizeSpec, sceneFromMode(mode))
-            : undefined,
-        };
-      /* 倍数：与「百万像素」同属「比例 + 百万像素 + 倍数」一类，工坊派值
-       *  （分辨率档由能整除两侧的最大候选反推）。 */
-      case "size-multiple":
-        return {
-          matched: sizeSpec !== null,
-          value: sizeSpec
-            ? sizeSpecMultiple(sizeSpec, sceneFromMode(mode))
-            : undefined,
-        };
-      case "first-frame":
-        return { matched: firstFrame !== undefined, value: firstFrame };
-      case "last-frame":
-        return { matched: lastFrame !== undefined, value: lastFrame };
-      case "reference-image":
-        return { matched: refImage !== undefined, value: nextReference() };
-      /* 时长：同一个口两种落点单位 —— 按帧表达的端口吃 `frames`，按秒表达的
-       *  吃 `duration`（两者都由调用方按当前 fps 折算好，这里不猜 fps）。
-       *  端口声明了候选（COMBO）时先按候选收敛，绝不写非法值进去。 */
-      case "duration": {
-        const wantsFrames = durationPinUsesFrames(ioEntry);
-        const raw = wantsFrames ? values.frames : values.duration;
-        if (raw === undefined) return { matched: false, value: undefined };
-        const value = matchDurationOption(ioEntry, raw);
-        return { matched: value !== undefined, value };
-      }
-      default:
-        return { matched: false, value: undefined };
-    }
-  };
-
-  for (const [key, entry] of Object.entries(io)) {
-    const cls = classified.get(key) ?? "internal";
-    if (cls !== "internal") {
-      exposed[key] = cls;
-      const { matched, value } = userValueFor(cls, entry);
-      // 用户给了值就用用户值；否则与内部参数一样回退默认值。
-      const finalValue =
-        matched && value !== undefined
-          ? value
-          : resolveEntryDefault(entry, mode);
-      if (finalValue !== undefined) {
-        workflowInputs.push({
-          nodeId: entry.nodeId,
-          name: entry.name,
-          value: finalValue,
-        });
-      }
-      continue;
-    }
-    // internal：一律默认值。
-    const fallback = resolveEntryDefault(entry, mode);
-    internalKeys.push(key);
-    if (fallback !== undefined) {
-      workflowInputs.push({
-        nodeId: entry.nodeId,
-        name: entry.name,
-        value: fallback,
-      });
-    }
+  if (
+    (values.firstFrame !== undefined || refs.length > 0) &&
+    !hasEntry("first-frame")
+  ) {
+    reported.add("first-frame");
   }
-
-  // 用户给了值却没有对应 pin → 如实报告，不沉默丢弃。
-  if (values.prompt !== undefined && !pickFirst(classified, "prompt"))
-    unmatched.push("prompt");
-  if (values.negativePrompt !== undefined && !pickFirst(classified, "negative"))
-    unmatched.push("negativePrompt");
-  /* 尺寸：宽 / 高 / 比例 / 像素量任一类端口接住就不算没落下去（工作流用哪种口径
-   *  表达尺寸由它自己决定）。工坊一次给的是「比例 + 档位（+ 倍数）」，工作流
-   *  只吃其中一路 —— 另一路没落点上**不算问题**，因此只在「一类尺寸端口都没有」
-   *  时报一次 `size`，避免把「工作流只暴露 width/height」误报成「比例没生效」。 */
-  if (sizeSpec !== null && !hasAnySizeSlot(classified)) unmatched.push("size");
-  /* 参考图：首帧槽（含普通参考图槽）都没有，才算没落下去。
-   * 首尾帧工作流的 referenceImages[0] 会落到首帧槽，不该报 unmatched。 */
-  const hasImageSlot =
-    pickFirst(classified, "reference-image") ??
-    pickFirst(classified, "first-frame");
-  if (refImage !== undefined && !hasImageSlot)
-    unmatched.push("referenceImages");
-  if (lastFrame !== undefined && !pickFirst(classified, "last-frame"))
-    unmatched.push("lastFrame");
-
-  return { workflowInputs, exposed, internalKeys, unmatched };
+  if (values.lastFrame !== undefined && !hasEntry("last-frame")) {
+    reported.add("last-frame");
+  }
+  if (
+    (values.duration !== undefined || values.frames !== undefined) &&
+    !hasEntry("duration")
+  ) {
+    reported.add("duration");
+  }
+  /* 尺寸折叠成一条：工坊只送**一个**尺寸表达（比例 + 档位 + 倍数），工作流用
+   *  「宽高」还是「比例 + 像素量」由它自己决定 —— 接住其中一路就算接住（另一路
+   *  没落点不算问题，图内默认值补上）。所以只在**一路都没落上**时报一次 `size`，
+   *  报子口级会让「只暴露 width/height 的工作流」多出四条噪音。 */
+  const sizeIds = entries
+    .filter((entry) => entry.id.startsWith("size-"))
+    .map((entry) => entry.id);
+  if (sizeIds.length > 0 && values.size !== undefined) {
+    const landed = sizeIds.some(
+      (id) => resolved[id] !== undefined && !reported.has(id),
+    );
+    sizeIds.forEach((id) => reported.delete(id));
+    if (!landed) reported.add("size");
+  }
+  return { workflowInputs: inputs, unmatched: [...reported] };
 }

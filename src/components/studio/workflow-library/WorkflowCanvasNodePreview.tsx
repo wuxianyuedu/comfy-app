@@ -17,13 +17,7 @@
  * 映射**在这里可编辑（三列 React Flow 画布，见 WorkflowLibraryCanvas）。
  */
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   startLocalGenerate,
   watchTask,
@@ -32,12 +26,10 @@ import {
 import {
   appendWorkflowRunLog,
   failWorkflowRun,
-  getWorkflowRunStoreSnapshot,
   latestRunForWorkflow,
   patchWorkflowRun,
   registerWorkflowRun,
-  subscribeWorkflowRunStore,
-} from "~/lib/workflow-run-store";
+} from "~/lib/workflow/workflow-run-store";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   defaultInputValues,
@@ -45,7 +37,6 @@ import {
   inferGroups,
   mergeRefreshedDefaults,
   resolveEntrySeedMode,
-  filterVisibleInMode,
   splitWorkflowIO,
   toWorkflowInputsPayload,
   type WorkflowIOMap,
@@ -55,15 +46,16 @@ import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
-} from "~/lib/workflow-param-mapping";
+  sizeGroupIds,
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   applyOutputBindingEdit,
   canApplyOutputBindingEdit,
   clearOutputBindingEdit,
-} from "~/lib/workflow-output-binding";
+} from "~/lib/workflow/workflow-output-binding";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
-import { resolveWorkflowMode } from "~/lib/workflow-types";
+import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
@@ -73,8 +65,6 @@ import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
-import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
-import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import { WorkflowNodeActionButton } from "../shared/WorkflowNodeParts";
 
 type Phase =
@@ -127,14 +117,11 @@ export function WorkflowCanvasNodePreview({
   const resultUrlRef = useRef<string | null>(null);
   /* 当前运行对应的 taskId；挂到 store 后窗口关闭再打开仍能恢复。 */
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  /* 全屏执行日志弹窗开关。 */
-  const [logOpen, setLogOpen] = useState(false);
   /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
   const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
   /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
    *  「按 ⌫ 断的是哪一根」说不清）。 */
   const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
-  const [viewTaskId, setViewTaskId] = useState<string | null>(null);
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
    * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
@@ -185,11 +172,6 @@ export function WorkflowCanvasNodePreview({
   /* 重开窗口恢复：若 store 里有本工作流仍在运行的登记，恢复「生成中」视角。
    * 恢复走惰性初始化（useState 的初始化函数在挂载时读 store），避免 effect
    * 里同步 setState 的级联渲染。 */
-  const storeSnapshot = useSyncExternalStore(
-    subscribeWorkflowRunStore,
-    getWorkflowRunStoreSnapshot,
-    getWorkflowRunStoreSnapshot,
-  );
   const resumedRef = useRef(false);
   useEffect(() => {
     if (resumedRef.current) return;
@@ -264,26 +246,6 @@ export function WorkflowCanvasNodePreview({
     [workflowIO],
   );
 
-  /* 宿主卡片此刻**真的画得出来**的端口（ioKey 集合）。
-   *
-   *  它是「这个端口现在连得上」的事实源：卡片上的候选端点按它收窄 —— 画不出
-   *  端点的端口不给拖（拖过去也只会被画布闸门拒绝，用户看到的就是「点击端点
-   *  拉线出现禁用标记」）。
-   *
-   *  口径与宿主表单**同一份**（不是另算一遍）：`splitWorkflowIO` 拆出输入 →
-   *  `filterVisibleInMode` 按当前模式去掉隐藏项 → 组合控件接管的端口也算画得出来
-   *  （窄版控件把它们摆成逐行参数，各有端点）。纯派生：不必等 DOM 测量，也不会在
-   *  渲染里读 ref。 */
-  const reachableKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const entry of splitWorkflowIO(workflowIO).inputs) {
-      if (!filterVisibleInMode([entry], effectiveMode).length) continue;
-      keys.add(entry.ioKey);
-    }
-    for (const ioKey of groupedKeys) keys.add(ioKey);
-    return keys;
-  }, [workflowIO, effectiveMode, groupedKeys]);
-
   /* seed 类参数的「控件后行为」：按生效模式解析（模式覆盖优先，回退条目全局）。
    *  没有模式时与旧行为一致，只读条目全局 seedMode。 */
   const seedModes = useMemo(() => {
@@ -328,7 +290,6 @@ export function WorkflowCanvasNodePreview({
             mapping: parseParamMapping(wiring.effectiveParamMap),
             values,
             mode: effectiveMode,
-            groupedKeys,
           })
         : null;
       const workflowInputs =
@@ -344,8 +305,7 @@ export function WorkflowCanvasNodePreview({
       });
       setPhase({ kind: "running", pct: 0 });
       setActiveTaskId(taskId);
-      setViewTaskId(taskId);
-      /* 登记运行记录；日志弹窗不再自动打开，由用户点「执行日志」查看。 */
+      /* 登记运行记录；日志弹窗不再自动打开，由用户点详情头部的「执行日志」查看。 */
       registerWorkflowRun({
         taskId,
         workflowId,
@@ -395,11 +355,6 @@ export function WorkflowCanvasNodePreview({
   const pct = phase.kind === "running" ? phase.pct : 0;
   const nodeLabel =
     phase.kind === "running" && phase.node?.label ? phase.node.label : null;
-  /* 运行态/日志按「当前工作流」隔离：切到哪个工作流就展示哪个工作流的运行，
-   * 不再把别的工作流的运行串到本节点上。currentRuns 取本工作流记录（新→旧）。 */
-  const currentRuns = storeSnapshot.runs.filter(
-    (r) => r.workflowId === workflowId,
-  );
 
   /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
    * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
@@ -445,17 +400,8 @@ export function WorkflowCanvasNodePreview({
         paramMap: wiring.effectiveParamMap,
         mode: effectiveMode,
         groupedKeys,
-        /* 候选端点收窄到「宿主卡片此刻真的画得出来的行」——画不出端点的端口不给
-         * 拖，拖过去也落不上（与编辑器画布的 `reachableKeys` 同一口径）。 */
-        reachableKeys,
       }),
-    [
-      workflowIO,
-      wiring.effectiveParamMap,
-      effectiveMode,
-      groupedKeys,
-      reachableKeys,
-    ],
+    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys],
   );
   /* ── 对外输出参数（右列）──
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
@@ -544,8 +490,6 @@ export function WorkflowCanvasNodePreview({
     ],
   );
 
-  const activeRun = currentRuns[0] ?? null;
-
   return (
     /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
      * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
@@ -585,13 +529,31 @@ export function WorkflowCanvasNodePreview({
           setSelectedOutputId(id);
           if (id) setSelectedParamId(null);
         }}
-        onResetParam={wiring.resetToAuto}
+        /* 卡片头的 ↺：尺寸是一张卡（六行形态），一键恢复要把六个子口的线都撤掉
+         * —— 只撤其中一条会让卡片看着「还有线」。其余条目就是它自己那一个键。 */
+        onResetParam={(id) => {
+          /* 尺寸卡头一次撤六行形态：必须**一次算一次落库**（`resetMany`）——
+           *  逐条 `resetToAuto` 会各自从同一份旧值出发，后一次覆盖前一次，
+           *  用户看到的就是「重置清不掉」。 */
+          wiring.resetMany(sizeGroupIds(id));
+        }}
         onResetOutput={outputWiring.reset}
         onConnect={
           effectiveMode && onPatchParamMap ? wiring.connect : undefined
         }
         onConnectOutput={
           effectiveMode && onPatchParamMap ? outputWiring.connect : undefined
+        }
+        /* 删除单条线：点选某条线 → 删除，只断那一条（断开该 entryId / 输出 ioKey
+         *  的映射），不波及同一张卡片上的其它线（尺寸卡是六条形态线）。只读时
+         *  不可删，这里不传。 */
+        onDeleteWire={
+          effectiveMode && onPatchParamMap
+            ? (namespace, entryId) => {
+                if (namespace === "param") wiring.disconnect(entryId);
+                else outputWiring.disconnect(entryId);
+              }
+            : undefined
         }
         host={
           <LibraryHostCard
@@ -721,27 +683,9 @@ export function WorkflowCanvasNodePreview({
         </p>
       )}
 
-      {/* 执行日志入口：与「工坊封装」页签**同一扇门**（同一个按钮组件、同一份
-       *  运行登记表、同一个全屏弹窗）。有运行记录即显示（跨窗口存活）。 */}
-      <WorkflowRunLogButton
-        workflowId={workflowId}
-        taskId={activeRun?.taskId ?? null}
-        running={running}
-        onOpen={() => {
-          /* 打开日志默认定位到本工作流最近一次运行（切到的工作流独立展示）。 */
-          if (!viewTaskId && activeRun) setViewTaskId(activeRun.taskId);
-          setLogOpen(true);
-        }}
-      />
-
-      {/* 全屏执行日志弹窗：与项目画布 GlobalStepLogPanel 同款交互。 */}
-      <WorkflowRunLogModal
-        open={logOpen}
-        workflowId={workflowId}
-        viewTaskId={viewTaskId}
-        onViewTaskIdChange={setViewTaskId}
-        onClose={() => setLogOpen(false)}
-      />
+      {/* 执行日志入口不在这里 —— 它是**详情头部**的一扇固定门（DetailHeader）：
+          两个页签共用同一份运行登记表与同一个全屏弹窗，位置不再随页签 / 有没有
+          跑过而变化（ISSUE #611 与「入口位置固定」）。 */}
     </div>
   );
 }

@@ -51,23 +51,6 @@ export function portColor(type: string | undefined | null): string {
   return PORT_COLORS[type] ?? DEFAULT_PORT_COLOR;
 }
 
-/** Look up the right-side type label.
- *
- *  Per the pass the type column is now driven by the raw data
- *  itself: `portLabel(t)` returns the raw type string verbatim so users
- *  always see what ComfyUI itself reports (e.g. `COMBO` / `STRING` /
- *  `INT` / `SIGMAS`), preserving variable-name casing exactly.  An
- *  earlier Chinese-translation map was removed because it caused every
- *  COMBO row to read "枚举" — collapsing all six option-types of a
- *  DaSiWa / KJNodes node into one identical-looking tag.
- *
- *  Defensive: caller-side fall-backs (`portLabel(t) || t`) still recover
- *  gracefully when this returns an empty string for an unknown type. */
-export function portLabel(type: string | undefined | null): string {
-  if (!type) return "";
-  return String(type).trim();
-}
-
 /* ── Per-class output types.  ComfyUI's API exposes these via
  *    /object_info, but for the canvas we only need the output *order*
  *    per slot, which is the most-stable property of a node class.  When

@@ -116,6 +116,22 @@ function analyze() {
     if (hasNode) nodeImports.add(file);
   }
 
+  /* 边界判据：模块**自己**声明了「只用我」时，从它继续向下走会把整个服务端图
+   * 都算成命中（服务端代码引服务端代码是正常的）。所以边界处必须停。
+   *
+   * 关键在于**哪些声明算边界**，两条入口的答案不同：
+   *   · `server-only` / `.server.ts` 是**真边界** —— 它们的后面是服务端世界。
+   *   · `"use client"` 不是边界，它是**同一个客户端图里的另一个节点**：
+   *     client component 引 client component 是常态，从 `"use client"` 模块
+   *     继续往下走才看得见「客户端图里到底有没有 Node-only 物」。
+   *     （实测：`src/trpc/react.tsx` 是 `"use client"`，而只有一个未声明的
+   *     `src/trpc/query-client.ts` 从它出发才可达 —— 把它当边界，这个模块
+   *     就永远不在客户端可达集里，判据静默失效。） */
+  const isServerBoundary = (file) => {
+    const d = decls.get(file);
+    return d === "server-only" || d === "server-suffix";
+  };
+
   /** 从一组入口出发，找到「先撞上谁」。带分支，用于给出完整引用链。 */
   function reach(entries, isTarget) {
     const seen = new Set();
@@ -127,16 +143,9 @@ function analyze() {
         hits.set(rel(file), [...chain, rel(file)]);
         return;
       }
-      /* 声明过的模块是它**自己**的边界：从它继续往下走会把整个服务端图都算成
-       * 命中（服务端代码引服务端代码是正常的）。只有「没人声明」的普通逻辑模块
-       * 引到声明过的模块，才叫声明没生效。顺序不能反 —— 先判边界再判目标，
-       * 否则目标永远不可达，这条判据会静默变成「永远为 0」。 */
-      if (decls.get(file) !== "none" && chain.length > 0) return;
-      const raw = fs.readFileSync(file, "utf8");
-      const src = stripComments(raw);
-      // 声明为服务端物（server-only）或已是客户端入口：不再往下走 ——
-      // 前者是它自己的边界，后者的图由 client-bundle 那条用例守。
-      if (/^\s*["']use client["']/m.test(raw)) return;
+      /* 顺序不能反：先判边界再往下走，否则目标永远不可达、判据静默变成「永远为 0」。 */
+      if (isServerBoundary(file) && chain.length > 0) return;
+      const src = stripComments(fs.readFileSync(file, "utf8"));
       for (const im of parseImports(src)) {
         if (/^type\s/.test(im.clause)) continue;
         const next = resolveLocal(file, im.spec);
@@ -165,9 +174,10 @@ function analyze() {
       seenEntry.add(file);
       // 入口自身是客户端组件，但它**是**那条路径的起点；从它的依赖开始才算「被引到」。
       if (!isRoot) clientReachablePure.add(file);
-      const raw = fs.readFileSync(file, "utf8");
-      const src = stripComments(raw);
-      if (decls.get(file) !== "none" && !isRoot) return;
+      // 服务端边界之后不属于客户端图；`"use client"` 不在此列（它是同一张图里的
+      // 另一个节点，从它继续走才拿得到完整的客户端可达集，见 `isServerBoundary`）。
+      if (isServerBoundary(file) && !isRoot) return;
+      const src = stripComments(fs.readFileSync(file, "utf8"));
       for (const im of parseImports(src)) {
         if (/^type\s/.test(im.clause)) continue;
         const next = resolveLocal(file, im.spec);

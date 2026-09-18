@@ -4,9 +4,11 @@
  *
  * 每个对外参数一张卡片（视觉本体复用 workflow-editor/WorkflowParamCard）：
  *   · 卡片头是参数名（作者在编辑器里勾选/改名后的那个名字）；
- *   · 卡片体逐行列出它包含的端口名与类型，端口行尾标出该端口落到宿主卡片的
- *     哪一行参数（只有一个端口时标「→ <参数名>」）；
- *   · 卡片右侧有一颗**带类型的小圆点端点**（输出端口）。
+ *   · 卡片体一行：**这个口自己的名字 + 类型**（未连线用口自己的类型，连上后是
+ *     落点那一行的类型；落到哪一行在行的 `title` 里可查）；
+ *   · 卡片右侧**一颗**带类型的小圆点端点 —— **一个口一颗点**（落点由线的另一端
+ *     声明：拖到宿主哪一行就是哪一行）。尺寸是唯一的多行卡片：一行 = 一个形态，
+ *     每行一颗点，handle 取子口 id。
  *   · 卡片**可连线**（ISSUE #355：「连线要能编辑，现在编辑不了」）：从圆点按下
  *     并拖到宿主卡片上的某一行即改落点，卡片头的 ↺ 撤销该口的手工线。
  *
@@ -21,9 +23,13 @@
 
 import {
   paramOutputPorts,
+  sizeGroupIds,
+  sizeSubLabel,
+  sizeSubTypeDisplay,
+  SIZE_SUB_IDS,
   type ParamEntry,
   type ParamOutputPort,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { ReactNode } from "react";
 
@@ -55,10 +61,7 @@ export interface WorkflowParamCardColumnProps {
   /** 该对外参数在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual?: (entryId: string) => boolean;
   onReset?: (entryId: string) => void;
-  /** 宿主卡片此刻真的画得出来的端口（ioKey 集合）—— 候选圆点按它收窄：
-   *  画不出端点的端口不给拖，拖过去也落不上。缺省 = 不收窄。 */
-  reachableKeys?: ReadonlySet<string>;
-  /** 端点槽位（每个候选端口一颗）：消费方注入 `<Handle>` 或只读圆点。 */
+  /** 端点槽位：消费方注入 `<Handle>` 或只读圆点。 */
   endpoint?: (port: ParamOutputPort, index: number) => ReactNode;
 }
 
@@ -72,7 +75,6 @@ export function WorkflowParamCardColumn({
   onSelect,
   isManual,
   onReset,
-  reachableKeys,
   endpoint,
 }: WorkflowParamCardColumnProps) {
   if (entries.length === 0) return null;
@@ -88,7 +90,72 @@ export function WorkflowParamCardColumn({
         {canWire ? "对外参数 · 拖圆点改落点" : "对外参数"}
       </p>
       {entries.map((entry) => {
+        /* 尺寸在映射层是六个子口（形态由作者声明），但**卡片只有一张**：六行形态、
+         * 每行一颗圆点，不再并排六张卡（用户口径：「尺寸这里不要显示这么多节点，
+         * 尺寸只显示一个节点」）。只在第一个子口的位置画这一张，其余跳过。 */
+        if (SIZE_SUB_IDS.includes(entry.cls)) {
+          const forms = entries.filter((item) =>
+            SIZE_SUB_IDS.includes(item.cls),
+          );
+          if (entry !== forms[0]) return null;
+          const first = forms[0];
+          const sizeLabel =
+            contractEntries?.find((item) => item.id === "size")?.label ??
+            sizeSubLabel("size");
+          return (
+            <WorkflowParamCard
+              key="size"
+              /* 选中的可能是这张卡（`size`）或它的某一条线（子口 id）：两种都点亮。 */
+              selected={sizeGroupIds(selectedEntryId).some((id) =>
+                SIZE_SUB_IDS.includes(id),
+              )}
+              onSelect={onSelect ? () => onSelect("size") : undefined}
+              entryId="size"
+              cls="size"
+              label={sizeLabel}
+              idLabel="size"
+              classLabel={paramClassStyle("size").label}
+              hostNodeId={first.hostNodeId || first.nodeId}
+              width={CARD_WIDTH}
+              canWire={canWire}
+              readOnly={!canWire}
+              canReset={canWire && SIZE_SUB_IDS.some((id) => !!isManual?.(id))}
+              /* 一行 = 一个子口：卡片头的 ↺ 把六条线一起撤掉（尺寸是一张卡，
+               * 只撤其中一条会让卡片看着「还有线」）。
+               *
+               *  上抛的是聚合 id `size` —— 由消费方**一次**展开成六个子口交给
+               *  `resetMany`。在这里逐个上抛的话，消费方每收到一个就落一次库，
+               *  后一次会把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
+              onReset={canWire ? () => onReset?.("size") : undefined}
+              /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
+               * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
+              outputPorts={forms.map((item) => {
+                const target = resolved[item.id] ?? null;
+                /* 类型**恒为这个形态自己的类型**，不随落点变（用户口径：「尺寸上是
+                 *  什么类型就显示什么类型，不要跟连接的参数类型变换」）。
+                 *  宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，宽高比 =
+                 *  COMBO（见 `sizeSubTypeDisplay`）。 */
+                return {
+                  name: item.id,
+                  display: sizeSubLabel(item.cls),
+                  type: sizeSubTypeDisplay(item.cls),
+                  connected: !!target,
+                  ioKey: target ?? "",
+                  handleId: item.id,
+                  active: !!target,
+                };
+              })}
+              endpoint={endpoint}
+            />
+          );
+        }
         const style = paramClassStyle(entry.cls);
+        /* 这张卡片的名字只有一份：卡片头的标题与端口行都读它（见下方
+         * `outputPorts` 的 `displayName`）—— 两处各取一份会让同一张卡片说
+         * 两个名字（标题「提示词」、行上却写着工作流里的端口名）。 */
+        const cardLabel =
+          contractEntries?.find((item) => item.id === entry.id)?.label ??
+          entry.label;
         return (
           <WorkflowParamCard
             key={entry.id}
@@ -98,10 +165,7 @@ export function WorkflowParamCardColumn({
             onSelect={onSelect ? () => onSelect(entry.id) : undefined}
             entryId={entry.id}
             cls={entry.cls}
-            label={
-              contractEntries?.find((item) => item.id === entry.id)?.label ??
-              entry.label
-            }
+            label={cardLabel}
             /* 与「工坊封装」页签同口径：名字后面标出契约口 id（`prompt` /
                `size` / `reference-image-2`…），配置与日志里认的是 id。 */
             idLabel={entry.id}
@@ -115,13 +179,13 @@ export function WorkflowParamCardColumn({
             readOnly={!canWire}
             canReset={canWire && !!isManual?.(entry.id)}
             onReset={canWire ? () => onReset?.(entry.id) : undefined}
-            /* 带类型的输出端口：与编辑器同一份派生（类型跟着落点走），库里也
-             * 读得到「提示词 → STRING」。 */
+            /* **一个口一颗点**：卡片只说「这个口对外是什么」（名字 + 类型），
+             *  落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
             outputPorts={paramOutputPorts(
               entry,
               io,
               resolved[entry.id],
-              reachableKeys,
+              cardLabel,
             )}
             /* 右侧小圆点端点：**每个候选一颗圆点**（与编辑器画布同口径）。
              *

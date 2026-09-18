@@ -17,8 +17,8 @@ import {
 import { enqueue } from "~/lib/comfyui/enqueue";
 import { resolveExecutionPayload } from "~/lib/comfyui/execution-shape";
 import { coerceApiInputValue } from "~/lib/comfyui/raw-overrides";
-import { parseModesJson } from "~/lib/workflow-types";
-import type { WorkflowIOMap } from "~/lib/workflow-io-types";
+import { parseModesJson } from "~/lib/workflow/workflow-types";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import {
   buildEncapsulatedInputs,
   type WorkshopExposedValues,
@@ -55,7 +55,12 @@ export async function createWorkflowRunTask(
     !Array.isArray(tpl.workflowIO)
       ? (tpl.workflowIO as unknown as WorkflowIOMap)
       : {};
-  const { workflowInputs } = buildEncapsulatedInputs(io, mode, input.values);
+  const { workflowInputs } = buildEncapsulatedInputs({
+    io,
+    paramMap: tpl.paramMap,
+    mode,
+    values: input.values,
+  });
 
   const params = {
     workflow: tpl.id,

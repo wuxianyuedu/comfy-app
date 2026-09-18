@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { buildParamEntries } from "~/lib/workflow-param-mapping";
+import { buildParamEntries } from "~/lib/workflow/workflow-param-mapping";
 import {
   LIB_NODE_BACKDROP,
   LIB_NODE_HOST,
@@ -32,7 +32,11 @@ import {
   deriveLibraryEdges,
   libraryConnectionAllowed,
 } from "./hooks/use-library-wire-flow";
-import type { ParamCardWire } from "./workflow-library-param-cards";
+import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
+import {
+  deriveLibraryParamCards,
+  type ParamCardWire,
+} from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
   "9::widget::positive_prompt": {
@@ -94,19 +98,17 @@ describe("边的两端与 handle 取值", () => {
     targetIoKey: "9::widget::positive_prompt",
     handleId: "positive_prompt",
     grouped: false,
-    manual: false,
   };
   const outputWire: ParamCardWire = {
     entryId: "5::output::IMAGE",
     targetIoKey: "5::output::IMAGE",
     handleId: "images",
     grouped: false,
-    manual: true,
     kind: "hostToParam",
   };
 
   it("输入侧：卡片圆点（source handle）→ 宿主行（target handle = ioKey）", () => {
-    const edge = buildInputEdge(inputWire);
+    const edge = buildInputEdge(inputWire, true);
     expect(edge.source).toBe(LIB_NODE_PARAMS);
     expect(edge.target).toBe(LIB_NODE_HOST);
     expect(edge.sourceHandle).toBe("positive_prompt");
@@ -114,7 +116,7 @@ describe("边的两端与 handle 取值", () => {
   });
 
   it("输出侧方向相反：宿主输出行 → 右列卡片圆点", () => {
-    const edge = buildOutputEdge(outputWire);
+    const edge = buildOutputEdge(outputWire, true);
     expect(edge.source).toBe(LIB_NODE_HOST);
     expect(edge.target).toBe(LIB_NODE_OUTPUTS);
     expect(edge.sourceHandle).toBe("5::output::IMAGE");
@@ -124,29 +126,36 @@ describe("边的两端与 handle 取值", () => {
   it("两套键空间不混：落点是 ioKey，卡片端是 handle id", () => {
     /* 输入侧的 handle id 是**端口名**（库里按端口名给圆点定位），落点是 ioKey
      *  （运行期与落库的键）—— 混了边就量不到 handleBounds（线画不出来）。 */
-    const edge = buildInputEdge({
-      ...inputWire,
-      targetIoKey: "9::widget::negative_prompt",
-    });
+    const edge = buildInputEdge(
+      {
+        ...inputWire,
+        targetIoKey: "9::widget::negative_prompt",
+      },
+      true,
+    );
     expect(edge.targetHandle).toBe("9::widget::negative_prompt");
     expect(edge.sourceHandle).not.toContain("::");
   });
 
-  it("自动线画虚线、作者改过的画实线（与编辑器画布同一套语义）", () => {
-    const auto = buildInputEdge(inputWire);
-    const manual = buildInputEdge({ ...inputWire, manual: true });
-    expect((auto.style as { strokeDasharray?: string }).strokeDasharray).toBe(
-      "6 4",
-    );
-    expect(
-      (manual.style as { strokeDasharray?: string }).strokeDasharray,
-    ).toBeUndefined();
+  it("库里的线一律实线（未连过的不画线，见 param-cards 的用例）", () => {
+    /* 用户口径：这里是编辑对外参数的界面，「未连过就不要连」—— 所以库里没有
+     *  「默认线」这一档样式，两条边都按实线画。 */
+    for (const edge of [
+      buildInputEdge(inputWire, true),
+      buildOutputEdge(outputWire, true),
+    ]) {
+      expect(
+        (edge.style as { strokeDasharray?: string }).strokeDasharray,
+      ).toBeUndefined();
+      expect(edge.style).toMatchObject({ strokeWidth: 2.5, opacity: 1 });
+    }
   });
 
   it("两侧一起派生：几条 wire 就几条边", () => {
     const edges = deriveLibraryEdges(
       [inputWire, { ...inputWire, entryId: "size", handleId: "width" }],
       [outputWire],
+      true,
     );
     expect(edges).toHaveLength(3);
     expect(new Set(edges.map((e: Edge) => e.id)).size).toBe(3);
@@ -162,36 +171,38 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
   }) => libraryConnectionAllowed(connection, { io, entries });
 
   it("提示词口 → 提示词行：放行", () => {
-    const promptEntry = entries.find((entry) => entry.id === "prompt")!;
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        sourceHandle: promptEntry.pins[0]!.name,
+        /* 圆点 handle id = `<条目 id>?<落点 ioKey>`（卡片锚点，见
+         *  `paramOutputPorts`）—— 同一个画布节点里唯一：提示词与负向提示词的候选
+         *  行相同，不带条目 id 会互相顶。 */
+        sourceHandle: "prompt",
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(true);
   });
 
   it("提示词口 → 宽高比（尺寸行）：拒绝 —— 那是条运行期取不到值的假线", () => {
-    const promptEntry = entries.find((entry) => entry.id === "prompt")!;
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        sourceHandle: promptEntry.pins[0]!.name,
+        sourceHandle: "prompt",
         targetHandle: "5::widget::aspect_ratio",
       }),
     ).toBe(false);
   });
 
-  it("尺寸口 → 宽高比：放行（尺寸接受宽 / 高 / 宽高比 / 像素量四类）", () => {
-    const sizeEntry = entries.find((entry) => entry.id === "size")!;
+  it("尺寸子口 → 宽高比：放行（候选按类型收，形态由子口声明）", () => {
+    const sizeEntry = entries.find((entry) => entry.id === "size-aspect")!;
     expect(
       allowed({
         source: LIB_NODE_PARAMS,
         target: LIB_NODE_HOST,
-        sourceHandle: sizeEntry.pins[0]!.name,
+        /* 尺寸卡的行 = 形态：handle id 是**子口 id**（它是同一张卡上的行标识）。 */
+        sourceHandle: sizeEntry.id,
         targetHandle: "5::widget::aspect_ratio",
       }),
     ).toBe(true);
@@ -241,6 +252,21 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(false);
+  });
+});
+
+describe("handle id 就是条目 id（拖线落库的那条链）", () => {
+  it("`onConnect` 拿到的 handle id 直接就是落库键", () => {
+    /* 一个口一颗点：普通卡是契约口 id（`prompt` / `negative`），尺寸卡是子口 id
+     *  （`size-aspect`）—— 两者都是落库键，不再需要任何解析（回归：此前 handle id
+     *  带落点段，落库时若整串写进去，`resolveMapping` 就查不到了）。 */
+    const next = applyWireEdit(
+      {},
+      { entryId: "size-aspect", ioKey: "5::widget::aspect_ratio", mode: "T2I" },
+    );
+    const cards = deriveLibraryParamCards({ io, paramMap: next, mode: "T2I" });
+    expect(cards.resolved["size-aspect"]).toBe("5::widget::aspect_ratio");
+    expect(cards.wires.map((wire) => wire.handleId)).toEqual(["size-aspect"]);
   });
 });
 

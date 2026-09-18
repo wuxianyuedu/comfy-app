@@ -25,8 +25,9 @@
 - 改 `src/lib/**` → `docs/standards/18-lib层规范.md`（**它曾是四类门禁的盲区**：
   分层 element / Node-only 声明规则 / 文件与函数长度棘轮 / 覆盖率门槛；
   尤其 §18.4「`.server.ts` / `server-only` / 纯 Node 宿主」三选一的唯一口径，
-  自查 `node scripts/lib-node-only-scan.mjs`；新增 `lib` 子域目录时按 §18.6 在
-  `vitest.config.ts` 设实测门槛）；
+  自查 `node scripts/lib-node-only-scan.mjs`；新增模块时先答「它属于哪个子域」——
+  根目录只收顶层单例，新增子域目录**必须同批**登记 `scripts/check-file-structure.cjs`
+  的 `DOMAINS`（R14）并按 §18.6 在 `vitest.config.ts` 设实测门槛，见 §18.14 / §12.5.3）；
 - 提交 / PR / 自查清单 / 分支策略 → `docs/standards/13-提交与-code-review.md`
   （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
@@ -45,6 +46,7 @@
 | 工坊管线 | `src/components/workshop/**`、`src/lib/workshop/**` | §5 |
 | UI/逻辑分离 | 视图层新增 `fetch`/`vanillaApi`/tRPC hook 时 | §17（[17-UI与逻辑分离.md](docs/standards/17-UI与逻辑分离.md)） |
 | lib 层边界与门禁 | `src/lib/**`（新增/移动模块、拆 `.server.ts`、共享类型给视图层） | §18（[18-lib层规范.md](docs/standards/18-lib层规范.md)）；分层由 `eslint.config.js` 的 `boundaries` 强制，Node-only 声明由 `scripts/lib-node-only-scan.mjs` + `tests/lib-node-only-declarations.test.ts` 强制（§18.4），文件长度棘轮 `check-file-structure.cjs --strict` |
+| lib 子域归属 | `src/lib/**`（新增模块、新建子域目录、搬目录） | §12.5.3 + §18.14；门禁 `check-file-structure.cjs` 的 R13′/R14 |
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs` | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs` |
 | 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
@@ -104,7 +106,16 @@
    `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
    `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit 与 CI）。
    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
-11. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
+11. **`src/lib` 是域化的：根目录只放顶层单例，模块一律进子域**（ISSUE #565 / 规范
+    §12.5.3 / §18.14）。新增根模块前先答「它属于哪个域」——没有合适域就**新增一个域**，
+   但那是一次设计决定：必须同批 ① 登记 `scripts/check-file-structure.cjs` 的 `DOMAINS`
+   与 `DOMAIN_EXEMPT`，② 在 `vitest.config.ts` 的 `thresholds` 里按**实测值**设门槛。
+    只做②会让门槛挂在判据不认识的目录上、只做①会让新域零门槛。叶子域平铺，
+    **不要再造 `admin/` `other/` `shared/` 这类杂物层**。门禁 R13′/R14（pre-commit 第 2 步）。
+    迁移目录时连带检查五处：import 说明符（含 `vi.mock` / `await import`）、门禁脚本里的
+    路径白名单、测试夹具的假路径、硬编码 `path.resolve(__dirname, …)`、规范与碎片里的路径引用。
+
+12. **禁用 `.bat` / `.cmd` / `.vbs` 入口，Windows 入口一律 `.ps1`**（ISSUE #23 / 规范 §8）。
     **入口与编排分层：编排只写 Node（`.mjs`），`.ps1` 只是 Windows 调用入口。**
     `scripts/dev-launcher.mjs` 是**全平台唯一**的启动编排者（端口 / 缓存指纹 /
     进度快照 / 回收语义全在这里，平台机制收在 `scripts/launcher-core/**` 与
@@ -132,24 +143,24 @@
      按 GBK 解码，与 `.bat` 乱码同源）；
    - R7/R8 由 `scripts/check-file-structure.cjs` 在 pre-commit 强制拦截，
      回归测试见 `tests/check-file-structure.test.ts`。
-12. **注释里禁止「历史流水」**（ISSUE #46 / 规范 §12.4.2 / 反模式表 G4）：
+13. **注释里禁止「历史流水」**（ISSUE #46 / 规范 §12.4.2 / 反模式表 G4）：
     日期（`2026-08-17`）、改动编号（`R-ardot114` / `R83` / `R-Next`）、
     任务批次号（`T12-3`）—— 这些归 `git log`，写进注释会随代码搬迁过期失真。
     由 `scripts/check-file-structure.cjs` 的 **R10** 在 pre-commit 强制拦截，
     回归测试见 `tests/check-file-structure.test.ts`。
-13. **变更日志只写 `changelog.d/` 碎片，不直接改 `CHANGELOG.md`**（ISSUE #408 / 规范 §13.10.5）：
+14. **变更日志只写 `changelog.d/` 碎片，不直接改 `CHANGELOG.md`**（ISSUE #408 / 规范 §13.10.5）：
     `CHANGELOG.md` 的 `[Unreleased]` 是全仓库唯一「人人都改同一处」的文件，并行分支必然冲突。
     条目写 `changelog.d/<issue号>-<slug>.md`（一件变更一个文件，首行标 `## Added` / `## Fixed` 等段落），
     由 `node scripts/merge-changelog-fragments.mjs` 在发版/整理时并入。
     形态由 `scripts/check-changelog-fragments.cjs` 在 pre-commit 与 CI 强制拦截，
     回归测试见 `tests/check-changelog-fragments.test.ts`。
-14. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
+15. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
     未读 `README.md` / `docs/README.md` / 本文件全文就动手 = 违规；
     命中「强制先读规范文档的改动范围」表或相关规范章节时，须读完对应章节
     并在提交/实施说明里注明遵循了哪些条目。把「先看文档再改代码」当默认动作，
     不凭项目外部经验或旧记忆猜测本仓库约定。
 
-15. **构建期模块图上的模块：模块级副作用不得直接读库，且源码保持纯 ASCII**（ISSUE #489 / 规范 §5）：
+16. **构建期模块图上的模块：模块级副作用不得直接读库，且源码保持纯 ASCII**（ISSUE #489 / 规范 §5）：
     - **模块级副作用先判就绪**：`pnpm build` 的 collect-page-data / prerender 阶段会为每条路由
       起 worker 加载模块图，而干净检出（CI / 新克隆）没有 `db.sqlite`。任何「加载即读库」的副作用
       （现有：`src/lib/comfyui/reaper.ts`，由 `enqueue.ts` 裸副作用导入挂在启动路径）都会在
@@ -162,7 +173,7 @@
       带走，且报错完全指不出业务原因。触发偏移敏感 —— 同一文件删掉中文能过、换个长度的中文又能复现。
       实践口径见规范 §5 对应两条；业务模块与文档不受此限，中文照常。
 
-16. **分发产物不得携带开发机私有输入，敏感值不得以明文落日志**（ISSUE #489 / 规范 §7.3、07 §7.18.2.1）：
+17. **分发产物不得携带开发机私有输入，敏感值不得以明文落日志**（ISSUE #489 / 规范 §7.3、07 §7.18.2.1）：
     - `next build` 会把仓库根的 `.env` 与 `db.sqlite` 复制进 `.next/standalone`，
       进而被 `build-desktop` 内嵌进桌面包 —— **密钥明文分发**，且壳以
       `current_dir(res_dir)` 起 sidecar、db 路径按 `process.cwd()` 解析，被带进包的
@@ -182,7 +193,7 @@
       产物层由 `check-standalone-contents.cjs` 的 `ALLOWED_SCRIPTS` 同款守。
       **新增脚本默认不进产物**，要留下必须登记并说明理由。
 
-17. **standalone 产物必须包含 Next 自带运行时脚本，缺件的表现是「页面正常、接口全 500」**（ISSUE #489 / 规范 §7.4）：
+18. **standalone 产物必须包含 Next 自带运行时脚本，缺件的表现是「页面正常、接口全 500」**（ISSUE #489 / 规范 §7.4）：
     - Turbopack 对 `require("next/dist/compiled/next-server/<name>.runtime.prod.js")`
       这类**动态 require 字符串**的追踪不完整：只追到被 middleware 图带上的
       `app-page-turbo`，所有 `route.ts` 都要的 `app-route-turbo` 一条 nft 都没有。
@@ -196,7 +207,7 @@
       `tests/standalone-runtime-completeness.test.ts` 锁配置，
       `check-standalone-contents.cjs` 真去数产物里的必需文件。
 
-17. **源码里禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（规范 §12.11 / 门禁 R12）：
+19. **源码里禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（规范 §12.11 / 门禁 R12）：
     源码里带一个真的 NUL 字节，会让**整个文件**被 git / diff / grep / 多数编辑器判成
     二进制 —— `git diff` 只回「Binary files differ」（评审看不到改动）、`git show --stat`
     显示 bin、`grep -rn` 静默跳过整个文件，而 CI 全绿（tsc / eslint / vitest 都读得动
@@ -207,7 +218,7 @@
     的 R12 按码位扫 `src/**` 的 `.ts`/`.tsx`（豁免只有制表符 / 换行 / 回车），
     pre-commit 第 2 步与 CI `File structure rules` 各跑一次。
 
-18. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / 规范 §12.12、§12.14）：
+20. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / 规范 §12.12、§12.14）：
     - 同一段逻辑**逐行重合 ≥75% 且两边都 ≥60 行**即判定为「孪生」，由
       `scripts/check-code-duplication.cjs` 阻断（棘轮 `scripts/.code-duplication-baseline.json`）。
       修法是**抽共享模块让两边只留差异**，不是「两边一起改」；共享内核里不许放任何
@@ -215,7 +226,7 @@
     - 本机默认端口与回环地址只在 `src/lib/endpoints.ts` 定义一次，别处一律 import
       （回环主机写 `127.0.0.1` 不写 `localhost`：Node fetch 会先解析成 `::1`）。
 
-19. **函数长度超 400 行即进拆分候选，按文件计数走棘轮**（ISSUE #536 / 规范 §12.13）：
+21. **函数长度超 400 行即进拆分候选，按文件计数走棘轮**（ISSUE #536 / 规范 §12.13）：
     `scripts/check-function-length.cjs` 阻断「新增巨型函数」（棘轮
     `scripts/.function-length-baseline.json`，只许降不许升）。R5 管**文件**行数、
     本条管**函数**行数，两条维度不可互相替代。括号配对只认 `()` `{}` `[]`——
@@ -225,7 +236,7 @@
     `scripts/.rust-function-length-baseline.json`。Rust 特有的 `r#"…"#` 原始字符串与
     `'` 的两义性（字符字面量 vs 生命周期）已在状态机里处理。
 
-20. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / 规范 §18）：
+22. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / 规范 §18）：
     - **`lib` 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被
       `components` / `app` / `server` 共同依赖的**地基**，地基回头引视图会让「谁在最底层」
       成环，也让 lib 模块无法脱离 React 树单测。需要共享的类型**下沉到 `src/lib` 下的

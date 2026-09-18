@@ -1,6 +1,6 @@
 import type { Node } from "@xyflow/react";
 import type { ValidationError } from "~/lib/comfyui/validation";
-import { DEFAULT_SIZE_SPEC, type SizeSpec } from "~/lib/size-presets";
+import { DEFAULT_SIZE_SPEC, type SizeSpec } from "~/lib/media/size-presets";
 
 /* ── Canvas node model ── */
 
@@ -29,205 +29,6 @@ export interface ModelParamSchema {
   seed?: boolean;
   frames?: boolean; // video
   fps?: boolean; // video
-}
-
-export interface ModelPreset {
-  id: string;
-  name: string;
-  badge?: string; // short tag shown next to name (e.g. "推荐")
-  params: ModelParamSchema;
-}
-
-export interface ModelRegistry {
-  image: ModelPreset[];
-  video: ModelPreset[];
-  text: ModelPreset[];
-  /** True if the kind supports connection ports / chaining. */
-  chainable: boolean;
-}
-
-/* ── Model registry ── */
-export const MODEL_REGISTRY: Record<NodeKind, ModelRegistry> = {
-  image: {
-    chainable: true,
-    image: [
-      {
-        id: "seedream45",
-        name: "SeeDream 4.5",
-        badge: "推荐",
-        params: {
-          prompt: true,
-          negative: true,
-          size: true,
-          steps: true,
-          cfg: true,
-          seed: true,
-        },
-      },
-      {
-        id: "sdxl",
-        name: "SDXL",
-        params: {
-          prompt: true,
-          negative: true,
-          size: true,
-          steps: true,
-          cfg: true,
-          seed: true,
-        },
-      },
-      {
-        id: "flux1",
-        name: "Flux.1",
-        params: {
-          prompt: true,
-          negative: true,
-          size: true,
-          steps: true,
-          cfg: true,
-          seed: true,
-        },
-      },
-      {
-        id: "kandinsky",
-        name: "Kandinsky 3",
-        params: {
-          prompt: true,
-          negative: true,
-          size: true,
-          steps: true,
-          seed: true,
-        },
-      },
-    ],
-    video: [],
-    text: [],
-  },
-  video: {
-    chainable: false,
-    image: [],
-    video: [
-      {
-        id: "kling30",
-        name: "Kling 3.0 Omni",
-        badge: "热门",
-        params: {
-          prompt: true,
-          negative: true,
-          ratio: true,
-          duration: true,
-          size: true,
-        },
-      },
-      {
-        id: "wan22",
-        name: "Wan 2.2 I2V 14B",
-        params: {
-          prompt: true,
-          negative: true,
-          ratio: true,
-          frames: true,
-          fps: true,
-          steps: true,
-          cfg: true,
-          seed: true,
-        },
-      },
-      {
-        id: "hunyuan",
-        name: "HunyuanVideo",
-        params: {
-          prompt: true,
-          negative: true,
-          ratio: true,
-          duration: true,
-          steps: true,
-          cfg: true,
-          seed: true,
-        },
-      },
-      {
-        id: "cogvideo",
-        name: "CogVideoX 5B",
-        params: { prompt: true, ratio: true, duration: true },
-      },
-    ],
-    text: [],
-  },
-  script: {
-    chainable: true,
-    image: [],
-    video: [],
-    text: [
-      { id: "gpt55", name: "GPT-5.5", badge: "推荐", params: { prompt: true } },
-      { id: "claude45", name: "Claude 4.5", params: { prompt: true } },
-      { id: "deepseek", name: "DeepSeek V3", params: { prompt: true } },
-      { id: "qwen", name: "Qwen 3", params: { prompt: true } },
-    ],
-  },
-  agent: {
-    chainable: false,
-    image: [],
-    video: [],
-    text: [
-      { id: "gpt55", name: "GPT-5.5", params: { prompt: true } },
-      { id: "claude45", name: "Claude 4.5", params: { prompt: true } },
-    ],
-  },
-  workflow: {
-    chainable: false,
-    image: [],
-    video: [],
-    text: [],
-  },
-  /* Content-carrier nodes: user-supplied assets (no model, no execution).
-   * They exist only to hold text / uploaded media and act as connection
-   * sources for downstream generator nodes. The model lists stay empty so
-   * ModelSelector renders nothing for them. */
-  text: {
-    chainable: true,
-    image: [],
-    video: [],
-    text: [],
-  },
-  picture: {
-    chainable: true,
-    image: [],
-    video: [],
-    text: [],
-  },
-  movie: {
-    chainable: true,
-    image: [],
-    video: [],
-    text: [],
-  },
-};
-
-/** First (default) model id for a given kind. */
-export function defaultModelFor(kind: NodeKind): string {
-  const reg = MODEL_REGISTRY[kind];
-  const list = reg.image.length
-    ? reg.image
-    : reg.video.length
-      ? reg.video
-      : reg.text;
-  return list[0]?.id ?? "";
-}
-
-/** Resolve a model preset by id; falls back to the first preset of the kind. */
-export function getModelPreset(
-  kind: NodeKind,
-  modelId?: string,
-): ModelPreset | null {
-  const reg = MODEL_REGISTRY[kind];
-  const list = reg.image.length
-    ? reg.image
-    : reg.video.length
-      ? reg.video
-      : reg.text;
-  if (!list.length) return null;
-  return list.find((item) => item.id === modelId) ?? list[0] ?? null;
 }
 
 /**
@@ -261,7 +62,8 @@ export interface StrictCanvasNodeData {
    *  the start of each run; cleared by leaving "running" (done/error catch
    *  paths leave it stale — overlay is gated by status, so it's hidden). */
   progress?: number;
-  /** Selected model id (from MODEL_REGISTRY for the given kind). */
+  /** Selected model id —— 工坊起来之后模型不再由画布挑（选的是工作流库工作流），
+   *  这个字段只剩「用户在旧版本里选过什么」的历史值，**新的默认值恒为空串**。 */
   model: string;
 
   // image / video common
@@ -480,14 +282,12 @@ export const STATUS_LABEL: Record<CanvasNodeData["status"], string> = {
   error: "生成失败",
 };
 
-export const CANVAS_STORAGE_KEY = "comfyapp.canvas.v1";
-
 /** Build a fresh node-data object for the given kind. */
 export function defaultData(kind: NodeKind): CanvasNodeData {
   const base: CanvasNodeData = {
     kind,
     status: "idle",
-    model: defaultModelFor(kind),
+    model: "",
     prompt: "",
     negative: "",
     mode: kind === "video" ? "T2V" : "T2I",

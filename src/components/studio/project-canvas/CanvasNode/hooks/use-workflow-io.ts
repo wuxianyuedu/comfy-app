@@ -11,7 +11,7 @@ import {
   reconcileInputValues,
   type WorkflowIOMap,
 } from "~/components/studio/shared/workflow-io";
-import { parseModesJson } from "~/lib/workflow-types";
+import { parseModesJson } from "~/lib/workflow/workflow-types";
 import {
   type WorkflowModesState,
   type WorkflowSourceFilter,

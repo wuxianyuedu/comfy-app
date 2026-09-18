@@ -78,7 +78,7 @@ export function NumberField({
 
   return (
     <div
-      className={`nodrag nopan border-border bg-subtle flex items-center gap-0 rounded-lg border transition-opacity ${
+      className={`nodrag nopan border-border-strong bg-subtle flex items-center gap-0 rounded-lg border transition-opacity ${
         disabled ? "pointer-events-none opacity-40" : ""
       } ${className ?? ""}`}
     >

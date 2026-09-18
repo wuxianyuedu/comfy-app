@@ -8,7 +8,7 @@
 import {
   deriveDevServerStatus,
   type DevServerStatus,
-} from "~/lib/dev-server-status";
+} from "~/lib/shell/dev-server-status";
 
 import { useDevServerLiveness } from "./use-dev-server-liveness";
 

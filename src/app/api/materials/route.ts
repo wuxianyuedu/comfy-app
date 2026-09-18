@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
-import { requireServerUser } from "~/lib/auth-server";
+import { requireRequestUser } from "~/server/auth/request-user";
 import { logger } from "~/server/lib/logger";
 import { errorMessage } from "~/lib/error-message";
 import { unauthorizedResponse } from "~/server/lib/error-response";
@@ -16,7 +16,7 @@ import {
   sanitizeFileName,
   sanitizeScope,
   type MaterialItem,
-} from "~/lib/materials";
+} from "~/lib/media/materials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,7 +61,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 /** 鉴权守卫：无有效会话时返回 401（响应对象）。 */
 async function requireUser(): Promise<NextResponse | null> {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

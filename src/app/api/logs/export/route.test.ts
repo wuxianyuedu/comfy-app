@@ -21,8 +21,8 @@ const exportDir = path.join(tmp, "exports");
 
 /* 全部日志路径落到本用例自己的临时目录：`log/` 在 .gitignore 里，CI / 干净检出
  * 上根本不存在（若不隔离，用例会往仓库里写字，或按环境不同得到不同结果）。 */
-vi.mock("~/lib/log-paths", async () => {
-  const actual = await vi.importActual("~/lib/log-paths");
+vi.mock("~/lib/log/log-paths", async () => {
+  const actual = await vi.importActual("~/lib/log/log-paths");
   return {
     ...(actual as Record<string, unknown>),
     LOG_ROOT: tmp,
@@ -31,9 +31,9 @@ vi.mock("~/lib/log-paths", async () => {
 });
 
 /* 鉴权在单机模式下会回落演示用户（要读库），这里直接放行：本用例断言的是
- * 落盘契约，不是鉴权（鉴权由 requireServerUser 自身覆盖）。 */
-vi.mock("~/lib/auth-server", () => ({
-  requireServerUser: async () => ({
+ * 落盘契约，不是鉴权（鉴权由 requireRequestUser 自身覆盖）。 */
+vi.mock("~/server/auth/request-user", () => ({
+  requireRequestUser: async () => ({
     id: "u1",
     email: "t@example.com",
     name: null,

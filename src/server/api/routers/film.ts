@@ -15,7 +15,7 @@ export const filmRouter = createTRPCRouter({
   /** GET /api/film */
   list: authedProcedure.query(async ({ ctx }) => {
     const films = await filmRepository.listByUser(ctx.user.id);
-    const { isFFmpegAvailable } = await import("~/lib/film/orchestrator");
+    const { isFFmpegAvailable } = await import("~/server/film/orchestrator");
     return { films, ffmpegAvailable: await isFFmpegAvailable() };
   }),
 
@@ -41,7 +41,7 @@ export const filmRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       /* 建片（含分镜）收在 orchestrator 里：分镜解析 + 逐镜 params（帧数 / 帧率 /
        * 尺寸表达 / 工作流库 id）与画幅折算只此一处，路由不再各写一份。 */
-      const { createFilm } = await import("~/lib/film/orchestrator");
+      const { createFilm } = await import("~/server/film/orchestrator");
       const { id, shots } = await createFilm({
         userId: ctx.user.id,
         title: input.title,
@@ -86,7 +86,7 @@ export const filmRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const film = await filmRepository.findByIdForUser(ctx.user.id, input.id);
       if (!film) throw new Error("Film not found");
-      const { startFilm } = await import("~/lib/film/orchestrator");
+      const { startFilm } = await import("~/server/film/orchestrator");
       await startFilm(input.id);
       return { ok: true };
     }),
@@ -97,7 +97,7 @@ export const filmRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const film = await filmRepository.findByIdForUser(ctx.user.id, input.id);
       if (!film) throw new Error("Film not found");
-      const { composeFilm } = await import("~/lib/film/orchestrator");
+      const { composeFilm } = await import("~/server/film/orchestrator");
       await composeFilm(input.id);
       return { ok: true };
     }),

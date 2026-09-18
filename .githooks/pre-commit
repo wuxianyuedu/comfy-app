@@ -14,8 +14,10 @@ echo "[pre-commit] 2/24 文件结构硬规则（R1-R6/R7-R12）"
 # R5 的棘轮（超 900 行文件）需要 --strict 才判定,这里保持「只提醒」,与其余棘轮
 # （重复块 / 函数长度 / 主题色）的本地口径一致 —— 被拦下的动作要求拆分文件,
 # 不适合在本地每次提交都挡一次。
-# ⚠️ 遗留：平台侧流水线（.cnb.yml）删除后,R5 棘轮的 --strict 判定**当前没有执行者**
-# （规范 13.5.3）。要恢复它,先按提示把超基线的文件拆到位,再给这一步加上 --strict。
+# ⚠️ 遗留：平台侧流水线（.cnb.yml）删除后,R5 棘轮的 --strict 判定不在这里执行
+# （规范 13.5.3）。它的去处是「按需召唤」（规范 13.5.4）:在 PR / Issue 里 @ 评审
+# NPC 跑一轮,不 @ 就不跑 —— 不是把 .cnb.yml 贴回去。要恢复成本地每提交都跑,
+# 先按提示把超基线的文件拆到位,再给这一步加上 --strict。
 node scripts/check-file-structure.cjs || exit 1
 
 # 2026-09-15(ISSUE #562): 跨平台动作对照表（规范 §9.5）。
@@ -47,7 +49,8 @@ node scripts/check-title-bar-clearance.cjs || exit 1
 # 能在本地顺利进历史，直到更晚才被拦下（复核返工）。规范 11.7 / 13.5 的门禁
 # 一律零警告，本地与其它运行位置必须同一口径。
 # 平台侧流水线（.cnb.yml）已按额度约束删除（ISSUE #623），这条钩子现在是
-# **唯一**跑门禁的地方 —— 见规范 13.5 / 13.5.3。
+# **唯一**跑门禁的地方 —— 见规范 13.5 / 13.5.3。按需那一层（全量单测 / 构建护栏 /
+# E2E）走「@ 评审 NPC 唤起一轮」,不写配置、不花核时,见规范 13.5.4。
 # `--cache --cache-strategy content`（实测，全仓约 964 个代码文件）：
 #   · 冷跑/全量重建 311s（默认策略）· 346s（content，仅切换策略后首跑一次）
 #   · 稳态热跑 28.8–46.3s
@@ -191,12 +194,14 @@ node scripts/check-format.cjs || exit 1
 echo "[pre-commit] 22/24 格式化提交与行为改动分离"
 node scripts/check-reformat-only.cjs || exit 1
 
-# 2026-09-16(ISSUE #573 第 9 项 / 规范 §12.16): src/lib 的零消费值导出。
+# 2026-09-16(ISSUE #573 第 9 项 / 规范 §12.16): 地基层(src/lib + src/trpc)的零消费值导出。
 # §12.15 给了「死代码该接线还是该删」的口径，但**没有判据** —— 那批 Result /
 # 零 new 调用点的错误类 / eventBus 全是人工读出来的，读完就又开始长。这条只认
 # **值导出**（type/interface 不算：566 个「零引用」里 90% 是同文件内使用的 props
 # 类型，纳入只是噪音），按符号记棘轮、只许降不许升，登记项反向核对。
-echo "[pre-commit] 23/24 src/lib 零消费导出棘轮"
+# ISSUE #565 把扫描范围从 src/lib 扩到 src/trpc:server.ts(RSC 的 api +
+# HydrateClient 整条链路)全库零引用却长期活着，正因为原判据只扫 lib。
+echo "[pre-commit] 23/24 地基层(src/lib + src/trpc)零消费导出棘轮"
 node scripts/check-dead-exports.cjs || exit 1
 
 # 2026-09-16(ISSUE #565): core 的「出口纪律」与基类纯度。

@@ -29,13 +29,19 @@
  *   R10 注释里禁止「历史流水」:日期(2026-08-17)、改动编号(R-ardot114 / R83 /
  *       R-Next)、任务批次号(T12-3)。这些归 git log,写进注释会随代码搬迁过期
  *       失真(ISSUE #46 / 规范 12.4.2 / 反模式表 G4)
+ *   R13 src/lib 子域纪律:根目录只放「顶层单例地基」(见 DOMAIN_EXEMPT),
+ *       其余模块一律归属某个子域目录(§12.5.3)。叶子域平铺、不再套一层
+ *       admin/other/shared —— 那一层既说不出「谁属于它」,又会让
+ *       「一个域一个目录」的对应关系变成「一个域一个目录 + 一个杂物间」。
+ *   R14 src/lib 子域目录名必须在 DOMAINS 里登记(新增域是一次设计决定,
+ *       不是 mkdir 的副作用;漏登记会让 R13 的归属判据永远为绿)。
  *   R12 src/ 源码禁止内嵌控制字符(NUL 及其它 C0/C1 控制符,制表/换行除外)。
  *       源码里带一个真的 NUL 字节 = git / diff / grep / 多数编辑器一律当
  *       **二进制文件**处理:`git diff` 只回「Binary files differ」(评审看不到
  *       改动)、`git show --stat` 显示为 bin、`grep -rn` 静默跳过整个文件。
  *       曾经用来做「占位符」的 NUL 哨兵(规范 12.11)是它的来源,现已改为
  *       可打印形式;本条防回潮。
- * 违反 R1-R4、R7-R12 以退出码 1 阻断提交。
+ * 违反 R1-R4、R7-R12、R14 以退出码 1 阻断提交。
  *
  * R13（import 别名只有一种前缀 `~`，ISSUE #640）由**独立脚本**
  * `scripts/check-import-alias.cjs` 承担，不在这里实现：判据是「模块说明符的前缀」，
@@ -169,6 +175,100 @@ const HISTORY_DATE = /\d{4}-\d{2}-\d{2}/;
 const HISTORY_TAG =
   /\bR(?:[-_][A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*|\d{1,4}(?:[-_][A-Za-z]?[A-Za-z0-9]*)?)(?:\s*\/\s*(?:\d{1,4}|[A-Za-z][A-Za-z0-9]*))*/;
 const HISTORY_TASK = /\bT\d{1,3}(?:-\d{1,3})?\b/;
+
+/* ── R13/R14:src/lib 的域归属纪律(ISSUE #565 / 规范 §12.5.3) ──────────
+ *
+ * 背景:根目录曾长期平铺 60+ 个模块 —— 其中「log-paths.ts」与「log-ansi.ts」
+ * 相隔 20 个文件名,查找全靠 grep;更糟的是同一件事的模块散在两处
+ * (尺寸预设的纯逻辑 size-presets.ts / 存 size-preset-store.ts / 消费它的
+ *  DimensionControl 各在一层),读代码的人先得自己拼出「这几份是一伙的」。
+ *
+ * 判据只做两件可机器判断的事,不做「归属是否合理」这种评审判断:
+ *   R13 根目录只许放 DOMAIN_EXEMPT 列出的顶层单例;其余模块必须有子域目录。
+ *   R14 子域目录名必须在 DOMAINS 里登记 —— 与 §18.6 的覆盖率门槛同一条
+ *       治理原则:「新增域」必须同时登记它的门禁,否则新目录默认零约束。
+ *
+ * 为什么不禁止子域再嵌套(leaf-only):`comfyui/**` 与 `workshop/**` 自有子结构
+ * (执行链 / 通道)、`core/**` 的平铺是「一个仓储一个文件」的刻意形态。机器判
+ * 「嵌套深度」只会逼出 admin/ 这种既说不出归属、又绕开判据的目录。
+ */
+const DOMAINS = [
+  "agent",
+  "app-settings",
+  "comfy",
+  "comfyui",
+  "core",
+  "drizzle-studio",
+  "film",
+  "llm",
+  "log",
+  "media",
+  "process",
+  "project-canvas",
+  "shell",
+  "workflow",
+  "workshop",
+];
+
+/* 根目录的合法居民:必须是「唯一持有者 + 任何域消费」的顶层单例。
+ * 新加一项 = 声明「这个模块不属于任何域」,与新增域同样是设计决定 ——
+ * 因此这里只允许出现真正的单例,不接收「暂时没想好放哪」的模块。 */
+const DOMAIN_EXEMPT = new Set([
+  // 共享工具与常量:整个 src 都在用,放进某个域会让那个域变成所有人的上游
+  "src/lib/utils.ts",
+  "src/lib/endpoints.ts",
+  "src/lib/format-bytes.ts",
+  "src/lib/error-message.ts",
+  "src/lib/server-cache.ts",
+  // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
+  "src/lib/db.ts",
+  "src/lib/db-schema-ready.ts",
+  // 领域模型:model-types 是前端本地模型,models 是后端 ComfyUI 定义,分属两侧
+  "src/lib/model-types.ts",
+  "src/lib/models.ts",
+  // 会话判决:被 server/auth 与视图层共用
+  "src/lib/auth-server.ts",
+  // 应用级特性:skill 种子(与 agent 无关)、更新提醒(与桌面壳无关)
+  "src/lib/skills-seed.ts",
+  "src/lib/update-check-client.ts",
+  // 跨域 UI 与烘焙数据
+  "src/lib/full-screen-layer.ts",
+  "src/lib/floating-position.ts",
+  "src/lib/history-detail-actions.ts",
+  "src/lib/envfile.ts",
+  // 服务端装配与运维
+  "src/lib/session-banner.server.ts",
+  "src/lib/task-cancel-client.ts",
+]);
+
+/** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */
+(function checkLibDomainDiscipline() {
+  const LIB = "src/lib";
+  if (!fs.existsSync(LIB)) return;
+  for (const e of fs.readdirSync(LIB, { withFileTypes: true })) {
+    const rel = LIB + "/" + e.name;
+    if (e.isDirectory()) {
+      if (!DOMAINS.includes(e.name))
+        problems.push(
+          "R14 src/lib 子域目录未登记:" +
+            rel +
+            "。新增域须同时登记到 scripts/check-file-structure.cjs 的 DOMAINS," +
+            "并在 vitest.config.ts 按实测值设覆盖率门槛(规范 §18.6 / §12.5.3)",
+        );
+      continue;
+    }
+    if (!/\.ts$/.test(e.name) || e.name.endsWith(".d.ts")) continue;
+    /* 测试伙伴文件跟着它的被测模块走:模块在豁免清单里,它的用例也在。 */
+    const moduleRel = rel.replace(/(\.windows)?\.test\.ts$/, ".ts");
+    if (DOMAIN_EXEMPT.has(moduleRel)) continue;
+    problems.push(
+      "R13 src/lib 根目录模块必须有子域目录:" +
+        rel +
+        "。根目录只放顶层单例(DOMAIN_EXEMPT);分类到对应子域,或" +
+        "「新增域 + 登记 DOMAINS + 设覆盖率门槛」——后者是设计决定,见规范 §12.5.3",
+    );
+  }
+})();
 
 /* R2 豁免:src/ 根下的 Next 约定文件。proxy.ts(Next 16 起取代 middleware.ts)
  * 是**框架保留名**——名字由 Next 决定,改成 kebab-case 就不再被加载,只能豁免;

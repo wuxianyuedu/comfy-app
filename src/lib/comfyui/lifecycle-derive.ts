@@ -255,11 +255,6 @@ export function decideStopOutcome(probeResults: (string | null)[]): {
     : { ok: true, detail: "ComfyUI 已关闭" };
 }
 
-/** 就绪结论：探测到就返回，否则 null（继续等）。 */
-export function shouldReportReady(probeBase: string | null): boolean {
-  return probeBase !== null;
-}
-
 /* ── 内嵌放行参数（embed clearance）────────────────────────────────────
  * 为什么需要：应用把 ComfyUI 以 iframe 内嵌在同一个窗口的页签里，而
  * ComfyUI 与宿主**不同源**（宿主 http://127.0.0.1:3100，ComfyUI

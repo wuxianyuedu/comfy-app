@@ -25,7 +25,7 @@ import {
   clarityKindOfLabel,
   normalizeAlignMultiple,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 import {
   MultiSegmentPopover,
   RatioIcon,

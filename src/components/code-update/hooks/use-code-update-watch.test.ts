@@ -5,19 +5,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
-import type * as CodeUpdateModule from "~/lib/code-update-since-load";
+import type * as CodeUpdateModule from "~/lib/shell/code-update-since-load";
 
 import { BUILD_ID_POLL_MS, useCodeUpdateWatch } from "./use-code-update-watch";
 import {
   hasCodeUpdatedSinceLoad,
   resetStaleStoreNotify,
-} from "~/lib/stale-store-notify";
+} from "~/lib/shell/stale-store-notify";
 
 /** 逐次返回可控的构建标识；null = 本次读不到。 */
 const probeMock = vi.hoisted(() =>
   vi.fn<(buildId: string | null) => { buildId: string | null }>(),
 );
-vi.mock("~/lib/code-update-since-load", async (importOriginal) => {
+vi.mock("~/lib/shell/code-update-since-load", async (importOriginal) => {
   const actual = await importOriginal<typeof CodeUpdateModule>();
   return {
     ...actual,

@@ -13,7 +13,7 @@
  * (see src/app/api/workflows/[id]/route.ts → "workflowIO ENRICHMENT").
  */
 
-import { runtimeNodeId } from "~/lib/workflow-param-mapping";
+import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import {
   CLARITY_SUBGROUP_LABELS,
   DEFAULT_ALIGN_MULTIPLE,
@@ -28,7 +28,7 @@ import {
   type ClarityKind,
   type SizePresetTable,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 import {
   collectModeCodes,
   isVisibleInMode,
@@ -38,7 +38,7 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
   type WorkflowIOModeOverride,
-} from "~/lib/workflow-io-types";
+} from "~/lib/workflow/workflow-io-types";
 
 export type { WorkflowIOEntry, WorkflowIOMap, WorkflowIOModeOverride };
 /* 尺寸口径（倍数候选 / 比例表）与场景表同源，统一从 `lib/size-presets` 出口，
@@ -50,7 +50,7 @@ export {
   type ResolutionTier,
   type SizePresetTable,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 export {
   collectModeCodes,
   isVisibleInMode,
@@ -452,11 +452,8 @@ export function defaultInputValues(
   const { inputs } = splitWorkflowIO(io);
   for (const entry of inputs) {
     if (entry.control === "link") continue;
-    /* an author override (`value`) wins over the
-     *  graph-derived `defaultValue`, so the IO-edit preview + runtime forms
-     *  seed with the custom default.  Restoring a pin clears `value` (see
-     *  resetIOPreviewValues in wf-editor-inner) and falls back to
-     *  `defaultValue`. 模式默认值再压在两者之上。 */
+    /* 有模式语境时按模式覆盖层取（`modes[mode].defaultValue` 压过图内默认值）；
+     *  没有模式时就是图内读出的 `defaultValue`。 */
     const resolved = resolveEntryDefault(entry, mode);
     if (resolved !== undefined) out[entry.ioKey] = resolved;
     else if (entry.control === "switch") out[entry.ioKey] = false;

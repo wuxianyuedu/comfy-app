@@ -17,9 +17,9 @@ import {
   EXPOSED_PARAM_DISPLAY_LABEL,
   exposedParamDisplayLabel,
   exposedParamsForMode,
-} from "~/lib/workflow-exposed-params";
-import { getWorkflowType } from "~/lib/workflow-types";
-import { isVideoMode } from "~/lib/workshop/workflow-encapsulation";
+  isVideoMode,
+} from "~/lib/workflow/workflow-exposed-params";
+import { getWorkflowType } from "~/lib/workflow/workflow-types";
 
 /** 可作为输入的统一类型（供适配器配置选用）。
  *
@@ -149,21 +149,6 @@ export function outputKindForMode(mode: string): "image" | "video" | "audio" {
   if (def?.category === "audio") return "audio";
   if (isVideoMode(mode)) return "video";
   return "image";
-}
-
-/** 该模式是否为「图生」类（输入里带控制图 / 参考图）。 */
-export function modeUsesControlImage(mode: string): boolean {
-  return defaultInputsForMode(mode).some((i) =>
-    [
-      "image",
-      "first-frame",
-      "mask",
-      "depth",
-      "pose",
-      "lineart",
-      "edge",
-    ].includes(i.type),
-  );
 }
 
 /** 归一化适配器数组（丢弃非法项：无模式 / 无字段映射）。 */

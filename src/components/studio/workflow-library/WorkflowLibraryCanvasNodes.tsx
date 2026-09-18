@@ -14,7 +14,7 @@
 import { createContext, useContext } from "react";
 import type { NodeProps } from "@xyflow/react";
 
-import type { ParamEntry } from "~/lib/workflow-param-mapping";
+import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
 import type { LibraryNodeContent } from "./workflow-library-wire-graph";
@@ -59,7 +59,6 @@ export function LibraryParamsNode(_props: NodeProps) {
         onSelect={onSelect}
         isManual={cards.isManual}
         onReset={onReset}
-        reachableKeys={cards.reachableKeys}
         endpoint={(port) => (
           <PortHandle
             id={port.handleId}

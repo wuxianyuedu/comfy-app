@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { ratioOfLabel } from "~/lib/size-presets";
+import { ratioOfLabel } from "~/lib/media/size-presets";
 import {
   clarityPresetOf,
   parseShotSize,

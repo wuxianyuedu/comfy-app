@@ -206,20 +206,18 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          value: "16:9 (Widescreen)",
           modes: { T2I: { defaultValue: "4:3 (Standard)" } },
         },
       }),
     );
-    const entry = result["94::widget::aspect_ratio"]!;
-    expect(entry.value).toBe("16:9 (Widescreen)");
-    expect(
-      (entry.modes as Record<string, { defaultValue?: unknown }>).T2I!
-        .defaultValue,
-    ).toBe("4:3 (Standard)");
+    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+      string,
+      { defaultValue?: unknown }
+    >;
+    expect(modes.T2I!.defaultValue).toBe("4:3 (Standard)");
   });
 
-  it("候选表匹配不上的覆盖值被丢弃，回退合法 defaultValue", async () => {
+  it("候选表匹配不上的模式默认值被摘掉，回退图内默认值", async () => {
     const result = await enrichWorkflowIO(
       comboParams({
         "94::widget::aspect_ratio": {
@@ -227,13 +225,14 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          value: "竖版高清",
+          modes: { T2I: { defaultValue: "竖版高清" } },
         },
       }),
     );
     const entry = result["94::widget::aspect_ratio"]!;
-    /* 「竖版高清」解析不出宽高比、前缀也匹配不上任何候选 → 覆盖被丢弃。 */
-    expect(entry.value).toBeUndefined();
+    /* 「竖版高清」解析不出宽高比、前缀也匹配不上任何候选 → 该模式的
+     *  defaultValue 被摘掉；覆盖层里没有别的字段时整条不再下发。 */
+    expect(entry.modes?.T2I).toBeUndefined();
   });
 
   it("候选表缺失（ComfyUI 离线）时不清洗，保留原值", async () => {
@@ -244,66 +243,15 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          value: "16:9",
+          modes: { T2I: { defaultValue: "16:9" } },
         },
       }),
     );
-    expect(result["94::widget::aspect_ratio"]!.value).toBe("16:9");
-  });
-});
-
-describe("enrichWorkflowIO — classType（产出节点类名）", () => {
-  it("raw 导出的节点类名优先下发（工坊靠它区分首帧 / 尾帧槽）", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "20::widget::image": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "20",
-            name: "image",
-          },
-        },
-        {
-          // raw 侧类名（buildNodeTypeMap）与存库 graph 的 class_type 同时存在时，
-          // 取 raw 的 —— 它才是 ComfyUI 里真实的 class。
-          nodeTypeById: { "20": "LoadImageFirstFrame" },
-          graph: { "20": { class_type: "LoadImage", inputs: {} } },
-        },
-      ),
-    );
-    expect(result["20::widget::image"]!.classType).toBe("LoadImageFirstFrame");
-  });
-
-  it("API-only 导入（无 rawJson）退到 graph 的 class_type", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "21::widget::image": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "21",
-            name: "image",
-          },
-        },
-        { graph: { "21": { class_type: "LoadImageLastFrame", inputs: {} } } },
-      ),
-    );
-    expect(result["21::widget::image"]!.classType).toBe("LoadImageLastFrame");
-  });
-
-  it("两处都拿不到类名时不下发该字段（消费方按普通参考图降级）", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams({
-        "22::widget::image": {
-          direction: "input",
-          kind: "widget",
-          nodeId: "22",
-          name: "image",
-        },
-      }),
-    );
-    expect(result["22::widget::image"]!.classType).toBeUndefined();
+    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+      string,
+      { defaultValue?: unknown }
+    >;
+    expect(modes.T2I!.defaultValue).toBe("16:9");
   });
 });
 
@@ -354,7 +302,6 @@ describe("enrichWorkflowIO — 不投影图内语义角色（工坊契约口径�
         },
       ),
     );
-    expect(result["6::widget::text"]!.classType).toBe("CLIPTextEncode");
     expect(Object.keys(result["6::widget::text"]!)).not.toContain("isTextNode");
     expect(Object.keys(result["77::widget::value"]!)).not.toContain(
       "isTextNode",
@@ -449,9 +396,10 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
     expect(result["1::widget::value_1"]!.label).toBe("我的种子");
   });
 
-  it("存量 label 恰好是别名时视为未命名，改由内部字段取名", async () => {
-    /* 修复前勾选会把画布显示名（别名 value_1）写进 label 落库，这不是
-     * 作者命名，不该把内部字段的业务名压掉。 */
+  it("存库的 label 按作者命名直读（不再有「像机器名就让位」）", async () => {
+    /* `label` 的唯一写入点是面板改名框 —— 勾选不再抄画布显示名进库，因此库
+     *  里这串就是作者的显式命名，直读；作者在面板里清空改名即回到富化名
+     *  （下一条测的就是清空后的回退）。 */
     const result = await enrichWorkflowIO(
       makeParams(
         {
@@ -479,7 +427,7 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
         },
       ),
     );
-    expect(result["1::widget::value_1"]!.label).toBe("随机种子");
+    expect(result["1::widget::value_1"]!.label).toBe("value_1");
   });
 
   it("普通节点上 label 与 pin 名相同仍原样保留（不误判为存量别名）", async () => {
@@ -550,11 +498,12 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
     expect(result["1::widget::seed"]!.defaultValue).toBe(7);
   });
 
-  it("proxyWidgets 缺失（被导出隔离）时，仍按本层作者 label 清掉存量别名", async () => {
+  it("proxyWidgets 缺失（被导出隔离）时，类型 / 默认值照旧解析、label 直读", async () => {
     /* 真实工作流形状：`properties.proxyWidgets` 因导出缺失被 ComfyUI 隔离
      *  （`proxyWidgetErrorQuarantine`），proxyField 无从解析，但 wrapper 本层
      *  inputs[] 仍带作者写的 label（"Seed"），槽位名是别名 value_1。
-     *  存量库里勾选时把别名写进了 label——不能让别名把作者名压回去。 */
+     *  库里带着 label 时直读（作者命名 / 面板改名），本层作者名照旧下发成
+     *  `slotLabel` 供消费方取用。 */
     const result = await enrichWorkflowIO(
       makeParams(
         {
@@ -584,9 +533,10 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
         },
       ),
     );
-    expect(result["9::widget::value_1"]!.label).toBe("Seed");
+    expect(result["9::widget::value_1"]!.label).toBe("value_1");
     expect(result["9::widget::value_1"]!.type).toBe("INT");
     expect(result["9::widget::value_1"]!.defaultValue).toBe(42);
+    expect(result["9::widget::value_1"]!.slotLabel).toBe("Seed");
   });
 
   it("proxyWidgets 缺失时，作者手写的非别名 label 不受影响", async () => {
@@ -623,9 +573,8 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
   });
 
   it("普通节点：作者手写的名字与 pin 名逐字相同时原样保留", async () => {
-    /* 机器名判定要求「存在一个与槽位名不同的作者可见名」——raw 条目
-     *  label 与 pin 名逐字相同时无从判定，此时信任存量 label（作者确实
-     *  可以把它改名成与 pin 名一样的字）。 */
+    /* 库里存的就是作者命名，写什么存什么 —— 作者把参数改名成与 pin 名逐字
+     *  相同也照样生效（没有「像机器名所以不让存」的判定）。 */
     const result = await enrichWorkflowIO(
       makeParams(
         {
@@ -658,11 +607,11 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
     expect(result["7::widget::seed"]!.label).toBe("seed");
   });
 
-  it("普通节点：存量 label 是 pin 名时让位给作者的 label（ISSUE #349）", async () => {
-    /* LoadImage 的 image 槽：作者写的 label 是 "Last Frame Image"，而存量
-     *  workflowIO 里躺着的是勾选那一刻的原始 pin 名 `image`（旧版画布在拿
-     *  不到 meta 时会这么写）。IO 面板必须显示作者名，与画布逐字一致。 */
-    const result = await enrichWorkflowIO(
+  it("普通节点：存库 label 直读；清掉改名后回到 raw 的作者 label", async () => {
+    /* LoadImage 的 image 槽：raw 里作者写的 label 是 "Last Frame Image"。
+     *  `label` 只表示作者在面板里的改名 —— 有值就直读（哪怕它等于 pin 名），
+     *  清空（label: undefined）就回到 raw 的作者 label。 */
+    const params = (label?: string) =>
       makeParams(
         {
           "24::widget::image": {
@@ -670,7 +619,7 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
             kind: "widget",
             nodeId: "24",
             name: "image",
-            label: "image",
+            ...(label !== undefined ? { label } : {}),
           },
         },
         {
@@ -690,9 +639,11 @@ describe("enrichWorkflowIO — 子工作流封装节点的暴露口业务名（I
           graph: { "24": { class_type: "LoadImage", inputs: {} } },
           nodeTypeById: { "24": "LoadImage" },
         },
-      ),
-    );
-    expect(result["24::widget::image"]!.label).toBe("Last Frame Image");
+      );
+    const read = async (label?: string) =>
+      (await enrichWorkflowIO(params(label)))["24::widget::image"]!.label;
+    expect(await read("image")).toBe("image");
+    expect(await read()).toBe("Last Frame Image");
   });
 
   it("普通节点：作者手写的其它名字不受影响（不误伤）", async () => {
@@ -818,11 +769,12 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
   /* 复刻 issue #349 附件的真实形状：wrapper 节点 class_type 是子图 UUID，
    *  `properties.proxyWidgets` 因导出缺失被隔离（只有 proxyWidgetErrorQuarantine），
    *  槽位名是 ComfyUI 自动编号的别名 value_1，作者 label 写在本层 inputs[] 上
-   *  （"Seed" / "Seconds"）。存量库里的 label 已被别名污染。
-   *  这条链路要保证 buildRawInputs → enrichWorkflowIO 后仍取到 "Seed"。 */
+   *  （"Seed" / "Seconds"）。
+   *  这条链路要保证 buildRawInputs → enrichWorkflowIO 仍解析得出类型，且库里
+   *  没改名时取到本层作者 label（"Seed"）。 */
   const WRAPPER_UUID = "e0940f57-80b2-480e-8a38-36968dc1763d";
 
-  it("buildRawInputs + enrichWorkflowIO：别名槽位取到作者 label", async () => {
+  it("buildRawInputs + enrichWorkflowIO：label 直读，清掉改名后取到作者 label", async () => {
     const raw = {
       nodes: [
         {
@@ -871,26 +823,35 @@ describe("enrichWorkflowIO — 真实封装节点工作流的端到端取名（I
       async () => undefined,
       async () => undefined,
     );
-    const io = await enrichWorkflowIO(
-      makeParams(
-        {
-          "1512::widget::value_1": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "1512",
-            name: "value_1",
-            label: "value_1",
-          },
-        },
-        {
-          rawInputsById,
-          graph: { "1512": { class_type: WRAPPER_UUID, inputs: {} } },
-          nodeTypeById: { "1512": WRAPPER_UUID },
-        },
-      ),
-    );
-    expect(io["1512::widget::value_1"]!.label).toBe("Seed");
-    expect(io["1512::widget::value_1"]!.type).toBe("INT");
+    const read = async (label?: string) =>
+      (
+        await enrichWorkflowIO(
+          makeParams(
+            {
+              "1512::widget::value_1": {
+                direction: "input",
+                kind: "widget",
+                nodeId: "1512",
+                name: "value_1",
+                ...(label !== undefined ? { label } : {}),
+              },
+            },
+            {
+              rawInputsById,
+              graph: { "1512": { class_type: WRAPPER_UUID, inputs: {} } },
+              nodeTypeById: { "1512": WRAPPER_UUID },
+            },
+          ),
+        )
+      )["1512::widget::value_1"]!;
+    /* 库里存着 label（旧版勾选抄下来的别名）时直读 —— 不再有让位判定。 */
+    const poisoned = await read("value_1");
+    expect(poisoned.label).toBe("value_1");
+    expect(poisoned.type).toBe("INT");
+    /* 作者在面板里清掉改名后，显示名回到本层 raw 的作者 label。 */
+    const named = await read();
+    expect(named.label).toBe("Seed");
+    expect(named.slotLabel).toBe("Seed");
   });
 });
 
@@ -934,7 +895,7 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
     },
   } as unknown as RawWorkflow;
 
-  it("存量别名 label 被作者名顶掉，且类型 / 类名随条目下发", async () => {
+  it("类型 / 类名随条目下发；label 直读、本层作者名作为事实下发", async () => {
     const { rawInputsById } = await buildRawInputs(
       raw,
       async () => undefined,
@@ -959,42 +920,11 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
       ),
     );
     const entry = io["4::widget::value_1"]!;
-    expect(entry.label).toBe("Seed");
+    /* 库里带着 label 就直读（作者命名 / 面板改名），不再有让位判定。 */
+    expect(entry.label).toBe("value_1");
+    /* 本层作者名作为**事实**随条目下发（消费方要按作者名取名时有它）。 */
     expect(entry.slotLabel).toBe("Seed");
     expect(entry.type).toBe("INT");
-    /* 类名必须下发 —— 客户端「槽位名是封装节点自动编号别名」的判定靠它。 */
-    expect(entry.classType).toBe(WRAPPER_UUID);
-  });
-
-  it("子图边界 pin 也没写作者名时，别名判据由 classType 承担", async () => {
-    const noLabels = JSON.parse(JSON.stringify(raw)) as unknown as RawWorkflow;
-    noLabels.definitions!.subgraphs![0]!.inputs = [
-      { name: "value_1", type: "INT" },
-    ];
-    const { rawInputsById } = await buildRawInputs(
-      noLabels,
-      async () => undefined,
-      async () => undefined,
-    );
-    const io = await enrichWorkflowIO(
-      makeParams(
-        {
-          "4::widget::value_1": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "4",
-            name: "value_1",
-            label: "value_1",
-          },
-        },
-        {
-          rawInputsById,
-          graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
-          nodeTypeById: { "4": WRAPPER_UUID },
-        },
-      ),
-    );
-    expect(io["4::widget::value_1"]!.classType).toBe(WRAPPER_UUID);
   });
 
   it("作者写在本层的名字优先于子图边界 pin", async () => {
@@ -1200,11 +1130,10 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
       },
     );
 
-  it("随条目下发富化名（enrichedLabel），供客户端做别名判定", async () => {
+  it("没改过名时显示名由富化链给出（内部字段名）", async () => {
     const result = await enrichWorkflowIO(
       wrapperParams("4::widget::value_1", "value_1"),
     );
-    expect(result["4::widget::value_1"]!.enrichedLabel).toBe("1");
     expect(result["4::widget::value_1"]!.label).toBe("1");
   });
 
@@ -1239,7 +1168,7 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
     const entry = result["4::widget::Seed"]!;
     expect(entry.type).toBe("INT");
     expect(entry.defaultValue).toBe(1);
-    expect(entry.enrichedLabel).toBe("Seed");
+    expect(entry.label).toBe("Seed");
   });
 
   it("多插槽节点上同样的脏名字不会被误认到别的行", async () => {

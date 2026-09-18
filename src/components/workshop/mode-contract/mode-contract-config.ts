@@ -13,7 +13,7 @@ import {
   type ModeContract,
   type ModeContractInputType,
 } from "~/lib/workshop/model-mode-contract";
-import { ALL_WORKFLOW_TYPES } from "~/lib/workflow-types";
+import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 
 /** 可参与契约编辑的模式（生成类；与工坊的驱动口径一致）。 */
 export const CONTRACT_MODES = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);

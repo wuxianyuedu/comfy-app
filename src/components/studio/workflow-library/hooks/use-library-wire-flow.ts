@@ -28,16 +28,20 @@ import {
 } from "@xyflow/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { pinAcceptsEntry, type ParamEntry } from "~/lib/workflow-param-mapping";
 import {
+  pinAcceptsEntry,
+  type ParamEntry,
+} from "~/lib/workflow/workflow-param-mapping";
+import {
+  LIBRARY_EDGE_STYLE,
   LIB_NODE_BACKDROP,
   LIB_NODE_HOST,
   LIB_NODE_OUTPUTS,
   LIB_NODE_PARAMS,
   libraryBackdropSize,
   libraryEdgeId,
-  libraryEdgeStyle,
   layoutLibraryNodes,
+  SELECTED_STROKE,
   type LibraryNodeContent,
 } from "../workflow-library-wire-graph";
 import type {
@@ -75,6 +79,11 @@ export interface LibraryWireFlowArgs {
   connectOutput?: (outputIoKey: string, targetIoKey: string) => void;
   /** 背景板尺寸（画布量到容器尺寸后给出；不传用兜底值，见 `buildLibraryNodes`）。 */
   backdropSize?: { width: number; height: number };
+  /** 是否允许编辑（有模式 + 上层给了落库回调）。为 false 时连线不可单独点选 /
+   *  删除（只读预览，避免误删）。与画布的 `canWire` 同源。 */
+  canWire?: boolean;
+  /** 画布上当前点选中的边 id 集合（来自 `onEdgeClick`）。命中即注入高亮描边。 */
+  selectedEdgeIds?: ReadonlySet<string>;
 }
 
 /** 三列节点的首帧布局尺寸（面板靠 fitView 收进视口，这里只需稳定可读）。
@@ -119,6 +128,8 @@ export function useLibraryWireFlow({
   connect,
   connectOutput,
   backdropSize,
+  canWire,
+  selectedEdgeIds,
 }: LibraryWireFlowArgs) {
   /* 落点失败的原因：`onConnectEnd` 的 `connectionState.isValid` 给三态
    * （null = 没落在任何 handle 上、false = 落在 handle 上但被闸门拒了），
@@ -154,10 +165,21 @@ export function useLibraryWireFlow({
       ),
     [backdropWidth, backdropHeight],
   );
+  /* 边的**集合**跟随派生：改落点（含库内本地 overlay）、恢复默认、换模式之后，
+   *  新写入的线要能进画布。只在挂载时派生一次的话，写入成功的线永远进不了画布
+   *  —— 用户看到的就是「松手线就消失」（ISSUE #355 复审）。
+   *
+   *  节点集合仍是固定的（三列布局，见 `defaultNodes` 的说明）：节点内部是整张
+   *  表单，逐帧重建代价高；边只是几条线，重建无妨。 */
   const defaultEdges = useMemo(
-    () => deriveLibraryEdges(paramCards.wires, outputWires),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在挂载时派生
-    [],
+    () =>
+      deriveLibraryEdges(
+        paramCards.wires,
+        outputWires,
+        !!canWire,
+        selectedEdgeIds,
+      ),
+    [paramCards.wires, outputWires, canWire, selectedEdgeIds],
   );
 
   /* ── 类型闸门（第 2 步的核心）──
@@ -181,8 +203,8 @@ export function useLibraryWireFlow({
     (connection: Connection) => {
       const { source, target, sourceHandle, targetHandle } = connection;
       if (!sourceHandle || !targetHandle) return;
-      /* 卡片起手：handle id 就是该口的条目标识（左列按端口名、右列按输出口
-       *  ioKey），落点取另一端。 */
+      /* 左列卡片起手：handle id 就是**条目 id**（落库键），落点取另一端（宿主行的
+       *  ioKey）；右列输出卡的 handle id 就是输出口的 ioKey，同样是落库键。 */
       if (source === LIB_NODE_PARAMS && target === LIB_NODE_HOST) {
         connect?.(sourceHandle, targetHandle);
         return;
@@ -262,6 +284,7 @@ export function buildLibraryNodes(
       height: backdropSize?.height ?? extent.height,
       selectable: false,
       draggable: false,
+      deletable: false,
       connectable: false,
       data: {},
     },
@@ -271,6 +294,12 @@ export function buildLibraryNodes(
       position: at[LIB_NODE_PARAMS]!,
       width: sizing.paramsWidth,
       height: sizing.envelopeHeight,
+      /* 三列卡片是固定布局列：不可选中 / 不可删，否则点选会挂蓝框、按 Delete
+       *  还会删掉整列；连线的选中与删除只针对 edge（见 buildInputEdge /
+       *  buildOutputEdge 的 `selectable` / `deletable`）。卡片内的表单与端点
+       *  交互不受影响（draggable / connectable 仍按全局开关生效）。 */
+      selectable: false,
+      deletable: false,
       data: {},
     },
     {
@@ -279,6 +308,8 @@ export function buildLibraryNodes(
       position: at[LIB_NODE_HOST]!,
       width: sizing.hostWidth,
       height: sizing.envelopeHeight,
+      selectable: false,
+      deletable: false,
       data: {},
     },
     {
@@ -287,6 +318,8 @@ export function buildLibraryNodes(
       position: at[LIB_NODE_OUTPUTS]!,
       width: sizing.outputsWidth,
       height: sizing.envelopeHeight,
+      selectable: false,
+      deletable: false,
       data: {},
     },
   ];
@@ -334,14 +367,34 @@ export function libraryConnectionAllowed(
 /** 两条 wire 列表 → 库内的边集合（纯函数，可单测）。
  *
  *  输入侧与输出侧共用同一个 id 形状（`libraryEdgeId`），但**两端与 handle 取值
- *  刚好相反**：输入侧从卡片出发去宿主行，输出侧从宿主行出发去卡片。 */
+ *  刚好相反**：输入侧从卡片出发去宿主行，输出侧从宿主行出发去卡片。
+ *  `interactive` 控制边是否可被单独点选 / 删除（只读时不可，避免误删）；
+ *  `selectedIds` 是画布上当前点选中的边 id 集合 —— 命中的边在 `style` 里直接注入
+ *  高亮（内联 style 优先级确定，不依赖 React Flow 是否给 `<g>` 加 `.selected`）。 */
 export function deriveLibraryEdges(
   inputWires: readonly ParamCardWire[],
   outputWires: readonly ParamCardWire[],
+  interactive: boolean,
+  selectedIds?: ReadonlySet<string>,
 ): Edge[] {
+  const sel = selectedIds ?? new Set<string>();
   const out: Edge[] = [];
-  for (const wire of inputWires) out.push(buildInputEdge(wire));
-  for (const wire of outputWires) out.push(buildOutputEdge(wire));
+  for (const wire of inputWires)
+    out.push(
+      buildInputEdge(
+        wire,
+        interactive,
+        sel.has(libraryEdgeId("param", wire.entryId, wire.handleId)),
+      ),
+    );
+  for (const wire of outputWires)
+    out.push(
+      buildOutputEdge(
+        wire,
+        interactive,
+        sel.has(libraryEdgeId("output", wire.entryId, wire.handleId)),
+      ),
+    );
   return out;
 }
 
@@ -350,19 +403,26 @@ export function deriveLibraryEdges(
  *  库里给卡片圆点的 handle id 是**端口名**（`paramOutputPorts` 的 `handleId`），
  *  而契约条目的 id 是 `prompt` / `size` 这类键 —— 两者不是一回事，闸门必须按
  *  端口名反查条目。查不到（端口已从 IO 移除 / 过期快照）时拒绝连线。 */
+/** handle id 就是**条目 id**：一个口一颗点（见 `paramOutputPorts`），条目 id 在
+ *  同一个画布节点内天然唯一（尺寸卡的六行各是子口 id，普通卡就是契约口 id）。 */
 function entryForHandle(
   entries: readonly ParamEntry[],
   handleId: string,
 ): ParamEntry | null {
-  for (const entry of entries) {
-    if (entry.id === handleId) return entry;
-    if (entry.pins.some((pin) => pin.name === handleId)) return entry;
-  }
-  return null;
+  return entries.find((item) => item.id === handleId) ?? null;
 }
 
-/** 输入侧一条边：左列卡片圆点 → 宿主卡片的落点行。 */
-export function buildInputEdge(wire: ParamCardWire): Edge {
+/** 输入侧一条边：左列卡片圆点 → 宿主卡片的落点行。
+ *
+ *  边**可被单独点选 / 删除**（`selectable` / `deletable` 受 `canWire` 控制）：连错
+ *  某一条线时不必用卡片头 ↺ 把整张卡（尺寸卡是六条形态线）一起清掉 —— 点这条线、
+ *  按 Delete 即可只断这一条（断开的就是它对应的那个 entryId）。只读（无模式 /
+ *  无落库回调）时不可交互，避免误删。 */
+export function buildInputEdge(
+  wire: ParamCardWire,
+  interactive: boolean,
+  selected = false,
+): Edge {
   return {
     id: libraryEdgeId("param", wire.entryId, wire.handleId),
     source: LIB_NODE_PARAMS,
@@ -370,22 +430,35 @@ export function buildInputEdge(wire: ParamCardWire): Edge {
     /* 圆点按端口名打锚点（一个候选一颗），边必须从**被落到的那一颗**出发。 */
     sourceHandle: wire.handleId,
     targetHandle: wire.targetIoKey,
-    style: libraryEdgeStyle(wire.manual),
-    selectable: false,
+    /* 库里的线一律是作者画的（实线）：未连过的口不画线，见 `deriveLibraryOutputCards`。
+     * 选中的线（点选欲删的那一条）加粗 + 换亮紫，和默认细线拉开对比。 */
+    style: selected
+      ? { ...LIBRARY_EDGE_STYLE, stroke: SELECTED_STROKE, strokeWidth: 4 }
+      : { ...LIBRARY_EDGE_STYLE },
+    selectable: interactive,
+    deletable: interactive,
     focusable: false,
   };
 }
 
 /** 输出侧一条边：宿主卡片的输出行圆点 → 右列卡片圆点。 */
-export function buildOutputEdge(wire: ParamCardWire): Edge {
+export function buildOutputEdge(
+  wire: ParamCardWire,
+  interactive: boolean,
+  selected = false,
+): Edge {
   return {
     id: libraryEdgeId("output", wire.entryId, wire.handleId),
     source: LIB_NODE_HOST,
     target: LIB_NODE_OUTPUTS,
     sourceHandle: wire.targetIoKey,
     targetHandle: wire.handleId,
-    style: libraryEdgeStyle(wire.manual),
-    selectable: false,
+    /* 库里的线一律是作者画的（实线）：未连过的口不画线，见 `deriveLibraryOutputCards`。 */
+    style: selected
+      ? { ...LIBRARY_EDGE_STYLE, stroke: SELECTED_STROKE, strokeWidth: 4 }
+      : { ...LIBRARY_EDGE_STYLE },
+    selectable: interactive,
+    deletable: interactive,
     focusable: false,
   };
 }

@@ -19,15 +19,13 @@ import {
   modeContractEntries,
   requiredInputsFor,
 } from "~/lib/workshop/model-mode-contract";
-import { getWorkflowType } from "~/lib/workflow-types";
+import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import {
   DEFAULT_SHOT_SIZE,
   type ShotSizeState,
 } from "~/components/workshop/shot-size-config";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
-import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
-import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
 
 interface WorkshopEncapsulationPanelProps {
   workflowId: string;
@@ -90,10 +88,6 @@ export function WorkshopEncapsulationPanel({
   );
   const [negative, setNegative] = React.useState("");
   const [size, setSize] = React.useState<ShotSizeState>(DEFAULT_SHOT_SIZE);
-  /* 全屏执行日志弹窗开关 —— 与「画布节点」页签同一扇门（WorkflowRunLogModal）
-   *  同一份运行登记表（workflow-run-store）。两个页签不再是两套各占一个执行
-   *  视角的日志（ISSUE #611）。 */
-  const [logOpen, setLogOpen] = React.useState(false);
 
   const entryById = React.useMemo(
     () => new Map(status.entries.map((e) => [e.id, e])),
@@ -237,15 +231,9 @@ export function WorkshopEncapsulationPanel({
             >
               {test.running ? "测试中…" : "执行流程测试"}
             </button>
-            {/* 执行日志入口与「画布节点」页签**同一扇门**：同一份运行登记表、
-                同一个全屏弹窗。两个页签共用一个执行视图，不再「一个在跑、另
-                一个像执行不了」，也不必在各自的区域里展示两套日志（ISSUE #611）。 */}
-            <WorkflowRunLogButton
-              workflowId={workflowId}
-              taskId={test.taskId}
-              running={test.running}
-              onOpen={() => setLogOpen(true)}
-            />
+            {/* 执行日志入口不在页签里 —— 它是详情头部的一扇固定门
+                （`DetailHeader`）：两个页签共用同一份运行登记表与同一个全屏
+                弹窗，位置不再随页签 / 有没有跑过而变化（ISSUE #611）。 */}
             <span className="text-muted-foreground text-[11px]">
               会真实调用本机 ComfyUI 生成一张图
             </span>
@@ -280,15 +268,6 @@ export function WorkshopEncapsulationPanel({
           </p>
         </div>
       </div>
-
-      {/* 全屏执行日志弹窗：与「画布节点」页签同一个组件、同一份运行登记表。 */}
-      <WorkflowRunLogModal
-        open={logOpen}
-        workflowId={workflowId}
-        viewTaskId={test.taskId}
-        onViewTaskIdChange={() => undefined}
-        onClose={() => setLogOpen(false)}
-      />
     </div>
   );
 }

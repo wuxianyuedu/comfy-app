@@ -16,14 +16,14 @@ import {
   resetSizePresetScene,
   setSizePresetDims,
   subscribeSizePresetTable,
-} from "~/lib/size-preset-store";
+} from "~/lib/media/size-preset-store";
 import {
   sceneIsModified,
   type ResolutionTier,
   type SizeDims,
   type SizePresetTable,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 
 export interface SizePresetTableController {
   /** 当前生效的尺寸表（用户改过的覆盖默认表）。 */

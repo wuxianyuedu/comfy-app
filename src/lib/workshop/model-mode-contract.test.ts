@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { exposedParamDisplayLabel } from "~/lib/workflow-exposed-params";
-import { ALL_WORKFLOW_TYPES } from "~/lib/workflow-types";
+import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
+import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import {
   adapterInputsFromContract,
   builtInModeContract,

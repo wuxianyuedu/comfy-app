@@ -20,11 +20,14 @@
 import type { DOMAttributes } from "react";
 import { RotateCcw } from "lucide-react";
 
-import type { ParamEntry, ParamOutputPort } from "~/lib/workflow-param-mapping";
+import type {
+  ParamEntry,
+  ParamOutputPort,
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   PARAM_NODE_HEADER_H,
   PARAM_NODE_OUTPUT_ROW_H,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 
 export interface WorkflowParamCardProps {
@@ -216,7 +219,13 @@ export function WorkflowParamCard({
             }`}
             style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
-            title={`${side === "left" ? "输入端口" : "输出端口"} ${port.name} · ${port.type}`}
+            title={
+              /* 行上显示的是对外参数自己的名字（`display`）；**落到工作流的哪一行**
+               *  在这里可查（`ioKey`）—— 显示与落点是两件事，行上不写内部键。 */
+              port.ioKey
+                ? `${side === "left" ? "输入端口" : "输出端口"} ${port.display ?? port.name} · ${port.type} → 落到 ${port.ioKey}`
+                : `${side === "left" ? "输入端口" : "输出端口"} ${port.display ?? port.name} · ${port.type}`
+            }
           >
             {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：
                 圆点在左时槽位在前（DOM 顺序 = 视觉顺序），在右时槽位在后。 */}
@@ -226,7 +235,7 @@ export function WorkflowParamCard({
                 port.connected ? "text-ink-soft" : "text-ink-fainter"
               }`}
             >
-              {port.name}
+              {port.display ?? port.name}
             </span>
             <span
               className="shrink-0 rounded px-1 font-mono text-[9px] leading-[14px]"

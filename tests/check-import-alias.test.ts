@@ -86,7 +86,7 @@ describe("check-import-alias", () => {
       "src/app/workspace/page.tsx":
         'export const lazy = () => import("@/components/studio");\n',
       "src/components/studio/hooks/use-x.test.ts":
-        'vi.mock("@/lib/media", () => ({}));\n',
+        'vi.mock("@/lib/media/media", () => ({}));\n',
     });
     const { ok, output } = run();
     expect(ok).toBe(false);

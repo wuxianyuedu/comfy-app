@@ -1,15 +1,24 @@
+/* ── 工坊封装：落点只认作者连的线 ──
+ *
+ * 这一层不做任何「按名字 / 节点类名猜槽位」——某个对外口落到工作流的哪一行，
+ * 由工作流库里作者拖出来的连线声明（`paramMap.source.mode:<模式>`）。所以每条
+ * 「值落到某行」的用例都**先给一条线**；没有线就没有落点（如实上报 unmatched）。
+ *
+ * 名字启发式的用例（`classifyWorkshopPin` / `classifyVideoPin`）已随实现一起
+ * 删除：那套判据本身就是被去掉的东西（猜错时用户无从察觉）。
+ */
 import { describe, it, expect } from "vitest";
+import { buildEncapsulatedInputs } from "./workflow-encapsulation";
 import {
-  buildEncapsulatedInputs,
-  classifyVideoPin,
-  classifyWorkshopPin,
   isVideoMode,
   modeUsesFirstFrame,
   modeUsesLastFrame,
-  type WorkshopPinClass,
-} from "./workflow-encapsulation";
-import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
-import type { SizeSpec } from "~/lib/size-presets";
+} from "~/lib/workflow/workflow-exposed-params";
+import type {
+  WorkflowIOEntry,
+  WorkflowIOMap,
+} from "~/lib/workflow/workflow-io-types";
+import type { SizeSpec } from "~/lib/media/size-presets";
 
 /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）—— 工坊下发的唯一尺寸口径。 */
 const sizeSpec = (over: Partial<SizeSpec> = {}): SizeSpec => ({
@@ -19,9 +28,25 @@ const sizeSpec = (over: Partial<SizeSpec> = {}): SizeSpec => ({
   ...over,
 });
 
+/** 作者在某个模式下连的线（落库形状 `paramMap.source.mode:<模式>`）。 */
+function wire(
+  mode: string,
+  lines: Record<string, string | null>,
+): Record<string, unknown> {
+  return { source: { [`mode:${mode}`]: lines } };
+}
+
+/** 取 workflowInputs 里的某个 name 的值。 */
+function valueOf(
+  inputs: { name: string; value: unknown }[],
+  name: string,
+): unknown {
+  return inputs.find((i) => i.name === name)?.value;
+}
+
 /* ── 测试夹具 ─────────────────────────────────────────────── */
 
-/** 一个典型的自定义工作流 IO：提示词 + 负向 + 尺寸对 + 若干内部参数。 */
+/** 一个典型的自定义工作流 IO：提示词 + 负向 + 尺寸对 + 若干内部参数 + 图片口。 */
 const IO: WorkflowIOMap = {
   text: {
     direction: "input",
@@ -98,210 +123,540 @@ const IO: WorkflowIOMap = {
   },
 };
 
-/** 取 workflowInputs 里的某个 name 的值。 */
-function valueOf(
-  inputs: { name: string; value: unknown }[],
-  name: string,
-): unknown {
-  return inputs.find((i) => i.name === name)?.value;
-}
+/* ── 落点只认作者连的线 ───────────────────────────────────── */
 
-/* ── classifyWorkshopPin ─────────────────────────────────── */
-
-describe("classifyWorkshopPin", () => {
-  const cases: [string, WorkflowIOEntry, WorkshopPinClass][] = [
-    [
-      "正面提示词 → prompt",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "positive_prompt",
-      },
-      "prompt",
-    ],
-    [
-      "负向提示词优先于正向",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "negative_prompt",
-      },
-      "negative",
-    ],
-    [
-      "宽 → size-width",
-      { direction: "input", kind: "widget", nodeId: "1", name: "width" },
-      "size-width",
-    ],
-    [
-      "高 → size-height",
-      { direction: "input", kind: "widget", nodeId: "1", name: "height" },
-      "size-height",
-    ],
-    [
-      "宽高比 → size-aspect",
-      { direction: "input", kind: "widget", nodeId: "1", name: "aspect_ratio" },
-      "size-aspect",
-    ],
-    [
-      "百万像素 → size-megapixels",
-      { direction: "input", kind: "widget", nodeId: "1", name: "megapixels" },
-      "size-megapixels",
-    ],
-    [
-      "IMAGEUPLOAD → reference-image",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "image",
-        type: "IMAGEUPLOAD",
-      },
-      "reference-image",
-    ],
-    [
-      "steps → internal",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "steps",
-        type: "INT",
-      },
-      "internal",
-    ],
-    [
-      "时长（按帧）→ duration",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "length",
-        type: "INT",
-      },
-      "duration",
-    ],
-    [
-      "时长（按秒）→ duration",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "duration",
-        type: "FLOAT",
-      },
-      "duration",
-    ],
-    [
-      "帧率不是时长（fps → internal）",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "fps",
-        type: "INT",
-      },
-      "internal",
-    ],
-    [
-      "内部参数 cfg → internal",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "cfg",
-        type: "FLOAT",
-      },
-      "internal",
-    ],
-    [
-      "连线端口 MODEL → internal",
-      {
-        direction: "input",
-        kind: "param",
-        nodeId: "1",
-        name: "model",
-        type: "MODEL",
-      },
-      "internal",
-    ],
-    [
-      "输出 → internal",
-      { direction: "output", kind: "output", nodeId: "1", name: "IMAGE" },
-      "internal",
-    ],
-    [
-      "无类型但默认值很长的文本 → prompt",
-      {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "weird",
-        type: "STRING",
-        defaultValue: "x".repeat(60),
-      },
-      "prompt",
-    ],
-  ];
-  it.each(cases)("%s", (_label, entry, expected) => {
-    expect(classifyWorkshopPin(entry)).toBe(expected);
+describe("落点只认作者连的线", () => {
+  it("提示词 / 负向各自连线：值落到各自那一行", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text", negative: "negative" }),
+      mode: "T2I",
+      values: { prompt: "a dog", negativePrompt: "lowres" },
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "6",
+      name: "text",
+      value: "a dog",
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "7",
+      name: "text",
+      value: "lowres",
+    });
+    expect(res.unmatched).toEqual([]);
   });
 
-  it("不在这一层做图内推导：两行同名的 `text` 都判不出正负", () => {
-    /* 真实文生图里两个 CLIPTextEncode 的 pin 名与显示名完全一样（都叫 text /
-     *  「文本」）。工坊的对外参数是**契约**，判不出名字就交给契约兜底
-     *  （用户给的值按契约 id 落点），不靠图内推导替作者猜哪一行是负向。 */
-    expect(
-      classifyWorkshopPin({
-        direction: "input",
-        kind: "widget",
-        nodeId: "6",
-        name: "text",
-        type: "STRING",
-      }),
-    ).toBe("internal");
-    /* 名字里写了负向才认。 */
-    expect(
-      classifyWorkshopPin({
-        direction: "input",
-        kind: "widget",
-        nodeId: "7",
-        name: "negative_prompt",
-        type: "STRING",
-      }),
-    ).toBe("negative");
-    /* 图片口按图片判。 */
-    expect(
-      classifyWorkshopPin({
-        direction: "input",
-        kind: "widget",
-        nodeId: "8",
-        name: "image",
-        type: "IMAGE",
-      }),
-    ).toBe("reference-image");
+  it("两行同名 `text` 也能分清：谁是谁由线说，不由名字说", () => {
+    /* 真实文生图里两个 CLIPTextEncode 的 pin 名与显示名完全一样。旧实现只能靠
+     * 「名字里有没有 negative」猜，猜不出就把口子丢了；现在作者把两个口各连到
+     * 自己那一行，两条线指向不同节点 —— 名字一样也不影响。 */
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "negative", negative: "text" }),
+      mode: "T2I",
+      values: { prompt: "正向", negativePrompt: "负向" },
+    });
+    /* 线说了算：正向口这次落到 nodeId 7，负向口落到 nodeId 6。 */
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "7",
+      name: "text",
+      value: "正向",
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "6",
+      name: "text",
+      value: "负向",
+    });
   });
 
-  it("宽度判定优先于提示词启发式（避免泛化文本抢走尺寸口）", () => {
-    expect(
-      classifyWorkshopPin({
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "width_prompt_hint",
-        type: "INT",
-        defaultValue: 512,
-      }),
-    ).toBe("size-width");
+  it("没连线的口给了值 → 如实进 unmatched，不替作者挑端口", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: null,
+      mode: "T2I",
+      values: { prompt: "x" },
+    });
+    expect(res.unmatched).toContain("prompt");
+    /* 不下发任何东西：工作流图内自带的值照旧生效（工坊不塞默认值）。 */
+    expect(res.workflowInputs).toEqual([]);
+  });
+
+  it("未连线的内部参数不下发（不再是「把每个 pin 的默认值都塞进载荷」）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: "T2I",
+      values: { prompt: "x" },
+    });
+    expect(res.workflowInputs).toEqual([
+      { nodeId: "6", name: "text", value: "x" },
+    ]);
+  });
+
+  it("作者显式断开（null）的口：值落不下去，如实上报", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: null }),
+      mode: "T2I",
+      values: { prompt: "x" },
+    });
+    expect(res.unmatched).toContain("prompt");
+    expect(res.workflowInputs).toEqual([]);
+  });
+
+  it("落点端口已被改版移除 → 按未配置处理，不静默落空", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "9::widget::gone" }),
+      mode: "T2I",
+      values: { prompt: "x" },
+    });
+    expect(res.unmatched).toContain("prompt");
+    expect(res.workflowInputs).toEqual([]);
+  });
+
+  it("模式为空：不存在脱离模式的手工线 → 一律未配置", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: null,
+      values: { prompt: "x" },
+    });
+    expect(res.unmatched).toContain("prompt");
+    expect(res.workflowInputs).toEqual([]);
+  });
+
+  it("另一模式的线不在本模式生效", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("I2I", { prompt: "text" }),
+      mode: "T2I",
+      values: { prompt: "x" },
+    });
+    expect(res.unmatched).toContain("prompt");
   });
 });
 
-/* ── 视频侧：模式判定 ─────────────────────────────────────── */
+/* ── 尺寸：形态由作者连的子口声明 ─────────────────────────── */
+
+describe("尺寸：形态由作者连的子口声明，值按形态派", () => {
+  it("宽 + 高两条线：宽高按场景尺寸表算出", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", {
+        "size-width": "width",
+        "size-height": "height",
+      }),
+      mode: "T2I",
+      values: { size: sizeSpec() },
+    });
+    expect(valueOf(res.workflowInputs, "width")).toBe(768);
+    expect(valueOf(res.workflowInputs, "height")).toBe(1024);
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("比例 + 像素量 + 倍数三条线：各自按形态取值（比例写端口自己的候选）", () => {
+    const io: WorkflowIOMap = {
+      ar: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "aspect_ratio",
+        type: "COMBO",
+        defaultValue: "16:9 (Widescreen)",
+        options: ["1:1 (Square)", "16:9 (Widescreen)", "9:16 (Portrait)"],
+      },
+      mp: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "megapixels",
+        type: "FLOAT",
+        defaultValue: 1,
+      },
+      mul: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "multiple",
+        type: "INT",
+        defaultValue: 8,
+      },
+    };
+    const res = buildEncapsulatedInputs({
+      io,
+      paramMap: wire("T2I", {
+        "size-aspect": "ar",
+        "size-megapixels": "mp",
+        "size-multiple": "mul",
+      }),
+      mode: "T2I",
+      values: {
+        size: sizeSpec({ ratio: "9:16 竖屏", clarity: "2M", multiple: 32 }),
+      },
+    });
+    /* 比例必须写端口自己声明的候选值（逐字命中），不是工坊的短标签。 */
+    expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("9:16 (Portrait)");
+    expect(valueOf(res.workflowInputs, "megapixels")).toBe(2);
+    expect(valueOf(res.workflowInputs, "multiple")).toBe(32);
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("同一档位在视频场景是另一组值（场景由模式码推）", () => {
+    const io: WorkflowIOMap = {
+      w: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "width",
+        type: "INT",
+      },
+      h: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "height",
+        type: "INT",
+      },
+    };
+    const res = buildEncapsulatedInputs({
+      io,
+      paramMap: wire("I2V", {
+        "size-width": "w",
+        "size-height": "h",
+      }),
+      mode: "I2V",
+      values: { size: sizeSpec({ ratio: "16:9 横屏" }) },
+    });
+    expect(valueOf(res.workflowInputs, "width")).toBe(1280);
+    expect(valueOf(res.workflowInputs, "height")).toBe(720);
+  });
+
+  it("只连了一个子口：算接住了（另一维由图内默认值补）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { "size-width": "width" }),
+      mode: "T2I",
+      values: { size: sizeSpec() },
+    });
+    expect(res.workflowInputs).toEqual([
+      { nodeId: "5", name: "width", value: 768 },
+    ]);
+    /* 工坊只送一个尺寸表达，工作流接住其中一路即算接住 —— 不报子口级噪音。 */
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("一个尺寸子口都没连：值落不下去，如实上报一次 size", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: "T2I",
+      values: { size: sizeSpec() },
+    });
+    expect(res.workflowInputs).toEqual([]);
+    expect(res.unmatched).toEqual(["size"]);
+  });
+
+  it("比例候选里认不出 → 不写非法值（该子口不上报，图内默认值生效）", () => {
+    const io: WorkflowIOMap = {
+      ar: {
+        direction: "input",
+        kind: "widget",
+        nodeId: "1",
+        name: "aspect_ratio",
+        type: "COMBO",
+        defaultValue: "Widescreen",
+        options: ["Widescreen", "Portrait"],
+      },
+    };
+    const res = buildEncapsulatedInputs({
+      io,
+      paramMap: wire("T2I", { "size-aspect": "ar" }),
+      mode: "T2I",
+      values: { size: sizeSpec({ ratio: "16:9 横屏" }) },
+    });
+    /* 写一个解不出比例的候选只会让 ComfyUI 静默回落到第一个选项（看起来像
+     *  「改了没生效」），所以不写 —— 端口图内的默认值照旧生效。 */
+    expect(res.workflowInputs).toEqual([]);
+  });
+});
+
+/* ── 图片槽位：同名 pin 由线区分 ─────────────────────────── */
+
+/** 一个典型的图生视频工作流：两个上传口**同名同类型**（只有节点不同）。 */
+const VIDEO_IO: WorkflowIOMap = {
+  prompt: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "1",
+    name: "text",
+    label: "positive_prompt",
+    type: "STRING",
+    multiline: true,
+    defaultValue: "a running cat",
+  },
+  firstFrame: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "20",
+    name: "image",
+    type: "IMAGEUPLOAD",
+    defaultValue: "",
+  },
+  lastFrame: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "21",
+    name: "image",
+    type: "IMAGEUPLOAD",
+    defaultValue: "",
+  },
+  frames: {
+    direction: "input",
+    kind: "widget",
+    nodeId: "30",
+    name: "length",
+    type: "INT",
+    defaultValue: 81,
+  },
+};
+
+describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名", () => {
+  it("首尾帧：两个都叫 image 的上传口，作者连给谁就是谁", () => {
+    /* 旧实现按节点类名（LoadImageFirstFrame / LoadImageLastFrame）或 pin 名里的
+     *  「首帧 / 尾帧」猜；两个口名字一样、类名又认不出时只能猜错。现在两条线
+     *  各自指向一个节点，首帧不会串到尾帧。 */
+    const res = buildEncapsulatedInputs({
+      io: VIDEO_IO,
+      paramMap: wire("FLF2V", {
+        "first-frame": "firstFrame",
+        "last-frame": "lastFrame",
+      }),
+      mode: "FLF2V",
+      values: { firstFrame: "a.png", lastFrame: "b.png" },
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "20",
+      name: "image",
+      value: "a.png",
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "21",
+      name: "image",
+      value: "b.png",
+    });
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("作者把首帧连到第二个上传口 → 就落那一行（名字里的 first 不算数）", () => {
+    const res = buildEncapsulatedInputs({
+      io: VIDEO_IO,
+      paramMap: wire("I2V", { "first-frame": "lastFrame" }),
+      mode: "I2V",
+      values: { firstFrame: "a.png" },
+    });
+    expect(res.workflowInputs).toEqual([
+      { nodeId: "21", name: "image", value: "a.png" },
+    ]);
+  });
+
+  it("镜头图（referenceImages 第一张）落到作者连的首帧口", () => {
+    const res = buildEncapsulatedInputs({
+      io: VIDEO_IO,
+      paramMap: wire("I2V", { "first-frame": "firstFrame" }),
+      mode: "I2V",
+      values: { referenceImages: ["shot.png"] },
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "20",
+      name: "image",
+      value: "shot.png",
+    });
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("尾帧口没连线（工作流没有尾帧槽）→ 如实上报，不塞给别的上传口", () => {
+    const io: WorkflowIOMap = {
+      prompt: VIDEO_IO.prompt!,
+      firstFrame: VIDEO_IO.firstFrame!,
+    };
+    const res = buildEncapsulatedInputs({
+      io,
+      paramMap: wire("I2V", { "first-frame": "firstFrame" }),
+      mode: "I2V",
+      values: { firstFrame: "a.png", lastFrame: "b.png" },
+    });
+    expect(res.unmatched).toContain("last-frame");
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "20",
+      name: "image",
+      value: "a.png",
+    });
+  });
+
+  it("工坊给了图、但这个模式不暴露图片口 → 如实上报（不静默丢图）", () => {
+    /* T2I 契约里只有提示词 / 负向 / 尺寸：给了参考图却没有任何口接住 ——
+     *  映射层只遍历契约条目，看不见「模式压根没有这个口」，由本层补报。 */
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: "T2I",
+      values: { prompt: "x", referenceImages: ["r.png"] },
+    });
+    expect(res.unmatched).toContain("first-frame");
+  });
+
+  it("图生图：两张参考图各落到作者连的那一行（同名 pin 也分得清）", () => {
+    const io: WorkflowIOMap = {
+      ...IO,
+      ref2: { ...IO.initImage!, nodeId: "11" },
+    };
+    const res = buildEncapsulatedInputs({
+      io,
+      paramMap: wire("I2I", {
+        "reference-image": "initImage",
+        "reference-image-2": "ref2",
+      }),
+      mode: "I2I",
+      values: { referenceImages: ["a.png", "b.png"] },
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "9",
+      name: "image",
+      value: "a.png",
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "11",
+      name: "image",
+      value: "b.png",
+    });
+  });
+});
+
+/* ── 时长：单位与候选由落点端口声明 ───────────────────────── */
+
+describe("时长：单位与候选由落点端口声明", () => {
+  const pinOf = (over: Partial<WorkflowIOEntry>): WorkflowIOEntry => ({
+    direction: "input",
+    kind: "widget",
+    nodeId: "12",
+    name: "length",
+    type: "INT",
+    defaultValue: 81,
+    ...over,
+  });
+
+  it("按帧表达的端口吃 frames，按秒表达的端口吃 duration", () => {
+    const byFrames = buildEncapsulatedInputs({
+      io: { length: pinOf({}) },
+      paramMap: wire("I2V", { duration: "length" }),
+      mode: "I2V",
+      values: { frames: 49 },
+    });
+    expect(valueOf(byFrames.workflowInputs, "length")).toBe(49);
+
+    const bySeconds = buildEncapsulatedInputs({
+      io: {
+        secs: pinOf({
+          nodeId: "13",
+          name: "duration",
+          type: "FLOAT",
+          defaultValue: 5,
+        }),
+      },
+      paramMap: wire("I2V", { duration: "secs" }),
+      mode: "I2V",
+      values: { duration: 8 },
+    });
+    expect(valueOf(bySeconds.workflowInputs, "duration")).toBe(8);
+  });
+
+  it("端口声明了候选（COMBO）时按候选收敛：命不中就取最近档", () => {
+    const io = {
+      length: pinOf({ defaultValue: 16, options: ["16", "24", "32"] }),
+    };
+    const exact = buildEncapsulatedInputs({
+      io,
+      paramMap: wire("I2V", { duration: "length" }),
+      mode: "I2V",
+      values: { frames: 24 },
+    });
+    expect(valueOf(exact.workflowInputs, "length")).toBe(24);
+
+    /* 81 不在候选里 → 取最近档 32，而不是写 81 让 ComfyUI 静默回落。 */
+    const near = buildEncapsulatedInputs({
+      io,
+      paramMap: wire("I2V", { duration: "length" }),
+      mode: "I2V",
+      values: { frames: 81 },
+    });
+    expect(valueOf(near.workflowInputs, "length")).toBe(32);
+  });
+
+  it("候选不是数字 → 不写非法值（值不落，图内默认值生效）", () => {
+    const res = buildEncapsulatedInputs({
+      io: { length: pinOf({ defaultValue: 16, options: ["auto", "long"] }) },
+      paramMap: wire("I2V", { duration: "length" }),
+      mode: "I2V",
+      values: { frames: 81 },
+    });
+    expect(res.workflowInputs).toEqual([]);
+  });
+
+  it("时长口没连线 → 不落值", () => {
+    const res = buildEncapsulatedInputs({
+      io: { length: pinOf({}) },
+      paramMap: wire("I2V", { prompt: "length" }),
+      mode: "I2V",
+      values: { frames: 49 },
+    });
+    expect(res.workflowInputs).toEqual([]);
+    expect(res.unmatched).toContain("duration");
+  });
+});
+
+/* ── 边界 ────────────────────────────────────────────────── */
+
+describe("边界", () => {
+  it("空 IO 表安全返回空结果", () => {
+    const res = buildEncapsulatedInputs({
+      io: null,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: "T2I",
+      values: { prompt: "x" },
+    });
+    expect(res.workflowInputs).toEqual([]);
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("什么都没给 → 什么都不下发，也不报未配置", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: "T2I",
+      values: {},
+    });
+    expect(res.workflowInputs).toEqual([]);
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("畸形 paramMap 不抛（按「没有线」处理）", () => {
+    for (const bad of [42, "x", [], { source: [] }, { source: { nope: {} } }]) {
+      const res = buildEncapsulatedInputs({
+        io: IO,
+        paramMap: bad,
+        mode: "T2I",
+        values: { prompt: "x" },
+      });
+      expect(res.unmatched).toContain("prompt");
+    }
+  });
+});
+
+/* ── 视频模式判定（契约表导出） ───────────────────────────── */
 
 describe("视频模式判定", () => {
-  it("视频模式码前缀命中，图类模式码不命中", () => {
+  it("视频模式码命中，图类模式码不命中", () => {
     for (const code of ["T2V", "I2V", "TI2V", "FLF2V", "S2V", "V2V"]) {
       expect(isVideoMode(code)).toBe(true);
     }
@@ -330,499 +685,5 @@ describe("视频模式判定", () => {
     expect(modeUsesLastFrame("FLF2V")).toBe(true);
     expect(modeUsesLastFrame("FMF2V")).toBe(true);
     expect(modeUsesLastFrame("I2V")).toBe(false);
-  });
-});
-
-/* ── 时长（视频）：按落点端口自己的单位与候选取值 ─────────── */
-
-describe("时长口的取值", () => {
-  const pinOf = (over: Partial<WorkflowIOEntry>): WorkflowIOEntry => ({
-    direction: "input",
-    kind: "widget",
-    nodeId: "12",
-    name: "length",
-    type: "INT",
-    defaultValue: 81,
-    ...over,
-  });
-
-  it("按帧表达的端口吃 frames，按秒表达的端口吃 duration", () => {
-    const byFrames = buildEncapsulatedInputs({ length: pinOf({}) }, "I2V", {
-      frames: 49,
-    });
-    expect(valueOf(byFrames.workflowInputs, "length")).toBe(49);
-
-    const bySeconds = buildEncapsulatedInputs(
-      {
-        secs: pinOf({
-          nodeId: "13",
-          name: "duration",
-          type: "FLOAT",
-          defaultValue: 5,
-        }),
-      },
-      "I2V",
-      { duration: 8 },
-    );
-    expect(valueOf(bySeconds.workflowInputs, "duration")).toBe(8);
-  });
-
-  it("端口声明了候选（COMBO）时按候选收敛：命不中就取最近档", () => {
-    const combo = {
-      length: pinOf({ defaultValue: 16, options: ["16", "24", "32"] }),
-    };
-    expect(
-      valueOf(
-        buildEncapsulatedInputs(combo, "I2V", { frames: 24 }).workflowInputs,
-        "length",
-      ),
-    ).toBe(24);
-    // 81 帧不在候选里 → 取最近档 32，而不是写 81 让 ComfyUI 静默回落
-    expect(
-      valueOf(
-        buildEncapsulatedInputs(combo, "I2V", { frames: 81 }).workflowInputs,
-        "length",
-      ),
-    ).toBe(32);
-  });
-
-  it("候选不是数字时退回端口默认值（不猜）", () => {
-    const odd = {
-      length: pinOf({ defaultValue: 16, options: ["auto", "long"] }),
-    };
-    expect(
-      valueOf(
-        buildEncapsulatedInputs(odd, "I2V", { frames: 81 }).workflowInputs,
-        "length",
-      ),
-    ).toBe(16);
-  });
-});
-
-/* ── classifyVideoPin ────────────────────────────────────── */
-
-describe("classifyVideoPin", () => {
-  const pin = (over: Partial<WorkflowIOEntry>): WorkflowIOEntry => ({
-    direction: "input",
-    kind: "widget",
-    nodeId: "1",
-    name: "image",
-    ...over,
-  });
-
-  it("按产出节点类名区分首帧 / 尾帧（pin 名都叫 image）", () => {
-    expect(classifyVideoPin(pin({ classType: "LoadImageFirstFrame" }))).toBe(
-      "first-frame",
-    );
-    expect(classifyVideoPin(pin({ classType: "LoadImageLastFrame" }))).toBe(
-      "last-frame",
-    );
-    expect(classifyVideoPin(pin({ classType: "LoadImage" }))).toBe(
-      "reference-image",
-    );
-  });
-
-  it("节点类名认不出时按 pin 名 / 标签兜底", () => {
-    expect(classifyVideoPin(pin({ name: "first_frame" }))).toBe("first-frame");
-    expect(classifyVideoPin(pin({ name: "image", label: "尾帧图" }))).toBe(
-      "last-frame",
-    );
-  });
-
-  it("时长与帧率分开归类（帧率不是帧数）", () => {
-    expect(classifyVideoPin(pin({ name: "frames", type: "INT" }))).toBe(
-      "frames",
-    );
-    expect(classifyVideoPin(pin({ name: "length", type: "INT" }))).toBe(
-      "frames",
-    );
-    expect(classifyVideoPin(pin({ name: "fps", type: "INT" }))).toBe("fps");
-    expect(classifyVideoPin(pin({ name: "frame_rate", type: "INT" }))).toBe(
-      "fps",
-    );
-  });
-
-  it("连线型端口与输出不对外", () => {
-    expect(classifyVideoPin(pin({ kind: "param", type: "MODEL" }))).toBe(
-      "internal",
-    );
-    expect(classifyVideoPin(pin({ direction: "output" }))).toBe("internal");
-  });
-});
-
-/* ── buildEncapsulatedInputs ─────────────────────────────── */
-
-describe("buildEncapsulatedInputs", () => {
-  it("用户填的提示词/尺寸落到被识别的 pin 上", () => {
-    const res = buildEncapsulatedInputs(IO, null, {
-      prompt: "a dog",
-      negativePrompt: "lowres",
-      /* 比例 + 分辨率：宽高由场景尺寸表现算（1:1 1k = 1024×1024）。 */
-      size: sizeSpec({ ratio: "1:1 正方" }),
-    });
-    expect(valueOf(res.workflowInputs, "text")).toBe("a dog");
-    // negative pin 的 name 也是 text → 用 nodeId 区分
-    expect(res.workflowInputs).toContainEqual({
-      nodeId: "7",
-      name: "text",
-      value: "lowres",
-    });
-    expect(valueOf(res.workflowInputs, "width")).toBe(1024);
-    expect(valueOf(res.workflowInputs, "height")).toBe(1024);
-  });
-
-  it("内部参数一律用默认值，不受用户输入影响", () => {
-    const res = buildEncapsulatedInputs(IO, null, { prompt: "a dog" });
-    expect(valueOf(res.workflowInputs, "steps")).toBe(28);
-    expect(valueOf(res.workflowInputs, "seed")).toBe(42);
-    expect(res.internalKeys).toEqual(
-      expect.arrayContaining(["steps", "seed", "model", "out"]),
-    );
-  });
-
-  it("用户没改的参数回退工作流默认值（改的是默认值不是抹掉）", () => {
-    const res = buildEncapsulatedInputs(IO, null, {});
-    expect(valueOf(res.workflowInputs, "text")).toBe("a cat");
-    expect(valueOf(res.workflowInputs, "width")).toBe(512);
-    expect(valueOf(res.workflowInputs, "height")).toBe(768);
-  });
-
-  it("参考图落到第一个图片 pin 上", () => {
-    const res = buildEncapsulatedInputs(IO, null, {
-      referenceImages: ["ref.png"],
-    });
-    expect(res.workflowInputs).toContainEqual({
-      nodeId: "9",
-      name: "image",
-      value: "ref.png",
-    });
-    expect(res.exposed.initImage).toBe("reference-image");
-  });
-
-  it("模式默认值参与回退（模式优先于通用默认值）", () => {
-    const io: WorkflowIOMap = {
-      ...IO,
-      steps: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "3",
-        name: "steps",
-        type: "INT",
-        defaultValue: 28,
-        modes: { fast: { defaultValue: 8 } },
-      },
-    };
-    expect(
-      valueOf(buildEncapsulatedInputs(io, null, {}).workflowInputs, "steps"),
-    ).toBe(28);
-    expect(
-      valueOf(buildEncapsulatedInputs(io, "fast", {}).workflowInputs, "steps"),
-    ).toBe(8);
-  });
-
-  it("用户给了值但工作流没有对应 pin → 记进 unmatched，不凭空造 pin", () => {
-    const io: WorkflowIOMap = {
-      steps: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "3",
-        name: "steps",
-        type: "INT",
-        defaultValue: 28,
-      },
-    };
-    const res = buildEncapsulatedInputs(io, null, {
-      prompt: "x",
-      negativePrompt: "y",
-      size: sizeSpec({ ratio: "1:1 正方" }),
-      referenceImages: ["r.png"],
-    });
-    expect(res.unmatched).toEqual(
-      expect.arrayContaining([
-        "prompt",
-        "negativePrompt",
-        "size",
-        "referenceImages",
-      ]),
-    );
-    expect(res.workflowInputs).toEqual([
-      { nodeId: "3", name: "steps", value: 28 },
-    ]);
-  });
-
-  it("aspect/megapixels/multiple pin 接住「比例 + 百万像素 + 倍数」", () => {
-    const io: WorkflowIOMap = {
-      ar: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "aspect_ratio",
-        type: "COMBO",
-        defaultValue: "16:9 (Widescreen)",
-        options: ["1:1 (Square)", "16:9 (Widescreen)", "9:16 (Portrait)"],
-      },
-      mp: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "megapixels",
-        type: "FLOAT",
-        defaultValue: 1,
-      },
-      mul: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "multiple",
-        type: "INT",
-        defaultValue: 8,
-      },
-    };
-    const res = buildEncapsulatedInputs(io, null, {
-      size: sizeSpec({ ratio: "9:16 竖屏", clarity: "2M", multiple: 32 }),
-    });
-    expect(res.exposed.ar).toBe("size-aspect");
-    expect(res.exposed.mp).toBe("size-megapixels");
-    expect(res.exposed.mul).toBe("size-multiple");
-    /* 比例必须写端口自己声明的候选值（COMBO 逐字命中），不是工坊的短标签。 */
-    expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("9:16 (Portrait)");
-    expect(valueOf(res.workflowInputs, "megapixels")).toBe(2);
-    expect(valueOf(res.workflowInputs, "multiple")).toBe(32);
-    expect(res.unmatched).toEqual([]);
-  });
-
-  it("端口候选里认不出比例 → 退回端口默认值而不是写非法选项", () => {
-    const io: WorkflowIOMap = {
-      ar: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "aspect_ratio",
-        type: "COMBO",
-        defaultValue: "Widescreen",
-        options: ["Widescreen", "Portrait"],
-      },
-    };
-    const res = buildEncapsulatedInputs(io, null, {
-      size: sizeSpec({ ratio: "16:9 横屏" }),
-    });
-    /* 候选里一个比例都解不出来 → 不猜，退回端口默认值（写非法值只会被
-     *  ComfyUI 静默回落到第一个选项，看起来像「改了没生效」）。 */
-    expect(valueOf(res.workflowInputs, "aspect_ratio")).toBe("Widescreen");
-  });
-
-  it("分辨率档给只声明 megapixels 的工作流：按该档宽高的实际总像素落值", () => {
-    const io: WorkflowIOMap = {
-      mp: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "megapixels",
-        type: "FLOAT",
-      },
-    };
-    /* 图片场景 16:9 2k = 2048×1152 → 2.359M（不是幂次近似的 4）。 */
-    const res = buildEncapsulatedInputs(io, null, {
-      size: sizeSpec({ ratio: "16:9 横屏", clarity: "2k" }),
-    });
-    expect(valueOf(res.workflowInputs, "megapixels")).toBe(2.359);
-  });
-
-  it("只有宽 / 高的工作流：宽高按场景尺寸表现算，不报 unmatched", () => {
-    const wh: WorkflowIOMap = {
-      w: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "width",
-        type: "INT",
-      },
-      h: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "height",
-        type: "INT",
-      },
-    };
-    const res = buildEncapsulatedInputs(wh, null, { size: sizeSpec() });
-    expect(valueOf(res.workflowInputs, "width")).toBe(768);
-    expect(valueOf(res.workflowInputs, "height")).toBe(1024);
-    expect(res.unmatched).toEqual([]);
-
-    /* 同一档位在视频场景是另一组值（1k 长边 1280）—— 场景由模式码推。 */
-    const video = buildEncapsulatedInputs(wh, "I2V", {
-      size: sizeSpec({ ratio: "16:9 横屏" }),
-    });
-    expect(valueOf(video.workflowInputs, "width")).toBe(1280);
-    expect(valueOf(video.workflowInputs, "height")).toBe(720);
-
-    /* 一个尺寸端口都没有 → 报一次 size（如实，不沉默丢弃）。 */
-    const none: WorkflowIOMap = {
-      s: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "steps",
-        type: "INT",
-      },
-    };
-    const empty = buildEncapsulatedInputs(none, null, { size: sizeSpec() });
-    expect(empty.unmatched).toContain("size");
-  });
-
-  it("空 IO 表安全返回空结果", () => {
-    const res = buildEncapsulatedInputs(null, null, { prompt: "x" });
-    expect(res.workflowInputs).toEqual([]);
-    expect(res.unmatched).toEqual([]);
-  });
-
-  it("没有默认值且用户没给值的 pin 不产生 undefined 三元组", () => {
-    const io: WorkflowIOMap = {
-      maybe: {
-        direction: "input",
-        kind: "widget",
-        nodeId: "1",
-        name: "maybe_text",
-        type: "STRING",
-      },
-    };
-    const res = buildEncapsulatedInputs(io, null, {});
-    expect(res.workflowInputs).toEqual([]);
-  });
-});
-
-/* ── 视频封装（按模式） ───────────────────────────────────── */
-
-/** 一个典型的图生视频工作流：首帧上传 + 尾帧上传（可选）+ 提示词 + 时长。 */
-const VIDEO_IO: WorkflowIOMap = {
-  prompt: {
-    direction: "input",
-    kind: "widget",
-    nodeId: "1",
-    name: "text",
-    label: "positive_prompt",
-    type: "STRING",
-    multiline: true,
-    defaultValue: "a running cat",
-  },
-  firstFrame: {
-    direction: "input",
-    kind: "widget",
-    nodeId: "20",
-    name: "image",
-    type: "IMAGEUPLOAD",
-    classType: "LoadImageFirstFrame",
-    defaultValue: "",
-  },
-  lastFrame: {
-    direction: "input",
-    kind: "widget",
-    nodeId: "21",
-    name: "image",
-    type: "IMAGEUPLOAD",
-    classType: "LoadImageLastFrame",
-    defaultValue: "",
-  },
-  frames: {
-    direction: "input",
-    kind: "widget",
-    nodeId: "30",
-    name: "length",
-    type: "INT",
-    defaultValue: 81,
-  },
-  steps: {
-    direction: "input",
-    kind: "widget",
-    nodeId: "31",
-    name: "steps",
-    type: "INT",
-    defaultValue: 25,
-  },
-};
-
-describe("buildEncapsulatedInputs — 视频模式", () => {
-  it("首帧落到首帧槽，时长仍走工作流默认值", () => {
-    const res = buildEncapsulatedInputs(VIDEO_IO, "I2V", {
-      prompt: "a bird",
-      firstFrame: "frame.png",
-    });
-    expect(res.exposed.firstFrame).toBe("first-frame");
-    expect(res.workflowInputs).toContainEqual({
-      nodeId: "20",
-      name: "image",
-      value: "frame.png",
-    });
-    // 时长/步数不是对外参数 —— 用工作流默认值。
-    expect(valueOf(res.workflowInputs, "length")).toBe(81);
-    expect(valueOf(res.workflowInputs, "steps")).toBe(25);
-    expect(res.exposed.lastFrame).toBe("last-frame");
-  });
-
-  it("首尾帧模式：尾帧落到尾帧槽，首帧不串到尾帧", () => {
-    const res = buildEncapsulatedInputs(VIDEO_IO, "FLF2V", {
-      firstFrame: "a.png",
-      lastFrame: "b.png",
-    });
-    expect(res.workflowInputs).toContainEqual({
-      nodeId: "20",
-      name: "image",
-      value: "a.png",
-    });
-    expect(res.workflowInputs).toContainEqual({
-      nodeId: "21",
-      name: "image",
-      value: "b.png",
-    });
-    expect(res.unmatched).toEqual([]);
-  });
-
-  it("referenceImages 的第一张落到首帧槽（工坊视频把镜头图当首帧传）", () => {
-    const res = buildEncapsulatedInputs(VIDEO_IO, "I2V", {
-      referenceImages: ["shot.png"],
-    });
-    expect(res.workflowInputs).toContainEqual({
-      nodeId: "20",
-      name: "image",
-      value: "shot.png",
-    });
-    expect(res.unmatched).not.toContain("referenceImages");
-  });
-
-  it("工作流没有尾帧槽时如实上报 lastFrame 落不下去", () => {
-    const io: WorkflowIOMap = {
-      firstFrame: VIDEO_IO.firstFrame!,
-      prompt: VIDEO_IO.prompt!,
-    };
-    const res = buildEncapsulatedInputs(io, "I2V", {
-      firstFrame: "a.png",
-      lastFrame: "b.png",
-    });
-    expect(res.unmatched).toContain("lastFrame");
-  });
-
-  it("模式默认值按模式解析（文生 / 图生存不同的时长）", () => {
-    const io: WorkflowIOMap = {
-      ...VIDEO_IO,
-      frames: {
-        ...VIDEO_IO.frames!,
-        modes: { T2V: { defaultValue: 49 }, I2V: { defaultValue: 81 } },
-      },
-    };
-    expect(
-      valueOf(buildEncapsulatedInputs(io, "T2V", {}).workflowInputs, "length"),
-    ).toBe(49);
-    expect(
-      valueOf(buildEncapsulatedInputs(io, "I2V", {}).workflowInputs, "length"),
-    ).toBe(81);
-  });
-
-  it("文生视频：没有参考图时也是合法请求（提示词 + 默认参数）", () => {
-    const res = buildEncapsulatedInputs(VIDEO_IO, "T2V", {
-      prompt: "a sunset",
-    });
-    expect(valueOf(res.workflowInputs, "text")).toBe("a sunset");
-    expect(res.unmatched).toEqual([]);
   });
 });

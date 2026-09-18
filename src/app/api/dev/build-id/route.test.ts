@@ -21,7 +21,7 @@ describe("GET /api/dev/build-id", () => {
   });
 
   it("标识里带进程启动标识，应用服务重启即可被识别", async () => {
-    const { getServerBootId } = await import("~/lib/dev-server-id");
+    const { getServerBootId } = await import("~/lib/shell/dev-server-id");
     expect(await buildId()).toContain(getServerBootId());
   });
 

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
-import { requireServerUser } from "~/lib/auth-server";
-import { LOG_EXPORT_DIR, LOG_ROOT } from "~/lib/log-paths";
+import { requireRequestUser } from "~/server/auth/request-user";
+import { LOG_EXPORT_DIR, LOG_ROOT } from "~/lib/log/log-paths";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**
@@ -14,7 +14,7 @@ import { unauthorizedResponse } from "~/server/lib/error-response";
  * 因此由服务端落盘到 `log/exports/`，并把**绝对路径**回给面板显示。
  *
  * 契约：
- *   - 鉴权与 `/api/logs/list`、`/api/logs/history` 一致（`requireServerUser`）；
+ *   - 鉴权与 `/api/logs/list`、`/api/logs/history` 一致（`requireRequestUser`）；
  *   - 文件名由服务端**自己生成**（只接受前缀白名单），绝不采用客户端传来的路径
  *     ——否则就是一个任意路径写入漏洞；
  *   - 内容大小封顶（日志可能几十 MB，一次导出不该把磁盘写满）；
@@ -45,7 +45,7 @@ function exportFileName(label: string): string {
 }
 
 export async function POST(request: Request) {
-  const user = await requireServerUser();
+  const user = await requireRequestUser();
   if (!user) {
     return unauthorizedResponse();
   }

@@ -29,7 +29,7 @@ import {
   type RawInputEntry,
   type RawNodeMeta,
 } from "~/lib/comfyui/workflow-detail-raw";
-import { type WorkflowIOModeOverride } from "~/lib/workflow-io-types";
+import { type WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
 export interface WorkflowIORawEntry {
   direction: "input" | "output";
@@ -38,7 +38,6 @@ export interface WorkflowIORawEntry {
   name: string;
   label?: string;
   displayOrder?: number;
-  value?: unknown;
   /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，与 `nodeId`
    *  （内部节点 id）一起在运行期拼成 comfy-cli 展开后的 `host:inner` 形式。
    *  顶层勾选的条目没有本字段，PATCH / GET 原样往返。 */
@@ -90,9 +89,9 @@ function optionRatio(label: string): number | null {
 }
 
 /**
- * 把存量作者值对齐到服务器候选表：值合法原样返回；非法则按宽高比数值
+ * 把存量模式默认值对齐到服务器候选表：值合法原样返回；非法则按宽高比数值
  * （"16:9" → "16:9 (Widescreen)"）→ 前缀包含就近纠正；仍匹配不上返回
- * undefined（调用方丢弃该覆盖，回退合法 defaultValue）。候选表缺失
+ * undefined（调用方摘掉该覆盖，回退合法 defaultValue）。候选表缺失
  * （ComfyUI 离线）时不动——此时无从判定合法性，交由表单原样编辑。
  */
 function reconcileOptionValue(
@@ -132,10 +131,6 @@ export interface WorkflowIOEntry {
    *  /api/object_info.  Absent for non-COMBO pins or when ComfyUI is
    *  unreachable — consumers fall back to a plain text control. */
   options?: string[];
-  /** author override of the default value, round-tripped
-   *  from the stored `workflowIORaw` so a custom default survives reload.
-   *  COMBO 条目上会先经存量清洗（对齐服务器候选表）。 */
-  value?: unknown;
   displayOrder?: number;
   /** IO 编辑里切换的「运行时强校验」标记 —— PATCH 原样落库，GET 透传。 */
   required?: boolean;
@@ -146,30 +141,15 @@ export interface WorkflowIOEntry {
    *  WorkflowIOModeOverride 同源（workflow-io-types），两端的
    *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
   modes?: Record<string, WorkflowIOModeOverride>;
-  /** 拥有该 pin 的节点类名（如 "LoadImage" / "KSampler"）。
-   *
-   *  只有 pin 名（"image" / "text"）不足以判定语义：多张参考图时哪张是首帧、
-   *  哪张是尾帧，靠的是产出节点型别。工坊封装（workflow-encapsulation）据它
-   *  把参考图槽位区分成「首帧 / 尾帧 / 普通参考图」。rawJson + graph 都拿不到
-   *  类名时（畸形导出）返回 undefined，消费方按「普通参考图」降级。 */
-  classType?: string;
   /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，运行期据它把
    *  `nodeId`（内部节点）还原成 comfy-cli 展开后的 `host:inner` 拼接 id。 */
   hostNodeId?: string;
   /** 本层槽位上**作者写的**业务名（`label`，且与槽位名不同才有值）。
    *
-   *  富化链把它排在 `localized` 之后（通用翻译会盖住它），但它是判定
-   *  「本地存的那串是不是机器生成的槽位名」的第二判据：富化名恰好停在槽位名
-   *  （`value_1`）时，仅凭显示的 label 无从判断本层有没有作者命名，而这里能。
-   *  没有它，同名条目在写入时会被当成作者命名固化回库（ISSUE #349）。 */
+   *  随条目下发的**事实字段**：富化链把它排在 `localized` 之后（通用翻译会
+   *  盖住它），所以显示名算不到它；但消费方想要「作者在本层槽位上写的名字」
+   *  时，只有这里有。 */
   slotLabel?: string;
-  /** 富化链现在给这个条目的显示名（`label → localized → name` 之外还含子图
-   *  内部字段业务名）。
-   *
-   *  客户端只用它做**别名判定的事实源**：本地 label 是不是一串机器 pin 名，
-   *  要拿真实 pin 名 + 本层作者名 + 这里的富化名三者互相印证，缺一处就可能
-   *  把机器名当成作者命名（ISSUE #349）。 */
-  enrichedLabel?: string;
 }
 
 /** Enrich the stored IO selection into a self-describing record (see the
@@ -312,44 +292,13 @@ export async function enrichWorkflowIO(
          *  非封装节点没有 proxyField，行为与旧版逐值等价：作者 label →
          *  localized → pin 名。 */
         const f = ri.proxyField;
-        /* 存量数据：勾选那一刻会把「画布显示名」写进 label。修复前封装节点
-         *  的显示名就是别名（value_1），库存 label 里于是躺着一串机器生成的
-         *  名字，它并不是作者的命名，不该把内部字段的业务名压掉。label 恰好
-         *  等于别名槽位名（`ri.name`）时视为未命名——作者手写的名字几乎不可能
-         *  与机器别名逐字相同，因此不会误伤；普通节点没有这一分支，行为与旧版
-         *  逐值等价。
-         *
-         *  别名判定不能只看 proxyField：`properties.proxyWidgets` 会因导出缺
-         *  失被 ComfyUI 隔离（`proxyWidgetErrorQuarantine`），此时 proxyField
-         *  为空，但 wrapper 本层 inputs[] 仍带作者写的 label（"Seed"）。只按
-         *  proxyField 判定会让这类工作流的存量别名永远清不掉（ISSUE #349）。
-         *  故以「class_type 是 UUID 的封装节点」为准，只要本层还找得到与槽位
-         *  名不同的作者 label/localized，就认得出这是一串机器别名。 */
-        /* 作者在本层槽位上写的**英文业务名**（`label`）—— 它是判定「库存
-         *  label 是不是一串机器生成的槽位名」的唯一可靠基准。刻意不用
-         *  `localized`：那是 ComfyUI 的通用翻译（`seed` → "随机种"），拿它
-         *  去压作者手写的名字会误伤。
-         *
-         *  封装节点还要额外认内部真实字段（`proxyField`）。 */
+        /* 本层作者名（随条目下发的**事实字段**，见 WorkflowIOEntry.slotLabel）：
+         *  只在真能解析到**非别名**的业务名时才算数 —— 内部字段名（proxyField）
+         *  也足以说明业务语义，故按 f.label → f.localized → ri.label → f.field
+         *  取第一个不同于槽位名的值。刻意不用 `localized`：那是 ComfyUI 的通用
+         *  翻译（`seed` → "随机种"），拿它去压作者手写的名字会误伤。 */
         const authorSlotLabel =
           ri.label !== undefined && ri.label !== ri.name ? ri.label : undefined;
-        const authorFacingName =
-          f?.label ??
-          (f?.localized !== ri.name ? f?.localized : undefined) ??
-          f?.field ??
-          authorSlotLabel;
-        /* 存量/机器名：勾选那一刻会把「画布显示名」写进 label，而修复前某些
-         *  路径写进去的其实是原始槽位名（封装节点的别名 `value_1`，或普通节点
-         *  的 pin 名 `image`）。这串东西不是作者的命名，不该把作者名压掉 ——
-         *  ISSUE #349：`image` 挡住了 `Last Frame Image`。
-         *
-         *  判定：label 恰好等于本层槽位名，且本层/内部确实带一个不同的作者
-         *  业务名。作者把参数重命名成与 pin 名逐字相同（且 raw 里另有一个
-         *  业务名）的概率极低，因此不会误伤。 */
-        /* 本层作者名（下发给客户端做别名判定，见 WorkflowIOEntry.slotLabel）：
-         *  与 `authorFacingName` 同源取值，但只在真能解析到**非别名**的业务名
-         *  时才算数 —— 内部字段名（proxyField）也足以说明业务语义，故按
-         *  f.label → f.localized → ri.label → f.field 取第一个不同于槽位名的值。 */
         const candidateSlotLabel =
           f?.label ??
           (f?.localized !== ri.name ? f?.localized : undefined) ??
@@ -362,13 +311,11 @@ export async function enrichWorkflowIO(
           slotLabel = candidateSlotLabel;
         }
 
-        const staleAlias =
-          label !== undefined &&
-          label === ri.name &&
-          authorFacingName !== undefined &&
-          authorFacingName !== ri.name;
+        /* 库里存着的 label 就是作者的显式重命名（勾选不再抄画布的名字进库，
+         *  唯一写入点是面板的改名框）—— 直读，不做任何「像不像机器名」的让位
+         *  判断。作者想在面板里覆盖本层 raw label，写进去的就是它。 */
         label =
-          (staleAlias ? undefined : label) ??
+          label ??
           f?.label ??
           f?.localized ??
           ri.label ??
@@ -412,12 +359,11 @@ export async function enrichWorkflowIO(
       }
     }
 
-    /* 存量清洗：作者覆盖值 / 模式默认值可能是在候选表缺失或过期时写入的
-     *  （如简写 "16:9"），不在服务器候选表里——照原样展示，用户再怎么选
-     *  提交的仍是脏值。这里在 GET 重建时就地对齐（见 reconcileOptionValue），
-     *  保证 UI 显示与提交的候选值与服务器一致。不回写入参（可能被共享），
-     *  清洗只作用于本次响应；用户保存后 PATCH 自然落库清洗结果。 */
-    const cleanedValue = reconcileOptionValue(v.value, options);
+    /* 存量清洗：模式默认值可能是在候选表缺失或过期时写入的（如简写 "16:9"），
+     *  不在服务器候选表里——照原样展示，用户再怎么选提交的仍是脏值。这里在 GET
+     *  重建时就地对齐（见 reconcileOptionValue），保证 UI 显示与提交的候选值与
+     *  服务器一致。不回写入参（可能被共享），清洗只作用于本次响应；用户保存后
+     *  PATCH 自然落库清洗结果。 */
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
     if (
       v.modes != null &&
@@ -454,8 +400,9 @@ export async function enrichWorkflowIO(
       if (touched) cleanedModes = next;
     }
 
-    /* 节点类名：raw 导出优先（它才是 ComfyUI 里真实的 class），
-     *  API-only 导入退到存库 graph 的 class_type。两者都没有就不下发。 */
+    /* 节点类名（**只在本层内部用**：它是查 `multiline` 声明的键 —— 随条目下发的
+     *  那份已随工坊封装的名字启发式一起删除）：raw 导出优先（它才是 ComfyUI 里
+     *  真实的 class），API-only 导入退到存库 graph 的 class_type。 */
     const graphClassType = asRecord(graph[canonicalNodeId])?.class_type;
     /* raw 导出的类名是空串时也算「没有」—— 不能让它把 graph 里的真类名吃掉。 */
     const rawClassType = nodeTypeById[canonicalNodeId];
@@ -475,7 +422,6 @@ export async function enrichWorkflowIO(
       type,
       ...(defaultValue !== undefined ? { defaultValue } : {}),
       ...(options ? { options } : {}),
-      ...(classType !== undefined ? { classType } : {}),
       nodeTitle:
         nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
       /* 多行 = 节点自己声明的 `("STRING", {"multiline": true})`（查 object_info），
@@ -499,13 +445,9 @@ export async function enrichWorkflowIO(
       ...(typeof v.displayOrder === "number" && Number.isFinite(v.displayOrder)
         ? { displayOrder: v.displayOrder }
         : {}),
-      /* preserve any author override of the default value.
-       *  `value` is stored verbatim via PATCH (the whole workflowIO object is
-       *  persisted as-is) and must survive this GET rebuild so a custom
-       *  default isn't silently dropped on reload.  清洗结果见上方存量清洗：
-       *  非法值被就地纠正；匹配不上时 cleanedValue 为 undefined → 不输出
-       *  value，条目回退到图内合法 defaultValue。 */
-      ...(v.value !== undefined ? { value: cleanedValue } : {}),
+      /* 历史 `value`（旧「通用页签」写的全局覆盖）**读到即丢**：该概念已随通用
+       *  页签删除，这里不再透传 —— 下一次 PATCH 把残留一并清掉（整个 workflowIO
+       *  对象原样落库）。 */
       /* required / seedMode / modes 同 value 一样是作者编辑态（PATCH 原样
        *  落库），GET 重建必须原样透传 —— 此前 required 被丢掉，导致
        *  「改成必填 → 保存 → 重开又变回可选」。modes 走存量清洗。 */
@@ -518,9 +460,6 @@ export async function enrichWorkflowIO(
       /* 本层作者名：只在真的与槽位名不同时下发，避免给「label 就是 pin 名」
        *  的普通节点塞一份无信息量的副本。 */
       ...(slotLabel !== undefined ? { slotLabel } : {}),
-      /* 富化链最终给出的显示名 —— 客户端拿它 + 上面两个字段一起判「本地存的那串
-       *  是不是机器 pin 名」。只作判定事实源，客户端显示仍按自己的合并链取。 */
-      ...(label !== undefined ? { enrichedLabel: label } : {}),
     };
   }
 

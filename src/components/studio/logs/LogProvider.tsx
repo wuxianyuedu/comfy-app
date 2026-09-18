@@ -2,8 +2,8 @@
 
 import React, { useEffect, useRef } from "react";
 
-import { fetchFileLogSlice } from "~/lib/log-file-client";
-import { clampLogTime } from "~/lib/log-session-scope";
+import { fetchFileLogSlice } from "~/lib/log/log-file-client";
+import { clampLogTime } from "~/lib/log/log-session-scope";
 
 import {
   type LogLevel,

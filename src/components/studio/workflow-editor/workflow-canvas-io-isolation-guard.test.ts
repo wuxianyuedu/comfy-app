@@ -220,35 +220,47 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     /* 「对外参数」是产品对用户承诺的那几个口子（提示词 / 尺寸 / 首帧…），
      *  由模式决定，与具体工作流无关 —— 契约表是唯一来源。 */
     const lib = readFileSync(
-      path.resolve(__dirname, "../../../lib/workflow-exposed-params.ts"),
+      path.resolve(
+        __dirname,
+        "../../../lib/workflow/workflow-exposed-params.ts",
+      ),
       "utf8",
     );
     expect(lib).toContain("exposedParamsForMode");
     const mapping = stripComments(
       readFileSync(
-        path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+        path.resolve(
+          __dirname,
+          "../../../lib/workflow/workflow-param-mapping.ts",
+        ),
         "utf8",
       ),
     );
     expect(mapping).toContain("exposedParamsForMode");
   });
 
-  it("库内按端口名找圆点锚点，落点仍在 ioKey 键空间（两者不混）", () => {
+  it("库内卡片圆点的 handle id 卡内唯一（`<条目 id>?<落点 ioKey>`）", () => {
     const cards = stripComments(
       readFileSync(
         path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"),
         "utf8",
       ),
     );
-    /* 落点是 ioKey；圆点锚点是端口名 —— 两者之间由 `wireHandleIdForIoKey` 换算，
-     * 库内不许各写一套字符串拼装。 */
+    /* 锚点带上**条目 id**：三列卡片列是同一个 React Flow 节点，而提示词与负向
+     *  提示词的候选行完全相同（都吃 text 族）—— 只用端口名或只用 ioKey 都会撞车，
+     *  React Flow 只认第一颗（用户口径：「负向提示词的线从提示词那连出来」）。
+     *  尺寸卡取子口 id（卡内唯一的行标识）；库内不许各写一套字符串拼装。 */
     expect(cards).toContain("wiredTargetsForEntry");
-    expect(cards).toContain("wireHandleIdForIoKey");
+    expect(cards).toMatch(/handleId:[\s\S]{0,120}wired\.ioKey/);
     const mapping = readFileSync(
-      path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+      path.resolve(
+        __dirname,
+        "../../../lib/workflow/workflow-param-mapping.ts",
+      ),
       "utf8",
     );
     expect(mapping).toContain("export function wiredTargetsForEntry");
-    expect(mapping).toContain("wireHandleIdForIoKey");
+    /* 换算那一层已删除（函数定义不该再存在）。 */
+    expect(mapping).not.toContain("export function wireHandleIdForIoKey");
   });
 });

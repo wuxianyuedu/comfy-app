@@ -1,6 +1,7 @@
 /**
  * 提交门槛自检：把 scripts/check-dead-exports.cjs 当成黑盒跑在临时工作区上，
- * 验证「src/lib 的零消费值导出」这条规范（§12.16）真的会阻断提交。
+ * 验证「地基层（src/lib + src/trpc）的零消费值导出」这条规范（§12.16）
+ * 真的会阻断提交。
  *
  * 规范：docs/standards/12-代码组织与文件结构.md §12.16（ISSUE #573 第 9 项）
  *
@@ -49,7 +50,7 @@ function write(rel: string, content: string): void {
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "dead-exports-gate-"));
   copyFileSync(SCRIPT, join(workdir, "check-dead-exports.cjs"));
-  for (const d of ["src/lib", "src/components", "scripts", "tests"]) {
+  for (const d of ["src/lib", "src/trpc", "src/components", "scripts", "tests"]) {
     mkdirSync(join(workdir, d), { recursive: true });
   }
 });
@@ -108,10 +109,34 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     expect(output).toContain("src/lib/alias.ts#renamed");
   });
 
-  it("扫描范围只到 src/lib：components 的零消费导出不报", () => {
+  it("扫描范围是地基层：components 的零消费导出不报", () => {
     write(
       "src/components/view.tsx",
       "export function Labelled(): null {\n  return null;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(0);
+    expect(output).toContain("无新增零消费导出");
+  });
+
+  it("src/trpc 也在扫描范围内：零消费的客户端入口导出被阻断", () => {
+    write(
+      "src/trpc/server.ts",
+      "export const orphanApi = { ping: () => 1 };\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("src/trpc/server.ts#orphanApi");
+  });
+
+  it("src/trpc 里被消费的导出放行（客户端入口层与 lib 同一口径）", () => {
+    write(
+      "src/trpc/react.tsx",
+      "export const api = { ping: () => 1 };\n",
+    );
+    write(
+      "src/components/consumer.ts",
+      'import { api } from "~/trpc/react";\nexport const x = api.ping();\n',
     );
     const { code, output } = run();
     expect(code).toBe(0);
@@ -172,11 +197,100 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
     expect(output).toContain("零消费导出 1 个");
   });
 
-  it("真实仓库：基线非空、当前无漂移（棘轮处于收紧状态）", () => {
+  it("同域单测算消费方：符号被同目录同名测试锁住时不报（判据不可能误伤真死代码）", () => {
+    write(
+      "src/lib/util.ts",
+      "export function lockedByOwnTest(): number {\n  return 1;\n}\n",
+    );
+    write(
+      "src/lib/util.test.ts",
+      'import { lockedByOwnTest } from "./util";\nlockedByOwnTest();\n',
+    );
+    const { code, output } = run();
+    expect(code).toBe(0);
+    expect(output).toContain("无新增零消费导出");
+  });
+
+  it("集中目录同名测试（tests/<基名>.test.ts）同样算消费方", () => {
+    write(
+      "src/lib/pure.ts",
+      "export function onlyUsedInCentralTest(): number {\n  return 1;\n}\n",
+    );
+    write(
+      "tests/pure.test.ts",
+      'import { onlyUsedInCentralTest } from "../src/lib/pure";\nonlyUsedInCentralTest();\n',
+    );
+    const { code, output } = run();
+    expect(code).toBe(0);
+    expect(output).toContain("无新增零消费导出");
+  });
+
+  it("集中目录**异名**测试：按 import 关系认消费方，不按文件名", () => {
+    write(
+      "src/lib/workshop/deep.ts",
+      "export function coveredByDifferentlyNamedTest(): number {\n  return 1;\n}\n",
+    );
+    write(
+      "tests/workshop-deep-coverage.test.ts",
+      'import { coveredByDifferentlyNamedTest } from "../src/lib/workshop/deep";\ncoveredByDifferentlyNamedTest();\n',
+    );
+    const { code, output } = run();
+    expect(code).toBe(0);
+    expect(output).toContain("无新增零消费导出");
+  });
+
+  it("没有任何测试文件 import 该模块时仍是零消费（判据不会退化成「有没有人写过这个名字」）", () => {
+    write("src/lib/lonely.ts", "export function trulyDead(): number {\n  return 1;\n}\n");
+    // 一份**别的**模块的测试，只是提到了这个名字 —— 不构成消费
+    write(
+      "tests/other.test.ts",
+      'import { describe, it } from "vitest";\ndescribe("trulyDead 语义说明", () => {\n  it("x", () => {})\n});\n',
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("src/lib/lonely.ts#trulyDead");
+  });
+
+  it("--verify 单条精确复核：清单归零后仍能自证判据在工作", () => {
+    write(
+      "src/lib/pure.ts",
+      "export function kept(): number {\n  return 1;\n}\nexport function lost(): number {\n  return 2;\n}\n",
+    );
+    write(
+      "tests/pure.test.ts",
+      'import { kept } from "../src/lib/pure";\nkept();\n',
+    );
+    const ok = run(["--verify", "src/lib/pure.ts#kept"]);
+    expect(ok.code).toBe(0);
+    expect(ok.output).toContain("有消费");
+    const dead = run(["--verify", "src/lib/pure.ts#lost"]);
+    expect(dead.code).toBe(0);
+    expect(dead.output).toContain("零消费");
+    const missing = run(["--verify", "src/lib/pure.ts#nope"]);
+    expect(missing.code).toBe(1);
+  });
+
+  it("真实仓库：当前零漂移（棘轮处于收紧状态）", () => {
     const result = execFileSync(process.execPath, [SCRIPT, "--strict"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });
     expect(result).toContain("无新增零消费导出");
+  });
+
+  it("真实仓库：清单归零之后，判据靠 --verify 的自证而非「清单为空」", () => {
+    /* 一个**永远返回空**的扫描器会让「清单为空」这类断言全绿 —— 所以归零
+     * 之后必须有第二条证据：对**真的被消费**的符号复核，它必须报「有消费」。
+     * 这里用刚才接线上去的两个符号当锚点。 */
+    for (const target of [
+      "src/lib/workshop/script-parser.ts#emptyProject",
+      "src/lib/log/log-paths.ts#NEXTJS_PANEL_LOG_PREFIX",
+    ]) {
+      const result = execFileSync(process.execPath, [SCRIPT, "--verify", target], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      });
+      expect(result).toContain("有消费");
+    }
   });
 });

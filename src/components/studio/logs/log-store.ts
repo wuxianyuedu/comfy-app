@@ -21,7 +21,7 @@
 
 import { create } from "zustand";
 
-import { saveLogExport, type SavedLogExport } from "~/lib/log-file-client";
+import { saveLogExport, type SavedLogExport } from "~/lib/log/log-file-client";
 
 import { copyLogText, downloadLogText } from "./log-export";
 import { formatForClipboard } from "./log-format";

@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
-import { resolveSessionStart } from "~/lib/log-session-scope";
-import { fileMtimeMs } from "~/lib/log-session-scope.server";
-import { getServerBootId } from "~/lib/dev-server-id";
+import { resolveSessionStart } from "~/lib/log/log-session-scope";
+import { fileMtimeMs } from "~/lib/log/log-session-scope.server";
+import { getServerBootId } from "~/lib/shell/dev-server-id";
 import {
   COMFYUI_RUNTIME_LOG,
   DEV_LAUNCHER_CURRENT_SENTINEL,
   DEV_LAUNCHER_LOG,
   DRIZZLE_STUDIO_RUNTIME_LOG,
   NEXTJS_LOG_DIR,
+  NEXTJS_PANEL_LOG_PREFIX,
   OLLAMA_RUNTIME_LOG,
   START_TAURI_LAUNCHER_LOG,
   APP_RUNTIME_LOG,
-} from "~/lib/log-paths";
+} from "~/lib/log/log-paths";
 
 const LAUNCHER_LOG_FILE = START_TAURI_LAUNCHER_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
@@ -30,7 +31,10 @@ function panelCaptureLog(): string | null {
     const entries = fs
       .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
       .filter(
-        (name) => name.startsWith("nextjs-panel-") && name.endsWith(".log"),
+        /* 前缀的唯一出处是 `log-paths`（`capture-streams.server.ts` 用它命名
+         *  转录文件）——这里手抄一份字面量就是同一件事的第二个名字（§12.14）。 */
+        (name) =>
+          name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"),
       )
       .sort();
     const latest = entries[entries.length - 1];

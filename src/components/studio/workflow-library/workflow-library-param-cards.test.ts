@@ -12,13 +12,17 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { buildParamEntries } from "~/lib/workflow-param-mapping";
-import { applyOutputBindingEdit } from "~/lib/workflow-output-binding";
+import {
+  buildParamEntries,
+  SIZE_SUB_IDS,
+  sizeSubLabel,
+} from "~/lib/workflow/workflow-param-mapping";
+import { applyOutputBindingEdit } from "~/lib/workflow/workflow-output-binding";
 import {
   inferGroups,
   splitWorkflowIO,
 } from "~/components/studio/shared/workflow-io";
-import { exposedParamDisplayLabel } from "~/lib/workflow-exposed-params";
+import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,
@@ -57,10 +61,12 @@ const io: WorkflowIOMap = {
   },
 };
 
-/* 库内卡片列与编辑器同一份契约条目（按模式），故这里也带上模式。 */
+/* 库内卡片列与编辑器同一份契约条目（按模式），故这里也带上模式。
+ * 「尺寸」在映射层是六个子口（见 `SIZE_SUB_IDS`），这里挑「宽度」那个当代表 ——
+ * 形态由子口身份给出，一个子口只连它自己那一行。 */
 const entries = buildParamEntries(io, undefined, { mode: "T2I" });
 const promptEntry = entries.find((entry) => entry.id === "prompt")!;
-const sizeEntry = entries.find((entry) => entry.id === "size")!;
+const sizeEntry = entries.find((entry) => entry.id === "size-width")!;
 
 describe("deriveLibraryParamCards", () => {
   it("作者没画线时 resolved 为空 → 卡片全部显示「未配置」", () => {
@@ -74,7 +80,7 @@ describe("deriveLibraryParamCards", () => {
     expect(derived.map((entry) => entry.id)).toEqual([
       "prompt",
       "negative",
-      "size",
+      ...SIZE_SUB_IDS,
     ]);
     /* 落点只由作者画的线决定：没有线就没有落点，页面如实显示未配置。 */
     expect(resolved).toEqual({});
@@ -182,15 +188,18 @@ describe("deriveLibraryParamCards", () => {
     });
     /* 措辞取自契约表的展示名（「尺寸」在工坊里是组合控件，名字里带它的两类
      * 写法），这里按同一份取值断言，不写字面量 —— 话术调整不该改这条用例。 */
+    /* 尺寸摊成六个子口，名字是「尺寸 · 宽度/高度/…」—— 一律经派生函数取，
+     *  不写字面量：话术调整不该改这条用例。 */
+    const sizeLabels = SIZE_SUB_IDS.map((cls) => sizeSubLabel(cls));
     expect(plain.entries.map((entry) => entry.label)).toEqual([
       exposedParamDisplayLabel("prompt"),
       exposedParamDisplayLabel("negative"),
-      exposedParamDisplayLabel("size"),
+      ...sizeLabels,
     ]);
     expect(withRename.entries.map((entry) => entry.label)).toEqual([
       exposedParamDisplayLabel("prompt"),
       exposedParamDisplayLabel("negative"),
-      exposedParamDisplayLabel("size"),
+      ...sizeLabels,
     ]);
     expect(withRename.ownersByPin["9::widget::text"]).toBe("提示词");
   });
@@ -206,11 +215,9 @@ describe("deriveLibraryParamCards", () => {
     }
   });
 
-  it("每个候选落点都给一条只读连线：卡片圆点 → 宿主行", () => {
+  it("作者连过的口各留一条只读连线：卡片圆点 → 宿主行", () => {
     /* 圆点不给线就只是一颗装饰点：读者答不出「提示词这个口连到哪一行」。
-     *  多候选口子（尺寸）是「每一个能连的候选各一条线」—— 卡片上每个候选都有
-     *  圆点，线只画一条的话，其余几项读作「没接上」（ISSUE #355：「宽高比 + 百万
-     *  像素这两项都需要能导入到工作流中，2 条线都要能连出去」）。 */
+     *  一个口一颗点、一条线 —— 线从哪张卡出发由 handle id（= 条目 id）说清。 */
     const { wires } = deriveLibraryParamCards({
       io,
       paramMap: {
@@ -228,17 +235,16 @@ describe("deriveLibraryParamCards", () => {
         {
           entryId: promptEntry.id,
           targetIoKey: "9::widget::text",
-          /* 线从**被落到的那颗圆点**出发：handle id = 端口名（库里按端口名找点）。 */
-          handleId: "positive_prompt",
+          /* 线从**这张卡**出发：handle id = 条目 id（一卡一颗点，天然唯一）。 */
+          handleId: promptEntry.id,
           grouped: false,
-          manual: true,
         },
         {
           entryId: sizeEntry.id,
           targetIoKey: "5::widget::width",
-          handleId: "width",
+          /* 尺寸那张卡的行 = 形态，handle 就是**子口 id**（= 条目 id）。 */
+          handleId: sizeEntry.id,
           grouped: false,
-          manual: true,
         },
       ]),
     );
@@ -253,7 +259,7 @@ describe("deriveLibraryParamCards", () => {
     expect(wires).toHaveLength(0);
   });
 
-  it("作者画的线标 manual（实线）", () => {
+  it("只有作者画过的口才留线（库里不画「猜出来的」线）", () => {
     const { wires } = deriveLibraryParamCards({
       io,
       paramMap: {
@@ -261,7 +267,7 @@ describe("deriveLibraryParamCards", () => {
       },
       mode: "T2I",
     });
-    expect(wires.find((w) => w.entryId === promptEntry.id)!.manual).toBe(true);
+    expect(wires.find((w) => w.entryId === promptEntry.id)).toBeTruthy();
     expect(wires.some((w) => w.entryId === sizeEntry.id)).toBe(false);
   });
 
@@ -294,65 +300,17 @@ describe("deriveLibraryParamCards", () => {
     expect(derived.map((entry) => entry.id)).toEqual([
       "prompt",
       "negative",
-      "size",
+      ...SIZE_SUB_IDS,
     ]);
     /* 没有落点就没有线：卡片如实显示成未配置，不凭空画。 */
     expect(wires).toHaveLength(0);
   });
 
-  it("组合控件里的一组端口各画一条线（尺寸有三个参数就该有三条线）", () => {
-    /* ISSUE #355：「尺寸现在有三个参数，就应该可以连三条线出来」。宽高比 /
-     *  像素量 / 倍数由同一块组合控件录入，作者把「尺寸」连到这块控件上时，
-     *  这几行都算接上了 —— 只画其中一条会让「尺寸」看着只有一个出口。 */
-    const groupedIO: WorkflowIOMap = {
-      "5::widget::aspect_ratio": {
-        direction: "input",
-        kind: "widget",
-        nodeId: "5",
-        name: "aspect_ratio",
-        type: "COMBO",
-        defaultValue: "16:9",
-      },
-      "5::widget::megapixels": {
-        direction: "input",
-        kind: "widget",
-        nodeId: "5",
-        name: "megapixels",
-        type: "FLOAT",
-        defaultValue: 1,
-      },
-      "5::widget::width": {
-        direction: "input",
-        kind: "widget",
-        nodeId: "5",
-        name: "width",
-        type: "INT",
-        defaultValue: 1024,
-      },
-    };
-    const { wires } = deriveLibraryParamCards({
-      io: groupedIO,
-      paramMap: { source: { "mode:T2I": { size: "5::widget::width" } } },
-      mode: "T2I",
-      groupedKeys: new Set(Object.keys(groupedIO)),
-    });
-    expect(wires.map((wire) => wire.targetIoKey)).toEqual([
-      "5::widget::width",
-      "5::widget::aspect_ratio",
-      "5::widget::megapixels",
-    ]);
-    /* 库里按**端口名**找卡片圆点锚点（不是 ioKey）。 */
-    expect(wires.map((wire) => wire.handleId)).toEqual([
-      "width",
-      "aspect_ratio",
-      "megapixels",
-    ]);
-    /* 三条线都来自作者画的那一条（实线口径）。 */
-    expect(wires.every((wire) => wire.manual === true)).toBe(true);
-    /* 三个端口都算「尺寸」的落点 —— 宿主卡片上三行各标一次徽标。 */
-  });
-
-  it("作者手工改过落点后，每个候选仍各留一条、被指定的那条标 manual", () => {
+  it("尺寸子口只画自己那一条（形态由子口声明，组合控件不再摊开）", () => {
+    /* 拆分之前「尺寸」是一个口，落到组合控件上要把兄弟口一起画出来，否则「宽高比
+     *  + 像素量」那几项读作没接上（ISSUE #355）。现在六种形态各有自己的子口 ——
+     *  「尺寸 · 宽度」只往它连的那一行画；把兄弟口也算上会让宽度值被写进比例 /
+     *  像素量那几行。 */
     const groupedIO: WorkflowIOMap = {
       "5::widget::aspect_ratio": {
         direction: "input",
@@ -382,28 +340,74 @@ describe("deriveLibraryParamCards", () => {
     const { wires } = deriveLibraryParamCards({
       io: groupedIO,
       paramMap: {
-        source: { "mode:T2I": { size: "5::widget::megapixels" } },
+        source: { "mode:T2I": { "size-width": "5::widget::width" } },
       },
       mode: "T2I",
       groupedKeys: new Set(Object.keys(groupedIO)),
     });
-    /* 每个候选各一条（用户口径：这几项都要能连出去），都由作者画的这条线派生。 */
+    expect(wires.map((wire) => wire.targetIoKey)).toEqual(["5::widget::width"]);
+    /* 尺寸那张卡的行 = 形态，圆点 handle 就是**子口 id**（卡片与边同一份算式）。 */
+    expect(wires.map((wire) => wire.handleId)).toEqual(["size-width"]);
+  });
+
+  it("作者把子口连到某一行后：只留那一条", () => {
+    const groupedIO: WorkflowIOMap = {
+      "5::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "aspect_ratio",
+        type: "COMBO",
+        defaultValue: "16:9",
+      },
+      "5::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "megapixels",
+        type: "FLOAT",
+        defaultValue: 1,
+      },
+      "5::widget::width": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "5",
+        name: "width",
+        type: "INT",
+        defaultValue: 1024,
+      },
+    };
+    const { wires } = deriveLibraryParamCards({
+      io: groupedIO,
+      paramMap: {
+        source: { "mode:T2I": { "size-megapixels": "5::widget::megapixels" } },
+      },
+      mode: "T2I",
+      groupedKeys: new Set(Object.keys(groupedIO)),
+    });
+    /* 子口只画它连的那一条（形态由子口身份声明）。 */
     expect(wires.map((wire) => wire.targetIoKey)).toEqual([
-      "5::widget::width",
-      "5::widget::aspect_ratio",
       "5::widget::megapixels",
     ]);
-    expect(wires.map((wire) => wire.manual)).toEqual([true, true, true]);
-    /* 线从**被落到的那一颗圆点**出发：handle 按端口名各归各位。 */
-    expect(
-      wires.every(
-        (wire) => wire.handleId === wire.targetIoKey.split("::").pop(),
-      ),
-    ).toBe(true);
+    /* 线从**被落到的那一行**出发：尺寸卡的行 = 形态，handle 就是子口 id。 */
+    expect(wires.map((wire) => wire.handleId)).toEqual(["size-megapixels"]);
   });
 });
 
 describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () => {
+  it("负向提示词的线从它自己那张卡出发（两卡候选相同也不互相顶）", () => {
+    /* 用户口径：「负面提示词连线还是会从提示词那连出来」—— 两张卡的候选行是同一
+     *  批（都吃 text 族），handle id（= 条目 id）就是分得开它们的那个字段。 */
+    const { wires } = deriveLibraryParamCards({
+      io,
+      paramMap: {
+        source: { "mode:T2I": { negative: "9::widget::text" } },
+      },
+      mode: "T2I",
+    });
+    expect(wires.map((wire) => wire.handleId)).toEqual(["negative"]);
+  });
+
   it("每个候选各一条线，wiredDotKeys 与线一一对应", () => {
     /* 视图按它判断「这颗圆点该不该画成已连接」：库内每个候选各画一条线，若还按
      *  「生效落点才实心」上色，带线的圆点看着反而是断的（ISSUE #355：「这里连线
@@ -426,7 +430,8 @@ describe("deriveLibraryParamCards — 画了线的圆点（wiredDotKeys）", () 
     });
     expect(wires.length).toBeGreaterThan(0);
     for (const wire of wires) {
-      expect(wiredDotKeys.has(`${wire.entryId}?${wire.handleId}`)).toBe(true);
+      /* handle id 本身就是卡片上的锚点标识（普通卡含条目 id）。 */
+      expect(wiredDotKeys.has(wire.handleId)).toBe(true);
     }
     expect(wiredDotKeys.size).toBe(wires.length);
   });
@@ -450,19 +455,12 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     expect(outputs.map((output) => output.ioKey)).toEqual(["9::output::IMAGE"]);
   });
 
-  it("每个输出一条线：宿主输出行 → 卡片（默认虚线的口径）", () => {
-    const { wires } = deriveLibraryOutputCards({ io: outIO });
-    expect(wires).toEqual([
-      {
-        entryId: "9::output::IMAGE",
-        targetIoKey: "9::output::IMAGE",
-        handleId: "images",
-        grouped: false,
-        manual: false,
-        /* 方向与输入侧相反：线从**宿主卡片的输出行**出发，收在对外输出卡片上。 */
-        kind: "hostToParam",
-      },
-    ]);
+  it("未连过就不画线（用户口径：编辑对外参数时「未连过就不要连」）", () => {
+    const { wires, resolved } = deriveLibraryOutputCards({ io: outIO });
+    /* 默认取值来源照旧算出来（卡片与运行期读 `resolved`），但画布上不画它 ——
+     * 库里只剩下作者真连过的实线，不再有一条虚线占位。 */
+    expect(resolved["9::output::IMAGE"]).toBe("9::output::IMAGE");
+    expect(wires).toHaveLength(0);
   });
 
   it("默认取值行 = 工作流自己那一行；改过之后按覆盖表解析", () => {
@@ -490,9 +488,10 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     });
     const moved = deriveLibraryOutputCards({ io: two, paramMap, mode: "T2I" });
     expect(moved.resolved["9::output::MASK"]).toBe("9::output::IMAGE");
-    expect(
-      moved.wires.find((w) => w.entryId === "9::output::MASK")!.manual,
-    ).toBe(true);
+    /* 作者改过的那一个口才画线（未连过的不画，见上一条用例）。 */
+    expect(moved.wires.map((wire) => wire.entryId)).toEqual([
+      "9::output::MASK",
+    ]);
     expect(moved.isManual("9::output::MASK")).toBe(true);
     /* 别的模式不受影响。 */
     expect(
@@ -517,10 +516,11 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
     expect(wires).toHaveLength(0);
   });
 
-  it("输出端口名为空时 handle 退回「输出」—— 与卡片锚点同一算式", () => {
+  it("输出端口名为空时锚点仍是 ioKey（显示名才退回「输出」）", () => {
     /* 两个地方各算一遍 handle，任何一处漏了 trim / 兜底，锚点与导线就对不上，
      *  线量不到锚点、整条不画（ISSUE #355：「images 和对外输出参数之间无法
-     *  连线」）。 */
+     *  连线」）。作者把它连到自己那一行，让线真的画出来 —— 要看的就是这条线的
+     *  handle。 */
     const nameless: WorkflowIOMap = {
       "9::output::EMPTY": {
         direction: "output",
@@ -531,8 +531,18 @@ describe("deriveLibraryOutputCards — 对外输出参数卡片与其连线", ()
         type: "IMAGE",
       },
     };
-    const { wires } = deriveLibraryOutputCards({ io: nameless });
-    expect(wires[0]!.handleId).toBe("输出");
+    const paramMap = applyOutputBindingEdit(null, {
+      outputIoKey: "9::output::EMPTY",
+      ioKey: "9::output::EMPTY",
+      mode: "T2I",
+    });
+    const { wires } = deriveLibraryOutputCards({
+      io: nameless,
+      paramMap,
+      mode: "T2I",
+    });
+    /* 锚点 = 输出的 ioKey（全图唯一、也就是落库键）—— 名字为空不影响它。 */
+    expect(wires[0]!.handleId).toBe("9::output::EMPTY");
   });
 
   it("没有输出时两张表都是空的（视图据此不渲染右列）", () => {
@@ -556,7 +566,6 @@ const negativeLessIo: WorkflowIOMap = {
     name: "text",
     label: "文本",
     type: "STRING",
-    classType: "CLIPTextEncode",
     defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
   },
   "5::widget::width": {
@@ -578,9 +587,11 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
     });
     const negative = entries.find((entry) => entry.id === "negative");
     expect(negative).toBeDefined();
-    /* 不推导、不兜底：落点为空就是未配置，等作者在库里连线。 */
+    /* 不推导、不兜底：落点为空就是未配置，等作者在库里连线。
+     *  候选**按类型**收（负向与提示词同族，STRING 行都是候选，作者把哪一行拖给
+     *  它、哪一行才落）—— 名字里没写 negative 不再等于「这一口没有可落点」。 */
     expect(resolved.negative ?? null).toBeNull();
-    expect(negative!.pins).toHaveLength(0);
+    expect(negative!.pins.map((pin) => pin.name)).toEqual(["text"]);
   });
 
   it("契约里根本没有可落点的端口时也照样显示契约口", () => {
@@ -592,7 +603,7 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
     expect(entries.map((entry) => entry.id)).toEqual([
       "prompt",
       "negative",
-      "size",
+      ...SIZE_SUB_IDS,
     ]);
   });
 
@@ -634,7 +645,8 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
     });
     expect(legacy.resolved.negative ?? null).toBeNull();
     const negative = legacy.entries.find((entry) => entry.id === "negative")!;
-    expect(negative.pins).toHaveLength(0);
+    /* 候选照旧按类型给（作者要能拖线），但历史键不会替它把落点填上。 */
+    expect(negative.pins.map((pin) => pin.name)).toEqual(["text"]);
   });
 
   it("作者显式断开 → 未配置，不被自动落点复活", () => {
