@@ -11,12 +11,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
       class="pointer-events-none absolute inset-0 overflow-hidden"
     >
       <div
-        class="absolute top-[-20%] right-[-10%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
-        style="background: radial-gradient(circle, rgba(139, 92, 246, 0.42) 0%, rgba(139, 92, 246, 0) 70%);"
+        aria-hidden="true"
+        class="pointer-events-none absolute rounded-full top-[-20%] right-[-10%] h-[70%] w-[55%] opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        style="background: radial-gradient(circle, color-mix(in srgb, var(--color-aurora-violet) 42%, transparent) 0%, transparent 70%);"
       />
       <div
-        class="absolute bottom-[15%] left-[-15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
-        style="background: radial-gradient(circle, rgba(34, 211, 238, 0.28) 0%, rgba(34, 211, 238, 0) 70%);"
+        aria-hidden="true"
+        class="pointer-events-none absolute rounded-full bottom-[15%] left-[-15%] h-[55%] w-[45%] opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        style="background: radial-gradient(circle, color-mix(in srgb, var(--color-aurora-cyan) 28%, transparent) 0%, transparent 70%);"
       />
     </div>
     <header

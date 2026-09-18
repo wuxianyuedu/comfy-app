@@ -47,7 +47,7 @@ export function UpdateCheckSection() {
         <input
           id="local-update-check-enabled"
           type="checkbox"
-          className="size-4 accent-[var(--primary,#7c5cff)]"
+          className="accent-primary size-4"
           checked={updateCheckEnabled}
           onChange={(event) =>
             useUpdateCheckStore.getState().setEnabled(event.target.checked)

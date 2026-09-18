@@ -1,0 +1,389 @@
+{
+  "generatedAt": "2026-09-18",
+  "note": "视图层自实现 UI 基元的存量（规范 16 §16.2.3）。棘轮只许下降；新增请先改用 ui/ 基元，不要用 --update 放水。豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
+  "rules": {
+    "P1": "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
+    "P2": "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
+    "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading / skeleton / progress）"
+  },
+  "total": 458,
+  "files": {
+    "src/components/message-center/MessageCenterButton.tsx": {
+      "P1": 1
+    },
+    "src/components/message-center/MessageCenterPanel.tsx": {
+      "P1": 5
+    },
+    "src/components/model/ModelLibrary.tsx": {
+      "P1": 2,
+      "P3": 1
+    },
+    "src/components/settings/SettingsOverlay.tsx": {
+      "P1": 2
+    },
+    "src/components/settings/SettingsShell.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/BrowserStatusBar.tsx": {
+      "P1": 1,
+      "P3": 1
+    },
+    "src/components/studio/DeleteWorkflowModal.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/FilmStudio.tsx": {
+      "P1": 9
+    },
+    "src/components/studio/HomePage.tsx": {
+      "P1": 6
+    },
+    "src/components/studio/ModelLibrary.tsx": {
+      "P1": 8,
+      "P3": 1
+    },
+    "src/components/studio/ModelTagManager.tsx": {
+      "P1": 3
+    },
+    "src/components/studio/ProjectCanvasSettings.tsx": {
+      "P1": 4,
+      "P2": 1
+    },
+    "src/components/studio/ProjectOutputs.tsx": {
+      "P1": 5
+    },
+    "src/components/studio/RequiredSummary.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/ShellTabs.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/SourceModal.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/TitleBarTabs.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/ToastProvider.tsx": {
+      "P1": 1,
+      "P3": 1
+    },
+    "src/components/studio/TrainingStudio.tsx": {
+      "P1": 8
+    },
+    "src/components/studio/VideoQueueModal.tsx": {
+      "P1": 8
+    },
+    "src/components/studio/WorkflowCanvasDecorations.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/WorkflowIOPreviewPanel.tsx": {
+      "P1": 4
+    },
+    "src/components/studio/WorkflowImportPanel.tsx": {
+      "P1": 5
+    },
+    "src/components/studio/WorkflowNodeJsonPopover.tsx": {
+      "P1": 3,
+      "P2": 1
+    },
+    "src/components/studio/WorksGallery.tsx": {
+      "P1": 4
+    },
+    "src/components/studio/WorkspaceNav.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/canvas/CanvasArea.tsx": {
+      "P1": 3
+    },
+    "src/components/studio/canvas/FlowNodeHeader.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/canvas/IOEditContext.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/canvas/SubgraphHeader.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/canvas/WorkflowCanvasEditor.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/canvas/WorkflowCanvasSettings.tsx": {
+      "P1": 6,
+      "P2": 1
+    },
+    "src/components/studio/debug/DebugChainFooter.tsx": {
+      "P1": 5,
+      "P2": 1,
+      "P3": 1
+    },
+    "src/components/studio/history/HistoryDetailModal.tsx": {
+      "P1": 5
+    },
+    "src/components/studio/history/HistoryList.tsx": {
+      "P1": 3
+    },
+    "src/components/studio/history/HistoryTaskCard.tsx": {
+      "P1": 4
+    },
+    "src/components/studio/logs/LogPanel.tsx": {
+      "P1": 13
+    },
+    "src/components/studio/logs/LogRow.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/logs/SaveExportButton.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/project-canvas/CanvasContextMenu.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/project-canvas/CanvasNode/ErrorPanel.tsx": {
+      "P1": 4
+    },
+    "src/components/studio/project-canvas/CanvasNode/ResultCard.tsx": {
+      "P1": 6
+    },
+    "src/components/studio/project-canvas/CanvasNode/SelectedToolbar.tsx": {
+      "P1": 6
+    },
+    "src/components/studio/project-canvas/CanvasPanelToolbar.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/project-canvas/CanvasToolbar.tsx": {
+      "P1": 3
+    },
+    "src/components/studio/project-canvas/ContentAssetNode.tsx": {
+      "P1": 9
+    },
+    "src/components/studio/project-canvas/EmptyCanvasHint.tsx": {
+      "P3": 1
+    },
+    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
+      "P1": 6
+    },
+    "src/components/studio/project-canvas/HistoryPanel.tsx": {
+      "P1": 10,
+      "P3": 3
+    },
+    "src/components/studio/project-canvas/ImageGenerationPanel.tsx": {
+      "P1": 3
+    },
+    "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": {
+      "P1": 17,
+      "P3": 3
+    },
+    "src/components/studio/project-canvas/ProjectSwitcher.tsx": {
+      "P1": 7
+    },
+    "src/components/studio/project-canvas/WorkflowModePickChip.tsx": {
+      "P1": 1,
+      "P2": 1
+    },
+    "src/components/studio/project-canvas/WorkflowModelFilterChip.tsx": {
+      "P1": 3,
+      "P2": 1
+    },
+    "src/components/studio/project-canvas/WorkflowNode.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/project-canvas/WorkflowNodeArdot.tsx": {
+      "P1": 4
+    },
+    "src/components/studio/project-canvas/WorkflowPickChip.tsx": {
+      "P1": 2,
+      "P2": 1,
+      "P3": 1
+    },
+    "src/components/studio/project-canvas/WorkflowSourceFilterChip.tsx": {
+      "P1": 2,
+      "P2": 1
+    },
+    "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": {
+      "P1": 2,
+      "P3": 2
+    },
+    "src/components/studio/workflow-editor/WorkflowEditorTopbar.tsx": {
+      "P1": 11
+    },
+    "src/components/studio/workflow-editor/WorkflowParamCard.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/workflow-editor/workflow-editor-topbar-config.ts": {
+      "P1": 1
+    },
+    "src/components/studio/workflow-library/CustomNodesSettings/CustomNodesSettings.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx": {
+      "P1": 6,
+      "P3": 1
+    },
+    "src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.tsx": {
+      "P3": 2
+    },
+    "src/components/studio/workflow-library/LibraryHostCard.tsx": {
+      "P3": 1
+    },
+    "src/components/studio/workflow-library/ModeContractSettings.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/workflow-library/WorkflowLibrary.tsx": {
+      "P1": 1,
+      "P3": 1
+    },
+    "src/components/studio/workflow-library/WorkflowLibraryFilters.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/workflow-library/WorkflowLibraryHeader.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/workflow-library/WorkflowLibraryList.tsx": {
+      "P1": 3,
+      "P3": 1
+    },
+    "src/components/studio/workflow-library/WorkflowRunLogButton.tsx": {
+      "P1": 1,
+      "P3": 1
+    },
+    "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
+      "P1": 4
+    },
+    "src/components/studio/workflow-library/sections/DetailBody.tsx": {
+      "P1": 1
+    },
+    "src/components/studio/workflow-library/sections/DetailControls.tsx": {
+      "P1": 2
+    },
+    "src/components/studio/workflow-library/sections/DetailHeader.tsx": {
+      "P1": 1,
+      "P3": 1
+    },
+    "src/components/studio/workflow-library/sections/MetaEditor.tsx": {
+      "P1": 4,
+      "P2": 1
+    },
+    "src/components/studio/workflow-library/sections/WorkshopEncapsulationPanel.tsx": {
+      "P1": 1
+    },
+    "src/components/workshop/AgentOverlay.tsx": {
+      "P1": 3,
+      "P3": 4
+    },
+    "src/components/workshop/AttributeMultiSelect.tsx": {
+      "P1": 3,
+      "P2": 1
+    },
+    "src/components/workshop/CharacterDesigner.tsx": {
+      "P1": 4
+    },
+    "src/components/workshop/CharacterPortraitStudio.tsx": {
+      "P1": 7,
+      "P3": 1
+    },
+    "src/components/workshop/ExtractToolbar.tsx": {
+      "P1": 3
+    },
+    "src/components/workshop/FinalComposer.tsx": {
+      "P1": 3
+    },
+    "src/components/workshop/LLMContext.tsx": {
+      "P1": 8
+    },
+    "src/components/workshop/ScriptGenerator.tsx": {
+      "P1": 2
+    },
+    "src/components/workshop/ScriptMarkdownEditor.parts.tsx": {
+      "P1": 3
+    },
+    "src/components/workshop/ScriptMarkdownEditor.tsx": {
+      "P1": 3
+    },
+    "src/components/workshop/ShotSizePicker.tsx": {
+      "P1": 1
+    },
+    "src/components/workshop/ShotStudio.tsx": {
+      "P1": 6
+    },
+    "src/components/workshop/StoryboardPlanner.parts.tsx": {
+      "P1": 4
+    },
+    "src/components/workshop/StoryboardPlanner.tsx": {
+      "P1": 5
+    },
+    "src/components/workshop/VideoStudio.parts.tsx": {
+      "P1": 6
+    },
+    "src/components/workshop/VideoStudio.tsx": {
+      "P1": 1
+    },
+    "src/components/workshop/WorkshopHeader.tsx": {
+      "P1": 7
+    },
+    "src/components/workshop/WorkshopModelAdapterModal.tsx": {
+      "P1": 9
+    },
+    "src/components/workshop/WorkshopStageBody.tsx": {
+      "P3": 1
+    },
+    "src/components/workshop/WorkshopStageNav.tsx": {
+      "P1": 1
+    },
+    "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx": {
+      "P1": 6
+    },
+    "src/app/(main)/settings/SettingsPageView.tsx": {
+      "P1": 1
+    },
+    "src/app/(main)/settings/components/AppUpdateSection.tsx": {
+      "P1": 1,
+      "P3": 2
+    },
+    "src/app/(main)/settings/components/AppearanceSection.tsx": {
+      "P1": 1
+    },
+    "src/app/(main)/settings/components/ComfyuiSection.tsx": {
+      "P1": 2,
+      "P3": 1
+    },
+    "src/app/(main)/settings/components/DatabaseSection.tsx": {
+      "P1": 2,
+      "P3": 1
+    },
+    "src/app/(main)/settings/components/LlmLocalSection.tsx": {
+      "P1": 5,
+      "P3": 3
+    },
+    "src/app/(main)/settings/components/LlmRemoteSection.tsx": {
+      "P1": 5
+    },
+    "src/app/(main)/settings/components/RemoteModelDialog.tsx": {
+      "P1": 7
+    },
+    "src/app/(main)/settings/components/SettingsPrimitives.tsx": {
+      "P1": 1
+    },
+    "src/app/(main)/settings/components/UpdateCheckSection.tsx": {
+      "P1": 1,
+      "P3": 1
+    },
+    "src/app/(main)/settings/components/UsageTestDialog.tsx": {
+      "P1": 11,
+      "P3": 3
+    },
+    "src/app/(main)/settings/page.tsx": {
+      "P1": 4
+    },
+    "src/app/error.tsx": {
+      "P1": 1
+    },
+    "src/app/login/page.tsx": {
+      "P1": 8
+    }
+  }
+}

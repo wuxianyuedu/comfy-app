@@ -168,7 +168,7 @@ export function UsageTestDialog({
                       }
                       className={`rounded-full border px-2 py-1 text-[11px] transition-colors ${
                         already
-                          ? "text-primary border-[var(--primary,#7c5cff)]/50 bg-[var(--primary,#7c5cff)]/5"
+                          ? "text-primary border-primary/50 bg-primary/5"
                           : "text-muted-foreground hover:text-ink border-border hover:bg-subtle"
                       }`}
                     >
@@ -269,7 +269,7 @@ function UsageVideoModeQuickPick({
                 onClick={() => d.setVideoMode(m)}
                 className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                   active
-                    ? "border-[var(--primary,#7c5cff)] bg-[var(--primary,#7c5cff)]/15 text-[var(--primary,#7c5cff)]"
+                    ? "border-primary bg-primary/15 text-primary"
                     : "border-border text-muted-foreground hover:bg-subtle"
                 }`}
               >
