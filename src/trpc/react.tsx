@@ -27,14 +27,14 @@ export const api = createTRPCReact<AppRouter>();
 /**
  * 入参的推导辅助。
  *
- * @example type HelloInput = RouterInputs['example']['hello']
+ * 用法示例：type HelloInput = RouterInputs['example']['hello']
  */
 export type RouterInputs = inferRouterInputs<AppRouter>;
 
 /**
  * 出参的推导辅助。
  *
- * @example type HelloOutput = RouterOutputs['example']['hello']
+ * 用法示例：type HelloOutput = RouterOutputs['example']['hello']
  */
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
 

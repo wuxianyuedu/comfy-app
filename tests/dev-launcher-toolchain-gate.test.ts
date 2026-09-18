@@ -678,8 +678,8 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
    * 全仓范围：**任何**由 Node 去起 pnpm 的地方都必须经同一处形态判据（ISSUE #638）。
    *
    * 前一条用例只钉住三个**服务类**入口；而门禁与工具脚本（`check-format.cjs`
-   * `check-reformat-only.cjs` / `check-app-port-vectors.cjs` / `heal-db.cjs` /
-   * `db-push.mjs` / `run-tests.mjs` / `quality-gate.mjs` / `generate-docs.mjs` /
+   * 同类「动作 ⇄ 脚本」映射还有：
+   * 另有 check-reformat-only / check-app-port-vectors / heal-db / db-push 等，
    * `build-desktop.mjs`）当时**都没进这份清单**，于是同一个坑换了地方复发：
    *
    *   [format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL

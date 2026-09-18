@@ -67,7 +67,7 @@ export const env = createEnv({
    * 给它们加 `NEXT_PUBLIC_` 前缀。
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    // 客户端变量这样声明：NEXT_PUBLIC_CLIENTVAR: z.string(),
   },
 
   /**

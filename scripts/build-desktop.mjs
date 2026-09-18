@@ -7,7 +7,7 @@
  *   2) 组装 src-tauri/static：
  *        - .next/standalone/*        → static/（server 本体）
  *        - .next/static/*            → static/.next/static（前端静态资源，standalone 不自动带）
- *        - public/*                  → static/public
+ *        - public/*                  → 静态资源 /public
  *        - 生成 index.html（sidecar 就绪前的过渡加载页）
  *   3) 复制当前 Node 运行时为 Tauri sidecar：src-tauri/binaries/node-<target-triple>[.exe]
  *      （bundle.externalBin = ["binaries/node"]，打包后资源中按平台名为 node / node.exe）
@@ -69,7 +69,7 @@ function targetTriple() {
  * 去 `src-tauri/binaries/` 找 `node-<triple>[.exe]`，打进资源后按平台补
  * `node.exe` / `node`。这里若只产出 `.exe`（历史实现），Linux/macOS 上
  * `build.rs` 会在编译期直接 panic：
- *   `resource path binaries/node-x86_64-unknown-linux-gnu doesn't exist`
+ *   表现为 resource path binaries/node-x86_64-unknown-linux-gnu 不存在
  * 而壳侧再写死 `node.exe`，即使编过也找不到 sidecar。两处必须同一个判据。
  * @param {string} triple @param {NodeJS.Platform} [platform]
  */

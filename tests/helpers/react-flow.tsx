@@ -15,7 +15,7 @@
  *   内部测量拿到稳定的非零值，避免 jsdom（默认 0×0）下的无限重测告警。
  *
  * 用法：
- *   renderWithFlow(<CanvasNode {...props} />)
+ *   用法示例：renderWithFlow(<CanvasNode {...props} />)
  *   返回值与 RTL render 完全一致（container / rerender / unmount / queries）。
  *   rerender 时同样走 Provider 包装。
  */

@@ -21,13 +21,13 @@
  * 脚本不做其他豁免：`src/**` 下任何 `.tsx` / `.ts` 渲染出的 `<style>` 都阻断。
  *
  * 反例（本脚本存在的理由）：
- *     const CSS = `.x { color: red }`;
- *     return <><style>{CSS}</style><div className="x" /></>;
+ *     例如  const CSS = `.x { color: red }`;
+ *     反例：内联注入 <style>{CSS}</style> 的写法
  * 正例：
  *     // globals.css
  *     .x { color: red }
  *     // 组件
- *     return <div className="x" />;
+ *     正例：只写 <div className="x" />，样式走 globals.css
  *
  * 用法：node scripts/check-inline-style.cjs
  */

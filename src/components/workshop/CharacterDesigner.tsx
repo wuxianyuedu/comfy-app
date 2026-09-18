@@ -221,7 +221,7 @@ export function CharacterDesigner({
       character.appearance = r.appearance;
       character.costume = r.costume;
       character.personality = r.personality;
-      // recompute prompts via existing update path
+      // 经既有的更新路径重算提示词
       const style = styles[0];
       character.positivePrompt = buildCharacterPrompt(character, style);
       character.negativePrompt = buildCharacterNegative(character, style);
@@ -643,7 +643,7 @@ export function CharacterDesigner({
                 />
               </div>
 
-              {/* Linked style skill */}
+              {/* 关联的风格技能 */}
               <div className="mt-2">
                 <span className="text-muted-foreground mb-1 block text-xs">
                   艺术风格（Skill）
@@ -665,7 +665,7 @@ export function CharacterDesigner({
                 />
               </div>
 
-              {/* Generated prompt preview */}
+              {/* 生成出的提示词预览 */}
               <div className="bg-subtle mt-3 rounded-lg p-3">
                 <p className="text-muted-foreground mb-1 text-xs font-medium">
                   生成提示词预览

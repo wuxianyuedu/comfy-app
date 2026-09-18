@@ -99,7 +99,7 @@ async function resolveOllamaExe(): Promise<string> {
     try {
       if (fs.existsSync(c)) return c;
     } catch {
-      // ignore — continue probing next candidate
+      // 忽略 —— 继续探测下一个候选
     }
   }
   // 兜底：交给系统 PATH 解析

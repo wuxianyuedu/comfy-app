@@ -117,7 +117,7 @@ export interface WorkflowDetailLoaderArgs {
   setSubgraphRawContext: Dispatch<
     SetStateAction<{ parentRawJson: unknown; subUid: string } | null>
   >;
-  /** Non-fatal drill-in error: keeps the PARENT graph visible (no library flash). */
+  /** 非致命的下钻错误：保持**父**图可见（不闪一下工作流库）。 */
   setSubgraphError: Dispatch<SetStateAction<string>>;
 }
 

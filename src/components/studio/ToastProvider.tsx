@@ -18,7 +18,7 @@ export interface ToastItem {
   kind: ToastKind;
   title: string;
   description?: string;
-  /** ms before auto-dismiss; 0 = sticky until dismissed */
+  /** 自动关闭前的毫秒数；0 = 手动关闭前一直停留 */
   duration?: number;
 }
 

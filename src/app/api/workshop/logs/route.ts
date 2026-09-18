@@ -1,5 +1,5 @@
 // 工坊生成执行日志：落盘 / 查询。
-//   POST /api/workshop/logs  { stage, entries: [{ts, kind, summary, detail?}] } → { saved }
+//   端点：POST /api/workshop/logs  { stage, entries: [...] } → { saved }
 //   端点：GET  /api/workshop/logs?stage=character&limit=100         → { entries }
 // 角色/分镜提取、AI 拆镜、定妆照生成的执行日志原来只在前端会话里，
 // 刷新即失；这里统一落 log/workshop/（按天分文件），供界面回看历史。
