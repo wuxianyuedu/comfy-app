@@ -246,7 +246,7 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 状态胶囊         | ~~**七个文件**各写一份「状态 → 配色」表（`emerald-500/15` / `emerald-400/10` / `emerald-100` 三种深浅各不相同）~~ | `ui/status-badge.tsx` 一份（`dot` 形态 / `dot={false}` 角标）；文案留在调用处                       | ✅ **见 §16.2.4.5 ①**                       |
 | UI kit 目录      | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~            | 见 §16.2.4.3                                                                                        | ✅ **归并完成（豁免已归还）**               |
 | 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~                                   | 接上有明确场景的一批，其余记为「有基元、无场景」                                                    | ✅ **见 §16.2.4.4 ①**                       |
-| 两套 token 口径  | `shadcn` 别名 与 `ink-*` / `surface-*` 并存                                                                       | 分工定死（别名只在 `ui/` 内），**物理合并另开**                                                     | ⏳ 见 §16.2.4.4 ②                           |
+| 两套 token 口径  | ~~`shadcn` 别名与项目 token **各写一份字面量**（同一颜色 2~3 份拷贝）~~                                           | 别名**只做 `var()` 转发**（项目 token 是唯一事实来源）；`@theme inline` 不再重定义项目 token        | ✅ **已合并，见 §16.2.4.4 ② / 03 §3.6.4**   |
 | 余量主题色       | ~~115 处写死色值「既不是豁免、也不是待治理项」~~                                                                  | 逐条定性：token 化 18 处 / 登记豁免 97 处 / 进固定暗色清单 2 处                                     | ✅ **基线归零，见 §16.2.4.5 ②**             |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
@@ -535,13 +535,38 @@ kebab-case；③ 除 `ui/` 外没有别的目录在放「与 `ui/` 同名的基�
 实测用量：项目系 `border-border-strong` 191 / `text-ink-muted` 236 /
 `bg-surface` 178；shadcn 系 `border-border` 519 / `text-muted-foreground` 320。
 
-**本批的结论是「暂不做物理合并」，并把理由写下来**：两者的分工是
-「shadcn 基元内部用别名、业务视图用项目 token」，而 `ui/` 是**工具生成、
-尽量不手改**的目录（§16.1）—— 把基元里的别名改成项目 token，下一次
-`shadcn add` 会把它们改回去。物理合并需要先解决「工具生成物怎么承载
-项目命名」这件事，那是独立一次设计决定，**不该混在 UI 一致性批次里做**。
-本批只把**能定死的部分定死**：新增业务代码一律用项目 token
-（§3.6.2 的语义色表），shadcn 别名只在 `ui/` 基元内部出现。
+**✅ 已合并（本批）**：别名不再自己写字面量，改为**只做 `var()` 转发**到项目
+token —— 「合并」这一步**不需要动 `ui/` 里的任何一行**，所以原先记下的那个
+顾虑（把基元里的别名改成项目 token、下一次 `shadcn add` 会改回去）**在正确
+的合并方式下并不存在**：基元继续写 `bg-card`，变的只是 `bg-card` 背后指向
+谁。口径与判据见 **03 §3.6.4**（T1 单向 / T2 不重名 / T3 无环），
+`tests/theme-token-single-source.test.ts` 守着。
+
+合并过程中揪出并修掉的**静默 bug**（这是本批最有价值的产出，不是「消除重复」
+本身）：`@theme inline` 把 `--color-primary` / `--color-accent` / `--color-muted` /
+`--color-border` 四行重定向回别名，而 `@theme` 里同名 token 早有值 —— 编译产物
+里同名两处、后者获胜，**项目 token 的含义被静默换成了别名**。
+`var(--color-muted)` 在浅色下取到 `#f7f8fa`（近白表面）而不是 `#6b6b76`
+（文字灰）—— `.u-chip` / `.u-ghost` 与 `WorkflowNodeJsonPopover` 的小字在浅色
+下几乎看不见，而 tsc / eslint / 主题色扫描器**全绿**。
+
+**可观测的行为变化只有 4 处，逐条列出**（UI 一致性改动不许藏差异）：
+
+| token                    | 变化                  | 说明                                                                |
+| ------------------------ | --------------------- | ------------------------------------------------------------------- |
+| `--color-muted`（深）    | `#9a9aad` → `#141419` | 名字归位：它是 shadcn 的**表面**语义（`bg-muted`），浅色档本就如此  |
+| `--secondary`（深）      | `#16161c` → `#141419` | 归一化到 `--color-subtle`（浅色档不变；原深色档与浅色档语义不一致） |
+| `--sidebar-accent`（深） | `#16161c` → `#141419` | 同上（`--sidebar*` **零引用**）                                     |
+| `--sidebar`（浅）        | `#ffffff` → `#f0f1f5` | 归一化到 `--color-panel-deep`（`--sidebar*` **零引用**）            |
+
+另新增两颗项目 token：`--color-on-brand`（品牌实心底上的文字色）与
+`--color-ring-shadow`（浮层 1px ring，原先只存在于别名里）。**编译产物的
+utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类靠桥生成的
+类没有掉过一个），用脚本对过全量清单。
+
+**顺带修掉的语义错位**：`var(--color-muted)` 被 6 处当「弱文字」用
+（`globals.css` 的 `.u-chip` / `.u-ghost`、`WorkflowNodeJsonPopover` ×4），
+它的正主是 `--color-ink-muted` —— 那 6 处已改到正确 token 上。
 
 **③ 余量主题色**：上一批把**表面/文字语义**的写死色值清了 27 处
 （142 → 115），本批把剩下的 115 处**逐条定性完毕**（详见 §16.2.4.5）。

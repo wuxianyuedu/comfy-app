@@ -428,6 +428,54 @@ utility 在两态里各有一态取错值」——`bg-card` 编出来是
 - 回归测试：`tests/theme-dark-token-cascade.test.ts`（真编译 `globals.css` +
   jsdom 解级联，断言每个别名两态取值不同），逐条覆盖上表别名。
 
+### 3.6.4 项目 token 是唯一事实来源，别名只做 `var()` 转发（ISSUE #672，机器强制）
+
+本项目的颜色命名有两条体系，**方向必须是单向的**：
+
+| 体系            | 名字                                                     | 角色                              |
+| --------------- | -------------------------------------------------------- | --------------------------------- |
+| **项目 token**  | `--color-*`（`--color-surface` / `--color-ink-muted` …） | **唯一事实来源**，两态各自赋值    |
+| **shadcn 别名** | `--card` / `--border` / `--muted` …                      | shadcn 基元要的名字，**只做转发** |
+
+收口之前两者**各写一份字面量**（别名在 `.dark {}` 与 `:root:not(.dark) {}` 里
+各一份），于是同一个颜色在库里有 **2~3 份拷贝**：把 `--color-surface` 改成别的，
+`bg-card` 一点不动 —— 这正是「同一个组件样式不好改」的机器原因。
+
+**判据（三条，`tests/theme-token-single-source.test.ts` 逐条守着）**：
+
+- **T1 单向**：别名不写字面量，值必须是 `var(--color-*)`。别名自己写死颜色时，
+  「改品牌色」要点名到别名这一层。
+- **T2 不重名**：`@theme inline` 块里不许出现 `@theme` 已有的名字。重名 =
+  项目 token 被别名顶掉（见下）。`--color-muted` 是**允许**出现在桥里的少数派 ——
+  shadcn 的 `--muted` 是**表面**语义（`bg-muted`），项目侧对应 `--color-subtle`；
+  项目原有的同名 `--color-muted` 是**文字**语义、且与 `--color-ink-muted`
+  逐字节同值，已删除。名字腾空之后它不再是「重定义」。
+- **T3 无环**：`var()` 链必须无环、不指向未定义的名字。`--color-X: var(--X)`
+  配 `--X: var(--color-X)` 会让两边同时变成无效值。
+
+**T2 不是风格偏好，是实际踩过的坑**：`@theme inline` 里曾有
+`--color-primary: var(--primary)`、`--color-accent`、`--color-muted`、
+`--color-border` 四行。名字在编译产物里出现两次，本块（层内靠后）获胜，于是
+**项目 token 的含义被静默换成了别名**：`var(--color-muted)` 在浅色下取到
+`#f7f8fa`（近白表面）而不是 `#6b6b76`（文字灰），`globals.css` 的 `.u-chip` /
+`.u-ghost` 与 `WorkflowNodeJsonPopover` 的那些小字在浅色下几乎看不见。
+**tsc / eslint / 主题色扫描器全绿** —— 扫描器扫「写死的色值」，而这里色值本身
+没问题，错的是 token 解析到了另一处同名声明。
+
+**别名不按主题分叉**：转发形态下别名只需声明**一次**，两态取值由项目 token
+负责。因此 `:root:not(.dark)` 那个「深色下不匹配」的技巧对别名不再必要
+（§3.6.3 讲的层叠陷阱仍适用于项目 token 自身：浅色档用裸 `:root`、深色档用
+`.dark` 时，浅色档会恒压深色档）。
+
+**新增一个颜色时**：先在 `@theme` 加 `--color-*`（两态各取值），再看 shadcn
+基元是否需要别名 —— 需要就在 `:root {}` 加一行转发、并在 `@theme inline` 加一行
+桥。**产品代码一律用项目 token**，别名只给 `ui/` 基元用。
+
+**取值口径**：`tests/helpers/theme-tokens.ts` 真编译 `globals.css` 产物，自己实现
+级联 + `var()` 链解析。**不要改用 `getComputedStyle`** —— jsdom 不解析 `var()`，
+别名改成转发后会返回字面量 `"var(--color-surface)"`，断言会全部变成误报
+（实测过）。本文件的做法在 Chromium 里逐项核对过。
+
 ### 3.7 装饰性元素可访问性与性能
 
 ```tsx
