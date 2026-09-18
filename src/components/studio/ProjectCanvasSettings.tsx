@@ -18,6 +18,7 @@ import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
 import { useDebugStore } from "./debug/debug-store";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
+import { Switch } from "~/components/ui/switch";
 
 /* ── 开关（内联，镜像 CanvasSettingsPanel 的 ToggleRow 观感） ── */
 function ToggleRow({
@@ -46,23 +47,10 @@ function ToggleRow({
           <span className="text-ink-muted mt-0.5 text-[10.5px]">{hint}</span>
         )}
       </span>
-      <Button
-        variant="ghost"
-        role="switch"
-        aria-checked={value}
-        onClick={() => onChange(!value)}
-        className={`relative h-5 w-9 shrink-0 rounded-full border p-0 transition-colors ${
-          value
-            ? "border-primary-500/60 bg-primary-500/80 hover:bg-primary-500/80"
-            : "border-border-strong bg-subtle"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-all ${
-            value ? "left-[18px]" : "left-0.5"
-          }`}
-        />
-      </Button>
+      {/* 开关走 ui/switch（规范 16 §16.2.3）：此前这里自绘了一个
+          「圆角底 + 绝对定位圆点」的开关，与 WorkflowCanvasSettings 的另一份
+          同形实现各自维护 —— 开关是**状态控件**，样式改动应当只发生在一处。 */}
+      <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
     </label>
   );
 }

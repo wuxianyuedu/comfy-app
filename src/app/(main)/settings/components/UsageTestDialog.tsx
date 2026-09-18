@@ -24,6 +24,8 @@ import type { UsageTestKind } from "~/lib/llm/usage-test-client";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
+import { Textarea } from "~/components/ui/textarea";
+import { Input } from "~/components/ui/input";
 
 import { FieldImagePreview } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -81,13 +83,13 @@ export function UsageTestDialog({
           <label className="text-ink/80 mb-1.5 block text-sm font-medium">
             提示词
           </label>
-          <textarea
+          <Textarea
             value={usageTest.prompt}
             onChange={(event) =>
               d.patchUsageTest({ prompt: event.target.value })
             }
             rows={2}
-            className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none"
+            className="border-border text-ink bg-surface-2 mb-3 resize-y"
           />
 
           {usageTest.kind === "image" && (
@@ -95,14 +97,14 @@ export function UsageTestDialog({
               <label className="text-ink/80 mb-1.5 block text-sm font-medium">
                 尺寸
               </label>
-              <input
+              <Input
                 type="text"
                 value={usageTest.size}
                 onChange={(event) =>
                   d.patchUsageTest({ size: event.target.value })
                 }
                 placeholder="1024x1024"
-                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="border-border text-ink bg-surface-2 mb-3"
               />
             </>
           )}
@@ -112,14 +114,14 @@ export function UsageTestDialog({
               <label className="text-ink/80 mb-1.5 block text-sm font-medium">
                 尺寸（可选，留空 = 不传）
               </label>
-              <input
+              <Input
                 type="text"
                 value={usageTest.size}
                 onChange={(event) =>
                   d.patchUsageTest({ size: event.target.value })
                 }
                 placeholder="如 720P（Agnes Flash 固定值）或 1280x704"
-                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="border-border text-ink bg-surface-2 mb-3"
               />
             </>
           )}
@@ -352,16 +354,16 @@ function UsageFieldEditor({
           return (
             <div key={i} className="flex flex-col gap-1.5">
               <div className="flex gap-1.5">
-                <input
+                <Input
                   type="text"
                   value={f.key}
                   onChange={(event) =>
                     d.patchField(i, { key: event.target.value })
                   }
                   placeholder="字段名（如 seed / first_frame）"
-                  className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-2/5 min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                  className="border-border text-ink bg-surface-2 w-2/5 min-w-0 font-mono text-xs"
                 />
-                <input
+                <Input
                   type="text"
                   value={f.value}
                   onChange={(event) =>
@@ -376,7 +378,7 @@ function UsageFieldEditor({
                           ? "值：一张或多张图片 URL（多张用逗号分隔，如 a,b）"
                           : "值：文本 / 数字 / 图片地址"
                   }
-                  className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full min-w-0 rounded-lg border px-2 py-1.5 font-mono text-xs outline-none"
+                  className="border-border text-ink bg-surface-2 w-full min-w-0 font-mono text-xs"
                 />
                 {f.key === "mode" ? (
                   <span

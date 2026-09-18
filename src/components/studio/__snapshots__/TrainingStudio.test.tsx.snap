@@ -39,10 +39,10 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
         </span>
       </div>
       <div
-        class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] bg-amber-500/12 text-amber-700 dark:text-amber-400"
+        class="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] bg-warning/12 text-warning-strong"
       >
         <span
-          class="inline-block h-[7px] w-[7px] rounded-full bg-amber-400 shadow-sm shadow-amber-400/40"
+          class="inline-block h-[7px] w-[7px] rounded-full bg-warning shadow-warning/40 shadow-sm"
         />
         训练后端未配置
       </div>
@@ -87,7 +87,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
           class="flex-1 space-y-3 overflow-y-auto p-4"
         >
           <div
-            class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400"
+            class="border-warning/30 bg-warning/10 text-warning-strong rounded-lg border p-3 text-[11px] leading-relaxed"
           >
             <p
               class="mb-1 font-semibold"
@@ -103,7 +103,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI 训练节点的 HTTP 地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
           </div>
           <div
-            class="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-violet-500/35 bg-violet-500/6 px-3 py-5 text-center transition-colors hover:border-violet-500/55 hover:bg-violet-500/10"
+            class="border-primary-500/35 bg-primary-500/6 hover:border-primary-500/55 hover:bg-primary-500/10 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-3 py-5 text-center transition-colors"
           >
             <svg
               aria-hidden="true"
@@ -129,7 +129,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               />
             </svg>
             <p
-              class="text-[12px] font-medium text-violet-700 dark:text-violet-400"
+              class="text-primary-strong text-[12px] font-medium"
             >
               点击或拖拽上传图片
             </p>
@@ -254,7 +254,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   触发词
                 </p>
                 <p
-                  class="truncate text-[13px] font-medium text-violet-700 dark:text-violet-400"
+                  class="text-primary-strong truncate text-[13px] font-medium"
                 >
                   —
                 </p>
@@ -279,7 +279,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             class="bg-surface-2 mt-4 h-1.5 w-full overflow-hidden rounded-full"
           >
             <div
-              class="h-full rounded-full bg-linear-to-r from-violet-500 to-cyan-400 transition-all"
+              class="from-primary-500 to-info h-full rounded-full bg-linear-to-r transition-all"
               style="width: 0%;"
             />
           </div>
@@ -302,7 +302,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 class="flex items-center gap-1"
               >
                 <span
-                  class="inline-block h-[2px] w-3 bg-violet-400"
+                  class="bg-primary-500 inline-block h-[2px] w-3"
                 />
                 训练
               </span>
@@ -310,7 +310,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 class="flex items-center gap-1"
               >
                 <span
-                  class="inline-block h-[2px] w-3 bg-cyan-400"
+                  class="bg-info inline-block h-[2px] w-3"
                 />
                 验证
               </span>
@@ -404,7 +404,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               任务名称
             </label>
             <input
-              class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+              class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/20"
               placeholder="如：我的水墨风格"
               value=""
             />
@@ -459,7 +459,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 触发词
               </label>
               <input
-                class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/20"
                 placeholder="如：somecjkstyle"
                 value=""
               />
@@ -471,7 +471,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 类别词（可选）
               </label>
               <input
-                class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/20"
                 placeholder="person / style"
                 value=""
               />
@@ -527,16 +527,17 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 训练步数
               </span>
               <span
-                class="text-[11px] font-medium text-violet-700 dark:text-violet-400"
+                class="text-primary-strong text-[11px] font-medium"
               >
                 1500
               </span>
             </div>
             <input
-              class="w-full accent-violet-500"
+              class="h-1 cursor-pointer appearance-none rounded-full outline-none w-full"
               max="4000"
               min="500"
               step="100"
+              style="background: linear-gradient(to right, var(--color-primary-500) 0%, var(--color-primary-500) 28.57142857142857%, var(--color-border) 28.57142857142857%, var(--color-border) 100%);"
               type="range"
               value="1500"
             />
@@ -551,15 +552,17 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 批次大小
               </span>
               <span
-                class="text-[11px] font-medium text-violet-700 dark:text-violet-400"
+                class="text-primary-strong text-[11px] font-medium"
               >
                 4
               </span>
             </div>
             <input
-              class="w-full accent-violet-500"
+              class="h-1 cursor-pointer appearance-none rounded-full outline-none w-full"
               max="8"
               min="1"
+              step="1"
+              style="background: linear-gradient(to right, var(--color-primary-500) 0%, var(--color-primary-500) 42.857142857142854%, var(--color-border) 42.857142857142854%, var(--color-border) 100%);"
               type="range"
               value="4"
             />
@@ -574,16 +577,17 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 LoRA 维度 (rank)
               </span>
               <span
-                class="text-[11px] font-medium text-violet-700 dark:text-violet-400"
+                class="text-primary-strong text-[11px] font-medium"
               >
                 32
               </span>
             </div>
             <input
-              class="w-full accent-violet-500"
+              class="h-1 cursor-pointer appearance-none rounded-full outline-none w-full"
               max="128"
               min="8"
               step="8"
+              style="background: linear-gradient(to right, var(--color-primary-500) 0%, var(--color-primary-500) 20%, var(--color-border) 20%, var(--color-border) 100%);"
               type="range"
               value="32"
             />
@@ -598,16 +602,17 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 Alpha
               </span>
               <span
-                class="text-[11px] font-medium text-violet-700 dark:text-violet-400"
+                class="text-primary-strong text-[11px] font-medium"
               >
                 16
               </span>
             </div>
             <input
-              class="w-full accent-violet-500"
+              class="h-1 cursor-pointer appearance-none rounded-full outline-none w-full"
               max="128"
               min="0"
               step="8"
+              style="background: linear-gradient(to right, var(--color-primary-500) 0%, var(--color-primary-500) 12.5%, var(--color-border) 12.5%, var(--color-border) 100%);"
               type="range"
               value="16"
             />
@@ -858,7 +863,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       class="border-border-subtle bg-panel-deep/95 relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm"
     >
       <span
-        class="inline-block h-[7px] w-[7px] rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/40"
+        class="bg-success-strong shadow-success-strong/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm"
       />
       <span
         class="text-ink-muted text-[11px]"

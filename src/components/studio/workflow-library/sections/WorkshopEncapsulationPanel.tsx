@@ -10,6 +10,7 @@
 import React from "react";
 
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import {
   deriveEncapsulationStatus,
@@ -194,20 +195,20 @@ export function WorkshopEncapsulationPanel({
         </div>
         <div className="space-y-2">
           {promptEntry?.targetIoKey && (
-            <textarea
+            <Textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               rows={2}
-              className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-xs outline-none"
+              className="border-border bg-bg text-xs"
               placeholder="测试提示词"
             />
           )}
           {negativeEntry?.targetIoKey && (
-            <textarea
+            <Textarea
               value={negative}
               onChange={(event) => setNegative(event.target.value)}
               rows={1}
-              className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-xs outline-none"
+              className="border-border bg-bg text-xs"
               placeholder="负向提示词（可选）"
             />
           )}

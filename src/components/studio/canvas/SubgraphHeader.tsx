@@ -42,7 +42,7 @@ export function SubgraphHeader({
   /* 标题栏底色 = 节点表面色与子图身份色 accent 的 20% 混色。混色基准此前
      写死 `#16161E`，Light 下整条标题栏仍是暗色（浅色节点配黑标题）。
      基准改为跟主题走的 `--color-node-mix-base`（浅色=白、深色=原 #16161e）。 */
-  const mixBase = useCssColorToken("--color-node-mix-base", "#16161e");
+  const mixBase = useCssColorToken("--color-node-mix-base", "#ffffff");
   return (
     <div
       className="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
