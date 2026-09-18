@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Layers, Settings } from "lucide-react";
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
+import { Button } from "~/components/ui/button";
 
 // Re-export `WorkspaceView` so existing imports like
 //   `import type { WorkspaceView } from "./WorkspaceNav"`
@@ -43,14 +44,14 @@ export function WorkspaceNav({
         const isActive = active === item.id;
         const isEnabled = item.enabled !== false;
         return (
-          <button
+          <Button
             key={item.id}
-            type="button"
+            variant="ghost"
             disabled={!isEnabled}
             onClick={() => isEnabled && onSelect(item.id)}
-            className={`group flex h-[42px] w-[42px] flex-col items-center justify-center rounded-xl transition-all ${
+            className={`group flex h-[42px] w-[42px] flex-col items-center justify-center rounded-xl p-0 font-normal ${
               isActive
-                ? "bg-primary/16 text-ink-bright shadow-sm shadow-black/5 dark:shadow-black/5"
+                ? "bg-primary/16 text-ink-bright hover:bg-primary/16 shadow-sm shadow-black/5 dark:shadow-black/5"
                 : isEnabled
                   ? "text-ink-muted hover:bg-subtle hover:text-ink-strong"
                   : "text-ink-fainter cursor-not-allowed opacity-50"
@@ -70,7 +71,7 @@ export function WorkspaceNav({
             >
               {item.label}
             </span>
-          </button>
+          </Button>
         );
       })}
 
@@ -79,14 +80,15 @@ export function WorkspaceNav({
       {/* Settings — workspace 内点击以 overlay 打开（组件树不卸载）；
           独立路由（非 workspace）时由调用方决定是否直接 Link 到 /settings。 */}
       {onOpenSettings ? (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-lg"
           onClick={onOpenSettings}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-9 w-9 items-center justify-center rounded-xl transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-xl"
           title="设置"
         >
           <Settings size={17} strokeWidth={1.8} />
-        </button>
+        </Button>
       ) : (
         <Link
           href="/settings"

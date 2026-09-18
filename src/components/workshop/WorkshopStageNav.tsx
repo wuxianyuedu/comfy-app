@@ -3,6 +3,7 @@
 // 横向阶段导航。全部阶段始终可点（顺序仅是推荐流），完成度由 controller 算好下发。
 
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import {
   STAGE_DEFS,
   stageSubtitle,
@@ -30,13 +31,15 @@ export function WorkshopStageNav({
         const active = tab === stage.id;
         const ratio = stageRatios[stage.id];
         return (
-          <button
+          <Button
             key={stage.id}
-            type="button"
+            variant="ghost"
             onClick={() => onTabChange(stage.id)}
             aria-current={active ? "step" : undefined}
-            className={`flex flex-1 items-center gap-3 rounded-xl px-4 py-3 transition-colors ${
-              active ? "bg-primary/12 ring-primary/25 ring-1" : "bg-surface"
+            className={`flex h-auto flex-1 items-center gap-3 rounded-xl px-4 py-3 font-normal ${
+              active
+                ? "bg-primary/12 ring-primary/25 hover:bg-primary/12 ring-1"
+                : "bg-surface hover:bg-surface"
             }`}
           >
             <span
@@ -62,7 +65,7 @@ export function WorkshopStageNav({
                 {stageSubtitle(stage.id, tab, stageRatios, viewContext)}
               </div>
             </div>
-          </button>
+          </Button>
         );
       })}
     </nav>

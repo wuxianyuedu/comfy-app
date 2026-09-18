@@ -1,7 +1,7 @@
 "use client";
 
 import type { DragEventHandler } from "react";
-import { AlertTriangle, Loader2, Search, Download } from "lucide-react";
+import { AlertTriangle, Search, Download } from "lucide-react";
 import {
   deriveFormatFlags,
   deriveSyncFlags,
@@ -11,6 +11,7 @@ import {
 } from "./workflow-library-config";
 import { TaskTypeChip } from "../ui/TaskTypeChip";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "../ui/SourceTag";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -119,8 +120,7 @@ export function WorkflowLibraryList({
             minHeightClass="min-h-[160px]"
             title="正在加载工作流…"
             description="本地目录会一起扫描，文件多时首次载入需要几秒。"
-            icon={Loader2}
-            className="[&_svg]:animate-spin"
+            icon={<Spinner className="size-6" />}
           />
         ) : empty && stalled ? (
           <EmptyState

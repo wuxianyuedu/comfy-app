@@ -42,7 +42,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         class="bg-surface-2 h-5 w-px"
       />
       <button
-        class="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+        class="group/button inline-flex shrink-0 items-center justify-center border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+        data-slot="button"
+        tabindex="0"
         title="撤销"
         type="button"
       >
@@ -68,7 +70,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         </svg>
       </button>
       <button
-        class="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+        class="group/button inline-flex shrink-0 items-center justify-center border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8 text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+        data-slot="button"
+        tabindex="0"
         title="重做"
         type="button"
       >
@@ -97,7 +101,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         class="flex-1"
       />
       <button
-        class="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/85 text-white shadow-sm shadow-violet-500/20 transition-all hover:bg-violet-500 hover:shadow-violet-500/30 active:scale-95"
+        class="group/button inline-flex shrink-0 items-center justify-center border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-3 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary-500 text-primary-foreground hover:bg-primary-600 focus-visible:border-primary-600 focus-visible:ring-primary-500/40 size-9 rounded-xl shadow-sm hover:scale-[1.03]"
+        data-slot="button"
+        tabindex="0"
         title="播放预览"
         type="button"
       >
@@ -121,8 +127,11 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         时间轴缩放
       </span>
       <button
-        class="bg-subtle flex items-center gap-1.5 rounded-lg border border-violet-500/35 px-3.5 py-1.5 text-xs font-semibold text-violet-700 transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50 dark:text-violet-400"
+        class="group/button inline-flex shrink-0 items-center justify-center border border-transparent bg-clip-padding whitespace-nowrap transition-all outline-none select-none focus-visible:ring-3 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 text-primary-strong hover:bg-primary-500/25 focus-visible:border-primary-500/40 focus-visible:ring-primary-500/20 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 bg-subtle h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
+        data-disabled=""
+        data-slot="button"
         disabled=""
+        tabindex="0"
         type="button"
       >
         导出成片
@@ -153,7 +162,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
           </div>
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/12 text-sm text-violet-700 transition-colors hover:border-violet-500/50 hover:bg-violet-500/20 dark:text-violet-400"
+            class="group/button inline-flex shrink-0 items-center justify-center border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-3 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 bg-primary-500/15 text-primary-strong hover:bg-primary-500/25 focus-visible:border-primary-500/40 focus-visible:ring-primary-500/20 size-6 in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3 rounded-md"
+            data-slot="button"
+            tabindex="0"
             title="新增镜头"
             type="button"
           >
@@ -164,7 +175,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           class="flex-1 space-y-1.5 overflow-y-auto p-2"
         >
           <button
-            class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all border-violet-500/40 bg-violet-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
+            class="group/button shrink-0 justify-center bg-clip-padding text-sm whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all border-primary-500/40 bg-primary-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
+            data-slot="button"
+            tabindex="0"
             type="button"
           >
             <div
@@ -207,7 +220,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
           </button>
           <button
-            class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
+            class="group/button shrink-0 justify-center bg-clip-padding text-sm whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
+            data-slot="button"
+            tabindex="0"
             type="button"
           >
             <div
@@ -250,7 +265,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
           </button>
           <button
-            class="group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
+            class="group/button shrink-0 justify-center bg-clip-padding text-sm whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
+            data-slot="button"
+            tabindex="0"
             type="button"
           >
             <div
@@ -309,7 +326,9 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             fps
           </span>
           <button
-            class="border-border-strong flex h-16 w-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
+            class="group/button shrink-0 bg-clip-padding text-sm font-medium whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
+            data-slot="button"
+            tabindex="0"
             title="播放"
             type="button"
           >

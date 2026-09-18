@@ -8,6 +8,7 @@
 import { ExternalLink } from "lucide-react";
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
+import { Button } from "~/components/ui/button";
 import {
   IoCheckbox,
   NodeIdChip,
@@ -57,8 +58,9 @@ export function SubgraphHeader({
        *  doesn't pick it up as a node-drag start, AND so the
        *  surrounding `onDoubleClick` (drill-down) doesn't fire after
        *  a double-click that began here. */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon-xs"
         aria-label={isCollapsed ? "展开子图" : "折叠子图"}
         title={isCollapsed ? "展开" : "折叠"}
         onClick={(event) => {
@@ -67,7 +69,7 @@ export function SubgraphHeader({
         }}
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 h-5 w-5 shrink-0 rounded"
         style={{ pointerEvents: "auto" }}
       >
         <svg
@@ -88,7 +90,7 @@ export function SubgraphHeader({
             strokeLinejoin="round"
           />
         </svg>
-      </button>
+      </Button>
       <span
         className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-[9px] font-bold"
         style={{
@@ -126,8 +128,9 @@ export function SubgraphHeader({
       )}
       <NodeIdChip nodeId={String(nodeId)} variant="subgraph" />
       {onEnter && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={(event) => {
             event.stopPropagation();
             onEnter();
@@ -143,7 +146,7 @@ export function SubgraphHeader({
           className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-700 transition-colors hover:bg-violet-500/30 hover:text-white dark:text-violet-200"
         >
           <ExternalLink size={12} strokeWidth={2.5} />
-        </button>
+        </Button>
       )}
     </div>
   );

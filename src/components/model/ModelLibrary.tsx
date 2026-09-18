@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { ModelCard } from "./ModelCard";
 import { useModelLibrary } from "./hooks/use-model-library";
 
@@ -24,17 +26,19 @@ export function ModelLibrary() {
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-2">
         {FILTERS.map((FILTERS) => (
-          <button
+          <Button
             key={FILTERS.key}
+            variant="outline"
+            size="sm"
             onClick={() => c.setType(FILTERS.key)}
-            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+            className={`h-auto rounded-full px-3 py-1.5 ${
               c.type === FILTERS.key
                 ? "border-primary bg-primary-soft text-primary"
-                : "border-border text-muted-foreground hover:text-ink"
+                : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
             }`}
           >
             {FILTERS.label}
-          </button>
+          </Button>
         ))}
         <input
           value={c.q}
@@ -42,21 +46,22 @@ export function ModelLibrary() {
           placeholder="搜索模型…"
           className="border-border bg-surface focus:border-primary ml-auto h-9 w-44 rounded-lg border px-3 text-sm outline-none sm:w-56"
         />
-        <button
+        <Button
+          variant="outline"
           onClick={() => void c.sync()}
           disabled={c.syncing}
-          className="border-border text-muted-foreground hover:text-ink h-9 rounded-lg border px-3 text-sm transition-colors disabled:opacity-50"
+          className="border-border text-muted-foreground hover:bg-subtle hover:text-ink h-9 rounded-lg px-3"
         >
           {c.syncing ? "同步中…" : "同步模型"}
-        </button>
+        </Button>
       </div>
 
       {c.loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div
+            <Skeleton
               key={`skeleton-${i}`}
-              className="bg-subtle aspect-[4/3] animate-pulse rounded-xl"
+              className="bg-subtle aspect-[4/3] rounded-xl"
             />
           ))}
         </div>

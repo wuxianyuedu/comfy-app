@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { X, Zap } from "lucide-react";
 import { authClient } from "~/server/better-auth/client";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { AuroraGlow } from "~/components/studio/ui/AuroraBackground";
 
 type Mode = "signin" | "register";
@@ -111,28 +112,28 @@ export default function LoginPage() {
 
         {/* Tab switcher */}
         <div className="bg-subtle mb-6 flex rounded-xl p-1">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => switchMode("signin")}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`h-auto flex-1 rounded-lg px-4 py-2 ${
               mode === "signin"
-                ? "bg-primary/15 text-primary"
+                ? "bg-primary/15 text-primary hover:bg-primary/20"
                 : "text-ink-muted hover:text-ink"
             }`}
           >
             登录
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => switchMode("register")}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`h-auto flex-1 rounded-lg px-4 py-2 ${
               mode === "register"
-                ? "bg-primary/15 text-primary"
+                ? "bg-primary/15 text-primary hover:bg-primary/20"
                 : "text-ink-muted hover:text-ink"
             }`}
           >
             创建账号
-          </button>
+          </Button>
         </div>
 
         <p className="text-ink-muted mb-6 text-center text-sm">
@@ -149,14 +150,15 @@ export default function LoginPage() {
               className="mt-0.5 shrink-0 text-violet-700 dark:text-violet-300"
             />
             <span className="flex-1 leading-relaxed">{notice}</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={() => setNotice(null)}
-              className="text-violet-700/70 transition-colors hover:text-violet-900 dark:text-violet-300/70 dark:hover:text-white"
+              className="text-primary/70 hover:text-primary"
               aria-label="关闭提示"
             >
               <X size={13} />
-            </button>
+            </Button>
           </div>
         )}
 
@@ -189,15 +191,16 @@ export default function LoginPage() {
               mode === "register" ? "new-password" : "current-password"
             }
             right={
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowPassword((value) => !value)}
-                className="text-ink-fainter hover:bg-surface-2 hover:text-ink rounded-md p-1.5 transition-colors"
+                className="text-ink-fainter hover:bg-surface-2 hover:text-ink rounded-md"
                 aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 tabIndex={-1}
               >
                 <Icon name={showPassword ? "eyeoff" : "eye"} size={18} />
-              </button>
+              </Button>
             }
           />
 
@@ -209,27 +212,28 @@ export default function LoginPage() {
 
           {mode === "signin" && (
             <div className="text-right">
-              <button
-                type="button"
+              <Button
+                variant="link"
                 onClick={() =>
                   setNotice(
                     "本地账号密码重置功能即将上线，如需帮助请联系管理员",
                   )
                 }
-                className="text-primary/90 hover:text-primary text-sm transition-colors"
+                className="text-primary/90 hover:text-primary h-auto p-0 text-sm"
               >
                 忘记密码?
-              </button>
+              </Button>
             </div>
           )}
 
-          <button
+          <Button
+            variant="primary-solid"
             type="submit"
             disabled={loading}
-            className="bg-primary hover:bg-primary-hover w-full rounded-xl py-3 text-sm font-semibold text-white transition-colors disabled:opacity-60"
+            className="h-auto w-full rounded-xl py-3"
           >
             {loading ? "处理中…" : mode === "signin" ? "登录" : "创建并登录"}
-          </button>
+          </Button>
         </form>
 
         <div className="text-ink-fainter my-6 flex items-center gap-3 text-xs">
@@ -239,24 +243,24 @@ export default function LoginPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={() =>
               setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")
             }
-            className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter rounded-xl border py-2.5 text-sm font-medium transition-colors"
+            className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
           >
             GitHub
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="outline"
             onClick={() =>
               setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")
             }
-            className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter rounded-xl border py-2.5 text-sm font-medium transition-colors"
+            className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
           >
             Google
-          </button>
+          </Button>
         </div>
 
         <p className="text-ink-fainter mt-6 text-center text-xs">

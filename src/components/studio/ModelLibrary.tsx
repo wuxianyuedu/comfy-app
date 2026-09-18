@@ -2,6 +2,8 @@
 
 import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 import { folderMeta, getFolderTooltip } from "~/lib/model-types";
 
 import { useModelFolderConfig } from "./hooks/use-model-folder-config";
@@ -34,13 +36,14 @@ export function ModelLibrary() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant="outline"
               onClick={() => c.setConfigOpen(true)}
-              className="border-border bg-subtle text-ink-bright inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors hover:border-violet-500/40 hover:text-violet-700 dark:text-violet-500"
+              className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-2"
             >
               <Icon name="settings" size={16} />
               模型目录配置
-            </button>
+            </Button>
             <input
               value={c.q}
               onChange={(event) => c.setQ(event.target.value)}
@@ -80,13 +83,14 @@ export function ModelLibrary() {
               <p className="mt-1 max-w-md text-sm">
                 没启用任何模型目录时这里为空。打开「模型目录配置」勾选需要扫描的目录，重新扫描后即可在此查看。
               </p>
-              <button
+              <Button
+                variant="primary"
                 onClick={() => c.setConfigOpen(true)}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-violet-500/20 px-4 py-2 text-sm font-medium text-violet-700 transition-colors hover:bg-violet-500/30 dark:text-violet-300"
+                className="mt-4 h-auto gap-1.5 rounded-lg px-4 py-2"
               >
                 <Icon name="settings" size={16} />
                 去配置目录
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -164,16 +168,18 @@ function FilterChip({
   label: string;
 }) {
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="xs"
       onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+      className={`h-auto rounded-full px-3 py-1.5 ${
         active
-          ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
-          : "bg-subtle text-ink-faint hover:text-ink-bright)"
+          ? "bg-primary-500/20 text-primary-strong hover:bg-primary-500/30"
+          : "bg-subtle text-ink-faint hover:text-ink-bright"
       }`}
     >
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -220,12 +226,15 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               COMBO 下拉中隐藏。
             </p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
-            className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright) rounded-lg p-1.5 transition-colors"
+            className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright rounded-lg"
+            aria-label="关闭"
           >
             <Icon name="close" size={18} />
-          </button>
+          </Button>
         </div>
 
         {/* status + scan */}
@@ -247,18 +256,20 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               <span className="text-rose-700 dark:text-rose-400">{c.err}</span>
             )}
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="xs"
             onClick={() => void c.rescan()}
             disabled={c.scanning}
-            className="border-border bg-subtle text-ink-bright inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-violet-500/40 hover:text-violet-700 disabled:opacity-50 dark:text-violet-500"
+            className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-1.5"
           >
-            <Icon
-              name={c.scanning ? "loader" : "shuffle"}
-              size={14}
-              className={c.scanning ? "animate-spin" : ""}
-            />
+            {c.scanning ? (
+              <Spinner className="size-3.5" />
+            ) : (
+              <Icon name="shuffle" size={14} />
+            )}
             {c.scanning ? "扫描中…" : "重新扫描"}
-          </button>
+          </Button>
         </div>
 
         {/* search + filter */}
@@ -393,29 +404,35 @@ function FolderConfigRow({
 
         <div className="flex shrink-0 items-center gap-2">
           {row.enabled ? (
-            <button
+            <Button
+              variant="success"
+              size="xs"
               onClick={toggleEnabled}
-              className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
+              className="h-auto rounded-lg px-3 py-1.5"
             >
               已启用
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="primary"
+              size="xs"
               onClick={enableFromAvailable}
-              className="inline-flex items-center gap-1 rounded-lg bg-violet-500/20 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-500/30 dark:text-violet-300"
+              className="h-auto gap-1 rounded-lg px-3 py-1.5"
             >
               <Icon name="plus" size={12} />
               启用
-            </button>
+            </Button>
           )}
           {row.hasConfig && (
-            <button
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={remove}
-              className="text-ink-muted hover:bg-surface-2 hover:text-ink-strong rounded-md px-2 py-1 text-[11px] transition-colors"
+              className="text-ink-muted hover:bg-surface-2 hover:text-ink-strong h-auto rounded-md px-2 py-1"
               title="删除配置（不再扫描）"
             >
               删除
-            </button>
+            </Button>
           )}
         </div>
       </div>

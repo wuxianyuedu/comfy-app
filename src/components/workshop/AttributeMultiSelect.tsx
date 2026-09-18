@@ -95,14 +95,15 @@ export function AttributeMultiSelect({
             className="bg-primary-soft text-primary flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
           >
             {v}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={() => removeOne(v)}
-              className="text-primary/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+              className="text-primary/60 hover:text-danger-strong"
               aria-label={`移除 ${v}`}
             >
               <X size={11} />
-            </button>
+            </Button>
           </span>
         ))}
         <Popover

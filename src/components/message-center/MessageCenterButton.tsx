@@ -7,6 +7,7 @@
 
 import { Bell } from "lucide-react";
 import { useMessageCenterStore } from "./message-center-store";
+import { Button } from "~/components/ui/button";
 
 export function MessageCenterButton() {
   const unread = useMessageCenterStore((s) =>
@@ -16,15 +17,15 @@ export function MessageCenterButton() {
   const toggleOpen = useMessageCenterStore((s) => s.toggleOpen);
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       onClick={toggleOpen}
       title={`系统消息${unread > 0 ? `（${unread} 条未读）` : ""}，点击全屏查看`}
       aria-label={`系统消息${unread > 0 ? `，${unread} 条未读` : ""}`}
       aria-expanded={open}
-      className={`relative flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+      className={`relative h-auto gap-1 rounded px-1.5 py-0.5 text-[11px] ${
         open || unread > 0
-          ? "text-violet-700 dark:text-violet-300"
+          ? "text-primary"
           : "text-ink-muted hover:bg-subtle hover:text-ink"
       }`}
     >
@@ -34,6 +35,6 @@ export function MessageCenterButton() {
           {unread > 99 ? "99+" : unread}
         </span>
       )}
-    </button>
+    </Button>
   );
 }

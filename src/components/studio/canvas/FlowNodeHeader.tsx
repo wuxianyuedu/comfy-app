@@ -8,6 +8,7 @@ import {
   NodeIdChip,
   type IOEditContextValue,
 } from "./IOEditContext";
+import { Button } from "~/components/ui/button";
 import type { WorkflowNodeData, IoRef } from "../workflow-types";
 import type { NodePalette } from "./workflow-node-palette";
 
@@ -53,8 +54,9 @@ export function FlowNodeHeader({
        *  the node-drag handler doesn't pick this up as drag-start.  The
        *  chevron points RIGHT when collapsed (click expands), rotates 90°
        *  clockwise to DOWN when expanded (click collapses). */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon-xs"
         aria-label={isCollapsed ? "展开节点" : "折叠节点"}
         title={isCollapsed ? "展开" : "折叠"}
         onClick={(event) => {
@@ -62,7 +64,7 @@ export function FlowNodeHeader({
           onToggleCollapsed();
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
+        className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 h-5 w-5 shrink-0 rounded"
         style={{ pointerEvents: "auto" }}
       >
         <svg
@@ -83,7 +85,7 @@ export function FlowNodeHeader({
             strokeLinejoin="round"
           />
         </svg>
-      </button>
+      </Button>
       <span
         className="inline-block h-2 w-2 shrink-0 rounded-full"
         style={{

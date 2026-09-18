@@ -10,6 +10,8 @@ import React, {
 } from "react";
 import { X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 
 type ToastKind = "success" | "error" | "info" | "loading";
 
@@ -64,7 +66,9 @@ const KIND_STYLE: Record<
   loading: {
     ring: "border-border-strong",
     icon: "loader",
-    iconColor: "text-ink-soft animate-spin",
+    /* 转圈动画由 <Spinner /> 自带（规范 16 §16.2.3 的 P3 判据：全库只留一处
+       `animate-spin`），这里只留底色语义。 */
+    iconColor: "text-ink-soft",
   },
 };
 
@@ -144,7 +148,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel/95 p-3.5 shadow-xl shadow-black/8 backdrop-blur-md transition-all dark:shadow-black/40`}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
-                <Icon name={st.icon} size={16} />
+                {item.kind === "loading" ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <Icon name={st.icon} size={16} />
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-ink-bright text-sm font-semibold">
@@ -156,14 +164,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   </p>
                 )}
               </div>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => dismiss(item.id)}
-                className="text-ink-muted hover:text-ink-bright transition-colors"
+                className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
                 aria-label="关闭"
               >
                 <X size={14} />
-              </button>
+              </Button>
             </div>
           );
         })}

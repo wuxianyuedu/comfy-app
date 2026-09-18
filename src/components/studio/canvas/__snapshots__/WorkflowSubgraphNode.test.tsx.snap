@@ -13,8 +13,10 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
     >
       <button
         aria-label="折叠子图"
-        class="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
+        class="group/button inline-flex items-center justify-center border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-6 in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3 text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 h-5 w-5 shrink-0 rounded"
+        data-slot="button"
         style="pointer-events: auto;"
+        tabindex="0"
         title="折叠"
         type="button"
       >
@@ -49,9 +51,11 @@ exports[`WorkflowSubgraphNode > 渲染子图标题与 #id 徽标 1`] = `
       </span>
       <button
         aria-label="查看节点 #10 的原始 JSON 数据"
-        class="nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold tracking-wider text-violet-700 uppercase transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-900 focus:ring-1 focus:ring-violet-400/40 focus:outline-none dark:text-violet-200 dark:hover:text-violet-50"
+        class="group/button justify-center border bg-clip-padding whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 nodrag nopan group border-primary-400/40 bg-primary-500/10 text-primary-strong hover:border-primary-300/70 hover:bg-primary-500/25 focus:ring-primary-400/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold tracking-wider uppercase focus:ring-1 focus:outline-none"
         data-node-id-chip="10"
+        data-slot="button"
         data-variant="subgraph"
+        tabindex="0"
         title="查看节点 10 在工作流 JSON 中的原始数据"
         type="button"
       >

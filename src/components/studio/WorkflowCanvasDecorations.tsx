@@ -9,6 +9,7 @@ import {
 } from "@xyflow/react";
 import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
 import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
+import { Button } from "~/components/ui/button";
 import {
   GRID_BASE_LAYER_ID,
   GRID_MAJOR_LAYER_ID,
@@ -214,8 +215,8 @@ export function ZoomIndicator({
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
       onMouseDown={onScrubStart}
       onClick={() => {
         if (justDraggedRef.current) {
@@ -225,12 +226,12 @@ export function ZoomIndicator({
         beginEdit();
       }}
       title="点击输入缩放倍数，或按住上下拖动调整"
-      className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 rounded-md border px-2.5 py-1 text-[11px] font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm transition-colors select-none hover:border-white/25 ${
-        dragging ? "cursor-grabbing border-purple-400/50" : "cursor-ns-resize"
+      className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
+        dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
       }`}
     >
       {pct}%
-    </button>
+    </Button>
   );
 }
 
