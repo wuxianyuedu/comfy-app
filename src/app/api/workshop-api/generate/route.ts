@@ -1,7 +1,7 @@
 // 工坊 API 通道生成中转。
 //   对外契约（POST /api/workshop-api/generate）：
 //     图片请求字段：{ kind: "image", prompt, negative?, size?,
-//       aspectRatio?, megapixels?, multiple?, image? }        → { url }
+//       可选：aspectRatio?, megapixels?, multiple?, image? } → 返回 { url }
 //     视频请求： { kind: "video", prompt, image?, frames?, fps? }  → { url? , remoteTaskId? }
 //     视频轮询： { kind: "video", remoteTaskId }                   → { url } | { pending: true }
 // 中转把提供方的 apiKey 留在服务端，并经共享
