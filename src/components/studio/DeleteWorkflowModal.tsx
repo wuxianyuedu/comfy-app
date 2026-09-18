@@ -1,8 +1,8 @@
 "use client";
 
-/** extracted from WorkflowLibrary's delete-confirm modal.
- *  Keeps the Escape-to-dismiss behaviour local to the
- *  modal: the listener is active only while the modal is mounted.
+/** 从 WorkflowLibrary 的删除确认弹窗抽出。
+ *  把 Escape 关闭的行为保留在弹窗本地：
+ *  监听器只在弹窗挂载期间活跃。
  */
 import { useEffect } from "react";
 import { Trash2 } from "lucide-react";
@@ -14,7 +14,7 @@ interface DeleteWorkflowModalProps {
   onConfirm: (id: string) => void;
   /** Escape / 取消按钮 — unconditional close. */
   onCancel: () => void;
-  /** Backdrop click — blocked while `deleting`. */
+  /** 点击背板 —— `deleting` 期间被阻断。 */
   onBackdropClick: () => void;
 }
 
@@ -25,9 +25,9 @@ export function DeleteWorkflowModal({
   onCancel,
   onBackdropClick,
 }: DeleteWorkflowModalProps) {
-  // pressing Escape dismisses the delete modal
-  // (matches the convention of native <dialog> elements so keyboard users
-  // aren't trapped in the modal).
+  // 按 Escape 关闭删除弹窗
+  //（与原生 <dialog> 元素的约定一致，好让键盘用户
+  // 不被困在弹窗里）。
   useEffect(() => {
     if (!pendingDelete) return;
     const onKey = (e: KeyboardEvent) => {

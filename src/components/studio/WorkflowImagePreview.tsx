@@ -1,18 +1,18 @@
 "use client";
-/* Extracted image preview + string textarea — originally inside WorkflowCanvasEditor.tsx. */
+/* 抽出的图片预览 + 字符串 textarea —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import { useState } from "react";
 import type { RawInputMeta } from "./workflow-types";
 
-/** The roles a node can be assigned in the paramMap */
+/** 节点在 paramMap 里可以分配到的角色 */
 export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   const ref = entry.imageRef;
   const label = entry.localized ?? entry.label ?? entry.name;
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [failed, setFailed] = useState(false);
-  /* Empty LoadImage (no widgets_values[0]) → placeholder card.  Same layout
-   * dimensions as the thumbnail (110px tall) so the preview area is
-   * visually consistent regardless of upload state, and the bordered /
-   * rounded box keeps the slot discoverable when scanning the canvas. */
+  /* 空的 LoadImage（没有 widgets_values[0]）→ 占位卡片。与缩略图
+   * 同一套布局尺寸（110px 高），好让预览区
+   * 无论上传状态如何都视觉一致，并且带边框 /
+   * 圆角的盒子让该槽位在扫读画布时仍可发现。 */
   if (!ref) {
     return (
       <div className="flex flex-col gap-1">
@@ -63,4 +63,4 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   );
 }
 
-/* ── Custom node renderer for ComfyUI graph nodes ── */
+/* ── ComfyUI 图节点的自定义节点渲染器 ── */

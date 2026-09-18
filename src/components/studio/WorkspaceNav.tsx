@@ -4,9 +4,9 @@ import Link from "next/link";
 import { Layers, Settings } from "lucide-react";
 import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
 
-// Re-export `WorkspaceView` so existing imports like
-//   `import type { WorkspaceView } from "./WorkspaceNav"`
-// keep working. The canonical source is `./nav-items`.
+// 重新导出 `WorkspaceView`，好让既有写法如
+// 例如 `import type { WorkspaceView } from "./WorkspaceNav"` 这种写法
+// 继续可用。权威来源是 `./nav-items`。
 export type { WorkspaceView } from "./NavItems";
 
 interface WorkspaceNavProps {
@@ -18,10 +18,10 @@ interface WorkspaceNavProps {
 }
 
 /**
- * Narrow left sidebar used in non-home views.
+ * 非首页视图使用的窄左侧栏。
  *
- * Items + icons are sourced from `./nav-items` to keep them in sync with the
- * `<HomePage>` inline sidebar (which mirrors this list).
+ * 项与图标取自 `./nav-items`，以与
+ * <HomePage> 的内联侧栏（镜像同一列表）保持同步。
  */
 export function WorkspaceNav({
   active,
@@ -30,7 +30,7 @@ export function WorkspaceNav({
 }: WorkspaceNavProps) {
   return (
     <nav className="border-border-subtle bg-canvas/85 flex h-full w-[64px] shrink-0 flex-col items-center gap-1 border-r py-4 backdrop-blur-sm">
-      {/* Logo / Brand mark */}
+      {/* Logo / 品牌标记 */}
       <Link
         href="/workspace"
         className="mb-5 flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/12 text-violet-700 ring-1 ring-violet-500/30 dark:text-violet-400"
