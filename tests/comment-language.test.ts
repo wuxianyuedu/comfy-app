@@ -170,6 +170,23 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run().code).toBe(0);
   });
 
+  it("turbopackIgnore 指令行不参与统计（Turbopack 按字面量解析）", () => {
+    // Turbopack 的静态分析豁免指令按字面量解析：改写成中文即静默失效
+    // （那一处的静态追踪豁免会丢失）。
+    write(
+      "src/lib/turbopack-directive.ts",
+      [
+        "import fs from \"node:fs\";",
+        "export function read(p: string) {",
+        "  return fs.readFileSync(/*turbopackIgnore: true*/ p, \"utf-8\");",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
   it("说明某个指令的中文注释仍会被统计（豁免只认行首就是指令）", () => {
     // 反向锚点：不设这条，「豁免正则写得太宽」会把正常中文注释一起放行而无人发现。
     write(

@@ -13,7 +13,7 @@
  * 的这一层下沉后，依赖方向变成单向：
  *
  *     client ─┐
- *     instance-port ─┼─→ probe
+ *     instance-port ─┼─→ probe（本模块，只有 fetch + 地址拼接）
  *     status ─┘
  *
  * 这里刻意**不 import 会话缓存**：探测必须是「按次事实」，不能污染

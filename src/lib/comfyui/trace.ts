@@ -140,8 +140,9 @@ function nonEmptyArray(v: unknown): boolean {
 /**
  * 从 /history 条目里提炼「有没有结果、为什么没有」的结论（纯函数，便于单测）。
  *
- * 只读 ComfyUI 已文档化的字段：`outputs` / `status.status_str` /
- * `status.completed` / `status.messages[type=execution_error].exception_message`。
+ * 只读 ComfyUI 已文档化的字段：`outputs` 与 `status.status_str`、
+ * `status.completed`，以及 messages 里 type 为 execution_error 的那条
+ * 所带的 exception_message。
  */
 export function historyTraceSummary(
   promptId: string,
