@@ -138,9 +138,20 @@ interface Behavior {
   comfyEmbeddable?: { embeddable: boolean; reason: string };
   /** comfyOpen（在浏览器打开）的返回文案；默认成功。 */
   comfyOpen?: { ok: boolean; detail: string };
+  /** 让 comfyStatus 端点一直不返回（验证「形态不等运行态探测」）。 */
+  comfyStatusPending?: boolean;
+  comfyInstance?: {
+    pathConfigured: boolean;
+    instanceType: "desktop" | "portable" | "venv" | null;
+    desktopManaged: boolean;
+  };
   dbStudioStatusError?: string;
   dbStudioUp?: boolean;
 }
+
+/** 永不 settle 的 promise：让某个端点「一直不返回」。
+ *  写 `() => undefined` 而不是 `() => {}`：后者会被 eslint 的 no-empty-function 拦下。 */
+const neverSettle = (): Promise<void> => new Promise<void>(() => undefined);
 
 let behavior: Behavior = {};
 /* 「在浏览器打开」端点的调用计数：单独一个模块级变量，不放进 behavior ——
@@ -168,12 +179,25 @@ const mockRouter = t.router({
       }
       return { settings: behavior.settings ?? SETTINGS };
     }),
-    comfyStatus: t.procedure.query(() => ({
-      up: behavior.comfyBase != null,
-      base: behavior.comfyBase ?? null,
-      starting: false,
-      pathConfigured: true,
-    })),
+    comfyStatus: t.procedure.query(async () => {
+      /* 用例可让运行态探测「一直不返回」：用来验证安装形态不依赖它（见对应用例）。 */
+      if (behavior.comfyStatusPending) await neverSettle();
+      return {
+        up: behavior.comfyBase != null,
+        base: behavior.comfyBase ?? null,
+        starting: false,
+      };
+    }),
+    /* 安装形态与运行态**分开取**（fs-only，与首屏配置同批）：这里给一份便携版默认。
+     * 用例不关心形态时不必改它；要断言徽标文案就按需覆写这三个字段。 */
+    comfyInstance: t.procedure.query(
+      () =>
+        behavior.comfyInstance ?? {
+          pathConfigured: true,
+          instanceType: "portable" as const,
+          desktopManaged: false,
+        },
+    ),
     comfyEmbeddable: t.procedure.query(
       () =>
         behavior.comfyEmbeddable ?? {
@@ -792,6 +816,24 @@ describe("useSettingsPage", () => {
     });
     expect(result.current.flash).toEqual({ kind: "err", text: "磁盘只读" });
     expect(result.current.saving).toBe(false);
+  });
+
+  /* 安装形态此前与运行态挤在同一个响应里，于是被秒级探测拖着：打开设置页先看不到
+   * 「安装形态」徽标，「端口 / 启动参数」输入框也要等探测完成才消失（探测本身是
+   * 「进程表查询 + 端口探测」，本机负载下到 10s 级）。现在形态走 fs-only 的独立
+   * 查询（与首屏配置同批）。这条把「不等探测」钉死：运行态一直悬着时，controller
+   * 里也必须已经有形态与「已配置」结论。 */
+  it("安装形态不依赖运行态探测：comfyStatus 悬着时形态已经就绪", async () => {
+    behavior = { comfyStatusPending: true };
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.comfyInstance).not.toBeNull());
+    expect(result.current.comfyInstance?.instanceType).toBe("portable");
+    expect(result.current.comfyInstance?.pathConfigured).toBe(true);
+    // 运行态那份还没落地 —— 正是它此前会把形态一起拖住
+    expect(result.current.comfyStatus).toBeNull();
   });
 
   it("ComfyUI 启动：后端返回 detail 直接进提示条", async () => {

@@ -54,9 +54,10 @@ const INSTANCE_KIND_LABEL: Record<
 };
 
 export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
-  /* ComfyUI 安装形态（由 comfyStatus 派生，供路径徽标 + 是否隐藏端口/启动参数）。 */
-  const instanceType = c.comfyStatus?.instanceType ?? null;
-  const desktopManaged = !!c.comfyStatus?.desktopManaged;
+  /* ComfyUI 安装形态（fs-only 的 comfyInstance，供路径徽标 + 是否隐藏端口/启动参数）。
+   * 刻意不取自 comfyStatus：那份要等秒级运行态探测，徽标与输入框显隐会被一起拖着走。 */
+  const instanceType = c.comfyInstance?.instanceType ?? null;
+  const desktopManaged = !!c.comfyInstance?.desktopManaged;
 
   /* 启动日志的滚动跟随是纯视觉偏好，留在视图层。 */
   const logBoxRef = useRef<HTMLDivElement>(null);
@@ -84,7 +85,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         standalone-env/），便携版配置含 main.py 的源码根。自动识别
         python_embeded / standalone-env / .venv
         解释器，多个环境并存时优先选用装了依赖（torch）的那个。
-        {c.comfyStatus?.pathConfigured
+        {c.comfyInstance?.pathConfigured
           ? "已配置——ComfyUI 未运行时提交任务会自动拉起。"
           : "未配置——ComfyUI 未运行时任务会失败。"}
       </p>
