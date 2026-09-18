@@ -17,10 +17,12 @@ import {
   type SavedOutput,
 } from "./api-channel-shared";
 import {
-  buildEncapsulatedInputs,
   isVideoMode,
   modeUsesFirstFrame,
   modeUsesLastFrame,
+} from "~/lib/workflow-exposed-params";
+import {
+  buildEncapsulatedInputs,
   type WorkshopExposedValues,
 } from "./workflow-encapsulation";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
@@ -125,7 +127,9 @@ export async function fetchWorkshopWorkflows(): Promise<
 /** 一次封装结果 + 该工作流在库里的模式信息（供调用方按模式做提示/校验）。 */
 export interface LibraryWorkflowBuildResult {
   input: GenerateInput;
-  unmatched: (keyof WorkshopExposedValues)[];
+  /** 用户给了值、但落不到任何端口的口（未连线 / 断开 / 端口已消失）。
+   *  键是**契约口 id**（`prompt` / `size-width`…），不是工作流里的端口名。 */
+  unmatched: string[];
   /** 本次实际使用的模式码（服务端默认模式，缺省回退 taskType / modes[0]）。 */
   mode: string | null;
   /** 该工作流可跑的全部模式码。 */
@@ -138,12 +142,12 @@ export interface LibraryWorkflowBuildResult {
 /** 用选定的工作流库工作流封装一次生成请求。
  *
  *  ISSUE #145：工坊对外只暴露「提示词 / 尺寸 / 参考图(首帧)」，其余 IO 参数
- *  一律用工作流里的默认值。这里拉取工作流详情（含 enrich 过的 workflowIO），
- *  交给 `buildEncapsulatedInputs` 按工作流的模式码组装成 `workflowInputs`
- *  三元组 —— 文生 / 图生两类模式的对外参数口径不同，模式码决定了首帧要不要下发。
+ *  一律用工作流图内的默认值。这里拉取工作流详情（含 enrich 过的 workflowIO 与
+ *  作者的连线表 `paramMap`），交给 `buildEncapsulatedInputs` 按工作流的模式码
+ *  组装成 `workflowInputs` 三元组 —— **落点只认作者在库里连的线**。
  *
- *  返回的 input 可直接交给 `startLocalGenerate`；工作流没有对应 pin 的字段会
- *  出现在 `unmatched` 里（由调用方决定是否提示用户）。 */
+ *  返回的 input 可直接交给 `startLocalGenerate`；没连线 / 断开的对外口会出现在
+ *  `unmatched` 里（由调用方决定是否提示用户）。 */
 export async function buildLibraryWorkflowInput(
   workflowId: string,
   values: WorkshopExposedValues,
@@ -154,11 +158,12 @@ export async function buildLibraryWorkflowInput(
     ? detail.modes.filter((mode): mode is string => typeof mode === "string")
     : [];
   const mode = detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null;
-  const { workflowInputs, unmatched } = buildEncapsulatedInputs(
+  const { workflowInputs, unmatched } = buildEncapsulatedInputs({
     io,
+    paramMap: detail?.paramMap ?? null,
     mode,
     values,
-  );
+  });
   /* 尺寸**不**再带 `size`（"WxH"）兼容字段：尺寸只以「比例 + 分辨率」或
    *  「比例 + 百万像素 + 倍数」表达，逐端口落进 `workflowInputs`；
    *  目标工作流要 width/height 时由封装层按场景尺寸表现算（见

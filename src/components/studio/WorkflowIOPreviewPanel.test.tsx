@@ -22,8 +22,6 @@ type IOMap = Record<string, WorkflowIOParam>;
 
 afterEach(cleanup);
 
-const WRAPPER = "e0940f57-80b2-480e-8a38-36968dc1763d";
-
 /** 服务端富化后的条目形状：封装槽位 `value_1` 的作者名在 label/slotLabel 上。 */
 function wrapperSeedEntry(): WorkflowIOParam {
   return {
@@ -34,7 +32,6 @@ function wrapperSeedEntry(): WorkflowIOParam {
     label: "Seed",
     type: "INT",
     defaultValue: -944756323327396,
-    classType: WRAPPER,
     nodeTitle: "Checkpoint settings",
     slotLabel: "Seed",
   };
@@ -49,7 +46,6 @@ function boolEntry(): WorkflowIOParam {
     label: "WAN22: True = I2V | False = FLF2V",
     type: "BOOLEAN",
     defaultValue: true,
-    classType: WRAPPER,
     nodeTitle: "Checkpoint settings",
   };
 }

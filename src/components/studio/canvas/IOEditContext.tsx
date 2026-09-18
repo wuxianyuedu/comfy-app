@@ -53,10 +53,6 @@ export function useIOEditContext() {
   const setIOLabel = useIOEditStore((state) => state.setIOLabel);
   const toggleIORequired = useIOEditStore((state) => state.toggleIORequired);
   const reorderIO = useIOEditStore((state) => state.reorderIO);
-  const setIOValues = useIOEditStore((state) => state.setIOValues);
-  const resetIOPreviewValues = useIOEditStore(
-    (state) => state.resetIOPreviewValues,
-  );
   return {
     ioEditMode,
     ioPreviewOpen,
@@ -65,8 +61,6 @@ export function useIOEditContext() {
     setIOLabel,
     toggleIORequired,
     reorderIO,
-    setIOValues,
-    resetIOPreviewValues,
   };
 }
 export type IOEditContextValue = ReturnType<typeof useIOEditContext>;

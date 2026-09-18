@@ -53,7 +53,7 @@ import { reportStaleStoreAction } from "~/lib/stale-store-notify";
  *
  *  注意：reorderIO 会 PATCH 服务端，依赖 workflowId；故工厂参数携带
  *  workflowId。其余动作（toggleIO / setIOLabel / toggleIORequired /
- *  setIOValues / resetIOPreviewValues）都是纯状态更新，与编辑器其它 30+
+ *  setIOModeOverride / purgeModeOverrides）都是纯状态更新，与编辑器其它 30+
  *  个画布 state 解耦。 */
 export interface IOEditState {
   ioEditMode: boolean;
@@ -78,10 +78,8 @@ export interface IOEditActions {
   toggleIO: (ref: IoRef) => void;
   setIOLabel: (key: string, label: string) => void;
   toggleIORequired: (key: string) => void;
-  setIOValues: (next: Record<string, unknown>) => void;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。 */
   setIOSeedMode: (key: string, mode: string) => void;
-  resetIOPreviewValues: () => void;
   reorderIO: (fromKey: string, beforeKey: string | null) => void;
   /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
    *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
@@ -235,22 +233,6 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       return cleaned;
     },
 
-    setIOValues: (next) =>
-      set((state) => {
-        const nextMap = { ...state.workflowIO } as Record<
-          string,
-          WorkflowIOParam
-        >;
-        let changed = false;
-        for (const [ioKey, value] of Object.entries(next)) {
-          const cur = nextMap[ioKey];
-          if (cur?.kind !== "widget") continue;
-          nextMap[ioKey] = { ...cur, value };
-          changed = true;
-        }
-        return changed ? { workflowIO: nextMap } : {};
-      }),
-
     setIOSeedMode: (key, mode) =>
       set((state) => {
         const cur = state.workflowIO[key];
@@ -262,23 +244,6 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             [key]: { ...cur, seedMode: mode },
           },
         };
-      }),
-
-    resetIOPreviewValues: () =>
-      set((state) => {
-        const nextMap: Record<string, WorkflowIOParam> = {};
-        let changed = false;
-        for (const [entryKey, entry] of Object.entries(state.workflowIO)) {
-          if (entry?.kind === "widget" && entry.value !== undefined) {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- value 仅在本分支被剔除（widget 的运行时值不持久化到 IO 配置）
-            const { value, ...rest } = entry;
-            nextMap[entryKey] = rest;
-            changed = true;
-          } else {
-            nextMap[entryKey] = entry;
-          }
-        }
-        return changed ? { workflowIO: nextMap } : {};
       }),
 
     /* 拖拽排序：把 `fromKey` 移动到 `beforeKey` 表示的位置。

@@ -87,6 +87,8 @@ describe("createWorkflowRunTask", () => {
       rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
       graph: {},
       workflowIO: IO,
+      /* 落点只认作者连的线：提示词口连到该端口。 */
+      paramMap: { source: { "mode:T2I": { prompt: "1::widget::prompt" } } },
     });
     const res = await createWorkflowRunTask({
       userId: "u1",
@@ -124,7 +126,7 @@ describe("createWorkflowRunTask", () => {
     });
   });
 
-  it("无 rawJson（API 图）→ 服务端按 nodeId+name 回填，数值口保持 number", async () => {
+  it("无 rawJson（API 图）→ 用户值按作者连线回填，未连线的口沿用图内值", async () => {
     wfRepoStub.findByIdForUser.mockResolvedValue({
       id: "wf-2",
       name: "API 图",
@@ -137,6 +139,7 @@ describe("createWorkflowRunTask", () => {
         "2": { class_type: "KSampler", inputs: { steps: 12 } },
       },
       workflowIO: IO,
+      paramMap: { source: { "mode:T2I": { prompt: "1::widget::prompt" } } },
     });
     await createWorkflowRunTask({
       userId: "u1",
@@ -147,8 +150,7 @@ describe("createWorkflowRunTask", () => {
       prompt: Record<string, { inputs: Record<string, unknown> }>;
     };
     expect(job.prompt["1"]?.inputs.prompt).toBe("新提示词");
-    // 库里是 number 时，字符串形数值回写要转回 number（ComfyUI 拒收字符串）
-    const steps = job.prompt["2"]?.inputs.steps;
-    expect(typeof steps).toBe("number");
+    /* 没连线的口工坊不碰（图内 `12` 原样保留，不因为它是数值就替作者塞一个值）。 */
+    expect(job.prompt["2"]?.inputs.steps).toBe(12);
   });
 });

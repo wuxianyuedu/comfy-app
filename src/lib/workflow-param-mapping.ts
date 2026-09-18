@@ -38,10 +38,10 @@ import {
   exposedParamDisplayLabel,
   exposedParamsForMode,
 } from "~/lib/workflow-exposed-params";
-import { megapixelsForSize } from "~/lib/workshop/workflow-encapsulation";
 import {
   alignMultipleOf,
   aspectLabelForDims,
+  megapixelsForSize,
   resolutionTierOf,
   resolutionTierOfLabel,
   sceneFromMode,
@@ -49,8 +49,8 @@ import {
 } from "~/lib/size-presets";
 
 /* ── 对外参数分类 ──
- * 与工坊封装的 WorkshopPinClass 子集 + `other`（尺寸/参考图/提示词之外，
- * 作者自行勾选的对外输入，例如 steps / cfg / 种子）。
+ * 工坊对外口的全集 + `other`（尺寸/参考图/提示词之外，作者自行勾选的对外输入，
+ * 例如 steps / cfg / 种子）。
  *
  * `other` **不参与对外参数契约**：那是工作流内部参数（步数 / CFG / 采样器…），
  * 对外只按模式给统一的那几个口子 —— 见 `~/lib/workflow-exposed-params`。 */

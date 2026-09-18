@@ -68,14 +68,20 @@ describe("既有多模式解析保持兼容", () => {
     expect(isVisibleInMode(e)).toBe(true);
   });
 
-  it("resolveEntryDefault 模式默认值 > 作者 value > 图内 defaultValue", () => {
-    const e = entry({
-      defaultValue: 0,
-      value: 10,
-      modes: { t2i: { defaultValue: 20 } },
-    });
+  it("resolveEntryDefault 模式默认值 > 图内 defaultValue", () => {
+    const e = entry({ defaultValue: 0, modes: { t2i: { defaultValue: 20 } } });
     expect(resolveEntryDefault(e, "t2i")).toBe(20);
-    expect(resolveEntryDefault(e)).toBe(10);
+    /* 没开模式（mode 为空）时不读模式覆盖 —— 模式覆盖只在模式语境里生效。 */
+    expect(resolveEntryDefault(e)).toBe(0);
     expect(resolveEntryDefault(entry({ defaultValue: 5 }))).toBe(5);
+  });
+
+  it("模式覆盖为 null 不算覆盖（照旧回退图内默认值）", () => {
+    /* `null` 表示不出一个「有意义的默认值」：放行只会把 null 下发给 ComfyUI。 */
+    const e = entry({
+      defaultValue: 7,
+      modes: { t2i: { defaultValue: null } },
+    });
+    expect(resolveEntryDefault(e, "t2i")).toBe(7);
   });
 });

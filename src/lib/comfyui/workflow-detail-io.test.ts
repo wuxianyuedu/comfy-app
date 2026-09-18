@@ -206,20 +206,18 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          value: "16:9 (Widescreen)",
           modes: { T2I: { defaultValue: "4:3 (Standard)" } },
         },
       }),
     );
-    const entry = result["94::widget::aspect_ratio"]!;
-    expect(entry.value).toBe("16:9 (Widescreen)");
-    expect(
-      (entry.modes as Record<string, { defaultValue?: unknown }>).T2I!
-        .defaultValue,
-    ).toBe("4:3 (Standard)");
+    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+      string,
+      { defaultValue?: unknown }
+    >;
+    expect(modes.T2I!.defaultValue).toBe("4:3 (Standard)");
   });
 
-  it("候选表匹配不上的覆盖值被丢弃，回退合法 defaultValue", async () => {
+  it("候选表匹配不上的模式默认值被摘掉，回退图内默认值", async () => {
     const result = await enrichWorkflowIO(
       comboParams({
         "94::widget::aspect_ratio": {
@@ -227,13 +225,14 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          value: "竖版高清",
+          modes: { T2I: { defaultValue: "竖版高清" } },
         },
       }),
     );
     const entry = result["94::widget::aspect_ratio"]!;
-    /* 「竖版高清」解析不出宽高比、前缀也匹配不上任何候选 → 覆盖被丢弃。 */
-    expect(entry.value).toBeUndefined();
+    /* 「竖版高清」解析不出宽高比、前缀也匹配不上任何候选 → 该模式的
+     *  defaultValue 被摘掉；覆盖层里没有别的字段时整条不再下发。 */
+    expect(entry.modes?.T2I).toBeUndefined();
   });
 
   it("候选表缺失（ComfyUI 离线）时不清洗，保留原值", async () => {
@@ -244,66 +243,15 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          value: "16:9",
+          modes: { T2I: { defaultValue: "16:9" } },
         },
       }),
     );
-    expect(result["94::widget::aspect_ratio"]!.value).toBe("16:9");
-  });
-});
-
-describe("enrichWorkflowIO — classType（产出节点类名）", () => {
-  it("raw 导出的节点类名优先下发（工坊靠它区分首帧 / 尾帧槽）", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "20::widget::image": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "20",
-            name: "image",
-          },
-        },
-        {
-          // raw 侧类名（buildNodeTypeMap）与存库 graph 的 class_type 同时存在时，
-          // 取 raw 的 —— 它才是 ComfyUI 里真实的 class。
-          nodeTypeById: { "20": "LoadImageFirstFrame" },
-          graph: { "20": { class_type: "LoadImage", inputs: {} } },
-        },
-      ),
-    );
-    expect(result["20::widget::image"]!.classType).toBe("LoadImageFirstFrame");
-  });
-
-  it("API-only 导入（无 rawJson）退到 graph 的 class_type", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams(
-        {
-          "21::widget::image": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "21",
-            name: "image",
-          },
-        },
-        { graph: { "21": { class_type: "LoadImageLastFrame", inputs: {} } } },
-      ),
-    );
-    expect(result["21::widget::image"]!.classType).toBe("LoadImageLastFrame");
-  });
-
-  it("两处都拿不到类名时不下发该字段（消费方按普通参考图降级）", async () => {
-    const result = await enrichWorkflowIO(
-      makeParams({
-        "22::widget::image": {
-          direction: "input",
-          kind: "widget",
-          nodeId: "22",
-          name: "image",
-        },
-      }),
-    );
-    expect(result["22::widget::image"]!.classType).toBeUndefined();
+    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+      string,
+      { defaultValue?: unknown }
+    >;
+    expect(modes.T2I!.defaultValue).toBe("16:9");
   });
 });
 
@@ -354,7 +302,6 @@ describe("enrichWorkflowIO — 不投影图内语义角色（工坊契约口径�
         },
       ),
     );
-    expect(result["6::widget::text"]!.classType).toBe("CLIPTextEncode");
     expect(Object.keys(result["6::widget::text"]!)).not.toContain("isTextNode");
     expect(Object.keys(result["77::widget::value"]!)).not.toContain(
       "isTextNode",
@@ -978,38 +925,6 @@ describe("enrichWorkflowIO — 封装节点作者名整体回收不到时的取�
     /* 本层作者名作为**事实**随条目下发（消费方要按作者名取名时有它）。 */
     expect(entry.slotLabel).toBe("Seed");
     expect(entry.type).toBe("INT");
-    expect(entry.classType).toBe(WRAPPER_UUID);
-  });
-
-  it("子图边界 pin 也没写作者名时，别名判据由 classType 承担", async () => {
-    const noLabels = JSON.parse(JSON.stringify(raw)) as unknown as RawWorkflow;
-    noLabels.definitions!.subgraphs![0]!.inputs = [
-      { name: "value_1", type: "INT" },
-    ];
-    const { rawInputsById } = await buildRawInputs(
-      noLabels,
-      async () => undefined,
-      async () => undefined,
-    );
-    const io = await enrichWorkflowIO(
-      makeParams(
-        {
-          "4::widget::value_1": {
-            direction: "input",
-            kind: "widget",
-            nodeId: "4",
-            name: "value_1",
-            label: "value_1",
-          },
-        },
-        {
-          rawInputsById,
-          graph: { "4": { class_type: WRAPPER_UUID, inputs: {} } },
-          nodeTypeById: { "4": WRAPPER_UUID },
-        },
-      ),
-    );
-    expect(io["4::widget::value_1"]!.classType).toBe(WRAPPER_UUID);
   });
 
   it("作者写在本层的名字优先于子图边界 pin", async () => {
