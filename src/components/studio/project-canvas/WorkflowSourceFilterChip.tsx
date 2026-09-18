@@ -1,7 +1,7 @@
 "use client";
 
-/** extracted from WorkflowNode.tsx — source filter chip
- *  (本机 / 在线 / 全部). Behaviour and visuals unchanged.
+/** 从 WorkflowNode.tsx 抽出的「来源筛选」chip（本机 / 在线 / 全部）。
+ *  行为与外观保持不变。
  */
 import { useState } from "react";
 import {
@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { Button } from "~/components/ui/button";
 /* 类型来自叶子模块而不是宿主：经宿主会形成
  * `WorkflowNode → chip → WorkflowNode` 的循环（规范 12.7）。 */
 import type { WorkflowSourceFilter } from "./workflow-node-types";
@@ -74,16 +75,16 @@ export function WorkflowSourceFilterChip({
         ).map((option) => {
           const sel = option.v === value;
           return (
-            <button
+            <Button
               key={option.v}
-              type="button"
+              variant="ghost"
               role="option"
               aria-selected={sel}
               onClick={() => {
                 onChange(option.v);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
+              className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
                 sel
                   ? "bg-violet-500/20 text-violet-700 dark:text-violet-200"
                   : "text-ink-soft hover:bg-subtle"
@@ -97,7 +98,7 @@ export function WorkflowSourceFilterChip({
               {sel && (
                 <span className="text-violet-700 dark:text-violet-300">✓</span>
               )}
-            </button>
+            </Button>
           );
         })}
       </PopoverContent>

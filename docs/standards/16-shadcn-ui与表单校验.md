@@ -182,7 +182,7 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 |------|------|------|------|
 | 对话框/浮层 | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~ | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）** |
 | 空态 | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~ | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`） | ✅ **P2 完成** |
-| 按钮 | `ui/button.tsx` + 视图里 364 处 `<button>` | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 | ⏳ P3 |
+| 按钮 | `ui/button.tsx` + 视图里的手写 `<button>`（逐批下降，当前值看 `pnpm ui:primitives:report`） | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 | ⏳ 分批（已清 3 批，见 §16.2.4.2） |
 | 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 23 个文件自写 spinner | P3 棘轮 | ⏳ P3 |
 | UI kit 目录 | `components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 | ⏳ 分批 |
 
@@ -202,6 +202,35 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 属性多选下拉 | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位） | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner） |
 | 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元 | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除 |
 | 两个设置抽屉 | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`） |
+
+### 16.2.4.2 P1 按钮分批的进度与做法
+
+按钮这一条不是「一次性替换」，而是**一次一个目录**地把手写 `<button>` 换掉，
+因为绝大多数调用点带着自己的布局类（全宽列表行、图标圆钮、Tab 项），
+变体只能接管外观语义，尺寸与排布仍由调用处的 `className` 承担。
+
+**已完成批次**（每批都把该目录清零，再 `--update` 收紧基线）：
+
+| 批次 | 目录 | 清零处数 | 手法 |
+|------|------|---------|------|
+| 1 | `studio/logs/` | 16 | 图标钮 → `size="icon-xs"`；Tab → `variant="ghost"` + `h-auto` |
+| 1 | `studio/workflow-library/` | 28 | 文字动作 → `variant="outline"` / `"ghost"`；实心紫 → `"primary-solid"` |
+| 2 | `studio/project-canvas/`（含 `CanvasNode/`） | 84 | 见下 |
+
+**`studio/project-canvas/` 这批评测出的三条口径**：
+
+1. **Popover 里的选项行**（`role="option"`）也换成 `<Button variant="ghost">`：
+   base-ui 的 `Button` 会把 `role` / `aria-selected` / `title` / `key` 原样透传
+   到 `<button>`，行为不变；`rounded-none` 抵消基元默认圆角，保住行样式的
+   边到边观感。
+2. **`type="button"` 可以随转换删掉**：base-ui 的 `useButton` 自带
+   `type: 'button'`（见 `@base-ui/react/internals/use-button`），不会退化成
+   表单提交钮。
+3. **`h-auto` 是覆盖基元高度的标准手法**：基元的 `size` 变体写死了 `h-6/7/8/9`，
+   调用处要沿用自己那套 `px/py` 就必须 `h-auto`，否则高度被基元压掉。
+
+**下一批候选**（照 `pnpm ui:primitives:report`）：`studio/workflow-editor/`、
+`app/(main)/settings/`、`studio/`（`FilmStudio` / `ModelLibrary` 等散件）。
 
 ### 16.2.4.1 按钮的语义变体（P1 的前置条件）
 

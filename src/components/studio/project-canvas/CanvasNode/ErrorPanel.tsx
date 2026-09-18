@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { shouldAutoExpandError, suggestForError } from "./error-suggestions";
 
 interface ErrorPanelProps {
@@ -127,32 +128,31 @@ export function ErrorPanel({
                   {String(workflowName)}
                 </span>
               )}
-              {/* Retry with the same payload.  Only enabled when there's a taskId
-               *  (i.e. a task actually ran) and we're not the pre-flight
-               *  validation errors.  Wrapped in Boolean() to keep TS happy
-               *  because `d.errorContext?.request` is typed `unknown`. */}
+              {/* 用同一份参数重跑。仅当有 taskId（即任务真的跑过）且不是
+               *  预检阶段的校验错误时才出现。用 Boolean() 包一层是为了让 TS
+               *  满意 —— `d.errorContext?.request` 的类型是 `unknown`。 */}
               {Boolean(errorContext?.request) && taskId && (
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
                   onClick={() => {
                     void onRetry(errorContext?.request);
                   }}
-                  className="rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 transition-colors hover:bg-rose-500/10 dark:text-rose-300/80"
+                  className="h-auto rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 hover:bg-rose-500/10 dark:text-rose-300/80"
                   title="用相同参数重跑一次"
                 >
                   ↻ 重试
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={() => setErrExpanded((value) => !value)}
-                className="rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 transition-colors hover:bg-rose-500/10 dark:text-rose-300/80"
+                className="h-auto rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 hover:bg-rose-500/10 dark:text-rose-300/80"
                 title={errExpanded ? "收起错误详情" : "展开错误详情"}
               >
                 {errExpanded ? "▲" : "▼"}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => {
                   void (async () => {
                     try {
@@ -190,11 +190,11 @@ export function ErrorPanel({
                     }
                   })();
                 }}
-                className="rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 transition-colors hover:bg-rose-500/10 dark:text-rose-300/80"
+                className="h-auto rounded border border-rose-400/20 px-1.5 py-0.5 text-[10px] text-rose-700/90 hover:bg-rose-500/10 dark:text-rose-300/80"
                 title="复制错误详情到剪贴板（含 taskId 与请求参数）"
               >
                 ⧉
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -281,18 +281,18 @@ export function ErrorPanel({
                           <span className="text-rose-700 dark:text-rose-300/60">
                             taskId
                           </span>
-                          <button
-                            type="button"
+                          <Button
+                            variant="ghost"
                             onClick={() =>
                               void navigator.clipboard
                                 .writeText(taskId)
                                 .catch(() => undefined)
                             }
-                            className="nodrag nopan min-w-0 truncate text-left font-mono text-rose-700/90 hover:text-rose-900 dark:text-rose-300/80 dark:hover:text-rose-100"
+                            className="nodrag nopan h-auto min-w-0 truncate p-0 text-left font-mono font-normal text-rose-700/90 hover:bg-transparent hover:text-rose-900 dark:text-rose-300/80 dark:hover:text-rose-100"
                             title="点击复制 taskId"
                           >
                             {taskId}
-                          </button>
+                          </Button>
                         </>
                       )}
                       {ts && (

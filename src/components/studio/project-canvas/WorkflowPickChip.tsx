@@ -1,7 +1,7 @@
 "use client";
 
-/** extracted from WorkflowNode.tsx — workflow picker chip
- *  (Dropdown 2, filtered by source/model). Behaviour and visuals unchanged.
+/** 从 WorkflowNode.tsx 抽出的「工作流选择」chip（下拉 2，按来源/模型过滤）。
+ *  行为与外观保持不变。
  */
 import { useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { PageLoading } from "~/components/ui/page-loading";
+import { Button } from "~/components/ui/button";
 
 export type WorkflowPickOption = {
   id: string;
@@ -85,16 +86,16 @@ export function WorkflowPickChip({
           const ol = Boolean(option.sourcePath);
           const active = option.id === value;
           return (
-            <button
+            <Button
               key={option.id}
-              type="button"
+              variant="ghost"
               role="option"
               aria-selected={active}
               onClick={() => {
                 onSelect(option.id);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
+              className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
                 active
                   ? "bg-violet-500/20 text-violet-700 dark:text-violet-200"
                   : "text-ink-soft hover:bg-subtle"
@@ -109,7 +110,7 @@ export function WorkflowPickChip({
                   {option.taskType}
                 </span>
               )}
-            </button>
+            </Button>
           );
         })}
       </PopoverContent>

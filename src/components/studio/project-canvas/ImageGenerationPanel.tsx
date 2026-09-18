@@ -6,6 +6,7 @@ import { DynamicWorkflowForm } from "~/components/studio/shared/DynamicWorkflowF
 /* 直接引基础件与结果卡（不再经 CanvasNode 目录 barrel）：barrel 会 re-export
  * `CanvasNode`，而 CanvasNode.tsx 又渲染本组件 —— 经 barrel 就成了
  * `CanvasNode → ImageGenerationPanel → index → CanvasNode` 的循环（规范 12.7）。 */
+import { Button } from "~/components/ui/button";
 import { Field, btnCls } from "./CanvasNode/CanvasNodePrimitives";
 import { ResultCard } from "./CanvasNode/ResultCard";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
@@ -370,9 +371,9 @@ export function ImageGenerationPanel({
             }
           />
           <div className="flex items-center justify-center gap-2">
-            <button
-              type="button"
-              className={btnCls + " px-6"}
+            <Button
+              variant="primary-solid"
+              className={btnCls + " h-auto px-6"}
               disabled={d.status === "running" || cancelling}
               onClick={onGenerate}
             >
@@ -381,7 +382,7 @@ export function ImageGenerationPanel({
                 : d.status === "error"
                   ? "↻ 重新执行"
                   : "▶ 用此工作流生成"}
-            </button>
+            </Button>
             {/* stuck-task escape hatch.  The
              *  picture node used to be stuck at "生成中…" forever when
              *  the runner raw-path held `s.active` hostage (an earlier fix
@@ -393,15 +394,15 @@ export function ImageGenerationPanel({
              *  `d.status` to "error" via the same path that handles
              *  normal failures. */}
             {d.status === "running" && d.taskId ? (
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={onCancel}
                 disabled={cancelling}
                 title="强制终止当前任务并释放活动槽位"
-                className="rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 disabled:opacity-50 dark:text-red-300/90"
+                className="h-auto rounded border border-red-500/30 bg-red-500/8 px-2.5 py-1 text-[10.5px] text-red-700/90 hover:bg-red-500/15 dark:text-red-300/90"
               >
                 {cancelling ? "× 取消中…" : "× 强制取消"}
-              </button>
+              </Button>
             ) : null}
           </div>
           {/* 执行步骤日志不再在此节点内渲染——
@@ -410,13 +411,13 @@ export function ImageGenerationPanel({
            * 结构化校验错误与每条日志的调用来源。 */}
         </>
       ) : (
-        <button
-          type="button"
-          className={btnCls + " mx-auto block w-auto px-6 opacity-40"}
+        <Button
+          variant="primary-solid"
+          className={btnCls + " mx-auto block h-auto w-auto px-6 opacity-40"}
           disabled
         >
           请先选择工作流
-        </button>
+        </Button>
       )}
     </div>
   );
