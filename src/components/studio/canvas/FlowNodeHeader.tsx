@@ -1,7 +1,7 @@
 "use client";
-/* FlowNode header bar — extracted from workflow-node.tsx.
- * Collapse toggle + status dot + title + per-node IO checkbox + #id chip
- * + role badge.  Pinned to NODE_TITLE_H like ComfyUI's title bar. */
+/* FlowNode 头部栏 —— 从 workflow-node.tsx 抽出。
+ * 收起开关 + 状态圆点 + 标题 + 按节点 IO 复选框 + #id 章
+ * + 角色徽标。与 ComfyUI 标题栏一样钉在 NODE_TITLE_H。 */
 import { colorToRgba, NODE_TITLE_H } from "../workflow-utils";
 import {
   IoCheckbox,
@@ -48,11 +48,11 @@ export function FlowNodeHeader({
         borderBottom: "1px solid var(--color-border-subtle)",
       }}
     >
-      {/* Collapse / expand toggle.  type="button" so future <form> submits
-       *  don't toggle the chip; stopPropagation on click AND mousedown so
-       *  the node-drag handler doesn't pick this up as drag-start.  The
-       *  chevron points RIGHT when collapsed (click expands), rotates 90°
-       *  clockwise to DOWN when expanded (click collapses). */}
+      {/* 收起 / 展开开关。type="button" 以免将来外层 <form> 提交
+       *  时误触章；click 与 mousedown 都 stopPropagation，好让
+       *  节点拖拽处理器不把它当成拖拽起点。
+       *  折叠时箭头朝**右**（点击展开），展开时顺时针转 90°
+       *  朝**下**（点击收起）。 */}
       <button
         type="button"
         aria-label={isCollapsed ? "展开节点" : "折叠节点"}
@@ -100,9 +100,9 @@ export function FlowNodeHeader({
       >
         {displayTitle}
       </span>
-      {/* Per-node output checkbox — workflow outputs are identified by NODE
-       * (comfy-cli execution dict is keyed by nodeId), NOT by output port,
-       * so a single checkbox marks the WHOLE node as a workflow output. */}
+      {/* 按节点输出复选框 —— 工作流输出按**节点**标识
+       *（comfy-cli 执行字典以 nodeId 为键），不是按输出端口，
+       * 所以一个复选框标记**整个**节点为工作流输出。 */}
       {io?.ioEditMode && outputs.length > 0 && (
         <IoCheckbox
           io={io}
@@ -117,8 +117,8 @@ export function FlowNodeHeader({
           }
         />
       )}
-      {/* Right-aligned `#<nodeId>` chip — click opens the NodeJsonPopover.
-       * stopPropagation so drag / double-click drilldown don't fire. */}
+      {/* 右对齐的 `#<nodeId>` 章 —— 点击打开 NodeJsonPopover。
+       * stopPropagation 以免触发拖拽 / 双击下钻。 */}
       <NodeIdChip nodeId={data.nodeId} variant="node" />
       {role && (
         <span

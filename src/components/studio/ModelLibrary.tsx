@@ -90,10 +90,10 @@ export function ModelLibrary() {
             </div>
           </div>
         ) : (
-          // compact list — each row is [type pill][filename][size].
-          // The old card grid (4 cols + 28px placeholder icon + duplicate fileName)
-          // was way too heavy; an N-row gallery is way more legible for what is
-          // ultimately a 1-line filename + size payload.
+          // 紧凑列表 —— 每行是 [类型药丸][文件名][大小]。
+          // 旧的卡片栅格（4 列 + 28px 占位图标 + 重复的 fileName）
+          // 太重；对最终只是「一行文件名 + 大小」的这种负载，
+          // N 行画廊可读性好得多。
           <div
             role="list"
             aria-label="模型文件列表"
@@ -177,13 +177,13 @@ function FilterChip({
   );
 }
 
-/* ── 模型目录配置 Modal ──
- * Surfaces every ComfyUI directory the scanner can visit.  Each row's type
- * is auto-resolved from the directory name (curated lookup → fuzzy match
- * → CHECKPOINT fallback) so the user only needs to enable / disable the
- * directory — they don't pick a type.  An "advanced" panel per row lets
- * the user add *extra* COMBO field types (e.g. expose this folder's files
- * under an additional field). */
+/* ── 模型目录配置弹窗 ──
+ * 呈现扫描器能访问的每个 ComfyUI 目录。每行的类型
+ * 由目录名自动解析（精选查表 → 模糊匹配
+ * → CHECKPOINT 兜底），所以用户只需启用 / 停用
+ * 目录 —— 不用选类型。每行的「高级」面板让
+ * 用户追加*额外*的 COMBO 字段类型（例如把该文件夹的文件
+ * 额外暴露在另一个字段下）。 */
 /**
  * 模型目录配置弹层 —— 视图层（规范 17 §17.2 第③层）。
  * 列表拉取、启用/停用/删除与重新扫描在 hooks/use-model-folder-config.ts。
@@ -347,10 +347,10 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * Single folder row.  Same shape is used for both enabled and available
- * sections — the only difference is which button is shown.  The type pill
- * shows the directory name verbatim (it IS the type); hover for an
- * explanation.
+ * 单个文件夹行。已启用区与可用区用同一形状
+ * —— 唯一区别是显示哪个按钮。类型药丸
+ * 原样显示目录名（它**就是**类型）；悬停看
+ * 说明。
  */
 function FolderConfigRow({
   row,
