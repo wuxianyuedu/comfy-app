@@ -544,6 +544,17 @@ export function WorkflowCanvasNodePreview({
         onConnectOutput={
           effectiveMode && onPatchParamMap ? outputWiring.connect : undefined
         }
+        /* 删除单条线：点选某条线 → 删除，只断那一条（断开该 entryId / 输出 ioKey
+         *  的映射），不波及同一张卡片上的其它线（尺寸卡是六条形态线）。只读时
+         *  不可删，这里不传。 */
+        onDeleteWire={
+          effectiveMode && onPatchParamMap
+            ? (namespace, entryId) => {
+                if (namespace === "param") wiring.disconnect(entryId);
+                else outputWiring.disconnect(entryId);
+              }
+            : undefined
+        }
         host={
           <LibraryHostCard
             workflowName={workflowName}
