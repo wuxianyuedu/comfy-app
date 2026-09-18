@@ -30,6 +30,7 @@
  *   字体        Noto Sans SC（中文） / Inter（数字·类型 chip）
  */
 import React from "react";
+import { Button } from "~/components/ui/button";
 
 /* ── 端口类型色常量表（类型色例外：色值即类型语义，不随主题） ──
  * 与 `lib/comfyui/types.ts` 的 PORT_COLORS 同源；本文件只用到三档前缀，
@@ -252,9 +253,9 @@ export function WorkflowNodeArdot() {
         {/* 顺序：本机（位置）→ image_z_image_int8（名称）→ T2I（类型，最右） */}
         <div className="flex h-11 items-center gap-1.5 pr-[14px] pl-[14px]">
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
-          <button
-            type="button"
-            className="border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
+          <Button
+            variant="outline"
+            className="border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-normal"
           >
             <span
               aria-hidden
@@ -273,11 +274,11 @@ export function WorkflowNodeArdot() {
             >
               ▾
             </span>
-          </button>
+          </Button>
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
-          <button
-            type="button"
-            className="border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
+          <Button
+            variant="outline"
+            className="border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-normal"
           >
             <span
               className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
@@ -292,11 +293,11 @@ export function WorkflowNodeArdot() {
             >
               ▾
             </span>
-          </button>
+          </Button>
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
-          <button
-            type="button"
-            className="border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
+          <Button
+            variant="outline"
+            className="border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-normal"
           >
             <span
               className="text-ink-bright font-medium"
@@ -311,7 +312,7 @@ export function WorkflowNodeArdot() {
             >
               ▾
             </span>
-          </button>
+          </Button>
         </div>
 
         {/* ── 端口行（输入） ── */}
@@ -335,9 +336,9 @@ export function WorkflowNodeArdot() {
         <PortRowOutput label="images" type="IMAGE" />
 
         {/* ── ActionBtn 340×43（紧贴端口行下沿，0 间距） ── */}
-        <button
-          type="button"
-          className="from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 bg-linear-to-r text-[13px] font-bold text-white"
+        <Button
+          variant="primary-solid"
+          className="from-primary to-accent flex h-[43px] w-full items-center justify-center gap-2 rounded-none bg-linear-to-r text-[13px] font-bold text-white hover:opacity-90"
           style={{
             fontFamily: "var(--font-sans)",
             boxShadow:
@@ -345,7 +346,7 @@ export function WorkflowNodeArdot() {
           }}
         >
           ▶ 用此工作流生成
-        </button>
+        </Button>
       </div>
 
       {/* ── 端点层（外层 wrapper 的 absolute 子元素，骑跨 Card 边框）──

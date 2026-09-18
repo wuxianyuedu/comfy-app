@@ -29,6 +29,7 @@ import {
 import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
+import { Button } from "~/components/ui/button";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
 
@@ -399,12 +400,12 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   return (
     <>
       {/* Floating trigger button — only rendered while debug mode is on. */}
-      <button
-        type="button"
+      <Button
+        variant="outline"
         onClick={() => setOpen(true)}
         title="打开执行日志"
         data-testid="step-log-trigger"
-        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto fixed top-16 right-3 z-30 flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm transition-colors"
+        className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto fixed top-16 right-3 z-30 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium shadow-lg backdrop-blur-sm"
       >
         <FileText size={12} />
         执行日志
@@ -413,7 +414,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             {errorCount}
           </span>
         )}
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -458,16 +459,16 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 status !== "SUCCEEDED" &&
                 status !== "FAILED" &&
                 status !== "CANCELLED" ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="outline"
                     onClick={onCancelFromPanel}
                     disabled={cancellingFromPanel}
                     title="取消当前查看的任务"
                     data-testid="log-panel-cancel"
-                    className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700/90 transition-colors hover:bg-red-500/15 disabled:opacity-50 dark:text-red-300/90"
+                    className="h-auto rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700/90 hover:bg-red-500/15 dark:text-red-300/90"
                   >
                     {cancellingFromPanel ? "× 取消中…" : "× 取消"}
-                  </button>
+                  </Button>
                 ) : null}
                 {cachedIds.length > 0 && (
                   <select
@@ -503,29 +504,29 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                     })}
                   </select>
                 )}
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
                   onClick={onClear}
-                  className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-2 py-0.5 text-[10.5px] transition-colors"
+                  className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md border px-2 py-0.5 text-[10.5px]"
                 >
                   清空
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => setWide((w) => !w)}
                   title={wide ? "收缩" : "加宽"}
-                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md p-1.5 transition-colors"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
                 >
                   {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => setOpen(false)}
                   title="关闭"
-                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md p-1.5 transition-colors"
+                  className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
                 >
                   <X size={16} />
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -539,13 +540,13 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       : visibleAll.filter((l) => l.level === option.value)
                           .length;
                   return (
-                    <button
+                    <Button
                       key={option.value}
-                      type="button"
+                      variant="ghost"
                       onClick={() => setFilter(option.value)}
                       title={`${option.label}（${count} 条）`}
                       data-testid={`log-filter-${option.value}`}
-                      className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
+                      className={`h-auto rounded-md px-2.5 py-1 text-[13px] font-normal ${
                         filter === option.value
                           ? "bg-surface-2 text-ink-bright"
                           : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
@@ -555,7 +556,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                       <span className="text-ink-fainter ml-1 text-[11px]">
                         {count}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

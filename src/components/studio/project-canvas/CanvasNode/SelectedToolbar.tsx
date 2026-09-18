@@ -1,6 +1,7 @@
 "use client";
 
 import { PortHandle } from "~/components/studio/shared/DynamicWorkflowForm";
+import { Button } from "~/components/ui/button";
 import {
   ioLabel,
   splitWorkflowIO,
@@ -8,11 +9,10 @@ import {
   type WorkflowIOMap,
 } from "~/components/studio/shared/workflow-io";
 
-/* ── Floating toolbar shown only when the node is selected ──
- *  Matches the landed design spec: a compact pill above the node with
- *  ⌫ delete (pink) · ⓘ info · ● colour · ⛶ focus · ↶ undo · ⋮ more.
- *  ⌫ and ⛶ are wired; the rest are intentional affordances (no-ops with
- *  titles) so the surface matches the spec and can be extended later. */
+/* ── 节点选中时才出现的悬浮工具条 ──
+ *  对齐已落地的设计稿：节点上方一枚紧凑胶囊，含 ⌫ 删除（粉）· ⓘ 信息 ·
+ *  ● 主题色 · ⛶ 聚焦 · ↶ 撤销 · ⋮ 更多。⌫ 与 ⛶ 已接线，其余是**有意保留的
+ *  占位**（只有 title、点击无操作），让界面与设计稿一致、后续可扩展。 */
 export function SelectedToolbar({
   onDelete,
   onFocusNode,
@@ -24,34 +24,34 @@ export function SelectedToolbar({
     "nodrag nopan text-ink-soft hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-full text-[13px] transition-colors";
   return (
     <div className="nodrag nopan border-border-strong bg-panel border]/95 absolute -top-12 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full px-1 py-1 shadow-lg shadow-black/40 backdrop-blur">
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         title="删除节点 (Delete)"
         onClick={onDelete}
         className={`${btn} text-rose-700 hover:bg-rose-500/15 dark:text-rose-300`}
       >
         ⌫
-      </button>
-      <button type="button" title="节点信息" className={btn}>
+      </Button>
+      <Button variant="ghost" title="节点信息" className={btn}>
         ⓘ
-      </button>
-      <button type="button" title="主题色" className={btn}>
+      </Button>
+      <Button variant="ghost" title="主题色" className={btn}>
         ●
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+        variant="ghost"
         title="聚焦此节点"
         onClick={onFocusNode}
         className={btn}
       >
         ⛶
-      </button>
-      <button type="button" title="撤销" className={btn}>
+      </Button>
+      <Button variant="ghost" title="撤销" className={btn}>
         ↶
-      </button>
-      <button type="button" title="更多" className={btn}>
+      </Button>
+      <Button variant="ghost" title="更多" className={btn}>
         ⋮
-      </button>
+      </Button>
     </div>
   );
 }
