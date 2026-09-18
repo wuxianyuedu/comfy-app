@@ -16,9 +16,9 @@ interface NodeTitleEntry {
   en: string;
 }
 
-/** ComfyUI core built-in nodes (zh-CN UI).  Source: ComfyUI-frontend
- *  apps/src/locales/zh-CN.json, version 0.5.x — manually verified vs
- *  a fresh /object_info payload. */
+/* ComfyUI 核心内置节点（简体中文界面的叫法）。
+ * 来源是 ComfyUI 前端 apps/src/locales/zh-CN.json（0.5.x 版），
+ * 并逐条对照过一份新的 /object_info 响应。 */
 const NODE_TITLES: Record<string, NodeTitleEntry> = {
   /* ── Loaders ── */
   CheckpointLoaderSimple: {
@@ -82,7 +82,7 @@ const NODE_TITLES: Record<string, NodeTitleEntry> = {
     en: "Set Latent Noise Mask",
   },
 
-  /* ── Decode / save / preview ── */
+  /* ── 解码 / 保存 / 预览 ── */
   VAEDecode: { zh: "VAE 解码", en: "VAE Decode" },
   VAEDecodeTiled: { zh: "VAE 解码（分块）", en: "VAE Decode (Tiled)" },
   VAEEncode: { zh: "VAE 编码", en: "VAE Encode" },
@@ -125,19 +125,18 @@ const NODE_TITLES: Record<string, NodeTitleEntry> = {
   Reroute: { zh: "转接节点", en: "Reroute" },
 };
 
-/** Friendly title lookup.
+/** 友好标题查询。
  *
  *  Resolution order:
- *    1. **User-supplied `rawTitle`** (from ComfyUI's properties dialog —
- *       e.g. "Save Z-Anime Upscaled").  Authors explicitly type these
- *       to disambiguate same-classType siblings, so this intent must
- *       win over the static map.  A `rawTitle` that merely echoes the
- *       classType is treated as missing (no renaming happened).
- *    2. Static NODE_TITLES map (covers ~60 well-known core nodes).
+ *    1. **用户自己填的 `rawTitle`**（来自 ComfyUI 的属性对话框，
+ *       例如 "Save Z-Anime Upscaled"）。作者特意写它，就是为了区分
+ *       同 classType 的兄弟节点，因此这个意图必须优先于静态表。
+ *       如果 `rawTitle` 只是把 classType 原样抄一遍，视为「没改名」。
+ *    2. 静态 NODE_TITLES 表（覆盖约 60 个常见核心节点）。
  *    3. Cleaned-up classType (UUID → "子工作流", FooBarBaz → "Foo Bar Baz").
  *
- *  @param rawTitle — server-side `detail.nodes[i].title` (ComfyUI's preferred display)
- *  @param lang     — "zh" | "en"
+ *  @param rawTitle — 服务端给的 `detail.nodes[i].title`（ComfyUI 的首选显示名）
+ *  @param lang     — "zh" 或 "en"
  */
 export function friendlyNodeTitle(
   classType: string,
@@ -145,11 +144,10 @@ export function friendlyNodeTitle(
   lang: "zh" | "en" = "zh",
 ): string {
   if (!classType) return rawTitle ?? "";
-  // (1) Author-supplied title wins — typed explicitly to disambiguate
-  // from sibling same-classType nodes.  Without this order swap the
-  // static map (e.g. "保存图像" for SaveImage) would silently override
-  // the user's custom name (e.g. "Save Z-Anime Upscaled") and their
-  // intent would be invisible on the canvas.
+  // (1) 作者自己填的标题优先 —— 那是为了与同 classType 的兄弟节点区分而特意写的。
+  // 不调换这个顺序的话，静态表（例如 SaveImage 对应「保存图像」）
+  // 会悄悄盖掉用户自定义的名字（例如 "Save Z-Anime Upscaled"），
+  // 用户的意图在画布上就看不出来了。
   if (rawTitle?.trim() && rawTitle.trim() !== classType) {
     return rawTitle.trim();
   }
@@ -157,22 +155,22 @@ export function friendlyNodeTitle(
   const entry = NODE_TITLES[classType];
   if (entry) return lang === "zh" ? entry.zh : entry.en;
 
-  // UUID-style extension display nodes
+  // 以 UUID 形式命名的扩展显示节点
   if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) {
     return lang === "zh" ? "子工作流" : "Subgraph";
   }
 
-  // Unknown — turn "FooBarBaz" into "Foo Bar Baz" for legibility
+  // 未知类型 —— 把 "FooBarBaz" 变成 "Foo Bar Baz"，提升可读性
   return prettifyClassType(classType, lang);
 }
 
-/** "FooBarBaz" → "Foo Bar Baz"; preserves trailing parens "(rgthree)".
- *  Used as the last-resort display name when no static or raw title applies. */
+/* "FooBarBaz" → "Foo Bar Baz"，并保留尾部的括号后缀 "(rgthree)"。
+ * 静态表与 rawTitle 都不适用时，用它作为最后兜底的显示名。 */
 export function prettifyClassType(
   classType: string,
   lang: "zh" | "en" = "zh",
 ): string {
-  // Strip trailing parenthesised library suffix "(rgthree)" / "(advanced)"
+  // 去掉尾部的库名括号后缀，例如 "(rgthree)" 或 "(advanced)"
   const parenMatch = /\s*\(([^)]+)\)\s*$/.exec(classType);
   let name = classType;
   let suffix = "";
@@ -180,26 +178,24 @@ export function prettifyClassType(
     suffix = parenMatch[1]!;
     name = classType.slice(0, parenMatch.index).trim();
   }
-  // Convert camelCase / PascalCase into spaces.
+  // 把 camelCase 与 PascalCase 拆成以空格分隔的单词。
   const spaced = name
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .replace(/_+/g, " ")
     .trim();
   if (lang === "en") return suffix ? `${spaced} (${suffix})` : spaced;
-  // zh: leave english as-is but keep the (rgthree) suffix for provenance
+  // 中文模式：英文原样保留，但留着 (rgthree) 后缀以标明来源
   return suffix ? `${spaced}（${suffix}）` : spaced;
 }
 
-/** Translate a *single* input name to its zh-CN label.  Returns the original
- *  `name` when no entry matches.  Used when the raw JSON exposes only the
- *  English field name (no `localized_name` field). */
+/* 把**单个**输入名翻译成中文标签；没有对应条目时原样返回 `name`。
+ * 原始 JSON 只给了英文字段名（没有 `localized_name`）时用它。 */
 const INPUT_LABELS: Record<string, string> = {
   text: "文本",
-  /* Subgraph wrappers (class_type = UUID) often wire these widget names
-   * with a human label like `positive_prompt` / `width_1`.  ComfyUI's
-   * frontend maps them to friendly Chinese labels; we replicate the
-   * common ones here so the subgraph node reads naturally in zh-CN. */
+  /* 子图 wrapper（class_type 是 UUID）常把这些控件名接成人可读的标签，
+   * 例如 `positive_prompt` 或 `width_1`。ComfyUI 前端会把它们映射成中文标签，
+   * 这里把常见的那批复制一份，让子图节点在中文界面下读起来自然。 */
   text_1: "反向文本",
   positive_prompt: "正面提示词",
   negative_prompt: "反向提示词",

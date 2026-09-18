@@ -1,14 +1,12 @@
-// Local-file-backed workflow import.
+// 以本地文件为源的工作流导入。
 //
-// Workflows can be imported directly from an on-disk file (the user gives the
-// server an absolute path to a ComfyUI-exported .json on the same machine).
-// We remember the path + a content checksum + mtime so that, on every detail
-// GET, the server can detect that the file changed on disk and re-import it —
-// so editing the workflow in ComfyUI and saving the same file is reflected on
-// the next refresh without a manual re-import.
+// 工作流可以直接从磁盘文件导入（用户把同机上 ComfyUI 导出的 .json 绝对路径
+// 交给服务端）。我们记下路径、内容校验和与 mtime，于是每次详情 GET 时服务端
+// 都能发现文件在磁盘上变了并重新导入 —— 在 ComfyUI 里改完工作流、保存同一份
+// 文件，下一次刷新就会反映出来，不必手动再导一次。
 //
-// This module centralises the "read a local file → parse → normalised fields"
-// pipeline so both the POST (first import) and GET (live re-import) paths share
+// 本模块把「读本地文件 → 解析 → 规整成字段」这条流水线集中在一处，
+// 让 POST（首次导入）与 GET（实时重新导入）两条路径共用
 // identical logic.
 //
 // **两种格式地位同等，入库不做格式互转**：API 格式落 `graph`、工作流(RAW)
@@ -72,8 +70,8 @@ export interface ParsedWorkflow {
   format: "api" | "raw";
 }
 
-/** Read a local file and return its text + mtime in ms. Throws a friendly
- *  error when the path is missing / unreadable. */
+/* 读一个本地文件，返回它的文本与 mtime（毫秒）。
+ * 路径缺失或不可读时抛出带可读说明的错误。 */
 export async function readLocalFile(
   absPath: string,
 ): Promise<{ text: string; mtimeMs: number }> {
@@ -94,14 +92,14 @@ export async function readLocalFile(
   return { text, mtimeMs: stat.mtimeMs };
 }
 
-/** Fast, short content hash used purely for change detection. */
+/* 轻量、快速的内容哈希，只用于判断「内容变没变」。 */
 export function checksum(text: string): string {
   return createHash("sha1").update(text).digest("hex").slice(0, 16);
 }
 
 /**
- * Parse raw ComfyUI JSON content into the normalised fields the DB stores.
- * Mirrors the pipeline in POST /api/workflows so first-import and live-reimport
+ * 把 ComfyUI 的原始 JSON 内容解析成数据库存的那套规整字段。
+ * 与 POST /api/workflows 的流水线保持一致，让「首次导入」与「实时重新导入」
  * behave identically.
  */
 export async function parseWorkflowContent(
@@ -196,13 +194,13 @@ export async function parseWorkflowContent(
 export interface ImportedFromFile extends ParsedWorkflow {
   sourcePath: string;
   sourceChecksum: string;
-  /** File mtime in SECONDS (epoch) — stored in a 32-bit SQLite INT column,
-   *  so we keep it under 2.1e9 rather than using ms (which overflows INT). */
+  /** 文件 mtime，单位是秒（epoch）—— 它存在 SQLite 的 32 位 INT 列里，
+   *  因此要保持在 2.1e9 以下，不能用毫秒（会溢出 INT）。 */
   sourceMtime: number;
 }
 
-/** One-shot import from a local path. Reads the file and returns all normalised
- *  fields plus the tracking metadata to persist on the WorkflowTemplate row. */
+/* 从本地路径做一次性导入：读文件，返回全部规整字段，
+ * 以及要写进 WorkflowTemplate 行的追踪元数据。 */
 export async function importFromLocalPath(
   absPath: string,
   opts: {
@@ -222,11 +220,11 @@ export async function importFromLocalPath(
 }
 
 export interface ReimportResult {
-  /** file is gone on disk — caller should surface a "missing" warning */
+  /* 文件已从磁盘上消失 —— 调用方应给出「源文件缺失」的提示 */
   missing?: boolean;
-  /** file exists but mtime matches the last import (fast path, no re-parse) */
+  /* 文件还在，但 mtime 与上次导入一致（快路径，不重新解析） */
   unchanged?: boolean;
-  /** file changed → re-parsed fields to persist back to the DB */
+  /* 文件变了 → 重新解析出的字段，要写回数据库 */
   update?: {
     graph: Record<string, unknown>;
     rawJson: unknown;
@@ -239,16 +237,15 @@ export interface ReimportResult {
 }
 
 /**
- * Re-read a previously-imported workflow's source file and decide what (if
- * anything) changed.  `tpl` must carry `sourcePath` + `sourceMtime`.  Returns:
- *   - { missing: true }   if the file no longer exists
- *   - { unchanged: true } if mtime matches (fast path, no re-parse)
- *   - { update: {...} }   if the file changed → normalised fields to persist
+ * 重新读取此前导入过的工作流的源文件，判断有没有变化、变化了什么。
+ * `tpl` 必须带 `sourcePath` 与 `sourceMtime`。返回三种之一：
+ *   - { missing: true }   文件已不存在
+ *   - { unchanged: true } mtime 一致（快路径，不重新解析）
+ *   - { update: {...} }   文件变了 → 要落库的规整字段
  *
- * Note: when `update` is returned we overwrite graph/rawJson/positions/paramMap
- * from the file — the file is the source of truth once it changes, so the
- * editor reflects the latest on-disk workflow.  Re-parsing is idempotent on
- * identical content, so a mtime tick without content change is harmless.
+ * 注意：返回 `update` 时，graph / rawJson / positions / paramMap 都会被覆盖
+ * 都来自该文件 —— 文件一变它就是唯一事实源，编辑器因此反映最新的磁盘版本。
+ * 对相同内容重复解析是幂等的，所以 mtime 动了但内容没变也无害。
  *
  * taskType 不再自动推断。重导入时若磁盘版本没带
  * taskType（旧逻辑会重新推断并覆盖用户已手动设置的值），传 `existingTaskType`
@@ -271,12 +268,12 @@ export async function reimportFromSource(tpl: {
   }
 
   const mtimeSec = Math.floor(stat.mtimeMs / 1000);
-  // Fast path: mtime (seconds) unchanged → content almost certainly unchanged.
+  // 快路径：mtime（秒）没变 → 内容几乎可以肯定也没变。
   if (tpl.sourceMtime != null && mtimeSec === tpl.sourceMtime) {
     return { unchanged: true };
   }
 
-  // mtime changed (or we had no mtime recorded) → read + re-parse.
+  // mtime 变了（或此前没记 mtime）→ 读文件并重新解析。
   const text = await fs.readFile(tpl.sourcePath, "utf-8");
   const parsed = await parseWorkflowContent(text, {
     preferredTaskType: tpl.existingTaskType ?? "",
