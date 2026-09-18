@@ -30,11 +30,11 @@ interface Props {
 type Channel = "local" | "api";
 
 /**
- * 视频生成 stage: consumes shot images produced upstream (auto-used as the
- * I2V first frame) and shot motion/duration (auto-prefilled from the
- * storyboard plan). Local channel runs the ComfyUI img2video/txt2video
- * workflows; API channel relays to the configured video endpoint (sync URL or
- * async task). Results are written back onto Shot.clipUrl for 成片合成.
+ * 视频生成 stage：消费上游产出的镜头图片（自动用作
+ * I2V 首帧）与镜头的运动 / 时长（从
+ * 分镜方案自动预填）。本地通道跑 ComfyUI 的 img2video/txt2video
+ * 工作流；API 通道中转到配置的视频端点（同步 URL 或
+ * 异步任务）。结果写回 Shot.clipUrl，供成片合成。
  */
 export function VideoStudio({
   shots,
@@ -74,13 +74,13 @@ export function VideoStudio({
     });
   }
 
-  /** Wait for one local ComfyUI task; resolves when the SSE stream settles. */
+  /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
     return new Promise<void>((resolve) => {
       const close = watchTask(taskId, {
         onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
         onOutput: (out) => {
-          // Prefer the video output; non-image extras (gif/other) still land.
+          // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
           if (out.kind !== "image") patchShot(shotId, { clipUrl: out.url });
         },
         onSettled: (r) => {
@@ -90,7 +90,7 @@ export function VideoStudio({
           resolve();
         },
       });
-      // Safety valve: video renders are slow, but never wedge the batch loop.
+      // 安全阀：视频渲染慢，但永不让批量循环卡住。
       const timeout = setTimeout(
         () => {
           close();
@@ -103,7 +103,7 @@ export function VideoStudio({
     });
   }
 
-  /** Poll an async API video task until it resolves or times out (~10 min). */
+  /** 轮询异步 API 视频任务直到 resolve 或超时（约 10 分钟）。 */
   async function pollApiVideo(
     shotId: string,
     remoteTaskId: string,
@@ -146,7 +146,7 @@ export function VideoStudio({
     const frames = framesFor(shot, fps);
     try {
       if (channel === "local") {
-        // Generated image → ComfyUI input dir, so LoadImage nodes can use it.
+        // 生成出的图片 → ComfyUI 输入目录，好让 LoadImage 节点能用它。
         const inputImage = shot.imageUrl
           ? await prepareLocalInputImage(shot.imageUrl)
           : undefined;
