@@ -47,7 +47,7 @@ export function deriveComfyuiSubdir(
     try {
       if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
     } catch {
-      /* ignore — fall through */
+      /* 忽略 —— 继续往下走 */
     }
   }
   return null;
@@ -83,7 +83,7 @@ export function deriveComfyuiWorkflowsDir(comfyuiPath: string): string | null {
 
 let cache: AppSettings | null = null;
 
-/** Synchronous read with in-process caching. Safe to call from request handlers. */
+/* 同步读取，带进程内缓存。从请求处理器里调用是安全的。 */
 export function getSettingsSync(): AppSettings {
   if (cache) return cache;
   try {
@@ -108,7 +108,7 @@ export async function getSettings(): Promise<AppSettings> {
   return getSettingsSync();
 }
 
-/** Merge a partial update and persist. Returns the full, updated settings. */
+/* 合并一次局部更新并落盘，返回合并后的完整设置。 */
 export async function saveSettings(
   partial: Partial<AppSettings>,
 ): Promise<AppSettings> {

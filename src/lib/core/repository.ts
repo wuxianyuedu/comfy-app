@@ -16,15 +16,13 @@
  *   - {@link ./repository-base}            契约接口 + 泛型基类（Identifiable /
  *                                          Repository / PrismaDelegate /
  *                                          PrismaRepository / TaskWithCover）
- *   - {@link ./repository-project}         ProjectRepository
- *   - {@link ./repository-task}            TaskRepository
- *   - {@link ./repository-workflow-template} WorkflowTemplateRepository
- *   - {@link ./repository-model}           ModelRepository + UserModelConfigRepository
- *   - {@link ./repository-model-tag}       WorkflowModelTagRepository
- *   - {@link ./repository-film}            FilmRepository + FilmShotRepository
- *   - {@link ./repository-skill}           SkillRepository
- *   - {@link ./repository-lora}            LoraTrainingJobRepository
- *   - {@link ./repository-user}            UserRepository + LlmConfigRepository
+ *   项目仓储（repository-project）、任务仓储（repository-task）、
+ *   工作流模板仓储（repository-workflow-template）、
+ *   模型与用户模型配置仓储（repository-model）、
+ *   工作流模型标签仓储（repository-model-tag）、
+ *   成片与分镜仓储（repository-film）、技能仓储（repository-skill）、
+ *   LoRA 训练任务仓储（repository-lora）、
+ *   用户与 LLM 配置仓储（repository-user）—— 各自的类名见对应模块。
  *
  * @module core/repository — Repository 模式统一出口（barrel）
  */

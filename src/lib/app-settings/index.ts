@@ -29,9 +29,9 @@ export type AppSettings = {
    * comfyuiPath 语义（配置的目录可以不是源码根本身）：
    *   - 便携版：<path>\python_embeded\python.exe + <path>\main.py
    *   - 桌面版：配置「实例根」（如 ComfyUI-Installs\ComfyUI2）——
-   *     <path>\standalone-env\python.exe + <path>\ComfyUI\main.py
+   *     <path>\standalone-env\python.exe + <path>\ComfyUI\main.py（解释器 + 源码）
    *     也可直接配置实例内的 ComfyUI/ 源码根，解释器会向上查找。
-   *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py
+   *   - venv：<path>\.venv\Scripts\python.exe + <path>\main.py（同上两件）
    * 配置后任务执行前若 ComfyUI 未运行会自动拉起（comfyuiAutoStart）。
    */
   comfyuiPath: string;
