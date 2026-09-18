@@ -5,13 +5,14 @@
  *
  *   1) API 格式
  *      ─────────────────
- *      { "3": { class_type: "KSampler", inputs: { seed: 123, steps: 20, ... } }, ... }
+ *      { "3": { class_type: "KSampler", inputs: { seed: 123, … } }, … }  // 节点 id 作键
+ *      （上面就是 API 图示例：节点按 id 平铺，inputs 是命名参数）
  *      节点按 id 平铺，inputs 是结构化的命名参数。库里的 `graph` 列就是它。
  *
  *   2) 原始 UI 格式（工作流 / RAW）
  *      ─────────────────
- *      { last_node_id, last_link_id, nodes: [ { id, type, pos:[x,y], size:[w,h],
- *           widgets_values:[...] }, ... ], links: [ [id, src, srcSlot, dst, dstSlot, type] ] }
+ *      { last_node_id, last_link_id, nodes: [...], links: [...] }  // RAW 顶层字段
+ *      （上面是 RAW 图示意：节点带坐标，控件值按数组存，links 是六元组）
  *      这是 ComfyUI 前端保存在磁盘的格式，含节点坐标信息。库里的 `rawJson`
  *      列就是它，执行时交给 comfy-cli（它按节点类定义做权威的 UI→API 转换）。
  *
@@ -19,14 +20,14 @@
  *   - {@link detectFormat}      这段 JSON 是哪种格式；
  *   - {@link extractPositions}  RAW 的节点坐标在哪；
  *   - RAW 节点的控件**叫什么名字**（{@link pairWidgetValues} /
- *     {@link fetchWidgetOrderTable} / {@link mapWidgetValuesByOrder}）——
- *     画布要把 `widgets_values` 的下标还原成可读参数名。
+ *     {@link fetchWidgetOrderTable} 与 {@link mapWidgetValuesByOrder}）——
+ *     画布要把 `widgets_values` 的下标还原成可读的参数名。
  *
  * 本模块**不再**做任何「raw → API 图」的转换：
  *   - 入库存图由导入件自己决定（API 原件落 `graph`、RAW 原件落 `rawJson`）；
  *   - 执行由 comfy-cli 做权威转换（RAW）或直接提交（API）；
  *   - 画布视图需要的派生在 `raw-view-graph.ts`，提交前的图收拾在
- *     `execution-graph.ts`。
+ *     `execution-graph.ts` 里。
  *   「导入时把 raw 转成 API 图存库」已被证明有害（ISSUE #632）：无 ComfyUI
  *   可达时按类名猜控件顺序，猜错就是一份能打开、跑起来结果不对的图。
  */
@@ -232,12 +233,12 @@ export interface ApiWorkflowNode {
  * 1) 格式识别
  * ────────────────────────────────────────────────────────────────────── */
 
-/** Detect whether a JSON value is API format, raw format, or neither. */
+/* 判断一段 JSON 属于 API 格式、RAW 格式，还是两者都不是。 */
 export function detectFormat(json: unknown): WorkflowFormat | null {
   if (!json || typeof json !== "object" || Array.isArray(json)) return null;
   const obj = asRecord(json);
   if (!obj) return null;
-  // API format: any top-level value has class_type + inputs
+  // API 格式：任意顶层节点同时带 class_type 与 inputs
   const apiHit = Object.values(obj).some((value) => {
     const v = asRecord(value);
     return (
@@ -245,7 +246,7 @@ export function detectFormat(json: unknown): WorkflowFormat | null {
     );
   });
   if (apiHit) return "api";
-  // Raw format: has `nodes` array + each node has `type` (not class_type)
+  // RAW 格式：有 `nodes` 数组，且每个节点带的是 `type`（不是 class_type）
   const rawObj = asRawWorkflow(json);
   if (
     rawObj &&
@@ -273,21 +274,18 @@ export function extractPositions(
       out[id] = [Number(n.pos[0]) || 0, Number(n.pos[1]) || 0];
     }
   }
-  // 3: subgraph wrapper inner nodes (rawJson.definitions.subgraphs[uid].nodes)
-  // are NOT in the top-level nodes[] — but they ARE part of `detail.nodes` /
-  // `detail.graph` after the wrapper is expanded (the server stitches them under
-  // `<wrapperId>:<internalId>` keys).  Without this loop, wrapper expansions
-  // render with zero saved positions and the client falls back to Kahn
-  // auto-layout even in RAW view, which never matches ComfyUI's look.
-  // Inner-node `pos` is ALREADY an absolute canvas coord (LiteGraph stores
-  // absolute positions for both top-level and sub-graph nodes), so we must
-  // NOT add wrapper.pos to it.
+  /* 第 3 类：子图 wrapper 的内部节点（rawJson.definitions.subgraphs[uid].nodes）
+   * 不在顶层的 nodes[] 里 —— 但 wrapper 展开之后它们是 detail.nodes /
+   * detail.graph 的一部分（服务端把它们拼在 `<wrapperId>:<internalId>` 键下）。
+   * 没有这个循环，展开的 wrapper 会以「零个已保存坐标」渲染，
+   * 客户端即使在 RAW 视图里也会回落到 Kahn 自动布局 —— 那永远不像 ComfyUI 的样子。
+   * 内部节点的 `pos` **本来就是**绝对画布坐标（LiteGraph 对顶层节点与子图节点
+   * 存的都是绝对位置），所以**不能**再往上加 wrapper.pos。 */
   //
-  // 3 (lookup fix): `definitions.subgraphs` is keyed by
-  // numeric index "0", "1", ... — NOT by the wrapper UUID. The wrapper
-  // UUID lives inside each sub def as `sub.id`. So we have to scan all
-  // entries and match by `sub.id === wrapper.type` (the wrapper's `type`
-  // IS the subgraph UUID in ComfyUI's format).
+  /* 第 3 类的查表修正：`definitions.subgraphs` 的键是数字下标 "0"、"1"…，
+   * **不是** wrapper 的 UUID。wrapper 的 UUID 藏在每个子图定义里的 `sub.id`。
+   * 因此必须遍历所有条目，按 `sub.id === wrapper.type` 去匹配
+   *（在 ComfyUI 的格式里，wrapper 的 `type` 就是子图 UUID）。 */
   const subs = raw.definitions?.subgraphs;
   if (subs && typeof subs === "object") {
     for (const wrapper of raw.nodes) {
@@ -330,7 +328,7 @@ export function extractPositions(
  * ComfyUI /object_info 的输入定义。
  *
  * ⚠️ 真实结构是 **元组** `[type, options?]`，不是带 `.type` 字段的对象：
- *   "seed":         ["INT",  { default: 0, min: 0, control_after_generate: true }]
+ *   "seed":         ["INT",  { default: 0, min: 0, control_after_generate: true }]  // 元组
  *   "model":        ["MODEL", {}]
  *   "sampler_name": [["euler", "euler_ancestral", …], {}]   ← COMBO：首项是候选数组
  * 少数新版（V3 schema）会给对象形式 `{ type: "INT", … }`，这里两种都兼容。
@@ -388,7 +386,7 @@ type ObjectInfo = Record<string, ObjectInfoClassDef>;
  *  表现为所有 COMBO 静默退化成文本框，且没有任何日志。 */
 const ObjectInfoEnvelopeSchema = z.record(z.string(), z.looseObject({}));
 
-/** Fetch ComfyUI node-class definitions (cached for 5 minutes) */
+/* 拉取 ComfyUI 的节点类定义（缓存 5 分钟）。 */
 let _objectInfoCache: { at: number; data: ObjectInfo } | null = null;
 /** 失败负缓存时间戳：ComfyUI 不可达时每次 detail/subgraph 请求都会白等
  *  20s 超时（AbortSignal.timeout）才降级 null，而旧实现失败不写缓存，
@@ -428,11 +426,10 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
   }
 }
 
-/** Resolve widget order for a node class — the ordered list of input names
- *  whose values are scalars (widgets).  Widgets are inputs whose type is one
- *  of: INT, FLOAT, STRING, BOOLEAN, COMBO.  Connection types (MODEL, LATENT,
- *  IMAGE, CONDITIONING, CLIP, …) are excluded because their values come from
- *  `links`, not from `widgets_values`. */
+/* 解析某节点类的控件顺序 —— 即「值是标量的那些输入」按声明顺序排列。
+ * 控件就是类型属于 INT / FLOAT / STRING / BOOLEAN / COMBO 的输入。
+ * 连接类型（MODEL、LATENT、IMAGE、CONDITIONING、CLIP …）排除在外，
+ * 因为它们来自 `links`，而不是 `widgets_values`。 */
 const CONNECTION_TYPE_RE =
   /^(MODEL|LATENT|IMAGE|IMAGE_TENSOR|MASK|CONDITIONING|CLIP|CLIP_VISION|CLIP_VISION_OUTPUT|VAE|MODEL_PATCH|GLIGEN|UPSCALE_MODEL|STYLE_MODEL|CONTROL_NET|SIGMAS|NOISE|SAMPLER|MASKED_IMAGE|IMAGE_3D|MESH|VOXEL|MESH_HOLDER|LATENT_3D|LOAD_3D|LATENT_4D|AUDIO|VIDEO|INT_ARRAY|FLOAT_ARRAY|STRING_ARRAY|TRANSFORMERS_MODEL_TENSOR|MT5|MT5_MODEL|CLIP_MODEL|UNET|UNET_TIMESTEP_EMBEDDING)$/i;
 
@@ -577,9 +574,9 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): string[] {
   return out;
 }
 
-/** Fallback widget mapping for common classes when /object_info is unavailable.
- *  The order here is the display order of WIDGET inputs only (connections
- *  excluded) — that matches how `widgets_values` is serialized on disk. */
+/* 拿不到 /object_info 时，给常见节点类用的控件映射兜底表。
+ * 这里的顺序只按「控件输入」的显示顺序排（不含连接），
+ * 与 `widgets_values` 在磁盘上的序列化顺序一致。 */
 const FALLBACK_WIDGETS: Record<string, string[]> = {
   KSampler: [
     "seed",
