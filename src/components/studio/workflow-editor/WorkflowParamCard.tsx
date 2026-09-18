@@ -71,9 +71,9 @@ export interface WorkflowParamCardProps {
   onReset?: () => void;
   /** 该口子的**输出端口**（提示词 → STRING…）——一个候选一颗圆点。
    *
-   *  由 `paramOutputPorts` 从「真正落到的端口」派生 —— 同一个「尺寸」口落到
-   *  `width` 是 INT、落到 `resolution_preset` 是 COMBO，类型跟着落点走。
-   *  未连线时逐个列出候选，不谎报类型。 */
+   *  由 `paramOutputPorts` 派生：类型是**这个口自己的**（按族 / 按尺寸形态），
+   *  连没连线都一样 —— 口子不该因为连到了 `IMAGEUPLOAD` 的装载行就把自己说成
+   *  IMAGEUPLOAD。落点那一行的声明类型在行 title 里可查（`targetType`）。 */
   outputPorts: readonly ParamOutputPort[];
   /** **每一行**输出端口右侧的端点槽位（编辑器 = <Handle>，库里 = 只读圆点）。
    *
@@ -100,6 +100,22 @@ export interface WorkflowParamCardProps {
   hoverRef?: (element: HTMLDivElement | null) => void;
   /** 鼠标进出卡片本体时的事件（节点渲染器用 useHoverElevation 生成）。 */
   hoverEvents?: DOMAttributes<HTMLDivElement>;
+}
+
+/** 输出端口行的悬停提示：这个口叫什么、自己是什么类型、落到哪一行。
+ *
+ *  芯片恒写口自己的类型（不许跟着连线漂），于是「落点那一行声明成什么」只剩
+ *  这一处可查 —— 首帧图片落到 `IMAGEUPLOAD` 的装载口是常态，不补这一句就再也
+ *  读不到两者类型不同。 */
+function rowTitle(port: ParamOutputPort, side: "right" | "left"): string {
+  const which = side === "left" ? "输入端口" : "输出端口";
+  const head = `${which} ${port.display ?? port.name} · ${port.type}`;
+  if (!port.ioKey) return head;
+  const target =
+    port.targetType && port.targetType !== port.type
+      ? `${port.ioKey}（声明 ${port.targetType}）`
+      : port.ioKey;
+  return `${head} → 落到 ${target}`;
 }
 
 export function WorkflowParamCard({
@@ -205,10 +221,10 @@ export function WorkflowParamCard({
       </div>
 
       {/* ── 输出端口 ──
-          每行 = 一个候选落点 + 它自己的圆点端点：圆点出去的是什么类型、叫什么
-          名字，看这一行即可。类型跟着当前落点走（提示词落到 STRING 文本口就是
-          STRING；尺寸落到 COMBO 的预设口就是 COMBO），尚未连线的候选照给类型
-          —— 那是它落到那一行时的类型，不是谎报。
+          每行 = 一个对外口 + 它自己的圆点端点：圆点出去的是什么类型、叫什么
+          名字，看这一行即可。类型**恒取这个口自己的**（提示词 STRING、首帧图片
+          IMAGE、尺寸子口按形态），连上哪一行都不改口 —— 改的是线，不是口的类型；
+          落点那一行声明成什么类型在行的 title 里可查。
           端点槽位（`endpoint`）压在这一行的右端，所以「类型 + 名称」整组**右对齐
           到端点**：圆点就是这一行在说什么的那个口，名字与类型贴着它才读得出
           「这颗点连到谁」。 */}
@@ -225,11 +241,11 @@ export function WorkflowParamCard({
             style={{ height: PARAM_NODE_OUTPUT_ROW_H }}
             data-testid={`param-node-out-${entryId}-${index}`}
             title={
-              /* 行上显示的是对外参数自己的名字（`display`）；**落到工作流的哪一行**
-               *  在这里可查（`ioKey`）—— 显示与落点是两件事，行上不写内部键。 */
-              port.ioKey
-                ? `${side === "left" ? "输入端口" : "输出端口"} ${port.display ?? port.name} · ${port.type} → 落到 ${port.ioKey}`
-                : `${side === "left" ? "输入端口" : "输出端口"} ${port.display ?? port.name} · ${port.type}`
+              /* 行上显示的是对外参数自己的名字（`display`）与类型（`type`）；
+               *  **落到工作流的哪一行**在这里可查（`ioKey`）—— 显示与落点是两件事，
+               *  行上不写内部键。落点那一行声明成别的类型时（首帧图片 → IMAGEUPLOAD
+               *  装载口）补一句，否则「类型不同」在界面上就没处查了。 */
+              rowTitle(port, side)
             }
           >
             {/* 端点槽位与「名字 + 类型」的相对顺序跟着端点所在的一侧走：

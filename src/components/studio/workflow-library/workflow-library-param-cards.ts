@@ -92,12 +92,21 @@ export function deriveLibraryParamCards(args: {
   mode: string | null | undefined;
   /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
   groupedKeys?: ReadonlySet<string>;
+  /** **该模式生效的契约口清单**（`modeContractEntries` 的 id；未改过的模式不用
+   *  传 —— 不传即内置默认）。
+   *
+   *  卡片列必须与「模式契约」编辑器说同一份清单（用户报的就是两者的差集：
+   *  画布按内置默认列出「时长」，而契约里那一口已被删掉）。 */
+  contractIds?: readonly string[];
 }): LibraryParamCards {
-  const { io, paramMap, mode, groupedKeys } = args;
+  const { io, paramMap, mode, groupedKeys, contractIds } = args;
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
    * **契约口一律常驻**：显示与否只由契约决定，与工作流内部长什么样无关；工作流
    * 只决定每张卡落到哪一行端口，落不到就如实显示成「未配置」。 */
-  const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
+  const entries = buildParamEntries(io, undefined, {
+    mode: mode ?? null,
+    contractIds,
+  });
   /* 落点只由作者画的线决定（`resolveMapping` 只认 `manualByMode`）：没有线就是
    * 未配置。这里不做任何「猜一个落点」的兜底 —— 猜错了比不显示更难被发现。 */
   const parsed = parseParamMapping(paramMap);

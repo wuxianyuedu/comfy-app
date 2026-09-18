@@ -676,3 +676,34 @@ describe("deriveEncapsulationStatus — 与画布节点页签同一份契约口"
     expect(negative.label).toBe("负向提示词");
   });
 });
+
+describe("deriveLibraryParamCards — 卡片列跟着「该模式生效的契约」", () => {
+  /* 用户报的现场：画布「对外参数」列着时长，点开「模式契约」→ 单图生视频里没有
+   * 它。成因是卡片列走的是**内置默认**，而契约编辑器走**生效契约**。 */
+  it("契约里删掉的口不再列出来（单图生视频去掉时长）", () => {
+    const byDefault = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "I2V",
+    }).entries.map((entry) => entry.id);
+    expect(byDefault).toContain("duration");
+    const byContract = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "I2V",
+      contractIds: ["prompt", "first-frame", "size"],
+    }).entries.map((entry) => entry.id);
+    expect(byContract).not.toContain("duration");
+    expect(byContract).not.toContain("negative");
+  });
+
+  it("契约里新增的口也会列出来", () => {
+    const ids = deriveLibraryParamCards({
+      io,
+      paramMap: {},
+      mode: "T2I",
+      contractIds: ["prompt", "reference-image", "size"],
+    }).entries.map((entry) => entry.id);
+    expect(ids).toContain("reference-image");
+  });
+});

@@ -38,6 +38,7 @@ import type {
 } from "~/lib/workflow/workflow-io-types";
 import {
   EXPOSED_PARAM_LABEL,
+  exposedClassOf,
   exposedParamDisplayLabel,
   exposedParamsForMode,
 } from "~/lib/workflow/workflow-exposed-params";
@@ -317,8 +318,8 @@ export function isSizeDetermined(
  *
  * 现在的口径：**输出端口 = 候选落点本身**，一个候选一颗圆点，圆点就是连到那一行
  * 的起点 —— 未连线时四颗点（宽/高/宽高比/像素量各一颗），连线后只剩被落到的那
- * 一颗。类型取自端口自己的声明（同一个「尺寸」口落到 `width` 是 INT、落到
- * `resolution_preset` 就是 COMBO），不看契约名硬编码。
+ * 一颗。类型**只看这个口自己**（按族；尺寸子口按形态），不看契约名硬编码、也不
+ * 跟着落点漂（见 `ParamOutputPort.type`）。
  *
  * 每颗圆点带自己的 handle id：它就是该端口的 **React Flow handle id（= pin 名）**
  * —— 落库与运行期用的 ioKey 经 `ioKeyForHandle` 翻回来（两个键空间不能混，
@@ -337,8 +338,19 @@ export interface ParamOutputPort {
    *  ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 `name` / `title`
    *  里可查（`ioKey`）。对外**输出**卡片不给（那里端口名就是作者要看的名字）。 */
   display?: string;
-  /** 声明类型（大写，如 STRING / INT / COMBO）；未知为 `*`。 */
+  /** **这个对外口自己的**声明类型（大写，如 STRING / IMAGE / COMBO）。
+   *
+   *  **恒不随落点变**：卡片上的芯片说的是「这个口对外是什么」，不是「它现在落到
+   *  哪一行、那一行声明成什么」。用户口径：「对外参数的类型都不要跟着连线改动，
+   *  现在图片节点连过去会变更显示类型」—— 同一个「首帧图片」连到 `IMAGEUPLOAD`
+   *  的装载口就显示成 IMAGEUPLOAD，松手又变回 IMAGE，读起来像口子自己换了类型。
+   *  落点那一行的类型仍在（`targetType`，行 title 里可查）。*/
   type: string;
+  /** 落点那一行的声明类型（未连线 / 落点已不存在时不给）。
+   *
+   *  芯片不显示它 —— 只用来在行 title 里补一句「落到的那一行其实是 IMAGEUPLOAD」，
+   *  免得「类型不同」这件事在界面上彻底查不到。 */
+  targetType?: string;
   /** 是否已经落到了工作流里真实存在的端口。 */
   connected: boolean;
   /** 落点（工作流内部键 `<nodeId>::<kind>::<name>`）；`""` = 还没落到任何行。 */
@@ -432,15 +444,18 @@ export function paramOutputPorts(
   displayName?: string,
 ): ParamOutputPort[] {
   const target = resolvedTarget ?? null;
-  const raw = target ? io?.[target] : undefined;
+  const rawTarget = target ? io?.[target] : undefined;
   return [
     {
       name: entry.label,
       /* 行上只写这个对外参数自己的名字；落到工作流的哪一行由线表达（`ioKey`
        *  在行的 title 里可查）。 */
       display: displayName ?? entry.label,
-      /* 有落点 → 落点那一行的真实类型；没有 → 这个口自己的类型（按族）。 */
-      type: raw ? portTypeDisplay(raw.type) : classPinType(entry.cls),
+      /* 类型**只看这个口自己**（按族 / 按尺寸形态），连没连线都一样 —— 见
+       *  `ParamOutputPort.type` 的说明。落点那一行的声明类型另存 `targetType`，
+       *  只在行 title 里露面。 */
+      type: classPinType(entry.cls),
+      targetType: rawTarget ? portTypeDisplay(rawTarget.type) : undefined,
       connected: !!target,
       ioKey: target ?? "",
       handleId: entry.id,
@@ -497,12 +512,27 @@ export function wiredTargetsForEntry(args: {
 export function buildParamEntries(
   io: WorkflowIOMap | null | undefined,
   labels?: Record<string, string>,
-  options?: { mode?: string | null },
+  options?: {
+    mode?: string | null;
+    /** **该模式生效的契约口清单**（`modeContractEntries(mode, storedContracts)`
+     *  的 id）。不传 = 按内置默认（`exposedParamsForMode`）。
+     *
+     *  必须传的情形：模式契约被用户改过（契约编辑器里标「已改」）。内置默认只是
+     *  「没改过时」的回落 —— 拿它当口径会让画布多列出契约里没有的口（用户报的
+     *  「画布上有时长，模式契约里没有」），也会漏掉用户在契约里**新增**的口。 */
+    contractIds?: readonly string[];
+  },
 ): ParamEntry[] {
-  /* 只有一条构造路径：契约（按模式）。没有模式语境时退到最保守的一套
-   *  （提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除 —— 对外有
-   *  哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是「对外参数」。 */
-  return buildContractEntries(io, labels, options?.mode ?? null);
+  /* 只有一条构造路径：契约（按模式 / 按该模式生效的契约清单）。没有模式语境时退
+   *  到最保守的一套（提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除
+   *  —— 对外有哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是
+   *  「对外参数」。 */
+  return buildContractEntries(
+    io,
+    labels,
+    options?.mode ?? null,
+    options?.contractIds,
+  );
 }
 
 /** 契约驱动的条目构造（有模式语境时的唯一路径）。 */
@@ -510,11 +540,21 @@ function buildContractEntries(
   io: WorkflowIOMap | null | undefined,
   labels: Record<string, string> | undefined,
   mode: string | null,
+  contractIds?: readonly string[],
 ): ParamEntry[] {
   const pinsByClass = classifyPins(io);
 
+  /* 口子的来源：调用方给的**生效契约**优先；没给才回落内置默认。两边都只提供
+   * 「有哪些口、按什么顺序」，落点仍由映射表决定。 */
+  const defs: Array<{ id: string; cls: ParamClass | null }> = contractIds
+    ? contractIds.map((id) => ({ id, cls: exposedClassOf(id) }))
+    : exposedParamsForMode(mode).map((def) => ({ id: def.id, cls: def.cls }));
+
   const out: ParamEntry[] = [];
-  for (const def of exposedParamsForMode(mode)) {
+  for (const def of defs) {
+    /* 认不出的 id（历史脏数据 / 别的键空间）不列：映射层没有它的分类，也就没有
+     *  任何可落点的候选，列出来只会是一张永远「未配置」的卡。 */
+    if (!def.cls) continue;
     /* 「尺寸」在映射层摊成四个子口（`SIZE_SUB_IDS`）：形态由作者连到哪个子口
      * 声明，不再从端口名里猜。对外契约仍是那一个「尺寸」口 —— 工坊送来的
      * `values.size` 由运行期按子口身份派成各自认的形状（见 sizeValueForPin）。 */
@@ -534,7 +574,11 @@ function buildContractEntries(
         hostNodeId: nodeIdOfIoKey(pins[0]?.ioKey ?? ""),
         nodeTitle: "",
         cls,
-        label: override ?? (def.cls === "size" ? sizeSubLabel(cls) : def.label),
+        label:
+          override ??
+          (def.cls === "size"
+            ? sizeSubLabel(cls)
+            : exposedParamDisplayLabel(def.id)),
         pins,
       });
     }
