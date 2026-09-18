@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
-import { DynamicWorkflowForm } from "~/components/studio/shared/DynamicWorkflowForm";
+import { SelectMenu } from "~/components/ui/select-menu";
+import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 /* 直接引基础件与结果卡（不再经 CanvasNode 目录 barrel）：barrel 会 re-export
  * `CanvasNode`，而 CanvasNode.tsx 又渲染本组件 —— 经 barrel 就成了
  * `CanvasNode → ImageGenerationPanel → index → CanvasNode` 的循环（规范 12.7）。 */
 import { Button } from "~/components/ui/button";
 import { Field, btnCls } from "./CanvasNode/CanvasNodePrimitives";
 import { ResultCard } from "./CanvasNode/ResultCard";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowModesState } from "./WorkflowNode";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import {
@@ -179,7 +179,7 @@ export function ImageGenerationPanel({
     seededFor.current = null;
     setWfModes(null);
     /* 切类型时若当前模型标签在新类型下没有工作流
-     *  也清掉，避免 DarkSelect 残留「幽灵选项」。如仍匹配则保留。 */
+     *  也清掉，避免 SelectMenu 残留「幽灵选项」。如仍匹配则保留。 */
     const newTypeWfs = wfList.filter(
       (wfList) => effectiveTaskType(wfList) === code,
     );
@@ -268,7 +268,7 @@ export function ImageGenerationPanel({
       {/* 步骤 1：类型（chip 列已改为 dropdown） */}
       <Field label="类型">
         {typeOptions.length ? (
-          <DarkSelect
+          <SelectMenu
             value={typeKnown ? d.mode : ""}
             onChange={selectType}
             options={typeOptions.map((typeOption) => typeOption.code)}
@@ -292,7 +292,7 @@ export function ImageGenerationPanel({
               下出现 DaSiwaWan22 这种 video 模型。 */}
           <Field label="模型">
             {modelTagOptions.length ? (
-              <DarkSelect
+              <SelectMenu
                 value={genTag}
                 onChange={selectModelTag}
                 options={[
@@ -326,7 +326,7 @@ export function ImageGenerationPanel({
           {/* 步骤 3：工作流（chip 列已改为 dropdown） */}
           <Field label="工作流">
             {workflowOptions.length ? (
-              <DarkSelect
+              <SelectMenu
                 value={d.workflowId ?? ""}
                 onChange={selectWorkflow}
                 options={workflowOptions.map(

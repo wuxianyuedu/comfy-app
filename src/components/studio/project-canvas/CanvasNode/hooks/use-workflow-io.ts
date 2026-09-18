@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   reconcileInputValues,
   type WorkflowIOMap,
-} from "~/components/studio/shared/workflow-io";
+} from "~/components/studio/workflow-io";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import {
   type WorkflowModesState,

@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useToast } from "./ToastProvider";
-import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
+import { AuroraBackground } from "~/components/ui/aurora-background";
 import {
   listProjects,
   reapAllEmptyDrafts,
   deleteProject,
   type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
-import { ModalDialog } from "~/components/studio/ui/ModalDialog";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 
 /**
@@ -44,7 +44,7 @@ export function WorksGallery({
     return listProjects();
   });
 
-  /** 画布项目删除确认。id 非 null = 该项目的 ModalDialog
+  /** 画布项目删除确认。id 非 null = 该项目的 ConfirmDialog
    *  已打开。项目名在清空对话框**之前**解析好，好让
    *  toast 读到原名，即使底层数组
    *  下一 tick 就变了。 */
@@ -229,7 +229,7 @@ export function WorksGallery({
       </div>
 
       {/* ── 画布项目删除确认 ── */}
-      <ModalDialog
+      <ConfirmDialog
         open={confirmDeleteId !== null}
         onClose={() => {
           if (!pendingDelete) setConfirmDeleteId(null);

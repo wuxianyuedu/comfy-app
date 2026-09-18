@@ -4,7 +4,7 @@ import React from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { WaterFillProgress } from "~/components/studio/ui/WaterFillProgress";
+import { WaterFillProgress } from "~/components/ui/water-fill-progress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { overlayClass } from "~/lib/full-screen-layer";

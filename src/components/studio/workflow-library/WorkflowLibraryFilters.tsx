@@ -6,7 +6,7 @@
 
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 
 export interface ModelTagCount {
@@ -43,7 +43,7 @@ const TYPE_LABELS: Record<TypeFilter, string> = {
   audio: "音频",
 };
 
-/** 计数徽标（ DarkSelect 的 labels 支持 ReactNode）。 */
+/** 计数徽标（ SelectMenu 的 labels 支持 ReactNode）。 */
 function CountBadge({ count }: { count: number }) {
   return (
     <span className="bg-surface-2 text-ink-faint ml-2 shrink-0 rounded-full px-1.5 text-[11px] tabular-nums">
@@ -70,7 +70,7 @@ export function WorkflowLibraryFilters({
 }: WorkflowLibraryFiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <DarkSelect
+      <SelectMenu
         value={sourceFilter}
         onChange={(v) => onSourceFilterChange(v as SourceFilter)}
         options={[...SOURCE_OPTIONS]}
@@ -95,7 +95,7 @@ export function WorkflowLibraryFilters({
         )}
       />
 
-      <DarkSelect
+      <SelectMenu
         value={typeFilter}
         onChange={(v) => onTypeFilterChange(v as TypeFilter)}
         options={[...TYPE_OPTIONS]}
@@ -122,7 +122,7 @@ export function WorkflowLibraryFilters({
         )}
       />
 
-      <DarkSelect
+      <SelectMenu
         value={modelFilter}
         onChange={(v) => onModelFilterChange(v)}
         options={["all", ...modelTags.map((tag) => tag.name)]}

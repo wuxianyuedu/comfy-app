@@ -9,7 +9,7 @@
  *  running/idle 切换时重置）。 */
 import { useMemo, useState } from "react";
 import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
-import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
+import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { shouldAutoExpandError, suggestForError } from "./error-suggestions";

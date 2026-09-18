@@ -8,7 +8,7 @@
  * `useRemoteModelDialogs`（第②层）承载，视图只渲染与触发。
  */
 
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { Button } from "~/components/ui/button";
 import {
   REMOTE_MODEL_KINDS,
@@ -64,7 +64,7 @@ export function RemoteModelDialog({
           <label className="text-ink/80 mb-1.5 block text-sm font-medium">
             供应商（仅支持 OpenAI 兼容协议 API）
           </label>
-          <DarkSelect
+          <SelectMenu
             className="mb-3 text-sm"
             value="custom"
             onChange={() => undefined}
@@ -78,7 +78,7 @@ export function RemoteModelDialog({
           <label className="text-ink/80 mb-1.5 block text-sm font-medium">
             用途
           </label>
-          <DarkSelect
+          <SelectMenu
             className="mb-3 text-sm"
             value={d.addForm.kind}
             onChange={(kind) =>

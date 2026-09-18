@@ -1,13 +1,13 @@
 "use client";
 
-import { PortHandle } from "~/components/studio/shared/DynamicWorkflowForm";
+import { PortHandle } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import { Button } from "~/components/ui/button";
 import {
   ioLabel,
   splitWorkflowIO,
   typeDisplay,
   type WorkflowIOMap,
-} from "~/components/studio/shared/workflow-io";
+} from "~/components/studio/workflow-io";
 
 /* ── 节点选中时才出现的悬浮工具条 ──
  *  对齐已落地的设计稿：节点上方一枚紧凑胶囊，含 ⌫ 删除（粉）· ⓘ 信息 ·

@@ -2,7 +2,7 @@
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import type { ProjectMeta, ProjectType } from "~/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
 import { useLLM } from "~/components/workshop/LLMContext";
@@ -102,7 +102,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             <span className="text-muted-foreground mb-1 block text-xs">
               类型
             </span>
-            <DarkSelect
+            <SelectMenu
               className="!bg-subtle !border-border text-sm"
               value={meta.type}
               onChange={(value) =>

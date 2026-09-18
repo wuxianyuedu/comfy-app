@@ -158,7 +158,7 @@ import "@/styles/json-viewer.css";
 渲染出的 `<style>` 一律阻断——判据只看「有没有 `<style>` 元素」，不做按文件豁免
 （只有注释里解释历史写法的引用放行，因为那是口径本身）。
 这条判据来自**同一个形态在本仓库犯过两次**：`WorkflowEditorCanvas` 与
-`studio/ui/CodeBlock` 的 `CODE_BLOCK_CSS` 都是「组件私有 CSS 字符串 + 渲染时注入」。
+`ui/code-block` 的 `CODE_BLOCK_CSS` 都是「组件私有 CSS 字符串 + 渲染时注入」。
 第一次改完只留了注释说明，第二次照样犯 —— 所以必须有机器判据，而不是「下次记得」。
 回归测试见 `tests/check-inline-style.test.ts`。
 
@@ -294,7 +294,7 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 ### 3.6.2 品牌/状态色必须走语义 token（ISSUE #672，机器强制）
 
 「改一处样式、全站生效」的前提是**颜色有单一事实来源**。实测出的反例：
-`--color-primary: #7c5cfc` 定义得好好的，但 `studio/ui/ModalDialog.tsx` 写死
+`--color-primary: #7c5cfc` 定义得好好的，但 `ui/confirm-dialog.tsx` 写死
 `violet-500/600` 6 处、`ui/status-badge.tsx` 写死 44 处
 `emerald/violet/amber/red`、`ui/page-loading.tsx` 写死 `border-violet-500` ——
 把 primary 改成蓝色，这些地方仍然是紫的，视觉体系当场破功。

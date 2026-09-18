@@ -28,7 +28,7 @@ import {
   splitWorkflowIO,
   type WorkflowIOEntry,
   type WorkflowIOMap,
-} from "~/components/studio/shared/workflow-io";
+} from "~/components/studio/workflow-io";
 import {
   defaultOutputSource,
   hasManualOutputBinding,

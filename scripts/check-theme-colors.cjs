@@ -203,18 +203,18 @@ const EXEMPT_TABLES = [
     reason: "端口类型粉彩渐变表（PORT_STYLE 六色），内容自身的颜色",
   },
   {
-    file: "src/components/studio/shared/WorkflowPortHandle.tsx",
+    file: "src/components/studio/workflow-form/WorkflowPortHandle.tsx",
     exports: [],
     reason:
       "端口类型色 / 描边常量（PORT_STROKE、portColorFor、portChipStyle 的**文字色**）：色值即类型语义；chip 的**底色**已两态化（--color-chip-type-*-bg），不在豁免范围",
   },
   {
-    file: "src/components/studio/shared/WorkflowSeedModeButton.tsx",
+    file: "src/components/ui/seed-mode-button.tsx",
     exports: [],
     reason: "seed 模式图标的类型配色（内联 SVG fill/stroke），内容色",
   },
   {
-    file: "src/components/studio/shared/DynamicWorkflowForm/constants.ts",
+    file: "src/components/studio/workflow-form/DynamicWorkflowForm/constants.ts",
     exports: ["ACCENT"],
     reason:
       "动态表单控件类型色（ACCENT：image/select/int/float… 分组色常量表）",

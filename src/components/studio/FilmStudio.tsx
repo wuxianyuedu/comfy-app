@@ -5,7 +5,7 @@ import { Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { useFilmStudio } from "./hooks/use-film-studio";
-import { AuroraGlow } from "./ui/AuroraBackground";
+import { AuroraGlow } from "~/components/ui/aurora-background";
 import { useToast } from "./ToastProvider";
 import { sizeSpecSummary } from "~/lib/media/size-presets";
 import {

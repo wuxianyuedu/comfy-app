@@ -6,7 +6,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { api } from "~/trpc/react";
 import {
   buildSourceData,

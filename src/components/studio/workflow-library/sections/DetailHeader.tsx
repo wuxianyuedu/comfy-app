@@ -15,8 +15,8 @@ import {
 
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
-import { SourceTag } from "~/components/studio/ui/SourceTag";
-import { TaskTypeChip } from "~/components/studio/ui/TaskTypeChip";
+import { SourceTag } from "~/components/ui/source-tag";
+import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { modeLabel } from "../workflow-library-config";
 import { type WorkflowRow } from "../workflow-library-config";
 import { WorkflowRunLogButton } from "../WorkflowRunLogButton";

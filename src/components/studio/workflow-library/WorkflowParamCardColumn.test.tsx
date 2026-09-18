@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import {
   buildParamEntries,
   sizeSubLabel,

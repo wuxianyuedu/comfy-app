@@ -233,7 +233,6 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/update-check-client.ts",
   // 跨域 UI 与烘焙数据
   "src/lib/full-screen-layer.ts",
-  "src/lib/floating-position.ts",
   "src/lib/history-detail-actions.ts",
   "src/lib/envfile.ts",
   // 服务端装配与运维

@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
 /** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
@@ -538,12 +538,12 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                           aria-hidden
                         />
                         {/* 工作流画布上的 COMBO widget 渲染成只读的
-                         *  DarkSelect —— 它把当前选中的模型显示成下拉外壳，但
+                         *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
                          *  在这里保持禁用（编辑发生在会落盘取值的项目
                          *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
                          *  触发器压到 22px 行高，免得
                          *  破坏统一的针脚节奏。 */}
-                        <DarkSelect
+                        <SelectMenu
                           value={typeof v === "string" ? v : ""}
                           onChange={() => undefined}
                           options={

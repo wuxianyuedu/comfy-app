@@ -20,7 +20,7 @@
  * （ISSUE #529）—— 手势与命中半径都由画布承担，卡片列本身不碰 React Flow。
  */
 
-import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import type { ReactNode } from "react";
 
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";

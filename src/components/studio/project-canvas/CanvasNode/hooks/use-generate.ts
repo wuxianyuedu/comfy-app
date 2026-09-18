@@ -14,7 +14,7 @@ import {
   toWorkflowInputsPayload,
   splitWorkflowIO,
   type WorkflowIOMap,
-} from "~/components/studio/shared/workflow-io";
+} from "~/components/studio/workflow-io";
 import {
   type CanvasNodeData,
   defaultData,

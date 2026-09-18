@@ -6,7 +6,7 @@
  */
 
 import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import {
   getWorkflowType,
   normalizeTaskType,

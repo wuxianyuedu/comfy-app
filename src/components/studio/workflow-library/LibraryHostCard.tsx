@@ -15,19 +15,19 @@
 
 import type { RefObject } from "react";
 
-import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { StatusDot } from "~/components/ui/status-dot";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { modeLabel } from "./workflow-library-config";
-import { WorkflowNodeOutputsRow } from "../shared/WorkflowNodeParts";
-import { PortHandle } from "../shared/WorkflowPortHandle";
+import { WorkflowNodeOutputsRow } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle";
 import {
   WorkflowNodeCardShell,
   WorkflowNodeDivider,
   WorkflowNodeHeader,
   WorkflowNodePill,
   WorkflowStaticChip,
-} from "../shared/WorkflowNodeParts";
+} from "~/components/studio/workflow-form/WorkflowNodeParts";
 
 export interface LibraryHostCardProps {
   workflowName: string;
@@ -124,7 +124,7 @@ export function LibraryHostCard({
             </WorkflowStaticChip>
             {modes && modes.length > 1 && onModeChange ? (
               /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
-              <DarkSelect
+              <SelectMenu
                 value={effectiveMode ?? taskType}
                 onChange={(code) => onModeChange(code)}
                 options={modes}

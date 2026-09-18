@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { useHistoryPanel } from "./hooks/use-history-panel";
 import {
   FILTER_TABS,

@@ -50,9 +50,9 @@ import { useProjectPersistence } from "./project-canvas/hooks/use-project-persis
 import { useProjectManager } from "./project-canvas/hooks/use-project-manager";
 import { useCanvasConnections } from "./project-canvas/hooks/use-canvas-connections";
 import { useCanvasDrop } from "./project-canvas/hooks/use-canvas-drop";
-import { ModalDialog } from "./ui/ModalDialog";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { useToast } from "./ToastProvider";
-import { useMiniMapJump } from "./shared/useMiniMapJump";
+import { useMiniMapJump } from "./useMiniMapJump";
 import {
   CanvasPanelToolbar,
   type CanvasPanelType,
@@ -351,7 +351,7 @@ function CanvasInner({
     setConfirmClear(true);
   }, [nodes.length, edges.length, toast]);
 
-  /** 真正的 clearCanvas 动作 —— 由 ModalDialog 的确认按钮调用。 */
+  /** 真正的 clearCanvas 动作 —— 由 ConfirmDialog 的确认按钮调用。 */
   const applyClearCanvas = useCallback(() => {
     setNodes([]);
     setEdges([]);
@@ -519,7 +519,7 @@ function CanvasInner({
       )}
 
       {/* ── 用自定义深色弹窗替换 window.confirm ── */}
-      <ModalDialog
+      <ConfirmDialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         title="删除此项目？"
@@ -529,7 +529,7 @@ function CanvasInner({
         danger
         onConfirm={applyDeleteCurrent}
       />
-      <ModalDialog
+      <ConfirmDialog
         open={confirmClear}
         onClose={() => setConfirmClear(false)}
         title="清空当前画布？"

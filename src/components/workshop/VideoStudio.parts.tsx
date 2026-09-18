@@ -2,7 +2,7 @@
 
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import {
   MOTION_LABELS,
   type MotionLevel,
@@ -86,7 +86,7 @@ export function ChannelSwitch({
         </Button>
         <label className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">帧率</span>
-          <DarkSelect
+          <SelectMenu
             className="!bg-subtle !border-border text-xs"
             value={String(fps)}
             onChange={(v) => onFpsChange(Number(v) || 16)}
@@ -270,7 +270,7 @@ export function ShotCard({
             </label>
             <label className="flex items-center gap-1 text-[11px]">
               <span className="text-muted-foreground">运动</span>
-              <DarkSelect
+              <SelectMenu
                 className="!bg-subtle !border-border text-[11px]"
                 value={shot.motion ?? "medium"}
                 onChange={(v) => onPatch({ motion: v as MotionLevel })}

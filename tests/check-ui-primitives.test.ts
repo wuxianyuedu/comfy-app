@@ -122,12 +122,17 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("0 处");
   });
 
-  it("studio/ui 与 studio/shared 放行（是 §16.2.3 的迁移对象，不重复计一遍）", () => {
-    write("src/components/studio/ui/D.tsx", BUTTON_VIEW);
-    write("src/components/studio/shared/E.tsx", PORTAL_VIEW);
+  it("studio/** 的业务目录不放行（豁免目录已按 §16.2.4 归还）", () => {
+    /* `studio/ui/**` 与 `studio/shared/**` 曾整体豁免（它们是「待合并的
+       第二套 UI kit」）。归并完成后豁免必须撤掉 —— 再留一条按目录的模糊
+       放行，等于让那两处的新增自实现在这里悄悄溜过。 */
     seedBaseline();
-    const { code } = run();
-    expect(code).toBe(0);
+    write("src/components/studio/workflow-form/D.tsx", BUTTON_VIEW);
+    write("src/components/studio/workflow-form/E.tsx", PORTAL_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("workflow-form/D.tsx");
+    expect(output).toContain("workflow-form/E.tsx");
   });
 
   it("<feature>/hooks/ 放行（§16.2.1 第②层是逻辑层，不是视图）", () => {

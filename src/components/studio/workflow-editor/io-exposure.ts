@@ -12,10 +12,7 @@
  * 出一个陈旧名字（`value_1`）。显示名因此只在前端这一处算，后端只认 pin 名与
  * 事实字段 —— ISSUE #349 的整条「机器名让位 / 清洗」链随此删除：库里带
  * `label` 的条目从此一律按「作者重命名」直读（`setIOLabel` 传空串即可清掉）。 */
-import {
-  ioLabel,
-  type WorkflowIOEntry,
-} from "~/components/studio/shared/workflow-io";
+import { ioLabel, type WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { sanitizeComboLabel } from "~/components/studio/workflow-utils";
 
 /** 本地勾选态在显示名上真正携带的字段（作者的显式重命名 + 画布透传的类型，

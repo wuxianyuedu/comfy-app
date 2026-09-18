@@ -49,7 +49,7 @@ pnpm typecheck          # tsc --noEmit
 | `src/components/studio/canvas/SubgraphHeader.test.tsx` | 子图头（标题回退、折叠/钻入回调、IO checkbox 条件） | 12 |
 | `src/components/studio/project-canvas/CanvasNode/CanvasNodePrimitives.test.tsx` | Field/StatusDot/StatusBadge/NodeChip | 11 |
 | `src/components/studio/project-canvas/CanvasNode/ResultCard.test.tsx` | 结果卡（三分支、mediaType 判定、占位与回退） | 11 |
-| `src/components/studio/shared/DynamicWorkflowForm/sections/*.test.tsx` | 表单分区（骨架/空态/I/O 端点 chip） | 10 |
+| `src/components/studio/workflow-form/DynamicWorkflowForm/sections/*.test.tsx` | 表单分区（骨架/空态/I/O 端点 chip） | 10 |
 | `src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.test.tsx` | 设置行/值 chip/汇总/进度/报告卡 | 17 |
 | （另 2 个文件为既有 lib 测试） | — | — |
 

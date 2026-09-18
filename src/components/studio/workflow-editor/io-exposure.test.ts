@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import {
   enrichFromViewNodes,
   mergeExposedEntry,

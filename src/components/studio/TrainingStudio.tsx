@@ -2,9 +2,9 @@
 
 import React, { useCallback, useRef, useState } from "react";
 import { Upload } from "lucide-react";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
-import { NumberField } from "~/components/studio/ui/NumberField";
-import { AuroraGlow } from "~/components/studio/ui/AuroraBackground";
+import { SelectMenu } from "~/components/ui/select-menu";
+import { NumberField } from "~/components/ui/number-field";
+import { AuroraGlow } from "~/components/ui/aurora-background";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -589,7 +589,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
 
             <div>
               <label className={labelClass}>底模（Checkpoint）</label>
-              <DarkSelect
+              <SelectMenu
                 className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 value={c.form.baseModel}
                 onChange={c.setBaseModel}
@@ -627,7 +627,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
 
             <div>
               <label className={labelClass}>分辨率</label>
-              <DarkSelect
+              <SelectMenu
                 className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 value={String(c.form.resolution)}
                 onChange={(value) => c.setResolution(Number(value))}
@@ -732,7 +732,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className={labelClass}>优化器</label>
-                <DarkSelect
+                <SelectMenu
                   className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                   value={c.form.optimizer}
                   onChange={c.setOptimizer}
@@ -742,7 +742,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               </div>
               <div>
                 <label className={labelClass}>调度器</label>
-                <DarkSelect
+                <SelectMenu
                   className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                   value={c.form.scheduler}
                   onChange={c.setScheduler}
