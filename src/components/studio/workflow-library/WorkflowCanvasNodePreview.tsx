@@ -427,11 +427,15 @@ export function WorkflowCanvasNodePreview({
   /* ── 对外输出参数的落点编辑（右列）──
    *
    * 与左列同一份编排思路（本地叠加 + 落库），但键空间分开：输出的取值行写在
-   * `paramMap.output.mode:<模式>`。同一份本地 overlay 承载它，落库回调也共用
-   * `onPatchParamMap` —— 库里不必等一次 PATCH 往返才看得见结果。
+   * `paramMap.output.mode:<模式>`。落库统一走 `commitParamMap`（先写本地 overlay
+   * 再落库）—— 这样输出线像左列一样**立刻**画出来，而不是等一次 PATCH + 查询
+   * 重拉（约 2s）回来才显示。
    *
    * 没有 `onPatchParamMap`（只读消费方）时不可拖：回调为 undefined，连线层据此
    * 不起手（拖不动的东西不摆出能拖的样子）。 */
+  /* 解构出两个稳定引用再进 useMemo：`wiring` 每次渲染都是新对象，回调里直接写
+   * `wiring.x` 会被 eslint 要求依赖整个 `wiring`（那样 useMemo 每次都重算）。 */
+  const { effectiveParamMap: wiringParamMap, commitParamMap } = wiring;
   const outputWiring = useMemo(
     () => ({
       isManual: (ioKey: string) => outputCards.isManual(ioKey),
@@ -453,22 +457,18 @@ export function WorkflowCanvasNodePreview({
         const revert =
           outputIoKey === targetIoKey && outputCards.isManual(outputIoKey);
         const next = revert
-          ? clearOutputBindingEdit(
-              wiring.effectiveParamMap,
-              outputIoKey,
-              effectiveMode,
-            )
-          : applyOutputBindingEdit(wiring.effectiveParamMap, {
+          ? clearOutputBindingEdit(wiringParamMap, outputIoKey, effectiveMode)
+          : applyOutputBindingEdit(wiringParamMap, {
               outputIoKey,
               ioKey: targetIoKey,
               mode: effectiveMode,
             });
-        void onPatchParamMap(next);
+        commitParamMap(next);
       },
       disconnect: (outputIoKey: string) => {
         if (!effectiveMode || !onPatchParamMap) return;
-        void onPatchParamMap(
-          applyOutputBindingEdit(wiring.effectiveParamMap, {
+        commitParamMap(
+          applyOutputBindingEdit(wiringParamMap, {
             outputIoKey,
             ioKey: null,
             mode: effectiveMode,
@@ -477,12 +477,8 @@ export function WorkflowCanvasNodePreview({
       },
       reset: (outputIoKey: string) => {
         if (!effectiveMode || !onPatchParamMap) return;
-        void onPatchParamMap(
-          clearOutputBindingEdit(
-            wiring.effectiveParamMap,
-            outputIoKey,
-            effectiveMode,
-          ),
+        commitParamMap(
+          clearOutputBindingEdit(wiringParamMap, outputIoKey, effectiveMode),
         );
       },
     }),
@@ -490,7 +486,8 @@ export function WorkflowCanvasNodePreview({
       outputCards,
       effectiveMode,
       onPatchParamMap,
-      wiring.effectiveParamMap,
+      wiringParamMap,
+      commitParamMap,
       workflowIO,
     ],
   );
