@@ -24,13 +24,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Square, X, Minus } from "lucide-react";
-import type { ShellTab } from "~/lib/shell-tabs-store";
+import type { ShellTab } from "~/lib/shell/shell-tabs-store";
 import {
   isDragRegionTarget,
   resolveMaximizeButtonKind,
   WINDOW_BUTTON_LABELS,
   type WindowButtonKind,
-} from "~/lib/title-bar-derive";
+} from "~/lib/shell/title-bar-derive";
 import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
 import {
   closeWindow,
@@ -39,7 +39,7 @@ import {
   onWindowResized,
   startWindowDrag,
   toggleMaximizeWindow,
-} from "~/lib/window-controls-client";
+} from "~/lib/shell/window-controls-client";
 import { useStartupForeground } from "./hooks/use-startup-foreground";
 
 interface TitleBarTabsProps {

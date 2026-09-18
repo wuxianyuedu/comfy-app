@@ -19,17 +19,17 @@ import {
   parseParamMapping,
   resolveMapping,
   SIZE_SUB_IDS,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   exposedParamDisplayLabel,
   exposedParamsForMode,
-} from "~/lib/workflow-exposed-params";
+} from "~/lib/workflow/workflow-exposed-params";
 import {
   builtInRequiredInputs,
   isModeContractInputId,
   type ModeContractInputId,
 } from "./model-mode-contract";
-import type { WorkflowIOMap } from "~/lib/workflow-io-types";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
  *  时长是秒数选择。 */

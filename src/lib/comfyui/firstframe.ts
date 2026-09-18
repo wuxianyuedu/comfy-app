@@ -10,7 +10,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
-import type { SizeSpec } from "~/lib/size-presets";
+import type { SizeSpec } from "~/lib/media/size-presets";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { subscribe } from "./enqueue";
 import { uploadImage } from "./client";

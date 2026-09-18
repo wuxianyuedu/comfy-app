@@ -12,7 +12,7 @@ import {
   reportCodeUpdatedSinceLoad,
   reportStaleStoreAction,
   resetStaleStoreNotify,
-} from "~/lib/stale-store-notify";
+} from "~/lib/shell/stale-store-notify";
 
 const toastInfo = vi.hoisted(() => vi.fn());
 vi.mock("~/components/studio/ToastProvider", () => ({

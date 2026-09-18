@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
+import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 
 const generateRuntimeLog = createAppRuntimeLogger("generate");
 import {

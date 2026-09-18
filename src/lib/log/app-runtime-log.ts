@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 
-import { APP_RUNTIME_LOG } from "~/lib/log-paths";
+import { APP_RUNTIME_LOG } from "~/lib/log/log-paths";
 
 /**
  * 应用运行操作日志（面板可见）。

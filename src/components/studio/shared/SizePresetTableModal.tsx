@@ -20,7 +20,7 @@ import {
   type ResolutionTier,
   type SizeDims,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 
 const SCENES: SizeScene[] = ["image", "video"];

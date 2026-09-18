@@ -13,7 +13,7 @@ export async function register() {
      * 时用户打开面板看到一片空白（ISSUE #360）。
      * 用动态 import 是刻意的：本文件在 Edge runtime 也会执行，Node-only 模块
      * 不能进入 Edge 图（同下方 sentry.server.config 的处理）。 */
-    await import("./lib/capture-streams.server").then((m) =>
+    await import("./lib/log/capture-streams.server").then((m) =>
       m.installStreamCapture(),
     );
     await import("./sentry.server.config");

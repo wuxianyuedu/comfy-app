@@ -27,8 +27,8 @@ const logFile = path.join(tmp, "app-runtime.log");
 const nextjsLogDir = path.join(tmp, "nextjs");
 const panelLogFile = path.join(nextjsLogDir, "nextjs-panel-test.log");
 
-vi.mock("~/lib/log-paths", async () => {
-  const actual = await vi.importActual("~/lib/log-paths");
+vi.mock("~/lib/log/log-paths", async () => {
+  const actual = await vi.importActual("~/lib/log/log-paths");
   return {
     ...(actual as Record<string, unknown>),
     APP_RUNTIME_LOG: logFile,

@@ -24,7 +24,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const IGNORE_MODULE = "src/lib/tracing-ignore.ts";
+const IGNORE_MODULE = "src/lib/shell/tracing-ignore.ts";
 
 /** 已知会因为动态路径访问触发「全项目追踪」的调用点。 */
 const CONSUMERS = [
@@ -50,7 +50,7 @@ describe("turbopackIgnore 注解的落位（TS 侧）", () => {
     const src = read(rel);
     // ① 引用共享模块（仓库里 ~/ 与 @/ 两个别名都指向 src/，两者都放行）
     expect(
-      /from "(@|~)\/(lib\/)?tracing-ignore"/.test(src),
+      /from "(@|~)\/(lib\/)?(shell\/)?tracing-ignore"/.test(src),
       `${rel} 未引用共享的 tracing-ignore 模块（注解必须只有一个来源）`,
     ).toBe(true);
     // ② 展开进 path.resolve(...) / path.join(...) 的参数列表

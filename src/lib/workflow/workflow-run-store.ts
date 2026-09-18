@@ -16,7 +16,7 @@
  * 参照 project-canvas/stepLogCache.ts 的同款取舍，真值永远以服务端为准。
  */
 
-import type { TaskLogEntry } from "./workshop/generation-client";
+import type { TaskLogEntry } from "../workshop/generation-client";
 
 /** 这次运行**从哪个入口发起**。
  *

@@ -13,7 +13,7 @@ import {
   buildParamEntries,
   sizeSubLabel,
   SIZE_SUB_IDS,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 

@@ -50,7 +50,7 @@ import "server-only";
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 
-import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
+import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 
 /** Table readiness state. */
 export type SchemaReadiness = "ready" | "missing" | "unknown";

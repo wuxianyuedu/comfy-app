@@ -9,7 +9,7 @@
 // 状态（见 use-dev-server-status.ts），ComfyUI 是否运行由占用条是否可见 +
 // 降级文案表达（"显存/内存暂不可用" 本身就等于「ComfyUI 没启动」）。
 
-import type { ComfyStatsPayload } from "~/lib/comfy-stats-client";
+import type { ComfyStatsPayload } from "~/lib/comfy/comfy-stats-client";
 
 import { useComfyStats } from "./use-comfy-stats";
 

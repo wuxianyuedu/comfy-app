@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { WorkflowIOMap } from "~/lib/workflow-io-types";
-import { parseParamMapping } from "~/lib/workflow-param-mapping";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { parseParamMapping } from "~/lib/workflow/workflow-param-mapping";
 import {
   applyWireEdit,
   canApplyWireEdit,

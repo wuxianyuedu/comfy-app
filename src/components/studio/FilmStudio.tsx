@@ -5,7 +5,7 @@ import { Redo2, Undo2 } from "lucide-react";
 
 import { useFilmStudio } from "./hooks/use-film-studio";
 import { useToast } from "./ToastProvider";
-import { sizeSpecSummary } from "~/lib/size-presets";
+import { sizeSpecSummary } from "~/lib/media/size-presets";
 import {
   MOCK_SHOTS,
   MODE_LABELS,

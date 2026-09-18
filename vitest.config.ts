@@ -184,6 +184,50 @@ export default defineConfig({
           statements: 90,
           branches: 85,
         },
+        /* 本批新划出的 6 个子域（ISSUE #565 的域化搬迁 / 规范 §12.5.3 / §18.14）：
+         * 根目录此前**不是一个域** —— 它是「一堆文件」，于是 18.6 的覆盖率门槛
+         * 与 18.4 的域级声明核对都挂不到它们身上。数值一律取**搬迁后的实测值
+         * 向下取整到 5 的倍数**，「只升不降」（§18.6 的口径）。 */
+        "src/lib/comfy/**": {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+          branches: 90,
+        },
+        // log/ 的分母含 `app-runtime-log`（ERROR 镜像，真写盘）与
+        // `capture-streams.server`（instrumentation 挂钩）的未覆盖分支。
+        "src/lib/log/**": {
+          lines: 85,
+          functions: 85,
+          statements: 85,
+          branches: 70,
+        },
+        "src/lib/media/**": {
+          lines: 80,
+          functions: 75,
+          statements: 75,
+          branches: 70,
+        },
+        // process/ 的 `kill-process-tree` 大部分分支要真杀进程（平台相关），
+        // 实测 52/61 —— 门槛按实测值设，补判决面（而非真起进程）时同批上调。
+        "src/lib/process/**": {
+          lines: 50,
+          functions: 60,
+          statements: 50,
+          branches: 55,
+        },
+        "src/lib/shell/**": {
+          lines: 60,
+          functions: 70,
+          statements: 60,
+          branches: 60,
+        },
+        "src/lib/workflow/**": {
+          lines: 90,
+          functions: 90,
+          statements: 85,
+          branches: 80,
+        },
         "src/lib/project-canvas/**": {
           lines: 70,
           functions: 70,

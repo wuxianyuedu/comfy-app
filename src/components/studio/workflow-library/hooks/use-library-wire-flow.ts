@@ -28,7 +28,10 @@ import {
 } from "@xyflow/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { pinAcceptsEntry, type ParamEntry } from "~/lib/workflow-param-mapping";
+import {
+  pinAcceptsEntry,
+  type ParamEntry,
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   LIBRARY_EDGE_STYLE,
   LIB_NODE_BACKDROP,

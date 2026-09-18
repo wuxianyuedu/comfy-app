@@ -36,7 +36,7 @@ import {
   touchHeartbeat,
   writeSession,
 } from "../scripts/dev-launcher-session.mjs";
-import { killProcessTree } from "../src/lib/kill-process-tree";
+import { killProcessTree } from "../src/lib/process/kill-process-tree";
 
 /** 数出「进程组」里还剩几个活着的标记进程（用唯一标记匹配命令行）。 */
 function countMarkedProcesses(marker: string): number {

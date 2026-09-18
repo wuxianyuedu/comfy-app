@@ -35,7 +35,7 @@ import {
   APP_RUNTIME_LOG,
   NEXTJS_LOG_DIR,
   NEXTJS_PANEL_LOG_PREFIX,
-} from "~/lib/log-paths";
+} from "~/lib/log/log-paths";
 import { appendSessionBanner } from "~/lib/session-banner.server";
 
 /** 转录文件的绝对路径（单例，模块仅执行一次）。 */

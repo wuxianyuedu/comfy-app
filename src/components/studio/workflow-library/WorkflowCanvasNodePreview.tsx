@@ -29,7 +29,7 @@ import {
   latestRunForWorkflow,
   patchWorkflowRun,
   registerWorkflowRun,
-} from "~/lib/workflow-run-store";
+} from "~/lib/workflow/workflow-run-store";
 import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
 import {
   defaultInputValues,
@@ -47,15 +47,15 @@ import {
   buildParamEntries,
   parseParamMapping,
   sizeGroupIds,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   applyOutputBindingEdit,
   canApplyOutputBindingEdit,
   clearOutputBindingEdit,
-} from "~/lib/workflow-output-binding";
+} from "~/lib/workflow/workflow-output-binding";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
-import { resolveWorkflowMode } from "~/lib/workflow-types";
+import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import {
   deriveLibraryOutputCards,
   deriveLibraryParamCards,

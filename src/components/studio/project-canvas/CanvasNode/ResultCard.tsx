@@ -6,7 +6,7 @@ import {
   type CanvasNodeData,
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
-import { isVideo as isVideoSource } from "~/lib/media-kind";
+import { isVideo as isVideoSource } from "~/lib/media/media-kind";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 
 /* ── Result preview card ──

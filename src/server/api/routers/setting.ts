@@ -14,7 +14,10 @@ import {
   stopComfyUiProcess,
 } from "~/lib/comfyui/lifecycle";
 import { classifyComfyInstall } from "~/lib/comfyui/instance-kind";
-import { decideComfyTabOpen, probeComfyEmbeddable } from "~/lib/comfy-embed";
+import {
+  decideComfyTabOpen,
+  probeComfyEmbeddable,
+} from "~/lib/comfy/comfy-embed";
 import {
   ensureDrizzleStudioUp,
   isDrizzleStudioStarting,
@@ -23,7 +26,7 @@ import {
   stopDrizzleStudio,
   DRIZZLE_STUDIO_DEFAULT_PORT,
 } from "~/lib/drizzle-studio/lifecycle";
-import { openUrlInBrowser } from "~/lib/open-in-browser";
+import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 
 export const settingRouter = createTRPCRouter({
   /** GET /api/settings */

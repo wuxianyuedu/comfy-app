@@ -21,7 +21,7 @@ import {
   registerStaleStoreDeliver,
   reportCodeUpdatedSinceLoad,
   resetStaleStoreNotify,
-} from "~/lib/stale-store-notify";
+} from "~/lib/shell/stale-store-notify";
 
 describe("IOEditStore.toggleIO", () => {
   it("顶层勾选只记身份字段（显示名由 IoRef 类型挡在外面）", () => {

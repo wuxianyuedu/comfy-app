@@ -21,7 +21,7 @@ import { cancelTask } from "~/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
-import { sizeSpecDims, toSizeSpec } from "~/lib/size-presets";
+import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
 import {
   FILM_COMPOSE_SIZE,
   NATIVE_SHOT_VIDEO_SIZE,

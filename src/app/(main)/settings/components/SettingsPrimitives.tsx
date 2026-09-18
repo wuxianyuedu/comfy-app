@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 
-import type { AnsiSegment, AnsiStyleKey } from "~/lib/log-ansi";
+import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
 import { isPreviewableUrl } from "~/lib/llm/usage-test-config";
 
 import { statusButtonClass } from "../settings-status-row-config";

@@ -29,7 +29,7 @@ import {
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "~/components/studio/shared/workflow-io";
-import { ALL_WORKFLOW_TYPES } from "~/lib/workflow-types";
+import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
 import { mergeExposedEntry } from "./workflow-editor/io-exposure";
 import type { WorkflowIOParam } from "./workflow-types";

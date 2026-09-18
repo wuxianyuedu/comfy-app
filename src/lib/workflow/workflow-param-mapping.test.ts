@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { WorkflowIOMap } from "~/lib/workflow-io-types";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -21,7 +21,7 @@ import {
   runtimeNodeId,
   serializeParamMapping,
   wiredTargetsForEntry,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 
 /** 造一个 IO 条目：默认都是可编辑 widget 输入。 */
 function pin(

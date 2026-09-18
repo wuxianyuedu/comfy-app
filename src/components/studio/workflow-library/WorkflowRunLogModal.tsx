@@ -24,11 +24,11 @@ import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
   getWorkflowRunStoreSnapshot,
   subscribeWorkflowRunStore,
-} from "~/lib/workflow-run-store";
+} from "~/lib/workflow/workflow-run-store";
 import {
   runLogSourceLabel,
   type WorkflowRunMeta,
-} from "~/lib/workflow-run-store";
+} from "~/lib/workflow/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
 

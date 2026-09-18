@@ -11,7 +11,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 
-import type { ComfyStatsPayload } from "~/lib/comfy-stats-client";
+import type { ComfyStatsPayload } from "~/lib/comfy/comfy-stats-client";
 
 import * as comfyStats from "./use-comfy-stats";
 import { useComfyReadiness } from "./use-comfy-readiness";

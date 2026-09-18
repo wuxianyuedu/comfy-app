@@ -32,7 +32,7 @@ import {
   type SizeDims,
   type SizeScene,
   type SizeSpec,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 
 /** 工坊的尺寸选择 —— 与 `SizeSpec` 同一形状（比例 + 清晰度档 + 倍数）。 */
 export type ShotSizeState = SizeSpec;

@@ -18,7 +18,7 @@ import {
   getWorkflowRunStoreSnapshot,
   subscribeWorkflowRunStore,
   type WorkflowRunSource,
-} from "~/lib/workflow-run-store";
+} from "~/lib/workflow/workflow-run-store";
 
 export interface WorkflowRunLogButtonProps {
   /** 只看当前工作流的运行记录。 */

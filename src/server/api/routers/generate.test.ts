@@ -9,7 +9,7 @@ import type * as LoggerModule from "~/lib/core/logger";
  * 故不再 mock `~/lib/comfyui/client` 的 listModels）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type * as AppRuntimeLogModule from "~/lib/app-runtime-log";
+import type * as AppRuntimeLogModule from "~/lib/log/app-runtime-log";
 /* 业务里程碑日志（`generateRuntimeLog`，模块内 `createAppRuntimeLogger("generate")`）
  * 是**真实写盘**副作用：不隔离就会往开发者/CI 的
  * `log/services/app-runtime.log` 里写字（实测 `pnpm test` 会在仓库根新建 `log/`
@@ -22,7 +22,7 @@ const runtimeLogFile = vi.hoisted(() => {
   // 不引入任何模块（目录本身由 `createAppRuntimeLogger` 按需 mkdir）。
   return `${process.env.TMPDIR ?? "/tmp"}/generate-router-log-${process.pid}-${Date.now()}/app-runtime.log`;
 });
-vi.mock("~/lib/app-runtime-log", async (importOriginal) => {
+vi.mock("~/lib/log/app-runtime-log", async (importOriginal) => {
   const actual = await importOriginal<typeof AppRuntimeLogModule>();
   return {
     ...actual,

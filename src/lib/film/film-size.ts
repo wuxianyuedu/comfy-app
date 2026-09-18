@@ -4,7 +4,7 @@
  *  倍数）；本模块只放短片特有的两个常量，前后端共用（故只依赖 size-presets，
  *  不把整个 orchestrator 拖进路由）。 */
 
-import { DEFAULT_SIZE_SPEC, type SizeSpec } from "~/lib/size-presets";
+import { DEFAULT_SIZE_SPEC, type SizeSpec } from "~/lib/media/size-presets";
 
 /** 成片画幅默认值：视频场景 16:9 1k（= 1280×720，与历史默认逐字相同）。
  *

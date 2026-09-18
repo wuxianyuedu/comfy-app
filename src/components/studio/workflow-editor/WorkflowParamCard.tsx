@@ -20,11 +20,14 @@
 import type { DOMAttributes } from "react";
 import { RotateCcw } from "lucide-react";
 
-import type { ParamEntry, ParamOutputPort } from "~/lib/workflow-param-mapping";
+import type {
+  ParamEntry,
+  ParamOutputPort,
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   PARAM_NODE_HEADER_H,
   PARAM_NODE_OUTPUT_ROW_H,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import { paramClassStyle } from "../workflow-library/workflow-param-mapping-ui";
 
 export interface WorkflowParamCardProps {

@@ -7,7 +7,7 @@
 // 更新源与签名公钥在 src-tauri/tauri.conf.json 的 plugins.updater 配置；未配置
 // 端点时 check() 返回 null（视为无更新），UI 提示「未配置更新源」。
 
-import { isDesktopShell } from "~/lib/desktop-shell-client";
+import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 一次「检测更新」的结果：是否有可用更新及其元信息。 */
 export interface AppUpdateInfo {

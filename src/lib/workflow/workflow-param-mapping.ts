@@ -32,12 +32,15 @@
  * `WorkflowLibraryCanvas`）—— 拖线即编辑落点，映射没有第二套界面。
  */
 
-import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
+import type {
+  WorkflowIOEntry,
+  WorkflowIOMap,
+} from "~/lib/workflow/workflow-io-types";
 import {
   EXPOSED_PARAM_LABEL,
   exposedParamDisplayLabel,
   exposedParamsForMode,
-} from "~/lib/workflow-exposed-params";
+} from "~/lib/workflow/workflow-exposed-params";
 import {
   alignMultipleOf,
   aspectLabelForDims,
@@ -46,7 +49,7 @@ import {
   resolutionTierOfLabel,
   sceneFromMode,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 
 /* ── 对外参数分类 ──
  * 工坊对外口的全集 + `other`（尺寸/参考图/提示词之外，作者自行勾选的对外输入，

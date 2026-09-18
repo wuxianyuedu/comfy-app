@@ -13,9 +13,12 @@ import {
   isVideoMode,
   modeUsesFirstFrame,
   modeUsesLastFrame,
-} from "~/lib/workflow-exposed-params";
-import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
-import type { SizeSpec } from "~/lib/size-presets";
+} from "~/lib/workflow/workflow-exposed-params";
+import type {
+  WorkflowIOEntry,
+  WorkflowIOMap,
+} from "~/lib/workflow/workflow-io-types";
+import type { SizeSpec } from "~/lib/media/size-presets";
 
 /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）—— 工坊下发的唯一尺寸口径。 */
 const sizeSpec = (over: Partial<SizeSpec> = {}): SizeSpec => ({

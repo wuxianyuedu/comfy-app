@@ -27,7 +27,10 @@ import {
   detectFormat,
   extractPositions,
 } from "~/lib/comfyui/raw";
-import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "~/lib/workflow-types";
+import {
+  normalizeTaskType,
+  VALID_TASK_TYPE_CODES,
+} from "~/lib/workflow/workflow-types";
 import { detectParamMap } from "~/lib/comfyui/workflow";
 
 /* ── 外部工作流 JSON 的形状契约（导入边界，规范 §5.5）──────────────────────

@@ -39,7 +39,7 @@ import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
-import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
+import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 import { probeComfyAtPort } from "./probe";
 import { collectComfyPythonCandidates } from "./env-python";
 import { logger } from "~/lib/core/logger";
