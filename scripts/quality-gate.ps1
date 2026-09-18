@@ -71,8 +71,14 @@ function Get-VitestKnownFailureArgs {
 $Blocks = @(
   @{ Name = "typecheck"; Label = "Typecheck (tsc --noEmit)"; Cmd = "pnpm";
      Args = @("typecheck"); Run = $true }
+  # --cache --cache-strategy content：与 .githooks/pre-commit 第 7 步 / quality-gate.mjs /
+  # package.json 同参数。content 不可省（默认 metadata 按 mtime+size 判定，git checkout /
+  # prettier --write 这类「重写同内容」会造成大面积失效）；实测只碰 3 个文件 mtime：
+  # metadata 3 条失效 / 87.5s → content 0 条 / 46.3s，真改 1 个文件 1 条 / 44s。
   @{ Name = "lint";      Label = "ESLint zero error / zero warning";
-     Cmd = "pnpm"; Args = @("exec","eslint",".","--max-warnings","0"); Run = $true }
+     Cmd = "pnpm"; Args = @("exec","eslint",".","--max-warnings","0",
+                            "--cache","--cache-location","node_modules/.cache/eslint",
+                            "--cache-strategy","content"); Run = $true }
   @{ Name = "format";    Label = "Prettier format ratchet (scripts/check-format.cjs)";
      Cmd = "node"; Args = @("scripts\check-format.cjs"); Run = $true }
   @{ Name = "test";      Label = "Vitest full run (excluding known baseline failures)";
