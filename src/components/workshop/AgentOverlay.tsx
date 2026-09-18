@@ -5,6 +5,9 @@
 // 渲染「对话消息区 + 工作过程面板 + 输入框」。无业务逻辑。
 import React from "react";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
+import { StatusDot } from "~/components/ui/status-dot";
 import type {
   WorkshopAgentController,
   AgentToolRun,
@@ -69,14 +72,15 @@ export function AgentOverlay({
             用对话指挥完整工坊流程
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={closeAgent}
           className="text-muted-foreground hover:text-ink"
           aria-label="关闭 Agent"
         >
           <Icon name="x" size={14} />
-        </button>
+        </Button>
       </div>
 
       {/* 工具执行状态面板（有工具跑过时显示在顶部） */}
@@ -147,14 +151,22 @@ export function AgentOverlay({
           <div className="flex justify-start">
             <div className="bg-subtle rounded-2xl px-3 py-2.5">
               <span className="inline-flex gap-1">
-                <span className="bg-muted-foreground h-1.5 w-1.5 animate-pulse rounded-full" />
-                <span
-                  className="bg-muted-foreground h-1.5 w-1.5 animate-pulse rounded-full"
-                  style={{ animationDelay: "0.15s" }}
+                <StatusDot
+                  state="probing"
+                  sizeClass="size-1.5 bg-muted-foreground"
+                  pulse
                 />
-                <span
-                  className="bg-muted-foreground h-1.5 w-1.5 animate-pulse rounded-full"
-                  style={{ animationDelay: "0.3s" }}
+                <StatusDot
+                  state="probing"
+                  sizeClass="size-1.5 bg-muted-foreground"
+                  pulse
+                  className="[animation-delay:0.15s]"
+                />
+                <StatusDot
+                  state="probing"
+                  sizeClass="size-1.5 bg-muted-foreground"
+                  pulse
+                  className="[animation-delay:0.3s]"
                 />
               </span>
             </div>
@@ -189,19 +201,20 @@ export function AgentOverlay({
           placeholder="描述你的创作想法… (Enter 发送)"
           className="border-border bg-subtle text-ink placeholder:text-muted-foreground/50 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-violet-500/40"
         />
-        <button
-          type="button"
+        <Button
+          variant="primary-solid"
+          size="icon-lg"
           onClick={() => void send()}
           disabled={!input.trim() || busy}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500 text-white transition-colors hover:bg-violet-400 disabled:opacity-30"
+          className="shrink-0 rounded-lg"
           aria-label="发送"
         >
           {busy ? (
-            <Icon name="loader" size={14} className="animate-spin" />
+            <Spinner className="size-3.5" />
           ) : (
             <Icon name="arrowup" size={14} />
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -210,14 +223,14 @@ export function AgentOverlay({
 /** 触发 Agent 浮层打开的浮动按钮。 */
 export function AgentFab({ onOpen }: { onOpen: () => void }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="primary-solid"
       onClick={onOpen}
-      className="fixed right-6 bottom-8 z-40 flex items-center gap-2 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-105"
+      className="shadow-primary-500/20 fixed right-6 bottom-8 z-40 h-auto gap-2 rounded-full px-4 py-2.5 shadow-lg transition-transform hover:scale-105"
       aria-label="打开创作指挥 Agent"
     >
       <Icon name="bot" size={15} />
       Agent
-    </button>
+    </Button>
   );
 }

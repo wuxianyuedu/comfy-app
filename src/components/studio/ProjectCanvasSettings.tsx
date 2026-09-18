@@ -17,6 +17,7 @@
 import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
 import { useDebugStore } from "./debug/debug-store";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
+import { Button } from "~/components/ui/button";
 
 /* ── 开关（内联，镜像 CanvasSettingsPanel 的 ToggleRow 观感） ── */
 function ToggleRow({
@@ -45,14 +46,14 @@ function ToggleRow({
           <span className="text-ink-muted mt-0.5 text-[10.5px]">{hint}</span>
         )}
       </span>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         role="switch"
         aria-checked={value}
         onClick={() => onChange(!value)}
-        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors ${
+        className={`relative h-5 w-9 shrink-0 rounded-full border p-0 transition-colors ${
           value
-            ? "border-violet-400/60 bg-violet-500/80"
+            ? "border-primary-500/60 bg-primary-500/80 hover:bg-primary-500/80"
             : "border-border-strong bg-subtle"
         }`}
       >
@@ -61,7 +62,7 @@ function ToggleRow({
             value ? "left-[18px]" : "left-0.5"
           }`}
         />
-      </button>
+      </Button>
     </label>
   );
 }
@@ -97,14 +98,15 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
               项目画布设置
             </span>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="icon-xs"
             onClick={onClose}
             aria-label="关闭"
-            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-1.5 py-0.5 text-[11px] transition-colors"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         {/* Body */}
@@ -145,18 +147,18 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
 /* ── 右上角齿轮按钮（位于居中工具栏右侧） ── */
 export function ProjectSettingsButton({ onClick }: { onClick: () => void }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
       onClick={onClick}
       title="项目画布设置"
       aria-label="项目画布设置"
       data-testid="project-canvas-settings-button"
-      className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-20 rounded-md border px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm transition-colors select-none hover:border-white/25"
+      className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-20 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm select-none hover:border-white/25"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12.5px]">
         ⚙
       </span>
       设置
-    </button>
+    </Button>
   );
 }

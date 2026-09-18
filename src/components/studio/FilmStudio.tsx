@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Redo2, Undo2 } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { useFilmStudio } from "./hooks/use-film-studio";
 import { AuroraGlow } from "./ui/AuroraBackground";
 import { useToast } from "./ToastProvider";
@@ -127,31 +128,34 @@ export function FilmStudio() {
         <div className="bg-surface-2 h-5 w-px" />
 
         {/* Undo / Redo */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={handleUndo}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
           title="撤销"
         >
           <Undo2 size={16} />
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={handleRedo}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
           title="重做"
         >
           <Redo2 size={16} />
-        </button>
+        </Button>
 
         {/* Spacer */}
         <div className="flex-1" />
 
         {/* Play button */}
-        <button
-          type="button"
+        <Button
+          variant="primary-solid"
+          size="icon-lg"
           onClick={handleTogglePlay}
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/85 text-white shadow-sm shadow-violet-500/20 transition-all hover:bg-violet-500 hover:shadow-violet-500/30 active:scale-95"
+          className="rounded-xl shadow-sm hover:scale-[1.03]"
           title={isPlaying ? "暂停" : "播放预览"}
         >
           {isPlaying ? (
@@ -164,29 +168,32 @@ export function FilmStudio() {
               <path d="M8 5v14l11-7z" />
             </svg>
           )}
-        </button>
+        </Button>
 
         <div className="w-3" />
 
         {/* 缩放标签 + 导出 */}
         <span className="text-ink-faintest text-[11px]">时间轴缩放</span>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => void c.create()}
           disabled={c.loading || !c.videoWorkflowId}
-          className="bg-subtle flex items-center gap-1.5 rounded-lg border border-violet-500/35 px-3.5 py-1.5 text-xs font-semibold text-violet-700 transition-all hover:border-violet-500/55 hover:bg-violet-500/8 disabled:opacity-50 dark:text-violet-400"
+          className="bg-subtle h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
         >
           {c.loading ? "启动中…" : "导出成片"}
-        </button>
+        </Button>
 
         {/* 取消按钮（运行中时） */}
         {c.film && running && (
-          <button
+          <Button
+            variant="outline"
+            size="xs"
             onClick={() => void c.cancel()}
-            className="border-border text-ink-strong hover:bg-surface-2 rounded-lg border px-3 py-1.5 text-xs transition-colors"
+            className="border-border text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
           >
             取消
-          </button>
+          </Button>
         )}
       </header>
 
@@ -204,14 +211,15 @@ export function FilmStudio() {
                 {shots.length} 镜头
               </span>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="icon-xs"
               onClick={handleAddShot}
-              className="flex h-6 w-6 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/12 text-sm text-violet-700 transition-colors hover:border-violet-500/50 hover:bg-violet-500/20 dark:text-violet-400"
+              className="rounded-md"
               title="新增镜头"
             >
               +
-            </button>
+            </Button>
           </div>
 
           {/* Shot items */}
@@ -220,13 +228,13 @@ export function FilmStudio() {
               const badge = STATUS_BADGE[shot.status];
               const isSelected = shot.id === selectedShotId;
               return (
-                <button
+                <Button
                   key={shot.id}
-                  type="button"
+                  variant="ghost"
                   onClick={() => handleSelectShot(shot.id)}
-                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all ${
+                  className={`group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all ${
                     isSelected
-                      ? "border-violet-500/40 bg-violet-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
+                      ? "border-primary-500/40 bg-primary-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
                       : "bg-card hover:border-border hover:bg-subtle border-transparent"
                   }`}
                 >
@@ -265,7 +273,7 @@ export function FilmStudio() {
                   >
                     {badge.label}
                   </span>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -281,10 +289,10 @@ export function FilmStudio() {
             </span>
 
             {/* Play overlay */}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={handleTogglePlay}
-              className="border-border-strong flex h-16 w-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
+              className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
               title={isPlaying ? "暂停" : "播放"}
             >
               {isPlaying ? (
@@ -297,7 +305,7 @@ export function FilmStudio() {
                   <path d="M8 5v14l11-7z" />
                 </svg>
               )}
-            </button>
+            </Button>
 
             {/* 影片进度覆盖层（生成中） */}
             {c.film && running && (
@@ -624,12 +632,13 @@ export function FilmStudio() {
                 {c.film.error}
                 {c.film.status === "FAILED" &&
                   c.film.shots.some((shot) => shot.status === "SUCCEEDED") && (
-                    <button
+                    <Button
+                      variant="link"
                       onClick={() => void c.recompose()}
-                      className="ml-2 underline hover:no-underline"
+                      className="ml-2 h-auto text-inherit underline hover:no-underline"
                     >
                       重新合成
-                    </button>
+                    </Button>
                   )}
               </div>
             )}

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import { Button } from "~/components/ui/button";
+import { PageLoading } from "~/components/ui/page-loading";
 import { ModelTagManager } from "../ModelTagManager";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
 import { WorkflowImportPanel } from "../WorkflowImportPanel";
@@ -29,10 +30,7 @@ const WorkflowCanvasEditor = dynamic(
         zClass="z-50"
         className="bg-bg flex items-center justify-center"
       >
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500" />
-          <p className="text-ink-faint text-sm">加载工作流编辑器…</p>
-        </div>
+        <PageLoading label="加载工作流编辑器…" />
       </FullScreenLayer>
     ),
   },

@@ -33,6 +33,7 @@ import {
   type SegmentSection,
 } from "~/components/studio/shared/MultiSegmentPopover";
 import { SizePresetTableModal } from "~/components/studio/shared/SizePresetTableModal";
+import { Button } from "~/components/ui/button";
 import { shotSizeSummary, type ShotSizeState } from "./shot-size-config";
 
 export function ShotSizePicker({
@@ -104,13 +105,14 @@ export function ShotSizePicker({
         disabled={disabled}
         footer={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="xs"
               onClick={() => setTableOpen(true)}
-              className="border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md border px-2 py-1 text-[10px] transition-colors"
+              className="border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright h-auto rounded-md px-2 py-1 text-[10px]"
             >
               尺寸表（{SIZE_SCENE_LABELS[scene]}场景）…
-            </button>
+            </Button>
             <span className="text-ink-faint text-[10px]">
               {clarityKind === "megapixel"
                 ? "总像素预算，宽高按倍数对齐"

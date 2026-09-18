@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
   MOTION_LABELS,
@@ -49,37 +50,40 @@ export function ChannelSwitch({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-xs">生成通道</span>
         <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={() => onChannelChange("local")}
-            className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+            className={`h-auto rounded-lg px-3 py-1.5 ${
               channel === "local"
                 ? "border-primary bg-primary-soft text-primary"
                 : "border-border text-muted-foreground hover:bg-subtle"
             }`}
           >
             本地 · ComfyUI 工作流
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
             onClick={() => onChannelChange("api")}
-            className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+            className={`h-auto rounded-lg px-3 py-1.5 ${
               channel === "api"
                 ? "border-primary bg-primary-soft text-primary"
                 : "border-border text-muted-foreground hover:bg-subtle"
             }`}
           >
             API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
-          </button>
+          </Button>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
         >
           <Icon name="settings" size={12} />
           API 通道设置
-        </button>
+        </Button>
         <label className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">帧率</span>
           <DarkSelect
@@ -90,8 +94,9 @@ export function ChannelSwitch({
             placeholder="帧率"
           />
         </label>
-        <button
-          type="button"
+        <Button
+          variant="primary-solid"
+          size="xs"
           onClick={onGenerateBatch}
           disabled={
             batchRunning ||
@@ -99,17 +104,18 @@ export function ChannelSwitch({
             (channel === "local" && !workflowSelected) ||
             (channel === "api" && !apiReady)
           }
-          className="bg-primary ml-auto rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+          className="ml-auto h-auto rounded-lg px-3 py-1.5"
         >
           {batchRunning ? "批量生成中…" : `批量生成视频 (${pendingCount})`}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          size="xs"
           onClick={onNextStage}
-          className="text-ink bg-subtle hover:bg-surface-2 rounded-lg px-3 py-1.5 text-xs font-medium"
+          className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
         >
           去合成 →
-        </button>
+        </Button>
       </div>
 
       {/* 通道专属的放行提示（温和，stage 仍可用） */}
@@ -278,22 +284,23 @@ export function ShotCard({
             </span>
           </div>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary-solid"
+          size="xs"
           onClick={onGenerate}
           disabled={
             clipStatus === "running" ||
             !videoPrompt(shot) ||
             (channel === "api" && !apiReady)
           }
-          className="bg-primary/90 shrink-0 rounded-lg px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+          className="h-auto shrink-0 rounded-lg px-4 py-1.5"
         >
           {clipStatus === "running"
             ? "生成中…"
             : shot.clipUrl
               ? "重新生成"
               : "生成片段"}
-        </button>
+        </Button>
       </div>
 
       {error && (

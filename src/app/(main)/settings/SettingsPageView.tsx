@@ -9,6 +9,7 @@
  */
 
 import { SettingsShell } from "~/components/settings/SettingsShell";
+import { Button } from "~/components/ui/button";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
 import { AppearanceSection } from "./components/AppearanceSection";
@@ -46,8 +47,8 @@ export function SettingsPageView({
         <div
           className={`mb-4 rounded-lg border px-4 py-2 text-sm ${
             c.flash.kind === "ok"
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+              ? "border-success/30 bg-success/10 text-success-strong"
+              : "border-destructive/30 bg-destructive/10 text-danger-strong"
           }`}
         >
           {c.flash.text}
@@ -58,18 +59,19 @@ export function SettingsPageView({
           整页错误视图只留给「连兜底都没有」的场景——应用服务刚重启时把整个
           设置页换成错误页，对用户没有任何好处（ISSUE #360）。 */}
       {c.serveState && (
-        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-700 dark:text-amber-300">
+        <div className="border-warning/30 bg-warning/10 text-warning-strong mb-4 flex items-start gap-3 rounded-lg border px-4 py-2 text-sm">
           <span className="min-w-0 flex-1 break-words">
             本次未能读取最新配置，界面显示的是上一次成功读取的内容：
             {c.serveState.errorText}
           </span>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={c.retry}
-            className="shrink-0 rounded border border-amber-500/40 px-2 py-0.5 text-xs transition-colors hover:bg-amber-500/15"
+            className="border-warning/40 hover:bg-warning/15 h-auto shrink-0 rounded px-2 py-0.5 text-xs"
           >
             重新读取
-          </button>
+          </Button>
         </div>
       )}
 

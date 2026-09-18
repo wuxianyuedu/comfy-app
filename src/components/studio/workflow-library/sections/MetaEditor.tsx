@@ -64,10 +64,11 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        variant="outline"
+        size="xs"
         onClick={() => setOpen((value) => !value)}
-        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex max-w-[260px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
+        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex h-auto max-w-[260px] gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px]"
         title={`${label}（点击管理模型标签绑定）`}
       >
         <span className="truncate">{label}</span>
@@ -76,7 +77,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
         >
           ▾
         </span>
-      </button>
+      </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
@@ -100,14 +101,15 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
             {options.map((name) => {
               const selected = draft.has(name);
               return (
-                <button
+                <Button
                   key={name}
-                  type="button"
+                  variant="ghost"
+                  size="xs"
                   onClick={() => toggle(name)}
-                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                  className={`flex h-auto items-center gap-2 rounded-md px-2 py-1.5 text-left ${
                     selected
-                      ? "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300"
-                      : "text-ink-strong hover:bg-subtle"
+                      ? "bg-primary/15 text-primary-strong hover:bg-primary/20"
+                      : "text-ink-strong hover:bg-subtle font-normal"
                   }`}
                 >
                   <span
@@ -120,7 +122,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                     {selected && "✓"}
                   </span>
                   <span className="truncate">{name}</span>
-                </button>
+                </Button>
               );
             })}
           </div>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "./ui/MediaThumbnail";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import {
   fetchVideoTasks,
   submitGeneration,
@@ -155,48 +156,51 @@ export function VideoQueueModal({
                 {runningCount} 个进行中
               </span>
             )}
-            <button
-              type="button"
+            <Button
+              variant="link"
               onClick={loadTasks}
-              className="text-ink-muted text-[11px] transition-colors hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-300"
+              className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
               title="刷新"
             >
               ↻ 刷新
-            </button>
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <div className="bg-subtle flex rounded-lg p-0.5">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setTab("queue")}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`h-auto rounded-md px-3 py-1.5 ${
                   tab === "queue"
-                    ? "bg-surface-2 text-ink-bright"
+                    ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
                     : "text-ink-muted hover:text-ink-soft"
                 }`}
               >
                 生成队列
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setTab("draft")}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`h-auto rounded-md px-3 py-1.5 ${
                   tab === "draft"
-                    ? "bg-surface-2 text-ink-bright"
+                    ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
                     : "text-ink-muted hover:text-ink-soft"
                 }`}
               >
                 批量提交（{draft.length}）
-              </button>
+              </Button>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={onClose}
               className="text-ink-muted hover:text-ink-soft"
               aria-label="关闭"
             >
               <X size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -266,13 +270,14 @@ export function VideoQueueModal({
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
-                        <button
-                          type="button"
+                        <Button
+                          variant="outline"
+                          size="xs"
                           onClick={() => onOpenTask?.(task.id)}
-                          className="border-border-strong text-ink-soft hover:bg-subtle rounded-md border px-2.5 py-1 text-[11px] transition-colors"
+                          className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-md px-2.5 py-1"
                         >
                           详情
-                        </button>
+                        </Button>
                         {task.video && (
                           <a
                             href={task.video}
@@ -323,28 +328,30 @@ export function VideoQueueModal({
                       placeholder="分镜提示词，含镜头运动描述…"
                       className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter outline-noneray-600 min-w-0 flex-1 resize-none rounded-lg border px-3 py-2 text-xs focus:border-violet-500/40"
                     />
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() =>
                         setDraft((arr) => arr.filter((_, j) => j !== index))
                       }
-                      className="text-ink-muted mt-1 transition-colors hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                      className="text-ink-muted hover:text-danger-strong mt-1"
                       aria-label="删除"
                     >
                       <Trash size={14} />
-                    </button>
+                    </Button>
                   </div>
                 ))
               )}
 
               <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="xs"
                   onClick={() => setDraft((arr) => [...arr, { prompt: "" }])}
-                  className="border-border-strong text-ink-soft rounded-lg border border-dashed px-3 py-1.5 text-xs transition-colors hover:border-violet-500/30 hover:text-violet-700 dark:text-violet-300"
+                  className="border-border-strong text-ink-soft hover:border-primary/30 hover:text-primary h-auto rounded-lg border-dashed px-3 py-1.5"
                 >
                   ＋ 添加一行
-                </button>
+                </Button>
                 <input
                   type="file"
                   accept=".txt,.csv"
@@ -387,19 +394,19 @@ export function VideoQueueModal({
             <span className="text-ink-muted text-[11px]">
               提交后将进入「生成队列」并实时刷新
             </span>
-            <button
-              type="button"
+            <Button
+              variant="primary-solid"
               onClick={submitDrafts}
               disabled={
                 submitting ||
                 draft.filter((draft) => draft.prompt.trim()).length === 0
               }
-              className="rounded-lg bg-violet-500 px-5 py-2 text-xs font-medium text-white transition-opacity hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-30"
+              className="h-auto rounded-lg px-5 py-2"
             >
               {submitting
                 ? "提交中…"
                 : `开始生成（${draft.filter((draft) => draft.prompt.trim()).length}）`}
-            </button>
+            </Button>
           </div>
         )}
       </div>

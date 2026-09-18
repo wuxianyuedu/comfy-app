@@ -6,6 +6,7 @@
  */
 import { useEffect } from "react";
 import { Trash2 } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 interface DeleteWorkflowModalProps {
@@ -74,22 +75,22 @@ export function DeleteWorkflowModal({
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={onCancel}
             disabled={deleting}
-            className="border-border-strong text-ink-soft hover:bg-subtle rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
           >
             取消
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="danger-solid"
             onClick={() => onConfirm(pendingDelete.id)}
             disabled={deleting}
-            className="rounded-lg bg-red-500/90 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+            className="h-auto rounded-lg px-3 py-1.5"
           >
             {deleting ? "删除中…" : "确认删除"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

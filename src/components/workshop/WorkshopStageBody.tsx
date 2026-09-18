@@ -9,6 +9,7 @@
 
 import React from "react";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
 import { markdownToHtml } from "~/lib/comfyui/markdown";
 import type { WorkshopPipelineController } from "~/components/workshop/hooks/use-workshop-pipeline";
@@ -57,7 +58,7 @@ const LazyFinalComposer = React.lazy(() =>
 /** 懒加载占位：保留版面高度，避免 stage 切换瞬间塌陷。 */
 function StageFallback() {
   return (
-    <div className="border-border bg-surface min-h-[260px] animate-pulse rounded-2xl border p-5" />
+    <Skeleton className="border-border bg-surface min-h-[260px] rounded-2xl border p-5" />
   );
 }
 

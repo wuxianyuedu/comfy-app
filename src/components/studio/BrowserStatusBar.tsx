@@ -10,6 +10,8 @@ import { useComfyReadiness } from "./hooks/use-comfy-readiness";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
 import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
+import { StatusDot } from "~/components/ui/status-dot";
+import { Button } from "~/components/ui/button";
 
 /* ── Tauri 窗口底部状态栏 ─────────────────────────
    显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。
@@ -181,13 +183,13 @@ export function BrowserStatusBar() {
         {/* 消息中心：系统级提示（本地更新需重启等）的收件箱，未读有数量，点开全屏查看 */}
         <MessageCenterButton />
 
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={toggleOpen}
           title={`日志面板 (${isOpen ? "开" : "关"}) — Ctrl+Shift+L`}
-          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+          className={`flex h-auto gap-1 rounded px-1.5 py-0.5 text-[11px] ${
             isOpen
-              ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
+              ? "bg-primary/20 text-primary-strong hover:bg-primary/25"
               : "text-ink-muted hover:bg-subtle hover:text-ink"
           }`}
         >
@@ -197,7 +199,7 @@ export function BrowserStatusBar() {
               {counts.error}
             </span>
           )}
-        </button>
+        </Button>
 
         {/* 应用服务（dev server）状态：这一格回答「应用服务此刻能不能应答」，
          *  与 ComfyUI 是否运行无关（判据见 ~/lib/dev-server-status）。
@@ -215,14 +217,25 @@ export function BrowserStatusBar() {
           aria-label={devServer.label}
           data-dev-server={devServer.state}
         >
-          <span
-            className={`inline-block h-1.5 w-1.5 rounded-full ${
+          <StatusDot
+            state={
               devServer.state === "online"
-                ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                ? "up"
                 : devServer.state === "starting"
-                  ? "bg-ink-fainter animate-pulse"
-                  : "bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)]"
-            }`}
+                  ? "busy"
+                  : "down"
+            }
+            sizeClass="size-1.5"
+            pulse={devServer.state === "starting"}
+            /* 这格是状态栏里的**实时状态灯**：与设置页的状态行不同，它沿用
+               原来的发光描边，好在深色状态栏上仍然显眼。 */
+            className={
+              devServer.state === "online"
+                ? "shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                : devServer.state === "starting"
+                  ? "bg-ink-fainter"
+                  : "shadow-[0_0_6px_rgba(251,113,133,0.8)]"
+            }
           />
           <span className="hidden sm:inline">{devServer.label}</span>
           {devServer.lastRestartAt !== null && devServer.state === "online" && (

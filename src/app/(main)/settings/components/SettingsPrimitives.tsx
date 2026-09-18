@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
 import { isPreviewableUrl } from "~/lib/llm/usage-test-config";
+import { Button } from "~/components/ui/button";
 
 import { statusButtonClass } from "../settings-status-row-config";
 
@@ -113,27 +114,44 @@ export function Field({
   );
 }
 
-export function Btn({
+/**
+ * 状态行主按钮 —— `ui/button` 的基元 + 本页的排布契约（ISSUE #672 P1）。
+ *
+ * 这里此前是第二个 `<button>` 实现（自拼尺寸类 + 自拼配色）。现在底子是
+ * `ui/button`：配色由 `variant`（`primary-solid` 等语义变体）决定，本模块只
+ * 负责把状态行的**排布契约**（`statusButtonClass`：不许换行 / 不许被 flex 压
+ * 扁 / 行框归位，见 ISSUE #423）叠上去。
+ *
+ * 三条覆盖类与工作流编辑器顶栏同一口径（规范 §16.2.4.2 第 3、4 条）：
+ *   · `h-auto px-4 py-2` —— 高度与横向内边距归还给本页（基元 `h-8 px-2.5`）；
+ *   · `font-semibold`     —— 状态行动作的权重比基元默认高一档；
+ *   · `rounded-lg`        —— 与状态行外框同一档圆角。
+ * `cn()` 走 tailwind-merge，同一属性后面的类赢，因此覆盖串必须排在最后。
+ */
+export function StatusButton({
   onClick,
   disabled,
   children,
   className,
+  variant = "primary-solid",
 }: {
   onClick: () => void;
   disabled?: boolean;
   children: React.ReactNode;
   className?: string;
+  variant?: React.ComponentProps<typeof Button>["variant"];
 }) {
   return (
-    <button
+    <Button
+      variant={variant}
       onClick={onClick}
       disabled={disabled}
       className={statusButtonClass(
-        `bg-primary hover:bg-primary-hover text-white disabled:opacity-50 ${className ?? ""}`,
+        `h-auto rounded-lg px-4 py-2 font-semibold ${className ?? ""}`,
       )}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

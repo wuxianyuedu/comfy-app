@@ -11,6 +11,7 @@ import {
   type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
 import { ModalDialog } from "~/components/studio/ui/ModalDialog";
+import { Button } from "~/components/ui/button";
 
 /**
  * 项目页面（"所有项目"标签）— 仅展示本地画布项目。
@@ -98,19 +99,20 @@ export function WorksGallery({
             </p>
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="outline"
               onClick={refreshCanvasProjects}
-              className="border-border text-ink-faint hover:text-ink-bright rounded-lg border px-3 py-2 text-xs"
+              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-2"
             >
               ↻ 刷新
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary-solid"
               onClick={() => onOpenTask?.("new")}
-              className="rounded-lg bg-violet-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500"
+              className="h-auto rounded-lg px-4 py-2"
             >
               新建创作
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -137,10 +139,10 @@ export function WorksGallery({
                     key={canvasProject.id}
                     className="group border-border-subtle bg-card relative rounded-2xl border transition-all hover:border-cyan-400/25 hover:bg-cyan-400/4"
                   >
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
                       onClick={() => onOpenCanvasProject?.(canvasProject.id)}
-                      className="canvasProject-3.5 flex w-full items-start gap-3 rounded-2xl text-left"
+                      className="canvasProject-3.5 flex h-auto w-full items-start gap-3 rounded-2xl text-left font-normal"
                     >
                       <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/12 text-cyan-700 dark:text-cyan-400">
                         <svg
@@ -171,22 +173,24 @@ export function WorksGallery({
                           {projectTimeAgo(canvasProject.updatedAt)}
                         </p>
                       </div>
-                    </button>
+                    </Button>
                     {/* 逐卡片删除：仅悬停显示，右上角。
                        阻断冒泡，好让父级卡片打开按钮
                        不触发。 */}
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="xs"
+
                       aria-label={`删除项目「${canvasProject.name || "未命名"}」`}
                       onClick={(event) => {
                         event.stopPropagation();
                         setConfirmDeleteId(canvasProject.id);
                       }}
-                      className="text-ink-muted absolute top-2 right-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-700 focus-visible:opacity-100 dark:text-red-300"
+                      className="text-ink-muted hover:bg-danger/15 hover:text-danger-strong absolute top-2 right-2 h-auto gap-1 rounded-md px-1.5 py-1 text-[11px] opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                     >
                       <Trash2 size={12} />
                       <span>删除</span>
-                    </button>
+                    </Button>
                   </div>
                 );
               })}

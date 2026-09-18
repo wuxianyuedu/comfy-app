@@ -41,6 +41,7 @@ import {
   toggleMaximizeWindow,
 } from "~/lib/shell/window-controls-client";
 import { useStartupForeground } from "./hooks/use-startup-foreground";
+import { Button } from "~/components/ui/button";
 
 interface TitleBarTabsProps {
   tabs: ShellTab[];
@@ -82,18 +83,19 @@ function TitleBarTab({
     >
       <span className="truncate">{tab.label}</span>
       {tab.closable && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           aria-label={`关闭 ${tab.label}`}
           data-no-drag
           onClick={(e) => {
             e.stopPropagation();
             onClose(tab.id);
           }}
-          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded p-0.5"
+          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded"
         >
           <X size={13} />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -121,20 +123,20 @@ function WindowButton({
       <X size={15} />
     );
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       aria-label={label}
       title={label}
       data-no-drag
       onClick={onClick}
-      className={`text-ink-soft flex h-full w-11 items-center justify-center transition-colors ${
+      className={`text-ink-soft h-full w-11 rounded-none ${
         danger
-          ? "hover:bg-red-500 hover:text-white"
+          ? "hover:bg-destructive hover:text-primary-foreground"
           : "hover:bg-subtle hover:text-ink-bright"
       }`}
     >
       {icon}
-    </button>
+    </Button>
   );
 }
 

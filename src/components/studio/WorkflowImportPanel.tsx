@@ -10,6 +10,7 @@ import { useRef } from "react";
 
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
+import { Button } from "~/components/ui/button";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;
@@ -68,14 +69,15 @@ export function WorkflowImportPanel({
         <h2 className="text-ink-bright text-sm font-semibold">
           导入 ComfyUI 工作流
         </h2>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={onClose}
-          className="text-ink-muted hover:text-ink-soft transition-colors"
+          className="text-ink-muted hover:text-ink-soft"
           title="关闭"
         >
           ✕
-        </button>
+        </Button>
       </div>
 
       {panelDragActive && (
@@ -132,15 +134,16 @@ export function WorkflowImportPanel({
         </div>
         <div className="flex items-end">
           <span className="group text-ink-muted relative inline-flex items-center gap-1.5 text-xs">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="icon-xs"
               onClick={() => setShowHelpTip((value) => !value)}
               aria-label="导入格式说明"
               aria-expanded={showHelpTip}
-              className="border-border-strong bg-subtle text-ink-soft flex h-5 w-5 items-center justify-center rounded-full border text-[11px] transition-colors hover:border-violet-400/40 hover:text-violet-700 dark:hover:text-violet-200"
+              className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary size-5 rounded-full text-[11px]"
             >
               ?
-            </button>
+            </Button>
             <span
               className={`border-border-strong bg-panel text-ink-soft absolute bottom-full left-0 mb-2 w-64 rounded-lg border p-2.5 text-xs leading-relaxed shadow-xl transition-opacity ${
                 showHelpTip
@@ -159,13 +162,14 @@ export function WorkflowImportPanel({
           把 ComfyUI 导出的 <code className="font-mono">.json</code>{" "}
           拖到面板任意位置，或
         </span>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="xs"
           onClick={() => fileInputRef.current?.click()}
-          className="border-border-strong bg-subtle text-ink-soft rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-violet-400/40 hover:text-violet-700 dark:hover:text-violet-200"
+          className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary h-auto rounded-lg px-3 py-1.5"
         >
           选择文件…
-        </button>
+        </Button>
         <input
           ref={fileInputRef}
           type="file"
@@ -213,21 +217,21 @@ export function WorkflowImportPanel({
         </div>
       )}
       <div className="mt-3 flex justify-end gap-2">
-        <button
-          type="button"
+        <Button
+          variant="outline"
           onClick={onClose}
-          className="border-border-strong text-ink-soft hover:bg-subtle rounded-lg border px-4 py-2 text-sm transition-colors"
+          className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-lg px-4 py-2"
         >
           取消
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary-solid"
           onClick={onImport}
           disabled={importing}
-          className="rounded-lg bg-violet-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+          className="h-auto rounded-lg px-4 py-2"
         >
           {importing ? "导入中…" : "确认导入"}
-        </button>
+        </Button>
       </div>
     </div>
   );

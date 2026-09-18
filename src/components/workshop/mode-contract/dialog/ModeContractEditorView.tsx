@@ -18,6 +18,7 @@ import {
   isModeContractCustomized,
 } from "../mode-contract-config";
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
+import { Button } from "~/components/ui/button";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
 function LabelWithId({ label, id }: { label: string; id: string }) {
@@ -50,14 +51,15 @@ export function ModeContractEditorView({
             契约是模式级的全局口径，与具体接口无关（接口字段映射在「模型适配」里配）。
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={controller.onClose}
           aria-label="关闭"
           className="text-muted-foreground hover:text-ink"
         >
           ✕
-        </button>
+        </Button>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-5 pb-4">
@@ -77,13 +79,14 @@ export function ModeContractEditorView({
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {modes.map((t) => (
-                    <button
+                    <Button
                       key={t.code}
-                      type="button"
+                      variant="outline"
+                      size="xs"
                       onClick={() => controller.selectMode(t.code)}
-                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                      className={`h-auto rounded-full px-3 py-1 ${
                         mode === t.code
-                          ? "border-primary bg-primary/10 text-primary"
+                          ? "border-primary text-primary bg-primary/10"
                           : "border-border text-muted-foreground hover:bg-subtle"
                       }`}
                     >
@@ -96,7 +99,7 @@ export function ModeContractEditorView({
                           已改
                         </span>
                       )}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -158,43 +161,46 @@ export function ModeContractEditorView({
                       />
                       必备
                     </label>
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={() => controller.removeInput(input)}
-                      className="text-muted-foreground/60 px-1 text-xs hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                      className="text-muted-foreground/60 hover:text-danger-strong"
                       aria-label={`移除 ${modeContractInputIdLabel(input)}`}
                     >
                       ✕
-                    </button>
+                    </Button>
                   </span>
                 </div>
               ))}
             </div>
             <div className="flex flex-wrap gap-1">
               {addableContractInputs(draft.inputs).map((type) => (
-                <button
+                <Button
                   key={type}
-                  type="button"
+                  variant="outline"
+                  size="xs"
                   onClick={() => controller.appendInput(type)}
-                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 rounded border border-dashed px-2 py-0.5 text-[11px]"
+                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 h-auto rounded border-dashed px-2 py-0.5"
                 >
                   ＋{" "}
                   <LabelWithId label={modeContractInputLabel(type)} id={type} />
-                </button>
+                </Button>
               ))}
               {nextReferenceImageId && (
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="xs"
                   title="参考图不设数量上限，可继续追加"
                   onClick={() => controller.appendInput(nextReferenceImageId)}
-                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 rounded border border-dashed px-2 py-0.5 text-[11px]"
+                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 h-auto rounded border-dashed px-2 py-0.5"
                 >
                   ＋{" "}
                   <LabelWithId
                     label={modeContractInputLabel("reference-image")}
                     id={nextReferenceImageId}
                   />
-                </button>
+                </Button>
               )}
             </div>
             <div>
@@ -230,14 +236,15 @@ export function ModeContractEditorView({
                 已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
               </p>
             )}
-            <button
-              type="button"
+            <Button
+              variant="primary-solid"
+              size="xs"
               onClick={() => void controller.save()}
               disabled={saving}
-              className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+              className="h-auto rounded-lg px-3 py-1.5"
             >
               {saving ? "保存中…" : "保存模式契约"}
-            </button>
+            </Button>
           </div>
         )}
       </div>

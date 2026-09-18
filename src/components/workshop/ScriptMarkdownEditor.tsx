@@ -15,6 +15,7 @@ import {
   EditorBody,
 } from "./ScriptMarkdownEditor.parts";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
+import { Button } from "~/components/ui/button";
 
 interface ScriptMarkdownEditorProps {
   title?: string;
@@ -287,13 +288,15 @@ export function ScriptMarkdownEditor({
           </span>
           <h2 className="text-ink-bright text-[15px] font-semibold">{title}</h2>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onCancel}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-bright grid h-8 w-8 place-items-center rounded-lg transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
           aria-label="关闭"
         >
           <X size={18} />
-        </button>
+        </Button>
       </header>
 
       {/* Toolbar */}
@@ -338,18 +341,22 @@ export function ScriptMarkdownEditor({
           {value.split("\n").filter((line) => line.trim()).length} 行 ·{" "}
           {value.trim().length} 字符
         </span>
-        <button
+        <Button
+          variant="outline"
+          size="xs"
           onClick={onCancel}
-          className="border-border text-ink-strong hover:bg-subtle rounded-lg border bg-transparent px-5 py-2 text-xs font-medium transition-colors"
+          className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-5 py-2"
         >
           取消
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="primary-solid"
+          size="xs"
           onClick={onSave}
-          className="btn-gradient rounded-lg px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-900/20"
+          className="shadow-primary-500/20 h-auto rounded-lg px-5 py-2 shadow-lg"
         >
           保存
-        </button>
+        </Button>
       </footer>
     </FullScreenLayer>
   );

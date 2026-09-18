@@ -1,5 +1,6 @@
 import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
 import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
+import { Button } from "~/components/ui/button";
 
 import type { TaskItem } from "./history-types";
 import { STATUS_STYLE, timeAgo } from "./history-utils";
@@ -56,9 +57,10 @@ export function HistoryTaskCard({
 
       <div className="flex items-center gap-4">
         {/* ── 缩略图 ── */}
-        <button
+        <Button
+          variant="ghost"
           onClick={() => onOpenDetail(task.id)}
-          className="bg-panel-deep relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl"
+          className="bg-panel-deep relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl p-0"
           aria-label="查看任务详情"
         >
           {task.cover ? (
@@ -87,7 +89,7 @@ export function HistoryTaskCard({
           {task.status === "QUEUED" && (
             <div className="pointer-events-none absolute inset-0 rounded-xl border border-dashed border-cyan-500/40" />
           )}
-        </button>
+        </Button>
 
         {/* ── 主体信息 ── */}
         <div
@@ -146,28 +148,34 @@ export function HistoryTaskCard({
         <div className="flex shrink-0 flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             {st.isActive && (
-              <button
+              <Button
+                variant="warning"
+                size="xs"
                 onClick={() => onCancel(task.id)}
-                className="rounded-lg border border-amber-500/30 px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+                className="h-auto rounded-lg px-2.5 py-1"
               >
                 取消
-              </button>
+              </Button>
             )}
             {task.status === "FAILED" && (
-              <button
+              <Button
+                variant="primary"
+                size="xs"
                 onClick={() => onRetry(task)}
                 disabled={retrying}
-                className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-xs text-violet-700 hover:bg-violet-500/20 disabled:opacity-50 dark:text-violet-300"
+                className="h-auto rounded-lg px-2.5 py-1"
               >
                 {retrying ? "提交中…" : "↻ 重试"}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant="danger"
+              size="xs"
               onClick={() => onRemove(task.id)}
-              className="rounded-lg border border-red-500/30 px-2.5 py-1 text-xs text-red-700 hover:bg-red-500/10 dark:text-red-300"
+              className="h-auto rounded-lg px-2.5 py-1"
             >
               删除
-            </button>
+            </Button>
           </div>
         </div>
       </div>

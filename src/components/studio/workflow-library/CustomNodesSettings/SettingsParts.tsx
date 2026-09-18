@@ -6,6 +6,7 @@
 
 import type { RefObject } from "react";
 import { STATUS_STYLE } from "./constants";
+import { StatusDot } from "~/components/ui/status-dot";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
 
 /** 类型端口区的一行 —— 小彩点 + 大写类型章
@@ -154,7 +155,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
       {/* 顶行：当前阶段 + 包计数（用户最关心的）。.py 文件数
           已去掉 —— 用户明说它没用。 */}
       <div className="flex items-center gap-2">
-        <span className="bg-primary inline-block h-2 w-2 animate-pulse rounded-full" />
+        <StatusDot state="busy" sizeClass="size-2" pulse />
         {progress.phase === "hash" && progress.total > 0 ? (
           <span className="text-ink">
             🔎 正在处理{" "}
@@ -239,7 +240,7 @@ export function ParseConsole({
         </span>
         {parsing && (
           <span className="text-primary flex items-center gap-1.5 text-xs">
-            <span className="bg-primary inline-block h-2 w-2 animate-pulse rounded-full" />
+            <StatusDot state="busy" sizeClass="size-2" pulse />
             解析中…
           </span>
         )}

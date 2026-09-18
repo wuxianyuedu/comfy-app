@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
   MOTION_LABELS,
@@ -190,14 +191,14 @@ export function FinalComposer({
         </span>
         <div className="ml-auto flex gap-2">
           {!playing ? (
-            <button
-              type="button"
+            <Button
+              variant="primary-solid"
               onClick={startPlayback}
               disabled={
                 clipsDone === 0 &&
                 timeline.every((entry) => !entry.shot.imageUrl)
               }
-              className="bg-primary rounded-xl px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
+              className="h-auto rounded-xl px-4 py-2 font-semibold"
             >
               <Icon
                 name="play"
@@ -205,23 +206,23 @@ export function FinalComposer({
                 className="mr-1 inline align-[-2px]"
               />
               串播预览
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={stopPlayback}
-              className="text-ink bg-subtle hover:bg-surface-2 rounded-xl px-4 py-2 text-xs font-semibold"
+              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-4 py-2 font-semibold"
             >
               停止
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
+          <Button
+            variant="primary-solid"
             onClick={exportPlan}
-            className="btn-gradient rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-purple-900/20"
+            className="shadow-primary-500/20 h-auto rounded-xl px-4 py-2 font-semibold shadow-lg"
           >
             导出合成清单
-          </button>
+          </Button>
         </div>
       </div>
 

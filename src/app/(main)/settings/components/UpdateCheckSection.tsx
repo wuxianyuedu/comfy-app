@@ -10,10 +10,12 @@
  * 视图自持的仅「本次手动检测的提示文案」这一个交互态，其余读 store。
  */
 
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 
 import { useUpdateCheckStore } from "~/components/update-check/update-check-store";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 
 import { Card } from "./SettingsPrimitives";
 
@@ -61,19 +63,19 @@ export function UpdateCheckSection() {
         </label>
       </div>
       <div className="border-border bg-surface-1 mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
-        <button
-          type="button"
+        <Button
+          variant="link"
           onClick={() => void handleManualCheck()}
-          className="text-primary hover:text-primary-hover inline-flex items-center gap-1.5 font-medium disabled:opacity-50"
+          className="text-primary h-auto items-center gap-1.5 p-0 font-medium"
           disabled={checking}
         >
           {checking ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Spinner className="size-3.5" />
           ) : (
             <ArrowLeft size={14} className="rotate-90" />
           )}
           立即检测本地更新
-        </button>
+        </Button>
         <span className="text-muted-foreground text-xs">
           {manualStatus ??
             (dirty ? "存在需重启的改动" : "未检测到需重启的改动")}

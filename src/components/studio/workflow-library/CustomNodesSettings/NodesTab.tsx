@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 import { ROW_STATE_PRESET } from "./constants";
 import { NodePreviewCard } from "./NodePreviewCard";
 import { ManifestSummary, ParseProgressBanner } from "./SettingsParts";
@@ -90,7 +91,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             )}
             {!saveErr && loading && (
               <span className="text-muted-foreground flex items-center gap-1.5">
-                <span className="border-muted inline-block h-2 w-2 animate-spin rounded-full border border-t-transparent" />
+                <Spinner className="size-3" />
                 加载中…
               </span>
             )}

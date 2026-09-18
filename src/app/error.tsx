@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 
 export default function Error({
   error,
@@ -28,12 +29,13 @@ export default function Error({
         </p>
       </div>
       <div className="flex gap-3">
-        <button
+        <Button
+          variant="primary-solid"
           onClick={reset}
-          className="bg-primary hover:bg-primary-hover rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+          className="h-auto rounded-xl px-5 py-2.5"
         >
           重试
-        </button>
+        </Button>
         <Link
           href="/"
           className="border-border bg-surface hover:bg-subtle rounded-xl border px-5 py-2.5 text-sm font-semibold transition-colors"

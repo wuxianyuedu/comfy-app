@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotNegative,
@@ -223,37 +224,40 @@ export function ShotStudio({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-xs">生成通道</span>
         <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={() => setChannel("local")}
-            className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+            className={`h-auto rounded-lg px-3 py-1.5 ${
               channel === "local"
                 ? "border-primary bg-primary-soft text-primary"
                 : "border-border text-muted-foreground hover:bg-subtle"
             }`}
           >
             本地 · ComfyUI 工作流
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
             onClick={() => setChannel("api")}
-            className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+            className={`h-auto rounded-lg px-3 py-1.5 ${
               channel === "api"
                 ? "border-primary bg-primary-soft text-primary"
                 : "border-border text-muted-foreground hover:bg-subtle"
             }`}
           >
             API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
-          </button>
+          </Button>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={onOpenApiSettings}
-          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
         >
           <Icon name="settings" size={12} />
           API 通道设置
-        </button>
+        </Button>
         {/* 不用 <label> 包住选择器：它内部会挂尺寸表配置弹窗，弹窗里的输入框
             会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
         <div className="flex items-center gap-2 text-xs">
@@ -264,8 +268,9 @@ export function ShotStudio({
             disabled={batchRunning}
           />
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary-solid"
+          size="xs"
           onClick={() => void generateBatch()}
           disabled={
             batchRunning ||
@@ -273,17 +278,18 @@ export function ShotStudio({
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
-          className="bg-primary ml-auto rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+          className="ml-auto h-auto rounded-lg px-3 py-1.5"
         >
           {batchRunning ? "批量生成中…" : `批量生图 (${pending.length})`}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          size="xs"
           onClick={onNextStage}
-          className="text-ink bg-subtle hover:bg-surface-2 rounded-lg px-3 py-1.5 text-xs font-medium"
+          className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
         >
           下一阶段 →
-        </button>
+        </Button>
       </div>
 
       {/* 通道专属的放行提示（温和，stage 仍可用） */}
@@ -360,8 +366,9 @@ export function ShotStudio({
                 )}
 
                 <div className="mt-2 flex items-center gap-3">
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary-solid"
+                    size="xs"
                     onClick={() => void generateShot(shot)}
                     disabled={
                       shot.status === "running" ||
@@ -369,14 +376,14 @@ export function ShotStudio({
                       (channel === "local" && !workflowId) ||
                       (channel === "api" && !apiReady)
                     }
-                    className="bg-primary/90 rounded-lg px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                    className="h-auto rounded-lg px-4 py-1.5"
                   >
                     {shot.status === "running"
                       ? "生成中…"
                       : shot.imageUrl
                         ? "重新生成"
                         : "生成此镜头"}
-                  </button>
+                  </Button>
                   {shot.taskId && (
                     <span className="text-faint truncate text-[10px]">
                       任务 {shot.taskId.slice(0, 12)}…

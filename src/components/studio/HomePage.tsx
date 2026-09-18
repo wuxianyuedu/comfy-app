@@ -12,6 +12,7 @@ import {
   Search,
   Video,
 } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import { AuroraGlow } from "./ui/AuroraBackground";
 import { useToast } from "./ToastProvider";
 import { type WorkspaceView } from "./NavItems";
@@ -141,24 +142,25 @@ export function HomePage({
           {/* Right side */}
           <div className="flex items-center gap-4">
             {/* Notification bell */}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-lg"
               onClick={() => toast.info("通知", "暂无新消息")}
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
+              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
               aria-label="通知"
             >
               <Bell size={18} strokeWidth={1.8} />
-            </button>
+            </Button>
 
             {/* User avatar */}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => toast.info("账户", "点击头像可管理账号设置")}
-              className="hover:bg-subtle flex items-center gap-2 rounded-lg px-1 py-0.5 transition-colors"
+              className="hover:bg-subtle h-auto gap-2 rounded-lg px-1 py-0.5"
               title="账户"
             >
               <div className="u-avatar h-8 w-8 overflow-hidden rounded-full" />
-            </button>
+            </Button>
           </div>
         </header>
 
@@ -216,11 +218,11 @@ export function HomePage({
                   ),
                 },
               ].map((card) => (
-                <button
+                <Button
                   key={card.id}
-                  type="button"
+                  variant="ghost"
                   onClick={() => onNavigate?.(card.id as WorkspaceView)}
-                  className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex flex-col items-start gap-2.5 rounded-2xl border p-4 text-left transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
+                  className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-800 transition-colors group-hover:bg-violet-500/15 dark:text-violet-300">
                     {card.icon}
@@ -231,7 +233,7 @@ export function HomePage({
                     </p>
                     <p className="text-ink-muted mt-0.5 text-xs">{card.desc}</p>
                   </div>
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -241,21 +243,22 @@ export function HomePage({
                 <h2 className="text-ink-field text-[17px] font-semibold">
                   最近项目
                 </h2>
-                <button
-                  type="button"
+                <Button
+                  variant="link"
                   onClick={() => onShowAllProjects?.()}
-                  className="text-ink-faint hover:text-ink-strong text-xs transition-colors"
+                  className="text-ink-faint hover:text-ink-strong h-auto p-0 text-xs"
                 >
                   查看全部 →
-                </button>
+                </Button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 {/* 新建项目卡片 —— 画布风入口 */}
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+
                   onClick={onNewProject}
-                  className="group border-border bg-surface-1 flex flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed py-7 transition-all hover:border-cyan-400/40 hover:bg-cyan-400/5 active:scale-[0.98]"
+                  className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed py-7 font-normal active:scale-[0.98]"
                 >
                   <div className="flex h-[28px] w-[28px] items-center justify-center rounded-xl text-cyan-700/70 transition-colors group-hover:text-cyan-700 dark:text-cyan-400/60 dark:group-hover:text-cyan-400">
                     <Plus size={24} strokeWidth={1.6} />
@@ -263,7 +266,7 @@ export function HomePage({
                   <span className="text-ink-muted text-[12.5px] font-medium transition-colors group-hover:text-cyan-700 dark:text-cyan-500">
                     新建画布项目
                   </span>
-                </button>
+                </Button>
 
                 {/* 最近项目卡片 —— 画布 / 项目风 */}
                 {recentProjects.length > 0
@@ -272,15 +275,15 @@ export function HomePage({
                         KIND_CONFIG[proj.kind ?? "generation"] ??
                         KIND_CONFIG.generation;
                       return (
-                        <button
+                        <Button
                           key={proj.id}
-                          type="button"
+                          variant="ghost"
                           onClick={() =>
                             proj.kind === "canvas"
                               ? onOpenCanvasProject?.(proj.id)
                               : onOpenProject?.(proj.id)
                           }
-                          className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex items-start gap-3 rounded-[16px] border p-3.5 text-left transition-all active:scale-[0.98]"
+                          className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto items-start gap-3 rounded-[16px] border p-3.5 text-left font-normal active:scale-[0.98]"
                         >
                           {/* Kind icon */}
                           <div
@@ -336,7 +339,7 @@ export function HomePage({
                               </div>
                             )}
                           </div>
-                        </button>
+                        </Button>
                       );
                     })
                   : /* Empty state — placeholder cards */

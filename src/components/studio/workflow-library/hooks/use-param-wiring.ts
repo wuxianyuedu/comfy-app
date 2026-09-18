@@ -42,6 +42,13 @@ export interface ParamWiringController {
    *  卡片列与连线必须都读这一份：只读落库那份的话，用户刚拖出来的线要等一次
    *  PATCH 往返（失败时永远不）才显示，「拖了没反应」与「拖坏了」看起来一模一样。 */
   effectiveParamMap: Record<string, unknown>;
+  /** 提交一份**完整** paramMap：先写本地 overlay（立刻回读），再落库。
+   *
+   *  左列（`connect` / `disconnect` / `resetToAuto`）已内建这套编排；右列的输出
+   *  落点写在 `paramMap.output.*`，由调用方算好 next 后经这里提交 —— 两列共用同一
+   *  份 overlay，输出线才会像输入线一样「拖完立刻画出来」，而不必等一次 PATCH +
+   *  查询重拉（约 2s）才把线显示出来。 */
+  commitParamMap: (next: Record<string, unknown>) => void;
 }
 
 export interface UseParamWiringArgs {
@@ -129,39 +136,61 @@ export function useParamWiring({
     resetToAuto,
     resetMany,
     effectiveParamMap: effective,
+    commitParamMap: commit,
   };
 }
 
-/** 已落库的 paramMap 叠上本地 overlay（source 命名空间按模式逐条合并）。 */
+/** 本地 overlay 会涉及的顶层命名空间：左列写 `source`、右列写 `output`，
+ *  两者都是「按模式归拢 → 再按条目」的同构结构，合并规则一致。 */
+const LOCAL_OVERLAY_NAMESPACES = ["source", "output"] as const;
+
+/** 已落库的 paramMap 叠上本地 overlay。
+ *
+ *  两个命名空间都要合并：只合并 `source` 的话，右列（输出落点写在 `output`）的
+ *  本地改动会被丢掉 —— 输出线又得等一次 PATCH + 查询重拉（约 2s）才出现。 */
 function mergeParamMaps(
   base: Record<string, unknown>,
   overlay: Record<string, unknown>,
 ): Record<string, unknown> {
   if (Object.keys(overlay).length === 0) return base;
-  const baseSource = sourceOf(base);
-  const overlaySource = sourceOf(overlay);
-  const source: Record<string, unknown> = { ...baseSource };
-  for (const [key, value] of Object.entries(overlaySource)) {
-    const prev = baseSource[key];
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      prev &&
-      typeof prev === "object" &&
-      !Array.isArray(prev)
-    ) {
-      source[key] = { ...prev, ...value };
-      continue;
-    }
-    source[key] = value;
+  const next: Record<string, unknown> = { ...base };
+  for (const ns of LOCAL_OVERLAY_NAMESPACES) {
+    const merged = mergeNamespace(
+      namespaceOf(base, ns),
+      namespaceOf(overlay, ns),
+    );
+    if (Object.keys(merged).length > 0) next[ns] = merged;
   }
-  return { ...base, source };
+  return next;
 }
 
-function sourceOf(paramMap: Record<string, unknown>): Record<string, unknown> {
-  const raw = paramMap.source;
-  return raw && typeof raw === "object" && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : {};
+/** 取某个一级命名空间（不是普通对象时按空表处理）。 */
+function namespaceOf(
+  paramMap: Record<string, unknown>,
+  ns: string,
+): Record<string, unknown> {
+  const raw = paramMap[ns];
+  return isPlainRecord(raw) ? raw : {};
+}
+
+/** 命名空间内按「模式 → 条目」一层浅合并：overlay 给了的键覆盖 base，对象值再
+ *  并一层（同一模式下其它条目原样保留）。 */
+function mergeNamespace(
+  baseNs: Record<string, unknown>,
+  overlayNs: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...baseNs };
+  for (const [key, value] of Object.entries(overlayNs)) {
+    const prev = baseNs[key];
+    if (isPlainRecord(value) && isPlainRecord(prev)) {
+      merged[key] = { ...prev, ...value };
+      continue;
+    }
+    merged[key] = value;
+  }
+  return merged;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }

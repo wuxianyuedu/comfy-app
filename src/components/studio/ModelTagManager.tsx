@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 import { overlayClass } from "~/lib/full-screen-layer";
@@ -72,14 +73,15 @@ export function ModelTagManager({
             />
             模型标签库
           </h3>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
-            className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg p-1"
+            className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
             aria-label="关闭"
           >
             <Icon name="x" className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         <p className="text-ink-soft mb-3 text-xs leading-relaxed">
@@ -98,14 +100,15 @@ export function ModelTagManager({
             placeholder="新增模型名，如 z-image / wan2.2"
             className="border-border-strong bg-canvas-deep text-ink-bright placeholder:text-ink-muted min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-fuchsia-500/50"
           />
-          <button
-            type="button"
+          <Button
+            variant="primary-solid"
+            size="sm"
             onClick={() => void c.addTag()}
             disabled={c.busy || !c.draft.trim()}
-            className="rounded-lg bg-fuchsia-500/90 px-3 py-2 text-sm font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-50"
+            className="h-auto rounded-lg px-3 py-2"
           >
             {c.busy ? "…" : "添加"}
-          </button>
+          </Button>
         </div>
 
         {c.error && (
@@ -165,8 +168,9 @@ export function ModelTagManager({
                   <span className="bg-surface-2 text-ink-soft rounded-full px-2 py-0.5 text-[11px] tabular-nums">
                     {tag.count} 个工作流
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
                     onClick={() => void c.deleteTag(tag.name, tag.count)}
                     disabled={isEditing}
                     title={
@@ -174,11 +178,11 @@ export function ModelTagManager({
                         ? `删除「${tag.name}」，会一并解除 ${tag.count} 个工作流的绑定`
                         : `删除「${tag.name}」`
                     }
-                    className="text-ink-soft rounded-md border border-transparent p-1 hover:border-red-400/40 hover:bg-red-500/15 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-300"
+                    className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                     aria-label={`删除 ${tag.name}`}
                   >
                     <Icon name="trash" className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             );

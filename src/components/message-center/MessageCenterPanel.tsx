@@ -20,6 +20,7 @@ import {
 
 import { useMessageCenterStore } from "./message-center-store";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
+import { Button } from "~/components/ui/button";
 
 const KIND_META: Record<
   string,
@@ -114,32 +115,35 @@ export function MessageCenterPanel() {
         </div>
 
         <div className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={markAllRead}
             disabled={unread === 0}
-            className="text-ink-soft hover:bg-subtle hover:text-ink flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            className="text-ink-soft hover:bg-subtle hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-[12px]"
           >
             <CheckCheck size={14} />
             全部已读
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={clear}
             disabled={messages.length === 0}
-            className="text-ink-soft flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors hover:bg-rose-500/10 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-40 dark:text-rose-300 dark:hover:text-rose-300"
+            className="text-ink-soft hover:bg-danger/10 hover:text-danger-strong h-auto gap-1.5 rounded-md px-2.5 py-1.5 text-[12px]"
           >
             <Trash2 size={14} />
             清空
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setOpen(false)}
-            className="text-ink-soft hover:bg-subtle hover:text-ink ml-1 rounded-md p-2 transition-colors"
+            className="text-ink-soft hover:bg-subtle hover:text-ink ml-1 rounded-md"
             aria-label="关闭消息中心"
           >
             <X size={16} />
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -189,17 +193,18 @@ export function MessageCenterPanel() {
                         {m.body}
                       </p>
                     </div>
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={(e) => {
                         e.stopPropagation();
                         remove(m.id);
                       }}
-                      className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded p-1 transition-colors"
+                      className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
                       aria-label="删除该消息"
                     >
                       <Trash2 size={13} />
-                    </button>
+                    </Button>
                   </div>
                 </li>
               );
@@ -210,13 +215,14 @@ export function MessageCenterPanel() {
 
       <footer className="border-border-strong text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[11px]">
         <span>底部状态栏铃铛实时汇总未读消息，点此可全屏查看。</span>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xs"
           onClick={() => setOpen(false)}
-          className="bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink rounded px-2 py-0.5 transition-colors"
+          className="bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink rounded px-2 py-0.5"
         >
           关闭 (Esc)
-        </button>
+        </Button>
       </footer>
     </FullScreenLayer>
   );
