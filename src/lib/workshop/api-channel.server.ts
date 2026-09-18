@@ -1,7 +1,7 @@
 // ── Workshop API channel: Next 侧入口（配置存储 + 上游调用）──────────────
-// Persists per-channel (image / video) endpoint config as a local JSON file
-// (same pattern as app-settings: no DB migration, git-ignored, env fallback).
-// The apiKey is stored server-side only; the browser receives a masked view.
+// 把每通道（图片 / 视频）的端点配置持久化成一份本地 JSON 文件
+//（与 app-settings 同一套路：不动数据库、被 git 忽略、有环境变量兜底）。
+// apiKey 只存在服务端；浏览器拿到的是脱敏视图。
 //
 // 本文件只负责**三件 Next 特有的事**，协议实现全部在 `api-channel-core.ts`：
 //   ① `import "server-only"` —— 把配置与 apiKey 挡在浏览器包外；
@@ -49,7 +49,7 @@ const DEFAULTS = defaultChannelsFromEnv();
 
 let cache: WorkshopApiSettings | null = null;
 
-/** Read with in-process caching; a fresh install just works (empty = unconfigured). */
+/* 读配置（进程内缓存）。全新安装也能直接用（空配置 = 未配置）。 */
 export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   if (cache) return cache;
   let stored: Partial<WorkshopApiSettings> = {};
@@ -58,13 +58,13 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
       readFileSync(FILE, "utf-8"),
     ) as Partial<WorkshopApiSettings>;
   } catch {
-    // Missing/corrupt file → defaults.
+    // 文件缺失或损坏 → 用默认值。
   }
   cache = normalizeSettings(stored, DEFAULTS);
   return cache;
 }
 
-/** Merge a partial per-channel update and persist. */
+/* 合并一次局部通道更新并落盘。 */
 export async function saveWorkshopApiSettings(
   patch: Partial<Record<ApiChannelKind, unknown>>,
 ): Promise<WorkshopApiSettings> {
@@ -85,7 +85,7 @@ export async function saveWorkshopApiSettings(
   return next;
 }
 
-/** Masked view for the browser — apiKey never leaves the server. */
+/* 给浏览器的脱敏视图 —— apiKey 从不离开服务端。 */
 export function getMaskedChannels() {
   return maskChannels(getWorkshopApiSettingsSync());
 }
@@ -178,8 +178,8 @@ function fallbackTarget(channel: ApiChannelStored): ApiUpstreamTarget {
   };
 }
 
-/** Call an OpenAI-compatible images/generations endpoint; returns a usable URL
- *  (remote or inline data URL for b64 payloads). */
+/* 调一个 OpenAI 兼容的 images/generations 端点；返回可用的 URL
+ *（远程 URL，或 b64 载荷内联成 data URL）。 */
 export async function generateImageViaApi(
   req: ApiImageRequest,
 ): Promise<string> {
@@ -195,7 +195,7 @@ export async function generateImageViaApi(
   });
 }
 
-/** Submit a video job to the configured endpoint. */
+/* 把视频任务提交到配置好的端点。 */
 export async function submitVideoViaApi(
   req: ApiVideoSubmitRequest,
 ): Promise<ApiVideoSubmitResult> {
@@ -204,7 +204,7 @@ export async function submitVideoViaApi(
   });
 }
 
-/** Poll an async video task once. Returns the finished URL or { pending: true }. */
+/* 轮询一次异步视频任务：返回成品 URL，或 { pending: true } 表示仍在进行。 */
 export async function pollVideoViaApi(
   remoteTaskId: string,
 ): Promise<{ url?: string; pending: boolean }> {
@@ -213,6 +213,6 @@ export async function pollVideoViaApi(
   });
 }
 
-/** Resolve any image reference into an inline data URL (used before forwarding
- *  a first-frame to remote video APIs and when uploading to local ComfyUI). */
+/* 把任意图片引用解析成内联 data URL
+ *（转发首帧给远程视频 API 之前、以及上传到本机 ComfyUI 时都要用）。 */
 export { resolveMediaDataUrl };

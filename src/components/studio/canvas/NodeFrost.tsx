@@ -1,16 +1,15 @@
 "use client";
-/* Extracted frost / overlay components — originally inside WorkflowCanvasEditor.tsx. */
+/* 拆出来的毛玻璃 / 覆盖层组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import { useStore } from "@xyflow/react";
 import { pseudoFrostPalette, hexToRgba } from "../workflow-utils";
 export const PSEUDO_FROST_NOISE_URL =
-  // 180×180 turbulence tile; alpha ~0.55; inlined SVG ⇒ no extra HTTP cost.
+  // 180×180 的湍流噪声 tile；透明度约 0.55；内联 SVG ⇒ 不额外增加 HTTP 请求。
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.7' numOctaves='2' seed='9'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>";
 
-/* Synthetic blob layout — five overlapping ellipses covering the node body.
- *  Positions/sizes are in percentages so the layer reflows with the node's
- *  React-Flow-applied `minWidth` without any layout gymnastics.  Each blob
- *  uses its own `filter: blur(Npx)` so the silhouette stays soft even when
- *  the user's CSS `transform: scale(...)` is applied via parent zoom. */
+/* 合成的色块布局 —— 五个互相重叠的椭圆铺满节点主体。
+ * 位置与尺寸都用百分比，所以这层会随节点被 React Flow 施加的 `minWidth`
+ * 自然重排，不必做任何布局上的小动作。每个色块各用自己的 `filter: blur(Npx)`，
+ * 于是即使父级缩放施加了 CSS `transform: scale(...)`，轮廓仍然是柔和的。 */
 export const PSEUDO_FROST_BLOBS: {
   left: string;
   top: string;
@@ -47,10 +46,9 @@ export const PSEUDO_FROST_BLOBS: {
   },
 ];
 
-/** Build the per-mode colour table consumed by `PSEUDO_FROST_BLOBS.alphaKey`.
- *  Disabled nodes lean grey, bypass leans pink-purple; the cool/warm/shadow
- *  channels stay constant so the panel reads as a coherent glass surface
- *  regardless of mode. */
+/* 构建每个模式对应的颜色表，供 `PSEUDO_FROST_BLOBS.alphaKey` 使用。
+ * 禁用态偏灰、绕过态偏粉紫；冷 / 暖 / 阴影三个通道保持不变，
+ * 因此无论哪种模式，面板读起来都是一块连贯的玻璃面。 */
 export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
   if (!modeColor) return null;
   const palette = pseudoFrostPalette(modeColor);
@@ -91,22 +89,20 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
 }
 
 /* ---------------------------------------------------------------------------
- *  NodeFrost — REAL see-through frosted layer for bypass / disabled nodes.
+ *  NodeFrost —— 绕过 / 禁用节点用的**真·透视**毛玻璃层。
  *
- *  Uses an actual `backdrop-filter: blur(...)` so the REAL canvas behind the
- *  node is what gets blurred (not synthetic blobs).  The classic Chromium bug
- *  is that `backdrop-filter` RE-TILES on very small on-screen elements — at low
- *  zoom a node's screen footprint shrinks, the blur kernel outgrows its
- *  backing texture, and the edge pixels wrap → the 2² / 3² / 4² (= 4 / 9 / 16)
- *  repeated-ghost artefact the user hit.
+ *  它用真正的 `backdrop-filter: blur(...)`，被模糊的是节点背后**真实的画布**
+ *（不是合成的色块）。Chromium 有个经典 bug：`backdrop-filter` 在屏幕上
+ *  尺寸极小的元素上会**重铺平铺** —— 缩小时节点的屏幕占位变小，模糊核超出
+ *  它的底层纹理，边缘像素开始回绕 → 于是用户看到的 2² / 3² / 4²（即 4 / 9 / 16）
+ *  重影伪影。
  *
- *  Fix: counter-scale the blur element by 1/zoom when zoomed out, holding its
- *  ON-SCREEN footprint at ~ the node's zoom=1 size (always large enough to
- *  blur cleanly).  The outer wrapper clips it back to the node bounds
- *  (`overflow:hidden`), so only the node-shaped slice of the — now correctly
- *  large — sampled backdrop is shown.  The blur radius is divided by the same
- *  scale so the effective on-screen blur stays ≈ 6px at every zoom.  Result:
- *  a genuine blurred view of the real canvas, with NO tiling at any zoom. */
+ *  修法：缩小时把模糊元素按 1/zoom 反向缩放，让它的**屏幕占位**保持在
+ *  节点 zoom=1 时的尺寸（那个大小总够干净地模糊）。外层 wrapper 再用
+ *  `overflow:hidden` 裁回节点边界，于是只显示「与节点同形的那一片」采样背景
+ *（此时它已经足够大）。模糊半径除以同一个比例，
+ *  让各个缩放档下的有效屏幕模糊都约为 6px。结果就是：真实画布的真模糊视图，
+ *  任何缩放档都不平铺。 */
 export function NodeFrost({
   zoom,
   color,
@@ -117,9 +113,9 @@ export function NodeFrost({
   nodeMode: number;
 }) {
   if (!color || nodeMode === 0) return null;
-  // Hold the on-screen footprint ≥ the node's zoom=1 size.
+  // 让屏幕占位不小于节点 zoom=1 时的尺寸。
   const scale = Math.max(1, 1 / Math.max(zoom, 0.01));
-  const blur = 6 / scale; // keep on-screen blur ≈ 6px regardless of zoom
+  const blur = 6 / scale; // 不论缩放多少，屏幕上的模糊都保持在约 6px
   return (
     <div
       aria-hidden
@@ -140,15 +136,14 @@ export function NodeFrost({
 }
 
 /* ---------------------------------------------------------------------------
- *  FrostLayer — zoom-aware wrapper around <NodeFrost>.
+ *  FrostLayer —— 感知缩放的 <NodeFrost> 包装层。
  *
- *  Only bypass / disabled nodes render <NodeFrost>, but previously EVERY
- *  canvas node subscribed to `useStore(state => state.transform[2])` just to
- *  pass `zoom` down — so a pinch/scroll zoom re-rendered all 130 nodes even
- *  though the vast majority don't use frost at all.  Moving the zoom
- *  subscription behind this component means only nodes that actually render
- *  a frosted layer react to zoom changes (their on-screen frost size must
- *  follow the viewport), and ordinary nodes stay put while zooming.
+ *  只有绕过 / 禁用节点才渲染 <NodeFrost>，但以前**每个**画布节点都会订阅
+ *  `useStore(state => state.transform[2])`，只为把 `zoom` 传下去 ——
+ *  于是捏合 / 滚轮缩放会把 130 个节点全部重渲染，
+ *  哪怕绝大多数根本不用毛玻璃。把缩放订阅挪到这个组件之后，
+ *  就只有真的渲染毛玻璃层的节点会响应缩放变化
+ *（它们的屏幕毛玻璃尺寸必须跟随视口），普通节点在缩放时纹丝不动。
  * ------------------------------------------------------------------------- */
 export function FrostLayer({
   color,
@@ -162,24 +157,20 @@ export function FrostLayer({
 }
 
 /* ---------------------------------------------------------------------------
- *  StringTextarea — multi-line read-only text box for long STRING widgets
- *  (prompts, captions, …).  Replaces the old `<div>` (whose Tailwind
- *  whitespace/overflow classes compiled unreliably inside this subtree) with
- *  the browser's native scrollable textarea, so wrapping + scroll work without
- *  any class dependency.
+ *  StringTextarea —— 给长 STRING 控件（提示词、说明文字 …）用的多行只读文本框。
+ *  它用浏览器原生的可滚动 textarea 取代了旧的 `<div>`
+ *（后者的 Tailwind 空白 / 溢出类在这一子树里编译不可靠），
+ *  于是换行与滚动都能工作，且不依赖任何 class。
  *
- *  Height strategy (fully vertical STACKED layout):
- *    • Row uses `flex-col gap-1.5 flex-1` — LABEL row on top,
- *      this container fills the remaining vertical space below.
- *    • When the node has a fixed box (`hasSize`), the textarea container's
- *      `flex-1 min-h-0` chain handles height in CSS: the box has a fixed
- *      height, the WIDGET zone flex-1 claims the box's leftover space after
- *      header + body rows, and this textarea fills the STRING row's share.
- *      `maxHeight` is intentionally REMOVED (used to be 96px) so a 12-line
- *      prompt can claim the full STRING-row slot instead of being capped
- *      and silently scrolling behind a "标题内容同一排" layout.  Overflow
- *      scrolls natively inside this fixed box.
- *    • When the node is content-sized (no fixed box), useLayoutEffect sets
- *      the textarea height to `scrollHeight` uncapped so a 12-line prompt
- *      makes the row tall enough to show every line — same fill intent as
- *      the `flex-1` chain, just driven from JS instead of CSS. */
+ *  高度策略（完全纵向堆叠布局）：
+ *    • 行用 `flex-col gap-1.5 flex-1` —— 标签行在上，
+ *      这个容器占满下方剩余空间。
+ *    • 节点有固定框（`hasSize`）时，由 CSS 的 `flex-1 min-h-0` 链条处理高度：
+ *      框高固定，控件区用 flex-1 拿走「框减去头部与主体行」的剩余空间，
+ *      这个 textarea 再占 STRING 行的那一份。
+ *      `maxHeight` 是**有意移除**的（以前是 96px），好让 12 行的提示词
+ *      占满整个 STRING 行槽位，而不是被限高、悄悄躲在布局后面滚动。
+ *      溢出内容在这个固定框内原生滚动。
+ *    • 节点高度随内容（没有固定框）时，useLayoutEffect 把 textarea 的高度
+ *      设成不限幅的 `scrollHeight`，好让 12 行提示词把这一行撑到能显示每一行
+ *      —— 填充意图与 `flex-1` 链条相同，只是由 JS 而不是 CSS 驱动。 */

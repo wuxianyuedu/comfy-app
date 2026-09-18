@@ -17,8 +17,8 @@
 // 子进程就是组长」。但经 `sh -c` / `pnpm exec` 两层中转后，组长往往是更上层
 // 的 shell，于是 `kill(-pid)` 抛 ESRCH（该组不存在），静默落到单杀兜底 ——
 // 反向验证时甚至看不到任何异常。实测（`pnpm dev` 真实进程树）：
-//     PID 2866  PGID 2838  PPID 2838  sh -c node scripts/dev.mjs
-//     PID 2867  PGID 2838  PPID 2866  node scripts/dev.mjs
+//     进程 2866  组 2838  父 2838  命令：sh -c node scripts/dev.mjs
+//     进程 2867  组 2838  父 2866  命令：node scripts/dev.mjs（真正的编排器）
 //   组长是 2838、而传入的 leader pid 是 2866 → `kill(-2866)` ESRCH。
 // 因此现在**运行时读取目标 pid 的 PGID**（`ps -o pgid=`），并以 PGID 为
 // 信号目标：拿到 PGID 就杀进程组，拿不到（ps 缺失 / 目标已退 / 权限不足）

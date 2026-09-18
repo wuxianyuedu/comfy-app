@@ -1,11 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Job } from "./runner-state";
 
-/* Mock the reaper's side-effectful dependencies so importing ./reaper
- * (which bootstraps `startReaper()` as a module side effect) never touches
- * the real DB / ComfyUI.  `isTaskClaimedInProcess` is a pure function, but
- * the module also owns the two sweeper intervals — reaping them to no-ops
- * keeps the import safe while letting us exercise the pure helper. */
+/* 把 reaper 那些带副作用的依赖 mock 掉，这样 import ./reaper
+ *（它会以模块副作用的形式启动 `startReaper()`）就不会碰到真实的数据库 / ComfyUI。
+ * `isTaskClaimedInProcess` 本身是纯函数，但该模块还持有两个清扫定时器 ——
+ * 把它们替换成空操作，既让 import 安全，又能测到那个纯助手。 */
 vi.mock("../core/repository", () => ({
   taskRepository: {
     listStaleQueued: vi.fn().mockResolvedValue([]),

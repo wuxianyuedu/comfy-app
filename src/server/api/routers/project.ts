@@ -3,12 +3,12 @@ import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { projectRepository, taskRepository } from "~/lib/core/repository";
 
 export const projectRouter = createTRPCRouter({
-  /** GET /api/projects */
+  /* GET /api/projects —— 读 */
   list: authedProcedure.query(async ({ ctx }) => {
     return projectRepository.listByUser(ctx.user.id);
   }),
 
-  /** POST /api/projects — upsert (client-generated id) */
+  /* POST /api/projects —— 新建：upsert (client-generated id) */
   upsert: authedProcedure
     .input(
       z.object({
@@ -28,7 +28,7 @@ export const projectRouter = createTRPCRouter({
       });
     }),
 
-  /** GET /api/projects/[id] */
+  /* GET /api/projects/[id] —— 读 */
   get: authedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -39,7 +39,7 @@ export const projectRouter = createTRPCRouter({
       return project;
     }),
 
-  /** PATCH /api/projects/[id] */
+  /* PATCH /api/projects/[id] —— 局部更新 */
   patch: authedProcedure
     .input(
       z.object({
@@ -61,7 +61,7 @@ export const projectRouter = createTRPCRouter({
       return projectRepository.update(input.projectId, patch);
     }),
 
-  /** DELETE /api/projects/[id] */
+  /* DELETE /api/projects/[id] —— 删除 */
   delete: authedProcedure
     .input(z.object({ projectId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -69,7 +69,7 @@ export const projectRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  /** GET /api/projects/[id]/outputs */
+  /* GET /api/projects/[id]/outputs —— 读 */
   outputs: authedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {

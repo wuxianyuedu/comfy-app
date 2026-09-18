@@ -52,7 +52,7 @@ const BANNER_COLOR: Record<SessionBannerKind, string> = {
  * 结尾的换行保证下一次 append 的内容从新的一行开始（不粘在横幅末行）。
  * 调用方按「一次 append 一条"横幅 + 空行"」使用，无需自己补换行。
  *
- * @param kind start / end，决定颜色
+ * @param kind 横幅类型（start 表示启动，end 表示停止），决定颜色
  * @param title 横幅中间的信息行（会话说明 / exit code 等，**不含时刻**）
  */
 export function buildSessionBanner(
@@ -81,7 +81,7 @@ export function buildSessionBanner(
  * 失败都静默吞掉——日志写不进去不该把启动/停止流程带崩。
  *
  * @param filePath 目标日志文件的**绝对路径**，一律取自 `log-paths.ts`
- * @param kind start / end
+ * @param kind 横幅类型（start 表示启动，end 表示停止）
  * @param title 横幅中间的信息行
  */
 export function appendSessionBanner(

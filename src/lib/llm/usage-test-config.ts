@@ -87,7 +87,7 @@ export function videoModeMissingHint(fields: UsageField[]): string | null {
 
 /** 服务端按「数组」接收的媒体字段（可携带多张参考图/音频）。这类字段常被用户
  *  贴成一张裸 URL 字符串，而服务端期望 []string——不包成数组就会 400
- *  （cannot unmarshal string into []string）。 */
+ *  （原文是 cannot unmarshal string into []string，即「无法把字符串解成字符串数组」）。 */
 export const MEDIA_ARRAY_FIELD_KEYS = ["images", "audios"] as const;
 
 /** 判断字段是不是数组型媒体字段（命中 images / audios 等，含首尾空白）。 */

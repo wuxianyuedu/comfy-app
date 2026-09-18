@@ -17,7 +17,7 @@
  * `widgets_values`（comfy-cli 展开子图后读的是内层值），只改 wrapper 不改内层
  * 会让覆盖在转换阶段被内层默认值覆盖回去。
  *
- * @module comfyui/raw-overrides
+ * @module comfyui/raw-overrides — 两种载荷的 canvas 覆盖注入（纯函数）
  */
 
 import { z } from "zod";
@@ -64,8 +64,7 @@ export type RawUiNode = {
   inputs?: RawUiNodeInput[];
   widgets_values?: unknown[];
 };
-
-/** Map an API-format node id (e.g. "4:1670") or top-level id to the raw UI node.
+/** 把 API 格式的节点 id（例如 "4:1670"）或顶层 id 映射到原始 UI 节点。
  *
  *  子图内部的覆盖项落库时会把「宿主 id 链」与「内部节点 id」都记下来，运行期
  *  拼成 comfy-cli 展开后的 `4:1670`（嵌套时 `4:5:1670`）。本函数按这条链**逐层
@@ -117,8 +116,7 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
   }
   return node;
 }
-
-/** Index of a named widget input within a UI node's `widgets_values` array. */
+/** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
 function widgetSlot(node: RawUiNode, name: string): number {
   const inputs = node?.inputs ?? [];
   let slot = 0;
@@ -130,9 +128,8 @@ function widgetSlot(node: RawUiNode, name: string): number {
   }
   return -1;
 }
-
-/** Index of the seed-type widget within a UI node's `widgets_values` array.
- *  Returns -1 when the node has no seed-like widget. */
+/** seed 类控件在 UI 节点 `widgets_values` 数组里的下标。
+ *  节点上没有 seed 类控件时返回 -1。 */
 function seedWidgetSlot(node: RawUiNode): number {
   const inputs = node?.inputs ?? [];
   let slot = 0;
@@ -151,8 +148,7 @@ function seedWidgetSlot(node: RawUiNode): number {
   }
   return -1;
 }
-
-/** Name of the seed-type widget input on a UI node (null when it has none). */
+/** UI 节点上 seed 类控件输入的名字（没有则为 null）。 */
 function seedWidgetName(node: RawUiNode): string | null {
   const inputs = node?.inputs ?? [];
   for (const inp of inputs) {
@@ -170,10 +166,9 @@ function seedWidgetName(node: RawUiNode): string | null {
   }
   return null;
 }
-
-/** Number of widget-bearing inputs (each occupies exactly one slot in
- *  `widgets_values` unless a seed's `control_after_generate` sentinel adds
- *  an extra slot — see {@link hasSeedControlSlot}). */
+/** 带控件的输入个数（每个各占 `widgets_values` 里的一个槽 ——
+ *  除非 seed 的 `control_after_generate` 哨兵额外多占一个，
+ *  见 {@link hasSeedControlSlot}）。 */
 function widgetInputCount(node: RawUiNode): number {
   const inputs = node?.inputs ?? [];
   let count = 0;
@@ -182,59 +177,49 @@ function widgetInputCount(node: RawUiNode): number {
   }
   return count;
 }
-
-/** Whether this UI node serializes a `control_after_generate` sentinel slot
- *  after its seed widget.  ComfyUI only emits that slot when the seed is a
- *  *real* INT widget on a node that carries randomization (KSampler etc.).
- *  Subgraph wrapper nodes that merely *expose* an inner seed do NOT keep a
- *  control slot in their own `widgets_values` — the slot right after the seed
- *  there belongs to the next exposed widget (e.g. a model COMBO), so writing
- *  `seedSlot + 1` would clobber it.  When the exposed seed's randomization was
- *  quarantined out (ComfyUI `proxyWidgetErrorQuarantine`), we must not write. */
+/** 该 UI 节点是否在 seed 控件之后序列化了一个 `control_after_generate` 哨兵槽。
+ *  ComfyUI 只在这个 seed 是**真正的** INT 控件、且所在节点带随机化能力
+ *  （KSampler 等）时才发那一个槽。
+ *  仅仅「暴露」内部 seed 的子图 wrapper 节点，自己的 `widgets_values` 里并不保留
+ *  这个控制槽 —— 那里 seed 之后的槽属于下一个被暴露的控件（比如模型 COMBO），
+ *  写 `seedSlot + 1` 会把它覆盖掉。被暴露 seed 的随机化被隔离时
+ *  （ComfyUI 的 `proxyWidgetErrorQuarantine`），更不能写。 */
 function hasSeedControlSlot(node: RawUiNode): boolean {
   if (!Array.isArray(node?.widgets_values)) return false;
-  // A sentinel slot only exists when `widgets_values` holds one more entry than
-  // the widget-bearing inputs (older ComfyUI didn't serialize the sentinel, so
-  // equal length means seed+1 is a real widget too).
+  /* 只有当 `widgets_values` 比带控件的输入多出一项时，哨兵槽才存在
+   *（更早的 ComfyUI 不序列化哨兵，长度相等说明 seed+1 也是真控件）。 */
   return node.widgets_values.length > widgetInputCount(node);
 }
-
-/** Mint a fresh non-negative ComfyUI-style seed (within JS safe-integer
- *  range) for the no-control-slot randomize fallback. */
+/** 为「没有控制槽时」的随机化兜底新造一个非负的 ComfyUI 风格 seed
+ * （在 JS 安全整数范围内）。 */
 function randomSeed(): number {
   return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 }
-
-/** Sentinel ids ComfyUI uses inside a subgraph definition for the synthetic
- *  boundary nodes: `-10` is the input rail, `-20` the output rail.  A link whose
- *  origin is `-10` means "this inner input is fed by an exposed subgraph pin",
- *  which is exactly how ComfyUI marks a promoted (host-owned) widget. */
+/** ComfyUI 在子图定义里给合成边界节点用的哨兵 id：`-10` 是输入轨，`-20` 是
+ *  输出轨。连线的 origin 是 `-10` 表示「这个内部输入由暴露出来的子图引脚供给」
+ *  —— 这正是 ComfyUI 标记「已提升为宿主所有」控件的方式。 */
 const SUBGRAPH_INPUT_NODE_ID = -10;
-
-/** Minimal view of one entry of a subgraph definition's `inputs[]` pin list. */
+/** 子图定义 `inputs[]` 引脚列表里一项的最小视图。 */
 type SubgraphPin = {
   name?: unknown;
   linkIds?: unknown;
 };
-
-/** Minimal view of one interior link object of a subgraph definition
- *  (`{ id, origin_id, origin_slot, target_id, target_slot, type }`). */
+/** 子图定义内部一条连线对象的最小视图（含 id、起止节点与槽位、类型等字段：
+ *  依次是 id、源节点、源槽、目标节点、目标槽、类型。 */
 type SubgraphLink = {
   id?: unknown;
   origin_id?: unknown;
   target_id?: unknown;
   target_slot?: unknown;
 };
-
-/** Minimal view of a subgraph definition (`definitions.subgraphs[uid]`). */
+/** 子图定义（`definitions.subgraphs[uid]`）的最小视图。 */
 type RawSubgraph = {
   id?: unknown;
   nodes?: unknown;
   links?: unknown;
   inputs?: unknown;
 };
-
-/** Collect every subgraph definition, keyed by its UUID (`sub.id`). */
+/** 收集所有子图定义，按其 UUID（`sub.id`）作键。 */
 function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
   const out = new Map<string, RawSubgraph>();
   const defs = raw.definitions;
@@ -381,8 +366,8 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
 /** 数值入参不要被字符串覆盖：已有值是数字、新值是可解析的数字串 → 取数字。
  *
  *  ComfyUI 对数值型入参收到字符串会拒单（或按 0 处理），而动态表单的值一路都是
- *  string。`buildCustomWorkflow` / `buildPromptFromGraph` / `applyApiOverrides`
- *  三处必须同口径，因此抽到这里只定义一次。 */
+ *  字符串。三个调用点（`buildCustomWorkflow` / `buildPromptFromGraph` /
+ *  `applyApiOverrides`）必须同口径，因此抽到这里只定义一次。 */
 export function coerceApiInputValue(current: unknown, value: unknown): unknown {
   if (typeof current === "number" && typeof value === "string") {
     const trimmed = value.trim();
@@ -396,8 +381,7 @@ export function coerceApiInputValue(current: unknown, value: unknown): unknown {
 const SEED_INPUT_NAMES = ["seed", "noise_seed"];
 /** 前端专有的随机化控件名（不是 ComfyUI 的入参）。 */
 const CONTROL_AFTER_GENERATE = "control_after_generate";
-
-/** Best-effort injection of canvas `workflowInputs` into an **API-format** graph.
+/** 尽力把画布的 `workflowInputs` 注入到 **API 格式** 的图里。
  *
  *  与 {@link applyRawOverrides} 同一套语义（`(nodeId, name, value)` 覆盖项、
  *  数值收窄、`control_after_generate=randomize` 兜底铸新种子），差别只在落点：
@@ -448,8 +432,7 @@ export function applyApiOverrides(
   }
   return out;
 }
-
-/** Best-effort injection of canvas `workflowInputs` into the raw UI json. */
+/** 尽力把画布的 `workflowInputs` 注入到原始 UI JSON 里。 */
 export function applyRawOverrides(
   rawJson: unknown,
   overrides?: RawWorkflowOverride[],
@@ -462,29 +445,24 @@ export function applyRawOverrides(
     if (!ov?.nodeId || ov.value === undefined) continue;
     const node = resolveRawNode(raw, ov.nodeId);
     if (!node) continue;
-
-    // Seed "control after generate" is NOT a named widget in raw UI format — it
-    // is serialized as the widgets_values slot immediately after the seed widget.
-    // Resolve the seed widget slot and target slot+1. (API-format graphs instead
-    // carry a real `control_after_generate` input, handled by the name branch.)
+    /* 原始 UI 格式里 seed 的 "control after generate" **不是**具名控件 ——
+     * 它被序列化成 seed 控件紧挨着的下一个 widgets_values 槽。
+     * 所以这里解析出 seed 控件槽，目标就是槽 +1。
+     *（API 格式的图则带一个真正的 `control_after_generate` 输入，由按名分支处理。） */
     if (ov.name === "control_after_generate") {
       const seedSlot = seedWidgetSlot(node);
       if (seedSlot < 0) continue;
       if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
-      // Only write the seed's control mode when this node actually keeps a
-      // `control_after_generate` sentinel slot right after the seed.  A
-      // subgraph wrapper that exposes an inner seed without exposing its
-      // randomization (ComfyUI quarantines it when the subgraph has no input
-      // pin for it) has no such slot — `seedSlot + 1` would otherwise
-      // overwrite the following real widget (e.g. the diffusion model name).
+      /* 只有当该节点确实在 seed 之后保留了 `control_after_generate` 哨兵槽时，
+       * 才写 seed 的控制模式。只暴露内部 seed、却不暴露其随机化能力的子图 wrapper
+       *（子图没有对应输入引脚时 ComfyUI 会把它隔离）没有这个槽 ——
+       * 否则 `seedSlot + 1` 会覆盖后面那个真控件（例如扩散模型名）。 */
       if (hasSeedControlSlot(node)) {
         node.widgets_values[seedSlot + 1] = ov.value;
       } else if (ov.value === "randomize") {
-        // No sentinel slot (exposed subgraph seed with no randomization pin,
-        // or a node whose randomization was quarantined) means ComfyUI keeps
-        // the seed fixed — the requested randomize mode would be dropped.
-        // Fall back to minting a fresh random seed here so the exposed seed
-        // still varies per run.
+        /* 没有哨兵槽（被暴露的子图 seed 没有随机化引脚，或该节点的随机化已被隔离）
+         * 意味着 ComfyUI 会把 seed 固定住 —— 用户请求的随机化模式会落空。
+         * 这里兜底造一个新的随机 seed，让被暴露的 seed 每次运行仍有变化。 */
         const minted = randomSeed();
         node.widgets_values[seedSlot] = minted;
         // 同步写进内层节点：comfy-cli 展开子图后真正被采样器读到的是内层

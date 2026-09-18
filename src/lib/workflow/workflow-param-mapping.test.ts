@@ -54,8 +54,8 @@ describe("pinFamily — 分类只看声明类型", () => {
     expect(pinFamily(pin("1", "aspect_ratio", { type: "COMBO" }))).toBe(
       "number",
     );
-    /* 时长口也是数值行 —— 它和「尺寸」同族，谁是谁由连线声明（不再按名字认
-     * duration / length / frames）。 */
+    /* 时长口也是数值行 —— 它和「尺寸」同族，谁是谁由连线声明，
+     * 不再按名字去认 duration、length、frames 这些字面量。 */
     expect(pinFamily(pin("1", "fps", { type: "INT" }))).toBe("number");
     /* 未知类型按最宽的数值族收。 */
     expect(pinFamily(pin("1", "seed", { type: "*" }))).toBe("number");

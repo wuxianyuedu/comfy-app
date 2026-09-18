@@ -120,7 +120,7 @@ export function parseCharacter(text: string): RawCharacter {
   };
 }
 
-// Generate a full character card from a one-line brief.
+// 从一句话简介生成一份完整的角色卡。
 export const CHARACTER_FROM_BRIEF_SYSTEM = `你是角色设定助手。用户会给一句角色设定或灵感，请生成一个完整的、可用于 AI 绘画的视觉角色卡。
 只输出严格 JSON 对象，不要额外文字或代码围栏：
 { "name": "角色名", "appearance": "外貌特征（发型、五官、身材、肤色等，具象）", "costume": "服装（具象，含颜色与材质）", "personality": "性格/气质关键词（逗号分隔）" }

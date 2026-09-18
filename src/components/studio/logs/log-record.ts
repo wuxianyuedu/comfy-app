@@ -34,7 +34,7 @@
  * 就是 JSON payload 记录**，且当前行也是 JSON 片段形状，就仍然并入——否则
  * 用户看到的是一开头就是几条散落的 `"mask",`。
  *
- * @module logs/log-record
+ * @module logs/log-record — log-record — 把「一条日志记录」从物理行里还原出来（纯逻辑，无 React/DOM）
  */
 
 /**

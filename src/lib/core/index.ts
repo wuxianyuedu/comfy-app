@@ -60,7 +60,7 @@
  * 统一直接 import**（判据是「两种方式取到的必须是同一个东西」，而不是注释里
  * 承诺的「可替换单例」）。
  *
- * @module core
+ * @module core — 架构核心层的**深路径入口别名**（barrel）
  */
 /** 内置技能种子的形状（定义处 `~/lib/core/repository-skill`，见 `skills-seed.ts`）。 */
 export type { SkillSeed } from "./repository-skill";

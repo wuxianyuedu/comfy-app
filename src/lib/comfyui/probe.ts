@@ -13,14 +13,14 @@
  * 的这一层下沉后，依赖方向变成单向：
  *
  *     client ─┐
- *     instance-port ─┼─→ probe
+ *     instance-port ─┼─→ probe（本模块，只有 fetch + 地址拼接）
  *     status ─┘
  *
  * 这里刻意**不 import 会话缓存**：探测必须是「按次事实」，不能污染
  * `client.ts` 里「本次会话连哪个地址」的粘性结论（ISSUE #344 的成因）。
  * 需要粘性语义的调用方（`client.probeComfyBase`）自己包一层缓存回滚。
  *
- * @module comfyui/probe
+ * @module comfyui/probe — 单点可达性探测（执行链/状态判定的**叶子**模块）
  */
 import { comfyUiBaseUrl } from "../endpoints";
 

@@ -1111,7 +1111,7 @@ describe("LoraTrainingJobRepository", () => {
   });
 });
 
-/* ─────────────────────────── User / LlmConfig / RemoteModel ─────────────────────────── */
+/* ─────────────────── 用户 / LLM 配置 / 远端模型 ─────────────────── */
 
 describe("UserRepository", () => {
   it("按 email 查、建号、改邮箱与密码", async () => {

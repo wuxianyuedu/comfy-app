@@ -6,12 +6,11 @@ function uid(prefix = "id"): string {
   return `${prefix}_${Date.now().toString(36)}_${_id}`;
 }
 
-/**
- * Convert a free-form idea / pasted text into a structured scene list.
- * Strategy:
- *  - If input looks like a single sentence (no blank lines, < 80 chars),
- *    expand it into a 3-beat mini structured scene using the project tone.
- *  - Otherwise split on blank lines / "场景" markers into separate scenes.
+/* 把自由发挥的想法 / 粘贴进来的文本转成结构化的场景列表。
+ * 策略：
+ *  - 输入看起来像一句话（没有空行、且少于 80 字）→ 结合项目基调，
+ *    把它扩写成 3 个节拍的小结构场景。
+ *  - 否则按空行 /「场景」标记切成多个场景。
  */
 export function parseIdeaToScenes(
   raw: string,
@@ -20,14 +19,14 @@ export function parseIdeaToScenes(
   const text = raw.trim();
   if (!text) return [];
 
-  // Single short idea → expand with a simple 3-act template
+  // 单句短想法 → 用简单的三幕模板扩写
   const hasStructure =
     /\n\s*\n/.test(text) || /场景\d|场\s*\d|SCENE/i.test(text);
   if (!hasStructure && text.length < 120) {
     return expandIdea(text, meta);
   }
 
-  // Split by blank lines first, fall back to explicit scene markers
+  // 先按空行切；没有空行时回落到显式的场景标记
   let blocks = text
     .split(/\n\s*\n+/)
     .map((block) => block.trim())
@@ -63,7 +62,7 @@ export function parseIdeaToScenes(
   });
 }
 
-/** Expand a single logline into a 3-beat scene using project tone */
+/* 依据项目基调，把一句 logline 扩写成 3 个节拍的场景。 */
 function expandIdea(
   idea: string,
   meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,

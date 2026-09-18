@@ -1,18 +1,15 @@
-/* ComfyUI port type system — port colors, labels, and inference helpers.
+/* ComfyUI 端口类型体系 —— 端口配色、标签与推断助手。
  *
- * The colour and naming scheme is taken from ComfyUI's own litegraph.js
- * `LGraphCanvas.link_colors` and `node-type` display strings.  We use it to
- * colour every connection dot and edge the same way the official frontend
- * does so our flow canvas reads as a faithful 1:1 reproduction.
+ * 配色与命名口径取自 ComfyUI 自己的 litegraph.js 里 `LGraphCanvas.link_colors`
+ * 与 node-type 的显示字符串。我们用同一套给每个连接点与连线着色，
+ * 让本项目的流程画布与官方前端保持一致。
  *
- * Use the helpers exported here in two places:
- *   1. `WorkflowCanvasEditor` — to colour the per-row port dots, the
- *      `← <srcTitle>` label, and the edges.
- *   2. Future: linting / validation when a user tries to wire incompatible
- *      types together.
+ * 这里导出的助手用在两处：
+ *   1. `WorkflowCanvasEditor` —— 给逐行的端口点、`← <srcTitle>` 标签与连线着色。
+ *   2. 将来：用户试图连接不兼容类型时做 lint / 校验。
  */
 
-/* ── Port colour per data type (matches ComfyUI's litegraph palette) ── */
+/* ── 各数据类型的端口配色（与 ComfyUI 的 litegraph 调色板一致） ── */
 export const PORT_COLORS: Record<string, string> = {
   MODEL: "#7C5CFF",
   CONDITIONING: "#FF6B6B",
@@ -39,23 +36,21 @@ export const PORT_COLORS: Record<string, string> = {
   STRING: "#3CA018",
   COMBO: "#3CA018",
   BOOLEAN: "#3CA018",
-  /* fallback: muted gray */
+  /* 兜底色：低饱和的灰 */
   UNKNOWN: "#7C7C8A",
 };
 
 export const DEFAULT_PORT_COLOR = "#7C7C8A";
 
-/** Look up a port colour; falls back to the default. */
+/* 查一个端口的配色；查不到就用默认色。 */
 export function portColor(type: string | undefined | null): string {
   if (!type) return DEFAULT_PORT_COLOR;
   return PORT_COLORS[type] ?? DEFAULT_PORT_COLOR;
 }
 
-/* ── Per-class output types.  ComfyUI's API exposes these via
- *    /object_info, but for the canvas we only need the output *order*
- *    per slot, which is the most-stable property of a node class.  When
- *    the live /object_info is unavailable, this static fallback lets us
- *    still colour edges correctly. */
+/* ── 各节点类型的**输出**类型表。ComfyUI 的 API 通过 /object_info 暴露这些，
+ *    但画布只需要「每个槽位的输出顺序」—— 那是节点类型最稳定的属性。
+ *    拿不到在跑的 /object_info 时，这张静态兜底表让连线配色依旧正确。 */
 const OUTPUT_TYPES: Record<string, string[]> = {
   /* Loaders */
   CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
@@ -153,11 +148,11 @@ const OUTPUT_TYPES: Record<string, string[]> = {
   /* Misc */
   ConditioningZeroOut: ["CONDITIONING"],
   ConditioningTimestepRange: ["CONDITIONING"],
-  /* Audio (some ComfyUI audio extensions) */
+  /* 音频（部分 ComfyUI 音频扩展） */
   VAEDecodeAudio: ["AUDIO"],
   SaveAudio: [],
   LoadAudio: ["AUDIO"],
-  /* Wan / I2V / T2V  ── typical WanVideoWrapper node names */
+  /* Wan / I2V / T2V —— WanVideoWrapper 的常见节点名 */
   WanVideoSampler: ["LATENT"],
   WanVideoDecode: ["IMAGE"],
   WanVideoImageToVideoEncode: ["LATENT"],
@@ -166,19 +161,19 @@ const OUTPUT_TYPES: Record<string, string[]> = {
   WanVideoT5TextEncode: ["CONDITIONING"],
 };
 
-/** Get the data type produced by a class's nth output slot. */
+/* 取某节点类型第 n 个输出槽位产出的数据类型。 */
 export function inferOutputType(classType: string, slot: number): string {
   const types = OUTPUT_TYPES[classType];
 
   if (types && slot >= 0 && slot < types.length) return types[slot]!;
 
-  /* Heuristic fallback for custom nodes the static table doesn't list
+  /* 静态表没列出的自定义节点的启发式兜底
 
-   *  (EmptySD3LatentImage, ModelSamplingAuraFlow, ResolutionSelector, …).
+   *  （例如 EmptySD3LatentImage、ModelSamplingAuraFlow、ResolutionSelector 等）。
 
-   *  Match on the class name itself, which is highly stable across
+   *  判据是节点类名本身 —— 在 ComfyUI 五花八门的社区节点生态里，
 
-   *  ComfyUI's wild ecosystem of community nodes. */
+   *  它相当稳定。 */
 
   const lower = classType.toLowerCase();
 
@@ -267,9 +262,8 @@ export function inferOutputType(classType: string, slot: number): string {
   return "UNKNOWN";
 }
 
-/* ── Per-class *input* type table.  This is a small but high-signal
- *    lookup for the most-used nodes; fall through to heuristic
- *    `inferInputTypeByName` for everything else. */
+/* ── 各节点类型的**输入**类型表。它只覆盖最常用的节点，但信号量很高；
+ *    其余一律回落到按名字推断的启发式函数 `inferInputTypeByName`。 */
 const INPUT_TYPES: Record<string, Record<string, string>> = {
   KSampler: {
     model: "MODEL",
@@ -394,9 +388,8 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
   },
 };
 
-/** Determine the data type of an input slot on a class.  Falls back to a
- *  heuristic over the input name.  Returns "UNKNOWN" if we really can't
- *  tell — the renderer shows a generic gray dot in that case. */
+/* 判断某节点类型上某个输入槽位的数据类型。兜底是「按输入名启发式推断」。
+ *  实在判断不出时返回 "UNKNOWN" —— 渲染器那时画一个通用灰点。 */
 export function inferInputType(
   classType: string,
   inputName: string,
@@ -415,7 +408,7 @@ export function inferInputType(
   return inferInputTypeByName(inputName);
 }
 
-/** Heuristic over the input name alone. */
+/* 仅按输入名做的启发式推断。 */
 export function inferInputTypeByName(name: string): string {
   const lower = name.toLowerCase();
 
@@ -465,7 +458,7 @@ export function inferInputTypeByName(name: string): string {
 
   if (lower === "audio" || lower === "waveform") return "AUDIO";
 
-  /* Widget types by suffix */
+  /* 按后缀识别的控件类型 */
 
   if (lower === "seed") return "INT";
 
@@ -525,13 +518,13 @@ export function inferInputTypeByName(name: string): string {
   return "UNKNOWN";
 }
 
-/* ── Multiline STRING detection ────────────────────────────
+/* ── 多行 STRING 的识别 ─────────────────────────────────
  *
- *  ComfyUI renders a STRING widget as a textarea when the node's Python
- *  `INPUT_TYPES()` declares the option on that input:
+ *  ComfyUI 只有在节点 Python 侧的 `INPUT_TYPES()` 给该输入声明了该选项时，
+ *  才把 STRING 控件渲染成文本域：
  *
- *      "value": (IO.STRING, {"multiline": True})     ← PrimitiveStringMultiline
- *      "text":  (IO.STRING, {"multiline": True, "dynamic_prompts": True})
+ *      "value": (IO.STRING, {"multiline": True})     ← 对应 PrimitiveStringMultiline
+ *      "text":  (IO.STRING, {"multiline": True, "dynamic_prompts": True})  ← 同理
  *      "filename_prefix": ("STRING", {"default": "ComfyUI"})   ← 单行
  *
  *  这是**声明的类型事实**，只能从 /api/object_info 读到（节点自己不带）。
@@ -554,9 +547,8 @@ export function inferIsMultiline(
   return typeof defaultValue === "string" && defaultValue.length > 40;
 }
 
-/** Given a connection target, return the *output* type that the source
- *  supplies, by combining class + slot.  Used for colouring edges and the
- *  small type label on the right side of a connection row. */
+/* 给定一条连线的目标端，结合「源节点类型 + 槽位」返回源侧提供的**输出**类型。
+ *  用于给连线着色，以及连接行右侧那个小类型标签。 */
 export function edgeType(
   srcClass: string | undefined,
   srcSlot: number,
@@ -565,8 +557,8 @@ export function edgeType(
   return inferOutputType(srcClass, srcSlot);
 }
 
-/** Same as `edgeType` but the value-style fallback: when source class
- *  is unknown, infer from the input *name* the wire is feeding into. */
+/* 与 `edgeType` 相同，只是多一层按值兜底：源节点类型未知时，
+ *  改从这条线喂进去的那个输入**名字**来推断。 */
 export function edgeTypeByInputName(name: string): string {
   return inferInputTypeByName(name);
 }

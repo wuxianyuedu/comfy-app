@@ -82,8 +82,10 @@ function seedBaseline(files: Record<string, number>, total: number): void {
   );
 }
 
-const CHINESE = "/** 组合输入参数：取值失败时回落缺省值。 */\nexport const a = 1;\n";
-const ENGLISH = "/** Combine the input parameters and fall back to defaults. */\nexport const a = 1;\n";
+const CHINESE =
+  "/** 组合输入参数：取值失败时回落缺省值。 */\nexport const a = 1;\n";
+const ENGLISH =
+  "/** Combine the input parameters and fall back to defaults. */\nexport const a = 1;\n";
 
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "comment-lang-gate-"));
@@ -170,6 +172,93 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run().code).toBe(0);
   });
 
+  it("turbopackIgnore 指令行不参与统计（Turbopack 按字面量解析）", () => {
+    // Turbopack 的静态分析豁免指令按字面量解析：改写成中文即静默失效
+    // （那一处的静态追踪豁免会丢失）。
+    write(
+      "src/lib/turbopack-directive.ts",
+      [
+        'import fs from "node:fs";',
+        "export function read(p: string) {",
+        '  return fs.readFileSync(/*turbopackIgnore: true*/ p, "utf-8");',
+        "}",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
+  it("JSDoc 结构行（只有类型语法，无散文）不参与统计", () => {
+    // `@param {T}` / `@returns {T}` / `@typedef {…}` 这类行只含类型语法与标识符，
+    // 是类型声明而非「用英文写的说明」。逐行塞中文会破坏语法。
+    write(
+      "src/lib/jsdoc-structural.ts",
+      [
+        "/**",
+        " * @param {string} candidate",
+        " * @returns {Promise<ProbeResult>}",
+        ' * @typedef {"ok" | "no-version"} ProbeReason',
+        " * @param {ProbeOptions} [options]",
+        " */",
+        "export function probe(candidate: string) { return candidate; }",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
+  it("JSDoc 结构块的**续行**（多行类型）同样不参与统计", () => {
+    // 多行 typedef 只有第一行带 tag，其余行只剩类型语法。
+    // 不豁免续行的话，`version: string | null }} ProbeResult` 这类行会被当成英文注释。
+    write(
+      "src/lib/jsdoc-continuation.ts",
+      [
+        "/**",
+        " * @typedef {{ ok: boolean, command: string | null,",
+        " *             version: string | null }} ProbeResult",
+        " */",
+        "export const a = 1;",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
+  it("JSDoc 续行里的英文说明句仍会被统计（豁免不放过散文）", () => {
+    // 反向锚点：续行豁免以「不含英文虚词」为准，说明句一定含虚词。
+    write(
+      "src/lib/jsdoc-continuation-prose.ts",
+      [
+        "/**",
+        " * @param {string} candidate",
+        " *   the command to probe, which must exist",
+        " */",
+        "export const a = 1;",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/jsdoc-continuation-prose.ts");
+  });
+
+  it("带英文散文的 JSDoc 行仍会被统计（结构行豁免不放过说明句）", () => {
+    // 反向锚点：豁免只剥「@tag + 类型块 + 参数名」三段。
+    // 若把「说明句里的每个英文词都当标识符删掉」，就会把这条忘了改的英文说明放过去。
+    write(
+      "src/lib/jsdoc-prose.ts",
+      "/** @param {string} candidate the command to probe */\nexport const a = 1;\n",
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/jsdoc-prose.ts");
+  });
+
   it("说明某个指令的中文注释仍会被统计（豁免只认行首就是指令）", () => {
     // 反向锚点：不设这条，「豁免正则写得太宽」会把正常中文注释一起放行而无人发现。
     write(
@@ -185,7 +274,10 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
   it("纯英文注释行（含 URL 行）计入 —— 判定口径是「连续英文单词 ≥ 3 个」", () => {
     // 反向锚点：上面那条只证明「噪声不计入」，不证明「英文真的被计入」。
     // 没有这条，一个永远返回 0 的统计器会让上面那条一起变绿（§12.16 同款教训）。
-    write("src/lib/url.ts", "// see https://example.com/a/b/c for details\nexport const a = 1;\n");
+    write(
+      "src/lib/url.ts",
+      "// see https://example.com/a/b/c for details\nexport const a = 1;\n",
+    );
     seedBaseline({}, 0);
     const r = run();
     expect(r.code).toBe(1);
@@ -226,7 +318,10 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run(["--update"]).code).toBe(0);
     expect(run().code).toBe(0);
     const baseline = JSON.parse(
-      readFileSync(join(workdir, "scripts", ".comment-language-baseline.json"), "utf8"),
+      readFileSync(
+        join(workdir, "scripts", ".comment-language-baseline.json"),
+        "utf8",
+      ),
     ) as { files: Record<string, number>; ruleVersion: number };
     expect(baseline.files["src/lib/legacy.ts"]).toBe(1);
     expect(baseline.ruleVersion).toBe(1);
@@ -243,9 +338,17 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
     expect(paths).toContain("src/lib/db-schema-ready.ts");
     expect(paths).toContain("src/server/db.ts");
     // 名单来源必须是那篇文档：解析结果与文档里写的逐项相同。
-    const doc = readFileSync(join(REPO_ROOT, "docs/reference-facts.md"), "utf8");
-    const row = doc.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
-    expect(row, "reference-facts 缺少 comment.language.asciiOnly 登记行").toBeTruthy();
+    const doc = readFileSync(
+      join(REPO_ROOT, "docs/reference-facts.md"),
+      "utf8",
+    );
+    const row = doc
+      .split("\n")
+      .find((l) => l.includes("comment.language.asciiOnly"));
+    expect(
+      row,
+      "reference-facts 缺少 comment.language.asciiOnly 登记行",
+    ).toBeTruthy();
     for (const p of paths) expect(row).toContain(`\`${p}\``);
   });
 
@@ -253,7 +356,9 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
     const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
       FACTS: Array<{ key: string }>;
     };
-    expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(true);
+    expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(
+      true,
+    );
   });
 
   it("规范与启动链路文档都写明了例外的存在（避免「一刀切」被改回去）", () => {

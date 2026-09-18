@@ -1,13 +1,13 @@
-// ── Workshop shared types ─────────────────────────────────
-// Full-chain creative pipeline: Script → Character → Storyboard → Generate
+// ── 工坊共享类型 ─────────────────────────────────────────
+// 全链路创作流水线：剧本 → 角色 → 分镜 → 生成
 
-/** Project metadata for the whole pipeline */
+/* 整条流水线的项目元数据。 */
 export interface ProjectMeta {
   title: string;
   type: ProjectType;
   tone: string; // e.g. "温暖治愈", "悬疑紧张"
-  logline: string; // one-line pitch
-  /** Full free-form script written in Markdown (seen in the script editor). */
+  logline: string; // 一句话的卖点概述
+  /** 用 Markdown 写的自由剧本全文（在剧本编辑器里可见）。 */
   scriptMarkdown?: string;
 }
 
@@ -19,7 +19,7 @@ export type ProjectType =
   | "comic" // 漫画/漫剧
   | "other";
 
-/** A single script scene */
+/* 剧本里的一个场景。 */
 export interface Scene {
   id: string;
   heading: string; // 场景标题 e.g. "场景1 · 清晨的咖啡馆"
@@ -30,7 +30,7 @@ export interface Scene {
   shotCount: number; // suggested number of shots
 }
 
-/** A character sheet that yields ComfyUI prompts */
+/* 一份能产出 ComfyUI 提示词的角色设定。 */
 export interface Character {
   id: string;
   name: string;
@@ -67,7 +67,7 @@ export interface CharacterPortrait {
   createdAt: number;
 }
 
-/** A storyboard shot that maps to one image-generation task (and later a video clip) */
+/* 一个分镜镜头，对应一次图片生成任务（之后还会对应一段视频片段）。 */
 export interface Shot {
   id: string;
   index: number; // 镜号
@@ -83,7 +83,7 @@ export interface Shot {
   status: "idle" | "queued" | "running" | "done" | "failed" | "stale";
   taskId?: string;
   imageUrl?: string;
-  // ── Video generation plan ──
+  // ── 视频生成计划 ──
   dialogue?: string; // 对白 / 字幕文本
   motion?: MotionLevel; // 运动强度（I2V）
   duration?: number; // 镜头时长（秒）
@@ -137,7 +137,7 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   other: "其他",
 };
 
-/** A style preset pulled from the Skill system (subset of SkillData) */
+/* 从技能系统取来的风格预设（SkillData 的子集）。 */
 export interface StyleRef {
   slug: string;
   name: string;
@@ -147,7 +147,7 @@ export interface StyleRef {
   defaultParams?: Record<string, unknown>;
 }
 
-// ── Full-chain pipeline stages ─────────────────────────────────
+// ── 全链路流水线的阶段 ─────────────────────────────────
 
 export type PipelineStageId =
   | "script"
@@ -180,11 +180,11 @@ export interface Asset {
   id: string;
   kind: AssetKind;
   title: string;
-  /** Optional linked entity id (scene / shot / character) */
+  /** 可选：关联的实体 id（场景 / 镜头 / 角色）。 */
   entityId?: string;
-  /** URL/path for media assets */
+  /** 媒体素材的 URL 或路径。 */
   url?: string;
   createdAt: string;
-  /** For generated media: generation status */
+  /** 生成类媒体专用的生成状态。 */
   status?: "idle" | "queued" | "running" | "done" | "failed" | "stale";
 }

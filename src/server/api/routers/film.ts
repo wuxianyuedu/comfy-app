@@ -12,14 +12,14 @@ const sizeSpecSchema = z.object({
 });
 
 export const filmRouter = createTRPCRouter({
-  /** GET /api/film */
+  /* GET /api/film —— 读 */
   list: authedProcedure.query(async ({ ctx }) => {
     const films = await filmRepository.listByUser(ctx.user.id);
     const { isFFmpegAvailable } = await import("~/server/film/orchestrator");
     return { films, ffmpegAvailable: await isFFmpegAvailable() };
   }),
 
-  /** POST /api/film — create */
+  /* POST /api/film —— 新建：create */
   create: authedProcedure
     .input(
       z.object({
@@ -59,7 +59,7 @@ export const filmRouter = createTRPCRouter({
       return { id, shots };
     }),
 
-  /** GET /api/film/[id] */
+  /* GET /api/film/[id] —— 读 */
   detail: authedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -70,7 +70,7 @@ export const filmRouter = createTRPCRouter({
       return { film };
     }),
 
-  /** POST /api/film/[id]/cancel */
+  /* POST /api/film/[id]/cancel —— 新建 */
   cancel: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -80,7 +80,7 @@ export const filmRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  /** POST /api/film/[id]/start */
+  /* POST /api/film/[id]/start —— 新建 */
   start: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -91,7 +91,7 @@ export const filmRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  /** POST /api/film/[id]/compose */
+  /* POST /api/film/[id]/compose —— 新建 */
   compose: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {

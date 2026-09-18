@@ -1,19 +1,17 @@
 /**
- * customNodes.ts — Loads the generated custom-node manifest and exposes it as
- * `NodeTypeConfig` entries for the workflow canvas.
+ * customNodes.ts —— 读取生成好的自定义节点 manifest，
+ * 并以 `NodeTypeConfig` 的形式供给工作流画布。
  *
- * The manifest (`src/generated/customNodes.manifest.json`) is produced by the
- * read-only AST parser (`scripts/parse_custom_nodes.py`) from the directories
- * configured via CUSTOM_NODES_PATH. The source custom_node packages are NEVER
- * imported or modified at runtime.
+ * manifest（`src/generated/customNodes.manifest.json`）由只读的 AST 解析器
+ * （`scripts/parse_custom_nodes.py`）从 CUSTOM_NODES_PATH 配置的目录里生成。
+ * 自定义节点的源码包在运行期**从不**被 import，也**从不**被修改。
  *
- * IMPORTANT: We DELIBERATELY do NOT `import` the manifest at build time.
- * Turbopack treats that .json as a module, and HMR breaks whenever the parser
- * rewrites it (HMR can no longer match the original module pattern after the
- * file is replaced). Instead we lazily populate `CUSTOM_NODE_TYPES` from
- * the on-disk manifest via `refreshCustomNodes()` (called on canvas mount and
- * after every parse from CustomNodesSettings). The raw file is also served
- * directly via `/api/custom-nodes/manifest`.
+ * 注意：我们**刻意不**在构建期 `import` 这份 manifest。
+ * Turbopack 会把这个 .json 当成模块，而解析器每次重写它都会打断 HMR
+ *（文件被替换后 HMR 再也匹配不上原来的模块模式）。因此改为惰性填充
+ * `CUSTOM_NODE_TYPES`：经 `refreshCustomNodes()` 从磁盘上的 manifest 读入
+ *（画布挂载时调一次，CustomNodesSettings 每次解析完也调一次）。
+ * 原始文件同时经 `/api/custom-nodes/manifest` 直接对外提供。
  */
 
 import type {
@@ -23,9 +21,8 @@ import type {
   FieldType,
 } from "~/lib/comfyui/node-config";
 
-/** Map a raw ComfyUI category string → accent color. Exported so the UI can
- *  render the same category colour for node-preview cards without having to
- *  bootstrap a full `NodeTypeConfig`. */
+/* 把 ComfyUI 的原始分类字符串映射到强调色。对外导出，
+ * 好让界面给节点预览卡渲染同一个分类配色，而不必先构建完整的 NodeTypeConfig。 */
 export const CATEGORY_COLORS: Record<string, string> = {
   loaders: "#F59E0B",
   loader: "#F59E0B",
@@ -63,7 +60,7 @@ export function colorFor(category: string | undefined): string {
   return hashColor(category);
 }
 
-/** Convert a manifest PortSpec into a FieldDef for the parameter editor. */
+/* 把 manifest 的 PortSpec 转成参数编辑器用的 FieldDef。 */
 export function specToField(s: PortSpec): FieldDef {
   return {
     key: s.name,
@@ -77,20 +74,19 @@ export function specToField(s: PortSpec): FieldDef {
         ? (s.default as { toString(): string }).toString()
         : undefined,
     group: "参数",
-    // Connection-only ports are rendered as handles, not editor fields.
+    // 纯连接端口渲染成连线手柄，而不是编辑字段。
     hidden: !s.widget,
   };
 }
 
-/** All custom node types, keyed by class_type. MUTABLE — `refreshCustomNodes`
- *  repopulates it from the on-disk manifest so the canvas updates live. */
+/* 所有自定义节点类型，按 class_type 作键。**可变** ——
+ * `refreshCustomNodes` 会从磁盘上的 manifest 重新填充它，画布因此能实时更新。 */
 export const CUSTOM_NODE_TYPES: Record<string, NodeTypeConfig> = {};
 
-/** Package origin for each custom node type, keyed by class_type. MUTABLE —
- *  repopulated on every `refreshCustomNodes()` call. The value is the package
- *  directory name (e.g. "DaSiWa-Nodes", "ComfyMath") parsed from the on-disk
- *  manifest. Used by ComfyNode to render the ComfyUI-native bottom-left
- *  "package source" footer on every canvas node. */
+/* 每个自定义节点类型的包来源，按 class_type 作键。**可变** ——
+ * 每次 `refreshCustomNodes()` 调用都会重新填充。值是从磁盘 manifest 解析出的
+ * 包目录名（例如 "DaSiWa-Nodes"、"ComfyMath"）。
+ * ComfyNode 用它给每个画布节点渲染 ComfyUI 原生的左下角「包来源」页脚。 */
 export const CUSTOM_NODE_PACKAGE: Record<string, string> = {};
 
 interface RawManifest {
@@ -102,7 +98,7 @@ interface ManifestInput {
   type: string;
   widget?: string | null;
   options?: string[] | null;
-  /** Opaque widget default (string / number / bool … raw-JSON value). */
+  /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
   default?: unknown;
   required?: boolean;
 }
@@ -117,12 +113,12 @@ interface ManifestNode {
   description?: string | null;
   inputs?: ManifestInput[];
   outputs?: Array<{ type: string; name: string }>;
-  /** Source file on disk (informational only). */
+  /** 磁盘上的源文件（仅供参考）。 */
   source?: string;
-  /** Originating package directory name (e.g. "ComfyMath", "DaSiWa-Nodes").
-   *  Populated by the parser from the package's top-level __init__ folder.
-   *  Stored separately in CUSTOM_NODE_PACKAGE so the canvas bottom-left
-   *  footer can look it up without re-parsing the manifest. */
+  /** 来源包目录名（例如 "ComfyMath"、"DaSiWa-Nodes"）。
+   *  由解析器从包顶层的 __init__ 目录取出，
+   *  并单独存进 CUSTOM_NODE_PACKAGE，好让画布左下角页脚不必重新解析 manifest
+   *  就能查到它。 */
   package?: string;
 }
 
@@ -165,43 +161,40 @@ function buildInto(
       outputsSpec: outputs,
       defaultFields: inputs.map(specToField),
     };
-    // Stash the package origin (e.g. "DaSiWa-Nodes", "ComfyMath") so the
-    // canvas can render the ComfyUI-native bottom-left footer. Falls back
-    // to the raw category string when the manifest didn't ship a package
-    // name (older parser versions / hand-edited manifests).
+    // 记下包来源（例如 "DaSiWa-Nodes"、"ComfyMath"），
+    // 好让画布渲染 ComfyUI 原生的左下角页脚。
+    // manifest 没给包名时（旧版解析器 / 手工改过的 manifest）
+    // 回落到原始分类字符串。
     if (packages && n.package) packages[ct] = n.package;
     count++;
   }
   return count;
 }
 
-/** Look up the package source for a custom node class type. Returns undefined
- *  for built-in nodes or for custom types whose manifest entry lacks a
- *  `package` field. ComfyNode uses this to render the bottom-left footer; for
- *  built-in nodes the footer falls back to a literal "ComfyUI" instead. */
+/* 查某个自定义节点类型的包来源。内置节点、或 manifest 条目里没有
+ * `package` 字段的自定义类型，都返回 undefined。
+ * ComfyNode 用它渲染左下角页脚；内置节点的页脚则回落到字面量 "ComfyUI"。 */
 export function getCustomNodePackage(classType: string): string | undefined {
   return CUSTOM_NODE_PACKAGE[classType];
 }
 
-// NOTE: no static seed — see file header. `CUSTOM_NODE_TYPES` is populated
-// on canvas mount via `refreshCustomNodes()` from `/api/custom-nodes/manifest`.
+// 注意：这里不做静态预置 —— 见文件头注。`CUSTOM_NODE_TYPES` 由画布挂载时的
+// `refreshCustomNodes()` 从 `/api/custom-nodes/manifest` 填充。
 
 export function isCustomNode(classType: string): boolean {
   return classType in CUSTOM_NODE_TYPES;
 }
 
-/** Event name broadcast whenever `refreshCustomNodes()` finishes applying a
- *  fresh manifest. Components that render a registry-dependent view (e.g.
- *  `WorkflowCanvas`'s add-node menu) subscribe to this and bump their own
- *  version state so React re-runs `getAllNodeTypes()`. Without this the canvas
- *  would only see changes mounted at first-load — parsed-from-settings updates
- *  would be invisible until a hard reload. */
+/* `refreshCustomNodes()` 应用完一份新 manifest 后广播的事件名。
+ * 渲染「依赖注册表」的视图组件（例如 `WorkflowCanvas` 的添加节点菜单）订阅它，
+ * 并抬高自己的版本 state，让 React 重新跑 `getAllNodeTypes()`。
+ * 没有它的话，画布只能看到首次加载时挂载的那份 ——
+ * 从设置面板解析出来的更新要硬刷新才可见。 */
 export const CUSTOM_NODES_UPDATED_EVENT = "custom-nodes:updated";
 
-/** Raw shape of a single node from `/api/custom-nodes/manifest.nodes`. The
- *  custom-node settings panel uses this directly so it can render mini-previews
- *  even when the registry hasn't been built yet (e.g. right after a parse,
- *  before any consumer has called `refreshCustomNodes`). */
+/* `/api/custom-nodes/manifest.nodes` 里单个节点的原始形状。
+ * 自定义节点设置面板直接用它，于是在注册表尚未构建时（例如刚解析完、还没有
+ * 任何消费方调用 `refreshCustomNodes`）也能渲染小预览卡。 */
 export interface ManifestNodeRaw {
   classType: string;
   displayName?: string;
@@ -214,7 +207,7 @@ export interface ManifestNodeRaw {
     type: string;
     widget?: string | null;
     options?: string[] | null;
-    /** Opaque widget default (string / number / bool … raw-JSON value). */
+    /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
     default?: unknown;
     required?: boolean;
   }>;
@@ -223,9 +216,8 @@ export interface ManifestNodeRaw {
   package?: string;
 }
 
-/** Fetch the raw manifest straight from disk. Returns null on missing/empty
- *  manifest (e.g. nothing parsed yet). Cheap on the server side — the file is
- *  already cached after the first parse. */
+/* 直接从磁盘取原始 manifest。manifest 缺失或为空（例如还没解析过）时返回 null。
+ * 服务端侧开销很小 —— 首解析之后文件已在缓存里。 */
 export async function getCustomNodesManifest(
   base = "",
 ): Promise<{ nodes: Record<string, ManifestNodeRaw> } | null> {
@@ -247,10 +239,8 @@ export async function getCustomNodesManifest(
   }
 }
 
-/**
- * Live-refresh the registry from the on-disk manifest (via /api/custom-nodes/manifest).
- * Returns the number of custom node types now loaded. Safe to call after a parse.
- */
+/* 从磁盘上的 manifest（经 /api/custom-nodes/manifest）实时刷新注册表。
+ * 返回当前载入的自定义节点类型数。解析完再调是安全的。 */
 export async function refreshCustomNodes(base = ""): Promise<number> {
   try {
     const res = await fetch(`${base}/api/custom-nodes/manifest`);
@@ -259,17 +249,17 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);
-    // Replace contents of the exported const map (consumers hold the reference).
+    // 就地替换对外导出的 const map 内容（消费方持有的是同一引用）。
     for (const k of Object.keys(CUSTOM_NODE_TYPES)) delete CUSTOM_NODE_TYPES[k];
     Object.assign(CUSTOM_NODE_TYPES, next);
-    // Mirror the package origin map so ComfyNode can render the bottom-left
-    // footer without re-parsing the manifest.
+    // 同步包来源映射，让 ComfyNode 不必重新解析 manifest
+    // 就能渲染左下角页脚。
     for (const k of Object.keys(CUSTOM_NODE_PACKAGE))
       delete CUSTOM_NODE_PACKAGE[k];
     Object.assign(CUSTOM_NODE_PACKAGE, nextPackages);
-    // Notify live views (canvas menu, etc.) that the registry mutated.
-    // Guarded for SSR — the broadcaster and the subscribers only run in the
-    // browser, where `CustomEvent` exists and listeners can render.
+    // 通知活跃视图（画布菜单等）注册表已变更。
+    // 为 SSR 做了保护 —— 广播方与订阅方都只在浏览器里跑，
+    // 那里才有 `CustomEvent`，监听者也才能渲染。
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent(CUSTOM_NODES_UPDATED_EVENT, { detail: { count } }),

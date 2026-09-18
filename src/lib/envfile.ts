@@ -1,13 +1,13 @@
 /**
- * envfile.ts — minimal, dependency-free reader/writer for the project `.env`.
+ * envfile.ts —— 项目 `.env` 的最小读写器，不依赖任何第三方库。
  *
- * Used by the custom-nodes settings API so the user can configure
- * CUSTOM_NODES_PATH from the UI instead of hand-editing `.env`.
+ * 自定义节点设置接口用它，让用户能在界面上配 CUSTOM_NODES_PATH，
+ * 而不必手工编辑 `.env`。
  *
- * - Reads `.env.local` first, then `.env` (mirrors Next.js precedence), so a
- *   value set in `.env` is returned even if `.env.local` is absent.
- * - Writing only touches the line `KEY=...` (or appends it), preserving every
- *   other line, comments, and ordering. Never rewrites the whole file.
+ * - 先读 `.env.local`，再读 `.env`（与 Next.js 的优先级一致），
+ *   因此即使在 `.env.local` 不存在时，`.env` 里设的值也能读到。
+ * - 写入只动 `KEY=...` 那一行（不存在则追加），其余各行、注释与顺序全部保留，
+ *   绝不重写整个文件。
  */
 import "server-only";
 import fs from "node:fs";
@@ -17,7 +17,7 @@ function envPath(name: string): string {
   return path.join(/*turbopackIgnore: true*/ process.cwd(), name);
 }
 
-/** Read a single var from .env.local / .env on disk (not process.env). */
+/* 从磁盘上的 .env.local / .env 读单个变量（不是从 process.env 读）。 */
 export function readEnvVar(key: string): string | null {
   for (const file of [".env.local", ".env"]) {
     const fullPath = envPath(file);

@@ -21,19 +21,17 @@ export function baseFromName(name: string): string {
   return "未知";
 }
 
-/** Strip extension so a stored fileName becomes the loadable ComfyUI name. */
+/* 去掉扩展名，让存储用的 fileName 变成 ComfyUI 能加载的名字。 */
 export function stripExt(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, "");
 }
 
-/**
- * Health probe used by the sync to decide whether to re-fill from disk.
+/* 同步流程用来判断「要不要从磁盘重新填充」的健康探测。
  *
- * Not a guard around the whole sync — every sync first retires LOCAL rows
- * so the library cannot lie about being out of sync with `UserModelConfig`.
- * When the user has zero configured folders (or has disabled them all) the
- * library reads empty regardless of ComfyUI connectivity; the probe only
- * controls whether we then attempt to refill from disk.
+ * 它不是整个同步的守卫 —— 每次同步都会**先**退掉所有 LOCAL 行，
+ * 因此模型库不会谎称自己与 `UserModelConfig` 同步。
+ * 用户一个目录都没配（或全部禁用）时，无论 ComfyUI 通不通，库里都是空的；
+ * 这个探测只决定「要不要接着尝试从磁盘回填」。
  */
 async function isComfyReachable(): Promise<boolean> {
   try {
@@ -54,20 +52,18 @@ interface ScannedFile {
   baseModel: string;
 }
 
-/**
- * Sync the on-disk ComfyUI models into our registry.
+/* 把磁盘上的 ComfyUI 模型同步进本项目的注册表。
  *
- * (zero-implicit-default): only folders the user has explicitly
- * enabled in `UserModelConfig` are visited. each directory IS its
- * own model type — the `Model.type` value is simply the directory name
- * verbatim (no taxonomy remapping, no per-row extra types).  A directory's
- * files are attributed only to that directory's type.
+ * 零隐式默认：只访问用户在 `UserModelConfig` 里明确启用的目录。
+ * 每个目录**就是**它自己的模型类型 —— `Model.type` 的值直接就是目录名原样
+ *（不做分类学重映射，也不给每一行加别的类型）。
+ * 某个目录的文件只归属于该目录的类型。
  *
- * Returns the number of model files synced.
+ * 返回同步到的模型文件数。
  */
 export async function syncModels(userId?: string): Promise<number> {
-  // Resolve the (folder → enabled) map for this user.  An empty override map
-  // means the user has zero folders configured → empty library.
+  // 解析该用户的「目录 → 是否启用」映射。映射为空说明用户一个目录都没配
+  // → 库为空。
   type FolderOverride = { enabled: boolean; isCustom: boolean };
   const overrides = new Map<string, FolderOverride>();
   if (userId) {
@@ -76,14 +72,14 @@ export async function syncModels(userId?: string): Promise<number> {
       overrides.set(r.folder, { enabled: r.enabled, isCustom: r.isCustom });
     }
   } else {
-    // Legacy path (no user): not used by /api/models/sync.
+    // 兼容旧路径（不带用户）：/api/models/sync 已不再走它。
     return 0;
   }
 
-  // STEP 1 — unconditionally retire every LOCAL row.
+  // 第 1 步 —— 无条件退掉所有 LOCAL 行。
   await modelRepository.disableAllLocal();
 
-  // STEP 2 — re-fill from disk only if ComfyUI is reachable.
+  // 第 2 步 —— 只在 ComfyUI 可达时才从磁盘回填。
   if (!(await isComfyReachable())) return 0;
 
   const scanned: ScannedFile[] = [];
@@ -115,18 +111,15 @@ export async function syncModels(userId?: string): Promise<number> {
   return scanned.length;
 }
 
-/**
- * Query locally-synced model file names for the given COMBO field types, for
- * the canvas dropdown union (P4).
+/* 为画布下拉框的并集（P4）查询本地已同步的模型文件名。
  *
- * `folders` are directory names (which ARE the model types). We
- * match enabled `UserModelConfig` rows whose `folder` is in the requested set,
- * then fetch distinct `fileName`s from `Model` where `isAvailable=true` and
- * `folder` is one of those directories.
+ * `folders` 是目录名（它们**就是**模型类型）。先匹配 `UserModelConfig` 里
+ * `folder` 属于所请求集合的已启用行，再从 `Model` 取出去重后的 `fileName`，
+ * 条件是 `isAvailable=true` 且 `folder` 属于这些目录之一。
  *
- * IMPORTANT: the value is returned **verbatim** (extension included).
- * ComfyUI's COMBO candidates are the exact `/api/models/<folder>` entries —
- * e.g. `waiIllustriousSDXL_v170.safetensors`.
+ * 重要：返回值是**原样**的（含扩展名）。ComfyUI 的 COMBO 候选就是
+ * `/api/models/<folder>` 的原始条目 —— 例如
+ * `waiIllustriousSDXL_v170.safetensors` 这样的文件名。
  */
 export async function localModelFileNames(
   folders: string[],

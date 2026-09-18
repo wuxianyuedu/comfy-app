@@ -116,7 +116,7 @@ export function applyPropagationToNodes(
     const next: CanvasNodeData = { ...td };
     switch (edge.targetHandle) {
       case "prompt":
-        // A text-carrier node feeds its free text; everything else feeds prompt.
+        // 文本载体节点喂它自己的自由文本；其它节点则喂 prompt 字段。
         if (src.kind === "text") {
           if (src.content?.trim()) next.prompt = src.content;
         } else if (src.prompt?.trim()) {
@@ -140,7 +140,7 @@ export function applyPropagationToNodes(
         if (importedFile) {
           next.inputImage = importedFile;
           next.upstreamId = sourceId;
-          // auto-switch the consumer mode so the fed input is actually used
+          // 自动切换消费端模式，让喂进来的图片真正被用上
           if (next.kind === "image" && next.mode === "txt2img")
             next.mode = "img2img";
           if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
@@ -148,8 +148,8 @@ export function applyPropagationToNodes(
           (src.kind === "picture" || src.kind === "movie") &&
           src.mediaPath
         ) {
-          // Content carriers already live in ComfyUI's input dir, so no
-          // re-import is needed — wire the existing filename straight in.
+          // 内容载体本来就住在 ComfyUI 的 input 目录里，
+          // 因此不必重新导入 —— 直接接上现成的文件名即可。
           next.inputImage = src.mediaPath;
           next.upstreamId = sourceId;
           if (next.kind === "image" && next.mode === "txt2img")

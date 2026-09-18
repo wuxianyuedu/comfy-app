@@ -1,14 +1,13 @@
 /**
- * Client-safe workflow graph preview helpers.
+ * 客户端安全的工作流图预览助手。
  *
- * These functions do NOT depend on any server-only modules (fs / ComfyUI client),
- * so they can be imported by React components in the browser bundle.
+ * 这些函数**不**依赖任何仅服务端的模块（fs / ComfyUI 客户端），
+ * 因此可以被浏览器包里的 React 组件导入。
  */
 
 /**
- * Compact preview summary of a ComfyUI workflow graph, used to render
- * a thumbnail node-graph on workflow library cards. The shape is
- * deliberately small so a /api/workflows GET can include it inline.
+ * ComfyUI 工作流图的紧凑预览摘要，用于在工作流库卡片上渲染缩略节点图。
+ * 结构刻意做小，让 /api/workflows 的 GET 响应可以内联带上它。
  */
 export type WorkflowPreviewNodeKind = "input" | "process" | "output";
 
@@ -16,9 +15,9 @@ export type WorkflowPreviewNode = {
   id: string;
   class_type: string;
   kind: WorkflowPreviewNodeKind;
-  /** Left-to-right layer index (0 = leftmost, larger = further right). */
+  /** 从左到右的层级下标（0 = 最左，越大越靠右）。 */
   level: number;
-  /** Row inside the level (0 = top). Used to position vertically. */
+  /** 层内的行号（0 = 最上），用于纵向定位。 */
   row: number;
 };
 
@@ -30,30 +29,30 @@ export type WorkflowPreviewEdge = {
 export type WorkflowPreview = {
   nodes: WorkflowPreviewNode[];
   edges: WorkflowPreviewEdge[];
-  /** Total node count (may be larger than nodes.length when truncated). */
+  /** 节点总数（被截断时可能大于 nodes.length）。 */
   total: number;
-  /** SVG viewBox width / height, in px. */
+  /** SVG viewBox 的宽 / 高（单位 px）。 */
   width: number;
   height: number;
-  /** True when nodes[] only shows a representative subset of total nodes. */
+  /** 为真时表示 nodes[] 只展示了全部节点里有代表性的一部分。 */
   truncated: boolean;
 };
 
 /**
- * Structural view of one node in a ComfyUI API-format graph ("Export (API
- * Format)" JSON: `{ "nodeId": { class_type, inputs } }`). Only `class_type`
- * and `inputs` are interpreted; every other field passes through untouched.
+ * ComfyUI API 格式图（「Export (API Format)」导出的 JSON：
+ * `{ "nodeId": { class_type, inputs } }`）里单个节点的结构视图。
+ * 这里只解读 `class_type` 与 `inputs`，其余字段原样透传。
  */
 export type WorkflowGraphNode = {
   class_type: string;
-  /** Named inputs; link values are `[nodeId, outputIndex]` tuples. */
+  /** 具名输入；连线值是 `[nodeId, outputIndex]` 二元组。 */
   inputs?: Record<string, unknown>;
 };
 
 /**
- * Runtime guard for {@link WorkflowGraphNode}. ComfyUI node objects carry
- * extra dynamic fields, so any object with a string `class_type` is accepted;
- * `inputs` is validated structurally only where it is actually read.
+ * {@link WorkflowGraphNode} 的运行时守卫。ComfyUI 的节点对象带额外的动态字段，
+ * 因此只要对象有字符串类型的 `class_type` 就接受；
+ * `inputs` 只在真正读取它的地方做结构校验。
  */
 export function isWorkflowGraphNode(
   value: unknown,
@@ -67,8 +66,8 @@ export function isWorkflowGraphNode(
 }
 
 /**
- * Extract the upstream node id from a ComfyUI link — an input value that is a
- * `[nodeId, outputIndex]` tuple. Non-link values (strings, numbers, …) yield
+ * 从 ComfyUI 的连线里取出上游节点 id —— 连线就是形如
+ * `[nodeId, outputIndex]` 的输入值。非连线值（字符串、数字 …）返回
  * undefined.
  */
 export function linkTargetId(value: unknown): string | undefined {
@@ -76,7 +75,7 @@ export function linkTargetId(value: unknown): string | undefined {
   return typeof value[0] === "string" ? value[0] : undefined;
 }
 
-/** Class types that act as data sources (no other node feeds them). */
+/** 充当数据源的节点类型（没有别的节点喂它）。 */
 const INPUT_CLASSES = new Set([
   "LoadImage",
   "CLIPTextEncode",
@@ -99,7 +98,7 @@ const INPUT_CLASSES = new Set([
   "ImageOnlyCheckpointLoader",
 ]);
 
-/** Class types that act as sinks (no other node consumes their output). */
+/** 充当数据汇的节点类型（没有别的节点消费它的输出）。 */
 const OUTPUT_CLASSES = new Set([
   "SaveImage",
   "SaveImageAdvanced",
@@ -121,10 +120,9 @@ function classifyNode(classType: string): WorkflowPreviewNodeKind {
 }
 
 /**
- * Build a compact preview for a workflow graph. We do a lightweight
- * longest-path layering so nodes with no incoming edges sit on the left
- * and pure sinks sit on the right. We then trim to the first ~14 nodes
- * by topological order so the card stays readable; `truncated` is set.
+ * 为工作流图构建紧凑预览。这里做一个轻量的最长路径分层：没有入边的节点排在最左，
+ * 纯数据汇排在最右。随后按拓扑序裁剪到前约 14 个节点，让卡片保持可读；
+ * 被裁剪时 `truncated` 会被置上。
  */
 export function buildWorkflowPreview(
   graph: Record<string, unknown>,
@@ -145,7 +143,7 @@ export function buildWorkflowPreview(
     };
   }
 
-  // Collect edges from any input that is a [nodeId, outputIndex] tuple.
+  // 从所有形如 [nodeId, outputIndex] 二元组的输入里收集连线。
   const incoming: Record<string, Set<string>> = {};
   const outAdj: Record<string, Set<string>> = {};
   for (const [id] of entries) {
@@ -164,7 +162,7 @@ export function buildWorkflowPreview(
     }
   }
 
-  // Longest-path layer (Kahn-style BFS with depth = max parent depth + 1).
+  // 最长路径分层（Kahn 风格 BFS，深度 = 父节点最大深度 + 1）。
   const level: Record<string, number> = {};
   const remaining = new Map<string, number>(
     Object.entries(incoming).map(([k, v]) => [k, v.size]),
@@ -184,11 +182,11 @@ export function buildWorkflowPreview(
       if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
     }
   }
-  // Any node still missing a level (cycle) — put it at level 0.
+  // 仍未分到层的节点（成环）—— 一律放到第 0 层。
   for (const id of Object.keys(incoming)) if (!(id in level)) level[id] = 0;
 
-  // Pick a representative subset if too many nodes. Keep at most 14, biased
-  // toward sources and sinks, and to early layers.
+  // 节点太多时挑一个有代表性的子集：最多保留 14 个，
+  // 偏向数据源与数据汇，以及靠前的层。
   const nodeById = new Map(entries);
   let visible = entries.map(([id]) => id);
   let truncated = false;
@@ -205,7 +203,7 @@ export function buildWorkflowPreview(
     visible = [...sources, ...mid.slice(0, midKeep), ...sinks];
   }
 
-  // Assign row within each level for vertical positioning.
+  // 给每个层内的节点分配行号，用于纵向定位。
   const byLevel: Record<number, string[]> = {};
   for (const id of visible) {
     const lv = level[id] ?? 0;
@@ -239,7 +237,7 @@ export function buildWorkflowPreview(
     };
   });
 
-  // Edges: only between visible nodes.
+  // 连线：只在可见节点之间保留。
   const visibleSet = new Set(visible);
   const edges: WorkflowPreviewEdge[] = [];
   for (const id of visible) {
@@ -251,7 +249,7 @@ export function buildWorkflowPreview(
   return { nodes, edges, total, width, height, truncated };
 }
 
-/** Layout constants for the full (non-truncated) detail preview. */
+/** 完整（不裁剪）详情预览的布局常量。 */
 export const FULL_PREVIEW_NODE_W = 140;
 export const FULL_PREVIEW_NODE_H = 44;
 export const FULL_PREVIEW_LEVEL_GAP = 180;
@@ -259,9 +257,9 @@ export const FULL_PREVIEW_ROW_GAP = 64;
 export const FULL_PREVIEW_MARGIN = 32;
 
 /**
- * Build a complete preview for a workflow graph, suitable for the detail view.
- * Unlike `buildWorkflowPreview`, this keeps every node and lays them out in a
- * wider, more readable grid so the user can inspect the full canvas topology.
+ * 为工作流图构建完整预览，供详情视图使用。
+ * 与 `buildWorkflowPreview` 不同：这里保留所有节点，
+ * 并按更宽、更易读的网格排布，让用户能审视完整的画布拓扑。
  */
 export function buildWorkflowPreviewFull(
   graph: Record<string, unknown>,
