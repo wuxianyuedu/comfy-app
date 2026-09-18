@@ -74,7 +74,7 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Small status chip showing the active provider. */
+/** 显示当前提供方的小状态章。 */
 export function LLMStatusChip() {
   const { config, loading, openSettings } = useLLM();
   if (loading) {
@@ -106,7 +106,7 @@ export function LLMStatusChip() {
   );
 }
 
-/** Gear button that opens the LLM settings modal. */
+/** 打开 LLM 设置弹窗的齿轮按钮。 */
 export function LLMSettingsButton() {
   const { openSettings } = useLLM();
   return (

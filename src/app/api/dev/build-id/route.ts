@@ -40,7 +40,7 @@ function moduleFingerprints(): string {
 }
 
 /**
- * GET /api/dev/build-id
+ * 端点：GET /api/dev/build-id
  *
  * 给前端一条「运行中的这棵模块图，是不是加载时的那一棵」的判定依据。
  *

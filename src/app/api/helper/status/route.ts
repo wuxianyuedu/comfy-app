@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 /**
- * GET /api/helper/status
+ * 端点：GET /api/helper/status
  * 前端用来判断「打开目录」自定义协议助手是否可用。
  * - platform：当前运行平台（win32 才支持 comfyapp:// 注册）。
  * - installerAvailable：项目内安装脚本是否存在。

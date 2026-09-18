@@ -1,5 +1,5 @@
 // 工坊 API 通道配置：掩码视图 + 保存。
-//   GET  /api/workshop-api/config  → { channels: ApiChannelsView }
+//   端点：GET  /api/workshop-api/config  → { channels: ApiChannelsView }
 //   POST /api/workshop-api/config  → 保存部分通道配置，返回掩码视图
 // apiKey 只存在服务端（data/workshop-api-settings.json），
 // 永不返回给浏览器 —— 与 LLM 配置契约一致。

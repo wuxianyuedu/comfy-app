@@ -6,14 +6,14 @@
  * 本身可以是多行的——最典型的是**结构化 payload 被打印成多行 JSON**：
  *
  * ```
- * [YYYY-MM-DD HH:mm:ss.mmm] [ERROR] [server] Invalid option: expected one of …
+ * 形如 [YYYY-MM-DD HH:mm:ss.mmm] [ERROR] [server] 的文本行
  * {
  *   "path": [
  *     "inputs",
  *     1
  *   ],
- *   "message": "Invalid option: …"
- * } {"ns":"server","level":"error"}
+ *   "message": "…"
+ * } 后接 {"ns":"server","level":"error"} 这样的 JSON 尾缀
  * ```
  *
  * 按 `\n` 切分后，`{` / `"path": [` / `"inputs",` … 每一行都成了**独立的一条

@@ -127,9 +127,9 @@ export function useHistoryPanel({
 
   /* ── 有任务在跑时轮询（4s），跑完自动停 ── */
   const refreshRef = useRef(refresh);
-  // Keep the polled callback fresh without reading/writing refs mid-render
-  // (React Compiler forbids ref access during render; the interval only ever
-  // fires after effects have run, so this is timing-equivalent).
+  // 让轮询回调保持新鲜，又不在渲染中途读写 ref
+  //（React Compiler 禁止渲染期间访问 ref；这个定时器只会在 effect 跑完后
+  // 触发，所以时序等价）。
   useEffect(() => {
     refreshRef.current = refresh;
   }, [refresh]);

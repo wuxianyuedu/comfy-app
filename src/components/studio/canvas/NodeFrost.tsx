@@ -72,9 +72,9 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
           }}
         />
       ))}
-      {/* Final noise overlay — adds the fine "frosted" texture that pure
-       *  blurred blobs alone would lack.  Mix-blend lets the colour blobs
-       *  tint it instead of being hidden under it. */}
+      {/* 最后一层噪声叠加 —— 补上纯模糊光斑单靠自己
+       *  缺少的那种细腻「磨砂」质感。Mix-blend 让彩色光斑
+       *  给它上色，而不是把它压在底下。 */}
       <div
         className="absolute inset-0"
         style={{

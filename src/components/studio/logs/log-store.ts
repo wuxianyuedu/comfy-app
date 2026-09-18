@@ -53,7 +53,7 @@ export const LOG_PAGE_SIZE = 2000;
 const REPEAT_FOLD_LIMIT = 5;
 
 export interface LogEntry {
-  /** nanoid-style short id */
+  /** nanoid 风格的短 id */
   id: string;
   /** 日志写入时刻（毫秒）。排序、展示、会话边界判定都用它。 */
   time: number;
@@ -64,7 +64,7 @@ export interface LogEntry {
   source: "console" | "tauri" | "system";
   /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
   origin?: "dev" | "launcher" | "app" | "app-runtime";
-  /** Caller location (file:line) for console logs */
+  /** console 日志的调用位置（文件:行号） */
   location?: string;
   /**
    * 入库顺序：只在同一毫秒内作为稳定排序次键（时间戳相同时保持确定的先后），
@@ -140,7 +140,7 @@ function serializeOne(a: unknown): string {
       ? `${a.name}: ${a.message}\n${a.stack}`
       : `${a.name}: ${a.message}`;
   }
-  // Preserve stack-like strings that may come from serialized error objects.
+  // 保留可能来自序列化错误对象的类栈字符串。
   if (
     typeof a === "object" &&
     a !== null &&

@@ -2,7 +2,7 @@
 // 输入目录，好让 img2video / flfvideo 工作流（LoadImage 节点）能消费它。
 // 生成路由期望 `inputImage` 是已存在于该目录的文件名；
 // 本端点桥接工坊的生成图片 URL。
-//   POST /api/workshop-local/prepare  { image: string }  → { filename }
+//   端点：POST /api/workshop-local/prepare  { image: string }  → { filename }
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";

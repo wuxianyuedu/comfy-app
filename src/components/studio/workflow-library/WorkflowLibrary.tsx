@@ -13,9 +13,9 @@ import { useWorkflowLibrary } from "./hooks/use-workflow-library";
 import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 
 /**
- * Lazy-load the canvas editor. It is a 7k-line module; keeping it behind a
- * dynamic import means editing this file no longer forces webpack to recompile
- * the editor graph on every save.
+ * 懒加载画布编辑器。它是个 7k 行的模块；把它挡在
+ * 动态 import 后面，意味着编辑本文件不再逼 webpack 在每次保存时
+ * 重编译编辑器图。
  */
 const WorkflowCanvasEditor = dynamic(
   () =>
