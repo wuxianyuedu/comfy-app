@@ -4,11 +4,17 @@
 // 纯展示 —— 写操作通过 controller 上抛，由 hook 持久化。
 // 触发按钮与详情头部其它操作按钮（导入画布 / 编辑 / 下载）同款式。
 
-import { useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState } from "react";
 
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
-import { overlayClass } from "~/lib/full-screen-layer";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
@@ -17,8 +23,6 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
     () => new Set(meta.modelTags),
   );
   const [newName, setNewName] = useState("");
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
 
   // Reset draft only on the closed → open transition, so mid-edit re-renders
   // don't wipe the user's selection.
@@ -61,7 +65,6 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   return (
     <>
       <button
-        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
         className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink inline-flex max-w-[260px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors"
@@ -75,96 +78,90 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
         </span>
       </button>
 
-      {open &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={popRef}
-            role="dialog"
-            aria-label="模型标签编辑器"
-            className={overlayClass(
-              "modal",
-              "bg-canvas-deep z-50 flex items-start justify-center p-4 pt-24",
-            )}
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setOpen(false);
-            }}
-          >
-            <div className="border-border bg-card w-80 rounded-xl border p-3 shadow-2xl">
-              <p className="text-ink-bright mb-2 text-xs font-medium">
-                绑定模型标签（{draft.size}）
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="bg-card border-border w-80 gap-0 p-3"
+        >
+          <DialogHeader className="mb-2 gap-0">
+            <DialogTitle className="text-ink-bright text-xs font-medium">
+              绑定模型标签（{draft.size}）
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              勾选模型标签，或输入新标签名（保存时自动入库）。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mb-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
+            {knownNames.length === 0 && (
+              <p className="text-ink-muted px-2 py-1.5 text-[11px] leading-relaxed">
+                全局标签库为空，可直接在下方输入新标签（保存时自动入库）。
               </p>
-              <div className="mb-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
-                {knownNames.length === 0 && (
-                  <p className="text-ink-muted px-2 py-1.5 text-[11px] leading-relaxed">
-                    全局标签库为空，可直接在下方输入新标签（保存时自动入库）。
-                  </p>
-                )}
-                {options.map((name) => {
-                  const selected = draft.has(name);
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => toggle(name)}
-                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-                        selected
-                          ? "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300"
-                          : "text-ink-strong hover:bg-subtle"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                          selected
-                            ? "border-fuchsia-400/60 bg-fuchsia-500/40"
-                            : "border-border-strong bg-subtle"
-                        }`}
-                      >
-                        {selected && "✓"}
-                      </span>
-                      <span className="truncate">{name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="mb-2 flex gap-1.5">
-                <input
-                  value={newName}
-                  onChange={(event) => setNewName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      const name = newName.trim();
-                      if (name) {
-                        toggle(name);
-                        setNewName("");
-                      }
-                    }
-                  }}
-                  placeholder="新增标签，如 z-image"
-                  className="border-border bg-subtle text-ink-bright placeholder:text-ink-muted h-7 min-w-0 flex-1 rounded-md border px-2 text-xs focus:border-fuchsia-400/40 focus:outline-none"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setOpen(false)}
-                  className="h-auto flex-1 rounded-md px-3 py-1.5 text-xs"
+            )}
+            {options.map((name) => {
+              const selected = draft.has(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggle(name)}
+                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                    selected
+                      ? "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300"
+                      : "text-ink-strong hover:bg-subtle"
+                  }`}
                 >
-                  取消
-                </Button>
-                <Button
-                  variant="primary-solid"
-                  onClick={() => void save()}
-                  className="bg-accent-soft hover:bg-accent-soft/90 h-auto flex-1 rounded-md px-3 py-1.5 text-xs font-semibold"
-                >
-                  保存
-                </Button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+                  <span
+                    className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
+                      selected
+                        ? "border-fuchsia-400/60 bg-fuchsia-500/40"
+                        : "border-border-strong bg-subtle"
+                    }`}
+                  >
+                    {selected && "✓"}
+                  </span>
+                  <span className="truncate">{name}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mb-2 flex gap-1.5">
+            <input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const name = newName.trim();
+                  if (name) {
+                    toggle(name);
+                    setNewName("");
+                  }
+                }
+              }}
+              placeholder="新增标签，如 z-image"
+              className="border-border bg-subtle text-ink-bright placeholder:text-ink-muted h-7 min-w-0 flex-1 rounded-md border px-2 text-xs focus:border-fuchsia-400/40 focus:outline-none"
+            />
+          </div>
+          <DialogFooter className="mx-0 mb-0 gap-2 rounded-none border-0 bg-transparent p-0 sm:flex-row">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setOpen(false)}
+              className="bg-subtle text-ink-strong hover:bg-surface-2 h-auto flex-1 rounded-md px-3 py-1.5 text-xs transition-colors"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="primary-solid"
+              onClick={() => void save()}
+              className="h-auto flex-1 rounded-md px-3 py-1.5 text-xs font-semibold"
+            >
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -33,39 +33,6 @@ export function rectToAnchor(
   };
 }
 
-/* 父组件（`WorkflowCanvasEditor`）已经缓存好的原始元数据 —— 这里直接接收，
- * 而不是每次打开浮层都从 `detail.rawNodes` 重算一遍，
- * 免得为同一个数组多跑一趟。 */
-export function computePos(rect: {
-  left: number;
-  top: number;
-  right: number;
-  width: number;
-  height: number;
-}): {
-  left: number;
-  top: number;
-} {
-  const POPOVER_W = 460;
-  const GAP = 8;
-  const INSET = 24;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  /* 决定浮层左边缘的位置：先试放右侧，会顶出视口就翻到左侧
-   *  （判据：芯片左 + 芯片宽 + 间距 + 浮层宽 > 视口宽 - 内边距）。 */
-  const rightCandidate = rect.left + rect.width + GAP;
-  const leftFits = rightCandidate + POPOVER_W + INSET <= vw;
-  const left = leftFits
-    ? rightCandidate
-    : Math.max(INSET, rect.left - GAP - POPOVER_W);
-  /* 纵向以芯片为中心 —— 夹紧取值，让浮层连同上下各 24px 的缓冲仍留在视口内
-   *  （max-height 60vh 由浮层样式自己保证，这里只管把锚点留在芯片附近）。 */
-  const chipCenter = rect.top + rect.height / 2;
-  const desiredTop = chipCenter - 32; // 头部高约 64px
-  const top = Math.min(Math.max(INSET, desiredTop), vh - INSET - 64);
-  return { left, top };
-}
-
 /* 元信息条里的一个小信息芯片。就是个带样式的 span ——
  * 不需要按钮语义（点了没有任何反应）。 */
 export const KNOWN_PACKAGE_HEURISTIC: Record<string, string> = {

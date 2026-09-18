@@ -13,7 +13,7 @@ import { TaskTypeChip } from "../ui/TaskTypeChip";
 import { Button } from "~/components/ui/button";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "../ui/SourceTag";
-import { EmptyState } from "../ui/EmptyState";
+import { EmptyState } from "~/components/ui/empty-state";
 
 interface WorkflowLibraryListProps {
   workflows: WorkflowRow[];
@@ -125,7 +125,7 @@ export function WorkflowLibraryList({
         ) : empty && stalled ? (
           <EmptyState
             minHeightClass="min-h-[160px]"
-            tone="warning"
+            variant="error"
             icon={AlertTriangle}
             title="工作流列表还没返回"
             description={

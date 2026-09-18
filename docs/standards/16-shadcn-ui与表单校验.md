@@ -137,24 +137,71 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 - **`src/components/studio/ui/**` 与 `src/components/studio/shared/**` 也豁免**，
   但豁免的理由是「它们是**迁移对象**而不是合规形态」：这两处的去向是合并进
   `ui/`（下面的台账），在本棘轮里重复计一遍只会让同一件事有两个数字。
-  收敛完成后这两条豁免应随目录一起删掉。
+
+  ⚠️ 这两条豁免是**临时**的，而且已经开始归还：P2 把它们的自搓浮层清干净后，
+  `studio/ui/ModalDialog.tsx` 已重新纳入扫描，`studio/ui/EmptyState.tsx` 与
+  `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 已删除。**每完成一批迁移，
+  就把该目录从 `EXEMPT_DIRS` 里摘出来、用 `--update` 把新出现的存量记进基线**
+  —— 「豁免目录里的存量不进基线」意味着那里治理了多少、还剩多少**没有任何判据**，
+  正是 §3.6.1「豁免必须显式」要防的失效模式。
+
+### 16.2.5 浮层层级只有两条刻度（ISSUE #672 P2）
+
+浮层收拢过程中暴露出第二处不一致：**层级各处一套魔数**。同一件事（下拉浮层）
+在 `MultiSegmentPopover` 是 `9999`、`WorkflowSeedModeButton` 是 `9999` 配 `9998`
+遮罩、节点 JSON 浮层用 `9000`/`9001`，全屏抽屉散落 `10005`/`10020` ——
+谁也说不清「它比谁高」，新增一层只能再编一个更大的数。
+
+收敛为**两条刻度**（数值同时定义在 `globals.css` 的 `@theme` 与
+`src/lib/shell/overlay-z.ts`，两处必须一致）：
+
+| 刻度 | 值 | 用途 | 用法 |
+|------|----|------|------|
+| `Z.overlay` | 100 | 应用内浮层：下拉 / 抽屉 / 模态 / 调试面板 | class 用 `z-overlay`，行内用 `zIndex: Z.overlay` |
+| `Z.toast` | 1000 | 全局提示，恒在浮层之上 | class 用 `z-toast` |
+
+**`Z.overlay` 刻意不进 1000~1200 区间**：那是 React Flow 给节点选中态（约 1010）
+与悬浮态（1180，见 `globals.css`）留的位，应用浮层插进去会和节点争层级。
+画布内部元素的层级（节点 10 / 子图 11 / 子图内元素 0~5）**不属于**本刻度 ——
+它们只在 React Flow 的层叠上下文里比较，与全屏浮层不在同一维度。
+
+浮层遮罩的 class 串统一由 `src/components/ui/dialog-overlay.ts` 的
+`dialogBackdropClass()` 产出：`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的
+`SheetContent` 共用同一份，它同时承载「顶部让出标题行」的硬规则（ISSUE #310：
+遮罩曾铺满视口，把页签与窗口按钮一起盖住）。**内容层不再自绘遮罩** ——
+base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成两层。
 
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
 > 免得每轮扫描都重新发现一遍（与 §3.6.1「豁免必须显式」同一个用意）。
 
-按「同一件事有几份实现」排序：
+按「同一件事有几份实现」排序（**P2 已完成的条目保留在此，作为「怎么迁」的样板**）：
 
-| 形态 | 现状 | 去向 |
-|------|------|------|
-| 按钮 | `ui/button.tsx` + 视图里 394 处 `<button>` | P1 棘轮逐批换 `<Button>`；语义变体已补齐（见下），按目录推进 |
-| 对话框/浮层 | `ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal` | P2 棘轮；`ModalDialog` 改基于 `ui/dialog` 封装 |
-| 空态 | `ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` | **三合一**到 `ui/empty-state.tsx`，props 取并集 |
-| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 26 个文件自写 spinner | P3 棘轮 |
-| UI kit 目录 | `components/ui/`（29）/ `components/studio/ui/`（12）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 |
+| 形态 | 现状 | 去向 | 状态 |
+|------|------|------|------|
+| 对话框/浮层 | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~ | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）** |
+| 空态 | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~ | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`） | ✅ **P2 完成** |
+| 按钮 | `ui/button.tsx` + 视图里 364 处 `<button>` | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 | ⏳ P3 |
+| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 23 个文件自写 spinner | P3 棘轮 | ⏳ P3 |
+| UI kit 目录 | `components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 | ⏳ 分批 |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
+
+**P2 的做法（可直接照抄到后续批次）**：迁移一个浮层 = 换掉两件事 ——
+① `createPortal(...)` → `ui/` 原语的容器；② 随之删掉该文件**自己那份**
+「手写 Esc、手写遮罩点击关闭、手写定位 + 滚动重定位、手写 z-index 魔数」。
+只换 ① 不删 ② 会留下两套关闭语义同时生效（例如 Esc 触发两次 dismiss）。
+
+| 形态 | 原来自搓的位置 | 现在 |
+|------|---------------|------|
+| 确认对话框 | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点） | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留 |
+| 节点 JSON 浮层 | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc） | `ui/dialog`；`workflow-utils.ts` 的 `computePos` 一并删除 |
+| 源码查看弹窗 | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc） | `ui/dialog`；载入态改 `ui/page-loading` |
+| 模型标签编辑器 | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭） | `ui/dialog` |
+| 属性多选下拉 | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位） | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner） |
+| 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元 | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除 |
+| 两个设置抽屉 | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`） |
 
 ### 16.2.4.1 按钮的语义变体（P1 的前置条件）
 
