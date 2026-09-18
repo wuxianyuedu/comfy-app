@@ -31,6 +31,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Z } from "~/lib/shell/overlay-z";
 import {
   ALL_WORKFLOW_TYPES,
   type WorkflowCategory,
@@ -305,7 +306,7 @@ export function MultiModeSelect({
               left: pos.left,
               top: pos.top,
               width: pos.width,
-              zIndex: 9999,
+              zIndex: Z.overlay,
             }}
             className="border-border-strong bg-card rounded-xl border shadow-2xl shadow-black/5 dark:shadow-black/5 dark:shadow-violet-500/20"
           >

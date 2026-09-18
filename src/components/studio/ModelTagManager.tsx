@@ -53,7 +53,7 @@ export function ModelTagManager({
     <div
       className={overlayClass(
         "modal",
-        "z-100 flex items-center justify-center bg-black/25 p-4 dark:bg-black/60",
+        "z-overlay flex items-center justify-center bg-black/25 p-4 dark:bg-black/60",
       )}
       onClick={onClose}
     >

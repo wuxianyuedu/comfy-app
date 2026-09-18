@@ -15,11 +15,9 @@
  * store (useSyncExternalStore + localStorage `v1`), so toggling here
  * instantly takes effect there and vice versa.
  */
-import { useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useDebugMode } from "./canvas/WorkflowCanvasSettings";
 import { useDebugStore } from "./debug/debug-store";
-import { FullScreenLayer } from "./fullscreen/FullScreenLayer";
+import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 
 /* ── Toggle (inline, mirrors CanvasSettingsPanel's ToggleRow look) ── */
 function ToggleRow({
@@ -79,37 +77,17 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
   const { debugMode: logPanelMode, setDebugMode: setLogPanelMode } =
     useDebugMode();
 
-  /* Esc closes the drawer — standard drawer affordance, mirrors
-   * CanvasSettingsPanel's behaviour. */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <FullScreenLayer
-      zClass="z-50"
-      className="flex justify-end"
-      role="presentation"
-    >
-      {/* Click-to-dismiss scrim */}
-      <button
-        type="button"
-        aria-label="关闭项目画布设置"
-        onClick={onClose}
-        className="bg-canvas-deep flex-1 cursor-default backdrop-blur-[1px]"
-      />
-      <aside
-        role="dialog"
+  /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
+     标题行此前是本文件手写的一份，`ui/sheet` 里还有一份同源实现。 */
+  return (
+    <Sheet open onOpenChange={(next) => !next && onClose()}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="bg-panel border-border-strong text-ink-bright w-[340px] gap-0 border-l sm:max-w-[340px]"
         aria-label="项目画布设置"
-        className="border-border-strong bg-panel text-ink-bright flex h-full w-[340px] flex-col border-l shadow-2xl"
       >
+        <SheetTitle className="sr-only">项目画布设置</SheetTitle>
         {/* Header */}
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -160,9 +138,8 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
         <div className="border-border-strong text-ink-muted flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3 text-[11px]">
           <span>设置保存在本浏览器</span>
         </div>
-      </aside>
-    </FullScreenLayer>,
-    document.body,
+      </SheetContent>
+    </Sheet>
   );
 }
 

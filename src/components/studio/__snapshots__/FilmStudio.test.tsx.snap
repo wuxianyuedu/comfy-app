@@ -638,7 +638,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
     </footer>
   </div>
   <div
-    class="pointer-events-none fixed right-5 bottom-8 z-100 flex w-[340px] flex-col gap-2.5"
+    class="z-toast pointer-events-none fixed right-5 bottom-8 flex w-[340px] flex-col gap-2.5"
   />
 </div>
 `;

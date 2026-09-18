@@ -4,6 +4,7 @@ import * as React from "react";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 
 import { cn } from "~/lib/utils";
+import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
 import { Button } from "~/components/ui/button";
 import { XIcon } from "lucide-react";
 
@@ -19,17 +20,15 @@ function SheetClose({ ...props }: SheetPrimitive.Close.Props) {
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />;
 }
 
-function SheetPortal({ ...props }: SheetPrimitive.Portal.Props) {
-  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />;
-}
-
+/** 抽屉遮罩：内容面板不再自绘，改由本组件挂在 Backdrop 上（点遮罩即关闭）。 */
 function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   return (
     <SheetPrimitive.Backdrop
       data-slot="sheet-overlay"
-      // 遮罩让出窗口标题行：否则页签与右上角窗口按钮会被遮罩一起盖住（ISSUE #310）。
+      // 遮罩与 dialog 共用同一份（含「让出标题行」的硬判据，ISSUE #310）。
       className={cn(
-        `top-title-bar fixed inset-x-0 bottom-0 z-50 bg-black/10 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs`,
+        "transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        dialogBackdropClass(),
         className,
       )}
       {...props}
@@ -37,24 +36,28 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   );
 }
 
+/** 抽屉面板 + 遮罩的成对渲染：调用处只关心面板内容。 */
 function SheetContent({
   className,
-  children,
+  panelClassName,
   side = "right",
   showCloseButton = true,
+  children,
   ...props
 }: SheetPrimitive.Popup.Props & {
+  panelClassName?: string;
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
 }) {
   return (
-    <SheetPortal>
+    <>
       <SheetOverlay />
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}
         className={cn(
           "bg-popover text-popover-foreground fixed z-50 flex flex-col gap-4 bg-clip-padding text-sm shadow-lg transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
+          panelClassName,
           className,
         )}
         {...props}
@@ -76,7 +79,7 @@ function SheetContent({
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>
-    </SheetPortal>
+    </>
   );
 }
 
@@ -133,6 +136,7 @@ export {
   SheetContent,
   SheetHeader,
   SheetFooter,
+  SheetOverlay,
   SheetTitle,
   SheetDescription,
 };
