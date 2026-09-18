@@ -99,7 +99,7 @@ async function resolveOllamaExe(): Promise<string> {
     try {
       if (fs.existsSync(c)) return c;
     } catch {
-      // ignore — continue probing next candidate
+      // 忽略 —— 继续探测下一个候选
     }
   }
   // 兜底：交给系统 PATH 解析
@@ -246,7 +246,7 @@ async function spawnOllamaServe(
 }
 
 /**
- * GET /api/llm/ollama-start
+ * 端点：GET /api/llm/ollama-start
  * 就绪探测：检查 11434 端口是否开始接受连接。
  */
 export async function GET(_req: NextRequest) {
@@ -256,7 +256,7 @@ export async function GET(_req: NextRequest) {
 }
 
 /**
- * POST /api/llm/ollama-start
+ * 端点：POST /api/llm/ollama-start
  *
  * 拉起 ollama serve：
  * 1. 先探测端口是否已就绪 → 已在运行就直接返回

@@ -19,10 +19,10 @@ import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
 /**
- * Cards with a title bar (wfNode / wfSubgraph) paint a 30px bar ABOVE their
- * body, so React Flow's node position is the card (title-bar) top while the
- * on-disk ComfyUI convention keeps the body top. We add this offset when
- * persisting a drag so the stored coordinate matches other tools.
+ * 带标题栏的卡片（wfNode / wfSubgraph）会在卡片体**上方**多画一条 30px 标题栏，
+ * 所以 React Flow 的节点坐标是卡片（标题栏）顶点，
+ * 而磁盘上 ComfyUI 的约定是卡片体顶点。
+ * 落盘拖拽结果时补上这段偏移，让存下来的坐标与其它工具对得上。
  */
 const NODE_TITLE_ANCHOR: Record<string, number> = {
   wfNode: NODE_TITLE_H,
@@ -30,9 +30,9 @@ const NODE_TITLE_ANCHOR: Record<string, number> = {
 };
 
 /**
- * Run `cb` after the browser has painted, so the optimistic `setDetail` from
- * resetLayout has committed and React Flow has laid out the canvas before we
- * fit the view. Two frames: one for the React commit, one for the layout pass.
+ * 等浏览器完成绘制后再执行 `cb` —— 好让 resetLayout 的乐观 `setDetail` 已提交、
+ * React Flow 也已完成画布布局，再去 fit 视图。
+ * 两帧：一帧给 React 提交，一帧给布局。
  */
 function afterNextPaint(cb: () => void): void {
   requestAnimationFrame(() => requestAnimationFrame(cb));
@@ -178,7 +178,7 @@ export function useWorkflowPersistence({
     );
   }, [paramMap, setNodes]);
 
-  /* Save paramMap + workflowIO (exposed inputs/outputs) */
+  /* 保存 paramMap + workflowIO（对外输入 / 输出） */
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
@@ -207,23 +207,23 @@ export function useWorkflowPersistence({
     toast,
   ]);
 
-  /* Persist a node's position after the user finishes dragging it.
-   *  - Note nodes (`note:<id>`) → write back into rawJson.nodes[i].pos via
-   *    the `notes` PATCH field, and reflect the new coord in local `detail`
-   *    so the canvas stays consistent (no snap-back on the next render).
-   *  - Real graph nodes → write into the `positions` column via the
-   *    `positions` PATCH field, likewise mirrored into local `detail`.
-   *  - Boundary-pin GROUPS (`grp:bpin:inputs|outputs`)
-   *    → write the group rect into `positions` so the rail stays where the
-   *    user dropped it after reload.  The children carry parentId +
-   *    extent:"parent" and move automatically with the group, so we don't
-   *    persist them individually — only the parent.
-   *  - Individual `bpin:*` nodes are NOT draggable (`draggable: false` in
-   *    the layout pass) so this branch never fires for them; if a future
-   *    change makes them draggable we'd persist their position the same
-   *    way as a real graph node.
-   *  The write is fire-and-forget: it must NOT trigger a detail re-fetch, so
-   *  the canvas never re-mounts or flashes. */
+  /* 用户拖完节点后落盘它的位置。
+   *  - 备注节点（`note:<id>`）→ 经 `notes` PATCH 字段写回
+   *    rawJson.nodes[i].pos，并同步更新本地 `detail` 里的坐标，
+   *    免得下一次渲染回弹。
+   *  - 真实图节点 → 经 `positions` PATCH 字段写进 `positions` 列，
+   *    同样镜像进本地 `detail`。
+   *  - 边界钉住的**分组**（`grp:bpin:inputs|outputs`）
+   *    → 把分组矩形写进 `positions`，重新加载后这条轨道仍停在
+   *    用户放下的位置。子节点带 parentId +
+   *    extent:"parent"，随分组一起移动，所以不单独落盘 —— 只落父级。
+   *  - 单个 `bpin:*` 节点不可拖（布局阶段 `draggable: false`），
+   *    因此这个分支对它们永远不触发；若将来改成可拖，
+   *    按真实图节点同样的方式落盘即可。
+   *  写盘是 fire-and-forget：**不得**触发 detail 重新拉取，
+   *  否则画布会重新挂载或闪一下。
+   *  以上为四类节点的落盘口径，
+   *  锚点换算见下一段。 */
   const reportPositionSaveFailure = useCallback(
     (err: unknown) => {
       console.error(
@@ -240,30 +240,30 @@ export function useWorkflowPersistence({
 
   const onNodeDragStop = useCallback(
     (_event: unknown, node: Node) => {
-      /* `detail` may be null during the loading → ready transition
-       * (e.g. user closes the editor mid-load); if so we have nowhere
-       * to persist the new position.  Bail silently — the canvas
-       * re-mounts with the persisted state on the next open. */
+      /* `detail` 在 loading → ready 的过渡期可能是 null
+       *（例如用户在加载中关掉了编辑器）；那种情况下没地方
+       * 写新位置。静默返回 —— 下次打开时画布会带着
+       * 已落盘的状态重新挂载。 */
       if (!detail) return;
       const x = Math.round(node.position.x);
-      /* Anchor inversion: wfNode / wfSubgraph cards paint a
-       *  30 px title bar ABOVE their body, so the React Flow `position.y`
-       *  is the CARD (title-bar) top, and the body sits `NODE_TITLE_H`
-       *  below it.  The on-disk `positions[id]` must keep the ComfyUI
-       *  body-top convention (what the user/other tools expect), so we
-       *  ADD NODE_TITLE_H before persisting: bodyTop = cardTop + 30.
-       *  Untitled notes, wfGroup and wfIoPort don't carry a title bar,
-       *  so their `position` already equals the ComfyUI top-left. */
+      /* 锚点反转：wfNode / wfSubgraph 卡片会在卡片体**上方**画一条
+       *  30px 标题栏，所以 React Flow 的 `position.y` 是**卡片**（标题栏）顶点，
+       *  卡片体落在它下方 `NODE_TITLE_H` 处。磁盘上的 `positions[id]` 必须保持
+       *  ComfyUI 的卡片体顶点约定（用户与其它工具的预期），因此落盘前
+       *  **加上** NODE_TITLE_H：bodyTop = cardTop + 30。
+       *  无标题备注、wfGroup 与 wfIoPort 没有标题栏，
+       *  它们的 `position` 本就等于 ComfyUI 的左上角；
+       *  带标题的备注见下一分支。 */
       const back = node.type ? (NODE_TITLE_ANCHOR[node.type] ?? 0) : 0;
       const y = Math.round(node.position.y + back);
       if (node.id.startsWith("note:")) {
         const noteId = node.id.replace(/^note:/, "");
-        /* Same anchor convention as the wfNode / wfSubgraph branch: a
-         *  titled note's React Flow `position.y` is its CARD top
-         *  (title-bar top), while the body sits NODE_TITLE_H below.  The
-         *  on-disk `pos` keeps the ComfyUI body-top convention, so we
-         *  ADD NODE_TITLE_H before persisting.  Untitled notes need no
-         *  inversion because their React Flow box has no title bar. */
+        /* 与 wfNode / wfSubgraph 分支同一套锚点约定：带标题的备注
+         *  的 React Flow `position.y` 是它的**卡片**顶点
+         *  （标题栏顶点），卡片体在其下方 NODE_TITLE_H 处。磁盘上的
+         *  `pos` 保持 ComfyUI 的卡片体顶点约定，因此落盘前
+         *  **加上** NODE_TITLE_H。无标题备注无需反转，
+         *  因为它们的 React Flow 盒子没有标题栏。 */
         const noteMeta = (detail.notes ?? []).find(
           (nn) => String(nn.id) === noteId,
         );

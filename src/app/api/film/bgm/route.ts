@@ -6,7 +6,7 @@ import { currentServerUser } from "~/server/auth/request-user";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// (OWASP A04/A05): whitelist audio types and cap the size.
+// 安全（OWASP A04/A05）：白名单音频类型并限制大小。
 const ALLOWED_MIME = new Set([
   "audio/mpeg",
   "audio/wav",

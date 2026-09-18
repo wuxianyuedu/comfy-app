@@ -4,7 +4,7 @@
  *
  * 用法：
  *   node scripts/lockfile/cli.mjs --installed <安装时的 lockfile> --root <仓库根>
- *        [--max-per-section N]
+ *        [--max-per-section N] 可选
  *
  * 退出码：0 两份一致；1 存在实质差异；2 参数/读取错误。
  * 正文只用 ASCII（Windows 控制台代码页，见 AGENTS 硬规则 11）。

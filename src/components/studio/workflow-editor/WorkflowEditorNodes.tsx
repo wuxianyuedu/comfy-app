@@ -146,16 +146,16 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
       }}
       title={`${hoverLabel}${data.type ? ` · ${data.type}` : ""}${valueStr ? ` · ${valueStr}` : ""}`}
     >
-      {/* Boundary-pin signal model:
-          pins face the *centre* of the canvas so the wires run short and
-          straight.  INPUT pin ("in") carries data INTO the subgraph
-          (React Flow `type="source"` — it supplies the inner node's
-          target handle), so its handle sits on the RIGHT edge of the
-          label (toward the middle column).  OUTPUT pin ("out") accepts
-          data flowing OUT of the subgraph (`type="target"`), so its
-          handle sits on the LEFT edge of the label (also toward the
-          middle column).  The "in" / "out" ids stay so the edges in
-          `buildEdges` can resolve a stable handle name. */}
+      {/* 边界针脚信号模型：
+          针脚朝向画布*中心*，好让连线短而直。
+          INPUT 针脚（"in"）把数据带**入**子图
+         （React Flow `type="source"` —— 它供应内部节点的
+          目标句柄），所以它的句柄坐在标签的**右**边缘
+         （朝向中间列）。OUTPUT 针脚（"out"）接收
+          从子图流出的数据（`type="target"`），所以它的
+          句柄坐在标签的**左**边缘（同样朝向
+          中间列）。"in" / "out" 这两个 id 保留，好让
+          `buildEdges` 里的边能解析出稳定的句柄名。 */}
       {!isInput || isBoth ? (
         <Handle
           type="target"

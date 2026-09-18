@@ -48,7 +48,7 @@ import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
  *  IOEdit store
  * ───────────────────────────────────────────────────────────────────────
  *  原先由 wf-editor-inner.tsx 以 useState + useCallback 声明、经
- *  `IOEditContext.Provider value={{ ioEditMode, workflowIO, toggleIO, … }}`
+ *  即 IOEditContext.Provider 上挂 ioEditMode / workflowIO / toggleIO 等
  *  下发。现把「状态 + 动作」一起收进 store；消费方按需订阅。
  *
  *  注意：reorderIO 会 PATCH 服务端，依赖 workflowId；故工厂参数携带
@@ -298,7 +298,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           const { entryKey, entry } = without[i]!;
           renumbered[entryKey] = { ...entry, displayOrder: i + 1 };
         }
-        /* Ship to the server (same call shape as before). */
+        /* 发往服务端（调用形状与之前一致）。 */
         patchWorkflowSilently({ id: workflowId, workflowIO: renumbered });
         return { workflowIO: renumbered };
       });
@@ -558,8 +558,8 @@ export function createNodeJsonViewerStore(
           } | null
         )?.definitions?.subgraphs;
         const targetUid = subgraphRawContext.subUid;
-        // raw subgraph definitions are untyped server payloads; read only
-        // the fields the viewer needs (id / nodes) through a narrow shape.
+        // 原始子图定义是无类型的服务端负载；只经一个窄形状
+        // 读取查看器需要的字段（id / nodes）。
         type RawSubgraphDef = {
           id?: string;
           nodes?: Array<Record<string, unknown>>;

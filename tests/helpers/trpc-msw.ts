@@ -58,10 +58,10 @@ export async function forwardForTest(
  * 建立一个把 `/api/trpc/*` 请求转发给 `router` 的 MSW server。
  *
  * 用法（每个测试文件）：
- *   const server = setupTrpcServer(mockRouter);
- *   beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
- *   afterEach(() => server.resetHandlers());
- *   afterAll(() => server.close());
+ *   建 server：const server = setupTrpcServer(mockRouter);
+ *   启动：beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+ *   每条用例后重置：afterEach(() => server.resetHandlers());
+ *   收尾关闭：afterAll(() => server.close());
  */
 export function setupTrpcServer(router: AnyRouter) {
   return setupServer(

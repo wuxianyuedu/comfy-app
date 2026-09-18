@@ -1,5 +1,5 @@
-/* Shared preset constants + label helpers — extracted from GroupedControls.tsx.
- * Non-component module (kebab-case per project standards). */
+/* 共享的预设常量 + 标签辅助函数 —— 从 GroupedControls.tsx 抽出。
+ * 非组件模块（按项目规范用 kebab-case 命名）。 */
 import { DIM_RATIO_PRESETS } from "./workflow-io";
 
 /** Strip a "16:9 横屏" → "16:9" short label for compact triggers and chips. */
@@ -7,9 +7,9 @@ export function shortRatioLabel(label: string): string {
   return label.split(/\s+/)[0] ?? label;
 }
 
-/* ── Video group presets ──
- * length is frames in ComfyUI video workflows; the labels approximate the
- * duration at ~16fps so the user thinks in seconds, not frame counts. */
+/* ── 视频组预设 ──
+ * length 在 ComfyUI 视频工作流里是帧数；标签按约 16fps
+ * 近似出时长，好让用户按秒思考，而不是帧数。 */
 export const VIDEO_DURATION_PRESETS: { label: string; value: number }[] = [
   { label: "3 秒", value: 48 },
   { label: "5 秒", value: 80 },
@@ -23,7 +23,7 @@ export const VIDEO_QUALITY_PRESETS: { label: string; value: number }[] = [
   { label: "超清 2K", value: 2048 },
 ];
 
-/** Map a video length / quality / aspect value to a friendly popover label. */
+/** 把视频的时长 / 画质 / 比例取值映射成友好的浮层标签。 */
 export function videoDurationLabel(value: number): string {
   return (
     VIDEO_DURATION_PRESETS.find((preset) => preset.value === value)?.label ??

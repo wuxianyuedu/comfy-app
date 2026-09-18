@@ -8,11 +8,11 @@
  * `Set-StrictMode -Version Latest`，而 StrictMode 的「Latest」档会把
  * 「引用不存在的变量」从「$null」升级成**终止性错误**：
  *
- *     Invoke-Entry: …\tools\start\run-local.ps1:32
+ * 典型现场：Invoke-Entry 报错指向 tools\start\run-local.ps1:32
  *     无法检索变量 '$NodeScript'，因为尚未设置该变量。
  *
  * 因为这条分支在 `Invoke-Entry` 的**主路径**上（不是 else 分支），它让
- * `run-local.ps1` / `verify-quality.ps1` / `run-tests.ps1` / `generate-docs.ps1`
+ * 涉及的入口：run-local / verify-quality / run-tests / generate-docs 这几个 .ps1
  * / `sync-lint.ps1` / `register-comfyapp-protocol.ps1` 等**每一个**走
  * `Invoke-Entry` 的双击入口在调起逻辑脚本之前就炸掉；而 `start-web.ps1` /
  * `start-tauri-dev.ps1` 虽然传的是 `dev-launcher.ps1`（一个现在只会定位→转交

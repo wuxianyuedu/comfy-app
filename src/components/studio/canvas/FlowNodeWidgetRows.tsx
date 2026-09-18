@@ -1,8 +1,8 @@
 "use client";
-/* Widget inputs section — knobs only (every entry carries a widgets_values
- * slot). Extracted from workflow-node.tsx. Pure-connection ports
- * live in FlowNodePinRows; this section renders the scalar/object inputs
- * with their values, including STRING multiline textareas. */
+/* Widget 输入区 —— 只有旋钮（每个条目都带一个 widgets_values
+ * 槽位）。从 workflow-node.tsx 抽出。纯连接端口
+ * 住在 FlowNodePinRows；本区渲染标量 / 对象输入
+ * 及其取值，含 STRING 多行 textarea。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor, inferInputType } from "~/lib/comfyui/types";
 import { friendlyInputName } from "~/lib/comfyui/node-titles";
@@ -48,15 +48,15 @@ export function FlowNodeWidgetRows({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col py-0.5">
       {visibleWidgetEntries.map(([k, v], idx) => {
-        // A row carries a wire only when rawInputs flags it as connected
-        // (rare — chiefly subgraph wrapper inputs that double as defaults).
+        // 只有当 rawInputs 标它为已连线时，行才带线
+        // （少见 —— 主要是兼作默认值的子图包裹输入）。
         const isConn = rawMeta[k]?.isConnection === true;
-        // Boundary wire: wrapper-exposes-this-slot sentinel (origin_id -10).
+        // 边界连线：包裹暴露该槽位的哨兵（origin_id -10）。
         const isBoundary =
           rawMeta[k]?.isBoundary === true ||
           data.boundaryInputs?.has(k) === true;
-        // Type always inferred from the JS-typed scalar value (wire-tuple
-        // edgeType paths live in the top pins section).
+        // 类型一律从 JS 类型的标量值推导（连线元组
+        // 的 edgeType 路径在顶部针脚区）。
         const inputType = inferInputType(data.classType, k, v);
         const typeCol = portColor(inputType);
         // Display label: 工作流 JSON 里作者写的 label（英文业务名）优先于
@@ -70,9 +70,9 @@ export function FlowNodeWidgetRows({
           sanitizeComboLabel(meta?.label) ||
           sanitizeComboLabel(meta?.localized) ||
           friendlyInputName(k);
-        // STRING widgets render as a stacked block (label row + textarea)
-        // only when genuinely long / multi-line; short scalars
-        // ("auto", "fp16") keep the compact 22px inline row.
+        // STRING widget 只有在确实很长 / 多行时才
+        // 渲染成堆叠块（标签行 + textarea）；短标量
+        //（"auto"、"fp16"）保持紧凑的 22px 行内排布。
         const stringText = typeof v === "string" ? v : "";
         /* 多行只认两件事：服务端按**类型声明**盖的 `multiline`（rawMeta 的
          *  `{"multiline": true}`），以及「值本身很长 / 带换行」这条数据判据 ——
@@ -95,8 +95,8 @@ export function FlowNodeWidgetRows({
 
         return (
           <div
-            // idx appended so ComfyUI number-slot inputs ("1", "2", …)
-            // don't collide across rows.
+            // 附加 idx，好让 ComfyUI 的数字槽输入（"1"、"2" …）
+            // 不跨行撞车。
             key={`${k}-${idx}`}
             data-input-key={k}
             data-input-type={inputType}
@@ -137,8 +137,8 @@ export function FlowNodeWidgetRows({
             />
 
             {isStringWidget ? (
-              /* STRING stacked block — LABEL + IoCheckbox on top, textarea
-               * below claiming the remaining vertical space. */
+              /* STRING 堆叠块 —— 顶部是 LABEL + IoCheckbox，textarea
+               * 在下方占满剩余竖向空间。 */
               <div className="flex shrink-0 items-center gap-1.5">
                 {io?.ioEditMode && !isConn && !isBoundary && (
                   <IoCheckbox
@@ -171,8 +171,8 @@ export function FlowNodeWidgetRows({
               </div>
             ) : (
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                {/* Workflow inputs must be UNCONNECTED — skip the checkbox
-                 * for wired / boundary slots. */}
+                {/* 工作流输入必须是**未连线**的 —— 对已连线 /
+                 *  边界槽位跳过复选框。 */}
                 {io?.ioEditMode && !isConn && !isBoundary && (
                   <IoCheckbox
                     io={io}
@@ -201,7 +201,7 @@ export function FlowNodeWidgetRows({
                   {friendlyLabel}
                 </span>
 
-                {/* Soft 1px vertical divider between label and value. */}
+                {/* 标签与取值之间的柔和 1px 竖向分隔线。 */}
                 <>
                   <span
                     className={
@@ -211,9 +211,9 @@ export function FlowNodeWidgetRows({
                     }
                     aria-hidden
                   />
-                  {/* A widget input that ALSO carries a wire still shows its
-                   * control value (ComfyUI never hides it) — only dimmed so
-                   * the reader can tell the live value comes from the wire. */}
+                  {/* **同时**带线的 widget 输入仍显示它的
+                   * 控件取值（ComfyUI 从不隐藏它）—— 只是调暗，让
+                   * 读者能看出这个活值来自连线。 */}
                   <span
                     className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                     style={{
@@ -229,10 +229,10 @@ export function FlowNodeWidgetRows({
                 </>
               </div>
             )}
-            {/* STRING-widget textbox — STACKED BELOW the LABEL row.
-             * <textarea readOnly> beats <div> + Tailwind arbitrary classes
-             * (they silently drop in this subtree).  Empty value falls back
-             * to a faint （空） placeholder. */}
+            {/* STRING widget 文本框 —— **堆叠**在 LABEL 行下方。
+             * <textarea readOnly> 胜过 <div> + Tailwind 任意类
+             *（它们在这个子树里会静默失效）。值为空时回落到
+             * 淡淡的（空）占位。 */}
             {isStringWidget && (
               <div className="flex min-w-0 flex-1 flex-col">
                 {stringText.length > 0 ? (

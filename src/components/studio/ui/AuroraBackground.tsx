@@ -1,16 +1,16 @@
 /**
- * AuroraBackground — shared decorative backdrop matching the Ardot design system.
- * Screen-blended radial glows (violet / cyan / cyan-mint) over the page base.
+ * AuroraBackground —— 与 Ardot 设计体系一致的共享装饰性背景。
+ * 页面底色之上叠加屏幕混合的径向光晕（紫 / 青 / 青薄荷）。
  *
- * Theme-aware:
- *  - Dark mode uses `mix-blend-screen` with strong glow (original design).
- *  - Light mode falls back to `normal` blend with **lower opacity**, since
- *    `screen` on a white/light surface produces no visible effect. Both the
- *    color-stops alpha and `opacity` utilities are tuned per mode so the aurora
- *    stays subtle rather than washed out.
+ * 随主题：
+ *  - 深色模式用 `mix-blend-screen` 配强光晕（原始设计）。
+ *  - 浅色模式回落到 `normal` 混合并**降低透明度**，因为
+ *    在白 / 浅色表面上的 `screen` 产生不了可见效果。色标 alpha 与
+ *    `opacity` 工具类都按模式各自调过，好让极光
+ *    保持克制而不是被冲淡。
  *
- * Place once near the root of a transparent (non-opaque) page; it is fixed and
- * pointer-events-none so it never interferes with layout or interaction.
+ * 在透明（非不透明）页面靠近根处放一次；它是 fixed 且
+ * pointer-events-none 的，所以永不干扰布局或交互。
  *
  * **色值走 `--color-aurora-*` token（规范 03 §3.6.2）**：这里曾把
  * `rgba(139,92,246,…)` / `rgba(34,212,237,…)` / `rgba(255,92,168,…)` 写死，

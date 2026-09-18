@@ -1,8 +1,8 @@
 "use client";
 
-/** extracted from ProjectCanvas's top-left project
- *  switcher (button + dropdown).  Controlled by the parent — all menu /
- *  rename state lives in useProjectManager and is threaded through props.
+/** 从 ProjectCanvas 的左上角项目
+ *  切换器（按钮 + 下拉）抽出。受父级控制 —— 菜单 /
+ *  重命名状态都在 useProjectManager 里并经 props 传入。
  */
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";

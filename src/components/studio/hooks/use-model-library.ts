@@ -51,7 +51,7 @@ export function useModelLibrary(): ModelLibraryController {
   /* 卸载标记：refetch 是一条**脱离组件生命周期的游离 promise 链**——
    * 它的 .finally 会在「组件已卸载、测试的 jsdom 环境已拆除」之后才 resolve，
    * 此时 setLoading 会打到已销毁的环境上。实测形态是 vitest 的
-   * `Unhandled Rejection: ReferenceError: window is not defined`
+   * 表现为 Unhandled Rejection: ReferenceError: window is not defined
    * （react-dom 的 resolveUpdatePriority 读 window），退出码非零、
    * 而报错点名的文件**每次都不同**（谁回包慢就点谁）。
    * cleanup() 只卸载组件、不会取消这条已发出的 promise，所以必须自己判存活。 */

@@ -5,7 +5,7 @@
  * node/pnpm 等一切走网络的 Node 程序连接超时(UND_ERR_CONNECT_TIMEOUT),
  * 而 curl 和显式 IPv4 的 TLS 均正常。用法:
  *
- *   NODE_OPTIONS="--require ./scripts/force-ipv4-dns.cjs" pnpm install
+ *   用法：NODE_OPTIONS 里 --require 本脚本后再跑 pnpm install
  *
  * 仅影响本次进程,不修改系统配置。调用方显式传了 family(如 family: 6)时不干预。
  */

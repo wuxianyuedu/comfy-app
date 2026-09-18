@@ -7,8 +7,8 @@ import { createTRPCContext } from "~/server/api/trpc";
 import { logger } from "~/server/lib/logger";
 
 /**
- * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
- * handling a HTTP request (e.g. when you make requests from Client Components).
+ * 它包住 `createTRPCContext` 辅助，在处理 HTTP 请求时
+ * 为 tRPC API 提供所需上下文（例如从客户端组件发请求时）。
  */
 const createContext = async (req: NextRequest) => {
   return createTRPCContext({

@@ -4,33 +4,33 @@ import { useCallback, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
 /**
- * ComfyUI-style numeric stepper:  [—] [value] [+]
+ * ComfyUI 风数值步进器：  [—] [值] [+]
  *
- * Replaces the browser's native <input type="number"> which has:
- *   - wrong colors in dark theme
- *   - hover-triggered value changes (the spinner buttons are too easy to hit)
- *   - no visual indication of min/max bounds
+ * 替换浏览器原生 <input type="number">，后者有：
+ *   - 深色主题下颜色不对
+ *   - 悬停就改值（spinner 按钮太容易误触）
+ *   - 没有 min/max 边界的视觉提示
  *
  * 输入用「草稿态」：聚焦期间的击键保存在本地 draft 里原样回显（受控 value 的
  * clamp 回写会在输入中途把 "0." / 清空 / 小于 step 的值瞬间顶回去，等于
  * 没法打字）；blur 或点 +/- 时才把草稿 clamp 成合法值提交。
  */
 interface NumberFieldProps {
-  /** Current numeric value */
+  /** 当前数值 */
   value: number;
-  /** Called with the new (clamped) value */
+  /** 用新的（已 clamp 的）值调用 */
   onChange: (v: number) => void;
-  /** Minimum allowed value (default 0) */
+  /** 允许的最小值（默认 0） */
   min?: number;
-  /** Maximum allowed value (default 9999) */
+  /** 允许的最大值（默认 9999） */
   max?: number;
-  /** Step increment/decrement amount (default 1) */
+  /** 步进增 / 减量（默认 1） */
   step?: number;
-  /** Decimal places to display (default 0 = integer) */
+  /** 显示的小数位（默认 0 = 整数） */
   decimalPlaces?: number;
-  /** Additional CSS classes for the outer container */
+  /** 外层容器的额外 CSS 类 */
   className?: string;
-  /** Whether the field is disabled */
+  /** 字段是否禁用 */
   disabled?: boolean;
 }
 

@@ -10,7 +10,7 @@
  *
  * 逃逸手段是注解，但**位置才是坑**：Turbopack 看的是**算出路径的那个表达式**，
  * 不是消费它的 `fs.*` 调用。把注解塞在调用参数里会被静默忽略 —— 这正是
- * `api/dev/build-id` / `api/update-check` / `comfyui/status` / `db-schema-ready` /
+ * 涉及的路由与模块：api/dev/build-id / api/update-check / comfyui/status / db-schema-ready 等
  * `server/workshop/db` 明明「有注解」却一直告警的原因。
  *
  * 本用例把「注解必须落在路径表达式上」变成硬判据：五个调用点逐个断言

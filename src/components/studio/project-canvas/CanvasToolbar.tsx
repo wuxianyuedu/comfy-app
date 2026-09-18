@@ -1,7 +1,7 @@
 "use client";
 
-/** extracted from ProjectCanvas's floating toolbar
- *  (fit view / export JSON / clear canvas).  Pure presentational.
+/** 从 ProjectCanvas 的浮动工具栏抽出
+ *  （适应视图 / 导出 JSON / 清空画布）。纯展示。
  */
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";

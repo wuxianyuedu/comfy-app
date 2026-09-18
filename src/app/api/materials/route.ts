@@ -72,9 +72,9 @@ async function requireUser(): Promise<NextResponse | null> {
  * 文件系统支撑，落点 public/generated/materials/{scope}/{folder}/。
  * 详见 src/lib/materials.ts 顶部的存储选型说明。
  *
- * GET    /api/materials?projectId=proj_1&scope=project
+ * 端点：GET    /api/materials?projectId=proj_1&scope=project
  *          → { folders: [{id,name,count}], items: [] }           列分类
- * GET    /api/materials?projectId=proj_1&folder=docs
+ * 端点：GET    /api/materials?projectId=proj_1&folder=docs
  *          → { folders: [...], items: [...] }                    列分类内文件
  * GET    /api/materials?projectId=proj_1&q=角色
  *          → { folders: [...], items: [...] }                    全库搜索

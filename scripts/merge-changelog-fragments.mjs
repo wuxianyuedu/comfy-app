@@ -9,7 +9,7 @@
  * 用法:
  *   node scripts/merge-changelog-fragments.mjs           并入 [Unreleased] 并删除碎片
  *   node scripts/merge-changelog-fragments.mjs --check   只预览要并入的内容,不落盘
- *   node scripts/merge-changelog-fragments.mjs --release 0.2.0
+ * 用法示例：node scripts/merge-changelog-fragments.mjs --release 0.2.0
  *                                                        并入后把 [Unreleased] 定版为
  *                                                        [0.2.0] - <今天>
  */

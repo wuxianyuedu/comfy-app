@@ -18,10 +18,10 @@
  * 切串时 panic。中文只出现在 `.ps1` 入口与文档里。
  *
  * 用法：
- *   node scripts/run-tests.mjs
- *   node scripts/run-tests.mjs --full
- *   node scripts/run-tests.mjs src/lib/media.test.ts
- *   node scripts/run-tests.mjs -- --reporter=verbose
+ * 用法示例：node scripts/run-tests.mjs
+ *   node scripts/run-tests.mjs --full（全量）
+ *   node scripts/run-tests.mjs src/lib/media.test.ts（指定文件）
+ *   node scripts/run-tests.mjs -- 后面跟 vitest 参数
  */
 import fs from "node:fs";
 import path from "node:path";

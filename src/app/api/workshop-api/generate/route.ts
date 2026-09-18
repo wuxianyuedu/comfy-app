@@ -1,12 +1,11 @@
-// Workshop API channel generation relay.
-//   POST /api/workshop-api/generate
-//     { kind: "image", prompt, negative?, size?,
-//       aspectRatio?, megapixels?, multiple?, image? }        → { url }
-//     { kind: "video", prompt, image?, frames?, fps? }        → { url? , remoteTaskId? }
-//     { kind: "video", remoteTaskId }                         → { url } | { pending: true }
-// The relay keeps the provider apiKey server-side and normalizes heterogeneous
-// upstream response shapes (direct URL vs b64 vs async task id) via the shared
-// extraction helpers.
+// 工坊 API 通道生成中转。
+//   对外契约（POST /api/workshop-api/generate）：
+//     图片请求字段：{ kind: "image", prompt, negative?, size?,
+//       可选：aspectRatio?, megapixels?, multiple?, image? } → 返回 { url }
+//     视频请求： { kind: "video", prompt, image?, frames?, fps? }  → { url? , remoteTaskId? }
+//     视频轮询： { kind: "video", remoteTaskId }                   → { url } | { pending: true }
+// 中转把提供方的 apiKey 留在服务端，并经共享
+// 提取辅助函数归一化各种上游响应形状（直给 URL vs b64 vs 异步任务 id）。
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
@@ -77,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (kind === "video") {
-      // Poll step for async providers.
+      // 异步提供方的轮询步。
       if (remoteTaskId) {
         const result = await pollVideoViaApi(remoteTaskId);
         return NextResponse.json(result);

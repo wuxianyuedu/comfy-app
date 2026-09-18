@@ -147,7 +147,7 @@ export function ShotRow({
         placeholder="画面描述（留空则使用场景动作描述）"
       />
 
-      {/* Character multi-select */}
+      {/* 角色多选 */}
       {characters.length > 0 && (
         <div className="mt-2">
           <span className="text-muted-foreground mb-1 block text-xs">

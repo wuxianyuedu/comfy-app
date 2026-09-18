@@ -1,5 +1,5 @@
 "use client";
-/* Unified multi-section popover dropdown — extracted from GroupedControls.tsx. */
+/* 统一的多段浮层下拉 —— 从 GroupedControls.tsx 抽出。 */
 import React, {
   useCallback,
   useEffect,
@@ -11,21 +11,21 @@ import { createPortal } from "react-dom";
 import { Z } from "~/lib/shell/overlay-z";
 
 /* ─────────────────────────────────────────────────────────────────────────
- * redesign: a unified multi-section popover dropdown
- * replaces the previous "two separate DarkSelects" preset UI.  The trigger
- * collapses the current selection into a single summary chip
- * (e.g. `16:9 / 2K`) and clicking it opens a panel with one row per
- * parameter — 比例 (icon row, single-select), 清晰度 (segmented, single-
- * select), 质量 (segmented, single-select, optional).  Each row is
- * single-select within itself but the dropdown as a whole lets the user
- * pick from N sections in one place — hence "multi-select popover".
+ * 改版：用一个统一的多段浮层下拉
+ * 替换此前「两个独立 DarkSelect」的预设 UI。触发器把当前选择
+ * 收成一颗摘要章
+ *（如 `16:9 / 2K`），点它打开一个面板，每个
+ * 参数一行 —— 比例（图标行，单选）、清晰度（分段，单选）、
+ * 质量（分段，单选，可选）。每行内部是
+ * 单选，但整个下拉让用户在一处就能从 N 个段里挑 —— 故名
+ * 「多选浮层」。
  *
- * Click-outside-to-close is wired with a mousedown listener that
- * excludes the wrapper ref, so the popover doesn't fight the parent
- * form's own click handlers.
+ * 点击外部关闭用 mousedown 监听实现，监听
+ * 排除包裹 ref，这样浮层不会和父级
+ * 表单自己的点击处理器打架。
  * ───────────────────────────────────────────────────────────────────────── */
 
-/** Small rectangle that visually mirrors a width/height ratio. */
+/** 视觉上镜像宽高比的小矩形。 */
 export function RatioIcon({
   ratio,
   className = "",
@@ -50,24 +50,24 @@ export function shortRatioLabel(label: string): string {
   return label.split(/\s+/)[0] ?? label;
 }
 
-/** One section inside the multi-segment popover. */
+/** 多段浮层里的一个段。 */
 export interface SegmentSection<T extends string = string> {
-  /** Section header label (uppercase, e.g. "比例"). */
+  /** 段头标签（大写，如「比例」）。 */
   label: string;
-  /** Currently-selected option value (must match one of `options.value`). */
+  /** 当前选中的选项值（必须是 `options.value` 之一）。 */
   value: T;
-  /** Available choices for this section. */
+  /** 这个段的可选项。 */
   options: {
     value: T;
     label: string;
     render?: React.ReactNode;
-    /** optional sub-group label. When two options
-     *  carry different `subgroup` strings, the section renders them in
-     *  separate rows with a small uppercase label between.  Options without
-     *  a subgroup default to a single unlabeled row. */
+    /** 可选的子分组标签。两个选项
+     *  带不同 `subgroup` 字符串时，该段把它们渲染在
+     *  分开的行里，中间夹一个小号大写标签。没有
+     *  subgroup 的选项默认归入一行无标签行。 */
     subgroup?: string;
   }[];
-  /** Called when the user picks a different option in this section. */
+  /** 用户在本段里选了别的选项时调用。 */
   onChange: (value: T) => void;
 }
 
@@ -83,13 +83,13 @@ function MultiSegmentPopoverInner({
   sections: SegmentSection<string>[];
   align?: "left" | "right";
   ariaLabel?: string;
-  /** grey out + block opening while the owning form is disabled. */
+  /** 宿主表单禁用时置灰 + 阻止打开。 */
   disabled?: boolean;
-  /** optional slot rendered below the sections
-   *  inside the popover card.  Used for the megapixel alignment-multiple
-   *  stepper (a continuous number control that doesn't fit the
-   *  `SegmentSection` shape).  Kept generic so future use-cases (e.g.
-   *  video bitrate / fps override) can ride the same plumbing. */
+  /** 可选插槽，渲染在浮层卡片内
+   *  各段下方。用于百万像素对齐倍数
+   *  步进器（一个连续数值控件，套不进
+   *  `SegmentSection` 的形状）。保持通用，好让日后用例（如
+   *  视频码率 / 帧率覆盖）复用同一套管线。 */
   footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -228,11 +228,11 @@ function MultiSegmentPopoverInner({
   );
 }
 
-/* split the inner section renderer out so the
- *  (potentially heavy) subgroup grouping only re-runs when its input
- *  actually changes.  The previous inline `.map` rebuilt the Map and
- *  array on every keystroke in CreatePanel, which combined with the
- *  `onChange` callback recreations made switching presets feel sticky. */
+/* 把内层段渲染器拆出来，好让
+ *  （可能较重的）子分组归组只在其输入
+ *  真的变了时才重跑。此前内联的 `.map` 会在 CreatePanel 每次
+ *  按键时重建 Map 与数组，叠加 `onChange` 回调重建后
+ *  让切换预设摸起来发涩。 */
 const Section = React.memo(function Section({
   section,
   first,
@@ -310,8 +310,8 @@ const Section = React.memo(function Section({
   );
 });
 
-/* the popover used to be rebuilt on every parent
- *  re-render even when its `sections` array was referentially the same.
- *  Wrap in React.memo so the click-to-select path no longer pays the cost
- *  of recreating all 6 segment buttons on each CreatePanel re-render. */
+/* 浮层以前会在父级每次重渲染时
+ *  重建，即使它的 `sections` 数组引用没变。
+ *  用 React.memo 包起来，点选路径就不再为
+ *  每次 CreatePanel 重渲染重建全部 6 个段按钮付代价。 */
 export const MultiSegmentPopover = React.memo(MultiSegmentPopoverInner);

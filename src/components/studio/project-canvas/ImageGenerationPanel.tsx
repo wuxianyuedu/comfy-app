@@ -83,8 +83,8 @@ export function ImageGenerationPanel({
     onFailed: (reason) => patchRef.current({ status: "error", error: reason }),
   });
 
-  // Keep `patch` in a ref so the cancel handler (fired from an async
-  // callback) always sees the latest value without being re-created.
+  // 把 `patch` 放在 ref 里，好让取消处理器（由异步
+  // 回调触发）总能读到最新的值，而不必被重建。
   const patchRef = useRef(patch);
   // eslint-disable-next-line react-hooks/refs -- 渲染期把最新 props 写入 ref，供异步取消回调读取最新值（刻意模式）
   patchRef.current = patch;
@@ -383,16 +383,15 @@ export function ImageGenerationPanel({
                   ? "↻ 重新执行"
                   : "▶ 用此工作流生成"}
             </Button>
-            {/* stuck-task escape hatch.  The
-             *  picture node used to be stuck at "生成中…" forever when
-             *  the runner raw-path held `s.active` hostage (an earlier fix
-             *  closed the leak, but older in-flight tasks still recover
-             *  via this button).  Calls POST /api/tasks/{id}/cancel
-             *  which marks the DB row CANCELLED + invokes
-             *  runner.cancelTask() to release the active slot.  The
-             *  SSE `error` event will follow within ~100ms and patch
-             *  `d.status` to "error" via the same path that handles
-             *  normal failures. */}
+            {/* 卡住任务的逃生通道。
+             *  当 runner 的 raw 路径把 `s.active` 占着不放时，
+             *  图片节点曾永远卡在「生成中…」（早前的修复
+             *  堵上了泄漏，但更早的在途任务仍靠
+             *  这个按钮恢复）。调用 POST /api/tasks/{id}/cancel，
+             *  它把 DB 行标为 CANCELLED + 调
+             *  runner.cancelTask() 释放活跃槽位。
+             *  SSE `error` 事件会在约 100ms 内跟上，并经处理
+             *  普通失败的同一条路径把 `d.status` patch 成 "error"。 */}
             {d.status === "running" && d.taskId ? (
               <Button
                 variant="outline"

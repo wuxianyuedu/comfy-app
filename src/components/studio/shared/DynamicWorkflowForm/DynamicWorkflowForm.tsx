@@ -1,11 +1,11 @@
 "use client";
 
 /* ── DynamicWorkflowForm ──
- * Renders the parameter form for a custom ComfyUI workflow strictly from the
- * pins the author exposed in IO-edit mode.  No hard-coded 提示词/CFG/种子 —
- * a workflow that exposes one `text` pin gets exactly one textarea; a
- * workflow that exposes nothing gets an actionable hint instead of a wall of
- * irrelevant fields.
+ * 严格按作者在 IO 编辑模式里暴露的针脚，渲染自定义 ComfyUI 工作流的参数表单。
+ * 不写死 提示词/CFG/种子 ——
+ * 只暴露一个 `text` 针脚的工作流就只得到一块 textarea；
+ * 什么都不暴露的工作流得到一句可行动的提示，而不是一堵
+ * 无关字段。
  *
  * Shared by CreatePanel（宽版）and the canvas `workflow` node（compact）.
  *

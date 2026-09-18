@@ -1,7 +1,7 @@
 "use client";
-/* Video group field renderer — extracted from GroupedControls.tsx.
- * Renders one friendly field per detected sub-widget (length / aspect /
- * quality), switching between preset dropdowns and native controls. */
+/* 视频组字段渲染器 —— 从 GroupedControls.tsx 抽出。
+ * 为每个探测到的子 widget（时长 / 比例 /
+ * 画质）渲染一个友好字段，在预设下拉与原生控件之间切换。 */
 import { NumberField } from "~/components/studio/ui/NumberField";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import {
@@ -35,7 +35,7 @@ function VideoField({
   const current = values[entry.ioKey];
   const label = roleLabel(role);
 
-  // COMBO with resolved candidates → always a select (both paradigms).
+  // COMBO 已解析出候选项 → 一律用下拉（两种范式都是）。
   if (
     entry.control === "select" &&
     Array.isArray(entry.options) &&
@@ -58,7 +58,7 @@ function VideoField({
     );
   }
 
-  // Preset paradigm → friendly dropdowns writing representative values.
+  // 预设范式 → 写代表性值的友好下拉。
   if (preset) {
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
@@ -101,7 +101,7 @@ function VideoField({
       );
     }
     if (role === "aspect") {
-      // numeric aspect → ratio presets writing the float ratio
+      // 数值比例 → 写浮点比值的形式预设
       const presets = DIM_RATIO_PRESETS;
       const cur = Number(current ?? entry.defaultValue ?? presets[0]!.ratio);
       const val =
@@ -123,7 +123,7 @@ function VideoField({
     }
   }
 
-  // Split paradigm → native control.
+  // 分开填写范式 → 原生控件。
   if (entry.control === "int" || entry.control === "float") {
     const bounds = numericBounds(entry);
     const value = Number(current ?? entry.defaultValue ?? bounds.min);

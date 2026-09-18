@@ -186,8 +186,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
       {accent && nodeMode !== 0 && (
         <FrostLayer color={accent} nodeMode={nodeMode} />
       )}
-      {/* Header — purple accent (subgraph identity).  Same NODE_TITLE_H as
-       *  the regular WorkflowNode header so titled nodes line up on the grid. */}
+      {/* 头部 —— 紫色强调（子图身份）。与普通 WorkflowNode 头部同一个
+       *  NODE_TITLE_H，好让带标题的节点在网格上对齐。 */}
       <SubgraphHeader
         title={data.title}
         nodeId={String(data.nodeId)}
@@ -203,13 +203,13 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         }
       />
 
-      {/* Collapsed-mode handle anchors. Hidden when the
-       *  subgraph chip is expanded — body sections below render
-       *  instead.  Visual is the same cylinder (rounded vertical
-       *  pill): one on the LEFT for wired boundary inputs, one on the
-       *  RIGHT whenever the wrapper declares any output.  Invisible
-       *  per-port <Handle>s sit underneath so live wire geometry is
-       *  preserved across toggle. */}
+      {/* 折叠态句柄锚点。子图章展开时隐藏 —— 那时
+       *  改由下面的主体区块渲染。视觉上是同一根圆柱（圆角竖向
+       *  药丸）：连线型边界输入在**左**一根，
+       *  只要包裹声明了输出就在**右**一根。底下坐着
+       *  不可见的每端口 <Handle>，让活连线几何
+       *  在切换前后保持不变。
+       *  折叠 / 展开都走这一套。 */}
       {isCollapsed &&
         (() => {
           const wiredInputs = connInputs.filter(({ inp }) =>
@@ -306,11 +306,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
           );
         })()}
 
-      {/* TOP PINS zone — pure-connection input ports (left dot) zipped with
-       *  exposed output ports (right dot) on shared rows, exactly like a
-       *  regular WorkflowNode.  Every declared pin shows its dot permanently
-       *  (always-on) so unconnected ports stay visible.
-       *  Hidden when the user / config marks the chip collapsed. */}
+      {/* 顶部针脚区 —— 纯连接型输入端口（左圆点）与暴露出的
+       *  输出端口（右圆点）拉在一行，与普通
+       *  WorkflowNode 完全一致。每个声明过的针脚都常显
+       *  圆点（always-on），未连线的端口也看得见。
+       *  用户 / 配置把章标成折叠时隐藏。 */}
       {!isCollapsed && pinRows > 0 && (
         <div
           className="border-border-strong border-b py-0.5"
@@ -354,11 +354,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       }}
                       title={`${inLabel} (${inType})`}
                     />
-                    {/* Subgraph boundary inputs that already have an incoming
-                     *  wire from the parent workflow (or are themselves a
-                     *  sentinel boundary link) get their value upstream — they
-                     *  cannot be exposed as workflow inputs.  Skip the checkbox
-                     *  for connected slots. */}
+                    {/* 已经从父工作流接进线来的子图边界输入（或本身
+                     *  就是哨兵边界连线）取值来自上游 —— 它们
+                     *  不能被暴露成工作流输入。已连线的槽位
+                     *  跳过复选框。 */}
                     {io?.ioEditMode &&
                       inName &&
                       !inInp?.isConnection &&
@@ -395,9 +394,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     >
                       {outDisplay}
                     </span>
-                    {/* per-PORT output checkbox removed;
-                     *  workflow outputs are node-identified.  The per-node output
-                     *  checkbox now lives in the subgraph node header. */}
+                    {/* 每端口输出复选框已移除；
+                     *  工作流输出按节点标识。按节点的输出
+                     *  复选框现在住在子图节点的头部。 */}
                     {/* 输出端点**任何视图模式下都必须挂载** —— 同
                      *  FlowNodePinRows：它同时是下游 `out:<name>` 边的锚点，
                      *  条件不渲染会让 React Flow 解析不到 handle 而丢掉整条边
@@ -427,12 +426,12 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         </div>
       )}
 
-      {/* WIDGET zone — exposed wrapper widget inputs as LABEL | VALUE rows.
-       *  A dot (target Handle) mounts only when the slot is ALSO wired
-       *  (isConnection / isBoundary), matching WorkflowNode's "both" row.  Even
-       *  then the value stays visible (连线不消失 + 值照常显示).
-       *  STRING widgets with long values break out into a stacked block.
-       *  Hidden when the chip is collapsed. */}
+      {/* Widget 区 —— 暴露出的包裹 widget 输入，按 LABEL | VALUE 行排。
+       *  只有槽位**同时**接了线（isConnection / isBoundary）才挂
+       *  圆点（目标 Handle），与 WorkflowNode 的「两者都有」行一致。即便
+       *  如此值也照常显示（连线不消失 + 值可见）。
+       *  值很长的 STRING widget 拆成上下堆叠块。
+       *  章折叠时隐藏。 */}
       {!isCollapsed && widgetInputs.length > 0 && (
         <div className="bg-surface-1 relative flex min-h-0 flex-1 flex-col py-0.5">
           {widgetInputs.map(({ inp, label }, i) => {
@@ -491,14 +490,14 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     title={`${label} (${inp.type})`}
                   />
                 )}
-                {/* Workflow inputs must be UNCONNECTED — a slot already carrying a wire
-                 *  (isConnection / isBoundary) gets its value from upstream, so
-                 *  exposing it as a workflow input is meaningless. */}
-                {/* this top-level checkbox is for COMPACT (non-STRING) widgets
-                 *  only.  STRING widgets render their own IoCheckbox inside the
-                 *  stacked block below (L4415), so without the `!isStringWidget`
-                 *  guard a STRING row would show TWO checkboxes — one orphaned at
-                 *  the top of the row, one correctly next to its label. */}
+                {/* 工作流输入必须是**未连线**的 —— 已经带线的槽位
+                 *  （isConnection / isBoundary）取值来自上游，
+                 *  把它暴露成工作流输入没有意义。 */}
+                {/* 这个顶层复选框只服务**紧凑型**（非 STRING）widget。
+                 *  STRING widget 在下面堆叠块内部
+                 *  自己渲染 IoCheckbox，所以少了 `!isStringWidget`
+                 *  守卫时，一行 STRING 会显示**两个**复选框 —— 一个孤零零飘在
+                 *  行首，一个正确地挨着标签。 */}
                 {io?.ioEditMode && !isConn && !isStringWidget && (
                   <IoCheckbox
                     io={io}
@@ -533,19 +532,17 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         >
                           {label}
                         </span>
-                        {/* Vertical 1px divider between label and value. */}
+                        {/* 标签与取值之间的竖向 1px 分隔线。 */}
                         <span
                           className="bg-border-strong h-2 w-px shrink-0"
                           aria-hidden
                         />
-                        {/* COMBO widget on the workflow canvas
-                         *  renders as a display-only DarkSelect — it shows the
-                         *  currently-selected model as a dropdown shell, but
-                         *  stays disabled here (editing happens in the project
-                         *  canvas form where the value is persisted).  The
-                         *  node is a faithful read-only preview, not an editor.
-                         *  The trigger is shrunk to the 22px row height so it
-                         *  doesn't break the uniform pin rhythm. */}
+                        {/* 工作流画布上的 COMBO widget 渲染成只读的
+                         *  DarkSelect —— 它把当前选中的模型显示成下拉外壳，但
+                         *  在这里保持禁用（编辑发生在会落盘取值的项目
+                         *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
+                         *  触发器压到 22px 行高，免得
+                         *  破坏统一的针脚节奏。 */}
                         <DarkSelect
                           value={typeof v === "string" ? v : ""}
                           onChange={() => undefined}
@@ -573,11 +570,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         >
                           {label}
                         </span>
-                        {/* Vertical 1px divider between label and value.
-                         *  now a soft vertical gradient (top/bottom
-                         *  fade to transparent) instead of a hard bar — reads as
-                         *  a column hint rather than a "cut the row in half" line.
-                         *  Width still 1px so it doesn't claim row real estate. */}
+                        {/* 标签与取值之间的竖向 1px 分隔线。
+                         *  现在是一段柔和竖向渐变（上下端
+                         *  淡出到透明）而不是硬条 —— 读起来是
+                         *  列提示，而不是「把行切成两半」的线。
+                         *  宽度仍是 1px，不占行的版面。 */}
                         <span
                           className="bg-border-strong h-2 w-px shrink-0"
                           aria-hidden
@@ -602,23 +599,23 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     )}
                   </>
                 )}
-                {/* STRING-widget textbox on subgraph wrapper.  STACKED
-                 *  BELOW the LABEL row (parity with WorkflowNode). Row is
-                 *  `flex-col gap-1.5 flex-1` so the label + charCount
-                 *  chip occupy the top row and the textarea below fills
-                 *  the remaining vertical space.  See WorkflowNode branch for
-                 *  the full rationale on the `flex-row items-start` →
-                 *  `flex-col gap-1.5 flex-1` migration and the removal
-                 *  of `maxHeight: 96`.
+                {/* 子图包裹上的 STRING widget 文本框。**堆叠**
+                 *  在 LABEL 行**下方**（与 WorkflowNode 对齐）。行是
+                 *  `flex-col gap-1.5 flex-1`，好让标签 + 字数
+                 *  章占住顶行、下面的 textarea 填满
+                 *  剩下的竖向空间。`flex-row items-start` →
+                 *  `flex-col gap-1.5 flex-1` 迁移与删掉
+                 *  `maxHeight: 96` 的完整理由
+                 *  见 WorkflowNode 分支。
                  *
-                 *  Pairs with the WorkflowNode branch: a real <textarea readOnly>
-                 *  so multi-line prompts wrap and any overflow scrolls
-                 *  natively (no Tailwind className dependence — WorkflowNode
-                 *  subtree historically has unreliable arbitrary-value
-                 *  compilation).  `mono` font for subgraph wrapper widgets
-                 *  (they're typically system names / IDs).  Empty value
-                 *  falls back to a faint "（空）" placeholder wrapped in a
-                 *  flex-1 container so the row layout stays balanced. */}
+                 *  与 WorkflowNode 分支配对：真正的 <textarea readOnly>
+                 *  让多行提示自动换行，溢出部分原生滚动
+                 *  （不依赖 Tailwind className —— WorkflowNode
+                 *  子树历史上对任意值 className
+                 *  编译不可靠）。子图包裹 widget 用 `mono` 字体
+                 *  （它们通常是系统名 / ID）。值为空时
+                 *  回落到淡淡的「（空）」占位，仍占住
+                 *  flex-1 容器，行布局保持均衡。 */}
                 {isStringWidget && (
                   <div className="flex min-h-0 flex-1 flex-col">
                     <div className="flex shrink-0 items-center gap-1.5">

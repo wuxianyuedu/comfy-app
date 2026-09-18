@@ -11,7 +11,7 @@
  *  - 防拖拽：阻断 pointer/mouse 事件冒泡，避免触发 ReactFlow 节点拖动
  *
  * 用法：
- *   <DebugChainFooter modules={getWorkflowRenderChainModules(classType)} />
+ *   用法：把 modules 传成 getWorkflowRenderChainModules(classType) 的结果
  */
 
 import {
