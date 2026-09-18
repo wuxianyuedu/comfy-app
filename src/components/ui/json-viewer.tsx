@@ -92,34 +92,35 @@ function ensureHighlightCss() {
   const style = document.createElement("style");
   style.dataset.jvHilite = "true";
   style.textContent = `
-/* 非 active hit — 行级提示色 */
+/* 非 active hit — 行级提示色。色值一律取 globals.css 的两态 token
+   （--json-view-hit-*，浅色深琥珀 / 深色亮琥珀）：写死琥珀字面量时
+   浅色下是「近白字压浅琥珀底」，命中看不出来。 */
 .json-view .json-view--pair[data-jv-hit="true"] {
-  background-color: rgba(251, 191, 36, 0.10);
+  background-color: var(--json-view-hit-bg);
   border-radius: 3px;
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.30);
+  box-shadow: inset 0 0 0 1px var(--json-view-hit-ring);
 }
 /* active hit — 强对比 */
 .json-view .json-view--pair[data-jv-active-hit="true"] {
-  background-color: rgba(251, 191, 36, 0.32) !important;
+  background-color: var(--json-view-hit-bg-active) !important;
   border-radius: 3px;
-  box-shadow: inset 0 0 0 2px rgb(251, 191, 36) !important;
+  box-shadow: inset 0 0 0 2px var(--json-view-hit-solid) !important;
 }
 /* string value 内的 substring mark */
 .json-view mark.jv-hit-sub {
-  background-color: rgba(251, 191, 36, 0.32);
-  /* 命中子串文字色跟主题：写死 rgb(254,243,199)（近白）时，Light 下是
-     近白字压浅琥珀底，看不到。浅色用深琥珀，深色保留原近白。 */
-  color: var(--json-view-hit-sub-ink, rgb(120, 53, 15));
+  background-color: var(--json-view-hit-bg-active);
+  /* 命中子串文字色跟主题走：token 已在两态各给一颗对比度足够的取值。 */
+  color: var(--json-view-hit-solid);
   border-radius: 2px;
   padding: 0 1px;
 }
 .dark .json-view mark.jv-hit-sub {
-  --json-view-hit-sub-ink: rgb(254, 243, 199);
+  color: var(--json-view-hit-active-ink);
 }
 .json-view mark.jv-hit-sub[data-jv-active-hit="true"] {
-  background-color: rgb(251, 191, 36);
-  color: rgb(24, 16, 28);
-  box-shadow: 0 0 0 2px rgb(251, 191, 36);
+  background-color: var(--json-view-hit-solid);
+  color: var(--json-view-hit-active-ink);
+  box-shadow: 0 0 0 2px var(--json-view-hit-solid);
   font-weight: 600;
 }
 `;

@@ -2,6 +2,7 @@
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { ProjectMeta, ProjectType } from "~/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
@@ -161,11 +162,11 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
           />
         </div>
         <div className="space-y-2">
-          <textarea
+          <Textarea
             value={idea}
             onChange={(event) => setIdea(event.target.value)}
             rows={3}
-            className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
+            className="border-border bg-bg"
             placeholder="输入一句话灵感或粘贴一段粗稿，直接生成完整剧本…"
           />
           <div className="flex flex-wrap gap-2">

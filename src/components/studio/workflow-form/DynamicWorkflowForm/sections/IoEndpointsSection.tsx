@@ -5,6 +5,7 @@ import {
   type WorkflowIOEntry,
 } from "../../../workflow-io";
 import { SectionHeader } from "../SectionHeader";
+import { PIN_ACCENT } from "../constants";
 
 interface IoEndpointsSectionProps {
   /** Wire-only inputs (必须连线) — rendered as read-only chips. */
@@ -28,7 +29,7 @@ export function IoEndpointsSection({
       <SectionHeader
         label="I/O 端点"
         count={wireInputs.length + (showOutputs ? outputs.length : 0)}
-        accent="#5BC6FF"
+        accent={PIN_ACCENT}
       />
       {wireInputs.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

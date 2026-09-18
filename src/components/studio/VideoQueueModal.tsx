@@ -5,6 +5,7 @@ import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
 import {
   fetchVideoTasks,
   submitGeneration,
@@ -313,7 +314,7 @@ export function VideoQueueModal({
                     <span className="mt-1 font-mono text-xs text-violet-700 dark:text-violet-300">
                       V{String(index + 1).padStart(2, "0")}
                     </span>
-                    <textarea
+                    <Textarea
                       value={draftItem.prompt}
                       onChange={(event) =>
                         setDraft((arr) =>
@@ -326,7 +327,7 @@ export function VideoQueueModal({
                       }
                       rows={2}
                       placeholder="分镜提示词，含镜头运动描述…"
-                      className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter outline-noneray-600 min-w-0 flex-1 resize-none rounded-lg border px-3 py-2 text-xs focus:border-violet-500/40"
+                      className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 resize-none text-xs"
                     />
                     <Button
                       variant="ghost"

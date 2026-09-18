@@ -24,6 +24,7 @@ import {
 } from "../workflow-io";
 import { DimensionControl } from "./DimensionControl";
 import { VideoControl } from "./VideoControl";
+import { SECTION_ACCENT } from "./DynamicWorkflowForm/constants";
 
 function GroupedControls({
   dimension,
@@ -91,7 +92,7 @@ function GroupedControls({
         <div className="border-border-strong mt-1 flex items-center gap-2 border-t pt-2.5">
           <span
             className="h-2 w-2 shrink-0 rounded-full"
-            style={{ background: "#FF9C5B" }}
+            style={{ background: SECTION_ACCENT }}
           />
           <span className="text-ink-muted text-[10px] font-semibold tracking-wider uppercase">
             组合参数

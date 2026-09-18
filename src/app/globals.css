@@ -18,6 +18,10 @@
   --color-primary-500: #8b5cf6;
   --color-primary-600: #7c3aed;
   --color-primary-soft: #f1ecff;
+  /* 警告色浅底上的文字档（浅色）：`--color-warning-strong` 是「浅底上的琥珀
+     文字」，深色下它会变亮；而深色渐变底（影片时间轴片段）需要的是
+     「暗底上的浅琥珀字」，与它取的是两侧。 */
+  --color-warning-soft: #fde8c0;
   --color-accent: #ff5ca8;
   /* 极光晕的三档色相（装饰性背景，两态同名 —— 浅色下靠外面那层
      `opacity-*` 调低，深色下配 `mix-blend-screen`）。强度由使用处的
@@ -163,6 +167,7 @@
   --color-ink: #ededf2;
   --color-muted: #9a9aad;
   --color-primary-soft: #221c3a;
+  --color-warning-soft: #fde8c0; /* 深色档：渐变底上的浅琥珀字（与浅色档同值） */
   --color-primary-strong: #a78bfa; /* 深色下品牌文字改亮紫（violet-400 同值） */
   --color-primary-500: #8b5cf6;
   --color-primary-600: #7c3aed;
@@ -685,6 +690,26 @@ textarea::-webkit-scrollbar {
   --json-view-container: var(--color-ink-soft);
   --json-view-brace: var(--color-ink-faint);
   --json-view-hover: rgb(0 0 0 / 0.05);
+  /* 搜索命中高亮（`json-viewer` 的 HIT CSS）：底色一律走 warning 家族，
+     两态各自取值 —— 原先写死 `rgba(251,191,36,*)`（amber-400），浅色下
+     近白字压浅琥珀底看不清。 */
+  --json-view-hit-bg: color-mix(
+    in srgb,
+    var(--color-warning-strong) 12%,
+    transparent
+  );
+  --json-view-hit-ring: color-mix(
+    in srgb,
+    var(--color-warning-strong) 32%,
+    transparent
+  );
+  --json-view-hit-bg-active: color-mix(
+    in srgb,
+    var(--color-warning-strong) 32%,
+    transparent
+  );
+  --json-view-hit-solid: var(--color-warning-strong);
+  --json-view-hit-active-ink: #ffffff;
 }
 .dark {
   --json-view-property: #c4b5fd; /* violet-300 */
@@ -695,6 +720,13 @@ textarea::-webkit-scrollbar {
   --json-view-container: #a1a1aa;
   --json-view-brace: #71717a;
   --json-view-hover: rgb(255 255 255 / 0.04);
+  /* 命中高亮（深色档）：保持「亮琥珀底 + 深字」——与浅色档的
+     「深琥珀底 + 亮字」同一条思路，两态都取对比度足够的一侧。 */
+  --json-view-hit-bg: rgb(251 191 36 / 0.1);
+  --json-view-hit-ring: rgb(251 191 36 / 0.3);
+  --json-view-hit-bg-active: rgb(251 191 36 / 0.32);
+  --json-view-hit-solid: rgb(251 191 36);
+  --json-view-hit-active-ink: rgb(24 16 28);
 }
 .json-view.jv-theme-comfy {
   color: var(--color-ink);

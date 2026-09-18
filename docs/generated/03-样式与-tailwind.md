@@ -293,6 +293,12 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
   `scripts/.theme-color-baseline.json`，新写的写死色值一律阻断；逐批治理后用
   `node scripts/check-theme-colors.cjs --update` 收紧基线（同 UI/逻辑分离棘轮
   的口径，见 17 章）。已接入 `.githooks/pre-commit` 与 CI。
+- **存量里混着「本该豁免的类型色」时怎么办**：余量 115 处里的多数落在
+  `workflow-node-palette` / `workflow-utils` / `CanvasNodePrimitives` 这类
+  **端口类型色 / 节点类别色常量表**上 —— 按上面的类型色例外**本可豁免**，
+  只是从未登记。**别把它留在「未豁免存量」里**：那样它既不是豁免、也不是
+  待治理项，两边都不算。「豁免必须显式」的另一面就是**存量必须逐条定性**，
+  登记进 `EXEMPT_TABLES`（带理由）或就地 token 化。
 
 ### 3.6.2 品牌/状态色必须走语义 token（ISSUE #672，机器强制）
 
@@ -338,6 +344,12 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 **这套区分直接决定 `Button` 的语义变体怎么写**（16 §16.2.4.1）：
 `variant="warning"` 的底色取 `bg-warning/10`、文字取 `text-warning-strong`，
 而不是两边都用 `amber-500`。
+
+**「浅底上的字」与「深底上的字」是两颗 token，别互相借用**：例如影片时间轴
+的片段底是**深色渐变**，上面的字要浅（`text-primary-soft` /
+`text-warning-soft`，`--color-warning-soft` 两态同值）；而「浅底上的琥珀字」
+用的是 `text-warning-strong`（深色下落亮）。两者在深色下取值接近、在浅色下
+**相反** —— 借错了不报错，只是在浅色下看不清（同 §3.6.1 开头那段论证）。
 
 **装饰性渐变/光晕**：色相进 token，**强度（alpha）留在调用处**。同一个极光晕
 曾在登录页 / 首页 / `FilmStudio` / `TrainingStudio` 各抄一份、且值不同

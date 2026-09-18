@@ -28,6 +28,8 @@
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
+import { RangeSlider } from "~/components/ui/range-slider";
+import { Switch } from "~/components/ui/switch";
 
 export interface CanvasSettings {
   /** 网格 (Grid) */
@@ -467,20 +469,12 @@ function SliderRow({
           {format(value)}
         </span>
       </div>
-      <input
-        type="range"
+      <RangeSlider
         min={min}
         max={max}
         step={step}
         value={value}
-        onChange={(event) => onChange(parseFloat(event.target.value))}
-        className="bg-subtle h-1 w-full cursor-pointer appearance-none rounded-full accent-violet-500 outline-none"
-        style={{
-          /* 滑动条的主题化单靠 Tailwind 很难做到；
-           * 这里用一个与滑块位置同步的渐变画出「已填充」那一段，
-           * 让用户在条上直接看到自己的取值。 */
-          background: `linear-gradient(to right, rgb(167,139,250) 0%, rgb(167,139,250) ${((value - min) / (max - min)) * 100}%, rgba(255,255,255,0.07) ${((value - min) / (max - min)) * 100}%, rgba(255,255,255,0.07) 100%)`,
-        }}
+        onChange={onChange}
       />
     </label>
   );
@@ -502,22 +496,9 @@ function ToggleRow({
       <span className="text-ink-soft" title={tooltip}>
         {label}
       </span>
-      <Button
-        variant="ghost"
-        role="switch"
-        aria-checked={value}
-        onClick={() => onChange(!value)}
-        className={`relative h-[18px] w-[32px] shrink-0 rounded-full p-0 transition-colors ${
-          value ? "bg-primary-500 hover:bg-primary-500" : "bg-border-strong"
-        }`}
-      >
-        <span
-          aria-hidden
-          className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white shadow transition-transform ${
-            value ? "translate-x-[16px]" : "translate-x-[2px]"
-          }`}
-        />
-      </Button>
+      {/* 与 ProjectCanvasSettings 的 ToggleRow 是同一件事（开关），此前各画
+          一份 —— 现在都走 ui/switch（规范 16 §16.2.3）。 */}
+      <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
     </label>
   );
 }

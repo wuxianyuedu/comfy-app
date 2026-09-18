@@ -4,6 +4,8 @@ import { useCallback, useState } from "react";
 import { Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
+import { Separator } from "~/components/ui/separator";
 import { useFilmStudio } from "./hooks/use-film-studio";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { useToast } from "./ToastProvider";
@@ -292,16 +294,26 @@ export function FilmStudio() {
             <Button
               variant="ghost"
               onClick={handleTogglePlay}
-              className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
+              className="border-border-strong flex size-16 items-center justify-center rounded-full border bg-black/45 text-white shadow-lg shadow-black/6 transition-all hover:scale-105 hover:bg-black/55 active:scale-95 dark:shadow-black/30"
               title={isPlaying ? "暂停" : "播放"}
             >
               {isPlaying ? (
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
                   <rect x="6" y="4" width="4" height="16" rx="1" />
                   <rect x="14" y="4" width="4" height="16" rx="1" />
                 </svg>
               ) : (
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
                   <path d="M8 5v14l11-7z" />
                 </svg>
               )}
@@ -408,7 +420,7 @@ export function FilmStudio() {
                   BGM
                 </span>
                 <div
-                  className="flex h-6 flex-1 items-center rounded bg-linear-to-r from-blue-500/20 to-violet-500/20 px-2.5"
+                  className="bg-info/20 from-info/20 to-primary-500/20 flex h-6 flex-1 items-center rounded bg-linear-to-r px-2.5"
                   style={{ width: "200px" }}
                 >
                   <svg
@@ -416,7 +428,7 @@ export function FilmStudio() {
                     height="12"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#a78bfa"
+                    stroke="var(--color-primary-strong)"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -518,27 +530,28 @@ export function FilmStudio() {
               <span className="text-ink-faint mb-1.5 block text-[11px]">
                 提示词 / 描述
               </span>
-              <textarea
+              <Textarea
                 rows={3}
                 defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
-                className="border-border bg-subtle text-ink-fainter w-full resize-none rounded-lg border px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-fainter resize-none rounded-lg text-[12px] leading-relaxed"
               />
             </label>
 
-            {/* Divider */}
-            <hr className="border-border-subtle" />
+            {/* Divider —— 走 ui/separator（规范 16 §16.2.3）：`<hr>` 自带
+                 UA 样式，改「分隔线长什么样」要同时找 `<hr>` 与 border-t 两种写法。 */}
+            <Separator className="bg-border-subtle" />
 
             {/* 全局配置：剧本输入（从原版收起） */}
             <label className="block">
               <span className="text-ink-faint mb-1.5 block text-[11px]">
                 剧本 / 创意
               </span>
-              <textarea
+              <Textarea
                 value={c.script}
                 onChange={(event) => c.setScript(event.target.value)}
                 rows={3}
                 placeholder="支持一句话自动分镜…"
-                className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest w-full resize-none rounded-lg border px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
+                className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-[12px] leading-relaxed"
               />
             </label>
 

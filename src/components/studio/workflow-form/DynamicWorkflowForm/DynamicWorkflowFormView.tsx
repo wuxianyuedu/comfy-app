@@ -20,6 +20,7 @@ import { EmptyStateHint } from "./sections/EmptyStateHint";
 import { IoEndpointsSection } from "./sections/IoEndpointsSection";
 import { LoadingSkeleton } from "./sections/LoadingSkeleton";
 import { WidgetInputRow } from "./sections/WidgetInputRow";
+import { SECTION_ACCENT } from "./constants";
 
 interface DynamicWorkflowFormViewProps {
   controller: DynamicWorkflowFormController;
@@ -290,7 +291,7 @@ export function DynamicWorkflowFormView({
           <SectionHeader
             label="可编辑参数"
             count={widgetSectionEntries.length}
-            accent="#FF9C5B"
+            accent={SECTION_ACCENT}
           />
           {widgetSectionEntries.map((entry) => renderRow(entry, false))}
         </>

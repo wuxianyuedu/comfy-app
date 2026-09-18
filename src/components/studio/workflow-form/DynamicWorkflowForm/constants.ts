@@ -7,7 +7,13 @@ import type { ControlKind } from "../../workflow-io";
 export const inputCls =
   "nodrag nopan w-full resize-none rounded-md bg-canvas-deep p-2.5 text-[11px] leading-relaxed text-ink-soft outline-none transition-colors placeholder:text-ink-placeholder focus:ring-1 focus:ring-primary/40";
 
-/** 按控件类型的强调色 —— 镜像画布端口配色。 */
+/** 按控件类型的强调色 —— 镜像画布端口配色。
+ *
+ *  「段头」与「组合参数圆点」也取这里的取值（`GroupedControls` 的圆点此前是
+ *  写死的 `#FF9C5B`，与 `ACCENT.text` 同值却各写一份 —— 同一层语义两处定义，
+ *  改配色必漏一处）。 */
+export const SECTION_ACCENT = "#FF9C5B"; /* = ACCENT.text：文本类段头 */
+export const PIN_ACCENT = "#5BC6FF"; /* = ACCENT.link：连线条目段头 */
 export const ACCENT: Record<ControlKind, string> = {
   image: "#5BE3C4",
   textarea: "#FF9C5B",

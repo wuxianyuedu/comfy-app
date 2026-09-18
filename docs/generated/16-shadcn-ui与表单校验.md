@@ -108,6 +108,11 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 （存量随治理逐批下降，当前值看 `pnpm ui:primitives:report` —— 写在正文里的
 数字是**首次扫描快照**，不是实时值，免得每完成一批就要改一遍正文。）
 
+**三条判据之外还有一侧**：P1/P2/P3 数的是「另一种写法出现了几次」，
+对「**基元齐全但一次都没被用**」天然无感（`card` / `badge` / `input` /
+`textarea` / `switch` / `separator` 的引用数都曾是 0）。那一侧由
+`tests/ui-primitives-coverage.test.ts` 管，口径见 §16.2.4.4 ①。
+
 
 本仓库的历史结论是**「只提醒 = 没有判据」**（§12.13 文件行数、§12.16 死代码同款），
 所以这里给计数棘轮：把存量冻结在基线，只许降不许升。
@@ -190,6 +195,8 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ✅ **P3 判据清零** |
 | 状态圆点 | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~ | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token） | ✅ **设置页批次完成** |
 | UI kit 目录 | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~ | 见 §16.2.4.3 | ✅ **归并完成（豁免已归还）** |
+| 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~ | 接上有明确场景的一批，其余记为「有基元、无场景」 | ✅ **见 §16.2.4.4 ①** |
+| 两套 token 口径 | `shadcn` 别名 与 `ink-*` / `surface-*` 并存 | 分工定死（别名只在 `ui/` 内），**物理合并另开** | ⏳ 见 §16.2.4.4 ② |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -417,6 +424,81 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 kebab-case；③ 除 `ui/` 外没有别的目录在放「与 `ui/` 同名的基元」。
 为什么需要它：`EXEMPT_DIRS` 撤掉只保证「再放进去的东西会被数」，
 挡不住下一个人 `mkdir studio/ui` 起一套新的 —— **目录本身的存在才是信号**。
+
+### 16.2.4.4 剩下的三条账（基元齐全但没人用 / 两套 token / 余量主题色）
+
+§16.2.4.3 之后，台账里还写着两条「⏳」，加上扫描器里仍有的存量，共三件事。
+本节把它们的**当前状态**与**判据**写下来，免得下一轮再重新发现一遍。
+
+**① 基元齐全但没人用**（台账里最后一条硬账）。
+
+`ui/` 的基元数一直在 29~33 之间，但 ISSUE #672 首轮体检实测：**只有 3 个
+被业务真正引用**。P1/P2/P3 三条棘轮对这件事**天然无感** —— 它们数的是
+「另一种写法出现了几次」，而「零引用的基元」是**没有出现**的那一侧：
+`<input>` / `<textarea>` / `<input type="range">` / `<hr>` / 自绘开关
+全都不在 P1/P2/P3 的判据里。
+
+本批把「有明确对应场景」的一批接上业务，并把「接上了」变成不可回退的事实：
+
+| 基元 | 接上的落点 | 之前是 |
+|------|-----------|--------|
+| `ui/card` | `model/ModelCard` 的卡片外壳 | 手写 `rounded-xl border overflow-hidden` |
+| `ui/badge` | `ModelCard` 的封面类型徽标 | 手写 `<span>` + 圆角类 |
+| `ui/input` | 设置页「用量测试」弹窗的文本输入 | 手写 `<input className="…rounded-lg border…">` |
+| `ui/textarea` | 设置页提示词 / 工作流导入 JSON / 影片剧本与提示词 | 手写 `<textarea>`（5 处） |
+| `ui/switch` | 画布设置与项目设置抽屉的开关 | **两份**自绘「圆角底 + 绝对定位圆点」 |
+| `ui/separator` | 影片工作台的分隔线 | `<hr>`（自带 UA 样式） |
+| `ui/range-slider`（新增） | 训练超参 4 处 + 画布设置滑块 | `accent-violet-500` 与一处自绘渐变 |
+
+两条口径（写进本节的用意正是它们**反直觉**）：
+
+1. **`ui/switch` / `ui/separator` / `ui/input` 这类「原生元素能直接写」的基元
+   也要接**：它们的价值不在「能不能写出来」，而在**样式改动只有一处**。
+   两个自绘开关是典型反例 —— 两处同形实现各自维护，改一次要点两遍名。
+   （同 §16.2.3 的「同一件事有几份实现」。）
+2. **`ui/range-slider` 用原生 `<input type="range">` 而非 `ui/slider`**：
+   后者是无原生 input 的复合控件（键盘语义、拖动、a11y 全由 base-ui 自搭），
+   替换现有 range 等于**换掉一套交互与 DOM 结构**。本基元的定位是
+   「把原生 range 的外观收口到语义 token」——**只接管取材，不接管行为**。
+   这与 §16.2.4.2 第 9 条同源：转换的验收标准是**渲染结果不变**。
+   两处刻意的手法：已填充段用 `background` 渐变画（`accent-*` 只能染
+   WebKit 的轨道与滑块，表达不了「条上直接看出取值」），颜色经
+   `color-mix(in srgb, var(--color-*), transparent)` **现取 token**。
+
+**不做的那一批，以及为什么**：`tabs` / `accordion` / `scroll-area` /
+`avatar` / `alert` / `dropdown-menu` / `form` 在本应用里**没有对应场景**
+（工作流库页签是自绘 chip、告警走 toast、滚动容器是画布专属形态、
+表单校验不走 RHF）。**不为「用上基元」而改变外观** —— 台账里它们的状态是
+「有基元、无场景」，不是「欠治理」。
+
+**机器判据**：`tests/ui-primitives-coverage.test.ts` —— 逐条断言上表里每个
+基元**至少有一个业务消费点**（消费点统计排除 `ui/` 自身与测试）。清单是
+**显式**的：要摘掉一个必须改本文件，也就是必须在 Review 里讲清理由。
+
+**② 两套 token 口径**（`shadcn` 别名 vs 项目 `ink-*` / `surface-*`）。
+
+现状：两边**并存**，语义有重叠也有分工 ——
+`bg-card` ↔ `bg-surface`、`bg-muted` ↔ `bg-subtle`、
+`text-muted-foreground` ↔ `text-ink-muted`、`bg-popover` ↔ `bg-panel`。
+实测用量：项目系 `border-border-strong` 191 / `text-ink-muted` 236 /
+`bg-surface` 178；shadcn 系 `border-border` 519 / `text-muted-foreground` 320。
+
+**本批的结论是「暂不做物理合并」，并把理由写下来**：两者的分工是
+「shadcn 基元内部用别名、业务视图用项目 token」，而 `ui/` 是**工具生成、
+尽量不手改**的目录（§16.1）—— 把基元里的别名改成项目 token，下一次
+`shadcn add` 会把它们改回去。物理合并需要先解决「工具生成物怎么承载
+项目命名」这件事，那是独立一次设计决定，**不该混在 UI 一致性批次里做**。
+本批只把**能定死的部分定死**：新增业务代码一律用项目 token
+（§3.6.2 的语义色表），shadcn 别名只在 `ui/` 基元内部出现。
+
+**③ 余量主题色**：本批把**表面/文字语义**的写死色值清了 27 处
+（142 → 115），落点是 `TrainingStudio` / `FilmStudio` / `ErrorPanel` /
+`ToastProvider` / `WorkflowSourceFilterChip` / `json-viewer` 等。剩下 115
+处集中在**类型色常量表**（`workflow-node-palette` 18、`workflow-utils` 15、
+`WorkflowNode` 11、`CanvasNodePrimitives` 10…）—— 它们按 §3.6.1 的
+「类型色例外」**本可豁免**，只是从未登记。**按「豁免必须显式」的口径，
+下一批要做的是逐条登记豁免或就地 token 化，而不是继续放在「未豁免存量」里**
+（放在存量里等于两者都不是）。
 
 ## 16.3 新增一个组件的标准动作
 
