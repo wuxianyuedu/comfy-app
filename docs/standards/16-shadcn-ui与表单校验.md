@@ -115,7 +115,6 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 `textarea` / `switch` / `separator` 的引用数都曾是 0）。那一侧由
 `tests/ui-primitives-coverage.test.ts` 管，口径见 §16.2.4.4 ①。
 
-
 本仓库的历史结论是**「只提醒 = 没有判据」**（§12.13 文件行数、§12.16 死代码同款），
 所以这里给计数棘轮：把存量冻结在基线，只许降不许升。
 
@@ -128,10 +127,10 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 **三条判据**（`scripts/check-ui-primitives.cjs`，基线
 `scripts/.ui-primitives-baseline.json`）：
 
-| ID | 判据 | 应改用什么 |
-|----|------|-----------|
-| **P1** | 视图层手写 `<button` | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体） |
-| **P2** | 视图层自建 `createPortal(` 浮层 | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu` |
+| ID     | 判据                                        | 应改用什么                                                                                                                                                                             |
+| ------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1** | 视图层手写 `<button`                        | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体）                                                                                                                         |
+| **P2** | 视图层自建 `createPortal(` 浮层             | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu`                                                                                                                           |
 | **P3** | 视图层自写 `animate-spin` / `animate-pulse` | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
 
 **三条判据当前都是硬闸**（P1/P2/P3 基线里已无条目，新增任何自实现直接被阻断）：
@@ -173,14 +172,14 @@ P2 先把自搓浮层收进 `ui/` 原语、定下两条刻度；**P4 复查时�
 `src/lib/shell/overlay-z.test.ts` 逐档钉住。`zClass(tone)` 由档名派生工具类名，
 不手抄第二份 `z-*` 字符串表。
 
-| 档 | 值 | 工具类 | 谁在这一档 | 判据 |
-|----|----|--------|-----------|------|
-| `Z.base` | 10 | `z-base` | **局部叠层下限**：画布节点内容 / 子图、卡片内遮罩、节点内浮标 | 参照点是**自己的定位祖先**，比较对象在容器内部 |
-| `Z.canvasUi` | 20 | `z-canvas-ui` | 画布 chrome：工具栏 / 侧栏 / 面板 / 角标提示 | 压过节点，但仍在**所处容器**那一层 |
-| `Z.canvasMax` | 30 | `z-canvas-max` | 画布最上层：IO 预览 / 底部工具栏 / 固定触发钮 | 压过 `canvasUi`，仍不越出容器 |
-| `Z.modal` | 90 | `z-modal` | **模态遮罩与抽屉**、全屏视图、消息中心 | 应用内的「顶」（`Z.overlay` 是它的旧名，同值） |
-| `Z.popup` | 100 | `z-popup` | **挂在 `body` 的浮层**：下拉 / 气泡 / 右键菜单 / 节点 JSON 浮层 | 由模态内的控件打开，**必须压过 `modal`** |
-| `Z.toast` | 1000 | `z-toast` | 全局提示、底部状态栏（应用级 chrome） | 任何浮层之上 |
+| 档            | 值   | 工具类         | 谁在这一档                                                      | 判据                                           |
+| ------------- | ---- | -------------- | --------------------------------------------------------------- | ---------------------------------------------- |
+| `Z.base`      | 10   | `z-base`       | **局部叠层下限**：画布节点内容 / 子图、卡片内遮罩、节点内浮标   | 参照点是**自己的定位祖先**，比较对象在容器内部 |
+| `Z.canvasUi`  | 20   | `z-canvas-ui`  | 画布 chrome：工具栏 / 侧栏 / 面板 / 角标提示                    | 压过节点，但仍在**所处容器**那一层             |
+| `Z.canvasMax` | 30   | `z-canvas-max` | 画布最上层：IO 预览 / 底部工具栏 / 固定触发钮                   | 压过 `canvasUi`，仍不越出容器                  |
+| `Z.modal`     | 90   | `z-modal`      | **模态遮罩与抽屉**、全屏视图、消息中心                          | 应用内的「顶」（`Z.overlay` 是它的旧名，同值） |
+| `Z.popup`     | 100  | `z-popup`      | **挂在 `body` 的浮层**：下拉 / 气泡 / 右键菜单 / 节点 JSON 浮层 | 由模态内的控件打开，**必须压过 `modal`**       |
+| `Z.toast`     | 1000 | `z-toast`      | 全局提示、底部状态栏（应用级 chrome）                           | 任何浮层之上                                   |
 
 **三条判据（缺一条这张表就会退化回「一串更大的数」）**：
 
@@ -239,16 +238,18 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 
 按「同一件事有几份实现」排序（**P2 已完成的条目保留在此，作为「怎么迁」的样板**）：
 
-| 形态 | 现状 | 去向 | 状态 |
-|------|------|------|------|
-| 对话框/浮层 | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~ | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）** |
-| 空态 | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~ | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`） | ✅ **P2 完成** |
-| 按钮 | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~ | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1 | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
-| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ✅ **P3 判据清零** |
-| 状态圆点 | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~ | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token） | ✅ **设置页批次完成** |
-| UI kit 目录 | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~ | 见 §16.2.4.3 | ✅ **归并完成（豁免已归还）** |
-| 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~ | 接上有明确场景的一批，其余记为「有基元、无场景」 | ✅ **见 §16.2.4.4 ①** |
-| 两套 token 口径 | `shadcn` 别名 与 `ink-*` / `surface-*` 并存 | 分工定死（别名只在 `ui/` 内），**物理合并另开** | ⏳ 见 §16.2.4.4 ② |
+| 形态             | 现状                                                                                                              | 去向                                                                                                | 状态                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 对话框/浮层      | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~                    | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）**               |
+| 空态             | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~    | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`）                   | ✅ **P2 完成**                              |
+| 按钮             | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~                                                             | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1                                                          | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
+| 加载态           | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner                                          | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里）             | ✅ **P3 判据清零**                          |
+| 状态圆点         | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~       | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token）            | ✅ **全库唯一实现（余量见 §16.2.4.5）**     |
+| 状态胶囊         | ~~**七个文件**各写一份「状态 → 配色」表（`emerald-500/15` / `emerald-400/10` / `emerald-100` 三种深浅各不相同）~~ | `ui/status-badge.tsx` 一份（`dot` 形态 / `dot={false}` 角标）；文案留在调用处                       | ✅ **见 §16.2.4.5 ①**                       |
+| UI kit 目录      | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~            | 见 §16.2.4.3                                                                                        | ✅ **归并完成（豁免已归还）**               |
+| 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~                                   | 接上有明确场景的一批，其余记为「有基元、无场景」                                                    | ✅ **见 §16.2.4.4 ①**                       |
+| 两套 token 口径  | `shadcn` 别名 与 `ink-*` / `surface-*` 并存                                                                       | 分工定死（别名只在 `ui/` 内），**物理合并另开**                                                     | ⏳ 见 §16.2.4.4 ②                           |
+| 余量主题色       | ~~115 处写死色值「既不是豁免、也不是待治理项」~~                                                                  | 逐条定性：token 化 18 处 / 登记豁免 97 处 / 进固定暗色清单 2 处                                     | ✅ **基线归零，见 §16.2.4.5 ②**             |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -257,15 +258,15 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 「手写 Esc、手写遮罩点击关闭、手写定位 + 滚动重定位、手写 z-index 魔数」。
 只换 ① 不删 ② 会留下两套关闭语义同时生效（例如 Esc 触发两次 dismiss）。
 
-| 形态 | 原来自搓的位置 | 现在 |
-|------|---------------|------|
-| 确认对话框 | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点） | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留 |
-| 节点 JSON 浮层 | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc） | `ui/dialog`；`workflow-utils.ts` 的 `computePos` 一并删除 |
-| 源码查看弹窗 | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc） | `ui/dialog`；载入态改 `ui/page-loading` |
-| 模型标签编辑器 | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭） | `ui/dialog` |
-| 属性多选下拉 | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位） | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner） |
-| 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元 | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除 |
-| 两个设置抽屉 | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`） |
+| 形态                 | 原来自搓的位置                                                                                                            | 现在                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 确认对话框           | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点）                                                                   | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留 |
+| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                       | `ui/dialog`；`workflow-utils.ts` 的 `computePos` 一并删除             |
+| 源码查看弹窗         | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc）                                                                        | `ui/dialog`；载入态改 `ui/page-loading`                               |
+| 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                     | `ui/dialog`                                                           |
+| 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                       | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）        |
+| 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元               | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除     |
+| 两个设置抽屉         | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`）                                          |
 
 ### 16.2.4.2 P1 按钮分批的进度与做法
 
@@ -275,14 +276,14 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 
 **已完成批次**（每批都把该目录清零，再 `--update` 收紧基线）：
 
-| 批次 | 目录 | 清零处数 | 手法 |
-|------|------|---------|------|
-| 1 | `studio/logs/` | 16 | 图标钮 → `size="icon-xs"`；Tab → `variant="ghost"` + `h-auto` |
-| 1 | `studio/workflow-library/` | 28 | 文字动作 → `variant="outline"` / `"ghost"`；实心紫 → `"primary-solid"` |
-| 2 | `studio/project-canvas/`（含 `CanvasNode/`） | 84 | 见下 |
-| 3 | `studio/workflow-editor/` | 14 + 2（P3） | 见下 |
-| 4 | `app/(main)/settings/` + `components/settings/` | 45 + 11（P3） | 见下 |
-| 5 | 全库清零：`workshop/` + `studio/` 散件 + `app/` + 剩余 `studio/**` | 174 + 24（P3） | 见下 |
+| 批次 | 目录                                                               | 清零处数       | 手法                                                                   |
+| ---- | ------------------------------------------------------------------ | -------------- | ---------------------------------------------------------------------- |
+| 1    | `studio/logs/`                                                     | 16             | 图标钮 → `size="icon-xs"`；Tab → `variant="ghost"` + `h-auto`          |
+| 1    | `studio/workflow-library/`                                         | 28             | 文字动作 → `variant="outline"` / `"ghost"`；实心紫 → `"primary-solid"` |
+| 2    | `studio/project-canvas/`（含 `CanvasNode/`）                       | 84             | 见下                                                                   |
+| 3    | `studio/workflow-editor/`                                          | 14 + 2（P3）   | 见下                                                                   |
+| 4    | `app/(main)/settings/` + `components/settings/`                    | 45 + 11（P3）  | 见下                                                                   |
+| 5    | 全库清零：`workshop/` + `studio/` 散件 + `app/` + 剩余 `studio/**` | 174 + 24（P3） | 见下                                                                   |
 
 **`studio/project-canvas/` 这批评测出的三条口径**：
 
@@ -315,6 +316,7 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
    只有合并结果能证明对错。所以拼装顺序固定为
    `base → 覆盖串 → 密度 → tone → extra`，并由契约测试逐个 tone 断言
    「tone 的圆角索引 > 覆盖串索引」+「密度的 `px-*` 索引 > `px-0` 索引」。
+
 5. **颜色字面量随转换一并收口**：本批把顶栏/画布残留的 `violet-*` /
    `amber-*` / `sky-*` / `rose-*` / `red-*` / `emerald-*` 全部换成
    `primary-*` / `warning-*` / `info-*` / `destructive` / `success-*`
@@ -405,17 +407,17 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 现在 `ui/button.tsx` 的 `variant` 多出 8 支，**按语义角色命名、不按色名**
 （§3.6.2：换品牌色时调用处不用改）：
 
-| 变体 | 形态 | 对应视图里的手写写法 |
-|------|------|---------------------|
-| `primary` | 品牌软底 | `bg-violet-500/15 text-violet-700 dark:text-violet-300` |
-| `danger` | 危险软底 | `bg-red-500/10 text-red-700 dark:text-red-300` |
-| `success` | 成功软底 | `bg-emerald-500/10 text-emerald-700 dark:text-emerald-400` |
-| `warning` | 警告软底 | `bg-amber-500/10 text-amber-700 dark:text-amber-300` |
-| `info` | 信息软底 | `bg-cyan-500/10 text-cyan-700 dark:text-cyan-300` |
-| `primary-solid` | 品牌实心 | `bg-violet-500/90 text-white hover:bg-violet-500` |
-| `danger-solid` | 危险实心 | `bg-red-500 text-white` |
-| `success-solid` | 成功实心 | `bg-emerald-500 text-white` |
-| `warning-solid` | 警告实心 | `bg-amber-500 text-white`（设置页批次补出） |
+| 变体            | 形态     | 对应视图里的手写写法                                       |
+| --------------- | -------- | ---------------------------------------------------------- |
+| `primary`       | 品牌软底 | `bg-violet-500/15 text-violet-700 dark:text-violet-300`    |
+| `danger`        | 危险软底 | `bg-red-500/10 text-red-700 dark:text-red-300`             |
+| `success`       | 成功软底 | `bg-emerald-500/10 text-emerald-700 dark:text-emerald-400` |
+| `warning`       | 警告软底 | `bg-amber-500/10 text-amber-700 dark:text-amber-300`       |
+| `info`          | 信息软底 | `bg-cyan-500/10 text-cyan-700 dark:text-cyan-300`          |
+| `primary-solid` | 品牌实心 | `bg-violet-500/90 text-white hover:bg-violet-500`          |
+| `danger-solid`  | 危险实心 | `bg-red-500 text-white`                                    |
+| `success-solid` | 成功实心 | `bg-emerald-500 text-white`                                |
+| `warning-solid` | 警告实心 | `bg-amber-500 text-white`（设置页批次补出）                |
 
 三条口径：
 
@@ -444,12 +446,12 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 
 台账最后一行的落地。四套「放通用件的地方」收成两处，各自的判据不同：
 
-| 原位置 | 14 个文件的去向 | 为什么是这里 |
-|--------|----------------|-------------|
-| `components/studio/ui/`（11 个） | `components/ui/`，文件名转 kebab-case | 它们是**跨域**的通用件（`SelectMenu` / `ConfirmDialog` / `JsonViewer` / `MediaThumbnail` / `EditableLabel`…），不只 studio 用 —— `app/(main)/settings`、`app/login`、`components/workshop` 都在引 |
-| `components/studio/shared/` 的通用件（3 个） | `components/ui/` | 同上（`SegmentPopover` / `ValidationErrorList` / `SeedModeButton`） |
-| `components/studio/shared/` 的表单件（19 个）+ `DynamicWorkflowForm/` | `components/studio/workflow-form/` | 它们是**工作流参数表单专属**的复合件（`DimensionControl` / `GroupedControls` / `WorkflowFormControls` / `PortHandle`…）：域内共享，不是跨域基元 —— 搬进 `ui/` 只会让「ui/ 是 shadcn 基元」这条口径失真 |
-| `components/studio/shared/workflow-io.ts` / `useMiniMapJump.ts` | `components/studio/` 域根 | 前者是工作流 IO 的纯逻辑（52 处引用），后者是画布视图工具 —— 都不属于「参数表单」 |
+| 原位置                                                                | 14 个文件的去向                       | 为什么是这里                                                                                                                                                                                           |
+| --------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `components/studio/ui/`（11 个）                                      | `components/ui/`，文件名转 kebab-case | 它们是**跨域**的通用件（`SelectMenu` / `ConfirmDialog` / `JsonViewer` / `MediaThumbnail` / `EditableLabel`…），不只 studio 用 —— `app/(main)/settings`、`app/login`、`components/workshop` 都在引      |
+| `components/studio/shared/` 的通用件（3 个）                          | `components/ui/`                      | 同上（`SegmentPopover` / `ValidationErrorList` / `SeedModeButton`）                                                                                                                                    |
+| `components/studio/shared/` 的表单件（19 个）+ `DynamicWorkflowForm/` | `components/studio/workflow-form/`    | 它们是**工作流参数表单专属**的复合件（`DimensionControl` / `GroupedControls` / `WorkflowFormControls` / `PortHandle`…）：域内共享，不是跨域基元 —— 搬进 `ui/` 只会让「ui/ 是 shadcn 基元」这条口径失真 |
+| `components/studio/shared/workflow-io.ts` / `useMiniMapJump.ts`       | `components/studio/` 域根             | 前者是工作流 IO 的纯逻辑（52 处引用），后者是画布视图工具 —— 都不属于「参数表单」                                                                                                                      |
 
 **为什么不是「全部塞进 `ui/`」**：`ui/` 在本仓库有一条明确口径 ——
 **shadcn 官方 kebab-case 基元目录**（§12.5 的命名例外正是为它开的）。
@@ -492,15 +494,15 @@ kebab-case；③ 除 `ui/` 外没有别的目录在放「与 `ui/` 同名的基�
 
 本批把「有明确对应场景」的一批接上业务，并把「接上了」变成不可回退的事实：
 
-| 基元 | 接上的落点 | 之前是 |
-|------|-----------|--------|
-| `ui/card` | `model/ModelCard` 的卡片外壳 | 手写 `rounded-xl border overflow-hidden` |
-| `ui/badge` | `ModelCard` 的封面类型徽标 | 手写 `<span>` + 圆角类 |
-| `ui/input` | 设置页「用量测试」弹窗的文本输入 | 手写 `<input className="…rounded-lg border…">` |
-| `ui/textarea` | 设置页提示词 / 工作流导入 JSON / 影片剧本与提示词 | 手写 `<textarea>`（5 处） |
-| `ui/switch` | 画布设置与项目设置抽屉的开关 | **两份**自绘「圆角底 + 绝对定位圆点」 |
-| `ui/separator` | 影片工作台的分隔线 | `<hr>`（自带 UA 样式） |
-| `ui/range-slider`（新增） | 训练超参 4 处 + 画布设置滑块 | `accent-violet-500` 与一处自绘渐变 |
+| 基元                      | 接上的落点                                        | 之前是                                         |
+| ------------------------- | ------------------------------------------------- | ---------------------------------------------- |
+| `ui/card`                 | `model/ModelCard` 的卡片外壳                      | 手写 `rounded-xl border overflow-hidden`       |
+| `ui/badge`                | `ModelCard` 的封面类型徽标                        | 手写 `<span>` + 圆角类                         |
+| `ui/input`                | 设置页「用量测试」弹窗的文本输入                  | 手写 `<input className="…rounded-lg border…">` |
+| `ui/textarea`             | 设置页提示词 / 工作流导入 JSON / 影片剧本与提示词 | 手写 `<textarea>`（5 处）                      |
+| `ui/switch`               | 画布设置与项目设置抽屉的开关                      | **两份**自绘「圆角底 + 绝对定位圆点」          |
+| `ui/separator`            | 影片工作台的分隔线                                | `<hr>`（自带 UA 样式）                         |
+| `ui/range-slider`（新增） | 训练超参 4 处 + 画布设置滑块                      | `accent-violet-500` 与一处自绘渐变             |
 
 两条口径（写进本节的用意正是它们**反直觉**）：
 
@@ -543,14 +545,45 @@ kebab-case；③ 除 `ui/` 外没有别的目录在放「与 `ui/` 同名的基�
 本批只把**能定死的部分定死**：新增业务代码一律用项目 token
 （§3.6.2 的语义色表），shadcn 别名只在 `ui/` 基元内部出现。
 
-**③ 余量主题色**：本批把**表面/文字语义**的写死色值清了 27 处
-（142 → 115），落点是 `TrainingStudio` / `FilmStudio` / `ErrorPanel` /
-`ToastProvider` / `WorkflowSourceFilterChip` / `json-viewer` 等。剩下 115
-处集中在**类型色常量表**（`workflow-node-palette` 18、`workflow-utils` 15、
-`WorkflowNode` 11、`CanvasNodePrimitives` 10…）—— 它们按 §3.6.1 的
-「类型色例外」**本可豁免**，只是从未登记。**按「豁免必须显式」的口径，
-下一批要做的是逐条登记豁免或就地 token 化，而不是继续放在「未豁免存量」里**
-（放在存量里等于两者都不是）。
+**③ 余量主题色**：上一批把**表面/文字语义**的写死色值清了 27 处
+（142 → 115），本批把剩下的 115 处**逐条定性完毕**（详见 §16.2.4.5）。
+
+## 16.2.4.5 状态色收口与「逐条定性」（ISSUE #672，机器强制）
+
+§16.2.4.4 的三条账里，① 与 ③ 在本批收口。收口的实质不是「又清了几个文件」，
+而是**把三处一直没人管的重复收成一处、把 115 处余量逐条定性**。
+
+**① 状态徽标 / 状态圆点：配色从此只有一处。**
+
+| 形态     | 此前                                                                                                                                                                                                                      | 现在                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 状态胶囊 | **七个文件**各写一份「状态 → 配色」表（任务历史 `STATUS_STYLE`、执行日志两份 `statusClass`、项目产出 `STATUS_CHIP`、画布节点 `CanvasNodePrimitives.StatusBadge`、自定义节点设置两份、工坊三处 `StatusBadge`/`ClipBadge`） | `ui/status-badge.tsx` 一份（`dot` 形态供独立徽标、`dot={false}` 供叠在媒体上的角标） |
+| 状态圆点 | 四处各写一份（`ui/status-dot` 已有实现，但视图里仍有 `bg-emerald-400` / `bg-cyan-400` / `bg-success-strong` 的手写 span）                                                                                                 | `ui/status-dot` 唯一实现                                                             |
+
+**文案不进基元**：同一个状态在不同界面叫法不同（任务历史「已完成」/ 画布节点
+「运行后生成」/ 镜头「片段就绪」），那是**业务文案**；基元只负责「状态 →
+配色」。画布小写词（`idle`/`running`/`done`/`error`）到大写状态键的映射收在
+`lib/project-canvas/canvas-types.ts` 的 `STATUS_BADGE_KEY`，与 `STATUS_LABEL`
+并排 —— 此前两处徽标各写一份映射，改一处漏一片。
+
+**② 余量主题色 115 处 → 逐条定性（基线归零）。**
+
+口径就是 §3.6.1 末段那句「存量必须逐条定性，登记进 `EXEMPT_TABLES`（带理由）
+或就地 token 化」——**放进存量里等于两者都不是**。115 处的去向：
+
+| 去向                                                                             | 处数 | 典型落点                                                                                                                        |
+| -------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **就地 token 化**（新增 `--color-edge-flow-*` 四档 + `--color-edge-focus-halo`） | 5    | `ProjectCanvas` 的连线渐变四档、`ProjectEdge` 的选中光晕                                                                        |
+| **就地 token 化**（写死的透明色 → `color-mix` 现取）                             | 4    | `HomePage` 的类别底色 `bg-[${color}/15]`：Tailwind JIT 扫不到运行时模板，**那条写法从来就没生效过**                             |
+| **就地 token 化**（状态色 → 语义类名）                                           | 9    | `CustomNodesSettings` 的两份 `rgba`/`hex` 状态表                                                                                |
+| **登记进类型色例外**                                                             | 97   | 画布连线 / 端口 / 节点模式 / 角色 / 类别色常量表（含 `workflow-node-palette` 的三个两态外观表、`RgthreeBodies` 的 3D 光照参数） |
+| **登记进固定暗色清单**                                                           | 2    | `ui/water-fill-progress` 的水幕（极小块叠层 + 刻意保留 ~0.9 让底层内容可见，两条判据都成立）                                    |
+
+**「零基线」本身防不住什么**（所以配了测试）：棘轮为 0 之后，把一处**真漏改**
+顺手登记进 `EXEMPT_TABLES` 是唯一能让数字变漂亮又不改代码的动作 —— 豁免不计入
+基线，登记完就再也不会出现在报告里。`tests/check-theme-colors.test.ts` 因此钉住：
+**每条豁免必须带说清「为什么这行色值是内容自己的颜色」的理由**（不能一句
+「类型色」了事）。
 
 ## 16.3 新增一个组件的标准动作
 
