@@ -49,11 +49,11 @@ export function RgthreeFastGroupsBypasserBody({
             >
               {bypass ? "yes" : "no"}
             </span>
-            {/* The toggle itself — a small clickable chip that flips the
-             *  group's bypass via the context.  Uses a div+role=button
-             *  pattern (consistent with the row-inline-button iron law)
-             *  and stops pointer events so ReactFlow's drag handler
-             *  never sees the click. */}
+            {/* 开关本体 —— 一颗可点击的小章，经 context 翻转
+             *  该分组的中止状态。用 div+role=button
+             *  写法（与「行内按钮铁律」一致）
+             *  并拦截指针事件，好让 ReactFlow 的拖拽处理器
+             *  看不到这次点击。 */}
             <div
               role="button"
               tabIndex={0}
@@ -109,16 +109,16 @@ export function RgthreeFastGroupsBypasserBody({
   );
 }
 
-/** Hardcoded classType → package mapping for well-known custom node packs
- *  that the manifest parser misses (e.g. its source tree isn't on the
- *  parse path, or its `MAPPING/CATEGORY` carries no package declaration).
- *  Keep this list narrow — anything beyond ~5 entries signals we should
- *  extend the parser instead.
+/** 把 classType 硬编码映射到包名，服务清单解析器漏掉的知名自定义
+ *  节点包（例如它的源码树不在解析路径上，
+ *  或它的 `MAPPING/CATEGORY` 里没有包声明）。
+ *  这张表要保持很窄 —— 超过约 5 条就说明该去
+ *  扩展解析器而不是继续加表。
  *
- *  Currently:
- *   • efficiency-nodes' SetNode / GetNode — its pkg has no on-disk marker
- *     in our install and its nodes carry no `cnr_id`, so we hard-code the
- *     attribution. */
+ *  目前：
+ *   • efficiency-nodes 的 SetNode / GetNode —— 它的包在我们装的环境里
+ *     没有磁盘标记，节点本身也没有 `cnr_id`，所以硬编码这份
+ *     归属。 */
 export function RgthreePowerLoraLoaderBody({
   widgets,
 }: {
@@ -126,7 +126,7 @@ export function RgthreePowerLoraLoaderBody({
 }) {
   const fmtStrength = (v: unknown): string | undefined => {
     if (typeof v === "number") {
-      // ComfyUI strips trailing zeros ("1.00" → "1", "0.85" stays).
+      // ComfyUI 会剥掉末尾的零（"1.00" → "1"，"0.85" 保持）。
       const s = v.toFixed(2);
       const stripped = s.replace(/\.?0+$/, "");
       return stripped.length > 0 ? stripped : "0";
@@ -135,8 +135,8 @@ export function RgthreePowerLoraLoaderBody({
     return undefined;
   };
 
-  // Per-lora rows: filter out the header widget and empty placeholders.
-  // Row shape is pack-dependent (bare filename string or a widget record).
+  // 逐 lora 行：过滤掉表头 widget 与空占位。
+  // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
   const loras: PowerLoraWidget[] = (
     (widgets ?? []) as PowerLoraWidget[]
@@ -152,8 +152,8 @@ export function RgthreePowerLoraLoaderBody({
 
   return (
     <div className="flex w-full flex-col gap-[3px] px-1 pt-0.5 pb-1">
-      {/* Lora Stack section header — always drawn (matches rgthree even on
-       *  empty stacks, so the author can always add a lora below it). */}
+      {/* Lora 堆栈区头 —— 始终绘制（空堆栈时也与 rgthree
+       *  一致，好让作者总能在其下添加一条 lora）。 */}
       <div
         className="flex items-center justify-between rounded px-1.5 py-[3px] text-[10px] font-medium uppercase"
         style={{
@@ -185,7 +185,7 @@ export function RgthreePowerLoraLoaderBody({
         </span>
       </div>
 
-      {/* Per-lora rows (empty placeholder area in this workflow). */}
+      {/* 逐 lora 行（本工作流里是空占位区）。 */}
       {loras.length === 0 ? (
         <div
           className="rounded px-1.5 py-3 text-center text-[10px]"
@@ -252,8 +252,8 @@ export function RgthreePowerLoraLoaderBody({
         })
       )}
 
-      {/* "+ Add Lora" CTA — rgthree shows this even on empty stacks.  Read-only
-       *  on the canvas, so it's a static pill (no click handler). */}
+      {/* 「+ 添加 Lora」CTA —— rgthree 在空堆栈时也显示它。画布上
+       *  是只读的，所以是一颗静态药丸（没有点击处理器）。 */}
       <div
         aria-hidden
         className="mt-1 flex items-center justify-center gap-2 rounded py-[6px] text-[11px] font-medium"
@@ -281,13 +281,12 @@ export function RgthreePowerLoraLoaderBody({
   );
 }
 
-/** rgthree Label runtime body. rgthree's Label node has no
- *  I/O — it paints its title (or `text` property) using the styles in
- *  `properties` (fontSize / fontFamily / fontColor / textAlign /
- *  backgroundColor / borderRadius / angle).  We render the styled text
- *  read-only, filling the node body.  The standard title bar is suppressed
- *  for this classType (ComfyUI shows no separate header) so the painted
- *  text reads as the whole node. */
+/** rgthree Label 的运行时主体。rgthree 的 Label 节点没有
+ *  I/O —— 它用 `properties` 里的样式（fontSize / fontFamily / fontColor / textAlign /
+ *  backgroundColor / borderRadius / angle）绘制自己的标题（或 `text` 属性）。
+ *  我们把这段带样式的文字只读渲染，铺满节点体。这个 classType
+ *  会抑制标准标题栏（ComfyUI 不显示独立头部），
+ *  好让绘制的文字读起来就是整个节点。 */
 export function RgthreeLabelBody({
   text,
   properties,
