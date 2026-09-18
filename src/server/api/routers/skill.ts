@@ -4,7 +4,7 @@ import { skillRepository } from "~/lib/core/repository";
 import { BUILTIN_SKILLS, CATEGORY_LABELS } from "~/lib/skills-seed";
 
 export const skillRouter = createTRPCRouter({
-  /** GET /api/skills — public, with category summary */
+  /* GET /api/skills —— 读：public, with category summary */
   list: authedProcedure
     .input(
       z
@@ -43,7 +43,7 @@ export const skillRouter = createTRPCRouter({
       };
     }),
 
-  /** POST /api/skills — create a user skill */
+  /* POST /api/skills —— 新建：create a user skill */
   create: authedProcedure
     .input(
       z.object({

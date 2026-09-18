@@ -55,7 +55,7 @@ const extraModelsSchema = z.array(
 );
 
 export const llmRouter = createTRPCRouter({
-  /** GET /api/llm/config */
+  /* GET /api/llm/config —— 读 */
   configGet: authedProcedure.query(async () => {
     await ensureRemoteStorageMigrated();
     const cfg = await getConfigForClient();
@@ -131,7 +131,7 @@ export const llmRouter = createTRPCRouter({
       return { adapters: saved };
     }),
 
-  /** POST /api/llm/config — update singleton config */
+  /* POST /api/llm/config —— 新建：update singleton config */
   configSave: authedProcedure
     .input(
       z.object({
@@ -169,7 +169,7 @@ export const llmRouter = createTRPCRouter({
       return { config };
     }),
 
-  /** POST /api/llm — non-streaming completion */
+  /* POST /api/llm —— 新建：non-streaming completion */
   complete: authedProcedure
     .input(
       z.object({

@@ -29,13 +29,13 @@ import {
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 
 export const settingRouter = createTRPCRouter({
-  /** GET /api/settings */
+  /* GET /api/settings —— 读 */
   get: authedProcedure.query(async () => {
     const settings = await getSettings();
     return { settings };
   }),
 
-  /** PUT /api/settings */
+  /* PUT /api/settings —— 更新 */
   save: authedProcedure
     .input(
       z.object({
