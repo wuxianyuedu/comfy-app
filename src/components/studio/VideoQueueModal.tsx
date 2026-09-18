@@ -11,10 +11,10 @@ import {
 } from "~/lib/media/video-queue-client";
 import { overlayClass } from "~/lib/full-screen-layer";
 
-/* ── Video Queue Modal — wired to real VIDEO tasks ──
-  Fetches the user's VIDEO-type tasks from /api/tasks (filtered), shows live
-  status (QUEUED / RUNNING / SUCCEEDED / FAILED), auto-refreshes every 4s,
-  lets the user batch-submit new clips, and open a clip's result/result detail.
+/* ── 视频队列弹窗 —— 接了真实的 VIDEO 任务 ──
+  从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
+  状态（QUEUED / RUNNING / SUCCEEDED / FAILED），每 4s 自动刷新，
+  让用户批量提交新片段，并打开某个片段的结果 / 结果详情。
 */
 
 const STATUS_META: Record<
@@ -39,9 +39,9 @@ const STATUS_META: Record<
 export interface VideoQueueModalProps {
   open: boolean;
   onClose: () => void;
-  /** Optional batch of prompts to submit when the modal opens. */
+  /** 弹窗打开时要提交的可选提示词批次。 */
   draftItems?: { prompt: string; params?: Record<string, unknown> }[];
-  /** Called when a clip is clicked — lets the parent open its detail view. */
+  /** 点某个片段时调用 —— 让父级打开它的详情视图。 */
   onOpenTask?: (taskId: string) => void;
 }
 
@@ -74,13 +74,13 @@ export function VideoQueueModal({
     }
   }, [open]);
 
-  // Initial load + poll every 4s while open (VIDEO tasks take a while).
+  // 打开时初始加载 + 每 4s 轮询（VIDEO 任务耗时较长）。
   useEffect(() => {
     if (!open) return;
     submittedRef.current = false;
     const t = setInterval(() => void loadTasks(), 4000);
-    // Defer the first fetch out of the effect body (React 19 rule:
-    // no setState synchronously within an effect).
+    // 把首次拉取延出 effect 体（React 19 规则：
+    // effect 内不得同步 setState）。
     const first = setTimeout(() => void loadTasks(), 0);
     return () => {
       clearInterval(t);
@@ -88,8 +88,8 @@ export function VideoQueueModal({
     };
   }, [open, loadTasks]);
 
-  // When draft items arrive, seed the draft editor and switch to the draft tab
-  // (adjusted during render, React 19 pattern).
+  // 草稿项到达时，给草稿编辑器播种并切到草稿页签
+  //（渲染期间调整，React 19 模式）。
   const [prevSeedOpen, setPrevSeedOpen] = useState(open);
   const [prevSeedDraftItems, setPrevSeedDraftItems] = useState(draftItems);
   if (
@@ -115,7 +115,7 @@ export function VideoQueueModal({
           const d = await submitGeneration(it.params, it.prompt);
           if (d.taskId) ok++;
         } catch {
-          /* skip failed item */
+          /* 跳过失败项 */
         }
       }
       if (ok > 0) {

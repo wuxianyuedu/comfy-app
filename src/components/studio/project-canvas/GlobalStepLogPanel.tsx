@@ -33,9 +33,9 @@ import { Button } from "~/components/ui/button";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
 
-/** Runtime shape of an SSE frame from /api/tasks/[id]/stream — only the
- *  fields this panel consumes.  `JSON.parse` yields `unknown`; the guards
- *  below narrow each field before use. */
+/** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
+ *  本面板消费的字段。`JSON.parse` 产出 `unknown`；下面的守卫
+ *  逐个收窄字段后再用。 */
 interface SseFrame {
   type?: unknown;
   entry?: unknown;
@@ -143,8 +143,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const debugMode = settings.debugMode;
   const activeTaskId = useActiveTaskId();
 
-  /* Modal open state — the switch only reveals the trigger button;
-   * clicking it opens the modal.  新任务开始不再自动弹窗，避免打断画布
+  /* 弹窗打开状态 —— 开关只露出触发按钮；
+   * 点它才打开弹窗。新任务开始不再自动弹窗，避免打断画布
    * 操作；日志仍由本面板托管，用户随时可点「执行日志」进入查看。 */
   const [open, setOpen] = useState(false);
 
@@ -163,13 +163,13 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const [wide, setWide] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
 
-  /* Reset view to the active task when none is explicitly pinned. */
+  /* 没有显式钉住时，视图重置到活跃任务。 */
   const taskId = viewTaskId ?? activeTaskId;
   useEffect(() => {
     if (activeTaskId && !viewTaskId) setViewTaskId(activeTaskId);
   }, [activeTaskId, viewTaskId]);
 
-  /* Cancel the currently viewed task from inside the panel.
+  /* 从面板内部取消当前查看的任务。
    * 「取消中…」态与失败文案都在 useCancelTask 里（视图零 IO）。 */
   const { cancelling: cancellingFromPanel, cancel: cancelFromPanel } =
     useCancelTask({ taskId, onFailed: setError });
@@ -186,7 +186,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const loadedForRef = useRef<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  // Re-seed from cache whenever the viewed task changes.
+  // 被查看任务一变化就重新从缓存播种。
   useEffect(() => {
     if (!taskId) return;
     if (loadedForRef.current !== taskId) {
@@ -202,7 +202,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     }
   }, [taskId]);
 
-  // Subscribe to the task SSE stream.
+  // 订阅该任务的 SSE 流。
   useEffect(() => {
     if (!taskId) {
       esRef.current?.close();
@@ -284,7 +284,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
           esRef.current = null;
         }
       } catch {
-        /* malformed SSE frame — ignore */
+        /* SSE 帧格式错误 —— 忽略 */
       }
     };
     es.onerror = () => {
@@ -297,7 +297,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     };
   }, [taskId]);
 
-  // 20s no-activity "stuck" hint.
+  // 20 秒无活动的「卡住」提示。
   useEffect(() => {
     if (!taskId) return;
     const timer = setInterval(() => {
@@ -326,7 +326,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     return () => clearInterval(timer);
   }, [taskId, status]);
 
-  // Auto-scroll to bottom.
+  // 自动滚到底部。
   useEffect(() => {
     if (!autoscroll) return;
     const el = scrollerRef.current;
@@ -399,7 +399,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
 
   return (
     <>
-      {/* Floating trigger button — only rendered while debug mode is on. */}
+      {/* 浮动触发按钮 —— 仅调试模式开启时渲染。 */}
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
