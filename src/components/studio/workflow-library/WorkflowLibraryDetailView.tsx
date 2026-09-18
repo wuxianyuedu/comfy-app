@@ -7,8 +7,8 @@ import { ExternalLink } from "lucide-react";
 
 import { SourceModal } from "~/components/studio/SourceModal";
 import type { WorkflowLibraryDetailController } from "./hooks/use-workflow-library-detail";
-import { DETAIL_TABS } from "./workflow-library-detail-config";
-import { TabButton } from "./sections/DetailControls";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { DETAIL_TABS, type DetailTab } from "./workflow-library-detail-config";
 import { DetailBody } from "./sections/DetailBody";
 import { DetailHeader } from "./sections/DetailHeader";
 
@@ -69,41 +69,56 @@ export function WorkflowLibraryDetailView({
         meta={metaEditor}
       />
 
-      <div className="border-border-subtle flex border-b px-5">
-        {DETAIL_TABS.map((tab) => (
-          <TabButton
-            key={tab.key}
-            active={activeTab === tab.key}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </TabButton>
-        ))}
-      </div>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as DetailTab)}
+        className="min-h-0 flex-1 gap-0"
+      >
+        <TabsList
+          variant="line"
+          className="border-border-subtle h-auto w-full justify-start gap-1 rounded-none border-b px-4"
+        >
+          {DETAIL_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.key}
+              value={tab.key}
+              className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-[12px] font-medium"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <DetailBody
-          workflow={workflow}
-          activeTab={activeTab}
-          isLoading={isLoading}
-          workflowIO={workflowIO}
-          paramMap={paramMap}
-          sourceData={sourceData}
-          usable={usable}
-          onEdit={actions.edit}
-          meta={{
-            modes: metaEditor.modes,
-            defaultMode: metaEditor.defaultMode,
-            onModeChange: (code) => {
-              void metaEditor.patchModes(metaEditor.modes, code);
-            },
-          }}
-          onSeedModeChange={(ioKey, mode) => {
-            void metaEditor.patchSeedMode(ioKey, mode);
-          }}
-          onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
-        />
-      </div>
+        {DETAIL_TABS.map((tab) => (
+          <TabsContent
+            key={tab.key}
+            value={tab.key}
+            className="min-h-0 flex-1 overflow-y-auto p-5"
+          >
+            <DetailBody
+              workflow={workflow}
+              tab={tab.key}
+              isLoading={isLoading}
+              workflowIO={workflowIO}
+              paramMap={paramMap}
+              sourceData={sourceData}
+              usable={usable}
+              onEdit={actions.edit}
+              meta={{
+                modes: metaEditor.modes,
+                defaultMode: metaEditor.defaultMode,
+                onModeChange: (code) => {
+                  void metaEditor.patchModes(metaEditor.modes, code);
+                },
+              }}
+              onSeedModeChange={(ioKey, mode) => {
+                void metaEditor.patchSeedMode(ioKey, mode);
+              }}
+              onPatchParamMap={(next) => metaEditor.patchParamMap(next)}
+            />
+          </TabsContent>
+        ))}
+      </Tabs>
 
       {sourceOpen && (
         <SourceModal

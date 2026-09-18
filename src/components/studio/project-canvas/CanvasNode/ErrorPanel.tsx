@@ -12,6 +12,7 @@ import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Alert } from "~/components/ui/alert";
 import { shouldAutoExpandError, suggestForError } from "./error-suggestions";
 
 interface ErrorPanelProps {
@@ -306,12 +307,13 @@ export function ErrorPanel({
 
                   {/* 2) 自动建议 — 正则推断的纠错提示 */}
                   {errorSuggestion && (
-                    <div className="border-warning/25 bg-warning/8 text-warning-strong rounded border px-2 py-1 text-[10px] leading-relaxed">
-                      <span className="text-warning-strong mr-1 font-semibold">
-                        建议
-                      </span>
+                    <Alert
+                      variant="warning"
+                      className="block rounded px-2 py-1 text-[10px] leading-relaxed"
+                    >
+                      <span className="mr-1 font-semibold">建议</span>
                       {errorSuggestion}
-                    </div>
+                    </Alert>
                   )}
 
                   {/* 3) 请求参数快照 */}

@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "~/components/ui/button";
+import { Alert, AlertTitle } from "~/components/ui/alert";
 import { useTrainingStudio } from "./hooks/use-training-studio";
 import {
   OPTIMIZERS,
@@ -158,8 +159,16 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {/* 后端未配置横幅 */}
             {!c.backendConfigured && (
-              <div className="border-warning/30 bg-warning/10 text-warning-strong rounded-lg border p-3 text-[11px] leading-relaxed">
-                <p className="mb-1 font-semibold">未配置训练后端</p>
+              <Alert
+                variant="warning"
+                /* 基元默认 `grid` 是给「图标 + 标题 + 正文」这种分行结构用的；
+                  这条横幅是**连续文字流**（正文里夹着内联链接），必须显式
+                   回到 `block`，否则每个文字节点各自成行、排版散架。 */
+                className="block rounded-lg p-3 text-[11px] leading-relaxed"
+              >
+                <AlertTitle className="mb-1 font-semibold">
+                  未配置训练后端
+                </AlertTitle>
                 {onOpenSettings ? (
                   <>
                     在「
@@ -185,7 +194,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                     地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
                   </>
                 )}
-              </div>
+              </Alert>
             )}
 
             {/* Upload zone */}
