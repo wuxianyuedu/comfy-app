@@ -325,7 +325,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   /* IO 端口节点的尺寸是文件顶部的模块级常量（IO_PORT_HEIGHT /
    *  PORT_ROW_GAP / GROUP_*）—— 下面的布局过程与 WfIoPortNode 渲染器
    *  共用同一份，两边不会各自漂移。 */
-   /* ── 边界 pin → wfGroup(wfIoPort …) ──
+  /* ── 边界 pin → wfGroup(wfIoPort …) ──
    *
    *  The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
    *  支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
@@ -363,12 +363,12 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     connectable: false,
     style: { width: IO_PORT_WIDTH, height: IO_PORT_HEIGHT },
     data: {
-             /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、
-              *  `IMAGE_FINAL`、`MODEL_HIGH_1st`），**优先**读它。取不到再回落
-              *  `localized`（ComfyUI 的 i18n），最后回落 `name` ——
-              * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
-              * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
-              * 解析出的类型以便区分。 */
+      /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、
+       *  `IMAGE_FINAL`、`MODEL_HIGH_1st`），**优先**读它。取不到再回落
+       *  `localized`（ComfyUI 的 i18n），最后回落 `name` ——
+       * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
+       * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
+       * 解析出的类型以便区分。 */
       title: pin.label ?? pin.localized ?? pin.name ?? "",
       type: pin.type,
       direction: kind,
@@ -378,29 +378,29 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       connectsFrom: null,
     },
   });
-   /* wfIoPort 子节点在它所属栏杆分组里的 X 锚点。
-    *
-    *  两条栏杆各自从所属 wfGroup 的**角**（右上 / 左上）锚定，而不是都从
-    *  同一条左边缘锚定：早先的输入侧布局把端口贴死在 wfGroup 的右边框上
-    *  （`relX = 2 * GROUP_PAD_X`），于是 `right:-4` 的 handle 整个**露在框外**
-    *  ——截图里能看到绿色的圆点溢过红色的 Inputs 框。
-    *
-    *   - 输入 pin：名字在端口右侧（justify-end → 标签贴右边缘）；端口从
-    *     wfGroup 的**右上角**锚定，让它的右边缘落在 wfGroup 边框内侧
-    *     GROUP_PAD_X 处。handle（`right:-4`）最终落在框内 6px 处，
-    *     与输出行严格镜像。⇒ relX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X。
-    *   - 输出 pin：名字在端口左侧（justify-start → 标签贴左边缘）；端口从
-    *     wfGroup 的**左上角**锚定，让它的左边缘落在 wfGroup 边框内侧
-    *     GROUP_PAD_X 处。handle（`left:-4`）最终落在框内 6px 处。
-    *     ⇒ relX = GROUP_PAD_X。 */
+  /* wfIoPort 子节点在它所属栏杆分组里的 X 锚点。
+   *
+   *  两条栏杆各自从所属 wfGroup 的**角**（右上 / 左上）锚定，而不是都从
+   *  同一条左边缘锚定：早先的输入侧布局把端口贴死在 wfGroup 的右边框上
+   *  （`relX = 2 * GROUP_PAD_X`），于是 `right:-4` 的 handle 整个**露在框外**
+   *  ——截图里能看到绿色的圆点溢过红色的 Inputs 框。
+   *
+   *   - 输入 pin：名字在端口右侧（justify-end → 标签贴右边缘）；端口从
+   *     wfGroup 的**右上角**锚定，让它的右边缘落在 wfGroup 边框内侧
+   *     GROUP_PAD_X 处。handle（`right:-4`）最终落在框内 6px 处，
+   *     与输出行严格镜像。⇒ relX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X。
+   *   - 输出 pin：名字在端口左侧（justify-start → 标签贴左边缘）；端口从
+   *     wfGroup 的**左上角**锚定，让它的左边缘落在 wfGroup 边框内侧
+   *     GROUP_PAD_X 处。handle（`left:-4`）最终落在框内 6px 处。
+   *     ⇒ relX = GROUP_PAD_X。 */
   const wfGroupWidth = IO_PORT_WIDTH + 2 * GROUP_PAD_X;
   const inputRelX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X;
   const outputRelX = GROUP_PAD_X;
-   /* 为整条栏杆建一个 wfGroup 节点。`draggable: true` 把 WfGroupNode 翻到
-    *  交互模式（pointerEvents: auto、cursor: move），React Flow 会自动带上
-    *  声明了 extent:"parent" 的子节点。高度这里**直接给** ——
-    *  下面各行 pin 的纵向偏移是变化的，套不进早先那个
-    *  `pinCount * IO_PORT_HEIGHT + (n-1)*PORT_ROW_GAP` 公式。 */
+  /* 为整条栏杆建一个 wfGroup 节点。`draggable: true` 把 WfGroupNode 翻到
+   *  交互模式（pointerEvents: auto、cursor: move），React Flow 会自动带上
+   *  声明了 extent:"parent" 的子节点。高度这里**直接给** ——
+   *  下面各行 pin 的纵向偏移是变化的，套不进早先那个
+   *  `pinCount * IO_PORT_HEIGHT + (n-1)*PORT_ROW_GAP` 公式。 */
   const buildBoundaryGroup = (
     id: string,
     title: string,
@@ -420,13 +420,13 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       style: { width: IO_PORT_WIDTH + 2 * GROUP_PAD_X, height },
     };
   };
-   /* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。
-    *  `savedGroupPos` 里可能已经有上个会话里用户拖出来的位置 —— 尊重它。
-    *
-    *  这里**不**把两条栏杆硬凑成包围盒对齐的一列，而是按 ComfyUI 存在
-    *  `boundaryPins.inputs[i].pos` / `boundaryPins.outputs[i].pos` 上的原始
-    *  坐标给每个分组锚定。那些坐标是「未改动的工作流里，对应内部槽位端口
-    *  所在的绝对画布位置」—— 正是用户当时指的东西。
+  /* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。
+   *  `savedGroupPos` 里可能已经有上个会话里用户拖出来的位置 —— 尊重它。
+   *
+   *  这里**不**把两条栏杆硬凑成包围盒对齐的一列，而是按 ComfyUI 存在
+   *  `boundaryPins.inputs[i].pos` / `boundaryPins.outputs[i].pos` 上的原始
+   *  坐标给每个分组锚定。那些坐标是「未改动的工作流里，对应内部槽位端口
+   *  所在的绝对画布位置」—— 正是用户当时指的东西。
    *  screenshot #2 ("这里有子图的输入节点和输出节点的位置，要按照
    *  这个来").  The fallback (bbox-anchored) only kicks in when those
    *      *  原始位置缺失或全是 0 时才落回包围盒（较旧的、或手搓的工作流）。
@@ -447,11 +447,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       if (p!.x > maxX) maxX = p!.x;
       if (p!.y < minY) minY = p!.y;
     }
-         /* 参考布局：┃ 左输入列 ┃ 中间画布列 ┃ 右输出列 ┃。
-          *  每条栏杆与中间包围盒之间的空隙必须 ≥ 一个中间节点的宽度（约 280px）
-          *  再加上一点呼吸余量，否则 wfIoPort 的标签会被埋进中间的 WfNode 卡片里。
-          *  工作流带真实 pin.pos 坐标时（常见路径）**优先**走下面的原始 pin 锚定；
-          *  这个 360px 的包围盒兜底只在所有 pin.pos 都缺失或为 0 时才生效。 */
+    /* 参考布局：┃ 左输入列 ┃ 中间画布列 ┃ 右输出列 ┃。
+     *  每条栏杆与中间包围盒之间的空隙必须 ≥ 一个中间节点的宽度（约 280px）
+     *  再加上一点呼吸余量，否则 wfIoPort 的标签会被埋进中间的 WfNode 卡片里。
+     *  工作流带真实 pin.pos 坐标时（常见路径）**优先**走下面的原始 pin 锚定；
+     *  这个 360px 的包围盒兜底只在所有 pin.pos 都缺失或为 0 时才生效。 */
     const RAIL_GAP = 360;
     const leftRailX = minX - RAIL_GAP;
     const rightRailX = maxX + RAIL_GAP;
@@ -460,19 +460,19 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
         const x = Number(pin.pos[0]) || 0;
         const y = Number(pin.pos[1]) || 0;
-                 /* (0,0) 一律当作「没提供」—— 不带 UI 位置的工作流（纯 API 导入）
-                  *  就是这个形态。回落到按包围盒锚定的栏杆，
-                  *  总好过把所有 pin 都堆在画布原点。 */
+        /* (0,0) 一律当作「没提供」—— 不带 UI 位置的工作流（纯 API 导入）
+         *  就是这个形态。回落到按包围盒锚定的栏杆，
+         *  总好过把所有 pin 都堆在画布原点。 */
         if (x !== 0 || y !== 0) return [x, y];
       }
       return null;
     };
     const inputsRaw = (detail.boundaryPins.inputs ?? []).map(rawPosOf);
     const outputsRaw = (detail.boundaryPins.outputs ?? []).map(rawPosOf);
-         /* 分组的默认锚点：取所有带真实原始位置的 pin 里最小的 x
-          *  （输入取最左、输出取最右）与最小的 y，然后把分组原点往左上挪，
-          *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
-          *  输入与输出是「朝内」的，所以左侧取 minX、右侧取 maxX。 */
+    /* 分组的默认锚点：取所有带真实原始位置的 pin 里最小的 x
+     *  （输入取最左、输出取最右）与最小的 y，然后把分组原点往左上挪，
+     *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
+     *  输入与输出是「朝内」的，所以左侧取 minX、右侧取 maxX。 */
     const computeGroupDefault = (
       list: ([number, number] | null)[],
       side: "left" | "right",

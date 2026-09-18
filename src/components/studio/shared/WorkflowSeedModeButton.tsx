@@ -4,6 +4,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { placeFloating } from "~/lib/floating-position";
+import { Z } from "~/lib/shell/overlay-z";
 
 /** Seed modes — ComfyUI `control_after_generate` mapping.  Each entry has the
  *  ComfyUI value, the Chinese label, and a two-line description used in the
@@ -16,6 +17,7 @@ const SEED_MODES: { value: string; label: string; hint: string }[] = [
 ];
 
 /** Seed-like widget input? (KSampler / custom node seed pins). */
+
 export function isSeedLike(e: { name: string; label?: string }): boolean {
   return /seed|noise_seed/i.test(`${e.name} ${e.label ?? ""}`);
 }
@@ -260,7 +262,7 @@ export function SeedModeButton({
         <>
           <div
             className={overlayClass("modal")}
-            style={{ zIndex: 9998 }}
+            style={{ zIndex: Z.overlay - 1 }}
             onClick={(event) => {
               event.stopPropagation();
               setOpen(false);
@@ -271,7 +273,7 @@ export function SeedModeButton({
             ref={popRef}
             className="nodrag nopan border-border-strong bg-card fixed overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
             style={{
-              zIndex: 9999,
+              zIndex: Z.overlay,
               width: POPOVER_WIDTH,
               top: pos?.top ?? -9999,
               left: pos?.left ?? 0,

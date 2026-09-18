@@ -3,9 +3,12 @@
 /** extracted from WorkflowNode.tsx — model-tag filter chip
  *  (Dropdown 4, ). Behaviour and visuals unchanged.
  */
-import { useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { usePopoverDismiss, usePopoverPosition } from "./workflow-node-popover";
+import { useState } from "react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 
 interface WorkflowModelFilterChipProps {
   value: string;
@@ -19,19 +22,13 @@ export function WorkflowModelFilterChip({
   onChange,
 }: WorkflowModelFilterChipProps) {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
-  const pos = usePopoverPosition(open, triggerRef, 200);
-  usePopoverDismiss(open, triggerRef, popRef, () => setOpen(false));
 
   const label = value === "all" ? "全部模型" : value;
 
   return (
-    <>
-      <button
-        ref={triggerRef}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
         type="button"
-        onClick={() => setOpen((value) => !value)}
         className="nodrag nopan border-accent/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
         title={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       >
@@ -52,85 +49,70 @@ export function WorkflowModelFilterChip({
         >
           ▾
         </span>
-      </button>
+      </PopoverTrigger>
 
-      {open &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={popRef}
-            role="listbox"
-            aria-label="按模型筛选工作流"
-            style={{
-              position: "fixed",
-              left: pos.left,
-              top: pos.top,
-              width: pos.width,
-              zIndex: 50,
-            }}
-            className="border-border-strong bg-card max-h-72 overflow-y-auto rounded-lg border py-1 shadow-2xl shadow-black/10 dark:shadow-fuchsia-500/20"
-          >
+      <PopoverContent
+        align="start"
+        aria-label="按模型筛选工作流"
+        className="border-border-strong bg-card max-h-72 w-72 gap-0 overflow-y-auto py-1 shadow-2xl shadow-black/10 dark:shadow-fuchsia-500/20"
+      >
+        <button
+          type="button"
+          role="option"
+          aria-selected={value === "all"}
+          onClick={() => {
+            onChange("all");
+            setOpen(false);
+          }}
+          className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
+            value === "all"
+              ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
+              : "text-ink-soft hover:bg-subtle"
+          }`}
+        >
+          <span className="bg-accent h-1.5 w-1.5 rounded-full" />
+          <span className="flex-1">全部模型</span>
+          {value === "all" && (
+            <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>
+          )}
+        </button>
+        {tags.length === 0 && (
+          <div className="text-ink-muted px-3 py-2 text-[10px]">
+            标签库为空，去工作流库「管理模型」添加
+          </div>
+        )}
+        {tags.map((tag) => {
+          const sel = tag.name === value;
+          return (
             <button
+              key={tag.id}
               type="button"
               role="option"
-              aria-selected={value === "all"}
+              aria-selected={sel}
               onClick={() => {
-                onChange("all");
+                onChange(tag.name);
                 setOpen(false);
               }}
               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
-                value === "all"
+                sel
                   ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
                   : "text-ink-soft hover:bg-subtle"
               }`}
             >
-              <span className="bg-accent h-1.5 w-1.5 rounded-full" />
-              <span className="flex-1">全部模型</span>
-              {value === "all" && (
+              <span className="bg-accent-soft h-1.5 w-1.5 rounded-full" />
+              <span className="flex-1 truncate">{tag.name}</span>
+              <span className="text-ink-muted text-[9px] tabular-nums">
+                {tag.count}
+              </span>
+              {sel && (
                 <span className="text-fuchsia-700 dark:text-fuchsia-300">
                   ✓
                 </span>
               )}
             </button>
-            {tags.length === 0 && (
-              <div className="text-ink-muted px-3 py-2 text-[10px]">
-                标签库为空，去工作流库「管理模型」添加
-              </div>
-            )}
-            {tags.map((tag) => {
-              const sel = tag.name === value;
-              return (
-                <button
-                  key={tag.id}
-                  type="button"
-                  role="option"
-                  aria-selected={sel}
-                  onClick={() => {
-                    onChange(tag.name);
-                    setOpen(false);
-                  }}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
-                    sel
-                      ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
-                      : "text-ink-soft hover:bg-subtle"
-                  }`}
-                >
-                  <span className="bg-accent-soft h-1.5 w-1.5 rounded-full" />
-                  <span className="flex-1 truncate">{tag.name}</span>
-                  <span className="text-ink-muted text-[9px] tabular-nums">
-                    {tag.count}
-                  </span>
-                  {sel && (
-                    <span className="text-fuchsia-700 dark:text-fuchsia-300">
-                      ✓
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>,
-          document.body,
-        )}
-    </>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -380,16 +380,16 @@ export function buildSubgraphGraph(
     if (!rn?.id) continue;
     const nodeId = String(rn.id);
     const classType: string = rn.type ?? "?";
-         /* 记下原始的 litegraph 外框尺寸，客户端才能按 ComfyUI 的精确尺寸
-          *  画出这个节点（见上面 `sizeById` 的声明）。 */
+    /* 记下原始的 litegraph 外框尺寸，客户端才能按 ComfyUI 的精确尺寸
+     *  画出这个节点（见上面 `sizeById` 的声明）。 */
     const rnSize =
       Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
     if (rnSize)
       sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
-     /* 每个输入的元数据。「内部」连线（源自子图内的另一个节点）与
-      *  「边界」连线（源自输入哨兵节点 -10，值来自父级封装节点）分开标记。
-      *  边界连线仍然记 isConnection（供 UI 打标签），但写 inputMap 时**跳过**，
-      *  免得把值绑到一个哨兵源上。 */
+    /* 每个输入的元数据。「内部」连线（源自子图内的另一个节点）与
+     *  「边界」连线（源自输入哨兵节点 -10，值来自父级封装节点）分开标记。
+     *  边界连线仍然记 isConnection（供 UI 打标签），但写 inputMap 时**跳过**，
+     *  免得把值绑到一个哨兵源上。 */
     const rawInputs: RawInputEntry[] = [];
     const inputMap: Record<string, unknown> = {};
     if (Array.isArray(rn.inputs)) {
@@ -421,17 +421,17 @@ export function buildSubgraphGraph(
               : undefined,
           type:
             typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
-                     /* 把边界连线（origin_id = -10/-20）标成 "isBoundary"，
-                      *  画布便能渲染成「封装节点暴露出来的输入」（它仍是一条连接，
-                      *  但子图内部没有真实的源节点）。 */
+          /* 把边界连线（origin_id = -10/-20）标成 "isBoundary"，
+           *  画布便能渲染成「封装节点暴露出来的输入」（它仍是一条连接，
+           *  但子图内部没有真实的源节点）。 */
           isConnection: isConn,
           isBoundary: false, // set later if needed
         };
         if (widgetName) entry.widget = { name: widgetName };
         if (widgetValue !== undefined) entry.widgetValue = widgetValue;
-                 /* 与父级路由保持一致：给助手标出的 STRING 输入盖 `multiline`，
-                  *  免得很短的提示词输入被降级成单行芯片。
-                  *
+        /* 与父级路由保持一致：给助手标出的 STRING 输入盖 `multiline`，
+         *  免得很短的提示词输入被降级成单行芯片。
+         *
          *
          *  这里是**同步**构建，读不到 object_info 的 `{"multiline": true}`
          *  声明（声明只能异步查）—— 因此只盖「值很长」那条数据判据，
@@ -453,11 +453,11 @@ export function buildSubgraphGraph(
           if (lk && lk.src !== "-10" && lk.src !== "-20") {
             inputMap[inp.name] = [lk.src, lk.slot];
           } else if (lk && (lk.src === "-10" || lk.src === "-20")) {
-                         /* 边界连线（子图暴露的输入/输出）—— 若该槽位同时声明了 widget，
-                          *  回落到 widget 值。CLIPTextEncode 的 `text` 就是这种情况：
-                          *  原始 JSON 里它既是 widget，又有 `link` 指向边界哨兵；
-                          *  我们要的是 widget 的默认值（真正的提示词文本），
-                          *  而不是一个连接元组。 */
+            /* 边界连线（子图暴露的输入/输出）—— 若该槽位同时声明了 widget，
+             *  回落到 widget 值。CLIPTextEncode 的 `text` 就是这种情况：
+             *  原始 JSON 里它既是 widget，又有 `link` 指向边界哨兵；
+             *  我们要的是 widget 的默认值（真正的提示词文本），
+             *  而不是一个连接元组。 */
             const last = rawInputs[rawInputs.length - 1];
             if (last) last.isBoundary = true;
             /* 把这个节点标成 INPUT 端点：源是哨兵 `-10` 意味着值来自父级
@@ -519,8 +519,8 @@ export function buildSubgraphGraph(
             if (target === "-20") {
               outputEndpointNodes.add(nodeId);
               isBoundaryOut = true;
-                             /* 存下边界输出端口，画布据此在**左边缘**渲染一枚紧凑的
-                              *  wfIoPort 标签。只记第一个指向 -20 的输出。 */
+              /* 存下边界输出端口，画布据此在**左边缘**渲染一枚紧凑的
+               *  wfIoPort 标签。只记第一个指向 -20 的输出。 */
               boundaryOutputByNode[nodeId] ??= {
                 name: o.name,
                 type: typeof o.type === "string" ? o.type : "*",

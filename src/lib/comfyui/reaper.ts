@@ -222,16 +222,16 @@ export async function reapStaleQueuedTasks(): Promise<void> {
      *  探测本身只在「进程内无认领足迹」的行才会被用到，见下方判决。 */
     let comfyEvidence: boolean | null | undefined;
     for (const t of stale) {
-             /* 进程内守卫：若另一个（并发的）回收节拍已经认领了这个任务，就跳过 ——
-              *  免得重复记 FAILED 日志。DB 的 `status: QUEUED` 查询不是原子的，
-              *  同一毫秒内触发的两个节拍可能同时捞到同一行。 */
+      /* 进程内守卫：若另一个（并发的）回收节拍已经认领了这个任务，就跳过 ——
+       *  免得重复记 FAILED 日志。DB 的 `status: QUEUED` 查询不是原子的，
+       *  同一毫秒内触发的两个节拍可能同时捞到同一行。 */
       if (reaperState.reaping.has(t.id)) continue;
       reaperState.reaping.add(t.id);
       try {
         const ageSec = Math.round((Date.now() - t.createdAt.getTime()) / 1000);
-                 /* 内存认领守卫：当前进程仍持有这个任务时，它**不是**孤儿 ——
-                  *  留给正常的执行路径去收口。只有在内存里毫无足迹的任务
-                  *  （dev 冷重启）才算真孤儿。 */
+        /* 内存认领守卫：当前进程仍持有这个任务时，它**不是**孤儿 ——
+         *  留给正常的执行路径去收口。只有在内存里毫无足迹的任务
+         *  （dev 冷重启）才算真孤儿。 */
         if (isTaskClaimedInProcess(s, (id) => cliProcs.has(id), t.id)) {
           log(
             t.id,
@@ -288,10 +288,10 @@ export async function reapStaleQueuedTasks(): Promise<void> {
         }
         const reason = `任务卡在队列超过 ${ageSec}s，且 ComfyUI 队列与历史中均无对应活动（本进程内存队列也无此任务的执行链）— 请重新执行`;
         log(t.id, "error", reason);
-                 /* 合成一对「state → error」事件，让任何 SSE 订阅者立刻看到终态失败，
-                  *  随后把 DB 行标成 FAILED。**不**调 processQueue() ——
-                  *  这个任务在内存里根本没有作业，而且我们明确不希望把一个未知工作流
-                  *  重新入队。 */
+        /* 合成一对「state → error」事件，让任何 SSE 订阅者立刻看到终态失败，
+         *  随后把 DB 行标成 FAILED。**不**调 processQueue() ——
+         *  这个任务在内存里根本没有作业，而且我们明确不希望把一个未知工作流
+         *  重新入队。 */
         s.emitter.emit(t.id, {
           type: "state",
           status: "FAILED",
@@ -366,11 +366,11 @@ export async function reapStaleRunningTasks(): Promise<void> {
                 reason = `已完成 · 输出见 ComfyUI /history/${t.promptId}（dev server 重启后由 reaper 对账恢复）`;
               }
             } else {
-                             /* 200 + 没有条目：ComfyUI 对未知 prompt **不会**回 404 ——
-                              *  它返回 `{}`。可能是 (a) prompt 还在处理（稍后会出现），
-                              *  也可能是 (b) ComfyUI 从没见过它（孤儿）。
-                              *  与 /queue 交叉核对：若该 prompt 既不在 queue_running
-                              *  也不在 queue_pending 里，那就等于丢了 → FAILED 孤儿。 */
+              /* 200 + 没有条目：ComfyUI 对未知 prompt **不会**回 404 ——
+               *  它返回 `{}`。可能是 (a) prompt 还在处理（稍后会出现），
+               *  也可能是 (b) ComfyUI 从没见过它（孤儿）。
+               *  与 /queue 交叉核对：若该 prompt 既不在 queue_running
+               *  也不在 queue_pending 里，那就等于丢了 → FAILED 孤儿。 */
               let inQueue = false;
               try {
                 const q = await fetch(`${base}/queue`, {

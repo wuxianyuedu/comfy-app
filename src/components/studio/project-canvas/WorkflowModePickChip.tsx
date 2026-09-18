@@ -5,10 +5,13 @@
  *  Behaviour and visuals unchanged.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useStore } from "@xyflow/react";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
-import { usePopoverDismiss, usePopoverPosition } from "./workflow-node-popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 
 interface WorkflowModePickChipProps {
   modes: string[];
@@ -44,10 +47,6 @@ export function WorkflowModePickChip({
   disabled,
 }: WorkflowModePickChipProps) {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
-  const pos = usePopoverPosition(open, triggerRef, 240);
-  usePopoverDismiss(open, triggerRef, popRef, () => setOpen(false));
 
   const defType = ALL_WORKFLOW_TYPES.find(
     (ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === defaultMode,
@@ -75,12 +74,10 @@ export function WorkflowModePickChip({
   };
 
   return (
-    <>
+    <Popover open={open} onOpenChange={setOpen}>
       {open && <PopoverAutoClose onClose={() => setOpen(false)} />}
-      <button
-        ref={triggerRef}
+      <PopoverTrigger
         type="button"
-        onClick={() => setOpen((value) => !value)}
         disabled={disabled}
         className={`nodrag nopan border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] ${
           disabled ? "opacity-50" : ""
@@ -100,79 +97,66 @@ export function WorkflowModePickChip({
         >
           ▾
         </span>
-      </button>
+      </PopoverTrigger>
 
-      {open &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={popRef}
-            role="listbox"
-            aria-label="工作流模式选择"
-            style={{
-              position: "fixed",
-              left: pos.left,
-              top: pos.top,
-              width: pos.width,
-              zIndex: 50,
-            }}
-            className="border-border-strong bg-card rounded-xl border py-1 shadow-2xl shadow-black/10 dark:shadow-violet-500/20"
-          >
-            {/* 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
-            {items.length === 0 ? (
-              <div className="text-ink-muted px-3 py-3 text-center text-[11px]">
-                该工作流没有声明可用模式
+      <PopoverContent
+        align="start"
+        aria-label="工作流模式选择"
+        className="border-border-strong bg-card w-60 gap-0 rounded-xl py-1 shadow-2xl shadow-black/10 dark:shadow-violet-500/20"
+      >
+        {/* 仅展示工作流 modes 数组里的 N 个，单选 + 点选即切换 */}
+        {items.length === 0 ? (
+          <div className="text-ink-muted px-3 py-3 text-center text-[11px]">
+            该工作流没有声明可用模式
+          </div>
+        ) : (
+          items.map((item) => {
+            const isDef = defaultMode === item.code;
+            return (
+              <div
+                key={item.code}
+                role="option"
+                aria-selected={isDef}
+                tabIndex={0}
+                onClick={() => pick(item.code)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    pick(item.code);
+                  }
+                }}
+                className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] transition-colors ${
+                  isDef
+                    ? "bg-violet-500/14 text-violet-700 dark:text-violet-100"
+                    : "text-ink-bright hover:bg-subtle"
+                }`}
+              >
+                {/* radio dot — 单选，无 checkbox */}
+                <span
+                  className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
+                    isDef
+                      ? "border-violet-400 bg-violet-500/20"
+                      : "border-border-strong bg-subtle"
+                  }`}
+                >
+                  {isDef && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {item.label}
+                </span>
+                <span
+                  className="bg-subtle text-ink-muted shrink-0 rounded px-1 py-px text-[9.5px]"
+                  style={{ fontFamily: "var(--font-sans)" }}
+                >
+                  {item.code}
+                </span>
               </div>
-            ) : (
-              items.map((item) => {
-                const isDef = defaultMode === item.code;
-                return (
-                  <div
-                    key={item.code}
-                    role="option"
-                    aria-selected={isDef}
-                    tabIndex={0}
-                    onClick={() => pick(item.code)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        pick(item.code);
-                      }
-                    }}
-                    className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] transition-colors ${
-                      isDef
-                        ? "bg-violet-500/14 text-violet-700 dark:text-violet-100"
-                        : "text-ink-bright hover:bg-subtle"
-                    }`}
-                  >
-                    {/* radio dot — 单选，无 checkbox */}
-                    <span
-                      className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
-                        isDef
-                          ? "border-violet-400 bg-violet-500/20"
-                          : "border-border-strong bg-subtle"
-                      }`}
-                    >
-                      {isDef && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-medium">
-                      {item.label}
-                    </span>
-                    <span
-                      className="bg-subtle text-ink-muted shrink-0 rounded px-1 py-px text-[9.5px]"
-                      style={{ fontFamily: "var(--font-sans)" }}
-                    >
-                      {item.code}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>,
-          document.body,
+            );
+          })
         )}
-    </>
+      </PopoverContent>
+    </Popover>
   );
 }

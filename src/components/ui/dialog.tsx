@@ -4,6 +4,7 @@ import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
 import { cn } from "~/lib/utils";
+import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
 import { Button } from "~/components/ui/button";
 import { XIcon } from "lucide-react";
 
@@ -30,9 +31,9 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
-      // 遮罩让出窗口标题行：否则页签与右上角窗口按钮会被遮罩一起盖住（ISSUE #310）。
       className={cn(
-        `top-title-bar data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 fixed inset-x-0 bottom-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs`,
+        "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 isolate",
+        dialogBackdropClass(),
         className,
       )}
       {...props}
@@ -42,19 +43,28 @@ function DialogOverlay({
 
 function DialogContent({
   className,
+  /** 给弹窗本体的额外 class（如形态按状态切换的宽度/边框）；与调用处传入的
+   *  `className` 分开，是为了让「内容体」与「外层容器」各自可覆盖。 */
+  popupClassName,
   children,
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  /** 弹窗本体（Popup）自身的 class，便于调用处只改形态、不动外层定位。 */
+  popupClassName?: string;
   showCloseButton?: boolean;
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      {/* 内容层不再自绘遮罩：遮罩由 base-ui 的 Backdrop 负责（打开时点遮罩
+          即关闭），样式与实际渲染串在 dialog-overlay.ts 里收口一次 ——
+          它同时要满足「让出标题行」的硬判据（ISSUE #310：遮罩曾整片盖住
+          页签与右上角窗口按钮）。 */}
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
           "bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm ring-1 duration-100 outline-none sm:max-w-sm",
+          popupClassName,
           className,
         )}
         {...props}
