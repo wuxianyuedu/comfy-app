@@ -108,7 +108,7 @@ describe("边的两端与 handle 取值", () => {
   };
 
   it("输入侧：卡片圆点（source handle）→ 宿主行（target handle = ioKey）", () => {
-    const edge = buildInputEdge(inputWire);
+    const edge = buildInputEdge(inputWire, true);
     expect(edge.source).toBe(LIB_NODE_PARAMS);
     expect(edge.target).toBe(LIB_NODE_HOST);
     expect(edge.sourceHandle).toBe("positive_prompt");
@@ -116,7 +116,7 @@ describe("边的两端与 handle 取值", () => {
   });
 
   it("输出侧方向相反：宿主输出行 → 右列卡片圆点", () => {
-    const edge = buildOutputEdge(outputWire);
+    const edge = buildOutputEdge(outputWire, true);
     expect(edge.source).toBe(LIB_NODE_HOST);
     expect(edge.target).toBe(LIB_NODE_OUTPUTS);
     expect(edge.sourceHandle).toBe("5::output::IMAGE");
@@ -126,10 +126,13 @@ describe("边的两端与 handle 取值", () => {
   it("两套键空间不混：落点是 ioKey，卡片端是 handle id", () => {
     /* 输入侧的 handle id 是**端口名**（库里按端口名给圆点定位），落点是 ioKey
      *  （运行期与落库的键）—— 混了边就量不到 handleBounds（线画不出来）。 */
-    const edge = buildInputEdge({
-      ...inputWire,
-      targetIoKey: "9::widget::negative_prompt",
-    });
+    const edge = buildInputEdge(
+      {
+        ...inputWire,
+        targetIoKey: "9::widget::negative_prompt",
+      },
+      true,
+    );
     expect(edge.targetHandle).toBe("9::widget::negative_prompt");
     expect(edge.sourceHandle).not.toContain("::");
   });
@@ -138,8 +141,8 @@ describe("边的两端与 handle 取值", () => {
     /* 用户口径：这里是编辑对外参数的界面，「未连过就不要连」—— 所以库里没有
      *  「默认线」这一档样式，两条边都按实线画。 */
     for (const edge of [
-      buildInputEdge(inputWire),
-      buildOutputEdge(outputWire),
+      buildInputEdge(inputWire, true),
+      buildOutputEdge(outputWire, true),
     ]) {
       expect(
         (edge.style as { strokeDasharray?: string }).strokeDasharray,
@@ -152,6 +155,7 @@ describe("边的两端与 handle 取值", () => {
     const edges = deriveLibraryEdges(
       [inputWire, { ...inputWire, entryId: "size", handleId: "width" }],
       [outputWire],
+      true,
     );
     expect(edges).toHaveLength(3);
     expect(new Set(edges.map((e: Edge) => e.id)).size).toBe(3);

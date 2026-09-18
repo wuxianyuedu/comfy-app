@@ -27,10 +27,13 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  type Edge,
   type Node,
   type OnNodeDrag,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+
+import { Button } from "~/components/ui/button";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
@@ -43,7 +46,10 @@ import {
   LAYOUT_SIZING,
   useLibraryWireFlow,
 } from "./hooks/use-library-wire-flow";
-import { libraryBackdropSize } from "./workflow-library-wire-graph";
+import {
+  libraryBackdropSize,
+  libraryEdgeOwner,
+} from "./workflow-library-wire-graph";
 import {
   LibraryBackdropNode,
   LibraryHostNode,
@@ -71,6 +77,10 @@ export interface WorkflowLibraryCanvasProps {
   onResetOutput: (ioKey: string) => void;
   onConnect?: (entryId: string, ioKey: string) => void;
   onConnectOutput?: (outputIoKey: string, targetIoKey: string) => void;
+  /** 删除一条映射线：点选某条线后按 Delete 或点「删除选中线」时调用。
+   *  由父层落到 `disconnect`（断开该 entryId / 输出 ioKey 的映射），从而只删
+   *  这一条线，而不用卡片头 ↺ 把整张卡（尺寸卡是六条形态线）一起清掉。 */
+  onDeleteWire?: (namespace: "param" | "output", entryId: string) => void;
   /** 宿主运行卡片（含表单与生成按钮）。 */
   host: React.ReactNode;
 }
@@ -86,9 +96,11 @@ const NODE_TYPES = {
 /** 三列的布局位置（模块级常量：吸附目标不随渲染重建）。 */
 const LAYOUT_NODES = buildLibraryNodes(LAYOUT_SIZING);
 
-/** 边的渲染参数：线本身要能点选（选中后按 ⌫ 断开）。 */
+/** 边的渲染参数：线本身要能点选（选中后按 ⌫ / Delete 断开，或点「删除选中线」）。
+ *  `deletable` 由派生时按 `canWire` 逐边设（只读预览不可删）；这里的默认值只作兜底。 */
 const DEFAULT_EDGE_OPTIONS = {
   type: "default",
+  selectable: true,
   deletable: false,
   reconnectable: false,
 } as const;
@@ -166,11 +178,18 @@ function WorkflowLibraryCanvasInner({
   onResetOutput,
   onConnect,
   onConnectOutput,
+  onDeleteWire,
   host,
 }: WorkflowLibraryCanvasProps) {
   /* 画布容器：量它才知道「铺满」要铺到哪儿（ISSUE #596）。 */
   const containerRef = useRef<HTMLDivElement>(null);
   const backdropSize = useCanvasBackdropSize(containerRef);
+  /* 当前在画布上点选中的映射线（用于「删除选中线」按钮与计数提示，并驱动选中
+   *  高亮）。挂在 React Flow 之外：由 `onEdgeClick` 写入、点击空白由 `onPaneClick`
+   *  清空；透传给 `useLibraryWireFlow`，在派生边时给命中的边注入高亮描边。 */
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
   const flow = useLibraryWireFlow({
     io,
     paramCards,
@@ -195,7 +214,40 @@ function WorkflowLibraryCanvasInner({
     connect: onConnect,
     connectOutput: onConnectOutput,
     backdropSize,
+    canWire,
+    selectedEdgeIds,
   });
+
+  /* 点一条线：记为选中（React Flow 自己对它打 selected，驱动 Delete 删除；同时
+   *  `selectedEdgeIds` 给命中的边注入高亮描边，见 `useLibraryWireFlow`）。 */
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      setSelectedEdgeIds(new Set([edge.id]));
+    },
+    [],
+  );
+
+  /* React Flow 通过 Delete / Backspace 删除选中线时回调：解析出每条线对应的
+   * 对外参数（输入侧 entryId / 输出侧 ioKey），落到 `disconnect` 只断那一条。 */
+  const handleEdgesDelete = useCallback(
+    (deleted: Edge[]) => {
+      for (const edge of deleted) {
+        const owner = libraryEdgeOwner(edge.id);
+        if (owner && onDeleteWire) onDeleteWire(owner.namespace, owner.entryId);
+      }
+      setSelectedEdgeIds(new Set());
+    },
+    [onDeleteWire],
+  );
+
+  /* 「删除选中线」按钮：与 Delete 键同一条断开路径。 */
+  const handleDeleteSelected = useCallback(() => {
+    for (const id of selectedEdgeIds) {
+      const owner = libraryEdgeOwner(id);
+      if (owner && onDeleteWire) onDeleteWire(owner.namespace, owner.entryId);
+    }
+    setSelectedEdgeIds(new Set());
+  }, [selectedEdgeIds, onDeleteWire]);
 
   /* 节点与边在挂载时取一次：React Flow 自己持有视口、位置与选中。
    *
@@ -277,6 +329,7 @@ function WorkflowLibraryCanvasInner({
           onPaneClick={() => {
             onSelectParam(null);
             onSelectOutput(null);
+            setSelectedEdgeIds(new Set());
           }}
           /* 库里三个节点全是卡片与表单：裁剪省不下什么，却要接一份 error#008
            *  过滤（见文件头说明）—— 直接关掉。 */
@@ -296,12 +349,24 @@ function WorkflowLibraryCanvasInner({
            *  不会被当成拖动。
            *
            *  三列是固定布局，拖散了看不出「哪一列是哪一列」—— 所以用「拖完吸附回
-           *  布局位置」兜住（见 onNodeDragStop）：手势在、位置不回退。 */
+           *  布局位置」兜住（见 onNodeDragStop）：手势在、位置不回退。
+           *
+           *  节点**不可选中 / 不可删**：三列卡片是固定的布局列，选中会在卡片上挂蓝
+           *  框、按 Delete 还可能误删整列；连线的选中 / 删除只针对 edge（边在
+           *  `buildInputEdge` / `buildOutputEdge` 里按 `canWire` 单独开
+           *  `selectable` / `deletable`）。 */
           nodesDraggable
           nodeDragThreshold={6}
           onNodeDragStop={resetNodePositions}
           nodesConnectable={canWire}
-          elementsSelectable={false}
+          /* 点一条线选中它（驱动高亮 + Delete 删除）；按 Delete / Backspace 删除
+           *  选中线时经 `onEdgesDelete` 落到数据源断开那一条（只读时边不可删）。
+           *  节点不在 `elementsSelectable` 范围里——它们各自 `selectable:false`，
+           *  这里只负责让边可点选。 */
+          onEdgeClick={handleEdgeClick}
+          onEdgesDelete={handleEdgesDelete}
+          deleteKeyCode={["Backspace", "Delete"]}
+          className="wflib-canvas-flow"
           data-testid="wflib-canvas-flow"
         >
           {/* 网格背景与编辑器画布同一套（浅色细格），只给「这是一块画布」的观感 ——
@@ -323,6 +388,35 @@ function WorkflowLibraryCanvasInner({
           data-testid="wflib-wire-drop-hint"
         >
           没有连上：{flow.dropHint}
+        </div>
+      )}
+      {/* 点选一条线后出现的删除条：只断那一条线（而不是卡片头 ↺ 整张清）。
+       * 与 Delete / Backspace 删除同一路径（都落到 `disconnect`）。只读时
+       * 边不可选、不显示此条。 */}
+      {canWire && selectedEdgeIds.size > 0 && (
+        <div
+          className="border-primary-500/40 bg-primary-500/15 text-primary-strong absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
+          data-testid="wflib-edge-delete-hint"
+        >
+          <span>已选中 {selectedEdgeIds.size} 条线</span>
+          <Button
+            type="button"
+            size="xs"
+            onClick={handleDeleteSelected}
+            data-testid="wflib-delete-edge"
+          >
+            删除选中线
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => setSelectedEdgeIds(new Set())}
+            className="text-primary-strong hover:bg-primary-500/20"
+            aria-label="取消选中"
+          >
+            ×
+          </Button>
         </div>
       )}
     </div>

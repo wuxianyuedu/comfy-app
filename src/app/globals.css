@@ -873,3 +873,15 @@ textarea::-webkit-scrollbar {
   white-space: pre;
   color: var(--color-ink-strong);
 }
+
+/* ── 工作流库画布：点选一条映射线后高亮（删除单条线能力） ──────────────
+ * 边的描边色由 React Flow 以**行内 style** 写到 path 上（见
+ * `LIBRARY_EDGE_STYLE` 的 `style`），普通类选择器压不住它；用 `!important`
+ * 覆盖。`.wflib-canvas-flow` 是挂在 <ReactFlow> 上的 className（非
+ * data-testid），选中态由 React Flow 在边的 <g> 上加 `.selected` 触发。
+ * 线条加粗 + 发光，和默认细线拉开对比，配合画布左下角的「删除选中线」按钮。 */
+.wflib-canvas-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #c4b5fd !important;
+  stroke-width: 4 !important;
+  filter: drop-shadow(0 0 5px rgba(196, 181, 253, 0.95));
+}
