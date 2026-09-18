@@ -5,25 +5,16 @@ import { resolveSessionStart } from "~/lib/log/log-session-scope";
 import { fileMtimeMs } from "~/lib/log/log-session-scope.server";
 import { getServerBootId } from "~/lib/shell/dev-server-id";
 import {
-  COMFYUI_RUNTIME_LOG,
   DEV_LAUNCHER_CURRENT_SENTINEL,
   DEV_LAUNCHER_LOG,
-  DRIZZLE_STUDIO_RUNTIME_LOG,
   NEXTJS_LOG_DIR,
   NEXTJS_PANEL_LOG_PREFIX,
-  OLLAMA_RUNTIME_LOG,
+  RUNTIME_LOG_FILES,
   START_TAURI_LAUNCHER_LOG,
-  APP_RUNTIME_LOG,
 } from "~/lib/log/log-paths";
 
 const LAUNCHER_LOG_FILE = START_TAURI_LAUNCHER_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
-const RUNTIME_LOG_FILES: Record<string, string> = {
-  "comfyui-runtime": COMFYUI_RUNTIME_LOG,
-  "drizzle-studio-runtime": DRIZZLE_STUDIO_RUNTIME_LOG,
-  "ollama-runtime": OLLAMA_RUNTIME_LOG,
-  "app-runtime": APP_RUNTIME_LOG,
-};
 
 /** 应用服务输出转录文件（本次进程）：惰性解析，取不到时退化为「文件不存在」。 */
 function panelCaptureLog(): string | null {

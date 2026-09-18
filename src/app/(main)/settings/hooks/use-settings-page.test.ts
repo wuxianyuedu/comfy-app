@@ -51,31 +51,35 @@ vi.mock("~/lib/llm/ollama-client", () => ({
 // app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
 // 测试通过 `vi.importActual` 保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），
 // 只 spy `postAppRuntimeLog` 并记录调用参数。
-const { postAppRuntimeLogMock, runtimeLogCalls } = vi.hoisted(() => {
-  const calls: Array<{
-    ns: string;
-    level: string;
-    msg: string;
-    fields?: unknown;
-  }> = [];
-  return {
-    postAppRuntimeLogMock: vi.fn(
-      (
-        ns: string,
-        level: string,
-        msg: string,
-        fields?: unknown,
-      ): Promise<void> => {
-        calls.push({ ns, level, msg, fields });
-        return Promise.resolve();
-      },
-    ),
-    runtimeLogCalls: calls,
-  };
-});
+const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } =
+  vi.hoisted(() => {
+    const calls: Array<{
+      ns: string;
+      level: string;
+      msg: string;
+      fields?: unknown;
+    }> = [];
+    /** 启动日志「按会话取」的请求记账（来源 + 请求的会话 id） */
+    const logRequests: Array<{ source: string; session: string | null }> = [];
+    return {
+      postAppRuntimeLogMock: vi.fn(
+        (
+          ns: string,
+          level: string,
+          msg: string,
+          fields?: unknown,
+        ): Promise<void> => {
+          calls.push({ ns, level, msg, fields });
+          return Promise.resolve();
+        },
+      ),
+      runtimeLogCalls: calls,
+      sessionLogRequests: logRequests,
+    };
+  });
 vi.mock("~/lib/log/log-file-client", () => {
-  // fetchFileLogSlice 复刻真实实现（走全局 fetch，由 MSW 拦截返回日志内容）。
-  // 之所以不引用 importOriginal：真实实现只是对 /api/logs/current 的一次 fetch，
+  // fetchFileLogSlice / fetchLogSessions 复刻真实实现（走全局 fetch，由 MSW 拦截
+  // 返回日志内容）。之所以不引用 importOriginal：真实实现只是对端点的一次 fetch，
   // 这里等价转发，避免 vitest 别名解析与模块类型在工厂内部的告警。
   const fetchFileLogSlice = vi.fn(
     async (
@@ -93,8 +97,17 @@ vi.mock("~/lib/log/log-file-client", () => {
       };
     },
   );
+  const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
+    sessionLogRequests.push({ source, session: sessionId ?? null });
+    const query = new URLSearchParams({ source });
+    if (sessionId) query.set("session", sessionId);
+    const res = await fetch(`/api/logs/sessions?${query.toString()}`);
+    if (!res.ok) return null;
+    return (await res.json()) as unknown;
+  });
   return {
     fetchFileLogSlice,
+    fetchLogSessions,
     postAppRuntimeLog: postAppRuntimeLogMock,
   };
 });
@@ -297,31 +310,69 @@ function makeWrapper(queryClient?: QueryClient) {
   };
 }
 
+/**
+ * 让 `/api/logs/sessions` 对某个来源回一份会话（其余来源仍走默认空 handler）。
+ * 载荷与真实契约同形：会话列表 + 选中会话正文 + 截断 / 尾窗标记。
+ */
+function mockSessionsFor(
+  source: string,
+  payload: {
+    content: string;
+    sessions?: Array<{ id: string; title: string; startedAt: number | null }>;
+    truncated?: boolean;
+    windowed?: boolean;
+  },
+): void {
+  const sessions = payload.sessions ?? [
+    { id: "0", title: "▶ 启动会话", startedAt: null },
+  ];
+  server.use(
+    http.get("*/api/logs/sessions", ({ request }) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get("source") !== source) {
+        return HttpResponse.json(
+          { error: "unexpected source" },
+          { status: 400 },
+        );
+      }
+      return HttpResponse.json({
+        sessions,
+        selectedId: sessions[sessions.length - 1]?.id ?? null,
+        content: payload.content,
+        truncated: payload.truncated ?? false,
+        windowed: payload.windowed ?? false,
+        size: payload.content.length,
+      });
+    }),
+  );
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 /* 默认「Ollama 运行中」：不设默认值时 vi.fn() 返回 undefined，探测回调会在
  * 上一个用例卸载后跑到，产生「Cannot read properties of undefined」的
  * unhandled rejection（表现为用例绿但文件红）。 */
-/* /api/logs/current 默认 handler：启动 ComfyUI 的用例里 hook 会开始跟随轮询
- * comfyui-runtime 日志，没有 handler 会以 onUnhandledRequest:error 报
- * unhandled rejection（与上面 probeMock 同源问题）。 */
+/* /api/logs/sessions 默认 handler：设置页挂载就会为三个「启动日志」来源各取一次
+ * 会话 + 正文，没有 handler 会以 onUnhandledRequest:error 报 unhandled
+ * rejection（与上面 probeMock 同源问题）。各用例按需覆盖。 */
 beforeEach(() => {
   runtimeLogCalls.length = 0;
+  sessionLogRequests.length = 0;
   /* 兜底缓存（sessionStorage 快照）跨用例共享同一个 jsdom —— 不清会把上一个
    * 用例的成功配置带进来，让「无兜底 → 整页降级」的用例失去意义。 */
   sessionStorage.clear();
   probeMock.mockResolvedValue({ up: true, models: [] });
   startMock.mockResolvedValue(undefined);
   server.use(
-    http.get("*/api/logs/current", ({ request }) => {
-      const url = new URL(request.url);
-      if (url.searchParams.get("source") !== "comfyui-runtime") {
-        return HttpResponse.json(
-          { error: "unexpected source" },
-          { status: 400 },
-        );
-      }
-      return HttpResponse.json({ content: "", size: 0, offset: 0 });
-    }),
+    http.get("*/api/logs/sessions", () =>
+      HttpResponse.json({
+        sessions: [],
+        selectedId: null,
+        content: "",
+        truncated: false,
+        windowed: false,
+        size: 0,
+      }),
+    ),
   );
 });
 afterEach(() => {
@@ -853,83 +904,78 @@ describe("useSettingsPage", () => {
     expect(result.current.comfyStarting).toBe(false);
   });
 
-  it("refreshComfyLog 拉取 comfyui-runtime 日志（替换式），未启动时不在跟随态", async () => {
-    server.use(
-      http.get("*/api/logs/current", ({ request }) => {
-        const url = new URL(request.url);
-        if (url.searchParams.get("source") !== "comfyui-runtime") {
-          return HttpResponse.json(
-            { error: "unexpected source" },
-            { status: 400 },
-          );
-        }
-        return HttpResponse.json({
-          content: "[spawn] pid=123 cmd=python.exe\n[out] Starting ComfyUI\n",
-          size: 2048,
-          offset: 0,
-        });
-      }),
-    );
+  it("comfyLog.refresh 拉取 comfyui-runtime 的会话日志，未启动时不在跟随态", async () => {
+    mockSessionsFor("comfyui-runtime", {
+      content: "[spawn] pid=123 cmd=python.exe\n[out] Starting ComfyUI\n",
+    });
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
 
     await act(async () => {
-      await result.current.refreshComfyLog();
+      await result.current.comfyLog.refresh();
     });
-    expect(result.current.comfyLogText).toContain("[spawn] pid=123");
-    expect(result.current.comfyLogActive).toBe(false);
+    expect(result.current.comfyLog.text).toContain("[spawn] pid=123");
+    expect(result.current.comfyLog.active).toBe(false);
   });
 
-  it("refreshDbStudioLog 拉取 drizzle-studio-runtime 日志（替换式）", async () => {
-    server.use(
-      http.get("*/api/logs/current", ({ request }) => {
-        const url = new URL(request.url);
-        if (url.searchParams.get("source") !== "drizzle-studio-runtime") {
-          return HttpResponse.json(
-            { error: "unexpected source" },
-            { status: 400 },
-          );
-        }
-        return HttpResponse.json({
-          content:
-            "[spawn] pid=456 cmd=node.exe\ndrizzle-kit studio\n[out] Drizzle Studio is running\n",
-          size: 4096,
-          offset: 0,
-        });
-      }),
-    );
+  it("dbStudioLog.refresh 拉取 drizzle-studio-runtime 的会话日志", async () => {
+    mockSessionsFor("drizzle-studio-runtime", {
+      content:
+        "[spawn] pid=456 cmd=node.exe\ndrizzle-kit studio\n[out] Drizzle Studio is running\n",
+    });
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
 
     await act(async () => {
-      await result.current.refreshDbStudioLog();
+      await result.current.dbStudioLog.refresh();
     });
-    expect(result.current.dbStudioLogText).toContain("[spawn] pid=456");
-    expect(result.current.dbStudioLogText).toContain(
+    expect(result.current.dbStudioLog.text).toContain("[spawn] pid=456");
+    expect(result.current.dbStudioLog.text).toContain(
       "Drizzle Studio is running",
     );
-    expect(result.current.dbStudioLogActive).toBe(false);
+    expect(result.current.dbStudioLog.active).toBe(false);
   });
 
-  it("refreshOllamaLog 拉取 ollama-runtime 日志（替换式），未启动时不在跟随态", async () => {
+  it("ollamaLog.refresh 拉取 ollama-runtime 的会话日志，未启动时不在跟随态", async () => {
+    mockSessionsFor("ollama-runtime", {
+      content:
+        '[spawn] pid=789 cmd=ollama.exe args=["serve"]\n[out] starting ollama serve\n[state] Ollama 已关闭\n',
+    });
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+
+    await act(async () => {
+      await result.current.ollamaLog.refresh();
+    });
+    expect(result.current.ollamaLog.text).toContain("[spawn] pid=789");
+    expect(result.current.ollamaLog.text).toContain("starting ollama serve");
+    expect(result.current.ollamaLog.active).toBe(false);
+  });
+
+  /* 用户反馈第 2 条：多次启动的日志不能混在一起 —— 下拉切到某一次启动时，
+   * 请求要带上那次的会话 id，界面只显示那一次。 */
+  it("切换启动会话：按会话 id 重新拉取，并把选中项与截断提示同步到状态", async () => {
+    const sessions = [
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: null },
+      { id: "40", title: "▶ ComfyUI 启动会话", startedAt: null },
+    ];
     server.use(
-      http.get("*/api/logs/current", ({ request }) => {
+      http.get("*/api/logs/sessions", ({ request }) => {
         const url = new URL(request.url);
-        if (url.searchParams.get("source") !== "ollama-runtime") {
-          return HttpResponse.json(
-            { error: "unexpected source" },
-            { status: 400 },
-          );
-        }
+        const session = url.searchParams.get("session");
         return HttpResponse.json({
-          content:
-            '[spawn] pid=789 cmd=ollama.exe args=["serve"]\n[out] starting ollama serve\n[state] Ollama 已关闭\n',
-          size: 4096,
-          offset: 0,
+          sessions,
+          selectedId: session ?? "40",
+          content: session === "12" ? "第一次启动的输出" : "第二次启动的输出",
+          truncated: session === "12",
+          windowed: true,
+          size: 8192,
         });
       }),
     );
@@ -937,13 +983,22 @@ describe("useSettingsPage", () => {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await waitFor(() => expect(result.current.comfyLog.text).not.toBe(""));
+    expect(result.current.comfyLog.sessions).toHaveLength(2);
 
     await act(async () => {
-      await result.current.refreshOllamaLog();
+      result.current.comfyLog.selectSession("12");
     });
-    expect(result.current.ollamaLogText).toContain("[spawn] pid=789");
-    expect(result.current.ollamaLogText).toContain("starting ollama serve");
-    expect(result.current.ollamaLogActive).toBe(false);
+    await waitFor(() =>
+      expect(result.current.comfyLog.text).toBe("第一次启动的输出"),
+    );
+    expect(result.current.comfyLog.sessionId).toBe("12");
+    expect(result.current.comfyLog.truncated).toBe(true);
+    expect(result.current.comfyLog.windowed).toBe(true);
+    expect(sessionLogRequests).toContainEqual({
+      source: "comfyui-runtime",
+      session: "12",
+    });
   });
 
   it("dbStudioStatus 查询失败 → dbStudioStatus 为 null，启动动作仍可用（#92 回归）", async () => {
