@@ -243,7 +243,8 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
    *      新写入的线进不了画布 —— 松手即消失（写入本身是成功的）。 */
   it("未连过的行显示形态固定的类型，而不是星号", () => {
     /* 用户口径：宽度 / 高度 / 像素量 = FLOAT，分辨率档 / 倍数 = INT，
-     *  宽高比 = COMBO（形态语义固定；连上之后改显示落点那一行的真实类型）。 */
+     *  宽高比 = COMBO —— 形态语义固定，**连上之后也不改口**（落点那一行声明
+     *  成什么只在行 title 里可查，见 `paramOutputPorts`）。 */
     const expectedByCls: Record<string, string> = {
       "size-width": "FLOAT",
       "size-height": "FLOAT",
@@ -490,5 +491,23 @@ describe("尺寸各项各自可取外部值", () => {
         `${entryId} 应各有一条边`,
       ).toBeTruthy();
     }
+  });
+});
+
+describe("画布节点页签：卡片列的口子清单取「生效契约」", () => {
+  /* 用户报的现场：画布「对外参数」列着时长，点开「模式契约」→ 单图生视频里没有它。
+   *  派生层已按 `contractIds` 收口（见 `workflow-param-mapping.test.ts` 与
+   *  `workflow-library-param-cards.test.ts`），这里钉住**最后一跳**：视图把生效契约
+   *  （`contractEntries`，用户改过的模式走注册表）真的传下去了 —— 传漏了就退回内置
+   *  默认，两个表面又各说一份。判据容忍换行（prettier 会把调用拆成多行）。 */
+  it("派生卡片列时把生效契约的 id 传下去", () => {
+    const preview = readFileSync(
+      path.join(__dirname, "WorkflowCanvasNodePreview.tsx"),
+      "utf8",
+    );
+    expect(preview).toMatch(/contractIds:\s*contractEntries\.map/);
+    expect(preview).toContain(
+      "modeContractEntries(effectiveMode, storedContracts)",
+    );
   });
 });

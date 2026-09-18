@@ -112,7 +112,12 @@ export function deriveEncapsulationStatus(args: {
    *  一个都读不到（每个契约口都被读成「未配置」、`ready` 恒 false）。
    *  `parseParamMapping` 对畸形 / 空值也返回空表，不会抛。 */
   const mapping = parseParamMapping(paramMap);
-  const entries = buildParamEntries(io, undefined, { mode: mode ?? null });
+  /* 口子清单与下面的 `canonical` 同源：调用方给了生效契约就按它列（未给回落内置
+   *  默认）—— 两处各取一份会让「这一口有没有落点」与「这一口存不存在」对不上。 */
+  const entries = buildParamEntries(io, undefined, {
+    mode: mode ?? null,
+    contractIds: contractEntries?.map((item) => item.id),
+  });
   const resolved = resolveMapping(entries, io, mapping, mode ?? null);
   /* 契约口必须显式可见：工作流缺对应端口时 buildParamEntries 会整口省略，
    * 但「未配置」恰恰要在这里现形（否则用户看不到缺了什么、也不知道为什么
