@@ -527,7 +527,7 @@ true`——这类场景的策略反过来，必须给前台。
 
 ## 3. 进程树管理规范
 
-### 3.1 跨平台入口：`src/lib/kill-process-tree.ts`（Node 侧唯一收口）
+### 3.1 跨平台入口：`src/lib/process/kill-process-tree.ts`（Node 侧唯一收口）
 
 Node 侧**只允许经 `killProcessTree()` / `killProcessTreeSync()` 回收进程树**，
 不要在各服务生命周期里自己写 `taskkill` / `process.kill`——历史实现正是各写一遍，
@@ -544,11 +544,23 @@ shell 发 SIGTERM 后 3 个子进程全部残留（PPID=1，占端口、锁日�
 「回收失败」变成静默失败（探测链路另有 `proc-detect.ts` 的同类约束）。
 回收结果由调用方**探测确认**收口（各服务生命周期自己那份），本模块不抛错。
 
-回归测试：`src/lib/kill-process-tree.test.ts` —— **真起多进程树、杀完数残留**，
+**「派发」与「等到结束」是两件事（`wait` 选项）**：Windows 上 taskkill 是独立进程，
+默认只派发（服务生命周期随后自行探测确认）；但**派发完就退出的调用方必须传
+`wait: true`** —— 父进程紧接着 `process.exit()` 会把还没跑起来的 taskkill 一起带走，
+现象是**打印了命令、退出码 0、目标进程却还在**（实测：不等时目标存活，等 3 秒后消失）。
+命令行入口 `scripts/reap-process.mjs` 正是这种形态，因此它显式等待，并把回收命令的
+退出码写进 `via`（宿主日志据此能看出这一刀落没落）。`spawn` 会同步抛错的情形
+（命令不是可执行映像 / 取不到命令名）一并收成 `ok: false`，不让「回收失败不抛错」
+这条承诺在实现里破口。
+
+回归测试：`src/lib/process/kill-process-tree.test.ts` —— **真起多进程树、杀完数残留**，
 而不是断言 `via` 字符串（只查命令构造正是让「按 detached 猜组长」漏过去的原因）。
 覆盖：detached 进程组整树 0 残留、与调用者同组时禁走组路径（防自杀）、
 `detached` 标记与实际组不一致、单杀兜底、目标已退出的返回语义；
 Windows 分支只在 win32 上断言命令构造。
+命令行入口另有**端到端**用例（`tests/cross-platform-launcher.test.ts`，Windows 上真起
+一个长命进程 → 真跑 `node scripts/reap-process.mjs <pid> --force` → 核实目标**真的没了**）：
+「打印了命令」不等于「杀掉了」，而这条兜底恰恰曾经停在前者。
 POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tcp` 解析、
 真起监听 socket 的 fd 交集、失败路径返回 null）。
 
@@ -597,7 +609,7 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 | ---------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | 编排       | `scripts/dev-launcher.mjs`                                                | 预检 / 端口 / 缓存 / 拉起 / 就绪 / 进度快照 / 收尾定性（**不摸 `process.platform`**） |
 | 平台机制   | `scripts/launcher-core/{procs,shell,job-object}.mjs`                      | 进程与端口探测、进程组拉起、可执行文件解析                                            |
-| 进程树回收 | `src/lib/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                    |
+| 进程树回收 | `src/lib/process/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                    |
 
 各环节的取值来源仍是**同一事实源**，只是不再有「第二份实现」：
 
@@ -679,7 +691,7 @@ dev server（Next 不认 `COMFYAPP_PORT`，必须显式传），所以**端口�
 | 用例                                         | 锁什么                                                                                                                                                                                     | 反向验证（改回旧实现必失败）                                   |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
 | `tests/cross-platform-launcher.test.ts`      | 真起进程组、杀完数残留；会话锚点四种心跳/PID 组合；缓存指纹清留判据；**`.ps1` 只剩入口**（不得含 `taskkill` / `Get-CimInstance` / Job Object，且 < 120 行）；编排器不摸 `process.platform` | `spawnInGroup` 的 `detached` 改回 `false` → 进程组用例残留 > 0 |
-| `src/lib/kill-process-tree.windows.test.ts`  | **Windows 分支真跑**：注入同名假 taskkill，断言 `taskkill /PID <pid> /T /F`、`/IM <name> /T /F` 真的被调起；空 target 不猜测性击杀                                                         | `windowsKillArgs` 去掉 `/T` → 用例必失败                       |
+| `src/lib/process/kill-process-tree.windows.test.ts`  | **Windows 分支真跑**：注入同名假 taskkill，断言 `taskkill /PID <pid> /T /F`、`/IM <name> /T /F` 真的被调起；空 target 不猜测性击杀；`wait: true` 等到命令结束并把退出码写进 `via`；命令起不来返回 `ok:false` 而不抛错（「参数真的发出去了」两条在 Windows 上跳过：假件只能是 `.cmd`，Node 不能直接 spawn 批处理） | `windowsKillArgs` 去掉 `/T` → 用例必失败                       |
 | `tests/dev-launcher-downstream-exit.test.ts` | 「下游先退出」四种成因的判决表与文案（`downstreamExitKind` / `describeDownstreamExit`），只认壳侧**正标记**                                                                                | 判决表退化成「壳退了就算放弃」 → 必失败                        |
 | `tests/dev-launcher-port-reclaim.test.ts`    | 端口残留回收的两层判据：显式端口 + 应用服务自证才回收；缺省端口 / 只有检出根路径 / 命令行取不到一律不碰                                                                                      | 去掉 `usesExplicitPort` 开关或去掉自证 → 必失败                |
 | `tests/dist-artifact-hygiene.test.ts`        | `scripts/` 白名单**真删一次**：嵌套条目保留、未登记的新文件被剔                                                                                                                            | 白名单改目录级放行 → 必失败                                    |
@@ -948,7 +960,7 @@ zustand 队列，而不是再加一个模块级单例。
 | 构建 release 壳在编译**开局**（依赖全部编完、轮到 `app v0.1.0` 的 build script 时）报 `failed to run custom build command for app v0.1.0` + `resource path binaries\node-x86_64-pc-windows-msvc.exe doesn't exist`（2026-09-13 定位）                                               | `tauri.conf.json` 声明 `bundle.externalBin = ["binaries/node"]`，tauri-build 在**每次 cargo build 的编译期**都校验 `src-tauri\binaries\node-<target-triple>.exe` 存在——即便 prebuilt 壳运行时用不到 sidecar 也绕不开。而 `binaries/` 被 `src-tauri/.gitignore` 忽略不入库，`build-tauri-release.ps1` 又刻意不跑 `build-desktop.mjs`（防 8GB static 污染，只增量同步 splash），于是全新克隆 / 清理过 `binaries/` 的机器必然开局即败；此前只有 `build-standalone.ps1`（经 build-desktop.mjs 第 3/4 步）这条路会顺带生成 sidecar                                                                                                                                                                                                                                           | 已修（`tools/scripts/build-tauri-release.ps1` 第 3/4 步）：编译前检测 sidecar 缺失即从当前 Node 运行时复制补齐（与 build-desktop.mjs 同源逻辑，仅缺失时复制；PATH 无 node 时给明确报错并退出）。手动救急：把 node.exe 复制为报错所指路径后重跑                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 桌面窗口已经关了，`app.exe` 进程还在（只能手工 `taskkill /IM app.exe /T /F`）                                                                                                                                                                                   | **启动器先于壳退出，壳成了无主进程**：壳由编排器拉起，正常路径以「壳退出」为锚点回收；但用户关掉启动器窗口 / python 监控线程结束时 dev-launcher 的 `WaitForExit` 与 taskkill 兜底都没机会跑。旧实现的「残留壳清理」还按 `CommandLine -like "*<项目根>*"` 筛选，而预编译壳经 `ProcessStartInfo(UseShellExecute=false)` 启动、命令行里不含项目根路径 → 既漏判残留，也让残留壳锁住 `target\release\app.exe`（连带 §5「os error 5」那条）                                                                                                                                                                                                                                                                                                                         | 已三层治理（2026-09-06 定位）：①启动前按 **exe 真实路径**回收残留壳；②壳拉起后 PID 落 `log/launcher/tauri-shell.pid`，python 启动器在监控退出/异常/超时时对仍存活的 PID 执行 `taskkill /PID <pid> /T /F` 后删除该文件；③正常关窗仍走编排器的进程树回收。见 §3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 打包启动器时报「无法清理 start-tauri」                                                                                                                                                                                                                                              | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **一键发布构建第二步卡在 `[2/3] 清理旧产物`**：`[错误] 无法清理 start-tauri，可能被其他程序占用（如 start-tauri.exe 仍在运行）`；而用户**已经关掉了桌面窗口**（他看到「壳有更改」提醒后关的），照提示去关窗口也关不掉（ISSUE #621）                                                                                                                                                                       | **关掉的是桌面壳，占了产物目录的是启动器自己**：`start-tauri\` 是 onedir 打包产物，运行中的 start-tauri.exe 把 `_internal\*.dll` 映射在内存里，整个目录删不掉；而启动器是独立 exe，**关掉它的启动画面 / 桌面窗口并不会让它自己退出**。旧实现只把这个根因写进一句固定文案（「可能被其他程序占用」），**没有查任何进程表** —— 既指不出是谁占着，也给不出能照做的动作                                                                                                                                                                                                                                                                                                                                                | 已修：新增 `Assert-LauncherNotRunning`（`tools/scripts/Build-Guard.ps1`），打包脚本在**清理旧产物之前**按 exe 真实路径自查本仓库启动器，命中即中止并点名 PID + 给 `taskkill /PID <pid> /T /F`；清理仍然失败时兜底提示补齐自查命令与「确认无同名进程 = 权限问题」的分流。见 §7.1.1，回归测试见 `tests/check-file-structure.test.ts` 的 Build-Guard 用例组                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **一键发布构建第二步卡在 `[2/3] 清理旧产物`**：`[错误] 无法清理 start-tauri，可能被其他程序占用（如 start-tauri.exe 仍在运行）`；而用户**已经关掉了桌面窗口**（他看到「壳有更改」提醒后关的），照提示去关窗口也关不掉（ISSUE #621）                                                                                                                                                                       | **关掉的是桌面壳，占了产物目录的是启动器自己**：`start-tauri\` 是 onedir 打包产物，运行中的 start-tauri.exe 把 `_internal\*.dll` 映射在内存里，整个目录删不掉；而启动器是独立 exe，**关掉它的启动画面 / 桌面窗口并不会让它自己退出**。旧实现只把这个根因写进一句固定文案（「可能被其他程序占用」），**没有查任何进程表** —— 既指不出是谁占着，也给不出能照做的动作                                                                                                                                                                                                                                                                                                                                                | 已修：新增 `Assert-LauncherNotRunning`（`tools/scripts/Build-Guard.ps1`），打包脚本在**清理旧产物之前**按 exe 真实路径自查本仓库启动器，命中即中止并点名 PID + 给 `taskkill /PID <pid> /T /F`；清理仍然失败时兜底提示补齐自查命令与「确认无同名进程 = 权限问题」的分流。**判据后来补了第二条**：占用者不止启动器 exe——启动器拉起的 dev server（`node`→`pnpm`→`next`）会把 `start-tauri\_internal\*.dll` 映射进自己的进程（实测 pnpm 侧的 `VCRUNTIME140.dll`），启动器异常退出后它们残留成孤儿，目录照样删不掉，而按 exe 名 / 路径判断一个都查不到（现场表现为「已经关掉启动器了，仍然无法清理」，提示还在猜同一个原因）。现在 `Get-ProductDirHolder` 按「被映射文件的路径落在产物目录内」把真正的占用者查出来，与启动器命中写在同一条消息里；清理失败走 `Write-ProductDirLockHint`，先给真实异常文案 + 占用者清单 + 逐条 `taskkill`，查不到人才是「杀毒 / 索引 / 权限」那条分流。见 §7.1.1，回归测试见 `tests/check-file-structure.test.ts` 的 Build-Guard 用例组                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等                                                                                                                                                                    | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/splash.html），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示                                                                                                                               | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 应用启动完成瞬间把窗口弹到最前面，打断用户正在看的别的内容（启动期间切出去干别的了）                                                                                                                                                                                                | **窗口交换只做 `show()` + `set_focus()`**：启动耗时期间用户可能已切走，加载完成照样抢前台（ISSUE #359）。判据缺失——「用户刚点的启动」与「用户早就切走了」在旧实现里没被区分                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 已修：启动完成默认只 `show()`（窗口进任务栏）并 `request_user_attention` 请求任务栏闪烁提醒；是否给前台由启动器 `decide_foreground()` 判决并经 `COMFYAPP_FOREGROUND` 注入（见 §1.3），只有「前台本来就是本应用 / 显式冷启动 / 唤起已有实例」才给（双击启动同样不给，见下一行）。改的是 `src-tauri/src/**`、`Cargo.toml`（`tray-icon`）与 capabilities，**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **启动/构建卡在「端口被别的进程占用」上，改端口只能绕开、查不到是谁占着**；`.env` 里把 `COMFYAPP_PORT` 写成了用户固定的端口，而该端口上前一次的 dev server 并未干净退出（ISSUE #621）                                                                                               | **兜底回收一条都没跑**：会话锚点（`run/launcher-session.json`）在正常收尾时已清掉，而 `pidBelongsToRoot` 按「命令行里有没有出现过检出根路径」判定——`pnpm dev -p N`（缺省端口链路）与 `pnpm exec next dev --turbo` 两条命令行里都没有检出根路径，于是本检出自己的残留被判成「别的检出 / 别的程序」，按 §1.4 只提示不回收                                                                                                                                                                                                                                                                                                                     | 已修：端口归属补第 ② 层**应用服务自证**（`portOwnershipVerdict`，`launcher-core/orchestrator.mjs`）——命令行跑的是本仓库的 `scripts/dev.mjs` / `scripts/start.mjs` 或 `next dev` / `next start` CLI 即认定为本检出残留；并由 `usesExplicitPort()` 收窄到**显式端口**（缺省解析链无法与别的检出区分，一律不碰）。见 §3.3，回归测试 `tests/dev-launcher-port-reclaim.test.ts` |
@@ -1119,17 +1131,29 @@ zustand 队列，而不是再加一个模块级单例。
 （`start-tauri\start-tauri.exe`，onedir 布局，窗口是它绘制的），关窗不等于它退出 ——
 提示因此既指不出是谁占着，给出的动作（去关窗口）也照做无效。
 
+**第二种现场形态（判据二要解决的那个）**：启动器起过一次应用，编排器在「回收上一次
+残留」这一步崩了（实测：编排器动态加载 `src/lib/process/kill-process-tree.ts` 的说明符
+没跟着目录迁移改 → `ERR_MODULE_NOT_FOUND`），于是**没人回收它拉起的 dev server**；
+启动器自己随后退出。此后跑 `build-all.ps1`，`Get-RunningLauncher` 查不到任何启动器，
+第二步却照样在 `Remove-Item` 上失败 —— 因为 dev server 进程把
+`start-tauri\_internal\VCRUNTIME140.dll` 映射在自己地址空间里。只按 exe 名 / 路径判断
+在这里必然漏判，提示也就只能继续猜「是不是启动器没关」。
+
 | 环节 | 判据 / 动作 |
 | --- | --- |
 | 检查时机 | 打包脚本在**清理旧产物之前**（此时什么都还没删，中止零代价） |
-| 判据 | `Assert-LauncherNotRunning` → `Get-RunningLauncher`：exe **真实路径**落在本仓库三个启动器产物目录内。别处的同名进程不算 |
-| 命中后的动作 | **中止**并点名 PID + 给 `taskkill /PID <pid> /T /F`，**不自动回收** |
-| 为什么不像壳那样自动回收 | 壳有「无主孤儿」这条判据（起它的启动器已退出）；启动器没有——窗口就是它自己的，「关掉窗口」这个用户动作并不代表「放弃这个入口」。替用户杀掉他刚双击过的入口不合适 |
-| 清理仍然失败时 | 兜底提示补上「自查 `Get-Process` / 结束 `taskkill /IM <name> /T /F`」，并点出「确认没有同名进程 = 权限问题（提权残留的 pyinstaller / 杀毒软件），重启后重试」 |
+| 判据一 | `Assert-LauncherNotRunning` → `Get-RunningLauncher`：exe **真实路径**落在本仓库三个启动器产物目录内。别处的同名进程不算；`ExecutablePath` 取不到时退回命令行匹配（同 `Get-RunningShellProcess`，宁可多提示也不要漏判） |
+| 判据二 | `Get-ProductDirHolder -Directory <产物目录>`：把「产物目录里的文件**映射进了哪个进程**」查出来。占用者不止启动器 exe 一类——启动器拉起的 dev server（`node` → `pnpm` → `next`）会继承启动器的 DLL 搜索目录，把 `_internal\*.dll` 映射进自己进程（实测：pnpm 侧的 `VCRUNTIME140.dll` 就取自产物目录），启动器异常退出后它们残留成孤儿，目录照样删不掉，而按 exe 名 / 路径判断一个都查不到 |
+| 命中后的动作 | **中止**并点名 PID + 给 `taskkill /PID <pid> /T /F`，**不自动回收**；两类命中在**同一条消息**里一起报，省掉「杀掉启动器 → 重跑 → 又被告知目录还被占着」 |
+| 为什么不像壳那样自动回收 | 壳有「无主孤儿」这条判据（起它的启动器已退出）；启动器没有——窗口就是它自己的，「关掉窗口」这个用户动作并不代表「放弃这个入口」。替用户杀掉他刚双击过的入口不合适。dev server 那一类同理：它可能就是用户正开着的那次启动的服务 |
+| 清理仍然失败时 | 统一走 `Write-ProductDirLockHint`：**真实异常文案**（`$_.Exception.Message`）+ 查出来的持有者（PID / 进程名 / 被映射的文件）+ 逐条 `taskkill /PID <pid> /T /F`。查不到持有者时才给「杀毒 / 索引服务正在扫描，或权限不足（提权残留的 pyinstaller）」的分流——旧实现把这条分流当成唯一解释，用户照做无效 |
 
 回归测试同样在 `tests/check-file-structure.test.ts` 的 Build-Guard 用例组里
-（打桩 `Get-CimInstance`）：命中即 `CODE=1` 且点名 PID；别处同名进程 + 无命中时
-`CODE=0`；三个产物目录各自都能命中。
+（打桩 `Get-CimInstance` 与 `Get-Process`）：命中即 `CODE=1` 且点名 PID；别处同名
+进程 + 无命中时 `CODE=0`；三个产物目录各自都能命中；**启动器已退出、只有 dev server
+孤儿占着目录时同样 `CODE=1`**（并点名孤儿 PID，不重复点名启动器）；
+`Write-ProductDirLockHint` 的输出里既有真实异常文案、也有查出来的占用者，
+查不到人时才是「权限 / 杀毒」那条分流。
 
 #### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
 
@@ -1587,7 +1611,7 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 | 入口        | `pnpm dev` → `node scripts/dev.mjs`                                                                                    | 无分支（Node 脚本本身跨平台）                                                                                                                        |
 | 完整编排    | `node scripts/dev-launcher.mjs`（预检 / 缓存 / 拉起 / 就绪 / 回收 / 进度快照，与 `.ps1` 同契约）                       | §3.3；平台机制差异只在这一处                                                                                                                         |
 | 端口        | `.env` → 路径推导（3200~3999）→ 兜底 3100                                                                              | `scripts/app-port.mjs`，规范化只对相对路径 resolve（§1.1）                                                                                           |
-| 进程树回收  | `process.kill(-pid)` 杀进程组                                                                                          | `src/lib/kill-process-tree.ts`（§3.1）                                                                                                               |
+| 进程树回收  | `process.kill(-pid)` 杀进程组                                                                                          | `src/lib/process/kill-process-tree.ts`（§3.1）                                                                                                               |
 | 进程探测    | `ps -eo pid,args` 查命令行；监听端口用 `/proc/net/tcp{,6}`（LISTEN 的 socket inode）∩ `/proc/<pid>/fd` 的 `socket:[…]` | `src/lib/comfyui/proc-detect.ts`。**不依赖 `lsof` / `ss` / `netstat`**（很多发行版默认不装，缺它时探测会静默返回 null，正是 §9.2 第 3 条禁止的形态） |
 | 解释器发现  | `.venv/bin/python3` / `.venv/bin/python` + `lib/python3.x/site-packages`                                               | `src/lib/comfyui/launch-path.ts`                                                                                                                     |
 | 打开浏览器  | `xdg-open`                                                                                                             | `src/lib/open-in-browser.ts`                                                                                                                         |
@@ -1597,7 +1621,7 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 
 新增任何「只在一个平台成立」的依赖时，按下面三条落位，不要散在各处：
 
-1. **判据收在一处**：进程树机制 → `src/lib/kill-process-tree.ts`；
+1. **判据收在一处**：进程树机制 → `src/lib/process/kill-process-tree.ts`；
    解释器可执行名与目录布局 → `src/lib/comfyui/launch-path.ts` 的
    `INTERPRETER_NAMES` / `venvDirs`。调用方表达意图（「回收这棵树」、
    「找解释器」），不自己摸 `process.platform`。
@@ -1670,7 +1694,7 @@ sidecar」两种不同形态的失败。
 `cargo test --release` 4 项通过；`cargo check --target x86_64-pc-windows-msvc`
 的资源校验也按 `node-x86_64-pc-windows-msvc.exe` 通过（Windows 侧命名未回归）。
 回归测试：`tests/cross-platform-launcher.test.ts`、
-`src/lib/kill-process-tree.windows.test.ts`。
+`src/lib/process/kill-process-tree.windows.test.ts`。
 
 ### 9.4 这个模式**仍不**解决的问题（别误当成完整跨平台支持）
 
@@ -1724,6 +1748,7 @@ sidecar」两种不同形态的失败。
 | 建库（Drizzle 表结构同步）                           | `scripts/prepare-local-run.ps1`（前置）/ 启动器预检 8 | `scripts/db-push.mjs`（`pnpm db:push`）                                                                                        |
 | `pnpm` 可用性自检与修复（工具链门禁的独立入口）      | `scripts/prepare-local-run.ps1`（第 2/3 步）          | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`）                                                                   |
 | `src/lib` 的 Node-only 声明与可达性（规范 §18.4）    | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`） |
+| UI 基元复用棘轮（规范 16 §16.2.3）                 | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/check-ui-primitives.cjs`（`pnpm ui:primitives`，契约测试 `tests/check-ui-primitives.test.ts`） |
 | prettier 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项） | `scripts/quality-gate.ps1`（`-Mode format`）          | `scripts/check-format.cjs`（`pnpm format:ratchet`，契约测试 `tests/check-format.test.ts`）                                     |
 | 格式化提交与行为改动分离（规范 §13.5）               | `scripts/quality-gate.ps1`（`-Mode format`）          | `scripts/check-reformat-only.cjs`（`pnpm format:reformat-guard`，契约测试 `tests/check-reformat-only.test.ts`）                |
 | `src/lib` 的零消费值导出棘轮（规范 §12.16）          | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）         |
@@ -1747,3 +1772,46 @@ sidecar」两种不同形态的失败。
    「排除项悄悄为空」看起来就像「本来就没有基线失败」（红/绿不再可归因）。
 
 回归测试见 `tests/ps1-consistency.test.ts`。
+
+### 9.6 注释语言与「纯 ASCII 模块」白名单（ISSUE #678，机器强制）
+
+**判据一句话**：注释一律中文；**只有「会被 `next-code-frame` 渲染到」的构建期模块**
+例外（英文注释并保持纯 ASCII），其余地方写英文注释即违规。
+
+**为什么需要例外**：§5 那条 Rust panic 的根因是 **Next 的 code frame 按字节偏移切串**，
+高亮区间端点落在多字节字符内部时直接 panic，整个 `next build` 被一个与业务无关的
+错误带走（触发是**偏移敏感**的，同一文件删掉中文能过、换个长度的中文又能复现）。
+所以「注释一律中文」这条规则在构建期模块图上**不能一刀切** —— 一刀切下去的表现是
+「文档要求中文、构建偶尔随机崩」，而下一个人只会看到那个 panic。
+
+因此规则拆成两半，口径各自唯一：
+
+| 位置                                                                      | 注释语言 | 判据                                                  |
+| ------------------------------------------------------------------------- | -------- | ----------------------------------------------------- |
+| 常规模块（业务 / 测试 / 脚本 / 文档）                                     | **中文** | 规范 12 §12.4.6 的 ASCII 比例棘轮（只许降不许升）     |
+| 「纯 ASCII 模块」：会被 `next-code-frame` 渲染到的构建期模块图上的模块    | 英文     | 文件头一条说明注明原因；白名单登记在 `reference-facts.md` |
+
+**白名单当前只有三个文件**（名单越短越好，新增必须能说出「它为什么会被 code frame
+渲染到」）：
+
+| 文件                              | 为什么在名单里                                                             |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `src/lib/db-schema-ready.ts`      | 构建期被加载（reaper 的模块级副作用先经它判就绪），且确实是报错现场         |
+| `src/server/db.ts`                | 每条路由的模块图都拉到它，实测被 code frame 渲染（`resolveDbPath` 那次报错） |
+| `src/lib/shell/tracing-ignore.ts` | 同上：构建期模块图上的纯工具，报错现场就在它自己的调用点上                  |
+
+**门禁与清单只定义一次的地方**：白名单登记在 `docs/reference-facts.md` 的
+`comment.language.asciiOnly` 一行（源码见 `scripts/doc-facts.cjs` 的 FACTS），
+由 `pnpm doc:check` 核对「文档写的名单」与「脚本读的名单」一致；
+规范 12 §12.4.6 的棘轮读同一份名单。
+
+**另有第二类豁免：工具指示注释**（规范 12 §12.4.6 的表里同款）。行首即
+`@vitest-environment` / `@ts-ignore` / `@ts-expect-error` / `eslint-disable*` /
+`@jsx*` 的行不参与统计 —— 它们不是给人读的注释，而是工具按**字面量**解析的指令：
+改成中文不是报错，而是**静默失效**（用例悄悄跑回默认环境、类型豁免悄悄失效）。
+判据只认「行首就是该指令」，避免把「解释某个指令」的正常中文注释一起放行。
+
+**自查入口（跨平台）**：`pnpm exec vitest run tests/comment-language.test.ts`。
+**排查手法**：真要给名单里的文件加中文注释时，先在浏览器里打开
+`settings` 页触发一次编译错误看 code frame 是否渲染它 —— 渲染不到就别加，
+不确定就别加（名单只有三个，加错一个的代价是构建偶发崩）。

@@ -30,7 +30,7 @@ export function runCapture(command, args, timeoutMs = 10_000) {
   });
 }
 
-/** 是否是 Windows（进程机制的分叉点，与 src/lib/kill-process-tree.ts 同一判据）。 */
+/** 是否是 Windows（进程机制的分叉点，与 src/lib/process/kill-process-tree.ts 同一判据）。 */
 /**
  * @param {NodeJS.Platform} [platform]
  * @returns {boolean}
