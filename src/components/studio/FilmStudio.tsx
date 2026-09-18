@@ -17,24 +17,24 @@ import {
   type ShotListItem,
 } from "./film-studio-config";
 
-/* ── Film Studio — Updream-style Video Editor (Ardot-aligned) ─
-  Dark-themed timeline-based video editing studio.
-  Matches Ardot design spec: dark-aurora (#0a0a0f) + violet #8B5CF6 accent.
-  Rendered inside WorkspaceNav parent shell (sidebar provided externally).
+/* ── 影片工坊 —— Updream 风视频剪辑器（对齐 Ardot） ─
+  深色主题的**时间线**视频剪辑工坊。
+  对齐 Ardot 设计规范：深色极光（#0a0a0f）+ 紫 #8B5CF6 强调。
+  渲染在 WorkspaceNav 父壳内部（侧栏由外部提供）。
 
-  Layout (within shell):
+  布局（壳内）：
   ┌──────────────────────────────────────────────────────────┐
-  │ Top Toolbar: [project name] [undo|redo] … [▶] [导出成片]  │
+  │ 顶部工具栏：[项目名] [撤销|重做] … [▶] [导出成片]  │
   ├──────────┬───────────────────────────────┬───────────────┤
-  │ Shot List│  Preview Canvas (16:9)       │  Props Panel  │
+  │ 镜头列表 │  预览画布（16:9）            │  属性面板     │
   │ (260px)  │  ┌─────────────────────┐     │  (280px)      │
-  │          │  │    ▶ play overlay    │     │  镜头名称      │
-  │ · shot 1 │  └─────────────────────┘     │  时长          │
-  │ · shot 2 │                               │  生成模式      │
-  │ · shot 3 │  Timeline                     │  转场效果      │
-  │ [+ add]  │  ruler + video/sub/bgm tracks │  提示词        │
+  │          │  │    ▶ 播放覆盖层       │     │  镜头名称      │
+  │ · 镜头1  │  └─────────────────────┘     │  时长          │
+  │ · 镜头2  │                               │  生成模式      │
+  │ · 镜头3  │  时间线                       │  转场效果      │
+  │ [+ 添加] │  标尺 + 视频/字幕/BGM 轨道     │  提示词        │
   ├──────────┴───────────────────────────────┴───────────────┤
-  │ Status Bar: ● ComfyUI 本地已连接 · GPU 可用              │
+  │ 状态栏：● ComfyUI 本地已连接 · GPU 可用              │
   └──────────────────────────────────────────────────────────┘
 */
 
@@ -99,7 +99,7 @@ export function FilmStudio() {
       className="bg-canvas flex h-full w-full flex-col overflow-hidden"
       style={{ fontFamily: "var(--font-sans)" }}
     >
-      {/* ── Aurora Background Blobs ───────────────── */}
+      {/* ── 极光背景光斑 ───────────────── */}
       <div
         className="pointer-events-none absolute inset-0 overflow-hidden"
         aria-hidden
@@ -168,7 +168,7 @@ export function FilmStudio() {
 
         <div className="w-3" />
 
-        {/* Zoom label + Export */}
+        {/* 缩放标签 + 导出 */}
         <span className="text-ink-faintest text-[11px]">时间轴缩放</span>
         <button
           type="button"
@@ -179,7 +179,7 @@ export function FilmStudio() {
           {c.loading ? "启动中…" : "导出成片"}
         </button>
 
-        {/* Cancel button (when running) */}
+        {/* 取消按钮（运行中时） */}
         {c.film && running && (
           <button
             onClick={() => void c.cancel()}
@@ -190,9 +190,9 @@ export function FilmStudio() {
         )}
       </header>
 
-      {/* ── Three-Column Body ───────────────────────── */}
+      {/* ── 三栏主体 ───────────────────────── */}
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
-        {/* ═══ Left: Shot List Panel (260px) ═══ */}
+        {/* ═══ 左：镜头列表面板（260px） ═══ */}
         <aside className="border-border-subtle bg-panel-deep/85 flex w-[260px] shrink-0 flex-col border-r backdrop-blur-sm">
           {/* Header */}
           <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
@@ -271,7 +271,7 @@ export function FilmStudio() {
           </div>
         </aside>
 
-        {/* ═══ Center: Preview + Timeline ═══ */}
+        {/* ═══ 中：预览 + 时间线 ═══ */}
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-5 pb-3">
           {/* Preview Canvas */}
           <div className="border-border-subtle bg-canvas-deep relative mb-3 flex min-h-[320px] flex-1 items-center justify-center overflow-hidden rounded-2xl border">
@@ -299,7 +299,7 @@ export function FilmStudio() {
               )}
             </button>
 
-            {/* Film progress overlay (when generating) */}
+            {/* 影片进度覆盖层（生成中） */}
             {c.film && running && (
               <div className="absolute right-0 bottom-0 left-0 bg-black/60 px-4 py-2.5 backdrop-blur-sm">
                 <div className="mb-1.5 flex items-center justify-between text-xs">
@@ -317,7 +317,7 @@ export function FilmStudio() {
               </div>
             )}
 
-            {/* Final video player (when done) */}
+            {/* 成片播放器（完成后） */}
             {c.film?.status === "DONE" && c.film.finalVideo && (
               <video
                 src={c.film.finalVideo}
@@ -394,7 +394,7 @@ export function FilmStudio() {
                 </div>
               </div>
 
-              {/* BGM / Audio track */}
+              {/* BGM / 音轨 */}
               <div className="flex h-9 items-center gap-2 rounded-md px-2">
                 <span className="text-ink-fainter w-12 shrink-0 text-[10px]">
                   BGM
@@ -425,7 +425,7 @@ export function FilmStudio() {
           </div>
         </main>
 
-        {/* ═══ Right: Properties Panel (280px) ═══ */}
+        {/* ═══ 右：属性面板（280px） ═══ */}
         <aside className="border-border-subtle bg-panel-deep/85 flex w-[280px] shrink-0 flex-col border-l backdrop-blur-sm">
           {/* Header */}
           <div className="border-border-subtle flex h-11 items-center border-b px-4">
@@ -520,7 +520,7 @@ export function FilmStudio() {
             {/* Divider */}
             <hr className="border-border-subtle" />
 
-            {/* Global config: Script input (collapsed from original) */}
+            {/* 全局配置：剧本输入（从原版收起） */}
             <label className="block">
               <span className="text-ink-faint mb-1.5 block text-[11px]">
                 剧本 / 创意
