@@ -9,14 +9,24 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "~/components/ui/button";
+import { StatusDot, type StatusDotState } from "~/components/ui/status-dot";
+
 import {
   STATUS_ACTIONS_CLASS,
   STATUS_ROW_CLASS,
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { AnsiLogText, Btn, Card } from "./SettingsPrimitives";
+import { AnsiLogText, StatusButton, Card } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
+
+/** Drizzle Studio 状态 → 圆点语义（过渡态优先，口径同 ComfyUI 那条）。 */
+function dbStudioDotState(c: ReadySettingsPageController): StatusDotState {
+  if (c.dbStudioStatus?.up) return "up";
+  if (c.dbStudioStatus?.starting || c.dbStudioStarting) return "busy";
+  return "down";
+}
 
 export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
   /* 启动日志的滚动跟随是纯视觉偏好，留在视图层。 */
@@ -43,15 +53,7 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
       <div
         className={`border-border bg-surface-1 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
       >
-        <span
-          className={`inline-block size-2 shrink-0 rounded-full ${
-            c.dbStudioStatus?.up
-              ? "bg-emerald-400"
-              : c.dbStudioStatus?.starting || c.dbStudioStarting
-                ? "bg-amber-400"
-                : "bg-rose-400"
-          }`}
-        />
+        <StatusDot state={dbStudioDotState(c)} />
         <span
           className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
           title={
@@ -72,26 +74,26 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
               等共享标志，卡住时曾把三个按钮一起锁死（#92）。
               状态查询失败（dbStudioStatus 为 null）时按「未运行」
               处理：启动按钮仍可点，用户不会整组被禁用。 */}
-          <Btn
+          <StatusButton
             onClick={() => void c.openDbStudio()}
             disabled={
               c.dbStudioOpening || c.dbStudioStarting || !c.dbStudioStatus?.up
             }
           >
             {c.dbStudioOpening ? "打开中…" : "打开查看"}
-          </Btn>
-          <Btn
+          </StatusButton>
+          <StatusButton
             onClick={() => void c.startDbStudio()}
             disabled={c.dbStudioStarting || c.dbStudioStatus?.up === true}
           >
             {c.dbStudioStarting ? "启动中…" : "启动 Drizzle Studio"}
-          </Btn>
-          <Btn
+          </StatusButton>
+          <StatusButton
             onClick={() => void c.stopDbStudio()}
             disabled={c.dbStudioStopping || !c.dbStudioStatus?.up}
           >
             {c.dbStudioStopping ? "关闭中…" : "关闭 Drizzle Studio"}
-          </Btn>
+          </StatusButton>
         </div>
       </div>
       {/* Drizzle Studio 启动日志：启动期间每秒跟随
@@ -101,29 +103,30 @@ export function DatabaseSection({ c }: { c: ReadySettingsPageController }) {
           <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
             启动日志（drizzle-studio-runtime.log）
             {c.dbStudioLogActive && (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
-                <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+              <span className="text-success-strong inline-flex items-center gap-1.5 text-[10px] font-normal">
+                <StatusDot state="up" sizeClass="size-1.5" pulse />
                 跟随中
               </span>
             )}
           </span>
           <div className="flex items-center gap-2">
             {!logFollow && (
-              <button
-                type="button"
+              <Button
+                size="xs"
                 onClick={() => setLogFollow(true)}
-                className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
+                className="h-auto rounded px-2 py-0.5 text-[11px] font-medium"
               >
                 恢复自动滚动
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="xs"
               onClick={() => void c.refreshDbStudioLog()}
-              className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
+              className="text-muted-foreground h-auto rounded px-2 py-0.5 text-[11px]"
             >
               刷新
-            </button>
+            </Button>
           </div>
         </div>
         <div

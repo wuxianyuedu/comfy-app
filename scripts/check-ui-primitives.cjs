@@ -19,7 +19,9 @@
  *   P2 视图层自建 `createPortal(` 浮层（应使用 `ui/dialog` / `ui/popover` /
  *      `ui/sheet` / `ui/dropdown-menu`）
  *   P3 视图文件里重复定义内联 `animate-spin` / `animate-pulse`（应使用
- *      `ui/page-loading` / `ui/skeleton` / `ui/progress` 这类加载态基元）
+ *      `ui/page-loading` 的 `PageLoading`（块级）/ `Spinner`（行内 · 按钮内）、
+ *      `ui/skeleton` / `ui/progress` 这类加载态基元，状态圆点的脉冲走
+ *      `ui/status-dot`）
  *   —— 三者合计走一条棘轮：**按文件记账、只许降不许升**，与
  *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径
  *      （基线 `scripts/.ui-primitives-baseline.json`）。
@@ -153,7 +155,7 @@ const RULES = {
   },
   P3: {
     label:
-      "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading / skeleton / progress）",
+      "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
     count: (t) => (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
   },
 };

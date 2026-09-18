@@ -10,14 +10,37 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "~/components/ui/button";
+import { StatusDot, type StatusDotState } from "~/components/ui/status-dot";
+
 import {
   STATUS_ACTIONS_CLASS,
   STATUS_ROW_CLASS,
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { AnsiLogText, Btn, Card, Field } from "./SettingsPrimitives";
+import { AnsiLogText, StatusButton, Card, Field } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
+
+/**
+ * ComfyUI 运行状态 → 圆点语义（纯派生，无 React 状态）。
+ *
+ * 顺序是载荷：**「过渡态」优先于「探测中」**，因为启动/关闭过程中状态查询
+ * 也会返回 probing 类似的形态；先把过渡态认下，圆点才不会是「未运行」的红。
+ */
+function comfyDotState(c: ReadySettingsPageController): StatusDotState {
+  if (c.comfyStatus?.up) return "up";
+  if (
+    c.comfyStopping ||
+    c.comfyStatus?.stopping ||
+    c.comfyStarting ||
+    c.comfyStatus?.starting
+  ) {
+    return "busy";
+  }
+  if (c.comfyStatus?.probing) return "probing";
+  return "down";
+}
 
 /** 安装形态 → 设置页徽标文案。 */
 const INSTANCE_KIND_LABEL: Record<
@@ -130,19 +153,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       <div
         className={`border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
       >
-        <span
-          className={`inline-block size-2 shrink-0 rounded-full ${
-            c.comfyStatus?.up
-              ? "bg-emerald-400"
-              : c.comfyStopping || c.comfyStatus?.stopping
-                ? "bg-amber-400"
-                : c.comfyStarting || c.comfyStatus?.starting
-                  ? "bg-amber-400"
-                  : c.comfyStatus?.probing
-                    ? "bg-sky-400"
-                    : "bg-rose-400"
-          }`}
-        />
+        <StatusDot state={comfyDotState(c)} />
         <span
           className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
           title={
@@ -169,7 +180,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           {/* 打开运行中的 ComfyUI 界面：桌面壳内在同一主窗口开一个「页签」
               （iframe 内嵌）；浏览器/dev 模式同样落在应用内页签。
               旁边的「在浏览器打开」是并列出口，不是替代（见该按钮注释）。 */}
-          <Btn
+          <StatusButton
             onClick={() => void c.openComfy()}
             /* 只在「明确未运行」时禁用：探测进行中（probing）也允许点一下，
            openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */
@@ -178,12 +189,12 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             }
           >
             {c.comfyOpening ? "打开中…" : "打开查看"}
-          </Btn>
+          </StatusButton>
           {/* 并列出口：同一个地址再交给系统默认浏览器（放大看 / 装插件 /
               多屏）。页签内嵌照旧，这里不做替换。地址由服务端自己探
               （comfyOpen），不采信界面里缓存的旧 base。禁用口径与
               「打开查看」一致：只看「明确未运行」。 */}
-          <Btn
+          <StatusButton
             onClick={() => void c.openComfyInBrowser()}
             disabled={
               c.comfyBrowserOpening ||
@@ -191,8 +202,8 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             }
           >
             {c.comfyBrowserOpening ? "打开中…" : "在浏览器打开"}
-          </Btn>
-          <Btn
+          </StatusButton>
+          <StatusButton
             onClick={() => void c.startComfy()}
             disabled={
               c.saving ||
@@ -206,8 +217,8 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             {c.comfyStarting || c.comfyStatus?.starting
               ? "启动中…"
               : "启动 ComfyUI"}
-          </Btn>
-          <Btn
+          </StatusButton>
+          <StatusButton
             onClick={() => void c.stopComfy()}
             disabled={
               c.saving ||
@@ -219,7 +230,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
             {c.comfyStopping || c.comfyStatus?.stopping
               ? "关闭中…"
               : "关闭 ComfyUI"}
-          </Btn>
+          </StatusButton>
         </div>
       </div>
       {/* ComfyUI 启动日志：启动期间每秒跟随 log/services/comfyui-runtime.log，
@@ -229,29 +240,30 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
             启动日志（comfyui-runtime.log）
             {c.comfyLogActive && (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
-                <span className="inline-block size-1.5 animate-pulse rounded-full bg-emerald-400" />
+              <span className="text-success-strong inline-flex items-center gap-1.5 text-[10px] font-normal">
+                <StatusDot state="up" sizeClass="size-1.5" pulse />
                 跟随中
               </span>
             )}
           </span>
           <div className="flex items-center gap-2">
             {!logFollow && (
-              <button
-                type="button"
+              <Button
+                size="xs"
                 onClick={() => setLogFollow(true)}
-                className="bg-primary/90 hover:bg-primary rounded px-2 py-0.5 text-[11px] font-medium text-white"
+                className="h-auto rounded px-2 py-0.5 text-[11px] font-medium"
               >
                 恢复自动滚动
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="xs"
               onClick={() => void c.refreshComfyLog()}
-              className="border-border text-muted-foreground hover:bg-subtle rounded border px-2 py-0.5 text-[11px] transition-colors"
+              className="text-muted-foreground h-auto rounded px-2 py-0.5 text-[11px]"
             >
               刷新
-            </button>
+            </Button>
           </div>
         </div>
         <div
@@ -283,9 +295,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         onChange={(value) => c.patchSettings({ comfyLorasDir: value })}
         placeholder="留空使用默认 models/loras"
       />
-      <Btn onClick={() => void c.savePrefs()} disabled={c.saving}>
+      <StatusButton onClick={() => void c.savePrefs()} disabled={c.saving}>
         保存偏好
-      </Btn>
+      </StatusButton>
     </Card>
   );
 }

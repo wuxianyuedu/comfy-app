@@ -8,6 +8,8 @@
 
 import { Moon, Sun } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
+
 import { Card } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
@@ -41,16 +43,19 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
         ).map(({ value, label, Icon, hint }) => {
           const active = c.theme === value;
           return (
-            <button
+            /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的高度/内边距/
+               字号全部归还给调用处（`h-auto justify-start whitespace-normal`），
+               只借用基元的可点目标语义与 focus-visible 焦点环。 */
+            <Button
               key={value}
-              type="button"
+              variant="ghost"
               role="radio"
               aria-checked={active}
               onClick={() => c.setTheme(value)}
-              className={`flex flex-col items-start gap-1.5 rounded-xl border p-4 text-left transition-colors ${
+              className={`h-auto flex-col items-start justify-start gap-1.5 rounded-xl border p-4 text-left whitespace-normal transition-colors ${
                 active
-                  ? "border-primary bg-primary-soft text-ink"
-                  : "border-border bg-surface-1 text-muted-foreground hover:border-border-strong hover:text-ink"
+                  ? "bg-primary-soft text-ink border-primary"
+                  : "bg-surface-1 text-muted-foreground hover:border-border-strong hover:text-ink border-border"
               }`}
             >
               <span className="flex items-center gap-2 text-sm font-semibold">
@@ -58,7 +63,7 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
                 {label}
               </span>
               <span className="text-xs opacity-80">{hint}</span>
-            </button>
+            </Button>
           );
         })}
       </div>

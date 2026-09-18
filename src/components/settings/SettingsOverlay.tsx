@@ -18,6 +18,7 @@ import { useSettingsPage } from "~/app/(main)/settings/hooks/use-settings-page";
 import { SettingsPageView } from "~/app/(main)/settings/SettingsPageView";
 import { SettingsLoadError } from "~/app/(main)/settings/page";
 import { SettingsShell } from "~/components/settings/SettingsShell";
+import { Button } from "~/components/ui/button";
 import { PageLoading } from "~/components/ui/page-loading";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 
@@ -55,12 +56,13 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
               引导打开日志面板（面板与文件日志都收了这条失败）。 */}
           <div className="relative">
             <SettingsLoadError errorText={c.errorText} onRetry={c.retry} />
-            <button
+            <Button
+              variant="link"
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground absolute bottom-6 left-1/2 -translate-x-1/2 text-sm underline"
+              className="text-muted-foreground hover:text-foreground absolute bottom-6 left-1/2 h-auto -translate-x-1/2 p-0 text-sm"
             >
               返回工作区
-            </button>
+            </Button>
           </div>
         </SettingsShell>
       </FullScreenLayer>
@@ -77,12 +79,13 @@ export function SettingsOverlay({ onClose }: SettingsOverlayProps) {
               errorText="配置数据未就绪（查询已结束但未返回可用配置）"
               onRetry={c.retry}
             />
-            <button
+            <Button
+              variant="link"
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground absolute bottom-6 left-1/2 -translate-x-1/2 text-sm underline"
+              className="text-muted-foreground hover:text-foreground absolute bottom-6 left-1/2 h-auto -translate-x-1/2 p-0 text-sm"
             >
               返回工作区
-            </button>
+            </Button>
           </div>
         </SettingsShell>
       </FullScreenLayer>

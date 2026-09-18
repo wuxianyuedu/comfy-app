@@ -17,6 +17,7 @@ import {
   SETTINGS_SECTIONS,
   type Section,
 } from "~/app/(main)/settings/hooks/use-settings-page";
+import { Button } from "~/components/ui/button";
 
 export function SettingsShell({
   section,
@@ -42,13 +43,16 @@ export function SettingsShell({
     <div className={`bg-bg flex flex-col overflow-hidden ${className}`}>
       {/* Header bar */}
       <div className="border-border flex items-center gap-3 border-b px-6 py-4">
-        <button
+        <Button
+          variant="ghost"
+          size="icon-lg"
           onClick={onClose ?? (() => router.back())}
-          className="text-muted-foreground hover:bg-subtle hover:text-ink flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
+          className="text-muted-foreground hover:text-ink"
           title="返回"
+          aria-label="返回"
         >
           <ArrowLeft size={18} />
-        </button>
+        </Button>
         <h1 className="text-ink text-lg font-semibold">设置</h1>
       </div>
 
@@ -56,18 +60,19 @@ export function SettingsShell({
         {/* Left sidebar */}
         <nav className="w-48 shrink-0 space-y-1">
           {SETTINGS_SECTIONS.map((item) => (
-            <button
+            <Button
               key={item.id}
-              type="button"
+              variant="ghost"
+              aria-current={section === item.id ? "true" : undefined}
               onClick={() => onSelect(item.id)}
-              className={`w-full rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${
+              className={`h-auto w-full rounded-lg px-3 py-2 text-center text-sm font-medium ${
                 section === item.id
                   ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-subtle hover:text-ink"
+                  : "text-muted-foreground hover:text-ink"
               }`}
             >
               {item.label}
-            </button>
+            </Button>
           ))}
         </nav>
 

@@ -19,6 +19,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { PageLoading } from "~/components/ui/page-loading";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
@@ -99,9 +100,7 @@ export function SettingsLoadError({
   return (
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">
       <div className="w-full max-w-xl text-center">
-        <p className="text-rose-700 dark:text-rose-400">
-          加载设置失败，请刷新重试
-        </p>
+        <p className="text-danger-strong">加载设置失败，请刷新重试</p>
         <p
           className="text-muted-foreground mt-2 truncate text-xs"
           title={errorText}
@@ -109,27 +108,29 @@ export function SettingsLoadError({
           {errorText}
         </p>
         <div className="mt-3 flex items-center justify-center gap-2">
-          <button
+          <Button
             onClick={onRetry}
-            className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm text-white"
+            className="h-auto rounded-lg px-4 py-2 text-sm"
           >
             重试
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => setExpanded((v) => !v)}
-            className="border-border text-muted-foreground hover:bg-subtle inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
+            className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
             aria-expanded={expanded}
           >
             {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             完整错误
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => void copyError()}
-            className="border-border text-muted-foreground hover:bg-subtle inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
+            className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
           >
             <Copy size={13} />
             {copied ? "已复制" : "复制"}
-          </button>
+          </Button>
         </div>
         {expanded && (
           <pre className="border-border bg-surface-1 custom-scrollbar mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-left font-mono text-[11px] break-all whitespace-pre-wrap">
@@ -150,12 +151,13 @@ export function SettingsLoadError({
             字段缺失）都可能是原因——只当“服务在
             重启”处理会漏掉后者，重试也不会好。
           </p>
-          <button
+          <Button
+            variant="link"
             onClick={togglePanel}
-            className="text-primary hover:text-primary-hover mt-1 underline-offset-2 hover:underline"
+            className="text-primary mt-1 h-auto p-0"
           >
             打开日志面板查看
-          </button>
+          </Button>
         </div>
       </div>
     </div>
