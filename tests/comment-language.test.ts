@@ -227,7 +227,7 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run().code).toBe(0);
     const baseline = JSON.parse(
       readFileSync(join(workdir, "scripts", ".comment-language-baseline.json"), "utf8"),
-    );
+    ) as { files: Record<string, number>; ruleVersion: number };
     expect(baseline.files["src/lib/legacy.ts"]).toBe(1);
     expect(baseline.ruleVersion).toBe(1);
   });
