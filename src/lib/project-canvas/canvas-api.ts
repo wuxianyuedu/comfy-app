@@ -89,9 +89,9 @@ export async function uploadImageFile(
   throw new Error(retry.message);
 }
 
-/* Re-upload an already-generated output (served via /outputs/...) back into
- * ComfyUI's input directory so it can be consumed as a downstream node's
- * `inputImage`. Cached by source path to avoid re-uploading for many targets. */
+/* 把已生成的产物（经 /outputs/... 提供）重新上传回 ComfyUI 的 input 目录，
+ * 供下游节点当作 `inputImage` 消费。按源路径缓存，避免同一个文件为多个目标
+ * 重复上传。 */
 const importCache = new Map<string, string>();
 
 export async function importOutputAsInput(localPath: string): Promise<string> {
@@ -107,11 +107,10 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
   return name;
 }
 
-/* Upload a user asset (image OR video) for a content-carrier node.
- * Reuses the same `/api/upload` endpoint the image nodes use (it drops the
- * bytes into ComfyUI's input dir and returns the stored filename). Returns
- * both the filename and a ready-to-use preview URL (proxied via /api/images
- * so the browser never hits ComfyUI :8188 directly). */
+/* 上传用户素材（图片或视频），供内容载体节点使用。
+ * 复用图片节点用的同一个 `/api/upload` 接口（它把字节丢进 ComfyUI 的 input
+ * 目录并返回存储后的文件名）。返回文件名，外加一个可直接用的预览 URL
+ *（经 /api/images 代理，浏览器因此不必直接访问 ComfyUI 的端口）。 */
 export async function uploadMediaFile(
   file: File,
 ): Promise<{ name: string; url: string }> {
@@ -120,7 +119,7 @@ export async function uploadMediaFile(
   return { name, url };
 }
 
-/** tRPC wire contract for the generate mutation (was `payload as any`). */
+/* 生成 mutation 的 tRPC 传输契约（此前是 `payload as any`）。 */
 type GenerateInput = RouterInputs["generate"]["generate"];
 
 export async function startGenerate(
@@ -137,34 +136,31 @@ export interface TaskResult {
   taskId?: string;
 }
 
-/** Returned by `pollTask` when the server task ended without producing an
- *  output (FAILED / CANCELLED / ERROR / TIMEOUT).  Carries the underlying
- *  backend error message from `prisma.task.error` so the UI can show a
- *  meaningful explanation instead of a generic "生成失败或无结果" stub. */
+/* `pollTask` 在服务端任务没产出结果就结束时返回它
+ *（FAILED / CANCELLED / ERROR / TIMEOUT）。它带上 `prisma.task.error` 里
+ * 底层后端的错误信息，好让界面给出有意义的解释，
+ * 而不是一句通用的「生成失败或无结果」。 */
 export interface TaskFailure {
   taskId: string;
   status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
-  /** Raw backend / ComfyUI error message, already decoded to plain text. */
+  /** 后端 / ComfyUI 的原始错误信息，已解码成纯文本。 */
   error: string;
-  /** Snapshot of the original request payload (from `prisma.task.params`)
-   *  so the error UI can show "what was sent" next to "what failed". */
+  /** 原始请求载荷的快照（来自 `prisma.task.params`），
+   *  好让错误界面把「发了什么」和「哪里失败了」并排展示。 */
   params?: unknown;
-  /** structured ComfyUI /prompt validation errors
-   *  (flattened `node_errors`), so the UI can render a precise per-field
-   *  list instead of parsing the English summary in `error`. */
+  /** 结构化的 ComfyUI /prompt 校验错误（摊平后的 `node_errors`），
+   *  好让界面渲染出精确到字段的列表，而不是去解析 `error` 里那句英文摘要。 */
   validationErrors?: ValidationError[];
 }
 
-/** Polls a task until it has a result, fails, or times out.  On success
- *  returns a `TaskResult` (truthy); on terminal failure returns the
- *  structured `TaskFailure` so callers can surface the real error. */
+/* 轮询一个任务，直到它有结果、失败或超时。
+ * 成功时返回 `TaskResult`（真值）；终态失败时返回结构化的 `TaskFailure`，
+ * 调用方据此把真实错误暴露出去。 */
 export async function pollTask(
   taskId: string,
   timeoutMs = 25 * 60 * 1000,
-  /* callback fired on every poll tick with a
-   *  clamped 0..100 progress. Optional — callers that don't care simply
-   *  omit it. Wired into CanvasNode.runGenerate so the picture/movie
-   *  preview can show a water-fill overlay while generation runs. */
+  /* 每次轮询都会回调，进度被夹在 0..100。可选 —— 不关心的调用方不传即可。
+   * 接到 CanvasNode.runGenerate 上，让图片 / 影片预览在生成期间显示水位填充。 */
   onProgress?: (progress: number) => void,
 ): Promise<TaskResult | TaskFailure> {
   const start = Date.now();
@@ -179,10 +175,9 @@ export async function pollTask(
     }
     try {
       const task = await vanillaApi.task.detail.query({ id: taskId });
-      /* surface 0..100 progress to the canvas.
-       *  Previously dropped — pollTask only read status + images, so the
-       *  canvas picture/image preview had no progress to show even
-       *  though /api/tasks/[id] returns task.progress. */
+      /* 把 0..100 的进度透到画布上。
+       * 此前被丢掉了 —— pollTask 只读 status 与 images，于是画布的图片/影片预览
+       * 即使 /api/tasks/[id] 返回了 task.progress，也没进度可显示。 */
       if (onProgress && typeof task?.progress === "number") {
         onProgress(Math.max(0, Math.min(100, task.progress)));
       }
@@ -193,14 +188,11 @@ export async function pollTask(
       }
       const st = task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
-        // Defensive normalize: `task.error` is typed `String?`
-        // in Prisma but legacy rows / older code paths (e.g.
-        // buildPromptError pre-used `String(res.error)`) can land
-        // the literal "[object Object]" as the stored string.  We
-        // peel structured objects to JSON AND detect the literal
-        // garbage-string sentinel so the UI never shows
-        // `[object Object]`.  Garbage strings get replaced with the
-        // generic fallback. */
+        /* 防御性归一：`task.error` 在 Prisma 里类型是 `String?`，
+         * 但历史数据行 / 更早的代码路径（例如 buildPromptError 曾用
+         * `String(res.error)`）可能把字面量 "[object Object]" 存了进来。
+         * 这里既把结构化对象剥成 JSON，也识别那个垃圾字符串哨兵，
+         * 让界面永远不显示 `[object Object]`；垃圾字符串换成通用兜底文案。 */
         const rawErr = task?.error;
         const peeled =
           typeof rawErr === "string"
@@ -229,9 +221,8 @@ export async function pollTask(
            *  展示「执行了哪些参数」。task.params 由 /api/generate route.ts
            *  写入（Prisma JSON 列）。 */
           params: task?.params ?? undefined,
-          /* carry structured validation errors from
-           *  /api/tasks/[id].task.validationErrors into the failure result
-           *  so CanvasNode can render a precise per-field list. */
+          /* 把 /api/tasks/[id] 的 task.validationErrors 里的结构化校验错误
+           * 带进失败结果，让 CanvasNode 能渲染出精确到字段的列表。 */
           /* validationErrors 存在 Prisma Json 列里，类型上是 unknown——
            *  直接 `as ValidationError[]` 只是假保险（列里存了别的东西时
            *  会在渲染期炸）。按 §05「API 响应一律 Zod 校验」收口成真校验。 */
@@ -239,15 +230,14 @@ export async function pollTask(
         };
       }
     } catch {
-      /* transient — keep polling */
+      /* 暂时性失败 —— 继续轮询 */
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
 
-/** Type guard for the success branch — keeps existing `if (result)` call
- *  sites semantic-compatible (a populated TaskResult is still truthy) while
- *  making the failure branch type-safe. */
+/* 成功分支的类型守卫 —— 让既有的 `if (result)` 调用点语义不变
+ *（填充过的 TaskResult 依旧是真值），同时让失败分支有类型安全。 */
 export function isTaskSuccess(r: TaskResult | TaskFailure): r is TaskResult {
   return typeof (r as TaskResult).localPath === "string";
 }
