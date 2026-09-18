@@ -29,12 +29,12 @@ import {
   GROUP_RAIL_COLOR,
 } from "./WorkflowEditorNodes";
 
-/** One entry of `WorkflowDetail.graph` (ComfyUI API-format graph).  The
- *  detail type declares `graph: Record<string, any>`; this narrows the
- *  two access sites here without touching shared types. */
+/** `WorkflowDetail.graph` 的一个条目（ComfyUI 的 API 格式图）。shared 的
+ *  detail 类型把它声明成 `graph: Record<string, any>`；这里在不改共享类型的
+ * 前提下，把本文件这两处取用收窄。 */
 type GraphEntry = { inputs?: WorkflowNodeData["inputs"] };
-/** A boundary pin from `detail.boundaryPins.inputs / .outputs` — both
- *  arrays share the same element shape. */
+/** `detail.boundaryPins.inputs / .outputs` 里的一个边界 pin ——
+ *  两个数组的元素形状相同。 */
 type BoundaryPin = NonNullable<
   WorkflowDetail["boundaryPins"]
 >["inputs"][number];
@@ -76,28 +76,27 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   const padX = 80;
   const padY = 80;
 
-  // Index nodes by id so we can resolve [srcId, slot] inputs to source titles.
+  // 按 id 给节点建索引，才能把 [srcId, slot] 形态的输入解析成源节点标题。
   const nodesById: Record<string, ComfyGraphNode> = {};
   for (const n of scopeDetail.nodes) nodesById[n.id] = n;
 
-  /* Look up the raw input metadata per node by id (for the graph view) */
+  /* 按 id 取每个节点的原始输入元数据（画布视图用） */
   const rawById: Record<string, RawInputMeta[]> = {};
   for (const n of scopeDetail.nodes) rawById[n.id] = n.raw_inputs ?? [];
 
-  /* Source-independent view of "this node's OUTPUT slots feed a
-   *  subgraph boundary" — derived directly from detail.boundaryLinks
-   *  where bl.kind === "output".  Used as a backup signal in WfNode's
-   *  hasDownstream check so boundary wires keep rendering even if the
-   *  server's rawOutputs[].isBoundary stamp hasn't propagated yet
-   *  (e.g. due to an older sessionStorage cache shape
-   *  fix after v4 cache still masked the output handles for
-   *  RandomNoise's NOISE slot).  Top-level (non-subgraph) workflows
-   *  leave `detail.boundaryLinks` undefined → returns empty map. */
+  /* 「本节点的 OUTPUT 槽馈入了子图边界」的**独立**视图 —— 直接从
+   *  detail.boundaryLinks（bl.kind === "output"）里推出。用作 WfNode 的
+   *  hasDownstream 判定的**备用信号**：即使服务端的 rawOutputs[].isBoundary
+   *  盖章还没传到（例如命中旧的 sessionStorage 缓存形状），边界连线也照样渲染。
+   *
+   *  这条备用通道不是多余：v4 缓存修好之后，RandomNoise 的 NOISE 槽的输出
+   *  handle 仍被旧缓存掩掉过一次 —— 判据只挂在服务端盖章上时，缓存形状一旧
+   *  就整条静默失效。顶层（非子图）工作流的 `detail.boundaryLinks` 是
+   *  undefined → 这里返回空 map。 */
   const boundaryOutputsByNodeId: Record<string, Set<string>> = {};
-  /* Mirror for input side: bl.kind === "input" maps an outer pin to an
-   *  inner node + input slot name.  Used by WfNode to mark widget rows
-   *  (no `link` in rawInputs) as boundary, so the wire still anchors
-   *  when isBoundary stamp is missing from a stale cache. */
+  /* 输入侧的镜像：bl.kind === "input" 把外层 pin 映射到「内部节点 + 输入槽名」。
+   *  WfNode 用它把（rawInputs 里没有 `link` 的）widget 行标成边界行，
+   *  这样陈旧缓存里缺 isBoundary 盖章时线也仍有落点。 */
   const boundaryInputsByNodeId: Record<string, Set<string>> = {};
   if (Array.isArray(detail.boundaryLinks)) {
     for (const bl of detail.boundaryLinks) {
@@ -112,13 +111,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     }
   }
 
-  /* rawMetaById + outSlotNameById are hoisted above (used by edges). */
+  /* rawMetaById + outSlotNameById 提到了上面（边的构建要用）。 */
 
-  /* rawMetaById + outSlotNameById are hoisted above (used by edges). */
-
-  /* Pre-compute which outputs of every node are wired downstream.  We
-   *  do this once on detail load so each WfNode/WfSubgraphNode can ask
-   *  "is this output connected?" and hide its dot when it isn't. */
+  /* 预先算出每个节点有哪些输出被下游接了线。detail 加载时算一次就好 ——
+   *  之后每个 WfNode / WfSubgraphNode 只需问一句「这个输出接了吗」，
+   *  没接就把圆点藏掉，不必各自重扫一遍图。 */
   const connectedOutputsById = buildConnectedOutputs(
     scopeDetail,
     nodesById,
@@ -126,22 +123,20 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     outSlotNameById,
   );
 
-  // Shared builder for a real ComfyUI graph node.
+  // 真实 ComfyUI 图节点的共享构建器。
   //
-  // — anchor convention: the React Flow `position` is the
-  // *card's* top-left (i.e. the title bar top), and the body is painted
-  // NODE_TITLE_H (=30px) *below* it.  The user wants the node BODY's
-  // top to land exactly on the ComfyUI config `pos[1]` (the imported
-  // coordinate), so we SUBTRACT NODE_TITLE_H here: cardTop = bodyTop − 30.
-  // onNodeDragStop inverts this by ADDING NODE_TITLE_H before persisting,
-  // so the on-disk `positions[id]` keeps the ComfyUI body-top convention
-  // and a drag never accumulates a 30px offset on every save.
+  // —— 锚点约定：React Flow 的 `position` 是**卡片**左上角（即标题栏顶部），
+  // 主体画在它**下面** NODE_TITLE_H（=30px）处。而 ComfyUI 配置里的 `pos[1]`
+  // 是节点**主体**的顶部，因此这里要**减去** NODE_TITLE_H：
+  // cardTop = bodyTop − 30。
+  // onNodeDragStop 在落库前把 NODE_TITLE_H 加回去（反向操作），
+  // 于是磁盘上的 `positions[id]` 始终遵循 ComfyUI 的「主体顶部」约定，
+  // 拖多少次也不会每次保存都累出 30px 的偏移。
   //
-  // When `n.size` is provided we force the node box to the exact
-  // ComfyUI dimensions: width = size[0], height = `size[1] + NODE_TITLE_H`
-  // (the raw `size[1]` is the BODY CONTENT height per the rule
-  // see the NODE_TITLE_H comment for the full rationale).  The body
-  // content height carried in `data.size.h` is exactly `size[1]`.
+  // 给了 `n.size` 就把节点外框强制成 ComfyUI 的精确尺寸：
+  // 宽 = size[0]，高 = `size[1] + NODE_TITLE_H`（原始 `size[1]` 是**主体内容**
+  // 高度，理由见 NODE_TITLE_H 的注释）。`data.size.h` 里带的主体内容高度
+  // 正好就是 `size[1]`。
   const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
   const graphById = detail.graph as Record<string, GraphEntry | undefined>;
   const buildWfNode = (
@@ -172,53 +167,46 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       rawOutputs: rawMetaById[n.id]?.outputs ?? [],
       rawWidgetValues: rawMetaById[n.id]?.widgets_values ?? [],
       connectedOutputs: connectedOutputsById[n.id],
-      /* Backup source (fix): stamped from detail.boundaryLinks
-       *  so the output Handle still mounts for nodes that don't carry
-       *  the rawOutputs[].isBoundary stamp yet (e.g. cached detail
-       *  shape from before the schema change).  Independent channel
-       *  → hasDownstream reads it via `data.boundaryOutputs.has`. */
+      /* 备用来源：从 detail.boundaryLinks 盖章，让还没带上
+       *  rawOutputs[].isBoundary 盖章的节点（例如命中了 schema 变更之前
+       *  的 detail 缓存形状）也照样挂上输出 Handle。这是一条**独立**通道 ——
+       *  hasDownstream 经 `data.boundaryOutputs.has` 读它。 */
       boundaryOutputs: boundaryOutputsByNodeId[n.id],
       boundaryInputs: boundaryInputsByNodeId[n.id],
       flags: rawMetaById[n.id]?.flags ?? {},
       mode: rawMetaById[n.id]?.mode ?? 0,
-      /* Boundary stamps from the subgraph route. Outer
-       *  (top-level) workflows always leave both false — sentinel
-       *  nodes only exist inside a subgraph.  The client uses these
-       *  flags to draw an INPUTS / OUTPUTS wfGroup around each cluster
-       *  so the user can see where the wrapper's exposed ports end up
-       *  on the canvas. */
+      /* 子图路由盖的边界章。外层（顶层）工作流这两个恒为 false ——
+       *  哨兵节点只存在于子图内部。客户端用这两个标记把每一簇节点包进
+       *  INPUTS / OUTPUTS wfGroup，让用户在画布上看得见封装节点暴露的口
+       *  最终落在了哪里。 */
       isInputEndpoint: !!n.is_input_endpoint,
       isOutputEndpoint: !!n.is_output_endpoint,
-      /* LiteGraph `properties`. Fed through to WfNode so
-       *  rgthree's `Fast Groups Bypasser` can read `matchTitle` etc.
-       *  and render its runtime toggle list.  Forwarded verbatim. */
+      /* LiteGraph 的 `properties`。透传给 WfNode，让 rgthree 的
+       *  `Fast Groups Bypasser` 能读到 `matchTitle` 等并渲染出它自己的
+       *  运行期开关清单。逐字透传。 */
       properties: rawMetaById[n.id]?.properties ?? {},
-      /* Workflow groups. Passed to WfNode so the
-       *  rgthree runtime body can match against them; other nodes
-       *  ignore this field.  The reference is shared (not cloned) so
-       *  the cost stays O(1) per node regardless of workflow size. */
+      /* 工作流分组。传给 WfNode，供 rgthree 的运行期主体比对；
+       *  其它节点忽略这个字段。这里传的是**同一份引用**而不是克隆 ——
+       *  节点数与工作流规模无关地把成本压在 O(1)。 */
       groups: detail.groups ?? [],
       size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
     },
   });
 
-  /* Subgraph wrapper node: class_type is a UUID and ComfyUI exposed
-   *  inputs via proxyWidgets + a localised_name per slot.
+  /* 子图封装节点：class_type 是 UUID，ComfyUI 经 proxyWidgets 暴露输入，
+   *  每个槽位带一个 localised_name。
    *
-   *  evening — IO rows REMOVED from the parent chip.
-   *  The parent card is now a compact "stats + drill-in CTA" chip
-   *  (see WfSubgraphNode).  Drilling in (via double-click or the
-   *  header expand button) loads the subgraph's inner graph where
-   *  IO member nodes get wrapped in INPUTS / OUTPUTS wfGroups.
+   *  父卡片上**不再**渲染 IO 行：它现在是一枚紧凑的「统计 + 下钻入口」
+   *  芯片（见 WfSubgraphNode）。下钻（双击，或点头部的展开按钮）才加载
+   *  子图内部的图，那里的 IO 成员节点会被包进 INPUTS / OUTPUTS wfGroup。
    */
   const buildSubgraphNode = (
     n: ComfyGraphNode,
     pos: { x: number; y: number },
   ): Node => {
-    /* Inputs of this subgraph that have an *external* edge are the
-     *  ones the parent workflow wires into it.  We pull this from
-     *  detail.graph[subgraph_node_id].inputs — anything keyed here
-     *  whose value is a [srcId, slot] tuple is connected. */
+    /* 有**外部**连线的子图输入，就是父工作流接进来的那些。判据取自
+     *  detail.graph[子图节点id].inputs —— 这里的键，只要值是
+     *  [srcId, slot] 元组，就算已连接。 */
     const subgraphInp = graphById[n.id]?.inputs ?? {};
     const connectedInputs = new Set<string>();
     for (const [name, v] of Object.entries(subgraphInp)) {
@@ -228,11 +216,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     return {
       id: n.id,
       type: "wfSubgraph",
-      // Same anchor convention as buildWfNode (see comment above the
-      // builder): card top = config body top − NODE_TITLE_H, so the body
-      // lands exactly on the imported pos.y.
+      // 锚点约定与 buildWfNode 相同（见构建器上方的注释）：
+      // 卡片顶部 = 配置里的主体顶部 − NODE_TITLE_H，
+      // 主体因此正好落在导入的 pos.y 上。
       position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
-      zIndex: 11, // render above regular nodes so the purple outline reads
+      zIndex: 11, // 画在普通节点之上，紫色描边才读得出来
       style: n.size
         ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H }
         : undefined,
@@ -257,19 +245,18 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     };
   };
 
-  /* ── Group frames (background, behind everything) ── */
+  /* ── 分组框（背景层，在所有内容之后）── */
   const groups = detail.groups ?? [];
   const groupDepth = computeGroupDepths(groups);
-  /* ComfyUI group ids are bare integers ("1", "2", "32") and can collide
-   *  BOTH with graph-node ids AND with each other (a sub-workflow's
-   *  `groups` array may legitimately contain two entries with the same
-   *  `id`, e.g. id="32" appearing twice in the same inner graph — the
-   *  outer `group:` prefix protects against node-id collision but does
-   *  nothing for group-vs-group, which produced
-   *  `Encountered two children with the same key, "group:32"` from
-   *  React Flow's <MiniMapNodes>).  We dedupe here by tracking used ids
-   *  and appending `-${i}` on collision.  `groupDepth` (keyed by the
-   *  raw g.id) is untouched, as is the WfGroupNode's data.title/color. */
+  /* ComfyUI 的分组 id 是裸整数（"1"、"2"、"32"），既可能与图节点 id 撞车，
+   *  也可能**彼此**撞车（子工作流的 `groups` 数组里合法地允许两条 `id` 相同的
+   *  记录，例如同一个内部图里出现两次 id="32"）。外层的 `group:` 前缀能挡住
+   *  与节点 id 的碰撞，对分组之间的碰撞却毫无作用 —— 后者会让 React Flow 的
+   *  <MiniMapNodes> 报
+   *  `Encountered two children with the same key, "group:32"`。
+   *  这里按「已用过的 id」去重，撞车时补 `-${i}` 后缀。
+   *  `groupDepth`（以原始 g.id 为键）与 WfGroupNode 的 data.title/color
+   *  都不受影响。 */
   const usedGroupIds = new Set<string>();
   const groupNodes: Node[] = groups
     .filter((group) => group.bounding[2] > 0 && group.bounding[3] > 0)
@@ -286,7 +273,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         id: nodeId,
         type: "wfGroup",
         position: { x, y },
-        // deeper nesting → higher zIndex, but always below notes/nodes
+        // 嵌套越深 zIndex 越高，但始终在便签 / 节点之下
         zIndex: 1 + Math.min(groupDepth[group.id] ?? 0, 3),
         draggable: false,
         selectable: false,
@@ -296,16 +283,15 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       };
     });
 
-  /* ── Note / MarkdownNote annotations ── */
+  /* ── 便签 / MarkdownNote 注释节点 ── */
   const notes = detail.notes ?? [];
   const noteNodes: Node[] = notes.map((note) => {
     const title = extractNoteTitle(note.text, note.title);
-    /* Anchor convention (same as graph nodes): the React
-     *  Flow `position` is the card top (title-bar top), body is NODE_TITLE_H
-     *  below it.  To land the BODY top on the imported `pos[1]` we SUBTRACT
-     *  NODE_TITLE_H for titled notes; untitled notes render no bar so their
-     *  body IS the whole card and need no offset.  The onNodeDragStop for
-     *  notes ADDS NODE_TITLE_H back before persisting. */
+    /* 锚点约定（与图节点相同）：React Flow 的 `position` 是卡片顶部
+     *  （标题栏顶部），主体在它下面 NODE_TITLE_H 处。要让**主体**顶部落在
+     *  导入的 `pos[1]` 上，带标题的便签就要减去 NODE_TITLE_H；
+     *  无标题便签不画标题栏，主体就是整张卡片，不需要偏移。
+     *  便签的 onNodeDragStop 在落库前把 NODE_TITLE_H 加回来。 */
     const noteHasTitle = !!title;
     return {
       id: `note:${note.id}`,
@@ -319,12 +305,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       selectable: true,
       connectable: false,
       data: { title, text: note.text, color: note.color },
-      /* `size` in the ComfyUI/litegraph payload stores the BODY CONTENT
-       *  height (the 30 px title bar is NOT included in `size[1]` per the
-       *  rule — see the NODE_TITLE_H comment). Titled notes add the
-       *  title bar on top of the raw content size, so the React Flow box
-       *  is `size[1] + NODE_TITLE_H` for titled notes.  Untitled notes
-       *  render no bar so their `size[1]` is already the full height. */
+      /* ComfyUI / litegraph 载荷里的 `size` 存的是**主体内容**高度
+       *  （30px 标题栏**不含**在 `size[1]` 里，见 NODE_TITLE_H 的注释）。
+       *  带标题的便签要在原始内容高度上再加一层标题栏，因此它的 React Flow
+       *  外框是 `size[1] + NODE_TITLE_H`；无标题便签不画标题栏，
+       *  `size[1]` 本身就是完整高度。 */
       style: {
         width: note.size[0],
         height: note.size[1] + (noteHasTitle ? NODE_TITLE_H : 0),
@@ -332,38 +317,34 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     };
   });
 
-  // Real graph nodes only (note-class nodes are rendered separately above).
+  // 只处理真实的图节点（便签类节点在上面单独渲染）。
   const realNodes = scopeDetail.nodes.filter(
     (node) => !isNoteType(node.class_type),
   );
 
-  /* IO port node dimensions live as module-level constants at the top of
-   *  this file (IO_PORT_HEIGHT / PORT_ROW_GAP / GROUP_*) so both the
-   *  layout pass below and the WfIoPortNode renderer stay in sync. */
-
-  /* ── Boundary pins → wfGroup(wfIoPort …) ──
+  /* IO 端口节点的尺寸是文件顶部的模块级常量（IO_PORT_HEIGHT /
+   *  PORT_ROW_GAP / GROUP_*）—— 下面的布局过程与 WfIoPortNode 渲染器
+   *  共用同一份，两边不会各自漂移。 */
+   /* ── 边界 pin → wfGroup(wfIoPort …) ──
    *
    *  The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
    *  支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
    *  加个边框就行了".  So:
-   *    • Each rail (inputs / outputs) is now wrapped in its OWN wfGroup
-   *      rectangle with the purple draggable style (draggable: true +
-   *      pointerEvents: auto + cursor: move).  Users grab the group once
-   *      and the whole column slides.
-   *    • The individual wfIoPort children carry parentId: <groupId> +
-   *      extent: "parent" + draggable: false, so React Flow keeps them
-   *      inside the group frame and moves them automatically with the
+   *        *    • 每条栏杆（输入 / 输出各一条）现在各自包在一个 wfGroup 矩形里，
+   *        *      用紫色可拖拽样式（draggable: true + pointerEvents: auto +
+   *        *      cursor: move）。用户抓一次分组，整列一起滑走。
+   *        *    • 各个 wfIoPort 子节点带 parentId: <分组 id> + extent: "parent" +
+   *        *      draggable: false，React Flow 因此把它们锁在分组框内，
+   *        *      并随着分组自动移动（见下一条）。
    *      parent's transform.
-   *    • Vertical spacing is the new PORT_ROW_GAP (4 px) with the new
-   *      IO_PORT_HEIGHT (22 px) → rows are tight without labels
+   *        *    • 纵向间距用 PORT_ROW_GAP（4px）、行高用 IO_PORT_HEIGHT（22px）——
+   *        *      行贴得很紧而标签仍不被裁。
    *      touching.
-   *    • Group position is persisted via `detail.positions["grp:bpin:…
-   *      "]`.  A saved override (left over from a previous session) is
-   *      preferred over the rail-layout fallback that anchors to the
-   *      inner bbox.  The previous single-pin-per-card render dropped
-   *      positions to positionsById which is a no-op, so reload
-   *      always reset to bbox-anchored rail; persisting the group
-   *      position is what makes a moved column stay put. */
+   *        *    • 分组位置经 `detail.positions["grp:bpin:…"]` 落库。会话里保存过的
+   *        *      覆盖位置优先于「按内部包围盒锚定」的布局兜底 —— 前者是用户亲手
+   *        *      拖出来的结果。早先「一个 pin 一张卡片」的渲染把位置写进
+   *        *      positionsById（那是空操作），于是每次刷新都退回包围盒锚定；
+   *        *      位置**落在分组上**才让挪过的列留得住。 */
   const buildBoundaryPinNode = (
     pin: BoundaryPin,
     kind: "input" | "output",
@@ -382,14 +363,12 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     connectable: false,
     style: { width: IO_PORT_WIDTH, height: IO_PORT_HEIGHT },
     data: {
-      /* Display label chain (fix): the boundary pin's
-       *  `label` is the author-set business name (`FRAMES`,
-       *  `IMAGE_FINAL`, `MODEL_HIGH_1st`) and is the *primary* read.
-       *  Falls back to `localized` (ComfyUI's i18n) then to `name`
-       *  so we never ship an empty title.  Same chain as
-       *  WfSubgraphNode.outputs.display so both layers render the
-       *  same string; the tooltip adds the resolved type for
-       *  disambiguation when `name === type`. */
+             /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、
+              *  `IMAGE_FINAL`、`MODEL_HIGH_1st`），**优先**读它。取不到再回落
+              *  `localized`（ComfyUI 的 i18n），最后回落 `name` ——
+              * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
+              * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
+              * 解析出的类型以便区分。 */
       title: pin.label ?? pin.localized ?? pin.name ?? "",
       type: pin.type,
       direction: kind,
@@ -399,38 +378,29 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       connectsFrom: null,
     },
   });
-
-  /* X-anchor for a wfIoPort child inside its rail group
-   *  fixed).  Both rails now anchor the port from the wfGroup's
-   *  top-right / top-left CORNER, not from the same (left) edge —
-   *  the previous input layout pushed the port flush against the
-   *  wfGroup's right border (`relX = 2 * GROUP_PAD_X`), which made
-   *  the handle `right:-4` stick OUTSIDE the box — visible in the
-   *  screenshot as green dots leaking past the red Inputs frame.
-   *
-   *   - input  pin: name on right side of port (justify-end → label
-   *                 hugs the right edge); port anchored from the
-   *                 wfGroup's RIGHT-TOP corner so its right edge
-   *                 sits GROUP_PAD_X inside the wfGroup border.
-   *                 Handle (`right:-4`) ends up 6 px INSIDE the
-   *                 box, mirroring the output row exactly.
-   *                 ⇒ relX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X.
-   *   - output pin: name on left side of port (justify-start → label
-   *                 hugs the left edge); port anchored from the
-   *                 wfGroup's LEFT-TOP corner so its left edge sits
-   *                 GROUP_PAD_X inside the wfGroup border.  Handle
-   *                 (`left:-4`) ends up 6 px inside the box.
-   *                 ⇒ relX = GROUP_PAD_X. */
+   /* wfIoPort 子节点在它所属栏杆分组里的 X 锚点。
+    *
+    *  两条栏杆各自从所属 wfGroup 的**角**（右上 / 左上）锚定，而不是都从
+    *  同一条左边缘锚定：早先的输入侧布局把端口贴死在 wfGroup 的右边框上
+    *  （`relX = 2 * GROUP_PAD_X`），于是 `right:-4` 的 handle 整个**露在框外**
+    *  ——截图里能看到绿色的圆点溢过红色的 Inputs 框。
+    *
+    *   - 输入 pin：名字在端口右侧（justify-end → 标签贴右边缘）；端口从
+    *     wfGroup 的**右上角**锚定，让它的右边缘落在 wfGroup 边框内侧
+    *     GROUP_PAD_X 处。handle（`right:-4`）最终落在框内 6px 处，
+    *     与输出行严格镜像。⇒ relX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X。
+    *   - 输出 pin：名字在端口左侧（justify-start → 标签贴左边缘）；端口从
+    *     wfGroup 的**左上角**锚定，让它的左边缘落在 wfGroup 边框内侧
+    *     GROUP_PAD_X 处。handle（`left:-4`）最终落在框内 6px 处。
+    *     ⇒ relX = GROUP_PAD_X。 */
   const wfGroupWidth = IO_PORT_WIDTH + 2 * GROUP_PAD_X;
   const inputRelX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X;
   const outputRelX = GROUP_PAD_X;
-
-  /* Build a wfGroup node for the whole rail.  `draggable: true` flips
-   *  WfGroupNode into interaction mode (pointerEvents: auto, cursor:
-   *  move) and React Flow moves the children declared with
-   *  extent:"parent" along automatically.  Height is supplied directly
-   *  (the variable pin-row offsets below don't fit the old
-   *  `pinCount * IO_PORT_HEIGHT + (n-1)*PORT_ROW_GAP` formula). */
+   /* 为整条栏杆建一个 wfGroup 节点。`draggable: true` 把 WfGroupNode 翻到
+    *  交互模式（pointerEvents: auto、cursor: move），React Flow 会自动带上
+    *  声明了 extent:"parent" 的子节点。高度这里**直接给** ——
+    *  下面各行 pin 的纵向偏移是变化的，套不进早先那个
+    *  `pinCount * IO_PORT_HEIGHT + (n-1)*PORT_ROW_GAP` 公式。 */
   const buildBoundaryGroup = (
     id: string,
     title: string,
@@ -450,22 +420,18 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       style: { width: IO_PORT_WIDTH + 2 * GROUP_PAD_X, height },
     };
   };
-
-  /* Compute rail-anchor positions and (when needed) fall back to
-   *  bbox-anchored defaults.  `savedGroupPos` may already contain a
-   *  user-moved position from a previous session — honour it.
-   *
-   *  Instead of forcing both rails into a
-   *  bbox-aligned vertical column, anchor each group at the raw
-   *  coordinates ComfyUI stored on `boundaryPins.inputs[i].pos` /
-   *  `boundaryPins.outputs[i].pos`.  These are the absolute canvas
-   *  coords where the corresponding inner-slot port sits in the
-   *  unmodified workflow — exactly what the user pointed at in
+   /* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。
+    *  `savedGroupPos` 里可能已经有上个会话里用户拖出来的位置 —— 尊重它。
+    *
+    *  这里**不**把两条栏杆硬凑成包围盒对齐的一列，而是按 ComfyUI 存在
+    *  `boundaryPins.inputs[i].pos` / `boundaryPins.outputs[i].pos` 上的原始
+    *  坐标给每个分组锚定。那些坐标是「未改动的工作流里，对应内部槽位端口
+    *  所在的绝对画布位置」—— 正是用户当时指的东西。
    *  screenshot #2 ("这里有子图的输入节点和输出节点的位置，要按照
    *  这个来").  The fallback (bbox-anchored) only kicks in when those
-   *  raw positions are absent or all-zero, e.g. older or hand-rolled
-   *  workflows.  Pin y-coords are derived as `rawPinY - groupY` so
-   *  variable vertical spacing is preserved. */
+   *      *  原始位置缺失或全是 0 时才落回包围盒（较旧的、或手搓的工作流）。
+   *      *  pin 的 y 坐标按 `rawPinY - groupY` 推导，
+   *      *  这样各行的纵向间距才保持原样。 */
   const layoutBoundaryPins = (
     middlePos: Record<string, { x: number; y: number }>,
   ): Node[] => {
@@ -481,14 +447,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       if (p!.x > maxX) maxX = p!.x;
       if (p!.y < minY) minY = p!.y;
     }
-    /* Reference layout: ┃ leftInputColumn ┃ middleCanvasColumn ┃
-     *  rightOutputColumn ┃.  The gap between each rail and the
-     *  middle bbox must be ≥ one middle-node width (~280 px) +
-     *  breathing room so the wfIoPort label is never buried inside
-     *  a middle WfNode card.  The raw-pin-anchored default below
-     *  WINS when the workflow carries real pin.pos coords (the
-     *  common path); this 360 px bbox fallback only fires for
-     *  workflow files where every pin.pos is missing or zero. */
+         /* 参考布局：┃ 左输入列 ┃ 中间画布列 ┃ 右输出列 ┃。
+          *  每条栏杆与中间包围盒之间的空隙必须 ≥ 一个中间节点的宽度（约 280px）
+          *  再加上一点呼吸余量，否则 wfIoPort 的标签会被埋进中间的 WfNode 卡片里。
+          *  工作流带真实 pin.pos 坐标时（常见路径）**优先**走下面的原始 pin 锚定；
+          *  这个 360px 的包围盒兜底只在所有 pin.pos 都缺失或为 0 时才生效。 */
     const RAIL_GAP = 360;
     const leftRailX = minX - RAIL_GAP;
     const rightRailX = maxX + RAIL_GAP;
@@ -497,21 +460,19 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
         const x = Number(pin.pos[0]) || 0;
         const y = Number(pin.pos[1]) || 0;
-        /* Treat (0,0) as "not provided" — happens for workflows
-         *  imported without UI positions (API-only).  Falling back
-         *  to the bbox-anchored rail is safer than popping every
-         *  pin at the canvas origin. */
+                 /* (0,0) 一律当作「没提供」—— 不带 UI 位置的工作流（纯 API 导入）
+                  *  就是这个形态。回落到按包围盒锚定的栏杆，
+                  *  总好过把所有 pin 都堆在画布原点。 */
         if (x !== 0 || y !== 0) return [x, y];
       }
       return null;
     };
     const inputsRaw = (detail.boundaryPins.inputs ?? []).map(rawPosOf);
     const outputsRaw = (detail.boundaryPins.outputs ?? []).map(rawPosOf);
-    /* Group default anchor: take the smallest (= leftmost for inputs,
-     *  rightmost for outputs) x of all pins with a real raw pos, and
-     *  the minimum y, then shift the group origin up-and-left so the
-     *  topmost pin sits inside the title bar + ~ GROUP_PAD_X.  Inputs
-     *  and outputs face inward so left uses minX, right uses maxX. */
+         /* 分组的默认锚点：取所有带真实原始位置的 pin 里最小的 x
+          *  （输入取最左、输出取最右）与最小的 y，然后把分组原点往左上挪，
+          *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
+          *  输入与输出是「朝内」的，所以左侧取 minX、右侧取 maxX。 */
     const computeGroupDefault = (
       list: ([number, number] | null)[],
       side: "left" | "right",
@@ -619,35 +580,27 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     return out;
   };
 
-  /* All inner graph nodes render as full WfNode / WfSubgraphNode cards
-   *  (we no longer convert any of them to wfIoPort based on
-   *  is_input_endpoint / is_output_endpoint — that approach collapsed
-   *  for subgraphs where every node has both flags, and the
-   *  reference layout wants the inner nodes to STAY as full cards). */
+  /* 内层的图节点一律渲染成完整的 WfNode / WfSubgraphNode 卡片 ——
+   *  不再按 is_input_endpoint / is_output_endpoint 把某些节点换成 wfIoPort。
+   *  那种做法在「每个节点同时带两个标记」的子图上直接塌掉，
+   *  而参考布局本身要求内层节点**保持**完整卡片。 */
   /* ── 1) Saved positions ──
    *  Guard against an empty `{}` (which a "重置布局" (reset layout) can
-   *  write to the server when the original workflow had NO saved
-   *  positions, e.g. an API-only import).  An empty object is truthy,
-   *  so without this guard every node would fall through to the
-   *  `{padX, padY}` default and stack at the origin.  With the guard,
-   *  empty → treated as "no positions" → Kahn auto-layout, which is the
-   *  original behaviour for API-only workflows.
+   *  （空对象是 truthy）—— 没有这道守卫，每个节点都会落到
+   *  `{padX, padY}` 默认值上、全部堆在原点。有了守卫，
+   *  空 → 视为「没有位置」→ 走 Kahn 自动布局，
+   *  也就是纯 API 工作流本来的行为。
    *
-   *  also guard against PARTIAL positions (count less than
-   *  realNodes.length).  This workflow can land in a state where the
-   *  user has only placed a couple of nodes by hand (e.g. the workflow
-   *  was imported as JSON-only and the user dragged 1-2 of them
-   *  before opening the editor); the saved-positions branch would
-   *  then place every un-positioned node at `{padX, padY}` = (80, 80)
-   *  and visually stack 100+ nodes behind a single card.  Detection:
-   *  Object.keys(detail.positions).length < realNodes.length →
-   *  treat the snapshot as "absent" and run Kahn on the WHOLE graph
-   *  for a predictable, grid-like starting layout.  Users can still
-   *  drag nodes after to fine-tune.  The opposite (mixed: some nodes
-   *  on saved pos, rest on Kahn) would be technically better but
-   *  gives a chaotic result because the auto-layout assumes a
-   *  blank canvas — half-placed nodes disrupt the longest-path
-   *  levels and produce a worse-looking fallback. */
+   *  同时防**部分位置**（数量少于 realNodes.length）。这个工作流可能处于
+   *  「用户只手动摆了两个节点」的状态（例如以 JSON 导入后、打开编辑器之前
+   *  随手拖了一两个）；此时「用保存的位置」那条分支会把其余没位置的节点全按
+   *  `{padX, padY}` = (80, 80) 摆，视觉上就是 100+ 个节点叠在同一个卡片后面。
+   *  判据：Object.keys(detail.positions).length < realNodes.length →
+   *  把这份快照当作「不存在」，对整个图跑 Kahn，
+   *  给一个可预期、网格状的初始布局。用户之后仍可拖动微调。
+   *  「混着来」（一部分用保存位置、一部分用 Kahn）理论上更好，
+   *  实际结果很乱：自动布局假定画布是空的，半摆好的节点会打乱最长路径的
+   *  层级划分，兜底布局反而更难看。 */
   // 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
   // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
   // Kahn 拓扑自动布局兜底。

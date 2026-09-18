@@ -1,73 +1,63 @@
-/* Extracted types — originally declared inside WorkflowCanvasEditor.tsx.
- * Pure type declarations only; no runtime code.
- * `import type` below is compile-time only (fully erased) — it reuses the
- * server's API-graph node shape so detail.graph consumers keep their
- * class_type/inputs accessors without any. */
+/* 抽出的类型声明 —— 原本声明在 WorkflowCanvasEditor.tsx 内部。
+ * 这里只有纯类型声明，没有运行期代码。
+ * 下面的 `import type` 只在编译期存在（完全擦除）——复用服务端 API 图的节点
+ * 形状，让 detail.graph 的消费方仍能拿到 class_type / inputs 访问器，
+ * 不必退化成 any。 */
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
 import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
-/* ── Types ── */
+/* ── 类型定义 ── */
 export interface RawInputMeta {
-  /** ComfyUI input name (English field name). */
+  /** ComfyUI 输入名（英文字段名）。 */
   name: string;
-  /** Optional human-readable English label. */
+  /** 可读的英文标签（可选）。 */
   label?: string;
-  /** Optional ComfyUI zh-CN localised label (preferred for display). */
+  /** ComfyUI 的简体中文本地化标签（可选，显示时优先用它）。 */
   localized?: string;
-  /** ComfyUI data type — MODEL, CLIP, IMAGE, INT, FLOAT, … */
+  /** ComfyUI 数据类型 —— MODEL、CLIP、IMAGE、INT、FLOAT 等。 */
   type: string;
-  /** True when this slot is occupied by an upstream connection. */
+  /** 该槽位已被上游连线占用时为真。 */
   isConnection: boolean;
-  /** True when this slot is fed by a sentinel boundary link (subgraph
-   *  exposed input/output wire — origin_id=-10 / target_id=-20).  The
-   *  inner-node side still carries the wire as a `link`, but the value
-   *  isn't bound to a real source node id, so the row stays in widget
-   *  shape yet must mount a target Handle so the boundary wire can
-   *  anchor.  See `WorkflowCanvasEditor` fatal-pitfall #5. */
+  /** 该槽位由边界哨兵连线馈入时为真（子图暴露口的输入/输出线 ——
+   *  origin_id=-10 / target_id=-20）。内部节点侧仍以 `link` 携带这条线，
+   *  但它的值并不绑定到某个真实源节点 id；因此这一行**外观上仍是 widget**，
+   *  却必须挂一个 target Handle 让边界线有落点。
+   *  见 `WorkflowCanvasEditor` 的致命坑第 5 条。 */
   isBoundary?: boolean;
-  /** ComfyUI wrapper-node widget proxy. Set on inputs
-   *  that back an internal widget; absent on pure connections.  Used
-   *  by WorkflowSubgraphNode to render a `VALUE` cell to the right of the
-   *  label with the same colour rules as WorkflowNode (`valueCellColor`). */
+  /** ComfyUI 封装节点的 widget 代理。凡是**背后有内部 widget** 的输入才有，
+   *  纯连线输入没有。WorkflowSubgraphNode 用它把 `VALUE` 单元格渲染在标签右侧，
+   *  配色规则与 WorkflowNode 一致（`valueCellColor`）。 */
   widget?: { name: string };
-  /** Pre-paired widget value (string/number/bool).  Paired index is
-   *  the running count of widgets seen before this row in inputs[],
-   *  matching ComfyUI's `widgets_values[]` ordering.  Undefined when
-   *  `widget` is absent (i.e. a pure connection row — the inner
-   *  node's value isn't surfaced through the wrapper). */
+  /** 预先配好的 widget 值（字符串/数字/布尔）。配对下标是「inputs[] 里排在
+   *  这一行之前的 widget 个数」，与 ComfyUI 的 `widgets_values[]` 顺序对齐。
+   *  `widget` 不存在时为 undefined（即纯连线行 —— 内部节点的值不经封装节点
+   *  暴露出来）。 */
   widgetValue?: unknown;
-  /** server-stamped `multiline` flag — drives
-   *  `isStringWidget` in WorkflowNode / WorkflowSubgraphNode so STRING inputs
-   *  declared multiline by the upstream Python `INPUT_TYPES()` render
-   *  as textareas regardless of how short the default value is.
-   *  Computed by the server from a static (classType, name) table +
-   *  length heuristic, since the API-format rawJson we receive does
-   *  NOT preserve the original widget config (no `widgets[]` /
-   *  `inputs[]`).  Stamped even when the widget spec has no
-   *  `multiline` hint, because the heuristic only flags "definitely
-   *  multiline" — absence means "no opinion". */
-  multiline?: boolean;
-  /** when this IMAGE input is fed by a LoadImage-family
-   *  upstream node, the server resolves the upstream's uploaded filename
-   *  and stamps it here so the canvas can render an inline thumbnail via
-   *  the /api/images proxy.
+  /** 服务端盖上的 `multiline` 标记 —— 驱动 WorkflowNode /
+   *  WorkflowSubgraphNode 里的 `isStringWidget`：上游 Python `INPUT_TYPES()`
+   *  声明为 multiline 的 STRING 输入一律渲染成多行文本框，
+   *  与默认值多短无关。
    *
-   *  SCOPE NARROWED — only stamped on the synthetic
-   *  `preview: true` entry that the server pushes for LoadImage nodes
-   *  themselves; downstream IMAGE inputs (ImageScale / CLIPVisionEncode /
-   *  …) no longer carry it, because showing the unscaled / un-encoded
-   *  upstream image there is misleading.  May also be undefined on the
-   *  synthetic preview entry itself — when widgets_values[0] is missing
-   *  (no image uploaded), the renderer falls back to a 「需要上传图片」
-   *  placeholder so the body always has its preview slot. */
+   *  由服务端用「静态 (classType, name) 表 + 长度启发式」算出：我们拿到的
+   *  API 格式 rawJson **不保留**原始 widget 配置（没有 `widgets[]` /
+   *  `inputs[]`）。widget 规格里没有 `multiline` 提示时同样会盖章 ——
+   *  启发式只标「确定是 multiline」，不盖 = 「没有意见」。 */
+  multiline?: boolean;
+  /** 当这个 IMAGE 输入由 LoadImage 一族的上游节点馈入时，服务端解析出上游
+   *  上传的文件名并盖在这里，画布便能经 /api/images 代理渲染内联缩略图。
+   *
+   *  **适用范围已收窄** —— 只盖在服务端为 LoadImage 节点本身推送的那条
+   *  合成 `preview: true` 条目上；下游的 IMAGE 输入（ImageScale /
+   *  CLIPVisionEncode 等）不再携带它：在那里显示未缩放 / 未编码的上游图会
+   *  误导用户。合成预览条目自身也可能是 undefined —— widgets_values[0] 缺失
+   *  （没上传图）时渲染器回落到「需要上传图片」占位，保证节点主体始终有预览位。 */
   imageRef?: { filename: string; subfolder: string; type: string };
-  /** marker on the synthetic LoadImage preview entry.
-   *  The renderer filters these out of BOTH connEntries and widgetEntries
-   *  so they never paint a port-cylinder or a regular widget control —
-   *  they're consumed exclusively by the dedicated <WorkflowImagePreview> tail
-   *  block.  This keeps LoadImage's body clean (no fake input cylinders
-   *  on the left for the synthetic `image` entry) and guarantees the
-   *  preview / placeholder rendering is single-sourced. */
+  /** 合成 LoadImage 预览条目的标记。
+   *  渲染器会把它从 connEntries 与 widgetEntries **两侧**都过滤掉，
+   *  因此它永远不会画成端口圆柱或普通 widget 控件 —— 只由专属的
+   *  <WorkflowImagePreview> 尾部块消费。这样 LoadImage 的主体保持干净
+   *  （左侧不会为合成的 `image` 条目多出一个假输入柱），
+   *  也保证预览 / 占位的渲染只有一个来源。 */
   preview?: boolean;
   /** 子工作流封装节点暴露口背后的「内部真实字段」（服务端由
    *  `properties.proxyWidgets` 解析后随条目下发）。
@@ -87,46 +77,41 @@ export interface ComfyGraphNode {
   id: string;
   class_type: string;
   title: string;
-  /** True when class_type is a UUID (ComfyUI subgraph wrapper). */
+  /** class_type 是 UUID 时为真（ComfyUI 子图封装节点）。 */
   is_subgraph?: boolean;
-  /** Per-input display metadata from raw JSON (localized_name + type). */
+  /** 每个输入的显示元数据，来自原始 JSON（localized_name + type）。 */
   raw_inputs?: RawInputMeta[];
-  /** Exact ComfyUI/litegraph node box size [w, h].  Undefined when the
-   *  import carried no raw size (API-only import) — the client then falls
-   *  back to its content-driven layout.  `h` is the BODY height only; the
-   *  30px title bar is painted above the box and is NOT included. */
+  /** ComfyUI / litegraph 节点的精确外框尺寸 [宽, 高]。导入时没带原始尺寸
+   *  （纯 API 导入）则为 undefined —— 客户端回落到按内容驱动的布局。
+   *  `h` **只算主体**：30px 的标题栏画在外框之上，不含在这里面。 */
   size?: [number, number];
-  /** True if any of this node's input slots receives a wire from the
-   *  subgraph's input sentinel node (-10) — meaning this node sits on
-   *  the INPUTS boundary of the current subgraph.  Stamped by the
-   *  /api/workflows/[id]/subgraph route so the client can wrap these
-   *  nodes in an INPUTS wfGroup without re-walking the link table.
-   *  Outer (top-level) workflows never set this true — every node is
-   *  just a regular node there. */
+  /** 该节点任一输入槽从子图的输入哨兵节点（-10）收到连线时为真 ——
+   *  表示它位于当前子图的 INPUTS 边界上。由
+   *  /api/workflows/[id]/subgraph 路由盖章，客户端据此把这些节点包进
+   *  一个 INPUTS wfGroup，不必再走一遍连线表。
+   *  外层（顶层）工作流永远不会为真 —— 那里的每个节点都只是普通节点。 */
   is_input_endpoint?: boolean;
-  /** True if any of this node's output slots feeds the subgraph's
-   *  output sentinel target (-20) — meaning this node sits on the
-   *  OUTPUTS boundary.  Mirror of `is_input_endpoint`. */
+  /** 该节点任一输出槽馈入子图的输出哨兵目标（-20）时为真 ——
+   *  表示它位于 OUTPUTS 边界上。与 `is_input_endpoint` 对称。 */
   is_output_endpoint?: boolean;
-  /** Boundary input port details for wfIoPort rendering (v3).
-   *  Only set when `is_input_endpoint` is true.  Captured by the
-   *  subgraph route from the sentinel -10 link + matching widget value. */
+  /** 边界输入口的细节，供 wfIoPort 渲染（v3）。
+   *  只在 `is_input_endpoint` 为真时设置。由子图路由从哨兵 -10 连线 +
+   *  配对的 widget 值里取出。 */
   boundary_input?: { name: string; type: string; value: unknown } | null;
-  /** Boundary output port details for wfIoPort rendering.  Only set
-   *  when `is_output_endpoint` is true. */
+  /** 边界输出口的细节，供 wfIoPort 渲染。
+   *  只在 `is_output_endpoint` 为真时设置。 */
   boundary_output?: { name: string; type: string } | null;
-  /** First non-sentinel middle node this endpoint's outputs feed into
-   *  internally (for INPUT endpoints).  The client positions the wfIoPort
-   *  adjacent to this middle node. */
+  /** 本端点的输出在内部**馈入**的第一个非哨兵中间节点（对 INPUT 端点而言）。
+   *  客户端据此把 wfIoPort 摆在这个中间节点旁边。 */
   connects_to?: string | null;
-  /** First non-sentinel middle node this endpoint's inputs come from
-   *  internally (for OUTPUT endpoints).  Mirror of connects_to. */
+  /** 本端点的输入在内部**来自**的第一个非哨兵中间节点（对 OUTPUT 端点而言）。
+   *  与 connects_to 对称。 */
   connects_from?: string | null;
 }
 
-/** One exposed parameter chosen in IO-edit mode.  The `ioKey` is the object
- *  key (`${nodeId}::${kind}::${name}`); the value records what it is so the
- *  final workflow IO summary can be built without re-walking the graph. */
+/** IO 编辑模式下勾选出来的一个暴露参数。`ioKey` 是对象的键
+ *  （`${nodeId}::${kind}::${name}`）；值记录它是什么，这样最终的工作流 IO
+ *  摘要不必重走一遍图就能拼出来。 */
 export interface WorkflowIOParam {
   direction: "input" | "output";
   kind: "param" | "widget" | "output";
@@ -142,27 +127,24 @@ export interface WorkflowIOParam {
    *  （一个 T2I 节点上的 `text` / `text_1` 会拿到同一个标题），那样 IO 摘要
    *  反而没法看。 */
   label?: string;
-  /* ── Server-enriched fields (GET /api/workflows/[id], ) ──
-   * Absent on entries that were just toggled locally (the checkbox only
-   * writes the four identity fields); the server re-derives them from
-   * raw_inputs / rawNodes.outputs on the next read, so treat as optional. */
-  /** ComfyUI data type: "STRING" | "INT" | "FLOAT" | "BOOLEAN" | "IMAGE" | … */
+  /* ── 服务端富化字段（GET /api/workflows/[id]）──
+   * 刚在本地勾选出来的条目上没有它们（勾选框只写四个身份字段）；服务端会在
+   * 下一次读取时从 raw_inputs / rawNodes.outputs 重新推导，
+   * 因此这里一律按可选对待。 */
+  /** ComfyUI 数据类型："STRING" | "INT" | "FLOAT" | "BOOLEAN" | "IMAGE" 等。 */
   type?: string;
-  /** Current widget value / graph literal, used to pre-fill dynamic forms. */
+  /** 当前 widget 值 / 图里的字面量，用于预填动态表单。 */
   defaultValue?: unknown;
-  /** Owning node's title — disambiguates same-named pins across nodes. */
+  /** 所属节点的标题 —— 用来区分不同节点上的同名 pin。 */
   nodeTitle?: string;
-  /** STRING inputs that should render as a textarea rather than one-liner. */
+  /** 应渲染成多行文本框而非单行的 STRING 输入。 */
   multiline?: boolean;
-  /** mirror field of `WorkflowIOEntry.required`. Only
-   *  meaningful for `kind === "widget"` — toggled in IO-edit mode and
-   *  persisted on the next PATCH. */
+  /** `WorkflowIOEntry.required` 的镜像字段。只在 `kind === "widget"` 时有意义
+   *  —— 在 IO 编辑模式里切换，下一次 PATCH 落库。 */
   required?: boolean;
-  /** user-defined display order written by the
-   *  IO-edit preview's drag-to-reorder gesture.  Mirrors
-   *  `WorkflowIOEntry.displayOrder`; see workflow-io.ts for the sort
-   *  contract.  Persisted to server on the same PATCH as the rest of
-   *  `workflowIO`. */
+  /** 用户自定义的显示顺序，由 IO 编辑预览的拖拽排序手势写入。镜像
+   *  `WorkflowIOEntry.displayOrder`；排序契约见 workflow-io.ts。
+   *  与 `workflowIO` 的其余部分在同一次 PATCH 里落库。 */
   displayOrder?: number;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。
    *  镜像 `WorkflowIOEntry.seedMode`，随 workflowIO 一起 PATCH 落库。 */
@@ -182,7 +164,7 @@ export interface WorkflowIOParam {
   slotLabel?: string;
 }
 
-/** A single parameter reference used to toggle IO exposure.
+/** 用于切换 IO 暴露状态的一次参数引用。
  *
  *  只带**身份字段**：显示名不进库（画布行上的名字与 IO 面板里的名字都由富化链
  *  一处给，抄一份下来只会在两处口径不一致时固化出陈旧名字）。作者想改名走
@@ -197,45 +179,38 @@ export interface IoRef {
   hostNodeId?: string;
 }
 
-/** Shared context so every custom node (WorkflowNode / WorkflowSubgraphNode) can read the
- *  current IO-edit mode + the live selection without re-building node `data`
- *  on every toggle.  Toggling updates `workflowIO` state here, and every
- *  consuming node re-renders directly via context. */
+/** 共享 context：让每个自定义节点（WorkflowNode / WorkflowSubgraphNode）都能读到
+ *  当前 IO 编辑模式与实时勾选集合，而不必在每次切换时重建节点的 `data`。
+ *  切换只在这里更新 `workflowIO` 状态，所有消费节点经 context 直接重渲染。 */
 export interface IOEditContextValue {
   ioEditMode: boolean;
   workflowIO: Record<string, WorkflowIOParam>;
   toggleIO: (ref: IoRef) => void;
-  /** Update the user-facing display label for a single checked pin.  The
-   *  new value is stored on `workflowIO[key].label` and persisted on the
-   *  next `handleSave` (the existing PATCH body already ships the whole
-   *  `workflowIO` map).  No-op when the key isn't currently in the map —
-   *  labels only exist for checked pins. */
+  /** 更新某个已勾选 pin 的显示名。新值存在 `workflowIO[key].label` 上，
+   *  下一次 `handleSave` 落库（现有 PATCH 体本来就整份发送 `workflowIO`）。
+   *  键不在表里时是空操作 —— 显示名只存在于已勾选的 pin 上。 */
   setIOLabel: (key: string, label: string) => void;
-  /** flip the `required` flag on a checked widget input.
-   *  The flip is local-only (no IOEdit-mode state is added); it lives on
-   *  the same `workflowIO[key]` record that toggleIO + setIOLabel mutate,
-   *  so it shares the persistence path (next PATCH ships the full map).
-   *  No-op when the key isn't currently in the map — required only makes
-   *  sense for checked pins. */
+  /** 翻转已勾选 widget 输入的 `required` 标记。
+   *  只在本地翻转（不新增 IOEdit 模式状态）；它与 toggleIO / setIOLabel
+   *  改的是同一条 `workflowIO[key]` 记录，因此共用同一条落库路径
+   *  （下一次 PATCH 整份发送）。键不在表里时是空操作 ——
+   *  required 只对已勾选的 pin 有意义。 */
   toggleIORequired: (key: string) => void;
-  /** drag-to-reorder in the IO preview. Moves
-   *  `fromKey` so it sits immediately before `beforeKey` in the rendered
-   *  list (use `null` to send to the tail).  Renumbers the affected
-   *  group's `displayOrder` and PATCHes the server inline so the
-   *  arrangement survives a reload.  See `reorderIO` impl for the dense
-   *  numbering strategy and group-segregation contract. */
+  /** IO 预览里的拖拽排序：把 `fromKey` 移到渲染列表中 `beforeKey` 的正前方
+   *  （传 `null` 表示移到末尾）。会重排受影响分组的 `displayOrder` 并即时
+   *  PATCH 服务端，让排列能扛过一次刷新。密集编号策略与分组隔离契约见
+   *  `reorderIO` 的实现。 */
   reorderIO: (fromKey: string, beforeKey: string | null) => void;
 }
 export interface RgthreeGroupsContextValue {
-  /** Effective bypass for a group id (override > detail). */
+  /** 某个分组 id 的**生效**旁路状态（本地覆盖 > detail）。 */
   getBypass: (groupId: string) => boolean;
-  /** Flip a group's bypass state; PATCHes server + sets local override. */
+  /** 翻转分组的旁路状态；PATCH 服务端并设置本地覆盖。 */
   setBypass: (groupId: string, bypass: boolean) => void;
 }
 export interface NodeJsonViewerRequest {
-  /** `DOMRect` of the `#id` chip that triggered the popover.  Captured
-   *  when the user clicks, then frozen for the lifetime of the popover
-   *  so re-renders (or pan/zoom) don't drag it around mid-read. */
+  /** 触发浮层的 `#id` 芯片的 `DOMRect`。用户点下时抓取一次，随后在浮层
+   *  存续期间冻结 —— 否则重渲染（或平移/缩放）会在阅读过程中把它拖着走。 */
   anchorRect: {
     left: number;
     top: number;
@@ -244,24 +219,21 @@ export interface NodeJsonViewerRequest {
     width: number;
     height: number;
   };
-  /** ComfyUI workflow JSON key — `data.nodeId`.  For subgraphs this is
-   *  ALSO the same key (subgraph wrappers are top-level entries in
-   *  `graph`, not nested). */
+  /** ComfyUI 工作流 JSON 的键 —— `data.nodeId`。子图**同样是**这个键
+   *  （子图封装节点是 `graph` 里的顶层条目，不是嵌套的）。 */
   nodeId: string;
-  /** Visual distinction (affects popover accent + chip color echo). */
+  /** 视觉区分（影响浮层的强调色与芯片配色回显）。 */
   kind: "node" | "subgraph";
 }
 export interface NodeJsonViewerContextValue {
-  /** Lookup the raw `detail.graph[nodeId]` entry.  Pure read — returns
-   *  `null` when `detail` hasn't loaded yet (top bar Loading… state) or
-   *  the key isn't present (e.g. fully-decorated node whose API form
-   *  omits the entry). */
+  /** 取原始的 `detail.graph[nodeId]` 条目。纯读 —— `detail` 还没加载
+   *  （顶栏「加载中…」状态）或该键不存在（例如被完整装饰过的节点，
+   *  其 API 形态省略了这条记录）时返回 `null`。 */
   getNodeJson: (nodeId: string) => Record<string, unknown> | null;
-  /** Richer lookup covering the same node for the popover's "节点视图"
-   *  synthesised tab — bundles the byte-perfect graph entry together
-   *  with the raw-ui metadata (`detail.rawNodes[i]` matched by id) and
-   *  the canvas position (`detail.positions[id]`).  `raw` and `pos` are
-   *  `undefined` / `null` for API-only imports. */
+  /** 更富的查询，供浮层「节点视图」合成页签使用 —— 把逐字节一致的图条目、
+   *  原始 UI 元数据（按 id 匹配的 `detail.rawNodes[i]`）与画布位置
+   *  （`detail.positions[id]`）打包在一起。纯 API 导入时 `raw` 与 `pos`
+   *  分别是 `undefined` / `null`。 */
   getNodeView: (nodeId: string) => {
     entry: Record<string, unknown> | null;
     raw:
@@ -273,25 +245,24 @@ export interface NodeJsonViewerContextValue {
           mode: number;
         }
       | undefined;
-    /** Literal RAW node (`detail.rawJson.nodes[i]`) — byte-identical to the
-     *  corresponding slice of the whole-workflow RAW view. `null` when the
-     *  workflow was API-only imported (no rawJson) or the node isn't found. */
+    /** 原始 RAW 节点（`detail.rawJson.nodes[i]`）—— 与整个工作流 RAW 视图
+     *  里对应的那一片逐字节一致。工作流是纯 API 导入（没有 rawJson）
+     *  或找不到该节点时为 `null`。 */
     rawNode?: Record<string, unknown> | null;
     pos: [number, number] | null;
   } | null;
-  /** Show the popover.  `anchorEl` should be the `#id` chip element
-   *  (used for positioning only — pointer-events fire on it AFTER the
-   *  popover is mounted, so we capture rect synchronously here). */
+  /** 打开浮层。`anchorEl` 应是那个 `#id` 芯片元素（只用于定位 ——
+   *  指针事件是在浮层挂载**之后**才落到它上面的，
+   *  因此这里同步抓一次矩形）。 */
   requestShow: (
     anchorEl: HTMLElement,
     nodeId: string,
     kind: "node" | "subgraph",
   ) => void;
-  /** Manually dismiss.  ESC and outside-click both call this. */
+  /** 手动关闭。ESC 与点击外部都会调它。 */
   dismiss: () => void;
-  /** Live viewer state — Provider exposes it ONLY for the popover
-   *  component itself; downstream consumers normally only need
-   *  requestShow/getNodeJson. */
+  /** 实时浮层状态 —— Provider 只把它暴露给浮层组件本身；
+   *  下游消费方通常只需要 requestShow / getNodeJson。 */
   viewer: NodeJsonViewerRequest | null;
 }
 export type RawMetaEntry = {
@@ -325,43 +296,40 @@ export interface WorkflowDetail {
     graph: Record<string, ApiWorkflowNode>;
   } | null;
   paramMap: Record<string, string>;
-  /** User-curated exposure selection: ioKey → metadata.  ioKey =
-   *  `${nodeId}::${kind}::${name}`.  Populated only after the user opens
-   *  IO-edit mode and ticks params; empty object means "nothing exposed". */
+  /** 用户挑出来的暴露集合：ioKey → 元数据。ioKey =
+   *  `${nodeId}::${kind}::${name}`。只有在用户打开 IO 编辑模式并勾选参数后
+   *  才有内容；空对象表示「什么都没暴露」。 */
   workflowIO: Record<string, WorkflowIOParam>;
-  /** { nodeId: [x, y] } — only set for raw imports; null when only API JSON was given. */
+  /** { nodeId: [x, y] } —— 只在原始导入时设置；只给了 API JSON 时为 null。 */
   positions: Record<string, [number, number]> | null;
-  /** ComfyUI group frames (raw UI format). bounding = [x, y, w, h]. */
+  /** ComfyUI 分组框（原始 UI 格式）。bounding = [x, y, w, h]。 */
   groups: WorkflowGroup[] | null;
-  /** Note / MarkdownNote annotation nodes (raw UI format). */
+  /** 便签 / MarkdownNote 注释节点（原始 UI 格式）。 */
   notes: WorkflowNote[] | null;
-  /** Sparse raw-node metadata — only `id`, `widgets_values` and `outputs[]` —
-   *  used by WorkflowSubgraphNode (widget values) and by both WorkflowNode &
-   *  WorkflowSubgraphNode to render the OUTPUT port strip when the offline type
-   *  table doesn't know the class (e.g. custom nodes like
-   *  ResolutionSelector, or subgraph UUIDs whose outputs we discover from
-   *  the raw JSON). */
+  /** 稀疏的原始节点元数据 —— 只有 `id`、`widgets_values` 与 `outputs[]`。
+   *  WorkflowSubgraphNode 用它取 widget 值；WorkflowNode 与
+   *  WorkflowSubgraphNode 在离线类型表不认得该类时用它渲染 OUTPUT 端口条
+   *  （例如 ResolutionSelector 这类自定义节点，或输出只能从原始 JSON 里
+   *  发现的子图 UUID）。 */
   rawNodes:
     | {
         id: string;
         widgets_values: unknown[];
         outputs: RawOutputMeta[];
-        /** Per-node LiteGraph flags (e.g. `collapsed`).  Empty when raw was
-         *  absent (API-only import).  The Flow already consumed these via
-         *  `(rn as any).flags`; declared here so the JSON popover can show
-         *  them in the synthesised "节点视图" tab. */
+        /** 每个节点的 LiteGraph 标记（如 `collapsed`）。原始数据缺失
+         *  （纯 API 导入）时为空。Flow 侧原本经 `(rn as any).flags` 消费它们；
+         *  在这里声明是为了让 JSON 浮层能在合成的「节点视图」页签里展示。 */
         flags?: Record<string, unknown>;
-        /** Custom-node properties (e.g. rgthree's `Fast Groups Bypasser`
-         *  reads `matchTitle` from this).  Empty when raw was absent. */
+        /** 自定义节点属性（例如 rgthree 的 `Fast Groups Bypasser`
+         *  从这里读 `matchTitle`）。原始数据缺失时为空。 */
         properties?: Record<string, unknown>;
         mode?: number;
       }[]
     | null;
-  /** Boundary pin entities (subgraph.inputs/outputs from ComfyUI raw).
-   *  Each pin has its own UUID, name, type, saved position, and linkIds
-   *  pointing at the cross-boundary wires.  Rendered as compact
-   *  wfIoPort nodes in a clean LEFT (inputs) / RIGHT (outputs) column
-   *  inside the inner canvas. */
+  /** 边界 pin 实体（来自 ComfyUI 原始的 subgraph.inputs/outputs）。
+   *  每个 pin 有自己的 UUID、名字、类型、保存位置，以及指向跨边界连线的
+   *  linkIds。它们在内层画布里渲染成一列整洁的紧凑 wfIoPort 节点
+   *  —— 左侧放输入、右侧放输出。 */
   boundaryPins?: {
     inputs: {
       id: string;
@@ -382,10 +350,9 @@ export interface WorkflowDetail {
       linkIds: number[];
     }[];
   };
-  /** Sentinel-bearing wires translated to (pin ↔ inner-node-slot)
-   *  pairs — used by `buildEdges` to emit React Flow edges between the
-   *  boundary pin's handle and the inner node's matching input/output
-   *  handle. */
+  /** 把带哨兵的连线翻译成 (pin ↔ 内部节点槽位) 配对 —— `buildEdges` 用它
+   *  在边界 pin 的 handle 与内部节点对应的输入/输出 handle 之间生成
+   *  React Flow 边。 */
   boundaryLinks?: {
     linkId: number;
     kind: "input" | "output";
@@ -393,31 +360,29 @@ export interface WorkflowDetail {
     innerNodeId: string;
     innerSlotName: string;
   }[];
-  /** Absolute local file path if this workflow is file-backed (imported via
-   *  "本机路径").  The server re-imports from it whenever the file changes. */
+  /** 该工作流由本地文件支撑（经「本机路径」导入）时的绝对路径。
+   *  文件一变，服务端就重新导入。 */
   sourcePath?: string | null;
-  /** Set on a detail GET that detected + applied a change to the source file. */
+  /** 本次 detail GET 检出并应用了源文件变更时设置。 */
   sourceChanged?: boolean;
-  /** Set when the tracked source file no longer exists on disk. */
+  /** 被跟踪的源文件在磁盘上已不存在时设置。 */
   sourceMissing?: boolean;
-  /** Classification: "local" = file-backed; "online" = pasted/API import. */
+  /** 分类："local" = 文件支撑；"online" = 粘贴 / API 导入。 */
   source?: "local" | "online";
 }
 
 export interface RawOutputMeta {
   name: string;
   localized?: string;
-  /** Business label for the slot — `FRAMES` / `IMAGE_FINAL`.  Forwarded
-   *  by /api/workflows/[id] from rawJson.outputs[].label so both the
-   *  parent WorkflowSubgraphNode outputs strip and the inner WorkflowIoPortNode
-   *  IO rail show the same name (fix). */
+  /** 槽位的业务标签 —— `FRAMES` / `IMAGE_FINAL`。由 /api/workflows/[id]
+   *  从 rawJson.outputs[].label 透传，让父级 WorkflowSubgraphNode 的输出条
+   *  与内层 WorkflowIoPortNode 的 IO 栏显示同一个名字。 */
   label?: string;
   type: string;
-  /** Source link ids coming out of this output (used to derive wires). */
+  /** 从这个输出出去的源连线 id（用来推导连线）。 */
   links: number[];
-  /** True when at least one outgoing link targets the boundary sentinel
-   *  `-20` (this output is exposed by the parent subgraph wrapper).
-   *  Set by /api/workflows/[id]/subgraph.  Outer workflows always false. */
+  /** 至少有一条出边指向边界哨兵 `-20` 时为真（该输出被父级子图封装节点
+   *  暴露出去）。由 /api/workflows/[id]/subgraph 盖章。外层工作流恒为 false。 */
   isBoundary?: boolean;
 }
 
@@ -426,16 +391,15 @@ export interface WorkflowGroup {
   title: string;
   bounding: [number, number, number, number];
   color: string;
-  /** Group bypass state. Mirrors `rawJson.groups[i].flags.bypass`
-   *  and is the handle used by the rgthree Fast Groups Bypasser integration:
-   *  clicking a toggle in that node's body flips this field and PATCHes it
-   *  back to the server.  Defaults to false on read. */
+  /** 分组旁路状态。镜像 `rawJson.groups[i].flags.bypass`，也是 rgthree
+   *  Fast Groups Bypasser 集成用的抓手：点该节点主体里的开关会翻转这个字段
+   *  并 PATCH 回服务端。读取时缺省为 false。 */
   bypass?: boolean;
 }
 
 export interface WorkflowNote {
   id: string;
-  /** Display title — extracted from `title` field or first `#`-heading line. */
+  /** 显示标题 —— 从 `title` 字段或第一行 `#` 标题里取出。 */
   title: string;
   text: string;
   pos: [number, number];
@@ -443,95 +407,85 @@ export interface WorkflowNote {
   color: string;
 }
 
-/** Extract a note's display title from its raw JSON.  ComfyUI stores the title
- *  either at the root level (newer versions) or as the first markdown heading
- *  line (`# Title`) in the text body.  Falls back to the first non-empty line
- *  when no markdown heading is present, and finally to "" when even that is
- *  missing.  Leading "Note:" prefixes are stripped so the title bar doesn't
- *  echo "Note: Note: Foo". */
+/** 从便签的原始 JSON 里取出显示标题。ComfyUI 把标题存在根级（较新版本），
+ *  或者写成正文里的第一行 markdown 标题（`# 标题`）。没有 markdown 标题时
+ *  回落到第一个非空行，连它都没有则回落成 ""。开头的 "Note:" 前缀会被剥掉，
+ *  否则标题栏会回显成 "Note: Note: Foo"。 */
 export interface WorkflowNodeData {
   [key: string]: unknown;
-  nodeId: string; // ComfyUI node ID
+  nodeId: string; // ComfyUI 节点 ID
   classType: string;
   title: string;
   inputs: Record<string, unknown>;
-  /** Which port role this node is assigned (if any) */
+  /** 该节点被指派了哪个端口角色（如果有） */
   assignedRole: string | null;
-  /** For every input that is a connection ([srcId, slot]), the source node's
-   *  title + class_type.  Used to render the "← <srcNode> #xx" label and to
-   *  infer the data type flowing through the wire. */
+  /** 对每个「连线型」输入（[srcId, slot]），记录源节点的 title 与
+   *  class_type。用于渲染 "← <源节点> #xx" 标签，并推断线上流动的数据类型。 */
   inputSources: Record<
     string,
     { id: string; title: string; slot: number; classType?: string }
   >;
-  /** Per-input display metadata from raw JSON (localized_name + type). */
+  /** 每个输入的显示元数据，来自原始 JSON（localized_name + type）。 */
   rawInputs?: RawInputMeta[];
-  /** True if this node is an INPUT endpoint of the current subgraph (its
-   *  input slot receives from the subgraph's -10 sentinel).  Stamped by
-   *  /api/workflows/[id]/subgraph.  Outer workflows always have false.
-   *  The client uses this flag to wrap the cluster in an INPUTS wfGroup
-   *  so the user can see where the parent wrapper's inputs flow into
-   *  the subgraph. */
+  /** 该节点是当前子图的 INPUT 端点时为真（它的输入槽从子图 -10 哨兵
+   *  接收）。由 /api/workflows/[id]/subgraph 盖章。外层工作流恒为 false。
+   *  客户端据此把这簇节点包进一个 INPUTS wfGroup，
+   *  让用户看得见父级封装节点的输入是从哪里流进子图的。 */
   isInputEndpoint?: boolean;
-  /** True if this node is an OUTPUT endpoint (its output feeds the
-   *  subgraph's -20 sentinel).  Mirror of `isInputEndpoint`. */
+  /** 该节点是 OUTPUT 端点时为真（它的输出馈入子图 -20 哨兵）。
+   *  与 `isInputEndpoint` 对称。 */
   isOutputEndpoint?: boolean;
-  /** Per-output display metadata from raw JSON (localized_name + type +
-   *  downstream link ids).  Used when inferOutputTypeAll can't resolve
-   *  the class (e.g. custom nodes like ResolutionSelector). */
+  /** 每个输出的显示元数据，来自原始 JSON（localized_name + type +
+   *  下游连线 id）。inferOutputTypeAll 认不出该类时用它
+   *  （例如 ResolutionSelector 这类自定义节点）。 */
   rawOutputs?: RawOutputMeta[];
-  /** Set of output slot NAMES that feed a subgraph boundary — derived from
-   *  `detail.boundaryLinks` (kind === "output").  Source-independent from
-   *  `rawOutputs[].isBoundary` so the canvas never goes dark if the
-   *  sessionStorage cache miss fails to deliver the latest detail shape.
-   *  Always empty for top-level (non-subgraph) workflows. */
+  /** 馈入子图边界的输出槽**名字**集合 —— 从 `detail.boundaryLinks`
+   *  （kind === "output"）推导。与 `rawOutputs[].isBoundary` **各自独立**：
+   *  sessionStorage 缓存未命中、拿不到最新 detail 形状时，
+   *  画布也不会因此黑掉。顶层（非子图）工作流恒为空。 */
   boundaryOutputs?: Set<string>;
-  /** Set of input slot NAMES that come from a subgraph boundary pin —
-   *  mirrors `boundaryOutputs` for the input side.  Source-independent
-   *  from `rawInputs[].isBoundary` so that WorkflowNode can keep mounting
-   *  input Handles for boundary wires even if the server's input-stamp
-   *  is missing from a stale cached detail. */
+  /** 来自子图边界 pin 的输入槽**名字**集合 —— 输入侧的
+   *  `boundaryOutputs`。与 `rawInputs[].isBoundary` 各自独立：
+   *  即使陈旧缓存里的 detail 缺了服务端的输入盖章，
+   *  WorkflowNode 也仍会为边界连线挂上输入 Handle。 */
   boundaryInputs?: Set<string>;
-  /** Widget values paired with `rawInputs` for custom nodes whose API
-   *  `inputs` map is empty (the import pipeline stores custom-node widget
-   *  values in rawJson.widgets_values rather than folding them into
-   *  `graph[id].inputs`).  When set, WorkflowNode uses rawInputs as the input
-   *  source with positional values from this array. */
+  /** 与 `rawInputs` 配对的 widget 值，用于 API `inputs` 映射为空的自定义
+   *  节点（导入管线把自定义节点的 widget 值存在 rawJson.widgets_values 里，
+   *  而不是折进 `graph[id].inputs`）。设置之后，WorkflowNode 以 rawInputs
+   *  作为输入来源，并按位置从这个数组取值。 */
   rawWidgetValues?: unknown[];
-  /** Output NAMES (matching the keys of `inferOutputTypeAll(classType)`
-   *  or `rawOutputs[i].name`) that have at least one downstream edge in
-   *  this workflow.  WorkflowNode only renders a source Handle for output rows
-   *  whose name appears here — "no wire ⇒ no dot".  When undefined / empty
-   *  the renderer treats every output as unused (no Handle). */
+  /** 在本工作流里至少有一条下游边的输出**名字**（与
+   *  `inferOutputTypeAll(classType)` 的键或 `rawOutputs[i].name` 对应）。
+   *  WorkflowNode 只为名字出现在这里的输出行渲染 source Handle ——
+   *  「没有线就没有圆点」。为 undefined / 空集时渲染器把所有输出都当成
+   *  未被使用（不挂 Handle）。 */
   connectedOutputs?: Set<string>;
-  /** Per-node LiteGraph flags forwarded verbatim from the raw JSON
-   *  (ComfyUI emits `flags.collapsed: true` for collapsed widgets such as
-   *  SetNode / rgthree Compact).  The editor reads `flags.collapsed` and
-   *  collapses the chip body when present.  Other flag keys (pinned,
-   *  allow_interaction, …) are kept opaque for future use. */
+  /** 每个节点的 LiteGraph 标记，逐字透传自原始 JSON（对 SetNode /
+   *  rgthree Compact 这类折叠 widget，ComfyUI 会写
+   *  `flags.collapsed: true`）。编辑器读 `flags.collapsed`，
+   *  有它就折叠芯片主体。其余键（pinned、allow_interaction 等）
+   *  原样保留，留给将来用。 */
   flags?: Record<string, unknown>;
-  /** LiteGraph `mode` value (0 = Always / normal, 2 = Never / muted, 4 = Bypass).
-   *  Surfaced from raw JSON so the canvas can tint nodes by their ComfyUI
-   *  status — bypass → purple, disabled → grey, normal → role/default. */
+  /** LiteGraph 的 `mode` 值（0 = Always / 正常，2 = Never / 静音，
+   *  4 = Bypass）。从原始 JSON 透出，让画布按 ComfyUI 状态给节点上色 ——
+   *  旁路 → 紫色，禁用 → 灰色，正常 → 角色色 / 默认色。 */
   mode?: number;
-  /** LiteGraph `properties` dict from rawJson. Used by
-   *  custom-frontends that derive their body UI at runtime from these
-   *  values — the prime example being rgthree's `Fast Groups Bypasser`
-   *  which reads `matchTitle` / `matchColors` / `sort` etc. to compute
-   *  its toggle list.  WorkflowNode looks at `properties.matchTitle` when
-   *  `classType === "Fast Groups Bypasser (rgthree)"` and renders the
-   *  matched groups as a runtime body.  Empty / undefined for nodes
-   *  that don't carry properties. */
+  /** rawJson 里的 LiteGraph `properties` 字典。那些在运行期由这些值推导
+   *  自身主体 UI 的自定义前端会用它 —— 最典型的例子是 rgthree 的
+   *  `Fast Groups Bypasser`，它读 `matchTitle` / `matchColors` / `sort`
+   *  等来算出自己的开关清单。`classType === "Fast Groups Bypasser
+   *  (rgthree)"` 时 WorkflowNode 会看 `properties.matchTitle`，
+   *  把匹配到的分组渲染成运行期主体。不带 properties 的节点为空 /
+   *  undefined。 */
   properties?: Record<string, unknown>;
-  /** Workflow groups. Forwarded to WorkflowNode so the rgthree
-   *  Fast Groups Bypasser runtime body can match against the live
-   *  group list without re-fetching.  Read-only here — toggling a
-   *  group's bypass goes through `RgthreeGroupsContext.setBypass` →
-   *  PATCH, not a direct edit. */
+  /** 工作流分组。透传给 WorkflowNode，让 rgthree Fast Groups Bypasser
+   *  的运行期主体不必重新拉取就能与实时分组列表比对。这里是**只读**的 ——
+   *  切换分组旁路要走 `RgthreeGroupsContext.setBypass` → PATCH，
+   *  而不是直接改。 */
   groups?: WorkflowGroup[];
-  /** Exact ComfyUI box size { w, h } (body only, title bar excluded).
-   *  When present the card is forced to these dimensions instead of the
-   *  content-driven min/max-width layout.  Undefined → content-driven. */
+  /** ComfyUI 的精确外框尺寸 { w, h }（只算主体，不含标题栏）。
+   *  有值时卡片被强制成这个尺寸，不再走按内容驱动的 min/max 宽度布局。
+   *  undefined → 按内容驱动。 */
   size?: { w: number; h: number };
   /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
    *  时由编辑器注入（值 = 进入本层时的 wrapper 节点 id）。
@@ -542,17 +496,16 @@ export interface WorkflowNodeData {
   hostNodeId?: string;
 }
 
-/** Row dimensions used to lay out the target Handles next to each input row. */
+/** 分组数据。行尺寸用于把 target Handle 摆在每个输入行旁边。 */
 export interface WorkflowGroupData {
   [key: string]: unknown;
   title: string;
   color: string;
-  /** When true, the group becomes a real draggable unit: pointerEvents
-   *  flip to auto, the cursor signals move-on-grab, and any React Flow
-   *  children declared with `parentId: this.id` + `extent:"parent"` move
-   *  in lock-step.  When false/undefined the group is pure decoration in
-   *  the back layer (pointers pass through to nodes/edges underneath) —
-   *  the legacy behaviour used by ComfyUI's own `group` rectangles. */
+  /** 为真时分组成为真正可拖拽的单元：pointerEvents 翻成 auto、光标提示
+   *  抓取即移动，任何声明了 `parentId: this.id` + `extent:"parent"` 的
+   *  React Flow 子节点都会同步移动。为 false / undefined 时分组只是后层的
+   *  纯装饰（指针穿透到下面的节点与边）—— 也就是 ComfyUI 自己那些
+   *  `group` 矩形的历史行为。 */
   draggable?: boolean;
 }
 
@@ -564,62 +517,38 @@ export interface WorkflowIoPortData {
   direction: "input" | "output" | "both";
   parentNodeId: string;
   parentNodeTitle: string;
-  /** First middle node this endpoint feeds into (input side) — used to
-   *  vertically align the port to its consumer in the left column. */
+  /** 本端点（输入侧）馈入的第一个中间节点 —— 用来在左列把端口与它的消费方
+   *  纵向对齐。 */
   connectsTo?: string | null;
-  /** First middle node this endpoint is fed by (output side) — used to
-   *  vertically align the port to its producer in the right column. */
+  /** 馈入本端点（输出侧）的第一个中间节点 —— 用来在右列把端口与它的产出方
+   *  纵向对齐。 */
   connectsFrom?: string | null;
 }
 
-/* Layout constants for the boundary-pin wfIoPort cards (late).
- *  The pins live inside INPUTS / OUTPUTS wfGroup rectangles and are
- *  rendered as compact label rows stacked vertically.  These three values
- *  govern the column's visual rhythm; bumping IO_PORT_HEIGHT shrinks the
- *  whole rail, bumping PORT_ROW_GAP separates the pins more, and
- *  IO_PORT_WIDTH controls how much room the longest label gets before it
- *  starts clipping.  The previous render used {130, 26, ~10}; the user
- *  asked for tighter spacing + a slightly wider label slot, so we moved
- *  to {160, 22, 4}.
+/* 边界 pin 的 wfIoPort 卡片布局常量。
  *
- *  bumped IO_PORT_HEIGHT 22 → 24 because at 22 px the
- *  React Flow node wrapper clipped the descenders of letters with
- *  downward strokes (`p`, `g`, `y`, `q`) by ~1–2 px.  The 10.5 px font's
- *  ascender + cap + descender stack fills more than 22 px once you
- *  centre it via `flex items-center` inside a 2 px `py-[1px]` row, and
- *  the node's `style.height = IO_PORT_HEIGHT` makes the wrapper a hard
- *  clip box.  24 px gives the descender a clean ~4–5 px runway and the
- *  whole wfGroup only grows by 2 px × (rowCount−1) ≈ 20 px for a 10-row
- *  INPUT rail — well within the user's "紧凑" brief.
+ *  这些 pin 住在 INPUTS / OUTPUTS 的 wfGroup 矩形里，渲染成一叠纵向排列的
+ *  紧凑标签行。三个值决定这一列的视觉节奏：调大 IO_PORT_HEIGHT 会让整条栏杆
+ *  变矮，调大 PORT_ROW_GAP 让 pin 之间更松散，IO_PORT_WIDTH 决定最长的标签
+ *  能有多宽才被裁掉。
  *
- *  bumped IO_PORT_HEIGHT 24 → 26 + flipped the row's
- *  flex alignment from `items-center` to `items-end` with `pb-[1px]`
- *  inside WorkflowIoPortNode. gave a calculated ~7 px clearance, but in
- *  the user's screenshot the `p` / `g` descenders STILL read as partial
- *  stubs — likely a combination of (a) Windows ClearType / sub-pixel
- *  rendering at non-integer zoom levels amputating the bottom 1 px of
- *  every glyph, and (b) `flex items-center` placing the *glyph block
- *  centre* rather than the baseline — so the descender sits roughly
- *  mid-row, where it visually crowds into the row below.  End-aligning
- *  pins the line box to the bottom of the node (with 1 px breathing
- *  room), which guarantees the descender terminal sits just above the
- *  row boundary and reads as a fully formed character at every zoom
- *  level.  Net wfGroup growth ≈ 2 px × 9 = 18 px for a 10-row rail.
+ *  高度取 28 而不是 22：22px 时 React Flow 的节点外框会把 `p` `g` `y` `q`
+ *  这类带下伸笔画的字母**裁掉约 1~2px**。10.5px 字体的「上伸 + 大写字高 +
+ *  下伸」叠起来本就超过 22px，一旦在 `py-[1px]` 的行里用
+ *  `flex items-center` 居中，节点的 `style.height = IO_PORT_HEIGHT`
+ *  就把外框变成硬裁剪盒。抬到 28px 并配 `leading-[1.4]`（行盒 14.7px，
+ *  内部含上下留白）后，下伸部分落在 28px 外框内的 y ≈ 10px 处，
+ *  底部留出 4~5px 余量；整条 wfGroup 只涨约 18px（10 行时），
+ *  仍然在「紧凑」的要求之内。
  *
- *  the user's third screenshot still showed the
- *  descenders amputated. The -end trick relied on the
- *  descender sitting at the *baseline of the line-box*, but with
- *  `leading-none` (= line-height: 1, so line-box = 10.5 px) the Inter
- *  descender (~3 px) still lives BELOW the line-box, clipped by
- *  `style.height = IO_PORT_HEIGHT` no matter how we align.
- *  replaces `leading-none` with `leading-[1.4]` (= 14.7 px line-box),
- *  which now INTERNALLY contains ascender + cap + descender with
- *  margin on both sides; with `items-center` the descender lands at
- *  y ≈ 10 px inside a 28 px wrapper, leaving a comfortable 4-5 px
- *  clear runway at the bottom.  IO_PORT_HEIGHT bumps 26 → 28 to
- *  keep a safety gap.  wfGroup rail grows by ~18 px for 10 rows.  If
- *  the user complains about row gaps looking too loose later, swap
- *  to leading-snug (1.375) and IO_PORT_HEIGHT = 26 to claw back 1 px. */
+ *  这条尺寸链被来回调过几次，结论只有一个：**下伸笔画被裁是「行盒高度」
+ *  与「外框高度」两个量共同决定的**，只调其中一个（例如把对齐从
+ *  items-center 改成 items-end）改不动它 —— 行盒本身不包含下伸部分时，
+ *  对齐方式怎么改都会被 `style.height` 裁掉。所以最终的两处修改是
+ *  「行盒高度（leading-[1.4]）」+「外框高度（28）」成对调整。
+ *
+ *  若以后觉得行距太松，可换回 leading-snug（1.375）并把
+ *  IO_PORT_HEIGHT 收到 26 —— 两个值必须一起动。 */
 export interface WorkflowNoteData {
   [key: string]: unknown;
   title: string;
@@ -629,40 +558,37 @@ export interface WorkflowNoteData {
 
 export interface WorkflowSubgraphData {
   [key: string]: unknown;
-  /** ComfyUI real node id (matches `detail.graph[id]`, `rawMetaById[id]`,
-   *  `positions[id]`).  Stamped by the initialNodes builder so the
-   *  `#id` chip can look up the entry the same way `WorkflowNodeData.nodeId`
-   *  does — using `data.uid` (classType 前 8 位) here would always miss
-   *  because that's a hash, not the canonical ComfyUI id. */
+  /** ComfyUI 的真实节点 id（与 `detail.graph[id]`、`rawMetaById[id]`、
+   *  `positions[id]` 对应）。由 initialNodes 构建器盖章，
+   *  让 `#id` 芯片能像 `WorkflowNodeData.nodeId` 那样查到条目 ——
+   *  这里若用 `data.uid`（classType 前 8 位）会永远查不中，
+   *  因为那是哈希值，不是 ComfyUI 的正规 id。 */
   nodeId: string;
   title: string;
-  uid: string; // first 8 chars of class_type — used as subtitle
+  uid: string; // class_type 的前 8 个字符 —— 用作副标题
   inputs: RawInputMeta[];
-  /** Per-output display metadata from raw JSON (e.g. the IMAGE output a
-   *  subgraph exposes).  Empty when the subgraph has no outputs. */
+  /** 每个输出的显示元数据，来自原始 JSON（例如子图暴露的 IMAGE 输出）。
+   *  子图没有输出时为空。 */
   outputs?: RawOutputMeta[];
   widgetValues: unknown[];
-  /** Callback to enter the subgraph's internal graph. */
+  /** 进入子图内部图的回调。 */
   onEnter?: () => void;
-  /** Same semantics as WorkflowNodeData.connectedOutputs — only outputs in this
-   *  set get a visible source Handle. */
+  /** 语义与 WorkflowNodeData.connectedOutputs 相同 ——
+   *  只有在这个集合里的输出才会拿到可见的 source Handle。 */
   connectedOutputs?: Set<string>;
-  /** Input NAMES (matching `inputs[i].name`) that have an external wire in
-   *  the *parent* workflow.  WorkflowSubgraphNode only renders a target Handle
-   *  for inputs whose name appears here.  Independent (un-wired) subgraph
-   *  inputs still get their label row so the user can see what's exposed,
-   *  but no Handle is rendered. */
+  /** 在**父级**工作流里有外部连线的输入**名字**（与 `inputs[i].name`
+   *  对应）。WorkflowSubgraphNode 只为名字出现在这里的输入渲染 target
+   *  Handle。独立的（未连线）子图输入仍保留标签行，让用户看得见暴露了什么，
+   *  但不挂 Handle。 */
   connectedInputs?: Set<string>;
-  /** Exact ComfyUI box size { w, h } (body only, title bar excluded).
-   *  When present the card is forced to these dimensions.  Undefined →
-   *  content-driven. */
+  /** ComfyUI 的精确外框尺寸 { w, h }（只算主体，不含标题栏）。
+   *  有值时卡片被强制成这个尺寸。undefined → 按内容驱动。 */
   size?: { w: number; h: number };
-  /** LiteGraph `mode` (0 = Always / 2 = Never-mute / 4 = Bypass).  Same
-   *  semantics as WorkflowNodeData.mode — drives the 3-state color overlay. */
+  /** LiteGraph 的 `mode`（0 = Always / 2 = Never 静音 / 4 = Bypass）。
+   *  语义与 WorkflowNodeData.mode 相同 —— 驱动三态配色覆盖层。 */
   mode?: number;
-  /** LiteGraph flags forwarded verbatim from raw JSON.  Currently
-   *  read for `flags.collapsed` so an imported subgraph that ComfyUI
-   *  ships collapsed stays collapsed here too. */
+  /** LiteGraph 标记，逐字透传自原始 JSON。目前读 `flags.collapsed`，
+   *  让 ComfyUI 里本来就折叠着的导入子图在这里也保持折叠。 */
   flags?: Record<string, unknown>;
   /** 当前视图的宿主（外层封装）节点 id 链 —— 仅当视图是「下钻后的子工作流
    *  内部」时注入；本卡片自身的暴露口勾选时带着它落库，运行期还原

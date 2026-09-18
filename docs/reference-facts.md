@@ -82,6 +82,23 @@
 | `registry.port` | `{{registry.port}}` | shadcn 本地团队 Registry 服务端口 | `tools/scripts/start-registry.ps1` 的 `$Port` | 读 `$Port` 值（`3874`） |
 | `mcp.http.port` | `{{mcp.http.port}}` | Workshop MCP HTTP 服务端口 | `tools/mcp-http.ts` 的 `MCP_HTTP_PORT ?? 4300` | 读 `MCP_HTTP_PORT` 默认值（`4300`）；仅 `docs/workshop-mcp.md` 校验 |
 | `comfyui.port` | `{{comfyui.port}}` | ComfyUI 默认监听端口 | `src/lib/endpoints.ts` 的 `COMFYUI_DEFAULT_PORT` 常量 | 读常量的值（`8188`）；校验范围 = `onlyDocs`（`docs/workshop-mcp.md`）+ `otherDocs`（主规范「开发端口」行）。**权威源换过两次**：#536 P3 之前这个端口散落在 5 个文件里（`client.ts` 只是其中一处），先收敛成 `app-settings.ts` 的常量；#534 P1 再把**定义**搬到零依赖的 `endpoints.ts`（设置页视图也要读它，而 `app-settings.ts` 顶层 `import fs`，浏览器图一 import 就整页 500），`app-settings.ts` 只再导出同名。因此提取规则指向 `endpoints.ts` 的定义处（迁移原因与门禁见规范 launch-and-build §9.2 第 5 条） |
+### 1.5 注释语言的「纯 ASCII 模块」白名单（ISSUE #678）
+
+> 注释一律中文（AGENTS 硬规则 23 / 规范 12 §12.4.6），**唯一例外**是「会被
+> `next-code-frame` 渲染到」的构建期模块：Next 的 code frame 按**字节**切串，
+> 高亮区间端点落在多字节字符内部时 Rust 侧直接 panic，整个 `next build` 被一个
+> 与业务无关的错误带走（规范 launch-and-build §5）。因此那几个文件必须保持纯 ASCII，
+> 注释写英文，并在文件头注明原因。
+>
+> **这一行的「模块清单」就是权威定义本身**（没有第二个事实源）：`scripts/doc-facts.cjs`
+> 反向解析本行登记的反引号路径，喂给规范 12 §12.4.6 的 ASCII 比例棘轮。
+> 名单越短越好 —— 新增一个必须能说出「它为什么会被 code frame 渲染到」。
+
+| key | 名单（权威定义） | meaning（可读语义） | source（权威定义文件） | extract |
+|---|---|---|---|---|
+| `comment.language.asciiOnly` | `src/lib/db-schema-ready.ts`（构建期被加载且是报错现场）、`src/server/db.ts`（每条路由的模块图都拉到）、`src/lib/shell/tracing-ignore.ts`（构建期模块图上的纯工具） | 注释写英文且源码保持纯 ASCII 的模块白名单 | 本行（清单本身即权威定义） | 解析本行反引号路径；规范 12 §12.4.6 的棘轮读同一结果 |
+
+
 
 ---
 
