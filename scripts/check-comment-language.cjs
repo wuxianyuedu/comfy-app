@@ -88,6 +88,19 @@ const SKIP_DIRS = new Set([
 const ENGLISH_WORDS_THRESHOLD = 3;
 const ENGLISH_WORD_RE = /[A-Za-z]{2,}/g;
 
+/**
+ * 保持原文形态的「工具指示注释」：这些**不是给人读的注释**,而是工具按字面量
+ * 解析的指令,改成中文即静默失效(不是报错,是行为悄悄变回默认)。
+ *   - `@vitest-environment jsdom` —— vitest 按这一行决定用例跑在什么环境;
+ *   - `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck` —— TypeScript 指令;
+ *   - `eslint-disable*` —— eslint 指令;
+ *   - `@jsx*` / `@jsxRuntime` —— 编译指示。
+ * 判据只认**行首就是该指令**的行(允许前面有 `*` 与空白),
+ * 以免把「说明某个指令」的正常中文注释一起放行。
+ */
+const TOOL_DIRECTIVE_RE =
+  /^\s*\*?\s*@?(vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*eslint-(disable|enable)/;
+
 function walk(dir, out = []) {
   let entries;
   try {
@@ -160,9 +173,9 @@ function countEnglishCommentLines(src) {
       text = line.slice(2).trim();
     }
     if (text === null || !text) continue;
+    if (TOOL_DIRECTIVE_RE.test(text)) continue;
     if (hasCJK(text)) continue;
-    if (!looksEnglish(text)) continue;
-    count += 1;
+    if (looksEnglish(text)) count += 1;
   }
   return count;
 }

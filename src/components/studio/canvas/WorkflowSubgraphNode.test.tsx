@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-// （该指示注释必须保持原文形态：vitest 按字面量识别它，改成中文即失效） 
 import { afterEach, describe, expect, it } from "vitest";
 import { ReactFlowProvider } from "@xyflow/react";
 import { cleanup, render, screen } from "@testing-library/react";

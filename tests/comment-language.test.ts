@@ -152,6 +152,36 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run().code).toBe(0);
   });
 
+  it("工具指示注释（@vitest-environment / @ts-* / eslint-disable）不参与统计", () => {
+    // 它们不是给人读的注释，而是工具按**字面量**解析的指令：
+    // 改成中文不是报错，而是静默失效（用例悄悄跑回默认环境）。
+    write(
+      "src/lib/tool-directives.test.ts",
+      [
+        "// @vitest-environment jsdom",
+        "// @ts-expect-error upstream types are wrong here",
+        "// eslint-disable-next-line no-console",
+        "/** 中文说明。 */",
+        "export const a = 1;",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
+  it("说明某个指令的中文注释仍会被统计（豁免只认行首就是指令）", () => {
+    // 反向锚点：不设这条，「豁免正则写得太宽」会把正常中文注释一起放行而无人发现。
+    write(
+      "src/lib/directive-doc.ts",
+      "// we keep the @ts-expect-error directive here on purpose\nexport const a = 1;\n",
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/directive-doc.ts");
+  });
+
   it("纯英文注释行（含 URL 行）计入 —— 判定口径是「连续英文单词 ≥ 3 个」", () => {
     // 反向锚点：上面那条只证明「噪声不计入」，不证明「英文真的被计入」。
     // 没有这条，一个永远返回 0 的统计器会让上面那条一起变绿（§12.16 同款教训）。
