@@ -29,6 +29,15 @@
   --color-aurora-violet: #8b5cf6;
   --color-aurora-cyan: #22d3ee;
   --color-aurora-magenta: #ff5ca8;
+  /* 画布连线的四色渐变（项目画布与工作流编辑器共用同一套观感）：
+     它是**线本身的颜色**，不是承载线的表面（规范 03 §3.6.1 的类型色例外
+     判据）。此前四处内联 SVG `stopColor` 各写一份字面量、`ProjectEdge` 的
+     选中光晕又写第五份 rgba，改一次要点五遍名。 */
+  --color-edge-flow-1: #b584ff;
+  --color-edge-flow-2: #5bc6ff;
+  --color-edge-flow-3: #5be3c4;
+  --color-edge-flow-4: #ffd571;
+  --color-edge-focus-halo: rgb(181 132 255 / 0.55);
 
   /* Surfaces & text (light default) */
   --color-bg: #ffffff;
@@ -337,6 +346,10 @@
      · 项目画布浮层工具条底（CanvasToolbar 的 `to-[#16121f]/85`）
        → `--color-panel/85` + `--color-shadow-strong`。此处还顺带修掉了
          一个语法坏掉的历史 class（`to-surface-20]/85`，不是合法 Tailwind 类）。
+     · 内容载体节点的「水幕」进度叠层（`ui/water-fill-progress.tsx`）
+       → **本条不 token 化**（登记进本清单）：它是浮在预览图/视频之上的
+         极小面积叠层，且刻意保留 ~0.9 的透明度「让底层内容隐约可见」——
+         浅色水幕会与浅色内容糊在一起，判据 1、2 同时成立。
      · 可读性 / 语法着色的硬编码令牌：
        · `JsonViewer` 的 `react18-json-view` 主题（`jv-theme-comfy` +
          `dark` prop）→ 两态 `--json-view-*` token；

@@ -6,74 +6,73 @@ import type { RowState } from "./types";
 export const ROW_STATE_PRESET: Record<
   RowState["kind"],
   {
-    bg: string;
-    fg: string;
+    /** `ui/status-badge` 认的状态键（配色只有那一处，规范 16 §16.2.4.5）。 */
+    status: string;
     label: string;
-    chip: string;
+    /** 整行的底色 / 边框（语义 token）。 */
+    rowCls: string;
+    /** 展开区左侧竖轨。 */
+    railCls: string;
+    /** 行内动作按钮（配色走 Button 变体 + 本模块的排布补充）。 */
     btn: string;
     btnLabel: string;
   }
 > = {
   loaded: {
-    bg: "rgba(16,185,129,0.10)",
-    fg: "#10B981",
+    status: "SUCCEEDED",
     label: "✓ 已加载",
-    chip: "border-emerald-500/30",
-    btn: "border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10",
+    rowCls: "border-success/20 bg-success/5",
+    railCls: "border-success/20",
+    btn: "border border-success/40 text-success-strong hover:bg-success/10",
     btnLabel: "重新解析",
   },
   outdated: {
-    bg: "rgba(245,158,11,0.10)",
-    fg: "#F59E0B",
+    status: "QUEUED",
     label: "↻ 有更新",
-    chip: "border-amber-500/40",
-    btn: "bg-amber-500 text-white hover:opacity-90",
+    rowCls: "border-warning/20 bg-warning/5",
+    railCls: "border-warning/20",
+    btn: "bg-warning text-white hover:opacity-90",
     btnLabel: "重新解析",
   },
   unimported: {
-    bg: "rgba(107,114,128,0.10)",
-    fg: "#9CA3AF",
+    status: "IDLE",
     label: "未导入",
-    chip: "border-gray-500/30",
+    rowCls: "border-border-strong bg-subtle",
+    railCls: "border-border-strong",
     btn: "bg-primary text-white hover:opacity-90",
     btnLabel: "导入此包",
   },
   error: {
-    bg: "rgba(239,68,68,0.10)",
-    fg: "#EF4444",
+    status: "ERROR",
     label: "解析出错",
-    chip: "border-red-500/40",
+    rowCls: "border-destructive/30 bg-destructive/5",
+    railCls: "border-destructive/30",
     btn: "bg-primary text-white hover:opacity-90",
     btnLabel: "重新解析",
   },
   missing: {
-    bg: "rgba(245,158,11,0.10)",
-    fg: "#F59E0B",
+    status: "QUEUED",
     label: "目录不存在",
-    chip: "border-amber-500/40",
+    rowCls: "border-warning/20 bg-warning/5",
+    railCls: "border-warning/20",
     btn: "border border-border text-muted-foreground cursor-not-allowed",
     btnLabel: "无法解析",
   },
   empty: {
-    bg: "rgba(107,114,128,0.08)",
-    fg: "#9CA3AF",
+    status: "IDLE",
     label: "无 NODE_CLASS_MAPPINGS",
-    chip: "border-gray-500/30",
+    rowCls: "border-border-strong bg-subtle",
+    railCls: "border-border-strong",
     btn: "border border-border text-muted-foreground cursor-not-allowed",
     btnLabel: "无可导入节点",
   },
 };
 
-export const STATUS_STYLE: Record<
-  string,
-  { bg: string; fg: string; label: string }
-> = {
-  ok: { bg: "rgba(16,185,129,0.15)", fg: "#10B981", label: "已加载" },
-  missing: { bg: "rgba(245,158,11,0.18)", fg: "#F59E0B", label: "目录不存在" },
-  error: { bg: "rgba(239,68,68,0.18)", fg: "#EF4444", label: "解析出错" },
-  empty: {
-    bg: "rgba(107,114,128,0.18)",
-    fg: "#9CA3AF",
-    label: "无 NODE_CLASS_MAPPINGS",
-  },
+/* 自定义节点状态 → 文案。配色不在这里 —— 由 `ui/status-badge` 按状态键
+ * 统一给出（此前本文件另存一份 rgba/hex，与页面其余状态徽标各写一套）。 */
+export const STATUS_STYLE: Record<string, { label: string }> = {
+  ok: { label: "已加载" },
+  missing: { label: "目录不存在" },
+  error: { label: "解析出错" },
+  empty: { label: "无 NODE_CLASS_MAPPINGS" },
 };

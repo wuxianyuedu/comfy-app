@@ -429,10 +429,12 @@ function CanvasInner({
               x2="100%"
               y2="0%"
             >
-              <stop offset="0%" stopColor="#B584FF" />
-              <stop offset="35%" stopColor="#5BC6FF" />
-              <stop offset="70%" stopColor="#5BE3C4" />
-              <stop offset="100%" stopColor="#FFD571" />
+              {/* 四档色相取自 `--color-edge-flow-*`（与工作流编辑器同一套
+                  连线渐变观感，规范 03 §3.6.1 的类型色例外）。 */}
+              <stop offset="0%" stopColor="var(--color-edge-flow-1)" />
+              <stop offset="35%" stopColor="var(--color-edge-flow-2)" />
+              <stop offset="70%" stopColor="var(--color-edge-flow-3)" />
+              <stop offset="100%" stopColor="var(--color-edge-flow-4)" />
             </linearGradient>
           </defs>
         </svg>

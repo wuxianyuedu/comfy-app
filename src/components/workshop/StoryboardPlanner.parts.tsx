@@ -5,6 +5,8 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
 import { Button } from "~/components/ui/button";
+import { StatusBadge } from "~/components/ui/status-badge";
+import { SHOT_STATUS_LABEL } from "./ShotStudio";
 import type { ShotProgress } from "./useStoryboardPlanner";
 
 const SHOT_TYPES: ShotType[] = [
@@ -18,34 +20,16 @@ const SHOT_TYPES: ShotType[] = [
   "pod",
 ];
 
-export function StatusBadge({ status }: { status: Shot["status"] }) {
-  const map: Record<Shot["status"], { label: string; cls: string }> = {
-    idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: {
-      label: "排队中",
-      cls: "bg-amber-100 text-amber-800 dark:text-amber-300",
-    },
-    running: {
-      label: "生成中",
-      cls: "bg-blue-100 text-blue-800 dark:text-blue-300",
-    },
-    done: {
-      label: "已完成",
-      cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
-    },
-    failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
-    stale: {
-      label: "待更新",
-      cls: "bg-red-100 text-red-800 dark:text-red-300",
-    },
-  };
-  const s = map[status];
+/* 镜头状态标签 —— 配色与文案都走与 ShotStudio 同一处（此前两处各写一份
+ * 逐字相同的 map，改状态色要点两遍名；规范 16 §16.2.4.5）。 */
+export function ShotStatusBadge({ status }: { status: Shot["status"] }) {
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}
-    >
-      {s.label}
-    </span>
+    <StatusBadge
+      status={status}
+      label={SHOT_STATUS_LABEL[status]}
+      dot={false}
+      className="px-2 py-0.5 text-[10px]"
+    />
   );
 }
 
@@ -85,7 +69,7 @@ export function ShotRow({
         <span className="text-muted-foreground text-xs">
           {shot.sceneHeading}
         </span>
-        <StatusBadge status={shot.status} />
+        <ShotStatusBadge status={shot.status} />
         <Button
           variant="ghost"
           size="icon-sm"

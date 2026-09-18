@@ -47,6 +47,16 @@ export interface RecentProject {
 }
 
 /* 卡片类型徽标文案与图标 */
+/* 项目类别色 + 图标。
+ *
+ * 色值仍是 hex，但**只作为内联 style，不再走 Tailwind 任意值类**：Tailwind
+ * 的 JIT 扫不到 `bg-[${cfg.color}/15]` 这种运行时模板，此前那条写法从来就没
+ * 生效过（图标方块一直是无底色）。`bg()` 给它配上当前色 15%/18% 的透明度 ——
+ * 「同一个色相、不同的透明度档」用 `color-mix` 表达，不必再手写一份透明色。
+ *
+ * 色值本身属规范 03 §3.6.1 的**类型色例外**（项目类别色与
+ * `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），
+ * 已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
 const KIND_CONFIG: Record<
   string,
   { label: string; color: string; icon: React.ReactNode }
@@ -72,6 +82,11 @@ const KIND_CONFIG: Record<
     icon: <Video size={14} />,
   },
 };
+
+/** 把类别色按给定透明度档降为背景（`color-mix` 现取，不硬编码透明色）。 */
+function kindTint(color: string, percent: number): string {
+  return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+}
 
 export interface HomePageProps {
   onNewProject?: () => void;
@@ -289,7 +304,7 @@ export function HomePage({
                           <div
                             className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors"
                             style={{
-                              backgroundColor: `${cfg!.color}15`,
+                              backgroundColor: kindTint(cfg!.color, 15),
                               color: cfg!.color,
                             }}
                           >
@@ -306,8 +321,11 @@ export function HomePage({
                                 className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 backdrop-blur-sm ring-inset"
                                 style={{
                                   color: cfg!.color,
-                                  backgroundColor: `${cfg!.color}15`,
-                                  ["--tw-ring-color" as string]: `${cfg!.color}30`,
+                                  backgroundColor: kindTint(cfg!.color, 15),
+                                  ["--tw-ring-color" as string]: kindTint(
+                                    cfg!.color,
+                                    30,
+                                  ),
                                 }}
                               >
                                 {cfg!.label}
@@ -358,7 +376,7 @@ export function HomePage({
                           <div
                             className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
                             style={{
-                              backgroundColor: `${cfg.color}12`,
+                              backgroundColor: kindTint(cfg.color, 12),
                               color: cfg.color,
                             }}
                           >
