@@ -13,57 +13,57 @@ import { createPortal } from "react-dom";
 import { Z } from "~/lib/shell/overlay-z";
 
 /**
- * Dark-themed custom <select> replacement.
+ * 深色主题的自定义 <select> 替代品。
  *
- * Native <select> dropdowns ignore CSS background-color on <option> in
- * Chromium/Windows (OS-level widget).  This component renders an identical
- * visual shell but drops a fully-styled dark popover for the option list.
+ * 原生 <select> 下拉在 Chromium/Windows 上会忽略 <option> 的 CSS
+ * background-color（那是 OS 级控件）。本组件渲染一模一样
+ * 的视觉外壳，但为选项列表弹出一个完全自绘的深色浮层。
  *
- * widened `labels` from `Record<string, string>` to
- * `Record<string, ReactNode>` so callers can decorate each row with
- * coloured dots / "本机" / "在线" badges etc.  Backward-compatible —
- * `string` is a valid ReactNode.
+ * 把 `labels` 从 `Record<string, string>` 放宽到
+ * `Record<string, ReactNode>`，好让调用方给每行点缀
+ * 彩色圆点 /「本机」/「在线」徽标等。向后兼容 ——
+ * `string` 本身就是合法的 ReactNode。
  */
 interface DarkSelectProps {
   value: string;
   onChange: (value: string) => void;
   options: string[];
-  /** Map from option value → display label. Falls back to raw value if omitted. */
+  /** 选项值 → 显示标签的映射。省略时回落到原始值。 */
   labels?: Record<string, React.ReactNode>;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
   /**
-   * Minimum popover width, in px.  Defaults to 480 so richly-decorated rows
-   * (dot + name + taskType + local/online badge) can breathe on narrow
-   * trigger containers; the popover still snaps back to `trigger.width`
-   * when the trigger is wider than this floor.  Capped to viewport with
-   * automatic left-shift so it never overflows the right edge.
+   * 浮层最小宽度，单位 px。默认 480，好让装饰丰富的行
+   *（圆点 + 名字 + taskType + 本机/在线 徽标）在窄的
+   * 触发器容器上也能舒展；触发器比这个下限更宽时，浮层仍
+   * 回落到 `trigger.width`。以视口封顶并
+   * 自动左移，永不溢出右边缘。
    *
-   * when `autoFitFromOptions` is on, the *effective* minimum is
-   * `max(popoverMinWidth, longestLabelChars × 8 + 56)` so long model file
-   * names / workflowIO labels fit on narrow canvas nodes without each
-   * caller tuning this prop.  Capped at 720 so a single absurd string
-   * can't blow the popover off-screen.
+   * `autoFitFromOptions` 打开时，**有效**最小值是
+   * `max(popoverMinWidth, longestLabelChars × 8 + 56)`，好让长模型文件
+   * 名 / workflowIO 标签在窄画布节点上也放得下，无需每个
+   * 调用方各自调这个 prop。以 720 封顶，单个荒唐的长字符串
+   * 也不会把浮层顶出屏幕。
    */
   popoverMinWidth?: number;
   /**
-   * Auto-widen the popover to fit the longest option label.
-   * Only string/number labels are measured — rich ReactNode labels (e.g.
-   * badges, icons) are skipped because we can't measure them without
-   * rendering off-screen.  Defaults to true.
+   * 自动加宽浮层以放下最长的选项标签。
+   * 只测量字符串 / 数字标签 —— 富 ReactNode 标签（例如
+   * 徽标、图标）跳过，因为不渲染到屏幕外就量不出来。默认 true。
+   *
    */
   autoFitFromOptions?: boolean;
   /**
-   * Optional footer rendered at the bottom of the popover (outside the
-   * scrollable option list) — used for group empty-state hints that must
-   * stay visible regardless of how many options exist.
+   * 可选底栏，渲染在浮层底部（在可滚动
+   * 选项列表之外）—— 用于分组空态提示，它必须
+   * 无论有多少选项都保持可见。
    */
   footer?: React.ReactNode;
   /**
-   * Called when the popover opens/closes. The open state lives inside the
-   * component; callers use this to lazily load options right as the list
-   * becomes visible.
+   * 浮层开 / 关时调用。开合状态住在组件内部；
+   * 调用方用它来在列表即将可见时懒加载选项。
+   *
    */
   onOpenChange?: (open: boolean) => void;
 }
@@ -110,8 +110,8 @@ export function DarkSelect({
     setListHeight(listRef.current?.offsetHeight ?? 0);
     setFooterHeight(footerRef.current?.offsetHeight ?? 0);
   }, [open, options, footer]);
-  /* Popover position (fixed, in viewport coords). Computed from the trigger
-   * button's bounding rect so the dropdown escapes any parent overflow. */
+  /* 浮层位置（fixed，视口坐标）。由触发器按钮的
+   * bounding rect 算出，好让下拉逃出任何父级溢出裁剪。 */
   const [pos, setPos] = useState<{
     left: number;
     top: number;
@@ -124,7 +124,7 @@ export function DarkSelect({
     placement: "down",
   });
 
-  /* Close on Escape / click outside.
+  /* Escape / 点击外部时关闭。
    *  capture-phase + click 双重兜底
    *  诊断结论同样适用于 DarkSelect：组件挂在项目画布节点里，React
    *  Flow Pane 在 bubble 阶段会 stopPropagation，document 永远收不到
@@ -159,7 +159,7 @@ export function DarkSelect({
     };
   }, [open, emitOpenChange]);
 
-  /* Reset highlight when opening (adjusted during render, React 19 pattern) */
+  /* 打开时重置高亮（渲染期间调整，React 19 模式） */
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
@@ -168,7 +168,7 @@ export function DarkSelect({
       setHighlighted(idx >= 0 ? idx : -1);
     }
   }
-  /* Scroll highlighted into view after render */
+  /* 渲染后把高亮项滚进视野 */
   useEffect(() => {
     if (open) {
       requestAnimationFrame(() => {
@@ -179,15 +179,15 @@ export function DarkSelect({
     }
   }, [open, highlighted]);
 
-  /* Recompute popover position when opening / on viewport changes.
-   * Auto-flips upward if the dropdown would overflow below the viewport.
-   * popover width is `max(trigger.width, popoverMinWidth)`,
-   * and the left edge is left-shifted if the wider popover would overflow
-   * the right viewport edge.
+  /* 打开时 / 视口变化时重算浮层位置。
+   * 若下拉会在视口下方溢出则自动向上翻转。
+   * 浮层宽度是 `max(trigger.width, popoverMinWidth)`，
+   * 且更宽的浮层会溢出右侧视口边缘时
+   * 左边缘会左移。
    *
-   * when `autoFitFromOptions` is on, the effective minimum is
-   * widened to fit the longest *string* label so long model file names
-   * don't get clipped on narrow canvas nodes.  Capped at 720. */
+   * `autoFitFromOptions` 打开时，有效最小值
+   * 加宽到放下最长的**字符串**标签，长模型文件名
+   * 不会在窄画布节点上被裁掉。以 720 封顶。 */
   const POPOVER_MAX_H = 240; // ~max-h-60 (6-7 items @ py-1.5)
   const VIEWPORT_MARGIN = 8;
   const POPOVER_AUTO_MAX = 720;
@@ -321,10 +321,10 @@ export function DarkSelect({
         onKeyDown={handleKeyDown}
         className={`border-border bg-subtle text-ink-bright flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none focus:border-violet-500/40 ${className}`}
       >
-        {/* min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
-         *  cleanly; callers that want a right-aligned badge (e.g. "本机" /
-         *  "在线") should place a `flex-1` spacer before the badge so it
-         *  pushes right even under this `truncate` (nowrap) context. */}
+        {/* min-w-0 + flex-1 + truncate 让富 ReactNode 标签裁切
+         *  干净；想要右对齐徽标（如「本机」/
+         *  「在线」）的调用方应在徽标前放一个 `flex-1` 占位，好在
+         *  这个 `truncate`（nowrap）上下文下也向右顶。 */}
         <span className="flex min-w-0 flex-1 items-center truncate">
           {label}
         </span>
