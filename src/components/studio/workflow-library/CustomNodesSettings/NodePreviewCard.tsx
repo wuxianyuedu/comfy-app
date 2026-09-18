@@ -9,22 +9,22 @@ import { colorFor, type ManifestNodeRaw } from "~/config/custom-nodes";
 import { PortRow, WidgetValueChip } from "./SettingsParts";
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/* NodePreviewCard — a small ComfyUI-style preview of one custom node.       */
+/* NodePreviewCard —— 一个自定义节点的小型 ComfyUI 风预览。       */
 /*                                                                            */
-/*  Layout mirrors what you see in the official ComfyUI web UI for the same  */
-/*  node: solid coloured header (drawn from the node's `category`) with a     */
-/*  collapse chevron and category badge, then a body split into two zones:    */
+/*  布局镜像官方 ComfyUI Web UI 里同一节点看到的样子：                */
+/*  实色头部（取自节点的 `category`）配                            */
+/*  收起箭头与类别徽标，然后卡片体分成两区：                      */
 /*                                                                            */
-/*    1. typed ports (inputs / outputs without a `widget` field) — drawn as   */
-/*       small left/right paired rows with coloured handle dots and an       */
-/*       uppercase type badge, mimicking the ComfyUI border on node cards.   */
-/*    2. widgets (inputs with `widget` field) — a label + default-value row   */
-/*       laid out like the parameter rows on the canvas itself.              */
+/*    1. 类型端口（没有 `widget` 字段的输入 / 输出）—— 画成          */
+/*       小的左右配对行，带彩色句柄圆点与                          */
+/*       大写类型章，模仿节点卡片上的 ComfyUI 边框。              */
+/*    2. widget（带 `widget` 字段的输入）—— 一行标签 + 默认值，      */
+/*       排布与画布上的参数行一致。                                */
 /*                                                                            */
-/*  Default state is collapsed: just the coloured header plus a 1-line tally */
-/*  ("3 typed / 7 widgets / 1 output"). Click the header to expand. This      */
-/*  matches ComfyUI's own behaviour and keeps the package list scannable    */
-/*  even for the 146-node WanVideoWrapper package.                            */
+/*  默认收起：只有彩色头部加一行计数                                */
+/* （「3 个类型端口 / 7 个 widget / 1 个输出」）。点头部展开。        */
+/*  这与 ComfyUI 自身行为一致，也让包列表保持可扫读                  */
+/*  即使面对 146 个节点的 WanVideoWrapper 包。                       */
 /* ──────────────────────────────────────────────────────────────────────── */
 export function NodePreviewCard({
   data,
@@ -54,7 +54,7 @@ export function NodePreviewCard({
         border: `1px solid ${expanded ? color : "var(--color-border-strong)"}`,
       }}
     >
-      {/* Header — clickable to expand. Solid colour band, category-derived. */}
+      {/* 头部 —— 可点击展开。实色色带，取自类别。 */}
       <div
         role="button"
         tabIndex={0}
@@ -120,7 +120,7 @@ export function NodePreviewCard({
         </div>
       ) : (
         <div className="px-2.5 pt-1.5 pb-2">
-          {/* Zone 1 — typed ports (inputs left, outputs right) */}
+          {/* 区 1 —— 类型端口（输入在左，输出在右） */}
           {(typed.length > 0 || outputs.length > 0) && (
             <div
               className="mb-1.5 grid"
@@ -151,7 +151,7 @@ export function NodePreviewCard({
             </div>
           )}
 
-          {/* Zone 2 — widgets (labelled parameters) */}
+          {/* 区 2 —— widget（带标签的参数） */}
           {widgets.length > 0 && (
             <div
               className="flex flex-col gap-[2px] border-t pt-1.5"

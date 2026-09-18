@@ -1,10 +1,10 @@
 "use client";
-/* TOP PINS section — pure-connection inputs paired with outputs on shared
- * rows (redesign). Extracted from workflow-node.tsx.
- * Inputs (left target Handle) and outputs (right source Handle) are zipped
- * positionally so one 22px row holds both; the longer side's leftover keeps
- * filling trailing rows alone.  Handles are ALWAYS rendered regardless of
- * wire state ("dot stays on permanently" rule). */
+/* 顶部针脚区 —— 纯连接型输入与输出配对在同一
+ * 行上（改版）。从 workflow-node.tsx 抽出。
+ * 输入（左侧目标 Handle）与输出（右侧源 Handle）按位置拉在一起
+ * 让一行 22px 同时装下两者；较长一侧多出的部分继续
+ * 独占后续行。句柄**始终**渲染，无论
+ * 连线状态如何（「圆点常显」规则）。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { friendlyInputName } from "~/lib/comfyui/node-titles";
@@ -67,8 +67,8 @@ export function FlowNodePinRows({
         const outName = outEntry?.[0];
         const outType = outEntry?.[1];
 
-        // Input side — colour by declared slot type, label via the same
-        // label / zh-CN / friendly chain the widget rows use（作者 label 优先）。
+        // 输入侧 —— 按声明的槽位类型着色，标签走与 widget 行
+        // 相同的 label / zh-CN / 友好名链（作者 label 优先）。
         const inMeta = inName ? rawMeta[inName] : undefined;
         const inType = inMeta?.type ?? "*";
         const inCol = portColor(inType);
@@ -78,8 +78,8 @@ export function FlowNodePinRows({
             friendlyInputName(inName)
           : "";
 
-        // Output side — colour by `outputs[i][1]`, label via rawOutputs
-        // `localized` (zh), else the raw key.
+        // 输出侧 —— 按 `outputs[i][1]` 着色，标签优先取 rawOutputs 的
+        // `localized`（中文），否则用原始 key。
         const outCol = outType ? portColor(outType) : undefined;
         const outRaw = outName
           ? data.rawOutputs?.find((output) => output.name === outName)
@@ -97,8 +97,8 @@ export function FlowNodePinRows({
 
         return (
           <div
-            // Key includes both names so number-slot ports ("1", "2", …)
-            // don't collide inside the array.
+            // key 同时含两个名字，好让数字槽端口（"1"、"2" …）
+            // 不在数组里撞车。
             key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
             className="relative flex h-[22px] items-center pr-5 pl-5 text-[11px]"
             data-pin-input={inName}
@@ -127,9 +127,9 @@ export function FlowNodePinRows({
                   }}
                   title={`${inName} (${inType})`}
                 />
-                {/* IO checkbox for TOP PINS inputs that are UNCONNECTED —
-                 * a wired slot gets its value from upstream, so exposing
-                 * it as a workflow input is meaningless. */}
+                {/* 顶部针脚区**未连线**输入的 IO 复选框 ——
+                 * 已连线的槽位取值来自上游，把它
+                 * 暴露成工作流输入没有意义。 */}
                 {io?.ioEditMode &&
                   inMeta &&
                   !inMeta.isConnection &&
