@@ -64,7 +64,7 @@ export function CustomNodesSettings() {
 
             <NodesTab ctrl={ctrl} />
 
-            {/* Live parse console */}
+            {/* 实时解析控制台 */}
             <ParseConsole
               logs={ctrl.logs}
               parsing={ctrl.parsing}
@@ -72,7 +72,7 @@ export function CustomNodesSettings() {
               consoleRef={ctrl.consoleRef}
             />
 
-            {/* Per-package report cards */}
+            {/* 按包的报告卡片 */}
             {ctrl.report && <ReportCards report={ctrl.report} />}
           </div>
         </div>

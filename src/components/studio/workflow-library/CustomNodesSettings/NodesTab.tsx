@@ -71,7 +71,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 ⚠ {saveErr}
               </span>
             )}
-            {/* Directory overview chips — show totals + outdated count when any subpackage is detected. */}
+            {/* 目录总览章 —— 检测到任何子包时显示总数 + 过期数。 */}
             {totalAcrossParents.total > 0 && (
               <>
                 <span className="bg-subtle text-ink rounded-full px-2 py-0.5">
@@ -106,13 +106,13 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         </div>
       </section>
 
-      {/* Live manifest summary */}
+      {/* 实时清单摘要 */}
       {summary && <ManifestSummary summary={summary} />}
       {loading && !summary && <ParseProgressBanner progress={progress} />}
 
-      {/* Group-by-parent collapsible view. Each top-level dir is its own
-          block; subpackages inside a block can be hidden / shown via the
-          chevron so the user can focus on one source tree at a time. */}
+      {/* 按父级分组的可折叠视图。每个顶层目录自成
+          一块；块内的子包可经箭头隐藏 / 显示，
+          好让用户一次专注一棵源码树。 */}
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-ink text-sm font-medium">
@@ -145,12 +145,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 key={parent}
                 className="border-border bg-bg rounded-xl border"
               >
-                {/* Parent header — clickable to toggle.
-                    IMPORTANT: must NOT be a native button element, because the
-                    row contains a nested action button ("解析本目录"). Nested
-                    button elements in HTML are invalid and trigger React
-                    hydration errors. We use a div with role/keyboard handlers so
-                    a11y is preserved. */}
+                {/* 父级头 —— 可点击切换。
+                    重要：**不能**用原生 button 元素，因为
+                    把 button 嵌在 button 里在 HTML 里非法、会触发 React
+                    水合错误。我们用带 role / 键盘处理器的 div 代替。 */}
                 <div
                   role="button"
                   tabIndex={0}
@@ -237,7 +235,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                   </div>
                 </div>
 
-                {/* Subpackages — only when expanded */}
+                {/* 子包 —— 仅展开时显示 */}
                 {isOpen && subs.length > 0 && (
                   <div className="border-border bg-surface/50 border-t p-2">
                     <div className="space-y-1.5">
@@ -255,9 +253,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                               ? state.nodeCount
                               : state.savedNodeCount
                             : sub.packageFileCount;
-                        // Click-to-expand is only available for packages that
-                        // actually have parsed nodes. Unimported / missing /
-                        // empty packages don't have anything to show.
+                        // 点击展开只对有已解析节点的包可用。
+                        // 未导入 / 缺失 /
+                        // 空的包没东西可显示。
                         const nodesAreLoaded =
                           state.kind === "loaded" || state.kind === "outdated";
                         const nodeListOpen = !!expandedNodeList[sub.path];
@@ -366,10 +364,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 </Button>
                               </div>
                             </div>
-                            {/* Expandable ComfyUI-style node previews. Only
-                                rendered when the user clicks the count cell.
-                                Each card is its own collapse/expand target so
-                                a 146-node package stays scannable. */}
+                            {/* 可展开的 ComfyUI 风节点预览。只在
+                                用户点击计数单元时渲染。
+                                每张卡片都是自己的收起 / 展开目标，好让
+                                一个 146 节点的包仍可扫读。 */}
                             {nodesAreLoaded && nodeListOpen && (
                               <div
                                 className="mt-1 ml-3 space-y-1 border-l-2 border-dashed py-1 pl-3"

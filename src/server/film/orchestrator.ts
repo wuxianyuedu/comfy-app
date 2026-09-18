@@ -1,11 +1,11 @@
-// ── Film Studio orchestrator ─────────────────────────────────
-// One-click complete film pipeline:
-//   script → auto storyboard (shots) → per-shot video generation
-//   (reusing the ComfyUI video workflow) → ffmpeg concat (+ subtitles / BGM)
-//   → a single finished film.
+// ── 影片工坊编排器 ─────────────────────────────────
+// 一键完整影片管线：
+//   剧本 → 自动分镜（镜头）→ 逐镜头视频生成
+//  （复用 ComfyUI 视频工作流）→ ffmpeg 拼接（+ 字幕 / BGM）
+//   → 一部成片。
 //
-// Each shot goes through the same library-workflow chain as the manual "video"
-// tab (workflow library id + encapsulation), so no built-in template is needed.
+// 每个镜头走与手动「视频」页签同一条库工作流链（工作流库 id +
+// 封装），所以不需要任何内置模板。
 
 import "server-only";
 import { spawn } from "child_process";
@@ -129,7 +129,7 @@ async function expandScriptLLM(raw: string): Promise<
   }));
 }
 
-/** Turn a raw script into an ordered list of shot prompts. */
+/** 把原始剧本变成有序的镜头提示词列表。 */
 async function parseScriptToShots(
   raw: string,
   type: string,
@@ -145,7 +145,7 @@ async function parseScriptToShots(
       shotCount: expanded.shotCount,
     }));
   } catch {
-    // offline fallback — reuse the workshop parser
+    // 离线兜底 —— 复用工坊解析器
     const sc = parseIdeaToScenes(raw, {
       title: "",
       type: (type as ProjectType) ?? "short_video",
@@ -338,7 +338,7 @@ export async function startFilm(id: string) {
     }
   }
 
-  // background watch → compose
+  // 后台监看 → 合成
   void watchFilm(id);
 }
 
@@ -350,7 +350,7 @@ async function watchFilm(id: string) {
     if (!film || film.status === "CANCELLED" || film.status === "FAILED")
       return;
     if (film.status !== "GENERATING") {
-      // already moved on (e.g. compose started)
+      // 已经走掉了（例如合成已开始）
     }
 
     const shots = await filmShotRepository.listByFilm(id);
@@ -424,7 +424,7 @@ async function watchFilm(id: string) {
         await appendFilmLog(id, "error", `影片生成失败：${failed} 个镜头失败`);
         return;
       }
-      // success (or partial) → compose
+      // 成功（或部分成功）→ 合成
       await composeFilm(id);
       return;
     }

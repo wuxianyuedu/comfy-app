@@ -36,7 +36,7 @@ function say(prefix, message) {
 }
 
 /** 只比数字主体：`v12.4.1` 与 `12.4.1` 是同一个版本（判据与启动器一致）。 */
-/** @param {string | null} a @param {string | null} b @returns {boolean} */
+/** 比较两个版本串 a、b，返回 a 是否小于 b。 */
 function sameVersion(a, b) {
   if (!a || !b) return false;
   return a.replace(/^v/, "") === b.replace(/^v/, "");

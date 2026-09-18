@@ -1,11 +1,11 @@
 "use client";
 
-/** extracted from WorkflowLibrary's import-panel state +
- *  JSON import / drag-and-drop logic.  The hook owns all import-panel UI
- *  state (name / modes / format / json / errors / help tip), the manual
- *  "粘贴 JSON" submit path, and the drag-and-drop funnel that
- *  pre-fills the same panel.  The component keeps only the state object
- *  and the JSX.
+/** 从 WorkflowLibrary 抽出的导入面板状态 +
+ *  JSON 导入 / 拖放逻辑。该 hook 拥有全部导入面板 UI
+ *  状态（name / modes / format / json / errors / 帮助提示）、手动的
+ *  「粘贴 JSON」提交路径，以及预填同一面板的
+ *  拖放漏斗。组件只保留状态对象
+ *  和 JSX。
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import { type api } from "~/trpc/react";
@@ -61,7 +61,7 @@ function useDropZone(
 }
 
 export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
-  // ── Import panel state ──
+  // ── 导入面板状态 ──
   const [showImport, setShowImport] = useState(false);
   const [importName, setImportName] = useState("");
   const [importModes, setImportModes] = useState<string[]>([]);
@@ -73,9 +73,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState("");
   const [importWarn, setImportWarn] = useState<string[]>([]);
-  // (#53): the import-panel "?" help was hover-only
-  // (pointer-events-none + group-hover).  Clicking did nothing.  Make it a
-  // real toggle so a click shows/hides the explanation.
+  //（#53）：导入面板的「?」帮助以前只有悬停
+  //（pointer-events-none + group-hover）。点击没反应。把它改成
+  // 真正的开关，好让点击能显示 / 隐藏说明。
   const [showHelpTip, setShowHelpTip] = useState(false);
 
   // 文件导入的两个入口：拖入（列表区 / 导入面板，见下方 useDropZone）与面板里的
@@ -179,7 +179,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         showFileError("无法识别的工作流格式：既不是 API 也不是 LiteGraph RAW");
         return;
       }
-      // Auto-name from filename (strip extension).
+      // 由文件名自动取名（去掉扩展名）。
       const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
       setImportName(baseName || "未命名工作流");
       setImportFormat(detected); // already "api" | "raw"
@@ -187,8 +187,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportErr("");
       setImportWarn([]);
       setShowImport(true);
-      // Best-effort mode hint: if the JSON hints at image-to-image
-      // (upscale / inpaint / img2img), suggest I2I as default; otherwise T2I.
+      // 尽力而为的模式提示：JSON 里若暗示图生图
+      //（upscale / inpaint / img2img），建议默认 I2I；否则 T2I。
       try {
         let suggested = "T2I";
         const obj = parsed as Record<string, unknown>;
@@ -227,7 +227,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         setImportModes([suggested]);
         setImportDefaultMode(suggested);
       } catch {
-        /* swallow — keep default */
+        /* 吞掉 —— 保持默认 */
       }
     },
     [showFileError],

@@ -29,13 +29,13 @@ import {
   type RowToken,
 } from "./log-row-style";
 
-/* Per-message render cache: a parsed log line is immutable, so we cache the
- * produced fragment list by the raw message string.  This avoids re-running the
- * ANSI/token parser for every row on every parent re-render (search, filter,
- * scroll, new-log arrival) — the single biggest cost in the old panel.
- * Memory is bounded by RENDER_CACHE_MAX (full clear on overflow).  Dev note:
- * Fast Refresh re-executes this module on edit, so rule changes naturally
- * start with a fresh cache — no stale-entry purge needed. */
+/* 逐消息渲染缓存：一条已解析的日志行是不可变的，所以我们按原始
+ * 消息串缓存产出的片段列表。这避免了在父级每次重渲染时
+ *（搜索、筛选、滚动、新日志到达）对每一行重跑
+ * ANSI / token 解析器 —— 旧面板里最大的单项开销。
+ * 内存由 RENDER_CACHE_MAX 限制（溢出时整体清空）。开发注记：
+ * Fast Refresh 会在编辑时重执行本模块，所以规则变化天然
+ * 从空缓存开始 —— 无需清理陈旧条目。 */
 const FRAGMENT_CACHE = new Map<string, RowToken[]>();
 const FRAGMENT_CACHE_MAX = 5000;
 

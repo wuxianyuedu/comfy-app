@@ -1,14 +1,14 @@
 "use client";
 
-/** extracted from ProjectCanvas — media drop-to-canvas
- *  logic.  The material-library / history panels hand files to the canvas
- *  through `placeMediaNode` (button click) or the drag-and-drop handlers.
+/** 从 ProjectCanvas 抽出 —— 媒体拖放落到画布
+ *  的逻辑。素材库 / 历史面板经 `placeMediaNode`（按钮点击）或
+ *  拖放处理器把文件交给画布。
  *
- *  Files live in public/generated (served via /api/generated), but the
- *  picture / movie node's mediaPath must be a filename inside the ComfyUI
- *  **input** directory so downstream LoadImage / LoadVideo can consume it.
- *  `importOutputAsInput` copies the bytes back into ComfyUI input (cached
- *  by source path, so re-dropping never re-uploads).
+ *  文件住在 public/generated（经 /api/generated 提供），但
+ *  图片 / 影片节点的 mediaPath 必须是 ComfyUI
+ *  **输入**目录内的文件名，好让下游 LoadImage / LoadVideo 能消费它。
+ *  `importOutputAsInput` 把字节拷回 ComfyUI 输入（按来源路径缓存，
+ *  所以重复拖放不会重复上传）。
  */
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { XYPosition } from "@xyflow/react";

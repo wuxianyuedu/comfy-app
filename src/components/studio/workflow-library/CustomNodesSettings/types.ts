@@ -1,6 +1,6 @@
-/* Shared type contracts for the CustomNodesSettings dialog modules.
- * Moved verbatim from the original single-file CustomNodesSettings.tsx —
- * no behaviour change, types only. */
+/* CustomNodesSettings 弹窗各模块共享的类型契约。
+ * 从原来的单文件 CustomNodesSettings.tsx 原样搬来 ——
+ * 无行为变化，只有类型。 */
 
 export interface PkgReport {
   path: string;
@@ -63,14 +63,14 @@ export interface SettingsResp {
   } | null;
   lastReport: ParseReport | null;
   discoveredByParent: Record<string, DiscoveredSubpkg[]>;
-  /** Map: normalised absolute path (forward slashes, lowercased) → loaded SummaryPkg
-   *  Lets the UI join discovered subpackages against the manifest and detect
-   *  "loaded but out-of-date" using contentHash. */
+  /** 映射：归一化绝对路径（正斜杠、小写）→ 已加载的 SummaryPkg
+   *  让 UI 能把发现的子包与清单对齐，并用 contentHash 识别
+   *  「已加载但已过期」。 */
   byPath: Record<string, SummaryPkg>;
 }
 
-/** Visual state derived per subpackage row from the discovered entry + the
- *  loaded manifest entry at the same path. */
+/** 每个子包行由发现的条目 + 同路径上已加载的清单
+ *  条目共同推导出的视觉状态。 */
 export type RowState =
   | { kind: "loaded"; savedHash: string; nodeCount: number }
   | {
@@ -84,11 +84,11 @@ export type RowState =
   | { kind: "missing" }
   | { kind: "empty" };
 
-/** Two-phase parse progress, expressed in PACKAGE counts (NOT file counts):
- *   scan phase → discovered grows; total is unknown until the file walk ends.
- *   hash phase → done / total of packages processed.
- * The progress bar fill switches: indeterminate (CSS animation) during scan,
- * then snaps to a determined K/M when scan announces `total=M`. */
+/** 两阶段解析进度，以**包**计数表示（**不是**文件数）：
+ *   扫描阶段 → discovered 增长；文件遍历结束前总数未知。
+ *   哈希阶段 → 已处理 / 总包数。
+ * 进度条填充会切换：扫描期间不确定（CSS 动画），
+ * 然后当扫描宣布 `total=M` 时跳到确定的 K/M。 */
 export type ParseProgress = {
   phase: "queue" | "scan" | "hash" | ""; // which stage we're in
   done: number; // packages processed (only meaningful in hash phase)

@@ -400,7 +400,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
         </>
       )}
 
-      {/* Full-screen markdown script editor */}
+      {/* 全屏 markdown 剧本编辑器 */}
       {isScriptEditorOpen && (
         <React.Suspense fallback={<StageFallback />}>
           <LazyScriptMarkdownEditor

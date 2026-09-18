@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 /**
- * GET /api/helper/install
+ * 端点：GET /api/helper/install
  * 把 install-comfyapp-helper.ps1 作为下载返回，方便用户在别的机器/会话取用。
  * 同机用户其实直接双击项目内 scripts\install-comfyapp-helper.ps1 即可。
  */

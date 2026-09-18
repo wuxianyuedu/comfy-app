@@ -6,9 +6,9 @@ import { overlayClass } from "~/lib/full-screen-layer";
 import { placeFloating } from "~/lib/floating-position";
 import { Z } from "~/lib/shell/overlay-z";
 
-/** Seed modes — ComfyUI `control_after_generate` mapping.  Each entry has the
- *  ComfyUI value, the Chinese label, and a two-line description used in the
- *  popover (mirrors the Ardot "控件后行为" 4-option panel). */
+/** Seed 模式 —— ComfyUI `control_after_generate` 的映射。每项含
+ *  ComfyUI 取值、中文标签，以及浮层里用的两行说明
+ *（镜像 Ardot 的「控件后行为」4 选项面板）。 */
 const SEED_MODES: { value: string; label: string; hint: string }[] = [
   { value: "fixed", label: "固定值", hint: "数值不变" },
   { value: "increment", label: "递增值", hint: "数值+1 或切换到下一个选项" },
@@ -16,19 +16,19 @@ const SEED_MODES: { value: string; label: string; hint: string }[] = [
   { value: "random", label: "随机值", hint: "每次运行后随机化该值" },
 ];
 
-/** Seed-like widget input? (KSampler / custom node seed pins). */
+/** 是不是类 seed 的 widget 输入？（KSampler / 自定义节点的 seed 针脚）。 */
 
 export function isSeedLike(e: { name: string; label?: string }): boolean {
   return /seed|noise_seed/i.test(`${e.name} ${e.label ?? ""}`);
 }
 
-/** Inline glyph for the seed-mode popover (Ardot 4-option panel).
- *  Geometric, no font dependency — drawn with SVG inside a 36×36 box with
- *  the same dark fill as the WorkflowChipRow chips. */
+/** seed 模式浮层的内联图标（Ardot 4 选项面板）。
+ *  几何化，不依赖字体 —— 在 36×36 盒子里用 SVG 画，填充色
+ *  与 WorkflowChipRow 的章同款深色。 */
 function SeedModeIcon({ value }: { value: string }) {
-  // 36x36 viewBox, ~22x22 glyph centered.
+  // 36x36 viewBox，约 22x22 的图标居中。
   if (value === "fixed") {
-    // 📌 Pin (rounded square cap + diagonal stem with dot).
+    // 📌 图钉（圆角方形帽 + 带点的斜杆）。
     return (
       <svg
         width="22"
@@ -122,23 +122,22 @@ function SeedModeIcon({ value }: { value: string }) {
   );
 }
 
-/** Clickable seed-mode chip (canvas node → inline on numeric/seed row).
- *  Click toggles a 4-option "控件后行为" popover aligned with the Ardot
- *  design (dark card, icon + title + hint, radio dot on the right).  Picking
- *  an option calls `onPick` which the canvas layer writes back to the
- *  node's `seedModes` map.
+/** 可点击的 seed 模式章（画布节点 → 数值 / seed 行内联）。
+ *  点击切换一个 4 选项「控件后行为」浮层，对齐 Ardot
+ *  设计（深色卡片、图标 + 标题 + 提示、右侧单选圆点）。选中
+ *  一项会调 `onPick`，由画布层写回节点的 `seedModes` 表。
  *
- *  Z-index fix (bug): the previous inline popover lived inside
- *  a React Flow node, which uses `position:absolute+transform:translate3d(...)`
- *  and therefore creates a stacking context. Even with `z-40` the popover was
- *  covered by any other node whose React Flow `zIndex` was raised (selected,
- *  dragging, etc.). We now portal the popover + backdrop into `document.body`
- *  so they live in the root stacking context and can never be hidden by other
- *  flow nodes. Position is recomputed from the trigger's getBoundingClientRect
- *  on open and on viewport/scroll resize.
+ *  z-index 修复（旧 bug）：此前内联浮层住在
+ *  一个 React Flow 节点里，而它用 `position:absolute+transform:translate3d(...)`、
+ *  因此创建了层叠上下文。即使给了 `z-40`，浮层仍会被任何
+ *  React Flow `zIndex` 更高的节点盖住（选中、拖拽等）。
+ *  现在把浮层 + 背板 portal 进 `document.body`，
+ *  于是它们住在根层叠上下文里，永远不会被别的
+ *  flow 节点遮住。位置在打开时与视口 / 滚动变化时
+ *  由触发器的 getBoundingClientRect 重算。
  *
  *  视口翻转（ISSUE #349）：seed 行是参数表单的**最后一行**（画布节点里
- *  outputs 不渲染，末尾就是它），面板又从触发器向下弹 ~270px，于是贴着窗口
+ *  outputs 不渲染，末尾就是它），面板又从触发器向下弹约 270px，于是贴着窗口
  *  下沿的节点一打开就把最后一个选项压到视口之外（截图里只露出前三项）。定位
  *  改为交给 `placeFloating`：下方放不下就翻到触发器上方，并给出高度上限
  *  （面板自身滚动），保证底边永远落在视口内。 */
@@ -209,7 +208,7 @@ export function SeedModeButton({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    // capture: true catches scrolls inside any scroll ancestor (incl. R/F Pane)
+    // capture: true 能接住任何滚动祖先里的滚动（含 R/F Pane）
     window.addEventListener("scroll", onScrollOrResize, true);
     window.addEventListener("resize", onScrollOrResize);
     window.addEventListener("keydown", onKey);

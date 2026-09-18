@@ -10,8 +10,8 @@ export interface TaskItem {
   negativePrompt?: string | null;
   params?: Record<string, unknown> | null;
   error?: string | null;
-  /** structured ComfyUI /prompt validation errors,
-   *  present on FAILED tasks so the card can show a per-field list. */
+  /** 结构化的 ComfyUI /prompt 校验错误，
+   *  在 FAILED 任务上存在，好让卡片显示逐字段清单。 */
   validationErrors?: ValidationError[] | null;
   createdAt: string;
   cover: string | null;

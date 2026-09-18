@@ -83,7 +83,7 @@ export function AgentOverlay({
         </Button>
       </div>
 
-      {/* Tool execution status panel (top, when tools have run) */}
+      {/* 工具执行状态面板（有工具跑过时显示在顶部） */}
       {toolRuns.length > 0 && (
         <div className="border-border bg-bg/60 max-h-28 shrink-0 overflow-y-auto border-b px-4 py-2">
           <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-[10px] font-medium">

@@ -1,8 +1,8 @@
-// Local ComfyUI chain helper: upload a shot's generated image into ComfyUI's
-// input dir so the img2video / flfvideo workflows (LoadImage nodes) can consume
-// it. The generate router expects `inputImage` to be a filename already present
-// in that dir; this endpoint bridges the workshop's generated-image URLs.
-//   POST /api/workshop-local/prepare  { image: string }  → { filename }
+// 本地 ComfyUI 链辅助：把某镜头的生成图片上传进 ComfyUI 的
+// 输入目录，好让 img2video / flfvideo 工作流（LoadImage 节点）能消费它。
+// 生成路由期望 `inputImage` 是已存在于该目录的文件名；
+// 本端点桥接工坊的生成图片 URL。
+//   端点：POST /api/workshop-local/prepare  { image: string }  → { filename }
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";

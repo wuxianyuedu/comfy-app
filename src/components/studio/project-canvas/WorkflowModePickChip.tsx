@@ -1,8 +1,8 @@
 "use client";
 
-/** extracted from WorkflowNode.tsx — mode picker chip
- *  (Dropdown 3, ) + the canvas-transform auto-close watcher.
- *  Behaviour and visuals unchanged.
+/** 从 WorkflowNode.tsx 抽出 —— 模式选择章
+ *  与画布变换时的自动关闭监听。
+ *  行为与视觉不变。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@xyflow/react";

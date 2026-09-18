@@ -32,10 +32,10 @@ interface Props {
   styles: StyleRef[];
   /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
   workflowId: string;
-  /** Masked API channel config; image channel gate comes from here. */
+  /** 掩码后的 API 通道配置；图片通道的放行判据来自这里。 */
   apiChannels: ApiChannelsView | null;
   onOpenApiSettings: () => void;
-  /** Shot-list owner (WorkshopPipeline setShots) — functional patches welcome. */
+  /** 镜头列表所有者（WorkshopPipeline setShots）—— 欢迎函数式补丁。 */
   onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
   onNextStage: () => void;
 }
@@ -43,11 +43,10 @@ interface Props {
 type Channel = "local" | "api";
 
 /**
- * 镜头生图 stage: consumes the shot list produced by 场景分镜 (prompts already
- * auto-built upstream; empty ones are re-filled here from scene + character
- * cards), and generates each shot image on the local ComfyUI chain or the
- * configured API channel. Results are written back onto Shot.imageUrl so the
- * video stage / FinalComposer can consume them unchanged.
+ * 镜头生图 stage：消费「场景分镜」产出的镜头列表（提示词已在上游
+ * 自动构建；空的在这里从场景 + 角色卡回填），并在本地 ComfyUI 链或
+ * 配置的 API 通道上生成每个镜头图片。结果写回 Shot.imageUrl，好让
+ * 视频 stage / FinalComposer 原样消费。
  */
 export function ShotStudio({
   shots,
@@ -69,7 +68,7 @@ export function ShotStudio({
   const [progress, setProgress] = React.useState<Record<string, number>>({});
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [batchRunning, setBatchRunning] = React.useState(false);
-  /** Shots whose prompt the user hand-edited — auto-prefill must not clobber. */
+  /** 提示词被用户手改过的镜头 —— 自动预填不得覆盖。 */
   const editedRef = React.useRef<Set<string>>(new Set());
 
   const apiReady = apiChannels?.image.configured === true;
@@ -79,9 +78,9 @@ export function ShotStudio({
     (s) => !s.imageUrl && (s.status === "idle" || s.status === "failed"),
   );
 
-  // ── Auto-prefill: storyboard output → image prompts ──────────────────────
-  // Shots arriving from 场景分镜 already carry built prompts; anything empty
-  // (e.g. imported bare shots) is filled from scene + character cards once.
+  // ── 自动预填：分镜输出 → 图片提示词 ──────────────────────
+  // 从「场景分镜」来的镜头已带构建好的提示词；任何为空的
+  //（例如导入的裸镜头）从场景 + 角色卡一次性填上。
   React.useEffect(() => {
     const needsFill = shots.some(
       (s) => !s.prompt.trim() && !editedRef.current.has(s.id),
@@ -120,7 +119,7 @@ export function ShotStudio({
     });
   }
 
-  /** Wait for one local ComfyUI task; resolves when the SSE stream settles. */
+  /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
     return new Promise<void>((resolve) => {
       const close = watchTask(taskId, {
@@ -135,7 +134,7 @@ export function ShotStudio({
           resolve();
         },
       });
-      // Safety valve: never wedge the batch loop on a silent stream.
+      // 安全阀：永不让批量循环卡在一个沉默的流上。
       const timeout = setTimeout(
         () => {
           close();
@@ -212,7 +211,7 @@ export function ShotStudio({
     if (batchRunning || pending.length === 0) return;
     setBatchRunning(true);
     for (const shot of [...pending]) {
-      // Re-check liveness each round — the user may edit/delete mid-run.
+      // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
       if (shot.status === "running" || shot.imageUrl) continue;
       await generateShot(shot);
     }
@@ -221,7 +220,7 @@ export function ShotStudio({
 
   return (
     <div className="space-y-4">
-      {/* Channel switch (local ComfyUI / configured API) */}
+      {/* 通道切换（本地 ComfyUI / 配置的 API） */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-xs">生成通道</span>
         <div className="grid grid-cols-2 gap-2">
@@ -293,7 +292,7 @@ export function ShotStudio({
         </Button>
       </div>
 
-      {/* Channel-specific gating hints (gentle, stage stays usable) */}
+      {/* 通道专属的放行提示（温和，stage 仍可用） */}
       {channel === "local" && !workflowId && (
         <div className="text-muted-foreground bg-subtle rounded-lg px-3 py-2 text-xs">
           本地通道需要先在右侧「生成资源」选择一个生图工作流（工作流库，需配好对外参数；ComfyUI

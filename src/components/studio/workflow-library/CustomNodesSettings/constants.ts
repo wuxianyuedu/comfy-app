@@ -1,5 +1,5 @@
-/* Visual presets for the CustomNodesSettings dialog.
- * Moved verbatim from the original single-file CustomNodesSettings.tsx. */
+/* CustomNodesSettings 弹窗的视觉预设。
+ * 从原来的单文件 CustomNodesSettings.tsx 原样搬来。 */
 
 import type { RowState } from "./types";
 

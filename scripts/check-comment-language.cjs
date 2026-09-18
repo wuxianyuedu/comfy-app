@@ -32,6 +32,9 @@
  * 1. **只统计注释行**。字符串字面量、URL、代码标识符一律不看 —— 它们里的英文
  *    是**内容**不是**文字**,改成中文会改行为(与 §12.11 的「判据写成形状等于把
  *    门禁挂在实现细节上」相反:这里的形状正是判据本身)。
+ *    **`.tsx` 里的 JSX 注释(`{/* … *\/}`)同样是注释**,按块注释同判 —— 早期版本
+ *    只认行首 `/*` / `//`,JSX 注释**从未被扫描**(判据盲区:那些英文注释既不会被
+ *    统计、也不会被拦下,棘轮数字还一直显示「很干净」)。
  * 2. **行内必须含「疑似英文句子」才计入**。判据是**连续英文单词(≥2 个字母)≥ 3 个**
  *    —— `// TODO: check` 这类两词以内的行、`// --- 分隔线 ---`、`// [ERROR] foo`
  *    一律不计入。理由:计数里混进分隔线与标签会让数字失去意义(它要回答的是
@@ -59,7 +62,7 @@ const BASELINE = path.join(__dirname, ".comment-language-baseline.json");
 /** 判据版本:只有判据本身变了(例如换了「疑似英文句子」的阈值)才允许一次性重记,
  *  其余情况数字只许下降 —— 否则 `--update` 就成了「这条先放宽一下」的后门
  *  (与 §12.13 / §12.16 同款口径)。 */
-const RULE_VERSION = 1;
+const RULE_VERSION = 2;
 const ARGS = new Set(process.argv.slice(2));
 const UPDATE = ARGS.has("--update");
 const STRICT = ARGS.has("--strict");
@@ -251,6 +254,13 @@ function countEnglishCommentLines(src) {
       if (!line.includes("*/")) inBlock = true;
     } else if (line.startsWith("//")) {
       text = line.slice(2).trim();
+    } else if (line.startsWith("{/*")) {
+      // JSX 里的注释块：`{/* … */}`。剥离包裹的 `{` 与 `*/}` 后与普通块注释同判。
+      text = line
+        .replace(/^\{\/\*+/, "")
+        .replace(/\*\/\}$/, "")
+        .trim();
+      if (!line.includes("*/}")) inBlock = true;
     }
     if (text === null || !text) continue;
     if (TOOL_DIRECTIVE_RE.test(text)) continue;
@@ -321,7 +331,8 @@ async function main() {
           generatedAt: new Date().toISOString().slice(0, 10),
           ruleVersion: RULE_VERSION,
           note:
-            "疑似英文注释行计数棘轮(规范 12.4.6,判据版本 1);只许降不许升。" +
+            `疑似英文注释行计数棘轮(规范 12.4.6,判据版本 ${RULE_VERSION});` +
+            "只许降不许升。" +
             "白名单见 docs/reference-facts.md 的 comment.language.asciiOnly。",
           total,
           files: counts,

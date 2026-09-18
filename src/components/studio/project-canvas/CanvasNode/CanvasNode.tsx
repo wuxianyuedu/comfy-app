@@ -1,12 +1,12 @@
 "use client";
 
-/* ── Main node component ──
- * behavior-preserving hook split. The logic clusters now live in
- * sibling modules of this directory: use-file-upload.ts (upload plumbing),
- * use-workflow-io.ts (shared lists + dynamic IO map + seeding/filter effects),
- * use-generate.ts (reconcile + runGenerate + error-panel retry) and
- * ErrorPanel.tsx (collapsible error panel). This file keeps state assembly,
- * patch and the render-body-by-kind JSX. */
+/* ── 主编点组件 ──
+ * 行为不变地拆成 hook。逻辑簇现在住在本目录的兄弟模块里：
+ * use-file-upload.ts（上传管线）、
+ * use-workflow-io.ts（共享列表 + 动态 IO 表 + 播种/筛选 effect）、
+ * use-generate.ts（对账 + runGenerate + 错误面板重试）与
+ * ErrorPanel.tsx（可折叠错误面板）。本文件保留状态组装、
+ * patch 与「按 kind 渲染 body」的 JSX。 */
 import React, { useCallback } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { WorkflowNode } from "../WorkflowNode";
@@ -60,8 +60,8 @@ export const CanvasNode = React.memo(function CanvasNode({
   const focusNode = () =>
     fitView({ nodes: [{ id }], duration: 300, padding: 0.2, maxZoom: 1.2 });
 
-  /* File-upload plumbing: refs + pick/upload handlers for the generator
-   * image input, the content-carrier media picker and drag-and-drop. */
+  /* 文件上传管线：生成器图片输入、内容载体媒体选择器与
+   *  拖放用的 ref + 选取 / 上传处理器。 */
   const {
     fileRef,
     pickFile,
@@ -72,7 +72,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onUploadFile,
   } = useFileUpload({ patch });
 
-  /* Shared workflow lists + dynamic IO map + modes/source filter + seeding. */
+  /* 共享工作流列表 + 动态 IO 表 + 模式 / 来源筛选 + 播种。 */
   const {
     wfList,
     wfListLoading,
@@ -97,7 +97,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onFailed: (reason) => patch({ error: reason, status: "error" }),
   });
 
-  /* Task-run logic: mount-time reconcile + runGenerate + error-panel retry. */
+  /* 任务运行逻辑：挂载时对账 + runGenerate + 错误面板重试。 */
   /* 运行期与编辑器取同一个生效模式：`defaultMode → modes[0] → taskType`。
    * 运行期表单按这个模式解析默认值与落点，落库的键也是 `source.mode:<模式>`。 */
   const wfMode = resolveWorkflowMode({
@@ -118,7 +118,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     getNode,
   });
 
-  /* ── render body by kind ── */
+  /* ── 按 kind 渲染 body ── */
   let body: React.ReactNode = null;
 
   if (d.kind === "image" || d.kind === "video") {
@@ -268,12 +268,12 @@ export const CanvasNode = React.memo(function CanvasNode({
        （避免 1px ↔ 2px 跳。Handle 骑跨设计保留——右下紫色 Handle 圆点本
        就设计在外露 +6，与 outline-offset 4 不冲突）。*/
     <div
-      /* node card width bumped 340→380 so the
-       *  label column ("宽度"/"高度"/"步数"…) can render the full 2-char
-       *  CJK label without competing with the stepper.  Combined with
-       *  (stepper capped at max-w-[180px]) the layout is
-       *  now:  [label flex-1] ……… [type chip] / [stepper ≤180]   on
-       *  each workflow widget row. */
+      /* 节点卡宽度从 340 提到 380，好让
+       *  标签列（「宽度」/「高度」/「步数」…）能完整渲染 2 字
+       *  CJK 标签而不与步进器抢空间。配合
+       *  （步进器以 max-w-[180px] 封顶），布局
+       *  现为： [label flex-1] ……… [type chip] / [stepper ≤180]，作用于
+       *  每条工作流 widget 行。 */
       className="border-border-strong bg-card relative w-[380px] rounded-[14px] border transition-[outline,box-shadow] duration-150"
       style={
         selected
@@ -364,8 +364,8 @@ export const CanvasNode = React.memo(function CanvasNode({
           <div className="px-3.5 py-2.5">{body}</div>
         </>
       )}
-      {/* Collapsible error panel — state/derivations/JSX live in ErrorPanel;
-       *  it renders null itself when the node has no visible error. */}
+      {/* 可折叠错误面板 —— 状态 / 推导 / JSX 都在 ErrorPanel；
+       *  节点没有可见错误时它自己渲染 null。 */}
       <ErrorPanel
         nodeId={id}
         kind={d.kind}
@@ -386,7 +386,7 @@ export const CanvasNode = React.memo(function CanvasNode({
         className="hidden"
         onChange={onFile}
       />
-      {/* content-carrier upload input — accepts both image and video */}
+      {/* 内容载体上传输入 —— 同时接受图片与视频 */}
       <input
         ref={mediaRef}
         type="file"
@@ -401,26 +401,26 @@ export const CanvasNode = React.memo(function CanvasNode({
           <OutputRowPort kind={d.kind} wfIO={wfIO ?? null} />
         </div>
       )}
-      {/* workflow output — exposed by ComfyUI workflow as a connectable right-side
-       *  source handle (matches the standard workflow-canvas endpoint styling,
-       *  no separate footer row).  Colour follows the resolved output kind
-       *  (IMAGE/VHS_VIDEO…) via outputTargetKind, so the handle always matches
-       *  Ardot design tokens regardless of the selected workflow's task type.
+      {/* 工作流输出 —— 由 ComfyUI 工作流暴露成右侧可连接的
+       *  源句柄（沿用标准工作流画布端点样式，
+       *  没有单独的底栏行）。颜色按解析出的输出类型
+       *  （IMAGE/VHS_VIDEO…）经 outputTargetKind 走，所以句柄始终与
+       *  Ardot 设计 token 一致，无论所选工作流的任务类型是什么。
        *
        *  用户反馈画布 workflow 节点右侧的紫色圆点
-       *  「看起来像漏出的 bug」——workflow 节点是叶节点（生成图片/视频），
+       *  「看起来像漏出的 bug」—— workflow 节点是叶节点（生成图片 / 视频），
        *  在 project canvas 上不会接出到下游节点，所以这个 source Handle 实
        *  际上没人连。需要让出端口的能力由画布 IO-edit modal 提供（不在节
        *  点上外挂圆点）。直接干掉这个 Handle，只在节点外侧浮层工具栏
-       *  「添加输出」里有需要时显式拖出。*/}
-      {/* d.kind === "workflow" && <Handle type="source" ... /> removed */}
-      {/* content-carrier output handles (text / picture / movie) 
-          (2026-08-16): 已上移到 body wrapper 内（与 picture input Handle 同 parent），
+       *  「添加输出」里有需要时显式拖出。 */}
+      {/* 已移除：d.kind === "workflow" && <Handle type="source" ... /> */}
+      {/* 内容载体的输出句柄（text / picture / movie）——
+          已上移到 body wrapper 内（与 picture input Handle 同 parent），
           保持右侧 50% 与左侧同 Y；底部不再挂 footer 行，去掉「输出 · 图像」label 与装饰点。
- *  video 节点现在也走 OutputRowPort（同 image / script）
-       *  — 与 WorkflowNode.outputs row 视觉对齐。agent / text / picture / movie 仍由各自
+          video 节点现在也走 OutputRowPort（同 image / script）
+       *  —— 与 WorkflowNode.outputs row 视觉对齐。agent / text / picture / movie 仍由各自
        *  body 内的 Handle 处理。 */}
-      {/* agent: no output Handle */}
+      {/* agent：没有输出 Handle */}
       {/* 调试模式：渲染链路模块标签（仅 debug-store 开启时由
        *  DebugChainFooter 自行显示，kind 决定链路）。 */}
       <DebugChainFooter modules={getProjectCanvasRenderChain(d.kind)} />

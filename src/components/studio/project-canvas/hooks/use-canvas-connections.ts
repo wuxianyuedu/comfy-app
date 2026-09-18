@@ -1,10 +1,10 @@
 "use client";
 
-/** extracted from ProjectCanvas — connection chaining
- *  logic (routes generated output by which port/handle is connected).
+/** 从 ProjectCanvas 抽出 —— 连接串联
+ *  逻辑（按哪个端口 / 句柄被连接来路由生成出来的输出）。
  *
- *  Ref objects are threaded in from the parent because the callbacks read
- *  the *latest* nodes/edges without re-binding on every state change.
+ *  ref 对象由父级传入，因为回调要读**最新**的
+ *  nodes/edges 而不必在每次状态变化时重绑。
  */
 import {
   useCallback,
@@ -51,9 +51,9 @@ export function useCanvasConnections({
       const outEdges = es.filter((edge) => edge.source === sourceId);
       if (outEdges.length === 0) return;
 
-      // Only import the generated image if at least one downstream port needs it.
-      // A workflow target also needs the imported file when a wire input is an
-      // IMAGE-type pin (the import happens once and is reused below).
+      // 只在至少一个下游端口需要时才导入生成出的图片。
+      // 当某个连线输入是 IMAGE 类型针脚时，工作流目标也需要
+      // 这个导入文件（导入只做一次，下面复用）。
       const needsImage = outEdges.some((outEdge) => {
         const t = nodesRef.current.find(
           (current) => current.id === outEdge.target,
@@ -85,7 +85,7 @@ export function useCanvasConnections({
     [nodesRef, edgesRef, setNodes],
   );
 
-  /* When any node finishes a generation, feed its output downstream. */
+  /* 任何节点生成完成时，把它的输出喂给下游。 */
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail as {
@@ -127,9 +127,9 @@ export function useCanvasConnections({
     [setEdges, edgesRef, propagateFrom],
   );
 
-  /* lazy edge interactivity — untouched edges stay inert
-   *  (deletable/reconnectable=false); the first click flips both flags on,
-   *  after which delete-key / drag-reconnect behave exactly as before. */
+  /* 惰性边交互 —— 未碰过的边保持惰性
+   *（deletable/reconnectable=false）；首次点击把两个标志都打开，
+   * 之后就与原来完全一样地支持删除键 / 拖拽重连。 */
   const onEdgeClick = useCallback(
     (_event: ReactMouseEvent, edge: Edge) => {
       if (edge.deletable === true && edge.reconnectable === true) return;

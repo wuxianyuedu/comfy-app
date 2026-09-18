@@ -53,7 +53,7 @@
  *   node scripts/check-dead-exports.cjs --strict  # 基线未收紧也失败(CI 用)
  *   node scripts/check-dead-exports.cjs --update  # 重写基线(须伴随下降)
  *   node scripts/check-dead-exports.cjs --report  # 只出清单不判失败(盘点用)
- *   node scripts/check-dead-exports.cjs --verify <src/lib/x.ts>#<Symbol>
+ * 用法示例：node scripts/check-dead-exports.cjs --verify <文件>#<符号>
  *                                                 # 单条精确复核(清单归零后仍能自证)
  */
 const fs = require("node:fs");
@@ -161,7 +161,7 @@ function moduleKeys(absPathNoExt) {
  *    ① 同目录同基名  `src/lib/x/y.ts`  ⇄ `src/lib/x/y.test.ts`
  *    ② 集中目录同基名 `src/lib/x/y.ts`  ⇄ `tests/y.test.ts`
  *    ③ 集中目录异名   `src/lib/workshop/generation-log.ts`
- *                       ⇄ `tests/workshop-generation-log.test.ts`
+ *                       与 tests/workshop-generation-log.test.ts 配对
  *
  *  为什么按「import 了它」而不是按「全 tests/ 一起算」：后者等于把整个测试
  *  目录都当消费方 —— 任何被任何测试**提到过名字**的符号都不再是零消费，

@@ -2,12 +2,12 @@ import { useCallback } from "react";
 import type { ReactFlowInstance, XYPosition } from "@xyflow/react";
 
 /**
- * MiniMap → main-viewport single-click jump hook.
+ * MiniMap → 主视口单击跳转 hook。
  *
  * 用法：
- *   const rf = useReactFlow();
- *   const jump = useMiniMapJump(rf);
- *   <MiniMap pannable zoomable onClick={jump} ... />
+ *   用法示例：const rf = useReactFlow();
+ *   然后 const jump = useMiniMapJump(rf);
+ *   然后把它挂到 <MiniMap pannable zoomable onClick={jump} />
  *
  * 工作原理：
  *   React Flow 的 `<MiniMap onClick>` 已经帮我们把点击坐标映射到 flow 空间，

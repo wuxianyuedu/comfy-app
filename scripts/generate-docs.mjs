@@ -15,7 +15,7 @@
  * 逻辑必须有跨平台实现（规范 §9）。
  *
  * 用法：
- *   node scripts/generate-docs.mjs
+ * 用法示例：node scripts/generate-docs.mjs
  */
 import fs from "node:fs";
 import path from "node:path";
