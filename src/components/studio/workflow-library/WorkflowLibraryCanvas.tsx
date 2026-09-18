@@ -33,6 +33,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
+import { Button } from "~/components/ui/button";
+
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
 import type {
@@ -393,26 +395,28 @@ function WorkflowLibraryCanvasInner({
        * 边不可选、不显示此条。 */}
       {canWire && selectedEdgeIds.size > 0 && (
         <div
-          className="absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-lg border border-violet-400/40 bg-violet-500/15 px-2.5 py-1.5 text-[11px] text-violet-800 shadow-sm backdrop-blur-sm dark:text-violet-100"
+          className="border-primary-500/40 bg-primary-500/15 text-primary-strong absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] shadow-sm backdrop-blur-sm"
           data-testid="wflib-edge-delete-hint"
         >
           <span>已选中 {selectedEdgeIds.size} 条线</span>
-          <button
+          <Button
             type="button"
+            size="xs"
             onClick={handleDeleteSelected}
-            className="rounded bg-violet-600 px-2 py-0.5 font-medium text-white transition-colors hover:bg-violet-500"
             data-testid="wflib-delete-edge"
           >
             删除选中线
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             onClick={() => setSelectedEdgeIds(new Set())}
-            className="rounded px-1 text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-200"
+            className="text-primary-strong hover:bg-primary-500/20"
             aria-label="取消选中"
           >
             ×
-          </button>
+          </Button>
         </div>
       )}
     </div>

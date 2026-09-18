@@ -37,6 +37,8 @@
     "test:visual": "playwright test e2e/visual",
     "doc:check": "node scripts/check-doc-references.cjs",
     "theme:scan": "node scripts/check-theme-colors.cjs --report",
+    "ui:primitives": "node scripts/check-ui-primitives.cjs",
+    "ui:primitives:report": "node scripts/check-ui-primitives.cjs --report",
     "theme:check": "node scripts/check-theme-colors.cjs",
     "doc:render": "node scripts/render-doc-placeholders.cjs",
     "doc:gen": "node scripts/generate-docs.mjs"

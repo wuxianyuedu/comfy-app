@@ -11,12 +11,14 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
       class="pointer-events-none absolute inset-0 overflow-hidden"
     >
       <div
-        class="absolute top-[-20%] right-[-10%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
-        style="background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, rgba(139, 92, 246, 0) 70%);"
+        aria-hidden="true"
+        class="pointer-events-none absolute rounded-full top-[-20%] right-[-10%] h-[70%] w-[55%] opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        style="background: radial-gradient(circle, color-mix(in srgb, var(--color-aurora-violet) 40%, transparent) 0%, transparent 70%);"
       />
       <div
-        class="absolute bottom-[15%] left-[-15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
-        style="background: radial-gradient(circle, rgba(34, 211, 238, 0.26) 0%, rgba(34, 211, 238, 0) 70%);"
+        aria-hidden="true"
+        class="pointer-events-none absolute rounded-full bottom-[15%] left-[-15%] h-[55%] w-[45%] opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
+        style="background: radial-gradient(circle, color-mix(in srgb, var(--color-aurora-cyan) 26%, transparent) 0%, transparent 70%);"
       />
     </div>
     <header
@@ -106,7 +108,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               class="lucide lucide-upload"
               fill="none"
               height="22"
-              stroke="#a78bfa"
+              stroke="var(--color-aurora-violet)"
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="1.8"
@@ -201,11 +203,11 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                   >
                     <stop
                       offset="0%"
-                      stop-color="#8B5CF6"
+                      stop-color="var(--color-aurora-violet)"
                     />
                     <stop
                       offset="100%"
-                      stop-color="#22d3ee"
+                      stop-color="var(--color-aurora-cyan)"
                     />
                   </lineargradient>
                 </defs>
@@ -319,7 +321,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             width="100%"
           >
             <line
-              stroke="rgba(255,255,255,0.05)"
+              stroke="var(--color-border-subtle)"
               stroke-width="1"
               x1="12"
               x2="308"
@@ -327,7 +329,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               y2="36"
             />
             <line
-              stroke="rgba(255,255,255,0.05)"
+              stroke="var(--color-border-subtle)"
               stroke-width="1"
               x1="12"
               x2="308"
@@ -335,7 +337,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               y2="60"
             />
             <line
-              stroke="rgba(255,255,255,0.05)"
+              stroke="var(--color-border-subtle)"
               stroke-width="1"
               x1="12"
               x2="308"
@@ -345,7 +347,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             <path
               d="M12.0 9.4 L23.8 18.9 L35.7 26.3 L47.5 32.0 L59.4 34.4 L71.2 37.3 L83.0 41.6 L94.9 44.4 L106.7 46.1 L118.6 49.9 L130.4 54.5 L142.2 56.3 L154.1 57.1 L165.9 60.1 L177.8 63.1 L189.6 64.4 L201.4 66.7 L213.3 70.8 L225.1 73.1 L237.0 73.1 L248.8 74.9 L260.6 78.2 L272.5 79.8 L284.3 81.0 L296.2 84.4 L308.0 87.3"
               fill="none"
-              stroke="#22d3ee"
+              stroke="var(--color-aurora-cyan)"
               stroke-linejoin="round"
               stroke-opacity="0.55"
               stroke-width="1.5"
@@ -353,7 +355,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             <path
               d="M12.0 10.8 L23.8 20.3 L35.7 29.1 L47.5 35.8 L59.4 37.5 L71.2 39.9 L83.0 45.0 L94.9 47.7 L106.7 48.7 L118.6 53.4 L130.4 59.3 L142.2 60.6 L154.1 60.4 L165.9 63.9 L177.8 67.5 L189.6 68.0 L201.4 70.5 L213.3 76.0 L225.1 78.5 L237.0 77.3 L248.8 78.9 L260.6 83.1 L272.5 84.6 L284.3 85.4 L296.2 89.7 L308.0 93.4"
               fill="none"
-              stroke="#a78bfa"
+              stroke="var(--color-aurora-violet)"
               stroke-linejoin="round"
               stroke-width="2"
             />

@@ -71,7 +71,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           <span
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
               desktopManaged
-                ? "bg-[var(--primary,#7c5cff)]/15 text-[var(--primary,#7c5cff)]"
+                ? "bg-primary/15 text-primary"
                 : "bg-subtle text-ink/70"
             }`}
           >
@@ -117,7 +117,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <input
           id="comfyui-autostart"
           type="checkbox"
-          className="size-4 accent-[var(--primary,#7c5cff)]"
+          className="accent-primary size-4"
           checked={c.drafts.settings.comfyuiAutoStart ?? true}
           onChange={(event) =>
             c.patchSettings({ comfyuiAutoStart: event.target.checked })
