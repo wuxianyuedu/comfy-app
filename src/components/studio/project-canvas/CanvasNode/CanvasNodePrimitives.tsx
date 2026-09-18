@@ -7,7 +7,7 @@ import {
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
 
-/* ── Small shared UI primitives ── */
+/* ── 小型共享 UI 原语 ── */
 export const btnCls =
   "rounded-md btn-gradient px-2.5 py-1 text-[12px] font-medium text-white disabled:opacity-40";
 
@@ -24,7 +24,7 @@ export function Field({
   const isOut = port?.dir === "out";
   return (
     <div className="relative block">
-      {/* Unified label row — relative anchor so the input Handle centers on the title */}
+      {/* 统一标签行 —— 相对锚点，好让输入 Handle 居中于标题 */}
       <div className="relative mb-1.5 flex items-center gap-1.5">
         {port && s && !isOut && (
           <>
@@ -170,9 +170,9 @@ export function StatusDot({ status }: { status: CanvasNodeData["status"] }) {
   );
 }
 
-/* ── Status badge (text label) ──
- * Used in the top-left header row of nodes & result cards so the user can
- * read the lifecycle state at a glance.  Color matches the status dot. */
+/* ── 状态徽标（文字标签） ──
+ * 用在节点与结果卡的左上角头部行，好让用户
+ * 一眼读出生命周期状态。颜色与状态圆点一致。 */
 export function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
   const style =
     status === "running"
@@ -191,11 +191,11 @@ export function StatusBadge({ status }: { status: CanvasNodeData["status"] }) {
   );
 }
 
-/* ── "Type char + name" chip ──
- * Shared by the node header and the result-card header so every surface
- * displays a consistent top-left "type indicator + name" pair.  The char is
- * the kind's representative letter (T/I/V/A/W) rendered inside a circular
- * gradient that matches the kind's color. */
+/* ── 「类型字符 + 名字」章 ──
+ * 由节点头部与结果卡头部共享，好让每处界面
+ * 都显示一致的左上角「类型指示 + 名字」配对。字符是
+ * 该类型的代表字母（T/I/V/A/W），画在与该类型颜色相配的
+ * 圆形渐变里。 */
 export function NodeChip({
   kind,
   name,
