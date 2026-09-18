@@ -2,26 +2,25 @@
 
 import { useCallback, useLayoutEffect, useRef } from "react";
 
-/** Auto-growing textarea with width strictly locked to the parent.
+/** 自动增高的 textarea，宽度严格锁死在父级。
  *
- *  replaces the `field-sizing: content` approach
- *  used in . The native `field-sizing` property was supposed
- *  to give us auto-height while keeping `maxWidth: 100%` as a hard cap, but
- *  Chrome's implementation lets intrinsic content width overflow the parent
- *  when a real prompt's longest unbreakable line exceeds the control's inner
- *  width (282px = Card 340 - 2 border - 14×2 padding). The overflow-X rules
- *  (`overflowWrap: anywhere`, `wordBreak: break-word`) only clip the
- *  visible text — they cannot constrain the textarea's box geometry.
+ *  替换此前的 `field-sizing: content` 方案。原生 `field-sizing`
+ *  本该在 `maxWidth: 100%` 硬封顶下给出自动高度，但
+ *  Chrome 的实现会让固有内容宽度溢出父级 ——
+ *  当真实提示词里最长的不可断行超过控件的内部
+ *  宽度（282px = 卡片 340 - 2 边框 - 14×2 内边距）时。溢出-X 规则
+ *（`overflowWrap: anywhere`、`wordBreak: break-word`）只能裁掉
+ *  可见文字 —— 它们约束不了 textarea 的盒子几何。
  *
- *  This component instead:
- *   - drives height via JS (scrollHeight after a reset to `auto`), clamped
- *     to [MIN, MAX]; the textarea therefore sizes itself row-by-row, never
- *     relies on the new `field-sizing` API;
- *   - sets `box-sizing: border-box` + `width: 100%` so the box width is
- *     strictly the parent's content box, immune to intrinsic sizing;
- *   - keeps the horizontal overflow guards (pr-3 > pl-2.5,
- *     overflowX: hidden, overflowWrap: anywhere, wordBreak: break-word);
- *   - keeps the scrollbar suppression (webkit + firefox + ms).
+ *  本组件改为：
+ *   - 高度交给 JS 驱动（重置成 `auto` 后读 scrollHeight），并夹在
+ *     [MIN, MAX] 内；于是 textarea 逐行自适应，永不
+ *     依赖新的 `field-sizing` API；
+ *   - 设 `box-sizing: border-box` + `width: 100%`，让盒子宽度严格等于
+ *     父级的内容盒，不受固有尺寸影响；
+ *   - 保留横向溢出守卫（pr-3 > pl-2.5，
+ *     overflowX: hidden，overflowWrap: anywhere，wordBreak: break-word）；
+ *   - 保留滚动条抑制（webkit + firefox + ms）。
  */
 export function AutoResizeTextarea({
   value,
@@ -40,15 +39,15 @@ export function AutoResizeTextarea({
   const resize = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    // Reset to "auto" so scrollHeight reflects only the natural content height
-    // (otherwise it'd be clamped to the previous explicit height).
+    // 重置成 "auto"，好让 scrollHeight 只反映自然内容高度
+    //（否则会被夹到上一次的显式高度）。
     el.style.height = "auto";
     const natural = el.scrollHeight;
     const clamped = Math.min(Math.max(natural, minHeight), maxHeight);
     el.style.height = `${clamped}px`;
     el.style.overflowY = natural > maxHeight ? "auto" : "hidden";
   }, [minHeight, maxHeight]);
-  // Run after every value change (initial mount + after each keystroke).
+  // 每次值变化都跑（初始挂载 + 每次按键之后）。
   useLayoutEffect(() => {
     resize();
   }, [value, resize]);
