@@ -1,18 +1,18 @@
 /**
- * Workflow detail / subgraph detail builders — ported from the legacy
- * REST routes (src/app/api/workflows/[id]/route.ts GET and
- * src/app/api/workflows/[id]/subgraph/route.ts GET) into shared lib
- * functions so the tRPC router can serve the exact same derived shapes
- * through `workflow.detailFull` / `workflow.subgraph`.
+ * 工作流详情 / 子图详情的构建器。
  *
- * Cache keys keep the legacy namespaces (`wf:` / `sg:`) so existing
- * server-side cache entries remain valid.
+ * 原先散在两条 REST 路由里（GET src/app/api/workflows/[id]/route.ts 与
+ * GET src/app/api/workflows/[id]/subgraph/route.ts），现收进共享 lib 函数，
+ * 让 tRPC 路由能经 `workflow.detailFull` / `workflow.subgraph` 提供完全相同的
+ * 派生形状。
  *
- * batch 4: the heavy per-format parsing was extracted into sibling
- * modules — workflow-detail-combo.ts (COMBO resolvers), workflow-detail-raw.ts
- * (RAW input/output/view parsing), workflow-detail-io.ts (workflowIO
- * enrichment) and workflow-subgraph-parse.ts (subgraph link/graph/pin
- * parsing).  This file keeps only the orchestration + caching layers.
+ * 缓存键沿用历史的命名空间（`wf:` / `sg:`），服务端**已有的缓存条目因此仍然有效**。
+ *
+ * 按格式分的重解析都抽到了同目录的兄弟模块里 ——
+ * workflow-detail-combo.ts（COMBO 候选值）、workflow-detail-raw.ts
+ * （RAW 的输入/输出/视图解析）、workflow-detail-io.ts（workflowIO 富化）、
+ * workflow-subgraph-parse.ts（子图的连线/图/pin 解析）。
+ * 本文件只留编排与缓存两层。
  */
 import { TRPCError } from "@trpc/server";
 import { workflowTemplateRepository } from "~/lib/core/repository";
@@ -100,23 +100,23 @@ type WorkflowDetailTemplateRow = NonNullable<
   Awaited<ReturnType<typeof workflowTemplateRepository.findByIdForUserSelect>>
 >;
 
-/** Shape returned by the legacy `GET /api/workflows/:id` (and the subgraph
- *  variant) — mirrors the client-side `WorkflowDetail` interface in
- *  components/studio/wf-types.ts.  Some fields only appear on the
+/** 历史的 `GET /api/workflows/:id`（及其子图变体）返回的形状 ——
+ *  与客户端 components/studio/wf-types.ts 里的 `WorkflowDetail` 接口对应。
+ *  有些字段只出现在子图变体上。
  *  subgraph variant. */
 export interface WorkflowDetailFull {
   id: string;
   name: string;
   taskType: string;
-  /** Full set of mode codes the workflow can run as (parsed from the
-   *  JSON-string column).  Subgraph variant omits it. */
+  /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
+   *  子图变体不带这个字段。 */
   modes?: string[];
   defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
-  /** Original RAW (UI-format) JSON as imported; null for API-only. */
+  /** 导入时的原始 RAW（UI 格式）JSON；纯 API 导入时为 null。 */
   rawJson?: unknown;
   nodes: DetailNodeView[];
-  /** RAW view packet (nodes/positions/graph) re-derived from rawJson. */
+  /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
   rawView?: RawViewPacket | null;
   paramMap: Record<string, string>;
   workflowIO: Record<string, WorkflowDetailIOEntry>;
@@ -133,16 +133,16 @@ export interface WorkflowDetailFull {
   sourceChanged?: boolean;
   sourceMissing?: boolean;
   source?: "local" | "online";
-  /** Subgraph variant: id of the top-level workflow. */
+  /** 子图变体：顶层工作流的 id。 */
   parentId?: string;
-  /** Subgraph variant: requested subgraph UUID. */
+  /** 子图变体：请求的子图 UUID。 */
   subgraphUid?: string;
-  /** Subgraph variant: boundary pin entities. */
+  /** 子图变体：边界 pin 实体。 */
   boundaryPins?: {
     inputs: BoundaryPin[];
     outputs: BoundaryPin[];
   };
-  /** Subgraph variant: sentinel wire ↔ pin/slot pairs. */
+  /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
   boundaryLinks?: BoundaryLink[];
 }
 
@@ -185,33 +185,26 @@ async function buildWorkflowDetailJson(input: {
   const graph = tpl.graph as Record<string, ApiWorkflowNode>;
   const raw = asRawWorkflow(tpl.rawJson);
 
-  /* Resolve effective node positions.
+  /* 算出**生效**的节点位置。
    *
-   * `tpl.positions` is the DB column tracking what the user has manually
-   * dragged.  `rawJson.nodes[i].pos` carries the original ComfyUI
-   * coordinates (x, y) from the imported workflow — these are the
-   * positions the user sees in their ComfyUI client and expect to see
-   * here too.  The two sources are layered: rawJson is the default
-   * background (every node has a position from import), tpl.positions is
-   * the foreground overlay (only nodes the user has explicitly dragged
-   * end up here).  Object-spread order does the merge correctly:
-   * `{ ...background, ...foreground }` → foreground wins per key.
+   * `tpl.positions` 是记录用户手动拖拽结果的 DB 列。
+   * `rawJson.nodes[i].pos` 携带导入工作流时 ComfyUI 的原始坐标 (x, y) ——
+   * 用户在 ComfyUI 客户端里看到、也期望在这里看到的就是那些位置。
+   * 两个来源分层叠加：rawJson 是默认**背景层**（每个节点导入时都有位置），
+   * tpl.positions 是**前景覆盖层**（只有用户明确拖过的节点才会出现在里面）。
+   * 对象展开的顺序天然完成合并：`{ ...背景, ...前景 }` → 同一个键以前景为准。
    *
-   * Why this matters:
-   *   1) Imported workflows where the user has only dragged a couple of
-   *      nodes have a sparse `tpl.positions` (e.g. just 2 of 114).  If
-   *      we returned tpl.positions as-is, the canvas would render the
-   *      2 saved nodes at their dragged spots and stack the remaining
-   *      112 at the (padX, padY) default — visually broken and
-   *      inconsistent with ComfyUI.  Merging fills the gaps from
-   *      rawJson so every node lands where ComfyUI placed it.
-   *   2) API-only imports (no rawJson) → background is {} → foreground
-   *      wins → client falls back to Kahn auto-layout.  Same behaviour
-   *      as before for that case.
-   *   3) Stale keys that don't correspond to any graph node (e.g. the
-   *      `grp:bpin:inputs` that a subgraph-view PATCH with merge:true
-   *      leaked in earlier) are harmless: the renderer only looks up
-   *      positions by graph node id, so an unknown key is silently
+   * 为什么必须这样合：
+   *   1) 只拖过两三个节点的导入工作流，`tpl.positions` 很稀疏（例如 114 个里
+   *      只有 2 个）。直接返回 tpl.positions 的话，画布会把那 2 个渲染在拖动后的
+   *      位置、剩下 112 个全堆在 (padX, padY) 默认值上 —— 视觉上就是坏的，
+   *      也与 ComfyUI 不一致。从 rawJson 补齐空隙，每个节点才落在 ComfyUI
+   *      摆放的位置上。
+   *   2) 纯 API 导入（没有 rawJson）→ 背景层是 {} → 前景层胜出 →
+   *      客户端回落到 Kahn 自动布局。这种情况的行为与之前一致。
+   *   3) 不对应任何图节点的陈旧键（例如子图视图用 merge:true PATCH 时漏进来的
+   *      `grp:bpin:inputs`）无害：渲染器只按图节点 id 查位置，
+   *      未知键会被静默忽略。
    *      ignored. */
   const positionsFromRaw =
     raw && Array.isArray(raw.nodes) ? extractPositions(raw) : {};
@@ -221,16 +214,15 @@ async function buildWorkflowDetailJson(input: {
     ...positionsFromRaw,
     ...tplPositions,
   };
-  /* If neither source has anything, the client should run Kahn on the
-   * whole graph rather than treat an empty object as "use these (none)
-   * positions".  Return null so the client-side sparse guard kicks in
-   * and falls through cleanly. */
+  /* 两个来源都没有内容时，客户端应该对整张图跑 Kahn，
+   * 而不是把一个空对象当成「就用这些（一个都没有）位置」。
+   * 返回 null，客户端的稀疏守卫才会生效并干净地往下走。 */
   const positions =
     Object.keys(effectivePositions).length > 0 ? effectivePositions : null;
 
-  /* Per-node input metadata + exact ComfyUI box sizes (see
-   * workflow-detail-raw.ts buildRawInputs for the full semantics —
-   * base parser, seed 2-slot bundle, proxyWidgets enrichment and
+  /* 每个节点的输入元数据 + ComfyUI 的精确外框尺寸
+   * （完整语义见 workflow-detail-raw.ts 的 buildRawInputs ——
+   * 基础解析、seed 双槽捆绑、proxyWidgets 富化等）。
    * COMBO resolution). */
   const { rawInputsById, sizeById } = await buildRawInputs(
     raw,
@@ -238,19 +230,17 @@ async function buildWorkflowDetailJson(input: {
     multilineForClassField,
   );
 
-  /* Sparse raw-node metadata — only enough for the canvas editor to render
-   * the OUTPUT port strip and to feed Subgraph UI nodes (which need
-   * widget_values to label their fields).  We don't ship the full raw graph
-   * here; the saved graph + positions are already on detail. */
+  /* 稀疏的原始节点元数据 —— 只够画布编辑器渲染 OUTPUT 端口条、
+   * 以及喂给子图 UI 节点（它们需要 widget_values 给字段打标签）。
+   * 这里**不**下发完整的原始图：保存过的 graph 与 positions 已经在 detail 上了。 */
   const rawNodeMeta = buildRawNodeMeta(raw);
 
   const nodes: DetailNodeView[] = Object.entries(graph).map(([nodeId, n]) => {
-    // ComfyUI exports vary: newer snapshots use `class_type`, older / some
-    // rgthree-comfy exports use `type` only.  Fall back to `type` so the
-    // subgraph-wrapper check below picks up UUID class names that live in
-    // either field — without this fallback every node renders as a plain
-    // WorkflowNode and subgraph wrappers dump their 10+ IO rows inline instead
-    // of being recognised as `is_subgraph: true` for the compact WorkflowSubgraphNode.
+    // ComfyUI 的导出形态不一：新快照用 `class_type`，旧的与部分 rgthree-comfy
+    // 导出只有 `type`。回落读 `type`，下面那句「是否为子图封装节点」的判断才能
+    // 认出两个字段里任一处的 UUID 类名 —— 少了这道回落，每个节点都会被渲染成
+    // 普通的 WorkflowNode，子图封装节点会把 10+ 行 IO **内联摊开**，
+    // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
     // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
     //  `a || b` ≡ `a ? a : b`，空串同样回退。）
     const classType: string = n.class_type
@@ -259,13 +249,12 @@ async function buildWorkflowDetailJson(input: {
         ? (n.type as string)
         : "?";
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
-    /* Subgraph wrapper nodes (class_type === UUID) get their display name
-     *  from raw.definitions.subgraphs[uid].name.  Same lookup as the
-     *  subgraph route's `sub` resolver (subgraphs may be keyed by either
-     *  the UUID or by their inner `.id` field).  Falls back to the
-     *  existing empty-string sentinel when the name is missing — the
-     *  client-side friendlyNodeTitle() then renders "子工作流" as a
-     *  last-resort label, identical to the pre-fix behaviour. */
+    /* 子图封装节点（class_type === UUID）的显示名取自
+     *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套
+     *  查找方式（子图的键可能是 UUID，也可能是它内部的 `.id` 字段）。
+     *  名字缺失时回落到既有的空字符串哨兵 —— 那是最后的兜底标签，
+     *  客户端 friendlyNodeTitle() 随后会渲染成「子工作流」——
+     *  也就是最后的兜底标签，与改动前的行为一致。 */
     let resolvedTitle: string | undefined;
     if (isUuidClass && raw?.definitions?.subgraphs) {
       const subs = raw.definitions.subgraphs;
@@ -290,9 +279,8 @@ async function buildWorkflowDetailJson(input: {
         nodeId,
       is_subgraph: isUuidClass,
       raw_inputs: rawInputsById[nodeId] ?? [],
-      /* Exact ComfyUI box size ([w, h]) for this node.  Undefined for
-       *  API-only imports that carry no rawJson size — the client then
-       *  falls back to its content-driven min/max-width layout. */
+      /* 该节点的 ComfyUI 精确外框尺寸（[w, h]）。纯 API 导入没带 rawJson 尺寸
+       *  时为 undefined —— 客户端回落到按内容驱动的 min/max 宽度布局。 */
       size: sizeById[nodeId],
     };
   });
@@ -308,9 +296,9 @@ async function buildWorkflowDetailJson(input: {
 
   const paramMap =
     (tpl.paramMap as Record<string, string>) ?? detectParamMap(graph);
-  // User-curated exposure selection: which node params/widgets/outputs are
-  // exposed as the workflow's external inputs/outputs.  (ioKey is
-  // `${nodeId}::${kind}::${name}`; see the canvas editor's IO-edit mode.)
+  // 用户挑出来的暴露集合：哪些节点参数 / widget / 输出被暴露成工作流的
+  // 对外输入输出。（ioKey 是 `${nodeId}::${kind}::${name}`；
+  // 见画布编辑器的 IO 编辑模式。）
   const workflowIORaw = (asRecord(tpl.workflowIO) ?? {}) as Record<
     string,
     WorkflowIORawEntry
@@ -320,28 +308,26 @@ async function buildWorkflowDetailJson(input: {
   for (const n of nodes) nodeTitleById[n.id] = n.title ?? n.class_type;
 
   /* ── workflowIO ENRICHMENT ──
-   * The stored selection only records WHICH pin was exposed
-   * (`direction` / `kind` / `nodeId` / `name`).  `kind` is a *semantic*
-   * bucket ("param" | "widget" | "output") — it is NOT the ComfyUI data
-   * type, so a consumer that wants to render a control (textarea vs
-   * number vs switch vs image-upload) had no way to decide.
+   * 落库的勾选只记录「哪个 pin 被暴露」（`direction` / `kind` / `nodeId` /
+   * `name`）。而 `kind` 是**语义**分桶（"param" | "widget" | "output"），
+   * **不是** ComfyUI 数据类型 —— 想渲染一个控件（多行框 / 数字 / 开关 /
+   * 图片上传）的消费方，光靠它无法判断该渲染什么。
    *
-   * Rather than force every client to re-join `nodes[].raw_inputs[]` and
-   * `rawNodes[].outputs[]` by (nodeId, name), we do the join once here and
-   * ship a self-describing record:
-   *   type          ComfyUI data type — "STRING" | "INT" | "FLOAT" |
-   *                 "BOOLEAN" | "IMAGE" | "LATENT" | …  ("*" when unknown)
-   *   defaultValue  current widget value (or the literal in the API graph),
-   *                 so a dynamic form can pre-fill instead of showing blanks
-   *   label         best display label (label > localized > name)
-   *   nodeTitle     owning node's title, used to disambiguate same-named
-   *                 pins across nodes ("seed" on 3 samplers)
-   *   multiline     STRING inputs that ComfyUI marks as multiline-ish
-   *                 (prompt-sized) → render a textarea, not a one-liner
-   * Consumers: DynamicWorkflowForm (CreatePanel + canvas workflow node)
-   * and the canvas auto-spawn logic (first output's `type` decides whether
-   * the downstream node is an image or a video node).
-   * Implementation lives in workflow-detail-io.ts. */
+   * 与其让每个客户端各自按 (nodeId, name) 去 join
+   * `nodes[].raw_inputs[]` 与 `rawNodes[].outputs[]`，不如在这里 join 一次，
+   * 下发一份自描述记录：
+   *   type          ComfyUI 数据类型 —— "STRING" | "INT" | "FLOAT" |
+   *                 "BOOLEAN" | "IMAGE" | "LATENT" 等（未知时为 "*"）
+   *   defaultValue  当前 widget 值（或 API 图里的字面量），
+   *                 动态表单据此预填，而不是显示空白
+   *   label         最优显示标签（label > localized > name）
+   *   nodeTitle     所属节点的标题，用来区分不同节点上的同名 pin
+   *                 （3 个采样器上都有 "seed"）
+   *   multiline     ComfyUI 标为「类多行」（提示词级别）的 STRING 输入 →
+   *                 渲染成多行文本框而不是单行
+   * 消费方：DynamicWorkflowForm（CreatePanel 与画布工作流节点）、
+   * 以及画布的自动派生逻辑（第一个输出的 `type` 决定下游节点是图像还是视频）。
+   * 实现落在 workflow-detail-io.ts。 */
   const workflowIO = await enrichWorkflowIO({
     workflowIORaw,
     rawInputsById,
@@ -357,11 +343,11 @@ async function buildWorkflowDetailJson(input: {
     multilineForClassField,
   });
 
-  /* ── Groups (ComfyUI frame rectangles) ──
-   * Raw UI format stores them in `raw.groups[]`, each shaped roughly as:
-   *   { title, bounding: [x, y, w, h], color }   (color is a hex string)
-   * We forward them so the editor can render faithful background frames that
-   * can be nested (a child group's bounding box sits inside its parent's). */
+  /* ── 分组（ComfyUI 的 frame 矩形）──
+   * 原始 UI 格式把它们存在 `raw.groups[]` 里，每项大致形如：
+   *   { title, bounding: [x, y, w, h], color }（color 是十六进制字符串）
+   * 透传出去，编辑器便能渲染出忠实、且**支持嵌套**的背景框
+   * （子分组的包围盒落在父分组内部）。 */
   const groups: WorkflowDetailGroup[] = [];
   if (raw && Array.isArray(raw.groups)) {
     raw.groups.forEach((g: unknown, idx: number) => {
@@ -381,18 +367,17 @@ async function buildWorkflowDetailJson(input: {
           Number(bounds[3]) || 0,
         ],
         color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
-        /* Group bypass state. Forwarded so rgthree's
-         *  `Fast Groups Bypasser` runtime UI can reflect — and toggle —
-         *  the `flags.bypass` of every matched group via PATCH.  Stored
-         *  on the group's `flags` object in rawJson, same place
-         *  ComfyUI's own frontend reads it. */
+        /* 分组旁路状态。透传出去，rgthree 的 `Fast Groups Bypasser`
+         *  运行期 UI 才能反映、并经 PATCH 切换每个匹配分组的
+         *  `flags.bypass`。存在 rawJson 里该分组的 `flags` 对象上 ——
+         *  与 ComfyUI 自己的前端读的是同一处。 */
         bypass: !!asRecord(rec.flags)?.bypass,
       });
     });
   }
 
-  /* ── Notes (Note / MarkdownNote annotation nodes) ──
-   * Their text lives in widgets_values[0]; position/size in pos/size. */
+  /* ── 便签（Note / MarkdownNote 注释节点）──
+   * 文本在 widgets_values[0]，位置与尺寸在 pos/size。 */
   const notes: WorkflowDetailNote[] = [];
   if (raw && Array.isArray(raw.nodes)) {
     raw.nodes.forEach((n) => {
@@ -402,9 +387,8 @@ async function buildWorkflowDetailJson(input: {
         Array.isArray(n.size) && n.size.length >= 2 ? n.size : [220, 120];
       const wv = Array.isArray(n.widgets_values) ? n.widgets_values[0] : "";
       const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
-      // ComfyUI's Note node may carry an explicit `title` field (newer
-      // versions); if absent we leave the title empty so the client can
-      // fall back to extracting one from the first markdown heading line.
+      // ComfyUI 的 Note 节点可能带显式的 `title` 字段（较新版本）；
+      // 没有就留空，客户端会回落到「从第一行 markdown 标题里提取」。
       const title = typeof n.title === "string" ? n.title : "";
       notes.push({
         id: String(n.id),
@@ -431,15 +415,14 @@ async function buildWorkflowDetailJson(input: {
     id: tpl.id,
     name: tpl.name,
     taskType: tpl.taskType,
-    /** multi-mode support. `modes` is the full set of mode codes
-     *  this workflow can run as (JSON-string column parsed here); `defaultMode`
-     *  is the canonical default (kept in sync with `taskType` on write). */
+    /** 多模式支持。`modes` 是该工作流可运行的全部模式码（在这里解析
+     *  JSON 字符串列）；`defaultMode` 是规范默认值（写入时与 `taskType`
+     *  保持同步）。 */
     modes: parseModesJson(tpl.modes),
     defaultMode: tpl.defaultMode ?? null,
     graph,
-    /** The original RAW (UI-format) JSON as imported — forwarded so the
-     *  client can show / re-download the source in its native form.  Null
-     *  for API-only imports (no rawJson on disk). */
+    /** 导入时的原始 RAW（UI 格式）JSON —— 透传出去，客户端便能按原生形态
+     *  查看 / 重新下载源。纯 API 导入（磁盘上没有 rawJson）时为 null。 */
     rawJson: raw,
     nodes,
     /** RAW 视图专用节点/位置/图（保留 subgraph wrapper）。
@@ -465,7 +448,7 @@ async function buildWorkflowDetailJson(input: {
     sourcePath,
     sourceChanged,
     sourceMissing,
-    /** Classification: "local" when tied to an on-disk file, else "online". */
+    /** 分类：绑定到磁盘文件时为 "local"，否则 "online"。 */
     source: sourcePath ? "local" : "online",
   });
 }
@@ -489,39 +472,36 @@ export async function buildWorkflowDetailFull(
 ): Promise<WorkflowDetailFull> {
   const cacheKey = `wf:${userId}:${id}`;
 
-  /* COMBO option resolver. ComfyUI COMBO widgets
-   * (unet_name / clip_name / vae_name / ckpt_name …) carry NO candidate
-   * list in the raw JSON — the only authoritative source is
-   * /api/object_info.  The resolver fetches it once per request
-   * (fetchObjectInfo itself caches for 5 min + degrades to null when
-   * ComfyUI is unreachable) and resolves `classType + field` → candidate
-   * array so the project-canvas form and the subgraph wrapper node can
-   * render a real <select> instead of a free-text box.  Missing /
-   * unreachable → undefined → graceful fallback to a plain text control.
-   * Implementation lives in workflow-detail-combo.ts. */
+  /* COMBO 候选值解析器。ComfyUI 的 COMBO widget
+   * （unet_name / clip_name / vae_name / ckpt_name 等）在原始 JSON 里
+   * **不带**候选清单 —— 唯一权威来源是 /api/object_info。解析器每次请求取一次
+   * （fetchObjectInfo 自身缓存 5 分钟，且 ComfyUI 不可达时降级为 null），
+   * 把 `classType + 字段名` 解析成候选数组，让项目画布表单与子图封装节点能渲染
+   * 真正的 <select>，而不是自由文本输入框。
+   * 缺失 / 不可达 → undefined → 优雅回落到普通文本控件。
+   * 实现落在 workflow-detail-combo.ts。 */
   const {
     comboOptionsForClassField,
     comboOptionsForFieldName,
     multilineForClassField,
   } = createObjectInfoResolvers();
 
-  /* ?_bust=1 query flag forces the in-memory LRU to be
+  /* ?_bust=1 查询参数强制内存 LRU 被
    *  bypassed (deleted + re-built) so the 顶栏 🔄 强制重载按钮 can pull
-   *  a guaranteed-fresh serialisation from Prisma.  Without this, even
-   *  cache:"no-store" on the client would still pull a 60s-stale
-   *  pre-serialised JSON blob from server memory.  The flag is
-   *  deliberately a private client-only token — never logged. */
+   *  绕过，强制从 Prisma 现读一份序列化结果。没有它，客户端即使带
+   *  cache:"no-store"，仍会从服务端内存里拿到一份已陈旧 60 秒的、预先序列化好的
+   *  JSON。这个标记刻意只作为客户端私有 token —— **从不打日志**。 */
   if (opts.bust) {
     cacheDel(cacheKey);
   }
 
-  /* ── Local-file workflows: detect on-disk changes & auto re-import ──
-   *  If this workflow was imported from a local file (sourcePath set), we stat
-   *  the file up-front (cheap) so we can re-import it before serving a stale
-   *  cached blob.  This is what lets the user edit the file in ComfyUI and see
-   *  the latest on refresh — with OR without the 🔄 force-reload button.
-   *  `meta` is a lightweight select so we don't drag the (large) rawJson blob
-   *  twice; the full read below still happens when the cache misses. */
+  /* ── 本地文件工作流：检出磁盘变更并自动重新导入 ──
+   *  如果这个工作流是从本地文件导入的（设置了 sourcePath），先 stat 一下文件
+   *  （很便宜），好在返回陈旧缓存之前把它重新导入。
+   *  用户在 ComfyUI 里改完文件、刷新就能看到最新内容，靠的就是这一步 ——
+   *  **有没有**点 🔄 强制重载都一样。
+   *  `meta` 是轻量查询，免得把（很大的）rawJson 拖两遍；
+   *  缓存未命中时下面仍会完整读一次。 */
   let sourceChanged = false;
   let sourceMissing = false;
   let sourcePath: string | null = null;
@@ -565,10 +545,10 @@ export async function buildWorkflowDetailFull(
     }
   }
 
-  /* Hot path: if the pre-serialized detail is already cached we return it
-   * directly — skipping the Prisma read of the (large) rawJson blob AND the
-   * per-request JSON.stringify.  This is what gets repeat opens to <50ms.
-   * (The cache entry is invalidated on PATCH/DELETE; a 404 is never cached.) */
+  /* 热路径：如果预序列化好的 detail 已在缓存里，直接返回 ——
+   * 既跳过对（很大的）rawJson 的 Prisma 读取，也省掉每次请求的 JSON.stringify。
+   * 反复打开能压到 50ms 以内靠的就是这一步。
+   * （缓存在 PATCH / DELETE 时失效；404 从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
     return JSON.parse(cached) as WorkflowDetailFull;
@@ -594,12 +574,12 @@ export async function buildWorkflowDetailFull(
   if (!tpl)
     throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
 
-  /* The transform below is pure (depends only on tpl.graph / tpl.rawJson /
-   * tpl.positions which never change between writes), so we cache the already
-   * serialized JSON string by user+id.  Repeated opens return it verbatim.
+  /* 下面的转换是纯的（只依赖 tpl.graph / tpl.rawJson / tpl.positions，
+   * 它们在两次写入之间不会变），因此按 user+id 缓存**已序列化**的 JSON 字符串，
+   * 反复打开原样返回。
    *
-   * TTL shortened from 60_000ms → 30_000ms so it locks at
-   * most 30s of staleness even if client cache:"no-store" is bypassed. */
+   * TTL 从 60_000ms 收到 30_000ms —— 即使客户端 cache:"no-store" 被绕过，
+   * 陈旧度也最多锁在 30 秒。 */
   const detailJson = await cacheJson(cacheKey, 30_000, () =>
     buildWorkflowDetailJson({
       tpl,
@@ -626,8 +606,8 @@ export async function buildSubgraphDetail(
 ): Promise<WorkflowDetailFull> {
   const cacheKey = `sg:${userId}:${id}:${uid}:${hostId}`;
 
-  /* Hot path: return the pre-serialized subgraph detail verbatim, skipping
-   * the Prisma read + transform.  (Never cached: 400/404 cases below.) */
+  /* 热路径：原样返回预序列化的子图详情，跳过 Prisma 读取与转换。
+   * （下面 400 / 404 那两种情况从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
     return JSON.parse(cached) as WorkflowDetailFull;
@@ -657,12 +637,12 @@ export async function buildSubgraphDetail(
     });
   }
 
-  // Subgraph definitions may be keyed by either the UUID or a numeric id;
-  // ComfyUI uses the UUID as the key for newer workflows.
+  // 子图定义的键可能是 UUID，也可能是数字 id；
+  // ComfyUI 对较新的工作流用 UUID 作键。
   const subgraphs = raw.definitions.subgraphs;
   let sub = subgraphs[uid];
   if (!sub) {
-    // Try matching by .id field
+    // 退回按 .id 字段匹配
     const matchUid = Object.keys(subgraphs).find(
       (key) => subgraphs[key]?.id === uid,
     );
@@ -675,17 +655,16 @@ export async function buildSubgraphDetail(
     });
   }
 
-  /* The subgraph transform depends only on tpl.rawJson (immutable between
-   * writes), so we cache the already-serialized JSON string by user+id+uid.
-   * TTL is longer than the top-level detail because subgraphs change even
+  /* 子图转换只依赖 tpl.rawJson（两次写入之间不变），因此按 user+id+uid 缓存
+   * 已序列化的 JSON 字符串。TTL 比顶层 detail 长 —— 子图变得比整份工作流
    * less often. */
   /* 本路由只用到 object_info 解析器的「声明型多行」查询（子图内部节点的
    *  STRING 是否 `{"multiline": true}`）；COMBO 候选仍由顶层详情路由负责。 */
   const { multilineForClassField } = createObjectInfoResolvers();
 
   const detailJson = await cacheJson(cacheKey, 120_000, async () => {
-    /* Sentinal-link indexing + inner-node graph transform + boundary rails
-     * all live in workflow-subgraph-parse.ts (see module docs there). */
+    /* 哨兵连线索引 + 内部节点图转换 + 边界栏杆，全都在
+     * workflow-subgraph-parse.ts 里（见那个模块的文档）。 */
     const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
     /* 边界槽位下标要先于槽位表算出来：ComfyUI 的 \`target_slot\` 与节点自带
      *  \`idx\` 在某些导出路径上口径不同，只有哨兵边记下的关联是权威事实
@@ -764,18 +743,16 @@ export async function buildSubgraphDetail(
       notes: ann.notes,
       rawNodes: sg.rawNodeMeta,
       format: "raw-subgraph",
-      /* Pass the parent workflow id and the subgraph uid so the client
-       *  can keep the breadcrumb accurate if it wants to re-fetch. */
+      /* 带上父工作流 id 与子图 uid，客户端想重新拉取时，
+       *  面包屑才对得上。 */
       parentId: tpl.id,
       subgraphUid: uid,
-      /* boundary rail data — the client renders each pin
-       *  as its own wfIoPort node (label-only) in a clean LEFT /
-       *  RIGHT column, and uses `boundaryLinks` to emit React Flow
-       *  edges from the pin's handle to the inner node's matching
-       *  input/output handle.  See `sub.inputs` / `sub.outputs` for
-       *  the source-of-truth structure: each pin has its own UUID
-       *  (`id`), `name`, `type`, `label`, `pos` (saved [x, y]) and
-       *  `linkIds` (the cross-boundary wire(s) entering/leaving inner
+      /* 边界栏杆数据 —— 客户端把每个 pin 渲染成一个独立的 wfIoPort 节点
+       *  （纯标签），在左 / 右两列排得干干净净；并用 `boundaryLinks` 从 pin 的
+       *  handle 向内部节点对应的输入/输出 handle 生成 React Flow 边。
+       *  权威结构见 `sub.inputs` / `sub.outputs`：每个 pin 自带 UUID（`id`）、
+       *  `name`、`type`、`label`、`pos`（保存的 [x, y]）与 `linkIds`
+       *  （进出内部节点的穿边界线）。
        *  nodes). */
       boundaryPins,
       boundaryLinks,

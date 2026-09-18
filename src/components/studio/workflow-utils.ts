@@ -1,6 +1,6 @@
 "use client";
-/* Extracted pure module-level helpers — originally declared inside
- * WorkflowCanvasEditor.tsx.  No JSX, no React hooks. */
+/* 抽出的纯模块级工具函数 —— 原本声明在 WorkflowCanvasEditor.tsx 内部。
+ * 没有 JSX，也不用 React hook。 */
 import { getCustomNodePackage } from "~/config/custom-nodes";
 import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
 import type { Node, Edge } from "@xyflow/react";
@@ -33,32 +33,29 @@ export function rectToAnchor(
   };
 }
 
-/* Small metadata chip used in the meta strip.  Plain styled span — no
- *  button semantics needed (clicking does nothing). */
+/* 元信息条里的一个小信息芯片。就是个带样式的 span ——
+ * 不需要按钮语义（点了没有任何反应）。 */
 export const KNOWN_PACKAGE_HEURISTIC: Record<string, string> = {
   SetNode: "efficiency-nodes",
   GetNode: "efficiency-nodes",
 };
 
-/** Resolve the package-source label for a workflow node.
+/** 解析工作流节点所属的包来源标签。
  *
- *  Resolution order (first non-empty wins):
- *    1. `getCustomNodePackage(classType)` — populated by
- *       `refreshCustomNodes()` from the on-disk custom-nodes manifest.
- *       Most accurate when present (exact directory name).
- *    2. `KNOWN_PACKAGE_HEURISTIC[classType]` — manual fallback for
- *       packages the parser missed (see above).
- *    3. `properties.cnr_id` — ComfyUI's own "this node was registered
- *       with registry X" stamp.  Treats the literal `"comfy-core"` as
- *       built-in (ComfyUI uses that string for internal LiteGraph UUID
- *       classes like `Extension` / `Preview3D`).
- *    4. `(rgthree)` suffix shortcut — `Fast Groups Bypasser (rgthree)`,
- *       `Power Lora Loader (rgthree)`, etc. live under the `rgthree-comfy`
- *       directory regardless of manifest/cnr_id state.  Suffix keyword kept
- *       in sync with the registered packages' `MAPPING` convention.
+ *  判据顺序（第一个非空的胜出）：
+ *    1. `getCustomNodePackage(classType)` —— 由 `refreshCustomNodes()`
+ *       从磁盘上的自定义节点清单填充。有值时最准（是确切的目录名）。
+ *    2. `KNOWN_PACKAGE_HEURISTIC[classType]` —— 解析器没认出来时的
+ *       人工兜底（见上面的表）。
+ *    3. `properties.cnr_id` —— ComfyUI 自己盖的「本节点注册于注册表 X」
+ *       印章。字面量 `"comfy-core"` 当作内建处理（ComfyUI 用这个字符串
+ *       表示 `Extension` / `Preview3D` 这类内置 LiteGraph UUID 类）。
+ *    4. `(rgthree)` 后缀捷径 —— `Fast Groups Bypasser (rgthree)`、
+ *       `Power Lora Loader (rgthree)` 等无论清单 / cnr_id 状态如何都住在
+ *       `rgthree-comfy` 目录下。后缀关键字与已登记包 `MAPPING` 的约定保持一致。
  *
- *  Returns the literal `"ComfyUI"` when nothing matched — `PackageFooter`
- *  treats that as the built-in hint and hides the label entirely. */
+ *  全部落空时返回字面量 `"ComfyUI"` —— `PackageFooter` 把它当作
+ *  「内建」的提示，整个标签都不显示。 */
 export function resolveNodePackage(
   classType: string,
   properties?: Record<string, unknown>,
@@ -75,19 +72,18 @@ export function resolveNodePackage(
   return "ComfyUI";
 }
 
-/** ComfyUI-native `frontend_only` pill (bottom-left).  Rendered when a
- *  node's LiteGraph `properties.frontend_only === true`, indicating the
- *  node does all its work in the browser frontend and has no backend
- *  execution.  This is a SEPARATE UI element from the package-source
- *  footer — both can show at once, both sit bottom-left, and they answer
- *  two different questions ("where did this node come from?" vs "does it
- *  run on the server?").  Mirrors ComfyUI's own dim italic label. */
+/** ComfyUI 原生的 `frontend_only` 小胶囊（左下角）。节点的 LiteGraph
+ *  `properties.frontend_only === true` 时渲染，表示该节点的活全在浏览器前端
+ *  干完、没有后端执行。这是与「包来源」页脚**并列**的另一个 UI 元素 ——
+ *  两者可以同时在左下角出现，回答的是两个不同的问题
+ *  （「这个节点哪来的」与「它跑在服务端吗」）。样式对齐 ComfyUI 自己的
+ *  暗色斜体标签。 */
 export function extractNoteTitle(text: string, fallback?: string): string {
   let raw = "";
   if (fallback?.trim()) {
     raw = fallback.trim();
-    // Strip a leading "Note:" / "Note : " prefix ComfyUI bakes in for some
-    // converted flows so the rendered title bar doesn't echo "Note: Note: X".
+    // 剥掉 ComfyUI 给某些转换流程烤进去的 "Note:" / "Note : " 前缀，
+    // 免得渲染出来的标题栏回显成 "Note: Note: X"。
     raw = raw.replace(/^Note\s*[:：]\s*/i, "").trim();
     if (raw) return raw;
   }
@@ -105,61 +101,55 @@ export function extractNoteTitle(text: string, fallback?: string): string {
   return "";
 }
 
-/** Node class types that are pure annotations (no inputs/outputs, no ports). */
+/** 纯注释型的节点 class type（没有输入/输出，也没有端口）。 */
 export function isNoteType(classType: string): boolean {
   return classType === "Note" || classType === "MarkdownNote";
 }
 
-/* ── Title bar height ──
- *  LiteGraph (and therefore ComfyUI) draws every titled node with a
- *  fixed `LiteGraph.NODE_TITLE_HEIGHT = 30` bar at the TOP of the node.
- *  (user rule): the serialised `size: [w, h]` in the
- *  raw archive is the BODY CONTENT height (the 30 px title bar is NOT
- *  included in `size[1]`).  So the actual rendered node box = content
- *  height + NODE_TITLE_H = `size[1] + 30`.
+/* ── 标题栏高度 ──
+ *  LiteGraph（以及用它的 ComfyUI）给每个带标题的节点都在**顶部**画一条固定
+ *  的 `LiteGraph.NODE_TITLE_HEIGHT = 30` 栏。
  *
- *  Convention (user rule):
- *    • `data.size.h` carries the raw BODY CONTENT height = `size[1]`
- *      (NO subtraction).
- *    • The React Flow node `style.height` = `size[1] + NODE_TITLE_H`
- *      (total with title bar).
- *    • Each renderer's body uses `minHeight = data.size.h` as the
- *      content floor; the title bar lives above it and is part of the
- *      React Flow box, not the body flex container.
- *  Untitled notes do not have a separate title bar, so their React Flow
- *  box = `size[1]` (no addition). */
+ *  约定（口径只此一处）：原始归档里序列化的 `size: [w, h]` 是**主体内容**高度
+ *  （30px 的标题栏**不含**在 `size[1]` 里）。因此真正渲染出来的节点外框 =
+ *  内容高度 + NODE_TITLE_H = `size[1] + 30`。
+ *
+ *  具体落点：
+ *    • `data.size.h` 存的是原始**主体内容**高度 = `size[1]`（不做减法）。
+ *    • React Flow 节点的 `style.height` = `size[1] + NODE_TITLE_H`（含标题栏）。
+ *    • 各渲染器的主体用 `minHeight = data.size.h` 作为内容下限；标题栏在它
+ *      之上，属于 React Flow 的外框，不属于主体的 flex 容器。
+ *  无标题的便签没有独立标题栏，因此其 React Flow 外框 = `size[1]`（不加）。 */
 export const NODE_TITLE_H = 30;
 
 /* ---------------------------------------------------------------------------
- *  Pseudo "frosted glass" layer — FAILBACK ONLY, currently NOT rendered.
- *  It paints synthetic coloured blur blobs inside the node box and samples
- *  NO real pixels from behind, so Chromium's small-element re-tile artefact
- *  (4 / 9 / 16 repeated notes at low zoom) can never occur.  It was used
- *  between two real-backdrop attempts, but the user preferred the genuine
- *  see-through blur, so the live path is <NodeFrost> — a REAL
- *  `backdrop-filter` on an inner layer that counter-scales by 1/zoom so its
- *  on-screen footprint never shrinks small enough to re-tile (see WorkflowNode).
- *  Kept here so it can be re-enabled instantly if the real-blur artefact
- *  ever resurfaces on some browser.
+ *  伪「磨砂玻璃」层 —— **只在兜底时用，当前不渲染**。
+ *  它在节点外框内画合成的彩色模糊色块，**一个真实像素都不采样**，
+ *  因此 Chromium 那个小元素重复平铺的毛病（低缩放下便签被重复成 4 / 9 / 16 份）
+ *  根本不会出现。它出现在两次「真背景模糊」尝试之间；用户后来更喜欢真正的
+ *  透视模糊，所以线上走的是 <NodeFrost> —— 内层真实 `backdrop-filter`，
+ *  并按 1/缩放 反向缩放，让它在屏幕上的占位永远不会小到触发重复平铺
+ *  （见 WorkflowNode）。这里保留一份，是为了万一某个浏览器上真模糊的伪影
+ *  再次冒头时能立刻切回来。
  * --------------------------------------------------------------------------- */
 export function pseudoFrostPalette(modeColor: string | null) {
   const mode = modeColor ?? "#ec4899";
   return {
-    primary: hexToRgba(mode, 0.45), // mode-tinted mass
-    secondary: hexToRgba(mode, 0.3), // mode-tinted halftone
-    cool: "rgba(110, 145, 215, 0.32)", // cool blue "leak"
-    warm: "rgba(255, 255, 255, 0.10)", // light from above
-    shadow: "rgba(0, 0, 0, 0.36)", // unlit corner
+    primary: hexToRgba(mode, 0.45), // 模式色的主块
+    secondary: hexToRgba(mode, 0.3), // 模式色的网点
+    cool: "rgba(110, 145, 215, 0.32)", // 冷蓝「漏光」
+    warm: "rgba(255, 255, 255, 0.10)", // 自上方来的光
+    shadow: "rgba(0, 0, 0, 0.36)", // 未受光的角落
   };
 }
 
-/** Pseudo-frost overlay.  Renders absolutely behind the node content (under
- *  the header / body), with `pointer-events: none` and `aria-hidden` so it
- *  never affects hit-testing, selection, or screen-reader output. */
+/** 伪磨砂覆盖层。绝对定位渲染在节点内容**之下**（在头部 / 主体下面），
+ *  带 `pointer-events: none` 与 `aria-hidden`，
+ *  因此它永远不会影响命中测试、选中，也不会污染读屏输出。 */
 export function inferOutputTypeAll(classType: string): Record<string, string> {
-  // ComfyUI lets nodes name their outputs; we don't have that info offline,
-  // so we use slot-based names.  For CheckpointLoaderSimple etc. this is
-  // MODEL/CLIP/VAE which lines up with ComfyUI's default display.
+  // ComfyUI 允许节点自己给输出命名；离线下我们没有这份信息，
+  // 因此改用按槽位的名字。CheckpointLoaderSimple 这类就是 MODEL/CLIP/VAE，
+  // 与 ComfyUI 的默认显示一致。
   const KNOWN_NAMES: Record<string, string[]> = {
     CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
     CheckpointLoader: ["MODEL", "CLIP", "VAE"],
@@ -202,28 +192,27 @@ export function inferOutputTypeAll(classType: string): Record<string, string> {
   return out;
 }
 
-/** Render a widget value as ComfyUI would:
- *   - numbers → 4dp trailing-zero strip (e.g. 1.00)
- *   - booleans → ✓ / ✕ icon
- *   - long strings → first 50 chars + ellipsis (full text in title)
- *   - objects → "{...}" */
+/** 按 ComfyUI 的方式渲染 widget 值：
+ *   - 数字 → 两位小数并去掉末尾的 0（如 1.00 → 1）
+ *   - 布尔 → ✓ / ✕ 图标
+ *   - 长字符串 → 原样返回，截断交给 CSS（完整文本留在 title 上）
+ *   - 对象 → "{...}" */
 export function renderWidgetValue(value: unknown): string {
   if (value === undefined || value === null) return "—";
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
-    // Keep small floats as 2dp; integers without dp.
+    // 小数保留两位；整数不带小数点。
     if (Number.isInteger(value) || value >= 10000) return String(value);
     const str = (Math.round(value * 100) / 100).toFixed(2);
-    // strip trailing zeros (1.00 → 1) but keep precision
+    // 去掉末尾的 0（1.00 → 1），保留精度
     return str.replace(/\.?0+$/, "") || "0";
   }
   if (typeof value === "string") {
-    /* Filenames like "DaSiWa_Wan22_I2V_14B_SnatchKiss_v1.safetensors" run
-     *  40+ chars; previously this function hard-truncated to 48 chars,
-     *  which produced the "DaSiWa_Wan22_…" inline display regardless of
-     *  node width.  The truncation now lives in CSS (`maxWidth: 480px`
-     *  on the consuming <span>) — that way a wider node shows the full
-     *  filename, and the full text remains available via `title`. */
+    /* 像 "DaSiWa_Wan22_I2V_14B_SnatchKiss_v1.safetensors" 这样的文件名
+     *  有 40+ 字符。这里**不做**硬截断了：截断搬到 CSS（消费方 <span> 上的
+     *  `maxWidth: 480px`）。这样节点变宽时能显示完整文件名，
+     *  完整文本也仍能从 `title` 拿到 —— 用固定字符数截断时，
+     *  无论节点多宽都只会显示 "DaSiWa_Wan22_…"。 */
     return value;
   }
   if (Array.isArray(value)) return "[…]";
@@ -233,25 +222,22 @@ export function renderWidgetValue(value: unknown): string {
   return (value as { toString(): string }).toString();
 }
 
-/** Choose a text color for the value cell based on its JS type.  The
- *  goal is to make the value-column visually subordinate to the label
- *  column while still being easy to scan at a glance — we keep all
- *  hues inside a low-saturation palette so the chip never looks like
- *  a rainbow.  Returns a CSS color (rgba) suitable for inline style. */
+/** 按值的 JS 类型给「值单元格」挑一个文字颜色。目标是让值列在视觉上**让位**
+ *  于标签列，同时一眼扫过去仍能分辨 —— 所有色相都压在一套低饱和调色板里，
+ *  免得整个芯片看起来像彩虹。返回可直接用于内联样式的 CSS 颜色（rgba）。 */
 export function valueCellColor(value: unknown): string {
   if (value === undefined || value === null) return "rgba(255,255,255,0.30)";
   if (typeof value === "boolean")
-    return value ? "#86efac" /* green-300 */ : "#fca5a5"; /* red-300 */
-  if (typeof value === "number") return "#fcd34d"; /* amber-300 */
-  if (typeof value === "string") return "#c7d2fe"; /* indigo-200 */
+    return value ? "#86efac" /* green-300 绿 */ : "#fca5a5"; /* red-300 红 */
+  if (typeof value === "number") return "#fcd34d"; /* amber-300 琥珀 */
+  if (typeof value === "string") return "#c7d2fe"; /* indigo-200 靛蓝 */
   return "rgba(255,255,255,0.55)";
 }
 
-/** Append an alpha channel to a value-cell color so a wired-widget row's
- *  control value reads one notch dimmer than an unwired one — signalling
- *  "this is the widget default; the live value comes from the wire".
- *  `valueCellColor` returns 6-digit hex for real values; for any
- *  edge-case rgba input we lower the alpha instead. */
+/** 给值单元格的颜色补一个 alpha 通道：**已接线**的 widget 行上的值要比未接线
+ *  的暗一档 —— 这是「当前显示的是 widget 默认值，真正的值来自连线」的信号。
+ *  真实值走 `valueCellColor` 返回的 6 位十六进制；遇到 rgba 输入这类边角情况
+ *  则改为降低 alpha。 */
 export function withAlpha(color: string): string {
   if (color.startsWith("#") && color.length === 7) return color + "66";
   const match = /rgba\(([^)]+)\)/.exec(color);
@@ -263,12 +249,10 @@ export function withAlpha(color: string): string {
   return color;
 }
 
-/** Same shape as WorkflowNode's widget values but stripped of any classType
- *  / key-aware sanitisation — a Subgraph has no `class_type` to ask
- *  for a friendly name from, and the inputs are already chosen by
- *  their `name` (and `localized_name`).  We only need the JS-type-driven
- *  colour family here; the cell on the parent card shows the raw paired
- *  value as ComfyUI stored it. */
+/** 与 WorkflowNode 的 widget 值同形，但去掉了所有按 classType / 键名的
+ *  清洗 —— 子图没有 `class_type` 可以去问友好名字，而且它的输入本来就按
+ *  `name`（与 `localized_name`）挑定了。这里只需按 JS 类型分色；
+ *  父卡片上的单元格直接展示 ComfyUI 存下来的原始配对值。 */
 export function renderSubgraphWidgetValue(value: unknown): string {
   if (value === undefined || value === null) return "—";
   if (typeof value === "boolean") return value ? "✓" : "✕";
@@ -278,13 +262,11 @@ export function renderSubgraphWidgetValue(value: unknown): string {
     return str.replace(/\.?0+$/, "") || "0";
   }
   if (typeof value === "string") {
-    /* Same rationale as `renderWidgetValue`: the CSS layer (now with
-     *  `maxWidth: 480px` + `text-overflow: ellipsis`) owns display
-     *  truncation.  The previous 36-char data-truncation made every long
-     *  filename render as "DaSiWa_Wan22_…" inline regardless of how
-     *  wide the user had made the node — that broke once the user
-     *  asked for value cells to actually use the available width.  Full
-     *  text stays available via the `title` attr on the <span>. */
+    /* 与 `renderWidgetValue` 同理：**显示层面的截断交给 CSS**（`maxWidth:
+     *  480px` + `text-overflow: ellipsis`）。这里**不做**数据截断 ——
+     *  按固定字符数截断时，无论用户把节点拉多宽，长文件名都只能内联显示成
+     *  "DaSiWa_Wan22_…"，与「值单元格要真的用上可用宽度」的要求相悖。
+     *  完整文本仍能从 <span> 的 `title` 属性拿到。 */
     return value;
   }
   if (Array.isArray(value)) return "[…]";
@@ -301,28 +283,24 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   return "";
 }
 
-/** Trim a raw `label` / `localized_name` down to its user-facing key.
- *  Custom COMBO widgets (KJNodes etc.) bake their full options list
- *  into the label as `"<Key>: opt1 | opt2 | opt3"`, which clutters the
- *  row — those option lists are stripped.  BUT a BOOLEAN toggle
- *  descriptor such as `"Model: True = 🟡 Safetensors | False = 🟣 GGUF"`
- *  (rgthree Settings nodes) is *semantic*, not a list of selectable
- *  options — it tells the reader what the on/off states switch between,
- *  so it must be kept intact. (the previous build
- *  stripped these to a bare `Model`, which read as a truncated /
- *  incomplete label; the full descriptor now renders and wraps via the
- *  CSS fix on the widget-label span.) Plain colon-bearing
- *  sentences like "Note: keep this secret" are also kept untouched. */
+/** 把原始的 `label` / `localized_name` 修剪成面向用户的键名。
+ *  自定义 COMBO widget（KJNodes 之类）会把整份选项清单烤进标签里，形如
+ *  `"<键>: 选项1 | 选项2 | 选项3"`，很占地方 —— 这类选项清单要剥掉。
+ *
+ *  **但** BOOLEAN 开关的描述性标签（rgthree Settings 节点里的
+ *  `"Model: True = 🟡 Safetensors | False = 🟣 GGUF"`）是**语义**，
+ *  不是可选项清单：它告诉读者开/关分别切到什么，必须原样保留。
+ *  （早先的实现在这里把整段剥到只剩 `Model`，读起来像被截断的残缺标签；
+ *  现在完整描述会渲染出来，并由 widget 标签 span 上的 CSS 换行。）
+ *  「Note: keep this secret」这类带冒号的普通句子同样原样保留。 */
 export function sanitizeComboLabel(label: string | undefined | null): string {
   if (!label) return "";
   const colon = label.indexOf(":");
   if (colon <= 0 || colon === label.length - 1) return label.trim();
   const tail = label.slice(colon + 1);
-  /* Strip only when the tail looks like a multi-option COMBO list:
-   * contains another `=` or `|` *and* is NOT a BOOLEAN descriptor
-   * (`true =` / `false =` markers).  A BOOLEAN descriptor is kept so the
-   * full label reaches the layout — where the CSS fix lets it
-   * wrap onto multiple lines instead of being clipped. */
+  /* 只有当尾部看起来像**多选项 COMBO 清单**时才剥：尾部还含 `=` 或 `|`，
+   * 且**不是** BOOLEAN 描述（`true =` / `false =` 标记）。BOOLEAN 描述要保留，
+   * 让完整标签进到布局里 —— 那里的 CSS 会让它换行而不是被裁掉。 */
   const isBooleanDescriptor = /\b(?:true|false)\s*=/i.test(tail);
   if (/[=|]/.test(tail) && !isBooleanDescriptor) {
     return label.slice(0, colon).trim();
@@ -330,10 +308,9 @@ export function sanitizeComboLabel(label: string | undefined | null): string {
   return label.trim();
 }
 
-/* ── Group frame node (ComfyUI group / frame rectangle) ──
- * Pure decoration: a translucent filled rectangle with a coloured border and a
- * title chip.  It never carries ports and never intercepts pointer events, so
- * it sits behind the real graph nodes and clicks pass straight through. */
+/* ── 分组框节点（ComfyUI 的 group / frame 矩形）──
+ * 纯装饰：一个半透明填充、带彩色边框与标题芯片的矩形。它不带端口、
+ * 也不拦截指针事件，因此落在真实图节点之后，点击直接穿过去。 */
 export function colorToRgba(hex: string, alpha: number): string {
   const red = parseInt(hex.slice(1, 3), 16);
   const green = parseInt(hex.slice(3, 5), 16);
@@ -341,8 +318,7 @@ export function colorToRgba(hex: string, alpha: number): string {
   return `rgba(${red},${green},${blue},${alpha})`;
 }
 
-/** Parse a #rgb / #rrggbb colour into an rgba() string, tolerating
- *  malformed input by falling back to a neutral slate. */
+/** 把 #rgb / #rrggbb 颜色解析成 rgba() 字符串；输入畸形时回落到中性石板色。 */
 export function hexToRgba(hex: string, alpha: number): string {
   let hexValue = (hex || "").trim();
   if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
@@ -358,8 +334,8 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${red},${green},${blue},${alpha})`;
 }
 
-/** Mix a hex colour towards white by `amt` (0..1) so dark group colours still
- *  produce a readable title chip on the dark canvas. */
+/** 把十六进制颜色按 `amt`（0..1）向白色混合 —— 让深色分组在暗色画布上
+ *  也能给出可读的标题芯片。 */
 export function lightenHex(hex: string, amt: number): string {
   let hexValue = (hex || "").trim();
   if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
@@ -378,8 +354,7 @@ export function lightenHex(hex: string, amt: number): string {
   return `rgb(${red},${green},${blue})`;
 }
 
-/** Parse #rgb / #rrggbb → [r,g,b]; falls back to a neutral slate on
- *  malformed input. */
+/** 把 #rgb / #rrggbb 解析成 [r,g,b]；输入畸形时回落到中性石板色。 */
 export function parseHex(hex: string): [number, number, number] {
   let hexValue = (hex || "").trim();
   if (hexValue.startsWith("#")) hexValue = hexValue.slice(1);
@@ -397,19 +372,19 @@ export function parseHex(hex: string): [number, number, number] {
   ];
 }
 
-/** Blend hex `a` (the *base*, e.g. a node's canvas-coloured body) towards
- *  hex `b` (the *tint*, e.g. the node's role colour) by factor `t ∈ [0,1]`,
- *  returning an opaque `rgb(r,g,b)`.  Convention:
+/** 把十六进制 `a`（**底色**，例如节点画布色的主体）按系数 `t ∈ [0,1]`
+ *  向十六进制 `b`（**着色**，例如节点的角色色）混合，
+ *  返回不透明的 `rgb(r,g,b)`。约定：
  *
- *    t=0  →  pure `a` (the base colour, no tint applied)
- *    t=1  →  pure `b` (fully replaced by the tint)
- *    0<t<1 → opaque equivalent of "semi-transparent tint painted over the
- *            base" (what a CSS `rgba(tint, t)` over the base would look
- *            like, baked into a single solid `rgb()`).
+ *    t=0  →  纯 `a`（底色，不着色）
+ *    t=1  →  纯 `b`（完全被着色替换）
+ *    0<t<1 → 「半透明着色叠在底色上」的不透明等价形式
+ *            （即 CSS 里 `rgba(着色, t)` 叠在底色上的效果，
+ *            预烘焙成一个实心 `rgb()`）。
  *
- *  Always call as `mixHex(baseColor, tintColor, t)` — same direction as
- *  "mix X% of the tint into the base".  Behaviour mirrors CSS
- *  `color-mix(in srgb, base X%, tint Y%)` where Y/(X+Y) ≡ t. */
+ *  调用一律写成 `mixHex(底色, 着色, t)` —— 方向与「把 X% 的着色混进底色」
+ *  一致。行为等价于 CSS 的 `color-mix(in srgb, 底色 X%, 着色 Y%)`，
+ *  其中 Y/(X+Y) ≡ t。 */
 export function mixHex(colorA: string, colorB: string, ratio: number): string {
   const pa = parseHex(colorA);
   const pb = parseHex(colorB);
@@ -419,22 +394,19 @@ export function mixHex(colorA: string, colorB: string, ratio: number): string {
   return `rgb(${red},${green},${bl})`;
 }
 
-/* Build ReactFlow edges from a ComfyUI graph: every input value of shape
- * [nodeId, outputIndex] becomes an edge from that node to the consumer.
- *  - `targetHandle` is the input field name so ReactFlow snaps the wire to
- *    the matching Handle id (which WorkflowNode renders for each connection row).
- *  - `sourceHandle` is "out:<outputName>" so the wire lands on the
- *    per-output Handle we render at the bottom of each node.
- *  - Stroke colour comes from the data type flowing through the wire —
- *    MODEL→purple, CLIP→yellow, LATENT→violet, etc. — so the canvas
- *    reads like a faithful ComfyUI graph. */
+/* 从 ComfyUI 图构建 ReactFlow 的边：每个形如 [nodeId, outputIndex] 的输入值，
+ * 都变成一条从该节点指向消费方的边。
+ *  - `targetHandle` 用输入字段名，ReactFlow 才能把线吸附到对应的 Handle id
+ *    （每个连接行都会渲染一个）。
+ *  - `sourceHandle` 用 "out:<输出名>"，线才会落到节点底部按输出渲染的 Handle 上。
+ *  - 描边颜色取自线上流动的数据类型 —— MODEL→紫、CLIP→黄、LATENT→紫罗兰等 ——
+ *    让画布读起来像一张忠实的 ComfyUI 图。 */
 
-/* 2: longest-path (Kahn) topological layout. Returns a
- * position for EVERY real graph node (no truncation, unlike
- * `buildWorkflowPreview` which caps at 14 for the card preview).  Used
- * by both the legacy auto-layout fallback (API-only imports with no
- * saved positions) and the new "API 布局" view mode (force the
- * execution-graph topology regardless of the imported rawJson layout). */
+/* 最长路径（Kahn）拓扑布局。为**每一个**真实图节点都算出位置 ——
+ * 不做截断，而 `buildWorkflowPreview` 为了卡片预览会截到 14 个。
+ * 两条路径都用它：历史的自动布局兜底（纯 API 导入、没有保存位置），
+ * 以及新的「API 布局」视图模式（不管导入的 rawJson 布局如何，
+ * 强制按执行图拓扑排布）。 */
 export function computeKahnLayout(
   realNodes: ComfyGraphNode[],
   graph: Record<string, unknown>,
@@ -509,14 +481,13 @@ export function buildEdges(
   outSlotNameById?: Record<string, string[]>,
 ): Edge[] {
   if (!detail) return [];
-  // Only real graph nodes carry edges; group/note frames never do.
+  // 只有真实的图节点才带边；分组框 / 便签永远不会。
   const known = new Set(detail.nodes.map((node) => node.id));
   const nodesById: Record<string, ComfyGraphNode> = {};
   for (const node of detail.nodes) nodesById[node.id] = node;
 
-  /* Per-node raw outputs[] — the same source FlowNode falls back to when a
-   * class isn't in the static `inferOutputTypeAll` table.  Kept as a map so
-   * the per-edge lookup below stays O(1). */
+  /* 每个节点的原始 outputs[] —— 当某个 class 不在静态 `inferOutputTypeAll`
+   * 表里时，Flow 节点回落的也是这里。存成 map，让下面的逐边查找保持 O(1)。 */
   const rawOutById = new Map<string, RawOutputMeta[]>();
   for (const rawNode of detail.rawNodes ?? []) {
     if (!rawNode?.id) continue;
@@ -548,8 +519,8 @@ export function buildEdges(
           ? edgeType(srcClass, srcSlot)
           : edgeTypeByInputName(inputName);
       const stroke = portColor(type);
-      // Pin to the precise output handle when we know its name; otherwise
-      // fall back to the generic hidden "out" handle every node exposes.
+      // 知道输出名时把线钉到精确的输出 handle 上；否则回落到每个节点都挂的
+      // 通用隐藏 "out" handle。
       const slotNames = outSlotNameById?.[srcId];
       const staticNames = Object.keys(inferOutputTypeAll(srcClass ?? ""));
       const rawOuts = rawOutById.get(srcId) ?? [];
@@ -575,11 +546,10 @@ export function buildEdges(
         targetHandle: inputName,
         animated: false,
         style: {
-          /* match the WorkflowEdge crisp+glow pair (strokeWidth
-           *  2.5, opacity 1) so even edges that fall through to React
-           *  Flow's default renderer still look as strong as `wf`-typed
-           *  ones.  The earlier 2/0.9 baseline was tuned for the old
-           *  thin-glow-free WorkflowEdge. */
+          /* 对齐 WorkflowEdge 那套「锐利 + 辉光」参数（strokeWidth 2.5、
+           *  opacity 1），这样即使某些边落到 React Flow 的默认渲染器上，
+           *  看起来仍与 `wf` 类型的边一样扎实。早先的 2/0.9 是针对
+           *  旧的、没有辉光的细线 WorkflowEdge 调的。 */
           stroke,
           strokeWidth: 2.5,
           opacity: 1,
@@ -588,15 +558,14 @@ export function buildEdges(
     }
   }
 
-  /* Boundary-pin wiring (fix): direction matters — React Flow
-   * only renders an edge when the source handle is `type="source"` and
-   * the target handle is `type="target"`.  Our pin nodes expose:
-   *   - input pin:  Left handle `id="in"`, type="source"
-   *   - output pin: Right handle `id="out"`, type="target"
-   * So an "input" boundary link flows pin → inner (external seed feeds
-   * into the wrapper), and an "output" boundary link flows inner → pin
-   * (wrapper exposes inner result).  Previously these were inverted and
-   * pointed at the wrong handle id, which yielded zero rendered edges. */
+  /* 边界 pin 的接线：**方向很关键** —— React Flow 只在 source handle 为
+   * `type="source"` 且 target handle 为 `type="target"` 时才渲染边。
+   * 我们的 pin 节点暴露的是：
+   *   - 输入 pin：左侧 handle `id="in"`，type="source"
+   *   - 输出 pin：右侧 handle `id="out"`，type="target"
+   * 因此 "input" 型边界连线从 pin 流向内部（外部输入喂进封装节点），
+   * "output" 型边界连线从内部流向 pin（封装节点把内部结果暴露出去）。
+   * 早先这两者的方向是反的、handle id 也指错，结果一条边都渲染不出来。 */
   if (detail.boundaryLinks) {
     const bp = detail.boundaryPins;
     const lookupPin = (pinId: string): { type: string } | null => {
@@ -611,7 +580,7 @@ export function buildEdges(
       const pinNodeId = `bpin:${bl.pinId}`;
       const stroke = portColor(lookupPin(bl.pinId)?.type ?? "*");
       if (bl.kind === "input") {
-        /* Pin (external seed) → inner node's matching input slot. */
+        /* pin（外部输入）→ 内部节点对应的输入槽。 */
         edges.push({
           id: `e-bb-${bl.linkId}-in`,
           source: pinNodeId,
@@ -622,7 +591,7 @@ export function buildEdges(
           style: { stroke, strokeWidth: 2, opacity: 0.9 },
         });
       } else {
-        /* Inner node's matching output handle → output pin. */
+        /* 内部节点对应的输出 handle → 输出 pin。 */
         edges.push({
           id: `e-bb-${bl.linkId}-out`,
           source: bl.innerNodeId,
@@ -639,11 +608,10 @@ export function buildEdges(
   return edges;
 }
 
-/* Resolve a node's input map into per-connection source metadata.  For every
- * input whose value is `[srcId, slot]`, we look up the source node's title
- * and class_type from the provided `nodesById` map so the renderer can show
- * "← <title> #id" next to that row and so the edge colour can be chosen
- * by data type.  Inputs that aren't connections are skipped. */
+/* 把节点的输入映射解析成「每条连线对应的源信息」。对每个值为
+ * `[srcId, slot]` 的输入，从传入的 `nodesById` 里查出源节点的标题与
+ * class_type —— 渲染器据此在该行旁边显示「← <标题> #id」，
+ * 并按数据类型选边的颜色。不是连线的输入直接跳过。 */
 export function buildInputSources(
   inputs: Record<string, unknown> | undefined,
   nodesById: Record<string, ComfyGraphNode>,
@@ -674,14 +642,13 @@ export function buildInputSources(
   return out;
 }
 
-/* Scan the workflow graph once and produce, for every source node, the set
- * of output *names* that have at least one downstream edge.  Used by both
- * WorkflowNode and WorkflowSubgraphNode to decide whether to render a source Handle on
- * each output row — "no wire ⇒ no dot".  Output names are resolved the same
- * way the buildWfNode / buildSubgraphNode output list does so that
- * `connectedOutputs.has(name)` matches the row key.  The optional
- * `outSlotNameById` table is produced by `inferSourceOutNames` for nodes
- * whose outputs are absent from the static table *and* the raw JSON. */
+/* 扫一遍工作流图，为每个源节点算出「至少有一条下游边」的输出**名字**集合。
+ * WorkflowNode 与 WorkflowSubgraphNode 都靠它决定每行输出要不要渲染 source
+ * Handle ——「没有线就没有圆点」。输出名的解析方式与
+ * buildWfNode / buildSubgraphNode 的输出清单一致，
+ * 这样 `connectedOutputs.has(name)` 才对得上行键。
+ * 可选的 `outSlotNameById` 由 `inferSourceOutNames` 产出，
+ * 针对那些输出**既不在**静态表里、**也不在**原始 JSON 里的节点。 */
 export function buildConnectedOutputs(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,
@@ -729,17 +696,15 @@ export function buildConnectedOutputs(
   return map;
 }
 
-/* For every source node, derive the per-slot output NAME we'd attach to
- * its source Handle, even for nodes that aren't in the static
- * `inferOutputTypeAll` table and that have no `outputs[]` in the raw
- * JSON.  Sources lookup chain, per node:
- *   1. Static `inferOutputTypeAll` table (KSampler → LATENT, etc.).
- *   2. Raw `outputs[]` array from the imported JSON.
- *   3. Destinations' input key, stripped of ComfyUI's "duplicate field"
- *      suffix (`_N`).  Returns `width` for input `width_1`, etc. — this
- *      is the only way to recover names for fully custom nodes like
- *      ResolutionSelector whose exported workflow carries no outputs.
- *   4. Generic `out<N>` fallback if none of the above produced a name. */
+/* 为每个源节点推导「挂在它 source Handle 上的按槽位输出名」，
+ * 哪怕该节点既不在静态 `inferOutputTypeAll` 表里、原始 JSON 里也没有
+ * `outputs[]`。逐节点的取值链：
+ *   1. 静态 `inferOutputTypeAll` 表（KSampler → LATENT 等）。
+ *   2. 导入 JSON 里的原始 `outputs[]` 数组。
+ *   3. 下游节点的输入键，剥掉 ComfyUI 的「同名字段」后缀（`_N`）——
+ *      输入 `width_1` 取出 `width`。对 ResolutionSelector 这类导出的工作流
+ *      完全不携带 outputs 的全自定义节点，这是唯一能把名字捞回来的路子。
+ *   4. 以上都没产出名字时，兜底用通用的 `out<N>`。 */
 export function inferSourceOutNames(
   detail: WorkflowDetail,
   nodesById: Record<string, ComfyGraphNode>,
@@ -796,9 +761,8 @@ export function inferSourceOutNames(
   return out;
 }
 
-/* Compute nesting depth for each group by bounding-box containment.  A group's
- * depth is how many other groups directly/indirectly contain it, so child frames
- * render on top of (above) their parents and nested groups read correctly. */
+/* 按包围盒包含关系算出每个分组的嵌套深度。分组深度 = 有多少个其它分组
+ * 直接或间接地包含它 —— 子框据此画在父框**之上**，嵌套分组才读得对。 */
 export function computeGroupDepths(
   groups: WorkflowGroup[],
 ): Record<string, number> {
@@ -836,9 +800,8 @@ export function computeGroupDepths(
     let depthCount = 0;
     let parent = findParent(group);
     const visited = new Set<string>([group.id]);
-    // Defensive: near-duplicate frame bounds (within tolerance) can make two
-    // groups report each other as parent, forming a cycle that would otherwise
-    // hang the main thread forever on subgraph expand.  Bail out instead.
+    // 防御：两个几乎重合的框（在容差内）会互相把对方认成父级、形成环，
+    // 展开子图时能把主线程挂死。这里直接退出（深度封顶 64 层）。
     while (parent && !visited.has(parent.id) && depthCount < 64) {
       visited.add(parent.id);
       depthCount++;
@@ -849,4 +812,4 @@ export function computeGroupDepths(
   return depth;
 }
 
-/* ── Inner editor (must be inside ReactFlowProvider) ── */
+/* ── 内层编辑器（必须位于 ReactFlowProvider 内部）── */

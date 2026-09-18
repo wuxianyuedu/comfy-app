@@ -1,16 +1,13 @@
-/* ── Shared workflow-IO model ──
+/* ── 共享的工作流 IO 模型 ──
  *
- * A single source of truth for "what does this custom workflow actually
- * accept / produce", used by BOTH consumers:
- *   • CreatePanel 「自定义工作流」 panel   (src/components/studio/CreatePanel.tsx)
- *   • Canvas `workflow` node               (src/components/studio/project-canvas/CanvasNode.tsx)
+ * 「这个自定义工作流到底接受 / 产出什么」的**唯一事实源**，两个消费方共用：
+ *   • CreatePanel 的「自定义工作流」面板（src/components/studio/CreatePanel.tsx）
+ *   • 画布上的 `workflow` 节点（src/components/studio/project-canvas/CanvasNode.tsx）
  *
- * Data source rule (decided with the user): the ONLY source is the
- * user-curated `workflowIO` selection made in the canvas editor's IO-edit
- * mode.  We never scan the graph to guess parameters — if the author didn't
- * tick a pin, it is not an external parameter.  The server enriches each
- * entry with the ComfyUI data type + current value before it reaches us
- * (see src/app/api/workflows/[id]/route.ts → "workflowIO ENRICHMENT").
+ * 数据来源口径（与用户定死的）：**只能**取画布编辑器 IO 编辑模式里作者亲手勾选的
+ * `workflowIO` 集合。我们从不扫图去猜参数 —— 作者没勾的 pin 就不是对外参数。
+ * 服务端在数据到达之前，会为每个条目补上 ComfyUI 数据类型与当前值
+ * （见 src/app/api/workflows/[id]/route.ts 的「workflowIO 富化」段）。
  */
 
 import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
@@ -59,7 +56,7 @@ export {
   resolveEntrySeedMode,
 };
 
-/** Which control a dynamic form should render for a given entry. */
+/** 动态表单该为某个条目渲染哪种控件。 */
 export type ControlKind =
   | "textarea"
   | "text"
@@ -70,7 +67,7 @@ export type ControlKind =
   | "link" // non-editable connection type (MODEL / CLIP / LATENT / …)
   | "select"; // COMBO with a resolved candidate list (DarkSelect dropdown)
 
-/** ComfyUI types that only ever arrive over a wire — no user input possible. */
+/** 只可能经连线到来的 ComfyUI 类型 —— 无法由用户直接输入。 */
 const LINK_ONLY = new Set([
   "MODEL",
   "CLIP",
@@ -87,16 +84,15 @@ const LINK_ONLY = new Set([
   "UPSCALE_MODEL",
 ]);
 
-/** Types that mean "an image is fed in as a FILE", not as a wire.
+/** 「图像以**文件**形式喂入」而非经连线的类型。
  *
- *  `IMAGE` / `MASK` are ComfyUI's data types; `IMAGEUPLOAD` is the widget
- *  type ComfyUI's own frontend stamps on the file-picker slot (`LoadImage`'s
- *  `upload`, video helpers' first-frame pickers, …).  Both must render the
- *  upload control — otherwise the only way to feed an image is a wire, and a
- *  file-picker pin the author deliberately exposed shows up as a dead row. */
+ *  `IMAGE` / `MASK` 是 ComfyUI 的数据类型；`IMAGEUPLOAD` 则是 ComfyUI 自己的
+ *  前端盖在文件选择槽位上的 widget 类型（`LoadImage` 的 `upload`、
+ *  视频辅助节点的首帧选择器等）。两者都必须渲染上传控件 ——
+ *  否则喂图就只能靠连线，而作者刻意暴露出来的文件选择 pin 会显示成一行死控件。 */
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
 
-/** Output types that should spawn a *video* node downstream. */
+/** 下游该派生出**视频**节点的输出类型。 */
 const VIDEO_TYPES = new Set([
   "VIDEO",
   "VHS_FILENAMES",
@@ -105,14 +101,13 @@ const VIDEO_TYPES = new Set([
   "AUDIO",
 ]);
 
-/** When a workflowIO entry has no explicit ComfyUI type (e.g. ComfyUI was
- *  offline when the IO map was saved), try to recover the control kind from
- *  the pin name / label / default value so width/height/steps/seed/etc. still
- *  render as numeric steppers and COMBO-like pins like aspect_ratio still
- *  render as select/text instead of plain text.
+/** 当某个 workflowIO 条目没有显式的 ComfyUI 类型时（例如保存 IO 映射时
+ *  ComfyUI 离线），尝试从 pin 名 / 标签 / 默认值把控件种类**捞回来** ——
+ *  让 width/height/steps/seed 等仍渲染成数字步进器，
+ *  让 aspect_ratio 这类 COMBO 形态的 pin 仍渲染成下拉或文本，而不是一律纯文本。
  *
- *  this fixes the "DimensionControl disappeared" regression
- *  without it, every untyped widget falls back to "text", so width/height
+ *  这条兜底修的是「DimensionControl 消失」那次回归：没有它，
+ *  每个没类型的 widget 都落到 "text"，width/height 就……
  *  pairs are never grouped and the 比例+清晰度 picker never renders. */
 function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
   if (typeof e.defaultValue === "number") {
@@ -140,28 +135,29 @@ function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
   return null;
 }
 
-/** Pin NAMES that mean "pick a local file" on custom nodes which declare their
- *  upload slot with a non-standard type (e.g. `upload` typed as `STRING`).
+/** 在那些用**非标准类型**声明上传槽位的自定义节点上（例如 `upload`
+ *  被标成 `STRING`），这些 pin **名字**表示「选一个本地文件」。
  *
- *  Deliberately name-only: ComfyUI's `LoadImage` ships `image` (COMBO, the
- *  uploaded filename) plus `upload` (IMAGEUPLOAD, the picker).  A bare
- *  `image` name must NOT become an upload button — it is the *result* slot. */
+ *  刻意只按名字判：ComfyUI 的 `LoadImage` 里 `image`（COMBO，上传后的文件名）
+ *  与 `upload`（IMAGEUPLOAD，选择器）并存。光看 `image` 这个名字**绝不能**
+ *  变成上传按钮 —— 它是**结果**槽。 */
 export function isUploadPinName(e: { name?: string }): boolean {
   return /upload|file_?picker/.test((e.name ?? "").toLowerCase());
 }
 
-/** Honest type chip text for a pin.
+/** 给 pin 的类型芯片用的、实事求是的文字。
  *
- *  User rule: 「type 是什么就显示什么类型」—— 徽章必须打印 pin 真实声明的
- *  ComfyUI 类型（`IMAGEUPLOAD` / `MASK` / `INT` …）。当元数据里根本没有类型
- *  （ComfyUI 离线时保存的 IO）才回退到控件推导出的类型，绝不把 `COMBO` 之类
- *  已有类型改写成别的名义（那会让「STRING 的行显示 INT」这类错位无从解释）。 */
+ *  用户口径：「type 是什么就显示什么类型」—— 徽章必须打印 pin 真实声明的
+ *  ComfyUI 类型（`IMAGEUPLOAD` / `MASK` / `INT` …）。只有元数据里根本没有类型
+ *  （ComfyUI 离线时保存的 IO）才回退到控件推导出的类型，
+ *  绝不把 `COMBO` 之类已有类型改写成别的名义 ——
+ *  那会让「STRING 的行显示 INT」这类错位无从解释。 */
 export function typeDisplay(type: string | undefined, fallback = "*"): string {
   const t = (type ?? "").trim().toUpperCase();
   return t.length > 0 ? t : fallback;
 }
 
-/** Decide the control to render for one exposed input. */
+/** 决定某个暴露输入该渲染成哪种控件。 */
 export function controlForEntry(e: WorkflowIOEntry): ControlKind {
   const type = (e.type ?? "*").toUpperCase();
   if (LINK_ONLY.has(type)) return "link";
@@ -174,24 +170,24 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
   if (type === "BOOLEAN" || type === "BOOL") return "switch";
   if (type === "INT") return "int";
   if (type === "FLOAT" || type === "NUMBER") return "float";
-  /* COMBO with a resolved candidate list → render a real <select>
-   *  (DarkSelect).  Without options (ComfyUI unreachable / non-enumerable)
-   *  fall back to a plain text control so the form never breaks. */
+  /* 解析出候选清单的 COMBO → 渲染真正的 <select>（DarkSelect）。
+   *  没有候选（ComfyUI 不可达 / 无法枚举）时回落到普通文本控件，
+   *  表单永远不至于打不开。 */
   if (type === "COMBO") {
     if (Array.isArray(e.options) && e.options.length > 0) return "select";
     return "text";
   }
   if (type === "STRING") {
     if (e.multiline) return "textarea";
-    /* A long current value is a strong hint this is a prompt box even when
-     * the server heuristic missed the name. */
+    /* 当前值很长，是「这是提示词框」的强信号 ——
+     * 即使服务端的名字启发式没认出来也照样判对。 */
     if (typeof e.defaultValue === "string" && e.defaultValue.length > 40)
       return "textarea";
     return "text";
   }
   if (type === "*") {
     if (e.multiline) return "textarea";
-    /* A long current value is a strong hint this is a prompt box. */
+    /* 当前值很长，是「这是提示词框」的强信号。 */
     if (typeof e.defaultValue === "string" && e.defaultValue.length > 40)
       return "textarea";
     const inferred = inferControlFromName(e);
@@ -203,11 +199,11 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
    *  连线」的哑端口 —— 那是「用户勾了却改不了」的观感来源。 */
   if (typeof e.defaultValue === "string" || typeof e.defaultValue === "number")
     return "text";
-  /* Truly untypable pin (no scalar, no upload semantics) → a wire. */
+  /* 彻底无法定类型的 pin（既不是标量，也没有上传语义）→ 走连线。 */
   return "link";
 }
 
-/** Sensible numeric bounds, keyed off the well-known ComfyUI widget names. */
+/** 按众所周知的 ComfyUI widget 名给出合理的数值上下界。 */
 export function numericBounds(e: WorkflowIOEntry): {
   min: number;
   max: number;
@@ -264,14 +260,13 @@ function isMachineAliasName(name: string | undefined): boolean {
   return /^value_\d+$/.test(slot) || /^\d+$/.test(slot);
 }
 
-/** Best display label for an exposed pin.
+/** 某个暴露 pin 的最优显示标签。
  *
- * Per user direction: the canvas's IO editor prefers the
- * `label` field so authors see `positive_prompt` / `negative_prompt`
- * instead of the bare ComfyUI key (`text` / `text_1`).  When the caller
- * also passes the full list of entries being displayed together
- * (`allEntries`), entries that share a label fall back to a
- * disambiguator so the two pins stay visually distinguishable (e.g. two
+ * 用户口径：画布的 IO 编辑器优先用 `label` 字段，作者看到的才是
+ * `positive_prompt` / `negative_prompt`，而不是光秃秃的 ComfyUI 键
+ * （`text` / `text_1`）。当调用方还传入了「一起显示的完整条目清单」
+ * （`allEntries`）时，标签相同的条目会退到消歧后缀，
+ * 两个 pin 在视觉上仍然分得开（例如两个……）。
  * pins both labeled "图像" → shown as `inputImage` / `outputImage`).
  *
  * 两条硬性约束（ISSUE #349）：
@@ -283,9 +278,8 @@ function isMachineAliasName(name: string | undefined): boolean {
  *      宿主节点标题（作者看得懂）区分；连标题都没有时保留作者命名，宁可两行
  *      同名，也不把平台编号产物当名字显示。
  *
- * Without `allEntries` the function returns the same `label || name`
- * behaviour the rest of the app already relies on, so existing callers
- * in CreatePanel / CanvasNode keep working. */
+ * 不传 `allEntries` 时，函数返回的仍是全应用早已依赖的 `label || name` 行为，
+ * CreatePanel / CanvasNode 里的既有调用方不受影响。 */
 export function ioLabel(
   e: WorkflowIOEntry,
   allEntries?: readonly WorkflowIOEntry[],
@@ -307,41 +301,37 @@ export function ioLabel(
   return candidate;
 }
 
-/** Per user direction: the order of parameter rows is up
- *  to the consumer — each row is an independent block, dynamically shown
- *  or hidden based on which IO pins exist.  No forced ordering.  We rely
- *  on the IO map's natural insertion order (Object.entries order), which
- *  matches what the user sees when authoring the workflow in IO-edit
- *  mode.  Outputs are sorted alphabetically by label as a stable-only
- *  tie-breaker for cases where multiple outputs share an insertion
+/** 用户口径：参数行的顺序**由消费方自己定** —— 每一行都是独立的块，
+ *  按存在哪些 IO pin 动态显示或隐藏，**不强制排序**。这里依赖 IO 映射的自然
+ *  插入顺序（Object.entries 的顺序），它与用户在 IO 编辑模式里编写工作流时
+ *  看到的一致。输出按标签字母序排，只作为「多个输出插入位置相同」时的
+ *  稳定断开器。
  *  context.
  *
  *  See §"动态更新" in the design source-of-truth (Ardot 714503087315759):
  *    > 「每一块都是可以动态根据是否有对应的参数需要显示来动态更新的，
  *    >  参数可多可少，但是样式就是这样」
- *  The style of each row is fixed by the design; the order is not. */
+ *  每行的样式由设计固定；顺序不固定。 */
 
-/** Split + sort the IO map into the three buckets the UI actually needs.
+/** 把 IO 映射拆分并排序成 UI 真正需要的三个桶。
  *
- *  Wire inputs (kind === "param") are typed-only ports — they can't be
- *  edited, only consumed via a connection from another node's output.
- *  Widget inputs (kind === "widget") carry an editable value (dropdown /
- *  number / boolean / multiline string).  Outputs are grouped with wire
- *  inputs on the canvas because both are "I/O 端点" — points where the
- *  workflow interfaces with the world — while widget inputs are
- *  parameters the author tunes before the workflow runs.
+ *  连线输入（kind === "param"）是「只认类型」的端口 —— 不可编辑，
+ *  只能从别的节点输出接过来消费。widget 输入（kind === "widget"）带可编辑的值
+ *  （下拉 / 数字 / 布尔 / 多行字符串）。输出之所以在画布上与连线输入同组，
+ *  是因为两者都是「I/O 端点」—— 工作流与外界对接的地方；
+ *  而 widget 输入是作者在工作流跑之前调的参数。
  *
- *  `inputs` is kept as a flat concatenation of wireInputs + widgetInputs
- *  so consumers that don't yet distinguish the two groups keep working. */
+ *  `inputs` 保留成 wireInputs + widgetInputs 的扁平拼接，
+ *  让还没区分这两组的消费方继续能用。 */
 export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
-  /** Inputs that have no widget — must be wired from another node's output.
-   *  In ComfyUI these are the "typed-only" ports (positive_prompt, MODEL,
-   *  CLIP, …).  Rendered as read-only chips. */
+  /** 没有 widget 的输入 —— 必须从别的节点输出接过来。ComfyUI 里这类是
+   *  「只认类型」的端口（positive_prompt、MODEL、CLIP 等），
+   *  渲染成只读芯片。 */
   wireInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
-  /** Inputs that carry a widget-backed value (dropdown / number / boolean /
-   *  multiline-string etc.) — the user can edit these without connections. */
+  /** 带 widget 值的输入（下拉 / 数字 / 布尔 / 多行字符串等）——
+   *  用户不连线也能直接编辑。 */
   widgetInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
-  /** Back-compat flatten: [wireInputs, widgetInputs] in stable order. */
+  /** 向后兼容的扁平化：[wireInputs, widgetInputs]，顺序稳定。 */
   inputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
   outputs: (WorkflowIOEntry & { ioKey: string })[];
 } {
@@ -360,26 +350,22 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
       outputs.push({ ...entry, ioKey });
     } else {
       const enriched = { ...entry, ioKey, control: controlForEntry(entry) };
-      /* `kind === "widget"` is the signal the canvas-side toggle wrote
-       *  when the user checked a node's editable parameter.  Anything
-       *  else (kind !== "widget") is treated as wire-only — matches the
-       *  canvas rendering where these rows render the 🔌 chip via
+      /* `kind === "widget"` 是用户勾选节点可编辑参数时，画布侧开关写下的信号。
+       *  其余情况（kind !== "widget"）一律当作只走连线 ——
+       *  与画布渲染一致：那些行会渲染 🔌 芯片。
        *  `controlForEntry` → "link".  存储自新格式起即正确区分
        *  widget / param,客户端直接按 kind 分流,无需任何旧数据特判。 */
       if (entry.kind === "widget") widgetInputs.push(enriched);
       else wireInputs.push(enriched);
     }
   }
-  /* apply the user-driven displayOrder. Absent
-   *  (undefined) → leave the IO map's natural insertion order untouched
-   *  by treating it as +Infinity, so existing workflows without an order
-   *  continue to render exactly as before.  Stable sort keeps the
-   *  relative order of items that share the same order (e.g. a brand-new
-   *  toggle alongside a manually-positioned one).  Each group
-   *  (wire / widget / output) is sorted independently — the canvas-side
-   *  IO preview keeps "wire + widget inputs above, outputs below" and the
-   *  user only reorders within those groups, which is what the design
-   *  intent of the preview panel calls for. */
+  /* 应用用户设定的 displayOrder。缺失（undefined）时按 +Infinity 处理，
+   *  不动 IO 映射的自然插入顺序 —— 没有顺序的既有工作流渲染结果与从前完全一样。
+   *  稳定排序保住了 displayOrder 相同项之间的相对次序
+   *  （例如一个刚勾上的项与一个手动排过位的项并排时）。
+   *  三组（wire / widget / output）各自独立排序 ——
+   *  画布侧的 IO 预览始终「连线 + widget 输入在上、输出在下」，
+   *  用户也只在这些组内部调序，这正是预览面板的设计意图。 */
   const byDisplayOrder = (
     itemA: { displayOrder?: number },
     itemB: { displayOrder?: number },
@@ -416,9 +402,9 @@ export function filterVisibleInMode<
 }
 
 /**
- * What kind of downstream canvas node should receive this workflow's result?
- * Driven by the exposed OUTPUT pins (the user's own curation), falling back
- * to the workflow's declared taskType, then to an image node.
+ * 这个工作流的结果该接到画布上哪种下游节点？
+ * 判据优先看暴露出来的 OUTPUT pin（用户自己的勾选），
+ * 再回落工作流声明的 taskType，最后回落图像节点。
  */
 export function outputTargetKind(
   io: WorkflowIOMap | undefined | null,
@@ -438,7 +424,7 @@ export function outputTargetKind(
   return "image";
 }
 
-/** Seed a value map from the enriched `defaultValue`s.
+/** 用富化出来的 `defaultValue` 播种一份值映射。
  *
  *  多模式：传入 `mode` 时走两级回退「模式默认值 → 通用默认值」
  *  （`resolveEntryDefault`），未开启模式时与旧行为完全一致。
@@ -466,9 +452,9 @@ export function defaultInputValues(
 }
 
 /**
- * Merge stored values over freshly-derived defaults.  Keys that no longer
- * exist in the workflow (pin un-ticked / workflow re-imported) are dropped so
- * a stale value can never be POSTed into a node that doesn't accept it.
+ * 把已存的值合并到新推导出的默认值之上。工作流里已经不存在的键
+ * （pin 被取消勾选 / 工作流重新导入过）会被丢掉 ——
+ * 陈旧的值永远不会被 POST 进一个不接受它的节点。
  */
 export function reconcileInputValues(
   io: WorkflowIOMap | undefined | null,
@@ -524,10 +510,10 @@ export function mergeRefreshedDefaults(
 }
 
 /**
- * Turn the flat `{ ioKey: value }` map into the wire payload consumed by
- * /api/generate → buildCustomWorkflow, i.e. explicit (nodeId, name, value)
- * triples.  Keys are re-resolved against the live IO map so a renamed /
- * removed pin never leaks through.
+ * 把扁平的 `{ ioKey: value }` 映射转成 /api/generate → buildCustomWorkflow
+ * 消费的连线载荷，即显式的 (nodeId, name, value) 三元组。
+ * 键会重新对照实时的 IO 映射解析一次，
+ * 改过名或被删掉的 pin 永远漏不过去。
  */
 export function toWorkflowInputsPayload(
   io: WorkflowIOMap | undefined | null,
@@ -553,26 +539,24 @@ export function toWorkflowInputsPayload(
 }
 
 /**
- * treat a value as "filled" for the purpose of
- * required-field validation.  `undefined` / `null` / empty string / NaN
- * all count as empty; `false` (boolean switch) DOES count as filled,
- * since a switch is either explicitly on or off — there's no third state.
+ * 就必填校验而言，判断一个值是否「已填」。
+ * `undefined` / `null` / 空字符串 / NaN 都算空；
+ * 而 `false`（布尔开关）**算已填** —— 开关只有明确的「开」或「关」，没有第三种状态。
  */
 export function isInputFilled(value: unknown): boolean {
   if (value === undefined || value === null) return false;
   if (typeof value === "string") return value.trim().length > 0;
   if (typeof value === "number") return Number.isFinite(value);
-  /* boolean / object / array — anything truthy-by-presence counts as filled. */
+  /* 布尔 / 对象 / 数组 —— 只要「存在即为真」的都算已填。 */
   return true;
 }
 
 /**
- * Return the ioKeys of every required widget input that has no usable
- * value yet.  Used by CreatePanel / CanvasNode as a submit guard so a
- * user can never enqueue a workflow with a missing `positive_prompt`
- * when the author marked it as required.  Wire (param) inputs are
- * intentionally excluded — those are validated by canvas wiring checks
- * elsewhere (an unwired required wire still surfaces as a missing
+ * 返回所有「标了必填、但还没有可用值」的 widget 输入的 ioKey。
+ * CreatePanel / CanvasNode 用它做提交守卫：作者把 `positive_prompt` 标成必填后，
+ * 用户就不可能带着一个缺它的工作流入队。
+ * 连线（param）型输入**刻意排除** —— 它们由画布上的接线检查在别处校验
+ * （未接线的必填连线仍会以「缺参数」的形式暴露出来）。
  * connection in the form's I/O 端点 strip).
  */
 export function getMissingRequiredInputs(
@@ -593,25 +577,23 @@ export function getMissingRequiredInputs(
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * parameter GROUP inference.
+ * 参数**分组**的推断。
  *
- * A custom workflow often exposes a tightly-coupled set of widgets that the
- * user would rather tune as one "paradigm" than as N separate boxes:
- *   • Dimension group  — `width` + `height` (image workflows).  Two fill
- *     styles: (A) edit W/H separately, (B) pick 比例(ratio) + 清晰度(scale)
- *     and let the form compute W/H back into the two widgets.
- *   • Video group      — `length`(frames) + `aspect`(比例) + `quality`(画质).
- *     Two fill styles: (A) edit each widget separately, (B) pick 时长 + 画质
- *     + 比例 from friendly presets that write the real widget values.
+ * 自定义工作流常常暴露一组强耦合的 widget，用户更愿意把它们当成一个「范式」
+ * 来调，而不是 N 个独立的输入框：
+ *   • 尺寸组 —— `width` + `height`（图像工作流）。两种填法：
+ *     (A) 分开编辑 W/H；(B) 选比例 + 清晰度，由表单把 W/H 算回那两个 widget。
+ *   • 视频组 —— `length`（帧数）+ `aspect`（比例）+ `quality`（画质）。
+ *     两种填法：(A) 逐个编辑 widget；(B) 从友好的预设里选时长 + 画质 + 比例，
+ *     由预设把真实 widget 值写进去。
  *
- * Inference is purely name/label based (mirrors `numericBounds`'s keyword
- * heuristic) so it needs no schema change and works for any workflow that
- * exposes the conventional pins.  The grouping is discovered by the single
- * consumer `DynamicWorkflowForm` and the matched widgets are then WITHHELD
- * from the generic row rendering (so width/height never appear twice).
+ * 推断**纯按名字 / 标签**（与 `numericBounds` 的关键字启发式同口径），
+ * 因此不需要改 schema，任何暴露了约定 pin 的工作流都能用。
+ * 分组由**唯一**的消费方 `DynamicWorkflowForm` 发现，
+ * 命中的 widget 随后会**从**通用逐行渲染里**摘掉**（width/height 不会出现两次）。
  * ───────────────────────────────────────────────────────────────────────── */
 
-/** Enriched widget entry as produced by `splitWorkflowIO().widgetInputs`. */
+/** 富化后的 widget 条目，由 `splitWorkflowIO().widgetInputs` 产出。 */
 export type EnrichedWidget = WorkflowIOEntry & {
   ioKey: string;
   control: ControlKind;
@@ -620,11 +602,11 @@ export type EnrichedWidget = WorkflowIOEntry & {
 export interface DimensionGroup {
   kind: "dimension";
   groupId: string;
-  /** Conventional W/H pair — renders the "比例 + 清晰度" picker. */
+  /** 常规的 W/H 成对项 —— 渲染「比例 + 清晰度」选择器。 */
   width?: EnrichedWidget;
   height?: EnrichedWidget;
-  /** ResolutionSelector-style pair — renders a "比例 + 像素" quick picker
-   *  that writes directly into the two exposed widgets. */
+  /** ResolutionSelector 风格的成对项 —— 渲染「比例 + 像素」快捷选择器，
+   *  直接写进那两个暴露出来的 widget。 */
   aspect?: EnrichedWidget;
   megapixels?: EnrichedWidget;
   /** 倍数（upscale multiple）—— 存在时并入「比例 + 像素」popover 的
@@ -667,9 +649,9 @@ export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] =
  *  再导出，避免同一份档位表在视图层再抄一遍（抄一份就必然漂移）。 */
 export interface DimClarityPreset {
   kind: ClarityKind;
-  /** Display label as shown in the popover chip (e.g. "1k", "1M"). */
+  /** 弹层芯片上显示的标签（如 "1k"、"1M"）。 */
   label: string;
-  /** Megapixel kind: total pixel count (width * height). */
+  /** 百万像素的种类：总像素数（宽 × 高）。 */
   totalPixels?: number;
 }
 
@@ -691,15 +673,14 @@ export const CLARITY_SUBGROUP_OF_KIND: Record<
 
 export { clarityKindOfLabel, megapixelTierOfLabel, resolutionTierOfLabel };
 
-/* ── ResolutionSelector quick presets ──
- *  Some custom nodes (e.g. ResolutionSelector) don't expose raw
- *  width/height; they expose `aspect_ratio` (a COMBO whose value is a label
- *  string like "16:9 (Widescreen)") plus `megapixels` (a FLOAT where 1 ≈
- *  1M total pixels).  The dimension picker needs explicit value mappings
- *  for that paradigm because nothing derives W/H from them.
+/* ── ResolutionSelector 的快捷预设 ──
+ *  有些自定义节点（如 ResolutionSelector）并不暴露原始的 width/height，
+ *  而是暴露 `aspect_ratio`（COMBO，值形如 "16:9 (Widescreen)" 的标签字符串）
+ *  加 `megapixels`（FLOAT，1 ≈ 100 万总像素）。
+ *  尺寸选择器需要针对这种范式的显式取值映射 —— 没东西能从这两个值推出 W/H。
  *
- *  `parseRatioFromLabel` below lets the picker still detect the ACTUAL
- *  ratio from a workflow-specific label string, so a workflow whose node
+ *  下面的 `parseRatioFromLabel` 让选择器仍能从工作流特有的标签字符串里
+ *  认出**真实**比例，这样即使某个工作流的节点……
  *  spells the option differently ("16:9 宽屏", "16:9") still highlights
  *  the right chip instead of silently falling back to "自定义". */
 export const ASPECT_RATIO_LABEL_PRESETS: {
@@ -722,8 +703,8 @@ export const MEGAPIXEL_VALUE_PRESETS: { label: string; value: number }[] = [
   { label: "4M", value: 4 },
 ];
 
-/** Pull a numeric w/h ratio out of a free-form aspect label ("16:9 (Wide)").
- *  Returns null when the string carries no recognisable ratio. */
+/** 从自由形式的比例标签（"16:9 (Wide)"）里取出数值化的宽高比。
+ *  字符串里没有可识别的比例时返回 null。 */
 export function parseRatioFromLabel(value: string): number | null {
   const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(value);
   if (!match) return null;
@@ -734,7 +715,7 @@ export function parseRatioFromLabel(value: string): number | null {
   return w / h;
 }
 
-/** Given a target ratio + clarity preset + scene, return the concrete {width, height}.
+/** 给定目标比例 + 清晰度预设 + 场景，返回具体的 {width, height}。
  *
  *  分辨率档（resolution kind）：查「场景 × 比例 × 档位」表 —— 表里的值就是该场景
  *    1k/2k/4k 的口径（图片与视频不同），不做网格吸附，也不做区间钳制
@@ -751,8 +732,8 @@ export function dimsForRatio(
   scene: SizeScene = "image",
   table?: SizePresetTable,
 ): { width: number; height: number } {
-  /* Guard against a degenerate / missing ratio: NaN / 0 / negative falls
-   * back to a 1:1 square so the form still gets a finite answer. */
+  /* 防退化 / 缺失的比例：NaN / 0 / 负数一律回落到 1:1 正方形，
+   * 表单拿到的永远是一个有限值。 */
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
 
   if (typeof presetOrBase === "number") {
@@ -823,7 +804,7 @@ export function pickClarityPreset(
   return best;
 }
 
-/* ── Keyword matchers (name + label, case-insensitive) ── */
+/* ── 关键字匹配器（名字 + 标签，忽略大小写）── */
 function isDimWidth(e: EnrichedWidget): boolean {
   const name = (e.name || "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
@@ -837,7 +818,7 @@ function isDimHeight(e: EnrichedWidget): boolean {
   const label = (e.label ?? "").toLowerCase();
   /* NOTE: a bare "高" inside a 画质 label like "高清" must NOT count as the
    *  height pin — we only accept the exact Chinese shape 高度/纵向/纵 or the
-   *  English name, never a substring of an unrelated label. */
+   *      *  英文名字，绝不能是某个无关标签的子串。 */
   if (/height|heigth/.test(name)) return true;
   if (label === "高度" || label === "纵" || label === "纵向") return true;
   if (name === "高") return true;
@@ -880,12 +861,12 @@ function isVideoQuality(e: EnrichedWidget): boolean {
   return /quality|clarity|清晰|画质/.test(searchText);
 }
 
-/** Detect a dimension-like widget group from the widget list.
+/** 从 widget 清单里认出「尺寸型」的分组。
  *
- *  Supports two paradigms:
+ *  支持两种范式：
  *    • width + height            → renders the classic "比例 + 清晰度" picker
  *    • aspect_ratio + megapixels → renders a "比例 + 像素" quick picker that
- *      writes directly into the two exposed widgets (e.g. ResolutionSelector).
+ *      直接写进那两个暴露出来的 widget（如 ResolutionSelector）。
  */
 export function inferDimensionGroup(
   widgets: EnrichedWidget[],
@@ -913,9 +894,8 @@ export function inferDimensionGroup(
   }
 
   /* ResolutionSelector-style: the user exposed "宽高比" + "百万像素" instead
-   *  of raw width/height.  We don't require a specific control kind because
-   *  these pins are often COMBO/FLOAT but may arrive as untyped "text" when
-   *  ComfyUI was offline during IO curation. */
+   *      *  原始的 width/height。这里**不**要求特定的控件种类：这些 pin 通常是
+   *      *  COMBO/FLOAT，但 IO 整理时 ComfyUI 离线的话，它们会以无类型的 "text" 到来。 */
   const aspectWidgets = widgets.filter(isDimAspect);
   const mpWidgets = widgets.filter(isDimMegapixels);
   if (aspectWidgets.length > 0 && mpWidgets.length > 0) {
@@ -941,7 +921,7 @@ export function inferDimensionGroup(
   return null;
 }
 
-/** Detect a length+aspect+quality video group from the widget list. */
+/** 从 widget 清单里认出「时长 + 比例 + 质量」的视频分组。 */
 export function inferVideoGroup(widgets: EnrichedWidget[]): VideoGroup | null {
   const len = widgets.filter(isVideoLength);
   const asp = widgets.filter(isVideoAspect);
@@ -957,19 +937,18 @@ export function inferVideoGroup(widgets: EnrichedWidget[]): VideoGroup | null {
   };
 }
 
-/** Run both inferences, excluding dimension pins from the video scan so a
- *  single widget can never belong to two groups.  Returns the matched groups
- *  plus the complete set of ioKeys they consume (so the caller can suppress
- *  the generic per-widget rows for those pins). */
+/** 跑两次推断，并在视频扫描里排除尺寸 pin ——
+ *  同一个 widget 永远不会同属两组。返回命中的分组，
+ *  以及它们消费掉的完整 ioKey 集合（调用方据此把那些 pin 的通用逐行渲染抑制掉）。 */
 export function inferGroups(widgets: EnrichedWidget[]): {
   dimension: DimensionGroup | null;
   video: VideoGroup | null;
   groupedKeys: Set<string>;
 } {
   const dimension = inferDimensionGroup(widgets);
-  /* a dimension group may be either the W/H pair or
+  /* 尺寸组可能是 W/H 成对，也可能是别的形态，
    *  the 宽高比 + 百万像素 pair, so collect whichever pins it actually holds
-   *  instead of assuming `width`/`height` are present. */
+   *  而不是假定一定存在 `width`/`height`。 */
   const dimKeys = new Set<string>();
   if (dimension) {
     if (dimension.width) dimKeys.add(dimension.width.ioKey);
