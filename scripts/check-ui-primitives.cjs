@@ -83,19 +83,78 @@ const EXEMPT_DIRS = [
 
 /* ── 三条判据 ────────────────────────────────────────────── */
 
+/**
+ * 去掉 `//` 行注释与 `/* … *\/` 块注释（保留换行，便于定位）。
+ *
+ * **为什么判据必须先过这一层**：注释里描述「本组件渲染一个 `<button>`」、
+ * 「原来是 `<button>` 手写实现」是**说明**，不是视图实现。不剥注释时，把一处
+ * 手写按钮改成 `<Button>` 并把理由写进注释，会让该文件的计数**停在原地**
+ * —— 棘轮于是永远降不下去，而代码其实已经合规。
+ * （同款教训见 `scripts/check-theme-colors.cjs` 的 `stripComments`：
+ * 注释里的 `#346` ISSUE 引用被误判成 3 位色值。）
+ *
+ * 字符串/模板字面量**不**剥离：`"<button"` 出现在字面量里同样是「自己实现
+ * 一份」的信号，保守计上更安全（NUL 哨兵那类反例见规范 §12.11）。
+ */
+function stripComments(text) {
+  let out = "";
+  let i = 0;
+  const n = text.length;
+  let inBlock = false;
+  let inLine = false;
+  while (i < n) {
+    const ch = text[i];
+    const nx = text[i + 1];
+    if (inLine) {
+      if (ch === "\n") {
+        inLine = false;
+        out += ch;
+      } else out += " ";
+      i++;
+      continue;
+    }
+    if (inBlock) {
+      if (ch === "*" && nx === "/") {
+        inBlock = false;
+        out += "  ";
+        i += 2;
+        continue;
+      }
+      out += ch === "\n" ? "\n" : " ";
+      i++;
+      continue;
+    }
+    if (ch === "/" && nx === "/") {
+      inLine = true;
+      out += "  ";
+      i += 2;
+      continue;
+    }
+    if (ch === "/" && nx === "*") {
+      inBlock = true;
+      out += "  ";
+      i += 2;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
 const RULES = {
   P1: {
     label: "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
-    count: (t) => (t.match(/<button\b/g) || []).length,
+    count: (t) => (stripComments(t).match(/<button\b/g) || []).length,
   },
   P2: {
     label: "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
-    count: (t) => (t.match(/\bcreatePortal\s*\(/g) || []).length,
+    count: (t) => (stripComments(t).match(/\bcreatePortal\s*\(/g) || []).length,
   },
   P3: {
     label:
       "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading / skeleton / progress）",
-    count: (t) => (t.match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+    count: (t) => (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
   },
 };
 

@@ -200,6 +200,43 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("--update");
   });
 
+  /* ── 注释里的 `<button>` 是说明，不是实现 ────────────────────────────────
+   * 判据先剥注释：把一处手写按钮改成 `<Button>` 并顺手把理由（「原来是
+   * `<button>` 手搓」）写进注释，是最自然不过的写法 —— 若不剥注释，该文件
+   * 的计数会停在原地，棘轮永远降不下去，而代码其实已经合规。
+   * 同款教训见 `check-theme-colors.cjs`（注释里的 `#346` 被误判成色值）。 */
+  it("注释里提到 <button> 不计入 P1", () => {
+    write(
+      "src/components/studio/N.tsx",
+      '/* 原来是 <button> 手搓，现改走 <Button>（ISSUE #672） */\n' +
+        "// 也见 <button> 的默认 type\n" +
+        "export const N = () => <Button>ok</Button>;\n",
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/N.tsx");
+  });
+
+  it("代码里（含字符串字面量）的 <button> 仍然计入 P1", () => {
+    write(
+      "src/components/studio/O.tsx",
+      "export const O = () => <button type=\"button\">ok</button>;\n",
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).toContain("studio/O.tsx");
+  });
+
+  it("块注释跨多行时不会漏剥（<button> 落在中间那行）", () => {
+    write(
+      "src/components/studio/P.tsx",
+      "/*\n * 说明：\n * 这里渲染一个 <button\n * 但现在走基元\n */\nexport const P = 1;\n",
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P.tsx");
+  });
+
   it("写入的基线带 rules 说明与 total（清单不自证失效）", () => {
     write("src/components/studio/M.tsx", BUTTON_VIEW);
     seedBaseline();

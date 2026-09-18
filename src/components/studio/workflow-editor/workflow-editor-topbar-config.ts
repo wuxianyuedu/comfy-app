@@ -53,6 +53,30 @@ const DENSITY_CLASS: Record<TopBarDensity, string> = {
     `gap-1 px-2.5 py-1.5 text-xs ${TOP_BAR_DENSITY_BREAKPOINT}:gap-1.5 ${TOP_BAR_DENSITY_BREAKPOINT}:px-4 ${TOP_BAR_DENSITY_BREAKPOINT}:py-2 ${TOP_BAR_DENSITY_BREAKPOINT}:text-sm`.trim(),
 };
 
+/**
+ * 覆盖 `ui/button` 基元的默认外观。
+ *
+ * 顶栏按钮现已全部换成 `<Button>`（ISSUE #672 P1），但它的**尺寸与底盘**仍
+ * 由本模块决定：顶栏在窄窗口下的退化顺序是专门设计过的（见文件头），基元默认
+ * 的 `h-8`、`px-2.5` 与 `ghost` 的 `hover:bg-muted` 都不属于那套设计。
+ *
+ * 每个 tone 都显式带齐这一串：
+ *
+ *   · `h-auto` —— 高度归还给 `DENSITY_CLASS` 的 `py`（规范 16 §16.2.4.2 第 3 条）；
+ *   · `px-0`   —— 横向内边距同理归还给 `px-*`；
+ *   · `bg-transparent` —— ghost 的 hover 底色不许自带，hover 由 tone 决定；
+ *   · `rounded-none` —— 圆角由 tone 决定（并且**必须写在 tone 之前**，见下）。
+ *
+ * ⚠️ **`rounded-none` 的位置是有讲究的**：`cn()` 走 tailwind-merge，同一属性
+ * 冲突时**后面的类胜**。tone 里的 `rounded-md` / `rounded-lg` 是真正想要的圆角，
+ * 但若把 `rounded-none` 排在它们之后，被消掉的会是 tone 的那一个 —— 顶栏按钮
+ * 于是全部变成直角。所以这一串必须排在 tone **之前**（`topBarButtonClass` 的
+ * 拼装顺序即为此：base → 覆盖串 → 密度 → tone），让 tone 赢。
+ * 契约测试 `workflow-editor-topbar-config.test.ts` 逐个 tone 钉住这三件事：
+ * 覆盖串在场、tone 的圆角在场、且 tone 的圆角在覆盖串之后。
+ */
+const BUTTON_PRIMITIVE_OVERRIDE = "h-auto px-0 rounded-none bg-transparent";
+
 /** 顶栏右侧按钮组：`gap-2` -> `gap-1.5`，与按钮内边距同向收缩。 */
 const GROUP_GAP_CLASS: Record<TopBarDensity, string> = {
   regular: "gap-2",
@@ -73,6 +97,7 @@ export function topBarButtonClass(
 ): string {
   return [
     TOP_BAR_BUTTON_BASE,
+    BUTTON_PRIMITIVE_OVERRIDE,
     DENSITY_CLASS[density],
     TOP_BAR_TONE_CLASS[tone],
     extra,
@@ -141,15 +166,15 @@ const TOP_BAR_TONE_CLASS: Record<TopBarTone, string> = {
   /* 中性底盘：边框 + 半透明底，hover 提亮。 */
   outline:
     "border-border-strong bg-subtle text-ink-bright hover:bg-surface-2 rounded-lg border font-semibold transition-colors",
-  /* 主按钮（保存）：实心紫底。 */
+  /* 主按钮（保存）：实心品牌底。 */
   solid:
-    "rounded-lg bg-violet-500/90 font-semibold text-white transition-colors hover:bg-violet-500",
+    "rounded-lg bg-primary-500 font-semibold text-primary-foreground transition-colors hover:bg-primary-600",
   /* 无底色的次级入口（调试开关）。 */
   ghost:
     "text-ink-soft hover:text-ink rounded-md font-medium transition-colors",
-  /* 「编辑 IO」激活态：琥珀色高亮。 */
-  ioOn: "rounded-lg border border-amber-400/60 bg-amber-400/20 font-semibold text-amber-800 transition-colors hover:bg-amber-400/30 dark:text-amber-100",
-  /* 「预览 IO」激活态：天蓝色高亮。 */
+  /* 「编辑 IO」激活态：警告色高亮。 */
+  ioOn: "rounded-lg border border-warning/60 bg-warning/20 font-semibold text-warning-strong transition-colors hover:bg-warning/30",
+  /* 「预览 IO」激活态：信息色高亮。 */
   ioPreviewOn:
-    "rounded-lg border border-sky-400/60 bg-sky-400/20 font-semibold text-sky-800 transition-colors hover:bg-sky-400/30 dark:text-sky-100",
+    "rounded-lg border border-info/60 bg-info/20 font-semibold text-info-strong transition-colors hover:bg-info/30",
 };
