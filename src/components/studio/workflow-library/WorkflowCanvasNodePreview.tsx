@@ -401,8 +401,17 @@ export function WorkflowCanvasNodePreview({
         paramMap: wiring.effectiveParamMap,
         mode: effectiveMode,
         groupedKeys,
+        /* 卡片列的口子清单与上面那份**同一份**（用户改过契约的模式必须按改过的
+         *  清单列 —— 用内置默认会多列出契约里没有的口，见 `deriveLibraryParamCards`）。 */
+        contractIds: contractEntries.map((item) => item.id),
       }),
-    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys],
+    [
+      workflowIO,
+      wiring.effectiveParamMap,
+      effectiveMode,
+      groupedKeys,
+      contractEntries,
+    ],
   );
   /* ── 对外输出参数（右列）──
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
