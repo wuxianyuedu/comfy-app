@@ -1,7 +1,6 @@
-// Agentic creation helper — multi-turn natural-language guidance that turns a
-// vague idea into a structured generation spec. Uses the local/remote LLM when
-// configured, otherwise falls back to a scripted offline state machine so the
-// multi-turn flow always works.
+// 智能体式创作助手 —— 用多轮自然语言引导，把模糊的想法变成结构化的生成描述。
+// 配了本地/远程 LLM 时就用它；没配则回落到一个脚本化的离线状态机，
+// 保证多轮流程始终可用。
 
 export interface AgentSpec {
   prompt: string;
@@ -25,11 +24,11 @@ export interface ChatMessage {
 }
 
 export interface AgentTurnResult {
-  /** Assistant's natural-language reply (a question or a confirmation). */
+  /** 助手的自然语言回复（一个提问，或一次确认）。 */
   reply: string;
-  /** Present + true when the spec is final and ready to generate. */
+  /** 有此字段且为真，表示描述已定稿、可以开始生成。 */
   ready: boolean;
-  /** Final structured spec (only when ready). */
+  /** 最终的结构化描述（仅在就绪时给出）。 */
   spec?: AgentSpec;
 }
 
@@ -89,7 +88,7 @@ function detectKind(msgs: string[]): "image" | "video" | null {
   return null;
 }
 
-/** Scripted multi-turn fallback used when no LLM is configured. */
+/* 没配 LLM 时用的脚本化多轮兜底。 */
 function offlineAgent(history: ChatMessage[]): AgentTurnResult {
   const userMsgs = history
     .filter((history) => history.role === "user")
@@ -154,9 +153,9 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
 }
 
 /**
- * One turn of the multi-turn agent conversation.
- * @param history full conversation so far (user/assistant messages only; the
- *                 system prompt is injected internally).
+ * 多轮智能体对话里的一轮。
+ * @param history 截至目前完整对话（只含用户/助手消息；
+ *                 系统提示词在内部注入）。
  */
 export async function chatAgent(
   history: ChatMessage[],
@@ -200,7 +199,7 @@ export async function chatAgent(
   }
 }
 
-/** Single-shot expansion (legacy helper, kept for compatibility). */
+/* 一次性扩写（兼容旧调用的助手）。 */
 export async function expandIdea(text: string): Promise<AgentSpec> {
   const res = await chatAgent([{ role: "user", content: text }]);
   return res.spec ?? offlineIdea(text);
