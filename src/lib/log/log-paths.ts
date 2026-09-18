@@ -82,6 +82,23 @@ export const COMFYUI_TRACE_LOG = path.join(
 export const APP_RUNTIME_LOG = path.join(SERVICES_LOG_DIR, "app-runtime.log");
 
 /**
+ * 追加写 runtime 日志的「来源键 → 文件」映射。
+ *
+ * 两个读取端点的**同一份**来源表：`GET /api/logs/current`（增量跟随）与
+ * `GET /api/logs/sessions`（按会话切分）。分开放会各自漂移 —— 新增一个
+ * runtime 通道时只补一侧，另一侧就静默读不到（而两处都「看起来是对的」）。
+ *
+ * 键即接口上的 `source` 查询值（与 `src/lib/log/log-file-client.ts` 的
+ * `LogSourceKind` 一一对应），因此值一律取上面那些常量，不在这里另拼路径。
+ */
+export const RUNTIME_LOG_FILES: Record<string, string> = {
+  "comfyui-runtime": COMFYUI_RUNTIME_LOG,
+  "drizzle-studio-runtime": DRIZZLE_STUDIO_RUNTIME_LOG,
+  "ollama-runtime": OLLAMA_RUNTIME_LOG,
+  "app-runtime": APP_RUNTIME_LOG,
+};
+
+/**
  * 日志面板「保存到本地」的落盘目录（`log/exports/`，按次命名）。
  *
  * 为什么服务端落盘、而不是只靠浏览器下载：桌面壳（WebView2）里 `<a download>`
