@@ -24,12 +24,18 @@
  * **七条里有五条是误判** —— 库内确实存在对应形态，只是当时按名字比、
  * 没按形态找（明细与证据见规范 16 §16.2.4.6）。这里把结论改成按**档**记，
  * 免得下一轮再照着这句「没有场景」跳过一遍：
- *   - `tabs` / `alert` / `dropdown-menu` —— 有明确落点，**欠治理**（待接）
- *   - `form`（`ui/form`，RHF 族）—— 不是「欠治理」而是**选型未发生**：
- *     全库零 `useForm`，接它 = 改数据层设计，须先决策
- *   - `accordion` / `scroll-area` / `avatar` —— 确有近似形态，但接上会
- *     改变外观或交互语义（`scroll-area` 尤甚：base-ui 自绘滚动条 + 显式
- *     `Viewport` 高度契约，与画布内滚动容器是两回事），**按现状不动**
+ *   - `tabs` / `alert` / `dropdown-menu` —— 有明确落点，**欠治理**，已接上
+ *   - `form`（`ui/form`，RHF 族）—— 那次**设计决定已做出**：**不进业务表单**，
+ *     字段级规则改住 `src/lib/<domain>/*-schema.ts`（规范 16 §16.2.4.8）。
+ *     本文件底部的 `FORM_DECISION` 把结论钉成可回归的事实
+ *   - `accordion` / `avatar` —— 确有近似形态，但接上会改变外观或交互语义，
+ *     **按现状不动**
+ *   - `scroll-area` —— 判据在复查后**被更正**：此前说「高度由 flex 链推出、
+ *     接不上」（其实 `Viewport` 是 `size-full`，flex 链推得出来），真正的阻塞
+ *     是**五处全部需要 `ref` + `scrollTop` 的命令式滚动跟随**，而
+ *     `ui/scroll-area` 不转发 viewport ref。同批复查发现更值钱的一条：
+ *     库里有**两份自绘滚动条实现**（`.custom-scrollbar` 与视图文件里的
+ *     任意值变体），已收口进 `globals.css` 并由 P4 硬闸守住
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
@@ -108,6 +114,40 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ).toBeGreaterThan(0);
     },
   );
+
+  /* ── 第二档 `ui/form` 的设计决定（规范 16 §16.2.4.6 / §16.2.4.8）─────
+   *
+   * 结论是「**不进业务表单**」：字段级规则改住 `src/lib/<domain>/*-schema.ts`
+   * 的纯函数（首个落点 `~/lib/llm/remote-model-schema`），跨条目规则
+   * （重名查重）留在 controller —— 那要看列表，不是纯字段判定。
+   *
+   * 为什么这条要有机器判据：上一轮把它记成「须先决策」就停在那里，
+   * 而「另开一次设计决定」这种结论**不会被任何人复查** —— 它会一直挂在
+   * 台账里，下一轮还得从头推一遍。钉成事实之后，要么它继续成立，要么
+   * 有人显式改掉本用例并说明新的决策。 */
+  it("表单校验规则的归属：字段级在 lib 的 schema 模块里，不在视图里", () => {
+    const schemaPath = join(SRC, "lib", "llm", "remote-model-schema.ts");
+    expect(statSync(schemaPath).isFile()).toBe(true);
+    const schema = readFileSync(schemaPath, "utf8");
+    // 纯函数：不碰 React，也不碰列表（集合级规则不在这里）。
+    expect(schema).not.toMatch(/from\s+["']react["']/);
+    expect(schema).toContain("validateRemoteModelFields");
+
+    /* 视图只转述，不自己判定：`RemoteModelDialog` 里不得出现 zod / trim 校验。
+       （视图消费 `d.fieldErrors` 是允许的 —— 那正是「controller 是唯一数据
+       出入口」的形态。） */
+    const dialogPath = join(
+      SRC,
+      "app",
+      "(main)",
+      "settings",
+      "components",
+      "RemoteModelDialog.tsx",
+    );
+    const dialog = readFileSync(dialogPath, "utf8");
+    expect(dialog).not.toMatch(/from\s+["']zod["']/);
+    expect(dialog).toContain("fieldErrors");
+  });
 
   it("ui/ 目录本身不空（判据没被绕过）", () => {
     const uiDir = join(SRC, "components", "ui");

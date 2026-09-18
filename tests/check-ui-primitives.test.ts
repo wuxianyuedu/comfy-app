@@ -84,6 +84,8 @@ const PORTAL_VIEW =
   'import { createPortal } from "react-dom";\nexport const P = () => createPortal(null, document.body);\n';
 const SPIN_VIEW =
   'export function S() {\n  return <span className="animate-spin" />;\n}\n';
+const SCROLLBAR_VIEW =
+  'export function C() {\n  return <div className="[&::-webkit-scrollbar-thumb]:bg-red-500!" />;\n}\n';
 
 describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   it("视图里手写 <button> 会被阻断（规范 P1）", () => {
@@ -112,6 +114,37 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run();
     expect(code).toBe(1);
     expect(output).toContain("P3");
+  });
+
+  it("视图里自写 ::-webkit-scrollbar 外观直接阻断，不进棘轮（规范 P4）", () => {
+    /* P4 与 P1~P3 不同：它不是「先冻结存量」的棘轮，而是**硬闸** ——
+       自绘滚动条外观的唯一出口是 globals.css（`.custom-scrollbar` /
+       `.soft-scrollbar`）。所以基线里没有这一条，第一处新增就直接断。 */
+    seedBaseline();
+    write("src/components/workshop/E.tsx", SCROLLBAR_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P4");
+    expect(output).toContain("src/components/workshop/E.tsx");
+  });
+
+  it("P4 未清零时 --update 拒绝更新基线（硬闸不能靠放水绕过）", () => {
+    seedBaseline();
+    write("src/components/studio/F.tsx", SCROLLBAR_VIEW);
+    const { code, output } = run(["--update"]);
+    expect(code).toBe(1);
+    expect(output).toContain("硬闸");
+  });
+
+  it("P4 的计数不进棘轮基线（P4 只在 HARD_GATE_RULES 里判空）", () => {
+    seedBaseline();
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { rules: Record<string, string> };
+    expect(baseline.rules.P4).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {
@@ -213,7 +246,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   it("注释里提到 <button> 不计入 P1", () => {
     write(
       "src/components/studio/N.tsx",
-      '/* 原来是 <button> 手搓，现改走 <Button>（ISSUE #672） */\n' +
+      "/* 原来是 <button> 手搓，现改走 <Button>（ISSUE #672） */\n" +
         "// 也见 <button> 的默认 type\n" +
         "export const N = () => <Button>ok</Button>;\n",
     );
@@ -225,7 +258,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   it("代码里（含字符串字面量）的 <button> 仍然计入 P1", () => {
     write(
       "src/components/studio/O.tsx",
-      "export const O = () => <button type=\"button\">ok</button>;\n",
+      'export const O = () => <button type="button">ok</button>;\n',
     );
     const { code, output } = run(["--report"]);
     expect(code).toBe(0);

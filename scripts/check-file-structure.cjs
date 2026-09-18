@@ -28,7 +28,10 @@
  *       不靠"铺在根目录第一眼看见"
  *   R10 注释里禁止「历史流水」:日期(2026-08-17)、改动编号(R-ardot114 / R83 /
  *       R-Next)、任务批次号(T12-3)。这些归 git log,写进注释会随代码搬迁过期
- *       失真(ISSUE #46 / 规范 12.4.2 / 反模式表 G4)
+ *       失真(ISSUE #46 / 规范 12.4.2 / 反模式表 G4)。
+ *       扫 `.ts` / `.tsx` **与 `.css`** —— 样式文件的注释同样会写「R-ardot18
+ *       (2026-08-14): 这里为什么这么写」,而它恰恰是最容易被搬来搬去的一类
+ *       (只扫 TS 时,globals.css 里就有三处这样的遗留长期未被发现)。
  *   R13 src/lib 子域纪律:根目录只放「顶层单例地基」(见 DOMAIN_EXEMPT),
  *       其余模块一律归属某个子域目录(§12.5.3)。叶子域平铺、不再套一层
  *       admin/other/shared —— 那一层既说不出「谁属于它」,又会让
@@ -476,7 +479,9 @@ const SCAN_EXCLUDED = [
         walkComments(p);
         continue;
       }
-      if (/\.(ts|tsx)$/.test(e.name)) files.push(p);
+      // `.css` 一并纳入:样式注释里的改动编号 / 日期同样是「历史流水」,
+      // 且样式块常被整段搬运,过期的落点说明比代码里的更容易失真。
+      if (/\.(ts|tsx|css)$/.test(e.name)) files.push(p);
     }
   })("src");
   for (const rel of files) {

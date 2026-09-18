@@ -22,9 +22,19 @@
  *      `ui/page-loading` 的 `PageLoading`（块级）/ `Spinner`（行内 · 按钮内）、
  *      `ui/skeleton` / `ui/progress` 这类加载态基元，状态圆点的脉冲走
  *      `ui/status-dot`）
- *   —— 三者合计走一条棘轮：**按文件记账、只许降不许升**，与
+ *   —— P1~P3 合计走一条棘轮：**按文件记账、只许降不许升**，与
  *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径
  *      （基线 `scripts/.ui-primitives-baseline.json`）。
+ *
+ *   P4 视图里再写一份 `::-webkit-scrollbar` 外观（**硬闸，不是棘轮**）——
+ *      `src/app/globals.css` 是自绘滚动条的唯一出口（`.custom-scrollbar` /
+ *      `.soft-scrollbar` / 全局兜底，三档取值各有出处）。视图里写任意值变体
+ *      （`[&::-webkit-scrollbar-thumb]:bg-…!`）等于把同一件事再实现一份，
+ *      取值还会各自漂移 —— 收口前实测到两份（`.custom-scrollbar` 的
+ *      `--color-border-strong` / `--color-ink-icon` 与视图里那份
+ *      `bg-border-strong` / `bg-ink-muted`）。P4 已在同批清零，因此直接是硬闸。
+ *      `ui/scroll-area` 那套 base-ui 自绘滚动条属`ui/` 工具生成物，
+ *      走 EXEMPT_DIRS 的 `ui/` 豁免（口径见规范 16 §16.2.4.6 第三档）。
  *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
@@ -72,7 +82,6 @@ const EXEMPT_DIRS = [
   { re: /^src\/components\/ui\//, reason: "ui/ 基元自身实现" },
   { re: /\/hooks\//, reason: "§16.2.1 第②层（逻辑层），不算视图实现" },
 ];
-
 
 /* ── 三条判据 ────────────────────────────────────────────── */
 
@@ -147,9 +156,18 @@ const RULES = {
   P3: {
     label:
       "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
-    count: (t) => (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+    count: (t) =>
+      (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+  },
+  P4: {
+    label:
+      "视图内自写 ::-webkit-scrollbar 外观（应复用 globals.css 的 .custom-scrollbar / .soft-scrollbar）",
+    count: (t) => (stripComments(t).match(/::-webkit-scrollbar/g) || []).length,
   },
 };
+
+/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4 属此类）。 */
+const HARD_GATE_RULES = new Set(["P4"]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -171,7 +189,9 @@ function walk(dir, out = []) {
 const isTest = (r) =>
   /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
 
-/** 收集当前各文件的违规计数：rel -> { P1?, P2?, P3? }。 */
+/** 收集当前各文件的违规计数：rel -> { P1?, P2?, P3?, P4? }。
+ *  硬闸判据（HARD_GATE_RULES）一并收进来，由 main 分开判定：棘轮只看前者，
+ *  后者必须恒为 0。 */
 function collect() {
   const files = {};
   for (const dir of SCAN_DIRS) {
@@ -187,6 +207,31 @@ function collect() {
     }
   }
   return files;
+}
+
+/** 棘轮口径的计数：剔掉硬闸判据（它们的判据是「必须为 0」，不进基线）。 */
+function ratchetOnly(map) {
+  const out = {};
+  for (const [rel, counts] of Object.entries(map)) {
+    const keep = {};
+    for (const [id, n] of Object.entries(counts)) {
+      if (!HARD_GATE_RULES.has(id)) keep[id] = n;
+    }
+    if (Object.keys(keep).length) out[rel] = keep;
+  }
+  return out;
+}
+
+/** 硬闸判据的命中清单（须为空，否则阻断）。 */
+function hardGateHits(map) {
+  const hits = [];
+  for (const [rel, counts] of Object.entries(map)) {
+    for (const id of Object.keys(counts)) {
+      if (HARD_GATE_RULES.has(id))
+        hits.push(`${id} → ${rel}（${counts[id]} 处）`);
+    }
+  }
+  return hits;
 }
 
 function total(map) {
@@ -208,7 +253,9 @@ function writeBaseline(files) {
           "新增请先改用 ui/ 基元，不要用 --update 放水。" +
           "豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
         rules: Object.fromEntries(
-          Object.entries(RULES).map(([id, r]) => [id, r.label]),
+          Object.entries(RULES)
+            .filter(([id]) => !HARD_GATE_RULES.has(id))
+            .map(([id, r]) => [id, r.label]),
         ),
         total: total(files),
         files,
@@ -227,8 +274,17 @@ function main() {
   const baseFiles = prev?.files ?? null;
 
   if (UPDATE) {
+    const gate = hardGateHits(now);
+    if (gate.length) {
+      console.error(
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4）。\n  " +
+          gate.join("\n  ") +
+          "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观，改用 globals.css 的 .custom-scrollbar / .soft-scrollbar。",
+      );
+      process.exit(1);
+    }
     const before = baseFiles ? total(baseFiles) : 0;
-    const after = total(now);
+    const after = total(ratchetOnly(now));
     if (before && after > before) {
       console.error(
         `[ui-primitives] 拒绝放宽基线：${before} → ${after}（棘轮只许下降）。\n` +
@@ -236,7 +292,7 @@ function main() {
       );
       process.exit(1);
     }
-    writeBaseline(now);
+    writeBaseline(ratchetOnly(now));
     console.log(
       `[ui-primitives] 基线已更新：${before} → ${after}（${path.relative(ROOT, BASELINE)}）`,
     );
@@ -269,9 +325,9 @@ function main() {
     process.exit(1);
   }
 
-  const problems = [];
+  const problems = hardGateHits(now);
   const dropped = [];
-  for (const [rel, counts] of Object.entries(now)) {
+  for (const [rel, counts] of Object.entries(ratchetOnly(now))) {
     const b = baseFiles[rel];
     for (const [id, n] of Object.entries(counts)) {
       if (!b || b[id] === undefined) {
@@ -292,10 +348,14 @@ function main() {
     }
   }
 
-  const sum = total(now);
+  const ratchetNow = ratchetOnly(now);
+  const sum = total(ratchetNow);
   console.log(
-    `[ui-primitives] 当前自实现存量 ${sum} 处 / ${Object.keys(now).length} 个文件` +
+    `[ui-primitives] 当前自实现存量 ${sum} 处 / ${Object.keys(ratchetNow).length} 个文件` +
       `（规范 16 §16.2.3）`,
+  );
+  console.log(
+    `[ui-primitives] P4 自绘滚动条外观（硬闸，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -303,7 +363,8 @@ function main() {
     console.error(
       "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.3；\n" +
         "  改法：`<button>` → `<Button>`（~/components/ui/button）、自建 portal → ui/dialog / popover / sheet、\n" +
-        "  自写 animate-spin → ui/page-loading。治理后执行 --update 收紧基线。",
+        "  自写 animate-spin → ui/page-loading、自绘滚动条 → globals.css 的 .custom-scrollbar / .soft-scrollbar。\n" +
+        "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);
   }
