@@ -618,6 +618,16 @@ textarea::-webkit-scrollbar {
     background: var(--color-subtle);
     color: var(--color-ink);
   }
+  /* 详情面板页签的选中指示条：品牌双色渐变（primary → accent）。
+     此前由 `TabButton` 用 `from-violet-500 to-fuchsia-500` 写在视图里 ——
+     换成 `ui/tabs` 基元后，指示条的颜色只有一个出口，走 token 现取。 */
+  .detail-tab-trigger::after {
+    background: linear-gradient(
+      to right,
+      var(--color-primary),
+      var(--color-accent)
+    );
+  }
   /* 头像/图标占位：纯色块，去掉渐变 */
   .u-avatar {
     background: var(--color-subtle);

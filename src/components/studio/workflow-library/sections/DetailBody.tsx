@@ -15,7 +15,8 @@ import { WorkshopEncapsulationPanel } from "./WorkshopEncapsulationPanel";
 
 interface DetailBodyProps {
   workflow: WorkflowRow;
-  activeTab: DetailTab;
+  /** 本面板承载的页签 —— 每个页签各自一个面板（`ui/tabs` 的 Panel）。 */
+  tab: DetailTab;
   isLoading: boolean;
   workflowIO: WorkflowIOMap | null;
   /** 模板 paramMap（对外参数落点），画布节点页签据此标出对外参数与落点。 */
@@ -38,7 +39,7 @@ interface DetailBodyProps {
 
 export function DetailBody({
   workflow,
-  activeTab,
+  tab,
   isLoading,
   workflowIO,
   paramMap,
@@ -57,7 +58,7 @@ export function DetailBody({
 
   return (
     <>
-      {activeTab === "canvas" && (
+      {tab === "canvas" && (
         /* 画布页签**吃满可用高度**（不再钉在 420px）：用户把详情面板看全屏时，
          *  画布要一直铺到面板底部，下面不留一块面板底色（ISSUE #596）。高度链条
          *  靠 flex 传下去 —— 外层的 `min-h-0 flex-1` 与本层的 `h-full` 缺一不可。 */
@@ -106,7 +107,7 @@ export function DetailBody({
         </div>
       )}
 
-      {activeTab === "params" && (
+      {tab === "params" && (
         <WorkshopEncapsulationPanel
           key={workflow.id}
           workflowId={workflow.id}
@@ -122,7 +123,7 @@ export function DetailBody({
         />
       )}
 
-      {activeTab === "source" && (
+      {tab === "source" && (
         <div className="border-border bg-panel-deep rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-ink-faint text-xs font-medium">
