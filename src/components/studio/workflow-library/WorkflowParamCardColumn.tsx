@@ -30,7 +30,7 @@ import {
   type ParamEntry,
   type ParamOutputPort,
 } from "~/lib/workflow/workflow-param-mapping";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { ReactNode } from "react";
 
 import { WorkflowParamCard } from "../workflow-editor/WorkflowParamCard";

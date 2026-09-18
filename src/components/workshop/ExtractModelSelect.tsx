@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import {
   fetchLocalModels,
   fetchRemoteModels,
@@ -129,7 +129,7 @@ export function ExtractModelSelect({
   return (
     <div>
       <div className="min-w-56">
-        <DarkSelect
+        <SelectMenu
           value={value}
           onChange={onChange}
           options={options}

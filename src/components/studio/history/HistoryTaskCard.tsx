@@ -1,5 +1,5 @@
-import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
-import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
 
 import type { TaskItem } from "./history-types";

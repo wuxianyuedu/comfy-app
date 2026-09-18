@@ -30,7 +30,7 @@ import {
   patchWorkflowRun,
   registerWorkflowRun,
 } from "~/lib/workflow/workflow-run-store";
-import { DynamicWorkflowForm } from "../shared/DynamicWorkflowForm";
+import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import {
   defaultInputValues,
   getMissingRequiredInputs,
@@ -40,7 +40,7 @@ import {
   splitWorkflowIO,
   toWorkflowInputsPayload,
   type WorkflowIOMap,
-} from "../shared/workflow-io";
+} from "../workflow-io";
 import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
 import { Button } from "~/components/ui/button";
 import {
@@ -66,7 +66,7 @@ import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
-import { WorkflowNodeActionButton } from "../shared/WorkflowNodeParts";
+import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
 
 type Phase =
   | { kind: "idle" }

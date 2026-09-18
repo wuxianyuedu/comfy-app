@@ -18,7 +18,7 @@ import type { OptionGroup } from "~/lib/workshop/character-options";
  *  - popover 底部提供「添加自定义」以覆盖穷举之外的同义表达。
  *
  * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里自搓了一套
- * portal + fixed 定位 + Esc/外点关闭 + 滚动重定位，`DarkSelect` 里还有一份 ——
+ * portal + fixed 定位 + Esc/外点关闭 + 滚动重定位，`SelectMenu` 里还有一份 ——
  * 定位与关闭语义本就不该由每个调用点各写一遍。翻上/翻下、右边界收边、随触发
  * 元素滚动重定位全部交给 base-ui Positioner。
  */

@@ -139,16 +139,17 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 - 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
 - 豁免 `src/components/ui/**`（基元自身实现）、`<feature>/hooks/**`（§16.2.1 第②层
   是逻辑层）、`*.test.*` / `__tests__/**`；
-- **`src/components/studio/ui/**` 与 `src/components/studio/shared/**` 也豁免**，
-  但豁免的理由是「它们是**迁移对象**而不是合规形态」：这两处的去向是合并进
-  `ui/`（下面的台账），在本棘轮里重复计一遍只会让同一件事有两个数字。
+- **豁免只剩两条**：`ui/` 自身实现与 `<feature>/hooks/**`（§16.2.1 第②层）。
 
-  ⚠️ 这两条豁免是**临时**的，而且已经开始归还：P2 把它们的自搓浮层清干净后，
-  `studio/ui/ModalDialog.tsx` 已重新纳入扫描，`studio/ui/EmptyState.tsx` 与
-  `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 已删除。**每完成一批迁移，
-  就把该目录从 `EXEMPT_DIRS` 里摘出来、用 `--update` 把新出现的存量记进基线**
-  —— 「豁免目录里的存量不进基线」意味着那里治理了多少、还剩多少**没有任何判据**，
-  正是 §3.6.1「豁免必须显式」要防的失效模式。
+  这里曾**整体豁免** `studio/ui/**` 与 `studio/shared/**`（理由是「它们是迁移对象
+  而不是合规形态」）。P2 把它们的自搓浮层清干净后，豁免开始逐条归还；到
+  §16.2.4 的目录归并完成时，两条豁免**已全部撤掉** —— 「豁免目录里的存量不进
+  基线」意味着那里治理了多少、还剩多少**没有任何判据**，正是 §3.6.1「豁免必须
+  显式」要防的失效模式。撤掉之后 P1/P2/P3 各自**全库清零**（含归并进来的
+  11 + 24 个文件），棘轮由此变成硬闸。
+
+  撤掉的另一面是**目录不得复活**：归并完还得有个判据挡住「下一个人再
+  `mkdir studio/ui` 起一套」，见 `tests/ui-kit-single-home.test.ts`。
 
 ### 16.2.5 浮层层级只有两条刻度（ISSUE #672 P2）
 
@@ -190,7 +191,7 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 按钮 | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~ | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1 | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
 | 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ✅ **P3 判据清零** |
 | 状态圆点 | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~ | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token） | ✅ **设置页批次完成** |
-| UI kit 目录 | `components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 | ⏳ 分批 |
+| UI kit 目录 | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~ | 见 §16.2.4.3 | ✅ **归并完成（豁免已归还）** |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -332,10 +333,9 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 `WorkflowLibrary` 那段「居中 spinner + 文案」的自写加载态换成 `PageLoading`
 （块级用 `PageLoading`，第 7 条同一口径）。
 
-**目录豁免的归还进度**：`studio/ui/` 与 `studio/shared/` 仍在 `EXEMPT_DIRS`
-里（§16.2.3 的「临时豁免」），归入 `ui/` 的迁移是独立一件事（台账最后一行）。
-本批**没有**把这两处纳入扫描 —— 它们的存量不进基线，也就不会让本次的
-「P1 清零」变成一句半真的话。下一步要做的是那件迁移本身。
+**目录豁免的归还进度**：`studio/ui/` 与 `studio/shared/` 当时仍在
+`EXEMPT_DIRS` 里（§16.2.3 的「临时豁免」），所以那一批的「清零」只指**已纳入
+扫描范围的视图层**。两处豁免的归还即下一节（§16.2.4.3）。
 
 ### 16.2.4.1 按钮的语义变体（P1 的前置条件）
 
@@ -382,6 +382,43 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 **机器判据**：`src/components/ui/button.test.tsx` —— 逐个钉住「这 8 支变体存在」
 「产出的类名不含任何 Tailwind 原生调色板字面量」「软底变体的文字走 `-strong`」，
 以及「既有 6 个变体仍在」。变体被删或改回写死色，这里先失败。
+
+### 16.2.4.3 UI kit 目录归并（P1 从「已扫描范围清零」到「全库清零」）
+
+台账最后一行的落地。四套「放通用件的地方」收成两处，各自的判据不同：
+
+| 原位置 | 14 个文件的去向 | 为什么是这里 |
+|--------|----------------|-------------|
+| `components/studio/ui/`（11 个） | `components/ui/`，文件名转 kebab-case | 它们是**跨域**的通用件（`SelectMenu` / `ConfirmDialog` / `JsonViewer` / `MediaThumbnail` / `EditableLabel`…），不只 studio 用 —— `app/(main)/settings`、`app/login`、`components/workshop` 都在引 |
+| `components/studio/shared/` 的通用件（3 个） | `components/ui/` | 同上（`SegmentPopover` / `ValidationErrorList` / `SeedModeButton`） |
+| `components/studio/shared/` 的表单件（19 个）+ `DynamicWorkflowForm/` | `components/studio/workflow-form/` | 它们是**工作流参数表单专属**的复合件（`DimensionControl` / `GroupedControls` / `WorkflowFormControls` / `PortHandle`…）：域内共享，不是跨域基元 —— 搬进 `ui/` 只会让「ui/ 是 shadcn 基元」这条口径失真 |
+| `components/studio/shared/workflow-io.ts` / `useMiniMapJump.ts` | `components/studio/` 域根 | 前者是工作流 IO 的纯逻辑（52 处引用），后者是画布视图工具 —— 都不属于「参数表单」 |
+
+**为什么不是「全部塞进 `ui/`」**：`ui/` 在本仓库有一条明确口径 ——
+**shadcn 官方 kebab-case 基元目录**（§12.5 的命名例外正是为它开的）。
+把 `DimensionControl` 这种「域内表单复合件」也放进去，等于把「工具生成的基元」
+与「业务组合件」混在一层，下一个人 `shadcn add` 时就分不清哪些能重生成。
+所以分工是：**跨功能复用 → `ui/`；域内复用 → 本域目录**（§16.2.4 台账原话
+「后三处归入 `ui/`，一次搬一个域」按这个口径落成）。
+
+**顺带收掉的同源问题**（这批的真正收获）：
+
+1. **`floating-position.ts` 整个删除**。它承载的「视口翻转 / 收边 / 高度封顶」
+   在 §16.2.4 的浮层迁移完成后**只剩自己的单测在用** —— 同一件事（摆位）
+   已经由 base-ui 的 Positioner 承担，再留一份自有实现就是第三份口径。
+2. **`SeedModeButton` 的视口翻转单测重写**。旧用例断言 `style.top === 324`
+   这类**派生像素值**：那是自搓定位的实现细节，换了 Positioner 就整片失效。
+   新用例只锁本组件**自己欠的语义**（四个选项、选中态、点击即回调并收起）——
+   「把基元的实现细节当成自己的契约」正是这次踩到的坑，写进用例注释。
+3. **`ui/` 基元与新家对齐命名**：`ModalDialog`→`ConfirmDialog`、
+   `DarkSelect`→`SelectMenu`（后者与 `ui/select` 区分：它是「自定义样式的
+   列表菜单」，不是原生 select 的包装）。
+
+**机器判据**：`tests/ui-kit-single-home.test.ts` —— 三个断言：
+① 已退役的 `studio/ui` / `studio/shared` 目录**不得复活**；② `ui/` 下全是
+kebab-case；③ 除 `ui/` 外没有别的目录在放「与 `ui/` 同名的基元」。
+为什么需要它：`EXEMPT_DIRS` 撤掉只保证「再放进去的东西会被数」，
+挡不住下一个人 `mkdir studio/ui` 起一套新的 —— **目录本身的存在才是信号**。
 
 ## 16.3 新增一个组件的标准动作
 

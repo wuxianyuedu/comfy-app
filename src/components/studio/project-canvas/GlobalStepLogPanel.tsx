@@ -28,7 +28,7 @@ import {
 } from "./stepLogCache";
 import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
-import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
+import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";

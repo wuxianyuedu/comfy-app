@@ -32,9 +32,6 @@
  *
  * 豁免（显式，不做模糊放行）：
  *   · `src/components/ui/**`      基元自己的实现（Button 里本来就是 `<button>`）；
- *   · `src/components/studio/ui/**`、`src/components/studio/shared/**` 等既有
- *     「第二套 UI kit」目录：它们**是**要合并进 `ui/` 的对象（§16.2.3 的 P2/P3），
- *     记在规范里逐批迁，不在本棘轮里重复计一遍（同一件事只定义一次口径）；
  *   · `<feature>/hooks/**`        §16.2.1 第②层（逻辑层），不是视图；
  *   · `*.test.*` / `__tests__/**` 测试里的 DOM 与 mock 不算视图实现。
  *
@@ -63,22 +60,16 @@ const SCAN_DIRS = ["src/components", "src/app"];
  * 豁免目录（正则，均按仓库相对 POSIX 路径匹配）与理由：
  *
  * - `ui/`：基元自身实现，`<button>` / portal 在这里是**正确的载体**；
- * - `studio/ui/` 与 `studio/shared/`：历史形成的第二套 UI kit（详见 §16.2.3），
- *   它们的去向是「合并到 `ui/`」而不是「在本棘轮里再记一笔」——同一件事
- *   只定义一次口径，否则两处数字会各自漂移；
  * - `hooks/`：§16.2.1 第②层，逻辑层里出现 IO/样式拼接不是「视图自己实现一份」。
+ *
+ * ⚠️ 这里**只剩这两条**：原先还豁免 `studio/ui/**` 与 `studio/shared/**`
+ * （历史第二套 UI kit）。那批目录已按 §16.2.4 的台账归并完（`studio/ui/**`
+ * 并入 `components/ui/**`，`studio/shared/**` 拆成 `components/ui/**` 的通用
+ * 件与 `studio/workflow-form/**` 的表单件），所以**豁免已归还** —— 再留一条
+ * 按目录的模糊放行，等于让那两处的新增自实现悄悄溜过。
  */
 const EXEMPT_DIRS = [
   { re: /^src\/components\/ui\//, reason: "ui/ 基元自身实现" },
-  {
-    re: /^src\/components\/studio\/ui\//,
-    reason:
-      "历史第二套 UI kit（去向是合并进 ui/，分批计划见规范 §16.2.4）",
-  },
-  {
-    re: /^src\/components\/studio\/shared\//,
-    reason: "同上：shared/ 里的通用件是 §16.2.4 的迁移对象",
-  },
   { re: /\/hooks\//, reason: "§16.2.1 第②层（逻辑层），不算视图实现" },
 ];
 

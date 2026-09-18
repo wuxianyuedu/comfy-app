@@ -18,7 +18,7 @@ import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
 import type { LibraryNodeContent } from "./workflow-library-wire-graph";
-import { PortHandle } from "../shared/WorkflowPortHandle";
+import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle";
 
 /** 三列节点的渲染内容（类型收在纯 `.ts` 里，hooks 层也要引用它）。 */
 export type { LibraryNodeContent };

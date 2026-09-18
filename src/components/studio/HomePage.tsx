@@ -13,7 +13,7 @@ import {
   Video,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { AuroraGlow } from "./ui/AuroraBackground";
+import { AuroraGlow } from "~/components/ui/aurora-background";
 import { useToast } from "./ToastProvider";
 import { type WorkspaceView } from "./NavItems";
 import { WorkspaceNav } from "./WorkspaceNav";

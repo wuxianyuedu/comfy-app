@@ -27,7 +27,7 @@ import {
   type OnConnectEnd,
 } from "@xyflow/react";
 
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import {
   pinAcceptsEntry,
   type ParamEntry,

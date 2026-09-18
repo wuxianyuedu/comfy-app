@@ -5,8 +5,8 @@
 import { Maximize2 } from "lucide-react";
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { JsonViewer } from "~/components/studio/ui/JsonViewer";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { JsonViewer } from "~/components/ui/json-viewer";
 import { Button } from "~/components/ui/button";
 import type { DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";

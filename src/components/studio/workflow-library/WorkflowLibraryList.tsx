@@ -9,11 +9,11 @@ import {
   type PendingRow,
   type WorkflowRow,
 } from "./workflow-library-config";
-import { TaskTypeChip } from "../ui/TaskTypeChip";
+import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
-import { SourceTag } from "../ui/SourceTag";
+import { SourceTag } from "~/components/ui/source-tag";
 import { EmptyState } from "~/components/ui/empty-state";
 
 interface WorkflowLibraryListProps {

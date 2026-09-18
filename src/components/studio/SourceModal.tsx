@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo } from "react";
-import { JsonViewer } from "./ui/JsonViewer";
+import { JsonViewer } from "~/components/ui/json-viewer";
 import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
 

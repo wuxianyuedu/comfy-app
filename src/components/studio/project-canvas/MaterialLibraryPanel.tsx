@@ -17,7 +17,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { MediaThumbnail as MediaThumb } from "~/components/studio/ui/MediaThumbnail";
+import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/page-loading";
