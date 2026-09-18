@@ -36,13 +36,13 @@ import { useStore } from "@xyflow/react";
 import {
   DynamicWorkflowForm,
   PortHandle,
-} from "~/components/studio/shared/DynamicWorkflowForm";
+} from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import {
   type WorkflowIOMap,
   splitWorkflowIO,
   ioLabel,
   typeDisplay,
-} from "~/components/studio/shared/workflow-io";
+} from "~/components/studio/workflow-io";
 import {
   type CanvasNodeData,
   NODE_META,

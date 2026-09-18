@@ -2,7 +2,7 @@
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import {
   MOTION_LABELS,
   TRANSITION_LABELS,
@@ -338,7 +338,7 @@ export function FinalComposer({
                   <span className="text-muted-foreground mb-0.5 block text-[10px]">
                     转场
                   </span>
-                  <DarkSelect
+                  <SelectMenu
                     className="!bg-subtle !border-border text-xs"
                     value={shot.transition ?? "cut"}
                     onChange={(value) =>
@@ -353,7 +353,7 @@ export function FinalComposer({
                   <span className="text-muted-foreground mb-0.5 block text-[10px]">
                     运动
                   </span>
-                  <DarkSelect
+                  <SelectMenu
                     className="!bg-subtle !border-border text-xs"
                     value={shot.motion ?? "medium"}
                     onChange={(value) =>

@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useToast } from "./ToastProvider";
-import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
+import { AuroraBackground } from "~/components/ui/aurora-background";
 import {
   listProjects,
   reapAllEmptyDrafts,
   deleteProject,
   type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
-import { ModalDialog } from "~/components/studio/ui/ModalDialog";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
 
 /**
@@ -44,7 +44,7 @@ export function WorksGallery({
     return listProjects();
   });
 
-  /** Canvas-project delete confirmation. Non-null id = the ModalDialog is
+  /** Canvas-project delete confirmation. Non-null id = the ConfirmDialog is
    *  open for that project. Resolved projects' names are resolved BEFORE
    *  clearing the dialog so the toast reads the original name even though
    *  the underlying array changes one tick later. */
@@ -228,7 +228,7 @@ export function WorksGallery({
       </div>
 
       {/* ── Canvas-project delete confirm ── */}
-      <ModalDialog
+      <ConfirmDialog
         open={confirmDeleteId !== null}
         onClose={() => {
           if (!pendingDelete) setConfirmDeleteId(null);

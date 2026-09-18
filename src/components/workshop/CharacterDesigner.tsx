@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Trash } from "lucide-react";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
@@ -653,7 +653,7 @@ export function CharacterDesigner({
                 <span className="text-muted-foreground mb-1 block text-xs">
                   艺术风格（Skill）
                 </span>
-                <DarkSelect
+                <SelectMenu
                   className="!border-border !bg-subtle text-sm"
                   value={character.skillSlug ?? ""}
                   onChange={(value) =>

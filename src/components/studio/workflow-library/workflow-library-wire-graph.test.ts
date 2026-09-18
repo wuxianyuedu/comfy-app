@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { buildParamEntries } from "~/lib/workflow/workflow-param-mapping";
 import {
   LIB_NODE_BACKDROP,

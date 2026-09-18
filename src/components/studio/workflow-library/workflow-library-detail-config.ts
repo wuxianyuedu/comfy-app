@@ -2,7 +2,7 @@
 // 纯类型 + 纯函数（无 React、无副作用）：hook 据此算派生数据，视图只负责渲染。
 
 import type { SourceModalData } from "~/components/studio/SourceModal";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowRow } from "./workflow-library-config";
 
 /** 详情面板的三个页签 —— 数组顺序即渲染顺序。 */

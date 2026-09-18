@@ -8,8 +8,8 @@
  */
 import { useRef } from "react";
 
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
-import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
+import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { Button } from "~/components/ui/button";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
 
@@ -119,7 +119,7 @@ export function WorkflowImportPanel({
           <label className="text-ink-soft mb-1 block text-xs font-medium">
             JSON 格式
           </label>
-          <DarkSelect
+          <SelectMenu
             value={importFormat}
             onChange={(value) =>
               setImportFormat((value as "auto" | "api" | "raw") ?? "auto")

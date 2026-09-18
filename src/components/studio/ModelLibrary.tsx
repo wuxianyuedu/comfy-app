@@ -1,6 +1,6 @@
 "use client";
 
-import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
+import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";

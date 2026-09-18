@@ -24,7 +24,7 @@ import { PageLoading } from "~/components/ui/page-loading";
 import { SourceModal } from "../SourceModal";
 import type { WorkflowDetail, WorkflowIOParam } from "../workflow-types";
 import { buildEdges } from "../workflow-utils";
-import { useMiniMapJump } from "../shared/useMiniMapJump";
+import { useMiniMapJump } from "../useMiniMapJump";
 import {
   useCanvasSettings,
   CanvasSettingsPanel,

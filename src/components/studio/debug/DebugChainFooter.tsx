@@ -20,7 +20,7 @@ import {
   type CSSProperties,
   type MouseEvent,
 } from "react";
-import { CodeBlock, extToLanguage } from "../ui/CodeBlock";
+import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
 import { fetchDebugSource } from "~/lib/workflow/debug-source-client";
 import { useDebugStore } from "./debug-store";
 import {

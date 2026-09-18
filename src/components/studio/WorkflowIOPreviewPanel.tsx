@@ -22,15 +22,15 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { DynamicWorkflowForm } from "~/components/studio/shared/DynamicWorkflowForm";
+import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import {
   defaultInputValues,
   resolveEntrySeedMode,
   splitWorkflowIO,
   type WorkflowIOMap,
-} from "~/components/studio/shared/workflow-io";
+} from "~/components/studio/workflow-io";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
-import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
+import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { Button } from "~/components/ui/button";
 import { mergeExposedEntry } from "./workflow-editor/io-exposure";
 import type { WorkflowIOParam } from "./workflow-types";

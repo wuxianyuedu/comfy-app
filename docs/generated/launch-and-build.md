@@ -1724,6 +1724,7 @@ sidecar」两种不同形态的失败。
 | 建库（Drizzle 表结构同步）                           | `scripts/prepare-local-run.ps1`（前置）/ 启动器预检 8 | `scripts/db-push.mjs`（`pnpm db:push`）                                                                                        |
 | `pnpm` 可用性自检与修复（工具链门禁的独立入口）      | `scripts/prepare-local-run.ps1`（第 2/3 步）          | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`）                                                                   |
 | `src/lib` 的 Node-only 声明与可达性（规范 §18.4）    | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`） |
+| UI 基元复用棘轮（规范 16 §16.2.3）                 | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/check-ui-primitives.cjs`（`pnpm ui:primitives`，契约测试 `tests/check-ui-primitives.test.ts`） |
 | prettier 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项） | `scripts/quality-gate.ps1`（`-Mode format`）          | `scripts/check-format.cjs`（`pnpm format:ratchet`，契约测试 `tests/check-format.test.ts`）                                     |
 | 格式化提交与行为改动分离（规范 §13.5）               | `scripts/quality-gate.ps1`（`-Mode format`）          | `scripts/check-reformat-only.cjs`（`pnpm format:reformat-guard`，契约测试 `tests/check-reformat-only.test.ts`）                |
 | `src/lib` 的零消费值导出棘轮（规范 §12.16）          | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行） | `scripts/check-dead-exports.cjs`（`node scripts/check-dead-exports.cjs`，契约测试 `tests/check-dead-exports.test.ts`）         |
@@ -1747,3 +1748,46 @@ sidecar」两种不同形态的失败。
    「排除项悄悄为空」看起来就像「本来就没有基线失败」（红/绿不再可归因）。
 
 回归测试见 `tests/ps1-consistency.test.ts`。
+
+### 9.6 注释语言与「纯 ASCII 模块」白名单（ISSUE #678，机器强制）
+
+**判据一句话**：注释一律中文；**只有「会被 `next-code-frame` 渲染到」的构建期模块**
+例外（英文注释并保持纯 ASCII），其余地方写英文注释即违规。
+
+**为什么需要例外**：§5 那条 Rust panic 的根因是 **Next 的 code frame 按字节偏移切串**，
+高亮区间端点落在多字节字符内部时直接 panic，整个 `next build` 被一个与业务无关的
+错误带走（触发是**偏移敏感**的，同一文件删掉中文能过、换个长度的中文又能复现）。
+所以「注释一律中文」这条规则在构建期模块图上**不能一刀切** —— 一刀切下去的表现是
+「文档要求中文、构建偶尔随机崩」，而下一个人只会看到那个 panic。
+
+因此规则拆成两半，口径各自唯一：
+
+| 位置                                                                      | 注释语言 | 判据                                                  |
+| ------------------------------------------------------------------------- | -------- | ----------------------------------------------------- |
+| 常规模块（业务 / 测试 / 脚本 / 文档）                                     | **中文** | 规范 12 §12.4.6 的 ASCII 比例棘轮（只许降不许升）     |
+| 「纯 ASCII 模块」：会被 `next-code-frame` 渲染到的构建期模块图上的模块    | 英文     | 文件头一条说明注明原因；白名单登记在 `reference-facts.md` |
+
+**白名单当前只有三个文件**（名单越短越好，新增必须能说出「它为什么会被 code frame
+渲染到」）：
+
+| 文件                              | 为什么在名单里                                                             |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| `src/lib/db-schema-ready.ts`      | 构建期被加载（reaper 的模块级副作用先经它判就绪），且确实是报错现场         |
+| `src/server/db.ts`                | 每条路由的模块图都拉到它，实测被 code frame 渲染（`resolveDbPath` 那次报错） |
+| `src/lib/shell/tracing-ignore.ts` | 同上：构建期模块图上的纯工具，报错现场就在它自己的调用点上                  |
+
+**门禁与清单只定义一次的地方**：白名单登记在 `docs/reference-facts.md` 的
+`comment.language.asciiOnly` 一行（源码见 `scripts/doc-facts.cjs` 的 FACTS），
+由 `pnpm doc:check` 核对「文档写的名单」与「脚本读的名单」一致；
+规范 12 §12.4.6 的棘轮读同一份名单。
+
+**另有第二类豁免：工具指示注释**（规范 12 §12.4.6 的表里同款）。行首即
+`@vitest-environment` / `@ts-ignore` / `@ts-expect-error` / `eslint-disable*` /
+`@jsx*` 的行不参与统计 —— 它们不是给人读的注释，而是工具按**字面量**解析的指令：
+改成中文不是报错，而是**静默失效**（用例悄悄跑回默认环境、类型豁免悄悄失效）。
+判据只认「行首就是该指令」，避免把「解释某个指令」的正常中文注释一起放行。
+
+**自查入口（跨平台）**：`pnpm exec vitest run tests/comment-language.test.ts`。
+**排查手法**：真要给名单里的文件加中文注释时，先在浏览器里打开
+`settings` 页触发一次编译错误看 code frame 是否渲染它 —— 渲染不到就别加，
+不确定就别加（名单只有三个，加错一个的代价是构建偶发崩）。

@@ -11,17 +11,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import {
   buildParamEntries,
   SIZE_SUB_IDS,
   sizeSubLabel,
 } from "~/lib/workflow/workflow-param-mapping";
 import { applyOutputBindingEdit } from "~/lib/workflow/workflow-output-binding";
-import {
-  inferGroups,
-  splitWorkflowIO,
-} from "~/components/studio/shared/workflow-io";
+import { inferGroups, splitWorkflowIO } from "~/components/studio/workflow-io";
 import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
 import {
   deriveLibraryOutputCards,

@@ -14,7 +14,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
-import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
 import { outputPortLabel } from "./workflow-library-param-cards";
 

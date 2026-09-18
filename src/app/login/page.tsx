@@ -7,7 +7,7 @@ import { X, Zap } from "lucide-react";
 import { authClient } from "~/server/better-auth/client";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { AuroraGlow } from "~/components/studio/ui/AuroraBackground";
+import { AuroraGlow } from "~/components/ui/aurora-background";
 
 type Mode = "signin" | "register";
 

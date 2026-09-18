@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import { MediaThumbnail as MediaThumb } from "~/components/studio/ui/MediaThumbnail";
-import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
+import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
+import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import {
   getActiveId,

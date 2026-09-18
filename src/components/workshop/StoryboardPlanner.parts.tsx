@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash } from "lucide-react";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
 import { Button } from "~/components/ui/button";
@@ -101,7 +101,7 @@ export function ShotRow({
         {/* Shot type */}
         <label className="block">
           <span className="text-muted-foreground mb-1 block text-xs">景别</span>
-          <DarkSelect
+          <SelectMenu
             className="!bg-subtle !border-border text-xs"
             value={shot.shotType}
             onChange={(value) =>
@@ -118,7 +118,7 @@ export function ShotRow({
           <span className="text-muted-foreground mb-1 block text-xs">
             风格 Skill
           </span>
-          <DarkSelect
+          <SelectMenu
             className="!bg-subtle !border-border text-xs"
             value={shot.skillSlug ?? ""}
             onChange={(value) =>

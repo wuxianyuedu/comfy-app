@@ -31,8 +31,8 @@ import {
   RatioIcon,
   shortRatioLabel,
   type SegmentSection,
-} from "~/components/studio/shared/MultiSegmentPopover";
-import { SizePresetTableModal } from "~/components/studio/shared/SizePresetTableModal";
+} from "~/components/ui/segment-popover";
+import { SizePresetTableModal } from "~/components/studio/workflow-form/SizePresetTableModal";
 import { Button } from "~/components/ui/button";
 import { shotSizeSummary, type ShotSizeState } from "./shot-size-config";
 

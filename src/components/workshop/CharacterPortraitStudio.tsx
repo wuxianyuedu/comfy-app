@@ -8,7 +8,7 @@
 
 import React from "react";
 
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
@@ -127,7 +127,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           ))}
         </div>
         {session.channel === "local" && (
-          <DarkSelect
+          <SelectMenu
             value={session.localWorkflowId}
             onChange={(value) => actions.patch({ localWorkflowId: value })}
             options={localOptions}
@@ -139,7 +139,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           />
         )}
         {session.channel === "remote" && remoteImageModels.length > 0 && (
-          <DarkSelect
+          <SelectMenu
             value={effectiveRemoteModel}
             onChange={(value) => actions.patch({ remoteModel: value })}
             options={remoteImageModels}

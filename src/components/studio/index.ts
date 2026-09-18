@@ -7,8 +7,6 @@ export type { VideoQueueModalProps } from "./VideoQueueModal";
 export { HomePage } from "./HomePage";
 export type { HomePageProps, RecentProject } from "./HomePage";
 
-export { MediaThumbnail } from "./ui/MediaThumbnail";
-
 export { WorkspaceNav } from "./WorkspaceNav";
 export type { WorkspaceView } from "./WorkspaceNav";
 
@@ -31,15 +29,9 @@ export { HistoryList } from "./history/HistoryList";
 export { ToastProvider, useToast } from "./ToastProvider";
 export type { ToastItem } from "./ToastProvider";
 
-export { ModalDialog } from "./ui/ModalDialog";
-export type { ModalDialogProps } from "./ui/ModalDialog";
-
-export { AuroraBackground } from "./ui/AuroraBackground";
+export { AuroraBackground } from "~/components/ui/aurora-background";
 
 export { BrowserStatusBar } from "./BrowserStatusBar";
 
 export { LogProvider, useLogPanel } from "./logs/LogProvider";
 export { LogPanel } from "./logs/LogPanel";
-
-export { NumberField } from "./ui/NumberField";
-export { DarkSelect } from "./ui/DarkSelect";

@@ -40,7 +40,7 @@ const EXEMPT = new Map([
   // 注释里说明「旧写法是什么」的全屏视图组件本身用常量拼串，静态扫不到
   ["src/components/studio/fullscreen/FullScreenLayer.tsx", "注释引用旧写法；实现走 fullScreenLayerClass"],
   // 应用级背景层：标题行自身半透明，背景若从标题行下方才开始，顶部会露出亮带
-  ["src/components/studio/ui/AuroraBackground.tsx", "应用级装饰背景，非内容浮层，需覆盖标题行避免顶部亮带"],
+  ["src/components/ui/aurora-background.tsx", "应用级装饰背景，非内容浮层，需覆盖标题行避免顶部亮带"],
 ]);
 /** 顶层浮层的最小判定：铺满整个视口。 */
 const FIXED_INSET = /\bfixed\b[^"'`]*\binset-0\b/;

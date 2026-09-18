@@ -44,7 +44,7 @@ vi.mock("~/lib/workflow/workflow-run-store", () => {
 });
 vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import {
   parseParamMapping,
   SIZE_SUB_IDS,

@@ -98,6 +98,326 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 - **hook 内不做 early return**：空态 / loading 交给视图判断，保证 hooks 顺序稳定
   （WorkflowLibraryDetail 的「未选中工作流」空态即走这条）。
 
+### 16.2.3 混合形态台账与「自实现」棘轮（ISSUE #672，机器强制）
+
+§16.2 的分工原则是「工具建界面、前端只写逻辑」，但在很长一段时间里它**只有原则、
+没有判据** —— 于是实测出：`src/components/ui/` 的 29 个基元里只有少数被业务引用，
+视图里手写 `<button>` 408 处、自建 `createPortal` 浮层 10 处、自写
+`animate-spin`/`animate-pulse` 40 处，同一套按钮/浮层/加载态在多个目录里各实现一份。
+
+（存量随治理逐批下降，当前值看 `pnpm ui:primitives:report` —— 写在正文里的
+数字是**首次扫描快照**，不是实时值，免得每完成一批就要改一遍正文。）
+
+
+本仓库的历史结论是**「只提醒 = 没有判据」**（§12.13 文件行数、§12.16 死代码同款），
+所以这里给计数棘轮：把存量冻结在基线，只许降不许升。
+
+```bash
+pnpm ui:primitives            # 检查（棘轮：只许降不许升，pre-commit 第 12 步）
+pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
+node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
+```
+
+**三条判据**（`scripts/check-ui-primitives.cjs`，基线
+`scripts/.ui-primitives-baseline.json`）：
+
+| ID | 判据 | 应改用什么 |
+|----|------|-----------|
+| **P1** | 视图层手写 `<button` | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体） |
+| **P2** | 视图层自建 `createPortal(` 浮层 | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu` |
+| **P3** | 视图层自写 `animate-spin` / `animate-pulse` | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
+
+**三条判据当前都是硬闸**（P1/P2/P3 基线里已无条目，新增任何自实现直接被阻断）：
+`pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
+「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
+防护强度只增不减。
+
+**范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
+
+- 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
+- 豁免 `src/components/ui/**`（基元自身实现）、`<feature>/hooks/**`（§16.2.1 第②层
+  是逻辑层）、`*.test.*` / `__tests__/**`；
+- **豁免只剩两条**：`ui/` 自身实现与 `<feature>/hooks/**`（§16.2.1 第②层）。
+
+  这里曾**整体豁免** `studio/ui/**` 与 `studio/shared/**`（理由是「它们是迁移对象
+  而不是合规形态」）。P2 把它们的自搓浮层清干净后，豁免开始逐条归还；到
+  §16.2.4 的目录归并完成时，两条豁免**已全部撤掉** —— 「豁免目录里的存量不进
+  基线」意味着那里治理了多少、还剩多少**没有任何判据**，正是 §3.6.1「豁免必须
+  显式」要防的失效模式。撤掉之后 P1/P2/P3 各自**全库清零**（含归并进来的
+  11 + 24 个文件），棘轮由此变成硬闸。
+
+  撤掉的另一面是**目录不得复活**：归并完还得有个判据挡住「下一个人再
+  `mkdir studio/ui` 起一套」，见 `tests/ui-kit-single-home.test.ts`。
+
+### 16.2.5 浮层层级只有两条刻度（ISSUE #672 P2）
+
+浮层收拢过程中暴露出第二处不一致：**层级各处一套魔数**。同一件事（下拉浮层）
+在 `MultiSegmentPopover` 是 `9999`、`WorkflowSeedModeButton` 是 `9999` 配 `9998`
+遮罩、节点 JSON 浮层用 `9000`/`9001`，全屏抽屉散落 `10005`/`10020` ——
+谁也说不清「它比谁高」，新增一层只能再编一个更大的数。
+
+收敛为**两条刻度**（数值同时定义在 `globals.css` 的 `@theme` 与
+`src/lib/shell/overlay-z.ts`，两处必须一致）：
+
+| 刻度 | 值 | 用途 | 用法 |
+|------|----|------|------|
+| `Z.overlay` | 100 | 应用内浮层：下拉 / 抽屉 / 模态 / 调试面板 | class 用 `z-overlay`，行内用 `zIndex: Z.overlay` |
+| `Z.toast` | 1000 | 全局提示，恒在浮层之上 | class 用 `z-toast` |
+
+**`Z.overlay` 刻意不进 1000~1200 区间**：那是 React Flow 给节点选中态（约 1010）
+与悬浮态（1180，见 `globals.css`）留的位，应用浮层插进去会和节点争层级。
+画布内部元素的层级（节点 10 / 子图 11 / 子图内元素 0~5）**不属于**本刻度 ——
+它们只在 React Flow 的层叠上下文里比较，与全屏浮层不在同一维度。
+
+浮层遮罩的 class 串统一由 `src/components/ui/dialog-overlay.ts` 的
+`dialogBackdropClass()` 产出：`ui/dialog` 的 `DialogContent` 与 `ui/sheet` 的
+`SheetContent` 共用同一份，它同时承载「顶部让出标题行」的硬规则（ISSUE #310：
+遮罩曾铺满视口，把页签与窗口按钮一起盖住）。**内容层不再自绘遮罩** ——
+base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成两层。
+
+### 16.2.4 混合形态台账（现状，不是目标）
+
+> 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
+> 免得每轮扫描都重新发现一遍（与 §3.6.1「豁免必须显式」同一个用意）。
+
+按「同一件事有几份实现」排序（**P2 已完成的条目保留在此，作为「怎么迁」的样板**）：
+
+| 形态 | 现状 | 去向 | 状态 |
+|------|------|------|------|
+| 对话框/浮层 | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~ | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）** |
+| 空态 | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~ | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`） | ✅ **P2 完成** |
+| 按钮 | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~ | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1 | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
+| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ✅ **P3 判据清零** |
+| 状态圆点 | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~ | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token） | ✅ **设置页批次完成** |
+| UI kit 目录 | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~ | 见 §16.2.4.3 | ✅ **归并完成（豁免已归还）** |
+
+`pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
+
+**P2 的做法（可直接照抄到后续批次）**：迁移一个浮层 = 换掉两件事 ——
+① `createPortal(...)` → `ui/` 原语的容器；② 随之删掉该文件**自己那份**
+「手写 Esc、手写遮罩点击关闭、手写定位 + 滚动重定位、手写 z-index 魔数」。
+只换 ① 不删 ② 会留下两套关闭语义同时生效（例如 Esc 触发两次 dismiss）。
+
+| 形态 | 原来自搓的位置 | 现在 |
+|------|---------------|------|
+| 确认对话框 | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点） | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留 |
+| 节点 JSON 浮层 | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc） | `ui/dialog`；`workflow-utils.ts` 的 `computePos` 一并删除 |
+| 源码查看弹窗 | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc） | `ui/dialog`；载入态改 `ui/page-loading` |
+| 模型标签编辑器 | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭） | `ui/dialog` |
+| 属性多选下拉 | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位） | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner） |
+| 4 个工作流 chip 下拉 | `project-canvas/Workflow{Pick,ModelFilter,SourceFilter,ModePick}Chip.tsx` + `workflow-node-popover.ts` 基元 | `ui/popover`；`workflow-node-popover.ts`（定位/关闭基元）整个删除 |
+| 两个设置抽屉 | `studio/ProjectCanvasSettings.tsx`、`studio/canvas/WorkflowCanvasSettings.tsx`（各自 `FullScreenLayer` + 遮罩按钮 + Esc） | `ui/sheet`（`side="right"`） |
+
+### 16.2.4.2 P1 按钮分批的进度与做法
+
+按钮这一条不是「一次性替换」，而是**一次一个目录**地把手写 `<button>` 换掉，
+因为绝大多数调用点带着自己的布局类（全宽列表行、图标圆钮、Tab 项），
+变体只能接管外观语义，尺寸与排布仍由调用处的 `className` 承担。
+
+**已完成批次**（每批都把该目录清零，再 `--update` 收紧基线）：
+
+| 批次 | 目录 | 清零处数 | 手法 |
+|------|------|---------|------|
+| 1 | `studio/logs/` | 16 | 图标钮 → `size="icon-xs"`；Tab → `variant="ghost"` + `h-auto` |
+| 1 | `studio/workflow-library/` | 28 | 文字动作 → `variant="outline"` / `"ghost"`；实心紫 → `"primary-solid"` |
+| 2 | `studio/project-canvas/`（含 `CanvasNode/`） | 84 | 见下 |
+| 3 | `studio/workflow-editor/` | 14 + 2（P3） | 见下 |
+| 4 | `app/(main)/settings/` + `components/settings/` | 45 + 11（P3） | 见下 |
+| 5 | 全库清零：`workshop/` + `studio/` 散件 + `app/` + 剩余 `studio/**` | 174 + 24（P3） | 见下 |
+
+**`studio/project-canvas/` 这批评测出的三条口径**：
+
+1. **Popover 里的选项行**（`role="option"`）也换成 `<Button variant="ghost">`：
+   base-ui 的 `Button` 会把 `role` / `aria-selected` / `title` / `key` 原样透传
+   到 `<button>`，行为不变；`rounded-none` 抵消基元默认圆角，保住行样式的
+   边到边观感。
+2. **`type="button"` 可以随转换删掉**：base-ui 的 `useButton` 自带
+   `type: 'button'`（见 `@base-ui/react/internals/use-button`），不会退化成
+   表单提交钮。
+3. **`h-auto` 是覆盖基元高度的标准手法**：基元的 `size` 变体写死了 `h-6/7/8/9`，
+   调用处要沿用自己那套 `px/py` 就必须 `h-auto`，否则高度被基元压掉。
+
+**`studio/workflow-editor/` 这批评测出的两条口径**：
+
+4. **覆盖基元默认值是「成套 + 讲顺序」两件事**：顶栏按钮原本全走
+   `workflow-editor-topbar-config.ts` 的 `topBarButtonClass(tone, density)`，
+   它的尺寸与底盘是为「窄窗退化顺序」专门设计的（ISSUE #404）。换成 `<Button>`
+   后，`cn()` 把 `buttonVariants(...)` 排在调用处 `className` **之前** ——
+   基元的 `h-8 px-2.5 rounded-lg` 与 `ghost` 的 `hover:bg-muted` 本就会被
+   后面的类覆盖，但**依赖「碰巧排对了」不是判据**：基元里没写的那几档
+   （起始 `bg-*`）会漏过去。所以 `topBarButtonClass` 的每个 tone 都**显式
+   带齐** `h-auto px-0 rounded-none bg-transparent`（`h-auto` 是第 3 条的同一
+   手段，这次连「无起始底色」一起归位）。
+
+   ⚠️ **顺序是载荷**：`cn()` 走 tailwind-merge，同一属性**后面的类赢**。
+   覆盖串里的 `rounded-none` / `px-0` 只是「先声明要归位」，真正生效的必须是
+   tone 的 `rounded-md|lg` 与密度的 `px-*` —— 把覆盖串排到 tone 之后，
+   tailwind-merge 会把 tone 的圆角吃掉、按钮全部变直角，而**源码里两串都在**，
+   只有合并结果能证明对错。所以拼装顺序固定为
+   `base → 覆盖串 → 密度 → tone → extra`，并由契约测试逐个 tone 断言
+   「tone 的圆角索引 > 覆盖串索引」+「密度的 `px-*` 索引 > `px-0` 索引」。
+5. **颜色字面量随转换一并收口**：本批把顶栏/画布残留的 `violet-*` /
+   `amber-*` / `sky-*` / `rose-*` / `red-*` / `emerald-*` 全部换成
+   `primary-*` / `warning-*` / `info-*` / `destructive` / `success-*`
+   （§3.6.2）。这些字面量本来就不该在视图里 —— 之前只是因为顶栏是
+   「另一套 UI kit」而没被追到。
+
+**判据自身的修正**：本批同时给 `check-ui-primitives.cjs` 的 P1/P2/P3 加了
+**注释剥离**。判据原来直接数原始文本里的 `<button`，于是「原来是 `<button>`
+手搓，现改走 `<Button>`」这类**说明性注释**会被当成实现计上 —— 该文件的计数
+停在原地，棘轮永远降不下去（同款教训见 `check-theme-colors.cjs` 的注释剥离：
+注释里的 `#346` 被误判成 3 位色值）。剥离后 P1 立刻多降 2 处
+（`studio/RequiredSummary.tsx` 与本模块），说明此前一直在为注释记账。
+**字符串/模板字面量不剥离** —— `"<button"` 同样是「自己实现一份」的信号。
+
+**`app/(main)/settings/` + `components/settings/` 这批评测出的三条口径**：
+
+6. **「本页主按钮」这种局部原语要换成基元的包装，不是平行实现**。设置页
+   `SettingsPrimitives` 的 `Btn` 此前是第二个 `<button>`（自拼尺寸类 +
+   自拼配色 `bg-primary hover:bg-primary-hover text-white`）。改法不是「把
+   `<button>` 换成 `<Button>` 但保留全部自拼类」—— 那只是换了个标签名。正确
+   拆法是**分工**：配色交给 `variant`（`primary-solid` / `success-solid`），
+   本模块只留该页特有的**排布契约**（`statusButtonClass`：不许换行 / 不许被
+   flex 压扁 / 行框归位，ISSUE #423）。这与顶栏的 `topBarButtonClass` 是同一
+   手法，区别只是契约的内容（顶栏管「窄窗退化顺序」，设置页管「状态行不许
+   被压扁」）。原语随之改名 `StatusButton`，名字说明它属于状态行。
+7. **内联加载态用 `Spinner`，不要用 `PageLoading`**。`PageLoading` 是块级
+   加载态（居中 + 文案 + `size-9` 转圈），放进按钮里会让按钮被撑高。此前各
+   调用点因此退回 `<Loader2 className="animate-spin" />` —— 那正是 P3 判据
+   计数的「自写 spinner」。现在 `ui/page-loading` 同时导出裸转圈 `Spinner`
+   （`size-4`、继承 `currentColor`），`PageLoading` 内部也复用它，全库只剩
+   一处 `animate-spin`。判据：**块级用 `PageLoading`，行内 / 按钮内用
+   `Spinner`**，不要写 `PageLoading label=""`。
+8. **同一组「状态圆点」跨三个文件重复时，收成 `ui/` 基元而不是本页常量**。
+   设置页三条状态行的圆点此前各写一份四分支三元套娃（配色还是各写各的
+   `bg-emerald-400` / `bg-amber-400` / `bg-sky-400` / `bg-rose-400`），这才是
+   典型的「同一个组件到处实现一份」。收进 `ui/status-dot.tsx` 的 `StatusDot`
+   后，状态语义（`up` / `busy` / `probing` / `down`）与颜色只定义一次；**判定
+   逻辑（哪个字段组合算 busy）留在各视图的纯派生函数里**（`comfyDotState` /
+   `dbStudioDotState`），因为那是业务判据、不是样式。日志「跟随中」的脉冲
+   小点也复用它（`pulse`），顺带消掉三份重复的 `animate-pulse`。
+
+**收尾批次（第 5 批，P1/P3 双双清零）的口径**：
+
+9. **`variant` 只在「语义能对上」时接管配色，其余交给 `className`**。
+   不是每个手写按钮都有对应的语义变体 —— `TitleBarTabs` 的窗口按钮是
+   「无底色、hover 变色」、`IOEditContext` 的节点 id 徽标是「mono 小字 +
+   点线框」、`WorkflowNodeJsonPopover` 的三个控件是行内 `style` 驱动的。
+   这些一律用 `variant="ghost"` / `"outline"` + 原 `className`，**不要为了
+   「用上变体」而改变外观**：转换的验收标准是**渲染结果不变**（快照测试
+   就是为此存在的），不是「配色都走变体」。
+10. **`role="switch"` / `role="tab"` 的按钮照换**：base-ui 的 `Button` 会把
+    `role` / `aria-checked` / `aria-selected` / `tabIndex` / `onMouseDown`
+    原样透传（第 1、2 条同款），`h-[18px] w-[32px] p-0` 之类的尺寸类照旧由
+    调用处给。不要因为「它其实是开关」就留在手写形态 —— P1 判据不区分语义。
+11. **枚举状态圆点一律走 `StatusDot`**：本批把 `BrowserStatusBar` 的
+    dev server 灯、`LibraryHostCard` 的节点相位点、`WorkflowRunLogButton`
+    的「跟随中」点、`CustomNodesSettings` 的两处「解析中」点、`AgentOverlay`
+    的三个「正在输入」点全部换成 `StatusDot`（`probing` / `busy` + `pulse`）。
+    调用处特有的装饰（状态栏灯的发光描边）经 `className` 传下去，**不要
+    另起一个圆点实现**。`AgentOverlay` 的错峰脉冲用 `[animation-delay:0.15s]`
+    这类任意值类表达，不再写行内 `style={{ animationDelay }}`。
+12. **`animate-pulse` 的「骨架占位」走 `Skeleton`**：`HistoryPanel` 的五条
+    骨架、`MaterialLibraryPanel` 的两条、`ModelLibrary`（两处）、
+    `WorkshopStageBody` 的懒加载占位全部换成 `ui/skeleton` 的 `<Skeleton>`。
+    `Skeleton` 的 `bg-muted` 会被调用处的 `bg-subtle` 覆盖（tailwind-merge
+    后面的类赢），所以迁过来时保留原底色类即可。
+13. **`ui/progress` 的 `value={null}` 就是「不确定进度」**：定妆照的
+    「通道不提供进度」此前自写一条 `animate-pulse` 的满宽条，现在传 `null`
+    给 `Progress` —— base-ui 会渲染成不确定进度条（脉动）。**不要传 0 冒充
+    确定性进度**（那会把「不知道」画成「刚开始」）。
+
+**收尾批次的另一件事：`dynamic()` 的 `loading` 也归 P3**。
+`WorkflowLibrary` 那段「居中 spinner + 文案」的自写加载态换成 `PageLoading`
+（块级用 `PageLoading`，第 7 条同一口径）。
+
+**目录豁免的归还进度**：`studio/ui/` 与 `studio/shared/` 当时仍在
+`EXEMPT_DIRS` 里（§16.2.3 的「临时豁免」），所以那一批的「清零」只指**已纳入
+扫描范围的视图层**。两处豁免的归还即下一节（§16.2.4.3）。
+
+### 16.2.4.1 按钮的语义变体（P1 的前置条件）
+
+把 400 处手写 `<button>` 换成 `<Button>`，**前提是 `Button` 先有对应的语义
+变体** —— 否则替换只能靠 `className` 把原样式一字不差搬过去，那既没减少
+重复，也把「按钮该长什么样」的决定权继续留在调用处。实测视图里的手写按钮
+用的是 `violet / red / rose / emerald / amber / cyan` 六个色系，`Button` 原本
+只有 `default / outline / secondary / ghost / destructive / link`，缺口就在这里。
+
+现在 `ui/button.tsx` 的 `variant` 多出 8 支，**按语义角色命名、不按色名**
+（§3.6.2：换品牌色时调用处不用改）：
+
+| 变体 | 形态 | 对应视图里的手写写法 |
+|------|------|---------------------|
+| `primary` | 品牌软底 | `bg-violet-500/15 text-violet-700 dark:text-violet-300` |
+| `danger` | 危险软底 | `bg-red-500/10 text-red-700 dark:text-red-300` |
+| `success` | 成功软底 | `bg-emerald-500/10 text-emerald-700 dark:text-emerald-400` |
+| `warning` | 警告软底 | `bg-amber-500/10 text-amber-700 dark:text-amber-300` |
+| `info` | 信息软底 | `bg-cyan-500/10 text-cyan-700 dark:text-cyan-300` |
+| `primary-solid` | 品牌实心 | `bg-violet-500/90 text-white hover:bg-violet-500` |
+| `danger-solid` | 危险实心 | `bg-red-500 text-white` |
+| `success-solid` | 成功实心 | `bg-emerald-500 text-white` |
+| `warning-solid` | 警告实心 | `bg-amber-500 text-white`（设置页批次补出） |
+
+三条口径：
+
+1. **软底是主力形态**（手写按钮的绝大多数是这个），实心只出**实测用到**的那些色
+   —— 首批三色（品牌 / 危险 / 成功），设置页批次按实测补出 `warning-solid`
+   （「继续等待视频生成」是实心琥珀，它同时是「进行中」与「需要用户动手」
+   两种语义的交叠，软底不足以表达）。**补变体的依据是实测，不是「凑齐色系」**；
+2. **每个软底变体的文字档走 `*-strong` token**，不是同色相原色：同一个琥珀
+   `#d97706` 当底色可以、当浅底上的文字色对比度不足 —— 这正是「写死字面量」
+   表达不了的那层区分（§3.6.2 末尾同款论证）；
+3. **既有六个变体一个不动**（`destructive` 仍是软底危险，与 `danger` 并存是
+   历史包袱：`destructive` 属 shadcn 名词空间、`danger` 属本项目的语义角色命名。
+   新代码用 `danger`，`destructive` 留待随 shadcn 基元一起收口）。
+
+**顺带修掉一颗哑弹**：`--color-success-strong` 一直存在，但
+`status-badge.tsx` 引用的 `text-warning-strong` **从未定义过** —— `QUEUED` /
+`PENDING` / `DRAFT` 三个状态因此渲染成无色（Tailwind 生成不出这个类，
+静默不报错）。本次补齐 `--color-warning-strong` / `--color-danger-strong` /
+`--color-info-strong` 两态取值。
+
+**机器判据**：`src/components/ui/button.test.tsx` —— 逐个钉住「这 8 支变体存在」
+「产出的类名不含任何 Tailwind 原生调色板字面量」「软底变体的文字走 `-strong`」，
+以及「既有 6 个变体仍在」。变体被删或改回写死色，这里先失败。
+
+### 16.2.4.3 UI kit 目录归并（P1 从「已扫描范围清零」到「全库清零」）
+
+台账最后一行的落地。四套「放通用件的地方」收成两处，各自的判据不同：
+
+| 原位置 | 14 个文件的去向 | 为什么是这里 |
+|--------|----------------|-------------|
+| `components/studio/ui/`（11 个） | `components/ui/`，文件名转 kebab-case | 它们是**跨域**的通用件（`SelectMenu` / `ConfirmDialog` / `JsonViewer` / `MediaThumbnail` / `EditableLabel`…），不只 studio 用 —— `app/(main)/settings`、`app/login`、`components/workshop` 都在引 |
+| `components/studio/shared/` 的通用件（3 个） | `components/ui/` | 同上（`SegmentPopover` / `ValidationErrorList` / `SeedModeButton`） |
+| `components/studio/shared/` 的表单件（19 个）+ `DynamicWorkflowForm/` | `components/studio/workflow-form/` | 它们是**工作流参数表单专属**的复合件（`DimensionControl` / `GroupedControls` / `WorkflowFormControls` / `PortHandle`…）：域内共享，不是跨域基元 —— 搬进 `ui/` 只会让「ui/ 是 shadcn 基元」这条口径失真 |
+| `components/studio/shared/workflow-io.ts` / `useMiniMapJump.ts` | `components/studio/` 域根 | 前者是工作流 IO 的纯逻辑（52 处引用），后者是画布视图工具 —— 都不属于「参数表单」 |
+
+**为什么不是「全部塞进 `ui/`」**：`ui/` 在本仓库有一条明确口径 ——
+**shadcn 官方 kebab-case 基元目录**（§12.5 的命名例外正是为它开的）。
+把 `DimensionControl` 这种「域内表单复合件」也放进去，等于把「工具生成的基元」
+与「业务组合件」混在一层，下一个人 `shadcn add` 时就分不清哪些能重生成。
+所以分工是：**跨功能复用 → `ui/`；域内复用 → 本域目录**（§16.2.4 台账原话
+「后三处归入 `ui/`，一次搬一个域」按这个口径落成）。
+
+**顺带收掉的同源问题**（这批的真正收获）：
+
+1. **`floating-position.ts` 整个删除**。它承载的「视口翻转 / 收边 / 高度封顶」
+   在 §16.2.4 的浮层迁移完成后**只剩自己的单测在用** —— 同一件事（摆位）
+   已经由 base-ui 的 Positioner 承担，再留一份自有实现就是第三份口径。
+2. **`SeedModeButton` 的视口翻转单测重写**。旧用例断言 `style.top === 324`
+   这类**派生像素值**：那是自搓定位的实现细节，换了 Positioner 就整片失效。
+   新用例只锁本组件**自己欠的语义**（四个选项、选中态、点击即回调并收起）——
+   「把基元的实现细节当成自己的契约」正是这次踩到的坑，写进用例注释。
+3. **`ui/` 基元与新家对齐命名**：`ModalDialog`→`ConfirmDialog`、
+   `DarkSelect`→`SelectMenu`（后者与 `ui/select` 区分：它是「自定义样式的
+   列表菜单」，不是原生 select 的包装）。
+
+**机器判据**：`tests/ui-kit-single-home.test.ts` —— 三个断言：
+① 已退役的 `studio/ui` / `studio/shared` 目录**不得复活**；② `ui/` 下全是
+kebab-case；③ 除 `ui/` 外没有别的目录在放「与 `ui/` 同名的基元」。
+为什么需要它：`EXEMPT_DIRS` 撤掉只保证「再放进去的东西会被数」，
+挡不住下一个人 `mkdir studio/ui` 起一套新的 —— **目录本身的存在才是信号**。
+
 ## 16.3 新增一个组件的标准动作
 
 ```bash
@@ -294,3 +614,6 @@ shadcn add @comfy-app-t3/form @comfy-app-t3/select
 - 不手工编辑 `ui/` 内组件源码；界面变更通过 `shadcn add` 重生成，或在使用处以 `className` 覆盖。
 - 业务表单/页面放在 `src/components/<feature>/`、`src/app/`，只 `import ~/components/ui/*`。
 - 新增原语一律走 `shadcn add`，不要把整段 UI 逻辑写进 `ui/`。
+- **新增视图代码前先查 `ui/` 有没有现成基元**（§16.2.3 的棘轮会在提交阶段拦下
+  手写 `<button>` / 自建 portal / 自写 spinner）。需要覆盖样式就在使用处以
+  `className` 覆盖或扩展 `cva` 变体，**不要**在原地另起一份实现。

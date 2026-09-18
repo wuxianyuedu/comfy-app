@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
-import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { SelectMenu } from "~/components/ui/select-menu";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
 /** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
@@ -539,14 +539,14 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                           aria-hidden
                         />
                         {/* COMBO widget on the workflow canvas
-                         *  renders as a display-only DarkSelect — it shows the
+                         *  renders as a display-only SelectMenu — it shows the
                          *  currently-selected model as a dropdown shell, but
                          *  stays disabled here (editing happens in the project
                          *  canvas form where the value is persisted).  The
                          *  node is a faithful read-only preview, not an editor.
                          *  The trigger is shrunk to the 22px row height so it
                          *  doesn't break the uniform pin rhythm. */}
-                        <DarkSelect
+                        <SelectMenu
                           value={typeof v === "string" ? v : ""}
                           onChange={() => undefined}
                           options={

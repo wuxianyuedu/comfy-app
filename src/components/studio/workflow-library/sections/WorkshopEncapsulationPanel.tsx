@@ -25,7 +25,7 @@ import {
   DEFAULT_SHOT_SIZE,
   type ShotSizeState,
 } from "~/components/workshop/shot-size-config";
-import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
+import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
 
 interface WorkshopEncapsulationPanelProps {
