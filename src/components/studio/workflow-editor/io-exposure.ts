@@ -37,9 +37,9 @@ export function resolveExposedLabel(
 }
 
 /** 把本地勾选态与服务端富化条目合并成 IO 编辑面板用的条目：
- *  本地字段（label / value / required / seedMode / modes…）整体覆盖在富化
- *  结果之上——本地才是作者编辑态的唯一事实源；只有 `label` 需要额外兜住
- *  「本地没重命名过」的情形（此时取富化名，没有富化名再回退原始 pin 名）。
+ *  本地字段（label / required / seedMode / modes…）整体覆盖在富化结果之上
+ *  ——本地才是作者编辑态的唯一事实源；只有 `label` 需要额外兜住「本地没重命名
+ *  过」的情形（此时取富化名，没有富化名再回退原始 pin 名）。
  *  `type` 单独处理：本地缺省时保留富化类型，否则控件会从 select 退化成文本框。 */
 export function mergeExposedEntry<T extends WorkflowIOEntry>(
   local: (ExposedLabelSource & Partial<WorkflowIOEntry>) | undefined | null,
@@ -102,7 +102,6 @@ export function enrichFromViewNodes(
           ? { multiline: input.multiline }
           : {}),
         ...(value !== undefined ? { defaultValue: value } : {}),
-        ...(node.class_type ? { classType: node.class_type } : {}),
       };
     }
   }

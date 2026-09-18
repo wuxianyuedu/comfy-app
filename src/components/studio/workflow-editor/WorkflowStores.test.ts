@@ -243,21 +243,21 @@ describe("callStoreAction", () => {
 
   it("动作缺失时降级不抛错 —— 热更新后未重载的陈旧实例", () => {
     const store = createIOEditStore("wf");
-    /* 模拟旧实例：动作集合比当前模块少成员（旧窗口里 purgeMachineNames
-     *  这类已删动作还在调用点，新实例上则已经不存在）。 */
+    /* 模拟旧实例：动作集合比当前模块少成员（旧窗口里 setIOValues /
+     *  resetIOPreviewValues 这类已删动作还在调用点，新实例上则已经不存在）。 */
     const stale = {
       getState: () => ({}) as unknown as IOEditStore,
     } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       expect(() =>
-        callStoreAction(stale, "resetIOPreviewValues", () => undefined),
+        callStoreAction(stale, "toggleIORequired", () => undefined),
       ).not.toThrow();
       expect(warn).toHaveBeenCalledOnce();
       /* 正常实例不受影响。 */
-      expect(
-        callStoreAction(store, "resetIOPreviewValues", () => undefined),
-      ).toBe(true);
+      expect(callStoreAction(store, "toggleIORequired", () => undefined)).toBe(
+        true,
+      );
     } finally {
       warn.mockRestore();
     }
@@ -275,7 +275,7 @@ describe("callStoreAction", () => {
     } as unknown as Parameters<typeof callStoreAction<IOEditStore>>[0];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
-      callStoreAction(stale, "resetIOPreviewValues", () => undefined);
+      callStoreAction(stale, "toggleIORequired", () => undefined);
       expect(deliveries).toHaveLength(1);
       expect(deliveries[0]!.title).toContain("重载");
     } finally {

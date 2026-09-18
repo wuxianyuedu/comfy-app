@@ -27,19 +27,12 @@ export interface WorkflowIOEntry {
   options?: string[];
   /** user-defined display order. */
   displayOrder?: number;
-  /** author override of `defaultValue`. */
-  value?: unknown;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random），
    *  与 ComfyUI 的 control_after_generate 对应；仅 seed 类 widget 有意义。 */
   seedMode?: string;
   /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
    *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。 */
   modes?: Record<string, WorkflowIOModeOverride>;
-  /** 拥有该 pin 的节点类名（"LoadImage" / "KSampler" / "LoadImageFirstFrame"…），
-   *  服务端富化字段（raw 导出优先，API-only 导入退到存库 graph 的 class_type）。
-   *  工坊封装要按它区分参考图槽位（首帧 / 尾帧 / 普通参考图）——多个 LoadImage
-   *  的 pin 名都叫 `image`，只看名字分不出哪张是首帧。 */
-  classType?: string;
   /** 宿主（外层封装）节点 id，**仅在「下钻到子工作流内部」勾选时**写入。
    *
    *  `nodeId` 此时是子图内部节点 id（`1670`），它在顶层画布上不存在；而运行期
@@ -107,19 +100,26 @@ export function isVisibleInMode(
   return entry.modes?.[mode]?.visible ?? true;
 }
 
-/** 参数默认值的两级回退：模式默认值 → 作者覆盖值(value) → 通用默认值。
+/** 参数默认值的回退：模式覆盖值 → 工作流图内读出的 defaultValue。
  *
- *  注意顺序：模式默认值优先级最高（它就是"该模式下应该用这个"的显式声明），
- *  其次才是作者在 IO 编辑里写的通用覆盖 value，最后才是工作流图里读出的 defaultValue。 */
+ *  `modes[mode].defaultValue` 是作者针对**该模式**填的值（模式页签写的覆盖层），
+ *  压过图内默认值；未开启模式（mode 为空）时只读图内值 —— 与 `manualTargetFor`
+ *  的「没有模式就没有手工线」同构。
+ *
+ *  历史中间档 `entry.value`（旧「通用页签」写的全局覆盖）**整档删除**：通用页签
+ *  早已移除，那一档只剩历史落库数据，且它写的值在模式语境里永远不会被读到
+ *  （模式覆盖永远压过它）。落库里的残留不再透传，下一次 PATCH 自然清掉。
+ *
+ *  `null` 不算覆盖：它表示不出一个「有意义的默认值」，放行只会把 `null` 下发给
+ *  ComfyUI；一律回退图内默认值。 */
 export function resolveEntryDefault(
   entry: WorkflowIOEntry,
   mode?: string | null,
 ): unknown {
   if (mode) {
     const modeDefault = entry.modes?.[mode]?.defaultValue;
-    if (modeDefault !== undefined) return modeDefault;
+    if (modeDefault !== undefined && modeDefault !== null) return modeDefault;
   }
-  if (entry.value !== undefined) return entry.value;
   return entry.defaultValue;
 }
 

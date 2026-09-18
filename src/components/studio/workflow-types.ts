@@ -164,11 +164,6 @@ export interface WorkflowIOParam {
    *  contract.  Persisted to server on the same PATCH as the rest of
    *  `workflowIO`. */
   displayOrder?: number;
-  /** author override of the graph-derived default. Mirrors
-   *  `WorkflowIOEntry.value`; written by the IO-edit preview when the author
-   *  edits a pin's default value, cleared to restore the original default.
-   *  Round-trips through GET/PATCH like the rest of `workflowIO`. */
-  value?: unknown;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。
    *  镜像 `WorkflowIOEntry.seedMode`，随 workflowIO 一起 PATCH 落库。 */
   seedMode?: string;
@@ -176,11 +171,6 @@ export interface WorkflowIOParam {
    *  落在同一个 workflowIO JSON 列里（因此新增模式无需改表）。由 IO 预览面板的
    *  「模式页签」编辑，随整体 workflowIO 一起 PATCH 落库。 */
   modes?: Record<string, WorkflowIOModeOverride>;
-  /** 拥有该 pin 的节点类名（"LoadImage" / "KSampler" …），服务端富化字段。
-   *  工坊封装要靠它区分参考图槽位（首帧 / 尾帧 / 普通参考图）—— 只看 pin 名
-   *  分不出三张 LoadImage 里哪张是首帧。本地新勾选的 pin 没有此字段，
-   *  服务端下次读取时补上。 */
-  classType?: string;
   /** 宿主（外层封装）节点 id。仅在「下钻到子工作流内部」勾选时写入：此时
    *  `nodeId` 是子图内部节点 id（`1670`），运行期 comfy-cli 展开后是 `4:1670`
    *  （宿主 id + 内部 id），两个 id 都存下来才能在运行期确定性还原。 */

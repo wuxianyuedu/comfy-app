@@ -243,6 +243,29 @@ export function megapixelsOf(size: SizeDims, digits = 3): number {
   return Math.round(raw * factor) / factor;
 }
 
+/** 宽高 → 百万像素值，**按目标端口声明的小数位取整**（`1.0` → 1 位；`1` → 0 位）。
+ *
+ *  与 `megapixelsOf` 的差别：那个是给界面看的量（固定 3 位小数），这个是**要写进
+ *  端口候选**的值 —— 工坊的 `1M` 这类声明通常写 `1.0`，写 `1.03` 进去会被端口判成
+ *  「不在候选内」而静默回落。返回 null = 宽高不合法（调用方跳过这个口）。
+ *
+ *  原先住 `workflow-encapsulation`（工坊封装层）：它算的是「值的形状」，与尺寸表
+ *  同源；留在封装层会让映射层反过来依赖封装层（环）。 */
+export function megapixelsForSize(
+  width: number,
+  height: number,
+  defaultValue?: unknown,
+): number | null {
+  if (!(width > 0) || !(height > 0)) return null;
+  const raw = (width * height) / 1_000_000;
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  const digits =
+    typeof defaultValue === "number" && !Number.isInteger(defaultValue) ? 1 : 0;
+  const factor = 10 ** digits;
+  const rounded = Math.round(raw * factor) / factor;
+  return rounded > 0 ? rounded : null;
+}
+
 /** 宽高 → 能把两侧都整除的最大候选倍数；都除不尽时退到最小档 8。 */
 export function alignMultipleOf(size: SizeDims): AlignMultiple {
   for (let i = ALIGN_MULTIPLE_OPTIONS.length - 1; i >= 0; i -= 1) {
