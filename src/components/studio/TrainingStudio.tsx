@@ -4,6 +4,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { NumberField } from "~/components/studio/ui/NumberField";
+import { AuroraGlow } from "~/components/studio/ui/AuroraBackground";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -85,19 +86,15 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
         className="pointer-events-none absolute inset-0 overflow-hidden"
         aria-hidden
       >
-        <div
-          className="absolute top-[-20%] right-[-10%] h-[70%] w-[55%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(139,92,246,0.40) 0%, rgba(139,92,246,0) 70%)",
-          }}
+        <AuroraGlow
+          tone="violet"
+          alpha={0.4}
+          className="top-[-20%] right-[-10%] h-[70%] w-[55%] opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         />
-        <div
-          className="absolute bottom-[15%] left-[-15%] h-[55%] w-[45%] rounded-full opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(34,211,238,0.26) 0%, rgba(34,211,238,0) 70%)",
-          }}
+        <AuroraGlow
+          tone="cyan"
+          alpha={0.26}
+          className="bottom-[15%] left-[-15%] h-[55%] w-[45%] opacity-10 mix-blend-normal dark:opacity-50 dark:mix-blend-screen"
         />
       </div>
 
@@ -192,7 +189,11 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               onClick={() => fileRef.current?.click()}
               className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-violet-500/35 bg-violet-500/6 px-3 py-5 text-center transition-colors hover:border-violet-500/55 hover:bg-violet-500/10"
             >
-              <Upload size={22} strokeWidth={1.8} color="#a78bfa" />
+              <Upload
+                size={22}
+                strokeWidth={1.8}
+                color="var(--color-aurora-violet)"
+              />
               <p className="text-[12px] font-medium text-violet-700 dark:text-violet-400">
                 {c.uploading ? "上传中…" : "点击或拖拽上传图片"}
               </p>
@@ -324,8 +325,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   />
                   <defs>
                     <linearGradient id="trainRing" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#8B5CF6" />
-                      <stop offset="100%" stopColor="#22d3ee" />
+                      <stop
+                        offset="0%"
+                        stopColor="var(--color-aurora-violet)"
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--color-aurora-cyan)"
+                      />
                     </linearGradient>
                   </defs>
                 </svg>
@@ -400,14 +407,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   x2={lossGeo.W - 12}
                   y1={12 + gain * (lossGeo.H - 24)}
                   y2={12 + gain * (lossGeo.H - 24)}
-                  stroke="rgba(255,255,255,0.05)"
+                  stroke="var(--color-border-subtle)"
                   strokeWidth="1"
                 />
               ))}
               <path
                 d={lossGeo.val}
                 fill="none"
-                stroke="#22d3ee"
+                stroke="var(--color-aurora-cyan)"
                 strokeOpacity="0.55"
                 strokeWidth="1.5"
                 strokeLinejoin="round"
@@ -415,7 +422,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               <path
                 d={lossGeo.train}
                 fill="none"
-                stroke="#a78bfa"
+                stroke="var(--color-aurora-violet)"
                 strokeWidth="2"
                 strokeLinejoin="round"
               />

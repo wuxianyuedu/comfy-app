@@ -129,7 +129,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 
 | 层 | 位置 | 拦什么 | 能绕过吗 |
 |----|------|--------|---------|
-| 本地 | `.githooks/pre-commit`（24 步） | 分支守卫 + 结构硬规则 + tsc + eslint + 各棘轮 | 只能 `--no-verify`（进历史，Review 可见） |
+| 本地 | `.githooks/pre-commit`（25 步） | 分支守卫 + 结构硬规则 + tsc + eslint + 各棘轮 | 只能 `--no-verify`（进历史，Review 可见） |
 | 平台（push 保护） | CNB **分支保护设置** | `master` 的直接 push（放行 PR 合并） | 需管理员改设置 |
 
 > **服务端形态的判据本身仍在**：`scripts/check-branch-guard.cjs` 的
@@ -139,7 +139,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 理由见上面 `⚠️` 那段。
 
 ```
-本地提交前必须通过（.githooks/pre-commit，24 步）：
+本地提交前必须通过（.githooks/pre-commit，25 步）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
@@ -149,6 +149,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 ✅ node scripts/check-ui-logic-separation.cjs
 ✅ node scripts/check-changelog-fragments.cjs
 ✅ node scripts/check-app-port-vectors.cjs   # 端口推导跨语言一致性（见 launch-and-build §1.1）
+✅ node scripts/check-ui-primitives.cjs      # UI 基元复用棘轮（见 16 §16.2.3）
 ✅ node scripts/check-theme-colors.cjs       # 主题色扫描棘轮（见 03 §3.6.1）
 ✅ node scripts/check-comfyui-port-contract.cjs # ComfyUI 端口口径一致性（见 launch-and-build §5）
 ✅ node scripts/check-inline-style.cjs       # 视图层不得动态注入 <style>（见 03 §3.5）

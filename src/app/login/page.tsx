@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { X, Zap } from "lucide-react";
 import { authClient } from "~/server/better-auth/client";
 import { Icon } from "~/components/ui/icon";
+import { AuroraGlow } from "~/components/studio/ui/AuroraBackground";
 
 type Mode = "signin" | "register";
 
@@ -75,31 +76,23 @@ export default function LoginPage() {
 
   return (
     <div className="bg-bg relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      {/* Aurora glows：与 AuroraBackground 同一口径——浅色下 opacity 大幅调低、
+      {/* Aurora glows：复用 AuroraGlow 原语（同一个光晕在四处各抄一份，
+          色值还各不相同 —— 见规范 03 §3.6.2）。浅色下 opacity 大幅调低、
           不用 `mix-blend-screen`（screen 在白底上什么也不显示）。 */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-40 -right-32 h-[640px] w-[640px] rounded-full opacity-[0.14] blur-[120px] dark:opacity-70"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(124,92,252,0.45), transparent 70%)",
-        }}
+      <AuroraGlow
+        tone="violet"
+        alpha={0.45}
+        className="-top-40 -right-32 h-[640px] w-[640px] opacity-[0.14] blur-[120px] dark:opacity-70"
       />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -bottom-40 -left-32 h-[560px] w-[560px] rounded-full opacity-10 blur-[110px] dark:opacity-60"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(46,167,255,0.25), transparent 70%)",
-        }}
+      <AuroraGlow
+        tone="cyan"
+        alpha={0.25}
+        className="-bottom-40 -left-32 h-[560px] w-[560px] opacity-10 blur-[110px] dark:opacity-60"
       />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-1/3 left-1/2 h-[360px] w-[360px] rounded-full opacity-[0.08] blur-[90px] dark:opacity-40"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(19,221,196,0.16), transparent 70%)",
-        }}
+      <AuroraGlow
+        tone="cyan"
+        alpha={0.16}
+        className="top-1/3 left-1/2 h-[360px] w-[360px] opacity-[0.08] blur-[90px] dark:opacity-40"
       />
 
       <div className="border-border-subtle bg-surface/90 shadow-ink/5 dark:border-border-strong relative w-full max-w-[440px] rounded-[20px] border p-9 shadow-[0_8px_40px] backdrop-blur-xl">

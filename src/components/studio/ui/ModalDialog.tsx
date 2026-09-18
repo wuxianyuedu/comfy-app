@@ -11,8 +11,11 @@
  * Visual language matches the global design tokens (Light / Dark 两态):
  *   - backdrop:  bg-canvas-deep (Light) / bg-black/65 (Dark) + backdrop-blur-sm
  *   - card:      bg-panel/95 + 中性 ring(浅色深 ring、深色浅 ring)
- *                + border border-red-500/30 (danger) /
- *                border-violet-500/25 (info)
+ *                + border-destructive/30 (danger) /
+ *                border-primary-500/25 (info)
+ *
+ * 颜色全部走语义 token（规范 03 §3.6.2）：这里曾把 `violet-500/600` 写死
+ * 6 处，于是「改品牌色」对确认弹窗不起作用 —— 它绕开了 `--color-primary`。
  *   - spacing:   p-6, gap-4, rounded-2xl
  *   - buttons:   ghost secondary + brand/danger primary
  *
@@ -104,14 +107,12 @@ export function ModalDialog({
 
   const accentIcon = icon ?? (danger ? ICON_WARN : ICON_INFO);
   const ringClass = danger
-    ? "border-red-500/30 ring-red-500/10 shadow-lg shadow-black/5 dark:shadow-black/5 dark:shadow-red-950/20"
-    : "border-violet-500/25 ring-violet-500/10 shadow-lg shadow-black/5 dark:shadow-black/5 dark:shadow-none";
-  const iconColor = danger
-    ? "text-red-600 dark:text-red-400"
-    : "text-violet-600 dark:text-violet-400";
+    ? "border-destructive/30 ring-destructive/10 shadow-lg shadow-black/5 dark:shadow-black/5 dark:shadow-destructive/20"
+    : "border-primary-500/25 ring-primary-500/10 shadow-lg shadow-black/5 dark:shadow-black/5 dark:shadow-none";
+  const iconColor = danger ? "text-destructive" : "text-primary-strong";
   const confirmClass = danger
-    ? "bg-red-500/90 hover:bg-red-500 focus-visible:ring-red-400/60 text-white shadow-sm shadow-red-950/40"
-    : "bg-violet-500/90 hover:bg-violet-500 focus-visible:ring-violet-400/60 text-white shadow-sm shadow-violet-950/40";
+    ? "bg-destructive/90 hover:bg-destructive focus-visible:ring-destructive/60 text-white shadow-sm"
+    : "bg-primary-500/90 hover:bg-primary-500 focus-visible:ring-primary-500/60 text-white shadow-sm";
   const cancelClass =
     "bg-subtle hover:bg-surface-2 focus-visible:ring-foreground/20 text-ink-strong";
 
@@ -135,15 +136,15 @@ export function ModalDialog({
           aria-hidden
           className={`pointer-events-none absolute inset-x-0 top-0 h-24 ${
             danger
-              ? "bg-linear-to-b from-red-500/10 via-red-500/0"
-              : "bg-linear-to-b from-violet-500/10 via-violet-500/0"
+              ? "from-destructive/10 via-destructive/0 bg-linear-to-b"
+              : "from-primary-500/10 via-primary-500/0 bg-linear-to-b"
           }`}
         />
 
         <div className="relative flex items-start gap-3">
           <div
             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-              danger ? "bg-red-500/10" : "bg-violet-500/10"
+              danger ? "bg-destructive/10" : "bg-primary-500/10"
             } ${iconColor}`}
           >
             {accentIcon}

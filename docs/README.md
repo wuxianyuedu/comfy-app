@@ -100,7 +100,7 @@ AIGC:
 | 总览 | [README.md](standards/README.md) | 文档集用法、快速查阅、与主规范关系 |
 | 01 | [架构与状态管理](standards/01-架构与状态管理.md) | Context vs Zustand、状态归属、React Flow/tRPC/Drizzle/认证边界 |
 | 02 | [性能规范](standards/02-性能规范.md) | 列表上限、虚拟滚动、动画 transform、分片、memo 准则、画布性能 |
-| 03 | [样式与 Tailwind](standards/03-样式与-tailwind.md) | Tailwind v4 透明度、Design Token、图标、暗色模式 |
+| 03 | [样式与 Tailwind](standards/03-样式与-tailwind.md) | Tailwind v4 透明度、Design Token、**品牌/状态色必须走语义 token**（3.6.2）、图标、暗色模式 |
 | 04 | [组件设计](standards/04-组件设计.md) | 单一职责、数组驱动、事件隔离、props、memo |
 | 05 | [类型安全](standards/05-类型安全.md) | 禁 any、Zod 校验、类型守卫、union 替代 enum |
 | 06 | [无障碍访问 a11y](standards/06-无障碍访问-a11y.md) | aria-label、焦点管理、对比度、晕动症 |
@@ -113,7 +113,7 @@ AIGC:
 | 13 | [提交与 Code Review](standards/13-提交与-code-review.md) | 提交前自查、Commit Message、PR、Review 维度、CI、LF/git-lfs、CHANGELOG 记录规范与碎片化（13.10.5） |
 | 14 | [反模式速查表](standards/14-反模式速查表.md) | 状态/性能/样式/组件/类型/异步/a11y/Git 反模式对照 |
 | 15 | [附录](standards/15-附录.md) | 技术栈速查、组件评分、ADR、命令速查、新成员路径、疑难索引 |
-| 16 | [shadcn/ui 与表单校验](standards/16-shadcn-ui与表单校验.md) | ui/ 定位、四层范式（controller hook + 纯展示）、表单方案 |
+| 16 | [shadcn/ui 与表单校验](standards/16-shadcn-ui与表单校验.md) | ui/ 定位、四层范式（controller hook + 纯展示）、表单方案、**UI 基元复用棘轮与混合形态台账**（16.2.3 / 16.2.4） |
 | 17 | [UI 与逻辑分离](standards/17-UI与逻辑分离.md) | 分离判定、棘轮护栏脚本、全库分批推进计划与落地记录 |
 | 18 | [lib 层规范](standards/18-lib层规范.md) | `src/lib` 的边界与门禁：分层 element、Node-only 声明规则、文件/函数长度棘轮、覆盖率里程碑、`lib → server` 登记清单（**已归零**） |
 

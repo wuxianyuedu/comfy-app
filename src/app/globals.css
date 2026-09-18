@@ -9,8 +9,22 @@
   /* Brand — refined violet/magenta (liblib-style), kept desaturated, no neon glow */
   --color-primary: #7c5cfc;
   --color-primary-hover: #6a47e8;
+  /* 品牌强调档：深紫字（浅色）/ 亮紫字（深色）——徽标文字与图标用。
+     与 `--primary`（品牌原色，浅色下当底色用）分开：同一个原色在浅底上当
+     文字色对比度不足，故「品牌」在两个位置上取的是两个值，而不是各处
+     自己写 `violet-*`（ISSUE #672：改一次品牌色要改 72 个文件）。 */
+  --color-primary-strong: #6d28d9;
+  /* 品牌原色档：浅色下当「实心按钮底」用（violet-500 同值） */
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
   --color-primary-soft: #f1ecff;
   --color-accent: #ff5ca8;
+  /* 极光晕的三档色相（装饰性背景，两态同名 —— 浅色下靠外面那层
+     `opacity-*` 调低，深色下配 `mix-blend-screen`）。强度由使用处的
+     `AuroraGlow` alpha 决定，不在这里再出一份 token。 */
+  --color-aurora-violet: #8b5cf6;
+  --color-aurora-cyan: #22d3ee;
+  --color-aurora-magenta: #ff5ca8;
 
   /* Surfaces & text (light default) */
   --color-bg: #ffffff;
@@ -121,6 +135,9 @@
   --color-ink: #ededf2;
   --color-muted: #9a9aad;
   --color-primary-soft: #221c3a;
+  --color-primary-strong: #a78bfa; /* 深色下品牌文字改亮紫（violet-400 同值） */
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
   /* ── immersive / editor surface overrides (see T11 @theme block) ── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
   --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */

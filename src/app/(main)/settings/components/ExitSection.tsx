@@ -25,7 +25,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           <input
             id="exit-kill-comfyui"
             type="checkbox"
-            className="size-4 accent-[var(--primary,#7c5cff)]"
+            className="accent-primary size-4"
             checked={c.drafts.settings.exitKillComfyui ?? false}
             onChange={(event) =>
               c.patchSettings({
@@ -49,7 +49,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           <input
             id="exit-kill-ollama"
             type="checkbox"
-            className="size-4 accent-[var(--primary,#7c5cff)]"
+            className="accent-primary size-4"
             checked={c.drafts.settings.exitKillOllama ?? true}
             onChange={(event) =>
               c.patchSettings({

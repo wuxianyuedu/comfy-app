@@ -100,6 +100,58 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 - **hook 内不做 early return**：空态 / loading 交给视图判断，保证 hooks 顺序稳定
   （WorkflowLibraryDetail 的「未选中工作流」空态即走这条）。
 
+### 16.2.3 混合形态台账与「自实现」棘轮（ISSUE #672，机器强制）
+
+§16.2 的分工原则是「工具建界面、前端只写逻辑」，但在很长一段时间里它**只有原则、
+没有判据** —— 于是实测出：`src/components/ui/` 的 29 个基元里只有少数被业务引用，
+视图里手写 `<button>` 408 处、自建 `createPortal` 浮层 10 处、自写
+`animate-spin`/`animate-pulse` 40 处，同一套按钮/浮层/加载态在多个目录里各实现一份。
+
+本仓库的历史结论是**「只提醒 = 没有判据」**（§12.13 文件行数、§12.16 死代码同款），
+所以这里给计数棘轮：把存量冻结在基线，只许降不许升。
+
+```bash
+pnpm ui:primitives            # 检查（棘轮：只许降不许升，pre-commit 第 12 步）
+pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
+node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
+```
+
+**三条判据**（`scripts/check-ui-primitives.cjs`，基线
+`scripts/.ui-primitives-baseline.json`）：
+
+| ID | 判据 | 应改用什么 |
+|----|------|-----------|
+| **P1** | 视图层手写 `<button` | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体） |
+| **P2** | 视图层自建 `createPortal(` 浮层 | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu` |
+| **P3** | 视图层自写 `animate-spin` / `animate-pulse` | `ui/page-loading` / `ui/skeleton` / `ui/progress` |
+
+**范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
+
+- 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
+- 豁免 `src/components/ui/**`（基元自身实现）、`<feature>/hooks/**`（§16.2.1 第②层
+  是逻辑层）、`*.test.*` / `__tests__/**`；
+- **`src/components/studio/ui/**` 与 `src/components/studio/shared/**` 也豁免**，
+  但豁免的理由是「它们是**迁移对象**而不是合规形态」：这两处的去向是合并进
+  `ui/`（下面的台账），在本棘轮里重复计一遍只会让同一件事有两个数字。
+  收敛完成后这两条豁免应随目录一起删掉。
+
+### 16.2.4 混合形态台账（现状，不是目标）
+
+> 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
+> 免得每轮扫描都重新发现一遍（与 §3.6.1「豁免必须显式」同一个用意）。
+
+按「同一件事有几份实现」排序：
+
+| 形态 | 现状 | 去向 |
+|------|------|------|
+| 按钮 | `ui/button.tsx` + 视图里 408 处 `<button>` | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 |
+| 对话框/浮层 | `ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal` | P2 棘轮；`ModalDialog` 改基于 `ui/dialog` 封装 |
+| 空态 | `ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` | **三合一**到 `ui/empty-state.tsx`，props 取并集 |
+| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 26 个文件自写 spinner | P3 棘轮 |
+| UI kit 目录 | `components/ui/`（29）/ `components/studio/ui/`（12）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 |
+
+`pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
+
 ## 16.3 新增一个组件的标准动作
 
 ```bash
@@ -296,3 +348,6 @@ shadcn add @comfy-app-t3/form @comfy-app-t3/select
 - 不手工编辑 `ui/` 内组件源码；界面变更通过 `shadcn add` 重生成，或在使用处以 `className` 覆盖。
 - 业务表单/页面放在 `src/components/<feature>/`、`src/app/`，只 `import ~/components/ui/*`。
 - 新增原语一律走 `shadcn add`，不要把整段 UI 逻辑写进 `ui/`。
+- **新增视图代码前先查 `ui/` 有没有现成基元**（§16.2.3 的棘轮会在提交阶段拦下
+  手写 `<button>` / 自建 portal / 自写 spinner）。需要覆盖样式就在使用处以
+  `className` 覆盖或扩展 `cva` 变体，**不要**在原地另起一份实现。

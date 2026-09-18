@@ -291,6 +291,56 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
   `node scripts/check-theme-colors.cjs --update` 收紧基线（同 UI/逻辑分离棘轮
   的口径，见 17 章）。已接入 `.githooks/pre-commit` 与 CI。
 
+### 3.6.2 品牌/状态色必须走语义 token（ISSUE #672，机器强制）
+
+「改一处样式、全站生效」的前提是**颜色有单一事实来源**。实测出的反例：
+`--color-primary: #7c5cfc` 定义得好好的，但 `studio/ui/ModalDialog.tsx` 写死
+`violet-500/600` 6 处、`ui/status-badge.tsx` 写死 44 处
+`emerald/violet/amber/red`、`ui/page-loading.tsx` 写死 `border-violet-500` ——
+把 primary 改成蓝色，这些地方仍然是紫的，视觉体系当场破功。
+
+**判据一句话**：这行色值是「**表面/文字/状态的语义**」还是「**内容自身的颜色**」？
+前者一律写语义类名（§3.1.1 已禁内联变量写法），后者才进 §3.6.1 的类型色例外。
+
+```tsx
+// ❌ 语义色写死：改品牌色时这行不会跟着变
+"border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400";
+
+// ✅ 语义 token（token 自己两态取值，不必再手写 dark:）
+"border-primary-500/30 bg-primary-500/10 text-primary-strong";
+```
+
+**本项目已有的语义色 token**（新增前先查这张表，别再写死字面量）：
+
+| 语义 | token / 类名 | 用途 |
+|------|-------------|------|
+| 品牌主色 | `--color-primary` → `primary` | 浅色底下当**底**用（`bg-primary/15`） |
+| 品牌文字档 | `--color-primary-strong` → `primary-strong` | 浅底上的品牌**文字/图标**（原 `violet-700` / `violet-400`） |
+| 品牌实心档 | `--color-primary-500` / `--color-primary-600` | 实心按钮底、spinner 描边（原 `violet-500` / `violet-600`） |
+| 品牌浅底 | `--color-primary-soft` | 图标托底、选中项底 |
+| 强调/品红 | `--color-accent` / `--color-accent-soft` | 第二品牌色 |
+| 成功 | `--color-success` / `--color-success-strong` | 状态绿（原 `emerald-*`） |
+| 警告 | `--color-warning` / `--color-amber` | 待处理/排队（原 `amber-*`） |
+| 危险 | `--destructive`（shadcn，两态已定义） | 失败/删除（原 `red-*`） |
+| 信息 | `--color-info` | 链接/提示 |
+| 极光晕 | `--color-aurora-violet` / `-cyan` / `-magenta` | 装饰性背景光晕的**色相**（强度由调用处决定） |
+
+**「同一个原色在两个位置上取不同值」是正常的，别用同一份写死值糊过去**：
+品牌紫 `#7c5cfc` 当底色可以、当浅底上的文字色对比度不够 —— 所以有
+`--color-primary`（底）与 `--color-primary-strong`（字）两颗 token。
+这正是不该写死的原因：写死的那一处无法表达这个区分。
+
+**装饰性渐变/光晕**：色相进 token，**强度（alpha）留在调用处**。同一个极光晕
+曾在登录页 / 首页 / `FilmStudio` / `TrainingStudio` 各抄一份、且值不同
+（0.48 / 0.42 / 0.40），现在统一走 `AuroraGlow`（`tone` 选色相、`alpha` 定强度）——
+与 §3.5 的「AuroraBackground 模式」是同一条要求：**同一个装饰不在多处内联重复**。
+
+**机器判定**：`scripts/check-theme-colors.cjs`（`pnpm theme:check`，pre-commit
+第 13 步）。它认「写死的 `#rrggbb` / `rgba(...)`」，而 Tailwind 类名形式的
+语义色类名本来就扫不到 —— 也就是说**本节的判据靠「不要在源码里写字面量」实现**：
+只要颜色是类名，`theme:check` 与改名/换 token 都不会有冲突。
+`EXEMPT_TABLES` / `EXEMPT_FIXED_DARK` 的豁免口径与 §3.6.1 完全一致。
+
 ### 3.7 装饰性元素可访问性与性能
 
 ```tsx
