@@ -1,25 +1,24 @@
 import type { Character, Shot, Scene, StyleRef } from "./types";
 
-/**
- * Build a ComfyUI positive prompt for a character from its sheet + style.
+/* 依据角色设定表与风格，拼出这个角色的 ComfyUI 正向提示词。
  */
 export function buildCharacterPrompt(c: Character, style?: StyleRef): string {
   const parts: string[] = [];
 
-  // Core identity
+  // 核心身份特征
   const identity = [c.ageGender, c.appearance, c.costume]
     .filter(Boolean)
     .join(", ");
   if (identity) parts.push(identity);
 
-  // Personality / temperament as mood keywords
+  // 性格 / 气质，作为氛围关键词
   const mood = [c.personality, c.temperament].filter(Boolean).join(", ");
   if (mood) parts.push(`mood: ${mood}`);
 
-  // Style tags
+  // 风格标签
   if (c.styleTags.length) parts.push(c.styleTags.join(", "));
 
-  // Linked skill template (acts as art-direction wrapper)
+  // 关联的技能模板（充当美术指导的外包装）
   if (style?.promptTemplate) {
     parts.push(style.promptTemplate);
   } else if (c.skillSlug && style?.promptTemplate) {
@@ -44,7 +43,7 @@ export function buildCharacterNegative(c: Character, style?: StyleRef): string {
   return base.join(", ");
 }
 
-/** Build a storyboard shot prompt from scene + characters + style */
+/* 依据场景 + 角色 + 风格，拼出分镜镜头的提示词。 */
 export function buildShotPrompt(
   shot: Pick<Shot, "description" | "shotType">,
   scene: Scene | undefined,
@@ -53,11 +52,11 @@ export function buildShotPrompt(
 ): string {
   const parts: string[] = [];
 
-  // Shot composition keyword
+  // 镜头构图关键词
   const shotKw = SHOT_KEYWORDS[shot.shotType] ?? "";
   if (shotKw) parts.push(shotKw);
 
-  // Scene atmosphere
+  // 场景氛围
   if (scene) {
     const sceneBits = [scene.location, scene.time, scene.action]
       .filter(Boolean)
@@ -65,7 +64,7 @@ export function buildShotPrompt(
     if (sceneBits) parts.push(sceneBits);
   }
 
-  // Shot-specific description
+  // 该镜头特有的描述
   if (shot.description) parts.push(shot.description);
 
   // Character prompts
@@ -112,7 +111,7 @@ const SHOT_KEYWORDS: Record<string, string> = {
   pod: "high angle shot, looking down",
 };
 
-/** Merge recommended params from style + character, character wins ties */
+/* 合并风格与角色各自的推荐参数；冲突时以角色为准。 */
 export function mergeParams(
   style?: StyleRef,
   character?: Character,

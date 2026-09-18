@@ -13,9 +13,10 @@
  *   • executor-outputs.ts   — collectOutputs / extractRuntimeParams（纯函数）
  *   • executor-errors.ts    — friendlyError（纯函数）
  *
- * 对外导出（enqueue.ts 依赖的符号）全部保留：
- *   connect / processQueue / cliProcs / collectOutputs /
- *   extractRuntimeParams / friendlyError / applyRawOverrides / RuntimeParams
+ * 对外导出（enqueue.ts 依赖的符号）全部保留，分别是：
+ *   连接（connect）、出队（processQueue）、CLI 进程表（cliProcs）、
+ *   产物收集（collectOutputs）、运行时参数提取（extractRuntimeParams）、
+ *   友好错误（friendlyError）、原始覆盖（applyRawOverrides）、RuntimeParams 类型。
  *
  * 提交路径**只有一条**：两种格式（RAW 原件 / API 图）都交 comfy-cli
  * （见 executor-scheduler 的模块注释）。
@@ -24,7 +25,7 @@
  * 事件回调 / 异步调用期的运行时引用，模块加载期无顶层交叉执行，安全。
  * 引入本模块会同时触发 executor-scheduler 的 startHeartbeat() 副作用。
  *
- * @module comfyui/executor
+ * @module comfyui/executor — ComfyUI 执行引擎（barrel 聚合）
  */
 export { connect } from "./executor-ws";
 export { processQueue } from "./executor-scheduler";

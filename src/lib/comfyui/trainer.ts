@@ -1,27 +1,25 @@
-// LoRA training orchestrator (炼丹).
+// LoRA 训练编排器（炼丹）。
 //
-// Local-first design: a training job is created in the DB, then this module
-// drives it. Two modes:
+// 本地优先的设计：训练任务先写进数据库，再由本模块驱动。两种模式：
 //
-//  1. Real backend (recommended for production):
-//     Set LORA_TRAINER_URL to your trainer service (Kohya / OneTrainer /
-//     a ComfyUI training node exposing an HTTP API). We POST the job spec,
-//     then poll status until terminal. On success the backend is expected to
-//     have written the final `.safetensors` into the ComfyUI loras folder
-//     (or the dir given by COMFY_LORAS_DIR); we then register a Model row so
-//     the LoRA shows up in the selector / model library and can be used.
+//  1. 接了真实后端（生产环境推荐）：
+//     把 LORA_TRAINER_URL 指向你的训练服务（Kohya / OneTrainer，
+//     或某个暴露 HTTP 接口的 ComfyUI 训练节点）。我们 POST 任务描述，
+//     然后轮询状态直到终态。成功时后端应当已把最终的 `.safetensors` 写进
+//     ComfyUI 的 loras 目录（或 COMFY_LORAS_DIR 指定的目录）；
+//     我们随后登记一条 Model 记录，让这个 LoRA 出现在选择器 / 模型库里可用。
 //
-//  2. No backend configured (default in a fresh install):
-//     The job is kept QUEUED with a clear informational log. The UI shows a
-//     "训练后端未配置" banner with setup instructions. This mirrors how the
-//     video pipeline behaves when ComfyUI is offline — honest, not faked.
+//  2. 没配后端（全新安装的默认情形）：
+//     任务保持 QUEUED，并留一条说明性日志。界面显示
+//     「训练后端未配置」的横幅与配置指引。这与 ComfyUI 离线时视频流水线的
+//     行为一致 —— 如实告知，不做假象。
 //
-// Backend contract (mode 1):
-//   POST  {LORA_TRAINER_URL}/train      body: TrainJobSpec  -> { id: string }
-//   GET   {LORA_TRAINER_URL}/train/:id  -> { status, progress, logs?, outputName? }
-//     status: "running" | "done" | "failed"
-//   On "done", `outputName` is the .safetensors filename already placed in the
-//   ComfyUI loras directory.
+// 后端契约（模式 1）：
+//   POST  {LORA_TRAINER_URL}/train      请求体是 TrainJobSpec，返回 { id }（任务 id）
+//   GET   {LORA_TRAINER_URL}/train/:id  返回 status / progress / logs / outputName 等
+//     其中 status 为 "running" / "done" / "failed" 三选一。
+//   状态变成 "done" 时，`outputName` 就是已经放进 ComfyUI loras 目录的
+//   .safetensors 文件名。
 
 import "server-only";
 import { loraTrainingJobRepository, modelRepository } from "../core/repository";
@@ -88,17 +86,15 @@ async function appendLog(
   });
 }
 
-/**
- * Kick off a training job. Fire-and-forget (same pattern as the generation
- * runner). Safe to call from a request handler.
- */
+/* 启动一个训练任务。发完即忘（与生成执行器同一套路子），
+ * 从请求处理器里调用是安全的。 */
 export async function enqueueTraining(jobId: string): Promise<void> {
   const job = await loraTrainingJobRepository.findById(jobId);
   if (!job) return;
 
   const spec = job as unknown as TrainJobSpec;
-  // Flatten per-image captions into a filename→caption map for backends that
-  // expect it (the caption also rides along inside datasetImages).
+  // 把逐图说明摊平成「文件名 → 说明」映射，供需要它的后后端使用
+  //（说明同时也随 datasetImages 一起带过去）。
   spec.captions = Object.fromEntries(
     (spec.datasetImages ?? [])
       .filter((item) => item?.caption?.trim())
@@ -136,7 +132,7 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
 
   await loraTrainingJobRepository.markRunning(spec.id);
 
-  // Poll until terminal.
+  // 轮询到终态为止。
   const POLL_MS = 4000;
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
@@ -176,8 +172,8 @@ async function finishJob(
     outputName ||
     `${spec.name.replace(/[^\w一-龥-]+/g, "_")}_r${spec.rankDim}.safetensors`;
 
-  // Register a Model row so the LoRA appears in the selector / library.
-  // (Assumes the backend already wrote finalName into the ComfyUI loras dir.)
+  // 登记一条 Model 记录，让这个 LoRA 出现在选择器 / 模型库里。
+  //（前提是后端已经把它写进 ComfyUI 的 loras 目录。）
   await modelRepository.registerLora({
     fileName: finalName,
     name: spec.name,
@@ -221,7 +217,7 @@ export async function cancelTraining(jobId: string): Promise<void> {
   await appendLog(jobId, "warn", "用户已取消训练任务");
 }
 
-// Keep `fs` referenced (used by future local-backend file copy) to satisfy
-// lint and avoid unused-import errors if a local path is added later.
+// 保留对 `fs` 的引用（将来本地后端拷贝文件要用），以满足 lint，
+// 避免以后加本地路径时冒出未使用导入的错误。
 void fs;
 void comfyLorasDir;

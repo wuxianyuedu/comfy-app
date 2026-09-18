@@ -80,7 +80,7 @@ import {
 import { createHash } from "node:crypto";
 import path from "node:path";
 
-/** Resolve the local-workflow scan roots.
+/* 解析本地工作流的扫描根目录。
  *  主路径：设置里配置的 ComfyUI 安装根下的用户工作流目录（自动推导，
  *  见 deriveComfyuiWorkflowsDir —— 兼容 user/default/workflows 与旧 workflows）。
  *  `.env` 的 LOCAL_WORKFLOWS_PATH 仍作为覆盖项保留（向后兼容，可加扫额外目录）。 */
@@ -93,17 +93,16 @@ function getLocalWorkflowRoots(): string[] {
   return derived ? [derived, ...extra] : extra;
 }
 
-/** Stable, deterministic placeholder id for files that exist on disk but
- *  haven't been imported yet. */
+/* 给「磁盘上有、但还没导入过」的文件生成的稳定、确定的占位 id。 */
 function pendingId(absPath: string): string {
   return (
     "pending-" + createHash("sha1").update(absPath).digest("hex").slice(0, 12)
   );
 }
 
-/** shape of the local-pending placeholder rows appended to
- *  `list`.  Kept structurally identical to the `enriched` DB rows so the
- *  frontend `LibraryRow` merge stays friction-free. */
+/* 追加到 `list` 里的「本地待导入」占位行的形状。
+ * 刻意与数据库里 `enriched` 出来的行保持结构一致，
+ * 让前端的 `LibraryRow` 合并不必做额外适配。 */
 interface LocalPendingRow {
   id: string;
   name: string;
@@ -132,7 +131,7 @@ interface LocalPendingRow {
   pendingMtime: number;
 }
 
-/** Normalise an absolute path the same way `localWorkflows.pathKey` does. */
+/* 按 `localWorkflows.pathKey` 的同一口径归一化绝对路径。 */
 function pathKey(p: string): string {
   if (!p) return "";
   try {
@@ -146,7 +145,7 @@ function pathKey(p: string): string {
   }
 }
 
-/** Find the configured root whose `absPath` is a path-prefix of `filePath`. */
+/* 找出「`absPath` 是 `filePath` 路径前缀」的那个已配置根目录。 */
 function findRootFor(
   filePath: string,
   roots: Array<{ rawPath: string; absPath: string }>,
@@ -169,7 +168,7 @@ function findRootFor(
 }
 
 export const workflowRouter = createTRPCRouter({
-  /** GET /api/workflows — list with disk scan + enrichment + localPending */
+  /* GET /api/workflows —— 读：list with disk scan + enrichment + localPending */
   list: authedProcedure
     .input(
       z
@@ -246,7 +245,7 @@ export const workflowRouter = createTRPCRouter({
         tagsByName.set(r.templateId, arr);
       }
 
-      // ── Local-on-disk roots ──
+      // ── 磁盘上的本地根目录 ──
       const localRoots = getLocalWorkflowRoots();
       let localRootsSummary: Array<{
         rawPath: string;
@@ -283,14 +282,14 @@ export const workflowRouter = createTRPCRouter({
         localAllFiles = allFiles;
       }
 
-      // ── Disk-mtime index by absolute path ──
+      // ── 按绝对路径建「磁盘 mtime」索引 ──
       const diskMtimeByPath = new Map<string, number>();
       for (const f of localAllFiles) {
         if (!f.absPath) continue;
         diskMtimeByPath.set(pathKey(f.absPath), f.mtimeMs);
       }
 
-      // ── Content-addressed relink (renamed local files) ──
+      // ── 按内容寻址重新关联（本地文件被改名的情况） ──
       const renamedFromTo = new Map<string, string>();
       if (localAllFiles.length > 0) {
         const checksumEntries = await scanLocalWorkflowChecksums(localRoots);
@@ -331,7 +330,7 @@ export const workflowRouter = createTRPCRouter({
         }
       }
 
-      // ── Enrich with type metadata + compact preview ──
+      // ── 补上类型元数据与紧凑预览 ──
       const enriched = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const graphObj =
@@ -388,7 +387,7 @@ export const workflowRouter = createTRPCRouter({
         };
       });
 
-      // ── Local-pending placeholder builder ──
+      // ── 本地待导入占位行的构造器 ──
       const localPending: LocalPendingRow[] = [];
       if (localRoots.length > 0) {
         const existingByPath = new Set<string>();
@@ -458,7 +457,7 @@ export const workflowRouter = createTRPCRouter({
       };
     }),
 
-  /** POST /api/workflows — create/import (API graph, RAW UI json, or local file) */
+  /* POST /api/workflows —— 新建：create/import (API graph, RAW UI json, or local file) */
   create: authedProcedure
     .input(
       z.object({
@@ -478,7 +477,7 @@ export const workflowRouter = createTRPCRouter({
         body.format === "raw" || body.format === "api" ? body.format : null;
       const candidate = body.raw ?? body.graph;
 
-      // ── Local-file import ──
+      // ── 本地文件导入 ──
       const sourcePath =
         typeof body.sourcePath === "string" ? body.sourcePath.trim() : "";
       if (sourcePath) {
@@ -625,7 +624,7 @@ export const workflowRouter = createTRPCRouter({
       };
     }),
 
-  /** GET /api/workflows/[id] */
+  /* GET /api/workflows/[id] —— 读 */
   detail: authedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -641,9 +640,9 @@ export const workflowRouter = createTRPCRouter({
       return { template };
     }),
 
-  /** GET /api/workflows/[id] — full derived detail (port of the legacy
-   *  REST GET handler: rawJson re-import, COMBO resolution, rawView,
-   *  positions/groups/notes/rawNodes, source tracking, 30s server cache). */
+  /* GET /api/workflows/[id] —— 完整派生详情（从旧的 REST GET 处理器移植：
+   * rawJson 重新导入、COMBO 解析、rawView、
+   * positions / groups / notes / rawNodes、来源追踪、30 秒服务端缓存）。 */
   detailFull: authedProcedure
     .input(z.object({ id: z.string(), bust: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
@@ -652,7 +651,7 @@ export const workflowRouter = createTRPCRouter({
       });
     }),
 
-  /** PATCH /api/workflows/[id] */
+  /* PATCH /api/workflows/[id] —— 局部更新 */
   update: authedProcedure
     .input(
       z.object({
@@ -776,7 +775,7 @@ export const workflowRouter = createTRPCRouter({
         patch.positions = Object.keys(next).length > 0 ? next : null;
       }
 
-      // positions merge / replace + groups & notes write-back into rawJson
+      // 位置的合并 / 替换，以及把分组与便签写回 rawJson
       let nextRawJson: Record<string, unknown> | null = null;
       if (
         existing.rawJson &&
@@ -817,8 +816,8 @@ export const workflowRouter = createTRPCRouter({
         patch.rawJson = nextRawJson;
         if (writePositions) {
           if (mergePositions) {
-            // Merge into the existing positions column (single-key drags from
-            // subgraph / RAW views must not wipe the other namespace).
+            // 合并进已有的 positions 列（从子图 / RAW 视图拖单个键时，
+            // 不能把另一个命名空间一起抹掉）。
             const cur =
               existing.positions &&
               typeof existing.positions === "object" &&
@@ -843,7 +842,7 @@ export const workflowRouter = createTRPCRouter({
         ? await workflowTemplateRepository.update(id, patch)
         : existing;
 
-      // modelTags: user-level global tag library → relation set
+      // modelTags：把用户级的全局标签库转成关联集合
       if (modelTags !== undefined) {
         const tagIds: string[] = [];
         for (const name of modelTags) {
@@ -864,7 +863,7 @@ export const workflowRouter = createTRPCRouter({
       return { template };
     }),
 
-  /** DELETE /api/workflows/[id] */
+  /* DELETE /api/workflows/[id] —— 删除 */
   delete: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -881,7 +880,7 @@ export const workflowRouter = createTRPCRouter({
       return { ok: true };
     }),
 
-  /** POST /api/workflows/[id]/resync */
+  /* POST /api/workflows/[id]/resync —— 新建 */
   resync: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -909,7 +908,7 @@ export const workflowRouter = createTRPCRouter({
       if (!result.update) {
         return { unchanged: true };
       }
-      // Persist the reimported content back onto the template
+      // 把重新导入的内容落回模板
       const updated = await workflowTemplateRepository.update(existing.id, {
         graph: result.update.graph,
         rawJson: result.update.rawJson ?? existing.rawJson,
@@ -922,8 +921,8 @@ export const workflowRouter = createTRPCRouter({
       return { updated: true, template: updated };
     }),
 
-  /** GET /api/workflows/[id]/subgraph — full derived subgraph detail
-   *  (port of the legacy REST GET handler, requires the subgraph uid). */
+  /* GET /api/workflows/[id]/subgraph —— 子图的完整派生详情
+   *（从旧的 REST GET 处理器移植，需要子图的 uid）。 */
   subgraph: authedProcedure
     .input(
       z.object({

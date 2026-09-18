@@ -4,7 +4,7 @@ import type { WorkflowIOEnrichParams } from "./workflow-detail-io";
 import { buildRawInputs } from "./workflow-detail-raw";
 import type { RawWorkflow } from "./raw";
 
-/** Minimal valid params; individual tests override the fields they need. */
+/* 最小可用参数；各条用例按需覆盖自己关心的字段。 */
 function makeParams(
   workflowIORaw: Record<string, unknown>,
   extra?: Partial<WorkflowIOEnrichParams>,

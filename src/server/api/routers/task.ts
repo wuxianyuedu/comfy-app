@@ -29,7 +29,7 @@ function inferMediaType(
 }
 
 export const taskRouter = createTRPCRouter({
-  /** GET /api/tasks — list tasks */
+  /* GET /api/tasks —— 读：list tasks */
   list: authedProcedure
     .input(
       z
@@ -90,7 +90,7 @@ export const taskRouter = createTRPCRouter({
       return { tasks: list };
     }),
 
-  /** GET /api/tasks/[id] */
+  /* GET /api/tasks/[id] —— 读 */
   detail: authedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -101,7 +101,7 @@ export const taskRouter = createTRPCRouter({
       return task;
     }),
 
-  /** POST /api/tasks/[id]/cancel */
+  /* POST /api/tasks/[id]/cancel —— 新建 */
   cancel: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -119,7 +119,7 @@ export const taskRouter = createTRPCRouter({
   openFolder: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      // Returns the output directory path for the task
+      // 返回该任务的产物目录路径
       const task = await taskRepository.findByIdWithImages(input.id);
       if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
@@ -130,7 +130,7 @@ export const taskRouter = createTRPCRouter({
       const dir = task.projectId
         ? path.join(baseDir, "projects", task.projectId, input.id)
         : path.join(baseDir, input.id);
-      // whitelist: resolved dir must stay under public/generated
+      // 白名单：解析后的目录必须留在 public/generated 之下
       const normalized = path.resolve(dir);
       const normalizedBase = path.resolve(baseDir);
       if (
@@ -160,7 +160,7 @@ export const taskRouter = createTRPCRouter({
       };
     }),
 
-  /** GET /api/tasks/[id]/workflow — returns the workflow snapshot */
+  /* GET /api/tasks/[id]/workflow —— 读：returns the workflow snapshot */
   workflow: authedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
@@ -178,7 +178,7 @@ export const taskRouter = createTRPCRouter({
       };
     }),
 
-  /** DELETE /api/tasks/[id] — delete task + its generated files on disk */
+  /* DELETE /api/tasks/[id] —— 删除：delete task + its generated files on disk */
   delete: rateLimitedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -186,7 +186,7 @@ export const taskRouter = createTRPCRouter({
       if (task?.userId !== ctx.user.id) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
       }
-      // Delete image files on disk as well.
+      // 磁盘上的图片文件也一并删掉。
       const fsPromises = await import("fs/promises");
       const path = await import("path");
       for (const img of task.images) {

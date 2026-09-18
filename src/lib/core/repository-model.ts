@@ -1,6 +1,6 @@
 /**
  * `repository-model.ts` — Model 与 UserModelConfig 仓储（Drizzle 版）
- * @module core/repository-model
+ * @module core/repository-model — Model 与 UserModelConfig 仓储（Drizzle 版）
  */
 import "server-only";
 

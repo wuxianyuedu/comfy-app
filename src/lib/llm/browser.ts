@@ -5,15 +5,14 @@ import type { LLMMessage, LLMRequestOptions } from "./types";
 interface ChatArgs {
   messages: LLMMessage[];
   opts?: LLMRequestOptions;
-  /** Called on each streamed token (streaming mode only). */
+  /** 每收到一个流式 token 就回调一次（仅流式模式）。 */
   onToken?: (token: string) => void;
   signal?: AbortSignal;
 }
 
-/**
- * Streaming chat via the server proxy (/api/llm). The server hides the API
- * key, so the browser never sees it. SSE chunks are shaped `{ token }` and a
- * final `[DONE]` marker ends the stream.
+/* 经服务端代理（/api/llm）做流式对话。API 密钥由服务端藏住，
+ * 浏览器永远看不到它。SSE 分片形如 `{ token }`，
+ * 末尾以 `[DONE]` 标记结束整条流。
  */
 export async function streamChat({
   messages,
@@ -94,7 +93,7 @@ export async function streamChat({
   return full;
 }
 
-/** Non-streaming one-shot chat. */
+/* 非流式的一次性对话。 */
 export async function completeChat({
   messages,
   opts,

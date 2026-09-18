@@ -11,7 +11,7 @@
  * 转发用 `@trpc/server/adapters/fetch` 的 `fetchRequestHandler` 现算响应，
  * 保证 batch-stream(application/jsonl) 的线格式与服务端一致，测试不用手拼 NDJSON。
  *
- * @module tests/helpers/trpc-msw
+ * @module tests/helpers/trpc-msw — tests/helpers/trpc-msw.ts — 前端集成测试的「传输层」基建
  */
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";

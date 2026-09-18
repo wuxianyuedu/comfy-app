@@ -94,12 +94,87 @@ const ENGLISH_WORD_RE = /[A-Za-z]{2,}/g;
  *   - `@vitest-environment jsdom` —— vitest 按这一行决定用例跑在什么环境;
  *   - `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck` —— TypeScript 指令;
  *   - `eslint-disable*` —— eslint 指令;
- *   - `@jsx*` / `@jsxRuntime` —— 编译指示。
+ *   - `@jsx*` / `@jsxRuntime` —— 编译指示;
+ *   - `turbopackIgnore: <bool>` —— Turbopack 的静态分析豁免指令,
+ *     按字面量解析「这一处不要被静态追踪」(见 src/lib/comfyui/trace.ts 等 62 处)。
  * 判据只认**行首就是该指令**的行(允许前面有 `*` 与空白),
  * 以免把「说明某个指令」的正常中文注释一起放行。
  */
 const TOOL_DIRECTIVE_RE =
-  /^\s*\*?\s*@?(vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*eslint-(disable|enable)/;
+  /^\s*\*?\s*@?(vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*eslint-(disable|enable)|^\s*\*?\s*turbopackIgnore\s*:/;
+
+/**
+ * JSDoc **结构行**豁免：`@param {T}` / `@returns {T}` / `@typedef {…}` /
+ * `@type {…}` / `@property {T}` / `@template` 这类行**只含类型语法
+ * 与标识符**，不含散文 —— 它们是类型声明，不是「用英文写的注释」。
+ *
+ * 为什么必须豁免：这些行的内容由 TS/JSDoc 语法决定（`{string | null}`、
+ * `NodeJS.Platform`、`Record<string, string>`…），逐行塞中文说明会破坏
+ * 语法（编辑器解析变红）或让 `@typedef` 的续行失去意义。而「把类型写成英文」
+ * 不是本规则要治的病 —— 它治的是**人读的说明文字**用英文写。
+ *
+ * 判据刻意要求**去掉类型花括号后的剩余部分不含「疑似英文句子」**：
+ * 带说明的 `@param {string} name 用户名` 不受影响（它有中文，本就不计入），
+ * 而 `@param {string} candidate 待探测的命令` 里若只剩类型 + 标识符则豁免。
+ * 于是「给类型行补中文说明」仍然是推荐写法（更好读），但**不再被门禁逼着写**。
+ */
+const JSDOC_STRUCTURAL_RE =
+  /^\s*\*?\s*@(param|arg|argument|returns?|typedef|type|property|prop|template|generic|satisfies|satisfies|extends|implements|readonly|internal|private|public|protected|package|enum|this|typeParam)\b/;
+/**
+ * 去掉「@tag + 可选类型块 + 可选参数名」后，是否还剩**散文**。
+ *
+ * 只剥这三段，不再剥第三个及其后的标识符 —— 否则
+ * `@param {string} candidate the command to probe` 里的说明句会被当成
+ * 标识符逐词删掉，把「写了英文说明」误判成「只有类型语法」。
+ */
+/** 去掉类型语法与 @tag 后，是否出现「英文虚词 / 动词」（那就是说明句）。 */
+const JSDOC_PROSE_WORDS_RE =
+  /\b(the|a|an|is|are|was|were|be|been|being|to|of|for|with|and|or|not|no|when|which|that|this|these|those|it|its|so|than|then|via|from|by|as|at|in|on|into|onto|over|under|use|used|uses|using|call|calls|called|must|should|can|could|may|might|will|would|have|has|had|do|does|did|only|also|both|each|every|any|all|some|one|two|three|first|second|last|next|before|after|while|until|because|since|if|else|but|however|note|means|become|becomes|instead|still|just|never|always|default|whether|same|other|another|happen|happens|appear|appears|remain|remains|keep|keeps|stay|stays|make|makes|made|give|gives|given|take|takes|taken|get|gets|point|points|points?|hold|holds|held|return|returns|returning)\b/i;
+
+/** 剥掉类型块、`[...]` 名字、`@tag`，剩下的就是标识符与标点。 */
+function stripJsdocTypeSyntax(text) {
+  let rest = text
+    .replace(/\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, " ")
+    .replace(/\[[^\]]*\]/g, " ");
+  if (rest.includes("{")) rest = rest.slice(0, rest.indexOf("{"));
+  return rest.replace(/@\w+/g, " ").replace(/[{}]/g, " ");
+}
+
+/**
+ * 一行是否**本身就是** JSDoc 结构行（带 `@param` / `@typedef` 等 tag）。
+ * 判据：剥掉类型语法后不含英文虚词，且剩余英文词 < 3 个。
+ */
+function jsdocStructuralOnly(text) {
+  if (hasCJK(text)) return false; // 有中文说明 → 本就不计入
+  const rest = stripJsdocTypeSyntax(text);
+  if (JSDOC_PROSE_WORDS_RE.test(rest)) return false;
+  const words = rest.match(/[A-Za-z]{2,}/g) || [];
+  return words.length < 3;
+}
+
+/**
+ * 一行是否是 JSDoc **结构块的续行**（只在块由结构行开头时调用）。
+ * 判据比结构行更宽：续行里全是类型语法时，标识符个数不受 3 个的限制
+ *（`version: string | null }} ProbeResult` 有 4 个词，但都是标识符）。
+ * 仍以「不含英文虚词」为准 —— 说明句一定含虚词。
+ */
+function jsdocStructuralContinuation(text) {
+  if (hasCJK(text)) return false;
+  if (text.startsWith("//")) return false;
+  const rest = stripJsdocTypeSyntax(text);
+  if (JSDOC_PROSE_WORDS_RE.test(rest)) return false;
+  // 出现句末标点（`.`/`!`/`?`）说明是句子，不是类型
+  return !/[.!?]\s*$/.test(rest.replace(/[\w)]\.(?=\w)/g, ""));
+}
+
+/**
+ * 一行是否是「JSDoc 结构行」—— `@param` / `@returns` / `@typedef` / `@type` /
+ * `@property` / `@template` 等带类型语法的行。
+ * 续行（块由结构行开头，本行仍是类型语法）由调用方另行判定。
+ */
+function isJsdocStructuralLine(text) {
+  return JSDOC_STRUCTURAL_RE.test(text) && jsdocStructuralOnly(text);
+}
 
 function walk(dir, out = []) {
   let entries;
@@ -159,6 +234,8 @@ function hasCJK(text) {
 function countEnglishCommentLines(src) {
   const lines = src.split("\n");
   let inBlock = false;
+  /** 当前是否处在「由结构 tag 开头的 JSDoc 块」里（用于豁免续行）。 */
+  let inJsdocStruct = false;
   let count = 0;
   for (const raw of lines) {
     const line = raw.trim();
@@ -167,13 +244,26 @@ function countEnglishCommentLines(src) {
       text = line.replace(/^\*+/, "").trim();
       if (line.includes("*/")) inBlock = false;
     } else if (line.startsWith("/*")) {
-      text = line.replace(/^\/\*+/, "").replace(/\*\/$/, "").trim();
+      text = line
+        .replace(/^\/\*+/, "")
+        .replace(/\*\/$/, "")
+        .trim();
       if (!line.includes("*/")) inBlock = true;
     } else if (line.startsWith("//")) {
       text = line.slice(2).trim();
     }
     if (text === null || !text) continue;
     if (TOOL_DIRECTIVE_RE.test(text)) continue;
+    if (isJsdocStructuralLine(text)) {
+      // 整个 JSDoc 块按结构块处理：其续行也只含类型语法时同样豁免
+      inJsdocStruct = true;
+      continue;
+    }
+    // 续行：块由结构 tag 开头，且本行剥掉类型语法后无英文成句 → 豁免
+    if (inJsdocStruct && jsdocStructuralContinuation(text)) {
+      continue;
+    }
+    inJsdocStruct = false;
     if (hasCJK(text)) continue;
     if (looksEnglish(text)) count += 1;
   }
@@ -216,7 +306,8 @@ async function main() {
     console.log(
       `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件`,
     );
-    for (const [rel, n] of rows) console.log(`  ${String(n).padStart(5)}  ${rel}`);
+    for (const [rel, n] of rows)
+      console.log(`  ${String(n).padStart(5)}  ${rel}`);
     return;
   }
 
@@ -239,7 +330,9 @@ async function main() {
         2,
       )}\n`,
     );
-    console.log(`✓ 已写入基线:${total} 行 / ${Object.keys(counts).length} 个文件`);
+    console.log(
+      `✓ 已写入基线:${total} 行 / ${Object.keys(counts).length} 个文件`,
+    );
     return;
   }
 
@@ -273,7 +366,9 @@ async function main() {
     failed = true;
   }
   if (grown.length) {
-    console.error(`✗ ${grown.length} 个文件的英文注释变多（棘轮只许降不许升）:`);
+    console.error(
+      `✗ ${grown.length} 个文件的英文注释变多（棘轮只许降不许升）:`,
+    );
     for (const g of grown) console.error(`    ${g}`);
     failed = true;
   }

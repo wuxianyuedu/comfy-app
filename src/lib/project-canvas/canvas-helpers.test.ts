@@ -80,7 +80,7 @@ describe("applyPropagationToNodes", () => {
    * 因此这两行**从未命中** —— 连线上游图片后模式不会被切成图生图。
    * 下面两条断言锁定的是**现状**，改 mode 枚举时它们会变红，
    * 提醒一起核对 CanvasNode/hooks/use-generate.ts 里同族的三个判断
-   * （img2img / i2v / flf）。 */
+   * （分别是 img2img、i2v、flf 这三处）。 */
   it("inputImage：写入 inputImage 并记录上游（模式自动切换当前不生效 — 见注释）", () => {
     const src = node("s", { kind: "image", resultPath: "/outputs/a.png" });
     const target = node("t", { kind: "image", mode: "T2I" });

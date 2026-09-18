@@ -1,20 +1,19 @@
-// Centralized model-type (directory) metadata for the Comfy-APP model library.
+// Comfy-APP 模型库的「模型类型（目录）」元数据，集中在这里。
 //
-// Design principle: **each ComfyUI model directory IS its own
-// independent type.**  A directory's on-disk files belong ONLY to that
-// directory's type — there is never a case where directory X's models must be
-// attributed to another type.  Concretely, the `Model.type` value stored in
-// the database is simply the directory name verbatim (e.g. "checkpoints",
-// "loras", "adetailer", "blip").  This removes the old "why is adetailer
-// labelled Ultralytics / Checkpoint?" confusion: the label the user sees IS
-// the directory name.
+// 设计原则：**每个 ComfyUI 模型目录就是它自己独立的类型。**
+// 某个目录在磁盘上的文件**只**属于该目录的类型 —— 从不存在
+//「目录 X 的模型必须归到另一个类型」的情形。具体来说，数据库里
+// `Model.type` 的值直接就是目录名原样（例如 "checkpoints"、"loras"、
+// "adetailer"、"blip"）。这消除了过去那个疑惑：
+//「adetailer 为什么被标成 Ultralytics / Checkpoint？」——
+// 用户看到的标签**就是**目录名。
 //
-// SQLite has no enums, so `type` is a free String; we keep `ModelType` as a
-// string alias purely for documentation.
+// SQLite 没有枚举，所以 `type` 是自由字符串；`ModelType` 只作为字符串别名
+// 存在，纯为文档之用。
 
 export type ModelType = string;
 
-/** Pretty-print a directory name: snake / kebab → Title Case. */
+/* 把目录名格式化成好看的显示名：下划线 / 连字符分隔 → 首字母大写。 */
 export function prettyFolder(folder: string): string {
   return folder
     .replace(/[_-]+/g, " ")
@@ -23,12 +22,11 @@ export function prettyFolder(folder: string): string {
 }
 
 /**
- * Map a ComfyUI COMBO widget field name to the directory name(s) whose
- * on-disk files should be unioned into the canvas dropdown.  Because each
- * directory is its own type, the value IS the directory name verbatim.
+ * 把 ComfyUI COMBO 控件的字段名映射到「其磁盘文件应并入画布下拉框」的目录名。
+ * 因为每个目录就是它自己的类型，所以值**就是**目录名原样。
  *
- * The keys are the canonical ComfyUI loader field names; the arrays list the
- * real `folder_paths` directories those fields read from.
+ * 键是 ComfyUI 加载器里的规范字段名；数组列出这些字段真正读取的
+ * `folder_paths` 目录。
  */
 export const FIELD_TO_FOLDERS: Record<string, string[]> = {
   ckpt_name: ["checkpoints"],
@@ -70,7 +68,7 @@ export const FIELD_TO_FOLDERS: Record<string, string[]> = {
   pose: ["pose"],
 };
 
-/** Reverse map: directory name → field names that read from it (for tooltips). */
+/* 反向映射：目录名 → 从它读取的字段名（用于提示气泡）。 */
 const FOLDER_TO_FIELDS: Record<string, string[]> = (() => {
   const m: Record<string, string[]> = {};
   for (const [field, folders] of Object.entries(FIELD_TO_FOLDERS)) {
@@ -80,9 +78,9 @@ const FOLDER_TO_FIELDS: Record<string, string[]> = (() => {
 })();
 
 /**
- * Resolve which directory name(s) a COMBO field maps to: exact lookup first,
- * then a normalized substring fallback so variant field names still resolve.
- * Returns directory names (which ARE the model types).
+ * 解析某个 COMBO 字段映射到哪些目录名：先精确查表，
+ * 再不精确地按归一化后的子串兜底，好让变体字段名也能解析出来。
+ * 返回目录名（它们**就是**模型类型）。
  */
 export function modelFoldersForField(field: string): string[] {
   if (!field) return [];
@@ -145,7 +143,7 @@ export function modelFoldersForField(field: string): string[] {
   return [];
 }
 
-/** Curated display metadata for the well-known ComfyUI directories. */
+/* 为常见 ComfyUI 目录手工整理的展示元数据。 */
 const FOLDER_META: Record<string, { label: string; color: string }> = {
   checkpoints: {
     label: "Checkpoint",
@@ -273,7 +271,7 @@ function hashString(s: string): number {
   return Math.abs(hash);
 }
 
-/** Display metadata for a directory name (curated label / color or derived). */
+/* 某个目录名的展示元数据（手工整理的标签 / 配色，或推导得出）。 */
 export function folderMeta(folder: string): { label: string; color: string } {
   const curated = FOLDER_META[folder];
   if (curated) return curated;
@@ -284,9 +282,9 @@ export function folderMeta(folder: string): { label: string; color: string } {
 }
 
 /**
- * Tooltip for a directory's type pill. Explains the principle:
- * the directory name IS the type — its models are never attributed to another
- * type — and which canvas COMBO fields will list this directory's files.
+ * 目录类型「药丸」标签的提示气泡。它解释这条原则：
+ * 目录名**就是**类型 —— 该目录的模型绝不会归到另一个类型 ——
+ * 以及哪些画布 COMBO 字段会列出该目录下的文件。
  */
 export function getFolderTooltip(folder: string): string {
   const fields = FOLDER_TO_FIELDS[folder] ?? [];

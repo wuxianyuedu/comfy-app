@@ -11,7 +11,7 @@
  * executor-cli 里完成）。此前 API 走 postPrompt、RAW 走 cli，两条路径各自
  * 维护一套提交与报错口径，同一份工作流换个格式就有不同的文案。
  *
- * @module comfyui/executor-scheduler
+ * @module comfyui/executor-scheduler — 队列调度与心跳（executor 的调度层）
  */
 import WebSocket from "ws";
 import { logger } from "~/lib/core/logger";
@@ -80,9 +80,8 @@ export async function processQueue() {
     try {
       await finalizeFailure(job.taskId, "", msg);
     } catch (inner) {
-      /* finalizeFailure may itself throw (DB down) — don't recurse into
-       * another catch, just log and release the slot manually so the
-       * queue keeps moving. */
+      /* finalizeFailure 自己也可能抛（数据库挂了）—— 不要再嵌一层 catch 递归，
+       * 只记日志 + 手动归还并发槽，让队列继续往前走。 */
       log(
         job.taskId,
         "error",
@@ -95,29 +94,23 @@ export async function processQueue() {
     }
   });
 }
-
-/* safety-net heartbeat. `processQueue()`
- *  is normally driven by:
- *    (a) enqueue() right after the user clicks 生成
- *    (b) WS open  (line 181)
- *    (c) finalizeFailure / cancelTask (after active--)
+/* 兜底心跳。`processQueue()` 正常由三处驱动：
+ *    (a) 用户点「生成」后的 enqueue()
+ *    (b) WS open
+ *    (c) finalizeFailure / cancelTask（在 active-- 之后）
  *
- *  In a few edge cases, none of these fire promptly:
- *    - The very first WS attempt fails during `new WebSocket()`,
- *      then `scheduleReconnect` defers the next attempt; during
- *      the back-off, a job sitting in `s.queue` has no trigger.
- *    - The handler that's supposed to call processQueue inside
- *      `executeViaComfyCli` runs, but the comfy-cli process spawn
- *      succeeds and the JS `spawn` promise resolves without ever
- *      emitting "queued" → no other life cycle re-fires it.
- *  Without a heartbeat, the user sees "QUEUED 0%" forever even
- *  though the slot is free and the WS is up.  We poll every 3s
- *  and re-run processQueue if it can make progress (queue non-
- *  empty, slot free, WS OPEN).  Idempotent — `processQueue` is a
- *  no-op when there's nothing to do.
+ *  少数边界情形下这三处都不会及时触发：
+ *    - 第一次 WS 尝试在 `new WebSocket()` 阶段就失败，随后
+ *      `scheduleReconnect` 推迟下一次尝试；在这段退避期里，躺在 `s.queue`
+ *      里的任务没有任何触发器。
+ *    - 本该在 `executeViaComfyCli` 里调 processQueue 的那段逻辑跑了，但
+ *      comfy-cli 进程 spawn 成功、JS 的 `spawn` Promise 直接 resolve，
+ *      从未发出 "queued" → 没有别的生命周期会再触发它。
+ *  没有心跳时，用户会永远看到 "QUEUED 0%" —— 哪怕槽是空的、WS 也是通的。
+ *  这里每 3s 轮一次，只要还有推进空间（队列非空、槽为空、WS 已 OPEN）就重跑
+ *  processQueue。幂等 —— 没事可做时 processQueue 是空操作。
  *
- *  Global flag to avoid double-heartbeats if the module is
- *  re-imported under HMR. */
+ *  用全局标志避免 HMR 下模块被重新 import 时起两条心跳。 */
 const HEARTBEAT_MS = 3000;
 let heartbeatHandle: ReturnType<typeof setInterval> | null = null;
 function startHeartbeat() {

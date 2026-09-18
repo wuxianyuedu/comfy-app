@@ -15,7 +15,7 @@
  *   - 若要自建任意路由的集成层自检，可组合 `createTestQueryClient()` + `localApi.Provider`
  *     自行包一层（见 tests/integration/renderWithProviders.integration.test.tsx）。
  *
- * @module tests/helpers/renderWithProviders
+ * @module tests/helpers/renderWithProviders — 前端集成测试的渲染入口
  */
 import React from "react";
 import { render, type RenderOptions, type RenderResult } from "@testing-library/react";

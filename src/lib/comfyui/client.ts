@@ -1,8 +1,8 @@
-// Thin REST wrapper around the local ComfyUI instance.
-// IMPORTANT: all ComfyUI endpoints are under /api/.
+// 本机 ComfyUI 实例的薄 REST 封装。
+// 注意：ComfyUI 的所有接口都挂在 /api/ 下。
 //
-// The base URL is resolved per-call from app settings (so it can be changed
-// from the Settings page), falling back to COMFYUI_BASE env then localhost.
+// base URL 每次调用都从应用设置里现解析（因此设置页改完即时生效），
+// 设置缺失时回落 COMFYUI_BASE 环境变量，再回落本机地址。
 //
 // 地址解析顺序（ISSUE #449）：
 //   ① 配置了 comfyuiPath → **先问进程事实**：按路径找到实例进程，读它实际
@@ -31,10 +31,10 @@ import { probeBaseOnce, probeComfyAtPort } from "./probe";
 import { queryNvidiaVram } from "./gpu-vram";
 import { logger } from "~/lib/core/logger";
 
-/** How many extra ports to probe when the configured one is unreachable */
+/** 配置端口连不上时，还要额外探测多少个端口 */
 const PROBE_RANGE = 5;
 
-/** Cached resolved base URL (set once after successful probe) */
+/** 探测成功后缓存下来的 base URL（只写一次） */
 let _resolvedBase: string | null = null;
 
 /** ComfyUI 的窗口地址（桌面版「打开查看」用的那个）。它作为实例清单的兜底项，
@@ -108,12 +108,12 @@ export function resetProbeMissLog(): void {
 }
 
 /**
- * Node's undici `fetch` resolves the hostname `localhost` to IPv6 `::1` first.
- * ComfyUI's default IPv4 listener (0.0.0.0) never answers on `::1`, so every
- * server-side call to `http://localhost:8188` fails with ECONNREFUSED — but a
- * plain `curl localhost:8188` works fine, which makes the failure confusing.
- * Force the loopback to 127.0.0.1 to keep traffic on IPv4. Apps that genuinely
- * run ComfyUI on a LAN IP or a custom hostname are left untouched.
+ * Node 的 undici `fetch` 会把主机名 `localhost` 优先解析成 IPv6 的 `::1`。
+ * ComfyUI 默认只监听 IPv4（0.0.0.0），在 `::1` 上从不应答，于是服务端每次请求
+ * `http://localhost:8188` 都 ECONNREFUSED —— 而直接用 `curl localhost:8188`
+ * 却一切正常，故障现场因此极难理解。
+ * 这里把环回强制成 127.0.0.1，让流量留在 IPv4。真正跑在局域网 IP 或自定义
+ * 主机名上的 ComfyUI 不受影响。
  */
 function forceIpv4Host(raw: string): string {
   try {
@@ -127,7 +127,7 @@ function forceIpv4Host(raw: string): string {
   }
 }
 
-/** Probe a single port — returns true if ComfyUI responds
+/** 探单个端口 —— ComfyUI 应答即返回 true。
  *
  * 超时按环回地址给 300ms：真实监听中的 ComfyUI 应答 /system_stats 是毫秒级，
  * 800ms 只会拉长「未运行」场景的空扫（配置端口 +1..+5 共 6 次探测，
@@ -144,8 +144,8 @@ async function probePort(host: string, port: number): Promise<boolean> {
 }
 
 /**
- * Resolve the actual ComfyUI base URL with auto-port-detection.
- * Tries: configured → +1 … +PROBE_RANGE. Caches result for session lifetime.
+ * 解析 ComfyUI 的实际 base URL，带端口自动探测。
+ * 依次试：配置端口 → +1 … 到 +PROBE_RANGE。结果缓存到进程生命周期结束。
  */
 export async function resolveComfyBase(): Promise<string> {
   if (_resolvedBase) return _resolvedBase;
@@ -300,9 +300,9 @@ export async function probeComfyBase(): Promise<string | null> {
 }
 
 /**
- * Synchronous version — returns cached value or raw config (no probing).
- * Use this for non-critical reads where latency matters more than accuracy.
- * For mutations (upload/prompt), prefer resolveComfyBase().
+ * 同步版本 —— 返回缓存值或原始配置（不探测端口）。
+ * 适用于「延迟比准确更重要」的非关键读取。
+ * 会改变状态的调用（上传 / 提交 prompt）请用 resolveComfyBase()。
  */
 export function comfyBase(): string {
   if (_resolvedBase) return forceIpv4Host(_resolvedBase);
@@ -316,18 +316,17 @@ export function comfyBase(): string {
 }
 
 /**
- * Drop the cached probe result so the next resolveComfyBase() re-probes.
+ * 丢掉缓存的探测结果，让下一次 resolveComfyBase() 重新探测。
  *
- * Needed because ComfyUI may restart on a *different* port (it auto-increments
- * when the configured one is busy). Without this the cache pins us to a dead
- * port for the whole process lifetime. The runner calls this whenever the
- * WebSocket drops, so a reconnect always re-discovers the live port.
+ * 必需的原因：ComfyUI 重启后可能落在**另一个**端口（配置端口被占用时它会自己 +1）。
+ * 不清缓存就会在整个进程生命周期里钉死在一个已经死掉的端口上。执行器在
+ * WebSocket 断开时都会调它，因此每次重连都会重新发现活着的是哪个端口。
  */
 export function resetComfyBase(): void {
   _resolvedBase = null;
 }
 
-/** `http(s)://host:port` → `ws(s)://host:port` (ComfyUI serves /api/ws there). */
+/** `http(s)://host:port` → `ws(s)://host:port`（ComfyUI 的 /api/ws 挂在那个地址下）。 */
 export function toWsBase(httpBase: string): string {
   return httpBase.replace(/^http(s?):\/\//i, (_m, s) => `ws${s}://`);
 }
@@ -359,7 +358,7 @@ export async function getView(
   return Buffer.from(await res.arrayBuffer());
 }
 
-// Returns the list of real filenames on disk for a model folder.
+// 返回某个模型目录在磁盘上的真实文件名列表。
 export async function listModels(folder: string): Promise<string[]> {
   try {
     const res = await fetch(
@@ -374,15 +373,13 @@ export async function listModels(folder: string): Promise<string[]> {
 }
 
 /**
- * The model directories ComfyUI actually knows about (`GET /api/models`).
+ * ComfyUI 自己认得的模型目录清单（`GET /api/models`）。
  *
- * This is the authoritative answer to "by what rules are models found": a live
- * install exposes ~86 folders (checkpoints, loras, ultralytics_bbox, sams,
- * gguf, …).  The model-library config UI lists these so the user picks from
- * real directories instead of guessing a folder name.
+ * 这是「模型按什么规则被发现」的权威答案：一套在跑的安装会暴露约 86 个目录
+ * （checkpoints、loras、ultralytics_bbox、sams、gguf …）。模型库配置界面列出
+ * 它们，用户从真实目录里挑，而不是自己猜目录名。
  *
- * Returns `[]` when ComfyUI is unreachable — callers then show an empty
- * directory list (the user configures from real directories only).
+ * ComfyUI 连不上时返回 `[]` —— 调用方据此显示空目录列表（只允许从真实目录配置）。
  */
 export async function listModelFolders(): Promise<string[]> {
   try {

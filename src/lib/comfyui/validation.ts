@@ -1,27 +1,28 @@
-// Shared, client-safe validation-error types & helpers.
+// 共享的、客户端安全的校验错误类型与助手。
 //
-// ComfyUI's /prompt endpoint, when the workflow fails server-side
-// validation, returns a payload shaped like:
+// ComfyUI 的 /prompt 接口在工作流服务端校验失败时，返回的载荷大致长这样
+//（下面是原始英文回执的示例，字段名与文案就是服务端给的原样）：
 //
 //   {
-//     "error": "Workflow has 6 validation error(s) against server",
+//     // 汇总：共有 6 处校验错误
+//     "error": "Workflow has 6 validation error(s) against server",  // 汇总计数
 //     "node_errors": {
 //       "10": {
-//         "class_type": "KSampler",
+//         "class_type": "KSampler",  // 出错节点的类型
 //         "input_errors": {
-//           "cfg": { "message": "cfg must be a number" },
+//           "cfg": { "message": "cfg must be a number" },  // 该字段的报错
 //           "steps": { "details": "..." }
 //         }
 //       },
-//       "12": { "class_type": "CheckpointLoader", "message": "..." }
+//       "12": { "class_type": "CheckpointLoader", "message": "..." }  // 另一个节点
 //     }
 //   }
 //
-// We flatten `node_errors` into a `ValidationError[]` so the UI can render a
-// precise, per-field, localized list ("节点 10 (KSampler) · 字段 cfg：…")
-// instead of dumping the English summary string.  This module contains ONLY
-// types + a pure parser — no prisma / fs / server-only imports — so it is
-// safe to import from both the runner (server) and React components (client).
+// 我们把 `node_errors` 摊平成 `ValidationError[]`，让界面能渲染出
+//「精确到字段、本地化」的列表（形如「节点 10 (KSampler) · 字段 cfg：…」），
+// 而不是把服务端那句英文摘要直接倒给用户。本模块**只有**类型与一个纯解析器
+// —— 不 import prisma / fs / server-only —— 因此执行器（服务端）与 React
+// 组件（客户端）都能安全导入。
 
 import { z } from "zod";
 
@@ -51,36 +52,33 @@ export function parseValidationErrorsJson(
 }
 
 export interface ValidationError {
-  /** ComfyUI node id, as a string (matches graph keys). */
+  /** ComfyUI 的节点 id，字符串形式（与图的键一致）。 */
   nodeId: string;
-  /** Node class_type, e.g. "KSampler". Empty if unknown. */
+  /** 节点 class_type，例如 "KSampler"；未知时为空串。 */
   classType: string;
-  /** Offending input field name. Empty for node-level (non-input) errors. */
+  /** 出错的输入字段名；节点级（非输入）错误时为空串。 */
   field: string;
   /** Human-readable reason. Never empty — falls back to "配置错误". */
   message: string;
 }
 
-/** Flatten ComfyUI's `node_errors` into a `ValidationError[]`.
- *  Returns `[]` when there is nothing structured to report.
+/** 把 ComfyUI 的 `node_errors` 摊平成 `ValidationError[]`。
+ *  没有可结构化报告的内容时返回 `[]`。
  *
- *  accept TWO carrier shapes, because the
- *  upstream `/prompt` response and the comfy-cli envelope disagree on
- *  how `node_errors` is serialised:
+ *  这里要接受**两种**承载形状，因为上游 `/prompt` 响应与 comfy-cli 的信封
+ *  在 `node_errors` 的序列化方式上不一致：
  *
- *    • DICT  — ComfyUI's native `/prompt` error body, and comfy-cli's
- *      `error.node_errors` when it forwards the raw body:
- *        { "10": { "class_type": "KSampler", "input_errors": {...} } }
- *    • LIST  — comfy-cli's `_node_errors_to_list()` flattens the dict
- *      into a list of self-contained records BEFORE it reaches the
- *      envelope's `error.details.node_errors`:
- *        [ { "node_id": "10", "class_type": "KSampler",
+ *    • 字典形 —— ComfyUI 原生 `/prompt` 的错误体，以及 comfy-cli 原样转发
+ *      该错误体时的 `error.node_errors`，形如：
+ *        { "10": { "class_type": "KSampler", "input_errors": {...} } }  // 键是节点 id
+ *    • 列表形 —— comfy-cli 的 `_node_errors_to_list()` 会在进入信封的
+ *      `error.details.node_errors` **之前**，把字典摊平成一串自包含记录：
+ *        [ { "node_id": "10", "class_type": "KSampler",  // 每条自带节点 id
  *            "input_errors": {...} } ]
  *
- *  `res` may be either the carrier itself (a list) or an object that
- *  *contains* `node_errors` (dict or list).  The previous implementation
- *  only handled the DICT-in-object case, so the LIST-in-envelope shape
- *  returned `[]` and the per-field 6-item list never rendered. */
+ *  `res` 既可能是承载者自身（一个列表），也可能是**含有** `node_errors`
+ *  （字典或列表）的对象。此前的实现只处理了「对象里放字典」这一种，
+ *  于是「信封里放列表」那种形状会返回 `[]`，那 6 条按字段的错误就永远渲染不出来。 */
 export function extractValidationErrors(
   res: unknown,
   graph?: Record<string, unknown>,
@@ -91,7 +89,7 @@ export function extractValidationErrors(
       ? (res as Record<string, unknown>)
       : undefined;
   let ne: unknown = resObj?.node_errors;
-  // `res` is the LIST carrier directly (comfy-cli envelope path).
+  // `res` 本身就是列表承载者（comfy-cli 信封这条路径）。
   const isListCarrier =
     Array.isArray(res) &&
     res.length > 0 &&
@@ -152,7 +150,7 @@ export function extractValidationErrors(
     } else if (typeof err === "string") {
       out.push({ nodeId: nid, classType, field: "", message: err });
     } else if (err && typeof err === "object") {
-      // Unknown structured shape — best-effort stringify so we never drop it.
+      // 未知的结构化形状 —— 尽力序列化出来，绝不把信息丢掉。
       out.push({
         nodeId: nid,
         classType,
@@ -164,9 +162,9 @@ export function extractValidationErrors(
   return out;
 }
 
-/** Parse the `validationErrors` DB column (a JSON string of `ValidationError[]`
- *  or `null`) back into a typed array.  Defensive: a corrupt / non-array
- *  payload yields `null` so callers can fall back to the `error` string. */
+/* 把数据库 `validationErrors` 列（`ValidationError[]` 的 JSON 字符串，或 null）
+ * 解析回类型化数组。做防御：载荷损坏或不是数组时返回 `null`，
+ * 调用方据此回落到 `error` 字符串。 */
 export function parseValidationErrors(
   raw: string | null | undefined,
 ): ValidationError[] | null {

@@ -11,7 +11,7 @@
 //      创建它的基础解释器位置（uv 建的 venv 同样会写 uv 托管目录），顺藤
 //      摸到真正在跑的那个 python.exe；
 //   ② uv 缓存/托管目录里枚举 `cpython-*` 环境（`UV_PYTHON_INSTALL_DIR`、
-//      `%LOCALAPPDATA%\uv\python`、`~/.local/share/uv/python`）。
+//      `%LOCALAPPDATA%\uv\python`、`~/.local/share/uv/python` 这两处）。
 // 两者都只是「候选」，是否真在跑由 status.ts 查进程表决定。
 //
 // 纯函数 + 注入 exists/readdir：不 spawn、不碰网络，可独立单测。真实调用方
@@ -87,7 +87,7 @@ export type PythonEnvVars = {
   UV_PYTHON_INSTALL_DIR?: string | undefined;
   /** Windows：`%LOCALAPPDATA%`。 */
   LOCALAPPDATA?: string | undefined;
-  /** POSIX：`$XDG_DATA_HOME`。 */
+  /* POSIX 侧的基准目录由 `$XDG_DATA_HOME` 决定。 */
   XDG_DATA_HOME?: string | undefined;
 };
 

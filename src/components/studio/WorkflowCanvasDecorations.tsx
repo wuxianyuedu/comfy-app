@@ -1,5 +1,5 @@
 "use client";
-/* Extracted canvas decoration components — originally inside WorkflowCanvasEditor.tsx. */
+/* 拆出来的画布装饰组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import React, { useState, useRef, useMemo } from "react";
 import {
   useReactFlow,
@@ -35,23 +35,21 @@ export const GRID_FINE_FADE_ZOOM = 0.3;
 export function CanvasGrid({
   settings = DEFAULT_CANVAS_SETTINGS,
 }: {
-  /* settings are passed in by the editor root (which owns the
-   * single useCanvasSettings() instance) instead of consumed from a
-   *  context.  This keeps CanvasGrid a pure function of its props and
-   *  avoids crossing any <ReactFlow> internal context boundaries. */
+  /* 设置由编辑器根组件（它持有唯一的 useCanvasSettings() 实例）通过 props 传进来，
+   *  而不是从 context 里取。这样 CanvasGrid 就是它 props 的纯函数，
+   *  也不必穿越 <ReactFlow> 的内部 context 边界。 */
   settings?: CanvasSettings;
 }) {
   const { minorAlpha, showFineLines } = useStore((state) => {
     const zoom = state.transform[2];
     const cellPx = settings.gridGap * zoom;
-    /* Pick the fade-in curve so:
-     *  - zoom 0.30 (≈ cellPx 3): t = 0  → no fine lines (would just be noise)
-     *  - zoom 0.45 (≈ cellPx 4.5): t ≈ 0.4 → visible
-     *  - zoom 0.60 (≈ cellPx 6):  t ≈ 0.7 → solid
-     *  - zoom 0.80+:              t = 1  → full alpha
-     * Previously `(cellPx - 5) / 3` started fading in only at cellPx 5
-     * (zoom 0.5), which left the post-fitView canvas visually empty for
-     * any normal-sized workflow. */
+    /* 淡入曲线这样取：
+     *  - 缩放 0.30（约 3px 一格）：t = 0 → 不画细线（那时只是噪点）
+     *  - 缩放 0.45（约 4.5px）：t ≈ 0.4 → 可见
+     *  - 缩放 0.60（约 6px）：t ≈ 0.7 → 实了
+     *  - 缩放 0.80 以上：t = 1 → 满透明度
+     * 早先用的是 `(cellPx - 5) / 3`，要到 5px 一格（缩放 0.5）才开始淡入，
+     * 于是对任何正常规模的工作流，fitView 之后的画布在视觉上都是空的。 */
     const t = Math.max(0, Math.min(1, (cellPx - 3) / 3));
     return {
       minorAlpha: Math.round(t * 10) / 10,
@@ -68,10 +66,10 @@ export function CanvasGrid({
         <Background
           id={GRID_MINOR_LAYER_ID}
           variant={BackgroundVariant.Lines}
-          /* gap / lineWidth / alpha are now bound to the user's
-           *  canvas settings instead of the hard-coded 10 / 1 / 0.22.
-           *  Multiplied by a zoom-fade factor so the lines stay readable
-           *  at any zoom (the alpha at zoom 0.5 was previously 0). */
+          /* 间距 / 线宽 / 透明度现在绑定到用户的画布设置，
+           *  不再是硬编码的 10 / 1 / 0.22。
+           *  会乘上一个「随缩放淡出」的系数，让线在任何缩放档下都可读
+           *（此前缩放 0.5 时透明度直接是 0）。 */
           gap={settings.gridGap}
           lineWidth={settings.gridMinorLineWidth}
           color={`rgba(148,163,184,${(settings.gridMinorAlpha * minorAlpha).toFixed(3)})`}
@@ -87,8 +85,8 @@ export function CanvasGrid({
         bgColor={CANVAS_BG}
       />
       {settings.showGrid && (
-        /* Major reference lines always land at `gridGap * 10` to keep the
-         *  1:10 ratio users expect; only their alpha + width are tunable. */
+        /* 主参考线恒落在 `gridGap * 10` 处，保持用户预期的 1:10 比例；
+         *  可调的只有它们的透明度与线宽。 */
         <Background
           id={GRID_MAJOR_LAYER_ID}
           variant={BackgroundVariant.Lines}
@@ -102,35 +100,30 @@ export function CanvasGrid({
   );
 }
 
-/* ── Canvas rulers ──
- *  Tiny coordinate readout along the four edges of the canvas window
- *  so the user can read a node's world position at a glance.  Each
- *  ruler renders the *world* X / Y of every major grid line that
- *  currently crosses the corresponding edge, positioned in screen
- *  pixels (so labels stay readable regardless of zoom).
+/* ── 画布标尺 ──
+ *  在画布窗口四条边上的细小坐标读数，让用户一眼读出节点的世界坐标。
+ *  每条标尺渲染「当前穿过该边的所有主网格线」的**世界** X / Y 值，
+ *  定位用屏幕像素（于是标签在任何缩放下都清晰可读）。
  *
- *  Step size auto-doubles when the major lines would be < 48px apart
- *  on screen — at zoom 0.1 labels would otherwise stack on top of
- *  each other.  Negative world coords render as `−N` via Unicode
- *  minus for typographic consistency.
+ *  当主网格线在屏幕上间距不到 48px 时，步长会自动翻倍 ——
+ *  否则在缩放 0.1 下标签会叠在一起。
+ *  负的世界坐标用 Unicode 负号渲染成 `−N`，排版上更一致。
  *
- *  The whole overlay is `pointer-events: none` so it never blocks
- *  node/edge interaction, and sits at `z-index: 3` — above the
- *  transformed viewport (z 0) but below Controls/MiniMap (z 5+),
- *  which means a ruler label that happens to land on a zoom button
- *  is hidden behind it instead of occluding the control. */
+ *  整个浮层是 `pointer-events: none`，因此它绝不挡住节点 / 连线的交互；
+ *  它的层级是 `z-index: 3` —— 在变换过的视口（z 0）之上、
+ *  但在 Controls / MiniMap（z 5+）之下，
+ *  于是落在缩放按钮上的标尺标签会被按钮盖住，而不是把控件遮住。 */
 
 /**
- * Zoom readout chip — sits in the top-right corner and shows the live canvas
- *  zoom as a percentage.  Two ways to adjust it:
- *    • Click the chip to type an exact percentage, Enter (or blur) to apply —
- *      `rf.zoomTo` honours the `<ReactFlow>` minZoom/maxZoom bounds (0.15–2).
- *    • Press and hold, then drag vertically (up = zoom in, down = zoom out)
- *      for a continuous scrub.  A press with <4px of travel counts as a click.
- *  ESC cancels the editor; empty / non-numeric input leaves zoom untouched.
+ * 缩放读数小片 —— 在右上角显示画布的实时缩放百分比。两种调整方式：
+ *    • 点它，直接键入精确百分比，回车（或失焦）生效 ——
+ *      `rf.zoomTo` 会遵守 `<ReactFlow>` 的 minZoom / maxZoom 边界（0.15–2）。
+ *    • 按住后上下拖拽（向上放大、向下缩小）做连续微调。
+ *      位移小于 4px 的按压按「一次点击」处理。
+ *  ESC 取消编辑；空值或非数字输入不改动缩放。
  *
- *  clamp bounds now read from `useCanvasSettings()`
- *  so the chip respects the same minZoom/maxZoom the user sets in the panel. */
+ *  限幅现在从 `useCanvasSettings()` 读，因此这个小片遵守用户在面板里设的
+ *  同一套 minZoom / maxZoom。 */
 export function ZoomIndicator({
   minZoom = DEFAULT_CANVAS_SETTINGS.minZoom,
   maxZoom = DEFAULT_CANVAS_SETTINGS.maxZoom,
@@ -168,9 +161,8 @@ export function ZoomIndicator({
     setEditing(false);
   };
 
-  //  Scrub: hold + drag vertically to scale zoom continuously.  Up zooms in,
-  //  down zooms out, using a multiplicative (log) mapping so each pixel of
-  //  travel feels proportional at any zoom level.
+  // 微调：按住后上下拖拽，连续改变缩放。向上放大、向下缩小；
+  // 用乘法（对数）映射，让每像素位移在任何缩放档下手感一致。
   const onScrubStart = (e: React.MouseEvent) => {
     if (editing) return;
     e.preventDefault();
@@ -245,9 +237,8 @@ export function ZoomIndicator({
 export function CanvasRulers({
   settings = DEFAULT_CANVAS_SETTINGS,
 }: {
-  /* rulers can be hidden via the canvas settings panel so
-   *  that authors who want an unobstructed canvas (or who are working
-   *  on screenshots) don't have to live with the coordinate overlay. */
+  /* 标尺可以在画布设置面板里隐藏，
+   *  好让需要干净画布（或正在做截图）的作者不必忍受这层坐标浮层。 */
   settings?: CanvasSettings;
 } = {}) {
   const tx = useStore((state) => state.transform[0]);
@@ -256,8 +247,8 @@ export function CanvasRulers({
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
 
-  // Pick the smallest world-unit step that keeps screen spacing ≥ 48px
-  // so labels never overlap.  Always a multiple of the major grid step.
+  // 取满足「屏幕间距 ≥ 48px」的最小世界单位步长，让标签永不重叠。
+  // 它总是主网格步长的整数倍。
   const labelStep = useMemo(() => {
     const base = settings.gridGap * GRID_MAJOR_EVERY; // 100
     let s = base;
@@ -265,7 +256,7 @@ export function CanvasRulers({
     return s;
   }, [zoom, settings.gridGap]);
 
-  // World X of each visible major vertical line → screen X.
+  // 每条可见的主竖线的世界 X → 屏幕 X。
   const xLabels = useMemo(() => {
     if (zoom <= 0.01 || !width)
       return [] as { world: number; screen: number }[];
@@ -280,7 +271,7 @@ export function CanvasRulers({
     return out;
   }, [tx, zoom, width, labelStep]);
 
-  // World Y of each visible major horizontal line → screen Y.
+  // 每条可见的主横线的世界 Y → 屏幕 Y。
   const yLabels = useMemo(() => {
     if (zoom <= 0.01 || !height)
       return [] as { world: number; screen: number }[];
@@ -297,9 +288,8 @@ export function CanvasRulers({
 
   if (!settings.showRulers) return null;
 
-  // Unicode minus for typographic parity (the existing widget values
-  // use plain `-`; rulers use `−` because they sit at a larger size
-  // and the difference is noticeable on negative coords).
+  // 用 Unicode 负号统一排版（既有控件值用的是普通 `-`；
+  // 标尺用 `−`，因为它的字号更大，负坐标下这点差异看得出来）。
   const fmt = (n: number) => (n < 0 ? `−${-n}` : `${n}`);
 
   const labelBase =

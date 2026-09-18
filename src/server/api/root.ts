@@ -16,9 +16,9 @@ import { customNodeRouter } from "~/server/api/routers/custom-nodes";
 import { generateRouter } from "~/server/api/routers/generate";
 
 /**
- * This is the primary router for your server.
+ * 这是服务端的主路由。
  *
- * All routers added in /api/routers should be manually added here.
+ * 在 /api/routers 下新增的路由都要在这里手工登记。
  */
 export const appRouter = createTRPCRouter({
   post: postRouter,
@@ -38,7 +38,7 @@ export const appRouter = createTRPCRouter({
   generate: generateRouter,
 });
 
-// export type definition of API
+// 对外导出 API 的类型定义
 export type AppRouter = typeof appRouter;
 
 export const createCaller = createCallerFactory(appRouter);

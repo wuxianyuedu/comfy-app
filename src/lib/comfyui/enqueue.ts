@@ -1,16 +1,12 @@
-// P3 enqueue: public-facing queue / subscription / logs / cancel API for the
-// ComfyUI runner.
+// 面向外部的入队 API：队列 / 订阅 / 日志 / 取消，服务 ComfyUI 执行器。
 //
-// Split out of the legacy single-file `runner.ts`.  This module owns the
-// *public entry points* used by API routes / orchestrators; the actual WS
-// execution machinery lives in executor.ts, and orphan reaping lives in
-// reaper.ts.
+// 从历史上的单文件 `runner.ts` 拆出。本模块持有 API 路由与编排方用的
+// **公开入口**；真正的 WS 执行机制在 executor.ts，孤儿回收在 reaper.ts。
 //
-// Reaper cold-start: importing this module pulls in `./reaper` as a side
-// effect so a server that enqueues/subscribes always launches the orphan
-// sweepers (QUEUED/RUNNING reconciliation).  Every API/orchestrator that
-// needs enqueue/subscribe/cancelTask imports from here, so deleting the old
-// `runner.ts` shim keeps the reaper on the boot path.
+// reaper 冷启动：import 本模块会以模块副作用的形式带上 `./reaper`，于是任何
+// 会入队 / 订阅的服务端都会启动孤儿清扫（QUEUED/RUNNING 对账）。所有需要
+// enqueue/subscribe/cancelTask 的 API 与编排方都从这里导入 —— 因此删掉旧的
+// `runner.ts` 转发壳也不会让 reaper 掉出启动路径。
 
 import "./reaper"; // module side-effect: launch the reaper sweeps
 import { interrupt } from "./client";
@@ -40,24 +36,14 @@ export function enqueue(job: Job) {
   if (job.prompt) store.promptByTask.set(job.taskId, job.prompt);
 
   state().logs.set(job.taskId, []);
-
-  // stamp the start time so we can emit a
-
-  // "总耗时 Xs" line at completion, and so the client log can show
-
-  // task age for "stuck RUNNING" debugging.
+  /* 记下开始时间：完成时能打一行「总耗时 Xs」，客户端日志也能据此显示任务
+   * 已跑多久，方便排查「卡在 RUNNING」。 */
 
   store.startedAt.set(job.taskId, Date.now());
 
   log(job.taskId, "info", "任务已加入执行队列");
-
-  // surface queue position + active slot
-
-  // so the user can see whether the task is waiting on a peer or
-
-  // about to run immediately.  This is the very first line they'll
-
-  // see if they had the log panel open before clicking 生成.
+  /* 打出队列位置与在跑的并发槽：让用户看出任务是在等前面那个、还是马上就要跑。
+   * 如果用户在点「生成」之前就开着日志面板，这就是他最先看到的一行。 */
 
   log(
     job.taskId,
@@ -89,8 +75,7 @@ export function getLogs(taskId: string): LogEntry[] {
 
 export async function cancelTask(taskId: string) {
   const store = state();
-
-  // Kill any comfy-cli subprocess driving this task before flipping status.
+  // 先把驱动这个任务的 comfy-cli 子进程杀掉，再翻状态。
 
   const cliProc = cliProcs.get(taskId);
 
@@ -107,22 +92,11 @@ export async function cancelTask(taskId: string) {
   const task = await taskRepository.findStatusAndPromptById(taskId);
 
   if (!task) return;
-
-  /* previously this required
-
-   *  `status === RUNNING || QUEUED`.  We now accept ANY non-terminal
-
-   *  status — SUCCEEDED / FAILED / CANCELLED are skipped below — so
-
-   *  users can cancel a stuck QUEUED row even when the in-memory
-
-   *  state has been wiped (e.g. by a dev-server restart that the
-
-   *  reaper hasn't yet swept). If the task has a
-
-   *  promptId we still try `interrupt()` to tell ComfyUI to drop
-
-   *  its prompt as well; if not, we just close out the DB row. */
+  /* 以前这里要求 `status === RUNNING || QUEUED`。现在改为接受**任何非终态**的
+   * 状态（SUCCEEDED / FAILED / CANCELLED 会在下面被跳过），于是用户能取消掉一个
+   * 卡住的 QUEUED 行 —— 哪怕内存态已经被清掉（例如 dev server 重启过、reaper
+   * 还没扫到）。任务有 promptId 时仍会调 `interrupt()` 让 ComfyUI 也丢掉它的
+   * prompt；没有的话就只把数据库这一行收口。 */
 
   const isTerminal = (st: string | null) =>
     st === "SUCCEEDED" || st === "FAILED" || st === "CANCELLED";
@@ -130,11 +104,8 @@ export async function cancelTask(taskId: string) {
   log(taskId, "warn", "用户取消任务");
 
   // 取消也是「写终态」的一种。对**尚未终态**的任务先抢落库锁：抢不到说明
-
   // 它已在本进程被别的原因收口（成功 / 失败 / 被 reaper 判孤），此时不能再
-
   // 把原因改写成「用户取消」，否则用户在执行日志看到的失败原因会被取消动作
-
   // 悄悄覆盖掉。DB 行本就是终态时保持旧行为（仍允许改写为 CANCELLED）。
 
   if (!isTerminal(task.status) && !claimFinalize(taskId)) {
@@ -169,50 +140,26 @@ export async function cancelTask(taskId: string) {
   if (task.promptId) store.promptToTask.delete(task.promptId);
 
   store.promptByTask.delete(taskId);
-
-  // clean up the per-task bookkeeping we
-
-  // added so a re-enqueue of the same taskId starts clean.
+  // 清掉本模块给这个任务加的记账，同一个 taskId 再入队时从干净状态开始。
 
   store.startedAt.delete(taskId);
 
   store.lastNodeByTask.delete(taskId);
-
-  /* only release the runner's slot when we
-
-   *  actually held one.  DB-only tasks (no in-memory job) must NOT
-
-   *  decrement `s.active`, or a future `processQueue` call would
-
-   *  briefly think a slot is free and try to enqueue a phantom job.
-
-   *  `hadSlot` means we either owned the comfy-cli subprocess or
-
-   *  had the task sitting in the in-memory queue. */
+  /* 只有确实占着并发槽时才归还它。纯数据库任务（内存里没有对应 job）**不能**
+   * 递减 `s.active`，否则后续 `processQueue` 会短暂以为有空槽，去入队一个并不
+   * 存在的幻影任务。`hadSlot` 的判据是：要么持有 comfy-cli 子进程，要么任务
+   * 正躺在内存队列里。 */
 
   const inQueue = store.queue.some((queue) => queue.taskId === taskId);
 
   const hadSlot = inQueue || cliProcs.has(taskId);
 
   if (hadSlot) store.active = Math.max(0, store.active - 1);
-
-  /* cancel previously only updated the DB
-
-   *  and the in-memory slot, never pushed anything to the SSE
-
-   *  emitter — so the frontend's d.status stayed at "running"
-
-   *  forever and the "生成中…" button never came back.  Emit a
-
-   *  synthetic state event so the canvas patch() flips the node
-
-   *  to error, then a terminal error event so the EventSource
-
-   *  onmessage handler closes the connection (matching the
-
-   *  finalizeFailure pattern at line 886).  Order matters: state
-
-   *  first (heal UI), error second (close socket). */
+  /* 以前取消只改数据库与内存槽，从不往 SSE 推送 —— 于是前端的 d.status 永远停在
+   * "running"，「生成中…」按钮再也不回来。现在发一个合成的 state 事件，让画布的
+   * patch() 把节点翻成 error；再发一个终态 error 事件，让 EventSource 的
+   * onmessage 处理器关掉连接（与 finalizeFailure 里的做法一致）。顺序要紧：
+   * 先 state（修 UI），后 error（关连接）。 */
 
   store.emitter.emit(taskId, {
     type: "state",
@@ -227,14 +174,8 @@ export async function cancelTask(taskId: string) {
   });
 
   store.emitter.emit(taskId, { type: "error", error: "用户取消" });
-
-  // flush any pending debounced log writes
-
-  // for this task so the cancel-line + any in-flight warnings reach
-
-  // the DB before we declare the row terminal.  Without this, a fast
-
-  // cancel-then-reload could miss the "用户取消任务" entry.
+  /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
+   * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。 */
 
   await persistLogs(taskId);
 

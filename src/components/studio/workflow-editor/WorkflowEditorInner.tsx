@@ -1,9 +1,8 @@
 "use client";
-/* Extracted WorkflowEditorInner (the inner editor that must live inside
- * ReactFlowProvider).  Node renderers / registries moved to
- * wf-editor-nodes.tsx (WorkflowGroupNode / WorkflowIoPortNode / WorkflowNoteNode +
- * workflowNodeTypes / workflowEdgeTypes + shared layout constants).
- * Originally inside WorkflowCanvasEditor.tsx. */
+/* 拆出来的 WorkflowEditorInner —— 内层编辑器，必须住在
+ * ReactFlowProvider 里面。节点渲染器与注册表已移到 wf-editor-nodes.tsx
+ *（分组节点、IO 端口节点、便签节点，以及节点类型表、连线类型表与共享布局常量）。
+ * 它原本在 WorkflowCanvasEditor.tsx 里。 */
 import React, {
   useCallback,
   useEffect,
@@ -61,38 +60,33 @@ import {
   type FitBoundsNode,
 } from "./subgraph-viewport";
 
-/* ── Canvas grid ──
- *  Two stacked native <Background> layers so the grid pans / zooms with
- *  the viewport (an earlier CSS-on-`.react-flow__pane` grid was static
- *  because the pane is the un-transformed interaction layer):
+/* ── 画布网格 ──
+ *  两层叠起来用原生 <Background> 实现，让网格随视口平移 / 缩放
+ *（早先那版是给 `.react-flow__pane` 加 CSS 网格，结果是静态的 ——
+ * 因为 pane 是不做变换的交互层）：
  *
- *    · minor — one line every GRID_CELL px  (1 cell)
- *    · major — one line every 10 cells, slightly thicker + brighter
+ *    · 细线 —— 每 GRID_CELL 像素一条（即 1 格）
+ *    · 粗线 —— 每 10 格一条，略粗且更亮
  *
- *  Cell size = 10px canvas units so common node widths (e.g. a 230px
- *  MarkdownNote) line up cleanly on integer cell counts (23 cells),
- *  which makes "snap every N cells" meaningful instead of an odd fraction.
+ *  一格 = 10 个画布单位，因此常见节点宽度（例如 230px 的 MarkdownNote）
+ *  正好落在整数格上（23 格），让「每 N 格对齐一次」有意义，而不是一个零头分数。
  *
- *  `BackgroundVariant.Lines` draws a full-height + full-width segment per
- *  pattern tile, so the tiles butt up into continuous orthogonal rules —
- *  not the `+` constellation an older comment in this file claimed.
+ *  `BackgroundVariant.Lines` 每个图案 tile 会画一条贯通全高 / 全宽的线段，
+ *  所以 tile 拼接起来就是连续的十字网格线 —— 不是本文件早先那条注释所说的
+ *  「`+` 星座」形状。
  *
- *  Layer order matters: the major grid is rendered last so it paints over
- *  the minor one.  Only the minor layer carries `bgColor`; the major layer
- *  must stay `transparent` or it would blank out the layer beneath it.
+ *  层序要紧：粗线网格最后渲染，因此会盖在细线之上。
+ *  只有细线层带 `bgColor`；粗线层必须保持 `transparent`，
+ *  否则会把下面那层整个刷白。
  *
- *  Below ~0.65 zoom a 10px cell collapses to <6.5 screen px and the fine
- *  grid turns into noise, so its alpha fades out while the 10-cell major
- *  rules stay put and keep the canvas readable.  The selector returns an
- *  already-quantised alpha so panning/zooming only re-renders when the
- *  fade actually steps.
+ *  缩放低于约 0.65 时，10px 的格子会缩到屏幕 6.5px 以下，细网格就变成噪点，
+ *  于是它的透明度淡出，而 10 格一条的粗线留在原地，让画布仍可读。
+ *  选择器返回的是**已经量化过的**透明度，因此平移 / 缩放只在淡出真的跨档时才重渲染。
  *
- *  user request — once the viewport is zoomed out to ≤ 60%
- *  the entire grid (minor + major) is hidden.  At that scale the canvas
- *  reads as a whole-workflow map and the grid just adds clutter, so we
- *  short-circuit and render nothing.  Note `<ReactFlow>` minZoom is 0.15
- *  (see ZoomIndicator), so we never hit a zoom where we'd still want the
- *  grid but it's missing for technical reasons. */
+ *  按用户要求：视口缩到 60% 及以下时整个网格（细线 + 粗线）隐藏。
+ *  在这个尺度下画布读起来是一张全流程地图，网格只是添乱，
+ *  于是直接短路、什么都不渲染。注意 <ReactFlow> 的 minZoom 是 0.15
+ *（见 ZoomIndicator），所以我们不会遇到「还想要网格、却因技术原因拿不到」的缩放档。 */
 /* ── 画布聚焦（打开工作流 / 子工作流时把视口对准真实内容）──
  *
  *  算式本体在 subgraph-viewport.ts（纯函数 + 单测）；这里只放与 React Flow
@@ -166,9 +160,9 @@ export function WorkflowEditorInner({
   onClose: () => void;
   onSave?: () => void;
 }) {
-  /* 3 per-instance Zustand stores, created once per mount.  useState lazy
-   *  initializer keeps them stable without touching a ref during render
-   *  (react-hooks/refs). */
+  /* 3 个按实例创建的 Zustand store，每次挂载只建一次。
+   * 用 useState 的惰性初始化让它们保持稳定，又不必在渲染期去碰 ref
+   *（否则触发 react-hooks/refs 规则）。 */
   const [stores] = React.useState<WFStoresHelper>(() => ({
     io: createIOEditStore(workflowId),
     rgthree: createRgthreeGroupsStore({ workflowId, detail: null }),
@@ -221,22 +215,20 @@ function WorkflowEditorBody({
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const savePatch = useWorkflowSaveMutation();
-  /* Side-panel toggle for the IO preview.  Default closed — the canvas already
-   *  gives a busy experience and we don't want to pile on a second floating
-   *  panel before the user asks for one.
+  /* IO 预览的侧栏开关。默认关闭 —— 画布本身信息量已经很大，
+   *  用户没主动要之前，不宜再叠一个浮动面板上去。
    *
    *  与 `ioEditMode` 是双向耦合：开预览一并进编辑模式（勾选框要可用），
    *  关预览一并退出编辑模式（面板没了就不该再留一排勾选框）；反方向同样
    *  成立 —— 关编辑模式一并关预览。两层耦合都写在 store 的
    *  `setIoEditMode` / `setIoPreviewOpen` 里，见那里的注释。 */
-  /* canvas-settings panel state — sits next to
-   *  ioPreviewOpen / viewJsonOpen as a sibling overlay opened by a gear
-   *  button in the canvas chrome.  Default closed. */
+  /* 画布设置面板的开关 —— 与 ioPreviewOpen / viewJsonOpen 并列，
+   *  由画布外框上的齿轮按钮打开。默认关闭。 */
   const [canvasSettingsOpen, setCanvasSettingsOpen] = useState(false);
-  /* The settings hook owns a single localStorage-backed settings object
-   *  that drives CanvasGrid / CanvasRulers / ZoomIndicator / MiniMap.
-   *  Until `hydrated` is true we render with defaults so SSR / first
-   *  paint don't briefly show saved values before the read completes. */
+  /* 设置 hook 持有唯一一份「localStorage 持久化」的设置对象，
+   *  驱动画布网格、标尺、缩放指示器与小地图。
+   *  在 `hydrated` 为真之前一律用默认值渲染，避免 SSR / 首屏在读取完成前
+   *  短暂闪出已保存的值。 */
   const {
     settings: canvasSettings,
     update: updateCanvasSetting,
@@ -275,27 +267,24 @@ function WorkflowEditorBody({
     [ioApi],
   );
   const [error, setError] = useState("");
-  /* Sync the on-disk custom-node manifest into the in-memory registry once
-   *  on mount so <PackageFooter> can resolve every node's `classType` →
-   *  package mapping without each node firing its own /api fetch. The
-   *  manifest is already cached server-side after the first parse, so
-   *  this is one cheap roundtrip per page open. */
+  /* 挂载时把磁盘上的自定义节点 manifest 同步进内存注册表一次，
+   *  让 <PackageFooter> 能解析每个节点的「类型 → 所属包」映射，
+   *  而不必让每个节点各自发一次 /api 请求。
+   *  manifest 在首次解析后已经在服务端缓存，因此每次打开页面只花一次廉价往返。 */
   useEffect(() => {
     refreshCustomNodes().catch((e) => console.warn("[we] 节点清单刷新失败", e));
   }, []);
-  /* Subgraph navigation stack.  Empty while viewing the top-level workflow.
-   *  Each entry is {uid, name} for breadcrumb display; clicking a crumb
-   *  pops back to that level. */
+  /* 子工作流导航栈。查看顶层工作流时为空。
+   *  每一项是 {uid, name}，供面包屑显示；点某一级会退回到那一层。 */
   const [subgraphStack, setSubgraphStack] = useState<
     { uid: string; name: string; nodeId: string }[]
   >([]);
-  /* The root workflow's display name is captured on the FIRST top-level
-   *  fetch and then preserved across subgraph navigation, so the breadcrumb
-   *  can always render "<root workflow> / <subgraph 1> / <subgraph 2> …".
-   *  Without this, drilling into a subgraph rewrites the leading crumb to
-   *  the subgraph's own name (since `detail.name` becomes the subgraph's
-   *  title), producing a confusing "subA / subA" duplicate and triggering
-   *  the recursive "click subgraph name → enter another layer" bug. */
+  /* 根工作流的显示名在**第一次**顶层拉取时记下，之后跨越子工作流导航一直保留，
+   *  于是面包屑总能渲染成「<根工作流> / <子工作流 1> / <子工作流 2> …」。
+   *  没有它的话，钻进子图会把最前面那一级改写成子图自己的名字
+   *（因为 `detail.name` 变成了子图的标题），
+   *  既会出现令人困惑的「subA / subA」重名，
+   *  又会触发「点子图名字 → 又进一层」的递归 bug。 */
   const [rootWorkflowName, setRootWorkflowName] = useState<string>("");
   const [subgraphLoading, setSubgraphLoading] = useState(false);
   const [subgraphError, setSubgraphError] = useState("");
@@ -373,19 +362,16 @@ function WorkflowEditorBody({
     };
   }, [detail, subgraphStack.length, subgraphRawContext]);
 
-  /* After fitView completes, lock the viewport onto the middle (real
-   *  WorkflowNode / WorkflowSubgraph / wfNote / wfGroup) nodes.  We (a) run
-   *  rf.fitView WITHOUT passing a `nodes` filter — that option was
-   *  unreliable across React Flow v12 minor versions and made the
-   *  viewport randomly include stray boundary pins, (b) immediately
-   *  compute the middle-node bbox ourselves and call setViewport so
-   *  the centre is guaranteed to land on the real workflow regardless
-   *  of what the three-block rail layout did to the canvas bounds.
-   *  Also enforce a *minimum* zoom of 0.35 — wide workflows (130+ nodes,
-   *  bbox ~7000 px vs a 1280 px viewport) otherwise auto-shrink to
-   *  ~0.15x where every note collapses to ~5–15 px and becomes
-   *  indistinguishable from background.  Re-runs on subgraph
-   *  navigation so a cramped child graph still fits. */
+  /* fitView 完成后，把视口锁定到「中间那批真实节点」上
+   *（WorkflowNode / WorkflowSubgraph / wfNote / wfGroup）。做法是：
+   * (a) 调 rf.fitView 时**不**传 `nodes` 过滤 —— 该选项在 React Flow v12 的
+   *     各小版本间表现不稳，会让视口随机把边缘的散落引脚也算进去；
+   * (b) 随后自己算中间节点的包围盒并调 setViewport，
+   *     保证中心一定落在真实工作流上，不受「三段式导轨布局」对画布边界的影响。
+   * 同时把缩放的**下限**钉在 0.35 —— 否则超宽工作流
+   *（130+ 节点、包围盒约 7000px 对 1280px 视口）会自动缩到约 0.15 倍，
+   * 那时每个便签都塌成 5–15px，与背景无从区分。
+   * 子工作流导航时也会重跑，让局促的子图同样能放下。 */
   const rf = useReactFlow();
   /* 自动聚焦的记账（详见 subgraph-viewport.ts 的 FitOnceScheduler）：按图的
    * key（detail.id）记「已下发过聚焦的那份图」，切换子图自然会重新聚焦。
@@ -397,16 +383,13 @@ function WorkflowEditorBody({
     typeof createFitOnceScheduler
   > | null>(null);
   fitSchedulerRef.current ??= createFitOnceScheduler();
-  /* MiniMap → main-viewport single-click jump.
-   *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
+  /* 小地图 → 主视口的单击跳转。
+   *  与下面 <MiniMap pannable zoomable onClick={onMiniMapJump} /> 配对使用。 */
   const onMiniMapJump = useMiniMapJump(rf);
 
-  /* monotonically-increasing token so background fetches
-   *  can't overwrite the current fetchDetail's commit.  Bumped inside
-   *  fetchDetail; whichever invocation holds the highest number
-   *  when its response arrives is the one allowed to write to state.
-   *  This guarantees the cacheKey upgrade never sits behind "background
-   *  fetch silently updates storage while UI remains stale". */
+  /* 单调递增的令牌，防止后台拉取覆盖当前 fetchDetail 的提交。
+   *  在 fetchDetail 内部自增；响应到达时持有最大编号的那次调用才有权写 state。
+   *  这保证缓存键的升级不会落在「后台拉取悄悄更新了存储、界面却还是旧的」之后。 */
   const latestRequestIdRef = useRef(0);
 
   /* 把视口对准「当前视图里真实有内容的节点」。
@@ -427,12 +410,11 @@ function WorkflowEditorBody({
     requestAnimationFrame(() => fitToContent());
   }, [fitToContent]);
 
-  /* Fetch workflow detail (or subgraph detail when navigating into one).
-   * Performance: a per-session (sessionStorage) cache keyed by URL lets a
-   * re-opened canvas paint instantly without waiting on the network. The
-   * first open still benefits from the server-side LRU cache (see
-   * src/lib/server-cache.ts). On a cache hit we render immediately and then
-   * refresh the stored copy in the background without disturbing the UI. */
+  /* 拉取工作流详情（进入子工作流时则拉子图详情）。
+   * 性能：按 URL 作键的会话级缓存（sessionStorage）让再次打开的画布
+   * 立刻出画面，不必等网络。首次打开仍能享受服务端的 LRU 缓存
+   *（见 src/lib/server-cache.ts）。命中缓存时立即渲染，
+   * 随后在后台刷新存下来的副本，且不打扰界面。 */
   const { fetchDetail, forceReloadDetail, onEnterSubgraph, onExitSubgraph } =
     useWorkflowDetailLoader({
       workflowId,
@@ -450,19 +432,18 @@ function WorkflowEditorBody({
       setSubgraphRawContext,
       setSubgraphError,
     });
-  /* Convert graph → flow nodes.  Rendering order (back→front):
-   *   groups (frames) → notes (annotations) → real graph nodes (always on top).
-   *  Layout strategies for the real nodes, in priority order:
-   *   1. **Saved positions** (raw imports): use the original ComfyUI coordinates
-   *      verbatim so the canvas looks exactly like the user arranged it.
-   *   2. **Auto layout (BFS levels)** when only API JSON was provided. */
-  /* Hoisted raw meta + slot-name table — also referenced from the edges
-   * useEffect below, so we keep them at component scope (not inside the
-   * initialNodes memo). */
+  /* 把图转成流程节点。渲染顺序（从后到前）：
+   *  分组框 → 便签注释 → 真实图节点（恒在最上层）。
+   * 真实节点的布局策略按优先级：
+   *   1. **已保存的坐标**（RAW 导入）：原样使用 ComfyUI 里的坐标，
+   *      让画布与用户当初摆的样子完全一致。
+   *   2. **自动布局（按 BFS 分层）**：只给了 API JSON 时用。 */
+  /* 提升到组件作用域的 raw meta 与槽位名表 —— 下面的连线 useEffect 也要用，
+   * 所以放在组件作用域，而不是塞进 initialNodes 的 memo 里。 */
   /* 单一格式，移除 RAW/API viewMode 与 apiLayoutOverrides 状态 */
 
-  /* Derived lookups: raw-node metadata map, view-scoped detail (RAW / API),
-   * and per-node output-slot names. */
+  /* 派生查表：raw 节点元数据映射、按视图范围取的详情（RAW / API），
+   * 以及每个节点的输出槽位名。 */
   const { rawMetaById, scopeDetail, outSlotNameById } =
     useWorkflowDerivedData(detail);
 
@@ -547,10 +528,9 @@ function WorkflowEditorBody({
    * 页签（用户口径：「彻底不显示」）。 */
   const initialNodes: Node[] = graphNodes;
 
-  /* Sync nodes/edges when the graph or the mapping changes.  useNodesState only
-   * takes its initial value on mount, so when the workflow detail arrives async
-   * (or the author edits a wire) we have to push the freshly derived nodes into
-   * the flow state ourselves. */
+  /* 图或映射变化时同步节点与连线。useNodesState 只在挂载时取初始值，
+   * 所以工作流详情异步到达（或作者改了某条线）时，
+   * 必须由我们自己把刚派生出的节点推进流程状态。 */
   useEffect(() => {
     setNodes(initialNodes);
     /* 连线只有一种来源：工作流图自身的 `buildEdges`。 */
@@ -564,8 +544,8 @@ function WorkflowEditorBody({
     setEdges,
   ]);
 
-  /* Fit-to-content once per workflow/subgraph open. Placed after `nodes`
-   * so we don't reference it before declaration (react-hooks/immutability). */
+  /* 每打开一次工作流 / 子工作流就贴合内容一次。放在 `nodes` 之后，
+   * 避免在声明之前引用它（否则触发 react-hooks/immutability 规则）。 */
   useEffect(() => {
     if (nodes.length === 0) return;
     /* nodes 是异步填充的：依赖里若没有 nodes.length，effect 会在数组还空着时
@@ -609,17 +589,15 @@ function WorkflowEditorBody({
       }
       scheduler.markSettled(fitKey);
     };
-    /* Defer one frame so ReactFlow has measured the viewport and laid
-     * nodes out before we fit. */
+    /* 延后一帧，等 ReactFlow 量好视口、摆好节点再贴合。 */
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [rf, detail?.id, nodes.length]);
 
-  /* lazy edge interactivity.  defaultEdgeOptions in the canvas
-   *  sets deletable/reconnectable=false so untouched edges stay inert; the
-   *  first click on an edge flips BOTH flags on (idempotent afterwards), so
-   *  the user can still delete / re-connect it exactly as before while the
-   *  graph never pays the interaction cost for edges nobody touches. */
+  /* 惰性连线交互。画布的 defaultEdgeOptions 把 deletable / reconnectable
+   *  都设成 false，未被动过的连线因此保持惰性；某条线第一次被点击时两个标志一起打开
+   *（之后再点幂等），于是用户仍能像以前一样删除 / 重连它，
+   * 而整张图不会为没人碰的连线白白付交互开销。 */
   const onEdgeClick = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
       if (edge.deletable === true && edge.reconnectable === true) return;

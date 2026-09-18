@@ -1,6 +1,6 @@
 /**
  * `repository-film.ts` — FilmProject 与 FilmShot 业务仓储（Drizzle 版）
- * @module core/repository-film
+ * @module core/repository-film — FilmProject 与 FilmShot 业务仓储（Drizzle 版）
  */
 import "server-only";
 

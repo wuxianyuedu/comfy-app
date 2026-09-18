@@ -19,7 +19,7 @@
  * 那一步读的正是 `_meta.mode / virtual / value / inputOrder / inputTypes /
  * outputTypes`。丢掉它们会让「画布上旁路一个节点再运行」失效。
  *
- * @module comfyui/raw-view-graph
+ * @module comfyui/raw-view-graph — RAW 工作流 → **画布视图图**（纯离线派生，不发网络）
  */
 
 import { toStringValue } from "./raw";
@@ -31,7 +31,7 @@ import {
   NODE_MODE_NEVER,
 } from "./execution-graph";
 
-/** Fallback FULL input order (widgets + connections) for slot→name mapping.
+/* 槽位→名字映射用的兜底「完整输入顺序」（控件 + 连线）。
  *  Raw 节点没有 `inputs[]` 时（老导出 / 被裁过的节点）只能按槽位序号查这张表
  *  拿名字；有 `inputs[]` 时一律以节点自带的名字为准。 */
 const FALLBACK_FULL: Record<string, string[]> = {
@@ -169,8 +169,8 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
  * 从 raw UI 格式派生一份**画布视图图**：节点 id → `{ class_type, inputs }`，
  * 其中连线入参是 `[上游节点 id, 上游输出槽位]` 元组（画布据它画边与自动布局）。
  *
- * 不含任何「转成 API 提交」的语义：控件值不由这里映射（画布的参数值走
- * `rawInputsById` / `rawNodes[].widgets_values`）。
+ * 不含任何「转成 API 提交」的语义：控件值不由这里映射
+ *（画布的参数值走 `rawInputsById` 与 rawNodes 的 `widgets_values` 两处）。
  */
 export function buildRawViewGraph(
   raw: RawWorkflow,

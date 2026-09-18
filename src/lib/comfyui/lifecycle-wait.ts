@@ -12,7 +12,7 @@
  *      超时文案**收敛到一处**（此前 keepAlive / bound 各写了一份逐字相同的）。
  *   2. `createOutputSink(deps)` —— stdout/stderr 的「appendRuntimeLog + 留底」
  *      回调，宿主状态显式传参，无需真实子进程即可单测。
- *   3. `createRecentOutputLedger()` / `createChildExitHandler(deps)` ——
+ *   3. `createRecentOutputLedger()` 与 `createChildExitHandler(deps)` ——
  *      「进程秒退」时提取可行动报错的留底与退出回调。
  *
  * 为什么单开文件而不是塞回 `lifecycle-derive.ts`：derive 是**纯判决表**
@@ -60,11 +60,11 @@ export interface WaitReadyResult {
  *
  * ```ts
  * // keepAlive：端口实探 + 限频查进程表判死
- * await waitForComfyReady({ probe: () => probeComfyUi(2000),
- *                           isDead: async () => (await findPidForMainPy(mainPy)) ? null : "…",
+ * await waitForComfyReady({ probe: () => probeComfyUi(2000),   // 探测函数
+ *                           isDead: async () => …  // 找不到进程即视为已死
  *                           … });
  * // bound：已知子进程 PID → 探它监听的端口 + /system_stats
- * await waitForComfyReady({ probe: () => probeChildReady(child), … });
+ * await waitForComfyReady({ probe: () => probeChildReady(child), … });  // 子进程路径
  * ```
  *
  * 这就是 `lifecycle-derive.ts` 判决表同一手法的延伸：把「怎么探」与
@@ -124,10 +124,10 @@ export interface OutputSinkDeps {
  * 现在依赖显式传参，回调可直接调用断言：
  *
  * ```ts
- * const lines: string[] = [];
- * const sink = createOutputSink({ appendRuntimeLog: (l) => lines.push(l),
- *                                 pushRecent: (t) => recent.push(t) });
- * sink(Buffer.from("a".repeat(600)));
+ * const lines: string[] = [];                                  // 收到的日志行
+ * const sink = createOutputSink({ appendRuntimeLog: (l) => lines.push(l),  // 落日志
+ *                                 pushRecent: (t) => recent.push(t) });  // 两个出口
+ * sink(Buffer.from("a".repeat(600)));                          // 一次喂 600 字节
  * expect(lines[0]).toContain("…");  // 已截断
  * ```
  */

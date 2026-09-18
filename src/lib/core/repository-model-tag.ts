@@ -1,6 +1,6 @@
 /**
  * `repository-model-tag.ts` — WorkflowModelTag 仓储（Drizzle 版）
- * @module core/repository-model-tag
+ * @module core/repository-model-tag — WorkflowModelTag 仓储（Drizzle 版）
  */
 import "server-only";
 

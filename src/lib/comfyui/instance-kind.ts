@@ -106,7 +106,7 @@ export function classifyComfyInstall(
   // 未命中标记文件时，按「目录形态」判定：
   //   desktop 布局 = ComfyUI/ 源码子目录 + standalone-env（Comfy Desktop
   //                  canonical 运行时；注意与 root 直接放 main.py 的便携区分开）。
-  //   portable = python_embeded；venv = .venv / venv。
+  //   便携版的解释器目录是 python_embeded；venv 的则是 .venv 或 venv。
   const desktopLayout =
     hasSubMain &&
     exists(

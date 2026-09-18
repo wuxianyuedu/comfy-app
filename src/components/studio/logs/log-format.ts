@@ -9,7 +9,7 @@
  * 本模块只依赖结构类型（不 import `LogEntry`），因此 store 与视图都能安全引用，
  * 不引入循环。
  *
- * @module logs/log-format
+ * @module logs/log-format — 日志行的时间与文本格式化（**唯一口径**）
  */
 
 /** 两个时刻是否同一天（决定行首是否补月-日）。 */

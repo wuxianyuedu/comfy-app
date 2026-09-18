@@ -7,7 +7,7 @@
  * - `user: null` 时走 authedProcedure 的 demo-user 兜底分支，可用于覆盖
  *   鉴权中间件逻辑。
  *
- * @module tests/helpers/trpc
+ * @module tests/helpers/trpc — tRPC 集成测试的 context / caller 基建
  */
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";

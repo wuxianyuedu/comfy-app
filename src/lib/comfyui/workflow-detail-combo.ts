@@ -1,20 +1,18 @@
 /**
- * COMBO option resolvers — extracted from workflow-detail.ts (batch 4).
+ * COMBO 候选项解析器 —— 从 workflow-detail.ts 拆出。
  *
- * ComfyUI COMBO widgets (unet_name / clip_name / vae_name / ckpt_name …)
- * carry NO candidate list in the raw JSON — the only authoritative source
- * is /api/object_info.  We fetch it once per resolver instance (fetchObjectInfo
- * itself caches for 5 min + degrades to null when ComfyUI is unreachable)
- * and resolve `classType + field` → candidate array so the project-canvas
- * form and the subgraph wrapper node can render a real <select> instead of
- * a free-text box.  Missing / unreachable → undefined → graceful fallback
- * to a plain text control.
+ * ComfyUI 的 COMBO 控件（unet_name / clip_name / vae_name / ckpt_name …）
+ * 在原始 JSON 里**不带**候选列表 —— 唯一的权威来源是 /api/object_info。
+ * 每个解析器实例拉一次它（fetchObjectInfo 自身缓存 5 分钟，ComfyUI 连不上时
+ * 降级为 null），再把「classType + 字段名」解析成候选数组，好让画布表单与
+ * 子图 wrapper 节点渲染出真正的 <select>，而不是一个自由文本框。
+ * 缺失或连不上时落到 undefined，消费方优雅回落到纯文本控件。
  */
 import { fetchObjectInfo } from "~/lib/comfyui/raw";
 import { localModelFileNames } from "~/lib/models";
 import { modelFoldersForField } from "~/lib/model-types";
 
-/** Candidate-list extraction from an object_info spec tuple.
+/* 从 object_info 的 spec 元组里抽出候选列表。
  *  旧形态：`[["option-a", "option-b"], {...extra}]`（head 即选项数组）。
  *  新形态（ComfyUI V3 combo，0.13+ 实测）：`["COMBO", {options:[...]}, ...]`
  *  —— head 是类型名字符串，候选挂在第二元素对象的 `options` 字段。
@@ -41,12 +39,11 @@ const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
   return undefined;
 };
 
-/** Factory that returns fresh object_info-backed resolvers。
+/* 工厂：返回一组「由 object_info 支撑」的新解析器。
  *
- *  The object_info cache lives inside the returned instance (mirroring the
- *  original per-request closure in workflow-detail.ts): each build starts
- *  with a cold `_comboObjectInfo` so a long-lived process never pins a stale
- *  object_info snapshot across requests.
+ * object_info 缓存存在返回的实例内部（与 workflow-detail.ts 里原来「每请求
+ * 一个闭包」的做法一致）：每次构建都从冷的 `_comboObjectInfo` 开始，
+ * 于是长驻进程不会跨请求钉住一份过期的 object_info 快照。
  *
  *  两类解析共用这一次 fetch（同一份对象、同一个缓存）：
  *    · `comboOptionsFor*` —— COMBO 候选表；
@@ -72,16 +69,14 @@ export function createObjectInfoResolvers(): {
   };
 
   /**
-   * Resolve COMBO candidate options for a wrapper widget field.
+   * 解析 wrapper 控件字段的 COMBO 候选项。
    *
-   * P4: union the node-declared `object_info` candidates with the
-   * locally-synced model files that map to this field (e.g. `ckpt_name` →
-   * CHECKPOINT files).  ComfyUI's own COMBO list is only ever the default set
-   * shipped in object_info; real on-disk models the user installed are NOT
-   * listed there, so without the union the canvas dropdown silently misses
-   * every local model.  Both sources are returned verbatim (extension kept)
-   * and de-duplicated + sorted; if neither yields anything we return
-   * `undefined` so the consumer falls back to a plain text control.
+   * P4：把「节点声明的 object_info 候选」与「映射到该字段的本地已同步模型文件」
+   * 取并集（例如 `ckpt_name` 对应 CHECKPOINT 文件）。ComfyUI 自己的 COMBO 列表
+   * 永远只是 object_info 里随附的默认集；用户真正装在磁盘上的模型**不在**其中，
+   * 因此不取并集的话，画布下拉框会悄悄漏掉所有本地模型。
+   * 两个来源都原样返回（保留扩展名），再去重 + 排序；
+   * 两边都取不到时返回 `undefined`，消费方随即回落到纯文本控件。
    */
   /** 某 class 某字段在 object_info 里的原始 spec（`[类型, 选项对象, …]`）。
    *  查不到（未注册 / 该字段不存在 / ComfyUI 未启动）时 undefined。 */
@@ -117,18 +112,16 @@ export function createObjectInfoResolvers(): {
   };
 
   /**
-   * Fallback COMBO resolver used when the class-based lookup yields nothing —
-   * e.g. a `comfy-core` subgraph node (v0.7.0) whose `properties.proxyWidgets`
-   * is absent or quarantined, so we never learn the internal node's class and
-   * `comboOptionsForClassField(wrapperClass, field)` can't find the field.
+   * 按类型查不到任何东西时用的兜底 COMBO 解析器 —— 例如某个 `comfy-core`
+   * 子图节点（v0.7.0）的 `properties.proxyWidgets` 缺失或被隔离，于是我们
+   * 学不到内部节点的类型，`comboOptionsForClassField(wrapperClass, field)`
+   * 也就找不到该字段。
    *
-   * Scans EVERY `object_info` class that declares `field` as a COMBO and unions
-   * their candidate lists.  For uniquely-named fields (e.g. `resolution_preset`,
-   * declared by exactly one class) this recovers the full option list; for
-   * shared model fields (e.g. `unet_name`) it unions all known defaults, which
-   * is harmless because the local-model union below already covers the
-   * realistic on-disk set.  object_info is fetched once and cached, so the
-   * scan is cheap on repeated calls.
+   * 这里扫描**每一个**把 `field` 声明为 COMBO 的 object_info 类，
+   * 把它们的候选列表取并集。对名字唯一的字段（例如只被一个类声明的
+   * `resolution_preset`）能还原出完整选项；对共享的模型字段（例如 `unet_name`）
+   * 会把所有已知默认值并起来 —— 这无害，因为下面的本地模型并集已经覆盖了
+   * 现实中磁盘上的那批。object_info 只拉一次并缓存，因此重复调用很便宜。
    */
   const comboOptionsForFieldName = async (
     field: string,

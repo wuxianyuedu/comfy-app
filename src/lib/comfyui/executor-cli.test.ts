@@ -337,7 +337,7 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
     ]) as unknown as FixtureResult;
 
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
-    // KSampler widgets_values = [seed, control, steps, cfg, sampler, scheduler, denoise]
+    // KSampler 的 widgets_values 依次是：seed、control、steps、cfg、sampler、scheduler、denoise
     expect(inner.widgets_values[0]).toBe(12345);
     // 哨兵槽与后续控件不能被写坏
     expect(inner.widgets_values[1]).toBe("randomize");

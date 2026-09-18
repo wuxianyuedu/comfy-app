@@ -32,11 +32,10 @@ const ENV_DEFAULTS: LLMConfig = {
   maxTokens: Number(process.env.LLM_MAX_TOKENS ?? 2048),
 };
 
-/**
- * Resolve the effective LLM config by layering:
- *   1. process.env (defaults)
- *   2. DB singleton row (user overrides via the settings UI)
- *   3. per-request override (rarely used; the browser never sends apiKey)
+/* 按层叠加出最终生效的 LLM 配置：
+ *   1. process.env（作为默认值）
+ *   2. 数据库里的单例行（用户在设置界面里的覆盖）
+ *   3. 单次请求的覆盖（很少用；浏览器从不发送 apiKey）
  *
  * 温度解析优先级：override.taskType 的用户覆盖 → override.temperature →
  * 该任务类型的推荐默认（TASK_TYPES.defaultTemperature）→ DB.temperature（全局）
@@ -92,7 +91,7 @@ export async function getLLMConfig(
       if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
     }
   } catch {
-    // DB unavailable — fall back to env defaults
+    // 数据库不可用 —— 回落到环境变量里的默认值
   }
 
   if (override) {
@@ -262,7 +261,7 @@ function assertModelConfigured(cfg: LLMConfig): void {
   if (!cfg.model?.trim()) throw new Error(ERR_MODEL_UNCONFIGURED);
 }
 
-/** One-shot (non-streaming) completion. */
+/* 一次性（非流式）补全。 */
 export async function completeLLM(
   cfg: LLMConfig,
   messages: LLMMessage[],
@@ -282,10 +281,10 @@ export async function completeLLM(
   return json.choices?.[0]?.message?.content ?? "";
 }
 
-/**
- * Streaming completion. Calls `onToken` with each delta and resolves with the
- * full concatenated text. Works with Ollama, LM Studio, vLLM, and OpenAI —
- * all emit SSE chunks shaped like `{ choices: [{ delta: { content } }] }`.
+/* 流式补全。每收到一个增量就调用一次 `onToken`，
+ * 最终以「拼接好的完整文本」resolve。
+ * 兼容 Ollama、LM Studio、vLLM 与 OpenAI —— 它们发出的 SSE 分片形状一致，
+ * 都形如 `{ choices: [{ delta: { content } }] }`。
  */
 export async function streamLLM(
   cfg: LLMConfig,
@@ -332,7 +331,7 @@ export async function streamLLM(
           onToken(token);
         }
       } catch {
-        // ignore malformed keep-alive chunks
+        // 忽略格式不对的保活分片
       }
     }
   }

@@ -14,7 +14,7 @@
  * （不 import pino、不 import `server-only`），因此两条通道都能用；
  * `src/lib/core/logger.ts` 与服务端转发层各按原样 re-export 保住既有导入路径。
  *
- * @module core/redact-secret
+ * @module core/redact-secret — 密钥形状守卫（值形状判据，唯一实现）
  */
 /* ── 密钥形状守卫：比枚举字段名更可靠的那一层 ──────────────────────────────
  * pino 的 `redact` 只认**精确路径**（`a.b.c`）与**整段通配**（`a.*` / `*.b`）。

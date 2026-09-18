@@ -14,7 +14,7 @@
  *   - id 默认用 cuid2（`@paralleldrive/cuid2` 的 createId），贴近 Prisma cuid；
  *     Project 复用客户端 `proj_*` id（无默认）。
  *
- * @module server/db/schema
+ * @module server/db/schema — Drizzle SQLite schema（替代 prisma/schema.prisma）
  */
 import {
   sqliteTable,

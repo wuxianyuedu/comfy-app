@@ -14,7 +14,7 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
-    // (OWASP A07): enforce a real minimum password length.
+    // OWASP A07（认证失败）：强制一个真正有意义的最小密码长度。
     minPasswordLength: 12,
     maxPasswordLength: 128,
   },
@@ -22,8 +22,8 @@ export const auth = betterAuth({
     github: {
       clientId: env.BETTER_AUTH_GITHUB_CLIENT_ID,
       clientSecret: env.BETTER_AUTH_GITHUB_CLIENT_SECRET,
-      // (OWASP A05/A07): redirectURI removed — better-auth derives
-      // it from `baseURL`, so no hard-coded localhost in production.
+      // OWASP A05/A07：已移除 redirectURI —— better-auth 会从 `baseURL` 推导它，
+      // 于是生产环境里不会再残留硬编码的 localhost。
     },
   },
   // ── 生产级限流（OWASP A07 / A08）：auth 端点防暴破 ──────────

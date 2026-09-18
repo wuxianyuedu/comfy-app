@@ -1,6 +1,6 @@
 /**
  * `repository-post.ts` — Post 仓储（Drizzle 版）
- * @module core/repository-post
+ * @module core/repository-post — Post 仓储（Drizzle 版）
  */
 import "server-only";
 

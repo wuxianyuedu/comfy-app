@@ -1,31 +1,31 @@
-/* ── Shared workflow-IO types ──
+/* ── 共享的工作流对外 IO 类型 ──
  *
- * Single source of truth for "what does this custom workflow accept / produce",
- * imported by BOTH client components (src/components/studio/...) and the server
- * router (src/server/api/routers/workflow.ts). Living in `src/lib/` keeps the
- * server from crossing the boundary into `components/`.
+ * 「这个自定义工作流接受 / 产出什么」的唯一事实源，
+ * 客户端组件（src/components/studio/...）与服务端路由
+ *（src/server/api/routers/workflow.ts）**都**导入它。
+ * 放在 `src/lib/` 下是为了让服务端不必跨界去引 `components/`。
  */
 import { z } from "zod";
 
-/** One exposed pin, as returned by GET /api/workflows/[id]. */
+/* 一个暴露出来的引脚，形状与 GET /api/workflows/[id] 返回的一致。 */
 export interface WorkflowIOEntry {
   direction: "input" | "output";
-  /** Semantic bucket chosen in IO-edit mode — NOT the data type.
-   *  Values: "param" | "widget" | "output" | (free-form for custom kinds). */
+  /** IO 编辑模式里选的**语义**分桶 —— 不是数据类型。
+   *  取值为 "param" / "widget" / "output"（自定义种类可自由取值）。 */
   kind: string;
   nodeId: string;
   name: string;
   label?: string;
-  /** ComfyUI data type: STRING / INT / FLOAT / BOOLEAN / IMAGE / VIDEO / … */
+  /** ComfyUI 的数据类型：STRING / INT / FLOAT / BOOLEAN / IMAGE / VIDEO … */
   type?: string;
   defaultValue?: unknown;
   nodeTitle?: string;
   multiline?: boolean;
-  /** mark a widget-backed input as REQUIRED. */
+  /** 把某个由控件支撑的输入标为必填。 */
   required?: boolean;
-  /** COMBO candidate list resolved from ComfyUI /object_info. */
+  /** 由 ComfyUI /object_info 解析出的 COMBO 候选项列表。 */
   options?: string[];
-  /** user-defined display order. */
+  /** 用户自定义的展示顺序。 */
   displayOrder?: number;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random），
    *  与 ComfyUI 的 control_after_generate 对应；仅 seed 类 widget 有意义。 */

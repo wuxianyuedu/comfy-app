@@ -10,18 +10,16 @@
  * 校验错误（`node_errors`）由 `executor-cli-stream` 从 cli envelope 里深搜后
  * 交给 `validation.extractValidationErrors`。
  *
- * @module comfyui/executor-errors
+ * @module comfyui/executor-errors — 面向用户的错误提示映射
  */
 
-// Map raw ComfyUI/node errors to user-actionable hints.
+// 把 ComfyUI / 节点抛回的原始错误翻译成用户能照着做的提示。
 //
-// Why we don't just `String(raw)`: some ComfyUI builds (kaytool's v0.28
-// included) emit `exception_message` as a structured object instead of a
-// plain string, and tracebacks can be arrays of frames. A naive
-// `Object.prototype.toString` would collapse all of those to
-// "[object Object]", hiding the actual reason from the user.  This
-// helper recursively peels known fields, falling back to a pretty-printed
-// JSON dump so *something* informative always lands in `task.error`.
+// 为什么不直接 `String(raw)`：部分 ComfyUI 构建（含 kaytool v0.28）把
+// `exception_message` 发成结构化对象而不是字符串，traceback 还可能是帧数组。
+// 朴素的 `Object.prototype.toString` 会把它们统统压成 "[object Object]"，
+// 用户看到的就不是真实原因了。本函数递归剥出已知字段，兜底再打印 JSON ——
+// 保证 `task.error` 里**总有**可读的信息。
 export function friendlyError(raw: unknown): string {
   if (raw == null) return "";
   if (typeof raw === "string") return raw;
@@ -33,8 +31,8 @@ export function friendlyError(raw: unknown): string {
   }
   if (typeof raw === "object") {
     const o = raw as Record<string, unknown>;
-    // Ordered preference: ComfyUI's own canonical fields first, then
-    // generic exception shape (Error.message / details / reason).
+    // 按优先级取：先 ComfyUI 自己的规范字段，再取通用异常形状
+    //（Error.message / details / reason 这类通用形状）。
     const candidates: (keyof typeof o)[] = [
       "exception_message",
       "message",
@@ -49,8 +47,8 @@ export function friendlyError(raw: unknown): string {
       const v = o[k];
       if (typeof v === "string" && v.trim()) return v;
     }
-    // Some ComfyUI exception_payloads nest `exception_message` deeper
-    // (e.g. `{ data: { exception_message: "..." } }`).
+    // 部分 ComfyUI 的 exception_payload 把 `exception_message` 埋得更深
+    //（例如 `{ data: { exception_message: "..." } }`）。
     for (const k of ["data", "exception", "exception_payload"]) {
       const inner = o[k];
       if (inner && typeof inner === "object") {
@@ -58,9 +56,8 @@ export function friendlyError(raw: unknown): string {
         if (innerText.trim()) return innerText;
       }
     }
-    // Last resort: pretty-print the object so the user at least sees
-    // *something* other than "[object Object]".  Cap length so a
-    // gigantic traceback payload can't blow up the DB column.
+    // 最后手段：把对象打印出来，让用户至少看到点东西而不是 "[object Object]"。
+    // 截断长度，避免超长的 traceback 撑爆数据库列。
     try {
       const json = JSON.stringify(raw, null, 2);
       return json.length > 4000 ? json.slice(0, 4000) + "\n…(truncated)" : json;
@@ -68,7 +65,7 @@ export function friendlyError(raw: unknown): string {
       return "[unserializable error]";
     }
   }
-  // Fallback for symbols / functions — should not happen, but be safe.
+  // symbol / function 的兜底分支 —— 正常不会走到，留着以防万一。
   if (typeof raw === "function") return raw.name || "[function]";
   if (typeof raw === "symbol") return Symbol.prototype.toString.call(raw);
   return "[unknown error]";

@@ -17,7 +17,7 @@
  * 提交，不做 UI→API 那套前端语义），少了它，画布上被旁路/静音的节点会被真的
  * 执行。
  *
- * @module comfyui/execution-graph
+ * @module comfyui/execution-graph — API 图的**执行前规范化**（纯函数）
  */
 
 import { asRecord } from "./raw";

@@ -5,7 +5,7 @@ import { enqueueTraining, isTrainerConfigured } from "~/lib/comfyui/trainer";
 import { getSettingsSync } from "~/lib/app-settings/app-settings.server";
 
 export const trainRouter = createTRPCRouter({
-  /** GET /api/train */
+  /* GET /api/train —— 读 */
   list: authedProcedure.query(async ({ ctx }) => {
     const jobs = await loraTrainingJobRepository.listByUser(ctx.user.id);
     return {
@@ -16,7 +16,7 @@ export const trainRouter = createTRPCRouter({
     };
   }),
 
-  /** POST /api/train — create a training job */
+  /* POST /api/train —— 新建：create a training job */
   create: authedProcedure
     .input(
       z.object({
@@ -60,7 +60,7 @@ export const trainRouter = createTRPCRouter({
       return { jobId: job.id };
     }),
 
-  /** GET /api/train/[id] */
+  /* GET /api/train/[id] —— 读 */
   detail: authedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -72,7 +72,7 @@ export const trainRouter = createTRPCRouter({
       return { job };
     }),
 
-  /** POST /api/train/[id]/cancel */
+  /* POST /api/train/[id]/cancel —— 新建 */
   cancel: authedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {

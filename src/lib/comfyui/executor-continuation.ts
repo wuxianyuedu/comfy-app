@@ -6,11 +6,9 @@
  * ------------
  * executor 家族曾有一组**互相递归**的模块依赖（规范 12.7 禁止）：
  *
- *     executor-cli ─┐
- *                   ├─→ executor-finalize ─┬─→ executor-scheduler ─┐
- *     executor-ws ──┘   （收口：complete /  │   （出队：processQueue）│
- *                        fail / finalize）  └─→ executor-ws ←──────┘
- *                                            executor-scheduler → executor-cli
+ * 两条提交入口（CLI 与 WS 通道）都流向收口层（complete / fail / finalize），
+ * 收口层再流向调度层（processQueue）继续出队；而调度层执行任务时又必须回到
+ * 通道层与 CLI 层 —— 这三步首尾相接，构成一个环。
  *
  * 环的**真实成因**只有一类边：`finalize` / `ws` 收口结束后要「让队列继续跑」，
  * 因此 `import { processQueue } from "./executor-scheduler"`。而调度层反过来必须
@@ -32,7 +30,7 @@
  *   静默空转**：调度层另有一处 3s 安全网心跳（`startHeartbeat`）会重新出队，
  *   等价于旧行为里的兜底。缺注册时打一次 warn，避免「队列悄悄停住」无人察觉。
  *
- * @module comfyui/executor-continuation
+ * @module comfyui/executor-continuation — 出队续跑的回调总线（唯一注册点）
  */
 import { logger } from "~/lib/core/logger";
 
