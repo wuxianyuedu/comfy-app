@@ -36,17 +36,44 @@ node scripts/check-react-updater-purity.cjs || exit 1
 echo "[pre-commit] 5/24 标题行让位硬规则"
 node scripts/check-title-bar-clearance.cjs || exit 1
 
-echo "[pre-commit] 6/24 tsc --noEmit"
-pnpm exec tsc --noEmit || exit 1
-
+# 2026-09-18: tsc 与 eslint 并行。二者判据完全独立、互不依赖 —— tsc 查类型、
+# eslint 查 lint 与零警告；输出也不喂给后续步骤（第 8 步起的棘轮是独立的 node
+# 脚本）。实测 tsc ~133s、eslint 热跑 ~30–46s，串行合计约 180s，并行后整段收束
+# 到 tsc 那段。两个都放后台，等两者都结束再统一判失败 —— 任一个非零退出都阻断
+# 提交（判据与口径不变）。注意：两者各会建一份 TS 程序，同时跑会多吃内存，机器
+# 紧张时退回串行即可（去掉 & 与 wait，恢复两条 || exit 1）。
 # 2026-09-10(ISSUE #322): eslint 统一为**零警告**口径。
 # 此前本地只判「无 error」，而门禁另一侧判 --max-warnings 0 —— 结果是 warning
 # 能在本地顺利进历史，直到更晚才被拦下（复核返工）。规范 11.7 / 13.5 的门禁
 # 一律零警告，本地与其它运行位置必须同一口径。
 # 平台侧流水线（.cnb.yml）已按额度约束删除（ISSUE #623），这条钩子现在是
 # **唯一**跑门禁的地方 —— 见规范 13.5 / 13.5.3。
-echo "[pre-commit] 7/24 eslint（零警告）"
-pnpm exec eslint . --max-warnings 0 || exit 1
+# `--cache --cache-strategy content`（实测，全仓约 964 个代码文件）：
+#   · 冷跑/全量重建 311s（默认策略）· 346s（content，仅切换策略后首跑一次）
+#   · 稳态热跑 28.8–46.3s
+#   · **只碰 mtime、内容不变**：默认 metadata 策略 → 3 条失效、87.5s；
+#     content 策略 → **0 条失效**、46.3s
+#   · 真改 1 个文件内容：1 条失效、44s
+# `--cache-strategy` 默认是 `metadata`（用 mtime + size 判定），于是任何「重写同一
+# 份内容」的操作都会把文件判成已变：`git checkout` / `stash` / `pull`、`prettier
+# --write`、编辑器保存、构建脚本 touch —— 一次动很多文件就是**大面积失效**。
+# 换成 `content`（按内容哈希）后这类抖动不再失效，真实内容改动照常只失效自己那
+# 一条。缓存键含「文件内容 + 解析后的 config」，所以改 eslint.config.js 会自然
+# 失效；缓存放 node_modules/.cache/eslint（已被 gitignore 覆盖，不必登记忽略清单）。
+# ⚠️ 升级 eslint / typescript-eslint **之后**先删掉该缓存目录 —— 插件实现变更不在
+# 缓存键里（这是 --cache 的已知边界，不是本仓的判据问题）；换 cache-location 或
+# cache-strategy 也会导致一次全量重建，属预期。
+echo "[pre-commit] 6&7/24 tsc --noEmit + eslint（零警告，并行）"
+pnpm exec tsc --noEmit &
+tsc_pid=$!
+pnpm exec eslint . --max-warnings 0 \
+  --cache --cache-location node_modules/.cache/eslint \
+  --cache-strategy content &
+eslint_pid=$!
+rc=0
+wait "$tsc_pid" || rc=1
+wait "$eslint_pid" || rc=1
+[ "$rc" -ne 0 ] && exit 1
 
 # 2026-09-04: UI 与逻辑分离棘轮(规范 17)。违规数只许降不许升:
 # 新增 fetch / vanillaApi / tRPC hook 进视图层 → 阻断;
