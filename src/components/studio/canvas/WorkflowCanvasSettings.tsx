@@ -26,8 +26,7 @@
  *  不会与旧载荷相撞。
  */
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
-import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
+import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 
 export interface CanvasSettings {
   /** 网格 (Grid) */
@@ -195,38 +194,17 @@ export function CanvasSettingsPanel({
   reset,
   onClose,
 }: PanelProps) {
-  /* 按 Esc 关闭面板 —— 抽屉的标准交互。 */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <FullScreenLayer
-      zClass="z-50"
-      className="flex justify-end"
-      role="presentation"
-    >
-      {/* Click-to-dismiss scrim.  Stays interactive so a click outside
-       *  feels like clicking "the background of the drawer", not a
-       *  floating dim layer. */}
-      <button
-        type="button"
-        aria-label="关闭画布设置"
-        onClick={onClose}
-        className="dark:bg-canvas-deep flex-1 cursor-default bg-black/25 backdrop-blur-[1px]"
-      />
-      <aside
-        role="dialog"
+  /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
+     标题行与 ProjectSettingsDrawer 是同一件事，此前两边各写一份。 */
+  return (
+    <Sheet open onOpenChange={(next) => !next && onClose()}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="bg-panel/97 border-border-strong text-ink-bright w-[340px] gap-0 border-l shadow-2xl shadow-black/10 sm:max-w-[340px] dark:shadow-black/50"
         aria-label="工作流画布设置"
-        className="bg-panel/97 border-border-strong text-ink-bright flex h-full w-[340px] flex-col border-l shadow-2xl shadow-black/10 dark:shadow-black/50"
       >
+        <SheetTitle className="sr-only">工作流画布设置</SheetTitle>
         {/* Header bar */}
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -368,9 +346,8 @@ export function CanvasSettingsPanel({
             恢复默认
           </button>
         </div>
-      </aside>
-    </FullScreenLayer>,
-    document.body,
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -394,9 +371,8 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
         ⚙
       </span>
       设置
-      {/* Violet dot tells the user "you have unsaved-from-default
-       *  preferences" without forcing them to open the panel.  Reads as
-       *  both a status indicator and a tiny bit of branding. */}
+      {/* 紫色小点告诉用户「当前有偏离默认值的偏好」，
+       *  不必先打开面板。它既是状态指示，也算一点点品牌色。 */}
       {hasOverrides && (
         <span
           aria-hidden

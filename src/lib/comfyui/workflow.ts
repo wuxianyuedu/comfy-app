@@ -12,7 +12,7 @@ export type LoraSpec = { name: string; weight: number };
  *  时才有意义）；括号里是它们各自对应的参数名：步数（steps）、CFG（cfg）、
  *  随机种子（seed）、尺寸（size）、数量（count）、降噪（denoise）、
  *  遮罩（mask）、放大模型（upscaleModel）、前缀（prefix）、WAN 模型（wanModel）、
- *  WAN VAE（wanVae）、T5 模型（t5Model）、LTX 模型（ltxModel）、
+ *  WAN VAE（wanVae）、WAN 文本编码器（t5Model）、LTX 模型（ltxModel）、
  *  时长（duration）、分辨率（resolution）、帧率（fps）、LoRA（loras）。
  *
  *  保留这些字段与自动注入是为了两件事：① 画布 / 导入图的**提示词**注入

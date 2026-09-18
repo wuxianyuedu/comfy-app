@@ -30,6 +30,7 @@ import {
   type Edge,
   type Node,
   type OnNodeDrag,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -49,6 +50,9 @@ import {
 import {
   libraryBackdropSize,
   libraryEdgeOwner,
+  LIB_NODE_HOST,
+  LIB_NODE_OUTPUTS,
+  LIB_NODE_PARAMS,
 } from "./workflow-library-wire-graph";
 import {
   LibraryBackdropNode,
@@ -227,6 +231,24 @@ function WorkflowLibraryCanvasInner({
     [],
   );
 
+  /* 打开时把**三列内容**收进视野，而不是整块背景板。
+   *
+   *  `fitView` prop 按**所有节点**的并集包围盒缩放 —— 背景板（ISSUE #596）在宽高
+   *  两个方向都严格大于视口（max(内容, 视口) + BACKDROP_PADDING），把它算进包围
+   *  盒会把首帧缩放钉在 ~0.5，三列缩成面板中间一小团。挂载后在 `onInit` 里按三列
+   *  内容节点重跑一次定向 fitView 覆盖它：内容尽量占满面板，背景板继续只负责
+   *  「把缩放下限钉住 + 铺满画布底」（它的两个职责都不受影响）。 */
+  const handleInit = useCallback((instance: ReactFlowInstance) => {
+    void instance.fitView({
+      nodes: [
+        { id: LIB_NODE_PARAMS },
+        { id: LIB_NODE_HOST },
+        { id: LIB_NODE_OUTPUTS },
+      ],
+      padding: 0.08,
+    });
+  }, []);
+
   /* React Flow 通过 Delete / Backspace 删除选中线时回调：解析出每条线对应的
    * 对外参数（输入侧 entryId / 输出侧 ioKey），落到 `disconnect` 只断那一条。 */
   const handleEdgesDelete = useCallback(
@@ -338,9 +360,12 @@ function WorkflowLibraryCanvasInner({
           maxZoom={2}
           panOnDrag
           zoomOnScroll
-          /* 站点默认 `fitView` 会把三列收进视野；用户随后可自由平移缩放。 */
+          /* 站点默认 `fitView` 会把三列收进视野；用户随后可自由平移缩放。
+           *  prop 版先按全部节点（含背景板）跑一遍，`onInit` 的定向 fitView
+           *  随即按三列内容覆盖 —— 见 `handleInit`。 */
           fitView
           fitViewOptions={{ padding: 0.12 }}
+          onInit={handleInit}
           proOptions={{ hideAttribution: true }}
           /* 节点**可拖**（React Flow 用它给 `.react-flow__node` 打开命中与指针事件
            *  —— 关掉它，卡片列与宿主卡片整块变成 `pointer-events: none`，表单输入、
