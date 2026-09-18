@@ -1,31 +1,29 @@
 "use client";
 /**
- * Canvas settings — user-tunable preferences for the workflow editor
- * canvas.  Persisted per-browser to localStorage so the user's choices
- * (grid transparency, ruler visibility, etc.) survive page reloads and
- * apply the moment a new workflow is opened.
+ * 画布设置 —— 用户可以调的「工作流编辑器画布」偏好。
+ * 按浏览器持久化到 localStorage，因此用户的选择（网格透明度、标尺显隐等）
+ * 在刷新后仍在，并在打开新工作流时立刻生效。
  *
- *  three small affordances owe their home here
- *    • grid line opacity / line width / gap (the orange/dark gridlines
- *      from the screenshot were too prominent),
- *    • show/hide rulers + mini-map,
- *    • max zoom clamp.
+ *  三件小功能归在这里：
+ *    • 网格线的透明度 / 线宽 / 间距
+ *     （截图里那种橙 / 深色格线太抢眼了），
+ *    • 标尺与小地图的显隐，
+ *    • 最大缩放的限幅。
  *
- *  All settings live under one flat object so a single `useCanvasSettings()`
- *  hook can mutate any subset in one round-trip.  Rendered through:
- *    • <CanvasSettingsButton> — gear icon at the canvas top-right that
- *      shows a violet dot when settings differ from defaults,
- *    • <CanvasSettingsPanel> — right-edge drawer (340px wide) opened
- *      via the button.  Closes on Esc / scrim click / × button.
+ *  所有设置放在同一个扁平对象里，好让单个 `useCanvasSettings()` hook
+ *  一次往返就能改任意子集。渲染出口有两个：
+ *    • <CanvasSettingsButton> —— 画布右上角的齿轮图标，
+ *      设置偏离默认值时显示一个紫色小点；
+ *    • <CanvasSettingsPanel> —— 由该按钮打开的右侧抽屉（宽 340px）。
+ *      按 Esc、点遮罩或点 × 都会关闭。
  *
- *  Settings are read by CanvasGrid / CanvasRulers / ZoomIndicator via
- *  props (the workflow editor root calls `useCanvasSettings()` once and
- *  distributes).  This avoids any React Context crossing the
- *  `<ReactFlow>` boundary, which can confuse the editor's internal
- *  selector subscriptions.
+ *  设置由 CanvasGrid / CanvasRulers / ZoomIndicator 经 props 读取
+ *（工作流编辑器根组件调一次 `useCanvasSettings()` 再分发）。
+ * 这样就避免了任何 React Context 跨越 `<ReactFlow>` 边界 ——
+ * 那会干扰编辑器内部的选择器订阅。
  *
- *  Storage key is versioned (`v1`) so future shape changes can migrate
- *  without colliding with old payloads.
+ *  存储键带版本（`v1`），将来改结构时可以迁移，
+ *  不会与旧载荷相撞。
  */
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -33,35 +31,34 @@ import { FullScreenLayer } from "../fullscreen/FullScreenLayer";
 
 export interface CanvasSettings {
   /** 网格 (Grid) */
-  /** 0..1, applied to the fine (default 10px) grid lines. Multiplied by
-   *  the CanvasGrid zoom-fade curve so lines stay legible at all zooms. */
+  /** 0..1，作用于细网格线（默认 10px 那层）。
+   *  会与 CanvasGrid 的缩放淡出曲线相乘，让线在所有缩放档下都可读。 */
   gridMinorAlpha: number;
-  /** 0..1, applied to the major reference lines (default every 100px). */
+  /** 0..1，作用于主参考线（默认每 100px 一条）。 */
   gridMajorAlpha: number;
-  /** World-px between two adjacent fine lines.  Major lines always land
-   *  at `gridGap * 10` to keep the 1:10 ratio users expect. */
+  /** 相邻两条细线之间的世界坐标像素。主线恒落在 `gridGap * 10` 处，
+   *  保持用户预期的 1:10 比例。 */
   gridGap: number;
   gridMinorLineWidth: number;
   gridMajorLineWidth: number;
-  /** When false the entire <Background> stack returns null.  Useful
-   *  for screenshot workflows where a clean canvas is wanted. */
+  /** 为 false 时整层 <Background> 直接返回 null。
+   *  适合需要干净画布的截图流程。 */
   showGrid: boolean;
 
   /** 画布 (Canvas chrome) */
   showRulers: boolean;
   showMiniMap: boolean;
 
-  /** 缩放 (Zoom) — these only take effect on the next editor mount
-   *  because the underlying `<ReactFlow minZoom/maxZoom>` props are
-   *  consumed once at instantiation; the panel labels communicate that. */
+  /** 缩放 —— 这两项只在下次挂载编辑器时生效，
+   * 因为底层的 `<ReactFlow minZoom/maxZoom>` props 在实例化时只读一次；
+   *  面板上的文案已写明这一点。 */
   maxZoom: number;
   minZoom: number;
 
-  /** 调试 (Debug) — unified "调试模式" toggle.
-   *  When ON, the canvas shows a separate bottom-docked execution-log
-   *  panel (GlobalStepLogPanel) and each log line carries its caller
-   *  source ("file:line").  This is the single switch the user asked
-   *  for — no per-node log toggles. */
+  /** 调试 —— 统一的「调试模式」开关。
+   *  打开时，画布底部会多出一个独立的执行日志面板（GlobalStepLogPanel），
+   *  且每条日志都带上调用方来源（"文件:行"）。
+   *  这是用户要的**一个**总开关 —— 不做按节点的日志开关。 */
   debugMode: boolean;
 }
 
@@ -87,8 +84,7 @@ function readSettings(): CanvasSettings {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_CANVAS_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<CanvasSettings>;
-    /* Forward-compat: unknown keys in storage are ignored, default
-     * values fill any holes left by older payloads. */
+    /* 向前兼容：存储里的未知键忽略，默认值补齐旧载荷留下的空洞。 */
     return { ...DEFAULT_CANVAS_SETTINGS, ...parsed };
   } catch {
     return DEFAULT_CANVAS_SETTINGS;
@@ -100,19 +96,17 @@ function writeSettings(s: CanvasSettings): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   } catch {
-    /* Quota / private-mode / disabled-storage — silently ignore.
-     * The settings still apply for this session; only persistence
-     * is lost. */
+    /* 配额满 / 隐私模式 / 存储被禁用 —— 静默忽略。
+     * 设置对本次会话仍然生效，只是丢掉了持久化。 */
   }
 }
 
-/** Single source of truth for canvas preferences.  Hydrates from
- *  localStorage on mount; mutations are auto-persisted and fanned out to
- *  EVERY `useCanvasSettings()` instance via a module-level listener set
- *  (useSyncExternalStore).  This matters because the settings drawer and
- *  the GlobalStepLogPanel are separate components — flipping "调试模式"
- *  in the drawer must instantly re-render the panel without prop-drilling
- *  across the React Flow boundary. */
+/* 画布偏好的唯一事实源。挂载时从 localStorage 读入；
+ * 变更会自动落盘，并经模块级监听器集合（useSyncExternalStore）
+ * 广播给**每一个** `useCanvasSettings()` 实例。
+ * 这一点很要紧：设置抽屉与 GlobalStepLogPanel 是两个独立组件 ——
+ * 在抽屉里切换「调试模式」必须立刻让面板重渲染，
+ * 而不是靠 props 一路穿过 React Flow 边界传下去。 */
 const SETTINGS_LISTENERS = new Set<() => void>();
 let CURRENT_SETTINGS: CanvasSettings = DEFAULT_CANVAS_SETTINGS;
 
@@ -127,9 +121,9 @@ function applySettings(next: CanvasSettings) {
 }
 
 export function useCanvasSettings() {
-  /* Start with defaults so SSR / first paint don't flash a saved state.
-   * `hydrated` flips client-side only, via useSyncExternalStore (no
-   * set-state-in-effect). */
+  /* 先用默认值起步，避免 SSR / 首屏闪一下已保存的状态。
+   * `hydrated` 只在客户端翻转，且经 useSyncExternalStore 实现
+   *（不在 effect 里 set-state）。 */
   const hydrated = useSyncExternalStore(
     useCallback(() => () => undefined, []),
     () => true,
@@ -163,7 +157,7 @@ export function useCanvasSettings() {
   return { settings, update, reset, hydrated };
 }
 
-/** Convenience accessor for just the debug toggle. */
+/* 只取「调试模式」开关的便捷访问器。 */
 export function useDebugMode() {
   const { settings, update } = useCanvasSettings();
   return {
@@ -172,12 +166,10 @@ export function useDebugMode() {
   };
 }
 
-/** True iff the user has changed anything from defaults — used to
- *  light up the violet dot beside the ⚙ button so they know their
- *  customisations are in effect without having to open the panel.
- *  `debugMode` is excluded: it's a runtime debug affordance, not a
- *  visual customisation, so it shouldn't light the "you have overrides"
- *  dot. */
+/* 当且仅当用户改过任何一项、偏离了默认值时为真 ——
+ * 用于点亮 ⚙ 按钮旁边那个紫色小点，让用户不必打开面板也知道自己的定制在生效。
+ * `debugMode` 被排除在外：它是运行期调试手段，不是视觉定制，
+ * 不该点亮「你改过设置」这个点。 */
 export function isCustomCanvasSettings(s: CanvasSettings): boolean {
   const keys = (
     Object.keys(DEFAULT_CANVAS_SETTINGS) as (keyof CanvasSettings)[]
@@ -188,7 +180,7 @@ export function isCustomCanvasSettings(s: CanvasSettings): boolean {
   return false;
 }
 
-/* ── Settings panel (right-edge drawer) ── */
+/* ── 设置面板（右侧抽屉） ── */
 
 interface PanelProps {
   settings: CanvasSettings;
@@ -203,7 +195,7 @@ export function CanvasSettingsPanel({
   reset,
   onClose,
 }: PanelProps) {
-  /* Esc closes the panel — standard drawer affordance. */
+  /* 按 Esc 关闭面板 —— 抽屉的标准交互。 */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -382,7 +374,7 @@ export function CanvasSettingsPanel({
   );
 }
 
-/* ── Top-right gear button (sits next to <ZoomIndicator>) ── */
+/* ── 右上角齿轮按钮（与 <ZoomIndicator> 并排） ── */
 
 interface ButtonProps {
   hasOverrides: boolean;
@@ -439,7 +431,7 @@ export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-/* ── Small presentational row helpers ── */
+/* ── 小型的展示性行助手 ── */
 
 function Section({
   title,
@@ -505,10 +497,9 @@ function SliderRow({
         onChange={(event) => onChange(parseFloat(event.target.value))}
         className="bg-subtle h-1 w-full cursor-pointer appearance-none rounded-full accent-violet-500 outline-none"
         style={{
-          /* Range input theming that's hard to do with Tailwind alone;
-           * we paint the filled portion via a gradient that mirrors the
-           * slider position so the user sees their value in the bar
-           * itself. */
+          /* 滑动条的主题化单靠 Tailwind 很难做到；
+           * 这里用一个与滑块位置同步的渐变画出「已填充」那一段，
+           * 让用户在条上直接看到自己的取值。 */
           background: `linear-gradient(to right, rgb(167,139,250) 0%, rgb(167,139,250) ${((value - min) / (max - min)) * 100}%, rgba(255,255,255,0.07) ${((value - min) / (max - min)) * 100}%, rgba(255,255,255,0.07) 100%)`,
         }}
       />
