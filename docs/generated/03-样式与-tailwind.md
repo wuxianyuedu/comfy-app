@@ -202,25 +202,25 @@ import "@/styles/json-viewer.css";
 
 **已明确不属于固定暗色**（历史误判，已 token 化，勿回退）：
 
-| 表面                                                                              | 应使用的 token                                                                                                                                              |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button`                       | `--color-node` / `--color-border-strong` / `--color-ink-muted`                                                                                              |
-| MiniMap 非视口遮罩（`maskColor`）                                                 | `--color-canvas-minimap-mask`                                                                                                                               |
-| 原生 `<select>` / `<option>` 与滚动条                                             | `color-scheme` + `--color-node` / `--color-ink-field`                                                                                                       |
-| 登录页整屏底 + 极光                                                               | `--color-bg` + 两态极光                                                                                                                                     |
-| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`）             | `--color-port-surface`                                                                                                                                      |
-| 端口内圈光晕（`flow-focus-endpoints` 的 `portDotGlow`）                           | `--color-port-halo-ring` / `--color-port-halo-ring-weak`                                                                                                    |
-| 项目画布 MiniMap / Background / Controls（`#0D0818` / `#0B0712` / 25% 白点阵）    | `--color-canvas-minimap-mask` / `--color-canvas-grid-dot` + `.react-flow__controls*` token 规则                                                             |
-| 工作流画布底色 `CANVAS_BG`（写死 `#0a0a0f`）                                      | `--color-canvas`                                                                                                                                            |
-| 画布标尺文字 / 连线中点圆点（85% 近白字 + 深色 text-shadow / 纯白点）             | `--color-canvas-ruler-ink` `-shadow` / `--color-edge-hub-dot`                                                                                               |
-| 子图标题栏混色基准（写死 `#16161E` 作为 `mixHex` 基色）                           | `--color-node-mix-base`                                                                                                                                     |
-| `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档） | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                                                                                       |
-| `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                  | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                                                                                |
-| `lib/comfyui/markdown.ts` 内联 style（便签 Markdown）                             | `--color-md-*` token                                                                                                                                        |
-| 类型 chip 的载体底（`WorkflowNodeArdot` 写死 `#1E1A2E` / `#331A28`）              | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（chip 文字仍是类型色，底色是表面）                                                              |
-| 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                      | `--color-panel/85` + `--color-shadow-strong`                                                                                                                |
-| 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）        | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`） |
-| 「本机 / 在线」状态点与文字（写死 `#33D499`）                                     | `--color-status-online`（浅色 = `#047857`，与 `emerald-700` 同值）                                                                                          |
+| 表面                                                                                                                            | 应使用的 token                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ReactFlow 缩放/适配/锁定控件 `.react-flow__controls-button`                                                                     | `--color-node` / `--color-border-strong` / `--color-ink-muted`                                                                                                                                                                     |
+| MiniMap 非视口遮罩（`maskColor`）                                                                                               | `--color-canvas-minimap-mask`                                                                                                                                                                                                      |
+| 原生 `<select>` / `<option>` 与滚动条                                                                                           | `color-scheme` + `--color-node` / `--color-ink-field`                                                                                                                                                                              |
+| 登录页整屏底 + 极光                                                                                                             | `--color-bg` + 两态极光                                                                                                                                                                                                            |
+| 端口圆点描边 / 内圈高光（`border-(--color-canvas)` + 25% 白 `inset`）                                                           | `--color-port-surface`                                                                                                                                                                                                             |
+| 端口内圈光晕（`flow-focus-endpoints` 的 `portDotGlow`）                                                                         | `--color-port-halo-ring` / `--color-port-halo-ring-weak`                                                                                                                                                                           |
+| 项目画布 MiniMap / Background / Controls（`#0D0818` / `#0B0712` / 25% 白点阵）                                                  | `--color-canvas-minimap-mask` / `--color-canvas-grid-dot` + `.react-flow__controls*` token 规则                                                                                                                                    |
+| 工作流画布底色 `CANVAS_BG`（写死 `#0a0a0f`）                                                                                    | `--color-canvas`                                                                                                                                                                                                                   |
+| 画布标尺文字 / 连线中点圆点（85% 近白字 + 深色 text-shadow / 纯白点）                                                           | `--color-canvas-ruler-ink` `-shadow` / `--color-edge-hub-dot`                                                                                                                                                                      |
+| 子图标题栏混色基准（写死 `#16161E` 作为 `mixHex` 基色）                                                                         | `--color-node-mix-base`                                                                                                                                                                                                            |
+| `JsonViewer` 的 `react18-json-view` 主题（`dark` prop + `jv-theme-comfy` 暗色档）                                               | 两态 `--json-view-*` token（浅色默认 + `.dark` 覆盖）                                                                                                                                                                              |
+| `CodeBlock` 的 shiki 主题（写死 `one-dark-pro`）                                                                                | 按 `resolvedTheme` 在 `one-dark-pro` / `github-light` 间切换                                                                                                                                                                       |
+| `lib/comfyui/markdown.ts` 内联 style（便签 Markdown）                                                                           | `--color-md-*` token                                                                                                                                                                                                               |
+| 类型 chip 的载体底（`WorkflowNodeArdot` 与 `WorkflowPortHandle` 的 `portChipStyle` 都曾写死 `#1E1A2E` / `#331A28` / `#26262E`） | `--color-chip-type-image-bg` / `--color-chip-type-video-bg`（中性档用 `--color-border-strong`）；chip **文字**仍是类型色，**底色**是表面。同一形态在本仓库犯过两次（先只改了 `WorkflowNodeArdot`），改一处要同时扫 `portChipStyle` |
+| 项目画布浮层工具条底（`CanvasToolbar` 的 `to-[#16121f]/85`）                                                                    | `--color-panel/85` + `--color-shadow-strong`                                                                                                                                                                                       |
+| 节点 JSON 浮层的 accent / chip 色（写死 `#7C5CFC`/`#5BC6FF`/`#ec4899` 等）                                                      | `--color-primary` / `--color-info` / `--color-accent-soft` / `--color-ink-faint` / `--color-success-strong` / `--color-warning`（带透明度用 `color-mix()`）                                                                        |
+| 「本机 / 在线」状态点与文字（写死 `#33D499`）                                                                                   | `--color-status-online`（浅色 = `#047857`，与 `emerald-700` 同值）                                                                                                                                                                 |
 
 > 判据的用意：**控件**是结构性表面（用户要操作它），跟主题走才不会在浅色
 > 下变成「深底深图标」的隐形按钮；**叠加在内容上的说明层**才是例外。
@@ -293,6 +293,103 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
   `scripts/.theme-color-baseline.json`，新写的写死色值一律阻断；逐批治理后用
   `node scripts/check-theme-colors.cjs --update` 收紧基线（同 UI/逻辑分离棘轮
   的口径，见 17 章）。已接入 `.githooks/pre-commit` 与 CI。
+
+### 3.6.2 品牌/状态色必须走语义 token（ISSUE #672，机器强制）
+
+「改一处样式、全站生效」的前提是**颜色有单一事实来源**。实测出的反例：
+`--color-primary: #7c5cfc` 定义得好好的，但 `studio/ui/ModalDialog.tsx` 写死
+`violet-500/600` 6 处、`ui/status-badge.tsx` 写死 44 处
+`emerald/violet/amber/red`、`ui/page-loading.tsx` 写死 `border-violet-500` ——
+把 primary 改成蓝色，这些地方仍然是紫的，视觉体系当场破功。
+
+**判据一句话**：这行色值是「**表面/文字/状态的语义**」还是「**内容自身的颜色**」？
+前者一律写语义类名（§3.1.1 已禁内联变量写法），后者才进 §3.6.1 的类型色例外。
+
+```tsx
+// ❌ 语义色写死：改品牌色时这行不会跟着变
+"border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400";
+
+// ✅ 语义 token（token 自己两态取值，不必再手写 dark:）
+"border-primary-500/30 bg-primary-500/10 text-primary-strong";
+```
+
+**本项目已有的语义色 token**（新增前先查这张表，别再写死字面量）：
+
+| 语义       | token / 类名                                   | 用途                                                        |
+| ---------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| 品牌主色   | `--color-primary` → `primary`                  | 浅色底下当**底**用（`bg-primary/15`）                       |
+| 品牌文字档 | `--color-primary-strong` → `primary-strong`    | 浅底上的品牌**文字/图标**（原 `violet-700` / `violet-400`） |
+| 品牌实心档 | `--color-primary-500` / `--color-primary-600`  | 实心按钮底、spinner 描边（原 `violet-500` / `violet-600`）  |
+| 品牌浅底   | `--color-primary-soft`                         | 图标托底、选中项底                                          |
+| 强调/品红  | `--color-accent` / `--color-accent-soft`       | 第二品牌色                                                  |
+| 成功       | `--color-success` / `--color-success-strong`   | 状态绿（原 `emerald-*`）                                    |
+| 警告       | `--color-warning` / `--color-warning-strong`   | 待处理/排队（原 `amber-*`）                                 |
+| 危险       | `--destructive` / `--color-danger-strong`      | 失败/删除（原 `red-*`）                                     |
+| 信息       | `--color-info` / `--color-info-strong`         | 链接/提示（原 `cyan-*` / `blue-*`）                         |
+| 极光晕     | `--color-aurora-violet` / `-cyan` / `-magenta` | 装饰性背景光晕的**色相**（强度由调用处决定）                |
+
+**「同一个原色在两个位置上取不同值」是正常的，别用同一份写死值糊过去**：
+品牌紫 `#7c5cfc` 当底色可以、当浅底上的文字色对比度不够 —— 所以有
+`--color-primary`（底）与 `--color-primary-strong`（字）两颗 token。
+这正是不该写死的原因：写死的那一处无法表达这个区分。状态色同理：
+`warning` / `success` / `info` / `danger` 各自都有「当底的原色」与
+「浅底上当字的 `*-strong` 档」。
+
+**这套区分直接决定 `Button` 的语义变体怎么写**（16 §16.2.4.1）：
+`variant="warning"` 的底色取 `bg-warning/10`、文字取 `text-warning-strong`，
+而不是两边都用 `amber-500`。
+
+**装饰性渐变/光晕**：色相进 token，**强度（alpha）留在调用处**。同一个极光晕
+曾在登录页 / 首页 / `FilmStudio` / `TrainingStudio` 各抄一份、且值不同
+（0.48 / 0.42 / 0.40），现在统一走 `AuroraGlow`（`tone` 选色相、`alpha` 定强度）——
+与 §3.5 的「AuroraBackground 模式」是同一条要求：**同一个装饰不在多处内联重复**。
+
+**机器判定**：`scripts/check-theme-colors.cjs`（`pnpm theme:check`，pre-commit
+第 13 步）。它认「写死的 `#rrggbb` / `rgba(...)`」，而 Tailwind 类名形式的
+语义色类名本来就扫不到 —— 也就是说**本节的判据靠「不要在源码里写字面量」实现**：
+只要颜色是类名，`theme:check` 与改名/换 token 都不会有冲突。
+`EXEMPT_TABLES` / `EXEMPT_FIXED_DARK` 的豁免口径与 §3.6.1 完全一致。
+
+### 3.6.3 主题 token 的层叠顺序：浅色档不得用裸 `:root`
+
+**判据**：同一个元素的同名自定义属性出现两处声明时，**特异性相同则由源码顺序决定**。
+`<html>` 上同时有 `:root`（伪类，特异性 0-1-0）与 `.dark`（类，同为 0-1-0）——
+两者写在同一份样式表里时，**谁写在后面谁生效**。
+
+**因此：一个 token 的浅色档与深色档必须满足「浅色在前、深色在后」**，
+或者给浅色档一个在深色下**不匹配**的选择器（本项目用 `:root:not(.dark)`）。
+写成「深色档在前、浅色裸 `:root` 在后」时，浅色档会在深色下**恒定胜出**。
+
+```css
+/* ❌ 深色在前、浅色裸 :root 在后 → 深色下 --card 仍是 #ffffff */
+.dark {
+  --card: #16161c;
+}
+:root {
+  --card: #ffffff;
+}
+
+/* ✅ 浅色档在深色下不匹配 */
+.dark {
+  --card: #16161c;
+}
+:root:not(.dark) {
+  --card: #ffffff;
+}
+```
+
+**这类故障 tsc / eslint / 主题色扫描器都看不见**：扫描器扫的是**写死色值**，
+而这里的色值本身没问题，错的是 token 解析到了另一态。表现是「整套走该别名的
+utility 在两态里各有一态取错值」——`bg-card` 编出来是
+`background-color: var(--card)`（`@theme inline` 直接把别名内联进 utility），
+`--card` 取错，**所有** `bg-card` 表面一起错。
+
+- shadcn 语义别名（`--background` / `--foreground` / `--card` / `--popover` /
+  `--secondary` / `--muted` / `--border` / `--input` …）的浅色档统一收在
+  `globals.css` 末尾的 `:root:not(.dark) {}` 块，深色档在上方 `.dark {}` 块。
+- 新增别名时**不要**另起裸 `:root`；要么并入该块，要么自己保证在 `.dark` 之前。
+- 回归测试：`tests/theme-dark-token-cascade.test.ts`（真编译 `globals.css` +
+  jsdom 解级联，断言每个别名两态取值不同），逐条覆盖上表别名。
 
 ### 3.7 装饰性元素可访问性与性能
 
