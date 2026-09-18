@@ -1,69 +1,60 @@
 "use client";
 
-/* ── stepLogCache.ts · ──────────────────────────────
- * Cross-unmount cache for the CanvasNode step-log panel state.
+/* ── stepLogCache.ts ──────────────────────────────
+ * 跨「卸载 / 重新挂载」缓存 CanvasNode 的步骤日志面板状态。
  *
- * Why this exists
- * ────────────────
- * The picture-node body renders the log panel via `{selected && <ImageGenerationPanel/>}`
- * (CanvasNode.tsx:1234).  When the user clicks away → React unmounts the
- * panel → React tears down its `useState` slots for `stepLogs` and
- * `validationErrors`.  Clicking back re-mounts the panel → fresh empty
- * arrays → the SSE EventSource reconnects from scratch → the user sees
- * a duplicate "📡 已订阅…" line, a "fresh QUEUED (0%)" status, and the
- * 20s stuck warning counter resets — even though the same task is
- * still running on the backend.
+ * 为什么需要它
+ * ────────────
+ * 图片节点的正文用 `{selected && <ImageGenerationPanel/>}` 渲染日志面板
+ *（CanvasNode.tsx:1234）。用户点走时 → React 卸载该面板 →
+ * 连带拆掉 `stepLogs` 与 `validationErrors` 那两个 `useState` 槽位。
+ * 点回来又挂载 → 空数组重新来过 → SSE 的 EventSource 从头重连 →
+ * 用户会看到重复的「📡 已订阅…」、状态又变回「QUEUED (0%)」，
+ * 20s 卡死告警的计数也重置了 —— 哪怕后端上同一个任务还在跑。
  *
- * Backend logs live in `Task.logs` (Prisma) and are replayed on SSE
- * connect, so the *content* reappears within ~1 round-trip — but
- * (a) the in-flight warning timer (20s no-activity) is gone for ~20s
- * of new silence, (b) the UI feels like it dropped its memory of the
- * run, and (c) the console noise makes the user think there's a
- * duplication bug.
+ * 后端日志存在 `Task.logs`（Prisma）里、SSE 连上时会重放，
+ * 所以**内容**大约一个往返就回来了 —— 但
+ *（a）在途的告警计时器（20s 无活动）会丢，接下来 20s 的新静默没人管；
+ *（b）界面给人一种「把这次运行的记忆丢了」的感觉；
+ *（c）控制台噪音还让用户以为是重复订阅的 bug。
  *
- * Fix:  hold the panel's transient state in a module-level Map keyed
- *       by `taskId`, so unmount/remount within a session is invisible
- *       to the user.  Bounded by `MAX_ENTRIES` (LRU) so a long-running
- *       tab doesn't leak memory.
+ * 修法：把面板的临时状态放进模块级 Map，按 `taskId` 作键，
+ *       于是同一次会话内的卸载 / 重挂载对用户不可见。
+ *       用 `MAX_ENTRIES` 做上限（LRU），长时间开着的页签也不会漏内存。
  *
- * Scope
- * ─────
- * This is *intra-tab* persistence only.  Surviving a full browser
- * reload would need localStorage, which is intentional non-goal for
- * v1 — task-level state belongs in Prisma + SSE replay, not in
- * per-tab scratch state.
+ * 范围
+ * ────
+ * 只做**标签页内**的持久化。跨整个浏览器刷新要 localStorage，
+ * 那是 v1 有意排除的目标 —— 任务级状态属于 Prisma + SSE 重放，
+ * 不属于每个标签页自己的草稿区。
  *
  * ───────────────────────────────────────────────────────────────────── */
 
 import type { ValidationError } from "~/lib/comfyui/validation";
 
-/* StepLogEntry is re-exported from this module so ImageGenerationPanel
- * can import both the type and the cache helpers without creating a
- * circular import (panel ↔ cache).  The shape mirrors runner.ts
- * LogEntry (TaskEvent union "log" entry payload) with one
- * UI-only extension: `client?: boolean` flags entries that the
- * browser itself pushed (subscription state, stuck-detection
- * warning…) so they can render with a muted italic style. */
+/* StepLogEntry 从本模块再导出，让 ImageGenerationPanel 能同时拿到类型与
+ * 缓存助手，而不必造成循环导入（面板 ↔ 缓存）。
+ * 形状与 runner.ts 的 LogEntry 一致（即 TaskEvent 联合里 "log" 那条的载荷），
+ * 只多一个**纯界面**扩展：`client?: boolean` 标记「浏览器自己推的」条目
+ *（订阅状态、卡死检测告警 …），好让它们以低饱和斜体渲染。 */
 export interface StepLogEntry {
   t: number;
   level: "info" | "progress" | "warn" | "error" | "success";
   msg: string;
   client?: boolean;
-  /** caller source ("file:line") mirrored from
-   *  the server LogEntry, rendered only when the debug toggle is on. */
+  /** 调用方来源（"文件:行"），从服务端 LogEntry 镜像过来；
+   *  只在调试开关打开时渲染。 */
   src?: string;
 }
 
 export interface StepLogPanelState {
-  /** All log entries pushed since this taskId's panel was first opened. */
+  /** 该 taskId 的面板首次打开以来推入的全部日志条目。 */
   logs: StepLogEntry[];
-  /** Last structured failure seen (from pollTask via `d.validationErrors`
-   *  or from the SSE `state` event).  Null when the task is still
-   *  running or has never been marked failed. */
+  /** 最近一次看到的结构化失败（来自 pollTask 的 `d.validationErrors`，
+   *  或 SSE 的 `state` 事件）。任务仍在跑、或从未标记失败时为 null。 */
   validationErrors: ValidationError[] | null;
-  /* per-task metadata so the task-switcher
-   *  dropdown can show "工作流名 · 状态" instead of a truncated id.
-   *  Populated by GlobalStepLogPanel on every SSE `state` event. */
+  /* 任务级元数据，好让任务切换下拉框显示「工作流名 · 状态」，
+   *  而不是一串被截断的 id。由 GlobalStepLogPanel 在每次 SSE `state` 事件时填充。 */
   workflowName?: string;
   status?: string;
   /** 触发该任务的画布节点 id，用于日志面板按 #1/#2… 短序号筛选。 */
@@ -74,7 +65,7 @@ const MAX_ENTRIES = 256;
 
 const cache = new Map<string, StepLogPanelState>();
 
-/** Touch (move to end of insertion order) + clamp size.  LRU. */
+/* 触碰一次（移到插入顺序末尾）+ 限制总条数。LRU。 */
 function touch(id: string, next: StepLogPanelState) {
   cache.set(id, next);
   if (cache.size > MAX_ENTRIES) {
@@ -83,7 +74,7 @@ function touch(id: string, next: StepLogPanelState) {
   }
 }
 
-/** Load the persisted state for a taskId, or null if none. */
+/* 载入某个 taskId 的持久化状态；没有则为 null。 */
 export function loadStepLogPanelState(
   taskId: string | null | undefined,
 ): StepLogPanelState | null {
@@ -91,9 +82,9 @@ export function loadStepLogPanelState(
   return cache.get(taskId) ?? null;
 }
 
-/** Overwrite the persisted state for a taskId.  Useful for tests and
- *  for cases where the panel wants to reset (e.g. user picks a new
- *  workflow — there is no such flow today, but keep the escape hatch). */
+/* 覆盖某个 taskId 的持久化状态。测试要用；
+ * 面板想主动重置时也用（例如用户选了新工作流 —— 目前没有这条路径，
+ * 但把出口留着）。 */
 export function saveStepLogPanelState(
   taskId: string,
   next: StepLogPanelState,
@@ -102,9 +93,8 @@ export function saveStepLogPanelState(
   touch(taskId, next);
 }
 
-/** Drop the entry for a taskId.  Used when the task truly finishes and
- *  the user doesn't want stale UI state to come back next time they
- *  click the same node — we don't yet, but the API is here. */
+/* 丢掉某个 taskId 的条目。用于「任务真结束后，用户不希望下次点同一节点时
+ * 又冒出旧界面状态」的场景 —— 目前还没这么做，但接口先备着。 */
 export function clearStepLogPanelState(
   taskId: string | null | undefined,
 ): void {
@@ -112,8 +102,8 @@ export function clearStepLogPanelState(
   cache.delete(taskId);
 }
 
-/** Append a single log entry to the cached state, creating the entry
- *  if needed.  Returns the updated state (same reference if a no-op). */
+/* 往缓存状态里追加一条日志（必要时新建条目）。
+ * 返回更新后的状态；若是空操作则返回同一个引用。 */
 export function appendStepLog(
   taskId: string | null | undefined,
   entry: StepLogEntry,
@@ -123,7 +113,7 @@ export function appendStepLog(
     logs: [] as StepLogEntry[],
     validationErrors: null,
   };
-  // Dedupe on (t, msg) — mirrors the SSE dedupe in ImageGenerationPanel.
+  // 按 (时间, 消息) 去重 —— 与 ImageGenerationPanel 里的 SSE 去重口径一致。
   if (prev.logs.some((log) => log.t === entry.t && log.msg === entry.msg)) {
     return prev;
   }
@@ -135,8 +125,7 @@ export function appendStepLog(
   return next;
 }
 
-/** Update the cached `validationErrors` for a taskId (creating the
- *  entry if missing). */
+/* 更新某个 taskId 缓存的 `validationErrors`（条目不存在则新建）。 */
 export function setStepLogValidationErrors(
   taskId: string | null | undefined,
   errs: ValidationError[] | null,
@@ -149,10 +138,10 @@ export function setStepLogValidationErrors(
   touch(taskId, { logs: prev.logs, validationErrors: errs });
 }
 
-/* merge workflowName + status into the
- *  cache entry so the task-switcher dropdown can label each id
- *  with the workflow name (e.g. "image_Z-Anime-Workflow-v1 · FAILED")
- *  instead of forcing the user to read a truncated 14-char id. */
+/* 把 workflowName 与 status 合并进缓存条目，
+ * 好让任务切换下拉框能按工作流名给每个 id 打标签
+ *（例如「image_Z-Anime-Workflow-v1 · FAILED」），
+ * 而不是逼用户去认一串被截断的 14 字符 id。 */
 export function patchStepLogMeta(
   taskId: string | null | undefined,
   meta: { workflowName?: string; status?: string; nodeId?: string },
@@ -171,19 +160,18 @@ export function patchStepLogMeta(
   });
 }
 
-/** Test/admin helper: how many tasks are tracked right now. */
+/* 测试 / 管理用助手：当前跟踪着多少个任务。 */
 export function stepLogCacheSize(): number {
   return cache.size;
 }
 
-/** Return the taskIds currently held in the cache, most-recently-touched
- *  first.  Used by the global log panel's task selector so the user can
- *  flip between past runs without re-running them. */
+/* 返回缓存当前持有的 taskId，最近触碰的排在最前。
+ * 全局日志面板的任务选择器用它，让用户能在历史运行之间来回切，而不必重跑。 */
 export function listCachedTaskIds(): string[] {
   return Array.from(cache.keys());
 }
 
-/** Test/admin helper: drop all cached state. */
+/* 测试 / 管理用助手：丢掉全部缓存状态。 */
 export function clearAllStepLogPanels(): void {
   cache.clear();
 }
