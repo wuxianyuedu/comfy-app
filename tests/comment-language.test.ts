@@ -189,6 +189,39 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run().code).toBe(0);
   });
 
+  it("JSDoc 结构行（只有类型语法，无散文）不参与统计", () => {
+    // `@param {T}` / `@returns {T}` / `@typedef {…}` 这类行只含类型语法与标识符，
+    // 是类型声明而非「用英文写的说明」。逐行塞中文会破坏语法。
+    write(
+      "src/lib/jsdoc-structural.ts",
+      [
+        "/**",
+        " * @param {string} candidate",
+        " * @returns {Promise<ProbeResult>}",
+        ' * @typedef {"ok" | "no-version"} ProbeReason',
+        " * @param {ProbeOptions} [options]",
+        " */",
+        "export function probe(candidate: string) { return candidate; }",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
+  it("带英文散文的 JSDoc 行仍会被统计（结构行豁免不放过说明句）", () => {
+    // 反向锚点：豁免只剥「@tag + 类型块 + 参数名」三段。
+    // 若把「说明句里的每个英文词都当标识符删掉」，就会把这条忘了改的英文说明放过去。
+    write(
+      "src/lib/jsdoc-prose.ts",
+      "/** @param {string} candidate the command to probe */\nexport const a = 1;\n",
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/jsdoc-prose.ts");
+  });
+
   it("说明某个指令的中文注释仍会被统计（豁免只认行首就是指令）", () => {
     // 反向锚点：不设这条，「豁免正则写得太宽」会把正常中文注释一起放行而无人发现。
     write(

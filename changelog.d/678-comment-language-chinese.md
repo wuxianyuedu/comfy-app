@@ -34,4 +34,8 @@
   `turbopackIgnore:` 等）在统计中整行豁免：它们是工具按**字面量**解析的指令，
   改成中文不是报错而是**静默失效**（用例悄悄跑回默认环境、类型豁免悄悄失效、
   `turbopackIgnore` 的静态追踪豁免丢失）。棘轮因此不会被这类行逼着做出错误改写。
-  新增回归用例覆盖 `turbopackIgnore`（`tests/comment-language.test.ts`，16 条）。
+  新增回归用例覆盖 `turbopackIgnore`（`tests/comment-language.test.ts`，18 条）。
+- JSDoc **结构行**（只含类型语法与标识符的 `@param {T}` / `@returns {T}` /
+  `@typedef {…}` / `@property {T}` 等）整行豁免：它们是类型声明而非英文说明，
+  逐行塞中文会破坏语法。判据只剥「@tag + 类型块 + 参数名」三段 ——
+  带英文说明的 `@param {string} x the command to probe` 仍被统计（有回归用例守着）。

@@ -34,6 +34,7 @@ import { commandInvocation, whichCommand } from "./shell.mjs";
 /**
  * @typedef {{ root?: string, env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *             platform?: NodeJS.Platform }} ProbeOptions
+ * 探测选项：根目录、环境变量表、平台（后者可注入以便单测模拟另一平台）。
  */
 
 /** 一次命令探测的结构化结论。`reason` 是机器可判的成因键，`reasonText` 是给用户看的短句。 */
@@ -41,11 +42,14 @@ import { commandInvocation, whichCommand } from "./shell.mjs";
  * @typedef {{ ok: boolean, command: string | null, version: string | null,
  *             reason: ProbeReason, reasonText: string, detail: string,
  *             exitCode: number | null }} ProbeResult
+ * 探测结论：是否可用、命令名、版本号、机器可判的成因键、
+ * 给用户看的短句、细节文本、退出码（命令没起来时为 null）。
  */
 
 /** 探测失败的成因键（`ok: true` 时恒为 `"ok"`）。 */
 /**
  * @typedef {"ok" | "spawn-error" | "no-version" | "exit-nonzero" | "not-found"} ProbeReason
+ * 失败成因键依次为：正常、进程起不来、取不到版本号、退出码非 0、没找到命令。
  */
 
 /** 探测 pnpm 的超时：正常 `pnpm -v` 在 1s 内返回，30s 只为兜住首次 corepack 解压。 */
@@ -56,8 +60,8 @@ const PREPARE_TIMEOUT_MS = 600_000;
 /** package.json 里声明的 pnpm 版本（`packageManager: "pnpm@12.4.1"` → `"12.4.1"`）。
  *  解析不到返回 null —— 调用方据此跳过修复，而不是拿一个空版本号去 prepare。 */
 /**
- * @param {string} [root]
- * @returns {string | null}
+ * @param {string} [root] 项目根目录（缺省取当前工作目录）
+ * @returns {string | null} 声明的 pnpm 版本号；解析不到则为 null
  */
 export function packageManagerVersion(root = process.cwd()) {
   try {
@@ -93,8 +97,8 @@ function reasonText(key) {
  * ENOEXEC…）与命令回显的 stderr 一起带出来，用户第一眼就能分清
  * 「选错了可执行文件」还是「pnpm 自己坏了」。
  *
- * @param {ProbeOptions} [options]
- * @returns {ProbeResult}
+ * @param {ProbeOptions} [options] 探测选项
+ * @returns {ProbeResult} 探测结论
  */
 export function probePnpm({ root = process.cwd(), env = process.env, platform = process.platform } = {}) {
   const candidate = whichCommand("pnpm", { env, platform });
@@ -106,9 +110,9 @@ export function probePnpm({ root = process.cwd(), env = process.env, platform = 
 
 /** 用同一条判据探任意命令（`probePnpm` 与 corepack 复核共用）。 */
 /**
- * @param {string} candidate
- * @param {ProbeOptions & { args?: string[] }} [options]
- * @returns {ProbeResult}
+ * @param {string} candidate 待探测的命令路径
+ * @param {ProbeOptions & { args?: string[] }} [options] 探测选项，外加自定义参数
+ * @returns {ProbeResult} 探测结论
  */
 export function probeCommand(candidate, { root = process.cwd(), env = process.env, platform = process.platform, args = ["-v"] } = {}) {
   /** 注入的 env 可能是更宽的 Record（测试里常只给 PATH），这里统一成 spawn 认的形状。 */
@@ -153,22 +157,22 @@ export function probeCommand(candidate, { root = process.cwd(), env = process.en
  *  `probeCommand` 报 spawn-error 时（例如宿主要求的参数不对），把它的名字写出来
  *  比一句「未发现可回退形态」有用 —— ISSUE #576 第一轮现场就是这句把回退目标
  *  （旁边的 `pnpm.ps1`）掩盖了。 */
-/** @param {string} candidate @param {string[]} args
- *  @param {{ env?: NodeJS.ProcessEnv | Record<string, string | undefined>, platform?: NodeJS.Platform }} [options] */
+/** @param {string} candidate 候选命令 @param {string[]} args 传给它的参数
+ *  @param {{ env?: NodeJS.ProcessEnv | Record<string, string | undefined>, platform?: NodeJS.Platform }} [options] 环境变量表与平台 */
 function usableReason(candidate, args, { env = process.env, platform = process.platform } = {}) {
   const usable = commandInvocation(candidate, args, { env, platform });
   return usable.command === candidate ? "未发现可回退形态" : `已回退到 ${path.basename(usable.command)}`;
 }
 
 /** 统一的失败返回，保证字段齐全（调用方不必到处判 undefined）。 */
-/** @param {string | null} command @param {ProbeReason} reason @param {string} detail
- *  @param {number | null} exitCode @returns {ProbeResult} */
+/** @param {string | null} command 命令名 @param {ProbeReason} reason 成因键 @param {string} detail 细节文本
+ *  @param {number | null} exitCode 退出码（未启动为 null）@returns {ProbeResult} 失败结论 */
 function failed(command, reason, detail, exitCode) {
   return { ok: false, command, version: null, reason, reasonText: reasonText(reason), detail, exitCode };
 }
 
 /** 只留输出的头几行（错误摘要足够，整段栈会顶掉启动页那一行提示）。 */
-/** @param {string} output @returns {string} */
+/** @param {string} output 原始输出 @returns {string} 只留头几行后的摘要 */
 function firstLines(output) {
   return String(output)
     .split(/\r?\n/)
@@ -185,8 +189,8 @@ function firstLines(output) {
  * 但只有在 corepack 自己能跑时才成立；corepack 本身不可用时**不抛**——
  * 返回 description 让调用方把实测情况原样写进提示（抛出去只会变成另一句「未知错误」）。
  *
- * @param {ProbeOptions & { expected?: string | null }} [options]
- * @returns {{ ran: boolean, ok: boolean, description: string }}
+ * @param {ProbeOptions & { expected?: string | null }} [options] 探测选项，外加期望的版本号
+ * @returns {{ ran: boolean, ok: boolean, description: string }} 是否执行、是否成功、说明
  */
 export function preparePnpm({ root = process.cwd(), expected = null, env = process.env, platform = process.platform } = {}) {
   const spawnEnv = /** @type {NodeJS.ProcessEnv} */ (env);
@@ -227,9 +231,10 @@ export function preparePnpm({ root = process.cwd(), expected = null, env = proce
  * 这类现场里恰好相反（prepare 成功、pnpm 依旧起不来）。只报 prepare 成功
  * 等于把「修好了」当成结论，用户下一次启动会原封不动地再撞一次。
  *
- * @param {ProbeOptions} [options]
+ * @param {ProbeOptions} [options] 探测选项
  * @returns {{ repaired: boolean, pre: ProbeResult, prepare: { ran: boolean, ok: boolean, description: string },
  *             post: ProbeResult, before: string | null, after: string | null }}
+ * 重建前后的两次探测结论、prepare 的执行情况，以及前后版本号。
  */
 export function repairPnpm({ root = process.cwd(), env = process.env, platform = process.platform } = {}) {
   const pre = probePnpm({ root, env, platform });
@@ -248,8 +253,8 @@ export function repairPnpm({ root = process.cwd(), env = process.env, platform =
  * `no-version` / `exit-nonzero` 往往是 pnpm 自己在报业务错误（工作区配置、
  * 磁盘权限），重建一遍 pnpm 既治不好、还会多花几分钟下载。
  *
- * @param {Pick<ProbeResult, "ok" | "reason">} probe
- * @returns {boolean}
+ * @param {Pick<ProbeResult, "ok" | "reason">} probe 探测结论（只用到可用性与成因键）
+ * @returns {boolean} 是否应该尝试自动重建
  */
 export function shouldRepair(probe) {
   return !probe.ok && (probe.reason === "spawn-error" || probe.reason === "not-found");
@@ -259,9 +264,10 @@ export function shouldRepair(probe) {
  * 启动编排器接线的**唯一入口**：探测 → （必要时）重建 → 复核 → 返回结论与
  * 可行动提示。编排器只负责把 `tip` 记进日志 / launch-status / 启动页横幅。
  *
- * @param {ProbeOptions & { autoRepair?: boolean }} [options]
+ * @param {ProbeOptions & { autoRepair?: boolean }} [options] 探测选项，外加「是否允许自动重建」
  * @returns {{ probe: ProbeResult, repaired: boolean, tip: string | null,
  *             repairable: boolean, expected: string | null }}
+ * 探测结论、是否重建过、给用户的提示语、是否可重建、期望版本号。
  */
 export function orchestratePnpm({ root = process.cwd(), env = process.env, platform = process.platform, autoRepair = true } = {}) {
   const expected = packageManagerVersion(root);
@@ -307,9 +313,9 @@ export function orchestratePnpm({ root = process.cwd(), env = process.env, platf
  * 也可能来自 PATH 上选中的那个 shim 起不来（Issue #576）。把两句话分开写，
  * 用户照第二条处置时不会先去删缓存。
  *
- * @param {ProbeResult} probe
- * @param {{ expected?: string | null, extra?: string | null }} [context]
- * @returns {string}
+ * @param {ProbeResult} probe 探测结论
+ * @param {{ expected?: string | null, extra?: string | null }} [context] 期望版本号与额外提示
+ * @returns {string} 给用户的可行动提示语
  */
 export function buildTip(probe, { expected = null, extra = null } = {}) {
   const parts = [];

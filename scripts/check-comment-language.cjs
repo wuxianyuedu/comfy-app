@@ -103,6 +103,43 @@ const ENGLISH_WORD_RE = /[A-Za-z]{2,}/g;
 const TOOL_DIRECTIVE_RE =
   /^\s*\*?\s*@?(vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*eslint-(disable|enable)|^\s*\*?\s*turbopackIgnore\s*:/;
 
+/**
+ * JSDoc **结构行**豁免：`@param {T}` / `@returns {T}` / `@typedef {…}` /
+ * `@type {…}` / `@property {T}` / `@template` 这类行**只含类型语法
+ * 与标识符**，不含散文 —— 它们是类型声明，不是「用英文写的注释」。
+ *
+ * 为什么必须豁免：这些行的内容由 TS/JSDoc 语法决定（`{string | null}`、
+ * `NodeJS.Platform`、`Record<string, string>`…），逐行塞中文说明会破坏
+ * 语法（编辑器解析变红）或让 `@typedef` 的续行失去意义。而「把类型写成英文」
+ * 不是本规则要治的病 —— 它治的是**人读的说明文字**用英文写。
+ *
+ * 判据刻意要求**去掉类型花括号后的剩余部分不含「疑似英文句子」**：
+ * 带说明的 `@param {string} name 用户名` 不受影响（它有中文，本就不计入），
+ * 而 `@param {string} candidate 待探测的命令` 里若只剩类型 + 标识符则豁免。
+ * 于是「给类型行补中文说明」仍然是推荐写法（更好读），但**不再被门禁逼着写**。
+ */
+const JSDOC_STRUCTURAL_RE =
+  /^\s*\*?\s*@(param|arg|argument|returns?|typedef|type|property|prop|template|generic|satisfies|satisfies|extends|implements|readonly|internal|private|public|protected|package|enum|this|typeParam)\b/;
+/**
+ * 去掉「@tag + 可选类型块 + 可选参数名」后，是否还剩**散文**。
+ *
+ * 只剥这三段，不再剥第三个及其后的标识符 —— 否则
+ * `@param {string} candidate the command to probe` 里的说明句会被当成
+ * 标识符逐词删掉，把「写了英文说明」误判成「只有类型语法」。
+ */
+function jsdocStructuralOnly(text) {
+  if (!JSDOC_STRUCTURAL_RE.test(text)) return false;
+  if (hasCJK(text)) return false; // 有中文说明 → 本就不计入
+  // 剥掉 @tag、随后的 `{...}` 类型块（允许嵌套一层）、以及 `[name=default]` / 参数名
+  const rest = text
+    .replace(/^\s*\*?\s*@\w+/, " ")
+    .replace(/^\s*\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/, " ")
+    .replace(/^\s*\[[^\]]*\]/, " ")
+    .replace(/^\s*[A-Za-z_$][\w$]*/, " ");
+  // 剩余部分若还含「连续 ≥2 个字母的英文词」的成句，视为散文 → 不豁免
+  return !/[A-Za-z]{2,}/.test(rest);
+}
+
 function walk(dir, out = []) {
   let entries;
   try {
@@ -179,6 +216,7 @@ function countEnglishCommentLines(src) {
     }
     if (text === null || !text) continue;
     if (TOOL_DIRECTIVE_RE.test(text)) continue;
+    if (jsdocStructuralOnly(text)) continue;
     if (hasCJK(text)) continue;
     if (looksEnglish(text)) count += 1;
   }
