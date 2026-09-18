@@ -2,6 +2,7 @@
 
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Alert } from "~/components/ui/alert";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { SHOT_STATUS_LABEL } from "./ShotStudio";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -290,9 +291,13 @@ export function ShotCard({
       </div>
 
       {error && (
-        <p className="mt-2 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+        <Alert
+          variant="danger"
+          /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
+          className="mt-2 block rounded-md border-transparent px-2 py-1 text-[11px]"
+        >
           {error}
-        </p>
+        </Alert>
       )}
       {!shot.imageUrl && !error && (
         <p className="text-muted-foreground mt-2 text-[10.5px]">

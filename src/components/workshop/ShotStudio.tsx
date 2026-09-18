@@ -2,6 +2,7 @@
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Alert } from "~/components/ui/alert";
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
@@ -361,9 +362,13 @@ export function ShotStudio({
                   placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
                 />
                 {err && (
-                  <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+                  <Alert
+                    variant="danger"
+                    /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
+                    className="mt-1 block rounded-md border-transparent px-2 py-1 text-[11px]"
+                  >
                     {err}
-                  </p>
+                  </Alert>
                 )}
 
                 <div className="mt-2 flex items-center gap-3">

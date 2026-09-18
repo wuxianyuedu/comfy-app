@@ -8,6 +8,7 @@ import { authClient } from "~/server/better-auth/client";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { AuroraGlow } from "~/components/ui/aurora-background";
+import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 
 type Mode = "signin" | "register";
 
@@ -143,23 +144,26 @@ export default function LoginPage() {
         </p>
 
         {notice && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2.5 text-sm text-violet-800 dark:text-violet-200">
-            <Icon
-              name="info"
-              size={15}
-              className="mt-0.5 shrink-0 text-violet-700 dark:text-violet-300"
-            />
-            <span className="flex-1 leading-relaxed">{notice}</span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setNotice(null)}
-              className="text-primary/70 hover:text-primary"
-              aria-label="关闭提示"
-            >
-              <X size={13} />
-            </Button>
-          </div>
+          <Alert
+            variant="info"
+            className="mb-4 flex items-start gap-2 px-3 py-2.5 text-sm"
+          >
+            <Icon name="info" size={15} className="mt-0.5 shrink-0" />
+            <AlertDescription className="flex-1 text-sm leading-relaxed">
+              {notice}
+            </AlertDescription>
+            <AlertAction className="static">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setNotice(null)}
+                className="text-primary/70 hover:text-primary"
+                aria-label="关闭提示"
+              >
+                <X size={13} />
+              </Button>
+            </AlertAction>
+          </Alert>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -11,6 +11,18 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+        /* ── 语义色变体（ISSUE #672 / 规范 16 §16.2.4）──
+           与 `ui/button` 的软底变体同源：`warning` / `info` / `success` /
+           `danger` 接管「边框 + 底色 + 文字档」三件事，文字一律走 -strong
+           token（同一色相的原色当浅底上的文字对比度不足）。变体名取语义
+           角色不取色名，换品牌色时调用处不用改（§3.6.2）。 */
+        warning:
+          "border-warning/30 bg-warning/10 text-warning-strong *:data-[slot=alert-description]:text-warning-strong/90 *:[svg]:text-current",
+        info: "border-info/30 bg-info/10 text-info-strong *:data-[slot=alert-description]:text-info-strong/90 *:[svg]:text-current",
+        success:
+          "border-success/30 bg-success/10 text-success-strong *:data-[slot=alert-description]:text-success-strong/90 *:[svg]:text-current",
+        danger:
+          "border-destructive/30 bg-destructive/10 text-danger-strong *:data-[slot=alert-description]:text-danger-strong/90 *:[svg]:text-current",
       },
     },
     defaultVariants: {

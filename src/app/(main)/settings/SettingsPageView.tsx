@@ -10,6 +10,7 @@
 
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { Button } from "~/components/ui/button";
+import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
 import { AppearanceSection } from "./components/AppearanceSection";
@@ -59,20 +60,25 @@ export function SettingsPageView({
           整页错误视图只留给「连兜底都没有」的场景——应用服务刚重启时把整个
           设置页换成错误页，对用户没有任何好处（ISSUE #360）。 */}
       {c.serveState && (
-        <div className="border-warning/30 bg-warning/10 text-warning-strong mb-4 flex items-start gap-3 rounded-lg border px-4 py-2 text-sm">
-          <span className="min-w-0 flex-1 break-words">
+        <Alert
+          variant="warning"
+          className="mb-4 flex items-start gap-3 px-4 py-2 text-sm"
+        >
+          <AlertDescription className="min-w-0 flex-1 text-sm break-words">
             本次未能读取最新配置，界面显示的是上一次成功读取的内容：
             {c.serveState.errorText}
-          </span>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={c.retry}
-            className="border-warning/40 hover:bg-warning/15 h-auto shrink-0 rounded px-2 py-0.5 text-xs"
-          >
-            重新读取
-          </Button>
-        </div>
+          </AlertDescription>
+          <AlertAction className="static shrink-0">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={c.retry}
+              className="border-warning/40 hover:bg-warning/15 h-auto shrink-0 rounded px-2 py-0.5 text-xs"
+            >
+              重新读取
+            </Button>
+          </AlertAction>
+        </Alert>
       )}
 
       {/* ═══ Appearance Section ═══ */}

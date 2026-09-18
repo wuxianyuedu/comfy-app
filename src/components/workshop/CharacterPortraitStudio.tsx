@@ -12,6 +12,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
+import { Alert } from "~/components/ui/alert";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import { useLLM } from "~/components/workshop/LLMContext";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
@@ -256,12 +257,15 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             </p>
           )}
           {session.error && (
-            <p
-              role="alert"
-              className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300"
+            <Alert
+              variant="danger"
+              /* 行内错误行：保持原有的紧凑尺寸与「无可见边框」观感 ——
+                 基元只接管「危险色怎么取」（此前写死 bg-red-100 + 深色档
+                 文字，浅底在深色主题下会与文字糊在一起）。 */
+              className="block rounded-md border-transparent px-2 py-1 text-[11px]"
             >
               {session.error}
-            </p>
+            </Alert>
           )}
           {(session.log.length > 0 || focused) && (
             <details className="bg-bg/60 rounded-md px-2 py-1" open={busy}>
