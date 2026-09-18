@@ -169,7 +169,10 @@ function countEnglishCommentLines(src) {
       text = line.replace(/^\*+/, "").trim();
       if (line.includes("*/")) inBlock = false;
     } else if (line.startsWith("/*")) {
-      text = line.replace(/^\/\*+/, "").replace(/\*\/$/, "").trim();
+      text = line
+        .replace(/^\/\*+/, "")
+        .replace(/\*\/$/, "")
+        .trim();
       if (!line.includes("*/")) inBlock = true;
     } else if (line.startsWith("//")) {
       text = line.slice(2).trim();
@@ -218,7 +221,8 @@ async function main() {
     console.log(
       `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件`,
     );
-    for (const [rel, n] of rows) console.log(`  ${String(n).padStart(5)}  ${rel}`);
+    for (const [rel, n] of rows)
+      console.log(`  ${String(n).padStart(5)}  ${rel}`);
     return;
   }
 
@@ -241,7 +245,9 @@ async function main() {
         2,
       )}\n`,
     );
-    console.log(`✓ 已写入基线:${total} 行 / ${Object.keys(counts).length} 个文件`);
+    console.log(
+      `✓ 已写入基线:${total} 行 / ${Object.keys(counts).length} 个文件`,
+    );
     return;
   }
 
@@ -275,7 +281,9 @@ async function main() {
     failed = true;
   }
   if (grown.length) {
-    console.error(`✗ ${grown.length} 个文件的英文注释变多（棘轮只许降不许升）:`);
+    console.error(
+      `✗ ${grown.length} 个文件的英文注释变多（棘轮只许降不许升）:`,
+    );
     for (const g of grown) console.error(`    ${g}`);
     failed = true;
   }

@@ -82,8 +82,10 @@ function seedBaseline(files: Record<string, number>, total: number): void {
   );
 }
 
-const CHINESE = "/** 组合输入参数：取值失败时回落缺省值。 */\nexport const a = 1;\n";
-const ENGLISH = "/** Combine the input parameters and fall back to defaults. */\nexport const a = 1;\n";
+const CHINESE =
+  "/** 组合输入参数：取值失败时回落缺省值。 */\nexport const a = 1;\n";
+const ENGLISH =
+  "/** Combine the input parameters and fall back to defaults. */\nexport const a = 1;\n";
 
 beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), "comment-lang-gate-"));
@@ -176,9 +178,9 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     write(
       "src/lib/turbopack-directive.ts",
       [
-        "import fs from \"node:fs\";",
+        'import fs from "node:fs";',
         "export function read(p: string) {",
-        "  return fs.readFileSync(/*turbopackIgnore: true*/ p, \"utf-8\");",
+        '  return fs.readFileSync(/*turbopackIgnore: true*/ p, "utf-8");',
         "}",
         "",
       ].join("\n"),
@@ -202,7 +204,10 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
   it("纯英文注释行（含 URL 行）计入 —— 判定口径是「连续英文单词 ≥ 3 个」", () => {
     // 反向锚点：上面那条只证明「噪声不计入」，不证明「英文真的被计入」。
     // 没有这条，一个永远返回 0 的统计器会让上面那条一起变绿（§12.16 同款教训）。
-    write("src/lib/url.ts", "// see https://example.com/a/b/c for details\nexport const a = 1;\n");
+    write(
+      "src/lib/url.ts",
+      "// see https://example.com/a/b/c for details\nexport const a = 1;\n",
+    );
     seedBaseline({}, 0);
     const r = run();
     expect(r.code).toBe(1);
@@ -243,7 +248,10 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run(["--update"]).code).toBe(0);
     expect(run().code).toBe(0);
     const baseline = JSON.parse(
-      readFileSync(join(workdir, "scripts", ".comment-language-baseline.json"), "utf8"),
+      readFileSync(
+        join(workdir, "scripts", ".comment-language-baseline.json"),
+        "utf8",
+      ),
     ) as { files: Record<string, number>; ruleVersion: number };
     expect(baseline.files["src/lib/legacy.ts"]).toBe(1);
     expect(baseline.ruleVersion).toBe(1);
@@ -260,9 +268,17 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
     expect(paths).toContain("src/lib/db-schema-ready.ts");
     expect(paths).toContain("src/server/db.ts");
     // 名单来源必须是那篇文档：解析结果与文档里写的逐项相同。
-    const doc = readFileSync(join(REPO_ROOT, "docs/reference-facts.md"), "utf8");
-    const row = doc.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
-    expect(row, "reference-facts 缺少 comment.language.asciiOnly 登记行").toBeTruthy();
+    const doc = readFileSync(
+      join(REPO_ROOT, "docs/reference-facts.md"),
+      "utf8",
+    );
+    const row = doc
+      .split("\n")
+      .find((l) => l.includes("comment.language.asciiOnly"));
+    expect(
+      row,
+      "reference-facts 缺少 comment.language.asciiOnly 登记行",
+    ).toBeTruthy();
     for (const p of paths) expect(row).toContain(`\`${p}\``);
   });
 
@@ -270,7 +286,9 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
     const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
       FACTS: Array<{ key: string }>;
     };
-    expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(true);
+    expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(
+      true,
+    );
   });
 
   it("规范与启动链路文档都写明了例外的存在（避免「一刀切」被改回去）", () => {
