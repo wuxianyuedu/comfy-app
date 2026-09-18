@@ -53,7 +53,7 @@
   --color-border-subtle: rgb(0 0 0 / 0.06);
   --color-ink: #1a1a1f;
 
-  /* Immersive / editor surfaces (canvas / node / editor) — T11.
+  /* Immersive / editor surfaces (canvas / node / editor).
      Theme-aware: these default to LIGHT (the :root value Tailwind emits
      from @theme) and are overridden to DARK inside `.dark`. They must be
      kept in sync with the corresponding `.dark { … }` block below. */
@@ -181,7 +181,7 @@
   --font-sans:
     var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
     system-ui, -apple-system, sans-serif;
-  /* Mono / code — unified stack (T10: merged from inline fontFamily usage) */
+  /* Mono / code — unified stack（原先是各处内联 fontFamily，已收口到此） */
   --font-mono:
     "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas,
     monospace;
@@ -207,7 +207,7 @@
   --color-primary-strong: #a78bfa; /* 深色下品牌文字改亮紫（violet-400 同值） */
   --color-primary-500: #8b5cf6;
   --color-primary-600: #7c3aed;
-  /* ── immersive / editor surface overrides (see T11 @theme block) ── */
+  /* ── immersive / editor surface overrides（同上方的 surface 组）── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
   --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
   --color-edge-hub-dot: #ffffff; /* 连线中点圆点 */
@@ -439,7 +439,24 @@ body {
   width: 100%;
 }
 
-/* Thin, modern scrollbar */
+/* ── 滚动条外观：本文件是全库唯一出口 ─────────────────────────────
+   自绘滚动条（`::-webkit-scrollbar`）在 WebView2 / Chromium 下生效，
+   本项目有三档**刻意不同**的观感，因此这里保留三个具名类 + 一条全局兜底，
+   每个类的取值各有出处。判据：`src/**` 里不得再出现
+   `::-webkit-scrollbar`（由 `scripts/check-ui-primitives.cjs` 的 P4 拦截）——
+   视图里写任意值变体等于把同一件事再实现一份，取值还会各自漂移。
+
+   档位与谁在用：
+   · 全局兜底（下方，无类名）—— 默认滚动条，浅灰 thumb。
+   · `.custom-scrollbar` —— 密集日志区（日志面板 / 步骤日志 / 运行日志 /
+     设置页与消息中心）。thumb 取强边框色、hover 再深一档，弱底上看得见。
+   · `.soft-scrollbar` —— 文字编辑区（剧本 Markdown 编辑器与工坊舞台正文）。
+     与上一档同宽不同档：thumb 同色、hover 取弱文字色，长时间编辑不抢视线。
+   · `textarea::-webkit-scrollbar`（下方）—— 画布节点文本框**只滚动不显示**
+     滚动条，保住面板右缘干净（滚轮 / PgDn / 方向键照常可用）。
+   `ui/scroll-area` 另有一套 base-ui 自绘滚动条，口径见规范 16 §16.2.4.6 第三档。 */
+
+/* Thin, modern scrollbar（全局兜底） */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -449,10 +466,9 @@ body {
   border-radius: 999px;
 }
 
-/* R-ardot18 (2026-08-14): canvas node textarea must not show the scrollbar
-   track even though it still scrolls (overflowY:auto + maxHeight).  We keep
-   wheel / PgDn / arrow keys usable but hide the chrome visual so the right
-   edge of the panel stays clean. */
+/* canvas node textarea must not show the scrollbar track even though it still
+   scrolls (overflowY:auto + maxHeight).  Wheel / PgDn / arrow keys stay usable
+   but the chrome visual is hidden so the right edge of the panel stays clean. */
 textarea::-webkit-scrollbar {
   width: 0;
   height: 0;
@@ -476,7 +492,7 @@ textarea::-webkit-scrollbar {
   background-color: transparent;
 }
 
-/* ── R-ardot106 (2026-08-17) MiniMap focus aids ──
+/* ── MiniMap focus aids ──
    • `pannable zoomable` on the MiniMap exposes an interactive viewport
      rectangle; the default xyflow stroke (transparent / 1px) is invisible
      against our dark canvas.  Re-tint to a violet accent + 1.5px so the
@@ -679,7 +695,7 @@ textarea::-webkit-scrollbar {
   }
 }
 
-/* R-ardot103 (2026-08-17): 生成进度水面水平滑动 —— WaterFillProgress 用。
+/* 生成进度水面水平滑动 —— WaterFillProgress 用。
  * SVG viewBox 宽 120 = 渲染宽（100%），所以 translateX(-100%) 恰好移动一整个
  * 波形周期，无缝循环。线性 6s，无限；配合水层高度过渡形成"水面涨起 + 流动"。 */
 @keyframes wf-wave {
@@ -784,7 +800,8 @@ textarea::-webkit-scrollbar {
   fill: var(--json-view-brace);
 }
 
-/* Custom dark scrollbar for log panel / overflow containers */
+/* 密集日志区的滚动条：thumb 走强边框色、hover 深一档
+   （见文件顶部「滚动条外观」块的档位说明）。 */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -798,6 +815,24 @@ textarea::-webkit-scrollbar {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--color-ink-icon);
+}
+
+/* 文字编辑区的滚动条：与 `.custom-scrollbar` 同宽不同档，hover 取弱文字色。
+   此前是视图文件里的任意值变体（`SCROLLBAR_VISIBLE_CLASSES`），
+   取值逐条照搬、观感不变，只是把「外观定义」收回本文件。 */
+.soft-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.soft-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.soft-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+}
+.soft-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-muted);
 }
 
 /* ── shadcn 工具类桥（别名 → Tailwind color 命名空间） ──────────────

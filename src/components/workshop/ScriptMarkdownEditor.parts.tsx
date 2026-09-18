@@ -24,8 +24,12 @@ import {
 import type { OutlineItem } from "./script-markdown-utils";
 import { Button } from "~/components/ui/button";
 
-export const SCROLLBAR_VISIBLE_CLASSES =
-  "overflow-y-auto [&::-webkit-scrollbar]:h-2.5! [&::-webkit-scrollbar]:w-2.5! [&::-webkit-scrollbar-track]:bg-transparent! [&::-webkit-scrollbar-thumb]:rounded-full! [&::-webkit-scrollbar-thumb]:bg-border-strong! [&::-webkit-scrollbar-thumb:hover]:bg-ink-muted!";
+/** 可滚动 + 编辑区档位的滚动条外观。
+ *  外观定义已收进 `globals.css` 的 `.soft-scrollbar` —— 此前这里用一组
+ *  任意值变体（`[&::-webkit-scrollbar-thumb]:bg-border-strong!` …）把同一件事
+ *  又实现了一份，取值与 `.custom-scrollbar` 各自漂移；判据 P4 现在禁止
+ *  视图里再出现 `::-webkit-scrollbar`。 */
+export const SCROLLBAR_VISIBLE_CLASSES = "soft-scrollbar overflow-y-auto";
 
 /* ── Toolbar primitives ── */
 export function ToolbarButton({
