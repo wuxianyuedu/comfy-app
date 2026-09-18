@@ -7,6 +7,8 @@
  * `offset` 是**本次返回内容的起点**（服务端在需要重读整文件时会把它回落到 0）。
  */
 
+import type { LogSessionsPayload } from "./log-sessions";
+
 export interface FileLogSlice {
   content: string;
   /** 文件当前总字节数（下一轮增量读取的游标）。 */
@@ -59,6 +61,38 @@ export async function fetchFileLogSlice(
   );
   if (!res.ok) return null;
   return (await res.json()) as FileLogSlice;
+}
+
+/* ── 常驻服务 runtime 日志的「会话视图」（设置页启动日志）───────────────
+ * 这些文件追加不轮转，多次启动的行混在一条时间线上。`/api/logs/sessions` 按
+ * 会话横幅把它们切开，一次只回**一份**正文；设置页因此能提供「切换每次启动」
+ * 的下拉，而不用把整份文件读进浏览器。切分判据见 `lib/log/log-sessions`。
+ */
+
+/** 可做会话切分的来源（`RUNTIME_LOG_FILES` 里的常驻服务三条通道）。 */
+export type RuntimeLogSourceKind =
+  "comfyui-runtime" | "drizzle-studio-runtime" | "ollama-runtime";
+
+/**
+ * 拉取某来源的会话列表 + 指定会话（缺省取最新一次）的正文。
+ *
+ * 服务端未就绪 / 网络失败时返回 null（与 `fetchFileLogSlice` 的约定不同：
+ * 它抛错，因为它跑在「已经很确定服务端在」的面板轮询里；本函数在设置页
+ * 挂载时就会调用一次，用户可能正处在服务重启的窗口期，报错只会污染控制台）。
+ */
+export async function fetchLogSessions(
+  source: RuntimeLogSourceKind,
+  sessionId?: string | null,
+): Promise<LogSessionsPayload | null> {
+  try {
+    const query = new URLSearchParams({ source });
+    if (sessionId) query.set("session", sessionId);
+    const res = await fetch(`/api/logs/sessions?${query.toString()}`);
+    if (!res.ok) return null;
+    return (await res.json()) as LogSessionsPayload;
+  } catch {
+    return null;
+  }
 }
 
 /** 列出 log/ 下的归档日志文件（供「历史日志」选择）。 */

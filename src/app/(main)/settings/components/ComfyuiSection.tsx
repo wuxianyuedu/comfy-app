@@ -8,9 +8,6 @@
  * 判据，也在 controller。视图自持的仅启动日志的滚动跟随（纯视觉偏好）。
  */
 
-import { useEffect, useRef, useState } from "react";
-
-import { Button } from "~/components/ui/button";
 import { StatusDot, type StatusDotState } from "~/components/ui/status-dot";
 
 import {
@@ -19,7 +16,8 @@ import {
   STATUS_TEXT_CLASS,
 } from "../settings-status-row-config";
 
-import { AnsiLogText, StatusButton, Card, Field } from "./SettingsPrimitives";
+import { StatusButton, Card, Field } from "./SettingsPrimitives";
+import { RuntimeLogBox } from "./RuntimeLogBox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /**
@@ -58,19 +56,6 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
    * 刻意不取自 comfyStatus：那份要等秒级运行态探测，徽标与输入框显隐会被一起拖着走。 */
   const instanceType = c.comfyInstance?.instanceType ?? null;
   const desktopManaged = !!c.comfyInstance?.desktopManaged;
-
-  /* 启动日志的滚动跟随是纯视觉偏好，留在视图层。 */
-  const logBoxRef = useRef<HTMLDivElement>(null);
-  const [logFollow, setLogFollow] = useState(true);
-  useEffect(() => {
-    const el = logBoxRef.current;
-    if (el && logFollow) el.scrollTop = el.scrollHeight;
-  }, [c.comfyLogText, logFollow]);
-  const onLogScroll = () => {
-    const el = logBoxRef.current;
-    if (!el) return;
-    setLogFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
-  };
 
   return (
     <Card title="创作后端（ComfyUI）">
@@ -235,55 +220,19 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         </div>
       </div>
       {/* ComfyUI 启动日志：启动期间每秒跟随 log/services/comfyui-runtime.log，
-          让「正在启动…」不再是个黑盒（硬规则 4 的用户可见出口） */}
-      <div className="border-border bg-surface-1 mb-4 rounded-xl border">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-ink/80 flex items-center gap-2 text-sm font-medium">
-            启动日志（comfyui-runtime.log）
-            {c.comfyLogActive && (
-              <span className="text-success-strong inline-flex items-center gap-1.5 text-[10px] font-normal">
-                <StatusDot state="up" sizeClass="size-1.5" pulse />
-                跟随中
-              </span>
-            )}
-          </span>
-          <div className="flex items-center gap-2">
-            {!logFollow && (
-              <Button
-                size="xs"
-                onClick={() => setLogFollow(true)}
-                className="h-auto rounded px-2 py-0.5 text-[11px] font-medium"
-              >
-                恢复自动滚动
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => void c.refreshComfyLog()}
-              className="text-muted-foreground h-auto rounded px-2 py-0.5 text-[11px]"
-            >
-              刷新
-            </Button>
-          </div>
-        </div>
-        <div
-          ref={logBoxRef}
-          onScroll={onLogScroll}
-          className="border-border-subtle bg-canvas-deep text-ink-field custom-scrollbar mx-3 mb-3 max-h-44 overflow-y-auto rounded-lg border px-3 py-2 font-mono text-[11px] leading-relaxed"
-        >
-          {c.comfyLogText ? (
-            <span className="break-all whitespace-pre-wrap">
-              <AnsiLogText segments={c.comfyLogSegments} />
-            </span>
-          ) : (
-            <span className="text-muted-foreground">
-              暂无日志 —— 点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
-              参数、模型加载与就绪状态）；也可点「刷新」查看最近一次运行日志。
-            </span>
-          )}
-        </div>
-      </div>
+          让「正在启动…」不再是个黑盒（硬规则 4 的用户可见出口）。
+          右上角的下拉按「每次启动」切换（服务端按会话横幅切分），全屏按钮铺满
+          标题行下方的内容区 —— 多次启动不再混在一条时间线上。 */}
+      <RuntimeLogBox
+        fileName="comfyui-runtime.log"
+        log={c.comfyLog}
+        emptyHint={
+          <>
+            暂无日志 —— 点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
+            参数、模型加载与就绪状态）；也可点「刷新」查看最近一次运行日志。
+          </>
+        }
+      />
       <Field
         label="训练后端 URL"
         value={c.drafts.settings.trainerUrl}
