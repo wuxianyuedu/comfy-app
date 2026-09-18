@@ -8,7 +8,7 @@ import {
   fetchVideoTasks,
   submitGeneration,
   type VideoTask,
-} from "~/lib/video-queue-client";
+} from "~/lib/media/video-queue-client";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 /* ── Video Queue Modal — wired to real VIDEO tasks ──

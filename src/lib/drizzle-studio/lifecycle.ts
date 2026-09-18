@@ -20,10 +20,13 @@ import { connect } from "net";
 import fs from "fs";
 import path from "path";
 import { logger } from "~/lib/core/logger";
-import { openUrlInBrowser } from "~/lib/open-in-browser";
-import { DRIZZLE_STUDIO_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
+import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
+import {
+  DRIZZLE_STUDIO_RUNTIME_LOG,
+  SERVICES_LOG_DIR,
+} from "~/lib/log/log-paths";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
-import { killProcessTree } from "~/lib/kill-process-tree";
+import { killProcessTree } from "~/lib/process/kill-process-tree";
 import {
   createChildExitHandler,
   createOutputSink,

@@ -14,7 +14,7 @@
 import { createContext, useContext } from "react";
 import type { NodeProps } from "@xyflow/react";
 
-import type { ParamEntry } from "~/lib/workflow-param-mapping";
+import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
 import { WorkflowParamCardColumn } from "./WorkflowParamCardColumn";
 import { WorkflowOutputParamCardColumn } from "./WorkflowOutputParamCardColumn";
 import type { LibraryNodeContent } from "./workflow-library-wire-graph";

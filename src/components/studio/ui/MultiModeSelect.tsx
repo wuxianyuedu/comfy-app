@@ -34,7 +34,7 @@ import { createPortal } from "react-dom";
 import {
   ALL_WORKFLOW_TYPES,
   type WorkflowCategory,
-} from "~/lib/workflow-types";
+} from "~/lib/workflow/workflow-types";
 
 /* ── per-category pill colors ── */
 const CATEGORY_PILL: Record<WorkflowCategory, string> = {

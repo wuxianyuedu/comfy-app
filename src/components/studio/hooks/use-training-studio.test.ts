@@ -6,12 +6,12 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { uploadDatasetImage } from "~/lib/dataset-upload-client";
+import { uploadDatasetImage } from "~/lib/media/dataset-upload-client";
 import { vanillaApi } from "~/trpc/vanilla";
 
 import { useTrainingStudio } from "./use-training-studio";
 
-vi.mock("~/lib/dataset-upload-client", () => ({
+vi.mock("~/lib/media/dataset-upload-client", () => ({
   uploadDatasetImage: vi.fn(),
 }));
 

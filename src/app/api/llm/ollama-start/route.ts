@@ -1,8 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentServerUser } from "~/server/auth/request-user";
 import { getExitPolicy } from "~/lib/app-settings/app-settings.server";
-import { spawnManaged, waitForDetachMediator } from "~/lib/process-launch";
-import { OLLAMA_RUNTIME_LOG } from "~/lib/log-paths";
+import {
+  spawnManaged,
+  waitForDetachMediator,
+} from "~/lib/process/process-launch";
+import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { spawn } from "node:child_process";
 import fs from "node:fs";

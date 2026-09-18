@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchComfyStats,
   type ComfyStatsPayload,
-} from "~/lib/comfy-stats-client";
+} from "~/lib/comfy/comfy-stats-client";
 
 export const COMFY_STATS_POLL_MS = 4000;
 

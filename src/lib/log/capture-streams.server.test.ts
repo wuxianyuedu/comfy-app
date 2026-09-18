@@ -24,8 +24,8 @@ const tmp = fs.realpathSync(
   fs.mkdtempSync(path.join(os.tmpdir(), "capture-streams-")),
 );
 
-vi.mock("~/lib/log-paths", async () => {
-  const actual = await vi.importActual("~/lib/log-paths");
+vi.mock("~/lib/log/log-paths", async () => {
+  const actual = await vi.importActual("~/lib/log/log-paths");
   return {
     ...(actual as Record<string, unknown>),
     NEXTJS_LOG_DIR: tmp,

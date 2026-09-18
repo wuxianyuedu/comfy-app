@@ -1,6 +1,6 @@
 import type { Node } from "@xyflow/react";
 import type { ValidationError } from "~/lib/comfyui/validation";
-import { DEFAULT_SIZE_SPEC, type SizeSpec } from "~/lib/size-presets";
+import { DEFAULT_SIZE_SPEC, type SizeSpec } from "~/lib/media/size-presets";
 
 /* ── Canvas node model ── */
 

@@ -20,7 +20,7 @@ import fs from "fs";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { probeComfyBase, probeComfyAtPort } from "./client";
 import { logger } from "~/lib/core/logger";
-import { killProcessTree } from "../kill-process-tree";
+import { killProcessTree } from "~/lib/process/kill-process-tree";
 import { runEnsureLaunch } from "./lifecycle-launch";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { findPidForMainPy } from "./proc-detect";
@@ -29,8 +29,8 @@ import {
   resetComfyRuntimeSnapshot,
   type ComfyRuntimeSnapshot,
 } from "./status";
-import { openUrlInBrowser } from "~/lib/open-in-browser";
-import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log-paths";
+import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
+import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import {
   decideEnsureLaunch,
@@ -157,7 +157,7 @@ export async function probeComfyUi(_timeoutMs = 2500): Promise<string | null> {
  * 关闭 ComfyUI：杀整棵进程树。
  * Windows 走 `taskkill /PID <pid> /T /F`（cmd 外壳死了不杀子进程会留下
  * python 孤儿锁住端口与日志文件）；POSIX 由 `killProcessTree` 向进程组
- * 发信号（拿不到组时单杀兜底），两条路径都收在 `~/lib/kill-process-tree`。
+ * 发信号（拿不到组时单杀兜底），两条路径都收在 `~/lib/process/kill-process-tree`。
  *
  * 两种来源都能关：
  *   - bound（默认）：本进程持着子进程句柄 st.child，直接以其 PID 杀树；

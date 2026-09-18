@@ -19,7 +19,10 @@ import {
   workshopInputLabel,
   type WorkshopInputType,
 } from "~/lib/workshop/model-mode-contract";
-import { ALL_WORKFLOW_TYPES, getWorkflowType } from "~/lib/workflow-types";
+import {
+  ALL_WORKFLOW_TYPES,
+  getWorkflowType,
+} from "~/lib/workflow/workflow-types";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { useModelAdapters } from "./hooks/use-model-adapters";
 

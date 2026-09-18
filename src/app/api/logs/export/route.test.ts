@@ -21,8 +21,8 @@ const exportDir = path.join(tmp, "exports");
 
 /* 全部日志路径落到本用例自己的临时目录：`log/` 在 .gitignore 里，CI / 干净检出
  * 上根本不存在（若不隔离，用例会往仓库里写字，或按环境不同得到不同结果）。 */
-vi.mock("~/lib/log-paths", async () => {
-  const actual = await vi.importActual("~/lib/log-paths");
+vi.mock("~/lib/log/log-paths", async () => {
+  const actual = await vi.importActual("~/lib/log/log-paths");
   return {
     ...(actual as Record<string, unknown>),
     LOG_ROOT: tmp,

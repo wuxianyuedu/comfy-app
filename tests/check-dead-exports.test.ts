@@ -284,7 +284,7 @@ describe("check-dead-exports.cjs（提交门槛）", () => {
      * 这里用刚才接线上去的两个符号当锚点。 */
     for (const target of [
       "src/lib/workshop/script-parser.ts#emptyProject",
-      "src/lib/log-paths.ts#NEXTJS_PANEL_LOG_PREFIX",
+      "src/lib/log/log-paths.ts#NEXTJS_PANEL_LOG_PREFIX",
     ]) {
       const result = execFileSync(process.execPath, [SCRIPT, "--verify", target], {
         cwd: process.cwd(),

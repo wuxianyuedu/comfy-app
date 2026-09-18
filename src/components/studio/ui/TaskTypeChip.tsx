@@ -4,7 +4,7 @@ import {
   getWorkflowType,
   normalizeTaskType,
   type WorkflowCategory,
-} from "~/lib/workflow-types";
+} from "~/lib/workflow/workflow-types";
 
 /**
  * 工作流类型只读标签，按 image / video / audio 分类着色。

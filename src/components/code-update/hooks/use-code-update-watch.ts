@@ -18,8 +18,8 @@ import {
   fetchBuildId,
   isBuildIdChange,
   isPageOlderThanBuild,
-} from "~/lib/code-update-since-load";
-import { reportCodeUpdatedSinceLoad } from "~/lib/stale-store-notify";
+} from "~/lib/shell/code-update-since-load";
+import { reportCodeUpdatedSinceLoad } from "~/lib/shell/stale-store-notify";
 
 /** 构建标识轮询间隔：源码改动的粒度是「人敲一次键盘」，30s 足够及时。 */
 export const BUILD_ID_POLL_MS = 30_000;

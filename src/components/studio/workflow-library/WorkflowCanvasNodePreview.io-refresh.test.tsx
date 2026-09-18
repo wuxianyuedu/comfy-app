@@ -21,7 +21,7 @@ vi.mock("~/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
   watchTask: vi.fn(),
 }));
-vi.mock("~/lib/workflow-run-store", () => {
+vi.mock("~/lib/workflow/workflow-run-store", () => {
   /* 快照必须引用稳定：每次返回新对象会让 useSyncExternalStore 判定「一直在
    * 变」，触发无限重渲染（"Maximum update depth exceeded"）。 */
   const snapshot = { runs: [] };
@@ -37,8 +37,8 @@ vi.mock("~/lib/workflow-run-store", () => {
 vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { buildParamEntries } from "~/lib/workflow-param-mapping";
-import { exposedParamDisplayLabel } from "~/lib/workflow-exposed-params";
+import { buildParamEntries } from "~/lib/workflow/workflow-param-mapping";
+import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 
 /* 预览卡片现在挂在 React Flow 画布上（ISSUE #355），React Flow 挂载时会自行

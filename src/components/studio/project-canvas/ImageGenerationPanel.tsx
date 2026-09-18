@@ -15,7 +15,7 @@ import {
   IMAGE_WORKFLOW_TYPES,
   VIDEO_WORKFLOW_TYPES,
   normalizeTaskType,
-} from "~/lib/workflow-types";
+} from "~/lib/workflow/workflow-types";
 import { setActiveTaskId } from "./activeTask";
 import { useCancelTask } from "./hooks/use-cancel-task";
 

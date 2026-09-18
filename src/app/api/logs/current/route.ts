@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
-import { resolveSessionStart } from "~/lib/log-session-scope";
-import { fileMtimeMs } from "~/lib/log-session-scope.server";
-import { getServerBootId } from "~/lib/dev-server-id";
+import { resolveSessionStart } from "~/lib/log/log-session-scope";
+import { fileMtimeMs } from "~/lib/log/log-session-scope.server";
+import { getServerBootId } from "~/lib/shell/dev-server-id";
 import {
   COMFYUI_RUNTIME_LOG,
   DEV_LAUNCHER_CURRENT_SENTINEL,
@@ -14,7 +14,7 @@ import {
   OLLAMA_RUNTIME_LOG,
   START_TAURI_LAUNCHER_LOG,
   APP_RUNTIME_LOG,
-} from "~/lib/log-paths";
+} from "~/lib/log/log-paths";
 
 const LAUNCHER_LOG_FILE = START_TAURI_LAUNCHER_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;

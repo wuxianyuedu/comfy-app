@@ -34,9 +34,9 @@ import {
   useShellTabs,
   MAIN_TAB_ID,
   type ShellTab,
-} from "~/lib/shell-tabs-store";
-import { isDesktopShell } from "~/lib/desktop-shell-client";
-import { shouldUseTitleBarTabs } from "~/lib/title-bar-derive";
+} from "~/lib/shell/shell-tabs-store";
+import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
+import { shouldUseTitleBarTabs } from "~/lib/shell/title-bar-derive";
 import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
 import { TitleBarTabs } from "./TitleBarTabs";
 

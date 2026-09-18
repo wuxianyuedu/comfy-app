@@ -6,11 +6,11 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchTaskImages } from "~/lib/task-images-client";
+import { fetchTaskImages } from "~/lib/media/task-images-client";
 
 import { useContentAssetGallery } from "./use-content-asset-gallery";
 
-vi.mock("~/lib/task-images-client", () => ({ fetchTaskImages: vi.fn() }));
+vi.mock("~/lib/media/task-images-client", () => ({ fetchTaskImages: vi.fn() }));
 
 const mockedFetch = vi.mocked(fetchTaskImages);
 

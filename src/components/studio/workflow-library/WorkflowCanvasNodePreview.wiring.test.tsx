@@ -31,7 +31,7 @@ vi.mock("~/lib/workshop/generation-client", () => ({
   startLocalGenerate: vi.fn().mockResolvedValue("task-1"),
   watchTask: vi.fn(),
 }));
-vi.mock("~/lib/workflow-run-store", () => {
+vi.mock("~/lib/workflow/workflow-run-store", () => {
   const snapshot = { runs: [] };
   return {
     appendWorkflowRunLog: vi.fn(),
@@ -45,8 +45,11 @@ vi.mock("~/lib/workflow-run-store", () => {
 vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { parseParamMapping, SIZE_SUB_IDS } from "~/lib/workflow-param-mapping";
-import { applyWireEdit } from "~/lib/workflow-param-wiring";
+import {
+  parseParamMapping,
+  SIZE_SUB_IDS,
+} from "~/lib/workflow/workflow-param-mapping";
+import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 import { deriveLibraryParamCards } from "./workflow-library-param-cards";
 import { deriveLibraryEdges } from "./hooks/use-library-wire-flow";

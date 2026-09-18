@@ -32,7 +32,7 @@ import { useFileUpload } from "./hooks/use-file-upload";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
 import { ErrorPanel } from "./ErrorPanel";
-import { resolveWorkflowMode } from "~/lib/workflow-types";
+import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
 export const CanvasNode = React.memo(function CanvasNode({
   id,

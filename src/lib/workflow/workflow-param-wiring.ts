@@ -20,8 +20,8 @@ import {
   parseParamMapping,
   serializeParamMapping,
   type ParamMapping,
-} from "~/lib/workflow-param-mapping";
-import type { WorkflowIOMap } from "~/lib/workflow-io-types";
+} from "~/lib/workflow/workflow-param-mapping";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 一条连线动作：把某个对外参数在这个模式下连到 `ioKey`（`null` = 断开）。 */
 export interface ParamWireEdit {

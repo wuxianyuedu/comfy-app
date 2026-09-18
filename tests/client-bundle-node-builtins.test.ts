@@ -1,7 +1,7 @@
 /**
  * 客户端 bundle 不得含 Node-only 模块（ISSUE #317 定位的 P0 回归）。
  *
- * 背景：`src/lib/log-session-scope.ts` 顶层 `import fs from "node:fs"`，而
+ * 背景：`src/lib/log/log-session-scope.ts` 顶层 `import fs from "node:fs"`，而
  * 客户端组件 `LogProvider.tsx`（"use client"）只是想要它的纯函数
  * `clampLogTime`。Turbopack 编译浏览器 chunk 时把 `node:fs` 整图形入，报
  * `the chunking context does not support external modules (request: node:fs)`
@@ -85,29 +85,29 @@ describe("客户端可达图中不得出现顶层 import Node 内建的模块", 
 
   it("log-session-scope 已分层：纯函数模块不含 fs，IO 在 .server 模块", () => {
     // 这是本测试要守住的具体回归（ISSUE #317 的 P0）。
-    const pure = readFileSync(join(SRC, "lib", "log-session-scope.ts"), "utf8");
+    const pure = readFileSync(join(SRC, "lib", "log", "log-session-scope.ts"), "utf8");
     expect(stripComments(pure)).not.toMatch(/from\s+["']node:fs["']/);
     // 纯函数仍可被客户端 import（clampLogTime 是 LogProvider 在用的）
     expect(pure).toContain("export function clampLogTime");
     expect(pure).toContain("export function resolveSessionStart");
 
-    const server = readFileSync(join(SRC, "lib", "log-session-scope.server.ts"), "utf8");
+    const server = readFileSync(join(SRC, "lib", "log", "log-session-scope.server.ts"), "utf8");
     expect(server).toMatch(/from\s+["']node:fs["']/);
     expect(server).toContain("export function fileMtimeMs");
   });
 
   it("入口是全 src/** 的 use client（不限于 app/components）", () => {
-    // 反向验证入口集：`src/lib/shell-tabs-store.ts` 是 `"use client"`，但它
+    // 反向验证入口集：`src/lib/shell/shell-tabs-store.ts` 是 `"use client"`，但它
     // **不在** `src/app|components` 下 —— 旧版本文件只从 app/components 收集入口，
     // 因此把 Node 内建注进它不会红。入口集改回窄口径，这条立刻红。
-    const target = join(SRC, "lib", "shell-tabs-store.ts");
+    const target = join(SRC, "lib", "shell", "shell-tabs-store.ts");
     const original = readFileSync(target, "utf8");
     expect(original).toMatch(/^\s*["']use client["']/m);
     try {
       writeFileSync(target, 'import fs from "node:fs";\n' + original);
       const probe = scan();
       const hit = probe.clientReachable.find(
-        (h) => h.module === "src/lib/shell-tabs-store.ts",
+        (h) => h.module === "src/lib/shell/shell-tabs-store.ts",
       );
       expect(
         hit,

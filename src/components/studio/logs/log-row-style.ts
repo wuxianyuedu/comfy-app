@@ -15,7 +15,7 @@ import {
   colorizeLogrusLine,
   parseAnsiSegments,
   type AnsiStyleKey,
-} from "~/lib/log-ansi";
+} from "~/lib/log/log-ansi";
 
 /** 行文本里识别出的词法分片。`style` 为空 = 按级别默认色渲染。 */
 export interface RowToken {

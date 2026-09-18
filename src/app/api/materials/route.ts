@@ -16,7 +16,7 @@ import {
   sanitizeFileName,
   sanitizeScope,
   type MaterialItem,
-} from "~/lib/materials";
+} from "~/lib/media/materials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

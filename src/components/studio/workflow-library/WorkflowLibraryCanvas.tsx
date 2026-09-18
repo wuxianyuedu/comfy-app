@@ -33,7 +33,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import type { ParamEntry } from "~/lib/workflow-param-mapping";
+import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
 import type {
   LibraryOutputCards,
   LibraryParamCards,

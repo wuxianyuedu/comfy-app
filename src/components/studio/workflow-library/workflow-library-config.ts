@@ -7,7 +7,10 @@
 
 import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { getWorkflowType, normalizeTaskType } from "~/lib/workflow-types";
+import {
+  getWorkflowType,
+  normalizeTaskType,
+} from "~/lib/workflow/workflow-types";
 
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
 export interface LocalWorkflowRoot {

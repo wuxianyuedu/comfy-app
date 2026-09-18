@@ -17,7 +17,7 @@
  *
  * 为什么必须走「可达性」而不是「扫 `import fs` 就要求 `server-only`」：
  * `eslint-plugin-boundaries` 的 import 图**对服务端源码完全不采样**
- * （实测：给 `src/lib/log-paths.ts` 加 `import "server-only"` 后 `pnpm lint` 仍绿），
+ * （实测：给 `src/lib/log/log-paths.ts` 加 `import "server-only"` 后 `pnpm lint` 仍绿），
  * 于是「扫到 fs 就要求声明」的写法**没有任何门禁能替它兜底** —— 而 §18.4 的
  * 第三类（纯 Node 宿主）本来就不该带 `server-only`（它的入口是一句 `throw`，
  * 加上去 `scripts/*.mjs` 的启动编排会直接崩）。判据必须区分「真的可能被打包
@@ -30,7 +30,7 @@ const REPO_ROOT = process.cwd();
 
 /** §18.4 第二类：纯 Node 宿主（由 `scripts/*.mjs` 动态加载，不经 Next 打包）。 */
 const PURE_NODE_HOSTS = [
-  "src/lib/kill-process-tree.ts",
+  "src/lib/process/kill-process-tree.ts",
   // workshop MCP：由 tools/mcp-{stdio,http}.ts 经 `tsx` 直接跑，**不经 Next**；
   // 它必须与 Next 侧共用同一份密文实现（`src/server/workshop/llm.ts` 也引它），
   // 因此不能带 server-only（那会让 MCP 宿主直接 throw）。
@@ -74,7 +74,7 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
 
   it("声明过的模块，最窄的那条路径都引不到（声明不是装饰）", () => {
     // 判据：`lib` 侧入口 + 纯 Node 宿主 => 不可达。
-    // 反向验证过它真的会红：给 `src/lib/log-paths.ts` 加 `import "server-only"`
+    // 反向验证过它真的会红：给 `src/lib/log/log-paths.ts` 加 `import "server-only"`
     // 并把 `log-session-scope.ts`（纯）改成引它，立刻报出完整引用链。
     const hits = report.libOnlyReachable;
     expect(

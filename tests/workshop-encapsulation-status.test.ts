@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { WorkflowIOMap } from "../src/lib/workflow-io-types";
+import type { WorkflowIOMap } from "../src/lib/workflow/workflow-io-types";
 import { deriveEncapsulationStatus } from "../src/lib/workshop/workshop-encapsulation-status";
 import { modeContractInputLabel } from "../src/lib/workshop/model-mode-contract";
-import { exposedParamDisplayLabel } from "../src/lib/workflow-exposed-params";
+import { exposedParamDisplayLabel } from "../src/lib/workflow/workflow-exposed-params";
 
 /** 尺寸口的展示名与模式契约编辑器同一份措辞（单一出处，不做字面重复断言）。 */
 const SIZE_LABEL = modeContractInputLabel("size");

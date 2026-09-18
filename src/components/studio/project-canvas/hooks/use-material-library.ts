@@ -12,7 +12,7 @@ import {
   uploadMaterial,
   type MaterialFolder,
   type MaterialItem,
-} from "~/lib/materials-client";
+} from "~/lib/media/materials-client";
 
 /** 搜索防抖：有关键字时延迟 250ms 再发请求，逐字输入不打爆后端。 */
 const SEARCH_DEBOUNCE_MS = 250;

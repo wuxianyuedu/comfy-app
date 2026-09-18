@@ -11,7 +11,7 @@ import {
   sizeSpecFromText,
   toSizeSpec,
   type SizeSpec,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 import type { ProjectMeta } from "~/lib/workshop/types";
 import { saveComfySettings } from "~/server/workshop/comfyui";
 import * as orchestrator from "~/server/workshop/orchestrator";

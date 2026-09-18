@@ -30,8 +30,8 @@ import {
   failWorkflowRun,
   patchWorkflowRun,
   registerWorkflowRun,
-} from "~/lib/workflow-run-store";
-import type { SizeSpec } from "~/lib/size-presets";
+} from "~/lib/workflow/workflow-run-store";
+import type { SizeSpec } from "~/lib/media/size-presets";
 
 export interface EncapsulationTestRunArgs {
   workflowId: string;

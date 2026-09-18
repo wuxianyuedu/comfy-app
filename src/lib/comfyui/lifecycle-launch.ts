@@ -21,8 +21,11 @@ import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
 import { findPidForMainPy, findPidListeningPort } from "./proc-detect";
-import { spawnManaged, waitForDetachMediator } from "../process-launch";
-import { SERVICES_LOG_DIR } from "~/lib/log-paths";
+import {
+  spawnManaged,
+  waitForDetachMediator,
+} from "~/lib/process/process-launch";
+import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import {
   buildEarlyExitDetail,
   buildSpawnArgs,

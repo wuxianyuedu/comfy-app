@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerBootId } from "~/lib/dev-server-id";
+import { getServerBootId } from "~/lib/shell/dev-server-id";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
