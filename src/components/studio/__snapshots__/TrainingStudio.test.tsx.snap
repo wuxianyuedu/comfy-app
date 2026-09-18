@@ -617,7 +617,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               学习率
             </label>
             <div
-              class="nodrag nopan border-border bg-subtle flex items-center gap-0 rounded-lg border transition-opacity  "
+              class="nodrag nopan border-border-strong bg-subtle flex items-center gap-0 rounded-lg border transition-opacity  "
             >
               <button
                 class="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"
@@ -767,7 +767,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               随机种子
             </label>
             <div
-              class="nodrag nopan border-border bg-subtle flex items-center gap-0 rounded-lg border transition-opacity  "
+              class="nodrag nopan border-border-strong bg-subtle flex items-center gap-0 rounded-lg border transition-opacity  "
             >
               <button
                 class="text-ink-muted hover:bg-surface-2 hover:text-ink-bright active:text-ink flex h-[24px] w-[24px] shrink-0 items-center justify-center transition-colors disabled:opacity-30"

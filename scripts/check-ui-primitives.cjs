@@ -71,7 +71,7 @@ const EXEMPT_DIRS = [
   {
     re: /^src\/components\/studio\/ui\//,
     reason:
-      "历史第二套 UI kit（INCLUDE_AT_LEVEL 里逐个目录开扫，见规范 §16.2.4 的分批计划）",
+      "历史第二套 UI kit（去向是合并进 ui/，分批计划见规范 §16.2.4）",
   },
   {
     re: /^src\/components\/studio\/shared\//,

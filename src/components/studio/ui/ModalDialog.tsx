@@ -22,6 +22,8 @@
  *
  * 颜色全部走语义 token（规范 03 §3.6.2）：这里曾把 `violet-500/600` 写死
  * 6 处，于是「改品牌色」对确认弹窗不起作用 —— 它绕开了 `--color-primary`。
+ *   - spacing:   p-6, gap-4, rounded-2xl
+ *   - buttons:   ghost secondary + brand/danger primary
  *
  * Behavior:
  *   - Click backdrop or press Esc → onClose()

@@ -6,7 +6,7 @@
   "scripts": {
     "build": "next build && node scripts/standalone-private-inputs.mjs",
     "analyze": "node scripts/analyze-bundle.mjs",
-    "check": "eslint . && tsc --noEmit",
+    "check": "eslint . --cache --cache-location node_modules/.cache/eslint --cache-strategy content && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "node scripts/db-push.mjs",
@@ -18,7 +18,7 @@
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:ratchet": "node scripts/check-format.cjs",
     "format:reformat-guard": "node scripts/check-reformat-only.cjs",
-    "lint": "eslint .",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint --cache-strategy content",
     "lint:fix": "eslint . --fix",
     "postinstall": "node scripts/install-git-hooks.mjs",
     "preview": "node scripts/start.mjs",
