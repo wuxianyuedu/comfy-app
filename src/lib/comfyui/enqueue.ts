@@ -36,14 +36,14 @@ export function enqueue(job: Job) {
   if (job.prompt) store.promptByTask.set(job.taskId, job.prompt);
 
   state().logs.set(job.taskId, []);
-/* 记下开始时间：完成时能打一行「总耗时 Xs」，客户端日志也能据此显示任务
- * 已跑多久，方便排查「卡在 RUNNING」。 */
+  /* 记下开始时间：完成时能打一行「总耗时 Xs」，客户端日志也能据此显示任务
+   * 已跑多久，方便排查「卡在 RUNNING」。 */
 
   store.startedAt.set(job.taskId, Date.now());
 
   log(job.taskId, "info", "任务已加入执行队列");
-/* 打出队列位置与在跑的并发槽：让用户看出任务是在等前面那个、还是马上就要跑。
- * 如果用户在点「生成」之前就开着日志面板，这就是他最先看到的一行。 */
+  /* 打出队列位置与在跑的并发槽：让用户看出任务是在等前面那个、还是马上就要跑。
+   * 如果用户在点「生成」之前就开着日志面板，这就是他最先看到的一行。 */
 
   log(
     job.taskId,
@@ -75,7 +75,7 @@ export function getLogs(taskId: string): LogEntry[] {
 
 export async function cancelTask(taskId: string) {
   const store = state();
-// 先把驱动这个任务的 comfy-cli 子进程杀掉，再翻状态。
+  // 先把驱动这个任务的 comfy-cli 子进程杀掉，再翻状态。
 
   const cliProc = cliProcs.get(taskId);
 
@@ -92,11 +92,11 @@ export async function cancelTask(taskId: string) {
   const task = await taskRepository.findStatusAndPromptById(taskId);
 
   if (!task) return;
-/* 以前这里要求 `status === RUNNING || QUEUED`。现在改为接受**任何非终态**的
- * 状态（SUCCEEDED / FAILED / CANCELLED 会在下面被跳过），于是用户能取消掉一个
- * 卡住的 QUEUED 行 —— 哪怕内存态已经被清掉（例如 dev server 重启过、reaper
- * 还没扫到）。任务有 promptId 时仍会调 `interrupt()` 让 ComfyUI 也丢掉它的
- * prompt；没有的话就只把数据库这一行收口。 */
+  /* 以前这里要求 `status === RUNNING || QUEUED`。现在改为接受**任何非终态**的
+   * 状态（SUCCEEDED / FAILED / CANCELLED 会在下面被跳过），于是用户能取消掉一个
+   * 卡住的 QUEUED 行 —— 哪怕内存态已经被清掉（例如 dev server 重启过、reaper
+   * 还没扫到）。任务有 promptId 时仍会调 `interrupt()` 让 ComfyUI 也丢掉它的
+   * prompt；没有的话就只把数据库这一行收口。 */
 
   const isTerminal = (st: string | null) =>
     st === "SUCCEEDED" || st === "FAILED" || st === "CANCELLED";
@@ -140,26 +140,26 @@ export async function cancelTask(taskId: string) {
   if (task.promptId) store.promptToTask.delete(task.promptId);
 
   store.promptByTask.delete(taskId);
-// 清掉本模块给这个任务加的记账，同一个 taskId 再入队时从干净状态开始。
+  // 清掉本模块给这个任务加的记账，同一个 taskId 再入队时从干净状态开始。
 
   store.startedAt.delete(taskId);
 
   store.lastNodeByTask.delete(taskId);
-/* 只有确实占着并发槽时才归还它。纯数据库任务（内存里没有对应 job）**不能**
- * 递减 `s.active`，否则后续 `processQueue` 会短暂以为有空槽，去入队一个并不
- * 存在的幻影任务。`hadSlot` 的判据是：要么持有 comfy-cli 子进程，要么任务
- * 正躺在内存队列里。 */
+  /* 只有确实占着并发槽时才归还它。纯数据库任务（内存里没有对应 job）**不能**
+   * 递减 `s.active`，否则后续 `processQueue` 会短暂以为有空槽，去入队一个并不
+   * 存在的幻影任务。`hadSlot` 的判据是：要么持有 comfy-cli 子进程，要么任务
+   * 正躺在内存队列里。 */
 
   const inQueue = store.queue.some((queue) => queue.taskId === taskId);
 
   const hadSlot = inQueue || cliProcs.has(taskId);
 
   if (hadSlot) store.active = Math.max(0, store.active - 1);
-/* 以前取消只改数据库与内存槽，从不往 SSE 推送 —— 于是前端的 d.status 永远停在
- * "running"，「生成中…」按钮再也不回来。现在发一个合成的 state 事件，让画布的
- * patch() 把节点翻成 error；再发一个终态 error 事件，让 EventSource 的
- * onmessage 处理器关掉连接（与 finalizeFailure 里的做法一致）。顺序要紧：
- * 先 state（修 UI），后 error（关连接）。 */
+  /* 以前取消只改数据库与内存槽，从不往 SSE 推送 —— 于是前端的 d.status 永远停在
+   * "running"，「生成中…」按钮再也不回来。现在发一个合成的 state 事件，让画布的
+   * patch() 把节点翻成 error；再发一个终态 error 事件，让 EventSource 的
+   * onmessage 处理器关掉连接（与 finalizeFailure 里的做法一致）。顺序要紧：
+   * 先 state（修 UI），后 error（关连接）。 */
 
   store.emitter.emit(taskId, {
     type: "state",
@@ -174,8 +174,8 @@ export async function cancelTask(taskId: string) {
   });
 
   store.emitter.emit(taskId, { type: "error", error: "用户取消" });
-/* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
- * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。 */
+  /* 把这个任务还没落盘的防抖日志刷出去：让「用户取消任务」这一行与在途的告警
+   * 都先进数据库，再把行标成终态。否则「取消后立刻刷新」会看不到那条取消记录。 */
 
   await persistLogs(taskId);
 

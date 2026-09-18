@@ -108,15 +108,15 @@ export interface WorkflowDetailFull {
   id: string;
   name: string;
   taskType: string;
-     /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
-      *  子图变体不带这个字段。 */
+  /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
+   *  子图变体不带这个字段。 */
   modes?: string[];
   defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
-     /** 导入时的原始 RAW（UI 格式）JSON；纯 API 导入时为 null。 */
+  /** 导入时的原始 RAW（UI 格式）JSON；纯 API 导入时为 null。 */
   rawJson?: unknown;
   nodes: DetailNodeView[];
-     /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
+  /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
   rawView?: RawViewPacket | null;
   paramMap: Record<string, string>;
   workflowIO: Record<string, WorkflowDetailIOEntry>;
@@ -133,16 +133,16 @@ export interface WorkflowDetailFull {
   sourceChanged?: boolean;
   sourceMissing?: boolean;
   source?: "local" | "online";
-     /** 子图变体：顶层工作流的 id。 */
+  /** 子图变体：顶层工作流的 id。 */
   parentId?: string;
-     /** 子图变体：请求的子图 UUID。 */
+  /** 子图变体：请求的子图 UUID。 */
   subgraphUid?: string;
-     /** 子图变体：边界 pin 实体。 */
+  /** 子图变体：边界 pin 实体。 */
   boundaryPins?: {
     inputs: BoundaryPin[];
     outputs: BoundaryPin[];
   };
-     /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
+  /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
   boundaryLinks?: BoundaryLink[];
 }
 
@@ -663,8 +663,8 @@ export async function buildSubgraphDetail(
   const { multilineForClassField } = createObjectInfoResolvers();
 
   const detailJson = await cacheJson(cacheKey, 120_000, async () => {
-         /* 哨兵连线索引 + 内部节点图转换 + 边界栏杆，全都在
-          * workflow-subgraph-parse.ts 里（见那个模块的文档）。 */
+    /* 哨兵连线索引 + 内部节点图转换 + 边界栏杆，全都在
+     * workflow-subgraph-parse.ts 里（见那个模块的文档）。 */
     const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
     /* 边界槽位下标要先于槽位表算出来：ComfyUI 的 \`target_slot\` 与节点自带
      *  \`idx\` 在某些导出路径上口径不同，只有哨兵边记下的关联是权威事实

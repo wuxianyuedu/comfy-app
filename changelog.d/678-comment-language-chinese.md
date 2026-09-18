@@ -40,3 +40,7 @@
   而非英文说明，逐行塞中文会破坏语法。判据是「剥掉类型块 / `[…]` / `@tag` 后
   不含英文虚词与动词」—— 带英文说明的 `@param {string} x the command to probe`
   仍被统计（两条反向锚点用例守着，`tests/comment-language.test.ts` 20 条）。
+- 修复 `WorkflowCanvasNodePreview.wiring.test.tsx` 里一条**把判据挂在格式化形态上**的
+  断言（它在干净 `master` 上就已经是红的）：正则要求 `deriveLibraryEdges(...)` 的四个
+  实参写在**同一行**，而 prettier 早就把它拆成了多行。改为容忍换行的写法 ——
+  既仍钉住「四个实参按此顺序」，又不把判据挂在某次格式化的结果上（规范 §12.11）。

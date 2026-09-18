@@ -373,8 +373,8 @@ export function buildCustomWorkflow(
   // 优先用用户给的角色映射，没有就回落到自动识别。
   const map: ParamMap =
     paramMap && Object.keys(paramMap).length ? paramMap : detectParamMap(out);
-/* 只有在明确传了 prompt/negative 时才覆盖 —— 否则「自带提示词」的工作流必须
- * 保留它（旧代码会把它清成 ""）。 */
+  /* 只有在明确传了 prompt/negative 时才覆盖 —— 否则「自带提示词」的工作流必须
+   * 保留它（旧代码会把它清成 ""）。 */
   if (
     map.positiveNode &&
     out[map.positiveNode] &&

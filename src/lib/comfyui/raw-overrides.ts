@@ -186,8 +186,8 @@ function widgetInputCount(node: RawUiNode): number {
  *  （ComfyUI 的 `proxyWidgetErrorQuarantine`），更不能写。 */
 function hasSeedControlSlot(node: RawUiNode): boolean {
   if (!Array.isArray(node?.widgets_values)) return false;
-/* 只有当 `widgets_values` 比带控件的输入多出一项时，哨兵槽才存在
- *（更早的 ComfyUI 不序列化哨兵，长度相等说明 seed+1 也是真控件）。 */
+  /* 只有当 `widgets_values` 比带控件的输入多出一项时，哨兵槽才存在
+   *（更早的 ComfyUI 不序列化哨兵，长度相等说明 seed+1 也是真控件）。 */
   return node.widgets_values.length > widgetInputCount(node);
 }
 /** 为「没有控制槽时」的随机化兜底新造一个非负的 ComfyUI 风格 seed
@@ -445,24 +445,24 @@ export function applyRawOverrides(
     if (!ov?.nodeId || ov.value === undefined) continue;
     const node = resolveRawNode(raw, ov.nodeId);
     if (!node) continue;
-/* 原始 UI 格式里 seed 的 "control after generate" **不是**具名控件 ——
- * 它被序列化成 seed 控件紧挨着的下一个 widgets_values 槽。
- * 所以这里解析出 seed 控件槽，目标就是槽 +1。
- *（API 格式的图则带一个真正的 `control_after_generate` 输入，由按名分支处理。） */
+    /* 原始 UI 格式里 seed 的 "control after generate" **不是**具名控件 ——
+     * 它被序列化成 seed 控件紧挨着的下一个 widgets_values 槽。
+     * 所以这里解析出 seed 控件槽，目标就是槽 +1。
+     *（API 格式的图则带一个真正的 `control_after_generate` 输入，由按名分支处理。） */
     if (ov.name === "control_after_generate") {
       const seedSlot = seedWidgetSlot(node);
       if (seedSlot < 0) continue;
       if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
-/* 只有当该节点确实在 seed 之后保留了 `control_after_generate` 哨兵槽时，
- * 才写 seed 的控制模式。只暴露内部 seed、却不暴露其随机化能力的子图 wrapper
- *（子图没有对应输入引脚时 ComfyUI 会把它隔离）没有这个槽 ——
- * 否则 `seedSlot + 1` 会覆盖后面那个真控件（例如扩散模型名）。 */
+      /* 只有当该节点确实在 seed 之后保留了 `control_after_generate` 哨兵槽时，
+       * 才写 seed 的控制模式。只暴露内部 seed、却不暴露其随机化能力的子图 wrapper
+       *（子图没有对应输入引脚时 ComfyUI 会把它隔离）没有这个槽 ——
+       * 否则 `seedSlot + 1` 会覆盖后面那个真控件（例如扩散模型名）。 */
       if (hasSeedControlSlot(node)) {
         node.widgets_values[seedSlot + 1] = ov.value;
       } else if (ov.value === "randomize") {
-/* 没有哨兵槽（被暴露的子图 seed 没有随机化引脚，或该节点的随机化已被隔离）
- * 意味着 ComfyUI 会把 seed 固定住 —— 用户请求的随机化模式会落空。
- * 这里兜底造一个新的随机 seed，让被暴露的 seed 每次运行仍有变化。 */
+        /* 没有哨兵槽（被暴露的子图 seed 没有随机化引脚，或该节点的随机化已被隔离）
+         * 意味着 ComfyUI 会把 seed 固定住 —— 用户请求的随机化模式会落空。
+         * 这里兜底造一个新的随机 seed，让被暴露的 seed 每次运行仍有变化。 */
         const minted = randomSeed();
         node.widgets_values[seedSlot] = minted;
         // 同步写进内层节点：comfy-cli 展开子图后真正被采样器读到的是内层

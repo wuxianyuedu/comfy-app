@@ -80,8 +80,8 @@ export async function processQueue() {
     try {
       await finalizeFailure(job.taskId, "", msg);
     } catch (inner) {
-/* finalizeFailure 自己也可能抛（数据库挂了）—— 不要再嵌一层 catch 递归，
- * 只记日志 + 手动归还并发槽，让队列继续往前走。 */
+      /* finalizeFailure 自己也可能抛（数据库挂了）—— 不要再嵌一层 catch 递归，
+       * 只记日志 + 手动归还并发槽，让队列继续往前走。 */
       log(
         job.taskId,
         "error",

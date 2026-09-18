@@ -287,8 +287,11 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
      *   · 画布把派生出来的边**写回 edges 状态**。
      *  缺任一处，写入成功的线永远进不了画布 —— 用户看到的就是「一松手线就消失」。 */
     const flow = read("hooks/use-library-wire-flow.ts");
+    /* 判据要**容忍换行**：prettier 会把这条调用拆成多行，
+     * 而 `\s*` 化的写法既钉住了「四个实参按此顺序」这件事，
+     * 又不把判据挂在「某次格式化后长什么样」上（规范 §12.11 的同款教训）。 */
     expect(flow).toMatch(
-      /deriveLibraryEdges\(paramCards\.wires, outputWires, !!canWire, selectedEdgeIds\)/,
+      /deriveLibraryEdges\(\s*paramCards\.wires,\s*outputWires,\s*!!canWire,\s*selectedEdgeIds,?\s*\)/,
     );
     const canvas = read("WorkflowLibraryCanvas.tsx");
     expect(canvas).toMatch(/setEdges\(flow\.defaultEdges\)/);
