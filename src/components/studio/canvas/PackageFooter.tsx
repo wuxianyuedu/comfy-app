@@ -1,37 +1,35 @@
 "use client";
 
 /**
- * PackageFooter — ComfyUI-native bottom-left package source label.
+ * PackageFooter —— ComfyUI 原生风格的左下角「包来源」标签。
  *
- * ComfyUI draws a tiny dim label in the bottom-left of every canvas node
- * showing which package the node originated from ("DaSiWa-Nodes",
- * "ComfyMath", "rgthree-comfy", ...). This is invaluable for debugging
- * "where did this node come from?" questions and matches the native UX, so
- * we mirror it on every node the editor renders.
+ * ComfyUI 会在每个画布节点左下角画一个很淡的小标签，标出这个节点
+ * 来自哪个包（"DaSiWa-Nodes"、"ComfyMath"、"rgthree-comfy" …）。
+ * 排查「这个节点从哪来的」时它非常有用，也和原生 UX 一致，
+ * 所以编辑器渲染的每个节点都镜像一份。
  *
- * Resolution order (per `classType`):
- *   1. CUSTOM_NODE_PACKAGE map populated by `refreshCustomNodes()` — the
- *      exact directory name from the on-disk manifest ("DaSiWa-Nodes",
- *      "ComfyMath", "rgthree-comfy", ...). Empty when the manifest hasn't
- *      been fetched yet (e.g. before mount).
- *   2. config.rawCategory — ComfyUI's own `CATEGORY` attribute, used when
- *      the parser shipped an entry but no `package` field.
- *   3. "Custom" — generic fallback for any custom node we can't classify.
+ * 解析顺序（按 `classType`）：
+ *   1. `refreshCustomNodes()` 填充的 CUSTOM_NODE_PACKAGE 表 —— 取磁盘清单
+ *      里的目录名原样（"DaSiWa-Nodes"、"ComfyMath"、"rgthree-comfy" …）。
+ *      清单还没拉到（例如挂载前）时为空。
+ *   2. config.rawCategory —— ComfyUI 自己的 `CATEGORY` 属性；
+ *      解析结果里有条目但没有 `package` 字段时用它。
+ *   3. "Custom" —— 无法归类的自定义节点的兜底。
  *
- * Display rules:
- *   - Built-in nodes (no custom package) used to show the literal prefix
- *     "ComfyUI". Per user request that prefix is no longer shown — the
- *     footer is hidden entirely for built-in nodes.
- *   - Custom packages commonly carry a "ComfyUI-" directory prefix
- *     (e.g. "ComfyUI-DaSiWa-Nodes"). That prefix is stripped, so the label
- *     reads "DaSiWa-Nodes". Packages without the prefix are shown verbatim.
- *   - The label is rendered as a small bordered pill (1px hairline border)
- *     so the source name is visually distinguishable.
+ * 显示规则：
+ *   - 内建节点（没有自定义包）原来会显示字面量前缀
+ *     "ComfyUI"。按用户要求不再显示该前缀 —— 内建节点直接
+ *     整个隐藏底栏。
+ *   - 自定义包常带 "ComfyUI-" 目录前缀
+ *     （如 "ComfyUI-DaSiWa-Nodes"）。该前缀会被剥掉，标签
+ *     只读 "DaSiWa-Nodes"。没有前缀的包原样显示。
+ *   - 标签渲染成一个带 1px 细边框的小药丸，
+ *     好让来源名在视觉上区分得出来。
  *
- * IMPORTANT: rendered inline as a static child of the node card (NOT
- * absolute-positioned). This lets it flow naturally under the I/O rows so
- * no row overlap, and lets ReactFlow's auto-measurement handle the new
- * height. `pointer-events:none` so it never intercepts drag gestures.
+ * 注意：作为节点卡片的静态子元素**内联渲染**（**不是**
+ * 绝对定位）。这样它自然排在 I/O 行下方，
+ * 不会与行重叠，也交给 ReactFlow 的自动测量处理新增
+ * 高度。`pointer-events:none` 让它永不截获拖拽手势。
  */
 
 import type { NodeTypeConfig } from "~/lib/comfyui/node-config";
@@ -42,13 +40,13 @@ export function PackageFooter({
   classType,
   name,
 }: {
-  /** Optional — pass `config.custom`/`config.rawCategory` for richer fallback
-   *  resolution.  Callers that don't have a `NodeTypeConfig` (e.g. WorkflowNode in
-   *  the workspace editor) can omit it and supply `name` directly. */
+  /** 可选 —— 传 `config.custom`/`config.rawCategory` 能得到更丰富的兜底
+   *  解析。没有 `NodeTypeConfig` 的调用方（例如工作区编辑器里的 WorkflowNode）
+   *  可以省略它，直接给 `name`。 */
   config?: NodeTypeConfig;
   classType: string;
-  /** Override the resolved name.  When provided, used verbatim (e.g. when the
-   *  caller already computed the right package from `getCustomNodePackage()`). */
+  /** 覆盖解析出的名字。给了就原样使用（例如调用方
+   *  已经用 `getCustomNodePackage()` 算出了正确的包名）。 */
   name?: string;
 }) {
   const resolved =
@@ -57,9 +55,9 @@ export function PackageFooter({
       ? (getCustomNodePackage(classType) ?? config.rawCategory ?? "Custom")
       : "ComfyUI");
 
-  // Built-in nodes only ever resolve to the literal "ComfyUI" prefix — per
-  // request we don't show that, so hide the footer. Custom packages drop the
-  // "ComfyUI-" directory prefix for a cleaner label.
+  // 内建节点永远只会解析出字面量 "ComfyUI" 前缀 —— 按
+  // 要求不显示它，于是隐藏底栏。自定义包会剥掉
+  // "ComfyUI-" 目录前缀，标签更干净。
   const display =
     resolved === "ComfyUI"
       ? ""

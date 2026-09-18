@@ -12,14 +12,14 @@ import { Button } from "~/components/ui/button";
 import type { NodeJsonViewerRequest, RawOutputMeta } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
-/* The popover itself.  Three blocks stacked vertically:
+/* 浮层本体。垂直堆三块：
  *   ┌────────────────────────────────────────────────┐
- *   │  Header  ─  📋 节点 JSON · #182 · class_type   │
+ *   │  头部  ─  📋 节点 JSON · #182 · class_type   │
  *   │              [⧉ 复制]   [× 关闭]                │
  *   ├────────────────────────────────────────────────┤
- *   │  Meta strip — mode / flags / boundaries / etc   │
+ *   │  元信息条 —— mode / flags / boundaries 等      │
  *   ├────────────────────────────────────────────────┤
- *   │  JSON dump — monospace, syntax-toned, copyable  │
+ *   │  JSON 转储 —— 等宽、按语法着色、可复制          │
  *   └────────────────────────────────────────────────┘
  */
 /* ── 逐字段收敛的 Raw 节点 JSON 形状 ──
@@ -141,7 +141,7 @@ export function NodeJsonPopover({
           setCopied(true);
           setTimeout(() => setCopied(false), 1400);
         } catch {
-          /* give up; user can still select-and-copy manually */
+          /* 放弃；用户仍可手动选中复制 */
         } finally {
           document.body.removeChild(ta);
         }

@@ -33,8 +33,8 @@ export function useCancelTask({
 }: UseCancelTaskArgs): CancelTaskController {
   const [cancelling, setCancelling] = useState(false);
 
-  // Keep the latest taskId / onFailed in refs so the handler (fired from an
-  // async callback) always sees fresh values without being re-created.
+  // 把最新的 taskId / onFailed 放在 ref 里，好让处理器（由异步
+  // 回调触发）总能读到新鲜的值，而不必被重建。
   const taskIdRef = useRef(taskId);
   // eslint-disable-next-line react-hooks/refs -- 渲染期同步最新 props 到 ref，供异步取消回调读取（刻意模式）
   taskIdRef.current = taskId;

@@ -45,7 +45,7 @@ export function useWorkflowModes({
           defaultMode: next.defaultMode,
         });
       } catch (err) {
-        // rollback local state to avoid zombie mode chip
+        // 回滚本地状态，避免出现「僵尸模式章」
         setModes(modes ?? { modes: [], defaultMode: null });
         onFailed(errorMessage(err, "保存模式失败，请重试"));
       }

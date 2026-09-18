@@ -1,12 +1,12 @@
 "use client";
 
-/* extracted from CanvasNode — task-run logic.
- *  Owns the mount-time reconcile effect (stale status="running" self-heal)
- *  and runGenerate (workflow branch + prompt branch, incl. poll lifecycle,
- *  downstream sink auto-spawn and picture self-import), plus retryGenerate
- *  (re-run with the payload snapshotted into the error panel's context).
- *  All component-scoped closures (d / patch / wfIO / React Flow setters) are
- *  threaded in explicitly via the args object. */
+/* 从 CanvasNode 抽出 —— 任务运行逻辑。
+ *  负责挂载时对账 effect（陈旧 status="running" 的自愈）
+ *  与 runGenerate（工作流分支 + 提示词分支，含轮询生命周期、
+ *  下游接收节点自动孵化、图片自导入），以及 retryGenerate
+ *  （用快照进错误面板上下文的 payload 重跑）。
+ *  所有组件作用域的闭包（d / patch / wfIO / React Flow setter）
+ *  都经 args 对象显式传入。 */
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import {
@@ -80,18 +80,16 @@ export function useGenerate({
   setEdges,
   getNode,
 }: UseGenerateArgs) {
-  /* mount-time reconcile — if the node was
-   *  loaded with stale `status="running"` (e.g. dev server restarted
-   *  while a generation was in flight, or the user closed/reopened the
-   *  tab mid-run), the in-memory patch chain is gone but the DB task
-   *  row has long been marked terminal by the runner's completion
-   *  callback — or, if the runner itself died, by the RUNNING reaper
-   *  we added in runner.ts.  Without this, the card sticks on
-   *  "● 生成中…" forever even though the underlying task is FAILED/
-   *  SUCCEEDED/CANCELLED.  We fetch the task once on mount when the
-   *  node claims `status="running" + taskId` and patch to the real
-   *  verdict. RUNNING-on-server is left alone (legitimately running
-   *  on another runner instance). */
+  /* 挂载时对账 —— 若节点带着陈旧的 `status="running"` 被
+   *  加载（例如生成进行中 dev server 重启了，或用户在运行中
+   *  关掉 / 重开了页签），内存里的 patch 链已丢失，但 DB 任务
+   *  行早被 runner 的完成回调标成终态 —— 或者 runner 自己也死了，
+   *  则由 runner.ts 里的 RUNNING 回收器标终态。没有这一步，卡片会
+   *  永远停在「● 生成中…」，即使底层任务已是 FAILED/
+   *  SUCCEEDED/CANCELLED。节点自称
+   *  `status="running" + taskId` 时我们挂载时拉一次任务，patch 成真实
+   *  结论。服务端仍在 RUNNING 的不动（那是另一个 runner 实例
+   *  上合法地在跑）。 */
   const taskIdForReconcile = typeof d.taskId === "string" ? d.taskId : "";
   useEffect(() => {
     if (d.status !== "running" || !taskIdForReconcile) return;
@@ -104,7 +102,7 @@ export function useGenerate({
         });
         if (cancelled || !t?.status) return;
         if (t.status === "RUNNING") {
-          // Legitimately still running on another runner — leave the node as-is.
+          // 在另一个 runner 上合法地仍在运行 —— 节点保持原样。
           return;
         }
         if (t.status === "SUCCEEDED") {
@@ -123,21 +121,21 @@ export function useGenerate({
           });
         }
       } catch {
-        /* network blip — silently ignore; the live SSE via GlobalStepLogPanel
-         *  will catch up if the user re-triggers / the runner resumes. */
+        /* 网络抖动 —— 静默忽略；用户重触发 / runner 恢复后，
+         *  GlobalStepLogPanel 的实时 SSE 会自己追上。 */
       }
     })();
     return () => {
       cancelled = true;
     };
-    /* patch is stable (setNodes setter + id) — intentionally omitted to avoid
-     * re-firing; we only want one reconcile per (status="running", taskId). */
+    /* patch 是稳定的（setNodes setter + id）—— 故意省略以避免
+     * 重复触发；每个 (status="running", taskId) 只对账一次。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.status, taskIdForReconcile]);
 
-  /* ── image / video generation ── */
+  /* ── 图片 / 视频生成 ── */
   const runGenerate = async () => {
-    // ── user-uploaded workflow node: run the chosen WorkflowTemplate ──
+    // ── 用户上传的工作流节点：跑选中的 WorkflowTemplate ──
     if (
       d.kind === "workflow" ||
       ((d.kind === "image" || d.kind === "video" || d.kind === "picture") &&
@@ -147,13 +145,13 @@ export function useGenerate({
         patch({ error: "请先选择工作流", status: "error" });
         return;
       }
-      /* also reset progress to 0 so the water-fill
-       *  overlay starts from the bottom regardless of any stale value left
-       *  from a previous run. pollTask's onProgress will tick it up as the
-       *  backend reports task.progress. */
+      /* 同时把进度重置为 0，好让水填充
+       *  覆盖层从底部起步，不受上一轮残留值
+       *  影响。pollTask 的 onProgress 会随
+       *  后端上报的 task.progress 把它顶上去。 */
       patch({ status: "running", error: undefined, progress: 0 });
-      /* hoist `payload` so the catch-block can also snapshot
-       *  the request into errorContext.  `null` until the try-block assigns. */
+      /* 把 `payload` 提到外层，好让 catch 块也能把
+       *  请求快照进 errorContext。try 块赋值前它是 `null`。 */
       let payload: Record<string, unknown> | null = null;
       try {
         /* 有映射表时按「对外参数 → 目标端口」解析：作者画过线的对外口只覆盖他连到的
@@ -183,14 +181,14 @@ export function useGenerate({
         const cagInputs = seedModeOverrides(wfIO ?? null, d.seedModes);
         payload = {
           workflow: d.workflowId,
-          // Exposed-pin values drive the workflow (not the old hardcoded
-          // 提示词/反向/参考图/步数/CFG/种子 fields). 种子「生成后控制」模式
+          // 暴露的针脚取值驱动工作流（不是旧的写死
+          // 提示词/反向/参考图/步数/CFG/种子 字段）。种子的「生成后控制」模式
           // 也并入同一数组（name=control_after_generate），API 图与 Raw 图两条
           // 后端路径都能识别。注：原本单独下发的 seedModes 字段被 zod schema
           // 剥离、从未到达后端，故改为并入 workflowInputs 一并生效。
           workflowInputs: [...baseInputs, ...cagInputs],
         };
-        // Feed an upstream-generated image into this workflow (auto-chained via edge).
+        // 把上游生成的图片喂进这条工作流（经边自动串联）。
         if (d.inputImage) payload.inputImage = d.inputImage;
         // 项目级产出：归属到当前画布项目 + 记录参考图。
         payload.projectId = getActiveId() ?? undefined;
@@ -230,9 +228,9 @@ export function useGenerate({
             );
             return;
           }
-          // Auto-spawn a downstream image/video node and wire it to this node's
-          // output handle, so the produced media is shown + chainable. Spawn
-          // once per workflow node (workflowSinkId guards re-runs).
+          // 自动孵化一个下游图片 / 视频节点，并连到本节点的
+          // 输出句柄，好让产出的媒体被展示且可继续串联。每个
+          // 工作流节点只孵化一次（workflowSinkId 挡住重跑）。
           let sinkId = d.workflowSinkId;
           if (!sinkId) {
             const nid = makeNodeId();
@@ -335,8 +333,8 @@ export function useGenerate({
     patch({ error: "请先选择工作流（工作流库模型）", status: "error" });
   };
 
-  /* Error-panel retry: re-run the task with the payload recorded in the
-   *  error context (moved verbatim from the retry button's onClick handler).
+  /* 错误面板重试：用记录在错误上下文里的 payload 重跑任务
+   *  （从重试按钮的 onClick 处理器原样搬来）。
    *  直接复用上次已记录的 payload 重新跑
    *  一遍（不发新 task）。这样用户在保存当前错误上下文
    *  的同时，可以一键重试而无需重新输入所有字段。 */

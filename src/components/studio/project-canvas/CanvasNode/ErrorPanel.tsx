@@ -1,12 +1,12 @@
 "use client";
 
-/* extracted from CanvasNode — the collapsible error panel.
- *  Owns the errExpanded toggle state + the shouldAutoExpand / errorSuggestion
- *  derivations and renders the full panel JSX (expand/collapse, copy, retry,
- *  suggestion). The parent renders <ErrorPanel/> unconditionally; when the
- *  node is not in a visible error state the component returns null AFTER its
- *  hooks so the expand-state lifecycle matches the pre-extraction inline JSX
- *  exactly (state survives while hidden, resets on running/idle transitions). */
+/* 从 CanvasNode 抽出 —— 可折叠的错误面板。
+ *  负责 errExpanded 开关状态 + shouldAutoExpand / errorSuggestion
+ *  两个推导，并渲染整个面板 JSX（展开/收起、复制、重试、
+ *  建议）。父组件无条件渲染 <ErrorPanel/>；节点不处于
+ *  可见错误态时，组件在 hooks 之后返回 null，好让展开状态的
+ *  生命周期与拆分前内联 JSX 完全一致（隐藏期间状态保留，
+ *  running/idle 切换时重置）。 */
 import { useMemo, useState } from "react";
 import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { ValidationErrorList } from "~/components/studio/shared/ValidationErrorList";
@@ -42,32 +42,32 @@ export function ErrorPanel({
   workflowName,
   onRetry,
 }: ErrorPanelProps) {
-  /* Error panel state — collapsed by default (just a one-line summary),
-   *  expandable to show the raw backend error (incl. ComfyUI tracebacks).
-   *  Reset to collapsed whenever a new run starts so the next failure
-   *  presents fresh without the user seeing a stale expanded state.
+  /* 错误面板状态 —— 默认收起（只有一行摘要），
+   *  可展开查看后端原始错误（含 ComfyUI traceback）。
+   *  每次新运行开始时重置为收起，好让下一次失败
+   *  以干净状态呈现，用户不会看到上次残留的展开态。
    *
-   *  when the error message contains ComfyUI's
-   *  "Node X not found" / "OOM" / "Cannot find model" / 5xx patterns, the
-   *  panel auto-expands so the user can actually see the actionable
-   *  context (taskId, request payload, suggestion). */
+   *  错误信息里出现 ComfyUI 的
+   *  "Node X not found" / "OOM" / "Cannot find model" / 5xx 形态时，
+   *  面板自动展开，让用户能看到可行动的
+   *  上下文（taskId、请求 payload、建议）。 */
   const [errExpanded, setErrExpanded] = useState(false);
-  /* Reset to collapsed whenever a new run starts (adjusted during render,
-   * React 19 pattern). */
+  /* 每次新运行开始时重置为收起（渲染期间调整，
+   * React 19 模式）。 */
   const [prevStatus, setPrevStatus] = useState(status);
   if (status !== prevStatus) {
     setPrevStatus(status);
     if (status === "running" || status === "idle") setErrExpanded(false);
   }
 
-  /* Auto-expand on structured / actionable errors so the suggestion +
-   *  request-payload sections are visible without an extra click. */
+  /* 结构化 / 可行动的错误上自动展开，好让建议 +
+   *  请求 payload 区不用多点一次就看得见。 */
   const shouldAutoExpand = shouldAutoExpandError(
     error,
     validationErrors?.length ?? 0,
   );
-  /* Auto-expand on actionable errors (adjusted during render, React 19
-   *  pattern). */
+  /* 可行动错误上自动展开（渲染期间调整，React 19
+   *  模式）。 */
   const [prevErrCtx, setPrevErrCtx] = useState(`${status}|${shouldAutoExpand}`);
   const errCtx = `${status}|${shouldAutoExpand}`;
   if (errCtx !== prevErrCtx) {
@@ -75,18 +75,18 @@ export function ErrorPanel({
     if (status === "error" && shouldAutoExpand) setErrExpanded(true);
   }
 
-  /* Pattern-match the error text to surface a one-line actionable hint.
-   *  Returns null if we don't recognize the failure shape (UI keeps the
-   *  generic raw-error block instead of making up bad advice). */
+  /* 对错误文本做模式匹配，给出一行可行动的提示。
+   *  认不出失败形态时返回 null（UI 保留通用的原始错误块，
+   *  而不是编造不靠谱的建议）。 */
   const errorSuggestion: string | null = useMemo(
     () => suggestForError(error),
     [error],
   );
 
-  /* Hidden entirely when the node isn't showing an actionable error. Kept
-   *  after the hooks (instead of gating the mount in the parent) so the
-   *  expand/reset lifecycle runs on every render exactly like the original
-   *  inline block did. */
+  /* 节点没在显示可行动错误时整体隐藏。放在 hooks 之后
+   *  （而不是在父级拦住挂载），好让展开 / 重置生命周期
+   *  每次渲染都跑一遍，与原来的
+   *  内联块完全一致。 */
   if (!(status === "error" && (error || (validationErrors?.length ?? 0) > 0))) {
     return null;
   }
@@ -100,7 +100,7 @@ export function ErrorPanel({
           className="mt-px shrink-0 text-rose-700 dark:text-rose-300"
         />
         <div className="min-w-0 flex-1">
-          {/* Header row: status badge + workflow name + actions */}
+          {/* 头部行：状态徽标 + 工作流名 + 动作 */}
           <div className="flex items-center justify-between gap-1.5">
             <span className="min-w-0 truncate font-medium text-rose-700 dark:text-rose-300">
               {errorStatus === "TIMEOUT"
@@ -120,11 +120,11 @@ export function ErrorPanel({
                   className="rounded border border-rose-400/15 bg-rose-400/10 px-1.5 py-0.5 font-mono text-[9.5px] text-rose-700/90 dark:text-rose-300/80"
                   title="执行的工作流"
                 >
-                  {/* cast: CanvasNodeData has [key: string]: unknown
-                   *  index signature that widens d.workflowName to
-                   *  unknown on JSX read.  Explicit String() fixes
-                   *  ReactNode compatibility for the rare wrapper
-                   *  union. */}
+                  {/* 转型说明：CanvasNodeData 有 [key: string]: unknown
+                   *  索引签名，会在 JSX 读取时把 d.workflowName 放宽成
+                   *  unknown。显式 String() 修好
+                   *  ReactNode 兼容性，照顾少见的包裹联合。
+                   */}
                   {String(workflowName)}
                 </span>
               )}
@@ -185,8 +185,8 @@ export function ErrorPanel({
                         ),
                       );
                     } catch {
-                      /* clipboard unavailable — silent; user can still
-                       *  hand-expand and select the raw error text */
+                      /* 剪贴板不可用 —— 静默；用户仍可
+                       *  手动展开并选中原始错误文本 */
                     }
                   })();
                 }}
@@ -198,9 +198,9 @@ export function ErrorPanel({
             </div>
           </div>
 
-          {/* Collapsed teaser: just the raw error string. Keeps the
-           *  existing one-line behavior so users who don't need the
-           *  full context don't lose vertical space. */}
+          {/* 收起态摘要：只给原始错误串。保持
+           *  既有的单行行为，不需要完整上下文的用户
+           *  就不用占竖向空间。 */}
           {!errExpanded && (validationErrors?.length ?? 0) > 0 && (
             <p className="nodrag nopan mt-1 text-[10px] font-medium text-rose-700 dark:text-rose-300">
               发现 {(validationErrors ?? []).length} 项节点配置错误（点击 ▼
@@ -219,14 +219,14 @@ export function ErrorPanel({
             (() => {
               // 重做失败面板，把「执行了什么」结构化展示。
               //
-              // Defensive coerce: `d.error` is typed `string`
-              // but legacy rows / older code paths may have stored the
-              // literal "[object Object]" (e.g. buildPromptError pre-
-              // used `String(res.error)`) or a structured object slipped
-              // through a race.  We (1) detect the literal garbage-string
-              // sentinel, (2) JSON-stringify real objects, (3) fall back
-              // to a generic "no detail" message.  The expanded <pre>
-              // never shows literal `[object Object]`.
+              // 防御性转换：`d.error` 的类型是 `string`，
+              // 但遗留行 / 较老代码路径可能存过
+              // 字面量 "[object Object]"（例如 buildPromptError 以前
+              // 用 `String(res.error)`），或有结构化对象经竞态漏了进来。
+              // 我们（1）识别这个垃圾字符串哨兵，（2）把真对象 JSON.stringify，
+              //（3）回落到通用的「无详情」文案。展开的 <pre>
+              // 永不显示字面量 `[object Object]`。
+              //
               const raw = error;
               let errText = "(no error detail)";
               if (typeof raw === "string") {

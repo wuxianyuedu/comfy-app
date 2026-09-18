@@ -24,8 +24,8 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   );
   const [newName, setNewName] = useState("");
 
-  // Reset draft only on the closed → open transition, so mid-edit re-renders
-  // don't wipe the user's selection.
+  // 只在关 → 开的跃迁上重置草稿，好让编辑中的重渲染
+  // 不抹掉用户的选择。
   const [prevOpen, setPrevOpen] = useState(false);
   if (open && !prevOpen) {
     setPrevOpen(true);

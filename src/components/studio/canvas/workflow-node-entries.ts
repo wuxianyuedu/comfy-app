@@ -1,37 +1,37 @@
 "use client";
-/* Extracted input/output row computation for FlowNode (workflow-node.tsx).
- * Split out of the 1276-line FlowNode component so the renderer only
- * orchestrates layout while this hook owns the entry bucketing logic. */
+/* 从 FlowNode（workflow-node.tsx）抽出的输入 / 输出行计算。
+ * 从 1276 行的 FlowNode 组件里拆出来，让渲染器只编排布局，
+ * 条目分桶逻辑归这个 hook 管。 */
 import { useMemo } from "react";
 import { inferOutputTypeAll } from "../workflow-utils";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
 export interface FlowNodeEntries {
-  /** raw_inputs (per-node metadata with localized labels) keyed by API `name`. */
+  /** raw_inputs（每节点元数据，带本地化标签），按 API `name` 索引。 */
   rawMeta: Record<string, RawInputMeta>;
-  /** Composed input rows: rawInputs (server-paired widget values) first, then data.inputs. */
+  /** 组装好的输入行：先是 rawInputs（服务端配对的 widget 值），再是 data.inputs。 */
   allEntries: [string, unknown][];
-  /** Pure-typed port rows (rawInputs[i].widget absent) — get a Handle on the left edge. */
+  /** 纯类型端口行（rawInputs[i].widget 缺省）—— 在左边缘拿一个 Handle。 */
   connEntries: [string, unknown][];
-  /** Rows that back a widgets_values slot (rawInputs[i].widget present). */
+  /** 背后是 widgets_values 槽位的行（rawInputs[i].widget 存在）。 */
   widgetEntries: [string, unknown][];
-  /** connEntries minus names that also appear as widgets (dedupe). */
+  /** connEntries 去掉同时也是 widget 的名字（去重）。 */
   uniqueConnEntries: [string, unknown][];
   uniqueWidgetEntries: [string, unknown][];
-  /** Legacy combined list — kept for the overflow-handle fallback. */
+  /** 遗留的合并列表 —— 留给溢出句柄的兜底用。 */
   orderedEntries: [string, unknown][];
-  /** No cap — every widget renders (DaSiWa etc. show full parameter list). */
+  /** 不设上限 —— 每个 widget 都渲染（DaSiWa 之类要显示完整参数表）。 */
   visibleWidgetEntries: [string, unknown][];
-  /** LoadImage synthetic `preview: true` entries (inline thumbnail / placeholder). */
+  /** LoadImage 合成的 `preview: true` 条目（内联缩略图 / 占位）。 */
   imagePreviewEntries: RawInputMeta[];
-  /** Output ports: static inferOutputTypeAll table → rawOutputs → empty. */
+  /** 输出端口：静态 inferOutputTypeAll 表 → rawOutputs → 空。 */
   outputs: [string, string][];
 }
 
 /**
- * Buckets a node's inputs into connection rows (TOP PINS) and widget rows
- * (knobs), plus outputs and image preview targets.  Behaviour is identical
- * to the pre-split inline useMemos in workflow-node.tsx.
+ * 把一个节点的输入分桶成连接行（顶部针脚）与 widget 行
+ *（旋钮），外加输出与图片预览目标。行为与拆分前
+ * workflow-node.tsx 里内联的 useMemo 完全一致。
  */
 export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   const rawMeta: Record<string, RawInputMeta> = useMemo(() => {
@@ -43,13 +43,13 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   const allEntries: [string, unknown][] = useMemo(() => {
     if (data.rawInputs && data.rawInputs.length > 0) {
       return data.rawInputs.map((rawInput) => {
-        // Server-paired widget value — present for EVERY widget-type input,
-        // connected or not.  Show it regardless of link state.
+        // 服务端配对的 widget 值 —— **每个** widget 型输入都有，
+        // 连不连线都在。无论连线与否都显示它。
         if (rawInput.widgetValue !== undefined) {
           return [rawInput.name, rawInput.widgetValue] as [string, unknown];
         }
-        // Pure-connection inputs carry no widget value — emit an array so
-        // the conn/widget splitter keeps them as wire rows with a Handle.
+        // 纯连接型输入没有 widget 值 —— 发一个数组，好让
+        // conn/widget 分流器把它们当成带 Handle 的连线行。
         return [rawInput.name, rawInput.isConnection ? [] : ""] as [
           string,
           unknown,
@@ -61,9 +61,9 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
     return [];
   }, [data.inputs, data.rawInputs]);
 
-  // Split into two buckets using ComfyUI's own input definition (widget
-  // marker presence). Skip the synthetic `preview` entries — they
-  // are body-only thumbnail slots, never input ports.
+  // 用 ComfyUI 自己的输入定义（有没有 widget 标记）分成两桶。
+  // 跳过合成的 `preview` 条目 —— 它们是只在卡片体里的缩略图
+  // 槽位，从来不是输入端口。
   const connEntries = allEntries.filter(([k]) => {
     const m = rawMeta[k];
     return m && m.widget === undefined && !m.preview;
@@ -72,24 +72,24 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
     const m = rawMeta[k];
     return m?.widget !== undefined && !m.preview;
   });
-  // dedupe by `name` across the two buckets BEFORE layout — custom
-  // nodes that combine a typed port with an inline widget (Z-Image-Base)
-  // surface the same name twice; keep the widget row (live widgets_values).
+  // 布局**之前**按 `name` 跨两桶去重 —— 把类型端口与内联 widget
+  // 合在一起的自定义节点（Z-Image-Base）会让同一个名字出现两次；
+  // 保留 widget 行（writes_values 是活的）。
   const widgetNameSet = new Set(widgetEntries.map(([k]) => k));
   const uniqueConnEntries = connEntries.filter(([k]) => !widgetNameSet.has(k));
   const uniqueWidgetEntries = widgetEntries;
   const orderedEntries = [...uniqueConnEntries, ...uniqueWidgetEntries];
   const visibleWidgetEntries = uniqueWidgetEntries;
 
-  // IMAGE-input inline thumbnail previews (narrowed ): only
-  // LoadImage's synthetic `preview: true` entry qualifies.
+  // IMAGE 型输入的内联缩略图预览（收窄后）：只有
+  // LoadImage 合成的 `preview: true` 条目符合。
   const imagePreviewEntries = useMemo(
     () => (data.rawInputs ?? []).filter((raw) => raw.preview === true),
     [data.rawInputs],
   );
 
-  // Output ports: static table → raw outputs[] (only place custom-node
-  // outputs like ResolutionSelector.width/height survive) → empty list.
+  // 输出端口：静态表 → raw outputs[]（只有这里能让 ResolutionSelector.width/height
+  // 这类自定义节点输出存活下来）→ 空列表。
   const outputs: [string, string][] = useMemo(() => {
     const staticOuts = Object.entries(inferOutputTypeAll(data.classType));
     if (staticOuts.length > 0) return staticOuts;

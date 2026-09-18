@@ -30,24 +30,24 @@ export function WorksGallery({
 }: {
   /** 「新建创作」按钮触发 —— 项目页保留它作为跳到生成器的入口。 */
   onOpenTask?: (id: string) => void;
-  /** Open a canvas project (set active + jump to canvas view). */
+  /** 打开一个画布项目（设为活跃 + 跳到画布视图）。 */
   onOpenCanvasProject?: (id: string) => void;
 }) {
   const toast = useToast();
 
-  /** Canvas projects sourced from localStorage (canvas-store). They never
-   * land in the /api/tasks table, so we read them separately and refresh on
-   * the `comfyapp:canvas-store-changed` event so editing inside the canvas
-   * view is reflected here live. */
+  /** 来自 localStorage（canvas-store）的画布项目。它们从不
+   * 落进 /api/tasks 表，所以我们单独读取，并在
+   * `comfyapp:canvas-store-changed` 事件上刷新，好让画布
+   * 视图内的编辑能实时反映到这里。 */
   const [canvasProjects, setCanvasProjects] = useState<CanvasProject[]>(() => {
     reapAllEmptyDrafts();
     return listProjects();
   });
 
-  /** Canvas-project delete confirmation. Non-null id = the ModalDialog is
-   *  open for that project. Resolved projects' names are resolved BEFORE
-   *  clearing the dialog so the toast reads the original name even though
-   *  the underlying array changes one tick later. */
+  /** 画布项目删除确认。id 非 null = 该项目的 ModalDialog
+   *  已打开。项目名在清空对话框**之前**解析好，好让
+   *  toast 读到原名，即使底层数组
+   *  下一 tick 就变了。 */
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
 
@@ -58,10 +58,10 @@ export function WorksGallery({
       (canvasProject) => canvasProject.id === id,
     );
     setPendingDelete(true);
-    // Use a microtask delay so the dialog's spinner / disabled state is
-    // visible at least one paint frame. deleteProject itself fires
-    // `comfyapp:canvas-store-changed` which the mounted listener picks
-    // up to refresh `canvasProjects`.
+    // 用微任务延迟，好让对话框的 spinner / 禁用态
+    // 至少可见一帧。deleteProject 本身会触发
+    // `comfyapp:canvas-store-changed`，已挂载的监听器接住它
+    // 来刷新 `canvasProjects`。
     queueMicrotask(() => {
       deleteProject(id); // canvas-store also clears active-id when matched
       setPendingDelete(false);
@@ -75,7 +75,7 @@ export function WorksGallery({
   }, []);
 
   useEffect(() => {
-    // Sweep legacy empty default-named drafts before listing.
+    // 列出前先清掉遗留的空默认名草稿。
     window.addEventListener(
       "comfyapp:canvas-store-changed",
       refreshCanvasProjects,
@@ -116,7 +116,7 @@ export function WorksGallery({
           </div>
         </div>
 
-        {/* ── Canvas Projects Section ── */}
+        {/* ── 画布项目区 ── */}
         {canvasProjects.length > 0 ? (
           <section className="mb-10">
             <div className="mb-4 flex items-baseline justify-between">
@@ -174,12 +174,13 @@ export function WorksGallery({
                         </p>
                       </div>
                     </Button>
-                    {/* Per-card delete: hover-only, top-right corner.
-                       Stops propagation so the parent card-open button
-                       doesn't fire. */}
+                    {/* 逐卡片删除：仅悬停显示，右上角。
+                       阻断冒泡，好让父级卡片打开按钮
+                       不触发。 */}
                     <Button
                       variant="ghost"
                       size="xs"
+
                       aria-label={`删除项目「${canvasProject.name || "未命名"}」`}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -227,7 +228,7 @@ export function WorksGallery({
         )}
       </div>
 
-      {/* ── Canvas-project delete confirm ── */}
+      {/* ── 画布项目删除确认 ── */}
       <ModalDialog
         open={confirmDeleteId !== null}
         onClose={() => {

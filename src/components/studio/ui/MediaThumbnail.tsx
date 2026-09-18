@@ -4,8 +4,8 @@ import React from "react";
 import { isVideo } from "~/lib/media/media";
 
 /**
- * Renders a media thumbnail that plays video inline or shows an image.
- * Used by WorksGallery and HistoryList so both support video playback.
+ * 渲染媒体缩略图：视频就地播放，图片直接显示。
+ * WorksGallery 与 HistoryList 都用它，所以两者都支持视频播放。
  */
 export const MediaThumbnail = React.memo(function MediaThumbnail({
   src,

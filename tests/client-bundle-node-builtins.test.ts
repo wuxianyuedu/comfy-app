@@ -4,7 +4,7 @@
  * 背景：`src/lib/log/log-session-scope.ts` 顶层 `import fs from "node:fs"`，而
  * 客户端组件 `LogProvider.tsx`（"use client"）只是想要它的纯函数
  * `clampLogTime`。Turbopack 编译浏览器 chunk 时把 `node:fs` 整图形入，报
- * `the chunking context does not support external modules (request: node:fs)`
+ * 表现为 the chunking context does not support external modules (request: node:fs)
  * 并让 endpoint 编译失败——**`/login` 与 `/workspace` 整页 500**，应用完全
  * 打不开。这与 `app-runtime-log.ts` 的历史回归（ISSUE #282 / 规范 07 §7.12）
  * 同源，只是这次走的是「纯逻辑模块混进了 IO」这条更隐蔽的路。

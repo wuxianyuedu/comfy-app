@@ -6,27 +6,27 @@ import { shouldDimEdge, type EdgeFocusRole } from "./flow-focus-endpoints";
 import { readEdgeFocusRole } from "./hooks/use-related-edges-highlight";
 
 /**
- * WorkflowEdge — ComfyUI-style bezier connection.
+ * WorkflowEdge —— ComfyUI 风格的贝塞尔连线。
  *
- * Why we *don't* use React Flow's built-in `getBezierPath`:
+ * 为什么**不用** React Flow 自带的 `getBezierPath`：
  *
- *   The built-in algorithm hard-codes the control-point offset based on
- *   the *distance* between source and target.  For short L→R or T→B
- *   links the offset collapses to a few pixels, so the curve reads as a
- *   straight line — visually identical to no edge-style at all.
+ *   自带算法把控制点偏移写成源与目标之间**距离**的函数。
+ *   对于短距离的 L→R 或 T→B
+ *   连线，偏移植会塌缩到几个像素，于是曲线读起来就是
+ *   一条直线 —— 视觉上等于完全没有边样式。
  *
- *   ComfyUI's lit-renderer instead always pulls the control points by a
- *   fixed-ish offset in the **direction the handle faces**, regardless of
- *   distance.  We do the same here.
+ *   ComfyUI 的 lit-renderer 则一律按**句柄朝向**拉一个
+ *   近乎固定的偏移量，与距离无关。
+ *   我们这里照做。
  *
- *   Result:
- *     • L→R / R→L edges get a clean S-curve anchored 100 px off each end.
- *     • T→B / B→T (vertical) edges ALSO curve because the offset is in
- *       the *handle* direction (vertical), not the source→target axis.
- *     • Diagonal edges split the offset between x and y.
+ *   结果：
+ *     • L→R / R→L 的边得到干净的 S 形曲线，两端各锚出 100 px。
+ *     • T→B / B→T（竖向）的边**同样**弯曲，因为偏移落在
+ *       *句柄*方向上（竖向），而不是源→目标轴上。
+ *     • 斜向的边把偏移在 x 与 y 之间分摊。
  *
- * The data model (id / source / target / handles / style) is untouched
- * — this component only controls how the curve is rendered.
+ * 数据模型（id / source / target / handles / style）不动
+ * —— 本组件只决定曲线怎么画。
  */
 const HANDLE_OUT: Record<Position, [number, number]> = {
   [Position.Left]: [-1, 0],
@@ -35,15 +35,15 @@ const HANDLE_OUT: Record<Position, [number, number]> = {
   [Position.Bottom]: [0, 1],
 };
 
-/** Tunable: how far each control point is pulled along the handle axis. */
+/** 可调参数：每个控制点沿句柄轴被拉出多远。 */
 const MIN_OFFSET = 80;
 const MAX_OFFSET = 240;
 const OFFSET_RATIO = 0.55;
 
 function pickOffset(sx: number, sy: number, tx: number, ty: number) {
-  // Use Manhattan-ish distance along the longer axis so very short
-  // wires still get a visible bend, but very long wires don't whip
-  // around into giant C-shapes.
+  // 沿更长的那条轴取近似曼哈顿距离，这样极短的
+  // 线仍能看出弯，而极长的线也不会甩成
+  // 巨大的 C 形。
   const dx = Math.abs(tx - sx);
   const dy = Math.abs(ty - sy);
   const longAxis = Math.max(dx, dy);
@@ -54,7 +54,7 @@ function pickOffset(sx: number, sy: number, tx: number, ty: number) {
   return mag;
 }
 
-/** Cubic-bezier midpoint at t = 0.5. */
+/** 三次贝塞尔在 t = 0.5 处的中点。 */
 function bezierMidpoint(
   p0x: number,
   p0y: number,
@@ -162,11 +162,10 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
 
   return (
     <>
-      {/* outer "glow" layer so a thin 2.5px stroke still reads
-       *  as a visible wire on the dark canvas (especially for the small set of
-       *  top-level edges that survive when subgraph inner nodes aren't
-       *  stitched into the rendered graph).  Painted first so the crisp
-       *  foreground stroke sits on top of its blurred halo. */}
+      {/* 外层「光晕」层，让一条细细的 2.5px 描边在深色画布上
+       *  仍读得出是连线（尤其对那少数
+       *  顶层边 —— 子图内部节点没被缝合进渲染图时它们会留下来）。
+       *  先画它，好让干净的前景描边压在它模糊的光晕之上。 */}
       <BaseEdge
         id={`${id}-glow`}
         path={edgePath}
@@ -188,9 +187,9 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
           opacity: focused ? 1 : dimmed ? 0.45 : 1,
         }}
       />
-      {/* ComfyUI-style hub dot at the curve midpoint.  Slightly larger
-       *  (r=4) and brighter than 's r=3.5 / 0.55 so it survives at low
-       *  zoom levels when the wire itself is just a couple of screen pixels.
+      {/* 曲线中点处的 ComfyUI 风格枢纽圆点。比默认的
+       *  r=3.5 / 0.55 略大（r=4）也更亮，好让它在低
+       *  缩放下也存活 —— 那时线本身只有几个屏幕像素。
        *  相关连线上的圆点同步放大 —— 线被加粗后原尺寸的点会「缩」进去。 */}
       <circle
         cx={labelX}

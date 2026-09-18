@@ -12,7 +12,7 @@
  * 只依赖 Node 内置能力（无 yaml 依赖，standalone 产物里也不带第三方解析器）。
  * 命令行入口（tools/start/run-local.ps1 与 scripts/quality-gate.ps1 都经它输出）：
  *
- *   node scripts/lockfile/lock-diff.mjs --installed <path> --root <path> [--max-per-section N]
+ * 用法示例：node scripts/lockfile/lock-diff.mjs --installed <路径> --root <路径>
  */
 import fs from "node:fs";
 
@@ -164,7 +164,7 @@ const KEY_RE = /^(["']?)([^:'"]*\S)\1:\s*(.*)$/;
  *   或
  *   packages:
  *
- *     '@adobe/css-tools@4.5.0':
+ * 形如：'@adobe/css-tools@4.5.0':
  *       resolution: ...
  *   一级键 = 段落内缩进最小的键行。不依赖固定缩进宽度（pnpm 的缩进随层级变化）。
  */

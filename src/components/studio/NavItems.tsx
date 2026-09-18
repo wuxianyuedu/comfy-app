@@ -12,14 +12,14 @@ import {
 } from "lucide-react";
 
 /**
- * Shared left-sidebar navigation registry.
+ * 共享的左侧栏导航注册表。
  *
- * One source of truth for both:
- *   - <WorkspaceNav>   — used in non-home views (canvas / skills / models / etc.)
- *   - <HomePage>       — used in the home view, where the sidebar is inlined
+ * 两处的唯一事实来源：
+ *   - <WorkspaceNav>   —— 用在非首页视图（画布 / 技能 / 模型等）
+ *   - <HomePage>       —— 用在首页视图，那里侧栏是内联的
  *
- * Adding / reordering / renaming any nav item here keeps both surfaces
- * consistent and avoids drift between the two implementations.
+ * 在这里新增 / 重排 / 重命名任何导航项，都会让两处界面
+ * 保持一致，避免两份实现之间漂移。
  */
 export type WorkspaceView =
   | "home"
@@ -36,12 +36,12 @@ export type WorkspaceView =
 export interface NavItem {
   id: WorkspaceView;
   label: string;
-  /** Whether the work for this view has shipped (drives cursor / opacity) */
+  /** 这个视图的工作是否已上线（驱动 cursor / opacity） */
   enabled?: boolean;
   icon: React.ReactNode;
 }
 
-/** Standard icon stroke + size for sidebar items. */
+/** 侧栏项统一使用的图标描边 + 尺寸。 */
 const ICON_PROPS = {
   width: 22,
   height: 22,

@@ -291,7 +291,7 @@ export function useStoryboardPlanner(props: Props) {
     }
   }
 
-  // Import shots from script: each scene → shotCount shots
+  // 从剧本导入镜头：每个场景 → shotCount 个镜头
   function importFromScript() {
     const built: Shot[] = [];
     let n = shots.length;
@@ -312,7 +312,7 @@ export function useStoryboardPlanner(props: Props) {
           params: {},
           status: "idle",
         };
-        // Auto-build prompt
+        // 自动构建提示词
         recompute(shot, scene, [], undefined);
         built.push(shot);
       }

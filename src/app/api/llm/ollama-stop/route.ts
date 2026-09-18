@@ -55,7 +55,7 @@ async function ollamaUp(): Promise<boolean> {
 }
 
 /**
- * POST /api/llm/ollama-stop
+ * 端点：POST /api/llm/ollama-stop
  *
  * 关闭 Ollama：官方 CLI 没有「退出 serve」的命令（`ollama stop <model>` 只停
  * 模型加载），所以进程级终止是唯一可靠的关闭方式。

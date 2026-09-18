@@ -1,5 +1,5 @@
 "use client";
-/* Extracted small presentational chips — originally inside WorkflowCanvasEditor.tsx. */
+/* 抽出的小展示章（原本内联在 WorkflowCanvasEditor.tsx 里）。 */
 import { useMemo } from "react";
 import {
   resolveEntryRequired,
@@ -37,30 +37,6 @@ export function RequiredSummary({
   );
 }
 
-/* ── rgthree Fast Groups Bypasser integration ──
- * rgthree's `Fast Groups Bypasser` is a utility node whose LiteGraph
- * definition carries ZERO inputs — its entire body is computed at
- * runtime by scanning the graph for groups matching the node's
- * `properties` (matchTitle, matchColors, sort, ...).  We replicate
- * that runtime here so the node renders the same way it does inside
- * ComfyUI + rgthree's frontend:
- *
- *   1. Read groups from the editor's detail (single source of truth).
- *   2. Filter by `matchTitle` (case-insensitive substring).  rgthree
- *      also supports a `matchColors` palette, but the property is a
- *      free-form string ("cyan", "#8AA", …) and the matching rule is
- *      perceptual; for v1 we keep the title filter (which is what
- *      the user actually configures 99% of the time) and skip colour.
- *   3. Sort alphanumerically by group title (rgthree default; the
- *      `sort` property is honoured when it parses to a known mode).
- *   4. Render one toggle row per match, label `Enable <matchTitle><idx>`
- *      (zero-padded to at least 2 digits), with a toggle bound to the
- *      group's bypass state.
- *   5. Toggle click → optimistic local override + PATCH
- *      `/api/workflows/{id}` with `{groups:[{id, bypass}]}`.  The
- *      route writes `rawJson.groups[i].flags.bypass` and invalidates
- *      the detail cache.
- */
 /** 统计徽标的「中性」取值 —— 一个灰色圆点/文字既可以走写死的 `#a1a1aa`，
  *  也可以走随主题的弱文字 token。后者在浅色下才读得出来（浅底上的
  *  `#a1a1aa` 只有 ~2:1）。调用方传这个常量即表示「中性统计」。 */
@@ -85,9 +61,9 @@ export function Chip({ color, label }: { color: string; label: string }) {
   );
 }
 
-/** Body for rgthree's `Fast Groups Bypasser`.  Renders the matched
- *  groups as toggle rows that flip the group's `flags.bypass` on click.
- *  Matches the rgthree label convention: "Enable <matchTitle><idx>". */
+/** `frontend_only` 徽标 —— 标出「此节点只在浏览器前端运行、没有后端执行」
+ *  的节点（如 rgthree 的 `Fast Groups Bypasser`：它的 LiteGraph 定义里没有输入，
+ *  整个节点体是前端按图扫描出来的）。 */
 export function FrontendOnlyBadge() {
   return (
     <div
@@ -116,24 +92,3 @@ export function FrontendOnlyBadge() {
     </div>
   );
 }
-
-/* NodeIdChip — right-aligned `#<nodeId>` badge inside a node's header
- *  Tapping it opens the NodeJsonPopover pinned next to
- *  the chip, showing the literal `detail.graph[nodeId]` entry.  Two
- *  variants:
- *    • "node"     — plain grey/teal text (matches the previous WorkflowNode
- *                   appearance).
- *    • "subgraph" — uppercase violet tint, matching WorkflowSubgraphNode's
- *                   prior look.
- *  Implementation notes:
- *   • Native `<button>` (not `<div role="button">`) — semantically the
- *     right element, no extra a11y wiring needed.
- *   • `e.stopPropagation()` on BOTH onClick AND onMouseDown — React Flow
- *     attaches drag listeners on the node root, and double-click on the
- *     node would otherwise trigger drill-down.  Also need to swallow
- *     the onPointerDown so a press-and-drag never starts a pan from the
- *     chip's bounding box.
- *   • `type="button"` so the chip never accidentally submits an
- *     enclosing <form> (defensive — no forms today, but cheap to lock).
- *   • Visual feedback: chip becomes dotted-underline + brighter on
- *     hover/focus so the click affordance reads without a label. */

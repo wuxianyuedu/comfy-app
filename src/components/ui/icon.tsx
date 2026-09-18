@@ -66,10 +66,10 @@ import {
 import type { ComponentType } from "react";
 
 /**
- * String-key → lucide icon map.
- * UI data (skills, canvas node types, create-panel categories, workshop tabs,
- * API responses) only ever carries a string key, so the resolver keeps the
- * data model serializable while we render flat SVG icons on the frontend.
+ * 字符串键 → lucide 图标映射。
+ * UI 数据（技能、画布节点类型、创建面板类别、工坊页签、
+ * API 响应）只带字符串键，所以解析器让
+ * 数据模型保持可序列化，同时前端渲染扁平 SVG 图标。
  */
 const ICON_MAP: Record<string, LucideIcon> = {
   palette: Palette,
@@ -141,12 +141,12 @@ const ICON_MAP: Record<string, LucideIcon> = {
 };
 
 export interface IconProps extends Omit<LucideProps, "name"> {
-  /** Icon key, e.g. "film", "sparkles", "trash". Case-insensitive. */
+  /** 图标键，如 "film"、"sparkles"、"trash"。大小写不敏感。 */
   name?: string | null;
   size?: number;
 }
 
-/** Renders a flat lucide icon from a string key. Returns null if key unknown. */
+/** 由字符串键渲染扁平的 lucide 图标。键未知时返回 null。 */
 export function Icon({ name, size = 16, className, ...rest }: IconProps) {
   const Cmp: LucideIcon | undefined = name
     ? ICON_MAP[name.toLowerCase()]

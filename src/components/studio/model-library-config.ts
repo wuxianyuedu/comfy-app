@@ -15,7 +15,7 @@ export interface ModelRow {
 /** GET /api/models/config 返回的一行（只保留本视图渲染用到的子集）。 */
 export interface FolderConfigRow {
   folder: string;
-  /** The directory name IS the model type. */
+  /** 目录名**就是**模型类型。 */
   type: string;
   label: string;
   enabled: boolean;

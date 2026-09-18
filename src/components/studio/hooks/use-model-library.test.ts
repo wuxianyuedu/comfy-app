@@ -203,10 +203,10 @@ describe("useModelLibrary", () => {
  * 实测形态：`pnpm test` **随机**非零退出（65 轮里 4 轮），用例层面全绿
  * （`Tests N passed / 0 failed`），退出码来自 vitest 的 `Unhandled Errors`：
  *
- *     Unhandled Rejection: ReferenceError: window is not defined
- *       ❯ resolveUpdatePriority  react-dom-client.development.js:1308
- *       ❯ dispatchSetState       react-dom-client.development.js:9126
- *       ❯ use-model-library.ts:58  .finally(() => setLoading(false))
+ * 实测量：Unhandled Rejection: ReferenceError: window is not defined
+ *       栈帧：resolveUpdatePriority 在 react-dom-client.development.js:1308
+ *       栈帧：dispatchSetState 在同一文件的 9126 行
+ *       栈帧：use-model-library.ts:58 的 .finally(() => setLoading(false))
  *
  * 根因：`loadModels` 里 `listQ.refetch().finally(...)` 是一条**脱离组件生命
  * 周期的链**。测试结束后（jsdom 环境已拆除、window 已消失）它才 resolve，

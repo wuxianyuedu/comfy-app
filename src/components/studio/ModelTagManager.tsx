@@ -8,18 +8,18 @@ import { useModelTags, type TagItem } from "./hooks/use-model-tags";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 interface ModelTagManagerProps {
-  /** Initial tags (from the parent's cached library list). */
+  /** 初始标签（来自父级缓存的标签库列表）。 */
   initialTags: TagItem[];
-  /** Called after any create/delete so the parent can refresh its list. */
+  /** 任何创建 / 删除之后调用，好让父级刷新列表。 */
   onChanged: () => void;
-  /** Called when the user closes the dialog. */
+  /** 用户关闭对话框时调用。 */
   onClose: () => void;
 }
 
-/** Modal dialog for managing the user-level workflow model-tag library.
- *  Tags are shared across all of a user's workflows (e.g. "z-image",
- *  "wan2.2"); creating one here makes it available in every workflow card's
- *  "＋ 标签" menu and in the library's model filter.
+/** 管理用户级工作流模型标签库的弹窗。
+ *  标签在用户的所有工作流之间共享（如 "z-image"、
+ *  "wan2.2"）；在这里创建一个，它就会出现在每张工作流卡片的
+ *  「＋ 标签」菜单与库的模型筛选里。
  *
  * 视图层（规范 17 §17.2 第③层）：列表合并与三个写动作在
  * hooks/use-model-tags.ts；本文件只渲染。对外 props 与导出名保持不变。 */
@@ -146,12 +146,12 @@ export function ModelTagManager({
                         cancelEdit();
                       }
                     }}
-                    // NOTE: intentionally no onBlur → commit. If the user dismisses
-                    // the editor by other means (clicking outside, the dialog
-                    // closing), the local state advances but no rename is sent.
-                    // Saves must go through Enter (the only intentional save path),
-                    // otherwise two commits would race (e.g. Enter + blur both fire
-                    // and the second one sees the now-renamed tag as 404).
+                    // 注意：刻意不设 onBlur → 提交。若用户以别的方式
+                    // 退出编辑（点外部、关闭对话框），
+                    // 本地状态会前进但不会发送重命名。
+                    // 保存必须走 Enter（唯一有意的保存路径），
+                    // 否则两次提交会竞速（例如 Enter + blur 都触发，
+                    // 第二个看到一个已重命名的标签而报 404）。
                     onBlur={() => cancelEdit()}
                     className="bg-canvas-deep text-ink-bright min-w-0 flex-1 rounded-md border border-fuchsia-500/50 px-2 py-0.5 text-sm outline-none focus:border-fuchsia-400"
                   />
