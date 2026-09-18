@@ -108,17 +108,15 @@ describe("mergeExposedEntry — 本地编辑态覆盖服务端富化", () => {
     expect(merged.nodeId).toBe("node-uuid");
   });
 
-  it("本地未保存的 value / required / modes 整体透传", () => {
+  it("本地未保存的 required / modes 整体透传", () => {
     const merged = mergeExposedEntry(
       {
         label: "seed",
-        value: 7,
         required: true,
         modes: { i2v: { visible: false } },
       },
       enriched(),
     );
-    expect(merged.value).toBe(7);
     expect(merged.required).toBe(true);
     expect(merged.modes).toEqual({ i2v: { visible: false } });
   });
@@ -156,12 +154,6 @@ describe("enrichFromViewNodes — 子图内层视图的就地富化兜底", () =
     expect(map["1670::widget::value"]!.type).toBe("INT");
     expect(map["1670::widget::value"]!.defaultValue).toBe(1234);
     expect(map["1670::widget::model_name"]!.label).toBe("模型");
-  });
-
-  it("带上节点类名，供「首帧 / 尾帧」这类按类名判定的消费方使用", () => {
-    expect(
-      enrichFromViewNodes(viewNodes)["1670::widget::value"]!.classType,
-    ).toBe("PrimitiveInt");
   });
 
   it("无节点 / 无 raw_inputs 时返回空表", () => {

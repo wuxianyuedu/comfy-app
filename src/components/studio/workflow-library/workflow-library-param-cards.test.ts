@@ -566,7 +566,6 @@ const negativeLessIo: WorkflowIOMap = {
     name: "text",
     label: "文本",
     type: "STRING",
-    classType: "CLIPTextEncode",
     defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
   },
   "5::widget::width": {

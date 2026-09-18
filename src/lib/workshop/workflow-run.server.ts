@@ -55,7 +55,12 @@ export async function createWorkflowRunTask(
     !Array.isArray(tpl.workflowIO)
       ? (tpl.workflowIO as unknown as WorkflowIOMap)
       : {};
-  const { workflowInputs } = buildEncapsulatedInputs(io, mode, input.values);
+  const { workflowInputs } = buildEncapsulatedInputs({
+    io,
+    paramMap: tpl.paramMap,
+    mode,
+    values: input.values,
+  });
 
   const params = {
     workflow: tpl.id,

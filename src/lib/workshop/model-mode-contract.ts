@@ -17,9 +17,9 @@ import {
   EXPOSED_PARAM_DISPLAY_LABEL,
   exposedParamDisplayLabel,
   exposedParamsForMode,
+  isVideoMode,
 } from "~/lib/workflow-exposed-params";
 import { getWorkflowType } from "~/lib/workflow-types";
-import { isVideoMode } from "~/lib/workshop/workflow-encapsulation";
 
 /** 可作为输入的统一类型（供适配器配置选用）。
  *
