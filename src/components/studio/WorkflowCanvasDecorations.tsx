@@ -297,7 +297,7 @@ export function CanvasRulers({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-3" aria-hidden>
-      {/* Top edge — X coords */}
+      {/* 上边 —— X 坐标 */}
       {xLabels.map(({ world, screen }) => (
         <div
           key={`rt-${world}`}
@@ -313,8 +313,8 @@ export function CanvasRulers({
           {fmt(world)}
         </div>
       ))}
-      {/* Bottom edge — X coords (offset above the zoom controls so the
-       *  bottom-left button cluster doesn't cover the leftmost labels) */}
+      {/* 下边 —— X 坐标（上移到缩放控件之上，好让
+       *  左下角按钮簇不盖住最左侧的标签） */}
       {xLabels.map(({ world, screen }) => (
         <div
           key={`rb-${world}`}
@@ -330,7 +330,7 @@ export function CanvasRulers({
           {fmt(world)}
         </div>
       ))}
-      {/* Left edge — Y coords */}
+      {/* 左边 —— Y 坐标 */}
       {yLabels.map(({ world, screen }) => (
         <div
           key={`rl-${world}`}
@@ -346,7 +346,7 @@ export function CanvasRulers({
           {fmt(world)}
         </div>
       ))}
-      {/* Right edge — Y coords */}
+      {/* 右边 —— Y 坐标 */}
       {yLabels.map(({ world, screen }) => (
         <div
           key={`rr-${world}`}

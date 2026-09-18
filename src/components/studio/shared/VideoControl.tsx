@@ -1,7 +1,7 @@
 "use client";
-/* Video group control — extracted from GroupedControls.tsx.
- * Switches between split native fields and a unified 时长 + 画质 + 比例
- * preset popover; the chosen paradigm persists per-workflow. */
+/* 视频组控件 —— 从 GroupedControls.tsx 抽出。
+ * 在分开的原生字段与统一的「时长 + 画质 + 比例」
+ * 预设浮层之间切换；所选范式按工作流持久化。 */
 import { useState } from "react";
 import {
   DIM_RATIO_PRESETS,
@@ -124,8 +124,8 @@ function VideoControl({
         },
       };
     }
-    /* role === "aspect" — a COMBO aspect uses its own options, otherwise a
-     *  friendly ratio preset writing the float ratio back into the widget. */
+    /* role === "aspect" —— COMBO 比例用自己的选项，否则用
+     *  友好比例预设把浮点比值写回 widget。 */
     if (
       entry.control === "select" &&
       Array.isArray(entry.options) &&

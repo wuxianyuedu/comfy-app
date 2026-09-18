@@ -1,14 +1,13 @@
 "use client";
 
-/** extracted from ProjectCanvas's empty-state overlays
- *  the loading hint (shown while the initial project hydrates) and the
- *  friendly "right-click to start" guide card (shown when the canvas is
- *  genuinely empty).
+/** 从 ProjectCanvas 抽出空态覆盖层：
+ *  加载提示（初始项目水合期间显示）与
+ *  友好的「右键开始」引导卡（画布确实为空时显示）。
  */
 import { Icon } from "~/components/ui/icon";
 
 interface EmptyCanvasHintProps {
-  /** True → hydrating overlay; false → empty-canvas guide. */
+  /** true → 水合覆盖层；false → 空画布引导。 */
   loading: boolean;
 }
 

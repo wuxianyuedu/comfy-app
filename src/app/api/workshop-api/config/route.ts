@@ -1,8 +1,8 @@
-// Workshop API channel config: masked view + save.
+// 工坊 API 通道配置：掩码视图 + 保存。
 //   GET  /api/workshop-api/config  → { channels: ApiChannelsView }
-//   POST /api/workshop-api/config  → save partial channel config, returns masked view
-// The apiKey is stored server-side only (data/workshop-api-settings.json) and
-// never returned to the browser — matching the LLM config contract.
+//   POST /api/workshop-api/config  → 保存部分通道配置，返回掩码视图
+// apiKey 只存在服务端（data/workshop-api-settings.json），
+// 永不返回给浏览器 —— 与 LLM 配置契约一致。
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
