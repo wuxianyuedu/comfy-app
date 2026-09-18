@@ -124,23 +124,23 @@ export function useDynamicWorkflowForm(
     [shownWireInputs, shownWidgetInputs],
   );
 
-  /* Coupled widget groups (dimension = width + height; video = length +
-   * aspect + quality) are withheld from the generic per-widget rows and
-   * rendered by `GroupedControls` instead — a single dropdown switches
-   * between 分别填写 and the friendly preset paradigm.  `groupedKeys` is the
-   * set of ioKeys the groups consume. */
+  /* 耦合的 widget 组（尺寸 = 宽 + 高；视频 = 时长 +
+   * 比例 + 画质）会被挡在通用逐 widget 行之外，
+   * 改由 `GroupedControls` 渲染 —— 一个下拉在 分别填写 与
+   * 友好预设范式之间切换。`groupedKeys` 是
+   * 各组消费的 ioKey 集合。 */
   const groups = useMemo(
     () => inferGroups(shownWidgetInputs),
     [shownWidgetInputs],
   );
   const { groupedKeys } = groups;
 
-  /* Port rows = wire inputs + numeric widgets (seed/steps/cfg …).  Numeric
-   * widgets join them to inherit the connectable single-line layout.
-   * Grouped pins are excluded so they never render twice (once here, once
-   * in GroupedControls).
-   *   IO-edit 作者态（isAuthoringEdit）下数值 widget 不再并入端口行——改由
-   *   widgetSectionEntries 渲染成完整参数行，否则必填/👁 无从编辑。 */
+  /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg …）。数值
+   * widget 并入它们以继承可连接的单行布局。
+   * 已分组的针脚排除在外，好让它们永不重复渲染（一次这里，一次
+   * 在 GroupedControls 里）。
+   *   IO 编辑作者态（isAuthoringEdit）下数值 widget 不再并入端口行 —— 改由
+   *   widgetSectionEntries 渲染成完整参数行，否则必填 / 👁 无从编辑。 */
   const portEntries = useMemo(
     () => [
       ...shownWireInputs,
@@ -164,18 +164,18 @@ export function useDynamicWorkflowForm(
     [shownWidgetInputs, groupedKeys, isAuthoringEdit],
   );
 
-  /* Drag state is deliberately component-local (not in workflow-io.ts or any
-   * context) so a reorder on one surface can't steal drag focus from another
-   * form rendered on the same page.  `draggingKey` is the ioKey the user
-   * picked up; `dragOverKey` is the row currently under the cursor (paints
-   * the insert line).  Both are cleared on drop / dragend so a dropped row
-   * never leaves a stale highlight behind.
+  /* 拖拽状态刻意留在组件本地（不进 workflow-io.ts 或任何
+   * context），好让某个界面上的重排不会抢走同页另一个
+   * 表单的拖拽焦点。`draggingKey` 是用户拎起的 ioKey；
+   * `dragOverKey` 是光标当前所在的行（画
+   * 插入线）。两者都在 drop / dragend 时清掉，好让落下的行
+   * 永不留下陈旧高亮。
    *
    *  **被拿起的键同时记在 ref 上**：一次原生拖拽横跨多个 task（dragstart →
    *  dragover… → drop），`drop` 拿到的处理器闭包可能来自**另一次渲染**，
    *  它读到的 `draggingKey` 是那一刻的 state 而不是起手时写入的值。ref 在
    *  dragstart 现场立刻写好，drop 一律以它为准 —— 否则「拖完什么都没发生」
-   *  （ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。
+   *（ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。
    *  state 仍保留：插入指示线 / 半透明行都靠它触发重渲。 */
   const dragFromRef = useRef<string | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
@@ -212,14 +212,14 @@ export function useDynamicWorkflowForm(
          *  行内子元素（标签按钮、输入框），bind 进来的 ioKey 是渲染时那一次
          *  的闭包值，可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
         beginDrag(rowKeyOf(event.target) ?? ioKey);
-        /* Firefox refuses to start a drag unless dataTransfer.setData is
-         * called.  Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
+        /* Firefox 不调 dataTransfer.setData 就拒绝开始拖拽。
+         * Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
          * 以上面的 ref 为准（见 dragFromRef 注释）。 */
         try {
           event.dataTransfer.setData("text/plain", ioKey);
           event.dataTransfer.effectAllowed = "move";
         } catch {
-          /* Some browsers throw on setData outside a user gesture; safe to ignore. */
+          /* 有些浏览器在用户手势之外调 setData 会抛异常；忽略即可。 */
         }
       },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {

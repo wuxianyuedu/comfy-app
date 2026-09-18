@@ -9,9 +9,9 @@
  *
  * 后果不是「少了个文件」，而是**所有 API 路由 500**：
  *
- *     Failed to load external module
- *     next/dist/compiled/next-server/app-route-turbo.runtime.prod.js:
- *     Error: Cannot find module '...'
+ * 报错形如：Failed to load external module
+ *   缺的件形如 next/dist/compiled/next-server/app-route-turbo.runtime.prod.js
+ *   跟一句 Cannot find module 报错
  *
  * 页面（RSC 渲染走 app-page-turbo）与 middleware 都还正常，于是呈现成
  * 「首页 200、接口全 500」—— 看起来像业务 bug，实际是产物缺口。

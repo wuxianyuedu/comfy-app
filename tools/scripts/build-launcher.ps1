@@ -38,29 +38,27 @@ Log "  Python      : $pyVer"
 Log "  PyInstaller : $piVer"
 Log ""
 
-Log "[2/4] 前置检查：启动器自身是否仍在运行"
-# 产物目录（start-tauri\ 等）里被运行中的启动器占住的 _internal\*.dll 删不掉，
-# 旧实现只把这个根因写成一句「可能被其他程序占用」——用户关掉的是桌面壳，
-# 启动器自己还在跑，照提示去关窗口永远清理不掉。见 Build-Guard.ps1 的说明。
-if ((Assert-LauncherNotRunning -ProjectRoot $PROJECT_ROOT -Purpose "打包启动器") -ne 0) {
+$startTauriDir = Join-Path $PROJECT_ROOT "start-tauri"
+$buildLauncherDir = Join-Path $PROJECT_ROOT "build-launcher"
+
+Log "[2/4] 前置检查：产物目录是否被占用"
+# 产物目录（start-tauri\ 等）里被占住的 _internal\*.dll 删不掉。占用者有两类：
+# 启动器自己（关掉启动画面 / 桌面窗口并不让它退出），以及它拉起、后来残留成孤儿的
+# dev server（node → pnpm → next 会把产物目录里的 dll 映射进自己的进程）。两类都由
+# Assert-LauncherNotRunning 一次查出并点名 PID，见 Build-Guard.ps1 的说明。
+if ((Assert-LauncherNotRunning -ProjectRoot $PROJECT_ROOT -Purpose "打包启动器" -ProductDir $startTauriDir) -ne 0) {
     exit 1
 }
-Log "  未发现正在运行的启动器，继续。"
+Log "  产物目录没有被占用，继续。"
 Log ""
 
 Log "[3/4] 清理旧产物..."
-$startTauriDir = Join-Path $PROJECT_ROOT "start-tauri"
-$buildLauncherDir = Join-Path $PROJECT_ROOT "build-launcher"
 if (Test-Path $startTauriDir) {
     try {
         Remove-Item -Recurse -Force $startTauriDir -ErrorAction Stop
     } catch {
-        Log ""
-        Log "[错误] 无法清理 start-tauri：目录里的文件被其他程序占用。"
-        Log "        最常见的是本仓库启动器 start-tauri.exe 仍在运行（关掉它的启动画面才会退出）。"
-        Log "        自查：Get-Process start-tauri -ErrorAction SilentlyContinue"
-        Log "        结束：taskkill /IM start-tauri.exe /T /F"
-        Log "        若确认没有同名进程，则是权限问题（提权残留的 pyinstaller / 杀毒软件），重启后重试。"
+        # 失败路径要能自己解释：真实异常 + 点出是谁占着 + 给出可执行的动作。
+        Write-ProductDirLockHint -Purpose "打包启动器" -Name "start-tauri" -Directory $startTauriDir -Detail $_.Exception.Message
         exit 1
     }
 }
@@ -68,9 +66,7 @@ if (Test-Path $buildLauncherDir) {
     try {
         Remove-Item -Recurse -Force $buildLauncherDir -ErrorAction Stop
     } catch {
-        Log ""
-        Log "[错误] 无法清理 build-launcher，可能被其他程序占用。"
-        Log "        请手动关闭占用程序后重试。"
+        Write-ProductDirLockHint -Purpose "打包启动器（pyinstaller 工作目录）" -Name "build-launcher" -Directory $buildLauncherDir -Detail $_.Exception.Message
         exit 1
     }
 }

@@ -8,9 +8,9 @@ import type {
 } from "../workflow-types";
 import { inferSourceOutNames } from "../workflow-utils";
 
-/** Raw ComfyUI node metadata — `widgets_values` elements and the flags /
- *  properties dicts are opaque raw-JSON payloads, kept `unknown` (they were
- *  `any` before; consumers already treat them opaquely). */
+/** 原始 ComfyUI 节点元数据 —— `widgets_values` 元素与 flags /
+ *  properties 字典都是不透明的 raw-JSON 负载，保持 `unknown`（此前
+ *  是 `any`；消费方本来就当它们不透明处理）。 */
 export type RawNodeMeta = {
   widgets_values: unknown[];
   outputs: RawOutputMeta[];
@@ -26,11 +26,11 @@ export interface WorkflowDerivedData {
 }
 
 /**
- * Derived lookups for the workflow editor canvas:
- *  - rawMetaById: raw-node metadata map (widgets / outputs / flags ...)
- *  - scopeDetail: view-scoped detail (RAW view swaps node/graph/position
- *    sources to `detail.rawView`, keeping wrapper-level data intact)
- *  - outSlotNameById: per-node output-slot name inference
+ * 工作流编辑器画布的派生查表：
+ *  - rawMetaById：原始节点元数据表（widgets / outputs / flags …）
+ *  - scopeDetail：视图作用域的 detail（RAW 视图把 node/graph/position
+ *    的来源换成 `detail.rawView`，包装层数据保持不变）
+ *  - outSlotNameById：按节点的输出槽名推导
  */
 export function useWorkflowDerivedData(
   detail: WorkflowDetail | null,

@@ -35,42 +35,37 @@ interface SelectMenuProps {
   value: string;
   onChange: (value: string) => void;
   options: string[];
-  /** Map from option value → display label. Falls back to raw value if omitted. */
+  /** 选项值 → 显示文案的映射；缺省时回退到原始值。 */
   labels?: Record<string, React.ReactNode>;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
   /**
-   * Minimum popover width, in px.  Defaults to 480 so richly-decorated rows
-   * (dot + name + taskType + local/online badge) can breathe on narrow
-   * trigger containers; the popover still snaps back to `trigger.width`
-   * when the trigger is wider than this floor.  Capped to viewport with
-   * automatic left-shift so it never overflows the right edge.
+   * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行
+   *（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展；
+   *  触发器本身比这个下限宽时，浮层仍会回落到 `trigger.width`。
+   *  并按视口做上限裁剪 + 自动左移，保证不会溢出右边缘。
    *
-   * when `autoFitFromOptions` is on, the *effective* minimum is
-   * `max(popoverMinWidth, longestLabelChars × 8 + 56)` so long model file
-   * names / workflowIO labels fit on narrow canvas nodes without each
-   * caller tuning this prop.  Capped at 720 so a single absurd string
-   * can't blow the popover off-screen.
+   * 开启 `autoFitFromOptions` 时，**生效**的下限为
+   * `max(popoverMinWidth, 最长标签字符数 × 8 + 56)`，好让较长的模型文件名 /
+   * workflowIO 标签在窄画布节点里也放得下，不必每个调用处各调一遍；
+   *  上限封顶 720，免得单个异常长的字符串把浮层顶出屏幕。
    */
   popoverMinWidth?: number;
   /**
-   * Auto-widen the popover to fit the longest option label.
-   * Only string/number labels are measured — rich ReactNode labels (e.g.
-   * badges, icons) are skipped because we can't measure them without
-   * rendering off-screen.  Defaults to true.
+   * 自动加宽浮层以容纳最长的选项标签。
+   *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过，
+   *  因为不渲染到屏幕外就无法测量它的宽度。默认 true。
    */
   autoFitFromOptions?: boolean;
   /**
-   * Optional footer rendered at the bottom of the popover (outside the
-   * scrollable option list) — used for group empty-state hints that must
-   * stay visible regardless of how many options exist.
+   * 可选页脚，渲染在浮层底部（可滚动的选项列表之外）——
+   *  用于分组空态提示：无论有多少选项，它都必须始终可见。
    */
   footer?: React.ReactNode;
   /**
-   * Called when the popover opens/closes. The open state lives inside the
-   * component; callers use this to lazily load options right as the list
-   * becomes visible.
+   * 浮层打开 / 关闭时调用。打开状态由组件自身持有；
+   *  调用方借此在列表即将可见时惰性加载选项。
    */
   onOpenChange?: (open: boolean) => void;
 }
@@ -106,7 +101,7 @@ export function SelectMenu({
     onOpenChangeRef.current?.(next);
   }, []);
 
-  /* Reset highlight when opening. */
+  /* 打开时重置高亮项。 */
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
@@ -204,10 +199,9 @@ export function SelectMenu({
         onKeyDown={handleKeyDown}
         className={`border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none ${className}`}
       >
-        {/* min-w-0 + flex-1 + truncate lets rich ReactNode labels clip
-         *  cleanly; callers that want a right-aligned badge (e.g. "本机" /
-         *  "在线") should place a `flex-1` spacer before the badge so it
-         *  pushes right even under this `truncate` (nowrap) context. */}
+        {/* min-w-0 + flex-1 + truncate 让富 ReactNode 标签能干净地裁剪；
+         *  想让徽标（如「本机」/「在线」）右对齐的调用方，应在徽标前放一个
+         *  `flex-1` 占位，这样在 `truncate`（nowrap）上下文里它才会被推向右侧。 */}
         <span className="flex min-w-0 flex-1 items-center truncate">
           {label}
         </span>

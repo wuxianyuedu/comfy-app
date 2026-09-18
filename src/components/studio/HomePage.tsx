@@ -18,20 +18,20 @@ import { useToast } from "./ToastProvider";
 import { type WorkspaceView } from "./NavItems";
 import { WorkspaceNav } from "./WorkspaceNav";
 
-/* ── Home Page — Updream-style Full-Screen Dashboard (Ardot-aligned) ─
-  Dark-themed home page with left sidebar navigation + top bar + aurora bg.
-  Matches Ardot design spec: dark-aurora (#0a0a0f) + violet #8B5CF6 accent.
+/* ── 首页 —— Updream 风全屏仪表盘（对齐 Ardot） ─
+  深色主题首页，左侧栏导航 + 顶栏 + 极光背景。
+  对齐 Ardot 设计规范：深色极光（#0a0a0f）+ 紫 #8B5CF6 强调。
 
-  Layout:
+  布局：
   ┌────┬──────────────────────────────────────────┐
-  │    │  ╔══ Top Bar (search · bell · avatar) ════╗ │
-  │ L  │  ╚═══════════════════════════════════════╝ │
-  │ e  │  Title: 灵感从这里开始!                  │
-  │ f  │  Input box + toolbar                     │
-  │ t  │  Quick action pills                      │
-  │(72│  Recent projects grid                    │
+  │    │  ╔══ 顶栏（搜索 · 铃铛 · 头像） ════╗ │
+  │ 左  │  ╚═══════════════════════════════════╝ │
+  │ 侧  │  标题：灵感从这里开始!                  │
+  │ 栏  │  输入框 + 工具栏                         │
+  │    │  快捷动作药丸                      │
+  │(72│  最近项目栅格                    │
   │px)│                                          │
-  │    │  [aurora blobs behind everything]        │
+  │    │  [极光光斑在所有内容之后]        │
   └────┴──────────────────────────────────────────┘
 */
 
@@ -40,13 +40,13 @@ export interface RecentProject {
   name: string;
   updatedAt: string;
   thumbnails?: string[];
-  /** Project kind — determines the icon and visual treatment */
+  /** 项目种类 —— 决定图标与视觉处理 */
   kind?: "canvas" | "generation" | "workflow" | "video";
   /** Secondary line: e.g. "12 节点", "4 张图", "Wan I2V" */
   subtitle?: string;
 }
 
-/* Card type badge labels & icons */
+/* 卡片类型徽标文案与图标 */
 const KIND_CONFIG: Record<
   string,
   { label: string; color: string; icon: React.ReactNode }
@@ -77,15 +77,15 @@ export interface HomePageProps {
   onNewProject?: () => void;
   recentProjects?: RecentProject[];
   onOpenProject?: (id: string) => void;
-  /** Open a canvas project (jump to canvas view, not /create/{id}). */
+  /** 打开一个画布项目（跳到画布视图，而不是 /create/{id}）。 */
   onOpenCanvasProject?: (id: string) => void;
-  /** Current active nav item (WorkspaceView id) */
+  /** 当前活跃的导航项（WorkspaceView id） */
   activeNav?: WorkspaceView;
-  /** Navigate to a workspace view (models / workflows / canvas etc.) */
+  /** 跳到一个工作区视图（模型 / 工作流 / 画布等） */
   onNavigate?: (view: WorkspaceView) => void;
   /** Switch to the "项目" (works) tab to show all projects */
   onShowAllProjects?: () => void;
-  /** Open the settings overlay (keep workspace tree alive). */
+  /** 打开设置浮层（保持工作区树存活）。 */
   onOpenSettings?: () => void;
 }
 
@@ -105,7 +105,7 @@ export function HomePage({
       className="bg-canvas text-ink relative flex h-full w-full overflow-hidden"
       style={{ fontFamily: "var(--font-sans)" }}
     >
-      {/* ── Aurora Background Blobs ───────────────── */}
+      {/* ── 极光背景光斑 ───────────────── */}
       <div
         className="pointer-events-none absolute inset-0 overflow-hidden"
         aria-hidden
@@ -122,14 +122,14 @@ export function HomePage({
         />
       </div>
 
-      {/* ── Left Sidebar Navigation ───────────────── */}
+      {/* ── 左侧栏导航 ───────────────── */}
       <WorkspaceNav
         active={activeNav}
         onSelect={(id) => onNavigate?.(id)}
         onOpenSettings={onOpenSettings}
       />
 
-      {/* ── Right Area: Top Bar + Main Content ──────────── */}
+      {/* ── 右侧区：顶栏 + 主内容 ──────────── */}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* ── Top Bar ── */}
         <header className="border-border-subtle bg-panel/88 flex shrink-0 items-center justify-between gap-3 border-b px-5 py-0 backdrop-blur-md">
@@ -164,7 +164,7 @@ export function HomePage({
           </div>
         </header>
 
-        {/* ── Main Content Area ──────────────────────── */}
+        {/* ── 主内容区 ──────────────────────── */}
         <main className="relative flex min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[960px] px-10 py-16">
             {/* ── Title ── */}
@@ -175,7 +175,7 @@ export function HomePage({
               用本地 AI 模型，自由创作图像、视频与专属模型
             </p>
 
-            {/* ── Quick Entry Cards ── */}
+            {/* ── 快捷入口卡片 ── */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 {
@@ -253,9 +253,10 @@ export function HomePage({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* New Project Card — canvas-style entry point */}
+                {/* 新建项目卡片 —— 画布风入口 */}
                 <Button
                   variant="ghost"
+
                   onClick={onNewProject}
                   className="group border-border bg-surface-1 hover:bg-info/5 flex h-auto flex-col items-center justify-center gap-2.5 rounded-[16px] border border-dashed py-7 font-normal active:scale-[0.98]"
                 >
@@ -267,7 +268,7 @@ export function HomePage({
                   </span>
                 </Button>
 
-                {/* Recent project cards — canvas / project style */}
+                {/* 最近项目卡片 —— 画布 / 项目风 */}
                 {recentProjects.length > 0
                   ? recentProjects.slice(0, 3).map((proj) => {
                       const cfg =
@@ -317,7 +318,7 @@ export function HomePage({
                               <span className="shrink-0">{proj.updatedAt}</span>
                             </div>
 
-                            {/* Mini thumbnail strip (if available) */}
+                            {/* 迷你缩略图条（如果有） */}
                             {proj.thumbnails && proj.thumbnails.length > 0 && (
                               <div className="mt-2.5 flex gap-1 overflow-hidden">
                                 {proj.thumbnails

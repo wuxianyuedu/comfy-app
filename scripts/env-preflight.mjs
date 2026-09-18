@@ -3,8 +3,8 @@
 //
 // 为什么要在**起 Next 之前**判：`src/env.js` 的校验发生在 Next 加载
 // next.config.js 的阶段，而 Next 会先打印
-//   - Local: http://localhost:<port>
-//   ✓ Ready in 77ms
+//   就绪后才会打印形如 - Local: http://localhost:<port> 的一行
+//   ✓ Ready in 77ms（未就绪时不该出现这一行）
 // 然后才抛错退出。用户看到的是「已就绪」紧跟一屏栈，最自然的读法是
 // 「服务起来了但是有 bug」——而真相是**它根本没起来**（端口无人监听）。
 // 更糟的是缺文件那条错误里的小贴士指向 `tools/start/run-local.ps1`，

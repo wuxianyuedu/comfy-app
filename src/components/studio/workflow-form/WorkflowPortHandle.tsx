@@ -3,12 +3,12 @@
 import React from "react";
 import { Handle, Position, useNodeId } from "@xyflow/react";
 
-/* ── Workflow-canvas endpoint styling (compact canvas mode) ──
- * Port colours per the landed design spec: STRING/INT → neutral grey,
- * IMAGE → violet, VIDEO → pink, link types (MODEL/CLIP/LATENT) → cyan.
- * The stroke is a mid-grey that reads on both the card (#16161C) and the
- * page (#0A0A0F) backgrounds. Handles are 12px and straddle the card
- * border so half sits outside the node, exactly like the workflow canvas. */
+/* ── 工作流画布端点样式（紧凑画布模式） ──
+ * 端口配色按已定稿的设计规范：STRING/INT → 中性灰，
+ * IMAGE → 紫，VIDEO → 粉，连线型（MODEL/CLIP/LATENT）→ 青。
+ * 描边是中灰，在卡片（#16161C）与
+ * 页面（#0A0A0F）背景上都读得出来。句柄 12px，骑在卡片
+ * 边框上，一半露在节点外，与工作流画布完全一致。 */
 const PORT_STROKE = "#4D4D59";
 const PORT_IMG = new Set(["IMAGE", "MASK"]);
 const PORT_VID = new Set([
@@ -29,24 +29,24 @@ function portColorFor(type?: string): string {
   return "#5BC6FF";
 }
 
-/** Type-chip styling for the port-row label (right side of each row).
- *  Matches Ardot v2: STRING/INT/FLOAT → neutral surface + `#9A9AAD` text;
- *  IMAGE/MASK → `--color-chip-type-image-bg` + `#7C5CFC` 0.4 stroke + `#7C5CFC` text;
- *  VIDEO/AUDIO → `--color-chip-type-video-bg` + `#FF5CA8` 0.4 stroke + `#FF5CA8` text.
+/** 端口行标签（每行右侧）的类型章样式。
+ *  对齐 Ardot v2：STRING/INT/FLOAT → 中性表面 + `#9A9AAD` 文字；
+ *  IMAGE/MASK → `--color-chip-type-image-bg` + `#7C5CFC` 0.4 描边 + `#7C5CFC` 文字；
+ *  VIDEO/AUDIO → `--color-chip-type-video-bg` + `#FF5CA8` 0.4 描边 + `#FF5CA8` 文字。
  *  底色随主题（浅色档见 globals.css 的 `--color-chip-type-*-bg`）。
  *
- *  `type` is also normalised up-front: the raw `e.type` can leak through
- *  non-ComfyUI values (`"*"`, `""`, or, historically, stray
- *  `control_after_generate` strings like `"fixed"`/`"randomize"`) when
- *  the workflow was imported as API-only and the enrichment fell back
- *  to JS-type inference.  Any non-{INT,FLOAT,NUMBER} type on a row the
- *  caller already classified as numeric (compact WirePortRows path)
- *  is coerced to INT so the chip is honest about the row's edit semantics. */
-/** Types the chip treats as known ComfyUI data types.  Any other declared type
- *  (custom-node `IMAGEUPLOAD`, vendor enums, …) is ALSO rendered verbatim —
- *  user rule:「type 是什么就显示什么类型」.  `fallback` only kicks in when the
- *  metadata carries no type at all (ComfyUI was offline during IO curation),
- *  where the caller passes the type implied by the control it renders. */
+ *  `type` 同时会提前归一化：当工作流以纯 API 导入、富化
+ *  回落到 JS 类型推导时，原始的 `e.type` 可能漏出非 ComfyUI 的
+ *  值（`"*"`、`""`，或历史上残留的
+ *  `control_after_generate` 字符串如 `"fixed"`/`"randomize"`）。
+ *  调用方已归类为数值的行（紧凑 WirePortRows 路径）上出现任何
+ *  非 {INT,FLOAT,NUMBER} 类型，
+ *  都强制成 INT，好让章对该行的编辑语义保持诚实。 */
+/** 章视为已知 ComfyUI 数据类型的类型集合。任何别的已声明类型
+ *（自定义节点的 `IMAGEUPLOAD`、厂商枚举 …）也**原样**渲染 ——
+ * 用户规则：「type 是什么就显示什么类型」。`fallback` 只在
+ * 元数据完全没带类型时启用（IO 整理时 ComfyUI 离线），
+ * 那时调用方传入它渲染的控件所隐含的类型。 */
 const KNOWN_CHIP_TYPES = new Set([
   "INT",
   "FLOAT",
@@ -102,7 +102,7 @@ export function portChipStyle(type?: string): {
   return { background: "var(--color-border-strong)", color: "#9A9AAD" };
 }
 
-/* export PortHandle — WorkflowNode outputs row
+/* 导出 PortHandle —— WorkflowNode 的 outputs 行
  *  现在也要复用这个端点。要避免飘移，handle 几何参数 / 锚点
  *  / 描边色规则都还在这里维护。 */
 export function PortHandle({
@@ -114,9 +114,9 @@ export function PortHandle({
   id: string;
   dir: "in" | "out";
   type?: string;
-  /** Override / merge into the default positioning (e.g. { top: 14 } for
-   *  fixed-height rows).  Ardot v2 anchor defaults still apply unless
-   *  overridden here. */
+  /** 覆盖 / 并入默认定位（如定高行用 { top: 14 }）。
+   *  Ardot v2 锚点默认值仍然生效，除非
+   *  在这里覆盖。 */
   style?: React.CSSProperties;
 }) {
   /* React Flow 的 <Handle> 只能在自定义 Node 内渲染——它内部靠 useNodeId

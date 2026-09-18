@@ -10,7 +10,7 @@
  * 完全一致」，故把卡片部件收敛到这里，两侧只允许组合、不允许复刻。
  *
  * 视觉 token（Ardot 714503087315759 v5）：
- *   Card 380 / r14 / border --color-border-strong / bg --color-card
+ *   卡片宽 380 / 圆角 14 / 边框与底色走语义 token
  *   Header h-8 · W 图标 #2A1F4A r14 28×28 + 右侧胶囊
  *   ActionBtn h-43 渐变 --color-primary→--color-accent，rounded-b-[14px]
  */

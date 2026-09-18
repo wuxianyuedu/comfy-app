@@ -5,7 +5,7 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**
- * GET /api/debug/source?file=src/components/studio/workflow-node.tsx
+ * 端点：GET /api/debug/source?file=src/components/studio/workflow-node.tsx
  *
  * 画布调试模式的「渲染链路标签」点击后读取项目源码用。
  * 安全约束：

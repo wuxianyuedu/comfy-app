@@ -1,5 +1,5 @@
 "use client";
-/* StyleSwitcher + shared atomic form primitives — extracted from GroupedControls.tsx. */
+/* StyleSwitcher + 共享原子表单原语 —— 从 GroupedControls.tsx 抽出。 */
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
 
@@ -34,11 +34,11 @@ export function saveGroupStyle(
       style,
     );
   } catch {
-    /* storage unavailable (private mode / quota) — non-fatal */
+    /* 存储不可用（隐私模式 / 配额）—— 非致命 */
   }
 }
 
-/** Segmented dropdown that flips the active fill paradigm. */
+/** 切换当前填写范式的分段下拉。 */
 export function StyleSwitcher({
   style,
   onChange,

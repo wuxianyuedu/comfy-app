@@ -67,7 +67,7 @@ export function stripPrivateInputs(dir, onRemoved) {
  *
  *   AGENTS.md / CHANGELOG.md / README.md           内部规范与变更史
  *   eslint.config.js / playwright.config.ts /      开发与门禁配置
- *   vitest.config.ts / typedoc.json / …
+ *   例如 vitest.config.ts / typedoc.json 等开发期文件
  *   scripts/**（46 个文件 / 544K，含 16 个 *.cjs 门禁脚本）+ __pycache__
  *
  * 它们随 static 被编译期内嵌进 exe —— 解包即得内部规范全文与全部门禁脚本。

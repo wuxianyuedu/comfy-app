@@ -115,21 +115,21 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           <ArrowLeft size={18} />
         </Button>
         <div className="flex flex-col">
-          {/* Breadcrumb: root workflow name · subgraph 1 · subgraph 2 …
-           *  The leading crumb is always the **root** workflow's display
-           *  name (captured on first top-level fetch and preserved across
-           *  subgraph navigation), so drilling into a subgraph never
-           *  rewrites the leading crumb to the subgraph's own name.
-           *  Clicking the root crumb jumps back to top level.  Each
-           *  intermediate subgraph crumb is a clickable button that
-           *  drills back to that level.  The LAST crumb (the subgraph
-           *  the user is currently inside) is rendered as a non-
-           *  interactive span with a violet selection box — clicking
-           *  it does NOT re-enter the same subgraph (which used to
-           *  stack another layer in `subgraphStack` and was confusing).
-           *  Truncation uses `max-w` + `truncate` so an over-long name
-           *  collapses to ellipsis; the full name stays accessible via
-           *  the `title` attribute (browser native tooltip). */}
+          {/* 面包屑：根工作流名 · 子图 1 · 子图 2 …
+           *  首段永远是**根**工作流的显示
+           *  名（首次顶层拉取时捕获，跨子图导航时保留），
+           *  所以下钻进子图永远不会
+           *  把首段改写成子图自己的名字。
+           *  点根段跳回顶层。每个
+           *  中间层子图段是可点击按钮，
+           *  下钻回那一层。**最后**一段（用户
+           *  当前所在的子图）渲染成不可交互的
+           *  span，配紫色选择框 —— 点它
+           *  不会重入同一子图（那会把另一层压进
+           *  `subgraphStack`，很令人困惑）。
+           *  截断用 `max-w` + `truncate`，超长名字
+           *  收成省略号；全名仍可经
+           *  `title` 属性（浏览器原生 tooltip）读到。 */}
           <div className="flex items-center gap-1.5 text-[12px]">
             <Button
               variant="ghost"
@@ -152,15 +152,15 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             </Button>
             {subgraphStack.map((crumb, i) => {
               const isLast = i === subgraphStack.length - 1;
-              /* Common truncation styling for every crumb. */
+              /* 所有面包屑通用的截断样式。 */
               const baseCls =
                 "max-w-[260px] truncate text-[14px] font-medium transition-colors";
               if (isLast) {
-                /* Current subgraph: non-clickable span with a violet
-                 *  selection pill so it's visually pinned as the
-                 *  "here" marker.  No button = no accidental
-                 *  re-entry that used to push a phantom layer onto
-                 *  `subgraphStack`. */
+                /* 当前子图：不可点击的 span，配紫色
+                 *  选中药丸，视觉上钉住「此处」
+                 *  标记。不用按钮 = 不会误触重入
+                 *  （那会把幽灵层压进
+                 *  `subgraphStack`）。 */
                 return (
                   <React.Fragment key={crumb.uid + i}>
                     <span className="text-ink-fainter text-[14px]">/</span>
@@ -174,9 +174,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   </React.Fragment>
                 );
               }
-              /* Intermediate subgraph (i < last): clickable button that
-               *  drills back to that level (truncates the stack at i+1
-               *  and re-fetches that subgraph's data). */
+              /* 中间层子图（i < last）：可点击按钮，
+               *  下钻回到那一层（把栈截到 i+1
+               *  并重新拉取该子图的数据）。 */
               return (
                 <React.Fragment key={crumb.uid + i}>
                   <span className="text-ink-fainter text-[14px]">/</span>
@@ -303,8 +303,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             {error}
           </span>
         )}
-        {/* the "编辑 IO" / "预览 IO" affordances are available at BOTH
-         *  levels — the root workflow AND inside a subgraph.
+        {/* 「编辑 IO」/「预览 IO」在**两层**都可用
+         *  —— 根工作流与子图内部都可用。
          *
          *  子图本身没有独立的 IO 契约（它由父工作流经边界 pin 进入），但**父
          *  工作流**完全可以把参数暴露在子图内部的节点上（`LoadImage` 的
@@ -333,12 +333,12 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             </span>
           )}
         </Button>
-        {/* IO preview toggle. Sits next to "编辑 IO" so the
-         *  author can flip into edit + open the preview in one sweep.
-         *  Disabled outside edit mode — preview is meaningful only when
-         *  there's an IO selection to render.  When the user opens the
-         *  panel but hasn't entered edit mode, auto-flip edit on too,
-         *  so checkboxes remain usable alongside the preview.
+        {/* IO 预览开关。挨着「编辑 IO」放，好让
+         *  作者一次就切进编辑 + 打开预览。
+         *  编辑模式外禁用 —— 预览只有在
+         *  有 IO 选择可渲染时才有意义。用户打开
+         *  面板但还没进编辑模式时，也自动切进编辑，
+         *  好让复选框与预览一起可用。
          *
          *  两个方向都耦合：关预览会一并退出编辑模式（面板消失后画布上不该
          *  再留一排没有结果的勾选框），关编辑模式也一并关预览。耦合落在 store

@@ -4,8 +4,8 @@
  * React 函数式 updater 纯净性护栏 —— ISSUE #141
  *
  * 背景:ISSUE #141 报出的告警
- *   "Cannot update a component (`ExtractModelSelect`) while rendering a
- *    different component (`DarkSelect`)"
+ * 即 "Cannot update a component (`ExtractModelSelect`) while rendering a
+ *   （即在渲染另一个组件时更新组件）
  * 根因是 DarkSelect 把副作用 `emitOpenChange(!value)` 塞进了
  * `setOpen((value) => { emitOpenChange(!value); return !value; })` 的
  * 函数式 updater。React 的函数式 updater 是**纯函数**,可能在渲染/调度阶段被求值,
@@ -57,7 +57,7 @@ const NOT_SETTER = new Set([
 const isStateSetter = (callee) => {
   if (ts.isIdentifier(callee))
     return /^set[A-Z]/.test(callee.text) && !NOT_SETTER.has(callee.text);
-  // zustand:store.set(state => ...) / store.setState(state => ...)
+  // zustand：store.set(state => ...) / store.setState(state => ...)
   if (ts.isPropertyAccessExpression(callee))
     return /^(set|setState)$/.test(callee.name.text);
   return false;

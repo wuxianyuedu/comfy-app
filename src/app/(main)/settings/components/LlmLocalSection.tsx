@@ -67,7 +67,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         placeholder={OLLAMA_DEFAULT_BASE_URL}
       />
 
-      {/* Ollama status row */}
+      {/* Ollama 状态行 */}
       <div
         className={`border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2.5 ${STATUS_ROW_CLASS}`}
       >

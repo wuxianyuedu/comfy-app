@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SettingsOverlay — settings UI opened as an in-workspace full-screen overlay.
+ * SettingsOverlay —— 以工作区内全屏浮层形式打开的设置界面。
  *
  * 与独立路由 /settings 相比，overlay 不卸载 workspace 页面组件树——canvas /
  * 工坊 / 工作流库等视图内的选中项与编辑内容天然保留，关闭设置后原样恢复。

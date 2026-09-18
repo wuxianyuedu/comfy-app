@@ -24,7 +24,7 @@ import path from "node:path";
  * @property {number} launcher_pid 持有会话的编排器 PID
  * @property {number[]} child_pids 它拉起的子进程（回收对象）
  * @property {number} app_port 本次使用的端口
- * @property {string} mode web / tauri / prebuilt
+ * @property {string} mode 启动模式：web / tauri / prebuilt
  * @property {string} started_at ISO 时间戳
  */
 

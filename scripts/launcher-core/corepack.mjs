@@ -233,7 +233,7 @@ export function preparePnpm({ root = process.cwd(), expected = null, env = proce
  *
  * @param {ProbeOptions} [options] 探测选项
  * @returns {{ repaired: boolean, pre: ProbeResult, prepare: { ran: boolean, ok: boolean, description: string },
- *             post: ProbeResult, before: string | null, after: string | null }}
+ *             post: ProbeResult, before: string | null, after: string | null }}  ← 重建前 / 后版本号
  * 重建前后的两次探测结论、prepare 的执行情况，以及前后版本号。
  */
 export function repairPnpm({ root = process.cwd(), env = process.env, platform = process.platform } = {}) {

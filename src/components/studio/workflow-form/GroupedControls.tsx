@@ -1,22 +1,21 @@
 "use client";
-/* Grouped parameter controls — entry point (split).
+/* 分组参数控件 —— 入口（已拆分）。
  *
- * Two "paradigms" per group, switchable from a single dropdown
- * (StyleSwitcher):
- *   • Dimension group (image)  — 分别填写宽高  ⇄  比例 + 清晰度（内部算宽高）
- *   • Video group              — 分别填写      ⇄  时长 + 画质 + 比例
+ * 每组两种「范式」，可由一个下拉（StyleSwitcher）切换：
+ *   • 尺寸组（图片）  —— 分别填写宽高  ⇄  比例 + 清晰度（内部算宽高）
+ *   • 视频组          —— 分别填写      ⇄  时长 + 画质 + 比例
  *
- * Every selection ultimately writes the REAL underlying widget values
- * (width/height/length/aspect/quality) back through `onChange`, so the
- * rest of the pipeline (reconcile → toWorkflowInputsPayload → /api/generate)
- * is untouched.  The chosen paradigm is persisted per-workflow in
- * localStorage so the user's preference sticks across reloads.
+ * 每种选择最终都经 `onChange` 把**真正底层**的 widget 值
+ *（width/height/length/aspect/quality）写回去，所以管线其余部分
+ *（reconcile → toWorkflowInputsPayload → /api/generate）
+ * 完全不动。所选范式按工作流持久化在
+ * localStorage 里，好让用户的偏好扛过重新加载。
  *
- * Split into: MultiSegmentPopover.tsx / StyleSwitcher.tsx /
+ * 拆分为：MultiSegmentPopover.tsx / StyleSwitcher.tsx /
  * DimensionControl.tsx（入口 + 宽高形态）/ AspectMegapixelControl.tsx
- * （比例 + 百万像素 + 倍数形态）/ DimensionControlParts.tsx（共用零件）/
- * VideoControl.tsx / VideoField.tsx / grouped-controls-presets.ts /
- * SizePresetTableModal.tsx（尺寸表配置）.
+ *（比例 + 百万像素 + 倍数形态）/ DimensionControlParts.tsx（共用零件）/
+ * 其余拆件：VideoControl.tsx / VideoField.tsx / grouped-controls-presets.ts /
+ * SizePresetTableModal.tsx（尺寸表配置）。
  * ───────────────────────────────────────────────────────────────────────── */
 import {
   type DimensionGroup,

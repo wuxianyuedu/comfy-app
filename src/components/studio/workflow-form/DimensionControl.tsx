@@ -48,10 +48,10 @@ import {
 } from "./DimensionControlParts";
 import type { DimensionGroup } from "../workflow-io";
 
-/** Entry point: dispatch on which paradigm the workflow exposes.
+/** 入口：按工作流暴露的范式分发。
  *
- *  The dispatch happens BEFORE any hook is called so the two sub-controls
- *  can each own their own hook set (React forbids conditional hooks). */
+ *  分发发生在调用任何 hook **之前**，好让两个子控件各自拥有
+ *  自己的 hook 集合（React 不允许条件式 hook）。 */
 function DimensionControl({
   group,
   values,
@@ -154,10 +154,10 @@ function DimensionSizeControl({
   const { table } = useSizePresetTable();
   const [tableOpen, setTableOpen] = useState(false);
 
-  /* user-pinned alignment multiple for the
-   *  megapixel clearity presets.  Persisted per-workflow so a panel
-   *  for an SDXL image workflow doesn't bleed into a Wan video one.
-   *  Default 64 (matches the user requirement). */
+  /* 用户钉住的「对齐倍数」，用于百万像素清晰度预设。
+   *  按工作流持久化，这样一个 SDXL 图片工作流的面板
+   *  不会串到 Wan 视频工作流上。
+   *  默认 64（符合用户要求）。 */
   const ALIGN_PREFIX = "comfyapp:wf-align-multiple:v1";
   const [alignMultiple, setAlignMultipleState] = useState<number>(() => {
     if (typeof window === "undefined") return DEFAULT_ALIGN_MULTIPLE;
@@ -183,16 +183,16 @@ function DimensionSizeControl({
             String(clamped),
           );
         } catch {
-          /* storage unavailable — non-fatal */
+          /* 存储不可用 —— 非致命 */
         }
       }
     },
     [workflowId],
   );
 
-  // Derive the active ratio / clarity presets from the live width+height so
-  // the popover always reflects what's actually in the widgets (even after the
-  // user types a custom W/H directly), instead of a stale first-mount guess.
+  // 由实时 width+height 反推当前比例 / 清晰度预设，
+  // 这样弹层始终反映 widget 里真实的取值（即使用户直接手打了
+  // 自定义 W/H），而不是首次挂载时的猜测。
   const ratio = useMemo(() => {
     const currentRatio = h0 === 0 ? 1 : w0 / h0;
     return DIM_RATIO_PRESETS.reduce(
@@ -204,14 +204,14 @@ function DimensionSizeControl({
       DIM_RATIO_PRESETS[0]!,
     ).label;
   }, [w0, h0]);
-  /* clarity preset is picked across both kinds ("pixel" = 分辨率 1k/2k/4k and
-   *  "megapixel" = 1M/2M/4M) by `pickClarityPreset`, which mirrors the same
-   *  scene table + align multiple used when applying a preset.
+  /* 清晰度预设跨两种类型挑选（"pixel" = 分辨率 1k/2k/4k；
+   *  "megapixel" = 1M/2M/4M），由 `pickClarityPreset` 负责，它镜像了
+   *  应用预设时用的同一张场景表 + 对齐倍数。
    *
-   *  an explicit user-picked clarity is locked in `explicitClarity` so a click
-   *  on, e.g., "4M" survives the next pickClarityPreset round-trip.  The lock is
-   *  cleared whenever the user manually edits W or H via NumberField, so the
-   *  auto-detect still wins after a hand-typed value. */
+   *  用户显式挑过的清晰度会锁进 `explicitClarity`，好让点过
+   *  例如「4M」之后能扛过下一轮 pickClarityPreset 往返。用户经
+   *  NumberField 手动改 W 或 H 时锁会被清掉，
+   *  这样手打值之后仍是自动检测胜出。 */
   const derivedClarity = useMemo(
     () => pickClarityPreset(w0, h0, alignMultiple, scene, table).label,
     [w0, h0, alignMultiple, scene, table],
@@ -242,12 +242,12 @@ function DimensionSizeControl({
     [group, setMany, alignMultiple, scene, table],
   );
 
-  /* changing the alignment multiple
-   *  re-snaps the current W/H to the new grid and clears the
-   *  explicit-clarity lock so the popover re-detects the closest
-   *  preset (the snapped dims may now belong to a different
-   *  clearity bucket).  Numeric W/H steppers also follow this value
-   *  so the +/- buttons feel consistent with the snap grid. */
+  /* 改对齐倍数会把当前 W/H
+   *  重新吸附到新网格，并清掉
+   *  显式清晰度锁，好让弹层重新检测最接近的
+   *  预设（吸附后的尺寸可能已属于另一个
+   *  清晰度桶）。数值 W/H 步进器也跟随这个值，
+   *  让 +/- 按钮与吸附网格保持一致。 */
   const handleAlignChange = useCallback(
     (next: number) => {
       const clamped = normalizeAlignMultiple(next);
@@ -378,15 +378,12 @@ function DimensionSizeControl({
         />
       </div>
 
-      {/* Width + Height — always visible, styled like any other node parameter
-          field (NumberField, two-column grid).  Picking a preset in the row
-          above writes the real W/H via applyPreset → setMany, so the
-          NumberFields below update live.  The stepper +/- matches the
-          user-pinned alignMultiple so the manual W/H nudge lands on the same
-          grid the megapixel clearity uses.
-          窄版不画宽高步进器：这两个端口在组合控件里由「比例 + 像素」推算，
-          它们各自的落点由这块控件承担（见 GroupedControls 的落点口径），
-          同一件事不在两处各放一份录入。 */}
+      {/* 宽 + 高 —— 始终可见，样式与别的节点参数字段一致
+          （NumberField，两列栅格）。上面一行里挑一个预设
+          会经 applyPreset → setMany 写入真实的 W/H，所以下面的
+          NumberField 会实时更新。步进器 +/- 遵循
+          用户钉住的对齐倍数，好让手动微调 W/H 落在
+          与百万像素清晰度同一张网格上。 */}
       {!narrow && (
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">

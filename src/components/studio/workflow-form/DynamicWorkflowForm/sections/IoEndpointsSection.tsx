@@ -9,7 +9,7 @@ import { SectionHeader } from "../SectionHeader";
 interface IoEndpointsSectionProps {
   /** Wire-only inputs (必须连线) — rendered as read-only chips. */
   wireInputs: EnrichedWidget[];
-  /** All enriched inputs; passed to ioLabel() for conflict-aware labels. */
+  /** 全部已富化输入；传给 ioLabel() 做冲突感知标签。 */
   inputs: EnrichedWidget[];
   outputs: (WorkflowIOEntry & { ioKey: string })[];
   showOutputs: boolean;

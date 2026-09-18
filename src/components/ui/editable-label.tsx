@@ -18,8 +18,8 @@ export function EditableLabel({
   const inputRef = useRef<HTMLInputElement>(null);
   const editable = typeof onChange === "function";
 
-  /* Sync external label changes into the draft editor during render
-   * (React 19 recommended "adjusting state when a prop changes" pattern). */
+  /* 渲染期间把外部 label 变化同步进草稿编辑器
+   *（React 19 推荐的「prop 变化时调整状态」模式）。 */
   const [prevLabel, setPrevLabel] = useState(label);
   if (label !== prevLabel) {
     setPrevLabel(label);
@@ -71,8 +71,8 @@ export function EditableLabel({
 
   const commit = () => {
     const next = draft.trim();
-    /* No-op when the trimmed value is unchanged — avoids dirtying the
-     * workflowIO map on every blur. */
+    /* trim 后的值没变时是空操作 —— 免得
+     * 每次 blur 都把 workflowIO 表弄脏。 */
     if (next && next !== label) onChange?.(next);
     else setDraft(label);
     setEditing(false);

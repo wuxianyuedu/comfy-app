@@ -4,20 +4,20 @@
  * 「没有值」）。`??` 会把空串当成「有值」而放行，改动语义 —— 例如
  * `path.replace(...) || ""` 改 `??` 后，空串不再被兜底。因此 `||` 是刻意的
  * 语义选择，不是疏忽。 */
-/* Pure helpers for the CustomNodesSettings dialog: path normalisation, row
- * state derivation, path-list parsing and misc formatting. No hooks, no JSX —
- * moved verbatim from the original single-file CustomNodesSettings.tsx. */
+/* CustomNodesSettings 弹窗的纯辅助函数：路径归一化、行
+ * 状态推导、路径列表解析与杂项格式化。无 hook、无 JSX ——
+ * 从原来的单文件 CustomNodesSettings.tsx 原样搬来。 */
 
 import type { DiscoveredSubpkg, RowState, SummaryPkg } from "./types";
 
 export function pathKey(path: string): string {
   if (!path) return "";
-  // Match server-side normalisation in route.ts: absolute → lowercased →
-  // backslashes to forward slashes. This way the discover output (which carries
-  // user-typed casing + native separators) joins the manifest's byPath keys
-  // without Windows complaining about case.
+  // 与 route.ts 的服务端归一化一致：绝对 → 小写 →
+  // 反斜杠换正斜杠。这样 discover 的输出（带
+  // 用户输入的字母大小写 + 原生分隔符）就能并入清单的 byPath 键，
+  // 而 Windows 不会抱怨大小写。
   let normalized = path.replace(/\\/g, "/");
-  // drop trailing slash for directory roots
+  // 目录根去掉尾部的斜杠
   if (normalized.length > 1 && normalized.endsWith("/"))
     normalized = normalized.replace(/\/+$/, "");
   return normalized.toLowerCase();
@@ -40,7 +40,7 @@ export function deriveRowState(
   if (saved.status === "missing") return { kind: "missing" };
   const savedHash = saved.contentHash || "";
   if (!savedHash || !sub.contentHash) {
-    // No hash info on either side — treat as loaded only when status==='ok' on saved
+    // 两边都没有哈希信息 —— 仅当已保存侧 status==='ok' 时才当作已加载
     if (saved.status === "ok")
       return { kind: "loaded", savedHash: "", nodeCount: saved.nodeCount };
     return { kind: "unimported" };

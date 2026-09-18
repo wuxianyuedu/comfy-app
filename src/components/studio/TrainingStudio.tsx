@@ -18,9 +18,9 @@ import {
   statusMeta,
 } from "./training-studio-config";
 
-/* ── Layout (within WorkspaceNav parent shell) ──
+/* ── 布局（在 WorkspaceNav 父壳内） ──
   ┌─────────────────────────────────────────────────────────────┐
-  │ Top Toolbar: [LoRA 训练工作室] … [后端状态] … [开始训练]     │
+  │ 顶部工具栏：[LoRA 训练工作室] … [后端状态] … [开始训练]     │
   ├─────────────┬───────────────────────────────┬───────────────┤
   │ 数据集       │  训练监控                      │  超参数        │
   │ (300px)      │  · 进度环 + 指标              │  (320px)       │
@@ -30,7 +30,7 @@ import {
   │              │                               │  优化器/调度器  │
   │              │                               │  种子 + 开始    │
   ├─────────────────────────────────────────────────────────────┤
-  │ Status Bar: ● ComfyUI·Kohya 就绪 · 本地算力 · 零授权          │
+  │ 状态栏：● ComfyUI·Kohya 就绪 · 本地算力 · 零授权          │
   └─────────────────────────────────────────────────────────────┘
 */
 
@@ -82,7 +82,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       className="bg-canvas flex h-full w-full flex-col overflow-hidden"
       style={{ fontFamily: "var(--font-sans)" }}
     >
-      {/* ── Aurora Background Blobs ───────────────── */}
+      {/* ── 极光背景光斑 ───────────────── */}
       <div
         className="pointer-events-none absolute inset-0 overflow-hidden"
         aria-hidden
@@ -106,7 +106,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           <span className="text-ink-fainter text-xs">· 炼丹</span>
         </div>
 
-        {/* Backend status pill */}
+        {/* 后端状态药丸 */}
         <div
           className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${
             c.backendConfigured
@@ -126,10 +126,11 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
 
         <div className="flex-1" />
 
-        {/* Primary action (mirrors the form submit) */}
+        {/* 主操作（镜像表单提交） */}
         <Button
           variant="primary-solid"
           size="sm"
+
           onClick={() => void c.submit()}
           disabled={c.submitting || c.uploading}
           className="h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
@@ -138,9 +139,9 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
         </Button>
       </header>
 
-      {/* ── Three-Column Body ─────────────────────── */}
+      {/* ── 三栏主体 ─────────────────────── */}
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
-        {/* ═══ Left: Dataset Panel (300px) ═══ */}
+        {/* ═══ 左：数据集面板（300px） ═══ */}
         <aside className="border-border-subtle bg-panel-deep/85 flex w-[300px] shrink-0 flex-col border-r backdrop-blur-sm">
           <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
             <div className="flex items-center gap-2">
@@ -154,7 +155,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            {/* Backend not configured banner */}
+            {/* 后端未配置横幅 */}
             {!c.backendConfigured && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
                 <p className="mb-1 font-semibold">未配置训练后端</p>
@@ -212,7 +213,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               />
             </div>
 
-            {/* Per-image caption editing */}
+            {/* 逐图 caption 编辑 */}
             {c.dataset.length > 0 && (
               <>
                 <div className="flex items-center justify-between">
@@ -281,7 +282,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           </div>
         </aside>
 
-        {/* ═══ Center: Training Monitor ═══ */}
+        {/* ═══ 中：训练监控 ═══ */}
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-5">
           <div className="mb-4 flex items-center gap-2">
             <span className="text-ink-field text-[13px] font-semibold">
@@ -296,7 +297,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             )}
           </div>
 
-          {/* Progress ring + metrics card */}
+          {/* 进度环 + 指标卡 */}
           <div className="border-border-subtle bg-card rounded-2xl border p-4">
             <div className="flex items-center gap-5">
               {/* Ring */}
@@ -380,7 +381,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </div>
           </div>
 
-          {/* Loss curve card */}
+          {/* Loss 曲线卡 */}
           <div className="border-border-subtle bg-card mt-4 rounded-2xl border p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-ink-field text-[12px] font-medium">
@@ -567,7 +568,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           </div>
         </main>
 
-        {/* ═══ Right: Hyperparameters (320px) ═══ */}
+        {/* ═══ 右：超参数（320px） ═══ */}
         <aside className="border-border-subtle bg-panel-deep/85 flex w-[320px] shrink-0 flex-col border-l backdrop-blur-sm">
           <div className="border-border-subtle flex h-11 items-center border-b px-4">
             <span className="text-ink-field text-[13px] font-semibold">

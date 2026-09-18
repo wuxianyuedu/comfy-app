@@ -1,11 +1,11 @@
 "use client";
 
-/* extracted from CanvasNode — workflow-node IO lifecycle.
- *  Owns the shared wfList/modelTagLib fetching (with module-level in-flight
- *  dedup), the selected workflow's dynamic IO map + modes loading, the
- *  ioKey render-phase reset, the default-value seeding effect and the
- *  filter-invalidation effect. The node data object and `patch` are threaded
- *  in explicitly from the parent. */
+/* 从 CanvasNode 抽出 —— workflow 节点的 IO 生命周期。
+ *  负责共享的 wfList / modelTagLib 拉取（带模块级在途去重）、
+ *  所选工作流的动态 IO 表 + 模式加载、
+ *  ioKey 的渲染期重置、默认值播种 effect 与
+ *  筛选失效 effect。节点数据对象与 `patch` 由父级
+ *  显式传入。 */
 import { useEffect, useRef, useState } from "react";
 import {
   reconcileInputValues,
@@ -42,14 +42,14 @@ export interface UseWorkflowIoArgs {
 }
 
 export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
-  /* ── uploaded workflows list (for the workflow node) ── */
-  /* include `sourcePath` so the dropdown can distinguish
-   *  local-on-disk imports from user-uploaded online workflows (the dot +
-   *  "本机 / 在线" badge in the option label).  The DB select already
-   *  exposes it; only the client type was missing. */
+  /* ── 已上传的工作流列表（给 workflow 节点用） ── */
+  /* 带上 `sourcePath`，好让下拉能区分
+   *  磁盘上的本地导入与用户上传的在线工作流（选项标签里的圆点 +
+   *  「本机 / 在线」徽标）。DB 查询本来就
+   *  暴露了它；缺的只是客户端类型。 */
   const [wfList, setWfList] = useState<WfListItem[]>([]);
-  // True until the workflow list has finished loading. The dropdown must
-  // NOT render "暂无工作流" (empty) while the list is still in flight.
+  // 工作流列表加载完成前一直是 true。列表还在途时下拉
+  // **不得**渲染「暂无工作流」。
   const [wfListLoading, setWfListLoading] = useState(true);
   // 用户级模型标签库（全局），供 WorkflowNode 的模型筛选 chip 使用
   const [modelTagLib, setModelTagLib] = useState<TagLibItem[]>([]);
@@ -116,12 +116,12 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     };
   }, [d.kind]);
 
-  /* ── dynamic IO map for the selected workflow (drives the form) ── */
+  /* ── 所选工作流的动态 IO 表（驱动表单） ── */
   const [wfIO, setWfIO] = useState<WorkflowIOMap | null>(null);
   const [wfIOLoading, setWfIOLoading] = useState(false);
-  /* alongside wfIO, also keep the workflow's
-   *  multi-mode config (modes[] + defaultMode) so chip3 can render
-   *  按该工作流配置的动态模式列表. */
+  /* 除 wfIO 外，也保留工作流的
+   *  多模式配置（modes[] + defaultMode），好让 chip3 能渲染
+   *  按该工作流配置的动态模式列表。 */
   const [wfModes, setWfModes] = useState<WorkflowModesState | null>(null);
   /* 对外参数 → 节点端口的连线（作者在工作流库里配的映射，落在 paramMap.source）。
    * 运行期据此决定「哪个端口收用户值」，未连线的对外参数仍走默认值兜底。 */
@@ -132,8 +132,8 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
    *  内部 React state 持有，不写 patch（不污染 d，避免 React Flow 重渲）。
    *  默认「全部」，用户切换后只在当前节点 lifespan 内生效。 */
   const [sourceFilter, setSourceFilter] = useState<WorkflowSourceFilter>("all");
-  /* Reset IO state when the node's workflow binding changes (adjusted during
-   * render, React 19 pattern — keeps the effect body setState-free). */
+  /* 节点的 workflow 绑定变化时重置 IO 状态（渲染期间
+   * 调整，React 19 模式 —— 让 effect 体里不出现 setState）。 */
   const ioKey = `${d.kind}|${d.workflowId ?? ""}`;
   const [prevIoKey, setPrevIoKey] = useState(ioKey);
   if (ioKey !== prevIoKey) {
@@ -211,9 +211,9 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.kind, d.workflowId]);
 
-  /* Seed the dynamic form with the workflow's default values once IO loads, so
-   * the form is fully populated (not blank) and the generate payload carries
-   * every exposed pin's current value. Re-seeds only when the workflow changes. */
+  /* IO 加载完成后用工作流的默认值给动态表单播种一次，好让
+   * 表单完整填充（而不是空白），且生成 payload 带上
+   * 每个暴露针脚的当前值。只有工作流变化时才重新播种。 */
   const seededFor = useRef<string | null>(null);
   useEffect(() => {
     if (
@@ -239,8 +239,8 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     if ((d.kind !== "workflow" && d.kind !== "picture") || !d.workflowId)
       return;
     if (wfList.length === 0) return;
-    // Defer out of the effect body (React 19 rule: no setState synchronously
-    // within an effect).
+    // 延出 effect 体（React 19 规则：effect 内不得
+    // 同步 setState）。
     const t = setTimeout(() => {
       const stillVisible = wfList
         .filter((workflow) => {

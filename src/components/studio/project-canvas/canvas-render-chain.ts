@@ -13,7 +13,7 @@
  *    src/lib/project-canvas/canvas-helpers.ts（startGenerate / pollTask）
  *  - script：追加 src/lib/project-canvas/canvas-helpers.ts（runScript）
  *  - agent：追加 src/lib/agent/agentic.ts +
- *    src/lib/project-canvas/canvas-helpers.ts
+ *  例如 src/lib/project-canvas/canvas-helpers.ts
  *  - text / picture / movie：追加 ContentAssetNode.tsx
  *  - 未知 kind：只显示公共链路
  *

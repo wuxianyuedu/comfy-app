@@ -73,15 +73,98 @@ function Get-RunningLauncher {
         foreach ($p in $procs) {
             $path = ""
             try { $path = [string]$p.ExecutablePath } catch { }
-            if (-not $path) { continue }
-            foreach ($e in $expected) {
-                if ($path.Equals($e, [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $result += [pscustomobject]@{ Id = $p.ProcessId; Path = $path }
+            $hit = $false
+            if ($path) {
+                foreach ($e in $expected) {
+                    if ($path.Equals($e, [System.StringComparison]::OrdinalIgnoreCase)) { $hit = $true }
                 }
+            } elseif ($p.CommandLine -and $p.CommandLine -like ("*" + $ProjectRoot + "*")) {
+                # 取不到 exe 路径时退回命令行（与 Get-RunningShellProcess 同一策略）：
+                # 提权实例或受限会话下 ExecutablePath 可能是空串，只按路径判断会「一个
+                # 都没查到」——而那时目录照样被锁着，用户拿到的是一句与现场矛盾的结论。
+                $hit = $true
             }
+            if ($hit) { $result += [pscustomobject]@{ Id = $p.ProcessId; Path = $path } }
         }
     }
     return $result
+}
+
+# 列出「把产物目录里的文件映射进自己地址空间」的进程 —— 目录删不掉的直接原因。
+#
+# 为什么不能只看启动器 exe：启动器拉起的 dev server（node → pnpm → next）会把
+# `start-tauri\_internal\*.dll` 映射进自己的进程（实测：pnpm 侧的 VCRUNTIME140.dll
+# 就取自产物目录）。于是「启动器已退出、dev server 还在跑」这种孤儿形态同样锁住
+# 目录，而按 exe 名 / 路径判断的 Get-RunningLauncher 一个都查不到 —— 现场因此拿到
+# 一句指向「start-tauri.exe 仍在运行」的错误结论：用户刚关掉的正是它。
+# 判据是**被映射文件的路径**落在产物目录内，因为那才是 Windows 拒绝删除的原因
+# （提权 / 系统进程读不到模块表时跳过：宁可少列，也不列错人）。
+function Get-ProductDirHolder {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $prefix = [System.IO.Path]::GetFullPath($Directory).TrimEnd([char]92, [char]47) + "\"
+
+    $result = @()
+    foreach ($p in @(Get-Process -ErrorAction SilentlyContinue)) {
+        $module = ""
+        try {
+            foreach ($m in $p.Modules) {
+                $fileName = [string]$m.FileName
+                if ($fileName -and $fileName.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $module = $fileName
+                    break
+                }
+            }
+        } catch {
+            # 读不到该进程的模块表：不猜
+        }
+        if ($module) {
+            $exePath = ""
+            try { $exePath = [string]$p.Path } catch { }
+            $result += [pscustomobject]@{ Id = $p.Id; Name = $p.ProcessName; Module = $module; Path = $exePath }
+        }
+    }
+    return $result
+}
+
+# 产物目录清理失败时的**统一出错出口**：真实异常 + 点名占用者 + 可执行动作。
+#
+# 旧实现把根因写成一句猜出来的「最常见的是启动器仍在运行」，异常对象直接丢掉 ——
+# 用户照提示关掉窗口、重跑，第二条提示还是同一句（真正的占用者在别处），
+# 失败路径既没有日志也没有能走通的出口。
+function Write-ProductDirLockHint {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [string]$Purpose = "打包启动器",
+        [string]$Name = "",
+        [string]$Detail = ""
+    )
+
+    if (-not $Name) { $Name = Split-Path -Leaf $Directory }
+    $full = [System.IO.Path]::GetFullPath($Directory)
+
+    Log ""
+    Log ("[错误] {0}：无法清理 {1} —— 目录里的文件被其他程序占用（Windows 拒绝删除已映射的文件）。" -f $Purpose, $Name)
+    if ($Detail) { Log ("        系统报错：{0}" -f $Detail) }
+    Log ("        目录：{0}" -f $full)
+
+    $holders = @(Get-ProductDirHolder -Directory $full)
+    if ($holders.Count -gt 0) {
+        Log ""
+        Log "        持有该目录里文件的进程（查出来的，不是猜的）："
+        foreach ($h in $holders) { Log ("          PID {0}  {1}  ← {2}" -f $h.Id, $h.Name, $h.Module) }
+        Log ""
+        Log "        结束它们（连带子进程树，别在任务管理器里单杀）："
+        foreach ($h in $holders) { Log ("          taskkill /PID {0} /T /F" -f $h.Id) }
+        Log "        之后重新运行本构建。"
+    } else {
+        Log ""
+        Log "        没有查到持有文件的进程，常见于杀毒 / 索引服务正在扫描该目录，"
+        Log "        或本进程权限不足（提权残留的 pyinstaller）。稍后重试；仍不行则重启后重试。"
+    }
+    Log ""
 }
 
 # 判断某个壳进程是否「本次构建期间无人会再用」的陈旧壳。
@@ -216,29 +299,59 @@ function Assert-ShellNotRunning {
 # 刚双击过的入口（关掉它的启动画面 = 放弃本次启动），构建侧替用户做这个决定不合适；
 # 而且它与壳不同，不存在「无主孤儿」这种判据（窗口是它自己的）。
 #
-# 返回 0 = 没有启动器在跑，可以继续打包；1 = 命中占用，调用方应中止并提示用户。
+# 第二个判据（ProductDir）：目录被**启动器拉起的子进程**占用（dev server 持有
+# `_internal\*.dll`），此时启动器自己可能早就退出了。两条一起报，用户一次就能清完，
+# 不必「杀启动器 → 重跑 → 又被告知目录还被占着」来回一轮。
+#
+# 返回 0 = 没有启动器在跑、产物目录也没被别的进程占用，可以继续打包；
+# 1 = 命中占用，调用方应中止并提示用户。
 function Assert-LauncherNotRunning {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$ProjectRoot,
-        [string]$Purpose = "打包启动器"
+        [string]$Purpose = "打包启动器",
+        [string]$ProductDir = ""
     )
 
     $running = @(Get-RunningLauncher -ProjectRoot $ProjectRoot)
-    if ($running.Count -eq 0) { return 0 }
+
+    $holders = @()
+    if ($ProductDir) {
+        $launcherIds = @($running | ForEach-Object { $_.Id })
+        $holders = @(
+            Get-ProductDirHolder -Directory $ProductDir |
+                Where-Object { $launcherIds -notcontains $_.Id }
+        )
+    }
+    if ($running.Count -eq 0 -and $holders.Count -eq 0) { return 0 }
 
     Log ""
-    Log ("[错误] {0}：本仓库的启动器仍在运行，产物目录被它占用。" -f $Purpose)
-    Log ""
-    Log "  原因：启动器（start-tauri*.exe）是独立进程，关掉它的启动画面 / 桌面窗口并不会"
-    Log "        让它自己退出；只要它还在跑，产物目录里的 _internal\*.dll 就被锁住，"
-    Log "        无法删除重建（就是刚才那句「无法清理 start-tauri」）。"
-    Log ""
-    foreach ($p in $running) { Log ("  正在运行的启动器：PID {0}  {1}" -f $p.Id, $p.Path) }
-    Log ""
-    Log "  请先结束上面的启动器进程（关掉它的启动画面 / 控制台窗口），再重新运行本构建。"
-    Log "  若窗口已关掉、只剩进程，执行：taskkill /PID <上面的 PID> /T /F"
-    Log "  （别用任务管理器单杀：它拉起的 dev server / 壳会残留占端口，见规范 §3。）"
+    if ($running.Count -gt 0) {
+        Log ("[错误] {0}：本仓库的启动器仍在运行，产物目录被它占用。" -f $Purpose)
+        Log ""
+        Log "  原因：启动器（start-tauri*.exe）是独立进程，关掉它的启动画面 / 桌面窗口并不会"
+        Log "        让它自己退出；只要它还在跑，产物目录里的 _internal\*.dll 就被锁住，"
+        Log "        无法删除重建（就是刚才那句「无法清理 start-tauri」）。"
+        Log ""
+        foreach ($p in $running) { Log ("  正在运行的启动器：PID {0}  {1}" -f $p.Id, $p.Path) }
+        Log ""
+        Log "  请先结束上面的启动器进程（关掉它的启动画面 / 控制台窗口），再重新运行本构建。"
+        Log "  若窗口已关掉、只剩进程，执行：taskkill /PID <上面的 PID> /T /F"
+        Log "  （别用任务管理器单杀：它拉起的 dev server / 壳会残留占端口，见规范 §3。）"
+    }
+    if ($holders.Count -gt 0) {
+        Log ""
+        Log ("[错误] {0}：产物目录 {1}\ 被下面这些进程占用（它们不是启动器本身）。" -f $Purpose, (Split-Path -Leaf $ProductDir))
+        Log ""
+        Log "  原因：启动器拉起的 dev server（node → pnpm → next）会把产物目录里的"
+        Log "        _internal\*.dll 映射进自己的进程；启动器一旦异常退出，它们会残留成"
+        Log "        孤儿，目录照样删不掉 —— 而关掉启动画面 / 桌面窗口都解不开这一条。"
+        Log ""
+        foreach ($h in $holders) { Log ("  正在占用的进程：PID {0}  {1}  ← {2}" -f $h.Id, $h.Name, $h.Module) }
+        Log ""
+        Log "  请结束它们（连带子进程树，别单杀）："
+        foreach ($h in $holders) { Log ("    taskkill /PID {0} /T /F" -f $h.Id) }
+    }
     Log ""
     return 1
 }

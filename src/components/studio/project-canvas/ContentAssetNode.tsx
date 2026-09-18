@@ -31,9 +31,9 @@ export function ContentAssetBody({
   onPatch,
   onPickMedia,
   onUploadFile,
-  /* progress overlay while a generation is in
-   *  flight. Rendered only when status === "running"; otherwise the body
-   *  falls back to the existing empty/populated preview. */
+  /* 生成进行中的进度覆盖层。
+   *  只在 status === "running" 时渲染；否则卡片体
+   *  回落到既有的空 / 有内容预览。 */
   status,
   progress,
 }: {
@@ -41,7 +41,7 @@ export function ContentAssetBody({
   data: CanvasNodeData;
   onPatch: (p: Partial<CanvasNodeData>) => void;
   onPickMedia: (k: "picture" | "movie") => void;
-  /* drag-and-drop upload onto the dashed area.
+  /* 拖放到虚线区上传。
    *  该区域**曾**是带 onClick={onPickMedia} 的按钮元素；用户希望虚线区
    *  只接受拖放 —— 文件选择器现在只能从右下角 FAB 触发。 */
   onUploadFile?: (file: File) => void | Promise<void>;
@@ -49,9 +49,9 @@ export function ContentAssetBody({
   progress?: number;
 }) {
   const accent = ASSET_ACCENT[kind];
-  /* Local drag-over highlight so the user can see where the drop lands.
-   *  Lives at the top so both the empty-state branch and any future
-   *  drop-zone wiring share the same boolean. */
+  /* 本地拖入高亮，好让用户看到落点在哪。
+   *  放在顶部，好让空态分支与日后任何
+   *  拖放区接线共用同一个布尔量。 */
   const [isDropOver, setIsDropOver] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   /* 多图相册：数据（图片列表）+ 开关/下标都在 hook 里，视图只消费。
@@ -140,8 +140,8 @@ export function ContentAssetBody({
           onDragOver={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            /* Only highlight when a file (not a node/edge) is being dragged
-             *  over — `types` includes "Files" for native file drags. */
+            /* 只有当拖入的是文件（不是节点 / 边）时才高亮
+             *  —— `types` 对原生文件拖拽含 "Files"。 */
             const types = Array.from(event.dataTransfer.types ?? []);
             if (types.includes("Files") && !isDropOver) setIsDropOver(true);
             event.dataTransfer.dropEffect = "copy";

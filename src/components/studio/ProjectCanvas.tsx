@@ -86,10 +86,9 @@ const nodeTypes = {
  * 组件内部仍用 getSmoothStepPath 画出同一条曲线，只额外叠加选中态样式）。 */
 const edgeTypes = { default: ProjectEdge } as const;
 
-/* MiniMap 颜色表 hoisted to a module-level Map so the
- * `nodeColor` callback can stay referentially stable — MiniMap only re-runs
- * it while painting and never re-renders because of a fresh callback
- * identity during drags / state churn. */
+/* MiniMap 颜色表提到模块级 Map —— 好让 `nodeColor` 回调保持引用稳定：
+ * MiniMap 只在绘制时调用它，不会因为拖拽 / 状态抖动期间回调换了引用
+ * 而重新渲染。 */
 const MINIMAP_COLOR_BY_KIND = new Map(
   (Object.keys(NODE_META) as NodeKind[]).map((k) => [k, NODE_META[k].color]),
 );
@@ -97,13 +96,13 @@ const MINIMAP_COLOR_BY_KIND = new Map(
 interface ProjectCanvasProps {
   seedNew?: boolean;
   onConsumeSeed?: () => void;
-  /** When set (from the Workspace "workflow library → 使用" action) the canvas
-   *  drops a `kind="workflow"` node for this workflow onto the open project. */
+  /** 设置后（来自工作区「工作流库 → 使用」动作）画布会为这条工作流
+   *  往当前打开的项目里放一个 `kind="workflow"` 节点。 */
   pendingWorkflow?: { id: string; name: string; taskType: string } | null;
   onConsumePending?: () => void;
 }
 
-/* ── Inner canvas (must be inside ReactFlowProvider) ── */
+/* ── 内层画布（必须在 ReactFlowProvider 里） ── */
 function CanvasInner({
   seedNew,
   onConsumeSeed,
@@ -116,23 +115,22 @@ function CanvasInner({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("未命名");
-  /* Confirmation dialogs (replaced window.confirm with custom dialog) */
+  /* 确认对话框（用自定义弹窗替换了 window.confirm） */
   const [confirmClear, setConfirmClear] = useState(false);
   /* Canvas panel system: 素材库 / 历史记录 slide-out panels */
   const [activePanel, setActivePanel] = useState<CanvasPanelType>(null);
-  /* top-right settings drawer (调试模式). The
-   * workflow editor already has its own drawer for grid/ruler/zoom; the
-   * project canvas only needs the debug toggle so the user can flip it
-   * without first drill-in'ing. State is shared with the workflow
-   * editor via useDebugMode (same localStorage key). */
+  /* 右上角设置抽屉（调试模式）。工作流编辑器已经自带
+   * 网格 / 标尺 / 缩放的抽屉；项目画布只需要这一个调试开关，
+   * 免得用户还得先钻进去才能切。状态经 useDebugMode 与工作流
+   * 编辑器共享（同一个 localStorage key）。 */
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const rf = useReactFlow();
   const { screenToFlowPosition, fitView } = rf;
-  /* MiniMap → main-viewport single-click jump.
-   *  Pairs with <MiniMap pannable zoomable onClick={onMiniMapJump} /> below. */
+  /* MiniMap → 主视口单击跳转。
+   *  与下面 <MiniMap pannable zoomable onClick={onMiniMapJump} /> 配对。 */
   const onMiniMapJump = useMiniMapJump(rf);
 
-  /* refs holding the latest values for event handlers / flush */
+  /* 保存事件处理器 / flush 用的最新值的 ref */
   const edgesRef = useRef(edges);
   const nodesRef = useRef(nodes);
   const projectIdRef = useRef(projectId);
@@ -144,8 +142,8 @@ function CanvasInner({
     projectIdRef.current = projectId;
     projectNameRef.current = projectName;
   }, [edges, nodes, projectId, projectName]);
-  // True until the initial project has been hydrated from storage.
-  // Prevents the empty-canvas hint from flashing while content loads.
+  // 初始项目从存储水合完成前一直是 true。
+  // 避免内容加载时闪一下「空画布」提示。
   const [hydrating, setHydrating] = useState(true);
   /* ── 拆分：持久化三件套 → useProjectPersistence；
    *  项目 CRUD + 下拉 UI 状态 → useProjectManager；CanvasInner 只留编排与 JSX。
@@ -230,24 +228,23 @@ function CanvasInner({
     [fitView],
   );
 
-  /* ── Load (or create) the active project on mount ──
+  /* ── 挂载时加载（或新建）当前项目 ──
    *
-   *  Draft-aware: when the user clicks "新建项目" we DO NOT immediately
-   *  persist an empty row to the project index.  Instead, `seedNew`
-   *  allocates a fresh id via `createDraftProject`, which only writes the
-   *  active-id.  The project row only enters the index the moment the
-   *  user produces real content (auto-persist effect below), or via the
-   *  manual upsert in `commitRename` / `newProject`.
+   *  草稿感知：用户点「新建项目」时我们**不**立刻往项目索引
+   *  里落一行空记录。而是由 `seedNew` 经 `createDraftProject`
+   *  分配新 id，只写 active-id。项目行只有在用户
+   *  产出真实内容那一刻（下面的自动落盘 effect），或经
+   *  `commitRename` / `newProject` 里的手动 upsert，才进索引。
    *
-   *  Before mounting, we sweep any legacy empty-default rows left over
-   *  from earlier sessions so the recent-projects list stays clean. */
+   *  挂载前先清掉历史会话遗留的「空默认」行，
+   *  免得最近项目列表一直脏着。 */
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
     void (async () => {
-      // Reconcile server-side projects into localStorage BEFORE we read the
-      // active project, so a port-switch (3100↔3102) / device never loses
-      // canvas data that was persisted to the DB.
+      // 在读取当前项目**之前**先把服务端项目对账进 localStorage，
+      // 这样换端口（3100↔3102）/ 换设备都不会丢掉
+      // 已落库的画布数据。
       await hydrateFromServer();
       reapAllEmptyDrafts(); // one-shot cleanup of pre-fix pollution
       let proj: CanvasProject | null = null;
@@ -301,9 +298,9 @@ function CanvasInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
-   * (kind colours are static), so MiniMap never re-renders due to a fresh
-   * callback reference while nodes are dragged. */
+  /* MiniMap 用的「稳定身份 → 颜色」查表。不依赖任何东西
+   *（类别色是静态的），所以拖节点时 MiniMap 不会因为回调
+   * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: { data?: unknown }) => {
     const kind = (node.data as CanvasNodeData | undefined)?.kind;
     return (kind ? MINIMAP_COLOR_BY_KIND.get(kind) : undefined) ?? "#6B7280";
@@ -330,8 +327,8 @@ function CanvasInner({
     [menu, screenToFlowPosition, setNodes],
   );
 
-  /** Drops a pure-visual Ardot-style workflow node at the right-click position.
-   *  No data, no handlers — just renders the design reference component.
+  /** 在右键位置放一个纯视觉的 Ardot 风工作流节点。
+   *  无数据、无处理器 —— 只渲染设计参考组件。
    *  `workflowArdot` 已收进 CanvasNodeType 联合类型，无需强转。 */
   const createTestWorkflowNode = useCallback(() => {
     if (!menu) return;
@@ -354,7 +351,7 @@ function CanvasInner({
     setConfirmClear(true);
   }, [nodes.length, edges.length, toast]);
 
-  /** Actual clearCanvas action — invoked from the ConfirmDialog confirm. */
+  /** 真正的 clearCanvas 动作 —— 由 ConfirmDialog 的确认按钮调用。 */
   const applyClearCanvas = useCallback(() => {
     setNodes([]);
     setEdges([]);
@@ -373,9 +370,9 @@ function CanvasInner({
     URL.revokeObjectURL(url);
   }, [nodes, edges, projectName]);
 
-  /* ── Project switcher actions（已抽入 useProjectManager：openProjMenu /
-   *  switchProject / newProject / deleteCurrent / applyDeleteCurrent /
-   *  loadProject / startRename / commitRename）── */
+  /* ── 项目切换动作（已抽入 useProjectManager；含 switchProject、
+   *  newProject、deleteCurrent、applyDeleteCurrent、loadProject、
+   *  startRename、commitRename 等动作）。 ── */
 
   const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), []);
 
@@ -397,12 +394,12 @@ function CanvasInner({
         onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        /* commercial-grade perf — only mount nodes/edges that
-         *  intersect the viewport (same treatment as the workflow canvas).
-         *  Project graphs with many workflow/material nodes previously
-         *  mounted the ENTIRE graph DOM every frame; viewport culling keeps
-         *  DOM proportional to what's visible so drag/pan/zoom costs stay a
-         *  small constant. */
+        /* 商业级性能 —— 只挂载与视口
+         *  相交的节点 / 边（与工作流画布同一处理）。
+         *  此前含大量工作流 / 素材节点的项目图每帧都把
+         *  **整张图**的 DOM 挂上；视口裁剪让
+         *  DOM 与可见内容成正比，拖拽 / 平移 / 缩放的开销因此保持
+         *  一个小常数。 */
         onlyRenderVisibleElements
         fitView
         minZoom={0.2}
@@ -413,9 +410,9 @@ function CanvasInner({
         defaultEdgeOptions={{
           type: "smoothstep",
           animated: true,
-          /* lazy edge interactivity — untouched edges stay
-           *  inert (no delete/reconnect plumbing); onEdgeClick activates
-           *  them on first use. */
+          /* 惰性边交互 —— 未碰过的边保持
+           *  惰性（不接删除 / 重连管线）；onEdgeClick 在首次使用时
+           *  激活它们。 */
           deletable: false,
           reconnectable: false,
           style: { stroke: "url(#canvas-edge-gradient)", strokeWidth: 2.5 },
@@ -466,7 +463,7 @@ function CanvasInner({
         />
       </ReactFlow>
 
-      {/* Project switcher (top-left) */}
+      {/* 项目切换器（左上角） */}
       <div className="absolute top-3 left-3 z-20">
         <ProjectSwitcher
           projectName={projectName}
@@ -487,16 +484,16 @@ function CanvasInner({
         />
       </div>
 
-      {/* Floating toolbar (center) */}
+      {/* 浮动工具栏（居中） */}
       <CanvasToolbar
         onFitView={() => fitView({ padding: 0.2, duration: 400 })}
         onExport={exportJson}
         onClear={clearCanvas}
       />
 
-      {/* project-canvas settings (top-right gear). Opens a
-       *  right-edge drawer with the 调试模式 toggle. State is shared
-       *  with the workflow editor via useDebugMode. */}
+      {/* 项目画布设置（右上角齿轮）。从右边缘滑出抽屉，内含
+       *  「调试模式」开关。状态经 useDebugMode 与
+       *  工作流编辑器共享。 */}
       <ProjectSettingsButton onClick={() => setProjectSettingsOpen(true)} />
       {projectSettingsOpen && (
         <ProjectSettingsDrawer onClose={() => setProjectSettingsOpen(false)} />
@@ -507,7 +504,7 @@ function CanvasInner({
        *  里打开「日志面板」开关会毫无反应。 */}
       <GlobalStepLogPanel />
 
-      {/* Empty hints — 加载中 / 右键引导（仅当项目确实无内容且已加载完成时展示） */}
+      {/* 空态提示 —— 加载中 / 右键引导（仅当项目确实无内容且已加载完成时展示） */}
       {hydrating && nodes.length === 0 && <EmptyCanvasHint loading />}
       {nodes.length === 0 && !hydrating && <EmptyCanvasHint loading={false} />}
 
@@ -521,7 +518,7 @@ function CanvasInner({
         />
       )}
 
-      {/* ── replace window.confirm with custom dark-themed dialogs ── */}
+      {/* ── 用自定义深色弹窗替换 window.confirm ── */}
       <ConfirmDialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
@@ -543,7 +540,7 @@ function CanvasInner({
         onConfirm={applyClearCanvas}
       />
 
-      {/* ── Canvas panel system: toolbar + slide-out panels ── */}
+      {/* ── 画布面板系统：工具栏 + 滑出面板 ── */}
       {activePanel ? (
         /* 面板打开时：工具栏紧贴面板左侧，同一 flex 容器内 */
         <div className="absolute inset-y-0 left-0 z-20 flex">

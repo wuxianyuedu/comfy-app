@@ -1,10 +1,10 @@
 "use client";
 
-/* Extracted SubgraphHeader — the purple identity title bar of a ComfyUI
- * subgraph wrapper node (previously inlined inside WorkflowSubgraphNode).
- * Collapse chevron + "S" badge + drill-in affordance + IO-edit checkbox +
- * node-id chip.  Same NODE_TITLE_H as the regular WorkflowNode header so
- * titled nodes line up on the grid. */
+/* 抽出的 SubgraphHeader —— ComfyUI 子图包裹节点的紫色身份标题栏
+ *（原本内联在 WorkflowSubgraphNode 里）。
+ * 收起箭头 + 「S」徽标 + 下钻动作 + IO 编辑复选框 +
+ * 节点 id 章。与普通 WorkflowNode 头部同一个 NODE_TITLE_H，
+ * 好让带标题的节点在网格上对齐。 */
 import { ExternalLink } from "lucide-react";
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
@@ -52,15 +52,16 @@ export function SubgraphHeader({
         borderBottom: "1px solid var(--color-border-subtle)",
       }}
     >
-      {/* Collapse / expand toggle. Same chevron as
-       *  WorkflowNode's; sits on the top-left of the header.  stopPropagation
-       *  on both click and pointer-down so ReactFlow's drag handler
-       *  doesn't pick it up as a node-drag start, AND so the
-       *  surrounding `onDoubleClick` (drill-down) doesn't fire after
-       *  a double-click that began here. */}
+      {/* 收起 / 展开开关。与 WorkflowNode 同一个箭头；
+       *  位于头部左上角。Button 默认 type="button"。click 与
+       *  pointer-down 都 stopPropagation，好让 ReactFlow 的拖拽处理器
+       *  不把它当成节点拖拽起点，也免得外层
+       *  `onDoubleClick`（下钻）在这里起手的双击
+       *  之后被触发。 */}
       <Button
         variant="ghost"
         size="icon-xs"
+
         aria-label={isCollapsed ? "展开子图" : "折叠子图"}
         title={isCollapsed ? "展开" : "折叠"}
         onClick={(event) => {
@@ -111,10 +112,10 @@ export function SubgraphHeader({
       >
         {title || "子工作流"}
       </span>
-      {/* PER-NODE output checkbox at the subgraph
-       *  node's top-right.  Same rationale as WorkflowNode — outputs are identified
-       *  by node, so the per-port checkbox is gone; one checkbox marks the
-       *  whole node as a workflow output source. */}
+      {/* 子图节点右上角的**按节点**输出复选框。
+       *  理由同 WorkflowNode —— 输出按节点标识，
+       *  所以逐端口复选框已移除；一个复选框标记
+       *  整个节点作为工作流输出源。 */}
       {io?.ioEditMode && outputRef && (
         <IoCheckbox
           io={io}
@@ -136,13 +137,13 @@ export function SubgraphHeader({
             onEnter();
           }}
           title="展开子工作流"
-          /* bumped from h-4 w-4 (16×16) to h-6 w-6
-           *  (24×24) — user feedback that the prior drill-in chip was
-           *  too small a target on the 30px-tall title row.  24×24 is
-           *  3px shy of NODE_TITLE_H so it still feels like an
-           *  in-bar button (vs the 28-32px standalone chip look).
-           *  Sits a step above the chevron collapse button's h-5 w-5
-           *  to mark drill-in as the *primary* subgraph action. */
+          /* 从 h-4 w-4（16×16）提到 h-6 w-6
+           *  （24×24）—— 用户反馈此前这下钻章在
+           *  30px 高的标题行上目标太小。24×24 比
+           *  NODE_TITLE_H 矮 3px，所以仍像一颗
+           *  行内按钮（而不是 28-32px 的独立章观感）。
+           *  比收起箭头的 h-5 w-5 大一档，
+           *  以标记下钻是子图的*主要*动作。 */
           className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[10px] text-violet-700 transition-colors hover:bg-violet-500/30 hover:text-white dark:text-violet-200"
         >
           <ExternalLink size={12} strokeWidth={2.5} />

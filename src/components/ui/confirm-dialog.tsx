@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * ConfirmDialog — centered confirmation dialog that follows the app theme.
+ * ConfirmDialog —— 跟随应用主题的居中确认弹窗。
  *
- * Replaces `window.confirm()` / `window.alert()` so prompts match the
- * app's visual system instead of showing the native browser chrome
- * (which sits awkwardly in the top-left / center of the viewport
- * and ignores dark CSS).
+ * 替换 `window.confirm()` / `window.alert()`，让提示语与应用
+ * 视觉体系一致，而不是弹原生浏览器窗口
+ *（它别扭地贴在视口左上 / 居中
+ * 且忽略深色 CSS）。
  *
  * 实现基于 `~/components/ui/dialog`（规范 16 §16.2.3 P2）：此前这里自搓了一套
  * `createPortal` + 手写 Esc + 手写遮罩点击关闭，于是同一件「模态对话框」在库里
@@ -14,22 +14,22 @@
  * 无障碍行为只在一边有。现在动作语义交给 base-ui Dialog 原语（Esc / 点遮罩关闭、
  * 焦点锁在弹窗内、关闭后焦点归还触发元素），本组件只负责「确认弹窗」的形态。
  *
- * Visual language matches the global design tokens (Light / Dark 两态):
- *   - backdrop:  bg-canvas-deep (Light) / bg-black/65 (Dark) + backdrop-blur-sm
- *   - card:      bg-panel/95 + 中性 ring(浅色深 ring、深色浅 ring)
- *                + border-destructive/30 (danger) /
- *                border-primary-500/25 (info)
+ * 视觉语言与全局设计 token 一致（浅色 / 深色两态）：
+ *   - 背景遮罩:  bg-canvas-deep（浅色）/ bg-black/65（深色）+ backdrop-blur-sm
+ *   - 卡片:      bg-panel/95 + 中性 ring（浅色深 ring、深色浅 ring）
+ *                + border-destructive/30（危险） /
+ *                border-primary-500/25（信息）
  *
  * 颜色全部走语义 token（规范 03 §3.6.2）：这里曾把 `violet-500/600` 写死
  * 6 处，于是「改品牌色」对确认弹窗不起作用 —— 它绕开了 `--color-primary`。
- *   - spacing:   p-6, gap-4, rounded-2xl
- *   - buttons:   ghost secondary + brand/danger primary
+ *   - 间距:   p-6, gap-4, rounded-2xl
+ *   - 按钮:   幽灵次级 + 品牌 / 危险主按钮
  *
- * Behavior:
- *   - Click backdrop or press Esc → onClose()
- *   - Confirm button is auto-focused so Enter fires it immediately
- *   - Disabled confirm stays disabled until re-enabled (handy for async)
- *   - `pending` prop puts the confirm button into a spinner state
+ * 行为：
+ *   - 点遮罩或按 Esc → onClose()
+ *   - 确认按钮自动聚焦，好让 Enter 立刻触发它
+ *   - 禁用的确认按钮保持禁用直到重新启用（异步场景很好用）
+ *   - `pending` prop 把确认按钮置为 spinner 态
  */
 
 import React, { useEffect, useId, useRef } from "react";
@@ -45,21 +45,21 @@ export interface ConfirmDialogProps {
   onClose: () => void;
   /** Short headline. */
   title: string;
-  /** Optional descriptive text (supports newlines). */
+  /** 可选的描述文字（支持换行）。 */
   description?: React.ReactNode;
-  /** Confirm button label. */
+  /** 确认按钮文字。 */
   confirmLabel?: string;
-  /** Cancel button label. */
+  /** 取消按钮文字。 */
   cancelLabel?: string;
-  /** Toggles the destructive red-button variant. */
+  /** 切换破坏性红色按钮变体。 */
   danger?: boolean;
-  /** When true, the confirm button is disabled. Useful for async ops. */
+  /** 为 true 时确认按钮禁用。异步操作很有用。 */
   pending?: boolean;
-  /** Fired when the user confirms. */
+  /** 用户确认时触发。 */
   onConfirm: () => void;
   /**
-   * Optional small icon displayed next to the title. Defaults to a glyph
-   * matching the `danger` variant; pass a node to override.
+   * 可选小图标，显示在标题旁。默认取与 `danger` 变体
+   * 匹配的字符；传节点可覆盖。
    */
   icon?: React.ReactNode;
 }
@@ -81,15 +81,15 @@ export function ConfirmDialog({
   icon,
 }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
-  // Unique id per instance — a static "modal-dialog-title" would collide
-  // when multiple dialogs mount at once, breaking aria-labelledby wiring.
+  // 每个实例一个唯一 id —— 写死 "modal-dialog-title" 会在
+  // 多个弹窗同时挂载时撞车，破坏 aria-labelledby 接线。
   const titleId = useId();
 
-  // Auto-focus confirm so Enter fires it immediately, matching native
-  // confirm() muscle memory.  Reset on every open.
+  // 自动聚焦确认按钮，好让 Enter 立刻触发它，符合原生
+  // confirm() 的肌肉记忆。每次打开都重置。
   useEffect(() => {
     if (open) {
-      // Wait one frame so the portal-mounted node exists.
+      // 等一帧，好让 portal 挂载的节点已存在。
       const id = requestAnimationFrame(() => confirmRef.current?.focus());
       return () => cancelAnimationFrame(id);
     }
@@ -114,7 +114,7 @@ export function ConfirmDialog({
         <div
           className={`bg-panel/95 relative w-full max-w-[420px] overflow-hidden rounded-2xl border p-6 ring-1 backdrop-blur-md ${ringClass}`}
         >
-          {/* Soft accent wash — sets the mood without dominating */}
+          {/* 柔和强调底色 —— 定调但不喧宾夺主 */}
           <div
             aria-hidden
             className={`pointer-events-none absolute inset-x-0 top-0 h-24 ${

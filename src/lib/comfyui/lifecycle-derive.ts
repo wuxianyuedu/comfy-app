@@ -176,7 +176,7 @@ export interface StopFacts {
 }
 
 export type StopDecision =
-  /** 杀进程树（平台机制由 `~/lib/kill-process-tree` 选）。 */
+  /** 杀进程树（平台机制由 `~/lib/process/kill-process-tree` 选）。 */
   | {
       kind: "kill";
       pid: number;

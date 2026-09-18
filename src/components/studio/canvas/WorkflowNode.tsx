@@ -1,13 +1,13 @@
 "use client";
-/* FlowNode (custom ComfyUI graph node renderer) — orchestrates the node
- * card. heavy blocks split into siblings:
- *   - workflow-node-entries.ts      (input/output row bucketing hook)
- *   - workflow-node-palette.ts      (mode/role colour computation)
- *   - FlowNodeHeader.tsx            (title bar)
- *   - FlowNodeCollapsedAnchors.tsx  (collapsed-mode cylinders + handles)
- *   - FlowNodePinRows.tsx           (TOP PINS connection rows)
- *   - FlowNodeWidgetRows.tsx        (widget/knob rows)
- * Originally inside WorkflowCanvasEditor.tsx. */
+/* FlowNode（自定义 ComfyUI 图节点渲染器）—— 编排节点卡片。
+ * 重块已拆成兄弟模块：
+ *   - workflow-node-entries.ts      （输入 / 输出行分桶 hook）
+ *   - workflow-node-palette.ts      （模式 / 角色配色计算）
+ *   - FlowNodeHeader.tsx            （标题栏）
+ *   - FlowNodeCollapsedAnchors.tsx  （折叠态圆柱 + 句柄）
+ *   - FlowNodePinRows.tsx           （顶部针脚连接行）
+ *   - FlowNodeWidgetRows.tsx        （widget / 旋钮行）
+ * 原本内联在 WorkflowCanvasEditor.tsx 里。 */
 import React, { useState } from "react";
 import { useTheme } from "next-themes";
 import { Handle, Position } from "@xyflow/react";
@@ -39,7 +39,7 @@ import { FlowNodePinRows } from "./FlowNodePinRows";
 import { FlowNodeWidgetRows } from "./FlowNodeWidgetRows";
 import type { WorkflowNodeData } from "../workflow-types";
 
-/** Node role palette definitions (assignedRole → label + accent colour). */
+/** 节点角色配色定义（assignedRole → 标签 + 强调色）。 */
 export const PORT_ROLES: {
   key: string;
   label: string;
@@ -78,14 +78,13 @@ export const PORT_ROLES: {
   },
 ];
 
-/* ── Node data for the flow canvas (must satisfy Record<string, unknown> for @xyflow/react) ── */
+/* ── 流画布的节点数据（必须满足 Record<string, unknown>，@xyflow/react 要求） ── */
 export const INPUT_ROW_HEIGHT = 22; // px per input row (matches the py-1 + text-[11px] row)
 export const HEADER_TOTAL = 60; // header (32) + #id bar (22) + small breathing room (6)
 
-/* (Note: we used to override `<Handle top: ...>` with these constants to
- *  line Handles up with their rows.  We no longer do that — React Flow
- *  pins every Handle to its row's `top: 50%` automatically.  The constants
- *  are kept around as a reference for any future layout work.) */
+/*（注：以前用这些常量覆盖 `<Handle top: ...>`，好让句柄与行
+ *  对齐。现在不这么做了 —— React Flow 会自动把每个句柄钉到
+ *  其行的 `top: 50%`。常量留着，供日后布局改动参考。） */
 
 export const FlowNode = React.memo(function FlowNode({
   data,
@@ -98,16 +97,16 @@ export const FlowNode = React.memo(function FlowNode({
     (PORT_ROLES) => PORT_ROLES.key === data.assignedRole,
   );
   const io = useIOEditContext();
-  /* viewport zoom is NO LONGER subscribed here — the zoom read
-   *  lives inside <FrostLayer> so only frosted nodes re-render while zooming. */
+  /* 视口缩放**不再**在这里订阅 —— 缩放的读取
+   *  挪进了 <FrostLayer>，缩放时只有磨砂节点重渲染。 */
   const debugMode = useDebugStore((state) => state.debugMode);
 
   /* 悬浮置顶：鼠标指着的节点压住连线（ISSUE #400）。
    *  状态是本节点自己的 —— 鼠标进出只重渲染被指的这一个节点。 */
   const { hoverHandlers, hoverRef } = useHoverElevation();
 
-  /* Input/output row bucketing + palette live in sibling modules so the
-   *  renderer below only orchestrates layout. */
+  /* 输入 / 输出行分桶与配色住在兄弟模块里，
+   *  下面的渲染器只编排布局。 */
   const entries = useFlowNodeEntries(data);
   /* 节点卡片表面色（body / header / border / title / dot）与主题联动 ——
    *  与画布其它表面的口径一致，浅色下是一张浅卡，深色下取回原深色。
@@ -120,27 +119,27 @@ export const FlowNode = React.memo(function FlowNode({
     resolvedTheme === "light" ? LIGHT_PALETTE_BASE : DARK_PALETTE_BASE,
   );
 
-  /* Collapsed state (ComfyUI LiteGraph flag `flags.collapsed`).  The
-   *  imported config's flag seeds the INITIAL value; the user toggle owns
-   *  the state thereafter (a naive `dataCollapsed || userCollapsed` could
-   *  never re-expand an initially-collapsed node). */
+  /* 折叠态（ComfyUI LiteGraph 的 `flags.collapsed`）。导入配置里的
+   *  标记只播下**初始**值；此后由用户开关接管状态
+   *  （天真地写 `dataCollapsed || userCollapsed` 会让
+   *  初始就折叠的节点永远展不开）。 */
   const [userCollapsed, setUserCollapsed] = useState<boolean>(
     data.flags?.collapsed === true,
   );
   const isCollapsed = userCollapsed;
 
-  /* Display title prefers zh-CN friendly map → raw `title` from ComfyUI →
-   * prettified class_type. */
+  /* 显示标题优先用 zh-CN 友好映射 → ComfyUI 的原始 `title` →
+   *  美化后的 class_type。 */
   const displayTitle = friendlyNodeTitle(data.classType, data.title, "zh");
-  /* rgthree Label nodes paint their text across the whole card and have NO
-   *  separate ComfyUI title bar — suppress the standard header for them. */
+  /* rgthree Label 节点的文字铺满整张卡片，没有**独立的**
+   *  ComfyUI 标题栏 —— 对它们抑制标准头部。 */
   const isLabel = data.classType === "Label (rgthree)";
-  /* rgthree Power Lora Loader renders its own Lora Stack body — skip the
-   *  standard widget-body section for this classType. */
+  /* rgthree Power Lora Loader 自带 Lora 堆栈主体 —— 这个
+   *  classType 跳过标准 widget 主体区。 */
   const isPowerLoraLoader = data.classType === "Power Lora Loader (rgthree)";
 
-  /* When the imported config carries an exact box size, the node is forced
-   *  to those dimensions; the body flexes to the raw CONTENT height. */
+  /* 导入配置带精确盒子尺寸时，节点被强制成
+   *  那几个尺寸；卡片体则按原始**内容**高度伸缩。 */
   const hasSize = !!data.size;
 
   return (
@@ -150,9 +149,9 @@ export const FlowNode = React.memo(function FlowNode({
       data-node-id={data.nodeId}
       {...hoverHandlers}
       style={{
-        // Width tracks ComfyUI's saved `size.w` when present; height is
-        // content-driven (`auto`) so the card grows with its ports/widgets
-        // and shrinks to the title bar when collapsed.
+        // 宽度在有 ComfyUI 保存的 `size.w` 时跟随它；高度交给
+        // 内容驱动（`auto`），卡片随端口 / widget 长高，
+        // 折叠时缩回标题栏高度。
         width: hasSize ? data.size?.w : undefined,
         height: "auto",
         minWidth: hasSize
@@ -160,18 +159,18 @@ export const FlowNode = React.memo(function FlowNode({
           : entries.outputs.length > 0
             ? 268
             : 248,
-        // data.size.h is BODY CONTENT height; the outer div includes
-        // the pinned NODE_TITLE_H title bar, so the floor is content + title.
+        // data.size.h 是**卡片体内容**高度；外层 div 还包含
+        // 钉住的 NODE_TITLE_H 标题栏，所以下限是内容 + 标题。
         minHeight: isCollapsed
           ? NODE_TITLE_H
           : hasSize
             ? (data.size?.h ?? 0) + NODE_TITLE_H
             : undefined,
-        // No maxWidth cap — ComfyUI lets the user resize the node box freely.
+        // 不设 maxWidth 上限 —— ComfyUI 允许用户自由缩放节点框。
         borderColor: palette.nodeBorder,
-        // Mode (bypass/disabled) nodes tint via <FrostLayer> + real blur, so
-        // the root is transparent (isolation keeps the frost contained).
-        // Normal nodes keep a solid panel.
+        // 模式（旁路 / 停用）节点经 <FrostLayer> + 真实模糊着色，所以
+        // 根节点透明（isolation 把磨砂限制在本节点内）。
+        // 普通节点保留实心面板。
         isolation: "isolate",
         background: palette.modeColor ? "transparent" : palette.nodeBg,
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
@@ -181,8 +180,8 @@ export const FlowNode = React.memo(function FlowNode({
       {palette.modeColor && palette.nodeMode !== 0 && (
         <FrostLayer color={palette.modeColor} nodeMode={palette.nodeMode} />
       )}
-      {/* Header — pinned to NODE_TITLE_H (litegraph's NODE_TITLE_HEIGHT).
-       *  Suppressed entirely for rgthree Label nodes (see `isLabel`). */}
+      {/* 头部 —— 钉在 NODE_TITLE_H（litegraph 的 NODE_TITLE_HEIGHT）。
+       *  rgthree Label 节点整个抑制（见 `isLabel`）。 */}
       {!isLabel && (
         <FlowNodeHeader
           data={data}
@@ -196,8 +195,8 @@ export const FlowNode = React.memo(function FlowNode({
         />
       )}
 
-      {/* Collapsed-mode handle anchors — decorative cylinders + invisible
-       *  per-port Handles so wires never detach when toggling. */}
+      {/* 折叠态句柄锚点 —— 装饰性圆柱 + 不可见的
+       *  每端口 Handle，切换时连线永不脱落。 */}
       {isCollapsed && (
         <FlowNodeCollapsedAnchors
           data={data}
@@ -206,8 +205,8 @@ export const FlowNode = React.memo(function FlowNode({
         />
       )}
 
-      {/* TOP PINS section — pure-connection inputs paired with outputs on
-       *  shared rows.  Hidden when collapsed. */}
+      {/* 顶部针脚区 —— 纯连接型输入与输出配在
+       *  同一行。折叠时隐藏。 */}
       {!isCollapsed &&
         (entries.uniqueConnEntries.length > 0 ||
           entries.outputs.length > 0) && (
@@ -220,8 +219,8 @@ export const FlowNode = React.memo(function FlowNode({
           />
         )}
 
-      {/* Widget inputs section — knobs only.  Skipped for Power Lora
-       *  Loader (renders its own stack) and hidden when collapsed. */}
+      {/* Widget 输入区 —— 只有旋钮。Power Lora
+       *  Loader 跳过（它自带堆栈），折叠时隐藏。 */}
       {!isCollapsed &&
         entries.visibleWidgetEntries.length > 0 &&
         !isPowerLoraLoader && (
@@ -234,8 +233,8 @@ export const FlowNode = React.memo(function FlowNode({
           />
         )}
 
-      {/* rgthree Fast Groups Bypasser runtime body — one toggle row per
-       *  group matching `matchTitle` (PATCH → rawJson write). */}
+      {/* rgthree Fast Groups Bypasser 运行时主体 —— 每个匹配 `matchTitle`
+       *  的分组一行开关（PATCH → 写入 rawJson）。 */}
       {data.classType === "Fast Groups Bypasser (rgthree)" &&
         typeof data.properties?.matchTitle === "string" && (
           <RgthreeFastGroupsBypasserBody
@@ -244,14 +243,14 @@ export const FlowNode = React.memo(function FlowNode({
           />
         )}
 
-      {/* rgthree Power Lora Loader runtime body — renders the lora stack
-       *  from `widgets_values`.  Read-only. */}
+      {/* rgthree Power Lora Loader 运行时主体 —— 由 `widgets_values`
+       *  渲染 lora 堆栈。只读。 */}
       {data.classType === "Power Lora Loader (rgthree)" && (
         <RgthreePowerLoraLoaderBody widgets={data.rawWidgetValues ?? []} />
       )}
 
-      {/* rgthree Label runtime body — paints the title in `properties`
-       *  styles, filling the (header-less) card. */}
+      {/* rgthree Label 运行时主体 —— 按 `properties` 里的样式
+       *  绘制标题，铺满这张（无头部的）卡片。 */}
       {isLabel && (
         <RgthreeLabelBody
           text={data.title}
@@ -259,9 +258,9 @@ export const FlowNode = React.memo(function FlowNode({
         />
       )}
 
-      {/* IMAGE-input inline thumbnail preview — every rawInput
-       *  carrying `preview: true` (LoadImage family) gets a ComfyUI-style
-       *  preview at the node-body tail. */}
+      {/* IMAGE 输入的内联缩略图预览 —— 每个带
+       *  `preview: true` 的 rawInput（LoadImage 家族）都在卡片体
+       *  尾部得到一个 ComfyUI 风格的预览。 */}
       {!isCollapsed && entries.imagePreviewEntries.length > 0 && (
         <div className="flex flex-col gap-2 px-2 pt-1 pb-2">
           {entries.imagePreviewEntries.map((entry) => (
@@ -270,8 +269,8 @@ export const FlowNode = React.memo(function FlowNode({
         </div>
       )}
 
-      {/* Default target handle for nodes with no inputs at all —
-       *  unmapped/fallback edges need somewhere to anchor.
+      {/* 完全没有输入的节点的默认目标句柄 ——
+       *  未映射 / 兜底的边总得有个地方锚定。
        *
        *  这个 Handle 之前是可见的紫色圆点，但无输入的节点
        *  （各类 Loader / EmptyLatentImage …）本就没有入端口，左侧挂一颗
@@ -289,8 +288,8 @@ export const FlowNode = React.memo(function FlowNode({
           />
         )}
 
-      {/* Generic source handle — always present but invisible so edges that
-       *  can't resolve a precise "out:<name>" handle still anchor. */}
+      {/* 通用源句柄 —— 始终存在但不可见，好让解析不出精确
+       *  "out:<name>" 句柄的边仍能锚定。 */}
       <Handle
         type="source"
         position={Position.Right}
@@ -299,8 +298,8 @@ export const FlowNode = React.memo(function FlowNode({
         style={{ opacity: 0, right: -5 }}
       />
 
-      {/* ComfyUI-native bottom-left footers: package source + frontend_only
-       *  badge.  Both hidden when collapsed. */}
+      {/* ComfyUI 原生左下角底栏：包来源 + frontend_only
+       *  徽标。折叠时都隐藏。 */}
       {!isCollapsed && (
         <>
           <PackageFooter

@@ -47,7 +47,7 @@ const CATEGORY_LABEL: Record<WorkflowCategory, string> = {
   video: "视频",
   audio: "音频",
 };
-/* accent color for the active tab underline */
+/* 当前页签下划线的高亮色 */
 const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
   image: "bg-primary-400",
   video: "bg-info",
@@ -55,9 +55,9 @@ const CATEGORY_ACCENT: Record<WorkflowCategory, string> = {
 };
 
 interface MultiModeSelectProps {
-  /** All selected mode codes (defaultMode ⊆ modes).  Empty array → blank chip. */
+  /** 全部已选模式码（defaultMode ⊆ modes）。空数组 → 空 chip。 */
   modes: string[];
-  /** Default mode code (defaultMode must be in `modes`). */
+  /** 默认模式码（defaultMode 必须 ∈ `modes`）。 */
   defaultMode: string;
   onChange: (modes: string[], defaultMode: string) => void;
   className?: string;
@@ -78,18 +78,17 @@ export function MultiModeSelect({
   hideExtraBadge = false,
 }: MultiModeSelectProps) {
   const [open, setOpen] = useState(false);
-  // Which category tab is currently shown in the popover (图像/视频/音频).
+  // 浮层当前展示的分类页签（图像/视频/音频）。
   const [activeTab, setActiveTab] = useState<WorkflowCategory>("image");
-  // Draft state inside the popover — only flushed on save.
+  // 浮层内的草稿状态 —— 只在保存时提交。
   const [draft, setDraft] = useState<Set<string>>(new Set(modes));
   /** 弹窗内的默认模式草稿（必须 ∈ draft），保存时一并落库。 */
   const [draftDefault, setDraftDefault] = useState<string>(defaultMode);
   const [query, setQuery] = useState("");
 
-  // Reset draft only when the popover transitions from closed to open.
-  // Do NOT reset while the user is actively checking items, otherwise
-  // a parent re-render with a new `modes` array reference would wipe
-  // the user's selection.
+  // 只在浮层由关闭转为打开时重置草稿。
+  // 用户正在勾选时**不要**重置，否则父组件带着新的 `modes` 数组引用重渲染，
+  // 就会把用户的选择抹掉。
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
@@ -97,7 +96,7 @@ export function MultiModeSelect({
       setDraft(new Set(modes));
       setDraftDefault(defaultMode);
       setQuery("");
-      // Open on the category of the first selected mode (falls back to image).
+      // 打开时定位到第一个已选模式的分类（回退到图像）。
       const firstSelected = ALL_WORKFLOW_TYPES.find((type) =>
         modes.includes(type.code),
       );
@@ -126,7 +125,7 @@ export function MultiModeSelect({
     setOpen(false);
   }, [draft, draftDefault, onChange]);
 
-  // Default mode's category drives the chip accent.
+  // chip 的高亮色由默认模式的分类决定。
   const accent = useMemo(() => {
     const first = ALL_WORKFLOW_TYPES.find((type) => modes.includes(type.code));
     const def = ALL_WORKFLOW_TYPES.find((type) => type.code === defaultMode);
@@ -134,7 +133,7 @@ export function MultiModeSelect({
     return { pill: CATEGORY_PILL[cat], text: CATEGORY_TEXT[cat] };
   }, [modes, defaultMode]);
 
-  // Filtered + grouped (by category) options.  Used inside the popover.
+  // 过滤并按分类归并后的选项，供浮层使用。
   const grouped = useMemo(() => {
     const lowerQuery = query.trim().toLowerCase();
     const filtered = ALL_WORKFLOW_TYPES.filter((type) => {
@@ -166,7 +165,7 @@ export function MultiModeSelect({
       <span
         className={`inline-flex items-center gap-1 ${disabled ? "pointer-events-none opacity-50" : ""}`}
       >
-        {/* main chip — clicking opens the popover */}
+        {/* 主 chip —— 点击它打开浮层 */}
         <PopoverTrigger
           title={`当前 ${modes.length} 种模式 · 点击管理`}
           render={
@@ -195,7 +194,7 @@ export function MultiModeSelect({
           </svg>
         </PopoverTrigger>
 
-        {/* +N pill — clicking also opens the popover */}
+        {/* +N pill —— 点击它也打开同一个浮层 */}
         {plusN > 0 && !hideExtraBadge && (
           <Button
             variant="ghost"
@@ -267,7 +266,7 @@ export function MultiModeSelect({
           })}
         </div>
 
-        {/* list — only the active tab's category */}
+        {/* 列表 —— 只列当前页签分类下的项 */}
         <div
           style={{ maxHeight: POPOVER_MAX_H }}
           className="overflow-y-auto py-1"

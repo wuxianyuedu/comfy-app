@@ -1,11 +1,11 @@
-// shared renderer for ComfyUI's structured
-// `node_errors` (flattened into `ValidationError[]` by
-// `src/lib/comfyui/validation.ts`).  Renders a precise per-field list
-// ("节点 10（KSampler）· 字段 cfg：cfg must be a number") so the user can
-// locate the exact bad input instead of parsing the English summary.
+// ComfyUI 结构化 `node_errors` 的共享渲染器
+//（由 src/lib/comfyui/validation.ts 摊平成 `ValidationError[]`）。
+// 渲染逐字段的精确清单
+//（"节点 10（KSampler）· 字段 cfg：cfg must be a number"），好让用户
+// 定位到确切的错误输入，而不必去解析英文摘要。
 //
-// Theme-agnostic: each caller wraps it in its own colored container
-// (rose for the canvas error panel, red for the history card).
+// 与主题无关：每个调用方把它包进各自颜色的容器
+//（画布错误面板用玫红，历史卡用红）。
 
 import type { ValidationError } from "~/lib/comfyui/validation";
 

@@ -18,8 +18,8 @@ import {
   reapAllEmptyDrafts,
 } from "~/lib/project-canvas/canvas-store";
 
-/* ── Lazy-load view components so the initial bundle stays small ── */
-/* Only HomePage / WorkspaceNav / ToastProvider / VideoQueueModal are loaded eagerly. */
+/* ── 懒加载视图组件，好让初始包体保持小 ── */
+/* 只有 HomePage / WorkspaceNav / ToastProvider / VideoQueueModal 是即时加载的。 */
 const SettingsOverlay = dynamic(
   () =>
     import("~/components/settings/SettingsOverlay").then(
@@ -53,7 +53,7 @@ const WorkflowLibrary = dynamic(
   { ssr: false },
 );
 
-/* Lazy-load the heavier canvas/film editors (ReactFlow etc.) on the client. */
+/* 客户端上懒加载更重的画布 / 影片编辑器（ReactFlow 等）。 */
 const FilmStudio = dynamic(
   () => import("~/components/studio/FilmStudio").then((mod) => mod.FilmStudio),
   { ssr: false },
@@ -66,7 +66,7 @@ const ProjectCanvas = dynamic(
   { ssr: false },
 );
 
-/* ── Workspace Page — Updream-style full-screen editor ── */
+/* ── 工作区页面 —— Updream 风全屏编辑器 ── */
 
 /* 离开 /workspace 到其它顶层路由（如 /settings）再返回时，Next.js 会重新
  * 挂载本页面组件导致 viewMode 重置回 home。用 sessionStorage 保存最近一次
@@ -127,10 +127,10 @@ export default function WorkspacePage() {
       setViewMode(saved);
     }
   }, []);
-  // View history stack for smart back-navigation (avoids jumping straight to home)
+  // 视**图**历史栈，用于智能返回导航（避免一跳就回首页）
   const [, setViewHistory] = useState<WorkspaceView[]>(["home"]);
 
-  /** Navigate to a new view while recording history for back-button support. */
+  /** 跳到新视图，同时记录历史以支持返回按钮。 */
   const navigateTo = useCallback((view: WorkspaceView) => {
     setViewHistory((prev) => {
       const last = prev[prev.length - 1];
@@ -141,7 +141,7 @@ export default function WorkspacePage() {
     writeLastView(view);
   }, []);
 
-  // ── Video queue modal ──
+  // ── 视频队列弹窗 ──
   const [videoQueueOpen, setVideoQueueOpen] = useState(false);
 
   // ── Settings overlay ──
@@ -151,36 +151,36 @@ export default function WorkspacePage() {
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
-  // ── Canvas: when true, the canvas opens a brand-new named project
+  // ── 画布：为 true 时，画布打开一个全新的命名项目
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
 
-  // ── Bump to re-read canvas-store (recent projects) ──
+  // ── 自增以重新读取 canvas-store（最近项目） ──
   const [recentsKey] = useState(0);
 
-  // ── When set, the infinite canvas receives this workflow and drops a
-  //    `kind="workflow"` node for it (from the Workflow Library "使用" action).
+  // ── 设置后，无限画布接收这条工作流并为它放一个
+  //    `kind="workflow"` 节点（来自工作流库的「使用」动作）。
   const [pendingCanvasWorkflow, setPendingCanvasWorkflow] = useState<{
     id: string;
     name: string;
     taskType: string;
   } | null>(null);
 
-  // ── Recent projects: sourced from canvas-store (localStorage), not Task table.
-  //    Task.type only accepts TXT2IMG|IMG2IMG|INPAINT|HIRERES|VIDEO, so canvas
-  //    projects never appear there. Reading from listProjects() guarantees the
-  //    "最近项目" section reflects the user's actual canvas work.
-  // ── Load real recent canvas projects on mount + on store-change events ──
-  //    Stored in localStorage (canvas-store), so SSR returns []; we hydrate
-  //    after mount. The "comfyapp:canvas-store-changed" event lets the home
-  //    view stay in sync with edits made inside ProjectCanvas (upsert / delete
-  //    / rename) without requiring a full reload.
+  // ── 最近项目：来源是 canvas-store（localStorage），不是 Task 表。
+  //    Task.type 只接受 TXT2IMG|IMG2IMG|INPAINT|HIRERES|VIDEO，所以画布
+  //    项目永远不会出现在那里。从 listProjects() 读取能保证
+  //    「最近项目」区反映用户真实的画布工作。
+  // ── 挂载时 + store 变化事件时加载真实的最近画布项目 ──
+  //    存在 localStorage（canvas-store），所以 SSR 返回 []；我们挂载后
+  //    再水合。"comfyapp:canvas-store-changed" 事件让首页
+  //    视图与 ProjectCanvas 里的编辑（upsert / delete
+  //    / rename）保持同步，无需整页重载。
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   useEffect(() => {
-    // One-shot sweep on home mount: remove any stale empty default-named
-    // drafts that earlier code versions (+ prior) left in the index.
-    // Triggers `comfyapp:canvas-store-changed` if anything was reaped, so
-    // the refresh callback below will re-read `listProjects()` and the
-    // home recent-projects list stays clean without a hard reload.
+    // 在首页挂载时做一次性清扫：移除较早代码版本
+    // 留在索引里的陈旧空默认名草稿。
+    // 若真清掉了东西就触发 `comfyapp:canvas-store-changed`，好让
+    // 下面的刷新回调重读 `listProjects()`，首页最近项目列表
+    // 无需硬重载就保持干净。
     reapAllEmptyDrafts();
     const compute = () => {
       setRecentProjects(
@@ -221,13 +221,13 @@ export default function WorkspacePage() {
   );
 
   const handleNewProject = useCallback(() => {
-    // Opening "新建项目" drops the user into a fresh, named canvas project
-    // (the previous project is preserved in the project store).
+    // 打开「新建项目」会把用户带进一个全新的命名画布项目
+    //（上一个项目保留在项目 store 里）。
     setCanvasSeedNew(true);
     navigateTo("canvas");
   }, [navigateTo]);
 
-  // Open a canvas project — set it as active and jump to the canvas view.
+  // 打开一个画布项目 —— 设为活跃并跳到画布视图。
   const handleOpenCanvasProject = useCallback(
     (id: string) => {
       setActive(id);
@@ -238,8 +238,8 @@ export default function WorkspacePage() {
 
   const handleHomeNavigate = useCallback(
     (view: WorkspaceView) => {
-      // Accept any registered WorkspaceView id; "home" is the current view,
-      // so clicking it again is a no-op.
+      // 接受任何已注册的 WorkspaceView id；"home" 就是当前视图，
+      // 所以再点它是个空操作。
       if (view === "home") return;
       navigateTo(view);
     },
@@ -265,8 +265,8 @@ export default function WorkspacePage() {
     [navigateTo, router],
   );
 
-  // "使用" a workflow from the Workflow Library → jump to the infinite canvas
-  // and drop the workflow as a node on the currently-open project.
+  // 从工作流库「使用」一条工作流 → 跳到无限画布
+  // 并把该工作流作为节点放到当前打开的项目上。
   const handleUseWorkflow = useCallback(
     (id: string, meta?: { name: string; taskType: string }) => {
       setPendingCanvasWorkflow({

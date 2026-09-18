@@ -10,11 +10,11 @@ import {
 import { isVideo as isVideoSource } from "~/lib/media/media-kind";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 
-/* ── Result preview card ──
- * The card itself mimics a node: it has a top-left "type char + name" header
- * and a status badge below, so the user can read the output's identity and
- * lifecycle at a glance — the same surface that already shows on the parent
- * node.  Then comes the content (image / video / text) and a 替换 button. */
+/* ── 结果预览卡 ──
+ * 卡片本身模仿一个节点：它有左上角「类型字符 + 名字」头部
+ * 与下方的状态徽标，好让用户一眼读出输出的身份与
+ * 生命周期 —— 与父节点上已显示的同一套界面。然后才是
+ * 内容（图片 / 视频 / 文本）与一颗替换按钮。 */
 export function ResultCard({
   kind,
   name,
@@ -45,7 +45,7 @@ export function ResultCard({
   if (kind === "script" || kind === "agent" || (!src && text)) {
     return (
       <div className="nodrag nopan border-border-strong bg-subtle relative mt-2 overflow-hidden rounded-xl border">
-        {/* Header — top-left: type char + name, top-right: status badge */}
+        {/* 头部 —— 左上：类型字符 + 名字；右上：状态徽标 */}
         <div className="border-border-strong bg-canvas-deep flex items-center justify-between border-b px-2.5 py-1.5">
           <NodeChip kind={kind} name={displayName} size="sm" />
           <StatusBadge status={status} />
@@ -109,10 +109,10 @@ export function ResultCard({
     );
   }
 
-  /* ── Image / video result ── */
+  /* ── 图片 / 视频结果 ── */
   return (
     <div className="nodrag nopan border-border-strong bg-subtle relative mt-2 overflow-hidden rounded-xl border">
-      {/* Header — top-left: type char + name, top-right: status badge */}
+      {/* 头部 —— 左上：类型字符 + 名字；右上：状态徽标 */}
       <div className="border-border-strong bg-canvas-deep flex items-center justify-between border-b px-2.5 py-1.5">
         <NodeChip kind={kind} name={displayName} size="sm" />
         <StatusBadge status={status} />

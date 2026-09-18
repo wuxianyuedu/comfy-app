@@ -15,8 +15,8 @@ function isUnreachable(msg: string): boolean {
   );
 }
 
-// (OWASP A04/A05): whitelist image types and cap the size so a
-// malformed upload cannot write arbitrary extensions or exhaust memory.
+// 安全（OWASP A04/A05）：白名单图片类型并限制大小，好让
+// 畸形上传无法写入任意扩展名或耗尽内存。
 
 const ALLOWED_MIME = new Set([
   "image/png",
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
         { status: 503 },
       );
     }
-    // Log other upload errors too
+    // 其它上传错误也记日志
     logger.error(`[upload] ${msg} | file: ${filename}`);
     return NextResponse.json({ error: msg }, { status: 500 });
   }

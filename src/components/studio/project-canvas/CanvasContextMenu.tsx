@@ -12,7 +12,7 @@ interface CanvasContextMenuProps {
   x: number;
   y: number;
   onPick: (kind: NodeKind) => void;
-  /** Spawn a pure-visual Ardot-style test node (no runtime). */
+  /** 放一个纯视觉的 Ardot 风测试节点（无运行时）。 */
   onPickTest: () => void;
   onClose: () => void;
 }

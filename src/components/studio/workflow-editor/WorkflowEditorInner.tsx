@@ -692,10 +692,10 @@ function WorkflowEditorBody({
 
       {/* ── Canvas ── */}
       <div className="relative min-h-0 flex-1">
-        {/* Subgraph drill-in / drill-out overlay: keep the parent graph fully
-         *  visible and only paint a lightweight centered spinner card on top.
-         *  This matches the requested UX: current content unchanged, then a
-         *  loading screen, then the subgraph content. */}
+        {/* 子图下钻 / 上浮遮罩：父图保持完整可见，
+         *  只在上面画一张轻量的居中 spinner 卡片。
+         *  这就是要求的 UX：当前内容不变，然后
+         *  一屏加载，再切到子图内容。 */}
         {subgraphLoading && (
           <div className="bg-canvas-deep pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div className="bg-canvas/90 border-border-strong pointer-events-auto rounded-xl border px-6 py-4 shadow-2xl shadow-black/10 backdrop-blur-sm dark:shadow-black/50">
@@ -729,32 +729,30 @@ function WorkflowEditorBody({
             </div>
           </div>
         )}
-        {/* IO preview side panel.  Renders the same
-         *  DynamicWorkflowForm that CreatePanel / the canvas workflow node
-         *  consume, fed by the **live** `workflowIO` state (not the cached
-         *  server-side enrichment).  This lets the author toggle a
-         *  checkbox on the canvas and immediately see the new row appear
-         *  in the preview, plus rename any row's display label and watch
-         *  it flow back into the persisted selection.  Compact mode to
-         *  match the on-canvas rendering the user will see at run time.
+        {/* IO 预览侧栏。渲染 CreatePanel / 画布工作流节点
+         *  消费的同一个 DynamicWorkflowForm，数据来自**实时的**
+         *  `workflowIO` 状态（不是服务端缓存的富化结果）。这让作者在
+         *  画布上勾一个复选框，就能立刻在预览里看到新行出现，
+         *  还能重命名任何行的显示标签并看到它
+         *  回写到已落盘的选择里。紧凑模式以
+         *  匹配用户在运行时会看到的画布内渲染。
          *
-         *  Position: top-right, ~360px wide, max-h that respects the
-         *  bottom toolbar.  z-30 so it sits above the MiniMap + Controls
-         *  but below the save toast.  Pointer events on the panel itself
-         *  are enabled; the wrapper stays pointer-events:none-equivalent
-         *  only on the padding outside the panel (we use a single flex
-         *  container, so the whole thing is interactive).
+         *  位置：右上角，约 360px 宽，max-h 会避开
+         *  底部工具栏。z-30，压在 MiniMap + Controls
+         *  之上、保存 toast 之下。面板自身的指针事件
+         *  是开着的；包裹层只在面板外侧的留白上等效于
+         *  pointer-events:none（我们用一个 flex
+         *  容器，所以整块都是可交互的）。
          *
-         *  DATA MERGE.  The local `workflowIO` state only
-         *  carries the four identity fields written by toggleIO — it
-         *  does NOT have type/defaultValue/nodeTitle/multiline, those
-         *  come from the server-side enrichment in
-         *  `api/workflows/[id].route.ts`.  Without merging, every freshly
-         *  toggled pin would render as a read-only `link` placeholder
-         *  (controlForEntry falls through to "link" for type "*" with no
-         *  scalar).  Solution: for each key in the local state, prefer
-         *  `detail.workflowIO[key]` (already enriched), and overlay the
-         *  local `label` on top so an un-saved rename wins immediately. */}
+         *  数据合并。本地 `workflowIO` 状态只
+         *  带 toggleIO 写的那四个身份字段 —— 它
+         *  **没有** type/defaultValue/nodeTitle/multiline，那些
+         *  来自 `api/workflows/[id].route.ts` 的服务端富化。
+         *  不合并时，每个新切换的针脚都会渲染成只读的 `link` 占位
+         *  （controlForEntry 对没有标量值的 type "*" 会落到 "link"）。
+         *  解法：对本地状态里的每个 key，优先取
+         *  `detail.workflowIO[key]`（已富化），再把本地 `label`
+         *  叠上去，这样未保存的重命名立即生效。 */}
         {ioPreviewOpen && (
           <WorkflowIoPreviewPanel
             workflowIO={workflowIO}
@@ -815,10 +813,10 @@ function WorkflowEditorBody({
         <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-[11px] text-gray-300 backdrop-blur-sm">
           点击节点查看详情 · 拖拽移动节点位置 · 滚轮缩放
         </div>
-        {/* right-edge canvas settings drawer.  Portaled to
-         *  document.body by the panel itself so it can sit above the
-         *  WorkflowCanvasEditor root overlay stack (`z-50`); rendered
-         *  only when the gear button is clicked. */}
+        {/* 右边缘画布设置抽屉。面板自己把内容 portal 到
+         *  document.body，好让它压在
+         *  WorkflowCanvasEditor 根遮罩栈（`z-50`）之上；只在
+         *  点击齿轮按钮时渲染。 */}
         {canvasSettingsOpen && (
           <CanvasSettingsPanel
             settings={canvasSettings}
@@ -832,8 +830,8 @@ function WorkflowEditorBody({
         {/* 顶部「📋 查看 JSON」触发的全屏 modal。
             派生数据由 `sourceModalData` (useMemo) 给出:
               - 顶层 detail: graph/rawJson 来自 detail
-              - sub 视图: graph 来自 sub-detail, rawJson 切自父
-                rawJson.definitions.subgraphs[uid]
+              - sub 视图: graph 来自 sub-detail, rawJson 切自父级的
+                definitions.subgraphs[uid] 这一项
             关闭则清空 viewJsonOpen。 */}
         {viewJsonOpen && sourceModalData && (
           <SourceModal

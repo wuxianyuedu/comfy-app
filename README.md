@@ -135,7 +135,7 @@ Windows 侧多一层「怎么被拉起」的入口（双击 / `start-tauri*.exe`
 
 | 平台 | 入口 | 平台机制（回收 / 探测） |
 |---|---|---|
-| Windows | `scripts/dev-launcher.ps1`、`tools/start/*.ps1`（双击）、`start-tauri*.exe` | `taskkill /PID <pid> /T /F`（收在 `src/lib/kill-process-tree.ts`） |
+| Windows | `scripts/dev-launcher.ps1`、`tools/start/*.ps1`（双击）、`start-tauri*.exe` | `taskkill /PID <pid> /T /F`（收在 `src/lib/process/kill-process-tree.ts`） |
 | Linux / macOS | `pnpm dev`、`node scripts/dev-launcher.mjs` | POSIX 进程组（`detached` 建组 + 整组信号） |
 
 平台判据只有两处出处（`scripts/launcher-core/**` 与 `kill-process-tree`）：入口与

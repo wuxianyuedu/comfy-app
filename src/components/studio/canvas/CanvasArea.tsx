@@ -19,12 +19,12 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 
-/* ── Canvas Area with Context Menu + Bottom Toolbar ────
-  Wraps content (e.g. WorkflowCanvas) with:
-  - Right-click context menu
-  - Bottom zoom/toolbar strip
-  - Minimap toggle (bottom-left)
-*/
+/* ── 画布区 + 右键菜单 + 底部工具栏 ────
+  给内容（如 WorkflowCanvas）包上：
+  - 右键上下文菜单
+  - 底部缩放 / 工具栏条
+  - minimap 开关（左下角）
+ */
 
 export interface ContextMenuItem {
   id: string;
@@ -50,23 +50,23 @@ const DEFAULT_CONTEXT_MENU: ContextMenuItem[] = [
 
 export interface CanvasAreaProps {
   children: React.ReactNode;
-  /** Custom context menu items */
+  /** 自定义上下文菜单项 */
   contextItems?: ContextMenuItem[];
-  /** On context menu item click */
+  /** 点上下文菜单项时 */
   onContextAction?: (id: string) => void;
   /** Zoom level (0-100) */
   zoom?: number;
-  /** On zoom change */
+  /** 缩放变化时 */
   onZoomChange?: (zoom: number) => void;
-  /** Extra toolbar elements (right side) */
+  /** 额外工具栏元素（右侧） */
   toolbarExtra?: React.ReactNode;
-  /** Show minimap toggle */
+  /** 显示 minimap 开关 */
   showMinimap?: boolean;
-  /** Minimap visible state */
+  /** minimap 可见状态 */
   minimapVisible?: boolean;
-  /** On minimap toggle */
+  /** minimap 开关切换时 */
   onMinimapToggle?: (v: boolean) => void;
-  /** Class name for canvas wrapper */
+  /** 画布包裹层的 class 名 */
   className?: string;
 }
 
@@ -85,7 +85,7 @@ export function CanvasArea({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close menu on click outside
+  // 点击外部时关闭菜单
   useEffect(() => {
     if (!menu) return;
     const handler = () => setMenu(null);
@@ -149,7 +149,7 @@ export function CanvasArea({
       {/* ── Bottom Toolbar ── */}
       <div className="absolute bottom-3 left-1/2 z-50 -translate-x-1/2">
         <div className="border-border-strong bg-panel/95 flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10 backdrop-blur-md">
-          {/* Send / Run button */}
+          {/* 发送 / 运行按钮 */}
           <ToolbarButton
             title="执行"
             onClick={() => onContextAction?.("run")}
@@ -216,7 +216,7 @@ export function CanvasArea({
         </div>
       </div>
 
-      {/* ── Minimap Toggle (bottom-left) ── */}
+      {/* ── Minimap 开关（左下角） ── */}
       {showMinimap && (
         <Button
           variant="outline"

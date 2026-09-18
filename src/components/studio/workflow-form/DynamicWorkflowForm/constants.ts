@@ -7,7 +7,7 @@ import type { ControlKind } from "../../workflow-io";
 export const inputCls =
   "nodrag nopan w-full resize-none rounded-md bg-canvas-deep p-2.5 text-[11px] leading-relaxed text-ink-soft outline-none transition-colors placeholder:text-ink-placeholder focus:ring-1 focus:ring-primary/40";
 
-/** Colour accent per control kind — mirrors the canvas port palette. */
+/** 按控件类型的强调色 —— 镜像画布端口配色。 */
 export const ACCENT: Record<ControlKind, string> = {
   image: "#5BE3C4",
   textarea: "#FF9C5B",

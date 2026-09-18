@@ -72,7 +72,7 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   }, [configQ]);
 
   useEffect(() => {
-    // Defer the initial load out of the effect body (React 19 rule).
+    // 把首次加载延出 effect 体（React 19 规则）。
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);
   }, [load]);

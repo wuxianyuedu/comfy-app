@@ -46,24 +46,24 @@ export interface WorkflowRow {
   id: string;
   name: string;
   taskType: string;
-  /** A workflow may declare multiple modes at once.  When
-   *  absent or empty, the UI falls back to `[taskType]` for display
-   *  (backward compatibility for older rows).  Both `modes` and
-   *  `defaultMode` are returned by GET /api/workflows (persisted to
-   *  prisma.WorkflowTemplate.modes / .defaultMode). */
+  /** 一条工作流可以同时声明多个模式。为空或缺省时，
+   *  UI 退回用 `[taskType]` 展示（兼容老数据）。`modes` 与
+   *  `defaultMode` 由 GET /api/workflows 下发，落库在
+   *  prisma.WorkflowTemplate 的 modes /
+   *  .defaultMode 两个字段。 */
   modes?: string[];
-  /** Canonical default mode code; must be present in `modes`. Kept in sync
-   *  with `taskType` for the legacy single-value filter. */
+  /** 规范默认模式码；必须出现在 `modes` 里。
+   *  与 `taskType` 保持同步，供旧版单值筛选用。 */
   defaultMode?: string | null;
   createdAt: string;
   paramMap?: Record<string, string> | null;
   preview?: WorkflowPreviewT;
-  /** User-curated external IO, returned by GET /api/workflows.
-   *  Used to render the library card when no graph preview is available. */
+  /** 用户维护的对外 IO，由 GET /api/workflows 下发。
+   *  没有图谱预览时用它在库里渲染卡片。 */
   workflowIO?: WorkflowIOMap;
-  /** Model tag names attached to this workflow (user-level
-   *  global tag library, e.g. ["z-image","wan2.2"]).  Returned by
-   *  GET /api/workflows.  Drives the library card chips + model filter. */
+  /** 挂在这条工作流上的模型标签名（来自用户级全局标签库，
+   *  例如 ["z-image","wan2.2"]）。由 GET /api/workflows 下发。
+   *  驱动库卡片的标签与模型筛选。 */
   modelTags?: string[];
   /** 两列各自有没有内容 —— **只用于如实标注**，不判可执行性（raw 与 api
    *  地位同等，见下 `usable`）。 */
@@ -79,40 +79,40 @@ export interface WorkflowRow {
    *  RAW 由 comfy-cli 直接执行（它按节点类定义做权威转换），所以
    *  「只有 rawJson、没有 graph」是完整可用的工作流，不是残缺态。 */
   usable?: boolean;
-  /** "raw" if the user originally imported the UI/raw format (positions
-   *  preserved).  "api" otherwise.  This is kept as a legacy hint — UI
-   *  should prefer `hasApi/hasRaw` since this single tag can't distinguish
-   *  "both" from "only RAW". */
+  /** 用户最初的导入格式是 UI/raw 时为 "raw"（保留节点位置），
+   *  否则为 "api"。这是遗留提示 —— UI 应优先看 `hasApi/hasRaw`，
+   *  因为单个标签分不清「两者都有」和
+   *  「只有 RAW」。 */
   format?: "raw" | "api";
-  /** Absolute path of the on-disk file the workflow was imported from.
-   *  Set by any import that touched a real file (the source-local ⤓ 载入
-   *  card, or future ad-hoc imports).  When set, the server tracks the
-   *  file and re-imports it whenever it changes on disk. */
+  /** 导入来源在磁盘上的绝对路径。
+   *  任何碰到真实文件的导入都会写它（来源本地的 ⤓ 载入
+   *  卡片，或后续临时导入）。写入后服务端跟踪该文件，
+   *  磁盘上一有变化就重新导入。 */
   sourcePath?: string | null;
-  /** Which configured LOCAL_WORKFLOWS_PATH entry (verbatim
-   *  raw path) this file lives under.  The server stamps this on every
-   *  already-imported local workflow.  Same value for all rows from the
-   *  same configured root — used by the card to label "📂 from which
-   *  directory". undefined when the file isn't matched against any root
-   *  (e.g. an older import done before LOCAL_WORKFLOWS_PATH was set). */
+  /** 这个文件落在哪个已配置的 LOCAL_WORKFLOWS_PATH（原样
+   *  路径）下。服务端给每条已导入的本地工作流都盖上这个戳。
+   *  同一个配置根下的所有行取同一个值 —— 卡片用它标注「📂 来自
+   *  哪个目录」。文件没匹配上任何根时为 undefined
+   *  （例如在设置
+   *  LOCAL_WORKFLOWS_PATH 之前完成的旧导入）。 */
   sourceRoot?: string | null;
-  /** Classification: "local" = tied to an on-disk file; "online" = pasted /
-   *  API-only import. Derived from `sourcePath` presence. */
+  /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴 /
+   *  纯 API 导入。由有没有 `sourcePath` 推导。 */
   source?: "local" | "online";
-  /** Manual-sync support.  `diskDirty = (diskMtimeSec >
-   *  sourceMtimeSec)` means the on-disk file changed since the last
-   *  reimport; the card then surfaces a "↻ 同步" action that POSTs to
-   *  /api/workflows/[id]/resync.  All four fields are null/false for
-   *  online rows (no sourcePath). */
+  /** 手动同步支持。`diskDirty = (diskMtimeSec >
+   *  sourceMtimeSec)` 表示磁盘上的文件在上次导入之后被改过；
+   *  卡片据此显示「↻ 同步」动作，POST 到
+   *  /api/workflows/[id]/resync。在线行（没有 sourcePath）
+   *  这四项都为 null/false。 */
   diskDirty?: boolean;
   diskMissing?: boolean;
   diskMtimeSec?: number | null;
   sourceMtimeSec?: number | null;
-  /** The server detected that the source file
-   *  was renamed on disk and automatically re-linked the row to the
-   *  new path.  `diskRenamedTo` is a human-readable "old.json → new.json"
-   *  summary; the UI flashes a one-shot toast so the user knows the
-   *  link silently moved.  null for everything else. */
+  /** 服务端检测到来源文件
+   *  在磁盘上被改名，已自动把该行重新指到新路径。
+   *  `diskRenamedTo` 是给人读的 "old.json → new.json"
+   *  摘要；UI 弹一次性的提示，让用户知道
+   *  这条链接悄悄挪了位置。其余情况为 null。 */
   diskRenamed?: boolean;
   diskRenamedTo?: string | null;
 }
@@ -151,11 +151,11 @@ export function deriveFormatFlags(row: WorkflowRow): {
   };
 }
 
-/* Aggregate the four manual-sync fields into UI booleans.
- *  Online rows (no sourcePath) get `dirty=false, missing=false,
- *  canResync=false`; missing-on-disk rows stay dirty=false but flag
- *  missing so the card can show "📁 文件已不存在" instead of a sync
- *  button. */
+/* 把四个手动同步字段聚合成 UI 用的布尔量。
+ *  在线行（没有 sourcePath）得到 `dirty=false, missing=false,
+ *  canResync=false`；磁盘上已缺失的行仍是 dirty=false，但会置上
+ *  missing，好让卡片显示「📁 文件已不存在」而不是同步按钮。
+ *  按钮。 */
 export function deriveSyncFlags(row: WorkflowRow): {
   dirty: boolean;
   missing: boolean;
@@ -167,13 +167,13 @@ export function deriveSyncFlags(row: WorkflowRow): {
 }
 
 /* ── detectWorkflowFormat：实现已抽到 ~/lib/workflow-format 供服务端复用 ──
- * Implementation lives in ~/lib/workflow-format so the server-side
- * PATCH endpoint can validate the same JSON shape (drag-to-upgrade). */
+ * detectWorkflowFormat：实现已抽到 ~/lib/workflow-format，供服务端复用 ——
+ * 服务端 PATCH 端点要校验同一份 JSON 形态（拖拽升级）。 */
 
-/** ComfyUI default filenames start with a "date_slug" prefix and contain only
- *  lowercase letters / underscores / digits.  When we see such a name we
- *  render it in a slightly different style (code font + brighter color) so
- *  it's easier to read at a glance. */
+/** ComfyUI 的默认文件名以 "date_slug" 前缀开头，且只含
+ *  小写字母 / 下划线 / 数字。见到这种名字时换一种样式渲染
+ *  （等宽字体 + 更亮的颜色），
+ *  扫一眼就能读出来。 */
 export function isTechnicalName(name: string): boolean {
   if (!name) return false;
   if (name.length > 38) return false; // already a descriptive name

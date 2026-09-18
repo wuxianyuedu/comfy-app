@@ -14,7 +14,7 @@ import {
 interface Props {
   shots: Shot[];
   title: string;
-  /** Shot-list owner callback (duration / transition / motion edits). */
+  /** 镜头列表所有者回调（时长 / 转场 / 运动编辑）。 */
   onShotsChange: (shots: Shot[]) => void;
   /** Raised when the user exports the composition plan (成片产出物完成). */
   onRendered: () => void;
@@ -42,10 +42,10 @@ export function motionPromptSuffix(motion: MotionLevel | undefined): string {
 }
 
 /**
- * 成片合成 stage: consumes the shot list produced upstream (imageUrl / clipUrl /
- * duration / transition / dialogue) — pure client-side composition. Provides a
- * sequential preview player, per-shot duration & transition editing, and a
- * composition-plan export (JSON) as the pipeline's final artifact.
+ * 成片合成 stage：消费上游产出的镜头列表（imageUrl / clipUrl /
+ * duration / transition / dialogue）—— 纯客户端合成。提供
+ * 顺序预览播放器、逐镜头时长与转场编辑，以及
+ * 合成方案导出（JSON）作为管线的最终产物。
  */
 export function FinalComposer({
   shots,
@@ -81,7 +81,7 @@ export function FinalComposer({
     };
   }, []);
 
-  /** Advance to the next entry (or stop at the end). */
+  /** 前进到下一条（或到末尾停住）。 */
   function advance() {
     if (imageTimerRef.current) {
       clearTimeout(imageTimerRef.current);
@@ -94,7 +94,7 @@ export function FinalComposer({
       }
       const next = timeline[idx + 1];
       if (next && !next.shot.clipUrl && next.shot.imageUrl) {
-        // Still frame fallback: hold for the shot duration.
+        // 静止帧兜底：按住该镜头时长。
         imageTimerRef.current = setTimeout(
           () => advance(),
           next.duration * 1000,

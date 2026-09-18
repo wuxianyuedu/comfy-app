@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 
-/** Small rectangle that visually mirrors a width/height ratio. */
+/** 用小矩形直观呈现宽高比。 */
 export function RatioIcon({
   ratio,
   className = "",
@@ -46,29 +46,28 @@ export function RatioIcon({
   );
 }
 
-/** Strip a "16:9 横屏" → "16:9" short label for compact triggers and chips. */
+/** 把 "16:9 横屏" 裁成 "16:9" 短标签，供紧凑触发器与 chip 使用。 */
 export function shortRatioLabel(label: string): string {
   return label.split(/\s+/)[0] ?? label;
 }
 
-/** One section inside the multi-segment popover. */
+/** 多段式面板里的一个分组。 */
 export interface SegmentSection<T extends string = string> {
-  /** Section header label (uppercase, e.g. "比例"). */
+  /** 分组标题（大写展示，如「比例」）。 */
   label: string;
-  /** Currently-selected option value (must match one of `options.value`). */
+  /** 当前选中的选项值（必须是 `options.value` 之一）。 */
   value: T;
-  /** Available choices for this section. */
+  /** 本分组的可选项。 */
   options: {
     value: T;
     label: string;
     render?: React.ReactNode;
-    /** optional sub-group label. When two options
-     *  carry different `subgroup` strings, the section renders them in
-     *  separate rows with a small uppercase label between.  Options without
-     *  a subgroup default to a single unlabeled row. */
+    /** 可选的子分组标签。当两个选项带着不同的 `subgroup` 字符串时，
+     *  分组会把它们渲染到不同行，并在行间插一条小号大写标签；
+     *  不带子分组的选项默认落在同一行、不加标签。 */
     subgroup?: string;
   }[];
-  /** Called when the user picks a different option in this section. */
+  /** 用户在本分组中改选其他选项时调用。 */
   onChange: (value: T) => void;
 }
 
@@ -84,13 +83,12 @@ export function MultiSegmentPopover({
   sections: SegmentSection<string>[];
   align?: "left" | "right";
   ariaLabel?: string;
-  /** grey out + block opening while the owning form is disabled. */
+  /** 所属表单禁用时，置灰并阻止打开。 */
   disabled?: boolean;
-  /** optional slot rendered below the sections
-   *  inside the popover card.  Used for the megapixel alignment-multiple
-   *  stepper (a continuous number control that doesn't fit the
-   *  `SegmentSection` shape).  Kept generic so future use-cases (e.g.
-   *  video bitrate / fps override) can ride the same plumbing. */
+  /** 可选插槽，渲染在浮层卡片里各分组的下方。
+   *  用于百万像素「对齐倍数」步进器（一种连续数值控件，不符合
+   *  `SegmentSection` 的形状）。刻意保持通用，好让后续场景
+   *（如视频码率 / 帧率覆盖）复用同一套管线。 */
   footer?: React.ReactNode;
 }) {
   return (
@@ -136,11 +134,9 @@ export function MultiSegmentPopover({
   );
 }
 
-/* split the inner section renderer out so the
- *  (potentially heavy) subgroup grouping only re-runs when its input
- *  actually changes.  The previous inline `.map` rebuilt the Map and
- *  array on every keystroke in CreatePanel, which combined with the
- *  `onChange` callback recreations made switching presets feel sticky. */
+/* 把内部的分组渲染器拆出来，让（可能较重的）子分组归并只在输入真正变化时重跑。
+ *  此前的内联 `.map` 会在 CreatePanel 每敲一次键时重建 Map 与数组；
+ *  叠加 `onChange` 回调每次重建，切换预设会感到发黏。 */
 const Section = React.memo(function Section({
   section,
   first,

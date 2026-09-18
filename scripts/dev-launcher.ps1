@@ -13,7 +13,7 @@ dev-launcher.ps1 — Windows 侧的**调用入口**（编排逻辑不在这里�
 为什么不再自己编排：同一件「拉起一个能用的开发环境」曾有两套实现（Windows 的
 .ps1 与 POSIX 的 .mjs），两套各自演进 → 平台间行为不一致；而「记得同步另一侧」
 全靠自觉，漏同步是静默的。现在平台特有的部分只剩两处，都已收口：
-  · 进程机制（Windows 走 taskkill）→ src/lib/kill-process-tree.ts
+  · 进程机制（Windows 走 taskkill）→ src/lib/process/kill-process-tree.ts
   · 入口形态（双击 .ps1 / 启动器 exe）→ 本文件与 scripts/entry-common.ps1
 
 历史实现（1324 行、19 处 Windows 专属调用）已整体删除：它只作对照用，却会被

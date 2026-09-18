@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/dev/server-id
+ * 端点：GET /api/dev/server-id
  * 返回当前 dev server 进程的 bootId。
  *
  * 这是「真正重启」判定的权威信号：进程每次冷启动重新生成一个 bootId，

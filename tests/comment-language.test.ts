@@ -78,7 +78,7 @@ function seedFactsDoc(modules: string[]): void {
 function seedBaseline(files: Record<string, number>, total: number): void {
   writeFileSync(
     join(workdir, "scripts", ".comment-language-baseline.json"),
-    JSON.stringify({ ruleVersion: 1, total, files }, null, 2),
+    JSON.stringify({ ruleVersion: 2, total, files }, null, 2),
   );
 }
 
@@ -284,6 +284,54 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/url.ts");
   });
 
+  it("JSX 注释块（`{/* … */}`）与块注释同判 —— 英文计入、中文不计入", () => {
+    // 反向锚点 + 正向用例：早期判据只认行首 `/*` / `//`，JSX 注释**从未被扫描**，
+    // 于是那些英文注释既不被统计、也不被拦下（棘轮数字还显示「很干净」）。
+    write(
+      "src/components/Widget.tsx",
+      [
+        "export function Widget() {",
+        "  return (",
+        "    <div>",
+        "      {/* Floating toolbar (center) */}",
+        "      <span />",
+        "      {/* 中文说明 */}",
+        "    </div>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/components/Widget.tsx");
+  });
+
+  it("多行 JSX 注释块的每一行都参与统计（不只看第一行）", () => {
+    write(
+      "src/components/Multi.tsx",
+      [
+        "export function Multi() {",
+        "  return (",
+        "    <div>",
+        "      {/* project-canvas settings (top-right gear). Opens a",
+        "       *  right-edge drawer with the debug toggle. State is shared",
+        "       *  with the workflow editor. */}",
+        "      <span />",
+        "    </div>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    // 三行都含成句英文 → 应统计到 3（只看首行会漏掉两行）
+    expect(r.output).toContain("src/components/Multi.tsx（3 行）");
+  });
+
   it("字符串字面量里的英文不被当成注释", () => {
     write(
       "src/lib/str.ts",
@@ -324,7 +372,7 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
       ),
     ) as { files: Record<string, number>; ruleVersion: number };
     expect(baseline.files["src/lib/legacy.ts"]).toBe(1);
-    expect(baseline.ruleVersion).toBe(1);
+    expect(baseline.ruleVersion).toBe(2);
   });
 });
 

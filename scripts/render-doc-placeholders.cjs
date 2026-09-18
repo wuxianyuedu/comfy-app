@@ -13,7 +13,10 @@
  * 单一事实：真实值只存在于源码/配置（FACTS 提取，见 scripts/doc-facts.cjs），
  * 本脚本运行时动态提取并替换，不硬编码任何值。
  *
- * 用法：`pnpm doc:render`。生成后产物提交到 git，读者直接看 docs/generated/。
+ * 用法：`pnpm doc:render`（写入）。`--check` 只比对不写入（pre-commit 第 26 步）：
+ * 生成态是**提交进 git** 的原文文档，改编辑态却忘了重渲染时，读者看到的就是过期原文
+ * （实测：5 份生成物落后于源、缺整节内容），因此需要一个判据。判据与写入模式共用
+ * `renderDocContent()` 这一份「源 → 生成物」计算，不另写一套比对逻辑。
  * 注意：本文件为自动生成产物，改编辑文档后重新运行本命令即可；请勿手改产物。
  */
 const fs = require("node:fs");
@@ -76,6 +79,18 @@ function generatedPathFor(docRel) {
   return path.join(GENERATED_DOCS_DIR, base);
 }
 
+/** 一份原文文档的内容（写入模式与 `--check` 共用：判据与实现读同一份「源 → 生成物」计算）。 */
+function renderDocContent(docRel, map) {
+  return (
+    bannerFor(docRel) + resolvePlaceholders(stripPlaceholderNote(readText(docRel)), map)
+  );
+}
+
+/** 换行先归一到 LF 再比对：这条判据问的是「内容是否一致」，行尾由 .gitattributes 与 §13.7 管。 */
+function normalizeEol(text) {
+  return text.replace(/\r\n/g, "\n");
+}
+
 function main() {
   const map = buildPlaceholderMap();
   if (!map.size) {
@@ -92,12 +107,8 @@ function main() {
       console.warn(`[doc:render] 跳过不存在的编辑文档：${docRel}`);
       continue;
     }
-    let src = readText(docRel);
-    src = stripPlaceholderNote(src);
-    const resolved = resolvePlaceholders(src, map);
     const outRel = generatedPathFor(docRel);
-    const outAbs = path.join(ROOT, outRel);
-    fs.writeFileSync(outAbs, bannerFor(docRel) + resolved);
+    fs.writeFileSync(path.join(ROOT, outRel), renderDocContent(docRel, map));
     console.log(`[doc:render] 生成 ${outRel}（源：${docRel}）`);
     generated++;
   }
@@ -105,4 +116,63 @@ function main() {
   console.log(`[doc:render] ✓ 已生成 ${generated} 份原文文档到 ${GENERATED_DOCS_DIR}/。`);
 }
 
-main();
+/**
+ * 只比对不写入：生成态是否等于「当前源 + 当前占位符事实」渲染出来的内容。
+ *
+ * 三个方向都要报，否则漏掉的那一类会静默留在产物目录里：
+ *   · 落后 —— 源改了没重渲染（实测 5 份缺整节内容，读者看的是生成物）；
+ *   · 缺失 —— 源在 SCOPED_DOCS 里但生成物不在（如新登记文档忘了生成）；
+ *   · 多余 —— 生成物在但源已不在 SCOPED_DOCS（源删了/改名了）。
+ */
+function check() {
+  const tag = "[doc:render --check]";
+  const map = buildPlaceholderMap();
+  if (!map.size) {
+    console.error(`${tag} 未找到任何占位符事实，判据无法成立。`);
+    process.exit(1);
+  }
+
+  const outDir = path.join(ROOT, GENERATED_DOCS_DIR);
+  const drifted = [];
+  const missing = [];
+  const expected = new Set();
+
+  for (const docRel of SCOPED_DOCS) {
+    if (!exists(docRel)) continue; // 源不在了：交给下面的「多余生成物」报
+    const outRel = generatedPathFor(docRel);
+    expected.add(path.basename(outRel));
+    const outAbs = path.join(ROOT, outRel);
+    if (!fs.existsSync(outAbs)) {
+      missing.push({ outRel, docRel });
+      continue;
+    }
+    const want = normalizeEol(renderDocContent(docRel, map));
+    const got = normalizeEol(fs.readFileSync(outAbs, "utf8"));
+    if (got !== want) drifted.push({ outRel, docRel });
+  }
+
+  const orphans = fs.existsSync(outDir)
+    ? fs
+        .readdirSync(outDir)
+        .filter((name) => name.endsWith(".md") && !expected.has(name))
+        .map((name) => `${GENERATED_DOCS_DIR}/${name}`)
+    : [];
+
+  if (!drifted.length && !missing.length && !orphans.length) {
+    console.log(`${tag} ✓ 生成态文档与源一致（${expected.size} 份）。`);
+    return;
+  }
+
+  console.error(`${tag} ✗ 生成态文档与源不一致：`);
+  for (const d of drifted) console.error(`  · ${d.outRel} 落后于源 ${d.docRel}`);
+  for (const m of missing) console.error(`  · ${m.outRel} 缺失（源仍在 SCOPED_DOCS 里）`);
+  for (const o of orphans) console.error(`  · ${o} 多余（对应源已不在 SCOPED_DOCS）`);
+  console.error(`${tag} 修法：pnpm doc:render 后把重渲染结果一并提交（不要手改生成物）。`);
+  process.exit(1);
+}
+
+if (process.argv.includes("--check")) {
+  check();
+} else {
+  main();
+}

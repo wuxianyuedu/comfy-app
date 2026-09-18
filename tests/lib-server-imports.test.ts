@@ -194,7 +194,7 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
     // 从源码串解析到仓库内的 server 目标。
     const probe = `
       import { getSession } from "~/server/better-auth/server";
-      // import { logger } from "~/server/lib/logger";
+      // 曾经这样写：import { logger } from "~/server/lib/logger";
     `;
     const specs = [...stripComments(probe).matchAll(SPECIFIER_RE)].map((m) => m[1]);
     expect(specs, "解析器必须能认出 from 说明符").toEqual([

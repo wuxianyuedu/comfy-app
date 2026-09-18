@@ -16,7 +16,7 @@ const MOTIONS: MotionLevel[] = ["low", "medium", "high"];
 
 type Channel = "local" | "api";
 
-/* ── Channel switch (local ComfyUI / configured API) + gating hints ── */
+/* ── 通道切换（本地 ComfyUI / 配置的 API）+ 放行提示 ── */
 export function ChannelSwitch({
   channel,
   onChannelChange,
@@ -118,7 +118,7 @@ export function ChannelSwitch({
         </Button>
       </div>
 
-      {/* Channel-specific gating hints (gentle, stage stays usable) */}
+      {/* 通道专属的放行提示（温和，stage 仍可用） */}
       {channel === "local" && (
         <div className="text-muted-foreground bg-subtle rounded-lg px-3 py-2 text-xs">
           {workflowSelected
@@ -137,7 +137,7 @@ export function ChannelSwitch({
   );
 }
 
-/* ── Status pill for a shot's clip generation ── */
+/* ── 某镜头片段生成的状态药丸 ── */
 export function ClipBadge({
   status,
 }: {
@@ -176,7 +176,7 @@ export function ClipBadge({
   );
 }
 
-/* ── One shot row: first frame, prompt, duration/motion controls, generate ── */
+/* ── 单个镜头行：首帧、提示词、时长 / 运动控件、生成 ── */
 export function ShotCard({
   shot,
   progress,

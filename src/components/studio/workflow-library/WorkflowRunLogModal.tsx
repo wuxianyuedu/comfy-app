@@ -268,7 +268,7 @@ export function WorkflowRunLogModal({
           </div>
         </div>
 
-        {/* Level filter bar */}
+        {/* 级别筛选栏 */}
         <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
           <div className="flex items-center gap-1">
             {FILTER_LABELS.map((option) => {

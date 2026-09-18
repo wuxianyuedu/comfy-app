@@ -15,16 +15,16 @@ export function StringTextarea({
     const ta = ref.current;
     if (!ta) return;
     if (!hasSize) {
-      // Content-sized node: textarea decides its own height, capped at
-      // content. No 96px cap: a multi-line prompt must stay
-      // fully visible instead of being clipped behind the row's other
-      // half.  `auto` first so the browser can compute the new
-      // scrollHeight after the value changes.
+      // 内容自适应高度：textarea 自己决定高度，以内容封顶。
+      // 不设 96px 上限：多行提示词必须完整
+      // 可见，而不是被裁在行的另一半之后。
+      // 先置 `auto`，好让浏览器能在取值变化后算出新的
+      // scrollHeight。
       ta.style.height = "auto";
       ta.style.height = ta.scrollHeight + "px";
     }
-    // hasSize: height is owned by the flex chain (the parent's `flex-1` +
-    // `min-h-0`); leave the textarea inline style untouched so CSS wins.
+    // hasSize：高度归 flex 链所有（父级的 `flex-1` +
+    // `min-h-0`）；不动 textarea 的内联样式，让 CSS 胜出。
   }, [value, hasSize]);
   return (
     <textarea
@@ -38,18 +38,18 @@ export function StringTextarea({
         (mono ? " font-mono" : "")
       }
       style={{
-        /* `width: 100%` claims every pixel the row's flexbox gives us.
-         * `flex: 1 1 0` + `minHeight: 0` joins the row's flex chain in
-         *  the hasSize path — the textarea fills the STRING row's
-         *  remaining vertical space (vertical stacked). had
-         *  `maxHeight: 96` here; removed because it capped a 12-line
-         *  prompt behind the row's other half and was the "内容不可
-         *  自适应高度，不铺满可用空间" the user reported.
-         * `minWidth: 0` overrides the default `min-width: auto` so a
-         *  very wide prompt line can ellipsize on the cross axis instead
-         *  of pushing the label off-screen.  (Irrelevant now that the
-         *  label sits on its own row above, but kept as defensive.)
-         * `overflowY: "auto"` lets any leftover content scroll. */
+        /* `width: 100%` 占住行内 flexbox 给我们的每个像素。
+         * `flex: 1 1 0` + `minHeight: 0` 在 hasSize 路径上接入行的 flex 链
+         *  —— textarea 填满 STRING 行
+         *  剩余的竖向空间（竖向堆叠）。此前这里
+         *  有 `maxHeight: 96`；已移除，因为它会把 12 行
+         *  提示词裁在行的另一半之后，正是用户报的
+         *  「内容不可自适应高度，不铺满可用空间」。
+         * `minWidth: 0` 覆盖默认的 `min-width: auto`，好让
+         *  极宽的提示词行在交叉轴上省略
+         *  而不是把标签顶出屏幕。（标签已单独占一行，此条
+         *  现在无关紧要，但保留作防御。）
+         * `overflowY: "auto"` 让多余内容可滚动。 */
         width: "100%",
         flex: "1 1 0",
         minHeight: 0,

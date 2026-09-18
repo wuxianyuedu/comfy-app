@@ -10,9 +10,9 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 
-/** Seed modes — ComfyUI `control_after_generate` mapping.  Each entry has the
- *  ComfyUI value, the Chinese label, and a two-line description used in the
- *  popover (mirrors the Ardot "控件后行为" 4-option panel). */
+/** seed 模式 —— ComfyUI `control_after_generate` 的映射。每条含
+ *  ComfyUI 取值、中文标签，以及浮层里用的两行说明
+ *（对应 Ardot「控件后行为」四选项面板）。 */
 const SEED_MODES: { value: string; label: string; hint: string }[] = [
   { value: "fixed", label: "固定值", hint: "数值不变" },
   { value: "increment", label: "递增值", hint: "数值+1 或切换到下一个选项" },
@@ -20,23 +20,23 @@ const SEED_MODES: { value: string; label: string; hint: string }[] = [
   { value: "random", label: "随机值", hint: "每次运行后随机化该值" },
 ];
 
-/** Seed-like widget input? (KSampler / custom node seed pins). */
+/** 是不是 seed 类 widget 输入？（KSampler / 自定义节点的 seed 针脚）。 */
 
 export function isSeedLike(e: { name: string; label?: string }): boolean {
   return /seed|noise_seed/i.test(`${e.name} ${e.label ?? ""}`);
 }
 
-/** Inline glyph for the seed-mode popover (Ardot 4-option panel).
- *  Geometric, no font dependency — drawn with SVG inside a 36×36 box with
- *  the same dark fill as the WorkflowChipRow chips.
+/** seed 模式浮层（Ardot 四选项面板）里的行内图形。
+ *  纯几何、不依赖字体 —— 用 SVG 画在 36×36 的盒子里，
+ *  底色与 WorkflowChipRow 的 chip 一致。
  *
  *  配色（`#FF6B6B` / `#67E89D` / 深底 `#16161C` 等）属**类型色例外**
  *  （规范 03 §3.6.1）：色值即「哪一种 seed 行为」的语义，不是表面色，
  *  已逐条登记在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES`。 */
 function SeedModeIcon({ value }: { value: string }) {
-  // 36x36 viewBox, ~22x22 glyph centered.
+  // 36x36 的 viewBox，图形约 22x22 居中。
   if (value === "fixed") {
-    // 📌 Pin (rounded square cap + diagonal stem with dot).
+    // 📌 图钉（圆角方帽 + 带点的斜杆）。
     return (
       <svg
         width="22"
@@ -102,7 +102,7 @@ function SeedModeIcon({ value }: { value: string }) {
       </svg>
     );
   }
-  // random (dice)
+  // 随机（骰子）
   return (
     <svg
       width="22"
@@ -130,11 +130,10 @@ function SeedModeIcon({ value }: { value: string }) {
   );
 }
 
-/** Clickable seed-mode chip (canvas node → inline on numeric/seed row).
- *  Click toggles a 4-option "控件后行为" popover aligned with the Ardot
- *  design (dark card, icon + title + hint, radio dot on the right).  Picking
- *  an option calls `onPick` which the canvas layer writes back to the
- *  node's `seedModes` map.
+/** 可点击的 seed 模式 chip（画布节点 → 数值 / seed 行内联）。
+ *  点击展开与 Ardot 设计对齐的四选项「控件后行为」浮层
+ *（深色卡片、图标 + 标题 + 提示、右侧单选圆点）。选中某项会调用 `onPick`，
+ *  由画布层写回节点的 `seedModes` 映射。
  *
  *  浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里自搓了
  *  `createPortal` + 手写 fixed 定位（`placeFloating`）+ 遮罩 + 滚动重定位 +

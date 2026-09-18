@@ -7,25 +7,25 @@ import { Button } from "~/components/ui/button";
 export type CanvasPanelType = "materials" | "history" | null;
 
 interface CanvasPanelToolbarProps {
-  /** Currently open panel (null = none) */
+  /** 当前打开的面板（null = 无） */
   active: CanvasPanelType;
-  /** Called when user toggles a panel */
+  /** 用户切换面板时调用 */
   onSelect: (panel: CanvasPanelType) => void;
   /**
-   * When true: renders as a floating absolute-positioned element in the canvas
-   * (used when no panel is open).
-   * When false: renders as an inline flex child (used inside the panel container,
-   *  vertically centered alongside the panel).
+   * 为 true 时：渲染成画布内绝对定位的浮动元素
+   *（没有面板打开时用）。
+   * 为 false 时：渲染成行内 flex 子元素（用在面板容器内部，
+   *  与面板竖向居中并排）。
    */
   floating?: boolean;
 }
 
 /**
- * Vertical toolbar for toggling material-library / history panels.
+ * 竖向工具栏，用于切换素材库 / 历史面板。
  *
- * Two modes:
- * - **Floating** (`floating=true`, default): absolutely positioned in canvas at left-3.
- * - **Inline** (`floating=false`): normal flex child, sits to the left of the open panel.
+ * 两种模式：
+ * - **浮动**（`floating=true`，默认）：绝对定位在画布 left-3。
+ * - **行内**（`floating=false`）：普通 flex 子元素，坐在打开的面板左侧。
  */
 export function CanvasPanelToolbar({
   active,
@@ -69,7 +69,7 @@ export function CanvasPanelToolbar({
             }`}
           >
             {item.icon}
-            {/* Tooltip — show right of button on hover or when active */}
+            {/* Tooltip —— 悬停或激活时显示在按钮右侧 */}
             <span
               className={`border-border-strong bg-panel/95 text-ink-soft pointer-events-none absolute left-full ml-2.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium whitespace-nowrap shadow-xl shadow-black/40 backdrop-blur-sm transition-opacity ${
                 isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"

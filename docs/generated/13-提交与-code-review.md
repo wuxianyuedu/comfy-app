@@ -142,7 +142,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 理由见上面 `⚠️` 那段。
 
 ```
-本地提交前必须通过（.githooks/pre-commit，25 步）：
+本地提交前必须通过（.githooks/pre-commit，26 步）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
@@ -165,6 +165,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 ✅ vitest run tests/lib-node-only-declarations.test.ts # src/lib Node-only 声明（见 18 §18.4）
 ✅ node scripts/check-format.cjs             # prettier 格式棘轮（见下 13.5.1）
 ✅ node scripts/check-reformat-only.cjs      # 格式化提交与行为改动分离（见下 13.5.2）
+✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
@@ -374,12 +375,34 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 **边界（不要做过头）**：
 
 - **这不是把门禁从本地搬回平台**。机器判据仍然只在 `.githooks/pre-commit`
-  （13.5 的清单，24 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
+  （13.5 的清单，26 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
 - **不要为它写 `.cnb.yml`**。`pull_request` / `push` 类事件是**无条件执行**的，
   写下去就又回到 13.5.3 的额度结论；「每天只跑一次」这种节流平台也不支持
   （无「今天跑过就跳过」的判据，见 13.5.3）。
 - **不要在自动触发的流水线里 `@` NPC**：`@` 是**人的动作**。把它写进流水线
   等于按事件触发，绕回被删掉的形态。
+
+#### 13.5.5 生成态文档与源同步（`node scripts/render-doc-placeholders.cjs --check`）
+
+`docs/generated/**` 是**提交进 git** 的原文文档（把 `{{…}}` 占位符替换成真实值，供直接
+阅读），由 `pnpm doc:render` 从编辑态重渲染。**读者看的是它，而它此前没有任何判据**：
+改了编辑文档却忘了重渲染，生成物就静默过期 —— 实测 5 份落后于源、缺整节内容
+（如 `12-代码组织与文件结构.md` 的 §12.4.6），而这类差异在 `pnpm doc:check` 眼里是
+「编辑态文档一切正确」，两个判据管的不是同一件事。
+
+判据排在 `.githooks/pre-commit` 第 26 步，与写入模式**共用同一份「源 → 生成物」计算**
+（`scripts/render-doc-placeholders.cjs` 的 `renderDocContent()`，只比对不写入）。
+报三个方向 —— 少报任何一个，漏掉的那类都会静默留在产物目录里：
+
+| 方向 | 含义 | 典型来因 |
+| --- | --- | --- |
+| **落后** | 生成物 ≠ 用当前源渲染出的内容 | 改了编辑文档却没重渲染（最常见） |
+| **缺失** | 源在 `SCOPED_DOCS` 里、生成物不存在 | 新登记文档忘了生成 |
+| **多余** | 生成物在、对应源已不在 `SCOPED_DOCS` | 源被删 / 改名后留下的孤儿 |
+
+修法：`pnpm doc:render` 后把重渲染结果**一并提交**（不要手改生成物）。比对前把换行
+归一到 LF —— 这条判据问的是「内容是否一致」，行尾由 `.gitattributes` 与 §13.7 负责，
+两件事不混在一处。
 
 ### 13.6 分支与合并策略
 

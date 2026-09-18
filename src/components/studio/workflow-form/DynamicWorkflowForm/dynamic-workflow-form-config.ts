@@ -10,30 +10,30 @@ import type {
 } from "~/components/studio/workflow-io";
 
 export interface DynamicWorkflowFormProps {
-  /** Enriched workflowIO map from GET /api/workflows/[id]. */
+  /** 来自 GET /api/workflows/[id] 的富化 workflowIO 表。 */
   io: WorkflowIOMap | null | undefined;
-  /** Current values, keyed by ioKey. */
+  /** 当前取值，按 ioKey 索引。 */
   values: Record<string, unknown>;
-  /** Receives the full next value map (caller owns the state). */
+  /** 接收完整的新值表（状态归调用方所有）。 */
   onChange: (next: Record<string, unknown>) => void;
   loading?: boolean;
   disabled?: boolean;
-  /** Tighter spacing + single column, for the 300px-wide canvas node. */
+  /** 更紧的间距 + 单列，适配 300px 宽的画布节点。 */
   compact?: boolean;
-  /** Render the "此工作流输出" strip below the inputs. */
+  /** 在输入下方渲染「此工作流输出」条。 */
   showOutputs?: boolean;
-  /** Override the hint shown when the workflow exposes no input pins. */
+  /** 覆盖工作流没有暴露输入针脚时显示的提示。 */
   emptyHint?: ReactNode;
-  /** When set, each input row's label becomes click-to-edit (pencil icon →
-   *  click → inline <input> → blur / Enter commits).  The new label is
-   *  written into `workflowIO[key].label`, where `key` is the ioKey — the
-   *  IO-edit preview panel's UX: the author sees exactly what the form will
-   *  look like and can rename each pin in-place. */
+  /** 设置后，每个输入行的标签变成可点击编辑（铅笔图标 →
+   *  点击 → 内联 <input> → blur / Enter 提交）。新标签写进
+   *  `workflowIO[key].label`，其中 `key` 是 ioKey —— 这是
+   *  IO 编辑预览面板的 UX：作者看到表单最终长什么样，
+   *  并能就地重命名每个针脚。 */
   onLabelChange?: (ioKey: string, label: string) => void;
-  /** When set, every widget row gets a "必填 / 可选" toggle button next to
-   *  the label.  Clicking it flips `workflowIO[ioKey].required`.  Required
-   *  rows that are still empty render the input with a red border to keep
-   *  the author honest — the IO-edit-mode counterpart of `onLabelChange`. */
+  /** 设置后，每个 widget 行在标签旁得到「必填 / 可选」切换按钮。
+   *  点击它翻转 `workflowIO[ioKey].required`。仍为空的必填
+   *  行会把输入渲染成红边框，逼作者面对 —— 这是
+   *  IO 编辑模式下 `onLabelChange` 的对应物。 */
   onRequiredChange?: (ioKey: string, required: boolean) => void;
   /** IO 编辑态：每行渲染 👁 切换「该参数在 visibilityMode 模式下是否可见」，
    *  写入 `workflowIO[ioKey].modes[visibilityMode].visible`（按模式保留）。
@@ -42,27 +42,27 @@ export interface DynamicWorkflowFormProps {
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
   /** IO 编辑预览置 true：隐藏行不过滤、置灰呈现（作者靠 👁 恢复显示）。 */
   showHiddenInMode?: boolean;
-  /** Canvas-only: per-pin seed "control after generate" mode, keyed by
-   *  ioKey.  Rendered as a clickable chip on seed-like int rows so the user
-   *  can pick fixed / increment / decrement / random without leaving the
-   *  node. */
+  /** 仅画布：每针脚的 seed「生成后控制」模式，按
+   *  ioKey 索引。在类 seed 的 int 行上渲染成可点击的章，让用户
+   *  不离开节点就能选 固定 / 递增 / 递减 / 随机。
+   *  模式值经 onSeedModeChange 上抛。 */
   seedModes?: Record<string, string>;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
-  /** When set, rows in the rendered list become drag-to-reorder: the author
-   *  picks up a row by its drag handle and drops it onto another row to
-   *  insert immediately before it.  The callback receives
-   *  `(fromKey, beforeKey | null)`, where `beforeKey === null` signals "send
-   *  to the tail of the same group".  The consumer (typically the IO-edit
-   *  preview panel) is responsible for renumbering `displayOrder` and
-   *  persisting — we only emit the intent here so this component stays free
-   *  of persistence concerns.  Not provided = rows are non-draggable
-   *  (read-only surfaces like CreatePanel, WorkflowLibrary, canvas
-   *  `workflow` node). */
+  /** 设置后，渲染列表里的行变成可拖拽重排：作者
+   *  用拖拽把手拎起一行，放到另一行上，就插到它
+   *  之前。回调收到
+   *  `(fromKey, beforeKey | null)`，其中 `beforeKey === null` 表示「送到
+   *  同组末尾」。消费方（通常是 IO 编辑
+   *  预览面板）负责重排 `displayOrder` 序号并
+   *  落盘 —— 这里只发意图，好让本组件不背
+   *  持久化的包袱。不传 = 行不可拖
+   *（只读场景如 CreatePanel、WorkflowLibrary、画布的
+   *  `workflow` 节点）。 */
   onReorder?: (fromKey: string, beforeKey: string | null) => void;
-  /** Owning workflow id — scopes the user's chosen group fill-paradigm
-   *  (分别填写 ⇄ 比例+清晰度 / 时长+画质+比例) in localStorage so the
-   *  preference survives reloads.  Omit to fall back to a per-browser
-   *  global key. */
+  /** 宿主工作流 id —— 把用户选的分组填写范式
+   *（分别填写 ⇄ 比例+清晰度 / 时长+画质+比例）限定在 localStorage 作用域，好让
+   *  这个偏好扛过重新加载。省略则回落到按浏览器的
+   *  全局 key。 */
   workflowId?: string;
   /** 多模式：当前模式码。传入后表单只渲染该模式下
    *  `visible !== false` 的参数行；默认值由调用方用
@@ -79,19 +79,19 @@ export interface DynamicWorkflowFormProps {
    *  缺省不渲染：画布节点 / CreatePanel / 表单预览的观感一律不变。 */
   rowTrailing?: (entry: EnrichedWidget) => ReactNode;
 }
-
-/** ComfyUI types that render as connectable port rows instead of generic
- *  widget rows, so they keep the canvas' single-line 33h layout (with
- *  SeedModeButton injected by `WirePortRows`). */
+/** ComfyUI 里渲染成可连接端口行而不是通用
+ *  widget 行的类型，好让它们保持画布的单行 33h 布局（由
+ *  `WirePortRows` 注入 SeedModeButton）。
+ *  这些类型同时用于数值校验。 */
 const NUMERIC_TYPES = new Set(["INT", "FLOAT", "NUMBER"]);
 
 export function isNumericWidget(entry: EnrichedWidget): boolean {
   return NUMERIC_TYPES.has((entry.type ?? "").toUpperCase());
 }
-
-/** When the backend type is missing/unknown, fall back to a chip that matches
- *  the control we actually render so the badge stays honest about the row's
- *  edit semantics (e.g. textarea → STRING instead of INT). */
+/** 后端类型缺失 / 未知时，回落到与实际渲染的控件相匹配
+ *  的章，好让徽标对该行
+ *  编辑语义的标注保持诚实
+ *（如 textarea → STRING 而不是 INT）。 */
 export function controlTypeFallback(control: ControlKind): string {
   switch (control) {
     case "textarea":

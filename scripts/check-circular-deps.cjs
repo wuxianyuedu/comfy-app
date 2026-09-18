@@ -98,7 +98,7 @@ function resolveSpec(spec, fromFile) {
 function depsOf(file) {
   const src = stripComments(fs.readFileSync(file, "utf8"));
   const deps = new Set();
-  // import ... from "x" / export ... from "x"
+  // 匹配 import … from "x" 与 export … from "x"
   const fromRe = /(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+["']([^"']+)["']/g;
   // 裸副作用 import "x"
   const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;

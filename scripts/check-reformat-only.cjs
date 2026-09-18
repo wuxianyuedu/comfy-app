@@ -51,7 +51,7 @@
  *
  * 用法:
  *   node scripts/check-reformat-only.cjs            # 判暂存区；无暂存改动则判 HEAD
- *   node scripts/check-reformat-only.cjs --range A..B
+ * 用法示例：node scripts/check-reformat-only.cjs --range A..B
  *   node scripts/check-reformat-only.cjs --strict   # 阈值降为 1(排查/盘点用)
  */
 const fs = require("node:fs");

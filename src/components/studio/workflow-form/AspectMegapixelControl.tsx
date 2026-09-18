@@ -11,10 +11,10 @@
  *     「百万像素 + 倍数」写下去；
  *   · 「百万像素」（1M/2M/4M）：直接写该档位的总像素量，倍数保持不变。
  *
- * When ComfyUI is reachable the curated pin carries `options`, and we render
- * those verbatim (highlighting still works because we parse the ratio out of
- * each option string).  When it isn't (the type/options are missing from the
- * stored IO map) we fall back to the built-in `ASPECT_RATIO_LABEL_PRESETS`. */
+ * ComfyUI 可达时，精选针脚带 `options`，我们
+ * 原样渲染它们（高亮仍有效，因为我们从
+ * 每个选项串里解析出比例）。不可达时（存储的 IO 表里缺 type/options）
+ * 回落到内置的 `ASPECT_RATIO_LABEL_PRESETS`。 */
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -84,8 +84,8 @@ export function AspectMegapixelControl({
   const [tableOpen, setTableOpen] = useState(false);
 
   const rawAspect = values[aspect.ioKey];
-  /* Only primitives are safe to stringify — an object value would render as
-   *  "[object Object]" and break the preset reverse-detection below. */
+  /* 只有基本类型才安全 stringify —— 对象值会渲染成
+   *  "[object Object]" 并破坏下面的预设反检测。 */
   const currentAspect =
     typeof rawAspect === "string"
       ? rawAspect
@@ -95,7 +95,7 @@ export function AspectMegapixelControl({
   const currentMp =
     Number(values[megapixels.ioKey] ?? megapixels.defaultValue ?? 1) || 1;
 
-  /** Candidate chips: the node's own COMBO options when available. */
+  /** 候选章：节点自己的 COMBO 选项（可用时）。 */
   const aspectOptions = useMemo((): {
     value: string;
     label: string;
@@ -115,7 +115,7 @@ export function AspectMegapixelControl({
     });
   }, [aspect.options]);
 
-  /** Reverse-detect the active chip so a hand-typed value still highlights. */
+  /** 反检测活跃章，好让手打的值也能高亮。 */
   const activeAspect = useMemo(() => {
     const exact = aspectOptions.find(
       (option) => option.value === currentAspect,
@@ -221,9 +221,9 @@ export function AspectMegapixelControl({
     [currentMultiple],
   );
 
-  /* Preserve the workflow's own spelling when the user only changes the
-   * megapixel count — writing a preset string into a node that spells the
-   * option differently would silently blank the pin. */
+  /* 用户只改百万像素数时，保留工作流自己的写法 ——
+   * 往一个把选项写成别的拼法的节点里写预设串
+   * 会静默清空该针脚。 */
   const apply = useCallback(
     (nextAspect: string, nextMp: number, nextMultiple?: number) => {
       setMany({

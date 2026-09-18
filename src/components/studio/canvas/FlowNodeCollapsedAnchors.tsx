@@ -1,10 +1,10 @@
 "use client";
-/* Collapsed-mode handle anchors — extracted from workflow-node.tsx.
- * When a node is collapsed the body is hidden but wires still need an
- * anchor.  Each side collapses to a decorative "cylinder" (a tall pill);
- * underneath it we keep the per-port <Handle> stack as tiny invisible
- * anchors so every wire's id ties to its own anchor and edges never detach
- * when toggling. */
+/* 折叠态句柄锚点 —— 从 workflow-node.tsx 抽出。
+ * 节点折叠时卡片体隐藏，但连线仍需锚点。每侧
+ * 塌缩成一根装饰性「圆柱」（一颗高药丸）；
+ * 底下保留逐端口 <Handle> 栈作为极小的不可见
+ * 锚点，好让每条线的 id 绑到各自的锚点，切换时
+ * 边永不脱落。 */
 import { Handle, Position } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { portColor } from "~/lib/comfyui/types";
@@ -22,13 +22,13 @@ export function FlowNodeCollapsedAnchors({
   orderedEntries,
   outputs,
 }: FlowNodeCollapsedAnchorsProps) {
-  // Connected inputs (wire tuple `[]`) and connected outputs stay anchored.
+  // 已连线的输入（连线元组 `[]`）与已连线的输出保持锚定。
   const connectedInputs = orderedEntries.filter(([, v]) => Array.isArray(v));
   const connectedOutputs = outputs.filter(([n]) =>
     data.connectedOutputs?.has(n),
   );
-  // Cylinder visual height scales with port count, clamped 16px..64px so
-  // it never bleeds past the icon/title bar.
+  // 圆柱视觉高度随端口数缩放，夹在 16px..64px 之间，
+  // 好让它永不盖过图标 / 标题栏。
   const cylH = (count: number) => Math.min(64, Math.max(16, 12 + count * 4));
   /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
   const { resolvedTheme } = useTheme();
@@ -36,9 +36,9 @@ export function FlowNodeCollapsedAnchors({
 
   return (
     <>
-      {/* LEFT cylinder — only when there are connected inputs.  Opaque
-       *  gray gradient sits on top of the wires (zIndex:10) so the user
-       *  can see "my ports are here" on a busy canvas. */}
+      {/* 左圆柱 —— 仅当有已连线输入时。不透明的
+       *  灰色渐变压在连线之上（zIndex:10），好让用户
+       *  在繁忙画布上看出「我的端口在这里」。 */}
       {connectedInputs.length > 0 && (
         <div
           aria-hidden
@@ -57,8 +57,8 @@ export function FlowNodeCollapsedAnchors({
           }}
         />
       )}
-      {/* RIGHT cylinder — whenever the node declares an output (ComfyUI's
-       *  "outputs always visible" rule). */}
+      {/* 右圆柱 —— 只要节点声明了输出就画（ComfyUI 的
+       *  「输出始终可见」规则）。 */}
       {outputs.length > 0 && (
         <div
           aria-hidden
@@ -78,9 +78,9 @@ export function FlowNodeCollapsedAnchors({
         />
       )}
 
-      {/* Invisible per-port Handles — wires anchor here so live edge
-       *  geometry never breaks when toggling collapse.  Hidden via
-       *  opacity:0 but `isConnectable:false` to avoid accidental wires. */}
+      {/* 不可见的逐端口 Handle —— 连线锚在这里，好让活边
+       *  几何在切换折叠时永不破坏。经
+       *  opacity:0 隐藏，但 `isConnectable:false` 以免误连线。 */}
       {connectedInputs.map(([k], idx) => {
         const inputType =
           data.rawInputs?.find((raw) => raw.name === k)?.type ?? "*";
