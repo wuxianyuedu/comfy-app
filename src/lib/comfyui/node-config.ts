@@ -25,16 +25,16 @@ export interface FieldDef {
   multiline?: boolean; // for text type
   hidden?: boolean; // don't show in editor (e.g. internal wiring)
   group?: string; // section grouping
-  /** Numeric bounds (mirrors ComfyUI INPUT_TYPES min/max/step). */
+  /* 数值上下界（与 ComfyUI INPUT_TYPES 的 min/max/step 对齐）。 */
   min?: number;
   max?: number;
   step?: number;
-  /** Model folder for file dropdowns (checkpoints/loras/vae/...). When set and
-   *  a matching list is supplied, the editor renders a real file <select>. */
+  /* 文件下拉框对应的模型目录（checkpoints / loras / vae 等）。设置它、
+   *  并给出匹配的文件列表时，编辑器会渲染真正的文件 <select> 控件。 */
   modelFolder?: string;
 }
 
-/* ── Port spec (from custom-node manifest) ── */
+/* ── 端口规格（来自自定义节点的 manifest） ── */
 export interface PortSpec {
   name: string; // input/output name
   type: string; // e.g. "FLOAT" | "IMAGE" | "COMBO" ...
@@ -44,7 +44,7 @@ export interface PortSpec {
   required: boolean;
 }
 
-/* ── Node type registry — maps class_type → display info + field specs ── */
+/* ── 节点类型注册表 —— 把 class_type 映射到展示信息与字段规格 ── */
 export interface NodeTypeConfig {
   label: string; // default Chinese label
   color: string; // accent color (CSS var or hex)
@@ -61,7 +61,7 @@ export interface NodeTypeConfig {
   defaultFields: FieldDef[];
   width: number; // node card width in px
   height: number; // min height
-  /* custom-node support (populated from customNodes manifest) */
+  /* 自定义节点支持（从 customNodes manifest 填充） */
   custom?: boolean;
   rawCategory?: string; // original ComfyUI category string
   inputsSpec?: PortSpec[];
