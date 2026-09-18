@@ -66,10 +66,10 @@ export function isEdgeHandleCullingNoise(args: {
   return !mountedNodeIds.has(sourceId) || !mountedNodeIds.has(targetId);
 }
 
-/* Role key → minimap colour.  Hoisted to a module-level Map so the MiniMap
- *  `nodeColor` callback can stay referentially stable (empty useCallback
- *  deps): MiniMap only re-runs it while painting, and never re-renders
- *  because of a fresh callback identity. */
+/* 角色 key → minimap 颜色。提到模块级 Map，好让 MiniMap
+ *  的 `nodeColor` 回调保持引用稳定（useCallback 空
+ *  deps）：MiniMap 只在绘制时调用它，不会因为回调换了
+ *  引用而重新渲染。 */
 const ROLE_COLOR_BY_KEY = new Map(PORT_ROLES.map((r) => [r.key, r.color]));
 
 /* 默认连线选项（模块级常量，避免每次渲染重建对象 —— 见规范 §6.1）。
@@ -103,8 +103,8 @@ export interface WorkflowEditorCanvasProps {
   onOpenSettings: () => void;
   /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
   onRecenter: () => void;
-  /** Lazily activates deletable/reconnectable for a clicked edge (see
-   *  defaultEdgeOptions below). */
+  /** 惰性激活被点击边的 deletable/reconnectable（见
+   *  下面的 defaultEdgeOptions）。 */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
   /** 画布上新增一条连线（对外参数卡片 → 宿主节点端口）。 */
   onConnect?: (connection: Connection) => void;
@@ -136,9 +136,9 @@ export function WorkflowEditorCanvas({
   setEdges,
   setNodes,
 }: WorkflowEditorCanvasProps) {
-  /* Stable identity → colour lookup for the MiniMap.  Depends on nothing
-   *  (role colours are static), so MiniMap never re-renders due to a fresh
-   *  callback reference while nodes are dragged. */
+  /* MiniMap 用的「稳定身份 → 颜色」查表。不依赖任何东西
+   *（角色色是静态的），所以拖节点时 MiniMap 不会因为回调
+   * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: Node) => {
     const d = node.data as WorkflowNodeData | undefined;
     return (
@@ -201,44 +201,44 @@ export function WorkflowEditorCanvas({
       edgeTypes={workflowEdgeTypes}
       /* 过滤视口裁剪造成的 error#008 假告警（ISSUE #374）—— 见 handleError。 */
       onError={handleError}
-      /* commercial-grade perf — only mount nodes/edges that
-       *  intersect the viewport.  The DaSiWa Wan 2.2 template ships 130
-       *  nodes across a ~7000 px bbox; React Flow was previously mounting
-       *  the ENTIRE graph (plus every rail IO port) and letting the
-       *  browser paint off-screen DOM every frame.  With viewport culling
-       *  the DOM stays proportional to what's visible, and drag/pan/zoom
-       *  costs drop to a small constant.
-       *  NOTE: the parent still drives the initial fitToContent() viewport
-       *  (min zoom floor 0.35) — culling uses each node's measured size
-       *  after first paint, so the initial fit is unaffected. */
+      /* 商业级性能 —— 只挂载与视口
+       *  相交的节点 / 边。DaSiWa Wan 2.2 模板足足有 130
+       *  个节点、包围盒约 7000 px；React Flow 以前把
+       *  **整张图**（以及每条轨道 IO 端口）全挂上，
+       *  让浏览器每帧都绘制屏幕外的 DOM。视口裁剪后
+       *  DOM 与可见内容成正比，拖拽 / 平移 / 缩放
+       *  的开销降为一个小常数。
+       *  注意：初始 fitToContent() 视口仍由父级驱动
+       *（最小缩放下限 0.35）—— 裁剪用的是每个节点首次绘制后
+       *  的实测尺寸，所以初始 fit 不受影响。 */
       onlyRenderVisibleElements
-      /* `fitView` is intentionally NOT set here — we drive the
-       *  initial viewport ourselves in a useEffect above so we can
-       *  enforce a minimum zoom of 0.35.  Without that floor, the
-       *  DaSiWa Wan 2.2 template (130 nodes, bbox ≈ 7000 px wide)
-       *  fitView'd to ~0.15x and every note became illegible.
+      /* 这里**故意不设** `fitView` —— 初始视口由上面
+       *  的 useEffect 自己驱动，好让
+       *  我们能强制最小缩放 0.35。没有这个下限，
+       *  DaSiWa Wan 2.2 模板（130 节点，包围盒约 7000 px 宽）
+       *  会 fitView 到约 0.15x，每个备注都读不清。
        *  fitViewOptions={{ padding: 0.3 }}
-       *  → see useEffect above; tight 0.10 + 0.35 zoom floor. */
+       *  → 见上面的 useEffect；紧凑的 0.10 + 0.35 缩放下限。 */
       minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
       maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
       defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
       proOptions={{ hideAttribution: true }}
     >
-      {/* Grid background — 20px cells with a heavier rule every
-       *  10 cells.  See <CanvasGrid> above. */}
+      {/* 网格底纹 —— 20px 小格，每 10 格一条更重的线。
+       *  见上面的 <CanvasGrid>。 */}
       <CanvasGrid settings={canvasSettings} />
-      {/* Coordinate rulers along the four edges — show the world
-       *  X / Y of every visible major line.  See <CanvasRulers>. */}
+      {/* 四条边上的坐标标尺 —— 显示每条可见主线对应的世界
+       *  坐标 X / Y。见 <CanvasRulers>。 */}
       <CanvasRulers settings={canvasSettings} />
       <ZoomIndicator
         minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
         maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
       />
-      {/* gear button opens the right-side canvas settings
-       *  panel (grid alpha, ruler toggle, etc.).  Sits below the zoom
-       *  indicator so they don't compete for the same vertical slot;
-       *  a violet dot lights up whenever the user has changed any
-       *  setting from its default. */}
+      {/* 齿轮按钮打开右侧画布设置面板
+       *  （网格透明度、标尺开关等）。它与缩放指示器
+       *  错开竖向位置，免得两者争同一个槽位；
+       *  用户把任何一项从默认值改掉时，
+       *  会亮起一颗紫色圆点。 */}
       <CanvasSettingsButton
         hasOverrides={
           canvasSettingsHydrated && isCustomCanvasSettings(canvasSettings)
