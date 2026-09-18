@@ -1,27 +1,26 @@
 /**
- * workflowIO enrichment — extracted from workflow-detail.ts (batch 4).
+ * workflowIO 信息补全 —— 从 workflow-detail.ts 拆出。
  *
- * The stored selection only records WHICH pin was exposed
- * (`direction` / `kind` / `nodeId` / `name`).  `kind` is a *semantic*
- * bucket ("param" | "widget" | "output") — it is NOT the ComfyUI data
- * type, so a consumer that wants to render a control (textarea vs
- * number vs switch vs image-upload) had no way to decide.
+ * 存档里只记了「暴露的是哪一个引脚」（`direction` / `kind` / `nodeId` / `name`）。
+ * `kind` 是一个**语义**分桶（"param" | "widget" | "output"），**不是** ComfyUI 的
+ * 数据类型 —— 因此想渲染控件的消费方（文本域还是数字框、开关还是图片上传）
+ * 无从判断该用哪个。
  *
- * Rather than force every client to re-join `nodes[].raw_inputs[]` and
- * `rawNodes[].outputs[]` by (nodeId, name), we do the join once here and
- * ship a self-describing record:
- *   type          ComfyUI data type — "STRING" | "INT" | "FLOAT" |
- *                 "BOOLEAN" | "IMAGE" | "LATENT" | …  ("*" when unknown)
- *   defaultValue  current widget value (or the literal in the API graph),
- *                 so a dynamic form can pre-fill instead of showing blanks
- *   label         best display label (label > localized > name)
- *   nodeTitle     owning node's title, used to disambiguate same-named
- *                 pins across nodes ("seed" on 3 samplers)
- *   multiline     STRING inputs that ComfyUI marks as multiline-ish
- *                 (prompt-sized) → render a textarea, not a one-liner
- * Consumers: DynamicWorkflowForm (CreatePanel + canvas workflow node)
- * and the canvas auto-spawn logic (first output's `type` decides whether
- * the downstream node is an image or a video node).
+ * 与其让每个消费方各自按 (nodeId, name) 去 join `nodes[].raw_inputs[]` 与
+ * `rawNodes[].outputs[]`，不如在这里 join 一次，发出一条自描述记录：
+ *
+ *   类型（type）           ComfyUI 数据类型 —— "STRING" | "INT" | "FLOAT" |
+ *                        "BOOLEAN" | "IMAGE" | "LATENT" …（未知时是 "*"）
+ *   默认值（defaultValue） 当前控件值（或 API 图里的字面量），
+ *                        动态表单据此预填，而不是显示空白
+ *   标签（label）          最佳展示标签（优先级：label > localized > name）
+ *   节点标题（nodeTitle）  所属节点的标题，用来区分不同节点上的同名引脚
+ *                        （三个采样器上都有 "seed" 的情况）
+ *   多行（multiline）      ComfyUI 标为「多行倾向」（提示词量级）的 STRING 输入
+ *                        → 渲染文本域，而不是单行输入
+ *
+ * 消费方：DynamicWorkflowForm（创建面板 + 画布工作流节点），以及画布的自动
+ * 派生逻辑（第一个输出的 `type` 决定下游节点是图片节点还是视频节点）。
  */
 import { asRecord } from "~/lib/comfyui/raw";
 import { inferIsMultiline } from "~/lib/comfyui/types";
@@ -127,9 +126,8 @@ export interface WorkflowIOEntry {
   defaultValue?: unknown;
   nodeTitle?: string;
   multiline?: boolean;
-  /** COMBO candidate list (unet_name / clip_name / …) resolved from
-   *  /api/object_info.  Absent for non-COMBO pins or when ComfyUI is
-   *  unreachable — consumers fall back to a plain text control. */
+/** COMBO 候选项列表（unet_name / clip_name …），由 /api/object_info 解析得到。
+ *  非 COMBO 引脚、或 ComfyUI 连不上时为空 —— 消费方回落到纯文本控件。 */
   options?: string[];
   displayOrder?: number;
   /** IO 编辑里切换的「运行时强校验」标记 —— PATCH 原样落库，GET 透传。 */
@@ -151,9 +149,8 @@ export interface WorkflowIOEntry {
    *  时，只有这里有。 */
   slotLabel?: string;
 }
-
-/** Enrich the stored IO selection into a self-describing record (see the
- *  module doc for field semantics).  Pure — only depends on its params. */
+/** 把存档里的 IO 选择补全成自描述记录（字段语义见模块头注）。
+ *  纯函数 —— 只依赖入参。 */
 export async function enrichWorkflowIO(
   params: WorkflowIOEnrichParams,
 ): Promise<Record<string, WorkflowIOEntry>> {
@@ -181,8 +178,7 @@ export async function enrichWorkflowIO(
     let slotLabel: string | undefined;
     /* kind 与 key 直接透传存储值。存储自新格式起即正确区分
      *  widget(可编辑控件) / param(wire 端口) / output,不再做旧数据迁移。 */
-
-    /* COMBO candidate list — resolved below once we know the final `type`. */
+    /* COMBO 候选项列表 —— 下面确定了最终的 `type` 之后再解析。 */
     let options: string[] | undefined;
 
     // Helper: resolve a stored `v.nodeId` against keys that may
