@@ -182,7 +182,7 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 |------|------|------|------|
 | 对话框/浮层 | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~ | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）** |
 | 空态 | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~ | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`） | ✅ **P2 完成** |
-| 按钮 | `ui/button.tsx` + 视图里的手写 `<button>`（逐批下降，当前值看 `pnpm ui:primitives:report`） | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 | ⏳ 分批（已清 3 批，见 §16.2.4.2） |
+| 按钮 | `ui/button.tsx` + 视图里的手写 `<button>`（逐批下降，当前值看 `pnpm ui:primitives:report`） | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 | ⏳ 分批（已清 4 批，见 §16.2.4.2） |
 | 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 23 个文件自写 spinner | P3 棘轮 | ⏳ P3 |
 | UI kit 目录 | `components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 | ⏳ 分批 |
 
@@ -216,6 +216,7 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 1 | `studio/logs/` | 16 | 图标钮 → `size="icon-xs"`；Tab → `variant="ghost"` + `h-auto` |
 | 1 | `studio/workflow-library/` | 28 | 文字动作 → `variant="outline"` / `"ghost"`；实心紫 → `"primary-solid"` |
 | 2 | `studio/project-canvas/`（含 `CanvasNode/`） | 84 | 见下 |
+| 3 | `studio/workflow-editor/` | 14 + 2（P3） | 见下 |
 
 **`studio/project-canvas/` 这批评测出的三条口径**：
 
@@ -229,8 +230,43 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 3. **`h-auto` 是覆盖基元高度的标准手法**：基元的 `size` 变体写死了 `h-6/7/8/9`，
    调用处要沿用自己那套 `px/py` 就必须 `h-auto`，否则高度被基元压掉。
 
-**下一批候选**（照 `pnpm ui:primitives:report`）：`studio/workflow-editor/`、
-`app/(main)/settings/`、`studio/`（`FilmStudio` / `ModelLibrary` 等散件）。
+**`studio/workflow-editor/` 这批评测出的两条口径**：
+
+4. **覆盖基元默认值是「成套 + 讲顺序」两件事**：顶栏按钮原本全走
+   `workflow-editor-topbar-config.ts` 的 `topBarButtonClass(tone, density)`，
+   它的尺寸与底盘是为「窄窗退化顺序」专门设计的（ISSUE #404）。换成 `<Button>`
+   后，`cn()` 把 `buttonVariants(...)` 排在调用处 `className` **之前** ——
+   基元的 `h-8 px-2.5 rounded-lg` 与 `ghost` 的 `hover:bg-muted` 本就会被
+   后面的类覆盖，但**依赖「碰巧排对了」不是判据**：基元里没写的那几档
+   （起始 `bg-*`）会漏过去。所以 `topBarButtonClass` 的每个 tone 都**显式
+   带齐** `h-auto px-0 rounded-none bg-transparent`（`h-auto` 是第 3 条的同一
+   手段，这次连「无起始底色」一起归位）。
+
+   ⚠️ **顺序是载荷**：`cn()` 走 tailwind-merge，同一属性**后面的类赢**。
+   覆盖串里的 `rounded-none` / `px-0` 只是「先声明要归位」，真正生效的必须是
+   tone 的 `rounded-md|lg` 与密度的 `px-*` —— 把覆盖串排到 tone 之后，
+   tailwind-merge 会把 tone 的圆角吃掉、按钮全部变直角，而**源码里两串都在**，
+   只有合并结果能证明对错。所以拼装顺序固定为
+   `base → 覆盖串 → 密度 → tone → extra`，并由契约测试逐个 tone 断言
+   「tone 的圆角索引 > 覆盖串索引」+「密度的 `px-*` 索引 > `px-0` 索引」。
+5. **颜色字面量随转换一并收口**：本批把顶栏/画布残留的 `violet-*` /
+   `amber-*` / `sky-*` / `rose-*` / `red-*` / `emerald-*` 全部换成
+   `primary-*` / `warning-*` / `info-*` / `destructive` / `success-*`
+   （§3.6.2）。这些字面量本来就不该在视图里 —— 之前只是因为顶栏是
+   「另一套 UI kit」而没被追到。
+
+**判据自身的修正**：本批同时给 `check-ui-primitives.cjs` 的 P1/P2/P3 加了
+**注释剥离**。判据原来直接数原始文本里的 `<button`，于是「原来是 `<button>`
+手搓，现改走 `<Button>`」这类**说明性注释**会被当成实现计上 —— 该文件的计数
+停在原地，棘轮永远降不下去（同款教训见 `check-theme-colors.cjs` 的注释剥离：
+注释里的 `#346` 被误判成 3 位色值）。剥离后 P1 立刻多降 2 处
+（`studio/RequiredSummary.tsx` 与本模块），说明此前一直在为注释记账。
+**字符串/模板字面量不剥离** —— `"<button"` 同样是「自己实现一份」的信号。
+
+**下一批候选**（照 `pnpm ui:primitives:report`）：`app/(main)/settings/`（含
+`UsageTestDialog` 11 处）、`workshop/`（`WorkshopModelAdapterModal` /
+`CharacterPortraitStudio` / `LLMContext`）、`studio/`（`FilmStudio` /
+`ModelLibrary` / `TrainingStudio` 等散件）。
 
 ### 16.2.4.1 按钮的语义变体（P1 的前置条件）
 

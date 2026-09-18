@@ -6,13 +6,13 @@ exports[`WorkflowEditorInner > 在 ReactFlowProvider 内挂载并渲染加载态
     class="fixed top-title-bar right-0 bottom-0 left-0 z-50 bg-canvas flex items-center justify-center pb-6"
   >
     <div
-      class="text-center"
+      class="text-ink-muted flex flex-col items-center justify-center gap-4"
     >
-      <div
-        class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-violet-500/30 border-t-violet-500"
+      <span
+        class="border-primary-500/20 border-t-primary-500 h-9 w-9 animate-spin rounded-full border-2"
       />
       <p
-        class="text-ink-soft text-sm"
+        class="text-sm"
       >
         加载工作流节点…
       </p>

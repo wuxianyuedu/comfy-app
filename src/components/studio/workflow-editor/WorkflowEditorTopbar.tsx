@@ -15,6 +15,7 @@ import {
   selectWorkflowIO,
   selectIoPreviewOpen,
 } from "./WorkflowStores";
+import { Button } from "~/components/ui/button";
 import {
   TOP_BAR_BREADCRUMB_CLASS,
   TOP_BAR_ROOT_CLASS,
@@ -105,13 +106,14 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
       }}
     >
       <div className={TOP_BAR_BREADCRUMB_CLASS}>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-lg"
           onClick={onClose}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-lg p-1.5 transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-lg"
         >
           <ArrowLeft size={18} />
-        </button>
+        </Button>
         <div className="flex flex-col">
           {/* Breadcrumb: root workflow name · subgraph 1 · subgraph 2 …
            *  The leading crumb is always the **root** workflow's display
@@ -129,15 +131,17 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
            *  collapses to ellipsis; the full name stays accessible via
            *  the `title` attribute (browser native tooltip). */}
           <div className="flex items-center gap-1.5 text-[12px]">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => {
                 if (subgraphStack.length > 0) {
                   setSubgraphStack([]);
                   void fetchDetail();
                 }
               }}
-              className="text-ink-bright font-title max-w-70 truncate text-[18px] leading-tight font-bold tracking-tight transition-colors hover:text-violet-700 dark:text-violet-300"
+              /* 标题本身就是触发器：吃掉基元的高度/圆角/内边距（`h-auto`），
+               *  只留 hover 变色（16 §16.2.4.2）。 */
+              className="text-ink-bright font-title hover:text-primary-strong h-auto max-w-70 truncate rounded-md px-0 py-0 text-[18px] leading-tight font-bold tracking-tight hover:bg-transparent"
               title={
                 subgraphStack.length
                   ? `${rootWorkflowName || detail.name}（返回顶层工作流）`
@@ -145,7 +149,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               }
             >
               {rootWorkflowName || detail.name}
-            </button>
+            </Button>
             {subgraphStack.map((crumb, i) => {
               const isLast = i === subgraphStack.length - 1;
               /* Common truncation styling for every crumb. */
@@ -161,7 +165,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   <React.Fragment key={crumb.uid + i}>
                     <span className="text-ink-fainter text-[14px]">/</span>
                     <span
-                      className={`${baseCls} rounded-md border border-violet-500/40 bg-violet-500/15 px-2 py-0.5 text-violet-700 dark:text-violet-200`}
+                      className={`${baseCls} border-primary-500/40 bg-primary-500/15 text-primary-strong rounded-md border px-2 py-0.5`}
                       style={{ cursor: "default" }}
                       title={crumb.name}
                     >
@@ -176,8 +180,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               return (
                 <React.Fragment key={crumb.uid + i}>
                   <span className="text-ink-fainter text-[14px]">/</span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       const next = subgraphStack.slice(0, i + 1);
                       setSubgraphStack(next);
@@ -194,39 +198,39 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                         hostNodeId: hostChain,
                       });
                     }}
-                    className={`${baseCls} text-ink-soft hover:bg-subtle rounded-md px-1.5 py-0.5 hover:text-violet-700 dark:hover:text-violet-200`}
+                    className={`${baseCls} text-ink-soft hover:bg-subtle hover:text-primary-strong h-auto rounded-md px-1.5 py-0.5`}
                     title={`${crumb.name}（跳到此层）`}
                   >
                     {crumb.name}
-                  </button>
+                  </Button>
                 </React.Fragment>
               );
             })}
             {subgraphStack.length > 0 && (
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 onClick={onExitSubgraph}
-                className="ml-2 inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-200"
+                className="ml-2 h-auto rounded-md px-2 py-0.5 text-[11px]"
                 title="返回上一级"
               >
                 <ArrowLeft size={10} strokeWidth={2.5} />
                 返回上一级
-              </button>
+              </Button>
             )}
             {/* 终极方案 #4：🔄 一键强制重载缓存.
              *   - 清 sessionStorage + 跳过 server LRU + 重置 in-flight req
              *   - 任何 之前的旧缓存条目都不会被读到，因为入口扫描删了
              *   - 任何之后人为改了 route.ts 没同步 SCHEMA_FINGERPRINT 的，
              *     schema 不匹配会直接导致 cacheKey 不命中，走冷路径 */}
-            <button
-              type="button"
+            <Button
+              variant="danger"
               onClick={() => forceReloadDetail(viewHostNodeId)}
-              className="ml-1 inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-700 transition-colors hover:bg-rose-500/20 dark:text-rose-200"
+              className="ml-1 h-auto rounded-md px-2 py-0.5 text-[11px]"
               title="强制重载（清 sessionStorage + 跳过 server LRU + 重拉数据）"
             >
               <RotateCw size={10} strokeWidth={2.5} />
               强制重载
-            </button>
+            </Button>
           </div>
           <p className="text-ink-soft mt-0.5 truncate text-[11px] font-medium">
             {detail.nodes.filter((node) => !isNoteType(node.class_type)).length}{" "}
@@ -240,7 +244,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             {subgraphStack.length > 0 && (
               <>
                 <span className="text-ink-fainter mx-1.5">·</span>
-                <span className="text-violet-700 dark:text-violet-300">
+                <span className="text-primary-strong">
                   子工作流 #{subgraphStack[subgraphStack.length - 1]!.uid}
                 </span>
               </>
@@ -248,23 +252,23 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           </p>
           {detail.sourcePath ? (
             detail.sourceMissing ? (
-              <p className="mt-1 flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-700 dark:text-red-300">
+              <p className="border-destructive/30 bg-destructive/10 text-danger-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
                 <span className="font-semibold">本地文件已丢失：</span>
                 <span className="truncate font-mono">{detail.sourcePath}</span>
-                <span className="ml-1 shrink-0 text-red-700/80 dark:text-red-400/80">
+                <span className="text-danger-strong/80 ml-1 shrink-0">
                   · 修改保存后刷新将自动重连
                 </span>
               </p>
             ) : detail.sourceChanged ? (
-              <p className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
+              <p className="border-success/30 bg-success/10 text-success-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
                 <span className="font-semibold">已从本地文件刷新最新内容</span>
-                <span className="truncate font-mono text-emerald-700/80 dark:text-emerald-400/80">
+                <span className="text-success-strong/80 truncate font-mono">
                   {detail.sourcePath}
                 </span>
               </p>
             ) : (
               <p
-                className="mt-1 truncate rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-700/80 dark:text-emerald-400/80"
+                className="border-success/20 bg-success/5 text-success-strong/80 mt-1 truncate rounded-md border px-2 py-1 text-[11px]"
                 title={detail.sourcePath}
               >
                 已连接本地文件 · 文件改动后刷新即可同步
@@ -280,18 +284,20 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         {/* 调试模式 — 节点卡片叠加显示渲染链路模块标签。
          *  读写全局 debug-store（与项目画布共用同一开关），激活态高亮。
          *  开启后 wf-node 卡片底部渲染 DebugChainFooter。 */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={toggleDebugMode}
           className={topBarButtonClass(
             "ghost",
             "compact",
-            debugMode ? "bg-violet-500/90 text-white shadow" : "",
+            debugMode
+              ? "bg-primary-500 text-primary-foreground hover:bg-primary-500 shadow"
+              : "",
           )}
           title="调试模式：在节点卡片上叠加显示渲染链路模块标签（点击复制完整路径）"
         >
           {debugMode ? "✓ 调试中" : "调试"}
-        </button>
+        </Button>
         {error && (
           <span className="text-xs text-red-700 dark:text-red-400">
             {error}
@@ -311,8 +317,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
          *  工作流的下标打键，带进内层会误伤顶层未保存的编辑），IO 预览按当前
          *  视图节点的原始元数据就地派生（见 `enrichFromViewNodes`），保证两层
          *  取名口径一致。 */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() => setIoEditMode((value) => !value)}
           className={topBarButtonClass(
             ioEditMode ? "ioOn" : "outline",
@@ -322,11 +328,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         >
           {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
           {ioEditMode && Object.keys(workflowIO).length > 0 && (
-            <span className="ml-1 rounded-full bg-amber-300/30 px-1.5 text-[11px] font-bold text-amber-800 dark:text-amber-50">
+            <span className="bg-warning/30 text-warning-strong ml-1 rounded-full px-1.5 text-[11px] font-bold">
               {Object.keys(workflowIO).length}
             </span>
           )}
-        </button>
+        </Button>
         {/* IO preview toggle. Sits next to "编辑 IO" so the
          *  author can flip into edit + open the preview in one sweep.
          *  Disabled outside edit mode — preview is meaningful only when
@@ -337,8 +343,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
          *  两个方向都耦合：关预览会一并退出编辑模式（面板消失后画布上不该
          *  再留一排没有结果的勾选框），关编辑模式也一并关预览。耦合落在 store
          *  的 `setIoEditMode` / `setIoPreviewOpen` 上，不在这里手写两处 setState。 */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() => setIoPreviewOpen((value) => !value)}
           disabled={
             !ioEditMode &&
@@ -353,12 +359,12 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           title="预览当前勾选的 IO 在最终表单中的样子；预览面板中每个名称都可点击重命名。关闭预览时会一并退出 IO 编辑模式"
         >
           {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}
-        </button>
+        </Button>
         {/* 顶部直达 JSON 源码查看器。复用 WorkflowLibrary
          *  的 SourceModal —— 从缓存里的 disk snapshot 拿 graph/rawJson,
          *  无需再 fetch。打开 modal 前判读 detail 是否已就绪,否则 toast 提醒。 */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() => {
             if (!detail) {
               toast.info("工作流尚未加载完成");
@@ -375,17 +381,17 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           title="查看当前工作流的 API + RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）"
         >
           📋 查看 JSON
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={resetLayout}
           className={topBarButtonClass("outline", "compact")}
           title="把所有节点恢复到进入工作流时的原始位置（撤销全部手动拖动）"
         >
           重置布局
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={handleSave}
           disabled={saving}
           className={topBarButtonClass(
@@ -395,7 +401,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
           )}
         >
           {saving ? "保存中…" : "💾 保存"}
-        </button>
+        </Button>
       </div>
     </header>
   );

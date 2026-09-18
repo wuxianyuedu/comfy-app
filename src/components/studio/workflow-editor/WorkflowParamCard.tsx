@@ -20,6 +20,8 @@
 import type { DOMAttributes } from "react";
 import { RotateCcw } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
+
 import type {
   ParamEntry,
   ParamOutputPort,
@@ -177,11 +179,14 @@ export function WorkflowParamCard({
           )}
         </span>
         {onReset && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={onReset}
             disabled={!canReset}
-            className={`nodrag nopan shrink-0 rounded p-0.5 transition-colors ${
+            /* 卡片上的小圆钮沿用自己这套尺寸与内边距：基元 `size` 变体写死了
+             *  h/w，必须 `h-auto w-auto` 让回来（16 §16.2.4.2 第 3 条）。 */
+            className={`nodrag nopan h-auto w-auto shrink-0 rounded p-0.5 ${
               canReset
                 ? "text-ink-soft hover:bg-subtle hover:text-ink-bright"
                 : "text-ink-fainter cursor-default"
@@ -195,7 +200,7 @@ export function WorkflowParamCard({
             aria-label="恢复默认"
           >
             <RotateCcw size={11} />
-          </button>
+          </Button>
         )}
       </div>
 

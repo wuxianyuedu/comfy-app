@@ -80,6 +80,75 @@ describe("顶栏按钮：紧凑态收窄但可读（「较小尺寸按钮可适�
   });
 });
 
+/* ── 顶栏按钮已换成 ui/button 基元（ISSUE #672 P1）────────────────────────
+ * 顶栏按钮的尺寸/底盘仍由本模块决定（退化顺序是专门设计过的，见文件头），
+ * 因此 `topBarButtonClass` 必须把基元的 `h-8` / `rounded-lg` / `px-2.5` 与
+ * `ghost` 的 hover 底色**覆盖掉** —— 否则基元默认值会在调用处排在后面胜出，
+ * 顶栏的窄窗退化整条失效（规范 16 §16.2.4.2 的 `h-auto` 是同一件事）。 */
+describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #672 P1）", () => {
+  const allTones = [
+    "outline",
+    "solid",
+    "ghost",
+    "ioOn",
+    "ioPreviewOn",
+  ] as const;
+
+  it.each(allTones)("tone=%s 归还高度与圆角给调用处", (tone) => {
+    const cls = tokens(topBarButtonClass(tone, "regular"));
+    expect(cls).toContain("h-auto");
+    expect(cls).toContain("rounded-none");
+    expect(cls).toContain("px-0");
+  });
+
+  it.each(allTones)(
+    "tone=%s 的圆角与内边距必须排在覆盖串之后（否则 rounded-none 吃掉 tone）",
+    (tone) => {
+      /* `cn()` 走 tailwind-merge，同一属性**后面的类赢**。覆盖串里的
+       * `rounded-none` / `px-0` 是「先声明要归位」，真正生效的必须是 tone 的
+       * `rounded-md|lg` 与密度的 `px-*`。顺序写反时顶栏按钮会全部变直角、
+       * 内边距归零 —— 而源码里两串都「在」，只有合并结果能证明。 */
+      const cls = topBarButtonClass(tone, "compact");
+      const iOverride = cls.indexOf("rounded-none");
+      const iToneRadius = cls.search(/rounded-(?:md|lg)\b/);
+      expect(iOverride).toBeGreaterThanOrEqual(0);
+      expect(iToneRadius).toBeGreaterThan(iOverride);
+
+      const iPx0 = cls.indexOf("px-0");
+      /* 密度的实值 `px-2.5`（不是 `px-0` 自己）：它必须排在覆盖串之后才生效。 */
+      const iPx = cls.indexOf("px-2.5");
+      expect(iPx0).toBeGreaterThanOrEqual(0);
+      expect(iPx).toBeGreaterThan(iPx0);
+
+      /* `h-auto` 与基元 `h-8` 不是同一串里的冲突 —— 基元高度在
+       * `buttonVariants` 里，排在调用处 className 之前，因此恒被覆盖；
+       * 这里只需确认覆盖串确实带上了它。 */
+      expect(cls).toContain("h-auto");
+    },
+  );
+
+  it("紧凑态的 px/py 覆盖不会丢（px-0 只做归位，不压掉密度的实值）", () => {
+    const cls = topBarButtonClass("outline", "compact");
+    expect(cls).toContain("px-2.5");
+    expect(cls).toContain(`${TOP_BAR_DENSITY_BREAKPOINT}:px-4`);
+    expect(cls).toContain(`${TOP_BAR_DENSITY_BREAKPOINT}:py-2`);
+  });
+
+  it("每个 tone 都不含 Tailwind 原生调色板字面量（颜色只有单一事实来源）", () => {
+    /* 规范 03 §3.6.2：颜色一律走语义 token / 语义类名，换品牌色时调用处不用改。
+     * `violet-*` / `amber-*` / `sky-*` 这类在顶栏出现过（保存钮的实心紫、
+     * 「编辑 IO」的琥珀高亮），治理后一律改 `primary-*` / `warning-*` / `info-*`。 */
+    const native =
+      /(?:^|:)(?:bg|text|border|ring|from|to|via)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/;
+    for (const tone of allTones) {
+      for (const density of ["regular", "compact"] as const) {
+        const cls = topBarButtonClass(tone, density);
+        expect(cls).not.toMatch(native);
+      }
+    }
+  });
+});
+
 describe("顶栏容器：窄了换行，不压扁按钮", () => {
   it("按钮组整体不收缩", () => {
     for (const density of ["regular", "compact"] as const) {
