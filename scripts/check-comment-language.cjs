@@ -127,17 +127,53 @@ const JSDOC_STRUCTURAL_RE =
  * `@param {string} candidate the command to probe` 里的说明句会被当成
  * 标识符逐词删掉，把「写了英文说明」误判成「只有类型语法」。
  */
+/** 去掉类型语法与 @tag 后，是否出现「英文虚词 / 动词」（那就是说明句）。 */
+const JSDOC_PROSE_WORDS_RE =
+  /\b(the|a|an|is|are|was|were|be|been|being|to|of|for|with|and|or|not|no|when|which|that|this|these|those|it|its|so|than|then|via|from|by|as|at|in|on|into|onto|over|under|use|used|uses|using|call|calls|called|must|should|can|could|may|might|will|would|have|has|had|do|does|did|only|also|both|each|every|any|all|some|one|two|three|first|second|last|next|before|after|while|until|because|since|if|else|but|however|note|means|become|becomes|instead|still|just|never|always|default|whether|same|other|another|happen|happens|appear|appears|remain|remains|keep|keeps|stay|stays|make|makes|made|give|gives|given|take|takes|taken|get|gets|point|points|points?|hold|holds|held|return|returns|returning)\b/i;
+
+/** 剥掉类型块、`[...]` 名字、`@tag`，剩下的就是标识符与标点。 */
+function stripJsdocTypeSyntax(text) {
+  let rest = text
+    .replace(/\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, " ")
+    .replace(/\[[^\]]*\]/g, " ");
+  if (rest.includes("{")) rest = rest.slice(0, rest.indexOf("{"));
+  return rest.replace(/@\w+/g, " ").replace(/[{}]/g, " ");
+}
+
+/**
+ * 一行是否**本身就是** JSDoc 结构行（带 `@param` / `@typedef` 等 tag）。
+ * 判据：剥掉类型语法后不含英文虚词，且剩余英文词 < 3 个。
+ */
 function jsdocStructuralOnly(text) {
-  if (!JSDOC_STRUCTURAL_RE.test(text)) return false;
   if (hasCJK(text)) return false; // 有中文说明 → 本就不计入
-  // 剥掉 @tag、随后的 `{...}` 类型块（允许嵌套一层）、以及 `[name=default]` / 参数名
-  const rest = text
-    .replace(/^\s*\*?\s*@\w+/, " ")
-    .replace(/^\s*\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/, " ")
-    .replace(/^\s*\[[^\]]*\]/, " ")
-    .replace(/^\s*[A-Za-z_$][\w$]*/, " ");
-  // 剩余部分若还含「连续 ≥2 个字母的英文词」的成句，视为散文 → 不豁免
-  return !/[A-Za-z]{2,}/.test(rest);
+  const rest = stripJsdocTypeSyntax(text);
+  if (JSDOC_PROSE_WORDS_RE.test(rest)) return false;
+  const words = rest.match(/[A-Za-z]{2,}/g) || [];
+  return words.length < 3;
+}
+
+/**
+ * 一行是否是 JSDoc **结构块的续行**（只在块由结构行开头时调用）。
+ * 判据比结构行更宽：续行里全是类型语法时，标识符个数不受 3 个的限制
+ *（`version: string | null }} ProbeResult` 有 4 个词，但都是标识符）。
+ * 仍以「不含英文虚词」为准 —— 说明句一定含虚词。
+ */
+function jsdocStructuralContinuation(text) {
+  if (hasCJK(text)) return false;
+  if (text.startsWith("//")) return false;
+  const rest = stripJsdocTypeSyntax(text);
+  if (JSDOC_PROSE_WORDS_RE.test(rest)) return false;
+  // 出现句末标点（`.`/`!`/`?`）说明是句子，不是类型
+  return !/[.!?]\s*$/.test(rest.replace(/[\w)]\.(?=\w)/g, ""));
+}
+
+/**
+ * 一行是否是「JSDoc 结构行」—— `@param` / `@returns` / `@typedef` / `@type` /
+ * `@property` / `@template` 等带类型语法的行。
+ * 续行（块由结构行开头，本行仍是类型语法）由调用方另行判定。
+ */
+function isJsdocStructuralLine(text) {
+  return JSDOC_STRUCTURAL_RE.test(text) && jsdocStructuralOnly(text);
 }
 
 function walk(dir, out = []) {
@@ -198,6 +234,8 @@ function hasCJK(text) {
 function countEnglishCommentLines(src) {
   const lines = src.split("\n");
   let inBlock = false;
+  /** 当前是否处在「由结构 tag 开头的 JSDoc 块」里（用于豁免续行）。 */
+  let inJsdocStruct = false;
   let count = 0;
   for (const raw of lines) {
     const line = raw.trim();
@@ -216,7 +254,16 @@ function countEnglishCommentLines(src) {
     }
     if (text === null || !text) continue;
     if (TOOL_DIRECTIVE_RE.test(text)) continue;
-    if (jsdocStructuralOnly(text)) continue;
+    if (isJsdocStructuralLine(text)) {
+      // 整个 JSDoc 块按结构块处理：其续行也只含类型语法时同样豁免
+      inJsdocStruct = true;
+      continue;
+    }
+    // 续行：块由结构 tag 开头，且本行剥掉类型语法后无英文成句 → 豁免
+    if (inJsdocStruct && jsdocStructuralContinuation(text)) {
+      continue;
+    }
+    inJsdocStruct = false;
     if (hasCJK(text)) continue;
     if (looksEnglish(text)) count += 1;
   }

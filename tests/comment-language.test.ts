@@ -209,6 +209,43 @@ describe("注释语言棘轮（规范 §12.4.6）", () => {
     expect(run().code).toBe(0);
   });
 
+  it("JSDoc 结构块的**续行**（多行类型）同样不参与统计", () => {
+    // 多行 typedef 只有第一行带 tag，其余行只剩类型语法。
+    // 不豁免续行的话，`version: string | null }} ProbeResult` 这类行会被当成英文注释。
+    write(
+      "src/lib/jsdoc-continuation.ts",
+      [
+        "/**",
+        " * @typedef {{ ok: boolean, command: string | null,",
+        " *             version: string | null }} ProbeResult",
+        " */",
+        "export const a = 1;",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    expect(run().code).toBe(0);
+  });
+
+  it("JSDoc 续行里的英文说明句仍会被统计（豁免不放过散文）", () => {
+    // 反向锚点：续行豁免以「不含英文虚词」为准，说明句一定含虚词。
+    write(
+      "src/lib/jsdoc-continuation-prose.ts",
+      [
+        "/**",
+        " * @param {string} candidate",
+        " *   the command to probe, which must exist",
+        " */",
+        "export const a = 1;",
+        "",
+      ].join("\n"),
+    );
+    seedBaseline({}, 0);
+    const r = run();
+    expect(r.code).toBe(1);
+    expect(r.output).toContain("src/lib/jsdoc-continuation-prose.ts");
+  });
+
   it("带英文散文的 JSDoc 行仍会被统计（结构行豁免不放过说明句）", () => {
     // 反向锚点：豁免只剥「@tag + 类型块 + 参数名」三段。
     // 若把「说明句里的每个英文词都当标识符删掉」，就会把这条忘了改的英文说明放过去。
