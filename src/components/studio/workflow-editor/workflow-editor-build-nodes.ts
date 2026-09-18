@@ -2,7 +2,7 @@
  * useMemo 由调用方持有（见 wf-editor-inner.tsx 中的 buildInitialNodes 用法）。 */
 import type { Node } from "@xyflow/react";
 import { friendlyNodeTitle } from "~/lib/comfyui/node-titles";
-import { MODE_KEY_PREFIX } from "~/lib/workflow-param-mapping";
+import { MODE_KEY_PREFIX } from "~/lib/workflow/workflow-param-mapping";
 import type {
   RawInputMeta,
   ComfyGraphNode,

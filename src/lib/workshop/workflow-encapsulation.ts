@@ -28,14 +28,17 @@ import {
   normalizeSizeSpec,
   sceneFromMode,
   sizeSpecToWxH,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
   resolveMapping,
-} from "~/lib/workflow-param-mapping";
-import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow-io-types";
+} from "~/lib/workflow/workflow-param-mapping";
+import type {
+  WorkflowIOEntry,
+  WorkflowIOMap,
+} from "~/lib/workflow/workflow-io-types";
 
 /** 工坊这一次生成要落下去的对外参数（全部可选）。
  *

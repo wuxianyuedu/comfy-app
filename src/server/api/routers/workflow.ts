@@ -68,7 +68,7 @@ function executionShapeOf(row: {
 import {
   type WorkflowIOMap,
   parseWorkflowIOMap,
-} from "~/lib/workflow-io-types";
+} from "~/lib/workflow/workflow-io-types";
 import {
   normalizeTaskType,
   VALID_TASK_TYPE_CODES,
@@ -76,7 +76,7 @@ import {
   getWorkflowTypesByCategory,
   parseModesJson,
   serializeModesJson,
-} from "~/lib/workflow-types";
+} from "~/lib/workflow/workflow-types";
 import { createHash } from "node:crypto";
 import path from "node:path";
 

@@ -37,7 +37,7 @@ import {
   applyParamMapping,
   buildParamEntries,
   parseParamMapping,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 
 /** catch 抛出值（unknown）→ 与旧 `e?.message ?? String(e)` 逐值等价的错误文案：
  *  带 string message 的对象取 message（Error 实例即此路径），其余走 String(v)

@@ -21,8 +21,8 @@
  * = 断开（卡片悬空），刷新后不会被默认落点复活。
  */
 
-import { MODE_KEY_PREFIX } from "~/lib/workflow-param-mapping";
-import type { WorkflowIOMap } from "~/lib/workflow-io-types";
+import { MODE_KEY_PREFIX } from "~/lib/workflow/workflow-param-mapping";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** `paramMap` 里输出落点覆盖所在的一级键。 */
 export const OUTPUT_BINDING_NAMESPACE = "output";

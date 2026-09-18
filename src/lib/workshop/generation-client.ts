@@ -20,7 +20,7 @@ import {
   isVideoMode,
   modeUsesFirstFrame,
   modeUsesLastFrame,
-} from "~/lib/workflow-exposed-params";
+} from "~/lib/workflow/workflow-exposed-params";
 import {
   buildEncapsulatedInputs,
   type WorkshopExposedValues,

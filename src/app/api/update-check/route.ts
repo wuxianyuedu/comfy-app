@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 
-import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
+import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 
 /* ── 运行期「本地更新」检测：需重启才生效的文件 ─────────────────
  * 桌面壳开着时，前端源码 src/ 由 dev server HMR 自动热更、无需打扰；

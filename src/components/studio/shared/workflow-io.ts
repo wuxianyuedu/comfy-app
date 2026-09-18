@@ -13,7 +13,7 @@
  * (see src/app/api/workflows/[id]/route.ts → "workflowIO ENRICHMENT").
  */
 
-import { runtimeNodeId } from "~/lib/workflow-param-mapping";
+import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import {
   CLARITY_SUBGROUP_LABELS,
   DEFAULT_ALIGN_MULTIPLE,
@@ -28,7 +28,7 @@ import {
   type ClarityKind,
   type SizePresetTable,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 import {
   collectModeCodes,
   isVisibleInMode,
@@ -38,7 +38,7 @@ import {
   type WorkflowIOEntry,
   type WorkflowIOMap,
   type WorkflowIOModeOverride,
-} from "~/lib/workflow-io-types";
+} from "~/lib/workflow/workflow-io-types";
 
 export type { WorkflowIOEntry, WorkflowIOMap, WorkflowIOModeOverride };
 /* 尺寸口径（倍数候选 / 比例表）与场景表同源，统一从 `lib/size-presets` 出口，
@@ -50,7 +50,7 @@ export {
   type ResolutionTier,
   type SizePresetTable,
   type SizeScene,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 export {
   collectModeCodes,
   isVisibleInMode,

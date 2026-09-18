@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
   clearAllWorkflowRuns,
   registerWorkflowRun,
-} from "~/lib/workflow-run-store";
+} from "~/lib/workflow/workflow-run-store";
 import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
 
 afterEach(() => {

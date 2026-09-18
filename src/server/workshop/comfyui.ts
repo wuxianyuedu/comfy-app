@@ -15,7 +15,7 @@ import {
   DEFAULT_SIZE_SPEC,
   sizeSpecDims,
   type SizeSpec,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 
 const OUTPUT_DIR = path.join(process.cwd(), "data", "workshop-outputs");
 const SETTINGS_FILE = path.join(

@@ -8,7 +8,7 @@
  *   - 「任务 → 视频行」的形状收窄集中一处，别处要复用时直接 import。
  */
 
-import { isVideo } from "~/lib/media";
+import { isVideo } from "~/lib/media/media";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs, RouterOutputs } from "~/trpc/react";
 

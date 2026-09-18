@@ -23,7 +23,7 @@ import {
   resolveMapping,
   wiredTargetsForEntry,
   type ParamEntry,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import {
   splitWorkflowIO,
   type WorkflowIOEntry,
@@ -34,7 +34,7 @@ import {
   hasManualOutputBinding,
   manualOutputSource,
   resolveOutputSource,
-} from "~/lib/workflow-output-binding";
+} from "~/lib/workflow/workflow-output-binding";
 
 export interface LibraryParamCards {
   /** 对外参数条目（稳定顺序）。 */

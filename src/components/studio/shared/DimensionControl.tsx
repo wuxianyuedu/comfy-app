@@ -25,7 +25,10 @@ import {
   normalizeAlignMultiple,
   pickClarityPreset,
 } from "./workflow-io";
-import { ALIGN_MULTIPLE_OPTIONS, sceneFromMode } from "~/lib/size-presets";
+import {
+  ALIGN_MULTIPLE_OPTIONS,
+  sceneFromMode,
+} from "~/lib/media/size-presets";
 import {
   MultiSegmentPopover,
   RatioIcon,

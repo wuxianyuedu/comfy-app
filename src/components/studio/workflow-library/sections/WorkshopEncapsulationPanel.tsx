@@ -19,7 +19,7 @@ import {
   modeContractEntries,
   requiredInputsFor,
 } from "~/lib/workshop/model-mode-contract";
-import { getWorkflowType } from "~/lib/workflow-types";
+import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import {
   DEFAULT_SHOT_SIZE,
   type ShotSizeState,

@@ -29,7 +29,7 @@ import {
   type RawInputEntry,
   type RawNodeMeta,
 } from "~/lib/comfyui/workflow-detail-raw";
-import { type WorkflowIOModeOverride } from "~/lib/workflow-io-types";
+import { type WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
 export interface WorkflowIORawEntry {
   direction: "input" | "output";

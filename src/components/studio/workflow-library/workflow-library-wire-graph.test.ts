@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
 
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
-import { buildParamEntries } from "~/lib/workflow-param-mapping";
+import { buildParamEntries } from "~/lib/workflow/workflow-param-mapping";
 import {
   LIB_NODE_BACKDROP,
   LIB_NODE_HOST,
@@ -32,7 +32,7 @@ import {
   deriveLibraryEdges,
   libraryConnectionAllowed,
 } from "./hooks/use-library-wire-flow";
-import { applyWireEdit } from "~/lib/workflow-param-wiring";
+import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
 import {
   deriveLibraryParamCards,
   type ParamCardWire,

@@ -9,7 +9,7 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
-import { tracingIgnoreArgs } from "~/lib/tracing-ignore";
+import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "~/server/db/schema";
 

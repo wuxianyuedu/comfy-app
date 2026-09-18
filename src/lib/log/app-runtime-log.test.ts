@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createAppRuntimeLogger } from "~/lib/app-runtime-log";
+import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 
 /** 在一个临时目录里跑，避免污染真实 log/ 目录。 */
 let tmpDir: string;

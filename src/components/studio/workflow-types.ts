@@ -4,7 +4,7 @@
  * server's API-graph node shape so detail.graph consumers keep their
  * class_type/inputs accessors without any. */
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
-import type { WorkflowIOModeOverride } from "~/lib/workflow-io-types";
+import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
 /* ── Types ── */
 export interface RawInputMeta {

@@ -15,7 +15,7 @@ import { useEffect } from "react";
 import {
   activateMainWindow,
   shouldActivateWindowOnLaunch,
-} from "~/lib/desktop-shell-client";
+} from "~/lib/shell/desktop-shell-client";
 
 /**
  * 挂载时按启动标记决定是否把主窗口唤到前台。只跑一次（启动期行为），

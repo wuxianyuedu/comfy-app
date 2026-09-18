@@ -6,7 +6,7 @@
 //
 // 无 React、无副作用（规范 §17.2 第①层）。
 
-import type { ParamClass } from "~/lib/workflow-param-mapping";
+import type { ParamClass } from "~/lib/workflow/workflow-param-mapping";
 
 /** 分类 → 展示名。与参数映射模型里的默认名同口径。 */
 export const PARAM_CLASS_LABEL: Record<ParamClass, string> = {

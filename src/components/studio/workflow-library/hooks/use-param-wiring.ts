@@ -8,7 +8,7 @@
  *   ② 一次编辑的落库编排（patch paramMap），本地叠加一层 overlay 立即回读；
  *   ③ 「恢复默认」：清掉该对外参数在当前模式下的手工线。
  *
- * 落库形状由 `~/lib/workflow-param-wiring` 给出（纯函数，与编辑器同一份）。
+ * 落库形状由 `~/lib/workflow/workflow-param-wiring` 给出（纯函数，与编辑器同一份）。
  * 视图只消费这里返回的 controller：不碰 tRPC、不解析映射。 */
 
 import { useCallback, useMemo, useState } from "react";
@@ -18,7 +18,7 @@ import {
   clearWireEdit,
   hasWireEdit,
   type ParamWireEdit,
-} from "~/lib/workflow-param-wiring";
+} from "~/lib/workflow/workflow-param-wiring";
 
 export interface ParamWiringController {
   /** 当前生效模式；没有模式时编辑无从归属，写入是空操作。 */

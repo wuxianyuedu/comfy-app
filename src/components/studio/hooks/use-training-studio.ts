@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { uploadDatasetImage } from "~/lib/dataset-upload-client";
+import { uploadDatasetImage } from "~/lib/media/dataset-upload-client";
 import { errorMessage } from "~/lib/error-message";
 import { vanillaApi } from "~/trpc/vanilla";
 

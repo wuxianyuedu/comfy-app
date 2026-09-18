@@ -29,7 +29,7 @@ import {
   SIZE_SUB_IDS,
   type ParamEntry,
   type ParamOutputPort,
-} from "~/lib/workflow-param-mapping";
+} from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import type { ReactNode } from "react";
 

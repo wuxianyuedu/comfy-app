@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import { requireRequestUser } from "~/server/auth/request-user";
-import { LOG_EXPORT_DIR, LOG_ROOT } from "~/lib/log-paths";
+import { LOG_EXPORT_DIR, LOG_ROOT } from "~/lib/log/log-paths";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**

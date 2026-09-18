@@ -220,13 +220,19 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     /* 「对外参数」是产品对用户承诺的那几个口子（提示词 / 尺寸 / 首帧…），
      *  由模式决定，与具体工作流无关 —— 契约表是唯一来源。 */
     const lib = readFileSync(
-      path.resolve(__dirname, "../../../lib/workflow-exposed-params.ts"),
+      path.resolve(
+        __dirname,
+        "../../../lib/workflow/workflow-exposed-params.ts",
+      ),
       "utf8",
     );
     expect(lib).toContain("exposedParamsForMode");
     const mapping = stripComments(
       readFileSync(
-        path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+        path.resolve(
+          __dirname,
+          "../../../lib/workflow/workflow-param-mapping.ts",
+        ),
         "utf8",
       ),
     );
@@ -247,7 +253,10 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     expect(cards).toContain("wiredTargetsForEntry");
     expect(cards).toMatch(/handleId:[\s\S]{0,120}wired\.ioKey/);
     const mapping = readFileSync(
-      path.resolve(__dirname, "../../../lib/workflow-param-mapping.ts"),
+      path.resolve(
+        __dirname,
+        "../../../lib/workflow/workflow-param-mapping.ts",
+      ),
       "utf8",
     );
     expect(mapping).toContain("export function wiredTargetsForEntry");

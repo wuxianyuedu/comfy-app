@@ -42,7 +42,7 @@
  */
 import pino, { type DestinationStream, type LoggerOptions } from "pino";
 
-import { appRuntimeLog } from "~/lib/app-runtime-log";
+import { appRuntimeLog } from "~/lib/log/app-runtime-log";
 import { redactSecretShaped } from "~/lib/core/redact-secret";
 
 /**

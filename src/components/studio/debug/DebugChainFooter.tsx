@@ -23,7 +23,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { CodeBlock, extToLanguage } from "../ui/CodeBlock";
-import { fetchDebugSource } from "~/lib/debug-source-client";
+import { fetchDebugSource } from "~/lib/workflow/debug-source-client";
 import { useDebugStore } from "./debug-store";
 import { overlayClass } from "~/lib/full-screen-layer";
 

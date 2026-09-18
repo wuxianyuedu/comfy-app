@@ -19,7 +19,7 @@ import {
   buildShotNegative,
   buildShotPrompt,
 } from "~/lib/workshop/prompt-builder";
-import { sizeSpecToWxH, type SizeSpec } from "~/lib/size-presets";
+import { sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
 import {
   generateImageViaApi,
   pollVideoViaApi,

@@ -29,7 +29,7 @@ import {
   sceneFromMode,
   type AlignMultiple,
   type SizeDims,
-} from "~/lib/size-presets";
+} from "~/lib/media/size-presets";
 import {
   ASPECT_RATIO_LABEL_PRESETS,
   CLARITY_SUBGROUP_OF_KIND,

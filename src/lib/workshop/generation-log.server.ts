@@ -11,7 +11,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { createLogger } from "~/lib/core/logger";
-import { WORKSHOP_LOG_DIR } from "~/lib/log-paths";
+import { WORKSHOP_LOG_DIR } from "~/lib/log/log-paths";
 import {
   generationLogFileName,
   normalizeGenerationLogEntry,

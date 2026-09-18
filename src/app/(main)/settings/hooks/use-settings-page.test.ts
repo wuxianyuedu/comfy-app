@@ -29,7 +29,7 @@ import { createTestQueryClient } from "../../../../../tests/helpers/renderWithPr
 import { createTestTRPC } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { api } from "~/trpc/react";
-import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell-tabs-store";
+import { useShellTabs, MAIN_TAB_ID } from "~/lib/shell/shell-tabs-store";
 import { probeOllama, startOllama } from "~/lib/llm/ollama-client";
 
 import {
@@ -73,7 +73,7 @@ const { postAppRuntimeLogMock, runtimeLogCalls } = vi.hoisted(() => {
     runtimeLogCalls: calls,
   };
 });
-vi.mock("~/lib/log-file-client", () => {
+vi.mock("~/lib/log/log-file-client", () => {
   // fetchFileLogSlice 复刻真实实现（走全局 fetch，由 MSW 拦截返回日志内容）。
   // 之所以不引用 importOriginal：真实实现只是对 /api/logs/current 的一次 fetch，
   // 这里等价转发，避免 vitest 别名解析与模块类型在工厂内部的告警。

@@ -16,7 +16,7 @@ import { useEffect } from "react";
 
 import { useToast } from "~/components/studio/ToastProvider";
 import { useMessageCenterStore } from "~/components/message-center/message-center-store";
-import { registerStaleStoreDeliver } from "~/lib/stale-store-notify";
+import { registerStaleStoreDeliver } from "~/lib/shell/stale-store-notify";
 
 import { useCodeUpdateWatch } from "./hooks/use-code-update-watch";
 

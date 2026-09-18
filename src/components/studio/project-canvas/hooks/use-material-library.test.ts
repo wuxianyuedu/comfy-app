@@ -9,11 +9,11 @@ import {
   fetchMaterials,
   uploadMaterial,
   type MaterialItem,
-} from "~/lib/materials-client";
+} from "~/lib/media/materials-client";
 
 import { useMaterialLibrary } from "./use-material-library";
 
-vi.mock("~/lib/materials-client", () => ({
+vi.mock("~/lib/media/materials-client", () => ({
   fetchMaterials: vi.fn(),
   uploadMaterial: vi.fn(),
   deleteMaterial: vi.fn(),

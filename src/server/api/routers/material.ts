@@ -12,7 +12,7 @@ import {
   sanitizeFileName,
   sanitizeScope,
   type MaterialItem,
-} from "~/lib/materials";
+} from "~/lib/media/materials";
 
 async function resolveScopes(
   scopeMode: string | null,

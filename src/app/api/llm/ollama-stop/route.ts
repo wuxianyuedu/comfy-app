@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { currentServerUser } from "~/server/auth/request-user";
 import fs from "node:fs";
 import path from "node:path";
-import { OLLAMA_RUNTIME_LOG } from "~/lib/log-paths";
+import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { OLLAMA_DEFAULT_PORT } from "~/lib/endpoints";
-import { killProcessTreeByImage } from "~/lib/kill-process-tree";
+import { killProcessTreeByImage } from "~/lib/process/kill-process-tree";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

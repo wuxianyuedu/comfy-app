@@ -41,7 +41,10 @@ vi.mock("~/lib/workshop/generation-client", () => ({
   ),
 }));
 
-import { clearAllWorkflowRuns, getWorkflowRun } from "~/lib/workflow-run-store";
+import {
+  clearAllWorkflowRuns,
+  getWorkflowRun,
+} from "~/lib/workflow/workflow-run-store";
 import { useEncapsulationTestRun } from "./use-encapsulation-test-run";
 
 afterEach(() => {

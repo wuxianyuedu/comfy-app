@@ -30,7 +30,7 @@ import {
   cacheDelPrefix,
   cachePeek,
 } from "~/lib/server-cache";
-import { parseModesJson } from "~/lib/workflow-types";
+import { parseModesJson } from "~/lib/workflow/workflow-types";
 import { createObjectInfoResolvers } from "~/lib/comfyui/workflow-detail-combo";
 import { inferIsMultiline } from "~/lib/comfyui/types";
 import {

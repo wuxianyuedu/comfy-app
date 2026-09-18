@@ -47,11 +47,11 @@ vi.mock("./proc-detect", () => ({
     .fn()
     .mockResolvedValue({ pid: null, failed: false }),
 }));
-vi.mock("../process-launch", () => ({
+vi.mock("~/lib/process/process-launch", () => ({
   spawnManaged: vi.fn(),
   waitForDetachMediator: vi.fn().mockResolvedValue({ code: 0, stderr: "" }),
 }));
-vi.mock("~/lib/open-in-browser", () => ({
+vi.mock("~/lib/shell/open-in-browser", () => ({
   openUrlInBrowser: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock("../log-paths", () => ({
@@ -152,7 +152,7 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
    * 二者都走 note + { ok:false, detail } 的同一条收口路径。 */
   const runFailingAutoStart = async () => {
     const { resolveComfyLaunchPlan } = await import("./launch-path");
-    const { spawnManaged } = await import("../process-launch");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
     vi.mocked(spawnManaged).mockClear();
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
       error: "ComfyUI 路径不存在：/nope（请在设置页检查）",
@@ -166,7 +166,7 @@ describe("自动启动失败后停止重试（ISSUE #335）", () => {
     expect(first.ok).toBe(false);
     expect(first.detail).toContain("路径不存在");
 
-    const { spawnManaged } = await import("../process-launch");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
     vi.mocked(spawnManaged).mockClear();
 
     const second = await ensureComfyUiReady({});
@@ -241,7 +241,7 @@ describe("getComfyUiStatus — 状态三态组合", () => {
       await import("./lifecycle");
     const { getExitPolicy } =
       await import("../app-settings/app-settings.server");
-    const { spawnManaged } = await import("../process-launch");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
     // 走保活（keepAlive）路径 + 进程探测永远找不到 main.py：启动会一直等到
     // timeoutMs 到点收尾，这段时间正好观察 starting 的 true → false 两端。
     // 保活路径用 spawnManaged（已被 mock），不会真实起进程。
@@ -502,7 +502,7 @@ describe("getComfyUiStatus 的 TTL 缓存（#346）", () => {
      * 启动会一直等到 timeoutMs 到点，期间 starting 为真。 */
     const { getExitPolicy } =
       await import("../app-settings/app-settings.server");
-    const { spawnManaged } = await import("../process-launch");
+    const { spawnManaged } = await import("~/lib/process/process-launch");
     const { resolveComfyLaunchPlan } = await import("./launch-path");
     vi.mocked(resolveComfyLaunchPlan).mockReturnValue({
       cmd: "python",

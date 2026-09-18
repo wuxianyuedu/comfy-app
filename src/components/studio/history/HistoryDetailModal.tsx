@@ -1,7 +1,7 @@
 import { Folder, X } from "lucide-react";
 
 import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
-import { isVideo } from "~/lib/media";
+import { isVideo } from "~/lib/media/media";
 import {
   fetchTaskWorkflow,
   openTaskFolder,

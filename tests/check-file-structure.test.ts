@@ -76,6 +76,10 @@ beforeEach(() => {
   mkdirSync(join(workdir, "src"));
   mkdirSync(join(workdir, "scripts"));
   mkdirSync(join(workdir, "tools", "build"), { recursive: true });
+  /* R13 的默认前提：src/lib 存在（判据只看它的顶层条目）。临时工作区不带它时
+   * R13 整块跳过 —— 那些 R5 棘轮用例要的是「无 R13 噪声」，所以这里把目录建出来，
+   * 不往里放任何东西（空目录既不违反 R13，也不触发 R14）。 */
+  mkdirSync(join(workdir, "src", "lib"), { recursive: true });
   /* R11 的默认前提：Next 16 代理约定文件在 src/ 根。真实仓库里它一直在，
    * 所以「干净工作区放行」这类基线用例必须带上它，否则测的不是真实形态。 */
   writeFileSync(
@@ -321,6 +325,50 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
   });
 
+  /* ── R13/R14：src/lib 的域归属纪律（ISSUE #565 / 规范 §12.5.3）──
+   *
+   * 这两条的价值全在「新增模块会被要求先回答归属」——而它们最容易的失效方式
+   * 是「判定永远为绿」（比如只看目录名、不递归看顶层文件）。因此这里既测
+   * 「该拦的拦」，也测「豁免清单里的单例不被误伤」，还把「域目录名未登记」
+   * 单独钉住：漏登记会让 R13 的归属判据形同虚设。 */
+  describe("R13/R14：src/lib 子域纪律（规范 §12.5.3）", () => {
+    const writeLib = (rel: string, body = "export const x = 1;\n") => {
+      const abs = join(workdir, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, body);
+    };
+
+    it("根目录散放的普通模块被阻断", () => {
+      writeLib("src/lib/orphaned-helper.ts");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R13");
+      expect(output).toContain("src/lib/orphaned-helper.ts");
+    });
+
+    it("归入已登记子域后放行", () => {
+      writeLib("src/lib/media/size-presets.ts");
+      const { code, output } = run();
+      expect(output).not.toContain("R13");
+      expect(code).toBe(0);
+    });
+
+    it("未登记的子域目录被阻断（新增域要同时登记 DOMAINS 与覆盖率门槛）", () => {
+      writeLib("src/lib/brand-new-domain/a.ts");
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R14");
+      expect(output).toContain("brand-new-domain");
+    });
+
+    it("根目录的测试伙伴文件跟着被测模块走（不因用例单独散放而红）", () => {
+      writeLib("src/lib/utils.test.ts");
+      const { code, output } = run();
+      expect(output).not.toContain("R13");
+      expect(code).toBe(0);
+    });
+  });
+
   // ── R5：超大文件的拆分候选（提示级，ISSUE #536）──
   // 历史口径只扫 `src/components/` 且只认 .tsx，于是**全仓库最大的那个文件**
   //（`settings/SettingsPageView.tsx` 2499 行）与逻辑层的大文件
@@ -408,7 +456,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     };
 
     it("基线缺失时 --strict 阻断并给出可行动作", () => {
-      writeLines("src/lib/huge.ts", 1000);
+      writeLines("src/lib/media/huge.ts", 1000);
       const { code, output } = runWith(["--strict"]);
       expect(code).toBe(1);
       expect(output).toContain("R5 基线文件缺失");
@@ -416,49 +464,49 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("基线内的超限文件放行（存量交给排期）", () => {
-      writeLines("src/lib/huge.ts", 1000);
-      writeBaseline({ "src/lib/huge.ts": 1000 });
+      writeLines("src/lib/media/huge.ts", 1000);
+      writeBaseline({ "src/lib/media/huge.ts": 1000 });
       const { code, output } = runWith(["--strict"]);
       expect(code).toBe(0);
       expect(output).toContain("[structure] OK");
     });
 
     it("新增超限文件被阻断（这才是棘轮的意义）", () => {
-      writeLines("src/lib/huge.ts", 1000);
-      writeBaseline({ "src/lib/huge.ts": 1000 });
-      writeLines("src/lib/another-huge.ts", 950);
+      writeLines("src/lib/media/huge.ts", 1000);
+      writeBaseline({ "src/lib/media/huge.ts": 1000 });
+      writeLines("src/lib/media/another-huge.ts", 950);
       const { code, output } = runWith(["--strict"]);
       expect(code).toBe(1);
       expect(output).toContain("R5 新增超限文件");
-      expect(output).toContain("src/lib/another-huge.ts");
+      expect(output).toContain("src/lib/media/another-huge.ts");
     });
 
     it("存量文件继续变大同样阻断（不是「进过基线就永久免疫」）", () => {
-      writeLines("src/lib/huge.ts", 1000);
-      writeBaseline({ "src/lib/huge.ts": 1000 });
-      writeLines("src/lib/huge.ts", 1200);
+      writeLines("src/lib/media/huge.ts", 1000);
+      writeBaseline({ "src/lib/media/huge.ts": 1000 });
+      writeLines("src/lib/media/huge.ts", 1200);
       const { code, output } = runWith(["--strict"]);
       expect(code).toBe(1);
       expect(output).toContain("R5 超限文件继续变大");
     });
 
     it("降回阈值内后提示收紧基线（不阻断，避免打断提交）", () => {
-      writeLines("src/lib/shrunk.ts", 800);
-      writeBaseline({ "src/lib/shrunk.ts": 1000 });
+      writeLines("src/lib/media/shrunk.ts", 800);
+      writeBaseline({ "src/lib/media/shrunk.ts": 1000 });
       const { code, output } = runWith(["--strict"]);
       expect(code).toBe(0);
       expect(output).toContain("R5 基线可收紧");
     });
 
     it("非 strict（pre-commit 口径）不因新增超限文件阻断", () => {
-      writeLines("src/lib/huge.ts", 1000);
+      writeLines("src/lib/media/huge.ts", 1000);
       writeBaseline({});
       const { code } = run();
       expect(code).toBe(0);
     });
 
     it("--update 按当前扫描重写基线（治理后收紧）", () => {
-      writeLines("src/lib/huge.ts", 1000);
+      writeLines("src/lib/media/huge.ts", 1000);
       writeBaseline({ "src/lib/stale.ts": 1234 });
       const { code, output } = runWith(["--update"]);
       expect(code).toBe(0);
@@ -466,7 +514,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       const written = JSON.parse(readFileSync(BASELINE(), "utf8")) as {
         files: Record<string, number>;
       };
-      expect(written.files).toEqual({ "src/lib/huge.ts": 1000 });
+      expect(written.files).toEqual({ "src/lib/media/huge.ts": 1000 });
     });
 
     /* ── 行数按 baselineRev 同口径重数（ISSUE #637）──
@@ -527,8 +575,8 @@ describe("check-file-structure.cjs（提交门槛）", () => {
         /* 基线那一刻文件是 1000 行，但基线里记成 900（旧口径 / 手工记漏）。
          * 旧判据会拿 1000 > 900 直接判「这次改动让它变大」—— 而当前 1000 行与
          * 基线版本逐行相同，压根没人动过它。 */
-        const rev = commitAs("src/lib/huge.ts", 1000, "baseline");
-        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
+        const rev = commitAs("src/lib/media/huge.ts", 1000, "baseline");
+        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
 
         const { code, output } = runWith(["--strict"]);
         expect(code).toBe(0);
@@ -536,12 +584,12 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       });
 
       it("内容未变 → 放行；再真加 20 行 → 阻断（同口径比较不放过真实膨胀）", () => {
-        const rev = commitAs("src/lib/huge.ts", 1000, "baseline");
-        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
+        const rev = commitAs("src/lib/media/huge.ts", 1000, "baseline");
+        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
         /* ① 一个字没改：同口径重数得 1000，与当前 1000 持平 → 放行。 */
         expect(runWith(["--strict"]).code).toBe(0);
         /* ② 真加了 20 行：1000 → 1020，同口径下 1020 > 1000 → 阻断。 */
-        writeLines("src/lib/huge.ts", 1020);
+        writeLines("src/lib/media/huge.ts", 1020);
         const { code, output } = runWith(["--strict"]);
         expect(code).toBe(1);
         expect(output).toContain("R5 超限文件继续变大");
@@ -549,8 +597,8 @@ describe("check-file-structure.cjs（提交门槛）", () => {
 
       it("基线版本里没有该文件（本次新增）→ 退回记录值，不静默漏放", () => {
         const rev = commitAs("src/lib/other.ts", 10, "empty baseline");
-        writeLines("src/lib/huge.ts", 1000);
-        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
+        writeLines("src/lib/media/huge.ts", 1000);
+        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
 
         const { code, output } = runWith(["--strict"]);
         expect(code).toBe(1);
@@ -558,15 +606,15 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       });
 
       it("基线缺 baselineRev（旧基线）→ 退回记录值，行为与历史一致", () => {
-        writeLines("src/lib/huge.ts", 1000);
-        writeBaseline({ "src/lib/huge.ts": 1000 });
+        writeLines("src/lib/media/huge.ts", 1000);
+        writeBaseline({ "src/lib/media/huge.ts": 1000 });
         const { code, output } = runWith(["--strict"]);
         expect(code).toBe(0);
         expect(output).toContain("[structure] OK");
       });
 
       it("--update 记下 baselineRev（供日后同口径重数）", () => {
-        writeLines("src/lib/huge.ts", 1000);
+        writeLines("src/lib/media/huge.ts", 1000);
         git("add", "-A");
         git("commit", "-qm", "seed");
         const rev = head();
@@ -586,11 +634,11 @@ describe("check-file-structure.cjs（提交门槛）", () => {
        * 判据修成两支：修订号可用 → 同口径重数（上面的用例）；不可达 → 直接报
        * 「基线修订号取不到」，可行动作是重记基线，而不是拆文件。 */
       it("基线修订号不可达 → 报「取不到」并指向重记基线，不误报成文件变大", () => {
-        writeLines("src/lib/huge.ts", 1000);
+        writeLines("src/lib/media/huge.ts", 1000);
         git("add", "-A");
         git("commit", "-qm", "seed");
         /* 记录值比当前小（基线的那个格式时代数得少），修订号却取不到。 */
-        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, "0".repeat(40));
+        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, "0".repeat(40));
 
         const { code, output } = runWith(["--strict"]);
         expect(code).toBe(1);
@@ -602,11 +650,11 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       });
 
       it("基线修订号不可达且内容真变大 → 同样只指向重记基线（不放行也不误报）", () => {
-        writeLines("src/lib/huge.ts", 1000);
+        writeLines("src/lib/media/huge.ts", 1000);
         git("add", "-A");
         git("commit", "-qm", "seed");
-        writeBaselineAtRev({ "src/lib/huge.ts": 990 }, "f".repeat(40));
-        writeLines("src/lib/huge.ts", 1200);
+        writeBaselineAtRev({ "src/lib/media/huge.ts": 990 }, "f".repeat(40));
+        writeLines("src/lib/media/huge.ts", 1200);
 
         const { code, output } = runWith(["--strict"]);
         expect(code).toBe(1);
@@ -615,9 +663,9 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       });
 
       it("基线修订号可达 → 走同口径重数那一支（不落进「取不到」）", () => {
-        const rev = commitAs("src/lib/huge.ts", 1000, "baseline");
-        writeBaselineAtRev({ "src/lib/huge.ts": 900 }, rev);
-        writeLines("src/lib/huge.ts", 1020);
+        const rev = commitAs("src/lib/media/huge.ts", 1000, "baseline");
+        writeBaselineAtRev({ "src/lib/media/huge.ts": 900 }, rev);
+        writeLines("src/lib/media/huge.ts", 1020);
         const { code, output } = runWith(["--strict"]);
         expect(code).toBe(1);
         expect(output).toContain("R5 超限文件继续变大");

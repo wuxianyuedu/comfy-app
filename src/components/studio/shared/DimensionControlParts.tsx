@@ -8,7 +8,7 @@
 import type { ReactNode } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-import { SIZE_SCENE_LABELS, type SizeScene } from "~/lib/size-presets";
+import { SIZE_SCENE_LABELS, type SizeScene } from "~/lib/media/size-presets";
 import {
   isVisibleInMode,
   resolveEntryRequired,

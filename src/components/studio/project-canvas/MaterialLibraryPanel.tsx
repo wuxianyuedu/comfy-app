@@ -24,7 +24,7 @@ import {
   useMaterialLibrary,
   type MaterialScope,
 } from "./hooks/use-material-library";
-import type { MaterialItem } from "~/lib/materials-client";
+import type { MaterialItem } from "~/lib/media/materials-client";
 
 /* 对外类型再导出：历史消费方从本文件 import MaterialItem，保持 API 不变。 */
 export type { MaterialItem };

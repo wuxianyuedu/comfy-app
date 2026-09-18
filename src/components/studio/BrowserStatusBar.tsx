@@ -9,7 +9,7 @@ import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
 import { fmtBytes } from "~/lib/format-bytes";
-import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell-tabs-store";
+import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
 /* ── Tauri window bottom status bar ─────────────────────────
    显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。

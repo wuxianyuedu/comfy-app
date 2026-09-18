@@ -18,8 +18,8 @@ import {
   exposedParamDisplayLabel,
   exposedParamsForMode,
   isVideoMode,
-} from "~/lib/workflow-exposed-params";
-import { getWorkflowType } from "~/lib/workflow-types";
+} from "~/lib/workflow/workflow-exposed-params";
+import { getWorkflowType } from "~/lib/workflow/workflow-types";
 
 /** 可作为输入的统一类型（供适配器配置选用）。
  *
