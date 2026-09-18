@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { MediaThumbnail } from "~/components/studio/ui/MediaThumbnail";
 import { useHistoryPanel } from "./hooks/use-history-panel";
 import {
@@ -180,10 +181,10 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                 key={`skeleton-${i}`}
                 className="flex items-center gap-3 py-2"
               >
-                <div className="bg-subtle h-10 w-10 shrink-0 animate-pulse rounded-md" />
+                <Skeleton className="bg-subtle h-10 w-10 shrink-0 rounded-md" />
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="bg-subtle h-3 w-3/4 animate-pulse rounded" />
-                  <div className="bg-subtle h-2 w-1/3 animate-pulse rounded" />
+                  <Skeleton className="bg-subtle h-3 w-3/4 rounded" />
+                  <Skeleton className="bg-subtle h-2 w-1/3 rounded" />
                 </div>
               </div>
             ))}

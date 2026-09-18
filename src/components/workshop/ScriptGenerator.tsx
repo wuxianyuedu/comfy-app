@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { ProjectMeta, ProjectType } from "~/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
@@ -168,19 +169,19 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             placeholder="输入一句话灵感或粘贴一段粗稿，直接生成完整剧本…"
           />
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={handleStructure}
               disabled={!idea.trim() || aiBusy}
-              className="border-border text-ink hover:bg-subtle rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-40"
+              className="border-border text-ink hover:bg-subtle h-auto rounded-lg px-4 py-2"
             >
               模板生成（离线）
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary-solid"
               onClick={handleAI}
               disabled={!idea.trim() || aiBusy}
-              className="bg-primary rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+              className="h-auto rounded-lg px-4 py-2"
             >
               {aiBusy ? (
                 "AI 生成中…"
@@ -194,7 +195,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
                   AI 生成剧本
                 </>
               )}
-            </button>
+            </Button>
           </div>
           {aiBusy && aiDraft && (
             <pre className="bg-bg text-ink/80 max-h-48 overflow-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap">

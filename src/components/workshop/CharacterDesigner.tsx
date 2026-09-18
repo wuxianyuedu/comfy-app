@@ -3,6 +3,7 @@ import React from "react";
 import { Trash } from "lucide-react";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
 import {
   CHARACTER_ATTRIBUTES,
@@ -409,13 +410,14 @@ export function CharacterDesigner({
           <span className="text-muted-foreground">({characters.length})</span>
         </h3>
         <div className="flex gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={add}
-            className="border-border text-primary hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs"
+            className="border-border text-primary hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
           >
             + 新建角色
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -446,14 +448,15 @@ export function CharacterDesigner({
             placeholder="例如：一位穿唐装的白发剑客，气质孤傲"
             className="border-border bg-bg focus:border-primary flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
           />
-          <button
-            type="button"
+          <Button
+            variant="primary-solid"
+            size="xs"
             onClick={handleAIGenerate}
             disabled={!brief.trim() || genBusy}
-            className="bg-primary rounded-lg px-3 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="h-auto rounded-lg px-3 py-2"
           >
             {genBusy ? "生成中…" : "AI 生成"}
-          </button>
+          </Button>
         </div>
         {config && !genSel && (
           <p className="text-muted-foreground mt-2 text-[11px]">
@@ -555,11 +558,12 @@ export function CharacterDesigner({
                   className="text-ink hover:border-border focus:border-primary flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium outline-none"
                   placeholder="角色名"
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="xs"
                   onClick={() => handleAICard(character)}
                   disabled={aiBusyId === character.id || genBusy}
-                  className="border-primary-soft text-primary hover:bg-primary-soft rounded-md border px-2 py-1 text-xs transition-colors disabled:opacity-40"
+                  className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
                   title="用 LLM 补全外貌/服装/性格"
                 >
                   {aiBusyId === character.id ? (
@@ -574,15 +578,16 @@ export function CharacterDesigner({
                       AI 润色
                     </>
                   )}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => remove(character.id)}
-                  className="text-muted-foreground hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                  className="text-muted-foreground hover:text-danger-strong"
                   aria-label="删除角色"
                 >
                   <Trash size={16} />
-                </button>
+                </Button>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">

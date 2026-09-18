@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { PageLoading } from "~/components/ui/page-loading";
+import { Button } from "~/components/ui/button";
 
 export interface RenderChainModule {
   /** 完整相对路径（相对项目根，如 src/components/xxx.tsx） */
@@ -222,40 +223,44 @@ export function DebugChainFooter({
               </code>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
+              <Button
+                variant="info"
+                size="xs"
                 onClick={() => source && openInVscode(source.absolutePath)}
                 disabled={!source}
-                className="rounded-md border border-sky-400/30 bg-sky-400/10 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-400/20 disabled:opacity-40 dark:text-sky-200"
+                className="h-auto rounded-md px-2.5 py-1"
                 title="在 Visual Studio Code 中打开该文件（需已安装 VSCode）"
               >
                 在 VSCode 打开
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
                 onClick={() => copyText(viewedFile)}
-                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors"
+                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-2.5 py-1"
                 title="复制完整相对路径"
               >
                 复制路径
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="warning"
+                size="xs"
                 onClick={() => source && copyText(source.content)}
                 disabled={!source}
-                className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:bg-amber-400/20 disabled:opacity-40 dark:text-amber-200"
+                className="h-auto rounded-md px-2.5 py-1"
                 title="复制全部源码"
               >
                 复制代码
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-xs"
                 onClick={closeModal}
                 aria-label="关闭"
-                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-2 py-1 text-[11px] transition-colors"
+                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md"
               >
                 ✕
-              </button>
+              </Button>
             </div>
           </div>
           {/* 内容区 */}

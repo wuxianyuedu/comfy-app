@@ -129,6 +129,11 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P2** | 视图层自建 `createPortal(` 浮层 | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu` |
 | **P3** | 视图层自写 `animate-spin` / `animate-pulse` | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
 
+**三条判据当前都是硬闸**（P1/P2/P3 基线里已无条目，新增任何自实现直接被阻断）：
+`pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
+「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
+防护强度只增不减。
+
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
 - 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
@@ -182,8 +187,8 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 |------|------|------|------|
 | 对话框/浮层 | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~ | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）** |
 | 空态 | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~ | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`） | ✅ **P2 完成** |
-| 按钮 | `ui/button.tsx` + 视图里的手写 `<button>`（逐批下降，当前值看 `pnpm ui:primitives:report`） | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 | ⏳ 分批（已清 4 批，见 §16.2.4.2） |
-| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ⏳ P3 |
+| 按钮 | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~ | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1 | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
+| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ✅ **P3 判据清零** |
 | 状态圆点 | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~ | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token） | ✅ **设置页批次完成** |
 | UI kit 目录 | `components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 | ⏳ 分批 |
 
@@ -219,6 +224,7 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 2 | `studio/project-canvas/`（含 `CanvasNode/`） | 84 | 见下 |
 | 3 | `studio/workflow-editor/` | 14 + 2（P3） | 见下 |
 | 4 | `app/(main)/settings/` + `components/settings/` | 45 + 11（P3） | 见下 |
+| 5 | 全库清零：`workshop/` + `studio/` 散件 + `app/` + 剩余 `studio/**` | 174 + 24（P3） | 见下 |
 
 **`studio/project-canvas/` 这批评测出的三条口径**：
 
@@ -292,10 +298,44 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
    `dbStudioDotState`），因为那是业务判据、不是样式。日志「跟随中」的脉冲
    小点也复用它（`pulse`），顺带消掉三份重复的 `animate-pulse`。
 
-**下一批候选**（照 `pnpm ui:primitives:report`）：`workshop/`
-（`WorkshopModelAdapterModal` 9 处、`CharacterPortraitStudio` / `LLMContext`
-各 7-8 处）、`studio/` 散件（`FilmStudio` 9 处、`ModelLibrary` /
-`TrainingStudio` / `VideoQueueModal` 各 8 处）、`app/login/`（8 处）。
+**收尾批次（第 5 批，P1/P3 双双清零）的口径**：
+
+9. **`variant` 只在「语义能对上」时接管配色，其余交给 `className`**。
+   不是每个手写按钮都有对应的语义变体 —— `TitleBarTabs` 的窗口按钮是
+   「无底色、hover 变色」、`IOEditContext` 的节点 id 徽标是「mono 小字 +
+   点线框」、`WorkflowNodeJsonPopover` 的三个控件是行内 `style` 驱动的。
+   这些一律用 `variant="ghost"` / `"outline"` + 原 `className`，**不要为了
+   「用上变体」而改变外观**：转换的验收标准是**渲染结果不变**（快照测试
+   就是为此存在的），不是「配色都走变体」。
+10. **`role="switch"` / `role="tab"` 的按钮照换**：base-ui 的 `Button` 会把
+    `role` / `aria-checked` / `aria-selected` / `tabIndex` / `onMouseDown`
+    原样透传（第 1、2 条同款），`h-[18px] w-[32px] p-0` 之类的尺寸类照旧由
+    调用处给。不要因为「它其实是开关」就留在手写形态 —— P1 判据不区分语义。
+11. **枚举状态圆点一律走 `StatusDot`**：本批把 `BrowserStatusBar` 的
+    dev server 灯、`LibraryHostCard` 的节点相位点、`WorkflowRunLogButton`
+    的「跟随中」点、`CustomNodesSettings` 的两处「解析中」点、`AgentOverlay`
+    的三个「正在输入」点全部换成 `StatusDot`（`probing` / `busy` + `pulse`）。
+    调用处特有的装饰（状态栏灯的发光描边）经 `className` 传下去，**不要
+    另起一个圆点实现**。`AgentOverlay` 的错峰脉冲用 `[animation-delay:0.15s]`
+    这类任意值类表达，不再写行内 `style={{ animationDelay }}`。
+12. **`animate-pulse` 的「骨架占位」走 `Skeleton`**：`HistoryPanel` 的五条
+    骨架、`MaterialLibraryPanel` 的两条、`ModelLibrary`（两处）、
+    `WorkshopStageBody` 的懒加载占位全部换成 `ui/skeleton` 的 `<Skeleton>`。
+    `Skeleton` 的 `bg-muted` 会被调用处的 `bg-subtle` 覆盖（tailwind-merge
+    后面的类赢），所以迁过来时保留原底色类即可。
+13. **`ui/progress` 的 `value={null}` 就是「不确定进度」**：定妆照的
+    「通道不提供进度」此前自写一条 `animate-pulse` 的满宽条，现在传 `null`
+    给 `Progress` —— base-ui 会渲染成不确定进度条（脉动）。**不要传 0 冒充
+    确定性进度**（那会把「不知道」画成「刚开始」）。
+
+**收尾批次的另一件事：`dynamic()` 的 `loading` 也归 P3**。
+`WorkflowLibrary` 那段「居中 spinner + 文案」的自写加载态换成 `PageLoading`
+（块级用 `PageLoading`，第 7 条同一口径）。
+
+**目录豁免的归还进度**：`studio/ui/` 与 `studio/shared/` 仍在 `EXEMPT_DIRS`
+里（§16.2.3 的「临时豁免」），归入 `ui/` 的迁移是独立一件事（台账最后一行）。
+本批**没有**把这两处纳入扫描 —— 它们的存量不进基线，也就不会让本次的
+「P1 清零」变成一句半真的话。下一步要做的是那件迁移本身。
 
 ### 16.2.4.1 按钮的语义变体（P1 的前置条件）
 

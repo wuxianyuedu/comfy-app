@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo } from "react";
 import { JsonViewer } from "./ui/JsonViewer";
+import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 /**
@@ -107,27 +108,29 @@ export function SourceModal({
                   : "工作流(RAW)格式导入，显示磁盘上的原始文件内容，未做任何转换"}
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
-            className="text-ink-muted hover:text-ink-soft transition-colors"
+            className="text-ink-muted hover:text-ink-soft"
             title="关闭"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         {/* Actions */}
         <div className="border-border-strong flex items-center gap-3 border-b px-5 py-2">
           <span className="flex-1" />
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={downloadCurrent}
             disabled={!activeText}
-            className="border-border-strong text-ink-soft hover:bg-subtle rounded-md border px-3 py-1.5 text-xs transition-colors disabled:opacity-40"
+            className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-md px-3 py-1.5"
           >
             下载当前
-          </button>
+          </Button>
         </div>
 
         {/* Body — JsonViewer 自带语法着色 / 折叠 / 搜索 / 滚动。 */}

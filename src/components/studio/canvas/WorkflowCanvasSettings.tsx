@@ -27,6 +27,7 @@
  */
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
+import { Button } from "~/components/ui/button";
 
 export interface CanvasSettings {
   /** 网格 (Grid) */
@@ -218,14 +219,15 @@ export function CanvasSettingsPanel({
               v1
             </span>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="icon-xs"
             onClick={onClose}
             aria-label="关闭"
-            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-1.5 py-0.5 text-[11px] transition-colors"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         {/* Body */}
@@ -338,13 +340,14 @@ export function CanvasSettingsPanel({
         {/* Footer */}
         <div className="border-border-strong text-ink-muted flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3 text-[11px]">
           <span>设置保存在本浏览器</span>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={reset}
-            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-2 py-1 text-[11px] font-medium transition-colors"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-2 py-1"
           >
             恢复默认
-          </button>
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
@@ -360,12 +363,12 @@ interface ButtonProps {
 
 export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
       onClick={onClick}
       title="画布设置 · 调整格子 / 坐标尺 / 缩略图 等"
       aria-label="画布设置"
-      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-12 right-3 z-6 rounded-md border px-2.5 py-1 text-[11px] font-medium tracking-tight shadow-lg backdrop-blur-sm transition-colors select-none"
+      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-12 right-3 z-6 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12px]">
         ⚙
@@ -379,7 +382,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
           className="ml-1 inline-block h-1.5 w-1.5 translate-y-[-1px] rounded-full bg-violet-400 align-middle shadow-[0_0_6px_rgba(167,139,250,0.7)]"
         />
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -392,18 +395,18 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
 
 export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
       onClick={onClick}
       title="回到有节点的位置（只移动视口，不改动节点布局）"
       aria-label="重新居中"
-      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 rounded-md border px-2.5 py-1 text-[11px] font-medium tracking-tight shadow-lg backdrop-blur-sm transition-colors select-none"
+      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12px]">
         🎯
       </span>
       居中
-    </button>
+    </Button>
   );
 }
 
@@ -499,13 +502,13 @@ function ToggleRow({
       <span className="text-ink-soft" title={tooltip}>
         {label}
       </span>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         role="switch"
         aria-checked={value}
         onClick={() => onChange(!value)}
-        className={`relative h-[18px] w-[32px] shrink-0 rounded-full transition-colors ${
-          value ? "bg-violet-500" : "bg-border-strong"
+        className={`relative h-[18px] w-[32px] shrink-0 rounded-full p-0 transition-colors ${
+          value ? "bg-primary-500 hover:bg-primary-500" : "bg-border-strong"
         }`}
       >
         <span
@@ -514,7 +517,7 @@ function ToggleRow({
             value ? "translate-x-[16px]" : "translate-x-[2px]"
           }`}
         />
-      </button>
+      </Button>
     </label>
   );
 }

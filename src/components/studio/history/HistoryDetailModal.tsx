@@ -15,6 +15,7 @@ import {
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { Button } from "~/components/ui/button";
 
 interface HistoryDetailModalProps {
   detailId: string | null;
@@ -82,19 +83,20 @@ export function HistoryDetailModal({
         <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-5 py-3">
           <h3 className="u-title">任务详情</h3>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="xs"
               disabled={!current?.id || actions.openFolderBusy}
               onClick={() => {
                 if (!current?.id) return;
                 void actions.openFolder(current.id);
               }}
-              className="border-border text-ink-strong hover:border-border-strong hover:text-ink inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-md px-2.5 py-1 text-[11px]"
               title="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
             >
               <Folder size={12} />
               打开目录
-            </button>
+            </Button>
             {actions.folderPopover && (
               <div
                 className="border-border bg-panel-deep absolute top-[52px] right-5 z-10 w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl"
@@ -104,14 +106,15 @@ export function HistoryDetailModal({
                   <span className="text-ink-strong text-[11px] font-medium">
                     📂 在资源管理器中打开
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
                     onClick={actions.dismissFolderPopover}
                     className="text-ink-muted hover:text-ink-bright"
                     aria-label="关闭"
                   >
                     <X size={12} />
-                  </button>
+                  </Button>
                 </div>
                 {actions.folderPopover.helperMissing ? (
                   <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-700 dark:text-amber-300">
@@ -144,30 +147,32 @@ export function HistoryDetailModal({
                   {actions.folderPopover.path}
                 </code>
                 <div className="mt-2 flex flex-wrap justify-end gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    variant="success"
+                    size="xs"
                     onClick={() => void actions.copyPath()}
-                    className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-700 hover:border-emerald-500/60 hover:text-emerald-700 dark:text-emerald-300"
+                    className="h-auto rounded-md px-2.5 py-1 text-[11px]"
                   >
                     📋 复制路径
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
             {firstImage?.localPath && (
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="xs"
                   disabled={actions.downloading}
                   onClick={() => {
                     if (!current?.id) return;
                     void actions.downloadWorkflow(current.id);
                   }}
-                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink rounded-md border px-2.5 py-1 text-[11px] transition-colors disabled:opacity-40"
+                  className="border-border text-ink-strong hover:border-border-strong hover:text-ink h-auto rounded-md px-2.5 py-1 text-[11px]"
                   title="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
                 >
                   下载工作流
-                </button>
+                </Button>
                 <span
                   className="bg-subtle text-ink-muted hidden rounded px-1.5 py-0.5 text-[10px] sm:inline"
                   title={sourceLabel}
@@ -176,13 +181,15 @@ export function HistoryDetailModal({
                 </span>
               </div>
             )}
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={onClose}
               className="text-ink-muted hover:text-ink-bright"
               aria-label="关闭"
             >
               <X size={16} />
-            </button>
+            </Button>
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">

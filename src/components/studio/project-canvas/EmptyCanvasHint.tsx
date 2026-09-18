@@ -6,6 +6,7 @@
  *  genuinely empty).
  */
 import { Icon } from "~/components/ui/icon";
+import { Spinner } from "~/components/ui/page-loading";
 
 interface EmptyCanvasHintProps {
   /** True → hydrating overlay; false → empty-canvas guide. */
@@ -17,11 +18,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
     return (
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
         <div className="border-border-strong from-subtle to-canvas-deep flex flex-col items-center gap-3 rounded-3xl border bg-linear-to-br px-12 py-10 shadow-2xl shadow-black/40 backdrop-blur-md">
-          <Icon
-            name="loader"
-            size={40}
-            className="animate-spin text-cyan-700 dark:text-cyan-300/90"
-          />
+          <Spinner className="size-10" />
           <p className="text-ink-soft text-sm">加载中…</p>
         </div>
       </div>

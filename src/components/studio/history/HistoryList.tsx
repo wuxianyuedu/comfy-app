@@ -5,6 +5,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
 import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
+import { Button } from "~/components/ui/button";
 import { useHistoryList } from "./hooks/use-history-list";
 import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 
@@ -99,12 +100,14 @@ export function HistoryList({
                 时间正序
               </option>
             </select>
-            <button
+            <Button
+              variant="outline"
+              size="xs"
               onClick={c.refresh}
-              className="border-border text-ink-faint hover:text-ink-bright rounded-lg border px-3 py-1.5 text-xs"
+              className="border-border text-ink-faint hover:text-ink-bright h-auto rounded-lg px-3 py-1.5"
             >
               ↻ 刷新
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -114,13 +117,15 @@ export function HistoryList({
             const isActive = c.filter === filterOption.key;
             const count = c.counts[filterOption.key] ?? 0;
             return (
-              <button
+              <Button
                 key={filterOption.key}
+                variant="ghost"
+                size="xs"
                 onClick={() => c.switchFilter(filterOption.key)}
                 className={
-                  "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all " +
+                  "h-auto gap-2 rounded-full px-3 py-1.5 " +
                   (isActive
-                    ? "bg-linear-to-r from-violet-500 to-fuchsia-500 text-white shadow-md shadow-violet-500/20"
+                    ? "bg-primary-solid text-primary-foreground hover:bg-primary-600 shadow-primary-500/20 shadow-md"
                     : "border-border bg-card text-ink-strong hover:bg-surface-2 border")
                 }
               >
@@ -140,7 +145,7 @@ export function HistoryList({
                 >
                   {count}
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -191,12 +196,14 @@ export function HistoryList({
                 已加载 {c.visibleTotal} / {c.filteredCount} 个任务
               </span>
               {c.canLoadMore ? (
-                <button
+                <Button
+                  variant="outline"
+                  size="xs"
                   onClick={c.loadMore}
-                  className="border-border bg-subtle text-ink-strong hover:bg-surface-2 rounded-lg border px-4 py-1.5 text-xs"
+                  className="border-border bg-subtle text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-4 py-1.5"
                 >
                   加载更多
-                </button>
+                </Button>
               ) : (
                 <span className="text-ink-fainter text-[11px]">已全部加载</span>
               )}

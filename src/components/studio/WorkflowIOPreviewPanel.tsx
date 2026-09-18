@@ -31,6 +31,7 @@ import {
 } from "~/components/studio/shared/workflow-io";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import { MultiModeSelect } from "~/components/studio/ui/MultiModeSelect";
+import { Button } from "~/components/ui/button";
 import { mergeExposedEntry } from "./workflow-editor/io-exposure";
 import type { WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
@@ -194,49 +195,53 @@ export function WorkflowIoPreviewPanel({
             </span>
           </div>
           {hasModeOverrides && (
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="xs"
               onClick={resetActiveModeOverrides}
-              className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-1.5 py-0.5 text-[11px] transition-colors"
+              className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-1.5 py-0.5 text-[11px]"
               title={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}
             >
               恢复默认
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="icon-xs"
             onClick={onClose}
-            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md border px-1.5 py-0.5 text-[11px] transition-colors"
+            className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md text-[11px]"
             title="关闭预览"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         {/* ── 模式页签：来自工作流 modes（与库「类型」同源）＋右侧模式管理 ── */}
         <div className="border-border-strong flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
           {modes.map((code) => (
             <span key={code} className="flex shrink-0 items-center gap-0.5">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setActiveMode(code)}
                 title={code}
-                className={tabClass(effectiveMode === code)}
+                className={`${tabClass(effectiveMode === code)} h-auto`}
               >
                 {modeLabel(code)}
-              </button>
+              </Button>
               {modes.length > 1 && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => {
                     const next = modes.filter((m) => m !== code);
                     onModesChange(next, next[0] ?? "");
                   }}
-                  className="text-ink-muted rounded px-0.5 text-[10px] transition-colors hover:text-red-700 dark:text-red-300"
+                  className="text-ink-muted hover:text-danger-strong rounded text-[10px]"
                   title={`从工作流模式中移除「${modeLabel(code)}」`}
                 >
                   ×
-                </button>
+                </Button>
               )}
             </span>
           ))}

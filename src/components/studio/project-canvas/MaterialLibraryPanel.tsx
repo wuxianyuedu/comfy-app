@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/studio/ui/MediaThumbnail";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
+import { Spinner } from "~/components/ui/page-loading";
 import { useState } from "react";
 
 import {
@@ -213,18 +215,7 @@ export function MaterialLibraryPanel({
           }
         >
           {uploading ? (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              className="animate-spin"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
-              <path d="M21 12a9 9 0 00-9-9" strokeLinecap="round" />
-            </svg>
+            <Spinner className="size-4" />
           ) : (
             <Plus size={16} strokeWidth={1.8} />
           )}
@@ -302,8 +293,8 @@ export function MaterialLibraryPanel({
                 key={`skeleton-${i}`}
                 className="flex items-center gap-3 py-2"
               >
-                <div className="bg-subtle h-9 w-9 shrink-0 animate-pulse rounded-lg" />
-                <div className="bg-subtle h-3 flex-1 animate-pulse rounded" />
+                <Skeleton className="bg-subtle h-9 w-9 shrink-0 rounded-lg" />
+                <Skeleton className="bg-subtle h-3 flex-1 rounded" />
               </div>
             ))}
           </div>

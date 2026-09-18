@@ -39,6 +39,7 @@ import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { shouldUseTitleBarTabs } from "~/lib/shell/title-bar-derive";
 import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
 import { TitleBarTabs } from "./TitleBarTabs";
+import { Button } from "~/components/ui/button";
 
 interface ShellTabsProps {
   /** 主应用页签的内容（即 workspace 整套界面）。 */
@@ -77,17 +78,18 @@ function TabButton({
     >
       <span className="truncate">{tab.label}</span>
       {tab.closable && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           aria-label={`关闭 ${tab.label}`}
           onClick={(e) => {
             e.stopPropagation();
             onClose(tab.id);
           }}
-          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded p-0.5"
+          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded"
         >
           <X size={14} />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -157,15 +159,16 @@ function TabBlockedNotice({
       {url && (
         <div className="border-border-subtle bg-subtle/40 flex max-w-xl items-center gap-2 rounded-md border px-3 py-2">
           <code className="text-ink-muted truncate text-xs">{url}</code>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => {
               void navigator.clipboard?.writeText(url);
             }}
-            className="text-ink-muted hover:bg-subtle hover:text-ink-strong shrink-0 rounded px-2 py-1 text-xs"
+            className="text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto shrink-0 rounded px-2 py-1"
           >
             复制地址
-          </button>
+          </Button>
         </div>
       )}
       <p className="text-ink-fainter max-w-xl text-center text-xs leading-relaxed">

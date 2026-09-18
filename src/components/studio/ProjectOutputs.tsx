@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/studio/ui/MediaThumbnail";
 import { AuroraBackground } from "~/components/studio/ui/AuroraBackground";
+import { Button } from "~/components/ui/button";
 import {
   getActiveId,
   listProjects,
@@ -209,12 +210,14 @@ export function ProjectOutputs() {
                 </option>
               ))}
             </select>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={refetchOutputs}
-              className="border-border-strong text-ink-muted hover:text-ink rounded-lg border px-3 py-2 text-xs"
+              className="border-border-strong text-ink-muted hover:text-ink h-auto rounded-lg px-3 py-2"
             >
               ↻ 刷新
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -264,13 +267,13 @@ export function ProjectOutputs() {
               const st = STATUS_CHIP[output.status] ?? STATUS_CHIP.QUEUED;
               const active = selectedId === output.id;
               return (
-                <button
+                <Button
                   key={output.id}
-                  type="button"
+                  variant="ghost"
                   onClick={() => setSelectedId(output.id)}
-                  className={`group relative overflow-hidden rounded-2xl border text-left transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
+                  className={`group relative h-auto overflow-hidden rounded-2xl border text-left font-normal transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
                     active
-                      ? "border-violet-400/70 ring-1 ring-violet-400/40"
+                      ? "border-primary-500/70 ring-primary-500/40 ring-1"
                       : "border-border-strong hover:border-ink-fainter"
                   } bg-subtle`}
                 >
@@ -322,7 +325,7 @@ export function ProjectOutputs() {
                       {timeAgo(output.createdAt)}
                     </p>
                   </div>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -348,13 +351,15 @@ export function ProjectOutputs() {
                   {TYPE_CHIP[selected.type] ?? selected.type}
                 </span>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setSelectedId(null)}
                 className="text-ink-muted hover:text-ink"
                 aria-label="关闭"
               >
                 <X size={16} />
-              </button>
+              </Button>
             </div>
 
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
@@ -452,18 +457,22 @@ export function ProjectOutputs() {
             {/* footer actions */}
             <div className="border-border-strong border-t p-4">
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="primary-solid"
+                  size="sm"
                   onClick={handleCopy}
-                  className="flex-1 rounded-lg bg-violet-500/90 px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-violet-500"
+                  className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
                 >
                   {copied ? "已复制 ✓" : "复制元数据"}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleExport}
-                  className="border-border-strong text-ink-soft hover:bg-subtle flex-1 rounded-lg border px-3 py-2 text-[12px] transition-colors"
+                  className="border-border-strong text-ink-soft hover:bg-subtle h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
                 >
                   导出 JSON
-                </button>
+                </Button>
               </div>
               <p className="text-ink-fainter mt-2 text-[10.5px]">
                 文件已保存至{" "}

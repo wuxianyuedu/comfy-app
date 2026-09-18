@@ -16,6 +16,7 @@
 import type { RefObject } from "react";
 
 import type { WorkflowIOEntry } from "~/components/studio/shared/workflow-io";
+import { StatusDot } from "~/components/ui/status-dot";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import { modeLabel } from "./workflow-library-config";
 import { WorkflowNodeOutputsRow } from "../shared/WorkflowNodeParts";
@@ -74,17 +75,18 @@ export function LibraryHostCard({
           title={workflowName}
           right={
             <WorkflowNodePill>
-              <span
-                className={[
-                  "h-1.5 w-1.5 rounded-full",
+              <StatusDot
+                state={
                   running
-                    ? "animate-pulse bg-amber-300"
+                    ? "busy"
                     : phaseKind === "done"
-                      ? "bg-emerald-400"
+                      ? "up"
                       : phaseKind === "failed"
-                        ? "bg-rose-400"
-                        : "bg-primary",
-                ].join(" ")}
+                        ? "down"
+                        : "probing"
+                }
+                sizeClass="size-1.5"
+                pulse={running}
               />
               <span
                 className="text-ink-soft text-[10px] font-medium"

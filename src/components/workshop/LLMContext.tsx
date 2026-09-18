@@ -6,6 +6,7 @@ import type { LLMConfigView } from "~/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { errorMessage } from "~/lib/error-message";
+import { Button } from "~/components/ui/button";
 
 interface LLMContextValue {
   config: LLMConfigView | null;
@@ -86,13 +87,14 @@ export function LLMStatusChip() {
   }
   if (!config) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="warning"
+        size="xs"
         onClick={openSettings}
-        className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-300"
+        className="h-auto rounded-full px-2 py-0.5 text-xs"
       >
         未配置 LLM
-      </button>
+      </Button>
     );
   }
   const label = config.provider === "local" ? "本地 LLM" : "远端 API";
@@ -110,15 +112,15 @@ export function LLMStatusChip() {
 export function LLMSettingsButton() {
   const { openSettings } = useLLM();
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
       onClick={openSettings}
       title="LLM 文本生成设置"
-      className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-2 text-sm transition-colors"
+      className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm transition-colors"
     >
       <Icon name="settings" size={14} className="mr-1.5 inline align-[-2px]" />
       LLM 设置
-    </button>
+    </Button>
   );
 }
 
@@ -218,26 +220,27 @@ function LLMSettingsModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="u-title">模型选择</h3>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
             className="text-muted-foreground hover:text-ink"
             aria-label="关闭"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
           工坊按当前生效的模型调用全链路（剧本 → 角色卡 → 分镜 →
           图片提示词）。需要增删模型、调温度等，请到
-          <button
-            type="button"
+          <Button
+            variant="link"
             onClick={onClose}
-            className="text-primary mx-1 underline underline-offset-2"
+            className="mx-1 h-auto p-0 text-inherit underline underline-offset-2"
           >
             设置
-          </button>
+          </Button>
           页配置。
         </p>
 
@@ -250,18 +253,18 @@ function LLMSettingsModal({
             {(["local", "remote"] as const).map((p) => {
               const active = provider === p;
               return (
-                <button
+                <Button
                   key={p}
-                  type="button"
+                  variant="outline"
                   onClick={() => setDraftProvider(p)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`h-auto rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     active
-                      ? "border-primary bg-primary/10 text-primary"
+                      ? "border-primary text-primary bg-primary/10"
                       : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
                   }`}
                 >
                   {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -270,11 +273,11 @@ function LLMSettingsModal({
         {candidates.length > 0 ? (
           <div className="space-y-1.5">
             {candidates.map((name) => (
-              <button
+              <Button
                 key={name}
-                type="button"
+                variant="outline"
                 onClick={() => setDraftModel(name)}
-                className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                className={`flex h-auto w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal transition-colors ${
                   activeModel === name
                     ? "border-primary bg-primary-soft text-primary"
                     : "border-border text-muted-foreground hover:bg-subtle"
@@ -291,7 +294,7 @@ function LLMSettingsModal({
                     本地
                   </span>
                 )}
-              </button>
+              </Button>
             ))}
           </div>
         ) : (
@@ -313,26 +316,26 @@ function LLMSettingsModal({
         )}
 
         <div className="mt-4 flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={handleTest}
             disabled={testing}
-            className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-2 text-sm disabled:opacity-40"
+            className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm"
           >
             {testing ? "测试中…" : "测试连接"}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary-solid"
             onClick={handleSave}
             disabled={saving || (draftModel == null && draftProvider == null)}
-            className="bg-primary flex-1 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            className="h-auto flex-1 rounded-lg px-4 py-2 text-sm"
           >
             {saving
               ? "保存中…"
               : draftModel == null && draftProvider == null
                 ? "使用当前配置"
                 : "保存并生效"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ import {
   getWorkflowType,
 } from "~/lib/workflow/workflow-types";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { Button } from "~/components/ui/button";
 import { useModelAdapters } from "./hooks/use-model-adapters";
 
 const MODE_GROUPS: Array<{
@@ -103,14 +104,15 @@ export function WorkshopModelAdapterModal({
               百万像素、倍数、图片…）映射到该接口请求体的字段名，产物按字段路径提取。
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
             aria-label="关闭"
             className="text-muted-foreground hover:text-ink"
           >
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-5 pb-4">
@@ -129,21 +131,22 @@ export function WorkshopModelAdapterModal({
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {candidates.map((c) => (
-                  <button
+                  <Button
                     key={c.name}
-                    type="button"
+                    variant="outline"
+                    size="xs"
                     onClick={() => selectModel(c.name)}
-                    className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                    className={`h-auto rounded-full px-3 py-1 ${
                       selectedModel === c.name
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border text-muted-foreground hover:bg-subtle"
+                        ? "border-primary text-primary bg-primary/10"
+                        : "text-muted-foreground hover:bg-subtle border-border hover:text-ink"
                     }`}
                   >
                     {c.name}
                     <span className="text-muted-foreground/70 ml-1 text-[10px]">
                       {c.kind === "image" ? "生图" : "视频"}
                     </span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
@@ -163,27 +166,29 @@ export function WorkshopModelAdapterModal({
                       className="border-border text-muted-foreground inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs"
                     >
                       <span>{modeLabel(a.mode)}</span>
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
                         aria-label={`移除模式 ${modeLabel(a.mode)}`}
                         onClick={() =>
                           setDraft((prev) =>
                             prev.filter((x) => x.mode !== a.mode),
                           )
                         }
-                        className="text-muted-foreground/60 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                        className="text-muted-foreground/60 hover:text-danger-strong hover:bg-transparent"
                       >
                         ✕
-                      </button>
+                      </Button>
                     </span>
                   ))}
-                  <button
-                    type="button"
+                  <Button
+                    variant="outline"
+                    size="xs"
                     onClick={() => setAddModeOpen((v) => !v)}
-                    className="border-primary text-primary hover:bg-primary/10 rounded-full border border-dashed px-2.5 py-1 text-xs"
+                    className="border-primary text-primary hover:bg-primary/10 h-auto rounded-full border-dashed px-2.5 py-1"
                   >
                     ＋ 添加模式
-                  </button>
+                  </Button>
                 </div>
                 {addModeOpen && (
                   <div className="border-border bg-bg mt-2 space-y-2 rounded-lg border p-2">
@@ -199,17 +204,18 @@ export function WorkshopModelAdapterModal({
                           </p>
                           <div className="flex flex-wrap gap-1">
                             {modes.map((t) => (
-                              <button
+                              <Button
                                 key={t.code}
-                                type="button"
+                                variant="outline"
+                                size="xs"
                                 onClick={() => {
                                   addMode(t.code);
                                   setAddModeOpen(false);
                                 }}
-                                className="border-border text-muted-foreground hover:border-primary hover:text-primary rounded border px-2 py-0.5 text-[11px]"
+                                className="border-border text-muted-foreground hover:border-primary hover:text-primary h-auto rounded px-2 py-0.5 text-[11px]"
                               >
                                 <LabelWithId label={t.label} id={t.code} />
-                              </button>
+                              </Button>
                             ))}
                           </div>
                         </div>
@@ -303,8 +309,9 @@ export function WorkshopModelAdapterModal({
                           placeholder="请求体字段名"
                           className="border-border bg-bg focus:border-primary flex-1 rounded-lg border px-2 py-1 font-mono text-[11px] outline-none"
                         />
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
                           aria-label="删除该输入映射"
                           onClick={() =>
                             updateAdapter(a.mode, (x) => ({
@@ -312,14 +319,15 @@ export function WorkshopModelAdapterModal({
                               inputs: x.inputs.filter((_, j) => j !== i),
                             }))
                           }
-                          className="text-muted-foreground/60 px-1 text-xs hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                          className="text-muted-foreground/60 hover:text-danger-strong hover:bg-transparent"
                         >
                           ✕
-                        </button>
+                        </Button>
                       </div>
                     ))}
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="xs"
                       onClick={() =>
                         updateAdapter(a.mode, (x) => {
                           const used = new Set(x.inputs.map((r) => r.type));
@@ -336,10 +344,10 @@ export function WorkshopModelAdapterModal({
                           };
                         })
                       }
-                      className="text-primary hover:bg-primary/10 border-primary/40 rounded border border-dashed px-2 py-0.5 text-[11px]"
+                      className="text-primary hover:bg-primary/10 border-primary/40 h-auto rounded border-dashed px-2 py-0.5 text-[11px]"
                     >
                       ＋ 添加输入映射
-                    </button>
+                    </Button>
                   </div>
                   <label className="text-muted-foreground mt-2 mb-1 block text-[10px]">
                     产物字段路径（响应 JSON 内，如 url /
@@ -375,21 +383,23 @@ export function WorkshopModelAdapterModal({
         </div>
 
         <div className="border-border flex items-center justify-end gap-2 border-t px-5 py-3">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onClose}
-            className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-4 py-1.5 text-xs"
+            className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-4 py-1.5 text-xs"
           >
             关闭
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary-solid"
+            size="sm"
             onClick={() => void save()}
             disabled={!selectedModel || saving}
-            className="bg-primary rounded-lg px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="h-auto rounded-lg px-4 py-1.5 text-xs"
           >
             {saving ? "保存中…" : "保存适配器"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@ import {
   Upload,
   Wrench,
 } from "lucide-react";
+import { Button } from "~/components/ui/button";
 
 /* ── Canvas Area with Context Menu + Bottom Toolbar ────
   Wraps content (e.g. WorkflowCanvas) with:
@@ -124,22 +125,22 @@ export function CanvasArea({
             item.divider ? (
               <div key={item.id} className="bg-border-strong my-1 h-px" />
             ) : (
-              <button
+              <Button
                 key={item.id}
-                type="button"
+                variant={item.danger ? "danger" : "ghost"}
                 disabled={item.disabled}
                 onClick={() => handleAction(item.id)}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors ${
+                className={`flex h-auto w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-normal ${
                   item.disabled
                     ? "text-ink-fainter cursor-not-allowed"
                     : item.danger
-                      ? "text-red-700 hover:bg-red-500/10 dark:text-red-400"
+                      ? "hover:bg-danger/10 text-danger-strong"
                       : "text-ink-strong hover:bg-subtle"
                 }`}
               >
                 <span className="text-ink-fainter shrink-0">{item.icon}</span>
                 {item.label}
-              </button>
+              </Button>
             ),
           )}
         </div>
@@ -217,18 +218,18 @@ export function CanvasArea({
 
       {/* ── Minimap Toggle (bottom-left) ── */}
       {showMinimap && (
-        <button
-          type="button"
+        <Button
+          variant="outline"
           onClick={() => onMinimapToggle?.(!minimapVisible)}
-          className={`absolute bottom-3 left-3 z-40 flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors ${
+          className={`absolute bottom-3 left-3 z-40 flex h-8 gap-1.5 rounded-lg px-2.5 ${
             minimapVisible
-              ? "text-ink-strong border-violet-500/30 bg-violet-500/10"
+              ? "text-ink-strong border-primary-500/30 bg-primary-500/10"
               : "border-border-strong bg-panel/85 text-ink-fainter hover:text-ink-strong"
           } backdrop-blur-sm`}
         >
           <LayoutGrid size={12} />
           小地图
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -248,18 +249,19 @@ function ToolbarButton({
   active?: boolean;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="icon-sm"
       onClick={onClick}
       title={title}
-      className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition-colors ${
+      className={`rounded-lg text-xs ${
         active
           ? "bg-primary/12 text-ink-bright hover:bg-primary/18"
           : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
       }`}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

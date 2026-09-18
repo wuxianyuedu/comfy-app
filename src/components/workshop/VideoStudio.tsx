@@ -14,6 +14,7 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 import { errorMessage } from "~/lib/error-message";
+import { Button } from "~/components/ui/button";
 
 interface Props {
   shots: Shot[];
@@ -244,13 +245,14 @@ export function VideoStudio({
         </p>
       )}
       {shots.length > 0 && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xs"
           onClick={onPrevStage}
-          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 rounded-lg px-3 py-1.5 text-xs"
+          className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
         >
           ← 回镜头生图
-        </button>
+        </Button>
       )}
     </div>
   );

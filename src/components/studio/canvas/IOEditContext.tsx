@@ -15,6 +15,7 @@
  * ════════════════════════════════════════════════════════════════════════ */
 import React from "react";
 import type { IoRef } from "../workflow-types";
+import { Button } from "~/components/ui/button";
 import {
   WFStoresProvider,
   useIOEditStore,
@@ -92,9 +93,9 @@ export function NodeIdChip({
   };
 
   return (
-    <button
+    <Button
       ref={ref}
-      type="button"
+      variant="outline"
       data-node-id-chip={nodeId}
       data-variant={variant}
       onClick={handleOpen}
@@ -105,15 +106,15 @@ export function NodeIdChip({
       aria-label={`查看节点 #${nodeId} 的原始 JSON 数据`}
       className={
         variant === "subgraph"
-          ? "nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-violet-400/40 bg-violet-500/10 px-1 font-mono text-[9.5px] font-semibold tracking-wider text-violet-700 uppercase transition-colors hover:border-violet-300/70 hover:bg-violet-500/25 hover:text-violet-900 focus:ring-1 focus:ring-violet-400/40 focus:outline-none dark:text-violet-200 dark:hover:text-violet-50"
-          : "nodrag nopan group inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded border border-cyan-400/45 bg-cyan-500/15 px-1 font-mono text-[9.5px] font-semibold text-cyan-700 transition-colors hover:border-cyan-300/70 hover:bg-cyan-500/25 hover:text-cyan-900 focus:ring-1 focus:ring-cyan-400/40 focus:outline-none dark:text-cyan-200 dark:hover:text-cyan-50"
+          ? "nodrag nopan group border-primary-400/40 bg-primary-500/10 text-primary-strong hover:border-primary-300/70 hover:bg-primary-500/25 focus:ring-primary-400/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold tracking-wider uppercase focus:ring-1 focus:outline-none"
+          : "nodrag nopan group border-info/45 bg-info/15 text-info-strong hover:border-info/70 hover:bg-info/25 focus:ring-info/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold focus:ring-1 focus:outline-none"
       }
     >
       <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>
         🔍
       </span>
       <span>#{nodeId}</span>
-    </button>
+    </Button>
   );
 }
 

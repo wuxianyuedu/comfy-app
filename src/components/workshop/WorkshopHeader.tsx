@@ -112,10 +112,10 @@ export function WorkshopHeader({
 
         {/* ── 项目切换器 ── */}
         <div className="relative ml-2" ref={menuRef}>
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={() => setOpen((v) => !v)}
-            className="text-ink hover:bg-primary/10 border-border bg-subtle flex max-w-[240px] items-center gap-2 rounded-lg border px-3 py-1.5 transition-colors"
+            className="text-ink hover:bg-primary/10 border-border bg-subtle h-auto max-w-[240px] gap-2 rounded-lg px-3 py-1.5"
             title="切换 / 新建 / 重命名项目"
           >
             <span className="truncate text-[13px] font-medium">{title}</span>
@@ -125,7 +125,7 @@ export function WorkshopHeader({
             <span className="text-muted-foreground shrink-0 text-[10px]">
               {open ? "▲" : "▼"}
             </span>
-          </button>
+          </Button>
 
           {open && (
             <div className="border-border bg-panel/98 absolute top-full left-0 z-50 mt-1.5 w-[280px] overflow-hidden rounded-xl border shadow-2xl backdrop-blur-md">
@@ -143,23 +143,25 @@ export function WorkshopHeader({
                           <span className="text-muted-foreground flex-1 truncate text-[12px]">
                             删除「{shown}」？
                           </span>
-                          <button
-                            type="button"
+                          <Button
+                            variant="danger"
+                            size="xs"
                             onClick={() => {
                               onDeleteProject(p.id);
                               setPendingDelete(null);
                             }}
-                            className="rounded bg-red-500/20 px-1.5 py-0.5 text-[11px] text-red-700 hover:bg-red-500/30 dark:text-red-400"
+                            className="rounded px-1.5 py-0.5"
                           >
                             删除
-                          </button>
-                          <button
-                            type="button"
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="xs"
                             onClick={() => setPendingDelete(null)}
-                            className="bg-surface-2 text-ink-strong hover:bg-subtle rounded px-1.5 py-0.5 text-[11px]"
+                            className="rounded px-1.5 py-0.5"
                           >
                             取消
-                          </button>
+                          </Button>
                         </div>
                       ) : editingId === p.id ? (
                         <input
@@ -175,13 +177,13 @@ export function WorkshopHeader({
                         />
                       ) : (
                         <>
-                          <button
-                            type="button"
+                          <Button
+                            variant="ghost"
                             onClick={() => {
                               onSwitchProject(p.id);
                               setOpen(false);
                             }}
-                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                            className="flex h-auto min-w-0 flex-1 items-center gap-2 text-left font-normal"
                             title={active ? "当前项目" : "切换到此项目"}
                           >
                             <span
@@ -198,27 +200,29 @@ export function WorkshopHeader({
                             >
                               {shown}
                             </span>
-                          </button>
-                          <button
-                            type="button"
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
                             onClick={() => {
                               setDraftTitle(shown);
                               setEditingId(p.id);
                             }}
-                            className="text-muted-foreground hover:text-ink-bright shrink-0 rounded px-1 text-[11px] opacity-0 transition-opacity group-hover:opacity-100"
+                            className="text-muted-foreground hover:text-ink-bright shrink-0 rounded opacity-0 group-hover:opacity-100"
                             title="重命名项目"
                           >
                             ✎
-                          </button>
+                          </Button>
                           {projects.length > 1 && (
-                            <button
-                              type="button"
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
                               onClick={() => setPendingDelete(p.id)}
-                              className="text-ink-muted shrink-0 rounded px-1 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                              className="text-ink-muted hover:text-danger-strong shrink-0 rounded opacity-0 group-hover:opacity-100"
                               title="删除项目"
                             >
                               🗑
-                            </button>
+                            </Button>
                           )}
                         </>
                       )}
@@ -244,17 +248,17 @@ export function WorkshopHeader({
                     className="border-border-strong bg-canvas-deep text-ink placeholder:text-ink-fainter w-full rounded border px-2 py-1 text-[13px] outline-none focus:border-violet-400/60"
                   />
                 ) : (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       setDraftTitle("");
                       setCreating(true);
                       setEditingId(null);
                     }}
-                    className="text-muted-foreground hover:text-ink hover:bg-surface-2 w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors"
+                    className="text-muted-foreground hover:text-ink hover:bg-surface-2 h-auto w-full rounded-lg px-2 py-1.5 text-left font-normal"
                   >
                     ＋ 新建项目
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
