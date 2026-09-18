@@ -30,9 +30,10 @@ function portColorFor(type?: string): string {
 }
 
 /** Type-chip styling for the port-row label (right side of each row).
- *  Matches Ardot v2: STRING/INT/FLOAT → `#26262E` solid + `#9A9AAD` text;
- *  IMAGE/MASK → `#1E1A2E` + `#7C5CFC` 0.4 stroke + `#7C5CFC` text;
- *  VIDEO/AUDIO → `#331A28` + `#FF5CA8` 0.4 stroke + `#FF5CA8` text.
+ *  Matches Ardot v2: STRING/INT/FLOAT → neutral surface + `#9A9AAD` text;
+ *  IMAGE/MASK → `--color-chip-type-image-bg` + `#7C5CFC` 0.4 stroke + `#7C5CFC` text;
+ *  VIDEO/AUDIO → `--color-chip-type-video-bg` + `#FF5CA8` 0.4 stroke + `#FF5CA8` text.
+ *  底色随主题（浅色档见 globals.css 的 `--color-chip-type-*-bg`）。
  *
  *  `type` is also normalised up-front: the raw `e.type` can leak through
  *  non-ComfyUI values (`"*"`, `""`, or, historically, stray
@@ -81,19 +82,24 @@ export function portChipStyle(type?: string): {
   border?: string;
 } {
   const t = normalizeTypeChip(type);
+  /* 底色是**表面**（随主题），只有文字是类型色（类型色例外，见 globals.css
+     的「固定暗色清单」）。写死 `#1E1A2E` / `#331A28` / `#26262E` 时，浅色主题下这颗
+     chip 是「深底 + 深类型字」，叠在浅色面板上整块读不出来（ISSUE #609
+     「浅色下预览 IO 这些看不清」——红框圈的就是它）。两态化后浅色拿极浅
+     紫 / 粉 / 中性底，深色观感不变。 */
   if (PORT_IMG.has(t))
     return {
-      background: "#1E1A2E",
+      background: "var(--color-chip-type-image-bg)",
       color: "#7C5CFC",
-      border: "1px solid rgba(124,92,252,0.4)",
+      border: "1px solid color-mix(in srgb, #7C5CFC 40%, transparent)",
     };
   if (PORT_VID.has(t))
     return {
-      background: "#331A28",
+      background: "var(--color-chip-type-video-bg)",
       color: "#FF5CA8",
-      border: "1px solid rgba(255,92,168,0.4)",
+      border: "1px solid color-mix(in srgb, #FF5CA8 40%, transparent)",
     };
-  return { background: "#26262E", color: "#9A9AAD" };
+  return { background: "var(--color-border-strong)", color: "#9A9AAD" };
 }
 
 /* export PortHandle — WorkflowNode outputs row

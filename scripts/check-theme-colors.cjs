@@ -205,7 +205,8 @@ const EXEMPT_TABLES = [
   {
     file: "src/components/studio/shared/WorkflowPortHandle.tsx",
     exports: [],
-    reason: "端口类型色 / 描边常量（PORT_STROKE 等）：整文件是端口视觉常量表",
+    reason:
+      "端口类型色 / 描边常量（PORT_STROKE、portColorFor、portChipStyle 的**文字色**）：色值即类型语义；chip 的**底色**已两态化（--color-chip-type-*-bg），不在豁免范围",
   },
   {
     file: "src/components/studio/shared/WorkflowSeedModeButton.tsx",
