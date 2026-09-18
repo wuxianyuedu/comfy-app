@@ -8,10 +8,12 @@ export type LoraSpec = { name: string; weight: number };
  *
  *  **只有 `GenerateInput`（`generate.generate` 的入参）里也有的字段会被真正填充**
  *  —— 内置模板（token 替换）移除后，`checkpoint` / `sampler` / `scheduler` /
- *  `steps` / `cfg` / `seed` / `size` / `count` / `denoise` / `mask` / `upscaleModel`
- *  / `prefix` / `wanModel` / `wanVae` / `t5Model` / `ltxModel` / `duration` /
- *  `resolution` / `fps` / `loras` 已无任何生产写入方，它们的自动注入分支只在
- *  「有人绕过路由直接调用本函数」时才有意义。
+ *  下列字段已无任何生产写入方（自动注入分支只在「有人绕过路由直接调用本函数」
+ *  时才有意义）；括号里是它们各自对应的参数名：步数（steps）、CFG（cfg）、
+ *  随机种子（seed）、尺寸（size）、数量（count）、降噪（denoise）、
+ *  遮罩（mask）、放大模型（upscaleModel）、前缀（prefix）、WAN 模型（wanModel）、
+ *  WAN VAE（wanVae）、T5 模型（t5Model）、LTX 模型（ltxModel）、
+ *  时长（duration）、分辨率（resolution）、帧率（fps）、LoRA（loras）。
  *
  *  保留这些字段与自动注入是为了两件事：① 画布 / 导入图的**提示词**注入
  *  （`prompt` / `negative` / `inputImage`，这条是真的在用）；② 未来若把某个
@@ -21,35 +23,35 @@ export type LoraSpec = { name: string; weight: number };
 export type GenerateParams = {
   prompt?: string;
   negative?: string;
-  checkpoint?: string; // fileName — must match ComfyUI exactly
+  checkpoint?: string; // 文件名 —— 必须与 ComfyUI 里的完全一致
   loras?: LoraSpec[];
   sampler?: string;
   scheduler?: string;
   steps?: number;
   cfg?: number;
-  size?: string; // e.g. "1024x1024"
+  size?: string; // 例如 "1024x1024"
   count?: number;
   seed?: number;
   denoise?: number;
-  inputImage?: string; // filename already in ComfyUI input dir
-  // image editing
+  inputImage?: string; // 已在 ComfyUI input 目录里的文件名
+  // 图像编辑
   mask?: string;
   upscaleModel?: string;
-  // video
+  // 视频
   frames?: number;
   fps?: number;
   wanModel?: string;
   wanVae?: string;
   t5Model?: string;
-  // LTX video
+  // LTX 视频
   ltxModel?: string;
   duration?: number;
   resolution?: string;
-  firstFrame?: string; // filename already in ComfyUI input dir (首尾帧首图)
-  lastFrame?: string; // filename already in ComfyUI input dir (首尾帧尾图)
-  // Custom workflow: user-curated exposed pins from the IO-edit mode.
-  // Same shape as the runner's RawWorkflowOverride — the generate router feeds
-  // the same array to buildCustomWorkflow and to enqueue().overrides.
+  firstFrame?: string; // 已在 ComfyUI input 目录里的文件名（首尾帧的首图）
+  lastFrame?: string; // 已在 ComfyUI input 目录里的文件名（首尾帧的尾图）
+  /* 自定义工作流：用户在 IO 编辑模式里挑出来的暴露引脚。
+   * 形状与执行器的 RawWorkflowOverride 一致 —— 生成路由会把同一个数组分别喂给
+   * buildCustomWorkflow 与 enqueue().overrides。 */
   workflowInputs?: RawWorkflowOverride[];
 };
 
@@ -58,26 +60,22 @@ export type BuildResult = {
   prompt?: Record<string, unknown>;
   error?: string;
 };
-
 /**
- * Maps a user-imported workflow's role nodes to specific node ids, so the UI
- * can override which CLIPTextEncode is the positive prompt, etc. All fields
- * are optional — any that are missing fall back to auto-detection.
+ * 把用户导入的工作流里「哪个节点是什么角色」映射到具体节点 id，
+ * 于是 UI 可以指定「哪一个 CLIPTextEncode 才是正向提示词」等等。
+ * 所有字段都是可选的 —— 缺哪个就对该角色走自动识别。
  */
 export type ParamMap = {
   positiveNode?: string;
   negativeNode?: string;
   checkpointNode?: string;
   samplerNode?: string;
-  // LoadImage node whose `image` input should receive a fed upstream image
-  // (set automatically when detected, or manually in the UI).
+  // 接收上游图片的 LoadImage 节点（自动识别出来的，或用户在 UI 里手动指定）。
   inputImageNode?: string;
 };
-
 /**
- * Client-safe workflow preview helpers are split into `workflow-preview.ts`
- * so they can be imported by browser components without pulling in server-only
- * modules such as `fs` / ComfyUI client.
+ * 客户端安全的预览助手拆在 `workflow-preview.ts`：浏览器组件可以导入它，
+ * 而不会连带拉进 `fs` / ComfyUI 客户端这类仅服务端的模块。
  */
 export {
   buildWorkflowPreview,
@@ -92,30 +90,28 @@ export {
   type WorkflowPreviewNode,
   type WorkflowPreviewNodeKind,
 } from "./workflow-preview";
-
 /**
- * Auto-detect the role nodes of an imported ComfyUI graph:
- *  - first two CLIPTextEncode → positive / negative prompt
- *  - first CheckpointLoaderSimple → model
- *  - first KSampler → sampler
+ * 自动识别导入的 ComfyUI 图里各角色节点：
+ *  - 前两个 CLIPTextEncode → 正向 / 负向提示词
+ *  - 第一个 CheckpointLoaderSimple → 模型
+ *  - 第一个 KSampler → 采样器
  */
 /**
- * Walk upstream from a conditioning link until we reach the text-encode node
- * that actually holds the prompt string (CLIPTextEncode / SDXL / Flux …). This
- * follows the real graph topology instead of guessing by node id order.
+ * 从 conditioning 连线向上游走，直到找到真正持有提示词字符串的那个
+ * 文本编码节点（CLIPTextEncode / SDXL / Flux …）。
+ * 这里跟的是真实的图拓扑，而不是按节点 id 顺序猜。
  */
 /**
- * Loose structural view of a possibly-incomplete graph node. Imported graphs
- * are user JSON — fields may be missing or hold unexpected types — so the
- * walkers below interpret every field defensively instead of trusting shapes.
+ * 对「可能不完整」的图节点做宽松结构视图。导入的图就是用户给的 JSON ——
+ * 字段可能缺失、类型可能出人意料 —— 所以下面的遍历逻辑对每个字段都做防御性
+ * 解读，而不是直接信任它的形状。
  */
 type GraphNodeLike = {
   class_type?: unknown;
   inputs: Record<string, unknown>;
 };
-
-/** Object check returning a structural view of `value` (same reference — no
- *  copy — so mutations through it write back into the graph). */
+/** 对象检查：返回 `value` 的结构视图（同一引用、不复制 ——
+ *  因此经它做的修改会写回原图）。 */
 function asGraphNode(value: unknown): GraphNodeLike | null {
   return typeof value === "object" && value !== null
     ? (value as GraphNodeLike)
@@ -165,14 +161,12 @@ function isSamplerLike(node: GraphNodeLike): boolean {
     Array.isArray(node.inputs.negative)
   );
 }
-
 /**
- * Auto-detect the role nodes of an imported ComfyUI graph.
+ * 自动识别导入的 ComfyUI 图里各角色节点。
  *
- * Positive/negative are no longer guessed by node id order — they follow the
- * KSampler's `positive`/`negative` conditioning links upstream to the actual
- * text-encode node (CLIPTextEncode / SDXL / Flux / …). Falls back to the
- * first two CLIPTextEncode when no sampler is present.
+ * 正/负向不再按节点 id 顺序猜 —— 而是沿 KSampler 的 `positive`/`negative`
+ * conditioning 连线向上游走，找到真正的文本编码节点（CLIPTextEncode /
+ * SDXL / Flux …）。图中没有采样器时，回落到「前两个 CLIPTextEncode」。
  */
 export function detectParamMap(graph: Record<string, unknown>): ParamMap {
   const map: ParamMap = {};
@@ -195,7 +189,7 @@ export function detectParamMap(graph: Record<string, unknown>): ParamMap {
     if (posEnc) map.positiveNode = posEnc;
     if (negEnc) map.negativeNode = negEnc;
   }
-  // Fallback: first two CLIPTextEncode by id (preserves old behavior if no sampler).
+  // 兜底：按 id 取前两个 CLIPTextEncode（没有采样器时保持旧行为）。
   if (!map.positiveNode || !map.negativeNode) {
     const clips = nodes.filter(
       (node) => node.node?.class_type === "CLIPTextEncode",
@@ -221,18 +215,16 @@ export function detectParamMap(graph: Record<string, unknown>): ParamMap {
 
   return map;
 }
-
 /**
- * ComfyUI seeds are unsigned 32-bit integers. The old code used
- * `Math.random() * 0xffffffffffffffff` (2^64), which is both beyond
- * `Number.MAX_SAFE_INTEGER` (so the value lost integer precision) and beyond
- * the uint32 range ComfyUI expects. Generate a safe seed in [0, 2^32-1].
+ * ComfyUI 的 seed 是无符号 32 位整数。旧代码用
+ * `Math.random() * 0xffffffffffffffff`（2^64）—— 既超过
+ * `Number.MAX_SAFE_INTEGER`（整数精度因此丢失），又超出 ComfyUI 期望的 uint32
+ * 范围。这里在 [0, 2^32-1] 内生成安全的 seed。
  */
 function randomSeed(): number {
   return Math.floor(Math.random() * 0x100000000);
 }
-
-/** Clamp a user-provided seed into the valid uint32 range ComfyUI accepts. */
+/** 把用户给的 seed 夹到 ComfyUI 能接受的合法 uint32 范围内。 */
 function clampSeed(seed: number): number {
   const truncated = Math.trunc(seed);
 
@@ -254,13 +246,12 @@ const CLIP_LOADER = new Set([
   "CLIPLoader",
   "CLIPLoaderGGUF",
 ]);
-
 /**
- * Inject a chain of LoraLoader nodes. Supports Flux / SD3 / WAN workflows whose
- * base model+clip come from UNETLoader + DualCLIPLoader (or Triple/CLIPLoader)
- * instead of a single CheckpointLoaderSimple. Returns the base loader outputs
- * and the id of the last LoraLoader so callers can re-point only the nodes that
- * originally consumed the base model/clip (preserving refiner / dual-CLIP chains).
+ * 注入一串 LoraLoader 节点。支持 Flux / SD3 / WAN 这类「基座 model+clip 来自
+ * UNETLoader + DualCLIPLoader（或 Triple/CLIPLoader）而非单个
+ * CheckpointLoaderSimple」的工作流。
+ * 返回基座 loader 的输出与最后那个 LoraLoader 的 id，调用方据此只重连「原本吃
+ * 基座 model/clip 的节点」（refiner / 双 CLIP 链路因此保持完好）。
  */
 function injectLoras(
   graph: Record<string, unknown>,
@@ -276,7 +267,7 @@ function injectLoras(
     const classType = asGraphNode(value)?.class_type;
     if (typeof classType !== "string") continue;
     if (CHECKPOINT_LOADER.has(classType)) {
-      // CheckpointLoaderSimple: outputs [MODEL0, CLIP1, VAE2].
+      // CheckpointLoaderSimple 的输出顺序是 [MODEL0, CLIP1, VAE2]。
       baseModel ??= [id, 0];
       baseClip ??= [id, 1];
     } else if (UNET_LOADER.has(classType) && !baseModel) {
@@ -312,10 +303,9 @@ function injectLoras(
     lastLora: loraIds.length ? loraIds[loraIds.length - 1]! : null,
   };
 }
-
-/** Re-point only the loader outputs that originally fed the base model/clip.
- *  Skips the injected LoraLoader nodes themselves (their model/clip inputs
- *  legitimately reference the previous link in the chain). */
+/** 只重连「原本吃基座 model/clip」的那些 loader 输出。
+ *  跳过注入的 LoraLoader 节点自身（它们的 model/clip 输入本就该指向链上的
+ *  前一个环节）。 */
 function rewireLoaders(
   graph: Record<string, unknown>,
   baseModel: [string, number] | null,
@@ -349,23 +339,22 @@ function rewireLoaders(
     }
   }
 }
-
-/** Set the prompt string on a CLIPTextEncode-style node (handles SDXL text_g/text_l). */
+/** 给 CLIPTextEncode 类节点写提示词（兼容 SDXL 的 text_g/text_l）。 */
 function setPromptText(node: GraphNodeLike | null, prompt: string) {
   if (!node?.inputs) return;
   const inputs = node.inputs;
   if (inputs.text_g !== undefined) {
-    // SDXL / SDXL-simplified: both text_g and text_l carry the prompt.
+    // SDXL / SDXL-simplified：text_g 与 text_l 都承载提示词。
     inputs.text_g = prompt;
     if (inputs.text_l !== undefined) inputs.text_l = prompt;
   } else if (!Array.isArray(inputs.text)) {
-    // Plain CLIPTextEncode: `text` is the prompt (unless it's a link).
+    // 普通 CLIPTextEncode：`text` 就是提示词（除非它是一条连线）。
     inputs.text = prompt;
   }
 }
 
 /**
- * Build a graph from a user-imported ComfyUI workflow (API format).
+ * 从用户导入的 ComfyUI 工作流（API 格式）构建成图。
  *
  * 按节点检测自动注入：prompt/negative 进第一对 CLIPTextEncode，steps/cfg/seed/
  * sampler/scheduler/checkpoint 进对应节点（存在时）。这样一张原样的
@@ -381,13 +370,11 @@ export function buildCustomWorkflow(
   paramMap?: ParamMap | null,
 ): Record<string, unknown> {
   const out = JSON.parse(JSON.stringify(graph)) as Record<string, unknown>;
-
-  // Use the user-supplied role mapping, else fall back to auto-detection.
+  // 优先用用户给的角色映射，没有就回落到自动识别。
   const map: ParamMap =
     paramMap && Object.keys(paramMap).length ? paramMap : detectParamMap(out);
-
-  // Prompt/negative are only overridden when explicitly supplied — otherwise a
-  // workflow with a baked-in prompt must keep it (the old code wiped it to "").
+/* 只有在明确传了 prompt/negative 时才覆盖 —— 否则「自带提示词」的工作流必须
+ * 保留它（旧代码会把它清成 ""）。 */
   if (
     map.positiveNode &&
     out[map.positiveNode] &&
@@ -419,10 +406,8 @@ export function buildCustomWorkflow(
       if (typeof params.steps === "number") inputs.steps = params.steps;
 
       if (typeof params.cfg === "number") inputs.cfg = params.cfg;
-
-      // KSampler uses `seed`, KSamplerAdvanced uses `noise_seed`.
-
-      // Note: seed=0 is a valid, intentional value — the old `> 0` guard dropped it.
+      /* KSampler 用 `seed`，KSamplerAdvanced 用 `noise_seed`。
+       * 注意：seed=0 是合法且有意义的值 —— 旧的 `> 0` 判断会把它丢掉。 */
 
       const seedKey =
         samplerNode.class_type === "KSamplerAdvanced" ? "noise_seed" : "seed";
@@ -436,18 +421,16 @@ export function buildCustomWorkflow(
       if (params.scheduler) inputs.scheduler = params.scheduler;
     }
   }
-
-  // Feed an upstream-generated (or manually uploaded) image into the
-  // workflow's LoadImage node so chains like 图生图 work out of the box.
+  /* 把上游生成的（或手动上传的）图片喂进工作流的 LoadImage 节点，
+   * 让「图生图」这类链路开箱即用。 */
   if (params.inputImage && map.inputImageNode) {
     const inputNode = asGraphNode(out[map.inputImageNode]);
     if (inputNode?.inputs) inputNode.inputs.image = params.inputImage;
   }
-
-  // Apply user-curated exposed-pin values (the dynamic form). These win over
-  // the auto-injection above, so an explicitly set pin always takes effect.
-  // Numeric coercion: ComfyUI rejects string values for numeric inputs, so when
-  // the existing pin already holds a number we coerce a numeric-looking string.
+  /* 应用用户挑出来的暴露引脚值（动态表单）。它们优先于上面的自动注入，
+   * 因此显式设过的引脚一定会生效。
+   * 数值强转：ComfyUI 不接受数值输入收到字符串，所以当该引脚原本就是数字时，
+   * 把「看起来像数字的字符串」强转成数字。 */
   if (params.workflowInputs && Array.isArray(params.workflowInputs)) {
     for (const it of params.workflowInputs) {
       const node = asGraphNode(out[it.nodeId]);
@@ -463,8 +446,7 @@ export function buildCustomWorkflow(
       node.inputs[it.name] = coerceApiInputValue(cur, value);
     }
   }
-
-  // Re-wire model/clip if LoRAs are present (custom workflows too).
+  // 有 LoRA 时重连 model/clip（自定义工作流同样适用）。
   if (params.loras?.length) {
     const { baseModel, baseClip, lastLora } = injectLoras(out, params.loras);
     if (lastLora) rewireLoaders(out, baseModel, baseClip, lastLora);

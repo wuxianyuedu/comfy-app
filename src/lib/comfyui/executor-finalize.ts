@@ -107,12 +107,9 @@ async function completeInner(
   const publicBase = projectId
     ? `/api/generated/projects/${projectId}/${taskId}`
     : `/api/generated/${taskId}`;
-
-  // explicit "拉取 history" line so the
-  // gap between "last node done" and "history is ready" is visible
-  // — ComfyUI is async here (success signal lands before outputs
-  // are persisted), so a hang in this window would otherwise look
-  // like "the runner froze".
+/* 显式打一行「拉取 history」：让「最后一个节点跑完」到「history 就绪」之间的
+ * 空档可见 —— ComfyUI 在这段是异步的（成功信号先到，产物后落盘），所以在
+ * 这个窗口里卡住，否则看起来就像「执行器冻住了」。 */
   log(taskId, "info", "🔍 拉取 ComfyUI history（最长 ~3s）…");
   const entry: ComfyHistoryEntry | null = await fetchHistoryEntry(promptId);
   if (!entry) {
@@ -254,8 +251,7 @@ async function completeInner(
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "image" });
     log(taskId, "info", `下载第 ${i + 1} 张图像`);
   }
-
-  // Videos (mp4 / gif / webm)
+// 视频（mp4 / gif / webm）
   for (let i = 0; i < videos.length; i++) {
     const v = videos[i]!;
     const buf = await getView(v.filename, v.subfolder ?? "", v.type ?? "");
@@ -265,8 +261,7 @@ async function completeInner(
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "video" });
     log(taskId, "info", `下载第 ${i + 1} 个视频`);
   }
-
-  // Audio (SaveAudio / AudioComposite)
+// 音频（SaveAudio / AudioComposite）
   for (let i = 0; i < audios.length; i++) {
     const a = audios[i]!;
     const buf = await getView(a.filename, a.subfolder ?? "", a.type ?? "");
@@ -276,8 +271,7 @@ async function completeInner(
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "audio" });
     log(taskId, "info", `下载第 ${i + 1} 个音频`);
   }
-
-  // Generic 3D / unknown file outputs (mesh, gltf, obj, …)
+// 通用 3D / 未知文件产物（mesh、gltf、obj …）
   for (let i = 0; i < others.length; i++) {
     const o = others[i]!;
     const buf = await getView(o.filename, o.subfolder ?? "", o.type ?? "");
@@ -287,8 +281,7 @@ async function completeInner(
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "other" });
     log(taskId, "info", `下载第 ${i + 1} 个文件`);
   }
-
-  // Text outputs (ShowText): persist as .txt so the result is inspectable.
+// 文本产物（ShowText）：存成 .txt，结果可读可查。
   for (let i = 0; i < texts.length; i++) {
     const fname = `txt_${i}.txt`;
     await fs.writeFile(path.join(dir, fname), texts[i]!, "utf-8");
@@ -397,11 +390,9 @@ async function completeInner(
 
   await persistLogs(taskId);
   taskRuntimeLog.info(`任务完成 ${taskId}`, { outputs: saved.length });
-  // emit "总耗时 Xs" so the user can see
-  // the wall-clock duration of the whole run.  Falls back to a
-  // generic note if startedAt is missing (which can happen for
-  // tasks enqueued in a previous server lifetime and re-claimed on
-  // a re-attach — extremely rare).
+/* 打一行「总耗时 Xs」：让用户看到整轮跑的墙上时间。startedAt 缺失时退化成一句
+ * 通用说明 —— 这只在「上一次服务端生命周期入队、本次重新接管」时才会发生，
+ * 极其罕见。 */
   const startedAt = s.startedAt.get(taskId);
   if (startedAt) {
     const elapsedSec = Math.max(
@@ -462,9 +453,8 @@ export async function finalizeFailure(
     kickQueue();
     return;
   }
-  // emit total elapsed time on the failure
-  // branch too, so the user knows "this task actually ran for Xs
-  // before failing" rather than "it died immediately".
+/* 失败分支同样打出总耗时：让用户知道「这个任务其实跑了 Xs 才失败」，而不是
+ * 「它一上来就死了」。 */
   const startedAt = s.startedAt.get(taskId);
   const elapsedSuffix = startedAt
     ? `（已运行 ${Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10)}s）`
@@ -479,23 +469,18 @@ export async function finalizeFailure(
 
   await persistLogs(taskId);
   taskRuntimeLog.error(`任务失败 ${taskId}: ${friendly}`);
-  // clean up the per-task state we added so
-  // a re-enqueue of the same taskId starts from a clean slate.
+// 清掉本模块给这个任务加的状态，同一个 taskId 再入队时从干净状态开始。
   if (startedAt) s.startedAt.delete(taskId);
   s.lastNodeByTask.delete(taskId);
   /* executedWorkflow 只在 complete() 成功分支清过，失败分支一直留着——
    * 既泄漏内存，又让「已执行过就永远算被本进程认领」把 reaper 的孤儿回收
    * 永久挡住。失败收口同样清掉。 */
   s.executedWorkflow.delete(taskId);
-  /* previously finalizeFailure only emitted
-   *  an `error` event.  The `error` event closes the SSE stream (see
-   *  /api/tasks/[id]/stream/route.ts:54-59) so a `state` patch
-   *  carrying structured `validationErrors` would never reach the
-   *  client.  cancelTask() already does the right thing — it emits
-   *  `state` first, then `error`.  Mirror that here so the panel
-   *  gets the structured diagnostic *while the stream is still
-   *  open* and patches d.validationErrors before the close.  Order
-   *  matters: state first (heal UI), error second (close socket). */
+/* 以前 finalizeFailure 只发 `error` 事件。而 `error` 会把 SSE 流关掉（见
+ * /api/tasks/[id]/stream/route.ts），于是带着结构化 `validationErrors` 的
+ * `state` 补丁永远到不了客户端。cancelTask() 的做法是对的 —— 先 `state` 再
+ * `error`。这里照做：让面板**在流还开着的时候**拿到结构化诊断，在关闭之前把
+ * d.validationErrors 补上。顺序要紧：先 state（修 UI），后 error（关连接）。 */
   s.emitter.emit(taskId, {
     type: "state",
     status: "FAILED",
