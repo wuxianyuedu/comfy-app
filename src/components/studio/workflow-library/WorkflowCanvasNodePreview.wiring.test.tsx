@@ -285,7 +285,7 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
      *  缺任一处，写入成功的线永远进不了画布 —— 用户看到的就是「一松手线就消失」。 */
     const flow = read("hooks/use-library-wire-flow.ts");
     expect(flow).toMatch(
-      /deriveLibraryEdges\(paramCards\.wires, outputWires\)/,
+      /deriveLibraryEdges\(paramCards\.wires, outputWires, !!canWire, selectedEdgeIds\)/,
     );
     const canvas = read("WorkflowLibraryCanvas.tsx");
     expect(canvas).toMatch(/setEdges\(flow\.defaultEdges\)/);
@@ -476,7 +476,7 @@ describe("尺寸各项各自可取外部值", () => {
       },
       mode: "T2I",
     });
-    const edges = deriveLibraryEdges(paramCards.wires, []);
+    const edges = deriveLibraryEdges(paramCards.wires, [], true);
     /* 尺寸那张卡的行 = 形态，所以圆点 handle 就是**子口 id**（卡片与边同一份算式）。 */
     for (const entryId of ["size-width", "size-aspect", "size-megapixels"]) {
       expect(
