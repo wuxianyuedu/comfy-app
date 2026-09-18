@@ -21,28 +21,20 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
 }: {
   data: WorkflowGroupData;
 }) {
-  /* title is now a "tab" inside the top-left corner of the
-   *  frame (was floating ABOVE the box at `top-[-16px]` — looked detached
-   *  and competed with adjacent note headers).  The tab's bg picks up
-   *  the group colour at 0.12 alpha so it visually anchors to its
-   *  parent frame; the body fill drops to 0.04 so internal nodes
-   *  remain the visual focus.
+  /* 标题现在是框内左上角的一个「页签」（原先浮在框**上方**的
+   *  `top-[-16px]`，看着像脱了节，还和相邻便签的标题打架）。
+   *  页签底色取分组色并压到 0.12 alpha，视觉上挂住它所属的框；
+   *  主体填充降到 0.04，让内部节点仍是视觉焦点。
    *
-   *  user feedback — 0.12 alpha was too washed out
-   *  against the canvas, "Step2 · Image size" tab barely
-   *  contrasted with the surrounding wireframe and looked almost
-   *  transparent.  Bumped tab to 0.30 — clearly readable while still
-   *  feeling like a light "tab chip" attached to the frame edge (vs
-   *  the full WorkflowNote title bar at 0.65 mix which would feel like a
-   *  separate card).
+   *  0.12 一开始被用户反馈「在画布上太淡」——「Step2 · Image size」页签
+   *  与周围的线框几乎看不出对比、像透明的。页签因此抬到 0.30：
+   *  清楚可读，又仍像一枚贴着框边的轻量「页签芯片」
+   *  （WorkflowNote 那种 0.65 混色的整条标题栏会显得像另一张卡片）。
    *
-   *  same complaint extended to the FRAME BODY
-   *  "红框处的背景也很透明" (top-right of group interior).  Body was
-   *  at 0.04 (effectively invisible against the dark canvas grid).
-   *  Bumped to 0.12 so the group's spatial boundary is visible at a
-   *  glance, but still 2.5× lighter than the 0.30 tab so the title
-   *  remains the visual anchor and internal nodes aren't drowned by
-   *  the tint. */
+   *  同一个问题随后又落到**框体**上：「红框处的背景也很透明」
+   *  （分组内部右上角）。框体原本是 0.04，在暗色画布网格上实际不可见。
+   *  抬到 0.12 后分组空间边界一眼可辨，但仍比 0.30 的页签轻 2.5 倍 ——
+   *  标题保持视觉锚点，内部节点不被这层色淹掉。 */
   const fill = hexToRgba(data.color, 0.12);
   const border = hexToRgba(data.color, 0.55);
   const titleBg = hexToRgba(data.color, 0.3);
@@ -65,10 +57,9 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
           style={{
             color: titleCol,
             background: titleBg,
-            /* Soften the title tab into the frame edge with a 1px
-             *  side/bottom divider that picks up the border colour at
-             *  0.5 alpha — keeps the tab visually attached to the
-             *  frame without an extra hard outline. */
+            /* 用 1px 的侧边 / 底部分隔线把标题页签「融」进框边：
+             *  分隔线取边框色并压到 0.5 alpha —— 页签视觉上挂住了框，
+             *  又不必再加一圈硬描边。 */
             boxShadow: `inset 0 -1px 0 ${hexToRgba(data.color, 0.5)}, inset -1px 0 0 ${hexToRgba(data.color, 0.5)}`,
           }}
         >
@@ -78,43 +69,37 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
     </div>
   );
 });
-
-/* ── IO boundary port node ──
- * Compact label-only rendering for nodes sitting on a subgraph's INPUTS
- * or OUTPUTS boundary (i.e. nodes whose input is fed by the -10 sentinel
- * or whose output is consumed by the -20 sentinel).  Reference image:
- * the user wants these boundary nodes drawn as small label rows on the
- * LEFT (inputs) / RIGHT (outputs) of the inner canvas — no card chrome,
- * no title bar, no outputs strip — instead of the current "full FlowNode
- * scattered across canvas" behaviour.
+/* ── IO 边界端口节点 ──
+ * 给位于子图 INPUTS / OUTPUTS 边界上的节点（即输入由 -10 哨兵馈入、
+ * 或输出被 -20 哨兵消费的节点）用的紧凑纯标签渲染。用户口径：
+ * 这些边界节点要画成内层画布**左侧**（输入）/ **右侧**（输出）的小标签行 ——
+ * 没有卡片外壳、没有标题栏、没有输出条 ——
+ * 而不是现在「完整的 FlowNode 撒在画布上」那样。
  *
  * Visual contract:
- *   - No background card, no border.  Just label text + handle dot.
- *   - Width ~110 px (long enough for typical port names; capped at 200
- *     so a single "thisIsAnExtremelyLongWrapperInputName" doesn't blow
- *     out the column).
- *   - INPUT variant: handle on LEFT (sentinel -10 wire enters here).
- *   - OUTPUT variant: handle on RIGHT (sentinel -20 wire exits here).
- *   - Value column rendered in amber tabular-nums when present (the
- *     wrapper input's default value, e.g. seed `41`).  Matches the
- *     reference screenshot's "noise_seed  41  ▶" row styling.
- *   - `parentNodeTitle` shown in `title` attribute as tooltip so users
- *     can still identify the underlying node when hovering. */
+ *   - 无背景卡片、无边框，只有标签文字 + handle 圆点。
+ *   - 宽度约 110px（够放常见端口名；上限 200，
+ *     免得一个 "thisIsAnExtremelyLongWrapperInputName" 把整列撑爆）。
+ *   - INPUT 变体：handle 在**左**（哨兵 -10 的线从这里进）。
+ *   - OUTPUT 变体：handle 在**右**（哨兵 -20 的线从这里出）。
+ *   - 有值时值列用琥珀色 tabular-nums 渲染（封装输入的默认值，如 seed `41`），
+ *     与参考截图里 "noise_seed  41  ▶" 那一行的样式一致。
+ *   - `parentNodeTitle` 放在 `title` 属性里当 tooltip，
+ *     用户悬停时仍能认出底下是哪个节点。 */
 export const IO_PORT_WIDTH = 160;
 export const IO_PORT_HEIGHT = 28;
 export const PORT_ROW_GAP = 4;
-/** Horizontal padding applied inside the wfGroup around the wfIoPort
- *  column.  Keeps the label text from kissing the purple border. */
+/** wfGroup 内、wfIoPort 列四周的水平内边距。
+ *  避免标签文字贴死在紫色边框上。 */
 export const GROUP_PAD_X = 10;
-/** Vertical padding at the top of a wfGroup — leaves room for the -top-16
- *  title chip (rendered at `top-[-16px]` above the box, taking ~18 px). */
+/** wfGroup 顶部的纵向内边距 —— 给 `top-[-16px]` 的标题芯片留出位置
+ *  （它画在框上方，约占 18px）。 */
 export const GROUP_TITLE_BAR = 24;
-/** Vertical padding at the bottom of a wfGroup. */
+/** wfGroup 底部的纵向内边距。 */
 export const GROUP_PAD_Y_BOTTOM = 10;
-/** Border + title-chip colour for the INPUTS / OUTPUTS wfGroups wrapping
- *  the boundary pins. A muted purple so the group
- *  frames read clearly against the canvas while still
- *  staying distinct from the inner FlowNode / WorkflowSubgraphNode cards. */
+/** 包住边界 pin 的 INPUTS / OUTPUTS wfGroup 的边框与标题芯片颜色。
+ *  用低饱和的紫色：分组框在画布上读得清，
+ *  同时与内层的 FlowNode / WorkflowSubgraphNode 卡片区分得开。 */
 export const GROUP_RAIL_COLOR = "#a855f7";
 
 export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
@@ -124,9 +109,8 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
 }) {
   const isInput = data.direction === "input";
   const isBoth = data.direction === "both";
-  /* The handle dot colour tracks the port type, matching the row dot
-   * convention used in the rest of the canvas.  Fall back to a neutral
-   * white-ish dot when type is missing. */
+  /* handle 圆点的颜色跟随端口类型，与画布其它地方的行圆点约定一致。
+   * 类型缺失时回落到中性偏白的圆点。 */
   const dotColor = data.type ? portColor(data.type) : "var(--color-ink-faint)";
   const rawValue = data.value;
   let valueStr: string | null = null;
@@ -140,23 +124,20 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
   } else if (rawValue !== null && rawValue !== undefined) {
     valueStr = JSON.stringify(rawValue);
   }
-  /* Boundary pin entities (definitions.subgraphs[uid].inputs/outputs)
-   * carry no inner-node title — they're the wrapper's exposed port
-   * directly.  In that case `parentNodeTitle` is "" so the tooltip
-   * collapses to just the port label + type. */
+  /* 边界 pin 实体（definitions.subgraphs[uid].inputs/outputs）没有内部节点标题
+   * —— 它们就是封装节点直接暴露出来的端口。此时 `parentNodeTitle` 是空串，
+   * tooltip 就只剩端口标签 + 类型。 */
   const hoverLabel = data.parentNodeTitle
     ? `${data.parentNodeTitle} · ${data.title}`
     : data.title;
   return (
     <div
-      /* input panels right-align their label so the
-       *  name hugs the right-edge handle dot, matching the user-supplied
-       *  reference (`noise_seed  ●`, `noise_seed 1  ●`, ...).  Output
-       *  panels stay left-aligned so their label hugs the LEFT-edge
-       *  handle dot (`● noise_seed`).  React Flow positions the Handle
-       *  absolutely via the `Position` prop, so changing flex `justify-…`
-       *  only moves the visible label/value — the dot stays anchored to
-       *  its side of the wfGroup. */
+      /* 输入面板的标签右对齐，名字紧贴右边的 handle 圆点（`noise_seed  ●`、
+       *  `noise_seed 1  ●` 等），与用户给的参考图一致；输出面板保持左对齐，
+       *  标签紧贴**左**边的 handle 圆点（`● noise_seed`）。
+       *  React Flow 用 `Position` 属性把 Handle 绝对定位，
+       *  所以改 flex 的 `justify-…` 只挪得动可见的标签 / 值 ——
+       *  圆点始终钉在 wfGroup 的那一侧。 */
       className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 gap-1 px-1.5 py-[1px] text-[10.5px] leading-[1.4]`}
       style={{
         width: IO_PORT_WIDTH,
@@ -185,15 +166,12 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
       ) : null}
       <span
         className="truncate font-medium"
-        /* — "letter truncation" on the boundary-pin labels: at
-         *  low canvas zoom the default browser text-rendering produces a
-         *  soft, anti-aliased glyph that visually reads as a gap between
-         *  characters ("s a m p l e s").  `geometricPrecision` + a tiny
-         *  negative letter-spacing tightens the glyphs so they read as a
-         *  single word at every zoom level.  We deliberately leave the
-         *  font-family and `font-medium` alone — the 500 weight is the
-         *  right optical weight for the column's 10.5 px size; bumping
-         *  to 600 reads too heavy once the rendering is tightened. */
+        /* 边界 pin 标签上的「字距被拉开」问题：画布缩得很小时，
+         *  浏览器默认的文字渲染会产生柔化的抗锯齿字形，看起来像字符之间有空隙
+         *  （"s a m p l e s"）。`geometricPrecision` 加一点点负字距把字形收拢，
+         *  任何缩放级别下都读作一个完整的词。
+         *  字体族与 `font-medium` **刻意不动** —— 这一列只有 10.5px，
+         *  500 字重正是合适的光学重量；渲染收拢之后再抬到 600 会显得过重。 */
         style={{
           maxWidth: IO_PORT_WIDTH - (valueStr ? 56 : 24),
           textRendering: "geometricPrecision",
@@ -218,51 +196,41 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
     </div>
   );
 });
-
-/* ── Note / MarkdownNote annotation node ──
- * ComfyUI's note widget renders two parts stacked vertically:
- *   1. **Title bar** — a coloured chip with a small dot icon and the
- *      resolved title (either an explicit `title` property or the first
- *      `# Heading` line of the body).
- *   2. **Body** — the markdown text wrapped to the note's width with the
- *      surrounding bg colour.
- * Notes are draggable (the whole node acts as a drag handle) so users can
- * reposition annotations freely; the markdown body still renders links/scroll
- * without blocking the underlying graph where the note doesn't cover it. */
+/* ── 便签 / MarkdownNote 注释节点 ──
+ * ComfyUI 的便签 widget 上下叠着两部分：
+ *   1. **标题栏** —— 一枚带小圆点图标的彩色芯片，标题取显式的 `title`
+ *      属性，或正文第一行 `# 标题`。
+ *   2. **主体** —— markdown 文本按便签宽度折行，配周围的底色。
+ * 便签可拖动（整张节点就是拖拽把手），用户可以自由挪动注释；
+ * markdown 主体仍能渲染链接与滚动，且在便签没覆盖到的地方不会挡住下面的图。 */
 export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
   data,
 }: {
   data: WorkflowNoteData;
 }) {
-  /* Note background is fully OPAQUE — a baked tint of `data.color` into the
-   *  canvas.  The base colour matters: with the canvas and the note sharing a
-   *  base, a dark note colour like `#432` produced a computed bg only ~12 RGB
-   *  units above the canvas — the note visually dissolved into the background
-   *  and only the React Flow selection ring was visible.  Using a base a step
-   *  off the canvas guarantees ~25 units of contrast for ANY note colour, so
-   *  even the darkest note (`#432`) stays clearly outlined.  That base is the
-   *  `--color-note-tint-base` token (white in Light, `#22222c` in Dark) — the
-   *  contrast argument holds in both modes, and Light no longer gets a dark
-   *  note.
+  /* 便签背景是**全不透明**的 —— 把 `data.color` 烤进画布底色后的结果。
+   *  底色很关键：若便签与画布共用同一底色，`#432` 这样的深色便签算出来的
+   *  背景只比画布高约 12 个 RGB 单位 —— 便签在视觉上溶进背景，
+   *  只剩 React Flow 的选中圈看得见。底色比画布**错开一档**，
+   *  任意便签色都能保证约 25 个单位的对比，连最深的 `#432` 也轮廓清楚。
    *
-   *  Visibility at low zoom: for wide workflows like the DaSiWa Wan 2.2
-   *  template (130 nodes, viewport fitView lands at scale ~0.15), the
-   *  note bbox collapses to ~5–15 px on-screen.  A 1.5 px solid border
-   *  is barely a pixel there.  So we also paint a strong outer halo
-   *  (boxShadow + 4 px ring) so the user can still *count* the 17 notes
-   *  by their colour rings even when the text is illegible, plus a high
-   *  z-index so notes float above ordinary nodes and aren't hidden
-   *  behind groups. */
-  /* 混色基准跟主题走（`--color-note-tint-base`：浅色 = 白、深色 = #22222c）。
-   *  `data.color` 是用户给的**内容色**（note 自身的颜色），不用改；要改的是
-   *  「这个内容色叠在什么表面上」——基准写死深色的话，浅色下便签仍是一块暗色。 */
+   *  那一档就是 `--color-note-tint-base` token（浅色模式为白，暗色为 `#22222c`），
+   *  跟主题走而不写死：对比论证在两种模式下都成立，浅色模式也不会再拿到一片深色。
+   *  `data.color` 是用户给的内容色本身，不动。
+   *
+   *  低缩放下的可见性：像 DaSiWa Wan 2.2 这种宽工作流（130 个节点，
+   *  fitView 后缩放落在约 0.15），便签的包围盒在屏幕上只有约 5~15px，
+   *  1.5px 的实线边框在那里还不到一个像素。所以额外画一圈强外发光
+   *  （boxShadow + 4px 环）—— 即使文字已经读不清，
+   *  用户仍能按颜色环**数出**那 17 条便签；再加高 z-index
+   *  让便签浮在普通节点之上，不被分组遮住。 */
   const noteTintBase = useCssColorToken("--color-note-tint-base", "#22222c");
   const bg = mixHex(noteTintBase, data.color, 0.2);
   const border = mixHex(noteTintBase, data.color, 0.65);
   const titleBg = mixHex(noteTintBase, data.color, 0.65);
   const titleText = lightenHex(data.color, 0.7);
-  /* Render the body markdown once per render.  The renderer is XSS-safe
-   * (input is HTML-escaped, hrefs go through a URL allow-list). */
+  /* 每次渲染只跑一遍正文 markdown。该渲染器是 XSS 安全的
+   * （输入先做 HTML 转义，href 过 URL 白名单）。 */
   const html = useMemo(() => renderMarkdown(data.text), [data.text]);
   return (
     <div
@@ -277,11 +245,11 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
       }}
     >
       {data.title && (
-        /* Same NODE_TITLE_H as FlowNode / WorkflowSubgraphNode.  The wrapper node's
-         *  React Flow height already adds this bar on top of the raw
-         *  `size[1]` body box (see the noteNodes builder), so pinning the
-         *  height here is what keeps the markdown body at exactly the
-         *  authored size instead of losing a title bar's worth of rows. */
+        /* 与 FlowNode / WorkflowSubgraphNode 用同一个 NODE_TITLE_H。
+         *  包装节点的 React Flow 高度已经在原始 `size[1]` 主体框之上加了这条
+         *  标题栏（见 noteNodes 构建器），因此在这里把高度钉死，
+         *  markdown 主体才会正好停在作者设定的尺寸上，
+         *  而不是少掉一整条标题栏的高度。 */
         <div
           className="flex shrink-0 items-center gap-1.5 px-2.5 text-[11.5px] leading-tight font-bold"
           style={{
@@ -310,13 +278,12 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
   );
 });
 
-/* ── Subgraph wrapper node (ComfyUI extension display node) ──
- * ComfyUI's subgraph instances serialise with class_type === a UUID and
- * a synthetic set of inputs from the inner graph's *exposed* ports
- * (`proxyWidgets`).  Each input carries a `localized_name` Chinese label
- * (e.g. "正面提示词") and a widget name (English, e.g. "text").  This
- * component renders them as a compact form-like node so the user can see
- * what's inside without expanding the subgraph. */
+/* ── 子图封装节点（ComfyUI 的扩展显示节点）──
+ * ComfyUI 的子图实例序列化后 class_type === UUID，并带一组来自内部图
+ * **暴露端口**（`proxyWidgets`）的合成输入。每个输入带一个 `localized_name`
+ * 中文标签（如「正面提示词」）与一个英文 widget 名（如 "text"）。
+ * 本组件把它们渲染成一枚紧凑的、类表单的节点，
+ * 让用户不必展开子图就能看到里面有什么。 */
 /* 节点类型注册表 = **工作流自身的图**：普通节点 / 备注 / 分组 / 子图封装 /
  *  子图边界口。这里**没有**「对外参数卡片」这一类：卡片会浮在图节点之上（`zIndex`
  *  比图节点高、贴着宿主节点左右各排一列）把工作流本身挡掉一片，且落点映射编辑
@@ -330,7 +297,7 @@ export const workflowNodeTypes = {
   wfSubgraph: WorkflowSubgraphNode,
   wfIoPort: WorkflowIoPortNode,
 };
-// Custom edge renderer — rounder bezier (curvature 0.85) + ComfyUI-style
-// white hub dot at the curve midpoint.  Defined at module scope so React
-// Flow doesn't re-register edgeTypes on every render.
+// 自定义边渲染器 —— 更圆的贝塞尔（曲率 0.85）+ ComfyUI 风格的
+// 曲线中点白心圆点。定义在模块作用域，React Flow 就不会每次渲染都
+// 重新注册 edgeTypes。
 export const workflowEdgeTypes = { default: WorkflowEdge };

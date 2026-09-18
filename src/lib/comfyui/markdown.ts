@@ -1,29 +1,28 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 /**
- * Lightweight markdown → safe HTML renderer for ComfyUI note bodies.
+ * 轻量的 markdown → 安全 HTML 渲染器，服务于 ComfyUI 的便签正文。
  *
- * Scope (just enough to make z_image_int8's `Note: Model Links` look right):
- *   - ## ### #### headings (h2 / h3 / h4)
- *   - fenced ``` blocks  → <pre><code>
- *   - inline `code`      → <code>
- *   - **bold**, *italic*, __under__
- *   - [text](url)        → <a href="…" target="_blank" rel="noreferrer">
- *   - - / * list items   → consecutive <li>, wrapped in <ul>
- *   - > blockquotes      → <blockquote>
- *   - horizontal rule --- / ***
- *   - GFM-style tables   → <table><thead>...<tbody>... — detected when a
- *     | ... | header line is followed by a | --- | --- | separator line.
- *   - whitelisted inline HTML: <br>, <b>, <strong>, <i>, <em>, <u>, <s>,
- *     <del>, <mark>, <small>, <sub>, <sup>, <kbd>.  Anything else (e.g.
- *     <script>, <iframe>, <a href="javascript:…">) stays escaped.
+ * 覆盖范围（刚好够让 z_image_int8 的 `Note: Model Links` 看着正常）：
+ *   - ## ### #### 标题（h2 / h3 / h4）
+ *   - 围栏 ``` 代码块     → <pre><code>
+ *   - 行内 `code`         → <code>
+ *   - **粗体**、*斜体*、__下划线__
+ *   - [文字](链接)        → <a href="…" target="_blank" rel="noreferrer">
+ *   - - / * 列表项        → 连续的 <li>，外面包 <ul>
+ *   - > 引用块            → <blockquote>
+ *   - 水平分隔线 --- / ***
+ *   - GFM 风格表格        → <table><thead>…<tbody>…；判据是 `| … |` 的表头行
+ *     后面紧跟一行 `| --- | --- |` 分隔行
+ *   - 白名单内的行内 HTML：<br>、<b>、<strong>、<i>、<em>、<u>、<s>、
+ *     <del>、<mark>、<small>、<sub>、<sup>、<kbd>。其余一律保持转义
+ *     （例如 <script>、<iframe>、<a href="javascript:…">）
  *
- * Out of scope: images, footnotes, html passthrough, sub-lists, table
- * alignment via `:---:` / `---:` / `:---` (we always left-align).
+ * 不在范围内：图片、脚注、HTML 透传、子列表、用 `:---:` / `---:` / `:---`
+ * 表达的对齐（我们一律左对齐）。
  *
- * Output is XSS-safe: the entire input is HTML-escaped first, then we
- * splice in only the tags we generated (markdown + the whitelisted HTML
- * set).  Anchor hrefs are matched against an allow-list of URL schemes
- * (`http://`, `https://`, `mailto:`, `absolute-path or relative`).
+ * 输出是 XSS 安全的：整份输入先做 HTML 转义，随后只拼回**我们自己生成**的标签
+ * （markdown 的那批 + 白名单 HTML 集合）。链接 href 会按 URL scheme 白名单核对
+ * （`http://`、`https://`、`mailto:`、绝对路径或相对路径）。
  */
 
 const HTML_ESCAPE: Record<string, string> = {
@@ -34,25 +33,24 @@ const HTML_ESCAPE: Record<string, string> = {
   "'": "&#39;",
 };
 
-/** Escape any text destined for HTML output. */
+/** 转义任何要输出成 HTML 的文本。 */
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (char) => HTML_ESCAPE[char] ?? char);
 }
 
-/** Validate a URL before emitting an <a href="…">.  Disallows javascript:
- *  and other executable schemes. */
+/** 输出 <a href="…"> 之前先校验 URL。禁掉 javascript: 及其它可执行的 scheme。 */
 function safeHref(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  // Allowed: http(s), mailto, relative/absolute paths
+  // 允许：http(s)、mailto、相对 / 绝对路径
   if (/^(https?:|mailto:|\/|#)/i.test(trimmed)) return trimmed;
-  // Bare hostname without scheme → treat as https
+  // 只有裸主机名、没有 scheme → 当成 https
   if (/^[\w-]+(\.[\w-]+)+/.test(trimmed) && !/[\s"'<>]/.test(trimmed))
     return "https://" + trimmed;
   return null;
 }
 
-/** Render a single block of markdown text to sanitised HTML. */
+/** 把一段 markdown 文本渲染成已消毒的 HTML。 */
 export function markdownToHtml(text: string): string {
   if (!text) return "";
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
@@ -63,7 +61,7 @@ export function markdownToHtml(text: string): string {
   while (i < lines.length) {
     const line = lines[i]!;
 
-    // Fenced code block (``` … ```)
+    // 围栏代码块（``` … ```）
     const fence = /^```/.exec(line);
     if (fence) {
       const code: string[] = [];
@@ -103,7 +101,7 @@ export function markdownToHtml(text: string): string {
       continue;
     }
 
-    // Blockquote: gather consecutive `> …` lines
+    // 引用块：把连续的 `> …` 行归到一起
     if (/^>\s?/.test(line)) {
       const body: string[] = [];
       while (i < lines.length && /^>\s?/.test(lines[i]!)) {
@@ -118,18 +116,18 @@ export function markdownToHtml(text: string): string {
       continue;
     }
 
-    // GFM table: a header row `| a | b | … |` immediately followed by a
-    //  separator row `| --- | :--- | ---: | … |`.  We accept any line
-    //  that contains at least one `|` and whose next line is a separator;
-    //  the row before that line (if it also starts with `|`) is the
-    //  header.  Body rows keep coming until a blank / non-pipe line.
+    // GFM 表格：表头行 `| a | b | … |` 后面紧跟一行分隔行
+    //  `| --- | :--- | ---: | … |`。
+    //  判据：某行含至少一个 `|`，且它的下一行是分隔行；
+    //  该行前面那一行（若也以 `|` 开头）就是表头。
+    //  表体行一直收到空行或非管道行为止。
     if (
       line.includes("|") &&
       i + 1 < lines.length &&
       isTableSeparator(lines[i + 1]!)
     ) {
-      // Walk back to capture the header line, in case the caller's parser
-      //  fed us a chunk that started mid-table.
+      // 往回挪一行把表头捞进来，以防调用方的解析器
+      // 递给我们的片段是从表格中间开始的。
       let headerIdx = i;
       while (
         headerIdx > 0 &&
@@ -155,7 +153,7 @@ export function markdownToHtml(text: string): string {
       continue;
     }
 
-    // Unordered list: gather consecutive `-` / `*` lines
+    // 无序列表：把连续的 `-` / `*` 行归到一起
     if (/^[-*]\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^[-*]\s+/.test(lines[i]!)) {
@@ -173,13 +171,13 @@ export function markdownToHtml(text: string): string {
       continue;
     }
 
-    // Empty line → paragraph break
+    // 空行 → 段落分隔
     if (line.trim() === "") {
       i++;
       continue;
     }
 
-    // Default paragraph — gather contiguous lines and inline-render
+    // 默认段落 —— 收拢连续行并做行内渲染
     const para: string[] = [];
     while (
       i < lines.length &&
@@ -202,10 +200,9 @@ export function markdownToHtml(text: string): string {
   return out.join("");
 }
 
-/** Apply inline replacements (bold, italic, code, link, safe HTML) to an
- *  already escaped string.  Run AFTER escapeHtml so user input is XSS-safe;
- *  here we only recognise escaped markers of markdown / safe HTML that we
- *  know how to convert. */
+/** 对已经转义过的字符串做行内替换（粗体、斜体、代码、链接、安全 HTML）。
+ *  必须在 escapeHtml **之后**跑 —— 用户输入才是 XSS 安全的；
+ *  这里只识别我们认得、并且知道怎么转换的「已转义」markdown / 安全 HTML 标记。 */
 function renderInline(escapedText: string): string {
   // 1) Inline code: `…` — 先整段替换掉，正文暂存进 `codeStash`，字面量里只留
   //   一个「数字 id」。这里的**关键前提是：本条替换是 `renderInline` 的第一步**，
@@ -230,11 +227,10 @@ function renderInline(escapedText: string): string {
     return `<${idx}>`;
   });
 
-  // 2) Whitelisted inline HTML — runs only against the non-code text, so
-  //   <br> typed in a note body becomes a real line break, while <br>
-  //   captured inside backticks is untouched (it stays escaped).
+  // 2) 白名单行内 HTML —— 只作用于非代码文本：便签正文里写的 <br>
+  //   会变成真正的换行，而反引号里捕获到的 <br> 原样不动（保持转义）。
   text = renderSafeInlineHtml(text);
-  // 3) Links [text](url) — text in escaped form already has & etc.
+  // 3) 链接 [文字](链接) —— 文字部分已经是转义形态，& 等都处理过了
   text = text.replace(/\[([^\]]+?)\]\(([^)\s]+)\)/g, (_, txt, url) => {
     const safe = safeHref(url);
     if (!safe) return txt;
@@ -242,20 +238,19 @@ function renderInline(escapedText: string): string {
   });
   // 4) Bold **…**  → <strong>
   text = text.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>");
-  // 5) Italic *…*  → <em>  (must not swallow pairs already consumed by bold)
+  // 5) 斜体 *…* → <em>（不能把已被粗体消费掉的成对星号再吞一遍）
   text = text.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, "$1<em>$2</em>");
   // 6) Underline __…__
   text = text.replace(/__([^_]+?)__/g, "<u>$1</u>");
-  // 7) Restore the stashed code spans.
+  // 7) 还原前面暂存起来的代码片段。
   text = text.replace(/<(\d+)>/g, (_, idx) => codeStash[Number(idx)]!);
   return text;
 }
 
-/** Whitelisted inline-HTML elements we are willing to un-escape.
- *  Everything else (including <script>, <iframe>, <a>, <style>, on*=
- *  attributes, etc.) stays escaped.  Keys are the canonical tag name in
- *  lower-case; values are [openTag, closeTag] for wrapping tags, or a
- *  single-string sentinel for self-closing void elements. */
+/** 我们愿意反向转义的**白名单**行内 HTML 元素。
+ *  其余一律保持转义（包括 <script>、<iframe>、<a>、<style>、on*= 属性等）。
+ *  键是小写的规范标签名；值是包裹型标签的 [开标签, 闭标签]，
+ *  或自闭合空元素的单字符串哨兵。 */
 const SAFE_INLINE_HTML: Record<string, readonly [string, string] | string> = {
   br: "<br />", // void element — <br>, <br/>, <br /> all → <br />
   b: ["<b>", "</b>"],
@@ -272,14 +267,13 @@ const SAFE_INLINE_HTML: Record<string, readonly [string, string] | string> = {
   kbd: ["<kbd>", "</kbd>"],
 };
 
-/** Convert escaped (&lt;…&gt;) representations of whitelisted inline HTML
- *  back to real tags.  Runs AFTER escapeHtml, so the input contains
- *  `&lt;br&gt;` etc., not raw `<br>`.  Anything that isn't on the
- *  allow-list remains escaped, keeping the output XSS-safe. */
+/** 把白名单行内 HTML 的**已转义**形态（&lt;…&gt;）还原成真标签。
+ *  在 escapeHtml **之后**跑，因此输入里是 `&lt;br&gt;` 而不是原始的 `<br>`。
+ *  不在白名单里的一律保持转义，输出因此始终是 XSS 安全的。 */
 function renderSafeInlineHtml(escapedText: string): string {
-  // Self-closing void elements first.  Match `<br>`, `<br/>`, `<br />`,
+  // 先处理自闭合的空元素。匹配 `<br>`、`<br/>`、`<br />`，
 
-  //  and their uppercase variants — but only for tags in the allow-list.
+  //  以及它们的大写变体 —— 但只针对白名单里的标签。
 
   let text = escapedText.replace(
     /&lt;\s*([A-Za-z][A-Za-z0-9]*)\s*\/?\s*&gt;/g,
@@ -295,7 +289,7 @@ function renderSafeInlineHtml(escapedText: string): string {
     },
   );
 
-  // Wrapping tags: <b>…</b>, <strong>…</strong>, <em>…</em>, etc.
+  // 包裹型标签：<b>…</b>、<strong>…</strong>、<em>…</em> 等。
 
   text = text.replace(
     /&lt;\s*(\/?)\s*([A-Za-z][A-Za-z0-9]*)\s*&gt;/g,
@@ -314,19 +308,19 @@ function renderSafeInlineHtml(escapedText: string): string {
   return text;
 }
 
-/** Quick helper for callers: render as a string suitable for
+/** 给调用方的一个顺手助手：渲染成可直接用于
  *  `dangerouslySetInnerHTML`. */
 export function renderMarkdown(text: string): string {
   return markdownToHtml(text);
 }
 
 /* ──────────────────────────────────────────────────────────────────────
- * GFM table helpers
+ * GFM 表格助手
  * ────────────────────────────────────────────────────────────────────── */
 
-/** A table separator line is `| --- | :--- | ---: | :---: | …` —
- *  one or more cells of dashes/colons separated by `|`.  We deliberately
- *  allow leading/trailing whitespace and arbitrary cell widths. */
+/** 表格分隔行形如 `| --- | :--- | ---: | :---: | …` ——
+ *  由一个或多个「横线 / 冒号」单元格组成，彼此用 `|` 隔开。
+ *  刻意允许首尾空白与任意单元格宽度。 */
 function isTableSeparator(line: string): boolean {
   if (!line?.includes("|")) return false;
   const cells = splitRow(line);
@@ -334,23 +328,21 @@ function isTableSeparator(line: string): boolean {
   return cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()));
 }
 
-/** Split a `| a | b | c |` row into cells.  Leading/trailing empty cells
- *  caused by surrounding pipes are dropped — this matches GFM behaviour
- *  (`|a|b|` → 2 cells, not 4). */
+/** 把 `| a | b | c |` 这样的一行拆成单元格。两侧管道符造成的首尾空单元格
+ *  会被丢掉 —— 与 GFM 的行为一致（`|a|b|` 拆出 2 个而不是 4 个）。 */
 function splitRow(line: string): string[] {
   let trimmed = line.trim();
-  // Strip a single leading and a single trailing pipe so the cell split
-  //  doesn't yield phantom empty cells.
+  // 各剥掉一个首尾管道符，拆出来的单元格里才不会多出幽灵空项。
   if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
   if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1);
   if (!trimmed) return [];
   return trimmed.split("|").map((col) => col.trim());
 }
 
-/** Render a parsed table to HTML.  Cell content still goes through
- *  `renderInline` so **bold**, `code`, [links] etc. work inside cells.
- *  We always left-align — alignment colons in the separator line are
- *  accepted for parsing compatibility but not honoured visually. */
+/** 把解析好的表格渲染成 HTML。单元格内容仍会过一遍 `renderInline`，
+ *  因此 **粗体**、`代码`、[链接] 在单元格里都生效。
+ *  我们一律左对齐 —— 分隔行里的对齐冒号为了解析兼容会被接受，
+ *  但视觉上不予兑现。 */
 function renderTable(
   headerCells: string[],
   bodyRows: string[][],

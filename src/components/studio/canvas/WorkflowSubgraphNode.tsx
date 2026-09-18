@@ -1,6 +1,6 @@
 "use client";
-/* Extracted WorkflowSubgraphNode (ComfyUI subgraph wrapper renderer).
- * Originally inside WorkflowCanvasEditor.tsx. */
+/* 抽出的 WorkflowSubgraphNode（ComfyUI 子图封装节点的渲染器）。
+ * 原本在 WorkflowCanvasEditor.tsx 内部。 */
 import React, { useState } from "react";
 import { useTheme } from "next-themes";
 
@@ -9,8 +9,8 @@ import { portColor } from "~/lib/comfyui/types";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 
-/** COMBO inputs additionally carry their option list (stamped by the import
- *  pipeline; not part of the shared RawInputMeta contract). */
+/** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
+ *  不属于共享的 RawInputMeta 契约）。 */
 type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
 import {
   valueCellColor,
@@ -40,52 +40,49 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);
 
-  /* viewport zoom is NO LONGER subscribed here — see FlowNode /
-   *  FrostLayer: only frosted (bypass / disabled) nodes need to track zoom.
-   *  Parent-graph subgraph card — mirrors WorkflowNode's two-zone layout
-   *  a purple HEADER, a TOP PINS zone that zips the
-   *  wrapper's pure-connection input ports (left dot) with its exposed
-   *  output ports (right dot) on shared 22px rows, and a WIDGET zone
-   *  listing the wrapper's exposed widget inputs as LABEL | VALUE rows
-   * (a dot only when the widget slot is ALSO wired, matching WorkflowNode's
-   * "both" behaviour).  The purple identity + drill-in affordance are
-   * the only subgraph-specific bits; the IO rows use the exact same
-   * connection model as a regular node so wiring stays uniform. */
-  /* Subgraph identity tint: purple by default, switching to bypass-pink
-   *  (#ec4899) when the wrapper itself is bypassed and to grey when
-   *  muted. Mirrors WorkflowNode's mode→color logic. */
+  /* 这里**不再**订阅视口缩放 —— 见 FlowNode / FrostLayer：
+   *  只有磨砂（旁路 / 禁用）节点需要跟缩放。
+   *
+   *  父图上的子图卡片 —— 与 WorkflowNode 的两区布局对齐：
+   *  紫色**头部**、一个把「纯连线输入端口（左圆点）」与「暴露的输出端口
+   *  （右圆点）」按共享的 22px 行拉链式成对的**顶部 PINS 区**，
+   *  以及一个把暴露的 widget 输入列成 LABEL | VALUE 行的 **WIDGET 区**
+   *  （只有该 widget 槽**同时**接了线时才画圆点，与 WorkflowNode 的「both」
+   *  行为一致）。紫色身份色与下钻入口是唯一子图特有的两处；
+   *  IO 行用的是与普通节点**完全相同**的连接模型，接线方式因此保持统一。 */
+  /* 子图身份色：默认紫色；封装节点自身被旁路时切成旁路粉（#ec4899），
+   * 静音时切成灰色。与 WorkflowNode 的「模式 → 颜色」逻辑一致。 */
   const nodeMode = data.mode ?? 0;
 
-  /*  Subgraph wrapper uses the same REAL `backdrop-filter` via <NodeFrost>
-   *  as WorkflowNode — counter-scaled by 1/zoom to avoid Chromium's low-zoom
-   *  re-tile artefact.  <PseudoFrostLayer> stays an unused fallback. */
+  /*  子图封装节点与 WorkflowNode 一样，经 <NodeFrost> 用**真实**的
+   *  `backdrop-filter` —— 按 1/缩放 反向缩放，避开 Chromium 在低缩放下的
+   *  重复平铺伪影。<PseudoFrostLayer> 仍是不启用的兜底。 */
   const accent =
     nodeMode === 4 ? "#ec4899" : nodeMode === 2 ? "#6b7280" : "#7C5CFC"; // subgraph default purple identity (mode 0)
 
-  /* Same box semantics as WorkflowNode: when the imported config carries an
-   *  explicit size, the root div is forced to width/height: 100% (see the
-   *  `style` block below) so the card fills the React Flow node box.  The
-   *  textarea then joins the flex chain and fills the box's remaining
-   *  vertical space instead of being capped at a fixed pixel height. */
+  /* 外框语义与 WorkflowNode 相同：导入的配置带显式尺寸时，
+   *  根 div 被强制成 width/height: 100%（见下面的 `style` 块），
+   *  卡片因此填满 React Flow 的节点框。多行文本框随之接入 flex 链，
+   *  填满框内剩余的纵向空间，而不是被钉在一个固定的像素高度上。 */
   const hasSize = !!data.size;
   const inputsList = data.inputs ?? [];
   const outputsList = data.outputs ?? [];
 
-  /* User-toggleable collapse state. Mirrors WorkflowNode: the
-   *  left-side chevron flips between header-only chip and full body.
-   *  Seed `userCollapsed` from the imported `flags.collapsed` so an
-   *  initially-collapsed subgraph can still be expanded by the toggle
-   *  (same `true || anything` trap as WorkflowNode — must not OR them). */
+  /* 用户可切换的折叠状态。与 WorkflowNode 一致：左侧的折叠箭头在
+   *  「只有头部」与「完整主体」之间切换。
+   *  `userCollapsed` 的初值取自导入的 `flags.collapsed`，
+   *  这样一开始就折叠的子图仍能靠开关展开（与 WorkflowNode 同一个
+   *  `true || 任何值` 的坑 —— 两者**不能**做或运算）。 */
   const [userCollapsed, setUserCollapsed] = useState<boolean>(
     data.flags?.collapsed === true,
   );
   const isCollapsed = userCollapsed;
 
-  /* Filter rows whose display label would be empty (fix).
-   *  ComfyUI sometimes exports sentinel / placeholder IO on subgraph
-   *  wrappers — e.g. Settings.outputs[11] = `{name:"", type:"*",
-   *  label:"PREVIEW"}`.  Without this filter the canvas would render
-   *  a 22px-tall empty row that the user mistakes for a render bug. */
+  /* 过滤掉显示标签为空的那些行。
+   *  ComfyUI 有时会在子图封装节点上导出哨兵 / 占位 IO ——
+   *  例如 Settings.outputs[11] = `{name:"", type:"*", label:"PREVIEW"}`。
+   *  没有这道过滤，画布会渲染出一行 22px 高的空行，
+   *  用户会把它当成渲染 bug。 */
   /* 暴露口的显示名。wrapper 本层槽位名是 ComfyUI 自动编号的别名
    *  （`value_1`），业务名在内部真实字段上（proxyField，服务端由
    *  `properties.proxyWidgets` 解析）。先取内部字段的 label → localized →
@@ -115,36 +112,32 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
     }))
     .filter(({ display }) => display.trim().length > 0);
 
-  /* Split the wrapper inputs into the two WorkflowNode-style buckets:
-   *   - connInputs   — pure-typed ports (no widget marker).  Each gets
-   *                    a left-edge dot (always on, shown even when
-   *                    unwired) and is zipped with outputs in TOP PINS.
-   *                    A wrapper input that ALSO has `isConnection: true`
-   *                    from upstream wiring is bucketed here too (the
-   *                    wire anchors, the value is upstream).
-   *   - widgetInputs — exposed widget slots (widget marker present).
-   *                    Rendered in the WIDGET zone as LABEL | VALUE; a
-   *                    dot appears only when the slot is ALSO wired
-   *                    (`isConnection` / `isBoundary`), mirroring
-   *                    WorkflowNode's "both" row.
+  /* 把封装节点的输入拆成 WorkflowNode 风格的两个桶：
+   *   - connInputs   —— 纯类型端口（没有 widget 标记）。每个都有左边缘圆点
+   *                    （常亮，未接线时也显示），并在顶部 PINS 区与输出成对。
+   *                    若某个封装输入**同时**因上游接线带
+   *                    `isConnection: true`，也归到这里（线是有落点的，
+   *                    值来自上游）。
+   *   - widgetInputs —— 被暴露的 widget 槽（带 widget 标记）。
+   *                    在 WIDGET 区渲染成 LABEL | VALUE；只有该槽**同时**
+   *                    接线（`isConnection` / `isBoundary`）时才画圆点，
+   *                    与 WorkflowNode 的「both」行一致。
    *
-   * split criterion changed from `widgetValue`
-   * (never populated for wrapper nodes since the wrapper's own
-   * `widgets_values[]` is empty — ComfyUI exports wrappers without
-   * inlining values) to `widget` marker (always present on ComfyUI's
-   * exported wrappers, and now also stamped defensively for custom
-   * wrappers by the server-side pass). This matches WorkflowNode's
-   * splitter and routes every exposed widget slot into the WIDGET
-   * zone so the LABEL | VALUE rows render as inline widgets. */
+   *  拆分判据从 `widgetValue` 改了过来（封装节点自己的 widgets_values
+   *  从来不会填充那个字段，所以旧判据在封装节点上永不成立）。
+   *     * `widgets_values[]` 是空的 —— ComfyUI 导出的封装节点不会把值内联进来），
+   *     * 改成了按 `widget` 标记判（ComfyUI 导出的封装节点总是有它，
+   *     * 服务端那一趟现在也会为自定义封装节点防御性地盖章）。
+   *     * 与 WorkflowNode 的拆分器一致，把每个暴露的 widget 槽都归进 WIDGET 区，
+   *     * LABEL | VALUE 行才能渲染成内联 widget。 */
   const connInputs = cleanedInputs.filter(
     ({ inp }) => !inp.widget && !inp.isConnection,
   );
   const widgetInputs = cleanedInputs.filter(
     ({ inp }) => !!inp.widget || inp.isConnection === true,
   );
-
-  /* Top Pins rows: every declared input port AND every output port is a
-   *  row, zipped left/right on 22px rows (same as a regular WorkflowNode). */
+   /* 顶部 PINS 行：每个声明的输入端口与每个输出端口各占一行，
+    *  左右拉链式成对、行高 22px（与普通 WorkflowNode 相同）。 */
   const pinRows = Math.max(connInputs.length, cleanedOutputs.length);
 
   return (
@@ -156,38 +149,36 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
       data-node-id={data.nodeId}
       {...hoverHandlers}
       style={{
-        // Width tracks ComfyUI's saved `size.w` when present (fixed-width box,
-        //  exactly like ComfyUI — only the height is fluid).  Falls back to a
-        //  sensible min width when no size is carried.
+                 // 有 ComfyUI 保存的 `size.w` 时宽度就跟随它（固定宽度框，
+                 //  与 ComfyUI 完全一致 —— 只有高度是流动的）。
+                 //  没带尺寸时回落到一个合理的最小宽度。
         width: data.size ? data.size.w : undefined,
-        // Height is fully content-driven (`auto`) in BOTH states: the subgraph
-        //  card GROWS with its pins when expanded and AUTO-SHRINKS to the title
-        //  bar when collapsed.  A `minHeight` floor keeps the expanded box from
-        //  dropping below ComfyUI's saved `size.h`, and the collapsed chip never
-        //  collapses below its own title bar.
+                 // 两种状态下高度都完全由内容驱动（`auto`）：展开时子图卡片随 pin 一起
+                 //  变高，折叠时自动收到标题栏那么高。
+                 //  `minHeight` 下限保证展开的框不会低于 ComfyUI 保存的 `size.h`；
+                 //  折叠态也永远不会低于它自己的标题栏。
         height: "auto",
         minWidth: data.size ? data.size.w : 280,
-        // data.size.h is the BODY CONTENT height (size[1]).
-        //  The WorkflowSubgraphNode outer div INCLUDES the pinned 30px title bar,
-        //  so the total floor is content + title = size[1] + 30.  Mirrors
-        //  WorkflowNode's fix so the card fills the React Flow box instead of
-        //  rendering short by 30px.
+                 // data.size.h 是**主体内容**高度（size[1]）。
+                 //  WorkflowSubgraphNode 的外层 div **包含**那条钉死的 30px 标题栏，
+                 //  因此总下限 = 内容 + 标题 = size[1] + 30。
+                 //  与 WorkflowNode 的修正一致，卡片才能填满 React Flow 的节点框，
+                 //  而不是矮 30px。
         minHeight: isCollapsed
           ? NODE_TITLE_H
           : data.size
             ? (data.size.h ?? 0) + NODE_TITLE_H
             : undefined,
-        // No maxWidth cap here either: ComfyUI lets the user resize the
-        //  subgraph box freely, and we must respect whatever `size` the
-        //  config carries (a hard 320 cap would clip wider subgraph
-        //  boxes the user explicitly set in ComfyUI).
+                 // 这里同样不设 maxWidth 上限：ComfyUI 允许用户自由调整子图框，
+                 //  而我们必须尊重配置里带的 `size`
+                 //  （硬写 320 的上限会把用户在 ComfyUI 里明确调宽的框裁掉）。
         borderColor: hexToRgba(accent, 0.55),
-        // Tint + real blur for bypass/disabled subgraphs live in <NodeFrost>;
-        //  the root keeps `isolation` so the frost's negative z stays contained,
-        //  and stays transparent so the frost shows through.  Normal subgraphs
-        //  take the solid panel from `bg-node` (theme-aware).
+                 // 旁路 / 禁用子图的着色与真模糊在 <NodeFrost> 里；
+                 //  根节点保留 `isolation`，把磨砂层的负 z 关在里面；
+                 //  同时保持透明，磨砂才透得出来。
+                 //  普通子图用 `bg-node` 的实心面板（跟随主题）。
         isolation: "isolate",
-        // ComfyUI draws a bright selection rectangle around the active node.
+                 // ComfyUI 会给当前激活的节点画一圈亮色选中矩形。
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected ? "2px" : undefined,
       }}
@@ -341,9 +332,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
             return (
               <div
                 key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-                /* long boundary-port labels wrap onto
-                 *  multiple lines instead of being clipped to 22 px.  See
-                 *  the WorkflowNode inline-branch comment for full rationale. */
+                                 /* 长的边界端口标签换行到
+                 *                    *  多行换行，而不是被裁到 22px。完整理由见 WorkflowNode 内联分支
+                 *                    *  的注释。 */
                 className="relative flex h-auto min-h-[22px] items-center py-0.5 pr-5 pl-5 text-[11px]"
                 data-sub-pin-input={inName}
                 data-sub-pin-output={outName}
@@ -384,12 +375,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         />
                       )}
                     <span
-                      /* drop `truncate` so a long
-                       *  boundary-port label (e.g. the Settings wrapper's
-                       *  `Model: True = 🟡 Safetensors | False = 🟣 GGUF`
-                       *  BOOLEAN widget) wraps onto multiple lines
-                       *  instead of being clipped.  Full text stays
-                       *  available via the native `title` tooltip. */
+                                             /* 去掉 `truncate`：让长的边界端口标签
+                                              *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
+                                              *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
+                                              *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
                       className="text-ink-bright min-w-0 flex-1 text-left text-[11px] break-words whitespace-normal"
                       title={`${inLabel} (${inType})`}
                     >
@@ -400,8 +389,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                 {outEntry && (
                   <>
                     <span
-                      /* same wrap fix as the
-                       *  boundary-input branch above. */
+                                             /* 与上面边界输入分支同款换行修正。 */
                       className="text-ink-bright min-w-0 flex-1 text-right text-[11px] break-words whitespace-normal"
                       title={`${outDisplay} (${outType})`}
                     >
@@ -452,10 +440,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
             const isConn = inp.isConnection === true || inp.isBoundary === true;
             const typeCol = portColor(inp.type);
             const stringText: string = typeof v === "string" ? v : "";
-            /* (parity with WorkflowNode): STRING widget detection reads the
-             *  server-stamped `multiline`（来自节点类型声明
-             *  `("STRING", {"multiline": true})`）plus the long-value /
-             *  newline data heuristics —— 不按字段名猜。 */
+            /* 与 WorkflowNode 保持一致：STRING widget 的判定读服务端盖的
+             *  `multiline`（来自节点类型声明
+             *  `("STRING", {"multiline": true})`），再加上「值很长 / 含换行」
+             *  这两条数据启发式 —— 不按字段名猜。 */
             const isStringWidget =
               !isConn &&
               inp.type === "STRING" &&
@@ -531,10 +519,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       0 ? (
                       <>
                         <span
-                          /* drop `truncate` so a long
-                           *  subgraph-wrapper COMBO widget label wraps
-                           *  onto multiple lines instead of being clipped
-                           *  (same fix as the WorkflowNode inline branch). */
+                                                     /* 去掉 `truncate`：让长的子图封装 COMBO widget 标签
+                                                      *  换成多行而不是被裁掉（与 WorkflowNode 内联分支
+                                                      *  同款修正）。 */
                           className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
                           style={{
                             flex: "0 1 auto",
@@ -573,10 +560,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     ) : (
                       <>
                         <span
-                          /* drop `truncate` so a long
-                           *  subgraph-wrapper widget label wraps onto
-                           *  multiple lines instead of being clipped
-                           *  (same fix as the WorkflowNode inline branch). */
+                                                     /* 去掉 `truncate`：让长的子图封装 widget 标签换成多行
+                                                      *  而不是被裁掉（与 WorkflowNode 内联分支同款修正）。 */
                           className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
                           style={{
                             flex: "0 1 auto",
@@ -600,13 +585,12 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         <span
                           className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                           style={{
-                            /* Same rationale as the WorkflowNode value span — `truncate`
-                             *  is back, but only the text itself ellipsises; the
-                             *  node width stays under the user's control
-                             *  (ComfyUI resize ↔ canvas mirror).  No `minWidth:
-                             *  fit-content` (would blow up to 810px on long
-                             *  filenames) and no `maxWidth` cap (would clip
-                             *  legitimate wide nodes). */
+                                                         /* 与 WorkflowNode 的值 span 同理 —— `truncate` 回来了，
+                                                          *  但只有文字本身缩略；节点宽度仍由用户控制
+                                                          *  （ComfyUI 改尺寸 ↔ 画布镜像）。
+                                                          *  不加 `minWidth: fit-content`
+                                                          *  （长文件名会把它撑到 810px），
+                                                          *  也不加 `maxWidth` 上限（会把本来就合法的宽节点裁掉）。 */
                             flex: "1 1 0",
                             color: valueCellColor(v),
                           }}
@@ -651,9 +635,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         />
                       )}
                       <span
-                        /* drop `truncate` from the
-                         *  subgraph STRING-stacked row label too — same
-                         *  rationale as the WorkflowNode inline branch. */
+                                                 /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
+                                                  *  理由与 WorkflowNode 内联分支相同。 */
                         className="shrink-0 text-left text-[11px] break-words whitespace-normal"
                         style={{
                           color: isConn
