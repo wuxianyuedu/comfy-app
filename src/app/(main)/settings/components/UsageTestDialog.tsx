@@ -8,8 +8,6 @@
  * 由 `useRemoteModelDialogs`（第②层）承载。
  */
 
-import { Loader2 } from "lucide-react";
-
 import {
   MEDIA_URL_NOTICE,
   USAGE_FIELD_PRESETS,
@@ -24,6 +22,8 @@ import {
 } from "~/lib/llm/usage-test-config";
 import type { UsageTestKind } from "~/lib/llm/usage-test-client";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 
 import { FieldImagePreview } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
@@ -64,14 +64,15 @@ export function UsageTestDialog({
             <h3 className="u-title">
               实际调用测试 · {USAGE_TEST_KIND_LABELS[usageTest.kind]}
             </h3>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => d.closeUsageTest()}
               className="text-muted-foreground hover:text-ink"
               aria-label="关闭"
             >
               ✕
-            </button>
+            </Button>
           </div>
 
           {/* 接口地址 / 端点路径 / API Key 不再展示：
@@ -157,24 +158,25 @@ export function UsageTestDialog({
                     preset.key,
                   );
                   return (
-                    <button
+                    <Button
                       key={preset.key}
-                      type="button"
+                      variant="outline"
+                      size="xs"
                       onClick={() => d.addPresetField(preset.key)}
                       title={
                         already
                           ? `已有 ${preset.key} 字段行，直接改那行即可`
                           : preset.hint
                       }
-                      className={`rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                      className={`h-auto rounded-full px-2 py-1 text-[11px] ${
                         already
-                          ? "text-primary border-primary/50 bg-primary/5"
-                          : "text-muted-foreground hover:text-ink border-border hover:bg-subtle"
+                          ? "bg-primary/5 border-primary/50 text-primary"
+                          : "text-muted-foreground hover:text-ink border-border"
                       }`}
                     >
                       ＋ {preset.key}
                       {already ? " ✓" : ""}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -182,21 +184,21 @@ export function UsageTestDialog({
           )}
 
           {(usageTest.kind === "image" || usageTest.kind === "video") && (
-            <p className="mb-3 rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            <p className="bg-warning/10 text-warning-strong mb-3 rounded-lg px-3 py-2 text-[11px]">
               ⚠ 会真实调用生成接口并消耗提供方额度。
             </p>
           )}
 
           {usageTest.running && (
             <p className="text-muted-foreground mb-3 flex items-center gap-2 text-xs">
-              <Loader2 size={13} className="animate-spin" />
+              <Spinner className="size-3.5" />
               正在按实际用法调用…
             </p>
           )}
 
           {usageTest.querying && !usageTest.running && (
-            <p className="mb-3 flex items-center gap-2 rounded-lg bg-sky-100 px-3 py-2 text-xs text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
-              <Loader2 size={13} className="animate-spin" />
+            <p className="bg-info/10 text-info-strong mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs">
+              <Spinner className="size-3.5" />
               正在继续等待视频生成完成…（不会重复提交）
             </p>
           )}
@@ -211,29 +213,28 @@ export function UsageTestDialog({
           )}
 
           <div className="mt-4 flex justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => d.closeUsageTest()}
-              className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-4 py-2 text-sm transition-colors"
+              className="text-muted-foreground h-auto rounded-lg px-4 py-2 text-sm"
             >
               关闭
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={() => void d.runUsageTest()}
               disabled={
                 usageTest.running ||
                 usageTest.querying ||
                 !usageTest.prompt.trim()
               }
-              className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+              className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
             >
               {usageTest.querying
                 ? "等待中…"
                 : usageTest.running
                   ? "调用中…"
                   : "执行测试"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -263,18 +264,20 @@ function UsageVideoModeQuickPick({
             const active =
               modeValue?.trim() === m && !isModeValueBroken(modeValue ?? "");
             return (
-              <button
+              <Button
                 key={m}
-                type="button"
+                variant="outline"
+                size="xs"
+                aria-pressed={active}
                 onClick={() => d.setVideoMode(m)}
-                className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                className={`h-auto rounded-full px-2.5 py-1 text-[11px] ${
                   active
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:bg-subtle"
+                    ? "bg-primary/15 border-primary text-primary"
+                    : "text-muted-foreground hover:bg-subtle border-border"
                 }`}
               >
                 {m}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -296,7 +299,7 @@ function UsageVideoModeQuickPick({
           return (
             <div
               key="mode-broken"
-              className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+              className="border-warning/60 bg-warning/5 text-warning-strong mt-1 rounded-lg border border-dashed px-2 py-1.5 text-[11px]"
             >
               <p>
                 ⚠ mode 的值被图片/链接覆盖了——这正是「reference 选中消失」和 400
@@ -304,19 +307,20 @@ function UsageVideoModeQuickPick({
                 行，或直接把输入框改回 text / keyframe / reference。
               </p>
               {isPreviewableUrl(f.value) && (
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="xs"
                   onClick={() => d.rescueMediaFromMode(i, f.value.trim())}
-                  className="mt-1 rounded border border-amber-400/60 px-2 py-0.5 text-[11px] hover:bg-amber-500/10"
+                  className="border-warning/60 hover:bg-warning/10 mt-1 h-auto rounded px-2 py-0.5 text-[11px]"
                 >
                   把这张图搬到 images 行，mode 复位为 text
-                </button>
+                </Button>
               )}
             </div>
           );
         })}
         {videoModeMissingHint(usageTest.fields) && (
-          <p className="mt-1 rounded-lg border border-dashed border-amber-400/60 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+          <p className="border-warning/60 bg-warning/5 text-warning-strong mt-1 rounded-lg border border-dashed px-2 py-1.5 text-[11px]">
             ⚠ {videoModeMissingHint(usageTest.fields)}
           </p>
         )}
@@ -399,23 +403,25 @@ function UsageFieldEditor({
                 )}
                 {!(usageTest.kind === "video" && isMediaField(f.key)) &&
                   f.key !== "mode" && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="outline"
+                      size="xs"
                       onClick={() => d.patchField(i, { value: "https://" })}
-                      className="text-muted-foreground hover:text-ink border-border hover:bg-subtle shrink-0 rounded-lg border px-2 text-[11px] transition-colors"
+                      className="text-muted-foreground hover:text-ink h-auto shrink-0 rounded-lg px-2 text-[11px]"
                       title="填入公网图片地址占位，直接改成你的图片 URL 即可"
                     >
                       链接
-                    </button>
+                    </Button>
                   )}
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => d.removeField(i)}
-                  className="text-muted-foreground shrink-0 px-1 text-sm hover:text-red-700 dark:text-red-400"
+                  className="text-muted-foreground hover:text-danger-strong"
                   aria-label="删除该字段"
                 >
                   ✕
-                </button>
+                </Button>
               </div>
               {isPreviewableUrl(f.value) && <FieldImagePreview src={f.value} />}
             </div>
@@ -423,13 +429,14 @@ function UsageFieldEditor({
         })}
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="outline"
+        size="xs"
         onClick={() => d.addField()}
-        className="text-muted-foreground hover:text-ink border-border mb-3 rounded-lg border border-dashed px-3 py-1.5 text-xs transition-colors"
+        className="text-muted-foreground hover:text-ink border-border mb-3 h-auto rounded-lg border-dashed px-3 py-1.5 text-xs"
       >
         ＋ 添加字段
-      </button>
+      </Button>
     </>
   );
 }
@@ -452,7 +459,7 @@ function UsageTestResultPanel({
       <div className="mb-3">
         {result.ok ? (
           <>
-            <p className="mb-2 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+            <p className="bg-success/10 text-success-strong mb-2 rounded-lg px-3 py-2 text-xs">
               {result.detail}
               {result.elapsedMs != null &&
                 ` · 耗时 ${(result.elapsedMs / 1000).toFixed(1)}s`}
@@ -470,14 +477,14 @@ function UsageTestResultPanel({
               />
             )}
             {result.videoUrl && (
-              <button
-                type="button"
+              <Button
+                variant="link"
                 onClick={() => void c.openExternalUrl(result.videoUrl ?? "")}
-                className="text-primary hover:text-primary-hover inline-flex items-center gap-1 text-xs font-medium underline-offset-2 hover:underline"
+                className="text-primary h-auto items-center gap-1 p-0 text-xs font-medium"
                 title="在系统默认浏览器中打开生成的视频"
               >
                 打开生成的视频
-              </button>
+              </Button>
             )}
             {result.savedPath && (
               <p
@@ -489,7 +496,7 @@ function UsageTestResultPanel({
               </p>
             )}
             {result.pending && result.taskId && !usageTest.querying && (
-              <div className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+              <div className="bg-warning/10 text-warning-strong mt-2 rounded-lg px-3 py-2 text-xs">
                 <p className="font-medium">
                   ⏳ 视频仍在生成中（不是失败），已提交到提供方，
                   生成通常需数十秒到几分钟。
@@ -497,26 +504,23 @@ function UsageTestResultPanel({
                 <p className="text-muted-foreground mt-1 break-all">
                   任务 ID：{result.taskId}
                 </p>
-                <button
-                  type="button"
+                <Button
+                  variant="warning-solid"
                   onClick={() => void d.continueUsageWait()}
                   disabled={usageTest.querying}
-                  className="mt-2 inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-60"
+                  className="mt-2 h-auto items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold"
                 >
                   {usageTest.querying ? (
-                    <>
-                      <Loader2 size={12} className="animate-spin" />
-                      等待中…
-                    </>
+                    <Spinner className="text-primary-foreground size-3" />
                   ) : (
                     "继续等待并获取结果"
                   )}
-                </button>
+                </Button>
               </div>
             )}
           </>
         ) : (
-          <p className="rounded-lg bg-red-100 px-3 py-2 text-xs break-all text-red-700 dark:bg-red-500/10 dark:text-red-300">
+          <p className="bg-destructive/10 text-danger-strong rounded-lg px-3 py-2 text-xs break-all">
             {result.detail}
           </p>
         )}

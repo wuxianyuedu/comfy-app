@@ -9,6 +9,7 @@
  */
 
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
+import { Button } from "~/components/ui/button";
 import {
   REMOTE_MODEL_KINDS,
   REMOTE_MODEL_KIND_LABELS,
@@ -49,14 +50,15 @@ export function RemoteModelDialog({
             <h3 className="u-title">
               {dialog.mode === "edit" ? "编辑模型" : "添加模型"}
             </h3>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => d.closeDialog()}
               className="text-muted-foreground hover:text-ink"
               aria-label="关闭"
             >
               ✕
-            </button>
+            </Button>
           </div>
 
           <label className="text-ink/80 mb-1.5 block text-sm font-medium">
@@ -129,37 +131,37 @@ export function RemoteModelDialog({
               }
               className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
             />
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => void d.testConnection()}
               disabled={d.testing}
-              className="border-border text-muted-foreground hover:bg-subtle shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-40"
+              className="text-muted-foreground h-auto shrink-0 rounded-lg px-3 py-2 text-sm"
             >
               {d.testing ? "测试中…" : "测试连接"}
-            </button>
+            </Button>
           </div>
           {dialog.mode === "edit" && dialog.entry.apiKey && (
             <p className="text-muted-foreground mb-1 text-[11px]">
               {d.clearKey ? (
                 <>
                   将清除独立密钥、改用全局 API Key。
-                  <button
-                    type="button"
+                  <Button
+                    variant="link"
                     onClick={() => d.setClearKey(false)}
-                    className="text-primary mx-1 underline underline-offset-2"
+                    className="text-primary mx-1 h-auto p-0 underline underline-offset-2"
                   >
                     撤销
-                  </button>
+                  </Button>
                 </>
               ) : (
                 !d.addForm.apiKey && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="link"
                     onClick={() => d.setClearKey(true)}
-                    className="text-primary underline underline-offset-2"
+                    className="text-primary h-auto p-0 underline underline-offset-2"
                   >
                     清除独立密钥，改用全局
-                  </button>
+                  </Button>
                 )
               )}
             </p>
@@ -168,8 +170,8 @@ export function RemoteModelDialog({
             <p
               className={`mb-3 rounded-lg px-3 py-2 text-xs ${
                 d.testMsg.kind === "ok"
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                  : "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                  ? "bg-success/10 text-success-strong"
+                  : "bg-destructive/10 text-danger-strong"
               }`}
             >
               {d.testMsg.text}
@@ -183,16 +185,17 @@ export function RemoteModelDialog({
               <div className="border-border/50 max-h-28 overflow-y-auto rounded-lg border p-2">
                 <div className="flex flex-wrap gap-1.5">
                   {d.suggestions.map((name) => (
-                    <button
+                    <Button
                       key={name}
-                      type="button"
+                      variant="outline"
+                      size="xs"
                       onClick={() =>
                         d.setAddForm((f) => ({ ...f, model: name }))
                       }
-                      className="border-border text-muted-foreground hover:bg-subtle hover:text-ink rounded border px-2 py-0.5 text-[11px] transition-colors"
+                      className="text-muted-foreground hover:text-ink h-auto rounded px-2 py-0.5 text-[11px]"
                     >
                       {name}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -212,31 +215,30 @@ export function RemoteModelDialog({
             className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
           />
           {d.addError && (
-            <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">
+            <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
               {d.addError}
             </p>
           )}
 
           <div className="mt-4 flex justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => d.closeDialog()}
-              className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-4 py-2 text-sm transition-colors"
+              className="text-muted-foreground h-auto rounded-lg px-4 py-2 text-sm"
             >
               取消
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={() => void d.submitDialog()}
               disabled={c.saving || !d.addForm.model.trim()}
-              className="bg-primary hover:bg-primary-hover rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+              className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
             >
               {c.saving
                 ? "保存中…"
                 : dialog.mode === "edit"
                   ? "保存"
                   : "添加并保存"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

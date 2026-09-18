@@ -20,6 +20,7 @@ const SEMANTIC_VARIANTS = [
   "primary-solid",
   "danger-solid",
   "success-solid",
+  "warning-solid",
 ] as const;
 
 describe("Button 语义变体", () => {

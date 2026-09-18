@@ -7,11 +7,11 @@
  * 全部状态与动作由 controller 的 `appUpdate` 承载，视图只渲染与触发。
  */
 
-import { Loader2 } from "lucide-react";
-
 import { fmtBytes } from "~/lib/format-bytes";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 
-import { Btn, Card } from "./SettingsPrimitives";
+import { Card, StatusButton } from "./SettingsPrimitives";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
@@ -43,37 +43,37 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             </p>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <Btn
+            <StatusButton
               onClick={() => void c.checkAppUpdate()}
               disabled={c.appUpdate.busy !== "idle"}
             >
               {c.appUpdate.busy === "checking" ? (
-                <Loader2 size={14} className="animate-spin" />
+                <Spinner className="text-primary-foreground size-3.5" />
               ) : (
                 "检测更新"
               )}
-            </Btn>
+            </StatusButton>
             {c.appUpdate.available && (
-              <Btn
+              <StatusButton
+                variant="success-solid"
                 onClick={() => void c.installAppUpdate()}
                 disabled={c.appUpdate.busy !== "idle"}
-                className="bg-emerald-600 hover:bg-emerald-500"
               >
                 {c.appUpdate.busy === "installing" ? (
-                  <Loader2 size={14} className="animate-spin" />
+                  <Spinner className="text-primary-foreground size-3.5" />
                 ) : (
                   "下载并更新"
                 )}
-              </Btn>
+              </StatusButton>
             )}
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => void c.relaunchApp()}
               disabled={c.appUpdate.busy !== "idle"}
-              className="border-border text-muted-foreground hover:bg-subtle hover:text-ink shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-50"
+              className="text-muted-foreground hover:text-ink h-auto rounded-lg px-4 py-2 font-semibold"
             >
               重启应用
-            </button>
+            </Button>
           </div>
           {c.appUpdate.busy === "installing" && c.appUpdate.progress && (
             <div className="mt-4">

@@ -127,7 +127,7 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 |----|------|-----------|
 | **P1** | 视图层手写 `<button` | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体） |
 | **P2** | 视图层自建 `createPortal(` 浮层 | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu` |
-| **P3** | 视图层自写 `animate-spin` / `animate-pulse` | `ui/page-loading` / `ui/skeleton` / `ui/progress` |
+| **P3** | 视图层自写 `animate-spin` / `animate-pulse` | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
 
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
@@ -183,7 +183,8 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 对话框/浮层 | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~ | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet` | ✅ **P2 完成（P2 判据清零）** |
 | 空态 | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~ | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`） | ✅ **P2 完成** |
 | 按钮 | `ui/button.tsx` + 视图里的手写 `<button>`（逐批下降，当前值看 `pnpm ui:primitives:report`） | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 | ⏳ 分批（已清 4 批，见 §16.2.4.2） |
-| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 23 个文件自写 spinner | P3 棘轮 | ⏳ P3 |
+| 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里） | ⏳ P3 |
+| 状态圆点 | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~ | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token） | ✅ **设置页批次完成** |
 | UI kit 目录 | `components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 | ⏳ 分批 |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
@@ -217,6 +218,7 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | 1 | `studio/workflow-library/` | 28 | 文字动作 → `variant="outline"` / `"ghost"`；实心紫 → `"primary-solid"` |
 | 2 | `studio/project-canvas/`（含 `CanvasNode/`） | 84 | 见下 |
 | 3 | `studio/workflow-editor/` | 14 + 2（P3） | 见下 |
+| 4 | `app/(main)/settings/` + `components/settings/` | 45 + 11（P3） | 见下 |
 
 **`studio/project-canvas/` 这批评测出的三条口径**：
 
@@ -263,10 +265,37 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 （`studio/RequiredSummary.tsx` 与本模块），说明此前一直在为注释记账。
 **字符串/模板字面量不剥离** —— `"<button"` 同样是「自己实现一份」的信号。
 
-**下一批候选**（照 `pnpm ui:primitives:report`）：`app/(main)/settings/`（含
-`UsageTestDialog` 11 处）、`workshop/`（`WorkshopModelAdapterModal` /
-`CharacterPortraitStudio` / `LLMContext`）、`studio/`（`FilmStudio` /
-`ModelLibrary` / `TrainingStudio` 等散件）。
+**`app/(main)/settings/` + `components/settings/` 这批评测出的三条口径**：
+
+6. **「本页主按钮」这种局部原语要换成基元的包装，不是平行实现**。设置页
+   `SettingsPrimitives` 的 `Btn` 此前是第二个 `<button>`（自拼尺寸类 +
+   自拼配色 `bg-primary hover:bg-primary-hover text-white`）。改法不是「把
+   `<button>` 换成 `<Button>` 但保留全部自拼类」—— 那只是换了个标签名。正确
+   拆法是**分工**：配色交给 `variant`（`primary-solid` / `success-solid`），
+   本模块只留该页特有的**排布契约**（`statusButtonClass`：不许换行 / 不许被
+   flex 压扁 / 行框归位，ISSUE #423）。这与顶栏的 `topBarButtonClass` 是同一
+   手法，区别只是契约的内容（顶栏管「窄窗退化顺序」，设置页管「状态行不许
+   被压扁」）。原语随之改名 `StatusButton`，名字说明它属于状态行。
+7. **内联加载态用 `Spinner`，不要用 `PageLoading`**。`PageLoading` 是块级
+   加载态（居中 + 文案 + `size-9` 转圈），放进按钮里会让按钮被撑高。此前各
+   调用点因此退回 `<Loader2 className="animate-spin" />` —— 那正是 P3 判据
+   计数的「自写 spinner」。现在 `ui/page-loading` 同时导出裸转圈 `Spinner`
+   （`size-4`、继承 `currentColor`），`PageLoading` 内部也复用它，全库只剩
+   一处 `animate-spin`。判据：**块级用 `PageLoading`，行内 / 按钮内用
+   `Spinner`**，不要写 `PageLoading label=""`。
+8. **同一组「状态圆点」跨三个文件重复时，收成 `ui/` 基元而不是本页常量**。
+   设置页三条状态行的圆点此前各写一份四分支三元套娃（配色还是各写各的
+   `bg-emerald-400` / `bg-amber-400` / `bg-sky-400` / `bg-rose-400`），这才是
+   典型的「同一个组件到处实现一份」。收进 `ui/status-dot.tsx` 的 `StatusDot`
+   后，状态语义（`up` / `busy` / `probing` / `down`）与颜色只定义一次；**判定
+   逻辑（哪个字段组合算 busy）留在各视图的纯派生函数里**（`comfyDotState` /
+   `dbStudioDotState`），因为那是业务判据、不是样式。日志「跟随中」的脉冲
+   小点也复用它（`pulse`），顺带消掉三份重复的 `animate-pulse`。
+
+**下一批候选**（照 `pnpm ui:primitives:report`）：`workshop/`
+（`WorkshopModelAdapterModal` 9 处、`CharacterPortraitStudio` / `LLMContext`
+各 7-8 处）、`studio/` 散件（`FilmStudio` 9 处、`ModelLibrary` /
+`TrainingStudio` / `VideoQueueModal` 各 8 处）、`app/login/`（8 处）。
 
 ### 16.2.4.1 按钮的语义变体（P1 的前置条件）
 
@@ -289,10 +318,14 @@ base-ui 的 Backdrop 负责点遮罩关闭，自绘的那一份会与它叠成�
 | `primary-solid` | 品牌实心 | `bg-violet-500/90 text-white hover:bg-violet-500` |
 | `danger-solid` | 危险实心 | `bg-red-500 text-white` |
 | `success-solid` | 成功实心 | `bg-emerald-500 text-white` |
+| `warning-solid` | 警告实心 | `bg-amber-500 text-white`（设置页批次补出） |
 
 三条口径：
 
-1. **软底是主力形态**（手写按钮的绝大多数是这个），实心只出实测用到的那三色；
+1. **软底是主力形态**（手写按钮的绝大多数是这个），实心只出**实测用到**的那些色
+   —— 首批三色（品牌 / 危险 / 成功），设置页批次按实测补出 `warning-solid`
+   （「继续等待视频生成」是实心琥珀，它同时是「进行中」与「需要用户动手」
+   两种语义的交叠，软底不足以表达）。**补变体的依据是实测，不是「凑齐色系」**；
 2. **每个软底变体的文字档走 `*-strong` token**，不是同色相原色：同一个琥珀
    `#d97706` 当底色可以、当浅底上的文字色对比度不足 —— 这正是「写死字面量」
    表达不了的那层区分（§3.6.2 末尾同款论证）；
