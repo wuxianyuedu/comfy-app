@@ -17,7 +17,7 @@
  * `widgets_values`（comfy-cli 展开子图后读的是内层值），只改 wrapper 不改内层
  * 会让覆盖在转换阶段被内层默认值覆盖回去。
  *
- * @module comfyui/raw-overrides
+ * @module comfyui/raw-overrides — 两种载荷的 canvas 覆盖注入（纯函数）
  */
 
 import { z } from "zod";

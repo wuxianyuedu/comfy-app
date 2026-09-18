@@ -26,7 +26,7 @@
  *   - {@link ./repository-lora}            LoraTrainingJobRepository
  *   - {@link ./repository-user}            UserRepository + LlmConfigRepository
  *
- * @module core/repository
+ * @module core/repository — Repository 模式统一出口（barrel）
  */
 import "server-only";
 

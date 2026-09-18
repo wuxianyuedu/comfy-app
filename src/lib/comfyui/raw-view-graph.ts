@@ -19,7 +19,7 @@
  * 那一步读的正是 `_meta.mode / virtual / value / inputOrder / inputTypes /
  * outputTypes`。丢掉它们会让「画布上旁路一个节点再运行」失效。
  *
- * @module comfyui/raw-view-graph
+ * @module comfyui/raw-view-graph — RAW 工作流 → **画布视图图**（纯离线派生，不发网络）
  */
 
 import { toStringValue } from "./raw";

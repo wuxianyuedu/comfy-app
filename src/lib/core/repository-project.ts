@@ -1,6 +1,6 @@
 /**
  * `repository-project.ts` — Project 业务仓储（Drizzle 版）
- * @module core/repository-project
+ * @module core/repository-project — Project 业务仓储（Drizzle 版）
  */
 import "server-only";
 

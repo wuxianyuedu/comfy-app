@@ -24,7 +24,7 @@
  * 事件回调 / 异步调用期的运行时引用，模块加载期无顶层交叉执行，安全。
  * 引入本模块会同时触发 executor-scheduler 的 startHeartbeat() 副作用。
  *
- * @module comfyui/executor
+ * @module comfyui/executor — ComfyUI 执行引擎（barrel 聚合）
  */
 export { connect } from "./executor-ws";
 export { processQueue } from "./executor-scheduler";

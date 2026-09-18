@@ -12,7 +12,7 @@
  * 依赖的通道层（claimSettle / fetchHistoryEntry）在 {@link ./executor-ws}，
  * 队列调度（processQueue）在 {@link ./executor-scheduler}。
  *
- * @module comfyui/executor-finalize
+ * @module comfyui/executor-finalize — 任务终态收口（成功下载 / 失败落库）
  */
 import "server-only";
 import { promises as fs } from "fs";

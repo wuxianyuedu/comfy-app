@@ -1,6 +1,6 @@
 /**
  * `repository-workflow-template.ts` — WorkflowTemplate 业务仓储（Drizzle 版）
- * @module core/repository-workflow-template
+ * @module core/repository-workflow-template — WorkflowTemplate 业务仓储（Drizzle 版）
  */
 import "server-only";
 

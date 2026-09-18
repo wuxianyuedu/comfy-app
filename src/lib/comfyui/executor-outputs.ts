@@ -8,7 +8,7 @@
  *   - {@link extractRuntimeParams} 从 history prompt graph 抽取本次执行
  *                                实际使用的 KSampler 参数（真实 seed 等）
  *
- * @module comfyui/executor-outputs
+ * @module comfyui/executor-outputs — 产物收集与运行时参数提取（纯函数）
  */
 /** ComfyUI history 输出文件条目（images / videos / gifs / audios 及 3D 兜底）。 */
 export type CollectedOutputFile = {

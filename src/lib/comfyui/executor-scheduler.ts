@@ -11,7 +11,7 @@
  * executor-cli 里完成）。此前 API 走 postPrompt、RAW 走 cli，两条路径各自
  * 维护一套提交与报错口径，同一份工作流换个格式就有不同的文案。
  *
- * @module comfyui/executor-scheduler
+ * @module comfyui/executor-scheduler — 队列调度与心跳（executor 的调度层）
  */
 import WebSocket from "ws";
 import { logger } from "~/lib/core/logger";

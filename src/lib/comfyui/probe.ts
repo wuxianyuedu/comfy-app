@@ -20,7 +20,7 @@
  * `client.ts` 里「本次会话连哪个地址」的粘性结论（ISSUE #344 的成因）。
  * 需要粘性语义的调用方（`client.probeComfyBase`）自己包一层缓存回滚。
  *
- * @module comfyui/probe
+ * @module comfyui/probe — 单点可达性探测（执行链/状态判定的**叶子**模块）
  */
 import { comfyUiBaseUrl } from "../endpoints";
 

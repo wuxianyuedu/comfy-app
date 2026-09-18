@@ -1,6 +1,6 @@
 /**
  * `repository-lora.ts` — LoraTrainingJob 业务仓储（Drizzle 版）
- * @module core/repository-lora
+ * @module core/repository-lora — LoraTrainingJob 业务仓储（Drizzle 版）
  */
 import "server-only";
 

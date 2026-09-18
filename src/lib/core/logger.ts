@@ -38,7 +38,7 @@
  *     redact**，由 `./redact-secret` 的**值形状守卫**在写入边界擦，且只写文本
  *     字段、绝不整包 `JSON.stringify`（规范 07 §7.18.2.1 / AGENTS 硬规则 16）。
  *
- * @module core/logger
+ * @module core/logger — 全应用日志的**唯一实现**（pino）
  */
 import pino, { type DestinationStream, type LoggerOptions } from "pino";
 

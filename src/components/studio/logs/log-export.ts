@@ -9,7 +9,7 @@
  * 只管「怎么把一段文本送出去」，不管「送哪些行」——后者是 `filteredLogs` 的
  * 口径，属于 store。为此本模块**不依赖 `log-store`**（不引入循环引用）。
  *
- * @module logs/log-export
+ * @module logs/log-export — 「把日志导出到面板之外」的两个出口（纯逻辑 + 两处最小 IO）
  */
 
 /** 导出文件名（本地时间戳，避免同名互相覆盖）。 */

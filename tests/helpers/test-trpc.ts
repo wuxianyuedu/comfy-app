@@ -5,7 +5,7 @@
  * db / 文件系统 —— procedure 返回测试脚本可控的预设值，用于驱动被测组件走
  * loading → data → error / 缓存失效等数据态流转。
  *
- * @module tests/helpers/test-trpc
+ * @module tests/helpers/test-trpc — 供前端集成用例现造「测试 tRPC router」的基建
  */
 import { initTRPC } from "@trpc/server";
 import superjson from "superjson";

@@ -32,7 +32,7 @@
  *   静默空转**：调度层另有一处 3s 安全网心跳（`startHeartbeat`）会重新出队，
  *   等价于旧行为里的兜底。缺注册时打一次 warn，避免「队列悄悄停住」无人察觉。
  *
- * @module comfyui/executor-continuation
+ * @module comfyui/executor-continuation — 出队续跑的回调总线（唯一注册点）
  */
 import { logger } from "~/lib/core/logger";
 
