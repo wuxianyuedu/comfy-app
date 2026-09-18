@@ -1,11 +1,10 @@
 /**
- * RAW (UI-format) workflow parsing helpers — extracted from
- * workflow-detail.ts (batch 4).
+ * RAW（UI 格式）工作流解析助手。
  *
- * These pure functions turn a rawJson blob into the lookup tables the
- * detail builders need: per-node input metadata (`rawInputsById`), exact
- * ComfyUI box sizes (`sizeById`), sparse output metadata (`rawNodeMeta`),
- * class-type lookup (`nodeTypeById`) and the raw-view packet (`rawView`).
+ * 这些纯函数把一份 rawJson 转成详情构建器需要的若干查找表：
+ * 逐节点的输入元数据（`rawInputsById`）、ComfyUI 的精确外框尺寸
+ * （`sizeById`）、稀疏的输出元数据（`rawNodeMeta`）、class type 查找
+ * （`nodeTypeById`）以及 RAW 视图包（`rawView`）。
  */
 import {
   extractPositions,
@@ -100,16 +99,14 @@ export interface RawViewPacket {
   graph: Record<string, ApiWorkflowNode>;
 }
 
-/* IMAGE-input thumbnail preview (narrowed in ). ComfyUI's
- * LoadImage node keeps the uploaded filename in `widgets_values[0]`; we
- * surface that as an inline preview by stamping a synthetic `preview`-marked
- * entry onto the LoadImage node itself.  We DO NOT propagate `imageRef` to
- * downstream IMAGE inputs (ImageScale / CLIPVisionEncode / …) because those
- * renderings would always show the unscaled / un-encoded upstream image
- * (just a duplicate of the LoadImage preview), which is meaningless per
- * user feedback — only the source LoadImage node should paint
- * the thumbnail.  Empty LoadImage uploads (widgets_values[0] missing/empty)
- * still push the synthetic entry — without `imageRef` — so the renderer can
+/* IMAGE 输入的缩略图预览。ComfyUI 的 LoadImage 节点把上传的文件名存在
+ * `widgets_values[0]` 里；我们在 LoadImage 节点**自身**上盖一条合成的
+ * `preview` 标记条目，把它变成内联预览。**不**把 `imageRef` 传播到下游的
+ * IMAGE 输入（ImageScale / CLIPVisionEncode 等）—— 那里渲染出来的永远只是
+ * 未缩放 / 未编码的上游图（等于 LoadImage 预览的副本），用户反馈说没有意义；
+ * 缩略图只该由源头那个 LoadImage 节点画。
+ * LoadImage 没上传图（widgets_values[0] 缺失或为空）时**仍**推这条合成条目
+ * （不带 `imageRef`），让渲染器……
  * show a 「需要上传图片」 placeholder in the body, matching ComfyUI's empty
  * state. */
 const LOAD_IMAGE_NODE_TYPES = new Set([
@@ -123,23 +120,22 @@ const LOAD_IMAGE_NODE_TYPES = new Set([
 ]);
 
 /**
- * Build per-node input metadata (`rawInputsById`) and exact ComfyUI box
- * sizes (`sizeById`) from the RAW (UI-format) json.
+ * 从 RAW（UI 格式）json 里构建逐节点的输入元数据（`rawInputsById`）与
+ * ComfyUI 的精确外框尺寸（`sizeById`）。
  *
- * The base parser walks every raw node's `inputs[]` array and stamps:
- *   - `isConnection` from `inp.link`
- *   - `widget: { name }` for inputs that expose an internal widget value
- *   - `widgetValue` drawn from `widgets_values[k]` with a running widget
- *     counter (seed / noise_seed bundle two slots — value + implicit
- *     `control_after_generate` partner)
- *   - `multiline` for STRING inputs flagged by `inferIsMultiline`
- *   - a synthetic `preview` entry on LoadImage-family nodes
+ * 基础解析器走每个原始节点的 `inputs[]` 数组，并盖上：
+ *   - `isConnection`，取自 `inp.link`
+ *   - `widget: { name }`，给暴露了内部 widget 值的输入
+ *   - `widgetValue`，从 `widgets_values[k]` 取值，配一个递进的 widget 计数器
+ *     （seed / noise_seed 会捆两个槽：本身的值 + 隐含的
+ *     `control_after_generate` 伙伴）
+ *   - `multiline`，给 `inferIsMultiline` 标出的 STRING 输入
+ *   - LoadImage 一族节点上的一条合成 `preview` 条目
  *
- * Then subgraph wrapper nodes get their exposed widget
- * values enriched from `properties.proxyWidgets` — the wrapper's own
- * `widgets_values[]` is empty; the actual values live in the internal
- * nodes' arrays.  COMBO candidates are resolved via /api/object_info
- * (single fetch per resolver, cached) and stamped as `comboOptions`.
+ * 随后，子图封装节点暴露出来的 widget 值会从 `properties.proxyWidgets`
+ * 富化得到 —— 封装节点自己的 `widgets_values[]` 是空的，真正的值存在内部节点
+ * 的数组里。COMBO 候选值经 /api/object_info 解析（每个解析器只取一次，带缓存），
+ * 盖上 `comboOptions`。
  */
 /** 唯一定位一个代理目标 —— 空白槽位与跳过的目标不会互相顶掉。 */
 function proxyKey(target: [string, string]): string {
@@ -271,19 +267,17 @@ export async function buildRawInputs(
   rawInputsById: Record<string, RawInputEntry[]>;
   sizeById: Record<string, [number, number]>;
 }> {
-  /* Build a `rawInputs` lookup for every graph node.  In raw UI format, each
-   * node carries an `inputs` array on the disk record where every entry has
-   *   { name, localized_name, label?, type, link }
-   * `localized_name` is the zh-CN display label (ComfyUI saves it per node)
-   * and `type` is the ComfyUI data-type string used for both connections and
-   * widget values.  When the workflow was imported as API JSON only, this
-   * map is empty. */
+  /* 给每个图节点建 `rawInputs` 查找表。原始 UI 格式里，每个节点在磁盘记录上
+   * 带一个 `inputs` 数组，每项形如
+   *   { name, localized_name, label?, type, link }（字段名照旧）
+   * `localized_name` 是简体中文显示标签（ComfyUI 逐节点保存的），
+   * `type` 是 ComfyUI 的数据类型字符串，连线与 widget 值都用它。
+   * 工作流只以 API JSON 导入时，这张表是空的。 */
   const rawInputsById: Record<string, RawInputEntry[]> = {};
-  /* ComfyUI/litegraph node `size` ([w, h]) — forwarded so the canvas can
-   *  paint each node box at its exact ComfyUI dimensions (the user expects
-   *  the card to match the imported config, including oversized boxes with
-   *  internal whitespace).  Raw API-format `tpl.graph` drops `size`, so we
-   *  pull it back from `raw.nodes` (which still carries it) keyed by id. */
+  /* ComfyUI / litegraph 节点的 `size`（[w, h]）—— 透传出去，画布便能按
+   *  ComfyUI 的精确尺寸画出每个节点框（用户期望卡片与导入的配置一致，
+   * 包括那些内部留白很大的超尺寸框）。API 格式的 `tpl.graph` 把 `size` 丢了，
+   * 因此这里按 id 从 `raw.nodes`（它还带着）里捞回来。 */
   const sizeById: Record<string, [number, number]> = {};
   /* 控件顺序表（classType → 控件名数组，含 control_after_generate
    * 哨兵槽）。惰性拉取 —— 只有真的遇到「inputs[] 没覆盖到的控件值」时才请求
@@ -302,11 +296,11 @@ export async function buildRawInputs(
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
       if (!rn) continue;
-      /* Capture `size` for EVERY raw node, independent of whether the node
-       *  carries an `inputs` array.  Some litegraph exports (and certain
-       *  test fixtures) omit `inputs` on nodes that still have a `size`,
-       *  so gating size on `inputs` would wrongly drop it.  (The
-       *  rawInputsById pass below still needs `inputs`, hence the separate
+      /* 给**每个**原始节点都记 `size`，与该节点有没有 `inputs` 数组无关。
+       * 有些 litegraph 导出（以及部分测试夹具）会在仍有 `size` 的节点上省略
+       * `inputs`；把 size 挂在 `inputs` 上判，会把这些尺寸误丢。
+       * （下面那一趟 rawInputsById 仍然需要 `inputs`，
+       * 所以这里单独走一遍。）
        *  guard below.) */
       const rnSize =
         Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
@@ -335,8 +329,8 @@ export async function buildRawInputs(
             : undefined;
         if (!widgetName || widgetCounter >= rnWidgets.length) continue;
         legacyByName.set(widgetName, rnWidgets[widgetCounter]);
-        /* seed / noise_seed widgets carry an implicit `control_after_generate`
-         * partner slot immediately after their own value (fix). */
+        /* seed / noise_seed widget 的值后面紧跟着一个隐含的
+         * `control_after_generate` 伙伴槽。 */
         const isSeedBundle =
           widgetName === "seed" ||
           widgetName === "noise_seed" ||
@@ -369,13 +363,12 @@ export async function buildRawInputs(
       for (const inp of rn.inputs) {
         if (!inp || typeof inp.name !== "string") continue;
         const isConn = inp.link != null;
-        /* ComfyUI bakes the widget handle as `{ widget: { name: "…" } }`
-         *  on inputs that are "exposed widget proxies" — the value lives
-         *  in `widgets_values` at the position of widgets seen so far in
-         *  inputs[] order.  Without this counter, the API would only
-         *  expose the flat widgets_values array and force every consumer
-         *  to re-pair the indices (which was the previous source of the
-         *  "<input name still showing no value>" regression). */
+        /* ComfyUI 在「被暴露的 widget 代理」输入上，把 widget 把手烤成
+         *  `{ widget: { name: "…" } }` —— 值存在 `widgets_values` 里，
+         * 下标是「按 inputs[] 顺序数到该行时已见到的 widget 个数」。
+         * 没有这个计数器，API 只会暴露扁平的 widgets_values 数组，
+         * 逼每个消费方自己去重新配对下标 ——
+         * 那正是此前「<输入名仍然显示没有值>」这类回归的来源。 */
         const widgetName =
           inp.widget && typeof inp.widget.name === "string"
             ? inp.widget.name
@@ -416,11 +409,10 @@ export async function buildRawInputs(
         };
         if (widgetName) entry.widget = { name: widgetName };
         if (widgetValue !== undefined) entry.widgetValue = widgetValue;
-        /* stamp `multiline` on every STRING input that
-         *  the upstream `inferIsMultiline` helper flags.  The helper
-         *  intentionally never stamps `multiline: false` (an opt-in
-         *  only flag); the renderer treats absence as "no opinion"
-         *  and falls back to its own heuristics.
+        /* 给上游 `inferIsMultiline` 助手标出的每个 STRING 输入盖
+         *  `multiline`。该助手**刻意**不盖 `multiline: false` ——
+         *  这是一个只做「开启」的标记；渲染器把「没有」当成「没有意见」，
+         *  回落到自己的启发式。
          *
          *  判据来自节点自己的类型声明（`("STRING", {"multiline": true})`
          *  → object_info），不按字段名猜：「叫 prompt 的就是多行」会把
@@ -469,21 +461,17 @@ export async function buildRawInputs(
       }
 
       rawInputsById[String(rn.id)] = list;
-
-      /* LoadImage-family nodes carry the uploaded filename in widgets_values[0]
-       * but have NO IMAGE input (they *produce* IMAGE).  We synthesize one
-       * preview entry — `preview: true` marker — so the canvas can paint the
+      /* LoadImage 一族节点把上传的文件名放在 widgets_values[0]，
+       * 但它们**没有** IMAGE 输入（它们是 IMAGE 的**产出方**）。
+       * 我们合成一条预览条目（`preview: true` 标记），画布便能画出它 ——
        * uploaded thumbnail (or a 「需要上传图片」 placeholder when empty) on
-       * the LoadImage node itself, which is exactly where ComfyUI paints it.
-       *
-       * ALWAYS push for LoadImage-family, regardless of
-       * whether an image is loaded.  The empty-image branch (widgets_values[0]
-       * missing / empty) returns `imageRef: undefined` and the frontend
-       * renders a placeholder.  This way the node always has its preview
-       * area in the body — collapsing the body hides both, which is the
-       * correct ComfyUI-parity shape.  The dedicated `preview: true` flag
-       * is checked by the renderer's connEntries / widgetEntries filters
-       * so this entry never lands in the port row or widget control list. */
+       *         * 缩略图，且正好画在 ComfyUI 自己画的位置。
+       *        * LoadImage 一族**一律**推这条条目，与是否已加载图片无关。
+       *        * 没图的分支（widgets_values[0] 缺失 / 为空）返回
+       *        * `imageRef: undefined`，前端渲染成占位。这样节点主体上永远有它的预览区
+       *        * —— 折叠主体两者一起消失，正是与 ComfyUI 一致的形态。
+       *        * 专属的 `preview: true` 标记会被渲染器的 connEntries / widgetEntries
+       *        * 过滤器检查，因此这条条目永远不会落进端口行或 widget 控件清单。 */
       if (
         LOAD_IMAGE_NODE_TYPES.has(typeof rn.type === "string" ? rn.type : "")
       ) {
@@ -511,32 +499,28 @@ export async function buildRawInputs(
       }
     }
   }
-
-  /* Subgraph wrapper widget value lookup.
+  /* 子图封装节点的 widget 值查找。
    *
-   * ComfyUI's exported subgraph workflows carry a `properties.proxyWidgets`
-   * array on each wrapper node that maps wrapper.inputs[i] to an internal
-   * node + widget field: `proxyWidgets[i] = [internalNodeId, fieldName]`.
-   * The wrapper's own `widgets_values[]` is empty — the actual values
-   * live in the corresponding internal nodes' `widgets_values[]`, indexed
-   * by walking the internal node's `inputs[]` array to find the slot
-   * for `fieldName` (counting widget slots seen so far, since
-   * ComfyUI/LiteGraph stores widget values as a flat array in input
-   * order).
-   *
-   * Special case: KSampler / KSamplerAdvanced bundle `seed` and
-   * `control_after_generate` into TWO consecutive widget slots — the
-   * `seed` input occupies slot 0, `control_after_generate` slots into
-   * slot 1, so any slot counter that hits a seed widget advances by 2.
-   *
-   * The base parser (above) already stamps `widget: { name }` on inputs
-   * that carry the widget marker (ComfyUI's exported wrappers always do),
-   * `isConnection` from `inp.link`, and attempts `widgetValue` from
-   * `rn.widgets_values[widgetCounter]` — but for wrapper nodes the latter
-   * is empty, leaving every widget row blank until this enrichment runs. */
+   * ComfyUI 导出的子图工作流会在每个封装节点上带一个
+   * `properties.proxyWidgets` 数组，把 wrapper.inputs[i] 映射到「内部节点 +
+   * widget 字段」：`proxyWidgets[i] = [内部节点id, 字段名]`。
+   * 封装节点自己的 `widgets_values[]` 是空的 —— 真正的值存在对应内部节点的
+   * `widgets_values[]` 里，下标为下面那个槽位计数器。
+   * 具体做法：走内部节点的 `inputs[]` 数组，找到 `fieldName` 对应的槽位
+   * （边数边累计已见到的 widget 槽数 —— ComfyUI / LiteGraph 把 widget 值
+   * 按输入顺序存成一个扁平数组）。
+   * 特例：KSampler / KSamplerAdvanced 把 `seed` 与 `control_after_generate`
+   * 捆成**连续的两个** widget 槽 —— `seed` 占 0 号槽，
+   * `control_after_generate` 落在 1 号槽；因此槽位计数器一旦碰到 seed widget
+   * 就要一次前进 2。
+   * 上面的基础解析器已经给带 widget 标记的输入盖上了 `widget: { name }`
+   * （ComfyUI 导出的封装节点总是有），并从 `inp.link` 盖 `isConnection`，
+   * 还尝试从 `rn.widgets_values[widgetCounter]` 取 `widgetValue` ——
+   * 但对封装节点来说后者是空的，因此在这趟富化跑之前，
+   * 每一行 widget 都是空白。 */
   if (raw?.definitions?.subgraphs) {
     const subs = raw.definitions.subgraphs;
-    /* Index internal nodes per subgraph def by id for O(1) lookup. */
+    /* 按 id 给每个子图定义里的内部节点建索引，查找降到 O(1)。 */
     const internalByIdByKey = new Map<string, Map<string, RawNode>>();
     for (const subKey of Object.keys(subs)) {
       const subDef = subs[subKey];
@@ -551,8 +535,7 @@ export async function buildRawInputs(
 
       internalByIdByKey.set(subKey, map);
     }
-
-    /* Find the subgraph def that belongs to a wrapper's UUID classType. */
+    /* 找出封装节点 UUID classType 对应的那个子图定义。 */
     const resolveSubDef = (
       classType: string,
     ): { key: string; def: RawSubgraphDef } | null => {
@@ -564,12 +547,10 @@ export async function buildRawInputs(
       }
       return null;
     };
-    /* Look up a widget field's current value on an internal node by
-     * walking inputs[] to find the matching slot, then indexing
-     * widgets_values[].  Handles the seed+control_after_generate
-     * 2-slot bundle by advancing the slot counter twice wherever a
-     * seed/ noise_seed widget is encountered (those inputs always
-     * carry an implicit `control_after_generate` partner slot). */
+    /* 取内部节点上某个 widget 字段的当前值：走 inputs[] 找到对应槽位，
+     * 再按它索引 widgets_values[]。seed + control_after_generate 的双槽捆绑
+     * 也要处理 —— 碰到 seed / noise_seed widget 时槽位计数器前进两次
+     * （这些输入总是带一个隐含的 `control_after_generate` 伙伴槽）。 */
     const lookupFieldValue = (
       internalNode: RawNode | undefined,
       fieldName: string,
@@ -580,7 +561,7 @@ export async function buildRawInputs(
       const wv: unknown[] = Array.isArray(internalNode.widgets_values)
         ? internalNode.widgets_values
         : [];
-      /* control_after_generate always sits in the slot AFTER seed. */
+      /* control_after_generate 永远紧跟在 seed 的**下一个**槽位。 */
       if (fieldName === "control_after_generate") {
         const seedIdx = inputs.findIndex(
           (i) => !!i && (i.name === "seed" || i.name === "noise_seed"),
@@ -592,7 +573,7 @@ export async function buildRawInputs(
         }
         return slot < wv.length ? wv[slot] : undefined;
       }
-      /* Generic: count widget slots before the target input. */
+      /* 通用路径：数出目标输入之前有多少个 widget 槽。 */
       const inputIdx = inputs.findIndex((i) => i?.name === fieldName);
       if (inputIdx < 0) return undefined;
       let slot = 0;
@@ -600,15 +581,14 @@ export async function buildRawInputs(
         const inp = inputs[k];
         if (inp?.widget) {
           slot++;
-          /* seed bundle consumes an extra slot for control_after_generate */
+          /* seed 捆绑要额外占掉一个 control_after_generate 的槽 */
           if (inp.name === "seed" || inp.name === "noise_seed") slot++;
         }
       }
       return slot < wv.length ? wv[slot] : undefined;
     };
-
-    /* Precompute (subDefKey, proxyWidgets, internalById) per wrapper so
-     * the inner map stays cheap when the workflow has many wrappers. */
+    /* 给每个封装节点预先算好 (subDefKey, proxyWidgets, internalById)，
+     * 工作流里封装节点很多时，内层映射的代价仍然很低。 */
     const wrapperNodeIds: string[] = [];
     for (const nodeId of Object.keys(rawInputsById)) {
       const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
@@ -645,22 +625,19 @@ export async function buildRawInputs(
           : classType;
 
       const existingList = rawInputsById[nodeId] ?? [];
-      /* `proxyWidgets` is indexed by *widget-input order* (the i-th exposed
-       *  widget slot), NOT by the raw input-array index — ComfyUI skips
-       *  pure-connection ports when it builds the array.  So we must walk
-       *  the widget slots with their own counter (`widgetSlot`) rather than
-       *  reuse the map's `idx` (which counts every input, ports included).
-       *  Reusing `idx` shifts the mapping whenever a wrapper has leading or
-       *  trailing non-widget ports: every wrapped value lands on the wrong
-       *  row, and the trailing widget inputs fall off the end of the array
-       *  and render as blank placeholder cells. */
+      /* `proxyWidgets` 是按**widget 输入的次序**（第 i 个暴露的 widget 槽）
+       *  索引的，**不是**原始输入数组的下标 —— ComfyUI 构建这个数组时会跳过
+       *  纯连线端口。因此必须用**专门的** `widgetSlot` 计数器走 widget 槽，
+       *  不能复用映射里的 `idx`（它把每个输入都数进去，端口也在内）。
+       *  复用 `idx` 的后果：封装节点只要在首尾有非 widget 端口，
+       *  映射就整体错位 —— 每个被封装的值都落到错误的行上，
+       *  末尾的 widget 输入则掉出数组尾部，渲染成空占位格。 */
       let widgetSlot = 0;
       /* 已被位置序消费过的 (内部节点, 字段) 对 —— 防重复匹配串台。 */
       const usedProxyTargets = new Set<string>();
       const updatedList = existingList.map((entry) => {
-        /* Only enrich inputs that ALREADY have a widget marker (i.e.
-         *  they're exposed widget slots, not pure-connection ports).
-         *  Pure ports correctly stay in connInputs on the client side. */
+        /* 只富化**已经**带 widget 标记的输入（即被暴露的 widget 槽，
+         *  而不是纯连线端口）。纯端口在客户端正确地留在 connInputs 里。 */
         if (!entry.widget) return entry;
         /* 首选按槽位名匹配：`value_1` 直取自己的目标，比位置更抗得住导出差异。
          *  名字对不上（命名不是 value_N 的私有导出）时退回位置序。 */
@@ -678,10 +655,8 @@ export async function buildRawInputs(
 
           if (value !== undefined) updated.widgetValue = value;
         }
-
-        /* Adopt the internal node's slot type as authoritative if our
-         *  wrapper entry didn't carry one (defensive — usually already
-         *  present from the raw JSON). */
+        /* 封装条目自己没带类型时，采用内部节点该槽位的类型作为权威值
+         *  （防御性 —— 通常原始 JSON 里本来就有）。 */
         if (internalNode && Array.isArray(internalNode.inputs)) {
           const inp = internalNode.inputs.find((i) => i?.name === fieldName);
           if (typeof inp?.type === "string") updated.type = inp.type;
@@ -701,9 +676,9 @@ export async function buildRawInputs(
                 : {}),
             };
           }
-          /* Stash the proxy target (internal node class + field) so the
-           *  async COMBO-option pass below can resolve candidate lists from
-           *  /api/object_info for any COMBO widget on this wrapper. */
+          /* 存下代理目标（内部节点的 class + 字段），下面那趟异步 COMBO
+           *  候选值处理便能为本封装节点上的 COMBO widget 从
+           *  /api/object_info 解析候选清单。 */
           updated.__comboClass = internalNode.type;
           updated.__comboField = fieldName;
         } else if (internalNodeId && fieldName) {
@@ -725,11 +700,10 @@ export async function buildRawInputs(
         );
         if (inferIsMultiline(declared, e.widgetValue)) e.multiline = true;
       }
-      /* Resolve COMBO candidate lists from /api/object_info (single fetch
-       *  per request, cached).  Only wrapper widget inputs that are COMBOs
-       *  get a `comboOptions` array; everything else is left untouched.  If
-       *  ComfyUI is unreachable the temp fields are just dropped and the
-       *  consumer falls back to a plain text control. */
+      /* 从 /api/object_info 解析 COMBO 候选清单（每次请求只取一次，带缓存）。
+       *  只有是 COMBO 的封装 widget 输入才会拿到 `comboOptions` 数组，
+       *  其余一律不动。ComfyUI 不可达时，这些临时字段直接丢掉，
+       *  消费方回落到普通文本控件。 */
       for (const e of updatedList) {
         if (e.type === "COMBO" && e.__comboClass) {
           const opts = await comboOptionsForClassField(
@@ -749,9 +723,9 @@ export async function buildRawInputs(
 }
 
 /**
- * Sparse raw-node metadata — only enough for the canvas editor to render
- * the OUTPUT port strip and to feed Subgraph UI nodes (which need
- * widget_values to label their fields).  Note nodes are excluded.
+ * 稀疏的原始节点元数据 —— 只够画布编辑器渲染 OUTPUT 端口条、
+ * 以及喂给子图 UI 节点（它们需要 widget_values 给字段打标签）。
+ * 便签节点排除在外。
  */
 export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
   const rawNodeMeta: RawNodeMeta[] = [];
@@ -768,9 +742,9 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
               typeof o.localized_name === "string"
                 ? o.localized_name
                 : undefined,
-            /* Business label (e.g. `FRAMES` / `IMAGE_FINAL`).  Forwarded
-             *  so the parent's WorkflowSubgraphNode outputs strip and the
-             *  inner WorkflowIoPortNode display stay in lock-step. */
+            /* 业务标签（如 `FRAMES` / `IMAGE_FINAL`）。透传出去，
+             *  父级 WorkflowSubgraphNode 的输出条与内层 WorkflowIoPortNode
+             *  的显示才能一致。 */
             label: typeof o.label === "string" ? o.label : undefined,
             type: typeof o.type === "string" ? o.type : "*",
             links: Array.isArray(o.links)
@@ -779,11 +753,11 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
           });
         }
       }
-      // Forward `flags` so the editor can honour per-node flags such as
-      //  `flags.collapsed === true` (a ComfyUI LiteGraph state used by
-      //  SetNode / Fast Groups Muter / rgthree Compact etc.).  Only
-      //  plain-object flags are kept; everything else is dropped to
-      //  avoid leaking class-instances into the JSON payload.
+      // 透传 `flags`，编辑器才能照顾到逐节点的标记，例如
+      //  `flags.collapsed === true`（SetNode / Fast Groups Muter /
+      //  rgthree Compact 等会用的 ComfyUI LiteGraph 状态）。
+      //  只保留纯对象形态的 flags，其余一律丢掉 ——
+      //  避免把类实例泄漏进 JSON 载荷。
       const flags =
         rn && typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {};
       rawNodeMeta.push({
@@ -793,9 +767,9 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
           : [],
         outputs,
         flags,
-        /* Custom-node `properties`. Forwarded so the canvas
-         *  can replicate runtime UI driven by properties — the most
-         *  prominent example is rgthree's `Fast Groups Bypasser`. */
+        /* 自定义节点的 `properties`。透传出去，画布便能复现由 properties
+         *  驱动的运行期 UI —— 最典型的例子是 rgthree 的
+         *  `Fast Groups Bypasser`。 */
         properties:
           rn && typeof rn.properties === "object" && rn.properties !== null
             ? rn.properties
@@ -807,8 +781,8 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
   return rawNodeMeta;
 }
 
-/** Map node id → ComfyUI class type (raw.nodes), used by the workflowIO
- *  enrichment to resolve direct (non-wrapper) COMBO candidates. */
+/** 节点 id → ComfyUI class type 的映射（取自 raw.nodes）。
+ *  workflowIO 富化用它解析**直接**（非封装）节点的 COMBO 候选值。 */
 export function buildNodeTypeMap(
   raw: RawWorkflow | null,
 ): Record<string, string> {
