@@ -320,15 +320,21 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 | 品牌浅底   | `--color-primary-soft`                         | 图标托底、选中项底                                          |
 | 强调/品红  | `--color-accent` / `--color-accent-soft`       | 第二品牌色                                                  |
 | 成功       | `--color-success` / `--color-success-strong`   | 状态绿（原 `emerald-*`）                                    |
-| 警告       | `--color-warning` / `--color-amber`            | 待处理/排队（原 `amber-*`）                                 |
-| 危险       | `--destructive`（shadcn，两态已定义）          | 失败/删除（原 `red-*`）                                     |
-| 信息       | `--color-info`                                 | 链接/提示                                                   |
+| 警告       | `--color-warning` / `--color-warning-strong`   | 待处理/排队（原 `amber-*`）                                 |
+| 危险       | `--destructive` / `--color-danger-strong`      | 失败/删除（原 `red-*`）                                     |
+| 信息       | `--color-info` / `--color-info-strong`         | 链接/提示（原 `cyan-*` / `blue-*`）                         |
 | 极光晕     | `--color-aurora-violet` / `-cyan` / `-magenta` | 装饰性背景光晕的**色相**（强度由调用处决定）                |
 
 **「同一个原色在两个位置上取不同值」是正常的，别用同一份写死值糊过去**：
 品牌紫 `#7c5cfc` 当底色可以、当浅底上的文字色对比度不够 —— 所以有
 `--color-primary`（底）与 `--color-primary-strong`（字）两颗 token。
-这正是不该写死的原因：写死的那一处无法表达这个区分。
+这正是不该写死的原因：写死的那一处无法表达这个区分。状态色同理：
+`warning` / `success` / `info` / `danger` 各自都有「当底的原色」与
+「浅底上当字的 `*-strong` 档」。
+
+**这套区分直接决定 `Button` 的语义变体怎么写**（16 §16.2.4.1）：
+`variant="warning"` 的底色取 `bg-warning/10`、文字取 `text-warning-strong`，
+而不是两边都用 `amber-500`。
 
 **装饰性渐变/光晕**：色相进 token，**强度（alpha）留在调用处**。同一个极光晕
 曾在登录页 / 首页 / `FilmStudio` / `TrainingStudio` 各抄一份、且值不同

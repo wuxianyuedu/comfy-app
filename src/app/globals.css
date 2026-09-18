@@ -46,18 +46,27 @@
   --color-port-surface: #ffffff; /* 端口圆点的载体色：节点表面（浅色） */
   --color-edge-hub-dot: #52525b; /* 连线中点圆点（浅色画布上的深点） (light default) */
   --color-edge-default: #a78bfa; /* 默认连线描边（紫，与端口/类别色系一致） (light default) */
-  --color-port-halo-ring: rgb(0 0 0 / 0.45); /* 端口内圈高光（强档） (light default) */
-  --color-port-halo-ring-weak: rgb(0 0 0 / 0.22); /* 端口内圈高光（常规档） (light default) */
+  --color-port-halo-ring: rgb(
+    0 0 0 / 0.45
+  ); /* 端口内圈高光（强档） (light default) */
+  --color-port-halo-ring-weak: rgb(
+    0 0 0 / 0.22
+  ); /* 端口内圈高光（常规档） (light default) */
   /* 便签节点内 Markdown 渲染色（markdown.ts 内联 style 直接引用） */
   --color-md-code-bg: rgb(0 0 0 / 0.05); /* 代码块底 (light default) */
   --color-md-inline-code-bg: rgb(0 0 0 / 0.04); /* 行内代码底 (light default) */
   --color-md-border: rgb(0 0 0 / 0.12); /* 分隔线/表格边框 (light default) */
-  --color-md-quote-border: rgb(0 0 0 / 0.20); /* 引用左边线 (light default) */
+  --color-md-quote-border: rgb(0 0 0 / 0.2); /* 引用左边线 (light default) */
   --color-md-link: #1d4ed8; /* 链接 (light default) */
-  --color-canvas-ruler-ink: rgb(51 65 85 / 0.9); /* 画布标尺文字 (light default) */
-  --color-canvas-ruler-shadow: 0 0 3px rgb(255 255 255 / 0.9), 0 0 1px rgb(255 255 255 / 0.9); /* 标尺文字描边 (light default) */
+  --color-canvas-ruler-ink: rgb(
+    51 65 85 / 0.9
+  ); /* 画布标尺文字 (light default) */
+  --color-canvas-ruler-shadow:
+    0 0 3px rgb(255 255 255 / 0.9), 0 0 1px rgb(255 255 255 / 0.9); /* 标尺文字描边 (light default) */
   --color-canvas-deep: #eef0f4; /* 输入控件/深面板底 (light default) */
-  --color-canvas-minimap-mask: rgb(0 0 0 / 0.12); /* 小地图非视口遮罩 (light default) */
+  --color-canvas-minimap-mask: rgb(
+    0 0 0 / 0.12
+  ); /* 小地图非视口遮罩 (light default) */
   --color-canvas-grid-dot: rgb(0 0 0 / 0.22); /* 画布点阵底纹 (light default) */
   --color-panel: #ffffff; /* 面板/顶栏/浮层 (light default) */
   --color-panel-deep: #f0f1f5; /* 侧栏/页脚 (light default) */
@@ -82,6 +91,12 @@
   --color-info: #2563eb; /* 信息/链接强调 (light default) */
   --color-success: #0ea472; /* 成功/薄荷强调 (light default) */
   --color-success-strong: #10b981; /* 成功绿 (light default) */
+  /* 状态色的「浅底上的文字档」：与 -strong 同一用意 —— 同一个色相当底色可以、
+     当浅底上的文字色对比度不够（ISSUE #672）。`text-warning-strong` 一度被
+     status-badge 引用却从没定义过，那三个状态因此渲染成无色。 */
+  --color-warning-strong: #b45309; /* 警告文字档（琥珀-700 同值）(light default) */
+  --color-danger-strong: #b91c1c; /* 危险文字档（红-700 同值）(light default) */
+  --color-info-strong: #1d4ed8; /* 信息文字档（蓝-700 同值）(light default) */
   --color-status-online: #047857; /* 「本机/在线」状态点与文字（浅色档，与 emerald-700 同值）(light default) */
   --color-warning: #d97706; /* 警告 (light default) */
   --color-amber: #d97706; /* 琥珀强调（workshop 徽章/按钮）(light default) */
@@ -156,15 +171,18 @@
   --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
   --color-edge-hub-dot: #ffffff; /* 连线中点圆点 */
   --color-port-halo-ring: rgb(255 255 255 / 0.5); /* 端口内圈高光（强档） */
-  --color-port-halo-ring-weak: rgb(255 255 255 / 0.25); /* 端口内圈高光（常规档） */
+  --color-port-halo-ring-weak: rgb(
+    255 255 255 / 0.25
+  ); /* 端口内圈高光（常规档） */
   /* 便签节点内 Markdown 渲染色（markdown.ts 内联 style 直接引用） */
-  --color-md-code-bg: rgb(0 0 0 / 0.20); /* 代码块底 */
+  --color-md-code-bg: rgb(0 0 0 / 0.2); /* 代码块底 */
   --color-md-inline-code-bg: rgb(255 255 255 / 0.05); /* 行内代码底 */
   --color-md-border: rgb(255 255 255 / 0.08); /* 分隔线/表格边框 */
   --color-md-quote-border: rgb(255 255 255 / 0.18); /* 引用左边线 */
   --color-md-link: #7aa2ff; /* 链接 */
   --color-canvas-ruler-ink: rgb(203 213 225 / 0.85); /* 画布标尺文字 */
-  --color-canvas-ruler-shadow: 0 0 3px rgb(10 10 15 / 0.95), 0 0 1px rgb(10 10 15 / 0.95); /* 标尺文字描边 */
+  --color-canvas-ruler-shadow:
+    0 0 3px rgb(10 10 15 / 0.95), 0 0 1px rgb(10 10 15 / 0.95); /* 标尺文字描边 */
   --color-canvas-deep: #0f0f14; /* 输入控件/深面板底 */
   --color-canvas-minimap-mask: rgb(0 0 0 / 0.78); /* 小地图非视口遮罩 */
   --color-canvas-grid-dot: rgb(255 255 255 / 0.22); /* 画布点阵底纹 */
@@ -191,6 +209,9 @@
   --color-info: #5bc6ff; /* 信息/链接强调 */
   --color-success: #5be3c4; /* 成功/薄荷强调 */
   --color-success-strong: #10b981; /* 成功绿 */
+  --color-warning-strong: #fbbf24; /* 警告文字档（琥珀-400 同值） */
+  --color-danger-strong: #fca5a5; /* 危险文字档（红-300 同值） */
+  --color-info-strong: #7dd3fc; /* 信息文字档（天蓝-300 同值） */
   --color-status-online: #33d499; /* 「本机/在线」状态点与文字（深色档 — 即原写死值） */
   --color-warning: #f59e0b; /* 警告 */
   --color-amber: #ffb553; /* 琥珀强调 */
@@ -231,7 +252,7 @@
   --sidebar-accent-foreground: #ededf2;
   --sidebar-border: #26262e;
   --sidebar-ring: #7c5cfc;
-  --ring-shadow: rgb(255 255 255 / 0.10); /* 浮层 ring（深色下用中性白） */
+  --ring-shadow: rgb(255 255 255 / 0.1); /* 浮层 ring（深色下用中性白） */
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -786,7 +807,9 @@ textarea::-webkit-scrollbar {
   --card-foreground: #1a1a1f;
   --popover: #ffffff;
   --popover-foreground: #1a1a1f;
-  --ring-shadow: rgb(0 0 0 / 0.08); /* 浮层 ring（浅色下用中性灰，不用前景色） */
+  --ring-shadow: rgb(
+    0 0 0 / 0.08
+  ); /* 浮层 ring（浅色下用中性灰，不用前景色） */
   --primary: #7c5cfc; /* 品牌紫 */
   --primary-foreground: #ffffff;
   --secondary: #f7f8fa;

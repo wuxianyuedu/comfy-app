@@ -5,6 +5,7 @@ import { useCustomNodesSettings } from "./hooks/use-custom-nodes-settings";
 import { NodesTab } from "./NodesTab";
 import { ParseConsole, ReportCards } from "./SettingsParts";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { Button } from "~/components/ui/button";
 
 /** 自定义节点导入对话框。
  *
@@ -17,15 +18,14 @@ export function CustomNodesSettings() {
   return (
     <>
       <div>
-        <button
-          type="button"
+        <Button
           onClick={() => ctrl.setOpen(true)}
-          className="bg-primary flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+          className="h-auto w-full gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90"
           title="从 ComfyUI 安装目录的 custom_nodes 导入自定义节点（服务端只读、绝不修改这些目录里的任何文件）"
         >
           <span>{"\u{1F4E6}"}</span>
           <span>导入自定义节点</span>
-        </button>
+        </Button>
       </div>
 
       {ctrl.open && (
@@ -46,12 +46,14 @@ export function CustomNodesSettings() {
               <h3 className="text-ink text-base font-semibold">
                 导入自定义节点
               </h3>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => ctrl.setOpen(false)}
                 className="text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg px-2 py-1"
               >
                 关闭
-              </button>
+              </Button>
             </div>
 
             <p className="text-muted-foreground mb-3 text-xs">

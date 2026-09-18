@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { SourceTag } from "~/components/studio/ui/SourceTag";
 import { TaskTypeChip } from "~/components/studio/ui/TaskTypeChip";
 import { modeLabel } from "../workflow-library-config";
@@ -92,8 +93,8 @@ export function DetailHeader({
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="relative">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => {
                   if (modes.length > 1) setShowAllModes((value) => !value);
                 }}
@@ -105,12 +106,12 @@ export function DetailHeader({
                       ? `${modeLabel(modes[0])}（${modes[0]}）`
                       : undefined
                 }
-                className={
+                className={`h-auto gap-0 p-0 disabled:opacity-100 ${
                   modes.length > 1 ? "cursor-pointer" : "cursor-default"
-                }
+                }`}
               >
                 <TaskTypeChip taskType={workflow.taskType} />
-              </button>
+              </Button>
               {showAllModes && modes.length > 1 && (
                 <div className="border-border bg-panel absolute top-full left-0 z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl">
                   {modes.map((code) => (

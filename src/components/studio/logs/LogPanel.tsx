@@ -10,7 +10,6 @@ import {
   FileText,
   Maximize2,
   Minimize2,
-  Search,
   Trash2,
   Type,
   X,
@@ -22,7 +21,6 @@ import {
   selectNewLogCount,
   selectPageLogs,
   selectShouldPinToLatest,
-  type LogFilter,
   type LogLevel,
   type LogLevelCounts,
   type LogOriginFilter,
@@ -35,8 +33,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { Button } from "~/components/ui/button";
 import { useLogPanel } from "./LogProvider";
 import { SaveExportButton } from "./SaveExportButton";
+import { FILTER_LABELS, LogFilterBar } from "./LogFilterBar";
 import {
   LOG_ROW_SINGLE,
   layoutRows,
@@ -52,25 +52,6 @@ import {
 import { overlayClass } from "~/lib/full-screen-layer";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
-
-/**
- * 级别按钮上的计数数字。
- *
- * **定宽 + 右对齐 + 等宽数字**：四个按钮上的 `0 / 12 / 3 / 1822` 宽度不一，
- * 按钮再等分也读不齐。这里给它一个显式的 `w-[4ch]`——「文字 + 四位数字」是
- * 这一格的固定预算，所以**文本长度不再随内容变化**。
- *
- * 数字本身不再按级别染色（`text-ink-fainter` 固定）：级别色已由同一行左侧的
- * **标签文字**承担（「警告」黄、「错误」红），同一个含义不必写两遍，
- * 也避免两个色块挤在一个按钮里互相稀释。
- */
-function CountChip({ value }: { value: number }) {
-  return (
-    <span className="text-ink-fainter w-[4ch] shrink-0 text-right text-[11px] tabular-nums">
-      {value}
-    </span>
-  );
-}
 
 /** 单个级别的摘要文案；零条目的级别说「无」——它也是一条信息，不是空白。 */
 function levelSummary(label: string, value: number): string {
@@ -169,23 +150,6 @@ const ORIGIN_COLUMNS: {
  * 零条目也照样着色：它表达的仍然是「这一格是警告」，而不是「这里有问题」——
  * 「有没有问题」由数字回答（`0` 与「切过去是空的」互相印证）。
  */
-const LEVEL_LABEL_STYLES: Record<LogFilter, string> = {
-  all: "text-ink-bright",
-  debug: "text-ink-muted hover:text-ink",
-  info: "text-cyan-700 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-200",
-  warn: "text-amber-600 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200",
-  error:
-    "text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200",
-};
-
-const FILTER_LABELS: { label: string; value: LogFilter }[] = [
-  { label: "全部", value: "all" },
-  { label: "调试", value: "debug" },
-  { label: "信息", value: "info" },
-  { label: "警告", value: "warn" },
-  { label: "错误", value: "error" },
-];
-
 /* 来源筛选（ISSUE #262）：启动日志与应用运行日志此前混在一屏，query 噪音把
  * 业务日志挤掉。分开看是最直接的「让日志有意义」手段。
  *
@@ -696,61 +660,7 @@ export function LogPanel() {
                  第二行（`flex-wrap` 的换行单位就是这个容器）并吃掉整行宽度。
                  比「每个按钮各自 min-w 后硬挤」好在：无论多窄，标签都保持可读，
                  不会退化成只剩一列竖字。 */}
-          <div className="ml-3 flex min-w-56 flex-1 basis-0 items-center gap-1">
-            {FILTER_LABELS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setFilter(option.value)}
-                aria-pressed={filter === option.value}
-                /* `min-w-fit` 取的是**内容固有宽度**：`min-w-0` 会让容器压到能
-                 * 忽略固有宽度、于是「警告」被切成 `警…`（ISSUE #262）。窄窗口下
-                 * 整组可能横向溢出，交给行头的 `flex-wrap` 接住（折行判据就是
-                 * 上面容器的 `min-w-56`），而不是靠切字。
-                 * 选中态见 log-row-style 的 FILTER_SELECTED_STYLES。 */
-                className={`flex h-9 min-w-fit flex-1 basis-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] leading-none transition-colors ${
-                  filter === option.value
-                    ? FILTER_SELECTED_STYLES
-                    : "hover:bg-subtle"
-                } ${LEVEL_LABEL_STYLES[option.value]}`}
-                title={`当前来源的${option.label}：${originCounts[option.value]} 条（该来源共 ${originCounts.all} 条 · 警告 ${originCounts.warn} · 错误 ${originCounts.error}）`}
-              >
-                <span className="whitespace-nowrap">{option.label}</span>
-                <CountChip value={originCounts[option.value]} />
-              </button>
-            ))}
-          </div>
-
-          {/* Search 紧跟在级别按钮之后（不再 `ml-auto`）。
-              行头的稀有宽度应当优先给**类别与条数**：搜索框是偶尔才用一次的
-              控件，却因为吃掉了 `ml-auto` 多出来的全部空间，把来源下拉一直顶在
-              级别按钮旁边，两者之间空出一大片（用户截图的红框正是这块空白），
-              而左侧那排四位数的计数反而最挤。现在下拉右移贴住搜索框，
-              中间被让出来的宽度由 `flex-1` 的空白区吸收。 */}
-          {/* 搜索框可收缩（`shrink` + `min-w`）：行头窄到放不下时它先让位，
-              而不是去挤筛选器的标签。`w-56` 是它舒展时的宽度。 */}
-          <div className="relative flex w-56 min-w-24 shrink items-center">
-            <Search
-              size={14}
-              className="text-ink-fainter pointer-events-none absolute left-2.5"
-            />
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索日志（支持命中高亮）..."
-              className="border-border-strong bg-canvas-deep text-ink-field placeholder:text-ink-fainter h-8 w-full rounded-lg border pr-7 pl-8 text-[13px] outline-none focus:border-violet-500/40"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                className="text-ink-muted hover:text-ink absolute right-2"
-              >
-                ×
-              </button>
-            )}
-          </div>
+          <LogFilterBar originCounts={originCounts} />
 
           {/* 来源筛选贴最右（用户要求：中间让出来的宽度归左侧的类别与条数）。
               候选列表每项自带「条数 / 信息 / 警告 / 错误」四列——此前只有名字，
@@ -763,8 +673,9 @@ export function LogPanel() {
 
           {/* Actions */}
           <div className="flex items-center gap-1 pl-2">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setWrap((prev) => !prev)}
               title={wrap ? "折叠超长行" : "自动换行显示"}
               /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
@@ -775,7 +686,7 @@ export function LogPanel() {
               }`}
             >
               <Type size={16} />
-            </button>
+            </Button>
             {/* title 写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。 */}
             {(
               [
@@ -783,16 +694,17 @@ export function LogPanel() {
                 { onClick: download, label: "下载为文本文件", Icon: Download },
               ] as const
             ).map(({ onClick, label, Icon }) => (
-              <button
+              <Button
                 key={label}
-                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={onClick}
                 title={`${label}当前筛选的全部日志（${scopeLabel} · ${total} 条）`}
                 aria-label={`${label}当前筛选的全部日志`}
-                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
+                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
               >
                 <Icon size={16} />
-              </button>
+              </Button>
             ))}
             {/* 服务端落盘版导出（见 SaveExportButton）。 */}
             <SaveExportButton
@@ -800,30 +712,33 @@ export function LogPanel() {
               scopeLabel={scopeLabel}
               total={total}
             />
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={clear}
               title="清空面板"
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
             >
               <Trash2 size={16} />
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setWide((w) => !w)}
               title={wide ? "收缩" : "加宽"}
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
             >
               {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setIsOpen(false)}
               title="关闭 (Ctrl+Shift+L)"
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors"
+              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
             >
               <X size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -905,71 +820,72 @@ export function LogPanel() {
           </span>
           <span className="flex items-center gap-3">
             {shouldPin && (
-              <button
-                type="button"
-                onClick={jumpToLatest}
-                className="flex items-center gap-1 rounded-md bg-violet-500/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-violet-500"
-              >
+              <Button variant="primary-solid" size="xs" onClick={jumpToLatest}>
                 <ArrowDownToLine size={12} />
                 {newLogCount > 0
                   ? `有 ${newLogCount} 条新的日志 · 回到最新`
                   : "回到最新"}
-              </button>
+              </Button>
             )}
             <span className="flex items-center gap-1">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => setPage(safePage + 1)}
                 disabled={safePage >= totalPages}
                 title="更早的一页"
-                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
               >
                 <ChevronLeft size={14} />
-              </button>
+              </Button>
               {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
                   那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
                   的位置，回滚动作本来就该在这儿，不必让用户跑回顶部找。 */}
               <span className="text-ink-soft flex items-center gap-1">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="xs"
                   onClick={() => setOrigin("all")}
                   disabled={!origin || origin === "all"}
                   title={
                     origin && origin !== "all" ? "去掉来源筛选" : undefined
                   }
-                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md px-1.5 py-0.5 tabular-nums disabled:cursor-default"
+                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
                 >
                   {ORIGIN_TEXT[origin ?? "all"]}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
                   onClick={() => setFilter("all")}
                   disabled={filter === "all"}
                   title={filter !== "all" ? "去掉级别筛选" : undefined}
-                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md px-1.5 py-0.5 disabled:cursor-default"
+                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
                 >
                   {FILTER_LABELS.find((item) => item.value === filter)?.label}
-                </button>
+                </Button>
                 {search.trim() && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={() => setSearch("")}
                     title="清空搜索"
-                    className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md px-1.5 py-0.5"
+                    className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
                   >
                     {`搜索「${search.trim()}」`}
-                  </button>
+                  </Button>
                 )}
               </span>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => setPage(safePage - 1)}
                 disabled={safePage <= 1}
                 title="更新的一页"
-                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
               >
                 <ChevronRight size={14} />
-              </button>
+              </Button>
             </span>
           </span>
         </div>
