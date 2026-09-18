@@ -180,13 +180,21 @@ export interface SettingsPageController {
     /** 服务端「关闭中」窗口（globalThis 计时，可跨设置页挂载存活）：见 ISSUE #103 */
     stopping: boolean;
     base: string | null;
-    pathConfigured: boolean;
     port: number;
     /** 进程用什么起的（中文短语）：只有端口监听在、HTTP 未就绪时也非空，
      *  状态行据此提示「接口未就绪，可能仍在启动」。 */
     via: string | null;
-    /** 安装形态：桌面版/便携版/venv；未配置路径或无路径时为 null。 */
-    instanceType: "desktop" | "portable" | "venv" | "unknown" | null;
+  } | null;
+  /** 安装形态：**只读文件系统的快速判据**，与 comfyStatus 分开取。
+   *
+   * 为什么不合进 comfyStatus：comfyStatus 要付「进程表查询 + 端口探测」（秒级），
+   * 而形态只需毫秒级 fs 判定；合在一起时徽标与「端口/启动参数是否隐藏」会被拖到
+   * 探测结束才出现（改路径保存后也一样）。这条与首屏的 `setting.get` 同批返回。 */
+  comfyInstance: {
+    /** 配置里是否填了路径（与形态同源，都是设置行的事实）。 */
+    pathConfigured: boolean;
+    /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
+    instanceType: "desktop" | "portable" | "venv" | null;
     /** 桌面实例且能读到实例 ID → 端口/参数由 Comfy Desktop 元数据决定，
      *  设置页据此隐藏 端口/启动参数 输入。 */
     desktopManaged: boolean;
@@ -461,6 +469,10 @@ export function useSettingsPage(): SettingsPageController {
    * 时隔更短，让「切回设置页」几乎立刻看到真实状态（ISSUE #339 的「打开界面
    * 要等一会才显示在运行」）。服务端有进程级快照 + HTTP 探测兜底，间隔收紧
    * 不会把压力转成卡顿。 */
+  /* 安装形态：**不 gate 在 statusQueriesEnabled 上**，与首屏的 get/configGet 同批
+   * 发出 —— 它是 fs-only 的毫秒级判据，跟着 comfyStatus 一起等秒级探测就白拆了。
+   * 改路径 / 启动参数后由 savePrefs、startComfy 手动 refetch（形态依赖路径）。 */
+  const comfyInstanceQ = api.setting.comfyInstance.useQuery();
   const comfyStatusQ = api.setting.comfyStatus.useQuery(undefined, {
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,
@@ -665,13 +677,22 @@ export function useSettingsPage(): SettingsPageController {
       const result = await comfyStartM.mutateAsync({});
       showFlash(result.ok ? "ok" : "err", result.detail);
       await comfyStatusQ.refetch();
+      // 启动动作会先把当前草稿（含路径）落库：形态跟着重判定一次。
+      await comfyInstanceQ.refetch();
     } catch (error) {
       showFlash("err", errorMessage(error, "启动 ComfyUI 失败"));
     } finally {
       setSaving(false);
       setComfyStarting(false);
     }
-  }, [settingsDraft, saveSetting, comfyStartM, comfyStatusQ, showFlash]);
+  }, [
+    settingsDraft,
+    saveSetting,
+    comfyStartM,
+    comfyStatusQ,
+    comfyInstanceQ,
+    showFlash,
+  ]);
 
   const stopComfy = useCallback(async () => {
     setSaving(true);
@@ -1078,13 +1099,16 @@ export function useSettingsPage(): SettingsPageController {
     try {
       await saveSetting.mutateAsync(settingsDraft);
       await settingsQ.refetch();
+      // 形态是「配置路径的目录形态」的函数：路径可能刚被改过，立即重判定一次
+      // （不必等 5s 轮询，也不该再走一次秒级运行态探测）。
+      await comfyInstanceQ.refetch();
       showFlash("ok", "偏好已保存");
     } catch (error) {
       showFlash("err", errorMessage(error, "保存失败"));
     } finally {
       setSaving(false);
     }
-  }, [settingsDraft, saveSetting, settingsQ, showFlash]);
+  }, [settingsDraft, saveSetting, settingsQ, comfyInstanceQ, showFlash]);
 
   /* ── 按任务温度 ─────────────────────────────────────────── */
   const patchLlm = useCallback((patch: Partial<LlmConfig>) => {
@@ -1361,13 +1385,11 @@ export function useSettingsPage(): SettingsPageController {
           probing: !!comfy.probing,
           stopping: !!comfy.stopping,
           base: comfy.base ?? null,
-          pathConfigured: !!comfy.pathConfigured,
           port: comfy.port ?? 0,
           via: comfy.via ?? null,
-          instanceType: comfy.instanceType ?? null,
-          desktopManaged: !!comfy.desktopManaged,
         }
       : null,
+    comfyInstance: comfyInstanceQ.data ?? null,
     comfyStarting,
     comfyStopping,
     comfyOpening,

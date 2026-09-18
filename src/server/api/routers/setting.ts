@@ -13,7 +13,7 @@ import {
   openComfyUi,
   stopComfyUiProcess,
 } from "~/lib/comfyui/lifecycle";
-import { classifyComfyInstall } from "~/lib/comfyui/instance-kind";
+import { describeComfyInstance } from "~/lib/comfyui/instance-kind";
 import {
   decideComfyTabOpen,
   probeComfyEmbeddable,
@@ -70,6 +70,17 @@ export const settingRouter = createTRPCRouter({
       return { settings };
     }),
 
+  /** ComfyUI 安装形态（桌面版 / 便携版 / venv）：**只读文件系统的快速判据**。
+   *
+   * 与下面的 `comfyStatus` 分开是有意的：形态只取决于配置路径的目录形态
+   * （实测毫秒级），而运行态要付「进程表查询 + 端口探测」（秒级）。两者同在一个
+   * 响应里时，形态会被拖到探测结束才出现 —— 设置页先看不到「安装形态」徽标，
+   * 「端口 / 启动参数」输入框也要等探测完成才消失。设置页在首屏与 `setting.get`
+   * 同批拉它，保存路径后再 refetch（见 launch-and-build §5）。 */
+  comfyInstance: authedProcedure.query(() =>
+    describeComfyInstance(getSettingsSync().comfyuiPath),
+  ),
+
   /** ComfyUI 运行状态（设置页状态行 / 启动按钮旁） */
   comfyStatus: authedProcedure.query(async () => {
     const settings = getSettingsSync();
@@ -78,16 +89,6 @@ export const settingRouter = createTRPCRouter({
      * 状态行先落到「未运行」再跳「运行中」（ISSUE #339）。 */
     const status = await getComfyUiStatus();
     const base = status.base;
-    // 形态识别：配置好路径后返回 桌面版/便携版/venv，供设置页展示徽标并按形态
-    // 决定是否隐藏 端口/启动参数 输入（桌面版由 Comfy Desktop 元数据决定）。
-    let instanceType: "desktop" | "portable" | "venv" | "unknown" | null = null;
-    let desktopManaged = false;
-    if (settings.comfyuiPath?.trim()) {
-      const c = classifyComfyInstall(settings.comfyuiPath);
-      instanceType = c.kind === "unknown" ? null : c.kind;
-      // desktopManaged = 桌面实例且能读到实例 ID（端口/参数走元数据，非手填）。
-      desktopManaged = c.kind === "desktop" && !!c.instanceIdFile;
-    }
     return {
       up: status.up,
       base,
@@ -103,11 +104,8 @@ export const settingRouter = createTRPCRouter({
        * 「端口监听中」；via 说明这个实例是怎么起来的（排查「不是我起的」）。 */
       port: status.port ?? settings.comfyuiPort,
       via: status.via ?? null,
-      pathConfigured: !!settings.comfyuiPath,
       autoStart: settings.comfyuiAutoStart,
       path: settings.comfyuiPath,
-      instanceType,
-      desktopManaged,
     };
   }),
 

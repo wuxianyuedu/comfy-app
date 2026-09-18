@@ -162,3 +162,38 @@ export function classifyComfyInstall(
 function isInstanceIdSource(file: string): boolean {
   return /\.comfyui-desktop-\d+$/.test(path.basename(file));
 }
+
+/** 设置页要的安装形态视图（只有这三件事，多一项就是没人消费的字段）。 */
+export type ComfyInstanceView = {
+  /** 配置里是否填了路径。与形态同源：它也是**设置行**的事实，不该等运行态探测。 */
+  pathConfigured: boolean;
+  /** 桌面版 / 便携版 / venv；未配置路径或判不出形态时为 null。 */
+  instanceType: Exclude<ComfyInstallKind, "unknown"> | null;
+  /** 桌面实例且能读到实例 ID → 端口/启动参数由 Comfy Desktop 元数据决定。 */
+  desktopManaged: boolean;
+};
+
+/**
+ * 形态视图：**纯文件系统判定**，不做任何进程 / 端口探测。
+ *
+ * 为什么单独一个函数、而不是顺手塞进运行态状态响应：形态只取决于配置路径的目录
+ * 形态（实测 10 次 `existsSync` ≈ 1.4ms），而运行态结论要付「进程表查询 + 端口
+ * 探测」（本机空载 0.5s，负载下到 10s 级，见 launch-and-build §5）。两者同在一个
+ * 响应里时，形态会被拖到探测结束才出现 —— 打开设置页先看不到「安装形态」徽标，
+ * 「端口 / 启动参数」输入框也要等探测完成才消失。拆开后形态与 `setting.get` 同批
+ * 返回（毫秒级），探测只管它该管的运行态。
+ */
+export function describeComfyInstance(
+  installDir: string | null | undefined,
+  exists: (p: string) => boolean = fs.existsSync,
+): ComfyInstanceView {
+  const dir = (installDir ?? "").trim();
+  if (!dir)
+    return { pathConfigured: false, instanceType: null, desktopManaged: false };
+  const c = classifyComfyInstall(dir, exists);
+  return {
+    pathConfigured: true,
+    instanceType: c.kind === "unknown" ? null : c.kind,
+    desktopManaged: c.kind === "desktop" && !!c.instanceIdFile,
+  };
+}
