@@ -18,6 +18,7 @@
 import React, { memo, useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
+import { Button } from "~/components/ui/button";
 import { formatTime } from "./log-format";
 import {
   LEVEL_BADGE_STYLES,
@@ -140,8 +141,9 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
   };
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="icon-xs"
       onClick={() => void onCopy()}
       title={
         state === "done"
@@ -155,15 +157,15 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
       /* 悬停/聚焦才显形：日志是「长时间盯着看」的界面，一个常在的按钮列会
        * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
        * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
-      className={`shrink-0 self-center rounded p-1 transition-opacity ${
+      className={`shrink-0 self-center rounded transition-opacity ${
         state === "idle"
           ? "hover:bg-subtle hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
           : "opacity-100"
       } ${
         state === "done"
-          ? "text-emerald-600 dark:text-emerald-300"
+          ? "text-success-strong"
           : state === "failed"
-            ? "text-rose-600 dark:text-rose-300"
+            ? "text-danger-strong"
             : "text-ink-muted"
       }`}
     >
@@ -174,7 +176,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
           {state === "done" ? "已复制" : "复制失败"}
         </span>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -227,18 +229,18 @@ export const LogRow = memo(function LogRow({
         <HighlightedText text={entry.message} keyword={keyword} />
       </span>
       {entry.location && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() =>
             void navigator.clipboard
               .writeText(entry.location!)
               .catch(() => undefined)
           }
-          className="text-ink-fainter hover:text-ink-soft max-w-[28%] shrink-0 cursor-pointer truncate text-right text-[11px]"
+          className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
           title={`${entry.location}（点击复制）`}
         >
           {entry.location}
-        </button>
+        </Button>
       )}
       {entry.origin ? (
         <span className="text-ink-fainter shrink-0 text-[11px]">

@@ -6,7 +6,7 @@
     "P2": "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
     "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading / skeleton / progress）"
   },
-  "total": 458,
+  "total": 414,
   "files": {
     "src/components/message-center/MessageCenterButton.tsx": {
       "P1": 1
@@ -125,15 +125,6 @@
     "src/components/studio/history/HistoryTaskCard.tsx": {
       "P1": 4
     },
-    "src/components/studio/logs/LogPanel.tsx": {
-      "P1": 13
-    },
-    "src/components/studio/logs/LogRow.tsx": {
-      "P1": 2
-    },
-    "src/components/studio/logs/SaveExportButton.tsx": {
-      "P1": 1
-    },
     "src/components/studio/project-canvas/CanvasContextMenu.tsx": {
       "P1": 2
     },
@@ -214,11 +205,7 @@
     "src/components/studio/workflow-editor/workflow-editor-topbar-config.ts": {
       "P1": 1
     },
-    "src/components/studio/workflow-library/CustomNodesSettings/CustomNodesSettings.tsx": {
-      "P1": 2
-    },
     "src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx": {
-      "P1": 6,
       "P3": 1
     },
     "src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.tsx": {
@@ -227,49 +214,21 @@
     "src/components/studio/workflow-library/LibraryHostCard.tsx": {
       "P3": 1
     },
-    "src/components/studio/workflow-library/ModeContractSettings.tsx": {
-      "P1": 1
-    },
-    "src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx": {
-      "P1": 1
-    },
     "src/components/studio/workflow-library/WorkflowLibrary.tsx": {
-      "P1": 1,
       "P3": 1
     },
-    "src/components/studio/workflow-library/WorkflowLibraryFilters.tsx": {
-      "P1": 1
-    },
-    "src/components/studio/workflow-library/WorkflowLibraryHeader.tsx": {
-      "P1": 1
-    },
     "src/components/studio/workflow-library/WorkflowLibraryList.tsx": {
-      "P1": 3,
       "P3": 1
     },
     "src/components/studio/workflow-library/WorkflowRunLogButton.tsx": {
-      "P1": 1,
       "P3": 1
     },
-    "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
-      "P1": 4
-    },
-    "src/components/studio/workflow-library/sections/DetailBody.tsx": {
-      "P1": 1
-    },
-    "src/components/studio/workflow-library/sections/DetailControls.tsx": {
-      "P1": 2
-    },
     "src/components/studio/workflow-library/sections/DetailHeader.tsx": {
-      "P1": 1,
       "P3": 1
     },
     "src/components/studio/workflow-library/sections/MetaEditor.tsx": {
-      "P1": 4,
+      "P1": 2,
       "P2": 1
-    },
-    "src/components/studio/workflow-library/sections/WorkshopEncapsulationPanel.tsx": {
-      "P1": 1
     },
     "src/components/workshop/AgentOverlay.tsx": {
       "P1": 3,

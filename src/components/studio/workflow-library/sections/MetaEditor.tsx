@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { Button } from "~/components/ui/button";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const [open, setOpen] = useState(false);
@@ -145,20 +146,20 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                 />
               </div>
               <div className="flex gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   onClick={() => setOpen(false)}
-                  className="bg-subtle text-ink-strong hover:bg-surface-2 flex-1 rounded-md px-3 py-1.5 text-xs transition-colors"
+                  className="h-auto flex-1 rounded-md px-3 py-1.5 text-xs"
                 >
                   取消
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="primary-solid"
                   onClick={() => void save()}
-                  className="flex-1 rounded-md bg-fuchsia-500/90 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-fuchsia-500"
+                  className="bg-accent-soft hover:bg-accent-soft/90 h-auto flex-1 rounded-md px-3 py-1.5 text-xs font-semibold"
                 >
                   保存
-                </button>
+                </Button>
               </div>
             </div>
           </div>,

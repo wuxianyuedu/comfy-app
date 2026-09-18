@@ -136,8 +136,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   const widgetInputs = cleanedInputs.filter(
     ({ inp }) => !!inp.widget || inp.isConnection === true,
   );
-   /* 顶部 PINS 行：每个声明的输入端口与每个输出端口各占一行，
-    *  左右拉链式成对、行高 22px（与普通 WorkflowNode 相同）。 */
+  /* 顶部 PINS 行：每个声明的输入端口与每个输出端口各占一行，
+   *  左右拉链式成对、行高 22px（与普通 WorkflowNode 相同）。 */
   const pinRows = Math.max(connInputs.length, cleanedOutputs.length);
 
   return (
@@ -149,36 +149,36 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
       data-node-id={data.nodeId}
       {...hoverHandlers}
       style={{
-                 // 有 ComfyUI 保存的 `size.w` 时宽度就跟随它（固定宽度框，
-                 //  与 ComfyUI 完全一致 —— 只有高度是流动的）。
-                 //  没带尺寸时回落到一个合理的最小宽度。
+        // 有 ComfyUI 保存的 `size.w` 时宽度就跟随它（固定宽度框，
+        //  与 ComfyUI 完全一致 —— 只有高度是流动的）。
+        //  没带尺寸时回落到一个合理的最小宽度。
         width: data.size ? data.size.w : undefined,
-                 // 两种状态下高度都完全由内容驱动（`auto`）：展开时子图卡片随 pin 一起
-                 //  变高，折叠时自动收到标题栏那么高。
-                 //  `minHeight` 下限保证展开的框不会低于 ComfyUI 保存的 `size.h`；
-                 //  折叠态也永远不会低于它自己的标题栏。
+        // 两种状态下高度都完全由内容驱动（`auto`）：展开时子图卡片随 pin 一起
+        //  变高，折叠时自动收到标题栏那么高。
+        //  `minHeight` 下限保证展开的框不会低于 ComfyUI 保存的 `size.h`；
+        //  折叠态也永远不会低于它自己的标题栏。
         height: "auto",
         minWidth: data.size ? data.size.w : 280,
-                 // data.size.h 是**主体内容**高度（size[1]）。
-                 //  WorkflowSubgraphNode 的外层 div **包含**那条钉死的 30px 标题栏，
-                 //  因此总下限 = 内容 + 标题 = size[1] + 30。
-                 //  与 WorkflowNode 的修正一致，卡片才能填满 React Flow 的节点框，
-                 //  而不是矮 30px。
+        // data.size.h 是**主体内容**高度（size[1]）。
+        //  WorkflowSubgraphNode 的外层 div **包含**那条钉死的 30px 标题栏，
+        //  因此总下限 = 内容 + 标题 = size[1] + 30。
+        //  与 WorkflowNode 的修正一致，卡片才能填满 React Flow 的节点框，
+        //  而不是矮 30px。
         minHeight: isCollapsed
           ? NODE_TITLE_H
           : data.size
             ? (data.size.h ?? 0) + NODE_TITLE_H
             : undefined,
-                 // 这里同样不设 maxWidth 上限：ComfyUI 允许用户自由调整子图框，
-                 //  而我们必须尊重配置里带的 `size`
-                 //  （硬写 320 的上限会把用户在 ComfyUI 里明确调宽的框裁掉）。
+        // 这里同样不设 maxWidth 上限：ComfyUI 允许用户自由调整子图框，
+        //  而我们必须尊重配置里带的 `size`
+        //  （硬写 320 的上限会把用户在 ComfyUI 里明确调宽的框裁掉）。
         borderColor: hexToRgba(accent, 0.55),
-                 // 旁路 / 禁用子图的着色与真模糊在 <NodeFrost> 里；
-                 //  根节点保留 `isolation`，把磨砂层的负 z 关在里面；
-                 //  同时保持透明，磨砂才透得出来。
-                 //  普通子图用 `bg-node` 的实心面板（跟随主题）。
+        // 旁路 / 禁用子图的着色与真模糊在 <NodeFrost> 里；
+        //  根节点保留 `isolation`，把磨砂层的负 z 关在里面；
+        //  同时保持透明，磨砂才透得出来。
+        //  普通子图用 `bg-node` 的实心面板（跟随主题）。
         isolation: "isolate",
-                 // ComfyUI 会给当前激活的节点画一圈亮色选中矩形。
+        // ComfyUI 会给当前激活的节点画一圈亮色选中矩形。
         outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
         outlineOffset: selected ? "2px" : undefined,
       }}
@@ -332,7 +332,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
             return (
               <div
                 key={`subpin-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
-                                 /* 长的边界端口标签换行到
+                /* 长的边界端口标签换行到
                  *                    *  多行换行，而不是被裁到 22px。完整理由见 WorkflowNode 内联分支
                  *                    *  的注释。 */
                 className="relative flex h-auto min-h-[22px] items-center py-0.5 pr-5 pl-5 text-[11px]"
@@ -375,10 +375,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         />
                       )}
                     <span
-                                             /* 去掉 `truncate`：让长的边界端口标签
-                                              *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
-                                              *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
-                                              *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
+                      /* 去掉 `truncate`：让长的边界端口标签
+                       *  （例如 Settings 封装节点的 `Model: True = 🟡 Safetensors
+                       *  | False = 🟣 GGUF` BOOLEAN widget）换成多行，
+                       *  而不是被裁掉。完整文本仍能从原生 `title` tooltip 看到。 */
                       className="text-ink-bright min-w-0 flex-1 text-left text-[11px] break-words whitespace-normal"
                       title={`${inLabel} (${inType})`}
                     >
@@ -389,7 +389,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                 {outEntry && (
                   <>
                     <span
-                                             /* 与上面边界输入分支同款换行修正。 */
+                      /* 与上面边界输入分支同款换行修正。 */
                       className="text-ink-bright min-w-0 flex-1 text-right text-[11px] break-words whitespace-normal"
                       title={`${outDisplay} (${outType})`}
                     >
@@ -519,9 +519,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       0 ? (
                       <>
                         <span
-                                                     /* 去掉 `truncate`：让长的子图封装 COMBO widget 标签
-                                                      *  换成多行而不是被裁掉（与 WorkflowNode 内联分支
-                                                      *  同款修正）。 */
+                          /* 去掉 `truncate`：让长的子图封装 COMBO widget 标签
+                           *  换成多行而不是被裁掉（与 WorkflowNode 内联分支
+                           *  同款修正）。 */
                           className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
                           style={{
                             flex: "0 1 auto",
@@ -560,8 +560,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                     ) : (
                       <>
                         <span
-                                                     /* 去掉 `truncate`：让长的子图封装 widget 标签换成多行
-                                                      *  而不是被裁掉（与 WorkflowNode 内联分支同款修正）。 */
+                          /* 去掉 `truncate`：让长的子图封装 widget 标签换成多行
+                           *  而不是被裁掉（与 WorkflowNode 内联分支同款修正）。 */
                           className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
                           style={{
                             flex: "0 1 auto",
@@ -585,12 +585,12 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         <span
                           className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
                           style={{
-                                                         /* 与 WorkflowNode 的值 span 同理 —— `truncate` 回来了，
-                                                          *  但只有文字本身缩略；节点宽度仍由用户控制
-                                                          *  （ComfyUI 改尺寸 ↔ 画布镜像）。
-                                                          *  不加 `minWidth: fit-content`
-                                                          *  （长文件名会把它撑到 810px），
-                                                          *  也不加 `maxWidth` 上限（会把本来就合法的宽节点裁掉）。 */
+                            /* 与 WorkflowNode 的值 span 同理 —— `truncate` 回来了，
+                             *  但只有文字本身缩略；节点宽度仍由用户控制
+                             *  （ComfyUI 改尺寸 ↔ 画布镜像）。
+                             *  不加 `minWidth: fit-content`
+                             *  （长文件名会把它撑到 810px），
+                             *  也不加 `maxWidth` 上限（会把本来就合法的宽节点裁掉）。 */
                             flex: "1 1 0",
                             color: valueCellColor(v),
                           }}
@@ -635,8 +635,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         />
                       )}
                       <span
-                                                 /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
-                                                  *  理由与 WorkflowNode 内联分支相同。 */
+                        /* 子图 STRING 堆叠行的标签同样去掉 `truncate` ——
+                         *  理由与 WorkflowNode 内联分支相同。 */
                         className="shrink-0 text-left text-[11px] break-words whitespace-normal"
                         style={{
                           color: isConn

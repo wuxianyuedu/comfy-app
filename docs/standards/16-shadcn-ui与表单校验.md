@@ -107,6 +107,10 @@ ui/（工具生成，界面源码）        ← 尽量不碰
 视图里手写 `<button>` 408 处、自建 `createPortal` 浮层 10 处、自写
 `animate-spin`/`animate-pulse` 40 处，同一套按钮/浮层/加载态在多个目录里各实现一份。
 
+（存量随治理逐批下降，当前值看 `pnpm ui:primitives:report` —— 写在正文里的
+数字是**首次扫描快照**，不是实时值，免得每完成一批就要改一遍正文。）
+
+
 本仓库的历史结论是**「只提醒 = 没有判据」**（§12.13 文件行数、§12.16 死代码同款），
 所以这里给计数棘轮：把存量冻结在基线，只许降不许升。
 
@@ -144,13 +148,55 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 
 | 形态 | 现状 | 去向 |
 |------|------|------|
-| 按钮 | `ui/button.tsx` + 视图里 408 处 `<button>` | P1 棘轮逐批换 `<Button>`；先补 `Button` 缺失的语义变体 |
+| 按钮 | `ui/button.tsx` + 视图里 394 处 `<button>` | P1 棘轮逐批换 `<Button>`；语义变体已补齐（见下），按目录推进 |
 | 对话框/浮层 | `ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal` | P2 棘轮；`ModalDialog` 改基于 `ui/dialog` 封装 |
 | 空态 | `ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` | **三合一**到 `ui/empty-state.tsx`，props 取并集 |
 | 加载态 | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 26 个文件自写 spinner | P3 棘轮 |
 | UI kit 目录 | `components/ui/`（29）/ `components/studio/ui/`（12）/ `shared/` / `DynamicWorkflowForm/sections/` | 后三处归入 `ui/`，一次搬一个域 |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
+
+### 16.2.4.1 按钮的语义变体（P1 的前置条件）
+
+把 400 处手写 `<button>` 换成 `<Button>`，**前提是 `Button` 先有对应的语义
+变体** —— 否则替换只能靠 `className` 把原样式一字不差搬过去，那既没减少
+重复，也把「按钮该长什么样」的决定权继续留在调用处。实测视图里的手写按钮
+用的是 `violet / red / rose / emerald / amber / cyan` 六个色系，`Button` 原本
+只有 `default / outline / secondary / ghost / destructive / link`，缺口就在这里。
+
+现在 `ui/button.tsx` 的 `variant` 多出 8 支，**按语义角色命名、不按色名**
+（§3.6.2：换品牌色时调用处不用改）：
+
+| 变体 | 形态 | 对应视图里的手写写法 |
+|------|------|---------------------|
+| `primary` | 品牌软底 | `bg-violet-500/15 text-violet-700 dark:text-violet-300` |
+| `danger` | 危险软底 | `bg-red-500/10 text-red-700 dark:text-red-300` |
+| `success` | 成功软底 | `bg-emerald-500/10 text-emerald-700 dark:text-emerald-400` |
+| `warning` | 警告软底 | `bg-amber-500/10 text-amber-700 dark:text-amber-300` |
+| `info` | 信息软底 | `bg-cyan-500/10 text-cyan-700 dark:text-cyan-300` |
+| `primary-solid` | 品牌实心 | `bg-violet-500/90 text-white hover:bg-violet-500` |
+| `danger-solid` | 危险实心 | `bg-red-500 text-white` |
+| `success-solid` | 成功实心 | `bg-emerald-500 text-white` |
+
+三条口径：
+
+1. **软底是主力形态**（手写按钮的绝大多数是这个），实心只出实测用到的那三色；
+2. **每个软底变体的文字档走 `*-strong` token**，不是同色相原色：同一个琥珀
+   `#d97706` 当底色可以、当浅底上的文字色对比度不足 —— 这正是「写死字面量」
+   表达不了的那层区分（§3.6.2 末尾同款论证）；
+3. **既有六个变体一个不动**（`destructive` 仍是软底危险，与 `danger` 并存是
+   历史包袱：`destructive` 属 shadcn 名词空间、`danger` 属本项目的语义角色命名。
+   新代码用 `danger`，`destructive` 留待随 shadcn 基元一起收口）。
+
+**顺带修掉一颗哑弹**：`--color-success-strong` 一直存在，但
+`status-badge.tsx` 引用的 `text-warning-strong` **从未定义过** —— `QUEUED` /
+`PENDING` / `DRAFT` 三个状态因此渲染成无色（Tailwind 生成不出这个类，
+静默不报错）。本次补齐 `--color-warning-strong` / `--color-danger-strong` /
+`--color-info-strong` 两态取值。
+
+**机器判据**：`src/components/ui/button.test.tsx` —— 逐个钉住「这 8 支变体存在」
+「产出的类名不含任何 Tailwind 原生调色板字面量」「软底变体的文字走 `-strong`」，
+以及「既有 6 个变体仍在」。变体被删或改回写死色，这里先失败。
 
 ## 16.3 新增一个组件的标准动作
 

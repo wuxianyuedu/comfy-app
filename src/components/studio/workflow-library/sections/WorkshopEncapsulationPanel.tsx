@@ -9,6 +9,7 @@
 
 import React from "react";
 
+import { Button } from "~/components/ui/button";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import {
   deriveEncapsulationStatus,
@@ -218,8 +219,7 @@ export function WorkshopEncapsulationPanel({
             />
           )}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
               onClick={runTest}
               disabled={test.running || !status.ready}
               title={
@@ -227,10 +227,10 @@ export function WorkshopEncapsulationPanel({
                   ? undefined
                   : `${status.missingRequired.join("、") || "必备口"}未落到端口，工坊无法驱动这条工作流`
               }
-              className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+              className="h-auto rounded-lg px-3 py-1.5 text-xs font-medium"
             >
               {test.running ? "测试中…" : "执行流程测试"}
-            </button>
+            </Button>
             {/* 执行日志入口不在页签里 —— 它是详情头部的一扇固定门
                 （`DetailHeader`）：两个页签共用同一份运行登记表与同一个全屏
                 弹窗，位置不再随页签 / 有没有跑过而变化（ISSUE #611）。 */}

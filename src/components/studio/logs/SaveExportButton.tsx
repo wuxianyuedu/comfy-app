@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { HardDriveDownload } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import { useLogPanel } from "./LogProvider";
 
 /**
@@ -62,17 +63,18 @@ export function SaveExportButton({
 
   return (
     <span className="flex items-center gap-1">
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={onSave}
         title={`保存当前筛选的全部日志到本机 log/exports/（${scopeLabel} · ${total} 条）`}
         aria-label="保存当前筛选的全部日志到本地文件"
-        className={`hover:bg-subtle hover:text-ink rounded-md p-2 transition-colors ${
-          failed ? "text-rose-600 dark:text-rose-300" : "text-ink-muted"
+        className={`hover:bg-subtle hover:text-ink rounded-md ${
+          failed ? "text-danger-strong" : "text-ink-muted"
         }`}
       >
         <HardDriveDownload size={16} />
-      </button>
+      </Button>
       {/* 路径就是这次保存的「回执」：没有它，用户只能自己去猜文件在哪。 */}
       {savedPath && (
         <span
@@ -83,9 +85,7 @@ export function SaveExportButton({
         </span>
       )}
       {failed && (
-        <span className="text-[11px] text-rose-600 dark:text-rose-300">
-          保存失败
-        </span>
+        <span className="text-danger-strong text-[11px]">保存失败</span>
       )}
     </span>
   );

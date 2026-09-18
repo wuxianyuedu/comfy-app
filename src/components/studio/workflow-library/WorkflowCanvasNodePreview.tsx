@@ -42,6 +42,7 @@ import {
   type WorkflowIOMap,
 } from "../shared/workflow-io";
 import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
+import { Button } from "~/components/ui/button";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -666,14 +667,15 @@ export function WorkflowCanvasNodePreview({
         >
           <div className="flex items-start justify-between gap-2">
             <span className="min-w-0 flex-1">{uploadNotice}</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={() => setUploadNotice(null)}
-              className="shrink-0 rounded px-1 text-amber-800 transition-colors hover:text-amber-800 dark:text-amber-300/70"
+              className="text-warning-strong shrink-0 rounded"
               aria-label="关闭上传提示"
             >
               ✕
-            </button>
+            </Button>
           </div>
         </div>
       )}

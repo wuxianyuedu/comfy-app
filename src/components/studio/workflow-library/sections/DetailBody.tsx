@@ -7,6 +7,7 @@ import { Maximize2 } from "lucide-react";
 import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/shared/workflow-io";
 import { JsonViewer } from "~/components/studio/ui/JsonViewer";
+import { Button } from "~/components/ui/button";
 import type { DetailTab } from "../workflow-library-detail-config";
 import type { WorkflowRow } from "../workflow-library-config";
 import { WorkflowCanvasNodePreview } from "../WorkflowCanvasNodePreview";
@@ -65,14 +66,15 @@ export function DetailBody({
             <span className="text-ink-faint text-xs font-medium">
               画布样式预览（与项目画布节点一致，可直接运行调试）
             </span>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="xs"
               onClick={onEdit}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300"
+              className="h-auto gap-1 rounded-md px-2 py-1 text-[11px]"
             >
               <Maximize2 className="h-3 w-3" />
               在编辑器中打开
-            </button>
+            </Button>
           </div>
           {/* 画布预览：宿主运行卡片居中，两侧各并排一列卡片 —— 左侧是「对外
               输入参数」（要什么、落到哪一行），右侧是「对外输出参数」（给什么）。

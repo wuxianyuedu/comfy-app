@@ -30,6 +30,7 @@ import {
   type WorkflowRunMeta,
 } from "~/lib/workflow/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
+import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
@@ -206,16 +207,16 @@ export function WorkflowRunLogModal({
 
           <div className="flex shrink-0 items-center gap-2">
             {viewTaskId && status === "running" && (
-              <button
-                type="button"
+              <Button
+                variant="danger"
                 onClick={onCancel}
                 disabled={cancelling}
                 title="取消当前查看的任务"
                 data-testid="wflib-log-cancel"
-                className="rounded-md border border-red-500/30 bg-red-500/8 px-2 py-0.5 text-[10.5px] text-red-700 transition-colors hover:bg-red-500/15 disabled:opacity-50 dark:text-red-300/90"
+                className="h-auto rounded-md px-2 py-0.5 text-[10.5px]"
               >
                 {cancelling ? "× 取消中…" : "× 取消"}
-              </button>
+              </Button>
             )}
             {runs.length > 1 && (
               <select
@@ -238,22 +239,24 @@ export function WorkflowRunLogModal({
                 ))}
               </select>
             )}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => setWide((w) => !w)}
               title={wide ? "收缩" : "加宽"}
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md p-1.5 transition-colors"
+              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
             >
               {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={onClose}
               title="关闭"
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md p-1.5 transition-colors"
+              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
             >
               <X size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -266,12 +269,12 @@ export function WorkflowRunLogModal({
                   ? visibleAll.length
                   : visibleAll.filter((l) => l.level === option.value).length;
               return (
-                <button
+                <Button
                   key={option.value}
-                  type="button"
+                  variant="ghost"
                   onClick={() => setFilter(option.value)}
                   title={`${option.label}（${count} 条）`}
-                  className={`rounded-md px-2.5 py-1 text-[13px] transition-colors ${
+                  className={`h-auto rounded-md px-2.5 py-1 text-[13px] ${
                     filter === option.value
                       ? "bg-surface-2 text-ink"
                       : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
@@ -281,7 +284,7 @@ export function WorkflowRunLogModal({
                   <span className="text-ink-fainter ml-1 text-[11px]">
                     {count}
                   </span>
-                </button>
+                </Button>
               );
             })}
           </div>

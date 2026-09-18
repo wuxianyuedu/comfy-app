@@ -4,6 +4,7 @@
 // 由页头「工作流库」标题右侧统一收纳，减少垂直空间占用。
 // 计数以徽标形式并入每个选项行；「管理模型」作为模型下拉的固定末项入口。
 
+import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
@@ -152,15 +153,15 @@ export function WorkflowLibraryFilters({
         }}
       />
 
-      <button
-        type="button"
+      <Button
+        variant="outline"
         onClick={onManageModels}
-        className="border-border-strong text-ink-strong hover:bg-subtle flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+        className="border-border-strong text-ink-strong hover:bg-subtle h-auto gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
         title="管理模型标签库"
       >
         <Icon name="tag" className="h-3.5 w-3.5" />
         管理模型
-      </button>
+      </Button>
     </div>
   );
 }

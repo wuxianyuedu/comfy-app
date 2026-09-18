@@ -649,9 +649,9 @@ export const DIM_RATIO_PRESETS: { label: string; ratio: number }[] =
  *  再导出，避免同一份档位表在视图层再抄一遍（抄一份就必然漂移）。 */
 export interface DimClarityPreset {
   kind: ClarityKind;
-     /** 弹层芯片上显示的标签（如 "1k"、"1M"）。 */
+  /** 弹层芯片上显示的标签（如 "1k"、"1M"）。 */
   label: string;
-     /** 百万像素的种类：总像素数（宽 × 高）。 */
+  /** 百万像素的种类：总像素数（宽 × 高）。 */
   totalPixels?: number;
 }
 

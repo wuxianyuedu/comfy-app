@@ -3,6 +3,7 @@
 // 页头：标题 + 筛选下拉（来源 / 类型 / 模型）+ 导入按钮 + 模式契约 + 自定义节点设置。
 // 筛选由原来的三行页签压缩为标题右侧的三个下拉（减少垂直空间占用）。
 
+import { Button } from "~/components/ui/button";
 import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
@@ -55,13 +56,12 @@ export function WorkflowLibraryHeader({
       />
 
       <div className="ml-auto flex items-center gap-2">
-        <button
-          type="button"
+        <Button
           onClick={onToggleImport}
-          className="btn-gradient rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-all hover:shadow-violet-500/30"
+          className="btn-gradient shadow-primary-500/20 hover:shadow-primary-500/30 h-auto rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-lg"
         >
           ＋ 导入工作流
-        </button>
+        </Button>
         <ModeContractSettings />
         <CustomNodesSettings />
       </div>
