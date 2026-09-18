@@ -1,11 +1,9 @@
 /**
- * Subgraph (inner workflow) parsing helpers — extracted from
- * workflow-detail.ts (batch 4).
+ * 子图（内层工作流）解析助手。
  *
- * These pure functions turn a `definitions.subgraphs[uid]` definition into
- * the API graph, node metadata, boundary pins and annotations the subgraph
- * detail builder serves.  All are free of I/O (positions overlay is passed
- * in), so the caller can cache the serialized result.
+ * 这些纯函数把 `definitions.subgraphs[uid]` 定义转成子图详情构建器要出的
+ * API 图、节点元数据、边界 pin 与注释。全部**不含 IO**
+ * （位置覆盖层由调用方传入），因此调用方可以直接把序列化结果缓存起来。
  */
 import {
   asRecord,
@@ -27,13 +25,11 @@ import {
   type RawOutputEntry,
 } from "~/lib/comfyui/workflow-detail-raw";
 
-/* IMAGE-input thumbnail preview (narrowed in ).
- * Mirrors the parent route.  We surface the LoadImage upstream filename as
- * a synthetic `preview`-marked entry on the LoadImage node itself; we do
- * NOT propagate `imageRef` to downstream IMAGE inputs (ImageScale /
- * CLIPVisionEncode / …) since those would only show the un-scaled /
- * un-encoded upstream image — meaningless, per user feedback.
- * Empty LoadImage uploads (widgets_values[0] missing/empty) still push
+/* IMAGE 输入的缩略图预览。与父级路由保持一致：只把 LoadImage 的上游文件名
+ * 以合成 `preview` 标记条目的形式挂在 LoadImage 节点**自身**上；
+ * **不**把 `imageRef` 传播到下游的 IMAGE 输入（ImageScale / CLIPVisionEncode 等）
+ * —— 那里只会显示未缩放 / 未编码的上游图，用户反馈说那样没有意义。
+ * LoadImage 没上传图（widgets_values[0] 缺失或为空）时仍会推一条合成条目，
  * the synthetic entry so the body can show a 「需要上传图片」 placeholder. */
 const LOAD_IMAGE_NODE_TYPES = new Set([
   "LoadImage",
@@ -81,37 +77,31 @@ export interface SubgraphLinkEntry {
 export interface BoundaryLinkInfo {
   kind: "input" | "output";
   pinId: string;
-  /** Inner-node side: source for output-boundary links, target for
-   *  input-boundary links. */
+  /** 内部节点侧：输出边界连线当源、输入边界连线当目标。 */
   innerNodeId: string;
   innerSlot: number;
   innerSlotName?: string;
 }
 
 /**
- * Build a link-id → {src, slot, type, targetId, targetSlot} lookup so we
- * can resolve the raw-format link objects back into API-format
- * [srcId, srcSlot] tuples for each target node's input.
+ * 建一张 link-id → {src, slot, type, targetId, targetSlot} 的查找表，
+ * 好把原始格式的连线对象还原成 API 格式的 [srcId, srcSlot] 元组，
+ * 填进每个目标节点的输入。
  *
- * Important: `sub.links` is an *array of objects* in newer ComfyUI
- * versions (not a flat tuple array as in older builds):
- *   { id, origin_id, origin_slot, target_id, target_slot, type }
- * Origin ids of -10 / -20 are sentinel "input/output" nodes the
- * subgraph uses to mark cross-boundary wires; we keep them out of the
- * API graph so the canvas shows them as disconnected internal ports.
+ * 注意：较新的 ComfyUI 里 `sub.links` 是**对象数组**，不再是旧版的扁平元组
+ * 数组：
+ *   { id, origin_id, origin_slot, target_id, target_slot, type }（字段名照旧）
+ * origin_id 为 -10 / -20 的是子图用来标记跨边界连线的哨兵「输入/输出」节点；
+ * 我们把它们排除在 API 图之外，画布上就显示成一段没有连接的内部端口。
  *
- * We additionally record every sentinel-bearing link in
- * `boundaryLinkInfoById` so the route response can hand the canvas
- * an exact mapping of boundary_pin_id ↔ inner_node_handle.  This
- * replaces the previous v3 strategy of flagging inner nodes as
- * "endpoints" based on whether they consume/produce boundary wires
- * — which produced nested-node-id collisions and missing middle
- * cards whenever every inner node happened to sit on the boundary
- * (e.g. a small NOISE subgraph whose 10 RandomNoise nodes each
- * had their own noise_seed input and NOISE output going through
- * the wrapper).  The clean approach is to treat the boundary
- * PINS (definitions.subgraphs[u].inputs / .outputs) as separate
- * first-class entities — see also `boundaryPins` below. */
+ * 另外把每条带哨兵的连线记进 `boundaryLinkInfoById`，
+ * 路由响应便能交给画布一份精确的「边界 pin id ↔ 内部节点 handle」映射。
+ * 这一版取代了此前「按内部节点是否消费/产出边界连线，把它标成端点」的做法 ——
+ * 后者会在**每个内部节点都恰好在边界上**时出问题（例如一个小的 NOISE 子图，
+ * 10 个 RandomNoise 节点各自的 noise_seed 输入与 NOISE 输出都要穿封装节点），
+ * 表现为内部节点 id 互相碰撞、中间的卡片整片消失。
+ * 干净的做法是把边界 **pin**（definitions.subgraphs[u].inputs / .outputs）
+ * 当作一等实体，见下面的 `boundaryPins`。 */
 export function parseSubgraphLinks(sub: RawSubgraphDef): {
   linkById: Record<number, SubgraphLinkEntry>;
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>;
@@ -137,7 +127,7 @@ export function parseSubgraphLinks(sub: RawSubgraphDef): {
       targetId: Number.isFinite(targetId) ? String(targetId) : "?",
       targetSlot,
     };
-    /* If one end is a sentinel, mark this link for boundary tracking. */
+    /* 只要有一端是哨兵，就把这条连线标进边界跟踪表。 */
     if (originId === -10 && Number.isFinite(targetId)) {
       boundaryLinkInfoById[id] = {
         kind: "input",
@@ -204,12 +194,11 @@ function slotNameAt(
 }
 
 /**
- * Pre-pass: collect per-node input/output slot-name lookups (positional
- * index → slot name).  These are needed to translate a sentinel link's
- * `target_slot` / `origin_slot` integer into the inner node's slot
- * *name* (which becomes the React Flow edge's targetHandle /
- * sourceHandle).  Modern ComfyUI puts an `idx` on each slot entry;
- * older versions fall back to array order (idx=0,1,2,...). */
+ * 预处理：收集每个节点的输入/输出槽位名查找表（位置下标 → 槽位名）。
+ * 有了它才能把哨兵连线的 `target_slot` / `origin_slot` 整数翻译成内部节点的
+ * 槽位**名字** —— 后者才是 React Flow 边的 targetHandle / sourceHandle。
+ * 新的 ComfyUI 会在槽位条目上带 `idx`；旧版没有，回落成数组顺序
+ * （idx = 0,1,2,…）。 */
 export function parseSubgraphSlots(
   sub: RawSubgraphDef,
   /** 被哨兵边**实际关联**的输入槽位（`boundarySlotsByNode(…)` 的产物）——
@@ -222,8 +211,8 @@ export function parseSubgraphSlots(
 } {
   const inputNameByNodeSlot: Record<string, string[]> = {};
   const outputNameByNodeSlot: Record<string, string[]> = {};
-  /** Per-node lookup of a raw input/output index → widget value (for
-   *  inputs that *also* have boundary wires, e.g. CLIPTextEncode's text). */
+  /** 每个节点的「原始输入/输出下标 → widget 值」查找表
+   *  （用于**同时**带边界连线的输入，例如 CLIPTextEncode 的 text）。 */
   const inputWidgetValueByNodeSlot: Record<string, unknown[]> = {};
 
   const innerNodes: RawNode[] = Array.isArray(sub.nodes) ? sub.nodes : [];
@@ -240,9 +229,8 @@ export function parseSubgraphSlots(
       inputNameByNodeSlot[nodeId] = slots.map(({ slot }) =>
         slotNameAt(slots, rawInputs, slot),
       );
-      // Snapshot widget values aligned with slot order so the boundary
-      // pass can also surface a default `value` (CLIPTextEncode's `text`
-      // sits here when the wrapper exposes the prompt as an input).
+      // 按槽位顺序拍一份 widget 值快照，边界那一趟才能顺带给出默认 `value`
+      // （封装节点把提示词暴露成输入时，CLIPTextEncode 的 `text` 就在这里）。
       inputWidgetValueByNodeSlot[nodeId] = slots.map(({ slot, index }) => {
         const slotInput = rawInputs[index];
         if (!slotNameAt(slots, rawInputs, slot)) return undefined;
@@ -283,8 +271,8 @@ export interface SubgraphGraphResult {
   boundaryOutputByNode: Record<string, { name: string; type: string }>;
   connectsToByNode: Record<string, string>;
   connectsFromByNode: Record<string, string>;
-  /** Per-node slot-name lookups (positional index → slot name), surfaced
-   *  for the caller to assemble boundaryLinks. */
+  /** 每个节点的槽位名查找表（位置下标 → 槽位名），
+   *  交给调用方拼 boundaryLinks。 */
   inputNameByNodeSlot: Record<string, string[]>;
   outputNameByNodeSlot: Record<string, string[]>;
   /** 子图暴露口 → 作者写在**外层 wrapper** 上的业务名（`label`）。
@@ -305,11 +293,10 @@ export interface SubgraphGraphResult {
 }
 
 /**
- * Walk each inner node and produce an API-style graph entry plus the
- * `nodes` array (consumed by the canvas as a flat list of ComfyGraphNode
- * entries).  Boundary endpoint nodes are stamped with
- * `is_input_endpoint` / `is_output_endpoint` so the client
- * can draw INPUTS / OUTPUTS wfGroup rectangles without re-walking the
+ * 逐个走内部节点，产出 API 风格的图条目与 `nodes` 数组
+ * （画布把它当 ComfyGraphNode 的扁平清单消费）。边界端点节点会盖上
+ * `is_input_endpoint` / `is_output_endpoint`，客户端据此画出
+ * INPUTS / OUTPUTS 的 wfGroup 矩形，不必重走一遍连线表。
  * link table.
  */
 export function buildSubgraphGraph(
@@ -324,28 +311,23 @@ export function buildSubgraphGraph(
   const rawInputsById: Record<string, RawInputEntry[]> = {};
 
   const rawOutputsById: Record<string, RawOutputEntry[]> = {};
-  /* Exact ComfyUI box size ([w, h]) per inner node — forwarded so the
-   *  inner-canvas nodes match their imported config dimensions.  Pulled
-   *  from the raw inner-node JSON (sub.nodes), since the synthetic `graph`
-   *  map below only keeps class_type + inputs. */
+  /* 每个内部节点的 ComfyUI 精确外框尺寸（[w, h]）—— 透传出去，让内层画布的
+   *  节点与导入配置里的尺寸一致。取自原始内部节点 JSON（sub.nodes）：
+   *  下面那张合成 `graph` 表只保留 class_type 与 inputs。 */
   const sizeById: Record<string, [number, number]> = {};
   const rawNodeMeta: RawNodeMeta[] = [];
-  /* Boundary node-id collectors — populated as we walk nodes + links so
-   * the client can mark "this node is on the inputs/outputs boundary of
-   * the subgraph" without re-doing the link scan.  A node is considered
-   * an INPUT endpoint when one of its inputs is fed by the sentinel
-   * `-10` source (subgraph exposed input → inner consumer); likewise an
-   * OUTPUT endpoint is one whose output is the sentinel `-20` target
-   * (inner producer → subgraph exposed output).
+  /* 边界节点 id 收集器 —— 在走节点与连线的同一趟里填好，
+   *  客户端便能直接标出「这个节点在子图的输入/输出边界上」，不必重扫连线。
+   *  节点的某个输入由哨兵 `-10` 源馈入，它就是 INPUT 端点
+   *  （子图暴露的输入 → 内部消费方）；同理，输出指向哨兵 `-20` 目标的是
+   *  OUTPUT 端点（内部产出方 → 子图暴露的输出）。
    *
-   * We keep populating these for diagnostic reasons but no
-   * longer depend on them in the client.  The boundary PINS themselves
-   * (defined in `sub.inputs` and `sub.outputs`) carry their own ids and
-   * positions; emitting them via the new top-level `boundaryPins` field
-   * is the right way to render the inner-canvas IO rails.  We also keep
-   * `boundaryInputByNode` / `boundaryOutputByNode` for the legacy
-   * `boundary_input` / `boundary_output` debug fields, but the client
-   * ignores them now. */
+   *  这两个集合为了诊断保留，但客户端**不再依赖它们**。
+   *  边界 **pin** 自身（定义在 `sub.inputs` / `sub.outputs`）带自己的 id 与
+   *  位置 —— 把它们经新的顶层 `boundaryPins` 字段下发，才是渲染内层画布
+   *  IO 栏杆的正确做法。`boundaryInputByNode` / `boundaryOutputByNode`
+   *  同样保留，供历史的 `boundary_input` / `boundary_output` 调试字段用，
+   *  客户端现在已经忽略它们。 */
   const inputEndpointNodes = new Set<string>();
   const outputEndpointNodes = new Set<string>();
   const boundaryInputByNode: Record<
@@ -398,32 +380,29 @@ export function buildSubgraphGraph(
     if (!rn?.id) continue;
     const nodeId = String(rn.id);
     const classType: string = rn.type ?? "?";
-    /* Capture the raw litegraph box size so the client can paint the node
-     *  at its exact ComfyUI dimensions (see `sizeById` declaration above). */
+         /* 记下原始的 litegraph 外框尺寸，客户端才能按 ComfyUI 的精确尺寸
+          *  画出这个节点（见上面 `sizeById` 的声明）。 */
     const rnSize =
       Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
     if (rnSize)
       sizeById[nodeId] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
-
-    /* Per-input metadata.  We tag a connection as "internal" (originates
-     * from another node inside the subgraph) vs "boundary" (originates
-     * from the input sentinel node -10, meaning the value comes from
-     * the parent wrapper).  Boundary connections are still recorded as
-     * isConnection for UI labelling but skipped when writing inputMap
-     * so the value isn't bound to a sentinel source. */
+     /* 每个输入的元数据。「内部」连线（源自子图内的另一个节点）与
+      *  「边界」连线（源自输入哨兵节点 -10，值来自父级封装节点）分开标记。
+      *  边界连线仍然记 isConnection（供 UI 打标签），但写 inputMap 时**跳过**，
+      *  免得把值绑到一个哨兵源上。 */
     const rawInputs: RawInputEntry[] = [];
     const inputMap: Record<string, unknown> = {};
     if (Array.isArray(rn.inputs)) {
       const rnWidgets = Array.isArray(rn.widgets_values)
         ? rn.widgets_values
         : [];
-      /* Sentinel-aware pairing: ComfyUI inserts a `control_after_generate`
-       *  slot into `widgets_values` right after a seed-type INT widget, so
-       *  a naive index match would shift every later widget by one.  Use the
-       *  shared helper (mirrors `resolveWidgetOrder`) to map widget-name →
-       *  value.  This is what makes inner-node widgets (KSampler seed/steps/
-       *  cfg/sampler/scheduler/denoise, CLIPTextEncode's prompt, …) show
-       *  their real values instead of blank/offset rows. */
+      /* 哨兵感知的配对：ComfyUI 会在 seed 型 INT widget 之后往
+       *  `widgets_values` 里插一个 `control_after_generate` 槽位，
+       *  按位置硬对会把后面每个 widget 都错位一格。这里用共享助手
+       *  （与 `resolveWidgetOrder` 同口径）做「widget 名 → 值」的映射 ——
+       *  内部节点的 widget（KSampler 的 seed/steps/cfg/sampler/scheduler/
+       *  denoise、CLIPTextEncode 的提示词等）才会显示真实值，
+       *  而不是空白行或错位行。 */
       const wvMap = pairWidgetValues(rn.inputs, rnWidgets);
       for (const inp of rn.inputs) {
         if (!inp || typeof inp.name !== "string") continue;
@@ -442,26 +421,25 @@ export function buildSubgraphGraph(
               : undefined,
           type:
             typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
-          /* Mark boundary wires (origin_id = -10/-20) as "isBoundary" so
-           *  the canvas can render them as a wrapper-exposed input (still
-           *  a connection, but no real source node inside the subgraph). */
+                     /* 把边界连线（origin_id = -10/-20）标成 "isBoundary"，
+                      *  画布便能渲染成「封装节点暴露出来的输入」（它仍是一条连接，
+                      *  但子图内部没有真实的源节点）。 */
           isConnection: isConn,
           isBoundary: false, // set later if needed
         };
         if (widgetName) entry.widget = { name: widgetName };
         if (widgetValue !== undefined) entry.widgetValue = widgetValue;
-        /* parity: stamp `multiline` on STRING inputs the helper flags,
-         *  so short prompt inputs don't degrade to one-line chips.
+                 /* 与父级路由保持一致：给助手标出的 STRING 输入盖 `multiline`，
+                  *  免得很短的提示词输入被降级成单行芯片。
+                  *
          *
          *  这里是**同步**构建，读不到 object_info 的 `{"multiline": true}`
          *  声明（声明只能异步查）—— 因此只盖「值很长」那条数据判据，
          *  声明由调用方 `buildSubgraphDetail` 在构建之后补盖一次。
          *
-         *  removed the IMAGE-input `imageRef` propagation
-         *  for the same reason as the parent route — downstream IMAGE
-         *  consumers would only re-display the un-scaled / un-encoded
-         *  upstream image, which is misleading.  Only the LoadImage
-         *  source node gets a preview (synthetic entry pushed below). */
+         *  另外：不再向下游传播 IMAGE 输入的 `imageRef`，理由与父级路由相同 ——
+         *  下游的 IMAGE 消费方只会再显示一遍未缩放 / 未编码的上游图，
+         *  有误导性。只有 LoadImage 源节点带预览（在下面推的合成条目上）。 */
         if (
           typeof inp.type === "string" &&
           inp.type === "STRING" &&
@@ -475,24 +453,20 @@ export function buildSubgraphGraph(
           if (lk && lk.src !== "-10" && lk.src !== "-20") {
             inputMap[inp.name] = [lk.src, lk.slot];
           } else if (lk && (lk.src === "-10" || lk.src === "-20")) {
-            /* Boundary wire (subgraph's exposed input/output) — fall back
-             *  to the widget value if one is declared.  This is the case
-             *  for `text` on CLIPTextEncode: in raw JSON the field is
-             *  both a widget AND has a `link` pointing to the boundary
-             *  sentinel; we want the widget's default value (the actual
-             *  prompt text), not a connection tuple. */
+                         /* 边界连线（子图暴露的输入/输出）—— 若该槽位同时声明了 widget，
+                          *  回落到 widget 值。CLIPTextEncode 的 `text` 就是这种情况：
+                          *  原始 JSON 里它既是 widget，又有 `link` 指向边界哨兵；
+                          *  我们要的是 widget 的默认值（真正的提示词文本），
+                          *  而不是一个连接元组。 */
             const last = rawInputs[rawInputs.length - 1];
             if (last) last.isBoundary = true;
-            /* Mark this node as an INPUT endpoint: the
-             *  sentinel `-10` source means the value comes from the
-             *  parent wrapper, so this node is the boundary consumer
-             *  on the INPUTS side.  Output sentinel `-20` is rare on
-             *  inputs in practice but we still group it as "input"
-             *  since it falls into the boundary connection branch. */
+            /* 把这个节点标成 INPUT 端点：源是哨兵 `-10` 意味着值来自父级
+             *  封装节点，因此本节点是 INPUTS 侧的边界消费方。
+             *  输入上出现输出哨兵 `-20` 在实践中很少，但它既然落进了
+             *  「边界连线」分支，就同样归为 "input"。 */
             if (lk.src === "-10") inputEndpointNodes.add(nodeId);
-            /* Stash the boundary port details for the canvas to render
-             *  a compact wfIoPort label.  Only the first boundary input
-             *  per node is recorded (most endpoints have exactly one). */
+            /* 存下边界端口细节，画布据此渲染一枚紧凑的 wfIoPort 标签。
+             *  每个节点只记**第一个**边界输入（绝大多数端点就一个）。 */
             if (lk.src === "-10" && !boundaryInputByNode[nodeId]) {
               boundaryInputByNode[nodeId] = {
                 name: inp.name,
@@ -504,16 +478,15 @@ export function buildSubgraphGraph(
               inputMap[inp.name] = widgetValue;
             }
           } else {
-            /* Non-sentinel input connection — record the source middle
-             *  node id as `connects_from` (used by the OUTPUT endpoint
-             *  positioning helper).  We only keep the FIRST non-sentinel
-             *  source to keep positioning deterministic. */
+            /* 非哨兵的输入连线 —— 把源中间节点 id 记进 `connects_from`
+             *  （OUTPUT 端点定位助手要用）。只保留**第一个**非哨兵源，
+             *  定位结果才确定。 */
             // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 需保留 first-truthy 语义（空串也视为未设置）
             if (!connectsFromByNode[nodeId])
               connectsFromByNode[nodeId] = lk?.src ?? "";
           }
         } else if (widgetValue !== undefined) {
-          // Fold the corresponding widget value into inputs[] (API form).
+          // 把对应的 widget 值折进 inputs[]（API 形态）。
           inputMap[inp.name] = widgetValue;
         }
       }
@@ -531,16 +504,14 @@ export function buildSubgraphGraph(
       ...(rawTitle ? { _meta: { title: rawTitle } } : {}),
     };
 
-    /* Per-output metadata. */
+    /* 每个输出的元数据。 */
     const rawOutputs: RawOutputEntry[] = [];
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
         if (!o || typeof o.name !== "string") continue;
-        /* Mark OUTPUT endpoint nodes: if any link from this
-         *  output aims at the sentinel `-20` target (the subgraph's
-         *  exposed output), then this node is an output producer — it
-         *  feeds the parent wrapper's exposed output.  The client uses
-         *  this flag to draw an OUTPUTS wfGroup around the cluster. */
+        /* 标记 OUTPUT 端点节点：本输出的任意一条连线指向哨兵 `-20` 目标
+         *  （子图暴露的输出）时，本节点就是产出方 —— 它馈入父级封装节点暴露
+         *  出去的输出。客户端据此在这簇节点外画一个 OUTPUTS wfGroup。 */
         let isBoundaryOut = false;
         if (Array.isArray(o.links)) {
           for (const lnkId of o.links) {
@@ -548,17 +519,16 @@ export function buildSubgraphGraph(
             if (target === "-20") {
               outputEndpointNodes.add(nodeId);
               isBoundaryOut = true;
-              /* Stash the boundary output port for the canvas to render
-               *  a compact wfIoPort label on the LEFT edge.  Only the
-               *  first -20-bearing output is recorded. */
+                             /* 存下边界输出端口，画布据此在**左边缘**渲染一枚紧凑的
+                              *  wfIoPort 标签。只记第一个指向 -20 的输出。 */
               boundaryOutputByNode[nodeId] ??= {
                 name: o.name,
                 type: typeof o.type === "string" ? o.type : "*",
               };
               break;
             }
-            /* Non-sentinel target → record first as `connects_to` (used
-             *  by the INPUT endpoint positioning helper). */
+            /* 非哨兵目标 → 把第一个记成 `connects_to`
+             *  （INPUT 端点定位助手要用）。 */
             if (
               target &&
               target !== "-10" &&
@@ -583,18 +553,17 @@ export function buildSubgraphGraph(
     }
 
     if (rn.type !== "Note" && rn.type !== "MarkdownNote") {
-      /* LoadImage family: synthesise a `preview: true` image entry so the
+      /* LoadImage 一族：合成一条 `preview: true` 的图像条目，把
        * canvas paints the uploaded thumbnail (or 「需要上传图片」 placeholder
-       * when empty) on the LoadImage node itself.  ComfyUI shows the
-       * thumbnail there, not on downstream consumers — per
-       * we no longer propagate imageRef downstream because the un-scaled /
-       * un-encoded back-reference rendering was misleading.
+       * （为空时也照样推一条）交给 LoadImage 节点**自身**。
+       *  ComfyUI 就在那里显示缩略图，不在下游消费方 ——
+       *  我们也不再向下游传播 imageRef：渲染未缩放 / 未编码的反向引用
+       *  有误导性。
        *
-       * ALWAYS push for LoadImage-family, regardless of
-       * whether an image is loaded.  The dedicated `preview: true` flag
-       * is checked by the renderer's connEntries / widgetEntries filters
-       * so this entry never lands in the port row or widget control list
-       * — it's consumed exclusively by <WorkflowImagePreview>. */
+       * LoadImage 一族**一律**推这条条目，与是否已加载图片无关。
+       *  渲染器的 connEntries / widgetEntries 过滤器会检查专属的
+       *  `preview: true` 标记，因此这条条目永远不会出现在端口行或
+       *  widget 控件清单里 —— 只有 <WorkflowImagePreview> 消费它。 */
       if (LOAD_IMAGE_NODE_TYPES.has(classType)) {
         if (!rawInputs.some((rawInput) => rawInput.preview)) {
           const wv0 = rn.widgets_values?.[0];
@@ -634,19 +603,17 @@ export function buildSubgraphGraph(
     }
   }
 
-  /* Build the `nodes` array (consumed by the canvas as a flat list of
-   *  ComfyGraphNode entries).  We also stamp each node with
-   *  `is_input_endpoint` / `is_output_endpoint` so the
-   *  client can draw INPUTS / OUTPUTS wfGroup rectangles around the
-   *  two clusters without re-walking the link table. */
+  /* 构建 `nodes` 数组（画布把它当 ComfyGraphNode 的扁平清单消费）。
+   *  同时给每个节点盖 `is_input_endpoint` / `is_output_endpoint`，
+   *  客户端便能在这两簇外面画 INPUTS / OUTPUTS 的 wfGroup 矩形，
+   *  不必重走一遍连线表。 */
   const nodes: DetailNodeView[] = Object.entries(graph).map(([nodeId, n]) => {
-    // Same class_type / type fallback as the parent route — newer ComfyUI
-    // exports put the class name in `class_type`, but older / rgthree-comfy
-    // exports use `type` only.  Without this fallback subgraph wrappers
-    // come back with classType="?" and `is_subgraph: false`, so the
-    // inner canvas paints them as full WorkflowNodes instead of compact
-    // WorkflowSubgraphNode chips.  (graph entries are built above with a
-    // string class_type, so it is always present here.)
+    // class_type / type 的回落与父级路由一致 —— 新的 ComfyUI 导出把类名放在
+    // `class_type`，旧的与 rgthree-comfy 的导出只有 `type`。没有这道回落，
+    // 子图封装节点会带着 classType="?" 与 `is_subgraph: false` 回来，
+    // 内层画布就会把它们画成完整的 WorkflowNode，而不是紧凑的
+    // WorkflowSubgraphNode 芯片。（上面构建 graph 条目时给的是字符串
+    // class_type，因此这里一定有值。）
     const classType: string = n.class_type;
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     const isInEp = inputEndpointNodes.has(nodeId);
@@ -659,21 +626,18 @@ export function buildSubgraphGraph(
       raw_inputs: rawInputsById[nodeId] ?? [],
       is_input_endpoint: isInEp,
       is_output_endpoint: isOutEp,
-      /* Exact ComfyUI box size ([w, h]) for this inner node.  Undefined
-       *  when the subgraph definition carries no per-node size (rare). */
+      /* 该内部节点的 ComfyUI 精确外框尺寸（[w, h]）。子图定义没带
+       *  逐节点尺寸（少见）时为 undefined。 */
       size: sizeById[nodeId],
-      /* Boundary port details for wfIoPort rendering (v3).
-       *  The client renders IO endpoint nodes as compact label-only
-       *  items on the LEFT (input) / RIGHT (output) of the inner canvas.
-       *  Without these fields the canvas can't show the port name and
-       *  default value (e.g. "noise_seed  41"). */
+      /* 供 wfIoPort 渲染的边界端口细节（v3）。
+       *  客户端把 IO 端点节点渲染成内层画布**左侧**（输入）/ **右侧**（输出）
+       *  的紧凑纯标签项。没有这些字段，画布就显示不出端口名与默认值
+       *  （例如 "noise_seed  41"）。 */
       boundary_input: isInEp ? (boundaryInputByNode[nodeId] ?? null) : null,
       boundary_output: isOutEp ? (boundaryOutputByNode[nodeId] ?? null) : null,
-      /* First non-sentinel middle node this endpoint actually wires to
-       *  internally — used by the client to position the wfIoPort
-       *  adjacent to its target/source middle node.  Undefined for pure
-       *  passthrough endpoints (RandomNoise-style), which fall back to
-       *  the saved position. */
+      /* 本端点在内部真正连到的第一个非哨兵中间节点 —— 客户端据此把 wfIoPort
+       *  摆在它的目标/源中间节点旁边。纯透传端点（RandomNoise 那种）为
+       *  undefined，此时回落到保存的位置。 */
       connects_to: connectsToByNode[nodeId] ?? null,
       connects_from: connectsFromByNode[nodeId] ?? null,
     };
@@ -692,8 +656,7 @@ export function buildSubgraphGraph(
     boundaryOutputByNode,
     connectsToByNode,
     connectsFromByNode,
-    /* Slot-name lookups are derived in the same walk as boundary IO, so
-     *  they are already final by the time we assemble the result. */
+    /* 槽位名查找表与边界 IO 在同一趟里算好，拼结果时已经是终值。 */
     inputNameByNodeSlot,
     outputNameByNodeSlot,
     proxyAuthorLabels,
@@ -704,26 +667,24 @@ export interface BoundaryPin {
   id: string;
   name: string;
   type: string;
-  /** ComfyUI-i18n label (zh-CN etc.).  Usually equals `type`/`name`
-   *  for proxy pins — kept for completeness. */
+  /** ComfyUI 的 i18n 标签（简体中文等）。对代理 pin 来说通常就等于
+   *  `type` / `name` —— 为完整性保留。 */
   localized?: string;
-  /** Business-facing label set by the author in the node editor
-   *  (e.g. `FRAMES`, `IMAGE_FINAL`, `MODEL_HIGH_1st`).  Use this
-   *  first when rendering so the inner IO rail matches what the
-   *  parent-card outputs strip shows. */
+  /** 作者在节点编辑器里设的业务标签（如 `FRAMES`、`IMAGE_FINAL`、
+   *  `MODEL_HIGH_1st`）。渲染时优先用它，内层 IO 栏杆才能与父卡片上的
+   *  输出条显示同一个名字。 */
   label?: string;
   pos: [number, number];
   linkIds: number[];
 }
 
 /**
- * Parse the subgraph's exposed IO pins (`sub.inputs` / `sub.outputs`).
+ * 解析子图暴露的 IO pin（`sub.inputs` / `sub.outputs`）。
  *
- * Each pin is a first-class entity with its own UUID (`id`),
- * slot name (`name`), type, optional human label, saved position, and one
- * or more `linkIds` (the cross-boundary wire(s) feeding into / out of an
- * inner node).  Also builds the inverse `pinIdByLinkId` map used to
- * resolve the sentinel-link table into `boundaryLinks`.
+ * 每个 pin 是一等实体：自带 UUID（`id`）、槽位名（`name`）、类型、
+ * 可选的人类标签、保存的位置，以及一个或多个 `linkIds`
+ * （穿过边界、与内部节点相连的线）。这里另外建一张反向的
+ * `pinIdByLinkId`，用来把哨兵连线表解析成 `boundaryLinks`。
  */
 export function parseSubgraphPins(sub: RawSubgraphDef): {
   boundaryPins: { inputs: BoundaryPin[]; outputs: BoundaryPin[] };
@@ -792,9 +753,9 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
   return { boundaryPins, pinIdByLinkId };
 }
 
-/** Sentinel-bearing wire resolved to a boundary pin ↔ inner-node slot
- *  pair (client renders a React Flow edge from the pin's handle to the
- *  inner node's matching input/output handle). */
+/** 带哨兵的线解析成的「边界 pin ↔ 内部节点槽位」配对
+ *  （客户端据此从 pin 的 handle 向内部节点对应的输入/输出 handle
+ *  画一条 React Flow 边）。 */
 export interface BoundaryLink {
   linkId: number;
   kind: "input" | "output";
@@ -804,10 +765,9 @@ export interface BoundaryLink {
 }
 
 /**
- * Resolve the sentinel-link table collected up-front into a list of
- * `boundaryLinks` for the client.  Each entry maps one boundary-bearing
- * wire to the inner node's slot name on its end, so the React Flow edge
- * can targetHandle/sourceHandle correctly.
+ * 把前面收集的哨兵连线表解析成给客户端用的 `boundaryLinks`。
+ * 每条条目把一根穿边界的线映射到它那一端内部节点的槽位名，
+ * React Flow 边才能把 targetHandle / sourceHandle 指对。
  */
 export function buildBoundaryLinks(
   boundaryLinkInfoById: Record<number, BoundaryLinkInfo>,
@@ -893,21 +853,18 @@ export function reportDroppedBoundaryLinks(
 }
 
 /**
- * Inner group frames, note annotations and effective positions.
+ * 内层的分组框、便签注释与生效位置。
  *
- * Positions: raw.pos per node, layered with user-dragged positions from
- * `tplPositions` (the canvas editor's subgraph-view drag handler PATCHes
- * with merge:true, putting them in the same shared column).  User-dragged
- * positions win; stale keys not present in the subgraph are ignored; raw
- * positions are only seeded for nodes in this subgraph so neighbouring
- * subgraphs' positions can't leak in.
+ * 位置：每个节点的 raw.pos 为底，再叠上 `tplPositions` 里用户拖出来的位置
+ * （画布编辑器的子图视图拖拽处理器用 merge:true PATCH，
+ * 写进的是同一个共享列）。用户拖过的位置优先；子图里不存在的陈旧键忽略；
+ * 原始位置**只**给本子图内的节点打底，免得相邻子图的位置漏进来。
  *
- * `hostId` is the host-chain prefix the drag handler writes with
- * (`runtimeNodeId`, e.g. `4` or `4:5`).  The shared `positions` column keeps
- * subgraph inner nodes under `host:inner` keys, but this view's node ids are
- * the BARE inner ids — reading only bare keys silently discarded every drag
- * made inside a subgraph, so reopening always showed raw positions.  Both
- * spellings are accepted here (bare, for legacy/imported data).
+ * `hostId` 是拖拽处理器写库时用的宿主链前缀（`runtimeNodeId`，如 `4` 或
+ * `4:5`）。共享的 `positions` 列把子图内部节点存在 `host:inner` 键下，
+ * 而本视图的节点 id 是**裸的内部 id** —— 只读裸键会静默丢掉用户在子图里
+ * 做过的每一次拖动，表现为「重新打开永远回到原始位置」。
+ * 这里两种写法都接受（裸键用于历史 / 导入数据）。
  */
 export function runtimeInnerId(key: string, hostId: string): string {
   if (!hostId) return "";
@@ -939,7 +896,7 @@ export function extractSubgraphAnnotations(
   }[];
   positions: Record<string, [number, number]>;
 } {
-  /* Inner group frames. */
+  /* 内层的分组框。 */
   const groups: {
     id: string;
     title: string;
@@ -970,7 +927,7 @@ export function extractSubgraphAnnotations(
     });
   }
 
-  /* Inner note annotations. */
+  /* 内层的便签注释。 */
   const notes: {
     id: string;
     title: string;
@@ -998,9 +955,8 @@ export function extractSubgraphAnnotations(
     });
   }
 
-  /* Positions: user-dragged overrides win over the raw (original) coords.
-   *  Both `host:inner` and bare-inner key spellings are read — see the
-   *  `hostId` note above. */
+  /* 位置：用户拖出来的覆盖值优先于原始坐标。
+   *  `host:inner` 与裸内部 id 两种键写法都会读 —— 见上面 `hostId` 的说明。 */
   const innerNodeIdSet = new Set(
     innerNodes.filter((rn) => rn?.id != null).map((rn) => String(rn.id)),
   );

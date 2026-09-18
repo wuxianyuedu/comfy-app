@@ -164,6 +164,43 @@ function extractComfyUIPort() {
 }
 
 // --------------------------------------------------------------------------
+
+/* ── 注释语言的「纯 ASCII 模块」白名单（ISSUE #678 / 规范 12 §12.4.6）────
+ * 口径：注释一律中文；只有「会被 `next-code-frame` 渲染到」的构建期模块写英文，
+ * 且必须保持纯 ASCII —— Next 的 code frame 按**字节**切串，高亮区间端点落在
+ * 多字节字符内部时 Rust 侧直接 panic，整个 `next build` 被一个与业务无关的错误
+ * 带走（规范 launch-and-build §5）。
+ *
+ * 这份名单必须**只定义一次**：文档（docs/reference-facts.md / 规范 12 §12.4.6 /
+ * launch-and-build §9.6）写的与脚本读的如果各存一份，两边必然各自漂移 ——
+ * 表现是「文档说允许、判据说违规」而没人知道该信哪个。因此这里刻意**反向读文档**：
+ * 白名单在 reference-facts 的那一行里以 `path（判定符号）` 列表登记，本函数解析它。
+ * 与 §1.x 的值类事实相反，这里没有「第二个事实源」——路径清单本身就是权威定义，
+ * 解析出来的结果直接喂给判据。
+ */
+const ASCII_ONLY_FACT_DOCS = ["docs/reference-facts.md"];
+
+/** 解析 reference-facts 里 `comment.language.asciiOnly` 那一行登记的模块路径。 */
+function extractAsciiOnlyModules() {
+  for (const doc of ASCII_ONLY_FACT_DOCS) {
+    if (!exists(doc)) continue;
+    const text = readText(doc);
+    // 取登记行：`| comment.language.asciiOnly | <路径清单> | ... |`
+    const line = text.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
+    if (!line) continue;
+    // 取「名单」那一格（第 2 列），逐项提取反引号包裹的模块路径。
+    // 括号里的理由（「构建期被加载」这类）写在路径的**同一对反引号之外**，
+    // 因此 `[^`]+?` 天然不会把它吃进来 —— 不需要按「（」二次切分。
+    const cell = line.split("|")[2] ?? "";
+    const paths = [...cell.matchAll(/`((?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g)].map((m) => m[1]);
+    // 名单可以为**空**（棘轮基线归零是这条规则的目标形态），但「读不到登记行」
+    // 必须报错：一个永远返回空数组的解析器会让所有断言全绿（§12.16 的同款教训）。
+    // 判据因此落在「登记行在不在」上，而不是「解析出几项」。
+    if (line) return paths;
+  }
+  throw new Error("docs/reference-facts.md 里读不到 comment.language.asciiOnly 的登记行");
+}
+
 // FACTS：机器可读事实定义（与 docs/reference-facts.md 的 key 一一对应）
 //   placeholder 类：文档用占位符替代裸值，doc:check 发现裸值即报错，
 //                    doc:render 把占位符替换成真实值。
@@ -204,6 +241,9 @@ const FACTS = [
   // otherDocs：该值在别的文档里的「引用点」不是无括号端口形态（如主规范的
   //          `localhost:3100` / `:8188` 并列行），须在另一套文档里也防裸值回潮。
   { key: "comfyui.port", placeholder: "{{comfyui.port}}", kind: "placeholder", extract: extractComfyUIPort, onlyDocs: ["docs/workshop-mcp.md"], otherDocs: ["docs/standards/Comfy-APP-T3-项目开发规范.md"] },
+  // 注释语言白名单（ISSUE #678 / 规范 12 §12.4.6）：名单本身是权威定义，
+  // 由 reference-facts 的一行承载，脚本解析它 —— 两侧只有一份清单。
+  { key: "comment.language.asciiOnly", kind: "list", extract: extractAsciiOnlyModules },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
@@ -264,4 +304,5 @@ module.exports = {
   extractSplash,
   extractRegistryPort,
   extractMcpHttpPort,
+  extractAsciiOnlyModules,
 };
