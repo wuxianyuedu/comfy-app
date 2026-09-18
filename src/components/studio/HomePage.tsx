@@ -130,7 +130,7 @@ export function HomePage({
       />
 
       {/* ── 右侧区：顶栏 + 主内容 ──────────── */}
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="z-base relative flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* ── Top Bar ── */}
         <header className="border-border-subtle bg-panel/88 flex shrink-0 items-center justify-between gap-3 border-b px-5 py-0 backdrop-blur-md">
           {/* Search */}

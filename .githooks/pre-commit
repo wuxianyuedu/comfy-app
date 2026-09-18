@@ -7,10 +7,10 @@
 # 且 npx 可能触发与 pnpm 布局不一致的隐式安装。
 # master 分支只接受「分支开发 → PR → 合并」的变更(规范 13.6)。
 # 放在最前:分支不对时不必再跑 tsc/lint —— 那些检查的结果最后都会被丢弃。
-echo "[pre-commit] 1/26 master 分支提交守卫"
+echo "[pre-commit] 1/27 master 分支提交守卫"
 node scripts/check-branch-guard.cjs || exit 1
 
-echo "[pre-commit] 2/26 文件结构硬规则（R1-R6/R7-R12）"
+echo "[pre-commit] 2/27 文件结构硬规则（R1-R6/R7-R12）"
 # R5 的棘轮（超 900 行文件）需要 --strict 才判定,这里保持「只提醒」,与其余棘轮
 # （重复块 / 函数长度 / 主题色）的本地口径一致 —— 被拦下的动作要求拆分文件,
 # 不适合在本地每次提交都挡一次。
@@ -26,16 +26,16 @@ node scripts/check-file-structure.cjs || exit 1
 # 各自演进，四项行为静默分叉），所以「新增动作必须两侧都在」与「会失效的清单
 # 只许定义一次」都机器化：新增 .mjs 忘了登记、或在 .ps1 里又抄一份
 # KNOWN_FAILED_FILES，都在这里被拦下。
-echo "[pre-commit] 3/26 跨平台动作对照（.ps1 ⇄ .mjs）"
+echo "[pre-commit] 3/27 跨平台动作对照（.ps1 ⇄ .mjs）"
 node scripts/check-ps1-consistency.mjs || exit 1
 
-echo "[pre-commit] 4/26 React 函数式 updater 纯净性(ISSUE #141)"
+echo "[pre-commit] 4/27 React 函数式 updater 纯净性(ISSUE #141)"
 node scripts/check-react-updater-purity.cjs || exit 1
 
 # 2026-09-11(ISSUE #310 弹窗类回归): 标题行(页签栏)让位。
 # 页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会把页签和右上角
 # 窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。这条把判据机器化。
-echo "[pre-commit] 5/26 标题行让位硬规则"
+echo "[pre-commit] 5/27 标题行让位硬规则"
 node scripts/check-title-bar-clearance.cjs || exit 1
 
 # 2026-09-18: tsc 与 eslint 并行。二者判据完全独立、互不依赖 —— tsc 查类型、
@@ -66,7 +66,7 @@ node scripts/check-title-bar-clearance.cjs || exit 1
 # ⚠️ 升级 eslint / typescript-eslint **之后**先删掉该缓存目录 —— 插件实现变更不在
 # 缓存键里（这是 --cache 的已知边界，不是本仓的判据问题）；换 cache-location 或
 # cache-strategy 也会导致一次全量重建，属预期。
-echo "[pre-commit] 6&7/26 tsc --noEmit + eslint（零警告，并行）"
+echo "[pre-commit] 6&7/27 tsc --noEmit + eslint（零警告，并行）"
 pnpm exec tsc --noEmit &
 tsc_pid=$!
 pnpm exec eslint . --max-warnings 0 \
@@ -81,14 +81,14 @@ wait "$eslint_pid" || rc=1
 # 2026-09-04: UI 与逻辑分离棘轮(规范 17)。违规数只许降不许升:
 # 新增 fetch / vanillaApi / tRPC hook 进视图层 → 阻断;
 # 治理后指标下降 → 提示执行 --update 收紧基线(不阻断,避免打断提交)。
-echo "[pre-commit] 8/26 UI/逻辑分离棘轮"
+echo "[pre-commit] 8/27 UI/逻辑分离棘轮"
 node scripts/check-ui-logic-separation.cjs || exit 1
 
 # 2026-09-12(ISSUE #408): CHANGELOG 碎片形态。
 # CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
 # 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的
 # 文件名与段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
-echo "[pre-commit] 9/26 CHANGELOG 碎片"
+echo "[pre-commit] 9/27 CHANGELOG 碎片"
 node scripts/check-changelog-fragments.cjs || exit 1
 
 # 2026-09-14(ISSUE #489 缺陷 4): 端口推导的跨语言一致性。
@@ -101,10 +101,10 @@ node scripts/check-changelog-fragments.cjs || exit 1
 # 漂移面积自己变大。`shadcn add` 生成的组件默认写 `@/`（§16.3 已点名），
 # src/components/ui/ 因此是重灾区；而 ui/ 是「工具生成、不手改」的目录，
 # 靠人改不现实。判据机器化后，顺手改一处就是顺手的事。
-echo "[pre-commit] 10/26 import 别名统一（~ 前缀）"
+echo "[pre-commit] 10/27 import 别名统一（~ 前缀）"
 node scripts/check-import-alias.cjs || exit 1
 
-echo "[pre-commit] 11/26 端口推导跨语言一致性"
+echo "[pre-commit] 11/27 端口推导跨语言一致性"
 node scripts/check-app-port-vectors.cjs || exit 1
 
 # 2026-09-18(ISSUE #672「前端 ui 组件是否完善、是否商业级」): UI 基元复用棘轮（规范 16 §16.2.3）。
@@ -112,7 +112,7 @@ node scripts/check-app-port-vectors.cjs || exit 1
 # 自建 createPortal 浮层 10 处、自写 animate-spin/pulse 40 处 —— 「同一个组件到处实现一份」
 # 属实，而此前**没有任何机器判据**（check-ui-logic-separation 管的是 IO 分层，不管组件复用）。
 # 本条把存量冻结在基线，只许降不许升：新增自实现一律先改用 ui/ 基元。
-echo "[pre-commit] 12/26 UI 基元复用棘轮"
+echo "[pre-commit] 12/27 UI 基元复用棘轮"
 node scripts/check-ui-primitives.cjs || exit 1
 
 # 2026-09-14(ISSUE #75 主题专项): 主题色扫描棘轮。
@@ -120,7 +120,7 @@ node scripts/check-ui-primitives.cjs || exit 1
 # 没有机器可读的豁免清单,于是同一批类型色(端口类型色/节点类别色/参数分组色)
 # 每轮扫描都被当漏网再报一遍。这条把豁免显式化,未豁免的写死色值走棘轮
 # (只许降不许升),新写的写死色值一律阻断。
-echo "[pre-commit] 13/26 主题色扫描棘轮"
+echo "[pre-commit] 13/27 主题色扫描棘轮"
 node scripts/check-theme-colors.cjs || exit 1
 
 # 2026-09-14(ISSUE #536 P2): 跨文件重复块(规范 12.12)。
@@ -132,17 +132,17 @@ node scripts/check-theme-colors.cjs || exit 1
 # config.ts 的 schema 默认值、错误文案），彼此从未对过。单看每一处都「没毛病」，
 # 只有并排比较才发现是同一件事的不同口径 —— 与跨文件重复块同族，故放在一起。
 # 分叉的表现不是「连不上」，而是静默连到另一个实例（现象是上传失败/端口漂移）。
-echo "[pre-commit] 14/26 ComfyUI 端口口径一致性"
+echo "[pre-commit] 14/27 ComfyUI 端口口径一致性"
 node scripts/check-comfyui-port-contract.cjs || exit 1
 
 # 2026-09-14(ISSUE #534 P3): 视图层不得动态注入 <style>(规范 03 §3.5 / 反模式 T5)。
 # 本仓库踩过两次、形态一样(组件私有 CSS 字符串 + 渲染时注入):WorkflowEditorCanvas
 # 与 studio/ui/CodeBlock。前者改完只留了注释,后者又犯一遍 —— 「自己修完自己写
 # 注释」挡不住下一个人,故把判据机器化。
-echo "[pre-commit] 15/26 内联样式注入"
+echo "[pre-commit] 15/27 内联样式注入"
 node scripts/check-inline-style.cjs || exit 1
 
-echo "[pre-commit] 16/26 跨文件重复块"
+echo "[pre-commit] 16/27 跨文件重复块"
 node scripts/check-code-duplication.cjs || exit 1
 
 # 2026-09-14(ISSUE #536 P4): 函数长度(规范 12.13)。
@@ -150,21 +150,21 @@ node scripts/check-code-duplication.cjs || exit 1
 # 「每个文件超阈值的函数数」记账,棘轮只许降不许升。
 # 2026-09-15(ISSUE #570 第 7 项): 无名字的块体(IIFE / 回调 / 闭包)与跨行签名
 # 同受约束(规范 12 §12.13.2)—— 此前「把 300 行塞进 IIFE 里」能整条绕过本门禁。
-echo "[pre-commit] 17/26 函数长度棘轮"
+echo "[pre-commit] 17/27 函数长度棘轮"
 node scripts/check-function-length.cjs || exit 1
 
 # 2026-09-14(ISSUE #536 P4): Rust 函数长度（规范 12.13）。
 # §12.13 的 TS/TSX 门禁扫不到 Rust —— 于是 lib.rs 的 run() 里塞了近 300 行的
 # 窗口/托盘/协议/sidecar 编排，没有任何机器信号。这条把 Rust 侧同一维度补上，
 # 阈值 120（Rust 是结构化编排，自然长度比 TSX 短），同样走棘轮。
-echo "[pre-commit] 18/26 Rust 函数长度棘轮"
+echo "[pre-commit] 18/27 Rust 函数长度棘轮"
 node scripts/check-rust-function-length.cjs || exit 1
 
 # 2026-09-15(ISSUE #568): core 骨架的单一事实源。
 # 三处承诺此前都只写在注释里，而注释与现状恰好相反（DI 容器只有 2 个调用方、
 # 30+ 处直接读 process.env、日志有两条通道且其中一条零脱敏）。本仓库的教训是
 # 「判据不接门禁就等于没有判据」，因此这三条各自配机器判据。
-echo "[pre-commit] 19/26 core 骨架单一事实源"
+echo "[pre-commit] 19/27 core 骨架单一事实源"
 pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts || exit 1
 
 # 2026-09-15(ISSUE #574): 模块循环依赖（规范 12.7）。
@@ -172,7 +172,7 @@ pnpm exec vitest run tests/single-logger-channel.test.ts tests/container-single-
 # 3 文件成环），只靠一句注释「加载期是安全的」维持、没有任何测试。环的症状是
 # 「import 顺序变了就 undefined is not a function」，排查成本极高，因此把
 # 「无环」做成棘轮：新增环即阻断，消除一个就 --update 收紧一次。
-echo "[pre-commit] 20/26 模块循环依赖棘轮"
+echo "[pre-commit] 20/27 模块循环依赖棘轮"
 node scripts/check-circular-deps.cjs || exit 1
 
 # 2026-09-15(ISSUE #572 第 1 项 / 规范 §18.4): src/lib 的 Node-only 声明与可达性。
@@ -181,7 +181,7 @@ node scripts/check-circular-deps.cjs || exit 1
 # 判据不是「扫到 fs 就要求 server-only」—— 那会误伤「纯 Node 宿主」（它的入口是
 # 一句 throw，加上去 scripts/*.mjs 的启动编排会直接崩），而是走依赖图判三件事：
 # 声明缺失 / 声明失效（假声明）/ 真被 "use client" 入口引到。
-echo "[pre-commit] 21/26 src/lib Node-only 声明与可达性"
+echo "[pre-commit] 21/27 src/lib Node-only 声明与可达性"
 pnpm exec vitest run tests/lib-node-only-declarations.test.ts || exit 1
 
 # 2026-09-15(ISSUE #575 第 9 项 / 规范 §13.5): prettier 格式棘轮。
@@ -190,7 +190,7 @@ pnpm exec vitest run tests/lib-node-only-declarations.test.ts || exit 1
 # 整改完再接入」的代价是每个新文件都能带任意格式进来,存量只增不减,那一天
 # 永远不会到。判据改为**基线 + 只许下降**:新增脏文件即阻断,存量修掉后
 # 提示收紧基线(--strict 下要求必须收紧)。
-echo "[pre-commit] 22/26 prettier 格式棘轮"
+echo "[pre-commit] 22/27 prettier 格式棘轮"
 node scripts/check-format.cjs || exit 1
 
 # 2026-09-15(ISSUE #575 第 9 项 / 规范 §13.5): 格式化提交与行为改动分离。
@@ -199,7 +199,7 @@ node scripts/check-format.cjs || exit 1
 # 这条判**提交形态**:某文件的改动若「过一遍 prettier 就变成另一种写法」,
 # 即视为纯格式化;一次提交里这种文件 ≥ 10 个就阻断,要求拆成两次提交。
 # 阈值取 10:顺手格式化一两个文件是正常操作,拦在 1 会让门禁变成噪声源。
-echo "[pre-commit] 23/26 格式化提交与行为改动分离"
+echo "[pre-commit] 23/27 格式化提交与行为改动分离"
 node scripts/check-reformat-only.cjs || exit 1
 
 # 2026-09-16(ISSUE #573 第 9 项 / 规范 §12.16): 地基层(src/lib + src/trpc)的零消费值导出。
@@ -209,7 +209,7 @@ node scripts/check-reformat-only.cjs || exit 1
 # 类型，纳入只是噪音），按符号记棘轮、只许降不许升，登记项反向核对。
 # ISSUE #565 把扫描范围从 src/lib 扩到 src/trpc:server.ts(RSC 的 api +
 # HydrateClient 整条链路)全库零引用却长期活着，正因为原判据只扫 lib。
-echo "[pre-commit] 24/26 地基层(src/lib + src/trpc)零消费导出棘轮"
+echo "[pre-commit] 24/27 地基层(src/lib + src/trpc)零消费导出棘轮"
 node scripts/check-dead-exports.cjs || exit 1
 
 # 2026-09-16(ISSUE #565): core 的「出口纪律」与基类纯度。
@@ -218,7 +218,7 @@ node scripts/check-dead-exports.cjs || exit 1
 # 照着写就多出一种取法（与已删除的 container 同款）。`repository-base.ts` 同理：
 # 它在基类里打了一条日志，把口径钉死在基类，并让没有日志设施的宿主连带加载 pino。
 # 两条此前都只写在注释里、没有判据，因此这里各配一条机器判据。
-echo "[pre-commit] 25/26 core 出口纪律与基类纯度"
+echo "[pre-commit] 25/27 core 出口纪律与基类纯度"
 pnpm exec vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts || exit 1
 
 # 2026-09-18(ISSUE #692 后续): 生成态文档与源同步（规范 §13.5.5）。
@@ -226,6 +226,17 @@ pnpm exec vitest run tests/core-barrel-entry-discipline.test.ts tests/repository
 # 从编辑态重渲染 —— 它此前没有任何判据：改了编辑文档却不重渲染，生成物就静默过期
 # （实测 5 份落后于源、缺整节内容），而读者看的正是生成物。这里用与 doc:render 同一份
 # 计算做「只比对不写入」，漂了就阻断并给出修法。
-echo "[pre-commit] 26/26 生成态文档与源同步"
+echo "[pre-commit] 26/27 生成态文档与源同步"
 node scripts/render-doc-placeholders.cjs --check || exit 1
+# 2026-09-18(ISSUE #672 P4 / 规范 §16.2.5): 浮层层级刻度。
+# P2 把自搓浮层收拢到 ui/ 原语、定下「应用浮层 / 提示」两条刻度之后，余量里
+# **仍有 7 处自成一档**（9998 / z-[10000] / z-[10020] / z-80 / z-60 /
+# studio/logs 的 z-99+z-200）—— 同一件事（一条模态遮罩）在库里有两个值，
+# 谁也说不清比谁高。这条把刻度表变成机器判据：行内数字 zIndex 与任意值写法
+# 全库清零（硬闸），刻度之外的裸数字档按文件记棘轮、只许降不许升。
+# z-index 写错的表现是「时灵时不灵」——jsdom 不做层叠与命中测试，单测全绿也照样
+# 复现，所以判据只能落在源码形态上。
+echo "[pre-commit] 27/27 浮层层级刻度棘轮"
+node scripts/check-overlay-z.cjs || exit 1
+
 echo "[pre-commit] 全部通过 ✓"

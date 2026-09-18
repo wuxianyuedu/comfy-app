@@ -7,6 +7,7 @@
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { zClass } from "~/lib/shell/overlay-z";
 
 interface ProjectSwitcherProps {
   projectName: string;
@@ -58,10 +59,12 @@ export function ProjectSwitcher({
       {menuOpen && (
         <>
           <div
-            className={overlayClass("modal", "z-30")}
+            className={overlayClass("modal", zClass("canvasMax"))}
             onClick={onCloseMenu}
           />
-          <div className="border-border-strong bg-panel/95 absolute top-10 left-0 z-40 w-60 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60">
+          <div
+            className={`border-border-strong bg-panel/95 absolute top-10 left-0 ${zClass("popup")} w-60 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 backdrop-blur dark:shadow-black/60`}
+          >
             <div className="text-ink-muted px-2 py-1 text-[10px] tracking-wider uppercase">
               我的画布项目
             </div>

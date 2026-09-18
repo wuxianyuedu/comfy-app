@@ -141,7 +141,7 @@ export function ProjectSettingsButton({ onClick }: { onClick: () => void }) {
       title="项目画布设置"
       aria-label="项目画布设置"
       data-testid="project-canvas-settings-button"
-      className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-20 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm select-none hover:border-white/25"
+      className="border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-canvas-ui pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg backdrop-blur-sm select-none hover:border-white/25"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12.5px]">
         ⚙

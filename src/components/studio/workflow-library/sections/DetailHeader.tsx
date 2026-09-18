@@ -24,6 +24,7 @@ import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
 import { ActionButton } from "./DetailControls";
 import { ModelTagPicker } from "./MetaEditor";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
+import { zClass } from "~/lib/shell/overlay-z";
 
 interface DetailHeaderProps {
   workflow: WorkflowRow;
@@ -114,7 +115,9 @@ export function DetailHeader({
                 <TaskTypeChip taskType={workflow.taskType} />
               </Button>
               {showAllModes && modes.length > 1 && (
-                <div className="border-border bg-panel absolute top-full left-0 z-50 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl">
+                <div
+                  className={`border-border bg-panel absolute top-full left-0 ${zClass("popup")} mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-lg border p-1.5 shadow-xl`}
+                >
                   {modes.map((code) => (
                     <span
                       key={code}

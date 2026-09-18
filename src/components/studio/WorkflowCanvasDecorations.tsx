@@ -209,7 +209,7 @@ export function ZoomIndicator({
           }
         }}
         title="输入缩放百分比后回车"
-        className="bg-panel text-ink-bright absolute top-3 right-3 z-6 h-7 w-16 rounded-md border border-purple-400/60 px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
+        className="bg-panel text-ink-bright z-base absolute top-3 right-3 h-7 w-16 rounded-md border border-purple-400/60 px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
       />
     );
   }
@@ -226,7 +226,7 @@ export function ZoomIndicator({
         beginEdit();
       }}
       title="点击输入缩放倍数，或按住上下拖动调整"
-      className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
+      className={`border-border-strong bg-panel/90 text-ink-soft hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight tabular-nums shadow-lg backdrop-blur-sm select-none hover:border-white/25 ${
         dragging ? "border-primary-400/50 cursor-grabbing" : "cursor-ns-resize"
       }`}
     >
@@ -297,7 +297,7 @@ export function CanvasRulers({
     "pointer-events-none absolute select-none whitespace-nowrap text-[10px] font-medium tabular-nums tracking-tight";
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-3" aria-hidden>
+    <div className="z-base pointer-events-none absolute inset-0" aria-hidden>
       {/* 上边 —— X 坐标 */}
       {xLabels.map(({ world, screen }) => (
         <div

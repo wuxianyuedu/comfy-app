@@ -337,10 +337,10 @@ export function ProjectOutputs() {
         <>
           {/* 遮罩 + 抽屉都从标题行下方起：顶部让出应用页签栏（ISSUE #310） */}
           <div
-            className="top-title-bar bg-canvas-deep dark:bg-canvas-deep fixed right-0 bottom-0 left-0 z-80"
+            className="top-title-bar bg-canvas-deep dark:bg-canvas-deep z-modal fixed right-0 bottom-0 left-0"
             onClick={() => setSelectedId(null)}
           />
-          <aside className="top-title-bar bg-node border-border-strong fixed right-0 bottom-0 z-90 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l shadow-2xl shadow-black/10 dark:shadow-black/50">
+          <aside className="top-title-bar bg-node border-border-strong z-modal fixed right-0 bottom-0 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l shadow-2xl shadow-black/10 dark:shadow-black/50">
             {/* head */}
             <div className="border-border-strong flex items-center justify-between border-b px-5 py-3">
               <div className="flex items-center gap-2">

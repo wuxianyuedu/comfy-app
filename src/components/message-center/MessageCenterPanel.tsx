@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useMemo } from "react";
+import { zClass } from "~/lib/shell/overlay-z";
 import {
   Bell,
   BellRing,
@@ -84,7 +85,7 @@ export function MessageCenterPanel() {
 
   return (
     <FullScreenLayer
-      zClass="z-[10020]"
+      zClass={zClass("modal")}
       className="bg-bg/92 flex flex-col backdrop-blur-md"
       role="dialog"
       aria-modal="true"

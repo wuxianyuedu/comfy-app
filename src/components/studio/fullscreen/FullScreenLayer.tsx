@@ -21,7 +21,8 @@ import type { ReactNode } from "react";
 import { fullScreenLayerClass } from "~/lib/full-screen-layer";
 
 interface FullScreenLayerProps {
-  /** z-index 的 tailwind 工具类（如 `z-50`），各视图按浮层高低自选。 */
+  /** z-index 的 tailwind 工具类。取自浮层刻度表（规范 16 §16.2.5）：
+   *  常规全屏视图用 `${zClass("modal")}`，调试类视图可下探到 `Z.base`。 */
   zClass: string;
   /** 该视图自身的布局 class（`flex flex-col` / `bg-bg` 等）。 */
   className?: string;

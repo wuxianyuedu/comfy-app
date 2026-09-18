@@ -25,8 +25,11 @@ import userEvent from "@testing-library/user-event";
 import { LogPanel } from "./LogPanel";
 import { LOG_PAGE_SIZE, computeOriginCounts, useLogStore } from "./log-store";
 import type { LogEntry } from "./log-store";
+import { Z } from "~/lib/shell/overlay-z";
 import {
   LOG_PANEL_OVERLAY_Z,
+  LOG_PANEL_OVERLAY_Z_CLASS,
+  LOG_PANEL_POPUP_Z,
   LOG_PANEL_POPUP_Z_CLASS,
 } from "./log-panel-layers";
 import { LOG_ROW_SINGLE } from "./log-virtual";
@@ -1004,9 +1007,10 @@ describe("LogPanel 日志面板", () => {
     );
     const { container } = render(<LogPanel />);
 
-    /* 面板遮罩：overlayClass("modal", …) 拼出的最外层，层级取自同一份契约。 */
+    /* 面板遮罩：overlayClass("modal", …) 拼出的最外层，层级取自同一份契约
+       （P4 起是枚举档 `z-modal`，不再是裸数字 —— 故按 class 名查而不是数字）。 */
     const overlay = container.querySelector(
-      `[class*="z-${LOG_PANEL_OVERLAY_Z}"]`,
+      `[class*="${LOG_PANEL_OVERLAY_Z_CLASS}"]`,
     );
     expect(overlay).not.toBeNull();
 
@@ -1019,9 +1023,10 @@ describe("LogPanel 日志面板", () => {
       '[data-slot="select-content"]',
     )?.parentElement;
     expect(positioner?.className ?? "").toContain(LOG_PANEL_POPUP_Z_CLASS);
-    expect(Number(LOG_PANEL_POPUP_Z_CLASS.slice(2))).toBeGreaterThan(
-      LOG_PANEL_OVERLAY_Z,
-    );
+    /* 两档都取自刻度表，关系由刻度表保证（§16.2.5 的 popup > modal）。 */
+    expect(LOG_PANEL_POPUP_Z).toBe(Z.popup);
+    expect(LOG_PANEL_OVERLAY_Z).toBe(Z.modal);
+    expect(Z.popup).toBeGreaterThan(Z.modal);
   });
 
   /* 零条目同样不留占位：胶囊已删，所以「警告 0 / 错误 0」在任何地方都不出现，

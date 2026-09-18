@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2026-09-18",
+  "note": "视图层刻度表之外的 z-index 存量（规范 16 §16.2.5）。棘轮只许下降；新增请先改走刻度（z-modal / z-popup / Z.*），不要用 --update 放水。豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.5 同源）。",
+  "rules": {
+    "Z1": "行内数字 zIndex（应改走 Z.*，~/lib/shell/overlay-z）",
+    "Z2": "任意值写法 z-[<数字>]（规范 03 §3.2 应写 z-<数字>）",
+    "Z3": "刻度表之外的裸数字档 z-<数字>（应写 z-base / z-canvas-ui / z-canvas-max / z-modal / z-popup / z-toast）"
+  },
+  "total": 0,
+  "files": {}
+}

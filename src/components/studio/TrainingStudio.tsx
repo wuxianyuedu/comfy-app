@@ -101,7 +101,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       </div>
 
       {/* ── Top Toolbar ───────────────────────────── */}
-      <header className="border-border-subtle bg-panel/88 relative z-10 flex h-12 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md">
+      <header className="border-border-subtle bg-panel/88 z-base relative flex h-12 shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <span className="u-title">LoRA 训练工作室</span>
           <span className="text-ink-fainter text-xs">· 炼丹</span>
@@ -141,7 +141,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       </header>
 
       {/* ── 三栏主体 ─────────────────────── */}
-      <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
+      <div className="z-base relative flex min-h-0 flex-1 overflow-hidden">
         {/* ═══ 左：数据集面板（300px） ═══ */}
         <aside className="border-border-subtle bg-panel-deep/85 flex w-[300px] shrink-0 flex-col border-r backdrop-blur-sm">
           <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
@@ -776,7 +776,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
       </div>
 
       {/* ── Status Bar ────────────────────────────── */}
-      <footer className="border-border-subtle bg-panel-deep/95 relative z-10 flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
+      <footer className="border-border-subtle bg-panel-deep/95 z-base relative flex h-6 shrink-0 items-center justify-center gap-2 border-t backdrop-blur-sm">
         <span className="bg-success-strong shadow-success-strong/40 inline-block h-[7px] w-[7px] rounded-full shadow-sm" />
         <span className="text-ink-muted text-[11px]">
           ComfyUI·Kohya 就绪 · 本地算力 · 零授权

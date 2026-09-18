@@ -370,7 +370,7 @@ export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
       onClick={onClick}
       title="画布设置 · 调整格子 / 坐标尺 / 缩略图 等"
       aria-label="画布设置"
-      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-12 right-3 z-6 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
+      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-12 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12px]">
         ⚙
@@ -402,7 +402,7 @@ export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       title="回到有节点的位置（只移动视口，不改动节点布局）"
       aria-label="重新居中"
-      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright pointer-events-auto absolute top-3 right-3 z-6 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
+      className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg backdrop-blur-sm select-none"
     >
       <span aria-hidden className="mr-1 align-baseline text-[12px]">
         🎯

@@ -6,6 +6,7 @@ import { NodesTab } from "./NodesTab";
 import { ParseConsole, ReportCards } from "./SettingsParts";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { Button } from "~/components/ui/button";
+import { zClass } from "~/lib/shell/overlay-z";
 
 /** 自定义节点导入对话框。
  *
@@ -32,7 +33,7 @@ export function CustomNodesSettings() {
         <div
           className={overlayClass(
             "modal",
-            "bg-canvas-deep z-50 grid place-items-center p-4",
+            `${zClass("modal")} bg-canvas-deep grid place-items-center p-4`,
           )}
           onClick={() => ctrl.setOpen(false)}
         >

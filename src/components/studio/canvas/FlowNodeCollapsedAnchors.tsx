@@ -8,6 +8,7 @@
 import { Handle, Position } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { portColor } from "~/lib/comfyui/types";
+import { Z } from "~/lib/shell/overlay-z";
 import { resolveAnchorCylinder } from "./workflow-node-palette";
 import type { WorkflowNodeData } from "../workflow-types";
 
@@ -53,7 +54,7 @@ export function FlowNodeCollapsedAnchors({
             background: anchor.gradient,
             border: anchor.border,
             boxShadow: anchor.boxShadow,
-            zIndex: 10,
+            zIndex: Z.base,
           }}
         />
       )}
@@ -73,7 +74,7 @@ export function FlowNodeCollapsedAnchors({
             background: anchor.gradient,
             border: anchor.border,
             boxShadow: anchor.boxShadow,
-            zIndex: 10,
+            zIndex: Z.base,
           }}
         />
       )}

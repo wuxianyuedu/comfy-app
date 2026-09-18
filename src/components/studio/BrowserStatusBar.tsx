@@ -90,7 +90,7 @@ export function BrowserStatusBar() {
 
   return (
     <div
-      className="border-border bg-panel/95 text-ink-muted fixed right-0 bottom-0 left-0 z-[10000] flex h-6 items-center justify-between gap-3 border-t px-3 text-[11px] backdrop-blur-sm"
+      className="border-border bg-panel/95 text-ink-muted z-toast fixed right-0 bottom-0 left-0 flex h-6 items-center justify-between gap-3 border-t px-3 text-[11px] backdrop-blur-sm"
       aria-label="底部状态栏"
     >
       <div className="flex min-w-0 items-center gap-1.5">

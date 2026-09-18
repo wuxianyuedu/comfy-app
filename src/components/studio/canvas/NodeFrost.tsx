@@ -1,5 +1,6 @@
 "use client";
 /* 拆出来的毛玻璃 / 覆盖层组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
+import { Z } from "~/lib/shell/overlay-z";
 import { useStore } from "@xyflow/react";
 import { pseudoFrostPalette, hexToRgba } from "../workflow-utils";
 export const PSEUDO_FROST_NOISE_URL =
@@ -56,7 +57,7 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
     <div
       aria-hidden
       className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg"
-      style={{ zIndex: 0 }}
+      style={{ zIndex: Z.base }}
     >
       {PSEUDO_FROST_BLOBS.map((blob, idx) => (
         <div

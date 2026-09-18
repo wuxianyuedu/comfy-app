@@ -50,7 +50,7 @@ export function CanvasPanelToolbar({
     <div
       className={`border-border-strong bg-panel/95 dark:shadow-black/50p-blur-md flex flex-col items-center gap-1 rounded-2xl border p-1.5 shadow-xl shadow-black/20 backdrop-blur ${
         floating
-          ? "absolute top-1/2 left-3 z-20 -translate-y-1/2"
+          ? "z-canvas-ui absolute top-1/2 left-3 -translate-y-1/2"
           : "shrink-0 self-center"
       }`}
     >
