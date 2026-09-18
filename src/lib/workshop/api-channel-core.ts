@@ -59,7 +59,7 @@ export interface ApiImageRequest {
 export interface ApiVideoSubmitRequest {
   prompt: string;
   negative?: string;
-  /** Reference first-frame image (inline data URL) for image-to-video. */
+  /* 图生视频用的参考首帧图（内联 data URL）。 */
   imageDataUrl?: string;
   frames?: number;
   fps?: number;
@@ -67,9 +67,9 @@ export interface ApiVideoSubmitRequest {
 
 /** 视频提交结果：同步返回 URL，或给一个待轮询的任务 id。 */
 export interface ApiVideoSubmitResult {
-  /** Direct URL when the provider returned the finished video synchronously. */
+  /* 上游同步返回成品视频时给出的直链 URL。 */
   url?: string;
-  /** Async task id to poll via pollVideoViaApi when the provider is task-based. */
+  /* 上游是「任务式」接口时，用来轮询的任务 id（经 pollVideoViaApi）。 */
   remoteTaskId?: string;
 }
 
@@ -95,7 +95,7 @@ export function sanitizeChannel(
   const reqPath = (str("path") ?? fallback.path).trim();
   return {
     baseUrl,
-    // Path must be root-relative so `${baseUrl}${path}` stays well-formed.
+    // 路径必须是根相对，拼接 `${baseUrl}${path}` 才能保持格式正确。
     path: reqPath.startsWith("/") ? reqPath : `/${reqPath}`,
     model: (str("model") ?? fallback.model).trim(),
     apiKey: str("apiKey") ?? fallback.apiKey,
