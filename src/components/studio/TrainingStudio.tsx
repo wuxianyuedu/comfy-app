@@ -8,6 +8,7 @@ import { AuroraGlow } from "~/components/studio/ui/AuroraBackground";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { Button } from "~/components/ui/button";
 import { useTrainingStudio } from "./hooks/use-training-studio";
 import {
   OPTIMIZERS,
@@ -126,14 +127,15 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
         <div className="flex-1" />
 
         {/* Primary action (mirrors the form submit) */}
-        <button
-          type="button"
+        <Button
+          variant="primary-solid"
+          size="sm"
           onClick={() => void c.submit()}
           disabled={c.submitting || c.uploading}
-          className="flex items-center gap-1.5 rounded-lg bg-violet-500 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-violet-400 disabled:opacity-50"
+          className="h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
         >
           {c.submitting ? "提交中…" : "开始训练"}
-        </button>
+        </Button>
       </header>
 
       {/* ── Three-Column Body ─────────────────────── */}
@@ -159,13 +161,13 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 {onOpenSettings ? (
                   <>
                     在「
-                    <button
-                      type="button"
+                    <Button
+                      variant="link"
                       onClick={onOpenSettings}
-                      className="underline hover:opacity-80"
+                      className="h-auto text-inherit underline hover:opacity-80"
                     >
                       设置 → 偏好
-                    </button>
+                    </Button>
                     」中填写训练后端 URL（如 Kohya / OneTrainer / ComfyUI
                     训练节点的 HTTP
                     地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
@@ -217,14 +219,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   <span className="text-ink-faint text-[11px] font-medium">
                     逐图 caption 标注
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="link"
                     onClick={c.fillBlank}
                     disabled={!c.form.triggerWord.trim()}
-                    className="text-[10px] text-violet-700 hover:underline disabled:opacity-40 dark:text-violet-400"
+                    className="text-primary h-auto p-0 text-[10px] hover:underline"
                   >
                     用触发词填充空白
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="space-y-1.5">
@@ -256,15 +258,17 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                         placeholder="图片描述，如：a photo of somecjkstyle person"
                         className="border-border bg-canvas-deep text-ink-bright min-w-0 flex-1 rounded border px-2 py-1 text-[11px] outline-none focus:border-violet-500/40"
                       />
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
                         onClick={() =>
                           c.setDataset((prev) => prev.filter((_, j) => j !== i))
                         }
-                        className="text-ink-faint shrink-0 rounded px-1.5 text-[11px] hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+                        className="text-ink-faint hover:text-danger-strong shrink-0 rounded hover:bg-transparent"
                         aria-label="移除"
                       >
                         ✕
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -471,27 +475,33 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                           </p>
                         </div>
                         <div className="flex shrink-0 gap-2">
-                          <button
+                          <Button
+                            variant="primary"
+                            size="xs"
                             onClick={() => router.push(`/train/${job.id}`)}
-                            className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] text-violet-700 hover:bg-violet-500/20 dark:text-violet-400"
+                            className="h-auto rounded-lg px-2.5 py-1"
                           >
                             详情 ↗
-                          </button>
+                          </Button>
                           {(job.status === "QUEUED" ||
                             job.status === "RUNNING") && (
-                            <button
+                            <Button
+                              variant="outline"
+                              size="xs"
                               onClick={() => void c.cancelJob(job.id)}
-                              className="border-border text-ink-strong hover:bg-subtle rounded-lg border px-2.5 py-1 text-[11px]"
+                              className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-2.5 py-1"
                             >
                               取消
-                            </button>
+                            </Button>
                           )}
-                          <button
+                          <Button
+                            variant="outline"
+                            size="xs"
                             onClick={() => setExpanded(isOpen ? null : job.id)}
-                            className="border-border text-ink-strong hover:bg-subtle rounded-lg border px-2.5 py-1 text-[11px]"
+                            className="border-border text-ink-strong hover:bg-subtle h-auto rounded-lg px-2.5 py-1"
                           >
                             {isOpen ? "收起" : "日志"}
-                          </button>
+                          </Button>
                         </div>
                       </div>
 
@@ -758,13 +768,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               </p>
             )}
 
-            <button
+            <Button
+              variant="primary-solid"
               onClick={() => void c.submit()}
               disabled={c.submitting || c.uploading}
-              className="w-full rounded-xl bg-violet-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-400 disabled:opacity-50"
+              className="h-auto w-full rounded-xl py-2.5 font-semibold"
             >
               {c.submitting ? "提交中…" : "开始训练"}
-            </button>
+            </Button>
             <p className="text-ink-faintest text-center text-[10px] leading-relaxed">
               全部在本机运行 · 无需登录 · 零授权
             </p>

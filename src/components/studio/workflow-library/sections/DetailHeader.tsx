@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/page-loading";
 import { SourceTag } from "~/components/studio/ui/SourceTag";
 import { TaskTypeChip } from "~/components/studio/ui/TaskTypeChip";
 import { modeLabel } from "../workflow-library-config";
@@ -190,9 +191,11 @@ export function DetailHeader({
             <ActionButton
               onClick={onResync}
               icon={
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${busyResync ? "animate-spin" : ""}`}
-                />
+                busyResync ? (
+                  <Spinner className="size-3.5" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )
               }
               label={busyResync ? "同步中" : "同步"}
               disabled={busyResync}

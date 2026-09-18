@@ -14,6 +14,7 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 import { Button } from "~/components/ui/button";
+import { StatusDot } from "~/components/ui/status-dot";
 
 import {
   getWorkflowRunStoreSnapshot,
@@ -87,9 +88,7 @@ export function WorkflowRunLogButton({
     >
       <span className="text-ink-strong flex items-center gap-1.5 font-medium">
         执行日志
-        {live && (
-          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
-        )}
+        {live && <StatusDot state="busy" sizeClass="size-1.5" pulse />}
       </span>
       <span className="text-ink-fainter text-[10.5px]">{statusText}</span>
     </Button>

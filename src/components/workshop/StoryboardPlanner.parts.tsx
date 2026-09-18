@@ -4,6 +4,7 @@ import { Trash } from "lucide-react";
 import { DarkSelect } from "~/components/studio/ui/DarkSelect";
 import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
+import { Button } from "~/components/ui/button";
 import type { ShotProgress } from "./useStoryboardPlanner";
 
 const SHOT_TYPES: ShotType[] = [
@@ -85,14 +86,15 @@ export function ShotRow({
           {shot.sceneHeading}
         </span>
         <StatusBadge status={shot.status} />
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={() => onRemove(shot.id)}
-          className="text-muted-foreground ml-auto hover:text-red-700 dark:text-red-300 dark:hover:text-red-400"
+          className="text-muted-foreground hover:text-danger-strong ml-auto"
           aria-label="删除镜头"
         >
           <Trash size={15} />
-        </button>
+        </Button>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -155,9 +157,10 @@ export function ShotRow({
             {characters.map((character) => {
               const on = shot.characterIds.includes(character.id);
               return (
-                <button
+                <Button
                   key={character.id}
-                  type="button"
+                  variant={on ? "default" : "outline"}
+                  size="xs"
                   onClick={() =>
                     onUpdate(shot.id, {
                       characterIds: on
@@ -165,14 +168,10 @@ export function ShotRow({
                         : [...shot.characterIds, character.id],
                     })
                   }
-                  className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
-                    on
-                      ? "bg-primary text-white"
-                      : "border-border text-muted-foreground hover:text-ink border"
-                  }`}
+                  className="h-auto rounded-full px-2 py-0.5"
                 >
                   {character.name || "未命名"}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -184,15 +183,16 @@ export function ShotRow({
         <p className="text-muted-foreground mb-1 flex items-center justify-between text-xs font-medium">
           生图提示词
           {onPolish && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={onPolish}
               disabled={polishBusy}
               title="用模型润色为更有画面感的提示词"
-              className="text-primary hover:bg-primary/10 rounded px-1.5 py-0.5 text-[10px] disabled:opacity-40"
+              className="text-primary hover:bg-primary/10 h-auto rounded px-1.5 py-0.5 text-[10px]"
             >
               {polishBusy ? "润色中…" : "✨ AI 润色"}
-            </button>
+            </Button>
           )}
         </p>
         <p className="text-ink/80 text-xs leading-relaxed break-words">
@@ -238,11 +238,12 @@ export function ShotRow({
         })()}
 
       {/* Generate button */}
-      <button
-        type="button"
+      <Button
+        variant="primary-solid"
+        size="xs"
         onClick={() => onGenerate(shot)}
         disabled={shot.status === "running" || generating || !shot.prompt}
-        className="bg-primary/90 mt-2 w-full rounded-lg py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+        className="mt-2 h-auto w-full rounded-lg py-2"
       >
         {shot.status === "running"
           ? progressByShot?.[shot.id]
@@ -251,7 +252,7 @@ export function ShotRow({
           : shot.status === "done"
             ? "重新生成"
             : "生成此镜头"}
-      </button>
+      </Button>
 
       {shot.imageUrl && (
         <img

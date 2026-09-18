@@ -22,6 +22,7 @@ import {
   Undo,
 } from "lucide-react";
 import type { OutlineItem } from "./script-markdown-utils";
+import { Button } from "~/components/ui/button";
 
 export const SCROLLBAR_VISIBLE_CLASSES =
   "overflow-y-auto [&::-webkit-scrollbar]:h-2.5! [&::-webkit-scrollbar]:w-2.5! [&::-webkit-scrollbar-track]:bg-transparent! [&::-webkit-scrollbar-thumb]:rounded-full! [&::-webkit-scrollbar-thumb]:bg-border-strong! [&::-webkit-scrollbar-thumb:hover]:bg-ink-muted!";
@@ -37,14 +38,15 @@ export function ToolbarButton({
   title: string;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="icon"
       onClick={onClick}
       title={title}
-      className="text-ink-muted hover:bg-subtle hover:text-ink-bright grid h-8 w-8 place-items-center rounded-lg transition-colors"
+      className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-lg"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -170,13 +172,15 @@ export function EditorToolbar({
       </ToolbarGroup>
 
       <div className="ml-auto flex items-center gap-2">
-        <button
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={onTogglePreview}
-          className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+          className="text-ink-muted hover:bg-subtle hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
         >
           {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
           {showPreview ? "返回编辑" : "预览"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -202,20 +206,22 @@ export function OutlineSidebar({
       ) : (
         <nav className="space-y-1">
           {outline.map((item, index) => (
-            <button
+            <Button
               key={`${item.line}-${index}`}
+              variant="ghost"
+              size="xs"
               onClick={() => onJump(item.line)}
-              className={`hover:bg-subtle hover:text-ink-bright block w-full truncate rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+              className={`hover:bg-subtle hover:text-ink-bright block h-auto w-full truncate rounded-md px-2.5 py-1.5 text-left ${
                 item.level === 1
                   ? "text-ink-strong font-medium"
                   : item.level === 2
-                    ? "text-ink-muted pl-5"
-                    : "text-ink-faint pl-8"
+                    ? "text-ink-muted pl-5 font-normal"
+                    : "text-ink-faint pl-8 font-normal"
               }`}
               title={item.text}
             >
               {item.text}
-            </button>
+            </Button>
           ))}
         </nav>
       )}

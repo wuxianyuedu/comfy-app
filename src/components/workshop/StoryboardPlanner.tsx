@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "~/components/ui/icon";
+import { Button } from "~/components/ui/button";
 import { ExtractToolbar } from "~/components/workshop/ExtractToolbar";
 import { useStoryboardPlanner, type Props } from "./useStoryboardPlanner";
 import { ShotRow } from "./StoryboardPlanner.parts";
@@ -54,19 +55,21 @@ export function StoryboardPlanner(props: Props) {
           <span className="text-muted-foreground">({shots.length})</span>
         </h3>
         <div className="flex gap-2">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="xs"
             onClick={importFromScript}
             disabled={scenes.length === 0 || aiBusy}
-            className="border-border text-primary hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs disabled:opacity-40"
+            className="border-border text-primary hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
           >
             ↓ 从剧本导入
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary-solid"
+            size="xs"
             onClick={handleAISplit}
             disabled={scenes.length === 0 || aiBusy}
-            className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="h-auto rounded-lg px-3 py-1.5"
           >
             {aiBusy ? (
               "AI 拆镜中…"
@@ -80,15 +83,16 @@ export function StoryboardPlanner(props: Props) {
                 AI 智能拆镜
               </>
             )}
-          </button>
+          </Button>
           {shots.length > 0 && (
             <>
-              <button
-                type="button"
+              <Button
+                variant="primary-solid"
+                size="xs"
                 title="用模型把模板提示词润色为更有画面感的生图提示词"
                 onClick={() => void polishAll()}
                 disabled={polishBusyAll || polishBusyId != null || aiBusy}
-                className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                className="h-auto rounded-lg px-3 py-1.5"
               >
                 {polishBusyAll ? (
                   "润色中…"
@@ -102,24 +106,26 @@ export function StoryboardPlanner(props: Props) {
                     AI 润色提示词
                   </>
                 )}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
                 onClick={clearShots}
-                className="border-border text-muted-foreground hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs"
+                className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
               >
                 清空
-              </button>
+              </Button>
             </>
           )}
-          <button
-            type="button"
+          <Button
+            variant="primary-solid"
+            size="xs"
             onClick={generateAll}
             disabled={idleCount === 0 || generating}
-            className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="h-auto rounded-lg px-3 py-1.5"
           >
             {generating ? "生成中…" : `批量生成 (${idleCount})`}
-          </button>
+          </Button>
         </div>
       </div>
 

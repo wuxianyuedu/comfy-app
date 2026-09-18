@@ -8,6 +8,7 @@
  * ════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
+import { Button } from "~/components/ui/button";
 import type { NodeJsonViewerRequest, RawOutputMeta } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
@@ -262,45 +263,35 @@ export function NodeJsonPopover({
                 {nodeClass}
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="xs"
               onClick={handleCopy}
               title="复制 JSON 到剪贴板"
               style={{
-                fontSize: 11,
-                padding: "4px 8px",
-                borderRadius: 6,
                 background: copied ? accentAlpha(15) : "var(--color-subtle)",
                 color: copied ? accent : "var(--color-ink)",
                 border: `1px solid ${copied ? accentAlpha(40) : "var(--color-border-strong)"}`,
-                cursor: "pointer",
-                transition: "all 120ms ease",
               }}
+              className="font-normal"
             >
               {copied ? "✓ 已复制" : "⧉ 复制"}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
               onClick={onDismiss}
               title="关闭 (Esc)"
               aria-label="关闭"
               style={{
-                width: 26,
-                height: 26,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 6,
                 background: "var(--color-subtle)",
                 border: "1px solid var(--color-border-strong)",
                 color: "var(--color-muted)",
-                cursor: "pointer",
-                fontSize: 14,
-                lineHeight: 1,
               }}
+              className="rounded-md text-[14px] leading-none"
             >
               ×
-            </button>
+            </Button>
           </div>
           <div
             role="tablist"
@@ -316,9 +307,9 @@ export function NodeJsonPopover({
             {(["view", "saved"] as const).map((tab) => {
               const active = tab === tab;
               return (
-                <button
+                <Button
                   key={tab}
-                  type="button"
+                  variant="ghost"
                   role="tab"
                   aria-selected={active}
                   onClick={() => setTab(tab)}
@@ -340,12 +331,11 @@ export function NodeJsonPopover({
                       ? accentAlpha(13)
                       : "var(--color-subtle)",
                     color: active ? "var(--color-ink)" : "var(--color-muted)",
-                    cursor: "pointer",
-                    transition: "all 120ms ease",
                   }}
+                  className="h-auto font-normal"
                 >
                   {tab === "saved" ? "API · 保存格式" : "RAW · 节点视图"}
-                </button>
+                </Button>
               );
             })}
           </div>

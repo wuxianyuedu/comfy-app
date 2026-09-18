@@ -5,6 +5,7 @@ import {
   ExtractModelSelect,
   parseChannelOption,
 } from "~/components/workshop/ExtractModelSelect";
+import { Button } from "~/components/ui/button";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
@@ -118,23 +119,25 @@ export function ExtractToolbar({
           value={channelValue}
           onChange={onChannelValueChange}
         />
-        <button
-          type="button"
+        <Button
+          variant="primary-solid"
+          size="xs"
           onClick={onExtract}
           disabled={busy || extractDisabled}
           title={extractDisabled ? extractDisabledReason : undefined}
-          className="bg-primary rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+          className="h-auto rounded-lg px-3 py-1.5"
         >
           {busy ? "提取中…" : "提取"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="outline"
+          size="xs"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className="border-border text-primary hover:bg-subtle rounded-lg border px-3 py-1.5 text-xs transition-colors disabled:opacity-40"
+          className="border-border text-primary hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
         >
           外部导入
-        </button>
+        </Button>
         <input
           ref={fileRef}
           type="file"
@@ -183,16 +186,16 @@ export function ExtractToolbar({
           <summary className="text-primary flex cursor-pointer items-center gap-2 text-[11px] font-medium select-none">
             <span>执行日志（{executionLog.length} 条）</span>
             {logStage && (
-              <button
-                type="button"
+              <Button
+                variant="link"
                 onClick={(event) => {
                   event.stopPropagation();
                   loadHistory();
                 }}
-                className="text-muted-foreground hover:text-primary text-[10px] font-normal underline underline-offset-2"
+                className="text-muted-foreground hover:text-primary h-auto p-0 text-[10px] font-normal underline underline-offset-2"
               >
                 历史
-              </button>
+              </Button>
             )}
           </summary>
           <ul className="mt-2 space-y-2">
