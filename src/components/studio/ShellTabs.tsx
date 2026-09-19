@@ -35,6 +35,7 @@ import {
   MAIN_TAB_ID,
   type ShellTab,
 } from "~/lib/shell/shell-tabs-store";
+import { copyText } from "~/lib/browser-io";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { shouldUseTitleBarTabs } from "~/lib/shell/title-bar-derive";
 import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
@@ -163,7 +164,7 @@ function TabBlockedNotice({
             variant="ghost"
             size="xs"
             onClick={() => {
-              void navigator.clipboard?.writeText(url);
+              void copyText(url);
             }}
             className="text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto shrink-0 rounded px-2 py-1"
           >

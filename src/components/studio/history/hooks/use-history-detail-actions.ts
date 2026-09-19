@@ -9,6 +9,8 @@
 
 import { useCallback, useState } from "react";
 
+import { copyText, downloadJson } from "~/lib/browser-io";
+
 import { useToast } from "../../ToastProvider";
 
 /** comfyapp:// 协议未接管的引导状态：为 null 表示尚未发起过导航。 */
@@ -32,29 +34,6 @@ export interface HistoryDetailActions {
 
 /** 协议导航后判定超时：2s 内页面失焦视为 OS 已接管。 */
 const PROTOCOL_DETECT_MS = 2000;
-
-/** 把文本写进剪贴板；Clipboard API 被禁时降级到临时 textarea + execCommand。 */
-export async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    /* 继续走 fallback */
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 动作层：接收两个 tRPC 调用（由调用方注入，便于测试替换）。
@@ -150,15 +129,7 @@ export function useHistoryDetailActions(
           toast.error("未找到工作流快照");
           return;
         }
-        const blob = new Blob([JSON.stringify(result.workflow, null, 2)], {
-          type: "application/json",
-        });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = "workflow.json";
-        anchor.click();
-        URL.revokeObjectURL(url);
+        downloadJson(result.workflow, "workflow.json");
       } catch {
         toast.error("下载失败");
       } finally {

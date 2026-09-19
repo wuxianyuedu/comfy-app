@@ -32,6 +32,7 @@ import {
 import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
+import { copyText } from "~/lib/browser-io";
 import { Icon } from "~/components/ui/icon";
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
@@ -343,12 +344,9 @@ export function JsonViewer({
   // ── 拷贝 ──
   const [copied, setCopied] = useState(false);
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    if (await copyText(JSON.stringify(data, null, 2))) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
     }
   };
 

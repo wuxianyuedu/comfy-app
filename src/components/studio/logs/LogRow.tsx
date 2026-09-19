@@ -19,6 +19,7 @@ import React, { memo, useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
+import { copyText } from "~/lib/browser-io";
 import { formatTime } from "./log-format";
 import {
   LEVEL_BADGE_STYLES,
@@ -129,15 +130,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
 
   const onCopy = async () => {
     const text = formatEntryForClipboard(entry);
-    try {
-      if (typeof navigator === "undefined" || !navigator.clipboard) {
-        throw new Error("clipboard unavailable");
-      }
-      await navigator.clipboard.writeText(text);
-      flash("done");
-    } catch {
-      flash("failed");
-    }
+    flash((await copyText(text)) ? "done" : "failed");
   };
 
   return (
@@ -231,11 +224,9 @@ export const LogRow = memo(function LogRow({
       {entry.location && (
         <Button
           variant="ghost"
-          onClick={() =>
-            void navigator.clipboard
-              .writeText(entry.location!)
-              .catch(() => undefined)
-          }
+          onClick={() => {
+            void copyText(entry.location!);
+          }}
           className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
           title={`${entry.location}（点击复制）`}
         >

@@ -12,6 +12,7 @@ import {
 } from "~/lib/project-canvas/canvas-store";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
+import { timeAgo } from "~/lib/time-format";
 
 /**
  * 项目页面（"所有项目"标签）— 仅展示本地画布项目。
@@ -170,7 +171,9 @@ export function WorksGallery({
                             : "空画布"}
                         </p>
                         <p className="text-ink-fainter mt-0.5 text-[11px]">
-                          {projectTimeAgo(canvasProject.updatedAt)}
+                          {timeAgo(canvasProject.updatedAt, {
+                            suffix: "修改",
+                          }) ?? "刚刚修改"}
                         </p>
                       </div>
                     </Button>
@@ -252,14 +255,4 @@ export function WorksGallery({
       />
     </div>
   );
-}
-
-function projectTimeAgo(updatedAt: number) {
-  const diff = Date.now() - updatedAt;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚修改";
-  if (m < 60) return `${m} 分钟前修改`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前修改`;
-  return `${Math.floor(h / 24)} 天前修改`;
 }
