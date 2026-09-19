@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
-import type { NodeJsonViewerRequest, RawOutputMeta } from "./workflow-types";
+import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
 /* 浮层本体。垂直堆三块：
@@ -43,13 +43,8 @@ export type RawNodeJson = {
 
 export type RawNodeView = {
   entry: RawNodeJson | null;
-  raw?: {
-    widgets_values: unknown[];
-    outputs: RawOutputMeta[];
-    flags: Record<string, unknown>;
-    properties: Record<string, unknown>;
-    mode: number;
-  };
+  /** 与 `RawMetaEntry` 同源（同一份节点元数据，可选字段在纯 API 导入时缺失）。 */
+  raw?: RawMetaEntry;
   rawNode?: RawNodeJson | null;
   pos: [number, number] | null;
 };
