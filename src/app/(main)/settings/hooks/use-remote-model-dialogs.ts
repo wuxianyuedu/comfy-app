@@ -16,12 +16,8 @@ import { useEffect, useState } from "react";
 
 import {
   defaultVideoFields,
-  hasUsageFieldKey,
-  isMediaField,
-  sanitizeModeValue,
   usageFieldsToJson,
   usageTestDraftKey,
-  videoModeHidesMedia,
   type UsageField,
 } from "~/lib/llm/usage-test-config";
 import type {
@@ -29,8 +25,10 @@ import type {
   UsageTestResult,
 } from "~/lib/llm/usage-test-client";
 import type { RemoteModelEntry, RemoteModelKind } from "~/lib/llm/types";
+import { validateRemoteModelFields } from "~/lib/llm/remote-model-schema";
 
 import type { ReadySettingsPageController } from "./use-settings-page";
+import { createUsageFieldEditor } from "./usage-field-editor";
 
 /** 添加 / 编辑模型弹窗的表单草稿。 */
 export interface ModelDialogForm {
@@ -45,6 +43,9 @@ export type ModelDialog =
   | { mode: "add" }
   | { mode: "edit"; original: string; entry: RemoteModelEntry }
   | null;
+
+/** 字段级错误的键（与 `ModelDialogForm` 同域）。 */
+type ModelDialogField = keyof ModelDialogForm;
 
 /** 「实际使用」测试弹窗的状态：参数可自定义，结果按用途渲染。 */
 export interface UsageTestDialogState {
@@ -108,19 +109,6 @@ function restoreUsageTestDraft(
   return usageTestDrafts.get(usageTestDraftKey(kind, name)) ?? null;
 }
 
-/** 读取本地图片文件为 data URL，供图片字段上传（不回服务端，纯前端转码）。 */
-function readImageAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      /* readAsDataURL 的结果必是字符串（data:image/...） */
-      resolve(typeof reader.result === "string" ? reader.result : "");
-    };
-    reader.onerror = () => reject(new Error("读取图片失败"));
-    reader.readAsDataURL(file);
-  });
-}
-
 /** 每个模型条目的「测试连接」进行态与结果。 */
 export interface RowProbe {
   name: string;
@@ -136,6 +124,9 @@ export interface RemoteModelDialogs {
   setAddForm: React.Dispatch<React.SetStateAction<ModelDialogForm>>;
   /** 弹窗内提交失败的错误文案（留在原地展示）。 */
   addError: string | null;
+  /** 字段级校验错误（键 = 字段名）。规则住在 `~/lib/llm/remote-model-schema`，
+   *  这里只转述 —— 字段级与集合级（重名查重）分开，见该模块头注释。 */
+  fieldErrors: Partial<Record<ModelDialogField, string>>;
   /** 编辑态显式清除独立密钥的勾选。 */
   clearKey: boolean;
   setClearKey: React.Dispatch<React.SetStateAction<boolean>>;
@@ -203,6 +194,9 @@ export function useRemoteModelDialogs(
   } | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<ModelDialogField, string>>
+  >({});
   const [clearKey, setClearKey] = useState(false);
   const [usageTest, setUsageTest] = useState<UsageTestDialogState | null>(null);
   const [rowProbe, setRowProbe] = useState<RowProbe | null>(null);
@@ -213,6 +207,10 @@ export function useRemoteModelDialogs(
     if (usageTest) rememberUsageTestDraft(usageTest);
   }, [usageTest]);
 
+  /* 字段行编辑器是一个自洽的交互面（只读写 usageTest.fields），已切到
+   * `./usage-field-editor`；状态仍由本 hook 一处持有，子模块只提供动作。 */
+  const editor = createUsageFieldEditor(setUsageTest);
+
   function openAddDialog(kind: RemoteModelKind = "chat") {
     setDialog({ mode: "add" });
     setAddForm({ baseUrl: "", apiKey: "", model: "", kind });
@@ -220,6 +218,7 @@ export function useRemoteModelDialogs(
     setTestMsg(null);
     setSuggestions([]);
     setAddError(null);
+    setFieldErrors({});
   }
 
   function openEditDialog(entry: RemoteModelEntry) {
@@ -234,6 +233,7 @@ export function useRemoteModelDialogs(
     setTestMsg(null);
     setSuggestions([]);
     setAddError(null);
+    setFieldErrors({});
   }
 
   function closeDialog() {
@@ -363,7 +363,8 @@ export function useRemoteModelDialogs(
       size: usageTest.size.trim() || undefined,
       /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
        * 视频且 mode=text 时媒体字段已被界面隐藏，这里同样排除，避免 invalid mode */
-      extraJson: usageFieldsToJson(usageFieldsToSend(usageTest)) || undefined,
+      extraJson:
+        usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
     });
     setUsageTest((prev) =>
       prev ? { ...prev, running: false, querying: false, result: out } : prev,
@@ -391,107 +392,18 @@ export function useRemoteModelDialogs(
     );
   }
 
-  /* ── 「额外字段」行编辑器：增删改某一行 / 把某行设为图片 / 应用 mode 预设。
-   *  纯视图交互，不入库；随弹窗关闭即丢弃。 */
-  function patchField(index: number, patch: Partial<UsageField>) {
-    setUsageTest((prev) => {
-      if (!prev) return prev;
-      const fields = prev.fields.map((f, i) =>
-        i === index ? { ...f, ...patch } : f,
-      );
-      return { ...prev, fields };
-    });
-  }
-  function addField(key = "") {
-    setUsageTest((prev) =>
-      prev ? { ...prev, fields: [...prev.fields, { key, value: "" }] } : prev,
-    );
-  }
-  /** 一键添加固定名称字段（images / first_frame / seed 等预设）：
-   *  已存在同名行则不重复加，避免堆出无用的空行。 */
-  function addPresetField(key: string) {
-    setUsageTest((prev) =>
-      prev && !hasUsageFieldKey(prev.fields, key)
-        ? { ...prev, fields: [...prev.fields, { key, value: "" }] }
-        : prev,
-    );
-  }
-  function removeField(index: number) {
-    setUsageTest((prev) =>
-      prev
-        ? { ...prev, fields: prev.fields.filter((_, i) => i !== index) }
-        : prev,
-    );
-  }
-  async function pickFieldImage(index: number, file: File | undefined) {
-    if (!file) return;
-    try {
-      const dataUrl = await readImageAsDataUrl(file);
-      patchField(index, { value: dataUrl });
-    } catch (err) {
-      patchField(index, {
-        value: `读取图片失败：${err instanceof Error ? err.message : "未知错误"}`,
-      });
-    }
-  }
-  /** 随请求发送的字段行：视频 mode=text 时媒体字段已被隐藏（不渲染也不发送），
-   *  其余场景原样保留。过滤逻辑读 usage-test-config 的纯函数，视图不重复实现。 */
-  function usageFieldsToSend(state: UsageTestDialogState): UsageField[] {
-    const hideMedia =
-      state.kind === "video" && videoModeHidesMedia(state.fields);
-    return hideMedia
-      ? state.fields.filter((f) => !isMediaField(f.key))
-      : state.fields;
-  }
-
-  /** 设置视频 mode 快捷值：已有 mode 行则改其值，否则在末尾追加一行。
-   *  若引用图从未落到媒体行（images / first_frame / audios）——例如被误
-   *  填进了 mode 行或首行默认值——先把它搬移过去再设 mode，避免丢图。 */
-  function setVideoMode(mode: string) {
-    setUsageTest((prev) => {
-      if (!prev) return prev;
-      const idx = prev.fields.findIndex((f) => f.key === "mode");
-      if (idx >= 0) {
-        const fields = prev.fields.map((f, i) =>
-          i === idx ? { ...f, value: mode } : f,
-        );
-        return { ...prev, fields };
-      }
-      return {
-        ...prev,
-        fields: [...prev.fields, { key: "mode", value: mode }],
-      };
-    });
-  }
-
-  /** mode 行被图片覆盖时的自愈：把图片搬到 images 行（没有则新建），
-   *  mode 值复位为 text——图片不丢、mode 可见可改。
-   *
-   *  「复位成什么」不在视图层写死：`sanitizeModeValue` 是「坏值 → 可再改的
-   *  值」的唯一出口（同名卡片在 `UsageTestDialog` 里按同一个函数判「已损坏」），
-   *  这里手抄一份 `"text"` 就是同一件事的两个名字（§12.14）。 */
-  function rescueMediaFromMode(index: number, url: string) {
-    setUsageTest((prev) => {
-      if (!prev) return prev;
-      const fields = prev.fields.map((f, i) =>
-        i === index ? { ...f, value: sanitizeModeValue(f.value) } : f,
-      );
-      const emptyImgRow = fields.findIndex(
-        (f) => f.key.trim() === "images" && f.value.trim() === "",
-      );
-      if (emptyImgRow >= 0) {
-        fields[emptyImgRow] = { key: "images", value: url };
-      } else {
-        fields.push({ key: "images", value: url });
-      }
-      return { ...prev, fields };
-    });
-  }
-
   /** 添加 / 编辑提交即落库（远端模型清单已无单独的保存按钮）；
    *  失败时弹窗留在原地展示错误。 */
   async function submitDialog() {
     setAddError(null);
+    /* 第一关：字段级规则（纯函数，住在 lib 的 schema 里）。不过就逐字段标红，
+     * 不再往服务端发 —— 此前只有一条无差别的横幅提示，用户得自己猜是哪一项。 */
+    const fields = validateRemoteModelFields(addForm);
+    if (Object.keys(fields).length > 0) {
+      setFieldErrors(fields);
+      return;
+    }
+    setFieldErrors({});
     const baseUrl = addForm.baseUrl.trim();
     if (dialog?.mode === "edit") {
       const result = await c.updateRemoteModel(dialog.original, {
@@ -503,7 +415,9 @@ export function useRemoteModelDialogs(
         kind: addForm.kind,
       });
       if (!result.ok) {
-        setAddError(result.error ?? "保存失败");
+        /* 集合级失败（重名 / 条目已不存在）里的「重名」本质是名称字段的问题，
+         * 一并标在该字段上，用户不必从横幅文案里反推是哪个输入框。 */
+        markCollectionError(result.error, "保存失败");
         return;
       }
       setDialog(null);
@@ -517,10 +431,24 @@ export function useRemoteModelDialogs(
       kind: addForm.kind,
     });
     if (!result.ok) {
-      setAddError(result.error ?? "添加失败");
+      markCollectionError(result.error, "添加失败");
       return;
     }
     setDialog(null);
+  }
+
+  /** 把集合级（要看列表的）失败错位到具体字段上：重名 → `model` 字段。
+   *  其余（配置未就绪 / 条目已不存在）没有对应字段，仍走横幅。 */
+  function markCollectionError(
+    error: string | undefined,
+    fallback: string,
+  ): void {
+    const text = error ?? fallback;
+    if (text.includes("已在列表中")) {
+      setFieldErrors((prev) => ({ ...prev, model: text }));
+      return;
+    }
+    setAddError(text);
   }
 
   return {
@@ -528,6 +456,7 @@ export function useRemoteModelDialogs(
     closeDialog,
     addForm,
     setAddForm,
+    fieldErrors,
     addError,
     clearKey,
     setClearKey,
@@ -546,13 +475,6 @@ export function useRemoteModelDialogs(
     patchUsageTest,
     runUsageTest,
     continueUsageWait,
-    patchField,
-    addField,
-    addPresetField,
-    removeField,
-    pickFieldImage,
-    setVideoMode,
-    rescueMediaFromMode,
-    usageFieldsToSend,
+    ...editor,
   };
 }

@@ -227,6 +227,30 @@ describe("check-file-structure.cjs（提交门槛）", () => {
       const { code } = run();
       expect(code).toBe(0);
     });
+
+    it("样式文件（.css）里的流水注释同样被阻断", () => {
+      /* 只扫 TS 时 `.css` 是盲区，而样式块恰恰常被整段搬运 —— 收口前
+         globals.css 里就有三处（编号 T10 / T11）长期未被发现。 */
+      mkdirSync(join(workdir, "src", "app"), { recursive: true });
+      writeFileSync(
+        join(workdir, "src", "app", "globals.css"),
+        "/* 沉浸式表面 — T11 */\n.a { color: red; }\n",
+      );
+      const { code, output } = run();
+      expect(code).toBe(1);
+      expect(output).toContain("R10");
+      expect(output).toContain("globals.css");
+    });
+
+    it("样式文件里只写当前 Why 的注释放行", () => {
+      mkdirSync(join(workdir, "src", "app"), { recursive: true });
+      writeFileSync(
+        join(workdir, "src", "app", "globals.css"),
+        "/* 滚动条外观的唯一出口：三档取值各有出处 */\n.a { color: red; }\n",
+      );
+      const { code } = run();
+      expect(code).toBe(0);
+    });
   });
 
   // ── R11：Next 16 起代理约定名是 proxy（`middleware` 已废弃，ISSUE #489）──
@@ -1058,7 +1082,9 @@ Write-Output ("|END")
       );
       expect(out).toContain("CODE=1");
       expect(out).toContain("正在占用的进程：PID 921");
-      expect(out).toContain(`← ${join(productDir, "_internal", "VCRUNTIME140.dll")}`);
+      expect(out).toContain(
+        `← ${join(productDir, "_internal", "VCRUNTIME140.dll")}`,
+      );
       expect(out).toContain("taskkill /PID 921 /T /F");
     },
   );
@@ -1073,7 +1099,10 @@ Write-Output ("|END")
           Id: 931,
           Name: "node",
           Path: "D:\\nodejs\\node.exe",
-          Modules: ["C:\\Windows\\System32\\kernel32.dll", "D:\\nodejs\\node.dll"],
+          Modules: [
+            "C:\\Windows\\System32\\kernel32.dll",
+            "D:\\nodejs\\node.dll",
+          ],
         },
       ];
       const out = runGuard(
@@ -1090,12 +1119,19 @@ Write-Output ("|END")
       const productDir = join(root, "start-tauri");
       const launcherExe = join(productDir, "start-tauri.exe");
       const processes = [
-        { Id: 811, Name: "start-tauri", Path: launcherExe, Modules: [launcherExe] },
+        {
+          Id: 811,
+          Name: "start-tauri",
+          Path: launcherExe,
+          Modules: [launcherExe],
+        },
       ];
       const json = JSON.stringify([
         { Id: 811, Path: launcherExe, Cmd: "", Name: "start-tauri.exe" },
       ]);
-      const out = runGuard(assertLauncherScript(json, { processes, productDir }));
+      const out = runGuard(
+        assertLauncherScript(json, { processes, productDir }),
+      );
       expect(out).toContain("CODE=1");
       expect(out).toContain("正在运行的启动器：PID 811");
       expect(out).not.toContain("正在占用的进程");
