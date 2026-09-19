@@ -163,7 +163,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     }))
                   }
                   marker="caret"
-                  className="hover:bg-subtle justify-between gap-2 rounded-xl px-3 py-2.5"
+                  /* 整排的排布在 Root 上（`rootClassName`）：触发开关与右侧的
+                   * 「解析本目录」是 Root 的**并列**子元素，Root 不写 `flex`
+                   * 它们就各自独占一行（规范 16 §16.2.4.13 迁移口径第 2 条）。 */
+                  rootClassName="flex items-center gap-2"
+                  className="hover:bg-subtle w-auto flex-1 justify-between gap-2 rounded-xl px-3 py-2.5"
                   panelClassName="contents"
                   trigger={
                     <div className="min-w-0 flex-1">

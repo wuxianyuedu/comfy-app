@@ -19,8 +19,9 @@
 import { useState } from "react";
 import { ChevronRight, Copy } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
+import { cn } from "~/lib/utils";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { PageLoading } from "~/components/ui/page-loading";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -112,12 +113,18 @@ export function SettingsLoadError({
             自绘那份没有 `aria-expanded` / `aria-controls`）。
             一排按钮里只有中间那个是折叠开关，其余两个走 `leading` / `trailing`
             —— 基元的 trigger 是 `<button>`，往它里面塞 `<Button>` 在 HTML 里
-            非法。面板落在这排按钮下方（`basis-full` 独占一行）。 */}
+            非法（会触发水合错误）。开关自己的外观经 `className` 给（它本身就是
+            按钮，直接穿 `buttonVariants` 的 outline 档），整排的排布在
+            `rootClassName`，面板靠 `basis-full` 独占一行。 */}
         <Disclosure
           open={expanded}
           onOpenChange={setExpanded}
           marker="none"
-          className="mt-3 flex flex-wrap items-center justify-center gap-2"
+          rootClassName="mt-3 flex flex-wrap items-center justify-center gap-2"
+          className={cn(
+            buttonVariants({ variant: "outline" }),
+            "text-muted-foreground h-auto w-auto gap-1 rounded-lg px-3 py-2 text-xs",
+          )}
           panelClassName="basis-full"
           leading={
             <Button
@@ -128,16 +135,13 @@ export function SettingsLoadError({
             </Button>
           }
           trigger={
-            <Button
-              variant="outline"
-              className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
-            >
+            <>
               <ChevronRight
                 size={13}
                 className={`transition-transform group-aria-expanded/disclosure:rotate-90`}
               />
               完整错误
-            </Button>
+            </>
           }
           trailing={
             <Button
