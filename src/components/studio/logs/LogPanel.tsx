@@ -45,11 +45,8 @@ import {
   scrollHeightOf,
   visibleRange,
 } from "./log-virtual";
-import {
-  LOG_PANEL_OVERLAY_Z_CLASS,
-  LOG_PANEL_POPUP_Z_CLASS,
-} from "./log-panel-layers";
-import { overlayClass } from "~/lib/full-screen-layer";
+import { LOG_PANEL_POPUP_Z_CLASS } from "./log-panel-layers";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
 import { displayValue } from "~/lib/display-value";
@@ -351,6 +348,13 @@ export function LogPanel() {
   const download = useLogPanel((state) => state.download);
 
   const bodyRef = useRef<HTMLDivElement>(null);
+  /* 滚动视口的**元素本身**进 state：下面「量视口」的 effect 必须等到这个元素
+   * 真的挂上才量。改成弹窗基元（`ui/dialog`）之后，面板内容经 Portal 渲染，
+   * 挂载比本组件晚一个提交 —— 只按 `[isOpen]` 触发的话，唯一的量测会发生在
+   * ref 还是 null 的时候，之后再也没有第二次，虚拟化于是静默退化成「整页渲染」
+   *（jsdom 里两条分支都渲染全部行，肉眼看不出来；只有量 DOM 节点数才发现）。
+   * 依赖「元素出现了没有」而不是「面板开了没有」，量测才与挂载方式无关。 */
+  const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null);
   /* 贴底基线（= 用户已看过的最新一条在**页面里的序号**）。
    *
    * 面板贴着底看时只滚到这里：新日志在下面累积，不再每两秒把内容整体上移一次
@@ -546,8 +550,11 @@ export function LogPanel() {
    * 窗口尺寸一点没变。观测不到（jsdom / 老浏览器）时不额外退化——量出来恒为
    * 0 已经会让下面的窗口逻辑走「整页渲染」那一支，行为与改动前一致。 */
   useEffect(() => {
-    const el = bodyRef.current;
+    const el = bodyEl;
     if (!el) return;
+    /* 首次量测与后续量测走**同一条**路径：都从 `ResizeObserver` 的回调外部
+       调一次 `measure`。`measure` 里的 setState 只在取值真的变了才落状态
+       （见它自己的等值判断），因此这里不会「每次 effect 都触发一次渲染」。 */
     const measure = () => {
       const next = {
         height: el.clientHeight,
@@ -556,14 +563,14 @@ export function LogPanel() {
       setViewport((prev) =>
         prev.height === next.height && prev.width === next.width ? prev : next,
       );
+      setScrollTop(el.scrollTop);
     };
     measure();
-    setScrollTop(el.scrollTop);
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [isOpen]);
+  }, [bodyEl]);
 
   const onScroll = () => {
     const el = bodyRef.current;
@@ -618,35 +625,39 @@ export function LogPanel() {
 
   if (!isOpen) return null;
 
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前这里**既没接
+     Esc、也没有遮罩点击关闭** —— 面板只能靠外壳的开关按钮关掉。层级仍由刻度表
+     给出（`ui/dialog` 的遮罩取 `Z.modal`），面板内的弹层继续取 `Z.popup`
+     （§16.2.5 的 `popup > modal` 判据不变）。 */
   return (
-    <div
-      className={overlayClass(
-        "modal",
-        `${LOG_PANEL_OVERLAY_Z_CLASS} flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm`,
-      )}
-    >
-      <div
-        className={`border-border-strong bg-panel flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
+    <Dialog open onOpenChange={(next) => !next && setIsOpen(false)}>
+      <DialogContent
+        showCloseButton={false}
+        className="bg-transparent p-0 ring-0"
+        popupClassName={wide ? "max-w-[96vw]" : "max-w-6xl"}
       >
-        {/* Header */}
-        {/* 行头：宽窗口一行，窄窗口下筛选器整组折到第二行（判据是筛选器容器的
+        <div
+          className={`border-border-strong bg-panel flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
+        >
+          {/* Header */}
+          {/* 行头：宽窗口一行，窄窗口下筛选器整组折到第二行（判据是筛选器容器的
             `min-w-56`），所以行高用 `min-h`、允许内容把它撑高而不是钉死高度。 */}
-        <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
-          <div className="flex shrink-0 items-center gap-2">
-            <FileText
-              size={16}
-              className="shrink-0 text-violet-700 dark:text-violet-400"
-            />
-            {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
+          <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
+            <div className="flex shrink-0 items-center gap-2">
+              <FileText
+                size={16}
+                className="shrink-0 text-violet-700 dark:text-violet-400"
+              />
+              {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
                 （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
-            <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
-              应用日志
-            </span>
-            {/* 标题旁不复述任何计数：数字的唯一出口是右侧级别按钮（同一份
+              <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
+                应用日志
+              </span>
+              {/* 标题旁不复述任何计数：数字的唯一出口是右侧级别按钮（同一份
                 `originCounts`），完整分类数（含信息）在各按钮的悬浮说明里。 */}
-          </div>
+            </div>
 
-          {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径。
+            {/* Level filters：数字是**当前来源**下的计数，与右边来源下拉同口径。
               标签与数字**同行**（标签在左、计数在右）——这是本轮之前被否掉的一种
               排法，当时的问题是它**各占一份固有宽度**、不和别人分享空间：行头一挤
               就先把筛选器压到 32px、汉字只剩竖排的余地。
@@ -654,7 +665,7 @@ export function LogPanel() {
               每个按钮等分并在有富余时一起变宽（用户诉求：「全部/警告/错误这些挤
               在一起，可以占用大些空间」；「顶部还有较大空白区域」指的就是它们与
               搜索框之间那块被 `flex-1` 空白吸走的地方）。 */}
-          {/* 这个容器同时承担两件事：
+            {/* 这个容器同时承担两件事：
               1. **它自己就是那块弹性空间**——不再另设无名空白，五个按钮等分富余
                  宽度（用户诉求：「全部/警告/错误这些挤在一起，可以占用大些空间」）；
                  右侧的搜索 / 来源下拉 / 操作按钮也因此被顶到最右，不必再靠一个
@@ -664,237 +675,249 @@ export function LogPanel() {
                  第二行（`flex-wrap` 的换行单位就是这个容器）并吃掉整行宽度。
                  比「每个按钮各自 min-w 后硬挤」好在：无论多窄，标签都保持可读，
                  不会退化成只剩一列竖字。 */}
-          <LogFilterBar originCounts={originCounts} />
+            <LogFilterBar originCounts={originCounts} />
 
-          {/* 来源筛选贴最右（用户要求：中间让出来的宽度归左侧的类别与条数）。
+            {/* 来源筛选贴最右（用户要求：中间让出来的宽度归左侧的类别与条数）。
               候选列表每项自带「条数 / 信息 / 警告 / 错误」四列——此前只有名字，
               用户必须先切过去才知道那边有没有问题（ISSUE #360）。 */}
-          <OriginSelect
-            value={origin ?? "all"}
-            countsByOrigin={countsByOrigin}
-            onChange={setOrigin}
-          />
+            <OriginSelect
+              value={origin ?? "all"}
+              countsByOrigin={countsByOrigin}
+              onChange={setOrigin}
+            />
 
-          {/* Actions */}
-          <div className="flex items-center gap-1 pl-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setWrap((prev) => !prev)}
-              title={wrap ? "折叠超长行" : "自动换行显示"}
-              /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
-              className={`rounded-md p-2 transition-colors ${
-                wrap
-                  ? `${FILTER_SELECTED_STYLES} text-ink-bright`
-                  : "text-ink-muted hover:bg-subtle hover:text-ink"
-              }`}
-            >
-              <Type size={16} />
-            </Button>
-            {/* title 写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。 */}
-            {(
-              [
-                { onClick: copyAll, label: "复制", Icon: Copy },
-                { onClick: download, label: "下载为文本文件", Icon: Download },
-              ] as const
-            ).map(({ onClick, label, Icon }) => (
+            {/* Actions */}
+            <div className="flex items-center gap-1 pl-2">
               <Button
-                key={label}
                 variant="ghost"
                 size="icon"
-                onClick={onClick}
-                title={`${label}当前筛选的全部日志（${scopeLabel} · ${total} 条）`}
-                aria-label={`${label}当前筛选的全部日志`}
+                onClick={() => setWrap((prev) => !prev)}
+                title={wrap ? "折叠超长行" : "自动换行显示"}
+                /* 选中态与级别按钮同一份：`bg-subtle` 在浅色主题下与行头底色同值。 */
+                className={`rounded-md p-2 transition-colors ${
+                  wrap
+                    ? `${FILTER_SELECTED_STYLES} text-ink-bright`
+                    : "text-ink-muted hover:bg-subtle hover:text-ink"
+                }`}
+              >
+                <Type size={16} />
+              </Button>
+              {/* title 写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。 */}
+              {(
+                [
+                  { onClick: copyAll, label: "复制", Icon: Copy },
+                  {
+                    onClick: download,
+                    label: "下载为文本文件",
+                    Icon: Download,
+                  },
+                ] as const
+              ).map(({ onClick, label, Icon }) => (
+                <Button
+                  key={label}
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClick}
+                  title={`${label}当前筛选的全部日志（${scopeLabel} · ${total} 条）`}
+                  aria-label={`${label}当前筛选的全部日志`}
+                  className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <Icon size={16} />
+                </Button>
+              ))}
+              {/* 服务端落盘版导出（见 SaveExportButton）。 */}
+              <SaveExportButton
+                label={origin ?? "all"}
+                scopeLabel={scopeLabel}
+                total={total}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clear}
+                title="清空面板"
                 className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
               >
-                <Icon size={16} />
+                <Trash2 size={16} />
               </Button>
-            ))}
-            {/* 服务端落盘版导出（见 SaveExportButton）。 */}
-            <SaveExportButton
-              label={origin ?? "all"}
-              scopeLabel={scopeLabel}
-              total={total}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={clear}
-              title="清空面板"
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-            >
-              <Trash2 size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setWide((w) => !w)}
-              title={wide ? "收缩" : "加宽"}
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-            >
-              {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              title="关闭 (Ctrl+Shift+L)"
-              className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-            >
-              <X size={16} />
-            </Button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div
-          ref={bodyRef}
-          onScroll={onScroll}
-          className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
-        >
-          {pageLogs.length === 0 ? (
-            <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
-              <FileText size={32} strokeWidth={1.5} className="opacity-30" />
-              {total === 0 ? "暂无匹配的日志" : "本页无内容"}
-            </div>
-          ) : (
-            /* 虚拟窗口：外层撑出**估算总高**（滚动条长度与真实内容一致），
-               内层 `translateY` 到当前窗口的起点——只挂视口内的行。 */
-            <div
-              style={{ height: `${scrollHeight}px` }}
-              className="relative w-full"
-            >
-              <div
-                style={{
-                  transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,
-                }}
-                className="absolute top-0 left-0 w-full"
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setWide((w) => !w)}
+                title={wide ? "收缩" : "加宽"}
+                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
               >
-                {/* `data-log-index`：这一行在**整页**里的绝对序号（不是它在
+                {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(false)}
+                title="关闭 (Ctrl+Shift+L)"
+                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div
+            ref={(el) => {
+              bodyRef.current = el;
+              setBodyEl(el);
+            }}
+            onScroll={onScroll}
+            className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
+          >
+            {pageLogs.length === 0 ? (
+              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
+                <FileText size={32} strokeWidth={1.5} className="opacity-30" />
+                {total === 0 ? "暂无匹配的日志" : "本页无内容"}
+              </div>
+            ) : (
+              /* 虚拟窗口：外层撑出**估算总高**（滚动条长度与真实内容一致），
+               内层 `translateY` 到当前窗口的起点——只挂视口内的行。 */
+              <div
+                style={{ height: `${scrollHeight}px` }}
+                className="relative w-full"
+              >
+                <div
+                  style={{
+                    transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,
+                  }}
+                  className="absolute top-0 left-0 w-full"
+                >
+                  {/* `data-log-index`：这一行在**整页**里的绝对序号（不是它在
                     当前窗口里的第几个）。它同时是测试量「渲染了哪一段」的落点
                     （e2e 与 jsdom 单测都按它断言窗口位置），因此序号口径必须是
                     页内绝对的——窗口一变，同一个序号还得指着同一行。 */}
-                {rowWindow.entries.map((entry, offset) => {
-                  const index = rowWindow.start + offset;
-                  return (
-                    <div key={entry.id} data-log-index={index}>
-                      <LogRow
-                        entry={entry}
-                        wrap={wrap}
-                        keyword={search}
-                        /* 显式高度 = 估算高度：两者不同口径时误差会累积，
+                  {rowWindow.entries.map((entry, offset) => {
+                    const index = rowWindow.start + offset;
+                    return (
+                      <div key={entry.id} data-log-index={index}>
+                        <LogRow
+                          entry={entry}
+                          wrap={wrap}
+                          keyword={search}
+                          /* 显式高度 = 估算高度：两者不同口径时误差会累积，
                            滚动位置与内容就错开了（见 log-virtual 的常量）。 */
-                        style={{
-                          height: `${rows[index]?.size ?? LOG_ROW_SINGLE}px`,
-                        }}
-                      />
-                    </div>
-                  );
-                })}
+                          style={{
+                            height: `${rows[index]?.size ?? LOG_ROW_SINGLE}px`,
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Footer：分页 + 「回到最新」出口。
+          {/* Footer：分页 + 「回到最新」出口。
             时间线不设总数上限（能往前翻完整段历史），**同时显示**多少条由
             每页 ≤ LOG_PAGE_SIZE 兜住，用户不会再被「两千条封顶」挡住视线。 */}
-        <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
-          <span className="flex items-center gap-2">
-            <span>
-              {pageSummary(
-                safePage,
-                totalPages,
-                pageSize,
-                total,
-                counts.all,
-                search,
+          <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
+            <span className="flex items-center gap-2">
+              <span>
+                {pageSummary(
+                  safePage,
+                  totalPages,
+                  pageSize,
+                  total,
+                  counts.all,
+                  search,
+                )}
+              </span>
+              {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
+                也让面板在服务真重启后能自证（时间线已重置）。 */}
+              {bootId && (
+                <span
+                  className="border-border-strong text-ink-muted shrink-0 rounded border px-1.5 py-px text-[11px]"
+                  title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
+                >
+                  服务 {bootId.split(":").slice(-2).join(":")}
+                </span>
               )}
             </span>
-            {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
-                也让面板在服务真重启后能自证（时间线已重置）。 */}
-            {bootId && (
-              <span
-                className="border-border-strong text-ink-muted shrink-0 rounded border px-1.5 py-px text-[11px]"
-                title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
-              >
-                服务 {bootId.split(":").slice(-2).join(":")}
-              </span>
-            )}
-          </span>
-          <span className="flex items-center gap-3">
-            {shouldPin && (
-              <Button variant="primary-solid" size="xs" onClick={jumpToLatest}>
-                <ArrowDownToLine size={12} />
-                {newLogCount > 0
-                  ? `有 ${newLogCount} 条新的日志 · 回到最新`
-                  : "回到最新"}
-              </Button>
-            )}
-            <span className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setPage(safePage + 1)}
-                disabled={safePage >= totalPages}
-                title="更早的一页"
-                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
-              >
-                <ChevronLeft size={14} />
-              </Button>
-              {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
+            <span className="flex items-center gap-3">
+              {shouldPin && (
+                <Button
+                  variant="primary-solid"
+                  size="xs"
+                  onClick={jumpToLatest}
+                >
+                  <ArrowDownToLine size={12} />
+                  {newLogCount > 0
+                    ? `有 ${newLogCount} 条新的日志 · 回到最新`
+                    : "回到最新"}
+                </Button>
+              )}
+              <span className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setPage(safePage + 1)}
+                  disabled={safePage >= totalPages}
+                  title="更早的一页"
+                  className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <ChevronLeft size={14} />
+                </Button>
+                {/* 当前正看的是哪一段（来源 / 级别 / 搜索词），点任意一项即去掉
                   那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
                   的位置，回滚动作本来就该在这儿，不必让用户跑回顶部找。 */}
-              <span className="text-ink-soft flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => setOrigin("all")}
-                  disabled={!origin || origin === "all"}
-                  title={
-                    origin && origin !== "all" ? "去掉来源筛选" : undefined
-                  }
-                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
-                >
-                  {ORIGIN_TEXT[origin ?? "all"]}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => setFilter("all")}
-                  disabled={filter === "all"}
-                  title={filter !== "all" ? "去掉级别筛选" : undefined}
-                  className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
-                >
-                  {FILTER_LABELS.find((item) => item.value === filter)?.label}
-                </Button>
-                {search.trim() && (
+                <span className="text-ink-soft flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="xs"
-                    onClick={() => setSearch("")}
-                    title="清空搜索"
-                    className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                    onClick={() => setOrigin("all")}
+                    disabled={!origin || origin === "all"}
+                    title={
+                      origin && origin !== "all" ? "去掉来源筛选" : undefined
+                    }
+                    className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
                   >
-                    {`搜索「${search.trim()}」`}
+                    {ORIGIN_TEXT[origin ?? "all"]}
                   </Button>
-                )}
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setFilter("all")}
+                    disabled={filter === "all"}
+                    title={filter !== "all" ? "去掉级别筛选" : undefined}
+                    className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
+                  >
+                    {FILTER_LABELS.find((item) => item.value === filter)?.label}
+                  </Button>
+                  {search.trim() && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setSearch("")}
+                      title="清空搜索"
+                      className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                    >
+                      {`搜索「${search.trim()}」`}
+                    </Button>
+                  )}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setPage(safePage - 1)}
+                  disabled={safePage <= 1}
+                  title="更新的一页"
+                  className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                >
+                  <ChevronRight size={14} />
+                </Button>
               </span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setPage(safePage - 1)}
-                disabled={safePage <= 1}
-                title="更新的一页"
-                className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
-              >
-                <ChevronRight size={14} />
-              </Button>
             </span>
-          </span>
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

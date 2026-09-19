@@ -53,6 +53,14 @@ interface SelectMenuProps {
    */
   popoverMinWidth?: number;
   /**
+   * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。
+   *
+   * 缺省是自适应：触发器宽度由标签撑开、外层容器多宽都不管 —— 并排的
+   * 一排筛选控件要的就是这个（宽度一致会让短文案两侧空一块，不一致又
+   * 会在窄窗口里被压）。需要「一个下拉独占一行」时传 `true`。
+   */
+  fullWidth?: boolean;
+  /**
    * 自动加宽浮层以容纳最长的选项标签。
    *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过，
    *  因为不渲染到屏幕外就无法测量它的宽度。默认 true。
@@ -78,6 +86,7 @@ export function SelectMenu({
   placeholder = "选择…",
   disabled = false,
   className = "",
+  fullWidth = false,
   popoverMinWidth = 480,
   autoFitFromOptions = true,
   footer,
@@ -197,7 +206,13 @@ export function SelectMenu({
         aria-haspopup="listbox"
         disabled={disabled}
         onKeyDown={handleKeyDown}
-        className={`border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none ${className}`}
+        /* 基础样式里**没有** `w-full`：默认宽度由调用处决定（`w-full` 用在
+         *  需要铺满容器的地方，`w-auto` 用在并排的一排控件里）。基础样式里带
+         *  `w-full` 时，调用处的 `w-auto` **覆盖不掉**它 —— 两个同属性 utility
+         *  同时出现时按 Tailwind 的输出顺序决胜，而 `w-full` 与 `w-auto` 同属
+         *  宽度族、顺序不受调用处控制，结果是「写了 `w-auto` 但一排放不下、
+         *  每个都铺满整行」（工作流库页头的三个筛选下拉就撞上了这一条）。 */
+        className={`border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex items-center justify-between gap-x-2 rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none ${fullWidth ? "w-full" : "w-auto"} ${className}`}
       >
         {/* min-w-0 + flex-1 + truncate 让富 ReactNode 标签能干净地裁剪；
          *  想让徽标（如「本机」/「在线」）右对齐的调用方，应在徽标前放一个

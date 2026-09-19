@@ -135,3 +135,107 @@ describe("列表侧栏的拖入导入提示", () => {
     ).toBeInTheDocument();
   });
 });
+
+// 列表项的空间预算（ISSUE #716）：名称 + 徽标必须排在一行里，且每个徽标
+// 都对应用户要看的那个事实。
+//
+// 现场是「名称太长 + 徽标带一整句中文」两件事同时发生：名称把整行撑破，
+// 右侧的「对外参数未配置」「本地」被侧栏的 `overflow-hidden` 裁掉 ——
+// 用户看到的是「列表内容超框」。判据因此分两条：
+//   ① 名称有显式最大宽度（可截断的那块有下限，徽标一律不被压）；
+//   ② 对外参数只留 1 字状态标记，完整口径在 `title` 里。
+describe("列表项：名称限长 + 对外参数精简显示", () => {
+  const longName = "22WorkflowsI2VSVI2_fastfidelityCAIoV88";
+
+  it("名称有显式最大宽度，不会把右侧徽标挤出侧栏", () => {
+    renderList({ workflows: [row({ name: longName })] });
+
+    const name = screen.getByText(longName);
+    expect(name.className).toContain("truncate");
+    expect(name.className).toMatch(/max-w-\[/);
+    /* 完整名称仍可从 title 读到（截断只发生在视觉上）。 */
+    expect(name.getAttribute("title")).toBe(longName);
+  });
+
+  it("对外参数收成一枚 1 字标记，完整说明在 title 里", () => {
+    renderList({
+      workflows: [
+        row({
+          name: "image_z_image_int8_t2i",
+          /* T2I 模式的必备口全部有落点 = ready。两样都要：IO 给候选端口，
+             paramMap 给作者画的线 —— 只给 IO 是「有候选没落点」，仍是未配置。 */
+          taskType: "T2I",
+          defaultMode: "T2I",
+          workflowIO: {
+            "1::text": {
+              direction: "input",
+              kind: "widget",
+              nodeId: "1",
+              name: "text",
+              type: "STRING",
+            },
+            "2::text": {
+              direction: "input",
+              kind: "widget",
+              nodeId: "2",
+              name: "negative",
+              type: "STRING",
+            },
+            "3::width": {
+              direction: "input",
+              kind: "widget",
+              nodeId: "3",
+              name: "width",
+              type: "INT",
+            },
+            "3::height": {
+              direction: "input",
+              kind: "widget",
+              nodeId: "3",
+              name: "height",
+              type: "INT",
+            },
+          },
+          /* `WorkflowRow.paramMap` 的声明比库里的真实形状窄（`Record<string,
+             string>`），而派生函数按存库原始形状读 —— 测试要构造真实数据，
+             因此这一处显式放宽类型。 */
+          paramMap: {
+            source: {
+              "mode:T2I": {
+                prompt: "1::text",
+                negative: "2::text",
+                "size-width": "3::width",
+                "size-height": "3::height",
+              },
+            },
+          } as unknown as WorkflowRow["paramMap"],
+        }),
+      ],
+    });
+
+    /* 不再出现整句「对外参数已配置 / 未配置」——它曾与名称争夺同一行宽度。 */
+    expect(screen.queryByText("对外参数未配置")).toBeNull();
+    expect(screen.queryByText("对外参数已配置")).toBeNull();
+
+    /* 标记本身带得动信息：✅ 表示配好了，title 里给出口径。 */
+    const mark = screen.getByTitle(/对外参数已配置/);
+    expect(mark.textContent).toBe("✓");
+  });
+
+  it("没配对外参数时标记是 ！，title 说清缺哪些口", () => {
+    renderList({
+      workflows: [row({ name: "image_SenseNova-U1.5_edit", taskType: "T2I" })],
+    });
+
+    const mark = screen.getByTitle(/对外参数未配置/);
+    expect(mark.textContent).toBe("！");
+  });
+
+  it("不可执行的工作流仍显示「无可执行内容」（这条是闸门，不是元信息）", () => {
+    renderList({
+      workflows: [row({ name: "坏掉的", hasRaw: false })],
+    });
+
+    expect(screen.getByText("无可执行内容")).toBeInTheDocument();
+  });
+});

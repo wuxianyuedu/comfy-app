@@ -65,6 +65,9 @@ const REQUIRED_CONSUMERS: Record<string, string> = {
    * 页签落点是工作流库详情面板（自绘 TabButton 删除）；通知块落到
    * 登录页 / 训练页 / 设置页 / 节点错误面板 / 工坊三处错误行；
    * 下拉菜单落到画布右键菜单与项目切换器（两处自绘菜单 + 遮罩删除）。 */
+  /* 密集列表行的内联小徽标（ISSUE #716）：工作流库列表的名称行 +
+   *  模型标签。它此前是四处各写一遍 `text-[9px]` + 写死配色的 span。 */
+  "list-badge": "工作流库列表项的名称行徽标与模型标签",
   tabs: "工作流库详情面板的三页签",
   alert: "登录提示 / 训练后端横幅 / 设置页提示条 / 工坊错误行",
   "dropdown-menu": "画布右键菜单与项目切换器",
@@ -215,6 +218,48 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     expect(
       refs,
       "file-picker 的业务引用少于 3 处（收口可能被回退）",
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  /* ── 「模态浮层」的出口与消费点（规范 16 §16.2.3 的 P9 / §16.2.4.11）──
+   *
+   * `check-ui-primitives.cjs` 的 P9 是**硬闸**，判的是「视图里又自绘了一份模态
+   * 外壳」；这里补**另一侧**：`ui/dialog` 与 `ui/sheet` 必须真的被业务用着。
+   *
+   * 为什么两侧都要有：P9 数的是「另一种写法」，对「基元没人用」天然无感 ——
+   * 而 16 处自绘浮层能长期存在，正是因为**没人觉得 `ui/dialog` 是必选项**
+   * （它此前只有 4 个业务引用）。只加 P9 会挡住新增，但挡不住「下一个人的
+   * 新弹窗又照抄一份自绘」。 */
+  it("ui/dialog 是模态浮层的出口，且已被多处业务引用", () => {
+    const mod = readFileSync(
+      join(SRC, "components", "ui", "dialog.tsx"),
+      "utf8",
+    );
+    for (const name of ["Dialog", "DialogContent"]) {
+      expect(mod, `dialog 应导出 ${name}`).toMatch(
+        new RegExp(`function ${name}(?=[^A-Za-z])`),
+      );
+    }
+    /* 门槛留在现状之下（本批后是十处上下）：挡的是「掉回 0 / 掉回 1」。 */
+    expect(
+      consumerCount("dialog"),
+      "ui/dialog 的业务引用过少（模态浮层可能又回退成各写一份）",
+    ).toBeGreaterThanOrEqual(8);
+  });
+
+  it("ui/sheet 是抽屉形态的出口，且已被业务引用", () => {
+    const mod = readFileSync(
+      join(SRC, "components", "ui", "sheet.tsx"),
+      "utf8",
+    );
+    for (const name of ["Sheet", "SheetContent"]) {
+      expect(mod, `sheet 应导出 ${name}`).toMatch(
+        new RegExp(`function ${name}(?=[^A-Za-z])`),
+      );
+    }
+    expect(
+      consumerCount("sheet"),
+      "ui/sheet 的业务引用过少（抽屉可能又回退成各写一份）",
     ).toBeGreaterThanOrEqual(3);
   });
 

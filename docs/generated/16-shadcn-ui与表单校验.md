@@ -122,7 +122,7 @@ pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
 node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 ```
 
-**六条判据**（`scripts/check-ui-primitives.cjs`，基线
+**判据**（`scripts/check-ui-primitives.cjs`，基线
 `scripts/.ui-primitives-baseline.json`）：
 
 | ID     | 判据                                                                   | 应改用什么                                                                                                                                                                             |
@@ -133,14 +133,16 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P4** | 视图层自写 `::-webkit-scrollbar` 外观                                  | `globals.css` 的三个具名类：`.custom-scrollbar`（密集日志区）/ `.soft-scrollbar`（文字编辑区）/ 全局兜底（见 §16.2.4.9）                                                               |
 | **P5** | 视图层自写剪贴板写入（`navigator.clipboard` / `document.execCommand`） | `~/lib/browser-io` 的 `copyText`（含降级链路与 `navigator` 存在性判定）                                                                                                                |
 | **P6** | 视图层自写 Blob 下载（`URL.createObjectURL`）                          | `~/lib/browser-io` 的 `downloadText` / `downloadJson`（`revoke` 与 `click` 的顺序收在出口里）                                                                                          |
+| **P9** | 视图层自绘模态浮层（视图里出现 `overlayClass(`）                        | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）或 `ui/sheet` 的 `SheetContent`（右侧抽屉）；全屏视图走 `ui/fullscreen-dialog` / `FullScreenLayer`（见 §16.2.4.12）                 |
 
-**P4~~P6 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4/P5/P6 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载」这三件事的
-**定义**只能有一处，没有「冻结在某个数字」的中间态可言。因此它们**不进基线**
-（`--update` 也不接受带违规的基线，否则「把违规一起写进基线」就成了唯一的绕过
-方式）。P4~P6 的清零过程见 §16.2.4.9 / §16.2.4.10。
+**P4~P9 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P9 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+缺值占位符 / 模态浮层」这六件事的**定义**只能有一处，没有「冻结在某个数字」的
+中间态可言。因此它们**不进基线**（`--update` 也不接受带违规的基线，否则
+「把违规一起写进基线」就成了唯一的绕过方式）。清零过程：P4 见 §16.2.4.9、
+P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、P9 见 §16.2.4.12。
 
-**四条判据当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P9 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -161,6 +163,31 @@ P4/P5/P6 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / �
 
   撤掉的另一面是**目录不得复活**：归并完还得有个判据挡住「下一个人再
   `mkdir studio/ui` 起一套」，见 `tests/ui-kit-single-home.test.ts`。
+
+#### 16.2.3.1 浮层的「位置由谁定」：有锚点就必须交给 Positioner（ISSUE #717）
+
+P2 把浮层收拢到 `ui/` 原语时踩过一个坑，值得单独立一条判据：**收拢容器不等于
+收拢定位**。
+
+节点 JSON 浮层的触发者是画布节点里的 `#id` 芯片，浮层却是由 store 打开的。
+迁移时它被换成了 `ui/dialog` 配 `popupClassName="fixed top-24 left-1/2 …"` ——
+看起来「自定义了这一处的位置」，实际是**丢掉了锚点定位**：`DialogContent` 的
+Popup 基类自带 `top-1/2 -translate-y-1/2`，调用处的 `top-24` 覆盖不掉它，
+两者叠加把浮层推到视口之上（实测 `top: -174`），头部与正文开头整片裁在窗口外。
+
+**判据**：浮层的定位应当由基元的 Positioner 负责（`ui/popover` 可传 `anchor`，
+支持元素 / 虚拟元素 / `{ getBoundingClientRect }` 形式的回调），翻转（flip）与
+视口内收边（shift）也由它算 —— **不要在调用处手写 `top` / `left` / `translate`
+去夹紧视口**：那既覆盖不掉基类自带的定位，也是第三份「摆位」口径
+（§16.2.4.3 已把 `computePos` 这类派生像素值整片删掉过一次）。
+
+`ui/dialog` 的 Popup 里**没有** Positioner，结构上就表达不了锚点定位；有锚点的
+浮层一律走 `ui/popover`。没有锚点（居中模态）才用 `ui/dialog`。
+
+**验证口径**：这类「位置对不对」的问题，单测只能锁结构（浮层挂在 Positioner 里、
+关闭语义齐全），**别断言 `style.top` 这类派生像素值**（同 §16.2.4 的
+`seed-mode-button` 那条）；四边是否真的在视口内，用真实浏览器按两档窗口
+（宽窗 / 窄窗）各验一次。
 
 ### 16.2.5 浮层层级是一张刻度表（ISSUE #672 P2 → P4，机器强制）
 
@@ -238,6 +265,7 @@ node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
 「让位」这条硬规则（`check-title-bar-clearance.cjs`）不被层级改名牵动。
 P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`。
 
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
@@ -266,6 +294,7 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 字节容量         | ~~**3 份实现**（`fmtBytes` / `fmtSize` / `formatSize` **三个名字**），而 `src/lib/format-bytes.ts` 早就在；1024 字节整这一档还敢给出不同答案~~                                                    | `~/lib/format-bytes` 的 `fmtBytes`（既有出口，本批把两处漏网的接上）                                                                          | ✅ **见 §16.2.4.10**                        |
 | 隐藏文件选择框   | ~~**9 份实现**（`useRef` + `ref.current?.click()` 6 处、`<label htmlFor>` 隐式关联 2 处、input 直接露在界面 1 处）；多数落点**没有复位 `event.target.value`** —— 连选同一个文件不触发 `change`~~  | `~/components/ui/file-picker` 的 `useFilePicker` / `FilePickerButton`；**P7 硬闸**禁止视图再写「隐藏 input + 手工触发」                       | ✅ **见 §16.2.4.11**                        |
 | 一次性反馈       | ~~**6 份实现**，分两族：4 处裸 `setTimeout(() => setX(false), 1xx)`（**连卸载都不管**）、2 处手写 `timerRef` + `clearTimeout`；复位时长 1200/1400/1500/8000 各不相同且**没有一处说得清为什么**~~  | `~/components/ui/use-flash-state` 的 `useFlashState`（单值）/ `useFlashLatch`（多字段同生共死）；`DEFAULT_FLASH_MS` 是唯一默认值              | ✅ **见 §16.2.4.11**                        |
+| 模态浮层         | ~~**16 个视图**各拼一份 `overlayClass("modal", …)` 外壳（**一处 `createPortal` 都没有** —— 所以 P2 全库清零之后这批依然漏过）；a11y 语义各写各的：16 份里**只有 3 份**接 Esc、**3 份**声明 `role="dialog"`、**0 份**做焦点锁与焦点归还~~ | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）、`ui/sheet` 的 `SheetContent`（抽屉）；全屏视图仍走 `FullScreenLayer` / `ui/fullscreen-dialog`；**P9 硬闸**禁止视图再自绘模态外壳 | ✅ **见 §16.2.4.12**                        |
 | 缺值占位符       | ~~**31 处**裸写 `?? "—"`，而「什么算不存在」**四种判法**：`??`（只管 null/undefined）、`\|\|`（把 `0` 与 `""` 也当缺值 —— 「步数 0」显示成「—」）、`> 0 ? x : "—"`、`!= null ? String(x) : "—"`~~ | `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER`；**P8 硬闸**禁止视图再写占位符字面量                                            | ✅ **见 §16.2.4.11**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
@@ -278,7 +307,7 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 形态                 | 原来自搓的位置                                                                                                            | 现在                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | 确认对话框           | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点）                                                                   | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留 |
-| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                       | `ui/dialog`；`workflow-utils.ts` 的 `computePos` 一并删除             |
+| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                       | `ui/popover` + **锚点定位**；`workflow-utils.ts` 的 `computePos` 一并删除（见 §16.2.3.1） |
 | 源码查看弹窗         | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc）                                                                        | `ui/dialog`；载入态改 `ui/page-loading`                               |
 | 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                     | `ui/dialog`                                                           |
 | 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                       | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）        |
@@ -604,6 +633,34 @@ utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类�
 配色」。画布小写词（`idle`/`running`/`done`/`error`）到大写状态键的映射收在
 `lib/project-canvas/canvas-types.ts` 的 `STATUS_BADGE_KEY`，与 `STATUS_LABEL`
 并排 —— 此前两处徽标各写一份映射，改一处漏一片。
+
+**③ 密集列表行的内联小徽标：`ui/list-badge`（ISSUE #716）。**
+
+上表两条按「状态」分类，这一条按**出现的容器**分类 —— 它是第三个形态，
+判据不是「长什么样」而是「它出现在哪里」：
+
+| 基元             | 形态                                  | 用在哪                                                     |
+| ---------------- | ------------------------------------- | ---------------------------------------------------------- |
+| `ui/status-dot`  | 一个圆点                              | 状态行左侧                                                 |
+| `ui/status-badge`| 圆点 + 文字的胶囊（`text-xs` + 边框） | 卡片头、详情头这类**独立徽标**                             |
+| `ui/list-badge`  | 纯文字的紧凑小块（`text-[9px]`，无边框） | 列表行里**紧跟标题**的元信息                               |
+
+**为什么不能复用一个**：列表行的高度是按「每行一行文字」定的，`text-xs` 胶囊
+比行内文字还高，一行里塞几个就把行撑成两倍高。工作流库列表曾因此每项挤进四枚
+手写 `text-[9px]` span（`对外参数未配置` / `本地` / 类型 / 模型标签），加上名称后
+总宽超过侧栏、被根容器的 `overflow-hidden` 裁掉。收口之后**尺寸不再由每处各写
+一遍**，`tone` 的取色也回到语义 token（此前是 `bg-emerald-500/12 text-emerald-700
+dark:text-emerald-300` 这类写死值）。
+
+**同批的两条收口口径**（可照抄到下一批）：
+
+1. **一行里的「闸门」与「元信息」要分开对待**。`无可执行内容` 是**闸门**
+   （这条工作流根本跑不了），它必须留着并占位；`对外参数未配置` 是**元信息**
+   （还能跑，只是工坊驱动不了），它该收成一枚状态标记 —— 完整口径（缺哪些口）
+   挪进 `title`。一行的宽度预算只够一个长标签，留给闸门。
+2. **判据是「出现在哪里」，不是「长什么样」**。按外观找会得到「三个都是徽标」，
+   进而得出「合并成一个」的错误结论；按容器找才看得出列表行的高度预算是另一档。
+   这与 §16.2.4.10 的「扫描要按问法设计，不是按目录」是同一条方法论。
 
 **② 余量主题色 115 处 → 逐条定性（基线归零）。**
 
@@ -990,6 +1047,96 @@ utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类�
 `src/lib/display-value.test.ts` 与 `src/components/ui/use-flash-state.test.ts`
 按**边界值**与**时间轴**设用例（`0`/`false`/NaN 站哪一边、卸载后是否还 `setState`、
 连点是否被旧定时器打断）—— 这些恰恰是各自调用点看不出来的部分。
+
+### 16.2.4.12 「模态浮层」也是同一件事的多种写法（P9 硬闸）
+
+§16.2.4.10 的方法论再扫一遍时撞出这条：**16 个视图各拼了一份模态浮层外壳**。
+它和前面几批的形状都不一样 —— 前几批是「一个动作有几份实现」（四份剪贴板、
+七份下载），这条是**一个形态有很多种写法**，而且**P2 追不到它**。
+
+#### 为什么 P2 全库清零了、这批还在
+
+P2 数的是 `createPortal(`。而 16 个落点里**一处 portal 都没有** —— 它们把遮罩
+写成一个普通 `<div className={overlayClass("modal", …)}>`，靠 `fixed` 定位铺满。
+**判据问的是「有没有用某个 API」，于是「用另一种方式做同一件事」全部漏过。**
+
+> 教训与 §16.2.4.9 同源：**扫描要按形态设计，不是按 API。** P9 的问法是
+> 「这个文件自己拼了一份模态外壳吗」，形态锚点取 **`overlayClass(`** ——
+> 它是本项目顶层浮层定位的唯一出口（`fixed top-title-bar …`，同时被
+> `check-title-bar-clearance.cjs` 认），视图里出现它 = 在自绘浮层容器。
+
+#### 不止是重复：a11y 语义在 16 份之间分叉
+
+真正的病灶不是「多写了几行」，而是**每一份各自决定要实现哪些无障碍行为**：
+
+| 行为 | 16 份里有几份做到了 |
+| --- | --- |
+| 点遮罩关闭 | 15（`ModelLibrary` 把遮罩写成一个**兄弟 div** 单独接 `onClick`；`VideoQueueModal` / `LogPanel` 干脆没有） |
+| Esc 关闭 | **3**（`SourceModal` / `ModelTagManager` / `DeleteWorkflowModal`） |
+| `role="dialog"` + `aria-modal` | **3**（`ContentAssetNode` / `ModelTagManager` / `DeleteWorkflowModal`） |
+| 焦点锁在弹窗内 / 关闭后归还焦点 | **0** |
+
+也就是说：**同一个「模态弹窗」在库里有 16 种行为组合**，用户能不能用键盘
+退出，取决于他打开的是哪一个弹窗。这类差异**没有报错、没有告警**，
+tsc / eslint 也都不看 —— 只能靠「同一件事只允许一处实现」从结构上消除。
+
+#### 顺带清掉的两处同族
+
+- **`DeleteWorkflowModal` 是 `ConfirmDialog` 的第二份实现**（同一个「危险色
+  圆角卡片 + 确认/取消」，连「确认中不许关」这条语义都各写了一遍：前者用
+  「遮罩点击被阻断」，后者用 `pending` 把确认按钮置为 spinner）。已改成
+  `ConfirmDialog` 的薄包装，那句阻断语义换成更准确的 `pending`。
+- **`ProjectOutputs` 的元数据抽屉**是 `ui/sheet` 的第二份实现
+  （`w-[380px]` 右锚定面板 + 手写遮罩 `onClick`）—— 与设置页两个抽屉
+  （已迁 `ui/sheet`）是同一件事的两套写法。已迁 `ui/sheet`（`side="right"`）。
+
+#### 迁移口径（可直接照抄）
+
+1. **居中卡片 → `<Dialog>` + `<DialogContent>`**。基元自带
+   Esc / 点遮罩关闭 / 焦点锁 / 焦点归还，以及 `role` 与 `aria-*`。
+2. **形态差异经 `className` / `popupClassName` 表达，不重写外壳**：
+   宽度用 `popupClassName="max-w-3xl"`；调用处自己的卡片外观（`bg-panel` +
+   `border` + `rounded-2xl`）原样保留在 `DialogContent` 的**子** div 上
+   （`className="bg-transparent p-0 ring-0"` 抵消基元默认卡片 chrome）——
+   验收标准仍是 **渲染结果不变**（§16.2.4.2 第 9 条）。
+3. **不该统一的那几类，别硬塞**：
+   - **全屏视图**（设置 / 工作流编辑器 / 脚本编辑器 / 消息中心…）走
+     `FullScreenLayer` / `ui/fullscreen-dialog` —— 它们要的是「让出窗口标题行、
+     铺满内容区」，与「居中卡片」是两个形态（基元里早就分家，见 `ui/fullscreen-dialog`
+     文件头的论证）。**P9 的判据够不着它们**：调用处传的是基元组件的 props，
+     不出现 `overlayClass(`。
+   - **画布内部的叠层**（`Z.base` / `Z.canvasUi` / `Z.canvasMax`）在同一容器内
+     比较高低，与「模态」不是一层（§16.2.5 第 3 条）。
+
+#### 迁移中撞出来的一条坑：Portal 渲染会错开一次提交
+
+`LogPanel` 迁到 `ui/dialog` 之后，**虚拟化静默退化成整页渲染**（200 行全渲染）。
+根因不是虚拟化坏了，而是：面板内容经 Portal 渲染，**挂载比本组件晚一个提交**，
+而它的「量滚动视口」effect 只在 `[isOpen]` 变化时跑 —— 那一次 `bodyRef.current`
+还是 `null`，量测被跳过，之后再也没有第二次。jsdom 里两条分支**都渲染全部行**，
+肉眼完全看不出来，只有量 DOM 节点数才发现（这正是 `LogPanel.test` 里那条
+「虚拟化没生效在 jsdom 里不可见」的用例存在的理由）。
+
+口径：**依赖「元素出现了没有」而不是「面板开了没有」** —— 把滚动元素本身放进
+state（`ref` 回调里 `setBodyEl(el)`），量视口的 effect 依赖它。这样量测与
+挂载方式无关，换任何 lazy / portal 容器都不会再静默失效。
+
+#### 判据：P9（硬闸）+ 出口侧契约
+
+`check-ui-primitives.cjs` 新增 **P9**（`HARD_GATE_RULES`，不进基线）：
+**视图里出现 `overlayClass(`**。与 P1 同款，判据先过 `stripComments` ——
+把理由（「此前这里是 `overlayClass("modal", …)` 自绘的浮层」）写进注释
+不该让计数停在原地。
+
+`tests/ui-primitives-coverage.test.ts` 从**另一侧**补两条契约：
+
+- `ui/dialog` 导出 `Dialog` / `DialogContent`，且业务引用数 ≥8
+  （这批之后是十处上下，门槛刻意留在现状之下 —— 挡「掉回 0/1」，不锁死数量）；
+- `ui/sheet` 同样，引用数 ≥3。
+
+**为什么两侧都要有**：P9 挡得住「新增自绘」，挡不住「下一个人的新弹窗又照抄一份」
+—— 而 16 处自绘能长期存在，正是因为**没人觉得 `ui/dialog` 是必选项**
+（它此前只有 4 个业务引用）。
 
 ## 16.3 新增一个组件的标准动作
 

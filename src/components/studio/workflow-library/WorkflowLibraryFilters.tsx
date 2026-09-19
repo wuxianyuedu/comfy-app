@@ -3,6 +3,11 @@
 // 三级筛选（来源 / 类型 / 模型标签）的紧凑下拉版：替代原先三行平铺页签，
 // 由页头「工作流库」标题右侧统一收纳，减少垂直空间占用。
 // 计数以徽标形式并入每个选项行；「管理模型」作为模型下拉的固定末项入口。
+//
+// **这一组必须排成一行**（ISSUE #716）：三个下拉 + 「管理模型」按钮，
+// 组内 `flex-nowrap`、每项 `shrink-0`。它们此前是 `flex-wrap` + 每项 `w-auto`，
+// 在窄宽度下会各自折行，形成「三个下拉竖着叠成一列」的形态 —— 页头因此吃掉
+// 三行高度，用户看到的是「筛选菜单不是水平排列的」。
 
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
@@ -52,9 +57,16 @@ function CountBadge({ count }: { count: number }) {
   );
 }
 
-/** 筛选触发按钮的统一样式：宽度收紧，靠内容自适应。 */
+/**
+ * 筛选触发按钮的统一样式。
+ *
+ * `w-auto` + `min-w`（不是统一的 `w-[Npx]`）：三个下拉的选项文案长短不同
+ *（「全部来源」vs「全部模型」vs 某个模型标签名），固定宽度要么把长文案截掉、
+ *  要么在短文案上留一块空白。`shrink-0` 是硬要求 —— 这排控件不许被压扁
+ *  （规范 03 §3.8.1），排不下由外层整组换行。
+ */
 const TRIGGER_CLS =
-  "w-auto min-w-[104px] gap-x-1 rounded-full px-3 py-1 text-xs";
+  "w-auto min-w-[112px] shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
 
 export function WorkflowLibraryFilters({
   sourceFilter,
@@ -69,7 +81,10 @@ export function WorkflowLibraryFilters({
   onManageModels,
 }: WorkflowLibraryFiltersProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div
+      data-testid="workflow-library-filter-row"
+      className="flex flex-nowrap items-center gap-2"
+    >
       <SelectMenu
         value={sourceFilter}
         onChange={(v) => onSourceFilterChange(v as SourceFilter)}
@@ -156,7 +171,7 @@ export function WorkflowLibraryFilters({
       <Button
         variant="outline"
         onClick={onManageModels}
-        className="border-border-strong text-ink-strong hover:bg-subtle h-auto gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+        className="border-border-strong text-ink-strong hover:bg-subtle h-auto shrink-0 gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap"
         title="管理模型标签库"
       >
         <Icon name="tag" className="h-3.5 w-3.5" />

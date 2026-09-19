@@ -1001,6 +1001,94 @@ describe("useSettingsPage", () => {
     });
   });
 
+  /* 用户反馈：启动后有新日志时要自动切到下拉里的最新一项，而不是停在旧会话。 */
+  it("新一轮启动出现（会话列表多出最新一项）时自动切过去，无需手动换下拉", async () => {
+    /* 会话列表可变：先只有一次启动，随后模拟新一次启动写入横幅。 */
+    let sessions = [
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
+    ];
+    server.use(
+      http.get("*/api/logs/sessions", ({ request }) => {
+        const url = new URL(request.url);
+        const session = url.searchParams.get("session");
+        const latestId = sessions[sessions.length - 1]!.id;
+        const selectedId = sessions.some((s) => s.id === session)
+          ? session
+          : latestId;
+        return HttpResponse.json({
+          sessions,
+          selectedId,
+          content:
+            selectedId === "12" ? "第一次启动的输出" : "第二次启动的输出",
+          truncated: false,
+          windowed: false,
+          size: 128,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await waitFor(() =>
+      expect(result.current.comfyLog.text).toBe("第一次启动的输出"),
+    );
+
+    sessions = [
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
+      { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
+    ];
+    await act(async () => {
+      await result.current.comfyLog.refresh();
+    });
+    await waitFor(() =>
+      expect(result.current.comfyLog.text).toBe("第二次启动的输出"),
+    );
+    expect(result.current.comfyLog.sessionId).toBe("40");
+    expect(sessionLogRequests).toContainEqual({
+      source: "comfyui-runtime",
+      session: "40",
+    });
+  });
+
+  it("没有新启动时保持用户选中的旧会话，不因轮询被顶回最新", async () => {
+    const sessions = [
+      { id: "12", title: "▶ ComfyUI 启动会话", startedAt: 1_000 },
+      { id: "40", title: "▶ ComfyUI 启动会话", startedAt: 2_000 },
+    ];
+    server.use(
+      http.get("*/api/logs/sessions", ({ request }) => {
+        const url = new URL(request.url);
+        const session = url.searchParams.get("session");
+        return HttpResponse.json({
+          sessions,
+          selectedId: sessions.some((s) => s.id === session) ? session : "40",
+          content: session === "12" ? "第一次启动的输出" : "第二次启动的输出",
+          truncated: false,
+          windowed: false,
+          size: 128,
+        });
+      }),
+    );
+    const { result } = renderHook(() => useSettingsPage(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.drafts).not.toBeNull());
+    await act(async () => {
+      result.current.comfyLog.selectSession("12");
+    });
+    await waitFor(() =>
+      expect(result.current.comfyLog.text).toBe("第一次启动的输出"),
+    );
+
+    await act(async () => {
+      await result.current.comfyLog.refresh();
+    });
+    /* 最新会话的开始时刻没变（没有新启动）→ 不切走 */
+    expect(result.current.comfyLog.sessionId).toBe("12");
+    expect(result.current.comfyLog.text).toBe("第一次启动的输出");
+  });
+
   it("dbStudioStatus 查询失败 → dbStudioStatus 为 null，启动动作仍可用（#92 回归）", async () => {
     behavior = { dbStudioStatusError: "探测崩溃" };
     const { result } = renderHook(() => useSettingsPage(), {

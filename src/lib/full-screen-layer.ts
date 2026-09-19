@@ -43,6 +43,26 @@ export const TITLE_BAR_HEIGHT_REM = "2.25rem";
 export const FULL_SCREEN_LAYER_CLASS = `fixed ${TITLE_BAR_TOP_CLASS} right-0 bottom-0 left-0`;
 
 /**
+ * 底部状态栏（`BrowserStatusBar`）的让位 class：`bottom-6` = 状态栏的 24px（`h-6`）。
+ *
+ * 与标题行同理，状态栏也是「固定悬浮在窗口边上」的应用级 chrome（`fixed
+ * bottom-0 h-6 z-toast`，z-toast = 1000 高于全屏视图的 z-100）：铺到 `bottom-0`
+ * 的浮层最后 24px 会被它压住 —— 启动日志全屏视图的实测反馈是「日志最下方
+ * 几行被状态栏盖住，看不到最后的内容」。
+ */
+export const STATUS_BAR_CLEARANCE_CLASS = "bottom-6";
+
+/**
+ * 铺满标题行下方内容区、底边让出状态栏的全屏层定位。
+ *
+ * 与 `FULL_SCREEN_LAYER_CLASS` 的分工：后者铺到 `bottom-0`，供「整块内容区
+ * 都是它」且不与状态栏争底边的视图；`ui/fullscreen-dialog` 这类盖在主页面
+ * 之上、而状态栏恒在主页面底部的浮层用本常量，避免最后 24px 被压住。
+ * 仍是四边显式锚定：依赖内容撑高会让「铺满」退化成「随内容长」。
+ */
+export const FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS = `fixed ${TITLE_BAR_TOP_CLASS} right-0 ${STATUS_BAR_CLEARANCE_CLASS} left-0`;
+
+/**
  * 拼出全屏视图层的完整 class 串（定位 + z-index + 视图自身布局）。
  *
  * @param zClass  z-index 工具类，取自浮层刻度表（规范 16 §16.2.5）：
