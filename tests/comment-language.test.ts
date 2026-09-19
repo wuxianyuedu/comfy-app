@@ -55,6 +55,24 @@ function run(args: string[] = []): { code: number; output: string } {
   }
 }
 
+/** 跑门禁：直接在本仓库工作区跑（验「仓库里的基线 ⇄ 仓库里的代码」）。 */
+function runInRepo(args: string[] = []): { code: number; output: string } {
+  try {
+    const output = execFileSync(process.execPath, [SCRIPT, ...args], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { code: 0, output };
+  } catch (err) {
+    const e = err as { status?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof e.status === "number" ? e.status : 1,
+      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+    };
+  }
+}
+
 /**
  * 白名单的权威定义在 `docs/reference-facts.md` 的那一行，脚本用
  * `scripts/doc-facts.cjs` 反向解析它。临时工作区里没有那篇文档，因此这里放一份
@@ -407,6 +425,53 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
     expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(
       true,
     );
+  });
+
+  /**
+   * 提交进仓库的基线**必须与提交进仓库的树对得上**。
+   *
+   * 这条守的是棘轮的一个结构性盲区：临时工作区里跑的用例（上面那批）验证的是
+   * 「脚本判据对不对」，而**仓库自己的基线有没有跟上仓库自己的代码**没有任何
+   * 判据盯着 —— `--update` 写出来的数字只在提交时进历史，此后新增的英文注释
+   * 若因为「钩子没跑 / 跑了没看」被提交进来，基线就会**停在原地**：
+   *   · `check-comment-language.cjs` 在 pre-commit 里报红（提交被拦），
+   *   · 但代码已经在 master 上了 —— 于是**下一个人做任何提交都会失败**，
+   *     且失败原因与他自己的改动毫无关系（实测：7 个文件、20 行，
+   *     出自 4 个已合并的提交）。
+   * 换句话说，这不是「基线滞后」的美观问题，而是「门禁从可信变成噪音」的
+   * 那一刻。写法上把脚本的 `--report` 输出与基线逐项比对即可（同一份脚本、
+   * 同一份判据，不另写一遍统计）。
+   */
+  it("仓库里的基线覆盖仓库里的代码（否则门禁对下一个提交者报与自己无关的红）", () => {
+    const report = runInRepo(["--report"]);
+    expect(report.code, report.output).toBe(0);
+    /* `--report` 的输出形如：
+     *   扫描 1012 个代码文件:疑似英文注释 20 行,分布在 7 个文件
+     *        8  （路径）
+     */
+    const header = /疑似英文注释 (\d+) 行,分布在 (\d+) 个文件/.exec(
+      report.output,
+    );
+    expect(header, `无法解析 --report 表头：${report.output}`).toBeTruthy();
+    const baseline = JSON.parse(
+      readFileSync(
+        join(REPO_ROOT, "scripts", ".comment-language-baseline.json"),
+        "utf8",
+      ),
+    ) as { total: number; files: Record<string, number> };
+    const actualTotal = Number(header![1]);
+    const actualFiles = Number(header![2]);
+    const baselineFiles = Object.keys(baseline.files ?? {}).length;
+    expect(
+      actualTotal,
+      `${actualFiles} 个文件里有 ${actualTotal} 行英文注释未登记进基线` +
+        "（基线 " +
+        `${baseline.total ?? 0} 行 / ${baselineFiles} 个文件）。` +
+        "\n  要么把这些注释改成中文（首选），要么执行" +
+        "\n  node scripts/check-comment-language.cjs --update 收紧基线" +
+        "\n  —— 但**不要**用一个更宽的基线把红遮掉，那等于把门禁改成噪音。",
+    ).toBe(baseline.total ?? 0);
+    expect(actualFiles).toBe(baselineFiles);
   });
 
   it("规范与启动链路文档都写明了例外的存在（避免「一刀切」被改回去）", () => {

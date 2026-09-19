@@ -1594,9 +1594,8 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
  *
  * 现场是两条**互不相干**的编译错误（用户日志里同时出现，容易被当成一件事）：
  *
- * 1. `generate_context!` 报
- *    `failed to parse plugin global API script paths: Error("trailing comma", line: 8, column: 1)`
- *    —— 真正的原因文件根本不在源码里（见下条用例的注释）。
+ * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」的错误（报的是
+ *    脚本里的尾随逗号与行列号）—— 真正的原因文件根本不在源码里（见下条用例的注释）。
  * 2. `PROBE_ATTEMPTS * PROBE_INTERVAL_MS` 报 `expected u32, found u64`
  *    + `cannot multiply u32 by u64` —— 同一处表达式里的两个常量类型不同档。
  *

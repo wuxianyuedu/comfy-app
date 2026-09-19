@@ -15,12 +15,12 @@ import type { ModalWidth } from "~/components/ui/dialog-width";
  *
  * ```tsx
  * /* 三份逐字同形（`LogPanel` / `GlobalStepLogPanel` / `WorkflowRunLogModal`）*\/
- * const [wide, setWide] = useState(false);
- * popupClassName={wide ? W.wide : W.base}
- * className={`…h-[85vh]… ${wide ? W.wide : W.base}`}   // ← 同一文件里再来一遍
- * <Button onClick={() => setWide((w) => !w)} title={wide ? "收缩" : "加宽"}>
- *   {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
- * </Button>
+ * 档位状态：`const [wide, setWide] = useState(false);`
+ * 宽度档：`popupClassName={wide ? W.wide : W.base}`
+ * 同一文件里第二处：`className={`…h-[85vh]… ${wide ? W.wide : W.base}`}`
+ * 触发钮：`<Button onClick={() => setWide((w) => !w)} title={wide ? "收缩" : "加宽"}>`
+ * 图标：`{wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}`
+ * 闭合：`</Button>`
  * ```
  *
  * 实测三份各自欠着同一件事：**「加宽」这个选择没有任何记忆**。
@@ -100,10 +100,10 @@ export interface WidePanel {
  * 面板加宽档的出口。
  *
  * ```tsx
- * const panel = useWidePanel("exec-log", EXEC_LOG_WIDTH);
- * <DialogContent popupClassName={panel.widthClass}>
- *   <div className={`… ${panel.widthClass}`}>…</div>
- *   <WidePanelToggle panel={panel} className="…" />
+ * 取出口：`const panel = useWidePanel("exec-log", EXEC_LOG_WIDTH);`
+ * 弹窗外壳用它：`<DialogContent popupClassName={panel.widthClass}>`
+ * 弹窗内容也用它：`<div className={`… ${panel.widthClass}`}>…</div>`
+ * 触发钮：`<WidePanelToggle panel={panel} className="…" />`
  * ```
  *
  * `id` 是**记忆的键**，必须跨挂载稳定（面板 id，不是组件实例）。

@@ -1,6 +1,6 @@
 /**
  * `task-state.ts` — 任务状态的终态判据（纯逻辑，客户端 / 服务端共用）
- * @module lib/task-state
+ * @module lib/task-state — 终态判据的模块路径
  *
  * 为什么需要收口：`SUCCEEDED / FAILED / CANCELLED` 这三个「终态」的判据
  * 此前散落在至少四处（执行器的收口守卫、SSE 流的关流条件、取消端点的
