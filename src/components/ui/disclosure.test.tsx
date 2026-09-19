@@ -142,4 +142,28 @@ describe("Disclosure", () => {
     const trigger = screen.getByRole("button", { name: /完整错误/ });
     expect(trigger.querySelector("button")).toBeNull();
   });
+
+  it("同排的排布在 Root 上（rootClassName），面板不随内容收缩", () => {
+    const { container } = render(
+      <Disclosure
+        rootClassName="mt-3 flex flex-wrap items-center gap-2"
+        panelClassName="basis-full"
+        trigger="完整错误"
+      >
+        <p>详情</p>
+      </Disclosure>,
+    );
+    /* Root 默认是块级容器：`leading` / `trailing` 与触发开关同排靠的是
+     * 调用处把 `flex` 一族加到 Root 上（设置页的「重试 / 完整错误 / 复制」
+     * 就是这样排的）。 */
+    const root = container.querySelector('[data-slot="disclosure"]');
+    expect(root?.className).toContain("flex");
+    expect(
+      root?.querySelector('[data-slot="disclosure-trigger"]'),
+    ).not.toBeNull();
+    /* 面板是「独占一行」的那块：Root 是 flex 行时它靠 `basis-full` 换行，
+     * 基类 `w-full` 保证它不被内容宽度挤窄。 */
+    const panel = container.querySelector('[data-slot="disclosure-panel"]');
+    expect(panel?.className).toContain("w-full");
+  });
 });

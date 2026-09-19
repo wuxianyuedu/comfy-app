@@ -1194,12 +1194,20 @@ Enter/Space 处理 —— 而它的注释里写着「**不能**用原生 button�
 
 1. **标记由 `marker` 选**：`none`（调用处自己画，如 `ErrorPanel` 的 `▼/▲`）/
    `caret`（`▸/▾` 字符）/ `chevron`（`ChevronRight`，展开转 90°）。
-   行样式、内边距、卡片外观一律由调用处经 `className` / `panelClassName` 给
+   触发行的样式、内边距、卡片外观一律由调用处经 `className` 给；整排的排布
+   归 **Root**（`rootClassName`）；展开面板的外观走 `panelClassName`
    —— 验收标准仍是**渲染结果不变**（§16.2.4.2 第 9 条）。
 2. **同一排按钮里只有一个是折叠开关时，其余走 `leading` / `trailing`**：
    基元的 trigger 是 `<button>`，往它里面塞 `<Button>` 在 HTML 里非法
-   （React 会报水合错误）。落点：设置页的「重试 / 完整错误 / 复制」、
-   `NodesTab` 分组头右侧的「解析本目录」、工坊两处的「历史」。
+   （React 会报水合错误）—— **触发插槽只放内容**，开关自己的外观经
+   `className` 给（如 `buttonVariants({ variant: "outline" })`，它本身就是按钮，
+   不必再套一层 `<Button>`）。「同排」是**布局**：`leading` / `trailing` 是
+   Root 的子元素，必须给 Root 传 `rootClassName="flex flex-wrap items-center
+   gap-2"` 才真排成一行（Root 默认是块级容器，而触发按钮基类带 `w-full`，
+   不写就是三个各自独占一行）；面板要独占一行配 `panelClassName="basis-full"`
+   （面板基类带 `w-full`，在 flex 行里不随内容收缩）。落点：设置页的
+   「重试 / 完整错误 / 复制」、`NodesTab` 分组头右侧的「解析本目录」、
+   工坊两处的「历史」。
 3. **`▾/▸` 放在标题右侧时**用 `flex-row-reverse` + 标题 `flex-1`
    （`LlmLocalSection` 的两端对齐观感由此不变）。
 4. **树形结构的外层可以就让 Root 当那层容器**（`panelClassName="contents"` 或
