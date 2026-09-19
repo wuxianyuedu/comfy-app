@@ -6,7 +6,7 @@
 // 两个入口是并列的（ISSUE #597）：模型适配 = 每个远端模型 × 每个模式的字段映射；
 // 模式契约 = 每种模式对外有哪些统一输入 / 输出。后者在工作流库也有一份。
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
@@ -14,6 +14,7 @@ import { ProgressBar } from "~/components/ui/progress-bar";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopProjectSummary } from "./hooks/use-workshop-pipeline";
 import { zClass } from "~/lib/shell/overlay-z";
+import { useHotkey } from "~/components/ui/use-hotkey";
 
 interface WorkshopHeaderProps {
   title: string;
@@ -67,21 +68,23 @@ export function WorkshopHeader({
         setPendingDelete(null);
       }
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        setEditingId(null);
-        setCreating(false);
-        setPendingDelete(null);
-      }
-    };
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
+
+  /* Esc 关闭下拉（与上面的「点击外部」是一对）。`filterInput: false` ——
+   * 用户可能正在改名输入框里按 Esc 放弃编辑，那时也要关掉菜单。 */
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setEditingId(null);
+    setCreating(false);
+    setPendingDelete(null);
+  }, []);
+  useHotkey({ key: "Escape" }, closeMenu, {
+    enabled: open,
+    filterInput: false,
+    target: document,
+  });
 
   const commitRename = (id: string) => {
     const next = draftTitle.trim();

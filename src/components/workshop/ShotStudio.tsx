@@ -25,6 +25,7 @@ import {
   type ShotSizeState,
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { errorMessage } from "~/lib/error-message";
 import { paramString } from "~/lib/workshop/param-coerce";
 
@@ -401,7 +402,7 @@ export function ShotStudio({
                 </div>
 
                 {shot.imageUrl && (
-                  <img
+                  <MediaThumbnail
                     src={shot.imageUrl}
                     alt={shot.sceneHeading}
                     className="border-border mt-2 max-h-64 w-auto rounded-lg border"

@@ -144,19 +144,23 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P15** | 视图里自写面板加宽档的三元（`<flag> ? <X>.wide : <X>.base`）             | `~/components/ui/wide-panel` 的 `useWidePanel` / `WidePanelToggle`（见 §16.2.4.18）                                                                                                   |
 | **P16** | 视图里自绘进度条填充（`style={{ width: \`${…}%\` }}`）                   | `~/components/ui/progress-bar` 的 `ProgressBar`；**数值**（夹取 / 比例 / 下限可见宽度）走 `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（见 §16.2.4.19）                       |
 | **P17** | 视图里自写键值行（muted/faint 标签叶子 + `displayValue(` / `JSON.stringify(` 值） | `~/components/ui/key-value-rows` 的 `KeyValueRows`（四种布局；缺值仍走 `~/lib/display-value`，见 §16.2.4.20）                                                                  |
+| **P18** | 视图里裸写 `<img` / `<video`                             | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底与 `loading`/`decoding` 都在出口里；媒体语义可经 `as` 覆盖后缀推断，见 §16.2.4.21）                        |
+| **P19** | 视图里手写媒体拖拽源（`setData("application/x-comfyapp-media"`） | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义，见 §16.2.4.22）                                              |
+| **P20** | 视图 / 逻辑层里自己挂 `keydown` 监听                     | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台、`filterInput`、`enabled`，见 §16.2.4.23）                                                                          |
 
-**P4~P17 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P17 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+**P4~P20 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P20 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
-加宽档 / 进度条 / 键值行」这十四件事的**定义**只能有一处，没有「冻结在某个数字」
-的中间态可言。
+加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键」这十七件事的
+**定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
 清零过程：P4 见 §16.2.4.9、P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、
 P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.4.15、
-P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18、P16/P17 见 §16.2.4.19 ~ §16.2.4.20。
+P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18、P16/P17 见 §16.2.4.19 ~ §16.2.4.20、
+P18/P19/P20 见 §16.2.4.21 ~ §16.2.4.23。
 
-**P4~P17 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P20 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -334,6 +338,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 面板加宽档       | ~~`LogPanel` / `GlobalStepLogPanel` / `WorkflowRunLogModal` 三份逐字同形（`useState` + 同一文件里两处三元 + 按钮文案图标），且三份**都没有持久化** —— 加宽后关掉再打开又变回窄档~~ | `~/components/ui/wide-panel` 的 `useWidePanel`（记忆按 `id` 落 localStorage）/ `WidePanelToggle`；**P15 硬闸** | ✅ **见 §16.2.4.18**                        |
 | 异步动作的进度   | ~~**10 处**各写一遍「track + `width: X%` + 百分比文字」，写法四派（`Math.max(4, p)` 可见下限 / 自算比例 / 不夹取 / 算好的 pct）；且**只有 2 处**声明 `role="progressbar"`~~ | `~/components/ui/progress-bar` 的 `ProgressBar`（形态）+ `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（数值）；**P16 硬闸** | ✅ **见 §16.2.4.19**                        |
 | 键值行           | ~~**5 处**各写一遍「标签 + 值 + 空值占位」的行，四种布局语言（隔行参数表 / 网格卡片 / `<table>` / 行内状态项）~~ | `~/components/ui/key-value-rows` 的 `KeyValueRows`（`rows` / `stacked` / `table` / `inline` 四布局）；缺值仍走 `~/lib/display-value`；**P17 硬闸** | ✅ **见 §16.2.4.20**                        |
+| 渲染媒体         | ~~**18 个文件**各写一遍裸 `<img>` / `<video>`，失败这一侧四种写法（`style.display = "none"` / `visibility = "hidden"` / 自持 `useState(failed)` 方块 / 长文案说明），**另外 14 处压根没有兜底**；`loading="lazy"` 只有 2 个写了~~ | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底 + `loading`/`decoding` 都在出口里，`as` 可覆盖后缀推断）；**P18 硬闸** | ✅ **见 §16.2.4.21**                        |
+| 媒体拖拽源       | ~~`HistoryPanel` 与 `MaterialLibraryPanel` 的网格 / 列表四个视图**逐字重复四遍** `setData("application/x-comfyapp-media", …)`；消费端 `use-canvas-drop` 只做 `JSON.parse` + 类型断言，形状对不上就是**静默丢投**~~ | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义）；**P19 硬闸** | ✅ **见 §16.2.4.22**                        |
+| 全局快捷键       | ~~**6 处**各自 `addEventListener("keydown")`，修饰键判据不同：`LogProvider` / `UpdateCheckProvider` 只判 `ctrlKey`（**macOS 上按 ⌘ 没反应**）、`json-viewer` 判了 `metaKey \|\| ctrlKey` 却不过滤输入焦点、`ScriptMarkdownEditor` 两者都判~~ | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台 / `filterInput` / `enabled` / `preventDefault`）；**P20 硬闸** | ✅ **见 §16.2.4.23**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -1688,6 +1695,157 @@ JSON 气泡 / 预览。窗口取 160 字符 —— 实测 400 字符会把环形
 节点里有个 muted 色的口 id span）。与 P13「更差的那种写法也要数」是同一枚
 硬币的两面 —— 判据要覆盖所有不合规的写法，也要**一个都不误伤**合规的。
 反面用例钉住「只有小标题、没有值」的行。
+
+### 16.2.4.21 「渲染一张可能失败的媒体图」有十八份写法（P18 硬闸）
+
+延续「按形态找，不按函数名找」的问法（§16.2.4.6 末的口径）：这一轮问的是
+**「谁在渲染一张图 / 视频，而它可能加载失败」**。
+
+全库 **18 个文件**各自裸写 `<img>`，而**失败这一侧有四种写法、四种后果**：
+
+| 落点 | 失败时怎么做 | 后果 |
+| --- | --- | --- |
+| `HomePage` 项目缩略图 | `event.target.style.display = "none"` | 直接改 DOM、绕过 React；失败那格**留下空洞**（`gap` 还在，缩略图条少一块） |
+| `TrainingStudio` 数据集缩略图 | `style.visibility = "hidden"` | 同上，只是换了个属性名 |
+| `WorkflowImagePreview` | 自持 `useState(failed)` + 「图片不可用」方块 | 写法对，但这段状态机在每个落点重写一遍 |
+| `SettingsPrimitives.FieldImagePreview` | 同上，换成长文案 | 同上 |
+
+而**另外 14 处压根没有兜底** —— `<img>` 失败就交给浏览器画破图图标
+（Chrome 的碎图片 + `alt` 文本），在深色面板上尤其难看。还有一处不一致：
+18 个 `<img>` 里只有 **2 个**写了 `loading="lazy"`、**1 个**写了 `decoding`。
+
+也就是说 —— **「图片挂了会看到什么」取决于它是从哪个面板渲染出来的**，
+而且没有报错、没有告警、tsc / eslint 也都不看。这类差异只能靠「同一件事
+只允许一处实现」从结构上消除。
+
+#### 出口：`~/components/ui/media-thumbnail` 的 `MediaThumbnail`
+
+- **形态**由出口给：`<video>` 就地播放（`playsInline` / `preload="metadata"`）、
+  其余走 `<img loading="lazy" decoding="async">`；
+- **失败兜底**由 `fallback` 决定形态：缺省 `"placeholder"`（中性占位，继承
+  调用处的盒子 —— 所以**不跳布局、不留空洞**）、`"none"`（宁缺勿错，整格不渲染）、
+  或一个自定义节点（`SettingsPrimitives` 给的是「怎么换掉这个地址」的可行动文案）；
+- **`as`** 覆盖后缀推断：`ResultCard` 的 `mediaType` / `kind` 已判过是视频，
+  而 ComfyUI 某些节点把视频帧存成 `.png` —— **语义判断优先于后缀推断**，
+  出口自己判后缀但**不推翻**调用处已经知道的答案（这条是迁移时被既有用例
+  抓出来的：`ResultCard.test.tsx` 的「mediaType=video 强制走视频分支」当场转红）；
+- **`src` 变化重新给机会**：列表复用同一组件实例时，上一张图的失败不该传染
+  给下一张（收口前各落点自己管这一条，漏掉的就会「换图仍是破图」）。
+
+迁 **18 个文件**：`HomePage` / `TrainingStudio` / `WorkflowImagePreview` /
+`SettingsPrimitives` / `ModelCard`（失败落回与「没有封面」同一个渐变底）/
+`ResultCard` / `ProjectOutputs` / `ContentAssetNode`（×3）/ `FilmStudio` /
+`VideoStudio.parts`（×2）/ `ShotStudio` / `FinalComposer`（×2）/
+`CharacterPortraitStudio` / `StoryboardPlanner.parts` /
+`WorkshopEncapsulationPanel` / `WorkflowCanvasNodePreview` /
+`me/works/page.tsx` / `UsageTestDialog`。
+
+#### 判据：P18（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P18**（`HARD_GATE_RULES`，不进基线）：视图里
+出现 `<img` 或 `<video` 标签。
+
+⚠️ **锚点取标签，不取 `onError=`**：单看 `onError=` 会漏掉那 14 处**压根没有
+兜底**的 `<img>` —— 而「没有出现 onError」正是这条账里更差的那一半。反面用例
+钉住「用了 `MediaThumbnail` 的文件不误伤」，并**显式覆盖「带自己的 onError
+兜底」那一半**（它也是四份写法之一，不能因为是「更完整的那种」就放过）。
+
+### 16.2.4.22 「把一张媒体图变成可拖拽源」有四处逐字相同（P19 硬闸）
+
+同一个「按形态找」的问法换到**拖拽**上问：**「谁在把一张图变成可拖拽的源」** ——
+注意按 `draggable` 找会把 React Flow 节点与表单行排序一起算进来（那些是
+**组件内**拖拽），所以锚点要取**跨组件**的那个特征。
+
+`HistoryPanel`（网格 / 列表两个视图）与 `MaterialLibraryPanel`（同两个视图）
+里，这段代码**逐字重复了四遍**：`draggable` + 一个 `onDragStart`（内部
+`dataTransfer.setData` 本项目自定义 MIME、载荷是 `{ url, displayName, mediaType }`
+的 JSON、再把 `effectAllowed` 设成 `"copy"`）+ 写死
+`cursor-grab active:cursor-grabbing` 的类名拼接。
+
+四处都编译、都运行、类型都对，而**真正的病灶不在重复**：
+
+1. **跨组件的契约靠手抄**。消费端 `use-canvas-drop` 里 `MediaDropPayload` 只有
+   `JSON.parse(raw) as MediaDropPayload` + 一个**类型断言** —— 源端少写一个字段、
+   把 `mediaType` 写成别的名字，编译期一个字都不会说，运行时是一次**静默丢投**
+   （拖到画布上什么都不发生，也没报错）。收口后两端由**同一份 `MediaDragPayload`**
+   约束：落点的 `MediaDropPayload` 就是它加上 `position`。
+2. **`displayName` 的推导各写各的**。`HistoryPanel` 用
+   `task.cover.split("/").pop() ?? task.id`、`MaterialLibraryPanel` 直接用
+   `item.name` —— 都对，但「文件名从路径里怎么取」这件事又多了两份实现。现在由
+   出口的 `displayNameFromUrl` 给缺省（剥查询串 / 锚点后取最后一段，**空段回退
+   原串**而不是给一个看不出来的空名字），调用处要自己的名字就显式传。
+3. **可拖 / 不可拖的判据散在两处**（`isDraggableCover(task)` 与
+   `item.kind === "image" || item.kind === "video"`）。四处都是「`draggable`
+   一个判据、光标类另一个判据」，改一处漏一处；出口把它们收成「可拖才有光标」。
+
+#### 出口：`~/components/ui/media-drag-source` 的 `mediaDragSourceProps`
+
+`mediaDragSourceProps({ url, displayName, kind, canDrag, className })` 返回
+`{ draggable, onDragStart, className }`，调用处**整份**摊到元素上（只摊一半
+就是此前四处那副样子）。`MEDIA_DRAG_MIME` 与 `MediaDragPayload` 也在这里导出 ——
+**源端与落点共用一份**。
+
+它是**纯函数而不是 hook**：只做「给定这张图，产出该摊在元素上的属性」，
+没有状态也没有订阅，而调用点都在 `Array.map` 的回调里 —— 那里不能调 hook，
+硬做成 hook 会逼着每个列表项先拆成一个组件（那是纯粹的噪音）。
+
+#### 判据：P19（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P19**（`HARD_GATE_RULES`，不进基线）：视图里
+出现 `setData("application/x-comfyapp-media"` 这个**自定义 MIME 的字面量**。
+
+⚠️ **只数这个 MIME，不数 `draggable`**：React Flow 节点与表单行排序都是组件内
+拖拽，它们不跨组件、也不带这个 MIME，不该走本出口。反面用例钉住它们放行。
+
+### 16.2.4.23 「注册一个全局快捷键」有六处写法（P20 硬闸）
+
+第三个问法：**「谁在注册一个全局按键监听」**。全库 **6 处**各自
+`addEventListener("keydown", handler)` + 手写清理，写法看着像，**判据却各不相同**：
+
+| 落点 | 修饰键判据 | 输入焦点过滤 |
+| --- | --- | --- |
+| `LogProvider`（Ctrl+Shift+L） | `ctrlKey && shiftKey` —— **没写 `metaKey`** | 无 |
+| `UpdateCheckProvider`（Ctrl+Shift+U） | 同上 —— **没写 `metaKey`** | 无 |
+| `json-viewer`（⌘/Ctrl+F） | `metaKey \|\| ctrlKey` | **无** —— 在别的输入框里也把 ⌘F 抢走 |
+| `ScriptMarkdownEditor`（⌘/Ctrl+S、Z） | `metaKey \|\| ctrlKey` | 无（它自己就是编辑器，正好需要不过滤） |
+| `MessageCenterPanel`（Esc） | — | 无 |
+| `WorkshopHeader`（Esc） | — | 无 |
+
+也就是说 —— **「这个快捷键在 mac 上能不能用」取决于它是哪一处写的**：
+前两处按 ⌘ 没有任何反应，而用户不会认为「这个应用没有这个快捷键」，只会认为
+「它坏了」。这类差异没有报错、没有告警、tsc / eslint 都不看。
+
+#### 出口：`~/components/ui/use-hotkey` 的 `useHotkey`
+
+`useHotkey(spec, handler, options)`，四件此前各处写不全的事：
+
+1. **`mod` 是跨平台的**：同时接受 ⌘（macOS）与 Ctrl（其它平台）。显式
+   `ctrl: true` / `meta: true` 仍可用，但那是「刻意只在某一个键上成立」——
+   要在调用处写明理由；
+2. **`enabled`**：不满足条件时**不注册**，而不是注册了在 handler 里 early return
+   （后者会在别的 handler 都跑完之后才轮到它，顺序不可控）；
+3. **`filterInput`**（默认开）：焦点在输入框 / 文本域 / contenteditable 里时不触发。
+   这条正是 `json-viewer` 缺的那半 —— 而 `ScriptMarkdownEditor` 是它的**反例**：
+   本组件是一整块全屏编辑器，主体就是 `<textarea>`，默认过滤会把 ⌘S / ⌘Z 全部
+   挡死，所以那两处**刻意**传 `filterInput: false`（写明了理由）；
+4. **`preventDefault`**（默认开）：命中时阻止浏览器默认行为（⌘S 会弹「保存网页」）。
+
+`matchesHotkey` 单独导出，判据是**declared 只约束声明了的东西**：主键相等后，
+每个显式声明的修饰键都必须按下、每个未声明的都必须没按。未声明的必须没按
+是关键 —— 否则一个不声明修饰键的 `keydown` 会把别的组合键一起吞掉。
+`Escape` 也照这条规则（`shift` 一起按就不算命中），因为它是「退出」，
+不该在用户同时按着修饰键时静默失效。
+
+#### 判据：P20（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P20**（`HARD_GATE_RULES`，不进基线）：视图 /
+逻辑层里出现 `addEventListener("keydown"`。
+
+⚠️ **锚点取「挂 keydown」这个动作，不取 `metaKey`**：单看 `metaKey` 会漏掉那两处
+**完全没写 `metaKey`** 的 —— 而它们才是这条账里更差的那一种（与 P13「更差的
+那种也要数」同源：判据漏掉更差的写法时，被拦下的永远只是合规者）。反面用例
+钉住「只判 `ctrlKey`（mac 上没反应）」这一种也能数到。`ui/` 自身豁免
+（`use-hotkey` 就要挂 `keydown`）。
 
 ## 16.3 新增一个组件的标准动作
 

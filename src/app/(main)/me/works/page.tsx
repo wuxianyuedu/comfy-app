@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMyWorks } from "./hooks/use-my-works";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   QUEUED: { label: "排队中", cls: "bg-subtle text-muted-foreground" },
@@ -60,7 +61,7 @@ export default function MyWorks() {
               >
                 <div className="bg-bg relative aspect-square">
                   {task.cover ? (
-                    <img
+                    <MediaThumbnail
                       src={task.cover}
                       alt={task.prompt}
                       className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"

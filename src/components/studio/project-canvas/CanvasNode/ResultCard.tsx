@@ -8,6 +8,7 @@ import {
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
 import { copyText } from "~/lib/browser-io";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { isVideo as isVideoSource } from "~/lib/media/media-kind";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 
@@ -128,8 +129,12 @@ export function ResultCard({
             className="text-ink-fainter"
           />
         ) : isVideo ? (
-          <video
+          <MediaThumbnail
             src={src}
+            /* `as="video"`：`mediaType` / `kind` 已判过视频，而媒体路径
+             * 可能是 `.png`（ComfyUI 把视频帧存成图片后缀）—— 语义判断
+             * 优先于后缀推断（§16.2.4.21 的口径）。 */
+            as="video"
             controls
             autoPlay
             loop
@@ -137,7 +142,7 @@ export function ResultCard({
             className="max-h-56 w-full object-contain"
           />
         ) : (
-          <img
+          <MediaThumbnail
             src={src}
             alt="result"
             className="max-h-56 w-full object-contain"

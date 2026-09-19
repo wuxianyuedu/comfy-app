@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
+import { useHotkey } from "~/components/ui/use-hotkey";
 import { fetchFileLogSlice } from "~/lib/log/log-file-client";
 import { clampLogTime } from "~/lib/log/log-session-scope";
 
@@ -326,18 +327,9 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
    * （规范 16 §16.2.4.15）。 */
   useInterval(poll, { ms: POLL_MS });
 
-  // ── 键盘快捷键：Ctrl+Shift+L ──
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {
-        e.preventDefault();
-        toggleOpen();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [toggleOpen]);
+  /* 键盘快捷键：⌘/Ctrl+Shift+L —— 收在 `useHotkey` 里（`mod` 同时覆盖 ⌘ 与
+   * Ctrl，此前只判 `ctrlKey`，macOS 上按 ⌘ 没有任何反应）。 */
+  useHotkey({ key: "l", mod: true, shift: true }, toggleOpen);
 
   return <>{children}</>;
 }

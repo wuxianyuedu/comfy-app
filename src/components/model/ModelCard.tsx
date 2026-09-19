@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Badge } from "~/components/ui/badge";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Card } from "~/components/ui/card";
 
 export type ModelCardData = {
@@ -48,10 +49,18 @@ export function ModelCard({ model }: { model: ModelCardData }) {
       <Card className="border-border bg-surface gap-0 py-0 transition-shadow group-hover:shadow-[0_8px_30px_rgba(20,20,40,0.10)]">
         <div className="relative aspect-[4/3] w-full overflow-hidden">
           {model.cover ? (
-            <img
+            <MediaThumbnail
               src={model.cover}
               alt={model.name}
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              /* 加载失败落回与「没有封面」同一个渐变底 —— 同一张卡的
+                 两种缺图原因不该长得不一样。 */
+              fallback={
+                <span
+                  className="block h-full w-full"
+                  style={{ background: grad }}
+                />
+              }
             />
           ) : (
             <div
