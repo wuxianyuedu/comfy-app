@@ -20,20 +20,21 @@ import {
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
 import { useToast } from "~/components/studio/ToastProvider";
+import {
+  MEDIA_DRAG_MIME,
+  type MediaDragPayload,
+} from "~/components/ui/media-drag-source";
 
 export interface UseCanvasDropArgs {
   screenToFlowPosition: (p: XYPosition) => XYPosition;
   setNodes: Dispatch<SetStateAction<CanvasNodeType[]>>;
 }
 
-export interface MediaDropPayload {
-  url: string;
-  displayName: string;
-  /** image / video 才有对应节点；audio 与 doc 目前无载体。 */
-  mediaType: "image" | "video" | "audio" | "doc";
+/** 落点载荷 = 源端交给 `mediaDragSourceProps` 的形状 + 落地坐标。 */
+export type MediaDropPayload = MediaDragPayload & {
   /** 拖拽落地时传入落点的 flow 坐标；缺省则落在视口中心。 */
   position?: XYPosition;
-}
+};
 
 export function useCanvasDrop({
   screenToFlowPosition,
@@ -83,7 +84,10 @@ export function useCanvasDrop({
   );
 
   const onCanvasDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (e.dataTransfer.types.includes("application/x-comfyapp-media")) {
+    /* MIME 与载荷形状都由 `~/components/ui/media-drag-source` 定义 ——
+     * 源端与落点共用一份，靠手抄保持一致的那段日子到此为止
+     * （源端少写一个字段，编译期不会说，运行时是一次静默丢投）。 */
+    if (e.dataTransfer.types.includes(MEDIA_DRAG_MIME)) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     }
@@ -91,7 +95,7 @@ export function useCanvasDrop({
 
   const onCanvasDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
-      const raw = e.dataTransfer.getData("application/x-comfyapp-media");
+      const raw = e.dataTransfer.getData(MEDIA_DRAG_MIME);
       if (!raw) return; // 非本应用拖拽（如外部文件），忽略
       e.preventDefault();
       let payload: MediaDropPayload;

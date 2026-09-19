@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Upload } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useFilePicker } from "~/components/ui/file-picker";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { NumberField } from "~/components/ui/number-field";
 import { RangeSlider } from "~/components/ui/range-slider";
 import { AuroraGlow } from "~/components/ui/aurora-background";
@@ -241,14 +242,10 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                       key={data.name}
                       className="border-border bg-card flex items-center gap-2 rounded-md border p-1.5"
                     >
-                      <img
+                      <MediaThumbnail
                         src={`/api/file/${encodeURIComponent(data.name)}`}
                         alt={data.name}
                         className="h-9 w-9 shrink-0 rounded object-cover"
-                        onError={(event) =>
-                          ((event.target as HTMLImageElement).style.visibility =
-                            "hidden")
-                        }
                       />
                       <input
                         value={data.caption}

@@ -13,6 +13,7 @@ import { useToast } from "~/components/studio/ToastProvider";
 import { useMessageCenterStore } from "~/components/message-center/message-center-store";
 import { useUpdateCheckStore } from "./update-check-store";
 import { useUpdateCheck } from "./hooks/use-update-check";
+import { useHotkey } from "~/components/ui/use-hotkey";
 
 const STORAGE_KEY = "comfyapp.updateCheck.enabled";
 const MANUAL_SHORTCUT = "检测本地更新 (Ctrl+Shift+U)";
@@ -100,31 +101,21 @@ export function UpdateCheckProvider() {
     return () => registerManual(null);
   }, [checkNow, registerManual]);
 
-  // 快捷键 Ctrl+Shift+U 主动检测一次：无脏态时给「已是最新」的确定性反馈
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "u") {
-        e.preventDefault();
-        void (async () => {
-          const ok = await checkNow();
-          if (ok) {
-            const dirty = useUpdateCheckStore.getState().dirty;
-            const groups = useUpdateCheckStore.getState().groups;
-            if (!dirty) {
-              toast.info(MANUAL_SHORTCUT, "本地文件无需重启的改动。");
-            } else {
-              toast.info(
-                MANUAL_SHORTCUT,
-                `检测到需重启的改动：${summaryOf(groups)}`,
-              );
-            }
-          }
-        })();
+  /* 快捷键 ⌘/Ctrl+Shift+U 主动检测一次：无脏态时给「已是最新」的确定性反馈。
+   * 此前只判 `ctrlKey` —— macOS 上按 ⌘ 没有任何反应（Issue 的一次收口）。 */
+  const checkFromShortcut = useCallback(() => {
+    void (async () => {
+      const ok = await checkNow();
+      if (!ok) return;
+      const { dirty, groups } = useUpdateCheckStore.getState();
+      if (!dirty) {
+        toast.info(MANUAL_SHORTCUT, "本地文件无需重启的改动。");
+      } else {
+        toast.info(MANUAL_SHORTCUT, `检测到需重启的改动：${summaryOf(groups)}`);
       }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    })();
   }, [checkNow, toast]);
+  useHotkey({ key: "u", mod: true, shift: true }, checkFromShortcut);
 
   return null;
 }

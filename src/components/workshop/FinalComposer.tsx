@@ -4,6 +4,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { downloadJson } from "~/lib/browser-io";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import {
   MOTION_LABELS,
   TRANSITION_LABELS,
@@ -237,7 +238,7 @@ export function FinalComposer({
           </div>
           <div className="bg-bg grid min-h-[240px] place-items-center overflow-hidden rounded-xl">
             {current.shot.clipUrl ? (
-              <video
+              <MediaThumbnail
                 key={current.shot.id}
                 src={current.shot.clipUrl}
                 autoPlay
@@ -246,7 +247,7 @@ export function FinalComposer({
                 className="max-h-[420px] w-full"
               />
             ) : current.shot.imageUrl ? (
-              <img
+              <MediaThumbnail
                 src={current.shot.imageUrl}
                 alt={current.shot.sceneHeading}
                 className="max-h-[420px] w-full object-contain"
@@ -282,7 +283,7 @@ export function FinalComposer({
               </span>
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
                 {shot.imageUrl ? (
-                  <img
+                  <MediaThumbnail
                     src={shot.imageUrl}
                     alt={shot.sceneHeading}
                     className="h-full w-full object-cover"

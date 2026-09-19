@@ -131,6 +131,26 @@ const KEY_VALUE_ROW_VIEW =
 /* 自写键值行：muted 色标签叶子 + `JSON.stringify(...)` 值（P17 形态 ②）。 */
 const KEY_VALUE_JSON_VIEW =
   'export function Kv({ row }: { row: { label: string; v: unknown } }) {\n  return (\n    <div>\n      <span className="text-muted-foreground">{row.label}</span>\n      <span>{JSON.stringify(row.v)}</span>\n    </div>\n  );\n}\n';
+/* 裸写 <img>：视图直接渲染媒体标签，而不是走 MediaThumbnail（P18）。 */
+const RAW_IMG_VIEW =
+  'export function A({ src }: { src: string }) {\n  return <img src={src} alt="" className="h-10 w-10 object-cover" />;\n}\n';
+/* 裸写 <video> 同样算「自己实现一份媒体渲染」（P18）。 */
+const RAW_VIDEO_VIEW =
+  'export function V({ src }: { src: string }) {\n  return <video src={src} controls className="h-10 w-10" />;\n}\n';
+/* 带自己的 onError 兜底也算自实现 —— 这正是这条账里「更完整」的那一半，
+ * 但它仍然是第四份写法（P18）。 */
+const RAW_IMG_WITH_ON_ERROR_VIEW =
+  'export function A({ src }: { src: string }) {\n  const [failed, setFailed] = useState(false);\n  if (failed) return <p>图片不可用</p>;\n  return <img src={src} alt="" onError={() => setFailed(true)} />;\n}\n';
+/* 手写跨组件拖拽源：自定义 MIME 的字面量（P19）。 */
+const HAND_WRITTEN_DRAG_VIEW =
+  'export function D({ item }: { item: MediaItem }) {\n  return (\n    <div\n      draggable\n      onDragStart={(event) => {\n        event.dataTransfer.setData(\n          "application/x-comfyapp-media",\n          JSON.stringify({ url: item.url, displayName: item.name, mediaType: item.kind }),\n        );\n        event.dataTransfer.effectAllowed = "copy";\n      }}\n    >\n      {item.name}\n    </div>\n  );\n}\n';
+/* 组件内拖拽（React Flow 节点 / 表单行）不带这个 MIME —— P19 必须放行。 */
+const INNER_DRAG_VIEW =
+  "export function D({ onMove }: { onMove: () => void }) {\n  return (\n    <div draggable onDragStart={() => onMove()} onDragEnd={onMove}>\n      handle\n    </div>\n  );\n}\n";
+/* 自己往 window 上挂 keydown（P20）。 */
+const HAND_WRITTEN_HOTKEY_VIEW =
+  'export function H({ onOpen }: { onOpen: () => void }) {\n  useEffect(() => {\n    const handler = (e: KeyboardEvent) => {\n      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {\n        e.preventDefault();\n        onOpen();\n      }\n    };\n    window.addEventListener("keydown", handler);\n    return () => window.removeEventListener("keydown", handler);\n  }, [onOpen]);\n  return null;\n}\n';
+
 /* 自绘模态浮层：**不含任何 `createPortal`** —— 这正是 P2 数不到的那一侧
  *（P2 问「有没有用某 API」，P9 问「有没有自己拼一份浮层外壳」）。 */
 const MODAL_OVERLAY_VIEW =
@@ -598,7 +618,110 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  it("P10~P17 未清零时 --update 拒绝更新基线", () => {
+  /* ── P18 / P19 / P20：本批三条硬闸（规范 §16.2.4.21 ~ §16.2.4.23）────
+   *
+   * 这三条的形态锚点都**不取 API 名**（P18 取标签、P19 取自定义 MIME 字面量、
+   * P20 取 `addEventListener("keydown"`）—— 前几批的反复教训是「按 API 看
+   * 不见那些用另一种方式做同一件事的写法」。每一条都配一个反面用例。 */
+  it("视图里裸写 <img> 直接阻断（规范 P18）", () => {
+    seedBaseline();
+    write("src/components/studio/Raw.tsx", RAW_IMG_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P18");
+    expect(output).toContain("src/components/studio/Raw.tsx");
+  });
+
+  it("裸写 <video> 同样被 P18 计（出口管的就是图片 / 视频二选一）", () => {
+    seedBaseline();
+    write("src/components/studio/RawVideo.tsx", RAW_VIDEO_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P18");
+  });
+
+  it("带自己的 onError 兜底也算自实现（P18 要数到那 4 份写法）", () => {
+    /* 判据必须覆盖「已经写了 onError 但自己实现一份」的那一半 ——
+     * 只数「没有 onError」的会漏掉这条账里更完整的四分之一。 */
+    seedBaseline();
+    write("src/components/studio/RawFallback.tsx", RAW_IMG_WITH_ON_ERROR_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P18");
+  });
+
+  it("使用 MediaThumbnail 的文件不再被 P18 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkMedia.tsx",
+      'import { MediaThumbnail } from "~/components/ui/media-thumbnail";\nexport const O = ({ src }: { src: string }) => <MediaThumbnail src={src} />;\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里手写媒体拖拽源直接阻断（规范 P19）", () => {
+    seedBaseline();
+    write("src/components/studio/Drag.tsx", HAND_WRITTEN_DRAG_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P19");
+    expect(output).toContain("src/components/studio/Drag.tsx");
+  });
+
+  it("组件内拖拽（不带自定义 MIME）不被 P19 误伤", () => {
+    /* React Flow 节点与表单行排序都是组件内拖拽 —— 它们不该走「跨组件」
+     * 那个出口（出口的载荷形状是给落点解析用的）。 */
+    seedBaseline();
+    write("src/components/studio/InnerDrag.tsx", INNER_DRAG_VIEW);
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("使用 mediaDragSourceProps 的文件不再被 P19 计", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkDrag.tsx",
+      'import { mediaDragSourceProps } from "~/components/ui/media-drag-source";\nexport const O = ({ url }: { url: string }) => (\n  <div {...mediaDragSourceProps({ url, kind: "image" })} />\n);\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自己挂 keydown 直接阻断（规范 P20）", () => {
+    seedBaseline();
+    write("src/components/studio/Hotkey.tsx", HAND_WRITTEN_HOTKEY_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P20");
+    expect(output).toContain("src/components/studio/Hotkey.tsx");
+  });
+
+  it("只判 ctrlKey（macOS 上按 ⌘ 没反应）这一种更差的写法也数得到", () => {
+    /* 与 P13「更差的那种也要数」同源：判据漏掉更差的写法时，被拦下的
+     * 永远只是合规者。这里断言的是**形态锚点**（挂 keydown）而不是
+     * `metaKey` 有没有 —— 后者正是漏掉那两处的原因。 */
+    seedBaseline();
+    write(
+      "src/components/studio/HotkeyCtrlOnly.tsx",
+      'export function H({ onOpen }: { onOpen: () => void }) {\n  useEffect(() => {\n    const h = (e: KeyboardEvent) => {\n      if (e.ctrlKey && e.key === "k") onOpen();\n    };\n    document.addEventListener("keydown", h);\n    return () => document.removeEventListener("keydown", h);\n  }, [onOpen]);\n  return null;\n}\n',
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P20");
+  });
+
+  it("使用 useHotkey 的文件不再被 P20 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkHotkey.tsx",
+      'import { useHotkey } from "~/components/ui/use-hotkey";\nexport function H({ onOpen }: { onOpen: () => void }) {\n  useHotkey({ key: "l", mod: true, shift: true }, onOpen);\n  return null;\n}\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P10~P20 未清零时 --update 拒绝更新基线", () => {
     write("src/components/studio/ToggleUpdate.tsx", ROLE_BUTTON_TOGGLE_VIEW);
     const { code, output } = run(["--update"]);
     expect(code).toBe(1);
@@ -621,6 +744,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P15).toBeUndefined();
     expect(baseline.rules.P16).toBeUndefined();
     expect(baseline.rules.P17).toBeUndefined();
+    expect(baseline.rules.P18).toBeUndefined();
+    expect(baseline.rules.P19).toBeUndefined();
+    expect(baseline.rules.P20).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

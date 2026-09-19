@@ -71,6 +71,14 @@ const REQUIRED_CONSUMERS: Record<string, string> = {
   tabs: "工作流库详情面板的三页签",
   alert: "登录提示 / 训练后端横幅 / 设置页提示条 / 工坊错误行",
   "dropdown-menu": "画布右键菜单与项目切换器",
+  /* 本批三条（规范 16 §16.2.4.21 ~ §16.2.4.23）：三条判据都按**形态**取锚点
+   * （标签 / 自定义 MIME 字面量 / `addEventListener("keydown"`）—— P2 数
+   * `createPortal` 漏掉 16 个自绘模态的教训，这三条各用一遍。 */
+  "media-thumbnail":
+    "全库 18 个文件的裸 <img> / <video>（含媒体缩略图、封面、预览、数据集缩略图）",
+  "media-drag-source": "历史面板与素材库四个视图的媒体拖拽源",
+  "use-hotkey":
+    "日志面板 ⌘/Ctrl+Shift+L、更新检测 ⌘/Ctrl+Shift+U、Esc 关闭面板 / 菜单、剧本编辑器 ⌘S / ⌘Z",
 };
 
 /** 逐文件收集业务侧（非 ui/ 自身、非测试）的 import 说明符。 */
@@ -340,12 +348,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     ],
     /* 本批（ISSUE #672 续）：异步动作的进度（P16）与对象渲染成键值行（P17）。 */
     ["~/lib/progress", "ts", ["clampPct", "toPct", "pctToWidth"], 4],
-    [
-      "~/components/ui/key-value-rows",
-      "tsx",
-      ["KeyValueRows"],
-      4,
-    ],
+    ["~/components/ui/key-value-rows", "tsx", ["KeyValueRows"], 4],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
     (spec, ext, exports, min) => {
