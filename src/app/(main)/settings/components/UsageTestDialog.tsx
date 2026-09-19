@@ -29,6 +29,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { Input } from "~/components/ui/input";
 
 import { FieldImagePreview } from "./SettingsPrimitives";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import type {
   RemoteModelDialogs,
@@ -459,7 +460,7 @@ function UsageTestResultPanel({
               </p>
             )}
             {result.imageUrl && (
-              <img
+              <MediaThumbnail
                 src={result.imageUrl}
                 alt="生成结果"
                 className="border-border/50 max-h-56 w-full rounded-lg border"

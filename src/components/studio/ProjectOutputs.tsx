@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
@@ -205,7 +205,7 @@ export function ProjectOutputs() {
         {/* ── Cover banner ── */}
         <div className="relative mb-6 h-[180px] overflow-hidden rounded-2xl border border-violet-500/20">
           {cover ? (
-            <MediaThumb
+            <MediaThumbnail
               src={cover.localPath}
               alt=""
               className="h-full w-full object-cover"
@@ -259,7 +259,7 @@ export function ProjectOutputs() {
                 >
                   <div className="bg-canvas-deep relative aspect-square w-full">
                     {c ? (
-                      <MediaThumb
+                      <MediaThumbnail
                         src={c.localPath}
                         alt=""
                         className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
@@ -366,7 +366,7 @@ export function ProjectOutputs() {
                           className="border-border-strong bg-panel-deep aspect-square overflow-hidden rounded-lg border"
                         >
                           {}
-                          <img
+                          <MediaThumbnail
                             src={refSrc(image)}
                             alt={`参考图 ${index + 1}`}
                             className="h-full w-full object-cover"

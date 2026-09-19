@@ -36,6 +36,7 @@ import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
 interface WorkshopEncapsulationPanelProps {
   workflowId: string;
@@ -295,7 +296,7 @@ export function WorkshopEncapsulationPanel({
               <p className="text-primary text-[11px]">
                 流程测试通过 —— {displayName} 在工坊中可用。
               </p>
-              <img
+              <MediaThumbnail
                 src={test.resultUrl}
                 alt="流程测试产物"
                 className="border-border max-h-56 rounded-lg border"

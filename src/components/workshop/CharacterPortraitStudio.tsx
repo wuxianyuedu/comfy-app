@@ -31,6 +31,7 @@ import {
   portraitCandidates,
 } from "~/lib/workshop/character-portrait";
 import type { Character } from "~/lib/workshop/types";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
 /** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
 export interface CharacterPortraitContext {
@@ -376,10 +377,9 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                       : "border-border hover:border-primary/60"
                   }`}
                 >
-                  <img
+                  <MediaThumbnail
                     src={candidate.url}
                     alt={`定妆照候选（${PORTRAIT_SOURCE_LABELS[candidate.source]}）`}
-                    loading="lazy"
                     className="h-24 w-24 object-cover"
                   />
                 </Button>

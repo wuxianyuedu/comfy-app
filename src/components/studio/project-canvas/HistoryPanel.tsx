@@ -14,6 +14,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { useHistoryPanel } from "./hooks/use-history-panel";
 import {
   FILTER_TABS,
@@ -212,24 +213,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               return (
                 <div
                   key={task.id}
-                  draggable={isDraggableCover(task)}
-                  onDragStart={(event) => {
-                    if (!task.cover) return;
-                    event.dataTransfer.setData(
-                      "application/x-comfyapp-media",
-                      JSON.stringify({
-                        url: task.cover,
-                        displayName: task.cover.split("/").pop() ?? task.id,
-                        mediaType: task.mediaType,
-                      }),
-                    );
-                    event.dataTransfer.effectAllowed = "copy";
-                  }}
-                  className={`group border-border-strong bg-subtle relative overflow-hidden rounded-lg border ${
-                    isDraggableCover(task)
-                      ? "cursor-grab active:cursor-grabbing"
-                      : ""
-                  }`}
+                  {...mediaDragSourceProps({
+                    url: task.cover,
+                    kind: task.mediaType,
+                    canDrag: isDraggableCover(task),
+                    className:
+                      "group border-border-strong bg-subtle relative overflow-hidden rounded-lg border",
+                  })}
                 >
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
                     {task.cover ? (
@@ -285,24 +275,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
               return (
                 <div
                   key={task.id}
-                  draggable={isDraggableCover(task)}
-                  onDragStart={(event) => {
-                    if (!task.cover) return;
-                    event.dataTransfer.setData(
-                      "application/x-comfyapp-media",
-                      JSON.stringify({
-                        url: task.cover,
-                        displayName: task.cover.split("/").pop() ?? task.id,
-                        mediaType: task.mediaType,
-                      }),
-                    );
-                    event.dataTransfer.effectAllowed = "copy";
-                  }}
-                  className={`hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
-                    isDraggableCover(task)
-                      ? "cursor-grab active:cursor-grabbing"
-                      : ""
-                  }`}
+                  {...mediaDragSourceProps({
+                    url: task.cover,
+                    kind: task.mediaType,
+                    canDrag: isDraggableCover(task),
+                    className:
+                      "hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors",
+                  })}
                 >
                   {/* 缩略图 / 类型占位 */}
                   {task.cover ? (

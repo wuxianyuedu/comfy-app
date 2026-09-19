@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { AuroraGlow } from "~/components/ui/aurora-background";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { useToast } from "./ToastProvider";
 import { type WorkspaceView } from "./NavItems";
 import { WorkspaceNav } from "./WorkspaceNav";
@@ -342,16 +343,11 @@ export function HomePage({
                                 {proj.thumbnails
                                   .slice(0, 3)
                                   .map((thumb, ti) => (
-                                    <img
+                                    <MediaThumbnail
                                       key={ti}
                                       src={thumb}
                                       alt=""
                                       className="ring-border-strong h-10 w-10 shrink-0 rounded-lg object-cover ring-1"
-                                      onError={(event) => {
-                                        (
-                                          event.target as HTMLImageElement
-                                        ).style.display = "none";
-                                      }}
                                     />
                                   ))}
                               </div>

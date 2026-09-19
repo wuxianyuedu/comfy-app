@@ -4,6 +4,7 @@ import React from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { WaterFillProgress } from "~/components/ui/water-fill-progress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
@@ -99,7 +100,7 @@ export function ContentAssetBody({
     <div className="relative">
       {mediaSrc ? (
         isPic ? (
-          <img
+          <MediaThumbnail
             src={mediaSrc}
             alt={data.mediaName ?? "参考图"}
             className="border-border-strong bg-canvas-deep h-[260px] w-full rounded-xl border object-cover"
@@ -112,7 +113,7 @@ export function ContentAssetBody({
             style={imageCount > 1 ? { cursor: "pointer" } : undefined}
           />
         ) : (
-          <video
+          <MediaThumbnail
             src={mediaSrc}
             controls
             className="border-border-strong bg-canvas-deep h-[260px] w-full rounded-xl border object-cover"
@@ -230,7 +231,7 @@ export function ContentAssetBody({
           </Button>
 
           {/* 主图 */}
-          <img
+          <MediaThumbnail
             src={`/api/images?filename=${encodeURIComponent(galleryImages[gallery.index]?.localPath ?? "")}&type=input`}
             alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
             className="border-border-strong max-h-[85vh] max-w-[85vw] rounded-lg border object-contain shadow-2xl"
@@ -293,7 +294,7 @@ export function ContentAssetBody({
                       }`}
                       title={`第 ${i + 1} 张`}
                     >
-                      <img
+                      <MediaThumbnail
                         src={`/api/images?filename=${encodeURIComponent(img.localPath)}&type=input`}
                         alt=""
                         className="h-full w-full object-cover"

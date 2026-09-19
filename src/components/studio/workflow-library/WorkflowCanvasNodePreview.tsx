@@ -64,6 +64,7 @@ import {
 } from "./workflow-library-param-cards";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
@@ -645,7 +646,7 @@ export function WorkflowCanvasNodePreview({
       {resultUrl && (
         <div className="w-[380px]">
           <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
-          <img
+          <MediaThumbnail
             src={resultUrl}
             alt="运行结果"
             className="border-border w-full rounded-xl border"

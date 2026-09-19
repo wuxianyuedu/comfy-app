@@ -1,6 +1,7 @@
 "use client";
 /* 抽出的图片预览 + 字符串 textarea —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import { useState } from "react";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import type { RawInputMeta } from "./workflow-types";
 
 /** 节点在 paramMap 里可以分配到的角色 */
@@ -8,7 +9,6 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   const ref = entry.imageRef;
   const label = entry.localized ?? entry.label ?? entry.name;
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const [failed, setFailed] = useState(false);
   /* 空的 LoadImage（没有 widgets_values[0]）→ 占位卡片。与缩略图
    * 同一套布局尺寸（110px 高），好让预览区
    * 无论上传状态如何都视觉一致，并且带边框 /
@@ -34,25 +34,23 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
         {label}
       </div>
       <div className="border-border-strong bg-canvas-deep overflow-hidden rounded-md border">
-        {failed ? (
-          <div className="text-ink-muted flex h-[110px] items-center justify-center text-[10px]">
-            图片不可用
-          </div>
-        ) : (
-          <img
-            src={src}
-            alt={ref.filename}
-            className="block max-h-[110px] w-full object-contain"
-            loading="lazy"
-            onLoad={(event) => {
-              const img = event.currentTarget;
-              if (img.naturalWidth && img.naturalHeight) {
-                setSize({ w: img.naturalWidth, h: img.naturalHeight });
-              }
-            }}
-            onError={() => setFailed(true)}
-          />
-        )}
+        {/* 失败兜底收在基元里（同一个「110px 高」盒子，不跳布局）。 */}
+        <MediaThumbnail
+          src={src}
+          alt={ref.filename}
+          className="block max-h-[110px] w-full object-contain"
+          fallback={
+            <div className="text-ink-muted flex h-[110px] items-center justify-center text-[10px]">
+              图片不可用
+            </div>
+          }
+          onLoad={(img) => {
+            const el = img as HTMLImageElement;
+            if (el.naturalWidth && el.naturalHeight) {
+              setSize({ w: el.naturalWidth, h: el.naturalHeight });
+            }
+          }}
+        />
       </div>
       {size && (
         <div className="text-ink-soft text-right text-[10px] tabular-nums">

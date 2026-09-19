@@ -49,6 +49,9 @@ export default defineConfig({
         "src/components/ui/wide-panel.tsx",
         "src/components/ui/progress-bar.tsx",
         "src/components/ui/key-value-rows.tsx",
+        "src/components/ui/media-thumbnail.tsx",
+        "src/components/ui/media-drag-source.tsx",
+        "src/components/ui/use-hotkey.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -228,6 +231,35 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 90,
+        },
+        /* 本批三条出口（规范 16 §16.2.4.21 ~ §16.2.4.23），门槛取实测值向下
+         * 取整到 5 的倍数（§18.6 的口径：不设理想值 —— 设高了会让无关提交
+         * 变红，设低了等于没设）。三处都**必须同时**出现在上面的
+         * `coverage.include` 里：阈值只对报告里出现的文件生效，P16/P17 那批
+         * 的教训是两个 `ui/` 出口的门槛「写着 95/90/95/100 却查无此文件」。 */
+        /* 实测 100 / 94.44 / 100 / 100；分支未覆盖的两处是 SSR 分支
+         * （`typeof navigator === "undefined"`）—— jsdom 到不了。 */
+        "src/components/ui/media-thumbnail.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
+        },
+        /* 实测 100 / 93.75 / 100 / 100；未覆盖的是「查询串剥完只剩空段」的回退。 */
+        "src/components/ui/media-drag-source.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
+        },
+        /* 实测 93.18 / 86.36 / 100 / 100（取向下取整到 5 的倍数）：
+         * 未覆盖的是 `document` 兜底与「已卸载后 handler 引用」那几行 ——
+         * jsdom 里 `window` 恒存在，`typeof window === "undefined"` 一支到不了。 */
+        "src/components/ui/use-hotkey.ts": {
+          lines: 90,
+          functions: 100,
+          statements: 90,
+          branches: 85,
         },
         "src/lib/core/**": {
           lines: 95,

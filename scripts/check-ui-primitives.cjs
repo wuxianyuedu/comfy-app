@@ -185,6 +185,45 @@
  *      单看 `justify-between` 会把 400+ 处普通布局算进来（实测 41 处误报）；
  *      单看 `font-mono` 会把日志行算进来。两个条件必须同时成立。
  *
+ *   P18 视图里裸写 `<img` / `<video`（**硬闸**）——
+ *      `~/components/ui/media-thumbnail` 的 `MediaThumbnail` 是唯一出口。
+ *      此前全库 **18 个文件**各自裸写 `<img>`，而**加载失败这一侧有四种写法**：
+ *      `HomePage` 项目缩略图用 `event.target.style.display = "none"`（绕过 React
+ *      直接改 DOM，失败的那一格留下**空洞**）、`TrainingStudio` 数据集缩略图用
+ *      `style.visibility = "hidden"`（同款）、`WorkflowImagePreview` 自持
+ *      `useState(failed)` + 「图片不可用」方块（写法对，但每个落点重写一遍）、
+ *      `SettingsPrimitives` 同上换成长文案。**另外 14 处压根没有兜底** ——
+ *      `<img>` 失败就交给浏览器画破图图标。
+ *
+ *      ⚠️ 判据取「视图里出现 `<img` 或 `<video` 标签」这个形态。收口后
+ *      这条是硬闸（0 处）—— 单看 `onError=` 会漏掉那 14 处没有兜底的，
+ *      而它们正是「同一件事在不同落点行为不同」的另一半。
+ *
+ *   P19 视图里自写「把一张媒体图变成可拖拽源」（**硬闸**）——
+ *      `~/components/ui/media-drag-source` 的 `useMediaDragSource` 是唯一出口。
+ *      `HistoryPanel` 与 `MaterialLibraryPanel` 各有网格 / 列表两个视图，**四处
+ *      逐字相同**地手写 `dataTransfer.setData("application/x-comfyapp-media", …)`
+ *      + `effectAllowed = "copy"` + drag 光标类；而消费端 `use-canvas-drop` 的
+ *      `MediaDropPayload` 形状要靠**手抄**跟这四处保持一致（它只做 `JSON.parse`
+ *      + 类型断言，形状对不上就是一次**静默丢投**）。
+ *
+ *      ⚠️ 判据取 `dataTransfer.setData("application/x-comfyapp-media"` 这个
+ *      自定义 MIME 的字面量：它是「跨组件拖拽」的签名。单看 `draggable` 会把
+ *      React Flow 节点、表单行拖拽这些**组件内**拖拽算进来（它们不跨组件、
+ *      不该走这个出口）。
+ *
+ *   P20 视图里自写「全局快捷键监听」（**硬闸**）——
+ *      `~/components/ui/use-hotkey` 的 `useHotkey` 是唯一出口。全库 6 处各自
+ *      `addEventListener("keydown", …)` + 手写清理，而**修饰键的判据各不相同**：
+ *      `LogProvider`（Ctrl+Shift+L）与 `UpdateCheckProvider`（Ctrl+Shift+U）
+ *      只判 `ctrlKey && shiftKey` —— **macOS 的 ⌘ 按了没反应**；`json-viewer`
+ *      （⌘/Ctrl+F）判了 `metaKey || ctrlKey` 却**不过滤输入焦点**（在别的输入框
+ *      里也会把 ⌘F 抢走）；`ScriptMarkdownEditor`（⌘/Ctrl+S、Z）两种修饰键都判。
+ *
+ *      ⚠️ 判据取 `addEventListener("keydown"` / `addEventListener('keydown'`
+ *      这个形态。单看 `metaKey` / `ctrlKey` 会漏掉那两处**完全没写 metaKey** 的
+ *      —— 而它们才是这条账里更差的那一种（与 P13「更差的那种也要数」同源）。
+ *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
  * 有 19 份自写 spinner —— 与 §12.12「跨文件重复块」是同一族问题。
@@ -251,6 +290,12 @@ const EXEMPT_FILES = {
       reason:
         "服务端路由的查询参数归一化与「视图搜索框」不是同一件事 —— " +
         "它没有 UI 归一化那层契约，且这里是服务端物（与 P12 跳过 app/api 同款）。",
+    },
+  ],
+  P20: [
+    {
+      re: /^src\/components\/ui\//,
+      reason: "ui/ 基元自身实现（`use-hotkey` 就要挂 keydown）。",
     },
   ],
   P10: [
@@ -450,10 +495,11 @@ const RULES = {
        * `query` / `search` / `keyword` / `q`）—— 否则 `line.trim()` 这类
        * 无关的去空白会被全量计入（那是格式清洗，不是搜索）。 */
       const both = (t2.match(/\S+\.trim\(\)\.toLowerCase\(\)/g) || []).length;
-      const trimmed =
-        (t2.match(
+      const trimmed = (
+        t2.match(
           /\b(?:kw|needle|term|query|search|keyword|q)\w*\s*=\s*[^;\n]*\.trim\(\)(?!\.toLowerCase\(\))/gi,
-        ) || []).length;
+        ) || []
+      ).length;
       return both + trimmed;
     },
   },
@@ -488,8 +534,10 @@ const RULES = {
       const t2 = stripComments(t);
       /* 形态：`<flag> ? <X>.wide : <X>.base` —— 加宽档的三元写法。
        * 单看 `useState(false)` 会把所有弹窗开关算上（见文件头 P15）。 */
-      return (t2.match(/\?\s*[A-Za-z_$][\w$]*\.wide\s*:\s*[A-Za-z_$][\w$]*\.base/g) || [])
-        .length;
+      return (
+        t2.match(/\?\s*[A-Za-z_$][\w$]*\.wide\s*:\s*[A-Za-z_$][\w$]*\.base/g) ||
+        []
+      ).length;
     },
   },
   P16: {
@@ -530,6 +578,46 @@ const RULES = {
       return (t2.match(pattern) || []).length;
     },
   },
+  P18: {
+    label:
+      "视图内裸写 <img> / <video>（应使用 ~/components/ui/media-thumbnail 的 MediaThumbnail）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：视图里自己出现 `<img` / `<video` 标签。收口后 `MediaThumbnail`
+       * 是「渲染一张可能失败的媒体图」的唯一出口，调用处不再出现这两个标签。
+       *
+       * ⚠️ 单看 `onError=` 会漏掉那 14 处**压根没有兜底**的 `<img>` —— 而
+       * 「没有出现 onError」正是这条账里更差的那一半（与 P13 同源）。
+       * `<video` 一并数：`MediaThumbnail` 管的就是「图片 / 视频二选一」。 */
+      return (
+        (t2.match(/<img\b/g) || []).length +
+        (t2.match(/<video\b/g) || []).length
+      );
+    },
+  },
+  P19: {
+    label:
+      "视图内自写媒体拖拽源（应使用 ~/components/ui/media-drag-source 的 useMediaDragSource）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：手写本项目跨组件拖拽的自定义 MIME。
+       * 单看 `draggable` 会把组件内拖拽（React Flow 节点、表单行）算进来。 */
+      return (
+        t2.match(/setData\(\s*["']application\/x-comfyapp-media["']/g) || []
+      ).length;
+    },
+  },
+  P20: {
+    label:
+      "视图 / 逻辑层里自写全局快捷键监听（应使用 ~/components/ui/use-hotkey 的 useHotkey）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：自己往 window / document 上挂 keydown。
+       * ⚠️ 单看 `metaKey` / `ctrlKey` 会漏掉「只判 ctrlKey」那两处 ——
+       * 而它们才是这条账里更差的那一种（macOS 上按 ⌘ 没反应）。 */
+      return (t2.match(/addEventListener\(\s*["']keydown["']/g) || []).length;
+    },
+  },
   P7: {
     label:
       "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
@@ -563,6 +651,9 @@ const HARD_GATE_RULES = new Set([
   "P15",
   "P16",
   "P17",
+  "P18",
+  "P19",
+  "P20",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -677,7 +768,10 @@ function main() {
         "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P15）。\n  " +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
-          "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）。",
+          "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、" +
+          "不再裸写 <img> / <video>（改用 ~/components/ui/media-thumbnail 的 MediaThumbnail）、" +
+          "不再手写媒体拖拽源（改用 ~/components/ui/media-drag-source 的 useMediaDragSource）、" +
+          "不再自己挂 keydown（改用 ~/components/ui/use-hotkey 的 useHotkey）。",
       );
       process.exit(1);
     }
@@ -753,7 +847,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -765,7 +859,9 @@ function main() {
         "  剪贴板 / Blob 下载 → ~/lib/browser-io 的 copyText / downloadText / downloadJson、\n" +
         "  隐藏文件选择框 → ~/components/ui/file-picker 的 useFilePicker / FilePickerButton、\n" +
         "  「值不存在显示 —」→ ~/lib/display-value 的 displayValue / EMPTY_PLACEHOLDER、\n" +
-        "  自绘模态外壳 → ui/dialog 的 Dialog / DialogContent（居中卡片）或 ui/sheet 的 SheetContent（抽屉）。\n" +
+        "  自绘模态外壳 → ui/dialog 的 Dialog / DialogContent（居中卡片）或 ui/sheet 的 SheetContent（抽屉）；\n" +
+        "  裸写 <img> / <video> → ~/components/ui/media-thumbnail 的 MediaThumbnail（失败兜底收在出口里）；\n" +
+        "  媒体拖拽源 → ~/components/ui/media-drag-source 的 useMediaDragSource；全局快捷键 → ~/components/ui/use-hotkey 的 useHotkey。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);

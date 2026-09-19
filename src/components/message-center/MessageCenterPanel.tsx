@@ -8,7 +8,7 @@
 
 import { formatClock } from "~/lib/time-format";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { zClass } from "~/lib/shell/overlay-z";
 import {
   Bell,
@@ -24,6 +24,7 @@ import {
 import { useMessageCenterStore } from "./message-center-store";
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Button } from "~/components/ui/button";
+import { useHotkey } from "~/components/ui/use-hotkey";
 
 const KIND_META: Record<
   string,
@@ -67,15 +68,12 @@ export function MessageCenterPanel() {
     [messages],
   );
 
-  // Esc 关闭全屏面板
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, setOpen]);
+  /* Esc 关闭全屏面板。`filterInput: false` —— 用户在消息正文里选中文本后
+   * 按 Esc，期望的是关掉面板而不是「因为焦点在文本里所以没反应」。 */
+  useHotkey({ key: "Escape" }, () => setOpen(false), {
+    enabled: open,
+    filterInput: false,
+  });
 
   if (!open) return null;
 

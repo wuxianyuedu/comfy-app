@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
 import { Separator } from "~/components/ui/separator";
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -339,7 +340,7 @@ export function FilmStudio() {
 
             {/* 成片播放器（完成后） */}
             {c.film?.status === "DONE" && c.film.finalVideo && (
-              <video
+              <MediaThumbnail
                 src={c.film.finalVideo}
                 controls
                 autoPlay
