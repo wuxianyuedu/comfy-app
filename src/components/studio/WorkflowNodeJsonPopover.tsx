@@ -9,6 +9,7 @@
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { useFlashState } from "~/components/ui/use-flash-state";
 import { copyText } from "~/lib/browser-io";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
@@ -118,13 +119,12 @@ export function NodeJsonPopover({
     }
     return "（节点详情尚未加载 — 等待 detail.ready）";
   }, [tab, json, viewObj]);
-  const [copied, setCopied] = useState(false);
+  const copied = useFlashState();
   const handleCopy = () => {
     /* 失败时静默：用户仍可手动选中复制。 */
     void copyText(pretty).then((ok) => {
       if (!ok) return;
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
+      copied.flash();
     });
   };
   const accent =
@@ -248,13 +248,13 @@ export function NodeJsonPopover({
               onClick={handleCopy}
               title="复制 JSON 到剪贴板"
               style={{
-                background: copied ? accentAlpha(15) : "var(--color-subtle)",
-                color: copied ? accent : "var(--color-ink)",
-                border: `1px solid ${copied ? accentAlpha(40) : "var(--color-border-strong)"}`,
+                background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
+                color: copied.on ? accent : "var(--color-ink)",
+                border: `1px solid ${copied.on ? accentAlpha(40) : "var(--color-border-strong)"}`,
               }}
               className="font-normal"
             >
-              {copied ? "✓ 已复制" : "⧉ 复制"}
+              {copied.on ? "✓ 已复制" : "⧉ 复制"}
             </Button>
             <Button
               variant="outline"

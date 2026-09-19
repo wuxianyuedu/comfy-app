@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { downloadText } from "~/lib/browser-io";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { zClass } from "~/lib/shell/overlay-z";
+import { displayValue } from "~/lib/display-value";
 
 /**
  * 查看源文件弹窗（只读）。
@@ -80,7 +81,7 @@ export function SourceModal({
         <div className="border-border-strong flex items-start justify-between border-b px-5 py-3">
           <div>
             <h2 className="text-ink-bright flex items-center gap-2 text-sm font-semibold">
-              查看源文件 · {data?.name ?? "—"}
+              查看源文件 · {displayValue(data?.name)}
               <span
                 title={
                   data?.isApiFallback

@@ -34,7 +34,11 @@ export default defineConfig({
       //                    ——当时的现场是插件 1.8s 就退出，而报错完全指不出是
       //                    reporter 少配了一项。
       reporter: ["text", "json-summary", "lcov"],
-      include: ["src/server/api/middleware/**", "src/server/film/**", "src/lib/**"],
+      include: [
+        "src/server/api/middleware/**",
+        "src/server/film/**",
+        "src/lib/**",
+      ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
         "src/server/api/middleware/**": {
@@ -135,6 +139,30 @@ export default defineConfig({
           branches: 80,
         },
         "src/lib/time-format.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「值不存在显示什么」的口径（§16.2.4，P8 的对面）：判据只有在
+         * 边界值上才看得出差别（`0` / `false` 照常显示、`""` / NaN 给占位符），
+         * 所以按实测值设门槛 —— 这几条边界用例就是它的全部逻辑。 */
+        "src/lib/display-value.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 隐藏文件选择框与闪一下复位这两件「交互样板」的出口：
+         * 它们承载的是**时序**与**复位**，恰恰是各自调用点看不出来的部分
+         * （卸载后 setState、连点被旧定时器打断、连选同一文件不触发 change）。 */
+        "src/components/ui/file-picker.tsx": {
+          lines: 95,
+          functions: 90,
+          statements: 95,
+          branches: 100,
+        },
+        "src/components/ui/use-flash-state.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

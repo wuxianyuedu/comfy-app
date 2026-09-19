@@ -33,6 +33,7 @@ import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
+import { useFlashState } from "~/components/ui/use-flash-state";
 import { Icon } from "~/components/ui/icon";
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
@@ -342,11 +343,10 @@ export function JsonViewer({
   };
 
   // ── 拷贝 ──
-  const [copied, setCopied] = useState(false);
+  const copied = useFlashState();
   const copy = async () => {
     if (await copyText(JSON.stringify(data, null, 2))) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      copied.flash();
     }
   };
 
@@ -368,7 +368,7 @@ export function JsonViewer({
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright bg-transparent"
           title="把当前 JSON 复制到剪贴板"
         >
-          {copied ? "已复制" : "复制"}
+          {copied.on ? "已复制" : "复制"}
         </Button>
       </div>
 

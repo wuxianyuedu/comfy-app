@@ -184,6 +184,40 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     expect(refs, `${spec} 没有任何业务引用（收口等于没做）`).toBeGreaterThan(0);
   });
 
+  /**
+   * 「隐藏文件选择框」的出口与消费点。
+   *
+   * P7 只看「同标签内 `type=file` + `hidden`」这一个形状，而绕过的形态可以不含
+   * 它（例如 `<label htmlFor>` 隐式关联、或把 input 放进 `<template>`）。
+   * 这一条从**另一侧**钉住：出口模块存在、导出的名字在、且真的有业务引用 ——
+   * 「抽出出口但没人用」等于没做。
+   */
+  it("~/components/ui/file-picker 是隐藏文件选择框的出口，且已被业务引用", () => {
+    const mod = readFileSync(
+      join(SRC, "components", "ui", "file-picker.tsx"),
+      "utf8",
+    );
+    for (const name of ["useFilePicker", "FilePickerButton", "FilePicker"]) {
+      expect(mod, `file-picker 应导出 ${name}`).toMatch(
+        new RegExp(`export (?:function|const) ${name}\\b`),
+      );
+    }
+    /* 至少三处业务引用：本批迁移了 9 个落点，留一条远低于现状的门槛 ——
+     * 它要挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
+    let refs = 0;
+    for (const abs of collectImports(SRC)) {
+      const rel = relative(SRC, abs).split(sep).join("/");
+      if (rel.startsWith("components/ui/")) continue;
+      if (rel.includes(".test.")) continue;
+      if (readFileSync(abs, "utf8").includes('"~/components/ui/file-picker"'))
+        refs++;
+    }
+    expect(
+      refs,
+      "file-picker 的业务引用少于 3 处（收口可能被回退）",
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it("ui/ 目录本身不空（判据没被绕过）", () => {
     const uiDir = join(SRC, "components", "ui");
     expect(statSync(uiDir).isDirectory()).toBe(true);

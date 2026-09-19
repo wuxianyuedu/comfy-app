@@ -1,4 +1,5 @@
 import { fmtBytes } from "~/lib/format-bytes";
+import { displayValue } from "~/lib/display-value";
 
 // ── 工作室模型库：配置层（规范 17 §17.2 第①层）──────────────────────────────
 // 行类型、纯派生（筛选 / 计数 / 体积格式化）。原先这些逻辑夹在 ModelLibrary.tsx
@@ -69,8 +70,11 @@ export function countByType(models: ModelRow[]): Array<[string, number]> {
  * `fmtBytes` 只把「非法 / 空值」判成 `null`，所以这层域语义留在调用处。
  */
 export function fmtSize(n?: number | null): string {
-  if (!n) return "—";
-  return fmtBytes(n) ?? "—";
+  /* `0` 是**本域的**「尚未探到体积」，不是「缺值」 —— 这层语义必须显式写在
+   * 这里（`displayValue` 会把 0 照常显示成 "0"，那对模型列表是误导）。
+   * 占位符本身不在这里拼，走全库唯一出口。 */
+  if (!n) return displayValue(null);
+  return displayValue(fmtBytes(n));
 }
 
 /** 目录行的关键字筛选（命中目录名或展示标签）。 */

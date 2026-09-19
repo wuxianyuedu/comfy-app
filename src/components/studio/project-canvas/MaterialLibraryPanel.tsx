@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -29,6 +30,7 @@ import {
   type MaterialScope,
 } from "./hooks/use-material-library";
 import type { MaterialItem } from "~/lib/media/materials-client";
+import { displayValue } from "~/lib/display-value";
 
 /* 对外类型再导出：历史消费方从本文件 import MaterialItem，保持 API 不变。 */
 export type { MaterialItem };
@@ -89,7 +91,6 @@ export function MaterialLibraryPanel({
     searching,
     showItems,
     breadcrumbSegments,
-    fileRef,
     setScope,
     setSearch,
     enterFolder,
@@ -97,6 +98,12 @@ export function MaterialLibraryPanel({
     remove,
     refresh,
   } = c;
+  /* 素材上传选择器：多选、无类型限制（素材库也收音频/视频）。 */
+  const uploadPicker = useFilePicker({
+    multiple: true,
+    onPick: (_first, files) => void upload(files),
+  });
+
   return (
     <aside className="bg-panel/98 border-border-strong flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
       {/* ── Header ── */}
@@ -190,17 +197,11 @@ export function MaterialLibraryPanel({
             </Button>
           )}
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(event) => void upload(event.target.files)}
-        />
+        <uploadPicker.Input />
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => fileRef.current?.click()}
+          onClick={uploadPicker.open}
           disabled={uploading}
           className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
           title={
@@ -312,7 +313,7 @@ export function MaterialLibraryPanel({
                 <div className="text-ink-fainter mt-4 space-y-2 text-[12px]">
                   <Button
                     variant="ghost"
-                    onClick={() => fileRef.current?.click()}
+                    onClick={uploadPicker.open}
                     className="flex h-auto items-center gap-2 font-normal hover:bg-transparent hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-700"
                   >
                     <Plus size={14} />
@@ -438,7 +439,7 @@ export function MaterialLibraryPanel({
                     </p>
                     <p className="text-ink-fainter mt-0.5 text-[11px]">
                       {searching ? `${item.folderName} · ` : ""}
-                      {fmtBytes(item.size) ?? "—"}
+                      {displayValue(fmtBytes(item.size))}
                     </p>
                   </div>
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">

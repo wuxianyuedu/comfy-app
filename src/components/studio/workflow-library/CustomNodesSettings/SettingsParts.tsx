@@ -9,6 +9,7 @@ import { STATUS_STYLE } from "./constants";
 import { StatusDot } from "~/components/ui/status-dot";
 import { StatusBadge } from "~/components/ui/status-badge";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
+import { displayValue } from "~/lib/display-value";
 
 /** 类型端口区的一行 —— 小彩点 + 大写类型章
  *  + 端口名。ComfyUI 真实节点把圆点放在画布边缘、
@@ -66,7 +67,10 @@ export function PortRow({
  *  各有一套截然不同的色系。镜像 ComfyUI 自己节点渲染
  *  逐 widget 取值章的方式。 */
 
-/** 把 widget 值安全转成展示文本：对象走 JSON，null/undefined 给空串，其余 String。 */
+/** 把 widget 值安全转成展示文本：对象走 JSON，null/undefined 给空串，其余 String。
+ *
+ *  「空值显示什么」由调用处经 `displayValue` 决定 —— 这里只负责「有值时
+ *  怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
   if (v == null) return "";
   if (typeof v === "object") return JSON.stringify(v);
@@ -106,7 +110,7 @@ export function WidgetValueChip({
         className="max-w-[100px] truncate rounded bg-violet-500/18 px-1.5 py-px font-mono text-[10px] font-semibold text-violet-700 dark:text-violet-300"
         title={widgetValueToText(value)}
       >
-        {value == null ? "—" : widgetValueToText(value)}
+        {displayValue(widgetValueToText(value))}
       </span>
     );
   }
@@ -116,7 +120,7 @@ export function WidgetValueChip({
         className="bg-warning/18 text-warning max-w-[100px] truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
         title={widgetValueToText(value)}
       >
-        {value == null ? "—" : widgetValueToText(value)}
+        {displayValue(widgetValueToText(value))}
       </span>
     );
   }
@@ -126,7 +130,7 @@ export function WidgetValueChip({
       className="bg-canvas-deep text-ink-soft max-w-[140px] truncate rounded px-1.5 py-px font-mono text-[10px]"
       title={widgetValueToText(value)}
     >
-      {value == null ? "—" : widgetValueToText(value)}
+      {displayValue(widgetValueToText(value))}
     </span>
   );
 }

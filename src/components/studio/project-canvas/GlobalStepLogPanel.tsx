@@ -36,6 +36,7 @@ import { StatusBadge } from "~/components/ui/status-badge";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { zClass } from "~/lib/shell/overlay-z";
+import { displayValue } from "~/lib/display-value";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
  *  本面板消费的字段。`JSON.parse` 产出 `unknown`；下面的守卫
@@ -375,7 +376,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
           ? "已取消"
           : status === "RUNNING"
             ? `运行中 ${progress}%`
-            : (status ?? "—");
+            : displayValue(status);
 
   const errorCount = visibleAll.filter((l) => l.level === "error").length;
 

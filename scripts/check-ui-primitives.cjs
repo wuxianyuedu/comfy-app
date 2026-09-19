@@ -47,6 +47,34 @@
  *
  *   P5/P6 与 P4 同性质：口径是「必须为 0」，不进棘轮基线。
  *
+ *   P7 视图里再写一份「隐藏 `<input type=file>` + 点谁去触发它」（**硬闸**）
+ *      —— `~/components/ui/file-picker` 的 `useFilePicker` / `FilePickerButton`
+ *      是唯一出口。此前 9 个落点各写一份，写法互不相同：多数用
+ *      `useRef` + `ref.current?.click()`、两处用 `<label htmlFor>` 隐式关联、
+ *      一处干脆把 input 露在界面上。三个共性问题只有放一处才收得住：
+ *      ① `click()` 在 ref 未挂上时**静默空操作**（界面「点了没反应」）；
+ *      ② 多数落点**没有复位 `event.target.value`** —— 用户连选同一个文件不触发
+ *      `change`，看起来像上传坏了；③ 两个隐藏 input + 两个 ref + 两个 click 的
+ *      样板在同一文件里复duplicated。
+ *
+ *   P8 视图里再写一份「值不存在时显示 `—`」的判据（**硬闸**）——
+ *      `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER` 是唯一
+ *      出口。此前 31 处各写一遍，而「什么算不存在」判得都不一样：
+ *      `??`（只管 null/undefined）、`||`（把 `0` 与 `""` 也当不存在 ——
+ *      「步数 0」显示成「—」）、`> 0 ? x : "—"`、`!= null ? String(x) : "—"`。
+ *      四者只差一两个字符，都编译、都运行、类型都对，差别只在**一个语义
+ *      决定**上，散在 31 处就永远不会被统一说出来。收口后口径写在
+ *      `src/lib/display-value.ts` 的文件头（`0` / `false` 是真实值不是缺值；
+ *      想把 `0` 当缺值的域必须显式写自己的判据）。
+ *
+ *      ⚠️ 判据只管**视图**（`src/components/**`、`src/app/**`）：出口模块
+ *      与 `src/lib/**` 里的域语义（如 `model-library-config.ts` 的
+ *      `fmtSize` 把 0 当「未探到体积」）不在此列。
+ *
+ *      ⚠️ 判据只管**隐藏** input 的触发（`className="hidden"` 那类）：
+ *      `FilmStudio` 的 BGM 选择器是**用户可见的表单字段**（靠 `file:` 伪元素
+ *      美化、就地显示已选文件名），是另一种形态，不在此列。
+ *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
  * 有 19 份自写 spinner —— 与 §12.12「跨文件重复块」是同一族问题。
@@ -176,8 +204,7 @@ const RULES = {
     count: (t) => (stripComments(t).match(/::-webkit-scrollbar/g) || []).length,
   },
   P5: {
-    label:
-      "视图内自写剪贴板写入（应使用 ~/lib/browser-io 的 copyText）",
+    label: "视图内自写剪贴板写入（应使用 ~/lib/browser-io 的 copyText）",
     count: (t) => {
       const t2 = stripComments(t);
       return (
@@ -189,12 +216,42 @@ const RULES = {
   P6: {
     label:
       "视图内自写 Blob 下载（应使用 ~/lib/browser-io 的 downloadText / downloadJson）",
-    count: (t) => (stripComments(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
+    count: (t) =>
+      (stripComments(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
+  },
+  P8: {
+    label:
+      "视图内自写「值不存在显示 —」的判据（应使用 ~/lib/display-value 的 displayValue）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 数两种写法：① 字面量里直接写占位符；② 比较算子后面紧跟占位符。
+       * 两条都要求占位符**字面出现**在代码里 —— 用了 `displayValue` 的地方
+       * 自然不含它。 */
+      return (
+        (t2.match(/"—"|'—'/g) || []).length +
+        (t2.match(/\?\?\s*"[^"]*—/g) || []).length
+      );
+    },
+  },
+  P7: {
+    label:
+      "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 只数**隐藏**的 input：可见 input 是另一种形态（见文件头 P7 说明）。
+       * 判据要同时看到 `type="file"` 与「它被藏起来了」—— 两种常见写法是
+       * 同类元素上的 `className="hidden"`，以及同文件里再写一遍
+       * `className="hidden"` 的另一处；用「同一元素标签内出现两者」判定。 */
+      const tags = t2.match(/<input\b[^>]*>/g) || [];
+      return tags.filter(
+        (tag) => /type\s*=\s*["']file["']/.test(tag) && /\bhidden\b/.test(tag),
+      ).length;
+    },
   },
 };
 
 /** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4 属此类）。 */
-const HARD_GATE_RULES = new Set(["P4", "P5", "P6"]);
+const HARD_GATE_RULES = new Set(["P4", "P5", "P6", "P7", "P8"]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -304,7 +361,7 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4/P5/P6）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4/P5/P6/P7）。\n  " +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）。",
@@ -383,7 +440,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -392,7 +449,9 @@ function main() {
       "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.3；\n" +
         "  改法：`<button>` → `<Button>`（~/components/ui/button）、自建 portal → ui/dialog / popover / sheet、\n" +
         "  自写 animate-spin → ui/page-loading、自绘滚动条 → globals.css 的 .custom-scrollbar / .soft-scrollbar、\n" +
-        "  剪贴板 / Blob 下载 → ~/lib/browser-io 的 copyText / downloadText / downloadJson。\n" +
+        "  剪贴板 / Blob 下载 → ~/lib/browser-io 的 copyText / downloadText / downloadJson、\n" +
+        "  隐藏文件选择框 → ~/components/ui/file-picker 的 useFilePicker / FilePickerButton、\n" +
+        "  「值不存在显示 —」→ ~/lib/display-value 的 displayValue / EMPTY_PLACEHOLDER。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);
