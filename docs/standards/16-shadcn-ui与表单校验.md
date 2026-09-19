@@ -166,6 +166,31 @@ P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、P9 见 §16.2.4.12。
   撤掉的另一面是**目录不得复活**：归并完还得有个判据挡住「下一个人再
   `mkdir studio/ui` 起一套」，见 `tests/ui-kit-single-home.test.ts`。
 
+#### 16.2.3.1 浮层的「位置由谁定」：有锚点就必须交给 Positioner（ISSUE #717）
+
+P2 把浮层收拢到 `ui/` 原语时踩过一个坑，值得单独立一条判据：**收拢容器不等于
+收拢定位**。
+
+节点 JSON 浮层的触发者是画布节点里的 `#id` 芯片，浮层却是由 store 打开的。
+迁移时它被换成了 `ui/dialog` 配 `popupClassName="fixed top-24 left-1/2 …"` ——
+看起来「自定义了这一处的位置」，实际是**丢掉了锚点定位**：`DialogContent` 的
+Popup 基类自带 `top-1/2 -translate-y-1/2`，调用处的 `top-24` 覆盖不掉它，
+两者叠加把浮层推到视口之上（实测 `top: -174`），头部与正文开头整片裁在窗口外。
+
+**判据**：浮层的定位应当由基元的 Positioner 负责（`ui/popover` 可传 `anchor`，
+支持元素 / 虚拟元素 / `{ getBoundingClientRect }` 形式的回调），翻转（flip）与
+视口内收边（shift）也由它算 —— **不要在调用处手写 `top` / `left` / `translate`
+去夹紧视口**：那既覆盖不掉基类自带的定位，也是第三份「摆位」口径
+（§16.2.4.3 已把 `computePos` 这类派生像素值整片删掉过一次）。
+
+`ui/dialog` 的 Popup 里**没有** Positioner，结构上就表达不了锚点定位；有锚点的
+浮层一律走 `ui/popover`。没有锚点（居中模态）才用 `ui/dialog`。
+
+**验证口径**：这类「位置对不对」的问题，单测只能锁结构（浮层挂在 Positioner 里、
+关闭语义齐全），**别断言 `style.top` 这类派生像素值**（同 §16.2.4 的
+`seed-mode-button` 那条）；四边是否真的在视口内，用真实浏览器按两档窗口
+（宽窗 / 窄窗）各验一次。
+
 ### 16.2.5 浮层层级是一张刻度表（ISSUE #672 P2 → P4，机器强制）
 
 浮层收拢过程中暴露出第二处不一致：**层级各处一套魔数**。同一件事（下拉浮层）
@@ -242,6 +267,7 @@ node scripts/check-overlay-z.cjs --update   # 治理后收紧基线
 「让位」这条硬规则（`check-title-bar-clearance.cjs`）不被层级改名牵动。
 P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`。
 
+
 ### 16.2.4 混合形态台账（现状，不是目标）
 
 > 这一节不是规范、是**排批次的账**：把「哪里还有第二套实现」写下来，
@@ -283,7 +309,7 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 形态                 | 原来自搓的位置                                                                                                            | 现在                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | 确认对话框           | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点）                                                                   | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留 |
-| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                       | `ui/dialog`；`workflow-utils.ts` 的 `computePos` 一并删除             |
+| 节点 JSON 浮层       | `WorkflowNodeJsonPopover.tsx`（自搓遮罩 + `computePos` 定位 + Esc）                                                       | `ui/popover` + **锚点定位**；`workflow-utils.ts` 的 `computePos` 一并删除（见 §16.2.3.1） |
 | 源码查看弹窗         | `debug/DebugChainFooter.tsx`（自搓遮罩按钮 + Esc）                                                                        | `ui/dialog`；载入态改 `ui/page-loading`                               |
 | 模型标签编辑器       | `workflow-library/sections/MetaEditor.tsx`（自搓遮罩 + 点击外点关闭）                                                     | `ui/dialog`                                                           |
 | 属性多选下拉         | `workshop/AttributeMultiSelect.tsx`（自搓定位 + Esc/外点 + 重定位）                                                       | `ui/popover`（翻上/翻下、收边、重定位交给 base-ui Positioner）        |
