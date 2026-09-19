@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
+import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
@@ -332,23 +333,13 @@ export function MaterialLibraryPanel({
               {items.map((item) => (
                 <div
                   key={item.id}
-                  draggable={item.kind === "image" || item.kind === "video"}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData(
-                      "application/x-comfyapp-media",
-                      JSON.stringify({
-                        url: item.url,
-                        displayName: item.name,
-                        mediaType: item.kind,
-                      }),
-                    );
-                    event.dataTransfer.effectAllowed = "copy";
-                  }}
-                  className={`group border-border-strong bg-subtle relative overflow-hidden rounded-lg border ${
-                    item.kind === "image" || item.kind === "video"
-                      ? "cursor-grab active:cursor-grabbing"
-                      : ""
-                  }`}
+                  {...mediaDragSourceProps({
+                    url: item.url,
+                    displayName: item.name,
+                    kind: item.kind,
+                    className:
+                      "group border-border-strong bg-subtle relative overflow-hidden rounded-lg border",
+                  })}
                 >
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
                     {item.kind === "image" || item.kind === "video" ? (
@@ -400,23 +391,13 @@ export function MaterialLibraryPanel({
               {items.map((item) => (
                 <div
                   key={item.id}
-                  draggable={item.kind === "image" || item.kind === "video"}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData(
-                      "application/x-comfyapp-media",
-                      JSON.stringify({
-                        url: item.url,
-                        displayName: item.name,
-                        mediaType: item.kind,
-                      }),
-                    );
-                    event.dataTransfer.effectAllowed = "copy";
-                  }}
-                  className={`hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${
-                    item.kind === "image" || item.kind === "video"
-                      ? "cursor-grab active:cursor-grabbing"
-                      : ""
-                  }`}
+                  {...mediaDragSourceProps({
+                    url: item.url,
+                    displayName: item.name,
+                    kind: item.kind,
+                    className:
+                      "hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors",
+                  })}
                 >
                   {item.kind === "image" || item.kind === "video" ? (
                     <div className="bg-canvas-deep h-9 w-9 shrink-0 overflow-hidden rounded-lg">

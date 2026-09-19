@@ -4,8 +4,102 @@ import React from "react";
 import { isVideo } from "~/lib/media/media";
 
 /**
- * 渲染媒体缩略图：视频就地播放，图片直接显示。
- * WorksGallery 与 HistoryList 都用它，所以两者都支持视频播放。
+ * 「渲染一张可能加载失败的图 / 视频」的唯一出口。
+ *
+ * 此前这件事散在全库 **18 个文件**的裸 `<img>` 里，而**加载失败这一侧**
+ * 有四种写法、四种后果：
+ *
+ *  - `HomePage` 项目缩略图：`event.target.style.display = "none"` —— 直接改
+ *    DOM，绕过 React；失败的那一格留下**空洞**（`gap` 还在，缩略图条少一块）；
+ *  - `TrainingStudio` 数据集缩略图：`style.visibility = "hidden"` —— 同上，
+ *    只是换了个属性名；
+ *  - `WorkflowImagePreview`：自己 `useState(failed)` + 「图片不可用」方块 ——
+ *    写法是对的，但这段状态机在**每个**需要兜底的落点各写一遍；
+ *  - `SettingsPrimitives.FieldImagePreview`：同上，只是文案更长。
+ *
+ * 而**另外 14 个文件压根没有兜底** —— `<img>` 加载失败就交给浏览器画破图图标
+ * （Chrome 的碎图片 + `alt` 文本），在深色面板上尤其难看。这不是「样式问题」，
+ * 是**同一件事（渲染一张图）在不同落点给出不同行为**：能不能看到「这张图没有
+ * 了」取决于它是从哪个面板渲染出来的，而且没有报错、没有告警。
+ *
+ * 判据（§16.2.4.21）因此是「**渲染媒体这件事只允许一处实现**」：
+ *  - 形态（`<img>` / `<video>` 的选择、`loading` / `decoding`）由本模块给；
+ *  - 失败兜底由 `fallback` 决定形态（默认一个中性的「图片不可用」占位）；
+ *  - **`loading="lazy"` / `decoding="async"` 不再是调用处的自由项** ——
+ *    收口前 18 个 `<img>` 里只有 2 个写了 `lazy`、1 个写了 `decoding`，
+ *    这种「多数漏、少数写」的项收在出口里才不会继续分叉。
+ */
+
+/** 加载失败时渲染什么。 */
+export type MediaFallback =
+  /** 中性占位（默认）：图标 + 「图片不可用」，填满调用处的盒子。 */
+  | "placeholder"
+  /** 什么都不渲染（`null`）—— 用于「宁缺勿错」的列表格位。 */
+  | "none"
+  /** 自定义节点（调用处要自己的文案 / 盒子）。 */
+  | React.ReactElement;
+
+/** 额外透传给底层 `<img>` / `<video>` 的属性（`onClick` / `title` 等）。 */
+export interface MediaThumbnailProps extends Omit<
+  React.ImgHTMLAttributes<HTMLImageElement> &
+    React.VideoHTMLAttributes<HTMLVideoElement>,
+  | "src"
+  | "alt"
+  | "className"
+  | "autoPlay"
+  | "muted"
+  | "loop"
+  | "onLoad"
+  | "onError"
+  | "loading"
+  | "decoding"
+> {
+  src?: string | null;
+  alt?: string;
+  className?: string;
+  autoPlay?: boolean;
+  muted?: boolean;
+  loop?: boolean;
+  /** 加载成功时回调（如 `WorkflowImagePreview` 要读 `naturalWidth/Height`）。 */
+  onLoad?: (media: HTMLImageElement | HTMLVideoElement) => void;
+  /** 加载失败时回调（如上报 / 记日志）；兜底渲染由 `fallback` 决定。 */
+  onLoadError?: (src: string) => void;
+  /** 失败兜底形态，见 `MediaFallback`。默认 `"placeholder"`。 */
+  fallback?: MediaFallback;
+  /**
+   * 强制按图片 / 视频渲染，覆盖按 `src` 后缀的推断。
+   *
+   * 需要它是因为「这张媒体是什么」有两个来源：**路径后缀**（多数情况）
+   * 与**调用处已有的语义判断**（如 `ResultCard` 的 `mediaType` 字段 ——
+   * ComfyUI 的某些节点把视频帧存成 `.png`）。出口自己判后缀，但**不推翻**
+   * 调用处已经知道的答案。
+   */
+  as?: "image" | "video";
+}
+
+/**
+ * 中性失败占位：与调用处的盒子同尺寸（`h-full w-full` + 继承圆角），
+ * 所以失败时**不会出现空洞、也不会跳布局** —— 这正是 `display: none`
+ * 那两处做不到的（它们把格子抽走了）。
+ */
+function FailurePlaceholder({ className }: { className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="图片不可用"
+      className={`text-ink-fainter bg-canvas-deep flex items-center justify-center text-[10px] ${className ?? ""}`}
+    >
+      图片不可用
+    </span>
+  );
+}
+
+/**
+ * 渲染媒体缩略图：视频就地播放，图片直接显示，失败走 `fallback`。
+ *
+ * 最常见是「盒子里一张图，失败显示默认占位」：
+ * `<MediaThumbnail src={item.url} alt={item.name} className="h-full w-full object-cover" />`；
+ * 列表里失败就整格不渲染（宁缺勿错）时传 `fallback="none"`。
  */
 export const MediaThumbnail = React.memo(function MediaThumbnail({
   src,
@@ -14,16 +108,37 @@ export const MediaThumbnail = React.memo(function MediaThumbnail({
   autoPlay = false,
   muted = true,
   loop = false,
-}: {
-  src?: string | null;
-  alt?: string;
-  className?: string;
-  autoPlay?: boolean;
-  muted?: boolean;
-  loop?: boolean;
-}) {
+  onLoad,
+  onLoadError,
+  fallback = "placeholder",
+  as,
+  ...mediaProps
+}: MediaThumbnailProps) {
+  /* 失败态收在这里 —— 这是**唯一**一处「渲染一张图」的状态机，
+   * 所以调用处不必再各写一份 `useState(failed)`。
+   *
+   * 存的是**哪一个 `src` 失败了**而不是一个布尔量：`src` 变了要重新给一次
+   * 机会（列表复用同一组件实例时，上一张图的失败不该传染给下一张），
+   * 而「记下失败的那个 url、渲染时比对」是**派生**，不需要 effect 里再
+   * `setState`（规范 08：effect 里的同步 setState 会引发级联渲染）。
+   * 收口前各落点自己管 `src` 变化这一条，漏掉的就是「换图仍是破图」。 */
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  const failed = failedSrc !== null && failedSrc === src;
+
   if (!src) return null;
-  if (isVideo(src)) {
+  if (failed) {
+    if (fallback === "none") return null;
+    if (fallback === "placeholder")
+      return <FailurePlaceholder className={className} />;
+    return <>{fallback}</>;
+  }
+
+  const handleError = () => {
+    setFailedSrc(src);
+    onLoadError?.(src);
+  };
+
+  if (as === "video" || (as !== "image" && isVideo(src))) {
     return (
       <video
         src={src}
@@ -33,6 +148,9 @@ export const MediaThumbnail = React.memo(function MediaThumbnail({
         loop={loop}
         playsInline
         preload="metadata"
+        onLoadedData={(event) => onLoad?.(event.currentTarget)}
+        onError={handleError}
+        {...mediaProps}
       />
     );
   }
@@ -44,6 +162,9 @@ export const MediaThumbnail = React.memo(function MediaThumbnail({
       className={className}
       loading="lazy"
       decoding="async"
+      onLoad={(event) => onLoad?.(event.currentTarget)}
+      onError={handleError}
+      {...mediaProps}
     />
   );
 });

@@ -8,11 +8,10 @@
  * 拆出后各分区视图共用同一份实现，避免复制样式类。
  */
 
-import { useState } from "react";
-
 import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
 import { isPreviewableUrl } from "~/lib/llm/usage-test-config";
 import { Button } from "~/components/ui/button";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
 import { statusButtonClass } from "../settings-status-row-config";
 
@@ -155,24 +154,21 @@ export function StatusButton({
   );
 }
 
-/* 图片预览：值是可尝试 URL（http(s)/data:image）才渲染 <img>；加载失败
+/* 图片预览：值是可尝试 URL（http(s)/data:image）才渲染图；加载失败
  *（防盗链 / 需要登录态 / 不是图片 / 网络问题）时降级成一行说明，而不是
- * 破图占位或完全空白——用 isPreviewableUrl 放开入口，交由 onError 兜底。 */
+ * 破图占位或完全空白。失败态本身由 `MediaThumbnail` 收着，这里只提供
+ * **本落点要的文案**（给用户可行动作），不再自持一份 `useState(failed)`。 */
 export function FieldImagePreview({ src }: { src: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <p className="text-muted-foreground/70 max-h-24 overflow-hidden rounded-md border border-dashed px-2 py-1 text-[11px] leading-relaxed">
-        该地址无法作为图片预览（可能被防盗链、需登录，或非图片地址）。点击行内「链接」替换，或用「上传」选本地图片。
-      </p>
-    );
-  }
   return (
-    <img
+    <MediaThumbnail
       src={src}
       alt="字段图片预览"
-      onError={() => setFailed(true)}
       className="border-border/60 max-h-24 w-fit rounded-md border"
+      fallback={
+        <p className="text-muted-foreground/70 max-h-24 overflow-hidden rounded-md border border-dashed px-2 py-1 text-[11px] leading-relaxed">
+          该地址无法作为图片预览（可能被防盗链、需登录，或非图片地址）。点击行内「链接」替换，或用「上传」选本地图片。
+        </p>
+      }
     />
   );
 }

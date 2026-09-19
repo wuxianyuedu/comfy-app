@@ -7,6 +7,7 @@ import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { SHOT_STATUS_LABEL } from "./ShotStudio";
 import type { ShotProgress } from "./useStoryboardPlanner";
 
@@ -228,7 +229,7 @@ export function ShotRow({
       </Button>
 
       {shot.imageUrl && (
-        <img
+        <MediaThumbnail
           src={shot.imageUrl}
           alt={shot.sceneHeading}
           className="border-border mt-2 w-full rounded-lg border"

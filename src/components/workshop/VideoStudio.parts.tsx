@@ -13,6 +13,7 @@ import {
   type Shot,
 } from "~/lib/workshop/types";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 
 const FPS_OPTIONS = ["8", "12", "16", "24"];
@@ -221,7 +222,7 @@ export function ShotCard({
         {/* First frame (auto-prefilled from 镜头生图) */}
         <div className="bg-elevated border-border h-16 w-24 shrink-0 overflow-hidden rounded-lg border">
           {shot.imageUrl ? (
-            <img
+            <MediaThumbnail
               src={shot.imageUrl}
               alt={shot.sceneHeading}
               className="h-full w-full object-cover"
@@ -311,7 +312,7 @@ export function ShotCard({
       )}
 
       {shot.clipUrl && (
-        <video
+        <MediaThumbnail
           src={shot.clipUrl}
           controls
           loop
