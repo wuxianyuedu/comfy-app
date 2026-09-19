@@ -31,6 +31,7 @@ describe("浮层刻度表（规范 16 §16.2.5）", () => {
     ["popup", Z.popup],
     ["overlay", Z.overlay],
     ["toast", Z.toast],
+    ["chrome", Z.chrome],
   ])("globals.css 的 --z-index-%s 与 Z 常量一致", (token, value) => {
     expect(readToken(token)).toBe(value);
   });
@@ -43,6 +44,7 @@ describe("浮层刻度表（规范 16 §16.2.5）", () => {
       Z.modal,
       Z.popup,
       Z.toast,
+      Z.chrome,
     ];
     for (let i = 1; i < scale.length; i += 1) {
       const lo = scale[i - 1] ?? Number.NaN;
@@ -64,9 +66,28 @@ describe("浮层刻度表（规范 16 §16.2.5）", () => {
     expect(Z.popup).toBeGreaterThan(Z.modal);
   });
 
-  it("toast 在最高一档", () => {
+  it("toast 高于所有浮层", () => {
     expect(Z.toast).toBeGreaterThan(Z.modal);
     expect(Z.toast).toBeGreaterThan(Z.popup);
+  });
+
+  it("chrome 严格高于其余每一档 —— 标题行的可点性由层级保证（ISSUE #310 第三次回归）", () => {
+    /* 几何让位（top-title-bar）只保证标题行「不被盖住 / 压暗」，挡不住第三方
+     * 往 body 注入的整视口遮罩（base-ui 的 InternalBackdrop 是 fixed inset-0 +
+     * z-index auto + pointer-events auto）。标题行若与任何一档相等或更低，
+     * 「设置页启动日志全屏后窗口按钮点不动」就会原样复现。 */
+    const others: Array<[string, number]> = [
+      ["base", Z.base],
+      ["canvasUi", Z.canvasUi],
+      ["canvasMax", Z.canvasMax],
+      ["modal", Z.modal],
+      ["overlay", Z.overlay],
+      ["popup", Z.popup],
+      ["toast", Z.toast],
+    ];
+    for (const [name, value] of others) {
+      expect(Z.chrome, `chrome 必须高于 ${name}`).toBeGreaterThan(value);
+    }
   });
 
   it("zClass 把驼峰档名转成 kebab 工具类名", () => {
@@ -77,5 +98,6 @@ describe("浮层刻度表（规范 16 §16.2.5）", () => {
     expect(zClass("popup")).toBe("z-popup");
     expect(zClass("modal")).toBe("z-modal");
     expect(zClass("toast")).toBe("z-toast");
+    expect(zClass("chrome")).toBe("z-chrome");
   });
 });

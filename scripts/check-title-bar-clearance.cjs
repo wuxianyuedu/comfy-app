@@ -22,6 +22,16 @@
  *        给全屏视图/模态弹窗用 overlayClass()/fullScreenLayerClass() 拼串、
  *         以及同文件内出现 `top-title-bar`(常量拼接，本脚本看不到运行时值)。
  *
+ * 第二条规则(标题行的层级，ISSUE #310 第三次回归)：**几何让位只管「不被盖住」，
+ * 不管「可点」**。让位是把标题行让出来，但标题行自己是流内元素(`z-index: auto`)，
+ * 任何后出现在 DOM 里的定位元素都会在命中测试里压过它 —— base-ui 的 Dialog 在
+ * modal 打开时注入 `InternalBackdrop`(`div[data-base-ui-inert]`，
+ * `position: fixed; inset: 0; z-index: auto; pointer-events: auto`)，铺满整个
+ * 视口(含标题行)，用户实测「设置页启动日志全屏后，页签与右上角窗口按钮整排点不动」。
+ * 第三方浮层不受本仓库让位规则约束，所以标题行的**可点性必须由层级保证**：
+ * 凡渲染标题行的文件(用到高度量 `h-title-bar`/`TITLE_BAR_HEIGHT_CLASS` 的地方)，
+ * 必须同时带上 `TITLE_BAR_CHROME_CLASS`(`relative z-chrome`，刻度表最高档)。
+ *
  * 用法:node scripts/check-title-bar-clearance.cjs
  */
 const fs = require("node:fs");
@@ -38,20 +48,33 @@ const EXEMPT = new Map([
   // 判据模块与门禁自身的注释里必然出现被禁字面量
   ["src/lib/full-screen-layer.ts", "让位判据模块，注释即口径说明"],
   // 注释里说明「旧写法是什么」的全屏视图组件本身用常量拼串，静态扫不到
-  ["src/components/studio/fullscreen/FullScreenLayer.tsx", "注释引用旧写法；实现走 fullScreenLayerClass"],
+  [
+    "src/components/studio/fullscreen/FullScreenLayer.tsx",
+    "注释引用旧写法；实现走 fullScreenLayerClass",
+  ],
   // 应用级背景层：标题行自身半透明，背景若从标题行下方才开始，顶部会露出亮带
-  ["src/components/ui/aurora-background.tsx", "应用级装饰背景，非内容浮层，需覆盖标题行避免顶部亮带"],
+  [
+    "src/components/ui/aurora-background.tsx",
+    "应用级装饰背景，非内容浮层，需覆盖标题行避免顶部亮带",
+  ],
 ]);
 /** 顶层浮层的最小判定：铺满整个视口。 */
 const FIXED_INSET = /\bfixed\b[^"'`]*\binset-0\b/;
 /** 让位标记：出现在 class 串里即视为已让出标题行。 */
 const CLEARANCE = /\btop-title-bar\b/;
+/** 标题行的渲染点：class 串里取高度量（`h-title-bar` 或它的常量）。 */
+const TITLE_BAR_RENDER = /\bTITLE_BAR_HEIGHT_CLASS\b|\bh-title-bar\b/;
+/** 标题行的层级标记：常量名或它拼出来的类名都算（见文件头第二条规则）。 */
+const CHROME_Z = /\bTITLE_BAR_CHROME_CLASS\b|\bz-chrome\b/;
+/** 导入行不算渲染点（`import { TITLE_BAR_HEIGHT_CLASS }` 里也有这个标识符）。 */
+const IMPORT_LINE = /^\s*import\b/;
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) walk(p, out);
-    else if (/\.[jt]sx?$/.test(e.name) && !/\.test\.[jt]sx?$/.test(e.name)) out.push(p);
+    else if (/\.[jt]sx?$/.test(e.name) && !/\.test\.[jt]sx?$/.test(e.name))
+      out.push(p);
   }
   return out;
 }
@@ -81,6 +104,23 @@ for (const dir of SCAN_DIRS) {
     });
     if (hits && CLEARANCE.test(text)) {
       notes.push(r);
+    }
+
+    // 第二条规则：渲染标题行的文件必须给 chrome 档层级（整文件判据，容忍
+    // class 串换行书写；误报会让成员直接删掉门禁，见 tests 的注释）。
+    const renderLines = lines
+      .map((line, i) => ({ line, i }))
+      .filter(
+        ({ line }) => !IMPORT_LINE.test(line) && TITLE_BAR_RENDER.test(line),
+      );
+    if (renderLines.length && !CHROME_Z.test(text)) {
+      const at = renderLines[0];
+      problems.push(
+        `${r}:${at.i + 1} 渲染标题行但没给 chrome 档层级（标题行会被整视口遮罩压住命中测试）\n` +
+          `    → ${at.line.trim()}\n` +
+          `    改用 TITLE_BAR_CHROME_CLASS（~/lib/full-screen-layer，= relative z-chrome）；` +
+          `几何让位（top-title-bar）只保证不被盖住，不保证可点`,
+      );
     }
   }
 }

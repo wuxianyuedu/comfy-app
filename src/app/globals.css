@@ -157,7 +157,12 @@
        · popup       = 100  挂在 body 的浮层（下拉 / 气泡）—— 高过画布与全屏视图，
                             也高过模态：它由模态里的控件打开，必须压在模态之上；
        · modal       = 90   模态遮罩与抽屉 —— 应用内的「顶」；
-       · toast       = 1000 全局提示，任何浮层之上。
+       · toast       = 1000 全局提示，任何浮层之上；
+       · chrome      = 2000 **应用级 chrome**（窗口标题行）—— 恒在最上：
+                            它的可点性由层级保证，几何让位（top-title-bar）
+                            挡不住第三方往 body 注入的整视口遮罩
+                            （base-ui 的 InternalBackdrop 是 fixed inset-0 +
+                            z-index auto，标题行停在 auto 就会被它压住命中测试）。
 
      ⚠️ modal 刻意**不进** 1000~1200 区间：那是 React Flow 给节点选中态（约 1010）
      与悬浮态（1180）留的位，应用模态插进去会和节点争层级。
@@ -174,6 +179,7 @@
      免得既有调用点改名。新代码写 z-modal / z-popup。 */
   --z-index-overlay: 90;
   --z-index-toast: 1000;
+  --z-index-chrome: 2000;
 
   /* Radii */
   --radius-sm: 8px;
