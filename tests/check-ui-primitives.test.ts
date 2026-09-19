@@ -94,6 +94,21 @@ const FILE_INPUT_VIEW =
   'export function F() {\n  const ref = useRef<HTMLInputElement>(null);\n  return <input ref={ref} type="file" className="hidden" />;\n}\n';
 const DASH_FALLBACK_VIEW =
   'export function E({ v }: { v?: string }) {\n  return <span>{v ?? "—"}</span>;\n}\n';
+/* 自绘折叠开关：原生 `<details>`（P10 形态 ①）。 */
+const DETAILS_VIEW =
+  'export function T() {\n  return (\n    <details>\n      <summary>展开</summary>\n      <pre>x</pre>\n    </details>\n  );\n}\n';
+/* 自绘折叠开关：`role="button"` + `▸/▾`（P10 形态 ②）。 */
+const ROLE_BUTTON_TOGGLE_VIEW =
+  'export function T() {\n  return (\n    <div role="button" tabIndex={0} onClick={onToggle}>\n      <span>{open ? "▾" : "▸"}</span>\n      <span>标题</span>\n    </div>\n  );\n}\n';
+/* 只有装饰性的 `▾`、没有 `role="button"`（**不是**折叠，也不手搓浮层）。 */
+const CARET_ONLY_VIEW =
+  'export function C() {\n  return (\n    <MenuTrigger>\n      <span>{label}</span>\n      <span className={open ? "rotate-180" : ""}>▾</span>\n    </MenuTrigger>\n  );\n}\n';
+/* 自绘「可滚动的浮层选项列表」：既建 PopoverTrigger 又画 `▾`（P11）。 */
+const CHIP_POPOVER_VIEW =
+  'export function C({ value }: { value: string }) {\n  return (\n    <Popover open={open} onOpenChange={setOpen}>\n      <PopoverTrigger>\n        <span>{label}</span>\n        <span>▾</span>\n      </PopoverTrigger>\n      <PopoverContent className="max-h-72 overflow-y-auto">\n        <Button role="option" aria-selected={value === "a"}>A</Button>\n      </PopoverContent>\n    </Popover>\n  );\n}\n';
+/* 自写轮询：视图里直接 setInterval（P12）。 */
+const SET_INTERVAL_VIEW =
+  'export function P() {\n  useEffect(() => {\n    const t = setInterval(() => void poll(), 4000);\n    return () => clearInterval(t);\n  }, []);\n  return null;\n}\n';
 /* 自绘模态浮层：**不含任何 `createPortal`** —— 这正是 P2 数不到的那一侧
  *（P2 问「有没有用某 API」，P9 问「有没有自己拼一份浮层外壳」）。 */
 const MODAL_OVERLAY_VIEW =
@@ -314,6 +329,107 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       ),
     ) as { rules: Record<string, string> };
     expect(baseline.rules.P4).toBeUndefined();
+  });
+
+  /* ── P10 / P11 / P12：本批三条硬闸（规范 16 §16.2.4.13 ~ §16.2.4.15）──
+   *
+   * 三条都按**形态**取锚点，不按 API —— 这正是前几批反复踩到的坑：
+   * P2 数 `createPortal` 漏掉 16 个自绘模态；P10 若数「用了哪个组件」会漏掉
+   * 「用另一种方式做同一件事」。所以这里逐个钉住「正面命中 + 反面不误伤」。 */
+  it("视图里原生 <details> 折叠块直接阻断（规范 P10）", () => {
+    seedBaseline();
+    write("src/components/workshop/Accordion.tsx", DETAILS_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P10");
+    expect(output).toContain("src/components/workshop/Accordion.tsx");
+  });
+
+  it("视图里自绘 role=button + ▸/▾ 折叠开关直接阻断（规范 P10）", () => {
+    seedBaseline();
+    write("src/components/studio/Toggle.tsx", ROLE_BUTTON_TOGGLE_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P10");
+  });
+
+  it("只有装饰性 ▾、没有 role=button / PopoverTrigger 时两条都不误伤", () => {
+    /* 这是两条判据的**边界**：`▾` 在 chip / 下拉 / 弹窗触发器上都会出现，
+     * 单看它会把「打开面板」误判成「折起来」（P10）或「手搓浮层」（P11）。
+     * 所以 P10 要求 `role="button"` 与标记**同时**出现，P11 要求
+     * `PopoverTrigger` 与标记**同时**出现。 */
+    seedBaseline();
+    write("src/components/studio/Caret.tsx", CARET_ONLY_VIEW);
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("注释里提到 <details> 不算实现（与 P1 同一份剥离）", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/DocumentedToggle.tsx",
+      '/* 这里此前是原生 `<details>` + `<summary>`，已改走 ui/disclosure。 */\nexport const D = () => null;\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里手搓 chip 浮层（PopoverTrigger + ▾）直接阻断（规范 P11）", () => {
+    seedBaseline();
+    write("src/components/workshop/MyChip.tsx", CHIP_POPOVER_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P11");
+    expect(output).toContain("src/components/workshop/MyChip.tsx");
+  });
+
+  it("只用 PopoverTrigger 而自己画 ▾ 之外的东西：不被 P11 误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/PlainPopover.tsx",
+      'export function P() {\n  return (\n    <Popover>\n      <PopoverTrigger>打开</PopoverTrigger>\n      <PopoverContent>x</PopoverContent>\n    </Popover>\n  );\n}\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写 setInterval 轮询直接阻断（规范 P12）", () => {
+    seedBaseline();
+    write("src/components/studio/Poller.tsx", SET_INTERVAL_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P12");
+    expect(output).toContain("src/components/studio/Poller.tsx");
+  });
+
+  it("服务端路由里的 setInterval 不算「视图轮询」（P12 豁免 app/api/**）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/tasks/[id]/stream/route.ts",
+      'export async function GET() {\n  const hb = setInterval(() => {}, 15000);\n  return new Response(String(hb));\n}\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P10/P11/P12 未清零时 --update 拒绝更新基线", () => {
+    write("src/components/studio/ToggleUpdate.tsx", ROLE_BUTTON_TOGGLE_VIEW);
+    const { code, output } = run(["--update"]);
+    expect(code).toBe(1);
+    expect(output).toContain("硬闸");
+  });
+
+  it("P10/P11/P12 的计数不进棘轮基线", () => {
+    seedBaseline();
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { rules: Record<string, string> };
+    expect(baseline.rules.P10).toBeUndefined();
+    expect(baseline.rules.P11).toBeUndefined();
+    expect(baseline.rules.P12).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

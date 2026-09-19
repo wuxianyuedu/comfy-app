@@ -7,7 +7,7 @@
 // 时间轴编辑（镜头列表、播放态、播放头）是纯视觉状态、不产生网络请求，
 // 按规范留在视图层——下沉反而要透传一堆 prop。
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { uploadBgm } from "~/lib/film/bgm-client";
 import { errorMessage } from "~/lib/error-message";
@@ -15,6 +15,7 @@ import type { SizeSpec } from "~/lib/media/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
 
 import { useToast } from "../ToastProvider";
+import { useInterval } from "~/components/ui/use-interval";
 import {
   DEFAULT_SCRIPT,
   FILM_FPS,
@@ -96,37 +97,19 @@ export function useFilmStudio(): FilmStudioController {
     { id: string; title: string; status: string }[]
   >([]);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopPoll = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+  /* 拉一次详情。轮询本身由 `useInterval` 按「是否在跑」驱动，这里不再自己
+   * 起停定时器（规范 16 §16.2.4.15）—— 此前 `fetchDetail` 里 `??= setInterval`
+   * 自启、跑完再 `stopPoll()` 自停，是「一个异步动作自己管自己的取消」。 */
+  const fetchDetail = useCallback(async (id: string) => {
+    try {
+      // /api/film/[id] 返回原始 Prisma FilmProject 行（status/logs/shots 比本地
+      // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
+      const data = await vanillaApi.film.detail.query({ id });
+      setFilm(data.film as unknown as Film);
+    } catch {
+      /* 拉详情失败静默忽略，下一次轮询会重试 */
     }
   }, []);
-
-  const fetchDetail = useCallback(
-    async (id: string) => {
-      const poll = async (tid: string): Promise<void> => {
-        try {
-          // /api/film/[id] 返回原始 Prisma FilmProject 行（status/logs/shots 比本地
-          // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
-          const data = await vanillaApi.film.detail.query({ id: tid });
-          const f = data.film as unknown as Film;
-          setFilm(f);
-          if (isFilmRunning(f.status)) {
-            pollRef.current ??= setInterval(() => void poll(tid), FILM_POLL_MS);
-          } else {
-            stopPoll();
-          }
-        } catch {
-          /* 轮询失败静默忽略，下一次 interval 会重试 */
-        }
-      };
-      await poll(id);
-    },
-    [stopPoll],
-  );
 
   /* 挂载时拉一次技能与近期成片（defer 出 effect body，React 19 规则） */
   useEffect(() => {
@@ -179,8 +162,6 @@ export function useFilmStudio(): FilmStudioController {
     };
   }, []);
 
-  useEffect(() => () => stopPoll(), [stopPoll]);
-
   const create = useCallback(async () => {
     if (!script.trim()) {
       toastError("请先输入剧本或创意");
@@ -188,7 +169,6 @@ export function useFilmStudio(): FilmStudioController {
     }
     setLoading(true);
     try {
-      stopPoll();
       const { id } = await vanillaApi.film.create.mutate({
         title,
         script,
@@ -222,7 +202,6 @@ export function useFilmStudio(): FilmStudioController {
     bgmName,
     videoWorkflowId,
     imageWorkflowId,
-    stopPoll,
     fetchDetail,
     toastError,
     success,
@@ -232,13 +211,12 @@ export function useFilmStudio(): FilmStudioController {
     if (!film) return;
     try {
       await vanillaApi.film.cancel.mutate({ id: film.id });
-      stopPoll();
       await fetchDetail(film.id);
       info("已取消");
     } catch (e) {
       toastError(errorMessage(e, "取消失败"));
     }
-  }, [film, stopPoll, fetchDetail, info, toastError]);
+  }, [film, fetchDetail, info, toastError]);
 
   const recompose = useCallback(async () => {
     if (!film) return;
@@ -266,6 +244,20 @@ export function useFilmStudio(): FilmStudioController {
   );
 
   const running = useMemo(() => !!film && isFilmRunning(film.status), [film]);
+
+  /* 成片在跑时按 `FILM_POLL_MS` 轮询详情，跑完自动停 —— 「要不要轮询」由
+   * `running` 决定，不再由 `fetchDetail` 自己起停定时器。`immediate: false`：
+   * 进 running 那一次详情**已经由 `create` / `cancel` / `recompose` 显式拉过**
+   * （它们都 `await fetchDetail(...)`），这里再补一次只会把刚拿到的状态多刷
+   * 一遍、也让首个间隔的语义说不清。`useInterval` 每次渲染把回调搬进 ref，
+   * 所以下面的闭包始终读到最新的 `film.id`。 */
+  const pollId = film?.id ?? null;
+  useInterval(
+    () => {
+      if (pollId) void fetchDetail(pollId);
+    },
+    { ms: running ? FILM_POLL_MS : null, immediate: false },
+  );
 
   return {
     title,

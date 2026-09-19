@@ -27,7 +27,9 @@
 // 注意：本探测同时用于「dev server 是否在线」的展示——探测失败仍表示进程
 // 当前不可达（restarting 字段的旧语义被改掉，详情见下）。
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { useInterval } from "~/components/ui/use-interval";
 
 export const DEV_SERVER_PROBE_MS = 2000;
 
@@ -115,62 +117,65 @@ export function useDevServerLiveness(): DevServerLiveness {
   const recentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
 
+  /* 卸载守卫：`useInterval` 卸载即停间隔，但已发出的探测仍可能回来并
+   * `setState`（也可能落在 `recentTimer` 的回调里）—— `stoppedRef` 保留
+   * （规范 16 §16.2.4.15）。 */
+  const stoppedRef = useRef(false);
+  const probe = useCallback(async () => {
+    /* 首次探测前补读持久化的上次 bootId，作为真正重启的对比基准。
+     * （hydrate 阶段 sessionStorage 读不到，此处手动恢复。） */
+    lastBootIdRef.current ??= readSessionString(LAST_BOOT_ID_KEY);
+    const result = await probeBootId();
+    if (stoppedRef.current) return;
+
+    /* 连通性先落：无论后续是否判定重启，视图都要知道此刻进程可不可达。 */
+    setProbeOk(result.ok);
+    if (result.ok) setEverOnline(true);
+
+    if (result.ok) {
+      const bootId = result.bootId;
+      const prevBootId = lastBootIdRef.current;
+
+      /* 真正重启判定：已有对比基准（非首次/非刷新后首探）且 bootId 变化。
+       * 首次探测（prevBootId 为 null）只做基准记录，不算重启。 */
+      if (prevBootId !== null && prevBootId !== bootId) {
+        const now = Date.now();
+        setLastRestartAt(now);
+        writeSession(LAST_RESTART_KEY, String(now));
+        /* 短暂置「刚重启」高亮，随后自动复位。 */
+        setRestarting(true);
+        if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
+        recentTimerRef.current = setTimeout(() => {
+          if (!stoppedRef.current) setRestarting(false);
+        }, RESTART_RECENT_MS);
+      }
+
+      lastBootIdRef.current = bootId;
+      writeSession(LAST_BOOT_ID_KEY, bootId);
+    }
+    /* 探测失败：不判定重启——这正是本次要排除的误报
+     * （显示器关闭 / 后台节流 / 瞬时断网）。也不动 lastRestartAt。 */
+
+    /* 首次探测完成后补读持久化的上次重启时间：setState 在异步回调里
+     * 而非 effect 体（react-hooks/set-state-in-effect），且首帧保持
+     * null 与 SSR 输出一致。 */
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      setLastRestartAt((prev) => prev ?? readSessionNumber(LAST_RESTART_KEY));
+    }
+  }, []);
+
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
-    let stopped = false;
-
-    const probe = async () => {
-      /* 首次探测前补读持久化的上次 bootId，作为真正重启的对比基准。
-       * （hydrate 阶段 sessionStorage 读不到，此处手动恢复。） */
-      lastBootIdRef.current ??= readSessionString(LAST_BOOT_ID_KEY);
-      const result = await probeBootId();
-      if (stopped) return;
-
-      /* 连通性先落：无论后续是否判定重启，视图都要知道此刻进程可不可达。 */
-      setProbeOk(result.ok);
-      if (result.ok) setEverOnline(true);
-
-      if (result.ok) {
-        const bootId = result.bootId;
-        const prevBootId = lastBootIdRef.current;
-
-        /* 真正重启判定：已有对比基准（非首次/非刷新后首探）且 bootId 变化。
-         * 首次探测（prevBootId 为 null）只做基准记录，不算重启。 */
-        if (prevBootId !== null && prevBootId !== bootId) {
-          const now = Date.now();
-          setLastRestartAt(now);
-          writeSession(LAST_RESTART_KEY, String(now));
-          /* 短暂置「刚重启」高亮，随后自动复位。 */
-          setRestarting(true);
-          if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
-          recentTimerRef.current = setTimeout(() => {
-            if (!stopped) setRestarting(false);
-          }, RESTART_RECENT_MS);
-        }
-
-        lastBootIdRef.current = bootId;
-        writeSession(LAST_BOOT_ID_KEY, bootId);
-      }
-      /* 探测失败：不判定重启——这正是本次要排除的误报
-       * （显示器关闭 / 后台节流 / 瞬时断网）。也不动 lastRestartAt。 */
-
-      /* 首次探测完成后补读持久化的上次重启时间：setState 在异步回调里
-       * 而非 effect 体（react-hooks/set-state-in-effect），且首帧保持
-       * null 与 SSR 输出一致。 */
-      if (!initializedRef.current) {
-        initializedRef.current = true;
-        setLastRestartAt((prev) => prev ?? readSessionNumber(LAST_RESTART_KEY));
-      }
-    };
-
-    void probe();
-    timer = setInterval(() => void probe(), DEV_SERVER_PROBE_MS);
+    stoppedRef.current = false;
     return () => {
-      stopped = true;
-      if (timer) clearInterval(timer);
+      stoppedRef.current = true;
       if (recentTimerRef.current) clearTimeout(recentTimerRef.current);
     };
   }, []);
+
+  /* 探测轮询：挂载即先探一次（`immediate`，之前也是），切后台暂停 —— 后台
+   * 节流/断网正是这条判据要排除的误报来源（规范 16 §16.2.4.15）。 */
+  useInterval(probe, { ms: DEV_SERVER_PROBE_MS });
 
   return { restarting, lastRestartAt, probeOk, everOnline };
 }

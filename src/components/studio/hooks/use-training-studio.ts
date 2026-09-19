@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useInterval } from "~/components/ui/use-interval";
 import { uploadDatasetImage } from "~/lib/media/dataset-upload-client";
 import { errorMessage } from "~/lib/error-message";
 import { vanillaApi } from "~/trpc/vanilla";
@@ -118,10 +119,12 @@ export function useTrainingStudio(): TrainingStudioController {
 
   useEffect(() => {
     loadModels();
-    loadJobs();
-    const t = setInterval(loadJobs, JOBS_POLL_MS);
-    return () => clearInterval(t);
-  }, [loadModels, loadJobs]);
+  }, [loadModels]);
+
+  /* 任务列表轮询：挂载即先拉一次、之后每 `JOBS_POLL_MS` 一次，切后台暂停
+   * （规范 16 §16.2.4.15）。此前自己 `setInterval` —— 不会立刻拉一次，且
+   * 后台标签页里空转。 */
+  useInterval(loadJobs, { ms: JOBS_POLL_MS });
 
   /* ── 数据集上传：逐张串行，失败即停并把错误抛给用户 ── */
   const upload = useCallback(async (files: FileList | null) => {

@@ -12,7 +12,9 @@
  * 同仁，且失败即静默（取不到标识就当无法判定，绝不打扰）。
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+
+import { useInterval } from "~/components/ui/use-interval";
 
 import {
   fetchBuildId,
@@ -27,44 +29,47 @@ export const BUILD_ID_POLL_MS = 30_000;
 export function useCodeUpdateWatch(): void {
   /* 页面加载时的构建标识（首探所得）与最近一次已知标识，都用 ref：
    * 它们只参与判定，不驱动渲染。 */
+  const stoppedRef = useRef(false);
   const loadedAtRef = useRef<string | null>(null);
   const lastRef = useRef<string | null>(null);
 
+  /* 卸载守卫仍在：`useInterval` 会在卸载时清掉间隔，但**已经发出的那次
+   * `fetchBuildId` 仍可能回来**并 `reportCodeUpdatedSinceLoad()` —— 那是个
+   * 全局通知，不该由一个已消失的 watcher 触发。间隔本身的起停已收在
+   * `useInterval` 里（规范 16 §16.2.4.15）。 */
   useEffect(() => {
-    let stopped = false;
-
-    const probe = async () => {
-      const { buildId } = await fetchBuildId();
-      if (stopped || buildId === null) return;
-
-      /* 首次探测：它既建立对比基准，也是「页面加载时那一版」的记录。 */
-      if (loadedAtRef.current === null) {
-        loadedAtRef.current = buildId;
-        lastRef.current = buildId;
-        return;
-      }
-
-      /* ① 加载后模块被替换（热更新 / 重新编译）。 */
-      if (isBuildIdChange(lastRef.current, buildId)) {
-        lastRef.current = buildId;
-        reportCodeUpdatedSinceLoad();
-        return;
-      }
-
-      /* ② 每次探测都复核「页面是不是本来就更旧」：页面加载时的标识与此刻
-       *    不一致，说明这个页面从挂载起就跑在过期的模块图上（服务重启过、
-       *    或加载时命中旧 chunk）。这一条只在**真的不一致**时上报，正常
-       *    情况下每次比较都相等。 */
-      if (isPageOlderThanBuild(loadedAtRef.current, buildId)) {
-        reportCodeUpdatedSinceLoad();
-      }
-    };
-
-    void probe();
-    const timer = setInterval(() => void probe(), BUILD_ID_POLL_MS);
+    stoppedRef.current = false;
     return () => {
-      stopped = true;
-      clearInterval(timer);
+      stoppedRef.current = true;
     };
   }, []);
+
+  const probe = useCallback(async () => {
+    const { buildId } = await fetchBuildId();
+    if (stoppedRef.current || buildId === null) return;
+
+    /* 首次探测：它既建立对比基准，也是「页面加载时那一版」的记录。 */
+    if (loadedAtRef.current === null) {
+      loadedAtRef.current = buildId;
+      lastRef.current = buildId;
+      return;
+    }
+
+    /* ① 加载后模块被替换（热更新 / 重新编译）。 */
+    if (isBuildIdChange(lastRef.current, buildId)) {
+      lastRef.current = buildId;
+      reportCodeUpdatedSinceLoad();
+      return;
+    }
+
+    /* ② 每次探测都复核「页面是不是本来就更旧」：页面加载时的标识与此刻
+     *    不一致，说明这个页面从挂载起就跑在过期的模块图上（服务重启过、
+     *    或加载时命中旧 chunk）。这一条只在**真的不一致**时上报，正常
+     *    情况下每次比较都相等。 */
+    if (isPageOlderThanBuild(loadedAtRef.current, buildId)) {
+      reportCodeUpdatedSinceLoad();
+    }
+  }, []);
+
+  useInterval(probe, { ms: BUILD_ID_POLL_MS, pauseWhenHidden: false });
 }

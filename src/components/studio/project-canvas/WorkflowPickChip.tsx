@@ -1,16 +1,11 @@
 "use client";
 
 /** 从 WorkflowNode.tsx 抽出的「工作流选择」chip（下拉 2，按来源/模型过滤）。
- *  行为与外观保持不变。
+ *  行为与外观保持不变。浮层壳与选项行走 `ui/option-list-popover`
+ *  （规范 16 §16.2.4.14）—— 此前这份壳在本目录的四个 chip 里各写了一遍。
  */
-import { useState } from "react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
 import { PageLoading } from "~/components/ui/page-loading";
-import { Button } from "~/components/ui/button";
+import { OptionListPopover } from "~/components/ui/option-list-popover";
 
 export type WorkflowPickOption = {
   id: string;
@@ -36,17 +31,17 @@ export function WorkflowPickChip({
   emptyHint,
   loading = false,
 }: WorkflowPickChipProps) {
-  const [open, setOpen] = useState(false);
-
   const sel = options.find((option) => option.id === value);
-  const name = sel?.name ?? "选择工作流";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        type="button"
-        className="nodrag nopan border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
-      >
+    <OptionListPopover
+      value={value}
+      onSelect={onSelect}
+      triggerTitle="选择工作流"
+      align="start"
+      contentClassName="w-[280px] py-1"
+      triggerClassName="border-primary/35 bg-node-accent h-6 min-w-0 flex-1 rounded-lg border px-2.5 text-[12px]"
+      trigger={
         <span
           className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
           style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}
@@ -54,66 +49,38 @@ export function WorkflowPickChip({
           {loading && !sel ? (
             <span className="text-ink-muted">加载中…</span>
           ) : sel ? (
-            name
+            sel.name
           ) : (
             <span className="text-ink-muted">选择工作流…</span>
           )}
         </span>
-        <span
-          className={`text-ink-icon shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
-        >
-          ▾
-        </span>
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="start"
-        aria-label="选择工作流"
-        className="border-border-strong bg-card max-h-72 w-[280px] gap-0 overflow-y-auto py-1 shadow-2xl shadow-black/10 dark:shadow-violet-500/20"
-      >
-        {options.length === 0 &&
-          (loading ? (
-            <div className="text-ink-muted flex items-center gap-2 px-3 py-3 text-[11px]">
-              <PageLoading label="加载中…" className="flex-row gap-2" />
-            </div>
-          ) : (
-            <div className="text-ink-muted px-3 py-3 text-[11px]">
-              {emptyHint ?? "暂无符合筛选的工作流"}
-            </div>
-          ))}
-        {options.map((option) => {
-          const ol = Boolean(option.sourcePath);
-          const active = option.id === value;
-          return (
-            <Button
-              key={option.id}
-              variant="ghost"
-              role="option"
-              aria-selected={active}
-              onClick={() => {
-                onSelect(option.id);
-                setOpen(false);
-              }}
-              className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
-                active
-                  ? "bg-violet-500/20 text-violet-700 dark:text-violet-200"
-                  : "text-ink-soft hover:bg-subtle"
-              }`}
-            >
-              <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${ol ? "bg-emerald-400" : "bg-violet-400"}`}
-              />
-              <span className="min-w-0 flex-1 truncate">{option.name}</span>
-              {option.taskType && (
-                <span className="bg-subtle text-ink-muted shrink-0 rounded px-1.5 py-0.5 text-[9.5px]">
-                  {option.taskType}
-                </span>
-              )}
-            </Button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
+      }
+      emptyHint={
+        loading ? (
+          <div className="flex items-center gap-2 px-0 py-1">
+            <PageLoading label="加载中…" className="flex-row gap-2" />
+          </div>
+        ) : (
+          (emptyHint ?? "暂无符合筛选的工作流")
+        )
+      }
+      items={options.map((option) => ({
+        value: option.id,
+        label: option.name,
+        title: option.name,
+        prefix: (
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              option.sourcePath ? "bg-status-online" : "bg-primary-strong"
+            }`}
+          />
+        ),
+        suffix: option.taskType ? (
+          <span className="bg-subtle text-ink-muted shrink-0 rounded px-1.5 py-0.5 text-[9.5px]">
+            {option.taskType}
+          </span>
+        ) : undefined,
+      }))}
+    />
   );
 }

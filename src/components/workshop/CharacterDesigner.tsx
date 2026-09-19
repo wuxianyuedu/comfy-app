@@ -4,6 +4,7 @@ import { Trash } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Disclosure } from "~/components/ui/disclosure";
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
 import {
   CHARACTER_ATTRIBUTES,
@@ -484,14 +485,16 @@ export function CharacterDesigner({
               </p>
             )}
             {genBusy && genProgress && (
-              <details className="bg-bg/60 rounded-lg px-3 py-2" open>
-                <summary className="text-primary cursor-pointer text-[11px] select-none">
-                  生成过程
-                </summary>
+              <Disclosure
+                defaultOpen
+                marker="caret"
+                className="text-primary bg-bg/60 rounded-lg px-3 py-2 text-[11px]"
+                trigger="生成过程"
+              >
                 <pre className="text-muted-foreground mt-1 max-h-40 overflow-y-auto text-[11px] leading-relaxed break-all whitespace-pre-wrap">
                   {genProgress}
                 </pre>
-              </details>
+              </Disclosure>
             )}
             {genStatus && !genError && (
               <p className="text-primary mt-1 text-xs">{genStatus}</p>
