@@ -5,33 +5,17 @@
 // 等于「配置路径的实例在运行」——端口上可能跑着别的 ComfyUI。要判断配置
 // 的实例是否真的启动了，需要在 OS 层查进程命令行里的 main.py 路径。
 //
-// Windows 用 PowerShell Get-CimInstance 查命令行，Get-NetTCPConnection 查
-// PID 的监听端口；POSIX 用 ps 查命令行、用 /proc/net/tcp + /proc/<pid>/fd 查
-// 监听端口（纯 Node 内建，不依赖任何发行版可选的二进制）。
+// Windows 用 PowerShell Get-CimInstance（过滤下推到 WMI）查命令行、用系统自带的
+// `netstat -ano -p TCP` 查 PID 的监听端口 —— 两者都不需要额外的第三方二进制，
+// 也不用付两次 PowerShell 的进程启动开销；POSIX 用 ps 查命令行、用
+// /proc/net/tcp + /proc/<pid>/fd 查监听端口（纯 Node 内建，不依赖 lsof）。
 import "server-only";
 import { execFile } from "child_process";
 import { readdirSync, readlinkSync, readFileSync } from "fs";
 
-function execFileP(
-  cmd: string,
-  args: string[],
-  timeoutMs = 3000,
-): Promise<string> {
-  return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { timeout: timeoutMs, windowsHide: true },
-      (err, stdout) => {
-        if (err) resolve("");
-        else resolve(stdout.toString());
-      },
-    );
-  });
-}
-
-/** execFileP 的结果区分版：ok=false 表示命令本身失败（超时 / 无法启动 / 非零退出），
- *  此时输出不可信——调用方不得把「没查到」当作「进程不存在」的证据。 */
+/** 带「成功与否」标记的 execFile 包装：ok=false 表示命令本身失败（超时 /
+ *  无法启动 / 非零退出），此时输出不可信——调用方不得把「没查到」当作
+ *  「进程不存在」的证据。 */
 async function execFilePTried(
   cmd: string,
   args: string[],
@@ -70,7 +54,7 @@ export type PidLookup = {
  * findPidForMainPy 的区分版：把「确认不存在」（failed=false, pid=null）与
  * 「查询失败」（failed=true）分开。
  *
- * 背景：execFileP 把 execFile 错误（含 10s 超时）静默成空串，上层只看到
+ * 背景：不带结果的版本把 execFile 错误（含 10s 超时）静默成空串，上层只看到
  * 「没找到进程」。ComfyUI 启动初期机器高负载（CUDA 初始化 / 大量 IO）时
  * PowerShell 查询很容易超时，把正在启动的实例误判成「没有在运行」，
  * probeComfyUi 随之整体跳过 HTTP 探测——设置页状态行显示「未运行」，
@@ -85,17 +69,23 @@ export async function findPidForMainPyDetailed(
 
   try {
     if (process.platform === "win32") {
-      // 用 PowerShell 查询命令行含目标路径的进程（转义单引号防注入）。
-      // 两个坑（都实测踩过）：
+      // 用 PowerShell 查询命令行含目标路径的进程。
+      // 三个坑（都实测踩过）：
       //  ① 整条命令只能出现单引号 —— execFile argv → PS -Command 的引号转义
-      //     链路会把内嵌双引号变形（-Filter "Name LIKE …" 恒空匹配）；
-      //  ② 字面反斜杠在引号链路里会被吞（'\\' 到 PS 手里剩几个不可控），
-      //     Replace 的反斜杠用 [char]92 运行时构造，路径分隔符归一才生效。
-      // Name 过滤放 Where 里做（枚举成本 ~2.5s，超时给足 10s）。
+      //     链路会把内嵌双引号变形，`-Filter "Name LIKE …"` 恒空匹配。WQL 的
+      //     字符串定界符恰恰是双引号，因此过滤条件在运行时用 `[char]34` 拼；
+      //  ② 字面反斜杠在引号链路里同样会被吞（'\\' 到 PS 手里剩几个不可控），
+      //     Replace 的反斜杠用 [char]92 运行时构造，路径分隔符归一才生效；
+      //  ③ **过滤必须下推到 WMI**：不带 `-Filter` 的 `Get-CimInstance
+      //     Win32_Process` 会把系统上每个进程的整份属性（含几 KB 的 CommandLine）
+      //     拉过来、再让 `Where-Object` 在 PowerShell 侧挑，本机实测 ~2.5s，
+      //     冷启动高负载下直接顶到超时。`-Filter` 交给 WMI 仓储层过滤后，
+      //     只有命中 `Name LIKE 'python%'` 的少数进程被物化。
       const safeMain = normalized.replace(/'/g, "''");
       const ps =
-        `Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ` +
-        `Where-Object { $_.Name -like 'python*' -and $_.CommandLine -and $_.CommandLine.ToLower().Replace([string][char]92,'/').Contains('${safeMain}') } | ` +
+        `$q=[char]34; ` +
+        `Get-CimInstance Win32_Process -Filter ('Name LIKE '+$q+'python%'+$q) -ErrorAction SilentlyContinue | ` +
+        `Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Replace([string][char]92,'/').Contains('${safeMain}') } | ` +
         `Select-Object -First 1 -ExpandProperty ProcessId`;
       const { ok, out } = await execFilePTried(
         "powershell.exe",
@@ -199,6 +189,27 @@ export function findListeningPortViaProc(pid: number): number | null {
   return null;
 }
 
+/** 解析 Windows `netstat -ano -p TCP` 的输出，取指定 PID 的 LISTEN 端口。
+ *  行形如（空白分列，最后一列是 PID）：
+ *  `TCP    127.0.0.1:8188    0.0.0.0:0    LISTENING    12345`
+ *  IPv6 行为 `TCP    [::1]:8188   [::]:0  LISTENING  12345` —— 端口分隔符是
+ *  **最后一个冒号**，两种形态都靠它切出来。 */
+export function parseNetstatListeningPort(
+  content: string,
+  pid: number,
+): number | null {
+  for (const line of content.split(/\r?\n/)) {
+    const cols = line.trim().split(/\s+/);
+    if (cols.length < 5) continue;
+    if (cols[0] !== "TCP" || cols[3] !== "LISTENING") continue;
+    if (parseInt(cols[4] ?? "", 10) !== pid) continue;
+    const local = cols[1] ?? "";
+    const port = parseInt(local.slice(local.lastIndexOf(":") + 1), 10);
+    if (Number.isInteger(port) && port > 0) return port;
+  }
+  return null;
+}
+
 /** 找到指定 PID 正在监听的 TCP 端口号（取第一个 LISTEN 端口）。 */
 export async function findPidListeningPort(
   pid: number,
@@ -207,22 +218,28 @@ export async function findPidListeningPort(
 
   try {
     if (process.platform === "win32") {
-      const ps =
-        `Get-NetTCPConnection -OwningProcess ${pid} -State Listen -ErrorAction SilentlyContinue | ` +
-        `Select-Object -First 1 -ExpandProperty LocalPort`;
-      const out = await execFileP(
-        "powershell.exe",
-        ["-NoProfile", "-NonInteractive", "-Command", ps],
+      /* `netstat -ano -p TCP` 是系统自带的原生程序（毫秒级），而
+       * `Get-NetTCPConnection` 要先起一个 PowerShell（固定 0.5~2s 启动开销）
+       * 再枚举**全部** TCP 连接（`-OwningProcess` 不是服务端过滤，实测 ~2.5s）。
+       * 状态判定链上这一跳与「找 main.py 的进程表查询」原本是两次串行
+       * PowerShell（5s 左右），换掉其中一次即省掉一半（ISSUE #346/#339 的
+       * 「打开设置页要等一会才显示运行中」）。
+       *
+       * 与启动器侧同一口径：`scripts/launcher-core/procs.mjs` 的
+       * `listeningPidsOnPort()` 也用 `netstat -ano`，理由相同。 */
+      const { ok, out } = await execFilePTried(
+        "netstat.exe",
+        ["-ano", "-p", "TCP"],
         4000,
       );
-      const port = parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
-      return isNaN(port) ? null : port;
+      if (!ok) return null;
+      return parseNetstatListeningPort(out, pid);
     } else {
       // POSIX：纯 Node 内建读取监听端口，**不依赖 lsof**。
       //
       // 历史实现是 `lsof -Pan -p <pid> -iTCP -sTCP:LISTEN`，但 lsof 在不少
-      // 发行版（含本项目 CI 用的精简镜像）默认不装；execFileP 会把 ENOENT
-      // 静默吞成空串 → 函数返回 null，正是规范 §9.2 第 3 条禁止的「静默失败」。
+      // 发行版（含本项目 CI 用的精简镜像）默认不装；静默吞错的版本会把 ENOENT
+      // 变成空串 → 函数返回 null，正是规范 §9.2 第 3 条禁止的「静默失败」。
       // 文档 §9.1 也曾声称「不依赖 lsof」，但代码实际就是 lsof —— 文档与实现
       // 互相打架（本次一并纠正）。
       //

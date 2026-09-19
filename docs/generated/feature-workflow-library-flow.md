@@ -88,7 +88,7 @@ flowchart LR
   Q --> SCAN["扫描本地工作流目录<br/>递归"]
   SCAN --> SUM["localRoots 摘要<br/>路径 / 是否存在 / 文件数"]
   DB --> ENRICH["富化：类型元数据 + 预览 + workflowIO + 模型标签"]
-  SCAN --> RELINK["按内容校验和「重命名重链」<br/>磁盘 renamed → 自动改 sourcePath"]
+  SCAN --> RELINK["按内容校验和「重命名重链」<br/>磁盘 renamed → 自动改 sourcePath<br/>（mtime+size 记忆命中即不读文件）"]
   SCAN --> PENDING["localPending：磁盘有、库里没有"]
   ENRICH --> ROWS["已载入行"]
   PENDING --> ROWS2["待载入行"]
@@ -101,6 +101,7 @@ flowchart LR
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | 列表为空的**原因**怎么告诉用户 | 服务端回 `localRoots` 摘要，前端派生「一个都没解析到 / 全不可访问 / 目录里没有文件」三类文案（`deriveLocalRootsHint`） |
 | 磁盘文件被重命名了怎么办       | 服务端按内容校验和找到新路径并自动重链，前端一次 toast 提示                                                            |
+| 轮询为什么不会把磁盘读爆       | 校验和按「路径 + mtime + size」记忆上一趟结果（`localWorkflows.checksumCache`），三者都没变时连文件都不打开；文件真改了才重算。`listForUser` 也用显式列投影，不把每个模板的 `positions` 大字段查出来 |
 | 「文件变了」怎么表达           | `diskDirty`（磁盘 mtime > 入库记录）→ 卡片出现「↻ 同步」；`diskMissing` → 标「文件已不存在」                           |
 | 首次拉取卡住怎么表现           | 8s 未拿到数据 → 可重试的「加载较久」出口，而不是伪装成「没有工作流」                                                   |
 | 计数的口径                     | 来源页签把待载入项计入 `local`；类型页签待载入项只计入 `all`（它们没有 taskType）                                      |

@@ -14,6 +14,7 @@ import net from "node:net";
 import { describe, expect, it } from "vitest";
 import {
   findListeningPortViaProc,
+  parseNetstatListeningPort,
   parseProcNetTcpListeners,
   socketInodesOfPid,
 } from "./proc-detect";
@@ -71,5 +72,39 @@ describe.runIf(process.platform === "linux")("findListeningPortViaProc", () => {
 
   it("socketInodesOfPid 对不存在的 pid 返回空集", () => {
     expect(socketInodesOfPid(999999).size).toBe(0);
+  });
+});
+
+/* ── Windows 侧的「更便宜的查询方式」（ISSUE #346 / #339 的查询成本） ──
+ *
+ * 两处判据都**只能靠断言命令形状与解析结果**来锁：真实 Windows 进程表 /
+ * netstat 在这个测试环境里不存在，而它们要拦的回归恰恰是「换回贵的写法」——
+ * 那种回归在 Linux 上跑什么都绿，只有把「命令里有什么」钉成断言才拦得住。 */
+describe("Windows 命令行探测的口径", () => {
+  it("parseNetstatListeningPort 认两种地址形态，按最后一列 PID 过滤", () => {
+    const content = [
+      "  TCP    127.0.0.1:8188         0.0.0.0:0              LISTENING       4242",
+      "  TCP    127.0.0.1:8189         0.0.0.0:0              LISTENING       9999",
+      "  TCP    127.0.0.1:50000        127.0.0.1:60000        ESTABLISHED     4242",
+    ].join("\r\n");
+    expect(parseNetstatListeningPort(content, 4242)).toBe(8188);
+    // 他人 PID 的行不得被算成它的端口
+    expect(parseNetstatListeningPort(content, 1234)).toBeNull();
+    // 非 LISTENING（ESTABLISHED 的 50000）不算监听端口
+    expect(
+      parseNetstatListeningPort(content.split("\r\n")[2]!, 4242),
+    ).toBeNull();
+  });
+
+  it("IPv6 行的端口按「最后一个冒号」切（不是第一个）", () => {
+    const content =
+      "  TCP    [::1]:8190              [::]:0                 LISTENING       7777";
+    expect(parseNetstatListeningPort(content, 7777)).toBe(8190);
+  });
+
+  it("容忍表头 / 空行 / 字段不足的脏输入", () => {
+    expect(parseNetstatListeningPort("", 1)).toBeNull();
+    expect(parseNetstatListeningPort("garbage\n\n  \n", 1)).toBeNull();
+    expect(parseNetstatListeningPort("TCP 127.0.0.1:1", 1)).toBeNull();
   });
 });

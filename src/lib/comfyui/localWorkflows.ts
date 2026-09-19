@@ -240,6 +240,10 @@ export function scanLocalWorkflowRoots(
  * 实现选择：**流式** SHA-1（`createReadStream` + 管道进 `Hash`），
  * 几 MB 的工作流也不会把堆撑爆。读不了的文件（权限错误、扫描中途消失）
  * 静默跳过 —— 这条改名流程本来就是尽力而为。
+ *
+ * **同一份内容只读一遍**：`workflow.list` 每次轮询都会走到这里，而文件在两次
+ * 轮询之间通常没变。按「路径 + mtime + size」记忆上一趟的 checksum（见
+ * `checksumCache`），命中时连文件都不打开 —— 这曾是本接口稳定 1s+ 的主因。
  * ───────────────────────────────────────────────────────────────────────── */
 
 export interface LocalChecksumEntry {
@@ -247,39 +251,98 @@ export interface LocalChecksumEntry {
   absPath: string;
   /** sha1(text).slice(0,16) —— 与 `WorkflowTemplate.sourceChecksum` 同值。 */
   checksum: string;
-  /** 文件 mtime（毫秒时间戳）。调用方在多个文件 checksum 相同时用它断开
-   *  （少见但确实可能）。 */
+  /** 文件 mtime（毫秒时间戳，取自扫描器的 `statSync`）。调用方在多个文件
+   *  checksum 相同时用它断开（少见但确实可能）；它同时是 checksum 记忆的键。 */
   mtimeMs: number;
+}
+
+/** checksum 的 mtime+size 记忆表。
+ *
+ *  为什么必须有：`scanLocalWorkflowChecksums` 是**每一趟 `workflow.list` 都跑**的
+ *  一步，而它把这个根目录下每个 `.json` / `.workflow` 完整读一遍再算 SHA-1。
+ *  工作流 JSON 动辄几 MB，几十个文件（并发 8）就是稳定 1s+ 的纯重复劳动——
+ *  文件在两次轮询之间根本没变，却被重算了整份内容。
+ *
+ *  **判据是「路径 + mtimeMs + size 三元组完全一致」**：三者任一不同就重算。
+ *  这是文件系统能给出的最强「内容没变」证据（`mtime` 精度足够，且写入会同时
+ *  改 `size` 或 `mtime`）；同秒内的「改完又改回来」会让 checksum 走一次旧的，
+ *  但那个旧值**本来就是当前内容的值**，不影响正确性。
+ *
+ *  挂在 `globalThis`（项目里 lifecycle / executor-cli 等同款口径）：Turbopack
+ *  热重载会重新求值本模块，模块级 `Map` 每次都被清空，记忆就白做了。
+ *  容量有上限：文件被删 / 改名后旧键会留在表里，不设界就是慢性泄漏。 */
+const CHECKSUM_CACHE_KEY = "__localWorkflowChecksums_v1";
+const CHECKSUM_CACHE_MAX = 512;
+
+type ChecksumMemo = { mtimeMs: number; size: number; checksum: string };
+
+function checksumCache(): Map<string, ChecksumMemo> {
+  const g = globalThis as unknown as Record<
+    string,
+    Map<string, ChecksumMemo> | undefined
+  >;
+  g[CHECKSUM_CACHE_KEY] ??= new Map();
+  return g[CHECKSUM_CACHE_KEY];
+}
+
+/** checksum 记忆的容量淘汰：超出上限时丢掉最早插入的键（Map 的插入序）。
+ *  不做 LRU（读一遍不重排）——命中率只取决于「同一批文件反复扫」，这已经够了。 */
+function rememberChecksum(key: string, memo: ChecksumMemo): void {
+  const cache = checksumCache();
+  cache.delete(key);
+  cache.set(key, memo);
+  while (cache.size > CHECKSUM_CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
 }
 
 /** 流式读内容算出单个文件的 checksum。
  *  任何读错误（权限、文件消失等）都 resolve 成 `null`，
- *  调用方可以跳过它而不必中断整趟扫描。 */
+ *  调用方可以跳过它而不必中断整趟扫描。
+ *
+ *  `size` / `mtimeMs` 由调用方从**同一趟扫描**的 `statSync` 结果传入：扫描器刚
+ *  拿过它们，再 `statSync` 一次既多余、也可能与刚才那一次不一致（文件正好在
+ *  两次之间被写）。三元组一致即直接复用记忆值，**连文件都不打开**。 */
 function checksumOfFile(
   absPath: string,
+  size: number,
+  mtimeMs: number,
 ): Promise<{ checksum: string; mtimeMs: number } | null> {
+  const key = pathKey(absPath);
+  const cached = checksumCache().get(key);
+  if (cached?.mtimeMs === mtimeMs && cached.size === size) {
+    return Promise.resolve({ checksum: cached.checksum, mtimeMs });
+  }
   return new Promise((resolve) => {
     try {
-      const stat = fs.statSync(absPath);
-      if (!stat.isFile()) return resolve(null);
       const hash = createHash("sha1");
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
       stream.on("data", (chunk) => hash.update(chunk as string));
       stream.on("error", () => resolve(null));
-      stream.on("end", () =>
-        resolve({
-          checksum: hash.digest("hex").slice(0, 16),
-          mtimeMs: stat.mtimeMs,
-        }),
-      );
+      stream.on("end", () => {
+        const checksum = hash.digest("hex").slice(0, 16);
+        rememberChecksum(key, { mtimeMs, size, checksum });
+        resolve({ checksum, mtimeMs });
+      });
     } catch {
       resolve(null);
     }
   });
 }
+
+/** 丢掉 checksum 记忆：本地工作流文件的 checksum 落库口径变了、或需要强制
+ *  重新读盘时调用（测试与排障用，正常路径靠 mtime+size 自动失效）。 */
+export function resetLocalWorkflowChecksumCache(): void {
+  checksumCache().clear();
+}
 /** 扫描每个配置的根目录，为每个可读的 `.json` / `.workflow` 文件返回
  *  `{absPath, checksum, mtimeMs}`。没有配置任何根目录（或每趟扫描都失败）时
- *  resolve 成空数组。单个文件的访问错误会被吞掉（尽力而为）。 */
+ *  resolve 成空数组。单个文件的访问错误会被吞掉（尽力而为）。
+ *
+ *  mtime+size 与上一趟相同的文件直接取记忆里的 checksum，不再读内容 ——
+ *  这是「轮询里同一份数据反复出现」的常规场景（见 `checksumCache`）。 */
 export async function scanLocalWorkflowChecksums(
   rawPaths: string[],
 ): Promise<LocalChecksumEntry[]> {
@@ -296,7 +359,11 @@ export async function scanLocalWorkflowChecksums(
 
       if (!file.absPath) continue;
 
-      const result = await checksumOfFile(file.absPath);
+      const result = await checksumOfFile(
+        file.absPath,
+        file.size,
+        file.mtimeMs,
+      );
 
       if (result) {
         out.push({
