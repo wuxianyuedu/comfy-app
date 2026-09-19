@@ -1,6 +1,8 @@
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
+import { ProgressBar } from "~/components/ui/progress-bar";
+import { clampPct } from "~/lib/progress";
 
 import type { TaskItem } from "./history-types";
 import { STATUS_STYLE, timeAgo } from "./history-utils";
@@ -76,14 +78,16 @@ export function HistoryTaskCard({
               {task.status === "FAILED" ? "失败" : "无图"}
             </span>
           )}
-          {/* 进行中：底部进度条 */}
+          {/* 进行中：底部进度条（卡片下缘的一条装饰条：无轨道底色、方角，
+              宽度下限与文字百分比分列两处，观感与收口前一致）。 */}
           {st.showProgress && (
-            <div className="bg-canvas-deep absolute inset-x-0 bottom-0 h-1">
-              <div
-                className="h-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-all duration-1000 ease-linear"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={progress}
+              showValue={false}
+              className="absolute inset-x-0 bottom-0"
+              trackClassName="bg-canvas-deep h-1 rounded-none"
+              fillClassName="rounded-none bg-linear-to-r from-violet-500 to-fuchsia-500 duration-1000 ease-linear"
+            />
           )}
           {/* 排队中：虚线边框 + 计时图标 */}
           {task.status === "QUEUED" && (
@@ -104,7 +108,7 @@ export function HistoryTaskCard({
             </span>
             {st.showProgress && (
               <span className="text-[10px] text-violet-700 tabular-nums dark:text-violet-400">
-                {Math.floor(progress)}%
+                {clampPct(progress)}%
               </span>
             )}
             <span className="text-ink-muted truncate text-xs">

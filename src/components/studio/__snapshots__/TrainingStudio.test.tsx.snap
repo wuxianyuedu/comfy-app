@@ -234,57 +234,69 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               </div>
             </div>
             <div
-              class="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3"
+              class="grid gap-x-4 gap-y-3 grid-cols-2 min-w-0 flex-1"
             >
-              <div>
-                <p
+              <div
+                class="flex min-w-0 flex-col gap-0.5"
+              >
+                <span
                   class="text-ink-fainter text-[10px]"
                 >
                   当前步数
-                </p>
-                <p
+                </span>
+                <span
                   class="text-ink-field truncate text-[13px] font-medium"
                 >
-                  0
-                   / 
-                  0
-                </p>
+                  0 / 0
+                </span>
               </div>
-              <div>
-                <p
+              <div
+                class="flex min-w-0 flex-col gap-0.5"
+              >
+                <span
                   class="text-ink-fainter text-[10px]"
                 >
                   触发词
-                </p>
-                <p
-                  class="text-primary-strong truncate text-[13px] font-medium"
+                </span>
+                <span
+                  class="truncate text-[13px] font-medium text-primary-strong"
                 >
                   —
-                </p>
+                </span>
               </div>
               <div
-                class="col-span-2 min-w-0"
+                class="flex min-w-0 flex-col gap-0.5 col-span-2"
               >
-                <p
+                <span
                   class="text-ink-fainter text-[10px]"
                 >
                   底模
-                </p>
-                <p
+                </span>
+                <span
                   class="text-ink-field truncate text-[13px] font-medium"
                 >
                   —
-                </p>
+                </span>
               </div>
             </div>
           </div>
           <div
-            class="bg-surface-2 mt-4 h-1.5 w-full overflow-hidden rounded-full"
+            class="w-full mt-4"
           >
             <div
-              class="from-primary-500 to-info h-full rounded-full bg-linear-to-r transition-all"
-              style="width: 0%;"
-            />
+              aria-valuemax="100"
+              aria-valuemin="0"
+              aria-valuenow="0"
+              class="w-full overflow-hidden rounded-full bg-surface-2 h-1.5"
+              data-slot="progress-bar-track"
+              role="progressbar"
+            >
+              <div
+                class="bg-primary h-full rounded-full transition-all bg-linear-to-r from-primary-500 to-info"
+                data-slot="progress-bar-fill"
+                style="width: 0%;"
+              />
+            </div>
           </div>
         </div>
         <div

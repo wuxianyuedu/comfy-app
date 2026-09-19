@@ -12,6 +12,8 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "~/components/ui/button";
 import { Alert, AlertTitle } from "~/components/ui/alert";
+import { ProgressBar } from "~/components/ui/progress-bar";
+import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { useTrainingStudio } from "./hooks/use-training-studio";
 import { displayValue } from "~/lib/display-value";
 import {
@@ -353,35 +355,36 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               </div>
 
               {/* Metrics */}
-              <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3">
-                <div>
-                  <p className="text-ink-fainter text-[10px]">当前步数</p>
-                  <p className="text-ink-field truncate text-[13px] font-medium">
-                    {ringSteps} / {activeJob?.steps ?? 0}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-ink-fainter text-[10px]">触发词</p>
-                  <p className="text-primary-strong truncate text-[13px] font-medium">
-                    {displayValue(activeJob?.triggerWord)}
-                  </p>
-                </div>
-                <div className="col-span-2 min-w-0">
-                  <p className="text-ink-fainter text-[10px]">底模</p>
-                  <p className="text-ink-field truncate text-[13px] font-medium">
-                    {displayValue(activeJob?.baseModel)}
-                  </p>
-                </div>
-              </div>
+              <KeyValueRows
+                layout="stacked"
+                className="min-w-0 flex-1"
+                items={[
+                  {
+                    key: "当前步数",
+                    value: `${ringSteps} / ${activeJob?.steps ?? 0}`,
+                  },
+                  {
+                    key: "触发词",
+                    value: displayValue(activeJob?.triggerWord),
+                    valueClassName: "text-primary-strong",
+                  },
+                  {
+                    key: "底模",
+                    raw: activeJob?.baseModel,
+                    itemClassName: "col-span-2",
+                  },
+                ]}
+              />
             </div>
 
             {/* Progress bar */}
-            <div className="bg-surface-2 mt-4 h-1.5 w-full overflow-hidden rounded-full">
-              <div
-                className="from-primary-500 to-info h-full rounded-full bg-linear-to-r transition-all"
-                style={{ width: `${ringProgress}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={ringProgress}
+              showValue={false}
+              className="mt-4"
+              trackClassName="bg-surface-2 h-1.5"
+              fillClassName="bg-linear-to-r from-primary-500 to-info"
+            />
           </div>
 
           {/* Loss 曲线卡 */}
@@ -511,12 +514,13 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
 
                       {(job.status === "RUNNING" ||
                         job.status === "QUEUED") && (
-                        <div className="bg-surface-2 mt-3 h-1.5 w-full overflow-hidden rounded-full">
-                          <div
-                            className="from-primary-500 to-info h-full rounded-full bg-linear-to-r transition-all"
-                            style={{ width: `${job.progress}%` }}
-                          />
-                        </div>
+                        <ProgressBar
+                          value={job.progress}
+                          showValue={false}
+                          className="mt-3"
+                          trackClassName="bg-surface-2 h-1.5"
+                          fillClassName="bg-linear-to-r from-primary-500 to-info"
+                        />
                       )}
 
                       {job.status === "DONE" && job.outputName && (

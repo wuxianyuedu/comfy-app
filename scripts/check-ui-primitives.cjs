@@ -160,6 +160,31 @@
  *      `FilmStudio` 的 BGM 选择器是**用户可见的表单字段**（靠 `file:` 伪元素
  *      美化、就地显示已选文件名），是另一种形态，不在此列。
  *
+ *   P16 视图里自绘「进度条」的填充（**硬闸**）—— 「给一段异步动作配进度」
+ *      这件事有两个出口：**数值**走 `~/lib/progress` 的 `clampPct` / `toPct` /
+ *      `pctToWidth`，**形态**走 `~/components/ui/progress-bar` 的 `ProgressBar`。
+ *      此前全库 **10 处**各写一遍「track div + 内层 `width: X%` + 百分比文字」，
+ *      写法分四派：`Math.max(4, p)` 的可见下限、自己 `Math.min(100, done/total*100)`
+ *      的比例、不夹取的 `${x}%`、以及算好的 `pct`。三条都编译、都运行，差别
+ *      只在「0% 要不要留一格 / 超量要不要夹取 / 总数未知算 0 还是算不确定」。
+ *
+ *      ⚠️ 判据锚点取 `style={{ width: `${…}%` }}` —— 那是「自己按百分比摆宽度」
+ *      这个动作本身。单看 `rounded-full` 会把所有圆角元素算进来；单看
+ *      `bg-primary` 会把按钮算进来。宽度百分比是进度条的签名。
+ *
+ *   P17 视图里自写「键值行」（**硬闸**）—— `~/components/ui/key-value-rows`
+ *      的 `KeyValueRows` 是唯一出口。此前全库 **5 处**各写一遍「标签 + 值 +
+ *      空值占位」的行，四种布局语言：`ProjectOutputs` 的隔行参数表、
+ *      `HistoryDetailModal` 的生成参数卡与 `<table>` 参数表、`TrainingStudio`
+ *      的 Metrics 网格、`BrowserStatusBar` 的显存/内存内联项。
+ *
+ *      ⚠️ 判据取「一个 muted/faint 色的标签叶子元素，紧随其后出现**值的
+ *      渲染器**（`displayValue(` / `JSON.stringify(` / `typeof x === "string"`）」。
+ *      「空值显示什么」早由 `~/lib/display-value` 收口（见 P8）—— 所以这里
+ *      数的是**布局那一层**：标签与值成对出现、值可能是任意对象。
+ *      单看 `justify-between` 会把 400+ 处普通布局算进来（实测 41 处误报）；
+ *      单看 `font-mono` 会把日志行算进来。两个条件必须同时成立。
+ *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
  * 有 19 份自写 spinner —— 与 §12.12「跨文件重复块」是同一族问题。
@@ -467,6 +492,44 @@ const RULES = {
         .length;
     },
   },
+  P16: {
+    label:
+      "视图内自绘进度条填充（应使用 ~/components/ui/progress-bar 的 ProgressBar；数值走 ~/lib/progress）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`style={{ width: `${…}%` }}` —— 自己按百分比摆宽度。
+       * 这是进度条填充的签名，且不会被圆角 / 背景色这类通用类误伤。 */
+      return (t2.match(/style=\{\{\s*width:\s*`\$\{[^}]+\}%`/g) || []).length;
+    },
+  },
+  P17: {
+    label:
+      "视图内自写键值行（应使用 ~/components/ui/key-value-rows 的 KeyValueRows）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已经用了出口的文件**不可能**是「自己写一份」—— 它的标签 / 值节点
+       * 是作为 `items` 传给 `KeyValueRows` 的，形态判据会把它们连起来误报
+       * （`WorkshopEncapsulationPanel` 的键节点里有个 muted 色的口 id span）。
+       * 与 P13「同时数更差的那种写法」是同一枚硬币的两面：判据要覆盖所有
+       * 不合规的写法，也要**一个都不误伤**合规的。 */
+      if (/from\s+["']~\/components\/ui\/key-value-rows["']/.test(t2)) return 0;
+      /* 形态：一个 muted / faint 色的**标签叶子元素**，紧随其后出现值的
+       * 渲染器（`displayValue(` / `JSON.stringify(` / `typeof x === "string"`）。
+       *
+       * 两个条件同时成立才是「把一个对象的字段渲染成键值行」：
+       * ① 只有标签 → 到处都有的小标题；② 只有值渲染器 → JSON 气泡 / 预览。
+       * 窗口取 160 字符（相邻的一对标签 + 值），足够跨过标签的闭合标签与
+       * 几个属性，又不会把整块 JSX 连起来 —— 实测 400 字符会把环形进度
+       * 的「进度」标签与下方的 SVG 连上（误报）。
+       *
+       * ⚠️ 标签必须是**叶子**（自身闭合、内容不超过 30 字或一个短表达式）：
+       * 否则容器型 `div`（内含整块子树）会把远处任何一处 `displayValue`
+       * 都连成一次命中。 */
+      const pattern =
+        /<(?:span|p|div)[^>]*className="[^"]*text-(?:ink-muted|ink-faint|ink-fainter|muted-foreground|faint)[^"]*"[^>]*>\s*(?:\{[^}]{0,60}\}|[^<]{0,30})\s*<\/(?:span|p|div)>[\s\S]{0,160}?(?:displayValue\(|JSON\.stringify\(|typeof\s+[\w.$]+\s*===\s*"string")/g;
+      return (t2.match(pattern) || []).length;
+    },
+  },
   P7: {
     label:
       "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
@@ -498,6 +561,8 @@ const HARD_GATE_RULES = new Set([
   "P13",
   "P14",
   "P15",
+  "P16",
+  "P17",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -688,7 +753,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {

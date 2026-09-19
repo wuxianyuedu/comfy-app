@@ -232,6 +232,14 @@ const DOMAIN_EXEMPT = new Set([
    * 依赖它 —— 与 `format-bytes` / `display-value` / `time-format` 同款：
    * 「唯一持有者 + 任何域消费」的顶层单例。 */
   "src/lib/list-filter.ts",
+  /* 异步动作的进度的**数值口径**（ISSUE #672）：视图层（工坊镜头卡、训练页、
+   * 影片台、历史卡、自定义节点设置）与 `src/lib` 的服务端 / 客户端执行链
+   *（`comfyui/executor-ws` 落库、`project-canvas/canvas-api` 透传、
+   *  `workshop/generation-client` 转发、`core/repository-lora` 写库）**都在用**，
+   * 且两侧必须同一口径（视图按 120 摆宽度而落库已夹到 100，会出现「界面卡在
+   *  100% 但数据库还在涨」）。进任何子域都会让另一侧反向依赖它 —— 与
+   * `format-bytes` / `display-value` / `list-filter` 同款：顶层单例。 */
+  "src/lib/progress.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",

@@ -317,7 +317,8 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * （规范 16 §16.2.4.16 ~ §16.2.4.18）。
    *
    * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
-   * `list-filter` 本批迁了 8 处、`expansion-set` 3 份映射、`wide-panel` 3 个面板。 */
+   * `list-filter` 本批迁了 8 处、`expansion-set` 3 份映射、`wide-panel` 3 个面板；
+   * `progress` / `key-value-rows` 各迁了 10 处与 5 处。 */
   it.each([
     [
       "~/lib/list-filter",
@@ -337,6 +338,14 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ["useWidePanel", "WidePanelToggle"],
       3,
     ],
+    /* 本批（ISSUE #672 续）：异步动作的进度（P16）与对象渲染成键值行（P17）。 */
+    ["~/lib/progress", "ts", ["clampPct", "toPct", "pctToWidth"], 4],
+    [
+      "~/components/ui/key-value-rows",
+      "tsx",
+      ["KeyValueRows"],
+      4,
+    ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
     (spec, ext, exports, min) => {
@@ -352,7 +361,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       /* 出口模块自己的文件头必须写清「它替代了几份实现」——
        * 这是本仓库那批「按形态收口」的唯一共同记号（规范 §16.2.4）。 */
       expect(mod, `${spec} 的文件头应说明它收掉了什么`).toMatch(
-        /规范 16 §16\.2\.4\.1[678]/,
+        /规范 16 §16\.2\.4\.(?:1[6-9]|20)/,
       );
       /* 至少一处业务侧引用（排除自身、自身测试与测试目录）。 */
       let refs = 0;

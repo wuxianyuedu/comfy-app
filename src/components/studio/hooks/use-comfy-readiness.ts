@@ -9,6 +9,7 @@
 // 状态（见 use-dev-server-status.ts），ComfyUI 是否运行由占用条是否可见 +
 // 降级文案表达（"显存/内存暂不可用" 本身就等于「ComfyUI 没启动」）。
 
+import { toPct } from "~/lib/progress";
 import type { ComfyStatsPayload } from "~/lib/comfy/comfy-stats-client";
 
 import { useComfyStats } from "./use-comfy-stats";
@@ -46,10 +47,12 @@ function toBar(
   total: number | undefined,
 ): StatBar | null {
   if (!total || total <= 0 || used == null || used < 0) return null;
+  /* 「已用 / 总量 → 百分比」走 `~/lib/progress` 的 `toPct`（同一条口径的另一
+   * 处落点）；`null` 在上面的守卫里已排除，这里落回 0 只为类型收窄。 */
   return {
     used,
     total,
-    pct: Math.min(100, Math.round((used / total) * 100)),
+    pct: toPct(used, total) ?? 0,
   };
 }
 
