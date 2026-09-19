@@ -52,7 +52,13 @@ export interface FitViewport {
 export const DEFAULT_VIEWPORT_PADDING: ViewportPadding = { x: 0.12, y: 0.12 };
 /** 缩放上限：单节点子图不该被放到撑满屏幕。 */
 export const DEFAULT_MAX_FIT_ZOOM = 1.5;
-/** 缩放下限：宽图（130+ 节点）自动缩到 0.15 时节点缩成噪点，宁可留边也不越过此值。 */
+/** 聚焦缩放的下限**默认值**：找不到画布自己的 `minZoom` 时用它兜底。
+ *
+ *  注意它只是兜底 —— 编辑器里聚焦用的是**画布设置自己的** minZoom / maxZoom
+ *  （见 WorkflowEditorInner 的 fitToContent）。曾有一版把 0.35 当成编辑器的
+ *  硬下限，本意是别让超宽工作流缩成噪点，代价却是「打开后整份工作流仍有大半
+ *  在视口外、还得手动滚轮」（ISSUE #717）：聚焦的意义就是**看得见全部内容**，
+ *  下限交给用户在画布设置里自己定。 */
 export const DEFAULT_MIN_FIT_ZOOM = 0.35;
 
 function toFiniteNumber(value: unknown): number | null {

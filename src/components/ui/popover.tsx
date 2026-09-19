@@ -19,12 +19,32 @@ function PopoverContent({
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
+  /** 锚点元素 / 虚拟锚点 / `{ getBoundingClientRect }` 形状的函数。
+   *  默认锚点是 `<PopoverTrigger>`；没有 trigger（浮层由外部状态打开、
+   *  触发元素住在别处）时由调用方传它 —— 例如节点 JSON 浮层，触发者是画布
+   *  节点里的 `#id` 芯片，而浮层由 store 打开（ISSUE #717）。
+   *  翻转 / 收边（`flip` / `shift`）由 base-ui 的 Positioner 自带，调用方
+   *  不必自己夹紧视口。 */
+  anchor,
+  /** 与视口边缘保持的最小距离（翻转 / 收边的边界）。 */
+  collisionPadding,
+  sticky,
+  /** 定位层（Positioner）的额外 class —— 需要改侧边偏移 / 层级时用。 */
+  positionerClassName,
   ...props
 }: PopoverPrimitive.Popup.Props &
   Pick<
     PopoverPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset"
-  >) {
+    | "align"
+    | "alignOffset"
+    | "side"
+    | "sideOffset"
+    | "anchor"
+    | "collisionPadding"
+    | "sticky"
+  > & {
+    positionerClassName?: string;
+  }) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -32,7 +52,10 @@ function PopoverContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="z-popup isolate"
+        anchor={anchor}
+        collisionPadding={collisionPadding}
+        sticky={sticky}
+        className={cn("z-popup isolate", positionerClassName)}
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
