@@ -1589,6 +1589,59 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
   });
 });
 
+/**
+ * ISSUE #730 的 release 壳构建失败（`cargo build --release --features custom-protocol`）。
+ *
+ * 现场是两条**互不相干**的编译错误（用户日志里同时出现，容易被当成一件事）：
+ *
+ * 1. `generate_context!` 报
+ *    `failed to parse plugin global API script paths: Error("trailing comma", line: 8, column: 1)`
+ *    —— 真正的原因文件根本不在源码里（见下条用例的注释）。
+ * 2. `PROBE_ATTEMPTS * PROBE_INTERVAL_MS` 报 `expected u32, found u64`
+ *    + `cannot multiply u32 by u64` —— 同一处表达式里的两个常量类型不同档。
+ *
+ * 两条的共同点是「本地跑 lint / tsc / 单测全绿，只有真编 release 壳才暴露」，
+ * 所以判据只能落在「编译前提」这一层。
+ */
+describe("release 壳构建的地雷（ISSUE #730）", () => {
+  it("格式化工具不碰 src-tauri/target（Tauri 的插件脚本清单被折行 = 整壳编译失败）", () => {
+    // 现场已在 Linux 上逐字复现（错误信息与用户日志完全一致）：
+    //   tauri-build 把插件全局 API 脚本清单写成**紧凑单行** JSON
+    //   （serde_json::to_string 不产生换行，因此它自己永远不会带尾逗号）；
+    //   文件落在 src-tauri/target/ 下的 out/__global-api-script.js，后缀是 .js。
+    //   于是 prettier（`pnpm format:write` / 编辑器保存）按 print-width 把它折成
+    //   多行、并给最后一项补一个尾逗号；generate_context! 再读时 serde_json 直接报
+    //   "trailing comma"。6 个插件 → 6 项 + 首尾两行 = 8 行，所以「line: 8」
+    //   是可以反推出来的：那正是 prettier 折行后的最后一项。
+    //   **报错位置落在 lib.rs 的 generate_context! 那一行**，与真正被改坏的
+    //   target 生成物毫无关系 —— 这正是本条长期定位不到的原因。
+    // 防线是别让格式化工具碰到它。prettier 只按 cwd（仓库根）读 .gitignore，
+    // 看不到 src-tauri/.gitignore 里的 /target/，所以必须由根级 .prettierignore 兜。
+    const ignore = readFileSync(join(process.cwd(), ".prettierignore"), "utf8");
+    expect(
+      ignore.split("\n").map((l) => l.trim()),
+      "根级 .prettierignore 必须忽略 src-tauri/target/：漏掉它，" +
+        "任何在本机 cargo build 过的检出都会在下次提交/格式化后编不出 release 壳",
+    ).toContain("src-tauri/target/");
+  });
+
+  it("首帧看护的两个常量类型同档（相乘，跨类型编译不过）", () => {
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    const typeOf = (name: string): string => {
+      const m = new RegExp(`const ${name}: ([A-Za-z0-9]+) =`).exec(rust);
+      if (!m) throw new Error(`lib.rs 里找不到 ${name} 的常量声明`);
+      return m[1]!;
+    };
+    // 这两条会在首帧看护的超时日志里相乘：u32 * u64 没有实现（E0277），
+    // 同档是编译前提，不是风格偏好。
+    expect(typeOf("PROBE_ATTEMPTS")).toBe(typeOf("PROBE_INTERVAL_MS"));
+    expect(rust).toContain("(PROBE_ATTEMPTS * PROBE_INTERVAL_MS) / 1000");
+  });
+});
+
 describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自绘标题行）", () => {
   /**
    * 启动页的日志面板是「一行一条日志」的不折行布局（`white-space: pre`，见
