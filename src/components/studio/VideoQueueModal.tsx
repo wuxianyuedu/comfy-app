@@ -6,6 +6,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { useFilePicker } from "~/components/ui/file-picker";
+import { useInterval } from "~/components/ui/use-interval";
 import { Textarea } from "~/components/ui/textarea";
 import {
   fetchVideoTasks,
@@ -77,19 +78,14 @@ export function VideoQueueModal({
     }
   }, [open]);
 
-  // 打开时初始加载 + 每 4s 轮询（VIDEO 任务耗时较长）。
+  // 打开时初始加载 + 每 4s 轮询（VIDEO 任务耗时较长）。挂载即先拉一次由
+  // `useInterval` 的 `immediate` 给（规范 16 §16.2.4.15）—— 此前自己要
+  // `setTimeout(…, 0)` 把首次拉取延出 effect 体，现在那一层由 hook 承担。
   useEffect(() => {
     if (!open) return;
     submittedRef.current = false;
-    const t = setInterval(() => void loadTasks(), 4000);
-    // 把首次拉取延出 effect 体（React 19 规则：
-    // effect 内不得同步 setState）。
-    const first = setTimeout(() => void loadTasks(), 0);
-    return () => {
-      clearInterval(t);
-      clearTimeout(first);
-    };
-  }, [open, loadTasks]);
+  }, [open]);
+  useInterval(loadTasks, { ms: open ? 4000 : null });
 
   // 草稿项到达时，给草稿编辑器播种并切到草稿页签
   //（渲染期间调整，React 19 模式）。

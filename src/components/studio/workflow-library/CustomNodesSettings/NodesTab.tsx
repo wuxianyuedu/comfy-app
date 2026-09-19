@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "~/components/ui/button";
+import { Disclosure } from "~/components/ui/disclosure";
 import { Spinner } from "~/components/ui/page-loading";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { cn } from "~/lib/utils";
@@ -147,85 +148,74 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 key={parent}
                 className="border-border bg-bg rounded-xl border"
               >
-                {/* 父级头 —— 可点击切换。
-                    重要：**不能**用原生 button 元素，因为
-                    把 button 嵌在 button 里在 HTML 里非法、会触发 React
-                    水合错误。我们用带 role / 键盘处理器的 div 代替。 */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() =>
+                {/* 父级头 —— 可点击切换。`▸/▾`、`role`、`tabIndex`、
+                    Enter/Space 全交给 `Disclosure`（规范 16 §16.2.4.13）——
+                    此前是自绘的 `role="button"` div，注释里写着「不能用原生
+                    button 因为嵌 button 非法」，而那个嵌进去的按钮正是右侧的
+                    「解析本目录」：改走基元的 `trailing` 后，它不再被嵌在
+                    触发按钮里。面板 = 子包列表（见下方 `subs.map`）。 */}
+                <Disclosure
+                  open={isOpen}
+                  onOpenChange={() =>
                     setExpandedParents((parents) => ({
                       ...parents,
                       [parent]: !parents[parent],
                     }))
                   }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setExpandedParents((parents) => ({
-                        ...parents,
-                        [parent]: !parents[parent],
-                      }));
-                    }
-                  }}
-                  className="hover:bg-subtle flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground font-mono text-xs">
-                        {isOpen ? "▾" : "▸"}
-                      </span>
-                      <span className="text-ink font-medium">📁</span>
-                      <span
-                        className="text-ink truncate font-mono text-[12px]"
-                        title={parent}
-                      >
-                        {parent}
-                      </span>
+                  marker="caret"
+                  className="hover:bg-subtle justify-between gap-2 rounded-xl px-3 py-2.5"
+                  panelClassName="contents"
+                  trigger={
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-ink font-medium">📁</span>
+                        <span
+                          className="text-ink truncate font-mono text-[12px]"
+                          title={parent}
+                        >
+                          {parent}
+                        </span>
+                      </div>
+                      <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                        <span>{total} 个子包</span>
+                        {cnt.loaded > 0 && (
+                          <span className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5">
+                            ✓ {cnt.loaded}
+                          </span>
+                        )}
+                        {cnt.outdated > 0 && (
+                          <span className="bg-warning/20 text-warning rounded-full px-1.5 py-0.5">
+                            ↻ {cnt.outdated}
+                          </span>
+                        )}
+                        {cnt.unimported > 0 && (
+                          <span className="rounded-full bg-gray-500/20 px-1.5 py-0.5 text-gray-700 dark:text-gray-300">
+                            {cnt.unimported} 未导入
+                          </span>
+                        )}
+                        {cnt.error > 0 && (
+                          <span className="rounded-full bg-red-500/18 px-1.5 py-0.5 text-red-700 dark:text-red-300">
+                            ⚠ {cnt.error}
+                          </span>
+                        )}
+                        {cnt.missing > 0 && (
+                          <span className="bg-warning/20 text-warning rounded-full px-1.5 py-0.5">
+                            ⚠ {cnt.missing} 不存在
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
-                      <span>{total} 个子包</span>
-                      {cnt.loaded > 0 && (
-                        <span className="bg-success-strong/18 text-success-strong rounded-full px-1.5 py-0.5">
-                          ✓ {cnt.loaded}
-                        </span>
-                      )}
-                      {cnt.outdated > 0 && (
-                        <span className="bg-warning/20 text-warning rounded-full px-1.5 py-0.5">
-                          ↻ {cnt.outdated}
-                        </span>
-                      )}
-                      {cnt.unimported > 0 && (
-                        <span className="rounded-full bg-gray-500/20 px-1.5 py-0.5 text-gray-700 dark:text-gray-300">
-                          {cnt.unimported} 未导入
-                        </span>
-                      )}
-                      {cnt.error > 0 && (
-                        <span className="rounded-full bg-red-500/18 px-1.5 py-0.5 text-red-700 dark:text-red-300">
-                          ⚠ {cnt.error}
-                        </span>
-                      )}
-                      {cnt.missing > 0 && (
-                        <span className="bg-warning/20 text-warning rounded-full px-1.5 py-0.5">
-                          ⚠ {cnt.missing} 不存在
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  }
+                  trailing={
                     <Button
                       variant="outline"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void onParseAllParent(parent);
-                      }}
+                      onClick={() => void onParseAllParent(parent)}
                       disabled={
                         !!parsing ||
                         total === 0 ||
                         (parentParsed && cnt.outdated === 0)
                       }
-                      className="border-border bg-bg text-ink hover:bg-subtle h-auto rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      className="border-border bg-bg text-ink hover:bg-subtle h-auto shrink-0 rounded-lg px-3 py-1 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-50"
                       title={
                         parentParsed && cnt.outdated === 0
                           ? "已加载、无更新"
@@ -234,9 +224,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     >
                       {parsing ? "…" : "解析本目录"}
                     </Button>
-                  </div>
-                </div>
-
+                  }
+                />
                 {/* 子包 —— 仅展开时显示 */}
                 {isOpen && subs.length > 0 && (
                   <div className="border-border bg-surface/50 border-t p-2">
@@ -296,46 +285,39 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                               </div>
                               <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
                                 {nodesAreLoaded ? (
-                                  <div
-                                    role="button"
-                                    tabIndex={0}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
+                                  /* 「节点计数」单元是一个折叠开关：点开看该包
+                                     已加载的节点清单。此前是自绘的
+                                     `role="button"` + `tabIndex` + 手写
+                                     Enter/Space 处理（规范 16 §16.2.4.13）——
+                                     基元把这些语义一次给全。`panelClassName`
+                                     留空：面板是下面那个 rail（由外面的条件渲染
+                                     承担），此处的 `Disclosure` 只接管这一行。 */
+                                  <Disclosure
+                                    open={nodeListOpen}
+                                    onOpenChange={() =>
                                       setExpandedNodeList((nodeList) => ({
                                         ...nodeList,
                                         [sub.path]: !nodeList[sub.path],
-                                      }));
-                                    }}
-                                    onKeyDown={(event) => {
-                                      if (
-                                        event.key === "Enter" ||
-                                        event.key === " "
-                                      ) {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        setExpandedNodeList((nodeList) => ({
-                                          ...nodeList,
-                                          [sub.path]: !nodeList[sub.path],
-                                        }));
-                                      }
-                                    }}
-                                    className="hover:bg-subtle cursor-pointer rounded-md px-1.5 py-1 text-right transition-colors"
-                                    title={
-                                      nodeListOpen
-                                        ? "收起节点列表"
-                                        : `点击查看已加载的 ${nodeCount} 个节点`
+                                      }))
                                     }
-                                  >
-                                    <div className="flex items-center justify-end gap-1">
-                                      <span className="text-ink font-mono text-sm font-semibold">
-                                        {nodeCount}
-                                      </span>
-                                      <span className="text-muted-foreground text-[10px]">
-                                        {nodeListOpen ? "▾" : "▸"}
-                                      </span>
-                                    </div>
-                                    <div className="text-[10px]">节点</div>
-                                  </div>
+                                    marker="caret"
+                                    className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
+                                    panelClassName="hidden"
+                                    trigger={
+                                      <div
+                                        title={
+                                          nodeListOpen
+                                            ? "收起节点列表"
+                                            : `点击查看已加载的 ${nodeCount} 个节点`
+                                        }
+                                      >
+                                        <div className="text-ink font-mono text-sm font-semibold">
+                                          {nodeCount}
+                                        </div>
+                                        <div className="text-[10px]">节点</div>
+                                      </div>
+                                    }
+                                  />
                                 ) : (
                                   <div className="text-right">
                                     <div className="text-ink font-mono text-sm font-semibold">

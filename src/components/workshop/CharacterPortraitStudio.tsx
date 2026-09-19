@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { Progress } from "~/components/ui/progress";
 import { Alert } from "~/components/ui/alert";
+import { Disclosure } from "~/components/ui/disclosure";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import { useLLM } from "~/components/workshop/LLMContext";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
@@ -263,42 +264,50 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             </Alert>
           )}
           {(session.log.length > 0 || focused) && (
-            <details className="bg-bg/60 rounded-md px-2 py-1" open={busy}>
-              <summary className="text-primary flex cursor-pointer items-center gap-2 text-[10px] select-none">
-                <span>
-                  生成过程
-                  {session.log.length > 0 ? `（${session.log.length} 条）` : ""}
-                </span>
+            /* 触发行右侧的「历史」是**另一个动作**（打开历史日志），不是折叠
+             *  开关 —— 它不能放进 `Disclosure` 的 trigger 里：
+             *  基元的 trigger 是 `<button>`，再嵌一个 `<button>` 在 HTML 里非法
+             *  （旧写法靠 `stopPropagation` 掩盖了这一点，React 会报水合错误）。
+             *  故改为「触发开关 + 并列动作」一行排布。 */
+            <div className="bg-bg/60 rounded-md px-2 py-1">
+              <div className="text-primary flex items-center gap-2 text-[10px]">
+                <Disclosure
+                  open={busy ? true : undefined}
+                  marker="caret"
+                  className="min-w-0 items-center gap-2"
+                  panelClassName="text-[10px]"
+                  trigger={`生成过程${
+                    session.log.length > 0 ? `（${session.log.length} 条）` : ""
+                  }`}
+                >
+                  <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                    {session.log.map((entry) => (
+                      <li
+                        key={`${entry.ts}-${entry.text}`}
+                        className={`text-[10.5px] leading-relaxed ${
+                          entry.level === "error"
+                            ? "text-red-700 dark:text-red-400"
+                            : entry.level === "success"
+                              ? "text-emerald-700 dark:text-emerald-400"
+                              : "text-muted-foreground"
+                        }`}
+                      >
+                        <span className="text-faint mr-1">
+                          {formatClock(entry.ts)}
+                        </span>
+                        {entry.text}
+                      </li>
+                    ))}
+                  </ul>
+                </Disclosure>
                 <Button
                   variant="link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    loadHistory();
-                  }}
-                  className="text-muted-foreground hover:text-primary h-auto p-0 text-[11px] underline underline-offset-2"
+                  onClick={() => loadHistory()}
+                  className="text-muted-foreground hover:text-primary h-auto shrink-0 p-0 text-[11px] underline underline-offset-2"
                 >
                   历史
                 </Button>
-              </summary>
-              <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
-                {session.log.map((entry) => (
-                  <li
-                    key={`${entry.ts}-${entry.text}`}
-                    className={`text-[10.5px] leading-relaxed ${
-                      entry.level === "error"
-                        ? "text-red-700 dark:text-red-400"
-                        : entry.level === "success"
-                          ? "text-emerald-700 dark:text-emerald-400"
-                          : "text-muted-foreground"
-                    }`}
-                  >
-                    <span className="text-faint mr-1">
-                      {formatClock(entry.ts)}
-                    </span>
-                    {entry.text}
-                  </li>
-                ))}
-              </ul>
+              </div>
               {historyOpen && (
                 <div className="border-border/60 mt-1 border-t pt-1">
                   <p className="text-muted-foreground text-[10px]">
@@ -335,7 +344,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                   )}
                 </div>
               )}
-            </details>
+            </div>
           )}
         </div>
       )}

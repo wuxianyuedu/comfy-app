@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useInterval } from "~/components/ui/use-interval";
 
 import { parseAnsiSegments, type AnsiSegment } from "~/lib/log/log-ansi";
 import {
@@ -144,16 +145,15 @@ export function useRuntimeLogSource({
     });
   }, [source, parse]);
 
-  /* 挂载 / 换来源先取一次：未启动时也要能看到最近一次启动的日志。 */
+  /* 挂载 / 换来源先取一次（未启动时也要能看到最近一次启动的日志），
+   * 之后按 `active` 开关轮询（规范 16 §16.2.4.15）。`pull` 变化时要重跑一次
+   * —— `useInterval` 的 `ms` 变化会重建定时器并补跑，但「换来源」不一定改变
+   * `active`，所以那次首取仍显式保留。 */
   useEffect(() => {
     void pull();
   }, [pull]);
 
-  useEffect(() => {
-    if (!active) return;
-    const timer = setInterval(() => void pull(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [active, pull]);
+  useInterval(pull, { ms: active ? POLL_MS : null });
 
   const selectSession = useCallback(
     (id: string) => {

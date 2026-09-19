@@ -21,6 +21,7 @@ import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
 import { StatusDot } from "~/components/ui/status-dot";
+import { Disclosure } from "~/components/ui/disclosure";
 
 import {
   STATUS_ROW_CLASS,
@@ -200,23 +201,25 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       {/* 按任务类型配置温度 —— 远端调用同样按这套推荐默认取温度，
           但不在此暴露配置项 */}
       <div className="border-border bg-surface-1 mb-4 rounded-xl border p-4">
-        <Button
-          variant="ghost"
-          onClick={() => setShowTaskTemps((v) => !v)}
-          aria-expanded={showTaskTemps}
-          className="text-ink/80 hover:text-ink mb-3 flex h-auto w-full items-center justify-between rounded-none px-0 text-sm font-medium"
-        >
-          <span>
-            按任务类型配置温度
-            <span className="text-muted-foreground ml-2 text-[11px] font-normal">
-              未覆盖的任务按推荐默认生效
+        {/* 折叠开关 + 面板：`▸/▾` 与 `aria-expanded` 都由基元给
+            （规范 16 §16.2.4.13）。基元默认 marker 在标题**左侧**，这里标题
+            在左、marker 在右 —— 用 `flex-row-reverse` 把 marker 换到右侧，
+            标题自身以 `flex-1` 撑开，于是两端对齐的观感不变。 */}
+        <Disclosure
+          open={showTaskTemps}
+          onOpenChange={setShowTaskTemps}
+          marker="caret"
+          className="text-ink/80 hover:text-ink mb-3 flex-row-reverse items-center justify-between text-sm font-medium"
+          panelClassName="space-y-3"
+          trigger={
+            <span className="flex-1 text-left">
+              按任务类型配置温度
+              <span className="text-muted-foreground ml-2 text-[11px] font-normal">
+                未覆盖的任务按推荐默认生效
+              </span>
             </span>
-          </span>
-          <span className="text-muted-foreground">
-            {showTaskTemps ? "▾" : "▸"}
-          </span>
-        </Button>
-        {showTaskTemps && (
+          }
+        >
           <div className="space-y-3">
             {TEMPERATURE_TASKS.map(([key, meta]) => {
               const override = c.drafts.llm.temperatureByTask?.[key];
@@ -279,7 +282,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
               );
             })}
           </div>
-        )}
+        </Disclosure>
       </div>
 
       <StatusButton onClick={() => void c.saveLlm()} disabled={c.saving}>

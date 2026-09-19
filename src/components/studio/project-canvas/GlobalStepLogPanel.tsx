@@ -35,6 +35,7 @@ import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { useInterval } from "~/components/ui/use-interval";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { displayValue } from "~/lib/display-value";
 
@@ -301,10 +302,11 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     };
   }, [taskId]);
 
-  // 20 秒无活动的「卡住」提示。
-  useEffect(() => {
-    if (!taskId) return;
-    const timer = setInterval(() => {
+  /* 20 秒无活动的「卡住」提示：每 10s 检查一次（规范 16 §16.2.4.15）。
+   * `useInterval` 把回调放 ref，所以 `status` / `setLogs` 都是新鲜的；
+   * `ms: taskId ? 10000 : null` 等价于原来「没有 taskId 就不起定时器」。 */
+  useInterval(
+    () => {
       const idle = Date.now() - lastActivityRef.current;
       if (idle > 20000 && status === "RUNNING") {
         const now = Date.now();
@@ -326,9 +328,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         });
         lastActivityRef.current = now;
       }
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [taskId, status]);
+    },
+    { ms: taskId ? 10000 : null, immediate: false },
+  );
 
   // 自动滚到底部。
   useEffect(() => {

@@ -14,6 +14,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
 import { Alert } from "~/components/ui/alert";
+import { Disclosure } from "~/components/ui/disclosure";
 import { shouldAutoExpandError, suggestForError } from "./error-suggestions";
 
 interface ErrorPanelProps {
@@ -309,10 +310,13 @@ export function ErrorPanel({
 
                   {/* 3) 请求参数快照 */}
                   {errorContext?.request ? (
-                    <details className="text-[10px]" open>
-                      <summary className="text-danger-strong hover:text-danger-strong cursor-pointer select-none">
-                        请求参数
-                      </summary>
+                    <Disclosure
+                      defaultOpen
+                      marker="caret"
+                      className="text-danger-strong text-[10px] hover:brightness-110"
+                      panelClassName="text-[10px]"
+                      trigger="请求参数"
+                    >
                       <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap">
                         {typeof errorContext.request === "string"
                           ? errorContext.request
@@ -329,18 +333,21 @@ export function ErrorPanel({
                               }
                             })()}
                       </pre>
-                    </details>
+                    </Disclosure>
                   ) : null}
 
                   {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
-                  <details className="text-[10px]" open>
-                    <summary className="text-danger-strong hover:text-danger-strong cursor-pointer select-none">
-                      原始错误
-                    </summary>
+                  <Disclosure
+                    defaultOpen
+                    marker="caret"
+                    className="text-danger-strong text-[10px] hover:brightness-110"
+                    panelClassName="text-[10px]"
+                    trigger="原始错误"
+                  >
                     <pre className="bg-canvas-deep nodrag nopan border-destructive/15 text-danger-strong/85 mt-1 max-h-40 overflow-auto rounded border p-1.5 font-mono text-[10px] leading-tight whitespace-pre-wrap">
                       {errText}
                     </pre>
-                  </details>
+                  </Disclosure>
                 </div>
               );
             })()}

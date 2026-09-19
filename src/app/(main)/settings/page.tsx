@@ -17,12 +17,13 @@
  */
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Copy } from "lucide-react";
+import { ChevronRight, Copy } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { PageLoading } from "~/components/ui/page-loading";
+import { Disclosure } from "~/components/ui/disclosure";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
 
@@ -106,36 +107,53 @@ export function SettingsLoadError({
         >
           {errorText}
         </p>
-        <div className="mt-3 flex items-center justify-center gap-2">
-          <Button
-            onClick={onRetry}
-            className="h-auto rounded-lg px-4 py-2 text-sm"
-          >
-            重试
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setExpanded((v) => !v)}
-            className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
-            aria-expanded={expanded}
-          >
-            {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            完整错误
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void copyError()}
-            className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
-          >
-            <Copy size={13} />
-            {copied.on ? "已复制" : "复制"}
-          </Button>
-        </div>
-        {expanded && (
+        {/* 「完整错误」是一个 disclosure：点它把下面的 `<pre>` 展开 —— 用
+            `Disclosure` 而不是自绘 chevron + 条件渲染（规范 16 §16.2.4.13；
+            自绘那份没有 `aria-expanded` / `aria-controls`）。
+            一排按钮里只有中间那个是折叠开关，其余两个走 `leading` / `trailing`
+            —— 基元的 trigger 是 `<button>`，往它里面塞 `<Button>` 在 HTML 里
+            非法。面板落在这排按钮下方（`basis-full` 独占一行）。 */}
+        <Disclosure
+          open={expanded}
+          onOpenChange={setExpanded}
+          marker="none"
+          className="mt-3 flex flex-wrap items-center justify-center gap-2"
+          panelClassName="basis-full"
+          leading={
+            <Button
+              onClick={onRetry}
+              className="h-auto rounded-lg px-4 py-2 text-sm"
+            >
+              重试
+            </Button>
+          }
+          trigger={
+            <Button
+              variant="outline"
+              className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
+            >
+              <ChevronRight
+                size={13}
+                className={`transition-transform group-aria-expanded/disclosure:rotate-90`}
+              />
+              完整错误
+            </Button>
+          }
+          trailing={
+            <Button
+              variant="outline"
+              onClick={() => void copyError()}
+              className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
+            >
+              <Copy size={13} />
+              {copied.on ? "已复制" : "复制"}
+            </Button>
+          }
+        >
           <pre className="border-border bg-surface-1 custom-scrollbar mt-3 max-h-64 overflow-auto rounded-lg border p-3 text-left font-mono text-[11px] break-all whitespace-pre-wrap">
             {errorText}
           </pre>
-        )}
+        </Disclosure>
         <div className="text-muted-foreground mt-4 space-y-1 text-xs">
           <p>
             本次失败已写入日志面板（按{" "}
