@@ -183,8 +183,8 @@ export function useGenerate({
           workflow: d.workflowId,
           // 暴露的针脚取值驱动工作流（不是旧的写死
           // 提示词/反向/参考图/步数/CFG/种子 字段）。种子的「生成后控制」模式
-          // 也并入同一数组（name=control_after_generate），API 图与 Raw 图两条
-          // 后端路径都能识别。注：原本单独下发的 seedModes 字段被 zod schema
+          // 也并入同一数组（name=control_after_generate），执行点按此写进
+          // 工作流原件的控件槽。注：原本单独下发的 seedModes 字段被 zod schema
           // 剥离、从未到达后端，故改为并入 workflowInputs 一并生效。
           workflowInputs: [...baseInputs, ...cagInputs],
         };

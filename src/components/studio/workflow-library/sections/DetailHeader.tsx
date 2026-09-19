@@ -178,7 +178,7 @@ export function DetailHeader({
             title={
               usable
                 ? "把该工作流导入项目画布"
-                : "当前工作流既没有 API 图也没有工作流(RAW)原件，无法导入"
+                : "当前工作流没有工作流(RAW)原件，无法生成"
             }
             disabled={!usable}
           />

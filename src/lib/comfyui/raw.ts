@@ -1,31 +1,21 @@
 /**
  * ComfyUI 工作流「原始 / 控件顺序」兼容层
  *
- * ComfyUI 提供两种 JSON 表达同一个工作流，**两者地位同等**：
+ * 本应用只接受 **ComfyUI 的原始工作流格式**（工作流 / RAW / UI 格式，
+ * `{ last_node_id, last_link_id, nodes: [...], links: [...] }`）—— ComfyUI 前端
+ * 保存在磁盘的那种，带节点坐标，控件值按数组存（`widgets_values`）。
+ * 库里的 `rawJson` 列就是它，执行时交给 comfy-cli（它按节点类定义做权威的
+ * UI→API 转换）。API 格式不是可导入的形态。
  *
- *   1) API 格式
- *      ─────────────────
- *      { "3": { class_type: "KSampler", inputs: { seed: 123, … } }, … }  // 节点 id 作键
- *      （上面就是 API 图示例：节点按 id 平铺，inputs 是命名参数）
- *      节点按 id 平铺，inputs 是结构化的命名参数。库里的 `graph` 列就是它。
- *
- *   2) 原始 UI 格式（工作流 / RAW）
- *      ─────────────────
- *      { last_node_id, last_link_id, nodes: [...], links: [...] }  // RAW 顶层字段
- *      （上面是 RAW 图示意：节点带坐标，控件值按数组存，links 是六元组）
- *      这是 ComfyUI 前端保存在磁盘的格式，含节点坐标信息。库里的 `rawJson`
- *      列就是它，执行时交给 comfy-cli（它按节点类定义做权威的 UI→API 转换）。
- *
- * 本模块**只回答三个问题**：
- *   - {@link detectFormat}      这段 JSON 是哪种格式；
+ * 本模块**只回答两个问题**：
  *   - {@link extractPositions}  RAW 的节点坐标在哪；
  *   - RAW 节点的控件**叫什么名字**（{@link pairWidgetValues} /
  *     {@link fetchWidgetOrderTable} 与 {@link mapWidgetValuesByOrder}）——
  *     画布要把 `widgets_values` 的下标还原成可读的参数名。
  *
- * 本模块**不再**做任何「raw → API 图」的转换：
- *   - 入库存图由导入件自己决定（API 原件落 `graph`、RAW 原件落 `rawJson`）；
- *   - 执行由 comfy-cli 做权威转换（RAW）或直接提交（API）；
+ * 本模块**不做**任何「raw → API 图」的转换：
+ *   - 入库就是原件逐字落 `rawJson`；
+ *   - 执行由 comfy-cli 做权威转换（按节点类定义）；
  *   - 画布视图需要的派生在 `raw-view-graph.ts`，提交前的图收拾在
  *     `execution-graph.ts` 里。
  *   「导入时把 raw 转成 API 图存库」已被证明有害（ISSUE #632）：无 ComfyUI
@@ -34,8 +24,6 @@
 
 import { z } from "zod";
 import { comfyBase } from "./client";
-
-export type WorkflowFormat = "api" | "raw";
 
 /* ── raw JSON 收窄工具（§5.6：外部输入 unknown + 守卫）──────────────────
  * 这些 helper 是本模块与 workflow-detail-* / workflow-subgraph-parse 共用的
@@ -230,37 +218,7 @@ export interface ApiWorkflowNode {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
- * 1) 格式识别
- * ────────────────────────────────────────────────────────────────────── */
-
-/* 判断一段 JSON 属于 API 格式、RAW 格式，还是两者都不是。 */
-export function detectFormat(json: unknown): WorkflowFormat | null {
-  if (!json || typeof json !== "object" || Array.isArray(json)) return null;
-  const obj = asRecord(json);
-  if (!obj) return null;
-  // API 格式：任意顶层节点同时带 class_type 与 inputs
-  const apiHit = Object.values(obj).some((value) => {
-    const v = asRecord(value);
-    return (
-      !!v && typeof v.class_type === "string" && typeof v.inputs === "object"
-    );
-  });
-  if (apiHit) return "api";
-  // RAW 格式：有 `nodes` 数组，且每个节点带的是 `type`（不是 class_type）
-  const rawObj = asRawWorkflow(json);
-  if (
-    rawObj &&
-    Array.isArray(rawObj.nodes) &&
-    rawObj.nodes.length > 0 &&
-    rawObj.nodes.every((n) => !!n && typeof n.type === "string")
-  ) {
-    return "raw";
-  }
-  return null;
-}
-
-/* ──────────────────────────────────────────────────────────────────────
- * 2) 从原始格式抽取节点坐标 (用于编辑器初始布局)
+ * 从原始格式抽取节点坐标 (用于编辑器初始布局)
  * ────────────────────────────────────────────────────────────────────── */
 
 export function extractPositions(
@@ -316,7 +274,7 @@ export function extractPositions(
 }
 
 /* ──────────────────────────────────────────────────────────────────────
- * 3) 控件名顺序：把 RAW 的 widgets_values 下标还原成可读参数名
+ * 控件名顺序：把 RAW 的 widgets_values 下标还原成可读参数名
  *
  * 只服务**画布展示**：ComfyUI 默认不把未「转成输入」的控件写进 raw 节点
  * `inputs[]`，于是 CLIPTextEncode 的提示词、各类 Loader 的模型名在下标直读时

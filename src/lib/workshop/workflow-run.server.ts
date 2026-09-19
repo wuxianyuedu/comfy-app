@@ -15,8 +15,7 @@ import {
   workflowTemplateRepository,
 } from "~/lib/core/repository";
 import { enqueue } from "~/lib/comfyui/enqueue";
-import { resolveExecutionPayload } from "~/lib/comfyui/execution-shape";
-import { coerceApiInputValue } from "~/lib/comfyui/raw-overrides";
+import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import {
@@ -83,56 +82,17 @@ export async function createWorkflowRunTask(
     projectId: input.projectId ?? null,
   });
 
-  /* raw / api 两条路径地位同等，送哪一份由**这条工作流自己是什么格式**决定
-   * （判据收在 `resolveExecutionPayload`，与 generate 路由同一份）：
-   *   · RAW 原件 → comfy-cli 做 UI→API 转换 + 子图展开；
-   *   · API 图   → 同样交 comfy-cli 提交（它对 API 格式直接提交）。
-   * 两列都没有时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
+  /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
+   * 子图展开（判据收在 `hasExecutableWorkflow`，与 generate 路由同一份）。
+   * 没有内容时抛错，而不是静默提交一份空图（空图会在 ComfyUI 侧变成
    * 「一个节点都没有」的报错，用户看不出是入库时就没内容）。 */
-  const payload = resolveExecutionPayload(tpl);
-  if (!payload) {
-    throw new Error(
-      `工作流没有可执行内容（graph 与 rawJson 都为空）：${tpl.name}`,
-    );
+  if (!hasExecutableWorkflow(tpl)) {
+    throw new Error(`工作流没有可执行内容（rawJson 为空）：${tpl.name}`);
   }
-  if (payload.kind === "raw") {
-    enqueue({
-      taskId: task.id,
-      rawJson: payload.rawJson,
-      overrides: workflowInputs,
-    });
-  } else {
-    enqueue({
-      taskId: task.id,
-      prompt: buildPromptFromGraph(payload.graph, workflowInputs),
-      /* 与 RAW 路径同一份覆盖数组、同一套语义：执行点还会再兜一遍
-       * （`applyApiOverrides`，处理 control_after_generate 这类前端专有控件）。 */
-      overrides: workflowInputs,
-    });
-  }
+  enqueue({
+    taskId: task.id,
+    rawJson: tpl.rawJson,
+    overrides: workflowInputs,
+  });
   return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
-}
-
-/** 已在库里拆平的 API 图：回填 workflowInputs 的三元组值。
- *
- *  `graph` 是 API 格式（nodeId → { class_type, inputs }），与
- *  `buildCustomWorkflow` 吃的是同一种形状；这里只做「按 nodeId + name 写回」，
- *  不重跑提示词 / 采样器自动注入（对外封装已经把该给的值都给了）。 */
-function buildPromptFromGraph(
-  graph: unknown,
-  overrides: { nodeId: string; name: string; value: unknown }[],
-): Record<string, unknown> {
-  if (!graph || typeof graph !== "object" || Array.isArray(graph)) return {};
-  const out = JSON.parse(JSON.stringify(graph)) as Record<
-    string,
-    { inputs?: Record<string, unknown> }
-  >;
-  for (const it of overrides) {
-    const node = out[it.nodeId];
-    if (!node?.inputs || it.value === undefined) continue;
-    /* 数值收窄与另外两处（buildCustomWorkflow / applyApiOverrides）同口径，
-     * 实现只定义一次（`coerceApiInputValue`）。 */
-    node.inputs[it.name] = coerceApiInputValue(node.inputs[it.name], it.value);
-  }
-  return out;
 }

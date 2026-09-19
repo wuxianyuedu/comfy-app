@@ -36,7 +36,6 @@ const jsonColumns = new Set<string>([
   "resultImages",
   "logs",
   "validationErrors",
-  "graph",
   "paramMap",
   "workflowIO",
   "rawJson",
@@ -124,8 +123,8 @@ CREATE TABLE IF NOT EXISTS taskImage (
 );
 CREATE TABLE IF NOT EXISTS workflowTemplate (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, taskType TEXT NOT NULL DEFAULT 'TXT2IMG',
-  modes TEXT NOT NULL DEFAULT '[]', defaultMode TEXT, graph TEXT NOT NULL, paramMap TEXT, workflowIO TEXT,
-  rawJson TEXT, positions TEXT, sourcePath TEXT, sourceChecksum TEXT, sourceMtime INTEGER, apiSource TEXT, createdAt TEXT NOT NULL
+  modes TEXT NOT NULL DEFAULT '[]', defaultMode TEXT, paramMap TEXT, workflowIO TEXT,
+  rawJson TEXT, positions TEXT, sourcePath TEXT, sourceChecksum TEXT, sourceMtime INTEGER, createdAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS workflowModelTag (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, createdAt TEXT NOT NULL
@@ -412,12 +411,10 @@ export interface SeedWorkflowTemplateInput {
   userId: string;
   name?: string;
   taskType?: string;
-  graph?: unknown;
   rawJson?: unknown;
   paramMap?: unknown;
   positions?: unknown;
   workflowIO?: unknown;
-  apiSource?: string | null;
   modes?: string | null;
   defaultMode?: string | null;
   sourcePath?: string | null;
@@ -438,12 +435,15 @@ export function seedWorkflowTemplate(
     userId: input.userId,
     name: input.name ?? "seeded workflow",
     taskType: input.taskType ?? "T2I",
-    graph: input.graph ?? {},
-    rawJson: input.rawJson ?? null,
+    /* 默认给一份最小的 RAW 原件 —— 库里的每一行通常都有可执行内容；
+     * 传 `rawJson: null` 可显式造「没有可执行内容」的行。 */
+    rawJson:
+      input.rawJson === undefined
+        ? { nodes: [{ id: "1", type: "KSampler" }] }
+        : input.rawJson,
     paramMap: input.paramMap ?? null,
     positions: input.positions ?? null,
     workflowIO: input.workflowIO ?? null,
-    apiSource: input.apiSource ?? null,
     modes: input.modes ?? "[]",
     defaultMode: input.defaultMode ?? null,
     sourcePath: input.sourcePath ?? null,

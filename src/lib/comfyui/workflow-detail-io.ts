@@ -70,7 +70,7 @@ export interface WorkflowIOEnrichParams {
   /** 子工作流内部节点的输入元数据（`buildInnerNodeInputs`）。
    *  勾选点落在子图内层视图时，落库 `nodeId` 指向内部节点，顶层 `rawInputsById`
    *  里没有它 —— 没有这份兜底表，类型退化成 `*`、显示名退化成 pin 名
-   *  （ISSUE #349）。缺省（API-only / 无子图）时行为与旧版逐值等价。 */
+   *  （ISSUE #349）。缺省（无子图）时行为与旧版逐值等价。 */
   innerInputsById?: Record<string, RawInputEntry[]>;
   rawNodeMeta: RawNodeMeta[];
   graph: Record<string, unknown>;
@@ -387,7 +387,7 @@ export async function enrichWorkflowIO(
         const gv = asRecord(asRecord(graph[canonicalNodeId])?.inputs)?.[v.name];
         if (gv !== undefined && !Array.isArray(gv)) defaultValue = gv;
       }
-      /* 连 graph 也取不到（纯 API 格式导入且图里没有该字面量）时，回落到存档里
+      /* 连派生图也取不到（图里没有该字面量）时，回落到存档里
        * 上一次在线保存过的默认值 —— 让「ComfyUI 离线时保存」的条目重新打开时仍
        * 能带值，而不是退化成空串 / 未填（fix 4：默认值也固化下来）。 */
       if (defaultValue === undefined && v.defaultValue !== undefined)
@@ -473,7 +473,7 @@ export async function enrichWorkflowIO(
 
     /* 节点类名（**只在本层内部用**：它是查 `multiline` 声明的键 —— 随条目下发的
      *  那份已随工坊封装的名字启发式一起删除）：raw 导出优先（它才是 ComfyUI 里
-     *  真实的 class），API-only 导入退到存库 graph 的 class_type。 */
+     *  真实的 class），退回派生图的 class_type。 */
     const graphClassType = asRecord(graph[canonicalNodeId])?.class_type;
     /* raw 导出的类名是空串时也算「没有」—— 不能让它把 graph 里的真类名吃掉。 */
     const rawClassType = nodeTypeById[canonicalNodeId];

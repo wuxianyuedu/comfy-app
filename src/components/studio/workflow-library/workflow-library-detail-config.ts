@@ -49,7 +49,6 @@ export interface WorkflowLibraryDetailProps {
 /** 详情接口里本面板用到的模板片段 —— 显式收窄，便于单测与复用。 */
 export interface DetailTemplate {
   rawJson?: unknown;
-  graph?: unknown;
   workflowIO?: unknown;
   /** 工作流模板的 paramMap 列（含 `source.mode:<模式>` 的对外参数落点覆盖）。
    *  仅在类型层描述线上返回的 Json 列；库画布据此标出对外参数与落点归属。 */
@@ -62,11 +61,8 @@ export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
   return raw as WorkflowIOMap;
 }
 
-/** 「源文件」优先展示磁盘上的原始导入 JSON（用户当初导入的那个文件），纯 API
- *  导入（本身就没有原件）才回退到 API 图，并置 `isApiFallback` 让弹层如实标注。
- *
- *  注意这里没有「哪种格式更好」的含义：两者地位同等、都能执行，只是原件更接近
- *  作者当初在 ComfyUI 里存下的那一份（带节点坐标与控件值）。 */
+/** 「源文件」展示磁盘上的原始导入 JSON（用户当初导入的那个文件）：库里的
+ *  `rawJson` 列就是它，带节点坐标与控件值，未做任何转换。 */
 export function buildSourceData(
   workflow: WorkflowRow,
   template: DetailTemplate | null | undefined,
@@ -74,8 +70,7 @@ export function buildSourceData(
   if (!template) return null;
   return {
     name: workflow.name,
-    source: template.rawJson ?? template.graph ?? null,
-    isApiFallback: template.rawJson == null,
+    source: template.rawJson ?? null,
   };
 }
 

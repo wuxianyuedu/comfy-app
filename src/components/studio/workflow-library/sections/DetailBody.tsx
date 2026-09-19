@@ -127,18 +127,14 @@ export function DetailBody({
         <div className="border-border bg-panel-deep rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-ink-faint text-xs font-medium">
-              {sourceData?.isApiFallback
-                ? "API 格式原件"
-                : "工作流(RAW)格式原件"}
+              工作流(RAW)格式原件
             </span>
           </div>
           <div className="bg-canvas-deep max-h-[70vh] overflow-auto rounded-xl">
             {sourceData?.source != null ? (
               <JsonViewer
                 data={sourceData.source}
-                title={
-                  sourceData.isApiFallback ? "API 格式" : "工作流(RAW)格式"
-                }
+                title="工作流(RAW)格式"
                 initialCollapsedDepth={2}
               />
             ) : (

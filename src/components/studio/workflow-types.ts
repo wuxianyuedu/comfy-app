@@ -1,6 +1,6 @@
 /* 抽出的类型声明 —— 原本声明在 WorkflowCanvasEditor.tsx 内部。
  * 这里只有纯类型声明，没有运行期代码。
- * 下面的 `import type` 只在编译期存在（完全擦除）——复用服务端 API 图的节点
+ * 下面的 `import type` 只在编译期存在（完全擦除）——复用服务端派生图的节点
  * 形状，让 detail.graph 的消费方仍能拿到 class_type / inputs 访问器，
  * 不必退化成 any。
  *
@@ -45,9 +45,9 @@ export interface RawInputMeta {
    *  声明为 multiline 的 STRING 输入一律渲染成多行文本框，
    *  与默认值多短无关。
    *
-   *  由服务端用「静态 (classType, name) 表 + 长度启发式」算出：我们拿到的
-   *  API 格式 rawJson **不保留**原始 widget 配置（没有 `widgets[]` /
-   *  `inputs[]`）。widget 规格里没有 `multiline` 提示时同样会盖章 ——
+   *  由服务端用「静态 (classType, name) 表 + 长度启发式」算出：原件里没有
+   *  `multiline` 这类 widget 规格提示时只能靠它兜底。widget 规格里没有
+   *  `multiline` 提示时同样会盖章 ——
    *  启发式只标「确定是 multiline」，不盖 = 「没有意见」。 */
   multiline?: boolean;
   /** 当这个 IMAGE 输入由 LoadImage 一族的上游节点馈入时，服务端解析出上游
@@ -88,8 +88,8 @@ export interface ComfyGraphNode {
   is_subgraph?: boolean;
   /** 每个输入的显示元数据，来自原始 JSON（localized_name + type）。 */
   raw_inputs?: RawInputMeta[];
-  /** ComfyUI / litegraph 节点的精确外框尺寸 [宽, 高]。导入时没带原始尺寸
-   *  （纯 API 导入）则为 undefined —— 客户端回落到按内容驱动的布局。
+  /** ComfyUI / litegraph 节点的精确外框尺寸 [宽, 高]。原件里没有该节点的尺寸
+   *  时为 undefined —— 客户端回落到按内容驱动的布局。
    *  `h` **只算主体**：30px 的标题栏画在外框之上，不含在这里面。 */
   size?: [number, number];
   /** 该节点任一输入槽从子图的输入哨兵节点（-10）收到连线时为真 ——
@@ -245,14 +245,13 @@ export interface NodeJsonViewerContextValue {
   getNodeJson: (nodeId: string) => Record<string, unknown> | null;
   /** 更富的查询，供浮层「节点视图」合成页签使用 —— 把逐字节一致的图条目、
    *  原始 UI 元数据（按 id 匹配的 `detail.rawNodes[i]`）与画布位置
-   *  （`detail.positions[id]`）打包在一起。纯 API 导入时 `raw` 与 `pos`
-   *  分别是 `undefined` / `null`。 */
+   *  （`detail.positions[id]`）打包在一起。原件里找不到该节点时 `raw` 与
+   *  `pos` 分别是 `undefined` / `null`。 */
   getNodeView: (nodeId: string) => {
     entry: Record<string, unknown> | null;
     raw?: RawMetaEntry;
     /** 原始 RAW 节点（`detail.rawJson.nodes[i]`）—— 与整个工作流 RAW 视图
-     *  里对应的那一片逐字节一致。工作流是纯 API 导入（没有 rawJson）
-     *  或找不到该节点时为 `null`。 */
+     *  里对应的那一片逐字节一致。找不到该节点时为 `null`。 */
     rawNode?: Record<string, unknown> | null;
     pos: [number, number] | null;
   } | null;
@@ -271,7 +270,7 @@ export interface NodeJsonViewerContextValue {
   viewer: NodeJsonViewerRequest | null;
 }
 /** 稀疏的原始节点元数据（与 `WorkflowDetail.rawNodes[]` 同源）。
- *  `flags` / `properties` / `mode` 在纯 API 导入（无 rawJson）时可能缺失，
+ *  `flags` / `properties` / `mode` 在原件里可能缺失（并非每个节点都写全），
  *  因此按可选对待 —— 与 `rawNodes` 口径一致；`getNodeView().raw` 也复用它。 */
 export type RawMetaEntry = {
   widgets_values: unknown[];
@@ -307,12 +306,12 @@ export interface WorkflowDetail {
   graph: Record<string, ApiWorkflowNode>;
   /** 从 `/api/workflows/:id` 返回的原始导入格式 (LiteGraph
    *  JSON)；canvas 顶部「📋 查看 JSON」modal 直接读这里喂给 SourceModal。
-   *  null 表示该工作流纯 API 导入，无原始格式。 */
+   *  这是唯一的存库原件 —— `graph` / `nodes` 都由它派生。 */
   rawJson?: unknown;
   nodes: ComfyGraphNode[];
   /** RAW 视图专用数据包（从 rawJson 派生、保留 subgraph
-   *  wrapper）。当存库 `graph` 被拆平成 N:xx 节点时，RAW 布局据此渲染原始
-   *  ComfyUI 节点（含 wrapper 紫色整卡），而非炸开的 API 图。null = 无 rawJson。 */
+   *  wrapper），供 RAW 布局渲染原始 ComfyUI 节点（含 wrapper 紫色整卡）。
+   *  null = 无 rawJson。 */
   rawView?: {
     nodes: ComfyGraphNode[];
     positions: Record<string, [number, number]> | null;
@@ -339,8 +338,8 @@ export interface WorkflowDetail {
         id: string;
         widgets_values: unknown[];
         outputs: RawOutputMeta[];
-        /** 每个节点的 LiteGraph 标记（如 `collapsed`）。原始数据缺失
-         *  （纯 API 导入）时为空。Flow 侧原本经 `(rn as any).flags` 消费它们；
+        /** 每个节点的 LiteGraph 标记（如 `collapsed`）。原件里没有该字段时为空。
+         *  Flow 侧原本经 `(rn as any).flags` 消费它们；
          *  在这里声明是为了让 JSON 浮层能在合成的「节点视图」页签里展示。 */
         flags?: Record<string, unknown>;
         /** 自定义节点属性（例如 rgthree 的 `Fast Groups Bypasser`

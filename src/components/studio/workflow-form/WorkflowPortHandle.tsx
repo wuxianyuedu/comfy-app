@@ -35,8 +35,8 @@ function portColorFor(type?: string): string {
  *  VIDEO/AUDIO → `--color-chip-type-video-bg` + `#FF5CA8` 0.4 描边 + `#FF5CA8` 文字。
  *  底色随主题（浅色档见 globals.css 的 `--color-chip-type-*-bg`）。
  *
- *  `type` 同时会提前归一化：当工作流以纯 API 导入、富化
- *  回落到 JS 类型推导时，原始的 `e.type` 可能漏出非 ComfyUI 的
+ *  `type` 同时会提前归一化：当工作流原件里缺少声明、富化回落到 JS 类型推导时，
+ *  原始的 `e.type` 可能漏出非 ComfyUI 的
  *  值（`"*"`、`""`，或历史上残留的
  *  `control_after_generate` 字符串如 `"fixed"`/`"randomize"`）。
  *  调用方已归类为数值的行（紧凑 WirePortRows 路径）上出现任何
