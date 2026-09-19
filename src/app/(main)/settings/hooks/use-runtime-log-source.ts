@@ -102,13 +102,34 @@ export function useRuntimeLogSource({
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY_SNAPSHOT);
   /* 选中的会话放在 ref：轮询回调要读它，但不该因「用户切换下拉」重建定时器。 */
   const sessionRef = useRef<string | null>(null);
+  /* 见过的最新会话开始时刻：会话 id 是「起点行号」，日志文件一超尾窗、行号
+   * 就整体平移，拿 id 判「新会话」会误判；开始时刻（行内时刻，跨窗口滑动
+   * 稳定）才是新启动的可靠标记。 */
+  const latestStartedAtRef = useRef<number | null>(null);
   /* 在途请求序号：切换 / 刷新与轮询可能重叠，只认最后一次的响应 ——
    * 否则后到的旧响应会把用户刚切过去的会话顶回去。 */
   const seqRef = useRef(0);
 
   const pull = useCallback(async () => {
     const seq = (seqRef.current += 1);
-    const slice = await fetchLogSessions(source, sessionRef.current);
+    let slice = await fetchLogSessions(source, sessionRef.current);
+    if (slice && seq === seqRef.current) {
+      /* 新的一次启动出现 → 自动切到最新（用户预期是「启动后自动看最新日志」，
+       * 不能停在旧会话里等他手动换下拉）。判据用会话开始时刻而不是行号 id
+       * （见 latestStartedAtRef）；正在展示的已是最新则不用动。 */
+      const latest = slice.sessions[slice.sessions.length - 1] ?? null;
+      const isNewStart =
+        latest !== null &&
+        latest.startedAt !== null &&
+        latest.startedAt !== latestStartedAtRef.current;
+      if (isNewStart) latestStartedAtRef.current = latest.startedAt;
+      if (isNewStart && slice.selectedId !== latest.id) {
+        /* 切过去并在同一次调用里把新会话的正文取回来（不走递归：
+         * useCallback 的自引用过不了 react-hooks 的静态检查）。 */
+        sessionRef.current = latest.id;
+        slice = await fetchLogSessions(source, latest.id);
+      }
+    }
     if (!slice || seq !== seqRef.current) return;
     /* 服务端回落的选中项（请求的 id 已不在列表里时它会选最新）：以它为准。 */
     sessionRef.current = slice.selectedId;

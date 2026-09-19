@@ -65,6 +65,7 @@ export function RemoteModelDialog({
           </label>
           <SelectMenu
             className="mb-3 text-sm"
+            fullWidth
             value="custom"
             onChange={() => undefined}
             options={["custom"]}
@@ -79,6 +80,7 @@ export function RemoteModelDialog({
           </label>
           <SelectMenu
             className="mb-3 text-sm"
+            fullWidth
             value={d.addForm.kind}
             onChange={(kind) =>
               d.setAddForm((f) => ({

@@ -170,6 +170,39 @@ describe("computeFitViewport", () => {
   it("没有节点 → null", () => {
     expect(computeFitViewport(null, CONTAINER)).toBeNull();
   });
+
+  /* ISSUE #717：编辑器聚焦时把**画布自己的缩放区间**传进来，覆盖默认下限。
+   * 写死的 0.35 下限会让 6700px 宽的图在 1295px 视口里仍有一大半在视野外 ——
+   * 用户打开后还得自己滚轮缩小。 */
+  it("显式传入缩放区间时覆盖默认下限：宽图按画布自己的 minZoom 缩到装得下", () => {
+    const wide = { minX: 0, maxX: 6700, minY: 0, maxY: 4000 };
+    const container = { width: 1295, height: 772 };
+
+    /* 默认（不传区间）：被 0.35 的下限挡住，装不下整张图。 */
+    const byDefault = computeFitViewport(wide, container)!;
+    expect(byDefault.zoom).toBe(DEFAULT_MIN_FIT_ZOOM);
+    expect(byDefault.zoom * (wide.maxX - wide.minX)).toBeGreaterThan(
+      container.width,
+    );
+
+    /* 传画布自己的区间（minZoom 0.15）：整张图连留白一起落在容器内。 */
+    const fitted = computeFitViewport(wide, container, {
+      minZoom: 0.15,
+      maxZoom: 2,
+    })!;
+    expect(fitted.zoom).toBeLessThan(DEFAULT_MIN_FIT_ZOOM);
+    expect(fitted.zoom * (wide.maxX - wide.minX)).toBeLessThanOrEqual(
+      container.width,
+    );
+    expect(fitted.zoom * (wide.maxY - wide.minY)).toBeLessThanOrEqual(
+      container.height,
+    );
+    /* 中心仍落在容器中心。 */
+    const centerX = (wide.minX + wide.maxX) / 2;
+    const centerY = (wide.minY + wide.maxY) / 2;
+    expect(fitted.x + fitted.zoom * centerX).toBeCloseTo(container.width / 2);
+    expect(fitted.y + fitted.zoom * centerY).toBeCloseTo(container.height / 2);
+  });
 });
 
 describe("createFitSettleStepper", () => {

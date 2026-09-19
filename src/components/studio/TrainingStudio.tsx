@@ -593,6 +593,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <label className={labelClass}>底模（Checkpoint）</label>
               <SelectMenu
+                fullWidth
                 className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 value={c.form.baseModel}
                 onChange={c.setBaseModel}
@@ -631,6 +632,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             <div>
               <label className={labelClass}>分辨率</label>
               <SelectMenu
+                fullWidth
                 className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 value={String(c.form.resolution)}
                 onChange={(value) => c.setResolution(Number(value))}
@@ -730,6 +732,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               <div>
                 <label className={labelClass}>优化器</label>
                 <SelectMenu
+                  fullWidth
                   className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                   value={c.form.optimizer}
                   onChange={c.setOptimizer}
@@ -740,6 +743,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               <div>
                 <label className={labelClass}>调度器</label>
                 <SelectMenu
+                  fullWidth
                   className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
                   value={c.form.scheduler}
                   onChange={c.setScheduler}

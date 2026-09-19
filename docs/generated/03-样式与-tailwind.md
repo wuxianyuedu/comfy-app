@@ -553,6 +553,31 @@ Ollama 三处同构）不要再各自拼 class——抽成一个纯派生模块�
 `src/app/(main)/settings/settings-status-row-config.ts` 与
 `src/components/studio/workflow-editor/workflow-editor-topbar-config.ts`。
 
+#### 3.8.1.1 一排控件的宽度由调用处决定，不由基础件预设
+
+**基础件里不要预设 `w-full`。** 宽度是**布局决定**，不是控件属性 —— 同一个
+下拉在「独占一行的表单」里该铺满，在「并排的一排筛选控件」里该随内容宽。
+基础件选了后者，前者没法覆盖：`w-full` 与 `w-auto` 属同一族 utility，
+编译后按 Tailwind 的输出顺序决胜，**调用处写的那个不保证赢**。
+
+症状很具体：调用处写了 `w-auto`、也写了 `flex-nowrap`，但每个下拉仍然
+**各自铺满整行**，看上去像「`flex-nowrap` 没生效」（ISSUE #716 的工作流库
+页头就撞上了这一条）。
+
+```tsx
+// ❌ 基础件预设宽度：调用处的 w-auto 覆盖不掉
+<span className={`flex w-full items-center … ${className}`} />
+
+// ✅ 宽度是调用处的决定；需要「铺满」时走显式开关
+<span className={`flex items-center … ${fullWidth ? "w-full" : "w-auto"} ${className}`} />
+```
+
+同理，**「占满剩下的宽度」与「铺满容器」是两件事**：前者要 `flex-1` 的
+**外层**（外层才是 flex 项，宽度才由剩余空间给出），把 `flex-1` 写在控件自己
+的 `className` 上不起作用 —— 控件自身仍是内容宽，旁边的兄弟一变长它就被挤回去。
+可参考的落地：`src/components/ui/select-menu.tsx` 的 `fullWidth` 开关
+（缺省随内容宽），以及 `StyleSwitcher` / `WidgetControl` 两处显式传值。
+
 ### 3.9 布局类名顺序约定（可读性）
 
 ```tsx

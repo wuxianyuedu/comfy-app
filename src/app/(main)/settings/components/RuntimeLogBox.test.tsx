@@ -127,6 +127,19 @@ describe("RuntimeLogBox", () => {
     expect(screen.getByLabelText("全屏查看")).toBeTruthy();
   });
 
+  it("点击弹窗外（窗口标题栏）不关闭全屏视图：只能由退出按钮或 Esc 关", () => {
+    // 全屏视图铺满标题行下方后，弹窗外唯一可点的就是标题栏；用户点标题栏
+    // （想拖动窗口）把全屏视图整个关掉是用户实测反馈，这里钉住不回归。
+    renderBox(controller({ sessions: twoSessions(), sessionId: "40" }));
+    fireEvent.click(screen.getByLabelText("全屏查看"));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    fireEvent.pointerDown(document.body);
+    fireEvent.pointerUp(document.body);
+    fireEvent.click(document.body);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
   it("启动进行中显示「跟随中」徽标", () => {
     renderBox(controller({ active: true }));
     expect(screen.getByText("跟随中")).toBeTruthy();
