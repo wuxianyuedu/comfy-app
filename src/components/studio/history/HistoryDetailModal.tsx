@@ -11,12 +11,14 @@ import {
   deriveGenValues,
   deriveParamRows,
   derivePrompt,
+  kvValueText,
 } from "./history-detail-derive";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Disclosure } from "~/components/ui/disclosure";
+import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { zClass } from "~/lib/shell/overlay-z";
 
 interface HistoryDetailModalProps {
@@ -258,28 +260,20 @@ export function HistoryDetailModal({
                     <p className="text-ink-faint mb-1 text-xs font-semibold">
                       生成参数
                     </p>
-                    <div className="border-border-subtle bg-card grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border p-3 sm:grid-cols-3">
-                      {genValues.map((item) => (
-                        <div key={item.label} className="flex flex-col gap-0.5">
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-ink-muted shrink-0 text-[11px]">
-                              {item.label}
-                            </span>
-                            <span className="text-ink-bright min-w-0 font-mono text-[12px] break-words">
-                              {typeof item.value === "string" ||
-                              typeof item.value === "number"
-                                ? String(item.value)
-                                : JSON.stringify(item.value)}
-                            </span>
-                          </div>
-                          {item.hint && (
-                            <span className="text-ink-muted/80 pl-0.5 text-[10px] leading-tight">
-                              {item.hint}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <KeyValueRows
+                      columns={3}
+                      className="border-border-subtle bg-card gap-y-1.5 rounded-lg border p-3"
+                      /* 这一块刻意用「标签在值左侧」的行内形态（不是
+                         `stacked` 的标签在上）：参数名短、值长，并排更省高度。 */
+                      itemClassName="flex-row items-baseline gap-2"
+                      keyClassName="text-ink-muted shrink-0 text-[11px]"
+                      valueClassName="text-ink-bright truncate font-mono text-[12px] font-normal"
+                      items={genValues.map((item) => ({
+                        key: item.label,
+                        value: kvValueText(item.value),
+                        hint: item.hint,
+                      }))}
+                    />
                     {genValues.some((item) => item.hint) && (
                       <p className="text-ink-muted mt-1 text-[10px] leading-relaxed">
                         注：种子字段在 control_after_generate=randomize
@@ -302,36 +296,18 @@ export function HistoryDetailModal({
                     </p>
 
                     {paramRows.length > 0 && (
-                      <div className="border-border-subtle mb-2 overflow-hidden rounded-lg border">
-                        <table className="w-full text-[11px]">
-                          <tbody>
-                            {paramRows.map((input, i) => (
-                              <tr
-                                key={
-                                  (input.nodeId ?? "?") +
-                                  ":" +
-                                  input.name +
-                                  ":" +
-                                  i
-                                }
-                                className="border-border-subtle border-b last:border-b-0"
-                              >
-                                <td
-                                  className="border-border-subtle bg-card w-[36%] max-w-[180px] shrink-0 truncate border-r px-2.5 py-1.5 align-top font-mono text-violet-700 dark:text-violet-300"
-                                  title={input.name}
-                                >
-                                  {input.name}
-                                </td>
-                                <td className="text-ink-bright px-2.5 py-1.5 break-words">
-                                  {typeof input.value === "string"
-                                    ? input.value
-                                    : JSON.stringify(input.value)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <KeyValueRows
+                        layout="table"
+                        className="mb-2"
+                        keyClassName="text-violet-700 dark:text-violet-300"
+                        items={paramRows.map((input, i) => ({
+                          id:
+                            (input.nodeId ?? "?") + ":" + input.name + ":" + i,
+                          key: input.name,
+                          value: kvValueText(input.value),
+                          title: input.name,
+                        }))}
+                      />
                     )}
 
                     {topLevelEntries.length > 0 && (

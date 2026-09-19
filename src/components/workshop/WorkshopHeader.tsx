@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
+import { ProgressBar } from "~/components/ui/progress-bar";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopProjectSummary } from "./hooks/use-workshop-pipeline";
 import { zClass } from "~/lib/shell/overlay-z";
@@ -270,18 +271,12 @@ export function WorkshopHeader({
       </div>
 
       {/* 项目总进度：放到最顶部（设计稿红框区域） */}
-      <div className="hidden w-full max-w-[260px] lg:block">
-        <div className="text-muted-foreground flex items-center justify-between text-[11px]">
-          <span>项目总进度</span>
-          <span className="text-primary font-medium">{progressPct}%</span>
-        </div>
-        <div className="bg-elevated mt-1.5 h-2 w-full rounded-full">
-          <div
-            className="bg-primary h-2 rounded-full transition-all"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
-      </div>
+      <ProgressBar
+        value={progressPct}
+        label="项目总进度"
+        className="hidden w-full max-w-[260px] text-[11px] lg:block"
+        trackClassName="bg-elevated mt-1.5 h-2"
+      />
 
       <div className="flex flex-1 items-center justify-end gap-3">
         <span className="bg-amber/15 text-amber rounded-full px-3 py-1.5 text-xs font-medium">

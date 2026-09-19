@@ -5,6 +5,7 @@
 import "server-only";
 
 import { db } from "~/lib/db";
+import { clampPct } from "~/lib/progress";
 import { loraTrainingJob, type LoraTrainingJob } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, desc } from "drizzle-orm";
@@ -129,7 +130,7 @@ export class LoraTrainingJobRepository extends DrizzleRepository<LoraTrainingJob
   async updateProgress(jobId: string, pct: number): Promise<void> {
     await db
       .update(loraTrainingJob)
-      .set({ progress: Math.min(100, Math.max(0, pct)), status: "RUNNING" })
+      .set({ progress: clampPct(pct), status: "RUNNING" })
       .where(eq(loraTrainingJob.id, jobId));
   }
 
