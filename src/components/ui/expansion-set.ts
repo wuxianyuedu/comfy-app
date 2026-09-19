@@ -9,24 +9,18 @@ import { useCallback, useMemo, useState } from "react";
  * 一棵树用了**三份同形的 `Record<string, boolean>`**（`expandedParents` /
  * `expandedNodeList` / `nodeExpanded`），每份都配一组「自己写一遍的」读写代码：
  *
- * ```tsx
- * /* 读 *\/
- * const isOpen = !!expandedParents[parent];
- * /* 写 —— 三份逐字同形，只有键的来源不同 *\/
- * setExpandedParents((prev) => ({ ...prev, [parent]: !prev[parent] }));
- * ```
+ * 读：`const isOpen = !!expandedParents[parent];`（关不关只看这一个取值）
+ * 写：`setExpandedParents((prev) => ({ ...prev, [parent]: !prev[parent] }));`
+ * （翻转该键）—— 三份实现逐字同形，只有键的来源不同。
  *
  * 三件事散在调用处，各自的缺陷都能对上号：
  *
  * 1. **「默认展开」那段逐字抄了两遍**（`use-custom-nodes-settings` 的
  *    冷路径与热路径各一份）：
- *    ```tsx
- *    setExpandedParents((prev) => {
- *      const out = { ...prev };
- *      for (const p of paths) if (!(p in out)) out[p] = true;
- *      return out;
- *    });
- *    ```
+ *    先复制一份原映射：`const out = { ...prev };`
+ *    再按「键在不在」逐个补（`in`，不是看取值）：
+ *    `for (const p of paths) if (!(p in out)) out[p] = true;` —— 键已存在就跳过，
+ *    最后 `return out;`。
  *    它的语义是「**已经存在的那一项不许被覆盖**」——用户手动收起过的目录，
  *    在下一轮刷新后不该自己弹回来。这条语义在一个块里，抄两遍就有两份会漂。
  * 2. **`isOpen` 的读取全靠 `!!map[key]`**，于是 `undefined` 与 `false` 谁也
@@ -77,15 +71,10 @@ export interface ExpansionSet {
 /**
  * 展开集合的状态出口。
  *
- * ```tsx
- * const nodes = useExpansionSet();
- * // 读
- * const open = nodes.isExpanded(sub.path);
- * // 写（此前是 `setExpandedNodeList((prev) => ({ ...prev, [k]: !prev[k] }))`）
- * <Disclosure open={open} onOpenChange={() => nodes.toggle(sub.path)} />
- * // 补默认（此前是一段抄两遍的 upserter）
- * nodes.seedDefaults(savedPaths);
- * ```
+ * 取出口：`const nodes = useExpansionSet();`
+ * 读：`const open = nodes.isExpanded(sub.path);`
+ * 写（交给 `Disclosure`）：`<Disclosure open={open} onOpenChange={() => nodes.toggle(sub.path)} />`
+ * 补默认（此前是一段抄两遍的合并器）：`nodes.seedDefaults(savedPaths);`
  */
 export function useExpansionSet(
   /** 初始集合（一般给 `{}`；从持久化恢复时给读出来的值）。 */
