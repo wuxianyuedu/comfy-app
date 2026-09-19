@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 
+import { useInterval } from "~/components/ui/use-interval";
 import { fetchFileLogSlice } from "~/lib/log/log-file-client";
 import { clampLogTime } from "~/lib/log/log-session-scope";
 
@@ -237,15 +238,24 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
    * 面板会以为「日志里什么也没有」，正是 ISSUE #360 里最难排查的那种空白。
    * 只在**状态翻转**时写一条（不刷屏），恢复后再翻转回正常。 */
   const unreachableRef = useRef(false);
+  /* 卸载守卫：`useInterval` 卸载即停间隔，但**已发出的那次请求仍可能回来**
+   * 并在组件消失后 `setState` —— 所以 `mountedRef` 保留（规范 16 §16.2.4.15）。 */
+  const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const poll = useCallback(async () => {
     if (typeof window === "undefined") return;
-    let mounted = true;
 
     const pollSource = async (source: PollSource) => {
       try {
         const offset = offsetsRef.current[source] ?? 0;
         const data = await fetchFileLogSlice(source, offset, bootIdRef.current);
-        if (!data || !mounted) return;
+        if (!data || !mountedRef.current) return;
 
         /* 服务端进程换过了（真重启 / 另一实例接管端口）：时间线里已有的行属于
          * 上一个进程，与本次会话没有可比性。清空时间线、重置全部游标，本轮从
@@ -307,21 +317,14 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const poll = async () => {
-      for (const source of POLL_SOURCES) {
-        await pollSource(source);
-      }
-    };
-
-    void poll();
-    const id = setInterval(() => {
-      void poll();
-    }, POLL_MS);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
+    for (const source of POLL_SOURCES) {
+      await pollSource(source);
+    }
   }, [addEntry, appendFileLogs, setSessionStart, setBootId]);
+
+  /* 每 `POLL_MS` 拉一次；挂载即先拉一次（`immediate`），切后台暂停
+   * （规范 16 §16.2.4.15）。 */
+  useInterval(poll, { ms: POLL_MS });
 
   // ── 键盘快捷键：Ctrl+Shift+L ──
   useEffect(() => {

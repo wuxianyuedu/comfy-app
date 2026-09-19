@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { fetchUpdateCheck } from "~/lib/update-check-client";
+import { useInterval } from "~/components/ui/use-interval";
 import { useUpdateCheckStore } from "../update-check-store";
 
 /** 需重启类文件的改动频率低，轮询间隔放宽，不打扰、不空转。 */
@@ -30,7 +31,6 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
   const enabled = useUpdateCheckStore((s) => s.enabled);
   const applyResult = useUpdateCheckStore((s) => s.applyResult);
   const setChecking = useUpdateCheckStore((s) => s.setChecking);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const wasDirtyRef = useRef(false);
   const onDirtyRef = useRef(onDirty);
   // ref 须在 effect 里同步：渲染期写 ref 会被 react-hooks/refs 判为
@@ -63,32 +63,12 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
     }
   }, [applyResult, setChecking]);
 
-  // 开关开启且前台时轮询，切后台暂停（与 useComfyStats 一致，避免空转请求）
-  useEffect(() => {
-    if (!enabled) return;
-    const start = () => {
-      if (timer.current) clearInterval(timer.current);
-      void checkNow();
-      timer.current = setInterval(() => void checkNow(), UPDATE_CHECK_POLL_MS);
-    };
-    const stop = () => {
-      if (timer.current) {
-        clearInterval(timer.current);
-        timer.current = null;
-      }
-    };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") start();
-      else stop();
-    };
-
-    start();
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [enabled, checkNow]);
+  /* 开关开启且前台时轮询，切后台暂停（与 `useComfyStats` 共用同一份实现
+   * —— 此前这段逐字抄了两遍，规范 16 §16.2.4.15）。`ms: null` 表示不轮询。 */
+  useInterval(checkNow, {
+    ms: enabled ? UPDATE_CHECK_POLL_MS : null,
+    pauseWhenHidden: true,
+  });
 
   return { checkNow };
 }

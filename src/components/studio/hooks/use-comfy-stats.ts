@@ -8,8 +8,9 @@
 //  - 前台 4s 一次（显存占用在跑图时每秒级变化，4s 足够反映趋势又不会刷屏）。
 //  - 页面隐藏（切后台）时暂停，避免空转请求；切回前台立即补一次并恢复轮询。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useInterval } from "~/components/ui/use-interval";
 import {
   fetchComfyStats,
   type ComfyStatsPayload,
@@ -37,45 +38,18 @@ const OFFLINE: ComfyStatsPayload = {
 
 export function useComfyStats(): ComfyStatsController {
   const [stats, setStats] = useState<ComfyStatsPayload | null>(null);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const pollOnce = useCallback(async () => {
     const next = await fetchComfyStats();
     setStats(next.online ? next : OFFLINE);
   }, []);
 
-  // 清理计时器
-  useEffect(() => {
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-    };
-  }, []);
-
-  // 前台时启动轮询；后台时暂停。visibilitychange 恢复前台先立即刷一次。
-  useEffect(() => {
-    const start = () => {
-      if (timer.current) clearInterval(timer.current);
-      void pollOnce();
-      timer.current = setInterval(() => void pollOnce(), COMFY_STATS_POLL_MS);
-    };
-    const stop = () => {
-      if (timer.current) {
-        clearInterval(timer.current);
-        timer.current = null;
-      }
-    };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") start();
-      else stop();
-    };
-
-    start();
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [pollOnce]);
+  /* 「前台轮询、后台暂停、回前台立即补跑」同 `use-update-check` —— 此前这段
+   * 逐字抄了两份，现在共用 `useInterval`（规范 16 §16.2.4.15）。 */
+  useInterval(pollOnce, {
+    ms: COMFY_STATS_POLL_MS,
+    pauseWhenHidden: true,
+  });
 
   const online = stats?.online === true;
 

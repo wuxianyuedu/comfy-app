@@ -12,7 +12,9 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import { useInterval } from "~/components/ui/use-interval";
 import { errorMessage } from "~/lib/error-message";
 import {
   fetchHistoryTasks,
@@ -126,18 +128,9 @@ export function useHistoryPanel({
   const activeCount = countActive(tasks);
 
   /* ── 有任务在跑时轮询（4s），跑完自动停 ── */
-  const refreshRef = useRef(refresh);
-  // 让轮询回调保持新鲜，又不在渲染中途读写 ref
-  //（React Compiler 禁止渲染期间访问 ref；这个定时器只会在 effect 跑完后
-  // 触发，所以时序等价）。
-  useEffect(() => {
-    refreshRef.current = refresh;
-  }, [refresh]);
-  useEffect(() => {
-    if (activeCount === 0) return;
-    const timer = setInterval(() => refreshRef.current(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [activeCount]);
+  /* 有任务在跑时轮询（4s），跑完自动停。`useInterval` 内部把回调放 ref，
+   * 所以这里不必再自己维护 `refreshRef`（规范 16 §16.2.4.15）。 */
+  useInterval(refresh, { ms: activeCount > 0 ? POLL_MS : null });
 
   return {
     tasks,

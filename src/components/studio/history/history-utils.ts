@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
+import { useInterval } from "~/components/ui/use-interval";
 import { timeAgo as timeAgoImpl } from "~/lib/time-format";
 
 import type { TaskItem } from "./history-types";
@@ -102,8 +103,11 @@ export function dateBucket(iso: string): string {
 /** 简单的「看起来在跑」动效：递增到 95% 后封顶；任务结束时归 0。 */
 export function useSimulatedProgress(tasks: TaskItem[]) {
   const [map, setMap] = useState<Record<string, number>>({});
-  useEffect(() => {
-    const id = setInterval(() => {
+  /* `useInterval` 的 `ms` 固定、回调放 ref —— 此前把 `tasks` 写进依赖数组，
+   * 每次任务数组变化（轮询每次都会给新数组）都要重建定时器、把计时重置；
+   * 现在定时器稳定，回调里读到的是最新的 `tasks`（规范 16 §16.2.4.15）。 */
+  useInterval(
+    () => {
       setMap((prev) => {
         const next = { ...prev };
         let dirty = false;
@@ -121,9 +125,9 @@ export function useSimulatedProgress(tasks: TaskItem[]) {
         }
         return dirty ? next : prev;
       });
-    }, 1500);
-    return () => clearInterval(id);
-  }, [tasks]);
+    },
+    { ms: 1500, immediate: false, pauseWhenHidden: false },
+  );
   return map;
 }
 

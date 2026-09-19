@@ -70,6 +70,46 @@
  *      这里问的是「这个文件自己拼了一份模态外壳吗」，形态锚点取
  *      「视图里出现 `overlayClass(`」（本项目顶层浮层定位的唯一出口）。
  *
+ *   P12 视图 / 逻辑层里自己写 `setInterval` 轮询（**硬闸**）——
+ *      `~/components/ui/use-interval` 的 `useInterval` 是唯一出口。
+ *      此前 **9 处**各自 `setInterval(onDone, N)` + 清理里 `clearInterval`，
+ *      写法分三族、缺陷各异：**不立刻跑一次**（挂载后先空一个间隔）、
+ *      **后台标签页空转**（浏览器把后台定时器降到 ≥1min，请求照发）、
+ *      **跑在已卸载组件上**（异步回调后 `setState`）。其中「前后台开关」
+ *      那段还被逐字抄了两份（`use-comfy-stats` / `use-update-check`）。
+ *
+ *      ⚠️ 豁免：`ui/use-interval.ts` 自身（实现），以及 `/hooks/**` 之外的
+ *      服务端路由（`app/api/**` 的 SSE 心跳是服务端定时器，不是「视图轮询」）。
+ *
+ *   P11 视图里再自绘一份「可滚动的浮层选项列表」（**硬闸**）——
+ *      `~/components/ui/option-list-popover` 的 `OptionListPopover` 是唯一
+ *      出口。此前画布节点上的四个 chip（`WorkflowPickChip` / `WorkflowModePickChip` /
+ *      `WorkflowSourceFilterChip` / `WorkflowModelFilterChip`）各写一份**逐行
+ *      同形**的浮层：触发器配一个 `▾`（`open` 时 `rotate-180`）、内容
+ *      `max-h-* overflow-y-auto`、每行 `role="option"` + `aria-selected` +
+ *      「选中高亮 + 勾」，而「当前项」配色四份各写各的（`violet-500/20` /
+ *      `fuchsia-500/20` / `primary-soft` / `bg-accent`）。
+ *
+ *      ⚠️ 判据取「同一文件里既自建 `PopoverTrigger`、又自己画 `▾` 展开标记」
+ *      —— 那就是「手搓 chip 浮层」。单看 `▾` 会把 `DropdownMenu` /
+ *      `Dialog` 的触发器（`ProjectSwitcher` / `MetaEditor`）误判；单看
+ *      `PopoverTrigger` 会把表单里的 `SelectMenu` 调用处误判。
+ *
+ *   P10 视图里再自绘一份「折叠 / 展开」开关（**硬闸**）—— `ui/disclosure` 的
+ *      `Disclosure` 是唯一出口。此前有三套写法做同一件事：
+ *      ① 原生 `<details>` / `<summary>` 六处（`ErrorPanel` ×2、
+ *      `HistoryDetailModal`、`CharacterDesigner`、`CharacterPortraitStudio`、
+ *      `ExtractToolbar` ×2）；② 自绘「布尔 state + 条件渲染 + `▸/▾` 或
+ *      `Chevron` 切换 + 手写 `role="button"` / `onKeyDown`」四处；
+ *      ③ 树形结构的 `expanded*` 映射两份。差别不是风格，而是**无障碍语义各写
+ *      各的**：`<details>` 天生带 `role` / `aria-expanded` / 键盘切换 / 页内查找
+ *      自动展开，自绘那份基本只有 `onClick`（`NodesTab` 还为此专门补了
+ *      `role="button"` + Enter/Space —— 因为「不能嵌 button」而绕路）。
+ *
+ *      ⚠️ 判据按**形态**取，不按 API：数「视图里出现 `<details`」与「自绘的
+ *      展开标记 `▸` / `▾` 字面量」。前者是原生写法，后者只能出现在把一段内容
+ *      折起来的地方 —— 与 P9 同款教训（`createPortal` 数不到 `overlayClass`）。
+ *
  *   P8 视图里再写一份「值不存在时显示 `—`」的判据（**硬闸**）——
  *      `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER` 是唯一
  *      出口。此前 31 处各写一遍，而「什么算不存在」判得都不一样：
@@ -134,6 +174,36 @@ const EXEMPT_DIRS = [
   { re: /^src\/components\/ui\//, reason: "ui/ 基元自身实现" },
   { re: /\/hooks\//, reason: "§16.2.1 第②层（逻辑层），不算视图实现" },
 ];
+
+/**
+ * 按文件豁免（正则 + 理由，均按仓库相对 POSIX 路径匹配）——只给**某一条判据**
+ * 用，不是整目录放行；每条都必须写清「为什么这一处不属于该判据」。
+ */
+const EXEMPT_FILES = {
+  P12: [
+    {
+      re: /^src\/app\/api\//,
+      reason:
+        "服务端路由（SSE 心跳 / 轮询）里的 setInterval 是**服务端定时器**，" +
+        "与「视图轮询」不是同一件事，也不在 React 生命周期里。",
+    },
+  ],
+  P10: [
+    {
+      re: /^src\/components\/studio\/workflow-library\/CustomNodesSettings\/NodePreviewCard\.tsx$/,
+      reason:
+        "自定义节点预览卡：头部是一条「取自 category」的实色色带（inline style " +
+        "画底 + 白字徽标），刻意镜像 ComfyUI 节点卡外观，与 disclosure 的" +
+        "「一行文字 + 折叠标记」不是一个形态；换基元会改掉那条色带的渲染契约" +
+        "（§16.2.4.2 第 9 条：验收标准是渲染结果不变）。",
+    },
+  ],
+};
+
+/** 某文件是否被指定判据豁免。 */
+function isExemptFile(id, rel) {
+  return (EXEMPT_FILES[id] ?? []).some((e) => e.re.test(rel));
+}
 
 /* ── 三条判据 ────────────────────────────────────────────── */
 
@@ -260,6 +330,43 @@ const RULES = {
       );
     },
   },
+  P12: {
+    label:
+      "视图 / 逻辑层里自写 setInterval 轮询（应使用 ~/components/ui/use-interval 的 useInterval）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (t2.match(/\bsetInterval\s*\(/g) || []).length;
+    },
+  },
+  P11: {
+    label:
+      "视图内自绘可滚动浮层选项列表（应使用 ~/components/ui/option-list-popover 的 OptionListPopover）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 「手搓 chip 浮层」= 本文件里既自建 `PopoverTrigger`、又自己画 `▾`
+       * 展开标记。两个条件同时成立才计 —— 见文件头 P11 说明。 */
+      if (!/\bPopoverTrigger\b/.test(t2)) return 0;
+      return (t2.match(/▾/g) || []).length;
+    },
+  },
+  P10: {
+    label:
+      "视图内自绘折叠/展开开关（应使用 ~/components/ui/disclosure 的 Disclosure）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 两种形态：① 原生 `<details>`；② 自绘折叠开关 —— `role="button"` 配
+       * `▸` / `▾` 展开标记。第二种要求**同一文件里两者同时出现**，否则会把
+       * 「浮层触发器上的装饰箭头」（chip / 下拉 / 弹窗触发器都画一个 `▾`）
+       * 误判成折叠 —— 那些属于浮层形态（P9 / 基元），不是 disclosure。
+       * 箭头图标（lucide `Chevron*`）不计：它在导航 / 分页 / 浮层触发里都有，
+       * 单看图标判不出意图；`▸` / `▾` 这两个字符在本库只用于「折起来」与
+       * 「打开面板」，配上 `role="button"` 才唯一指向折叠。 */
+      const details = (t2.match(/<details\b/g) || []).length;
+      const markers = (t2.match(/[▸▾]/g) || []).length;
+      const roleButton = /role\s*=\s*["']button["']/.test(t2);
+      return details + (roleButton ? markers : 0);
+    },
+  },
   P7: {
     label:
       "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
@@ -278,7 +385,17 @@ const RULES = {
 };
 
 /** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4 属此类）。 */
-const HARD_GATE_RULES = new Set(["P4", "P5", "P6", "P7", "P8", "P9"]);
+const HARD_GATE_RULES = new Set([
+  "P4",
+  "P5",
+  "P6",
+  "P7",
+  "P8",
+  "P9",
+  "P10",
+  "P11",
+  "P12",
+]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -312,6 +429,7 @@ function collect() {
       if (EXEMPT_DIRS.some((e) => e.re.test(rel))) continue;
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
       for (const [id, rule] of Object.entries(RULES)) {
+        if (isExemptFile(id, rel)) continue;
         const n = rule.count(text);
         if (n > 0) (files[rel] ||= {})[id] = n;
       }
@@ -467,7 +585,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
