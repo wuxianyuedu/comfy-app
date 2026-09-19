@@ -23,6 +23,12 @@ interface DetailBodyProps {
   paramMap: Record<string, unknown>;
   sourceData: SourceModalData | null;
   usable: boolean;
+  /** **两个页签共用的当前模式**（详情层持有，见 `WorkflowLibraryDetailController`
+   *  的 `activeMode`）：画布卡片列与工坊封装按同一个模式渲染，用户在两处切换的
+   *  是同一件事。 */
+  activeMode: string | null;
+  /** 切换当前模式（只改查看 / 测试语境，不落库）。 */
+  onActiveModeChange: (mode: string) => void;
   /** 在编辑器中打开当前工作流。 */
   onEdit: () => void;
   /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
@@ -45,6 +51,8 @@ export function DetailBody({
   paramMap,
   sourceData,
   usable,
+  activeMode,
+  onActiveModeChange,
   onEdit,
   meta,
   onSeedModeChange,
@@ -95,7 +103,9 @@ export function DetailBody({
                 paramMap={paramMap}
                 usable={usable}
                 modes={meta?.modes}
-                defaultMode={meta?.defaultMode}
+                /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
+                 * 作为「未切过时的初值」与卡片上的默认标记。 */
+                defaultMode={activeMode ?? meta?.defaultMode}
                 onModeChange={(code) => {
                   meta?.onModeChange(code);
                 }}
@@ -114,12 +124,14 @@ export function DetailBody({
           displayName={workflow.modelTags?.[0] ?? workflow.name}
           workflowIO={workflowIO}
           paramMap={paramMap}
-          mode={
-            workflow.defaultMode ??
-            workflow.taskType ??
-            workflow.modes?.[0] ??
-            null
-          }
+          /* 模式取详情层的当前模式（与画布节点页签同一份），并通过
+           * `onModeChange` 让用户在本页直接换模式跑流程测试 —— 多模式工作流
+           * 以前在这里只能测默认模式（ISSUE #720 第 3 条）。 */
+          mode={activeMode}
+          /* 可切换的模式清单与画布卡片上的模式下拉**同一份**
+           * （`metaEditor.modes`：缺省回退 [taskType]，兼容旧行）。 */
+          modes={meta?.modes ?? []}
+          onModeChange={onActiveModeChange}
         />
       )}
 

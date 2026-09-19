@@ -32,6 +32,8 @@ import {
   deriveLibraryEdges,
   libraryConnectionAllowed,
   libraryConnectionRefusal,
+  libraryFitViewOptions,
+  LIBRARY_CONTENT_NODE_IDS,
 } from "./hooks/use-library-wire-flow";
 import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
 import {
@@ -403,5 +405,38 @@ describe("背景板尺寸：视口与内容取大", () => {
   it("内容包围盒把列宽与列间距都算进去（右列不能被漏掉）", () => {
     const content = libraryContentExtent(SIZING);
     expect(content.width).toBe(220 + 380 + 200 + 96 * 2);
+  });
+});
+
+/* 首帧 fitView 的包围盒 —— ISSUE #720 第 4 条「切到这个页签整块画布闪一下」。
+ *
+ * 闪的成因有两条，缺一条都还在闪：
+ *   ① `<ReactFlow fitView>` 的默认口径按**全部节点**缩放，背景板（视口与内容取大）
+ *      把缩放钉在「铺满背景板」上，三列缩成中间一小团 —— 与定向 fitView 的结果
+ *      是两个不同的缩放，首帧画错、下一帧跳正；
+ *   ② fitView 要等容器测量值，无法在首帧前算出 —— 所以画布在 fit 落地前不可见
+ *      （见 `WorkflowLibraryCanvas` 的 `fitted`）。
+ *
+ * 这里锁住 ①：定向 fitView 的节点集合恰好是三列内容，**不含背景板**。 */
+describe("首帧 fitView 只按三列内容缩放", () => {
+  it("节点集合 = 三列内容（背景板不在里面）", () => {
+    const options = libraryFitViewOptions();
+    expect(options.nodes.map((node) => node.id)).toEqual([
+      LIB_NODE_PARAMS,
+      LIB_NODE_HOST,
+      LIB_NODE_OUTPUTS,
+    ]);
+    expect(options.nodes.map((node) => node.id)).not.toContain(
+      LIB_NODE_BACKDROP,
+    );
+    expect(options.padding).toBeGreaterThan(0);
+  });
+
+  it("常量清单与选项同源（改一处不会让两处漂开）", () => {
+    expect([...LIBRARY_CONTENT_NODE_IDS]).toEqual([
+      LIB_NODE_PARAMS,
+      LIB_NODE_HOST,
+      LIB_NODE_OUTPUTS,
+    ]);
   });
 });
