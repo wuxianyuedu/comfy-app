@@ -35,6 +35,12 @@ vi.mock("~/lib/log/log-paths", async () => {
     DEV_LAUNCHER_LOG: path.join(tmp, "dev-launcher.log"),
     NEXTJS_LOG_DIR: nextjsLogDir,
     START_TAURI_LAUNCHER_LOG: path.join(tmp, "start-tauri-launcher.log"),
+    /* 来源表**整体替换**：它在真实模块初始化时就由上面的常量拼好了，只覆盖
+     * 常量不会生效（端点读的是表里的值）。漏掉这一条时，`source=app-runtime`
+     * 会去读检出里的真实 `log/services/app-runtime.log`，本用例得到空内容——
+     * 而「文件不存在时返回空内容」恰好也期望空，于是半数用例静默转红（ISSUE #725）。
+     * 与 `sessions/route.test.ts` 保持同一口径。 */
+    RUNTIME_LOG_FILES: { "app-runtime": logFile },
   };
 });
 
