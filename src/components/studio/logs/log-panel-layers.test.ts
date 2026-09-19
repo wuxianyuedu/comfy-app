@@ -14,9 +14,10 @@ import { describe, expect, it } from "vitest";
 
 import { Z, zClass } from "~/lib/shell/overlay-z";
 
+import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
+
 import {
   LOG_PANEL_OVERLAY_Z,
-  LOG_PANEL_OVERLAY_Z_CLASS,
   LOG_PANEL_POPUP_Z,
   LOG_PANEL_POPUP_Z_CLASS,
   isPopupLayerAboveOverlay,
@@ -42,11 +43,11 @@ describe("日志面板浮层层级契约", () => {
        同一件事（一条模态遮罩 + 挂在它里面的下拉）在库里只该有一个值。 */
     expect(LOG_PANEL_OVERLAY_Z).toBe(Z.modal);
     expect(LOG_PANEL_POPUP_Z).toBe(Z.popup);
-    expect(LOG_PANEL_OVERLAY_Z_CLASS).toBe(zClass("modal"));
     expect(LOG_PANEL_POPUP_Z_CLASS).toBe(zClass("popup"));
-    /* 面板遮罩用的 class 常量必须真的出现在面板上（不是只在测试里对得上） */
-    expect(LOG_PANEL_OVERLAY_Z_CLASS).toBe("z-modal");
     expect(LOG_PANEL_POPUP_Z_CLASS).toBe("z-popup");
+    /* 面板遮罩的 class 现在由 `ui/dialog` 的遮罩出口产出（面板改用弹窗基元），
+       它必须仍落在 `z-modal` 档 —— 否则「弹层严格高于遮罩」那条判定就成了空谈。 */
+    expect(dialogBackdropClass()).toContain(zClass("modal"));
   });
 
   it("解析器只认纯数字 z：不认任意值写法（规范 03 §3.2）与枚举档", () => {

@@ -12,20 +12,19 @@
  */
 
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import {
   REMOTE_MODEL_KINDS,
   REMOTE_MODEL_KIND_LABELS,
   type RemoteModelKind,
 } from "~/lib/llm/types";
-import { overlayClass } from "~/lib/full-screen-layer";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import type {
   ModelDialog,
   RemoteModelDialogs,
 } from "../hooks/use-remote-model-dialogs";
-import { zClass } from "~/lib/shell/overlay-z";
 
 export function RemoteModelDialog({
   c,
@@ -37,19 +36,15 @@ export function RemoteModelDialog({
   /** 非空由调用方保证：仅在弹窗打开时渲染。 */
   dialog: NonNullable<ModelDialog>;
 }) {
+  /* 关闭语义（Esc / 点遮罩）交给 `ui/dialog`：此前自绘遮罩 div + 手写
+     `onClick`，Esc 与焦点归还都没有。 */
   return (
-    <>
-      <div
-        className={overlayClass(
-          "modal",
-          `${zClass("modal")} bg-canvas-deep grid place-items-center p-4`,
-        )}
-        onClick={() => d.closeDialog()}
+    <Dialog open onOpenChange={(next) => !next && d.closeDialog()}>
+      <DialogContent
+        className="bg-transparent p-0 ring-0"
+        popupClassName="max-w-md"
       >
-        <div
-          className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl"
-          onClick={(event) => event.stopPropagation()}
-        >
+        <div className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="u-title">
               {dialog.mode === "edit" ? "编辑模型" : "添加模型"}
@@ -254,7 +249,7 @@ export function RemoteModelDialog({
             </Button>
           </div>
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

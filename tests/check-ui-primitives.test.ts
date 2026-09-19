@@ -94,6 +94,10 @@ const FILE_INPUT_VIEW =
   'export function F() {\n  const ref = useRef<HTMLInputElement>(null);\n  return <input ref={ref} type="file" className="hidden" />;\n}\n';
 const DASH_FALLBACK_VIEW =
   'export function E({ v }: { v?: string }) {\n  return <span>{v ?? "—"}</span>;\n}\n';
+/* 自绘模态浮层：**不含任何 `createPortal`** —— 这正是 P2 数不到的那一侧
+ *（P2 问「有没有用某 API」，P9 问「有没有自己拼一份浮层外壳」）。 */
+const MODAL_OVERLAY_VIEW =
+  'export function M({ onClose }: { onClose: () => void }) {\n  return (\n    <div\n      className={overlayClass("modal", `${zClass("modal")} bg-black/60`)\n      onClick={onClose}\n    >\n      <div className="rounded-2xl bg-panel" onClick={(e) => e.stopPropagation()} />\n    </div>\n  );\n}\n';
 
 describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   it("视图里手写 <button> 会被阻断（规范 P1）", () => {
@@ -173,6 +177,61 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run(["--update"]);
     expect(code).toBe(1);
     expect(output).toContain("硬闸");
+  });
+
+  it("视图里自绘模态浮层直接阻断（规范 P9）", () => {
+    /* P9 是「按形态」的判据：P2 只数 `createPortal(`，而这批落点**一处 portal
+       都没有**（把遮罩写成一个普通 div）—— 所以它们在 P2 全库清零后依然漏过。
+       锚点取 `overlayClass(`：本项目顶层浮层定位的唯一出口，视图里出现它 =
+       这个文件在自绘浮层容器。 */
+    seedBaseline();
+    write("src/components/workshop/Modal.tsx", MODAL_OVERLAY_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P9");
+    expect(output).toContain("src/components/workshop/Modal.tsx");
+  });
+
+  it("`overlayClass` 只出现在基元里时不被计（判据够不着工具生成的浮层容器）", () => {
+    /* `ui/fullscreen-dialog` 自己也调 `overlayClass`，但它在 `ui/` 豁免目录里；
+       视图调用处走的是**基元组件**（`<FullScreenLayer>` / `<Dialog>`），
+       不出现这次调用 —— 否则每个用基元的文件都会被误判成「自绘」。 */
+    seedBaseline();
+    write(
+      "src/components/workshop/UsesPrimitive.tsx",
+      'import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";\nexport const U = () => <FullScreenLayer zClass="z-modal">x</FullScreenLayer>;\n',
+    );
+    write("src/components/ui/local-overlay.tsx", MODAL_OVERLAY_VIEW);
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("注释里提到 overlayClass 不算实现（与 P1 同一份剥离）", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/Documented.tsx",
+      '/* 这里此前是 `overlayClass("modal", …)` 自绘的浮层，已改走 ui/dialog。 */\nexport const Doc = () => null;\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P9 未清零时 --update 拒绝更新基线", () => {
+    write("src/components/studio/ModalUpdate.tsx", MODAL_OVERLAY_VIEW);
+    const { code, output } = run(["--update"]);
+    expect(code).toBe(1);
+    expect(output).toContain("硬闸");
+  });
+
+  it("P9 的计数不进棘轮基线", () => {
+    seedBaseline();
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { rules: Record<string, string> };
+    expect(baseline.rules.P9).toBeUndefined();
   });
 
   it("P7/P8 的计数不进棘轮基线", () => {

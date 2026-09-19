@@ -6,28 +6,27 @@
 //   · 模式契约 —— 全局的「该模式对外有哪些统一输入 / 输出」（与接口无关）。
 // 工作流库是落点配置的主场，因此那边也放一份同样的弹窗，用同一个组件。
 
+import { Dialog, DialogContent } from "~/components/ui/dialog";
+
 import { ModeContractEditorView } from "./dialog/ModeContractEditorView";
 import { useModeContractEditor } from "./hooks/use-mode-contract-editor";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
 
 export function ModeContractDialog({ onClose }: { onClose: () => void }) {
   const controller = useModeContractEditor({ onClose });
 
+  /* 关闭语义（Esc / 点遮罩 / 关闭按钮）由 `ui/dialog` 承担 —— 此前这里
+     自绘遮罩 div + 手写 `onClick` 关闭：Esc 与焦点归还都没有，
+     且 `role`/`aria-modal` 也缺。 */
   return (
-    <div
-      className={overlayClass(
-        "modal",
-        `${zClass("modal")} bg-canvas-deep dark:bg-canvas-deep grid place-items-center p-4 backdrop-blur-sm`,
-      )}
-      onClick={onClose}
-    >
-      <div
-        className="border-border bg-surface flex max-h-[86vh] w-full max-w-3xl flex-col rounded-2xl border shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        className="max-w-3xl bg-transparent p-0 ring-0"
+        popupClassName="max-w-3xl"
       >
-        <ModeContractEditorView controller={controller} />
-      </div>
-    </div>
+        <div className="border-border bg-surface flex max-h-[86vh] w-full flex-col overflow-hidden rounded-2xl border shadow-2xl">
+          <ModeContractEditorView controller={controller} />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

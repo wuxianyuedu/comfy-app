@@ -34,8 +34,7 @@ import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { useCancelTask } from "./hooks/use-cancel-task";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { displayValue } from "~/lib/display-value";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
@@ -409,15 +408,13 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         )}
       </Button>
 
-      {open && (
-        <div
-          className={overlayClass(
-            "modal",
-            `${zClass("modal")} bg-canvas-deep flex items-center justify-center p-4 backdrop-blur-sm dark:bg-black/60`,
-          )}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
+      {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
+          手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
+      <Dialog open={open} onOpenChange={(next) => setOpen(next)}>
+        <DialogContent
+          showCloseButton={false}
+          className="bg-transparent p-0 ring-0"
+          popupClassName={wide ? "max-w-[96vw]" : "max-w-5xl"}
         >
           <div
             className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border-strong bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
@@ -648,8 +645,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               <span>保留最近 300 条</span>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 });

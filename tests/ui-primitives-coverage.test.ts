@@ -218,6 +218,48 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
+  /* ── 「模态浮层」的出口与消费点（规范 16 §16.2.3 的 P9 / §16.2.4.11）──
+   *
+   * `check-ui-primitives.cjs` 的 P9 是**硬闸**，判的是「视图里又自绘了一份模态
+   * 外壳」；这里补**另一侧**：`ui/dialog` 与 `ui/sheet` 必须真的被业务用着。
+   *
+   * 为什么两侧都要有：P9 数的是「另一种写法」，对「基元没人用」天然无感 ——
+   * 而 16 处自绘浮层能长期存在，正是因为**没人觉得 `ui/dialog` 是必选项**
+   * （它此前只有 4 个业务引用）。只加 P9 会挡住新增，但挡不住「下一个人的
+   * 新弹窗又照抄一份自绘」。 */
+  it("ui/dialog 是模态浮层的出口，且已被多处业务引用", () => {
+    const mod = readFileSync(
+      join(SRC, "components", "ui", "dialog.tsx"),
+      "utf8",
+    );
+    for (const name of ["Dialog", "DialogContent"]) {
+      expect(mod, `dialog 应导出 ${name}`).toMatch(
+        new RegExp(`function ${name}(?=[^A-Za-z])`),
+      );
+    }
+    /* 门槛留在现状之下（本批后是十处上下）：挡的是「掉回 0 / 掉回 1」。 */
+    expect(
+      consumerCount("dialog"),
+      "ui/dialog 的业务引用过少（模态浮层可能又回退成各写一份）",
+    ).toBeGreaterThanOrEqual(8);
+  });
+
+  it("ui/sheet 是抽屉形态的出口，且已被业务引用", () => {
+    const mod = readFileSync(
+      join(SRC, "components", "ui", "sheet.tsx"),
+      "utf8",
+    );
+    for (const name of ["Sheet", "SheetContent"]) {
+      expect(mod, `sheet 应导出 ${name}`).toMatch(
+        new RegExp(`function ${name}(?=[^A-Za-z])`),
+      );
+    }
+    expect(
+      consumerCount("sheet"),
+      "ui/sheet 的业务引用过少（抽屉可能又回退成各写一份）",
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it("ui/ 目录本身不空（判据没被绕过）", () => {
     const uiDir = join(SRC, "components", "ui");
     expect(statSync(uiDir).isDirectory()).toBe(true);
