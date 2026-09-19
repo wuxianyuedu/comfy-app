@@ -7,6 +7,7 @@ import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
 import { errorMessage } from "~/lib/error-message";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { FormField } from "~/components/ui/form-field";
 
 interface LLMContextValue {
   config: LLMConfigView | null;
@@ -243,10 +244,8 @@ function LLMSettingsModal({
           </p>
 
           {/* 提供方切换：本地 / 远程的启用从设置页挪到运行界面（与选模型同处） */}
-          <div className="mb-3">
-            <span className="text-ink/80 mb-1.5 block text-sm font-medium">
-              提供方
-            </span>
+          {/* 提供方是**二选一按钮组**而不是单个控件：标签行只作小标题。 */}
+          <FormField label="提供方" className="mb-3">
             <div className="grid grid-cols-2 gap-2">
               {(["local", "remote"] as const).map((p) => {
                 const active = provider === p;
@@ -266,7 +265,7 @@ function LLMSettingsModal({
                 );
               })}
             </div>
-          </div>
+          </FormField>
 
           {candidates.length > 0 ? (
             <div className="space-y-1.5">

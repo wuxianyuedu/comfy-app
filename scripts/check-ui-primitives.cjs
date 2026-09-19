@@ -224,6 +224,43 @@
  *      这个形态。单看 `metaKey` / `ctrlKey` 会漏掉那两处**完全没写 metaKey** 的
  *      —— 而它们才是这条账里更差的那一种（与 P13「更差的那种也要数」同源）。
  *
+ *   P21 视图里自写「滚动跟随到底」（**硬闸**）——
+ *      `~/components/ui/use-scroll-follow` 的 `useScrollFollow` 是唯一出口。
+ *      全库 **4 处**各写一份「内容一变就把 `scrollTop` 设成 `scrollHeight`」，
+ *      而**判据各不相同**：`RuntimeLogBox` 有「贴底 32px 内仍算跟随」并给出
+ *      「恢复自动滚动」按钮；`GlobalStepLogPanel` / `WorkflowRunLogModal` 只有
+ *      一个 `autoscroll` 布尔、**用户上滚会被按回底部**；`AgentOverlay` 连开关
+ *      都没有（永远强行贴底 —— 读不到上一句 AI 回复）。
+ *
+ *      ⚠️ 判据取 `scrollTop = …scrollHeight` 这个**赋值形态**（两侧都要，
+ *      所以「只读 `scrollHeight` 做量测」的虚拟化面板不会误伤）。单看
+ *      `scrollHeight` 会把 `log-virtual` 的贴底算术、textarea 自动增高算进来。
+ *
+ *   P22 视图里自写「打开外部目标」（**硬闸**）——
+ *      `~/lib/external-open` 的目标类型与结果归一 + `~/components/ui/use-external-action`
+ *      的执行态样板是唯一出口。全库 **9 处**各写一份「set busy → mutate →
+ *      `ok ? ok : err` → catch `errorMessage` → finally 清 busy」，而
+ *      **结果字段不统一**（`openExternal` / `comfyOpen` / `dbStudioOpen` 读 `ok`，
+ *      更新器读 `triggered`）、**空目标只有一处拦过**（其余把空串发给服务端，
+ *      拿到 zod 的英文报错当用户提示）。
+ *
+ *      ⚠️ 判据取 `window.location.href =` 这个**外部导航**形态（自定义协议
+ *      打开目录的唯一写法）。单看 `target="_blank"` / `window.open` 与
+ *      「调 tRPC 打开浏览器」不是同一件事（后者走 `useExternalAction` 的调用处，
+ *      形态上判不出来 —— 那由出口契约从另一侧钉）。
+ *
+ *   P23 视图里自写「标签 + 控件」的表单行（**硬闸**）——
+ *      `~/components/ui/form-field` 的 `FormField` 是唯一出口。
+ *      全库 **15 处**各写一份「`<label>` + 控件」，而三件事在**不同落点被漏掉**：
+ *      `htmlFor` / `id` 关联（15 处**没有一处**关联过 —— 点标签不聚焦输入框、
+ *      读屏器把标签读成孤立文本）、`aria-invalid` + `aria-describedby`
+ *      （只有 1/15 处写了 `aria-invalid`、**没有一处**关联错误文案）、
+ *      错误行（训练工作室只报一句整表文案，不指出是哪一行错）。
+ *
+ *      ⚠️ 判据取「视图里的裸 `<label`」这个形态。单看 `aria-invalid` 会漏掉
+ *      那 14 处**压根没有** ARIA 标记的 —— 而它们才是这条账里更差的那一半
+ *      （与 P13「更差的那种也要数」同源）。`ui/` 自身豁免（`label.tsx` 就是实现）。
+ *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
  * 有 19 份自写 spinner —— 与 §12.12「跨文件重复块」是同一族问题。
@@ -296,6 +333,17 @@ const EXEMPT_FILES = {
     {
       re: /^src\/components\/ui\//,
       reason: "ui/ 基元自身实现（`use-hotkey` 就要挂 keydown）。",
+    },
+  ],
+  P23: [
+    {
+      re: /^src\/components\/studio\/canvas\/WorkflowCanvasSettings\.tsx$/,
+      reason:
+        "画布设置里的 `LabeledSlider`：标签行是**标签与当前值左右并排**" +
+        "（左边「细线透明度」、右边实时读数），而 `FormField` 的标签行是" +
+        "「一行标签 + 下方控件」的块级形态。套上去会把那个并排的读数挪走，" +
+        "改掉渲染结果（§16.2.4.2 第 9 条）。控件是 `ui/range-slider`，" +
+        "已经不在本判据的照管范围内。",
     },
   ],
   P10: [
@@ -618,6 +666,57 @@ const RULES = {
       return (t2.match(/addEventListener\(\s*["']keydown["']/g) || []).length;
     },
   },
+  P21: {
+    label:
+      "视图内自写滚动跟随到底（应使用 ~/components/ui/use-scroll-follow 的 useScrollFollow）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`el.scrollTop = el.scrollHeight` 这个**赋值**（两侧都在）。
+       * 只数「写 scrollTop」会漏掉「用别的变量名接 contentHeight 再赋」的写法；
+       * 而只数 `scrollHeight` 会把 `log-virtual` 的贴底算术（只读不写）与
+       * textarea 自动增高（写 `style.height`）算进来。两边同时出现才计。 */
+      return (t2.match(/scrollTop\s*=[^;\n]*scrollHeight/g) || []).length;
+    },
+  },
+  P22: {
+    label:
+      "视图内自写外部目标导航（应使用 ~/lib/external-open + ~/components/ui/use-external-action）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`window.location.href = <…>` —— 把控制权交给外部程序
+       * （本项目唯一实例是 `comfyapp://` 打开目录）。
+       * ⚠️ **不数**对内的路由跳转：那在 App Router 里走 `router.push`
+       * （`next/navigation`），不是同一个形态；也不数与文件选择相关的
+       * `input.click()`（那是 P7 的账）。 */
+      return (t2.match(/window\.location\.href\s*=/g) || []).length;
+    },
+  },
+  P23: {
+    label:
+      "视图内自写「标签 + 控件」的表单行（应使用 ~/components/ui/form-field 的 FormField）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：**块级标签行** —— `<label className="block …">`（标签是独立
+       * 一行、下方是控件）或 `<label htmlFor=… >`（显式关联，也是同一件事）。
+       *
+       * ⚠️ **不数**「整块可点的开关行」（`<label className="flex cursor-pointer
+       * items-center justify-between">` 包住一个 `<Switch>`）：那是另一种形态
+       * —— 标签与控件是**并排**的，点哪都切换；`FormField` 的块级标签行套上去
+       * 会改掉那条排布（§16.2.4.2 第 9 条：验收标准是渲染结果不变）。
+       * 单看 `aria-invalid` 则会漏掉那 14 处**完全没有** ARIA 标记的 ——
+       * 它们才是这条账里更差的那一半（与 P13 同源）。 */
+      /* 两个条件同时成立才是「标签 + 控件」的块级表单行：
+       * ① 块级标签（`className` 里带 `block`）；
+       * ② 其后 400 字符内出现一个**输入类控件**标签
+       *    （`<input` / `<textarea` / `<select` / `<Input` / `<Textarea` /
+       *    `<SelectMenu` / `<NumberField` / `<RangeSlider`）。
+       * 只判 ① 会把「带只读徽标的区块标题」（`NodesTab` 的自定义节点目录）
+       * 与「整块可点的开关行」一并算上。 */
+      const re =
+        /<label[^>]*className="[^"]*\bblock\b[^"]*"[^>]*>[\s\S]{0,400}?<(?:input|textarea|select|Input|Textarea|SelectMenu|NumberField|RangeSlider)\b/g;
+      return (t2.match(re) || []).length;
+    },
+  },
   P7: {
     label:
       "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
@@ -654,6 +753,9 @@ const HARD_GATE_RULES = new Set([
   "P18",
   "P19",
   "P20",
+  "P21",
+  "P22",
+  "P23",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -771,7 +873,9 @@ function main() {
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、" +
           "不再裸写 <img> / <video>（改用 ~/components/ui/media-thumbnail 的 MediaThumbnail）、" +
           "不再手写媒体拖拽源（改用 ~/components/ui/media-drag-source 的 useMediaDragSource）、" +
-          "不再自己挂 keydown（改用 ~/components/ui/use-hotkey 的 useHotkey）。",
+          "不再自己挂 keydown（改用 ~/components/ui/use-hotkey 的 useHotkey）、" +
+          "不再手写滚动贴底（改用 ~/components/ui/use-scroll-follow 的 useScrollFollow）、" +
+          "不再自己拼表单行（改用 ~/components/ui/form-field 的 FormField）。",
       );
       process.exit(1);
     }
@@ -847,7 +951,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键 / P21 自写滚动跟随 / P22 自写外部导航 / P23 自写表单行，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {

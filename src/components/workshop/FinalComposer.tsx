@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { downloadJson } from "~/lib/browser-io";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { FormField } from "~/components/ui/form-field";
 import {
   MOTION_LABELS,
   TRANSITION_LABELS,
@@ -308,10 +309,10 @@ export function FinalComposer({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <label className="block">
-                  <span className="text-muted-foreground mb-0.5 block text-[10px]">
-                    时长(s)
-                  </span>
+                <FormField
+                  label="时长(s)"
+                  labelClassName="text-muted-foreground mb-0.5 text-[10px]"
+                >
                   <input
                     type="number"
                     min={1}
@@ -327,11 +328,11 @@ export function FinalComposer({
                     }
                     className="border-border bg-bg text-ink focus:border-primary w-14 rounded-md border px-2 py-1 text-xs outline-none"
                   />
-                </label>
-                <label className="block">
-                  <span className="text-muted-foreground mb-0.5 block text-[10px]">
-                    转场
-                  </span>
+                </FormField>
+                <FormField
+                  label="转场"
+                  labelClassName="text-muted-foreground mb-0.5 text-[10px]"
+                >
                   <SelectMenu
                     className="!bg-subtle !border-border text-xs"
                     value={shot.transition ?? "cut"}
@@ -342,11 +343,11 @@ export function FinalComposer({
                     labels={TRANSITION_LABELS}
                     placeholder="转场"
                   />
-                </label>
-                <label className="block">
-                  <span className="text-muted-foreground mb-0.5 block text-[10px]">
-                    运动
-                  </span>
+                </FormField>
+                <FormField
+                  label="运动"
+                  labelClassName="text-muted-foreground mb-0.5 text-[10px]"
+                >
                   <SelectMenu
                     className="!bg-subtle !border-border text-xs"
                     value={shot.motion ?? "medium"}
@@ -357,7 +358,7 @@ export function FinalComposer({
                     labels={MOTION_LABELS}
                     placeholder="运动"
                   />
-                </label>
+                </FormField>
               </div>
             </div>
           );

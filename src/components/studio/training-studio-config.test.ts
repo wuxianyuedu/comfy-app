@@ -49,26 +49,26 @@ const baseForm: Pick<
 };
 
 describe("validateTrainForm", () => {
-  it("完整表单通过", () => {
-    expect(validateTrainForm(baseForm)).toBeNull();
+  it("完整表单通过（空对象 = 无字段错误）", () => {
+    expect(validateTrainForm(baseForm)).toEqual({});
   });
 
-  it("校验顺序 = 名称 → 底模 → 触发词 → 数据集（原组件的提示顺序）", () => {
-    expect(validateTrainForm({ ...baseForm, name: "   " })).toBe(
-      "请填写任务名称",
-    );
-    expect(validateTrainForm({ ...baseForm, baseModel: "" })).toBe(
-      "请选择底模（Checkpoint）",
-    );
-    expect(validateTrainForm({ ...baseForm, triggerWord: "" })).toBe(
-      "请填写触发词",
-    );
-    expect(validateTrainForm({ ...baseForm, datasetImages: [] })).toBe(
-      "请至少上传一张数据集图片",
-    );
+  it("逐字段给判据（不再是「只报第一条」的一句话）", () => {
+    expect(validateTrainForm({ ...baseForm, name: "   " })).toEqual({
+      name: "请填写任务名称",
+    });
+    expect(validateTrainForm({ ...baseForm, baseModel: "" })).toEqual({
+      baseModel: "请选择底模（Checkpoint）",
+    });
+    expect(validateTrainForm({ ...baseForm, triggerWord: "" })).toEqual({
+      triggerWord: "请填写触发词",
+    });
+    expect(validateTrainForm({ ...baseForm, datasetImages: [] })).toEqual({
+      dataset: "请至少上传一张数据集图片",
+    });
   });
 
-  it("多项同时缺失时只报第一条（逐条修，不刷屏）", () => {
+  it("多项同时缺失时全部报到（每个错字段各自标红，而不是只提示第一条）", () => {
     expect(
       validateTrainForm({
         name: "",
@@ -76,7 +76,12 @@ describe("validateTrainForm", () => {
         triggerWord: "",
         datasetImages: [],
       }),
-    ).toBe("请填写任务名称");
+    ).toEqual({
+      name: "请填写任务名称",
+      baseModel: "请选择底模（Checkpoint）",
+      triggerWord: "请填写触发词",
+      dataset: "请至少上传一张数据集图片",
+    });
   });
 });
 

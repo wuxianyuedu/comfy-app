@@ -7,6 +7,7 @@ import { useFilePicker } from "~/components/ui/file-picker";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { NumberField } from "~/components/ui/number-field";
 import { RangeSlider } from "~/components/ui/range-slider";
+import { FormField } from "~/components/ui/form-field";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -218,6 +219,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               </p>
               <datasetPicker.Input />
             </div>
+
+            {/* 数据集必填的错误行：挂在上传区下方（这一块没有单一控件，
+                所以不用 `FormField` 的自动关联，只复用它的错误行排版）。 */}
+            {c.fieldErrors.dataset && (
+              <p className="text-danger-strong text-[11px]">
+                {c.fieldErrors.dataset}
+              </p>
+            )}
 
             {/* 逐图 caption 编辑 */}
             {c.dataset.length > 0 && (
@@ -581,18 +590,29 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           </div>
 
           <div className="flex-1 space-y-3.5 overflow-y-auto p-4">
-            <div>
-              <label className={labelClass}>任务名称</label>
-              <input
-                value={c.form.name}
-                onChange={(event) => c.setName(event.target.value)}
-                placeholder="如：我的水墨风格"
-                className={fieldClass}
-              />
-            </div>
+            <FormField
+              label="任务名称"
+              id="train-name"
+              error={c.fieldErrors.name}
+              labelClassName={labelClass}
+            >
+              {(a11y) => (
+                <input
+                  {...a11y}
+                  value={c.form.name}
+                  onChange={(event) => c.setName(event.target.value)}
+                  placeholder="如：我的水墨风格"
+                  className={fieldClass}
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label className={labelClass}>底模（Checkpoint）</label>
+            <FormField
+              label="底模（Checkpoint）"
+              id="train-base-model"
+              error={c.fieldErrors.baseModel}
+              labelClassName={labelClass}
+            >
               <SelectMenu
                 fullWidth
                 className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
@@ -607,31 +627,47 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 )}
                 placeholder="请选择…"
               />
-            </div>
+            </FormField>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className={labelClass}>触发词</label>
-                <input
-                  value={c.form.triggerWord}
-                  onChange={(event) => c.setTriggerWord(event.target.value)}
-                  placeholder="如：somecjkstyle"
-                  className={fieldClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>类别词（可选）</label>
-                <input
-                  value={c.form.classWord ?? ""}
-                  onChange={(event) => c.setClassWord(event.target.value)}
-                  placeholder="person / style"
-                  className={fieldClass}
-                />
-              </div>
+              <FormField
+                label="触发词"
+                id="train-trigger-word"
+                error={c.fieldErrors.triggerWord}
+                labelClassName={labelClass}
+              >
+                {(a11y) => (
+                  <input
+                    {...a11y}
+                    value={c.form.triggerWord}
+                    onChange={(event) => c.setTriggerWord(event.target.value)}
+                    placeholder="如：somecjkstyle"
+                    className={fieldClass}
+                  />
+                )}
+              </FormField>
+              <FormField
+                label="类别词（可选）"
+                id="train-class-word"
+                labelClassName={labelClass}
+              >
+                {(a11y) => (
+                  <input
+                    {...a11y}
+                    value={c.form.classWord ?? ""}
+                    onChange={(event) => c.setClassWord(event.target.value)}
+                    placeholder="person / style"
+                    className={fieldClass}
+                  />
+                )}
+              </FormField>
             </div>
 
-            <div>
-              <label className={labelClass}>分辨率</label>
+            <FormField
+              label="分辨率"
+              id="train-resolution"
+              labelClassName={labelClass}
+            >
               <SelectMenu
                 fullWidth
                 className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
@@ -640,7 +676,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 options={RESOLUTIONS.map(String)}
                 placeholder="选择分辨率"
               />
-            </div>
+            </FormField>
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
@@ -718,7 +754,9 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </div>
 
             <div>
-              <label className={labelClass}>学习率</label>
+              {/* 学习率这一行没有单一控件（数字输入 + 快捷档位并排），
+                  标签行只作小标题。 */}
+              <FormField label="学习率" labelClassName={labelClass} />
               <NumberField
                 value={c.form.learningRate}
                 onChange={c.setLearningRate}
@@ -730,8 +768,11 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className={labelClass}>优化器</label>
+              <FormField
+                label="优化器"
+                id="train-optimizer"
+                labelClassName={labelClass}
+              >
                 <SelectMenu
                   fullWidth
                   className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
@@ -740,9 +781,12 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   options={OPTIMIZERS}
                   placeholder="选择优化器"
                 />
-              </div>
-              <div>
-                <label className={labelClass}>调度器</label>
+              </FormField>
+              <FormField
+                label="调度器"
+                id="train-scheduler"
+                labelClassName={labelClass}
+              >
                 <SelectMenu
                   fullWidth
                   className="!bg-subtle !border-border text-ink-field h-9 text-[13px]"
@@ -751,11 +795,14 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   options={SCHEDULERS}
                   placeholder="选择调度器"
                 />
-              </div>
+              </FormField>
             </div>
 
-            <div>
-              <label className={labelClass}>随机种子</label>
+            <FormField
+              label="随机种子"
+              id="train-seed"
+              labelClassName={labelClass}
+            >
               <NumberField
                 value={c.form.seed}
                 onChange={c.setSeed}
@@ -763,7 +810,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 max={999999}
                 step={1}
               />
-            </div>
+            </FormField>
 
             {c.error && <p className="text-danger-strong text-xs">{c.error}</p>}
 

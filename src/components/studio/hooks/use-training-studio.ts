@@ -25,6 +25,7 @@ import {
   pickActiveJob,
   toDatasetPayload,
   validateTrainForm,
+  type TrainFormErrors,
 } from "../training-studio-config";
 
 export interface TrainingStudioController {
@@ -51,8 +52,10 @@ export interface TrainingStudioController {
   dataset: DatasetItem[];
   setDataset: React.Dispatch<React.SetStateAction<DatasetItem[]>>;
   uploading: boolean;
-  /** 上传失败的错误文案；null 表示无错误。 */
+  /** 上传 / 网络等**非字段**错误文案；null 表示无错误。 */
   error: string | null;
+  /** 字段级校验错误（逐行渲染在对应控件下方）。 */
+  fieldErrors: TrainFormErrors;
   /* 状态位 */
   submitting: boolean;
   /** 当前监控的任务（进行中 > 排队中 > 首条）。 */
@@ -91,6 +94,9 @@ export function useTrainingStudio(): TrainingStudioController {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* 字段级校验错误（`FormField` 逐行渲染）。与 `error` 分工明确：
+   * 前者是**这个字段填错了**，后者是上传 / 网络的非字段错误（规范 16 §16.2.4.26）。 */
+  const [fieldErrors, setFieldErrors] = useState<TrainFormErrors>({});
 
   /* ── 底模列表 ── */
   const loadModels = useCallback(() => {
@@ -170,10 +176,12 @@ export function useTrainingStudio(): TrainingStudioController {
       ...payload,
       triggerWord: payload.triggerWord,
     });
-    if (invalid) {
-      setError(invalid);
+    if (Object.keys(invalid).length > 0) {
+      /* 逐字段标红，而不是在提交按钮上方报一句 —— 用户据此知道该改哪一行。 */
+      setFieldErrors(invalid);
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
@@ -296,6 +304,7 @@ export function useTrainingStudio(): TrainingStudioController {
     setDataset,
     uploading,
     error,
+    fieldErrors,
     submitting,
     activeJob,
     upload,
