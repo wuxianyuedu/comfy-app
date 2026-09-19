@@ -288,6 +288,51 @@ describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首�
   });
 });
 
+describe("配置端口只探一次 — 失败路径不重复付超时", () => {
+  it("步骤 1.5 探过配置端口且无人应答后，定位端口不再重探", async () => {
+    // 这一条拦的是「同一件事问两遍」的回归：`snapshotOnce` 的步骤 1.5 已经探过
+    // 配置端口，`resolvePortFast` 若再探一次，失败路径每次都要等满 1.5s 超时
+    // ——「没在跑」这个主场景下就是白加一整条链（ISSUE #346 的耗时代价）。
+    vi.mocked(getSettingsSync).mockReturnValue({
+      comfyuiPath: "C:\Comfy",
+      comfyuiPort: 8188,
+    } as never);
+    // 进程表命中，但配置端口没人应答（实例在别处 / 还没绑端口）。
+    vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
+      pid: 4242,
+      failed: false,
+    });
+    vi.mocked(probeComfyAtPort).mockResolvedValue(null);
+    vi.mocked(findPidListeningPort).mockResolvedValue(8190);
+
+    const snap = await getComfyRuntimeSnapshot({ force: true });
+    expect(snap.port).toBe(8190);
+    // 整条快照里配置端口只被探过一次（步骤 1.5 那次）。
+    expect(vi.mocked(probeComfyAtPort).mock.calls.length).toBe(1);
+  });
+
+  it("bound 子进程路径没有预探结论，仍需探一次配置端口抢跑", async () => {
+    // bound 分支在步骤 1.5 之前就返回了，没有现成结论 —— 抢跑必须照常做，
+    // 否则「本应用自己拉起的实例」就会退化成都等权威查询。
+    setBoundChildPidReader(() => 4242);
+    try {
+      vi.mocked(getSettingsSync).mockReturnValue({
+        comfyuiPath: "C:\Comfy",
+        comfyuiPort: 8188,
+      } as never);
+      vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
+      vi.mocked(findPidListeningPort).mockResolvedValue(8188);
+
+      const snap = await getComfyRuntimeSnapshot({ force: true });
+      expect(snap.source).toBe("bound");
+      expect(snap.port).toBe(8188);
+      expect(vi.mocked(probeComfyAtPort).mock.calls.length).toBe(1);
+    } finally {
+      setBoundChildPidReader(() => null);
+    }
+  });
+});
+
 describe("快照缓存 — 便宜但不失时效", () => {
   it("TTL 内复用同一结果，不在途重复查进程表", async () => {
     // 已绑定端口的「在跑」结论才允许缓存：它不会在下一秒变成别的结论。

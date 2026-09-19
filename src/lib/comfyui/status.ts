@@ -211,7 +211,7 @@ export function extractSetupCmds(raw: string): string | null {
 /** 设置里的 ComfyUI 监听端口（0 = 未配置 → 平台默认 8188）。
  *
  * 快照的「配置端口抢跑」要用它：绝大多数实例就监听在这里，探一下就能跳过
- * 一次 `Get-NetTCPConnection`（见 {@link resolvePortFast}）。 */
+ * 一次「定位 PID 监听端口」的系统查询（见 {@link resolvePortFast}）。 */
 function configuredPortOf(settings: { comfyuiPort?: number }): number {
   const p = settings.comfyuiPort ?? 0;
   return p > 0 ? p : COMFYUI_DEFAULT_PORT;
@@ -219,10 +219,9 @@ function configuredPortOf(settings: { comfyuiPort?: number }): number {
 
 /** 定位某个 PID 实际监听的端口，**并用「配置端口是否应答」抢跑**。
  *
- * 为什么需要抢跑：`findPidListeningPort` 是一次独立的 PowerShell 调用
- * （`Get-NetTCPConnection`，本机 ~2.5s），而它前面那次「找 main.py」的进程表
- * 查询也是同量级——两次串起来就是 5s 左右，用户看到的就是「ComfyUI 明明已经
- * 在跑，设置页还要等一会才显示运行中」。
+ * 为什么需要抢跑：定位 PID 的监听端口在 Windows 上要另起一次系统查询，而它
+ * 前面那次「找 main.py」的进程表查询也是秒级——两次串起来就是「ComfyUI 明明
+ * 已经在跑，设置页还要等一会才显示运行中」。
  *
  * 但绝大多数实例就监听在配置端口上。于是这里同时做两件事：
  *   ① `findPidListeningPort(pid)` —— 权威答案（能认出端口偏移的实例）；
@@ -231,17 +230,31 @@ function configuredPortOf(settings: { comfyuiPort?: number }): number {
  * 端口」。①随后返回时若给出不同的端口，说明实例确实偏移过端口，那时①已经
  * 赢在「更权威」上是不成立的——所以我们只在①尚未出结果时才采信②，
  * 避免用「猜的端口」覆盖「查出来的端口」。
+ *
+ * `alreadyProbedPort` 是调用方已经探过配置端口的结果（`null` = 刚探过、没人
+ * 应答）。否则同一件事会被连探两次，而每次探测的失败路径都要等满 1.5s 超时
+ * ——「没在跑」的主场景下这就是白加的一整条链（见 `snapshotOnce` 步骤 1.5）。
  */
 async function resolvePortFast(
   pid: number,
   configuredPort: number,
+  alreadyProbedPort: boolean | null = null,
 ): Promise<number | null> {
   const authoritative = findPidListeningPort(pid);
   if (!configuredPort) return authoritative;
 
-  const guessed = probeComfyAtPort(configuredPort).then((base) =>
-    base ? configuredPort : null,
-  );
+  if (alreadyProbedPort === false) {
+    /* 配置端口刚被探过且没人应答 → 抢跑这一路已经出局，直接等权威查询。
+     * 不重探的另一个理由同「不做无谓 IO」：探失败要等满超时。 */
+    return authoritative;
+  }
+
+  const guessed =
+    alreadyProbedPort === true
+      ? Promise.resolve(configuredPort)
+      : probeComfyAtPort(configuredPort).then((base) =>
+          base ? configuredPort : null,
+        );
   const winner = await Promise.race([
     authoritative.then((port) => ({ port })),
     guessed.then((port) => ({ port })),
@@ -284,7 +297,8 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   // 端口上**没有人应答**才继续往下走：这才是「没在跑」的主场景（进程表查询与端口
   // 扫描此时仍必须全跑一遍，否则外部实例的端口偏移会被漏掉）。
   const configuredPort = configuredPortOf(settings);
-  if (await probeComfyAtPort(configuredPort)) {
+  const configuredPortUp = (await probeComfyAtPort(configuredPort)) !== null;
+  if (configuredPortUp) {
     return {
       running: true,
       pid: null,
@@ -310,7 +324,11 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
-        port: await resolvePortFast(lookup.pid, configuredPortOf(settings)),
+        port: await resolvePortFast(
+          lookup.pid,
+          configuredPort,
+          configuredPortUp,
+        ),
         via: "配置路径的实例",
         unverified: false,
         didQueryProcTable: true,
@@ -366,7 +384,11 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
-        port: await resolvePortFast(lookup.pid, configuredPortOf(settings)),
+        port: await resolvePortFast(
+          lookup.pid,
+          configuredPort,
+          configuredPortUp,
+        ),
         via: candidates[i]!.via,
         unverified: false,
         didQueryProcTable: true,
