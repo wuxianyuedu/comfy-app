@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS,
   FULL_SCREEN_LAYER_CLASS,
+  STATUS_BAR_CLEARANCE_CLASS,
   TITLE_BAR_HEIGHT_CLASS,
   TITLE_BAR_HEIGHT_REM,
   TITLE_BAR_HEIGHT_VAR,
@@ -26,6 +28,22 @@ describe("全屏视图层定位（ISSUE #310 回归）", () => {
     expect(FULL_SCREEN_LAYER_CLASS).toContain("bottom-0");
     expect(FULL_SCREEN_LAYER_CLASS).toContain("right-0");
     expect(FULL_SCREEN_LAYER_CLASS).toContain("left-0");
+  });
+
+  it("让出底部状态栏的全屏层：顶部让标题行、底边停在状态栏上沿", () => {
+    // 状态栏（BrowserStatusBar）是 fixed bottom-0 h-6 的 z-toast 悬浮层：
+    // 铺到 bottom-0 的浮层最后 24px 会被它压住（日志全屏视图实测
+    // 「最后几行看不到」），所以底边是 bottom-6 而不是 bottom-0。
+    expect(FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS).toContain("top-title-bar");
+    expect(FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS).toContain(
+      STATUS_BAR_CLEARANCE_CLASS,
+    );
+    expect(FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS).toContain("bottom-6");
+    expect(FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS).not.toContain("bottom-0");
+    expect(FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS).not.toContain("inset-0");
+    // 四边显式锚定：依赖内容撑高会让「铺满」退化成「随内容长」。
+    expect(FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS).toContain("right-0");
+    expect(FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS).toContain("left-0");
   });
 
   it("标题行高度与 CSS 变量同源（改高度时两处一起改）", () => {
