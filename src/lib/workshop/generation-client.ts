@@ -151,6 +151,12 @@ export interface LibraryWorkflowBuildResult {
 export async function buildLibraryWorkflowInput(
   workflowId: string,
   values: WorkshopExposedValues,
+  /** 指定模式（缺省 = 工作流的默认模式）。
+   *
+   *  多模式工作流（文生图 / 图生图…）在**封装页签的流程测试**里要能逐个模式跑：
+   *  两个模式的契约口与落点通常不同，只能测默认模式等于只能验一条链路。工坊
+   *  正跑生成时仍走缺省口径（用工作流的默认模式）。 */
+  requestedMode?: string | null,
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
   const io = detail?.workflowIO ?? null;
@@ -159,7 +165,10 @@ export async function buildLibraryWorkflowInput(
         (mode): mode is string => typeof mode === "string",
       )
     : [];
-  const mode = detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null;
+  const mode =
+    requestedMode && requestedMode.trim() !== ""
+      ? requestedMode
+      : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null);
   const { workflowInputs, unmatched } = buildEncapsulatedInputs({
     io,
     paramMap: detail?.paramMap ?? null,

@@ -22,6 +22,8 @@ export function WorkflowLibraryDetailView({
     metaEditor,
     activeTab,
     setActiveTab,
+    activeMode,
+    setActiveMode,
     sourceOpen,
     openSource,
     closeSource,
@@ -104,10 +106,16 @@ export function WorkflowLibraryDetailView({
               sourceData={sourceData}
               usable={usable}
               onEdit={actions.edit}
+              activeMode={activeMode}
+              onActiveModeChange={setActiveMode}
               meta={{
                 modes: metaEditor.modes,
                 defaultMode: metaEditor.defaultMode,
+                /* 画布卡片上的模式下拉**同时**改当前模式与默认模式（既有口径：
+                 *  在这一排选模式 = 选默认模式，落库）。封装页签的切换器只改当前
+                 *  模式（见其自身说明）。 */
                 onModeChange: (code) => {
+                  setActiveMode(code);
                   void metaEditor.patchModes(metaEditor.modes, code);
                 },
               }}

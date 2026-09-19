@@ -43,8 +43,11 @@ export interface EncapsulationEntryStatus {
   control: EncapsulationControl;
   /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
   targetIoKey: string | null;
-  /** 落点是否由作者画过线（库里所有落点都来自作者画的线）。 */
-  manual: boolean;
+  /** 该口在**这一模式**下是否必备（随模式契约配置，见 `ModeContract.required`）。
+   *
+   *  必备与否只影响「能不能跑」的判据与界面上的一句提示：非必备口没有落点时工坊
+   *  照跑（缺的值由工作流图内的默认值兜底），不是「配置没做完」。 */
+  required: boolean;
 }
 
 export interface EncapsulationStatus {
@@ -152,6 +155,19 @@ export function deriveEncapsulationStatus(args: {
     }
     return null;
   };
+  /* 必备口：调用方给了就用它的（来自模式契约），没给回落内置默认。只保留
+   *  契约里真的存在、且**有落点判定意义**的口 —— 契约里没有的口不该出现在
+   *  「缺了它不能跑」的清单里（那份提示会指着一个用户看不见的口）。 */
+  const canonicalIds = new Set(canonical.map((slot) => slot.id));
+  const required = (
+    requiredInputs ??
+    builtInRequiredInputs(
+      canonical
+        .map((slot) => slot.id)
+        .filter((id): id is ModeContractInputId => isModeContractInputId(id)),
+    )
+  ).filter((id) => canonicalIds.has(id));
+  const requiredSet = new Set<string>(required);
   const mapped: EncapsulationEntryStatus[] = canonical.map((slot) => {
     const manual = manualTargetFor(mapping, slot.id, mode ?? null);
     const isSizeSlot = slot.id === "size";
@@ -165,34 +181,24 @@ export function deriveEncapsulationStatus(args: {
       label: displayLabel(slot.id),
       control: slot.control,
       targetIoKey: target,
-      manual: isSizeSlot
-        ? target !== null
-        : manual !== undefined && manual !== null,
+      required: requiredSet.has(slot.id),
     };
   });
   const ordered = Array.from(new Map(mapped.map((e) => [e.id, e])).values());
   const resolvedCount = ordered.filter((e) => e.targetIoKey !== null).length;
-  /* 必备口：调用方给了就用它的（来自模式契约），没给回落内置默认。只保留
-   * 契约里真的存在、且**有落点判定意义**的口 —— 契约里没有的口不该出现在
-   *  「缺了它不能跑」的清单里（那份提示会指着一个用户看不见的口）。 */
-  const contractIds = new Set(ordered.map((e) => e.id));
-  const required = (
-    requiredInputs ??
-    builtInRequiredInputs(
-      ordered
-        .map((e) => e.id)
-        .filter((id): id is ModeContractInputId => isModeContractInputId(id)),
-    )
-  ).filter((id) => contractIds.has(id));
   const missingRequired = ordered
     .filter((e) => required.includes(e.id) && e.targetIoKey === null)
     .map((e) => e.label);
-  /* 「尺寸」另有一条判据：定不出宽高就不许跑（见 `isSizeDetermined`）。缺的这一
-   * 项要出现在「缺了它不能跑」的清单里，否则用户看到的是一个「看起来配好了」
-   * 的尺寸口，跑起来却拿不到宽高。 */
+  /* 「尺寸」另有一条判据：**它是必备口时**，定不出宽高就不许跑（见
+   *  `isSizeDetermined`）—— 缺的这一项要出现在「缺了它不能跑」的清单里，否则
+   *  用户看到的是一个「看起来配好了」的尺寸口，跑起来却拿不到宽高。
+   *
+   *  **尺寸不是必备口时不进这份清单**：非必备口没有落点照样能跑（缺的值由工作流
+   *  图内的默认值兜底），把它算成「不能跑」会让「非必填参数不必连到工作流」这条
+   *  口径失效（用户口径，ISSUE #720 第 2 条）。 */
   const sizeSlot = ordered.find((e) => e.id === "size");
   if (
-    sizeSlot &&
+    sizeSlot?.required &&
     !sizeDetermined &&
     !missingRequired.includes(sizeSlot.label)
   ) {

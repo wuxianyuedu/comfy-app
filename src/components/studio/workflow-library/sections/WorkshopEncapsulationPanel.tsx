@@ -3,15 +3,22 @@
 // ── 工作流库详情「工坊封装」页签（规范 §17.2 第③层：只渲染 + 上抛）────────
 // 替代旧的「可配置参数」草稿表单：工坊不把工作流的全部参数摊给用户，这里
 // 展示的是**工坊会用哪些控件驱动这条工作流**（提示词 / 尺寸【宽高比+百万像素】/
-// 负向提示词 / 参考图…），每个口落到哪个 IO 端口、哪些还没落（未配置显式可见）。
-// 「流程测试」按封装口径真实跑一次生成（提示词 + 尺寸 → ComfyUI），验证它在
-// 工坊里的可用性 —— 与定妆照 / 镜头生图同一条 buildLibraryWorkflowInput 链路。
+// 负向提示词 / 参考图…），每个口落到哪个 IO 端口、哪些还没落（未落点显式可见）。
+//
+// 三件事必须显式：
+//   · **必填 / 可选**（随模式契约，`ModeContract.required`）——「能不能跑」只认
+//     必填口；可选口不必连到工作流，缺的值由工作流图内的默认值兜底；
+//   · **模式可切换**：多模式工作流（文生图 / 图生图…）在这里逐个换模式跑测试，
+//     只测默认模式验不全另一条链路。切模式只改「看/测哪个模式」，不动默认模式；
+//   · 「流程测试」按封装口径真实跑一次生成（提示词 + 尺寸 → ComfyUI），验证它在
+//     工坊里的可用性 —— 与定妆照 / 镜头生图同一条 buildLibraryWorkflowInput 链路。
 
 import React from "react";
 
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
+import { SelectMenu } from "~/components/ui/select-menu";
 import {
   deriveEncapsulationStatus,
   type EncapsulationEntryStatus,
@@ -22,6 +29,7 @@ import {
   requiredInputsFor,
 } from "~/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
+import { modeLabel } from "../workflow-library-config";
 import {
   DEFAULT_SHOT_SIZE,
   type ShotSizeState,
@@ -36,17 +44,43 @@ interface WorkshopEncapsulationPanelProps {
   displayName: string;
   workflowIO: WorkflowIOMap | null;
   paramMap: Record<string, unknown> | null;
+  /** 当前模式（详情层持有，与「画布节点」页签同一份）。 */
   mode: string | null | undefined;
+  /** 该工作流可跑的模式码（多于一个时渲染模式下拉）。 */
+  modes?: readonly string[];
+  /** 切换当前模式（**只改查看 / 测试语境，不落库**）：多模式工作流要能逐个
+   *  模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
+   *  模式测不出另一条能不能用。 */
+  onModeChange?: (mode: string) => void;
 }
 
-/** 契约口 → 徽标配色（与执行日志的 kind 徽标同一观感）。 */
-function entryBadge(entry: EncapsulationEntryStatus): string {
-  if (entry.targetIoKey === null) {
-    return "bg-amber-100 text-amber-800 dark:text-amber-300";
+/** 契约口 → 状态徽标（文案 + 配色）。
+ *
+ *  三档，判据只有「有没有落点」与「是不是必备口」两个事实：
+ *   · 已落到端口 —— 绿；
+ *   · 未落点 + **必备** —— 琥珀（缺了它这条工作流跑不了，必须显式可见）；
+ *   · 未落点 + **非必备** —— 中性灰（**不是问题状态**：非必填口不必连到工作流，
+ *     缺的值由工作流图内的默认值兜底；染成琥珀会让用户以为配置没做完）。 */
+function entryStateBadge(entry: EncapsulationEntryStatus): {
+  label: string;
+  className: string;
+} {
+  if (entry.targetIoKey !== null) {
+    return {
+      label: "已落点",
+      className: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
+    };
   }
-  return entry.id === "negative"
-    ? "bg-indigo-100 text-indigo-800 dark:text-indigo-300"
-    : "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
+  if (entry.required) {
+    return {
+      label: "必备 · 未落点",
+      className: "bg-amber-100 text-amber-800 dark:text-amber-300",
+    };
+  }
+  return {
+    label: "可选 · 未落点",
+    className: "bg-subtle text-muted-foreground border-border-strong border",
+  };
 }
 
 export function WorkshopEncapsulationPanel({
@@ -55,6 +89,8 @@ export function WorkshopEncapsulationPanel({
   workflowIO,
   paramMap,
   mode,
+  modes,
+  onModeChange,
 }: WorkshopEncapsulationPanelProps) {
   /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
    * 封装视图与远端适配器、实际生成链路同说一套话。清单本身经
@@ -139,16 +175,36 @@ export function WorkshopEncapsulationPanel({
             </span>
           </span>
         )}
+        {/* 多模式工作流：在这里换模式逐个测（文生图 / 图生图的封装口不同，
+         *  只看默认模式测不出另一条能不能用）。只改当前模式，不改默认模式。 */}
+        {modes && modes.length > 1 && onModeChange && (
+          <SelectMenu
+            value={mode ?? modes[0]!}
+            onChange={onModeChange}
+            options={[...modes]}
+            labels={Object.fromEntries(
+              modes.map((code) => [code, modeLabel(code)]),
+            )}
+            popoverMinWidth={160}
+            autoFitFromOptions={false}
+            className="!border-border-strong h-auto !bg-transparent px-2 py-0.5 text-[11px]"
+          />
+        )}
         <span className="text-muted-foreground text-[11px]">
           {status.resolvedCount}/{status.entries.length} 个对外口已落到端口
         </span>
       </div>
       {!status.ready && (
         <p className="rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
-          {status.missingRequired.join("、") || "必备口"}还没落到任何端口 ——
-          工坊（角色卡定妆照 / 镜头生图）无法驱动这条
-          工作流。到「画布节点」页签把
-          对应卡片的圆点拖到工作流里承载它的那一行参数上，再回这里跑流程测试。
+          必填口 {status.missingRequired.join("、")}
+          还没落到任何端口 —— 工坊（角色卡定妆照 / 镜头生图）无法驱动这条
+          工作流。到「画布节点」页签把对应卡片的圆点拖到工作流里承载它的那一行
+          参数上，再回这里跑流程测试。
+        </p>
+      )}
+      {status.entries.some((e) => !e.required) && (
+        <p className="text-muted-foreground/80 text-[10px]">
+          标注「可选」的口不必连到工作流：没有落点就用工作流图内的默认值执行。
         </p>
       )}
 
@@ -160,10 +216,21 @@ export function WorkshopEncapsulationPanel({
             className="border-border/60 bg-surface rounded-lg border px-3 py-2"
           >
             <div className="flex items-center gap-2">
+              {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），不是
+                  写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
               <span
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${entryBadge(entry)}`}
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  entry.required
+                    ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                    : "bg-subtle text-muted-foreground/80 border-border-strong border"
+                }`}
               >
-                {entry.targetIoKey === null ? "未配置" : "已配置"}
+                {entry.required ? "必填" : "可选"}
+              </span>
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${entryStateBadge(entry).className}`}
+              >
+                {entryStateBadge(entry).label}
               </span>
               <span className="text-ink text-[12px] font-medium">
                 {entry.label}
@@ -176,11 +243,6 @@ export function WorkshopEncapsulationPanel({
               <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]">
                 {displayValue(entry.targetIoKey)}
               </span>
-              {entry.manual && (
-                <span className="text-muted-foreground text-[10px]">
-                  手动落点
-                </span>
-              )}
             </div>
           </div>
         ))}
