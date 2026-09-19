@@ -223,7 +223,7 @@ describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作
 describe("useDynamicWorkflowForm — 多模式可见性过滤", () => {
   const hiddenInTxt2img: WorkflowIOEntry = widget("denoise", {
     type: "FLOAT",
-    modes: { txt2img: { visible: false } },
+    modeOverrides: { txt2img: { visible: false } },
   });
 
   it("当前模式下 visible=false 的行不显示（展示层过滤）", () => {

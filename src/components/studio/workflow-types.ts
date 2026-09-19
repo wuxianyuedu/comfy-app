@@ -8,7 +8,10 @@
  *  `raw_inputs`（snake，服务端 DTO）/ `rawInputs`（camel，画布 data）/
  *  `inputs`（裸名，子图 data）同源，`rawJson` 同理。别只认其中一个名字。 */
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
-import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
+import type {
+  WorkflowIOModeOverride,
+  IOParamSlot,
+} from "~/lib/workflow/workflow-io-types";
 
 /* ── 类型定义 ── */
 export interface RawInputMeta {
@@ -116,9 +119,13 @@ export interface ComfyGraphNode {
 /** IO 编辑模式下勾选出来的一个暴露参数。`ioKey` 是对象的键
  *  （`${nodeId}::${kind}::${name}`）；值记录它是什么，这样最终的工作流 IO
  *  摘要不必重走一遍图就能拼出来。 */
-export interface WorkflowIOParam {
-  direction: "input" | "output";
-  kind: "param" | "widget" | "output";
+/** 方向 × 种类判别联合（单一真相源在 `~/lib/workflow/workflow-io-types` 的
+ *  `IOParamSlot`）：合法的 (direction, kind) 组合只有 `input+param`、
+ *  `input+widget`、`output+output`，非法组合在类型层面被排除。这里 re-export
+ *  出来供画布侧（WorkflowStores 等）复用，避免两份同义定义漂移。 */
+export type { IOParamSlot } from "~/lib/workflow/workflow-io-types";
+
+export type WorkflowIOParam = IOParamSlot & {
   nodeId: string;
   name: string;
   /** 作者在 IO 面板里显式重命名的显示名（**唯一**写入点是面板的 ✎ 改名框）。
@@ -153,10 +160,12 @@ export interface WorkflowIOParam {
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。
    *  镜像 `WorkflowIOEntry.seedMode`，随 workflowIO 一起 PATCH 落库。 */
   seedMode?: string;
-  /** 多模式：按模式码的覆盖层。镜像 `WorkflowIOEntry.modes`，
+  /** 多模式覆盖层：按模式码的覆盖（镜像 `WorkflowIOEntry.modeOverrides`）。
    *  落在同一个 workflowIO JSON 列里（因此新增模式无需改表）。由 IO 预览面板的
-   *  「模式页签」编辑，随整体 workflowIO 一起 PATCH 落库。 */
-  modes?: Record<string, WorkflowIOModeOverride>;
+   *  「模式页签」编辑，随整体 workflowIO 一起 PATCH 落库。读取方见
+   *  `src/lib/workflow/workflow-io-types.ts` 的 `isModeVisible` / `modeDefaultValue`
+   *  等（它们吃的是 `WorkflowIOEntry.modeOverrides`，与本字段同名但属于不同模型）。 */
+  modeOverrides?: Record<string, WorkflowIOModeOverride>;
   /** 宿主（外层封装）节点 id。仅在「下钻到子工作流内部」勾选时写入：此时
    *  `nodeId` 是子图内部节点 id（`1670`），运行期 comfy-cli 展开后是 `4:1670`
    *  （宿主 id + 内部 id），两个 id 都存下来才能在运行期确定性还原。 */
@@ -166,7 +175,7 @@ export interface WorkflowIOParam {
    *  事实字段：富化链把它排在 `localized` 之后（通用翻译会盖住它），所以显示
    *  名算不到它；想按「作者在本层槽位上写的名字」取名时只有这里有。 */
   slotLabel?: string;
-}
+};
 
 /** 用于切换 IO 暴露状态的一次参数引用。
  *
@@ -289,9 +298,11 @@ export interface WorkflowDetail {
   id: string;
   name: string;
   taskType: string;
-  /** 多模式：该工作流可运行的全部模式码（模板 modes 列解析），与库详情的
-   *  「类型」同源；IO 预览面板的模式页签从这里取。子图变体缺省。 */
-  modes?: string[];
+  /** 多模式：该工作流可运行的全部模式码（由模板 `modes` 列解析），与库详情的
+   *  「类型」同源；IO 预览面板的模式页签从这里取。子图变体缺省。改名 `availableModes`
+   *  是为了和 `WorkflowIOParam.modeOverrides`（按模式码的覆盖层）区分开 —— 两者
+   *  同名 `modes` 是历史命名地雷。 */
+  availableModes?: string[];
   defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
   /** 从 `/api/workflows/:id` 返回的原始导入格式 (LiteGraph

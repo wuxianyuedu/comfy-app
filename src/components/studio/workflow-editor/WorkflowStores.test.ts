@@ -88,7 +88,7 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
     store.getState().setIOModeOverride(KEY, "i2v", { seedMode: "random" });
     const entry = store.getState().workflowIO[KEY]!;
     expect(entry.label).toBe("我的种子");
-    expect(entry.modes?.i2v?.seedMode).toBe("random");
+    expect(entry.modeOverrides?.i2v?.seedMode).toBe("random");
   });
 
   it("改「必填」不改写作者命名", () => {
