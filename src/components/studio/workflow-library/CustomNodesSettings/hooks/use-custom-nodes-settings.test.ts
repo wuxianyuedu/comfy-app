@@ -110,8 +110,8 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
     act(() => result.current.setOpen(true));
 
     await waitFor(() => expect(result.current.savedPaths).toHaveLength(2));
-    expect(result.current.expandedParents["D:/a"]).toBe(true);
-    expect(result.current.expandedParents["D:/b"]).toBe(true);
+    expect(result.current.parentExpansion.isExpanded("D:/a")).toBe(true);
+    expect(result.current.parentExpansion.isExpanded("D:/b")).toBe(true);
   });
 
   it("用户手动折叠过的父目录在重新拉取后仍保持折叠（不覆盖用户选择）", async () => {
@@ -121,17 +121,16 @@ describe("useCustomNodesSettings — 打开/关闭与数据拉取", () => {
     await waitFor(() => expect(result.current.savedPaths).toHaveLength(1));
 
     act(() =>
-      result.current.setExpandedParents((prev) => ({
-        ...prev,
-        "D:/comfy/custom_nodes": false,
-      })),
+      result.current.parentExpansion.set("D:/comfy/custom_nodes", false),
     );
 
     // 再拉一次：折叠状态必须保留
     await act(async () => {
       await result.current.onParseSingle("D:/comfy/custom_nodes/foo");
     });
-    expect(result.current.expandedParents["D:/comfy/custom_nodes"]).toBe(false);
+    expect(
+      result.current.parentExpansion.isExpanded("D:/comfy/custom_nodes"),
+    ).toBe(false);
   });
 });
 

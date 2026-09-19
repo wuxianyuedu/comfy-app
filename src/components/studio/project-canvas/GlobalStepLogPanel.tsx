@@ -17,7 +17,7 @@ import { formatClock } from "~/lib/time-format";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
-import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
+import { FileText, X } from "lucide-react";
 import type { ValidationError } from "~/lib/comfyui/validation";
 import type { StepLogEntry } from "./stepLogCache";
 import {
@@ -39,6 +39,7 @@ import { useCancelTask } from "./hooks/use-cancel-task";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { useInterval } from "~/components/ui/use-interval";
 import { modalWidth } from "~/components/ui/dialog-width";
+import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { displayValue } from "~/lib/display-value";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
@@ -166,8 +167,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const [connected, setConnected] = useState(false);
   /* 过滤改为单选（与应用日志同款交互），默认「全部」。 */
   const [filter, setFilter] = useState<Level | "all">("all");
-  /* 弹窗宽度切换：默认档见 `EXEC_LOG_WIDTH`，加宽档贴视线两边。 */
-  const [wide, setWide] = useState(false);
+  /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
+   * 默认档见 `EXEC_LOG_WIDTH`，加宽档贴视线两边 —— 与 `LogPanel` 此前是
+   * 两份同形实现，且都没有持久化。 */
+  const panel = useWidePanel("exec-log", EXEC_LOG_WIDTH);
   const [autoscroll, setAutoscroll] = useState(true);
 
   /* 没有显式钉住时，视图重置到活跃任务。 */
@@ -439,10 +442,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <DialogContent
           showCloseButton={false}
           className="bg-transparent p-0 ring-0"
-          popupClassName={wide ? EXEC_LOG_WIDTH.wide : EXEC_LOG_WIDTH.base}
+          popupClassName={panel.widthClass}
         >
           <div
-            className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${wide ? EXEC_LOG_WIDTH.wide : EXEC_LOG_WIDTH.base}`}
+            className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${panel.widthClass}`}
           >
             {/* Header */}
             <div className="border-border-strong bg-surface-1 flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
@@ -527,14 +530,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 >
                   清空
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setWide((w) => !w)}
-                  title={wide ? "收缩" : "加宽"}
+                <WidePanelToggle
+                  panel={panel}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-soft h-auto rounded-md p-1.5"
-                >
-                  {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                </Button>
+                />
                 <Button
                   variant="ghost"
                   onClick={() => setOpen(false)}

@@ -6,6 +6,7 @@
  */
 
 import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import {
   getWorkflowType,
@@ -178,7 +179,7 @@ export function filterWorkflows(
     search: string;
   },
 ): WorkflowRow[] {
-  const needle = filters.search.trim().toLowerCase();
+  const needle = normalizeNeedle(filters.search);
   return workflows.filter((workflow) => {
     if (filters.source !== "all" && sourceOf(workflow) !== filters.source) {
       return false;
@@ -192,8 +193,8 @@ export function filterWorkflows(
     ) {
       return false;
     }
-    if (needle && !workflow.name.toLowerCase().includes(needle)) return false;
-    return true;
+    /* 本域只搜名称（不搜路径 / 标签）—— 归一化与命中判决走出口。 */
+    return matchesNeedle(needle, workflow.name);
   });
 }
 
@@ -203,9 +204,9 @@ export function filterPending(
   filters: { source: SourceFilter; search: string },
 ): PendingRow[] {
   if (filters.source === "online") return [];
-  const needle = filters.search.trim().toLowerCase();
+  const needle = normalizeNeedle(filters.search);
   if (!needle) return pending;
-  return pending.filter((row) => row.name.toLowerCase().includes(needle));
+  return pending.filter((row) => matchesNeedle(needle, row.name));
 }
 
 export interface SourceCounts {

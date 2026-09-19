@@ -8,8 +8,6 @@ import {
   Copy,
   Download,
   FileText,
-  Maximize2,
-  Minimize2,
   Trash2,
   Type,
   X,
@@ -48,6 +46,7 @@ import {
 import { LOG_PANEL_POPUP_Z_CLASS } from "./log-panel-layers";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
+import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
 import { displayValue } from "~/lib/display-value";
@@ -375,7 +374,10 @@ export function LogPanel() {
    * （见 `log-virtual` 的 `pinShouldYield`），是记账值，不进 state。 */
   const appliedTopRef = useRef(0);
   const [wrap, setWrap] = useState(true);
-  const [wide, setWide] = useState(false);
+  /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
+   * 此前三个日志面板各写一份 `useState`，且**都没有持久化** ——
+   * 用户加宽后关掉再打开又回到窄档。 */
+  const panel = useWidePanel("app-log", PANEL_WIDTH);
 
   /* ── 虚拟窗口（ISSUE #609 八审：「切到 1000+ 的页签有明显卡顿」）────────
    *
@@ -641,10 +643,10 @@ export function LogPanel() {
       <DialogContent
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
-        popupClassName={wide ? PANEL_WIDTH.wide : PANEL_WIDTH.base}
+        popupClassName={panel.widthClass}
       >
         <div
-          className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${wide ? PANEL_WIDTH.wide : PANEL_WIDTH.base}`}
+          className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${panel.widthClass}`}
         >
           {/* Header */}
           {/* 行头：宽窗口一行，窄窗口下筛选器整组折到第二行（判据是筛选器容器的
@@ -747,15 +749,10 @@ export function LogPanel() {
               >
                 <Trash2 size={16} />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setWide((w) => !w)}
-                title={wide ? "收缩" : "加宽"}
+              <WidePanelToggle
+                panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-              >
-                {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </Button>
+              />
               <Button
                 variant="ghost"
                 size="icon"

@@ -225,6 +225,13 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/error-message.ts",
   "src/lib/browser-io.ts",
   "src/lib/time-format.ts",
+  /* 搜索关键字的归一化与分组过滤（ISSUE #672）：视图层（工坊多选、工作流库
+   * 筛选、日志面板、画布 chip）、`src/server` 的物化路由与 `src/app/api` 的
+   * REST 路由**都在用**，且逻辑层与视图层必须同一口径（命中判据折了小写而
+   * 高亮没折，会出现「行被选中但字没高亮」）。进任何子域都会让另一个域反向
+   * 依赖它 —— 与 `format-bytes` / `display-value` / `time-format` 同款：
+   * 「唯一持有者 + 任何域消费」的顶层单例。 */
+  "src/lib/list-filter.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",

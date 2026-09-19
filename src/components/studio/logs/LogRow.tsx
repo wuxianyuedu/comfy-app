@@ -20,6 +20,7 @@ import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
+import { normalizeNeedle } from "~/lib/list-filter";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
 import {
@@ -52,7 +53,9 @@ function fragmentsOf(text: string): RowToken[] {
 
 function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
   const fragments = fragmentsOf(text);
-  const needle = keyword.trim().toLowerCase();
+  /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）：它与 `matchesSearch`
+   * 必须同一口径 —— 命中判据折了小写而高亮没折，会出现「行被选中但字没高亮」。 */
+  const needle = normalizeNeedle(keyword);
   return (
     <>
       {fragments.map((fragment, index) => {
