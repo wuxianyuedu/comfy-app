@@ -3,10 +3,10 @@
 // 这条账的形状和 `display-value` / `format-bytes` 同族：**不是重复代码，是口径**。
 // 全库有 8 处各写一遍「搜索框 + 过滤」，而它们对三件事各判各的：
 //
-//   ① **关键字怎么归一化** —— `trim().toLowerCase()` 出现 6 次（`AttributeMultiSelect` /
-//      `model-library-config` ×2 / `workflow-library-config` ×2 / `log-store` /
-//      `RgthreeBodies` / `multi-mode-select`），但 `AttributeMultiSelect` 只写了
-//      `trim()`：那处的候选值全是中文，大小写无差别 —— 看起来「也对」，
+//   ① **关键字怎么归一化** —— 「去空白 + 折小写」这套出现 6 次（`AttributeMultiSelect` /
+//      `model-library-config` 两处 / `workflow-library-config` 两处 / `log-store` /
+//      `RgthreeBodies` / `multi-mode-select`），但 `AttributeMultiSelect` 只做了去空白：
+//      那处的候选值当时全是中文，大小写无差别 —— 看起来「也对」，
 //      直到候选里出现 `JK制服` / `T恤` 这类含拉丁字母的项（真在 `COSTUME_OPTIONS` 里），
 //      用户输入 `jk` 就一条也搜不到。**同一个决定散在多处，就不会被统一说出来。**
 //   ② **命中哪些字段** —— `filterModels` 命中的是「名称 + 文件名」拼接后的整串

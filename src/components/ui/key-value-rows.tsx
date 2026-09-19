@@ -41,16 +41,10 @@ import { cn } from "~/lib/utils";
  *   自动给占位符 `—`。**这两个字段互斥**：本来就是「值怎么来」的单选题，
  *   留两个可选字段即可，不必再包一层。
  *
- * ```tsx
- * <KeyValueRows
- *   bordered
- *   striped
- *   items={[
- *     { key: "Seed", value: displayValue(o.seed) },
- *     { key: "模型", raw: o.checkpoint },
- *   ]}
- * />
- * ```
+ * 形态：`<KeyValueRows bordered striped items={…} />`，`items` 的每一项是
+ * 「`key` + `value`」或「`key` + `raw`」—— 前者给**已渲染好的值**（可含徽标 /
+ * 链接，例如 `displayValue(o.seed)`），后者给**原始值**（缺值交给
+ * `displayValue` 处理）。
  *
  * ⚠️ **它不管「取哪些字段」**：那是域判据（哪些参数该露、哪些被过滤掉），
  * 留在调用处的派生函数里（如 `history-detail-derive` 的 `deriveParamRows`）。

@@ -12,14 +12,15 @@ import { cn } from "~/lib/utils";
  * 写法四派（见 `~/lib/progress` 文件头）。这里收的是**形态**：
  * 轨道、填充、百分比文字、a11y 语义；**数值**怎么算由 `~/lib/progress` 负责。
  *
- * ```tsx
- * // 确定进度
- * <ProgressBar value={toPct(done, total)} label="正在解析节点包" />
- * // 不确定进度（总数还没算出来）—— 条纹来回滑动
- * <ProgressBar value={null} label="正在扫描…" />
- * // 0% 也留一格可见（个别面板的观感选择，显式传）
- * <ProgressBar value={pct} minVisible={4} />
- * ```
+ * 三种用法：
+ *
+ * - 确定进度：`<ProgressBar value={toPct(done, total)} label="正在解析节点包" />`
+ * - 不确定进度（总数还没算出来，条纹来回滑动）：
+ *   `<ProgressBar value={null} label="正在扫描…" />`
+ * - 0% 也留一格可见（个别面板的观感选择，显式传）：传**算好的百分比**加
+ *   `minVisible={4}`（一般来自 `~/lib/progress` 的 `toPct(done, total)`）。
+ *
+ * 也就是说 `value` 收的是**算好的百分比**，`minVisible` 给一个可见下限。
  *
  * 三条口径：
  *
