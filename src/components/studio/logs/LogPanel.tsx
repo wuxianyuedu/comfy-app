@@ -47,6 +47,7 @@ import {
 } from "./log-virtual";
 import { LOG_PANEL_POPUP_Z_CLASS } from "./log-panel-layers";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { modalWidth } from "~/components/ui/dialog-width";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
 import { displayValue } from "~/lib/display-value";
@@ -298,6 +299,12 @@ function OriginSelect({
  * 读成面板一共只有 12 条）；这里用「命中」而不是「匹配」，与计数徽标上的
  * 「筛选命中」是同一个口径。
  */
+/* 面板的宽度档：默认 6xl —— 行是「时刻 + 级别 + 正文 + 来源」四列，比执行日志
+ * 多一列，默认就该更宽；加宽档统一贴视线两边。宽度写 `w-*` 而不是 `max-w-*`
+ * 的理由见 `~/components/ui/dialog-width` 的文件头（ISSUE #720：同族的两个
+ * max-w 谁赢由 Tailwind 输出顺序决定，加宽按钮因此一直没生效）。 */
+const PANEL_WIDTH = modalWidth("w-6xl");
+
 function pageSummary(
   page: number,
   totalPages: number,
@@ -634,10 +641,10 @@ export function LogPanel() {
       <DialogContent
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
-        popupClassName={wide ? "max-w-[96vw]" : "max-w-6xl"}
+        popupClassName={wide ? PANEL_WIDTH.wide : PANEL_WIDTH.base}
       >
         <div
-          className={`border-border-strong bg-panel flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
+          className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${wide ? PANEL_WIDTH.wide : PANEL_WIDTH.base}`}
         >
           {/* Header */}
           {/* 行头：宽窗口一行，窄窗口下筛选器整组折到第二行（判据是筛选器容器的

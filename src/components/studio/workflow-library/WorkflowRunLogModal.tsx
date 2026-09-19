@@ -35,6 +35,7 @@ import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { modalWidth } from "~/components/ui/dialog-width";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
 type Level = TaskLogEntry["level"];
@@ -84,6 +85,11 @@ export interface WorkflowRunLogModalProps {
   open: boolean;
   onClose: () => void;
 }
+
+/* 弹窗宽度档：默认 5xl（行是「时刻 + 级别 + 正文」，与执行日志同密度）；
+ * 加宽档统一贴视线两边。写 `w-*` 而不是 `max-w-*` 的理由见
+ * `~/components/ui/dialog-width` 的文件头（ISSUE #720）。 */
+const RUN_LOG_WIDTH = modalWidth("w-5xl");
 
 export function WorkflowRunLogModal({
   workflowId,
@@ -168,10 +174,10 @@ export function WorkflowRunLogModal({
         data-testid="wflib-log-modal"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
-        popupClassName={wide ? "max-w-[96vw]" : "max-w-5xl"}
+        popupClassName={wide ? RUN_LOG_WIDTH.wide : RUN_LOG_WIDTH.base}
       >
         <div
-          className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60`}
+          className={`border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60 ${wide ? RUN_LOG_WIDTH.wide : RUN_LOG_WIDTH.base}`}
         >
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">

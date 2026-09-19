@@ -1097,10 +1097,18 @@ tsc / eslint 也都不看 —— 只能靠「同一件事只允许一处实现�
 1. **居中卡片 → `<Dialog>` + `<DialogContent>`**。基元自带
    Esc / 点遮罩关闭 / 焦点锁 / 焦点归还，以及 `role` 与 `aria-*`。
 2. **形态差异经 `className` / `popupClassName` 表达，不重写外壳**：
-   宽度用 `popupClassName="max-w-3xl"`；调用处自己的卡片外观（`bg-panel` +
+   宽度用 `popupClassName`；调用处自己的卡片外观（`bg-panel` +
    `border` + `rounded-2xl`）原样保留在 `DialogContent` 的**子** div 上
    （`className="bg-transparent p-0 ring-0"` 抵消基元默认卡片 chrome）——
    验收标准仍是 **渲染结果不变**（§16.2.4.2 第 9 条）。
+
+   > **传宽度只传 `w-*`，不要传 `max-w-*`**（ISSUE #720）：基类里曾有带变体的
+   > `sm:max-w-sm`，而 Tailwind 把**带变体**的 utility 排在所有无变体之后 ——
+   > 调用处传 `max-w-[96vw]` 也好、`max-w-6xl` 也好，量到的永远是被它压住的
+   > 24rem。三个日志弹窗的「加宽」按钮因此长期是**按了没反应**（状态在变、
+   > 宽度不动）。现在基类只留无变体的兜底上限，调用处一律用**另一族的
+   > `w-*`** 给结论：跨族才有确定的优先级，同族只能「谁赢看产序」。
+   > 宽度档的单一出口是 `~/components/ui/dialog-width`（含选档理由）。
 3. **不该统一的那几类，别硬塞**：
    - **全屏视图**（设置 / 工作流编辑器 / 脚本编辑器 / 消息中心…）走
      `FullScreenLayer` / `ui/fullscreen-dialog` —— 它们要的是「让出窗口标题行、

@@ -63,7 +63,25 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-modal fixed top-1/2 left-1/2 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm ring-1 duration-100 outline-none sm:max-w-sm",
+          /* 默认卡片。宽度**只有一处下限**：`max-w-[calc(100%-2rem)]`（不贴满
+             视口两侧），**不再在 sm 断点压到 `max-w-sm`**（ISSUE #720）。
+
+             为什么要把 `sm:max-w-sm` 删掉：它是**带变体的** max-width，
+             Tailwind 的产序把它排在所有无变体 utility 之后 —— 于是它不只压
+             默认，连调用处传进来的宽度一起压。三个日志弹窗的「加宽」按钮因此
+             长期是**按了没反应**：`popupClassName` 里的 `max-w-[96vw]` 比不过
+             它，连换成 `w-6xl` 这种跨族写法也没用（实测 1430×900 视口下三种
+             写法量到的都是同一个 384px = 24rem `max-w-sm`）。
+
+             调用处现在只传 `w-*`（见 `~/components/ui/dialog-width`）：跟一条
+             `max-w-*` 打架只会得到「谁赢看产序」的结果，跨族的 `width` 才有
+             确定的结论，而这里的 `max-w-*` 继续只做「别贴满视口」的兜底 ——
+             正是它该管的那件事。 */
+          "bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-modal fixed top-1/2 left-1/2 grid max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm ring-1 duration-100 outline-none",
+          /* `w-full` 由调用处决定：默认卡片仍要「占满到自己的上限」（与删掉
+             `sm:max-w-sm` 之前一致），但 `w-full` 属无变体宽度，同样会被调用处
+             的 `w-*` 覆盖掉。 */
+          "w-full",
           popupClassName,
           className,
         )}

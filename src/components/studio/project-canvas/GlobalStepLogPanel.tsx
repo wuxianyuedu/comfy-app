@@ -35,6 +35,7 @@ import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { useCancelTask } from "./hooks/use-cancel-task";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { modalWidth } from "~/components/ui/dialog-width";
 import { displayValue } from "~/lib/display-value";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
@@ -136,6 +137,11 @@ function fmtTime(t: number): string {
   return formatClock(t, { millis: true });
 }
 
+/* 执行日志弹窗的宽度档：默认 5xl —— 行是「时刻 + 级别 + 正文」三列，比应用日志
+ * 少一列；加宽档统一贴视线两边。写 `w-*` 而不是 `max-w-*` 的理由见
+ * `~/components/ui/dialog-width` 的文件头（ISSUE #720）。 */
+const EXEC_LOG_WIDTH = modalWidth("w-5xl");
+
 export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const { settings } = useCanvasSettings();
   const debugMode = settings.debugMode;
@@ -157,7 +163,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const [connected, setConnected] = useState(false);
   /* 过滤改为单选（与应用日志同款交互），默认「全部」。 */
   const [filter, setFilter] = useState<Level | "all">("all");
-  /* 弹窗宽度切换：默认 max-w-5xl，点击加宽到 max-w-7xl。 */
+  /* 弹窗宽度切换：默认档见 `EXEC_LOG_WIDTH`，加宽档贴视线两边。 */
   const [wide, setWide] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
 
@@ -414,10 +420,10 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         <DialogContent
           showCloseButton={false}
           className="bg-transparent p-0 ring-0"
-          popupClassName={wide ? "max-w-[96vw]" : "max-w-5xl"}
+          popupClassName={wide ? EXEC_LOG_WIDTH.wide : EXEC_LOG_WIDTH.base}
         >
           <div
-            className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border-strong bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
+            className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${wide ? EXEC_LOG_WIDTH.wide : EXEC_LOG_WIDTH.base}`}
           >
             {/* Header */}
             <div className="border-border-strong bg-surface-1 flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
