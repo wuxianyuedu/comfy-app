@@ -38,6 +38,15 @@ export default defineConfig({
         "src/server/api/middleware/**",
         "src/server/film/**",
         "src/lib/**",
+        /* ⚠️ 这里必须列出**每一个**被 thresholds 点名的 `ui/` 出口 ——
+         * 阈值只对「出现在报告里的文件」生效，没进 `include` 的路径是一条
+         * **静默失效**的条目（`ui/file-picker.tsx` / `ui/use-flash-state.ts`
+         * 就是这样挂了一整轮：门槛写着 95/90/95/100，报告里查无此文件）。
+         * 新增 `ui/` 出口门槛时**两处同批改**：本数组 + `thresholds`。 */
+        "src/components/ui/file-picker.tsx",
+        "src/components/ui/use-flash-state.ts",
+        "src/components/ui/expansion-set.ts",
+        "src/components/ui/wide-panel.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -153,6 +162,17 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* 「可搜索列表过滤」的口径（§16.2.4.16，P13 的对面）：判据的差别
+         * 只在「归一化做到哪一步」上 —— `trim()` 单独写与 `trim().toLowerCase()`
+         * 都编译、都运行，差别是含拉丁字母的候选能不能被小写关键字搜到。
+         * 100/90/100/100 是实测值；唯一未覆盖的分支是 `filterGroups` 里
+         * 「`field` 上的值不是数组」那条兜底（调用处类型上就到不了）。 */
+        "src/lib/list-filter.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
+        },
         /* 隐藏文件选择框与闪一下复位这两件「交互样板」的出口：
          * 它们承载的是**时序**与**复位**，恰恰是各自调用点看不出来的部分
          * （卸载后 setState、连点被旧定时器打断、连选同一文件不触发 change）。 */
@@ -167,6 +187,26 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 「展开集合」的状态出口（§16.2.4.17，P14 的对面）：它承载的语义是
+         * `hasKey`（表过态没）与 `seedDefaults`（不覆盖已有表态）这两条
+         * **调用处看不出来**的判据，所以门槛按实测值设满档。 */
+        "src/components/ui/expansion-set.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「面板加宽档」的出口（§16.2.4.18，P15 的对面）：持久化的
+         * 读 / 写 / 缺省 / storage 不可用四条路径 + 跨实例同步都进了用例。
+         * 门槛取实测值向下取整到 5 的倍数（91.89/96.87/92.3/73.68）——
+         * 未覆盖的是**另一侧**的 SSR 分支（`typeof window === "undefined"`），
+         * jsdom 里到不了；真去 mock 它只会让用例断言一个不存在的行为。 */
+        "src/components/ui/wide-panel.tsx": {
+          lines: 90,
+          functions: 95,
+          statements: 90,
+          branches: 70,
         },
         "src/lib/core/**": {
           lines: 95,

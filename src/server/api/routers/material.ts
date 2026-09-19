@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { z } from "zod";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import {
   MATERIAL_FOLDERS,
@@ -45,7 +46,9 @@ export const materialRouter = createTRPCRouter({
       const projectId = sanitizeScope(input?.projectId ?? null);
       const scopeMode = input?.scope ?? null;
       const folder = input?.folder?.trim() ?? null;
-      const q = input?.q?.trim().toLowerCase() ?? null;
+      /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）—— 与 REST 路由的
+       * 同一段是同一条账。 */
+      const q = normalizeNeedle(input?.q ?? "") || null;
 
       const scopes = await resolveScopes(scopeMode, projectId);
 
@@ -61,7 +64,7 @@ export const materialRouter = createTRPCRouter({
         const pool: MaterialItem[] = [];
         for (const f of MATERIAL_FOLDERS)
           pool.push(...(byFolder.get(f.id) ?? []));
-        items = pool.filter((it) => it.name.toLowerCase().includes(q));
+        items = pool.filter((it) => matchesNeedle(q, it.name));
       } else if (folder) {
         if (!isValidFolder(folder)) {
           throw new Error("Invalid folder");

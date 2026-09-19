@@ -300,7 +300,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
    * 文件首行 —— 缺了它，任何从 Server Component 引用它们的地方会在构建期
    * 报「useState in Server Component」这类难定位的错。 */
   it.each(["disclosure", "option-list-popover"])(
-    "ui/%s 是客户端基元（有 \"use client\"）",
+    'ui/%s 是客户端基元（有 "use client"）',
     (name) => {
       const mod = readFileSync(
         join(SRC, "components", "ui", `${name}.tsx`),
@@ -309,6 +309,81 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       expect(mod.startsWith('"use client";')).toBe(true);
     },
   );
+
+  /* ── 本批三条「按形态」收口的出口与消费点 ──────────────────────────────
+   *
+   * 与 P10~P12 那批同款：P13/P14/P15 是硬闸（判「视图里又自写了一篇」），
+   * 这里从**另一侧**钉住出口真被用着 —— 「抽出出口但没人用」等于没做
+   * （规范 16 §16.2.4.16 ~ §16.2.4.18）。
+   *
+   * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
+   * `list-filter` 本批迁了 8 处、`expansion-set` 3 份映射、`wide-panel` 3 个面板。 */
+  it.each([
+    [
+      "~/lib/list-filter",
+      "ts",
+      ["normalizeNeedle", "matchesNeedle", "filterGroups"],
+      5,
+    ],
+    [
+      "~/components/ui/expansion-set",
+      "ts",
+      ["useExpansionSet", "ExpansionSet"],
+      1,
+    ],
+    [
+      "~/components/ui/wide-panel",
+      "tsx",
+      ["useWidePanel", "WidePanelToggle"],
+      3,
+    ],
+  ] as const)(
+    "%s 是「同一形态的唯一出口」且已被业务引用",
+    (spec, ext, exports, min) => {
+      const rel = spec.replace("~/", "");
+      const mod = readFileSync(join(SRC, `${rel}.${ext}`), "utf8");
+      for (const symbol of exports) {
+        expect(mod, `${spec} 应导出 ${symbol}`).toMatch(
+          new RegExp(
+            `export (?:async )?(?:function|const|interface|type) ${symbol}[^A-Za-z]`,
+          ),
+        );
+      }
+      /* 出口模块自己的文件头必须写清「它替代了几份实现」——
+       * 这是本仓库那批「按形态收口」的唯一共同记号（规范 §16.2.4）。 */
+      expect(mod, `${spec} 的文件头应说明它收掉了什么`).toMatch(
+        /规范 16 §16\.2\.4\.1[678]/,
+      );
+      /* 至少一处业务侧引用（排除自身、自身测试与测试目录）。 */
+      let refs = 0;
+      const self = join(SRC, `${rel}.${ext}`);
+      for (const abs of collectImports(SRC)) {
+        if (abs === self) continue;
+        const absRel = relative(SRC, abs).split(sep).join("/");
+        if (absRel.includes(".test.") || absRel.startsWith("tests/")) continue;
+        if (readFileSync(abs, "utf8").includes(`"${spec}"`)) refs++;
+      }
+      expect(
+        refs,
+        `${spec} 的业务引用少于 ${min} 处（收口可能被回退）`,
+      ).toBeGreaterThanOrEqual(min);
+    },
+  );
+
+  /* `useExpansionSet` / `useWidePanel` 是客户端 hook（用了 `useState` /
+   * `useSyncExternalStore`），`"use client"` 必须在文件首行 —— 缺了它，
+   * 任何从 Server Component 引用它们的地方会在构建期报
+   * 「useState in Server Component」这类难定位的错。 */
+  it.each([
+    ["expansion-set", "ts"],
+    ["wide-panel", "tsx"],
+  ])('ui/%s 是客户端模块（有 "use client"）', (name, ext) => {
+    const mod = readFileSync(
+      join(SRC, "components", "ui", `${name}.${ext}`),
+      "utf8",
+    );
+    expect(mod.startsWith('"use client";')).toBe(true);
+  });
 
   it("ui/ 目录本身不空（判据没被绕过）", () => {
     const uiDir = join(SRC, "components", "ui");

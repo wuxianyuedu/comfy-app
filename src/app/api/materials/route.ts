@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { logger } from "~/server/lib/logger";
 import { errorMessage } from "~/lib/error-message";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   MATERIAL_FOLDERS,
@@ -108,7 +109,9 @@ export async function GET(req: NextRequest) {
     const projectId = sanitizeScope(url.searchParams.get("projectId"));
     const scopeMode = url.searchParams.get("scope"); // "project" | "cross"
     const folder = url.searchParams.get("folder")?.trim() ?? null;
-    const q = url.searchParams.get("q")?.trim().toLowerCase() ?? null;
+    /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）—— 与 tRPC 路由
+     * 的同一段此前各写一遍，`trim` 与折小写都漏一处就会两侧搜索结果不一致。 */
+    const q = normalizeNeedle(url.searchParams.get("q") ?? "") || null;
 
     const scopes = await resolveScopes(scopeMode, projectId);
 
@@ -126,7 +129,7 @@ export async function GET(req: NextRequest) {
       const pool: MaterialItem[] = [];
       for (const f of MATERIAL_FOLDERS)
         pool.push(...(byFolder.get(f.id) ?? []));
-      items = pool.filter((it) => it.name.toLowerCase().includes(q));
+      items = pool.filter((it) => matchesNeedle(q, it.name));
     } else if (folder) {
       if (!isValidFolder(folder)) {
         return NextResponse.json(

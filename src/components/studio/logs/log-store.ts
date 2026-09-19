@@ -21,6 +21,8 @@
 
 import { create } from "zustand";
 
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
+
 import { saveLogExport, type SavedLogExport } from "~/lib/log/log-file-client";
 
 import { copyLogText, downloadLogText } from "./log-export";
@@ -752,11 +754,12 @@ export function computeOriginCounts(
  * ——「按钮上写着 2、切过去只剩 1」正是口径分叉的产物。
  */
 function matchesSearch(entry: LogEntry, search: string): boolean {
-  const needle = search.trim().toLowerCase();
-  if (!needle) return true;
+  const needle = normalizeNeedle(search);
+  /* 归一化与命中判决走 `~/lib/list-filter`（规范 16 §16.2.4.16）——
+   * 「命中了正文还是位置」是本域的判据（两列），归一化不是。 */
   return (
-    entry.message.toLowerCase().includes(needle) ||
-    entry.location?.toLowerCase().includes(needle) === true
+    matchesNeedle(needle, entry.message) ||
+    matchesNeedle(needle, entry.location ?? "")
   );
 }
 

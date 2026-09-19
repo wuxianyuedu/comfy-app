@@ -1,4 +1,5 @@
 "use client";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { useRgthreeGroups } from "./IOEditContext";
 import type { WorkflowGroup } from "../workflow-types";
 
@@ -12,10 +13,11 @@ export function RgthreeFastGroupsBypasserBody({
   const ctx = useRgthreeGroups();
   /* useRgthreeGroups 在 store 未挂载时抛错；但该组件只会在编辑器内渲染，
    * 始终在 <WFStoresProvider> 之下，故可直接使用，无需 null 守卫。 */
-  const needle = matchTitle.trim().toLowerCase();
+  /* 归一化（trim + 折小写）走 `~/lib/list-filter`（规范 16 §16.2.4.16）。 */
+  const needle = normalizeNeedle(matchTitle);
   if (!needle) return null;
   const matches = groups
-    .filter((group) => (group.title || "").toLowerCase().includes(needle))
+    .filter((group) => matchesNeedle(needle, group.title || ""))
     .slice()
     .sort((left, right) => left.title.localeCompare(right.title));
   if (matches.length === 0) return null;

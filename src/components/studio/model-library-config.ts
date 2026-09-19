@@ -1,4 +1,5 @@
 import { fmtBytes } from "~/lib/format-bytes";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { displayValue } from "~/lib/display-value";
 
 // ── 工作室模型库：配置层（规范 17 §17.2 第①层）──────────────────────────────
@@ -34,16 +35,12 @@ export function filterModels(
   filter: string,
   q: string,
 ): ModelRow[] {
-  const term = q.trim().toLowerCase();
+  const term = normalizeNeedle(q);
   return models.filter((model) => {
     if (filter !== ALL_TYPES && model.type !== filter) return false;
-    if (
-      term &&
-      !`${model.name} ${model.fileName}`.toLowerCase().includes(term)
-    ) {
-      return false;
-    }
-    return true;
+    /* 可搜字段是本域的判据（名称 + 文件名，搜 `model.safetensors` 也能中），
+     * 归一化与命中判决走 `~/lib/list-filter`（规范 16 §16.2.4.16）。 */
+    return matchesNeedle(term, `${model.name} ${model.fileName}`);
   });
 }
 
@@ -82,10 +79,10 @@ export function filterFolders(
   folders: FolderConfigRow[],
   q: string,
 ): FolderConfigRow[] {
-  const term = q.trim().toLowerCase();
+  const term = normalizeNeedle(q);
   if (!term) return folders;
   return folders.filter((row) =>
-    `${row.folder} ${row.label}`.toLowerCase().includes(term),
+    matchesNeedle(term, `${row.folder} ${row.label}`),
   );
 }
 

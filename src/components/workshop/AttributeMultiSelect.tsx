@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
+import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
 /**
@@ -72,16 +73,11 @@ export function AttributeMultiSelect({
     // 选中后保持展开，便于连续添加
   }
 
-  // 仅保留命中的分组/选项
-  const kw = keyword.trim();
-  const visibleGroups = kw
-    ? groups
-        .map((g) => ({
-          ...g,
-          options: g.options.filter((o) => o.includes(kw)),
-        }))
-        .filter((g) => g.options.length > 0)
-    : groups;
+  /* 仅保留命中的分组/选项 —— 归一化（trim + 折小写）、分组保序、空组丢弃
+   * 都收在 `~/lib/list-filter`（规范 16 §16.2.4.16）。此前这里只写了
+   * `trim()`：候选值里含拉丁字母的项（`JK制服` / `T恤` / `3D`）因此大小写敏感，
+   * 用户输 `jk` 一条也搜不到。 */
+  const visibleGroups = filterGroupsByKeyword(groups, keyword, "options");
 
   return (
     <div className={className}>

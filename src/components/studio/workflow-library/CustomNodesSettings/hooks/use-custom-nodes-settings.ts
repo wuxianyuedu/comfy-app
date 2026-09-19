@@ -16,6 +16,10 @@ import {
   type ManifestNodeRaw,
 } from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
+import {
+  useExpansionSet,
+  type ExpansionSet,
+} from "~/components/ui/expansion-set";
 import type {
   DiscoveredSubpkg,
   ParseProgress,
@@ -86,16 +90,16 @@ export interface CustomNodesSettingsController {
   summary: SettingsResp["summary"];
   discoveredByParent: Record<string, DiscoveredSubpkg[]>;
   byPath: Record<string, SummaryPkg>;
-  expandedParents: Record<string, boolean>;
-  setExpandedParents: Dispatch<SetStateAction<Record<string, boolean>>>;
+  /** 父目录展开集合（`~/components/ui/expansion-set`，规范 16 §16.2.4.17）。 */
+  parentExpansion: ExpansionSet;
   logs: { level: string; msg: string }[];
   consoleRef: RefObject<HTMLDivElement | null>;
   logsRef: RefObject<HTMLDivElement | null>;
   manifestByNode: Record<string, ManifestNodeRaw>;
-  expandedNodeList: Record<string, boolean>;
-  setExpandedNodeList: Dispatch<SetStateAction<Record<string, boolean>>>;
-  nodeExpanded: Record<string, boolean>;
-  setNodeExpanded: Dispatch<SetStateAction<Record<string, boolean>>>;
+  /** 子包「节点清单」展开集合。 */
+  nodeListExpansion: ExpansionSet;
+  /** 节点预览卡展开集合。 */
+  nodeCardExpansion: ExpansionSet;
   onParseAll: () => Promise<void>;
   onParseSingle: (pkgPath: string) => Promise<void>;
   onParseAllParent: (parent: string) => Promise<void>;
@@ -135,9 +139,12 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     Record<string, DiscoveredSubpkg[]>
   >({});
   const [byPath, setByPath] = useState<Record<string, SummaryPkg>>({});
-  const [expandedParents, setExpandedParents] = useState<
-    Record<string, boolean>
-  >({});
+  const parentExpansion = useExpansionSet();
+  /* 只取 `seedDefaults` 出来用在 `useCallback` 里：它的引用是稳定的
+   * （`useExpansionSet` 里用 `useCallback([])` 给出），而 `parentExpansion`
+   * 整个对象每次渲染都换引用（它带 `map`）—— 依赖整个对象会让这个
+   * `useCallback` 每轮重建，那正是它此前 `[]` 想避免的事。 */
+  const { seedDefaults: seedParentDefaults } = parentExpansion;
 
   const [logs, setLogs] = useState<{ level: string; msg: string }[]>([]);
   const consoleRef = useRef<HTMLDivElement>(null);
@@ -162,12 +169,11 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     Record<string, ManifestNodeRaw>
   >({});
   // 每个子包：内联节点列表是否展开？
-  const [expandedNodeList, setExpandedNodeList] = useState<
-    Record<string, boolean>
-  >({});
+  // 子包内联节点清单是否展开？
+  const nodeListExpansion = useExpansionSet();
   // 每个 classType：节点预览卡是否展开显示端口+控件？默认折叠 —— 一个 146 节点的
   // 包会产生海量叶子，全展开会过度膨胀。
-  const [nodeExpanded, setNodeExpanded] = useState<Record<string, boolean>>({});
+  const nodeCardExpansion = useExpansionSet();
 
   useEffect(() => {
     const stillParsing = parsing || Object.values(perPkgParsing).some(Boolean);
@@ -246,11 +252,10 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         setReport(data.lastReport);
         setDiscoveredByParent(data.discoveredByParent || {});
         setByPath(data.byPath || {});
-        setExpandedParents((prev) => {
-          const out = { ...prev };
-          for (const p of paths) if (!(p in out)) out[p] = true;
-          return out;
-        });
+        /* 「补默认展开」收在 `ExpansionSet.seedDefaults`（规范 16 §16.2.4.17）：
+         * 此前这段逐字抄了两遍（冷 / 热两条路径），而它承载的语义是
+         * 「**已有表态的键不覆盖**」—— 用户手动收起过的目录不该在刷新后弹回来。 */
+        seedParentDefaults(paths);
         return;
       }
 
@@ -341,11 +346,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       setReport(lastReport);
       setDiscoveredByParent(discoveredByParent);
       setByPath(byPath);
-      setExpandedParents((prev) => {
-        const out = { ...prev };
-        for (const p of paths) if (!(p in out)) out[p] = true;
-        return out;
-      });
+      seedParentDefaults(paths);
     } catch (e) {
       setSaveErr("读取配置失败：" + String(e));
     } finally {
@@ -364,7 +365,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         });
       }, 800);
     }
-  }, []);
+  }, [seedParentDefaults]);
 
   /** 重置 spinner/状态再拉取。仅从事件处理器或异步回调调用（绝不在 effect 内同步调用）。 */
   const reloadFromServer = useCallback(() => {
@@ -586,16 +587,13 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     summary,
     discoveredByParent,
     byPath,
-    expandedParents,
-    setExpandedParents,
+    parentExpansion,
     logs,
     consoleRef,
     logsRef,
     manifestByNode,
-    expandedNodeList,
-    setExpandedNodeList,
-    nodeExpanded,
-    setNodeExpanded,
+    nodeListExpansion,
+    nodeCardExpansion,
     onParseAll,
     onParseSingle,
     onParseAllParent,
