@@ -2,7 +2,11 @@
  * 这里只有纯类型声明，没有运行期代码。
  * 下面的 `import type` 只在编译期存在（完全擦除）——复用服务端 API 图的节点
  * 形状，让 detail.graph 的消费方仍能拿到 class_type / inputs 访问器，
- * 不必退化成 any。 */
+ * 不必退化成 any。
+ *
+ *  命名约定（避免 Ctrl+F 漏找）：同一份数据在服务端 DTO 与画布 data 两套拼写 ——
+ *  `raw_inputs`（snake，服务端 DTO）/ `rawInputs`（camel，画布 data）/
+ *  `inputs`（裸名，子图 data）同源，`rawJson` 同理。别只认其中一个名字。 */
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
 import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
@@ -236,15 +240,7 @@ export interface NodeJsonViewerContextValue {
    *  分别是 `undefined` / `null`。 */
   getNodeView: (nodeId: string) => {
     entry: Record<string, unknown> | null;
-    raw:
-      | {
-          widgets_values: unknown[];
-          outputs: RawOutputMeta[];
-          flags: Record<string, unknown>;
-          properties: Record<string, unknown>;
-          mode: number;
-        }
-      | undefined;
+    raw?: RawMetaEntry;
     /** 原始 RAW 节点（`detail.rawJson.nodes[i]`）—— 与整个工作流 RAW 视图
      *  里对应的那一片逐字节一致。工作流是纯 API 导入（没有 rawJson）
      *  或找不到该节点时为 `null`。 */
@@ -265,13 +261,29 @@ export interface NodeJsonViewerContextValue {
    *  下游消费方通常只需要 requestShow / getNodeJson。 */
   viewer: NodeJsonViewerRequest | null;
 }
+/** 稀疏的原始节点元数据（与 `WorkflowDetail.rawNodes[]` 同源）。
+ *  `flags` / `properties` / `mode` 在纯 API 导入（无 rawJson）时可能缺失，
+ *  因此按可选对待 —— 与 `rawNodes` 口径一致；`getNodeView().raw` 也复用它。 */
 export type RawMetaEntry = {
   widgets_values: unknown[];
   outputs: RawOutputMeta[];
-  flags: Record<string, unknown>;
-  properties: Record<string, unknown>;
-  mode: number;
+  flags?: Record<string, unknown>;
+  properties?: Record<string, unknown>;
+  mode?: number;
 };
+
+/** 边界 pin 实体（来自 ComfyGraphNode 的 subgraph.inputs/outputs）。
+ *  每个 pin 有 UUID、名字、类型、保存位置，以及指向跨边界连线的 linkIds。
+ *  `boundaryPins.inputs` / `.outputs` 共用这一形状（原本两处逐字段抄写，已抽出来）。 */
+export interface BoundaryPin {
+  id: string;
+  name: string;
+  type: string;
+  localized?: string;
+  label?: string;
+  pos: [number, number];
+  linkIds: number[];
+}
 
 export interface WorkflowDetail {
   id: string;
@@ -330,26 +342,7 @@ export interface WorkflowDetail {
    *  每个 pin 有自己的 UUID、名字、类型、保存位置，以及指向跨边界连线的
    *  linkIds。它们在内层画布里渲染成一列整洁的紧凑 wfIoPort 节点
    *  —— 左侧放输入、右侧放输出。 */
-  boundaryPins?: {
-    inputs: {
-      id: string;
-      name: string;
-      type: string;
-      localized?: string;
-      label?: string;
-      pos: [number, number];
-      linkIds: number[];
-    }[];
-    outputs: {
-      id: string;
-      name: string;
-      type: string;
-      localized?: string;
-      label?: string;
-      pos: [number, number];
-      linkIds: number[];
-    }[];
-  };
+  boundaryPins?: { inputs: BoundaryPin[]; outputs: BoundaryPin[] };
   /** 把带哨兵的连线翻译成 (pin ↔ 内部节点槽位) 配对 —— `buildEdges` 用它
    *  在边界 pin 的 handle 与内部节点对应的输入/输出 handle 之间生成
    *  React Flow 边。 */
@@ -525,30 +518,6 @@ export interface WorkflowIoPortData {
   connectsFrom?: string | null;
 }
 
-/* 边界 pin 的 wfIoPort 卡片布局常量。
- *
- *  这些 pin 住在 INPUTS / OUTPUTS 的 wfGroup 矩形里，渲染成一叠纵向排列的
- *  紧凑标签行。三个值决定这一列的视觉节奏：调大 IO_PORT_HEIGHT 会让整条栏杆
- *  变矮，调大 PORT_ROW_GAP 让 pin 之间更松散，IO_PORT_WIDTH 决定最长的标签
- *  能有多宽才被裁掉。
- *
- *  高度取 28 而不是 22：22px 时 React Flow 的节点外框会把 `p` `g` `y` `q`
- *  这类带下伸笔画的字母**裁掉约 1~2px**。10.5px 字体的「上伸 + 大写字高 +
- *  下伸」叠起来本就超过 22px，一旦在 `py-[1px]` 的行里用
- *  `flex items-center` 居中，节点的 `style.height = IO_PORT_HEIGHT`
- *  就把外框变成硬裁剪盒。抬到 28px 并配 `leading-[1.4]`（行盒 14.7px，
- *  内部含上下留白）后，下伸部分落在 28px 外框内的 y ≈ 10px 处，
- *  底部留出 4~5px 余量；整条 wfGroup 只涨约 18px（10 行时），
- *  仍然在「紧凑」的要求之内。
- *
- *  这条尺寸链被来回调过几次，结论只有一个：**下伸笔画被裁是「行盒高度」
- *  与「外框高度」两个量共同决定的**，只调其中一个（例如把对齐从
- *  items-center 改成 items-end）改不动它 —— 行盒本身不包含下伸部分时，
- *  对齐方式怎么改都会被 `style.height` 裁掉。所以最终的两处修改是
- *  「行盒高度（leading-[1.4]）」+「外框高度（28）」成对调整。
- *
- *  若以后觉得行距太松，可换回 leading-snug（1.375）并把
- *  IO_PORT_HEIGHT 收到 26 —— 两个值必须一起动。 */
 export interface WorkflowNoteData {
   [key: string]: unknown;
   title: string;
