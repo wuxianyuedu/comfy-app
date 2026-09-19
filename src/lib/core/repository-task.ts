@@ -8,10 +8,12 @@ import { db } from "~/lib/db";
 import { task, taskImage, type Task } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
+import { TERMINAL_TASK_STATUSES } from "../task-state";
 import {
   eq,
   and,
   inArray,
+  notInArray,
   desc,
   asc,
   lt,
@@ -34,6 +36,15 @@ import {
  * （断言集中在**这一处**，而不是散在调用点）。
  */
 const NO_LIMIT = sql`-1`;
+
+/**
+ * 终态集合的 SQL 形态：由 `~/lib/task-state` 的唯一定义摊平而来。
+ *
+ * 为什么必须摊平：drizzle 的 `where` 是 SQL 表达式，收不下 TS 谓词
+ * （`isTerminalTaskStatus`），所以这里必然要有一份数组。但**判据只能有一处
+ * 定义**（规范 §12.12）——因此这是派生值，新增状态时改那边即自动生效。
+ */
+const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
 
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
@@ -278,18 +289,37 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
-  async updateProgress(taskId: string, pct: number): Promise<void> {
-    await db
+  /**
+   * 进度回写（顺带把行标成 RUNNING）：**只在非终态行上生效**。
+   *
+   * 为什么必须加 `NOT IN (...)` 这个 where 条件：执行路径是异步的，
+   * ComfyUI 的 WS `progress` 帧与「本任务已被别的路径收口（reaper 判终态 /
+   * 用户取消）」可能交错到达。一条收口之后迟到的进度回写会把 DB 行从
+   * SUCCEEDED / FAILED / CANCELLED **改回 RUNNING**，于是：
+   *   • `/api/tasks/[id]/stream` 的 3s「数据库实情」轮询先看到终态 → 关流；
+   *     之后再看到 RUNNING → 客户端已经关掉的流不会重开，卡片永远停在
+   *     「生成中…」；
+   *   • 终态行还带着 `finishedAt`，与 status 自相矛盾。
+   *
+   * 返回是否真的更新了行（调用方据此判断「本任务是否已被别人收口」）。
+   */
+  async updateProgress(taskId: string, pct: number): Promise<boolean> {
+    const updated = await db
       .update(task)
       .set({ progress: pct, status: "RUNNING" })
-      .where(eq(task.id, taskId));
+      .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
+      .returning({ id: task.id });
+    return updated.length > 0;
   }
 
-  async markRunning(taskId: string, promptId: string): Promise<void> {
-    await db
+  /** 记下 promptId 并标 RUNNING（同样只对非终态行生效，理由见 updateProgress）。 */
+  async markRunning(taskId: string, promptId: string): Promise<boolean> {
+    const updated = await db
       .update(task)
       .set({ status: "RUNNING", promptId })
-      .where(eq(task.id, taskId));
+      .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
+      .returning({ id: task.id });
+    return updated.length > 0;
   }
 
   async finalizeSuccess(
