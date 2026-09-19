@@ -46,9 +46,18 @@ export function Disclosure({
   disabled,
   /** 触发行的内容（标题 / 摘要）。 */
   trigger,
-  /** 与触发行同排、排在触发开关**之前**的内容（见 `leading` 的说明）。 */
+  /**
+   * 与触发行同排、排在触发开关**之前**的内容。
+   * 用途：一排按钮里只有一个是折叠开关时（如设置页的「重试 / 完整错误 /
+   * 复制」），把非开关的那几个放这里 —— 基元的 trigger 是 `<button>`，
+   * 往它里面塞 `<Button>` 在 HTML 里非法。
+   *
+   * ⚠️「同排」是**布局**，不是把内容塞进 trigger：`leading` / `trailing` 是
+   * Root 的子元素、与 trigger **并列**。要让它们真排成一行，得给 Root 传
+   * `rootClassName="flex items-center gap-2"`（见 `rootClassName`）。
+   */
   leading,
-  /** 与触发行同排、排在触发开关**之后**的内容。 */
+  /** 与触发行**同排、排在触发开关之后**的内容（布局说明同 `leading`）。 */
   trailing,
   /** 展开的内容。 */
   children,
@@ -60,8 +69,18 @@ export function Disclosure({
    * @default "caret"
    */
   marker = "caret",
-  /** 触发按钮的 class（含行排布）。 */
+  /**
+   * 触发按钮的 class（标记与 `trigger` 内容的排布）。
+   * 整排（`leading` + 触发开关 + `trailing` + 面板）的排布是 **Root** 的事，
+   * 用 `rootClassName`（如 `flex flex-wrap items-center gap-2`）。
+   */
   className,
+  /**
+   * Root（整排的容器）的 class —— 需要 `leading` / `trailing` 与触发开关
+   * **排成一行**时在这里给 `flex` 一族；面板若要独占一行，配
+   * `panelClassName="basis-full"`。
+   */
+  rootClassName,
   /** 展开面板的 class。 */
   panelClassName,
 }: {
@@ -82,6 +101,7 @@ export function Disclosure({
   trailing?: React.ReactNode;
   marker?: DisclosureMarker;
   className?: string;
+  rootClassName?: string;
   panelClassName?: string;
 }) {
   return (
@@ -91,6 +111,9 @@ export function Disclosure({
       onOpenChange={onOpenChange}
       disabled={disabled}
       data-slot="disclosure"
+      /* 整排的容器：调用处要 `leading` / `trailing` 与触发开关同排时，
+       * 布局类（`flex` 一族）加在这里 —— 见 `rootClassName`。 */
+      className={rootClassName}
     >
       {leading}
       <CollapsiblePrimitive.Trigger
@@ -144,7 +167,9 @@ export function Disclosure({
          * 浏览器页内查找（Ctrl+F）命中折叠内容时会自动展开它。这正是原生
          * `<details>` 的行为，换成自绘「条件渲染」就丢了。 */
         hiddenUntilFound
-        className={panelClassName}
+        /* `w-full`：Root 是 flex 行时面板仍是「独占一行」的那块（配
+         * `panelClassName="basis-full"`），不随内容宽度收缩。 */
+        className={cn("w-full", panelClassName)}
       >
         {children}
       </CollapsiblePrimitive.Panel>
