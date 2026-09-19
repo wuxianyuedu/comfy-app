@@ -3,7 +3,8 @@
 // ── 工作流库详情「工坊封装」页签（规范 §17.2 第③层：只渲染 + 上抛）────────
 // 替代旧的「可配置参数」草稿表单：工坊不把工作流的全部参数摊给用户，这里
 // 展示的是**工坊会用哪些控件驱动这条工作流**（提示词 / 尺寸【宽高比+百万像素】/
-// 负向提示词 / 参考图…），每个口落到哪个 IO 端口、哪些还没落（未落点显式可见）。
+// 负向提示词 / 参考图…），每个口落到哪个 IO 端口，缺落点时只在「必填口」上
+// 立一个状态徽标（可选口没落点是常态，不是状态，见 entryStateBadge）。
 //
 // 三件事必须显式：
 //   · **必填 / 可选**（随模式契约，`ModeContract.required`）——「能不能跑」只认
@@ -54,33 +55,37 @@ interface WorkshopEncapsulationPanelProps {
   onModeChange?: (mode: string) => void;
 }
 
-/** 契约口 → 状态徽标（文案 + 配色）。
+/** 契约口状态徽标的形态（配色表；文案由 `entryStateBadge` 按缺口给）。 */
+const RESOLVED_BADGE_CLASS =
+  "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
+const MISSING_REQUIRED_BADGE_CLASS =
+  "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300";
+
+/** 落点状态 → 徽标：**已落点才给徽标**，没落点返回 null。
  *
- *  三档，判据只有「有没有落点」与「是不是必备口」两个事实：
- *   · 已落到端口 —— 绿；
- *   · 未落点 + **必备** —— 琥珀（缺了它这条工作流跑不了，必须显式可见）；
- *   · 未落点 + **非必备** —— 中性灰（**不是问题状态**：非必填口不必连到工作流，
- *     缺的值由工作流图内的默认值兜底；染成琥珀会让用户以为配置没做完）。 */
+ *  为什么「没落点」不再单独出一个徽标（ISSUE #720）：那一列里已经有
+ *  「必填 / 可选」标签，而它读的正是「没落点会不会挡住运行」这同一份事实
+ *  （`ModeContract.required`）——再挂一个「可选 · 未落点」，是把**已经说过的
+ *  话**换个说法再说一遍，还占着一列的视觉重量。实测截图里那一行三个胶囊：
+ *  `可选` `可选 · 未落点` `负向提示词`，前两个是同义反复。
+ *
+ *  留白只有一种例外：**必填口没落点**。那不是复述，是**状态**（缺了它这条
+ *  工作流跑不了）——它必须一眼看得出来，且它在「必填」标签上读不出来（必填
+ *  口照样可能已经落好点）。所以只保留这一个红色缺口徽标。
+ *
+ *  琥珀在这里刻意不用：没落点且必填 = 缺件，是问题状态（同「未配置」总览的
+ *  红系），不是「待办提示」。 */
 function entryStateBadge(entry: EncapsulationEntryStatus): {
   label: string;
   className: string;
-} {
+} | null {
   if (entry.targetIoKey !== null) {
-    return {
-      label: "已落点",
-      className: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
-    };
+    return { label: "已落点", className: RESOLVED_BADGE_CLASS };
   }
   if (entry.required) {
-    return {
-      label: "必备 · 未落点",
-      className: "bg-amber-100 text-amber-800 dark:text-amber-300",
-    };
+    return { label: "未落点", className: MISSING_REQUIRED_BADGE_CLASS };
   }
-  return {
-    label: "可选 · 未落点",
-    className: "bg-subtle text-muted-foreground border-border-strong border",
-  };
+  return null;
 }
 
 export function WorkshopEncapsulationPanel({
@@ -210,42 +215,50 @@ export function WorkshopEncapsulationPanel({
 
       {/* 工坊对外口一览：每个口 = 工坊控件形态 + 生效落点 */}
       <div className="space-y-2">
-        {status.entries.map((entry) => (
-          <div
-            key={entry.id}
-            className="border-border/60 bg-surface rounded-lg border px-3 py-2"
-          >
-            <div className="flex items-center gap-2">
-              {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），不是
-                  写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
-              <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  entry.required
-                    ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
-                    : "bg-subtle text-muted-foreground/80 border-border-strong border"
-                }`}
-              >
-                {entry.required ? "必填" : "可选"}
-              </span>
-              <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${entryStateBadge(entry).className}`}
-              >
-                {entryStateBadge(entry).label}
-              </span>
-              <span className="text-ink text-[12px] font-medium">
-                {entry.label}
-                {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
-                    而契约口与适配器口是两套 id，只写中文对不上。 */}
-                <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
-                  {entry.id}
+        {status.entries.map((entry) => {
+          /* 一行最多两个胶囊：**必填 / 可选**（随模式契约）+ 落点状态。
+           *  「没落点」只有必填口才有状态徽标 —— 可选口没落点就是常态，见
+           *  `entryStateBadge` 的注释（ISSUE #720）。 */
+          const badge = entryStateBadge(entry);
+          return (
+            <div
+              key={entry.id}
+              className="border-border/60 bg-surface rounded-lg border px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），不是
+                    写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    entry.required
+                      ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                      : "bg-subtle text-muted-foreground/80 border-border-strong border"
+                  }`}
+                >
+                  {entry.required ? "必填" : "可选"}
                 </span>
-              </span>
-              <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]">
-                {displayValue(entry.targetIoKey)}
-              </span>
+                {badge && (
+                  <span
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
+                  >
+                    {badge.label}
+                  </span>
+                )}
+                <span className="text-ink text-[12px] font-medium">
+                  {entry.label}
+                  {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
+                      而契约口与适配器口是两套 id，只写中文对不上。 */}
+                  <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
+                    {entry.id}
+                  </span>
+                </span>
+                <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]">
+                  {displayValue(entry.targetIoKey)}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* 流程测试：按封装口径真实跑一次（提示词 + 尺寸 → ComfyUI） */}

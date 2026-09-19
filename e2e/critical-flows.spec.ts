@@ -133,6 +133,57 @@ test.describe("工作区链路 @critical", () => {
     ).toBeVisible();
   });
 
+  /**
+   * ISSUE #720：「加载是有个不知道是什么的图案在」。
+   *
+   * 现场是工作流库的加载态：`EmptyState` 的图标位是 `<span class="block">`
+   * 这种**非 flex** 的容器，而 `Spinner` 是个 `<span>` —— 默认
+   * `display: inline`，`size-6` 出的 width/height 对行内盒不生效，画出来的
+   * 是「2px 上下边框叠在一个行内盒上」：**4×21 的竖线**。用户看不出那是加载
+   * 指示器，只读到一个来源不明的图案。
+   *
+   * 尺寸只有真实浏览器量得出来（jsdom 不做布局、不做行内盒的宽高失效）：
+   *   1. 宽高都到位（老形态宽 4px）；
+   *   2. 是个圆（宽高相等），不是竖条；
+   *   3. 容器**不是 flex** —— 否则这条判据又会退回「靠调用处布局撑着」，
+   *      下一个非 flex 的落点照样塌成竖线。
+   */
+  test("@critical 工作流库加载态的转圈是真的圆，不是一条竖线", async ({
+    page,
+  }) => {
+    await stubBackend(page);
+    /* 把列表查询拖住，制造「加载中」这一刻（它只持续几秒，抓不到就白跑）。 */
+    await page.route("**/api/trpc/**", async (route: Route) => {
+      if (!route.request().url().includes("workflow.list")) {
+        await route.continue();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 60_000));
+    });
+
+    await page.goto("/workspace");
+    await gotoWorkspaceView(page, "流程");
+    await expect(page.getByText(/正在加载工作流/)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const spinner = page.locator('[data-slot="spinner"]').first();
+    const box = await spinner.boundingBox();
+    expect(box).not.toBeNull();
+    const size = box ?? { width: 0, height: 0 };
+    /* 老形态宽 4px / 高 21px；正常形态是 24×24（`size-6`）。 */
+    expect(size.width).toBeGreaterThan(16);
+    /* 圆：宽高相等（给 1px 抗锯齿余量），竖条会在这里红。 */
+    expect(Math.abs(size.width - size.height)).toBeLessThanOrEqual(1);
+
+    /* 尺寸不能靠调用处的 flex 撑着 —— 图标容器本身不是 flex 项时才见真章。 */
+    const containerIsFlex = await spinner.evaluate((el) => {
+      const parent = el.parentElement;
+      return parent ? getComputedStyle(parent).display.includes("flex") : false;
+    });
+    expect(containerIsFlex).toBe(false);
+  });
+
   test("@critical 工作流库空态给出可行动指引而不是空白", async ({ page }) => {
     await stubBackend(page);
     await page.goto("/workspace");
@@ -648,6 +699,52 @@ test.describe("应用页签与全屏视图 @critical", () => {
       expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThanOrEqual(
         1,
       );
+    });
+
+    /**
+     * ISSUE #720：「日志默认宽度太小了，而且加宽的按钮也失效了」。
+     *
+     * 两个现象是**同一个根因**：`ui/dialog` 的弹窗基类带着 `sm:max-w-sm`
+     * （**带变体**的 max-width，Tailwind 把变体 utility 排在所有无变体之后），
+     * 于是调用处无论写 `max-w-[96vw]` 还是 `w-6xl`，量到的都是 24rem：
+     *   · 默认档 `max-w-5xl` 从来没生效过 → 面板只有 **384px** 宽；
+     *   · 加宽档同理，按钮点了状态在变（title 加宽→收缩）、宽度纹丝不动。
+     *
+     * 判据只有真实浏览器量得出来（jsdom 不做布局，读不出 Tailwind 的产出）：
+     *   1. 默认宽度 ≥ 800px（老形态恒为 384px，直接红）；
+     *   2. 加宽后**明显更宽**且贴近视口（老形态前后差值 0）；
+     *   3. 加宽后不溢出视口（贴边但不出界）。
+     */
+    test("@critical 日志弹窗默认够宽，且加宽按钮真的变宽", async ({ page }) => {
+      await stubBackend(page);
+      await stubLogs(page);
+      await openPanel(page);
+
+      const popupWidth = () =>
+        page
+          .locator('[data-slot="dialog-content"]')
+          .evaluate((el) => Math.round(el.getBoundingClientRect().width));
+      const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+
+      const before = await popupWidth();
+      /* 老形态是恒定的 384px（24rem）。给足余量：只要不再是那个值，就说明
+         基类的 max-width 没有再把调用处的宽度吃掉。 */
+      expect(before).toBeGreaterThan(800);
+      expect(before).toBeLessThanOrEqual(viewport.width);
+
+      await page.getByTitle("加宽").click();
+      await expect(page.getByTitle("收缩")).toBeVisible();
+      const after = await popupWidth();
+
+      /* 加宽必须**看得见**：老形态前后相等（按钮点了没反应就是这个现场）。 */
+      expect(after).toBeGreaterThan(before);
+      /* 加宽档 = 贴视线两边（左右各 8px），但不许溢出视口。 */
+      expect(after).toBeLessThanOrEqual(viewport.width);
+      expect(after).toBeGreaterThan(viewport.width * 0.9);
+
+      /* 收缩回到默认档，且宽度不残留。 */
+      await page.getByTitle("收缩").click();
+      await expect.poll(popupWidth).toBe(before);
     });
 
     test("@critical 行头里类别计数在下拉左侧，下拉贴住右侧操作区", async ({

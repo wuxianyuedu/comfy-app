@@ -553,6 +553,35 @@ Ollama 三处同构）不要再各自拼 class——抽成一个纯派生模块�
 `src/app/(main)/settings/settings-status-row-config.ts` 与
 `src/components/studio/workflow-editor/workflow-editor-topbar-config.ts`。
 
+#### 3.8.1.0 尺寸类只对「非行内盒」生效 —— 尺寸不能外包给调用处的布局
+
+`width` / `height` 对 **`display: inline`** 的盒子**不生效**。`<span>` 默认就是
+`inline`，所以 `<span className="size-6 rounded-full border-2 border-t-violet-500
+animate-spin" />` 画出来的不是圆，而是「上下两条 2px 边框叠在一个行内盒上」：
+**约 4px 宽、20px 高的竖线**。用户看不出那是加载指示器，只读到一个来源不明的图案
+（ISSUE #720 的第 1 条）。
+
+这条之所以长期没被发现：该组件此前**唯一的落点都在 flex 容器里** —— flex 会把
+子项的 display 计算值块化，尺寸照常生效。于是「尺寸能不能成立」悄悄依赖了调用处
+的布局，而这个前提从没被写下来。
+
+```tsx
+// ❌ 尺寸挂在行内盒上：size-6 被完全忽略
+<span className="size-6 rounded-full border-2" />
+
+// ✅ 自带 inline-block（或调用处显式给 block / flex）
+<span className="inline-block size-6 rounded-full border-2" />
+```
+
+**判据**：一个「靠尺寸表达形态」的基元（转圈、圆点、头像…）要么自带非行内的
+`display`，要么在自己的 props / 文档里写清「调用处必须给 flex/block 容器」。
+前者更稳 —— 后者只是把同一个坑挪给下一个人。
+
+> 同族的坑还有一条在 **Tailwind 产序**上：基类里写**带变体**的尺寸上限
+> （`sm:max-w-sm`）会被排在所有无变体 utility 之后，**调用处传什么都压不过
+> 它**（同族打同族只能看产序，跨族才有确定结论）。触发过的事故见 §14.3 的 T8
+> 与 §7.30。
+
 #### 3.8.1.1 一排控件的宽度由调用处决定，不由基础件预设
 
 **基础件里不要预设 `w-full`。** 宽度是**布局决定**，不是控件属性 —— 同一个
