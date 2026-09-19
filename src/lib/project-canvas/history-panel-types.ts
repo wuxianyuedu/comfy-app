@@ -8,7 +8,13 @@
  * 与 studio/history/ 域的同名函数**刻意不合并**：那边是「全量历史页」
  * （分页 + 日期分组 + 排序），这边是画布侧栏（80 条 + 网格/列表双密度），
  * 语义不同，硬抽只会制造第二个错误抽象（§17.6.1 同款判断）。
+ *
+ * **唯一收口的是 `timeAgo`**：它不承载上面那些域语义差异，只是「相对时间怎么写」，
+ * 此前两域各写一份（阈值/档位漂移）。现在两者都转发 `~/lib/time-format`，
+ * 画布侧的「30 天后转日期」这层差异留在本模块（`maxDays: 30` + 日期回落）。
  */
+
+import { timeAgo as timeAgoImpl } from "~/lib/time-format";
 
 export type HistoryFilter = "all" | "image" | "video" | "audio";
 export type HistoryScope = "project" | "all";
@@ -52,19 +58,20 @@ export const KIND_STYLE: Record<TaskMediaType, string> = {
   audio: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 
+/**
+ * 画布侧栏的相对时间：30 天内写「N 天前」，更早退化成 `M月D日`。
+ *
+ * 档位与文案逐条保持原样（§16.2.4.9 的「只搬定义、不动取值」），
+ * 只把「怎么写相对时间」交给 `~/lib/time-format`。
+ */
 export function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d} 天前`;
-  return new Date(iso).toLocaleDateString("zh-CN", {
-    month: "short",
-    day: "numeric",
-  });
+  return (
+    timeAgoImpl(iso, { maxDays: 30 }) ??
+    new Date(iso).toLocaleDateString("zh-CN", {
+      month: "short",
+      day: "numeric",
+    })
+  );
 }
 
 /** 卡片主标题：优先提示词摘要，退回工作流名，最后退回任务 id 短码。 */

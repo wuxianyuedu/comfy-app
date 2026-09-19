@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 
+import { copyText } from "~/lib/browser-io";
+
 import { useToast } from "../../ToastProvider";
 import {
   countByStatus,
@@ -187,13 +189,9 @@ export function useHistoryList(): HistoryListController {
         // 原 REST /api/tasks/[id]/retry 从未实现（历史一直 404）；后端无
         // 重试接口，复制参数到剪贴板，请到创作台手动重跑。
         const params = JSON.stringify(task.params ?? {}, null, 2);
-        try {
-          await navigator.clipboard?.writeText(
-            `prompt: ${task.prompt ?? ""}\nworkflow: ${task.workflowName}\ntype: ${task.type}\nparams: ${params}`,
-          );
-        } catch {
-          /* noop */
-        }
+        await copyText(
+          `prompt: ${task.prompt ?? ""}\nworkflow: ${task.workflowName}\ntype: ${task.type}\nparams: ${params}`,
+        );
         toast.info(
           "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
         );

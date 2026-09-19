@@ -6,6 +6,7 @@
 // 挑中的一张写在角色上（character.portraitUrl）。业务与网络全在
 // hooks/use-character-portrait.ts 与 lib/workshop/character-portrait-client.ts。
 
+import { formatClock } from "~/lib/time-format";
 import React from "react";
 
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -298,7 +299,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     }`}
                   >
                     <span className="text-faint mr-1">
-                      {new Date(entry.ts).toLocaleTimeString()}
+                      {formatClock(entry.ts)}
                     </span>
                     {entry.text}
                   </li>
@@ -331,7 +332,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                           }`}
                         >
                           <span className="text-faint mr-1">
-                            {new Date(entry.ts).toLocaleTimeString()}
+                            {formatClock(entry.ts)}
                           </span>
                           {entry.summary}
                         </li>

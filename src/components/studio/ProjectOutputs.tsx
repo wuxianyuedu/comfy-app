@@ -5,6 +5,8 @@ import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { copyText, downloadText } from "~/lib/browser-io";
+import { timeAgo } from "~/lib/time-format";
 import { StatusBadge } from "~/components/ui/status-badge";
 import {
   getActiveId,
@@ -45,17 +47,6 @@ function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
   const img = images.find((image) => image.mediaType === "image");
   if (img) return img;
   return images[0] ?? null;
-}
-
-function timeAgo(iso: string): string {
-  const d = new Date(iso).getTime();
-  const diff = Date.now() - d;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.floor(h / 24)} 天前`;
 }
 
 export function ProjectOutputs() {
@@ -140,24 +131,16 @@ export function ProjectOutputs() {
 
   const handleCopy = useCallback(() => {
     if (!metaJson) return;
-    navigator.clipboard?.writeText(metaJson).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      },
-      () => undefined,
-    );
+    void copyText(metaJson).then((ok) => {
+      if (!ok) return;
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   }, [metaJson]);
 
   const handleExport = useCallback(() => {
     if (!metaJson || !selected) return;
-    const blob = new Blob([metaJson], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `output-${selected.id}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(metaJson, `output-${selected.id}.json`);
   }, [metaJson, selected]);
 
   if (!projectId) {
@@ -316,7 +299,7 @@ export function ProjectOutputs() {
                       {output.seed ?? "—"}
                     </p>
                     <p className="text-ink-fainter mt-1 text-[11px]">
-                      {timeAgo(output.createdAt)}
+                      {timeAgo(output.createdAt) ?? "—"}
                     </p>
                   </div>
                 </Button>
@@ -424,7 +407,7 @@ export function ProjectOutputs() {
                     ],
                     ["CFG", selected.cfg != null ? String(selected.cfg) : "—"],
                     ["尺寸", selected.size ?? "—"],
-                    ["时间", timeAgo(selected.createdAt)],
+                    ["时间", timeAgo(selected.createdAt) ?? "—"],
                   ].map(([k, v], i) => (
                     <div
                       key={k}

@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
+import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/page-loading";
@@ -37,12 +38,6 @@ export type { MaterialItem };
 type DisplayMode = "grid" | "list";
 
 /* ── Helpers（纯展示：格式化与配色，不含业务规则）──────────── */
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 /** 分类图标底色：图片/视频/音频/文档各一套，和历史记录面板保持同一语言。 */
 const KIND_STYLE: Record<string, string> = {
@@ -443,7 +438,7 @@ export function MaterialLibraryPanel({
                     </p>
                     <p className="text-ink-fainter mt-0.5 text-[11px]">
                       {searching ? `${item.folderName} · ` : ""}
-                      {formatSize(item.size)}
+                      {fmtBytes(item.size) ?? "—"}
                     </p>
                   </div>
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">

@@ -124,7 +124,7 @@ pnpm ui:primitives:report     # 只出清单（排批次用，不判失败）
 node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 ```
 
-**四条判据**（`scripts/check-ui-primitives.cjs`，基线
+**六条判据**（`scripts/check-ui-primitives.cjs`，基线
 `scripts/.ui-primitives-baseline.json`）：
 
 | ID     | 判据                                        | 应改用什么                                                                                                                                                                             |
@@ -133,11 +133,14 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P2** | 视图层自建 `createPortal(` 浮层             | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu`                                                                                                                           |
 | **P3** | 视图层自写 `animate-spin` / `animate-pulse` | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
 | **P4** | 视图层自写 `::-webkit-scrollbar` 外观       | `globals.css` 的三个具名类：`.custom-scrollbar`（密集日志区）/ `.soft-scrollbar`（文字编辑区）/ 全局兜底（见 §16.2.4.9）                                                               |
+| **P5** | 视图层自写剪贴板写入（`navigator.clipboard` / `document.execCommand`） | `~/lib/browser-io` 的 `copyText`（含降级链路与 `navigator` 存在性判定）                                                                                                                |
+| **P6** | 视图层自写 Blob 下载（`URL.createObjectURL`） | `~/lib/browser-io` 的 `downloadText` / `downloadJson`（`revoke` 与 `click` 的顺序收在出口里）                                                                                          |
 
-**P4 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4 一上来就是**硬闸** —— 自绘滚动条的「定义」只能有一处，没有「冻结在某个数字」
-的中间态可言。因此 P4 **不进基线**（`--update` 也不接受带 P4 违规的基线，否则
-「把违规一起写进基线」就成了唯一的绕过方式）。
+**P4~P6 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4/P5/P6 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载」这三件事的
+**定义**只能有一处，没有「冻结在某个数字」的中间态可言。因此它们**不进基线**
+（`--update` 也不接受带违规的基线，否则「把违规一起写进基线」就成了唯一的绕过
+方式）。P4~P6 的清零过程见 §16.2.4.9 / §16.2.4.10。
 
 **四条判据当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
@@ -258,6 +261,11 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 余量主题色       | ~~115 处写死色值「既不是豁免、也不是待治理项」~~                                                                                   | 逐条定性：token 化 18 处 / 登记豁免 97 处 / 进固定暗色清单 2 处                                                                               | ✅ **基线归零，见 §16.2.4.5 ②**             |
 | 滚动条外观       | ~~`.custom-scrollbar`（`globals.css`）与 `SCROLLBAR_VISIBLE_CLASSES`（视图里的任意值变体）**各写一份**自绘滚动条外观，取值已漂移~~ | `globals.css` 是三档的唯一出口（`.custom-scrollbar` / `.soft-scrollbar` / 全局兜底），取值逐条保留；P4 硬闸禁止视图再写 `::-webkit-scrollbar` | ✅ **见 §16.2.4.9**                         |
 | 表单校验规则     | ~~`ui/form`（RHF 族）零引用，规则该归谁持有**未决策**~~                                                                            | **决定不接**：字段级规则住 `src/lib/<domain>/*-schema.ts` 的纯函数，集合级留 controller                                                       | ✅ **已决策，见 §16.2.4.8**                 |
+| 剪贴板写入       | ~~**4 份实现**（`copyText` / `copyLogText` / 两处内联），其中 6 个落点**完全没有降级链路**——可选链在 Tauri 的 `http://` 非安全上下文里把失败吞掉~~ | `~/lib/browser-io` 的 `copyText`（两条通道 + `navigator` 判定）；P5 硬闸禁止视图再写 `navigator.clipboard` / `execCommand`                     | ✅ **见 §16.2.4.10**                        |
+| Blob 下载        | ~~**7 份实现**，`revokeObjectURL` 与 `click()` 的**先后顺序不统一**（先 revoke 会让大文件拿到失效 URL）~~                          | `~/lib/browser-io` 的 `downloadText` / `downloadJson`；P6 硬闸禁止视图再写 `URL.createObjectURL`                                              | ✅ **见 §16.2.4.10**                        |
+| 相对时间         | ~~**5 份实现**，档位/后缀各不相同（`workspace` 与 `WorksGallery` 两份逐字相同）~~                                                   | `~/lib/time-format` 的 `timeAgo`（`maxDays` / `suffix` 承载差异）；域模块保留原名转发                                                          | ✅ **见 §16.2.4.10**                        |
+| 时刻格式化       | ~~**6 份实现**，带毫秒的两处逐字相同；`workshop` 4 处**连区域设置都没固定**~~                                                       | `~/lib/time-format` 的 `formatClock`（`millis` 档）；跨天补日期留在 `logs/log-format.ts`                                                       | ✅ **见 §16.2.4.10**                        |
+| 字节容量         | ~~**3 份实现**（`fmtBytes` / `fmtSize` / `formatSize` **三个名字**），而 `src/lib/format-bytes.ts` 早就在；1024 字节整这一档还敢给出不同答案~~ | `~/lib/format-bytes` 的 `fmtBytes`（既有出口，本批把两处漏网的接上）                                                                          | ✅ **见 §16.2.4.10**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -809,6 +817,86 @@ utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类�
 「历史流水」）此前只扫 `.ts` / `.tsx`，**`.css` 是盲区** —— 而样式注释恰恰是最容易
 被整段搬运的一类。把 `.css` 纳入扫描后，`globals.css` 里立刻报出三处
 （`T11` / `T10` ×2，另有 `R-ardot18` / `R-ardot106` / `R-ardot103` 已在同批清掉）。
+
+### 16.2.4.10 按形态再扫一遍：三件事各收了 4~7 份实现（P5/P6 硬闸）
+
+§16.2.4.9 的结论是**「按目录名 / 按文件名的问法看不见重复，按形态的才看得见」**。
+这一批把那句口径**当成方法用了一遍**：不问「库里有没有 `clipboard` 这个词」，
+而问「**谁在把一段文本送出去**」「**谁在把时间写成给人看的字**」。四问法各撞出一条账。
+
+#### 问法一：谁在把一段文本送出去（剪贴板）
+
+实测 **4 份实现**，且各自写法不同：
+
+| 在哪 | 兜底写法 |
+| --- | --- |
+| `history/hooks/use-history-detail-actions.ts` 的 `copyText` | 返回 `boolean`；临时 `<textarea>` 用 `position:fixed; opacity:0` |
+| `logs/log-export.ts` 的 `copyLogText` | 静默；同一个 `<textarea>` 用默认定位、不设 `opacity` |
+| `WorkflowNodeJsonPopover.tsx` | 只在自己那份里再写一遍 `execCommand`，`left:-9999px` |
+| `DebugChainFooter.tsx` / `ShellTabs.tsx` / 其余 6 处 | 直接 `navigator.clipboard?.writeText(...)`，**完全没有降级链路** |
+
+最后一行才是这条账的实质：**没有降级链路的那几处，在 Tauri 的 `http://` 非安全
+上下文里直接失败**（`navigator.clipboard` 是 `undefined`），而它们的写法看起来
+「已经用了可选链、应该没问题」—— 可选链在这里恰好**吞掉了失败**。
+
+#### 问法二：谁在触发一次下载
+
+实测 **7 份实现**，`URL.revokeObjectURL` 与 `a.click()` 的**先后顺序都不统一**。
+先 revoke 会让尚未开始的下载拿到失效 URL（大文件必现）—— 而这件事在 7 份里
+有 3 份写错顺序、却因为小文件测试（同步完成）而一直没暴露。
+
+#### 问法三：谁在把时间写成给人看的字
+
+| 形态 | 份数 | 漂移 |
+| --- | --- | --- |
+| `刚刚 / N 分钟前 / …` | **5** | 阈值档位各不相同（一处 30 天封顶后转日期、两处每档带「修改」后缀、一处不带）；`workspace` 与 `WorksGallery` **两份逐字相同** |
+| `HH:mm:ss` 时刻 | **6** | 带毫秒的两处**逐字相同**；`workshop` 那 4 处裸调 `toLocaleTimeString()`，**连区域设置都没固定**（宿主 12 小时制时会多出 AM/PM 把日志行撑开） |
+
+#### 问法四：谁在把字节写成容量
+
+**3 份实现**，而 `src/lib/format-bytes.ts` **早就存在**（`AppUpdateSection` /
+`BrowserStatusBar` 已在用）。`model-library-config.ts` 与 `MaterialLibraryPanel.tsx`
+各写一份，且 **降档阈值写法还不一致**（`>` vs `>=`）—— 1024 字节整这一档
+两处给出不同答案。这是**「出口存在但没人知道」**型重复，比「没有出口」更难发现：
+扫描「谁在实现 `formatBytes`」会全部漏掉，因为两处一个叫 `fmtSize`、
+一个是文件内私有的 `formatSize`。
+
+#### 收口：两个顶层单例 + 两条硬闸
+
+按「同一件事的定义只有一处，取值逐条保留」收口（§16.2.4.9 同款）：
+
+- `src/lib/browser-io.ts`：`copyText`（返回 `boolean`，两条通道 + `navigator`
+  存在性判定）、`downloadText`、`downloadJson`。这是 `src/lib/` 的**顶层单例**
+  （同 `format-bytes.ts` / `error-message.ts`），已登记进 `check-file-structure.cjs`
+  的 `DOMAIN_EXEMPT` 并设覆盖率门槛（§18.14 三件事同批做完）。
+- `src/lib/time-format.ts`：`timeAgo`（`maxDays` / `suffix` 两个**显式**选项承载
+  调用处的差异，不做「统一成一种」）、`formatClock`。
+
+**调用处零行为变化**的证据：`history-utils.ts` / `history-panel-types.ts` 保留
+原名转发（消费方一行未改）；`log-format.ts` 的 `formatTime` 跨天补日期的逻辑
+**留在原处**，只把「时刻本身怎么写」换成 `formatClock`；`log-export.ts` 的
+`copyLogText` / `downloadLogText` 签名不变。逐处比对见本批的 checklist。
+
+**为什么不合并 `history-utils` 与 `history-panel-types` 的其余部分**：那是**域语义**
+差异（全量历史页分页 + 日期分组 vs 画布侧栏 80 条 + 双密度），合并会制造第二个
+错误抽象（§16.2.4.6 / §17.6.1 同款判断）。本批只收「相对时间怎么写」这一件事 ——
+它在两处**不承载任何域语义**，此前各写一份纯属偶然。
+
+#### 判据：P5/P6（硬闸，不留存量）
+
+`check-ui-primitives.cjs` 新增两条，与 P4 同性质（`HARD_GATE_RULES`，不进基线）：
+
+- **P5** `navigator.clipboard` / `document.execCommand(` 出现在视图里；
+- **P6** `URL.createObjectURL(` 出现在视图里。
+
+`tests/ui-primitives-coverage.test.ts` 再从**另一侧**钉住出口：两个共享模块必须
+导出约定的名字、且至少有一处业务引用 —— 否则「抽出出口但没人用」等于没做。
+`ui/json-viewer.tsx` 的复制按钮也改走 `copyText`（它是 `ui/` 工具生成目录里的
+`z-*` 同款判断：**语义正确性优先于「不手改」**，见 §16.2.5 末段）。
+
+> 方法论记一笔：这四条账**没有一条**能靠读目录结构或文件名看出来。
+> `fmtSize` / `formatSize` / `fmtBytes` 是同一个函数的三个名字；
+> `copyText` 在四处叫同一个名字却有四种行为。**扫描要按问法设计，不是按目录。**
 
 ## 16.3 新增一个组件的标准动作
 

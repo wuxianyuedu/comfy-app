@@ -21,6 +21,7 @@ import {
   type MouseEvent,
 } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
+import { copyText } from "~/lib/browser-io";
 import { fetchDebugSource } from "~/lib/workflow/debug-source-client";
 import { useDebugStore } from "./debug-store";
 import {
@@ -100,8 +101,8 @@ export function DebugChainFooter({
     }
   }, []);
 
-  const copyText = useCallback((text: string) => {
-    void navigator.clipboard?.writeText(text).catch(() => undefined);
+  const onCopyText = useCallback((text: string) => {
+    void copyText(text);
   }, []);
 
   /* 弹窗内容只在 openFile 非空时渲染；提起为局部常量让内部的类型收窄
@@ -236,7 +237,7 @@ export function DebugChainFooter({
               <Button
                 variant="outline"
                 size="xs"
-                onClick={() => copyText(viewedFile)}
+                onClick={() => onCopyText(viewedFile)}
                 className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-2.5 py-1"
                 title="复制完整相对路径"
               >
@@ -245,7 +246,7 @@ export function DebugChainFooter({
               <Button
                 variant="warning"
                 size="xs"
-                onClick={() => source && copyText(source.content)}
+                onClick={() => source && onCopyText(source.content)}
                 disabled={!source}
                 className="h-auto rounded-md px-2.5 py-1"
                 title="复制全部源码"

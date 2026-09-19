@@ -6,6 +6,8 @@
  * 生产方，本组件不 import 逻辑/网络（规范 17 第③层视图）。
  */
 
+import { formatClock } from "~/lib/time-format";
+
 import { useEffect, useMemo } from "react";
 import { zClass } from "~/lib/shell/overlay-z";
 import {
@@ -46,15 +48,9 @@ const KIND_META: Record<
 
 function fmtTime(t: number): string {
   const d = new Date(t);
-  return d.toLocaleString("zh-CN", {
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  /* 消息中心带完整日期（消息可能跨天阅读）。 */
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${date} ${formatClock(t)}`;
 }
 
 export function MessageCenterPanel() {

@@ -149,6 +149,41 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     expect(dialog).toContain("fieldErrors");
   });
 
+  /* ── 按形态扫描：同一件事的「唯一出口」（规范 16 §16.2.4.10）──────────
+   *
+   * `check-ui-primitives.cjs` 的 P5/P6 是**硬闸**，判的是「视图里又写了一份」；
+   * 这里补的是**另一侧**：出口模块自己的接口不许被绕过 —— 视图只能经它们
+   * 拿到「写剪贴板 / 触发下载 / 格式化时间」这三件事的结果。
+   *
+   * 为什么要有这一层：P5/P6 只看 `navigator.clipboard` / `URL.createObjectURL`
+   * 这两个**字面量**，而绕过的形态可以不含它们（例如自己包一层 `new Blob`
+   * 却忘了 revoke、或自己写相对时间阈值）。用例逐个钉住出口模块存在 +
+   * 导出的名字 + 至少一处业务引用。 */
+  it.each([
+    ["~/lib/browser-io", ["copyText", "downloadText", "downloadJson"]],
+    ["~/lib/time-format", ["timeAgo", "formatClock"]],
+  ] as const)("%s 是「按形态收口」的出口，且已被业务引用", (spec, exports) => {
+    const mod = readFileSync(
+      join(SRC, spec.replace("~/", "").replace(/\//g, sep) + ".ts"),
+      "utf8",
+    );
+    for (const name of exports) {
+      /* 导出形式：`export function <name>` 或 `export const <name>`。 */
+      expect(mod, `${spec} 应导出 ${name}`).toMatch(
+        new RegExp(`export (?:async )?(?:function|const) ${name}\\b`),
+      );
+    }
+    /* 至少一处业务侧引用（排除自身与测试）。 */
+    let refs = 0;
+    for (const abs of collectImports(SRC)) {
+      const rel = relative(SRC, abs).split(sep).join("/");
+      if (rel.includes(".test.")) continue;
+      if (abs === join(SRC, spec.replace("~/", "") + ".ts")) continue;
+      if (readFileSync(abs, "utf8").includes(`"${spec}"`)) refs++;
+    }
+    expect(refs, `${spec} 没有任何业务引用（收口等于没做）`).toBeGreaterThan(0);
+  });
+
   it("ui/ 目录本身不空（判据没被绕过）", () => {
     const uiDir = join(SRC, "components", "ui");
     expect(statSync(uiDir).isDirectory()).toBe(true);

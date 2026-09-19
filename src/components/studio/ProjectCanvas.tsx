@@ -23,6 +23,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
+import { downloadJson } from "~/lib/browser-io";
 import { CanvasNode } from "./project-canvas/CanvasNode";
 import { WorkflowNodeArdot } from "./project-canvas/WorkflowNodeArdot";
 import {
@@ -359,15 +360,7 @@ function CanvasInner({
   }, [setNodes, setEdges]);
 
   const exportJson = useCallback(() => {
-    const blob = new Blob([JSON.stringify({ nodes, edges }, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${projectName || "comfy-canvas"}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadJson({ nodes, edges }, `${projectName || "comfy-canvas"}.json`);
   }, [nodes, edges, projectName]);
 
   /* ── 项目切换动作（已抽入 useProjectManager；含 switchProject、

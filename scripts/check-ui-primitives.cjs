@@ -36,6 +36,17 @@
  *      `ui/scroll-area` 那套 base-ui 自绘滚动条属`ui/` 工具生成物，
  *      走 EXEMPT_DIRS 的 `ui/` 豁免（口径见规范 16 §16.2.4.6 第三档）。
  *
+ *   P5 视图里再写一份「剪贴板写入」（**硬闸**）—— `~/lib/browser-io` 的
+ *      `copyText` 是唯一出口（含 Clipboard API → `execCommand` 的降级与
+ *      `navigator` 存在性判定）。此前有 4 份实现，各自的兜底写法还不一样
+ *      （`opacity:0` / `left:-9999px` / 不做降级 / 静默不静默）。
+ *   P6 视图里再写一份「Blob + 临时 `<a download>` 下载」（**硬闸**）——
+ *      `~/lib/browser-io` 的 `downloadText` / `downloadJson` 是唯一出口。
+ *      此前有 7 份实现，`URL.revokeObjectURL` 与 `click()` 的先后顺序都不统一
+ *      （先 revoke 会让大文件拿到失效 URL）。
+ *
+ *   P5/P6 与 P4 同性质：口径是「必须为 0」，不进棘轮基线。
+ *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
  * 有 19 份自写 spinner —— 与 §12.12「跨文件重复块」是同一族问题。
@@ -164,10 +175,26 @@ const RULES = {
       "视图内自写 ::-webkit-scrollbar 外观（应复用 globals.css 的 .custom-scrollbar / .soft-scrollbar）",
     count: (t) => (stripComments(t).match(/::-webkit-scrollbar/g) || []).length,
   },
+  P5: {
+    label:
+      "视图内自写剪贴板写入（应使用 ~/lib/browser-io 的 copyText）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (
+        (t2.match(/navigator\.clipboard/g) || []).length +
+        (t2.match(/document\.execCommand\(/g) || []).length
+      );
+    },
+  },
+  P6: {
+    label:
+      "视图内自写 Blob 下载（应使用 ~/lib/browser-io 的 downloadText / downloadJson）",
+    count: (t) => (stripComments(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
+  },
 };
 
 /** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4 属此类）。 */
-const HARD_GATE_RULES = new Set(["P4"]);
+const HARD_GATE_RULES = new Set(["P4", "P5", "P6"]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -277,9 +304,10 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4/P5/P6）。\n  " +
           gate.join("\n  ") +
-          "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观，改用 globals.css 的 .custom-scrollbar / .soft-scrollbar。",
+          "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
+          "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）。",
       );
       process.exit(1);
     }
@@ -355,7 +383,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] P4 自绘滚动条外观（硬闸，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -363,7 +391,8 @@ function main() {
     console.error(
       "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.3；\n" +
         "  改法：`<button>` → `<Button>`（~/components/ui/button）、自建 portal → ui/dialog / popover / sheet、\n" +
-        "  自写 animate-spin → ui/page-loading、自绘滚动条 → globals.css 的 .custom-scrollbar / .soft-scrollbar。\n" +
+        "  自写 animate-spin → ui/page-loading、自绘滚动条 → globals.css 的 .custom-scrollbar / .soft-scrollbar、\n" +
+        "  剪贴板 / Blob 下载 → ~/lib/browser-io 的 copyText / downloadText / downloadJson。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);

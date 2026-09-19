@@ -121,6 +121,25 @@ export default defineConfig({
         // （留痕归子类按语义记）。后者顺带补上了 `idColumn` 显式分支的用例，
         // 基类行覆盖 80% → 84.6%，目录整体 lines 96.9 / functions 96.5、statements 94.8、branches 90.6。
         // 口径仍是「实测值向下取整到 5 的倍数，只升不降」（§18.6）。
+        /* 根目录的**顶层单例**（`src/lib/<name>.ts`，规范 §12.5.3 / §18.14）此前
+         * 落在 `coverage.include` 里但**没有任何门槛条目** —— 与「文件级门槛只有
+         * 那几个」是同一个盲区。这两个是 ISSUE #672 按形态扫描新抽出来的共享出口
+         * （剪贴板 + 下载 / 时间格式化），首批就按实测值设门槛（各自都有完整用例：
+         * 降级链路的两条通道、`revoke` 与 `click` 的先后顺序、相对时间的档位与
+         * `maxDays`）。口径仍是「实测值向下取整到 5 的倍数，只升不降」（§18.6）。
+         */
+        "src/lib/browser-io.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 90,
+          branches: 80,
+        },
+        "src/lib/time-format.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         "src/lib/core/**": {
           lines: 95,
           functions: 95,
