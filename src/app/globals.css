@@ -118,6 +118,10 @@
   --color-destructive: oklch(0.577 0.245 27.325);
   --color-info-strong: #1d4ed8; /* 信息文字档（蓝-700 同值）(light default) */
   --color-status-online: #047857; /* 「本机/在线」状态点与文字（浅色档，与 emerald-700 同值）(light default) */
+  /* 对外参数封装状态（已配置 / 未配置）的文字档。琥珀取在「警示」语义上 ——
+     未配置不是失败、只是还没配，因此不并入 destructive 家族。
+     （浅色档与 amber-700 同值，深色档与 amber-400 同值。） */
+  --color-encap-pending: #b45309; /* 未配置对外参数的文字档 (light default) */
   --color-warning: #d97706; /* 警告 (light default) */
   --color-amber: #d97706; /* 琥珀强调（workshop 徽章/按钮）(light default) */
   --color-accent-soft: #ec4899; /* accent (light default) */
@@ -255,6 +259,7 @@
   --color-destructive: oklch(0.704 0.191 22.216); /* 危险原色（深色档，红-400 同值） */
   --color-info-strong: #7dd3fc; /* 信息文字档（天蓝-300 同值） */
   --color-status-online: #33d499; /* 「本机/在线」状态点与文字（深色档 — 即原写死值） */
+  --color-encap-pending: #fbbf24; /* 未配置对外参数的文字档 */
   --color-warning: #f59e0b; /* 警告 */
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
