@@ -112,8 +112,9 @@ export interface WorkflowDetailFull {
   name: string;
   taskType: string;
   /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
-   *  子图变体不带这个字段。 */
-  modes?: string[];
+   *  子图变体不带这个字段。改名 `availableModes` 以与 `WorkflowIOParam.modeOverrides`
+   *  （按模式码的覆盖层）区分 —— 两者同名 `modes` 是历史命名地雷。 */
+  availableModes?: string[];
   defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
   /** 导入时的原始 RAW（UI 格式）JSON；纯 API 导入时为 null。 */

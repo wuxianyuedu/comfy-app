@@ -388,14 +388,14 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   };
 }
 
-/** 按当前模式过滤掉 `modes[mode].visible === false` 的行。未开启模式时原样返回，
+/** 按当前模式过滤掉 `modeOverrides[mode].visible === false` 的行。未开启模式时原样返回，
  *  既有调用方行为完全不变。
  *
  *  刻意只在「展示层」过滤：`defaultInputValues` 依旧给被隐藏的参数播种模式默认值，
  *  因此提交给 ComfyUI 的 payload 不会因为某个参数在当前模式不可见就缺字段——
  *  隐藏只是不打扰用户，不代表这个值不需要下发给工作流。 */
 export function filterVisibleInMode<
-  T extends { modes?: Record<string, WorkflowIOModeOverride> },
+  T extends { modeOverrides?: Record<string, WorkflowIOModeOverride> },
 >(entries: T[], mode?: string | null): T[] {
   if (!mode) return entries;
   return entries.filter((entry) => isVisibleInMode(entry, mode));
@@ -438,7 +438,7 @@ export function defaultInputValues(
   const { inputs } = splitWorkflowIO(io);
   for (const entry of inputs) {
     if (entry.control === "link") continue;
-    /* 有模式语境时按模式覆盖层取（`modes[mode].defaultValue` 压过图内默认值）；
+    /* 有模式语境时按模式覆盖层取（`modeOverrides[mode].defaultValue` 压过图内默认值）；
      *  没有模式时就是图内读出的 `defaultValue`。 */
     const resolved = resolveEntryDefault(entry, mode);
     if (resolved !== undefined) out[entry.ioKey] = resolved;

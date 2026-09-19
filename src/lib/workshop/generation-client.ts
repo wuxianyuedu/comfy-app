@@ -154,8 +154,10 @@ export async function buildLibraryWorkflowInput(
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
   const io = detail?.workflowIO ?? null;
-  const modes = Array.isArray(detail?.modes)
-    ? detail.modes.filter((mode): mode is string => typeof mode === "string")
+  const modes = Array.isArray(detail?.availableModes)
+    ? detail.availableModes.filter(
+        (mode): mode is string => typeof mode === "string",
+      )
     : [];
   const mode = detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null;
   const { workflowInputs, unmatched } = buildEncapsulatedInputs({

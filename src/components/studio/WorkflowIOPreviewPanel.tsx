@@ -105,7 +105,7 @@ export function WorkflowIoPreviewPanel({
     () =>
       effectiveMode != null &&
       Object.values(workflowIO).some(
-        (entry) => entry?.modes?.[effectiveMode] !== undefined,
+        (entry) => entry?.modeOverrides?.[effectiveMode] !== undefined,
       ),
     [workflowIO, effectiveMode],
   );

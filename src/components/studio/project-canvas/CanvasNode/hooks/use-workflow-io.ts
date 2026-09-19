@@ -179,7 +179,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
            *   1) DB 的 modes[] + defaultMode（用户通过 MultiModeSelect 声明的）
            *   2) taskType 单模式兜底（向后兼容 之前的旧工作流）
            *   3) 都为空才走「未选 + 该工作流没有声明可用模式」 */
-          const dbModes = parseModesJson(tpl.modes);
+          const dbModes = parseModesJson(tpl.availableModes);
           const dbDefault =
             typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
           const inferredMode =

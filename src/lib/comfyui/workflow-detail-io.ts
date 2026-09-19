@@ -48,8 +48,10 @@ export interface WorkflowIORawEntry {
   seedMode?: string;
   /** 多模式覆盖层（各模式的默认值与可见性），PATCH 原样落库。
    *  类型与客户端 WorkflowIOModeOverride 同源（workflow-io-types）——
-   *  两端的 workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
-  modes?: Record<string, WorkflowIOModeOverride>;
+   *  两端的 workflowIO 载荷经 tRPC 直传，必须逐字段兼容。键名 `modeOverrides`
+   *  与 `WorkflowTemplate.modes`（工作流级模式清单）区分；旧数据仍是 `modes`
+   *  键，读取处统一回退归一。 */
+  modeOverrides?: Record<string, WorkflowIOModeOverride>;
 }
 
 export interface WorkflowIOEnrichParams {
@@ -137,8 +139,9 @@ export interface WorkflowIOEntry {
   /** 多模式覆盖层（各模式的默认值与可见性）。GET 重建时经存量清洗：
    *  非法 defaultValue 对齐服务器候选表或被丢弃。类型与客户端
    *  WorkflowIOModeOverride 同源（workflow-io-types），两端的
-   *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
-  modes?: Record<string, WorkflowIOModeOverride>;
+   *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。键名 `modeOverrides`
+   *  与 `WorkflowTemplate.modes`（工作流级模式清单）区分。 */
+  modeOverrides?: Record<string, WorkflowIOModeOverride>;
   /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，运行期据它把
    *  `nodeId`（内部节点）还原成 comfy-cli 展开后的 `host:inner` 拼接 id。 */
   hostNodeId?: string;
@@ -357,17 +360,23 @@ export async function enrichWorkflowIO(
      *  不在服务器候选表里——照原样展示，用户再怎么选提交的仍是脏值。这里在 GET
      *  重建时就地对齐（见 reconcileOptionValue），保证 UI 显示与提交的候选值与
      *  服务器一致。不回写入参（可能被共享），清洗只作用于本次响应；用户保存后
-     *  PATCH 自然落库清洗结果。 */
+     *  PATCH 自然落库清洗结果。
+     *  源键优先读 `modeOverrides`，旧数据仍是 `modes` 键时回退归一（避免旧工作流
+     *  的模式覆盖层在改名后整片丢失）。 */
+    const legacyModes = (v as unknown as Record<string, unknown>).modes;
+    const modeOverridesSource =
+      v.modeOverrides ??
+      (legacyModes as Record<string, WorkflowIOModeOverride> | undefined);
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
     if (
-      v.modes != null &&
-      typeof v.modes === "object" &&
+      modeOverridesSource != null &&
+      typeof modeOverridesSource === "object" &&
       options &&
       options.length > 0
     ) {
       let touched = false;
       const next: Record<string, WorkflowIOModeOverride> = {};
-      for (const [mode, override] of Object.entries(v.modes)) {
+      for (const [mode, override] of Object.entries(modeOverridesSource)) {
         if (override == null || typeof override !== "object") {
           /* 畸形覆盖（PATCH 原样落库可能带 null/标量）：原样透传不清洗。 */
           next[mode] = override ?? {};
@@ -442,12 +451,15 @@ export async function enrichWorkflowIO(
       /* 历史 `value`（旧「通用页签」写的全局覆盖）**读到即丢**：该概念已随通用
        *  页签删除，这里不再透传 —— 下一次 PATCH 把残留一并清掉（整个 workflowIO
        *  对象原样落库）。 */
-      /* required / seedMode / modes 同 value 一样是作者编辑态（PATCH 原样
+      /* required / seedMode / modeOverrides 同 value 一样是作者编辑态（PATCH 原样
        *  落库），GET 重建必须原样透传 —— 此前 required 被丢掉，导致
-       *  「改成必填 → 保存 → 重开又变回可选」。modes 走存量清洗。 */
+       *  「改成必填 → 保存 → 重开又变回可选」。modeOverrides 走存量清洗，且旧
+       *  数据 `modes` 键已在上文归一进 `modeOverridesSource`。 */
       ...(v.required !== undefined ? { required: v.required } : {}),
       ...(v.seedMode !== undefined ? { seedMode: v.seedMode } : {}),
-      ...(v.modes !== undefined ? { modes: cleanedModes ?? v.modes } : {}),
+      ...(modeOverridesSource !== undefined
+        ? { modeOverrides: cleanedModes ?? modeOverridesSource }
+        : {}),
       /* 宿主（外层封装）节点 id 纯透传 —— 它只在「下钻到子图内部」勾选时写入，
        *  运行期靠它把内部节点 id 还原成 comfy-cli 展开后的 `host:inner`。 */
       ...(v.hostNodeId !== undefined ? { hostNodeId: v.hostNodeId } : {}),
