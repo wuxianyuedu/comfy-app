@@ -4,6 +4,7 @@ import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
+import { LaunchLoadingStubCleaner } from "~/app/LaunchLoadingStubCleaner";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { Toaster } from "~/components/ui/sonner";
 import { ThemeProvider } from "~/app/ThemeProvider";
@@ -41,6 +42,9 @@ export default function RootLayout({
                   贴底内容需自行预留 24px（pb-6），不再逐页补挂 */}
               <LogProvider>
                 <ToastProvider>
+                  {/* 启动期占位的收尾：壳在应用首帧之前注入它（浏览器空白页 / Edge
+                      错误页都不能露给用户），应用挂载时连同它的重贴定时器一起收掉 */}
+                  <LaunchLoadingStubCleaner />
                   {children}
                   <LogPanel />
                   <BrowserStatusBar />
