@@ -208,8 +208,24 @@ describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动�
     expect(panel).toContain('entry.required ? "必填" : "可选"');
     expect(panel).toContain("不必连到工作流");
     expect(panel).toContain("必填口 ");
-    /* 非必备口没落点**不是问题状态**：不能用「缺了它就跑不了」那一档配色。 */
-    expect(panel).toContain("可选 · 未落点");
+  });
+
+  it("第 2 条复审（ISSUE #720）：没落点的可选口不再多挂一个同义徽标", () => {
+    const panel = read("sections/WorkshopEncapsulationPanel.tsx");
+    /* 用户口径：「可选-未落地 有些重复了，前面已经显示了可选标签」。
+       「必填 / 可选」读的正是「没落点会不会挡住运行」，再挂一个同义徽标就是把
+       同一份事实换个说法说第二遍。判据先去掉注释 —— 把「为什么删掉它」写进
+       注释不该让计数停在原地（同 §16.2.4.12 的 P9 口径）。 */
+    const code = panel
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toContain("可选 · 未落点");
+    expect(code).not.toContain("必备 · 未落点");
+    /* 例外只留「必填口没落点」：那不是复述，是缺件状态。 */
+    expect(panel).toContain("if (entry.required) {");
+    expect(panel).toContain('label: "未落点"');
+    /* 已落点照常给徽标（它是与「必填 / 可选」正交的那一档信息）。 */
+    expect(panel).toContain('label: "已落点"');
   });
 
   it("第 3 条：封装页签能切模式跑流程测试（多模式时渲染切换器）", () => {

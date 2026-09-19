@@ -10,7 +10,7 @@ exports[`WorkflowEditorInner > 在 ReactFlowProvider 内挂载并渲染加载态
     >
       <span
         aria-hidden="true"
-        class="border-primary-500/20 border-t-primary-500 shrink-0 animate-spin rounded-full border-2 size-9"
+        class="border-primary-500/20 border-t-primary-500 inline-block shrink-0 animate-spin rounded-full border-2 size-9"
         data-slot="spinner"
       />
       <p
