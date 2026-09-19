@@ -1006,8 +1006,11 @@ const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 216.0);
 const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);
 
 /// 主窗首帧看护的节奏与上限（见 watch_main_first_paint 的注释）。
+/// 两者类型取同一档（u64）：上限与节奏会相乘，跨类型相乘直接编译不过
+/// （`u32 * u64` 无实现）——「间隔是 u64 / 次数是 u32」这种看着像随手写的
+/// 组合，代价是 release 壳根本编不出来。
 const PROBE_INTERVAL_MS: u64 = 250;
-const PROBE_ATTEMPTS: u32 = 480;
+const PROBE_ATTEMPTS: u64 = 480;
 
 /// 注入主窗的加载占位（**纯 ASCII**：与 splash-assets 同一条约束——Tauri 的
 /// asset 处理器按字节切响应体补 nonce，多字节字符会让切片落到字符内部）。
@@ -1189,7 +1192,12 @@ pub fn run() {
       activate_main_window,
       should_activate_on_launch
     ])
-    .setup(|app| {
+    // setup 闭包要求 `'static`：它要活到应用退出，因此引用的局部变量必须**捕获
+    // 所有权**（`move`），否则 `expect_slow_first_paint` 这类按值传入的局部量会在
+    // 闭包借用检查时直接编译不过（`closure may outlive the current function`）。
+    // `launch_mode` 只走引用（见下方的 `&launch_mode`），`move` 一并捕获所有权，
+    // 两者都在此之后不再被用到。
+    .setup(move |app| {
       // run() 只做装配，启动编排按职责拆成命名步骤（原先整段塞在 setup 闭包里，
       // 单函数近 300 行，而 Rust 侧没有函数长度门禁——见 §12.13 / ISSUE #536 P4）。
       // 顺序是契约：先收二次启动事件并定启动页尺寸，再建隐藏的 main 窗并挂其加载
