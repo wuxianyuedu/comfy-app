@@ -2,6 +2,8 @@
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Alert } from "~/components/ui/alert";
+import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotNegative,
@@ -360,9 +362,13 @@ export function ShotStudio({
                   placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
                 />
                 {err && (
-                  <p className="mt-1 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+                  <Alert
+                    variant="danger"
+                    /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
+                    className="mt-1 block rounded-md border-transparent px-2 py-1 text-[11px]"
+                  >
                     {err}
-                  </p>
+                  </Alert>
                 )}
 
                 <div className="mt-2 flex items-center gap-3">
@@ -414,33 +420,25 @@ export function ShotStudio({
   );
 }
 
+/* 镜头状态 → 文案。配色走 `ui/status-badge` 的同一份状态 → 语义 token 映射；
+ * 本地化的标签留在本文件（同批把 StoryboardPlanner / VideoStudio 里那两份
+ * 逐字相同的副本一并收口，规范 16 §16.2.4.5）。 */
+export const SHOT_STATUS_LABEL: Record<Shot["status"], string> = {
+  idle: "待生成",
+  queued: "排队中",
+  running: "生成中",
+  done: "已完成",
+  failed: "失败",
+  stale: "待更新",
+};
+
 function StatusBadge({ status }: { status: Shot["status"] }) {
-  const map: Record<Shot["status"], { label: string; cls: string }> = {
-    idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: {
-      label: "排队中",
-      cls: "bg-amber-100 text-amber-800 dark:text-amber-300",
-    },
-    running: {
-      label: "生成中",
-      cls: "bg-blue-100 text-blue-800 dark:text-blue-300",
-    },
-    done: {
-      label: "已完成",
-      cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
-    },
-    failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
-    stale: {
-      label: "待更新",
-      cls: "bg-red-100 text-red-800 dark:text-red-300",
-    },
-  };
-  const s = map[status];
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}
-    >
-      {s.label}
-    </span>
+    <StatusBadgePrimitive
+      status={status}
+      label={SHOT_STATUS_LABEL[status]}
+      dot={false}
+      className="px-2 py-0.5 text-[10px]"
+    />
   );
 }

@@ -8,7 +8,11 @@
  *     `WorkflowCanvasViewportFrame` 与量 rect 的 SVG 连线层一并退场；
  *   · 「这一行收不收这个口子」是 `isValidConnection` 一个纯函数（与自动落点
  *     同一份判据 `pinAcceptsEntry`），不再由手势层各写一套；
- *   · 拖线没落上时的原因提示由 `onConnectEnd` 补回来（不许功能回退）。
+ *   · 拖线没落上时的原因提示由 `onConnectEnd` 补回来（不许功能回退）；
+ *   · 三列节点只用 `initialWidth` / `initialHeight` 声明首帧尺寸，端点清单变化时再
+ *     主动重算一次 `handleBounds` —— 这两件事合起来保证「线永远接在圆点上、首帧
+ *     之后新出现的口一定连得上」（见 hooks 的 `buildLibraryNodes` 与下面的
+ *     `useHandleInventoryRefresh`）。
  *
  * **`onlyRenderVisibleElements` 关掉**：编辑器画布那边开它是为了 130 节点的模板，
  * 代价是「长边可见、端点节点未挂载」会成批刷 error#008（ISSUE #374）。库里一共
@@ -27,6 +31,7 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useUpdateNodeInternals,
   type Edge,
   type Node,
   type OnNodeDrag,
@@ -44,6 +49,7 @@ import type {
 } from "./workflow-library-param-cards";
 import {
   buildLibraryNodes,
+  handleInventoryOf,
   LAYOUT_SIZING,
   useLibraryWireFlow,
 } from "./hooks/use-library-wire-flow";
@@ -159,6 +165,26 @@ function useCanvasBackdropSize(
   );
 }
 
+/** 端点**清单**（哪个节点上有哪些口）—— 变了就主动重算落点。
+ *
+ *  React Flow 的落点几何（`handleBounds`）只在**节点元素尺寸变化**时重算（它给自己
+ *  挂了 ResizeObserver，见 hooks 里 `contentNode` 的说明）。多数端点变化会连带改变列高
+ *  （新增一行表单、多一张卡片），尺寸变化顺手就重算了；但**恰好等高**的替换不会
+ *  （一个行换成另一个行、切模式换掉同高的候选口），那时新端点登记不上：拖不动、也
+ *  落不下，而且是**静默**的（连 `onConnectEnd` 都不回调）。
+ *
+ *  所以这里把「清单变了」显式告诉 React Flow。清单是拼出来的**字符串**：只在口
+ *  真的增减 / 换 id 时才变，纯重渲染（同一批口的新数组）不会发重算请求。 */
+function useHandleInventoryRefresh(inventory: string) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  const applied = useRef(inventory);
+  useEffect(() => {
+    if (applied.current === inventory) return;
+    applied.current = inventory;
+    updateNodeInternals([LIB_NODE_PARAMS, LIB_NODE_HOST, LIB_NODE_OUTPUTS]);
+  }, [inventory, updateNodeInternals]);
+}
+
 export function WorkflowLibraryCanvas(props: WorkflowLibraryCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -188,6 +214,13 @@ function WorkflowLibraryCanvasInner({
   /* 画布容器：量它才知道「铺满」要铺到哪儿（ISSUE #596）。 */
   const containerRef = useRef<HTMLDivElement>(null);
   const backdropSize = useCanvasBackdropSize(containerRef);
+  /* 端点清单变了就主动重算落点：等元素尺寸变化是等不到的（见
+   * `useHandleInventoryRefresh` 的说明）。 */
+  const handleInventory = useMemo(
+    () => handleInventoryOf(paramCards, outputCards, io, canWire),
+    [paramCards, outputCards, io, canWire],
+  );
+  useHandleInventoryRefresh(handleInventory);
   /* 当前在画布上点选中的映射线（用于「删除选中线」按钮与计数提示，并驱动选中
    *  高亮）。挂在 React Flow 之外：由 `onEdgeClick` 写入、点击空白由 `onPaneClick`
    *  清空；透传给 `useLibraryWireFlow`，在派生边时给命中的边注入高亮描边。 */

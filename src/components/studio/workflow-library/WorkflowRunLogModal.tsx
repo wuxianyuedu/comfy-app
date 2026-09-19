@@ -12,6 +12,8 @@
  * 任务订阅逻辑在 use-workflow-run-task.ts（§17 UI/逻辑分离）。
  */
 
+import { formatClock } from "~/lib/time-format";
+
 import {
   useEffect,
   useMemo,
@@ -31,8 +33,8 @@ import {
 } from "~/lib/workflow/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { Button } from "~/components/ui/button";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
+import { StatusBadge } from "~/components/ui/status-badge";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
 type Level = TaskLogEntry["level"];
@@ -61,13 +63,7 @@ function levelLabel(level: Level): string {
 }
 /* 与应用日志同款，带毫秒。 */
 function fmtTime(t: number): string {
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
+  return formatClock(t, { millis: true });
 }
 
 const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
@@ -155,217 +151,214 @@ export function WorkflowRunLogModal({
       ? visibleAll
       : visibleAll.filter((l) => l.level === filter);
   const status = run?.status ?? "running";
+  /* 文案在这里，配色走 `ui/status-badge` 的同一份状态 → 语义 token 映射
+   *（规范 16 §16.2.4.5）。 */
   const statusLabel =
     status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
-  const statusClass =
-    status === "failed"
-      ? "bg-red-500/20 text-red-700 dark:text-red-300"
-      : status === "done"
-        ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-        : "bg-violet-500/20 text-violet-700 dark:text-violet-300";
 
   const onCancel = () => {
     void cancel();
   };
 
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
+     手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */
   return (
-    <div
-      className={overlayClass(
-        "modal",
-        `${zClass("modal")} flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm`,
-      )}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      data-testid="wflib-log-modal"
-    >
-      <div
-        className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60`}
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        data-testid="wflib-log-modal"
+        showCloseButton={false}
+        className="bg-transparent p-0 ring-0"
+        popupClassName={wide ? "max-w-[96vw]" : "max-w-5xl"}
       >
-        {/* Header */}
-        <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
-          <div className="flex min-w-0 items-center gap-2">
-            <FileText
-              size={16}
-              className="shrink-0 text-violet-700 dark:text-violet-400"
-            />
-            <span className="text-ink truncate text-[15px] font-semibold">
-              执行日志
-            </span>
-            {run && (
-              <span
-                className="text-ink-muted max-w-[220px] truncate text-[11px]"
-                title={run.workflowName}
-              >
-                {run.workflowName}
-              </span>
-            )}
-            {run && (
-              <span className="bg-subtle text-ink-faint rounded-full px-1.5 py-px text-[10px] font-medium">
-                {runLogSourceLabel(run.source)}
-              </span>
-            )}
-            {run && (
-              <span
-                className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}
-              >
-                {statusLabel}
-              </span>
-            )}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            {viewTaskId && status === "running" && (
-              <Button
-                variant="danger"
-                onClick={onCancel}
-                disabled={cancelling}
-                title="取消当前查看的任务"
-                data-testid="wflib-log-cancel"
-                className="h-auto rounded-md px-2 py-0.5 text-[10.5px]"
-              >
-                {cancelling ? "× 取消中…" : "× 取消"}
-              </Button>
-            )}
-            {runs.length > 1 && (
-              <select
-                value={viewTaskId ?? ""}
-                onChange={(event) =>
-                  onViewTaskIdChange(event.target.value || null)
-                }
-                className="border-border bg-panel text-ink-strong max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
-                title="切换查看的任务"
-              >
-                {runs.map((r) => (
-                  <option key={r.taskId} value={r.taskId}>
-                    {r.workflowName} ·{" "}
-                    {r.status === "done"
-                      ? "完成"
-                      : r.status === "failed"
-                        ? "失败"
-                        : "运行中"}
-                  </option>
-                ))}
-              </select>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setWide((w) => !w)}
-              title={wide ? "收缩" : "加宽"}
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-            >
-              {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              title="关闭"
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-            >
-              <X size={16} />
-            </Button>
-          </div>
-        </div>
-
-        {/* 级别筛选栏 */}
-        <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
-          <div className="flex items-center gap-1">
-            {FILTER_LABELS.map((option) => {
-              const count =
-                option.value === "all"
-                  ? visibleAll.length
-                  : visibleAll.filter((l) => l.level === option.value).length;
-              return (
-                <Button
-                  key={option.value}
-                  variant="ghost"
-                  onClick={() => setFilter(option.value)}
-                  title={`${option.label}（${count} 条）`}
-                  className={`h-auto rounded-md px-2.5 py-1 text-[13px] ${
-                    filter === option.value
-                      ? "bg-surface-2 text-ink"
-                      : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
-                  }`}
-                >
-                  {option.label}
-                  <span className="text-ink-fainter ml-1 text-[11px]">
-                    {count}
-                  </span>
-                </Button>
-              );
-            })}
-          </div>
-          <label className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
-            <input
-              type="checkbox"
-              checked={autoscroll}
-              onChange={(event) => setAutoscroll(event.target.checked)}
-              className="h-3.5 w-3.5 cursor-pointer accent-violet-500"
-            />
-            自动滚动
-          </label>
-        </div>
-
-        {/* Log body */}
         <div
-          ref={scrollerRef}
-          className="custom-scrollbar bg-panel-deep/60 flex-1 overflow-y-auto"
+          className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60`}
         >
-          {run?.errorMessage && (
-            <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700 dark:text-red-300/90">
-              <div className="break-words whitespace-pre-wrap">
-                {run.errorMessage}
-              </div>
-            </div>
-          )}
-
-          {visible.length === 0 ? (
-            <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
-              <FileText size={32} strokeWidth={1.5} className="opacity-30" />
-              {run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {visible.map((log, index) => (
-                <div
-                  key={`${log.t}:${index}`}
-                  data-testid="wflib-modal-log-line"
-                  data-level={log.level}
-                  className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
+          {/* Header */}
+          <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileText
+                size={16}
+                className="shrink-0 text-violet-700 dark:text-violet-400"
+              />
+              <span className="text-ink truncate text-[15px] font-semibold">
+                执行日志
+              </span>
+              {run && (
+                <span
+                  className="text-ink-muted max-w-[220px] truncate text-[11px]"
+                  title={run.workflowName}
                 >
-                  <span className="text-ink-muted shrink-0">
-                    {fmtTime(log.t)}
-                  </span>
-                  <span
-                    className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
-                  >
-                    {levelLabel(log.level)}
-                  </span>
-                  <span className="text-ink-strong min-w-0 flex-1 break-words whitespace-pre-wrap">
-                    {log.msg}
-                  </span>
-                  {log.src && (
-                    <span className="text-ink-fainter hover:text-ink-faint max-w-[200px] shrink-0 truncate text-[11px]">
-                      {log.src}
-                    </span>
-                  )}
-                </div>
-              ))}
+                  {run.workflowName}
+                </span>
+              )}
+              {run && (
+                <span className="bg-subtle text-ink-faint rounded-full px-1.5 py-px text-[10px] font-medium">
+                  {runLogSourceLabel(run.source)}
+                </span>
+              )}
+              {run && (
+                <StatusBadge
+                  status={status}
+                  label={statusLabel}
+                  dot={false}
+                  className="px-1.5 py-px text-[10px]"
+                />
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Footer */}
-        <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
-          <span>
-            显示 {visible.length} / 总计 {visibleAll.length} 条
-          </span>
-          <span>保留最近 300 条</span>
+            <div className="flex shrink-0 items-center gap-2">
+              {viewTaskId && status === "running" && (
+                <Button
+                  variant="danger"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                  title="取消当前查看的任务"
+                  data-testid="wflib-log-cancel"
+                  className="h-auto rounded-md px-2 py-0.5 text-[10.5px]"
+                >
+                  {cancelling ? "× 取消中…" : "× 取消"}
+                </Button>
+              )}
+              {runs.length > 1 && (
+                <select
+                  value={viewTaskId ?? ""}
+                  onChange={(event) =>
+                    onViewTaskIdChange(event.target.value || null)
+                  }
+                  className="border-border bg-panel text-ink-strong max-w-[200px] truncate rounded-md border px-1.5 py-0.5 text-[10.5px] outline-none"
+                  title="切换查看的任务"
+                >
+                  {runs.map((r) => (
+                    <option key={r.taskId} value={r.taskId}>
+                      {r.workflowName} ·{" "}
+                      {r.status === "done"
+                        ? "完成"
+                        : r.status === "failed"
+                          ? "失败"
+                          : "运行中"}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setWide((w) => !w)}
+                title={wide ? "收缩" : "加宽"}
+                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+              >
+                {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onClose}
+                title="关闭"
+                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          </div>
+
+          {/* 级别筛选栏 */}
+          <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
+            <div className="flex items-center gap-1">
+              {FILTER_LABELS.map((option) => {
+                const count =
+                  option.value === "all"
+                    ? visibleAll.length
+                    : visibleAll.filter((l) => l.level === option.value).length;
+                return (
+                  <Button
+                    key={option.value}
+                    variant="ghost"
+                    onClick={() => setFilter(option.value)}
+                    title={`${option.label}（${count} 条）`}
+                    className={`h-auto rounded-md px-2.5 py-1 text-[13px] ${
+                      filter === option.value
+                        ? "bg-surface-2 text-ink"
+                        : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
+                    }`}
+                  >
+                    {option.label}
+                    <span className="text-ink-fainter ml-1 text-[11px]">
+                      {count}
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+            <label className="text-ink-faint flex cursor-pointer items-center gap-1.5 text-[12px] select-none">
+              <input
+                type="checkbox"
+                checked={autoscroll}
+                onChange={(event) => setAutoscroll(event.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-violet-500"
+              />
+              自动滚动
+            </label>
+          </div>
+
+          {/* Log body */}
+          <div
+            ref={scrollerRef}
+            className="custom-scrollbar bg-panel-deep/60 flex-1 overflow-y-auto"
+          >
+            {run?.errorMessage && (
+              <div className="mb-2 space-y-1 rounded border border-red-500/30 bg-red-500/6 p-2 text-[13px] text-red-700 dark:text-red-300/90">
+                <div className="break-words whitespace-pre-wrap">
+                  {run.errorMessage}
+                </div>
+              </div>
+            )}
+
+            {visible.length === 0 ? (
+              <div className="text-ink-fainter flex h-full flex-col items-center justify-center gap-2 text-[13px]">
+                <FileText size={32} strokeWidth={1.5} className="opacity-30" />
+                {run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                {visible.map((log, index) => (
+                  <div
+                    key={`${log.t}:${index}`}
+                    data-testid="wflib-modal-log-line"
+                    data-level={log.level}
+                    className="border-border-subtle hover:bg-card flex items-start gap-2.5 border-b px-4 py-1 font-mono text-[13px] leading-snug"
+                  >
+                    <span className="text-ink-muted shrink-0">
+                      {fmtTime(log.t)}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_STYLES[log.level]}`}
+                    >
+                      {levelLabel(log.level)}
+                    </span>
+                    <span className="text-ink-strong min-w-0 flex-1 break-words whitespace-pre-wrap">
+                      {log.msg}
+                    </span>
+                    {log.src && (
+                      <span className="text-ink-fainter hover:text-ink-faint max-w-[200px] shrink-0 truncate text-[11px]">
+                        {log.src}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-[12px]">
+            <span>
+              显示 {visible.length} / 总计 {visibleAll.length} 条
+            </span>
+            <span>保留最近 300 条</span>
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

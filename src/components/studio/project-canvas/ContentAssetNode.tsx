@@ -7,8 +7,7 @@ import { Button } from "~/components/ui/button";
 import { WaterFillProgress } from "~/components/ui/water-fill-progress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
  * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
@@ -203,16 +202,18 @@ export function ContentAssetBody({
       )}
 
       {/* ── 画廊覆盖层 ── */}
-      {gallery.open && galleryImages.length > 0 && (
-        <div
-          className={overlayClass(
-            "modal",
-            `${zClass("modal")} bg-canvas-deep flex items-center justify-center backdrop-blur-sm dark:bg-black/80`,
-          )}
-          onClick={() => gallery.setOpen(false)}
-          role="dialog"
-          aria-modal
+      {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前 `role` /
+          `aria-modal` / 遮罩点击都手写齐了，但 Esc 与焦点锁仍缺 —— 键盘用户
+          进得来出不去。 */}
+      <Dialog
+        open={gallery.open && galleryImages.length > 0}
+        onOpenChange={(next) => !next && gallery.setOpen(false)}
+      >
+        <DialogContent
           aria-label="图片画廊"
+          showCloseButton={false}
+          className="bg-transparent p-0 ring-0"
+          popupClassName="flex max-w-none items-center justify-center bg-transparent"
         >
           {/* 关闭按钮 */}
           <Button
@@ -303,8 +304,8 @@ export function ContentAssetBody({
               </div>
             </>
           )}
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -5,14 +5,14 @@ import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { Textarea } from "~/components/ui/textarea";
 import {
   fetchVideoTasks,
   submitGeneration,
   type VideoTask,
 } from "~/lib/media/video-queue-client";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 /* ── 视频队列弹窗 —— 接了真实的 VIDEO 任务 ──
   从 /api/tasks 拉取用户的 VIDEO 类型任务（已筛选），显示实时
@@ -141,277 +141,300 @@ export function VideoQueueModal({
     (task) => task.status === "RUNNING" || task.status === "QUEUED",
   ).length;
 
+  /* 关闭语义交给 `ui/dialog`：此前这里**既没有点遮罩关闭、也没有 Esc** ——
+     只能用右上角的 ✕ 关掉，键盘用户尤其难退出。 */
   return (
-    <div
-      className={overlayClass(
-        "modal",
-        `${zClass("modal")} flex items-center justify-center bg-black/25 p-4 backdrop-blur-sm dark:bg-black/60`,
-      )}
-    >
-      <div className="bg-node border-border-strong flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50">
-        {/* Header */}
-        <div className="border-border-strong flex items-center justify-between border-b px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <h3 className="u-title">视频生成队列</h3>
-            {runningCount > 0 && (
-              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
-                {runningCount} 个进行中
-              </span>
-            )}
-            <Button
-              variant="link"
-              onClick={loadTasks}
-              className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
-              title="刷新"
-            >
-              ↻ 刷新
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="bg-subtle flex rounded-lg p-0.5">
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className="bg-transparent p-0 ring-0"
+        popupClassName="max-w-3xl"
+      >
+        <div className="bg-node border-border-strong flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50">
+          {/* Header */}
+          <div className="border-border-strong flex items-center justify-between border-b px-5 py-3.5">
+            <div className="flex items-center gap-3">
+              <h3 className="u-title">视频生成队列</h3>
+              {runningCount > 0 && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                  {runningCount} 个进行中
+                </span>
+              )}
               <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setTab("queue")}
-                className={`h-auto rounded-md px-3 py-1.5 ${
-                  tab === "queue"
-                    ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
-                    : "text-ink-muted hover:text-ink-soft"
-                }`}
+                variant="link"
+                onClick={loadTasks}
+                className="text-ink-muted hover:text-primary h-auto p-0 text-[11px]"
+                title="刷新"
               >
-                生成队列
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setTab("draft")}
-                className={`h-auto rounded-md px-3 py-1.5 ${
-                  tab === "draft"
-                    ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
-                    : "text-ink-muted hover:text-ink-soft"
-                }`}
-              >
-                批量提交（{draft.length}）
+                ↻ 刷新
               </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              className="text-ink-muted hover:text-ink-soft"
-              aria-label="关闭"
-            >
-              <X size={16} />
-            </Button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {tab === "queue" ? (
-            <div className="space-y-3">
-              {loading && tasks.length === 0 ? (
-                <p className="text-ink-fainter py-10 text-center text-xs">
-                  加载中…
-                </p>
-              ) : tasks.length === 0 ? (
-                <p className="text-ink-fainter py-10 text-center text-xs">
-                  暂无视频生成任务。切到「批量提交」添加分镜，或在创作台「视频」模式直接生成。
-                </p>
-              ) : (
-                tasks.map((task, index) => {
-                  const meta = STATUS_META[task.status] ?? STATUS_META.QUEUED;
-                  return (
-                    <div
-                      key={task.id}
-                      className="border-border-strong bg-subtle flex items-center gap-3 rounded-xl border p-3"
-                    >
-                      <div className="bg-canvas-deep flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                        {task.video ? (
-                          <MediaThumbnail
-                            src={task.video}
-                            alt={`V${String(index + 1).padStart(2, "0")}`}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <Icon
-                            name="film"
-                            size={18}
-                            className="text-ink-muted"
-                          />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-0.5 flex items-center gap-2">
-                          <span className="font-mono text-xs text-violet-700 dark:text-violet-300">
-                            V{String(index + 1).padStart(2, "0")}
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 text-xs ${meta!.cls}`}
-                          >
-                            <Icon name={meta!.icon} size={13} />
-                            {meta!.label}
-                          </span>
-                        </div>
-                        <p
-                          className="text-ink-soft truncate text-xs"
-                          title={task.prompt}
-                        >
-                          {task.prompt || "（无提示词）"}
-                        </p>
-                        <p className="text-ink-fainter mt-0.5 truncate font-mono text-[10px]">
-                          {task.workflowName}
-                        </p>
-                        {task.status === "FAILED" && task.error && (
-                          <p
-                            className="mt-0.5 truncate text-[10px] text-red-700 dark:text-red-400"
-                            title={task.error}
-                          >
-                            {task.error}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => onOpenTask?.(task.id)}
-                          className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-md px-2.5 py-1"
-                        >
-                          详情
-                        </Button>
-                        {task.video && (
-                          <a
-                            href={task.video}
-                            download
-                            className="rounded-md bg-violet-500/20 px-2.5 py-1 text-[11px] text-violet-700 transition-colors hover:bg-violet-500/30 dark:text-violet-300"
-                          >
-                            下载
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              {error && (
-                <p className="text-center text-xs text-red-700 dark:text-red-400">
-                  {error}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {draft.length === 0 ? (
-                <p className="text-ink-fainter py-8 text-center text-xs">
-                  暂无待提交分镜。在下方逐个添加提示词（每行一个），或粘贴工坊分镜批量导入。
-                </p>
-              ) : (
-                draft.map((draftItem, index) => (
-                  <div
-                    key={`draft-${index}`}
-                    className="border-border-strong bg-subtle flex items-start gap-2 rounded-xl border p-3"
-                  >
-                    <span className="mt-1 font-mono text-xs text-violet-700 dark:text-violet-300">
-                      V{String(index + 1).padStart(2, "0")}
-                    </span>
-                    <Textarea
-                      value={draftItem.prompt}
-                      onChange={(event) =>
-                        setDraft((arr) =>
-                          arr.map((item, idx) =>
-                            idx === index
-                              ? { ...item, prompt: event.target.value }
-                              : item,
-                          ),
-                        )
-                      }
-                      rows={2}
-                      placeholder="分镜提示词，含镜头运动描述…"
-                      className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 resize-none text-xs"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() =>
-                        setDraft((arr) => arr.filter((_, j) => j !== index))
-                      }
-                      className="text-ink-muted hover:text-danger-strong mt-1"
-                      aria-label="删除"
-                    >
-                      <Trash size={14} />
-                    </Button>
-                  </div>
-                ))
-              )}
-
-              <div className="flex gap-2 pt-1">
+            <div className="flex items-center gap-2">
+              <div className="bg-subtle flex rounded-lg p-0.5">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="xs"
-                  onClick={() => setDraft((arr) => [...arr, { prompt: "" }])}
-                  className="border-border-strong text-ink-soft hover:border-primary/30 hover:text-primary h-auto rounded-lg border-dashed px-3 py-1.5"
+                  onClick={() => setTab("queue")}
+                  className={`h-auto rounded-md px-3 py-1.5 ${
+                    tab === "queue"
+                      ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
+                      : "text-ink-muted hover:text-ink-soft"
+                  }`}
                 >
-                  ＋ 添加一行
+                  生成队列
                 </Button>
-                <input
-                  type="file"
-                  accept=".txt,.csv"
-                  className="hidden"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    const text = await file.text();
-                    const lines = text
-                      .split(/\r?\n/)
-                      .map((segment) => segment.trim())
-                      .filter(Boolean);
-                    setDraft((arr) => [
-                      ...arr,
-                      ...lines.map((prompt) => ({ prompt })),
-                    ]);
-                  }}
-                  id="vq-import"
-                />
-                <label
-                  htmlFor="vq-import"
-                  className="border-border-strong text-ink-soft hover:bg-subtle cursor-pointer rounded-lg border px-3 py-1.5 text-xs transition-colors"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setTab("draft")}
+                  className={`h-auto rounded-md px-3 py-1.5 ${
+                    tab === "draft"
+                      ? "bg-surface-2 text-ink-bright hover:bg-surface-2"
+                      : "text-ink-muted hover:text-ink-soft"
+                  }`}
                 >
-                  导入 txt/csv
-                </label>
+                  批量提交（{draft.length}）
+                </Button>
               </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onClose}
+                className="text-ink-muted hover:text-ink-soft"
+                aria-label="关闭"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          </div>
 
-              {error && (
-                <p className="text-center text-xs text-red-700 dark:text-red-400">
-                  {error}
-                </p>
-              )}
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {tab === "queue" ? (
+              <div className="space-y-3">
+                {loading && tasks.length === 0 ? (
+                  <p className="text-ink-fainter py-10 text-center text-xs">
+                    加载中…
+                  </p>
+                ) : tasks.length === 0 ? (
+                  <p className="text-ink-fainter py-10 text-center text-xs">
+                    暂无视频生成任务。切到「批量提交」添加分镜，或在创作台「视频」模式直接生成。
+                  </p>
+                ) : (
+                  tasks.map((task, index) => {
+                    const meta = STATUS_META[task.status] ?? STATUS_META.QUEUED;
+                    return (
+                      <div
+                        key={task.id}
+                        className="border-border-strong bg-subtle flex items-center gap-3 rounded-xl border p-3"
+                      >
+                        <div className="bg-canvas-deep flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                          {task.video ? (
+                            <MediaThumbnail
+                              src={task.video}
+                              alt={`V${String(index + 1).padStart(2, "0")}`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Icon
+                              name="film"
+                              size={18}
+                              className="text-ink-muted"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-0.5 flex items-center gap-2">
+                            <span className="font-mono text-xs text-violet-700 dark:text-violet-300">
+                              V{String(index + 1).padStart(2, "0")}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs ${meta!.cls}`}
+                            >
+                              <Icon name={meta!.icon} size={13} />
+                              {meta!.label}
+                            </span>
+                          </div>
+                          <p
+                            className="text-ink-soft truncate text-xs"
+                            title={task.prompt}
+                          >
+                            {task.prompt || "（无提示词）"}
+                          </p>
+                          <p className="text-ink-fainter mt-0.5 truncate font-mono text-[10px]">
+                            {task.workflowName}
+                          </p>
+                          {task.status === "FAILED" && task.error && (
+                            <p
+                              className="mt-0.5 truncate text-[10px] text-red-700 dark:text-red-400"
+                              title={task.error}
+                            >
+                              {task.error}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => onOpenTask?.(task.id)}
+                            className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-md px-2.5 py-1"
+                          >
+                            详情
+                          </Button>
+                          {task.video && (
+                            <a
+                              href={task.video}
+                              download
+                              className="rounded-md bg-violet-500/20 px-2.5 py-1 text-[11px] text-violet-700 transition-colors hover:bg-violet-500/30 dark:text-violet-300"
+                            >
+                              下载
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {error && (
+                  <p className="text-center text-xs text-red-700 dark:text-red-400">
+                    {error}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {draft.length === 0 ? (
+                  <p className="text-ink-fainter py-8 text-center text-xs">
+                    暂无待提交分镜。在下方逐个添加提示词（每行一个），或粘贴工坊分镜批量导入。
+                  </p>
+                ) : (
+                  draft.map((draftItem, index) => (
+                    <div
+                      key={`draft-${index}`}
+                      className="border-border-strong bg-subtle flex items-start gap-2 rounded-xl border p-3"
+                    >
+                      <span className="mt-1 font-mono text-xs text-violet-700 dark:text-violet-300">
+                        V{String(index + 1).padStart(2, "0")}
+                      </span>
+                      <Textarea
+                        value={draftItem.prompt}
+                        onChange={(event) =>
+                          setDraft((arr) =>
+                            arr.map((item, idx) =>
+                              idx === index
+                                ? { ...item, prompt: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        rows={2}
+                        placeholder="分镜提示词，含镜头运动描述…"
+                        className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 resize-none text-xs"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() =>
+                          setDraft((arr) => arr.filter((_, j) => j !== index))
+                        }
+                        className="text-ink-muted hover:text-danger-strong mt-1"
+                        aria-label="删除"
+                      >
+                        <Trash size={14} />
+                      </Button>
+                    </div>
+                  ))
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setDraft((arr) => [...arr, { prompt: "" }])}
+                    className="border-border-strong text-ink-soft hover:border-primary/30 hover:text-primary h-auto rounded-lg border-dashed px-3 py-1.5"
+                  >
+                    ＋ 添加一行
+                  </Button>
+                  <ImportLinesButton
+                    onImported={(lines) =>
+                      setDraft((arr) => [
+                        ...arr,
+                        ...lines.map((prompt) => ({ prompt })),
+                      ])
+                    }
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-center text-xs text-red-700 dark:text-red-400">
+                    {error}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {tab === "draft" && (
+            <div className="border-border-strong flex items-center justify-between border-t px-5 py-3.5">
+              <span className="text-ink-muted text-[11px]">
+                提交后将进入「生成队列」并实时刷新
+              </span>
+              <Button
+                variant="primary-solid"
+                onClick={submitDrafts}
+                disabled={
+                  submitting ||
+                  draft.filter((draft) => draft.prompt.trim()).length === 0
+                }
+                className="h-auto rounded-lg px-5 py-2"
+              >
+                {submitting
+                  ? "提交中…"
+                  : `开始生成（${draft.filter((draft) => draft.prompt.trim()).length}）`}
+              </Button>
             </div>
           )}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-        {/* Footer */}
-        {tab === "draft" && (
-          <div className="border-border-strong flex items-center justify-between border-t px-5 py-3.5">
-            <span className="text-ink-muted text-[11px]">
-              提交后将进入「生成队列」并实时刷新
-            </span>
-            <Button
-              variant="primary-solid"
-              onClick={submitDrafts}
-              disabled={
-                submitting ||
-                draft.filter((draft) => draft.prompt.trim()).length === 0
-              }
-              className="h-auto rounded-lg px-5 py-2"
-            >
-              {submitting
-                ? "提交中…"
-                : `开始生成（${draft.filter((draft) => draft.prompt.trim()).length}）`}
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
+/** 「导入 txt/csv」入口：按钮 + 隐藏 input 二合一。
+ *  此前这里用 `<input id="vq-import">` + `<label htmlFor="vq-import">` 做
+ *  隐式关联 —— 与全库另外 8 个落点（有的用 ref.click()、有的干脆把 input
+ *  露在界面上）写法都不同，且成了全仓唯一一处靠 `id` 拼接触发的入口。
+ *  现在统一走 `ui/file-picker`。 */
+function ImportLinesButton({
+  onImported,
+}: {
+  onImported: (lines: string[]) => void;
+}) {
+  const picker = useFilePicker({
+    accept: ".txt,.csv",
+    onPick: (file) => {
+      void file.text().then((text) => {
+        const lines = text
+          .split(/\r?\n/)
+          .map((segment) => segment.trim())
+          .filter(Boolean);
+        onImported(lines);
+      });
+    },
+  });
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={picker.open}
+        className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-lg px-3 py-1.5 text-xs transition-colors"
+      >
+        导入 txt/csv
+      </Button>
+      <picker.Input />
+    </>
   );
 }

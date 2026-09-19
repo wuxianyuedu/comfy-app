@@ -48,8 +48,20 @@ export interface WorkflowIORawEntry {
   seedMode?: string;
   /** 多模式覆盖层（各模式的默认值与可见性），PATCH 原样落库。
    *  类型与客户端 WorkflowIOModeOverride 同源（workflow-io-types）——
-   *  两端的 workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
-  modes?: Record<string, WorkflowIOModeOverride>;
+   *  两端的 workflowIO 载荷经 tRPC 直传，必须逐字段兼容。键名 `modeOverrides`
+   *  与 `WorkflowTemplate.modes`（工作流级模式清单）区分；旧数据仍是 `modes`
+   *  键，读取处统一回退归一。 */
+  modeOverrides?: Record<string, WorkflowIOModeOverride>;
+  /** 富化后的 ComfyUI 类型（`INT` / `FLOAT` / `STRING` / `COMBO` …）。
+   *  勾选时通常没有，由 GET 的 `enrichWorkflowIO` 现算；但若保存时已被富化
+   *  （router 的 `persistEnrichedWorkflowIO` 或 client 持久化的富化 map 带真值），
+   *  这里留底，`enrichWorkflowIO` 把它当兜底基线 —— 见 fix 4：类型固化，
+   *  不再每次 GET 都依赖 object_info 重算，ComfyUI 离线重开也不退化成纯文本。 */
+  type?: string;
+  /** 富化出来的控件默认值（图内 widget 当前值）。同 type，可作兜底基线。 */
+  defaultValue?: unknown;
+  /** COMBO 候选列表（来自 object_info）。离线保存时可能缺失，留空由表单回落文本。 */
+  options?: string[];
 }
 
 export interface WorkflowIOEnrichParams {
@@ -137,8 +149,9 @@ export interface WorkflowIOEntry {
   /** 多模式覆盖层（各模式的默认值与可见性）。GET 重建时经存量清洗：
    *  非法 defaultValue 对齐服务器候选表或被丢弃。类型与客户端
    *  WorkflowIOModeOverride 同源（workflow-io-types），两端的
-   *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。 */
-  modes?: Record<string, WorkflowIOModeOverride>;
+   *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。键名 `modeOverrides`
+   *  与 `WorkflowTemplate.modes`（工作流级模式清单）区分。 */
+  modeOverrides?: Record<string, WorkflowIOModeOverride>;
   /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，运行期据它把
    *  `nodeId`（内部节点）还原成 comfy-cli 展开后的 `host:inner` 拼接 id。 */
   hostNodeId?: string;
@@ -149,6 +162,47 @@ export interface WorkflowIOEntry {
    *  时，只有这里有。 */
   slotLabel?: string;
 }
+/** 保存 IO 映射时把类型 / 默认值**固化**进库（fix 4 的根治）。
+ *
+ *  离线可用：只用 API graph 的字面量，不查 object_info。图里某个 widget 的当前
+ *  值（number / boolean / 字符串）足以推断它的数值类型；字符串值无法区分 STRING 与
+ *  COMBO，留给 GET 富化的候选查询 / 名字启发式，这里不替它下结论。已带
+ *  type / defaultValue 的条目（client 持久化的富化 map）原样保留，绝不覆盖。
+ *  COMBO 候选只能来自 object_info，离线时填不了 —— 留空由表单回落文本控件
+ *  （无害：空串会被运行 payload 过滤掉）。
+ *
+ *  这一步让「ComfyUI 离线保存 IO」的条目下次打开时仍带真类型，不再退化成纯文本、
+ *  也不再由名字猜测（猜测只在真·无元数据时兜底）。 */
+export function persistEnrichedWorkflowIO(
+  graph: Record<string, unknown> | undefined | null,
+  workflowIO: Record<string, WorkflowIORawEntry>,
+): Record<string, WorkflowIORawEntry> {
+  const out: Record<string, WorkflowIORawEntry> = {};
+  for (const [ioKey, v] of Object.entries(workflowIO)) {
+    if (!v || typeof v !== "object") continue;
+    const next: WorkflowIORawEntry = { ...v };
+    const node = asRecord(graph?.[String(v.nodeId)]);
+    const gv = node ? asRecord(node.inputs)?.[v.name] : undefined;
+    const isScalar =
+      typeof gv === "number" ||
+      typeof gv === "boolean" ||
+      (typeof gv === "string" && gv.length > 0);
+    if (isScalar) {
+      if (next.defaultValue === undefined) next.defaultValue = gv;
+      /* 数值 / 布尔类型无歧义，直接定；字符串可能是 STRING 也可能是 COMBO，
+       * 不在这里猜，交给 GET 富化。 */
+      const declared = (v.type ?? "").trim().toUpperCase();
+      if (declared === "" || declared === "*") {
+        if (typeof gv === "number")
+          next.type = Number.isInteger(gv) ? "INT" : "FLOAT";
+        else if (typeof gv === "boolean") next.type = "BOOLEAN";
+      }
+    }
+    out[ioKey] = next;
+  }
+  return out;
+}
+
 /** 把存档里的 IO 选择补全成自描述记录（字段语义见模块头注）。
  *  纯函数 —— 只依赖入参。 */
 export async function enrichWorkflowIO(
@@ -171,7 +225,15 @@ export async function enrichWorkflowIO(
 
   for (const [ioKey, v] of Object.entries(workflowIORaw)) {
     if (!v || typeof v !== "object") continue;
-    let type = "*";
+    // 以存档里的**事实字段**为起点：之前保存时定下来的 type / options，离线
+    // 重开时仍能保住正确控件 —— 这是「保存 IO 映射时 ComfyUI 离线」那条回归的根治
+    // 方向（把类型 / 候选也随富化后的 map 一起固化下来，而非每次 GET 都依赖
+    // object_info 重算）。rawJson 能解析出来时下面会覆盖这里的起点；都失败才回落到
+    // 存档值（client 持久化了富化后的 map，所以在线保存过的条目带真值）。
+    // defaultValue 不走「存档起点」：graph 里的当前字面量比存档值更新，故优先用
+    // graph，仅当 graph 也取不到时才用存档默认值（见下方）。
+    const storedType = (v.type ?? "").trim().toUpperCase();
+    let type: string = storedType === "" ? "*" : storedType;
     let defaultValue: unknown = undefined;
     let label = v.label;
     /* 本层槽位上的作者业务名（判定机器别名的第二判据），见 WorkflowIOEntry。 */
@@ -325,6 +387,11 @@ export async function enrichWorkflowIO(
         const gv = asRecord(asRecord(graph[canonicalNodeId])?.inputs)?.[v.name];
         if (gv !== undefined && !Array.isArray(gv)) defaultValue = gv;
       }
+      /* 连 graph 也取不到（纯 API 格式导入且图里没有该字面量）时，回落到存档里
+       * 上一次在线保存过的默认值 —— 让「ComfyUI 离线时保存」的条目重新打开时仍
+       * 能带值，而不是退化成空串 / 未填（fix 4：默认值也固化下来）。 */
+      if (defaultValue === undefined && v.defaultValue !== undefined)
+        defaultValue = v.defaultValue;
       if (type === "*" && defaultValue !== undefined) {
         if (typeof defaultValue === "boolean") type = "BOOLEAN";
         else if (typeof defaultValue === "number")
@@ -350,6 +417,10 @@ export async function enrichWorkflowIO(
            *  （例如 `resolution_preset`）。 */
           options = byClass ?? (await comboOptionsForFieldName(v.name));
         }
+        /* ComfyUI 不可达时 object_info 查不到候选；若存档里上一次在线时存过
+         * options（client 持久化了富化后的 map），直接复用，避免 COMBO 退化成
+         * 纯文本（fix 4：候选也固化下来）。 */
+        if (!options && Array.isArray(v.options)) options = v.options;
       }
     }
 
@@ -357,17 +428,23 @@ export async function enrichWorkflowIO(
      *  不在服务器候选表里——照原样展示，用户再怎么选提交的仍是脏值。这里在 GET
      *  重建时就地对齐（见 reconcileOptionValue），保证 UI 显示与提交的候选值与
      *  服务器一致。不回写入参（可能被共享），清洗只作用于本次响应；用户保存后
-     *  PATCH 自然落库清洗结果。 */
+     *  PATCH 自然落库清洗结果。
+     *  源键优先读 `modeOverrides`，旧数据仍是 `modes` 键时回退归一（避免旧工作流
+     *  的模式覆盖层在改名后整片丢失）。 */
+    const legacyModes = (v as unknown as Record<string, unknown>).modes;
+    const modeOverridesSource =
+      v.modeOverrides ??
+      (legacyModes as Record<string, WorkflowIOModeOverride> | undefined);
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
     if (
-      v.modes != null &&
-      typeof v.modes === "object" &&
+      modeOverridesSource != null &&
+      typeof modeOverridesSource === "object" &&
       options &&
       options.length > 0
     ) {
       let touched = false;
       const next: Record<string, WorkflowIOModeOverride> = {};
-      for (const [mode, override] of Object.entries(v.modes)) {
+      for (const [mode, override] of Object.entries(modeOverridesSource)) {
         if (override == null || typeof override !== "object") {
           /* 畸形覆盖（PATCH 原样落库可能带 null/标量）：原样透传不清洗。 */
           next[mode] = override ?? {};
@@ -442,12 +519,15 @@ export async function enrichWorkflowIO(
       /* 历史 `value`（旧「通用页签」写的全局覆盖）**读到即丢**：该概念已随通用
        *  页签删除，这里不再透传 —— 下一次 PATCH 把残留一并清掉（整个 workflowIO
        *  对象原样落库）。 */
-      /* required / seedMode / modes 同 value 一样是作者编辑态（PATCH 原样
+      /* required / seedMode / modeOverrides 同 value 一样是作者编辑态（PATCH 原样
        *  落库），GET 重建必须原样透传 —— 此前 required 被丢掉，导致
-       *  「改成必填 → 保存 → 重开又变回可选」。modes 走存量清洗。 */
+       *  「改成必填 → 保存 → 重开又变回可选」。modeOverrides 走存量清洗，且旧
+       *  数据 `modes` 键已在上文归一进 `modeOverridesSource`。 */
       ...(v.required !== undefined ? { required: v.required } : {}),
       ...(v.seedMode !== undefined ? { seedMode: v.seedMode } : {}),
-      ...(v.modes !== undefined ? { modes: cleanedModes ?? v.modes } : {}),
+      ...(modeOverridesSource !== undefined
+        ? { modeOverrides: cleanedModes ?? modeOverridesSource }
+        : {}),
       /* 宿主（外层封装）节点 id 纯透传 —— 它只在「下钻到子图内部」勾选时写入，
        *  运行期靠它把内部节点 id 还原成 comfy-cli 展开后的 `host:inner`。 */
       ...(v.hostNodeId !== undefined ? { hostNodeId: v.hostNodeId } : {}),

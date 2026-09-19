@@ -12,6 +12,7 @@ import {
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
 import { ShellTabs } from "~/components/studio/ShellTabs";
+import { timeAgo } from "~/lib/time-format";
 import {
   listProjects,
   setActive,
@@ -100,16 +101,6 @@ function writeLastView(view: WorkspaceView): void {
   sessionStorage.setItem(WS_VIEW_KEY, view);
 }
 
-function ago(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚修改";
-  if (m < 60) return `${m} 分钟前修改`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前修改`;
-  return `${Math.floor(h / 24)} 天前修改`;
-}
-
 export default function WorkspacePage() {
   const router = useRouter();
 
@@ -193,7 +184,7 @@ export default function WorkspacePage() {
               id: project.id,
               name: (project.name || "未命名项目").slice(0, 28),
               updatedAt: project.updatedAt
-                ? ago(new Date(project.updatedAt).toISOString())
+                ? (timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改")
                 : "刚刚",
               kind: "canvas" as const,
               subtitle:

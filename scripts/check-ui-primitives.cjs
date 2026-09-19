@@ -22,9 +22,71 @@
  *      `ui/page-loading` 的 `PageLoading`（块级）/ `Spinner`（行内 · 按钮内）、
  *      `ui/skeleton` / `ui/progress` 这类加载态基元，状态圆点的脉冲走
  *      `ui/status-dot`）
- *   —— 三者合计走一条棘轮：**按文件记账、只许降不许升**，与
+ *   —— P1~P3 合计走一条棘轮：**按文件记账、只许降不许升**，与
  *      `check-ui-logic-separation.cjs` / `check-theme-colors.cjs` 同一口径
  *      （基线 `scripts/.ui-primitives-baseline.json`）。
+ *
+ *   P4 视图里再写一份 `::-webkit-scrollbar` 外观（**硬闸，不是棘轮**）——
+ *      `src/app/globals.css` 是自绘滚动条的唯一出口（`.custom-scrollbar` /
+ *      `.soft-scrollbar` / 全局兜底，三档取值各有出处）。视图里写任意值变体
+ *      （`[&::-webkit-scrollbar-thumb]:bg-…!`）等于把同一件事再实现一份，
+ *      取值还会各自漂移 —— 收口前实测到两份（`.custom-scrollbar` 的
+ *      `--color-border-strong` / `--color-ink-icon` 与视图里那份
+ *      `bg-border-strong` / `bg-ink-muted`）。P4 已在同批清零，因此直接是硬闸。
+ *      `ui/scroll-area` 那套 base-ui 自绘滚动条属`ui/` 工具生成物，
+ *      走 EXEMPT_DIRS 的 `ui/` 豁免（口径见规范 16 §16.2.4.6 第三档）。
+ *
+ *   P5 视图里再写一份「剪贴板写入」（**硬闸**）—— `~/lib/browser-io` 的
+ *      `copyText` 是唯一出口（含 Clipboard API → `execCommand` 的降级与
+ *      `navigator` 存在性判定）。此前有 4 份实现，各自的兜底写法还不一样
+ *      （`opacity:0` / `left:-9999px` / 不做降级 / 静默不静默）。
+ *   P6 视图里再写一份「Blob + 临时 `<a download>` 下载」（**硬闸**）——
+ *      `~/lib/browser-io` 的 `downloadText` / `downloadJson` 是唯一出口。
+ *      此前有 7 份实现，`URL.revokeObjectURL` 与 `click()` 的先后顺序都不统一
+ *      （先 revoke 会让大文件拿到失效 URL）。
+ *
+ *   P5/P6 与 P4 同性质：口径是「必须为 0」，不进棘轮基线。
+ *
+ *   P7 视图里再写一份「隐藏 `<input type=file>` + 点谁去触发它」（**硬闸**）
+ *      —— `~/components/ui/file-picker` 的 `useFilePicker` / `FilePickerButton`
+ *      是唯一出口。此前 9 个落点各写一份，写法互不相同：多数用
+ *      `useRef` + `ref.current?.click()`、两处用 `<label htmlFor>` 隐式关联、
+ *      一处干脆把 input 露在界面上。三个共性问题只有放一处才收得住：
+ *      ① `click()` 在 ref 未挂上时**静默空操作**（界面「点了没反应」）；
+ *      ② 多数落点**没有复位 `event.target.value`** —— 用户连选同一个文件不触发
+ *      `change`，看起来像上传坏了；③ 两个隐藏 input + 两个 ref + 两个 click 的
+ *      样板在同一文件里复duplicated。
+ *
+ *   P9 视图里再自绘一份「模态浮层外壳」（**硬闸**）—— `ui/dialog` 的
+ *      `Dialog` / `DialogContent`（居中卡片）或 `ui/sheet` 的 `SheetContent`
+ *      （抽屉）是唯一出口。此前 **16 个落点**各写一份 `overlayClass("modal", …)`
+ *      的容器 div，写法还分三派：① 外层带 `onClick` + 内层 `stopPropagation`
+ *      （多数）；② 把遮罩写成一个**兄弟 div** 单独接 `onClick`；③ 干脆不接关闭
+ *      （只能点自带的 ✕）。a11y 语义随之分叉：16 份里**只有 3 份**接了 Esc、
+ *      只有 3 份声明了 `role="dialog"` / `aria-modal`，焦点锁与归还**一份都没有**。
+ *
+ *      ⚠️ P2 数的是「有没有用 `createPortal`」，这批**一处 portal 都没有** ——
+ *      所以它在 P2 全库清零之后依然全部漏过。**判据要按形态设计，不是按 API**：
+ *      这里问的是「这个文件自己拼了一份模态外壳吗」，形态锚点取
+ *      「视图里出现 `overlayClass(`」（本项目顶层浮层定位的唯一出口）。
+ *
+ *   P8 视图里再写一份「值不存在时显示 `—`」的判据（**硬闸**）——
+ *      `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER` 是唯一
+ *      出口。此前 31 处各写一遍，而「什么算不存在」判得都不一样：
+ *      `??`（只管 null/undefined）、`||`（把 `0` 与 `""` 也当不存在 ——
+ *      「步数 0」显示成「—」）、`> 0 ? x : "—"`、`!= null ? String(x) : "—"`。
+ *      四者只差一两个字符，都编译、都运行、类型都对，差别只在**一个语义
+ *      决定**上，散在 31 处就永远不会被统一说出来。收口后口径写在
+ *      `src/lib/display-value.ts` 的文件头（`0` / `false` 是真实值不是缺值；
+ *      想把 `0` 当缺值的域必须显式写自己的判据）。
+ *
+ *      ⚠️ 判据只管**视图**（`src/components/**`、`src/app/**`）：出口模块
+ *      与 `src/lib/**` 里的域语义（如 `model-library-config.ts` 的
+ *      `fmtSize` 把 0 当「未探到体积」）不在此列。
+ *
+ *      ⚠️ 判据只管**隐藏** input 的触发（`className="hidden"` 那类）：
+ *      `FilmStudio` 的 BGM 选择器是**用户可见的表单字段**（靠 `file:` 伪元素
+ *      美化、就地显示已选文件名），是另一种形态，不在此列。
  *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
@@ -72,7 +134,6 @@ const EXEMPT_DIRS = [
   { re: /^src\/components\/ui\//, reason: "ui/ 基元自身实现" },
   { re: /\/hooks\//, reason: "§16.2.1 第②层（逻辑层），不算视图实现" },
 ];
-
 
 /* ── 三条判据 ────────────────────────────────────────────── */
 
@@ -147,9 +208,77 @@ const RULES = {
   P3: {
     label:
       "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
-    count: (t) => (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+    count: (t) =>
+      (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+  },
+  P9: {
+    label:
+      "视图内自绘模态浮层（应使用 ui/dialog 的 Dialog/DialogContent 或 ui/sheet 的 SheetContent）",
+    /* 判据是「这个文件自己拼了一份模态外壳」，**不是**「有没有用 createPortal」
+       —— 这正是 P2 的盲区：16 个落点里一处 portal 都没写，它们把遮罩写成
+       一个普通 `<div className={overlayClass("modal", …)}>`。P2 数的是「有没有
+       用某个 API」，于是这批在 P2 全库清零之后依然一个都没被追上。
+
+       形态判据取 `overlayClass(` 这个调用：它是本项目「顶层浮层定位」的唯一出口
+       （`fixed top-title-bar …`，同时被 `check-title-bar-clearance.cjs` 认），
+       视图里出现它 = 这个文件在自绘浮层容器。`FullScreenLayer` 也是浮层，但它
+       由基元组件承担（`ui/` 目录整体豁免），调用处不出现这次调用。 */
+    count: (t) => (stripComments(t).match(/\boverlayClass\s*\(/g) || []).length,
+  },
+  P4: {
+    label:
+      "视图内自写 ::-webkit-scrollbar 外观（应复用 globals.css 的 .custom-scrollbar / .soft-scrollbar）",
+    count: (t) => (stripComments(t).match(/::-webkit-scrollbar/g) || []).length,
+  },
+  P5: {
+    label: "视图内自写剪贴板写入（应使用 ~/lib/browser-io 的 copyText）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (
+        (t2.match(/navigator\.clipboard/g) || []).length +
+        (t2.match(/document\.execCommand\(/g) || []).length
+      );
+    },
+  },
+  P6: {
+    label:
+      "视图内自写 Blob 下载（应使用 ~/lib/browser-io 的 downloadText / downloadJson）",
+    count: (t) =>
+      (stripComments(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
+  },
+  P8: {
+    label:
+      "视图内自写「值不存在显示 —」的判据（应使用 ~/lib/display-value 的 displayValue）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 数两种写法：① 字面量里直接写占位符；② 比较算子后面紧跟占位符。
+       * 两条都要求占位符**字面出现**在代码里 —— 用了 `displayValue` 的地方
+       * 自然不含它。 */
+      return (
+        (t2.match(/"—"|'—'/g) || []).length +
+        (t2.match(/\?\?\s*"[^"]*—/g) || []).length
+      );
+    },
+  },
+  P7: {
+    label:
+      "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 只数**隐藏**的 input：可见 input 是另一种形态（见文件头 P7 说明）。
+       * 判据要同时看到 `type="file"` 与「它被藏起来了」—— 两种常见写法是
+       * 同类元素上的 `className="hidden"`，以及同文件里再写一遍
+       * `className="hidden"` 的另一处；用「同一元素标签内出现两者」判定。 */
+      const tags = t2.match(/<input\b[^>]*>/g) || [];
+      return tags.filter(
+        (tag) => /type\s*=\s*["']file["']/.test(tag) && /\bhidden\b/.test(tag),
+      ).length;
+    },
   },
 };
+
+/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4 属此类）。 */
+const HARD_GATE_RULES = new Set(["P4", "P5", "P6", "P7", "P8", "P9"]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -171,7 +300,9 @@ function walk(dir, out = []) {
 const isTest = (r) =>
   /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
 
-/** 收集当前各文件的违规计数：rel -> { P1?, P2?, P3? }。 */
+/** 收集当前各文件的违规计数：rel -> { P1?, P2?, P3?, P4? }。
+ *  硬闸判据（HARD_GATE_RULES）一并收进来，由 main 分开判定：棘轮只看前者，
+ *  后者必须恒为 0。 */
 function collect() {
   const files = {};
   for (const dir of SCAN_DIRS) {
@@ -187,6 +318,31 @@ function collect() {
     }
   }
   return files;
+}
+
+/** 棘轮口径的计数：剔掉硬闸判据（它们的判据是「必须为 0」，不进基线）。 */
+function ratchetOnly(map) {
+  const out = {};
+  for (const [rel, counts] of Object.entries(map)) {
+    const keep = {};
+    for (const [id, n] of Object.entries(counts)) {
+      if (!HARD_GATE_RULES.has(id)) keep[id] = n;
+    }
+    if (Object.keys(keep).length) out[rel] = keep;
+  }
+  return out;
+}
+
+/** 硬闸判据的命中清单（须为空，否则阻断）。 */
+function hardGateHits(map) {
+  const hits = [];
+  for (const [rel, counts] of Object.entries(map)) {
+    for (const id of Object.keys(counts)) {
+      if (HARD_GATE_RULES.has(id))
+        hits.push(`${id} → ${rel}（${counts[id]} 处）`);
+    }
+  }
+  return hits;
 }
 
 function total(map) {
@@ -208,7 +364,9 @@ function writeBaseline(files) {
           "新增请先改用 ui/ 基元，不要用 --update 放水。" +
           "豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
         rules: Object.fromEntries(
-          Object.entries(RULES).map(([id, r]) => [id, r.label]),
+          Object.entries(RULES)
+            .filter(([id]) => !HARD_GATE_RULES.has(id))
+            .map(([id, r]) => [id, r.label]),
         ),
         total: total(files),
         files,
@@ -227,8 +385,18 @@ function main() {
   const baseFiles = prev?.files ?? null;
 
   if (UPDATE) {
+    const gate = hardGateHits(now);
+    if (gate.length) {
+      console.error(
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P9）。\n  " +
+          gate.join("\n  ") +
+          "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
+          "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）。",
+      );
+      process.exit(1);
+    }
     const before = baseFiles ? total(baseFiles) : 0;
-    const after = total(now);
+    const after = total(ratchetOnly(now));
     if (before && after > before) {
       console.error(
         `[ui-primitives] 拒绝放宽基线：${before} → ${after}（棘轮只许下降）。\n` +
@@ -236,7 +404,7 @@ function main() {
       );
       process.exit(1);
     }
-    writeBaseline(now);
+    writeBaseline(ratchetOnly(now));
     console.log(
       `[ui-primitives] 基线已更新：${before} → ${after}（${path.relative(ROOT, BASELINE)}）`,
     );
@@ -269,9 +437,9 @@ function main() {
     process.exit(1);
   }
 
-  const problems = [];
+  const problems = hardGateHits(now);
   const dropped = [];
-  for (const [rel, counts] of Object.entries(now)) {
+  for (const [rel, counts] of Object.entries(ratchetOnly(now))) {
     const b = baseFiles[rel];
     for (const [id, n] of Object.entries(counts)) {
       if (!b || b[id] === undefined) {
@@ -292,10 +460,14 @@ function main() {
     }
   }
 
-  const sum = total(now);
+  const ratchetNow = ratchetOnly(now);
+  const sum = total(ratchetNow);
   console.log(
-    `[ui-primitives] 当前自实现存量 ${sum} 处 / ${Object.keys(now).length} 个文件` +
+    `[ui-primitives] 当前自实现存量 ${sum} 处 / ${Object.keys(ratchetNow).length} 个文件` +
       `（规范 16 §16.2.3）`,
+  );
+  console.log(
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -303,7 +475,12 @@ function main() {
     console.error(
       "  规范见 docs/standards/16-shadcn-ui与表单校验.md §16.2.3；\n" +
         "  改法：`<button>` → `<Button>`（~/components/ui/button）、自建 portal → ui/dialog / popover / sheet、\n" +
-        "  自写 animate-spin → ui/page-loading。治理后执行 --update 收紧基线。",
+        "  自写 animate-spin → ui/page-loading、自绘滚动条 → globals.css 的 .custom-scrollbar / .soft-scrollbar、\n" +
+        "  剪贴板 / Blob 下载 → ~/lib/browser-io 的 copyText / downloadText / downloadJson、\n" +
+        "  隐藏文件选择框 → ~/components/ui/file-picker 的 useFilePicker / FilePickerButton、\n" +
+        "  「值不存在显示 —」→ ~/lib/display-value 的 displayValue / EMPTY_PLACEHOLDER、\n" +
+        "  自绘模态外壳 → ui/dialog 的 Dialog / DialogContent（居中卡片）或 ui/sheet 的 SheetContent（抽屉）。\n" +
+        "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);
   }

@@ -85,9 +85,6 @@ export function WorkflowLibrary({
           void c.confirmDelete(id);
         }}
         onCancel={c.cancelDelete}
-        onBackdropClick={() => {
-          if (!c.deleting) c.cancelDelete();
-        }}
       />
 
       {/* 动作失败提示：只有用户点「重试」才消失（§17.5.4），

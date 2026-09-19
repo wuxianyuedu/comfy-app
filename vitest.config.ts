@@ -34,7 +34,11 @@ export default defineConfig({
       //                    ——当时的现场是插件 1.8s 就退出，而报错完全指不出是
       //                    reporter 少配了一项。
       reporter: ["text", "json-summary", "lcov"],
-      include: ["src/server/api/middleware/**", "src/server/film/**", "src/lib/**"],
+      include: [
+        "src/server/api/middleware/**",
+        "src/server/film/**",
+        "src/lib/**",
+      ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
         "src/server/api/middleware/**": {
@@ -121,6 +125,49 @@ export default defineConfig({
         // （留痕归子类按语义记）。后者顺带补上了 `idColumn` 显式分支的用例，
         // 基类行覆盖 80% → 84.6%，目录整体 lines 96.9 / functions 96.5、statements 94.8、branches 90.6。
         // 口径仍是「实测值向下取整到 5 的倍数，只升不降」（§18.6）。
+        /* 根目录的**顶层单例**（`src/lib/<name>.ts`，规范 §12.5.3 / §18.14）此前
+         * 落在 `coverage.include` 里但**没有任何门槛条目** —— 与「文件级门槛只有
+         * 那几个」是同一个盲区。这两个是 ISSUE #672 按形态扫描新抽出来的共享出口
+         * （剪贴板 + 下载 / 时间格式化），首批就按实测值设门槛（各自都有完整用例：
+         * 降级链路的两条通道、`revoke` 与 `click` 的先后顺序、相对时间的档位与
+         * `maxDays`）。口径仍是「实测值向下取整到 5 的倍数，只升不降」（§18.6）。
+         */
+        "src/lib/browser-io.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 90,
+          branches: 80,
+        },
+        "src/lib/time-format.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「值不存在显示什么」的口径（§16.2.4，P8 的对面）：判据只有在
+         * 边界值上才看得出差别（`0` / `false` 照常显示、`""` / NaN 给占位符），
+         * 所以按实测值设门槛 —— 这几条边界用例就是它的全部逻辑。 */
+        "src/lib/display-value.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 隐藏文件选择框与闪一下复位这两件「交互样板」的出口：
+         * 它们承载的是**时序**与**复位**，恰恰是各自调用点看不出来的部分
+         * （卸载后 setState、连点被旧定时器打断、连选同一文件不触发 change）。 */
+        "src/components/ui/file-picker.tsx": {
+          lines: 95,
+          functions: 90,
+          statements: 95,
+          branches: 100,
+        },
+        "src/components/ui/use-flash-state.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         "src/lib/core/**": {
           lines: 95,
           functions: 95,

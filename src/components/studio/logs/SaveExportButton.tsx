@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { HardDriveDownload } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { useFlashLatch } from "~/components/ui/use-flash-state";
 import { useLogPanel } from "./LogProvider";
+
+/** 「已保存」回执的停留时长：8s。比默认长得多 —— 它要给出一个**路径**，
+ *  用户得看清并可能抄下来，而路径比「已复制」三个字长得多。 */
+const SAVED_FLASH_MS = 8000;
+
+/* 「未亮起」的空载荷：模块级常量，身份稳定（见 `useFlashLatch`）。 */
+const EMPTY_SAVED: { savedPath: string | null; failed: boolean } = {
+  savedPath: null,
+  failed: false,
+};
 
 /**
  * 日志面板的「保存到本地」按钮（服务端落盘，不是浏览器下载）。
@@ -31,33 +41,21 @@ export function SaveExportButton({
   total: number;
 }) {
   const saveExport = useLogPanel((state) => state.saveExport);
-  const [savedPath, setSavedPath] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [],
-  );
-
-  const flash = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setSavedPath(null);
-      setFailed(false);
-    }, 8000);
-  };
+  /* 「已保存 <路径>」与失败标记必须**同生共死**（见 `useFlashLatch`）：
+   * 两个独立定时器在时长一改就会漂移，留下「已保存」还在、失败标记已经
+   * 消失的自相矛盾画面。 */
+  const saved = useFlashLatch(SAVED_FLASH_MS, EMPTY_SAVED);
+  const { savedPath, failed } = saved.value;
 
   /* 用 `.then` 而不是 `async` 处理器：逻辑层已经是 Promise，这里只负责把
    * 结果翻成三种可见状态（不用在视图里写 async 状态机，见规范 17）。 */
   const onSave = () => {
     void saveExport(label).then((result) => {
       const ok = result.ok && result.relativePath;
-      setSavedPath(ok ? result.relativePath! : null);
-      setFailed(!ok);
-      flash();
+      saved.flash({
+        savedPath: ok ? result.relativePath! : null,
+        failed: !ok,
+      });
     });
   };
 

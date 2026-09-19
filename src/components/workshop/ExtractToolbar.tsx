@@ -1,11 +1,13 @@
 "use client";
 
+import { formatClock } from "~/lib/time-format";
 import React from "react";
 import {
   ExtractModelSelect,
   parseChannelOption,
 } from "~/components/workshop/ExtractModelSelect";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
@@ -93,7 +95,11 @@ export function ExtractToolbar({
   extractDisabled = false,
   extractDisabledReason,
 }: ExtractToolbarProps) {
-  const fileRef = React.useRef<HTMLInputElement>(null);
+  /* 外部导入选择器：隐藏 input + 选完复位收进 `ui/file-picker`。 */
+  const importPicker = useFilePicker({
+    accept: importAccept,
+    onPick: onImportFile,
+  });
 
   /* 执行日志历史（跨刷新 / 重启可回看）：点「历史」按需拉取，不做实时轮询。 */
   const [historyOpen, setHistoryOpen] = React.useState(false);
@@ -132,24 +138,13 @@ export function ExtractToolbar({
         <Button
           variant="outline"
           size="xs"
-          onClick={() => fileRef.current?.click()}
+          onClick={importPicker.open}
           disabled={busy}
           className="border-border text-primary hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
         >
           外部导入
         </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept={importAccept}
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) onImportFile(file);
-            // 允许重复选择同一文件
-            event.target.value = "";
-          }}
-        />
+        <importPicker.Input />
       </div>
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
       {busy && progressText && (
@@ -214,7 +209,7 @@ export function ExtractToolbar({
                     {entry.summary}
                   </span>
                   <span className="text-muted-foreground/60 shrink-0 text-[10px]">
-                    {new Date(entry.ts).toLocaleTimeString()}
+                    {formatClock(entry.ts)}
                   </span>
                 </div>
                 {entry.detail && (
@@ -251,7 +246,7 @@ export function ExtractToolbar({
                           {entry.summary}
                         </span>
                         <span className="text-muted-foreground/60 shrink-0 text-[10px]">
-                          {new Date(entry.ts).toLocaleTimeString()}
+                          {formatClock(entry.ts)}
                         </span>
                       </div>
                       {entry.detail && (

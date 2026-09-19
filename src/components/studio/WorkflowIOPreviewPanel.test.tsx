@@ -277,8 +277,8 @@ describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
     });
 
     expect(
-      stores.io.getState().workflowIO["1512::widget::value_1"]?.modes?.i2v
-        ?.seedMode,
+      stores.io.getState().workflowIO["1512::widget::value_1"]?.modeOverrides
+        ?.i2v?.seedMode,
     ).toBe("increment");
     expect(seedRowLabel()).toBe("Seed");
   });

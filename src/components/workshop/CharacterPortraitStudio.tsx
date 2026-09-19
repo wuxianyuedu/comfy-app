@@ -6,12 +6,15 @@
 // 挑中的一张写在角色上（character.portraitUrl）。业务与网络全在
 // hooks/use-character-portrait.ts 与 lib/workshop/character-portrait-client.ts。
 
+import { formatClock } from "~/lib/time-format";
 import React from "react";
 
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { Progress } from "~/components/ui/progress";
+import { Alert } from "~/components/ui/alert";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import { useLLM } from "~/components/workshop/LLMContext";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
@@ -48,7 +51,11 @@ interface Props {
 export function CharacterPortraitStudio({ character, portrait }: Props) {
   const { session, actions, apiChannels, workflows, onOpenApiSettings } =
     portrait;
-  const fileRef = React.useRef<HTMLInputElement>(null);
+  /* 导入定妆照：隐藏 input + 选完复位收进 `ui/file-picker`。 */
+  const importPicker = useFilePicker({
+    accept: "image/*",
+    onPick: (file) => void actions.importFile(character, file),
+  });
 
   /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
   const focused = session.focusCharacterId === character.id;
@@ -184,24 +191,13 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         <Button
           variant="outline"
           size="xs"
-          onClick={() => fileRef.current?.click()}
+          onClick={importPicker.open}
           disabled={session.busy || session.importing}
           className="border-border text-ink hover:bg-surface h-auto rounded-md px-3 py-1.5"
         >
           {importing ? "导入中…" : "导入图片"}
         </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void actions.importFile(character, file);
-            // 允许重复选择同一文件
-            event.target.value = "";
-          }}
-        />
+        <importPicker.Input />
       </div>
 
       {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}
@@ -256,12 +252,15 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
             </p>
           )}
           {session.error && (
-            <p
-              role="alert"
-              className="rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300"
+            <Alert
+              variant="danger"
+              /* 行内错误行：保持原有的紧凑尺寸与「无可见边框」观感 ——
+                 基元只接管「危险色怎么取」（此前写死 bg-red-100 + 深色档
+                 文字，浅底在深色主题下会与文字糊在一起）。 */
+              className="block rounded-md border-transparent px-2 py-1 text-[11px]"
             >
               {session.error}
-            </p>
+            </Alert>
           )}
           {(session.log.length > 0 || focused) && (
             <details className="bg-bg/60 rounded-md px-2 py-1" open={busy}>
@@ -294,7 +293,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                     }`}
                   >
                     <span className="text-faint mr-1">
-                      {new Date(entry.ts).toLocaleTimeString()}
+                      {formatClock(entry.ts)}
                     </span>
                     {entry.text}
                   </li>
@@ -327,7 +326,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                           }`}
                         >
                           <span className="text-faint mr-1">
-                            {new Date(entry.ts).toLocaleTimeString()}
+                            {formatClock(entry.ts)}
                           </span>
                           {entry.summary}
                         </li>

@@ -2,6 +2,9 @@
 
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { Alert } from "~/components/ui/alert";
+import { StatusBadge } from "~/components/ui/status-badge";
+import { SHOT_STATUS_LABEL } from "./ShotStudio";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
   MOTION_LABELS,
@@ -143,38 +146,22 @@ export function ClipBadge({
 }: {
   status: NonNullable<Shot["clipStatus"]>;
 }) {
-  const map: Record<
-    NonNullable<Shot["clipStatus"]>,
-    { label: string; cls: string }
-  > = {
-    idle: { label: "待生成", cls: "bg-subtle text-muted-foreground" },
-    queued: {
-      label: "排队中",
-      cls: "bg-amber-100 text-amber-800 dark:text-amber-300",
-    },
-    running: {
-      label: "生成中",
-      cls: "bg-blue-100 text-blue-800 dark:text-blue-300",
-    },
-    done: {
-      label: "片段就绪",
-      cls: "bg-emerald-100 text-emerald-800 dark:text-emerald-300",
-    },
-    failed: { label: "失败", cls: "bg-red-100 text-red-800 dark:text-red-300" },
-    stale: {
-      label: "待更新",
-      cls: "bg-red-100 text-red-800 dark:text-red-300",
-    },
-  };
-  const s = map[status];
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}
-    >
-      {s.label}
-    </span>
+    <StatusBadge
+      status={status}
+      label={CLIP_STATUS_LABEL[status]}
+      dot={false}
+      className="px-2 py-0.5 text-[10px]"
+    />
   );
 }
+
+/* 片段状态 → 文案。与镜头状态同源（只多一档「片段就绪」），配色同样走
+ * `ui/status-badge`（规范 16 §16.2.4.5）。 */
+const CLIP_STATUS_LABEL = {
+  ...SHOT_STATUS_LABEL,
+  done: "片段就绪",
+} satisfies Record<NonNullable<Shot["clipStatus"]>, string>;
 
 /* ── 单个镜头行：首帧、提示词、时长 / 运动控件、生成 ── */
 export function ShotCard({
@@ -304,9 +291,13 @@ export function ShotCard({
       </div>
 
       {error && (
-        <p className="mt-2 rounded-md bg-red-100 px-2 py-1 text-[11px] text-red-800 dark:text-red-300">
+        <Alert
+          variant="danger"
+          /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
+          className="mt-2 block rounded-md border-transparent px-2 py-1 text-[11px]"
+        >
           {error}
-        </p>
+        </Alert>
       )}
       {!shot.imageUrl && !error && (
         <p className="text-muted-foreground mt-2 text-[10.5px]">

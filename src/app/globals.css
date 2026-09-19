@@ -23,12 +23,24 @@
      「暗底上的浅琥珀字」，与它取的是两侧。 */
   --color-warning-soft: #fde8c0;
   --color-accent: #ff5ca8;
+  /* 品牌实心底（primary / accent）上的文字色。两态同值，但仍是 token ——
+     它由「底」的颜色决定，不是一处独立的美术选择。 */
+  --color-on-brand: #ffffff;
   /* 极光晕的三档色相（装饰性背景，两态同名 —— 浅色下靠外面那层
      `opacity-*` 调低，深色下配 `mix-blend-screen`）。强度由使用处的
      `AuroraGlow` alpha 决定，不在这里再出一份 token。 */
   --color-aurora-violet: #8b5cf6;
   --color-aurora-cyan: #22d3ee;
   --color-aurora-magenta: #ff5ca8;
+  /* 画布连线的四色渐变（项目画布与工作流编辑器共用同一套观感）：
+     它是**线本身的颜色**，不是承载线的表面（规范 03 §3.6.1 的类型色例外
+     判据）。此前四处内联 SVG `stopColor` 各写一份字面量、`ProjectEdge` 的
+     选中光晕又写第五份 rgba，改一次要点五遍名。 */
+  --color-edge-flow-1: #b584ff;
+  --color-edge-flow-2: #5bc6ff;
+  --color-edge-flow-3: #5be3c4;
+  --color-edge-flow-4: #ffd571;
+  --color-edge-focus-halo: rgb(181 132 255 / 0.55);
 
   /* Surfaces & text (light default) */
   --color-bg: #ffffff;
@@ -40,9 +52,8 @@
   --color-border: #ececf1;
   --color-border-subtle: rgb(0 0 0 / 0.06);
   --color-ink: #1a1a1f;
-  --color-muted: #6b6b76;
 
-  /* Immersive / editor surfaces (canvas / node / editor) — T11.
+  /* Immersive / editor surfaces (canvas / node / editor).
      Theme-aware: these default to LIGHT (the :root value Tailwind emits
      from @theme) and are overridden to DARK inside `.dark`. They must be
      kept in sync with the corresponding `.dark { … }` block below. */
@@ -100,13 +111,23 @@
      status-badge 引用却从没定义过，那三个状态因此渲染成无色。 */
   --color-warning-strong: #b45309; /* 警告文字档（琥珀-700 同值）(light default) */
   --color-danger-strong: #b91c1c; /* 危险文字档（红-700 同值）(light default) */
+  /* 危险色原色（当底 / 当描边 / 当图标用）。与 `--color-danger-strong`
+     （浅底上的红字）分开，理由同品牌紫的 `--color-primary` /
+     `--color-primary-strong`。取值沿用 shadcn 的 `--destructive` 两态值 ——
+     此前它只存在于别名 `--destructive` 里，项目侧要一份可复用的名字。 */
+  --color-destructive: oklch(0.577 0.245 27.325);
   --color-info-strong: #1d4ed8; /* 信息文字档（蓝-700 同值）(light default) */
   --color-status-online: #047857; /* 「本机/在线」状态点与文字（浅色档，与 emerald-700 同值）(light default) */
+  /* 对外参数封装状态（已配置 / 未配置）的文字档。琥珀取在「警示」语义上 ——
+     未配置不是失败、只是还没配，因此不并入 destructive 家族。
+     （浅色档与 amber-700 同值，深色档与 amber-400 同值。） */
+  --color-encap-pending: #b45309; /* 未配置对外参数的文字档 (light default) */
   --color-warning: #d97706; /* 警告 (light default) */
   --color-amber: #d97706; /* 琥珀强调（workshop 徽章/按钮）(light default) */
   --color-accent-soft: #ec4899; /* accent (light default) */
   /* 画布浮层投影：浅色下不能再用 55% 黑（看着像脏污），改成中性深灰。 */
   --color-shadow-strong: rgb(0 0 0 / 0.18); /* 浮层重投影 (light default) */
+  --color-ring-shadow: rgb(0 0 0 / 0.08); /* 浮层 1px ring（浅色下用中性灰，不用前景色）(light default) */
   --shadow-card: 0 4px 20px rgb(0 0 0 / 0.18); /* 浮层卡片投影 (light default) */
   /* 便签（Note）身体色的混色基准：用户给的 note 颜色是内容语义色，
      基准必须跟主题走，否则浅色下便签仍是一块暗色。 */
@@ -164,7 +185,7 @@
   --font-sans:
     var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
     system-ui, -apple-system, sans-serif;
-  /* Mono / code — unified stack (T10: merged from inline fontFamily usage) */
+  /* Mono / code — unified stack（原先是各处内联 fontFamily，已收口到此） */
   --font-mono:
     "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas,
     monospace;
@@ -185,13 +206,12 @@
   --color-border: #26262e;
   --color-border-subtle: rgb(255 255 255 / 0.06);
   --color-ink: #ededf2;
-  --color-muted: #9a9aad;
   --color-primary-soft: #221c3a;
   --color-warning-soft: #fde8c0; /* 深色档：渐变底上的浅琥珀字（与浅色档同值） */
   --color-primary-strong: #a78bfa; /* 深色下品牌文字改亮紫（violet-400 同值） */
   --color-primary-500: #8b5cf6;
   --color-primary-600: #7c3aed;
-  /* ── immersive / editor surface overrides (see T11 @theme block) ── */
+  /* ── immersive / editor surface overrides（同上方的 surface 组）── */
   --color-canvas: #0a0a0f; /* 画布/工作区背景 */
   --color-port-surface: #0b0b10; /* 端口圆点的载体色：节点内层面板（深色） */
   --color-edge-hub-dot: #ffffff; /* 连线中点圆点 */
@@ -236,48 +256,18 @@
   --color-success-strong: #10b981; /* 成功绿 */
   --color-warning-strong: #fbbf24; /* 警告文字档（琥珀-400 同值） */
   --color-danger-strong: #fca5a5; /* 危险文字档（红-300 同值） */
+  --color-destructive: oklch(0.704 0.191 22.216); /* 危险原色（深色档，红-400 同值） */
   --color-info-strong: #7dd3fc; /* 信息文字档（天蓝-300 同值） */
   --color-status-online: #33d499; /* 「本机/在线」状态点与文字（深色档 — 即原写死值） */
+  --color-encap-pending: #fbbf24; /* 未配置对外参数的文字档 */
   --color-warning: #f59e0b; /* 警告 */
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
+  --color-ring-shadow: rgb(255 255 255 / 0.1); /* 浮层 1px ring（深色下用中性白） */
   --shadow-card: 0 4px 20px rgb(0 0 0 / 0.55); /* 浮层卡片投影（深色档） */
   --color-note-tint-base: #22222c; /* note 混色基准 */
   --color-node-mix-base: #16161e; /* 子图标题栏混色基准 */
-  /* ── shadcn 语义 token 映射到项目品牌色板（全面接管主题） ── */
-  --background: #0a0a0f;
-  --foreground: #ededf2;
-  --card: #16161c;
-  --card-foreground: #ededf2;
-  --popover: #16161c;
-  --popover-foreground: #ededf2;
-  --primary: #7c5cfc; /* 品牌紫 */
-  --primary-foreground: #ffffff;
-  --secondary: #16161c;
-  --secondary-foreground: #ededf2;
-  --muted: #141419; /* surface，用于 bg-muted */
-  --muted-foreground: #9a9aad; /* 文字灰，对应原 text-muted */
-  --accent: #ff5ca8; /* 品牌品红，保留 bg-accent/text-accent 语义 */
-  --accent-foreground: #ffffff;
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: #26262e;
-  --input: #26262e;
-  --ring: #7c5cfc;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: #0f0f16;
-  --sidebar-foreground: #ededf2;
-  --sidebar-primary: #7c5cfc;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #16161c;
-  --sidebar-accent-foreground: #ededf2;
-  --sidebar-border: #26262e;
-  --sidebar-ring: #7c5cfc;
-  --ring-shadow: rgb(255 255 255 / 0.1); /* 浮层 ring（深色下用中性白） */
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -337,6 +327,10 @@
      · 项目画布浮层工具条底（CanvasToolbar 的 `to-[#16121f]/85`）
        → `--color-panel/85` + `--color-shadow-strong`。此处还顺带修掉了
          一个语法坏掉的历史 class（`to-surface-20]/85`，不是合法 Tailwind 类）。
+     · 内容载体节点的「水幕」进度叠层（`ui/water-fill-progress.tsx`）
+       → **本条不 token 化**（登记进本清单）：它是浮在预览图/视频之上的
+         极小面积叠层，且刻意保留 ~0.9 的透明度「让底层内容隐约可见」——
+         浅色水幕会与浅色内容糊在一起，判据 1、2 同时成立。
      · 可读性 / 语法着色的硬编码令牌：
        · `JsonViewer` 的 `react18-json-view` 主题（`jv-theme-comfy` +
          `dark` prop）→ 两态 `--json-view-*` token；
@@ -450,7 +444,24 @@ body {
   width: 100%;
 }
 
-/* Thin, modern scrollbar */
+/* ── 滚动条外观：本文件是全库唯一出口 ─────────────────────────────
+   自绘滚动条（`::-webkit-scrollbar`）在 WebView2 / Chromium 下生效，
+   本项目有三档**刻意不同**的观感，因此这里保留三个具名类 + 一条全局兜底，
+   每个类的取值各有出处。判据：`src/**` 里不得再出现
+   `::-webkit-scrollbar`（由 `scripts/check-ui-primitives.cjs` 的 P4 拦截）——
+   视图里写任意值变体等于把同一件事再实现一份，取值还会各自漂移。
+
+   档位与谁在用：
+   · 全局兜底（下方，无类名）—— 默认滚动条，浅灰 thumb。
+   · `.custom-scrollbar` —— 密集日志区（日志面板 / 步骤日志 / 运行日志 /
+     设置页与消息中心）。thumb 取强边框色、hover 再深一档，弱底上看得见。
+   · `.soft-scrollbar` —— 文字编辑区（剧本 Markdown 编辑器与工坊舞台正文）。
+     与上一档同宽不同档：thumb 同色、hover 取弱文字色，长时间编辑不抢视线。
+   · `textarea::-webkit-scrollbar`（下方）—— 画布节点文本框**只滚动不显示**
+     滚动条，保住面板右缘干净（滚轮 / PgDn / 方向键照常可用）。
+   `ui/scroll-area` 另有一套 base-ui 自绘滚动条，口径见规范 16 §16.2.4.6 第三档。 */
+
+/* Thin, modern scrollbar（全局兜底） */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -460,10 +471,9 @@ body {
   border-radius: 999px;
 }
 
-/* R-ardot18 (2026-08-14): canvas node textarea must not show the scrollbar
-   track even though it still scrolls (overflowY:auto + maxHeight).  We keep
-   wheel / PgDn / arrow keys usable but hide the chrome visual so the right
-   edge of the panel stays clean. */
+/* canvas node textarea must not show the scrollbar track even though it still
+   scrolls (overflowY:auto + maxHeight).  Wheel / PgDn / arrow keys stay usable
+   but the chrome visual is hidden so the right edge of the panel stays clean. */
 textarea::-webkit-scrollbar {
   width: 0;
   height: 0;
@@ -487,7 +497,7 @@ textarea::-webkit-scrollbar {
   background-color: transparent;
 }
 
-/* ── R-ardot106 (2026-08-17) MiniMap focus aids ──
+/* ── MiniMap focus aids ──
    • `pannable zoomable` on the MiniMap exposes an interactive viewport
      rectangle; the default xyflow stroke (transparent / 1px) is invisible
      against our dark canvas.  Re-tint to a violet accent + 1.5px so the
@@ -602,7 +612,7 @@ textarea::-webkit-scrollbar {
   .u-chip {
     border: 1px solid var(--color-border);
     background: var(--color-surface);
-    color: var(--color-muted);
+    color: var(--color-ink-muted);
     border-radius: 999px;
     transition:
       border-color 0.15s ease,
@@ -619,7 +629,7 @@ textarea::-webkit-scrollbar {
     color: var(--color-ink);
   }
   .u-ghost {
-    color: var(--color-muted);
+    color: var(--color-ink-muted);
     border-radius: var(--radius-md);
     transition:
       background-color 0.15s ease,
@@ -628,6 +638,16 @@ textarea::-webkit-scrollbar {
   .u-ghost:hover {
     background: var(--color-subtle);
     color: var(--color-ink);
+  }
+  /* 详情面板页签的选中指示条：品牌双色渐变（primary → accent）。
+     此前由 `TabButton` 用 `from-violet-500 to-fuchsia-500` 写在视图里 ——
+     换成 `ui/tabs` 基元后，指示条的颜色只有一个出口，走 token 现取。 */
+  .detail-tab-trigger::after {
+    background: linear-gradient(
+      to right,
+      var(--color-primary),
+      var(--color-accent)
+    );
   }
   /* 头像/图标占位：纯色块，去掉渐变 */
   .u-avatar {
@@ -680,7 +700,7 @@ textarea::-webkit-scrollbar {
   }
 }
 
-/* R-ardot103 (2026-08-17): 生成进度水面水平滑动 —— WaterFillProgress 用。
+/* 生成进度水面水平滑动 —— WaterFillProgress 用。
  * SVG viewBox 宽 120 = 渲染宽（100%），所以 translateX(-100%) 恰好移动一整个
  * 波形周期，无缝循环。线性 6s，无限；配合水层高度过渡形成"水面涨起 + 流动"。 */
 @keyframes wf-wave {
@@ -785,7 +805,8 @@ textarea::-webkit-scrollbar {
   fill: var(--json-view-brace);
 }
 
-/* Custom dark scrollbar for log panel / overflow containers */
+/* 密集日志区的滚动条：thumb 走强边框色、hover 深一档
+   （见文件顶部「滚动条外观」块的档位说明）。 */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -801,6 +822,45 @@ textarea::-webkit-scrollbar {
   background: var(--color-ink-icon);
 }
 
+/* 文字编辑区的滚动条：与 `.custom-scrollbar` 同宽不同档，hover 取弱文字色。
+   此前是视图文件里的任意值变体（`SCROLLBAR_VISIBLE_CLASSES`），
+   取值逐条照搬、观感不变，只是把「外观定义」收回本文件。 */
+.soft-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.soft-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.soft-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+}
+.soft-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-muted);
+}
+
+/* ── shadcn 工具类桥（别名 → Tailwind color 命名空间） ──────────────
+   `@theme inline` 的作用是把别名挂进 Tailwind 的 `--color-*` 命名空间，
+   让 `bg-card` / `border-border` 这样的类名编得出来 —— 它是**工具类的入口**，
+   不是「第二份 token 定义」。
+
+   **铁律：本块里的每个名字，`@theme` 块里不得有同名定义。** 这是判别方法，
+   不是风格偏好 —— 名字同时出现在两处时，编译产物里 `--color-X` 会有两个值、
+   本块（层内靠后）获胜，于是 `@theme` 里那个**项目 token 被静默换成了别名**：
+   曾经有 `--color-primary` / `--color-accent` / `--color-muted` / `--color-border`
+   四行，让 `var(--color-muted)` 在浅色下取到 `#f7f8fa`（表面）而不是 `#6b6b76`
+   （文字灰）—— `.u-chip` / `.u-ghost` 与 `WorkflowNodeJsonPopover` 里那些
+   「弱文字」因此在浅色下几乎看不见，而 tsc / eslint / 主题色扫描器全都报绿。
+
+   反过来，别名一律**转发**到项目 token（见下方 `:root {}` 块），方向是单向的；
+   反向再挂一次就成环（`--color-X: var(--X)` 配 `--X: var(--color-X)`）。
+   两条都由 `tests/theme-token-single-source.test.ts` 机器守着。
+
+   `--color-muted` 是**允许**出现在这里的少数派：`--muted` 是 shadcn 的**表面**
+   语义（`bg-muted`），项目侧对应的是 `--color-subtle`；项目原有的同名 token
+   `--color-muted` 是**文字**语义、且与 `--color-ink-muted` 逐字节同值，已删。
+   名字腾空之后，这一行就不再是「重定义」而是「唯一来源」。 */
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
@@ -819,16 +879,12 @@ textarea::-webkit-scrollbar {
   --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
+  --color-muted: var(--muted); /* 表面语义（shadcn 约定）：bg-muted */
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -844,50 +900,62 @@ textarea::-webkit-scrollbar {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ── shadcn 语义别名（浅色默认） ──
-   选择器必须是 `:root:not(.dark)`，不能是裸 `:root`：
-   这些别名的深色档写在**上方更早**的 `.dark` 块里，而两个选择器落在同一个
-   元素（<html>）上、特异性相同（都是 0-1-0）——此时**源码顺序决定胜负**，
-   写在后面的浅色 `:root` 会恒压过前面的 `.dark`。实测后果：`bg-card`
-   （= `background-color: var(--card)`）在深色下仍是 `#ffffff`，工作流库
-   画布的三张卡片在深色里成了白底近白字，整块读不出来。
-   `:not(.dark)` 让浅色块在深色下**不匹配**，深色档自然生效。 */
-:root:not(.dark) {
-  --background: #ffffff;
-  --foreground: #1a1a1f;
-  --card: #ffffff;
-  --card-foreground: #1a1a1f;
-  --popover: #ffffff;
-  --popover-foreground: #1a1a1f;
-  --ring-shadow: rgb(
-    0 0 0 / 0.08
-  ); /* 浮层 ring（浅色下用中性灰，不用前景色） */
-  --primary: #7c5cfc; /* 品牌紫 */
-  --primary-foreground: #ffffff;
-  --secondary: #f7f8fa;
-  --secondary-foreground: #1a1a1f;
-  --muted: #f7f8fa; /* surface，用于 bg-muted */
-  --muted-foreground: #6b6b76; /* 文字灰，对应原 text-muted */
-  --accent: #ff5ca8; /* 品牌品红，保留 bg-accent/text-accent 语义 */
-  --accent-foreground: #ffffff;
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: #ececf1;
-  --input: #ececf1;
-  --ring: #7c5cfc;
+/* ── shadcn 语义别名：只做 `var()` 转发，不写第二份字面量 ──────────
+   口径（规范 03 §3.6.4）：**项目 token（`--color-*`）是唯一事实来源**，
+   别名只是「shadcn 基元要的那几个名字」的兼容层 —— 它把名字转成项目 token，
+   两态取值由项目 token 自己负责。
+
+   这样写有三个直接后果：
+
+   1. **改品牌色只改一处**。此前别名在 `.dark {}` 与 `:root:not(.dark) {}`
+      里各写一份字面量，与项目 token 构成三份拷贝 —— 改 `--color-surface`
+      对 `bg-card` 不生效。现在 `--card` 直接跟随 `--color-surface`。
+   2. **别名不需要两态各写一份**，因此也不需要 `:root:not(.dark)` 这个
+      「深色下不匹配」的技巧（§3.6.3）：`--color-*` 在两个块里各自取值，
+      别名在哪个元素上求值就拿到哪个值。
+   3. **不再有「同一个名字两个定义」**。此前 `@theme inline` 把
+      `--color-primary` / `--color-accent` / `--color-muted` / `--color-border`
+      四行重定向回别名，于是「项目 token」这个名字在编译产物里出现两次、
+      后一处（别名）获胜：`var(--color-ink-muted)` 在浅色下拿到的是
+      `#f7f8fa`（表面色）而不是 `#6b6b76`（文字灰）—— 写的人以为在取
+      「弱文字」，实际取到「浅底」。四行已删，见 `@theme inline` 上方注释。
+
+   仍然带字面量的只有 `--chart-*` 与 `--radius` —— 它们是**非颜色**刻度
+   （本应用不使用图表；圆角另有自己的刻度）。颜色一律转发，没有例外。 */
+:root {
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-on-brand);
+  --secondary: var(--color-subtle);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-subtle); /* 表面语义：bg-muted（shadcn 约定） */
+  --muted-foreground: var(--color-ink-muted); /* 文字语义：text-muted-foreground */
+  --accent: var(--color-accent);
+  --accent-foreground: var(--color-on-brand);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-primary);
+  --ring-shadow: var(--color-ring-shadow);
+  --destructive: var(--color-destructive);
+  --sidebar: var(--color-panel-deep);
+  --sidebar-foreground: var(--color-ink);
+  --sidebar-primary: var(--color-primary);
+  --sidebar-primary-foreground: var(--color-on-brand);
+  --sidebar-accent: var(--color-subtle);
+  --sidebar-accent-foreground: var(--color-ink);
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-primary);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.75rem; /* 对应原 --radius-md 12px */
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1a1a1f;
-  --sidebar-primary: #7c5cfc;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f7f8fa;
-  --sidebar-accent-foreground: #1a1a1f;
-  --sidebar-border: #ececf1;
-  --sidebar-ring: #7c5cfc;
 }
 
 @layer base {

@@ -179,3 +179,44 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
     );
   });
 });
+
+describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
+  const ROOT = path.resolve(__dirname);
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+  /* 用户口径：「工作流库界面的上方筛选菜单应该是水平布局排列的」。
+   *
+   * 触发条件是宽度不足 —— 三个筛选下拉 + 「管理模型」在窄窗口里排不下时，
+   * 组内 `flex-wrap` 会让它们**各自折行**，叠成一个竖列，页头因此吃掉三行。
+   * 判据因此是两条：① 组内 `flex-nowrap`（三个下拉是一组，拆行会错位）；
+   * ② 每项 `shrink-0`（不许被压扁成两行小字，规范 03 §3.8.1）。 */
+
+  it("筛选组不换行，组内每项不收缩", () => {
+    const filters = read("WorkflowLibraryFilters.tsx");
+
+    /* 组容器：一行到底。 */
+    expect(filters).toMatch(
+      /workflow-library-filter-row[\s\S]{0,80}flex flex-nowrap items-center gap-2/,
+    );
+    expect(filters).not.toMatch(/flex flex-wrap items-center gap-2/);
+
+    /* 触发按钮：宽度跟内容走，且不许被压。 */
+    expect(filters).toContain("min-w-[112px] shrink-0");
+  });
+
+  it("页头把筛选包成一组并交给整行换行，动作组不许被压", () => {
+    const header = read("WorkflowLibraryHeader.tsx");
+
+    /* 根容器换行：排不下时整组落到第二行，而不是把某个下拉挤变形。 */
+    expect(header).toMatch(/flex flex-wrap items-center gap-x-3 gap-y-2/);
+    /* 筛选是一组：组内不换行（组之间才换行）。 */
+    expect(header).toMatch(
+      /workflow-library-header-filters[\s\S]{0,80}flex shrink-0 flex-nowrap/,
+    );
+    /* 标题与动作组同样不收缩。 */
+    expect(header).toContain('className="font-title text-ink shrink-0 text-lg');
+    expect(header).toMatch(
+      /ml-auto flex shrink-0 flex-wrap items-center gap-2/,
+    );
+  });
+});

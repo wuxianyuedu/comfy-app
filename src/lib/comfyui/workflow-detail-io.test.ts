@@ -187,11 +187,11 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "16:9" } },
+          modeOverrides: { T2I: { defaultValue: "16:9" } },
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
       string,
       { defaultValue?: unknown }
     >;
@@ -206,11 +206,11 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "4:3 (Standard)" } },
+          modeOverrides: { T2I: { defaultValue: "4:3 (Standard)" } },
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
       string,
       { defaultValue?: unknown }
     >;
@@ -225,14 +225,14 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "竖版高清" } },
+          modeOverrides: { T2I: { defaultValue: "竖版高清" } },
         },
       }),
     );
     const entry = result["94::widget::aspect_ratio"]!;
     /* 「竖版高清」解析不出宽高比、前缀也匹配不上任何候选 → 该模式的
      *  defaultValue 被摘掉；覆盖层里没有别的字段时整条不再下发。 */
-    expect(entry.modes?.T2I).toBeUndefined();
+    expect(entry.modeOverrides?.T2I).toBeUndefined();
   });
 
   it("候选表缺失（ComfyUI 离线）时不清洗，保留原值", async () => {
@@ -243,15 +243,35 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "16:9" } },
+          modeOverrides: { T2I: { defaultValue: "16:9" } },
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
       string,
       { defaultValue?: unknown }
     >;
     expect(modes.T2I!.defaultValue).toBe("16:9");
+  });
+
+  it("旧数据用 `modes` 键存储时仍被读取并归一到 `modeOverrides`", async () => {
+    const result = await enrichWorkflowIO(
+      comboParams({
+        "94::widget::aspect_ratio": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "94",
+          name: "aspect_ratio",
+          // 历史命名：覆盖层挂在 `modes` 而非 `modeOverrides`。
+          modes: { T2I: { defaultValue: "4:3 (Standard)" } },
+        },
+      }),
+    );
+    const entry = result["94::widget::aspect_ratio"]!;
+    /* 旧键被回退归一：客户端只读 `modeOverrides` 也能拿到覆盖层。 */
+    expect(entry.modeOverrides?.T2I?.defaultValue).toBe("4:3 (Standard)");
+    /* 旧键不应原样下发，避免同一份覆盖层以两个名字落库往返。 */
+    expect((entry as { modes?: unknown }).modes).toBeUndefined();
   });
 });
 
@@ -1207,5 +1227,77 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
       ),
     );
     expect(result["7::widget::1"]!.label).toBe("1");
+  });
+});
+
+describe("enrichWorkflowIO — 存档 type/defaultValue/options 作兜底基线（fix 4）", () => {
+  it("rawJson/graph 都取不到时沿用存档 type，不退化成 *", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "7::widget::scale": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "7",
+          name: "scale",
+          type: "FLOAT",
+          defaultValue: 1.2,
+        },
+      }),
+      // rawInputsById / graph / options 都故意留空：模拟「富化查不到该节点」
+    );
+    const e = result["7::widget::scale"]!;
+    expect(e.type).toBe("FLOAT");
+    expect(e.defaultValue).toBe(1.2);
+  });
+
+  it("object_info 不可达时复用存档 options，COMBO 不退化成 text", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "7::widget::sampler": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "7",
+          name: "sampler",
+          type: "COMBO",
+          options: ["euler", "dpmpp_2m"],
+        },
+      }),
+    );
+    const e = result["7::widget::sampler"]!;
+    expect(e.type).toBe("COMBO");
+    expect(e.options).toEqual(["euler", "dpmpp_2m"]);
+  });
+
+  it("rawJson 能解析出来时以解析结果为准，覆盖存档旧值", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "7::widget::seed": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "seed",
+            type: "STRING", // 存档旧值（已过期）
+            defaultValue: "old",
+          },
+        },
+        {
+          rawInputsById: {
+            "7": [
+              {
+                name: "seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "seed" },
+                widgetValue: 42,
+              },
+            ],
+          },
+        },
+      ),
+    );
+    const e = result["7::widget::seed"]!;
+    expect(e.type).toBe("INT"); // 解析覆盖存档
+    expect(e.defaultValue).toBe(42);
   });
 });

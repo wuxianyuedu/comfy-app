@@ -6,23 +6,25 @@
  * 接口地址 / API Key 可留空回落全局；编辑态密钥「留空不改」，可显式清除。
  * 「测试连接」成功后顺带展示服务端模型清单供点选。交互状态与动作由
  * `useRemoteModelDialogs`（第②层）承载，视图只渲染与触发。
+ *
+ * 字段级校验走 `~/lib/llm/remote-model-schema`（纯函数），controller 转述成
+ * `fieldErrors`；视图只把文案挂在对应字段下方（口径见规范 16 §16.2.4.8）。
  */
 
 import { SelectMenu } from "~/components/ui/select-menu";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import {
   REMOTE_MODEL_KINDS,
   REMOTE_MODEL_KIND_LABELS,
   type RemoteModelKind,
 } from "~/lib/llm/types";
-import { overlayClass } from "~/lib/full-screen-layer";
 
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import type {
   ModelDialog,
   RemoteModelDialogs,
 } from "../hooks/use-remote-model-dialogs";
-import { zClass } from "~/lib/shell/overlay-z";
 
 export function RemoteModelDialog({
   c,
@@ -34,19 +36,15 @@ export function RemoteModelDialog({
   /** 非空由调用方保证：仅在弹窗打开时渲染。 */
   dialog: NonNullable<ModelDialog>;
 }) {
+  /* 关闭语义（Esc / 点遮罩）交给 `ui/dialog`：此前自绘遮罩 div + 手写
+     `onClick`，Esc 与焦点归还都没有。 */
   return (
-    <>
-      <div
-        className={overlayClass(
-          "modal",
-          `${zClass("modal")} bg-canvas-deep grid place-items-center p-4`,
-        )}
-        onClick={() => d.closeDialog()}
+    <Dialog open onOpenChange={(next) => !next && d.closeDialog()}>
+      <DialogContent
+        className="bg-transparent p-0 ring-0"
+        popupClassName="max-w-md"
       >
-        <div
-          className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl"
-          onClick={(event) => event.stopPropagation()}
-        >
+        <div className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="u-title">
               {dialog.mode === "edit" ? "编辑模型" : "添加模型"}
@@ -67,6 +65,7 @@ export function RemoteModelDialog({
           </label>
           <SelectMenu
             className="mb-3 text-sm"
+            fullWidth
             value="custom"
             onChange={() => undefined}
             options={["custom"]}
@@ -81,6 +80,7 @@ export function RemoteModelDialog({
           </label>
           <SelectMenu
             className="mb-3 text-sm"
+            fullWidth
             value={d.addForm.kind}
             onChange={(kind) =>
               d.setAddForm((f) => ({
@@ -213,8 +213,14 @@ export function RemoteModelDialog({
               d.setAddForm({ ...d.addForm, model: event.target.value })
             }
             placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
-            className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+            aria-invalid={d.fieldErrors.model ? true : undefined}
+            className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 aria-invalid:border-destructive w-full rounded-lg border px-3 py-2 text-sm outline-none"
           />
+          {d.fieldErrors.model && (
+            <p className="text-danger-strong mt-1 text-[11px]">
+              {d.fieldErrors.model}
+            </p>
+          )}
           {d.addError && (
             <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
               {d.addError}
@@ -231,7 +237,10 @@ export function RemoteModelDialog({
             </Button>
             <Button
               onClick={() => void d.submitDialog()}
-              disabled={c.saving || !d.addForm.model.trim()}
+              /* 不再因「名称为空」禁用：禁用态下点不动，字段级提示就永远出不来
+                 （规范性提示要么可达、要么写在 onSubmit 之前）。校验交给
+                 `submitDialog` 的字段级判定，失败逐字段标红。 */
+              disabled={c.saving}
               className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
             >
               {c.saving
@@ -242,7 +251,7 @@ export function RemoteModelDialog({
             </Button>
           </div>
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -14,6 +14,7 @@
  */
 
 import type { RefObject } from "react";
+import { displayValue } from "~/lib/display-value";
 
 import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -138,7 +139,7 @@ export function LibraryHostCard({
             ) : (
               <WorkflowStaticChip>
                 <span className="text-ink-bright text-[11px] font-medium">
-                  {effectiveModeLabel || "—"}
+                  {displayValue(effectiveModeLabel)}
                 </span>
               </WorkflowStaticChip>
             )}

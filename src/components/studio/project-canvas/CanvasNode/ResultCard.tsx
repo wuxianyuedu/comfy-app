@@ -7,6 +7,7 @@ import {
   type CanvasNodeData,
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
+import { copyText } from "~/lib/browser-io";
 import { isVideo as isVideoSource } from "~/lib/media/media-kind";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
 
@@ -78,7 +79,9 @@ export function ResultCard({
           <Button
             variant="ghost"
             title="下载"
-            onClick={() => text && navigator.clipboard?.writeText(text)}
+            onClick={() => {
+              if (text) void copyText(text);
+            }}
             className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
           >
             <Icon

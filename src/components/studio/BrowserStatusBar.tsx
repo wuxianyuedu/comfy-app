@@ -1,5 +1,7 @@
 "use client";
 
+import { formatClock } from "~/lib/time-format";
+
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
@@ -12,6 +14,7 @@ import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Button } from "~/components/ui/button";
+import { displayValue } from "~/lib/display-value";
 
 /* ── Tauri 窗口底部状态栏 ─────────────────────────
    显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。
@@ -35,15 +38,9 @@ import { Button } from "~/components/ui/button";
    须渲染在 <LogProvider> 内部，日志开关才能工作。
 */
 
-/** HH:mm:ss（重启标记的时间展示）。 */
+/** HH:mm:ss（重启标记的时间展示）。`null` 由 `displayValue` 统一给占位符。 */
 function fmtClock(t: number | null): string {
-  if (t === null) return "—";
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return t === null ? displayValue(null) : formatClock(t, {});
 }
 
 const fpsTextColor: Record<string, string> = {
@@ -119,7 +116,7 @@ export function BrowserStatusBar() {
             className={`inline-block h-1.5 w-1.5 rounded-full ${fpsDotColor[tone]}`}
           />
           <span className={`tabular-nums ${fpsTextColor[tone]}`}>
-            {fps ?? "—"}
+            {displayValue(fps)}
           </span>
           <span className="text-ink-soft">FPS</span>
         </span>
@@ -134,7 +131,8 @@ export function BrowserStatusBar() {
           >
             <span className="text-ink-muted">显存</span>
             <span className="text-ink-bright">
-              {fmtBytes(smiVram.used) ?? "—"}/{fmtBytes(smiVram.total) ?? "—"}
+              {displayValue(fmtBytes(smiVram.used))}/
+              {displayValue(fmtBytes(smiVram.total))}
             </span>
             <span className="text-ink-fainter">({smiVram.pct}%)</span>
           </span>
@@ -149,7 +147,8 @@ export function BrowserStatusBar() {
           >
             <span className="text-ink-muted">显存·ComfyUI</span>
             <span className="text-ink-bright">
-              {fmtBytes(cudaVram.used) ?? "—"}/{fmtBytes(cudaVram.total) ?? "—"}
+              {displayValue(fmtBytes(cudaVram.used))}/
+              {displayValue(fmtBytes(cudaVram.total))}
             </span>
             <span className="text-ink-fainter">({cudaVram.pct}%)</span>
           </span>
@@ -163,7 +162,8 @@ export function BrowserStatusBar() {
           >
             <span className="text-ink-muted">内存</span>
             <span className="text-ink-bright">
-              {fmtBytes(ram.used) ?? "—"}/{fmtBytes(ram.total) ?? "—"}
+              {displayValue(fmtBytes(ram.used))}/
+              {displayValue(fmtBytes(ram.total))}
             </span>
             <span className="text-ink-fainter">({ram.pct}%)</span>
           </span>

@@ -13,6 +13,8 @@
  *   - 弹窗打开后不受该开关影响，避免操作中突然消失。
  */
 
+import { formatClock } from "~/lib/time-format";
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
 import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
@@ -30,9 +32,10 @@ import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
+import { StatusBadge } from "~/components/ui/status-badge";
 import { useCancelTask } from "./hooks/use-cancel-task";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { displayValue } from "~/lib/display-value";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
  *  本面板消费的字段。`JSON.parse` 产出 `unknown`；下面的守卫
@@ -130,13 +133,7 @@ function levelLabel(level: Level): string {
 
 /* 与应用日志同款，带毫秒。 */
 function fmtTime(t: number): string {
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
+  return formatClock(t, { millis: true });
 }
 
 export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
@@ -367,6 +364,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
       ? visibleAll
       : visibleAll.filter((log) => log.level === filter);
   const valErrs = validationErrors ?? [];
+  /* 文案在这里（运行中带实时百分比，是业务信息），配色走 `ui/status-badge`
+   * 的同一份状态 → 语义 token 映射（规范 16 §16.2.4.5）。 */
   const statusLabel =
     status === "SUCCEEDED"
       ? "完成"
@@ -376,15 +375,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
           ? "已取消"
           : status === "RUNNING"
             ? `运行中 ${progress}%`
-            : (status ?? "—");
-  const statusClass =
-    status === "FAILED"
-      ? "bg-red-500/20 text-red-700 dark:text-red-300"
-      : status === "SUCCEEDED"
-        ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-        : status === "RUNNING"
-          ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
-          : "bg-subtle text-ink-soft";
+            : displayValue(status);
 
   const errorCount = visibleAll.filter((l) => l.level === "error").length;
 
@@ -417,15 +408,13 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
         )}
       </Button>
 
-      {open && (
-        <div
-          className={overlayClass(
-            "modal",
-            `${zClass("modal")} bg-canvas-deep flex items-center justify-center p-4 backdrop-blur-sm dark:bg-black/60`,
-          )}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
+      {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
+          手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
+      <Dialog open={open} onOpenChange={(next) => setOpen(next)}>
+        <DialogContent
+          showCloseButton={false}
+          className="bg-transparent p-0 ring-0"
+          popupClassName={wide ? "max-w-[96vw]" : "max-w-5xl"}
         >
           <div
             className={`flex h-[85vh] w-full ${wide ? "max-w-[96vw]" : "max-w-5xl"} border-border-strong bg-panel flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60`}
@@ -440,11 +429,12 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <span className="text-ink-bright truncate text-[15px] font-semibold">
                   执行日志
                 </span>
-                <span
-                  className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}
-                >
-                  {statusLabel}
-                </span>
+                <StatusBadge
+                  status={status ?? "IDLE"}
+                  label={statusLabel}
+                  dot={false}
+                  className="px-1.5 py-px text-[10px]"
+                />
                 <span
                   className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
                     connected
@@ -655,8 +645,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               <span>保留最近 300 条</span>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 });

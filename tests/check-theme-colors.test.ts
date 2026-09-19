@@ -17,6 +17,7 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -141,5 +142,53 @@ describe("check-theme-colors", () => {
       { "src/components/studio/Thing.tsx": 1 },
     );
     expect(run().ok).toBe(true);
+  });
+});
+
+/**
+ * 「存量必须逐条定性」的判据（ISSUE #672 / 规范 03 §3.6.1 末段）。
+ *
+ * 清完之后棘轮是 **0**，而**零基线本身防不住两件事**：
+ *   ① 新写一处「表面/文字语义」的写死色值 —— 这条棘轮管得住（基线不容抬高）；
+ *   ② 把一处**真漏改**顺手登记进 `EXEMPT_TABLES` —— 棘轮对此完全无感：
+ *      豁免不计入基线，登记完就再也不会出现在报告里。
+ *
+ * 所以这里钉两件事：豁免**必须带理由**（空理由等于模糊放行），且
+ * 专项结束时基线为 0（否则说明又回到了「既不是豁免、也不是待治理项」）。
+ *
+ * 回归来源：本批把余量 115 处逐条定性时，「多加一条豁免」是唯一能让数字
+ * 变漂亮又不改代码的动作 —— 这正是规范里那句「模糊放行会让真正的漏改
+ * 混在豁免里悄悄溜过」要防的。
+ */
+describe("主题色豁免台账", () => {
+  it("每一条豁免都有文件、理由，且不留下空的 exports 占位", () => {
+    const src = readFileSync(SCRIPT, "utf8");
+    const block = src.slice(
+      src.indexOf("const EXEMPT_TABLES"),
+      src.indexOf("/** 全部豁免落点索引"),
+    );
+    const entries = block.match(/\{\s*\n\s*file:[\s\S]*?\n {2}\},/g) ?? [];
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      const file = /file:\s*"([^"]+)"/.exec(entry)?.[1];
+      expect(file, `豁免条目缺 file：${entry.slice(0, 40)}`).toBeTruthy();
+      const reason = /reason:\s*([\s\S]*?),\n {2}\},$/.exec(entry)?.[1] ?? "";
+      // 理由必须说清「为什么这行色值是内容自己的颜色」，不能是一句「类型色」了事。
+      expect(
+        reason.replace(/\s+/g, "").length,
+        `豁免理由过短（等于没写）：${file}`,
+      ).toBeGreaterThan(20);
+    }
+  });
+
+  it("专项收口后基线为 0（没有「既不是豁免、也不是待治理项」的余量）", () => {
+    const baseline = JSON.parse(
+      readFileSync(
+        path.resolve(__dirname, "../scripts/.theme-color-baseline.json"),
+        "utf8",
+      ),
+    ) as { total: number; files: Record<string, number> };
+    expect(baseline.total).toBe(0);
+    expect(Object.keys(baseline.files)).toEqual([]);
   });
 });

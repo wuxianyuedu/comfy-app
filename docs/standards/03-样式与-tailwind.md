@@ -299,12 +299,24 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
   `scripts/.theme-color-baseline.json`，新写的写死色值一律阻断；逐批治理后用
   `node scripts/check-theme-colors.cjs --update` 收紧基线（同 UI/逻辑分离棘轮
   的口径，见 17 章）。已接入 `.githooks/pre-commit` 与 CI。
-- **存量里混着「本该豁免的类型色」时怎么办**：余量 115 处里的多数落在
+- **存量里混着「本该豁免的类型色」时怎么办**：余量里曾有一大批落在
   `workflow-node-palette` / `workflow-utils` / `CanvasNodePrimitives` 这类
   **端口类型色 / 节点类别色常量表**上 —— 按上面的类型色例外**本可豁免**，
   只是从未登记。**别把它留在「未豁免存量」里**：那样它既不是豁免、也不是
   待治理项，两边都不算。「豁免必须显式」的另一面就是**存量必须逐条定性**，
   登记进 `EXEMPT_TABLES`（带理由）或就地 token 化。
+- **定性完毕的标志是基线归零**（ISSUE #672 已收口，`--report` 里未豁免
+  存量与基线条目都是 0）。零基线之后，**唯一能「让数字变漂亮又不改代码」的
+  动作就是多加一条豁免** —— 豁免不计入基线，登记完就再也不会出现在报告里。
+  所以 `tests/check-theme-colors.test.ts` 另钉一条：**每条豁免必须带说清
+  「为什么这行色值是内容自己的颜色」的理由**，不能一句「类型色」了事。
+- **两态外观常量表按类型色判**（新增口径）：`workflow-node-palette.ts` 的
+  `LIGHT/DARK_ANCHOR_CYLINDER`（锚点圆柱的金属渐变）与
+  `LIGHT/DARK_PALETTE_BASE`（混色数值基准，不是可见表面）整表登记豁免 ——
+  判据仍是「这行色值画的是什么」：画的是**圆柱本体**（内容），不是承载它的
+  表面。反过来，**底色写死成 `bg-[${color}/15]` 这类运行时模板不算豁免**：
+  Tailwind 的 JIT 扫不到它，那条 class 从来就没生效过（`HomePage` 的类别
+  底色就是此例，已改 `color-mix()` 现取）。
 
 ### 3.6.2 品牌/状态色必须走语义 token（ISSUE #672，机器强制）
 
@@ -324,6 +336,13 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 // ✅ 语义 token（token 自己两态取值，不必再手写 dark:）
 "border-primary-500/30 bg-primary-500/10 text-primary-strong";
 ```
+
+**状态徽标只有一处配色**（新增状态界面时照这个来）：状态 → 配色收在
+`ui/status-badge.tsx`，状态 → 圆点收在 `ui/status-dot.tsx`；**文案留在调用处**
+（同一个状态在不同界面叫法不同，那是业务文案，不是样式）。
+此前七个文件各写一份「状态 → 配色」表，同一个「已完成」在不同界面是
+`bg-emerald-500/15` / `bg-emerald-400/10` / `bg-emerald-100` 三种深浅 ——
+改一次状态色要点七遍名。规范 16 §16.2.4.5 是这件事的台账。
 
 **本项目已有的语义色 token**（新增前先查这张表，别再写死字面量）：
 
@@ -409,6 +428,54 @@ utility 在两态里各有一态取错值」——`bg-card` 编出来是
 - 回归测试：`tests/theme-dark-token-cascade.test.ts`（真编译 `globals.css` +
   jsdom 解级联，断言每个别名两态取值不同），逐条覆盖上表别名。
 
+### 3.6.4 项目 token 是唯一事实来源，别名只做 `var()` 转发（ISSUE #672，机器强制）
+
+本项目的颜色命名有两条体系，**方向必须是单向的**：
+
+| 体系            | 名字                                                     | 角色                              |
+| --------------- | -------------------------------------------------------- | --------------------------------- |
+| **项目 token**  | `--color-*`（`--color-surface` / `--color-ink-muted` …） | **唯一事实来源**，两态各自赋值    |
+| **shadcn 别名** | `--card` / `--border` / `--muted` …                      | shadcn 基元要的名字，**只做转发** |
+
+收口之前两者**各写一份字面量**（别名在 `.dark {}` 与 `:root:not(.dark) {}` 里
+各一份），于是同一个颜色在库里有 **2~3 份拷贝**：把 `--color-surface` 改成别的，
+`bg-card` 一点不动 —— 这正是「同一个组件样式不好改」的机器原因。
+
+**判据（三条，`tests/theme-token-single-source.test.ts` 逐条守着）**：
+
+- **T1 单向**：别名不写字面量，值必须是 `var(--color-*)`。别名自己写死颜色时，
+  「改品牌色」要点名到别名这一层。
+- **T2 不重名**：`@theme inline` 块里不许出现 `@theme` 已有的名字。重名 =
+  项目 token 被别名顶掉（见下）。`--color-muted` 是**允许**出现在桥里的少数派 ——
+  shadcn 的 `--muted` 是**表面**语义（`bg-muted`），项目侧对应 `--color-subtle`；
+  项目原有的同名 `--color-muted` 是**文字**语义、且与 `--color-ink-muted`
+  逐字节同值，已删除。名字腾空之后它不再是「重定义」。
+- **T3 无环**：`var()` 链必须无环、不指向未定义的名字。`--color-X: var(--X)`
+  配 `--X: var(--color-X)` 会让两边同时变成无效值。
+
+**T2 不是风格偏好，是实际踩过的坑**：`@theme inline` 里曾有
+`--color-primary: var(--primary)`、`--color-accent`、`--color-muted`、
+`--color-border` 四行。名字在编译产物里出现两次，本块（层内靠后）获胜，于是
+**项目 token 的含义被静默换成了别名**：`var(--color-muted)` 在浅色下取到
+`#f7f8fa`（近白表面）而不是 `#6b6b76`（文字灰），`globals.css` 的 `.u-chip` /
+`.u-ghost` 与 `WorkflowNodeJsonPopover` 的那些小字在浅色下几乎看不见。
+**tsc / eslint / 主题色扫描器全绿** —— 扫描器扫「写死的色值」，而这里色值本身
+没问题，错的是 token 解析到了另一处同名声明。
+
+**别名不按主题分叉**：转发形态下别名只需声明**一次**，两态取值由项目 token
+负责。因此 `:root:not(.dark)` 那个「深色下不匹配」的技巧对别名不再必要
+（§3.6.3 讲的层叠陷阱仍适用于项目 token 自身：浅色档用裸 `:root`、深色档用
+`.dark` 时，浅色档会恒压深色档）。
+
+**新增一个颜色时**：先在 `@theme` 加 `--color-*`（两态各取值），再看 shadcn
+基元是否需要别名 —— 需要就在 `:root {}` 加一行转发、并在 `@theme inline` 加一行
+桥。**产品代码一律用项目 token**，别名只给 `ui/` 基元用。
+
+**取值口径**：`tests/helpers/theme-tokens.ts` 真编译 `globals.css` 产物，自己实现
+级联 + `var()` 链解析。**不要改用 `getComputedStyle`** —— jsdom 不解析 `var()`，
+别名改成转发后会返回字面量 `"var(--color-surface)"`，断言会全部变成误报
+（实测过）。本文件的做法在 Chromium 里逐项核对过。
+
 ### 3.7 装饰性元素可访问性与性能
 
 ```tsx
@@ -482,6 +549,31 @@ Ollama 三处同构）不要再各自拼 class——抽成一个纯派生模块�
 #423），而散落在 N 个 `<button>` 上的 class 改一处漏一片。可参考的落地：
 `src/app/(main)/settings/settings-status-row-config.ts` 与
 `src/components/studio/workflow-editor/workflow-editor-topbar-config.ts`。
+
+#### 3.8.1.1 一排控件的宽度由调用处决定，不由基础件预设
+
+**基础件里不要预设 `w-full`。** 宽度是**布局决定**，不是控件属性 —— 同一个
+下拉在「独占一行的表单」里该铺满，在「并排的一排筛选控件」里该随内容宽。
+基础件选了后者，前者没法覆盖：`w-full` 与 `w-auto` 属同一族 utility，
+编译后按 Tailwind 的输出顺序决胜，**调用处写的那个不保证赢**。
+
+症状很具体：调用处写了 `w-auto`、也写了 `flex-nowrap`，但每个下拉仍然
+**各自铺满整行**，看上去像「`flex-nowrap` 没生效」（ISSUE #716 的工作流库
+页头就撞上了这一条）。
+
+```tsx
+// ❌ 基础件预设宽度：调用处的 w-auto 覆盖不掉
+<span className={`flex w-full items-center … ${className}`} />
+
+// ✅ 宽度是调用处的决定；需要「铺满」时走显式开关
+<span className={`flex items-center … ${fullWidth ? "w-full" : "w-auto"} ${className}`} />
+```
+
+同理，**「占满剩下的宽度」与「铺满容器」是两件事**：前者要 `flex-1` 的
+**外层**（外层才是 flex 项，宽度才由剩余空间给出），把 `flex-1` 写在控件自己
+的 `className` 上不起作用 —— 控件自身仍是内容宽，旁边的兄弟一变长它就被挤回去。
+可参考的落地：`src/components/ui/select-menu.tsx` 的 `fullWidth` 开关
+（缺省随内容宽），以及 `StyleSwitcher` / `WidgetControl` 两处显式传值。
 
 ### 3.9 布局类名顺序约定（可读性）
 

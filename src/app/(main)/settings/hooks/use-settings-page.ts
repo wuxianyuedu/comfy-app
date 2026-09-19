@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
+import { useFlashLatch } from "~/components/ui/use-flash-state";
 
 /* 默认端口从 `~/lib/endpoints` 取（零依赖常量层）：它同时被设置页视图消费，
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
@@ -296,6 +297,9 @@ export interface SettingsPageController {
 /** 提示条停留时长。 */
 const FLASH_MS = 3500;
 
+/* 「没有提示」的空载荷：模块级常量，身份稳定（`useFlashLatch` 的依赖）。 */
+const NO_FLASH: FlashMessage | null = null;
+
 /* ── 配置读取的兜底缓存（ISSUE #360）──────────────────────────────────────
  * 设置页的两份读（`setting.get` / `llm.configGet`）是服务端最脆弱的两跳：前者走
  * SQLite，后者还要先跑 remote storage 迁移。应用服务刚重启 / 正在编译 / 数据库
@@ -367,7 +371,6 @@ const OLLAMA_START_POLL_INTERVAL_MS = 2000;
 export function useSettingsPage(): SettingsPageController {
   const [section, setSection] = useState<Section>("llmLocal");
   const { theme, setTheme } = useTheme();
-  const [flash, setFlash] = useState<FlashMessage | null>(null);
   const [saving, setSaving] = useState(false);
 
   /* 应用自更新：检测 / 下载安装的进行态与结果。运算放 lib/app-update-client，
@@ -472,17 +475,13 @@ export function useSettingsPage(): SettingsPageController {
   const [dbStudioOpening, setDbStudioOpening] = useState(false);
   const [ollamaStopping, setOllamaStopping] = useState(false);
 
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showFlash = useCallback((kind: "ok" | "err", text: string) => {
-    setFlash({ kind, text });
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = setTimeout(() => setFlash(null), FLASH_MS);
-  }, []);
-  useEffect(
-    () => () => {
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    },
-    [],
+  /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
+   * 卸载清掉）由 `useFlashLatch` 收口 —— 此前这里是手写的 `flashTimerRef`，
+   * 与全库另一处（`logs/SaveExportButton`）逐行同款、各写一份。 */
+  const flashLatch = useFlashLatch(FLASH_MS, NO_FLASH);
+  const showFlash = useCallback(
+    (kind: "ok" | "err", text: string) => flashLatch.flash({ kind, text }),
+    [flashLatch],
   );
 
   /* ── 从查询结果播种草稿 ─────────────────────────────────────
@@ -1247,8 +1246,8 @@ export function useSettingsPage(): SettingsPageController {
     saving,
     saveLlm,
     savePrefs,
-    flash,
-    dismissFlash: useCallback(() => setFlash(null), []),
+    flash: flashLatch.value,
+    dismissFlash: flashLatch.reset,
     setTaskTemperature,
     appUpdate: {
       inShell: isDesktopShell(),

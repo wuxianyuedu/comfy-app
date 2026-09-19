@@ -45,8 +45,10 @@ export const LOG_PANEL_POPUP_Z = Z.popup;
 /** 面板内 portal 弹层定位层用的 Tailwind class（`z-popup`）。 */
 export const LOG_PANEL_POPUP_Z_CLASS = zClass("popup");
 
-/** 日志面板模态遮罩用的 Tailwind class（`z-modal`）。 */
-export const LOG_PANEL_OVERLAY_Z_CLASS = zClass("modal");
+/* 面板遮罩的 class 由 `ui/dialog` 的 `dialogBackdropClass()` 产出（同样取
+   `z-modal`）—— 面板改用弹窗基元后，这里不再需要一份平行的 class 常量
+   （平行的那份最容易与基元里的取值各自漂移）。`LOG_PANEL_OVERLAY_Z` 仍是
+   「面板遮罩在刻度表上的档」这一事实，用于下面这条严格大于的判定。 */
 
 /**
  * 弹层定位层的层级是否安全：**必须严格高于**面板遮罩。

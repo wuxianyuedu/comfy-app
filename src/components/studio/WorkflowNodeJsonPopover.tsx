@@ -7,8 +7,10 @@
  *  本文件不 import 任何 store / context，只接收 props 渲染。
  * ════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
+import { Popover, PopoverContent } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
+import { useFlashState } from "~/components/ui/use-flash-state";
+import { copyText } from "~/lib/browser-io";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
@@ -117,31 +119,37 @@ export function NodeJsonPopover({
     }
     return "（节点详情尚未加载 — 等待 detail.ready）";
   }, [tab, json, viewObj]);
-  const [copied, setCopied] = useState(false);
+
+  /* 用户点下芯片时冻结的矩形 → 虚拟锚点（Floating UI 的 VirtualElement
+   *  只需 getBoundingClientRect）。浮层存续期间锚点不跟着画布平移 / 缩放走，
+   *  与 anchorRect 的语义一致（见 NodeJsonViewerRequest 的注释）。 */
+  const anchorElement = useMemo(
+    () => () => ({
+      getBoundingClientRect: () => {
+        const a = request.anchorRect;
+        return {
+          x: a.left,
+          y: a.top,
+          left: a.left,
+          top: a.top,
+          right: a.right,
+          bottom: a.bottom,
+          width: a.width,
+          height: a.height,
+          toJSON: () => ({}),
+        };
+      },
+    }),
+    [request.anchorRect],
+  );
+
+  const copied = useFlashState();
   const handleCopy = () => {
-    void navigator.clipboard.writeText(pretty).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
-      },
-      () => {
-        const ta = document.createElement("textarea");
-        ta.value = pretty;
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-          document.execCommand("copy");
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1400);
-        } catch {
-          /* 放弃；用户仍可手动选中复制 */
-        } finally {
-          document.body.removeChild(ta);
-        }
-      },
-    );
+    /* 失败时静默：用户仍可手动选中复制。 */
+    void copyText(pretty).then((ok) => {
+      if (!ok) return;
+      copied.flash();
+    });
   };
   const accent =
     request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
@@ -167,20 +175,23 @@ export function NodeJsonPopover({
         : "var(--color-success-strong)";
 
   return (
-    /* 浮层走 ui/dialog（规范 16 §16.2.3 P2）：遮罩点击关闭、Esc 关闭、焦点
-       管理此前是这里手写的一份，`ui/dialog` 里还有一份。尺寸/位置仍是本组件
-       自己的形态（贴在锚点下方、不占满视口），故用 popupClassName 覆盖定位。 */
-    <Dialog open onOpenChange={(next) => !next && onDismiss()}>
-      <DialogContent
-        showCloseButton={false}
+    /* 浮层走 ui/popover（规范 16 §16.2.3 P2）：遮罩点击关闭、Esc 关闭由
+       base-ui 负责，**定位也交给它的 Positioner** —— 这里把用户点下时冻结的
+       锚点矩形包成虚拟锚点，翻转（flip）与视口内收边（shift）由 base-ui 算，
+       本组件不再自己夹紧视口。
+       此前用 `ui/dialog` 配 `top-24 left-1/2` 是**丢掉了锚点定位**：dialog 的
+       基类自带 `top-1/2 -translate-y-1/2`，与 `top-24` 叠加后浮层被推到视口之上
+       （实测 `top: -174`），头部与 JSON 开头被裁在视口外（ISSUE #717）。 */
+    <Popover open modal onOpenChange={(next) => !next && onDismiss()}>
+      <PopoverContent
+        anchor={anchorElement}
         aria-label={`节点 #${request.nodeId} 的原始 JSON`}
-        className="w-[460px] max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 ring-0"
-        popupClassName="fixed top-24 left-1/2 max-h-[60vh] -translate-x-1/2"
+        className="w-[460px] max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 shadow-none ring-0"
+        positionerClassName="max-h-[60vh]"
+        collisionPadding={12}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <DialogTitle className="sr-only">
-          节点 #{request.nodeId} 的原始 JSON
-        </DialogTitle>
+        <span className="sr-only">节点 #{request.nodeId} 的原始 JSON</span>
         <div
           style={{
             width: 460,
@@ -227,7 +238,7 @@ export function NodeJsonPopover({
                   alignItems: "center",
                   gap: 6,
                   fontSize: 11,
-                  color: "var(--color-muted)",
+                  color: "var(--color-ink-muted)",
                   textTransform: "uppercase",
                   letterSpacing: 0.6,
                 }}
@@ -264,13 +275,13 @@ export function NodeJsonPopover({
               onClick={handleCopy}
               title="复制 JSON 到剪贴板"
               style={{
-                background: copied ? accentAlpha(15) : "var(--color-subtle)",
-                color: copied ? accent : "var(--color-ink)",
-                border: `1px solid ${copied ? accentAlpha(40) : "var(--color-border-strong)"}`,
+                background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
+                color: copied.on ? accent : "var(--color-ink)",
+                border: `1px solid ${copied.on ? accentAlpha(40) : "var(--color-border-strong)"}`,
               }}
               className="font-normal"
             >
-              {copied ? "✓ 已复制" : "⧉ 复制"}
+              {copied.on ? "✓ 已复制" : "⧉ 复制"}
             </Button>
             <Button
               variant="outline"
@@ -281,7 +292,7 @@ export function NodeJsonPopover({
               style={{
                 background: "var(--color-subtle)",
                 border: "1px solid var(--color-border-strong)",
-                color: "var(--color-muted)",
+                color: "var(--color-ink-muted)",
               }}
               className="rounded-md text-[14px] leading-none"
             >
@@ -325,7 +336,9 @@ export function NodeJsonPopover({
                     background: active
                       ? accentAlpha(13)
                       : "var(--color-subtle)",
-                    color: active ? "var(--color-ink)" : "var(--color-muted)",
+                    color: active
+                      ? "var(--color-ink)"
+                      : "var(--color-ink-muted)",
                   }}
                   className="h-auto font-normal"
                 >
@@ -436,7 +449,7 @@ export function NodeJsonPopover({
             style={{
               padding: "6px 14px 8px",
               fontSize: 10.5,
-              color: "var(--color-muted)",
+              color: "var(--color-ink-muted)",
               borderTop: "1px solid var(--color-border-subtle)",
               display: "flex",
               justifyContent: "space-between",
@@ -450,7 +463,7 @@ export function NodeJsonPopover({
             <span style={{ fontFamily: "var(--font-mono)" }}>esc ×</span>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }

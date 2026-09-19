@@ -77,19 +77,18 @@ export function DynamicWorkflowFormView({
     groups,
     portEntries,
     widgetSectionEntries,
-    fileRef,
     uploading,
     uploadTarget,
     uploadError,
     dismissUploadError,
     pickFile,
-    onFile,
     set,
     dragHandlers,
     draggingKey,
     dragOverKey,
     beginPortDrag,
     endDrag,
+    FileInput,
   } = controller;
 
   /* ioLabel() 需要全量 pin 才能在标签撞名时回退到原始 name。 */
@@ -100,8 +99,8 @@ export function DynamicWorkflowFormView({
      *  显示模式覆盖值而非条目全局值。mode 为空时 rowEntry === entry（旧行为）。 */
     const rowEntry: EnrichedWidget =
       mode &&
-      (entry.modes?.[mode]?.required !== undefined ||
-        entry.modes?.[mode]?.seedMode !== undefined)
+      (entry.modeOverrides?.[mode]?.required !== undefined ||
+        entry.modeOverrides?.[mode]?.seedMode !== undefined)
         ? {
             ...entry,
             required: resolveEntryRequired(entry, mode),
@@ -137,7 +136,7 @@ export function DynamicWorkflowFormView({
         }
         visible={
           visibilityMode
-            ? (entry.modes?.[visibilityMode]?.visible ?? true)
+            ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true)
             : undefined
         }
         onVisibilityChange={
@@ -147,7 +146,7 @@ export function DynamicWorkflowFormView({
         }
         dimmed={
           !!visibilityMode &&
-          rowEntry.modes?.[visibilityMode]?.visible === false
+          rowEntry.modeOverrides?.[visibilityMode]?.visible === false
         }
         withHandle={withHandle}
         /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
@@ -161,13 +160,7 @@ export function DynamicWorkflowFormView({
 
   return (
     <div className={compact ? "space-y-0" : "space-y-3"}>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onFile}
-      />
+      <FileInput />
 
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
           用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}

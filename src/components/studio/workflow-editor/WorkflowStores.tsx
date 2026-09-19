@@ -189,7 +189,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const cur = state.workflowIO[key];
         if (!cur || !mode) return {};
         const modes: Record<string, WorkflowIOModeOverride> = {
-          ...(cur.modes ?? {}),
+          ...(cur.modeOverrides ?? {}),
         };
         if (patch === null) {
           if (!(mode in modes)) return {};
@@ -200,8 +200,8 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         /* modes 全空时把字段摘掉，避免往服务端 JSON 里塞一个空对象。 */
         const nextEntry: WorkflowIOParam =
           Object.keys(modes).length > 0
-            ? { ...cur, modes }
-            : { ...cur, modes: undefined };
+            ? { ...cur, modeOverrides: modes }
+            : { ...cur, modeOverrides: undefined };
         return {
           workflowIO: {
             ...state.workflowIO,
@@ -215,13 +215,14 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       set((state) => {
         const hit = codes.filter((code) =>
           Object.values(state.workflowIO).some(
-            (entry) => entry?.modes != null && code in entry.modes,
+            (entry) =>
+              entry?.modeOverrides != null && code in entry.modeOverrides,
           ),
         );
         if (hit.length === 0) return {};
         const next: Record<string, WorkflowIOParam> = {};
         for (const [key, entry] of Object.entries(state.workflowIO)) {
-          const modes = entry?.modes;
+          const modes = entry?.modeOverrides;
           if (!modes || !hit.some((code) => code in modes)) {
             next[key] = entry;
             continue;
@@ -231,7 +232,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           /* 与 setIOModeOverride 的落库形态一致：modes 全空时摘掉字段。 */
           next[key] = {
             ...entry,
-            modes: Object.keys(rest).length > 0 ? rest : undefined,
+            modeOverrides: Object.keys(rest).length > 0 ? rest : undefined,
           };
         }
         cleaned = next;

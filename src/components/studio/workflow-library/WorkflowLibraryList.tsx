@@ -15,6 +15,8 @@ import { Spinner } from "~/components/ui/page-loading";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "~/components/ui/source-tag";
 import { EmptyState } from "~/components/ui/empty-state";
+import { StatusDot } from "~/components/ui/status-dot";
+import { ListBadge } from "~/components/ui/list-badge";
 
 interface WorkflowLibraryListProps {
   workflows: WorkflowRow[];
@@ -88,8 +90,10 @@ export function WorkflowLibraryList({
         dragActive ? "outline-2 -outline-offset-2 outline-cyan-400/60" : "",
       ].join(" ")}
     >
-      {/* 搜索栏 */}
-      <div className="border-border-subtle border-b p-3">
+      {/* 搜索栏。`shrink-0` 必须有：排查过的一个现场是搜索框连同下面的列表一起
+          纵向压缩 —— flex 列容器里 `p-3` 的固定块默认 `flex-shrink: 1`，
+          列表内容一多它就被压，输入框看着像「瘪了」。 */}
+      <div className="border-border-subtle shrink-0 border-b p-3">
         <div className="relative">
           <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
           <input
@@ -97,7 +101,7 @@ export function WorkflowLibraryList({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="搜索工作流名称…"
-            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-subtle h-8 w-full rounded-lg border pr-3 pl-8 text-xs focus:border-violet-500/40 focus:outline-none"
+            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-subtle focus:border-primary-500/40 h-8 w-full rounded-lg border pr-3 pl-8 text-xs focus:outline-none"
           />
         </div>
       </div>
@@ -176,7 +180,9 @@ export function WorkflowLibraryList({
         {pendingRows.length > 0 && (
           <div className="mt-3 mb-3 rounded-xl border border-dashed border-cyan-500/25 bg-cyan-500/[0.04] p-2.5">
             <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-cyan-700 dark:text-cyan-300/80">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400" />
+              {/* 状态点走 `ui/status-dot`（全库唯一实现，规范 16 §16.2.4.5）；
+                  `probing` 表达「还没载入、等待中」。 */}
+              <StatusDot state="probing" sizeClass="size-1.5" />
               未载入的本地工作流
             </p>
             <ul className="space-y-1">
@@ -213,13 +219,30 @@ export function WorkflowLibraryList({
       </div>
 
       {/* 底部计数 */}
-      <div className="border-border-subtle text-ink-fainter border-t px-3 py-2 text-[10px]">
+      <div className="border-border-subtle text-ink-fainter shrink-0 border-t px-3 py-2 text-[10px]">
         共 {workflows.length + pendingRows.length} 个工作流
         {pendingRows.length > 0 ? `（${pendingRows.length} 个未载入）` : ""}
       </div>
     </div>
   );
 }
+
+/**
+ * 列表项的名称最大显示宽度（px）。
+ *
+ * 侧栏是固定宽度（`w-80` = 320px，减去内边距与两侧 gap 后约 280px 可用），
+ * 而工作流名常来自磁盘文件名 —— `22WorkflowsI2VSVI2_fastfidelityCAIoV88`
+ * 这类可以长到 40+ 字符。名称不设上限时有两种坏法，两种都真发生过：
+ *
+ *   ① 名称吃掉整行宽度，右侧徽标被挤出侧栏，被根容器的 `overflow-hidden`
+ *      裁掉（用户看到的是「徽标不见了」）；
+ *   ② 名称在换行点折成两行，行高翻倍，一屏少看好几条。
+ *
+ * 因此给出显式上限：`truncate` + `max-w-[132px]` 把可截断的那块钉住，
+ * 宽度压力由它承担，徽标一律 `shrink-0`（规范 03 §3.8.1：可截断的块要有
+ * 贴着实测宽度的下限，按钮/徽标不许被压扁）。完整名称仍在 `title` 里。
+ */
+const NAME_MAX_WIDTH_CLASS = "max-w-[132px]";
 
 function WorkflowListItem({
   workflow,
@@ -246,17 +269,18 @@ function WorkflowListItem({
         variant="ghost"
         onClick={onClick}
         className={[
-          "h-auto w-full rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
+          "h-auto w-full min-w-0 rounded-lg border px-2 py-1.5 text-left font-normal hover:bg-transparent",
           selected
             ? "border-violet-500/40 bg-linear-to-br from-violet-500/15 to-fuchsia-500/10 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.15)]"
             : "bg-subtle hover:border-border hover:bg-subtle border-transparent",
         ].join(" ")}
       >
         {/* 单行布局：名称 + 徽标同一行，降低每项高度 */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
           <span
             className={[
-              "min-w-0 flex-1 truncate text-[12px] leading-tight font-medium",
+              NAME_MAX_WIDTH_CLASS,
+              "shrink truncate text-[12px] leading-tight font-medium",
               isTech ? "text-ink-strong font-mono" : "text-ink-bright",
             ].join(" ")}
             title={workflow.name}
@@ -264,50 +288,55 @@ function WorkflowListItem({
             {workflow.name}
           </span>
           {!usable && (
-            <span
+            <ListBadge
+              tone="danger"
               title="既没有 API 图也没有工作流(RAW)原件 —— 两列都为空"
-              className="shrink-0 rounded bg-red-500/12 px-1 py-px text-[9px] text-red-700 dark:text-red-300"
             >
               无可执行内容
-            </span>
+            </ListBadge>
           )}
-          {usable &&
-            (encapsulation.ready ? (
-              <span
-                title={`对外参数已配置（${encapsulation.resolvedCount}/${encapsulation.entries.length}）`}
-                className="shrink-0 rounded bg-emerald-500/12 px-1 py-px text-[9px] text-emerald-700 dark:text-emerald-300"
-              >
-                对外参数已配置
-              </span>
-            ) : (
-              <span
-                title={`未配置：${encapsulation.missingLabels.join("、") || "提示词口未落到端口"}`}
-                className="shrink-0 rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-700 dark:text-amber-300"
-              >
-                对外参数未配置
-              </span>
-            ))}
+          {/* 对外参数：状态收成一枚 1 字标记（✓ / ！），完整说明在 tooltip 里。
+              此前这里是一整块 `对外参数未配置` 文字，与名称争夺同一行宽度，
+              是列表超框的主因。颜色 + 形状都表达「配好了没有」，所以不必靠
+              文字长度来承载（`title` 里给全口径：已配置几个口 / 缺哪些口）。 */}
+          {usable && (
+            <ListBadge
+              tone={encapsulation.ready ? "success" : "warning"}
+              className={
+                encapsulation.ready ? "" : "text-encap-pending bg-warning/12"
+              }
+              title={
+                encapsulation.ready
+                  ? `对外参数已配置（${encapsulation.resolvedCount}/${encapsulation.entries.length}）`
+                  : `对外参数未配置：${encapsulation.missingLabels.join("、") || "提示词口未落到端口"}`
+              }
+            >
+              {encapsulation.ready ? "✓" : "！"}
+            </ListBadge>
+          )}
           {canResync && (
-            <span className="shrink-0 rounded bg-amber-500/12 px-1 py-px text-[9px] text-amber-700 dark:text-amber-300">
+            <ListBadge
+              tone="warning"
+              title={missing ? "本地文件已丢失" : "本地文件有更新"}
+            >
               {missing ? "已丢失" : "有更新"}
-            </span>
+            </ListBadge>
           )}
-          <span className="shrink-0">
-            <SourceTag source={workflow.source} />
-          </span>
+          <SourceTag source={workflow.source} />
         </div>
 
         {(workflow.taskType || (workflow.modelTags?.length ?? 0) > 0) && (
-          <div className="mt-1 flex items-center gap-1.5">
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
             <TaskTypeChip taskType={workflow.taskType} />
             {workflow.modelTags?.slice(0, 2).map((tag) => (
-              <span
+              <ListBadge
                 key={tag}
-                className="border-border bg-subtle text-ink-faint max-w-[72px] truncate rounded-full border px-1.5 py-0.5 text-[9px]"
+                tone="neutral"
                 title={tag}
+                className="max-w-[72px] truncate rounded-full"
               >
                 {tag}
-              </span>
+              </ListBadge>
             ))}
             {(workflow.modelTags?.length ?? 0) > 2 && (
               <span className="text-ink-fainter shrink-0 text-[9px]">

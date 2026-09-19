@@ -18,6 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
+import { useFilePicker } from "~/components/ui/file-picker";
+import { fmtBytes } from "~/lib/format-bytes";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/page-loading";
@@ -28,6 +30,7 @@ import {
   type MaterialScope,
 } from "./hooks/use-material-library";
 import type { MaterialItem } from "~/lib/media/materials-client";
+import { displayValue } from "~/lib/display-value";
 
 /* 对外类型再导出：历史消费方从本文件 import MaterialItem，保持 API 不变。 */
 export type { MaterialItem };
@@ -37,12 +40,6 @@ export type { MaterialItem };
 type DisplayMode = "grid" | "list";
 
 /* ── Helpers（纯展示：格式化与配色，不含业务规则）──────────── */
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 /** 分类图标底色：图片/视频/音频/文档各一套，和历史记录面板保持同一语言。 */
 const KIND_STYLE: Record<string, string> = {
@@ -94,7 +91,6 @@ export function MaterialLibraryPanel({
     searching,
     showItems,
     breadcrumbSegments,
-    fileRef,
     setScope,
     setSearch,
     enterFolder,
@@ -102,6 +98,12 @@ export function MaterialLibraryPanel({
     remove,
     refresh,
   } = c;
+  /* 素材上传选择器：多选、无类型限制（素材库也收音频/视频）。 */
+  const uploadPicker = useFilePicker({
+    multiple: true,
+    onPick: (_first, files) => void upload(files),
+  });
+
   return (
     <aside className="bg-panel/98 border-border-strong flex h-full w-[360px] shrink-0 flex-col overflow-hidden border-l backdrop-blur-md">
       {/* ── Header ── */}
@@ -195,17 +197,11 @@ export function MaterialLibraryPanel({
             </Button>
           )}
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(event) => void upload(event.target.files)}
-        />
+        <uploadPicker.Input />
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => fileRef.current?.click()}
+          onClick={uploadPicker.open}
           disabled={uploading}
           className="text-ink-soft hover:bg-subtle hover:text-ink-bright rounded-lg"
           title={
@@ -317,7 +313,7 @@ export function MaterialLibraryPanel({
                 <div className="text-ink-fainter mt-4 space-y-2 text-[12px]">
                   <Button
                     variant="ghost"
-                    onClick={() => fileRef.current?.click()}
+                    onClick={uploadPicker.open}
                     className="flex h-auto items-center gap-2 font-normal hover:bg-transparent hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-700"
                   >
                     <Plus size={14} />
@@ -443,7 +439,7 @@ export function MaterialLibraryPanel({
                     </p>
                     <p className="text-ink-fainter mt-0.5 text-[11px]">
                       {searching ? `${item.folderName} · ` : ""}
-                      {formatSize(item.size)}
+                      {displayValue(fmtBytes(item.size))}
                     </p>
                   </div>
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">

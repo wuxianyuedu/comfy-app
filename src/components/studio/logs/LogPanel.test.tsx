@@ -25,10 +25,9 @@ import userEvent from "@testing-library/user-event";
 import { LogPanel } from "./LogPanel";
 import { LOG_PAGE_SIZE, computeOriginCounts, useLogStore } from "./log-store";
 import type { LogEntry } from "./log-store";
-import { Z } from "~/lib/shell/overlay-z";
+import { Z, zClass } from "~/lib/shell/overlay-z";
 import {
   LOG_PANEL_OVERLAY_Z,
-  LOG_PANEL_OVERLAY_Z_CLASS,
   LOG_PANEL_POPUP_Z,
   LOG_PANEL_POPUP_Z_CLASS,
 } from "./log-panel-layers";
@@ -190,9 +189,9 @@ describe("LogPanel 日志面板", () => {
 
   it("渲染的行按时刻升序（用户诉求「最基本的时间顺序」）", () => {
     seed(20);
-    const { container } = render(<LogPanel />);
+    render(<LogPanel />);
     const stamps = Array.from(
-      container.querySelectorAll<HTMLElement>("time"),
+      document.querySelectorAll<HTMLElement>("time"),
     ).map((el) => el.textContent ?? "");
     expect(stamps).not.toHaveLength(0);
     const sorted = [...stamps].sort();
@@ -576,9 +575,9 @@ describe("LogPanel 日志面板", () => {
     act(() =>
       useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
     );
-    const { container } = render(<LogPanel />);
+    render(<LogPanel />);
 
-    const header = container.querySelector(".min-h-14");
+    const header = document.querySelector(".min-h-14");
     expect(header).not.toBeNull();
     const order = Array.from(header!.children);
 
@@ -826,12 +825,12 @@ describe("LogPanel 日志面板", () => {
 
   it("日志行正文带选区标记，贴底前据此避让（选中时内容不被刷新冲走）", () => {
     seed(5);
-    const { container } = render(<LogPanel />);
+    render(<LogPanel />);
     /* 行正文必须带 `data-log-text`：面板贴底前要问「用户是不是正在框选日志」，
      * 而这个属性就是那件事的落点（见 selectionInsideLogs）。
      * 真实浏览器里「框住之后内容不再自己上移」由 §7.22 的现场复核兜底 ——
      * jsdom 既不实现 selection 也不做滚动，量不出「选择有没有被冲掉」。 */
-    const rows = container.querySelectorAll("[data-log-text]");
+    const rows = document.querySelectorAll("[data-log-text]");
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]?.textContent).toContain("事件");
   });
@@ -852,17 +851,17 @@ describe("LogPanel 日志面板", () => {
      * 留下的那一份，断言「300 行」拿到 200 行。 */
     useSmallPage(200);
     seed(120);
-    const { container } = render(<LogPanel />);
+    render(<LogPanel />);
     /* jsdom 的 clientHeight 恒为 0 → 走兜底分支 → 整页都在。 */
-    expect(container.querySelectorAll("[data-log-index]")).toHaveLength(120);
+    expect(document.querySelectorAll("[data-log-index]")).toHaveLength(120);
   });
 
   it("每行都带显式高度，且外层撑出与之一致的估算总高", () => {
     useSmallPage(200);
     seed(120);
-    const { container } = render(<LogPanel />);
+    render(<LogPanel />);
     const rows = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-log-index] > div"),
+      document.querySelectorAll<HTMLElement>("[data-log-index] > div"),
     );
     expect(rows.length).toBeGreaterThan(0);
     /* 显式高度是这件事的地基：估算高度与实际渲染高度不同口径时，累计误差会让
@@ -904,12 +903,12 @@ describe("LogPanel 日志面板", () => {
       get: () => 1100,
     });
     try {
-      const { container } = render(<LogPanel />);
+      render(<LogPanel />);
       const rowCount = () =>
-        container.querySelectorAll("[data-log-index]").length;
+        document.querySelectorAll("[data-log-index]").length;
       const firstIndex = () =>
         Number(
-          container
+          document
             .querySelector("[data-log-index]")!
             .getAttribute("data-log-index"),
         );
@@ -921,7 +920,7 @@ describe("LogPanel 日志面板", () => {
 
       /* 往下滚 → 窗口跟着走（「滚动不换段」正是窗口算歪的表现）。 */
       const scroller =
-        container.querySelector<HTMLElement>(".custom-scrollbar")!;
+        document.querySelector<HTMLElement>(".custom-scrollbar")!;
       scroller.scrollTop = 3000;
       act(() => {
         scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -966,9 +965,9 @@ describe("LogPanel 日志面板", () => {
       get: () => 1100,
     });
     try {
-      const { container } = render(<LogPanel />);
+      render(<LogPanel />);
       const scroller =
-        container.querySelector<HTMLElement>(".custom-scrollbar")!;
+        document.querySelector<HTMLElement>(".custom-scrollbar")!;
 
       /* 用户滚到最底：贴底基线跟着取到当前页最后一条，effect 据此定位。 */
       scroller.scrollTop = 200 * LOG_ROW_SINGLE;
@@ -982,10 +981,10 @@ describe("LogPanel 日志面板", () => {
       expect(scroller.scrollTop).toBe(expected);
       /* 窗口也真的跟着走到了页尾。 */
       const lastIndex = Number(
-        container
+        document
           .querySelectorAll("[data-log-index]")
           [
-            container.querySelectorAll("[data-log-index]").length - 1
+            document.querySelectorAll("[data-log-index]").length - 1
           ]!.getAttribute("data-log-index"),
       );
       expect(lastIndex).toBe(199);
@@ -1005,13 +1004,12 @@ describe("LogPanel 日志面板", () => {
     act(() =>
       useLogStore.getState().appendFileLogs([makeEntry(1, { origin: "app" })]),
     );
-    const { container } = render(<LogPanel />);
+    render(<LogPanel />);
 
-    /* 面板遮罩：overlayClass("modal", …) 拼出的最外层，层级取自同一份契约
-       （P4 起是枚举档 `z-modal`，不再是裸数字 —— 故按 class 名查而不是数字）。 */
-    const overlay = container.querySelector(
-      `[class*="${LOG_PANEL_OVERLAY_Z_CLASS}"]`,
-    );
+    /* 面板遮罩：面板改用 `ui/dialog` 后遮罩由基元 Portal 到 body（不再挂在
+       本组件的 container 里），层级取自基元的遮罩出口 —— 故按 `document` 查，
+       且断言它落在刻度表的 `modal` 档（P4 起是枚举档 `z-modal`）。 */
+    const overlay = document.querySelector(`[class*="${zClass("modal")}"]`);
     expect(overlay).not.toBeNull();
 
     const user = userEvent.setup();
