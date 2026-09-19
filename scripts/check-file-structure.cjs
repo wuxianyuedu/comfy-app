@@ -244,6 +244,12 @@ const DOMAIN_EXEMPT = new Set([
   // 服务端装配与运维
   "src/lib/session-banner.server.ts",
   "src/lib/task-cancel-client.ts",
+  /* 任务状态的终态判据：执行器（server）、SSE 关流（app/api）、仓储 SQL
+   * 条件（server）与**视图层**（日志面板决定终态帧怎么呈现）共用的纯逻辑。
+   * 它不能进任何子域：进 `core/**` 会被划成 element `server`，视图层
+   * import 即被 `boundaries` 拦下；进 `project-canvas/**` 又会让服务端
+   * 数据层反向依赖视图域。判据收敛在根层是唯一同时满足两侧的落点。 */
+  "src/lib/task-state.ts",
 ]);
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */

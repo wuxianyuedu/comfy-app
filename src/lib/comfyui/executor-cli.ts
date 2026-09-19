@@ -353,7 +353,22 @@ export async function executeViaComfyCli(job: Job) {
     onPromptId: (id: string) => {
       promptId = id;
       s.promptToTask.set(id, taskId);
-      void taskRepository.markRunning(taskId, id).catch(() => undefined);
+      /* 记 promptId 同样是「只在非终态行生效」的 compare-and-set：comfy-cli
+       *  回传 prompt_id 之前，reaper 完全可能已按「QUEUED 超时 + 无 promptId」
+       *  判过终态。此时若把行标回 RUNNING，终态就被改写、SSE 已关的流不会
+       *  重开，用户看到的是永远「生成中…」。更新失败即说明本任务不再归我们，
+       *  后续流程照旧由 reaper 的对账负责。 */
+      void taskRepository
+        .markRunning(taskId, id)
+        .then((updated) => {
+          if (!updated)
+            log(
+              taskId,
+              "warn",
+              "任务已由其它路径收口，忽略本次 prompt_id 回传（不再改写终态）",
+            );
+        })
+        .catch(() => undefined);
     },
     onProgress: (progress: number) => {
       s.emitter.emit(taskId, { type: "progress", progress });
