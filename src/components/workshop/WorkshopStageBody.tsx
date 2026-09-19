@@ -9,6 +9,7 @@
 
 import React from "react";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
 import { markdownToHtml } from "~/lib/comfyui/markdown";
@@ -110,20 +111,16 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     dismissNotice,
   } = controller;
 
-  /* 本地剧本文件导入：读取 .md / .txt 内容并写入 scriptMarkdown */
-  const scriptFileRef = React.useRef<HTMLInputElement>(null);
-  const handleScriptImport = React.useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (file) {
-        const text = await file.text();
+  /* 本地剧本文件导入：读取 .md / .txt 内容并写入 scriptMarkdown。
+   *  隐藏 input 与「选完复位 value」的样板收进 `ui/file-picker`。 */
+  const scriptPicker = useFilePicker({
+    accept: ".md,.txt",
+    onPick: (file) => {
+      void file.text().then((text) => {
         if (text.trim()) setScriptMarkdown(text);
-      }
-      // 允许重复选择同一文件
-      event.target.value = "";
+      });
     },
-    [setScriptMarkdown],
-  );
+  });
 
   return (
     <div className="min-w-0">
@@ -201,7 +198,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => scriptFileRef.current?.click()}
+                      onClick={scriptPicker.open}
                       className="text-ink bg-subtle hover:bg-surface-2 rounded-lg px-4 py-1.5 text-xs font-medium"
                     >
                       导入剧本
@@ -214,13 +211,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
                     >
                       新建剧本
                     </Button>
-                    <input
-                      ref={scriptFileRef}
-                      type="file"
-                      accept=".md,.txt"
-                      className="hidden"
-                      onChange={handleScriptImport}
-                    />
+                    <scriptPicker.Input />
                   </div>
                 </div>
               </section>

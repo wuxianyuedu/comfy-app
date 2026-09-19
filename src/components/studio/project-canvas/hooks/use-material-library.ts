@@ -4,7 +4,7 @@
 // 承载搜索防抖、列表拉取、上传、删除与错误提示；MaterialLibraryPanel 视图
 // 只消费本 hook 返回的 controller，不再自己发请求。
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   deleteMaterial,
@@ -39,7 +39,6 @@ export interface MaterialLibraryController {
   showItems: boolean;
   /** 面包屑路径段，每段可点击返回该级。 */
   breadcrumbSegments: Array<{ label: string; key: string | null }>;
-  fileRef: React.RefObject<HTMLInputElement | null>;
   setScope: (scope: MaterialScope) => void;
   setSearch: (value: string) => void;
   enterFolder: (folder: string | null) => void;
@@ -79,8 +78,6 @@ export function useMaterialLibrary({
   const [uploading, setUploading] = useState(false);
   /** 递增触发重新拉取（上传/删除后刷新）。 */
   const [reloadKey, setReloadKey] = useState(0);
-
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(() => {
     setActionError(null);
@@ -150,7 +147,6 @@ export function useMaterialLibrary({
         setActionError(errMsg(e, "上传失败"));
       } finally {
         setUploading(false);
-        if (fileRef.current) fileRef.current.value = "";
       }
     },
     [folder, projectId, refresh],
@@ -200,7 +196,6 @@ export function useMaterialLibrary({
     searching,
     showItems,
     breadcrumbSegments,
-    fileRef,
     setScope,
     setSearch,
     enterFolder,

@@ -125,16 +125,16 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 **六条判据**（`scripts/check-ui-primitives.cjs`，基线
 `scripts/.ui-primitives-baseline.json`）：
 
-| ID     | 判据                                        | 应改用什么                                                                                                                                                                             |
-| ------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **P1** | 视图层手写 `<button`                        | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体）                                                                                                                         |
-| **P2** | 视图层自建 `createPortal(` 浮层             | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu`                                                                                                                           |
-| **P3** | 视图层自写 `animate-spin` / `animate-pulse` | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
-| **P4** | 视图层自写 `::-webkit-scrollbar` 外观       | `globals.css` 的三个具名类：`.custom-scrollbar`（密集日志区）/ `.soft-scrollbar`（文字编辑区）/ 全局兜底（见 §16.2.4.9）                                                               |
+| ID     | 判据                                                                   | 应改用什么                                                                                                                                                                             |
+| ------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1** | 视图层手写 `<button`                                                   | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体）                                                                                                                         |
+| **P2** | 视图层自建 `createPortal(` 浮层                                        | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu`                                                                                                                           |
+| **P3** | 视图层自写 `animate-spin` / `animate-pulse`                            | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
+| **P4** | 视图层自写 `::-webkit-scrollbar` 外观                                  | `globals.css` 的三个具名类：`.custom-scrollbar`（密集日志区）/ `.soft-scrollbar`（文字编辑区）/ 全局兜底（见 §16.2.4.9）                                                               |
 | **P5** | 视图层自写剪贴板写入（`navigator.clipboard` / `document.execCommand`） | `~/lib/browser-io` 的 `copyText`（含降级链路与 `navigator` 存在性判定）                                                                                                                |
-| **P6** | 视图层自写 Blob 下载（`URL.createObjectURL`） | `~/lib/browser-io` 的 `downloadText` / `downloadJson`（`revoke` 与 `click` 的顺序收在出口里）                                                                                          |
+| **P6** | 视图层自写 Blob 下载（`URL.createObjectURL`）                          | `~/lib/browser-io` 的 `downloadText` / `downloadJson`（`revoke` 与 `click` 的顺序收在出口里）                                                                                          |
 
-**P4~P6 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+**P4~~P6 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
 P4/P5/P6 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载」这三件事的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。因此它们**不进基线**
 （`--update` 也不接受带违规的基线，否则「把违规一起写进基线」就成了唯一的绕过
@@ -245,25 +245,28 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 
 按「同一件事有几份实现」排序（**P2 已完成的条目保留在此，作为「怎么迁」的样板**）：
 
-| 形态             | 现状                                                                                                                               | 去向                                                                                                                                          | 状态                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| 对话框/浮层      | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~                                     | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet`                                           | ✅ **P2 完成（P2 判据清零）**               |
-| 空态             | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~                     | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`）                                                             | ✅ **P2 完成**                              |
-| 按钮             | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~                                                                              | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1                                                                                                    | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
-| 加载态           | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner                                                           | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里）                                                       | ✅ **P3 判据清零**                          |
-| 状态圆点         | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~                        | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token）                                                      | ✅ **全库唯一实现（余量见 §16.2.4.5）**     |
-| 状态胶囊         | ~~**七个文件**各写一份「状态 → 配色」表（`emerald-500/15` / `emerald-400/10` / `emerald-100` 三种深浅各不相同）~~                  | `ui/status-badge.tsx` 一份（`dot` 形态 / `dot={false}` 角标）；文案留在调用处                                                                 | ✅ **见 §16.2.4.5 ①**                       |
-| UI kit 目录      | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~                             | 见 §16.2.4.3                                                                                                                                  | ✅ **归并完成（豁免已归还）**               |
-| 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~                                                    | 接上有明确场景的一批，其余记为「有基元、无场景」                                                                                              | ✅ **见 §16.2.4.4 ①**                       |
-| 两套 token 口径  | ~~`shadcn` 别名与项目 token **各写一份字面量**（同一颜色 2~3 份拷贝）~~                                                            | 别名**只做 `var()` 转发**（项目 token 是唯一事实来源）；`@theme inline` 不再重定义项目 token                                                  | ✅ **已合并，见 §16.2.4.4 ② / 03 §3.6.4**   |
-| 余量主题色       | ~~115 处写死色值「既不是豁免、也不是待治理项」~~                                                                                   | 逐条定性：token 化 18 处 / 登记豁免 97 处 / 进固定暗色清单 2 处                                                                               | ✅ **基线归零，见 §16.2.4.5 ②**             |
-| 滚动条外观       | ~~`.custom-scrollbar`（`globals.css`）与 `SCROLLBAR_VISIBLE_CLASSES`（视图里的任意值变体）**各写一份**自绘滚动条外观，取值已漂移~~ | `globals.css` 是三档的唯一出口（`.custom-scrollbar` / `.soft-scrollbar` / 全局兜底），取值逐条保留；P4 硬闸禁止视图再写 `::-webkit-scrollbar` | ✅ **见 §16.2.4.9**                         |
-| 表单校验规则     | ~~`ui/form`（RHF 族）零引用，规则该归谁持有**未决策**~~                                                                            | **决定不接**：字段级规则住 `src/lib/<domain>/*-schema.ts` 的纯函数，集合级留 controller                                                       | ✅ **已决策，见 §16.2.4.8**                 |
-| 剪贴板写入       | ~~**4 份实现**（`copyText` / `copyLogText` / 两处内联），其中 6 个落点**完全没有降级链路**——可选链在 Tauri 的 `http://` 非安全上下文里把失败吞掉~~ | `~/lib/browser-io` 的 `copyText`（两条通道 + `navigator` 判定）；P5 硬闸禁止视图再写 `navigator.clipboard` / `execCommand`                     | ✅ **见 §16.2.4.10**                        |
-| Blob 下载        | ~~**7 份实现**，`revokeObjectURL` 与 `click()` 的**先后顺序不统一**（先 revoke 会让大文件拿到失效 URL）~~                          | `~/lib/browser-io` 的 `downloadText` / `downloadJson`；P6 硬闸禁止视图再写 `URL.createObjectURL`                                              | ✅ **见 §16.2.4.10**                        |
-| 相对时间         | ~~**5 份实现**，档位/后缀各不相同（`workspace` 与 `WorksGallery` 两份逐字相同）~~                                                   | `~/lib/time-format` 的 `timeAgo`（`maxDays` / `suffix` 承载差异）；域模块保留原名转发                                                          | ✅ **见 §16.2.4.10**                        |
-| 时刻格式化       | ~~**6 份实现**，带毫秒的两处逐字相同；`workshop` 4 处**连区域设置都没固定**~~                                                       | `~/lib/time-format` 的 `formatClock`（`millis` 档）；跨天补日期留在 `logs/log-format.ts`                                                       | ✅ **见 §16.2.4.10**                        |
-| 字节容量         | ~~**3 份实现**（`fmtBytes` / `fmtSize` / `formatSize` **三个名字**），而 `src/lib/format-bytes.ts` 早就在；1024 字节整这一档还敢给出不同答案~~ | `~/lib/format-bytes` 的 `fmtBytes`（既有出口，本批把两处漏网的接上）                                                                          | ✅ **见 §16.2.4.10**                        |
+| 形态             | 现状                                                                                                                                                                                              | 去向                                                                                                                                          | 状态                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 对话框/浮层      | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~                                                                                                    | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet`                                           | ✅ **P2 完成（P2 判据清零）**               |
+| 空态             | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~                                                                                    | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`）                                                             | ✅ **P2 完成**                              |
+| 按钮             | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~                                                                                                                                             | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1                                                                                                    | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
+| 加载态           | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner                                                                                                                          | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里）                                                       | ✅ **P3 判据清零**                          |
+| 状态圆点         | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~                                                                                       | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token）                                                      | ✅ **全库唯一实现（余量见 §16.2.4.5）**     |
+| 状态胶囊         | ~~**七个文件**各写一份「状态 → 配色」表（`emerald-500/15` / `emerald-400/10` / `emerald-100` 三种深浅各不相同）~~                                                                                 | `ui/status-badge.tsx` 一份（`dot` 形态 / `dot={false}` 角标）；文案留在调用处                                                                 | ✅ **见 §16.2.4.5 ①**                       |
+| UI kit 目录      | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~                                                                                            | 见 §16.2.4.3                                                                                                                                  | ✅ **归并完成（豁免已归还）**               |
+| 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~                                                                                                                   | 接上有明确场景的一批，其余记为「有基元、无场景」                                                                                              | ✅ **见 §16.2.4.4 ①**                       |
+| 两套 token 口径  | ~~`shadcn` 别名与项目 token **各写一份字面量**（同一颜色 2~3 份拷贝）~~                                                                                                                           | 别名**只做 `var()` 转发**（项目 token 是唯一事实来源）；`@theme inline` 不再重定义项目 token                                                  | ✅ **已合并，见 §16.2.4.4 ② / 03 §3.6.4**   |
+| 余量主题色       | ~~115 处写死色值「既不是豁免、也不是待治理项」~~                                                                                                                                                  | 逐条定性：token 化 18 处 / 登记豁免 97 处 / 进固定暗色清单 2 处                                                                               | ✅ **基线归零，见 §16.2.4.5 ②**             |
+| 滚动条外观       | ~~`.custom-scrollbar`（`globals.css`）与 `SCROLLBAR_VISIBLE_CLASSES`（视图里的任意值变体）**各写一份**自绘滚动条外观，取值已漂移~~                                                                | `globals.css` 是三档的唯一出口（`.custom-scrollbar` / `.soft-scrollbar` / 全局兜底），取值逐条保留；P4 硬闸禁止视图再写 `::-webkit-scrollbar` | ✅ **见 §16.2.4.9**                         |
+| 表单校验规则     | ~~`ui/form`（RHF 族）零引用，规则该归谁持有**未决策**~~                                                                                                                                           | **决定不接**：字段级规则住 `src/lib/<domain>/*-schema.ts` 的纯函数，集合级留 controller                                                       | ✅ **已决策，见 §16.2.4.8**                 |
+| 剪贴板写入       | ~~**4 份实现**（`copyText` / `copyLogText` / 两处内联），其中 6 个落点**完全没有降级链路**——可选链在 Tauri 的 `http://` 非安全上下文里把失败吞掉~~                                                | `~/lib/browser-io` 的 `copyText`（两条通道 + `navigator` 判定）；P5 硬闸禁止视图再写 `navigator.clipboard` / `execCommand`                    | ✅ **见 §16.2.4.10**                        |
+| Blob 下载        | ~~**7 份实现**，`revokeObjectURL` 与 `click()` 的**先后顺序不统一**（先 revoke 会让大文件拿到失效 URL）~~                                                                                         | `~/lib/browser-io` 的 `downloadText` / `downloadJson`；P6 硬闸禁止视图再写 `URL.createObjectURL`                                              | ✅ **见 §16.2.4.10**                        |
+| 相对时间         | ~~**5 份实现**，档位/后缀各不相同（`workspace` 与 `WorksGallery` 两份逐字相同）~~                                                                                                                 | `~/lib/time-format` 的 `timeAgo`（`maxDays` / `suffix` 承载差异）；域模块保留原名转发                                                         | ✅ **见 §16.2.4.10**                        |
+| 时刻格式化       | ~~**6 份实现**，带毫秒的两处逐字相同；`workshop` 4 处**连区域设置都没固定**~~                                                                                                                     | `~/lib/time-format` 的 `formatClock`（`millis` 档）；跨天补日期留在 `logs/log-format.ts`                                                      | ✅ **见 §16.2.4.10**                        |
+| 字节容量         | ~~**3 份实现**（`fmtBytes` / `fmtSize` / `formatSize` **三个名字**），而 `src/lib/format-bytes.ts` 早就在；1024 字节整这一档还敢给出不同答案~~                                                    | `~/lib/format-bytes` 的 `fmtBytes`（既有出口，本批把两处漏网的接上）                                                                          | ✅ **见 §16.2.4.10**                        |
+| 隐藏文件选择框   | ~~**9 份实现**（`useRef` + `ref.current?.click()` 6 处、`<label htmlFor>` 隐式关联 2 处、input 直接露在界面 1 处）；多数落点**没有复位 `event.target.value`** —— 连选同一个文件不触发 `change`~~  | `~/components/ui/file-picker` 的 `useFilePicker` / `FilePickerButton`；**P7 硬闸**禁止视图再写「隐藏 input + 手工触发」                       | ✅ **见 §16.2.4.11**                        |
+| 一次性反馈       | ~~**6 份实现**，分两族：4 处裸 `setTimeout(() => setX(false), 1xx)`（**连卸载都不管**）、2 处手写 `timerRef` + `clearTimeout`；复位时长 1200/1400/1500/8000 各不相同且**没有一处说得清为什么**~~  | `~/components/ui/use-flash-state` 的 `useFlashState`（单值）/ `useFlashLatch`（多字段同生共死）；`DEFAULT_FLASH_MS` 是唯一默认值              | ✅ **见 §16.2.4.11**                        |
+| 缺值占位符       | ~~**31 处**裸写 `?? "—"`，而「什么算不存在」**四种判法**：`??`（只管 null/undefined）、`\|\|`（把 `0` 与 `""` 也当缺值 —— 「步数 0」显示成「—」）、`> 0 ? x : "—"`、`!= null ? String(x) : "—"`~~ | `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER`；**P8 硬闸**禁止视图再写占位符字面量                                            | ✅ **见 §16.2.4.11**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -826,12 +829,12 @@ utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类�
 
 实测 **4 份实现**，且各自写法不同：
 
-| 在哪 | 兜底写法 |
-| --- | --- |
+| 在哪                                                        | 兜底写法                                                         |
+| ----------------------------------------------------------- | ---------------------------------------------------------------- |
 | `history/hooks/use-history-detail-actions.ts` 的 `copyText` | 返回 `boolean`；临时 `<textarea>` 用 `position:fixed; opacity:0` |
-| `logs/log-export.ts` 的 `copyLogText` | 静默；同一个 `<textarea>` 用默认定位、不设 `opacity` |
-| `WorkflowNodeJsonPopover.tsx` | 只在自己那份里再写一遍 `execCommand`，`left:-9999px` |
-| `DebugChainFooter.tsx` / `ShellTabs.tsx` / 其余 6 处 | 直接 `navigator.clipboard?.writeText(...)`，**完全没有降级链路** |
+| `logs/log-export.ts` 的 `copyLogText`                       | 静默；同一个 `<textarea>` 用默认定位、不设 `opacity`             |
+| `WorkflowNodeJsonPopover.tsx`                               | 只在自己那份里再写一遍 `execCommand`，`left:-9999px`             |
+| `DebugChainFooter.tsx` / `ShellTabs.tsx` / 其余 6 处        | 直接 `navigator.clipboard?.writeText(...)`，**完全没有降级链路** |
 
 最后一行才是这条账的实质：**没有降级链路的那几处，在 Tauri 的 `http://` 非安全
 上下文里直接失败**（`navigator.clipboard` 是 `undefined`），而它们的写法看起来
@@ -845,10 +848,10 @@ utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类�
 
 #### 问法三：谁在把时间写成给人看的字
 
-| 形态 | 份数 | 漂移 |
-| --- | --- | --- |
-| `刚刚 / N 分钟前 / …` | **5** | 阈值档位各不相同（一处 30 天封顶后转日期、两处每档带「修改」后缀、一处不带）；`workspace` 与 `WorksGallery` **两份逐字相同** |
-| `HH:mm:ss` 时刻 | **6** | 带毫秒的两处**逐字相同**；`workshop` 那 4 处裸调 `toLocaleTimeString()`，**连区域设置都没固定**（宿主 12 小时制时会多出 AM/PM 把日志行撑开） |
+| 形态                  | 份数  | 漂移                                                                                                                                         |
+| --------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `刚刚 / N 分钟前 / …` | **5** | 阈值档位各不相同（一处 30 天封顶后转日期、两处每档带「修改」后缀、一处不带）；`workspace` 与 `WorksGallery` **两份逐字相同**                 |
+| `HH:mm:ss` 时刻       | **6** | 带毫秒的两处**逐字相同**；`workshop` 那 4 处裸调 `toLocaleTimeString()`，**连区域设置都没固定**（宿主 12 小时制时会多出 AM/PM 把日志行撑开） |
 
 #### 问法四：谁在把字节写成容量
 
@@ -895,6 +898,98 @@ utility 类集与合并前逐字节一致**（`bg-muted` / `text-muted` 这类�
 > 方法论记一笔：这四条账**没有一条**能靠读目录结构或文件名看出来。
 > `fmtSize` / `formatSize` / `fmtBytes` 是同一个函数的三个名字；
 > `copyText` 在四处叫同一个名字却有四种行为。**扫描要按问法设计，不是按目录。**
+
+### 16.2.4.11 上一批留下的三条账：交互样板与判据口径（P7/P8 硬闸）
+
+§16.2.4.10 收尾时留了三笔「扫到但没动」的账。这一批做掉，形状与上一批**不同** ——
+上一批的账是「一个动作有几份实现」，这一批是**「一件交互的样板」**与
+**「一个判断的口径」**。后者尤其值得单独记：它不是重复代码，是**同一个决定的多种写法**。
+
+#### 账一：隐藏文件选择框（P7）
+
+**9 份实现，三种写法**：
+
+| 写法                              | 落点                                                                                                                                                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `useRef` + `ref.current?.click()` | `CanvasNode` 的 `use-file-upload`（**两个** ref / 两个 click）、`use-dynamic-workflow-form`、`MaterialLibraryPanel`、`WorkflowImportPanel`、`TrainingStudio`、`CharacterPortraitStudio`、`ExtractToolbar`、`WorkshopStageBody` |
+| `<label htmlFor>` 隐式关联        | `UsageTestDialog`、`VideoQueueModal`（后者是全仓唯一靠 `id` 拼接触发的入口）                                                                                                                                                   |
+| input 直接露在界面上              | `FilmStudio` 的 BGM 选择器                                                                                                                                                                                                     |
+
+三个共性问题只有放在一处才收得住：
+
+1. **`click()` 在 ref 未挂上时是静默空操作** —— 界面「点了没反应」，
+   既没有反馈也不知道该去查什么；
+2. **多数落点没有复位 `event.target.value`** —— 浏览器只在取值变化时派发
+   `change`，于是用户第二次选**同一个文件**时回调根本不触发，
+   表现成「上传按钮坏了」。这条缺陷是**静默**的：没有报错、没有告警。
+3. 同一文件里两个隐藏 input + 两个 ref + 两个 `click()` 的样板重复。
+
+收口进 `~/components/ui/file-picker`：`useFilePicker`（命令式，`open()` + `<picker.Input />`）、
+`FilePickerButton`（声明式，按钮与 input 二合一）。`onPick` 同时给 `file` 与整份
+`FileList` —— 多选落点（数据集、素材库）要整份交给上传管线。
+
+> **判据只管「隐藏」这一种形态**（P7 数 `<input type=file>` 同标签内出现
+> `hidden`）。`FilmStudio` 的 BGM 选择器是**用户可见的表单字段**（靠 `file:`
+> 伪元素美化、就地显示已选文件名），是另一种形态，不欠 file-picker 的契约 ——
+> 硬把它改成「隐藏 input + 按钮」是**改坏外观去迎合判据**，所以进
+> `tests/check-ui-primitives.test.ts` 的反面用例，明确记下「可见输入框放行」。
+
+#### 账二：一次性反馈（`useFlashState` / `useFlashLatch`）
+
+**6 份实现，两族**：
+
+| 族              | 落点                                                                          | 缺陷                                                                                                                                       |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 裸 `setTimeout` | 设置页报错复制、`ProjectOutputs`、`WorkflowNodeJsonPopover`、`ui/json-viewer` | 定时器**没人管** —— 组件卸载后仍 `setState`（**日志行会随翻页/锚点窗口被卸载**）；连点时旧定时器没清，第一次的复位**提前抹掉**第二次的亮起 |
+| 手写 `timerRef` | `logs/LogRow`、`logs/SaveExportButton`、设置页 `use-settings-page`            | 行为正确，但与上一族逐行同款、各写一份；时长散落                                                                                           |
+
+复位时长此前是 **1200 / 1400 / 1500 / 8000**，**没有一处说得清为什么是它**。
+现在 `DEFAULT_FLASH_MS = 1500` 是唯一默认值，需要不同的落点显式传值
+并写明理由（`logs` 的保存回执留 8s：它要给出**路径**，用户得看清并可能抄下来；
+行内复制 1.2s：反馈就长在按钮上，停留越久越像常驻标签）。
+
+`SaveExportButton` 是**多字段**场景（「已保存 <路径>」与失败标记必须**同生共死**），
+所以另有 `useFlashLatch(durationMs, empty)` —— 两个 `useFlashState` 会各起一个
+定时器，时长一改就漂移，留下「已保存还在、失败标记已消失」的自相矛盾画面。
+
+#### 账三：缺值占位符（P8）—— 这条不是重复，是**口径**
+
+**31 处**裸写 `"—"`，而「什么算不存在」有**四种判法**：
+
+| 写法                          | 把谁当成「不存在」        | 问题                                             |
+| ----------------------------- | ------------------------- | ------------------------------------------------ |
+| `x ?? "—"`                    | 只有 `null` / `undefined` | 空串会渲染成空白格                               |
+| `x \|\| "—"`                  | 再加 `0` 与 `""`          | **「步数 0」显示成「—」** —— 它是真实跑过的 0 步 |
+| `value > 0 ? value : "—"`     | 再加负数                  | 计数徽标的域语义，但混在通用判据里看不出         |
+| `x != null ? String(x) : "—"` | 只有 `null` / `undefined` | 与第一种等价、写法不同                           |
+
+四种只差一两个字符，**都编译、都运行、类型都对**，差别只在**一个语义决定**上。
+散在 31 处，这个决定就永远不会被统一说出来 —— 所以收口的意义不在「少写几个字符」，
+而在**把口径写进一个文件头**：
+
+- `undefined` / `null` / `""` / `NaN` → 占位符；
+- **`0` / `false` 照常显示**（真实测到的值不是缺值）；
+- 想把 `0` 当缺值的**域**必须显式写自己的判据（实例：`model-library-config.ts`
+  的 `fmtSize` —— 模型列表里 `fileSize=0` 表示尚未探到，显示 `0 B` 会让用户
+  以为模型是空的）。
+
+出口 `~/lib/display-value` 的 `displayValue` / `nonEmpty` / `EMPTY_PLACEHOLDER`
+（`src/lib` 顶层单例，同 `format-bytes.ts`）。`workflow-utils.ts` 的
+`renderWidgetValue` / `renderSubgraphWidgetValue` 保留原职（布尔成 ✓/✕、
+小数去尾零 —— 「有值时怎么渲染」），只把「没有值时显示什么」换成出口调用。
+
+#### 判据：P7/P8（硬闸）+ 出口侧契约
+
+`check-ui-primitives.cjs` 新增两条，与 P4~P6 同性质（`HARD_GATE_RULES`，不进基线）：
+
+- **P7** 视图里「`<input type=file>` + `hidden`」同标签出现；
+- **P8** 视图里出现占位符字面量 `"—"`。
+
+`tests/ui-primitives-coverage.test.ts` 从**另一侧**钉住 `file-picker` 的导出名与
+业务引用数（≥3，远低于现状的 9 —— 它要挡的是「掉回 0/1」而不是锁死数量）；
+`src/lib/display-value.test.ts` 与 `src/components/ui/use-flash-state.test.ts`
+按**边界值**与**时间轴**设用例（`0`/`false`/NaN 站哪一边、卸载后是否还 `setState`、
+连点是否被旧定时器打断）—— 这些恰恰是各自调用点看不出来的部分。
 
 ## 16.3 新增一个组件的标准动作
 

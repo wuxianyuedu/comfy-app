@@ -2,6 +2,7 @@
 /* 抽出的纯模块级工具函数 —— 原本声明在 WorkflowCanvasEditor.tsx 内部。
  * 没有 JSX，也不用 React hook。 */
 import { getCustomNodePackage } from "~/config/custom-nodes";
+import { displayValue } from "~/lib/display-value";
 import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
 import type { Node, Edge } from "@xyflow/react";
 import type {
@@ -198,7 +199,10 @@ export function inferOutputTypeAll(classType: string): Record<string, string> {
  *   - 长字符串 → 原样返回，截断交给 CSS（完整文本留在 title 上）
  *   - 对象 → "{...}" */
 export function renderWidgetValue(value: unknown): string {
-  if (value === undefined || value === null) return "—";
+  /* 缺值占位符只有一处定义（`~/lib/display-value`）—— 本函数负责的是
+   * 「有值时怎么渲染」（布尔成 ✓/✕、小数去尾零…），「没有值时显示什么」
+   * 不在这里再写一遍。 */
+  if (value === undefined || value === null) return displayValue(null);
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
     // 小数保留两位；整数不带小数点。
@@ -254,7 +258,7 @@ export function withAlpha(color: string): string {
  *  `name`（与 `localized_name`）挑定了。这里只需按 JS 类型分色；
  *  父卡片上的单元格直接展示 ComfyUI 存下来的原始配对值。 */
 export function renderSubgraphWidgetValue(value: unknown): string {
-  if (value === undefined || value === null) return "—";
+  if (value === undefined || value === null) return displayValue(null);
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
     if (Number.isInteger(value) || value >= 10000) return String(value);

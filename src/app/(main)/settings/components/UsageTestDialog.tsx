@@ -23,6 +23,7 @@ import {
 import type { UsageTestKind } from "~/lib/llm/usage-test-client";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { Spinner } from "~/components/ui/page-loading";
 import { Textarea } from "~/components/ui/textarea";
 import { Input } from "~/components/ui/input";
@@ -389,20 +390,10 @@ function UsageFieldEditor({
                     上传
                   </span>
                 ) : (
-                  <label
-                    className="text-muted-foreground hover:text-ink border-border hover:bg-subtle flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border px-2 text-[11px] transition-colors"
+                  <FieldImageButton
                     title="本地上传一张图片作为该字段的值（自动转 data URL）"
-                  >
-                    上传
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      className="hidden"
-                      onChange={(event) =>
-                        void d.pickFieldImage(i, event.target.files?.[0])
-                      }
-                    />
-                  </label>
+                    onPick={(file) => void d.pickFieldImage(i, file)}
+                  />
                 )}
                 {!(usageTest.kind === "video" && isMediaField(f.key)) &&
                   f.key !== "mode" && (
@@ -528,6 +519,36 @@ function UsageTestResultPanel({
           </p>
         )}
       </div>
+    </>
+  );
+}
+
+/** 单行的「上传图片」入口：外观是 `label` 样式的按钮，内部是
+ *  隐藏 input —— 此前这里用 `<label>` 包住 `<input type=file>` 让浏览器
+ *  隐式关联，写法与全库另外 8 个落点都不同。现在统一走 `ui/file-picker`。 */
+function FieldImageButton({
+  title,
+  onPick,
+}: {
+  title: string;
+  onPick: (file: File) => void;
+}) {
+  const picker = useFilePicker({
+    accept: "image/png,image/jpeg,image/webp,image/gif",
+    onPick: (file) => onPick(file),
+  });
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={picker.open}
+        title={title}
+        className="text-muted-foreground hover:text-ink border-border hover:bg-subtle h-auto shrink-0 gap-1 rounded-lg px-2 text-[11px] transition-colors"
+      >
+        上传
+      </Button>
+      <picker.Input />
     </>
   );
 }

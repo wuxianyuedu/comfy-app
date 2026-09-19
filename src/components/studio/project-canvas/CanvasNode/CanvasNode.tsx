@@ -61,16 +61,10 @@ export const CanvasNode = React.memo(function CanvasNode({
     fitView({ nodes: [{ id }], duration: 300, padding: 0.2, maxZoom: 1.2 });
 
   /* 文件上传管线：生成器图片输入、内容载体媒体选择器与
-   *  拖放用的 ref + 选取 / 上传处理器。 */
-  const {
-    fileRef,
-    pickFile,
-    mediaRef,
-    pickMedia,
-    onFile,
-    onMediaFile,
-    onUploadFile,
-  } = useFileUpload({ patch });
+   *  拖放用的选取 / 上传处理器。隐藏 input 由管线自己持有并渲染
+   *  （`ImageInput` / `MediaInput`）。 */
+  const { ImageInput, pickFile, MediaInput, pickMedia, onUploadFile } =
+    useFileUpload({ patch });
 
   /* 共享工作流列表 + 动态 IO 表 + 模式 / 来源筛选 + 播种。 */
   const {
@@ -379,21 +373,9 @@ export const CanvasNode = React.memo(function CanvasNode({
         workflowName={d.workflowName}
         onRetry={retryGenerate}
       />
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onFile}
-      />
+      <ImageInput />
       {/* 内容载体上传输入 —— 同时接受图片与视频 */}
-      <input
-        ref={mediaRef}
-        type="file"
-        accept="image/*,video/*"
-        className="hidden"
-        onChange={onMediaFile}
-      />
+      <MediaInput />
       {/* 主输出端口 + 类型标签 — 改为与 WorkflowNode.outputs
        *  row 同款结构（label + typeChip + PortHandle）。image / video / script 通用。 */}
       {(d.kind === "image" || d.kind === "video" || d.kind === "script") && (

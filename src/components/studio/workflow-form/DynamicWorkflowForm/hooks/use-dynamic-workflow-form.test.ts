@@ -9,7 +9,8 @@
 // 本文件只测逻辑层（renderHook），视图由 sections/*.test.tsx 承担。
 // 用例名直接写出「什么场景 → 什么派生结果」。
 
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
+import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/lib/project-canvas/canvas-api", () => ({
@@ -22,8 +23,46 @@ import type {
   WorkflowIOMap,
 } from "~/components/studio/workflow-io";
 import type { DynamicWorkflowFormProps } from "../dynamic-workflow-form-config";
+import type { DynamicWorkflowFormController } from "./use-dynamic-workflow-form";
 
 import { useDynamicWorkflowForm } from "./use-dynamic-workflow-form";
+
+/** 驱动 controller 暴露的隐藏 `<input type=file>`。
+ *
+ *  上传管线的入口现在是 `ui/file-picker` —— input 由 `FileInput` 组件渲染，
+ *  所以测试必须**真的渲染它**（`renderHook` 不会渲染返回的组件）。这里把
+ *  controller 与它的 `FileInput` 一起渲染，再从真实 DOM 派发 `change`，
+ *  顺带覆盖「选完复位 `value`」那段样板。 */
+function renderFormWithPicker(props: DynamicWorkflowFormProps) {
+  /* 本文件是 `.ts`（无 JSX），用 createElement 手搭一个「渲染 controller +
+   * 它的 FileInput」的探针组件：`renderHook` 只挂 hook 不挂返回的节点，
+   *  而上传入口现在是真实 DOM 里的 `<input type=file>`。 */
+  let captured: DynamicWorkflowFormController | null = null;
+  function Probe(p: DynamicWorkflowFormProps) {
+    const controller = useDynamicWorkflowForm(p);
+    captured = controller;
+    return createElement(controller.FileInput);
+  }
+  const rendered = render(createElement(Probe, props));
+  return {
+    result: {
+      get current() {
+        return { controller: captured! };
+      },
+    },
+    rendered,
+  };
+}
+
+function pickPickerFile(file: File) {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error("没有渲染 ui/file-picker 的 input");
+  const files = { 0: file, length: 1, item: () => file } as unknown as FileList;
+  Object.defineProperty(input, "files", { value: files, configurable: true });
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  /* 复位行为本身也是被测项：不复位时用户连选同一个文件不会触发 change。 */
+  return input;
+}
 
 /** Widget pin（默认 kind=widget）。 */
 function widget(
@@ -374,38 +413,30 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
 });
 
 describe("useDynamicWorkflowForm — 图片上传", () => {
-  it("pickFile 记住上传目标并点开文件选择框", () => {
-    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps()));
-    const click = vi.fn();
-    // fileRef 指向真实 <input>，测试里直接打桩 click
-    Object.defineProperty(result.current.fileRef, "current", {
-      value: { click },
-      writable: true,
-    });
+  it("pickFile 记住上传目标（选择框由 ui/file-picker 打开）", () => {
+    const { result } = renderFormWithPicker(baseProps());
 
-    act(() => result.current.pickFile("img-key"));
+    act(() => result.current.controller.pickFile("img-key"));
 
-    expect(result.current.uploadTarget).toBe("img-key");
-    expect(click).toHaveBeenCalled();
+    expect(result.current.controller.uploadTarget).toBe("img-key");
   });
 
   it("上传成功：把返回的文件名写进该字段的值表", async () => {
     const onChange = vi.fn();
     vi.mocked(uploadImageFile).mockResolvedValue("uploaded.png");
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onChange })),
-    );
+    const { result } = renderFormWithPicker(baseProps({ onChange }));
 
-    act(() => result.current.pickFile("img-key"));
+    act(() => result.current.controller.pickFile("img-key"));
+    /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
+     * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
-      await result.current.onFile({
-        target: { files: [new File(["x"], "a.png")], value: "" },
-      } as never);
+      pickPickerFile(new File(["x"], "a.png"));
+      await Promise.resolve();
     });
 
     expect(onChange).toHaveBeenCalledWith({ "img-key": "uploaded.png" });
-    expect(result.current.uploading).toBe(false);
-    expect(result.current.uploadTarget).toBeNull();
+    expect(result.current.controller.uploading).toBe(false);
+    expect(result.current.controller.uploadTarget).toBeNull();
   });
 
   it("上传失败：不写值、不抛异常，且 uploading 归位（不卡在上传中）", async () => {
@@ -417,23 +448,22 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     const consoleErr = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onChange })),
-    );
+    const { result } = renderFormWithPicker(baseProps({ onChange }));
 
-    act(() => result.current.pickFile("img-key"));
+    act(() => result.current.controller.pickFile("img-key"));
+    /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
+     * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
-      await result.current.onFile({
-        target: { files: [new File(["x"], "a.png")], value: "" },
-      } as never);
+      pickPickerFile(new File(["x"], "a.png"));
+      await Promise.resolve();
     });
 
     expect(onChange).not.toHaveBeenCalled();
-    expect(result.current.uploading).toBe(false);
-    expect(result.current.uploadTarget).toBeNull();
+    expect(result.current.controller.uploading).toBe(false);
+    expect(result.current.controller.uploadTarget).toBeNull();
     /* 失败必须留一个用户可见出口：controller 暴露 uploadError，视图据此
      * 渲染提示条（此前失败只进 console，上传位毫无反馈 — ISSUE #345）。 */
-    expect(result.current.uploadError).toBe("boom");
+    expect(result.current.controller.uploadError).toBe("boom");
     consoleErr.mockRestore();
   });
 
@@ -443,15 +473,14 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
     const consoleErr = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onUploadError })),
-    );
+    const { result } = renderFormWithPicker(baseProps({ onUploadError }));
 
-    act(() => result.current.pickFile("img-key"));
+    act(() => result.current.controller.pickFile("img-key"));
+    /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
+     * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
-      await result.current.onFile({
-        target: { files: [new File(["x"], "a.png")], value: "" },
-      } as never);
+      pickPickerFile(new File(["x"], "a.png"));
+      await Promise.resolve();
     });
 
     expect(onUploadError).toHaveBeenCalledWith("ComfyUI 启动超时");
@@ -464,32 +493,30 @@ describe("useDynamicWorkflowForm — 图片上传", () => {
       return "ok.png";
     });
     const onUploadProgress = vi.fn();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onUploadProgress })),
-    );
+    const { result } = renderFormWithPicker(baseProps({ onUploadProgress }));
 
-    act(() => result.current.pickFile("img-key"));
+    act(() => result.current.controller.pickFile("img-key"));
+    /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
+     * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
-      await result.current.onFile({
-        target: { files: [new File(["x"], "a.png")], value: "" },
-      } as never);
+      pickPickerFile(new File(["x"], "a.png"));
+      await Promise.resolve();
     });
 
     expect(onUploadProgress).toHaveBeenCalledWith("正在启动 ComfyUI…");
-    expect(result.current.uploadError).toBeNull();
+    expect(result.current.controller.uploadError).toBeNull();
   });
 
   it("没有上传目标时 onFile 是 no-op（不会把文件写到错误的字段）", async () => {
     const onChange = vi.fn();
     vi.mocked(uploadImageFile).mockClear();
-    const { result } = renderHook(() =>
-      useDynamicWorkflowForm(baseProps({ onChange })),
-    );
+    renderFormWithPicker(baseProps({ onChange }));
 
+    /* `pickPickerFile` 是同步派发 —— 但 `change` 之后挂着的上传 Promise
+     * 要跑完，所以外面仍要 `await act`。 */
     await act(async () => {
-      await result.current.onFile({
-        target: { files: [new File(["x"], "a.png")], value: "" },
-      } as never);
+      pickPickerFile(new File(["x"], "a.png"));
+      await Promise.resolve();
     });
 
     // 先选文件才可能上传：没有 uploadTarget 时不该调上传接口、也不该写值

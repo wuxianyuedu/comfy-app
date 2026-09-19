@@ -21,6 +21,7 @@ import { ChevronDown, ChevronRight, Copy } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
+import { useFlashState } from "~/components/ui/use-flash-state";
 import { PageLoading } from "~/components/ui/page-loading";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
@@ -82,7 +83,7 @@ export function SettingsLoadError({
   onRetry: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const copied = useFlashState();
   const togglePanel = useLogPanel((s) => s.toggleOpen);
 
   /* 复制的是用户看到的这段可读文案（`errorText` 也已优先取服务端原文）；
@@ -91,8 +92,7 @@ export function SettingsLoadError({
   const copyError = async () => {
     /* 剪贴板不可用（非安全上下文等）时静默失败，用户仍可展开后手动选择复制。 */
     if (await copyText(errorText)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      copied.flash();
     }
   };
 
@@ -128,7 +128,7 @@ export function SettingsLoadError({
             className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
           >
             <Copy size={13} />
-            {copied ? "已复制" : "复制"}
+            {copied.on ? "已复制" : "复制"}
           </Button>
         </div>
         {expanded && (
