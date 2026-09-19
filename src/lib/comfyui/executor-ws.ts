@@ -334,7 +334,19 @@ async function handleMessage(raw: string) {
     const value = Number(data.value ?? 0);
     const max = Number(data.max ?? 1);
     const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
-    await taskRepository.updateProgress(taskId, pct);
+    /* 进度回写走「只在非终态行生效」的 compare-and-set：本任务若已被
+     *  reaper 判终态、或被用户取消，说明这一轮结果不再归我们，迟到的进度
+     *  帧**必须被丢弃**。否则 DB 行会从终态被打回 RUNNING，SSE 的 3s 实情
+     *  轮询先看到终态关掉了流，客户端就永远卡在「生成中…」（用户看不到
+     *  任何失败出口，只能刷新）。 */
+    if (!(await taskRepository.updateProgress(taskId, pct))) {
+      log(
+        taskId,
+        "warn",
+        "忽略迟到进度：本任务已由其它路径收口（终态不再改写）",
+      );
+      return;
+    }
     // progress 消息自带 node id——把节点 id / 类别名 / 步数一并
     // 发给前端，画布与管线节点才能显示「当前节点 + 百分比」而不仅是总数。
     let node:

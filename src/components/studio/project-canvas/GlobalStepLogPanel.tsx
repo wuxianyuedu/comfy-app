@@ -29,6 +29,8 @@ import {
   setStepLogValidationErrors,
 } from "./stepLogCache";
 import { useActiveTaskId, getNodeIdByTaskId } from "./activeTask";
+import { isTerminalFailureTaskStatus } from "~/lib/task-state";
+import { fetchTaskStatus } from "~/lib/task-cancel-client";
 import { useCanvasSettings } from "../canvas/WorkflowCanvasSettings";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Button } from "~/components/ui/button";
@@ -270,22 +272,37 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               nodeId: getNodeIdByTaskId(tid) ?? undefined,
             });
           }
-        } else if (msg.type === "done") {
-          if (lastStatusRef.current !== "SUCCEEDED")
-            lastStatusRef.current = "SUCCEEDED";
-          setStatus("SUCCEEDED");
+        } else if (msg.type === "done" || msg.type === "error") {
+          /* 终态帧**不能直接下结论**。
+           *
+           * 现场（ISSUE #733）：任务被后端判终态（如 CANCELLED）后，迟到的
+           * 「完成」帧仍可能到达；旧实现把它当权威，直接显示「完成」并关流，
+           * 用户看到的是一个已经死掉的任务显示成功。反过来，帧里没有
+           * `status` 字段时旧实现还会把它落成 FAILED —— 成功也被显示成失败。
+           *
+           * 因此这里改为：终态帧只作为**触发器**，去向 DB 要权威结论；DB
+           * 读不到时才退回帧内信息。 */
+          const fallback = msg.type === "error" ? "FAILED" : "SUCCEEDED";
+          if (typeof msg.error === "string") setError(msg.error);
           es.close();
           esRef.current = null;
-        } else if (msg.type === "error") {
-          if (lastStatusRef.current !== "FAILED")
-            lastStatusRef.current = "FAILED";
-          setStatus("FAILED");
-          if (typeof msg.error === "string") {
-            setError(msg.error);
-            appendFailureLogLine(tid, msg.error, setLogs);
-          }
-          es.close();
-          esRef.current = null;
+          void (async () => {
+            /* 网络层收在 `~/lib/task-cancel-client`（视图零 IO，规范 17）。 */
+            const snap = await fetchTaskStatus(tid);
+            const finalStatus = snap.status;
+            const finalError = snap.error;
+            const st = finalStatus ?? fallback;
+            if (lastStatusRef.current !== st) lastStatusRef.current = st;
+            setStatus(st);
+            const reason =
+              finalError ?? (typeof msg.error === "string" ? msg.error : null);
+            if (reason && isTerminalFailureTaskStatus(st)) {
+              setError(reason);
+              appendFailureLogLine(tid, reason, setLogs);
+            } else if (reason) {
+              setError(reason);
+            }
+          })();
         }
       } catch {
         /* SSE 帧格式错误 —— 忽略 */

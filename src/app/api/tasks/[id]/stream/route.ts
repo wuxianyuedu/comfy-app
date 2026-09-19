@@ -4,6 +4,7 @@ import { taskRepository } from "~/lib/core/repository";
 import { getLogs, subscribe } from "~/lib/comfyui/enqueue";
 import type { TaskEvent } from "~/lib/comfyui/runner-state";
 import { parseValidationErrors } from "~/lib/comfyui/validation";
+import { isTerminalTaskStatus } from "~/lib/task-state";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -139,11 +140,7 @@ export async function GET(
                 validationErrors: parseValidationErrors(cur.validationErrors),
                 workflowName: cur.workflowName,
               });
-              if (
-                cur.status === "SUCCEEDED" ||
-                cur.status === "FAILED" ||
-                cur.status === "CANCELLED"
-              ) {
+              if (isTerminalTaskStatus(cur.status)) {
                 try {
                   controller.close();
                 } catch {
