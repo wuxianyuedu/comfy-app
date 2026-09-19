@@ -5,8 +5,8 @@ import type * as LoggerModule from "~/lib/core/logger";
  * mock 边界：~/server/db（内存 Prisma 替身）、~/server/better-auth、
  * ~/lib/core/logger（静音）、~/lib/comfyui/enqueue（enqueue 整体 mock——
  * 真模块 import 时会启动 reaper 定时器并连 ComfyUI WS）、
- * `buildCustomWorkflow` / repository 均走真实实现（内置模板 + token 替换已移除，
- * 故不再 mock `~/lib/comfyui/client` 的 listModels）。
+ * repository 走真实实现（内置模板 + token 替换已移除，故不再 mock
+ * `~/lib/comfyui/client` 的 listModels）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type * as AppRuntimeLogModule from "~/lib/log/app-runtime-log";
@@ -65,10 +65,7 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 const createCaller = createCallerFactory(generateRouter);
 const tdb = getTestDb();
 
-const CUSTOM_GRAPH = {
-  "1": { class_type: "CLIPTextEncode", inputs: { text: "seed text" } },
-  "2": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } },
-};
+const RAW_WF = { nodes: [{ id: "1", type: "KSampler" }] };
 
 beforeEach(() => {
   tdb.$reset();
@@ -86,8 +83,7 @@ describe("generate.generate（工作流库工作流）", () => {
       userId: "user-a",
       name: "库生图",
       taskType: "T2I",
-      graph: CUSTOM_GRAPH,
-      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+      rawJson: RAW_WF,
     });
     const res = await createCaller(makeCtx()).generate({
       workflow: "wf-lib",
@@ -113,13 +109,13 @@ describe("generate.generate（工作流库工作流）", () => {
       overrides?: unknown;
     };
     expect(job.taskId).toBe(res.taskId);
-    expect(job.rawJson).toBeDefined();
+    expect(job.rawJson).toEqual(RAW_WF);
     expect(job.overrides).toEqual([
       { nodeId: "1", name: "text", value: "a cat" },
     ]);
   });
 
-  it("工作流不存在且无 canvasGraph → 抛 Workflow not found（不入队）", async () => {
+  it("工作流不存在 → 抛 Workflow not found（不入队）", async () => {
     await expect(
       createCaller(makeCtx()).generate({ workflow: "no-such-workflow" }),
     ).rejects.toThrow("Workflow not found");
@@ -140,61 +136,10 @@ describe("generate.generate（工作流库工作流）", () => {
   });
 });
 
-// ────────────────────────────── 自定义工作流路径 ──────────────────────────────
+// ────────────────────────────── 工作流库路径（RAW 原件） ──────────────────────────────
 
-describe("generate.generate（自定义工作流）", () => {
-  it("canvasGraph：经 buildCustomWorkflow 回填 prompt 并入队", async () => {
-    seedWorkflowTemplate(tdb, {
-      id: "wf-1",
-      userId: "user-a",
-      name: "My Custom",
-      taskType: "T2I",
-      graph: CUSTOM_GRAPH,
-    });
-    const res = await createCaller(makeCtx()).generate({
-      workflow: "wf-1",
-      prompt: "hello",
-      canvasGraph: CUSTOM_GRAPH,
-      paramMap: { positiveNode: "1", samplerNode: "2" },
-    });
-    const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
-    expect(row?.type).toBe("T2I");
-    expect(row?.workflowName).toBe("My Custom");
-    const job = enqueueMock.mock.calls[0]?.[0] as {
-      prompt: Record<string, { inputs: Record<string, unknown> }>;
-    };
-    expect(job.prompt["1"]?.inputs.text).toBe("hello");
-  });
-
-  it("canvasGraph + workflowInputs：同一份数组也进 overrides（执行点再兜一遍前端专有控件）", async () => {
-    seedWorkflowTemplate(tdb, {
-      id: "wf-ov",
-      userId: "user-a",
-      name: "My Custom",
-      taskType: "T2I",
-      graph: CUSTOM_GRAPH,
-    });
-    await createCaller(makeCtx()).generate({
-      workflow: "wf-ov",
-      prompt: "hello",
-      canvasGraph: CUSTOM_GRAPH,
-      paramMap: { positiveNode: "1", samplerNode: "2" },
-      workflowInputs: [{ nodeId: "1", name: "text", value: "hello" }],
-    });
-
-    const job = enqueueMock.mock.calls[0]?.[0] as {
-      overrides?: unknown;
-      prompt: Record<string, { inputs: Record<string, unknown> }>;
-    };
-    /* 结构注入（buildCustomWorkflow）与执行点注入（applyApiOverrides）吃同一份
-     * 数组 —— 后者负责 control_after_generate 这类「不入载荷」的前端控件。 */
-    expect(job.overrides).toEqual([
-      { nodeId: "1", name: "text", value: "hello" },
-    ]);
-    expect(job.prompt["1"]?.inputs.text).toBe("hello");
-  });
-
-  it("模板 rawJson（无 canvasGraph）→ comfy-cli 原始执行路径（rawJson + overrides 入队）", async () => {
+describe("generate.generate（RAW 原件执行路径）", () => {
+  it("模板 rawJson → comfy-cli 原始执行路径（rawJson + overrides 入队）", async () => {
     const rawJson = { nodes: [{ id: "1", type: "KSampler" }] };
     seedWorkflowTemplate(tdb, {
       id: "wf-raw",
@@ -219,21 +164,13 @@ describe("generate.generate（自定义工作流）", () => {
     expect(job.prompt).toBeUndefined();
   });
 
-  it("仅有 canvasGraph、无模板 → 仍可执行（默认 TXT2IMG / 以输入为名）", async () => {
-    const res = await createCaller(makeCtx()).generate({
-      workflow: "unknown-wf",
-      prompt: "hi",
-      canvasGraph: CUSTOM_GRAPH,
+  it("边界：模板 rawJson 为空 → 报「没有可执行内容」", async () => {
+    /* rawJson 列可空：库里没有原件的行（历史数据 / 手工插行）走不通。 */
+    seedWorkflowTemplate(tdb, {
+      id: "wf-empty",
+      userId: "user-a",
+      rawJson: null,
     });
-    const row = tdb.$tables.tasks.find((t) => t.id === res.taskId);
-    expect(row?.type).toBe("TXT2IMG");
-    expect(row?.workflowName).toBe("unknown-wf");
-    expect(row?.userId).toBe("user-a");
-  });
-
-  it("边界：模板 graph/rawJson 均为空且无 canvasGraph → 报「没有可执行内容」", async () => {
-    // graph 列 NOT NULL，「空图」在库里的形态就是空对象 {}
-    seedWorkflowTemplate(tdb, { id: "wf-empty", userId: "user-a", graph: {} });
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-empty" }),
     ).rejects.toThrow("工作流没有可执行内容");
@@ -244,13 +181,10 @@ describe("generate.generate（自定义工作流）", () => {
     seedWorkflowTemplate(tdb, {
       id: "wf-b",
       userId: "user-b",
-      graph: CUSTOM_GRAPH,
+      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
     });
     await expect(
-      createCaller(makeCtx()).generate({
-        workflow: "wf-b",
-        canvasGraph: undefined,
-      }),
+      createCaller(makeCtx()).generate({ workflow: "wf-b" }),
     ).rejects.toThrow("Workflow not found");
     await expect(
       createCaller(makeCtx()).generate({ workflow: "wf-missing" }),

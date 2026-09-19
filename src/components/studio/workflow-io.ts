@@ -559,8 +559,8 @@ export function mergeRefreshedDefaults(
 }
 
 /**
- * 把扁平的 `{ ioKey: value }` 映射转成 /api/generate → buildCustomWorkflow
- * 消费的连线载荷，即显式的 (nodeId, name, value) 三元组。
+ * 把扁平的 `{ ioKey: value }` 映射转成 /api/generate 消费的连线载荷，即显式的
+ * (nodeId, name, value) 三元组 —— 执行点据此把值落到工作流原件上。
  * 键会重新对照实时的 IO 映射解析一次，
  * 改过名或被删掉的 pin 永远漏不过去。
  */

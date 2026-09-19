@@ -532,7 +532,7 @@ export function inferInputTypeByName(name: string): string {
  *  的就是多行」会让 `prompt_width_of_thing` 这类名字把单行输入升级成 textarea，
  *  也会让改了名的提示词框掉回单行（用户口径：「不要用名字判断，看类型声明」）。
  *
- *  唯一保留的非声明判据是**当前值长度**：ComfyUI 未启动 / 纯 API 导入时读不到
+ *  唯一保留的非声明判据是**当前值长度**：ComfyUI 未启动时读不到
  *  object_info，此时长文本仍是可靠信号（它不是名字，是数据）。阈值与表单侧
  *  `controlForEntry` 的 > 40 一致，两条路径据此收敛。
  *

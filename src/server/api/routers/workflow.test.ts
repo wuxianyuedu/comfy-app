@@ -72,13 +72,16 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 const createCaller = createCallerFactory(workflowRouter);
 const tdb = getTestDb();
 
-const API_GRAPH = {
-  "1": {
-    class_type: "CheckpointLoaderSimple",
-    inputs: { ckpt_name: "a.safetensors" },
-  },
-  "2": { class_type: "CLIPTextEncode", inputs: { text: "hello" } },
-  "3": { class_type: "KSampler", inputs: { seed: 1, steps: 4 } },
+/** 一份最小的 ComfyUI 原始工作流（RAW / LiteGraph）—— 唯一支持的导入形态。 */
+const RAW_WF = {
+  last_node_id: 3,
+  last_link_id: 0,
+  nodes: [
+    { id: 1, type: "CheckpointLoaderSimple", pos: [10, 20] },
+    { id: 2, type: "CLIPTextEncode", pos: [30, 40] },
+    { id: 3, type: "KSampler", pos: [50, 60] },
+  ],
+  links: [],
 };
 
 beforeEach(() => {
@@ -99,25 +102,24 @@ describe("workflow.list", () => {
     expect(res.localRoots).toBeNull();
   });
 
-  it("按用户隔离返回并完成 enrichment（hasApi/hasRaw/usable/format/typeLabel/modelTags）", async () => {
+  it("按用户隔离返回并完成 enrichment（hasRaw/usable/typeLabel/modelTags）", async () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
     seedUser(tdb, { id: "user-b", email: "b@test.dev" });
-    const rawOnly = seedWorkflowTemplate(tdb, {
+    const withRaw = seedWorkflowTemplate(tdb, {
       id: "wf-raw",
       userId: "user-a",
       name: "Raw One",
       taskType: "T2I",
       rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
-      graph: null,
+      modelTags: [{ id: "tag-1", userId: "user-a", name: "SDXL" }],
       createdAt: new Date(1000),
     });
-    const apiOnly = seedWorkflowTemplate(tdb, {
-      id: "wf-api",
+    const noRaw = seedWorkflowTemplate(tdb, {
+      id: "wf-empty",
       userId: "user-a",
-      name: "Api One",
+      name: "Empty One",
       taskType: "T2I",
-      graph: API_GRAPH,
-      modelTags: [{ id: "tag-1", userId: "user-a", name: "SDXL" }],
+      rawJson: null,
       createdAt: new Date(2000),
     });
     // 他人工作流不得出现
@@ -129,27 +131,20 @@ describe("workflow.list", () => {
 
     const res = await createCaller(makeCtx()).list();
 
-    expect(res.workflows.map((w) => w.id)).toEqual(["wf-api", "wf-raw"]); // createdAt desc
-    const apiRow = res.workflows[0]!;
-    expect(apiRow.source).toBe("online");
-    expect(apiRow.hasApi).toBe(true);
-    expect(apiRow.hasRaw).toBe(false);
-    expect(apiRow.usable).toBe(true);
-    expect(apiRow.format).toBe("api");
-    expect(apiRow.apiSource).toBeNull();
-    expect(apiRow.modelTags).toEqual(["SDXL"]);
-    expect(apiRow.sourceRoot).toBeUndefined();
-    /* 只有 RAW（graph 为空）**照样可执行** —— raw 与 api 地位同等，RAW 由
-     *  comfy-cli 直接吃。此前这里断言 usable=false（把「没有 API 图」当成了
-     *  「不能跑」），会把纯 RAW 的工作流在卡片上标成不可执行。 */
+    expect(res.workflows.map((w) => w.id)).toEqual(["wf-empty", "wf-raw"]); // createdAt desc
+    const emptyRow = res.workflows[0]!;
+    expect(emptyRow.source).toBe("online");
+    expect(emptyRow.sourceRoot).toBeUndefined();
+    /* 没有 RAW 原件 → 不可执行（库里唯一可执行的形态就是 RAW 原件）。 */
+    expect(emptyRow.hasRaw).toBe(false);
+    expect(emptyRow.usable).toBe(false);
+    expect(emptyRow.id).toBe(noRaw.id);
+
     const rawRow = res.workflows[1]!;
-    expect(rawRow.hasApi).toBe(false);
     expect(rawRow.hasRaw).toBe(true);
     expect(rawRow.usable).toBe(true);
-    expect(rawRow.format).toBe("raw");
-    expect(rawRow.apiSource).toBeNull();
-    expect(rawRow.id).toBe(rawOnly.id);
-    expect(apiRow.id).toBe(apiOnly.id);
+    expect(rawRow.modelTags).toEqual(["SDXL"]);
+    expect(rawRow.id).toBe(withRaw.id);
   });
 
   it("type 过滤命中任务类型", async () => {
@@ -208,21 +203,27 @@ describe("workflow.create", () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });
   });
 
-  it("API graph 导入：默认名、detectParamMap、落库", async () => {
-    const res = await createCaller(makeCtx()).create({ graph: API_GRAPH });
+  it("RAW 原件导入：默认名、坐标与原件一起落库", async () => {
+    const res = await createCaller(makeCtx()).create({ raw: RAW_WF });
     expect(res.name).toBe("未命名工作流");
-    expect(res.format).toBe("api");
-    expect(res.hasPositions).toBe(false);
+    expect(res.hasPositions).toBe(true);
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === res.id);
     expect(row).toBeDefined();
     expect(row?.userId).toBe("user-a");
-    expect(row?.graph).toEqual(API_GRAPH);
+    expect(row?.rawJson).toEqual(RAW_WF);
+    expect(row?.positions).toEqual({
+      "1": [10, 20],
+      "2": [30, 40],
+      "3": [50, 60],
+    });
   });
 
-  it("显式 format=api 但节点缺 class_type → BAD_REQUEST", async () => {
+  it("API 格式导入不受支持 → BAD_REQUEST（本应用只吃原始工作流格式）", async () => {
     const caller = createCaller(makeCtx());
     await expect(
-      caller.create({ format: "api", graph: { "1": { inputs: {} } } }),
+      caller.create({
+        raw: { "1": { class_type: "KSampler", inputs: {} } },
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
@@ -232,42 +233,22 @@ describe("workflow.create", () => {
     });
   });
 
-  it("无法识别的格式 → BAD_REQUEST", async () => {
+  it("nodes 为空数组 → BAD_REQUEST", async () => {
     await expect(
-      createCaller(makeCtx()).create({ graph: { foo: "bar" } }),
+      createCaller(makeCtx()).create({ raw: { nodes: [] } }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("raw 格式：原件入库、不转 API 图，坐标与 rawJson 一起留下", async () => {
-    /* RAW 与 API 两种格式地位同等：RAW 由 comfy-cli 直接执行（它按节点类定义做
-     * 权威转换），导入时**不做格式互转** —— 无 ComfyUI 可达时的启发式转换结果
-     * 本身就是猜的，存进 `graph` 只会让画布与运行都跑一份错图。 */
-    const raw = { nodes: [{ id: 1, type: "KSampler", pos: [10, 20] }] };
-    const res = await createCaller(makeCtx()).create({
-      raw,
-      name: "Raw Import",
-    });
-    expect(res.format).toBe("raw");
-    expect(res.hasPositions).toBe(true);
-    const row = tdb.$tables.workflowTemplates.find((r) => r.id === res.id);
-    expect(row?.rawJson).toEqual(raw);
-    /* graph 列 NOT NULL，但没有可写的内容 → 落空对象（= 没有 API 图）。 */
-    expect(row?.graph).toEqual({});
-    expect(row?.positions).toEqual({ "1": [10, 20] });
   });
 
   it("本地文件导入：成功路径（名称回退为文件名）", async () => {
     vi.mocked(importFromLocalPath).mockResolvedValueOnce({
       taskType: "T2I",
-      apiGraph: API_GRAPH,
-      paramMap: { positiveNode: "2" },
-      rawJson: null,
+      rawJson: RAW_WF,
       positions: null,
       sourcePath: "C:/wf/my-flow.json",
       sourceChecksum: "abc123",
       sourceMtime: 1234,
       warnings: [],
-      format: "api",
+      format: "raw",
     });
     const res = await createCaller(makeCtx()).create({
       sourcePath: "C:/wf/my-flow.json",
@@ -291,7 +272,7 @@ describe("workflow.create", () => {
     await expect(
       createCaller(makeCtx()).create({
         name: "x".repeat(201),
-        graph: API_GRAPH,
+        raw: RAW_WF,
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
@@ -480,16 +461,6 @@ describe("workflow.update", () => {
     )!;
     expect(row.positions).toBeNull();
   });
-
-  it("upgradeFromApi 非 API 格式 → BAD_REQUEST", async () => {
-    seedWorkflowTemplate(tdb, { id: "wf-1", userId: "user-a" });
-    await expect(
-      createCaller(makeCtx()).update({
-        id: "wf-1",
-        upgradeFromApi: { nodes: [] },
-      }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
 });
 
 // ──────────────────────────────────── delete ────────────────────────────────────
@@ -549,9 +520,8 @@ describe("workflow.resync", () => {
   it("重新导入成功 → 更新模板并返回 { updated: true, template }", async () => {
     vi.mocked(reimportFromSource).mockResolvedValueOnce({
       update: {
-        graph: API_GRAPH,
-        rawJson: { nodes: [] },
-        paramMap: { positiveNode: "2" },
+        rawJson: RAW_WF,
+        paramMap: null,
         positions: { "1": [3, 4] },
         sourceMtime: 200,
         sourceChecksum: "chk-2",
@@ -563,7 +533,7 @@ describe("workflow.resync", () => {
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")!;
     expect(row.sourceChecksum).toBe("chk-2");
     expect(row.sourceMtime).toBe(200);
-    expect(row.graph).toEqual(API_GRAPH);
+    expect(row.rawJson).toEqual(RAW_WF);
     expect(reimportFromSource).toHaveBeenCalledWith(
       expect.objectContaining({
         sourcePath: "C:/wf/a.json",

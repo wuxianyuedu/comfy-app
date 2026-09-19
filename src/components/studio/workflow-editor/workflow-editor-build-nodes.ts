@@ -46,7 +46,7 @@ import {
   GROUP_RAIL_COLOR,
 } from "./WorkflowEditorNodes";
 
-/** `WorkflowDetail.graph` 的一个条目（ComfyUI 的 API 格式图）。shared 的
+/** `WorkflowDetail.graph` 的一个条目（从工作流原件派生的节点条目）。shared 的
  *  detail 类型把它声明成 `graph: Record<string, any>`；这里在不改共享类型的
  * 前提下，把本文件这两处取用收窄。 */
 type GraphEntry = { inputs?: WorkflowNodeData["inputs"] };
@@ -477,8 +477,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
         const x = Number(pin.pos[0]) || 0;
         const y = Number(pin.pos[1]) || 0;
-        /* (0,0) 一律当作「没提供」—— 不带 UI 位置的工作流（纯 API 导入）
-         *  就是这个形态。回落到按包围盒锚定的栏杆，
+        /* (0,0) 一律当作「没提供」—— 原件里没有该 pin 的位置时就是这个形态。
+         *  回落到按包围盒锚定的栏杆，
          *  总好过把所有 pin 都堆在画布原点。 */
         if (x !== 0 || y !== 0) return [x, y];
       }
@@ -605,8 +605,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
    *  Guard against an empty `{}` (which a "重置布局" (reset layout) can
    *  （空对象是 truthy）—— 没有这道守卫，每个节点都会落到
    *  `{padX, padY}` 默认值上、全部堆在原点。有了守卫，
-   *  空 → 视为「没有位置」→ 走 Kahn 自动布局，
-   *  也就是纯 API 工作流本来的行为。
+   *  空 → 视为「没有位置」→ 走 Kahn 自动布局。
    *
    *  同时防**部分位置**（数量少于 realNodes.length）。这个工作流可能处于
    *  「用户只手动摆了两个节点」的状态（例如以 JSON 导入后、打开编辑器之前

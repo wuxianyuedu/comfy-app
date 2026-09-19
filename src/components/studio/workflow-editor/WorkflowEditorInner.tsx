@@ -330,16 +330,13 @@ function WorkflowEditorBody({
     detailRef.current = detail;
   }, [detail]);
 
-  /* 「查看源文件」要展示**磁盘上的原始 JSON**，而不是 /prompt 用的
-   * 可执行图（`detail.graph`）—— 用户点这个按钮是想核对 ComfyUI 保存的源文件
-   * （nodes[] / links[] / widgets_values）。所以这里取 `detail.rawJson`；
-   * 只有纯 API 导入（rawJson 为 null）才回退到 graph，并标记 isApiFallback
-   * 让弹窗如实说明。sub 视图同理。 */
+  /* 「查看源文件」要展示**磁盘上的原始 JSON**，而不是派生的可执行视图
+   *  —— 用户点这个按钮是想核对 ComfyUI 保存的源文件（nodes[] / links[] /
+   *  widgets_values）。所以这里取 `detail.rawJson`。sub 视图同理。 */
   const sourceModalData = useMemo<{
     name: string;
     source: unknown;
     isSubgraph: boolean;
-    isApiFallback: boolean;
   } | null>(() => {
     if (!detail) return null;
     const isSubgraphView = subgraphStack.length > 0;
@@ -365,9 +362,8 @@ function WorkflowEditorBody({
     })();
     return {
       name: detail.name ?? "工作流",
-      source: raw ?? detail.graph,
+      source: raw,
       isSubgraph: isSubgraphView,
-      isApiFallback: raw == null,
     };
   }, [detail, subgraphStack.length, subgraphRawContext]);
 

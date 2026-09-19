@@ -16,7 +16,6 @@
  */
 import { TRPCError } from "@trpc/server";
 import { workflowTemplateRepository } from "~/lib/core/repository";
-import { detectParamMap } from "~/lib/comfyui/workflow";
 import {
   asRawWorkflow,
   asRecord,
@@ -46,9 +45,9 @@ import {
 } from "~/lib/comfyui/workflow-detail-raw";
 import {
   hasExecutableWorkflow,
-  hasGraphContent,
   hasRawContent,
 } from "~/lib/comfyui/execution-shape";
+import { buildRawViewGraph } from "~/lib/comfyui/raw-view-graph";
 import {
   enrichWorkflowIO,
   type WorkflowIOEntry,
@@ -117,7 +116,7 @@ export interface WorkflowDetailFull {
   availableModes?: string[];
   defaultMode?: string | null;
   graph: Record<string, ApiWorkflowNode>;
-  /** 导入时的原始 RAW（UI 格式）JSON；纯 API 导入时为 null。 */
+  /** 导入时的原始 RAW（UI 格式）JSON。 */
   rawJson?: unknown;
   nodes: DetailNodeView[];
   /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
@@ -129,10 +128,8 @@ export interface WorkflowDetailFull {
   notes: WorkflowDetailNote[];
   rawNodes: RawNodeMeta[];
   format: string;
-  hasApi?: boolean;
   hasRaw?: boolean;
   usable?: boolean;
-  apiSource?: string | null;
   sourcePath?: string | null;
   sourceChanged?: boolean;
   sourceMissing?: boolean;
@@ -184,9 +181,8 @@ async function buildWorkflowDetailJson(input: {
     sourceChanged,
     sourceMissing,
   } = input;
-  /* 存库 graph 恒为 API 格式对象（Json 列）；rawJson 收窄为 RawWorkflow 视图
-   * （根不是普通对象时为 null，下游均有守卫，路径与旧 any 代码等价）。 */
-  const graph = tpl.graph as Record<string, ApiWorkflowNode>;
+  /* rawJson 收窄为 RawWorkflow 视图（根不是普通对象时为 null，下游均有守卫，
+   * 路径与旧 any 代码等价）。 */
   const raw = asRawWorkflow(tpl.rawJson);
 
   /* 算出**生效**的节点位置。
@@ -204,8 +200,8 @@ async function buildWorkflowDetailJson(input: {
    *      位置、剩下 112 个全堆在 (padX, padY) 默认值上 —— 视觉上就是坏的，
    *      也与 ComfyUI 不一致。从 rawJson 补齐空隙，每个节点才落在 ComfyUI
    *      摆放的位置上。
-   *   2) 纯 API 导入（没有 rawJson）→ 背景层是 {} → 前景层胜出 →
-   *      客户端回落到 Kahn 自动布局。这种情况的行为与之前一致。
+   *   2) 没有 rawJson（异常数据）→ 背景层是 {} → 前景层胜出 →
+   *      客户端回落到 Kahn 自动布局。
    *   3) 不对应任何图节点的陈旧键（例如子图视图用 merge:true PATCH 时漏进来的
    *      `grp:bpin:inputs`）无害：渲染器只按图节点 id 查位置，
    *      未知键会被静默忽略。
@@ -236,70 +232,69 @@ async function buildWorkflowDetailJson(input: {
 
   /* 稀疏的原始节点元数据 —— 只够画布编辑器渲染 OUTPUT 端口条、
    * 以及喂给子图 UI 节点（它们需要 widget_values 给字段打标签）。
-   * 这里**不**下发完整的原始图：保存过的 graph 与 positions 已经在 detail 上了。 */
+   * 这里**不**下发完整的原始图：保存过的 positions 已经在 detail 上了。 */
   const rawNodeMeta = buildRawNodeMeta(raw);
 
-  const nodes: DetailNodeView[] = Object.entries(graph).map(([nodeId, n]) => {
-    // ComfyUI 的导出形态不一：新快照用 `class_type`，旧的与部分 rgthree-comfy
-    // 导出只有 `type`。回落读 `type`，下面那句「是否为子图封装节点」的判断才能
-    // 认出两个字段里任一处的 UUID 类名 —— 少了这道回落，每个节点都会被渲染成
-    // 普通的 WorkflowNode，子图封装节点会把 10+ 行 IO **内联摊开**，
-    // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
-    // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
-    //  `a || b` ≡ `a ? a : b`，空串同样回退。）
-    const classType: string = n.class_type
-      ? n.class_type
-      : n.type
-        ? (n.type as string)
-        : "?";
-    const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
-    /* 子图封装节点（class_type === UUID）的显示名取自
-     *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套
-     *  查找方式（子图的键可能是 UUID，也可能是它内部的 `.id` 字段）。
-     *  名字缺失时回落到既有的空字符串哨兵 —— 那是最后的兜底标签，
-     *  客户端 friendlyNodeTitle() 随后会渲染成「子工作流」——
-     *  也就是最后的兜底标签，与改动前的行为一致。 */
-    let resolvedTitle: string | undefined;
-    if (isUuidClass && raw?.definitions?.subgraphs) {
-      const subs = raw.definitions.subgraphs;
-      let def = subs[classType];
-      if (!def) {
-        const matchKey = Object.keys(subs).find(
-          (key) => subs[key]?.id === classType,
-        );
-        if (matchKey) def = subs[matchKey];
+  /* 派生视图图（保留 subgraph wrapper）就是 `detail.nodes` / `detail.graph`
+   * 的来源：`rawJson` 是唯一的存库原件。 */
+  const viewGraph = buildRawViewGraph(raw ?? { nodes: [] });
+  const nodes: DetailNodeView[] = Object.entries(viewGraph).map(
+    ([nodeId, n]) => {
+      // ComfyUI 的导出形态不一：新快照用 `class_type`，旧的与部分 rgthree-comfy
+      // 导出只有 `type`。回落读 `type`，下面那句「是否为子图封装节点」的判断才能
+      // 认出两个字段里任一处的 UUID 类名 —— 少了这道回落，每个节点都会被渲染成
+      // 普通的 WorkflowNode，子图封装节点会把 10+ 行 IO **内联摊开**，
+      // 而不是被认成 `is_subgraph: true` 去用紧凑的 WorkflowSubgraphNode。
+      // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
+      //  `a || b` ≡ `a ? a : b`，空串同样回退。）
+      const classType: string = n.class_type
+        ? n.class_type
+        : n.type
+          ? (n.type as string)
+          : "?";
+      const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
+      /* 子图封装节点（class_type === UUID）的显示名取自
+       *  raw.definitions.subgraphs[uid].name。与子图路由的 `sub` 解析器同一套
+       *  查找方式（子图的键可能是 UUID，也可能是它内部的 `.id` 字段）。
+       *  名字缺失时回落到既有的空字符串哨兵 —— 那是最后的兜底标签，
+       *  客户端 friendlyNodeTitle() 随后会渲染成「子工作流」——
+       *  也就是最后的兜底标签，与改动前的行为一致。 */
+      let resolvedTitle: string | undefined;
+      if (isUuidClass && raw?.definitions?.subgraphs) {
+        const subs = raw.definitions.subgraphs;
+        let def = subs[classType];
+        if (!def) {
+          const matchKey = Object.keys(subs).find(
+            (key) => subs[key]?.id === classType,
+          );
+          if (matchKey) def = subs[matchKey];
+        }
+        if (def && typeof def.name === "string" && def.name.trim()) {
+          resolvedTitle = def.name.trim();
+        }
       }
-      if (def && typeof def.name === "string" && def.name.trim()) {
-        resolvedTitle = def.name.trim();
-      }
-    }
-    return {
-      id: nodeId,
-      class_type: classType,
-      title:
-        resolvedTitle ??
-        n._meta?.title ??
-        (isUuidClass ? "" : classType) ??
-        nodeId,
-      is_subgraph: isUuidClass,
-      raw_inputs: rawInputsById[nodeId] ?? [],
-      /* 该节点的 ComfyUI 精确外框尺寸（[w, h]）。纯 API 导入没带 rawJson 尺寸
-       *  时为 undefined —— 客户端回落到按内容驱动的 min/max 宽度布局。 */
-      size: sizeById[nodeId],
-    };
-  });
+      return {
+        id: nodeId,
+        class_type: classType,
+        title:
+          resolvedTitle ??
+          n._meta?.title ??
+          (isUuidClass ? "" : classType) ??
+          nodeId,
+        is_subgraph: isUuidClass,
+        raw_inputs: rawInputsById[nodeId] ?? [],
+        /* 该节点的 ComfyUI 精确外框尺寸（[w, h]）。rawJson 里没有该节点时为
+         *  undefined —— 客户端回落到按内容驱动的 min/max 宽度布局。 */
+        size: sizeById[nodeId],
+      };
+    },
+  );
 
-  /* raw 视图专用数据包。
-   * 存库的 `graph`（即 `detail.nodes` 的来源）在某些工作流里被「拆平」成了
-   * `N:xx` 节点（例如某工作流的 flat form，而其 `_t2i` 兄弟保留 wrapper）。
-   * 这种情况下画布 RAW 布局会显示 17 个被炸开的节点，而用户期望的是 5 个
-   * 原始 ComfyUI 节点（含 wrapper 紫色整卡）。这里直接从 rawJson 再派生一份
-   * `rawView`（保留 subgraph wrapper），让 RAW 布局与 wrapper-form 兄弟、与
-   * ComfyUI 自身画布一致。fallbackRawToApi 走离线启发式、不发网络请求。 */
+  /* raw 视图专用数据包：与 `detail.nodes` 同源（都从 rawJson 派生），保留
+   * subgraph wrapper 整卡，供 RAW 布局与 ComfyUI 自身画布对齐。 */
   const rawView = buildRawView(raw, rawInputsById, sizeById);
 
-  const paramMap =
-    (tpl.paramMap as Record<string, string>) ?? detectParamMap(graph);
+  const paramMap = (tpl.paramMap as Record<string, string>) ?? {};
   // 用户挑出来的暴露集合：哪些节点参数 / widget / 输出被暴露成工作流的
   // 对外输入输出。（ioKey 是 `${nodeId}::${kind}::${name}`；
   // 见画布编辑器的 IO 编辑模式。）
@@ -322,7 +317,7 @@ async function buildWorkflowDetailJson(input: {
    * 下发一份自描述记录：
    *   type          ComfyUI 数据类型 —— "STRING" | "INT" | "FLOAT" |
    *                 "BOOLEAN" | "IMAGE" | "LATENT" 等（未知时为 "*"）
-   *   defaultValue  当前 widget 值（或 API 图里的字面量），
+   *   defaultValue  当前 widget 值（API 图里的字面量），
    *                 动态表单据此预填，而不是显示空白
    *   label         最优显示标签（label > localized > name）
    *   nodeTitle     所属节点的标题，用来区分不同节点上的同名 pin
@@ -339,7 +334,7 @@ async function buildWorkflowDetailJson(input: {
      *  顶层 rawInputsById 查不到 —— 没有它类型/显示名都会退化（ISSUE #349）。 */
     innerInputsById: buildInnerNodeInputs(raw),
     rawNodeMeta,
-    graph,
+    graph: viewGraph,
     nodeTitleById,
     nodeTypeById: buildNodeTypeMap(raw),
     comboOptionsForClassField,
@@ -405,16 +400,11 @@ async function buildWorkflowDetailJson(input: {
     });
   }
 
-  /* 两种格式地位同等：`graph`（API）与 `rawJson`（工作流 / RAW）都能执行 ——
-   * RAW 由 comfy-cli 直接吃（它按节点类定义做权威转换），不需要先转成 API 图。
-   * 因此这里只如实报「两列各自有没有内容」，可执行性是两者的并集，没有
-   * 「必须有 API 图」这回事（判据的唯一出处 `hasExecutableWorkflow`）。 */
-  const detailHasApi = hasGraphContent(graph);
+  /* 执行载荷恒为 RAW 原件 —— comfy-cli 直接吃它（按节点类定义做权威 UI→API
+   * 转换），所以可执行性就是「rawJson 列有没有内容」（判据的唯一出处
+   * `hasExecutableWorkflow`）。 */
   const detailHasRaw = hasRawContent(raw);
-  const detailUsable = hasExecutableWorkflow({
-    graph,
-    rawJson: tpl.rawJson,
-  });
+  const detailUsable = hasExecutableWorkflow({ rawJson: tpl.rawJson });
   return JSON.stringify({
     id: tpl.id,
     name: tpl.name,
@@ -424,16 +414,14 @@ async function buildWorkflowDetailJson(input: {
      *  保持同步）。 */
     modes: parseModesJson(tpl.modes),
     defaultMode: tpl.defaultMode ?? null,
-    graph,
+    graph: viewGraph,
     /** 导入时的原始 RAW（UI 格式）JSON —— 透传出去，客户端便能按原生形态
-     *  查看 / 重新下载源。纯 API 导入（磁盘上没有 rawJson）时为 null。 */
+     *  查看 / 重新下载源。 */
     rawJson: raw,
     nodes,
     /** RAW 视图专用节点/位置/图（保留 subgraph wrapper）。
-     *  flat form 等工作流的存库 graph 被拆平成 N:xx，RAW 布局若只用 `nodes`
-     *  会显示炸开的 17 节点；rawView 从 rawJson 重新派生，RAW 视图据此渲染
-     *  原始的 5 节点（含 wrapper 紫色整卡），与 wrapper-form 兄弟一致。
-     *  null 表示该工作流无 rawJson（API-only 导入）。 */
+     *  rawView 从 rawJson 派生，RAW 视图据此渲染原始节点（含 wrapper 紫色整卡）。
+     *  null 表示该工作流无 rawJson。 */
     rawView,
     paramMap,
     /* 把 enrichWorkflowIO 下发的宽类型条目（direction / kind 各为独立宽联合）
@@ -456,14 +444,9 @@ async function buildWorkflowDetailJson(input: {
     groups,
     notes,
     rawNodes: rawNodeMeta,
-    format: detailHasRaw ? "raw" : "api",
-    hasApi: detailHasApi,
+    format: "raw",
     hasRaw: detailHasRaw,
     usable: detailUsable,
-    /** API 列从哪来（`user` = 用户导出 API 格式；`derived` = 早年导入时转出来的；
-     *  null = 没有 API 列）。**与可执行性无关** —— 只有 RAW 的工作流 apiSource
-     *  为 null，照样可执行。 */
-    apiSource: typeof tpl.apiSource === "string" ? tpl.apiSource : null,
     sourcePath,
     sourceChanged,
     sourceMissing,
@@ -551,7 +534,6 @@ export async function buildWorkflowDetailFull(
       cacheDel(cacheKey); // rebuild so the missing flag reaches the client
     } else if (re.update) {
       await workflowTemplateRepository.update(id, {
-        graph: re.update.graph,
         rawJson: re.update.rawJson,
         positions: re.update.positions,
         paramMap: re.update.paramMap,
@@ -587,7 +569,6 @@ export async function buildWorkflowDetailFull(
       workflowIO: true,
       rawJson: true,
       positions: true,
-      apiSource: true,
     },
   );
   if (!tpl)

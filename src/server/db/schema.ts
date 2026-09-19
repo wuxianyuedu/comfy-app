@@ -295,7 +295,6 @@ export const workflowTemplate = sqliteTable(
     taskType: text("taskType").notNull().default("TXT2IMG"),
     modes: text("modes").notNull().default("[]"),
     defaultMode: text("defaultMode"),
-    graph: text("graph", { mode: "json" }).notNull(),
     paramMap: text("paramMap", { mode: "json" }),
     workflowIO: text("workflowIO", { mode: "json" }),
     rawJson: text("rawJson", { mode: "json" }),
@@ -303,7 +302,6 @@ export const workflowTemplate = sqliteTable(
     sourcePath: text("sourcePath"),
     sourceChecksum: text("sourceChecksum"),
     sourceMtime: integer("sourceMtime"),
-    apiSource: text("apiSource"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
