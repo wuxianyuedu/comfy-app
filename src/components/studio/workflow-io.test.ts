@@ -9,10 +9,12 @@ import {
   inferGroups,
   parseRatioFromLabel,
   typeDisplay,
+  defaultInputValues,
   type WorkflowIOMap,
   type WorkflowIOEntry,
   type EnrichedWidget,
 } from "./workflow-io";
+import { persistEnrichedWorkflowIO } from "~/lib/comfyui/workflow-detail-io";
 
 /* ComfyUI 离线时保存的 workflowIO 不带 type，width/height 因此被
  * 判成 text，inferDimensionGroup 从不命中，「比例 + 清晰度」选择器整体消失。
@@ -432,5 +434,75 @@ describe("ioLabel — 撞名判定不认机器别名（ISSUE #349）", () => {
       control: "int",
     } as EnrichedWidget;
     expect(ioLabel(seed, [seed, homonym])).toBe("Seed");
+  });
+});
+
+describe("controlForEntry — 与分组判据同口径（fix 2）", () => {
+  it("wrapper 槽位 value_1 + 中文标签「宽度」无 type 也能推断 int", () => {
+    /* 这条正是「DimensionControl 消失」回归的中文侧：分组判据 isDimWidth 认
+     * 「宽度」，控件推断原先只认英文整词 → 这里必须和分组同口径，否则
+     * 控件认不出 int → 组合选择器条件不满足 → 不出现。 */
+    expect(controlForEntry(pin("value_1", "宽度"))).toBe("int");
+  });
+  it("wrapper 槽位 value_1 + 中文标签「高度」无 type 也能推断 int", () => {
+    expect(controlForEntry(pin("value_1", "高度"))).toBe("int");
+  });
+  it("宽高比中文标签「比例」无 type 走 text（有候选则 select）", () => {
+    expect(controlForEntry(pin("ratio", "比例"))).toBe("text");
+  });
+});
+
+describe("splitWorkflowIO — controlInferred 标记（fix 3）", () => {
+  it("无 type 的条目被标记为推断控件", () => {
+    const [w] = widgetsOf(pin("width", "宽度"));
+    expect(w!.control).toBe("int");
+    expect(w!.controlInferred).toBe(true);
+  });
+  it("声明了 type 的条目不是推断控件", () => {
+    const [w] = widgetsOf(pin("steps", "步数", "INT"));
+    expect(w!.control).toBe("int");
+    expect(w!.controlInferred).toBe(false);
+  });
+});
+
+describe("defaultInputValues — 推断出的数值控件不许造默认值（fix 1）", () => {
+  it("无 type 的数值控件不下发任何键（避免离线时静默下发猜出的数字）", () => {
+    const map: WorkflowIOMap = { "7::widget::width": pin("width", "宽度") };
+    const values = defaultInputValues(map);
+    expect(values).not.toHaveProperty("7::widget::width");
+  });
+  it("声明了 INT 的数值控件照旧给 numericBounds 默认值", () => {
+    const map: WorkflowIOMap = {
+      "7::widget::steps": pin("steps", "步数", "INT"),
+    };
+    const values = defaultInputValues(map);
+    expect(values["7::widget::steps"]).toBe(1); // numericBounds("steps").min
+  });
+  it("无 type 的文本控件仍给空串（供必填校验；payload 会过滤空串）", () => {
+    const map: WorkflowIOMap = { "7::widget::text": pin("text", "提示词") };
+    const values = defaultInputValues(map);
+    expect(values["7::widget::text"]).toBe("");
+  });
+});
+
+describe("persistEnrichedWorkflowIO — 保存时固化类型（fix 4）", () => {
+  it("用图内字面量补全缺失 type，并保留已声明的条目", () => {
+    const graph = { "7": { inputs: { seed: 42 } } };
+    const out = persistEnrichedWorkflowIO(graph, {
+      "7::widget::seed": pin("seed", "随机种"),
+      "7::widget::steps": pin("steps", "步数", "INT"),
+    });
+    expect(out["7::widget::seed"]?.type).toBe("INT");
+    expect(out["7::widget::seed"]?.defaultValue).toBe(42);
+    expect(out["7::widget::steps"]?.type).toBe("INT");
+  });
+  it("图内字符串值不替 COMBO/STRING 下结论（留待 GET 富化）", () => {
+    const graph = { "7": { inputs: { ckpt_name: "sd_xl.safetensors" } } };
+    const out = persistEnrichedWorkflowIO(graph, {
+      "7::widget::ckpt_name": pin("ckpt_name", "模型"),
+    });
+    // 字符串无法区分 STRING 与 COMBO，这里不写 type，让 GET 富化接管。
+    expect(out["7::widget::ckpt_name"]?.type).toBeUndefined();
+    expect(out["7::widget::ckpt_name"]?.defaultValue).toBe("sd_xl.safetensors");
   });
 });
