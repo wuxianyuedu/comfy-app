@@ -4,10 +4,9 @@ import { completeChat } from "~/lib/llm/browser";
 import { Icon } from "~/components/ui/icon";
 import type { LLMConfigView } from "~/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
-import { overlayClass } from "~/lib/full-screen-layer";
 import { errorMessage } from "~/lib/error-message";
 import { Button } from "~/components/ui/button";
-import { zClass } from "~/lib/shell/overlay-z";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 interface LLMContextValue {
   config: LLMConfigView | null;
@@ -207,138 +206,137 @@ function LLMSettingsModal({
     }
   }
 
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
+     手写 `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
-    <div
-      className={overlayClass(
-        "modal",
-        `${zClass("modal")} bg-canvas-deep dark:bg-canvas-deep grid place-items-center p-4 backdrop-blur-sm`,
-      )}
-      onClick={onClose}
-    >
-      <div
-        className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className="bg-transparent p-0 ring-0"
+        popupClassName="max-w-md"
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="u-title">模型选择</h3>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            className="text-muted-foreground hover:text-ink"
-            aria-label="关闭"
-          >
-            ✕
-          </Button>
-        </div>
+        <div className="border-border bg-surface w-full max-w-md rounded-2xl border p-5 shadow-2xl">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="u-title">模型选择</h3>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onClose}
+              className="text-muted-foreground hover:text-ink"
+              aria-label="关闭"
+            >
+              ✕
+            </Button>
+          </div>
 
-        <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
-          工坊按当前生效的模型调用全链路（剧本 → 角色卡 → 分镜 →
-          图片提示词）。需要增删模型、调温度等，请到
-          <Button
-            variant="link"
-            onClick={onClose}
-            className="mx-1 h-auto p-0 text-inherit underline underline-offset-2"
-          >
-            设置
-          </Button>
-          页配置。
-        </p>
+          <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
+            工坊按当前生效的模型调用全链路（剧本 → 角色卡 → 分镜 →
+            图片提示词）。需要增删模型、调温度等，请到
+            <Button
+              variant="link"
+              onClick={onClose}
+              className="mx-1 h-auto p-0 text-inherit underline underline-offset-2"
+            >
+              设置
+            </Button>
+            页配置。
+          </p>
 
-        {/* 提供方切换：本地 / 远程的启用从设置页挪到运行界面（与选模型同处） */}
-        <div className="mb-3">
-          <span className="text-ink/80 mb-1.5 block text-sm font-medium">
-            提供方
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            {(["local", "remote"] as const).map((p) => {
-              const active = provider === p;
-              return (
+          {/* 提供方切换：本地 / 远程的启用从设置页挪到运行界面（与选模型同处） */}
+          <div className="mb-3">
+            <span className="text-ink/80 mb-1.5 block text-sm font-medium">
+              提供方
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              {(["local", "remote"] as const).map((p) => {
+                const active = provider === p;
+                return (
+                  <Button
+                    key={p}
+                    variant="outline"
+                    onClick={() => setDraftProvider(p)}
+                    className={`h-auto rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      active
+                        ? "border-primary text-primary bg-primary/10"
+                        : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
+                    }`}
+                  >
+                    {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          {candidates.length > 0 ? (
+            <div className="space-y-1.5">
+              {candidates.map((name) => (
                 <Button
-                  key={p}
+                  key={name}
                   variant="outline"
-                  onClick={() => setDraftProvider(p)}
-                  className={`h-auto rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "border-primary text-primary bg-primary/10"
-                      : "border-border text-muted-foreground hover:bg-subtle hover:text-ink"
+                  onClick={() => setDraftModel(name)}
+                  className={`flex h-auto w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal transition-colors ${
+                    activeModel === name
+                      ? "border-primary bg-primary-soft text-primary"
+                      : "border-border text-muted-foreground hover:bg-subtle"
                   }`}
                 >
-                  {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                  <span
+                    className={`inline-block size-2 shrink-0 rounded-full ${
+                      activeModel === name ? "bg-primary" : "bg-surface-2"
+                    }`}
+                  />
+                  <span className="flex-1 truncate">{name}</span>
+                  {provider === "local" && (
+                    <span className="text-muted-foreground text-[10px]">
+                      本地
+                    </span>
+                  )}
                 </Button>
-              );
-            })}
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+              暂无候选模型 —— 请到「设置」页添加（本地 Ollama 需已拉取模型）。
+            </p>
+          )}
+
+          {msg && (
+            <p
+              className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+                msg.kind === "ok"
+                  ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
+                  : "bg-red-100 text-red-800 dark:text-red-300"
+              }`}
+            >
+              {msg.text}
+            </p>
+          )}
+
+          <div className="mt-4 flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleTest}
+              disabled={testing}
+              className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm"
+            >
+              {testing ? "测试中…" : "测试连接"}
+            </Button>
+            <Button
+              variant="primary-solid"
+              onClick={handleSave}
+              disabled={saving || (draftModel == null && draftProvider == null)}
+              className="h-auto flex-1 rounded-lg px-4 py-2 text-sm"
+            >
+              {saving
+                ? "保存中…"
+                : draftModel == null && draftProvider == null
+                  ? "使用当前配置"
+                  : "保存并生效"}
+            </Button>
           </div>
         </div>
-
-        {candidates.length > 0 ? (
-          <div className="space-y-1.5">
-            {candidates.map((name) => (
-              <Button
-                key={name}
-                variant="outline"
-                onClick={() => setDraftModel(name)}
-                className={`flex h-auto w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal transition-colors ${
-                  activeModel === name
-                    ? "border-primary bg-primary-soft text-primary"
-                    : "border-border text-muted-foreground hover:bg-subtle"
-                }`}
-              >
-                <span
-                  className={`inline-block size-2 shrink-0 rounded-full ${
-                    activeModel === name ? "bg-primary" : "bg-surface-2"
-                  }`}
-                />
-                <span className="flex-1 truncate">{name}</span>
-                {provider === "local" && (
-                  <span className="text-muted-foreground text-[10px]">
-                    本地
-                  </span>
-                )}
-              </Button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted-foreground rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-            暂无候选模型 —— 请到「设置」页添加（本地 Ollama 需已拉取模型）。
-          </p>
-        )}
-
-        {msg && (
-          <p
-            className={`mt-3 rounded-lg px-3 py-2 text-xs ${
-              msg.kind === "ok"
-                ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
-                : "bg-red-100 text-red-800 dark:text-red-300"
-            }`}
-          >
-            {msg.text}
-          </p>
-        )}
-
-        <div className="mt-4 flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={handleTest}
-            disabled={testing}
-            className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm"
-          >
-            {testing ? "测试中…" : "测试连接"}
-          </Button>
-          <Button
-            variant="primary-solid"
-            onClick={handleSave}
-            disabled={saving || (draftModel == null && draftProvider == null)}
-            className="h-auto flex-1 rounded-lg px-4 py-2 text-sm"
-          >
-            {saving
-              ? "保存中…"
-              : draftModel == null && draftProvider == null
-                ? "使用当前配置"
-                : "保存并生效"}
-          </Button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

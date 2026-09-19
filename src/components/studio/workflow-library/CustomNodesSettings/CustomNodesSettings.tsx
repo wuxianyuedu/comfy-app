@@ -4,9 +4,8 @@ import { useRef } from "react";
 import { useCustomNodesSettings } from "./hooks/use-custom-nodes-settings";
 import { NodesTab } from "./NodesTab";
 import { ParseConsole, ReportCards } from "./SettingsParts";
-import { overlayClass } from "~/lib/full-screen-layer";
 import { Button } from "~/components/ui/button";
-import { zClass } from "~/lib/shell/overlay-z";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 /** 自定义节点导入对话框。
  *
@@ -29,19 +28,18 @@ export function CustomNodesSettings() {
         </Button>
       </div>
 
-      {ctrl.open && (
-        <div
-          className={overlayClass(
-            "modal",
-            `${zClass("modal")} bg-canvas-deep grid place-items-center p-4`,
-          )}
-          onClick={() => ctrl.setOpen(false)}
+      {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘
+          遮罩 + `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */}
+      <Dialog open={ctrl.open} onOpenChange={(next) => ctrl.setOpen(next)}>
+        <DialogContent
+          showCloseButton={false}
+          className="bg-transparent p-0 ring-0"
+          popupClassName="max-w-3xl"
         >
           <div
             ref={dialogRef}
-            className="border-border bg-surface w-full max-w-3xl rounded-2xl border p-5"
-            onClick={(event) => event.stopPropagation()}
-            style={{ maxHeight: "92vh", overflowY: "auto" }}
+            className="border-border bg-surface w-full max-w-3xl overflow-y-auto rounded-2xl border p-5"
+            style={{ maxHeight: "92vh" }}
           >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-ink text-base font-semibold">
@@ -76,8 +74,8 @@ export function CustomNodesSettings() {
             {/* 按包的报告卡片 */}
             {ctrl.report && <ReportCards report={ctrl.report} />}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

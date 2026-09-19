@@ -1,14 +1,15 @@
 "use client";
 
 /** 从 WorkflowLibrary 的删除确认弹窗抽出。
- *  把 Escape 关闭的行为保留在弹窗本地：
- *  监听器只在弹窗挂载期间活跃。
+ *
+ *  此前这里自绘遮罩 + 手写 Esc 的 keydown 监听 + 手搓 danger 图标按钮排布 ——
+ *  而 `ui/confirm-dialog` 就是同一件事（圆角卡片、危险色调、确认/取消双按钮、
+ *  Esc / 点遮罩关闭、确认按钮自动聚焦）。两份实现曾经各自漂移：本文件承担
+ *  「遮罩点击在 `deleting` 期间被阻断」这一条语义，`ConfirmDialog` 则由
+ *  `pending` 把确认按钮置为 spinner 态。现在统一走 `ConfirmDialog`：
+ *  `pending={deleting}` 取代「点不动」的遮罩阻断，语义更准确。
  */
-import { useEffect } from "react";
-import { Trash2 } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 
 interface DeleteWorkflowModalProps {
   pendingDelete: { id: string; name: string } | null;
@@ -16,8 +17,6 @@ interface DeleteWorkflowModalProps {
   onConfirm: (id: string) => void;
   /** Escape / 取消按钮 — unconditional close. */
   onCancel: () => void;
-  /** 点击背板 —— `deleting` 期间被阻断。 */
-  onBackdropClick: () => void;
 }
 
 export function DeleteWorkflowModal({
@@ -25,75 +24,26 @@ export function DeleteWorkflowModal({
   deleting,
   onConfirm,
   onCancel,
-  onBackdropClick,
 }: DeleteWorkflowModalProps) {
-  // 按 Escape 关闭删除弹窗
-  //（与原生 <dialog> 元素的约定一致，好让键盘用户
-  // 不被困在弹窗里）。
-  useEffect(() => {
-    if (!pendingDelete) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      onCancel();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [pendingDelete, onCancel]);
-
-  if (!pendingDelete) return null;
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-modal-title"
-      onClick={() => !deleting && onBackdropClick()}
-      className={overlayClass(
-        "modal",
-        `${zClass("modal")} flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm`,
-      )}
-    >
-      <div
-        onClick={(event) => event.stopPropagation()}
-        className="bg-card w-full max-w-md rounded-2xl border border-red-500/30 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.6)]"
-      >
-        <div className="mb-3 flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-700 dark:text-red-300">
-            <Trash2 size={18} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3
-              id="delete-modal-title"
-              className="text-base font-semibold text-white"
-            >
-              删除工作流
-            </h3>
-            <p className="text-ink-soft mt-1 text-sm break-words">
-              确认删除「
-              <span className="text-ink-bright">{pendingDelete.name}</span>
-              」？此操作不可撤销。
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={onCancel}
-            disabled={deleting}
-            className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-lg px-3 py-1.5"
-          >
-            取消
-          </Button>
-          <Button
-            variant="danger-solid"
-            onClick={() => onConfirm(pendingDelete.id)}
-            disabled={deleting}
-            className="h-auto rounded-lg px-3 py-1.5"
-          >
-            {deleting ? "删除中…" : "确认删除"}
-          </Button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      /* 确认中不许关：与旧实现「`deleting` 期间遮罩点击被阻断」同义 ——
+         请求已经发出，中途撤掉弹窗会让结果无处落地。 */
+      onClose={() => {
+        if (!deleting) onCancel();
+      }}
+      danger
+      title="删除工作流"
+      description={
+        pendingDelete
+          ? `确认删除「${pendingDelete.name}」？此操作不可撤销。`
+          : ""
+      }
+      confirmLabel="确认删除"
+      cancelLabel="取消"
+      pending={deleting}
+      onConfirm={() => pendingDelete && onConfirm(pendingDelete.id)}
+    />
   );
 }

@@ -57,6 +57,19 @@
  *      `change`，看起来像上传坏了；③ 两个隐藏 input + 两个 ref + 两个 click 的
  *      样板在同一文件里复duplicated。
  *
+ *   P9 视图里再自绘一份「模态浮层外壳」（**硬闸**）—— `ui/dialog` 的
+ *      `Dialog` / `DialogContent`（居中卡片）或 `ui/sheet` 的 `SheetContent`
+ *      （抽屉）是唯一出口。此前 **16 个落点**各写一份 `overlayClass("modal", …)`
+ *      的容器 div，写法还分三派：① 外层带 `onClick` + 内层 `stopPropagation`
+ *      （多数）；② 把遮罩写成一个**兄弟 div** 单独接 `onClick`；③ 干脆不接关闭
+ *      （只能点自带的 ✕）。a11y 语义随之分叉：16 份里**只有 3 份**接了 Esc、
+ *      只有 3 份声明了 `role="dialog"` / `aria-modal`，焦点锁与归还**一份都没有**。
+ *
+ *      ⚠️ P2 数的是「有没有用 `createPortal`」，这批**一处 portal 都没有** ——
+ *      所以它在 P2 全库清零之后依然全部漏过。**判据要按形态设计，不是按 API**：
+ *      这里问的是「这个文件自己拼了一份模态外壳吗」，形态锚点取
+ *      「视图里出现 `overlayClass(`」（本项目顶层浮层定位的唯一出口）。
+ *
  *   P8 视图里再写一份「值不存在时显示 `—`」的判据（**硬闸**）——
  *      `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER` 是唯一
  *      出口。此前 31 处各写一遍，而「什么算不存在」判得都不一样：
@@ -198,6 +211,20 @@ const RULES = {
     count: (t) =>
       (stripComments(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
   },
+  P9: {
+    label:
+      "视图内自绘模态浮层（应使用 ui/dialog 的 Dialog/DialogContent 或 ui/sheet 的 SheetContent）",
+    /* 判据是「这个文件自己拼了一份模态外壳」，**不是**「有没有用 createPortal」
+       —— 这正是 P2 的盲区：16 个落点里一处 portal 都没写，它们把遮罩写成
+       一个普通 `<div className={overlayClass("modal", …)}>`。P2 数的是「有没有
+       用某个 API」，于是这批在 P2 全库清零之后依然一个都没被追上。
+
+       形态判据取 `overlayClass(` 这个调用：它是本项目「顶层浮层定位」的唯一出口
+       （`fixed top-title-bar …`，同时被 `check-title-bar-clearance.cjs` 认），
+       视图里出现它 = 这个文件在自绘浮层容器。`FullScreenLayer` 也是浮层，但它
+       由基元组件承担（`ui/` 目录整体豁免），调用处不出现这次调用。 */
+    count: (t) => (stripComments(t).match(/\boverlayClass\s*\(/g) || []).length,
+  },
   P4: {
     label:
       "视图内自写 ::-webkit-scrollbar 外观（应复用 globals.css 的 .custom-scrollbar / .soft-scrollbar）",
@@ -251,7 +278,7 @@ const RULES = {
 };
 
 /** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4 属此类）。 */
-const HARD_GATE_RULES = new Set(["P4", "P5", "P6", "P7", "P8"]);
+const HARD_GATE_RULES = new Set(["P4", "P5", "P6", "P7", "P8", "P9"]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -361,7 +388,7 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4/P5/P6/P7）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P9）。\n  " +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）。",
@@ -440,7 +467,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -451,7 +478,8 @@ function main() {
         "  自写 animate-spin → ui/page-loading、自绘滚动条 → globals.css 的 .custom-scrollbar / .soft-scrollbar、\n" +
         "  剪贴板 / Blob 下载 → ~/lib/browser-io 的 copyText / downloadText / downloadJson、\n" +
         "  隐藏文件选择框 → ~/components/ui/file-picker 的 useFilePicker / FilePickerButton、\n" +
-        "  「值不存在显示 —」→ ~/lib/display-value 的 displayValue / EMPTY_PLACEHOLDER。\n" +
+        "  「值不存在显示 —」→ ~/lib/display-value 的 displayValue / EMPTY_PLACEHOLDER、\n" +
+        "  自绘模态外壳 → ui/dialog 的 Dialog / DialogContent（居中卡片）或 ui/sheet 的 SheetContent（抽屉）。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);
