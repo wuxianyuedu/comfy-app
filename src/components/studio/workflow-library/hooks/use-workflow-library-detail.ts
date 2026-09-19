@@ -21,6 +21,7 @@ import {
   isTechnicalName,
   type WorkflowRow,
 } from "../workflow-library-config";
+import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
 export interface WorkflowLibraryDetailActions {
   use: () => void;
@@ -55,6 +56,20 @@ export interface WorkflowLibraryDetailController {
   workflow: WorkflowRow | null;
   activeTab: DetailTab;
   setActiveTab: (tab: DetailTab) => void;
+  /** **两个页签共用的当前模式**（画布节点卡片列与工坊封装都按它渲染）。
+   *
+   *  初值取工作流的默认模式（`resolveWorkflowMode`：defaultMode → modes[0] →
+   *  taskType）。详情页原来的口径是「每个页签各算一次当前模式」——工坊封装页签
+   *  写死默认模式、画布页签自己解析，于是多模式工作流在封装页**没法换模式测试**
+   *  （ISSUE #720 第 3 条）。收成一处后两页签同说一个模式。
+   *
+   *  换工作流时重置回该工作流的默认模式（不把上一条工作流的查看模式带过来）。 */
+  activeMode: string | null;
+  /** 切换当前模式（**只改查看/测试语境，不落库**）。
+   *
+   *  落「默认模式」是另一件事（画布节点卡片的模式下拉走 `patchModes`）：用户
+   *  在封装页试着切模式跑一次流程测试，不该顺手改掉这条工作流的默认模式。 */
+  setActiveMode: (mode: string) => void;
   sourceOpen: boolean;
   openSource: () => void;
   closeSource: () => void;
@@ -78,6 +93,22 @@ export interface WorkflowLibraryDetailController {
   actions: WorkflowLibraryDetailActions;
 }
 
+/** 生效模式：用户在这条工作流上切过就用切过的，否则用默认模式解析值。
+ *
+ *  抽成纯函数（而不是组件里一个三元表达式）的两个理由：
+ *   · **判空顺序**：没选中工作流时 `modeOverride` 与 `workflow.id` 都为空，
+ *     写成 `modeOverride?.workflowId === workflow?.id` 会让两者相等
+ *     （`undefined === undefined`）从而去读一个空的 `modeOverride` —— 直接抛错；
+ *   · 分支（切过 / 没切过 / 换过工作流）可以单测，不必挂载整个详情面板。 */
+export function resolveActiveMode(
+  override: { workflowId: string; mode: string | null } | null,
+  workflowId: string | null,
+  defaultMode: string | null,
+): string | null {
+  if (!workflowId || !override) return defaultMode;
+  return override.workflowId === workflowId ? override.mode : defaultMode;
+}
+
 export function useWorkflowLibraryDetail(
   props: WorkflowLibraryDetailProps,
 ): WorkflowLibraryDetailController {
@@ -99,6 +130,20 @@ export function useWorkflowLibraryDetail(
 
   const [sourceOpen, setSourceOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>("canvas");
+  /* 当前模式：初值 = 该工作流的默认模式；换工作流时重置（见 controller 的说明）。
+   *  `null` = 用户主动切到了「自动（工作流默认）」——与「还没初始化」靠 workflow.id
+   *  区分，故用一个「记住初值来自哪条工作流」的 ref 而不是 effect 里 setState。 */
+  const [modeOverride, setModeOverride] = useState<{
+    workflowId: string;
+    mode: string | null;
+  } | null>(null);
+  const setActiveMode = useCallback(
+    (mode: string) => {
+      if (!workflow) return;
+      setModeOverride({ workflowId: workflow.id, mode });
+    },
+    [workflow],
+  );
 
   const openSource = useCallback(() => setSourceOpen(true), []);
   const closeSource = useCallback(() => setSourceOpen(false), []);
@@ -254,11 +299,31 @@ export function useWorkflowLibraryDetail(
     ],
   );
 
+  /* 生效模式：用户切过就用切过的，否则用该工作流的默认模式解析值。
+   *  必须以 `workflow.id` 对齐 —— 只按「有没有 override」判会把上一条工作流的
+   *  查看模式带到下一条（模式码恰好同名时更难发现）。 */
+  const defaultMode = useMemo(
+    () =>
+      resolveWorkflowMode({
+        modes: workflow?.modes ?? null,
+        defaultMode: workflow?.defaultMode ?? null,
+        taskType: workflow?.taskType ?? null,
+      }),
+    [workflow],
+  );
+  const activeMode = resolveActiveMode(
+    modeOverride,
+    workflow?.id ?? null,
+    defaultMode,
+  );
+
   return {
     workflow,
     metaEditor,
     activeTab,
     setActiveTab,
+    activeMode,
+    setActiveMode,
     sourceOpen,
     openSource,
     closeSource,

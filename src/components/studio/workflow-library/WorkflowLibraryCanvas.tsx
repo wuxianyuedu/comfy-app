@@ -51,6 +51,7 @@ import {
   buildLibraryNodes,
   handleInventoryOf,
   LAYOUT_SIZING,
+  libraryFitViewOptions,
   useLibraryWireFlow,
 } from "./hooks/use-library-wire-flow";
 import {
@@ -264,23 +265,35 @@ function WorkflowLibraryCanvasInner({
     [],
   );
 
-  /* 打开时把**三列内容**收进视野，而不是整块背景板。
+  /* 首帧**定向 fitView**：只按三列内容节点缩放（见 `libraryFitViewOptions`）。
    *
-   *  `fitView` prop 按**所有节点**的并集包围盒缩放 —— 背景板（ISSUE #596）在宽高
-   *  两个方向都严格大于视口（max(内容, 视口) + BACKDROP_PADDING），把它算进包围
-   *  盒会把首帧缩放钉在 ~0.5，三列缩成面板中间一小团。挂载后在 `onInit` 里按三列
-   *  内容节点重跑一次定向 fitView 覆盖它：内容尽量占满面板，背景板继续只负责
-   *  「把缩放下限钉住 + 铺满画布底」（它的两个职责都不受影响）。 */
-  const handleInit = useCallback((instance: ReactFlowInstance) => {
-    void instance.fitView({
-      nodes: [
-        { id: LIB_NODE_PARAMS },
-        { id: LIB_NODE_HOST },
-        { id: LIB_NODE_OUTPUTS },
-      ],
-      padding: 0.08,
-    });
-  }, []);
+   *  为什么不能用 `<ReactFlow fitView>` 的默认口径：它按**全部节点**的并集包围盒
+   *  缩放，而背景板在宽高两个方向都严格大于视口 —— 三列会被缩成面板中间一小团。
+   *
+   *  为什么首帧要遮住（`fitted` 之前画布不可见）：React Flow 在**测量到容器尺寸
+   *  之前**按默认视口（translate 0,0 scale 1）绘制一帧，量到之后才跑 fitView
+   *  —— 用户看到的正是「切到这个页签，整块画布先按错误缩放闪一下、再跳到正确
+   *  缩放」。fitView 的结果依赖测量值，无法在首帧前算出，所以**第一帧不画**，
+   *  等 fit 落地再显形：宁可少一帧空画布，也不要一帧错缩放。
+   *
+   *  三条退出路径都置 `fitted`（fitView 完成 / 视口首次变化 / 兜底定时器），
+   *  任一条都不会让画布停在「永远不显形」上。 */
+  const [fitted, setFitted] = useState(false);
+  const markFitted = useCallback(() => setFitted(true), []);
+  const handleInit = useCallback(
+    (instance: ReactFlowInstance) => {
+      void instance
+        .fitView(libraryFitViewOptions())
+        .then(markFitted, markFitted);
+    },
+    [markFitted],
+  );
+  /* 兜底：`fitView()` 在极少数路径上可能不 resolve（没有 panZoom 实例等）。
+   *  定时器只负责「别让画布卡在不可见」，不参与缩放口径。 */
+  useEffect(() => {
+    const timer = window.setTimeout(markFitted, 600);
+    return () => window.clearTimeout(timer);
+  }, [markFitted]);
 
   /* React Flow 通过 Delete / Backspace 删除选中线时回调：解析出每条线对应的
    * 对外参数（输入侧 entryId / 输出侧 ioKey），落到 `disconnect` 只断那一条。 */
@@ -366,8 +379,11 @@ function WorkflowLibraryCanvasInner({
       /* `bg-canvas` 是画布自己的底色（与项目画布同一 token）—— 面板底色
        *  （`bg-panel-deep`）与画布底色深浅不同，画布但凡没铺到容器底边，那条
        *  缝就会以「下方一块空白却不是画布」的形式被看见（ISSUE #596）。 */
-      className="border-border-subtle bg-canvas relative h-full min-h-[460px] w-full overflow-hidden rounded-xl border"
+      className={`border-border-subtle bg-canvas relative h-full min-h-[460px] w-full overflow-hidden rounded-xl border ${fitted ? "" : "invisible"}`}
       data-testid="wflib-canvas"
+      /* 首帧是否已按三列内容定好缩放（视图不可见期间为 false）。测试按它断言
+       *  「画布不会带着未 fit 的视口显形」。 */
+      data-fitted={fitted ? "true" : "false"}
     >
       <LibraryNodeContentContext.Provider value={flow.nodeContent}>
         <ReactFlow
@@ -393,12 +409,11 @@ function WorkflowLibraryCanvasInner({
           maxZoom={2}
           panOnDrag
           zoomOnScroll
-          /* 站点默认 `fitView` 会把三列收进视野；用户随后可自由平移缩放。
-           *  prop 版先按全部节点（含背景板）跑一遍，`onInit` 的定向 fitView
-           *  随即按三列内容覆盖 —— 见 `handleInit`。 */
-          fitView
-          fitViewOptions={{ padding: 0.12 }}
+          /* 首帧定向 fitView 由 `onInit` 发起（只按三列内容节点，见 `handleInit`）；
+           *  这里**不开** `fitView` prop —— 它按全部节点（含背景板）缩放，与定向
+           *  fitView 是两次口径不同的缩放，第一帧的错缩放就是这么来的。 */
           onInit={handleInit}
+          onMoveStart={markFitted}
           proOptions={{ hideAttribution: true }}
           /* 节点**可拖**（React Flow 用它给 `.react-flow__node` 打开命中与指针事件
            *  —— 关掉它，卡片列与宿主卡片整块变成 `pointer-events: none`，表单输入、
