@@ -31,7 +31,10 @@ import {
   WINDOW_BUTTON_LABELS,
   type WindowButtonKind,
 } from "~/lib/shell/title-bar-derive";
-import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
+import {
+  TITLE_BAR_CHROME_CLASS,
+  TITLE_BAR_HEIGHT_CLASS,
+} from "~/lib/full-screen-layer";
 import {
   closeWindow,
   isWindowMaximized,
@@ -203,7 +206,7 @@ export function TitleBarTabs({
 
   return (
     <div
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
     >

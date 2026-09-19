@@ -1,0 +1,3 @@
+## Fixed
+
+- **设置页「启动日志（comfyui-runtime.log）」点全屏后，窗口标题行的页签与右上角的最小化 / 最大化 / 关闭整排点不动**：全屏弹窗打开时，base-ui 会往 `body` 注入一层 `InternalBackdrop`（`position: fixed; inset: 0; z-index: auto; pointer-events: auto`）来吞掉弹窗外的点击，它铺满整个视口、把顶部 36px 的标题行也一起盖住；而标题行是流内元素（`z-index: auto`），后出现在 DOM 里的定位元素必然在命中测试里压过它 —— 几何让位（`top-title-bar`）只保证标题行「不被盖住」，挡不住不受本仓库规则约束的第三方浮层。现在标题行取刻度表最高档（新增 `chrome` = 2000，严格高于 `toast`/`popup`/`modal`）的 `TITLE_BAR_CHROME_CLASS`（`relative z-chrome`），`TitleBarTabs` 与浏览器形态的 `InAppTabStrip` 各挂一处。门禁 `check-title-bar-clearance.cjs` 补第二条规则（用到 `h-title-bar` 的文件必须同时带 `TITLE_BAR_CHROME_CLASS`），刻度关系由 `src/lib/shell/overlay-z.test.ts` 钉住。
