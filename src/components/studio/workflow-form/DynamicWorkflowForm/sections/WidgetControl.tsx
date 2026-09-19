@@ -192,7 +192,8 @@ export function WidgetControl({
           options={Array.isArray(entry.options) ? entry.options : []}
           disabled={disabled}
           placeholder={`选择 ${label}${requiredHint}`}
-          className={`w-full ${compact ? "" : "mt-1"} ${
+          fullWidth
+          className={`${compact ? "" : "mt-1"} ${
             missingRequired ? "rounded-md ring-1 ring-red-400/50" : ""
           }`}
           popoverMinWidth={compact ? 220 : 260}
