@@ -262,6 +262,35 @@ export function useLibraryWireFlow({
   };
 }
 
+/** 三列**内容**节点的 id（首帧定向 fitView 的包围盒 = 这三个）。 */
+export const LIBRARY_CONTENT_NODE_IDS = [
+  LIB_NODE_PARAMS,
+  LIB_NODE_HOST,
+  LIB_NODE_OUTPUTS,
+] as const;
+
+/** 首帧 fitView 的内边距（与既有的 `fitViewOptions` 同值）。 */
+export const LIBRARY_FIT_PADDING = 0.08;
+
+/** 首帧定向 fitView 的入参：**只按三列内容节点**缩放。
+ *
+ *  为什么不交给 `<ReactFlow fitView>` 的默认口径：那个口径按**全部节点**的并集
+ *  包围盒缩放，而背景板（`LIB_NODE_BACKDROP`，职责是「把缩放下限钉住 + 铺满画布
+ *  底」）在宽高两个方向都严格大于视口 —— 把它算进包围盒会把首帧缩放钉在「铺满
+ *  背景板」的那个值上，三列缩成面板中间一小团（ISSUE #596 的另一面）。
+ *
+ *  `nodes` 只给 id（React Flow 的 `FitViewOptions.nodes` 接受 `{ id }` 形状），
+ *  避免把节点对象复制成第二份事实。 */
+export function libraryFitViewOptions(): {
+  nodes: { id: string }[];
+  padding: number;
+} {
+  return {
+    nodes: LIBRARY_CONTENT_NODE_IDS.map((id) => ({ id })),
+    padding: LIBRARY_FIT_PADDING,
+  };
+}
+
 /** 三列节点的位置与首帧尺寸（真实尺寸由内容撑开）。
  *
  *  `nodesDraggable` 要求节点**必须能放得下内容的拖拽命中面**（见画布里的说明），

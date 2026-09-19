@@ -84,7 +84,13 @@ export function useEncapsulationTestRun({
       setResultUrl(null);
       void (async () => {
         try {
-          const { input } = await buildLibraryWorkflowInput(workflowId, values);
+          /* 按**当前选中的模式**组载荷：封装页签可以逐个模式跑一次流程测试
+           *  （多模式工作流的两个模式契约口往往不同，只测默认模式验不全）。 */
+          const { input } = await buildLibraryWorkflowInput(
+            workflowId,
+            values,
+            mode ?? null,
+          );
           const id = await startLocalGenerate(input);
           setTaskId(id);
           /* 登记进共享运行登记表：日志弹窗（两个页签共用同一扇门）按 taskId

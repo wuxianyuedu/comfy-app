@@ -180,6 +180,62 @@ describe("画布页签：画布铺到面板底部（ISSUE #596）", () => {
   });
 });
 
+/* ISSUE #720 的四条用户口径，逐条钉在源码上（这几条都是「删掉 / 加回来」型回归，
+ * 行为层用 RTL 很难表达：例如「页面上不再出现『手动落点』」是**没有**这件事）。 */
+describe("工坊封装页签：模式可切换 / 必填可分 / 不再有手动落点", () => {
+  const ROOT = path.resolve(__dirname);
+  const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+  it("第 1 条：不再显示「手动 / 自动」落点（相关字段也一并删了）", () => {
+    /* 落点现在**只**来自作者画的线（没有第二条来源），「手动落点」这句话已经
+     *  没有区分能力，留着只会让用户以为还有别的落点来源。 */
+    expect(read("sections/WorkshopEncapsulationPanel.tsx")).not.toContain(
+      "手动落点",
+    );
+    /* 状态派生的类型上也不再有这个字段（不是只把渲染删掉）。 */
+    const status = readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../lib/workshop/workshop-encapsulation-status.ts",
+      ),
+      "utf8",
+    );
+    expect(status).not.toMatch(/^\s*manual: boolean;/m);
+  });
+
+  it("第 2 条：每个口标出必填 / 可选，且说明「可选口不必连到工作流」", () => {
+    const panel = read("sections/WorkshopEncapsulationPanel.tsx");
+    expect(panel).toContain('entry.required ? "必填" : "可选"');
+    expect(panel).toContain("不必连到工作流");
+    expect(panel).toContain("必填口 ");
+    /* 非必备口没落点**不是问题状态**：不能用「缺了它就跑不了」那一档配色。 */
+    expect(panel).toContain("可选 · 未落点");
+  });
+
+  it("第 3 条：封装页签能切模式跑流程测试（多模式时渲染切换器）", () => {
+    const panel = read("sections/WorkshopEncapsulationPanel.tsx");
+    expect(panel).toContain("SelectMenu");
+    expect(panel).toMatch(/modes\.length > 1/);
+    /* 模式由详情层下发（两个页签共用同一份当前模式）。 */
+    expect(read("sections/DetailBody.tsx")).toMatch(/mode=\{activeMode\}/);
+    expect(read("WorkflowLibraryDetailView.tsx")).toContain(
+      "activeMode={activeMode}",
+    );
+  });
+
+  it("第 4 条：首帧 fit 落地前画布不可见（不在错误缩放上画一帧）", () => {
+    const canvas = read("WorkflowLibraryCanvas.tsx");
+    /* 不再用 `<ReactFlow fitView>` 的「全部节点」口径（背景板会把缩放带偏）。 */
+    expect(canvas).not.toMatch(/^\s*fitView$/m);
+    expect(canvas).toContain("libraryFitViewOptions()");
+    /* 首帧不画：`fitted` 之前画布不可见；fit 落地后显形。 */
+    expect(canvas).toMatch(/fitted \? "" : "invisible"/);
+    expect(canvas).toContain('data-fitted={fitted ? "true" : "false"}');
+    /* 兜底路径必须在：fitView 不 resolve 时也要显形，不能永远看不见。 */
+    expect(canvas).toMatch(/setTimeout\(markFitted,/);
+  });
+});
+
 describe("页头：筛选菜单水平排列（ISSUE #716）", () => {
   const ROOT = path.resolve(__dirname);
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");

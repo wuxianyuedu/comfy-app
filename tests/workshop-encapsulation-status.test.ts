@@ -107,9 +107,9 @@ describe("deriveEncapsulationStatus", () => {
   });
 
   it("必备口可配置：把「提示词」从必备里去掉后，缺它也算 ready", () => {
-    /* 尺寸是**独立**的硬闸门（定不出宽高就跑不起来，见 `isSizeDetermined`）——
-     * 它不随 `requiredInputs` 走。所以这条要先把尺寸配好，才谈得上「提示词不在
-     * 必备里 = 缺它也能跑」。 */
+    /* 尺寸定不出宽高也照跑：它**不是**必备口时，缺的值由工作流图内的默认值兜底
+     * （用户口径，ISSUE #720 第 2 条：「非必填参数不是必须要连到工作流中」）。
+     * 这条用例连尺寸都没配，仍应 ready。 */
     const status = deriveEncapsulationStatus({
       io: IO,
       paramMap: {
@@ -127,12 +127,31 @@ describe("deriveEncapsulationStatus", () => {
     expect(status.missingRequired).toEqual([]);
   });
 
-  it("尺寸是独立硬闸门：没定出宽高时，即使它不在必备里也不 ready", () => {
+  it("尺寸不是必备口时，没落点也不算「不能跑」", () => {
     const status = deriveEncapsulationStatus({
       io: IO,
       paramMap: null,
       mode: "t2i",
       requiredInputs: [],
+    });
+    expect(status.ready).toBe(true);
+    expect(status.missingRequired).toEqual([]);
+    /* 但「没落点」这件事本身仍要显式可见（清单里带上它），只是不阻塞。 */
+    expect(status.missingLabels).toContain(SIZE_LABEL);
+  });
+
+  it("尺寸是必备口时，没定出宽高就不 ready", () => {
+    /* 必备的尺寸口**另有一条**判据（`isSizeDetermined`）：只连一个子口解不出
+     * 另一维，跑起来拿不到宽高 —— 这种「看起来配好了」的状态必须进缺失清单。 */
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: {
+        source: {
+          "mode:t2i": { prompt: "positive_prompt", "size-width": "width" },
+        },
+      },
+      mode: "t2i",
+      requiredInputs: ["prompt", "size"],
     });
     expect(status.ready).toBe(false);
     expect(status.missingRequired).toEqual([SIZE_LABEL]);
@@ -163,6 +182,23 @@ describe("deriveEncapsulationStatus", () => {
     expect(status.missingLabels).toContain(SIZE_LABEL);
   });
 
+  it("逐口标出必填 / 可选（与「能不能跑」同一份判据）", () => {
+    /* 必备口是配置项（`ModeContract.required`），界面上的「必填 / 可选」徽标
+     *  必须读同一份事实 —— 各算一套就会出现「标着可选、却卡着不让跑」。 */
+    const status = deriveEncapsulationStatus({
+      io: IO,
+      paramMap: { source: { "mode:t2i": { prompt: "positive_prompt" } } },
+      mode: "t2i",
+      requiredInputs: ["prompt", "size"],
+    });
+    const flags = Object.fromEntries(
+      status.entries.map((entry) => [entry.id, entry.required]),
+    );
+    expect(flags.prompt).toBe(true);
+    expect(flags.size).toBe(true);
+    expect(flags.negative).toBe(false);
+  });
+
   it("作者画的线就是落点（可连到任意一行）", () => {
     const status = deriveEncapsulationStatus({
       io: IO,
@@ -171,7 +207,9 @@ describe("deriveEncapsulationStatus", () => {
     });
     const prompt = status.entries.find((e) => e.id === "prompt");
     expect(prompt?.targetIoKey).toBe("negative_prompt");
-    expect(prompt?.manual).toBe(true);
+    /* 落点就是作者画的那条线（没有「自动 / 手动」之分，相关字段已随 ISSUE #720
+     * 第 1 条删除）。 */
+    expect(prompt?.required).toBe(true);
   });
 
   it("IO 为空 → 全部口未配置且不 ready", () => {
