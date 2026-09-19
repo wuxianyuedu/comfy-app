@@ -1464,6 +1464,118 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     expect(focus).toContain("两套判据");
   });
 
+  /**
+   * ISSUE #730：启动后有一段「未连接」状态——主窗先露 WebView2 空白 / 内嵌
+   * Edge「无法访问此页面」错误页，几秒后才变成 workspace。
+   *
+   * 这条与 §5 对照表里那条「壳编译时没带 custom-protocol」**同族但不同档**：
+   * 那条是导航目标错了（devUrl），这条是导航目标对、但**首帧还没画出来**。
+   * 启动页探测到应用端口可响应就调 navigate_to_app，而导航一发起主窗画面就离开
+   * 启动页：dev 模式下要等 next dev 首次编译（十几秒），这段等待里主窗就是
+   * 空白 / 错误页；而主窗是 `decorations: false`（标题行前端接管），页面没画出来
+   * 时连右上角的关闭按钮都不存在——用户看到的就是「窗口没有关闭按钮」。
+   *
+   * 修法的判据是「**启动等待期的画面只有一个出口**」：
+   *   · 应用首帧之前，能看到的东西只能是壳注入的加载占位（壳侧注入、应用侧收尾）；
+   *   · TCP 可达性校验（url_reachable）不足以防住这条 —— 连接被接受但首编译未完成
+   *     时，on_page_load(Finished) 照样触发，交换窗口就把错误页/空白顶给了用户。
+   */
+  it("主窗首帧之前由壳注入加载占位，应用挂载时收尾（ISSUE #730）", () => {
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    // ① 注入端：占位必须由壳侧 eval 注入（导航一发起 WebView2 就已切走画面，
+    //    应用那一端此刻连首帧都没有，能抢在它前面的只有壳）
+    expect(rust).toContain("const MAIN_LOADING_STUB_JS");
+    expect(rust).toContain("fn watch_main_first_paint(");
+    expect(rust).toContain("win.eval(MAIN_LOADING_STUB_JS)");
+    // ② 起看护的时机：navigate_to_app 里**导航之前**就要起
+    const navigate = rust.slice(
+      rust.indexOf("fn navigate_to_app("),
+      rust.indexOf("/// 让已显示的应用窗口回到前台"),
+    );
+    expect(navigate).toContain("watch_main_first_paint(");
+    expect(navigate.indexOf("watch_main_first_paint(")).toBeLessThan(
+      navigate.indexOf(".navigate(parsed)"),
+    );
+    // ③ 退出界标：应用文档已渲染 / 主窗已显示 / 用户放弃，三者任一即收手
+    const watch = rust.slice(
+      rust.indexOf("fn watch_main_first_paint("),
+      rust.indexOf("/// 应用退出时回收 sidecar"),
+    );
+    expect(watch).toContain("is_main_shown()");
+    expect(watch).toContain("app_document_shown(");
+    expect(watch).toContain("is_abandoned()");
+    // ④ 收尾端：交接时清一次，应用挂载时再清一次（占位自带重贴定时器，
+    //    不收就会在真界面画好之后又盖回来）
+    expect(rust).toContain("fn main_window_clear_loading_stub(");
+    expect(rust).toContain('main_window_clear_loading_stub(&main, "swap")');
+    const stub = rust.slice(
+      rust.indexOf("const MAIN_LOADING_STUB_JS"),
+      rust.indexOf("const MAIN_LOADING_STUB_JS") + 2000,
+    );
+    // 占位要能在「错误页换掉整个 DOM」之后自己贴回来，否则用户看到的还是错误页
+    expect(stub).toContain("setInterval(");
+    // 但必须有上限，不能永久压着真界面
+    expect(stub).toContain("clearInterval(");
+    // ⑤ 注入脚本承载的 HTML 必须纯 ASCII：Tauri 的 asset 处理器按字节切响应体
+    //    补 nonce，多字节字符会让切片落到字符内部（与 splash-assets 同一条约束）。
+    //    注释是中文，所以只对「字面量体」做断言（`r#"` 到 `"#;` 之间）。
+    const stubStart = rust.indexOf('const MAIN_LOADING_STUB_JS: &str = r#"');
+    const stubEnd = rust.indexOf('"#;', stubStart);
+    const stubLiteral = rust.slice(stubStart, stubEnd);
+    expect(
+      [...stubLiteral].filter((c) => c.charCodeAt(0) > 127).length,
+      "承载 HTML 的字符串字面量必须纯 ASCII，中文只许出现在注释里",
+    ).toBe(0);
+    // …而中文注释里的说明必须是「应用侧怎么收尾」那条（注入端与收尾端同源）
+    expect(rust.slice(stubEnd, stubEnd + 400)).toContain("clearLaunchLoadingStub");
+    // ⑥ 应用侧收尾：根布局挂载即清（浏览器里没有占位，调用是空操作）
+    const cleaner = readFileSync(
+      join(process.cwd(), "src", "app", "LaunchLoadingStubCleaner.tsx"),
+      "utf8",
+    );
+    expect(cleaner).toContain("clearLaunchLoadingStub");
+    const layout = readFileSync(
+      join(process.cwd(), "src", "app", "layout.tsx"),
+      "utf8",
+    );
+    expect(layout).toContain("<LaunchLoadingStubCleaner />");
+    const client = readFileSync(
+      join(process.cwd(), "src", "lib", "shell", "desktop-shell-client.ts"),
+      "utf8",
+    );
+    expect(client).toContain("export function clearLaunchLoadingStub(");
+    expect(client).toContain("__comfyapp_loading_stub");
+    // 两端的标记必须是同一个字符串：壳注入的 id / 定时器键与应用侧清理的
+    // 键名各写一份就会静默失效（占位永远收不掉）
+    expect(stub).toContain("__comfyapp_loading_stub");
+    expect(stub).toContain("__comfyappStubTimer");
+    expect(client).toContain("__comfyappStubTimer");
+  });
+
+  it("standalone 模式不注入占位（内嵌 server 随壳就绪，注入只会白闪）", () => {
+    const rust = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    // 「要不要注入」的判据取自启动模式，且判据只有一处（launch_mode 在 run() 里
+    // 读一次、传下去），不许 setup_standalone_runtime 再自己读一遍
+    expect(rust).toContain("let expect_slow_first_paint = launch_mode != \"standalone\";");
+    expect(rust).toContain(
+      "watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);",
+    );
+    expect(rust).toContain("setup_standalone_runtime(app, &launch_mode)?;");
+    // 读出的启动模式只许有一处（run()），其余调用点都接收判定结果：
+    // 多处读取会让「跳过 sidecar」与「要不要占位」各自漂移
+    expect(
+      rust.match(/let launch_mode = std::env::var\("COMFYAPP_LAUNCH_MODE"\)/g)
+        ?.length,
+      "启动模式判据只许有一处：多处读取会让「跳过 sidecar」与「要不要占位」各自漂移",
+    ).toBe(1);
+  });
+
   it("壳侧启动页也显式置前一次（本地冷启动时无须等复核进程）", () => {
     const rust = readFileSync(
       join(process.cwd(), "src-tauri", "src", "lib.rs"),

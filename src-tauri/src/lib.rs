@@ -84,6 +84,15 @@ impl AppState {
     first
   }
 
+  /// 应用窗口是否已经显示过（交接完成 / 安全网强制显示）。
+  ///
+  /// 用于给「主窗首帧看护」一个确定的退出界标（见 watch_main_first_paint）：
+  /// 窗口一旦显示出来，就不再往页面里注入加载占位——顺手注入的 `eval` 会在
+  /// 页面**就位之后**才执行，那一刻用户可能已经在用真界面了。
+  fn is_main_shown(&self) -> bool {
+    *self.shown.lock().unwrap()
+  }
+
   fn set_attention(&self, value: bool) {
     *self.attention.lock().unwrap() = value;
   }
@@ -140,6 +149,9 @@ fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String
 fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHandle) -> Result<(), String> {
   let url = state.app_url();
   log::info!("[ComfyAPP] navigate_to_app called with url: {}", url);
+  // 导航一发起，主窗画面就离开启动页；在应用画好首帧之前由探测持续注入加载占位，
+  // 避免这段时间露出 WebView2 空白 / 内嵌错误页（见 watch_main_first_paint）。
+  watch_main_first_paint(app_handle.clone(), true);
   let parsed: tauri::Url = url.parse().map_err(|e| format!("非法 URL {}: {}", url, e))?;
   if let Some(win) = app_handle.get_webview_window("main") {
     win
@@ -169,6 +181,8 @@ fn navigate_to_app(state: tauri::State<'_, AppState>, app_handle: tauri::AppHand
       None => false,
     };
     if splash_open && main_hidden {
+      // 强制交接：主窗可能还停在空白 / 错误页，先注入占位再显示，别把空白顶给用户
+      watch_main_first_paint(monitor.clone(), true);
       show_main_window_without_focus(&monitor, false);
       if let Some(s) = monitor.get_webview_window("splash") {
         let _ = s.close();
@@ -566,13 +580,20 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error
   use tauri_plugin_shell::ShellExt;
 
   let port = pick_free_port();
+  // 允许回退 dev 的模式判据：只认「显式 standalone」这一种拒绝回退的情形，
+  // 所以这里判的是**缺省值**而不是整条字符串比较。它不引用 run() 里那份
+  // COMFYAPP_LAUNCH_MODE（本函数只在 setup_standalone_runtime 命中 standalone
+  // 分支时才会被调用，语义上已经隐含），启动模式的唯一读取点仍在 run()。
+  let refuses_dev_fallback = matches!(
+    std::env::var("COMFYAPP_LAUNCH_MODE").as_deref(),
+    Ok("standalone")
+  );
   let res_dir = app.path().resource_dir()?;
   let node = res_dir.join("binaries").join(sidecar_binary_name());
   let server = res_dir.join("server.js");
 
-  let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
   if !server.exists() {
-    if launch_mode == "standalone" {
+    if refuses_dev_fallback {
       // 显式 standalone 模式但资源缺失：必须报错，禁止悄悄回退 dev——
       // 否则「双击 start-tauri-standalone.exe 却跑成 dev」会产生歧义行为。
       return Err(format!(
@@ -660,6 +681,9 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
   };
   let host = parsed.host_str().unwrap_or("127.0.0.1").to_string();
   let port = parsed.port_or_known_default().unwrap_or(80);
+  // 启动页不可用，没有可保留的进度画面 —— 主窗会提前显示，因此占位就是这段时间
+  // 唯一的界面（见 watch_main_first_paint）。
+  watch_main_first_paint(handle.clone(), true);
 
   std::thread::spawn(move || {
     for _ in 0..240 {
@@ -688,6 +712,82 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
       std::thread::sleep(Duration::from_millis(500));
     }
     log::warn!("[ComfyAPP] 等待应用地址就绪超时：{}", url);
+  });
+}
+
+/// 主窗首帧看护：在应用自己渲染出界面之前，**不让 WebView2 的空白首帧露出来**。
+///
+/// 现场（ISSUE #730）：启动页探测到应用端口可响应后调 `navigate_to_app`，而
+/// 「TCP 可连」与「首帧能画出来」之间还有一段实打实的等待——dev 模式下要等
+/// next dev 编译路由（冷启动十几秒）。这段等待里的画面在一分钟内会先后呈现
+/// 三种样子，看起来都像「坏了」：
+///
+/// 1. **WebView2 自带的「无法访问此页面 / ERR_CONNECTION_REFUSED」**：端口可连
+///    但 HTTP 还没开始服务，或者请求在首编译期间被拒（与 §5 对照表里那条同族，
+///    区别是它在**交接之后**发生）；
+/// 2. **纯白空白**：Next 的 document 壳已下发，而骨架里的内容还在等 RSC 首帧；
+/// 3. **主窗（无原生装饰）自身**：标题行由前端接管，页面没画出来时，
+///    右上角的关闭按钮自然也不存在——用户看到的就是「没有关闭按钮的窗口」。
+///
+/// 因此把「等首帧」这段从主窗里挪走：探测期间每次 tick 往主窗注入一次加载占位
+/// （`MAIN_LOADING_STUB_JS`），启动页（带进度、日志面板与关闭按钮）保持可见；
+/// 一旦读到「应用已经自己渲染出文档」就立刻收手，交接仍由
+/// `on_main_page_finished` 完成——那里还有 TCP 可达性二次校验，不可达就继续
+/// 重导航并保持启动页，全程不会把错误页当应用显示。
+///
+/// `stub_visible` 由调用方按启动模式给：dev / prebuilt 恒为 true（此时应用首帧
+/// 必然晚于导航），standalone 是 false（内嵌 server 随壳一起就绪，主窗很快有画面，
+/// **连探测都不启动**——否则探测会在首帧之前把占位盖上去，反而白闪一下）。
+///
+/// 判据是 **URL 离开 about:blank** 而不是「主窗可见」：主窗在 setup 时就已创建，
+/// `is_visible()` 在交接前后都是 false，拿它当界标会让探测提前退出。
+fn watch_main_first_paint(handle: tauri::AppHandle, mut stub_visible: bool) {
+  if handle.get_webview_window("main").is_none() {
+    return;
+  }
+  std::thread::spawn(move || {
+    for _ in 0..PROBE_ATTEMPTS {
+      let Some(win) = handle.get_webview_window("main") else {
+        return;
+      };
+      if handle
+        .try_state::<AppState>()
+        .map(|s| s.is_abandoned())
+        .unwrap_or(false)
+      {
+        return;
+      }
+      if handle
+        .try_state::<AppState>()
+        .map(|s| s.is_main_shown())
+        .unwrap_or(false)
+      {
+        log::info!("[ComfyAPP] main window shown, first paint watch stops");
+        return;
+      }
+      let url = win.url().map(|u| u.to_string()).unwrap_or_default();
+      if !is_app_url(&url) {
+        continue;
+      }
+      if app_document_shown(&handle) {
+        log::info!("[ComfyAPP] main first paint observed, watch stops (url={})", url);
+        return;
+      }
+      // 占位只注入一次：eval 是**就位即执行**的，注入之后这次导航就算被错误页
+      // 顶掉也无所谓——页面里开着的重试定时器会把占位重新贴回来（见
+      // MAIN_LOADING_STUB_JS 里 setInterval 的注释）。
+      if stub_visible {
+        if let Err(e) = win.eval(MAIN_LOADING_STUB_JS) {
+          log::warn!("[ComfyAPP] main loading stub eval failed: {:?}", e);
+        }
+        stub_visible = false;
+      }
+      std::thread::sleep(Duration::from_millis(PROBE_INTERVAL_MS));
+    }
+    log::warn!(
+      "[ComfyAPP] main first paint watch timed out ({}s), splash kept",
+      (PROBE_ATTEMPTS * PROBE_INTERVAL_MS) / 1000
+    );
   });
 }
 
@@ -905,6 +1005,95 @@ const SPLASH_WINDOW_SIZE: (f64, f64) = (744.0, 216.0);
 /// 展开日志后的窗口尺寸（对应页面里「展开日志」那一档，见 splash.html）。
 const SPLASH_WINDOW_SIZE_EXPANDED: (f64, f64) = (1424.0, 788.0);
 
+/// 主窗首帧看护的节奏与上限（见 watch_main_first_paint 的注释）。
+const PROBE_INTERVAL_MS: u64 = 250;
+const PROBE_ATTEMPTS: u32 = 480;
+
+/// 注入主窗的加载占位（**纯 ASCII**：与 splash-assets 同一条约束——Tauri 的
+/// asset 处理器按字节切响应体补 nonce，多字节字符会让切片落到字符内部）。
+///
+/// 为什么占位由壳注入而不是让应用自己渲染：导航一发起，WebView2 就已把主窗
+/// 画面切到空白/错误页，应用那一端此刻连首帧都还没画出来；能抢在它前面的只有
+/// 壳侧注入。注入时机是**首帧看护**发现「应用文档还没出现」时（见
+/// watch_main_first_paint）；占位自带的重贴定时器由应用在根布局挂载时收掉
+/// （`clearLaunchLoadingStub`，见 src/lib/shell/desktop-shell-client.ts），
+/// 因此它不会盖住真界面。
+const MAIN_LOADING_STUB_JS: &str = r#"
+(function () {
+  function paint() {
+    try {
+      var doc = document;
+      if (!doc || !doc.documentElement || !doc.body) return;
+      if (doc.getElementById('__comfyapp_loading_stub')) return;
+      doc.documentElement.style.background = '#151320';
+      var box = doc.createElement('div');
+      box.id = '__comfyapp_loading_stub';
+      box.style.cssText =
+        'position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;' +
+        'justify-content:center;flex-direction:column;gap:12px;background:#151320;' +
+        'color:#E5E5E7;font-family:"Microsoft YaHei",system-ui,sans-serif;font-size:13px';
+      box.innerHTML =
+        '<div style="font-size:15px;font-weight:600;color:#7C5CFC">Comfy APP</div>' +
+        '<div id="__comfyapp_loading_text">Application is loading, please wait...</div>';
+      doc.body.appendChild(box);
+    } catch (e) {}
+  }
+  paint();
+  // The embedded error page replaces the whole DOM (taking the stub with it)
+  // while WebView2 still reports a finished navigation - without repainting the
+  // user sees that error page again. The timer belongs to the navigation that
+  // got the stub; the real app page clears it on mount (see the Rust comment
+  // above main_window_clear_loading_stub).
+  try {
+    if (window.__comfyappStubTimer) clearInterval(window.__comfyappStubTimer);
+    window.__comfyappStubTimer = setInterval(paint, 400);
+    setTimeout(function () {
+      if (window.__comfyappStubTimer) clearInterval(window.__comfyappStubTimer);
+      window.__comfyappStubTimer = 0;
+    }, 20000);
+  } catch (e) {}
+})();
+"#;
+
+
+/// 让**应用自己**清掉注入的加载占位。
+///
+/// 注入的开头开了一个每 400ms 重新贴一次占位的定时器（内嵌错误页会换掉整个
+/// DOM），它属于**被注入的那次导航**；应用页面加载之后必须把它关掉，否则占位
+/// 会在应用首帧画好之后又盖回来。应用侧无从知道这个定时器的存在（它只认一个
+/// 固定在窗口上的标记），而清理代码只有一行，因此放在前端根布局里——
+/// 判据与调用点见 src/app/layout.tsx 的 clearLaunchLoadingStub。
+fn main_window_clear_loading_stub(win: &tauri::WebviewWindow, phase: &str) {
+  // 清理脚本用 concat! 分组拼出来，避免在源码里出现一行的超长字符串字面量
+  // （可读性差，且编辑器/格式化工具会把行折得看不出结构）。
+  let clear_js = concat!(
+    "try { if (window.__comfyappStubTimer) { ",
+    "clearInterval(window.__comfyappStubTimer); window.__comfyappStubTimer = 0; } ",
+    "var el = document.getElementById('__comfyapp_loading_stub'); ",
+    "if (el && el.parentNode) el.parentNode.removeChild(el); } catch (e) {}",
+  );
+  if let Err(e) = win.eval(clear_js) {
+    log::debug!("[ComfyAPP] clear loading stub failed at {}: {:?}", phase, e);
+  }
+}
+
+/// 探测主窗 URL 是否已经换成应用地址。
+///
+/// 判据是 **URL 离开 about:blank**，而不是「匹配某个端口」：把 URL 判据写死成
+/// 某个端口，换端口 / 换模式（standalone 自选端口）就会静默失效，而这里真正要
+/// 区分的只有「还没导航过去」与「已经在应用上了」两种。
+fn is_app_url(url: &str) -> bool {
+  url.starts_with("http://") || url.starts_with("https://")
+}
+
+/// 主窗是否已经渲染出应用文档（而不是空白 / 内嵌错误页）。
+fn app_document_shown(handle: &tauri::AppHandle) -> bool {
+  handle
+    .get_webview_window("main")
+    .map(|w| w.eval("1").is_ok())
+    .unwrap_or(false)
+}
+
 /// 按当前显示器可用区域收一次尺寸（不越界）。
 fn clamp_to_monitor(app: &tauri::AppHandle, size: (f64, f64)) -> (f64, f64) {
   let (mut width, mut height) = size;
@@ -951,6 +1140,14 @@ pub fn run() {
   // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
   let app_url = std::env::var("COMFYAPP_DEV_URL")
     .unwrap_or_else(|_| default_dev_url("localhost"));
+
+  // 启动模式（standalone / prebuilt / tauri）由启动器经环境变量透传，壳按它决定
+  // 是否拉起内嵌 server（见 setup_standalone_runtime）。这里提前读出来还有第二个
+  // 用处：主窗「首帧看护」要不要注入加载占位**取决于它**——dev / prebuilt 下应用
+  // 首帧必然晚于导航（要等 next dev 首编译），而 standalone 的内嵌 server 随壳
+  // 一起就绪，注入占位只会白闪一下（见 watch_main_first_paint）。
+  let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
+  let expect_slow_first_paint = launch_mode != "standalone";
 
   let log_plugin = build_log_plugin(&project_root);
 
@@ -1005,12 +1202,13 @@ pub fn run() {
       // 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
       // 导航到应用 URL，加载完成后由 create_main_window 里挂的回调交换窗口。
       create_main_window(app)?;
+      watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);
 
       install_splash_close_handler(app);
       spawn_splash_watchdog(app);
 
       #[cfg(not(debug_assertions))]
-      setup_standalone_runtime(app)?;
+      setup_standalone_runtime(app, &launch_mode)?;
 
       // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
       // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
@@ -1181,8 +1379,15 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
   }
   if !url_reachable(&url) {
     log::warn!("[ComfyAPP] swap aborted, app url unreachable: {}", url_str);
+    // 页面是内嵌错误页时占位会被导航冲掉：再补一次，直到重导航把真页面带回来
+    watch_main_first_paint(handle.clone(), true);
     spawn_renavigate(handle.clone(), url);
     return;
+  }
+  // 交接的这一刻就把占位清掉，别让它多压一帧真界面；应用侧在根布局挂载时
+  // 还会再清一次（两道都失败时占位最多自存 20s，见 MAIN_LOADING_STUB_JS）。
+  if let Some(main) = handle.get_webview_window("main") {
+    main_window_clear_loading_stub(&main, "swap");
   }
   // 启动期可能已过了几十秒，用户很可能切到了别的窗口：这里只把应用显示到
   // 任务栏并做闪烁提醒，不把窗口顶到前台（见 show_main_window_without_focus）。
@@ -1260,14 +1465,20 @@ fn spawn_splash_watchdog(app: &mut tauri::App) {
     for _ in 0..300 {
       std::thread::sleep(Duration::from_millis(1000));
       let Some(s) = handle.get_webview_window("splash") else { return };
-      let drifted = match s.url() {
-        Ok(u) => u != splash_url,
-        Err(_) => false,
-      };
-      if drifted {
-        let cur = s.url().map(|u| u.to_string()).unwrap_or_default();
-        log::warn!("[ComfyAPP] splash watchdog: url drifted to {}, restoring", cur);
-        let _ = s.navigate(splash_url.clone());
+      // 判据只有一条：当前 URL 不是内嵌的启动页地址。**必须排除「窗口已不可用」**
+      // ——url() 出错（窗口正在销毁）时不能当作「漂移了」再导航回去，否则交接
+      // 瞬间的关闭动作会被这条看门狗抢回去。
+      match s.url() {
+        Ok(cur) if cur == splash_url => {}
+        Ok(cur) => {
+          log::warn!("[ComfyAPP] splash watchdog: url drifted to {}, restoring", cur);
+          if let Err(e) = s.navigate(splash_url.clone()) {
+            log::warn!("[ComfyAPP] splash watchdog: restore failed: {:?}", e);
+          }
+        }
+        Err(e) => {
+          log::debug!("[ComfyAPP] splash watchdog: url unavailable ({:?})", e);
+        }
       }
     }
   });
@@ -1281,8 +1492,10 @@ fn spawn_splash_watchdog(_app: &mut tauri::App) {}
 /// 生产模式（release）启动编排：按启动模式决定是否拉起内嵌 standalone server，
 /// 并在启动页资源缺失时走「等应用就绪直接导航」的兜底，避免永久黑屏。
 #[cfg(not(debug_assertions))]
-fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-  let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
+fn setup_standalone_runtime(
+  app: &mut tauri::App,
+  launch_mode: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
   if launch_mode == "standalone" {
     // 显式 standalone：必须启动内嵌 server（缺失时 spawn_sidecar 会报错）。
     spawn_sidecar(app.handle())?;

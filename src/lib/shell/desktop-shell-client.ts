@@ -65,3 +65,29 @@ export async function activateMainWindow(): Promise<boolean> {
     return false;
   }
 }
+
+/** 壳在「应用首帧之前」注入的加载占位标记（见 src-tauri/src/lib.rs 的
+ *  MAIN_LOADING_STUB_JS）：导航一发起主窗画面就离开启动页，而应用首帧要等
+ *  next dev 首次编译，这段时间的 WebView2 空白 / 内嵌错误页由这个占位顶住。 */
+const LOADING_STUB_ID = "__comfyapp_loading_stub";
+
+/**
+ * 清掉壳注入的启动期加载占位，并停掉它自我重贴的定时器。
+ *
+ * **为什么应用侧要主动清**：占位为了在白屏 / 内嵌错误页（它们会换掉整个 DOM）
+ * 之后仍顶得住，自带一个每 400ms 重贴一次的定时器；而它只认一个固定在 window
+ * 上的标记，应用侧不主动收，占位就会在真界面画好之后又盖回来。应用这边只有
+ * 这一行清理逻辑，判据与注入端（MAIN_LOADING_STUB_JS）同源，登记在
+ * docs/standards/launch-and-build.md 的「启动等待期画面唯一出口」一节。
+ *
+ * 非壳环境（浏览器）没有占位，静默返回。
+ */
+export function clearLaunchLoadingStub(): void {
+  if (typeof window === "undefined") return;
+  const w = window as unknown as { __comfyappStubTimer?: number };
+  if (w.__comfyappStubTimer) {
+    window.clearInterval(w.__comfyappStubTimer);
+    w.__comfyappStubTimer = 0;
+  }
+  document.getElementById(LOADING_STUB_ID)?.remove();
+}
