@@ -408,7 +408,7 @@ export function mixHex(colorA: string, colorB: string, ratio: number): string {
 
 /* 最长路径（Kahn）拓扑布局。为**每一个**真实图节点都算出位置 ——
  * 不做截断，而 `buildWorkflowPreview` 为了卡片预览会截到 14 个。
- * 两条路径都用它：历史的自动布局兜底（纯 API 导入、没有保存位置），
+ * 两条路径都用它：自动布局兜底（原件里没有保存位置），
  * 以及新的「API 布局」视图模式（不管导入的 rawJson 布局如何，
  * 强制按执行图拓扑排布）。 */
 export function computeKahnLayout(

@@ -66,80 +66,35 @@ describe("deriveLocalRootsHint 空列表原因", () => {
 });
 
 describe("deriveFormatFlags 格式标志推导", () => {
-  it("新字段齐全时透传 hasApi/hasRaw/usable/apiSource", () => {
-    expect(
-      deriveFormatFlags(
-        makeRow({
-          hasApi: false,
-          hasRaw: true,
-          apiSource: null,
-          usable: true,
-        }),
-      ),
-    ).toEqual({ hasApi: false, hasRaw: true, apiSource: null, usable: true });
+  it("新字段齐全时透传 hasRaw/usable", () => {
+    expect(deriveFormatFlags(makeRow({ hasRaw: true, usable: true }))).toEqual({
+      hasRaw: true,
+      usable: true,
+    });
   });
 
-  it("只有 RAW（graph 为空）仍然可执行 —— 两列地位同等", () => {
+  it("RAW 原件缺失时不可执行", () => {
     expect(
-      deriveFormatFlags(makeRow({ hasApi: false, hasRaw: true, usable: true })),
-    ).toEqual({ hasApi: false, hasRaw: true, apiSource: null, usable: true });
+      deriveFormatFlags(makeRow({ hasRaw: false, usable: false })),
+    ).toEqual({ hasRaw: false, usable: false });
   });
 
-  it("两列都为空时才不可执行", () => {
-    expect(
-      deriveFormatFlags(
-        makeRow({ hasApi: false, hasRaw: false, usable: false }),
-      ),
-    ).toEqual({ hasApi: false, hasRaw: false, apiSource: null, usable: false });
-  });
-
-  it("服务端没给 usable 时按两列回填（任一有内容即可执行）", () => {
-    // 只给 hasApi=false → hasRaw 回填自 format:"raw" → 可执行
-    expect(
-      deriveFormatFlags(makeRow({ hasApi: false, format: "raw" })),
-    ).toEqual({ hasApi: false, hasRaw: true, apiSource: null, usable: true });
-    // 只给 hasRaw=true → hasApi 回填 false（format 非 raw）
+  it("服务端没给 usable 时按 hasRaw 回填", () => {
     expect(deriveFormatFlags(makeRow({ hasRaw: true }))).toEqual({
-      hasApi: false,
       hasRaw: true,
-      apiSource: null,
       usable: true,
     });
-  });
-
-  it("仅传 legacy format=raw 时视为只有 RAW，但照样可执行", () => {
-    expect(deriveFormatFlags(makeRow({ format: "raw" }))).toEqual({
-      hasApi: false,
-      hasRaw: true,
-      apiSource: null,
-      usable: true,
-    });
-  });
-
-  it("仅传 legacy format=api 时 hasRaw=false", () => {
-    expect(deriveFormatFlags(makeRow({ format: "api" }))).toEqual({
-      hasApi: true,
+    expect(deriveFormatFlags(makeRow({ hasRaw: false }))).toEqual({
       hasRaw: false,
-      apiSource: null,
-      usable: true,
+      usable: false,
     });
   });
 
-  it("无任何格式信息时视为有 API 列、可执行", () => {
+  it("无任何格式信息时视为有 RAW 原件、可执行", () => {
     expect(deriveFormatFlags(makeRow())).toEqual({
-      hasApi: true,
-      hasRaw: false,
-      apiSource: null,
+      hasRaw: true,
       usable: true,
     });
-  });
-
-  it("新旧字段混用时显式 hasRaw 优先于 legacy format", () => {
-    expect(
-      deriveFormatFlags(
-        makeRow({ format: "raw", hasApi: true, hasRaw: false }),
-      ),
-    ).toEqual({ hasApi: true, hasRaw: false, apiSource: null, usable: true });
   });
 });
 

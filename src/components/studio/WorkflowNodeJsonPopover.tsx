@@ -44,7 +44,7 @@ export type RawNodeJson = {
 
 export type RawNodeView = {
   entry: RawNodeJson | null;
-  /** 与 `RawMetaEntry` 同源（同一份节点元数据，可选字段在纯 API 导入时缺失）。 */
+  /** 与 `RawMetaEntry` 同源（同一份节点元数据，可选字段在原件里可能缺失）。 */
   raw?: RawMetaEntry;
   rawNode?: RawNodeJson | null;
   pos: [number, number] | null;
@@ -294,7 +294,7 @@ export function NodeJsonPopover({
                   onClick={() => setTab(tab)}
                   title={
                     tab === "saved"
-                      ? "API 格式：detail.graph[nodeId] —— ComfyUI /prompt 用的执行条目；不含画布元数据"
+                      ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
                       : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
                   }
                   style={{
@@ -315,7 +315,7 @@ export function NodeJsonPopover({
                   }}
                   className="h-auto font-normal"
                 >
-                  {tab === "saved" ? "API · 保存格式" : "RAW · 节点视图"}
+                  {tab === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
                 </Button>
               );
             })}
@@ -352,10 +352,7 @@ export function NodeJsonPopover({
                   />
                 )}
                 {!json && (
-                  <Chip
-                    color="var(--color-warning)"
-                    label="节点未在 graph 中"
-                  />
+                  <Chip color="var(--color-warning)" label="节点未在派生图中" />
                 )}
               </>
             ) : (
@@ -394,7 +391,7 @@ export function NodeJsonPopover({
                 {!viewObj && (
                   <Chip
                     color="var(--color-warning)"
-                    label="无画布态数据 — 纯 API 工作流"
+                    label="无画布态数据 — 缺少工作流原件"
                   />
                 )}
               </>
@@ -430,7 +427,7 @@ export function NodeJsonPopover({
           >
             <span>
               {tab === "saved"
-                ? "展示的是 `detail.graph[nodeId]` 原始条目，再导出后字节级一致。"
+                ? "展示的是从工作流原件派生的 `detail.graph[nodeId]` 条目。"
                 : "画布视图：聚合 raw 元数据 + 画布坐标；非导出字节 — 仅排查用。"}
             </span>
             <span style={{ fontFamily: "var(--font-mono)" }}>esc ×</span>

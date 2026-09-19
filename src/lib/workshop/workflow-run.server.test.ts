@@ -85,7 +85,6 @@ describe("createWorkflowRunTask", () => {
       modes: "[]",
       defaultMode: null,
       rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
-      graph: {},
       workflowIO: IO,
       /* 落点只认作者连的线：提示词口连到该端口。 */
       paramMap: { source: { "mode:T2I": { prompt: "1::widget::prompt" } } },
@@ -126,31 +125,24 @@ describe("createWorkflowRunTask", () => {
     });
   });
 
-  it("无 rawJson（API 图）→ 用户值按作者连线回填，未连线的口沿用图内值", async () => {
+  it("无 rawJson → 抛「没有可执行内容」，不建任务也不入队", async () => {
     wfRepoStub.findByIdForUser.mockResolvedValue({
       id: "wf-2",
-      name: "API 图",
+      name: "空工作流",
       taskType: "T2I",
       modes: "[]",
       defaultMode: null,
       rawJson: null,
-      graph: {
-        "1": { class_type: "CLIPTextEncode", inputs: { prompt: "旧" } },
-        "2": { class_type: "KSampler", inputs: { steps: 12 } },
-      },
       workflowIO: IO,
       paramMap: { source: { "mode:T2I": { prompt: "1::widget::prompt" } } },
     });
-    await createWorkflowRunTask({
-      userId: "u1",
-      workflowId: "wf-2",
-      values: { prompt: "新提示词" },
-    });
-    const job = enqueueMock.mock.calls[0]![0] as {
-      prompt: Record<string, { inputs: Record<string, unknown> }>;
-    };
-    expect(job.prompt["1"]?.inputs.prompt).toBe("新提示词");
-    /* 没连线的口工坊不碰（图内 `12` 原样保留，不因为它是数值就替作者塞一个值）。 */
-    expect(job.prompt["2"]?.inputs.steps).toBe(12);
+    await expect(
+      createWorkflowRunTask({
+        userId: "u1",
+        workflowId: "wf-2",
+        values: { prompt: "新提示词" },
+      }),
+    ).rejects.toThrow("工作流没有可执行内容");
+    expect(enqueueMock).not.toHaveBeenCalled();
   });
 });

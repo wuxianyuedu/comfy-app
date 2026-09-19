@@ -9,7 +9,7 @@
  *   • executor-finalize.ts  — complete / fail / finalizeFailure（终态收口层）
  *   • executor-scheduler.ts — processQueue / startHeartbeat（调度层）
  *   • executor-cli.ts       — comfy-cli 提交路径（两种格式）+ applyRawOverrides（CLI 层）
- *   • execution-graph.ts    — prepareGraphForExecution（API 图的提交前收拾）
+ *   • execution-graph.ts    — prepareGraphForExecution（提交前的图收拾）
  *   • executor-outputs.ts   — collectOutputs / extractRuntimeParams（纯函数）
  *   • executor-errors.ts    — friendlyError（纯函数）
  *
@@ -18,7 +18,7 @@
  *   产物收集（collectOutputs）、运行时参数提取（extractRuntimeParams）、
  *   友好错误（friendlyError）、原始覆盖（applyRawOverrides）、RuntimeParams 类型。
  *
- * 提交路径**只有一条**：两种格式（RAW 原件 / API 图）都交 comfy-cli
+ * 提交路径**只有一条**：工作流原件交 comfy-cli
  * （见 executor-scheduler 的模块注释）。
  *
  * 注意：各子模块之间存在有意的循环引用（通道→收口→调度→通道），全部为

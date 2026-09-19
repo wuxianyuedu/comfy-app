@@ -2,14 +2,17 @@
 
 /** 从 WorkflowLibrary 抽出的导入面板状态 +
  *  JSON 导入 / 拖放逻辑。该 hook 拥有全部导入面板 UI
- *  状态（name / modes / format / json / errors / 帮助提示）、手动的
+ *  状态（name / modes / json / errors / 帮助提示）、手动的
  *  「粘贴 JSON」提交路径，以及预填同一面板的
  *  拖放漏斗。组件只保留状态对象
  *  和 JSX。
+ *
+ *  **只接受 ComfyUI 的原始工作流格式（RAW）**：API 格式（「导出(API格式)」）不是
+ *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import { type api } from "~/trpc/react";
-import { detectWorkflowFormat } from "~/lib/workflow/workflow-format";
+import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
 
 export interface UseWorkflowImportArgs {
   createMut: ReturnType<typeof api.workflow.create.useMutation>;
@@ -66,9 +69,6 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   const [importName, setImportName] = useState("");
   const [importModes, setImportModes] = useState<string[]>([]);
   const [importDefaultMode, setImportDefaultMode] = useState("");
-  const [importFormat, setImportFormat] = useState<"auto" | "api" | "raw">(
-    "auto",
-  );
   const [importJson, setImportJson] = useState("");
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState("");
@@ -92,9 +92,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     setImportErr("");
     setImportWarn([]);
     if (!importJson.trim()) {
-      setImportErr(
-        "请粘贴 ComfyUI「导出(API格式)」或「导出(工作流格式)」的 JSON",
-      );
+      setImportErr("请粘贴 ComfyUI「导出(工作流格式)」的 JSON");
       return;
     }
     let parsed: unknown;
@@ -114,8 +112,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         name: importName.trim() || "未命名工作流",
         modes: importModes,
         defaultMode: importDefaultMode,
-        graph: parsed,
-        format: importFormat !== "auto" ? importFormat : undefined,
+        raw: parsed,
       });
       if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
       setShowImport(false);
@@ -123,25 +120,16 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportJson("");
       setImportModes(["T2I"]);
       setImportDefaultMode("T2I");
-      setImportFormat("auto");
       void load();
     } catch (e: unknown) {
       setImportErr(e instanceof Error ? e.message : JSON.stringify(e ?? null));
     } finally {
       setImporting(false);
     }
-  }, [
-    importName,
-    importModes,
-    importDefaultMode,
-    importFormat,
-    importJson,
-    load,
-    createMut,
-  ]);
+  }, [importName, importModes, importDefaultMode, importJson, load, createMut]);
 
   /** 文件入口的统一前处理漏斗（拖入 / 「选择文件」共用）：读文本 → JSON 解析 →
-   *  识别格式 → 预填导入面板并打开，让用户确认名称 / 模式 / 格式后再提交。
+   *  校验是 ComfyUI 原始工作流 → 预填导入面板并打开，让用户确认名称 / 模式后再提交。
    *  刻意复用 `handleImport`（粘贴 JSON）那条提交链路，因此校验、告警与错误出口
    *  与粘贴路径完全一致；失败一律经 `showFileError` 落到可见错误条。 */
   const handlePickedFile = useCallback(
@@ -174,15 +162,15 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         showFileError("不是有效的工作流 JSON（应为对象）");
         return;
       }
-      const detected = detectWorkflowFormat(parsed);
-      if (!detected) {
-        showFileError("无法识别的工作流格式：既不是 API 也不是 LiteGraph RAW");
+      if (!isRawWorkflowJson(parsed)) {
+        showFileError(
+          "不是 ComfyUI 的工作流(RAW) JSON（缺少 nodes[]）：请用「导出(工作流格式)」，API 格式不受支持",
+        );
         return;
       }
       // 由文件名自动取名（去掉扩展名）。
       const baseName = file.name.replace(/\.(json|workflow)$/i, "").trim();
       setImportName(baseName || "未命名工作流");
-      setImportFormat(detected); // already "api" | "raw"
       setImportJson(text);
       setImportErr("");
       setImportWarn([]);
@@ -192,36 +180,15 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       try {
         let suggested = "T2I";
         const obj = parsed as Record<string, unknown>;
-        if (detected === "api") {
-          for (const v of Object.values(obj)) {
-            const ct =
-              v && typeof v === "object"
-                ? (v as { class_type?: unknown }).class_type
-                : undefined;
-            if (
-              typeof ct === "string" &&
-              /image|upscale|inpaint|edit/i.test(ct)
-            ) {
-              suggested = "I2I";
-              break;
-            }
-          }
-        } else if (detected === "raw") {
-          const nodes = Array.isArray(obj.nodes)
-            ? (obj.nodes as unknown[])
-            : [];
-          for (const n of nodes) {
-            const t =
-              n && typeof n === "object"
-                ? (n as { type?: unknown }).type
-                : undefined;
-            if (
-              typeof t === "string" &&
-              /image|upscale|inpaint|edit/i.test(t)
-            ) {
-              suggested = "I2I";
-              break;
-            }
+        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as unknown[]) : [];
+        for (const n of nodes) {
+          const t =
+            n && typeof n === "object"
+              ? (n as { type?: unknown }).type
+              : undefined;
+          if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
+            suggested = "I2I";
+            break;
           }
         }
         setImportModes([suggested]);
@@ -247,8 +214,6 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     setImportModes,
     importDefaultMode,
     setImportDefaultMode,
-    importFormat,
-    setImportFormat,
     importJson,
     setImportJson,
     importing,

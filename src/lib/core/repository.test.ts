@@ -339,7 +339,6 @@ describe("WorkflowTemplateRepository", () => {
       userId: "u1",
       name: "工作流 A",
       taskType: "I2V",
-      graph: { nodes: [1] },
       paramMap: { seed: "1" },
       rawJson: { raw: true },
       positions: { p: 1 },
@@ -358,7 +357,7 @@ describe("WorkflowTemplateRepository", () => {
       sourceMtime: 123,
       sourceChecksum: "abc",
     });
-    expect(created.graph).toEqual({ nodes: [1] });
+    expect(created.rawJson).toEqual({ raw: true });
 
     const tagA = await workflowModelTagRepository.upsertByName("u1", "A");
     const tagB = await workflowModelTagRepository.upsertByName("u1", "B");

@@ -65,25 +65,11 @@ export interface WorkflowRow {
    *  例如 ["z-image","wan2.2"]）。由 GET /api/workflows 下发。
    *  驱动库卡片的标签与模型筛选。 */
   modelTags?: string[];
-  /** 两列各自有没有内容 —— **只用于如实标注**，不判可执行性（raw 与 api
-   *  地位同等，见下 `usable`）。 */
-  hasApi?: boolean;
+  /** RAW 原件列有没有内容 —— **只用于如实标注**，不判可执行性（见下 `usable`）。 */
   hasRaw?: boolean;
-  /** API 列从哪来（服务端富化下发）。
-   *   - "user"：用户自己导出的 API 格式
-   *   - "derived"：早年导入 RAW 时转出来存下的
-   *   - null：没有 API 列（只有 RAW 的工作流就是这样，**它照样能跑**）
-   *  与可执行性无关，只用来在源文件页签 / 卡片来源徽标上说清这一列是哪来的。 */
-  apiSource?: string | null;
-  /** 这条工作流有没有可执行内容 —— **raw 或 api 任有一列有内容即可**。
-   *  RAW 由 comfy-cli 直接执行（它按节点类定义做权威转换），所以
-   *  「只有 rawJson、没有 graph」是完整可用的工作流，不是残缺态。 */
+  /** 这条工作流有没有可执行内容 —— **RAW 原件有内容即可**。
+   *  RAW 由 comfy-cli 直接执行（它按节点类定义做权威转换）。 */
   usable?: boolean;
-  /** 用户最初的导入格式是 UI/raw 时为 "raw"（保留节点位置），
-   *  否则为 "api"。这是遗留提示 —— UI 应优先看 `hasApi/hasRaw`，
-   *  因为单个标签分不清「两者都有」和
-   *  「只有 RAW」。 */
-  format?: "raw" | "api";
   /** 导入来源在磁盘上的绝对路径。
    *  任何碰到真实文件的导入都会写它（来源本地的 ⤓ 载入
    *  卡片，或后续临时导入）。写入后服务端跟踪该文件，
@@ -96,8 +82,8 @@ export interface WorkflowRow {
    *  （例如在设置
    *  LOCAL_WORKFLOWS_PATH 之前完成的旧导入）。 */
   sourceRoot?: string | null;
-  /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴 /
-   *  纯 API 导入。由有没有 `sourcePath` 推导。 */
+  /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴导入。
+   *  由有没有 `sourcePath` 推导。 */
   source?: "local" | "online";
   /** 手动同步支持。`diskDirty = (diskMtimeSec >
    *  sourceMtimeSec)` 表示磁盘上的文件在上次导入之后被改过；
@@ -117,38 +103,17 @@ export interface WorkflowRow {
   diskRenamedTo?: string | null;
 }
 
-/** 解析「这条工作流可执行吗、两列各有什么」。
+/** 解析「这条工作流可执行吗、RAW 原件在不在」。
  *
- *  **可用性判据 = 有可执行的列之一**（`usable`，服务端富化时已按同一份口径算好）。
- *  服务端没带 `usable` 的老路径（早期 `format` 单标记）按 `format` 反推：两种格式
- *  都可执行，所以只要有一行就是可执行的 —— 「有没有内容」在列表里本来就等价于
- *  「列表里出现了这一行」。 */
+ *  **可用性判据 = RAW 原件有内容**（`usable`，服务端富化时已按同一份口径算好）。
+ *  服务端没带 `hasRaw` / `usable` 的老路径（早期导入兼容）按「列表里出现了这一行
+ *  = 有内容」处理 —— 库里的每一行都是从 RAW 原件导入的。 */
 export function deriveFormatFlags(row: WorkflowRow): {
-  hasApi: boolean;
   hasRaw: boolean;
-  apiSource: string | null;
   usable: boolean;
 } {
-  if (
-    typeof row.hasApi === "boolean" ||
-    typeof row.hasRaw === "boolean" ||
-    typeof row.usable === "boolean"
-  ) {
-    const hasRaw = row.hasRaw ?? row.format === "raw";
-    const hasApi = row.hasApi ?? !hasRaw;
-    return {
-      hasApi,
-      hasRaw,
-      apiSource: row.apiSource ?? null,
-      usable: row.usable ?? (hasApi || hasRaw),
-    };
-  }
-  return {
-    hasApi: row.format !== "raw",
-    hasRaw: row.format === "raw",
-    apiSource: null,
-    usable: true,
-  };
+  const hasRaw = row.hasRaw ?? true;
+  return { hasRaw, usable: row.usable ?? hasRaw };
 }
 
 /* 把四个手动同步字段聚合成 UI 用的布尔量。
@@ -165,10 +130,6 @@ export function deriveSyncFlags(row: WorkflowRow): {
   const missing = !!row.diskMissing;
   return { dirty, missing, canResync: dirty };
 }
-
-/* ── detectWorkflowFormat：实现已抽到 ~/lib/workflow-format 供服务端复用 ──
- * detectWorkflowFormat：实现已抽到 ~/lib/workflow-format，供服务端复用 ——
- * 服务端 PATCH 端点要校验同一份 JSON 形态（拖拽升级）。 */
 
 /** ComfyUI 的默认文件名以 "date_slug" 前缀开头，且只含
  *  小写字母 / 下划线 / 数字。见到这种名字时换一种样式渲染

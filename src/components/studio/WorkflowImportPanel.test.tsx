@@ -20,7 +20,8 @@ import {
 
 afterEach(cleanup);
 
-const API_GRAPH = { "3": { class_type: "KSampler", inputs: { seed: 1 } } };
+/** 一份最小的 ComfyUI 原始工作流（RAW）；API 格式不受支持。 */
+const RAW_WF = { nodes: [{ id: 3, type: "KSampler", pos: [10, 20] }] };
 const FILE_LABEL = "选择工作流 JSON 文件";
 
 /** 面板只消费 hook 返回的 state，所以让真 hook 跑起来、只把 mutation 换成假的。 */
@@ -67,14 +68,14 @@ describe("导入面板的文件入口", () => {
   it("选择文件后预填名称与 JSON 内容", async () => {
     render(<Harness />);
 
-    pickFile(jsonFile("my-flow.json", API_GRAPH));
+    pickFile(jsonFile("my-flow.json", RAW_WF));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("my-flow")).toBeInTheDocument();
     });
     const textarea =
-      screen.getByPlaceholderText<HTMLTextAreaElement>(/API 格式/);
-    expect(textarea.value).toContain("class_type");
+      screen.getByPlaceholderText<HTMLTextAreaElement>(/last_node_id/);
+    expect(textarea.value).toContain("KSampler");
   });
 
   it("把文件拖到面板上同样能导入", async () => {
@@ -84,7 +85,7 @@ describe("导入面板的文件入口", () => {
 
     fireEvent.drop(panel!, {
       dataTransfer: {
-        files: [jsonFile("dropped.json", API_GRAPH)],
+        files: [jsonFile("dropped.json", RAW_WF)],
         types: ["Files"],
       },
     });
@@ -94,11 +95,23 @@ describe("导入面板的文件入口", () => {
     });
   });
 
-  it("拖入无法识别的 JSON：给出可见原因，不静默丢弃", async () => {
+  it("拖入 API 格式 JSON：给出可见原因，不静默丢弃", async () => {
+    render(<Harness />);
+
+    pickFile(
+      jsonFile("api.json", {
+        "3": { class_type: "KSampler", inputs: { seed: 1 } },
+      }),
+    );
+
+    expect(await screen.findByText(/API 格式不受支持/)).toBeInTheDocument();
+  });
+
+  it("拖入既不是工作流的 JSON：给出可见原因", async () => {
     render(<Harness />);
 
     pickFile(jsonFile("unknown.json", { hello: 1 }));
 
-    expect(await screen.findByText(/无法识别的工作流格式/)).toBeInTheDocument();
+    expect(await screen.findByText(/nodes\[\]/)).toBeInTheDocument();
   });
 });

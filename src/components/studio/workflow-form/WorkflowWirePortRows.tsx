@@ -178,7 +178,7 @@ export function WirePortRows({
                *  <input type="number"> 上下箭头。共享 NumberField 与 AR/CR 行
                *  已经实现的视觉规范（含按动态回弹、disabled 哑光）。
                *
-               *  值严格 Number() 化：API-only 导入偶尔会残留字面量字符串
+               *  值严格 Number() 化：原件偶尔会残留字面量字符串
                *  （如 control_after_generate="fixed"/"randomize" 一旦走漏到
                *  numeric 行的 defaultValue，就会像 4-image 里那样原样露出
                *  "fixed"）。这里把 Number("fixed")=NaN || b.min → 1，恰好

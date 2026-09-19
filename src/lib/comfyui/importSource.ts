@@ -9,65 +9,41 @@
 // 让 POST（首次导入）与 GET（实时重新导入）两条路径共用
 // identical logic.
 //
-// **两种格式地位同等，入库不做格式互转**：API 格式落 `graph`、工作流(RAW)
-// 格式落 `rawJson`，两列各自最多一份、各自可空。执行侧两条路都认（见
-// `resolveExecutionInput`），所以 RAW 不需要（也不该）在导入时被转成 API 图
-// —— 无 ComfyUI 可达时的启发式转换结果本身就是错的，存下来只会让画布与运行
-// 都跑一份错图。
+// **只接受 ComfyUI 的原始工作流格式（RAW）**：原件逐字落 `rawJson` 列，入库
+// 不做任何格式互转。API 格式不是本应用支持的导入形态 —— 把 RAW 转成 API 图由
+// comfy-cli 在执行时按节点类定义做权威转换（无 ComfyUI 可达时按类名猜控件顺序，
+// 猜错就是一份能打开、跑起来结果不对的图，历史 ISSUE #632 已证伪这条路）。
 
 import "server-only";
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
 import { z } from "zod";
 import { logger } from "~/lib/core/logger";
-import {
-  asRawWorkflow,
-  detectFormat,
-  extractPositions,
-} from "~/lib/comfyui/raw";
+import { asRawWorkflow, extractPositions } from "~/lib/comfyui/raw";
 import {
   normalizeTaskType,
   VALID_TASK_TYPE_CODES,
 } from "~/lib/workflow/workflow-types";
-import { detectParamMap } from "~/lib/comfyui/workflow";
 
 /* ── 外部工作流 JSON 的形状契约（导入边界，规范 §5.5）──────────────────────
- * 「这是哪种格式」仍由 `detectFormat` 判 —— 它是「两列地位同等」这条判据的
- * 唯一定义处，不在这里再写一遍。本组 schema 只回答**落到库里的东西是什么形状**：
- * 判据说是 API，就必须真的有一批带 `class_type` 的节点；说是 RAW，就必须真的有
- * 非空 `nodes[]`（且每个节点带 `type`）。
+ * 本 schema 回答**落到库里的东西是什么形状**：RAW 原件必须有非空 `nodes[]`
+ * （且每个节点带 `type`）。
  *
  * 用 `.loose()`（保留未知键）而不是剥键：RAW 原件要**逐字落库**（groups /
  * definitions / extra / 各节点私有字段都得原样留着），任何剥键都会让「重新下载
  * 源文件」拿到一份被改过的 JSON。 */
-const ApiGraphSchema = z
-  .record(z.string(), z.unknown())
-  .refine(
-    (graph) =>
-      Object.values(graph).some(
-        (node) =>
-          node !== null &&
-          typeof node === "object" &&
-          typeof (node as { class_type?: unknown }).class_type === "string",
-      ),
-    { message: "不是有效的 ComfyUI API 工作流（未找到节点 class_type）" },
-  );
 const RawWorkflowSchema = z.looseObject({
   nodes: z.array(z.looseObject({ type: z.string() })).min(1),
 });
 
 export interface ParsedWorkflow {
-  /** API 格式导入件（检测为 `api` 时才有，否则空对象）。 */
-  apiGraph: Record<string, unknown>;
-  /** 工作流(RAW)格式导入件（检测为 `raw` 时才有，否则 null）。 */
+  /** 工作流(RAW)格式原件（逐字落库；格式不认识时为 null）。 */
   rawJson: unknown;
-  /** 节点坐标：RAW 自带 `pos` 时原样取出；API 格式没有坐标（null，由客户端
-   *  自动布局兜底）。它**不是**「转换出来的 API 图」的副产品，两种格式各自成立。 */
+  /** 节点坐标：RAW 自带 `pos` 时原样取出；没有则 null（由客户端自动布局兜底）。 */
   positions: Record<string, [number, number]> | null;
   taskType: string;
-  paramMap: Record<string, string> | null;
   warnings: string[];
-  format: "api" | "raw";
+  format: "raw";
 }
 
 /* 读一个本地文件，返回它的文本与 mtime（毫秒）。
@@ -105,7 +81,6 @@ export function checksum(text: string): string {
 export async function parseWorkflowContent(
   content: string,
   opts: {
-    explicitFormat?: "api" | "raw" | null;
     preferredTaskType?: string;
     defaultName?: string;
   } = {},
@@ -122,45 +97,28 @@ export async function parseWorkflowContent(
     throw new Error("不是有效的工作流 JSON（根节点应为对象）");
   }
 
-  const detected = opts.explicitFormat ?? detectFormat(candidate);
-  if (!detected) {
+  /* 工作流(RAW)格式：**原件入库，不转 API 图**。
+   *
+   * 历史做法是导入时把 raw 转成 API 图存进 `graph`（转换失败再回落启发式），
+   * 存错图的代价由用户承担：无 ComfyUI 可达时启发式按类名猜控件顺序，猜错
+   * 就是一份能打开、跑起来结果不对的图。执行侧本来就有 comfy-cli 直接吃 raw
+   * 的路（它按节点类定义做权威转换），入库再转一次是多余且有害的一步。 */
+  const parsed = RawWorkflowSchema.safeParse(candidate);
+  if (!parsed.success) {
     throw new Error(
-      "无法识别的工作流格式：未找到 API 节点 (class_type) 或 raw 节点 (type + pos)。",
+      "不是有效的工作流(RAW) JSON：缺少节点数组 nodes[]（或节点缺少 type 字段）。" +
+        "请用 ComfyUI 的「导出(工作流格式)」，API 格式不受支持。",
     );
   }
-
-  let apiGraph: Record<string, unknown> = {};
-  let positions: Record<string, [number, number]> | null = null;
-  let rawJson: unknown = null;
+  const rawJson: unknown = parsed.data;
+  const rawView = asRawWorkflow(parsed.data);
+  const extracted = rawView ? extractPositions(rawView) : {};
+  const positions: Record<string, [number, number]> | null =
+    Object.keys(extracted).length > 0 ? extracted : null;
   const warnings: string[] = [];
 
-  if (detected === "api") {
-    const parsed = ApiGraphSchema.safeParse(candidate);
-    if (!parsed.success) {
-      throw new Error("不是有效的 ComfyUI API 工作流（未找到节点 class_type）");
-    }
-    apiGraph = parsed.data;
-  } else {
-    /* 工作流(RAW)格式：**原件入库，不转 API 图**。
-     *
-     * 历史做法是导入时把 raw 转成 API 图存进 `graph`（转换失败再回落启发式），
-     * 存错图的代价由用户承担：无 ComfyUI 可达时启发式按类名猜控件顺序，猜错
-     * 就是一份能打开、跑起来结果不对的图。执行侧本来就有 comfy-cli 直接吃 raw
-     * 的路（它按节点类定义做权威转换），入库再转一次是多余且有害的一步。 */
-    const parsed = RawWorkflowSchema.safeParse(candidate);
-    if (!parsed.success) {
-      throw new Error(
-        "不是有效的工作流(RAW) JSON：缺少节点数组 nodes[]（或节点缺少 type 字段）",
-      );
-    }
-    rawJson = parsed.data;
-    const rawView = asRawWorkflow(parsed.data);
-    const extracted = rawView ? extractPositions(rawView) : {};
-    positions = Object.keys(extracted).length > 0 ? extracted : null;
-  }
-
   /* 不再自动推断 taskType —— 旧逻辑用
-   * `inferWorkflowTypeFromGraph(apiGraph)` 兜底，但识别准确率不高（例如把
+   * `inferWorkflowTypeFromGraph(graph)` 兜底，但识别准确率不高（例如把
    * VAEEncode+LoadImage 一律判为 I2I，忽略 Inpaint 等子分支），用户更愿意
    * 手动挑。现在未传 preferredTaskType 时直接留空，由用户在 UI 里选。
    * 重导入路径走 `existingTaskType` 把旧 taskType 透传过来保留。 */
@@ -174,21 +132,7 @@ export async function parseWorkflowContent(
     );
   }
 
-  /* RAW 导入没有 API 图可判落点 → 留空，由画布 / 工作流编辑器按 RAW 视图
-   *  （`rawInputsById`）判。角色节点映射（positiveNode / negativeNode…）此时
-   *  没有意义，硬判会给出指向不存在节点的映射，反而让运行期取不到值。 */
-  const paramMap =
-    Object.keys(apiGraph).length > 0 ? detectParamMap(apiGraph) : null;
-
-  return {
-    apiGraph,
-    rawJson,
-    positions,
-    taskType,
-    paramMap,
-    warnings,
-    format: detected,
-  };
+  return { rawJson, positions, taskType, warnings, format: "raw" };
 }
 
 export interface ImportedFromFile extends ParsedWorkflow {
@@ -204,7 +148,6 @@ export interface ImportedFromFile extends ParsedWorkflow {
 export async function importFromLocalPath(
   absPath: string,
   opts: {
-    explicitFormat?: "api" | "raw" | null;
     preferredTaskType?: string;
     defaultName?: string;
   } = {},
@@ -226,7 +169,6 @@ export interface ReimportResult {
   unchanged?: boolean;
   /* 文件变了 → 重新解析出的字段，要写回数据库 */
   update?: {
-    graph: Record<string, unknown>;
     rawJson: unknown;
     positions: Record<string, [number, number]> | null;
     paramMap: Record<string, string> | null;
@@ -243,7 +185,7 @@ export interface ReimportResult {
  *   - { unchanged: true } mtime 一致（快路径，不重新解析）
  *   - { update: {...} }   文件变了 → 要落库的规整字段
  *
- * 注意：返回 `update` 时，graph / rawJson / positions / paramMap 都会被覆盖
+ * 注意：返回 `update` 时，rawJson / positions / paramMap 都会被覆盖
  * 都来自该文件 —— 文件一变它就是唯一事实源，编辑器因此反映最新的磁盘版本。
  * 对相同内容重复解析是幂等的，所以 mtime 动了但内容没变也无害。
  *
@@ -280,10 +222,9 @@ export async function reimportFromSource(tpl: {
   });
   return {
     update: {
-      graph: parsed.apiGraph,
       rawJson: parsed.rawJson,
       positions: parsed.positions,
-      paramMap: parsed.paramMap,
+      paramMap: null,
       taskType: parsed.taskType,
       sourceChecksum: checksum(text),
       sourceMtime: mtimeSec,

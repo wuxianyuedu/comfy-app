@@ -268,7 +268,7 @@ function WorkflowListItem({
           </span>
           {!usable && (
             <span
-              title="既没有 API 图也没有工作流(RAW)原件 —— 两列都为空"
+              title="没有工作流(RAW)原件 —— 没有可执行内容"
               className="shrink-0 rounded bg-red-500/12 px-1 py-px text-[9px] text-red-700 dark:text-red-300"
             >
               无可执行内容

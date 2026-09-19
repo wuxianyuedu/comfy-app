@@ -24,46 +24,26 @@ import {
   scanLocalWorkflowChecksums,
   type LocalWorkflowFile,
 } from "~/lib/comfyui/localWorkflows";
-import { buildWorkflowPreview, detectParamMap } from "~/lib/comfyui/workflow";
+import { buildWorkflowPreview } from "~/lib/comfyui/workflow";
 import {
   buildWorkflowDetailFull,
   buildSubgraphDetail,
   invalidateWorkflowDetailCache,
 } from "~/lib/comfyui/workflow-detail";
-import { detectFormat } from "~/lib/comfyui/raw";
-import {
-  hasExecutableWorkflow,
-  hasGraphContent,
-  hasRawContent,
-} from "~/lib/comfyui/execution-shape";
+import { asRawWorkflow } from "~/lib/comfyui/raw";
+import { hasRawContent } from "~/lib/comfyui/execution-shape";
 
-/** 列表行下发给前端的三件「可执行形态」事实 —— 判据全在
- *  `~/lib/comfyui/execution-shape`（raw 与 api 地位同等，任一列有内容即可执行）。
+/** 列表行下发给前端的「可执行形态」事实 —— 判据全在
+ *  `~/lib/comfyui/execution-shape`（原件是 RAW 才可执行）。
  *
  *  · `usable`：这条工作流能不能跑；
- *  · `hasApi` / `hasRaw`：两列各自有没有内容（如实标注，不判可用性）；
- *  · `format`：**原件**是哪一种（源文件页签 / 卡片上这么说）；
- *  · `apiSource`：API 列从哪来（`user` = 用户导出；`derived` = 早年导入 RAW 时
- *    转出来存下的；null = 没有 API 列 —— 只有 RAW 的工作流就是这样，它照样能跑）。 */
-function executionShapeOf(row: {
-  graph: unknown;
-  rawJson: unknown;
-  apiSource?: unknown;
-}): {
-  hasApi: boolean;
+ *  · `hasRaw`：RAW 原件列有没有内容（如实标注，不判可用性）。 */
+function executionShapeOf(row: { rawJson: unknown }): {
   hasRaw: boolean;
   usable: boolean;
-  apiSource: string | null;
-  format: "raw" | "api";
 } {
   const hasRaw = hasRawContent(row.rawJson);
-  return {
-    hasApi: hasGraphContent(row.graph),
-    hasRaw,
-    usable: hasExecutableWorkflow(row),
-    apiSource: typeof row.apiSource === "string" ? row.apiSource : null,
-    format: hasRaw ? "raw" : "api",
-  };
+  return { hasRaw, usable: hasRaw };
 }
 import {
   type WorkflowIOMap,
@@ -119,11 +99,8 @@ interface LocalPendingRow {
   typeCategory: string;
   typeDescription: string;
   isGenerative: boolean;
-  hasApi: boolean;
   hasRaw: boolean;
-  apiSource: null;
   usable: boolean;
-  format: "api";
   preview: { nodes: unknown[]; edges: unknown[]; w: number; h: number };
   workflowIO: WorkflowIOMap;
   modelTags: string[];
@@ -334,11 +311,10 @@ export const workflowRouter = createTRPCRouter({
       // ── 补上类型元数据与紧凑预览 ──
       const enriched = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
+        const rawView = asRawWorkflow(list.rawJson);
         const graphObj =
-          list.graph &&
-          typeof list.graph === "object" &&
-          !Array.isArray(list.graph)
-            ? (list.graph as Record<string, unknown>)
+          rawView && Array.isArray(rawView.nodes)
+            ? (rawView as unknown as Record<string, unknown>)
             : null;
         const exec = executionShapeOf(list);
 
@@ -417,11 +393,8 @@ export const workflowRouter = createTRPCRouter({
             typeCategory: "image",
             typeDescription: "",
             isGenerative: false,
-            hasApi: false,
             hasRaw: false,
-            apiSource: null,
             usable: false,
-            format: "api",
             preview: { nodes: [], edges: [], w: 0, h: 0 },
             workflowIO: {},
             modelTags: [],
@@ -466,17 +439,12 @@ export const workflowRouter = createTRPCRouter({
         taskType: z.string().optional(),
         modes: z.array(z.string()).optional(),
         defaultMode: z.string().nullable().optional(),
-        format: z.enum(["raw", "api"]).nullable().optional(),
-        graph: z.unknown().optional(),
         raw: z.unknown().optional(),
         sourcePath: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const body = input;
-      const explicitFormat =
-        body.format === "raw" || body.format === "api" ? body.format : null;
-      const candidate = body.raw ?? body.graph;
 
       // ── 本地文件导入 ──
       const sourcePath =
@@ -485,7 +453,6 @@ export const workflowRouter = createTRPCRouter({
         let imported;
         try {
           imported = await importFromLocalPath(sourcePath, {
-            explicitFormat,
             preferredTaskType:
               typeof body.taskType === "string" ? body.taskType : undefined,
             defaultName: typeof body.name === "string" ? body.name : undefined,
@@ -519,8 +486,6 @@ export const workflowRouter = createTRPCRouter({
           userId: ctx.user.id,
           name,
           taskType: defaultMode ?? imported.taskType,
-          graph: imported.apiGraph,
-          paramMap: imported.paramMap,
           rawJson: imported.rawJson,
           positions: imported.positions,
           sourcePath: imported.sourcePath,
@@ -543,23 +508,14 @@ export const workflowRouter = createTRPCRouter({
       }
 
       if (
-        !candidate ||
-        typeof candidate !== "object" ||
-        Array.isArray(candidate)
+        !body.raw ||
+        typeof body.raw !== "object" ||
+        Array.isArray(body.raw)
       ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
-            "缺少工作流 JSON。请粘贴 ComfyUI「导出 (API格式)」或「导出 (工作流格式)」的 JSON",
-        });
-      }
-
-      const detected = explicitFormat ?? detectFormat(candidate);
-      if (!detected) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            "无法识别的工作流格式：未找到 API 节点 (class_type) 或 raw 节点 (type + pos)。",
+            "缺少工作流 JSON。请粘贴 ComfyUI「导出 (工作流格式)」的 JSON",
         });
       }
 
@@ -568,16 +524,13 @@ export const workflowRouter = createTRPCRouter({
        * 不转，同一个文件从两条入口进来得到两种结果）。 */
       let parsed: Awaited<ReturnType<typeof parseWorkflowContent>>;
       try {
-        parsed = await parseWorkflowContent(JSON.stringify(candidate), {
-          explicitFormat,
-        });
+        parsed = await parseWorkflowContent(JSON.stringify(body.raw));
       } catch (e: unknown) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: e instanceof Error ? e.message : "工作流解析失败",
         });
       }
-      const apiGraph = parsed.apiGraph;
       const rawJson = parsed.rawJson;
       const positions = parsed.positions;
       const warnings = [...parsed.warnings];
@@ -602,13 +555,10 @@ export const workflowRouter = createTRPCRouter({
         );
       }
 
-      const paramMap = detectParamMap(apiGraph);
       const tpl = await workflowTemplateRepository.createImported({
         userId: ctx.user.id,
         name,
         taskType,
-        graph: apiGraph,
-        paramMap,
         rawJson: rawJson ?? undefined,
         positions: positions ?? undefined,
         modes,
@@ -619,7 +569,6 @@ export const workflowRouter = createTRPCRouter({
         name: tpl.name,
         taskType: tpl.taskType,
         paramMap: tpl.paramMap,
-        format: rawJson ? "raw" : "api",
         warnings: warnings.length ? warnings : undefined,
         hasPositions: !!positions,
       };
@@ -658,7 +607,6 @@ export const workflowRouter = createTRPCRouter({
       z.object({
         id: z.string(),
         name: z.string().min(1).max(200).optional(),
-        graph: z.unknown().optional(),
         rawJson: z.unknown().optional(),
         paramMap: z.unknown().optional(),
         positions: z.unknown().optional(),
@@ -668,7 +616,6 @@ export const workflowRouter = createTRPCRouter({
         modes: z.array(z.string()).optional(),
         defaultMode: z.string().nullable().optional(),
         modelTags: z.array(z.string()).optional(),
-        upgradeFromApi: z.unknown().optional(),
         mergePositions: z.boolean().optional(),
         /** 「重置布局」用：删掉该命名空间下的全部坐标覆盖，让节点回到工作流
          *  自带的原始布局。空串表示顶层；子图视图传宿主链（`4` / `4:5`）。
@@ -689,15 +636,14 @@ export const workflowRouter = createTRPCRouter({
           message: "Workflow not found",
         });
 
-      // patch 为显式字段构造（不含 ...rest 展开），故 upgradeFromApi 无需在此
-      // 排除——它的读取走下方 input.upgradeFromApi，解构里留着反而是死变量。
+      // patch 为显式字段构造（不含 ...rest 展开），故 mergePositions / groups /
+      // notes 无需在此排除——它们的读取走下方具名变量。
       const { id, modelTags, mergePositions, groups, notes, ...rest } = input;
       // WorkflowTemplate 无 thumb 列（旧遗留字段，留在 rest 不透传进 set()）
       const patch: Partial<WorkflowTemplate> = {
         name: rest.name,
         taskType: rest.taskType,
         defaultMode: rest.defaultMode,
-        graph: rest.graph,
         rawJson: rest.rawJson,
         paramMap: rest.paramMap,
         positions: rest.positions,
@@ -706,7 +652,9 @@ export const workflowRouter = createTRPCRouter({
         workflowIO:
           rest.workflowIO !== undefined
             ? persistEnrichedWorkflowIO(
-                ((rest.graph ?? existing.graph) as
+                /* IO 的类型 / 默认值从 RAW 原件的字面量与 object_info 富化，
+                 * 存库不再有第二份可执行的 API 图。 */
+                (existing.rawJson as
                   Record<string, unknown> | null | undefined) ?? null,
                 parseWorkflowIOMap(rest.workflowIO),
               )
@@ -722,18 +670,6 @@ export const workflowRouter = createTRPCRouter({
       if (input.defaultMode !== undefined) {
         patch.defaultMode = input.defaultMode;
       }
-      if (input.upgradeFromApi !== undefined) {
-        const fmt = detectFormat(input.upgradeFromApi);
-        if (fmt !== "api") {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "upgradeFromApi 需要有效的 API 格式工作流 JSON",
-          });
-        }
-        patch.graph = input.upgradeFromApi;
-        patch.apiSource = "user";
-      }
-
       /* 「重置布局」= 直接清除本视图的坐标覆盖。
        *
        *  为什么不是「把快照写回去」：客户端拿到的 `detail.positions` 是
@@ -920,7 +856,6 @@ export const workflowRouter = createTRPCRouter({
       }
       // 把重新导入的内容落回模板
       const updated = await workflowTemplateRepository.update(existing.id, {
-        graph: result.update.graph,
         rawJson: result.update.rawJson ?? existing.rawJson,
         paramMap: result.update.paramMap ?? existing.paramMap,
         positions: result.update.positions ?? existing.positions,

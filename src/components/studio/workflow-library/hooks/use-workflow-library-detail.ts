@@ -161,9 +161,7 @@ export function useWorkflowLibraryDetail(
 
   const formatFlags = useMemo(
     () =>
-      workflow
-        ? deriveFormatFlags(workflow)
-        : { hasApi: false, hasRaw: false, apiOrigin: null, usable: false },
+      workflow ? deriveFormatFlags(workflow) : { hasRaw: false, usable: false },
     [workflow],
   );
 

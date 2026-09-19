@@ -10,24 +10,17 @@ import { displayValue } from "~/lib/display-value";
 /**
  * 查看源文件弹窗（只读）。
  *
- * 之前这里展示的是 `detail.graph`（`/prompt` 用的可执行图，节点
- * 字典 `{nodeId: {class_type, inputs, ...}}`），并不是磁盘上的源文件内容 —— 用户
- * 点「查看源文件」期望看到的是 ComfyUI 保存的原始 JSON（`last_node_id` /
- * `nodes[]` / `widgets_values` …）。改为直接展示 `rawJson`；纯 API 导入（本来
- * 就没有原件）的工作流才回退到 API 图，并在副标题里写明。
- *
- * 「API 兜底」只是**来源**标签，不是「降级」：两种格式都能执行，这里只是说这一
- * 条工作流的原件是 API 格式。
+ * 展示的是 ComfyUI 保存的原始 JSON（`last_node_id` / `nodes[]` /
+ * `widgets_values` …）—— 也就是库里的 `rawJson` 列。本应用只接受这一种格式，
+ * 所以没有「另一种格式的兜底」这回事。
  */
 export interface SourceModalData {
   /** 工作流名（标题用） */
   name: string;
-  /** 磁盘上的原始导入 JSON（ComfyUI UI 格式）。null 表示纯 API 导入。 */
+  /** 磁盘上的原始导入 JSON（ComfyUI 工作流格式）。 */
   source: unknown;
   /** 当前 detail 是否来自子工作流 (drill-in 进 sub) 视图。用于文案区分。 */
   isSubgraph?: boolean;
-  /** true = 该工作流没有原始格式，当前展示的是可执行图兜底。 */
-  isApiFallback?: boolean;
 }
 
 export interface SourceModalProps {
@@ -83,26 +76,16 @@ export function SourceModal({
             <h2 className="text-ink-bright flex items-center gap-2 text-sm font-semibold">
               查看源文件 · {displayValue(data?.name)}
               <span
-                title={
-                  data?.isApiFallback
-                    ? "该工作流的原件就是 API 格式（没有工作流(RAW)原件），当前显示的是它的 API 图"
-                    : "ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
-                }
-                className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide ring-1 ${
-                  data?.isApiFallback
-                    ? "bg-amber-500/20 text-amber-700 ring-amber-500/40 dark:text-amber-300"
-                    : "bg-cyan-500/20 text-cyan-700 ring-cyan-500/40 dark:text-cyan-300"
-                }`}
+                title="ComfyUI 原始 JSON（nodes[] / links[] / widgets_values）"
+                className="rounded bg-cyan-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-cyan-700 ring-1 ring-cyan-500/40 dark:text-cyan-300"
               >
-                {data?.isApiFallback ? "API 原件" : "RAW 原件"}
+                RAW 原件
               </span>
             </h2>
             <p className="text-ink-muted mt-0.5 text-xs">
               {data?.isSubgraph
                 ? "当前为子工作流的源文件内容"
-                : data?.isApiFallback
-                  ? "API 格式导入，原件即 API 图（两种格式地位同等，都能执行）"
-                  : "工作流(RAW)格式导入，显示磁盘上的原始文件内容，未做任何转换"}
+                : "工作流(RAW)格式导入，显示磁盘上的原始文件内容，未做任何转换"}
             </p>
           </div>
           <Button
@@ -144,7 +127,7 @@ export function SourceModal({
             <JsonViewer
               key="source"
               data={data.source}
-              title={data.isApiFallback ? "API 格式" : "工作流(RAW)格式"}
+              title="工作流(RAW)格式"
               initialCollapsedDepth={1}
             />
           )}
