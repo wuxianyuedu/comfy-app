@@ -10,6 +10,7 @@
 import { useCallback, useState } from "react";
 
 import { copyText, downloadJson } from "~/lib/browser-io";
+import { detectFolderHelper } from "~/lib/external-open";
 
 import { useToast } from "../../ToastProvider";
 
@@ -31,9 +32,6 @@ export interface HistoryDetailActions {
   copyPath: () => Promise<void>;
   dismissFolderPopover: () => void;
 }
-
-/** 协议导航后判定超时：2s 内页面失焦视为 OS 已接管。 */
-const PROTOCOL_DETECT_MS = 2000;
 
 /**
  * 动作层：接收两个 tRPC 调用（由调用方注入，便于测试替换）。
@@ -64,35 +62,32 @@ export function useHistoryDetailActions(
       try {
         const result = await deps.openFolder(taskId);
         if (result.comfyappUrl) {
-          // 本机自定义协议方案：服务端已校验目录存在且在白名单内，
-          // 返回 comfyapp://open?path=... URL。这里直接导航（user-initiated 点击），
-          // 浏览器弹「是否打开外部应用」确认 → OS 调起 handler 用 explorer 打开目录。
-          //
-          // 检测协议是否真的被 OS 接管：导航后若超时内页面失去焦点（外部 app 抢走
-          // 焦点），视为已打开；否则认为未注册助手，展示安装引导（防静默失败）。
-          let openedByOs = false;
-          const onBlur = () => {
-            openedByOs = true;
-            window.removeEventListener("blur", onBlur);
-            setFolderPopover((prev) =>
-              prev ? { ...prev, helperMissing: false } : prev,
-            );
-          };
-          window.addEventListener("blur", onBlur);
-          window.location.href = result.comfyappUrl;
-          window.setTimeout(() => {
-            window.removeEventListener("blur", onBlur);
-            if (!openedByOs) {
-              setFolderPopover({
-                path: result.absolutePath ?? "",
-                helperMissing: true,
-              });
-            }
-          }, PROTOCOL_DETECT_MS);
+          /* 本机自定义协议方案：服务端已校验目录存在且在白名单内，返回
+           * comfyapp://open?path=... URL。这里直接导航（user-initiated 点击），
+           * 浏览器弹「是否打开外部应用」确认 → OS 调起 handler 用 explorer
+           * 打开目录。
+           *
+           * 「协议助手有没有真的接管」的探测收在 `~/lib/external-open` 的
+           * `detectFolderHelper`（规范 16 §16.2.4.25）—— 收口前它内联在这里，
+           * 是**全库唯一一处**判这个的文件，于是「点了什么都没发生」在别处
+           * 根本不是一个可表达的状态（防静默失败，硬规则 4）。 */
           setFolderPopover({
             path: result.absolutePath ?? "",
             helperMissing: false,
           });
+          const helper = detectFolderHelper(() =>
+            setFolderPopover((prev) =>
+              prev ? { ...prev, helperMissing: false } : prev,
+            ),
+          );
+          window.location.href = result.comfyappUrl;
+          const state = await helper.settle();
+          if (state === "missing") {
+            setFolderPopover({
+              path: result.absolutePath ?? "",
+              helperMissing: true,
+            });
+          }
         } else if (result.error === "directory missing") {
           toast.error(
             "该任务尚未生成文件目录",

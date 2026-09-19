@@ -16,11 +16,12 @@
  * 视图只渲染：正文 / 片段 / 会话列表 / 选中项都来自 controller（§17 UI 与逻辑分离）。
  */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { StatusDot } from "~/components/ui/status-dot";
+import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
 import { formatSessionLabel } from "~/lib/log/log-sessions";
 import { cn } from "~/lib/utils";
@@ -217,7 +218,12 @@ function LogToolbar({
   );
 }
 
-/** 日志正文（带滚动跟随；小窗口与全屏各挂一个实例）。 */
+/** 日志正文（带滚动跟随；小窗口与全屏各挂一个实例）。
+ *
+ * 贴底与「用户有没有接管滚动」的判据收在 `ui/use-scroll-follow`
+ *（规范 16 §16.2.4.24）—— 收口前它在这里手写，另有三处在别处各写一份、
+ * 判据还不一样。跟随态由父级持有并传下来：小窗口与全屏是**同一份**跟随态，
+ * 两个实例不能各判各的（切进去时应仍是「已暂停」）。 */
 function LogBody({
   log,
   follow,
@@ -231,24 +237,18 @@ function LogBody({
   emptyHint: ReactNode;
   className: string;
 }) {
-  const scrollerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (el && follow) el.scrollTop = el.scrollHeight;
-  }, [log.text, follow]);
-
-  const onScroll = () => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    /* 贴底 32px 内即视为「仍在跟随」：用户上滚一点不该立刻掉出跟随态。 */
-    onFollowChange(el.scrollHeight - el.scrollTop - el.clientHeight < 32);
-  };
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const scroller = useScrollFollow({
+    containerRef: scrollerRef,
+    watch: log.text,
+    following: follow,
+    onFollowingChange: onFollowChange,
+  });
 
   return (
     <div
       ref={scrollerRef}
-      onScroll={onScroll}
+      onScroll={scroller.onScroll}
       className={`bg-canvas-deep text-ink-field custom-scrollbar overflow-y-auto font-mono text-[11px] leading-relaxed ${className}`}
     >
       {log.text ? (

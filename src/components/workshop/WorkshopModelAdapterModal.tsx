@@ -24,6 +24,7 @@ import {
   getWorkflowType,
 } from "~/lib/workflow/workflow-types";
 import { Button } from "~/components/ui/button";
+import { FormField } from "~/components/ui/form-field";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { useModelAdapters } from "./hooks/use-model-adapters";
 
@@ -245,19 +246,25 @@ export function WorkshopModelAdapterModal({
                           : "图片（image）"}
                       </span>
                     </div>
-                    <label className="text-muted-foreground mb-1 block text-[10px]">
-                      端点路径（拼在模型 Base URL 后）
-                    </label>
-                    <input
-                      value={a.endpointPath}
-                      onChange={(event) =>
-                        updateAdapter(a.mode, (x) => ({
-                          ...x,
-                          endpointPath: event.target.value,
-                        }))
-                      }
-                      className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-[11px] outline-none"
-                    />
+                    <FormField
+                      label="端点路径（拼在模型 Base URL 后）"
+                      id={`adapter-endpoint-${a.mode}`}
+                      labelClassName="text-muted-foreground mb-1 text-[10px]"
+                    >
+                      {(a11y) => (
+                        <input
+                          {...a11y}
+                          value={a.endpointPath}
+                          onChange={(event) =>
+                            updateAdapter(a.mode, (x) => ({
+                              ...x,
+                              endpointPath: event.target.value,
+                            }))
+                          }
+                          className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-[11px] outline-none"
+                        />
+                      )}
+                    </FormField>
                     <p className="text-muted-foreground mt-2 mb-1 block text-[10px]">
                       输入映射：统一输入类型 → 请求体字段名
                     </p>
@@ -349,21 +356,26 @@ export function WorkshopModelAdapterModal({
                         ＋ 添加输入映射
                       </Button>
                     </div>
-                    <label className="text-muted-foreground mt-2 mb-1 block text-[10px]">
-                      产物字段路径（响应 JSON 内，如 url /
-                      data.0.url；留空走通用提取）
-                    </label>
-                    <input
-                      value={a.outputField}
-                      onChange={(event) =>
-                        updateAdapter(a.mode, (x) => ({
-                          ...x,
-                          outputField: event.target.value,
-                        }))
-                      }
-                      placeholder="url"
-                      className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-[11px] outline-none"
-                    />
+                    <FormField
+                      label="产物字段路径（响应 JSON 内，如 url / data.0.url；留空走通用提取）"
+                      id={`adapter-output-${a.mode}`}
+                      labelClassName="text-muted-foreground mt-2 mb-1 text-[10px]"
+                    >
+                      {(a11y) => (
+                        <input
+                          {...a11y}
+                          value={a.outputField}
+                          onChange={(event) =>
+                            updateAdapter(a.mode, (x) => ({
+                              ...x,
+                              outputField: event.target.value,
+                            }))
+                          }
+                          placeholder="url"
+                          className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-[11px] outline-none"
+                        />
+                      )}
+                    </FormField>
                   </div>
                 ))}
               </>

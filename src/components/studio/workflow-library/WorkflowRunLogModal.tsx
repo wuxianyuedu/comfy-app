@@ -37,6 +37,7 @@ import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
+import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
 type Level = TaskLogEntry["level"];
@@ -136,20 +137,22 @@ export function WorkflowRunLogModal({
   /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
   const panel = useWidePanel("wflib-run-log", RUN_LOG_WIDTH);
   const [autoscroll, setAutoscroll] = useState(true);
+  /* 贴底与「用户有没有接管滚动」的判据收在 `ui/use-scroll-follow`
+   *（规范 16 §16.2.4.24）。收口前这里是手写的 `scrollTop = scrollHeight`
+   * —— 用户上滚读历史会被按回底部，且没有跟随态可显示。 */
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const scroller = useScrollFollow({
+    containerRef: scrollerRef,
+    watch: `${logs.length}:${filter}:${open}`,
+    following: autoscroll,
+    onFollowingChange: setAutoscroll,
+  });
 
   /* 弹窗取消按钮复用画布同款 hook（视图零 IO）。 */
   const { cancelling, cancel } = useCancelTask({
     taskId: viewTaskId,
     onFailed: () => undefined,
   });
-
-  useEffect(() => {
-    if (!autoscroll) return;
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [logs.length, filter, autoscroll, open]);
 
   if (!open) return null;
 
@@ -306,6 +309,7 @@ export function WorkflowRunLogModal({
           {/* Log body */}
           <div
             ref={scrollerRef}
+            onScroll={scroller.onScroll}
             className="custom-scrollbar bg-panel-deep/60 flex-1 overflow-y-auto"
           >
             {run?.errorMessage && (

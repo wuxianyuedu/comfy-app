@@ -8,6 +8,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
 import { StatusDot } from "~/components/ui/status-dot";
+import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import type {
   WorkshopAgentController,
   AgentToolRun,
@@ -45,13 +46,18 @@ export function AgentOverlay({
     setInput,
     send,
   } = controller;
-  const scrollRef = React.useRef<HTMLDivElement>(null);
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
-  React.useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, busy]);
+  /* 对话区跟随底部：贴底与「用户有没有接管滚动」的判据收在
+   * `ui/use-scroll-follow`（规范 16 §16.2.4.24）。收口前这里是手写的
+   * `scrollTop = scrollHeight` —— 用户往上滚读上一句 AI 回复会被立刻按回
+   * 底部（`messages` / `busy` 一变就拉回去），而且**连开关都没有**。
+   * 现在上滚即暂停跟随，并给出「回到最新」的可见出口。 */
+  const followRef = React.useRef<HTMLDivElement>(null);
+  const follow = useScrollFollow({
+    containerRef: followRef,
+    watch: `${messages.length}:${busy}`,
+  });
 
   if (!open) return null;
 
@@ -116,64 +122,81 @@ export function AgentOverlay({
         </div>
       )}
 
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 space-y-3 overflow-y-auto px-4 py-3"
-      >
-        {visibleMessages.map((msg) => {
-          if (msg.role === "user") {
+      {/* Messages。`relative` 是给「回到最新」的悬浮按钮当定位上下文 ——
+          用户上滚后必须有一个能回到最新的出口（硬规则 4），否则只会觉得
+          「消息不刷新了」。 */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={followRef}
+          onScroll={follow.onScroll}
+          className="flex-1 space-y-3 overflow-y-auto px-4 py-3"
+        >
+          {visibleMessages.map((msg) => {
+            if (msg.role === "user") {
+              return (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl bg-violet-500/90 px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-white">
+                    {msg.content}
+                  </div>
+                </div>
+              );
+            }
+            if (msg.role === "tool-run") {
+              return (
+                <div key={msg.id} className="flex justify-start">
+                  <div className="border-border/60 bg-bg/80 text-muted-foreground max-w-[85%] rounded-xl border px-3 py-1.5 text-[11px]">
+                    ⚙ {msg.run.summary}
+                  </div>
+                </div>
+              );
+            }
+            // assistant
             return (
-              <div key={msg.id} className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl bg-violet-500/90 px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-white">
+              <div key={msg.id} className="flex justify-start">
+                <div className="bg-subtle text-ink max-w-[85%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap">
                   {msg.content}
                 </div>
               </div>
             );
-          }
-          if (msg.role === "tool-run") {
-            return (
-              <div key={msg.id} className="flex justify-start">
-                <div className="border-border/60 bg-bg/80 text-muted-foreground max-w-[85%] rounded-xl border px-3 py-1.5 text-[11px]">
-                  ⚙ {msg.run.summary}
-                </div>
-              </div>
-            );
-          }
-          // assistant
-          return (
-            <div key={msg.id} className="flex justify-start">
-              <div className="bg-subtle text-ink max-w-[85%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap">
-                {msg.content}
-              </div>
-            </div>
-          );
-        })}
+          })}
 
-        {busy && (
-          <div className="flex justify-start">
-            <div className="bg-subtle rounded-2xl px-3 py-2.5">
-              <span className="inline-flex gap-1">
-                <StatusDot
-                  state="probing"
-                  sizeClass="size-1.5 bg-muted-foreground"
-                  pulse
-                />
-                <StatusDot
-                  state="probing"
-                  sizeClass="size-1.5 bg-muted-foreground"
-                  pulse
-                  className="[animation-delay:0.15s]"
-                />
-                <StatusDot
-                  state="probing"
-                  sizeClass="size-1.5 bg-muted-foreground"
-                  pulse
-                  className="[animation-delay:0.3s]"
-                />
-              </span>
+          {busy && (
+            <div className="flex justify-start">
+              <div className="bg-subtle rounded-2xl px-3 py-2.5">
+                <span className="inline-flex gap-1">
+                  <StatusDot
+                    state="probing"
+                    sizeClass="size-1.5 bg-muted-foreground"
+                    pulse
+                  />
+                  <StatusDot
+                    state="probing"
+                    sizeClass="size-1.5 bg-muted-foreground"
+                    pulse
+                    className="[animation-delay:0.15s]"
+                  />
+                  <StatusDot
+                    state="probing"
+                    sizeClass="size-1.5 bg-muted-foreground"
+                    pulse
+                    className="[animation-delay:0.3s]"
+                  />
+                </span>
+              </div>
             </div>
-          </div>
+          )}
+        </div>
+
+        {/* 上滚后的可见出口：不给它，用户只会觉得「AI 不回复了」。 */}
+        {!follow.following && (
+          <Button
+            variant="primary-solid"
+            size="xs"
+            onClick={follow.jumpToLatest}
+            className="absolute bottom-3 left-1/2 h-auto -translate-x-1/2 rounded-full px-3 py-1 text-[11px] shadow-lg"
+          >
+            回到最新
+          </Button>
         )}
       </div>
 

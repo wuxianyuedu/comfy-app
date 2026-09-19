@@ -10,9 +10,14 @@ import { useMemo } from "react";
 
 import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
+import { FormField } from "~/components/ui/form-field";
 import { Button } from "~/components/ui/button";
 import { useFilePicker } from "~/components/ui/file-picker";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
+
+/* 导入面板的字段标签档：比设置页小一号（此处是密集的导入表单）。
+ * 覆盖 `FormField` 的默认 `text-sm` —— tailwind-merge 同属性后者赢。 */
+const IMPORT_LABEL_CLASS = "text-ink-soft mb-1 text-xs font-medium";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;
 
@@ -96,21 +101,26 @@ export function WorkflowImportPanel({
 
       {/* 通用：名字 + 模式 */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
-        <div>
-          <label className="text-ink-soft mb-1 block text-xs font-medium">
-            工作流名称
-          </label>
-          <input
-            value={importName}
-            onChange={(event) => setImportName(event.target.value)}
-            placeholder="例如：胶片人像 _v2（留空则用文件名）"
-            className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
-          />
-        </div>
-        <div>
-          <label className="text-ink-soft mb-1 block text-xs font-medium">
-            模式
-          </label>
+        <FormField
+          label="工作流名称"
+          id="workflow-import-name"
+          labelClassName={IMPORT_LABEL_CLASS}
+        >
+          {(a11y) => (
+            <input
+              {...a11y}
+              value={importName}
+              onChange={(event) => setImportName(event.target.value)}
+              placeholder="例如：胶片人像 _v2（留空则用文件名）"
+              className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
+            />
+          )}
+        </FormField>
+        <FormField
+          label="模式"
+          id="workflow-import-mode"
+          labelClassName={IMPORT_LABEL_CLASS}
+        >
           <MultiModeSelect
             modes={importModes}
             defaultMode={importDefaultMode}
@@ -119,7 +129,7 @@ export function WorkflowImportPanel({
               setImportDefaultMode(def);
             }}
           />
-        </div>
+        </FormField>
       </div>
 
       <div className="mt-3 flex items-center gap-1.5">

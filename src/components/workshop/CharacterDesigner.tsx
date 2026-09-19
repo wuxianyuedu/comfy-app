@@ -4,6 +4,7 @@ import { Trash } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { FormField } from "~/components/ui/form-field";
 import { Disclosure } from "~/components/ui/disclosure";
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
 import {
@@ -716,14 +717,19 @@ function Field({
   placeholder?: string;
 }) {
   return (
-    <label className="block">
-      <span className="text-muted-foreground mb-1 block text-xs">{label}</span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="border-border bg-bg focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
-        placeholder={placeholder}
-      />
-    </label>
+    <FormField
+      label={label}
+      labelClassName="text-muted-foreground mb-1 text-xs"
+    >
+      {(a11y) => (
+        <input
+          {...a11y}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="border-border bg-bg focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
+          placeholder={placeholder}
+        />
+      )}
+    </FormField>
   );
 }
