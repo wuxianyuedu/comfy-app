@@ -22,6 +22,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   buildLibraryWorkflowInput,
+  prepareLocalInputImage,
   startLocalGenerate,
   watchTask,
 } from "~/lib/workshop/generation-client";
@@ -31,7 +32,7 @@ import {
   patchWorkflowRun,
   registerWorkflowRun,
 } from "~/lib/workflow/workflow-run-store";
-import type { SizeSpec } from "~/lib/media/size-presets";
+import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 
 export interface EncapsulationTestRunArgs {
   workflowId: string;
@@ -52,12 +53,28 @@ export interface EncapsulationTestRunController {
   resultUrl: string | null;
   /** 最近一次登记的 taskId（日志弹窗按它定位）。 */
   taskId: string | null;
-  /** 跑一次流程测试（已跑/未就绪时为空操作）。 */
-  run: (values: {
-    prompt?: string;
-    negativePrompt?: string;
-    size?: SizeSpec;
-  }) => void;
+  /** 跑一次流程测试（已跑/未就绪时为空操作）。
+   *
+   *  收的是**工坊对外值**本身：表单摆出来的口就是契约口清单，值直接交给
+   *  `buildLibraryWorkflowInput` 落点，中间不再有「只认提示词 / 负向 / 尺寸」
+   *  的第二份字段白名单（那份白名单会让表单多出的口静默丢掉）。 */
+  run: (values: WorkshopExposedValues) => void;
+  /** 把用户选的本地图片送进 ComfyUI 输入目录，返回可直接落进工作流的文件名。
+   *  读文件与上传都在这一层（§17.2 第②层），视图只拿结果字符串。 */
+  uploadImage: (file: File) => Promise<string>;
+}
+
+/** 本地文件 → data URL（ComfyUI 输入目录的准备接口认这一种来源）。 */
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      resolve(typeof result === "string" ? result : "");
+    };
+    reader.onerror = () => reject(new Error("读取本地图片失败"));
+    reader.readAsDataURL(file);
+  });
 }
 
 /** 流程测试的运行编排：登记进共享运行态 + 订阅 SSE。 */
@@ -141,8 +158,22 @@ export function useEncapsulationTestRun({
     [workflowId, workflowName, mode],
   );
 
+  const uploadImage = useCallback(async (file: File) => {
+    const dataUrl = await readAsDataUrl(file);
+    if (!dataUrl) throw new Error("读取本地图片失败");
+    return prepareLocalInputImage(dataUrl);
+  }, []);
+
   return useMemo(
-    () => ({ running, progress, error, resultUrl, taskId, run }),
-    [running, progress, error, resultUrl, taskId, run],
+    () => ({
+      running,
+      progress,
+      error,
+      resultUrl,
+      taskId,
+      run,
+      uploadImage,
+    }),
+    [running, progress, error, resultUrl, taskId, run, uploadImage],
   );
 }

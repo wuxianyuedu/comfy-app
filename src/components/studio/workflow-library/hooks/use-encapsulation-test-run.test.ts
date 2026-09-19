@@ -24,6 +24,7 @@ vi.mock("~/lib/workshop/generation-client", () => ({
     usesLastFrame: false,
   }),
   startLocalGenerate: vi.fn().mockResolvedValue("task-test"),
+  prepareLocalInputImage: vi.fn().mockResolvedValue("uploaded.png"),
   watchTask: vi.fn(
     (
       _id: string,
@@ -106,5 +107,24 @@ describe("useEncapsulationTestRun", () => {
     const { startLocalGenerate } =
       await import("~/lib/workshop/generation-client");
     expect(vi.mocked(startLocalGenerate)).toHaveBeenCalledTimes(1);
+  });
+
+  it("本地图片读成 data URL 再交给准备接口，回传可直接落进工作流的文件名", async () => {
+    const { result } = renderHook(() =>
+      useEncapsulationTestRun({
+        workflowId: "wf1",
+        workflowName: "图生视频",
+        mode: "I2V",
+      }),
+    );
+    const file = new File(["x"], "cat.png", { type: "image/png" });
+    await expect(result.current.uploadImage(file)).resolves.toBe(
+      "uploaded.png",
+    );
+    const { prepareLocalInputImage } =
+      await import("~/lib/workshop/generation-client");
+    expect(vi.mocked(prepareLocalInputImage)).toHaveBeenCalledWith(
+      expect.stringContaining("data:"),
+    );
   });
 });
