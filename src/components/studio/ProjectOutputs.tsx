@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
 import { copyText, downloadText } from "~/lib/browser-io";
@@ -312,158 +313,172 @@ export function ProjectOutputs() {
       </div>
 
       {/* ── Metadata drawer ── */}
-      {selected && (
-        <>
-          {/* 遮罩 + 抽屉都从标题行下方起：顶部让出应用页签栏（ISSUE #310） */}
-          <div
-            className="top-title-bar bg-canvas-deep dark:bg-canvas-deep z-modal fixed right-0 bottom-0 left-0"
-            onClick={() => setSelectedId(null)}
-          />
-          <aside className="top-title-bar bg-node border-border-strong z-modal fixed right-0 bottom-0 flex w-[380px] max-w-[90vw] flex-col overflow-hidden border-l shadow-2xl shadow-black/10 dark:shadow-black/50">
-            {/* head */}
-            <div className="border-border-strong flex items-center justify-between border-b px-5 py-3">
-              <div className="flex items-center gap-2">
-                <h3 className="font-title text-ink-bright text-sm font-bold">
-                  产出 #{selected.id.slice(-4)}
-                </h3>
-                <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
-                  {TYPE_CHIP[selected.type] ?? selected.type}
-                </span>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setSelectedId(null)}
-                className="text-ink-muted hover:text-ink"
-                aria-label="关闭"
-              >
-                <X size={16} />
-              </Button>
-            </div>
-
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-              {/* reference images */}
-              <section>
-                <p className="text-ink-soft mb-2 text-xs font-semibold">
-                  参考图
-                </p>
-                {selected.referenceImages.length ? (
-                  <div className="grid grid-cols-4 gap-2">
-                    {selected.referenceImages.map((image, index) => (
-                      <div
-                        key={image}
-                        className="border-border-strong bg-panel-deep aspect-square overflow-hidden rounded-lg border"
-                      >
-                        {}
-                        <img
-                          src={refSrc(image)}
-                          alt={`参考图 ${index + 1}`}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-ink-fainter text-[11px]">
-                    本次生成无参考图（纯文生图）。
-                  </p>
-                )}
-                <p className="text-ink-fainter mt-1.5 text-[10.5px]">
-                  参考图随产出一起保存到项目目录，复现时可一键还原。
-                </p>
-              </section>
-
-              {/* prompts */}
-              <section className="space-y-2">
-                <div>
-                  <p className="text-ink-soft mb-1 text-xs font-semibold">
-                    正向提示词
-                  </p>
-                  <div className="border-border-strong bg-subtle text-ink-soft max-h-28 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
-                    {displayValue(selected.prompt)}
-                  </div>
+      {/* 右侧抽屉走 `ui/sheet`（side="right"）：此前自绘遮罩 div + 手写
+          `onClick` 关闭 + 手搓右锚定面板，Esc 没接、焦点不锁也不归还 ——
+          与设置页两个抽屉（已迁 `ui/sheet`）是同一件事的两套写法。
+          遮罩与面板都由基元 Portal，顶部让出标题行的硬判据（ISSUE #310）
+          收在 `dialogBackdropClass()` 里。 */}
+      <Sheet
+        open={selected !== null}
+        onOpenChange={(next) => !next && setSelectedId(null)}
+      >
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="gap-0 p-0"
+          panelClassName="bg-node border-border-strong w-[380px] max-w-[90vw]"
+        >
+          {selected && (
+            <>
+              {/* head */}
+              <div className="border-border-strong flex items-center justify-between border-b px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-title text-ink-bright text-sm font-bold">
+                    产出 #{selected.id.slice(-4)}
+                  </h3>
+                  <span className="rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                    {TYPE_CHIP[selected.type] ?? selected.type}
+                  </span>
                 </div>
-                {selected.negativePrompt && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setSelectedId(null)}
+                  className="text-ink-muted hover:text-ink"
+                  aria-label="关闭"
+                >
+                  <X size={16} />
+                </Button>
+              </div>
+
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+                {/* reference images */}
+                <section>
+                  <p className="text-ink-soft mb-2 text-xs font-semibold">
+                    参考图
+                  </p>
+                  {selected.referenceImages.length ? (
+                    <div className="grid grid-cols-4 gap-2">
+                      {selected.referenceImages.map((image, index) => (
+                        <div
+                          key={image}
+                          className="border-border-strong bg-panel-deep aspect-square overflow-hidden rounded-lg border"
+                        >
+                          {}
+                          <img
+                            src={refSrc(image)}
+                            alt={`参考图 ${index + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-ink-fainter text-[11px]">
+                      本次生成无参考图（纯文生图）。
+                    </p>
+                  )}
+                  <p className="text-ink-fainter mt-1.5 text-[10.5px]">
+                    参考图随产出一起保存到项目目录，复现时可一键还原。
+                  </p>
+                </section>
+
+                {/* prompts */}
+                <section className="space-y-2">
                   <div>
                     <p className="text-ink-soft mb-1 text-xs font-semibold">
-                      反向提示词
+                      正向提示词
                     </p>
-                    <div className="border-border-strong bg-subtle text-ink-muted max-h-24 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
-                      {selected.negativePrompt}
+                    <div className="border-border-strong bg-subtle text-ink-soft max-h-28 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
+                      {displayValue(selected.prompt)}
                     </div>
                   </div>
-                )}
-              </section>
+                  {selected.negativePrompt && (
+                    <div>
+                      <p className="text-ink-soft mb-1 text-xs font-semibold">
+                        反向提示词
+                      </p>
+                      <div className="border-border-strong bg-subtle text-ink-muted max-h-24 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
+                        {selected.negativePrompt}
+                      </div>
+                    </div>
+                  )}
+                </section>
 
-              {/* params table */}
-              <section>
-                <p className="text-ink-soft mb-2 text-xs font-semibold">参数</p>
-                <div className="border-border-strong overflow-hidden rounded-lg border">
-                  {/* 整张表走同一个判据：**取到没有**由 `displayValue` 定义，
+                {/* params table */}
+                <section>
+                  <p className="text-ink-soft mb-2 text-xs font-semibold">
+                    参数
+                  </p>
+                  <div className="border-border-strong overflow-hidden rounded-lg border">
+                    {/* 整张表走同一个判据：**取到没有**由 `displayValue` 定义，
                       值自己怎么成文本（`steps` / `cfg` 是数字，`timeAgo` 已是
                       字符串）交给它 —— 此前每一行都各写一遍 `?? "—"`，而
                       `steps` / `cfg` 那两行还把 `String()` 与占位符拼在一起。 */}
-                  {[
-                    ["Seed", displayValue(selected.seed)],
-                    ["模型", displayValue(selected.checkpoint)],
-                    ["采样器", displayValue(selected.sampler)],
-                    ["步数", displayValue(selected.steps)],
-                    ["CFG", displayValue(selected.cfg)],
-                    ["尺寸", displayValue(selected.size)],
-                    ["时间", displayValue(timeAgo(selected.createdAt))],
-                  ].map(([k, v], i) => (
-                    <div
-                      key={k}
-                      className={`flex items-center justify-between px-3 py-2 text-[12px] ${
-                        i % 2 === 0 ? "bg-subtle" : ""
-                      }`}
-                    >
-                      <span className="text-ink-muted">{k}</span>
-                      <span className="text-ink-bright font-mono">{v}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
+                    {[
+                      ["Seed", displayValue(selected.seed)],
+                      ["模型", displayValue(selected.checkpoint)],
+                      ["采样器", displayValue(selected.sampler)],
+                      ["步数", displayValue(selected.steps)],
+                      ["CFG", displayValue(selected.cfg)],
+                      ["尺寸", displayValue(selected.size)],
+                      ["时间", displayValue(timeAgo(selected.createdAt))],
+                    ].map(([k, v], i) => (
+                      <div
+                        key={k}
+                        className={`flex items-center justify-between px-3 py-2 text-[12px] ${
+                          i % 2 === 0 ? "bg-subtle" : ""
+                        }`}
+                      >
+                        <span className="text-ink-muted">{k}</span>
+                        <span className="text-ink-bright font-mono">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
 
-              {/* source */}
-              <section>
-                <p className="text-ink-soft mb-1 text-xs font-semibold">来源</p>
-                <p className="text-ink-soft text-[12px]">
-                  工作流：{displayValue(selected.workflowName)}
-                </p>
-              </section>
-            </div>
-
-            {/* footer actions */}
-            <div className="border-border-strong border-t p-4">
-              <div className="flex gap-2">
-                <Button
-                  variant="primary-solid"
-                  size="sm"
-                  onClick={handleCopy}
-                  className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
-                >
-                  {copied.on ? "已复制 ✓" : "复制元数据"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExport}
-                  className="border-border-strong text-ink-soft hover:bg-subtle h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
-                >
-                  导出 JSON
-                </Button>
+                {/* source */}
+                <section>
+                  <p className="text-ink-soft mb-1 text-xs font-semibold">
+                    来源
+                  </p>
+                  <p className="text-ink-soft text-[12px]">
+                    工作流：{displayValue(selected.workflowName)}
+                  </p>
+                </section>
               </div>
-              <p className="text-ink-fainter mt-2 text-[10.5px]">
-                文件已保存至{" "}
-                <span className="text-ink-muted font-mono">
-                  public/generated/projects/{projectId}/{selected.id}/
-                </span>
-              </p>
-            </div>
-          </aside>
-        </>
-      )}
+
+              {/* footer actions */}
+              <div className="border-border-strong border-t p-4">
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary-solid"
+                    size="sm"
+                    onClick={handleCopy}
+                    className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                  >
+                    {copied.on ? "已复制 ✓" : "复制元数据"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    className="border-border-strong text-ink-soft hover:bg-subtle h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                  >
+                    导出 JSON
+                  </Button>
+                </div>
+                <p className="text-ink-fainter mt-2 text-[10.5px]">
+                  文件已保存至{" "}
+                  <span className="text-ink-muted font-mono">
+                    public/generated/projects/{projectId}/{selected.id}/
+                  </span>
+                </p>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

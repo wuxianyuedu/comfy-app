@@ -21,8 +21,8 @@ import {
   videoModeMissingHint,
 } from "~/lib/llm/usage-test-config";
 import type { UsageTestKind } from "~/lib/llm/usage-test-client";
-import { overlayClass } from "~/lib/full-screen-layer";
 import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { Spinner } from "~/components/ui/page-loading";
 import { Textarea } from "~/components/ui/textarea";
@@ -34,7 +34,6 @@ import type {
   RemoteModelDialogs,
   UsageTestDialogState,
 } from "../hooks/use-remote-model-dialogs";
-import { zClass } from "~/lib/shell/overlay-z";
 
 const USAGE_TEST_KIND_LABELS: Record<UsageTestKind, string> = {
   chat: "文本",
@@ -51,19 +50,15 @@ export function UsageTestDialog({
   /** 非空由调用方保证：仅在弹窗打开时渲染。 */
   usageTest: NonNullable<UsageTestDialogState>;
 }) {
+  /* 关闭语义（Esc / 点遮罩）交给 `ui/dialog`：此前自绘遮罩 div + 手写
+     `onClick`，Esc 与焦点归还都没有。 */
   return (
-    <>
-      <div
-        className={overlayClass(
-          "modal",
-          `${zClass("modal")} bg-canvas-deep grid place-items-center p-4`,
-        )}
-        onClick={() => d.closeUsageTest()}
+    <Dialog open onOpenChange={(next) => !next && d.closeUsageTest()}>
+      <DialogContent
+        className="bg-transparent p-0 ring-0"
+        popupClassName="max-w-md"
       >
-        <div
-          className="border-border bg-surface max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border p-5 shadow-2xl"
-          onClick={(event) => event.stopPropagation()}
-        >
+        <div className="border-border bg-surface max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border p-5 shadow-2xl">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="u-title">
               实际调用测试 · {USAGE_TEST_KIND_LABELS[usageTest.kind]}
@@ -241,8 +236,8 @@ export function UsageTestDialog({
             </Button>
           </div>
         </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }
 

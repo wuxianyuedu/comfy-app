@@ -13,8 +13,7 @@ import {
   type FolderConfigRow as FolderConfigRowData,
   fmtSize,
 } from "./model-library-config";
-import { overlayClass } from "~/lib/full-screen-layer";
-import { zClass } from "~/lib/shell/overlay-z";
+import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 /**
  * 工作室模型库 —— 视图层（规范 17 §17.2 第③层）。
@@ -198,163 +197,165 @@ function FilterChip({
 function ModelConfigModal({ onClose }: { onClose: () => void }) {
   const c = useModelFolderConfig();
 
+  /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前把遮罩写成
+     一个**兄弟 div** 单独接 `onClick`（与全库其余弹窗的「外层带 onClick +
+     内层 stopPropagation」又是一种写法），Esc 没接、焦点不锁也不归还。 */
   return (
-    <div
-      className={overlayClass(
-        "modal",
-        `${zClass("modal")} flex items-center justify-center p-4`,
-      )}
-    >
-      <div
-        className="absolute inset-0 bg-black/25 backdrop-blur-sm dark:bg-black/60"
-        onClick={onClose}
-      />
-      <div className="border-border bg-panel relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/50">
-        {/* header */}
-        <div className="border-border-subtle flex items-start justify-between border-b px-5 py-4">
-          <div>
-            <h2 className="text-ink flex items-center gap-2 text-base font-semibold">
-              <Icon
-                name="foldertree"
-                size={18}
-                className="text-violet-700 dark:text-violet-400"
-              />
-              模型目录配置
-            </h2>
-            <p className="text-ink-muted mt-0.5 text-xs">
-              勾选需要扫描的 ComfyUI
-              模型目录；每个目录即独立模型类型（目录名即类型名）。禁用后该目录模型将从模型库与画布
-              COMBO 下拉中隐藏。
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright rounded-lg"
-            aria-label="关闭"
-          >
-            <Icon name="close" size={18} />
-          </Button>
-        </div>
-
-        {/* status + scan */}
-        <div className="border-border-subtle flex items-center justify-between gap-3 border-b px-5 py-3">
-          <div className="flex items-center gap-3 text-xs">
-            {c.comfyReachable ? (
-              <span className="text-emerald-700 dark:text-emerald-400">
-                ● ComfyUI 已连接 · 共 {c.totalCount} 个目录
-              </span>
-            ) : (
-              <span className="text-amber-700 dark:text-amber-400">
-                ● ComfyUI 未连接
-              </span>
-            )}
-            <span className="text-ink-muted">
-              · 已启用 {c.enabledRows.length} 个
-            </span>
-            {c.err && (
-              <span className="text-rose-700 dark:text-rose-400">{c.err}</span>
-            )}
-          </div>
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => void c.rescan()}
-            disabled={c.scanning}
-            className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-1.5"
-          >
-            {c.scanning ? (
-              <Spinner className="size-3.5" />
-            ) : (
-              <Icon name="shuffle" size={14} />
-            )}
-            {c.scanning ? "扫描中…" : "重新扫描"}
-          </Button>
-        </div>
-
-        {/* search + filter */}
-        <div className="flex items-center gap-3 px-5 py-3">
-          <input
-            value={c.q}
-            onChange={(event) => c.setQ(event.target.value)}
-            placeholder="搜索目录名…"
-            className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
-          />
-          <label className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={c.onlyEnabled}
-              onChange={(event) => c.setOnlyEnabled(event.target.checked)}
-              className="border-border-strong bg-surface-2 h-3.5 w-3.5 rounded text-violet-700 focus:ring-violet-400/40 dark:text-violet-400"
-            />
-            仅显示已启用
-          </label>
-        </div>
-
-        {/* list */}
-        <div className="flex-1 overflow-y-auto px-5 pb-5">
-          {c.loading ? (
-            <p className="text-ink-muted text-sm">加载中…</p>
-          ) : c.totalCount === 0 ? (
-            <div className="border-border text-ink-muted grid min-h-[160px] place-items-center rounded-xl border border-dashed">
-              <p className="text-sm">
-                {c.comfyReachable
-                  ? "ComfyUI 中没有可识别的模型目录。"
-                  : "未连接 ComfyUI；请先启动本地 ComfyUI。"}
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className="bg-transparent p-0 ring-0"
+        popupClassName="max-w-3xl"
+      >
+        <div className="border-border bg-panel relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/50">
+          {/* header */}
+          <div className="border-border-subtle flex items-start justify-between border-b px-5 py-4">
+            <div>
+              <h2 className="text-ink flex items-center gap-2 text-base font-semibold">
+                <Icon
+                  name="foldertree"
+                  size={18}
+                  className="text-violet-700 dark:text-violet-400"
+                />
+                模型目录配置
+              </h2>
+              <p className="text-ink-muted mt-0.5 text-xs">
+                勾选需要扫描的 ComfyUI
+                模型目录；每个目录即独立模型类型（目录名即类型名）。禁用后该目录模型将从模型库与画布
+                COMBO 下拉中隐藏。
               </p>
             </div>
-          ) : (
-            <>
-              {c.enabledRows.length > 0 && (
-                <section className="mb-6">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
-                      已启用 · {c.enabledRows.length}
-                    </h3>
-                  </div>
-                  <div className="space-y-2">
-                    {c.enabledRows.map((row) => (
-                      <FolderConfigRow
-                        key={row.folder}
-                        row={row}
-                        onToggle={c.toggle}
-                        onAdd={c.add}
-                        onDelete={c.remove}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={onClose}
+              className="text-ink-muted hover:bg-surface-2 hover:text-ink-bright rounded-lg"
+              aria-label="关闭"
+            >
+              <Icon name="close" size={18} />
+            </Button>
+          </div>
 
-              {!c.onlyEnabled && c.availableRows.length > 0 && (
-                <section>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
-                      可添加 · {c.availableRows.length}
-                    </h3>
-                    <p className="text-ink-muted text-[11px]">
-                      点「启用」加入扫描列表
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    {c.availableRows.map((row) => (
-                      <FolderConfigRow
-                        key={row.folder}
-                        row={row}
-                        onToggle={c.toggle}
-                        onAdd={c.add}
-                        onDelete={c.remove}
-                      />
-                    ))}
-                  </div>
-                </section>
+          {/* status + scan */}
+          <div className="border-border-subtle flex items-center justify-between gap-3 border-b px-5 py-3">
+            <div className="flex items-center gap-3 text-xs">
+              {c.comfyReachable ? (
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  ● ComfyUI 已连接 · 共 {c.totalCount} 个目录
+                </span>
+              ) : (
+                <span className="text-amber-700 dark:text-amber-400">
+                  ● ComfyUI 未连接
+                </span>
               )}
-            </>
-          )}
+              <span className="text-ink-muted">
+                · 已启用 {c.enabledRows.length} 个
+              </span>
+              {c.err && (
+                <span className="text-rose-700 dark:text-rose-400">
+                  {c.err}
+                </span>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => void c.rescan()}
+              disabled={c.scanning}
+              className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-1.5"
+            >
+              {c.scanning ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <Icon name="shuffle" size={14} />
+              )}
+              {c.scanning ? "扫描中…" : "重新扫描"}
+            </Button>
+          </div>
+
+          {/* search + filter */}
+          <div className="flex items-center gap-3 px-5 py-3">
+            <input
+              value={c.q}
+              onChange={(event) => c.setQ(event.target.value)}
+              placeholder="搜索目录名…"
+              className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
+            />
+            <label className="text-ink-faint flex shrink-0 cursor-pointer items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={c.onlyEnabled}
+                onChange={(event) => c.setOnlyEnabled(event.target.checked)}
+                className="border-border-strong bg-surface-2 h-3.5 w-3.5 rounded text-violet-700 focus:ring-violet-400/40 dark:text-violet-400"
+              />
+              仅显示已启用
+            </label>
+          </div>
+
+          {/* list */}
+          <div className="flex-1 overflow-y-auto px-5 pb-5">
+            {c.loading ? (
+              <p className="text-ink-muted text-sm">加载中…</p>
+            ) : c.totalCount === 0 ? (
+              <div className="border-border text-ink-muted grid min-h-[160px] place-items-center rounded-xl border border-dashed">
+                <p className="text-sm">
+                  {c.comfyReachable
+                    ? "ComfyUI 中没有可识别的模型目录。"
+                    : "未连接 ComfyUI；请先启动本地 ComfyUI。"}
+                </p>
+              </div>
+            ) : (
+              <>
+                {c.enabledRows.length > 0 && (
+                  <section className="mb-6">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
+                        已启用 · {c.enabledRows.length}
+                      </h3>
+                    </div>
+                    <div className="space-y-2">
+                      {c.enabledRows.map((row) => (
+                        <FolderConfigRow
+                          key={row.folder}
+                          row={row}
+                          onToggle={c.toggle}
+                          onAdd={c.add}
+                          onDelete={c.remove}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {!c.onlyEnabled && c.availableRows.length > 0 && (
+                  <section>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-ink-faint text-xs font-medium tracking-wide uppercase">
+                        可添加 · {c.availableRows.length}
+                      </h3>
+                      <p className="text-ink-muted text-[11px]">
+                        点「启用」加入扫描列表
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {c.availableRows.map((row) => (
+                        <FolderConfigRow
+                          key={row.folder}
+                          row={row}
+                          onToggle={c.toggle}
+                          onAdd={c.add}
+                          onDelete={c.remove}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
