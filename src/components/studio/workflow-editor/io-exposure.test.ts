@@ -113,12 +113,12 @@ describe("mergeExposedEntry — 本地编辑态覆盖服务端富化", () => {
       {
         label: "seed",
         required: true,
-        modes: { i2v: { visible: false } },
+        modeOverrides: { i2v: { visible: false } },
       },
       enriched(),
     );
     expect(merged.required).toBe(true);
-    expect(merged.modes).toEqual({ i2v: { visible: false } });
+    expect(merged.modeOverrides).toEqual({ i2v: { visible: false } });
   });
 
   it("本地没有 label 时沿用服务端富化名，不会把名字清空", () => {

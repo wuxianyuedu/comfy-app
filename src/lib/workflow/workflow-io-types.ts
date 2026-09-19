@@ -31,8 +31,11 @@ export interface WorkflowIOEntry {
    *  与 ComfyUI 的 control_after_generate 对应；仅 seed 类 widget 有意义。 */
   seedMode?: string;
   /** 多模式参数覆盖层。键为模式码，值为该模式下的默认值与可见性。
-   *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。 */
-  modes?: Record<string, WorkflowIOModeOverride>;
+   *  存在 workflowIO 的 JSON 列内，因此新增模式无需改表结构。
+   *  键名 `modeOverrides` 刻意与 `WorkflowDetail.availableModes`（工作流级模式清单）
+   *  区分开——两者同名 `modes` 是历史命名地雷；旧数据仍是 `modes` 键，由
+   *  `parseWorkflowIOMap` 与 `enrichWorkflowIO` 在读边界回退归一。 */
+  modeOverrides?: Record<string, WorkflowIOModeOverride>;
   /** 宿主（外层封装）节点 id，**仅在「下钻到子工作流内部」勾选时**写入。
    *
    *  `nodeId` 此时是子图内部节点 id（`1670`），它在顶层画布上不存在；而运行期
@@ -63,13 +66,21 @@ export interface WorkflowIOModeOverride {
   seedMode?: string;
 }
 
+/** 方向 × 种类判别联合：合法的 (direction, kind) 组合只有 `input+param`、
+ *  `input+widget`、`output+output` 三种；`output+param` 这类非法组合在类型层面
+ *  就被排除（`kind` 仍是开放字符串，自定义种类经 `WorkflowIOEntry` 透传，
+ *  不进这条判别联合）。 */
+export type IOParamSlot =
+  | { direction: "input"; kind: "param" | "widget" }
+  | { direction: "output"; kind: "output" };
+
 export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
 
 /* ── 形状契约（外部输入边界，规范 §5.5）──────────────────────────────────
  * workflowIO **列的解析**。schema 放在类型旁边（同一处定义、同一处演进），
  * 消费方（tRPC 路由）只调用 `parseWorkflowIOMap`，不自己复制判据。 */
 /** 条目的**身份字段**是硬约束（写入侧一定带这四个）；`.loose()` 是关键 ——
- *  富化字段（label / type / defaultValue / modes / hostNodeId / slotLabel …）
+ *  富化字段（label / type / defaultValue / modeOverrides / hostNodeId / slotLabel …）
  *  必须原样留下，剥键会让工作流库列表上的显示名与控件类型整片退化。
  *  形状不符的条目丢弃：换作盲转型（`as unknown as WorkflowIOMap`），坏条目会
  *  一路流到下游某个 `.name` 读取点才炸，报错位置离成因很远。 */
@@ -81,28 +92,45 @@ const WorkflowIOEntrySchema = z.looseObject({
 });
 const WorkflowIOMapSchema = z.record(z.string(), WorkflowIOEntrySchema);
 
-/** 解析 workflowIO 列（DB JSON 列）；非对象 / 形状不符 → 空表。 */
+/** 解析 workflowIO 列（DB JSON 列）；非对象 / 形状不符 → 空表。
+ *
+ *  旧数据把模式覆盖层写作 `modes` 键；统一回退到新键 `modeOverrides`，这样下游
+ *  助手（isVisibleInMode / resolveEntryDefault …）与消费方只读一个名字。回退只在
+ *  新键缺失时生效，不覆盖已经用新键落库的数据。 */
 export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
   const parsed = WorkflowIOMapSchema.safeParse(value);
-  return parsed.success ? parsed.data : {};
+  if (!parsed.success) return {};
+  const data = parsed.data;
+  for (const entry of Object.values(data)) {
+    if (!entry || typeof entry !== "object") continue;
+    const legacy = (entry as Record<string, unknown>).modes as
+      Record<string, WorkflowIOModeOverride> | undefined;
+    if (entry.modeOverrides === undefined && legacy !== undefined) {
+      entry.modeOverrides = legacy;
+    }
+  }
+  return data;
 }
 
 /** 该参数在指定模式下是否可见。未开启模式（mode 为空）时一律可见。
  *
- *  入参刻意只要求「带 modes 字段」这一结构子集，这样派生产物
+ *  入参刻意只要求「带 modeOverrides 字段」这一结构子集，这样派生产物
  *  （WorkflowIOEntry & { ioKey, control } 等）也能直接传进来。 */
 export function isVisibleInMode(
-  entry: { modes?: Record<string, WorkflowIOModeOverride> } | undefined | null,
+  entry:
+    | { modeOverrides?: Record<string, WorkflowIOModeOverride> }
+    | undefined
+    | null,
   mode?: string | null,
 ): boolean {
   if (!entry || typeof entry !== "object") return true;
   if (!mode) return true;
-  return entry.modes?.[mode]?.visible ?? true;
+  return entry.modeOverrides?.[mode]?.visible ?? true;
 }
 
 /** 参数默认值的回退：模式覆盖值 → 工作流图内读出的 defaultValue。
  *
- *  `modes[mode].defaultValue` 是作者针对**该模式**填的值（模式页签写的覆盖层），
+ *  `modeOverrides[mode].defaultValue` 是作者针对**该模式**填的值（模式页签写的覆盖层），
  *  压过图内默认值；未开启模式（mode 为空）时只读图内值 —— 与 `manualTargetFor`
  *  的「没有模式就没有手工线」同构。
  *
@@ -117,7 +145,7 @@ export function resolveEntryDefault(
   mode?: string | null,
 ): unknown {
   if (mode) {
-    const modeDefault = entry.modes?.[mode]?.defaultValue;
+    const modeDefault = entry.modeOverrides?.[mode]?.defaultValue;
     if (modeDefault !== undefined && modeDefault !== null) return modeDefault;
   }
   return entry.defaultValue;
@@ -125,7 +153,7 @@ export function resolveEntryDefault(
 
 /** 参数 required 的两级回退：模式覆盖值 → 条目级 required。
  *
- *  与 resolveEntryDefault 同语义——模式覆盖只写在 modes[mode].required，
+ *  与 resolveEntryDefault 同语义——模式覆盖只写在 modeOverrides[mode].required，
  *  未设置该字段的模式回退到条目级（工作流库/画布等未传 mode 的消费方
  *  仍按旧行为读取 entry.required）。未开启模式（mode 为空）时只读条目级。 */
 export function resolveEntryRequired(
@@ -134,7 +162,7 @@ export function resolveEntryRequired(
 ): boolean | undefined {
   if (!entry || typeof entry !== "object") return undefined;
   if (mode) {
-    const modeRequired = entry.modes?.[mode]?.required;
+    const modeRequired = entry.modeOverrides?.[mode]?.required;
     if (modeRequired !== undefined) return modeRequired;
   }
   return entry.required;
@@ -150,7 +178,7 @@ export function resolveEntrySeedMode(
 ): string | undefined {
   if (!entry || typeof entry !== "object") return undefined;
   if (mode) {
-    const modeSeed = entry.modes?.[mode]?.seedMode;
+    const modeSeed = entry.modeOverrides?.[mode]?.seedMode;
     if (modeSeed !== undefined) return modeSeed;
   }
   return entry.seedMode;
@@ -163,7 +191,7 @@ export function collectModeCodes(
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
     if (!entry || typeof entry !== "object") continue;
-    for (const code of Object.keys(entry.modes ?? {})) {
+    for (const code of Object.keys(entry.modeOverrides ?? {})) {
       if (code) seen.add(code);
     }
   }

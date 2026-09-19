@@ -187,11 +187,11 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "16:9" } },
+          modeOverrides: { T2I: { defaultValue: "16:9" } },
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
       string,
       { defaultValue?: unknown }
     >;
@@ -206,11 +206,11 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "4:3 (Standard)" } },
+          modeOverrides: { T2I: { defaultValue: "4:3 (Standard)" } },
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
       string,
       { defaultValue?: unknown }
     >;
@@ -225,14 +225,14 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "竖版高清" } },
+          modeOverrides: { T2I: { defaultValue: "竖版高清" } },
         },
       }),
     );
     const entry = result["94::widget::aspect_ratio"]!;
     /* 「竖版高清」解析不出宽高比、前缀也匹配不上任何候选 → 该模式的
      *  defaultValue 被摘掉；覆盖层里没有别的字段时整条不再下发。 */
-    expect(entry.modes?.T2I).toBeUndefined();
+    expect(entry.modeOverrides?.T2I).toBeUndefined();
   });
 
   it("候选表缺失（ComfyUI 离线）时不清洗，保留原值", async () => {
@@ -243,15 +243,35 @@ describe("enrichWorkflowIO — COMBO 存量值对齐服务器候选表", () => {
           kind: "widget",
           nodeId: "94",
           name: "aspect_ratio",
-          modes: { T2I: { defaultValue: "16:9" } },
+          modeOverrides: { T2I: { defaultValue: "16:9" } },
         },
       }),
     );
-    const modes = result["94::widget::aspect_ratio"]!.modes as Record<
+    const modes = result["94::widget::aspect_ratio"]!.modeOverrides as Record<
       string,
       { defaultValue?: unknown }
     >;
     expect(modes.T2I!.defaultValue).toBe("16:9");
+  });
+
+  it("旧数据用 `modes` 键存储时仍被读取并归一到 `modeOverrides`", async () => {
+    const result = await enrichWorkflowIO(
+      comboParams({
+        "94::widget::aspect_ratio": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "94",
+          name: "aspect_ratio",
+          // 历史命名：覆盖层挂在 `modes` 而非 `modeOverrides`。
+          modes: { T2I: { defaultValue: "4:3 (Standard)" } },
+        },
+      }),
+    );
+    const entry = result["94::widget::aspect_ratio"]!;
+    /* 旧键被回退归一：客户端只读 `modeOverrides` 也能拿到覆盖层。 */
+    expect(entry.modeOverrides?.T2I?.defaultValue).toBe("4:3 (Standard)");
+    /* 旧键不应原样下发，避免同一份覆盖层以两个名字落库往返。 */
+    expect((entry as { modes?: unknown }).modes).toBeUndefined();
   });
 });
 

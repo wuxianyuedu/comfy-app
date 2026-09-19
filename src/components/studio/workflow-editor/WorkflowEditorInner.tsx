@@ -761,7 +761,7 @@ function WorkflowEditorBody({
           <WorkflowIoPreviewPanel
             workflowIO={workflowIO}
             detailIOMap={ioDetailMap}
-            modes={detail.modes ?? []}
+            modes={detail.availableModes ?? []}
             defaultMode={detail.defaultMode ?? null}
             onModesChange={(modes, defaultMode) => {
               /* 模式集合变更立即落库（与库详情「类型」同一存储），并同步
@@ -769,7 +769,7 @@ function WorkflowEditorBody({
                * 覆盖层（modes[mode]）必须一并摘掉——页签栏只跟 modes 走，
                * 留下的无主覆盖会一直随 workflowIO 落库往返；清理结果随同
                * 一 PATCH 落库。 */
-              const removedModes = (detail.modes ?? []).filter(
+              const removedModes = (detail.availableModes ?? []).filter(
                 (m) => !modes.includes(m),
               );
               const cleanedIO =
