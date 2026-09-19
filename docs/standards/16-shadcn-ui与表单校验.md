@@ -136,15 +136,19 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P5** | 视图层自写剪贴板写入（`navigator.clipboard` / `document.execCommand`） | `~/lib/browser-io` 的 `copyText`（含降级链路与 `navigator` 存在性判定）                                                                                                                |
 | **P6** | 视图层自写 Blob 下载（`URL.createObjectURL`）                          | `~/lib/browser-io` 的 `downloadText` / `downloadJson`（`revoke` 与 `click` 的顺序收在出口里）                                                                                          |
 | **P9** | 视图层自绘模态浮层（视图里出现 `overlayClass(`）                        | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）或 `ui/sheet` 的 `SheetContent`（右侧抽屉）；全屏视图走 `ui/fullscreen-dialog` / `FullScreenLayer`（见 §16.2.4.12）                 |
+| **P10** | 视图层自绘折叠 / 展开开关（`<details>` 或 `role="button"` + `▸/▾`）     | `~/components/ui/disclosure` 的 `Disclosure`（见 §16.2.4.13）                                                                                                                          |
+| **P11** | 视图层自绘可滚动浮层选项列表（同文件里既建 `PopoverTrigger` 又画 `▾`） | `~/components/ui/option-list-popover` 的 `OptionListPopover`（见 §16.2.4.14）                                                                                                          |
+| **P12** | 视图 / 逻辑层里自写 `setInterval(` 轮询                                 | `~/components/ui/use-interval` 的 `useInterval`（见 §16.2.4.15）                                                                                                                       |
 
-**P4~P9 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P9 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
-缺值占位符 / 模态浮层」这六件事的**定义**只能有一处，没有「冻结在某个数字」的
-中间态可言。因此它们**不进基线**（`--update` 也不接受带违规的基线，否则
-「把违规一起写进基线」就成了唯一的绕过方式）。清零过程：P4 见 §16.2.4.9、
-P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、P9 见 §16.2.4.12。
+**P4~P12 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P12 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询」这九件事的**定义**只能有
+一处，没有「冻结在某个数字」的中间态可言。因此它们**不进基线**（`--update` 也
+不接受带违规的基线，否则「把违规一起写进基线」就成了唯一的绕过方式）。
+清零过程：P4 见 §16.2.4.9、P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、
+P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.4.15。
 
-**P4~P9 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P12 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -298,6 +302,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 一次性反馈       | ~~**6 份实现**，分两族：4 处裸 `setTimeout(() => setX(false), 1xx)`（**连卸载都不管**）、2 处手写 `timerRef` + `clearTimeout`；复位时长 1200/1400/1500/8000 各不相同且**没有一处说得清为什么**~~  | `~/components/ui/use-flash-state` 的 `useFlashState`（单值）/ `useFlashLatch`（多字段同生共死）；`DEFAULT_FLASH_MS` 是唯一默认值              | ✅ **见 §16.2.4.11**                        |
 | 模态浮层         | ~~**16 个视图**各拼一份 `overlayClass("modal", …)` 外壳（**一处 `createPortal` 都没有** —— 所以 P2 全库清零之后这批依然漏过）；a11y 语义各写各的：16 份里**只有 3 份**接 Esc、**3 份**声明 `role="dialog"`、**0 份**做焦点锁与焦点归还~~ | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）、`ui/sheet` 的 `SheetContent`（抽屉）；全屏视图仍走 `FullScreenLayer` / `ui/fullscreen-dialog`；**P9 硬闸**禁止视图再自绘模态外壳 | ✅ **见 §16.2.4.12**                        |
 | 缺值占位符       | ~~**31 处**裸写 `?? "—"`，而「什么算不存在」**四种判法**：`??`（只管 null/undefined）、`\|\|`（把 `0` 与 `""` 也当缺值 —— 「步数 0」显示成「—」）、`> 0 ? x : "—"`、`!= null ? String(x) : "—"`~~ | `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER`；**P8 硬闸**禁止视图再写占位符字面量                                            | ✅ **见 §16.2.4.11**                        |
+| 折叠 / 展开      | ~~**三族写法**：原生 `<details>` 六处、自绘「布尔 state + 条件渲染 + `▸/▾`」四处、树形 `expanded*` 映射两份；无障碍语义各写各的（自绘那份基本只有 `onClick`，`NodesTab` 还被迫用 `role="button"` 绕开「button 嵌 button」）~~ | `~/components/ui/disclosure` 的 `Disclosure`（`caret` / `chevron` / `none` 三种标记；排内其余动作走 `leading` / `trailing`）；**P10 硬闸**禁止视图再自绘折叠开关 | ✅ **见 §16.2.4.13**                        |
+| 浮层选项列表     | ~~画布四个 chip 各写一份**逐行同形**的浮层（触发器 `▾` + `max-h-* overflow-y-auto` + `role="option"` 行），选中配色四份各写各的（`violet-500/20` / `fuchsia-500/20` / `primary-soft` / `bg-accent`）~~ | `~/components/ui/option-list-popover` 的 `OptionListPopover`；**P11 硬闸**禁止视图再手搓 chip 浮层 | ✅ **见 §16.2.4.14**                        |
+| 定时轮询         | ~~**9 处**各自 `setInterval` + `clearInterval`：不立刻跑一次 / 后台空转 / 每次渲染重建定时器 / 前后台开关被抄两份 / 跑在已卸载组件上~~ | `~/components/ui/use-interval` 的 `useInterval`（`immediate` / `pauseWhenHidden` / 回调放 ref）；**P12 硬闸**禁止视图再写 `setInterval` | ✅ **见 §16.2.4.15**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -1147,6 +1154,191 @@ state（`ref` 回调里 `setBodyEl(el)`），量视口的 effect 依赖它。这
 **为什么两侧都要有**：P9 挡得住「新增自绘」，挡不住「下一个人的新弹窗又照抄一份」
 —— 而 16 处自绘能长期存在，正是因为**没人觉得 `ui/dialog` 是必选项**
 （它此前只有 4 个业务引用）。
+
+### 16.2.4.13 「折叠 / 展开」也是同一件事的多种写法（P10 硬闸）
+
+§16.2.4.12 收尾时留了三个问法，第一个是**「谁在把一段内容折叠 / 展开」**
+（`<details>` / 自绘 accordion / 状态驱动）。按形态扫下来，全库有**三族写法**
+在做同一件事：
+
+| 族 | 写法 | 落点 |
+| --- | --- | --- |
+| ① 原生 | `<details>` / `<summary>` | `ErrorPanel` ×2、`HistoryDetailModal`、`CharacterDesigner`、`CharacterPortraitStudio`、`ExtractToolbar` ×2 |
+| ② 自绘 | 布尔 state + 条件渲染 + `▸/▾` 或 `Chevron` 切换 | `SettingsLoadError`、`LlmLocalSection`、`NodesTab` 的分组头与节点计数单元 |
+| ③ 树形 | `expandedParents` / `expandedNodeList` / `nodeExpanded` 三份映射 | `NodesTab`（同文件里三层嵌套） |
+
+**差别不是风格，是无障碍语义各写各的**：`<details>` 天生带 `role` /
+`aria-expanded` / 键盘切换 / **浏览器页内查找时自动展开**；自绘那份基本只有
+`onClick`，`NodesTab` 还为此专门补了 `role="button"` + `tabIndex` +
+Enter/Space 处理 —— 而它的注释里写着「**不能**用原生 button，因为把 button
+嵌在 button 里在 HTML 里非法」：那个嵌进去的按钮正是分组头右侧的「解析本目录」。
+**自绘外壳逼出来的绕路，比重复本身更值得记。**
+
+#### 出口：`ui/disclosure` 的 `Disclosure`
+
+形态取 **base-ui 的 `Collapsible`** 而不是原生 `<details>`：
+
+- `CollapsiblePanel` 的 `hiddenUntilFound` 用 `hidden="until-found"` 隐藏 ——
+  **保留了 `<details>` 最值钱的那条**（页内查找命中折叠内容会自动展开），
+  换成自绘「条件渲染」就丢了；
+- 触发器的 `aria-expanded` / `aria-controls` / 键盘语义收进基元，调用处不再
+  自己补 `role="button"` 与 `onKeyDown`；
+- 受控 / 非受控都支持 —— `ErrorPanel` 的 `errExpanded` 会被运行状态重置、
+  `CharacterPortraitStudio` 的 `open={busy}`，这两处要「外部状态驱动」，传
+  `open` + `onOpenChange`；其余交给基元自己管（`defaultOpen`）。
+
+#### 迁移口径（可直接照抄）
+
+1. **标记由 `marker` 选**：`none`（调用处自己画，如 `ErrorPanel` 的 `▼/▲`）/
+   `caret`（`▸/▾` 字符）/ `chevron`（`ChevronRight`，展开转 90°）。
+   行样式、内边距、卡片外观一律由调用处经 `className` / `panelClassName` 给
+   —— 验收标准仍是**渲染结果不变**（§16.2.4.2 第 9 条）。
+2. **同一排按钮里只有一个是折叠开关时，其余走 `leading` / `trailing`**：
+   基元的 trigger 是 `<button>`，往它里面塞 `<Button>` 在 HTML 里非法
+   （React 会报水合错误）。落点：设置页的「重试 / 完整错误 / 复制」、
+   `NodesTab` 分组头右侧的「解析本目录」、工坊两处的「历史」。
+3. **`▾/▸` 放在标题右侧时**用 `flex-row-reverse` + 标题 `flex-1`
+   （`LlmLocalSection` 的两端对齐观感由此不变）。
+4. **树形结构的外层可以就让 Root 当那层容器**（`panelClassName="contents"` 或
+   `hidden`）—— 例如 `NodesTab` 的「节点计数」单元只接管那一行，展开的节点
+   清单仍由外面既有的 `nodeListOpen &&` 条件渲染承担。
+
+#### 不迁的一类：卡片外壳是实色色带的复合件
+
+`NodePreviewCard`（自定义节点预览卡）**维持自绘**并显式登记豁免：它的头部是
+一条「取自 `category`」的实色色带（inline style 画底 + 白字徽标），刻意镜像
+ComfyUI 节点卡外观，与 disclosure 的「一行文字 + 折叠标记」不是一个形态；
+换基元会改掉那条色带的渲染契约。豁免写在 `check-ui-primitives.cjs` 的
+`EXEMPT_FILES.P10` 里（**带理由**，不是按目录放行）。
+
+#### 判据：P10（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P10**（`HARD_GATE_RULES`，不进基线）：
+
+- 数 **`<details>`**（原生写法）；
+- 数 **`role="button"` 与 `▸` / `▾` 同时出现的文件**里的标记数 —— 两个条件
+  同时成立才计。**为什么必须「同时」**：`▾` 单独出现会误判浮层 / 下拉 / 弹窗
+  触发器（`ProjectSwitcher` / `MetaEditor` / chip 都画一个 `▾`），
+  而 `PopoverTrigger` 单独出现会误判表单里的 `SelectMenu` 调用处。
+  这是 §16.2.4.10 那条方法论的第三次应用：**判据按形态取，不按 API**。
+
+### 16.2.4.14 「可滚动的浮层选项列表」有多份写法（P11 硬闸）
+
+三个问法里的第二个：**「谁在做一个可滚动的浮层列表」**。
+
+画布节点上的四个 chip 各写了一份**逐行同形**的浮层：
+
+| chip | 触发器 | 内容 | 选中配色（各写各的） |
+| --- | --- | --- | --- |
+| `WorkflowPickChip` | `h-6 … rounded-lg` + `▾` | `max-h-72 overflow-y-auto` | `bg-violet-500/20` |
+| `WorkflowModePickChip` | 同上 | 无滚动上限 | `bg-violet-500/14` |
+| `WorkflowSourceFilterChip` | 同上 | 无滚动上限 | `bg-primary-soft` |
+| `WorkflowModelFilterChip` | 同上 | `max-h-72 overflow-y-auto` | `bg-fuchsia-500/20` |
+
+四份都做同一套动作：触发器上一个 `▾`（`open` 时 `rotate-180`）、内容区
+`max-h-* overflow-y-auto`、每行 `<Button role="option" aria-selected>` 配
+「选中高亮 + 勾」。**改一处品牌色漏三片，且四份都不受主题 token 控制。**
+
+#### 出口：`ui/option-list-popover` 的 `OptionListPopover`
+
+基元负责**壳与行**：触发器（含 `▾` 与旋转，`group-data-[popup-open]` 变体切
+形态，不靠 JS 条件类）、可滚动内容区、选项行的 `role` / `aria-selected` /
+选中态配色（走 `primary` 语义 token）/ 勾标记、`Escape` 与外点关闭
+（由 `ui/popover` 的 base-ui Positioner 给，调用处不再自绘）。
+
+调用处只提供：`value`、`items`（`label` + 可选 `prefix` / `suffix` / `title`）、
+`onSelect`、以及 chip 自己的 `trigger` 外观。
+
+**为什么不做成 `ui/select-menu` 的别名**：`select-menu` 是 `combobox` 语义
+（有 listbox id / 键盘高亮索引 / `aria-controls`），用于表单里「选一个值」；
+本基元是画布上的轻量「点一项切换」，没有高亮索引，行内容也更自由（计数、
+类型章、颜色点）。硬合会把 combobox 的 a11y 契约塞进 chip。
+
+`onOpenChange` 透传出去，供 `WorkflowModePickChip` 的
+`PopoverAutoClose`（画布一变换就关掉弹层）使用；`disabled` 走基元的
+`aria-disabled` / `disabled`，不再由调用处用 `pointer-events-none` 假装。
+
+#### 判据：P11（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P11**（`HARD_GATE_RULES`，不进基线）：
+**同一文件里既自建 `PopoverTrigger`、又自己画 `▾`** —— 那就是「手搓 chip
+浮层」。单看 `▾` 会误判 `DropdownMenu` / `Dialog` 的触发器；单看
+`PopoverTrigger` 会误判 `SelectMenu` 的调用处。
+
+#### 不迁的一类：多选 + 搜索 + 自定义添加
+
+`AttributeMultiSelect`（角色属性多选下拉）**维持现状**：它是「搜索框 + 分组
+多选 + 复选框 + 底部自定义添加」的 combobox 形态，与单选 chip 的语义不同，
+且它**已经**走在 `ui/popover` 上（P2 阶段完成）。为「统一」把它塞进
+`OptionListPopover` 只会把两种语义揉成一个长参数表。
+
+### 16.2.4.15 「给一个异步动作配取消 / 轮询」有多种写法（P12 硬闸）
+
+三个问法里的第三个：**「谁在给一个异步动作配取消」**。按形态扫下来，
+「定时轮询」这一族最集中 —— 全库 **9 处** 各自 `setInterval(onDone, N)` +
+在清理函数里 `clearInterval`，写法分三族、缺陷各异：
+
+| 缺陷 | 落点（收口前） |
+| --- | --- |
+| **不立刻跑一次**（挂载后先空一个间隔） | `use-training-studio`、`VideoQueueModal`、`use-history-panel`、`use-runtime-log-source` |
+| **后台标签页空转**（浏览器把后台定时器降到 ≥1min，请求照发） | 上述 + `use-code-update-watch`；只有 `use-comfy-stats` / `use-update-check` 接了 `visibilitychange` |
+| **前后台开关被逐字抄两份** | `use-comfy-stats` 与 `use-update-check` 的 `visibilitychange` 块完全同形 |
+| **每次渲染重建定时器**（回调进依赖数组 → 计时反复重置） | `use-history-panel`（`refreshRef` 手工保鲜）、`useSimulatedProgress`（`[tasks]` 依赖） |
+| **跑在已卸载组件上** | `use-film-studio` 的 `setInterval(() => void poll(tid))` |
+
+#### 出口：`ui/use-interval` 的 `useInterval`
+
+把三件事一次给全：
+
+1. **挂载即先跑一次**（`immediate`，默认 `true`）—— 用户不必等一个完整间隔；
+2. **`pauseWhenHidden`**（默认 `true`）—— 切后台暂停、回前台**立即补跑一次**
+   再恢复定时；语义与 `use-comfy-stats` / `use-update-check` 的既有实现一致，
+   并把那段被抄两份的开关收成一份；
+3. **回调放 ref** —— 传新函数不重建定时器（此前 `useCallback` 依赖数组容易
+   写错的地方，包括「回调里读到的 `tasks` 是不是最新」）。
+
+`ms: null`（或 0）表示**不轮询** —— 受控开关（`enabled` / `active` /
+`running` / `taskId` 存在与否）用它可以表达，不必再自己起停。
+
+**不替你吞掉卸载后的 `setState`**：React 18+ 对已卸载组件不再告警，静默兜底
+反而会掩盖「这个请求本来就该被取消」。确实需要守卫的落点保留自己的
+`stoppedRef` / `mountedRef`（`use-code-update-watch` / `LogProvider` /
+`use-dev-server-liveness` 三处如此），并在注释里写明「间隔的起停已收在
+`useInterval`，这个 ref 管的是**已经发出的那次请求**」。
+
+**背压（上一轮没回来就发下一轮）不在这里挡** —— 那是调用方的决定：多数轮询
+是幂等的单次查询，重叠无害；需要串行的落点自己在 `run` 里排队。
+
+#### 迁移落点（10 处）
+
+`use-comfy-stats` / `use-update-check` / `use-training-studio` /
+`VideoQueueModal` / `use-history-panel` / `use-runtime-log-source` /
+`GlobalStepLogPanel` / `history-utils`（`useSimulatedProgress`）/
+`LogProvider` / `use-code-update-watch` / `use-dev-server-liveness` /
+`use-film-studio`。
+
+其中两处的口径值得单独记：
+
+- **`use-film-studio`**：原来是「`fetchDetail` 里 `??= setInterval` 自启、
+  跑完 `stopPoll()` 自停」。改成由 `running`（派生自 `film.status`）决定
+  `ms`，并把 `immediate` 设为 **`false`** —— 进 running 那一次详情**已经由
+  `create` / `cancel` / `recompose` 显式拉过**，再补一次只是把状态多刷一遍。
+  这正是「一轮迁移里最容易改坏的一处」：默认的 `immediate: true` 会让
+  mock 队列里的第二个响应立刻覆盖第一个。
+- **`useSimulatedProgress`**：原来把 `tasks` 写进依赖数组，轮询每次返回新数组
+  都要重建定时器、把 1.5s 的节拍重置；收口后定时器稳定，回调里读最新 `tasks`。
+
+#### 判据：P12（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P12**（`HARD_GATE_RULES`，不进基线）：视图 /
+逻辑层里出现 `setInterval(`。豁免只有 `app/api/**`（服务端路由的 SSE 心跳 /
+轮询是服务端定时器，不在 React 生命周期里）。
+
+```bash
+pnpm ui:primitives            # 检查（棘轮 + P4~P12 硬闸，pre-commit 第 12 步）
+pnpm ui:primitives:report     # 只出清单
+node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
+```
 
 ## 16.3 新增一个组件的标准动作
 

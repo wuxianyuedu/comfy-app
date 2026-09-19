@@ -16,6 +16,7 @@ import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { Disclosure } from "~/components/ui/disclosure";
 import { zClass } from "~/lib/shell/overlay-z";
 
 interface HistoryDetailModalProps {
@@ -334,12 +335,13 @@ export function HistoryDetailModal({
                     )}
 
                     {topLevelEntries.length > 0 && (
-                      <details className="border-border-subtle bg-canvas-deep rounded-lg border">
-                        <summary className="text-ink-muted hover:text-ink-strong cursor-pointer px-3 py-1.5 text-[11px] select-none">
-                          原始 JSON ·{" "}
-                          {topLevelEntries.length + (paramRows.length ? 1 : 0)}{" "}
-                          个字段
-                        </summary>
+                      <Disclosure
+                        marker="caret"
+                        className="border-border-subtle bg-canvas-deep text-ink-muted hover:text-ink-strong rounded-lg border px-3 py-1.5 text-[11px]"
+                        trigger={`原始 JSON · ${
+                          topLevelEntries.length + (paramRows.length ? 1 : 0)
+                        } 个字段`}
+                      >
                         <pre className="border-border-subtle text-ink-faint max-w-full border-t p-3 text-[11px] break-all whitespace-pre-wrap">
                           {JSON.stringify(
                             Object.fromEntries(topLevelEntries),
@@ -347,7 +349,7 @@ export function HistoryDetailModal({
                             2,
                           )}
                         </pre>
-                      </details>
+                      </Disclosure>
                     )}
                   </div>
                 )}

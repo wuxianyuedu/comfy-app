@@ -1,14 +1,9 @@
 "use client";
 
 /** 从 WorkflowNode.tsx 抽出的「模型标签筛选」chip（下拉 4）。行为与外观不变。
+ *  浮层壳与选项行走 `ui/option-list-popover`（规范 16 §16.2.4.14）。
  */
-import { useState } from "react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
-import { Button } from "~/components/ui/button";
+import { OptionListPopover } from "~/components/ui/option-list-popover";
 
 interface WorkflowModelFilterChipProps {
   value: string;
@@ -21,98 +16,50 @@ export function WorkflowModelFilterChip({
   tags,
   onChange,
 }: WorkflowModelFilterChipProps) {
-  const [open, setOpen] = useState(false);
-
   const label = value === "all" ? "全部模型" : value;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        type="button"
-        className="nodrag nopan border-accent/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]"
-        title={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
-      >
-        <span
-          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-            value === "all" ? "bg-accent" : "bg-accent-soft"
-          }`}
-        />
-        <span
-          className="text-accent-soft max-w-[80px] truncate font-semibold"
-          style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
-        >
-          {label}
-        </span>
-        <span
-          className={`text-ink-icon shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ fontFamily: "var(--font-sans)", fontSize: 9 }}
-        >
-          ▾
-        </span>
-      </PopoverTrigger>
-
-      <PopoverContent
-        align="start"
-        aria-label="按模型筛选工作流"
-        className="border-border-strong bg-card max-h-72 w-72 gap-0 overflow-y-auto py-1 shadow-2xl shadow-black/10 dark:shadow-fuchsia-500/20"
-      >
-        <Button
-          variant="ghost"
-          role="option"
-          aria-selected={value === "all"}
-          onClick={() => {
-            onChange("all");
-            setOpen(false);
-          }}
-          className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
-            value === "all"
-              ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
-              : "text-ink-soft hover:bg-subtle"
-          }`}
-        >
-          <span className="bg-accent h-1.5 w-1.5 rounded-full" />
-          <span className="flex-1">全部模型</span>
-          {value === "all" && (
-            <span className="text-fuchsia-700 dark:text-fuchsia-300">✓</span>
-          )}
-        </Button>
-        {tags.length === 0 && (
-          <div className="text-ink-muted px-3 py-2 text-[10px]">
-            标签库为空，去工作流库「管理模型」添加
-          </div>
-        )}
-        {tags.map((tag) => {
-          const sel = tag.name === value;
-          return (
-            <Button
-              key={tag.id}
-              variant="ghost"
-              role="option"
-              aria-selected={sel}
-              onClick={() => {
-                onChange(tag.name);
-                setOpen(false);
-              }}
-              className={`flex h-auto w-full items-center gap-2 rounded-none px-3 py-1.5 text-left text-[11px] font-normal transition-colors ${
-                sel
-                  ? "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200"
-                  : "text-ink-soft hover:bg-subtle"
-              }`}
-            >
-              <span className="bg-accent-soft h-1.5 w-1.5 rounded-full" />
-              <span className="flex-1 truncate">{tag.name}</span>
-              <span className="text-ink-muted text-[9px] tabular-nums">
-                {tag.count}
-              </span>
-              {sel && (
-                <span className="text-fuchsia-700 dark:text-fuchsia-300">
-                  ✓
-                </span>
-              )}
-            </Button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
+    <OptionListPopover
+      value={value}
+      onSelect={onChange}
+      triggerTitle={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
+      align="start"
+      contentClassName="w-72"
+      triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-[12px]"
+      trigger={
+        <>
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              value === "all" ? "bg-accent" : "bg-accent-soft"
+            }`}
+          />
+          <span
+            className="text-accent-soft max-w-[80px] truncate font-semibold"
+            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+          >
+            {label}
+          </span>
+        </>
+      }
+      emptyHint="标签库为空，去工作流库「管理模型」添加"
+      items={[
+        {
+          value: "all",
+          label: "全部模型",
+          prefix: <span className="bg-accent h-1.5 w-1.5 rounded-full" />,
+        },
+        ...tags.map((tag) => ({
+          value: tag.name,
+          label: tag.name,
+          title: tag.name,
+          prefix: <span className="bg-accent-soft h-1.5 w-1.5 rounded-full" />,
+          suffix: (
+            <span className="text-ink-muted text-[9px] tabular-nums">
+              {tag.count}
+            </span>
+          ),
+        })),
+      ]}
+    />
   );
 }

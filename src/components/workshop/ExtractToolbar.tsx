@@ -7,6 +7,7 @@ import {
   parseChannelOption,
 } from "~/components/workshop/ExtractModelSelect";
 import { Button } from "~/components/ui/button";
+import { Disclosure } from "~/components/ui/disclosure";
 import { useFilePicker } from "~/components/ui/file-picker";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { fetchGenerationLogs } from "~/lib/workshop/generation-log-client";
@@ -148,14 +149,16 @@ export function ExtractToolbar({
       </div>
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
       {busy && progressText && (
-        <details className="bg-bg/60 mt-2 rounded-lg px-3 py-2" open>
-          <summary className="text-primary cursor-pointer text-[11px] select-none">
-            提取过程
-          </summary>
+        <Disclosure
+          defaultOpen
+          marker="caret"
+          className="text-primary bg-bg/60 mt-2 rounded-lg px-3 py-2 text-[11px]"
+          trigger="提取过程"
+        >
           <pre className="text-muted-foreground mt-1 max-h-40 overflow-y-auto text-[11px] leading-relaxed break-all whitespace-pre-wrap">
             {progressText}
           </pre>
-        </details>
+        </Disclosure>
       )}
       {statusText && !errorText && (
         <p className="text-primary mt-2 text-xs">{statusText}</p>
@@ -174,52 +177,55 @@ export function ExtractToolbar({
       {/* 结构化执行日志：完整记录一次提取从发起→输入→输出→结果的每一步，
          无论是否还在 busy 都保留展示，方便追溯模型到底做了什么（黑盒透明化）。 */}
       {executionLog && executionLog.length > 0 && (
-        <details
-          className="border-border bg-bg/40 mt-2 rounded-lg border px-3 py-2"
-          open={busy}
-        >
-          <summary className="text-primary flex cursor-pointer items-center gap-2 text-[11px] font-medium select-none">
-            <span>执行日志（{executionLog.length} 条）</span>
+        /* 「历史」是并列动作而非折叠开关 —— 见 `Disclosure` 文件头：
+         *  基元 trigger 已是 `<button>`，嵌套按钮非法（旧写法靠
+         *  `stopPropagation` 掩盖），故「开关 + 并列动作」一行排布。 */
+        <div className="border-border bg-bg/40 mt-2 rounded-lg border px-3 py-2">
+          <div className="text-primary flex items-center gap-2 text-[11px] font-medium">
+            <Disclosure
+              open={busy ? true : undefined}
+              marker="caret"
+              panelClassName="text-[11px]"
+              trigger={`执行日志（${executionLog.length} 条）`}
+            >
+              <ul className="mt-2 space-y-2">
+                {executionLog.map((entry, i) => (
+                  <li
+                    key={`${entry.ts}-${i}`}
+                    className="bg-surface rounded-lg px-2.5 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${logBadge(entry.kind)}`}
+                      >
+                        {logBadgeLabel(entry.kind)}
+                      </span>
+                      <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px] leading-relaxed">
+                        {entry.summary}
+                      </span>
+                      <span className="text-muted-foreground/60 shrink-0 text-[10px]">
+                        {formatClock(entry.ts)}
+                      </span>
+                    </div>
+                    {entry.detail && (
+                      <pre className="bg-bg/70 text-ink-subtle mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 text-[10.5px] leading-relaxed break-all whitespace-pre-wrap">
+                        {entry.detail}
+                      </pre>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Disclosure>
             {logStage && (
               <Button
                 variant="link"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  loadHistory();
-                }}
-                className="text-muted-foreground hover:text-primary h-auto p-0 text-[10px] font-normal underline underline-offset-2"
+                onClick={() => loadHistory()}
+                className="text-muted-foreground hover:text-primary h-auto shrink-0 p-0 text-[10px] font-normal underline underline-offset-2"
               >
                 历史
               </Button>
             )}
-          </summary>
-          <ul className="mt-2 space-y-2">
-            {executionLog.map((entry, i) => (
-              <li
-                key={`${entry.ts}-${i}`}
-                className="bg-surface rounded-lg px-2.5 py-2"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${logBadge(entry.kind)}`}
-                  >
-                    {logBadgeLabel(entry.kind)}
-                  </span>
-                  <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px] leading-relaxed">
-                    {entry.summary}
-                  </span>
-                  <span className="text-muted-foreground/60 shrink-0 text-[10px]">
-                    {formatClock(entry.ts)}
-                  </span>
-                </div>
-                {entry.detail && (
-                  <pre className="bg-bg/70 text-ink-subtle mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 text-[10.5px] leading-relaxed break-all whitespace-pre-wrap">
-                    {entry.detail}
-                  </pre>
-                )}
-              </li>
-            ))}
-          </ul>
+          </div>
           {logStage && historyOpen && (
             <div className="border-border/60 mt-2 border-t pt-2">
               <p className="text-muted-foreground text-[10px]">
@@ -260,7 +266,7 @@ export function ExtractToolbar({
               )}
             </div>
           )}
-        </details>
+        </div>
       )}
     </div>
   );

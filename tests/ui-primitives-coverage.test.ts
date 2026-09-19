@@ -263,6 +263,53 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
+  /* ── 本批三条「按形态」收口的出口与消费点 ──────────────────────────────
+   *
+   * 与上面的 `file-picker` / `dialog` / `sheet` 同款：P10/P11/P12 是硬闸
+   * （判「视图里又自绘了一份」），这里从**另一侧**钉住出口真被用着 ——
+   * 「抽出出口但没人用」等于没做（规范 16 §16.2.4.13 ~ §16.2.4.15）。
+   *
+   * 门槛都刻意留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。
+   * `disclosure` 本批迁了 8 处、`option-list-popover` 4 处、`use-interval`
+   * 10 处上下。 */
+  it.each([
+    ["disclosure", "tsx", ["Disclosure"], 3],
+    ["option-list-popover", "tsx", ["OptionListPopover"], 3],
+    ["use-interval", "ts", ["useInterval"], 5],
+  ] as const)(
+    "ui/%s 是「同一形态的唯一出口」且已被业务引用",
+    (name, ext, exports, min) => {
+      const mod = readFileSync(
+        join(SRC, "components", "ui", `${name}.${ext}`),
+        "utf8",
+      );
+      for (const symbol of exports) {
+        expect(mod, `ui/${name} 应导出 ${symbol}`).toMatch(
+          new RegExp(`export (?:async )?function ${symbol}[^A-Za-z]`),
+        );
+      }
+      const refs = consumerCount(name);
+      expect(
+        refs,
+        `ui/${name} 的业务引用少于 ${min} 处（收口可能被回退）`,
+      ).toBeGreaterThanOrEqual(min);
+    },
+  );
+
+  /* `disclosure` / `option-list-popover` 是客户端基元：`"use client"` 必须在
+   * 文件首行 —— 缺了它，任何从 Server Component 引用它们的地方会在构建期
+   * 报「useState in Server Component」这类难定位的错。 */
+  it.each(["disclosure", "option-list-popover"])(
+    "ui/%s 是客户端基元（有 \"use client\"）",
+    (name) => {
+      const mod = readFileSync(
+        join(SRC, "components", "ui", `${name}.tsx`),
+        "utf8",
+      );
+      expect(mod.startsWith('"use client";')).toBe(true);
+    },
+  );
+
   it("ui/ 目录本身不空（判据没被绕过）", () => {
     const uiDir = join(SRC, "components", "ui");
     expect(statSync(uiDir).isDirectory()).toBe(true);
