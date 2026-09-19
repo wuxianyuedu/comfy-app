@@ -14,6 +14,7 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  useStoreApi,
   type Node,
   type Edge,
 } from "@xyflow/react";
@@ -129,8 +130,16 @@ function collectFitTargets(
   return out;
 }
 
-/** 下发一次视口。没有可测量的节点时退回 React Flow 自己的 fitView。 */
+/** 下发一次视口。没有可测量的节点时退回 React Flow 自己的 fitView。
+ *
+ *  `container` 必须传入**本画布实例自己**的尺寸（取自 React Flow store 的
+ *  `width` / `height`）。此前这里写的是 `document.querySelector(".react-flow")`
+ *  —— 页面上只要有第二个 React Flow（工作流库详情面板的画布预览就在同一个
+ *  DOM 里），querySelector 命中的是**文档顺序里第一个**，于是本画布用一个
+ *  别的容器的宽高去算居中，打开时视口落在内容之外（ISSUE #717）。
+ *  `width`/`height` 由 React Flow 自己按本实例容器测量，天然是实例私有的。 */
 function applyFitViewport(
+  container: { width: number; height: number },
   rf: {
     fitView: (options?: { padding?: number; duration?: number }) => unknown;
     setViewport: (
@@ -139,12 +148,9 @@ function applyFitViewport(
     ) => unknown;
   },
   bounds: Bounds | null,
+  zoomBounds: { minZoom: number; maxZoom: number },
 ): void {
-  const container = document.querySelector(".react-flow");
-  const viewport = computeFitViewport(bounds, {
-    width: container?.clientWidth ?? 0,
-    height: container?.clientHeight ?? 0,
-  });
+  const viewport = computeFitViewport(bounds, container, zoomBounds);
   if (!viewport) {
     void rf.fitView({ padding: 0.1, duration: 0 });
     return;
@@ -371,11 +377,18 @@ function WorkflowEditorBody({
    *     各小版本间表现不稳，会让视口随机把边缘的散落引脚也算进去；
    * (b) 随后自己算中间节点的包围盒并调 setViewport，
    *     保证中心一定落在真实工作流上，不受「三段式导轨布局」对画布边界的影响。
-   * 同时把缩放的**下限**钉在 0.35 —— 否则超宽工作流
-   *（130+ 节点、包围盒约 7000px 对 1280px 视口）会自动缩到约 0.15 倍，
-   * 那时每个便签都塌成 5–15px，与背景无从区分。
+   * 同时把缩放夹在**画布自己的缩放区间**（画布设置里的 minZoom / maxZoom）：
+   * 上级此前额外钉了一层「聚焦下限 0.35」，本意是别让超宽工作流缩成噪点，
+   * 但它与「打开就能看见整份工作流」直接冲突 —— 6700px 宽的图在 0.35 倍下仍有
+   * 大半个在视口外，用户打开后还得自己滚轮缩小（ISSUE #717）。现在聚焦只受画布
+   * 缩放区间约束，下限交给用户在画布设置里自己定；想放大依旧可以滚轮，
+   * 想「一键回到内容处」有右上角的「居中」。
    * 子工作流导航时也会重跑，让局促的子图同样能放下。 */
   const rf = useReactFlow();
+  /* 本实例的容器尺寸从 React Flow **本实例的 store** 取，不用
+   *  document.querySelector（页面上还有工作流库的画布预览，querySelector 会命中
+   *  文档顺序里的第一个 —— 见 applyFitViewport 的注释）。 */
+  const rfStore = useStoreApi();
   /* 自动聚焦的记账（详见 subgraph-viewport.ts 的 FitOnceScheduler）：按图的
    * key（detail.id）记「已下发过聚焦的那份图」，切换子图自然会重新聚焦。
    * 关键点是**排程与已聚焦分开**：effect 的依赖会抖（节点整批换掉 →
@@ -401,11 +414,14 @@ function WorkflowEditorBody({
    *  以及画布右上角「🎯 居中」按钮 —— 作者把节点拖出视野或缩得太小之后
    *  需要一条回到内容处的出口。纯视口动作：不移动节点、不写库。 */
   const fitToContent = useCallback(() => {
+    const { width, height } = rfStore.getState();
     applyFitViewport(
+      { width, height },
       rf,
       normalizeBounds(collectFitTargets(rf.getNodes()), FIT_FALLBACK_SIZE),
+      { minZoom: canvasSettings.minZoom, maxZoom: canvasSettings.maxZoom },
     );
-  }, [rf]);
+  }, [rf, rfStore, canvasSettings.minZoom, canvasSettings.maxZoom]);
 
   /* 「重新居中」按钮。延后一帧再算：React Flow 在下一帧才提交最新的测量
    *  结果，直接算会用到上一帧的尺寸（对刚展开/折叠过节点的画布尤其明显）。 */
@@ -581,7 +597,11 @@ function WorkflowEditorBody({
       const { bounds, done } = stepper.next(() =>
         collectFitTargets(rf.getNodes()),
       );
-      applyFitViewport(rf, bounds);
+      const { width, height } = rfStore.getState();
+      applyFitViewport({ width, height }, rf, bounds, {
+        minZoom: canvasSettings.minZoom,
+        maxZoom: canvasSettings.maxZoom,
+      });
       /* 收敛（测量已稳定、视口已下发）后才把这份图记为「聚焦过」：只排过程
        * 不算数，否则被 cleanup 取消的那次就补不回来了。提前在首帧记账也不
        * 行 —— 首帧可能还在量上一份图的节点，会把这帧的范围错当成本图的。
@@ -595,7 +615,7 @@ function WorkflowEditorBody({
     /* 延后一帧，等 ReactFlow 量好视口、摆好节点再贴合。 */
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [rf, detail?.id, nodes.length]);
+  }, [rf, rfStore, canvasSettings, detail?.id, nodes.length]);
 
   /* 惰性连线交互。画布的 defaultEdgeOptions 把 deletable / reconnectable
    *  都设成 false，未被动过的连线因此保持惰性；某条线第一次被点击时两个标志一起打开
