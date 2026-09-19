@@ -13,6 +13,8 @@
  *   - 弹窗打开后不受该开关影响，避免操作中突然消失。
  */
 
+import { formatClock } from "~/lib/time-format";
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
 import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
@@ -131,13 +133,7 @@ function levelLabel(level: Level): string {
 
 /* 与应用日志同款，带毫秒。 */
 function fmtTime(t: number): string {
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
+  return formatClock(t, { millis: true });
 }
 
 export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {

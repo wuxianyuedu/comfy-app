@@ -1,5 +1,6 @@
 "use client";
 
+import { formatClock } from "~/lib/time-format";
 import React from "react";
 import {
   ExtractModelSelect,
@@ -214,7 +215,7 @@ export function ExtractToolbar({
                     {entry.summary}
                   </span>
                   <span className="text-muted-foreground/60 shrink-0 text-[10px]">
-                    {new Date(entry.ts).toLocaleTimeString()}
+                    {formatClock(entry.ts)}
                   </span>
                 </div>
                 {entry.detail && (
@@ -251,7 +252,7 @@ export function ExtractToolbar({
                           {entry.summary}
                         </span>
                         <span className="text-muted-foreground/60 shrink-0 text-[10px]">
-                          {new Date(entry.ts).toLocaleTimeString()}
+                          {formatClock(entry.ts)}
                         </span>
                       </div>
                       {entry.detail && (

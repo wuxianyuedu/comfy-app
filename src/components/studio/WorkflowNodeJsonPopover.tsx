@@ -9,6 +9,7 @@
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { copyText } from "~/lib/browser-io";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
@@ -119,29 +120,12 @@ export function NodeJsonPopover({
   }, [tab, json, viewObj]);
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
-    void navigator.clipboard.writeText(pretty).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
-      },
-      () => {
-        const ta = document.createElement("textarea");
-        ta.value = pretty;
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-          document.execCommand("copy");
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1400);
-        } catch {
-          /* 放弃；用户仍可手动选中复制 */
-        } finally {
-          document.body.removeChild(ta);
-        }
-      },
-    );
+    /* 失败时静默：用户仍可手动选中复制。 */
+    void copyText(pretty).then((ok) => {
+      if (!ok) return;
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    });
   };
   const accent =
     request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";

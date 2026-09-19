@@ -1,3 +1,5 @@
+import { formatClock } from "~/lib/time-format";
+
 /* ── 「应用服务状态」的单一事实（底部状态栏）────────────────────────────
  * 状态栏这一格回答的问题是**「应用服务（dev server）现在能不能应答」**，
  * 而不是「ComfyUI 能不能收任务」。
@@ -63,9 +65,7 @@ export function deriveDevServerStatus(
 
   if (restarted) {
     const at =
-      lastRestartAt === null
-        ? ""
-        : `（${new Date(lastRestartAt).toLocaleTimeString("zh-CN", { hour12: false })}）`;
+      lastRestartAt === null ? "" : `（${formatClock(lastRestartAt)}）`;
     return {
       state: "online",
       label: "应用服务已重启",

@@ -12,6 +12,8 @@
  * 任务订阅逻辑在 use-workflow-run-task.ts（§17 UI/逻辑分离）。
  */
 
+import { formatClock } from "~/lib/time-format";
+
 import {
   useEffect,
   useMemo,
@@ -62,13 +64,7 @@ function levelLabel(level: Level): string {
 }
 /* 与应用日志同款，带毫秒。 */
 function fmtTime(t: number): string {
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
+  return formatClock(t, { millis: true });
 }
 
 const FILTER_LABELS: { label: string; value: Level | "all" }[] = [

@@ -20,6 +20,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { copyText } from "~/lib/browser-io";
 import { PageLoading } from "~/components/ui/page-loading";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
@@ -88,12 +89,10 @@ export function SettingsLoadError({
    * 原始报错（tRPC code / 服务端 message / 堆栈首行）另见日志面板的同条记录
    * —— 视图不再手拼第二份原文，避免两处措辞漂移。 */
   const copyError = async () => {
-    try {
-      await navigator.clipboard.writeText(errorText);
+    /* 剪贴板不可用（非安全上下文等）时静默失败，用户仍可展开后手动选择复制。 */
+    if (await copyText(errorText)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // 剪贴板不可用（非安全上下文等）时静默失败，用户仍可展开后手动选择复制
     }
   };
 

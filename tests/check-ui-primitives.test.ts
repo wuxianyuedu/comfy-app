@@ -86,6 +86,10 @@ const SPIN_VIEW =
   'export function S() {\n  return <span className="animate-spin" />;\n}\n';
 const SCROLLBAR_VIEW =
   'export function C() {\n  return <div className="[&::-webkit-scrollbar-thumb]:bg-red-500!" />;\n}\n';
+const CLIPBOARD_VIEW =
+  'export function K() {\n  const onCopy = () => void navigator.clipboard.writeText("a");\n  return <span onClick={onCopy}>copy</span>;\n}\n';
+const DOWNLOAD_VIEW =
+  'export function D() {\n  const save = () => URL.createObjectURL(new Blob(["x"]));\n  return <span onClick={save}>save</span>;\n}\n';
 
 describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   it("视图里手写 <button> 会被阻断（规范 P1）", () => {
@@ -134,6 +138,45 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run(["--update"]);
     expect(code).toBe(1);
     expect(output).toContain("硬闸");
+  });
+
+  it("视图里自写剪贴板写入直接阻断，不进棘轮（规范 P5）", () => {
+    /* 与 P4 同性质：`~/lib/browser-io` 的 copyText 是唯一出口（含降级链路），
+       所以第一处自写就断，不存在「先冻结存量」的中间态。 */
+    seedBaseline();
+    write("src/components/studio/G.tsx", CLIPBOARD_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P5");
+    expect(output).toContain("src/components/studio/G.tsx");
+  });
+
+  it("视图里自写 Blob 下载直接阻断，不进棘轮（规范 P6）", () => {
+    seedBaseline();
+    write("src/components/studio/H.tsx", DOWNLOAD_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P6");
+  });
+
+  it("P5/P6 未清零时 --update 拒绝更新基线", () => {
+    seedBaseline();
+    write("src/components/studio/I.tsx", CLIPBOARD_VIEW);
+    const { code, output } = run(["--update"]);
+    expect(code).toBe(1);
+    expect(output).toContain("硬闸");
+  });
+
+  it("P5/P6 的计数不进棘轮基线", () => {
+    seedBaseline();
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { rules: Record<string, string> };
+    expect(baseline.rules.P5).toBeUndefined();
+    expect(baseline.rules.P6).toBeUndefined();
   });
 
   it("P4 的计数不进棘轮基线（P4 只在 HARD_GATE_RULES 里判空）", () => {

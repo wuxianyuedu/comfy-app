@@ -13,6 +13,7 @@
  */
 import { useCallback } from "react";
 import { type api } from "~/trpc/react";
+import { downloadJson as saveJsonFile } from "~/lib/browser-io";
 import { errorMessage } from "~/lib/error-message";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowRow } from "../workflow-library-config";
@@ -168,15 +169,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           toast.error("下载失败", "该工作流没有可下载的内容");
           return;
         }
-        const blob = new Blob([JSON.stringify(payload, null, 2)], {
-          type: "application/json",
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${tpl.name ?? name}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        saveJsonFile(payload, `${tpl.name ?? name}.json`);
         toast.success("已下载工作流", `${tpl.name ?? name}.json`);
       } catch (e) {
         toast.error("下载失败", errorMessage(e, "网络错误"));

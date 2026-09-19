@@ -222,6 +222,8 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/endpoints.ts",
   "src/lib/format-bytes.ts",
   "src/lib/error-message.ts",
+  "src/lib/browser-io.ts",
+  "src/lib/time-format.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",

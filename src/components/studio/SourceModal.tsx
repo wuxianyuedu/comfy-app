@@ -2,6 +2,7 @@
 import { useEffect, useMemo } from "react";
 import { JsonViewer } from "~/components/ui/json-viewer";
 import { Button } from "~/components/ui/button";
+import { downloadText } from "~/lib/browser-io";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { zClass } from "~/lib/shell/overlay-z";
 
@@ -50,13 +51,7 @@ export function SourceModal({
 
   const downloadCurrent = () => {
     if (!data || !activeText) return;
-    const blob = new Blob([activeText], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.name}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(activeText, `${data.name}.json`);
   };
 
   /* Esc 关闭（即便焦点在 JsonViewer 搜索框也关闭）。 */

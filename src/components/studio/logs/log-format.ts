@@ -12,6 +12,8 @@
  * @module logs/log-format — 日志行的时间与文本格式化（**唯一口径**）
  */
 
+import { formatClock } from "~/lib/time-format";
+
 /** 两个时刻是否同一天（决定行首是否补月-日）。 */
 export function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -32,13 +34,7 @@ export function formatTime(
   opts?: { alwaysDate?: boolean },
 ): string {
   const d = new Date(ts);
-  const time = d.toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
+  const time = formatClock(ts, { millis: true });
   if (opts?.alwaysDate || !isSameDay(d, new Date())) {
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");

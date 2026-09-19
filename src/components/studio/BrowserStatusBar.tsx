@@ -1,5 +1,7 @@
 "use client";
 
+import { formatClock } from "~/lib/time-format";
+
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { FileText, Lock } from "lucide-react";
@@ -38,12 +40,7 @@ import { Button } from "~/components/ui/button";
 /** HH:mm:ss（重启标记的时间展示）。 */
 function fmtClock(t: number | null): string {
   if (t === null) return "—";
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return formatClock(t, {});
 }
 
 const fpsTextColor: Record<string, string> = {
