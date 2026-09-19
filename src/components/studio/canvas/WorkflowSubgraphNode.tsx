@@ -551,7 +551,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                             (inp as ComboInputMeta).comboOptions as string[]
                           }
                           disabled
-                          className="!h-[22px] min-w-0 flex-1 !py-0 !text-[11px]"
+                          /* `flex-1` 改的是**外层**的伸缩；触发器自身仍是内容宽，
+                           *  宽度要铺满外层就得显式要 `fullWidth`（规范 03 §3.8.1.1）。 */
+                          fullWidth
+                          className="!h-[22px] min-w-0 !py-0 !text-[11px]"
                           popoverMinWidth={220}
                         />
                       </>
