@@ -223,6 +223,81 @@ function toContractValues(args: {
   return out;
 }
 
+/** 契约口 id → 对外值里对应的参考图槽位（`reference-image` = 0，`-2` = 1…）。
+ *  非参考图口返回 -1。 */
+function referenceSlotOf(id: string): number {
+  if (id === "reference-image") return 0;
+  const matched = /^reference-image-(\d+)$/.exec(id);
+  if (!matched) return -1;
+  return Math.max(0, Number(matched[1]) - 1);
+}
+
+/** 读某个**契约口**在对外值里的当前内容（图片口是文件名，文本口是文本）。
+ *
+ *  契约口 id 与对外值字段不是同一套名字：口叫 `negative`，字段叫
+ *  `negativePrompt`；口叫 `reference-image-2`，值是 `referenceImages[1]`。
+ *  读写各写一遍会让「表单上显示的那一口」与「真正下发下去的值」对不上，
+ *  所以两个方向共用这一份映射（尺寸 / 时长各有自己的控件，不走这里）。 */
+export function exposedValueOf(
+  values: WorkshopExposedValues,
+  id: string,
+): string {
+  if (id === "prompt") return values.prompt ?? "";
+  if (id === "negative") return values.negativePrompt ?? "";
+  if (id === "first-frame") return values.firstFrame ?? "";
+  if (id === "last-frame") return values.lastFrame ?? "";
+  const slot = referenceSlotOf(id);
+  if (slot < 0) return "";
+  return values.referenceImages?.[slot] ?? "";
+}
+
+/** 把某个契约口的内容写回对外值（不可变返回；认不出的口原样返回）。 */
+export function withExposedValue(
+  values: WorkshopExposedValues,
+  id: string,
+  next: string,
+): WorkshopExposedValues {
+  if (id === "prompt") return { ...values, prompt: next };
+  if (id === "negative") return { ...values, negativePrompt: next };
+  if (id === "first-frame") return { ...values, firstFrame: next };
+  if (id === "last-frame") return { ...values, lastFrame: next };
+  const slot = referenceSlotOf(id);
+  if (slot < 0) return values;
+  const refs = [...(values.referenceImages ?? [])];
+  refs[slot] = next;
+  return { ...values, referenceImages: refs };
+}
+
+/** 提交前清洗：**空字符串一律当「没给」**。
+ *
+ *  工坊的封装口径是「没给的口用工作流图内的默认值」（见 `buildEncapsulatedInputs`），
+ *  而空串是**给了一个空值** —— 负向提示词那一格清空后再跑，会把工作流里作者写好的
+ *  负向提示词抹成空。流程测试的表单是「全部口都摆出来」的，用户没碰过的口天然是
+ *  空串，所以这一层清洗必须在提交口做一次。 */
+export function pruneEmptyExposedValues(
+  values: WorkshopExposedValues,
+): WorkshopExposedValues {
+  const out: WorkshopExposedValues = {};
+  const text = (v: string | undefined) =>
+    v !== undefined && v.trim() !== "" ? v : undefined;
+  const prompt = text(values.prompt);
+  if (prompt !== undefined) out.prompt = prompt;
+  const negative = text(values.negativePrompt);
+  if (negative !== undefined) out.negativePrompt = negative;
+  const firstFrame = text(values.firstFrame);
+  if (firstFrame !== undefined) out.firstFrame = firstFrame;
+  const lastFrame = text(values.lastFrame);
+  if (lastFrame !== undefined) out.lastFrame = lastFrame;
+  const refs = (values.referenceImages ?? []).filter(
+    (ref): ref is string => typeof ref === "string" && ref.trim() !== "",
+  );
+  if (refs.length > 0) out.referenceImages = refs;
+  if (values.size !== undefined) out.size = values.size;
+  if (values.duration !== undefined) out.duration = values.duration;
+  if (values.frames !== undefined) out.frames = values.frames;
+  return out;
+}
+
 /** 组装工坊对外参数 → workflowInputs（**只落作者连过线的端口**）。
  *
  *  规则：

@@ -18,9 +18,6 @@ import React from "react";
 
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
-import { Button } from "~/components/ui/button";
-import { Textarea } from "~/components/ui/textarea";
-import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
   deriveEncapsulationStatus,
@@ -33,13 +30,12 @@ import {
 } from "~/lib/workshop/model-mode-contract";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 import { modeLabel } from "../workflow-library-config";
-import {
-  DEFAULT_SHOT_SIZE,
-  type ShotSizeState,
-} from "~/components/workshop/shot-size-config";
+import { sceneFromMode } from "~/lib/media/size-presets";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
+import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 import { displayValue } from "~/lib/display-value";
+import { EncapsulationTestForm } from "./EncapsulationTestForm";
 
 interface WorkshopEncapsulationPanelProps {
   workflowId: string;
@@ -128,20 +124,6 @@ export function WorkshopEncapsulationPanel({
     [workflowIO, paramMap, mode, storedContracts, requiredInputs],
   );
 
-  /* 流程测试的对外输入（与工坊同口径）：提示词 / 负向 / 尺寸。 */
-  const [prompt, setPrompt] = React.useState(
-    "一只戴宇航员头盔的柴犬，写实风格，高清",
-  );
-  const [negative, setNegative] = React.useState("");
-  const [size, setSize] = React.useState<ShotSizeState>(DEFAULT_SHOT_SIZE);
-
-  const entryById = React.useMemo(
-    () => new Map(status.entries.map((e) => [e.id, e])),
-    [status],
-  );
-  const negativeEntry = entryById.get("negative");
-  const sizeEntry = entryById.get("size");
-  const promptEntry = entryById.get("prompt");
   /* 流程测试的运行编排（规范 §17.2 第②层）：与画布节点那次运行共用同一份
    *  运行登记表与日志弹窗，只是带自己的来源标记。视图这里只消费 controller。 */
   const test = useEncapsulationTestRun({
@@ -150,14 +132,11 @@ export function WorkshopEncapsulationPanel({
     mode: mode ?? null,
   });
 
-  const runTest = () => {
+  /* 表单交上来的就是**工坊对外值**本身（口子清单 = 该模式的契约口，见
+   *  `EncapsulationTestForm`），这里不再做第二道字段过滤。 */
+  const runTest = (values: WorkshopExposedValues) => {
     if (test.running || !status.ready) return;
-    test.run({
-      prompt,
-      ...(negative.trim() ? { negativePrompt: negative.trim() } : {}),
-      /* 库工作流吃尺寸表达（比例 + 档位 [+ 倍数]），不下发 "WxH" 字符串。 */
-      size,
-    });
+    test.run(values);
   };
 
   return (
@@ -273,7 +252,7 @@ export function WorkshopEncapsulationPanel({
         })}
       </div>
 
-      {/* 流程测试：按封装口径真实跑一次（提示词 + 尺寸 → ComfyUI） */}
+      {/* 流程测试：按封装口径真实跑一次（提示词 / 负向 / 尺寸 / 图片 / 时长 → ComfyUI） */}
       <div className="border-primary-soft bg-primary-soft/30 rounded-xl border p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-primary text-xs font-medium">流程测试</p>
@@ -282,51 +261,22 @@ export function WorkshopEncapsulationPanel({
           </span>
         </div>
         <div className="space-y-2">
-          {promptEntry?.targetIoKey && (
-            <Textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              rows={2}
-              className="border-border bg-bg text-xs"
-              placeholder="测试提示词"
-            />
-          )}
-          {negativeEntry?.targetIoKey && (
-            <Textarea
-              value={negative}
-              onChange={(event) => setNegative(event.target.value)}
-              rows={1}
-              className="border-border bg-bg text-xs"
-              placeholder="负向提示词（可选）"
-            />
-          )}
-          {sizeEntry?.targetIoKey && (
-            <ShotSizePicker
-              value={size}
-              onChange={setSize}
-              disabled={test.running}
-            />
-          )}
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={runTest}
-              disabled={test.running || !status.ready}
-              title={
-                status.ready
-                  ? undefined
-                  : `${status.missingRequired.join("、") || "必备口"}未落到端口，工坊无法驱动这条工作流`
-              }
-              className="h-auto rounded-lg px-3 py-1.5 text-xs font-medium"
-            >
-              {test.running ? "测试中…" : "执行流程测试"}
-            </Button>
-            {/* 执行日志入口不在页签里 —— 它是详情头部的一扇固定门
-                （`DetailHeader`）：两个页签共用同一份运行登记表与同一个全屏
-                弹窗，位置不再随页签 / 有没有跑过而变化（ISSUE #611）。 */}
-            <span className="text-muted-foreground text-[11px]">
-              会真实调用本机 ComfyUI 生成一张图
-            </span>
-          </div>
+          {/* 输入框由**该模式的契约口清单**逐口渲染 —— 与上方「工坊对外口一览」
+              同一份清单，不看有没有落点（没落点的口照样能填，值落不下去时由
+              工作流图内的默认值兜底）。 */}
+          <EncapsulationTestForm
+            entries={status.entries}
+            scene={sceneFromMode(mode)}
+            running={test.running}
+            canRun={status.ready}
+            runDisabledReason={
+              status.ready
+                ? undefined
+                : `${status.missingRequired.join("、") || "必备口"}未落到端口，工坊无法驱动这条工作流`
+            }
+            onRun={runTest}
+            uploadImage={test.uploadImage}
+          />
           {test.running && (
             <ProgressBar
               value={test.progress}
@@ -353,7 +303,8 @@ export function WorkshopEncapsulationPanel({
             </div>
           )}
           <p className="text-muted-foreground/70 text-[10px]">
-            其余参数按工作流默认值执行，不在工坊对外暴露。
+            工作流图内的其余参数（步数 /
+            采样器等）按图内默认值执行，不在工坊对外暴露。
           </p>
         </div>
       </div>

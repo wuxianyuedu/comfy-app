@@ -8,7 +8,12 @@
  * 删除：那套判据本身就是被去掉的东西（猜错时用户无从察觉）。
  */
 import { describe, it, expect } from "vitest";
-import { buildEncapsulatedInputs } from "./workflow-encapsulation";
+import {
+  buildEncapsulatedInputs,
+  exposedValueOf,
+  pruneEmptyExposedValues,
+  withExposedValue,
+} from "./workflow-encapsulation";
 import {
   isVideoMode,
   modeUsesFirstFrame,
@@ -650,6 +655,73 @@ describe("边界", () => {
       });
       expect(res.unmatched).toContain("prompt");
     }
+  });
+});
+
+/* ── 契约口 ↔ 对外值字段的单一映射 ─────────────────────────── */
+
+describe("契约口 ↔ 对外值字段：读写共用一份映射", () => {
+  it("口名与字段名不同名也能对上（negative → negativePrompt）", () => {
+    const values = { negativePrompt: "lowres" };
+    expect(exposedValueOf(values, "negative")).toBe("lowres");
+    expect(withExposedValue(values, "negative", "blurry").negativePrompt).toBe(
+      "blurry",
+    );
+  });
+
+  it("参考图口按序号落槽位（第一张不带序号）", () => {
+    const values = { referenceImages: ["a.png", "b.png"] };
+    expect(exposedValueOf(values, "reference-image")).toBe("a.png");
+    expect(exposedValueOf(values, "reference-image-2")).toBe("b.png");
+    expect(
+      withExposedValue(values, "reference-image-2", "c.png"),
+    ).toMatchObject({ referenceImages: ["a.png", "c.png"] });
+  });
+
+  it("首帧 / 尾帧各写自己的字段，不互相串", () => {
+    const values = withExposedValue(
+      withExposedValue({}, "first-frame", "head.png"),
+      "last-frame",
+      "tail.png",
+    );
+    expect(values.firstFrame).toBe("head.png");
+    expect(values.lastFrame).toBe("tail.png");
+    expect(exposedValueOf(values, "first-frame")).toBe("head.png");
+  });
+
+  it("认不出的口：读回空串、写回原值（不凭空造字段）", () => {
+    const values = { prompt: "x" };
+    expect(exposedValueOf(values, "steps")).toBe("");
+    expect(withExposedValue(values, "steps", "28")).toBe(values);
+  });
+
+  it("缺值口读回空串（表单初值不出现 undefined）", () => {
+    expect(exposedValueOf({}, "prompt")).toBe("");
+    expect(exposedValueOf({}, "reference-image-3")).toBe("");
+  });
+});
+
+describe("提交前清洗：空串一律当「没给」", () => {
+  it("清空的口被剪掉（不把图内作者的负向提示词抹成空）", () => {
+    const out = pruneEmptyExposedValues({
+      prompt: "一只猫",
+      negativePrompt: "",
+      firstFrame: "   ",
+    });
+    expect(out).toEqual({ prompt: "一只猫" });
+  });
+
+  it("参考图里的空槽位被剔除（不留空洞）", () => {
+    const out = pruneEmptyExposedValues({
+      referenceImages: ["a.png", "", "  "],
+    });
+    expect(out.referenceImages).toEqual(["a.png"]);
+  });
+
+  it("尺寸 / 时长 / 帧数是结构值，原样保留", () => {
+    const size = sizeSpec();
+    const out = pruneEmptyExposedValues({ size, duration: 5, frames: 81 });
+    expect(out).toEqual({ size, duration: 5, frames: 81 });
   });
 });
 
