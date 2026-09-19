@@ -90,6 +90,10 @@ const CLIPBOARD_VIEW =
   'export function K() {\n  const onCopy = () => void navigator.clipboard.writeText("a");\n  return <span onClick={onCopy}>copy</span>;\n}\n';
 const DOWNLOAD_VIEW =
   'export function D() {\n  const save = () => URL.createObjectURL(new Blob(["x"]));\n  return <span onClick={save}>save</span>;\n}\n';
+const FILE_INPUT_VIEW =
+  'export function F() {\n  const ref = useRef<HTMLInputElement>(null);\n  return <input ref={ref} type="file" className="hidden" />;\n}\n';
+const DASH_FALLBACK_VIEW =
+  'export function E({ v }: { v?: string }) {\n  return <span>{v ?? "—"}</span>;\n}\n';
 
 describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   it("视图里手写 <button> 会被阻断（规范 P1）", () => {
@@ -118,6 +122,69 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run();
     expect(code).toBe(1);
     expect(output).toContain("P3");
+  });
+
+  /* ── P7 / P8：同 P4~P6 的硬闸，口径是「必须为 0」─────────────────────
+   * 这两条与 P1~P3 的棘轮**性质不同**：棘轮允许「先冻结存量再逐批降」，
+   * 而 P7/P8 已经在同批清零，所以基线里没有它们 —— 第一处新增就直接断。 */
+  it("视图里自写「隐藏 file input + 手工触发」直接阻断（规范 P7）", () => {
+    seedBaseline();
+    write("src/components/workshop/F.tsx", FILE_INPUT_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P7");
+    expect(output).toContain("src/components/workshop/F.tsx");
+  });
+
+  it("可见的 <input type=file> 不计入 P7（是另一种形态）", () => {
+    /* FilmStudio 的 BGM 选择器是**用户可见的表单字段**（靠 `file:` 伪元素
+     * 美化、就地显示已选文件名）—— 它不欠 file-picker 的契约。判据若把它
+     * 也算上，唯一的修法是把可见输入框硬改成隐藏 input + 按钮，那是**改坏
+     * 外观**去迎合判据。 */
+    seedBaseline();
+    write(
+      "src/components/workshop/G.tsx",
+      'export const G = () => <input type="file" className="file:bg-violet-500/20" />;\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写「值不存在显示 —」直接阻断（规范 P8）", () => {
+    seedBaseline();
+    write("src/components/workshop/H.tsx", DASH_FALLBACK_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P8");
+  });
+
+  it("用了 displayValue 的地方不含占位符字面量，自然不被 P8 计", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/I.tsx",
+      'import { displayValue } from "~/lib/display-value";\nexport const I = ({ v }: { v?: string }) => <span>{displayValue(v)}</span>;\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P7/P8 未清零时 --update 拒绝更新基线", () => {
+    write("src/components/studio/J.tsx", FILE_INPUT_VIEW);
+    const { code, output } = run(["--update"]);
+    expect(code).toBe(1);
+    expect(output).toContain("硬闸");
+  });
+
+  it("P7/P8 的计数不进棘轮基线", () => {
+    seedBaseline();
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { rules: Record<string, string> };
+    expect(baseline.rules.P7).toBeUndefined();
+    expect(baseline.rules.P8).toBeUndefined();
   });
 
   it("视图里自写 ::-webkit-scrollbar 外观直接阻断，不进棘轮（规范 P4）", () => {

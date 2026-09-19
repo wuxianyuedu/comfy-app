@@ -12,6 +12,7 @@ import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { Progress } from "~/components/ui/progress";
 import { Alert } from "~/components/ui/alert";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
@@ -50,7 +51,11 @@ interface Props {
 export function CharacterPortraitStudio({ character, portrait }: Props) {
   const { session, actions, apiChannels, workflows, onOpenApiSettings } =
     portrait;
-  const fileRef = React.useRef<HTMLInputElement>(null);
+  /* 导入定妆照：隐藏 input + 选完复位收进 `ui/file-picker`。 */
+  const importPicker = useFilePicker({
+    accept: "image/*",
+    onPick: (file) => void actions.importFile(character, file),
+  });
 
   /** 会话消息只挂在发起它的那张卡上，别的角色卡不重复展示同一份进度与日志。 */
   const focused = session.focusCharacterId === character.id;
@@ -186,24 +191,13 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
         <Button
           variant="outline"
           size="xs"
-          onClick={() => fileRef.current?.click()}
+          onClick={importPicker.open}
           disabled={session.busy || session.importing}
           className="border-border text-ink hover:bg-surface h-auto rounded-md px-3 py-1.5"
         >
           {importing ? "导入中…" : "导入图片"}
         </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void actions.importFile(character, file);
-            // 允许重复选择同一文件
-            event.target.value = "";
-          }}
-        />
+        <importPicker.Input />
       </div>
 
       {/* 通道门禁提示：说清缺什么、去哪里补，不让按钮无声失效 */}

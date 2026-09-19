@@ -221,6 +221,7 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/utils.ts",
   "src/lib/endpoints.ts",
   "src/lib/format-bytes.ts",
+  "src/lib/display-value.ts",
   "src/lib/error-message.ts",
   "src/lib/browser-io.ts",
   "src/lib/time-format.ts",

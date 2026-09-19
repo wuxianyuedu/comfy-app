@@ -52,6 +52,7 @@ import {
 import { overlayClass } from "~/lib/full-screen-layer";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
+import { displayValue } from "~/lib/display-value";
 
 /** 单个级别的摘要文案；零条目的级别说「无」——它也是一条信息，不是空白。 */
 function levelSummary(label: string, value: number): string {
@@ -108,7 +109,10 @@ function CountColumn({
           : "text-ink-soft";
   return (
     <span className={`w-14 shrink-0 text-right tabular-nums ${color}`}>
-      {value > 0 ? value : "—"}
+      {/* 计数徽标：**0 是有意义的「无」，不是缺值** —— 所以这里不套
+       *  `displayValue`（它会把 0 照常显示成 "0"，那是给「量」用的），而是
+       *  显式判 `> 0`，让占位符与屏幕阅读器文案来自同一个判断。 */}
+      {value > 0 ? value : displayValue(null)}
       <span className="sr-only">{value > 0 ? ` ${label}` : ` 无${label}`}</span>
     </span>
   );

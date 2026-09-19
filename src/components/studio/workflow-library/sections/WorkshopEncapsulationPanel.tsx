@@ -28,6 +28,7 @@ import {
 } from "~/components/workshop/shot-size-config";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
+import { displayValue } from "~/lib/display-value";
 
 interface WorkshopEncapsulationPanelProps {
   workflowId: string;
@@ -173,7 +174,7 @@ export function WorkshopEncapsulationPanel({
                 </span>
               </span>
               <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]">
-                {entry.targetIoKey ?? "—"}
+                {displayValue(entry.targetIoKey)}
               </span>
               {entry.manual && (
                 <span className="text-muted-foreground text-[10px]">
