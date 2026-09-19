@@ -21,7 +21,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { FileText, X, Maximize2, Minimize2 } from "lucide-react";
+import { FileText, X } from "lucide-react";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import {
   getWorkflowRunStoreSnapshot,
@@ -36,6 +36,7 @@ import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
+import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 
 /* 与项目画布 GlobalStepLogPanel 同款 level badge 配色。 */
 type Level = TaskLogEntry["level"];
@@ -132,7 +133,8 @@ export function WorkflowRunLogModal({
   const logs = run?.logs ?? [];
 
   const [filter, setFilter] = useState<Level | "all">("all");
-  const [wide, setWide] = useState(false);
+  /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
+  const panel = useWidePanel("wflib-run-log", RUN_LOG_WIDTH);
   const [autoscroll, setAutoscroll] = useState(true);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -174,10 +176,10 @@ export function WorkflowRunLogModal({
         data-testid="wflib-log-modal"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
-        popupClassName={wide ? RUN_LOG_WIDTH.wide : RUN_LOG_WIDTH.base}
+        popupClassName={panel.widthClass}
       >
         <div
-          className={`border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60 ${wide ? RUN_LOG_WIDTH.wide : RUN_LOG_WIDTH.base}`}
+          className={`border-border bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60 ${panel.widthClass}`}
         >
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
@@ -246,15 +248,10 @@ export function WorkflowRunLogModal({
                   ))}
                 </select>
               )}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setWide((w) => !w)}
-                title={wide ? "收缩" : "加宽"}
+              <WidePanelToggle
+                panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-              >
-                {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </Button>
+              />
               <Button
                 variant="ghost"
                 size="icon-sm"

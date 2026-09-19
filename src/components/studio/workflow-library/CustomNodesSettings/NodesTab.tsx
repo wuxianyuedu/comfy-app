@@ -21,15 +21,12 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
     parsing,
     totalAcrossParents,
     parentBlocks,
-    expandedParents,
-    setExpandedParents,
+    parentExpansion,
     perPkgParsing,
     onParseAllParent,
-    expandedNodeList,
-    setExpandedNodeList,
+    nodeListExpansion,
     manifestByNode,
-    nodeExpanded,
-    setNodeExpanded,
+    nodeCardExpansion,
     onParseSingle,
   } = ctrl;
   return (
@@ -140,7 +137,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         )}
         <div className="space-y-2">
           {parentBlocks.map(({ parent, subs, cnt, total }) => {
-            const isOpen = !!expandedParents[parent];
+            const isOpen = parentExpansion.isExpanded(parent);
             const parentParsed =
               total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
             return (
@@ -156,12 +153,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                     触发按钮里。面板 = 子包列表（见下方 `subs.map`）。 */}
                 <Disclosure
                   open={isOpen}
-                  onOpenChange={() =>
-                    setExpandedParents((parents) => ({
-                      ...parents,
-                      [parent]: !parents[parent],
-                    }))
-                  }
+                  onOpenChange={() => parentExpansion.toggle(parent)}
                   marker="caret"
                   className="hover:bg-subtle justify-between gap-2 rounded-xl px-3 py-2.5"
                   panelClassName="contents"
@@ -249,7 +241,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                         // 空的包没东西可显示。
                         const nodesAreLoaded =
                           state.kind === "loaded" || state.kind === "outdated";
-                        const nodeListOpen = !!expandedNodeList[sub.path];
+                        const nodeListOpen = nodeListExpansion.isExpanded(
+                          sub.path,
+                        );
                         const nodeTypeList = saved?.nodeTypes ?? [];
                         return (
                           <div key={sub.path}>
@@ -295,10 +289,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   <Disclosure
                                     open={nodeListOpen}
                                     onOpenChange={() =>
-                                      setExpandedNodeList((nodeList) => ({
-                                        ...nodeList,
-                                        [sub.path]: !nodeList[sub.path],
-                                      }))
+                                      nodeListExpansion.toggle(sub.path)
                                     }
                                     marker="caret"
                                     className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
@@ -367,12 +358,11 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                       key={ct}
                                       data={manifestByNode[ct]}
                                       fallbackName={ct}
-                                      expanded={!!nodeExpanded[ct]}
+                                      expanded={nodeCardExpansion.isExpanded(
+                                        ct,
+                                      )}
                                       onToggle={() =>
-                                        setNodeExpanded((expanded) => ({
-                                          ...expanded,
-                                          [ct]: !expanded[ct],
-                                        }))
+                                        nodeCardExpansion.toggle(ct)
                                       }
                                     />
                                   ))

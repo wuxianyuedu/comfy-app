@@ -21,6 +21,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import {
   Popover,
   PopoverContent,
@@ -135,16 +136,16 @@ export function MultiModeSelect({
 
   // 过滤并按分类归并后的选项，供浮层使用。
   const grouped = useMemo(() => {
-    const lowerQuery = query.trim().toLowerCase();
-    const filtered = ALL_WORKFLOW_TYPES.filter((type) => {
-      if (!lowerQuery) return true;
-      return (
-        type.code.toLowerCase().includes(lowerQuery) ||
-        type.label.toLowerCase().includes(lowerQuery) ||
-        (type.subCategory?.toLowerCase().includes(lowerQuery) ?? false) ||
-        (type.fullName.toLowerCase().includes(lowerQuery) ?? false)
-      );
-    });
+    /* 归一化（trim + 折小写）走 `~/lib/list-filter`（规范 16 §16.2.4.16）；
+     * 「可搜哪四个字段」是本域判据，留在调用处。 */
+    const lowerQuery = normalizeNeedle(query);
+    const filtered = ALL_WORKFLOW_TYPES.filter(
+      (type) =>
+        matchesNeedle(lowerQuery, type.code) ||
+        matchesNeedle(lowerQuery, type.label) ||
+        matchesNeedle(lowerQuery, type.subCategory ?? "") ||
+        matchesNeedle(lowerQuery, type.fullName),
+    );
     const groupedMap: Partial<
       Record<WorkflowCategory, typeof ALL_WORKFLOW_TYPES>
     > = {};

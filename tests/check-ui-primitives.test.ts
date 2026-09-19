@@ -96,7 +96,7 @@ const DASH_FALLBACK_VIEW =
   'export function E({ v }: { v?: string }) {\n  return <span>{v ?? "—"}</span>;\n}\n';
 /* 自绘折叠开关：原生 `<details>`（P10 形态 ①）。 */
 const DETAILS_VIEW =
-  'export function T() {\n  return (\n    <details>\n      <summary>展开</summary>\n      <pre>x</pre>\n    </details>\n  );\n}\n';
+  "export function T() {\n  return (\n    <details>\n      <summary>展开</summary>\n      <pre>x</pre>\n    </details>\n  );\n}\n";
 /* 自绘折叠开关：`role="button"` + `▸/▾`（P10 形态 ②）。 */
 const ROLE_BUTTON_TOGGLE_VIEW =
   'export function T() {\n  return (\n    <div role="button" tabIndex={0} onClick={onToggle}>\n      <span>{open ? "▾" : "▸"}</span>\n      <span>标题</span>\n    </div>\n  );\n}\n';
@@ -108,7 +108,20 @@ const CHIP_POPOVER_VIEW =
   'export function C({ value }: { value: string }) {\n  return (\n    <Popover open={open} onOpenChange={setOpen}>\n      <PopoverTrigger>\n        <span>{label}</span>\n        <span>▾</span>\n      </PopoverTrigger>\n      <PopoverContent className="max-h-72 overflow-y-auto">\n        <Button role="option" aria-selected={value === "a"}>A</Button>\n      </PopoverContent>\n    </Popover>\n  );\n}\n';
 /* 自写轮询：视图里直接 setInterval（P12）。 */
 const SET_INTERVAL_VIEW =
-  'export function P() {\n  useEffect(() => {\n    const t = setInterval(() => void poll(), 4000);\n    return () => clearInterval(t);\n  }, []);\n  return null;\n}\n';
+  "export function P() {\n  useEffect(() => {\n    const t = setInterval(() => void poll(), 4000);\n    return () => clearInterval(t);\n  }, []);\n  return null;\n}\n";
+/* 自写搜索归一化：视图里自己写 trim + 折小写（P13 形态 ①）。 */
+const SEARCH_NEEDLE_VIEW =
+  "export function S({ keyword }: { keyword: string }) {\n  const needle = keyword.trim().toLowerCase();\n  return <List rows={rows.filter((r) => matches(r, needle))} />;\n}\n";
+/* 自写搜索归一化：只 `trim()` 不折小写 —— **P13 必须也能看见这一种**
+ *（`AttributeMultiSelect` 的原始缺陷就是它，而它不含 `.trim().toLowerCase()`）。 */
+const SEARCH_TRIM_ONLY_VIEW =
+  "export function S({ kw }: { kw: string }) {\n  const needle = kw.trim();\n  return <List rows={rows.filter((r) => r.name.includes(needle))} />;\n}\n";
+/* 自己维护一份展开集合（P14）。 */
+const EXPANSION_MAP_VIEW =
+  "export function T({ parent }: { parent: string }) {\n  const [open, setOpen] = useState<Record<string, boolean>>({});\n  return (\n    <Row\n      open={!!open[parent]}\n      onToggle={() => setOpen((prev) => ({ ...prev, [parent]: !prev[parent] }))}\n    />\n  );\n}\n";
+/* 自己维护面板加宽档（P15）。 */
+const WIDE_PANEL_VIEW =
+  'export function W() {\n  const [wide, setWide] = useState(false);\n  return (\n    <DialogContent popupClassName={wide ? PANEL_WIDTH.wide : PANEL_WIDTH.base}>\n      <Button onClick={() => setWide((w) => !w)}>{wide ? "收缩" : "加宽"}</Button>\n    </DialogContent>\n  );\n}\n';
 /* 自绘模态浮层：**不含任何 `createPortal`** —— 这正是 P2 数不到的那一侧
  *（P2 问「有没有用某 API」，P9 问「有没有自己拼一份浮层外壳」）。 */
 const MODAL_OVERLAY_VIEW =
@@ -368,7 +381,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/workshop/DocumentedToggle.tsx",
-      '/* 这里此前是原生 `<details>` + `<summary>`，已改走 ui/disclosure。 */\nexport const D = () => null;\n',
+      "/* 这里此前是原生 `<details>` + `<summary>`，已改走 ui/disclosure。 */\nexport const D = () => null;\n",
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -387,7 +400,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/PlainPopover.tsx",
-      'export function P() {\n  return (\n    <Popover>\n      <PopoverTrigger>打开</PopoverTrigger>\n      <PopoverContent>x</PopoverContent>\n    </Popover>\n  );\n}\n',
+      "export function P() {\n  return (\n    <Popover>\n      <PopoverTrigger>打开</PopoverTrigger>\n      <PopoverContent>x</PopoverContent>\n    </Popover>\n  );\n}\n",
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -406,13 +419,100 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/app/api/tasks/[id]/stream/route.ts",
-      'export async function GET() {\n  const hb = setInterval(() => {}, 15000);\n  return new Response(String(hb));\n}\n',
+      "export async function GET() {\n  const hb = setInterval(() => {}, 15000);\n  return new Response(String(hb));\n}\n",
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
   });
 
-  it("P10/P11/P12 未清零时 --update 拒绝更新基线", () => {
+  /* ── P13 / P14 / P15：本批三条硬闸（规范 16 §16.2.4.16 ~ §16.2.4.18）──
+   *
+   * 与 P10~P12 同款：判据按**形态**取锚点，且**两条边界都要有用例** ——
+   * 判据太宽会逼下一个人改坏代码去迎合它。这三条各有一条特别的边界：
+   *   · P13 必须同时看见「只 trim 不折小写」那种写法（更差的那种）；
+   *   · P14 不能把「在跑标记」这类非折叠语义的 Record 算进来；
+   *   · P15 不能把普通的 `useState(false)` 弹窗开关算进来。 */
+  it("视图里自写搜索归一化（trim + 折小写）直接阻断（规范 P13）", () => {
+    seedBaseline();
+    write("src/components/studio/Searchable.tsx", SEARCH_NEEDLE_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P13");
+    expect(output).toContain("src/components/studio/Searchable.tsx");
+  });
+
+  it("只 trim 不折小写也算（更差的那种写法不能漏，规范 P13）", () => {
+    /* 这是本批最值得记的一条：`AttributeMultiSelect` 收口前只写了 `trim()`，
+     * 候选值含拉丁字母时大小写敏感。它**不含** `.trim().toLowerCase()` ——
+     * 判据若只数那一种，被拦下的永远只是合规者。 */
+    seedBaseline();
+    write("src/components/studio/TrimOnly.tsx", SEARCH_TRIM_ONLY_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P13");
+  });
+
+  it("无关的去空白（不是搜索词）不被 P13 误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Cleanup.tsx",
+      "export const clean = (line: string) => line.trim();\nexport const key = (s: string) => s.trim();\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("服务端路由的参数归一化不算「视图搜索框」（P13 豁免 app/api/**）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/things/route.ts",
+      'export async function GET(req: Request) {\n  const q = new URL(req.url).searchParams.get("q")?.trim().toLowerCase();\n  return Response.json({ q });\n}\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写展开集合的翻转样板直接阻断（规范 P14）", () => {
+    seedBaseline();
+    write("src/components/studio/Tree.tsx", EXPANSION_MAP_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P14");
+    expect(output).toContain("src/components/studio/Tree.tsx");
+  });
+
+  it("「在跑标记」这类非折叠语义的 Record 不被 P14 误伤", () => {
+    /* 边界：`{ ...state, [id]: true }` 是**落位 / 在跑**标记，不是折叠 ——
+     * 它没有「翻转」，也不该走 `ExpansionSet`（那会给出一个错误的语义）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/Pending.tsx",
+      "export function P({ id }: { id: string }) {\n  const [busy, setBusy] = useState<Record<string, boolean>>({});\n  return <Row onClick={() => setBusy((state) => ({ ...state, [id]: true }))} />;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写面板加宽档直接阻断（规范 P15）", () => {
+    seedBaseline();
+    write("src/components/studio/WideThing.tsx", WIDE_PANEL_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P15");
+    expect(output).toContain("src/components/studio/WideThing.tsx");
+  });
+
+  it("普通的 useState(false) 弹窗开关不被 P15 误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Modalish.tsx",
+      "export function M() {\n  const [open, setOpen] = useState(false);\n  return <Button onClick={() => setOpen((v) => !v)}>打开</Button>;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P10~P15 未清零时 --update 拒绝更新基线", () => {
     write("src/components/studio/ToggleUpdate.tsx", ROLE_BUTTON_TOGGLE_VIEW);
     const { code, output } = run(["--update"]);
     expect(code).toBe(1);
@@ -430,6 +530,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P10).toBeUndefined();
     expect(baseline.rules.P11).toBeUndefined();
     expect(baseline.rules.P12).toBeUndefined();
+    expect(baseline.rules.P13).toBeUndefined();
+    expect(baseline.rules.P14).toBeUndefined();
+    expect(baseline.rules.P15).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

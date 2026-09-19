@@ -137,16 +137,21 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P10** | 视图层自绘折叠 / 展开开关（`<details>` 或 `role="button"` + `▸/▾`）     | `~/components/ui/disclosure` 的 `Disclosure`（见 §16.2.4.13）                                                                                                                          |
 | **P11** | 视图层自绘可滚动浮层选项列表（同文件里既建 `PopoverTrigger` 又画 `▾`） | `~/components/ui/option-list-popover` 的 `OptionListPopover`（见 §16.2.4.14）                                                                                                          |
 | **P12** | 视图 / 逻辑层里自写 `setInterval(` 轮询                                 | `~/components/ui/use-interval` 的 `useInterval`（见 §16.2.4.15）                                                                                                                       |
+| **P13** | 视图 / 逻辑层里自写搜索关键字归一化（`.trim().toLowerCase()`，**或只 `trim()`**） | `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` / `filterGroups`（见 §16.2.4.16）                                                                                 |
+| **P14** | 视图里自写展开集合的翻转样板（`{ ...src, [key]: !src[key] }`）           | `~/components/ui/expansion-set` 的 `useExpansionSet`（见 §16.2.4.17）                                                                                                                 |
+| **P15** | 视图里自写面板加宽档的三元（`<flag> ? <X>.wide : <X>.base`）             | `~/components/ui/wide-panel` 的 `useWidePanel` / `WidePanelToggle`（见 §16.2.4.18）                                                                                                   |
 
-**P4~P12 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P12 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
-缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询」这九件事的**定义**只能有
-一处，没有「冻结在某个数字」的中间态可言。因此它们**不进基线**（`--update` 也
-不接受带违规的基线，否则「把违规一起写进基线」就成了唯一的绕过方式）。
+**P4~P15 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P15 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
+加宽档」这十二件事的**定义**只能有一处，没有「冻结在某个数字」的中间态可言。
+因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
+基线」就成了唯一的绕过方式）。
 清零过程：P4 见 §16.2.4.9、P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、
-P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.4.15。
+P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.4.15、
+P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18。
 
-**P4~P12 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P15 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -1333,10 +1338,194 @@ ComfyUI 节点卡外观，与 disclosure 的「一行文字 + 折叠标记」不
 轮询是服务端定时器，不在 React 生命周期里）。
 
 ```bash
-pnpm ui:primitives            # 检查（棘轮 + P4~P12 硬闸，pre-commit 第 12 步）
+pnpm ui:primitives            # 检查（棘轮 + P4~P15 硬闸，pre-commit 第 12 步）
 pnpm ui:primitives:report     # 只出清单
 node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 ```
+
+### 16.2.4.16 「可搜索列表过滤」有八份写法（P13 硬闸）
+
+§16.2.4.15 收尾时留了三个问法，第一个是**「谁在自己实现一个可搜索的列表过滤」**
+（搜索框 + 分组过滤：关键字归一化、分组保序、空组丢弃）。
+
+按形态扫下来，全库有 **8 处**各写一遍「怎么把用户输入变成一个可用的搜索关键字」：
+
+| 落点 | 归一化写法 | 可搜字段 |
+| --- | --- | --- |
+| `AttributeMultiSelect`（工坊角色属性多选） | **只 `trim()`** | 分组选项（`options`） |
+| `model-library-config` 的 `filterModels` / `filterFolders` | `trim().toLowerCase()` | 名称 + 文件名 / 目录名 + 标签 |
+| `workflow-library-config` 的 `filterWorkflows` / `filterPending` | `trim().toLowerCase()` | 名称 |
+| `log-store` 的 `matchesSearch` | `trim().toLowerCase()` | 正文 + 位置 |
+| `LogRow` 的 `HighlightedText` | `trim().toLowerCase()` | 正文分片 |
+| `RgthreeBodies` | `trim().toLowerCase()` | 组标题 |
+| `multi-mode-select` | `trim().toLowerCase()` | code / label / subCategory / fullName |
+| `app/api/materials/route.ts` + `server/api/routers/material.ts` | `trim().toLowerCase()` | 素材名 |
+
+**差别不是风格，是一个语义决定 —— 且有一处判错了：**
+
+`AttributeMultiSelect` 只写了 `trim()`，没折小写。这看起来「也对」（那批候选值
+绝大多数是中文），直到候选里出现**含拉丁字母**的项 —— 而它们**真在数据里**：
+`COSTUME_OPTIONS` 有 `JK制服`、`T恤`；`APPEARANCE_OPTIONS` 有 `3D`。用户输 `jk`
+**一条也搜不到**。这就是**同一个决定散在多处就不会被统一说出来**：
+`includes` 与 `toLowerCase().includes` 都编译、都运行、类型都对，
+差别只在这一个字符上。
+
+另一处同源问题：`AttributeMultiSelect` 的「分组过滤」只在**全空**时给
+「未找到匹配项」，中间的空标题仍会渲染 —— 搜「旗袍」时「中式」下面一条结果、
+紧跟着的「日韩」下面什么都没有，却还是留着一个小标题。
+
+#### 出口：`~/lib/list-filter`
+
+| 导出 | 承载的口径 |
+| --- | --- |
+| `normalizeNeedle(raw)` | **同时**去两侧空白 + 折小写。只做一半就是上面那处缺陷 |
+| `matchesNeedle(needle, haystack)` | 子串命中；空关键字恒命中（不搜 = 全留）。**两侧都折小写** —— 只折 haystack 不够（`matchesNeedle("T恤", "t恤")` 会 false） |
+| `filterGroups(groups, needle, field, hit?)` | **保组序 + 丢空组**。`field` 可配（`OptionGroup` 叫 `options`，其余叫 `items`）—— 硬性统一改名会牵动 `character-options.ts` 的 300+ 行数据 |
+| `filterGroupsByKeyword(...)` | 一步式：先归一化再分组过滤。**合成一个调用点，是因为分开写就有人只写一半** |
+
+**保组序**（不按命中数重排）与**丢空组**这两条各有一条反例作证 —— 前者是
+「同一个关键字连输两次、分组顺序会跳」（那是界面在动，不是结果在变），
+后者就是上面 `AttributeMultiSelect` 那个空标题。
+
+**「可搜哪些字段」是域判据，留在调用处**：`filterModels` 命中的是「名称 + 文件名」
+拼接后的整串（所以搜 `model.safetensors` 也能中），`workflow-library-config`
+只看 `name`，`RgthreeBodies` 只看 `group.title`。出口只做可机器判定的那一半。
+
+#### 判据：P13（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P13**（`HARD_GATE_RULES`，不进基线）：
+视图 / 逻辑层里的搜索关键字归一化（`<expr>.trim().toLowerCase()`）。
+
+⚠️ **判据必须同时数「只 `trim()` 不折小写」那种写法** —— 它是这条账里
+**更差**的那一种，而它**不含** `.trim().toLowerCase()`。判据漏掉更差的写法，
+被拦下的就永远只是合规者。所以 P13 还数「变量名像搜索词
+（`kw` / `needle` / `term` / `query` / `search` / `keyword` / `q`）且值只经
+`trim()`」的形状；无关的去空白（`line.trim()`）不误伤。
+
+豁免 `src/app/api/**`：服务端路由的查询参数归一化与「视图搜索框」不是同一件事
+（没有 UI 归一化那层契约），与 P12 跳过 `app/api/**` 同款。
+
+> 这两条是现成的落点：`AttributeMultiSelect` 与 REST 路由都在这批接上了出口，
+> 但 P13 的两条形态**都记在规范里** —— 下一个人的搜索框若只写 `trim()`，
+> 门禁会直接拦下，而不是等用户在候选里搜 `jk` 时才发现。
+
+### 16.2.4.17 「一棵树的展开 / 收起」状态没有出口（P14 硬闸）
+
+三个问法里的第二个：**「谁在把一棵树渲染成缩进列表」**。
+
+`NodesTab`（自定义节点设置）一棵树用了**三份同形的 `Record<string, boolean>`**
+（`expandedParents` / `expandedNodeList` / `nodeExpanded`），每份配一组
+**逐字同形**的读写代码：
+
+```tsx
+/* 读：三处都是这个写法，`undefined` 与 `false` 分不出来 */
+const isOpen = !!expandedParents[parent];
+/* 写：三处逐字同形，只有键的来源不同 */
+setExpandedParents((prev) => ({ ...prev, [parent]: !prev[parent] }));
+```
+
+三件事散在调用处，各自的缺陷都能对上号：
+
+1. **「默认展开」那段逐字抄了两遍**（`use-custom-nodes-settings` 的冷 / 热两条
+   路径各一份）：
+   ```tsx
+   setExpandedParents((prev) => {
+     const out = { ...prev };
+     for (const p of paths) if (!(p in out)) out[p] = true;
+     return out;
+   });
+   ```
+   它的语义是「**已经存在的那一项不许被覆盖**」——用户手动收起过的目录，
+   在下一轮刷新后不该自己弹回来。这条语义在一段代码里，抄两遍就有两份会漂。
+2. **`!!map[key]` 把「用户手动收起过」与「从没碰过」压成同一个 `false`** ——
+   而上面那条判据恰恰要区分它们（那是 `in` 与取值两种判据，不是一个）。
+3. **没有「全收起 / 全展开」这个动作**，于是每处需要时又各写一段
+   `Object.fromEntries(...)`。
+
+#### 出口：`~/components/ui/expansion-set` 的 `useExpansionSet`
+
+| 成员 | 承载的口径 |
+| --- | --- |
+| `isExpanded(key)` | 缺键 = 未表态 = 折叠 |
+| **`hasKey(key)`** | **该键有没有被表过态**（无论展开还是收起）—— 与 `isExpanded` 是两种判据，这正是上面第 2 条的修法 |
+| `toggle(key)` / `set(key, open)` | 函数式 updater（连点两次回到原态，不吃闭包里的旧值） |
+| **`seedDefaults(keys, open?)`** | 为**尚未表态**的键补默认值，**不覆盖已有表态**；无变化时**返回原引用**（它在 effect 里被调，每次给新对象会让订阅者白渲染一轮） |
+| `replace(map)` / `collapseAll()` | 整体替换（全展开 / 从持久化恢复）与全收起 |
+
+**它是 hook，不是组件** —— 树的渲染由调用处决定。`Disclosure`（§16.2.4.13）
+管的是「**一行**怎么折」，本模块管的是「**一棵树的哪些行折着**」，两者配合，
+不互相替代。
+
+#### 判据：P14（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P14**（`HARD_GATE_RULES`，不进基线）：视图里的
+**展开集合翻转样板** —— 形态取「`{ ...src, [key]: !src[key] }`，**同一个标识符**
+既被展开、又是翻转的取值源」。
+
+参数名**故意不写死**（`prev` / `state` / `parents` / `nodeList` / `expanded`
+各种都有 —— 收口前那三处的形参名就是三种）。双条件（展开 + 翻转同源）是必须的：
+只数 `[k]: !x[k]` 会把「在跑标记」这类**不是折叠语义**的映射误判成展开集合。
+
+⚠️ 这条边界有反面用例：`use-workflow-library` 的 `pendingLoading` 写的是
+`{ ...state, [id]: true }` —— 它是**落位中**标记，没有「翻转」，也不该走
+`ExpansionSet`（那会给出一个错误的语义）。
+
+### 16.2.4.18 「面板的加宽档」在三处各写一遍（P15 硬闸）
+
+第三个问法：**「谁在给一个抽屉 / 面板做『收起 → 窄条』形态」**（宽度拖拽 +
+折叠态 + 记忆）。
+
+按形态扫下来，画布侧栏（`CanvasPanelToolbar` 的工具栏 / 面板切换）与三个日志
+面板都有「档位」这件事，而**真正被各写一遍的是加宽档**：`LogPanel` /
+`GlobalStepLogPanel` / `WorkflowRunLogModal` 三份**逐字同形**：
+
+```tsx
+/* 三份各写一遍 */
+const [wide, setWide] = useState(false);
+popupClassName={wide ? W.width : W.base}                       // ← ①
+className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② 同一文件里再来一遍
+<Button onClick={() => setWide((w) => !w)} title={wide ? "收缩" : "加宽"}>
+  {wide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+</Button>
+```
+
+三份**共同欠着同一件事**：**「加宽」这个选择没有任何记忆**。用户把执行日志
+加宽、关掉、再打开 —— 又变回窄档；三个面板都是如此。而这**不是「设计如此」**，
+是三份实现都只写了 `useState`、**没有人负责持久化**。
+
+> 与 `ui/dialog-width`（§16.2.4.11 那批）的分工：那个模块管的是**「宽度怎么写
+> 才生效」**（`w-*` 而非 `max-w-*`，ISSUE #720 的静默失效）；本模块管的是
+> **「加宽这个动作」**本身。两者相邻但不是同一件事 —— 前者是常量，后者是状态。
+
+#### 出口：`~/components/ui/wide-panel` 的 `useWidePanel` / `WidePanelToggle`
+
+- `useWidePanel(id, widths, defaultWide?)` → `{ wide, toggle, set, widthClass, toggleLabel }`；
+  `id` 是**记忆的键**（必须跨挂载稳定：面板 id，不是组件实例）；
+- `widthClass` 一处给出当前档位的宽度类 —— 同一文件里那两处三元从此不可能
+  不一致（收口前它们是分开写的，改一处漏一处就是「弹窗外壳宽了、内容没宽」）；
+- `toggleLabel` 一处给出文案，`title` 与 `aria-label` 同源（改名不会漏一处）；
+- **记忆**按 `id` 落 `localStorage`，并走「模块级 store + `useSyncExternalStore`」
+  —— 与 `useCanvasSettings` 同一套机制。不用纯 `useState`，是因为同一面板
+  可能同时挂两份实例（按钮在标题栏、面板体在 Portal 里），纯 `useState`
+  会让两边各有一份真相。storage 不可用时**静默降级**（记忆是增强，不是功能）。
+
+#### 判据：P15（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P15**（`HARD_GATE_RULES`，不进基线）：视图里的
+`<flag> ? <X>.wide : <X>.base` 三元。**不能数 `useState(false)`** ——
+那会把正常的弹窗开关全算进来（反面用例钉住这一条）。
+
+#### 画布侧栏那条账的现状（**结论对、理由要更正**）
+
+「收起 → 窄条」这件事在画布侧栏**还没发生**：`ProjectCanvas` 的侧栏是
+`CanvasPanelToolbar` + 两个固定宽面板（`MaterialLibraryPanel` /
+`HistoryPanel` 都是 `w-[360px] shrink-0`），工具栏的「收起」是把它整体
+`activePanel === null` 掉（浮回画布左侧）。**没有宽度拖拽、也没有折叠态记忆**。
+
+所以这条的一半是**已经存在的重复**（上面三个日志面板的加宽档，本批已收口），
+另一半是**尚未发生的选型**（侧栏的可变宽 + 折叠记忆）—— 后者不是「治理一份
+重复实现」，而是「要不要给侧栏加一条可变宽交互」这个设计决定。写在这里，
+免得下一轮再把它当成一个「重复实现」去找。
 
 ## 16.3 新增一个组件的标准动作
 

@@ -110,6 +110,38 @@
  *      展开标记 `▸` / `▾` 字面量」。前者是原生写法，后者只能出现在把一段内容
  *      折起来的地方 —— 与 P9 同款教训（`createPortal` 数不到 `overlayClass`）。
  *
+ *   P15 视图里再写一份「面板加宽档 + 切换钮」（**硬闸**）——
+ *      `~/components/ui/wide-panel` 的 `useWidePanel` / `WidePanelToggle` 是
+ *      唯一出口。三个日志面板（`LogPanel` / `GlobalStepLogPanel` /
+ *      `WorkflowRunLogModal`）此前各写一份逐字同形的 `useState(false)` +
+ *      两处 `wide ? W.wide : W.base` + 「收缩 / 加宽」文案与图标，且三份
+ *      **都没有持久化** —— 用户加宽后关掉再打开又回到窄档。
+ *
+ *      ⚠️ 判据锚点取 `wide ?` 这个三元的形态（`.wide :` · `.base`），
+ *      比「数 `useState(false)`」准：后者会把正常的弹窗开关全算上。
+ *
+ *   P14 视图里再写一份「展开集合」的读写样板（**硬闸**）——
+ *      `~/components/ui/expansion-set` 的 `useExpansionSet` 是唯一出口。
+ *      `NodesTab` 一棵树此前用了三份 `Record<string, boolean>`，每份配一组
+ *      逐字同形的 `setX((prev) => ({ ...prev, [k]: !prev[k] }))`，外加一段
+ *      **抄了两遍**的「补默认展开」（它的语义是「已有表态的键不覆盖」）。
+ *
+ *      ⚠️ 判据锚点取「展开集合的翻转写法」：`...prev` 与 `[key]: !prev[key]`
+ *      同一处出现。单看 `Record<string, boolean>` 会把 `perPkgParsing`
+ *      （在跑标记）与 `pendingLoading`（落位中标记）这类**不是折叠语义**的
+ *      映射误判 —— 它们不该走 `ExpansionSet`。
+ *
+ *   P13 视图 / 逻辑层里再写一份「可搜索列表过滤」的归一化（**硬闸**）——
+ *      `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` 是唯一出口。
+ *      全库 8 处各写一遍 `trim().toLowerCase()`，而 `AttributeMultiSelect`
+ *      那处只写了 `trim()` —— 含拉丁字母的候选（`JK制服` / `T恤`）因此
+ *      大小写敏感，用户输 `jk` 一条也搜不到。两条都编译、都运行、类型都对，
+ *      差别只在这一个语义决定上。
+ *
+ *      ⚠️ 豁免 `src/app/api/**`：服务端路由的查询参数归一化与「视图搜索框」
+ *      不是同一件事（它没有 UI 归一化的那层契约），且那是服务端物 ——
+ *      与 P12 跳过 `app/api/**` 同款口径。
+ *
  *   P8 视图里再写一份「值不存在时显示 `—`」的判据（**硬闸**）——
  *      `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER` 是唯一
  *      出口。此前 31 处各写一遍，而「什么算不存在」判得都不一样：
@@ -186,6 +218,14 @@ const EXEMPT_FILES = {
       reason:
         "服务端路由（SSE 心跳 / 轮询）里的 setInterval 是**服务端定时器**，" +
         "与「视图轮询」不是同一件事，也不在 React 生命周期里。",
+    },
+  ],
+  P13: [
+    {
+      re: /^src\/app\/api\//,
+      reason:
+        "服务端路由的查询参数归一化与「视图搜索框」不是同一件事 —— " +
+        "它没有 UI 归一化那层契约，且这里是服务端物（与 P12 跳过 app/api 同款）。",
     },
   ],
   P10: [
@@ -367,6 +407,66 @@ const RULES = {
       return details + (roleButton ? markers : 0);
     },
   },
+  P13: {
+    label:
+      "视图 / 逻辑层里自写搜索关键字归一化（应使用 ~/lib/list-filter 的 normalizeNeedle / matchesNeedle）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`<expr>.trim().toLowerCase()`。这才是「搜索框归一化」的形状 ——
+       * 单看 `.toLowerCase()` 会把内容哈希、配置解析那些也数进来（它们不是
+       * 搜索）。同一串里两个方法都出现才计。
+       *
+       * ⚠️ **另一种形态必须同时数**：只 `trim()` 不折小写 —— 那正是
+       * `AttributeMultiSelect` 的原始缺陷（候选值含拉丁字母时大小写敏感），
+       * 而它**不含 `.trim().toLowerCase()`**，上一条正则一条也看不见。
+       * 判据漏掉「更差的那种写法」比判据太宽更危险：被拦下的只是合规者。
+       *
+       * 只数**变量名像搜索词**的那一类（`kw` / `needle` / `needle` / `term` /
+       * `query` / `search` / `keyword` / `q`）—— 否则 `line.trim()` 这类
+       * 无关的去空白会被全量计入（那是格式清洗，不是搜索）。 */
+      const both = (t2.match(/\S+\.trim\(\)\.toLowerCase\(\)/g) || []).length;
+      const trimmed =
+        (t2.match(
+          /\b(?:kw|needle|term|query|search|keyword|q)\w*\s*=\s*[^;\n]*\.trim\(\)(?!\.toLowerCase\(\))/gi,
+        ) || []).length;
+      return both + trimmed;
+    },
+  },
+  P14: {
+    label:
+      "视图内自写展开集合的翻转样板（应使用 ~/components/ui/expansion-set 的 useExpansionSet）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`{ ...src, [key]: !src[key] }` —— **同一个标识符**既被展开、
+       * 又是翻转的取值源。这就是「自己在维护一份展开集合」的签名。
+       *
+       * 参数名故意不写死（`prev` / `state` / `parents` / `nodeList` / `expanded`
+       * 各种都有）—— 收口前那三处的形参名就是三种。双条件（展开 + 翻转同源）
+       * 是必须的：只数 `[k]: !x[k]` 会把「在跑标记」这类**不是折叠语义**的
+       * 映射误判成展开集合（见文件头 P14）。 */
+      const flips =
+        t2.match(
+          /[A-Za-z_$][\w$]*\s*,?\s*\[\s*[^\]]+\s*\]\s*:\s*!\s*[A-Za-z_$][\w$]*\s*\[/g,
+        ) || [];
+      let n = 0;
+      for (const flip of flips) {
+        const src = /!\s*([A-Za-z_$][\w$]*)\s*\[/.exec(flip)?.[1];
+        if (src && new RegExp("\\.\\.\\.\\s*" + src + "\\b").test(t2)) n++;
+      }
+      return n;
+    },
+  },
+  P15: {
+    label:
+      "视图内自写面板加宽档与切换钮（应使用 ~/components/ui/wide-panel 的 useWidePanel / WidePanelToggle）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`<flag> ? <X>.wide : <X>.base` —— 加宽档的三元写法。
+       * 单看 `useState(false)` 会把所有弹窗开关算上（见文件头 P15）。 */
+      return (t2.match(/\?\s*[A-Za-z_$][\w$]*\.wide\s*:\s*[A-Za-z_$][\w$]*\.base/g) || [])
+        .length;
+    },
+  },
   P7: {
     label:
       "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
@@ -384,7 +484,7 @@ const RULES = {
   },
 };
 
-/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4 属此类）。 */
+/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P15 属此类）。 */
 const HARD_GATE_RULES = new Set([
   "P4",
   "P5",
@@ -395,6 +495,9 @@ const HARD_GATE_RULES = new Set([
   "P10",
   "P11",
   "P12",
+  "P13",
+  "P14",
+  "P15",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -506,7 +609,7 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P9）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P15）。\n  " +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）。",
@@ -585,7 +688,7 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
