@@ -38,7 +38,10 @@ import {
 import { copyText } from "~/lib/browser-io";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { shouldUseTitleBarTabs } from "~/lib/shell/title-bar-derive";
-import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
+import {
+  TITLE_BAR_CHROME_CLASS,
+  TITLE_BAR_HEIGHT_CLASS,
+} from "~/lib/full-screen-layer";
 import { TitleBarTabs } from "./TitleBarTabs";
 import { Button } from "~/components/ui/button";
 
@@ -112,7 +115,7 @@ function InAppTabStrip({
     <div
       role="tablist"
       aria-label="应用页签"
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} border-border-subtle bg-subtle/40 shrink-0 items-stretch border-b`}
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-subtle/40 shrink-0 items-stretch border-b`}
     >
       {tabs.map((tab) => (
         <TabButton

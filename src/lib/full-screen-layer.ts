@@ -16,6 +16,8 @@
  * 而不是 `inset-0`。
  */
 
+import { zClass } from "~/lib/shell/overlay-z";
+
 /**
  * 标题行（页签栏）高度对应的 CSS 变量名；定义在 `globals.css` 的 `@theme`。
  *
@@ -30,6 +32,23 @@ export const TITLE_BAR_TOP_CLASS = "top-title-bar";
 
 /** 标题行高度工具类：`h-title-bar`，TitleBarTabs / InAppTabStrip 用。 */
 export const TITLE_BAR_HEIGHT_CLASS = "h-title-bar";
+
+/**
+ * 标题行作为**应用级 chrome** 的层级 class（`relative z-chrome`）。
+ *
+ * 为什么让位之外还必须给层级（ISSUE #310 第三次回归）：几何让位只管「不被盖住、
+ * 不被压暗」，**不管可点**。第三方浮层不受本仓库的让位规则约束 —— base-ui 的
+ * Dialog 在 modal 打开时往 body 注入 `InternalBackdrop`
+ * （`position: fixed; inset: 0; z-index: auto; pointer-events: auto` 的
+ * `div[data-base-ui-inert]`），它铺满整个视口（含标题行），于是设置页「启动日志」
+ * 全屏后页签与右上角窗口按钮**整排点不动**。标题行是流内元素（`z-index: auto`），
+ * 后出现在 DOM 里的定位元素必然在命中测试里压过它。
+ *
+ * 修法：抬到刻度表的最高档 `chrome`（规范 16 §16.2.5，严格高于 `toast`）。
+ * `relative` 不能省 —— `z-index` 对 `position: static` 的元素不生效（flex item
+ * 是特例，但依赖「父容器恰好是 flex」会让层级在布局重构后静默失效）。
+ */
+export const TITLE_BAR_CHROME_CLASS = `relative ${zClass("chrome")}`;
 
 /** 标题行的高度值（`2.25rem` = 36px），供测试与派生计算引用。 */
 export const TITLE_BAR_HEIGHT_REM = "2.25rem";

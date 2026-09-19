@@ -4,6 +4,7 @@ import {
   FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS,
   FULL_SCREEN_LAYER_CLASS,
   STATUS_BAR_CLEARANCE_CLASS,
+  TITLE_BAR_CHROME_CLASS,
   TITLE_BAR_HEIGHT_CLASS,
   TITLE_BAR_HEIGHT_REM,
   TITLE_BAR_HEIGHT_VAR,
@@ -13,6 +14,7 @@ import {
   blocksTitleBar,
   overlayClass,
 } from "./full-screen-layer";
+import { zClass } from "./shell/overlay-z";
 
 describe("全屏视图层定位（ISSUE #310 回归）", () => {
   it("让出窗口标题行：顶部用 top-title-bar，而不是 inset-0", () => {
@@ -57,6 +59,16 @@ describe("全屏视图层定位（ISSUE #310 回归）", () => {
     expect(TITLE_BAR_HEIGHT_REM).toBe("2.25rem");
     // 让位用的 top 类必须与标题行自身高度类同源。
     expect(FULL_SCREEN_LAYER_CLASS).toContain(TITLE_BAR_TOP_CLASS);
+  });
+
+  it("标题行的层级由常量给出：relative + 刻度表最高档 z-chrome", () => {
+    // 让位只管「不被盖住」，不管「可点」：base-ui 的 modal 会往 body 注入
+    // `fixed inset-0 z-index:auto pointer-events:auto` 的 InternalBackdrop，
+    // 标题行停在 `z-index: auto` 就会被它压住命中测试（ISSUE #310 第三次回归：
+    // 设置页启动日志全屏后窗口按钮整排点不动）。
+    expect(TITLE_BAR_CHROME_CLASS).toContain("relative");
+    expect(TITLE_BAR_CHROME_CLASS).toContain(zClass("chrome"));
+    expect(zClass("chrome")).toBe("z-chrome");
   });
 });
 

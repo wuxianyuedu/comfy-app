@@ -6,12 +6,21 @@
  * 别让门禁自己变成误报源（成员会直接删掉误报的门禁，等于没有）。
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(__dirname, "../scripts/check-title-bar-clearance.cjs");
+const SCRIPT = path.resolve(
+  __dirname,
+  "../scripts/check-title-bar-clearance.cjs",
+);
 const tempDirs: string[] = [];
 
 /** 造一个只含被测文件的临时仓库（脚本按仓库根解析扫描目录）。 */
@@ -46,7 +55,8 @@ function scanner(files: Record<string, string>) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0))
+    rmSync(dir, { recursive: true, force: true });
 });
 
 describe("check-title-bar-clearance", () => {
@@ -101,6 +111,36 @@ export function FooModal() {
     const { run } = scanner({
       "src/components/studio/FooStatusBar.tsx": `export function FooStatusBar() {
   return <div className="fixed bottom-0 left-0 right-0 z-40 h-8" />;
+}
+`,
+    });
+    expect(run().ok).toBe(true);
+  });
+
+  it("拦下渲染标题行却没给 chrome 档层级的文件", () => {
+    const { run } = scanner({
+      "src/components/studio/TitleBarTabs.tsx": `import { TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
+
+export function TitleBarTabs() {
+  return <div className={\`flex \${TITLE_BAR_HEIGHT_CLASS} shrink-0 items-stretch\`} />;
+}
+`,
+    });
+    const res = run();
+    expect(res.ok).toBe(false);
+    expect(res.output).toContain("src/components/studio/TitleBarTabs.tsx:4");
+    expect(res.output).toContain("TITLE_BAR_CHROME_CLASS");
+  });
+
+  it("放过带上 chrome 档层级的标题行（导入行本身不算渲染点）", () => {
+    const { run } = scanner({
+      "src/components/studio/TitleBarTabs.tsx": `import {
+  TITLE_BAR_CHROME_CLASS,
+  TITLE_BAR_HEIGHT_CLASS,
+} from "~/lib/full-screen-layer";
+
+export function TitleBarTabs() {
+  return <div className={\`flex \${TITLE_BAR_HEIGHT_CLASS} \${TITLE_BAR_CHROME_CLASS} shrink-0\`} />;
 }
 `,
     });

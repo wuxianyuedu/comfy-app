@@ -70,6 +70,7 @@ const NAMED_TONES = [
   "popup",
   "toast",
   "overlay",
+  "chrome",
 ];
 
 /**
@@ -136,7 +137,7 @@ const RULES = {
   },
   Z3: {
     label:
-      "刻度表之外的裸数字档 z-<数字>（应写 z-base / z-canvas-ui / z-canvas-max / z-modal / z-popup / z-toast）",
+      "刻度表之外的裸数字档 z-<数字>（应写 z-base / z-canvas-ui / z-canvas-max / z-modal / z-popup / z-toast / z-chrome）",
     count: (t) => {
       const stripped = stripComments(t);
       let n = 0;
