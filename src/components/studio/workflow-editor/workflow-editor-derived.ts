@@ -58,7 +58,7 @@ export function useWorkflowDerivedData(
 
   /* 视图作用域 detail。RAW 视图下把节点/图/位置源切换为
    *  `detail.rawView`（rawJson 派生、wrapper 保留），让画布渲染 ComfyUI 原始
-   *  布局，而非可能被拆平的 API 图。groups/notes/IO/边界 pin 等两种视图一致，
+   *  布局，而非可能被拆平的派生图。groups/notes/IO/边界 pin 等两种视图一致，
    *  通过展开保留。RAW 视图下已在 `detail.positions` 镜像的 raw-id 拖拽覆盖
    *  会叠加在最上层，使 RAW 视图的手动拖拽无需重新拉取即生效。 */
   const scopeDetail: WorkflowDetail | null = useMemo(() => {

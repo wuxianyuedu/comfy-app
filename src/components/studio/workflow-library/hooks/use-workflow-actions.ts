@@ -149,11 +149,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [updateMut, utils, toast],
   );
 
-  /** 下载当前工作流 JSON。
-   *
-   *  下载的是**这条工作流自己的原件**（导入什么格式就下什么格式）：RAW 原件优先，
-   *  没有原件时下 API 图。「只有 graph 能下载」会把纯 RAW 的工作流变成「下载失败」
-   *  —— 而它完全可执行，只是原件不是 API 格式。 */
+  /** 下载当前工作流 JSON —— 下载的是**这条工作流自己的原件**
+   *  （ComfyUI 的工作流 / RAW 格式，与导入时逐字一致）。 */
   const downloadJson = useCallback(
     async (id: string, name: string) => {
       setBundleBusy(id);
@@ -164,7 +161,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           toast.error("获取工作流失败", "未知错误");
           return;
         }
-        const payload = tpl.rawJson ?? tpl.graph ?? null;
+        const payload = tpl.rawJson ?? null;
         if (payload == null) {
           toast.error("下载失败", "该工作流没有可下载的内容");
           return;

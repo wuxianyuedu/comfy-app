@@ -233,7 +233,7 @@ describe("列表项：名称限长 + 对外参数精简显示", () => {
 
   it("不可执行的工作流仍显示「无可执行内容」（这条是闸门，不是元信息）", () => {
     renderList({
-      workflows: [row({ name: "坏掉的", hasApi: false, hasRaw: false })],
+      workflows: [row({ name: "坏掉的", hasRaw: false })],
     });
 
     expect(screen.getByText("无可执行内容")).toBeInTheDocument();

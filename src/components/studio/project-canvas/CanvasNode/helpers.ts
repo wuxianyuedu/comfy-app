@@ -14,9 +14,9 @@ export function collectReferenceImages(d: CanvasNodeData): string[] {
 
 /* 把画布选中的种子「生成后控制」模式（seedModes，按 ioKey 索引）
  * 解析成 control_after_generate 覆盖项，合并进 workflowInputs 一并下发。
- * 只有画布侧能拿到实时 IO 映射（ioKey → nodeId），所以解析必须放在前端：
- *   - API 格式图：buildCustomWorkflow 写成 node.inputs["control_after_generate"]
- *   - Raw UI 格式图：runner.applyRawOverrides 写到 widgets_values[seedSlot+1]
+ * 只有画布侧能拿到实时 IO 映射（ioKey → nodeId），所以解析必须放在前端；
+ * 落到载荷里的位置由执行点的 raw 覆盖注入（`applyRawOverrides`）决定 ——
+ * 它把这一个覆盖项写进 `widgets_values[seedSlot+1]`。
  * 前端词表 random → ComfyUI 词表 randomize，其余（fixed/increment/decrement）一致。 */
 function toComfySeedMode(mode: string): string {
   return mode === "random" ? "randomize" : mode;

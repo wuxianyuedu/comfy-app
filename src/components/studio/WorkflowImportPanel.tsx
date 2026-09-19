@@ -8,7 +8,6 @@
  */
 import { useMemo } from "react";
 
-import { SelectMenu } from "~/components/ui/select-menu";
 import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { Button } from "~/components/ui/button";
@@ -35,8 +34,6 @@ export function WorkflowImportPanel({
     setImportModes,
     importDefaultMode,
     setImportDefaultMode,
-    importFormat,
-    setImportFormat,
     importJson,
     setImportJson,
     importing,
@@ -125,47 +122,31 @@ export function WorkflowImportPanel({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr]">
-        <div>
-          <label className="text-ink-soft mb-1 block text-xs font-medium">
-            JSON 格式
-          </label>
-          <SelectMenu
-            value={importFormat}
-            onChange={(value) =>
-              setImportFormat((value as "auto" | "api" | "raw") ?? "auto")
-            }
-            options={["auto", "api", "raw"]}
-            labels={{
-              auto: "自动识别",
-              api: "API 格式",
-              raw: "工作流格式(RAW)",
-            }}
-          />
-        </div>
-        <div className="flex items-end">
-          <span className="group text-ink-muted relative inline-flex items-center gap-1.5 text-xs">
-            <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={() => setShowHelpTip((value) => !value)}
-              aria-label="导入格式说明"
-              aria-expanded={showHelpTip}
-              className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary size-5 rounded-full text-[11px]"
-            >
-              ?
-            </Button>
-            <span
-              className={`border-border-strong bg-panel text-ink-soft absolute bottom-full left-0 mb-2 w-64 rounded-lg border p-2.5 text-xs leading-relaxed shadow-xl transition-opacity ${
-                showHelpTip
-                  ? "opacity-100"
-                  : "pointer-events-none opacity-0 group-hover:opacity-100"
-              }`}
-            >
-              ComfyUI → 菜单 → 「导出(API格式)」 或 「导出(工作流格式)」
-            </span>
+      <div className="mt-3 flex items-center gap-1.5">
+        <span className="text-ink-soft text-xs font-medium">JSON 格式</span>
+        <span className="text-ink-muted text-xs">工作流格式（RAW）</span>
+        <span className="group text-ink-muted relative inline-flex items-center gap-1.5 text-xs">
+          <Button
+            variant="outline"
+            size="icon-xs"
+            onClick={() => setShowHelpTip((value) => !value)}
+            aria-label="导入格式说明"
+            aria-expanded={showHelpTip}
+            className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary size-5 rounded-full text-[11px]"
+          >
+            ?
+          </Button>
+          <span
+            className={`border-border-strong bg-panel text-ink-soft z-popup absolute top-full left-0 mt-2 w-72 rounded-lg border p-2.5 text-xs leading-relaxed shadow-xl transition-opacity ${
+              showHelpTip
+                ? "opacity-100"
+                : "pointer-events-none opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            ComfyUI → 菜单 →「导出(工作流格式)」。API 格式不受支持 ——
+            转成可执行图由 ComfyUI 自己在运行时完成。
           </span>
-        </div>
+        </span>
       </div>
       {/* 文件入口：与拖入共用同一个漏斗（读文件 → 识别格式 → 预填面板）。 */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -189,7 +170,7 @@ export function WorkflowImportPanel({
           value={importJson}
           onChange={(event) => setImportJson(event.target.value)}
           rows={8}
-          placeholder='API 格式: { "3": { "class_type": "KSampler", "inputs": {...} } }\n\n工作流格式: { "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
+          placeholder='{ "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
           className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted resize-none font-mono text-xs"
         />
       </div>

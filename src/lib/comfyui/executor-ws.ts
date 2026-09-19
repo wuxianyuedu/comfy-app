@@ -315,7 +315,7 @@ async function handleMessage(raw: string) {
 
   /* ComfyUI 用「executing → node 为 null」表示上一个节点跑完。此时若
    * lastNodeByTask 里有记录，就补一行 "✔ 完成"，让用户看到按节点的时间线。
-   * 只对 API 格式这条路做 —— comfy-cli 路径自己会在 executeViaComfyCli
+   * 只对直连 /prompt 这条路做 —— comfy-cli 路径自己会在 executeViaComfyCli
    * 里打 "▶ 节点 N/total"。 */
   if (signal === "node-finished") {
     const last = s.lastNodeByTask.get(taskId);

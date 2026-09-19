@@ -366,8 +366,7 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
 /** 数值入参不要被字符串覆盖：已有值是数字、新值是可解析的数字串 → 取数字。
  *
  *  ComfyUI 对数值型入参收到字符串会拒单（或按 0 处理），而动态表单的值一路都是
- *  字符串。三个调用点（`buildCustomWorkflow` / `buildPromptFromGraph` /
- *  `applyApiOverrides`）必须同口径，因此抽到这里只定义一次。 */
+ *  字符串。raw / API 两侧的覆盖注入必须同口径，因此抽到这里只定义一次。 */
 export function coerceApiInputValue(current: unknown, value: unknown): unknown {
   if (typeof current === "number" && typeof value === "string") {
     const trimmed = value.trim();
