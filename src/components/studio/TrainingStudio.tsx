@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import { Upload } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { NumberField } from "~/components/ui/number-field";
 import { RangeSlider } from "~/components/ui/range-slider";
 import { AuroraGlow } from "~/components/ui/aurora-background";
@@ -10,7 +11,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "~/components/ui/button";
+import { Alert, AlertTitle } from "~/components/ui/alert";
 import { useTrainingStudio } from "./hooks/use-training-studio";
+import { displayValue } from "~/lib/display-value";
 import {
   OPTIMIZERS,
   RESOLUTIONS,
@@ -57,18 +60,16 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
   const router = useRouter();
   const c = useTrainingStudio();
 
-  /* 日志展开态、隐藏 file input 的引用：纯视觉/平台状态，留在视图层 */
+  /* 日志展开态：纯视觉状态，留在视图层 */
   const [expanded, setExpanded] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  const onUpload = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      await c.upload(e.target.files);
-      // 无论成功与否都复位：否则连选同一个文件第二次不会触发 change
-      if (fileRef.current) fileRef.current.value = "";
-    },
-    [c],
-  );
+  /* 数据集选择：拖放区整块可点，命中即开系统文件对话框。多选用
+   * `multiple`，选完之后交给 hook 逐张串行上传。 */
+  const datasetPicker = useFilePicker({
+    multiple: true,
+    accept: "image/*",
+    onPick: (_first: File, files: FileList) => void c.upload(files),
+  });
 
   /* ── 监控卡派生（纯视觉计算）── */
   const activeJob = c.activeJob;
@@ -158,8 +159,16 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {/* 后端未配置横幅 */}
             {!c.backendConfigured && (
-              <div className="border-warning/30 bg-warning/10 text-warning-strong rounded-lg border p-3 text-[11px] leading-relaxed">
-                <p className="mb-1 font-semibold">未配置训练后端</p>
+              <Alert
+                variant="warning"
+                /* 基元默认 `grid` 是给「图标 + 标题 + 正文」这种分行结构用的；
+                  这条横幅是**连续文字流**（正文里夹着内联链接），必须显式
+                   回到 `block`，否则每个文字节点各自成行、排版散架。 */
+                className="block rounded-lg p-3 text-[11px] leading-relaxed"
+              >
+                <AlertTitle className="mb-1 font-semibold">
+                  未配置训练后端
+                </AlertTitle>
                 {onOpenSettings ? (
                   <>
                     在「
@@ -185,12 +194,12 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                     地址）后，即可开始真实训练。当前提交的任务会保持「等待中」。
                   </>
                 )}
-              </div>
+              </Alert>
             )}
 
             {/* Upload zone */}
             <div
-              onClick={() => fileRef.current?.click()}
+              onClick={datasetPicker.open}
               className="border-primary-500/35 bg-primary-500/6 hover:border-primary-500/55 hover:bg-primary-500/10 flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-3 py-5 text-center transition-colors"
             >
               <Upload
@@ -204,14 +213,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               <p className="text-ink-fainter text-[10px]">
                 建议 10–30 张同主题图片
               </p>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={onUpload}
-                className="hidden"
-              />
+              <datasetPicker.Input />
             </div>
 
             {/* 逐图 caption 编辑 */}
@@ -361,13 +363,13 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 <div>
                   <p className="text-ink-fainter text-[10px]">触发词</p>
                   <p className="text-primary-strong truncate text-[13px] font-medium">
-                    {activeJob?.triggerWord ?? "—"}
+                    {displayValue(activeJob?.triggerWord)}
                   </p>
                 </div>
                 <div className="col-span-2 min-w-0">
                   <p className="text-ink-fainter text-[10px]">底模</p>
                   <p className="text-ink-field truncate text-[13px] font-medium">
-                    {activeJob?.baseModel ?? "—"}
+                    {displayValue(activeJob?.baseModel)}
                   </p>
                 </div>
               </div>

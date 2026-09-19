@@ -12,6 +12,8 @@
  * 任务订阅逻辑在 use-workflow-run-task.ts（§17 UI/逻辑分离）。
  */
 
+import { formatClock } from "~/lib/time-format";
+
 import {
   useEffect,
   useMemo,
@@ -31,6 +33,7 @@ import {
 } from "~/lib/workflow/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { Button } from "~/components/ui/button";
+import { StatusBadge } from "~/components/ui/status-badge";
 import { overlayClass } from "~/lib/full-screen-layer";
 import { zClass } from "~/lib/shell/overlay-z";
 
@@ -61,13 +64,7 @@ function levelLabel(level: Level): string {
 }
 /* 与应用日志同款，带毫秒。 */
 function fmtTime(t: number): string {
-  return new Date(t).toLocaleTimeString("zh-CN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    fractionalSecondDigits: 3,
-  });
+  return formatClock(t, { millis: true });
 }
 
 const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
@@ -155,14 +152,10 @@ export function WorkflowRunLogModal({
       ? visibleAll
       : visibleAll.filter((l) => l.level === filter);
   const status = run?.status ?? "running";
+  /* 文案在这里，配色走 `ui/status-badge` 的同一份状态 → 语义 token 映射
+   *（规范 16 §16.2.4.5）。 */
   const statusLabel =
     status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
-  const statusClass =
-    status === "failed"
-      ? "bg-red-500/20 text-red-700 dark:text-red-300"
-      : status === "done"
-        ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-        : "bg-violet-500/20 text-violet-700 dark:text-violet-300";
 
   const onCancel = () => {
     void cancel();
@@ -206,11 +199,12 @@ export function WorkflowRunLogModal({
               </span>
             )}
             {run && (
-              <span
-                className={`rounded-full px-1.5 py-px text-[10px] font-medium ${statusClass}`}
-              >
-                {statusLabel}
-              </span>
+              <StatusBadge
+                status={status}
+                label={statusLabel}
+                dot={false}
+                className="px-1.5 py-px text-[10px]"
+              />
             )}
           </div>
 

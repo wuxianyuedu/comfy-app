@@ -6,6 +6,9 @@
  * 接口地址 / API Key 可留空回落全局；编辑态密钥「留空不改」，可显式清除。
  * 「测试连接」成功后顺带展示服务端模型清单供点选。交互状态与动作由
  * `useRemoteModelDialogs`（第②层）承载，视图只渲染与触发。
+ *
+ * 字段级校验走 `~/lib/llm/remote-model-schema`（纯函数），controller 转述成
+ * `fieldErrors`；视图只把文案挂在对应字段下方（口径见规范 16 §16.2.4.8）。
  */
 
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -213,8 +216,14 @@ export function RemoteModelDialog({
               d.setAddForm({ ...d.addForm, model: event.target.value })
             }
             placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
-            className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+            aria-invalid={d.fieldErrors.model ? true : undefined}
+            className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 aria-invalid:border-destructive w-full rounded-lg border px-3 py-2 text-sm outline-none"
           />
+          {d.fieldErrors.model && (
+            <p className="text-danger-strong mt-1 text-[11px]">
+              {d.fieldErrors.model}
+            </p>
+          )}
           {d.addError && (
             <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
               {d.addError}
@@ -231,7 +240,10 @@ export function RemoteModelDialog({
             </Button>
             <Button
               onClick={() => void d.submitDialog()}
-              disabled={c.saving || !d.addForm.model.trim()}
+              /* 不再因「名称为空」禁用：禁用态下点不动，字段级提示就永远出不来
+                 （规范性提示要么可达、要么写在 onSubmit 之前）。校验交给
+                 `submitDialog` 的字段级判定，失败逐字段标红。 */
+              disabled={c.saving}
               className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
             >
               {c.saving

@@ -2,6 +2,7 @@
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { downloadJson } from "~/lib/browser-io";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
   MOTION_LABELS,
@@ -150,15 +151,7 @@ export function FinalComposer({
         dialogue: entry.shot.dialogue ?? "",
       })),
     };
-    const blob = new Blob([JSON.stringify(plan, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${title || "composition"}-合成清单.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadJson(plan, `${title || "composition"}-合成清单.json`);
     onRendered();
   }
 

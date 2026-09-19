@@ -7,7 +7,9 @@
 import type { RefObject } from "react";
 import { STATUS_STYLE } from "./constants";
 import { StatusDot } from "~/components/ui/status-dot";
+import { StatusBadge } from "~/components/ui/status-badge";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
+import { displayValue } from "~/lib/display-value";
 
 /** 类型端口区的一行 —— 小彩点 + 大写类型章
  *  + 端口名。ComfyUI 真实节点把圆点放在画布边缘、
@@ -26,6 +28,8 @@ export function PortRow({
 }) {
   const isOut = side === "out";
   // ComfyUI 给输出固定用青色调，输入则按类别派生。
+  // 输出侧的青色是「类型色」的近亲（见 constants.ts 的豁免登记），与
+  // `workflow-param-mapping-ui` 的 `PARAM_CLASS_COLOR` 同源。
   const dotColor = isOut ? "#06B6D4" : color;
   return (
     <div
@@ -63,7 +67,10 @@ export function PortRow({
  *  各有一套截然不同的色系。镜像 ComfyUI 自己节点渲染
  *  逐 widget 取值章的方式。 */
 
-/** 把 widget 值安全转成展示文本：对象走 JSON，null/undefined 给空串，其余 String。 */
+/** 把 widget 值安全转成展示文本：对象走 JSON，null/undefined 给空串，其余 String。
+ *
+ *  「空值显示什么」由调用处经 `displayValue` 决定 —— 这里只负责「有值时
+ *  怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
   if (v == null) return "";
   if (typeof v === "object") return JSON.stringify(v);
@@ -103,7 +110,7 @@ export function WidgetValueChip({
         className="max-w-[100px] truncate rounded bg-violet-500/18 px-1.5 py-px font-mono text-[10px] font-semibold text-violet-700 dark:text-violet-300"
         title={widgetValueToText(value)}
       >
-        {value == null ? "—" : widgetValueToText(value)}
+        {displayValue(widgetValueToText(value))}
       </span>
     );
   }
@@ -113,7 +120,7 @@ export function WidgetValueChip({
         className="bg-warning/18 text-warning max-w-[100px] truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
         title={widgetValueToText(value)}
       >
-        {value == null ? "—" : widgetValueToText(value)}
+        {displayValue(widgetValueToText(value))}
       </span>
     );
   }
@@ -123,7 +130,7 @@ export function WidgetValueChip({
       className="bg-canvas-deep text-ink-soft max-w-[140px] truncate rounded px-1.5 py-px font-mono text-[10px]"
       title={widgetValueToText(value)}
     >
-      {value == null ? "—" : widgetValueToText(value)}
+      {displayValue(widgetValueToText(value))}
     </span>
   );
 }
@@ -302,12 +309,12 @@ export function ReportCards({ report }: { report: ParseReport }) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-ink font-medium">{pkg.name}</span>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                      style={{ background: st!.bg, color: st!.fg }}
-                    >
-                      {st!.label}
-                    </span>
+                    <StatusBadge
+                      status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
+                      label={st!.label}
+                      dot={false}
+                      className="px-2 py-0.5 text-[11px]"
+                    />
                   </div>
                   <div
                     className="text-muted-foreground truncate font-mono text-[11px]"
@@ -317,10 +324,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div
-                    className="text-lg font-semibold"
-                    style={{ color: st!.fg }}
-                  >
+                  <div className="text-ink-bright text-lg font-semibold">
                     {pkg.nodeCount}
                   </div>
                   <div className="text-muted-foreground text-[11px]">

@@ -6,12 +6,13 @@
  *  拖放预填路径（handleDroppedFile）能在面板打开前填充同样的
  *  字段。行为不变。
  */
-import { useRef } from "react";
+import { useMemo } from "react";
 
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import type { useWorkflowImport } from "./workflow-library/hooks/use-workflow-import";
 
 type ImportState = ReturnType<typeof useWorkflowImport>;
@@ -52,9 +53,18 @@ export function WorkflowImportPanel({
     onPanelDrop,
   } = state;
 
-  /* 隐藏的文件输入框由视图持有 ref（§17.6.4：ref 留在视图层，hook 只回数据）——
-   * 「选择文件」按钮只是替用户点一下它，文件本身仍交给同一个漏斗处理。 */
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  /* 「选择文件」入口：隐藏 input 的持有与触发收进 `ui/file-picker`
+   *  （此前这里自己拿 ref、自己复位 `value`，同一套样板全库 9 份）。
+   *  文件本身仍交给同一个漏斗处理（§17.6.4：ref 留在视图层）。 */
+  const pickerProps = useMemo(
+    () => ({ "aria-label": "选择工作流 JSON 文件" }),
+    [],
+  );
+  const importPicker = useFilePicker({
+    accept: ".json,.workflow,application/json",
+    onPick: (file) => void handlePickedFile(file),
+    inputProps: pickerProps,
+  });
 
   return (
     <div
@@ -166,24 +176,12 @@ export function WorkflowImportPanel({
         <Button
           variant="outline"
           size="xs"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={importPicker.open}
           className="border-border-strong bg-subtle text-ink-soft hover:border-primary/40 hover:text-primary h-auto rounded-lg px-3 py-1.5"
         >
           选择文件…
         </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json,.workflow,application/json"
-          aria-label="选择工作流 JSON 文件"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            /* 清空 value：否则连续选同一个文件不会再触发 change。 */
-            event.target.value = "";
-            if (file) void handlePickedFile(file);
-          }}
-        />
+        <importPicker.Input />
       </div>
 
       <div className="mt-3">

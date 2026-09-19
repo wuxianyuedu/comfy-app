@@ -64,7 +64,7 @@ export const ProjectEdge = React.memo(function ProjectEdge(props: EdgeProps) {
         /* 提亮而不是换色：连线的渐变是画布的品牌观感，也是「这条线在流动」的
          * 视觉语义，换色会把两者一起丢掉。 */
         filter: focused
-          ? "brightness(1.45) drop-shadow(0 0 6px rgba(181,132,255,0.55))"
+          ? "brightness(1.45) drop-shadow(0 0 6px var(--color-edge-focus-halo))"
           : undefined,
       }}
     />

@@ -31,6 +31,7 @@ import {
   buildOutputEdge,
   deriveLibraryEdges,
   libraryConnectionAllowed,
+  libraryConnectionRefusal,
 } from "./hooks/use-library-wire-flow";
 import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
 import {
@@ -252,6 +253,70 @@ describe("类型闸门（libraryConnectionAllowed）", () => {
         targetHandle: "9::widget::positive_prompt",
       }),
     ).toBe(false);
+  });
+});
+
+describe("落点被拒的原因（libraryConnectionRefusal）", () => {
+  /* 松手被拒时给用户看的那句话由它出（画布 `onConnectEnd` 按现场还原 connection
+   * 再问它一次）。原先那句是写死的「类型不同」，方向不对（同列 / 反向）也照这句
+   * 报 —— 用户报「连不上也没有提示」，一半是这样「有提示但说错因」的提示。 */
+  const why = (connection: {
+    source: string;
+    target: string;
+    sourceHandle: string;
+    targetHandle: string;
+  }) => libraryConnectionRefusal(connection, { io, entries });
+
+  it("类型不匹配：说的是类型（契约口与端口分类要匹配）", () => {
+    expect(
+      why({
+        source: LIB_NODE_PARAMS,
+        target: LIB_NODE_HOST,
+        sourceHandle: "prompt",
+        targetHandle: "5::widget::aspect_ratio",
+      }),
+    ).toContain("类型不同");
+  });
+
+  it("方向 / 列不对：说的是方向，不赖类型", () => {
+    expect(
+      why({
+        source: LIB_NODE_PARAMS,
+        target: LIB_NODE_PARAMS,
+        sourceHandle: "prompt",
+        targetHandle: "prompt",
+      }),
+    ).toContain("跨两列");
+    expect(
+      why({
+        source: LIB_NODE_OUTPUTS,
+        target: LIB_NODE_HOST,
+        sourceHandle: "images",
+        targetHandle: "5::output::IMAGE",
+      }),
+    ).toContain("只能");
+  });
+
+  it("端口已经不在契约里：说的是「换模式 / 重做 IO」，不是类型", () => {
+    expect(
+      why({
+        source: LIB_NODE_PARAMS,
+        target: LIB_NODE_HOST,
+        sourceHandle: "不存在的口",
+        targetHandle: "9::widget::positive_prompt",
+      }),
+    ).toContain("不在当前模式的契约里");
+  });
+
+  it("放行时没有原因 —— 与 libraryConnectionAllowed 是同一判据的两面", () => {
+    const ok = {
+      source: LIB_NODE_PARAMS,
+      target: LIB_NODE_HOST,
+      sourceHandle: "prompt",
+      targetHandle: "9::widget::positive_prompt",
+    };
+    expect(why(ok)).toBeNull();
+    expect(libraryConnectionAllowed(ok, { io, entries })).toBe(true);
   });
 });
 

@@ -15,10 +15,12 @@
  *   一致（那个模块的注释指向的就是这里）。
  */
 
-import React, { memo, useEffect, useRef, useState } from "react";
+import React, { memo, useState } from "react";
 import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
+import { copyText } from "~/lib/browser-io";
+import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
 import {
   LEVEL_BADGE_STYLES,
@@ -109,35 +111,20 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
  * 是撒谎，反而让用户把一次失败的复制当成成功）。
  */
 function RowCopyButton({ entry }: { entry: LogEntry }) {
-  const [state, setState] = useState<"idle" | "done" | "failed">("idle");
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /* 卸载时清掉定时器：日志行会随翻页/锚定窗口被卸载，留着定时器等于在一个
-   * 已卸载组件上 setState（React 会警告，且那一下点击的反馈没了意义）。 */
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [],
-  );
-
-  const flash = (next: "done" | "failed") => {
-    setState(next);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setState("idle"), 1200);
-  };
+  const [outcome, setOutcome] = useState<"idle" | "done" | "failed">("idle");
+  /* 亮起态与「到点复位、连点清旧定时器、卸载清定时器」由 hook 收口 ——
+   * 此前这里自己持 `timerRef` + 自己 `clearTimeout`（全库两处这样写，
+   * 另有四处裸 `setTimeout` 连卸载都不管）。日志行**会**随翻页/锚点窗口
+   * 被卸载，所以这条不是洁癖：不清就是往已卸载组件上 setState。 */
+  /* 本按钮的亮起时长：1.2s。比 `useFlashState` 的默认 1.5s 短 ——
+   * 反馈就长在按钮自己身上（原地换字），日志行又是密集列表，
+   * 「已复制」停留越久越像常驻标签。 */
+  const flash = useFlashState(1200);
 
   const onCopy = async () => {
     const text = formatEntryForClipboard(entry);
-    try {
-      if (typeof navigator === "undefined" || !navigator.clipboard) {
-        throw new Error("clipboard unavailable");
-      }
-      await navigator.clipboard.writeText(text);
-      flash("done");
-    } catch {
-      flash("failed");
-    }
+    setOutcome((await copyText(text)) ? "done" : "failed");
+    flash.flash();
   };
 
   return (
@@ -146,9 +133,9 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
       size="icon-xs"
       onClick={() => void onCopy()}
       title={
-        state === "done"
+        outcome === "done"
           ? "已复制本条日志"
-          : state === "failed"
+          : outcome === "failed"
             ? "复制失败：剪贴板不可用，请手动选中复制"
             : "复制本条日志"
       }
@@ -158,22 +145,22 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
        * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
        * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
       className={`shrink-0 self-center rounded transition-opacity ${
-        state === "idle"
+        outcome === "idle"
           ? "hover:bg-subtle hover:text-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
           : "opacity-100"
       } ${
-        state === "done"
+        outcome === "done"
           ? "text-success-strong"
-          : state === "failed"
+          : outcome === "failed"
             ? "text-danger-strong"
             : "text-ink-muted"
       }`}
     >
-      {state === "idle" ? (
+      {outcome === "idle" ? (
         <Copy size={13} />
       ) : (
         <span className="text-[11px] whitespace-nowrap">
-          {state === "done" ? "已复制" : "复制失败"}
+          {outcome === "done" ? "已复制" : "复制失败"}
         </span>
       )}
     </Button>
@@ -231,11 +218,9 @@ export const LogRow = memo(function LogRow({
       {entry.location && (
         <Button
           variant="ghost"
-          onClick={() =>
-            void navigator.clipboard
-              .writeText(entry.location!)
-              .catch(() => undefined)
-          }
+          onClick={() => {
+            void copyText(entry.location!);
+          }}
           className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
           title={`${entry.location}（点击复制）`}
         >

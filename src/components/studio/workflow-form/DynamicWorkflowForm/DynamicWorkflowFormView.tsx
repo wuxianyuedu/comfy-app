@@ -77,19 +77,18 @@ export function DynamicWorkflowFormView({
     groups,
     portEntries,
     widgetSectionEntries,
-    fileRef,
     uploading,
     uploadTarget,
     uploadError,
     dismissUploadError,
     pickFile,
-    onFile,
     set,
     dragHandlers,
     draggingKey,
     dragOverKey,
     beginPortDrag,
     endDrag,
+    FileInput,
   } = controller;
 
   /* ioLabel() 需要全量 pin 才能在标签撞名时回退到原始 name。 */
@@ -161,13 +160,7 @@ export function DynamicWorkflowFormView({
 
   return (
     <div className={compact ? "space-y-0" : "space-y-3"}>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onFile}
-      />
+      <FileInput />
 
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
           用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}

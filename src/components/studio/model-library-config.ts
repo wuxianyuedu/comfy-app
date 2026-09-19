@@ -1,3 +1,6 @@
+import { fmtBytes } from "~/lib/format-bytes";
+import { displayValue } from "~/lib/display-value";
+
 // ── 工作室模型库：配置层（规范 17 §17.2 第①层）──────────────────────────────
 // 行类型、纯派生（筛选 / 计数 / 体积格式化）。原先这些逻辑夹在 ModelLibrary.tsx
 // 的 538 行里与 tRPC hook 混写；抽出来后可脱离 React 直接断言。
@@ -56,13 +59,22 @@ export function countByType(models: ModelRow[]): Array<[string, number]> {
   );
 }
 
-/** 模型体积：B / KB / MB / GB 自动换挡；空值显示「—」。 */
+/**
+ * 模型体积：B / KB / MB / GB 自动换挡；空值显示「—」。
+ *
+ * 走 `~/lib/format-bytes` 的唯一出口（此前这里与 `MaterialLibraryPanel` 各写
+ * 一份，降档阈值还写成 `>` 与 `<` 两套 —— 1024 字节整给出不同答案）。
+ *
+ * **`0` 也当作「未知体积」**（沿用本模块原有语义，有用例钉住）：模型列表里
+ * `fileSize` 为 0 表示尚未探到体积，显示 `0 B` 会让用户以为模型是空的。
+ * `fmtBytes` 只把「非法 / 空值」判成 `null`，所以这层域语义留在调用处。
+ */
 export function fmtSize(n?: number | null): string {
-  if (!n) return "—";
-  if (n > 1024 * 1024 * 1024)
-    return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
-  if (n > 1024 * 1024) return `${(n / 1024 / 1024).toFixed(0)} MB`;
-  return `${(n / 1024).toFixed(0)} KB`;
+  /* `0` 是**本域的**「尚未探到体积」，不是「缺值」 —— 这层语义必须显式写在
+   * 这里（`displayValue` 会把 0 照常显示成 "0"，那对模型列表是误导）。
+   * 占位符本身不在这里拼，走全库唯一出口。 */
+  if (!n) return displayValue(null);
+  return displayValue(fmtBytes(n));
 }
 
 /** 目录行的关键字筛选（命中目录名或展示标签）。 */

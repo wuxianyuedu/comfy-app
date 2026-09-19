@@ -5,6 +5,11 @@ import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { useFlashState } from "~/components/ui/use-flash-state";
+import { displayValue } from "~/lib/display-value";
+import { copyText, downloadText } from "~/lib/browser-io";
+import { timeAgo } from "~/lib/time-format";
+import { StatusBadge } from "~/components/ui/status-badge";
 import {
   getActiveId,
   listProjects,
@@ -23,21 +28,14 @@ const TYPE_CHIP: Record<string, string> = {
   VIDEO: "视频",
 };
 
-const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  SUCCEEDED: {
-    label: "已完成",
-    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  },
-  FAILED: {
-    label: "失败",
-    cls: "bg-red-500/15 text-red-700 dark:text-red-400",
-  },
-  CANCELLED: { label: "已取消", cls: "bg-subtle text-ink-muted" },
-  QUEUED: { label: "排队中", cls: "bg-subtle text-ink-soft" },
-  RUNNING: {
-    label: "生成中",
-    cls: "bg-violet-500/20 text-violet-700 dark:text-violet-300",
-  },
+/* 状态文案（配色不走这里 —— 它是叠在缩略图上的角标，颜色由
+ * `ui/status-badge` 按同一份状态 → 语义 token 映射给出，见规范 16 §16.2.4.5）。 */
+const STATUS_LABEL: Record<string, string> = {
+  SUCCEEDED: "已完成",
+  FAILED: "失败",
+  CANCELLED: "已取消",
+  QUEUED: "排队中",
+  RUNNING: "生成中",
 };
 
 /** 参考图路径可能是 ComfyUI input 文件名（如 abc.png）或绝对 url 路径
@@ -53,22 +51,12 @@ function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
   return images[0] ?? null;
 }
 
-function timeAgo(iso: string): string {
-  const d = new Date(iso).getTime();
-  const diff = Date.now() - d;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.floor(h / 24)} 天前`;
-}
-
 export function ProjectOutputs() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<CanvasProject[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  /* 「已复制 ✓」的一次性反馈：亮 1.5s 自动复位（连点/卸载由 hook 收口）。 */
+  const copied = useFlashState();
 
   const refreshProjects = useCallback(() => {
     setProjects(listProjects());
@@ -146,24 +134,15 @@ export function ProjectOutputs() {
 
   const handleCopy = useCallback(() => {
     if (!metaJson) return;
-    navigator.clipboard?.writeText(metaJson).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      },
-      () => undefined,
-    );
-  }, [metaJson]);
+    void copyText(metaJson).then((ok) => {
+      if (!ok) return;
+      copied.flash();
+    });
+  }, [metaJson, copied]);
 
   const handleExport = useCallback(() => {
     if (!metaJson || !selected) return;
-    const blob = new Blob([metaJson], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `output-${selected.id}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(metaJson, `output-${selected.id}.json`);
   }, [metaJson, selected]);
 
   if (!projectId) {
@@ -264,7 +243,6 @@ export function ProjectOutputs() {
             {outputs.map((output) => {
               const c = taskCover(output.images);
               const isVideoOut = c?.mediaType === "video";
-              const st = STATUS_CHIP[output.status] ?? STATUS_CHIP.QUEUED;
               const active = selectedId === output.id;
               return (
                 <Button
@@ -310,19 +288,20 @@ export function ProjectOutputs() {
                         视频
                       </span>
                     )}
-                    <span
-                      className={`absolute top-2 left-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${st!.cls}`}
-                    >
-                      {st!.label}
-                    </span>
+                    <StatusBadge
+                      status={output.status}
+                      label={STATUS_LABEL[output.status] ?? output.status}
+                      dot={false}
+                      className="absolute top-2 left-2 px-2 py-0.5 text-[11px]"
+                    />
                   </div>
                   <div className="p-3">
                     <p className="text-ink-soft line-clamp-1 text-xs font-medium">
                       {TYPE_CHIP[output.type] ?? output.type} ·{" "}
-                      {output.seed ?? "—"}
+                      {displayValue(output.seed)}
                     </p>
                     <p className="text-ink-fainter mt-1 text-[11px]">
-                      {timeAgo(output.createdAt)}
+                      {displayValue(timeAgo(output.createdAt))}
                     </p>
                   </div>
                 </Button>
@@ -401,7 +380,7 @@ export function ProjectOutputs() {
                     正向提示词
                   </p>
                   <div className="border-border-strong bg-subtle text-ink-soft max-h-28 overflow-y-auto rounded-lg border p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap">
-                    {selected.prompt ?? "—"}
+                    {displayValue(selected.prompt)}
                   </div>
                 </div>
                 {selected.negativePrompt && (
@@ -420,17 +399,18 @@ export function ProjectOutputs() {
               <section>
                 <p className="text-ink-soft mb-2 text-xs font-semibold">参数</p>
                 <div className="border-border-strong overflow-hidden rounded-lg border">
+                  {/* 整张表走同一个判据：**取到没有**由 `displayValue` 定义，
+                      值自己怎么成文本（`steps` / `cfg` 是数字，`timeAgo` 已是
+                      字符串）交给它 —— 此前每一行都各写一遍 `?? "—"`，而
+                      `steps` / `cfg` 那两行还把 `String()` 与占位符拼在一起。 */}
                   {[
-                    ["Seed", selected.seed ?? "—"],
-                    ["模型", selected.checkpoint ?? "—"],
-                    ["采样器", selected.sampler ?? "—"],
-                    [
-                      "步数",
-                      selected.steps != null ? String(selected.steps) : "—",
-                    ],
-                    ["CFG", selected.cfg != null ? String(selected.cfg) : "—"],
-                    ["尺寸", selected.size ?? "—"],
-                    ["时间", timeAgo(selected.createdAt)],
+                    ["Seed", displayValue(selected.seed)],
+                    ["模型", displayValue(selected.checkpoint)],
+                    ["采样器", displayValue(selected.sampler)],
+                    ["步数", displayValue(selected.steps)],
+                    ["CFG", displayValue(selected.cfg)],
+                    ["尺寸", displayValue(selected.size)],
+                    ["时间", displayValue(timeAgo(selected.createdAt))],
                   ].map(([k, v], i) => (
                     <div
                       key={k}
@@ -449,7 +429,7 @@ export function ProjectOutputs() {
               <section>
                 <p className="text-ink-soft mb-1 text-xs font-semibold">来源</p>
                 <p className="text-ink-soft text-[12px]">
-                  工作流：{selected.workflowName ?? "—"}
+                  工作流：{displayValue(selected.workflowName)}
                 </p>
               </section>
             </div>
@@ -463,7 +443,7 @@ export function ProjectOutputs() {
                   onClick={handleCopy}
                   className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
                 >
-                  {copied ? "已复制 ✓" : "复制元数据"}
+                  {copied.on ? "已复制 ✓" : "复制元数据"}
                 </Button>
                 <Button
                   variant="outline"

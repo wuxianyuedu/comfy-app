@@ -5,6 +5,7 @@ import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { useFilePicker } from "~/components/ui/file-picker";
 import { Textarea } from "~/components/ui/textarea";
 import {
   fetchVideoTasks,
@@ -354,31 +355,14 @@ export function VideoQueueModal({
                 >
                   ＋ 添加一行
                 </Button>
-                <input
-                  type="file"
-                  accept=".txt,.csv"
-                  className="hidden"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    const text = await file.text();
-                    const lines = text
-                      .split(/\r?\n/)
-                      .map((segment) => segment.trim())
-                      .filter(Boolean);
+                <ImportLinesButton
+                  onImported={(lines) =>
                     setDraft((arr) => [
                       ...arr,
                       ...lines.map((prompt) => ({ prompt })),
-                    ]);
-                  }}
-                  id="vq-import"
+                    ])
+                  }
                 />
-                <label
-                  htmlFor="vq-import"
-                  className="border-border-strong text-ink-soft hover:bg-subtle cursor-pointer rounded-lg border px-3 py-1.5 text-xs transition-colors"
-                >
-                  导入 txt/csv
-                </label>
               </div>
 
               {error && (
@@ -413,5 +397,42 @@ export function VideoQueueModal({
         )}
       </div>
     </div>
+  );
+}
+
+/** 「导入 txt/csv」入口：按钮 + 隐藏 input 二合一。
+ *  此前这里用 `<input id="vq-import">` + `<label htmlFor="vq-import">` 做
+ *  隐式关联 —— 与全库另外 8 个落点（有的用 ref.click()、有的干脆把 input
+ *  露在界面上）写法都不同，且成了全仓唯一一处靠 `id` 拼接触发的入口。
+ *  现在统一走 `ui/file-picker`。 */
+function ImportLinesButton({
+  onImported,
+}: {
+  onImported: (lines: string[]) => void;
+}) {
+  const picker = useFilePicker({
+    accept: ".txt,.csv",
+    onPick: (file) => {
+      void file.text().then((text) => {
+        const lines = text
+          .split(/\r?\n/)
+          .map((segment) => segment.trim())
+          .filter(Boolean);
+        onImported(lines);
+      });
+    },
+  });
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={picker.open}
+        className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-lg px-3 py-1.5 text-xs transition-colors"
+      >
+        导入 txt/csv
+      </Button>
+      <picker.Input />
+    </>
   );
 }

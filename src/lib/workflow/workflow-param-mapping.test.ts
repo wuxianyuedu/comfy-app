@@ -20,6 +20,7 @@ import {
   resolveMapping,
   runtimeNodeId,
   serializeParamMapping,
+  SIZE_SUB_IDS,
   wiredTargetsForEntry,
 } from "~/lib/workflow/workflow-param-mapping";
 
@@ -776,7 +777,7 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     });
   });
 
-  it("有落点时：类型与 ioKey 都跟着落点那一行走", () => {
+  it("有落点时：ioKey 跟着落点走，类型仍是这个口自己的", () => {
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const prompt = entries.find((entry) => entry.id === "prompt")!;
     const ports = paramOutputPorts(prompt, outIo, "9::widget::text");
@@ -790,7 +791,10 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     });
   });
 
-  it("同一个口落到不同类型就显示不同类型（类型跟着落点走）", () => {
+  it("同一个口落到不同类型：芯片类型不变，落点类型另存 targetType", () => {
+    /* 用户口径：「对外参数的类型都不要跟着连线改动，现在图片节点连过去会变更
+     *  显示类型。」口子对外是什么就恒是什么；落到的那一行声明成什么，只在
+     *  `targetType`（行 title 会补一句）里说。 */
     const entries = buildParamEntries(outIo, undefined, { mode: "T2I" });
     const size = entries.find((entry) => entry.id === "size-aspect")!;
     const onWidth = paramOutputPorts(size, outIo, "5::widget::width")[0]!;
@@ -799,8 +803,34 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
       outIo,
       "5::widget::aspect_ratio",
     )[0]!;
-    expect(onWidth.type).toBe("INT");
+    /* 宽高比口恒是 COMBO（形态语义），连到 INT 的 width 也不改口。 */
+    expect(onWidth.type).toBe("COMBO");
     expect(onAspect.type).toBe("COMBO");
+    /* 落点那一行真正声明成什么，仍查得到。 */
+    expect(onWidth.targetType).toBe("INT");
+    expect(onAspect.targetType).toBe("COMBO");
+  });
+
+  it("图片口连到 IMAGEUPLOAD 的装载行：芯片仍是 IMAGE（用户报的那一例）", () => {
+    const imageIo: WorkflowIOMap = {
+      "11::widget::image_upload": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "11",
+        name: "image",
+        type: "IMAGEUPLOAD",
+      },
+    };
+    const entries = buildParamEntries(imageIo, undefined, { mode: "I2V" });
+    const frame = entries.find((entry) => entry.id === "first-frame")!;
+    const port = paramOutputPorts(
+      frame,
+      imageIo,
+      "11::widget::image_upload",
+    )[0]!;
+    expect(port.type).toBe("IMAGE");
+    expect(port.targetType).toBe("IMAGEUPLOAD");
+    expect(port.ioKey).toBe("11::widget::image_upload");
   });
 
   it("**一个口一颗点**：不逐候选摆点（尺寸子口也一样）", () => {
@@ -824,7 +854,9 @@ describe("paramOutputPorts — 卡片的输出端口（ISSUE #355 复审）", ()
     const ports = paramOutputPorts(size, outIo, "5::widget::height");
     expect(ports).toHaveLength(1);
     expect(ports[0]).toMatchObject({
-      type: "INT",
+      /* 口自己的形态类型（宽高比 = COMBO），不因落到 INT 的 height 而改口。 */
+      type: "COMBO",
+      targetType: "INT",
       connected: true,
       ioKey: "5::widget::height",
       handleId: "size-aspect",
@@ -1060,5 +1092,72 @@ describe("applyParamMapping — 尺寸各项各自取值", () => {
     expect(read("9::widget::text")).toEqual([
       { nodeId: "9", name: "text", value: "一只猫" },
     ]);
+  });
+});
+
+describe("buildParamEntries — 按「该模式生效的契约」列口（contractIds）", () => {
+  /* 用户报的现场：画布上列着「时长」，而「模式契约」编辑器里单图生视频那一栏
+   * 已经把它删了 —— 画布当时用的是**内置默认**（`exposedParamsForMode`），而契约
+   * 编辑器读的是**该模式生效的契约**（`modeContractEntries`：改过的走注册表）。
+   * 两个表面各取一份，差集就现形。 */
+  const io: WorkflowIOMap = {
+    "9::widget::text": pin("9", "positive_prompt", {
+      defaultValue: "一只猫在喝山泉的完整描述词，足够长到被判定成提示词口",
+    }),
+    "11::widget::image": pin("11", "first_frame", { type: "IMAGE" }),
+  };
+
+  it("契约里删掉的口不出现（单图生视频：去掉负向与时长）", () => {
+    const ids = buildParamEntries(io, undefined, {
+      mode: "I2V",
+      contractIds: ["prompt", "first-frame", "size"],
+    }).map((entry) => entry.id);
+    expect(ids).toEqual(["prompt", "first-frame", ...SIZE_SUB_IDS]);
+    expect(ids).not.toContain("duration");
+    expect(ids).not.toContain("negative");
+    /* 不传契约时仍是内置默认（负向与时长都在）—— 两个入口的差别就是这一条。 */
+    expect(
+      buildParamEntries(io, undefined, { mode: "I2V" }).map(
+        (entry) => entry.id,
+      ),
+    ).toContain("duration");
+  });
+
+  it("契约里**新增**的口会出现（不是拿内置默认做过滤）", () => {
+    const ids = buildParamEntries(io, undefined, {
+      mode: "T2I",
+      contractIds: ["prompt", "reference-image", "reference-image-2", "size"],
+    }).map((entry) => entry.id);
+    expect(ids).toContain("reference-image");
+    expect(ids).toContain("reference-image-2");
+    /* 内置默认的文生图没有参考图口 —— 出现了才说明清单真的按契约走。 */
+    expect(
+      buildParamEntries(io, undefined, { mode: "T2I" }).map(
+        (entry) => entry.id,
+      ),
+    ).not.toContain("reference-image");
+  });
+
+  it("顺序与展示名都按契约（参考图 2 带序号，尺寸仍摊成子口）", () => {
+    const entries = buildParamEntries(io, undefined, {
+      mode: "T2I",
+      contractIds: ["size", "prompt", "reference-image-2"],
+    });
+    expect(entries.map((entry) => entry.id)).toEqual([
+      ...SIZE_SUB_IDS,
+      "prompt",
+      "reference-image-2",
+    ]);
+    expect(
+      entries.find((entry) => entry.id === "reference-image-2")!.label,
+    ).toBe("参考图 2");
+  });
+
+  it("契约里认不出的 id 跳过（别的键空间 / 历史脏数据）", () => {
+    const ids = buildParamEntries(io, undefined, {
+      mode: "T2I",
+      contractIds: ["prompt", "不存在的口"],
+    }).map((entry) => entry.id);
+    expect(ids).toEqual(["prompt"]);
   });
 });

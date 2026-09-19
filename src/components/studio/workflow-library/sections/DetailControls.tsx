@@ -1,6 +1,8 @@
 "use client";
 
-// 详情面板的两个复用控件：操作按钮与页签按钮。纯展示，不含业务规则。
+// 详情面板的复用控件：操作按钮。纯展示，不含业务规则。
+//
+// 页签不在这里 —— 它走 `ui/tabs` 基元（规范 16 §16.2.4.6 第一档）。
 
 import type { ReactNode } from "react";
 
@@ -36,32 +38,6 @@ export function ActionButton({
     >
       {icon}
       {label}
-    </Button>
-  );
-}
-
-export function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Button
-      variant="ghost"
-      onClick={onClick}
-      className={[
-        "relative h-auto rounded-none px-3 py-2.5 text-[12px] font-medium",
-        active ? "text-ink-bright" : "text-ink-fainter hover:text-ink-strong",
-      ].join(" ")}
-    >
-      {children}
-      {active && (
-        <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500" />
-      )}
     </Button>
   );
 }

@@ -109,29 +109,54 @@ const VIDEO_TYPES = new Set([
  *  这条兜底修的是「DimensionControl 消失」那次回归：没有它，
  *  每个没类型的 widget 都落到 "text"，width/height 就……
  *  pairs are never grouped and the 比例+清晰度 picker never renders. */
+/** 某个条目是否带**声明的** ComfyUI 类型。
+ *  没有（缺失 / 空串 / `*`）意味着控件种类是**推出来的**，不保证与 ComfyUI
+ *  真类型一致 —— `defaultInputValues` 据此不给推断出的数值控件造默认值。 */
+function hasDeclaredType(e: WorkflowIOEntry): boolean {
+  const t = (e.type ?? "").trim().toUpperCase();
+  return t.length > 0 && t !== "*";
+}
+
+/** 名字 / 标签带数值语义的 pin（尺寸 / 像素 / 倍数那几个已单独立项，这里不重复）。
+ *
+ *  与分组判据（`isDimWidth` / `isDimHeight` / `isDimMultiple` / `isDimMegapixels`）
+ *  **共用一份名字表**——避免「分组认得出这个 pin，控件推断却认不出」的错位
+ *  （分组判据认中文标签 宽度/高度/横向/纵向/倍数/倍率，控件推断原先只认英文整词）。 */
+function isNumericPinName(e: { name?: string; label?: string }): boolean {
+  const name = (e.name ?? "").toLowerCase();
+  const label = e.label ?? "";
+  if (
+    /\b(steps|seed|noise_seed|cfg|guidance|denoise|strength|weight|scale|batch|count|frames|length|duration|size|resolution)\b/.test(
+      name,
+    )
+  )
+    return true;
+  if (
+    /步数|采样步数|随机种|引导系数|降噪|强度|权重|缩放|倍率|批次|数量|尺寸|分辨率|时长|帧数/.test(
+      label,
+    )
+  )
+    return true;
+  return false;
+}
+
 function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
   if (typeof e.defaultValue === "number") {
     return Number.isInteger(e.defaultValue) ? "int" : "float";
   }
-  const search = `${e.name} ${e.label ?? ""}`.toLowerCase();
-  if (
-    e.name.toLowerCase() === "aspect_ratio" ||
-    /\baspect_ratio\b/.test(search)
-  ) {
+  /* 尺寸 / 像素 / 倍数：与 `inferDimensionGroup` 同一处判据。分组与控件推断共用
+   * 同一张表，这样「宽度」这类中文标签既能被分组认出、也能被控件推断认出——
+   * 控件推断原先只认英文整词，中文标签会退化成 text，于是「比例 + 清晰度」组合
+   * 控件不出现（那条「DimensionControl 消失」回归的中文侧）。 */
+  if (isDimWidth(e) || isDimHeight(e)) return "int";
+  if (isDimMegapixels(e)) return "float";
+  if (isDimMultiple(e)) return "int";
+  /* 宽高比 / 比例：与分组判据同口径。有候选走 select，离线无候选走 text——
+   * text 不会造值（payload 会过滤空串），比渲染成数字步进器更安全。 */
+  if (isDimAspect(e)) {
     return Array.isArray(e.options) && e.options.length > 0 ? "select" : "text";
   }
-  if (
-    e.name.toLowerCase() === "megapixels" ||
-    /megapixel|百万像素/.test(search)
-  )
-    return "float";
-  if (
-    /\b(width|height|size|resolution|steps|seed|cfg|denoise|strength|scale|weight|batch|count|frames|length|duration|multiple|倍数)\b/.test(
-      search,
-    )
-  ) {
-    return "int";
-  }
+  if (isNumericPinName(e)) return "int";
   return null;
 }
 
@@ -327,12 +352,24 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   /** 没有 widget 的输入 —— 必须从别的节点输出接过来。ComfyUI 里这类是
    *  「只认类型」的端口（positive_prompt、MODEL、CLIP 等），
    *  渲染成只读芯片。 */
-  wireInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
+  wireInputs: (WorkflowIOEntry & {
+    ioKey: string;
+    control: ControlKind;
+    controlInferred?: boolean;
+  })[];
   /** 带 widget 值的输入（下拉 / 数字 / 布尔 / 多行字符串等）——
    *  用户不连线也能直接编辑。 */
-  widgetInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
+  widgetInputs: (WorkflowIOEntry & {
+    ioKey: string;
+    control: ControlKind;
+    controlInferred?: boolean;
+  })[];
   /** 向后兼容的扁平化：[wireInputs, widgetInputs]，顺序稳定。 */
-  inputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
+  inputs: (WorkflowIOEntry & {
+    ioKey: string;
+    control: ControlKind;
+    controlInferred?: boolean;
+  })[];
   outputs: (WorkflowIOEntry & { ioKey: string })[];
 } {
   const wireInputs: (WorkflowIOEntry & {
@@ -349,7 +386,14 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
     if (entry.direction === "output") {
       outputs.push({ ...entry, ioKey });
     } else {
-      const enriched = { ...entry, ioKey, control: controlForEntry(entry) };
+      const enriched = {
+        ...entry,
+        ioKey,
+        control: controlForEntry(entry),
+        /* 控件种类是推断出来的（条目没有声明类型）就打标：defaultInputValues
+         * 据此不给它造默认值，分组 / 渲染照常。 */
+        controlInferred: !hasDeclaredType(entry),
+      };
       /* `kind === "widget"` 是用户勾选节点可编辑参数时，画布侧开关写下的信号。
        *  其余情况（kind !== "widget"）一律当作只走连线 ——
        *  与画布渲染一致：那些行会渲染 🔌 芯片。
@@ -443,9 +487,14 @@ export function defaultInputValues(
     const resolved = resolveEntryDefault(entry, mode);
     if (resolved !== undefined) out[entry.ioKey] = resolved;
     else if (entry.control === "switch") out[entry.ioKey] = false;
-    else if (entry.control === "int" || entry.control === "float")
-      out[entry.ioKey] = numericBounds(entry).min;
-    else if (entry.control === "textarea" || entry.control === "text")
+    else if (entry.control === "int" || entry.control === "float") {
+      /* 推断出来的数值控件（条目没有声明类型）**不许**造默认值：离线时猜出的
+       * 数字没有事实依据，一旦随运行下发会静默覆盖图内真实值 —— 同一份数据在
+       *  ComfyUI 在线 / 离线两种状态下得到不同 payload（「结果不一致」的实锤）。
+       *  声明了类型（INT / FLOAT）的条目照旧给 numericBounds 默认值，行为不变；
+       *  没类型的只交给图内默认值 / 用户填写，本函数不替它下发明文数字。 */
+      if (!entry.controlInferred) out[entry.ioKey] = numericBounds(entry).min;
+    } else if (entry.control === "textarea" || entry.control === "text")
       out[entry.ioKey] = "";
   }
   return out;
@@ -597,6 +646,12 @@ export function getMissingRequiredInputs(
 export type EnrichedWidget = WorkflowIOEntry & {
   ioKey: string;
   control: ControlKind;
+  /** 控件种类是**推断**出来的（条目没有声明 ComfyUI 类型）。
+   *  区别于「声明的类型」（富化链路给的 INT / FLOAT / STRING / COMBO …）。
+   *  推断控件只保证能编辑，不保证与 ComfyUI 真类型一致——
+   *  `defaultInputValues` 据此**不**给推断出的数值控件造默认值，避免离线时
+   *  静默下发一个猜出来的数字（见该函数的注释）。 */
+  controlInferred?: boolean;
 };
 
 export interface DimensionGroup {
@@ -805,16 +860,16 @@ export function pickClarityPreset(
 }
 
 /* ── 关键字匹配器（名字 + 标签，忽略大小写）── */
-function isDimWidth(e: EnrichedWidget): boolean {
-  const name = (e.name || "").toLowerCase();
+function isDimWidth(e: { name?: string; label?: string }): boolean {
+  const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
   if (name.includes("width")) return true;
   if (label === "宽度" || label === "横" || label === "横向") return true;
   if (name === "宽") return true;
   return false;
 }
-function isDimHeight(e: EnrichedWidget): boolean {
-  const name = (e.name || "").toLowerCase();
+function isDimHeight(e: { name?: string; label?: string }): boolean {
+  const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
   /* NOTE: a bare "高" inside a 画质 label like "高清" must NOT count as the
    *  height pin — we only accept the exact Chinese shape 高度/纵向/纵 or the
@@ -824,8 +879,8 @@ function isDimHeight(e: EnrichedWidget): boolean {
   if (name === "高") return true;
   return false;
 }
-function isDimAspect(e: EnrichedWidget): boolean {
-  const name = (e.name || "").toLowerCase();
+function isDimAspect(e: { name?: string; label?: string }): boolean {
+  const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
   if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name))
     return true;
@@ -833,31 +888,31 @@ function isDimAspect(e: EnrichedWidget): boolean {
     return true;
   return false;
 }
-function isDimMegapixels(e: EnrichedWidget): boolean {
-  const name = (e.name || "").toLowerCase();
+function isDimMegapixels(e: { name?: string; label?: string }): boolean {
+  const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
   if (name.includes("megapixel")) return true;
   if (label.includes("百万像素") || label.includes("像素")) return true;
   return false;
 }
-function isDimMultiple(e: EnrichedWidget): boolean {
-  const name = (e.name || "").toLowerCase();
+function isDimMultiple(e: { name?: string; label?: string }): boolean {
+  const name = (e.name ?? "").toLowerCase();
   const label = e.label ?? "";
   if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name))
     return true;
   if (label.includes("倍数") || label.includes("倍率")) return true;
   return false;
 }
-function isVideoLength(e: EnrichedWidget): boolean {
-  const searchText = `${e.name} ${e.label ?? ""}`.toLowerCase();
+function isVideoLength(e: { name?: string; label?: string }): boolean {
+  const searchText = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   return /length|duration|时长|帧数|frames|seconds|秒/.test(searchText);
 }
-function isVideoAspect(e: EnrichedWidget): boolean {
-  const searchText = `${e.name} ${e.label ?? ""}`.toLowerCase();
+function isVideoAspect(e: { name?: string; label?: string }): boolean {
+  const searchText = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   return /aspect|ratio|比例|纵横/.test(searchText);
 }
-function isVideoQuality(e: EnrichedWidget): boolean {
-  const searchText = `${e.name} ${e.label ?? ""}`.toLowerCase();
+function isVideoQuality(e: { name?: string; label?: string }): boolean {
+  const searchText = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   return /quality|clarity|清晰|画质/.test(searchText);
 }
 

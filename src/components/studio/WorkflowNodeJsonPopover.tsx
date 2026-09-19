@@ -9,6 +9,8 @@
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { useFlashState } from "~/components/ui/use-flash-state";
+import { copyText } from "~/lib/browser-io";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
@@ -117,31 +119,13 @@ export function NodeJsonPopover({
     }
     return "（节点详情尚未加载 — 等待 detail.ready）";
   }, [tab, json, viewObj]);
-  const [copied, setCopied] = useState(false);
+  const copied = useFlashState();
   const handleCopy = () => {
-    void navigator.clipboard.writeText(pretty).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1400);
-      },
-      () => {
-        const ta = document.createElement("textarea");
-        ta.value = pretty;
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-          document.execCommand("copy");
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1400);
-        } catch {
-          /* 放弃；用户仍可手动选中复制 */
-        } finally {
-          document.body.removeChild(ta);
-        }
-      },
-    );
+    /* 失败时静默：用户仍可手动选中复制。 */
+    void copyText(pretty).then((ok) => {
+      if (!ok) return;
+      copied.flash();
+    });
   };
   const accent =
     request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
@@ -227,7 +211,7 @@ export function NodeJsonPopover({
                   alignItems: "center",
                   gap: 6,
                   fontSize: 11,
-                  color: "var(--color-muted)",
+                  color: "var(--color-ink-muted)",
                   textTransform: "uppercase",
                   letterSpacing: 0.6,
                 }}
@@ -264,13 +248,13 @@ export function NodeJsonPopover({
               onClick={handleCopy}
               title="复制 JSON 到剪贴板"
               style={{
-                background: copied ? accentAlpha(15) : "var(--color-subtle)",
-                color: copied ? accent : "var(--color-ink)",
-                border: `1px solid ${copied ? accentAlpha(40) : "var(--color-border-strong)"}`,
+                background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
+                color: copied.on ? accent : "var(--color-ink)",
+                border: `1px solid ${copied.on ? accentAlpha(40) : "var(--color-border-strong)"}`,
               }}
               className="font-normal"
             >
-              {copied ? "✓ 已复制" : "⧉ 复制"}
+              {copied.on ? "✓ 已复制" : "⧉ 复制"}
             </Button>
             <Button
               variant="outline"
@@ -281,7 +265,7 @@ export function NodeJsonPopover({
               style={{
                 background: "var(--color-subtle)",
                 border: "1px solid var(--color-border-strong)",
-                color: "var(--color-muted)",
+                color: "var(--color-ink-muted)",
               }}
               className="rounded-md text-[14px] leading-none"
             >
@@ -325,7 +309,9 @@ export function NodeJsonPopover({
                     background: active
                       ? accentAlpha(13)
                       : "var(--color-subtle)",
-                    color: active ? "var(--color-ink)" : "var(--color-muted)",
+                    color: active
+                      ? "var(--color-ink)"
+                      : "var(--color-ink-muted)",
                   }}
                   className="h-auto font-normal"
                 >
@@ -436,7 +422,7 @@ export function NodeJsonPopover({
             style={{
               padding: "6px 14px 8px",
               fontSize: 10.5,
-              color: "var(--color-muted)",
+              color: "var(--color-ink-muted)",
               borderTop: "1px solid var(--color-border-subtle)",
               display: "flex",
               justifyContent: "space-between",

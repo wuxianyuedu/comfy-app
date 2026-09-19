@@ -1229,3 +1229,75 @@ describe("enrichWorkflowIO — 键漂移兜底与别名判定事实源（ISSUE #
     expect(result["7::widget::1"]!.label).toBe("1");
   });
 });
+
+describe("enrichWorkflowIO — 存档 type/defaultValue/options 作兜底基线（fix 4）", () => {
+  it("rawJson/graph 都取不到时沿用存档 type，不退化成 *", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "7::widget::scale": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "7",
+          name: "scale",
+          type: "FLOAT",
+          defaultValue: 1.2,
+        },
+      }),
+      // rawInputsById / graph / options 都故意留空：模拟「富化查不到该节点」
+    );
+    const e = result["7::widget::scale"]!;
+    expect(e.type).toBe("FLOAT");
+    expect(e.defaultValue).toBe(1.2);
+  });
+
+  it("object_info 不可达时复用存档 options，COMBO 不退化成 text", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams({
+        "7::widget::sampler": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "7",
+          name: "sampler",
+          type: "COMBO",
+          options: ["euler", "dpmpp_2m"],
+        },
+      }),
+    );
+    const e = result["7::widget::sampler"]!;
+    expect(e.type).toBe("COMBO");
+    expect(e.options).toEqual(["euler", "dpmpp_2m"]);
+  });
+
+  it("rawJson 能解析出来时以解析结果为准，覆盖存档旧值", async () => {
+    const result = await enrichWorkflowIO(
+      makeParams(
+        {
+          "7::widget::seed": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "7",
+            name: "seed",
+            type: "STRING", // 存档旧值（已过期）
+            defaultValue: "old",
+          },
+        },
+        {
+          rawInputsById: {
+            "7": [
+              {
+                name: "seed",
+                type: "INT",
+                isConnection: false,
+                widget: { name: "seed" },
+                widgetValue: 42,
+              },
+            ],
+          },
+        },
+      ),
+    );
+    const e = result["7::widget::seed"]!;
+    expect(e.type).toBe("INT"); // 解析覆盖存档
+    expect(e.defaultValue).toBe(42);
+  });
+});

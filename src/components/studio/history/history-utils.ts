@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 
+import { timeAgo as timeAgoImpl } from "~/lib/time-format";
+
 import type { TaskItem } from "./history-types";
+
+/** 全量历史页的相对时间。定义收在 `~/lib/time-format`（此前两域各写一份）。 */
+export function timeAgo(iso: string): string {
+  return timeAgoImpl(iso) ?? "刚刚";
+}
 
 export interface StatusStyle {
   label: string;
@@ -74,18 +81,6 @@ export function suggestFix(err?: string | null): string {
     return "建议：降低 batch size / 分辨率，或切换到更小的模型。";
   if (/queue/i.test(err)) return "建议：清空 ComfyUI 队列或重启服务后重试。";
   return `建议：复制错误码到 ComfyUI 控制台查日志：${err.slice(0, 40)}${err.length > 40 ? "…" : ""}`;
-}
-
-export function timeAgo(iso: string) {
-  const time = new Date(iso).getTime();
-  const diff = Date.now() - time;
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "刚刚";
-  if (minutes < 60) return `${minutes} 分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const day = Math.floor(hours / 24);
-  return `${day} 天前`;
 }
 
 /** 把 ISO 时间归到日期桶：今天 / 昨天 / yyyy-mm-dd */

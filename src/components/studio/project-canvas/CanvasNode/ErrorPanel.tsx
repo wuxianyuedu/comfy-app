@@ -12,6 +12,8 @@ import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { copyText } from "~/lib/browser-io";
+import { Alert } from "~/components/ui/alert";
 import { shouldAutoExpandError, suggestForError } from "./error-suggestions";
 
 interface ErrorPanelProps {
@@ -154,41 +156,33 @@ export function ErrorPanel({
               <Button
                 variant="outline"
                 onClick={() => {
-                  void (async () => {
-                    try {
-                      await navigator.clipboard.writeText(
-                        JSON.stringify(
-                          {
-                            nodeId: nodeId,
-                            workflowId: workflowId ?? null,
-                            workflowName: workflowName ?? null,
-                            taskId: taskId ?? null,
-                            errorStatus: errorStatus ?? null,
-                            validationErrors: validationErrors ?? null,
-                            error:
-                              typeof error === "string"
-                                ? error
-                                : (() => {
-                                    try {
-                                      return JSON.stringify(error);
-                                    } catch {
-                                      return String(error);
-                                    }
-                                  })(),
-                            request: errorContext?.request ?? null,
-                            ts:
-                              errorContext?.timestamp ??
-                              new Date().toISOString(),
-                          },
-                          null,
-                          2,
-                        ),
-                      );
-                    } catch {
-                      /* 剪贴板不可用 —— 静默；用户仍可
-                       *  手动展开并选中原始错误文本 */
-                    }
-                  })();
+                  /* 剪贴板不可用时静默 —— 用户仍可手动展开并选中原始错误文本。 */
+                  void copyText(
+                    JSON.stringify(
+                      {
+                        nodeId: nodeId,
+                        workflowId: workflowId ?? null,
+                        workflowName: workflowName ?? null,
+                        taskId: taskId ?? null,
+                        errorStatus: errorStatus ?? null,
+                        validationErrors: validationErrors ?? null,
+                        error:
+                          typeof error === "string"
+                            ? error
+                            : (() => {
+                                try {
+                                  return JSON.stringify(error);
+                                } catch {
+                                  return String(error);
+                                }
+                              })(),
+                        request: errorContext?.request ?? null,
+                        ts: errorContext?.timestamp ?? new Date().toISOString(),
+                      },
+                      null,
+                      2,
+                    ),
+                  );
                 }}
                 className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
                 title="复制错误详情到剪贴板（含 taskId 与请求参数）"
@@ -281,11 +275,9 @@ export function ErrorPanel({
                           <span className="text-danger-strong/60">taskId</span>
                           <Button
                             variant="ghost"
-                            onClick={() =>
-                              void navigator.clipboard
-                                .writeText(taskId)
-                                .catch(() => undefined)
-                            }
+                            onClick={() => {
+                              void copyText(taskId);
+                            }}
                             className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
                             title="点击复制 taskId"
                           >
@@ -306,12 +298,13 @@ export function ErrorPanel({
 
                   {/* 2) 自动建议 — 正则推断的纠错提示 */}
                   {errorSuggestion && (
-                    <div className="border-warning/25 bg-warning/8 text-warning-strong rounded border px-2 py-1 text-[10px] leading-relaxed">
-                      <span className="text-warning-strong mr-1 font-semibold">
-                        建议
-                      </span>
+                    <Alert
+                      variant="warning"
+                      className="block rounded px-2 py-1 text-[10px] leading-relaxed"
+                    >
+                      <span className="mr-1 font-semibold">建议</span>
                       {errorSuggestion}
-                    </div>
+                    </Alert>
                   )}
 
                   {/* 3) 请求参数快照 */}

@@ -69,6 +69,7 @@ import {
   type WorkflowIOMap,
   parseWorkflowIOMap,
 } from "~/lib/workflow/workflow-io-types";
+import { persistEnrichedWorkflowIO } from "~/lib/comfyui/workflow-detail-io";
 import {
   normalizeTaskType,
   VALID_TASK_TYPE_CODES,
@@ -700,7 +701,16 @@ export const workflowRouter = createTRPCRouter({
         rawJson: rest.rawJson,
         paramMap: rest.paramMap,
         positions: rest.positions,
-        workflowIO: rest.workflowIO,
+        /* 保存 IO 映射时把类型 / 默认值固化进库（fix 4）：用图里当前字面量补全
+         * 缺失的 type / defaultValue，离线也能做，不依赖 object_info 重算。 */
+        workflowIO:
+          rest.workflowIO !== undefined
+            ? persistEnrichedWorkflowIO(
+                ((rest.graph ?? existing.graph) as
+                  Record<string, unknown> | null | undefined) ?? null,
+                parseWorkflowIOMap(rest.workflowIO),
+              )
+            : undefined,
       };
 
       if (input.taskType !== undefined) {

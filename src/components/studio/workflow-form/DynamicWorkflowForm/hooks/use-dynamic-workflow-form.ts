@@ -3,8 +3,9 @@
 // DynamicWorkflowForm 的全部业务逻辑：IO 切分与分组、行拖拽手势、图片上传、
 // 值写入。视图层只消费这里返回的 controller，不持有任何业务规则。
 
+import { useFilePicker } from "~/components/ui/file-picker";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, DragEvent, RefObject } from "react";
+import type { ComponentType, DragEvent } from "react";
 
 import { uploadImageFile } from "~/lib/project-canvas/canvas-api";
 import {
@@ -48,9 +49,10 @@ export interface DynamicWorkflowFormController {
   widgetSectionEntries: EnrichedWidget[];
   /** 没有任何输入/输出端点 —— 视图据此渲染空态提示。 */
   isEmpty: boolean;
-  fileRef: RefObject<HTMLInputElement | null>;
   uploading: boolean;
   uploadTarget: string | null;
+  /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
+  FileInput: ComponentType;
   pickFile: (ioKey: string) => void;
   /** 上传失败的可读原因（未运行 / 启动超时…）；下一次选择文件时清空。
    *  视图据此在表单内渲染提示条——上传位本身没有错误区。 */
@@ -58,7 +60,6 @@ export interface DynamicWorkflowFormController {
   dismissUploadError: () => void;
   /** 上传是异步的（读文件 + 调接口），但 `<input type=file>` 的 onChange 只
    *  要求 void 返回 —— 调用方不需要 await，失败在这里转成 uploadError。 */
-  onFile: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   set: (ioKey: string, value: unknown) => void;
   /** 未开启重排（调用方未传 onReorder）时为 null。 */
   dragHandlers: RowDragHandlers | null;
@@ -243,7 +244,6 @@ export function useDynamicWorkflowForm(
     };
   }, [onReorder, dragOverKey, endDrag, beginDrag, rowKeyOf]);
 
-  const fileRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   /* 上传失败的原因（可读文案）：此前只在 console 留一行，表单里没有任何
@@ -256,16 +256,25 @@ export function useDynamicWorkflowForm(
     [values, onChange],
   );
 
-  const pickFile = useCallback((ioKey: string) => {
-    setUploadTarget(ioKey);
-    fileRef.current?.click();
-  }, []);
+  /* 图片输入选择器：隐藏 input、「点谁去触发」与「选完复位 value」收进
+   *  `ui/file-picker` —— 此前本 hook 自己持 ref、自己 click、自己在
+   *  onChange 里复位 `event.target.value`（同一套样板全库 9 份）。 */
+  const uploadPicker = useFilePicker({
+    accept: "image/*",
+    onPick: (file) => void onFile(file),
+  });
+
+  const pickFile = useCallback(
+    (ioKey: string) => {
+      setUploadTarget(ioKey);
+      uploadPicker.open();
+    },
+    [uploadPicker],
+  );
 
   const onFile = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      event.target.value = "";
-      if (!file || !uploadTarget) return;
+    async (file: File) => {
+      if (!uploadTarget) return;
       setUploading(true);
       setUploadError(null);
       try {
@@ -299,13 +308,12 @@ export function useDynamicWorkflowForm(
     portEntries,
     widgetSectionEntries,
     isEmpty: inputs.length === 0 && shownOutputs.length === 0,
-    fileRef,
     uploading,
     uploadTarget,
+    FileInput: uploadPicker.Input,
     pickFile,
     uploadError,
     dismissUploadError,
-    onFile,
     set,
     dragHandlers,
     draggingKey,
