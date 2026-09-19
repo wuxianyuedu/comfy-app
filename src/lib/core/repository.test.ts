@@ -328,6 +328,28 @@ describe("WorkflowModelTagRepository", () => {
     });
     expect(miss).toEqual([]);
   });
+
+  it("listForUser 只取列表页要用的列：大字段 positions 不下发", async () => {
+    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedWorkflowTemplate(tdb, {
+      id: "wt-pos",
+      userId: "u1",
+      positions: { "1": [10, 20] },
+    });
+
+    const rows = await workflowTemplateRepository.listForUser("u1");
+    expect(rows).toHaveLength(1);
+    const row: Record<string, unknown> = { ...rows[0]! };
+    /* 判据是「列投影真的生效」而不是「值恰好为空」：`select()` 会把 positions
+     * 取出来，投影不会 —— 两种写法下 `row.positions` 都为 `undefined`，所以这里断
+     * 的是**键不在行对象上**（`"positions" in row`）。真正要拦的回归是有人把
+     * `LIST_ROW_COLUMNS` 换回 `select()`，那样这个键会重新出现。 */
+    expect("positions" in row).toBe(false);
+    // 列表页真正要用的列一个都不能少（少一列 = 列表静默缺字段）。
+    expect(row.id).toBe("wt-pos");
+    expect(typeof row.taskType).toBe("string");
+    expect(row.rawJson).toEqual({ nodes: [{ id: "1", type: "KSampler" }] });
+  });
 });
 
 /* ────────────────────────────── WorkflowTemplate ────────────────────────────── */
