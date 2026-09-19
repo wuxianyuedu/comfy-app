@@ -158,9 +158,11 @@ describe("ParseProgressBanner", () => {
     expect(
       screen.getByText("· custom_nodes/ipadapter_plus"),
     ).toBeInTheDocument();
-    // 进度条为确定宽度 min(100, done/total*100)%
-    const bar = container.querySelector("div.transition-all")!;
-    expect(bar).toHaveStyle({ width: "37.5%" });
+    /* 进度条为确定宽度：`done/total*100` 经 `~/lib/progress` 的 `pctToWidth`
+       取整（3/8 = 37.5 → 38）。宽度口径收口后不再出现小数 —— 走
+       `~/components/ui/progress-bar` 的 `data-slot` 取节点。 */
+    const bar = container.querySelector('[data-slot="progress-bar-fill"]')!;
+    expect(bar).toHaveStyle({ width: "38%" });
     expect(screen.getByTitle("hashing packages…")).toBeInTheDocument();
   });
 
@@ -178,9 +180,13 @@ describe("ParseProgressBanner", () => {
     expect(screen.getByText(/已发现/)).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("（总数待定，正在扫描…）")).toBeInTheDocument();
-    // 不定态:宽 1/3 的动画条,而非按百分比设置的确定条
-    expect(container.querySelector("div.transition-all")).toBeNull();
-    expect(container.querySelector("div.w-1\\/3")).not.toBeNull();
+    // 不定态：滑动条纹，而不是按百分比设置的确定条
+    expect(
+      container.querySelector('[data-slot="progress-bar-fill"]'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-slot="progress-bar-indeterminate"]'),
+    ).not.toBeNull();
   });
 
   it("queue/初始阶段:渲染「首次扫描」兜底文案", () => {
@@ -188,7 +194,9 @@ describe("ParseProgressBanner", () => {
       <ParseProgressBanner progress={{ ...PROGRESS, phase: "queue" }} />,
     );
     expect(screen.getByText("首次扫描目录中的节点包…")).toBeInTheDocument();
-    expect(container.querySelector("div.transition-all")).toBeNull();
+    expect(
+      container.querySelector('[data-slot="progress-bar-fill"]'),
+    ).toBeNull();
   });
 });
 

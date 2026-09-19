@@ -15,6 +15,7 @@ import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Button } from "~/components/ui/button";
 import { displayValue } from "~/lib/display-value";
+import { KeyValueRows } from "~/components/ui/key-value-rows";
 
 /* ── Tauri 窗口底部状态栏 ─────────────────────────
    显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。
@@ -56,6 +57,50 @@ const fpsDotColor: Record<string, string> = {
   bad: "bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)]",
   unknown: "bg-ink-fainter",
 };
+
+/**
+ * 状态栏里的一项「标签 + 已用/总量 + 百分比」内联项。
+ *
+ * 三个资源项（显存 / 显存·ComfyUI / 内存）此前**各写一份逐字同形的三层
+ * `<span>`** —— 差别只有标签文案与 title，`used/total (pct%)` 那段三份完全
+ * 一致。行布局走 `KeyValueRows` 的 `inline`（P17），缺值占位走 `displayValue`
+ * （P8）—— 两件事各只写一遍。
+ */
+function UsageItem({
+  label,
+  title,
+  used,
+  total,
+  pct,
+}: {
+  label: string;
+  title: string;
+  used: number;
+  total: number;
+  pct: number;
+}) {
+  return (
+    <KeyValueRows
+      layout="inline"
+      className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
+      itemClassName="gap-1"
+      keyClassName="text-ink-muted"
+      valueClassName="text-ink-bright"
+      items={[
+        {
+          key: label,
+          title,
+          value: (
+            <>
+              {displayValue(fmtBytes(used))}/{displayValue(fmtBytes(total))}
+              <span className="text-ink-fainter"> ({pct}%)</span>
+            </>
+          ),
+        },
+      ]}
+    />
+  );
+}
 
 export function BrowserStatusBar() {
   const isOpen = useLogPanel((s) => s.isOpen);
@@ -125,48 +170,36 @@ export function BrowserStatusBar() {
             用户反馈 ComfyUI 的 CUDA 口径有时不准确，故同时显示两种口径做对照。
             非 NVIDIA 卡 / nvidia-smi 查询失败 → smiVram 为 null，整项隐藏（不留空项）。 */}
         {smiVram && (
-          <span
-            className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
+          <UsageItem
+            label="显存"
             title="nvidia-smi 物理专用显存（与任务管理器「专用 GPU 内存」同口径）"
-          >
-            <span className="text-ink-muted">显存</span>
-            <span className="text-ink-bright">
-              {displayValue(fmtBytes(smiVram.used))}/
-              {displayValue(fmtBytes(smiVram.total))}
-            </span>
-            <span className="text-ink-fainter">({smiVram.pct}%)</span>
-          </span>
+            used={smiVram.used}
+            total={smiVram.total}
+            pct={smiVram.pct}
+          />
         )}
 
         {/* 显存（ComfyUI CUDA 逻辑口径）：vram_free 语义是「剩余可用」，
             已用 = 总量 − 剩用，与内存侧推导一致。非 NVIDIA 卡上这是唯一口径。 */}
         {cudaVram && (
-          <span
-            className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
+          <UsageItem
+            label="显存·ComfyUI"
             title="ComfyUI 上报的 CUDA 口径（显存剩余可用/总量，已用 = 总量 − 剩用）"
-          >
-            <span className="text-ink-muted">显存·ComfyUI</span>
-            <span className="text-ink-bright">
-              {displayValue(fmtBytes(cudaVram.used))}/
-              {displayValue(fmtBytes(cudaVram.total))}
-            </span>
-            <span className="text-ink-fainter">({cudaVram.pct}%)</span>
-          </span>
+            used={cudaVram.used}
+            total={cudaVram.total}
+            pct={cudaVram.pct}
+          />
         )}
 
         {/* 内存占用：具体数值 + 百分比 */}
         {ram && (
-          <span
-            className="text-ink-soft hidden items-center gap-1 tabular-nums sm:flex"
+          <UsageItem
+            label="内存"
             title="系统内存占用"
-          >
-            <span className="text-ink-muted">内存</span>
-            <span className="text-ink-bright">
-              {displayValue(fmtBytes(ram.used))}/
-              {displayValue(fmtBytes(ram.total))}
-            </span>
-            <span className="text-ink-fainter">({ram.pct}%)</span>
-          </span>
+            used={ram.used}
+            total={ram.total}
+            pct={ram.pct}
+          />
         )}
 
         {/* 降级提示：离线/轮询失败时占用条不再显示，这里给出可见出口，

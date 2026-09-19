@@ -16,6 +16,8 @@
 
 import React from "react";
 
+import { ProgressBar } from "~/components/ui/progress-bar";
+import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
@@ -221,42 +223,52 @@ export function WorkshopEncapsulationPanel({
            *  `entryStateBadge` 的注释（ISSUE #720）。 */
           const badge = entryStateBadge(entry);
           return (
-            <div
+            /* 行布局走 `KeyValueRows`（P17）：左侧「键」是一组可变的徽标 +
+                标签 + 口 id，右侧「值」是生效落点。此前这一段是与其它四处
+                「标签 + 值」行**各写一份**的 `flex items-center` 布局。 */
+            <KeyValueRows
               key={entry.id}
               className="border-border/60 bg-surface rounded-lg border px-3 py-2"
-            >
-              <div className="flex items-center gap-2">
-                {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），不是
-                    写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    entry.required
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
-                      : "bg-subtle text-muted-foreground/80 border-border-strong border"
-                  }`}
-                >
-                  {entry.required ? "必填" : "可选"}
-                </span>
-                {badge && (
-                  <span
-                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
-                  >
-                    {badge.label}
-                  </span>
-                )}
-                <span className="text-ink text-[12px] font-medium">
-                  {entry.label}
-                  {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
-                      而契约口与适配器口是两套 id，只写中文对不上。 */}
-                  <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
-                    {entry.id}
-                  </span>
-                </span>
-                <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]">
-                  {displayValue(entry.targetIoKey)}
-                </span>
-              </div>
-            </div>
+              itemClassName="text-[12px]"
+              keyClassName="text-ink flex min-w-0 items-center gap-2 font-medium"
+              valueClassName="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-[10px]"
+              items={[
+                {
+                  id: entry.id,
+                  key: (
+                    <>
+                      {/* 必备 / 可选由**模式契约**判定（`ModeContract.required`），
+                          不是写死的口名 —— 与「能不能跑」的判据同一份事实。 */}
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          entry.required
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                            : "bg-subtle text-muted-foreground/80 border-border-strong border"
+                        }`}
+                      >
+                        {entry.required ? "必填" : "可选"}
+                      </span>
+                      {badge && (
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
+                        >
+                          {badge.label}
+                        </span>
+                      )}
+                      <span className="text-ink text-[12px] font-medium">
+                        {entry.label}
+                        {/* 口 id 与中文字面并列：配置 / 日志 / 代码里用的是 id，
+                            而契约口与适配器口是两套 id，只写中文对不上。 */}
+                        <span className="text-muted-foreground/60 ml-1 font-mono text-[10px]">
+                          {entry.id}
+                        </span>
+                      </span>
+                    </>
+                  ),
+                  value: displayValue(entry.targetIoKey),
+                },
+              ]}
+            />
           );
         })}
       </div>
@@ -316,12 +328,12 @@ export function WorkshopEncapsulationPanel({
             </span>
           </div>
           {test.running && (
-            <div className="bg-elevated h-1 w-full overflow-hidden rounded-full">
-              <div
-                className="bg-primary h-full rounded-full transition-all"
-                style={{ width: `${Math.max(4, test.progress)}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={test.progress}
+              minVisible={4}
+              showValue={false}
+              trackClassName="bg-elevated h-1"
+            />
           )}
           {test.error && (
             <p className="rounded-lg bg-red-100 px-3 py-2 text-[11px] text-red-800 dark:text-red-300">

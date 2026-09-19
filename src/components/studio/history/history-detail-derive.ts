@@ -12,6 +12,17 @@ export interface GenValue {
   hint?: string;
 }
 
+/**
+ * 参数值 → 展示文本。字符串 / 数字直接 `String()`，其余（数组 / 对象 /
+ * 布尔）走 `JSON.stringify`。两种写法此前在「生成参数卡」与「参数表」
+ * 各有一份逐字相同的三元 —— 收进这里，改一处即可。
+ */
+export function kvValueText(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number")
+    return String(value);
+  return JSON.stringify(value);
+}
+
 /** 参数表的一行。 */
 export interface ParamRow {
   nodeId?: string;

@@ -1,5 +1,7 @@
 "use client";
 
+import { clampPct } from "~/lib/progress";
+
 /* ─────────────────────────────────────────────────────────────────────────
  * "水逐渐装满" 进度覆盖层。
  *
@@ -26,7 +28,7 @@ export function WaterFillProgress({
   progress: number;
   className?: string;
 }) {
-  const pct = Math.max(0, Math.min(100, progress));
+  const pct = clampPct(progress);
   return (
     <div
       className={`pointer-events-none absolute inset-0 overflow-hidden rounded-xl ${className}`}

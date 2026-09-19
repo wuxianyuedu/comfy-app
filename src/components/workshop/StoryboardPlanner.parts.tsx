@@ -6,6 +6,7 @@ import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
+import { ProgressBar } from "~/components/ui/progress-bar";
 import { SHOT_STATUS_LABEL } from "./ShotStudio";
 import type { ShotProgress } from "./useStoryboardPlanner";
 
@@ -196,27 +197,15 @@ export function ShotRow({
       {shot.status === "running" &&
         (() => {
           const p = progressByShot?.[shot.id];
-          const pct = p?.pct ?? 0;
+          /* ComfyUI 还没报进度（`pct` 未定义）时是**不确定态**，不是 0%
+             —— 此前 `?? 0` 把它画成空条，看起来像「卡住没动」。 */
+          const pct = p?.pct ?? null;
           return (
             <div className="mt-2" aria-live="polite">
-              <div className="mb-1 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">
-                  {p?.label ? `正在执行 ${p.label}` : "正在生成…"}
-                </span>
-                <span className="text-primary font-medium">{pct}%</span>
-              </div>
-              <div
-                className="bg-subtle h-1.5 w-full overflow-hidden rounded-full"
-                role="progressbar"
-                aria-valuenow={pct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div
-                  className="bg-primary h-full rounded-full transition-[width] duration-300"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
+              <ProgressBar
+                value={pct}
+                label={p?.label ? `正在执行 ${p.label}` : "正在生成…"}
+              />
             </div>
           );
         })()}
