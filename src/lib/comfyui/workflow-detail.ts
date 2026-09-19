@@ -31,6 +31,7 @@ import {
   cachePeek,
 } from "~/lib/server-cache";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
+import { type IOParamSlot } from "~/lib/workflow/workflow-io-types";
 import { createObjectInfoResolvers } from "~/lib/comfyui/workflow-detail-combo";
 import { inferIsMultiline } from "~/lib/comfyui/types";
 import {
@@ -65,14 +66,16 @@ import {
   type BoundaryPin,
 } from "~/lib/comfyui/workflow-subgraph-parse";
 
-/** workflowIO 条目（enrichWorkflowIO 的返回形状 + kind 收窄为客户端契约的
- *  联合类型）。`kind` 是 IO-edit 模式写入的三桶语义标记（param/widget/
- *  output），PATCH 原样落库、GET 原样回显；JSON 序列化边界处按此类型收窄，
- *  与客户端 WorkflowDetail.workflowIO（components/studio/workflow-types.ts
- *  的 WorkflowIOParam）保持 tRPC 推断兼容。 */
-export interface WorkflowDetailIOEntry extends WorkflowIOEntry {
-  kind: "param" | "widget" | "output";
-}
+/** workflowIO 条目（enrichWorkflowIO 的返回形状 + 方向/种类收窄为判别联合）。
+ *  `kind` 是 IO-edit 模式写入的三桶语义标记（param/widget/output），PATCH 原样
+ *  落库、GET 原样回显；`direction` 由 `kind` 决定（output → output，其余 →
+ *  input），在 JSON 序列化边界处按此判别联合收窄，与客户端
+ *  `WorkflowDetail.workflowIO`（components/studio/workflow-types.ts 的
+ *  `WorkflowIOParam`）保持 tRPC 推断兼容 —— 非法组合（output+param 等）在类型
+ *  层面被排除。`kind` 的开放字符串取值（自定义种类）走 `WorkflowIOEntry` 透传，
+ *  不进这条判别联合。 */
+export type WorkflowDetailIOEntry = IOParamSlot &
+  Omit<WorkflowIOEntry, "direction" | "kind">;
 
 /** ComfyUI group frames 的下发形状（镜像客户端 WorkflowGroup，bypass 恒写入）。 */
 export interface WorkflowDetailGroup {
@@ -432,7 +435,22 @@ async function buildWorkflowDetailJson(input: {
      *  null 表示该工作流无 rawJson（API-only 导入）。 */
     rawView,
     paramMap,
-    workflowIO,
+    /* 把 enrichWorkflowIO 下发的宽类型条目（direction / kind 各为独立宽联合）
+     *  收窄成判别联合：direction 由 kind 决定（output → output，其余 → input），
+     *  这样 `WorkflowDetail.workflowIO`（客户端 WorkflowIOParam，同为判别联合）
+     *  在 tRPC 推断上严格兼容，非法组合（output+param 等）在类型层面被排除。 */
+    workflowIO: Object.fromEntries(
+      Object.entries(workflowIO).map(([k, e]) => {
+        /* direction 由 kind 决定（output → output，其余 → input），先合成判别联合
+         *  的 slot 再展开，确保 WorkflowDetailIOEntry 与客户端 WorkflowIOParam
+         *  （同为 IOParamSlot 判别联合）严格兼容。 */
+        const slot: IOParamSlot =
+          e.kind === "output"
+            ? { direction: "output", kind: "output" }
+            : { direction: "input", kind: e.kind as "param" | "widget" };
+        return [k, { ...e, ...slot } satisfies WorkflowDetailIOEntry];
+      }),
+    ),
     positions,
     groups,
     notes,

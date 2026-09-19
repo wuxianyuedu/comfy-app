@@ -33,6 +33,7 @@ import type {
   WorkflowGroup,
   RawMetaEntry,
   IoRef,
+  IOParamSlot,
   WorkflowIOParam,
   RgthreeGroupsContextValue,
   NodeJsonViewerRequest,
@@ -120,6 +121,13 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
 
     toggleIO: (ref) => {
       const key = `${ref.nodeId}::${ref.kind}::${ref.name}`;
+      /* `direction` 由 `kind` 决定（output → output，其余 → input），
+       *  先合成判别联合的 `slot`，再展开进记录 —— 这样 `WorkflowIOParam`
+       *  的非法组合（output+param 等）在类型层面就不可能构造出来。 */
+      const slot: IOParamSlot =
+        ref.kind === "output"
+          ? { direction: "output", kind: "output" }
+          : { direction: "input", kind: ref.kind };
       set((state) => {
         if (state.workflowIO[key]) {
           const next = { ...state.workflowIO };
@@ -133,8 +141,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           workflowIO: {
             ...state.workflowIO,
             [key]: {
-              direction: ref.direction,
-              kind: ref.kind,
+              ...slot,
               nodeId: ref.nodeId,
               name: ref.name,
               /* 下钻到子图内部勾选时，画布把「从哪一层钻进来」的宿主节点 id 一并

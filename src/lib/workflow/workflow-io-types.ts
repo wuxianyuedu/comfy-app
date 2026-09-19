@@ -63,6 +63,14 @@ export interface WorkflowIOModeOverride {
   seedMode?: string;
 }
 
+/** 方向 × 种类判别联合：合法的 (direction, kind) 组合只有 `input+param`、
+ *  `input+widget`、`output+output` 三种；`output+param` 这类非法组合在类型层面
+ *  就被排除（`kind` 仍是开放字符串，自定义种类经 `WorkflowIOEntry` 透传，
+ *  不进这条判别联合）。 */
+export type IOParamSlot =
+  | { direction: "input"; kind: "param" | "widget" }
+  | { direction: "output"; kind: "output" };
+
 export type WorkflowIOMap = Record<string, WorkflowIOEntry>;
 
 /* ── 形状契约（外部输入边界，规范 §5.5）──────────────────────────────────
