@@ -140,18 +140,21 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P13** | 视图 / 逻辑层里自写搜索关键字归一化（`.trim().toLowerCase()`，**或只 `trim()`**） | `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` / `filterGroups`（见 §16.2.4.16）                                                                                 |
 | **P14** | 视图里自写展开集合的翻转样板（`{ ...src, [key]: !src[key] }`）           | `~/components/ui/expansion-set` 的 `useExpansionSet`（见 §16.2.4.17）                                                                                                                 |
 | **P15** | 视图里自写面板加宽档的三元（`<flag> ? <X>.wide : <X>.base`）             | `~/components/ui/wide-panel` 的 `useWidePanel` / `WidePanelToggle`（见 §16.2.4.18）                                                                                                   |
+| **P16** | 视图里自绘进度条填充（`style={{ width: \`${…}%\` }}`）                   | `~/components/ui/progress-bar` 的 `ProgressBar`；**数值**（夹取 / 比例 / 下限可见宽度）走 `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（见 §16.2.4.19）                       |
+| **P17** | 视图里自写键值行（muted/faint 标签叶子 + `displayValue(` / `JSON.stringify(` 值） | `~/components/ui/key-value-rows` 的 `KeyValueRows`（四种布局；缺值仍走 `~/lib/display-value`，见 §16.2.4.20）                                                                  |
 
-**P4~P15 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P15 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+**P4~P17 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P17 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
-加宽档」这十二件事的**定义**只能有一处，没有「冻结在某个数字」的中间态可言。
+加宽档 / 进度条 / 键值行」这十四件事的**定义**只能有一处，没有「冻结在某个数字」
+的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
 清零过程：P4 见 §16.2.4.9、P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、
 P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.4.15、
-P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18。
+P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18、P16/P17 见 §16.2.4.19 ~ §16.2.4.20。
 
-**P4~P15 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P17 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -308,6 +311,11 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 折叠 / 展开      | ~~**三族写法**：原生 `<details>` 六处、自绘「布尔 state + 条件渲染 + `▸/▾`」四处、树形 `expanded*` 映射两份；无障碍语义各写各的（自绘那份基本只有 `onClick`，`NodesTab` 还被迫用 `role="button"` 绕开「button 嵌 button」）~~ | `~/components/ui/disclosure` 的 `Disclosure`（`caret` / `chevron` / `none` 三种标记；排内其余动作走 `leading` / `trailing`）；**P10 硬闸**禁止视图再自绘折叠开关 | ✅ **见 §16.2.4.13**                        |
 | 浮层选项列表     | ~~画布四个 chip 各写一份**逐行同形**的浮层（触发器 `▾` + `max-h-* overflow-y-auto` + `role="option"` 行），选中配色四份各写各的（`violet-500/20` / `fuchsia-500/20` / `primary-soft` / `bg-accent`）~~ | `~/components/ui/option-list-popover` 的 `OptionListPopover`；**P11 硬闸**禁止视图再手搓 chip 浮层 | ✅ **见 §16.2.4.14**                        |
 | 定时轮询         | ~~**9 处**各自 `setInterval` + `clearInterval`：不立刻跑一次 / 后台空转 / 每次渲染重建定时器 / 前后台开关被抄两份 / 跑在已卸载组件上~~ | `~/components/ui/use-interval` 的 `useInterval`（`immediate` / `pauseWhenHidden` / 回调放 ref）；**P12 硬闸**禁止视图再写 `setInterval` | ✅ **见 §16.2.4.15**                        |
+| 可搜索过滤       | ~~**8 处**各写一遍 `trim().toLowerCase()`，其中 `AttributeMultiSelect` **只写了 `trim()`** —— 候选含拉丁字母（`JK制服`）时用户输 `jk` 一条也搜不到~~ | `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` / `filterGroups`；**P13 硬闸**禁止视图再自写归一化 | ✅ **见 §16.2.4.16**                        |
+| 展开集合         | ~~一棵树用了 **3 份**同形 `Record<string, boolean>`，每份配一组逐字同形的读写，外加一段**抄了两遍**的「补默认展开」（`!!map[k]` 把「收起过」与「没碰过」压成同一个 false）~~ | `~/components/ui/expansion-set` 的 `useExpansionSet`（`isExpanded` / **`hasKey`** 两种判据 / `seedDefaults` 不覆盖已有表态）；**P14 硬闸** | ✅ **见 §16.2.4.17**                        |
+| 面板加宽档       | ~~`LogPanel` / `GlobalStepLogPanel` / `WorkflowRunLogModal` 三份逐字同形（`useState` + 同一文件里两处三元 + 按钮文案图标），且三份**都没有持久化** —— 加宽后关掉再打开又变回窄档~~ | `~/components/ui/wide-panel` 的 `useWidePanel`（记忆按 `id` 落 localStorage）/ `WidePanelToggle`；**P15 硬闸** | ✅ **见 §16.2.4.18**                        |
+| 异步动作的进度   | ~~**10 处**各写一遍「track + `width: X%` + 百分比文字」，写法四派（`Math.max(4, p)` 可见下限 / 自算比例 / 不夹取 / 算好的 pct）；且**只有 2 处**声明 `role="progressbar"`~~ | `~/components/ui/progress-bar` 的 `ProgressBar`（形态）+ `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（数值）；**P16 硬闸** | ✅ **见 §16.2.4.19**                        |
+| 键值行           | ~~**5 处**各写一遍「标签 + 值 + 空值占位」的行，四种布局语言（隔行参数表 / 网格卡片 / `<table>` / 行内状态项）~~ | `~/components/ui/key-value-rows` 的 `KeyValueRows`（`rows` / `stacked` / `table` / `inline` 四布局）；缺值仍走 `~/lib/display-value`；**P17 硬闸** | ✅ **见 §16.2.4.20**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -1526,6 +1534,134 @@ className={`…h-[85vh]… ${wide ? W.width : W.base}`}            // ← ② �
 另一半是**尚未发生的选型**（侧栏的可变宽 + 折叠记忆）—— 后者不是「治理一份
 重复实现」，而是「要不要给侧栏加一条可变宽交互」这个设计决定。写在这里，
 免得下一轮再把它当成一个「重复实现」去找。
+
+### 16.2.4.19 「给一段异步动作配进度」有十份写法（P16 硬闸）
+
+§16.2.4.18 收尾时留了两个问法，第一个是**「谁在给一段异步动作配进度」**
+（`useSimulatedProgress` 与 SSE 的进度条各自造一份「不确定 / 确定」的换算，
+而 `ui/progress` 就在库里）。
+
+按形态扫下来，全库有 **10 处**各写一遍「track + 内层 `width: X%` + 百分比文字」，
+而**写法分四派**：
+
+| 落点 | 写法 | 缺的是哪一条 |
+| --- | --- | --- |
+| `VideoStudio.parts` / `ShotStudio` / `WorkshopEncapsulationPanel` | `Math.max(4, progress)` | 一个**可见下限** |
+| `StoryboardPlanner.parts` | `p?.pct ?? 0` | 「还没报进度」被压成 0% |
+| `HistoryTaskCard` | 直接 `${progress}%` + `Math.floor` 另算一处 | 不夹取、算了两次 |
+| `CustomNodesSettings/SettingsParts` | `Math.min(100, (done / total) * 100)` | 自己算比例、不确定态手写条纹 |
+| `FilmStudio` / `TrainingStudio` ×2 / `WorkflowCanvasNodePreview` / `WorkshopHeader` | 直接 `${x}%` | 不夹取 |
+
+四派都编译、都运行、类型都对 —— 差别只在几个**语义决定**上：
+
+- **0% 要不要留一格**？`Math.max(4, 0)` 会把「还没开始」画成跑了 4%；
+  而另外六处 0% 就是空条。两者各自看着都「没毛病」，全库一起才看得出
+  是**同一个决定写了两遍相反答案**。
+- **超量要不要夹取**？接口 / SSE 给的数不可信，`120` 会溢出容器（多出来的
+  一截被 `overflow-hidden` 吃掉，看起来是满的；但 `-1` 会让宽度为负）。
+- **总数未知算 0 还是算不确定**？`ParseProgressBanner` 那处是**唯一想清楚了的**
+  —— 它用手写 CSS 条纹表达「在跑但不知道还剩多少」；其余各处的初态一律
+  画成 0%，看起来像「卡住没动」。
+- **a11y 语义谁给**？10 处里**只有 2 处**声明了 `role="progressbar"` 与
+  `aria-valuenow`，其余 8 处对读屏器完全不可见。
+
+#### 出口：数值侧 `~/lib/progress` + 形态侧 `~/components/ui/progress-bar`
+
+这件事**必须分两个出口**，因为两半的消费方不同：
+
+- **数值**（`~/lib/progress`）由视图层**与 `src/lib` 两侧共用** ——
+  `comfyui/executor-ws` 落库、`project-canvas/canvas-api` 透传、
+  `workshop/generation-client` 转发、`core/repository-lora` 写库都要
+  「值 / 上限 → 百分比」。两侧口径不一致就会出现「界面卡在 100%
+  而数据库还在涨」。所以它进 `DOMAIN_EXEMPT`（与 `format-bytes` /
+  `display-value` / `list-filter` 同款：唯一持有者 + 任何域消费的顶层单例）。
+- **形态**（`ProgressBar`）只服务视图，是 `ui/` 基元。
+
+| 导出 | 承载的口径 |
+| --- | --- |
+| `clampPct(n)` | 夹取到 `[0, 100]` **并取整**；非有限数 → 0（此处是「确定值」语义） |
+| `toPct(done, total)` | 比例 → 百分比；**分母不可用 / 分子非有限 → `null`（不确定态）**，不是 0 |
+| `pctToWidth(pct, { minVisible })` | 百分比 → 宽度；**`minVisible` 只抬非零值**（0 恒为 0） |
+| `PROGRESS_MAX` | 上限 100（唯一常量） |
+
+`ProgressBar` 的 `value` 直接吃 `number | null`：`null` 渲染滑动条纹并
+给 `aria-valuetext="进行中"`（**不给 `aria-valuenow`** —— 不确定的进度不该
+被读成一个数），确定值则给 `role="progressbar"` + `aria-valuenow`。
+填充观感的差异（品牌实心 / 渐变）走 `fillClassName`，不由调用处重画轨道。
+
+> **与 `ui/water-fill-progress` 的分工**：那是「水逐渐装满」的**覆盖层**
+> （`absolute inset-0`，水位是 `height` 而不是 `width`，还有正弦波水面），
+> 是另一种视觉形态，不是同一条账。它自己也改用 `clampPct` 取数值。
+
+#### 判据：P16（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P16**（`HARD_GATE_RULES`，不进基线）：视图里的
+`style={{ width: \`${…}%\` }}`。
+
+⚠️ **锚点取「自己按百分比摆宽度」这个动作本身**，不取 `rounded-full` / `bg-primary`
+（那会把所有圆角元素与按钮都算进来），也不取 `role="progressbar"`（收口前
+10 处里只有 2 处有它 —— 拿它当判据，被拦下的永远是合规者）。反面用例钉住
+`style={{ width: "280px" }}`（定宽是布局，不是进度）。
+
+### 16.2.4.20 「把一个对象渲染成键值行」有五份写法（P17 硬闸）
+
+第二个问法：**「谁在把一个对象渲染成键值行」**
+（`HistoryDetailModal` 的参数表、`WorkflowNodeJsonPopover` 的 JSON 视图、
+`StepLogCache` 的字段块，三处各自拼「标签 + 值 + 空值占位」的行）。
+
+按形态扫下来，全库有 **5 处**各写一遍这样的行，而**布局语言有四种**：
+
+| 落点 | 形态 |
+| --- | --- |
+| `ProjectOutputs` 的参数表 | 行内左右分布 + 隔行底色 + 外层圆角边框 |
+| `HistoryDetailModal` 的生成参数卡 | 网格卡片 + 标签在值左侧 + 行下 `hint` |
+| `HistoryDetailModal` 的参数表 | HTML `<table>` 两列（左列等宽截断，但用的是 `<td>` —— **语义是空的**） |
+| `TrainingStudio` 的 Metrics | 网格 + 标签在值**上方** |
+| `BrowserStatusBar` 的显存 / 内存 | 行内 `标签 + 值 + 尾注`（三份逐字同形） |
+
+`HistoryDetailModal` 两处还各写了一份**逐字相同**的「值怎么成文本」三元：
+`typeof v === "string" || typeof v === "number" ? String(v) : JSON.stringify(v)`。
+
+> **「空值显示什么」不在这条账里** —— 它早由 `~/lib/display-value` 的
+> `displayValue` 收口（P8，见 §16.2.4.11）。也就是说剩下的只有**布局**这一层
+> 没有被说出来：同一行键值有四种布局语言，改一处对齐/密度要改五遍。
+
+#### 出口：`~/components/ui/key-value-rows` 的 `KeyValueRows`
+
+`items: KeyValueItem[]` + `layout`（四种）：
+
+- `rows`（缺省）：一行一对，标签左、值右，值走等宽字体；`bordered` 加外框、
+  `striped` 加隔行底色。对应 `ProjectOutputs` 那张表。
+- `stacked`：标签在值**上方**，多列网格（`columns`）；`hint` 落在值下面一行。
+  传 `itemClassName="flex-row items-baseline"` 可改回「标签在值左侧」
+  （`HistoryDetailModal` 的生成参数卡）。对应 `TrainingStudio` 的 Metrics。
+- `table`：**真正的 `<table>`**，`<th scope="row">` 声明行表头（读屏器读得出
+  「哪个标签对应哪个值」）。对应 `HistoryDetailModal` 的参数表。
+- `inline`：`label value` 挤在一行不换行的内联项。对应 `BrowserStatusBar`。
+
+`value` 与 `raw` 二选一：`value` 是已渲染节点（含徽章 / 链接），`raw` 交给
+`displayValue` 处理缺值。`key` 也可以是节点（`WorkshopEncapsulationPanel`
+的「口一览」行，键里带两个条件徽标）。**「取哪些字段」是域判据，留在调用处**
+（如 `history-detail-derive` 的 `deriveParamRows`）—— 出口只做可机器判定的那一半。
+
+顺带收掉一处同源重复：`HistoryDetailModal` 两处那份**逐字相同**的值 → 文本
+三元，收进 `history-detail-derive` 的 `kvValueText`。
+
+#### 判据：P17（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P17**（`HARD_GATE_RULES`，不进基线）：一个
+muted / faint 色的**标签叶子元素**，紧随其后（160 字符内）出现**值的渲染器**
+（`displayValue(` / `JSON.stringify(` / `typeof x === "string"`）。
+
+⚠️ **两个条件必须同时成立**：只有标签 → 到处都有的小标题；只有值渲染器 →
+JSON 气泡 / 预览。窗口取 160 字符 —— 实测 400 字符会把环形进度的
+「进度」标签与下方 SVG 连上（误报）。
+
+⚠️ **已用 `KeyValueRows` 的文件直接跳过**：它的标签 / 值节点是作为 `items`
+传进去的，形态判据会把它们连起来误报（`WorkshopEncapsulationPanel` 的键
+节点里有个 muted 色的口 id span）。与 P13「更差的那种写法也要数」是同一枚
+硬币的两面 —— 判据要覆盖所有不合规的写法，也要**一个都不误伤**合规的。
+反面用例钉住「只有小标题、没有值」的行。
 
 ## 16.3 新增一个组件的标准动作
 

@@ -7,6 +7,7 @@
 // 这是 ShotStudio / VideoStudio / WorkshopPipeline 共用的客户端助手。
 // 每份网络载荷都用 unknown 守卫收窄（不做类型断言）。
 
+import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
 import {
@@ -290,7 +291,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
               };
             }
           }
-          h.onProgress?.(Math.max(0, Math.min(100, p)), node);
+          h.onProgress?.(clampPct(p), node);
         }
         if (type === "state") {
           // 数据库侧的实情轮询会把发射器漏掉的终态结论补发一次。

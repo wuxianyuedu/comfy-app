@@ -6,6 +6,7 @@ import { Redo2, Undo2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { Separator } from "~/components/ui/separator";
+import { ProgressBar } from "~/components/ui/progress-bar";
 import { useFilmStudio } from "./hooks/use-film-studio";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { useToast } from "./ToastProvider";
@@ -322,18 +323,17 @@ export function FilmStudio() {
             {/* 影片进度覆盖层（生成中） */}
             {c.film && running && (
               <div className="absolute right-0 bottom-0 left-0 bg-black/60 px-4 py-2.5 backdrop-blur-sm">
-                <div className="mb-1.5 flex items-center justify-between text-xs">
-                  <span className="text-ink-bright font-medium">
-                    {STAGE_LABEL[c.film.status]}
-                  </span>
-                  <span className="text-ink-faint">{c.film.progress}%</span>
-                </div>
-                <div className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full">
-                  <div
-                    className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-all"
-                    style={{ width: `${c.film.progress}%` }}
-                  />
-                </div>
+                <ProgressBar
+                  value={c.film.progress}
+                  label={
+                    <span className="text-ink-bright font-medium">
+                      {STAGE_LABEL[c.film.status]}
+                    </span>
+                  }
+                  className="mb-1.5 text-xs"
+                  trackClassName="bg-surface-2 h-1.5"
+                  fillClassName="bg-linear-to-r from-violet-500 to-fuchsia-500"
+                />
               </div>
             )}
 

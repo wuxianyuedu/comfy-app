@@ -47,6 +47,8 @@ export default defineConfig({
         "src/components/ui/use-flash-state.ts",
         "src/components/ui/expansion-set.ts",
         "src/components/ui/wide-panel.tsx",
+        "src/components/ui/progress-bar.tsx",
+        "src/components/ui/key-value-rows.tsx",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -207,6 +209,25 @@ export default defineConfig({
           functions: 95,
           statements: 90,
           branches: 70,
+        },
+        /* 「异步动作的进度条」的形态出口（§16.2.4.19，P16 的对面）：
+         * 确定态 / 不确定态 / 下限可见宽度 / 外观可覆盖四条路径都进了用例，
+         * 门槛按实测值设满档。数值侧的口径在 `src/lib/progress`。 */
+        "src/components/ui/progress-bar.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「对象渲染成键值行」的出口（§16.2.4.20，P17 的对面）：四种布局 +
+         * 值/原始值/缺值 + 空块都进了用例。门槛取实测值（100/91.48/100/100）
+         * 向下取整 —— 唯一未覆盖的分支是 `striped` 在 `bordered=false` 下的
+         * 奇偶判定（调用处类型上到得了，但没人会给一个无边框的表配隔行底色）。 */
+        "src/components/ui/key-value-rows.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
         },
         "src/lib/core/**": {
           lines: 95,

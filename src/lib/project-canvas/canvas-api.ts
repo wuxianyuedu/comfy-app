@@ -8,6 +8,7 @@
  */
 
 import { waitForComfyReady } from "~/lib/comfy/comfy-readiness-client";
+import { clampPct } from "~/lib/progress";
 import {
   parseValidationErrorsJson,
   type ValidationError,
@@ -179,7 +180,7 @@ export async function pollTask(
        * 此前被丢掉了 —— pollTask 只读 status 与 images，于是画布的图片/影片预览
        * 即使 /api/tasks/[id] 返回了 task.progress，也没进度可显示。 */
       if (onProgress && typeof task?.progress === "number") {
-        onProgress(Math.max(0, Math.min(100, task.progress)));
+        onProgress(clampPct(task.progress));
       }
       const imgs: TaskResult[] = task?.images ?? [];
       if (imgs.length) {

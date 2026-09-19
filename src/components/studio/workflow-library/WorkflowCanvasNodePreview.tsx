@@ -43,6 +43,7 @@ import {
 } from "../workflow-io";
 import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
 import { Button } from "~/components/ui/button";
+import { ProgressBar } from "~/components/ui/progress-bar";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -625,27 +626,18 @@ export function WorkflowCanvasNodePreview({
       {/* 进度条（running 时） */}
       {phase.kind === "running" && (
         <div className="w-[380px]" aria-live="polite">
-          <div className="text-ink-faint mb-1 flex items-center justify-between text-[11px]">
-            <span>
-              {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
-              {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
-            </span>
-            <span className="font-medium text-violet-700 dark:text-violet-300">
-              {pct}%
-            </span>
-          </div>
-          <div
-            className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full"
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full rounded-full bg-linear-to-r from-violet-500 to-fuchsia-500 transition-[width] duration-300"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+          <ProgressBar
+            value={pct}
+            label={
+              <>
+                {nodeLabel ? `正在执行 ${nodeLabel}` : "正在执行工作流"}
+                {phase.node ? `（${phase.node.value}/${phase.node.max}）` : ""}
+              </>
+            }
+            className="text-[11px]"
+            trackClassName="bg-surface-2 h-1.5"
+            fillClassName="bg-linear-to-r from-violet-500 to-fuchsia-500 duration-300"
+          />
         </div>
       )}
 

@@ -122,6 +122,15 @@ const EXPANSION_MAP_VIEW =
 /* 自己维护面板加宽档（P15）。 */
 const WIDE_PANEL_VIEW =
   'export function W() {\n  const [wide, setWide] = useState(false);\n  return (\n    <DialogContent popupClassName={wide ? PANEL_WIDTH.wide : PANEL_WIDTH.base}>\n      <Button onClick={() => setWide((w) => !w)}>{wide ? "收缩" : "加宽"}</Button>\n    </DialogContent>\n  );\n}\n';
+/* 自绘进度条填充：track + 内层 `width: X%`（P16）。 */
+const PROGRESS_FILL_VIEW =
+  'export function P({ pct }: { pct: number }) {\n  return (\n    <div className="bg-subtle h-1.5 w-full overflow-hidden rounded-full">\n      <div className="bg-primary h-full" style={{ width: `${pct}%` }} />\n    </div>\n  );\n}\n';
+/* 自写键值行：muted 色标签叶子 + `displayValue(...)` 值（P17）。 */
+const KEY_VALUE_ROW_VIEW =
+  'export function Kv({ row }: { row: { label: string; v: unknown } }) {\n  return (\n    <div className="flex items-center justify-between">\n      <span className="text-ink-muted">{row.label}</span>\n      <span className="text-ink-bright font-mono">{displayValue(row.v)}</span>\n    </div>\n  );\n}\n';
+/* 自写键值行：muted 色标签叶子 + `JSON.stringify(...)` 值（P17 形态 ②）。 */
+const KEY_VALUE_JSON_VIEW =
+  'export function Kv({ row }: { row: { label: string; v: unknown } }) {\n  return (\n    <div>\n      <span className="text-muted-foreground">{row.label}</span>\n      <span>{JSON.stringify(row.v)}</span>\n    </div>\n  );\n}\n';
 /* 自绘模态浮层：**不含任何 `createPortal`** —— 这正是 P2 数不到的那一侧
  *（P2 问「有没有用某 API」，P9 问「有没有自己拼一份浮层外壳」）。 */
 const MODAL_OVERLAY_VIEW =
@@ -512,7 +521,84 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  it("P10~P15 未清零时 --update 拒绝更新基线", () => {
+  /* ── P16 / P17：本批两条硬闸（规范 16 §16.2.4.19 ~ §16.2.4.20）────────
+   *
+   * 这一批的两个问法是「谁在给一段异步动作配进度」与「谁在把一个对象渲染成
+   * 键值行」。两条判据各有一条**必须有的反面用例**（判据太宽会逼下一个人
+   * 改坏代码去迎合它）：
+   *   · P16 不能把普通的 `style={{ width: "200px" }}`（定宽）算进来；
+   *   · P17 不能把「只有小标题、没有值」「只有值、没有标签」算进来。 */
+  it("视图里自绘进度条填充直接阻断（规范 P16）", () => {
+    seedBaseline();
+    write("src/components/studio/Progress.tsx", PROGRESS_FILL_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P16");
+    expect(output).toContain("src/components/studio/Progress.tsx");
+  });
+
+  it("定宽（px）不算进度条，P16 不误伤", () => {
+    /* 边界：`width: "280px"` 是布局，`width: \`${pct}%\`` 才是进度。 */
+    seedBaseline();
+    write(
+      "src/components/studio/Fixed.tsx",
+      'export const F = () => <div style={{ width: "280px" }} className="bg-primary" />;\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("使用 ProgressBar 的文件不再被 P16 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Ok.tsx",
+      'import { ProgressBar } from "~/components/ui/progress-bar";\nexport const O = ({ pct }: { pct: number }) => <ProgressBar value={pct} />;\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写键值行直接阻断（规范 P17，形态 ①）", () => {
+    seedBaseline();
+    write("src/components/studio/Kv.tsx", KEY_VALUE_ROW_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P17");
+    expect(output).toContain("src/components/studio/Kv.tsx");
+  });
+
+  it("值的渲染器是 JSON.stringify 时同样被 P17 计（形态 ②）", () => {
+    seedBaseline();
+    write("src/components/studio/KvJson.tsx", KEY_VALUE_JSON_VIEW);
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P17");
+  });
+
+  it("只有小标题、没有值的行不被 P17 误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Titled.tsx",
+      'export const T = () => (\n  <div>\n    <span className="text-ink-muted">参数</span>\n    <List rows={rows} />\n  </div>\n);\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("已经是 KeyValueRows 消费点的文件不被 P17 计（items 里的标签/值不误伤）", () => {
+    /* `WorkshopEncapsulationPanel` 的键节点里有个 muted 色的口 id span，
+     * 它被作为 `items` 传给 `KeyValueRows` —— 形态判据会把两者连起来误报。
+     * 合规者一个都不能误伤，与 P13「更差的那种也要数」是同一枚硬币的两面。 */
+    seedBaseline();
+    write(
+      "src/components/studio/OkKv.tsx",
+      'import { KeyValueRows } from "~/components/ui/key-value-rows";\nexport const O = () => (\n  <KeyValueRows\n    items={[\n      { key: <span className="text-muted-foreground">id</span>, value: displayValue(x) },\n    ]}\n  />\n);\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P10~P17 未清零时 --update 拒绝更新基线", () => {
     write("src/components/studio/ToggleUpdate.tsx", ROLE_BUTTON_TOGGLE_VIEW);
     const { code, output } = run(["--update"]);
     expect(code).toBe(1);
@@ -533,6 +619,8 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P13).toBeUndefined();
     expect(baseline.rules.P14).toBeUndefined();
     expect(baseline.rules.P15).toBeUndefined();
+    expect(baseline.rules.P16).toBeUndefined();
+    expect(baseline.rules.P17).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

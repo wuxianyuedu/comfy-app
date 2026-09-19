@@ -13,6 +13,7 @@
  */
 import WebSocket from "ws";
 import { taskRepository } from "../core/repository";
+import { toPct } from "~/lib/progress";
 import { logger } from "~/lib/core/logger";
 import {
   probeComfyBase,
@@ -333,7 +334,9 @@ async function handleMessage(raw: string) {
   if (signal === "progress") {
     const value = Number(data.value ?? 0);
     const max = Number(data.max ?? 1);
-    const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+    /* 「值 / 上限 → 百分比」收在 `~/lib/progress`：上限不可用（≤0 / 非有限）
+     * 时它返回 `null`，这里落回 0 —— 落库的 `progress` 是**确定值**语义。 */
+    const pct = toPct(value, max) ?? 0;
     /* 进度回写走「只在非终态行生效」的 compare-and-set：本任务若已被
      *  reaper 判终态、或被用户取消，说明这一轮结果不再归我们，迟到的进度
      *  帧**必须被丢弃**。否则 DB 行会从终态被打回 RUNNING，SSE 的 3s 实情

@@ -4,6 +4,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
+import { ProgressBar } from "~/components/ui/progress-bar";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotNegative,
@@ -343,12 +344,14 @@ export function ShotStudio({
                 </div>
 
                 {shot.status === "running" && (
-                  <div className="bg-elevated mb-2 h-1 w-full overflow-hidden rounded-full">
-                    <div
-                      className="bg-primary h-full rounded-full transition-all"
-                      style={{ width: `${Math.max(4, p)}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    value={p}
+                    /* 同 VideoStudio.parts：起点 0 时留一格可见。 */
+                    minVisible={4}
+                    showValue={false}
+                    className="mb-2"
+                    trackClassName="bg-elevated h-1"
+                  />
                 )}
 
                 <textarea

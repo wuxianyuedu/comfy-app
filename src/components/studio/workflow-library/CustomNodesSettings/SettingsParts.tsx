@@ -10,6 +10,8 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { StatusBadge } from "~/components/ui/status-badge";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
 import { displayValue } from "~/lib/display-value";
+import { ProgressBar } from "~/components/ui/progress-bar";
+import { toPct } from "~/lib/progress";
 
 /** 类型端口区的一行 —— 小彩点 + 大写类型章
  *  + 端口名。ComfyUI 真实节点把圆点放在画布边缘、
@@ -191,28 +193,21 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
           <span>首次扫描目录中的节点包…</span>
         )}
       </div>
-      {/* 进度条：扫描阶段是不确定的（CSS 条纹）；哈希阶段是确定的
-          K/M。`progress.total > 0` 只在文件遍历结束、
-          解析器宣布 M 时才翻真，所以
-          进度条能干净地从扫描过渡到哈希。 */}
-      <div className="bg-surface-2 mt-2 h-1.5 overflow-hidden rounded-full">
-        {progress.phase === "hash" && progress.total > 0 ? (
-          <div
-            className="bg-primary h-full transition-all duration-300 ease-out"
-            style={{
-              width: `${Math.min(100, (progress.done / progress.total) * 100)}%`,
-            }}
-          />
-        ) : (
-          // 不确定进度：动效条纹自左向右移动
-          <div
-            className="bg-primary h-full w-1/3"
-            style={{
-              animation: "progressStripe 1.4s ease-in-out infinite",
-            }}
-          />
-        )}
-      </div>
+      {/* 进度条：扫描阶段是不确定的（条纹滑动）；哈希阶段是确定的 K/M。
+          `progress.total > 0` 只在文件遍历结束、解析器宣布 M 时才翻真，
+          所以条子能干净地从扫描（不定态）过渡到哈希（确定态）。
+          「总数未知 → 不确定态」的换算收在 `~/lib/progress` 的 `toPct`。 */}
+      <ProgressBar
+        value={
+          progress.phase === "hash" && progress.total > 0
+            ? toPct(progress.done, progress.total)
+            : null
+        }
+        showValue={false}
+        className="mt-2"
+        trackClassName="bg-surface-2 h-1.5"
+        fillClassName="duration-300 ease-out"
+      />
       {progress.msg && (
         <div
           className="text-muted-foreground mt-1.5 truncate font-mono text-[10px]"

@@ -4,6 +4,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
 import { StatusBadge } from "~/components/ui/status-badge";
+import { ProgressBar } from "~/components/ui/progress-bar";
 import { SHOT_STATUS_LABEL } from "./ShotStudio";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
@@ -205,12 +206,15 @@ export function ShotCard({
       </div>
 
       {clipStatus === "running" && (
-        <div className="bg-elevated mb-2 h-1 w-full overflow-hidden rounded-full">
-          <div
-            className="bg-primary h-full rounded-full transition-all"
-            style={{ width: `${Math.max(4, progress)}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={progress}
+          /* 0% 也留一格：这里的 `progress` 起点是 0，不给下限时条子是空的，
+             用户读到「点了没反应」（保留收口前 `Math.max(4, …)` 的观感）。 */
+          minVisible={4}
+          showValue={false}
+          className="mb-2"
+          trackClassName="bg-elevated h-1"
+        />
       )}
 
       <div className="flex flex-wrap items-center gap-3">

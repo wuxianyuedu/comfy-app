@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
+import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
@@ -410,31 +411,26 @@ export function ProjectOutputs() {
                   <p className="text-ink-soft mb-2 text-xs font-semibold">
                     参数
                   </p>
-                  <div className="border-border-strong overflow-hidden rounded-lg border">
-                    {/* 整张表走同一个判据：**取到没有**由 `displayValue` 定义，
-                      值自己怎么成文本（`steps` / `cfg` 是数字，`timeAgo` 已是
-                      字符串）交给它 —— 此前每一行都各写一遍 `?? "—"`，而
-                      `steps` / `cfg` 那两行还把 `String()` 与占位符拼在一起。 */}
-                    {[
-                      ["Seed", displayValue(selected.seed)],
-                      ["模型", displayValue(selected.checkpoint)],
-                      ["采样器", displayValue(selected.sampler)],
-                      ["步数", displayValue(selected.steps)],
-                      ["CFG", displayValue(selected.cfg)],
-                      ["尺寸", displayValue(selected.size)],
-                      ["时间", displayValue(timeAgo(selected.createdAt))],
-                    ].map(([k, v], i) => (
-                      <div
-                        key={k}
-                        className={`flex items-center justify-between px-3 py-2 text-[12px] ${
-                          i % 2 === 0 ? "bg-subtle" : ""
-                        }`}
-                      >
-                        <span className="text-ink-muted">{k}</span>
-                        <span className="text-ink-bright font-mono">{v}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {/* 「取到没有」由 `displayValue` 定义（P8），行布局由
+                      `KeyValueRows` 定义（P17）—— 此前这一块两件事各写一遍，
+                      值自己怎么成文本（`steps` / `cfg` 是数字、`timeAgo` 已是
+                      字符串）也留在了调用处。 */}
+                  <KeyValueRows
+                    bordered
+                    striped
+                    items={[
+                      { key: "Seed", raw: selected.seed },
+                      { key: "模型", raw: selected.checkpoint },
+                      { key: "采样器", raw: selected.sampler },
+                      { key: "步数", raw: selected.steps },
+                      { key: "CFG", raw: selected.cfg },
+                      { key: "尺寸", raw: selected.size },
+                      {
+                        key: "时间",
+                        value: displayValue(timeAgo(selected.createdAt)),
+                      },
+                    ]}
+                  />
                 </section>
 
                 {/* source */}
