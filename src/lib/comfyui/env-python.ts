@@ -21,6 +21,7 @@ import "server-only";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { normalizeSlashes } from "~/lib/path-display";
 
 /** pyvenv.cfg 里我们关心的字段：基础解释器所在目录与可执行文件全路径。 */
 export type PyvenvConfig = {
@@ -154,7 +155,7 @@ export function collectComfyPythonCandidates(
   const seen = new Set<string>();
   const push = (exe: string, via: string): void => {
     if (!exe) return;
-    const key = exe.replace(/\\/g, "/").toLowerCase();
+    const key = normalizeSlashes(exe).toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
     out.push({ exe, via });

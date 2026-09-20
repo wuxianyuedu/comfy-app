@@ -13,6 +13,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { OLLAMA_DEFAULT_PORT } from "~/lib/endpoints";
+import { withTimeoutResult } from "~/lib/with-timeout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -175,7 +176,7 @@ async function spawnOllamaServe(
       detail: "Ollama 启动命令已执行（保活模式），正在等待服务就绪",
     });
   }
-  return new Promise((resolve) => {
+  {
     const isWindows = process.platform === "win32";
     const child = spawn(exe, ["serve"], {
       // Windows: detached:true 会给子进程独立控制台（即使 windowsHide
@@ -208,47 +209,43 @@ async function spawnOllamaServe(
       if (text) appendOllamaLog(`[err] ${text}`);
     });
 
-    let settled = false;
+    /* 观察期内的三种信号谁先到算谁：**秒退 / spawn 失败 → 启动失败**，
+     * **观察期到仍未退出 → 启动成功**。后者正是「与时间赛跑、超时给兜底值」
+     * 那一档 —— 交给 `withTimeoutResult`，定时器与重入判据都由出口管。 */
+    return withTimeoutResult(
+      new Promise<{ ok: boolean; detail: string }>((settle) => {
+        // spawn 找不到可执行文件时触发（异步 error 事件）
+        child.on("error", (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          const hint =
+            /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
+              ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
+              : msg;
+          appendOllamaLog(`[err] spawn error：${hint}`);
+          settle({ ok: false, detail: `启动 Ollama 失败：${hint}` });
+        });
 
-    const done = (ok: boolean, detail: string) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({ ok, detail });
-    };
-
-    // 观察期到仍未退出 → 启动成功
-    const timer = setTimeout(() => {
-      done(true, "Ollama 启动命令已执行，正在等待服务就绪");
-    }, SPAWN_GRACE_MS);
-
-    // spawn 找不到可执行文件时触发（异步 error 事件）
-    child.on("error", (err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      const hint =
-        /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
-          ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
-          : msg;
-      appendOllamaLog(`[err] spawn error：${hint}`);
-      done(false, `启动 Ollama 失败：${hint}`);
-    });
-
-    // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
-    child.on("exit", (code, signal) => {
-      appendOllamaBanner(
-        "end",
-        `■ Ollama 进程已退出（code=${code ?? "null"}）`,
-      );
-      appendOllamaLog(
-        `[exit] code=${code ?? "null"} signal=${signal ?? "none"}`,
-      );
-      done(
-        false,
-        `Ollama 进程启动后立即退出（code=${code ?? "null"}, signal=${signal ?? "none"}）。` +
-          "可能是端口已被占用或 Ollama 安装不完整，请在终端手动执行 ollama serve 查看详情",
-      );
-    });
-  });
+        // 进程在观察期内退出 = 启动秒退（端口被占 / 配置错误 / 安装不完整）
+        child.on("exit", (code, signal) => {
+          appendOllamaBanner(
+            "end",
+            `■ Ollama 进程已退出（code=${code ?? "null"}）`,
+          );
+          appendOllamaLog(
+            `[exit] code=${code ?? "null"} signal=${signal ?? "none"}`,
+          );
+          settle({
+            ok: false,
+            detail:
+              `Ollama 进程启动后立即退出（code=${code ?? "null"}, signal=${signal ?? "none"}）。` +
+              "可能是端口已被占用或 Ollama 安装不完整，请在终端手动执行 ollama serve 查看详情",
+          });
+        });
+      }),
+      SPAWN_GRACE_MS,
+      { ok: true, detail: "Ollama 启动命令已执行，正在等待服务就绪" },
+    );
+  }
 }
 
 /**

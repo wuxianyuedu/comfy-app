@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { toDisplayPath } from "~/lib/path-display";
 
 /**
  * 端点：GET /api/debug/source?file=src/components/studio/workflow-node.tsx
@@ -64,9 +65,9 @@ export async function GET(request: NextRequest) {
     const content = await fs.readFile(resolved, "utf8");
     const stat = await fs.stat(resolved);
     return NextResponse.json({
-      file: path.relative(PROJECT_ROOT, resolved).split(path.sep).join("/"),
+      file: toDisplayPath(resolved, PROJECT_ROOT),
       /** 绝对路径（正斜杠盘符格式，如 F:/AI/.../src/...），供 vscode://file/ 协议打开 */
-      absolutePath: resolved.split(path.sep).join("/"),
+      absolutePath: toDisplayPath(resolved),
       content,
       size: stat.size,
       modifiedAt: stat.mtime.toISOString(),

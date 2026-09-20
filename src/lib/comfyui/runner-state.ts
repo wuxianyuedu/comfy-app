@@ -19,6 +19,7 @@ import type WebSocket from "ws";
 
 import { taskRepository } from "../core/repository";
 import { HISTORY_READ } from "../retry-policy";
+import { lastSegments } from "~/lib/path-display";
 
 export const CLIENT_ID = process.env.COMFY_CLIENT_ID ?? "comfy-app-web";
 
@@ -273,7 +274,7 @@ function callerLoc(): string {
     const match = /\(([^():]+):(\d+):(\d+)\)/.exec(frame);
 
     if (match) {
-      const file = match[1]!.split(/[\\/]/).pop() ?? match[1]!;
+      const file = lastSegments(match[1], 1) || match[1];
 
       return `${file}:${match[2]}`;
     }
@@ -281,7 +282,7 @@ function callerLoc(): string {
     const m2 = /at\s+(\S+):(\d+):(\d+)/.exec(frame);
 
     if (m2) {
-      const file = m2[1]!.split(/[\\/]/).pop() ?? m2[1]!;
+      const file = lastSegments(m2[1], 1) || m2[1];
 
       return `${file}:${m2[2]}`;
     }

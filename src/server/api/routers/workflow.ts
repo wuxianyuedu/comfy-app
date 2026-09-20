@@ -59,6 +59,7 @@ import {
   serializeModesJson,
 } from "~/lib/workflow/workflow-types";
 import { createHash } from "node:crypto";
+import { normalizeSlashes } from "~/lib/path-display";
 import path from "node:path";
 
 /* 解析本地工作流的扫描根目录。
@@ -113,13 +114,9 @@ interface LocalPendingRow {
 function pathKey(p: string): string {
   if (!p) return "";
   try {
-    return path
-      .resolve(p)
-      .toLowerCase()
-      .replace(/\\/g, "/")
-      .replace(/\/+$/, "");
+    return normalizeSlashes(path.resolve(p).toLowerCase()).replace(/\/+$/, "");
   } catch {
-    return p.toLowerCase().replace(/\\/g, "/").replace(/\/+$/, "");
+    return normalizeSlashes(p.toLowerCase()).replace(/\/+$/, "");
   }
 }
 

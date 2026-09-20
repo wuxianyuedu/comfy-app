@@ -21,6 +21,7 @@
 import "server-only";
 import { spawn, type ChildProcess } from "child_process";
 import { closeSync, openSync } from "fs";
+import { withTimeoutResult } from "~/lib/with-timeout";
 
 /** 拉起方式：bound = 随应用进程树一起结束；keepAlive = 脱离进程树保活。 */
 export type DetachMode = "bound" | "keepAlive";
@@ -107,24 +108,22 @@ export function waitForDetachMediator(
   child: ChildProcess,
   timeoutMs = 5000,
 ): Promise<DetachMediatorOutcome> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    let settled = false;
-    const finish = (code: number | null) => {
-      if (settled) return;
-      settled = true;
-      resolve({
-        code,
-        stderr: decodePowerShellOutput(Buffer.concat(chunks)),
-      });
-    };
-    child.stderr?.on("data", (d: Buffer) => chunks.push(d));
-    const timer = setTimeout(() => finish(null), timeoutMs);
-    child.once("exit", (code) => {
-      clearTimeout(timer);
-      finish(code ?? -1);
-    });
-  });
+  const chunks: Buffer[] = [];
+  child.stderr?.on("data", (d: Buffer) => chunks.push(d));
+  return withTimeoutResult(
+    new Promise<DetachMediatorOutcome>((resolve) => {
+      child.once("exit", (code) =>
+        resolve({
+          code: code ?? -1,
+          stderr: decodePowerShellOutput(Buffer.concat(chunks)),
+        }),
+      );
+    }),
+    timeoutMs,
+    /* 超时不是「失败」而是「未知」：调用方按「继续外部探测」处理，
+     * 故走 `withTimeoutResult` 给哨兵值（`code: null`），不抛。 */
+    { code: null, stderr: decodePowerShellOutput(Buffer.concat(chunks)) },
+  );
 }
 
 /**

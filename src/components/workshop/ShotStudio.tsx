@@ -6,6 +6,7 @@ import { Alert } from "~/components/ui/alert";
 import { StatusBadge as StatusBadgePrimitive } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import type { Character, Scene, Shot, StyleRef } from "~/lib/workshop/types";
+import { withTimeoutResult } from "~/lib/with-timeout";
 import {
   buildShotNegative,
   buildShotPrompt,
@@ -45,6 +46,14 @@ interface Props {
 }
 
 type Channel = "local" | "api";
+
+/** 本地 ComfyUI 单镜头的安全阀（30 分钟无响应即判超时）。 */
+const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** 空操作（订阅句柄的初值）。 */
+function noop(): void {
+  /* 无操作。 */
+}
 
 /**
  * 镜头生图 stage：消费「场景分镜」产出的镜头列表（提示词已在上游
@@ -123,32 +132,38 @@ export function ShotStudio({
     });
   }
 
-  /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。 */
+  /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。
+   *
+   *  与「安全阀」赛跑的那一半交给 `withTimeoutResult`：超时给兜底（不抛），
+   *  `onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const close = watchTask(taskId, {
-        onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
-        onOutput: (out) => {
-          if (out.kind !== "video") patchShot(shotId, { imageUrl: out.url });
-        },
-        onSettled: (r) => {
-          clearTimeout(timeout);
-          patchShot(shotId, { status: r.ok ? "done" : "failed" });
-          if (!r.ok) setShotError(shotId, r.message ?? "生成失败");
-          resolve();
-        },
-      });
-      // 安全阀：永不让批量循环卡在一个沉默的流上。
-      const timeout = setTimeout(
-        () => {
+    /* 订阅句柄 —— watchTask 返回前先给一个空实现，settle 路径上一定已赋值。 */
+    let close: () => void = noop;
+    return withTimeoutResult(
+      new Promise<void>((resolve) => {
+        close = watchTask(taskId, {
+          onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
+          onOutput: (out) => {
+            if (out.kind !== "video") patchShot(shotId, { imageUrl: out.url });
+          },
+          onSettled: (r) => {
+            patchShot(shotId, { status: r.ok ? "done" : "failed" });
+            if (!r.ok) setShotError(shotId, r.message ?? "生成失败");
+            resolve();
+          },
+        });
+      }),
+      LOCAL_TASK_TIMEOUT_MS,
+      undefined,
+      {
+        onTimeout: () => {
+          // 安全阀：永不让批量循环卡在一个沉默的流上。
           close();
           patchShot(shotId, { status: "failed" });
           setShotError(shotId, "任务超时(30 分钟无响应)");
-          resolve();
         },
-        30 * 60 * 1000,
-      );
-    });
+      },
+    );
   }
 
   async function generateShot(shot: Shot): Promise<void> {

@@ -11,6 +11,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
+import { withTimeout } from "~/lib/with-timeout";
 import { subscribe } from "./enqueue";
 import { uploadImage } from "./client";
 
@@ -43,28 +44,30 @@ export async function synthesizeFirstFrame(opts: {
   if (!res.name) throw new Error("首帧上传失败");
   return res.name;
 }
-// 成功时以第一张生成图的本地路径 resolve；出错或超时则 reject。
+// 成功时以第一张生成图的本地路径 resolve；出错则 reject，超时由 `withTimeout`
+// 统一处理（含「胜出即清定时器」）。
+const FIRST_FRAME_TIMEOUT_MS = 5 * 60 * 1000;
+
 function waitForImage(taskId: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error("首帧生成超时")),
-      5 * 60 * 1000,
-    );
-    const off = subscribe(taskId, (event) => {
-      if (event.type === "done") {
-        clearTimeout(timeout);
-        off();
-        const imgs = (
-          event.images as Array<{ mediaType?: string; localPath?: string }>
-        ).filter((im) => im.mediaType === "image");
-        const first = imgs[0];
-        if (first?.localPath) resolve(first.localPath);
-        else reject(new Error("首帧无图像输出"));
-      } else if (event.type === "error") {
-        clearTimeout(timeout);
-        off();
-        reject(new Error(event.error));
-      }
-    });
-  });
+  return withTimeout(
+    new Promise<string>((resolve, reject) => {
+      /* 订阅要先拿到 `off` 才能在结算时退订 —— 声明在前、赋值在后。 */
+      const off = subscribe(taskId, (event) => {
+        if (event.type === "done") {
+          off();
+          const imgs = (
+            event.images as Array<{ mediaType?: string; localPath?: string }>
+          ).filter((im) => im.mediaType === "image");
+          const first = imgs[0];
+          if (first?.localPath) resolve(first.localPath);
+          else reject(new Error("首帧无图像输出"));
+        } else if (event.type === "error") {
+          off();
+          reject(new Error(event.error));
+        }
+      });
+    }),
+    FIRST_FRAME_TIMEOUT_MS,
+    { message: "首帧生成超时" },
+  );
 }

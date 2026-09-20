@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { type OmitOwnProps, splitDomProps } from "~/lib/dom-props";
 import { isVideo } from "~/lib/media/media";
 
 /**
@@ -39,20 +40,36 @@ export type MediaFallback =
   /** 自定义节点（调用处要自己的文案 / 盒子）。 */
   | React.ReactElement;
 
+/** 本基元的**私有字段**（自己接管，不透传给底层 `<img>` / `<video>`）——
+ *  类型侧与运行时侧共用这一份表（`~/lib/dom-props`）。
+ *
+ *  ⚠️ 这里的字段是**两个底层元素的并集**：`className` / `src` 在 `img` 与
+ *  `video` 上同名同义，`loading` / `decoding` 只有 `img` 有，`playsInline`
+ *  之类只有 `video` 有。剔的必须是**两个底层共同接管的**那几个 ——
+ *  用 `commonOwnProps` 求交集能一眼看出这条边界（写成 `[...A, ...B]` 的
+ *  并集会把只属于一个底层的字段也剔掉，那个底层再也拿不到它该有的属性，
+ *  且**没有报错**）。此处两个底层同名的字段就是下表，故直接列全。*/
+const OWN_PROPS = [
+  "src",
+  "alt",
+  "className",
+  "autoPlay",
+  "muted",
+  "loop",
+  "onLoad",
+  "onLoadError",
+  "fallback",
+  "as",
+  "onError",
+  "loading",
+  "decoding",
+] as const;
+
 /** 额外透传给底层 `<img>` / `<video>` 的属性（`onClick` / `title` 等）。 */
-export interface MediaThumbnailProps extends Omit<
+export interface MediaThumbnailProps extends OmitOwnProps<
   React.ImgHTMLAttributes<HTMLImageElement> &
     React.VideoHTMLAttributes<HTMLVideoElement>,
-  | "src"
-  | "alt"
-  | "className"
-  | "autoPlay"
-  | "muted"
-  | "loop"
-  | "onLoad"
-  | "onError"
-  | "loading"
-  | "decoding"
+  (typeof OWN_PROPS)[number]
 > {
   src?: string | null;
   alt?: string;
@@ -106,19 +123,24 @@ function FailurePlaceholder({ className }: { className?: string }) {
  * `<MediaThumbnail src={item.url} alt={item.name} className="h-full w-full object-cover" />`；
  * 列表里失败就整格不渲染（宁缺勿错）时传 `fallback="none"`。
  */
-export const MediaThumbnail = React.memo(function MediaThumbnail({
-  src,
-  alt = "",
-  className = "",
-  autoPlay = false,
-  muted = true,
-  loop = false,
-  onLoad,
-  onLoadError,
-  fallback = "placeholder",
-  as,
-  ...mediaProps
-}: MediaThumbnailProps) {
+export const MediaThumbnail = React.memo(function MediaThumbnail(
+  props: MediaThumbnailProps,
+) {
+  /* 私有字段与要透传的字段**从同一份表**分开（`OWN_PROPS`）—— 类型侧的
+   * `OmitOwnProps` 与这里的 `splitDomProps` 读的是同一个数组。 */
+  const { own, rest: mediaProps } = splitDomProps(props, OWN_PROPS);
+  const {
+    src,
+    alt = "",
+    className = "",
+    autoPlay = false,
+    muted = true,
+    loop = false,
+    onLoad,
+    onLoadError,
+    fallback = "placeholder",
+    as,
+  } = own;
   /* 失败态收在这里 —— 这是**唯一**一处「渲染一张图」的状态机，
    * 所以调用处不必再各写一份 `useState(failed)`。
    *

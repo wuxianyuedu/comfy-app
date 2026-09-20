@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { tracingIgnoreArgs } from "~/lib/shell/tracing-ignore";
+import { toDisplayPath } from "~/lib/path-display";
 
 /* ── 运行期「本地更新」检测：需重启才生效的文件 ─────────────────
  * 桌面壳开着时，前端源码 src/ 由 dev server HMR 自动热更、无需打扰；
@@ -78,7 +79,7 @@ function collectGroup(roots: string[]): Map<string, FileFingerprint> {
     if (st.isDirectory()) {
       for (const f of walkFiles(abs)) {
         const fp = fingerprintOf(f);
-        map.set(path.relative(REPO_ROOT, f), fp ?? "missing");
+        map.set(toDisplayPath(f, REPO_ROOT), fp ?? "missing");
       }
     } else {
       map.set(rel, fingerprintOf(abs) ?? "missing");

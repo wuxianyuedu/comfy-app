@@ -12,6 +12,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
+import { lastSegments } from "~/lib/path-display";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { extractMediaUrl } from "~/lib/workshop/api-channel-shared";
 import {
@@ -33,7 +34,7 @@ function localTempRoot(): string {
 
 /** 模型名 → 目录名：剥分隔符 / .. 与文件系统特殊字符，避免路径穿越。 */
 function safeModelDir(name: string): string {
-  const s = name.trim().split(/[\\/]/).pop() ?? "";
+  const s = lastSegments(name.trim(), 1);
   const cleaned = s.replace(/[\x00-\x1f<>:"|?*]/g, "_").slice(0, 80);
   return cleaned || "unnamed";
 }

@@ -10,6 +10,7 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { StatusBadge } from "~/components/ui/status-badge";
 import type { ParseProgress, ParseReport, SettingsResp } from "./types";
 import { displayValue } from "~/lib/display-value";
+import { lastSegments } from "~/lib/path-display";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { toPct } from "~/lib/progress";
 
@@ -177,7 +178,7 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
                 className="text-muted-foreground ml-2 truncate font-mono text-[11px]"
                 title={progress.parent}
               >
-                · {progress.parent.split(/[\\/]/).slice(-2).join("/")}
+                · {lastSegments(progress.parent, 2)}
               </span>
             )}
           </span>
@@ -315,7 +316,9 @@ export function ReportCards({ report }: { report: ParseReport }) {
                     className="text-muted-foreground truncate font-mono text-[11px]"
                     title={pkg.path}
                   >
-                    {pkg.path}
+                    {/* 绝对路径的**语义在尾部**（哪个目录下的包）—— CSS `truncate`
+                        只留头部，恰好把它切掉，故这里显式取末几段。 */}
+                    {lastSegments(pkg.path, 3)}
                   </div>
                 </div>
                 <div className="shrink-0 text-right">

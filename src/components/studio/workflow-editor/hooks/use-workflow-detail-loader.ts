@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { withQuery } from "~/lib/query-string";
+import { withTimeout } from "~/lib/with-timeout";
 import { vanillaApi } from "~/trpc/vanilla";
 import type {
   WorkflowDetail,
@@ -76,24 +77,6 @@ function writeCache(key: string, data: WorkflowDetail): void {
   } catch {
     /* 配额超限，忽略 */
   }
-}
-
-/** tRPC vanilla client 不支持直接传 signal，用 Promise.race 在超时后抛错，
- *  避免后端长时间不返回时加载覆盖层无限转圈。底层请求超时后仍可能最终返回，
- *  但竞态守卫 + 错误提示保证 UI 不会卡死。定时器在收尾时清理，避免泄漏。 */
-function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  label: string,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`${label}加载超时（${ms / 1000}s），请重试`)),
-      ms,
-    );
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 export interface WorkflowDetailLoaderArgs {
@@ -293,7 +276,13 @@ export function useWorkflowDetailLoader({
                 bust: opts?.bust ? true : undefined,
               }),
           60_000,
-          subgraphUid ? "子工作流" : "工作流",
+          {
+            /* tRPC vanilla client 不支持直接传 signal，故用「与时间赛跑」在超时后
+             * 抛错，避免后端长时间不返回时加载覆盖层无限转圈。底层请求超时后仍
+             * 可能最终返回，但竞态守卫 + 错误提示保证 UI 不会卡死。 */
+            label: subgraphUid ? "子工作流加载" : "工作流加载",
+            message: `${subgraphUid ? "子工作流" : "工作流"}加载超时（60s），请重试`,
+          },
         )) as WorkflowDetailResponse;
         if (d.error) throw new Error(d.error);
         writeCache(cacheKey, d);

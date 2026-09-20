@@ -30,6 +30,8 @@ import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import type { ProjectType } from "~/lib/workshop/types";
 import { errorMessage, errorText } from "~/lib/error-message";
+import { withTimeoutResult } from "~/lib/with-timeout";
+import { normalizeSlashes } from "~/lib/path-display";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import { fixed } from "~/lib/number-format";
 
@@ -454,24 +456,22 @@ function runFFmpeg(
   cwd?: string,
   timeout = 120000,
 ): Promise<{ code: number; stderr: string }> {
-  return new Promise((resolve) => {
-    const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
-    const cp = spawn(/*turbopackIgnore: true*/ bin, args, { cwd });
-    let stderr = "";
-    const to = setTimeout(() => {
-      cp.kill("SIGKILL");
-      resolve({ code: -1, stderr: "timeout" });
-    }, timeout);
-    cp.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
-    cp.on("close", (code) => {
-      clearTimeout(to);
-      resolve({ code: code ?? -1, stderr });
-    });
-    cp.on("error", () => {
-      clearTimeout(to);
-      resolve({ code: -2, stderr: "spawn error" });
-    });
-  });
+  const bin = process.env.FFMPEG_BIN ?? "ffmpeg";
+  const cp = spawn(/*turbopackIgnore: true*/ bin, args, { cwd });
+  let stderr = "";
+  cp.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+  return withTimeoutResult(
+    new Promise<{ code: number; stderr: string }>((resolve) => {
+      cp.on("close", (code) => resolve({ code: code ?? -1, stderr }));
+      cp.on("error", () => resolve({ code: -2, stderr: "spawn error" }));
+    }),
+    timeout,
+    /* 超时不是「一种结果」而是「放弃等待」：`code: -1` + `"timeout"` 是调用处
+     * 一直在判的哨兵值，故走 `withTimeoutResult`（不给异常）；
+     * `onTimeout` 里杀掉子进程 —— 放弃等待之后进程还占着 GPU 才是真问题。 */
+    { code: -1, stderr: "timeout" },
+    { onTimeout: () => cp.kill("SIGKILL") },
+  );
 }
 
 function escapeFilter(s: string): string {
@@ -557,7 +557,7 @@ export async function composeFilm(id: string) {
         "-vf",
         vf +
           (tryWithSub
-            ? `,subtitles='${escapeFilter(srtPath.replace(/\\/g, "/"))}'`
+            ? `,subtitles='${escapeFilter(normalizeSlashes(srtPath))}'`
             : ""),
         "-c:v",
         "libx264",

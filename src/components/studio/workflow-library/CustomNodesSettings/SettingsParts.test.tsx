@@ -231,8 +231,10 @@ describe("ReportCards", () => {
       .getByText("ipadapter")
       .closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(okCard).getByText("已加载")).toBeInTheDocument(); // STATUS_STYLE.ok
+    /* 路径按**末几段**渲染（语义在尾部，CSS `truncate` 只留头部会把它切掉），
+     * 完整路径仍在 `title` 上（hover 可见 / 可复制）。 */
     expect(
-      within(okCard).getByText("C:/ComfyUI/custom_nodes/ipadapter"),
+      within(okCard).getByText("ComfyUI/custom_nodes/ipadapter"),
     ).toBeInTheDocument();
     expect(within(okCard).getByText("18")).toBeInTheDocument();
     expect(within(okCard).getByText("IPAdapter")).toBeInTheDocument();
