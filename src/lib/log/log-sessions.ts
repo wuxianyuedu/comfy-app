@@ -15,7 +15,7 @@
  * 因此可脱离文件系统单测，也能被浏览器侧的标签格式化复用。
  */
 
-import { stripAnsi } from "./log-ansi";
+import { BANNER_ANSI, stripAnsi } from "./log-ansi";
 
 /**
  * 会话正文的保留上限（字符）。取尾部窗口：一次「保活」会话可能累积几个小时
@@ -26,8 +26,10 @@ const MAX_SESSION_CHARS = 400_000;
 /** 横幅分隔线：box 字符 U+2500，`buildSessionBanner` 用 72 个（这里放宽到 16+）。 */
 const BANNER_BAR_RE = /^\u2500{16,}$/;
 
-/** 会话**结束**横幅的 ANSI 亮黄（start 是亮绿，见 `session-banner.server.ts`）。 */
-const BANNER_END_ANSI = "\u001b[1;33m";
+/** 会话**结束**横幅的 ANSI 亮黄 —— 与写侧（`session-banner.server.ts`）
+ *  取的是**同一个字面量**（`~/lib/log/log-ansi` 的 `BANNER_ANSI`，规范 16
+ *  §16.2.4.58）：收口前两边各写一遍，写侧改色读侧就认不出自己写的横幅。 */
+const BANNER_END_ANSI = BANNER_ANSI.end;
 
 /** 无横幅可依据时（横幅机制上线前写的日志）那条「会话」的标题。 */
 const LEGACY_TITLE = "更早的日志（无会话标记）";

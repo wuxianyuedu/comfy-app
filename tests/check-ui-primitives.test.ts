@@ -67,6 +67,11 @@ beforeEach(() => {
      * 见脚本里的 `LIB_SCANNED_RULES`。 */
     "src/lib",
     "src/server/lib",
+    /* 本批三条判据（P53/P54/P55）的落点在 `lib/log` 与 `lib/shell`
+     * （日志出口 / 浮层刻度表的书写法换算）—— 同上，见 `LIB_SCANNED_RULES`。 */
+    "src/lib/log",
+    "src/lib/shell",
+    "src/components/studio/logs",
   ]) {
     mkdirSync(join(workdir, d), { recursive: true });
   }
@@ -992,7 +997,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  it("role=tab 上复刻按钮默认行为不被 P26 计（那是 Button 的账）", () => {
+  it("role=tab 上自己写键判别被 P53 拦下（那是 simpleKeyHandler 的账）", () => {
     seedBaseline();
     write(
       "src/components/studio/TabRow.tsx",
@@ -1012,7 +1017,8 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       ].join("\n"),
     );
     const { code, output } = run();
-    expect(code, output).toBe(0);
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P53");
   });
 
   it("使用 enterCommit 的文件不再被 P26 计（合规者不误伤）", () => {
@@ -2823,6 +2829,197 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run();
     expect(code, output).toBe(0);
     expect(output).toContain("0 处");
+  });
+
+  /* ── P53：键盘键判据（规范 §16.2.4.57）───────────────────────────── */
+
+  it("手写 event.key 字面量比对直接阻断（规范 P53）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/key.tsx",
+      [
+        "export function K({ run }: { run: () => void }) {",
+        "  return (",
+        '    <div role="tab" onKeyDown={(e) => { if (e.key === "Enter") run(); }} />',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P53");
+  });
+
+  it("反向比对（!== 字面量）同样计入 P53（同一形态的两半）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/key.tsx",
+      [
+        "export const isTab = (e: { key: string }) => {",
+        '  if (e.key !== "Tab") return false;',
+        "  return true;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P53");
+  });
+
+  it("走 simpleKeyHandler 的落点不再被 P53 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/key.tsx",
+      [
+        'import { simpleKeyHandler } from "~/components/ui/simple-key-handler";',
+        "export function K() {",
+        '  return <div role="tab" {...simpleKeyHandler(["Space", "Enter"], () => {})} />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("走 ~/lib/keyboard 归一的落点不再被 P53 计（两个出口共用一个判据）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/key.ts",
+      [
+        'import { KEY, isKeyIn } from "~/lib/keyboard";',
+        "export const hit = (key: string) => isKeyIn(key, [KEY.Space, KEY.Enter]);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("入口自身与 use-enter-commit / use-hotkey 不被 P53 误伤（显式豁免）", () => {
+    seedBaseline();
+    write(
+      "src/lib/keyboard.ts",
+      'export const isEnter = (key: string) => key === "Enter";\n',
+    );
+    write(
+      "src/components/ui/simple-key-handler.ts",
+      'export const isEnter = (event: { key: string }) => event.key === "Enter";\n',
+    );
+    write(
+      "src/components/ui/use-enter-commit.ts",
+      'export const isCommit = (event: { key: string }) => event.key === "Enter";\n',
+    );
+    write(
+      "src/components/ui/use-hotkey.ts",
+      'export const isEsc = (event: { key: string }) => event.key === "Escape";\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P54：SGR 转义序列（规范 §16.2.4.58）─────────────────────────── */
+
+  it("自写 SGR 转义序列直接阻断（规范 P54）", () => {
+    seedBaseline();
+    write(
+      "src/lib/log/thing.ts",
+      [
+        "export const SGR_RE = /\\x1b\\[[0-9;:]*m/g;",
+        'export const strip = (t: string) => t.replace(SGR_RE, "");',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P54");
+  });
+
+  it("u001b 转义写法（`\\u001b`）同样计入 P54（同一形态的两种字面量）", () => {
+    seedBaseline();
+    write("src/lib/log/thing.ts", 'export const RESET = "\\u001b[0m";\n');
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P54");
+  });
+
+  it("走 log-ansi 出口的落点不再被 P54 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/logs/thing.ts",
+      [
+        'import { hasSgr, stripSgr } from "~/lib/log/log-ansi";',
+        "export const on = (t: string) => hasSgr(t);",
+        "export const clean = (t: string) => stripSgr(t);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("出口自身（lib/log/log-ansi.ts）不被 P54 误伤（显式豁免）", () => {
+    seedBaseline();
+    write(
+      "src/lib/log/log-ansi.ts",
+      [
+        "export const SGR_RE = /\\x1b\\[[0-9;:]*m/g;",
+        'export const strip = (t: string) => t.replace(SGR_RE, "");',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("单独的 \\x1b（光标移动等，不带 [Nm 形态）不算 P54（另一条账）", () => {
+    seedBaseline();
+    write(
+      "src/lib/log/thing.ts",
+      [
+        'export const moveCursor = (t: string) => t.replace(/\\x1b\\[/g, "");',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P55：书写法换算（规范 §16.2.4.59）───────────────────────────── */
+
+  it("自写驼峰 → kebab 换算直接阻断（规范 P55）", () => {
+    seedBaseline();
+    write(
+      "src/lib/shell/thing.ts",
+      [
+        "export const kebab = (tone: string) =>",
+        "  tone.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P55");
+  });
+
+  it("走 case-token 出口的落点不再被 P55 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/shell/thing.ts",
+      [
+        'import { toKebabCase } from "~/lib/case-token";',
+        "export const kebab = (tone: string) => toKebabCase(tone);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("别的 [A-Z] 用法不算 P55（大写化 / 校验正则不是本条账）", () => {
+    seedBaseline();
+    write(
+      "src/lib/shell/thing.ts",
+      [
+        "export const upper = (t: string) => t.toUpperCase();",
+        "export const isUpper = (t: string) => /^[A-Z]+$/.test(t);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
   });
 
   it("lib 层的既有出口实现不被 P1~P38 误伤（只有逐条登记的判据扫 lib）", () => {

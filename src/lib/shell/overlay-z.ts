@@ -67,10 +67,16 @@ export const Z = {
 } as const;
 
 /** 刻度档名（`Z` 的键，排除 `overlay` 这个别名）。 */
+import { toKebabCase } from "~/lib/case-token";
+
 export type ZTone = Exclude<keyof typeof Z, "overlay">;
 
-/** 档名 → 工具类名（`z-modal` / `z-popup` …）。 */
+/** 档名 → 工具类名（`z-modal` / `z-popup` / `z-canvas-ui` …）。
+ *
+ *  换算走 `~/lib/case-token` 的 `toKebabCase`（规范 16 §16.2.4.59）——
+ *  「`canvasUi` 该变成 `z-canvas-ui` 还是 `z-canvasui`」此前只存在于本函数
+ *  那个正则里，而它与 `globals.css` 的 `@theme` 变量必须逐字一致，
+ *  写错时**没有报错**（Tailwind 找不到类名只是那一层没有 `z-index`）。 */
 export function zClass(tone: ZTone): string {
-  const kebab = tone.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
-  return `z-${kebab}`;
+  return `z-${toKebabCase(tone)}`;
 }

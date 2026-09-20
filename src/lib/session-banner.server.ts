@@ -30,6 +30,7 @@
  * 只能经服务端端点转交。
  */
 
+import { BANNER_ANSI } from "~/lib/log/log-ansi";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -39,10 +40,13 @@ export type SessionBannerKind = "start" | "end";
 /** 分隔线宽度：与三个 runtime 通道既有的 72 字符口径一致。 */
 const BAR_WIDTH = 72;
 
-/** 横幅用的 ANSI 颜色（亮绿 / 亮黄），面板解析 SGR 后渲染成高亮。 */
+/** 横幅用的 ANSI 颜色（亮绿 / 亮黄），面板解析 SGR 后渲染成高亮。
+ *  取值与读侧（`log-sessions` 认横幅行）共用 `~/lib/log/log-ansi` 的
+ *  `BANNER_ANSI`（规范 16 §16.2.4.58）—— 写侧改色、读侧就会立刻认不出
+ *  自己写的横幅，这是**同一件事的输入与判据**，不该各存一份。 */
 const BANNER_COLOR: Record<SessionBannerKind, string> = {
-  start: "\x1b[1;32m",
-  end: "\x1b[1;33m",
+  start: BANNER_ANSI.start,
+  end: BANNER_ANSI.end,
 };
 
 /**
@@ -61,7 +65,7 @@ export function buildSessionBanner(
 ): string {
   const bar = "─".repeat(BAR_WIDTH);
   const color = BANNER_COLOR[kind];
-  const reset = "\x1b[0m";
+  const reset = BANNER_ANSI.reset;
   /* 首尾各一个空行：`["", …, ""]` join 后 → `\n<bar>\n  <title>\n<bar>\n`，
    * 再补一个尾部 `\n` 收口，形成「空行 / bar / 标题 / bar / 空行」的呼吸感。 */
   const lines = [

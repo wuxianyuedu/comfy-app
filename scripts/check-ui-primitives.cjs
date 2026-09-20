@@ -363,6 +363,14 @@ const LIB_SCANNED_RULES = new Set([
   "P50",
   "P51",
   "P52",
+  /* 本批三条（规范 16 §16.2.4.57 ~ §16.2.4.59）：键盘键判据 / SGR 转义序列 /
+   * 书写法换算 —— 三条的落点**都在 `src/lib` 与 `src/server`**：
+   *   · P53 的键名归一在 `lib/keyboard`；
+   *   · P54 的四处里三处在 `lib/**`（日志出口、会话切分、服务端横幅）；
+   *   · P55 的唯一落点在 `lib/shell/overlay-z`。 */
+  "P53",
+  "P54",
+  "P55",
 ]);
 
 const SCAN_DIRS = [
@@ -575,6 +583,48 @@ const EXEMPT_FILES = {
       re: /^src\/lib\/safe-name\.ts$/,
       reason:
         "出口自身的实现（那两条 `replace` 就在这里；本判据数的是**别处**又写了一遍）。",
+    },
+  ],
+  P53: [
+    {
+      re: /^src\/lib\/keyboard\.ts$/,
+      reason:
+        "出口自身的实现（键名归一就在这里；本判据数的是**别处**又拿 " +
+        "`event.key` 与字面量比了一次）。",
+    },
+    {
+      re: /^src\/components\/ui\/simple-key-handler\.ts$/,
+      reason:
+        "出口自身的实现（它当然要读 `event.key`；本判据数的是调用处又手写键判别）。",
+    },
+    {
+      re: /^src\/components\/ui\/use-enter-commit\.tsx?$/,
+      reason:
+        "`enterCommit` 是**输入框**那条账（§16.2.4.29）：它要判 IME（`isComposing` / " +
+        "`keyCode === 229`）与 Shift 排除 —— 那是「按这个键算不算提交」的域判据，" +
+        "`simpleKeyHandler` 的「这个键叫什么」表达不了。两者共用 `~/lib/keyboard` 的归一。",
+    },
+    {
+      re: /^src\/components\/ui\/use-hotkey\.ts$/,
+      reason:
+        "`useHotkey` 是**全局监听**那条账（§16.2.4.23）：它判的是修饰键组合" +
+        "（`mod` / `metaKey` / `ctrlKey`）与 `document` 上的生命周期，" +
+        "不是元素上的那一个 `onKeyDown`。",
+    },
+  ],
+  P54: [
+    {
+      re: /^src\/lib\/log\/log-ansi\.ts$/,
+      reason:
+        "出口自身的实现（SGR 的两条正则与横幅色板就在这里；本判据数的是**别处**" +
+        "又写了一遍转义符）。",
+    },
+  ],
+  P55: [
+    {
+      re: /^src\/lib\/case-token\.ts$/,
+      reason:
+        "出口自身的实现（那条 `replace(/[A-Z]/g, …)` 就在这里；本判据数的是**别处**又写了一遍）。",
     },
   ],
   P50: [
@@ -2172,6 +2222,103 @@ const RULES = {
       return writes.length + cuts.length + splitCuts.length;
     },
   },
+
+  /* ── P53「在元素上自己实现一个键盘动作」（硬闸，§16.2.4.57）────────────
+   * 全库 **3 处**各写一遍键判别（`ShellTabs` / `TitleBarTabs` 的页签、
+   * `ScriptMarkdownEditor` 的 Tab 缩进），而它们对三件事各判各的：
+   *   · **键名叫什么** —— `" "` 还是 `"Space"`、要不要大小写归一
+   *     （无修饰单键的 `event.key` 是**带 Shift 的大写字符**）；
+   *   · **要不要 `preventDefault`** —— 混在同一个 `if` 里，看不出谁决定的；
+   *   · **`event.repeat` 收不收** —— 按住空格会连发。
+   *
+   * 判据取**一个 `onKeyDown` 里直接拿 `event.key` 与字面量比**这个形态。
+   * 键名比对只许经 `~/lib/keyboard` 的 `normalizeKeyName` / `isKeyIn`
+   * 或 `~/components/ui/simple-key-handler`（两者共用同一份归一规则）。
+   *
+   * **不数** `if (event.key === …)` 出现在别处的形态？——数量是全部：
+   * 收口后本仓库所有「元素上的键动作」都走这两个出口，`use-hotkey`
+   * （全局监听）与 `use-enter-commit`（输入框）另有各自更细的判据，
+   * 它们的实现文件在 `EXEMPT_FILES.P53` 里显式登记。
+   */
+  P53: {
+    label:
+      "视图里手写 onKeyDown 的键判据（应使用 ~/components/ui/simple-key-handler 或 ~/lib/keyboard 的归一）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (
+        /from "~\/lib\/keyboard"/.test(t2) ||
+        /from "~\/components\/ui\/simple-key-handler"/.test(t2)
+      ) {
+        return 0;
+      }
+      /* 形态：**键盘事件**的 `.key` 与一个字面量比。
+       *
+       * ⚠️ 锚点必须落在**事件对象**上，不能只锚 `.key` —— 本仓库的
+       * `UsageField.key`（结果字段名）也叫 `.key`，只锚 `.key` 会一次报出
+       * 6 处「`f.key === "mode"`」这种**数据字段比较**（实测）。
+       * 故要求左侧是**键盘事件名**（`event` / `e` 及 `…Event` 结尾者）。
+       * 这也把「`onKeyDown` 只转发不判键」正确放过（那条不是本判据的账）。
+       *
+       *  **已知边界（刻意不判）**：把键名**解构**出来再比
+       *（`({ key }: KeyboardEvent) => key === "Tab"`）不在本判据内 ——
+       *  那个 `key` 已经脱离了「事件对象」这个名字，机器判不出它是事件字段
+       *  还是数据字段。与 P37「忙碌位」、P30「错误位」同款：
+       *  按名字判的部分只判能判的那一半，剩下的一半由 Review 兜。 */
+      return (
+        t2.match(
+          /\b(?:e|ev|evt|event|[A-Za-z]+Event)\.key\s*[!=]==?\s*["'`]/g,
+        ) || []
+      ).length;
+    },
+  },
+
+  /* ── P54「剥掉 / 判断 SGR」（硬闸，§16.2.4.58）────────────────────────
+   * 同一条形态 `\x1b\[[0-9;:]*m` 在 **4 处**各写一遍，而它们**判据不同**：
+   *   · `lib/log/log-ansi` 的 `SGR_RE` —— 转义符必须在；
+   *   · `logs/log-record` 的 `stripSgr` —— 连**残缺颜色码**（只剩 `[90m`）
+   *     一起剥，少剥这层会在面板上显示成 `[[OK]【[90m[OK[0m] …`；
+   *   · `logs/log-row-style` 的 `hasAnsi` —— 只判不改；
+   *   · `lib/session-banner.server` 与 `log-sessions` —— **写侧与读侧**各持
+   *     一份同样的颜色码字面量（写侧改色、读侧就认不出自己写的横幅）。
+   *
+   * 判据锚**转义符字面量本身**（`\x1b[` 或 `\u001b[`）—— 它只该出现在
+   * 出口里。`\x1b` 单独出现（如光标移动）不在此列：那是另一条账。
+   */
+  P54: {
+    label:
+      "视图 / 逻辑 / 服务端里自写 SGR 转义序列（应使用 ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi / BANNER_ANSI）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：转义符字面量（`\\x1b` 或 `\\u001b`）后面在**同一个序列内**
+       *  出现 `m` 收尾 —— 即「一条 SGR」。中间形态在本仓库有两种写法
+       *  （正则里的 `\\[`、字符串里的 `[`），故不把「中间长什么样」写进判据；
+       *  单独的 `\\x1b`（光标移动 / 清屏）不在此列。 */
+      return (t2.match(/(?:\\x1b|\\u001[bB]).{0,16}?m/g) || []).length;
+    },
+  },
+
+  /* ── P55「标识符的书写法换算」（硬闸，§16.2.4.59）──────────────────────
+   * 全库只有 1 处（`lib/shell/overlay-z` 的 `zClass`），但它把判据写在
+   * 表达式里：`replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)` —— 而换算
+   * 结果必须与 `globals.css` 的 `@theme` 变量逐字一致，**写错时静默**
+   *（Tailwind 找不到类名不报错，只是那一层没有 `z-index`）。
+   *
+   * 判据锚**那条替换形态**：`/[A-Z]/g` 且同串出现 `${` 插值（即「大写字母
+   * 前插连字符」）。不数别的 `[A-Z]` 用法（`toUpperCase()`、校验正则）。
+   *
+   * 出口：`~/lib/case-token` 的 `toKebabCase` / `toCamelCase`。
+   */
+  P55: {
+    label:
+      "自写驼峰 ⇄ kebab 换算（应使用 ~/lib/case-token 的 toKebabCase / toCamelCase）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/case-token"/.test(t2)) return 0;
+      return (t2.match(/replace\(\/\[A-Z\]\/g[^;\n]{0,60}\$\{/g) || []).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -2241,6 +2388,14 @@ const HARD_GATE_RULES = new Set([
   "P50",
   "P51",
   "P52",
+  /* 本批三条（§16.2.4.57 ~ §16.2.4.59）：键盘键判据 / SGR 转义序列 /
+   * 书写法换算 —— 三条的落点**都在 src/lib 与 src/server**：
+   *   · P53 的键名归一在 `lib/keyboard`；
+   *   · P54 的四处里三处在 `lib/**`；
+   *   · P55 的唯一落点在 `lib/shell/overlay-z`。 */
+  "P53",
+  "P54",
+  "P55",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -2456,7 +2611,8 @@ function main() {
   P42 手拼错误文案的动作前缀 / P43 手写复制失败提示 / P44 自写文本截断 /
   P45 自写指数退避 / P46 手拼日期串 / P47 自写扩展名⇄MIME 表 /
   P48 自写宽松对象视图 / P49 自写文件名安全化 /
-  P50 自写数字精度格式化 / P51 自写去重合并 / P52 自拼自切 data URL，须为 0）：${hardGateHits(now).length} 处`,
+  P50 自写数字精度格式化 / P51 自写去重合并 / P52 自拼自切 data URL /
+  P53 手写键盘键判据 / P54 自写 SGR 转义序列 / P55 自写书写法换算，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -2474,6 +2630,9 @@ function main() {
         "  数字按精度成串 → ~/lib/number-format 的 fixed / trimmed / trimFixed / alphaText；\n" +
         "  去重合并与区域设置排序 → ~/lib/ordered-set 的 unique / uniqueSorted / uniqueBy / union / compareText；\n" +
         "  拼 data URL / 取回它的载荷 → ~/lib/media/data-url 的 toDataUrl / wrapBase64 / parseDataUrl / base64PayloadOf；\n" +
+        "  元素上的键动作 → ~/components/ui/simple-key-handler 的 simpleKeyHandler（键名归一走 ~/lib/keyboard 的 normalizeKeyName / isKeyIn）；\n" +
+        "  剥掉 / 判断 SGR → ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi（横幅色板取 BANNER_ANSI）；\n" +
+        "  驼峰 ⇄ kebab 换算 → ~/lib/case-token 的 toKebabCase / toCamelCase；\n" +
         "  异步动作的反馈样板 → ~/lib/async-action 的 runAsyncAction（失败文案走 errorMessage）；\n" +
         "  读媒体自然尺寸 → ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio / isPortraitMedia；\n" +
         "  手拼查询串 → ~/lib/query-string 的 buildQueryString / withQuery（媒体预览地址走 ~/lib/media/media-url）；\n" +

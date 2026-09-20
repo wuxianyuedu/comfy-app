@@ -37,6 +37,8 @@
  * @module logs/log-record — log-record — 把「一条日志记录」从物理行里还原出来（纯逻辑，无 React/DOM）
  */
 
+import { stripSgr as stripSgrFromAnsi } from "~/lib/log/log-ansi";
+
 /**
  * 一行里的括号净增量（`{`/`[` 记 +1，`}`/`]` 记 −1）。
  *
@@ -97,15 +99,16 @@ export interface RawRecord {
 }
 
 /**
- * 剥掉行内残留的 ANSI SGR。
+ * 剥掉行内残留的 ANSI SGR（**出口在** `~/lib/log/log-ansi`，规范 16 §16.2.4.58）。
  *
  * 必须在**切记录之前**做：颜色码残缺时（`\x1b` 丢失、只剩 `[90m` / `[0m`）它们
  * 会留在正文里，按 SGR 形状整段剥掉才不会在面板上显示成 `[[OK]【[90m[OK[0m] …`；
  * 若只在记录头上剥，续行上的颜色码会被当成 JSON 正文，拼回去时把结构搅乱。
+ *
+ * 「要不要连残缺码一起剥」这一条此前只存在于本函数的实现里（另一处同形态
+ * 就少剥了这层），现在它是出口的**显式参数**（`includePartial`，默认 `true`）。
  */
-export function stripSgr(text: string): string {
-  return text.replace(/\x1b\[[0-9;:]*m/g, "").replace(/\[[0-9;:]*m/g, "");
-}
+export const stripSgr = (text: string) => stripSgrFromAnsi(text);
 
 /**
  * 物理行 → 记录序列。

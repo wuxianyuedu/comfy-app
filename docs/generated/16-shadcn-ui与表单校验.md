@@ -177,15 +177,19 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P50** | 自写数字精度格式化（`.toFixed(`）                                                                                                                 | `~/lib/number-format` 的 `fixed` / `trimmed` / `trimFixed` / `alphaText`（见 §16.2.4.54）                                                                                                                        |
 | **P51** | 自写去重合并与区域设置排序（`.sort((…, …) => ….localeCompare(`）                                                                                   | `~/lib/ordered-set` 的 `unique` / `uniqueSorted` / `uniqueBy` / `union` / `compareText`（见 §16.2.4.55）                                                                                                          |
 | **P52** | 自拼或自切 data URL（`data:${…};base64,${…}` / `indexOf(",")` / `split(",")` 与 `data:` 同现）                                                      | `~/lib/media/data-url` 的 `isDataUrl` / `isInlineMedia` / `toDataUrl` / `wrapBase64` / `toBase64` / `parseDataUrl` / `base64PayloadOf`（见 §16.2.4.56）                                                            |
+| **P53** | 元素上自写键盘键判据（`.key === "…"` 之类的字面量比对）                                                                                          | `~/components/ui/simple-key-handler` 的 `simpleKeyHandler`（元素上的那一个 `onKeyDown`）+ `~/lib/keyboard` 的 `normalizeKeyName` / `isKeyIn`（键名归一，两处共用一份，见 §16.2.4.57）                          |
+| **P54** | 自写 SGR 转义序列字面量（`\x1b[` / `\u001b[` 打头的形态）                                                                                        | `~/lib/log/log-ansi` 的 `hasSgr` / `stripSgr` / `stripAnsi`（剥与判两条账）+ `BANNER_ANSI`（横幅色板，写侧与读侧同一份，见 §16.2.4.58）                                                                          |
+| **P55** | 自写驼峰 ⇄ kebab 换算（`replace(/[A-Z]/g, …)` 带插值）                                                                                            | `~/lib/case-token` 的 `toKebabCase` / `toCamelCase`（见 §16.2.4.59）                                                                                                                                            |
 
 **P4~~P52 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P52 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+P4~P55 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
 加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键 / 滚动跟随 /
 外部导航 / 表单行 / 读文件 / localStorage / Enter 提交 / 异步动作的反馈样板 /
 媒体自然尺寸 / 查询串 / 按条目的错误位 / 作废守卫 / 服务端错误信封 /
 唯一 id / 报错建议词表 / 画布节点落地 /
-数字精度格式化 / 去重合并与排序 / data URL」这**三十五件事**的
+数字精度格式化 / 去重合并与排序 / data URL /
+键盘键判据 / SGR 转义序列 / 书写法换算」这**三十八件事**的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
@@ -201,9 +205,10 @@ P36/P37/P38 见 §16.2.4.39 ~ §16.2.4.41、
 P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **P44/P45/P46 见 §16.2.4.48 ~ §16.2.4.50**、
 **P47/P48/P49 见 §16.2.4.51 ~ §16.2.4.53**、
-**P50/P51/P52 见 §16.2.4.54 ~ §16.2.4.56**。
+**P50/P51/P52 见 §16.2.4.54 ~ §16.2.4.56**、
+**P53/P54/P55 见 §16.2.4.57 ~ §16.2.4.59**。
 
-**P4~P52 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P55 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -211,7 +216,7 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
 - 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
-  **P39/P40/P41、P42、P44~P49 额外扫 `src/lib/**` 与 `src/server/**`**
+  **P39/P40/P41、P42、P44~P55 额外扫 `src/lib/**` 与 `src/server/**`**
   （`LIB_SCANNED_RULES`）——
   这三条账的落点本来就横跨两侧（帧调度在 `lib/project-canvas`、复制反馈在两处
   hooks、`isRecord` 的 5 份实现在 `lib/**`）。**不能**把这两条根直接加进
@@ -430,6 +435,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 数字精度格式化           | ~~**26 处 `toFixed(`**，其中画布设置的 6 个 `format` 回调各写各的小数位。四派差的是**语义决定**不是风格：**小数位从哪来**（写死 / props / 量纲巧合）、**末尾的零要不要留**（`1.00` 还是 `1`，而 ComfyUI 存的就是剥过零的形态）、**整数要不要也进格式化**、**大数值要不要绕开**（`>= 10000`）。另有更隐蔽的一处 `(Math.round(v * 100) / 100).toFixed(2)` —— **两层舍入**（先十进制舍、再二进制舍），边界值与直接 `toFixed` 给出不同答案~~ | `~/lib/number-format` 的 `fixed`（`toFixed` 唯一落点）/ `trimmed`（剥尾零）/ `trimFixed`（整数不带小数点）/ `alphaText`（CSS alpha 段固定 3 位）；精度是**调用处的域决定**、尾零剥离是**显式选项**；**P50 硬闸** | ✅ **见 §16.2.4.54** |
 | 去重合并与排序           | ~~`[...new Set(xs)]` 与 `Array.from(new Set(xs))` 混用，而比选型更要紧的是**排序口径也不一**：`localeCompare` 与手写 `for` 循环挑字段做键并存。四种形状差的是**判据**：① 去重保留首次出现；② 去重 + 字典序（`localeCompare` 与 `<` 不是同一判据 —— 前者 `"apple" < "Zebra"`、后者 `"Zebra" < "apple"`）；③ 去重**同时按字段做键**（键与值是两件事，收口前各写一遍 `for` 循环）；④ 两路来源取并集（`specOpts` 优先）~~ | `~/lib/ordered-set` 的 `unique`（首次出现）/ `uniqueSorted`（字典序）/ `uniqueBy`（按字段）/ `union`（先到先得）/ `compareText`（区域设置比较器，全库唯一）；**顺序是显式参数**；**P51 硬闸** | ✅ **见 §16.2.4.55** |
 | data URL                 | ~~`data:${mime};base64,${…}` **手拼 3 处**，读回的一侧 **6 处**各写一遍「找第一个逗号、后面就是 base64」。三处读法互相矛盾：`slice(indexOf(",") + 1)` 在缺逗号时把**整串**当 base64（解码器跳过非法字符）→ 静默解出垃圾字节；`split(",")` 至少判了逗号但多分配一份数组；只有一处真去读了 `;base64` 之前的 meta（因此只有它能给出 MIME）。另有**非 base64 的 data URL**（`data:text/plain,hello`）被无条件按 base64 解 → 乱码~~ | `~/lib/media/data-url` 的 `isDataUrl` / `isInlineMedia`（要不要走网络）/ `toDataUrl`（字节）/ `wrapBase64`（已有 base64 串）/ `toBase64`（含浏览器侧分块）/ `parseDataUrl`（给 `{ mime, base64 }`）/ `base64PayloadOf`；**畸形输入给 `null`，不静默解垃圾**；**P52 硬闸** | ✅ **见 §16.2.4.56** |
+| 键盘键判据               | ~~**3 处**各写一遍「按键就做一件事」，而它们对三件事各判各的：**键名叫什么**（`" "` 还是 `"Space"`、要不要大小写归一 —— 无修饰单键的 `event.key` 是**带 Shift 的大写字符**，`Shift+Space` 给 `" "`）、**要不要 `preventDefault`**（混在同一个 `if` 里，看不出谁决定的）、**`event.repeat` 收不收**（按住空格会连发，对「切换一次」等于按了十几次）~~ | `~/components/ui/simple-key-handler` 的 `simpleKeyHandler`（`preventDefault` 与 `ignoreRepeat` 都是显式选项）+ `~/lib/keyboard` 的 `normalizeKeyName` / `isKeyIn`（**两个落点共用一份归一规则**，不再各记一份键名表）；**P53 硬闸** | ✅ **见 §16.2.4.57** |
+| SGR 转义序列             | ~~同一条形态 `\x1b\[[0-9;:]*m` 在 **4 处**各写一遍，而**判据不同**：`log-ansi` 的 `SGR_RE`（转义符必须在）、`logs/log-record` 的 `stripSgr`（连**残缺颜色码**一起剥 —— 少剥这层会在面板上显示成 `[[OK]【[90m[OK[0m] …`）、`logs/log-row-style` 的 `hasAnsi`（只判不改）、`session-banner.server` 与 `log-sessions` **写侧与读侧**各持一份同样的颜色码字面量（写侧改色，读侧就认不出自己写的横幅）；且「要不要连残缺码一起剥」这条差异**没有任何一处写下来**~~ | `~/lib/log/log-ansi` 的 `hasSgr`（只判）/ `stripSgr(text, { includePartial })`（判据成为**显式参数**）/ `stripAnsi` + `BANNER_ANSI`（写侧取色、读侧比对，同一个字面量）；**P54 硬闸** | ✅ **见 §16.2.4.58** |
+| 驼峰 ⇄ kebab 换算        | ~~全库只有 **1 处**（`lib/shell/overlay-z` 的 `zClass`），但判据写在**表达式里**：`replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)` —— 而它派生的 5 个工具类名（`z-canvas-ui` / `z-canvas-max` …）必须与 `globals.css` 的 `@theme` 逐字一致，**写错时静默**（Tailwind 找不到类名不报错，只是那一层没有 `z-index`）~~ | `~/lib/case-token` 的 `toKebabCase`（逐字符，不猜词边界、不抹前导下划线）/ `toCamelCase`（与它成对收在同一处）；**P55 硬闸** | ✅ **见 §16.2.4.59** |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -3708,6 +3716,155 @@ base64PayloadOf(v); // 只要载荷，或 null
 **刻意不数 `startsWith("data:")`** —— SSE 帧前缀也是这个写法
 （`lib/llm/browser` / `lib/llm/server` 的 `data: {...}`），数进来会把
 **流式解析**误判成本条账。
+
+### 16.2.4.57 「按键就做一件事」有三处各写一遍键判据（P53 硬闸）
+
+按**形态**扫出来的账：全库 **3 处**在一个元素上自己实现键盘动作，
+而它们对三件事各判各的：
+
+| 决定的 | 收口前的三处 |
+| --- | --- |
+| **键名叫什么** | `ShellTabs` / `TitleBarTabs` 判 `"Enter" \|\| " "`；`ScriptMarkdownEditor` 判 `"Tab"` |
+| **要不要 `preventDefault`** | 三处都写了，但混在**同一个 `if`** 里 —— 看不出「吞掉默认行为」是谁决定的 |
+| **`event.repeat` 收不收** | 三处都没收 |
+
+**第一条是真缺陷，但它是「碰巧」的**：无修饰单键的 `event.key` 是**带 Shift
+的大写字符**（`Shift+Space` 给 `" "`、`Shift+a` 给 `"A"`）—— 直接拿调用处
+手写的 `" "` / `"Enter"` 去比，命中与否取决于那个键**恰好**叫什么。
+页签那两处**碰巧**没事（`" "` 与 `"Enter"` 带不带 Shift 都一样），
+但「Space 键」在 UI 上通常显示成 `Space`，判据写成 `" "` 就**没人能一眼
+确认它对不对**。`ScriptMarkdownEditor` 那处反过来：它是**唯一**吞掉
+Shift+Tab 的落点（本该放行）。
+
+#### 出口：两个落点、一个判据
+
+```ts
+// 键名归一（唯一出口，`~/lib/keyboard`）
+normalizeKeyName("Space") === "space"; // 与 " " 同一个键
+normalizeKeyName("A") === "a"; // 带 Shift 的单字符
+KEY.Enter / KEY.Space / KEY.Escape; // 具名键的字面量
+isKeyIn(event.key, [KEY.Space, KEY.Enter]);
+
+// 元素上的那一个 onKeyDown（`~/components/ui/simple-key-handler`）
+<div role="tab" tabIndex={0}
+  {...simpleKeyHandler(["Space", "Enter"], () => select(id))} />;
+```
+
+- **两个落点共用一份归一规则**：`simpleKeyHandler` 内部调
+  `normalizeKeyName`，**不自己记一份键名表** —— 再记一份就是本条账要消除的
+  那种重复；
+- **`preventDefault` / `ignoreRepeat` 都是显式选项**（默认 `true`）：
+  「吞掉默认行为」「按住不放不连发」都是决定，不是顺带；
+- **与 `useHotkey`（§16.2.4.23）分工**：那个管**全局**监听（挂 `document`、
+  有 `enabled` / `filterInput` / 生命周期），本出口管**元素上**的那一个
+  `onKeyDown`；
+- **与 `enterCommit`（§16.2.4.29）分工**：那个管**输入框**里的 Enter 提交 /
+  Esc 取消（含 IME 与 Shift 排除），本出口管**其它键**。两者共用
+  `~/lib/keyboard` 的归一，**不各自判一次**。
+
+#### 判据：P53（硬闸）
+
+锚**键盘事件对象上的 `.key` 与一个字面量比对**（`e.key === "…"` /
+`event.key !== "…"`）—— 精确到「拿事件里的键名去和调用处手写的字符串比」。
+
+**锚点必须落在事件对象上，不能只锚 `.key`**：本仓库的 `UsageField.key`
+（结果字段名）也叫 `.key`，只锚 `.key` 会一次报出 6 处
+「`f.key === "mode"`」这种**数据字段比较**（实测）。故要求左侧是
+**键盘事件名**（`e` / `ev` / `evt` / `event` 或 `…Event` 结尾者）。
+这也把「`onKeyDown` 只转发不判键」正确放过。
+
+**不数** `onKeyDown` 本身（那会把「只转发事件」一起算进来），也不数修饰键
+（`ctrlKey` / `metaKey`，那是 `useHotkey` 的账）。
+
+**已知边界（刻意不判）**：把键名**解构**出来再比
+（`({ key }: KeyboardEvent) => key === "Tab"`）不在本判据内 —— 那个 `key`
+已经脱离了「事件对象」这个名字，机器判不出它是事件字段还是数据字段。
+与 P37「忙碌位」、P30「错误位」同款：按名字判的部分只判能判的那一半。
+
+三个落点在 `EXEMPT_FILES.P53` 里**显式登记**：`~/lib/keyboard` 与
+`simple-key-handler`（出口自身的实现）、`use-enter-commit`（IME 与 Shift
+排除的域判据）、`use-hotkey`（修饰键组合与全局生命周期）。
+
+### 16.2.4.58 「剥掉 / 判断 SGR 转义序列」有四处、且判据各不相同（P54 硬闸）
+
+同一件「把 `\x1b[…m` 从文本里处理掉」在全库有 **4 处**，而它们的**判据不同**：
+
+| 落点 | 它做什么 | 判据 |
+| --- | --- | --- |
+| `lib/log/log-ansi` 的 `SGR_RE` | 剥 SGR，用于解析成带样式片段 | 转义符**必须在**（`\x1b[`） |
+| `logs/log-record` 的 `stripSgr` | 切记录**之前**剥残留颜色码 | 连**残缺颜色码**（只剩 `[90m` / `[0m`，转义符在管道里丢了）一起剥 |
+| `logs/log-row-style` 的 `hasAnsi` | 决定「按 ANSI 上色还是走词法上色」 | **只判不改** |
+| `session-banner.server` + `log-sessions` | 画横幅 / 认横幅 | **写侧与读侧**各持一份同样的颜色码字面量 |
+
+三件事此前**没有一处写下来**：
+
+1. **要不要连残缺码一起剥** —— `stripSgr` 剥了，`SGR_RE` 没剥。少剥那一层
+   的表现是面板上显示成 `[[OK]【[90m[OK[0m] …`；
+2. **读侧与写侧用的是同一个颜色** —— 写侧改了横幅色、读侧就**认不出自己写的
+   横幅**（会话切分会把那条边界当成普通文本行）；
+3. **「只判」与「剥掉」是两条账** —— 混在一个函数里会让「谁在剥、谁在看」
+   只能靠读实现去猜。
+
+#### 出口：`~/lib/log/log-ansi`
+
+```ts
+hasSgr(text); // 只判：有没有完整 SGR
+stripSgr(text, { includePartial }); // 剥；`includePartial` 默认 true
+stripAnsi(text); // 剥全部（含光标 / 清屏序列）
+BANNER_ANSI; // 横幅色板：start / end / reset（写侧取色、读侧比对）
+```
+
+- **`includePartial` 是显式参数**：那个分歧此前只存在于 `stripSgr` 的实现
+  里，现在它是调用处能看见的决定（默认取「剥得更全」那一档 —— 留在正文里的
+  `[90m` 会原样显示给用户）；
+- **`BANNER_ANSI` 一份字面量供两侧**：这是本条账里最容易被忽略的一条 ——
+  它不是「重复代码」，而是**同一件事的输入与判据分开两处**；
+- **转义符字面量只在本模块写**：其余三处都从它取。
+
+#### 判据：P54（硬闸）
+
+锚**转义符字面量**（`\x1b[` / `\u001b[` 打头、紧跟数字分号、以 `m` 收尾）。
+**不数**单独的 `\x1b`（光标移动 / 清屏是另一条账）。
+
+### 16.2.4.59 「标识符的两种书写法怎么换算」的判据写在表达式里（P55 硬闸）
+
+全库只有 **1 处**做这件事（`lib/shell/overlay-z` 的 `zClass`）：
+
+```ts
+const kebab = tone.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+```
+
+看起来是「一行小工具」，但它的产物要与 `globals.css` 的 `@theme` 变量
+**逐字一致**（`z-canvas-ui` / `z-canvas-max` …），而**写错时是静默的**：
+Tailwind 找不到类名不会报错，只是那一层**没有 `z-index`**（浮层该压过谁
+就压不过了）。判据既然写在表达式里，「`canvasUi` 该变成 `z-canvas-ui` 还是
+`z-canvasui`」这件事就只能靠读代码的人在心里跑一遍正则。
+
+#### 出口：`~/lib/case-token`
+
+```ts
+toKebabCase("canvasUi"); // "canvas-ui"
+toCamelCase("canvas-ui"); // "canvasUi"（与上面成对收在同一处）
+```
+
+三条**刻意不做的花活**（每一种都有人以为「该这样」，写下来才不会有人来加）：
+
+1. **不处理连续大写**（`HTTPServer` → `h-t-t-p-server`）—— 本仓库档名全是
+   单驼峰，要处理缩写就得引入「哪里是词边界」的猜测；
+2. **不 `trim` 连字符**（`_base` → `_base`）—— 前导下划线是「私有」的语义；
+3. **不转数字与符号**。
+
+`toCamelCase` 目前**没有消费方**（为「读回自己的输出」准备）—— 它
+**有用例、没有调用处**是刻意：判据先立着，比等人再猜一次划算。
+
+#### 判据：P55（硬闸）
+
+锚**那条替换形态**：`/[A-Z]/g` 且同串出现 `${` 插值（即「大写字母前插
+连字符」）。**不数**别的 `[A-Z]` 用法（`toUpperCase()`、校验正则）。
+
+⚠️ 两类「看起来像」的替换**不属于本条账**，别硬搬进来：`replace(/:/g, "-")`
+（把时刻写进文件名）是「哪些字符非法」的账；`replace(/[^…]/g, "_")`
+（文件名安全化）见 §16.2.4.53 的 `~/lib/safe-name`。
 
 ## 16.3 新增一个组件的标准动作
 
