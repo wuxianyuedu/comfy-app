@@ -12,6 +12,7 @@
 // `NOT NULL constraint failed`，而它一直报 ready）。`ensureSchemaCurrent` 是
 // 启动链路的**唯一出口**：指纹一致就毫秒级通过，不一致就自动同步一次。
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -52,7 +53,9 @@ export function probeSchemaSync(root, databaseUrl) {
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
       const row = db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
         .get(SENTINEL_TABLE);
       return row ? "ready" : "missing";
     } finally {
@@ -174,7 +177,9 @@ function schemaDigest(root, databaseUrl) {
         .all();
       return crypto
         .createHash("sha256")
-        .update(rows.map((r) => `${r.type}|${r.name}|${r.sql ?? ""}`).join("\n"))
+        .update(
+          rows.map((r) => `${r.type}|${r.name}|${r.sql ?? ""}`).join("\n"),
+        )
         .digest("hex");
     } finally {
       db.close();
@@ -213,10 +218,12 @@ export function ensureSchemaCurrent(root, options = {}) {
   if (!fs.existsSync(resolveSqlitePath(root, databaseUrl))) {
     return { state: "missing" };
   }
-  if (probeSchemaSync(root, databaseUrl) !== "ready") return { state: "missing" };
+  if (probeSchemaSync(root, databaseUrl) !== "ready")
+    return { state: "missing" };
 
   const want = schemaFingerprint(root);
-  if (want === null) return { state: "unknown", detail: "读不到 schema 源文件" };
+  if (want === null)
+    return { state: "unknown", detail: "读不到 schema 源文件" };
   const have = readSchemaFingerprint(root, databaseUrl);
   if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
   if (have === want) return { state: "ready" };
@@ -268,7 +275,11 @@ export function ensureSchemaCurrent(root, options = {}) {
     verifyConvergence: false,
     forward,
   });
-  if (!applied.converged || before === null || schemaDigest(root, databaseUrl) === before) {
+  if (
+    !applied.converged ||
+    before === null ||
+    schemaDigest(root, databaseUrl) === before
+  ) {
     return {
       state: "stale",
       detail: applied.converged
@@ -336,5 +347,82 @@ export function schemaNotice(result) {
           "必要时手动跑一次：pnpm db:push",
         ],
       };
+  }
+}
+
+/** 后台同步的状态文件（相对项目根）。服务端 `GET /api/schema` 读它透出给页面。 */
+export const SCHEMA_SYNC_STATUS_FILE = path.join("log", "schema-sync.json");
+
+/**
+ * 写同步状态（`{ phase, detail, at }`）。
+ *
+ * 用**文件**而不是内存：写它的是后台的 `db-sync.mjs` 子进程，读它的是另一个
+ * 进程里的 Next 服务端 —— 两者唯一的交汇处就是磁盘。
+ *
+ * 写不进去**不算错**：最坏的后果只是页面少一条提示（同步本身照常），所以这里
+ * 静默吞掉异常而不是把同步流程带崩。
+ *
+ * @param {string} root 项目根
+ * @param {{ phase: string, detail?: string | null }} payload
+ * @returns {boolean} 是否写成功
+ */
+export function writeSchemaSyncStatus(root, payload) {
+  const file = path.join(root, SCHEMA_SYNC_STATUS_FILE);
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      `${JSON.stringify({ ...payload, at: new Date().toISOString() })}\n`,
+      "utf8",
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 后台起一次 schema 同步，**不等待**。
+ *
+ * 为什么不让调用方等：drizzle 一轮约 17 秒、同步一次 15~30 秒。此前是
+ * 「先同步、再起 Next」，用户要盯着空窗等半分钟；现在「先把 Next 拉起来、
+ * 同步在后台跑」，等待时间还给用户，期间页面自己会显示「正在同步」。
+ *
+ * 输出重定向进 `log/schema-sync.log`（本进程通常立刻阻塞在 Next 上，转发不了
+ * 子进程的输出）；真正的对外信号是状态文件。
+ *
+ * @param {string} root 项目根
+ * @returns {{ started: boolean, reason?: string }}
+ */
+export function spawnSchemaSync(root) {
+  const script = path.join(root, "scripts", "db-sync.mjs");
+  if (!fs.existsSync(script)) {
+    /* 生产产物里 `scripts/` 只保留运行时会读的那几个（见 build-desktop 白名单），
+     * 那时这里没有可跑的东西 —— 如实返回，调用方据此不提示而不是报错。 */
+    return { started: false, reason: "找不到 scripts/db-sync.mjs" };
+  }
+  /** @type {"ignore" | ["ignore", number, number]} */
+  let stdio = "ignore";
+  try {
+    const dir = path.join(root, "log");
+    fs.mkdirSync(dir, { recursive: true });
+    const fd = fs.openSync(path.join(dir, "schema-sync.log"), "a");
+    stdio = ["ignore", fd, fd];
+  } catch {
+    /* 日志文件开不出来就丢弃输出，不影响同步本身。 */
+  }
+  try {
+    const child = spawn(process.execPath, [script], {
+      cwd: root,
+      detached: true,
+      stdio,
+    });
+    child.unref();
+    return { started: true };
+  } catch (error) {
+    return {
+      started: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
   }
 }

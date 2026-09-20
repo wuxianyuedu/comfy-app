@@ -10,6 +10,12 @@ import { MessageCenterButton } from "~/components/message-center/MessageCenterBu
 import { fpsTone, useFps } from "./hooks/use-fps";
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
 import { useDevServerStatus } from "./hooks/use-dev-server-status";
+import {
+  schemaSyncNotice,
+  useSchemaSyncStatus,
+  type SchemaSyncNotice,
+  type SchemaSyncStatus,
+} from "./hooks/use-schema-sync-status";
 import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -102,6 +108,47 @@ function UsageItem({
   );
 }
 
+/**
+ * 后台 schema 同步的提示格（数据源 `use-schema-sync-status`）。
+ *
+ * 为什么值得占一格：启动脚本把 Next 拉起来的**同时**在后台核对/同步库结构
+ * （不阻塞启动），同步完成前业务请求可能 500。页面若不说「正在同步」，用户看到
+ * 的就是一个报错页，无从判断该等一等还是该去查别的原因 —— 那正是「静默失败」
+ * 最贵的形态。
+ *
+ * 说什么由 `schemaSyncNotice` 判（纯函数，见 hooks/use-schema-sync-status.ts），
+ * 这里只把 tone 映射成颜色。
+ */
+const SCHEMA_TONE_CLASS: Record<SchemaSyncNotice["tone"], string> = {
+  info: "text-ink-soft",
+  ok: "text-emerald-600 dark:text-emerald-400",
+  error: "text-rose-600 dark:text-rose-400",
+};
+
+function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
+  const notice = schemaSyncNotice(status);
+  if (notice === null) return null;
+
+  const tone = SCHEMA_TONE_CLASS[notice.tone];
+  if (notice.refreshable) {
+    return (
+      <Button
+        variant="ghost"
+        className={`h-auto shrink-0 gap-0 rounded px-1 py-0 text-[11px] hover:underline ${tone}`}
+        title={notice.title}
+        onClick={() => window.location.reload()}
+      >
+        {notice.text}
+      </Button>
+    );
+  }
+  return (
+    <span className={`shrink-0 truncate ${tone}`} title={notice.title}>
+      {notice.text}
+    </span>
+  );
+}
+
 export function BrowserStatusBar() {
   const isOpen = useLogPanel((s) => s.isOpen);
   const toggleOpen = useLogPanel((s) => s.toggleOpen);
@@ -120,6 +167,7 @@ export function BrowserStatusBar() {
   const fps = useFps();
   const { cudaVram, smiVram, ram, degradedNote } = useComfyReadiness();
   const devServer = useDevServerStatus();
+  const schemaSync = useSchemaSyncStatus();
   // 非主应用页签（内嵌 ComfyUI 等 iframe 页签）时整体隐藏：状态栏是固定悬浮层，
   // 盖住窗口最底下 24px——iframe 页面自绘的底部控件（运行操作栏下缘、扩展面板）
   // 恰好落在这一条里，浏览器整窗打开时它们是完整可见的，页签里却被压住，形成
@@ -148,6 +196,8 @@ export function BrowserStatusBar() {
           {host ? `${host}${pathname}` : pathname}
         </span>
       </div>
+
+      <SchemaSyncItem status={schemaSync} />
 
       <div className="flex shrink-0 items-center gap-2.5">
         {/* 实时帧率：画布 FpsMeter 悬浮层已移除，全应用仅此一处（FPS 归属见

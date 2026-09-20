@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
-import { ensureSchemaCurrent, schemaNotice } from "./db-schema-state.mjs";
+import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
@@ -27,20 +27,27 @@ process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}\n`);
 // 用户看到的是「起来了但报错」，而事实是端口无人监听。
 exitIfEnvNotReady(root);
 
-/* schema 自检 + **按需自动同步**（与 dev.mjs 同一出口，见 db-schema-state.mjs）：
- * 拉了含 schema 变更的代码之后不必记得跑 `pnpm db:push`。 */
-const schema = schemaNotice(ensureSchemaCurrent(root));
-if (schema) {
-  const marker = schema.level === "warn" ? "⚠" : "✓";
-  for (const line of schema.lines) {
-    process.stdout.write(`[start.mjs] ${marker} ${line}\n`);
-  }
+/* schema 自检 + **后台**同步（与 dev.mjs 同一出口，见 db-schema-state.mjs）：
+ * 拉了含 schema 变更的代码之后不必记得跑 `pnpm db:push`；这里不等它，
+ * 期间由页面自己说「正在同步」。 */
+const schema = spawnSchemaSync(root);
+if (!schema.started) {
+  process.stdout.write(
+    `[start.mjs] ⚠ 无法后台核对数据库结构（${schema.reason ?? "原因未知"}）——` +
+      "必要时手动跑：pnpm db:push\n",
+  );
 }
 
 // 与 dev.mjs 同一口径：pnpm 的可执行形态由 shell.mjs 判定（规范 §2.1.1）。
 // 写死 `pnpm.cmd` 在 Windows 上会选中 Node 起不来的批处理，`status` 为 null
 // 会被 `?? 0` 读成成功退出，服务静默消失（ISSUE #576）。
-const invocation = pnpmInvocation(["exec", "next", "start", "-p", String(port)]);
+const invocation = pnpmInvocation([
+  "exec",
+  "next",
+  "start",
+  "-p",
+  String(port),
+]);
 if (!invocation) {
   process.stderr.write(
     "[start.mjs] ✗ PATH 上找不到可用的 pnpm，无法启动 Next.js server。\n" +

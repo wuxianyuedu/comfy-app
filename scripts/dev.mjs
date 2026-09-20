@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
-import { ensureSchemaCurrent, schemaNotice } from "./db-schema-state.mjs";
+import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
@@ -33,8 +33,10 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "-p" || a === "--port") port = argv[i + 1] ?? port;
     else if (a.startsWith("--port=")) port = a.slice("--port=".length);
-    else if (a === "-H" || a === "--hostname") hostname = argv[i + 1] ?? hostname;
-    else if (a.startsWith("--hostname=")) hostname = a.slice("--hostname=".length);
+    else if (a === "-H" || a === "--hostname")
+      hostname = argv[i + 1] ?? hostname;
+    else if (a.startsWith("--hostname="))
+      hostname = a.slice("--hostname=".length);
   }
   return { port, hostname };
 }
@@ -55,18 +57,18 @@ process.stdout.write(
 // 用户看到的是「起来了但报错」，而事实是端口无人监听。
 exitIfEnvNotReady(root);
 
-/* schema 自检 + **按需自动同步**：拉了含 schema 变更的代码之后不必记得跑
- * `pnpm db:push`（判据、自动做到哪一步为止，见 db-schema-state.mjs 的
- * `ensureSchemaCurrent`）。表没建 / 结构过期时**提前讲清楚**，而不是等页面
- * 500：`/` 与 `/api/health` 在空库上也能过（详见 scripts/db-push.mjs 的说明），
- * 用户很容易误判成「装好了」。只提示不退出 —— 前端页面本身可跑，退出会让
- * 「只想改 UI」的人被挡住。 */
-const schema = schemaNotice(ensureSchemaCurrent(root));
-if (schema) {
-  const marker = schema.level === "warn" ? "⚠" : "✓";
-  for (const line of schema.lines) {
-    process.stdout.write(`[dev.mjs] ${marker} ${line}\n`);
-  }
+/* schema 自检 + **后台**同步：拉了含 schema 变更的代码之后不必记得跑
+ * `pnpm db:push`（判据、自动做到哪一步为止见 db-schema-state.mjs）。
+ *
+ * 这里**不等它**——drizzle 一轮约 17 秒、同步一次 15~30 秒，等它等于「先同步、
+ * 再起 Next」，用户要盯着空窗等半分钟才看到页面。等待时间还给用户，期间由页面
+ * 自己说「正在同步，稍候刷新」（`GET /api/schema` + 状态栏）。 */
+const schema = spawnSchemaSync(root);
+if (!schema.started) {
+  process.stdout.write(
+    `[dev.mjs] ⚠ 无法后台核对数据库结构（${schema.reason ?? "原因未知"}）——` +
+      "必要时手动跑：pnpm db:push\n",
+  );
 }
 
 const nextArgs = ["exec", "next", "dev", "--turbo", "-p", String(port)];
