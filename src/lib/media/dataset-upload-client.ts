@@ -4,6 +4,7 @@
 // 逐张上传的循环逻辑留在 hook 里，视图不再碰网络。
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
+import { asRecord } from "~/lib/is-record";
 
 const ENDPOINT = "/api/upload";
 
@@ -21,10 +22,7 @@ export async function uploadDatasetImage(file: File): Promise<string> {
   const res = await fetch(ENDPOINT, { method: "POST", body: form });
   const body = await readJsonBody(res);
   if (!res.ok) throw new Error(readApiError(body) ?? "上传失败");
-  const name =
-    typeof body === "object" && body !== null
-      ? (body as Record<string, unknown>).name
-      : undefined;
+  const name = asRecord(body)?.name;
   if (typeof name !== "string" || name.length === 0) {
     throw new Error("上传失败：响应缺少文件名");
   }

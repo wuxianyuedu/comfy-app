@@ -267,6 +267,12 @@ const DOMAIN_EXEMPT = new Set([
    * 面板上看到两种质量并存的文本）。进任何子域都会让其余侧反向依赖它 ——
    * 与 `format-bytes` / `display-value` / `progress` 同款：顶层单例。 */
   "src/lib/text-clamp.ts",
+  /* 「把一段文本变成安全的文件名片段」的唯一出口（ISSUE #672）：
+   * `src/app/api`（三条上传路由）、`src/lib/comfyui`（Lora 训练产物名）、
+   * `src/server/workshop`（产出目录与文件名）**都在用**，且三侧对「保留哪些
+   * 字符」本来就该有各自的名字 —— 进任何子域都会让其余侧反向依赖它。
+   * 与 `text-clamp` / `is-record` 同款：顶层单例。 */
+  "src/lib/safe-name.ts",
   /* 「一个异步动作重试几次、退避多久」的唯一出口（ISSUE #672）：
    * `src/lib/comfyui`（WS 重连 / history 轮询）、`src/lib/drizzle-studio`、
    * `src/app/api`（Ollama 启停）、`src/app/(main)/settings` 的 hook **都在用**，

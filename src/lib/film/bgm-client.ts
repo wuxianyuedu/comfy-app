@@ -3,6 +3,7 @@
 // 散落在 JSX 事件处理器中。集中到此处后：错误信封改一处生效，视图零感知。
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
+import { asRecord } from "~/lib/is-record";
 
 const ENDPOINT = "/api/film/bgm";
 
@@ -18,10 +19,7 @@ export async function uploadBgm(file: File): Promise<string> {
   const res = await fetch(ENDPOINT, { method: "POST", body: form });
   const body = await readJsonBody(res);
   if (!res.ok) throw new Error(readApiError(body) ?? "BGM 上传失败");
-  const name =
-    typeof body === "object" && body !== null
-      ? (body as Record<string, unknown>).name
-      : undefined;
+  const name = asRecord(body)?.name;
   if (typeof name !== "string" || name.length === 0) {
     throw new Error("BGM 上传失败：响应缺少文件名");
   }

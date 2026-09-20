@@ -6,6 +6,7 @@ import { logger } from "~/server/lib/logger";
 import { apiErrorDetail } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { uniqueStamp } from "~/lib/unique-id";
+import { extOfPath } from "~/lib/media/mime-ext";
 
 export const runtime = "nodejs";
 
@@ -50,13 +51,13 @@ export async function POST(req: NextRequest) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const ext = file.name.includes(".")
-    ? file.name.slice(file.name.lastIndexOf("."))
-    : ".png";
+  /* 扩展名取法走唯一出口（`lastIndexOf(".")` 手切会把「没有点」的整段文件名
+   * 当扩展名）。缺后缀时当 png —— 这是上传路径的域口径。 */
+  const ext = extOfPath(file.name) || "png";
   /* 文件名走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是
    * `comfyapp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`，与另两处
    * 上传路由各写一份判据（其中一处用 36 进制随机段）。 */
-  const filename = `${uniqueStamp("comfyapp-")}${ext}`;
+  const filename = `${uniqueStamp("comfyapp-")}.${ext}`;
 
   try {
     const res = await uploadImage(buf, filename, "input");
