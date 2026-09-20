@@ -1,3 +1,4 @@
+import { fixupPluginRules } from "@eslint/compat";
 import tseslint from "typescript-eslint";
 import next from "eslint-config-next/core-web-vitals";
 import unusedImports from "eslint-plugin-unused-imports";
@@ -32,15 +33,89 @@ import boundaries from "eslint-plugin-boundaries";
  *（插件实现变更不在缓存键里，这是 `--cache` 的已知边界）。
  */
 const LINT_FILES = [
-  "src/**/*.{ts,tsx}",
-  "tests/**/*.{ts,tsx}",
-  "scripts/**/*.{ts,tsx}",
-  "e2e/**/*.{ts,tsx}",
-  "tools/**/*.{ts,tsx}",
+  "src/**/*.{ts,tsx,mts,cts}",
+  "tests/**/*.{ts,tsx,mts,cts}",
+  "scripts/**/*.{ts,tsx,mts,cts}",
+  "e2e/**/*.{ts,tsx,mts,cts}",
+  "tools/**/*.{ts,tsx,mts,cts}",
   // 根级工程配置里用 TS 写的那些（vitest / playwright / drizzle；eslint.config.js 自身
   // 是 .js，由下面 `...next` 那块覆盖，与改造前同口径）
-  "*.config.{ts,tsx}",
+  "*.config.{ts,tsx,mts,cts}",
 ];
+
+/** 需要兼容包装的插件名：next 聚合配置引来、且仍在调用 ESLint 10 已移除插件 API
+ *  的那几个。
+ *
+ *  ESLint 10 移除了 `context.getFilename()` / `getSourceCode()` 等**插件 API**，
+ *  `eslint-config-next@16.3.4` 引来的插件还在调用它们 —— 实测直接崩在**规则加载**
+ *  阶段（`TypeError: Error while loading rule 'react/display-name':
+ *  contextOrFilename.getFilename is not a function`），连 `drizzle.config.ts` 这种
+ *  非 React 文件都跑不到，等于整仓无法 lint。
+ *
+ *  **刻意不含 `@typescript-eslint`**：它在 `tseslint.configs.*` 那批配置里还有一处
+ *  引用，包成新对象会让 ESLint 10 判定「同名插件重定义」而直接报
+ *  `ConfigError: Cannot redefine plugin "@typescript-eslint"`；而它本身已原生支持
+ *  v10，不需要补。以后若在 v10 下崩在某个 `xxx/yyy` 规则上，把 `xxx` 加进来即可。
+ *
+ *  为什么不用 `eslint-plugin-import-x` 替换 `eslint-plugin-import`：后者是 next
+ *  聚合配置的传递依赖，规则名是 `import/*`，换包名会让 next 里那批规则找不到插件；
+ *  在其外包一层 fixup 是等价且更小的改动。 */
+const COMPAT_PLUGIN_NAMES = [
+  "react",
+  "react-hooks",
+  "import",
+  "jsx-a11y",
+  "@next/next",
+];
+
+/** 同一个插件对象只包一次：同名插件在多份 config 里出现时必须指向**同一个**包装
+ *  对象，否则又会触发上面那条「重定义」错误。 */
+const compatPluginCache = new WeakMap();
+
+/** @param {import("@eslint/compat").FixupPluginDefinition} plugin */
+function compatPlugin(plugin) {
+  const cached = compatPluginCache.get(plugin);
+  if (cached) return cached;
+  const fixed = fixupPluginRules(plugin);
+  compatPluginCache.set(plugin, fixed);
+  return fixed;
+}
+
+/** 摘掉 next 自带的 Babel parser（`eslint-config-next/parser`）。
+ *
+ *  它没跟上 ESLint 10 的 `scopeManager.addGlobals` 要求 —— 实测
+ *  `pnpm exec eslint postcss.config.js` 直接崩（`TypeError: scopeManager.addGlobals
+ *  is not a function`），而 .ts / .tsx 不受影响：那批文件被后面的 typescript-eslint
+ *  配置用自己的 parser 覆盖了，所以只有 `.js` 这条路径踩到它。
+ *
+ *  摘掉之后这批 js / jsx / mjs 文件落回 ESLint 默认的 espree —— 本仓扫描范围里的
+ *  `.js` / `.mjs` 都是普通 ESM（根级配置与门禁脚本），espree 足够。`parserOptions`
+ *  里是 Babel 专用的 `requireConfigFile` / `babelOptions`，一并摘掉。 */
+/** @param {import("@eslint/compat").FixupConfig} config */
+function stripBabelParser(config) {
+  if (!config.languageOptions?.parser) return config;
+  const { parser, parserOptions, ...languageOptions } = config.languageOptions;
+  return { ...config, languageOptions };
+}
+
+/** 把 next 各 config 里的插件换成一圈官方兼容包装（`@eslint/compat`），并摘掉它
+ *  自带的 Babel parser —— **不改**它的规则与 settings，只换掉这两样。 */
+/** @param {import("@eslint/compat").FixupConfig[]} configs */
+function withCompatPlugins(configs) {
+  return configs.map((config) => {
+    const patched = stripBabelParser(config);
+    if (!patched.plugins) return patched;
+    return {
+      ...patched,
+      plugins: Object.fromEntries(
+        Object.entries(patched.plugins).map(([name, plugin]) => [
+          name,
+          COMPAT_PLUGIN_NAMES.includes(name) ? compatPlugin(plugin) : plugin,
+        ]),
+      ),
+    };
+  });
+}
 
 export default tseslint.config(
   {
@@ -73,7 +148,8 @@ export default tseslint.config(
   // 旧写法用 FlatCompat.extends() 去加载它会触发 config-validator 对含
   // 插件/函数的扁平对象做 JSON 序列化，从而 TypeError: Converting circular
   // structure to JSON。这里直接展开扁平数组，绕开该崩溃。
-  ...next,
+  // 展开前过一层 `withCompatPlugins`（ESLint 10 的插件 API 兼容包装，见上面说明）。
+  ...withCompatPlugins(next),
   {
     files: LINT_FILES,
     extends: [
