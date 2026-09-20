@@ -16,6 +16,7 @@ import {
   type ManifestNodeRaw,
 } from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { errorText } from "~/lib/error-message";
 import { offsetWithin } from "~/lib/dom-rect";
 import { onNextFrame } from "~/lib/next-frame";
@@ -132,7 +133,8 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     parent: "",
     msg: "",
   });
-  const [parsing, setParsing] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const parseBusy = useBusyAction();
   const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>(
     {},
   );
@@ -179,7 +181,8 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const nodeCardExpansion = useExpansionSet();
 
   useEffect(() => {
-    const stillParsing = parsing || Object.values(perPkgParsing).some(Boolean);
+    const stillParsing =
+      parseBusy.busy || Object.values(perPkgParsing).some(Boolean);
     if (stillParsing) {
       if (consoleRef.current)
         consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
@@ -205,25 +208,29 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         console_.scrollTop = Math.max(0, console_.scrollTop + targetTop - 8);
       });
     }
-  }, [logs, parsing, perPkgParsing]);
+  }, [logs, parseBusy.busy, perPkgParsing]);
 
   // 解析开始或结束时，把对话框滚到日志控制台 —— 否则高个子包列表把日志推到折叠线
   // 以下，用户得手动折叠父级才能看到。
   useEffect(() => {
-    if (parsing || Object.values(perPkgParsing).some(Boolean)) {
+    if (parseBusy.busy || Object.values(perPkgParsing).some(Boolean)) {
       return onNextFrame(() => {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
-  }, [parsing, perPkgParsing, logs.length]);
+  }, [parseBusy.busy, perPkgParsing, logs.length]);
   // 单包解析完成时也滚到日志：此刻新 report 追加、reloadFromServer() 重新填充列表。
   useEffect(() => {
-    if (report && !parsing && !Object.values(perPkgParsing).some(Boolean)) {
+    if (
+      report &&
+      !parseBusy.busy &&
+      !Object.values(perPkgParsing).some(Boolean)
+    ) {
       return onNextFrame(() => {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
-  }, [report, parsing, perPkgParsing]);
+  }, [report, parseBusy.busy, perPkgParsing]);
 
   /** 从服务端拉取设置并写入本地 state。首个 await 之前不做同步 setState，因此可直接
    *  从 effect 调用（React 19 规则：effect 内不 set-state）。想要重置 spinner 的调用方
@@ -451,6 +458,34 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     setSaveErr(msg);
   }
 
+  /** 「跑一轮解析并收尾」——三处入口（全部 / 单个父目录 / 单个子包）共用。
+   *
+   *  收口前这段 fetch + NDJSON 流式消费在**三处逐字重复**，而忙碌位的复位各自
+   *  写在 `finally` 里；现在复位绑在忙碌位出口上（规范 16 §16.2.4.71），
+   *  「解析中」不会因为中途抛错永远留在界面上。 */
+  async function runParse(packages?: string[]) {
+    setError_(null);
+    setLogs([]);
+    try {
+      const res = await fetch("/api/custom-nodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          packages ? { action: "parse", packages } : { action: "parse" },
+        ),
+      });
+      await readNdjson(res, async (record, ok) => {
+        if (ok && record) {
+          setReport(record);
+          await refreshCustomNodes();
+        }
+        await reloadFromServer();
+      });
+    } catch (e) {
+      setError_(errorText(e, "解析失败"));
+    }
+  }
+
   async function onParseAll() {
     if (savedPaths.length === 0) {
       setError_(
@@ -458,56 +493,28 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       );
       return;
     }
-    setParsing(true);
-    setError_(null);
     setReport(null);
-    setLogs([]);
-    try {
-      const res = await fetch("/api/custom-nodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "parse" }),
-      });
-      await readNdjson(res, async (record, ok) => {
-        if (ok && record) {
-          setReport(record);
-          await refreshCustomNodes();
-        }
-        await reloadFromServer();
-      });
-    } catch (e) {
-      setError_(errorText(e, "解析失败"));
-    } finally {
-      setParsing(false);
-    }
+    await parseBusy.run(() => runParse());
   }
 
   async function onParseSingle(pkgPath: string) {
+    /* 按子包的忙碌位**不是一个布尔**（一屏多个子行各跑各的），所以它不走
+     *  `useBusyAction` —— 那一条账管的是「一次动作一块界面忙不忙」。 */
     setPerPkgParsing((parsing) => ({ ...parsing, [pkgPath]: true }));
-    setError_(null);
-    setLogs([]);
     try {
-      const res = await fetch("/api/custom-nodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "parse", packages: [pkgPath] }),
-      });
-      await readNdjson(res, async (record, ok) => {
-        if (ok && record) {
-          setReport(record);
-          await refreshCustomNodes();
-        }
-        await reloadFromServer();
-      });
-    } catch (e) {
-      setError_(errorText(e, "解析失败"));
+      await runParse([pkgPath]);
     } finally {
-      setPerPkgParsing((parsing) => {
-        const np = { ...parsing };
-        delete np[pkgPath];
-        return np;
-      });
+      clearPerPkgParsing(pkgPath);
     }
+  }
+
+  /** 撤下单条子包的解析中标记（按子包维度的忙碌位，见 `onParseSingle`）。 */
+  function clearPerPkgParsing(pkgPath: string) {
+    setPerPkgParsing((parsing) => {
+      const next = { ...parsing };
+      delete next[pkgPath];
+      return next;
+    });
   }
 
   /** 一次性重新解析单个已配置父目录下的所有子包。复用同一子集解析路径，只是一次传 N
@@ -519,27 +526,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       setError_("该目录下没有可解析的子包");
       return;
     }
-    setParsing(true);
-    setError_(null);
-    setLogs([]);
-    try {
-      const res = await fetch("/api/custom-nodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "parse", packages: targets }),
-      });
-      await readNdjson(res, async (record, ok) => {
-        if (ok && record) {
-          setReport(record);
-          await refreshCustomNodes();
-        }
-        await reloadFromServer();
-      });
-    } catch (e) {
-      setError_(errorText(e, "解析失败"));
-    } finally {
-      setParsing(false);
-    }
+    await parseBusy.run(() => runParse(targets));
   }
 
   // 跨所有已配置父目录的扁平子包列表。一个顶层包（如 Anima-Artist-Mixer）即便用户
@@ -585,7 +572,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     saveErr,
     loading,
     progress,
-    parsing,
+    parsing: parseBusy.busy,
     perPkgParsing,
     report,
     summary,

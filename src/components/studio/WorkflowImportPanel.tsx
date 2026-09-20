@@ -7,6 +7,7 @@
  *  字段。行为不变。
  */
 import { useMemo } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import { Textarea } from "~/components/ui/textarea";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
@@ -110,7 +111,7 @@ export function WorkflowImportPanel({
             <input
               {...a11y}
               value={importName}
-              onChange={(event) => setImportName(event.target.value)}
+              onChange={textHandler(setImportName)}
               placeholder="例如：胶片人像 _v2（留空则用文件名）"
               className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
             />
@@ -178,7 +179,7 @@ export function WorkflowImportPanel({
       <div className="mt-3">
         <Textarea
           value={importJson}
-          onChange={(event) => setImportJson(event.target.value)}
+          onChange={textHandler(setImportJson)}
           rows={8}
           placeholder='{ "last_node_id": 11, "nodes": [{ "id": 11, "type": "KSampler", "pos": [400, 300], "widgets_values": [...] }], "links": [...] }'
           className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-muted resize-none font-mono text-xs"

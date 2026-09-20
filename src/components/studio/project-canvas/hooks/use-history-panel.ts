@@ -6,13 +6,14 @@
  *   - 错误通道：只此一份，且**不会被随后的轮询清空**
  *     （§17.5.4 的同源坑：错误必须由「发起动作的一方」清，这里指用户点「重试」）
  *
- * 视图态（网格/列表密度）也在这里——它决定不了任何业务，但和 reloadKey
+ * 视图态（网格/列表密度）也在这里——它决定不了任何业务，但和刷新票据
  * 一样属于「面板状态」；放在 hook 里让视图只剩 JSX + props。
  */
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRefreshTicket } from "~/components/ui/use-refresh-ticket";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { errorMessage } from "~/lib/error-message";
@@ -69,8 +70,8 @@ export function useHistoryPanel({
   const [tasks, setTasks] = useState<HistoryTaskRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const refresh = useCallback(() => setReloadKey((key) => key + 1), []);
+  /* 「按需求重跑一遍取数」走唯一出口（规范 16 §16.2.4.70）。 */
+  const { ticket: reloadKey, refresh } = useRefreshTicket();
 
   /** 全局是否有记录 —— 本项目为空时用来决定是否提示「查看全部」。 */
   const [globalCount, setGlobalCount] = useState<number | null>(null);

@@ -11,6 +11,7 @@
  *  `modal={false}`：菜单里带着重命名输入框，需要能聚焦它且不锁页面滚动。
  */
 import { Icon } from "~/components/ui/icon";
+import { textHandler } from "~/lib/form-props";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import {
@@ -124,7 +125,7 @@ export function ProjectSwitcher({
             <input
               autoFocus
               value={renameVal}
-              onChange={(event) => onRenameValChange(event.target.value)}
+              onChange={textHandler(onRenameValChange)}
               {...enterCommit({
                 onCommit: onCommitRename,
                 onCancel: onCancelRename,

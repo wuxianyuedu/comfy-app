@@ -588,6 +588,150 @@ def _reset_shell_pid_file(project_root: str) -> None:
     _safe_remove(_shell_pid_file(project_root))
 
 
+# ── 壳自编排（ISSUE #784）：编排器由壳自己起时，启动器让位并按标记回收 ────────
+#
+# 两个新形态：
+#   1. 壳先起、编排器是壳的孩子（用户直接双击 target\release\app.exe）；
+#   2. 老形态：启动器起编排器，编排器再起壳。
+# 两者的**回收锚点不同**：形态 2 里启动器退出后编排器必须活着继续工作，所以
+# 启动器只清自己的锁与状态文件；形态 1 里编排器归属壳，启动器的兜底补刀要
+# 「按标记放过它」——它随壳退出被回收，启动器去杀它等于把用户正在用的应用掐掉。
+
+_SHELL_OWNED_ENV = "COMFYAPP_SHELL_OWNED"
+
+
+def _find_shell_owned_orchestrator() -> "int | None":
+    """找出「由壳亲手起」的编排器进程号（找不到 = None）。
+
+    判据是**环境变量标记**，不是形态（命令行里有没有项目根 / 有没有 dev server）：
+    后者只能说明「有个编排在跑」，认不出是谁起的 —— 而这里的动作是「让位」，
+    认错人就会把用户上一轮的应用当成自己的新实例。
+
+    只覆盖 Windows（`Process32FirstW` + 读进程环境块）：本文件本身就是
+    PyInstaller spec 的 Windows 入口，POSIX 上根本没有它。
+    """
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        TH32CS_SNAPPROCESS = 0x00000002
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.c_void_p),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", ctypes.c_wchar * 260),
+            ]
+
+        snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if not snapshot or snapshot == INVALID_HANDLE_VALUE:
+            return None
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            self_pid = os.getpid()
+            more = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+            while more:
+                pid = int(entry.th32ProcessID)
+                if pid and pid != self_pid:
+                    handle = kernel32.OpenProcess(
+                        PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+                    )
+                    if handle:
+                        try:
+                            if _process_env_owned(handle):
+                                return pid
+                        finally:
+                            kernel32.CloseHandle(handle)
+                more = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        finally:
+            kernel32.CloseHandle(snapshot)
+    except Exception as exc:
+        log(f"find shell-owned orchestrator skipped: {exc}")
+    return None
+
+
+def _process_env_owned(handle) -> bool:
+    """进程环境块里有没有 `COMFYAPP_SHELL_OWNED=1`（读 PEB → ProcessParameters）。"""
+    import ctypes
+
+    class PROCESS_BASIC_INFORMATION(ctypes.Structure):
+        _fields_ = [
+            ("Reserved1", ctypes.c_void_p),
+            ("PebBaseAddress", ctypes.c_void_p),
+            ("Reserved2", ctypes.c_void_p * 2),
+            ("UniqueProcessId", ctypes.c_void_p),
+            ("Reserved3", ctypes.c_void_p),
+        ]
+
+    pbi = PROCESS_BASIC_INFORMATION()
+    returned = ctypes.c_ulong(0)
+    status = ntdll.NtQueryInformationProcess(
+        handle, 0, ctypes.byref(pbi), ctypes.sizeof(pbi), ctypes.byref(returned)
+    )
+    if status != 0 or not pbi.PebBaseAddress:
+        return False
+    params = ctypes.c_void_p()
+    if not _read_remote(handle, pbi.PebBaseAddress + 0x20, ctypes.byref(params), 8):
+        return False
+    if not params.value:
+        return False
+    env_offset = 0x80 if ctypes.sizeof(ctypes.c_void_p) == 8 else 0x48
+    env_addr = ctypes.c_void_p()
+    if not _read_remote(handle, params.value + env_offset, ctypes.byref(env_addr), 8):
+        return False
+    if not env_addr.value:
+        return False
+    buf = ctypes.create_string_buffer(64 * 1024)
+    read = ctypes.c_size_t(0)
+    if not kernel32.ReadProcessMemory(
+        handle, env_addr, buf, ctypes.sizeof(buf), ctypes.byref(read)
+    ):
+        return False
+    text = buf.raw[: read.value].decode("utf-16-le", errors="ignore")
+    needle = f"{_SHELL_OWNED_ENV}=1"
+    return any(part.strip() == needle for part in text.split("\x00"))
+
+
+def _read_remote(handle, address, out_buffer, size: int) -> bool:
+    import ctypes
+
+    read = ctypes.c_size_t(0)
+    return bool(
+        kernel32.ReadProcessMemory(
+            handle, ctypes.c_void_p(address), out_buffer, size, ctypes.byref(read)
+        )
+    )
+
+
+_OWNED_ORCHESTRATOR_PID: "int | None" = None
+
+
+def _remember_owned_orchestrator(pid: int) -> None:
+    global _OWNED_ORCHESTRATOR_PID
+    _OWNED_ORCHESTRATOR_PID = pid
+
+
+def _is_shell_owned_pid(pid: int) -> bool:
+    """这个 PID 是不是壳自己起的编排器（可能已退出或 PID 被复用，故再查一次）。"""
+    global _OWNED_ORCHESTRATOR_PID
+    if _OWNED_ORCHESTRATOR_PID is not None and pid == _OWNED_ORCHESTRATOR_PID:
+        return True
+    found = _find_shell_owned_orchestrator()
+    return found is not None and found == pid
+
+
 def _kill_shell_from_pid_file(project_root: str) -> None:
     """回收本次启动器拉起的桌面壳（整棵进程树）。
 
@@ -609,6 +753,15 @@ def _kill_shell_from_pid_file(project_root: str) -> None:
     finally:
         _safe_remove(path)
     if not _is_pid_alive(pid):
+        return
+    if _is_shell_owned_pid(pid):
+        # 壳自编排（ISSUE #784）：这个编排器是壳的孩子，随壳一起退出——
+        # 启动器去杀它等于把用户正在用的应用掐掉。判据是环境块标记，见
+        # _is_shell_owned_pid 的注释。
+        log(
+            f"skip reaping PID {pid}: it is the orchestrator started by a shell "
+            "(it dies with that shell)"
+        )
         return
     log(f"shell process {pid} still alive after launcher exit, reaping process tree")
     try:
@@ -825,6 +978,27 @@ def _cleanup_status(project_root: str) -> None:
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 gdi32 = ctypes.windll.gdi32
+# 壳自编排的认亲（_process_env_owned）要经 NtQueryInformationProcess 拿 PEB ——
+# 它只在 ntdll 里，不在 kernel32。这里与上面几个一样是**调用点前就必须存在**的
+# 模块级绑定（_find_shell_owned_orchestrator 在 main 之前就被引用）。
+ntdll = ctypes.windll.ntdll
+
+kernel32.CreateToolhelp32Snapshot.argtypes = [DWORD, DWORD]
+kernel32.CreateToolhelp32Snapshot.restype = HANDLE
+kernel32.Process32FirstW.argtypes = [HANDLE, ctypes.c_void_p]
+kernel32.Process32FirstW.restype = BOOL
+kernel32.Process32NextW.argtypes = [HANDLE, ctypes.c_void_p]
+kernel32.Process32NextW.restype = BOOL
+kernel32.OpenProcess.argtypes = [DWORD, BOOL, DWORD]
+kernel32.OpenProcess.restype = HANDLE
+kernel32.ReadProcessMemory.argtypes = [
+    HANDLE, LPVOID, LPVOID, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t),
+]
+kernel32.ReadProcessMemory.restype = BOOL
+ntdll.NtQueryInformationProcess.argtypes = [
+    HANDLE, ctypes.c_int, LPVOID, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong),
+]
+ntdll.NtQueryInformationProcess.restype = ctypes.c_long
 
 user32.CreateWindowExW.argtypes = [
     DWORD, LPCWSTR, LPCWSTR, DWORD,
@@ -2012,6 +2186,16 @@ def _shell_exe(project_root: str) -> str:
     return ""
 
 
+def shell_launch_handoff() -> bool:
+    """本次是否「让位给壳自编排」。
+
+    与「真的起不来」共用同一个返回值（None），因此需要一条**显式**的标记把它
+    分开：把「让位」误报成失败会弹一个红色「无法启动 dev-launcher.mjs」，而现场
+    其实一切正常（壳正在起服务），用户照提示去修只会修坏别的东西。
+    """
+    return _find_shell_owned_orchestrator() is not None
+
+
 def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.Popen[str] | None":
     """拉起跨平台启动编排器（scripts/dev-launcher.mjs）。
 
@@ -2022,6 +2206,23 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
     entry = _launcher_entry(project_root)
     if not os.path.isfile(entry):
         log(f"launcher entry not found: {entry}")
+        return None
+
+    # 壳自编排（ISSUE #784）：壳自己起编排器时，这里**不再起第二份**。
+    #
+    # 两份编排会争同一个端口、同时又都往 run/launch-session.json 写锚点，谁的
+    # 回收动作都会把对方的 dev server 当成「上一次的孤儿」处理。判据是编排器
+    # 进程环境里的 COMFYAPP_SHELL_OWNED 标记（只有壳亲手起的才有，见
+    # src-tauri/src/shell_launch.rs 的 is_own）——比「有没有 dev-server 在跑」
+    # 精确得多，后者认不出「谁起的」，据此让位会把用户上一轮的应用当成自己的。
+    shell_owned = _find_shell_owned_orchestrator()
+    if shell_owned is not None:
+        log(
+            f"shell already orchestrates this checkout (pid {shell_owned}), "
+            "reusing it instead of starting a second orchestrator"
+        )
+        _reset_shell_pid_file(project_root)
+        _remember_owned_orchestrator(shell_owned)
         return None
 
     node = _node_exe()
@@ -2054,7 +2255,7 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
                 pass
         out = open(out_path, "a", encoding="utf-8", buffering=1)
         err = open(err_path, "a", encoding="utf-8", buffering=1)
-        return subprocess.Popen(
+        proc = subprocess.Popen(
             _node_argv(node, node_args),
             cwd=project_root,
             stdin=subprocess.DEVNULL,
@@ -2079,6 +2280,25 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
     except Exception as exc:
         log(f"subprocess.Popen failed: {exc}")
         return None
+
+    # 把编排器纳入一个 KILL_ON_JOB_CLOSE 的 Windows Job Object（规范 §3.3 平台机制层）。
+    # 上面对 DETACHED_PROCESS 的说明只解决了「启动器交班退出后 app 要活着」；但编排器
+    # 自己若崩溃 / 被硬杀，它拉起的 node→pnpm→next→壳会残留成孤儿（锁住 start-tauri
+    # \_internal\*.dll，正是 build-launcher 前置检查报的那类占用）。Job Object 是 OS 级
+    # 兜底：job 句柄已复制进编排器进程，编排器一死最后一个句柄关闭 → OS 当场终止整棵树。
+    # best-effort：attach 失败（非 Windows / API 不可用 / 权限不足）只记日志，退回现有
+    # 回收路径，绝不因它拖垮启动。
+    try:
+        from win_job import attach_kill_on_close_job
+
+        if attach_kill_on_close_job(proc.pid):
+            log(f"编排器 PID {proc.pid} 已纳入 KILL_ON_JOB_CLOSE job（崩溃/被杀即整树回收）")
+        else:
+            log("Windows Job Object 未启用（非 Windows / API 失败），沿用现有回收路径")
+    except Exception as exc:
+        log(f"attach kill-on-close job skipped: {exc}")
+
+    return proc
 
 
 
@@ -2124,6 +2344,10 @@ def _monitor_headless(
     """无启动画面模式：后台 tail dev-launcher.log 并写 run/launch-status.json，
 
     直到 Tauri 主窗口出现、dev-launcher 异常退出或超时。
+
+    ``proc`` 为 None 是**合法形态**（ISSUE #784）：壳自己起了编排器，启动器让位，
+    因此没有「自己要等」的进程。此时监控退化成「读壳写下的进度 + 等窗口出现」，
+    编排器的存活与回收都由壳负责。
     """
     start_time = time.time()
     deadline = start_time + timeout
@@ -2573,13 +2797,19 @@ def main(argv: list[str] | None = None) -> int:
         # 默认模式：不显示 Python 小弹窗，启动过程由 Tauri 主窗口内嵌页展示。
         # launcher 负责 tail dev-launcher.log 并把进度写入 run/launch-status.json。
         proc = launch_dev_server(project_root, mode=mode)
-        if proc is None:
+        if proc is None and not shell_launch_handoff():
+            # 真失败（找不到 node / 编排脚本 / node_modules 不全）与「让位给壳」
+            # 都返回 None，靠这个标记分开：让位是对的，失败才该弹窗。
             if mutex:
                 kernel32.CloseHandle(mutex)
             _cleanup_status(project_root)
             close_logging()
             return _fatal_box("无法启动 scripts/dev-launcher.mjs，请检查 Node.js 是否可用。")
-        _write_status(project_root, "initial")
+        if proc is None:
+            # 壳自编排：编排器是壳的孩子，启动器只负责把壳拉起来 + 读进度。
+            log("launcher handed orchestration over to the shell (ISSUE #784)")
+        else:
+            _write_status(project_root, "initial")
         monitor_code = 0
         try:
             monitor_code = _monitor_headless(project_root, proc)

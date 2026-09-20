@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { textHandler } from "~/lib/form-props";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Zap } from "lucide-react";
@@ -8,6 +9,7 @@ import { authClient } from "~/server/better-auth/client";
 import { readQueryParam } from "~/lib/query-string";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { FormField } from "~/components/ui/form-field";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
@@ -27,61 +29,62 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：提交失败 / 提前返回的分支
+   * 此前各写一次 `setLoading(false)`，漏一处按钮就永远停在「处理中…」。 */
+  const submitBusy = useBusyAction();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setLoading(true);
-    try {
-      if (mode === "register") {
-        const { error: signUpError } = await authClient.signUp.email({
+    await submitBusy
+      .run(async () => {
+        if (mode === "register") {
+          const { error: signUpError } = await authClient.signUp.email({
+            email,
+            password,
+            name: name || "",
+          });
+          if (signUpError) {
+            setError(signUpError.message ?? "注册失败，请稍后重试");
+            return;
+          }
+        }
+
+        const { error: signInError } = await authClient.signIn.email({
           email,
           password,
-          name: name || "",
         });
-        if (signUpError) {
-          setError(signUpError.message ?? "注册失败，请稍后重试");
-          setLoading(false);
+
+        if (signInError) {
+          setError(
+            mode === "register"
+              ? "注册成功，但自动登录失败，请重试"
+              : "邮箱或密码错误",
+          );
           return;
         }
-      }
 
-      const { error: signInError } = await authClient.signIn.email({
-        email,
-        password,
+        /* 读地址栏里的回调目标：`useSearchParams()` 在提交动作里够不到
+         * （它是渲染期契约），这里手上就是一句查询串，走 `~/lib/query-string`
+         * 的读取出口 —— 「键不存在」与「键为空串」分得开，坏转义不抛。 */
+        /* 空串 / 全空白都回落默认目标（`callbackUrl=` 是「没指定」而不是
+         * 「跳到首页」）—— 所以先归一，再判空，最后才 `??`。 */
+        const requested = readQueryParam(
+          window.location.search,
+          "callbackUrl",
+        )?.trim();
+        /* `requested` 为空串 / 全空白时回落默认目标（`callbackUrl=` 是
+         * 「没指定」而不是「跳到首页」）—— 空串归一后走 `??` 读不出差别，
+         * 所以显式用 `||` 的语义写在这一行，并在这里说明理由。 */
+        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串与全空白都要回落默认目标
+        const callback = requested || "/workspace";
+        router.push(callback);
+        router.refresh();
+        /* `run` 返回动作的返回值，这里不读；异常不往外抛（见下）。 */
+      })
+      .catch(() => {
+        setError("网络错误，请稍后重试");
       });
-
-      if (signInError) {
-        setError(
-          mode === "register"
-            ? "注册成功，但自动登录失败，请重试"
-            : "邮箱或密码错误",
-        );
-        setLoading(false);
-        return;
-      }
-
-      /* 读地址栏里的回调目标：`useSearchParams()` 在提交动作里够不到
-       * （它是渲染期契约），这里手上就是一句查询串，走 `~/lib/query-string`
-       * 的读取出口 —— 「键不存在」与「键为空串」分得开，坏转义不抛。 */
-      /* 空串 / 全空白都回落默认目标（`callbackUrl=` 是「没指定」而不是
-       * 「跳到首页」）—— 所以先归一，再判空，最后才 `??`。 */
-      const requested = readQueryParam(
-        window.location.search,
-        "callbackUrl",
-      )?.trim();
-      /* `requested` 为空串 / 全空白时回落默认目标（`callbackUrl=` 是
-       * 「没指定」而不是「跳到首页」）—— 空串归一后走 `??` 读不出差别，
-       * 所以显式用 `||` 的语义写在这一行，并在这里说明理由。 */
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串与全空白都要回落默认目标
-      const callback = requested || "/workspace";
-      router.push(callback);
-      router.refresh();
-    } catch {
-      setError("网络错误，请稍后重试");
-      setLoading(false);
-    }
   }
 
   function switchMode(next: Mode) {
@@ -247,10 +250,14 @@ export default function LoginPage() {
           <Button
             variant="primary-solid"
             type="submit"
-            disabled={loading}
+            disabled={submitBusy.busy}
             className="h-auto w-full rounded-xl py-3"
           >
-            {loading ? "处理中…" : mode === "signin" ? "登录" : "创建并登录"}
+            {submitBusy.busy
+              ? "处理中…"
+              : mode === "signin"
+                ? "登录"
+                : "创建并登录"}
           </Button>
         </form>
 
@@ -312,7 +319,7 @@ function Field({
         <input
           type={type}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={textHandler(onChange)}
           placeholder={placeholder}
           autoComplete={autoComplete}
           required

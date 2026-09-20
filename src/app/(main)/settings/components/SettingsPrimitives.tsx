@@ -9,6 +9,7 @@
  */
 
 import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
+import { textHandler } from "~/lib/form-props";
 import { isPreviewableUrl } from "~/lib/llm/usage-test-config";
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -109,7 +110,7 @@ export function Field({
           type={type}
           value={value}
           placeholder={placeholder}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={textHandler(onChange)}
           className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
         />
       )}
