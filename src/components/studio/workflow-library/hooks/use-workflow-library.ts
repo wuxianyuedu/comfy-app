@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 import { api } from "~/trpc/react";
 import { useItemAction } from "~/components/ui/use-item-action";
 
@@ -411,9 +411,9 @@ export function useWorkflowLibrary(
     pendingLoading,
     actionError,
     loadError: listQ.error
-      ? `工作流列表加载失败：${errorMessage(listQ.error, "未知错误")}`
+      ? errorText(listQ.error, "工作流列表加载失败")
       : tagsQ.error
-        ? `模型标签库加载失败：${errorMessage(tagsQ.error, "未知错误")}`
+        ? errorText(tagsQ.error, "模型标签库加载失败")
         : null,
     loading: listQ.isLoading && !listQ.data && !listQ.isError,
     loadStalled,

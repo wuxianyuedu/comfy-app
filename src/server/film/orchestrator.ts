@@ -29,7 +29,7 @@ import {
 import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import type { ProjectType } from "~/lib/workshop/types";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 
 export type FilmStatus =
   "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
@@ -333,7 +333,7 @@ export async function startFilm(id: string) {
       await appendFilmLog(
         id,
         "error",
-        `镜头 ${shot.order + 1} 提交失败：${errorMessage(e, "提交失败")}`,
+        errorText(e, `镜头 ${shot.order + 1} 提交失败`),
       );
     }
   }
@@ -693,11 +693,7 @@ export async function composeFilm(id: string) {
     await appendFilmLog(id, "success", `🎬 影片合成完成：${localPath}`);
   } catch (e) {
     await filmRepository.markFailed(id, errorMessage(e, "合成失败"));
-    await appendFilmLog(
-      id,
-      "error",
-      `合成失败：${errorMessage(e, "合成失败")}`,
-    );
+    await appendFilmLog(id, "error", errorText(e, "合成失败"));
   } finally {
     await fs
       .rm(tmpDir, { recursive: true, force: true })

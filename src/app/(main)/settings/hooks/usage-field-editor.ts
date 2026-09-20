@@ -14,11 +14,13 @@
 
 import type { Dispatch, SetStateAction } from "react";
 
+import { errorText } from "~/lib/error-message";
 import { readFileAsDataUrl } from "~/lib/file-io";
 
 import {
   hasUsageFieldKey,
   isMediaField,
+  makeUsageField,
   sanitizeModeValue,
   videoModeHidesMedia,
   type UsageField,
@@ -63,7 +65,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
   }
   function addField(key = "") {
     update((prev) =>
-      prev ? { ...prev, fields: [...prev.fields, { key, value: "" }] } : prev,
+      prev
+        ? { ...prev, fields: [...prev.fields, makeUsageField(key, "")] }
+        : prev,
     );
   }
   /** 一键添加固定名称字段（images / first_frame / seed 等预设）：
@@ -71,7 +75,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
   function addPresetField(key: string) {
     update((prev) =>
       prev && !hasUsageFieldKey(prev.fields, key)
-        ? { ...prev, fields: [...prev.fields, { key, value: "" }] }
+        ? { ...prev, fields: [...prev.fields, makeUsageField(key, "")] }
         : prev,
     );
   }
@@ -88,9 +92,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
       const dataUrl = await readFileAsDataUrl(file);
       patchField(index, { value: dataUrl });
     } catch (err) {
-      patchField(index, {
-        value: `读取图片失败：${err instanceof Error ? err.message : "未知错误"}`,
-      });
+      patchField(index, { value: errorText(err, "读取图片失败") });
     }
   }
   /** 随请求发送的字段行：视频 mode=text 时媒体字段已被隐藏（不渲染也不发送），
@@ -118,7 +120,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
       }
       return {
         ...prev,
-        fields: [...prev.fields, { key: "mode", value: mode }],
+        fields: [...prev.fields, makeUsageField("mode", mode)],
       };
     });
   }
@@ -139,9 +141,9 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
         (f) => f.key.trim() === "images" && f.value.trim() === "",
       );
       if (emptyImgRow >= 0) {
-        fields[emptyImgRow] = { key: "images", value: url };
+        fields[emptyImgRow] = makeUsageField("images", url);
       } else {
-        fields.push({ key: "images", value: url });
+        fields.push(makeUsageField("images", url));
       }
       return { ...prev, fields };
     });

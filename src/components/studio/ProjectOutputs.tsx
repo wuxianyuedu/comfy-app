@@ -10,7 +10,10 @@ import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
 import { downloadText } from "~/lib/browser-io";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { timeAgo } from "~/lib/time-format";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { StatusBadge } from "~/components/ui/status-badge";
@@ -455,9 +458,7 @@ export function ProjectOutputs() {
                     onClick={handleCopy}
                     className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
                     title={
-                      copyFailed
-                        ? "复制失败：剪贴板不可用，请手动选中后复制"
-                        : "复制元数据到剪贴板"
+                      copyFailed ? copyFailureText() : "复制元数据到剪贴板"
                     }
                   >
                     {copyFailed

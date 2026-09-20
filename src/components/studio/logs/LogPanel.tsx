@@ -51,7 +51,10 @@ import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { useElementBox } from "~/components/ui/use-element-box";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
 
@@ -738,7 +741,7 @@ export function LogPanel() {
                 onClick={copyAllAction}
                 title={
                   copyFailed
-                    ? "复制失败：剪贴板不可用，请手动选中日志后复制"
+                    ? copyFailureText("日志列表")
                     : `复制当前筛选的全部日志（${scopeLabel} · ${total} 条）`
                 }
                 aria-label="复制当前筛选的全部日志"

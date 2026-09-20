@@ -21,7 +21,10 @@ import {
   type MouseEvent,
 } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { fetchDebugSource } from "~/lib/workflow/debug-source-client";
 import { useDebugStore } from "./debug-store";
@@ -253,11 +256,7 @@ export function DebugChainFooter({
                     ? "border-destructive/40 text-danger-strong"
                     : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
                 }`}
-                title={
-                  copyFailed
-                    ? "复制失败：剪贴板不可用，请手动选中后复制"
-                    : "复制完整相对路径"
-                }
+                title={copyFailed ? copyFailureText() : "复制完整相对路径"}
               >
                 {copyFailed
                   ? "复制失败"
@@ -271,11 +270,7 @@ export function DebugChainFooter({
                 onClick={() => source && onCopyText(source.content)}
                 disabled={!source}
                 className="h-auto rounded-md px-2.5 py-1"
-                title={
-                  copyFailed
-                    ? "复制失败：剪贴板不可用，请手动选中后复制"
-                    : "复制全部源码"
-                }
+                title={copyFailed ? copyFailureText() : "复制全部源码"}
               >
                 {copyFailed
                   ? "复制失败"

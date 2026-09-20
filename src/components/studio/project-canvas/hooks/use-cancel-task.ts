@@ -12,7 +12,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { errorMessage } from "~/lib/error-message";
+import { errorText } from "~/lib/error-message";
 import { cancelTask } from "~/lib/task-cancel-client";
 
 export interface UseCancelTaskArgs {
@@ -57,7 +57,7 @@ export function useCancelTask({
       await cancelTask(currentTaskId);
       // 取消请求已送达，收尾交给 SSE 的 error 事件。
     } catch (e) {
-      onFailedRef.current(`取消请求异常：${errorMessage(e, "未知错误")}`);
+      onFailedRef.current(errorText(e, "取消请求异常"));
     } finally {
       setCancelling(false);
     }

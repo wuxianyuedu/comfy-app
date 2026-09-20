@@ -3,6 +3,7 @@
 // 清单（data/workshop-compositions/<sessionId>.json）。当 ffmpeg 可用且片段为
 // 本地文件时，可额外调用 ffmpeg 把片段（视频）或静帧（图片按 duration 占位）
 // 合成为最终 mp4。不依赖 server-only，纯 Node 可跑。
+import { errorText } from "~/lib/error-message";
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -202,7 +203,7 @@ export async function renderComposition(
     await fs.rm(tmpDir, { recursive: true, force: true });
     return {
       ok: false,
-      note: `ffmpeg 合成失败：${e instanceof Error ? e.message : String(e)}`,
+      note: errorText(e, "ffmpeg 合成失败"),
     };
   }
   await fs.rm(tmpDir, { recursive: true, force: true });

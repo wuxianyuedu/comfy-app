@@ -22,7 +22,8 @@ vi.mock("~/lib/browser-io", () => ({
   copyText: (text: string) => copyText(text),
 }));
 
-const { useCopyFeedback, useCopyResult } = await import("./use-copy-feedback");
+const { copyFailureText, useCopyFeedback, useCopyResult } =
+  await import("./use-copy-feedback");
 
 beforeEach(() => {
   copyText.mockReset();
@@ -150,5 +151,26 @@ describe("useCopyFeedback", () => {
       release(true);
       await Promise.resolve();
     });
+  });
+});
+
+describe("copyFailureText（复制失败的固定提示句）", () => {
+  it("不给 target 时是完整一句（上半句标题 + 下半句怎么办）", () => {
+    expect(copyFailureText()).toBe("复制失败：剪贴板不可用，请手动选中后复制");
+  });
+
+  it("target 是可选的界面位置说明，插在「手动选中」与「复制」之间", () => {
+    // 只有调用处知道「可复制物在哪一段界面里」；固定句不该把这层写死。
+    expect(copyFailureText("日志列表")).toBe(
+      "复制失败：剪贴板不可用，请手动选中日志列表后复制",
+    );
+    expect(copyFailureText("下方展开区")).toContain(
+      "请手动选中下方展开区后复制",
+    );
+    expect(copyFailureText("日志列表")).not.toContain("后后");
+  });
+
+  it("空串按「不给」处理 —— 免得拼出「请手动选中后复制」以外的怪句", () => {
+    expect(copyFailureText("")).toBe(copyFailureText());
   });
 });

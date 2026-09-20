@@ -25,6 +25,8 @@
 //     并把「该开什么开关」写进 reason，而不是把空白页摆给用户。
 //   - `decideComfyTabOpen(embed)`：由「可嵌性」推出去哪打开。
 
+import { errorText } from "~/lib/error-message";
+
 /** 探测结果：对端是否允许被 `hostOrigin` 内嵌。 */
 export type EmbedVerdict = {
   /** 能否安全地放进 iframe。 */
@@ -259,7 +261,7 @@ export async function probeComfyEmbeddable(
   } catch (e) {
     return {
       embeddable: false,
-      reason: `无法探测 ComfyUI 的内嵌策略：${e instanceof Error ? e.message : String(e)}`,
+      reason: errorText(e, "无法探测 ComfyUI 的内嵌策略"),
     };
   }
   return judgeEmbeddable({
