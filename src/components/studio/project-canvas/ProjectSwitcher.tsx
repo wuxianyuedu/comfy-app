@@ -12,6 +12,7 @@
  */
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -124,10 +125,10 @@ export function ProjectSwitcher({
               autoFocus
               value={renameVal}
               onChange={(event) => onRenameValChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onCommitRename();
-                if (event.key === "Escape") onCancelRename();
-              }}
+              {...enterCommit({
+                onCommit: onCommitRename,
+                onCancel: onCancelRename,
+              })}
               className="border-border-strong bg-canvas-deep text-ink-bright w-full rounded-md border px-2 py-1 text-[12px] outline-none focus:border-violet-400/60"
               placeholder="项目名称"
             />

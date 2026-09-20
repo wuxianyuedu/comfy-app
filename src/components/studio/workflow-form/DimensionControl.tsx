@@ -15,6 +15,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { NumberField } from "~/components/ui/number-field";
+import { readStorageJson, writeStorageItem } from "~/lib/browser-storage";
 import {
   CLARITY_SUBGROUP_OF_KIND,
   DEFAULT_ALIGN_MULTIPLE,
@@ -159,33 +160,24 @@ function DimensionSizeControl({
    *  不会串到 Wan 视频工作流上。
    *  默认 64（符合用户要求）。 */
   const ALIGN_PREFIX = "comfyapp:wf-align-multiple:v1";
-  const [alignMultiple, setAlignMultipleState] = useState<number>(() => {
-    if (typeof window === "undefined") return DEFAULT_ALIGN_MULTIPLE;
-    try {
-      const raw = window.localStorage.getItem(
-        `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
-      );
-      if (!raw) return DEFAULT_ALIGN_MULTIPLE;
-      const parsed = Number.parseInt(raw, 10);
-      return normalizeAlignMultiple(parsed);
-    } catch {
-      return DEFAULT_ALIGN_MULTIPLE;
-    }
-  });
+  const [alignMultiple, setAlignMultipleState] = useState<number>(() =>
+    /* SSR / 隐私模式 / 坏数据一律回落默认值（§16.2.4.28）。窄化交给
+     * `parse`：此前这里要在本地写一遍 `Number.parseInt` + 归一化。 */
+    readStorageJson(
+      `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
+      DEFAULT_ALIGN_MULTIPLE,
+      (raw) => normalizeAlignMultiple(Number.parseInt(raw, 10)),
+    ),
+  );
   const setAlignMultiple = useCallback(
     (multiple: number) => {
       const clamped = normalizeAlignMultiple(multiple);
       setAlignMultipleState(clamped);
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(
-            `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
-            String(clamped),
-          );
-        } catch {
-          /* 存储不可用 —— 非致命 */
-        }
-      }
+      /* 存储不可用（配额满 / 隐私模式）非致命，静默 —— 本次会话内仍然生效。 */
+      writeStorageItem(
+        `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
+        String(clamped),
+      );
     },
     [workflowId],
   );

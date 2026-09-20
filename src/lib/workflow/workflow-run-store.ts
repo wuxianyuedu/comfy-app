@@ -16,6 +16,11 @@
  * 参照 project-canvas/stepLogCache.ts 的同款取舍，真值永远以服务端为准。
  */
 
+import {
+  readStorageItem,
+  removeStorageItem,
+  writeStorageJson,
+} from "../browser-storage";
 import type { TaskLogEntry } from "../workshop/generation-client";
 
 /** 这次运行**从哪个入口发起**。
@@ -60,24 +65,23 @@ let version = 0;
 /* ── localStorage 写穿（SSR 安全：仅浏览器端执行）──────────────────────── */
 
 function persist(): void {
-  if (typeof window === "undefined") return;
-  try {
-    const arr = Array.from(runs.values()).map((meta) => ({
-      ...meta,
-      logs: meta.logs?.slice(-MAX_LOGS),
-    }));
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-  } catch {
-    /* 配额满 / 隐私模式：降级为仅会话内持久 */
-  }
+  /* 配额满 / 隐私模式：降级为仅会话内持久（写失败已静默）——
+   * 「能不能用 storage」与「写失败怎么办」收在 `~/lib/browser-storage`
+   *（§16.2.4.28）。 */
+  const arr = Array.from(runs.values()).map((meta) => ({
+    ...meta,
+    logs: meta.logs?.slice(-MAX_LOGS),
+  }));
+  writeStorageJson(STORAGE_KEY, arr);
 }
 
 function hydrate(): void {
-  if (typeof window === "undefined") return;
+  const raw = readStorageItem(STORAGE_KEY);
+  if (raw === null) return;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
     const parsed: unknown = JSON.parse(raw);
+    /* 坏数据静默丢弃、**不回落默认值** —— 本 store 的「默认值」是空表，
+     * 回不回落在结果上一样（§16.2.4.28 的口径：回落与丢弃等价时就别装两套）。 */
     if (!Array.isArray(parsed)) return;
     for (const item of parsed) {
       if (
@@ -263,13 +267,7 @@ export { subscribe as subscribeWorkflowRunStore };
 /** 测试辅助：清空全部登记（含 localStorage）。 */
 export function clearAllWorkflowRuns(): void {
   runs.clear();
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-  }
+  removeStorageItem(STORAGE_KEY);
   version += 1;
   for (const l of listeners) l();
 }

@@ -12,6 +12,7 @@
  * `src/lib/` 里读写 localStorage 并非新起法（见 `lib/project-canvas/canvas-store`），
  * 本模块只做存取与合并，不含 React。 */
 
+import { readStorageJson, writeStorageJson } from "../browser-storage";
 import {
   DEFAULT_SIZE_PRESET_TABLE,
   RESOLUTION_TIERS,
@@ -83,14 +84,13 @@ function mergeTable(raw: unknown): SizePresetTable {
 }
 
 function readStored(): SizePresetTable {
-  if (typeof window === "undefined") return mergeTable(null);
-  try {
-    const raw = window.localStorage.getItem(SIZE_PRESET_STORAGE_KEY);
-    return mergeTable(raw ? (JSON.parse(raw) as unknown) : null);
-  } catch {
-    /* 存储不可用 / JSON 损坏：按默认表走，不影响生成。 */
-    return mergeTable(null);
-  }
+  /* 存储不可用 / JSON 损坏 / SSR：一律按默认表走，不影响生成 ——
+   * 三条判据收在 `~/lib/browser-storage`（§16.2.4.28）。 */
+  return mergeTable(
+    readStorageJson<unknown>(SIZE_PRESET_STORAGE_KEY, null, (raw) =>
+      JSON.parse(raw),
+    ),
+  );
 }
 
 let snapshot: SizePresetTable = readStored();
@@ -115,16 +115,8 @@ export function subscribeSizePresetTable(listener: Listener): () => void {
 
 function commit(next: SizePresetTable): void {
   snapshot = next;
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.setItem(
-        SIZE_PRESET_STORAGE_KEY,
-        JSON.stringify(next),
-      );
-    } catch {
-      /* 存储不可用：本次会话内仍然生效。 */
-    }
-  }
+  /* 存储不可用（配额满 / 隐私模式）静默：本次会话内仍然生效。 */
+  writeStorageJson(SIZE_PRESET_STORAGE_KEY, next);
   for (const listener of listeners) listener();
 }
 

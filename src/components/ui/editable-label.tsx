@@ -3,6 +3,7 @@
 import React, { useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 
 export function EditableLabel({
   label,
@@ -89,16 +90,15 @@ export function EditableLabel({
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commit();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
+        {...enterCommit({
+          onCommit: commit,
+          /* Esc 显式回退原值：编辑态与草稿一起复位，下次点开看到的是当前值
+           * 而不是上次输入一半的内容。 */
+          onCancel: () => {
             setDraft(label);
             setEditing(false);
-          }
-        }}
+          },
+        })}
         onClick={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}

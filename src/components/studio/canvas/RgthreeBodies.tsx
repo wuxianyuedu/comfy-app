@@ -2,6 +2,7 @@
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { useRgthreeGroups } from "./IOEditContext";
 import type { WorkflowGroup } from "../workflow-types";
+import { Button } from "~/components/ui/button";
 
 export function RgthreeFastGroupsBypasserBody({
   matchTitle,
@@ -52,13 +53,14 @@ export function RgthreeFastGroupsBypasserBody({
               {bypass ? "yes" : "no"}
             </span>
             {/* 开关本体 —— 一颗可点击的小章，经 context 翻转
-             *  该分组的中止状态。用 div+role=button
-             *  写法（与「行内按钮铁律」一致）
-             *  并拦截指针事件，好让 ReactFlow 的拖拽处理器
-             *  看不到这次点击。 */}
-            <div
-              role="button"
-              tabIndex={0}
+             *  该分组的中止状态。**用原生 `<button>`**（不是在 `div` 上补
+             *  `role="button"` + `onKeyDown` 复刻浏览器默认行为）——
+             *  Enter/Space、焦点环、`aria-pressed` 的键盘语义都是免费给的，
+             *  自己补的那份写漏一处就是「这颗开关键盘点不动」。
+             *  外观逐条留在 `style` 里（§16.2.4.2 第 9 条：验收标准是渲染结果不变）。
+             *  指针事件照旧拦截，好让 ReactFlow 的拖拽处理器看不到这次点击。 */}
+            <Button
+              variant="ghost"
               aria-pressed={bypass}
               title={bypass ? "点击取消旁路" : "点击旁路此 group"}
               onClick={(event) => {
@@ -67,24 +69,21 @@ export function RgthreeFastGroupsBypasserBody({
               }}
               onPointerDown={(event) => event.stopPropagation()}
               onMouseDown={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  ctx.setBypass(group.id, !bypass);
-                }
-              }}
+              /* 覆盖串要在 `variant` 之后由 `cn()` 合并 —— tailwind-merge 同一属性
+               * 后面的类赢，所以底色 / 圆角 / 内边距 / 悬停底都由这里接管
+               *（§16.2.4.2 第 5 条：基元默认值「成套 + 讲顺序」地覆盖）。 */
+              className="border-0 bg-transparent p-0 hover:bg-transparent"
               style={{
                 marginLeft: 6,
                 width: 26,
                 height: 14,
                 borderRadius: 7,
+                cursor: "pointer",
                 background: bypass
                   ? "rgba(236, 72, 153, 0.55)"
                   : "rgba(63, 63, 70, 0.55)",
                 border: "1px solid var(--color-border-strong)",
                 position: "relative",
-                cursor: "pointer",
                 flex: "0 0 auto",
                 transition: "background 120ms",
               }}
@@ -103,7 +102,7 @@ export function RgthreeFastGroupsBypasserBody({
                   transition: "left 120ms",
                 }}
               />
-            </div>
+            </Button>
           </div>
         );
       })}

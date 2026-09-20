@@ -261,6 +261,45 @@
  *      那 14 处**压根没有** ARIA 标记的 —— 而它们才是这条账里更差的那一半
  *      （与 P13「更差的那种也要数」同源）。`ui/` 自身豁免（`label.tsx` 就是实现）。
  *
+ *   P24 视图里自写「读文件」（**硬闸**）——
+ *      `~/lib/file-io` 的 `readFileAsText` / `readFileAsDataUrl` 是出口。
+ *      全库 6 处各写一遍「把用户选的 File 读成文本 / data URL」，而它们对
+ *      两件事各判各的：**怎么读**（4 处 `file.text()`、2 处手搓 `FileReader`）
+ *      与**读到空算不算失败**（两处 FileReader 把 `typeof result === "string"
+ *      ? result : ""` 与「读失败」压成同一个 `""`，调用处只能靠 `if (!dataUrl)
+ *      throw` 反推，另一处连那一步都没有）。
+ *
+ *      ⚠️ 判据取 `new FileReader(` 与 `<input … type="file"` **之外的**
+ *      `readAs*` 调用形态（`readAsText` / `readAsDataURL` / `readAsArrayBuffer`）
+ *      + `await file.text()`。单看 `FileReader` 会漏掉 `file.text()` 那一族
+ *      （它们才是多数），而 `readAs*` 是 FileReader 的唯一签名。
+ *      文件选择框本身不在此列（那是 P7 的账，出口是 `ui/file-picker`）。
+ *
+ *   P25 视图 / lib 里自写 localStorage 存取（**硬闸**）——
+ *      出口是 `~/lib/browser-storage` 的六个函数，名字与理由见 §16.2.4.28
+ *      （读 / 写 / 删 + JSON 变体 + 「能不能用」探测）。全库 9 个
+ *      文件、十余处各写一遍「读 / 写 localStorage」，而它们对
+ *      **怎么判「没有浏览器」**各判各的 —— 三种写法同时存在，
+ *      在 SSR、jsdom、隐私模式下**行为不同**：只判 window 的那几处
+ *      在隐私模式下会抛异常（外层 try 兜住的是另一件事）。
+ *
+ *      ⚠️ 判据取 `localStorage` 上那几个读写方法调用的**形态**。
+ *      不看 `typeof localStorage`：那只是它的一个前置判据，
+ *      而这条账里更差的一半正是「压根没判」。
+ *
+ *   P26 视图里自写「Enter 提交 / Esc 取消」的键位判据（**硬闸**）——
+ *      `~/components/ui/use-enter-commit` 的 `enterCommit` 是出口。
+ *      全库 11 处各在 `onKeyDown` 里判键，而它们对两件事各判各的：
+ *      **Enter 要不要 `preventDefault`**（6 处写了、5 处没写 —— 没写的那几处
+ *      在 `<form>` 里会连带提交整页，「回车新增标签」变成「回车提交整页」）、
+ *      **Esc 取消要不要复位草稿**（复位是 3 处，其余留在原值）。
+ *      另有 6 处 `role="button"` 元素在 `onKeyDown` 里复刻浏览器对原生按钮的
+ *      默认行为 —— 那类要的是 `<Button>`（P1 的账），本判据够不着它们。
+ *
+ *      ⚠️ 判据取 `onKeyDown` 里判 `"Enter"` 这个**形态**，且**只看输入类控件**
+ *      （`<input` / `<textarea` / `<Input` / `<Textarea` 在附近）。
+ *      不数「挂到 window 上的全局快捷键」（那是 P20 的账）。
+ *
  * ⚠️ 为什么会把「内联 animate-spin」也算进来：它不是「样式问题」，而是
  * 「这个加载态本该复用基元」。单独看每一处都「没毛病」，全库一起才看得出
  * 有 19 份自写 spinner —— 与 §12.12「跨文件重复块」是同一族问题。
@@ -313,6 +352,14 @@ const EXEMPT_DIRS = [
  * 用，不是整目录放行；每条都必须写清「为什么这一处不属于该判据」。
  */
 const EXEMPT_FILES = {
+  P24: [
+    {
+      re: /^src\/app\/api\//,
+      reason:
+        "服务端路由里的 `.text()` 是**读 fetch 响应体**（`res.text()`），" +
+        "不是「读用户选的文件」；服务端也拿不到 `File`（与 P12 跳过 app/api 同款）。",
+    },
+  ],
   P12: [
     {
       re: /^src\/app\/api\//,
@@ -717,6 +764,76 @@ const RULES = {
       return (t2.match(re) || []).length;
     },
   },
+  P24: {
+    label:
+      "视图里自写读文件（应使用 ~/lib/file-io 的 readFileAsText / readFileAsDataUrl）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：FileReader 的 `readAs*` 调用，或 `await <x>.text()`。
+       * 单看 `FileReader` 会漏掉 `file.text()` 那一族（它们才是多数）；
+       * `readAs*` 是 FileReader 的唯一签名，漏不掉「手搓 reader」那种。 */
+      return (
+        (
+          t2.match(/readAs(?:Text|DataURL|ArrayBuffer|BinaryString)\s*\(/g) ||
+          []
+        ).length +
+        /* **不带 `await` 的 `.text()` 也要数**：那是这条账里更差的一半 ——
+         * `void file.text().then(...)` 没有 rejection 分支，读失败被整个吞掉
+         *（`VideoQueueModal` / `WorkshopStageBody` 原先就是这两处）。
+         * 与 P13「更差的那种写法也要数」同源：判据漏掉更差的那一种，
+         * 被拦下的就永远只是合规者。 */
+        /* 只数**像文件**的接收者（`file` / `fileToRead` / `files[0]` /
+         * `input.files[0]`）—— `.text()` 也是 `fetch` 读响应体的方法
+         *（`res.text()`），那是网络读取，不是「读用户选的文件」。
+         * 用名字前缀而不是白名单：调用处给 File 变量的命名几乎都带 `file`。 */
+        (
+          t2.match(
+            /\b(?:[A-Za-z_$]*[Ff]iles?(?:\[\d+\])?(?:\.\w+)?)\.text\s*\(\s*\)/g,
+          ) || []
+        ).length
+      );
+    },
+  },
+  P25: {
+    label:
+      "自写 localStorage 存取（应使用 ~/lib/browser-storage 的 readStorageItem / readStorageJson / writeStorageItem / writeStorageJson）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`localStorage.getItem(` 这类**调用**。
+       * 不数 `typeof localStorage` —— 那只是它的一个前置判据，
+       * 而这条账里更差的一半正是「压根没判」（与 P13 / P18 同源）。 */
+      return (
+        t2.match(
+          /(?:window\.)?localStorage\.(?:getItem|setItem|removeItem|clear)\s*\(/g,
+        ) || []
+      ).length;
+    },
+  },
+  P26: {
+    label:
+      "视图里自写「Enter 提交」键位判据（应使用 ~/components/ui/use-enter-commit 的 enterCommit）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 形态：`onKeyDown` 里判 `"Enter"`。这是「输入框回车提交」的签名。
+       * ⚠️ **不看挂到 window / document 的全局快捷键**（那是 P20 的账，
+       * 出口是 `use-hotkey`）；也够不着 `role="button"` 元素复刻浏览器默认
+       * 行为那 6 处 —— 那类要的是 `<Button>`（P1 的账）。 */
+      /* 只数**输入类控件**上的回车提交：`onKeyDown` 块里同时出现
+       * `"Enter"` 判据，且它所在的那个元素是 `<input` / `<textarea`。
+       * `role="tab"` / `role="button"` 上复刻浏览器默认行为的那几处
+       * （`e.key === "Enter" || e.key === " "`）是**另一种账** ——
+       * 它们要的是 `<Button>`（P1），不是「输入框回车提交」。 */
+      const blocks = t2.match(/onKeyDown=\{[\s\S]{0,600}?\}\s*\}/g) || [];
+      return blocks.filter((b) => {
+        if (!/\.key\s*===\s*"Enter"/.test(b)) return false;
+        /* 同一段里不得出现 Space 键位判据 —— 那是「复刻按钮默认行为」
+         *（`role="tab"` / `role="button"` 上补 Enter/Space），要的是
+         * `<Button>`（P1 的账），不是「输入框回车提交」。 */
+        if (/\.key\s*===\s*" "/.test(b)) return false;
+        return true;
+      }).length;
+    },
+  },
   P7: {
     label:
       "视图内自写「隐藏 <input type=file> + 手工触发」（应使用 ~/components/ui/file-picker 的 useFilePicker）",
@@ -756,6 +873,9 @@ const HARD_GATE_RULES = new Set([
   "P21",
   "P22",
   "P23",
+  "P24",
+  "P25",
+  "P26",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */

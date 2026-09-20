@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import { filterGroupsByKeyword } from "~/lib/list-filter";
 import type { OptionGroup } from "~/lib/workshop/character-options";
 
@@ -195,12 +196,7 @@ export function AttributeMultiSelect({
               <input
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addCustom();
-                  }
-                }}
+                {...enterCommit({ onCommit: addCustom })}
                 className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded border px-1.5 py-0.5 text-xs outline-none"
                 placeholder="没有想要的？自定义添加后回车"
               />

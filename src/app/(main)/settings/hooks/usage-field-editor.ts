@@ -14,6 +14,8 @@
 
 import type { Dispatch, SetStateAction } from "react";
 
+import { readFileAsDataUrl } from "~/lib/file-io";
+
 import {
   hasUsageFieldKey,
   isMediaField,
@@ -21,19 +23,6 @@ import {
   videoModeHidesMedia,
   type UsageField,
 } from "~/lib/llm/usage-test-config";
-
-/** 读取本地图片文件为 data URL，供图片字段上传（不回服务端，纯前端转码）。 */
-function readImageAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      /* readAsDataURL 的结果必是字符串（data:image/...） */
-      resolve(typeof reader.result === "string" ? reader.result : "");
-    };
-    reader.onerror = () => reject(new Error("读取图片失败"));
-    reader.readAsDataURL(file);
-  });
-}
 
 /** 编辑器需要的最小状态形状：只有 `kind` 与 `fields`。
  *
@@ -96,7 +85,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
   async function pickFieldImage(index: number, file: File | undefined) {
     if (!file) return;
     try {
-      const dataUrl = await readImageAsDataUrl(file);
+      const dataUrl = await readFileAsDataUrl(file);
       patchField(index, { value: dataUrl });
     } catch (err) {
       patchField(index, {

@@ -42,6 +42,7 @@ import {
 } from "~/lib/workshop/extraction-log";
 import { buildStoryboardMessages, parseStoryboard } from "~/lib/llm/prompts";
 import { errorMessage } from "~/lib/error-message";
+import { readFileAsText } from "~/lib/file-io";
 
 /** 判断导入内容是否为 JSON(分镜/角色卡 JSON 走结构化解析,其余按剧本 markdown 解析) */
 function looksLikeJson(text: string): boolean {
@@ -244,7 +245,9 @@ export function useStoryboardPlanner(props: Props) {
   async function handleImportFile(file: File) {
     setExtractState({ busy: true, status: "", error: "" });
     try {
-      const text = await file.text();
+      /* 读取收在唯一出口里（§16.2.4.27）—— 此前两处各写一遍 `file.text()`，
+       * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
+      const text = await readFileAsText(file);
       const trimmed = text.trim();
       if (!trimmed) throw new Error("文件内容为空");
       if (looksLikeJson(trimmed)) {

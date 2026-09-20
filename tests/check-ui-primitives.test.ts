@@ -730,7 +730,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/Follow.tsx",
-      "export function F({ text }: { text: string }) {\n  const ref = useRef<HTMLDivElement>(null);\n  useEffect(() => {\n    const el = ref.current;\n    if (el) el.scrollTop = el.scrollHeight;\n  }, [text]);\n  return <div ref={ref} className=\"overflow-y-auto\" />;\n}\n",
+      'export function F({ text }: { text: string }) {\n  const ref = useRef<HTMLDivElement>(null);\n  useEffect(() => {\n    const el = ref.current;\n    if (el) el.scrollTop = el.scrollHeight;\n  }, [text]);\n  return <div ref={ref} className="overflow-y-auto" />;\n}\n',
     );
     const { code, output } = run();
     expect(code).toBe(1);
@@ -754,7 +754,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/OkFollow.tsx",
-      "import { useScrollFollow } from \"~/components/ui/use-scroll-follow\";\nexport function F({ text }: { text: string }) {\n  const follow = useScrollFollow({ watch: text });\n  return <div ref={follow.containerRef} onScroll={follow.onScroll} />;\n}\n",
+      'import { useScrollFollow } from "~/components/ui/use-scroll-follow";\nexport function F({ text }: { text: string }) {\n  const follow = useScrollFollow({ watch: text });\n  return <div ref={follow.containerRef} onScroll={follow.onScroll} />;\n}\n',
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -776,7 +776,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/GoPage.tsx",
-      "import { useRouter } from \"next/navigation\";\nexport function G() {\n  const router = useRouter();\n  return <div onClick={() => router.push(\"/studio\")}>去工作室</div>;\n}\n",
+      'import { useRouter } from "next/navigation";\nexport function G() {\n  const router = useRouter();\n  return <div onClick={() => router.push("/studio")}>去工作室</div>;\n}\n',
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -786,7 +786,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/RawField.tsx",
-      "export function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <label className=\"block\">\n      <span className=\"text-ink-faint mb-1.5 block text-[11px]\">名称</span>\n      <input value={v} onChange={(e) => on(e.target.value)} />\n    </label>\n  );\n}\n",
+      'export function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <label className="block">\n      <span className="text-ink-faint mb-1.5 block text-[11px]">名称</span>\n      <input value={v} onChange={(e) => on(e.target.value)} />\n    </label>\n  );\n}\n',
     );
     const { code, output } = run();
     expect(code).toBe(1);
@@ -800,7 +800,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/SwitchRow.tsx",
-      "export function S({ v, on }: { v: boolean; on: (b: boolean) => void }) {\n  return (\n    <label className=\"flex cursor-pointer items-center justify-between gap-2\">\n      <span className=\"text-ink-soft\">显示网格</span>\n      <Switch checked={v} onCheckedChange={on} />\n    </label>\n  );\n}\n",
+      'export function S({ v, on }: { v: boolean; on: (b: boolean) => void }) {\n  return (\n    <label className="flex cursor-pointer items-center justify-between gap-2">\n      <span className="text-ink-soft">显示网格</span>\n      <Switch checked={v} onCheckedChange={on} />\n    </label>\n  );\n}\n',
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -810,7 +810,217 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/OkField.tsx",
-      "import { FormField } from \"~/components/ui/form-field\";\nexport function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <FormField label=\"名称\" id=\"n\">\n      {(a11y) => <input {...a11y} value={v} onChange={(e) => on(e.target.value)} />}\n    </FormField>\n  );\n}\n",
+      'import { FormField } from "~/components/ui/form-field";\nexport function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <FormField label="名称" id="n">\n      {(a11y) => <input {...a11y} value={v} onChange={(e) => on(e.target.value)} />}\n    </FormField>\n  );\n}\n',
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P24 / P25 / P26：本批三条硬闸（规范 §16.2.4.27 ~ §16.2.4.29）────
+   *
+   * 三条同样按**形态**取锚点（`readAs*` / `.text()` 调用、
+   * `localStorage.*Item` 调用、`onKeyDown` 里判 `"Enter"`），
+   * 每条都配反面用例 —— 判据太宽会逼下一个人改坏代码去迎合它。 */
+  it("视图里自写读文件直接阻断（规范 P24）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawRead.tsx",
+      [
+        "export function R({ file }: { file: File }) {",
+        '  const [text, setText] = useState("");',
+        "  useEffect(() => {",
+        "    void file.text().then(setText);",
+        "  }, [file]);",
+        "  return <pre>{text}</pre>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P24");
+    expect(output).toContain("src/components/studio/RawRead.tsx");
+  });
+
+  it("手搓 FileReader 的 readAs* 也被 P24 计（两种写法都要数）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawReader.tsx",
+      [
+        "export function R({ file }: { file: File }) {",
+        '  const [url, setUrl] = useState("");',
+        "  useEffect(() => {",
+        "    const reader = new FileReader();",
+        "    reader.onload = () => setUrl(String(reader.result));",
+        "    reader.readAsDataURL(file);",
+        "  }, [file]);",
+        "  return <div>{url}</div>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P24");
+  });
+
+  it("读 fetch 响应体（res.text()）不被 P24 计 —— 那是网络读取", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/FetchText.tsx",
+      [
+        "export async function F(url: string) {",
+        "  const res = await fetch(url);",
+        "  const body = await res.text();",
+        "  return body;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("使用 readFileAsText 的文件不再被 P24 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkRead.tsx",
+      [
+        'import { readFileAsText } from "~/lib/file-io";',
+        "export async function R(file: File) {",
+        "  return readFileAsText(file);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("自写 localStorage 存取直接阻断（规范 P25）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawStorage.tsx",
+      [
+        "export function S() {",
+        '  const [v, setV] = useState("");',
+        "  useEffect(() => {",
+        '    setV(window.localStorage.getItem("k") ?? "");',
+        "  }, []);",
+        "  return <span>{v}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P25");
+    expect(output).toContain("src/components/studio/RawStorage.tsx");
+  });
+
+  it("「压根没判有没有浏览器」的写法也被 P25 计（更差的那一半）", () => {
+    /* 单看 `typeof window === "undefined"` 会漏掉这一族 ——
+     * 而它们才是这条账里更差的那一种（隐私模式下直接抛）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/RawStorage2.tsx",
+      [
+        "export function S() {",
+        "  try {",
+        '    localStorage.setItem("k", "1");',
+        "  } catch {",
+        "    /* 忽略 */",
+        "  }",
+        "  return null;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P25");
+  });
+
+  it("使用 readStorageItem 的文件不再被 P25 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkStorage.tsx",
+      [
+        'import { readStorageItem } from "~/lib/browser-storage";',
+        "export function S() {",
+        '  return <span>{readStorageItem("k")}</span>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写「Enter 提交」键位判据直接阻断（规范 P26）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawEnter.tsx",
+      [
+        "export function E({ onCommit }: { onCommit: () => void }) {",
+        "  return (",
+        "    <input",
+        "      onKeyDown={(event) => {",
+        '        if (event.key === "Enter") onCommit();',
+        "      }}",
+        "    />",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P26");
+    expect(output).toContain("src/components/studio/RawEnter.tsx");
+  });
+
+  it("全局快捷键（走 useHotkey）不被 P26 计 —— 那是 P20 的账", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/GlobalKey.tsx",
+      [
+        'import { useHotkey } from "~/components/ui/use-hotkey";',
+        "export function G({ onOpen }: { onOpen: () => void }) {",
+        '  useHotkey({ key: "Enter", mod: true }, onOpen);',
+        "  return null;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("role=tab 上复刻按钮默认行为不被 P26 计（那是 Button 的账）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/TabRow.tsx",
+      [
+        "export function T({ onSelect }: { onSelect: () => void }) {",
+        "  return (",
+        '    <div role="tab"',
+        "      onKeyDown={(event) => {",
+        '        if (event.key === "Enter" || event.key === " ") {',
+        "          event.preventDefault();",
+        "          onSelect();",
+        "        }",
+        "      }}",
+        "    />",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("使用 enterCommit 的文件不再被 P26 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkEnter.tsx",
+      [
+        'import { enterCommit } from "~/components/ui/use-enter-commit";',
+        "export function E({ onCommit }: { onCommit: () => void }) {",
+        "  return <input {...enterCommit({ onCommit })} />;",
+        "}",
+      ].join("\n"),
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -845,6 +1055,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P21).toBeUndefined();
     expect(baseline.rules.P22).toBeUndefined();
     expect(baseline.rules.P23).toBeUndefined();
+    expect(baseline.rules.P24).toBeUndefined();
+    expect(baseline.rules.P25).toBeUndefined();
+    expect(baseline.rules.P26).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

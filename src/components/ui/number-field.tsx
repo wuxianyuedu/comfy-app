@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 
 /**
  * ComfyUI 风数值步进器：  [—] [值] [+]
@@ -113,12 +114,13 @@ export function NumberField({
             setDraft(null);
           }
         }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            (event.target as HTMLInputElement).blur();
-          }
-        }}
+        /* Enter = 提交：走 `onBlur` 的落盘路径（**用事件目标而不是 ref** ——
+         * 渲染期读 `ref.current` 会触发 `react-hooks/refs`，而这里要的本来就是
+         * 「让这个输入框失焦」，事件目标就是它）。Esc 无「取消」语义：数值框没有
+         * 草稿态，改一下就上抛了。 */
+        {...enterCommit({
+          onCommit: ({ currentTarget }) => currentTarget.blur(),
+        })}
         disabled={disabled}
         className="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-center font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />

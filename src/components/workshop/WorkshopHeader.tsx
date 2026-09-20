@@ -15,6 +15,7 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopProjectSummary } from "./hooks/use-workshop-pipeline";
 import { zClass } from "~/lib/shell/overlay-z";
 import { useHotkey } from "~/components/ui/use-hotkey";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 
 interface WorkshopHeaderProps {
   title: string;
@@ -175,10 +176,10 @@ export function WorkshopHeader({
                           autoFocus
                           value={draftTitle}
                           onChange={(e) => setDraftTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") commitRename(p.id);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
+                          {...enterCommit({
+                            onCommit: () => commitRename(p.id),
+                            onCancel: () => setEditingId(null),
+                          })}
                           onBlur={() => commitRename(p.id)}
                           className="border-border-strong bg-canvas-deep text-ink w-full rounded border px-2 py-1 text-[13px] outline-none focus:border-violet-400/60"
                         />
@@ -244,13 +245,13 @@ export function WorkshopHeader({
                     autoFocus
                     value={draftTitle}
                     onChange={(e) => setDraftTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitCreate();
-                      if (e.key === "Escape") {
+                    {...enterCommit({
+                      onCommit: commitCreate,
+                      onCancel: () => {
                         setCreating(false);
                         setDraftTitle("");
-                      }
-                    }}
+                      },
+                    })}
                     placeholder="新项目名称（回车确认）"
                     className="border-border-strong bg-canvas-deep text-ink placeholder:text-ink-fainter w-full rounded border px-2 py-1 text-[13px] outline-none focus:border-violet-400/60"
                   />
