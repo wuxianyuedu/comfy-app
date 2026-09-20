@@ -31,6 +31,12 @@
 - 提交 / PR / 自查清单 / 分支策略 → `docs/standards/13-提交与-code-review.md`
   （§13.1 自查清单、§13.5 门禁、§13.6 分支与合并、§13.6.1 master 提交守卫）；
 - 不确定读哪些 → 先读 `docs/standards/15-附录.md` §15.5「新成员 10 分钟速读路径」建立全局认知。
+- 跨文件检索 / 代码图谱查询 → 项目已配置两个 MCP server（`codegraph`、`zvec-grep`，声明见
+  `.mcp.json`）作为**导航加速**：前者按语义图谱找定义/引用/影响面，后者按正则/文本做跨文件
+  检索。**门禁判据只在 `scripts/check-*.cjs` 与 `.githooks/pre-commit`**——MCP 不替代机器
+  判据，也不作为提交前的独立校验源；选择顺序：先看有没有对应 `pnpm exec` 脚本 / 门禁能给出
+  结论 → 得不出再做检索。具体输入 / 输出 / 失败语义以各 server 的 `--help` 与
+  `.mcp.json` 声明为准。
 
 > 判断标准：改动被「强制先读规范文档的改动范围」表或本清单覆盖但未先读就动手 = 违规，
 > 提交会被拒或要求回滚。
@@ -82,10 +88,12 @@
    详见规范 §5）——窗口配置与启动页是编译期内嵌的，只改源码不重编 =
    跑旧二进制（历史黑屏事故来源）。
 6. **不在 `master` 上直接提交，一切变更走分支 + PR**（ISSUE #492 / 规范 §13.6.1）：
-   `master` 只接受「分支开发 → PR → 评审 → 合并」。三层防线 = 平台**分支保护设置**
+   `master` 只接受「分支开发 → PR → 评审 → 合并」。两层防线 = 平台**分支保护设置**
    （保护分支 + 禁直接 push，拦 push、放行 PR 合并）+ `.githooks/pre-commit` 第 1 步
-   `scripts/check-branch-guard.cjs`（拦本地提交）+ CI `Branch guard` 步骤（拦源分支为
-   `master` 的 PR）。**平台层禁用 `git create-branch-lock`**：它锁的是整分支写入，
+   `scripts/check-branch-guard.cjs`（拦本地提交）。`scripts/check-branch-guard.cjs`
+   的 `--pr-check` / `--merge-commit` 两个**服务端形态作为判据本身保留**，但随
+   ISSUE #623 与 `.cnb.yml` 一同失去调用方（见规范 §13.5），**目前不再有 CI 兜底**。
+   **平台层禁用 `git create-branch-lock`**：它锁的是整分支写入，
    会把 PR 合并一起拦死（锁上后 master 无法合并任何 PR）。
    判据是 **HEAD 父提交数**：`master` 上父提交数 ≤ 1 = 直连主干，阻断；> 1 =
    PR 合并提交，放行（只查分支名会把合并一起拦掉，见规范 §13.6.1）。
@@ -104,7 +112,7 @@
    `fetch(`、`vanillaApi.*`、`api.x.y.useQuery/useMutation`——逻辑要进
    `<feature>/hooks/`，网络层一律进 `src/lib/<domain>-client.ts`（守卫只豁免
    `hooks/` 目录，`components/<feature>/*-api.ts` 会被计为违规）。守卫脚本
-   `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit 与 CI）。
+   `scripts/check-ui-logic-separation.cjs`（棘轮只许降不许升，已接入 pre-commit）。
    治理后必须 `node scripts/check-ui-logic-separation.cjs --update` 收紧基线。
 11. **`src/lib` 是域化的：根目录只放顶层单例，模块一律进子域**（ISSUE #565 / 规范
     §12.5.3 / §18.14）。新增根模块前先答「它属于哪个域」——没有合适域就**新增一个域**，
@@ -132,7 +140,7 @@
     「Windows 上怎么被双击 / 被 exe 拉起」。同一件事在 Linux / macOS 上的入口是
     `pnpm` 脚本（`pnpm check:all` / `pnpm test:file` / `pnpm doc:gen` …），逐条登记在
     规范 §9.5 的**跨平台动作对照表**，由 `scripts/check-ps1-consistency.mjs` 在
-    pre-commit 与 CI 核对。**新增动作 = 写 `.mjs` 逻辑 + 挂 `package.json` 脚本 +
+    pre-commit 核对。**新增动作 = 写 `.mjs` 逻辑 + 挂 `package.json` 脚本 +
     登记 §9.5**；只写一侧、或在 `.ps1` 里又抄一份「会静默失效的清单」
     （如 `KNOWN_FAILED_FILES`）都会被拦下。
     理由：cmd.exe 走系统 ANSI（GBK）代码页，中文提示与子进程 UTF-8 输出必然乱码，
@@ -152,7 +160,7 @@
     `CHANGELOG.md` 的 `[Unreleased]` 是全仓库唯一「人人都改同一处」的文件，并行分支必然冲突。
     条目写 `changelog.d/<issue号>-<slug>.md`（一件变更一个文件，首行标 `## Added` / `## Fixed` 等段落），
     由 `node scripts/merge-changelog-fragments.mjs` 在发版/整理时并入。
-    形态由 `scripts/check-changelog-fragments.cjs` 在 pre-commit 与 CI 强制拦截，
+    形态由 `scripts/check-changelog-fragments.cjs` 在 pre-commit 强制拦截，
     回归测试见 `tests/check-changelog-fragments.test.ts`。
 15. **改动任何文件前必须完成「改动前必读文档」前置阅读**（见本文件对应章节）：
     未读 `README.md` / `docs/README.md` / 本文件全文就动手 = 违规；
@@ -202,21 +210,22 @@
     - 防线只能靠 `next.config.js` 顶层的 **`outputFileTracingIncludes`**
       （`./node_modules/next/dist/compiled/next-server/*runtime.prod.js`）。
       **别往 `outputFileTracingExcludes` 里加**：excludes 只做减法，补不回缺件。
-    - 「没有任何常规门禁会启动 standalone」是这条长期潜伏的原因：CI 只跑 `pnpm build`，
-      而 `next start` 与 `output: standalone` 不兼容。所以门禁是**两层**——
+    - 「没有任何常规门禁会启动 standalone」是这条长期潜伏的原因：既无平台侧流水线
+      （§13.5），本地钩子也不跑 `pnpm build`，而 `next start` 与 `output: standalone` 不兼容。
+      所以门禁是**两层**——
       `tests/standalone-runtime-completeness.test.ts` 锁配置，
       `check-standalone-contents.cjs` 真去数产物里的必需文件。
 
 19. **源码里禁止内嵌控制字符（NUL 等），哨兵必须用可打印形式**（规范 §12.11 / 门禁 R12）：
     源码里带一个真的 NUL 字节，会让**整个文件**被 git / diff / grep / 多数编辑器判成
     二进制 —— `git diff` 只回「Binary files differ」（评审看不到改动）、`git show --stat`
-    显示 bin、`grep -rn` 静默跳过整个文件，而 CI 全绿（tsc / eslint / vitest 都读得动
+    显示 bin、`grep -rn` 静默跳过整个文件，而本地钩子全绿（tsc / eslint / vitest 都读得动
     这个字节）。这类 NUL 几乎都来自「拿 NUL 当占位符哨兵」，本仓库的实例是
     `src/lib/comfyui/markdown.ts` 的行内代码暂存（`\0CODE<n>\0` → 已改 `<n>`）。
     要表达 NUL 写转义 `"\u0000"`；选哨兵形状时列清「接下来还要跑的每一组正则」，
     确认一个都不命中、且用户内容伪造不出同形状。门禁 `scripts/check-file-structure.cjs`
     的 R12 按码位扫 `src/**` 的 `.ts`/`.tsx`（豁免只有制表符 / 换行 / 回车），
-    pre-commit 第 2 步与 CI `File structure rules` 各跑一次。
+    pre-commit 第 2 步跑一次。
 
 20. **禁止跨文件复制实现（孪生对），默认地址不得各处硬编码**（ISSUE #536 / 规范 §12.12、§12.14）：
     - 同一段逻辑**逐行重合 ≥75% 且两边都 ≥60 行**即判定为「孪生」，由
@@ -240,7 +249,7 @@
     - **`lib` 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被
       `components` / `app` / `server` 共同依赖的**地基**，地基回头引视图会让「谁在最底层」
       成环，也让 lib 模块无法脱离 React 树单测。需要共享的类型**下沉到 `src/lib` 下的
-      类型模块**（实例：`src/lib/workflow-io-types.ts`）。由 `eslint.config.js` 的
+      类型模块**（实例：`src/lib/workflow/workflow-io-types.ts`）。由 `eslint.config.js` 的
       `boundaries` 强制：`src/lib/**` 已声明为 element `lib`，**元素顺序是语义** ——
       `src/lib/core/**`、`src/lib/db/**` 必须排在 `src/lib/**` 之前，否则数据层被重新
       归类成 `lib`、`server → components` 的既有约束会静默失效（回归测试守着）。
