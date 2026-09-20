@@ -2064,10 +2064,17 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
             # 句柄，避免它占用 PyInstaller 单文件临时目录导致退出时清理失败。
             # 对 onedir 模式同样有益：子进程不会误持 launcher 目录下的文件句柄。
             close_fds=True,
-            # Windows 上无 POSIX 进程组概念（start_new_session 仅 POSIX 有效）。
-            # 进程树的隔离与回收由编排器负责：它走 src/lib/process/kill-process-tree.ts
-            # （Windows taskkill /T /F，POSIX 进程组信号）。
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            # 让编排器脱离启动器的进程树独立存活：启动器在主窗口出现后即退出，
+            # 若 dev-launcher 随其一起被回收，便无法在桌面窗口关闭时回收 dev server，
+            # 导致 next dev 进程树残留为孤儿（锁端口、占资源）。启动与构建流程规范
+            # §1 分层边界明确要求「Python 启动器退出时 dev-launcher 必须还能活着继续工作」。
+            # DETACHED_PROCESS 使其脱离启动器控制台/进程组；CREATE_NEW_PROCESS_GROUP
+            # 让其成为独立进程组根，不被启动器的控制台事件波及。
+            creationflags=(
+                getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                | getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            ),
         )
     except Exception as exc:
         log(f"subprocess.Popen failed: {exc}")
