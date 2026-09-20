@@ -378,7 +378,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             "compact",
             "disabled:opacity-40",
           )}
-          title="查看当前工作流的 API + RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）"
+          title="查看当前工作流的 RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）"
         >
           📋 查看 JSON
         </Button>

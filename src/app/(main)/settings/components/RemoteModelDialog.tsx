@@ -41,7 +41,10 @@ export function RemoteModelDialog({
      `onClick`，Esc 与焦点归还都没有。 */
   return (
     <Dialog open onOpenChange={(next) => !next && d.closeDialog()}>
+      {/* 本弹窗自绘关闭按钮（见下方 header）——必须关掉基元的内置那枚，
+          否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
+        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-md"
       >

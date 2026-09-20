@@ -19,7 +19,11 @@ export function ModeContractDialog({ onClose }: { onClose: () => void }) {
      且 `role`/`aria-modal` 也缺。 */
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
+      {/* 关闭按钮由 `ModeContractEditorView` 的 header 自绘 —— 必须关掉基元
+          的内置那枚，否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的
+          `showCloseButton`）。 */}
       <DialogContent
+        showCloseButton={false}
         className="max-w-3xl bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
       >
