@@ -13,6 +13,7 @@
 import type { LogLevel } from "./log-store";
 import {
   colorizeLogrusLine,
+  hasSgr,
   parseAnsiSegments,
   type AnsiStyleKey,
 } from "~/lib/log/log-ansi";
@@ -59,7 +60,9 @@ export const LEVEL_TEXT_STYLES: Record<LogLevel, string> = {
 };
 
 export function hasAnsi(text: string): boolean {
-  return /\x1b\[[0-9;:]*m/.test(text);
+  /* 判据走 `~/lib/log/log-ansi` 的 `hasSgr`（规范 16 §16.2.4.58）——
+   * 转义符字面量只有那个模块写，这里不再自己持一份正则。 */
+  return hasSgr(text);
 }
 
 /**

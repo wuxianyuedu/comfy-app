@@ -104,6 +104,12 @@ export default defineConfig({
         "src/lib/number-format.ts",
         "src/lib/ordered-set.ts",
         "src/lib/media/data-url.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.57 ~ §16.2.4.59）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）；
+         * `simple-key-handler` 是 `ui/` 下的出口，一并登记。 */
+        "src/lib/keyboard.ts",
+        "src/components/ui/simple-key-handler.ts",
+        "src/lib/case-token.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -540,6 +546,31 @@ export default defineConfig({
           branches: 100,
         },
         "src/lib/media/data-url.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 本批三条新出口（规范 16 §16.2.4.57 ~ §16.2.4.59），门槛按实测值设满档：
+         *   · P53 对面 `~/lib/keyboard` —— 三条归一规则（空格两个名字 /
+         *     小写归一 / 单字符不 trim）与 `isKeyIn` 的边界逐条钉住；
+         *   · P53 对面 `~/components/ui/simple-key-handler` ——
+         *     `preventDefault` / `ignoreRepeat` 两个开关的正反两面都验到；
+         *   · P55 对面 `~/lib/case-token` —— 连续大写 / 前导下划线 /
+         *     往返一致这三条「刻意不做的花活」由用例钉住。 */
+        "src/lib/keyboard.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/ui/simple-key-handler.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/case-token.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

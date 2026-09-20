@@ -332,6 +332,18 @@ const DOMAIN_EXEMPT = new Set([
    * 进任何子域都会让另一个域反向依赖它 —— 与 `browser-io` / `display-value`
    * 同款：「唯一持有者 + 任何域消费」的顶层单例。 */
   "src/lib/file-io.ts",
+  /* 「键盘上那个键叫什么」的唯一出口（ISSUE #672）：`ui/simple-key-handler`
+   *（元素上的键动作）、`ui/use-enter-commit`（输入框的 Enter 判据）与
+   * `ui/use-hotkey`（全局监听）**三处都在读它**，而它们分属页签 / 表单 /
+   * 日志面板 / 富文本编辑器四个域 —— 进任何一个域都会让其余域反向依赖它。
+   * 与 `external-open` / `file-io` 同款：「唯一持有者 + 任何域消费」的顶层单例。 */
+  "src/lib/keyboard.ts",
+  /* 「标识符的两种书写法之间怎么换算」的唯一出口（ISSUE #672）：目前由
+   * `lib/shell/overlay-z` 的 `zClass` 消费，而它派生的 5 个工具类名要与
+   * `globals.css` 的 `@theme` 逐字一致 ——「哪个域拥有它」这个问题没有答案
+   *（浮层刻度表消费它，但换算本身与浮层无关），故按顶层单例收在根层。
+   * 与 `keyboard` / `external-open` 同款。 */
+  "src/lib/case-token.ts",
   /* 「在浏览器里持久一件小事」的唯一出口（ISSUE #672）：画布偏好、面板加宽档、
    * 工作流运行态、尺寸预设、工坊草稿、更新检测开关、工作流表单样式
    * —— **九个文件**都在用它，横跨 `project-canvas` / `workflow` / `media` /

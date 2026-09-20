@@ -45,6 +45,7 @@ import {
 } from "~/lib/full-screen-layer";
 import { TitleBarTabs } from "./TitleBarTabs";
 import { Button } from "~/components/ui/button";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 interface ShellTabsProps {
   /** 主应用页签的内容（即 workspace 整套界面）。 */
@@ -69,12 +70,10 @@ function TabButton({
       aria-selected={active}
       tabIndex={0}
       onClick={() => onSelect(tab.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect(tab.id);
-        }
-      }}
+      /* Enter / Space 的键判据走 `~/components/ui/simple-key-handler`
+       *（规范 16 §16.2.4.57）：此前手写 `e.key === " "` 与 `"Enter"` 比，
+       * 键名靠猜、连发放行（按住空格会连切十几次）。 */
+      {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.id))}
       className={`group border-border-subtle flex h-full cursor-pointer items-center gap-2 border-r px-4 text-sm transition-colors ${
         active
           ? "bg-canvas text-ink-bright"

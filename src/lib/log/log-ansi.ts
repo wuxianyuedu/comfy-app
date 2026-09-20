@@ -76,9 +76,78 @@ const BG: Record<number, AnsiStyleKey> = {
 /** 非 SGR 的转义序列：光标移动、清屏、窗口标题等，渲染无意义直接丢弃。 */
 const NON_SGR_RE =
   /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[?[0-9;]*[A-HJKSTfhlmsu]/g;
+
+/* ── 「剥掉 SGR / 问有没有 SGR」的唯一出口 ───────────────────────────
+ *
+ * 按形态扫出来的账（规范 16 §16.2.4.58）：全库 **4 处**各写一遍
+ * `\x1b\[[0-9;:]*m` 这个形态，而它们**判据各不相同**：
+ *
+ *   · 本模块的 `SGR_RE` —— 转义符**必须在**（`\x1b[`）；
+ *   · `logs/log-record` 的 `stripSgr` —— 先剥完整形态、再剥**残缺颜色码**
+ *     （只剩 `[90m` / `[0m`，转义符在管道里丢了）；少剥这一层会在面板上
+ *     显示成 `[[OK]【[90m[OK[0m] …`（这条差异此前**没有一处写下来**，
+ *     所以「哪个才是对的」只能靠比对两处实现去猜）；
+ *   · `logs/log-row-style` 的 `hasAnsi` —— 只**判有没有**，不动文本。
+ *
+ * 收口后**转义符字面量只有本模块写**：其余三处都从这里取。形态的判据
+ * （要不要连残缺码一起剥）经 `includePartial` 显式表达，不再靠「哪一处
+ * 抄得更全」。
+ */
+
+/** 完整 SGR 序列（含转义符）。带 `g`：`replace` 要一次剥干净。 */
 const SGR_RE = /\x1b\[([0-9;:]*)m/g;
 
-/** 剥掉全部 ANSI 转义序列（保留纯文本）。 */
+/**
+ * 残缺颜色码：转义符丢失、只剩 `[90m` / `[0m` 这类尾巴。
+ *
+ * 它**只**在「读完文本之后再剥一次」的形态下有意义（管道 / 日志文件里
+ * 子进程的转义符可能被吃掉），所以不用 `g` 常量复用，单独给一条：
+ * 判据是「方括号紧跟数字/分号、以 `m` 收尾」，与 markdown / 正则源码
+ * 里的普通方括号不冲突（后者中间不会是纯数字）。
+ */
+const PARTIAL_SGR_RE = /\[[0-9;:]*m/g;
+
+/** 「有没有 SGR（完整形态）」—— 只判不改。`logs/log-row-style` 的这个判据
+ *  用来决定「按 ANSI 上色还是走词法上色」，不动文本。 */
+export function hasSgr(text: string): boolean {
+  /* `lastIndex` 是 `g` 标志的状态：每次判前复位，避免同一正则跨调用漂移
+   *（本判据此前在 `log-row-style` 里是独立的一份，没有这个坑的机会）。 */
+  SGR_RE.lastIndex = 0;
+  return SGR_RE.test(text);
+}
+
+/**
+ * 剥掉 SGR 颜色码。
+ *
+ * `includePartial`（默认 `true`）决定要不要连**残缺颜色码**一起剥 ——
+ * 这是本条账里唯一真正的分歧，此前两处实现各判各的。默认取「剥得更全」
+ * 的那一档：留在正文里的 `[90m` 会原样显示给用户，比多剥一点更糟。
+ * 只想要「严格 SGR」时显式写 `false`。
+ */
+export function stripSgr(text: string, { includePartial = true } = {}): string {
+  const withoutFull = text.replace(/\x1b\[[0-9;:]*m/g, "");
+  return includePartial ? withoutFull.replace(PARTIAL_SGR_RE, "") : withoutFull;
+}
+
+/* ── 写日志时给「会话边界横幅」上色用的 ANSI 码 ──────────────────────
+ *
+ * 收口前同一条 `\x1b[1;33m` 在**两个**模块各写一遍（`log-sessions` 用它判
+ * 「这一行是不是 end 横幅」、`session-banner.server` 用它画横幅）——
+ * 而两者恰好是**读侧与写侧**：写侧改了颜色、读侧就认不出自己写的横幅。
+ * 这不是「重复代码」，是**同一件事的输入与判据分开两处**（规范 12 §12.12.1）。
+ *
+ * 因此颜色码只在本模块写：写侧取色、读侧比对，用的是同一份字面量。
+ */
+export const BANNER_ANSI = {
+  /** 新会话开始（亮绿）。 */
+  start: "\x1b[1;32m",
+  /** 会话结束（亮黄）—— 同时也是读侧「这一行是结束横幅」的判据。 */
+  end: "\x1b[1;33m",
+  /** 收尾复位。 */
+  reset: "\x1b[0m",
+} as const;
+
+/** 剥掉全部 ANSI 转义序列（含非 SGR 的光标 / 清屏序列），保留纯文本。 */
 export function stripAnsi(text: string): string {
   return text
     .replace(NON_SGR_RE, "")
