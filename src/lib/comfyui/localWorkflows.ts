@@ -22,6 +22,7 @@ import "server-only";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { normalizeSlashes } from "~/lib/path-display";
 
 import { compareText, uniqueBy } from "~/lib/ordered-set";
 
@@ -63,9 +64,9 @@ export interface ScannedRoot {
 function pathKey(p: string): string {
   if (!p) return "";
   try {
-    return path.resolve(p).toLowerCase().replace(/\\/g, "/");
+    return normalizeSlashes(path.resolve(p)).toLowerCase();
   } catch {
-    return p.toLowerCase().replace(/\\/g, "/");
+    return normalizeSlashes(p).toLowerCase();
   }
 }
 

@@ -17,6 +17,7 @@
 import "server-only";
 
 import { compareText } from "~/lib/ordered-set";
+import { lastSegments } from "~/lib/path-display";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -91,7 +92,7 @@ export function sanitizeFileName(
 ): string | null {
   if (!raw) return null;
   // 同时按两种分隔符切，避免 Windows 上 "a/b\\c.png" 漏网
-  const base = raw.split(/[\\/]/).pop()?.trim();
+  const base = lastSegments(raw, 1).trim();
   if (!base || base === "." || base === "..") return null;
   const cleaned = base.replace(/[\x00-\x1f<>:"|?*]/g, "_");
   if (!cleaned || cleaned.length > 200) return null;

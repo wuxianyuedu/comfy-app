@@ -12,6 +12,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { normalizeSlashes } from "~/lib/path-display";
 import {
   deriveComfyuiSubdir,
   deriveComfyuiWorkflowsDir,
@@ -150,9 +151,9 @@ function readManifestSummary() {
 function pathKey(p: string): string {
   if (!p) return "";
   try {
-    return path.resolve(p).toLowerCase().replace(/\\/g, "/");
+    return normalizeSlashes(path.resolve(p)).toLowerCase();
   } catch {
-    return String(p).toLowerCase().replace(/\\/g, "/");
+    return normalizeSlashes(String(p)).toLowerCase();
   }
 }
 

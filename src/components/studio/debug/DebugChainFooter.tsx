@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { PageLoading } from "~/components/ui/page-loading";
+import { lastSegments } from "~/lib/path-display";
 import { Button } from "~/components/ui/button";
 
 export interface RenderChainModule {
@@ -233,7 +234,9 @@ export function DebugChainFooter({
                 className="text-ink-bright truncate font-mono text-[12px]"
                 title={viewedFile}
               >
-                {viewedFile}
+                {/* 路径的语义在尾部（哪个文件）—— CSS `truncate` 只留头部，
+                    恰好把它切掉，故显式取末几段。 */}
+                {lastSegments(viewedFile, 3)}
               </code>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">

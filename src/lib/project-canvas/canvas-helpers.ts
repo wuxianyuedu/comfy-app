@@ -9,6 +9,7 @@
 import type { Edge, FitViewOptions, Node, XYPosition } from "@xyflow/react";
 import { afterNextPaint } from "~/lib/next-frame";
 import { nextId } from "~/lib/unique-id";
+import { lastSegments } from "~/lib/path-display";
 import {
   type CanvasNodeType,
   type CanvasNodeData,
@@ -181,7 +182,7 @@ export function applyPropagationToNodes(
             ...td,
             mediaPath: incoming,
             mediaName: src.resultPath
-              ? String(src.resultPath).split(/[\\/]/).pop()
+              ? lastSegments(String(src.resultPath), 1) || undefined
               : td.mediaName,
             upstreamId: sourceId,
           },

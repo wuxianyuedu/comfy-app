@@ -3022,6 +3022,229 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P56：路径展示（规范 §16.2.4.60）─────────────────────────────── */
+
+  it("服务端手工相对化路径直接阻断（规范 P56）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/logs/list/route.ts",
+      [
+        "import path from 'node:path';",
+        "export const R = () => path.relative('/a', '/a/b');",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P56");
+  });
+
+  it("取末段（split pop）与反斜杠归一都计入 P56（同一形态的两种写法）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export const tail = (p: string) => p.split(/[\\\\/]/).pop();",
+        "export const slash = (p: string) => p.replace(/\\\\/g, '/');",
+        "export const tail2 = (p: string) => p.split('/').pop();",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P56");
+  });
+
+  it("走 path-display 出口的落点不再被 P56 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        'import { toDisplayPath, normalizeSlashes } from "~/lib/path-display";',
+        "export const d = (p: string) => toDisplayPath(p);",
+        "export const s = (p: string) => normalizeSlashes(p);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it('包含判据（startsWith("..") / isAbsolute）不算 P56（那不是展示）', () => {
+    seedBaseline();
+    write(
+      "src/app/api/debug/source/route.ts",
+      [
+        "import path from 'node:path';",
+        "export const inRoot = (root: string, p: string) => {",
+        "  const rel = path.relative(root, p);",
+        '  return !rel.startsWith("..") && !path.isAbsolute(rel);',
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P57：props 透传（规范 §16.2.4.61）───────────────────────────── */
+
+  it("基元自写 props 剔除表直接阻断（规范 P57）", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/thing.tsx",
+      [
+        "import * as React from 'react';",
+        'interface P extends Omit<React.ComponentProps<"input">, "value" | "onChange"> { value: number }',
+        "export function T({ value, onChange, ...rest }: P) {",
+        "  return <input {...rest} value={value} onChange={onChange} />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P57");
+  });
+
+  it("走 dom-props 出口的落点不再被 P57 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/thing.tsx",
+      [
+        "import * as React from 'react';",
+        'import { type OmitOwnProps } from "~/lib/dom-props";',
+        "const OWN = ['value', 'onChange'] as const;",
+        "interface P extends OmitOwnProps<React.ComponentProps<'input'>, (typeof OWN)[number]> { value: number }",
+        "export function T({ value, onChange, ...rest }: P) {",
+        "  return <input {...rest} value={value} onChange={onChange} />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("数据模型的 Omit（Omit<LogEntry, 'seq'>）不算 P57（不是 DOM 属性）", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/thing.ts",
+      [
+        "interface LogEntry { id: string; seq: number }",
+        'export type New = Omit<LogEntry, "id" | "seq">;',
+        'export type One = Omit<LogEntry, "id">;',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P58：异步超时（规范 §16.2.4.62）─────────────────────────────── */
+
+  it("Promise.race + setTimeout 的超时样板直接阻断（规范 P58）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function withT<T>(p: Promise<T>, ms: number) {",
+        "  let timer: ReturnType<typeof setTimeout>;",
+        "  const t = new Promise<never>((_, reject) => {",
+        "    timer = setTimeout(() => reject(new Error('timeout')), ms);",
+        "  });",
+        "  return Promise.race([p, t]).finally(() => clearTimeout(timer));",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P58");
+  });
+
+  it("定时器在回调里结算 Promise（不用 race）也计入 P58", () => {
+    /* 这一档**不用** `Promise.race`，靠「谁先结算谁算数」，一样要清定时器、
+     * 一样各写各的（`waitForImage` / `runFFmpeg` / `waitForDetachMediator`）。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function wait(ms: number, onDone: () => void) {",
+        "  return new Promise<string>((resolve) => {",
+        "    const timer = setTimeout(() => resolve('timeout'), ms);",
+        "    onDone();",
+        "    return timer;",
+        "  }).finally(() => clearTimeout(timer));",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P58");
+  });
+
+  it("结算助手（finish / settle / done）写法的超时也计入 P58", () => {
+    /* `waitForDetachMediator` 把「这一轮结束」收成 `finish()`，定时器到点调它 ——
+     * 只看 `resolve(` 会漏掉这一档。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function wait(child: { once: (e: string, f: () => void) => void }) {",
+        "  return new Promise<number | null>((resolve) => {",
+        "    let settled = false;",
+        "    const finish = (v: number | null) => { if (settled) return; settled = true; resolve(v); };",
+        "    child.once('exit', () => finish(0));",
+        "    const timer = setTimeout(() => finish(null), 5000);",
+        "    return timer;",
+        "  }).finally(() => clearTimeout(timer));",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P58");
+  });
+
+  it("走 with-timeout 出口的落点不再被 P58 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        'import { withTimeout } from "~/lib/with-timeout";',
+        "export const w = <T,>(p: Promise<T>, ms: number) =>",
+        "  withTimeout(p, ms, { message: '慢' });",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("两路来源抢跑（Promise.race 但无 setTimeout）不算 P58（那不是超时）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export const fastest = async (a: Promise<number>, b: Promise<number>) => {",
+        "  const w = await Promise.race([a, b]);",
+        "  return w;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("看门狗 / 防抖（setTimeout 到点做事、不结算 Promise）不算 P58", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function arm(kick: () => void, ms: number) {",
+        "  const timer = setTimeout(() => {",
+        "    void kick();",
+        "  }, ms);",
+        "  return timer;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
   it("lib 层的既有出口实现不被 P1~P38 误伤（只有逐条登记的判据扫 lib）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规

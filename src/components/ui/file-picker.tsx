@@ -3,6 +3,7 @@
 import React from "react";
 
 import { Button } from "~/components/ui/button";
+import { type OmitOwnProps } from "~/lib/dom-props";
 
 /**
  * 「隐藏 `<input type="file">` + 谁来点它」的唯一出口。
@@ -36,7 +37,7 @@ export interface FilePickerProps {
   /** 是否允许一次选多个。默认单选。 */
   multiple?: boolean;
   /** 额外透传给 `<input>` 的属性（如 `id`，供 `<label htmlFor>` 关联）。 */
-  inputProps?: Omit<
+  inputProps?: OmitOwnProps<
     React.InputHTMLAttributes<HTMLInputElement>,
     "type" | "accept" | "multiple" | "onChange" | "className"
   >;
@@ -142,6 +143,7 @@ export function FilePicker({
  * 适合「按钮就是唯一入口」的落点：调用方只给 `onPick` 与按钮外观，
  * 不需要自己拿 ref、也不需要记得把 input 放进 JSX。
  */
+
 export function FilePickerButton({
   onPick,
   accept,
@@ -150,7 +152,7 @@ export function FilePickerButton({
   children,
   ...buttonProps
 }: FilePickerProps &
-  Omit<React.ComponentProps<typeof Button>, "children" | "onClick"> & {
+  OmitOwnProps<React.ComponentProps<typeof Button>, "children" | "onClick"> & {
     children: React.ReactNode;
   }) {
   const handleRef = React.useRef<FilePickerHandle | null>(null);

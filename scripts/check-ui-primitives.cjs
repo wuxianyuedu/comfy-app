@@ -371,6 +371,15 @@ const LIB_SCANNED_RULES = new Set([
   "P53",
   "P54",
   "P55",
+  /* 本批三条（规范 16 §16.2.4.60 ~ §16.2.4.62）：路径展示 / props 透传 /
+   * 异步超时 —— 三条的落点**都横跨两侧**：
+   *   · P56 的相对化 / 归一在 `src/app/api` 的三条路由与 `src/lib`；
+   *   · P57 的剔除表全在 `ui/` 基元（`ui/` 是**视图层**，见 UI_ALSO_SCANNED，
+   *     这里列上是为了让 `src/lib` 里的同类形态（若有）也被数到；
+   *   · P58 的 race 散在 `lib/comfyui`(`status`) 与 `components/studio`。 */
+  "P56",
+  "P57",
+  "P58",
 ]);
 
 const SCAN_DIRS = [
@@ -445,6 +454,16 @@ const UI_ALSO_SCANNED = new Set([
    * `ui/range-slider` 的读数）—— 与 P40/P47 同款：整体跳过会让出口的
    * 消费点无从校验。P51 / P52 不需要（`ui/` 里没有去重与 data URL）。 */
   "P50",
+  /* P56 的落点在 `ui/` 里也出现过（`ui/media-drag-source` 取末段做显示名、
+   * `ui/code-block` 的扩展名）—— 与 P40/P47 同款。
+   *
+   * **P57 必须一起扫 `ui/`**：这条账的全部落点本来就是基元自己
+   *（`ui/media-thumbnail` / `ui/range-slider` / `ui/icon` / `ui/file-picker`）——
+   * 跳过 `ui/` 等于对这条账视而不见（与 P1/P2/P3 的豁免理由相反：那三条数的是
+   * 「业务侧有没有自己实现一份基元」，`ui/` 里出现是正确的载体；本条数的是
+   * 「基元自己怎么写剔除表」，`ui/` 正是唯一该被数的地方）。 */
+  "P56",
+  "P57",
 ]);
 
 const HOOKS_ALSO_SCANNED = new Set([
@@ -492,6 +511,10 @@ const HOOKS_ALSO_SCANNED = new Set([
    *   · **P52** 不在此列：它的落点全在 lib / server（没有 hooks 里的）。 */
   "P50",
   "P51",
+  /* 本批一条（规范 16 §16.2.4.62）：**P58** —— 「给一个异步结果加超时」
+   * 在逻辑层同样成立，且收口前的落点里就有一处在 hook 里
+   *（`use-workflow-detail-loader` 的 `withTimeout`）。 */
+  "P58",
 ]);
 
 /**
@@ -648,6 +671,39 @@ const EXEMPT_FILES = {
       reason:
         '出口自身的实现（`data:` 前缀与 `indexOf(",")` 就在这里；' +
         "本判据数的是**别处**又写了一遍）。",
+    },
+  ],
+  P56: [
+    {
+      re: /^src\/lib\/path-display\.ts$/,
+      reason:
+        "出口自身的实现（`path.relative` / 反斜杠归一 / 取末段的三条判据就在这里；" +
+        "本判据数的是**别处**又写了一遍）。",
+    },
+    {
+      re: /^src\/lib\/media\/mime-ext\.ts$/,
+      reason:
+        "那是**扩展名解析**（§16.2.4.51 的 P47 出口），不是展示 —— `extOfPath` / " +
+        "`stemOfPath` 的「取最后一段」要的正是 `split().pop()` 的语义：" +
+        "`\"a/b/\"` 这种**目录形态**必须给出空段（拿它当文件名会多出一层），" +
+        "而 `~/lib/path-display` 的 `lastSegments` 刻意跳过空段（展示层" +
+        "不希望显示成 `a//b`）。两者对空段的判据不同，硬合会把一处的语义" +
+        "带进另一处。",
+    },
+    {
+      re: /^src\/components\/ui\/media-drag-source\.tsx$/,
+      reason:
+        "`displayNameFromUrl` 是**这一处自己的**出口（媒体拖拽载荷的显示名）：" +
+        "它的判据是「最后一段为空就回退到整串」—— `/a/b/` 取末段给空串、" +
+        "于是回退到 URL；而 `~/lib/path-display` 的 `lastSegments` 会跳过空段" +
+        "给出 `b`。两者对空段的判据不同（这条已有用例钉住），不属于「路径展示」。",
+    },
+  ],
+  P58: [
+    {
+      re: /^src\/lib\/with-timeout\.ts$/,
+      reason:
+        "出口自身的实现（两个 race 就在这里；本判据数的是**别处**又写了一份）。",
     },
   ],
   P42: [
@@ -825,6 +881,27 @@ function stripComments(text) {
     i++;
   }
   return out;
+}
+
+/**
+ * 数「把 `path.relative` 的结果当**展示文本**用」的处数。
+ *
+ * `path.relative` 有两种用途：展示（本条账）与**包含判据**
+ *（`const rel = path.relative(root, p); if (rel.startsWith("..") || …)` ——
+ * 判断「这个路径在不在 root 里」的标准写法）。只数前者：锚点取每次
+ * `path.relative(` 之后的 200 字符窗口里**没有** `startsWith("..")` / `isAbsolute`。
+ */
+function countNonContainment(text) {
+  const re = /\bpath\.relative\s*\(/g;
+  let n = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const window = text.slice(m.index, m.index + 200);
+    if (/startsWith\s*\(\s*"\.\."/.test(window)) continue;
+    if (/isAbsolute/.test(window)) continue;
+    n++;
+  }
+  return n;
 }
 
 const RULES = {
@@ -2319,6 +2396,152 @@ const RULES = {
       return (t2.match(/replace\(\/\[A-Z\]\/g[^;\n]{0,60}\$\{/g) || []).length;
     },
   },
+
+  /* ── P56「把一段路径拼成可展示的相对路径 / 超长时省略中段」（硬闸，§16.2.4.60）
+   * 同一件「把一条文件系统路径变成界面上的一行」散着三种各写各的写法，而它们对
+   * 三件事各判各的：**相对谁**（`path.relative(REPO_ROOT,…)` / `(LOG_ROOT,…)` /
+   * 原样绝对路径）、**分隔符**（`.replace(/\\/g,"/")` ×8 /
+   * `.split(path.sep).join("/")` ×2 / 不归一）、**超长怎么办**（视图清一色
+   * `truncate` 只留头部 —— 而路径的语义在尾部，用户看到的恰好是被切掉的那一段）。
+   *
+   * 判据锚**「手工把路径变成展示文本」的三种形态**：
+   *   ① `path.relative(` —— 相对化，出口是 `toDisplayPath`；
+   *   ② `split(/[\\/]/).pop()` / `.split("/").pop()` —— 取末段，出口是
+   *     `lastSegments` / `toDisplayPath`（`path.basename` 不算：它是 Node API，
+   *     在「解析已有路径」里是正确的，本条管的是展示）；
+   *   ③ `.replace(/\\/g, "/")` —— 分隔符归一，出口是 `normalizeSlashes`。
+   *
+   * **刻意不数** `path.join` / `path.resolve` / `path.dirname`（那些在拼路径、
+   * 不是展示），也不数 `path.basename`（同上）。
+   *
+   * 出口：`~/lib/path-display` 的 `toDisplayPath` / `stripPathPrefix` /
+   * `lastSegments` / `ellipsisMiddle` / `normalizeSlashes`。
+   */
+  P56: {
+    label:
+      "视图 / 逻辑 / 服务端里手工把路径变成展示文本（应使用 ~/lib/path-display 的 toDisplayPath / lastSegments / normalizeSlashes）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/from "~\/lib\/path-display"/.test(t2)) return 0;
+      /* `path.relative` 有**两种用途**：展示（本条账）与**包含判据**
+       *（`const rel = path.relative(root, p); if (rel.startsWith("..") || …)`
+       *  是判断「这个路径在不在 root 里」的标准写法 —— 那不是展示）。
+       * 只数**紧接着不是包含判据**的那些：锚点取 `path.relative(` 之后 150 字符内
+       * 没有 `startsWith("..")` / `isAbsolute`。 */
+      const relative = countNonContainment(t2);
+      /* 取末段：两种写法（正则分隔符 / 字面 "/"）—— 与 P50「更差的写法也要数」
+       * 同款：只数规范的那一种，被拦下的就永远只是合规者。 */
+      /* `/[\\/]/` 与 `"/"` 两种分隔符写法都数（与 P50/P52「更差的写法也要数」
+       * 同款）。锚点：`.split(/[...]/).pop()` 或 `.split("/").pop()`。 */
+      const tail =
+        (t2.match(/\.split\(\/\[[^\]\n]*\]\/\)\.pop\(\)/g) || []).length +
+        (t2.match(/\.split\("\/"\)\.pop\(\)/g) || []).length;
+      const slashes = (t2.match(/\.replace\(\/\\\\\/g,\s*"\/"\)/g) || []).length;
+      const sepJoin = (t2.match(/\.split\(path\.sep\)\.join\("\/"\)/g) || []).length;
+      return relative + tail + slashes + sepJoin;
+    },
+  },
+
+  /* ── P57「透传 props 给底层元素前先剔掉自己的私有字段」（硬闸，§16.2.4.61）
+   * 十几个基元都有同一段「摘掉自己的私有字段、剩下 `...rest` 透传」，
+   * 而**剔除表各写各的**：类型侧 `extends Omit<Base, "a" | "b">` 与运行时侧
+   * 的解构是**两份**，必须逐字一致而没有任何机器判据。表里有、解构里漏 →
+   * 该字段**静默透传给 DOM**（React 19 只给一条 console 警告），`value` /
+   * `onChange` 这类漏掉的表现是「双份受控」：界面有值但状态没变。
+   *
+   * 判据锚**「类型侧写了一张私有字段表」这个形态**：`Omit<` 后面紧跟一个
+   * **字符串字面量联合**（`Omit<X, "a" | "b">`）。出口是 `~/lib/dom-props`
+   * 的 `OmitOwnProps`（表只写一遍 → 类型与运行时同源）。
+   *
+   * **刻意不数** `Omit<SomeModel, "id">` 这类**数据模型**的排除（它们不是
+   * 「透传给 DOM 的属性」，`Omit` 在这里只是表达「这条记录还没有 id」）。
+   * 形态上的分界线是 **Omit 的基类型**：只有 `React.ComponentProps<…>` /
+   * `HTMLAttributes<…>` / base-ui 的 `…Primitive.…Props` / `LucideProps` /
+   * `typeof <组件>` 这类「底层元素的属性集」才是本条账；`Omit<LogEntry, "seq">`
+   * 那类数据记录一律不算。
+   */
+  P57: {
+    label:
+      "自写「剔掉私有 prop 再透传」的剔除表（应使用 ~/lib/dom-props 的 OmitOwnProps / splitDomProps）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/from "~\/lib\/dom-props"/.test(t2)) return 0;
+      /* 形态：`Omit<` 的基类型是**底层元素 / 组件的属性集**，且第二个参数是
+       * 字符串字面量键（`"a" | "b"` 或跨行的 `| "c"`）。 */
+      const base =
+        "(?:React\\.)?(?:ComponentProps|HTMLAttributes|InputHTMLAttributes|ImgHTMLAttributes|VideoHTMLAttributes|ButtonHTMLAttributes|AnchorHTMLAttributes|LabelHTMLAttributes|TextareaHTMLAttributes)|LucideProps|[A-Za-z]*Primitive\\.[A-Za-z.]+Props|typeof\\s+\\w+";
+      const oneLine = new RegExp(
+        "\\bOmit\\s*<\\s*(?:" + base + ")[^;]{0,200}?,\\s*\"[^\"]+\"",
+        "g",
+      );
+      const multiLine = new RegExp(
+        "\\bOmit\\s*<[^;]{0,200}?(?:" + base + ")[^;]{0,300}?\\n\\s*\\|[^;]{0,200}?\"[^\"]+\"",
+        "g",
+      );
+      return (t2.match(oneLine) || []).length + (t2.match(multiLine) || []).length;
+    },
+  },
+
+  /* ── P58「给一个异步结果加超时」（硬闸，§16.2.4.62）
+   * `Promise.race` + `setTimeout` 的样板散在六处，对三件事各判各的：
+   * **定时器谁来清**（`.finally` / 两个分支各清一次 / 三个分支各清一次 /
+   * 只有一个分支清）、**超时之后干什么**（`reject` / `resolve` 一个哨兵值 /
+   * 杀子进程再 fail）、**时长与文案**。
+   *
+   * 判据锚**「一个定时器在赛跑里把 Promise 结算掉」这个形态**，两种写法都数：
+   *   ① **`Promise.race(` 与 `setTimeout(` 同现** —— 最常见的一档。单看
+   *     `Promise.race` 会把「两路来源谁先到用谁」那种**正确的**用法误判
+   *     （`comfyui/status` 的「权威查询 vs 抢跑探测」：没有定时器、没有要清的
+   *     东西，那不是这条账），故两条必须同现；
+   *   ② **`setTimeout(() => … resolve(` / `reject(`** —— 手写「定时器到点就把这个
+   *     Promise 结算掉」的那一档（`waitForImage` 的 `reject` / `runFFmpeg` 的
+   *     `resolve` 哨兵），它们**不用** `Promise.race` 而靠「谁先结算谁算数」，
+   *     一样要清定时器、一样各写各的。
+   *
+   * **刻意不数**：
+   *   · `new Promise((r) => setTimeout(r, ms))`（「等一会儿」的 sleep，没有赛跑、
+   *     没有对手 —— 但它与两个出口同属「定时器」一族，收在同一文件的 `sleep` 里）；
+   *   · `setTimeout(() => void fail(…))` 这种**看门狗 / 防抖**（定时器到点**做事**，
+   *     不结算任何 Promise，也不在这条账里 —— 实例是 `executor-ws.armWatchdog`
+   *     与 `runner-state` 的三处 debounce）。
+   *
+   * 出口是 `~/lib/with-timeout` 的 `withTimeout`（超时抛错）/
+   * `withTimeoutResult`（超时给兜底值）—— 两者共用一条「胜出即清定时器」的收尾。
+   */
+  P58: {
+    label:
+      "自写「给异步结果加超时」的定时器样板（应使用 ~/lib/with-timeout 的 withTimeout / withTimeoutResult）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/from "~\/lib\/with-timeout"/.test(t2)) return 0;
+      /* 「必须清掉」是本条账的一半：有 `setTimeout` 却没有 `clearTimeout` 的文件
+       * 是**另一种**形态（该等一个窗口就等完，没有别的路径能先赢 ——
+       * `external-open.detectFolderHelper` 就是这一种），不属于本条。 */
+      if (!/\bclearTimeout\s*\(/.test(t2)) return 0;
+      const races = /\bsetTimeout\s*\(/.test(t2)
+        ? (t2.match(/\bPromise\.race\s*\(/g) || []).length
+        : 0;
+      /* ② 定时器回调里结算 Promise（`resolve(` / `reject(` 就在 setTimeout 的
+       * 回调体内）。锚点取「setTimeout」与「resolve/reject」在**同一条语句的
+       * 200 字符内**同现 —— 手写那几档的写法都是
+       * `setTimeout(() => reject(new Error(…)), ms)` 或
+       * `const t = setTimeout(() => { … resolve({…}); }, ms)`。 */
+      /* `[\s\S]` 而非 `[^;]`：回调体里常有 `;`（`cp.kill("SIGKILL");` 后面
+       * 才是 `resolve(…)`），用 `[^;]` 会把那一档**静默漏掉**（漏掉的又恰好是
+       * 更完整的那个写法 —— 与 P13/P52「更差的写法也要数」同一课）。 */
+      const settles = (
+        t2.match(/\bsettimeout\s*\([\s\S]{0,200}?\b(?:resolve|reject)\s*\(/gi) || []
+      ).length;
+      /* ③ 定时器回调里调一个**本地的结算助手**（`finish(` / `settle(` / `done(`）——
+       * `waitForDetachMediator` 就是这样写的：它把「这一轮结束」收成 `finish()`
+       *（内部判重入 + resolve），定时器到点调它。只看 `resolve(` 会漏掉这一档。
+       * 这几个名字在本仓库的语义是「本轮到此为止」。 */
+      const settledByHelper = (
+        t2.match(/\bsetTimeout\s*\([\s\S]{0,200}?\b(?:finish|settle|done)\s*\(/gi) || []
+      ).length;
+      return races + settles + settledByHelper;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -2396,6 +2619,15 @@ const HARD_GATE_RULES = new Set([
   "P53",
   "P54",
   "P55",
+  /* 本批三条（§16.2.4.60 ~ §16.2.4.62）：
+   *   · **P56**（路径展示）—— 「同一个文件在不同面板显示成三种样子」在浏览器侧
+   *     与服务端同样成立，且两侧必须同一口径；
+   *   · **P57**（props 透传）—— 落点全在 `ui/` 基元，那正是这条账该被数的地方；
+   *   · **P58**（异步超时）—— 「定时器谁来清」在浏览器侧（tRPC 取数）与
+   *     服务端（ffmpeg / 中介进程）同样会漏。 */
+  "P56",
+  "P57",
+  "P58",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -2612,7 +2844,8 @@ function main() {
   P45 自写指数退避 / P46 手拼日期串 / P47 自写扩展名⇄MIME 表 /
   P48 自写宽松对象视图 / P49 自写文件名安全化 /
   P50 自写数字精度格式化 / P51 自写去重合并 / P52 自拼自切 data URL /
-  P53 手写键盘键判据 / P54 自写 SGR 转义序列 / P55 自写书写法换算，须为 0）：${hardGateHits(now).length} 处`,
+  P53 手写键盘键判据 / P54 自写 SGR 转义序列 / P55 自写书写法换算 /
+  P56 手工把路径变成展示文本 / P57 自写 props 剔除表 / P58 自写异步超时 race，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -2633,6 +2866,9 @@ function main() {
         "  元素上的键动作 → ~/components/ui/simple-key-handler 的 simpleKeyHandler（键名归一走 ~/lib/keyboard 的 normalizeKeyName / isKeyIn）；\n" +
         "  剥掉 / 判断 SGR → ~/lib/log/log-ansi 的 hasSgr / stripSgr / stripAnsi（横幅色板取 BANNER_ANSI）；\n" +
         "  驼峰 ⇄ kebab 换算 → ~/lib/case-token 的 toKebabCase / toCamelCase；\n" +
+        "  路径变成展示文本（相对化 / 分隔符归一 / 取末段 / 中段省略）→ ~/lib/path-display 的 toDisplayPath / stripPathPrefix / lastSegments / ellipsisMiddle / normalizeSlashes；\n" +
+        "  透传 props 前剔掉自己的私有字段 → ~/lib/dom-props 的 OmitOwnProps（类型表）与 splitDomProps（运行时剥）；\n" +
+        "  给异步结果加超时 → ~/lib/with-timeout 的 withTimeout / withTimeoutResult（共用一条「胜出即清定时器」的收尾）；\n" +
         "  异步动作的反馈样板 → ~/lib/async-action 的 runAsyncAction（失败文案走 errorMessage）；\n" +
         "  读媒体自然尺寸 → ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio / isPortraitMedia；\n" +
         "  手拼查询串 → ~/lib/query-string 的 buildQueryString / withQuery（媒体预览地址走 ~/lib/media/media-url）；\n" +
