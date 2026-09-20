@@ -93,6 +93,12 @@ export default defineConfig({
          * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
         "src/lib/media/mime-ext.ts",
         "src/lib/safe-name.ts",
+        /* 通用图片查看器（形态 + 数值）两个出口：前者是弹窗、滚轮锚点与拖拽
+         * 平移的组装，后者是缩放档位与倍数夹取。与上面那批同款 ——
+         * **两处同批改**（`coverage.include` + `thresholds`），只写门槛不进
+         * `include` 会让门槛静默失效。 */
+        "src/components/ui/image-viewer.tsx",
+        "src/components/ui/use-image-zoom.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -651,6 +657,27 @@ export default defineConfig({
           functions: 70,
           statements: 65,
           branches: 55,
+        },
+        /* 通用图片查看器的两个出口（简化台账见 `docs/standards/16`）。
+         * 门槛取**实测值向下取整到 5 的倍数**（§18.6 / §11.7 的口径：不设
+         * 理想值 —— 设高了会让无关提交变红，设低了等于没设）：
+         *   · `use-image-zoom` 100/100/100/100 —— 缩放档位、夹取的四条边界
+         *     （0 / 负数 / NaN / Infinity）与档位切换全在用例里；
+         *   · `image-viewer` 实测 93.54/87.5/94.44/96.34，未覆盖的三行是
+         *     jsdom 到不了的真实指针捕获分支（`setPointerCapture` /
+         *     `releasePointerCapture` 在 jsdom 里不存在，代码里就是 `typeof`
+         *     守卫）与「滚轮到达倍数上限后提前返回」那一支。 */
+        "src/components/ui/image-viewer.tsx": {
+          lines: 95,
+          functions: 90,
+          statements: 90,
+          branches: 85,
+        },
+        "src/components/ui/use-image-zoom.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
       },
     },
