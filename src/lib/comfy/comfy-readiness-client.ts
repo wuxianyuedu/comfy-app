@@ -1,5 +1,6 @@
 import { clamp } from "~/lib/clamp";
 import { readApiError } from "~/lib/api-error";
+import { sleep } from "~/lib/with-timeout";
 
 /* ── 「让 ComfyUI 立即可用」的客户端（第②层网络部分）─────────────────────
  * 素材上传这类动作要求 ComfyUI 已经跑着（文件要写进它的 input 目录）。此前
@@ -115,7 +116,7 @@ export async function waitForComfyReady(
       opts.onProgress?.(r.message);
     }
     if (Date.now() + pollMs >= deadline) break;
-    await new Promise<void>((resolve) => setTimeout(resolve, pollMs));
+    await sleep(pollMs);
   }
   return {
     ok: false,

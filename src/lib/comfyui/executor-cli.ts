@@ -43,7 +43,7 @@ import {
   type JsonRecord,
 } from "./raw-overrides";
 import { trace } from "./trace";
-import { COMFYUI_DEFAULT_PORT } from "../endpoints";
+import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST } from "../endpoints";
 
 // 保持 executor.ts barrel 的 `applyRawOverrides` 导出不变
 //（纯逻辑已抽到 ./raw-overrides，这里仅透传）。
@@ -142,11 +142,11 @@ export async function executeViaComfyCli(job: Job) {
       : `→ executeViaComfyCli 入口（API 图，由 comfy-cli 直接提交）`,
   );
   const base = await resolveComfyBase();
-  let host = "127.0.0.1";
+  let host = LOOPBACK_HOST;
   let port = COMFYUI_DEFAULT_PORT;
   try {
     const u = new URL(base);
-    host = u.hostname === "localhost" ? "127.0.0.1" : u.hostname;
+    host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
     port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     /* keep defaults */

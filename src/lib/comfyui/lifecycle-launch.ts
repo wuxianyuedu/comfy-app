@@ -17,7 +17,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { getExitPolicy } from "../app-settings/app-settings.server";
-import { COMFYUI_DEFAULT_PORT } from "../endpoints";
+import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl } from "../endpoints";
 import { INLINE_STDERR_MAX, clampText } from "../text-clamp";
 import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
@@ -456,7 +456,7 @@ export async function probeChildReady(
   const childPid = child.pid;
   const listenPort = childPid ? await findPidListeningPort(childPid) : null;
   if (!listenPort) return null;
-  const base = `http://127.0.0.1:${listenPort}`;
+  const base = comfyUiBaseUrl(listenPort);
   try {
     const r = await fetch(`${base}/system_stats`, {
       signal: AbortSignal.timeout(2000),
