@@ -95,6 +95,8 @@ playwright-report/
 .zvec-grep/
 
 # agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
+# QoderWork 项目本地工作区（Better Harness 评审 canvas/findings/run 等产物落点）
+.qoder/
 .workbuddy/
 # Qoder IDE 的本地会话 / 索引 / 配置（每个开发者机器各自生成，不入版本库）
 .qoder/
