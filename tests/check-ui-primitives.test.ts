@@ -63,6 +63,10 @@ beforeEach(() => {
     "src/components/workshop",
     "src/components/ui",
     "src/app",
+    /* 本批三条判据（P39/P40/P41）的落点横跨 `src/lib` 与 `src/server` ——
+     * 见脚本里的 `LIB_SCANNED_RULES`。 */
+    "src/lib",
+    "src/server/lib",
   ]) {
     mkdirSync(join(workdir, d), { recursive: true });
   }
@@ -1292,6 +1296,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P36).toBeUndefined();
     expect(baseline.rules.P37).toBeUndefined();
     expect(baseline.rules.P38).toBeUndefined();
+    expect(baseline.rules.P39).toBeUndefined();
+    expect(baseline.rules.P40).toBeUndefined();
+    expect(baseline.rules.P41).toBeUndefined();
   });
 
   /* ── P30 / P31 / P32：本批三条硬闸（规范 §16.2.4.33 ~ §16.2.4.35）────
@@ -1986,6 +1993,203 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "  const top = offsetWithin(row, panel);",
         "  if (top === null) return;",
         "  panel.scrollTop = Math.max(0, panel.scrollTop + top - 8);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P39 / P40 / P41：本批三条硬闸（规范 §16.2.4.42 ~ §16.2.4.44）────
+   *
+   * 三条同样按**形态**取锚点，且都排除了「形态相近、语义不同」的合法写法：
+   *   · P39 排除帧循环（`step` 自递归采样器，不是「等一帧」）；
+   *   · P40 排除出口自身的实现与「纯编排 / 域转发」两层；
+   *   · P41 排除字段级校验（`BodySchema` 那类域判据）与出口自身。
+   * 每条都配反面用例。 */
+
+  it("裸写 requestAnimationFrame 调度直接阻断（规范 P39）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/after-frame.ts",
+      [
+        "export function recenter(el: HTMLElement) {",
+        "  requestAnimationFrame(() => {",
+        '    el.scrollIntoView({ block: "nearest" });',
+        "  });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P39");
+  });
+
+  it("帧循环（回调里再次 rAF 自己）不算 P39（那是采样器，不是等一帧）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/hooks/use-fps.ts",
+      [
+        "export function useFps() {",
+        "  let raf = 0;",
+        "  const tick = (now: number) => {",
+        "    sample(now);",
+        "    raf = requestAnimationFrame(tick);",
+        "  };",
+        "  raf = requestAnimationFrame(tick);",
+        "  return () => cancelAnimationFrame(raf);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("走 onNextFrame 的落点不再被 P39 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/after-frame.ts",
+      [
+        'import { onNextFrame } from "~/lib/next-frame";',
+        "export function recenter(el: HTMLElement) {",
+        "  return onNextFrame(() => {",
+        '    el.scrollIntoView({ block: "nearest" });',
+        "  });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("裸调 copyText 而不接反馈出口直接阻断（规范 P40）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/copy-all.tsx",
+      [
+        'import { copyText } from "~/lib/browser-io";',
+        "export function CopyAll({ text }: { text: string }) {",
+        "  return <Button onClick={() => void copyText(text)}>复制</Button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P40");
+  });
+
+  it("走 useCopyFeedback 的落点不再被 P40 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/copy-all.tsx",
+      [
+        'import { useCopyFeedback } from "~/components/ui/use-copy-feedback";',
+        "export function CopyAll({ text }: { text: string }) {",
+        '  const copy = useCopyFeedback({ onFailure: "silent" });',
+        "  return <Button onClick={() => copy(text)}>复制</Button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("在 lib 层裸调 copyText 也计 P40（这条账横跨两侧）", () => {
+    seedBaseline();
+    write(
+      "src/lib/media/upload-client.ts",
+      [
+        'import { copyText } from "~/lib/browser-io";',
+        "export async function copyLink(url: string) {",
+        "  await copyText(url);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P40");
+  });
+
+  it("REST 路由自己定义 isRecord 直接阻断（规范 P41）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/widgets/route.ts",
+      [
+        "function isRecord(v: unknown): v is Record<string, unknown> {",
+        '  return typeof v === "object" && v !== null;',
+        "}",
+        "export async function POST(req: Request) {",
+        "  const body = await req.json();",
+        "  if (!isRecord(body)) {",
+        '    return NextResponse.json({ error: "请求体必须是对象" }, { status: 400 });',
+        "  }",
+        "  return NextResponse.json({ ok: true });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P41");
+  });
+
+  it("手写「取 JSON + 400 信封」但不定义 isRecord 也计 P41", () => {
+    seedBaseline();
+    write(
+      "src/app/api/widgets/route.ts",
+      [
+        "export async function POST(req: Request) {",
+        "  let body: unknown;",
+        "  try {",
+        "    body = await req.json();",
+        "  } catch {",
+        '    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });',
+        "  }",
+        "  return NextResponse.json({ ok: true });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P41");
+  });
+
+  it("走 readJsonRecord 的 REST 路由不再被 P41 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/widgets/route.ts",
+      [
+        'import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";',
+        "export async function POST(req: Request) {",
+        "  const body = await readJsonRecord(req);",
+        "  if (isErrorResponse(body)) return body;",
+        "  return NextResponse.json({ ok: true, kind: body.kind });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("lib 层的既有出口实现不被 P1~P38 误伤（本批只让 P39~P41 扫 lib）", () => {
+    /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
+     * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规
+     *（它们本来就该做那件事）。试写一份「出口实现」的形态验一遍。 */
+    seedBaseline();
+    write(
+      "src/lib/browser-io.ts",
+      [
+        "export async function copyText(text: string): Promise<boolean> {",
+        "  await navigator.clipboard.writeText(text);",
+        "  return true;",
+        "}",
+      ].join("\n"),
+    );
+    write(
+      "src/lib/file-io.ts",
+      [
+        "export async function readFileAsText(file: File): Promise<string> {",
+        "  return await file.text();",
         "}",
       ].join("\n"),
     );

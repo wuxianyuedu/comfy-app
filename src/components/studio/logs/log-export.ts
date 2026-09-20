@@ -21,11 +21,15 @@ export function exportFileName(): string {
 }
 
 /**
- * 写入剪贴板。失败静默 —— 日志面板的「复制全部」已经在按钮上给了
- * 视觉反馈（`LogPanel` 的 flash 态），再弹一次错误提示反而吵。
+ * 写入剪贴板，并把**成败原样返回**（规范 16 §16.2.4.43）。
+ *
+ * 此前这里把结果吞掉（`await copyText(text)` 后什么都不返回），注释里写的
+ * 理由是「面板的按钮已经给了视觉反馈」—— 而实测那条反馈并不存在（`LogPanel`
+ * 的复制按钮与 `wrap` 共用一排、自己没有任何状态），于是「复制全部失败」在
+ * 界面上**完全不可见**。现在把判据还给调用处：谁给反馈、给什么，由面板决定。
  */
-export async function copyLogText(text: string): Promise<void> {
-  await copyText(text);
+export async function copyLogText(text: string): Promise<boolean> {
+  return await copyText(text);
 }
 
 /** 触发一次浏览器下载（纯文本 + 本地时间戳文件名）。 */

@@ -9,7 +9,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-import { copyText, downloadJson } from "~/lib/browser-io";
+import { downloadJson } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { detectFolderHelper } from "~/lib/external-open";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 
@@ -43,7 +44,7 @@ export interface HistoryDetailActions {
   downloading: boolean;
   openFolder: (taskId: string) => Promise<void>;
   downloadWorkflow: (taskId: string) => Promise<void>;
-  copyPath: () => Promise<void>;
+  copyPath: () => void;
   dismissFolderPopover: () => void;
 }
 
@@ -132,15 +133,17 @@ export function useHistoryDetailActions(
     [deps, toast, report],
   );
 
-  const copyPath = useCallback(async () => {
+  /* 路径复制走 toast 通道（这一族动作的既有表现层选择）。反馈形态是调用处
+   * 的事，但**成败两条都要有出口**归出口管（规范 16 §16.2.4.43）。 */
+  const copyPathFeedback = useCopyFeedback({
+    onSuccess: () =>
+      toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
+    onFailure: () => toast.error("复制失败", "请手动选择路径复制"),
+  });
+  const copyPath = useCallback(() => {
     if (!folderPopover) return;
-    const ok = await copyText(folderPopover.path);
-    if (!ok) {
-      toast.error("复制失败", "请手动选择路径复制");
-      return;
-    }
-    toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转");
-  }, [folderPopover, toast]);
+    copyPathFeedback(folderPopover.path);
+  }, [folderPopover, copyPathFeedback]);
 
   const downloadWorkflow = useCallback(
     async (taskId: string) => {

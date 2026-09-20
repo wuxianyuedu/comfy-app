@@ -19,7 +19,7 @@ import React, { memo, useState } from "react";
 import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
-import { copyText } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { normalizeNeedle } from "~/lib/list-filter";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
@@ -124,11 +124,20 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
    * 「已复制」停留越久越像常驻标签。 */
   const flash = useFlashState(1200);
 
-  const onCopy = async () => {
-    const text = formatEntryForClipboard(entry);
-    setOutcome((await copyText(text)) ? "done" : "failed");
-    flash.flash();
-  };
+  /* 成败都改口（§16.2.4.43）：失败时说「已复制」是撒谎，而**只在成功时才改口**
+   * 同样是撒谎的另一半 —— 用户连点几次都没反应，以为按钮坏了。 */
+  const copy = useCopyFeedback({
+    onSuccess: () => {
+      setOutcome("done");
+      flash.flash();
+    },
+    onFailure: () => {
+      setOutcome("failed");
+      flash.flash();
+    },
+  });
+
+  const onCopy = () => copy(formatEntryForClipboard(entry));
 
   return (
     <Button
@@ -191,6 +200,9 @@ export const LogRow = memo(function LogRow({
   keyword: string;
   style: React.CSSProperties;
 }) {
+  /* 文件路径那枚的复制：**显式静默**失败 —— 整条路径就印在按钮上，
+   * 旁边没有第二处可说的地方，而弹 toast 会盖住正在看的日志。 */
+  const copyLocation = useCopyFeedback({ onFailure: "silent" });
   return (
     <div
       style={style}
@@ -221,9 +233,7 @@ export const LogRow = memo(function LogRow({
       {entry.location && (
         <Button
           variant="ghost"
-          onClick={() => {
-            void copyText(entry.location!);
-          }}
+          onClick={() => copyLocation(entry.location!)}
           className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
           title={`${entry.location}（点击复制）`}
         >

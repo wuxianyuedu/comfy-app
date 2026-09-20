@@ -6,6 +6,7 @@ import type { Node } from "@xyflow/react";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { errorMessage } from "~/lib/error-message";
+import { afterNextPaint } from "~/lib/next-frame";
 import type {
   WorkflowDetail,
   WorkflowIOParam,
@@ -31,15 +32,6 @@ const NODE_TITLE_ANCHOR: Record<string, number> = {
   wfNode: NODE_TITLE_H,
   wfSubgraph: NODE_TITLE_H,
 };
-
-/**
- * 等浏览器完成绘制后再执行 `cb` —— 好让 resetLayout 的乐观 `setDetail` 已提交、
- * React Flow 也已完成画布布局，再去 fit 视图。
- * 两帧：一帧给 React 提交，一帧给布局。
- */
-function afterNextPaint(cb: () => void): void {
-  requestAnimationFrame(() => requestAnimationFrame(cb));
-}
 
 export interface WorkflowPersistenceArgs {
   workflowId: string;

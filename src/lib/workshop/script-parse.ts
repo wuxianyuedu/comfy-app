@@ -14,6 +14,7 @@ import {
   mergeParams,
 } from "./prompt-builder";
 import { workshopUid } from "./script-parser";
+import { isRecord } from "~/lib/is-record";
 
 // ─────────────────────────────────────────────────────────────
 // 数据草稿类型(不改既有 Character / Shot 结构,仅作为提取中间态)
@@ -65,10 +66,6 @@ export const VALID_SHOT_TYPES: readonly ShotType[] = [
   "poi",
   "pod",
 ];
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
 
 function asStr(v: unknown): string {
   return typeof v === "string" ? v : "";

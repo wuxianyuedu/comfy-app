@@ -35,7 +35,8 @@ import {
   MAIN_TAB_ID,
   type ShellTab,
 } from "~/lib/shell/shell-tabs-store";
-import { copyText } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import { useFlashState } from "~/components/ui/use-flash-state";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { shouldUseTitleBarTabs } from "~/lib/shell/title-bar-derive";
 import {
@@ -146,6 +147,15 @@ function TabBlockedNotice({
   reason: string;
   url?: string | null;
 }) {
+  /* 这一枚「复制地址」的文本就在旁边那行 `<code>` 里印着，失败时用户能直接
+   * 手动选中复制 —— 所以失败**显式静默**（规范 16 §16.2.4.43 的 `"silent"`），
+   * 而成功亮一下「已复制」，让用户知道点中了。收口前两者都没有：点下去
+   * 界面上什么都不变，成没成全靠猜。 */
+  const copied = useFlashState();
+  const copyUrl = useCopyFeedback({
+    onSuccess: () => copied.flash(),
+    onFailure: "silent",
+  });
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
       <div className="max-w-xl space-y-3 text-center">
@@ -166,12 +176,10 @@ function TabBlockedNotice({
           <Button
             variant="ghost"
             size="xs"
-            onClick={() => {
-              void copyText(url);
-            }}
+            onClick={() => copyUrl(url)}
             className="text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto shrink-0 rounded px-2 py-1"
           >
-            复制地址
+            {copied.on ? "已复制" : "复制地址"}
           </Button>
         </div>
       )}

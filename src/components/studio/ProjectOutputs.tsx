@@ -9,7 +9,8 @@ import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
-import { copyText, downloadText } from "~/lib/browser-io";
+import { downloadText } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { timeAgo } from "~/lib/time-format";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { StatusBadge } from "~/components/ui/status-badge";
@@ -128,13 +129,20 @@ export function ProjectOutputs() {
     );
   }, [selected, projectId]);
 
+  /* 复制的成败都交给出口（规范 16 §16.2.4.43）：成功亮一下按钮，失败也亮 ——
+   * 此前这里 `if (!ok) return;` 把失败整个吞掉，按钮一动不动，用户以为成了。 */
+  const [copyFailed, setCopyFailed] = useState(false);
+  const copy = useCopyFeedback({
+    onSuccess: () => {
+      setCopyFailed(false);
+      copied.flash();
+    },
+    onFailure: () => setCopyFailed(true),
+  });
   const handleCopy = useCallback(() => {
     if (!metaJson) return;
-    void copyText(metaJson).then((ok) => {
-      if (!ok) return;
-      copied.flash();
-    });
-  }, [metaJson, copied]);
+    copy(metaJson);
+  }, [metaJson, copy]);
 
   const handleExport = useCallback(() => {
     if (!metaJson || !selected) return;
@@ -446,8 +454,17 @@ export function ProjectOutputs() {
                     size="sm"
                     onClick={handleCopy}
                     className="h-auto flex-1 rounded-lg px-3 py-2 text-[12px]"
+                    title={
+                      copyFailed
+                        ? "复制失败：剪贴板不可用，请手动选中后复制"
+                        : "复制元数据到剪贴板"
+                    }
                   >
-                    {copied.on ? "已复制 ✓" : "复制元数据"}
+                    {copyFailed
+                      ? "复制失败"
+                      : copied.on
+                        ? "已复制 ✓"
+                        : "复制元数据"}
                   </Button>
                   <Button
                     variant="outline"

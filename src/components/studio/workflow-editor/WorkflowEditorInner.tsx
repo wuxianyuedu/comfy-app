@@ -62,6 +62,7 @@ import {
   type Bounds,
   type FitBoundsNode,
 } from "./subgraph-viewport";
+import { onNextFrame } from "~/lib/next-frame";
 import { zClass } from "~/lib/shell/overlay-z";
 
 /* ── 画布网格 ──
@@ -420,9 +421,10 @@ function WorkflowEditorBody({
   }, [rf, rfStore, canvasSettings.minZoom, canvasSettings.maxZoom]);
 
   /* 「重新居中」按钮。延后一帧再算：React Flow 在下一帧才提交最新的测量
-   *  结果，直接算会用到上一帧的尺寸（对刚展开/折叠过节点的画布尤其明显）。 */
+   *  结果，直接算会用到上一帧的尺寸（对刚展开/折叠过节点的画布尤其明显）。
+   *  调度本身收在 `~/lib/next-frame`（规范 16 §16.2.4.42）。 */
   const recenterCanvas = useCallback(() => {
-    requestAnimationFrame(() => fitToContent());
+    onNextFrame(() => fitToContent());
   }, [fitToContent]);
 
   /* 拉取工作流详情（进入子工作流时则拉子图详情）。
