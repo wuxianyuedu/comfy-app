@@ -36,26 +36,12 @@ const GATES = {
   typecheck: { label: "Typecheck (tsc --noEmit)", args: ["typecheck"] },
   lint: {
     label: "ESLint zero error / zero warning",
-    /* `--cache --cache-strategy content`：判据不变（缓存键 = 文件内容 + 解析后的
-     * config），只把「已判定过且没变」的文件跳过。`content` 不可省 —— 默认的
-     * metadata 用 mtime + size 判定，`git checkout` / `prettier --write` / 编辑器
-     * 保存这类「重写同一份内容」的动作会造成大面积失效（实测只碰 3 个文件的
-     * mtime：metadata → 3 条失效 / 87.5s，content → 0 条失效 / 46.3s；真改 1 个
-     * 文件 → 1 条 / 44s；全量重建 ~350s）。四个调用点（.githooks/pre-commit 第 7
-     * 步 / 本文件 / quality-gate.ps1 / package.json）保持同一组参数，改一处要四
-     * 处一起改。 */
-    args: [
-      "exec",
-      "eslint",
-      ".",
-      "--max-warnings",
-      "0",
-      "--cache",
-      "--cache-location",
-      "node_modules/.cache/eslint",
-      "--cache-strategy",
-      "content",
-    ],
+    /* 扫描范围（白名单目录）与参数（`--max-warnings 0` / `--cache-strategy
+     * content`）收在 package.json 的 `lint` 脚本里：四个调用点（.githooks/
+     * pre-commit 第 7 步 / 本文件 / quality-gate.ps1 / CI）共用同一份命令，
+     * 各自的目录清单与 `--cache` 参数不再各抄一遍（抄一遍就会漂移）。
+     * 范围口径与 `content` 策略的理由见 `eslint.config.js` 顶部那节。 */
+    args: ["run", "lint"],
   },
   /**
    * 格式棘轮（规范 §13.5 / ISSUE #575 第 9 项）。

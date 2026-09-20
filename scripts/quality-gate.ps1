@@ -71,14 +71,12 @@ function Get-VitestKnownFailureArgs {
 $Blocks = @(
   @{ Name = "typecheck"; Label = "Typecheck (tsc --noEmit)"; Cmd = "pnpm";
      Args = @("typecheck"); Run = $true }
-  # --cache --cache-strategy content：与 .githooks/pre-commit 第 7 步 / quality-gate.mjs /
-  # package.json 同参数。content 不可省（默认 metadata 按 mtime+size 判定，git checkout /
-  # prettier --write 这类「重写同内容」会造成大面积失效）；实测只碰 3 个文件 mtime：
-  # metadata 3 条失效 / 87.5s → content 0 条 / 46.3s，真改 1 个文件 1 条 / 44s。
+  # eslint 的扫描范围（白名单目录）与参数收在 package.json 的 `lint` 脚本里：
+  # 本门禁、.githooks/pre-commit 第 7 步、quality-gate.mjs、CI 共用同一份命令，
+  # 各自的目录清单与 `--cache` 参数不再各抄一遍（抄一遍就会漂移；范围口径与
+  # `--cache-strategy content` 的理由见 eslint.config.js 顶部那节）。
   @{ Name = "lint";      Label = "ESLint zero error / zero warning";
-     Cmd = "pnpm"; Args = @("exec","eslint",".","--max-warnings","0",
-                            "--cache","--cache-location","node_modules/.cache/eslint",
-                            "--cache-strategy","content"); Run = $true }
+     Cmd = "pnpm"; Args = @("run","lint"); Run = $true }
   @{ Name = "format";    Label = "Prettier format ratchet (scripts/check-format.cjs)";
      Cmd = "node"; Args = @("scripts\check-format.cjs"); Run = $true }
   @{ Name = "test";      Label = "Vitest full run (excluding known baseline failures)";
