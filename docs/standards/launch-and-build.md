@@ -12,9 +12,14 @@
 
 ## 1. 启动链路与分层职责
 
+启动有**两个入口**，最终都收敛到同一份编排（`scripts/dev-launcher.mjs`）：
+
 ```
-双击 start-tauri\{{shell.exe.prebuilt}}（scripts/start_tauri_launcher.py → PyInstaller）
+① 双击 start-tauri\{{shell.exe.prebuilt}}（scripts/start_tauri_launcher.py → PyInstaller）
   │  职责：单实例保护、失败弹窗（人类可见出口）、run/launch-status.json 进度
+  ▼
+② 双击 src-tauri\target\release\{{shell.app.exe}}（**没有启动器这一层**，ISSUE #784）
+  │  职责：壳自己起编排器，并从启动页那条链读进度（见 §1.5）
   ▼
 node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scripts/dev-launcher.ps1）
   │  职责：预检（依赖/壳时效）、进程编排、日志体系、进程树回收 —— **全平台唯一实现**
@@ -52,6 +57,10 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
   （**全平台同一份**，见 §3）。`scripts/dev-launcher.ps1` 只是它在 Windows 侧的
   **调用入口**（定位项目根 → 转交 → 透传退出码），不含任何编排逻辑；
 - **Rust 壳**只负责窗口与导航，不启动任何进程（dev 模式）；
+  唯一例外是**壳自编排**（双击 {{shell.app.exe}}，见 §1.5）：此时壳是编排器的
+  父进程，起它是为了「双击一个 exe 就能用」，而不是把编排搬进 Rust —— 起什么、
+  怎么起、怎么回收都写在 `src-tauri/src/shell_launch.rs`，编排本身仍是
+  `dev-launcher.mjs` 那一份；
 - 任何一层失败都必须有人类可见的出口（弹窗/窗口内提示），禁止只写文件。
 
 ### 1.1 端口统一配置（COMFYAPP_PORT）
@@ -276,6 +285,43 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 > 的一方会探测到已运行的实例并复用；需要隔离时在各自设置里配不同端口。
 > WebView2 用户数据目录按应用标识共享（同一台机器上的两份检出同一身份），
 > localStorage 等按源隔离（端口不同即不同源），不互相污染。
+
+### 1.5 只启动一个 exe：壳自编排（ISSUE #784）
+
+用户要的形态是「双击**一个** exe 就能用」。旧链路做不到：双击的是启动器
+（{{shell.exe.prebuilt}}），它再拉起编排器与壳——任务栏上是两个图标，
+`target\release\{{shell.app.exe}}` 直接双击则因为没人编排而加载一个连不上的
+静态 `devUrl`（内嵌错误页）。
+
+现在双击 {{shell.app.exe}} 也能起来，做法是**壳自己当编排的宿主**（不是把编排
+搬进 Rust）：
+
+| 环节       | 判据 / 实现                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------ |
+| 谁在编排   | `COMFYAPP_LAUNCH_MODE` 环境变量。启动器一定会注入它，**它的缺席 = 没人编排我**（`LaunchContext::collect`）    |
+| 起什么     | `node scripts/dev-launcher.mjs --mode prebuilt`（`shell_launch::spawn_orchestrator`），经官方 shell 插件     |
+| 起不起得来 | `can_self_launch()`：编排脚本 + `node_modules\.modules.yaml` + 关键依赖存在（只读、极快）；不满足就退回静态 `devUrl` 行为 |
+| 两份编排   | 起之前先用 `find_owned_orchestrator()` 查有没有**自己认领过的**编排器在跑；有就复用，绝不并发起两份（两份会争端口、互把对方的 dev server 当孤儿） |
+| 认亲       | 进程环境块里的 `COMFYAPP_SHELL_OWNED=1`（只有壳写、只有它起的编排器才有）。**不按形态猜**——「有没有 dev server」「命令行里有没有项目根」都认不出是谁起的 |
+| 回收       | 壳的 `RunEvent::Exit` → 插件 `kill()` + `scripts/reap-process.mjs`（`--detach`，自杀路径等不起 `wait`）；另挂 `KILL_ON_JOB_CLOSE` Job Object 兜住壳崩溃 / 被硬杀 |
+| 前台       | 双击壳的人就是在等画面（`decide_front_when_self_launched`）；`COMFYAPP_FOREGROUND` 已注入时以它为准 |
+| 只 debug / release 哪边 | **只在 release**：debug 下的壳归 `pnpm tauri dev` 管，那时 dev server 由 `beforeDevCommand` 起着 |
+
+两个入口**并存且不打架**：老入口仍是「双击启动」，而它的 `launch_dev_server`
+起编排前会先查有没有壳自编排的编排器在跑（`_find_shell_owned_orchestrator`），
+命中就让位并把监控退化成「读进度 + 等窗口出现」；反过来壳起编排前也会避开
+已在跑的。回收侧，启动器的兜底补刀遇到壳自编排的编排器要让开
+（`_kill_shell_owned_pid`：它随壳退出，杀了就是把用户正在用的应用掐掉）。
+
+**这一形态顺带修掉的两件事**：① 旧链路里壳只是编排器的子进程之一，python
+启动器早已退出，用户关掉主窗后整棵树能否回收取决于它退出前有没有把 Job Object
+句柄交出去；现在编排器是壳的孩子，「壳退出 → 回收编排器 → 编排器回收它自己那
+棵树」是一条没有中断的链。② 前台归属不再需要第二个进程（`win32-window-focus.py`）
+复核——壳自己知道这段编排是谁起的。
+
+> **路径判据仍是一条**：壳与启动器都用「项目根 + `scripts/dev-launcher.mjs`」
+> 定位编排器（`orchestrator_script` / `_launcher_entry`），不各自另拼一份会漂的
+> 相对路径。
 
 ## 2. 启动预检（dev-launcher.mjs，新增于 2026-09-02）
 
@@ -673,9 +719,20 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 | 孤儿线索   | `run/launcher-session.json` + `run/launcher-heartbeat.txt`             |
 | 进度快照   | `run/launch-status.json`（字段口径见 §9.3）                            |
 
-**增量决策：不在 Rust/Python 里重写平台判据。** 壳的 sidecar 回收（`kill_sidecar`）
-与 Python 启动器的兜底补刀都转交 `scripts/reap-process.mjs`：Rust 里再写一套
-`taskkill` 分支，就是「各写各的、POSIX 上退化成单杀」那条老路的翻版。
+**增量决策：不在 Rust/Python 里重写平台判据。** 壳的 sidecar 回收（`kill_sidecar`）、
+**壳自编排的编排器回收（`shell_launch::reap`，§1.5）** 与 Python 启动器的兜底补刀
+都转交 `scripts/reap-process.mjs`：Rust 里再写一套 `taskkill` 分支，就是
+「各写各的、POSIX 上退化成单杀」那条老路的翻版。
+
+> **「正在退出的宿主」用 `--detach`**：壳的 `Exit` 事件与启动器收尾只剩几十毫秒，
+> 而默认的 `wait: true` 要等 `taskkill` 跑完。`node scripts/reap-process.mjs <pid>
+> --force --detach` 改为派发即返回——命令已经落地，宿主随后退出不会把它带走。
+> 其余场景保持等待（退出码能写进日志，落没落可核对）。
+
+> **Job Object 有两个持有者，取决于谁在编排**：老链路里是 python 启动器
+> （`scripts/win_job.py` 把句柄复制进编排器）；壳自编排时由壳自己建
+> （`shell_launch::attach_kill_on_close_job`，句柄故意不关，壳一死 job 就关）。
+> 两者不冲突：同一时刻只有一条编排链在跑（认亲判据见 §1.5）。
 
 **进程组是本方案的地基，不是优化项**。POSIX 上没有 Job Object，而
 `spawn` 默认让子进程与编排器**同组**：此时 §3.1 的防自杀判据会禁用组路径，
@@ -993,6 +1050,8 @@ zustand 队列，而不是再加一个模块级单例。
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                                                                                                                                                                                                      | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `pnpm install` 已成功（exit 0）但仍报「node_modules/…为空或缺失」启动失败；同机跑 `sync-lint.ps1`/`run-local.ps1` 却正常                                                                                                                                                                                            | 假阳性：`Get-BrokenKeyDeps` 用 `Get-ChildItem -LiteralPath` 枚举顶层 junction/symlink 判空，pwsh（7.6.5 实测）对这类 reparse point 的枚举可能返回 0 项 → 健康安装被误判残缺，触发 install 后因 `.modules.yaml`/lockfile 已一致而“Already up to date”无法自愈，二次复查仍误报                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 已修：先 `Resolve-Path` 解析到链接目标真实绝对路径，再用 .NET `Directory.EnumerateFileSystemEntries` 对真实目录判非空（见 §2.2 step 5）。同步/自检脚本（sync-lint/run-local）本就只查 `.modules.yaml`+`.bin`+lockfile，故不受影响                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | junction 枚举已修（见上）后仍报「node_modules/ 仍为空或缺失」且 `pnpm install` 显示 “Already up to date”；报错串中目录名后为空                                                                                                                                                                                      | 第二处假阳性：`Get-BrokenKeyDeps` 结尾 `return ,$broken`（unary comma 防外层展开）。当依赖健康、`$broken` 为空数组 `@()` 时，`,@()` 向外输出「一个空数组」单对象，调用方 `@(Get-BrokenKeyDeps)` 收集成 `@(@())`——`.Count` 恒为 1 而非 0 → 健康环境永远被判有坏依赖，install 因依赖本就完好返回 exit 0 无法自愈，二次复查 `foreach ($d in …)` 取出空数组元素（`"$d"` 为空）再误报抛错                                                                                                                                                                                                                                                                                                                                                                                    | 已修：函数改 `return $broken`——空数组不产生输出，`@(...)` 得 0 项；非空正常展开，`foreach`/`.Count` 语义正确（见 §2.2 step 5）。勿再加 unary comma                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **双击 `target\release\{{shell.app.exe}}`：窗口出来了，但主窗一直不显示、启动页永远停在「正在等待本地服务就绪」**（ISSUE #784 之前的现场是内嵌 Edge 错误页）                                                                                                                                                                                      | 壳自编排的编排器起不来，而主窗又等不到就绪信号。常见成因：`node_modules` 被删/残缺（`can_self_launch` 直接放弃自编排，退回静态 `devUrl`）、PATH 上没有 `node`、`pnpm` 形态不可用（工具链门禁 fail）。**关键差别**：旧行为会把主窗导航到一个必然连不上的地址（用户看到「坏了」），现在主窗停在 `about:blank`，用户看到的是「还在启动」                                                                                                                              | 先点启动页「查看日志」：壳把编排器的 stdout/stderr 原样转发成 `[orchestrator] …`。日志里会直接写「本检出还不能自编排（缺 scripts/dev-launcher.mjs 或 node_modules）」「壳自编排未能启动（…）」或编排器的工具链门禁结论（`pnpm check:toolchain` 是它的自查入口）。修完依赖重新双击即可；想回老链路就用 `{{shell.exe.prebuilt}}` |
+| **双击 `target\release\{{shell.app.exe}}`：什么都没发生，也没有第二个窗口**                                                                                                                                                                                                                                                                    | 壳的单实例保护在 setup 之前就把本次启动退掉了（同一检出的壳已在跑）——这是**设计内**行为：二次启动只把已有窗口唤到前台，不新开窗口。日志里是 `another instance of this checkout is running, focus requested and exiting`                                                                                                                | 找已经开着的那个窗口（任务栏 / 托盘「打开主界面」）。要同时跑两份（比如对比两个分支）就用两份**检出**，不要复制 exe：身份锚点是检出路径，复制出去的 exe 仍认同一个检出（§1.4）                                                                                                                                                                                                                                                                   |
 | 双击 exe 完全无窗口、无报错                                                                                                                                                                                                                                                                                         | ① dev-launcher 静默失败（旧版无弹窗）② 日志文件被残留进程锁死                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 已修复：失败弹窗 + 日志按次命名。若复现，看 `start-tauri-launcher.log` 末行 exit code 与 `dev-launcher-stderr.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 窗口黑屏，左上角 `asset not found: {{shell.splash}}`                                                                                                                                                                                                                                                                | splash 窗口 URL 用了 macOS/Linux 形式的 `tauri://localhost`，Windows 资源源是 `http(s)://tauri.localhost`；或改了 splash-assets 但没重编壳                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | tauri.conf.json 用相对路径 `{{shell.splash}}`；重编壳                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **启动页的最小化 / 关闭点了没反应**（#412 二次回报；按钮画在右上角、能悬停高亮，就是点下去什么都不发生）                                                                                                                                                                                                            | 按钮「画出来」与「调得动窗口」是两件事：①`decorations: false` 之后窗口唯一的出口就是这两个按钮，而它们此前只挂在**一条** `addEventListener` 上——脚本没跑到绑定、监听被顶掉，点击就没人接；②兜底要靠新壳命令，而改了 `src-tauri/**` / `public/{{shell.splash}}` 不重编壳时跑的是旧壳（新命令不存在），症状同样是「点了没反应」；③`--splash` 那张启动器自绘画面用的是 `ShowWindow(SW_MINIMIZE)`——`WS_EX_TOPMOST` 的无主弹窗**不会被它最小化**（系统去找可最小化的父窗口组，找不到就什么都不做）                                                                                                                                                                                                                                                                           | 已修：启动页的窗口按钮改为「三条互补路径 + 失败可见」（事件监听 / 按钮内联 `onclick` → `window.__splashWinAction` / 应用自建命令 `win_minimize`·`win_close`，三条都失败时消息区写「当前壳缺少窗口命令，请更新」）；新命令按规范三处同步（`build.rs` AppManifest / `capabilities/splash.json`），壳侧直接操作 splash 窗口、不额外授权 `core:window` 命令面；启动器自绘画面的最小化改为「隐藏 + 撤置顶 + 交还前台」并由 40ms 定时器维持，尺寸同步到 744×216（与启动页一致）；另启动器启动前比一次壳文件时间戳，过期时在画面/日志里钉一条「请重编壳」。判据见 `tests/check-file-structure.test.ts`，规范 07 §7.18.7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
