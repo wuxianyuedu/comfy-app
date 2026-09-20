@@ -7,12 +7,26 @@
 //   • tRPC 调用集中在 ~/lib/history-detail-actions，改协议只需动一处；
 //   • 失败路径统一走 toast（硬规则：失败必须有日志 + 用户可见出口）。
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { copyText, downloadJson } from "~/lib/browser-io";
 import { detectFolderHelper } from "~/lib/external-open";
+import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 
 import { useToast } from "../../ToastProvider";
+
+/** 把 toast 适配成本模块的动作反馈通道（规范 16 §16.2.4.30）。
+ *
+ *  「成功 / 失败接哪个方法、带不带第二行说明」是**调用处的表现层选择**，
+ *  所以适配器住在这里而不是出口里 —— 设置页接的是整页提示条，
+ *  工作流库接的也是 toast，但带第二行说明的写法不同。 */
+function toastReport(toast: {
+  success: (t: string, d?: string) => unknown;
+  error: (t: string, d?: string) => unknown;
+}): ActionReport {
+  return (kind, detail) =>
+    kind === "ok" ? toast.success(detail) : toast.error(detail);
+}
 
 /** comfyapp:// 协议未接管的引导状态：为 null 表示尚未发起过导航。 */
 export interface FolderPopover {
@@ -56,6 +70,9 @@ export function useHistoryDetailActions(
   const [openFolderBusy, setOpenFolderBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  /* 反馈通道的适配只做一次（`toast` 的身份在 Provider 里是稳定的）。 */
+  const report = useMemo(() => toastReport(toast), [toast]);
+
   const openFolder = useCallback(
     async (taskId: string) => {
       setOpenFolderBusy(true);
@@ -94,15 +111,25 @@ export function useHistoryDetailActions(
             result.absolutePath ?? undefined,
           );
         } else {
-          toast.error("打开目录失败");
+          /* 服务端没给具体原因（`result.error` 是别的值 / 缺席）——
+           * 出口的失败文案就是这一句。 */
+          report("err", "打开目录失败");
         }
-      } catch {
-        toast.error("无法连接服务器");
+      } catch (error) {
+        /* 失败路径的文案由 `~/lib/async-action` 统一走 `errorMessage`：
+         * 收口前这里是一句写死的「无法连接服务器」—— 网络层原文
+         *（服务重启窗口的 `Failed to fetch`）被整个丢掉了。 */
+        await runAsyncAction(
+          async () => {
+            throw error;
+          },
+          { report, failureText: "打开目录失败" },
+        );
       } finally {
         setOpenFolderBusy(false);
       }
     },
-    [deps, toast],
+    [deps, toast, report],
   );
 
   const copyPath = useCallback(async () => {
@@ -118,20 +145,20 @@ export function useHistoryDetailActions(
   const downloadWorkflow = useCallback(
     async (taskId: string) => {
       setDownloading(true);
-      try {
-        const result = await deps.fetchWorkflow(taskId);
-        if (!result?.workflow) {
-          toast.error("未找到工作流快照");
-          return;
-        }
-        downloadJson(result.workflow, "workflow.json");
-      } catch {
-        toast.error("下载失败");
-      } finally {
-        setDownloading(false);
-      }
+      /* 「拿到快照 → 落盘」这一整段走同一个出口：成功静默（文件已经在
+       * 浏览器的下载目录里，再弹一句是噪声），失败走 `errorMessage`。 */
+      await runAsyncAction(
+        async () => {
+          const result = await deps.fetchWorkflow(taskId);
+          if (!result?.workflow) return false;
+          downloadJson(result.workflow, "workflow.json");
+          return true;
+        },
+        { report, failureText: "下载失败" },
+      );
+      setDownloading(false);
     },
-    [deps, toast],
+    [deps, report],
   );
 
   const dismissFolderPopover = useCallback(() => setFolderPopover(null), []);

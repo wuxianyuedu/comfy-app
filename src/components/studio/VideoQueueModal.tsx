@@ -5,6 +5,7 @@ import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { runAsyncAction } from "~/lib/async-action";
 import { readFileAsText } from "~/lib/file-io";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { useToast } from "~/components/studio/ToastProvider";
@@ -109,28 +110,37 @@ export function VideoQueueModal({
     if (!items.length) return;
     setSubmitting(true);
     setError("");
-    try {
-      let ok = 0;
-      for (const it of items) {
-        try {
-          const d = await submitGeneration(it.params, it.prompt);
-          if (d.taskId) ok++;
-        } catch {
-          /* 跳过失败项 */
+    /* 「逐条提交、跳过失败项、只要有一条成功就算成功」是本动作的域语义，
+     * 留在调用处；**失败通道只有一条**（这块行内 `setError`），
+     * 所以 `report` 恒接到它上（规范 16 §16.2.4.30：通道由调用处给）。 */
+    const result = await runAsyncAction(
+      async () => {
+        let ok = 0;
+        for (const it of items) {
+          try {
+            const d = await submitGeneration(it.params, it.prompt);
+            if (d.taskId) ok++;
+          } catch {
+            /* 跳过失败项 */
+          }
         }
-      }
-      if (ok > 0) {
+        if (ok === 0) {
+          /* 一条都没成：抛出去走出口的失败通道，文案带可执行动作。 */
+          throw new Error("提交失败，请检查参数或 ComfyUI 连接");
+        }
         setDraft([]);
         setTab("queue");
         void loadTasks();
-      } else {
-        setError("提交失败，请检查参数或 ComfyUI 连接");
-      }
-    } catch {
-      setError("提交失败");
-    } finally {
-      setSubmitting(false);
-    }
+      },
+      {
+        report: (kind: "ok" | "err", detail: string) => {
+          if (kind === "err") setError(detail);
+        },
+        failureText: "提交失败",
+      },
+    );
+    setSubmitting(false);
+    return result;
   }, [draft, loadTasks]);
 
   if (!open) return null;

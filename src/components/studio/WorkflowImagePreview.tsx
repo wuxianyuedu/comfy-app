@@ -2,13 +2,15 @@
 /* 抽出的图片预览 + 字符串 textarea —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import { useState } from "react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { comfyImageUrl } from "~/lib/media/media-url";
+import { readNaturalSize, type NaturalSize } from "~/lib/media/natural-size";
 import type { RawInputMeta } from "./workflow-types";
 
 /** 节点在 paramMap 里可以分配到的角色 */
 export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
   const ref = entry.imageRef;
   const label = entry.localized ?? entry.label ?? entry.name;
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [size, setSize] = useState<NaturalSize | null>(null);
   /* 空的 LoadImage（没有 widgets_values[0]）→ 占位卡片。与缩略图
    * 同一套布局尺寸（110px 高），好让预览区
    * 无论上传状态如何都视觉一致，并且带边框 /
@@ -25,9 +27,7 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
       </div>
     );
   }
-  const src = `/api/images?filename=${encodeURIComponent(ref.filename)}&subfolder=${encodeURIComponent(
-    ref.subfolder,
-  )}&type=${encodeURIComponent(ref.type)}`;
+  const src = comfyImageUrl(ref);
   return (
     <div className="flex flex-col gap-1">
       <div className="text-ink-soft truncate text-[11px]" title={label}>
@@ -44,17 +44,18 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
               图片不可用
             </div>
           }
-          onLoad={(img) => {
-            const el = img as HTMLImageElement;
-            if (el.naturalWidth && el.naturalHeight) {
-              setSize({ w: el.naturalWidth, h: el.naturalHeight });
-            }
+          /* 自然尺寸的读取口径收在 `~/lib/media/natural-size`
+           *（规范 16 §16.2.4.31）：读不到（还没解码完 / 元数据缺失）时
+           * 出口给 `null`，而不是 `{0, 0}` 那种会让下游算出 `Infinity` 的值。 */
+          onLoad={(media) => {
+            const size = readNaturalSize(media);
+            if (size) setSize(size);
           }}
         />
       </div>
       {size && (
         <div className="text-ink-soft text-right text-[10px] tabular-nums">
-          {size.w} × {size.h}
+          {size.width} × {size.height}
         </div>
       )}
     </div>

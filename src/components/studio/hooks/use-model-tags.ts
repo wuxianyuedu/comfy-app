@@ -11,7 +11,7 @@
 
 import { useCallback, useState } from "react";
 
-import { errorMessage } from "~/lib/error-message";
+import { runAsyncAction } from "~/lib/async-action";
 import { vanillaApi } from "~/trpc/vanilla";
 
 /** 快照去重 key 的分隔符：标签名不含 \u0000，用它拼不会撞车。 */
@@ -99,20 +99,28 @@ export function useModelTags({
     if (!name) return;
     setBusy(true);
     setError(null);
-    try {
-      const d = await vanillaApi.workflowModel.create.mutate({ name });
-      if (!d.tag) {
-        setError("添加失败");
-        return;
-      }
-      setDraft("");
-      await refresh();
-      onChanged?.();
-    } catch (e) {
-      setError(errorMessage(e, "添加失败"));
-    } finally {
-      setBusy(false);
-    }
+    /* 行内错误条（`setError`）是这块唯一的反馈通道。两个「没做成」的来源
+     * 都归到 `failureText`：服务端返回 `!tag`（静默的失败信封）与抛错
+     *（走 `errorMessage`）——出口给的一半正是后者。 */
+    const result = await runAsyncAction(
+      async () => {
+        const d = await vanillaApi.workflowModel.create.mutate({ name });
+        if (!d.tag) throw new Error("添加失败");
+        setDraft("");
+        await refresh();
+        onChanged?.();
+      },
+      {
+        report: (kind, detail) => {
+          if (kind === "err") setError(detail);
+        },
+        failureText: "添加失败",
+      },
+    );
+    setBusy(false);
+    /* `addTag` 的签名是 `Promise<void>`：结果本身没有下游用途
+     *（失败已经落在 `error` 上），所以显式丢弃 —— 不留一个没人读的返回值。 */
+    void result;
   }, [draft, refresh, onChanged]);
 
   const deleteTag = useCallback(
@@ -124,17 +132,20 @@ export function useModelTags({
         );
         if (!ok) return;
       }
-      try {
-        const d = await vanillaApi.workflowModel.delete.mutate({ name });
-        if (!d.ok) {
-          setError("删除失败");
-          return;
-        }
-        await refresh();
-        onChanged?.();
-      } catch (e) {
-        setError(errorMessage(e, "删除失败"));
-      }
+      await runAsyncAction(
+        async () => {
+          const d = await vanillaApi.workflowModel.delete.mutate({ name });
+          if (!d.ok) throw new Error("删除失败");
+          await refresh();
+          onChanged?.();
+        },
+        {
+          report: (kind, detail) => {
+            if (kind === "err") setError(detail);
+          },
+          failureText: "删除失败",
+        },
+      );
     },
     [refresh, onChanged],
   );
@@ -144,29 +155,31 @@ export function useModelTags({
       const trimmed = newName.trim();
       // 同名或空名视为 no-op 成功：调用方直接关闭编辑器（原组件行为）。
       if (!trimmed || trimmed === oldName) return true;
-      try {
-        const d = await vanillaApi.workflowModel.rename.mutate({
-          oldName,
-          newName: trimmed,
-        });
-        if (!d.tag) {
-          setError("重命名失败");
-          return false;
-        }
-        setError(null);
-        // 本地先换名，让弹窗立刻反映重命名，不等父组件 onChanged 的往返。
-        setTags((prev) =>
-          prev.map((tag) =>
-            tag.name === oldName ? { ...tag, name: trimmed } : tag,
-          ),
-        );
-        await refresh();
-        onChanged?.();
-        return true;
-      } catch (e) {
-        setError(errorMessage(e, "重命名失败"));
-        return false;
-      }
+      const result = await runAsyncAction(
+        async () => {
+          const d = await vanillaApi.workflowModel.rename.mutate({
+            oldName,
+            newName: trimmed,
+          });
+          if (!d.tag) throw new Error("重命名失败");
+          setError(null);
+          // 本地先换名，让弹窗立刻反映重命名，不等父组件 onChanged 的往返。
+          setTags((prev) =>
+            prev.map((tag) =>
+              tag.name === oldName ? { ...tag, name: trimmed } : tag,
+            ),
+          );
+          await refresh();
+          onChanged?.();
+        },
+        {
+          report: (kind, detail) => {
+            if (kind === "err") setError(detail);
+          },
+          failureText: "重命名失败",
+        },
+      );
+      return result.ok;
     },
     [refresh, onChanged],
   );

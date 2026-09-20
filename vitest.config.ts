@@ -61,6 +61,12 @@ export default defineConfig({
         "src/lib/external-open.ts",
         "src/lib/file-io.ts",
         "src/lib/browser-storage.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.30 ~ §16.2.4.32）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/lib/async-action.ts",
+        "src/lib/query-string.ts",
+        "src/lib/media/natural-size.ts",
+        "src/lib/media/media-url.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -338,6 +344,44 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 「异步动作的结果怎么接到反馈通道上」的出口（§16.2.4.30，P27 的对面）：
+         * 用例钉住四种返回形状的归一（信封 / 布尔 / void / 业务对象）、
+         * 三层成功文案优先级（`successText` → 信封 detail → 静默）、
+         * 失败一律走 `errorMessage`、以及「失败不向外抛、给返回值」。 */
+        "src/lib/async-action.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 85,
+        },
+        /* 「一组值写成查询串」的出口（§16.2.4.32，P29 的对面）：四条语义决定
+         * （省略 / `0` 不是缺值 / 一律编码 / 重复键）都有正反用例。
+         * 分支取实测值 —— 未覆盖的是 `decode()` 的容错分支在读取侧之外
+         * 的那一条（`readQueryParam` 里 `+` 替换后再解码的组合）。 */
+        "src/lib/query-string.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 95,
+        },
+        /* 「一张媒体图的自然尺寸是多少」的出口（§16.2.4.31，P28 的对面）：
+         * 两组读数、0 / NaN / 负 / 无限的读不到判据、竖图三态、
+         * `×` 的展示形态全在用例里。 */
+        "src/lib/media/natural-size.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
+        },
+        /* 「媒体引用 → 可渲染地址」的出口（§16.2.4.32 的另一半）：
+         * `/api/images` 的参数与编码、`subfolder` 的省略、空引用给 `null`、
+         * 「以 `/` 开头即已是可渲染路径」都在用例里。 */
+        "src/lib/media/media-url.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
         },
         "src/lib/core/**": {
           lines: 95,

@@ -60,7 +60,12 @@ export interface MediaThumbnailProps extends Omit<
   autoPlay?: boolean;
   muted?: boolean;
   loop?: boolean;
-  /** 加载成功时回调（如 `WorkflowImagePreview` 要读 `naturalWidth/Height`）。 */
+  /** 加载成功时回调，拿到底层媒体元素。
+   *
+   *  要**自然尺寸 / 宽高比**的调用处别在这里自己读 `naturalWidth` / `videoWidth`
+   *  —— 那些读数的口径收在 `~/lib/media/natural-size` 的 `readNaturalSize`
+   *  / `naturalAspectRatio` / `isPortraitMedia`（规范 16 §16.2.4.31）：
+   *  两组读数、0 值三态、`×` 的写法都只有一处定义。 */
   onLoad?: (media: HTMLImageElement | HTMLVideoElement) => void;
   /** 加载失败时回调（如上报 / 记日志）；兜底渲染由 `fallback` 决定。 */
   onLoadError?: (src: string) => void;

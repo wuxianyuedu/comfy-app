@@ -3,6 +3,8 @@
  * 此前这段裸 fetch 直接写在视图里，收口到这里后视图只需按 file 取 payload。
  */
 
+import { withQuery } from "~/lib/query-string";
+
 export interface DebugSourcePayload {
   file: string;
   /** 绝对路径（正斜杠盘符格式），供 vscode://file/ 协议打开 */
@@ -16,7 +18,9 @@ export interface DebugSourcePayload {
 export async function fetchDebugSource(
   file: string,
 ): Promise<DebugSourcePayload> {
-  const res = await fetch(`/api/debug/source?file=${encodeURIComponent(file)}`);
+  /* 一行也走出口：编码是出口的责任，调用处不必记得（漏一处就是静默 404，
+   * 见规范 16 §16.2.4.32 的第 ④ 条）。 */
+  const res = await fetch(withQuery("/api/debug/source", { file }));
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as {
       error?: string;

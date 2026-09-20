@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { uploadBgm } from "~/lib/film/bgm-client";
-import { errorMessage } from "~/lib/error-message";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -68,6 +68,19 @@ export interface FilmStudioController {
  */
 export function useFilmStudio(): FilmStudioController {
   const { success, error: toastError, info } = useToast();
+
+  /* 反馈通道适配：这一批里**每条动作的成功通道本来就不同**（「已启动」
+   * 与「已上传」走 `success`、「已取消」走 `info`），失败一律 `toastError`
+   * —— 收口前这三条接法散在四个动作里各写一遍（规范 16 §16.2.4.30：
+   * 通道是调用处的选择，出口只负责「什么时候报、报什么」）。 */
+  const reportSuccess = useCallback<ActionReport>(
+    (kind, detail) => (kind === "ok" ? success(detail) : toastError(detail)),
+    [success, toastError],
+  );
+  const reportInfo = useCallback<ActionReport>(
+    (kind, detail) => (kind === "ok" ? info(detail) : toastError(detail)),
+    [info, toastError],
+  );
 
   const [title] = useState(FILM_TITLE);
   const [type] = useState(FILM_TYPE);
@@ -168,28 +181,31 @@ export function useFilmStudio(): FilmStudioController {
       return;
     }
     setLoading(true);
-    try {
-      const { id } = await vanillaApi.film.create.mutate({
-        title,
-        script,
-        type,
-        styleSlug: styleSlug || null,
-        size,
-        fps,
-        framesPerShot: frames,
-        subtitleOn,
-        bgmName,
-        ...(videoWorkflowId ? { videoWorkflowId } : {}),
-        ...(imageWorkflowId ? { imageWorkflowId } : {}),
-      });
-      await vanillaApi.film.start.mutate({ id });
-      await fetchDetail(id);
-      success("已启动一键成片，正在逐镜生成…");
-    } catch (e) {
-      toastError(errorMessage(e, "启动失败"));
-    } finally {
-      setLoading(false);
-    }
+    await runAsyncAction(
+      async () => {
+        const { id } = await vanillaApi.film.create.mutate({
+          title,
+          script,
+          type,
+          styleSlug: styleSlug || null,
+          size,
+          fps,
+          framesPerShot: frames,
+          subtitleOn,
+          bgmName,
+          ...(videoWorkflowId ? { videoWorkflowId } : {}),
+          ...(imageWorkflowId ? { imageWorkflowId } : {}),
+        });
+        await vanillaApi.film.start.mutate({ id });
+        await fetchDetail(id);
+      },
+      {
+        report: reportSuccess,
+        failureText: "启动失败",
+        successText: "已启动一键成片，正在逐镜生成…",
+      },
+    );
+    setLoading(false);
   }, [
     script,
     title,
@@ -203,44 +219,52 @@ export function useFilmStudio(): FilmStudioController {
     videoWorkflowId,
     imageWorkflowId,
     fetchDetail,
+    reportSuccess,
     toastError,
-    success,
   ]);
 
   const cancel = useCallback(async () => {
     if (!film) return;
-    try {
-      await vanillaApi.film.cancel.mutate({ id: film.id });
-      await fetchDetail(film.id);
-      info("已取消");
-    } catch (e) {
-      toastError(errorMessage(e, "取消失败"));
-    }
-  }, [film, fetchDetail, info, toastError]);
+    await runAsyncAction(
+      async () => {
+        await vanillaApi.film.cancel.mutate({ id: film.id });
+        await fetchDetail(film.id);
+      },
+      { report: reportInfo, failureText: "取消失败", successText: "已取消" },
+    );
+  }, [film, fetchDetail, reportInfo]);
 
   const recompose = useCallback(async () => {
     if (!film) return;
     setLoading(true);
-    try {
-      await vanillaApi.film.compose.mutate({ id: film.id });
-      await fetchDetail(film.id);
-    } catch (e) {
-      toastError(errorMessage(e, "重新合成失败"));
-    } finally {
-      setLoading(false);
-    }
-  }, [film, fetchDetail, toastError]);
+    /* 成功静默：合成本身要几分钟，界面有进度与产物，多一句 toast 反而是噪声。 */
+    await runAsyncAction(
+      async () => {
+        await vanillaApi.film.compose.mutate({ id: film.id });
+        await fetchDetail(film.id);
+      },
+      { report: reportInfo, failureText: "重新合成失败" },
+    );
+    setLoading(false);
+  }, [film, fetchDetail, reportInfo]);
 
   const uploadBgmFile = useCallback(
     async (file: File) => {
-      try {
-        setBgmName(await uploadBgm(file));
-        success("背景音乐已上传");
-      } catch (e) {
-        toastError(errorMessage(e, "BGM 上传失败"));
-      }
+      /* 这一处成功走 `success`（明确的完成）而不是 `info` —— 上传是用户
+       * 点下去要结果的短动作，值得一句「已上传」。文件名（动作的产物）在
+       * `action` 里顺手写进 state，不由反馈通道承担。 */
+      await runAsyncAction(
+        async () => {
+          setBgmName(await uploadBgm(file));
+        },
+        {
+          report: reportSuccess,
+          failureText: "BGM 上传失败",
+          successText: "背景音乐已上传",
+        },
+      );
     },
-    [success, toastError],
+    [reportSuccess],
   );
 
   const running = useMemo(() => !!film && isFilmRunning(film.status), [film]);

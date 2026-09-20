@@ -3,6 +3,9 @@
 import { useCallback, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Node } from "@xyflow/react";
+
+import { runAsyncAction, type ActionReport } from "~/lib/async-action";
+import { errorMessage } from "~/lib/error-message";
 import type {
   WorkflowDetail,
   WorkflowIOParam,
@@ -181,21 +184,28 @@ export function useWorkflowPersistence({
   /* 保存 paramMap + workflowIO（对外输入 / 输出） */
   const handleSave = useCallback(async () => {
     setSaving(true);
-    try {
-      await savePatch.mutateAsync({
-        id: workflowId,
-        paramMap,
-        workflowIO,
-      });
-      onSave?.();
-      /* 保存后停留在当前工作流界面（不再 onClose 退出）——用户保存 IO /
-       * 布局后通常还要继续调整；成功与否由 toast 反馈。 */
-      toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "保存失败");
-    } finally {
-      setSaving(false);
-    }
+    await runAsyncAction(
+      async () => {
+        await savePatch.mutateAsync({
+          id: workflowId,
+          paramMap,
+          workflowIO,
+        });
+        onSave?.();
+      },
+      {
+        /* 成功 / 失败走**两条不同的通道**：成功是 toast（保存后停留在当前
+         * 工作流界面，不再 onClose 退出 —— 用户通常还要继续调整），失败是
+         * **行内错误块**（保存失败时往往要重试或去改配置，需要一个留着不走的
+         * 出口）。通道差异由 `report` 表达，文案归一由出口负责。 */
+        report: ((kind, detail) =>
+          kind === "ok"
+            ? toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑")
+            : setError(detail)) satisfies ActionReport,
+        failureText: "保存失败",
+      },
+    );
+    setSaving(false);
   }, [
     workflowId,
     paramMap,
@@ -230,10 +240,10 @@ export function useWorkflowPersistence({
         "[workflow-persistence] failed to persist node position",
         err,
       );
-      toast.error(
-        "位置保存失败",
-        err instanceof Error ? err.message : "请重试",
-      );
+      /* 失败路径的文案统一走 `errorMessage`（`~/lib/async-action` 的口径）——
+       * 收口前这里是自己拼的 `err instanceof Error ? err.message : "请重试"`，
+       * 网络层原文没有经过 `errorMessage` 的翻译。 */
+      toast.error("位置保存失败", errorMessage(err, "请重试"));
     },
     [toast],
   );

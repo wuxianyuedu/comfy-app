@@ -6,6 +6,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { normalizeNeedle } from "~/lib/list-filter";
+
 import {
   deleteMaterial,
   fetchMaterials,
@@ -93,7 +95,10 @@ export function useMaterialLibrary({
   /* ── 拉取素材（搜索做防抖）── */
   useEffect(() => {
     let cancelled = false;
-    const q = search.trim();
+    /* 关键字归一化走唯一出口（§16.2.4.16）：`trim().toLowerCase()` 手写一处
+     * 就会漏一处 —— 这个 hook 此前只 `trim()`，候选里含拉丁字母的关键字
+     * 大小写敏感（与 `AttributeMultiSelect` 的历史缺陷同源）。 */
+    const q = normalizeNeedle(search);
 
     const run = async () => {
       setLoading(true);
@@ -168,7 +173,7 @@ export function useMaterialLibrary({
     [refresh],
   );
 
-  const searching = search.trim().length > 0;
+  const searching = normalizeNeedle(search).length > 0;
   const showItems = searching || folder !== null;
 
   const breadcrumbSegments: Array<{ label: string; key: string | null }> =
