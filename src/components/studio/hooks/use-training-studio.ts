@@ -15,6 +15,7 @@ import {
   type ItemErrors,
 } from "~/components/ui/use-item-errors";
 import { uploadDatasetImage } from "~/lib/media/dataset-upload-client";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -102,8 +103,10 @@ export function useTrainingStudio(): TrainingStudioController {
   const [scheduler, setScheduler] = useState<string>(DEFAULTS.scheduler);
   const [seed, setSeed] = useState<number>(DEFAULTS.seed);
 
-  const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  /* 两个忙碌位走唯一出口（规范 16 §16.2.4.71）：此前复位都写在动作之后，
+   * `runAsyncAction` 之外的任意一行抛错就永远停在「上传中 / 提交中」。 */
+  const uploadBusy = useBusyAction();
+  const submitBusy = useBusyAction();
   /* 取消错误的 scope 是任务 id：任务不在列表里（已完成 / 被清掉）时，
    * 它挂着的错误随之消失。 */
   const errors = useItemErrors(jobs.map((job) => job.id));
@@ -150,25 +153,25 @@ export function useTrainingStudio(): TrainingStudioController {
     async (files: FileList | null) => {
       const list = Array.from(files ?? []);
       if (list.length === 0) return;
-      setUploading(true);
       errors.clear(null);
       /* 行内错误条是这块唯一的反馈通道；成功静默（缩略图出现即结果）。
        * 出口给「失败文案走 `errorMessage`」这一半。 */
-      await runAsyncAction(
-        async () => {
-          for (const file of list) {
-            const name = await uploadDatasetImage(file);
-            setDataset((prev) => [...prev, { name, caption: "" }]);
-          }
-        },
-        {
-          report: errors.report(null),
-          failureText: "上传失败",
-        },
+      await uploadBusy.run(() =>
+        runAsyncAction(
+          async () => {
+            for (const file of list) {
+              const name = await uploadDatasetImage(file);
+              setDataset((prev) => [...prev, { name, caption: "" }]);
+            }
+          },
+          {
+            report: errors.report(null),
+            failureText: "上传失败",
+          },
+        ),
       );
-      setUploading(false);
     },
-    [errors],
+    [errors, uploadBusy],
   );
 
   const fillBlank = useCallback(() => {
@@ -204,41 +207,41 @@ export function useTrainingStudio(): TrainingStudioController {
     }
     setFieldErrors({});
 
-    setSubmitting(true);
-    await runAsyncAction(
-      async () => {
-        await vanillaApi.train.create.mutate({
-          name: payload.name.trim(),
-          baseModel: payload.baseModel,
-          triggerWord: payload.triggerWord.trim(),
-          classWord: payload.classWord,
-          datasetImages: payload.datasetImages,
-          resolution,
-          steps,
-          batchSize,
-          learningRate,
-          rankDim,
-          networkAlpha,
-          optimizer,
-          scheduler,
-          seed,
-        });
-        // 提交成功后重置表单（原组件行为：保留底模、分辨率等配置，只清名称/触发词/数据集）
-        setName("");
-        setTriggerWord("");
-        setClassWord("");
-        setDataset([]);
-        setSteps(DEFAULTS.steps);
-        setRankDim(DEFAULTS.rankDim);
-        setNetworkAlpha(DEFAULTS.networkAlpha);
-        loadJobs();
-      },
-      {
-        report: errors.report(null),
-        failureText: "创建失败",
-      },
+    await submitBusy.run(() =>
+      runAsyncAction(
+        async () => {
+          await vanillaApi.train.create.mutate({
+            name: payload.name.trim(),
+            baseModel: payload.baseModel,
+            triggerWord: payload.triggerWord.trim(),
+            classWord: payload.classWord,
+            datasetImages: payload.datasetImages,
+            resolution,
+            steps,
+            batchSize,
+            learningRate,
+            rankDim,
+            networkAlpha,
+            optimizer,
+            scheduler,
+            seed,
+          });
+          // 提交成功后重置表单（原组件行为：保留底模、分辨率等配置，只清名称/触发词/数据集）
+          setName("");
+          setTriggerWord("");
+          setClassWord("");
+          setDataset([]);
+          setSteps(DEFAULTS.steps);
+          setRankDim(DEFAULTS.rankDim);
+          setNetworkAlpha(DEFAULTS.networkAlpha);
+          loadJobs();
+        },
+        {
+          report: errors.report(null),
+          failureText: "创建失败",
+        },
+      ),
     );
-    setSubmitting(false);
   }, [
     name,
     baseModel,
@@ -256,6 +259,7 @@ export function useTrainingStudio(): TrainingStudioController {
     seed,
     loadJobs,
     errors,
+    submitBusy,
   ]);
 
   const cancelJob = useCallback(
@@ -333,10 +337,10 @@ export function useTrainingStudio(): TrainingStudioController {
     setSeed,
     dataset,
     setDataset,
-    uploading,
+    uploading: uploadBusy.busy,
     errors,
     fieldErrors,
-    submitting,
+    submitting: submitBusy.busy,
     activeJob,
     upload,
     fillBlank,

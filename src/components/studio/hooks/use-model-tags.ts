@@ -15,6 +15,7 @@ import {
   useItemErrors,
   type ItemErrors,
 } from "~/components/ui/use-item-errors";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -75,7 +76,8 @@ export function useModelTags({
 }: UseModelTagsOptions): ModelTagsController {
   const [tags, setTags] = useState<TagItem[]>(initialTags);
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const addBusy = useBusyAction();
   /* 条目集合由标签名给出：删掉的标签，它挂着的错误随之消失 —— 否则会
    * 留下一个指向已不存在条目的错误条，用户找不到它说的是什么。 */
   const errors = useItemErrors(tags.map((tag) => tag.name));
@@ -110,31 +112,31 @@ export function useModelTags({
   const addTag = useCallback(async () => {
     const name = draft.trim();
     if (!name) return;
-    setBusy(true);
     /* 「新增」还没有对应的条目，错误挂在 `null` 那档（整表）—— 它呈现的位置
      * 就是新增框下方那块错误条。 */
     errors.clear(null);
     /* 行内错误条是这块唯一的反馈通道。两个「没做成」的来源都归到
      * `failureText`：服务端返回 `!tag`（静默的失败信封）与抛错
      *（走 `errorMessage`）——出口给的一半正是后者。 */
-    const result = await runAsyncAction(
-      async () => {
-        const d = await vanillaApi.workflowModel.create.mutate({ name });
-        if (!d.tag) throw new Error("添加失败");
-        setDraft("");
-        await refresh();
-        onChanged?.();
-      },
-      {
-        report: errors.report(null),
-        failureText: "添加失败",
-      },
+    const result = await addBusy.run(() =>
+      runAsyncAction(
+        async () => {
+          const d = await vanillaApi.workflowModel.create.mutate({ name });
+          if (!d.tag) throw new Error("添加失败");
+          setDraft("");
+          await refresh();
+          onChanged?.();
+        },
+        {
+          report: errors.report(null),
+          failureText: "添加失败",
+        },
+      ),
     );
-    setBusy(false);
     /* `addTag` 的签名是 `Promise<void>`：结果本身没有下游用途
      *（失败已经落在 `error` 上），所以显式丢弃 —— 不留一个没人读的返回值。 */
     void result;
-  }, [draft, refresh, onChanged, errors]);
+  }, [draft, refresh, onChanged, errors, addBusy]);
 
   const deleteTag = useCallback(
     async (name: string, count: number) => {
@@ -195,5 +197,14 @@ export function useModelTags({
     [refresh, onChanged, errors],
   );
 
-  return { tags, draft, setDraft, busy, errors, addTag, deleteTag, renameTag };
+  return {
+    tags,
+    draft,
+    setDraft,
+    busy: addBusy.busy,
+    errors,
+    addTag,
+    deleteTag,
+    renameTag,
+  };
 }

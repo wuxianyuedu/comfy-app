@@ -7,13 +7,14 @@
 // 候选本身写在角色对象上（随草稿持久化），本 hook 只负责编排与过程状态。
 //
 // 两条硬约束：
-//   ① 生成 / 导入共用一把**原子锁**（`taskRunningRef`）——同一时刻只跑一件；
+//   ① 生成 / 导入共用一把**单飞闸门**（`~/components/ui/use-reentrancy-lock`）——同一时刻只跑一件；
 //      渲染用的 busy / importing 只是展示态，不能拿来当并发守卫；
 //   ② 结果只回写「**发起时所属项目**」的角色列表（`writeBackCandidate`），
 //      项目被换掉时如实告知用户，不静默丢弃一次昂贵的生成。
 
 import React from "react";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
+import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 
 import { errorMessage } from "~/lib/error-message";
 import {
@@ -148,11 +149,11 @@ export function useCharacterPortrait(opts: {
     projectIdRef.current = projectId;
   }, [projectId]);
 
-  /* 「有一件任务在跑」的原子标志（生成 / 导入共用一把锁）。
-   *  真值必须放 ref：state 里的 busy / importing 是渲染态，同一帧内连点两次
-   *  （或程序化调用）都会读到旧值而放过第二次，两条任务并发写同一份会话，
-   *  先完成的那条会把 busy 提前抹掉。 */
-  const taskRunningRef = React.useRef(false);
+  /* 「有一件任务在跑」的单飞闸门（生成 / 导入共用一把）——判据收在唯一出口里
+   *（规范 16 §16.2.4.69）。它同步可见：state 里的 busy / importing 是渲染态，
+   *  同一帧内连点两次（或程序化调用）都会读到旧值而放过第二次，两条任务并发
+   *  写同一份会话，先完成的那条会把 busy 提前抹掉。 */
+  const taskLock = useReentrancyLock();
 
   /** 门禁 / 校验失败的统一出口：清掉上一轮的成功文案，给出可行动的原因。 */
   const fail = React.useCallback((message: string) => {
@@ -234,8 +235,8 @@ export function useCharacterPortrait(opts: {
 
   const generate = React.useCallback(
     async (character: Character, overrides?: PortraitGenerateOverrides) => {
-      /* 并发守卫读 ref 而不是 session.busy：见 taskRunningRef 的注释。 */
-      if (taskRunningRef.current) return;
+      /* 并发守卫用同步闸门，不读 session.busy（它是渲染态）：*/
+      if (!taskLock.tryEnter()) return;
       const prompt = character.positivePrompt.trim();
       if (!prompt) {
         fail(
@@ -269,9 +270,8 @@ export function useCharacterPortrait(opts: {
           : remoteModel
             ? `远端 API · ${remoteModel}`
             : "远端 API";
-      /* 从这里到第一个 await 之间是同步区：先占锁再改渲染态，两件事都在
-       *  并发窗口之外，第二次调用必定被上面的守卫挡下。 */
-      taskRunningRef.current = true;
+      /* 从这里到第一个 await 之间是同步区：闸门已被上面的 `tryEnter` 占住，
+       *  第二次调用必定被那道守卫挡下。 */
       /** 结果归属的项目：与 projectIdRef 比对，防止写进别的项目的角色列表。 */
       const originProjectId = projectId;
       /* 首行（本次用的通道 · 模型 · 尺寸）直接重置成会话日志，不经过 appendLog，
@@ -381,11 +381,12 @@ export function useCharacterPortrait(opts: {
       } finally {
         /* focusCharacterId 保留：让发起本次生成的角色卡继续展示状态与日志。
          * busy 与锁一起复位：writeBackCandidate 的早退（return）也走这里。 */
-        taskRunningRef.current = false;
+        taskLock.exit();
         setSession((prev) => ({ ...prev, busy: false }));
       }
     },
     [
+      taskLock,
       session.channel,
       session.size,
       session.remoteModel,
@@ -400,12 +401,12 @@ export function useCharacterPortrait(opts: {
   const importFile = React.useCallback(
     async (character: Character, file: File) => {
       /* 与生成共用同一把锁：导入与生成不允许叠加。 */
-      if (taskRunningRef.current) return;
+      if (!taskLock.tryEnter()) return;
       if (!file.type.startsWith("image/")) {
         fail("只能导入图片文件");
         return;
       }
-      taskRunningRef.current = true;
+      taskLock.tryEnter();
       const originProjectId = projectId;
       setSession((prev) => ({
         ...prev,
@@ -433,11 +434,11 @@ export function useCharacterPortrait(opts: {
          *  log/workshop/ 的落盘历史里完全看不到这次失败。 */
         appendLog(makePortraitLog("error", message));
       } finally {
-        taskRunningRef.current = false;
+        taskLock.exit();
         setSession((prev) => ({ ...prev, importing: false }));
       }
     },
-    [projectId, writeBackCandidate, appendLog, fail],
+    [taskLock, projectId, writeBackCandidate, appendLog, fail],
   );
 
   return [session, { patch, appendLog, generate, importFile, select, remove }];

@@ -263,6 +263,9 @@ export function useWorkflowDetailLoader({
 
       /* 冷路径：走 tRPC（POST，绕过 HTTP 缓存）。 */
       if (!detail) setLoading(true);
+      /* 忙碌位在这一段跨了多次 await（收窄 → 提交 → 竞态判定），复位写在
+       *  `finally` 里已经是对的；保留显式 `try/finally` 是因为它不仅复位，
+       *  还带**竞态令牌**（`myReqId`）判据 —— 那条不属于忙碌位这条账。 */
       try {
         const d = (await withTimeout(
           subgraphUid

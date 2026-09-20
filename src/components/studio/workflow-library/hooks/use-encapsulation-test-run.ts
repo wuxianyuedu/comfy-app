@@ -18,8 +18,9 @@
  * （提示词 + 负向 + 尺寸，`buildLibraryWorkflowInput`）—— 两个入口本来就是
  * 同一个动作的两种触发方式，不该有两套运行态。 */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useThrottledProgress } from "~/components/ui/use-throttled-progress";
+import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 
 import {
   buildLibraryWorkflowInput,
@@ -91,8 +92,9 @@ export function useEncapsulationTestRun({
   const [error, setError] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
-  /* 重入闸门放 ref：`run` 在异步回调里判定时 state 还停在旧值。 */
-  const runningRef = useRef(false);
+  /* 重入闸门走唯一出口（规范 16 §16.2.4.69）——同步可见，`run` 在异步回调里
+   * 判定时 state 还停在旧值，读它判不出重入。 */
+  const lock = useReentrancyLock();
 
   /* 切页签回来（`ui/tabs` 的 Panel 卸载后重新挂载）时恢复这次运行的视角：
    * 还在跑就回到「测试中」并重订阅，已完成直接恢复产物，已失败恢复原因。
@@ -104,7 +106,7 @@ export function useEncapsulationTestRun({
     handlers: {
       onProgress: (taskId, pct) => {
         /* 重入闸门也要跟着恢复：否则「恢复成生成中」之后点按钮会再发一次。 */
-        runningRef.current = true;
+        lock.tryEnter();
         setTaskId(taskId);
         setRunning(true);
         reportProgress(pct);
@@ -118,7 +120,7 @@ export function useEncapsulationTestRun({
         setResultUrl(output.url);
       },
       onSettled: (taskId, result) => {
-        runningRef.current = false;
+        lock.exit();
         setTaskId(taskId);
         setRunning(false);
         if (!result.ok) {
@@ -130,8 +132,7 @@ export function useEncapsulationTestRun({
 
   const run = useCallback<EncapsulationTestRunController["run"]>(
     (values) => {
-      if (runningRef.current) return;
-      runningRef.current = true;
+      if (!lock.tryEnter()) return;
       setRunning(true);
       resetProgress();
       setError("");
@@ -189,12 +190,13 @@ export function useEncapsulationTestRun({
           /* 提交阶段就失败（还没拿到 taskId）：没有可收口的运行记录，
            *  只落本页签的可见出口。 */
         } finally {
-          runningRef.current = false;
+          lock.exit();
           setRunning(false);
         }
       })();
     },
     [
+      lock,
       workflowId,
       workflowName,
       mode,

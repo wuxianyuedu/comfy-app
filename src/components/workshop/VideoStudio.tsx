@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import type { Shot } from "~/lib/workshop/types";
 import {
   apiPollVideo,
@@ -66,7 +67,9 @@ export function VideoStudio({
     flush: flushProgress,
   } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
-  const [batchRunning, setBatchRunning] = React.useState(false);
+  /* 批处理的忙碌位走唯一出口（规范 16 §16.2.4.71）：复位此前写在循环之后，
+   * 循环里抛错就永远停在「批处理中」。 */
+  const batch = useBusyAction();
 
   const apiReady = apiChannels?.video.configured === true;
   const doneCount = shots.filter((s) => !!s.clipUrl).length;
@@ -214,13 +217,13 @@ export function VideoStudio({
   }
 
   async function generateBatch() {
-    if (batchRunning || pending.length === 0) return;
-    setBatchRunning(true);
-    for (const shot of [...pending]) {
-      if (shot.clipUrl || shot.clipStatus === "running") continue;
-      await generateClip(shot);
-    }
-    setBatchRunning(false);
+    if (pending.length === 0) return;
+    await batch.run(async () => {
+      for (const shot of [...pending]) {
+        if (shot.clipUrl || shot.clipStatus === "running") continue;
+        await generateClip(shot);
+      }
+    });
   }
 
   return (
@@ -233,7 +236,7 @@ export function VideoStudio({
         workflowSelected={!!workflowId}
         fps={fps}
         onFpsChange={setFps}
-        batchRunning={batchRunning}
+        batchRunning={batch.busy}
         pendingCount={pending.length}
         onGenerateBatch={() => void generateBatch()}
         onNextStage={onNextStage}

@@ -5,7 +5,9 @@
 // 只消费本 hook 返回的 controller，不再自己发请求。
 
 import { useCallback, useEffect, useState } from "react";
+import { useRefreshTicket } from "~/components/ui/use-refresh-ticket";
 
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { normalizeNeedle } from "~/lib/list-filter";
 import { beginStaleRun } from "~/lib/stale-run";
 
@@ -78,14 +80,17 @@ export function useMaterialLibrary({
   const [loadError, setLoadError] = useState<string | null>(null);
   /** 上传/删除等动作失败的错误（不会被后台刷新吞掉，用户点「重试」才清）。 */
   const [actionError, setActionError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：复位绑在 `finally` 上，
+   * 上传中途抛错不会把「上传中」永远留在界面上。 */
+  const uploadBusy = useBusyAction();
   /** 递增触发重新拉取（上传/删除后刷新）。 */
-  const [reloadKey, setReloadKey] = useState(0);
+  /* 「按需求重跑一遍取数」走唯一出口（规范 16 §16.2.4.70）。 */
+  const { ticket: reloadKey, refresh: reload } = useRefreshTicket();
 
   const refresh = useCallback(() => {
     setActionError(null);
-    setReloadKey((key) => key + 1);
-  }, []);
+    reload();
+  }, [reload]);
   const setScope = useCallback((next: MaterialScope) => {
     setScopeState(next);
     // 切换「本项目 / 跨项目」后目录结构变了，退回分类列表避免停在空分类
@@ -146,20 +151,19 @@ export function useMaterialLibrary({
     async (files: FileList | null) => {
       if (!files || files.length === 0) return;
       const target = folder ?? "ref";
-      setUploading(true);
       setActionError(null);
       try {
-        for (const file of Array.from(files)) {
-          await uploadMaterial(file, { folder: target, projectId });
-        }
+        await uploadBusy.run(async () => {
+          for (const file of Array.from(files)) {
+            await uploadMaterial(file, { folder: target, projectId });
+          }
+        });
         refresh();
       } catch (e) {
         setActionError(errMsg(e, "上传失败"));
-      } finally {
-        setUploading(false);
       }
     },
-    [folder, projectId, refresh],
+    [folder, projectId, refresh, uploadBusy],
   );
 
   /* ── 删除 ── */
@@ -201,7 +205,7 @@ export function useMaterialLibrary({
     folders,
     items,
     loading,
-    uploading,
+    uploading: uploadBusy.busy,
     error: actionError ?? loadError,
     searching,
     showItems,
