@@ -1,5 +1,6 @@
 "use client";
 
+import { clamp } from "~/lib/clamp";
 import { useCallback, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 
@@ -58,10 +59,10 @@ export function NumberField({
     [decimalPlaces],
   );
 
-  const clamp = useCallback(
+  const clampToStep = useCallback(
     (v: number) => {
       const rounded = Math.round(v / step) * step;
-      return Math.min(max, Math.max(min, rounded));
+      return clamp(rounded, min, max);
     },
     [min, max, step],
   );
@@ -69,19 +70,19 @@ export function NumberField({
   const commitText = useCallback(
     (text: string) => {
       const n = parseFloat(text);
-      if (!isNaN(n)) onChange(clamp(n));
+      if (!isNaN(n)) onChange(clampToStep(n));
     },
-    [clamp, onChange],
+    [clampToStep, onChange],
   );
 
   const decr = useCallback(() => {
     setDraft(null);
-    onChange(clamp(value - step));
-  }, [value, step, clamp, onChange]);
+    onChange(clampToStep(value - step));
+  }, [value, step, clampToStep, onChange]);
   const incr = useCallback(() => {
     setDraft(null);
-    onChange(clamp(value + step));
-  }, [value, step, clamp, onChange]);
+    onChange(clampToStep(value + step));
+  }, [value, step, clampToStep, onChange]);
 
   return (
     <div
@@ -110,7 +111,7 @@ export function NumberField({
           setDraft(text);
           /* 合法前缀实时上抛（clamp 只影响提交值，不打断击键回显） */
           const n = parseFloat(text);
-          if (!isNaN(n)) onChange(clamp(n));
+          if (!isNaN(n)) onChange(clampToStep(n));
         }}
         onBlur={() => {
           if (draft !== null) {

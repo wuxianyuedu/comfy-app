@@ -22,6 +22,7 @@
  * 消费方：DynamicWorkflowForm（创建面板 + 画布工作流节点），以及画布的自动
  * 派生逻辑（第一个输出的 `type` 决定下游节点是图片节点还是视频节点）。
  */
+import { upperToken } from "~/lib/upper-token";
 import { asRecord } from "~/lib/comfyui/raw";
 import { inferIsMultiline } from "~/lib/comfyui/types";
 import {
@@ -191,7 +192,7 @@ export function persistEnrichedWorkflowIO(
       if (next.defaultValue === undefined) next.defaultValue = gv;
       /* 数值 / 布尔类型无歧义，直接定；字符串可能是 STRING 也可能是 COMBO，
        * 不在这里猜，交给 GET 富化。 */
-      const declared = (v.type ?? "").trim().toUpperCase();
+      const declared = upperToken(v.type);
       if (declared === "" || declared === "*") {
         if (typeof gv === "number")
           next.type = Number.isInteger(gv) ? "INT" : "FLOAT";
@@ -232,7 +233,7 @@ export async function enrichWorkflowIO(
     // 存档值（client 持久化了富化后的 map，所以在线保存过的条目带真值）。
     // defaultValue 不走「存档起点」：graph 里的当前字面量比存档值更新，故优先用
     // graph，仅当 graph 也取不到时才用存档默认值（见下方）。
-    const storedType = (v.type ?? "").trim().toUpperCase();
+    const storedType = upperToken(v.type);
     let type: string = storedType === "" ? "*" : storedType;
     let defaultValue: unknown = undefined;
     let label = v.label;

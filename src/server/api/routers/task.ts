@@ -1,3 +1,4 @@
+import { upperToken } from "~/lib/upper-token";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -45,7 +46,7 @@ export const taskRouter = createTRPCRouter({
       const statusList = input.status
         ? input.status
             .split(",")
-            .map((status) => status.trim().toUpperCase())
+            .map((status) => upperToken(status))
             .filter(Boolean)
         : undefined;
 

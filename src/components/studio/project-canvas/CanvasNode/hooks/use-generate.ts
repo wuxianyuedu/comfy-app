@@ -7,6 +7,7 @@
  *  （用快照进错误面板上下文的 payload 重跑）。
  *  所有组件作用域的闭包（d / patch / wfIO / React Flow setter）
  *  都经 args 对象显式传入。 */
+import { emitAppEvent } from "~/lib/app-events";
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import {
@@ -228,15 +229,11 @@ export function useGenerate({
               mediaPath: imported ?? result.localPath.split("/").pop() ?? "",
               mediaName: d.workflowName ?? "生成结果",
             });
-            window.dispatchEvent(
-              new CustomEvent("canvas:produce", {
-                detail: {
-                  id,
-                  resultPath: result.localPath,
-                  resultMediaType: result.mediaType,
-                },
-              }),
-            );
+            emitAppEvent("canvas:produce", {
+              id,
+              resultPath: result.localPath,
+              resultMediaType: result.mediaType,
+            });
             return;
           }
           // 自动孵化一个下游图片 / 视频节点，并连到本节点的
@@ -308,15 +305,11 @@ export function useGenerate({
             resultMediaType: result.mediaType,
             workflowSinkId: sinkId,
           });
-          window.dispatchEvent(
-            new CustomEvent("canvas:produce", {
-              detail: {
-                id,
-                resultPath: result.localPath,
-                resultMediaType: result.mediaType,
-              },
-            }),
-          );
+          emitAppEvent("canvas:produce", {
+            id,
+            resultPath: result.localPath,
+            resultMediaType: result.mediaType,
+          });
         } else {
           patch({
             status: "error",

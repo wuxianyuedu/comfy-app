@@ -16,6 +16,7 @@
  *    token 换值（含深浅两态）组件不用改。
  */
 
+import { clamp } from "~/lib/clamp";
 import * as React from "react";
 
 import { type OmitOwnProps, splitDomProps } from "~/lib/dom-props";
@@ -28,7 +29,7 @@ const FILL_COLOR = "var(--color-primary-500)";
 /** 触发器：`--range-fill` 表示「已填充比例」，由 value / min / max 算出。 */
 function fillPercent(value: number, min: number, max: number): number {
   if (max === min) return 0;
-  return Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+  return clamp(((value - min) / (max - min)) * 100, 0, 100);
 }
 
 /** 本基元的**私有字段**（自己接管，不透传给底层 `<input>`）

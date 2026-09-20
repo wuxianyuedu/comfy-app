@@ -2,6 +2,7 @@
 // 把图片引用（data URL / 本地生成路径 / 绝对 URL）解析成原始字节，
 // 从而可以 (a) 作为 data URL 转发给远程 API 通道，
 // 或 (b) 当作首帧上传进本机 ComfyUI 的 input 目录。
+import { clampInt } from "~/lib/clamp";
 import { errorText } from "~/lib/error-message";
 import "server-only";
 
@@ -122,7 +123,7 @@ export function intField(
   const v: unknown = rec[key];
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
   if (!Number.isFinite(n)) return undefined;
-  const clamped = Math.round(Math.min(max, Math.max(min, n)));
+  const clamped = clampInt(n, min, max);
   return clamped;
 }
 

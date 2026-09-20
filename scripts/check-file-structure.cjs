@@ -293,6 +293,26 @@ const DOMAIN_EXEMPT = new Set([
    * 且「指数退避 vs 固定间隔」的分野是跨域的同一类判据。进任何子域都会让
    * 其余侧反向依赖它 —— 与 `progress` / `list-filter` 同款：顶层单例。 */
   "src/lib/retry-policy.ts",
+  /* 「把一个数夹进一个区间」的唯一出口（ISSUE #672）：视图层（滑块填充比例、
+   * 数值步进器、图片缩放倍数、画布缩放、镜头时长）与 `src/lib` / `src/server`
+   *（日志字节切片、日志会话时间戳、序号夹取、VRAM 读数、影片镜头数、落库前
+   *  夹取）**都在用**，且两侧必须同一口径（一处夹到 `[0,100]` 另一处夹到
+   * `[0,size]`，同一个值在两个面板落进不同区间）。进任何子域都会让其余侧反向
+   * 依赖它 —— 与 `progress` / `number-format` / `ordered-set` 同款：顶层单例。 */
+  "src/lib/clamp.ts",
+  /* 「把一个可能带空白 / 缺省的外来串归一成大写记号」的唯一出口
+   *（ISSUE #672）：视图层（ComfyUI 类型判定、端口配色、模式筛选胶囊）与
+   * `src/lib` / `src/server`（模式契约、尺寸场景、状态筛选、端口类型映射）
+   * **都在用**，且两侧必须同一口径（`trim` 与否决定匹配成败 —— 收口前同一个
+   * 文件里两种写法并存）。进任何子域都会让其余侧反向依赖它 —— 顶层单例。 */
+  "src/lib/upper-token.ts",
+  /* 「跨组件广播一条应用事件」的唯一出口（ISSUE #672）：`src/app`（工作区首页）、
+   * `src/components`（画布产物串联、历史面板、作品墙、输出面板、工作流库）、
+   * `src/lib/project-canvas`（画布仓库变更广播）与 `src/config/custom-nodes`
+   *（节点注册表刷新）**都在用**，且事件名与载荷类型必须**同处定义**
+   *（收口前分开两处，已经养出两条死监听）。进任何子域都会让其余侧反向依赖它
+   * —— 与 `browser-storage` / `next-frame` 同款：顶层单例。 */
+  "src/lib/app-events.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",

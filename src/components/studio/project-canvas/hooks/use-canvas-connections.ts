@@ -6,6 +6,7 @@
  *  ref 对象由父级传入，因为回调要读**最新**的
  *  nodes/edges 而不必在每次状态变化时重绑。
  */
+import { subscribeAppEvent } from "~/lib/app-events";
 import {
   useCallback,
   useEffect,
@@ -88,16 +89,9 @@ export function useCanvasConnections({
 
   /* 任何节点生成完成时，把它的输出喂给下游。 */
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as {
-        id: string;
-        resultPath: string;
-        resultMediaType?: string;
-      };
+    return subscribeAppEvent("canvas:produce", (detail) => {
       void propagateFrom(detail.id, detail.resultPath);
-    };
-    window.addEventListener("canvas:produce", handler);
-    return () => window.removeEventListener("canvas:produce", handler);
+    });
   }, [propagateFrom]);
 
   const onConnect = useCallback(

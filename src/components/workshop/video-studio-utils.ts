@@ -1,3 +1,4 @@
+import { clampInt } from "~/lib/clamp";
 import type { Shot } from "~/lib/workshop/types";
 import { motionPromptSuffix } from "~/components/workshop/FinalComposer";
 
@@ -5,7 +6,7 @@ import { motionPromptSuffix } from "~/components/workshop/FinalComposer";
 export function framesFor(shot: Shot, fps: number): number {
   const seconds =
     typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 5;
-  return Math.max(9, Math.min(121, Math.round(seconds * fps)));
+  return clampInt(seconds * fps, 9, 121);
 }
 
 /** 视频提示词 = 镜头生图提示词(或画面描述) + 运动强度后缀。 */

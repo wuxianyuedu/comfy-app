@@ -14,6 +14,7 @@
  * 原始文件同时经 `/api/custom-nodes/manifest` 直接对外提供。
  */
 
+import { emitAppEvent } from "~/lib/app-events";
 import type {
   NodeTypeConfig,
   PortSpec,
@@ -261,9 +262,7 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
     // 为 SSR 做了保护 —— 广播方与订阅方都只在浏览器里跑，
     // 那里才有 `CustomEvent`，监听者也才能渲染。
     if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent(CUSTOM_NODES_UPDATED_EVENT, { detail: { count } }),
-      );
+      emitAppEvent(CUSTOM_NODES_UPDATED_EVENT, { count });
     }
     return count;
   } catch {

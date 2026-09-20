@@ -8,6 +8,7 @@
 // 与视图层的唯一差别是**取工作流元数据的方式**：视图层经 `workflow.detailFull`
 // 拿富化后的 workflowIO，本模块直接读仓储行。封装口径（`buildEncapsulatedInputs`）
 // 与落库形状（`workflowInputs` 三元组）两边完全一致 —— 那是同一份纯函数。
+import { upperToken } from "~/lib/upper-token";
 import "server-only";
 
 import {
@@ -60,7 +61,7 @@ export async function createWorkflowRunTask(
    *  不阻断生成。 */
   const contracts = await loadModeContracts();
   const contractIds = contracts.find(
-    (c) => c.mode === (mode ?? "").toUpperCase(),
+    (c) => c.mode === upperToken(mode),
   )?.inputs;
   const { workflowInputs } = buildEncapsulatedInputs({
     io,

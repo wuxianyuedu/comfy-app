@@ -29,6 +29,7 @@
  *   Subrow/X 起点 14（与 Card padding 一致）
  *   字体        Noto Sans SC（中文） / Inter（数字·类型 chip）
  */
+import { upperToken } from "~/lib/upper-token";
 import React from "react";
 import { Button } from "~/components/ui/button";
 
@@ -48,7 +49,7 @@ const PORT_DOT_SHADOW = "0 4px 4px rgba(0,0,0,0.25)";
 
 /** 端口类型 → 该类型的强调色（端点圆点 / chip 文字）。 */
 const portColor = (type?: string) => {
-  const t = (type ?? "").toUpperCase();
+  const t = upperToken(type);
   if (t === "IMAGE" || t === "MASK") return PORT_TYPE_COLORS.image;
   if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO")
     return PORT_TYPE_COLORS.video;
@@ -63,7 +64,7 @@ function portChipBorder(color: string) {
 
 /* ── 类型 chip ── */
 function PortChip({ type }: { type: string }) {
-  const t = type.toUpperCase();
+  const t = upperToken(type);
   const isImg = t === "IMAGE" || t === "MASK";
   const isVid = t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO";
   const style = isImg

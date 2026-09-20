@@ -116,6 +116,16 @@ export default defineConfig({
         "src/lib/path-display.ts",
         "src/lib/dom-props.ts",
         "src/lib/with-timeout.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.63 ~ §16.2.4.65）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）——
+         * 只写门槛不进 `include` 会让门槛静默失效。
+         *   · `clamp` / `upper-token` 是纯函数模块（无 React、无 IO），
+         *     可逐分支钉死；
+         *   · `app-events` 只有在 jsdom 下才走得到真实分支（`window` 的
+         *     存在性判据），用例自带 `@vitest-environment jsdom`。 */
+        "src/lib/clamp.ts",
+        "src/lib/upper-token.ts",
+        "src/lib/app-events.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -602,6 +612,31 @@ export default defineConfig({
           branches: 100,
         },
         "src/lib/with-timeout.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 本批三条新出口（规范 16 §16.2.4.63 ~ §16.2.4.65），门槛按实测值设满档：
+         *   · P59 对面 `~/lib/clamp` —— `NaN` 与 `±Infinity` 分两种处理、
+         *     「先夹后整」的顺序、`min > max` 不换序都是判据，逐条钉住；
+         *   · P60 对面 `~/lib/upper-token` —— 「吃空白」这条唯一口径与
+         *     `unknown` 参数的守卫逐条钉住；
+         *   · P61 对面 `~/lib/app-events` —— 带 / 不带载荷、多订阅者、
+         *     退订只影响自己、无 `window` 分支都验到。 */
+        "src/lib/clamp.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/upper-token.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/app-events.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

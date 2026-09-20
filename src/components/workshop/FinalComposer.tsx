@@ -1,4 +1,5 @@
 "use client";
+import { clamp } from "~/lib/clamp";
 import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -322,10 +323,7 @@ export function FinalComposer({
                     value={entry.duration}
                     onChange={(event) =>
                       updateShot(shot.id, {
-                        duration: Math.max(
-                          1,
-                          Math.min(20, Number(event.target.value) || 4),
-                        ),
+                        duration: clamp(Number(event.target.value) || 4, 1, 20),
                       })
                     }
                     className="border-border bg-bg text-ink focus:border-primary w-14 rounded-md border px-2 py-1 text-xs outline-none"

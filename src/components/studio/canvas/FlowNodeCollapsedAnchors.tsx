@@ -5,6 +5,7 @@
  * 底下保留逐端口 <Handle> 栈作为极小的不可见
  * 锚点，好让每条线的 id 绑到各自的锚点，切换时
  * 边永不脱落。 */
+import { clamp } from "~/lib/clamp";
 import { Handle, Position } from "@xyflow/react";
 import { useTheme } from "next-themes";
 import { portColor } from "~/lib/comfyui/types";
@@ -30,7 +31,7 @@ export function FlowNodeCollapsedAnchors({
   );
   // 圆柱视觉高度随端口数缩放，夹在 16px..64px 之间，
   // 好让它永不盖过图标 / 标题栏。
-  const cylH = (count: number) => Math.min(64, Math.max(16, 12 + count * 4));
+  const cylH = (count: number) => clamp(12 + count * 4, 16, 64);
   /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);

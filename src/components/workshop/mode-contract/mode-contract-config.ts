@@ -7,6 +7,7 @@
 // 「模式契约」弹窗），两处必须说同一套话 —— 分组顺序、标签、哪些口能追加一旦
 // 各写一份，就会在改动时静默分叉。
 
+import { upperToken } from "~/lib/upper-token";
 import {
   MODE_CONTRACT_INPUT_TYPES,
   builtInModeContract,
@@ -44,7 +45,7 @@ export function effectiveModeContract(
   mode: string,
   stored: readonly ModeContract[],
 ): { contract: ModeContract; customized: boolean } {
-  const code = mode.trim().toUpperCase();
+  const code = upperToken(mode);
   const found = stored.find((c) => c.mode === code);
   if (found) return { contract: found, customized: true };
   return { contract: builtInModeContract(code), customized: false };
