@@ -86,6 +86,11 @@ const REQUIRED_CONSUMERS: Record<string, string> = {
     "设置页运行日志、画布步骤日志、工作流库运行日志、工坊 Agent 对话四处",
   "form-field":
     "设置页四个分区、训练工作室超参、工作流导入面板、工坊角色与适配器、登录页",
+  /* 本批三条（规范 16 §16.2.4.27 ~ §16.2.4.29）：判据同样按**形态**取锚点
+   *（`readAs*` / `.text()` 调用、`localStorage.*Item` 调用、
+   * `onKeyDown` 里判 `"Enter"`）。 */
+  "use-enter-commit":
+    "模型标签新增与改名、画布缩放、项目重命名、工作流标签、角色名、工坊项目标题、数值输入框、Agent 对话、剧本导入",
 };
 
 /** 逐文件收集业务侧（非 ui/ 自身、非测试）的 import 说明符。 */
@@ -356,6 +361,28 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     /* 本批（ISSUE #672 续）：异步动作的进度（P16）与对象渲染成键值行（P17）。 */
     ["~/lib/progress", "ts", ["clampPct", "toPct", "pctToWidth"], 4],
     ["~/components/ui/key-value-rows", "tsx", ["KeyValueRows"], 4],
+    /* 本批（ISSUE #672 续）：读用户选的文件（P24）、SSR 安全的 localStorage
+     *（P25）、Enter 提交（P26）。门槛留在现状之下：挡的是「掉回 0 / 掉回 1」。 */
+    ["~/lib/file-io", "ts", ["readFileAsText", "readFileAsDataUrl"], 4],
+    [
+      "~/lib/browser-storage",
+      "ts",
+      [
+        "hasBrowserStorage",
+        "readStorageItem",
+        "writeStorageItem",
+        "removeStorageItem",
+        "readStorageJson",
+        "writeStorageJson",
+      ],
+      5,
+    ],
+    [
+      "~/components/ui/use-enter-commit",
+      "ts",
+      ["enterCommit", "isCommitKey"],
+      5,
+    ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
     (spec, ext, exports, min) => {
@@ -371,7 +398,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       /* 出口模块自己的文件头必须写清「它替代了几份实现」——
        * 这是本仓库那批「按形态收口」的唯一共同记号（规范 §16.2.4）。 */
       expect(mod, `${spec} 的文件头应说明它收掉了什么`).toMatch(
-        /规范 16 §16\.2\.4\.(?:1[6-9]|20)/,
+        /(?:规范 16 )?§16\.2\.4\.(?:1[6-9]|2[0-9])/,
       );
       /* 至少一处业务侧引用（排除自身、自身测试与测试目录）。 */
       let refs = 0;

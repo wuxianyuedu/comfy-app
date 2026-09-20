@@ -10,6 +10,7 @@ import {
 import type { CanvasSettings } from "./canvas/WorkflowCanvasSettings";
 import { DEFAULT_CANVAS_SETTINGS } from "./canvas/WorkflowCanvasSettings";
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import {
   GRID_BASE_LAYER_ID,
   GRID_MAJOR_LAYER_ID,
@@ -199,15 +200,12 @@ export function ZoomIndicator({
         inputMode="numeric"
         onChange={(event) => setDraft(event.target.value.replace(/[^\d]/g, ""))}
         onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commit();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            setEditing(false);
-          }
-        }}
+        {...enterCommit({
+          onCommit: commit,
+          /* Esc 关掉编辑态即可 —— 草稿在下次进入编辑时由 `beginEdit()` 重置，
+           * 所以这里不需要显式回退原值。 */
+          onCancel: () => setEditing(false),
+        })}
         title="输入缩放百分比后回车"
         className="bg-panel text-ink-bright z-base absolute top-3 right-3 h-7 w-16 rounded-md border border-purple-400/60 px-2 text-right text-[11px] font-medium tabular-nums shadow-lg outline-none"
       />

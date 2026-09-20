@@ -5,6 +5,13 @@
 
 import type { Edge } from "@xyflow/react";
 import type { CanvasNodeType } from "~/lib/project-canvas/canvas-types";
+import {
+  readStorageItem,
+  readStorageJson,
+  removeStorageItem,
+  writeStorageItem,
+  writeStorageJson,
+} from "~/lib/browser-storage";
 import { vanillaApi } from "~/trpc/vanilla";
 
 export interface CanvasProject {
@@ -29,24 +36,28 @@ function emitChanged() {
   }
 }
 
-function safeParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+/** 读项目索引（坏数据 / 没存过一律空表）。「能不能用 storage」与「坏数据怎么办」
+ *  收在 `~/lib/browser-storage`（§16.2.4.28）—— 此前本文件 12 处各写一遍
+ *  `typeof localStorage === "undefined"`，另有自己的 `safeParse`。 */
+function readIndex(): CanvasProject[] {
+  return readStorageJson<CanvasProject[]>(INDEX_KEY, [], (raw) => {
+    const parsed = JSON.parse(raw) as CanvasProject[];
+    return Array.isArray(parsed) ? parsed : [];
+  });
+}
+
+/** 写回项目索引（写失败静默 —— 与 `writeStorageJson` 同口径）。 */
+function writeIndex(all: CanvasProject[]): void {
+  writeStorageJson(INDEX_KEY, all);
 }
 
 export function listProjects(): CanvasProject[] {
-  if (typeof localStorage === "undefined") return []; // SSR guard
-  const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []);
+  const all = readIndex();
   return all.sort((left, right) => right.updatedAt - left.updatedAt);
 }
 
 export function getProject(id: string): CanvasProject | null {
-  if (typeof localStorage === "undefined") return null; // SSR guard
-  const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []);
+  const all = readIndex();
   return all.find((all) => all.id === id) ?? null;
 }
 
@@ -77,26 +88,21 @@ function deleteProjectOnServer(id: string): void {
 }
 
 export function upsertProject(p: CanvasProject): void {
-  if (typeof localStorage === "undefined") return; // SSR guard
-  const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []);
+  const all = readIndex();
   const idx = all.findIndex((item) => item.id === p.id);
   const next: CanvasProject = { ...p, updatedAt: Date.now() };
   if (idx >= 0) all[idx] = next;
   else all.push(next);
-  localStorage.setItem(INDEX_KEY, JSON.stringify(all));
+  writeIndex(all);
   emitChanged();
   // 同步到服务端（持久、跨来源的存储）。不阻塞。
   void persistProjectToServer(next);
 }
 
 export function deleteProject(id: string): void {
-  if (typeof localStorage === "undefined") return; // SSR guard
-  const all = safeParse<CanvasProject[]>(
-    localStorage.getItem(INDEX_KEY),
-    [],
-  ).filter((project) => project.id !== id);
-  localStorage.setItem(INDEX_KEY, JSON.stringify(all));
-  if (getActiveId() === id) localStorage.removeItem(ACTIVE_KEY);
+  const all = readIndex().filter((project) => project.id !== id);
+  writeIndex(all);
+  if (getActiveId() === id) removeStorageItem(ACTIVE_KEY);
   emitChanged();
   // 尽力在服务端也删掉。
   deleteProjectOnServer(id);
@@ -123,10 +129,7 @@ export async function hydrateFromServer(): Promise<void> {
       nodes?: unknown;
       edges?: unknown;
     }>;
-    const localAll = safeParse<CanvasProject[]>(
-      localStorage.getItem(INDEX_KEY),
-      [],
-    );
+    const localAll = readIndex();
     const byId = new Map(localAll.map((localAll) => [localAll.id, localAll]));
     let changed = false;
     for (const sp of serverProjects) {
@@ -153,7 +156,7 @@ export async function hydrateFromServer(): Promise<void> {
       const merged = [...byId.values()].sort(
         (left, right) => right.updatedAt - left.updatedAt,
       );
-      localStorage.setItem(INDEX_KEY, JSON.stringify(merged));
+      writeIndex(merged);
       emitChanged();
     }
   } catch {
@@ -273,8 +276,7 @@ export function createDraftProject(name?: string): CanvasProject {
  * 用户离开一张从未写过内容的崭新画布时调用。
  */
 export function clearActiveIfDraft(pid: string): void {
-  if (typeof localStorage === "undefined") return;
-  if (getActiveId() === pid) localStorage.removeItem(ACTIVE_KEY);
+  if (getActiveId() === pid) removeStorageItem(ACTIVE_KEY);
 }
 
 /**
@@ -283,8 +285,7 @@ export function clearActiveIfDraft(pid: string): void {
  * 于是用户特意命名成「空白灵感板」的空画布能在清回收中活下来。
  */
 export function reapEmptyProject(pid: string): boolean {
-  if (typeof localStorage === "undefined") return false;
-  const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []);
+  const all = readIndex();
   const p = all.find((all) => all.id === pid);
   if (!p) return false;
   if (p.name !== EMPTY_DRAFT_NAME) return false;
@@ -299,8 +300,7 @@ export function reapEmptyProject(pid: string): boolean {
  * 画布挂载时调一次，首页挂载时再调一次。
  */
 export function reapAllEmptyDrafts(): number {
-  if (typeof localStorage === "undefined") return 0;
-  const all = safeParse<CanvasProject[]>(localStorage.getItem(INDEX_KEY), []);
+  const all = readIndex();
   const survivors = all.filter(
     (project) =>
       project.name !== EMPTY_DRAFT_NAME ||
@@ -309,12 +309,12 @@ export function reapAllEmptyDrafts(): number {
   );
   const removed = all.length - survivors.length;
   if (removed > 0) {
-    localStorage.setItem(INDEX_KEY, JSON.stringify(survivors));
+    writeIndex(survivors);
     if (
       getActiveId() &&
       !survivors.some((survivor) => survivor.id === getActiveId())
     ) {
-      localStorage.removeItem(ACTIVE_KEY);
+      removeStorageItem(ACTIVE_KEY);
     }
     emitChanged();
   }
@@ -322,11 +322,9 @@ export function reapAllEmptyDrafts(): number {
 }
 
 export function setActive(id: string): void {
-  if (typeof localStorage === "undefined") return; // SSR guard
-  localStorage.setItem(ACTIVE_KEY, id);
+  writeStorageItem(ACTIVE_KEY, id);
 }
 
 export function getActiveId(): string | null {
-  if (typeof localStorage === "undefined") return null; // SSR guard
-  return localStorage.getItem(ACTIVE_KEY);
+  return readStorageItem(ACTIVE_KEY);
 }

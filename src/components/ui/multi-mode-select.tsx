@@ -21,6 +21,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import {
   Popover,
@@ -223,12 +224,7 @@ export function MultiModeSelect({
             placeholder="搜索模式（标签 / 缩写）…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                handleSave();
-              }
-            }}
+            {...enterCommit({ onCommit: handleSave })}
             className="bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-surface-2 focus:ring-primary-500/30 w-full rounded-md px-2.5 py-1.5 text-sm transition-colors outline-none focus:ring-1"
           />
         </div>
@@ -294,13 +290,11 @@ export function MultiModeSelect({
                       ? "bg-primary-500/10 text-primary-strong"
                       : "text-ink-strong hover:bg-subtle"
                   }`}
+                  /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`）——
+                   * Enter/Space 由 `ui/option-list-popover` 的键盘契约承担，
+                   * 这里不再自绘一份（此前本文件在 `onKeyDown` 里复刻了浏览器
+                   * 对原生按钮的默认行为，6 处同类写法之一，见 §16.2.4.29）。 */
                   onClick={() => toggle(item.code)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      toggle(item.code);
-                    }
-                  }}
                   tabIndex={0}
                   role="checkbox"
                   aria-checked={isSelected}
