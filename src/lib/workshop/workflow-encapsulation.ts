@@ -35,6 +35,7 @@ import {
   parseParamMapping,
   resolveMapping,
 } from "~/lib/workflow/workflow-param-mapping";
+import { exposedCustomKindOf } from "~/lib/workflow/workflow-exposed-params";
 import type {
   WorkflowIOEntry,
   WorkflowIOMap,
@@ -75,6 +76,13 @@ export interface WorkshopExposedValues {
    *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
    *  （见 VideoStudio 的 framesFor），这里不猜 fps。 */
   frames?: number;
+  /** **自定义口**的值（契约口 id → 值，如 `{ "custom-text-1": "水彩" }`）。
+   *
+   *  预制的几个口各有业务语义（提示词 / 尺寸 / 首帧…），所以各占一个字段；
+   *  自定义口是作者自己声明的，工坊没有第二个地方知道它的语义，只能按 id 收
+   *  在一张表里。值原样下发（文本口是字符串，数字口是数字），落点仍由作者连线
+   *  声明（`applyParamMapping` 只认作者画的线）。 */
+  custom?: Record<string, string | number>;
 }
 
 /** 尺寸表达（结构上与 `lib/size-presets` 的 `SizeSpec` 一致）。
@@ -220,6 +228,13 @@ function toContractValues(args: {
   const duration = durationValueFor({ io, resolved, values });
   if (duration !== undefined) out.duration = duration;
 
+  /* 自定义口：值已经是「契约口 id → 值」的形状，原样并入 —— 这些 id 只在生效
+   *  契约里存在，没有业务语义可翻译（作者起的名字就是全部语义）。落不下去的
+   *  口由 `applyParamMapping` 如实报进 unmatched。 */
+  for (const [id, value] of Object.entries(values.custom ?? {})) {
+    out[id] = value;
+  }
+
   return out;
 }
 
@@ -246,25 +261,35 @@ export function exposedValueOf(
   if (id === "negative") return values.negativePrompt ?? "";
   if (id === "first-frame") return values.firstFrame ?? "";
   if (id === "last-frame") return values.lastFrame ?? "";
+  /* 自定义口：值按 id 收在 `custom` 里（界面按文本显示它的当前内容）。 */
+  if (exposedCustomKindOf(id)) return String(values.custom?.[id] ?? "");
   const slot = referenceSlotOf(id);
   if (slot < 0) return "";
   return values.referenceImages?.[slot] ?? "";
 }
 
-/** 把某个契约口的内容写回对外值（不可变返回；认不出的口原样返回）。 */
+/** 把某个契约口的内容写回对外值（不可变返回；认不出的口原样返回）。
+ *
+ *  `next` 收 `number` 是为了自定义口里的「数字」类型：它下发的必须是数字
+ *  （写成字符串会被 ComfyUI 的数值端口判成非法值，静默回落到图内默认值）。
+ *  预制口一律按文本写（`String(next)`）—— 它们的值是字符串语义。 */
 export function withExposedValue(
   values: WorkshopExposedValues,
   id: string,
-  next: string,
+  next: string | number,
 ): WorkshopExposedValues {
-  if (id === "prompt") return { ...values, prompt: next };
-  if (id === "negative") return { ...values, negativePrompt: next };
-  if (id === "first-frame") return { ...values, firstFrame: next };
-  if (id === "last-frame") return { ...values, lastFrame: next };
+  if (exposedCustomKindOf(id)) {
+    return { ...values, custom: { ...(values.custom ?? {}), [id]: next } };
+  }
+  const text = typeof next === "string" ? next : String(next);
+  if (id === "prompt") return { ...values, prompt: text };
+  if (id === "negative") return { ...values, negativePrompt: text };
+  if (id === "first-frame") return { ...values, firstFrame: text };
+  if (id === "last-frame") return { ...values, lastFrame: text };
   const slot = referenceSlotOf(id);
   if (slot < 0) return values;
   const refs = [...(values.referenceImages ?? [])];
-  refs[slot] = next;
+  refs[slot] = text;
   return { ...values, referenceImages: refs };
 }
 
@@ -295,6 +320,18 @@ export function pruneEmptyExposedValues(
   if (values.size !== undefined) out.size = values.size;
   if (values.duration !== undefined) out.duration = values.duration;
   if (values.frames !== undefined) out.frames = values.frames;
+  /* 自定义口：空串当「没给」（与上面几条同一口径）；数字原样保留 —— `0` 是
+   *  一个有效值，不能按「假值」剪掉。 */
+  const custom: Record<string, string | number> = {};
+  for (const [id, value] of Object.entries(values.custom ?? {})) {
+    if (typeof value === "number") {
+      custom[id] = value;
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed !== "") custom[id] = trimmed;
+  }
+  if (Object.keys(custom).length > 0) out.custom = custom;
   return out;
 }
 
@@ -307,23 +344,30 @@ export function pruneEmptyExposedValues(
  *   • 用户给了值却落不下去（未连线 / 断开 / 端口已消失）：记进 `unmatched`，
  *     不凭空造端口。
  *
- *  @param io       工作流详情里的 IO 映射（服务端已 enrich）。
- *  @param paramMap 作者的连线表（`paramMap` 原始形状，内部走 `parseParamMapping`）。
- *  @param mode     当前模式码；连线按模式分开存放，未开启模式传 null。
- *  @param values   工坊这次要落下去的对外参数。
+ *  @param io         工作流详情里的 IO 映射（服务端已 enrich）。
+ *  @param paramMap   作者的连线表（`paramMap` 原始形状，内部走 `parseParamMapping`）。
+ *  @param mode       当前模式码；连线按模式分开存放，未开启模式传 null。
+ *  @param values     工坊这次要落下去的对外参数。
+ *  @param contractIds 该模式**生效的契约口清单**（含作者自定义的口）。不传 =
+ *    内置默认契约：自定义口不在其中，作者给它的值就落不下去（会如实进
+ *    `unmatched`，不会静默丢）。有契约注册表的调用方必须传。
  */
 export function buildEncapsulatedInputs(args: {
   io: WorkflowIOMap | null | undefined;
   paramMap: unknown;
   mode: string | null | undefined;
   values: WorkshopExposedValues;
+  contractIds?: readonly string[];
 }): EncapsulatedInputs {
-  const { io, paramMap, mode, values } = args;
+  const { io, paramMap, mode, values, contractIds } = args;
   if (!io || typeof io !== "object") {
     return { workflowInputs: [], unmatched: [] };
   }
   const effectiveMode = mode ?? null;
-  const entries = buildParamEntries(io, undefined, { mode: effectiveMode });
+  const entries = buildParamEntries(io, undefined, {
+    mode: effectiveMode,
+    contractIds,
+  });
   const mapping = parseParamMapping(paramMap);
   const resolved = resolveMapping(entries, io, mapping, effectiveMode);
   const { inputs, unmatched } = applyParamMapping({
@@ -373,6 +417,12 @@ export function buildEncapsulatedInputs(args: {
     );
     sizeIds.forEach((id) => reported.delete(id));
     if (!landed) reported.add("size");
+  }
+  /* 自定义口同理：给了值而**生效契约里没有这个口**（作者刚把它从契约里删掉，
+   *  而调用方还在按旧清单给值）映射层看不见 —— 在这里补报，否则用户会以为值
+   *  已经下发下去了。 */
+  for (const id of Object.keys(values.custom ?? {})) {
+    if (!hasEntry(id)) reported.add(id);
   }
   return { workflowInputs: inputs, unmatched: [...reported] };
 }

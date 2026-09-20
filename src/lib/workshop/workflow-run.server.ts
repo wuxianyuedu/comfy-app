@@ -22,6 +22,7 @@ import {
   buildEncapsulatedInputs,
   type WorkshopExposedValues,
 } from "./workflow-encapsulation";
+import { loadModeContracts } from "./mode-contract.server";
 
 /** 一次工作流库执行的入参：提示词 / 尺寸 / 参考图等对外参数 + 任务归属。 */
 export interface RunWorkflowInput {
@@ -54,11 +55,19 @@ export async function createWorkflowRunTask(
     !Array.isArray(tpl.workflowIO)
       ? (tpl.workflowIO as unknown as WorkflowIOMap)
       : {};
+  /* 该模式生效的契约口清单：作者改过的模式按注册表（含自定义口），没改过的
+   *  走内置默认（不传即回落）。读不到注册表时按空注册表处理 —— 回落内置契约，
+   *  不阻断生成。 */
+  const contracts = await loadModeContracts();
+  const contractIds = contracts.find(
+    (c) => c.mode === (mode ?? "").toUpperCase(),
+  )?.inputs;
   const { workflowInputs } = buildEncapsulatedInputs({
     io,
     paramMap: tpl.paramMap,
     mode,
     values: input.values,
+    contractIds,
   });
 
   const params = {

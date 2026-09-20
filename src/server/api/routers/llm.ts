@@ -9,6 +9,7 @@ import {
 import { splitExtraModels } from "~/lib/llm/types";
 import { remoteModelRepository } from "~/lib/core/repository";
 import {
+  isCustomContractInputId,
   isModeContractInputId,
   parseRemoteModeAdapters,
   WORKSHOP_INPUT_TYPES,
@@ -81,7 +82,7 @@ export const llmRouter = createTRPCRouter({
               .array(
                 z.string().refine(isModeContractInputId, {
                   message:
-                    "契约口必须是 prompt|negative|size|duration|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）",
+                    "契约口必须是 prompt|negative|size|duration|reference-image|first-frame|last-frame（第 2 张起的参考图带序号，如 reference-image-2）、或自定义口 custom-text-1 / custom-image-2 / custom-number-3",
                 }),
               )
               .min(1),
@@ -90,6 +91,20 @@ export const llmRouter = createTRPCRouter({
              * 没配过 → 由 requiredInputsFor 回落内置默认（提示词）。 */
             required: z
               .array(z.string().refine(isModeContractInputId))
+              .optional(),
+            /* 作者自定义的口：名字由作者填，类型是「简单类型」之一（决定工坊
+             *  控件形态与它接受哪一族端口）。归一化（丢弃无定义的口）在
+             *  `parseModeContracts` 里再做一次。 */
+            customInputs: z
+              .array(
+                z.object({
+                  id: z.string().refine(isCustomContractInputId, {
+                    message: "自定义口 id 形如 custom-text-1 / custom-image-2",
+                  }),
+                  label: z.string().min(1),
+                  kind: z.enum(["text", "image", "number"]),
+                }),
+              )
               .optional(),
           }),
         ),

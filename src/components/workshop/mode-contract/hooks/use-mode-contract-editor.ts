@@ -9,9 +9,12 @@
 import { useCallback, useMemo, useState } from "react";
 
 import {
+  moveContractInput,
+  nextCustomInputId,
   nextReferenceImageId,
   requiredInputsFor,
   type ModeContract,
+  type ModeContractCustomKind,
   type ModeContractInputId,
 } from "~/lib/workshop/model-mode-contract";
 import { effectiveModeContract } from "../mode-contract-config";
@@ -30,8 +33,14 @@ export interface ModeContractEditorController {
   setDraft: (draft: ModeContract) => void;
   /** 追加一个输入口（参考图由调用方传 `nextReferenceImageId` 的结果）。 */
   appendInput: (id: ModeContractInputId) => void;
-  /** 移除某个输入口。 */
+  /** 移除某个输入口（自定义口连着它的定义一起移除）。 */
   removeInput: (id: ModeContractInputId) => void;
+  /** 上移 / 下移一个输入口（`delta` = -1 / +1）—— 顺序即工坊对外的参数顺序。 */
+  moveInput: (id: ModeContractInputId, delta: number) => void;
+  /** 新增一个自定义口（作者填名 + 选简单类型）。空名不生效。 */
+  addCustomInput: (label: string, kind: ModeContractCustomKind) => void;
+  /** 改一个自定义口的展示名（空名不生效，保持原名）。 */
+  renameCustomInput: (id: ModeContractInputId, label: string) => void;
   /** 该口当前是不是必备口（缺了它这条模式在工坊里驱动不起来）。 */
   isRequired: (id: ModeContractInputId) => boolean;
   /** 切换某个口的「必备」状态。 */
@@ -75,24 +84,81 @@ export function useModeContractEditor({
         ? { ...prev, inputs: [...prev.inputs, id] }
         : prev,
     );
+    setSaved(false);
   }, []);
 
   const removeInput = useCallback((id: ModeContractInputId) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const inputs = prev.inputs.filter((x) => x !== id);
+      return {
+        ...prev,
+        inputs,
+        /* 自定义口没删定义的话，「全部参数」里会留下一个不在清单里的幽灵口 ——
+         *  它已经没有任何入口能再加回来。 */
+        ...(prev.customInputs
+          ? { customInputs: prev.customInputs.filter((def) => def.id !== id) }
+          : {}),
+        /* 口都没了，它的「必备」也跟着消失 —— 留一个指向不存在口的必备项，
+         *  会让「缺了必备口」的判据永远为真。 */
+        required: requiredInputsFor({ inputs, required: prev.required }),
+      };
+    });
+    setSaved(false);
+  }, []);
+
+  /* 调序只动 `inputs` 的顺序：顺序就是工坊对外的参数顺序（数组下标即界面上的
+   * 序号），另存一份顺序必然与它走散。越界时纯函数返回原数组，这里不再判一次。 */
+  const moveInput = useCallback((id: ModeContractInputId, delta: number) => {
     setDraft((prev) =>
       prev
-        ? {
-            ...prev,
-            inputs: prev.inputs.filter((x) => x !== id),
-            /* 口都没了，它的「必备」也跟着消失 —— 留一个指向不存在口的必备项，
-             *  会让「缺了必备口」的判据永远为真。 */
-            required: requiredInputsFor({
-              inputs: prev.inputs.filter((x) => x !== id),
-              required: prev.required,
-            }),
-          }
+        ? { ...prev, inputs: moveContractInput(prev.inputs, id, delta) }
         : prev,
     );
+    setSaved(false);
   }, []);
+
+  /* 自定义口：id 由系统生成（把类型编进去，见 `nextCustomInputId`），作者只填
+   *  名字 —— 名字单独存在 `customInputs` 里，落点/封装/适配器一律按 id 走。 */
+  const addCustomInput = useCallback(
+    (label: string, kind: ModeContractCustomKind) => {
+      const trimmed = label.trim();
+      if (!trimmed) return;
+      setDraft((prev) => {
+        if (!prev) return prev;
+        const id = nextCustomInputId(prev.inputs, kind);
+        return {
+          ...prev,
+          inputs: [...prev.inputs, id],
+          customInputs: [
+            ...(prev.customInputs ?? []),
+            { id, label: trimmed, kind },
+          ],
+        };
+      });
+      setSaved(false);
+    },
+    [],
+  );
+
+  const renameCustomInput = useCallback(
+    (id: ModeContractInputId, label: string) => {
+      const trimmed = label.trim();
+      if (!trimmed) return;
+      setDraft((prev) =>
+        prev?.customInputs
+          ? {
+              ...prev,
+              customInputs: prev.customInputs.map((def) =>
+                def.id === id ? { ...def, label: trimmed } : def,
+              ),
+            }
+          : prev,
+      );
+      setSaved(false);
+    },
+    [],
+  );
 
   /** 该模式下生效的必备口（配过用配过的，没配过回落内置默认）。 */
   const effectiveRequired = useMemo(
@@ -156,6 +222,9 @@ export function useModeContractEditor({
     },
     appendInput,
     removeInput,
+    moveInput,
+    addCustomInput,
+    renameCustomInput,
     nextReferenceImageId: draft ? nextReferenceImageId(draft.inputs) : null,
     setOutput,
     save,

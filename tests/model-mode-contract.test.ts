@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adapterInputsFromContract,
   defaultEndpointPathForMode,
   defaultInputsForMode,
   parseRemoteModeAdapters,
@@ -61,6 +62,23 @@ describe("远端模型工坊模式适配器：解析与归一化", () => {
       { mode: "I2V", inputs: [{ type: "image", field: "image" }] },
     ]);
     expect(adapters[0]?.endpointPath).toBe("/videos/generations");
+  });
+});
+
+describe("契约 → 适配器的默认映射", () => {
+  it("作者自定义的口不生成默认行（远端字段名没法猜，留给适配器页手填）", () => {
+    /* 与「第 2 张起的参考图」同一条口径：没有约定字段名就不猜 —— 猜错时请求体
+     *  会带上一个接口不认识的字段，而用户看不出来。 */
+    const rows = adapterInputsFromContract({
+      mode: "T2I",
+      inputs: ["prompt", "custom-text-1", "custom-number-2"],
+      output: "image",
+      customInputs: [
+        { id: "custom-text-1", label: "水彩风格", kind: "text" },
+        { id: "custom-number-2", label: "强度", kind: "number" },
+      ],
+    });
+    expect(rows).toEqual([{ type: "prompt", field: "prompt" }]);
   });
 });
 
