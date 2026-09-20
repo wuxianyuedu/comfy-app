@@ -1,5 +1,6 @@
 import { fmtBytes } from "~/lib/format-bytes";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
+import { compareText } from "~/lib/ordered-set";
 import { displayValue } from "~/lib/display-value";
 
 // ── 工作室模型库：配置层（规范 17 §17.2 第①层）──────────────────────────────
@@ -52,7 +53,9 @@ export function countByType(models: ModelRow[]): Array<[string, number]> {
   const counts = new Map<string, number>();
   for (const m of models) counts.set(m.type, (counts.get(m.type) ?? 0) + 1);
   return Array.from(counts.entries()).sort(
-    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+    /* 数量降序 → 类型名字典序；「按当前区域设置排序」走 `~/lib/ordered-set`
+     *（规范 16 §16.2.4.55）。 */
+    (left, right) => right[1] - left[1] || compareText(left[0], right[0]),
   );
 }
 

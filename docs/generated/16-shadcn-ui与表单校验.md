@@ -174,14 +174,18 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P47** | 自写「扩展名 ⇄ MIME」映射表（字面量对 `"image/x": "ext"` / `".ext": "image/x"`）                                                                 | `~/lib/media/mime-ext` 的 `mimeForExt` / `extForMime` / `extOfPath` / `stemOfPath` / `contentTypeForPath`（见 §16.2.4.51）                                                                                        |
 | **P48** | 自写「`unknown` 当宽松对象视图」（`typeof X === "object" && X !== null` 后紧跟 `as Record<string, unknown>`，同一变量名）                            | `~/lib/is-record` 的 `isRecord` / `isPlainRecord` / `asRecord`（见 §16.2.4.52）                                                                                                                                  |
 | **P49** | 自写文件名安全化（`replace(/[^…]/g, "_")`）                                                                                                       | `~/lib/safe-name` 的 `safeFileNameSegment` / `safeDisplayName`（见 §16.2.4.53）                                                                                                                                   |
+| **P50** | 自写数字精度格式化（`.toFixed(`）                                                                                                                 | `~/lib/number-format` 的 `fixed` / `trimmed` / `trimFixed` / `alphaText`（见 §16.2.4.54）                                                                                                                        |
+| **P51** | 自写去重合并与区域设置排序（`.sort((…, …) => ….localeCompare(`）                                                                                   | `~/lib/ordered-set` 的 `unique` / `uniqueSorted` / `uniqueBy` / `union` / `compareText`（见 §16.2.4.55）                                                                                                          |
+| **P52** | 自拼或自切 data URL（`data:${…};base64,${…}` / `indexOf(",")` / `split(",")` 与 `data:` 同现）                                                      | `~/lib/media/data-url` 的 `isDataUrl` / `isInlineMedia` / `toDataUrl` / `wrapBase64` / `toBase64` / `parseDataUrl` / `base64PayloadOf`（见 §16.2.4.56）                                                            |
 
-**P4~~P35 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P35 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+**P4~~P52 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P52 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
 加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键 / 滚动跟随 /
 外部导航 / 表单行 / 读文件 / localStorage / Enter 提交 / 异步动作的反馈样板 /
 媒体自然尺寸 / 查询串 / 按条目的错误位 / 作废守卫 / 服务端错误信封 /
-唯一 id / 报错建议词表 / 画布节点落地」这三十二件事的
+唯一 id / 报错建议词表 / 画布节点落地 /
+数字精度格式化 / 去重合并与排序 / data URL」这**三十五件事**的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
@@ -196,9 +200,10 @@ P36/P37/P38 见 §16.2.4.39 ~ §16.2.4.41、
 **P39/P40/P41 见 §16.2.4.42 ~ §16.2.4.44**、
 P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **P44/P45/P46 见 §16.2.4.48 ~ §16.2.4.50**、
-**P47/P48/P49 见 §16.2.4.51 ~ §16.2.4.53**。
+**P47/P48/P49 见 §16.2.4.51 ~ §16.2.4.53**、
+**P50/P51/P52 见 §16.2.4.54 ~ §16.2.4.56**。
 
-**P4~P49 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P52 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -422,6 +427,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 扩展名 ⇄ MIME            | ~~**6 份互不相同的映射表**：`api/generated`（13 条，还背了 txt/json）、`media-source.server`（7 条）、`character-portrait-client`（5 条）、`workshop-local/prepare`（4 条，**缺 webp**）、`film/bgm`（`path.extname() \|\| ".mp3"`）、`upload`（`lastIndexOf(".")` 手切）。差异互相矛盾 —— 同一个上传文件在「走 `resolveMediaBytes` 兜底」与「走 prepare 路由落盘」两条路径上得到不同的扩展名与 Content-Type~~ | `~/lib/media/mime-ext` 的 `mimeForExt` / `extForMime` / `extOfPath` / `stemOfPath` / `contentTypeForPath`（两张手写表，**不反转**；兜底值留给调用处；非媒体档收在 `contentTypeForPath` 一处）；**P47 硬闸** | ✅ **见 §16.2.4.51**                        |
 | unknown → 宽松对象视图   | ~~**4 份实现、名字各不同**：`workflow-utils` 与 `lib/comfyui/raw` 都叫 `asRecord`；`api-channel-core` **叫 `isPlainRecord` 却不排除数组**；`use-param-wiring` 的 `isPlainRecord` 真排除数组。第三处与 `~/lib/is-record` 的严格版**同名不同义** —— 按名字理解就会拿到意外的收窄结果~~ | `~/lib/is-record` 的三个函数语义各一：`isRecord`（含数组）/ `isPlainRecord`（非数组）/ **`asRecord`**（转成视图或 `null`）；`api-channel-core` 那处按**实际行为**改名；**P48 硬闸** | ✅ **见 §16.2.4.52**                        |
 | 文件名安全化             | ~~**4 份各不相同的正则**，差异没一处写下来：`/`[^\\w.\\-一-龥]/g``（留点、留 CJK）、`/`[^\\w一-龥-]+/g``（**吃掉点**）、`/`[^\\w.-]/g`` ×2（**吃掉 CJK**）。同一个中文名在 bgm 上传路径被保留、在工坊产出目录被替换成下划线；`v1.2` 在工坊里保留点、在 Lora 文件名里变成 `v1_2`~~ | `~/lib/safe-name` 的 `safeFileNameSegment`（ASCII 片段，进 ComfyUI 子目录 / URL 路径）/ `safeDisplayName`（额外保留 CJK，给用户认的名字）；`materials` 的 `sanitizeFileName` **不并入**（那是「这个名字能不能用」）；**P49 硬闸** | ✅ **见 §16.2.4.53**                        |
+| 数字精度格式化           | ~~**26 处 `toFixed(`**，其中画布设置的 6 个 `format` 回调各写各的小数位。四派差的是**语义决定**不是风格：**小数位从哪来**（写死 / props / 量纲巧合）、**末尾的零要不要留**（`1.00` 还是 `1`，而 ComfyUI 存的就是剥过零的形态）、**整数要不要也进格式化**、**大数值要不要绕开**（`>= 10000`）。另有更隐蔽的一处 `(Math.round(v * 100) / 100).toFixed(2)` —— **两层舍入**（先十进制舍、再二进制舍），边界值与直接 `toFixed` 给出不同答案~~ | `~/lib/number-format` 的 `fixed`（`toFixed` 唯一落点）/ `trimmed`（剥尾零）/ `trimFixed`（整数不带小数点）/ `alphaText`（CSS alpha 段固定 3 位）；精度是**调用处的域决定**、尾零剥离是**显式选项**；**P50 硬闸** | ✅ **见 §16.2.4.54** |
+| 去重合并与排序           | ~~`[...new Set(xs)]` 与 `Array.from(new Set(xs))` 混用，而比选型更要紧的是**排序口径也不一**：`localeCompare` 与手写 `for` 循环挑字段做键并存。四种形状差的是**判据**：① 去重保留首次出现；② 去重 + 字典序（`localeCompare` 与 `<` 不是同一判据 —— 前者 `"apple" < "Zebra"`、后者 `"Zebra" < "apple"`）；③ 去重**同时按字段做键**（键与值是两件事，收口前各写一遍 `for` 循环）；④ 两路来源取并集（`specOpts` 优先）~~ | `~/lib/ordered-set` 的 `unique`（首次出现）/ `uniqueSorted`（字典序）/ `uniqueBy`（按字段）/ `union`（先到先得）/ `compareText`（区域设置比较器，全库唯一）；**顺序是显式参数**；**P51 硬闸** | ✅ **见 §16.2.4.55** |
+| data URL                 | ~~`data:${mime};base64,${…}` **手拼 3 处**，读回的一侧 **6 处**各写一遍「找第一个逗号、后面就是 base64」。三处读法互相矛盾：`slice(indexOf(",") + 1)` 在缺逗号时把**整串**当 base64（解码器跳过非法字符）→ 静默解出垃圾字节；`split(",")` 至少判了逗号但多分配一份数组；只有一处真去读了 `;base64` 之前的 meta（因此只有它能给出 MIME）。另有**非 base64 的 data URL**（`data:text/plain,hello`）被无条件按 base64 解 → 乱码~~ | `~/lib/media/data-url` 的 `isDataUrl` / `isInlineMedia`（要不要走网络）/ `toDataUrl`（字节）/ `wrapBase64`（已有 base64 串）/ `toBase64`（含浏览器侧分块）/ `parseDataUrl`（给 `{ mime, base64 }`）/ `base64PayloadOf`；**畸形输入给 `null`，不静默解垃圾**；**P52 硬闸** | ✅ **见 §16.2.4.56** |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -3563,6 +3571,143 @@ ASCII 是唯一确定性的形态；而**要给用户认的名字**（上传的 
 取那条**替换形态**：`replace(/[^…]/g, "_")`（含 `+` 变体）—— 精确到
 「把一批字符换成下划线」。**不数**别的 `replace`（`.` → `-`、空格归一、
 去掉尾斜杠都不在此列）。豁免一条：`safe-name.ts` 自身。
+
+### 16.2.4.54 「把一个数字按某档精度写成字符串」有 26 处（P50 硬闸）
+
+按**形态**扫出来的账：全库 26 处 `toFixed(`，其中画布设置的 6 个 `format`
+回调各写各的小数位。四派写法**都编译、都运行、类型都对**，差别只在几个
+语义决定上：
+
+| 决定的 | 做法 A | 做法 B |
+| --- | --- | --- |
+| **小数位从哪来** | 写死 `.toFixed(2)` | 来自 props（`NumberField` 的 `decimalPlaces`）/ 来自「这个值量纲是几」 |
+| **末尾的零要不要留** | `1.00`（`toFixed(2)`） | `1`（剥尾零）—— 而 ComfyUI 存的就是剥过零的形态 |
+| **整数要不要也进格式化** | `Number.isInteger(v)` 提前 `String(v)` → `"3"` | 直接 `toFixed(2)` → `"3.00"` |
+| **大数值要不要绕开** | `value >= 10000` 提前返回 | 照常格式化 |
+
+还有一处更隐蔽的：`(Math.round(value * 100) / 100).toFixed(2)` ——
+先手动舍入到两位再 `toFixed(2)`，那是**两层舍入**（先十进制舍、再二进制舍），
+与直接 `toFixed(2)` 在边界值上给出不同答案。
+
+#### 出口：`~/lib/number-format`
+
+```ts
+fixed(value, digits); // "0.50" / "1.00"；非有限数 → null
+trimmed(value, digits); // "1" / "0.5"（剥尾零；"-0" 归一到 "0"）
+trimFixed(value, digits); // 整数不带小数点（Number.isInteger 判据）
+alphaText(value); // CSS 的 alpha 段，固定 3 位不剥零
+```
+
+- **精度是调用处的域决定**：本模块给具名档，不替调用处选小数位 ——
+  把上限也统一成一个数，会把「`1.00` 与 `1` 是两种观感」这件事抹掉；
+- **非有限数一律 `null`**（不给 `"NaN"` / `"Infinity"` 字面量）：
+  `NaN.toFixed(2)` 是 `"NaN"`，渲染出来是一个**假的值**，
+  调用处该走缺值占位（`~/lib/display-value`）；
+- **`alphaText` 不剥尾零**：那不是「给人读的数」，而是交给 CSS 解析的
+  语法片段 —— 一处写 3 位、一处写 1 位会让「同一件事有一处定义」重新变得
+  看不出来；
+- **`trimmed` 对负零归一**：`(-1e-9).toFixed(2)` 是 `"-0.00"`，剥完尾零剩
+  `"-0"` —— 显示出来会让用户以为「这个值小于 0」（它其实是被舍成 0 的）。
+
+#### 判据：P50（硬闸）
+
+取 **`toFixed(` 这个 API 本身** —— 它是本条账唯一的签名
+（`Math.round(v * 100) / 100` 那类写法里也必然有一个 `toFixed`）。
+**不数** `Math.round(` 或 `padStart(`：那些是别的账（像素取整 / 补零），
+数进来会逼人改坏代码。
+
+### 16.2.4.55 「把一组值去重 / 合并成有序集合」的排序口径不一（P51 硬闸）
+
+`[...new Set(xs)]` 与 `Array.from(new Set(xs))` 在全库混用，而比选型更要紧的
+是**排序口径也不一**。收口前有四种形状，差的是**判据**不是风格：
+
+| 形状 | 实例 |
+| --- | --- |
+| ① 去重，保留首次出现 | `[...new Set(dropped.map((i) => i.innerNodeId))]` |
+| ② 去重 + **字典序** | `Array.from(new Set(rows.map((r) => r.fileName))).sort((a, b) => a.localeCompare(b))` |
+| ③ 去重**同时按字段做键** | 手写 `for` 循环：`const seen = new Set(); … if (seen.has(key)) continue; seen.add(key);` |
+| ④ 两路来源取**并集**（先到先得） | 逐路 `merged.add(o)` 再 `Array.from(merged)` |
+
+②的关键：**`localeCompare` 与 `<` 不是同一个判据** —— 前者让
+`"apple" < "Zebra"`（按当前区域设置），后者让 `"Zebra" < "apple"`
+（按 UTF-16 码位）。两种混用会让同一份文件列表在不同面板顺序相反。
+
+③的关键：写成 `[...new Set(xs)]` **表达不了**「按哪个字段去重」——
+键（`file.absPath`）与值（整个 `LocalWorkflowFile`）是两件事，
+于是各处又手写一遍 `for` 循环。
+
+#### 出口：`~/lib/ordered-set`
+
+```ts
+unique(values); // 去重，保留首次出现
+uniqueSorted(values, cmp?); // 去重 + 字典序（默认 compareText）
+uniqueBy(values, keyOf); // 按字段去重，保留首次出现的整项
+union(...sources); // 多路来源并集，先到先得
+compareText(left, right); // 区域设置比较器（全库唯一）
+```
+
+- **顺序是显式参数，不是默认行为**：去重必然产生「留哪一个」的判据；
+- **`uniqueBy` 的键为空值即跳过**（`null` / `undefined` / `""`），
+  但 **`0` / `false` 是真实键**（收口前那些 `if (!key) continue` 会把它们
+  一起丢掉）；
+- **不做取交集 / 差集**：目前没有落点，不预置「将来可能用到」的 API。
+
+#### 判据：P51（硬闸）
+
+取一处**形态**：`.sort((…, …) => ….localeCompare(` —— 手写「按当前区域
+设置排序」。**不数**不带比较器的 `.sort()`（按码位排是**另一个判据**，
+合法且另有所指），也不数数值比较器。
+
+### 16.2.4.56 「拼一个 data: URL / 读回它的载荷」两处各写一遍（P52 硬闸）
+
+`data:${mime};base64,${…}` 手拼 **3 处**，读回的一侧 **6 处**各写一遍
+「从头开始找第一个逗号，后面的就是 base64」。三处读法**互相矛盾**：
+
+| 写法 | 落在哪 | 缺逗号时 |
+| --- | --- | --- |
+| `src.slice(src.indexOf(",") + 1)` | `server/workshop/comfyui`、`server/workshop/api-channel` | `indexOf` 给 `-1`，`slice(0)` 把**整串**当 base64 交给解码器（它跳过非法字符）→ **静默解出垃圾字节** |
+| `url.split(",")[1] ?? ""` | `llm/video-task-util` | 判了逗号，但**写成空串** → 写一个 0 字节文件冒充产物 |
+| `src.slice(5, comma)` + 读 meta | `workshop/media-source.server` | 只有这一处给得出 MIME |
+
+另有一类被无条件忽略的合法输入：**非 base64 的 data URL**
+（`data:text/plain,hello`）—— 它的载荷是百分号编码的文本，三处读取实现
+都按 base64 解，静默出乱码。
+
+#### 出口：`~/lib/media/data-url`
+
+```ts
+isDataUrl(v) / isInlineMedia(v); // 要不要走网络
+toDataUrl(bytes, mime); // 字节 → data URL
+wrapBase64(base64, mime); // 已有 base64 串 → data URL（上游回 b64_json）
+toBase64(bytes); // 只编码（含浏览器侧分块 btoa）
+parseDataUrl(v); // { mime, base64 } 或 null
+base64PayloadOf(v); // 只要载荷，或 null
+```
+
+- **畸形输入给 `null`，不静默解垃圾**：`Buffer.from(垃圾, "base64")`
+  **不报错**（它跳过非法字符），所以「有没有逗号」必须显式判；
+- **非 base64 形态显式拒绝**（本仓库没有落点用到它；真要支持时在这里加
+  一条分支，而不是让每个调用处各判一次）；
+- **服务端与浏览器两侧都给**：收口前 3 处写入全在服务端，而读取侧的
+  `character-portrait-client` 在浏览器里 —— 只覆盖 Node 分支等于让
+  「浏览器上能不能编码」没有任何判据（`toBase64` 里 `Buffer` 分支与
+  分块 `btoa` 分支都有用例）。
+
+#### 判据：P52（硬闸）
+
+取**三条只在本条账出现的形态**：
+
+1. 字面量 `` data:${…};base64,${…} ``（模板串拼接）；
+2. `indexOf(",")` —— 精确到「从这里切 base64 载荷」；
+3. `split(",")` **且同文件出现 `data:` 前缀** —— **更差的那一种写法**。
+   这一条必须一起数：与 P13「只数合规的那种、漏掉更差的那种」同款 ——
+   判据漏掉更差的写法，被拦下的就永远只是合规者
+   （`video-task-util` 的 HEAD 版本正是 `split(",")` 那一档）。
+   但 `split(",")` 在本仓库另有 CSV 解析的用法，故要求 `data:` 前缀同现。
+
+**刻意不数 `startsWith("data:")`** —— SSE 帧前缀也是这个写法
+（`lib/llm/browser` / `lib/llm/server` 的 `data: {...}`），数进来会把
+**流式解析**误判成本条账。
 
 ## 16.3 新增一个组件的标准动作
 

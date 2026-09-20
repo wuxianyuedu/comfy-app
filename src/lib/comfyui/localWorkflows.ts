@@ -23,6 +23,8 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 
+import { compareText, uniqueBy } from "~/lib/ordered-set";
+
 export interface LocalWorkflowFile {
   /** 绝对、归一化后的文件系统路径（小写 + 正斜杠，便于 Windows 盘符比较）。 */
   absPath: string;
@@ -182,7 +184,8 @@ function scanRoot(rawDir: string, recursive: boolean): ScannedRoot {
     };
   }
 
-  out.sort((left, right) => left.name.localeCompare(right.name));
+  /* 「按当前区域设置排序」走 `~/lib/ordered-set`（规范 16 §16.2.4.55）。 */
+  out.sort((left, right) => compareText(left.name, right.name));
   return { rawPath: rawDir, absPath: abs, exists: true, files: out };
 }
 
@@ -195,7 +198,6 @@ export function scanLocalWorkflowRoots(
   opts: { recursive?: boolean } = {},
 ): { roots: ScannedRoot[]; allFiles: LocalWorkflowFile[] } {
   const recursive = !!opts.recursive;
-  const seen = new Set<string>();
   const allFiles: LocalWorkflowFile[] = [];
   const roots: ScannedRoot[] = [];
   for (const p of rawPaths) {
@@ -203,21 +205,18 @@ export function scanLocalWorkflowRoots(
 
     if (!trimmed) continue;
 
-    const r = scanRoot(trimmed, recursive);
+    roots.push(scanRoot(trimmed, recursive));
+  }
 
-    roots.push(r);
-
-    for (const file of r.files) {
-      if (!file.absPath) continue;
-
-      const key = pathKey(file.absPath);
-
-      if (seen.has(key)) continue;
-
-      seen.add(key);
-
-      allFiles.push(file);
-    }
+  /* 「按绝对路径去重、保留首次出现」走 `~/lib/ordered-set` 的 `uniqueBy`
+   *（规范 16 §16.2.4.55）—— 收口前是本文件里手写的一遍 Set 循环，
+   * 键（`pathKey`）与值（整个 `LocalWorkflowFile`）是两件事。 */
+  for (const file of uniqueBy(
+    roots.flatMap((r) => r.files),
+    (f) => (f.absPath ? pathKey(f.absPath) : null),
+  )) {
+    if (!file.absPath) continue;
+    allFiles.push(file);
   }
 
   return { roots, allFiles };

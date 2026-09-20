@@ -7,7 +7,7 @@
 //                                —— 保留点、保留 CJK、截到 60
 //   lib/comfyui/trainer.ts       `replace(/[^\w一-龥-]+/g, "_")`
 //                                —— 不保留点！（Lora 名里的 `.` 会被吃掉）
-//   server/workshop/comfyui.ts   `replace(/[^\w.-]/g, "_")`   ×2
+//   server/workshop/comfyui.ts   两份 `replace(/[^\w.-]/g, "_")`
 //                                —— 保留点、**不吃 CJK**
 //
 // 三处的差异不是「覆盖面不同」而是**互相矛盾**：同一个中文名在 bgm 上传路径

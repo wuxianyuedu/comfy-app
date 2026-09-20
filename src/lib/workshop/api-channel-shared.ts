@@ -7,6 +7,7 @@
 // 全是纯函数 —— 客户端组件导入它是安全的。
 
 /* 某个 API 通道服务哪个生成阶段。 */
+import { isDataUrl, wrapBase64 } from "~/lib/media/data-url";
 import { isRecord } from "~/lib/is-record";
 
 export type ApiChannelKind = "image" | "video";
@@ -131,9 +132,10 @@ export function extractBase64DataUrl(
 ): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
   if (!b64) return null;
-  // 有些上游直接内联一个 data URL。
-  if (b64.startsWith("data:")) return b64;
-  return `data:${mime};base64,${b64}`;
+  /* 有些上游直接内联一个 data URL。 */
+  if (isDataUrl(b64)) return b64;
+  /* 「怎么拼 data URL」只有一处定义（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
+  return wrapBase64(b64, mime);
 }
 
 /* 按文件路径 / URL 的扩展名猜媒体类型（SSE 输出里两种都有）。 */
