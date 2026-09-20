@@ -8,6 +8,7 @@
  * 子图 wrapper 节点渲染出真正的 <select>，而不是一个自由文本框。
  * 缺失或连不上时落到 undefined，消费方优雅回落到纯文本控件。
  */
+import { union, uniqueSorted } from "~/lib/ordered-set";
 import { fetchObjectInfo } from "~/lib/comfyui/raw";
 import { localModelFileNames } from "~/lib/models";
 import { modelFoldersForField } from "~/lib/model-types";
@@ -102,13 +103,11 @@ export function createObjectInfoResolvers(): {
       localModelFileNames(modelFoldersForField(field)),
     ]);
 
-    const merged = new Set<string>();
-    if (specOpts) for (const o of specOpts) merged.add(o);
-    for (const o of localOpts) merged.add(o);
-    const out = Array.from(merged);
-    return out.length
-      ? out.sort((left, right) => left.localeCompare(right))
-      : undefined;
+    /* 「多路来源取并集 + 去重 + 按当前区域设置升序」走
+     * `~/lib/ordered-set`（规范 16 §16.2.4.55）。优先级是域判据：
+     * 服务端声明的候选排在磁盘实测的前面。 */
+    const out = uniqueSorted(union(specOpts ?? [], localOpts));
+    return out.length ? out : undefined;
   };
 
   /**
@@ -128,7 +127,7 @@ export function createObjectInfoResolvers(): {
   ): Promise<string[] | undefined> => {
     const oi = await ensureObjectInfo();
     if (!oi) return undefined;
-    const merged = new Set<string>();
+    const declared: string[] = [];
     let found = false;
     for (const def of Object.values(oi)) {
       const inp = def.input;
@@ -137,16 +136,15 @@ export function createObjectInfoResolvers(): {
       const opts = comboOptionsFromSpec(spec);
       if (opts) {
         found = true;
-        for (const o of opts) merged.add(o);
+        declared.push(...opts);
       }
     }
     if (!found) return undefined;
-    for (const o of await localModelFileNames(modelFoldersForField(field)))
-      merged.add(o);
-    const out = Array.from(merged);
-    return out.length
-      ? out.sort((left, right) => left.localeCompare(right))
-      : undefined;
+    /* 同上一处：并集 + 去重 + 字典序走 `~/lib/ordered-set`。 */
+    const out = uniqueSorted(
+      union(declared, await localModelFileNames(modelFoldersForField(field))),
+    );
+    return out.length ? out : undefined;
   };
 
   /** STRING 输入是否声明了 `{"multiline": true}`（多行文本框的类型事实）。

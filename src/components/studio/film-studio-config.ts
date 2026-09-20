@@ -4,6 +4,7 @@
 // 视觉常量也可以被工具/测试直接引用。
 
 import { FILM_COMPOSE_SIZE } from "~/lib/film/film-size";
+import { fixed } from "~/lib/number-format";
 
 /* ── 类型（与后端 Prisma 行的 UI 视图一致，保持对外 API 不变）── */
 
@@ -87,7 +88,8 @@ export const FILM_POLL_MS = 3000;
  * 的行为：本轮战役只搬不改（§17.6），视觉/文案差异另开 PR 处理。
  */
 export function formatShotDuration(seconds: number): string {
-  return seconds.toFixed(1).padStart(5, "0");
+  /* 「按一位小数写数」走 `~/lib/number-format`（规范 16 §16.2.4.54）。 */
+  return (fixed(seconds, 1) ?? "0.0").padStart(5, "0");
 }
 
 /* ── 时间轴样例数据（视觉设计参考）── */

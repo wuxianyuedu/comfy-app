@@ -273,6 +273,20 @@ const DOMAIN_EXEMPT = new Set([
    * 字符」本来就该有各自的名字 —— 进任何子域都会让其余侧反向依赖它。
    * 与 `text-clamp` / `is-record` 同款：顶层单例。 */
   "src/lib/safe-name.ts",
+  /* 「把一个数字按某档精度写成字符串」的唯一出口（ISSUE #672）：
+   * 视图层（节点值单元格、画布设置滑块读数、影片时长、训练 loss 曲线、
+   * 用量测试耗时、上传体积提示）与 `src/lib` / `src/server`
+   *（`format-bytes` 的降档、ffmpeg 的 `-t` 与 fade 时刻、合成计划的时长）
+   * **都在用**，且两侧必须同一口径（视图按两位小数去尾零、落盘按两位小数
+   * 留尾零，同一个时长在两处长得不一样）。进任何子域都会让其余侧反向依赖它
+   * —— 与 `format-bytes` / `display-value` / `progress` 同款：顶层单例。 */
+  "src/lib/number-format.ts",
+  /* 「把一组值去重 / 合并成有序集合」的唯一出口（ISSUE #672）：
+   * `src/lib/core`（模型文件名清单）、`src/lib/comfyui`（COMBO 候选并集、
+   * 本地工作流按绝对路径去重）、`src/lib/media`（素材排序）**都在用**，
+   * 且「去重键是什么」「排不排序」是跨域的同一类判据。进任何子域都会让
+   * 其余侧反向依赖它 —— 顶层单例。 */
+  "src/lib/ordered-set.ts",
   /* 「一个异步动作重试几次、退避多久」的唯一出口（ISSUE #672）：
    * `src/lib/comfyui`（WS 重连 / history 轮询）、`src/lib/drizzle-studio`、
    * `src/app/api`（Ollama 启停）、`src/app/(main)/settings` 的 hook **都在用**，

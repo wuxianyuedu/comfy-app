@@ -4,6 +4,7 @@
  */
 import "server-only";
 
+import { uniqueSorted } from "~/lib/ordered-set";
 import { db } from "~/lib/db";
 import {
   model,
@@ -82,9 +83,8 @@ export class ModelRepository extends DrizzleRepository<Model> {
       .select({ fileName: model.fileName })
       .from(model)
       .where(and(eq(model.isAvailable, true), inArray(model.folder, folders)));
-    return Array.from(new Set(rows.map((r) => r.fileName))).sort((a, b) =>
-      a.localeCompare(b),
-    );
+    /* 「去重 + 按当前区域设置升序」走 `~/lib/ordered-set`（规范 16 §16.2.4.55）。 */
+    return uniqueSorted(rows.map((r) => r.fileName));
   }
 
   async countsByFolder(): Promise<Record<string, number>> {

@@ -12,6 +12,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
+import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { extractMediaUrl } from "~/lib/workshop/api-channel-shared";
 import {
   buildVideoPollUrls,
@@ -53,8 +54,13 @@ export async function saveMediaToLocalTemp(
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const fileName = `usage-${kind}-${stamp}.${ext}`;
     const dest = path.join(dir, fileName);
-    if (url.startsWith("data:")) {
-      const base64 = url.includes(",") ? (url.split(",")[1] ?? "") : "";
+    if (isInlineMedia(url)) {
+      /* 「怎么取 data URL 的 base64 载荷」只有一处定义
+       *（`~/lib/media/data-url`，规范 16 §16.2.4.56）。
+       * 收口前这里是 `url.split(",")[1] ?? ""` —— 缺逗号时写成**空串**，
+       * 于是写一个 0 字节文件冒充产物（调用方拿到非 null 路径）。 */
+      const base64 = base64PayloadOf(url);
+      if (base64 === null) throw new Error("data URL 格式无效");
       await fs.writeFile(dest, Buffer.from(base64, "base64"));
     } else {
       const res = await fetch(url, {

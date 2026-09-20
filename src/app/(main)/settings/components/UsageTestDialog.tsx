@@ -31,6 +31,7 @@ import { Input } from "~/components/ui/input";
 
 import { FieldImagePreview } from "./SettingsPrimitives";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { fixed } from "~/lib/number-format";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 import type {
   RemoteModelDialogs,
@@ -475,7 +476,7 @@ function UsageTestResultPanel({
             <p className="bg-success/10 text-success-strong mb-2 rounded-lg px-3 py-2 text-xs">
               {result.detail}
               {result.elapsedMs != null &&
-                ` · 耗时 ${(result.elapsedMs / 1000).toFixed(1)}s`}
+                ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
             </p>
             {result.chatText && (
               <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">

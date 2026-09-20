@@ -3,6 +3,7 @@ import React from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { downloadJson } from "~/lib/browser-io";
+import { fixed } from "~/lib/number-format";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { FormField } from "~/components/ui/form-field";
@@ -138,7 +139,8 @@ export function FinalComposer({
       project: title,
       exportedAt: new Date().toISOString(),
       totalShots: timeline.length,
-      totalDurationSec: Number(totalDuration.toFixed(1)),
+      /* 「按一位小数写数」走 `~/lib/number-format`（规范 16 §16.2.4.54）。 */
+      totalDurationSec: Number(fixed(totalDuration, 1) ?? "0"),
       timeline: timeline.map((entry, i) => ({
         order: i + 1,
         shotId: entry.shot.id,

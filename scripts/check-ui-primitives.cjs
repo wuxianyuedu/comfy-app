@@ -356,6 +356,13 @@ const LIB_SCANNED_RULES = new Set([
   "P47",
   "P48",
   "P49",
+  /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：数字精度格式化 /
+   * 去重合并 / data URL —— 三条的落点**都在 `src/lib` / `src/server` 里
+   * 出现**（数字精度在 `format-bytes` 与 ffmpeg 编排、去重合并在
+   * `core` 与 `comfyui`、data URL 在 `lib/workshop` 与 `server/workshop`）。 */
+  "P50",
+  "P51",
+  "P52",
 ]);
 
 const SCAN_DIRS = [
@@ -426,6 +433,10 @@ const UI_ALSO_SCANNED = new Set([
    * 消费点无从校验。P49 不需要（`ui/` 里没有文件名安全化）。 */
   "P47",
   "P48",
+  /* P50 在被 `ui/` 里用了（`ui/number-field` 的小数位格式化、
+   * `ui/range-slider` 的读数）—— 与 P40/P47 同款：整体跳过会让出口的
+   * 消费点无从校验。P51 / P52 不需要（`ui/` 里没有去重与 data URL）。 */
+  "P50",
 ]);
 
 const HOOKS_ALSO_SCANNED = new Set([
@@ -466,6 +477,13 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P47",
   "P48",
   "P49",
+  /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：
+   *   · **P50**（数字精度）—— 逻辑层里的落点本来就有
+   *     （`use-workflow-import` 的体积提示、设置页 hook 的耗时文案）；
+   *   · **P51**（去重合并）—— 「去重键是什么」在逻辑层同样成立；
+   *   · **P52** 不在此列：它的落点全在 lib / server（没有 hooks 里的）。 */
+  "P50",
+  "P51",
 ]);
 
 /**
@@ -557,6 +575,29 @@ const EXEMPT_FILES = {
       re: /^src\/lib\/safe-name\.ts$/,
       reason:
         "出口自身的实现（那两条 `replace` 就在这里；本判据数的是**别处**又写了一遍）。",
+    },
+  ],
+  P50: [
+    {
+      re: /^src\/lib\/number-format\.ts$/,
+      reason:
+        "出口自身的实现（`fixed` 的 `toFixed` 就在这里；本判据数的是**别处**又写了一遍）。",
+    },
+  ],
+  P51: [
+    {
+      re: /^src\/lib\/ordered-set\.ts$/,
+      reason:
+        "出口自身的实现（`compareText` 的 `localeCompare` 就在这里；" +
+        "本判据数的是**别处**又写了一遍）。",
+    },
+  ],
+  P52: [
+    {
+      re: /^src\/lib\/media\/data-url\.ts$/,
+      reason:
+        '出口自身的实现（`data:` 前缀与 `indexOf(",")` 就在这里；' +
+        "本判据数的是**别处**又写了一遍）。",
     },
   ],
   P42: [
@@ -1949,10 +1990,18 @@ const RULES = {
     count: (t) => {
       const t2 = stripComments(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/\b(?:mimeForExt|extForMime|extOfPath|stemOfPath|contentTypeForPath)\s*\(/.test(t2))
+      if (
+        /\b(?:mimeForExt|extForMime|extOfPath|stemOfPath|contentTypeForPath)\s*\(/.test(
+          t2,
+        )
+      )
         return 0;
-      const mimeToExt = t2.match(/"\w[\w.+-]*\/[-\w.]+"\s*:\s*"[a-z0-9]{2,5}"/g) || [];
-      const extToMime = t2.match(/"\.?[a-z0-9]{2,5}"\s*:\s*"(?:image|video|audio)\/[-\w.+]+/g) || [];
+      const mimeToExt =
+        t2.match(/"\w[\w.+-]*\/[-\w.]+"\s*:\s*"[a-z0-9]{2,5}"/g) || [];
+      const extToMime =
+        t2.match(
+          /"\.?[a-z0-9]{2,5}"\s*:\s*"(?:image|video|audio)\/[-\w.+]+/g,
+        ) || [];
       return mimeToExt.length + extToMime.length;
     },
   },
@@ -1972,7 +2021,7 @@ const RULES = {
    *   · `typeof e === "object" && e !== null && "message" in e` —— 这是
    *     「就地读一个字段」，用出口要写成 `asRecord(e)?.message` 再判类型，
    *     反而多一层（`error-message.ts` / `repository-user.ts` 属此类）；
-   *   · `if (typeof body !== "object" || body === null) return null` ——
+   *   · 取反早退守卫（`if (typeof body !== "object" || body === null) return null`）——
    *     取反早退的**守卫**，收窄后立刻用掉，没有「视图」这回事
    *     （`api-error.ts` / `comfy-readiness-client.ts` 属此类）。
    *   第一版判据把这两种一起算进来，实测报出 **24 处**，其中一半是上面两种 ——
@@ -2016,9 +2065,111 @@ const RULES = {
     count: (t) => {
       const t2 = stripComments(t);
       if (/\b(?:safeFileNameSegment|safeDisplayName)\s*\(/.test(t2)) return 0;
+      return (t2.match(/replace\(\/\[\^[^\]]*\]\+?\/g, *"_"\)/g) || []).length;
+    },
+  },
+
+  /* ── P50「把一个数字按某档精度写成字符串」（硬闸，§16.2.4.54）──────────
+   * 全库 26 处 `toFixed(`，四派写法都编译、都运行、类型都对，差别只在
+   * **几个语义决定**上：小数位从哪来、末尾的零要不要留、整数要不要也进
+   * 格式化、大数值要不要绕开。还有一处更隐蔽的
+   * `(Math.round(v * 100) / 100).toFixed(2)` —— **两层舍入**。
+   *
+   * 判据锚 `toFixed(` **这个 API 本身**：它是本条账唯一的签名
+   *（`Math.round(v * 100) / 100` 那类写法里也必然有一个 `toFixed`）。
+   * 不数 `Math.round(` 或 `padStart(` —— 那些是别的账（像素取整 / 补零），
+   * 数进来会逼人改坏代码。
+   *
+   * 出口：`~/lib/number-format` 的 `fixed` / `trimmed` / `trimFixed` /
+   * `alphaText`。
+   */
+  P50: {
+    label:
+      "视图 / 逻辑 / 服务端里自写数字精度格式化（应使用 ~/lib/number-format）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/number-format"/.test(t2)) return 0;
+      return (t2.match(/\.toFixed\(/g) || []).length;
+    },
+  },
+
+  /* ── P51「把一组值去重 / 合并成有序集合」（硬闸，§16.2.4.55）────────────
+   * `[...new Set(xs)]` 与 `Array.from(new Set(xs))` 混用，而比选型更要紧的
+   * 是**排序口径也不一**（`localeCompare` 与手写 `for` 循环挑字段做键）。
+   *
+   * 判据锚两处**形态**，两个条件同时成立：
+   *   ① `.sort((…) => …localeCompare(…)` —— 手写「按当前区域设置排序」。
+   *      不数不带比较器的 `.sort()`（按字符串码位排是**另一个判据**，
+   *      合法且另有所指），也不数数值比较器；
+   *   ② 手写按字段去重（`const X = new Set(); … for (…) { if (X.has(k)) continue; X.add(k); … }`）
+   *      —— **手写按字段去重**。这一条必须与 ① 同时成立，否则会把
+   *      「Set 当索引用」（`seen` 做已读标记、邻接表 `incoming[id] = new Set()`）
+   *      一起算进来 —— 那些**不是**去重集合，数进来会逼人改坏代码。
+   *
+   * 出口：`~/lib/ordered-set` 的 `unique` / `uniqueSorted` / `uniqueBy` /
+   * `union` / `compareText`。
+   */
+  P51: {
+    label:
+      "视图 / 逻辑 / 服务端里自写去重合并 / 区域设置排序（应使用 ~/lib/ordered-set）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/ordered-set"/.test(t2)) return 0;
       return (
-        t2.match(/replace\(\/\[\^[^\]]*\]\+?\/g, *"_"\)/g) || []
+        t2.match(
+          /\.sort\(\s*\(\s*\w+\s*,\s*\w+\s*\)\s*=>[^;\n]{0,80}localeCompare\(/g,
+        ) || []
       ).length;
+    },
+  },
+
+  /* ── P52「拼一个 data: URL / 读回它的载荷」（硬闸，§16.2.4.56）──────────
+   * `data:${mime};base64,${…}` 手拼 3 处，读回的一侧 6 处各写一遍
+   * 「找第一个逗号、后面就是 base64」。而写法**互相矛盾**：
+   * `slice(indexOf(",") + 1)` 在缺逗号时会把**整个 data URL** 当 base64
+   * 交给解码器（它跳过非法字符）→ 静默解出垃圾字节。
+   *
+   * 判据取**三条只在本条账出现的形态**：
+   *   ① 字面量 `data:${…};base64,${…}`（模板串拼接）；
+   *   ② `indexOf(",")` —— 精确到「从这里切 base64 载荷」这个动作；
+   *   ③ `split(",")` **且同文件出现 `startsWith("data:")`** ——
+   *      **更差的那一种写法**（至少判了有没有逗号，但把整个串 split 一遍）。
+   *      ⚠️ 这一条必须一起数：与 P13「只数合规的那种、漏掉更差的那种」
+   *      同款 —— 判据漏掉更差的写法，被拦下的就永远只是合规者
+   *      （`video-task-util` 的 HEAD 版本正是 `split(",")` 那一档）。
+   *      但 `split(",")` 在本仓库另有 CSV 解析的用法（`.split(",")`
+   *      切 ANSI 分段 / 切节点白名单），故**两个条件同时成立**才计：
+   *      `data:` 前缀与它同现，说明这个文件确实在处理 data URL。
+   * **刻意不数 `startsWith("data:")`** —— SSE 帧前缀也是这个写法
+   *（`lib/llm/browser` / `lib/llm/server` 的 `data: {...}`），
+   * 数进来会把**流式解析**误判成本条账（那是另一件事）。
+   * 代价是 `character-portrait-client` 的 HEAD 版本（只用了
+   * `startsWith("data:")` 作判据）不会被本判据数到 —— 它的**实质**是
+   * 「这是不是内联 media」，已由 `isInlineMedia` 收口，出口侧契约
+   *（`tests/ui-primitives-coverage.test.ts`）从另一侧钉住。
+   *
+   * 出口：`~/lib/media/data-url` 的 `isDataUrl` / `isInlineMedia` /
+   * `toDataUrl` / `wrapBase64` / `toBase64` / `parseDataUrl` 与
+   * `base64PayloadOf` 七个（见规范 §16.2.4.56）。
+   */
+  P52: {
+    label:
+      "视图 / 逻辑 / 服务端里自拼或自切 data URL（应使用 ~/lib/media/data-url）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/media\/data-url"/.test(t2)) return 0;
+      const writes = t2.match(/data:\$\{[^}]{0,40}\};base64,\$\{/g) || [];
+      const cuts = t2.match(/indexOf\(",\"\)/g) || [];
+      /* ③ 两个条件同时成立才计：`split(",")` 与 `data:` 前缀同现
+       *（`split(",")` 在本仓库另有 CSV 解析的用法）。 */
+      const splitCuts =
+        t2.includes('startsWith("data:")') || t2.includes("data:${")
+          ? t2.match(/split\(",\"\)/g) || []
+          : [];
+      return writes.length + cuts.length + splitCuts.length;
     },
   },
 };
@@ -2080,6 +2231,16 @@ const HARD_GATE_RULES = new Set([
   "P47",
   "P48",
   "P49",
+  /* 本批三条（§16.2.4.54 ~ §16.2.4.56）：
+   *   · **P50**（数字精度）—— 「同一个值在两个面板长得不一样」在浏览器侧
+   *     同样成立（滑块读数 vs 节点值单元格）；
+   *   · **P51**（去重合并）—— 「排不排序 / 按哪个字段去重」在视图层
+   *     同样会漂移（画布 chip 的候选列表 vs 下拉框）；
+   *   · **P52**（data URL）—— 读取侧的 `character-portrait-client`
+   *     就跑在浏览器里。 */
+  "P50",
+  "P51",
+  "P52",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -2291,7 +2452,11 @@ function main() {
   P33 自写唯一 id / P34 自写报错建议词表 / P35 亲手拼画布节点 /
   P36 手写树的缩进与子行容器 / P37 自写「某一条在忙」的执行态 /
   P38 手写元素几何的算术 / P39 裸写「等一帧再做事」的调度 /
-  P40 裸调 copyText 不接反馈出口 / P41 自写入参收窄与 isRecord，须为 0）：${hardGateHits(now).length} 处`,
+  P40 裸调 copyText 不接反馈出口 / P41 自写入参收窄与 isRecord /
+  P42 手拼错误文案的动作前缀 / P43 手写复制失败提示 / P44 自写文本截断 /
+  P45 自写指数退避 / P46 手拼日期串 / P47 自写扩展名⇄MIME 表 /
+  P48 自写宽松对象视图 / P49 自写文件名安全化 /
+  P50 自写数字精度格式化 / P51 自写去重合并 / P52 自拼自切 data URL，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -2306,6 +2471,9 @@ function main() {
         "  自绘模态外壳 → ui/dialog 的 Dialog / DialogContent（居中卡片）或 ui/sheet 的 SheetContent（抽屉）；\n" +
         "  裸写 <img> / <video> → ~/components/ui/media-thumbnail 的 MediaThumbnail（失败兜底收在出口里）；\n" +
         "  媒体拖拽源 → ~/components/ui/media-drag-source 的 useMediaDragSource；全局快捷键 → ~/components/ui/use-hotkey 的 useHotkey；\n" +
+        "  数字按精度成串 → ~/lib/number-format 的 fixed / trimmed / trimFixed / alphaText；\n" +
+        "  去重合并与区域设置排序 → ~/lib/ordered-set 的 unique / uniqueSorted / uniqueBy / union / compareText；\n" +
+        "  拼 data URL / 取回它的载荷 → ~/lib/media/data-url 的 toDataUrl / wrapBase64 / parseDataUrl / base64PayloadOf；\n" +
         "  异步动作的反馈样板 → ~/lib/async-action 的 runAsyncAction（失败文案走 errorMessage）；\n" +
         "  读媒体自然尺寸 → ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio / isPortraitMedia；\n" +
         "  手拼查询串 → ~/lib/query-string 的 buildQueryString / withQuery（媒体预览地址走 ~/lib/media/media-url）；\n" +

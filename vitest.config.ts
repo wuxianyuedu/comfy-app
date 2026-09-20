@@ -99,6 +99,11 @@ export default defineConfig({
          * `include` 会让门槛静默失效。 */
         "src/components/ui/image-viewer.tsx",
         "src/components/ui/use-image-zoom.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.54 ~ §16.2.4.56）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/lib/number-format.ts",
+        "src/lib/ordered-set.ts",
+        "src/lib/media/data-url.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -510,6 +515,31 @@ export default defineConfig({
         /* 「把文本变成安全的文件名片段」的唯一出口（§16.2.4.53，P49 的对面）：
          * 两档的差异（保留 / 不保留 CJK）就是这条账的全部内容，必须 100%。 */
         "src/lib/safe-name.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 本批三条新出口（规范 16 §16.2.4.54 ~ §16.2.4.56），门槛按实测值设满档：
+         *   · P50 对面 `~/lib/number-format` —— 四档各有边界（非有限数 /
+         *     负零 / 整数 / 大小数位夹取），用例逐条钉住；
+         *   · P51 对面 `~/lib/ordered-set` —— 「首次出现 vs 字典序」
+         *     与「键为空值算不算身份」都是判据，逐条钉住；
+         *   · P52 对面 `~/lib/media/data-url` —— 畸形输入（缺逗号 /
+         *     非 base64 形态 / 空载荷）与浏览器侧分块编码都验到。 */
+        "src/lib/number-format.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/ordered-set.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/media/data-url.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

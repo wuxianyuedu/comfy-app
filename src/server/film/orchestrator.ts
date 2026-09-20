@@ -31,6 +31,7 @@ import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import type { ProjectType } from "~/lib/workshop/types";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { fixed } from "~/lib/number-format";
 
 export type FilmStatus =
   "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
@@ -536,7 +537,7 @@ export async function composeFilm(id: string) {
         `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
         `pad=${W}:${H}:(${W}-iw)/2:(${H}-ih)/2,setsar=1,` +
         `fps=${fps},` +
-        `fade=t=in:st=0:d=0.3,fade=t=out:st=${fadeOut.toFixed(2)}:d=0.3`;
+        `fade=t=in:st=0:d=0.3,fade=t=out:st=${fixed(fadeOut, 2) ?? "0"}:d=0.3`;
 
       const srtPath = path.join(tmpDir, `seg_${i}.srt`);
       if (film.subtitleOn) {
@@ -569,7 +570,8 @@ export async function composeFilm(id: string) {
         "-b:a",
         "128k",
         "-t",
-        dur.toFixed(2),
+        /* ffmpeg 的 `-t` 与 fade 时刻按两位小数写（`~/lib/number-format`）。 */
+        fixed(dur, 2) ?? "0",
         segOut,
       ];
       let res = await runFFmpeg(args, tmpDir);
@@ -596,7 +598,7 @@ export async function composeFilm(id: string) {
           "-b:a",
           "128k",
           "-t",
-          dur.toFixed(2),
+          fixed(dur, 2) ?? "0",
           segOut,
         ];
         res = await runFFmpeg(args, tmpDir);
