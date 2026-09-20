@@ -36,7 +36,6 @@ import {
   CHAT_TIMEOUT_MS,
   MEDIA_TIMEOUT_MS,
   USAGE_TEST_KINDS,
-  isRecord,
   strField,
   firstNonEmpty,
   normalizeEndpointPath,
@@ -107,14 +106,6 @@ afterEach(() => {
 });
 
 describe("字段读取助手", () => {
-  it("isRecord 排除 null 与数组以外的基本类型", () => {
-    expect(isRecord({})).toBe(true);
-    expect(isRecord([])).toBe(true); // 数组是对象：调用方另行判 Array.isArray
-    expect(isRecord(null)).toBe(false);
-    expect(isRecord("x")).toBe(false);
-    expect(isRecord(1)).toBe(false);
-  });
-
   it("strField 只认字符串并 trim，其余给空串", () => {
     expect(strField({ a: "  x  " }, "a")).toBe("x");
     expect(strField({ a: 1 }, "a")).toBe("");

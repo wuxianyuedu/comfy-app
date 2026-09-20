@@ -14,14 +14,12 @@ import {
   type LLMProviderType,
   type TaskType,
 } from "~/lib/llm/types";
+import { isRecord } from "~/lib/is-record";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
 
 const BodySchema = {
   parse(body: unknown): {
@@ -88,9 +86,13 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
+  /* 读体那一步走唯一出口（规范 16 §16.2.4.44）；**字段级**校验仍留给
+   * `BodySchema` —— 它绑着 `LLMRequestOptions` 的语义，是这一域的判据。 */
+  const body = await readJsonRecord(req);
+  if (isErrorResponse(body)) return body;
+
   let parsed: Awaited<ReturnType<typeof BodySchema.parse>>;
   try {
-    const body: unknown = await req.json();
     parsed = BodySchema.parse(body);
   } catch (e) {
     return NextResponse.json(apiErrorBody(e, "请求格式错误"), { status: 400 });

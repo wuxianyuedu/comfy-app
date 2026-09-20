@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 import { Popover, PopoverContent } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { useFlashState } from "~/components/ui/use-flash-state";
-import { copyText } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { anchorRectToVirtualElement } from "~/lib/dom-rect";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
@@ -130,13 +130,16 @@ export function NodeJsonPopover({
   );
 
   const copied = useFlashState();
-  const handleCopy = () => {
-    /* 失败时静默：用户仍可手动选中复制。 */
-    void copyText(pretty).then((ok) => {
-      if (!ok) return;
+  /* 成败都改口（规范 16 §16.2.4.43）：此前失败时静默，按钮一动不动 ——
+   * 用户看到的是「点了没反应」，而真正的原因是剪贴板不可用。 */
+  const [copyFailed, setCopyFailed] = useState(false);
+  const handleCopy = useCopyFeedback({
+    onSuccess: () => {
+      setCopyFailed(false);
       copied.flash();
-    });
-  };
+    },
+    onFailure: () => setCopyFailed(true),
+  });
   const accent =
     request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
   /** 带透明度的 accent —— `var()` 不能拼 hex alpha，走 color-mix。 */
@@ -258,8 +261,12 @@ export function NodeJsonPopover({
             <Button
               variant="outline"
               size="xs"
-              onClick={handleCopy}
-              title="复制 JSON 到剪贴板"
+              onClick={() => handleCopy(pretty)}
+              title={
+                copyFailed
+                  ? "复制失败：剪贴板不可用，请手动选中后复制"
+                  : "复制 JSON 到剪贴板"
+              }
               style={{
                 background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
                 color: copied.on ? accent : "var(--color-ink)",
@@ -267,7 +274,7 @@ export function NodeJsonPopover({
               }}
               className="font-normal"
             >
-              {copied.on ? "✓ 已复制" : "⧉ 复制"}
+              {copyFailed ? "复制失败" : copied.on ? "✓ 已复制" : "⧉ 复制"}
             </Button>
             <Button
               variant="outline"

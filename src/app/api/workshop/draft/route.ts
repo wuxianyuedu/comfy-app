@@ -12,7 +12,7 @@ import {
   parseDraftDto,
   draftHasContent,
 } from "~/lib/workshop/draft-sync-shared";
-import { isRecord } from "~/lib/workshop/api-channel-shared";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import {
   deleteDraft,
   getDraft,
@@ -59,15 +59,8 @@ export async function PUT(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) return UNAUTHORIZED();
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
-  }
-  if (!isRecord(body)) {
-    return NextResponse.json({ error: "请求体必须是对象" }, { status: 400 });
-  }
+  const body = await readJsonRecord(req);
+  if (isErrorResponse(body)) return body;
   const project =
     typeof body.project === "string" && body.project ? body.project : null;
   if (!project) {

@@ -7,7 +7,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 
-import { isRecord } from "./api-channel-shared";
+import { isRecord } from "~/lib/is-record";
 
 const GENERATED_DIR = path.join(process.cwd(), "public", "generated");
 const MAX_BYTES = 24 * 1024 * 1024;

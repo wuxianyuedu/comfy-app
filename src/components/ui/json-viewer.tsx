@@ -32,7 +32,8 @@ import {
 import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
-import { copyText } from "~/lib/browser-io";
+import { onNextFrame } from "~/lib/next-frame";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { Icon } from "~/components/ui/icon";
 
@@ -288,7 +289,7 @@ export function JsonViewer({
     ensureHighlightCss();
     if (!bodyRef.current) return;
     // 折叠 state 引发的 DOM 变化先 settle, 再扫
-    requestAnimationFrame(() => {
+    return onNextFrame(() => {
       if (!bodyRef.current) return;
       applyHighlights(bodyRef.current, hits, hitIndex, query.trim());
     });
@@ -297,14 +298,13 @@ export function JsonViewer({
   // ── active hit 居中滚动 ──
   useEffect(() => {
     if (!bodyRef.current || hits.length === 0) return;
-    const raf = requestAnimationFrame(() => {
+    return onNextFrame(() => {
       const el = bodyRef.current?.querySelector(
         "mark.jv-hit-sub[data-jv-active-hit]",
       ) as HTMLElement | null;
       if (!el) return;
       el.scrollIntoView({ block: "center", behavior: "smooth" });
     });
-    return () => cancelAnimationFrame(raf);
   }, [hitIndex, hits]);
 
   // ── ⌘/Ctrl+F 快捷键 ──
@@ -343,12 +343,16 @@ export function JsonViewer({
   };
 
   // ── 拷贝 ──
+  /* 成败都改口（规范 16 §16.2.4.43）：收口前这里只判成功，失败时按钮一动不动。 */
   const copied = useFlashState();
-  const copy = async () => {
-    if (await copyText(JSON.stringify(data, null, 2))) {
+  const [copyFailed, setCopyFailed] = useState(false);
+  const copy = useCopyFeedback({
+    onSuccess: () => {
+      setCopyFailed(false);
       copied.flash();
-    }
-  };
+    },
+    onFailure: () => setCopyFailed(true),
+  });
 
   // ── 渲染 ──
   // collapseObjectsAfterLength: initialCollapsedDepth=0 → 不折叠, 否则按深度折叠
@@ -364,11 +368,15 @@ export function JsonViewer({
         <Button
           variant="outline"
           size="xs"
-          onClick={copy}
+          onClick={() => copy(JSON.stringify(data, null, 2))}
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright bg-transparent"
-          title="把当前 JSON 复制到剪贴板"
+          title={
+            copyFailed
+              ? "复制失败：剪贴板不可用，请手动选中后复制"
+              : "把当前 JSON 复制到剪贴板"
+          }
         >
-          {copied.on ? "已复制" : "复制"}
+          {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
         </Button>
       </div>
 

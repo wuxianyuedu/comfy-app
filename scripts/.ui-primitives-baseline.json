@@ -4,10 +4,7 @@
   "rules": {
     "P1": "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
     "P2": "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
-    "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
-    "P27": "自写「try/catch + 反馈通道(errorMessage)」样板（应使用 ~/lib/async-action 的 runAsyncAction）",
-    "P28": "视图里自己读媒体的自然尺寸（应使用 ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio）",
-    "P29": "手拼查询串（应使用 ~/lib/query-string 的 buildQueryString / withQuery）"
+    "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）"
   },
   "total": 0,
   "files": {}

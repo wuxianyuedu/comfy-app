@@ -73,6 +73,28 @@ export class AuthError extends AppError {
   }
 }
 
+/**
+ * 入参校验失败 → 400。
+ *
+ * 缺席了很久的具名类：规范 10 §10.9 的对照表**一直**写着「入参校验失败 →
+ * `errorResponse(new ValidationError("..."))`」，而本文件当年把九个状态码子类
+ * 一并删掉之后，这条就只剩文档、没有实现 —— 于是各 REST 路由又回到手写
+ * `NextResponse.json({ error: "请求格式错误" }, { status: 400 })`（**信封形状
+ * 与其余错误不一致**：那里是 `{ error: { code, message } }`）。
+ *
+ * 第一个真实调用方是 `~/server/lib/request-body` 的 `readJsonRecord`
+ *（规范 16 §16.2.4.44 的入参收窄出口）—— 按本文件开头的裁决，这时才值得立类。
+ */
+export class ValidationError extends AppError {
+  constructor(
+    message = "请求参数不合法",
+    code = "validation.invalid",
+    details?: unknown,
+  ) {
+    super(message, code, 400, details);
+  }
+}
+
 /** 资源不存在 → 404。 */
 export class NotFoundError extends AppError {
   constructor(message = "资源不存在", code = "not_found", details?: unknown) {

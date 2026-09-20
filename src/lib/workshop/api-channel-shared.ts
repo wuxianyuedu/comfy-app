@@ -7,6 +7,8 @@
 // 全是纯函数 —— 客户端组件导入它是安全的。
 
 /* 某个 API 通道服务哪个生成阶段。 */
+import { isRecord } from "~/lib/is-record";
+
 export type ApiChannelKind = "image" | "video";
 
 /* 浏览器看到的「每通道配置」（已脱敏；apiKey 从不离开服务端）。 */
@@ -38,11 +40,6 @@ export interface ApiChannelStored {
   path: string;
   model: string;
   apiKey: string;
-}
-
-/* 把 unknown 收窄成纯对象（中继层唯一需要的守卫）。 */
-export function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
 }
 
 const MAX_EXTRACT_DEPTH = 8;
