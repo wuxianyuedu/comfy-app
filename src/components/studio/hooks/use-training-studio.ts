@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { uploadDatasetImage } from "~/lib/media/dataset-upload-client";
-import { errorMessage } from "~/lib/error-message";
+import { runAsyncAction } from "~/lib/async-action";
 import { vanillaApi } from "~/trpc/vanilla";
 
 import {
@@ -138,16 +138,23 @@ export function useTrainingStudio(): TrainingStudioController {
     if (list.length === 0) return;
     setUploading(true);
     setError(null);
-    try {
-      for (const file of list) {
-        const name = await uploadDatasetImage(file);
-        setDataset((prev) => [...prev, { name, caption: "" }]);
-      }
-    } catch (e) {
-      setError(errorMessage(e, "上传失败"));
-    } finally {
-      setUploading(false);
-    }
+    /* 行内错误条（`setError`）是这块唯一的反馈通道；成功静默
+     *（缩略图出现即结果）。出口给「失败文案走 `errorMessage`」这一半。 */
+    await runAsyncAction(
+      async () => {
+        for (const file of list) {
+          const name = await uploadDatasetImage(file);
+          setDataset((prev) => [...prev, { name, caption: "" }]);
+        }
+      },
+      {
+        report: (kind, detail) => {
+          if (kind === "err") setError(detail);
+        },
+        failureText: "上传失败",
+      },
+    );
+    setUploading(false);
   }, []);
 
   const fillBlank = useCallback(() => {
@@ -184,37 +191,42 @@ export function useTrainingStudio(): TrainingStudioController {
     setFieldErrors({});
 
     setSubmitting(true);
-    try {
-      await vanillaApi.train.create.mutate({
-        name: payload.name.trim(),
-        baseModel: payload.baseModel,
-        triggerWord: payload.triggerWord.trim(),
-        classWord: payload.classWord,
-        datasetImages: payload.datasetImages,
-        resolution,
-        steps,
-        batchSize,
-        learningRate,
-        rankDim,
-        networkAlpha,
-        optimizer,
-        scheduler,
-        seed,
-      });
-      // 提交成功后重置表单（原组件行为：保留底模、分辨率等配置，只清名称/触发词/数据集）
-      setName("");
-      setTriggerWord("");
-      setClassWord("");
-      setDataset([]);
-      setSteps(DEFAULTS.steps);
-      setRankDim(DEFAULTS.rankDim);
-      setNetworkAlpha(DEFAULTS.networkAlpha);
-      loadJobs();
-    } catch (e) {
-      setError(errorMessage(e, "创建失败"));
-    } finally {
-      setSubmitting(false);
-    }
+    await runAsyncAction(
+      async () => {
+        await vanillaApi.train.create.mutate({
+          name: payload.name.trim(),
+          baseModel: payload.baseModel,
+          triggerWord: payload.triggerWord.trim(),
+          classWord: payload.classWord,
+          datasetImages: payload.datasetImages,
+          resolution,
+          steps,
+          batchSize,
+          learningRate,
+          rankDim,
+          networkAlpha,
+          optimizer,
+          scheduler,
+          seed,
+        });
+        // 提交成功后重置表单（原组件行为：保留底模、分辨率等配置，只清名称/触发词/数据集）
+        setName("");
+        setTriggerWord("");
+        setClassWord("");
+        setDataset([]);
+        setSteps(DEFAULTS.steps);
+        setRankDim(DEFAULTS.rankDim);
+        setNetworkAlpha(DEFAULTS.networkAlpha);
+        loadJobs();
+      },
+      {
+        report: (kind, detail) => {
+          if (kind === "err") setError(detail);
+        },
+        failureText: "创建失败",
+      },
+    );
+    setSubmitting(false);
   }, [
     name,
     baseModel,
@@ -235,12 +247,18 @@ export function useTrainingStudio(): TrainingStudioController {
 
   const cancelJob = useCallback(
     async (id: string) => {
-      try {
-        await vanillaApi.train.cancel.mutate({ id });
-        loadJobs();
-      } catch (e) {
-        setError(errorMessage(e, "取消失败"));
-      }
+      await runAsyncAction(
+        async () => {
+          await vanillaApi.train.cancel.mutate({ id });
+          loadJobs();
+        },
+        {
+          report: (kind, detail) => {
+            if (kind === "err") setError(detail);
+          },
+          failureText: "取消失败",
+        },
+      );
     },
     [loadJobs],
   );

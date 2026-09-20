@@ -2,6 +2,8 @@
 // 各生成会话（提取 / AI 拆镜 / 定妆照）的日志在追加进界面的同时异步发一份到
 // /api/workshop/logs 落盘。失败静默——执行日志是辅助通道，绝不能影响生成本身。
 
+import { withQuery } from "~/lib/query-string";
+
 import { isRecord } from "./api-channel-shared";
 import type { GenerationLogStage } from "./generation-log";
 
@@ -44,7 +46,7 @@ export async function fetchGenerationLogs(
   let res: Response;
   try {
     res = await fetch(
-      `${LOGS_ENDPOINT}?stage=${encodeURIComponent(stage)}&limit=${limit}`,
+      withQuery(LOGS_ENDPOINT, { stage, limit: limit || undefined }),
     );
   } catch {
     return [];

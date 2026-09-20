@@ -13,6 +13,7 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { XYPosition } from "@xyflow/react";
 import { makeNodeId } from "~/lib/project-canvas/canvas-helpers";
+import { runAsyncAction } from "~/lib/async-action";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import {
   defaultData,
@@ -54,31 +55,45 @@ export function useCanvasDrop({
         );
         return;
       }
-      try {
-        const name = await importOutputAsInput(url);
-        const kind: NodeKind = mediaType === "video" ? "movie" : "picture";
-        const center =
-          position ??
-          screenToFlowPosition({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          });
-        const node: CanvasNodeType = {
-          id: makeNodeId(),
-          type: "canvasNode",
-          position: center,
-          data: {
-            ...defaultData(kind),
-            mediaPath: name,
-            mediaName: displayName,
-            mediaKind: mediaType,
-          },
-        };
-        setNodes((nds) => [...nds, node]);
-        toast.success("已加入画布", displayName);
-      } catch (e: unknown) {
-        toast.error("加入画布失败", e instanceof Error ? e.message : undefined);
-      }
+      /* 反馈通道接成**两行** toast（标题 + 文件名）：收口前失败那一侧的
+       * 第二行是自己拼 `e instanceof Error ? e.message : undefined` ——
+       * 而 `errorMessage` 会把网络层原文翻译成人话（出口负责这一半）。
+       * 「成功带文件名、失败带原因」是调用处的表现层选择。 */
+      await runAsyncAction(
+        async () => {
+          const name = await importOutputAsInput(url);
+          const kind: NodeKind = mediaType === "video" ? "movie" : "picture";
+          const center =
+            position ??
+            screenToFlowPosition({
+              x: window.innerWidth / 2,
+              y: window.innerHeight / 2,
+            });
+          const node: CanvasNodeType = {
+            id: makeNodeId(),
+            type: "canvasNode",
+            position: center,
+            data: {
+              ...defaultData(kind),
+              mediaPath: name,
+              mediaName: displayName,
+              mediaKind: mediaType,
+            },
+          };
+          setNodes((nds) => [...nds, node]);
+          return true;
+        },
+        {
+          /* 失败侧的两行 toast：标题由调用处给，第二行是出口翻译过的
+           * 可读原因（`errorMessage` 的人话）。`failureText` 在这里只作为
+           * 「抛出的值取不到 message」时的兜底 —— 与标题同源。 */
+          report: (kind, detail) =>
+            kind === "ok"
+              ? toast.success("已加入画布", displayName)
+              : toast.error("加入画布失败", detail),
+          failureText: "加入画布失败",
+        },
+      );
     },
     [screenToFlowPosition, setNodes, toast],
   );

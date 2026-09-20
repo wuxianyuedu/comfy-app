@@ -11,6 +11,8 @@
  * failed」这类误导提示不再出现。不带 model 时回落全局远端连接。
  */
 
+import { withQuery } from "~/lib/query-string";
+
 export interface RemoteModelCatalog {
   ok: boolean;
   models: string[];
@@ -21,12 +23,18 @@ async function getModels(
   provider: "local" | "remote",
   model?: string,
 ): Promise<RemoteModelCatalog> {
-  const modelQ =
-    provider === "remote" && model ? `&model=${encodeURIComponent(model)}` : "";
   try {
-    const res = await fetch(`/api/llm/models?provider=${provider}${modelQ}`, {
-      signal: AbortSignal.timeout(8000),
-    });
+    /* `model` 只在远端探测时带上（见文件头），空值由出口省略整个键 ——
+     * 不再自己拼一个条件串再拼进模板（规范 16 §16.2.4.32）。 */
+    const res = await fetch(
+      withQuery("/api/llm/models", {
+        provider,
+        model: provider === "remote" ? model : undefined,
+      }),
+      {
+        signal: AbortSignal.timeout(8000),
+      },
+    );
     const json = (await res.json().catch(() => ({}))) as {
       ok?: unknown;
       models?: unknown;

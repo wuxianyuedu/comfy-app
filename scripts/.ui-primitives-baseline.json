@@ -1,10 +1,13 @@
 {
-  "generatedAt": "2026-09-18",
+  "generatedAt": "2026-09-20",
   "note": "视图层自实现 UI 基元的存量（规范 16 §16.2.3）。棘轮只许下降；新增请先改用 ui/ 基元，不要用 --update 放水。豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
   "rules": {
     "P1": "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
     "P2": "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
-    "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）"
+    "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
+    "P27": "自写「try/catch + 反馈通道(errorMessage)」样板（应使用 ~/lib/async-action 的 runAsyncAction）",
+    "P28": "视图里自己读媒体的自然尺寸（应使用 ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio）",
+    "P29": "手拼查询串（应使用 ~/lib/query-string 的 buildQueryString / withQuery）"
   },
   "total": 0,
   "files": {}

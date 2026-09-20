@@ -284,6 +284,18 @@ const DOMAIN_EXEMPT = new Set([
    * —— **九个文件**都在用它，横跨 `project-canvas` / `workflow` / `media` /
    * `workshop` / 视图层，且逻辑层与视图层必须同一口径。与 `file-io` 同款：顶层单例。 */
   "src/lib/browser-storage.ts",
+  /* 「把一次异步动作的结果接到反馈通道上」的唯一出口（ISSUE #672）：
+   * 设置页（12 个动作）、工作流库（8 个）、历史列表与详情、模型标签、
+   * 训练工作室、影片工作室、画布拖放、工坊对话、模型目录配置
+   * —— 横跨 `app/**` 与六个视图域，且「失败文案怎么归一」必须同一口径。
+   * 进任何子域都会让另一个域反向依赖它 —— 与 `browser-io` / `file-io` 同款。 */
+  "src/lib/async-action.ts",
+  /* 「一组值怎么写进查询串」的唯一出口（ISSUE #672）：`log` / `media` /
+   * `llm` / `workflow` / `workshop` / `project-canvas` 的六个网络客户端、
+   * 设置页与工作流编辑器的取数、以及登录页读回调目标**都在用它**。
+   * 编码与省略口径必须全库一致（手拼漏一处 `encodeURIComponent` 就是静默
+   * 打到另一个端点）—— 顶层单例。 */
+  "src/lib/query-string.ts",
 ]);
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */

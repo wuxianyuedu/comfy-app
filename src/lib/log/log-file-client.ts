@@ -7,6 +7,7 @@
  * `offset` 是**本次返回内容的起点**（服务端在需要重读整文件时会把它回落到 0）。
  */
 
+import { withQuery } from "~/lib/query-string";
 import type { LogSessionsPayload } from "./log-sessions";
 
 export interface FileLogSlice {
@@ -55,9 +56,15 @@ export async function fetchFileLogSlice(
   offset: number,
   bootId?: string,
 ): Promise<FileLogSlice | null> {
-  const boot = bootId ? `&bootId=${encodeURIComponent(bootId)}` : "";
   const res = await fetch(
-    `/api/logs/current?source=${sourceQuery(source)}&offset=${offset}${boot}`,
+    withQuery("/api/logs/current", {
+      source: sourceQuery(source),
+      /* `offset` 是**游标**：`0` 表示「从头上读」，是真实的值不是缺值
+       *（省略它服务端会按自己的默认游标回答，那是另一件事）。 */
+      offset,
+      /* 上一轮的服务端进程标识；没有时整个键省略。 */
+      bootId: bootId ?? undefined,
+    }),
   );
   if (!res.ok) return null;
   return (await res.json()) as FileLogSlice;
@@ -85,9 +92,10 @@ export async function fetchLogSessions(
   sessionId?: string | null,
 ): Promise<LogSessionsPayload | null> {
   try {
-    const query = new URLSearchParams({ source });
-    if (sessionId) query.set("session", sessionId);
-    const res = await fetch(`/api/logs/sessions?${query.toString()}`);
+    /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
+    const res = await fetch(
+      withQuery("/api/logs/sessions", { source, session: sessionId }),
+    );
     if (!res.ok) return null;
     return (await res.json()) as LogSessionsPayload;
   } catch {

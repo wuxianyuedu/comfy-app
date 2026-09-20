@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { errorMessage } from "~/lib/error-message";
+import { runAsyncAction } from "~/lib/async-action";
 import { api } from "~/trpc/react";
 
 import { type FolderConfigRow, splitFolders } from "../model-library-config";
@@ -89,11 +89,14 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   const runMutate = useCallback(
     async (fn: () => Promise<unknown>) => {
       setErr(null);
-      try {
-        await fn();
-      } catch (e) {
-        setErr(errorMessage(e, "网络错误"));
-      }
+      /* 反馈通道是这块行内错误条（`setErr`），成功静默（列表刷新即结果）。
+       * 出口负责「失败文案走 `errorMessage`」这一半（规范 16 §16.2.4.30）。 */
+      await runAsyncAction(fn, {
+        report: (kind, detail) => {
+          if (kind === "err") setErr(detail);
+        },
+        failureText: "网络错误",
+      });
       await load();
     },
     [load],
@@ -117,11 +120,12 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   const rescan = useCallback(async () => {
     setScanning(true);
     setErr(null);
-    try {
-      await syncMut.mutateAsync();
-    } catch (e) {
-      setErr(errorMessage(e, "扫描失败"));
-    }
+    await runAsyncAction(() => syncMut.mutateAsync(), {
+      report: (kind, detail) => {
+        if (kind === "err") setErr(detail);
+      },
+      failureText: "扫描失败",
+    });
     setScanning(false);
     await load();
   }, [load, syncMut]);
