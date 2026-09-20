@@ -10,7 +10,9 @@
  *     选「分辨率」时按尺寸表换算成「百万像素 + 倍数」（AspectMegapixelControl）。
  *
  * 「像素」大类下分「分辨率」与「百万像素」两个子类；「倍数」只在选中百万像素档
- * 时出现 —— 那一档的宽高由总像素预算与对齐倍数共同决定，分辨率档则由表给定。 */
+ * 时出现 —— 那一档的宽高由总像素预算与对齐倍数共同决定，分辨率档则由表给定。
+ * 百万像素在端口上是 FLOAT（连续量），所以那一组下面还有一条「自定义」步进器
+ * （`MegapixelStepper`）—— 档位之外能填 2.5 这类任意值。 */
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -22,12 +24,15 @@ import {
   DIM_CLARITY_PRESETS,
   DIM_RATIO_PRESETS,
   clarityKindOfLabel,
+  clarityPresetFor,
   dimsForRatio,
   normalizeAlignMultiple,
   pickClarityPreset,
 } from "../workflow-io";
 import {
   ALIGN_MULTIPLE_OPTIONS,
+  megapixelLabel,
+  megapixelsOf,
   sceneFromMode,
 } from "~/lib/media/size-presets";
 import {
@@ -37,6 +42,7 @@ import {
   type SegmentSection,
 } from "~/components/ui/segment-popover";
 import { SizePresetTableModal } from "./SizePresetTableModal";
+import { MegapixelStepper } from "./MegapixelStepper";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 import { Field } from "./StyleSwitcher";
 import { AspectMegapixelControl } from "./AspectMegapixelControl";
@@ -212,18 +218,27 @@ function DimensionSizeControl({
   const clarity = explicitClarity ?? derivedClarity;
   const clarityKind = clarityKindOfLabel(clarity);
 
+  /* 步进器的值：当前宽高的**实际总像素** —— W/H 形态下「百万像素」本来就是从
+   *  宽高推出来的那个量，所以起点与屏幕上看到的尺寸一致（选 1k 就是它的实际
+   *  0.8M，而不是从 1M 跳一下）。用户改它 → 按同一比例换总像素预算，宽高随之
+   *  吸附到倍数网格。 */
+  const currentMegapixels = useMemo(
+    () => megapixelsOf({ width: w0, height: h0 }),
+    [w0, h0],
+  );
+
   const applyPreset = useCallback(
     (rLabel: string, cLabel: string) => {
       const rp =
         DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ??
         DIM_RATIO_PRESETS[0];
-      const cp =
-        DIM_CLARITY_PRESETS.find((preset) => preset.label === cLabel) ??
-        DIM_CLARITY_PRESETS[0];
+      /* 含自由百万像素值（`"2.5M"`）：`clarityPresetFor` 认档位表之外的合法值，
+       *  直接用 `DIM_CLARITY_PRESETS.find` 会把用户填的 2.5 悄悄换成 1k。 */
+      const cp = clarityPresetFor(cLabel);
       /* 分辨率档查场景表；百万像素档把用户选的倍数带进去吸附宽高。 */
       const { width, height } = dimsForRatio(
         rp!.ratio,
-        cp!,
+        cp,
         alignMultiple,
         scene,
         table,
@@ -301,6 +316,18 @@ function DimensionSizeControl({
           subgroup: CLARITY_SUBGROUP_OF_KIND[preset.kind],
         })),
         onChange: (value) => applyPreset(ratio, value),
+        /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着「百万像素」
+         *  那一组渲染）。写出去的 label 与档位同形（"2.5M"），`applyPreset` 经
+         *  `clarityPresetFor` 认出它。 */
+        extra: (
+          <MegapixelStepper
+            value={currentMegapixels}
+            disabled={disabled}
+            onChange={(megapixels) =>
+              applyPreset(ratio, megapixelLabel(megapixels))
+            }
+          />
+        ),
       },
     ];
     /* 倍数只在选中「百万像素」时才有意义（分辨率档的宽高由表给定）。 */
@@ -323,6 +350,8 @@ function DimensionSizeControl({
     alignMultiple,
     applyPreset,
     handleAlignChange,
+    currentMegapixels,
+    disabled,
   ]);
 
   return (
