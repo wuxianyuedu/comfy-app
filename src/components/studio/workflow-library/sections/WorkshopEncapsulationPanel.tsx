@@ -37,8 +37,6 @@ import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulatio
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
-import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
-import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
 
 interface WorkshopEncapsulationPanelProps {
   workflowId: string;
@@ -98,9 +96,6 @@ export function WorkshopEncapsulationPanel({
   modes,
   onModeChange,
 }: WorkshopEncapsulationPanelProps) {
-  /* 本页签独立的执行日志入口（按 source="encapsulation-test" 过滤） */
-  const [logOpen, setLogOpen] = React.useState(false);
-  const [logTaskId, setLogTaskId] = React.useState<string | null>(null);
   /* 模式契约注册表：用户改过的模式用自定义口径，未改过的用内置默认 ——
    * 封装视图与远端适配器、实际生成链路同说一套话。清单本身经
    * `modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
@@ -147,16 +142,10 @@ export function WorkshopEncapsulationPanel({
 
   return (
     <div className="border-border bg-panel-deep mx-auto max-w-2xl space-y-4 rounded-2xl border p-4">
-      {/* 封装状态总览 */}
+      {/* 封装状态总览。执行日志入口**不在这里** —— 它固定在详情头部那一排
+          （ISSUE #611：同一扇门只许有一处，位置也不随页签变化）。 */}
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
-        <WorkflowRunLogButton
-          workflowId={workflowId}
-          taskId={logTaskId}
-          source="encapsulation-test"
-          alwaysVisible
-          onOpen={() => setLogOpen(true)}
-        />
         {status.ready ? (
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800 dark:text-emerald-300">
             已配置 · 工坊可用
@@ -321,16 +310,6 @@ export function WorkshopEncapsulationPanel({
           </p>
         </div>
       </div>
-
-      {/* 本页签独立的执行日志弹窗（按 source="encapsulation-test" 过滤） */}
-      <WorkflowRunLogModal
-        open={logOpen}
-        workflowId={workflowId}
-        source="encapsulation-test"
-        viewTaskId={logTaskId}
-        onViewTaskIdChange={setLogTaskId}
-        onClose={() => setLogOpen(false)}
-      />
     </div>
   );
 }

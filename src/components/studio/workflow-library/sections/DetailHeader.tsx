@@ -21,6 +21,8 @@ import { modeLabel } from "../workflow-library-config";
 import { type WorkflowRow } from "../workflow-library-config";
 import { ActionButton } from "./DetailControls";
 import { ModelTagPicker } from "./MetaEditor";
+import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
+import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 import { zClass } from "~/lib/shell/overlay-z";
 
@@ -61,6 +63,10 @@ export function DetailHeader({
   /* 多模式时点击顶部模式徽标展开全部模式的小提示（问题：模式重复罗列，
    * 收敛到顶部一处）。 */
   const [showAllModes, setShowAllModes] = useState(false);
+  /* 执行日志弹窗的开关与「在看哪一次运行」。`logTaskId` 受控（而不是让弹窗
+   * 自己持有）：同一行按钮上的状态摘要与弹窗里选中的那次运行要是同一次。 */
+  const [logOpen, setLogOpen] = useState(false);
+  const [logTaskId, setLogTaskId] = useState<string | null>(null);
   const modes = workflow.modes ?? [];
 
   return (
@@ -213,8 +219,28 @@ export function DetailHeader({
             label="删除"
             variant="danger"
           />
+          {/* 执行日志入口**只此一处**：两个页签共用同一份运行登记表与同一个全屏
+              弹窗。此前页签里各挂一个，等于同一扇门有两处、位置还随「进了哪个
+              页签 / 有没有跑过」变化（ISSUE #611）。`alwaysVisible`：没跑过也
+              渲染，点开是空态文案 —— 入口位置不随运行记录出现/消失。 */}
+          <WorkflowRunLogButton
+            workflowId={workflow.id}
+            taskId={logTaskId}
+            alwaysVisible
+            onOpen={() => setLogOpen(true)}
+          />
         </div>
       </div>
+
+      {/* 全屏执行日志：**不**传 `source`，画布节点与工坊封装两种来源都在这里看
+          （入口已经只剩一处，再按来源分两个门就又把「门」变回两处）。 */}
+      <WorkflowRunLogModal
+        open={logOpen}
+        workflowId={workflow.id}
+        viewTaskId={logTaskId}
+        onViewTaskIdChange={setLogTaskId}
+        onClose={() => setLogOpen(false)}
+      />
     </div>
   );
 }
