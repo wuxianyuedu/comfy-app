@@ -175,7 +175,9 @@ node -e "const D=require('better-sqlite3'); const db=new D('test-main.sqlite',{r
 
 ---
 
-## 5. 任务管理器中进程分散的说明
+## 5. 开发模式下的进程定位与终止
+
+### 5.1 为什么任务管理器里进程是散的
 
 开发模式下，你会在 Windows 任务管理器里看到多个独立分组：
 
@@ -190,12 +192,61 @@ node -e "const D=require('better-sqlite3'); const db=new D('test-main.sqlite',{r
 sidecar（Next standalone + ComfyUI），Windows 任务管理器会按进程树
 将它们嵌套在同一个应用条目下。
 
-如果开发时想快速定位并终止本应用的所有进程，可用：
+### 5.2 按端口快速定位 PID
+
+每个应用实例有唯一的端口（见 `.env` 的 `COMFYAPP_PORT`），
+按端口找是最快的方式：
+
+```cmd
+:: 找 Next dev server（默认 3100，多实例时各不相同）
+netstat -ano | findstr :3100 | findstr LISTENING
+
+:: 找 ComfyUI（默认 8188）
+netstat -ano | findstr :8188 | findstr LISTENING
+```
+
+输出的最后一列就是 PID。
+
+### 5.3 终止整棵进程树
+
+拿到 PID 后，用项目自带的跨平台回收脚本（会连带杀所有子进程）：
 
 ```bash
-# 在项目根目录，杀掉 dev-launcher 起的整棵进程树
-node scripts/reap-process.mjs --project-root .
+:: 在项目根目录执行，<PID> 换成上一步拿到的数字
+node scripts/reap-process.mjs <PID> --force
 ```
+
+例如 Next dev server 的 PID 是 61232、ComfyUI 的 PID 是 43692：
+
+```bash
+node scripts/reap-process.mjs 61232 --force
+node scripts/reap-process.mjs 43692 --force
+```
+
+> **`--force` 的含义**：Windows 上发 `taskkill /T /F`（强制），
+> POSIX 上向进程组发 SIGKILL。不加 `--force` 则先尝试优雅终止。
+
+### 5.4 按项目路径批量查找（多实例时）
+
+如果你同时跑了多个项目副本（不同端口），想一次性找出某个项目
+的所有相关进程：
+
+```powershell
+# 在 PowerShell 中执行（把路径换成本项目的）
+Get-CimInstance Win32_Process |
+  Where-Object { $_.CommandLine -match 'comfy-app-t3-branch' } |
+  Select-Object ProcessId, Name, @{N='Cmd';E={$_.CommandLine.Substring(0,[Math]::Min(120,$_.CommandLine.Length))}} |
+  Format-Table -AutoSize
+```
+
+这会列出所有命令行中包含该项目路径的进程（node/python/tauri 壳），
+再对根 PID 逐个 `reap-process`。
+
+### 5.5 最省事的方式
+
+如果 dev server 的终端窗口还开着，直接在那个终端按 **Ctrl+C** 即可——
+`dev-launcher.mjs` 会走正常的整棵进程树回收流程（包括 Python 子进程）。
+只有终端已关闭、进程残留时才需要上面的手动定位方法。
 
 ---
 
@@ -208,3 +259,6 @@ node scripts/reap-process.mjs --project-root .
 | 用别人的库 | 关应用 → 删本机 `-wal` `-shm` → 覆盖 `db.sqlite` → 开应用 |
 | WAL 损坏修复 | 关应用 → 删 `-wal` `-shm` → 开应用 |
 | 完整性检查 | `node -e "..."` 见 §4.2 |
+| 定位 dev server PID | `netstat -ano \| findstr :3100 \| findstr LISTENING` |
+| 终止进程树 | `node scripts/reap-process.mjs <PID> --force` |
+| 按项目路径找所有进程 | PowerShell `Get-CimInstance` 见 §5.4 |
