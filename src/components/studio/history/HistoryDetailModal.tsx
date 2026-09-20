@@ -1,6 +1,7 @@
 import { Folder, X } from "lucide-react";
 
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 import { isVideo } from "~/lib/media/media";
 import {
   fetchTaskWorkflow,
@@ -201,18 +202,31 @@ export function HistoryDetailModal({
               <div className="space-y-4">
                 {current.images?.length > 0 ? (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {current.images.map((img) => (
+                    {current.images.map((img, index) => (
                       <div
                         key={img.localPath}
                         className="group border-border-subtle relative overflow-hidden rounded-xl border"
                       >
-                        <MediaThumbnail
-                          src={img.localPath}
-                          alt=""
-                          className="aspect-square w-full object-cover"
-                          autoPlay
-                          loop
-                        />
+                        {/* 任务详情里的每一张产物都可以点开看大图（原始大小 /
+                            缩放 / 拖拽平移）—— 缩略图是方形的 `object-cover`，
+                            看不到整张图，此前也没有任何放大入口。视频仍按视频
+                            渲染（`ViewableImage` 的查看器只服务图片）。 */}
+                        {isVideo(img.localPath) ? (
+                          <MediaThumbnail
+                            src={img.localPath}
+                            alt=""
+                            className="aspect-square w-full object-cover"
+                            autoPlay
+                            loop
+                          />
+                        ) : (
+                          <ViewableImage
+                            src={img.localPath}
+                            alt="任务产物"
+                            label={`任务产物 ${index + 1}`}
+                            className="aspect-square w-full object-cover"
+                          />
+                        )}
                         <a
                           href={img.localPath}
                           download

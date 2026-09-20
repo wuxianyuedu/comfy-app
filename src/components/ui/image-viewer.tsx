@@ -21,8 +21,10 @@
  *   放大 / 缩小；倍数与百分比由 `use-image-zoom` 算（数值侧单测）；
  * - **滚轮缩放**：以光标为锚点 —— 缩放后光标下的那块像素仍停在光标处，
  *   否则放大时想看的地方会从指针底下跑掉；
- * - **按住拖拽平移**：1:1 看长图时靠滚动条太慢；拖拽直接改容器的滚动偏移，
- *   不额外维护一套 transform 状态（少一套口径就少一处能漂移的地方）；
+ * - **按住拖拽平移**：1:1 看长图时靠滚动条太慢。**拖动期间只改 transform、
+ *   松手才把位移落到滚动偏移** —— 逐帧写 `scrollLeft` / `scrollTop` 是主线程
+ *   滚动，浏览器要为每一帧重新布局 + 绘制（大图尤其贵，指针 120Hz 下就是
+ *   肉眼可见的卡顿），而「把已经画好的内容挪个位置」交给合成器就够了；
  * - **双击**在适应窗口与原始大小之间切换；Esc / 点遮罩 / 右上角关闭都走
  *   `ui/dialog`（焦点锁与归还、遮罩让位标题行都在基元里，见其文件头）。
  *
@@ -57,6 +59,7 @@ import {
 } from "~/components/ui/use-image-zoom";
 import { readElementBox } from "~/lib/dom-rect";
 import { readNaturalSize, type NaturalSize } from "~/lib/media/natural-size";
+import { onNextFrame, type CancelNextFrame } from "~/lib/next-frame";
 
 /** 画布内单边留白（px）：图片不贴边，也参与「适应窗口」的可视区折算。 */
 const VIEWPORT_PADDING = 16;
@@ -176,26 +179,44 @@ export function ImageViewer({
     el.scrollTop = pending.top;
   }, [scrollerReady, zoom.scale]);
 
-  /* 拖拽平移：记录按下时的指针与滚动偏移，移动时按位移反推新的偏移。
+  /* 拖拽平移：**拖动期间只改内层的 transform，松手才落到滚动偏移**。
+   *
+   * 为什么不能逐帧写 `scrollLeft` / `scrollTop`（用户实测「拖动有卡顿」）：
+   * 那是**主线程滚动** —— 浏览器必须为每一帧重新做布局与绘制，图片越大越贵
+   * （缩放后动辄几千像素宽），而指针设备一秒能来 120 次。拖拽这件事的实质
+   * 只是「把已经画好的内容挪个位置」，交给合成器（transform）不必碰布局。
+   *
+   * 松手时把累计位移一次性写回 `scrollLeft` / `scrollTop`：滚动条因此仍如实
+   * 反映位置，后续的滚轮锚定、双击缩放也就有了正确的基准。
+   *
    * 指针捕获让指针移出容器后仍能收到事件（否则拖到边缘就断）。 */
+  const innerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
     pointerId: number;
-    x: number;
-    y: number;
-    left: number;
-    top: number;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+    dx: number;
+    dy: number;
   } | null>(null);
+  /* 本帧是否已排过一次写入（同一帧内的多个 pointermove 合并成一次）。 */
+  const panFrameRef = useRef<CancelNextFrame | null>(null);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const el = scrollerRef.current;
     if (event.button !== 0 || !el) return;
     dragRef.current = {
       pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      left: el.scrollLeft,
-      top: el.scrollTop,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop,
+      dx: 0,
+      dy: 0,
     };
+    /* 拖拽期间把内层提为合成层（松手即撤），免得每帧重新栅格化整张图。 */
+    if (innerRef.current) innerRef.current.style.willChange = "transform";
     if (typeof el.setPointerCapture === "function") {
       el.setPointerCapture(event.pointerId);
     }
@@ -203,23 +224,40 @@ export function ImageViewer({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
-    const el = scrollerRef.current;
-    if (!drag || !el) return;
-    el.scrollLeft = drag.left - (event.clientX - drag.x);
-    el.scrollTop = drag.top - (event.clientY - drag.y);
+    if (!drag) return;
+    drag.dx = event.clientX - drag.startX;
+    drag.dy = event.clientY - drag.startY;
+    if (panFrameRef.current) return;
+    panFrameRef.current = onNextFrame(() => {
+      panFrameRef.current = null;
+      const inner = innerRef.current;
+      const current = dragRef.current;
+      if (!inner || !current) return;
+      inner.style.transform = `translate3d(${current.dx}px, ${current.dy}px, 0)`;
+    });
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     const el = scrollerRef.current;
-    if (
-      dragRef.current &&
-      el &&
-      typeof el.releasePointerCapture === "function"
-    ) {
+    const drag = dragRef.current;
+    /* 先撤 transform 再写滚动偏移：两件事在同一帧里完成，浏览器只重绘一次；
+     * 反过来会先看到「内容弹回原位」再「滚到位」的闪动。 */
+    if (innerRef.current) {
+      innerRef.current.style.transform = "";
+      innerRef.current.style.willChange = "";
+    }
+    if (el && drag) {
+      el.scrollLeft = drag.scrollLeft - drag.dx;
+      el.scrollTop = drag.scrollTop - drag.dy;
+    }
+    if (drag && el && typeof el.releasePointerCapture === "function") {
       el.releasePointerCapture(event.pointerId);
     }
     dragRef.current = null;
   };
+
+  /* 卸载时撤掉可能还排着的那一帧（弹窗在拖拽中被关掉）。 */
+  useEffect(() => () => panFrameRef.current?.(), []);
 
   if (!src) return null;
 
@@ -354,6 +392,8 @@ export function ImageViewer({
                 居中显示，比可视区大时内层恰好等于图宽/高，`justify-center` 不再
                 产生偏移（经典 flex 居中会裁掉溢出内容的左/上边缘）。 */}
             <div
+              ref={innerRef}
+              data-testid="image-viewer-content"
               className="flex h-max min-h-full w-max min-w-full items-center justify-center"
               style={{ padding: VIEWPORT_PADDING }}
             >
@@ -444,7 +484,10 @@ export function ViewableImage({
         onClick={() => setOpen(true)}
         title={title}
         aria-label={name ? `查看大图：${name}` : "查看大图"}
-        className="h-auto w-full cursor-zoom-in rounded-xl p-0 hover:bg-transparent"
+        /* `h-full` 而不是 `h-auto`：调用处常在**有确定高度**的盒子里塞它
+           （`aspect-square` 网格、定高缩略图位），缩略图的 `h-full` 要有参照
+           才撑得满；父级高度是 auto 时 `h-full` 计算为 auto，行为不变。 */
+        className="h-full w-full cursor-zoom-in rounded-xl p-0 hover:bg-transparent"
       >
         <MediaThumbnail
           src={src}
