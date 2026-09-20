@@ -13,6 +13,7 @@
  */
 import WebSocket from "ws";
 import { taskRepository } from "../core/repository";
+import { errorText } from "~/lib/error-message";
 import { toPct } from "~/lib/progress";
 import { logger } from "~/lib/core/logger";
 import {
@@ -150,13 +151,8 @@ export async function connect(): Promise<void> {
           }
         })
         .catch((err: unknown) => {
-          logger.warn(
-            `[comfyui] 自动启动失败：${err instanceof Error ? err.message : String(err)}`,
-          );
-          logToQueuedTasks(
-            `ComfyUI 自动启动失败：${err instanceof Error ? err.message : String(err)}`,
-            "error",
-          );
+          logger.warn(`[comfyui] ${errorText(err, "自动启动失败")}`);
+          logToQueuedTasks(errorText(err, "ComfyUI 自动启动失败"), "error");
         });
     } else if (!isComfyAutoStartSuppressed()) {
       // 自动启动已在单飞中进行：仅维持调用以保 isComfyStarting 为真，

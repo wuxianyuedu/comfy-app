@@ -19,7 +19,10 @@ import React, { memo, useState } from "react";
 import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { normalizeNeedle } from "~/lib/list-filter";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
@@ -148,7 +151,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
         outcome === "done"
           ? "已复制本条日志"
           : outcome === "failed"
-            ? "复制失败：剪贴板不可用，请手动选中复制"
+            ? copyFailureText()
             : "复制本条日志"
       }
       aria-label="复制本条日志"

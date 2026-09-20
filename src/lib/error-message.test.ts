@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { errorMessage, rawErrorDetail } from "./error-message";
+import { errorMessage, errorText, rawErrorDetail } from "./error-message";
 
 describe("errorMessage", () => {
   it("Error 取 message", () => {
@@ -25,6 +25,40 @@ describe("errorMessage", () => {
     expect(errorMessage(undefined, "兜底")).toBe("兜底");
     expect(errorMessage("boom", "兜底")).toBe("兜底");
     expect(errorMessage(0, "兜底")).toBe("兜底");
+  });
+});
+
+describe("errorText（带动作前缀）", () => {
+  it("动作名与详情用全角冒号拼接（分隔符只有一处定义）", () => {
+    expect(errorText(new Error("连接被拒绝"), "读取配置")).toBe(
+      "读取配置：连接被拒绝",
+    );
+  });
+
+  it("详情取不到时回落默认兜底，且**动作前缀一定在**", () => {
+    // 裸 `errorMessage(e, "读取配置")` 在这里会把动作名当详情，于是
+    // 「读取配置：读取配置」—— 前缀分开之后这种重复不可能再出现。
+    expect(errorText("boom", "读取配置")).toBe("读取配置：未知错误");
+    expect(errorText("boom", "读取配置", "配置表缺失")).toBe(
+      "读取配置：配置表缺失",
+    );
+  });
+
+  it("网络层翻译照常生效（与 errorMessage 同一口径）", () => {
+    const e = new Error(
+      `Unexpected token '<', "<!DOCTYPE "...is not valid JSON`,
+    );
+    expect(errorText(e, "打开 ComfyUI")).toBe(
+      "打开 ComfyUI：服务返回了非预期内容（通常是应用服务正在重启或未就绪），请稍候重试",
+    );
+  });
+
+  it("绕开 errorMessage 的 String(e) 是这条账要消灭的那种写法", () => {
+    // 对**没有 message 的对象抛值**，String(e) 产出 "[object Object]"、
+    // 对 `new Error("")` 产出 "Error"。前两者在收口后一律产出可读文案。
+    expect(errorText({}, "解析")).toBe("解析：未知错误");
+    expect(errorText(new Error(""), "解析")).not.toContain("Error");
+    expect(errorText({ code: "E" }, "解析")).not.toContain("[object Object]");
   });
 });
 

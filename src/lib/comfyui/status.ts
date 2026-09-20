@@ -31,6 +31,7 @@
 //      目录下的解释器（Comfy Desktop 由 uv 起、解释器常不在实例根，
 //      见 env-python.ts）。
 
+import { errorText } from "~/lib/error-message";
 import "server-only";
 import fs from "fs";
 import path from "path";
@@ -431,9 +432,7 @@ export async function getComfyRuntimeSnapshot(
   if (st.inflight) return st.inflight;
   const task = snapshotOnce()
     .catch((err: unknown) => {
-      logger.warn(
-        `[comfyui] 运行态快照失败：${err instanceof Error ? err.message : String(err)}`,
-      );
+      logger.warn(`[comfyui] ${errorText(err, "运行态快照失败")}`);
       // 探测异常不能报成「未运行」：标 unverified 让调用方退回 HTTP 判据。
       return { ...emptySnapshot(), unverified: true };
     })

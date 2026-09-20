@@ -21,7 +21,10 @@ import { ChevronRight, Copy } from "lucide-react";
 
 import { Button, buttonVariants } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { PageLoading } from "~/components/ui/page-loading";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -158,9 +161,7 @@ export function SettingsLoadError({
               onClick={copyErrorText}
               className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
               title={
-                copyFailed
-                  ? "复制失败：剪贴板不可用，请在下方展开后手动选中复制"
-                  : "复制这段错误文案"
+                copyFailed ? copyFailureText("下方展开区") : "复制这段错误文案"
               }
             >
               <Copy size={13} />

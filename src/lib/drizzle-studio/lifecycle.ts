@@ -14,6 +14,7 @@
 //
 // HMR 安全：单飞锁与子进程句柄挂在 globalThis 上（同 comfyui），模块重载不重复拉起。
 
+import { errorText } from "~/lib/error-message";
 import "server-only";
 import { spawn } from "child_process";
 import { connect } from "net";
@@ -196,7 +197,7 @@ export async function ensureDrizzleStudioUp(
         windowsHide: true,
       });
     } catch (e) {
-      const detail = `启动 Drizzle Studio 失败：${e instanceof Error ? e.message : String(e)}`;
+      const detail = errorText(e, "启动 Drizzle Studio 失败");
       note(detail);
       return { ok: false, port, detail };
     }

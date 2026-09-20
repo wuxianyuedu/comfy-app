@@ -2171,7 +2171,158 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  it("lib 层的既有出口实现不被 P1~P38 误伤（本批只让 P39~P41 扫 lib）", () => {
+  /* ── P42：错误文案的「动作前缀」（规范 §16.2.4.45）────────────────────
+   *
+   * 判据取「**动作前缀 + 冒号 + 紧跟一个错误取值动作**」这个签名。
+   * 两个条件必须同时成立：只数冒号会把任何「标题：正文」的界面文案算上，
+   * 只数 `String(` 会把日志里别的转换算上。 */
+
+  it("自拼「动作前缀 + 错误详情」直接阻断（规范 P42）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/workflow-library/hooks/use-import.ts",
+      [
+        "export function load() {",
+        "  try {",
+        "    run();",
+        "  } catch (e) {",
+        '    return "无法读取文件：" + errorMessage(e, "未知错误");',
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P42");
+  });
+
+  it("`String(e)` 绕开取值出口的那一档同样计 P42（更差的那种也要数）", () => {
+    /* 这条账里**更差**的一半正是这一档：`String(e)` 对 `new Error("")` 产出
+     * `"Error"`、对 tRPC 投出的普通对象产出 `"[object Object]"`，
+     * 而且绕过网络层翻译。判据只认「后面跟着一个错误取值动作」这个签名，
+     * 两种写法都在内。 */
+    seedBaseline();
+    write(
+      "src/components/studio/custom-nodes/hooks/use-settings.ts",
+      [
+        "export function save() {",
+        "  try {",
+        "    run();",
+        "  } catch (e) {",
+        '    setError("读取配置失败：" + String(e));',
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P42");
+  });
+
+  it("走 errorText 的落点不再被 P42 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/workflow-library/hooks/use-import.ts",
+      [
+        'import { errorText } from "~/lib/error-message";',
+        "export function load() {",
+        "  try {",
+        "    run();",
+        "  } catch (e) {",
+        '    return errorText(e, "无法读取文件");',
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("「标题：正文」的普通界面文案不算 P42（判据太宽会逼人改坏文案）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Hint.tsx",
+      [
+        "export function Hint() {",
+        '  return <p>{"导出失败：请检查磁盘空间"}</p>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("动作名当 errorMessage 的 fallback 不算 P42（那一档结果本就正确）", () => {
+    /* `errorMessage(e, "保存失败")` 的产物就是「保存失败」，没有拼前缀 ——
+     * 它表达不了「动作 + 详情」两段式，但也不是这条账要消灭的写法。 */
+    seedBaseline();
+    write(
+      "src/components/studio/panels/badge.ts",
+      [
+        'import { errorMessage } from "~/lib/error-message";',
+        "export function text(e: unknown) {",
+        '  return errorMessage(e, "保存失败");',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P43：复制失败的固定提示句（规范 §16.2.4.46）──────────────────────
+   *
+   * 这是 P40 的下一层：P40 管「成败说不说」，P43 管「说了什么」。
+   * 判据取固定句的**语义内核**「剪贴板不可用」，而不取标题「复制失败」。 */
+
+  it("手写「剪贴板不可用」那一句直接阻断（规范 P43）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/CopyRow.tsx",
+      [
+        "export function CopyRow({ failed }: { failed: boolean }) {",
+        '  return <span title={failed ? "复制失败：剪贴板不可用，请手动选中后复制" : "复制"} />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P43");
+  });
+
+  it("走 copyFailureText 的落点不再被 P43 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/CopyRow.tsx",
+      [
+        'import { copyFailureText } from "~/components/ui/use-copy-feedback";',
+        "export function CopyRow({ failed }: { failed: boolean }) {",
+        "  return <span title={failed ? copyFailureText() : '复制'} />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("只说标题「复制失败」不点出剪贴板原因的不算 P43（各面板本来就该说不一样）", () => {
+    /* 判据太宽会逼人把每处标题都改成同一句 —— 而标题恰恰该保留面板自己的
+     * 说法（与 `errorText` 同款：动作前缀是调用处的事）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/panels/CopyRow.tsx",
+      [
+        "export function CopyRow({ failed }: { failed: boolean }) {",
+        '  return <span title={failed ? "复制失败，请重试" : "复制"} />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("lib 层的既有出口实现不被 P1~P38 误伤（本批只让 P39~P43 扫 lib）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规
      *（它们本来就该做那件事）。试写一份「出口实现」的形态验一遍。 */

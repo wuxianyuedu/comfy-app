@@ -12,7 +12,7 @@
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import { runAsyncAction } from "~/lib/async-action";
-import { errorMessage } from "~/lib/error-message";
+import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 import { type api } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
@@ -158,7 +158,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
          * 不用手搓 `FileReader`、失败怎么表达，口径只有一处。 */
         text = await readFileAsText(file);
       } catch (e: unknown) {
-        showFileError("无法读取文件：" + errorMessage(e, "未知错误"));
+        showFileError(errorText(e, "无法读取文件"));
         return;
       }
       let parsed: unknown;

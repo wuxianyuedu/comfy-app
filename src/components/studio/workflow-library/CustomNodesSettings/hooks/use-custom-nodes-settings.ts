@@ -16,6 +16,7 @@ import {
   type ManifestNodeRaw,
 } from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
+import { errorText } from "~/lib/error-message";
 import { offsetWithin } from "~/lib/dom-rect";
 import { onNextFrame } from "~/lib/next-frame";
 import {
@@ -351,7 +352,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       setByPath(byPath);
       seedParentDefaults(paths);
     } catch (e) {
-      setSaveErr("读取配置失败：" + String(e));
+      setSaveErr(errorText(e, "读取配置失败"));
     } finally {
       if (!aliveRef.current) return;
       setLoading(false);
@@ -475,7 +476,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         await reloadFromServer();
       });
     } catch (e) {
-      setError_("解析失败：" + String(e));
+      setError_(errorText(e, "解析失败"));
     } finally {
       setParsing(false);
     }
@@ -499,7 +500,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         await reloadFromServer();
       });
     } catch (e) {
-      setError_("解析失败：" + String(e));
+      setError_(errorText(e, "解析失败"));
     } finally {
       setPerPkgParsing((parsing) => {
         const np = { ...parsing };
@@ -535,7 +536,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         await reloadFromServer();
       });
     } catch (e) {
-      setError_("解析失败：" + String(e));
+      setError_(errorText(e, "解析失败"));
     } finally {
       setParsing(false);
     }

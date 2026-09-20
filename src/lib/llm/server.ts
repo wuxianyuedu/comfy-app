@@ -1,3 +1,5 @@
+import { errorMessage } from "~/lib/error-message";
+
 import "server-only";
 import type { ZodType } from "zod";
 import {
@@ -193,8 +195,9 @@ function headersFor(cfg: LLMConfig): Record<string, string> {
  *  历史 bug：Ollama 未启动 / 远端不可达时，用户只看到一句 `fetch failed`，
  *  既不知道是连不上本地 Ollama 还是远端 Key 无效，也没提示怎么处理。 */
 export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
-  if (!(e instanceof TypeError))
-    return e instanceof Error ? e.message : "网络请求失败";
+  /* 非 TypeError（未预期的抛值形态）：与全库同一个取值出口，
+   * 免得 `String(e)` 那一路把非 Error 抛值渲染成 `[object Object]`。 */
+  if (!(e instanceof TypeError)) return errorMessage(e, "网络请求失败");
   const cause = (e as { cause?: unknown }).cause;
   const causeMsg =
     cause instanceof Error
@@ -221,7 +224,7 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   if (local) {
     return `调用本地模型失败（${base}）：${causeMsg || "无法连接"}。请确认本地 Ollama/LM Studio 已启动且已拉取模型 ${cfg.model || ""}。`;
   }
-  return `调用远端模型失败（${base}）：${causeMsg || e.message}。请检查 Base URL / API Key / 网络。`;
+  return `调用远端模型失败（${base}）：${causeMsg || errorMessage(e, "未知错误")}。请检查 Base URL / API Key / 网络。`;
 }
 
 /** 统一的上游 /chat/completions 请求：网络层失败给出可读原因，HTTP 非 2xx 带状态码与响应片段。 */

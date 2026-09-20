@@ -12,7 +12,10 @@ import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
 import {
@@ -200,7 +203,7 @@ export function ErrorPanel({
                 className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
                 title={
                   detailCopyFailed
-                    ? "复制失败：剪贴板不可用，请在下方展开后手动选中复制"
+                    ? copyFailureText("下方展开区")
                     : "复制错误详情到剪贴板（含 taskId 与请求参数）"
                 }
               >

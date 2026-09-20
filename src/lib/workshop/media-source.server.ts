@@ -2,6 +2,7 @@
 // 把图片引用（data URL / 本地生成路径 / 绝对 URL）解析成原始字节，
 // 从而可以 (a) 作为 data URL 转发给远程 API 通道，
 // 或 (b) 当作首帧上传进本机 ComfyUI 的 input 目录。
+import { errorText } from "~/lib/error-message";
 import "server-only";
 
 import { promises as fs } from "fs";
@@ -76,9 +77,7 @@ export async function resolveMediaBytes(
     try {
       res = await fetch(src, { signal: AbortSignal.timeout(30_000) });
     } catch (e) {
-      throw new Error(
-        `拉取参考图失败: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      throw new Error(errorText(e, "拉取参考图失败"));
     }
     if (!res.ok) throw new Error(`拉取参考图失败 (${res.status})`);
     const buffer = Buffer.from(await res.arrayBuffer());

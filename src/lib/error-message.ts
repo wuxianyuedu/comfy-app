@@ -94,6 +94,48 @@ export function errorMessage(e: unknown, fallback: string): string {
 }
 
 /**
+ * 带**动作前缀**的错误文案：`「<动作>：<详情>」`。
+ *
+ * ## 这条账的形状（ISSUE #672 / 规范 16 §16.2.4.45）
+ *
+ * `errorMessage` 早已是唯一出口，但它只管「详情」那一半 —— 而「**是哪个动作
+ * 失败了**」那一半在收口前有四种写法并存，各自判各的：
+ *
+ * | 写法 | 实例 |
+ * |------|------|
+ * | 模板串硬拼 `：` | `` `工作流列表加载失败：${errorMessage(e, "未知错误")}` `` |
+ * | `+` 拼 | `"无法读取文件：" + errorMessage(e, "未知错误")` |
+ * | **绕开 `errorMessage`** | `"读取配置失败：" + String(e)` |
+ * | 逐处自己写 `instanceof` 判断 | `err instanceof Error ? err.message : "未知错误"` |
+ *
+ * 第三种才是真正的缺陷：`String(e)` 对 `new Error("")` 产出 `"Error"`、对
+ * tRPC 的对象抛值产出 `"[object Object]"`，而且**绕过网络层翻译** ——
+ * 同一个文件里其它落点走 `errorMessage`，于是用户会在同一块面板上看到
+ * 两种质量并存的文案（一边是人话，一边是 `[object Object]`）。
+ *
+ * ## 口径
+ *
+ * - `action` 是**动作名**（「读取配置」「导出日志」），不带标点 —— 分隔符由本
+ *   函数统一给，调用处不必各自决定用全角还是半角、后面带不带空格；
+ * - `fallback` 是详情取不到时的兜底（默认 `"未知错误"`）。注意它**只兜详情**，
+ *   动作前缀一定会出现在结果里 —— 这正是本函数与裸 `errorMessage` 的差别：
+ *   裸调时 `errorMessage(e, "保存失败")` 在取不到 message 时会把**动作名当详情**，
+ *   于是「保存失败：保存失败」。前缀分开之后那种重复不可能再出现。
+ *
+ * ```ts
+ * errorText(e, "读取配置")             // "读取配置：连接被拒绝或中断，…"
+ * errorText(e, "打开 ComfyUI", "启动失败") // 详情取不到时 → "打开 ComfyUI：启动失败"
+ * ```
+ */
+export function errorText(
+  e: unknown,
+  action: string,
+  fallback = "未知错误",
+): string {
+  return `${action}：${errorMessage(e, fallback)}`;
+}
+
+/**
  * 从 unknown 抛值里取出**原始**报错详情（给日志/「完整错误」区用，不翻译）。
  *
  * 与 {@link errorMessage} 的分工：`errorMessage` 产出**给人看**的可读文案
