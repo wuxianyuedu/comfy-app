@@ -7,6 +7,7 @@ import { apiErrorDetail } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { uniqueStamp } from "~/lib/unique-id";
 import { extOfPath } from "~/lib/media/mime-ext";
+import { fixed } from "~/lib/number-format";
 
 export const runtime = "nodejs";
 
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
         /* 启动失败已在 ensure 侧落日志（含「不再自动重试」闩锁），此处不重复刷 */
       });
       logger.error(
-        `[upload] 503 ComfyUI unreachable — ${base} | error: ${msg} | file: ${filename} (${(buf.length / 1024).toFixed(0)}KB)`,
+        `[upload] 503 ComfyUI unreachable — ${base} | error: ${msg} | file: ${filename} (${fixed(buf.length / 1024, 0) ?? "0"}KB)`,
       );
       return NextResponse.json(
         {

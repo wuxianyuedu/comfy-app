@@ -28,6 +28,7 @@
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
+import { fixed } from "~/lib/number-format";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { RangeSlider } from "~/components/ui/range-slider";
@@ -237,7 +238,7 @@ export function CanvasSettingsPanel({
               max={1}
               step={0.02}
               onChange={(value) => update({ gridMinorAlpha: value })}
-              format={(value) => value.toFixed(2)}
+              format={(value) => fixed(value, 2) ?? ""}
               tooltip="细格子 (默认 10px 一格) 线条的可见度。设为 0 接近全透明"
             />
             <SliderRow
@@ -247,7 +248,7 @@ export function CanvasSettingsPanel({
               max={1}
               step={0.02}
               onChange={(value) => update({ gridMajorAlpha: value })}
-              format={(value) => value.toFixed(2)}
+              format={(value) => fixed(value, 2) ?? ""}
               tooltip="主参考线 (每 10 格 = 100px) 的可见度"
             />
             <SliderRow
@@ -257,7 +258,7 @@ export function CanvasSettingsPanel({
               max={3}
               step={0.25}
               onChange={(value) => update({ gridMinorLineWidth: value })}
-              format={(value) => `${value.toFixed(2)}px`}
+              format={(value) => `${fixed(value, 2) ?? ""}px`}
             />
             <SliderRow
               label="主线宽度"
@@ -308,7 +309,7 @@ export function CanvasSettingsPanel({
               max={4}
               step={0.1}
               onChange={(value) => update({ maxZoom: value })}
-              format={(value) => `${value.toFixed(1)}×`}
+              format={(value) => `${fixed(value, 1) ?? ""}×`}
             />
             <SliderRow
               label="最小缩放"
@@ -317,7 +318,7 @@ export function CanvasSettingsPanel({
               max={0.5}
               step={0.05}
               onChange={(value) => update({ minZoom: value })}
-              format={(value) => `${value.toFixed(2)}×`}
+              format={(value) => `${fixed(value, 2) ?? ""}×`}
             />
           </Section>
 

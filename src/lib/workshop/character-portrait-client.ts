@@ -4,6 +4,7 @@
 //   · 远端：/api/workshop-api/generate 的 image 通道（OpenAI 兼容 images/generations）
 //   · 导入：素材库「角色」分类（/api/materials），落盘后拿到可引用的本地地址
 
+import { isInlineMedia } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, extForMime } from "~/lib/media/mime-ext";
 import { uploadMaterialItem } from "~/lib/media/materials-client";
 import {
@@ -76,6 +77,9 @@ const DEFAULT_EXT = "png";
 
 /** data URL → File（浏览器侧同源读取内联图片，不涉及跨域）。 */
 async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
+  /* 「这是不是一个内联 media」走 `~/lib/media/data-url`（规范 16 §16.2.4.56）；
+   * 解码本身交给 `fetch`（浏览器原生，不必自己 base64 → Blob）。 */
+  if (!isInlineMedia(dataUrl)) throw new Error("data URL 格式无效");
   const blob = await (await fetch(dataUrl)).blob();
   /* 服务端按扩展名归属素材种类，没有扩展名会被当成文档，故这里必须有兜底后缀。 */
   const ext = extForMime(blob.type) ?? DEFAULT_EXT;
@@ -91,7 +95,7 @@ async function localizePortraitImage(
   url: string,
   opts: { projectId: string; name: string },
 ): Promise<string> {
-  if (!url.startsWith("data:")) return url;
+  if (!isInlineMedia(url)) return url;
   const file = await dataUrlToFile(url, opts.name);
   const item = await uploadMaterialItem(file, {
     folder: "characters",

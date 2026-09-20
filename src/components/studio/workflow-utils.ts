@@ -3,6 +3,7 @@
  * 没有 JSX，也不用 React hook。 */
 import { getCustomNodePackage } from "~/config/custom-nodes";
 import { displayValue } from "~/lib/display-value";
+import { trimFixed } from "~/lib/number-format";
 import { asRecord } from "~/lib/is-record";
 import { TITLE_MAX, clampText } from "~/lib/text-clamp";
 import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
@@ -187,11 +188,13 @@ export function renderWidgetValue(value: unknown): string {
   if (value === undefined || value === null) return displayValue(null);
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
-    // 小数保留两位；整数不带小数点。
-    if (Number.isInteger(value) || value >= 10000) return String(value);
-    const str = (Math.round(value * 100) / 100).toFixed(2);
-    // 去掉末尾的 0（1.00 → 1），保留精度
-    return str.replace(/\.?0+$/, "") || "0";
+    /* 小数保留两位；整数不带小数点；去尾零（1.00 → 1）——
+     * 这三件事各有出口（`~/lib/number-format`，规范 16 §16.2.4.54）。
+     * 此前这里是 `(Math.round(v * 100) / 100).toFixed(2)` + 手写剥零，
+     * 即**两层舍入**（先十进制舍、再二进制舍），在边界值上与直接 `toFixed`
+     * 给出不同答案。 */
+    if (value >= 10000) return String(value);
+    return trimFixed(value, 2) ?? displayValue(null);
   }
   if (typeof value === "string") {
     /* 像 "DaSiWa_Wan22_I2V_14B_SnatchKiss_v1.safetensors" 这样的文件名
@@ -243,9 +246,9 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   if (value === undefined || value === null) return displayValue(null);
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
-    if (Number.isInteger(value) || value >= 10000) return String(value);
-    const str = (Math.round(value * 100) / 100).toFixed(2);
-    return str.replace(/\.?0+$/, "") || "0";
+    /* 与 `renderWidgetValue` 同一档（`~/lib/number-format`）。 */
+    if (value >= 10000) return String(value);
+    return trimFixed(value, 2) ?? displayValue(null);
   }
   if (typeof value === "string") {
     /* 与 `renderWidgetValue` 同理：**显示层面的截断交给 CSS**（`maxWidth:

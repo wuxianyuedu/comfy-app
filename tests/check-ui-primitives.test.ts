@@ -2517,9 +2517,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/app/api/thing/route.ts",
-      [
-        'export const fallback = (m: string | null) => m ?? "image/png";',
-      ].join("\n"),
+      ['export const fallback = (m: string | null) => m ?? "image/png";'].join(
+        "\n",
+      ),
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -2572,7 +2572,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "export function msg(e: unknown): string {",
         '  if (typeof e === "object" && e !== null && "message" in e) {',
-        '    return String((e as { message: unknown }).message);',
+        "    return String((e as { message: unknown }).message);",
         "  }",
         '  return "";',
         "}",
@@ -2606,9 +2606,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/server/thing.ts",
-      [
-        "export const safe = (n: string) => n.replace(/[^\\w.-]/g, \"_\");",
-      ].join("\n"),
+      ['export const safe = (n: string) => n.replace(/[^\\w.-]/g, "_");'].join(
+        "\n",
+      ),
     );
     const { code, output } = run();
     expect(code).toBe(1);
@@ -2642,7 +2642,190 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  it("lib 层的既有出口实现不被 P1~P38 误伤（本批只让 P39~P43 扫 lib）", () => {
+  /* ── P50：数字精度格式化（规范 §16.2.4.54）──────────────────────────
+   *
+   * 判据锚 `toFixed(` 这个 API 本身 —— 它是本条账唯一的签名
+   *（`Math.round(v * 100) / 100` 那类写法里也必然有一个 `toFixed`）。 */
+
+  it("自写数字精度格式化直接阻断（规范 P50）", () => {
+    seedBaseline();
+    write(
+      "src/components/settings/thing.tsx",
+      ["export const show = (v: number) => `${v.toFixed(2)}px`;"].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P50");
+  });
+
+  it("走 number-format 出口的落点不再被 P50 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/settings/thing.tsx",
+      [
+        'import { fixed } from "~/lib/number-format";',
+        'export const show = (v: number) => `${fixed(v, 2) ?? ""}px`;',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("像素取整（Math.round / padStart）不算 P50（那是别的账）", () => {
+    /* 判据太宽会逼人改坏代码：`Math.round(x)` 与 `String(n).padStart(2, "0")`
+     * 在本仓库大量用在坐标取整与补零上，它们**不是**「按某档精度写数」。 */
+    seedBaseline();
+    write(
+      "src/components/settings/thing.tsx",
+      [
+        "export const snap = (v: number) => Math.round(v / 8) * 8;",
+        'export const pad = (v: number) => String(v).padStart(2, "0");',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P51：去重合并 / 区域设置排序（规范 §16.2.4.55）───────────────── */
+
+  it("自写区域设置排序直接阻断（规范 P51）", () => {
+    seedBaseline();
+    write(
+      "src/components/settings/thing.tsx",
+      [
+        "export const list = (xs: string[]) =>",
+        "  [...new Set(xs)].sort((a, b) => a.localeCompare(b));",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P51");
+  });
+
+  it("走 ordered-set 出口的落点不再被 P51 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/settings/thing.tsx",
+      [
+        'import { uniqueSorted } from "~/lib/ordered-set";',
+        "export const list = (xs: string[]) => uniqueSorted(xs);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("数值比较器与不带比较器的 sort（码位序）不算 P51", () => {
+    /* 「按当前区域设置」与「按字符串码位」是**两种判据**：后者在不带比较器
+     * 的 `.sort()` 里是合法且另有所指的写法，数进来会逼人改坏代码。 */
+    seedBaseline();
+    write(
+      "src/components/settings/thing.tsx",
+      [
+        "export const byCount = (xs: number[]) => [...xs].sort((a, b) => b - a);",
+        "export const byCode = (xs: string[]) => [...xs].sort();",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P52：data URL（规范 §16.2.4.56）──────────────────────────────── */
+
+  it("自拼 data URL 直接阻断（规范 P52）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        "export const inline = (b64: string, mime: string) =>",
+        "  `data:${mime};base64,${b64}`;",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P52");
+  });
+
+  it("自切 data URL 载荷（indexOf 逗号）直接阻断（规范 P52）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        "export const payload = (url: string) =>",
+        '  url.slice(url.indexOf(",") + 1);',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P52");
+  });
+
+  it("更差的那种写法（split 逗号）也数得到 —— 与 data: 同现才计 P52", () => {
+    /* 与 P13「只数合规的那种、漏掉更差的那种」同款：判据漏掉更差的写法，
+     * 被拦下的就永远只是合规者。但 `split(",")` 另有 CSV 解析的用法，
+     * 故要求与 `data:` 前缀同现。 */
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        "export const payload = (url: string) => {",
+        '  if (!url.startsWith("data:")) return null;',
+        '  return url.split(",")[1] ?? null;',
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P52");
+  });
+
+  it("CSV 解析里的 split 逗号不算 P52（同文件没有 data: 前缀）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        "export const names = (raw: string) =>",
+        '  raw.split(",").map((x) => x.trim());',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it('SSE 帧前缀 startsWith("data:") 不算 P52（那是流式解析）', () => {
+    seedBaseline();
+    write(
+      "src/lib/llm/thing.ts",
+      [
+        "export const frame = (line: string) => {",
+        '  if (!line.startsWith("data:")) return null;',
+        "  return line.slice(5).trim();",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 data-url 出口的落点不再被 P52 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        'import { base64PayloadOf, toDataUrl } from "~/lib/media/data-url";',
+        "export const inline = (bytes: Uint8Array, mime: string) =>",
+        "  toDataUrl(bytes, mime);",
+        "export const payload = (url: string) => base64PayloadOf(url);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("lib 层的既有出口实现不被 P1~P38 误伤（只有逐条登记的判据扫 lib）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规
      *（它们本来就该做那件事）。试写一份「出口实现」的形态验一遍。 */

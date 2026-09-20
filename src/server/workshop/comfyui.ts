@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { safeFileNameSegment } from "~/lib/safe-name";
+import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "~/lib/endpoints";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
@@ -171,8 +172,14 @@ export function outputDirForSession(sessionId?: string): string {
 
 /** 把远程 URL / data URL 归一为可上传的 Buffer。 */
 export async function fetchToBuffer(ref: string): Promise<Buffer> {
-  if (ref.startsWith("data:")) {
-    const base64 = ref.slice(ref.indexOf(",") + 1);
+  if (isInlineMedia(ref)) {
+    /* 「怎么取 data URL 的 base64 载荷」只有一处定义
+     *（`~/lib/media/data-url`，规范 16 §16.2.4.56）。
+     * 收口前这里写的是 `ref.slice(ref.indexOf(",") + 1)` —— 缺逗号时
+     * `indexOf` 给 `-1`，`slice(0)` 会把**整个 data URL** 当 base64
+     * 交给 `Buffer.from`（它跳过非法字符）→ 静默解出垃圾字节。 */
+    const base64 = base64PayloadOf(ref);
+    if (base64 === null) throw new Error("参考图 data URL 格式无效");
     return Buffer.from(base64, "base64");
   }
   const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });

@@ -7,7 +7,7 @@
  *   lib/workshop/media-source.server   EXT→MIME   7 条（拉不到 content-type 时兜底）
  *   lib/workshop/character-portrait    MIME→EXT   5 条（data URL 落成素材文件）
  *   api/workshop-local/prepare/route   MIME→EXT   4 条（参考图进 ComfyUI input）
- *   api/film/bgm/route.ts              EXT         `path.extname(file.name) || ".mp3"`
+ *   api/film/bgm/route.ts              EXT         `path.extname() || ".mp3"` 兜底
  *   api/upload/route.ts                EXT         `file.name.lastIndexOf(".")` 手切
  *
  * 关键认识：**六份表的差异不是「覆盖面不同」这一件小事**。它们互相矛盾——

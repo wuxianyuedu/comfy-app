@@ -185,6 +185,26 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
   it.each([
     ["~/lib/browser-io", ["copyText", "downloadText", "downloadJson"]],
     ["~/lib/time-format", ["timeAgo", "formatClock"]],
+    /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：P50/P51/P52 是硬闸，
+     * 判的是「又写了一份」；这一层补**另一侧** —— 出口自己的接口不许被绕过
+     *（绕过的形态可以不含判据锚的那几个字面量）。 */
+    ["~/lib/number-format", ["fixed", "trimmed", "trimFixed", "alphaText"]],
+    [
+      "~/lib/ordered-set",
+      ["unique", "uniqueSorted", "uniqueBy", "union", "compareText"],
+    ],
+    [
+      "~/lib/media/data-url",
+      [
+        "isDataUrl",
+        "isInlineMedia",
+        "toDataUrl",
+        "wrapBase64",
+        "toBase64",
+        "parseDataUrl",
+        "base64PayloadOf",
+      ],
+    ],
   ] as const)("%s 是「按形态收口」的出口，且已被业务引用", (spec, exports) => {
     const mod = readFileSync(
       join(SRC, spec.replace("~/", "").replace(/\//g, sep) + ".ts"),

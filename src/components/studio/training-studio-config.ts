@@ -3,6 +3,8 @@
 // 的 700 行里与网络和状态混写；抽出来后视图只剩渲染，表单校验与 loss 曲线
 // 这两块业务逻辑可以脱离 React 直接单测。
 
+import { fixed } from "~/lib/number-format";
+
 export type ModelOpt = { id: string; fileName: string; name: string };
 
 export type TrainLogEntry = { t: number; level: string; msg: string };
@@ -207,8 +209,10 @@ export function buildLossGeometry(
     const px = pad + x * (W - 2 * pad);
     const pty = H - pad - ty * (H - 2 * pad);
     const pvy = H - pad - vy * (H - 2 * pad);
-    train.push(`${i === 0 ? "M" : "L"}${px.toFixed(1)} ${pty.toFixed(1)}`);
-    val.push(`${i === 0 ? "M" : "L"}${px.toFixed(1)} ${pvy.toFixed(1)}`);
+    /* SVG 路径里的坐标按一位小数写（`~/lib/number-format`，§16.2.4.54）。 */
+    const pxText = fixed(px, 1) ?? "0";
+    train.push(`${i === 0 ? "M" : "L"}${pxText} ${fixed(pty, 1) ?? "0"}`);
+    val.push(`${i === 0 ? "M" : "L"}${pxText} ${fixed(pvy, 1) ?? "0"}`);
   }
   return { W, H, train: train.join(" "), val: val.join(" ") };
 }
