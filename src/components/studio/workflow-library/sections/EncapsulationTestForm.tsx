@@ -21,6 +21,8 @@
 
 import { useCallback, useState } from "react";
 
+import { runAsyncAction } from "~/lib/async-action";
+
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { NumberField } from "~/components/ui/number-field";
@@ -92,14 +94,23 @@ export function EncapsulationTestForm({
       setError("");
       setUploadingId(entryId);
       void (async () => {
-        try {
-          const filename = await uploadImage(file);
-          setTexts((prev) => withExposedValue(prev, entryId, filename));
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
-        } finally {
-          setUploadingId(null);
-        }
+        /* 失败通道是这块行内 `setError`；成功无提示（输入框自己会显示文件名）。
+         * 文案统一走 `~/lib/async-action` 的 `errorMessage` —— 收口前这里是
+         * 自己拼的 `e instanceof Error ? e.message : String(e)`（全库另有三处
+         * 同形），抛出的值不是 Error 时会渲染成 `[object Object]`。 */
+        await runAsyncAction(
+          async () => {
+            const filename = await uploadImage(file);
+            setTexts((prev) => withExposedValue(prev, entryId, filename));
+          },
+          {
+            report: (kind, detail) => {
+              if (kind === "err") setError(detail);
+            },
+            failureText: "上传失败",
+          },
+        );
+        setUploadingId(null);
       })();
     },
     [uploadImage],

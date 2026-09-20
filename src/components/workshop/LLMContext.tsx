@@ -4,7 +4,7 @@ import { completeChat } from "~/lib/llm/browser";
 import { Icon } from "~/components/ui/icon";
 import type { LLMConfigView } from "~/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
-import { errorMessage } from "~/lib/error-message";
+import { runAsyncAction } from "~/lib/async-action";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
@@ -167,15 +167,22 @@ function LLMSettingsModal({
       return;
     }
     setMsg(null);
-    try {
-      const cfg = await save({
-        model: draftModel ?? initial?.model ?? "",
-        provider: draftProvider ?? undefined,
-      });
-      onSaved(cfg);
-    } catch (e: unknown) {
-      setMsg({ kind: "err", text: errorMessage(e, "保存失败") });
-    }
+    /* 反馈通道是这块的**两态提示行**（`setMsg`，成功与失败同一处）——
+     * 出口报 `kind`，通道自己决定长什么样（规范 16 §16.2.4.30）。 */
+    await runAsyncAction(
+      async () => {
+        const cfg = await save({
+          model: draftModel ?? initial?.model ?? "",
+          provider: draftProvider ?? undefined,
+        });
+        onSaved(cfg);
+      },
+      {
+        report: (kind, detail) =>
+          setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+        failureText: "保存失败",
+      },
+    );
   }
 
   async function handleTest() {
@@ -185,26 +192,34 @@ function LLMSettingsModal({
     }
     setTesting(true);
     setMsg(null);
-    try {
-      const out = await completeChat({
-        messages: [
-          { role: "system", content: "你是测试助手，只回复 OK。" },
-          { role: "user", content: "ping" },
-        ],
-        opts: {
-          provider,
-          baseUrl,
-          model: activeModel,
-          temperature: 0.2,
-          maxTokens: 16,
-        },
-      });
-      setMsg({ kind: "ok", text: `连接成功：${out.slice(0, 60)}` });
-    } catch (e: unknown) {
-      setMsg({ kind: "err", text: errorMessage(e, "连接失败") });
-    } finally {
-      setTesting(false);
-    }
+    await runAsyncAction(
+      async () => {
+        const out = await completeChat({
+          messages: [
+            { role: "system", content: "你是测试助手，只回复 OK。" },
+            { role: "user", content: "ping" },
+          ],
+          opts: {
+            provider,
+            baseUrl,
+            model: activeModel,
+            temperature: 0.2,
+            maxTokens: 16,
+          },
+        });
+        return out.slice(0, 60);
+      },
+      {
+        /* 成功文案是**动作结果**的函数（回显模型的前 60 个字符）——
+         * `successText` 支持函数形式正是为这类落点（同 `use-external-action`
+         * 的 `detail` 由端点给）。 */
+        report: (kind, detail) =>
+          setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+        failureText: "连接失败",
+        successText: (result) => `连接成功：${result.detail}`,
+      },
+    );
+    setTesting(false);
   }
 
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +

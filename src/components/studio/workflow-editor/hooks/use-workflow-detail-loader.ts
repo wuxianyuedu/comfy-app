@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { withQuery } from "~/lib/query-string";
 import { vanillaApi } from "~/trpc/vanilla";
 import type {
   WorkflowDetail,
@@ -214,10 +215,13 @@ export function useWorkflowDetailLoader({
       const subgraphUid = opts?.subgraphUid;
       const isSubgraph = Boolean(subgraphUid);
       const hostId = opts?.hostNodeId ?? "";
+      /* 两级路径各自拼查询串：子图下钻带 `uid`（必给）与 `hostId`（可选，
+       * 空值由出口省略整个键）。编码与省略口径收在 `~/lib/query-string`。 */
       const url = subgraphUid
-        ? `/api/workflows/${workflowId}/subgraph?uid=${encodeURIComponent(subgraphUid)}${
-            hostId ? `&host=${encodeURIComponent(hostId)}` : ""
-          }`
+        ? withQuery(`/api/workflows/${workflowId}/subgraph`, {
+            uid: subgraphUid,
+            hostId: hostId || undefined,
+          })
         : `/api/workflows/${workflowId}`;
       /* hostId 是累积的「宿主:内部」链。拼进 URL 后：① 嵌套子图坐标按该前缀
        *  读回（否则拖过的位置退回原始坐标）；② 缓存键按层级命名，同名子图不串用。 */

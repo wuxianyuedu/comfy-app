@@ -13,8 +13,8 @@
  */
 import { useCallback } from "react";
 import { type api } from "~/trpc/react";
+import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { downloadJson as saveJsonFile } from "~/lib/browser-io";
-import { errorMessage } from "~/lib/error-message";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowRow } from "../workflow-library-config";
 
@@ -54,18 +54,33 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   } = args;
   const toast = useToast();
 
+  /* 反馈通道适配：**成功静默**（这一批动作大多刷新列表即可见，
+   * 再弹一句是噪声），失败走 toast（规范 16 §16.2.4.30）。 */
+  const report: ActionReport = useCallback(
+    (kind, detail) => {
+      if (kind === "err") toast.error(detail);
+    },
+    [toast],
+  );
+
   const handleDelete = useCallback(
     async (id: string) => {
       setDeleting(true);
-      try {
-        await deleteMut.mutateAsync({ id });
+      /* 删除失败走**行内错误条**（`setActionError`）而不是 toast：它是
+       * §17.5.4 的「只有用户重试才清」通道 —— 这一批里唯一一条会因为
+       * 「文件被占用」反复失败的动作用户需要看着它改。反馈通道由调用处
+       * 注入，所以这里换一个 `report`（出口只负责文案归一）。 */
+      const result = await runAsyncAction(() => deleteMut.mutateAsync({ id }), {
+        report: (kind, detail) => {
+          if (kind === "err") setActionError(detail);
+        },
+        failureText: "删除失败",
+      });
+      if (result.ok) {
         setPendingDelete(null);
         void load();
-      } catch (e) {
-        setActionError(errorMessage(e, "删除失败"));
-      } finally {
-        setDeleting(false);
       }
+      setDeleting(false);
     },
     [setDeleting, deleteMut, setPendingDelete, load, setActionError],
   );
@@ -80,21 +95,22 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
             : workflow,
         ),
       );
-      try {
-        // taskType 与 defaultMode 一并回写：服务端仅在显式传入时才更新该列，
-        // 缺了它 DB 的 taskType 会与本地乐观更新的值漂移（旧 type 筛选失准）。
-        await updateMut.mutateAsync({
-          id,
-          modes,
-          defaultMode,
-          taskType: defaultMode,
-        });
-      } catch (e) {
-        toast.error("更新模式失败", errorMessage(e, "未知错误"));
-        void load();
-      }
+      // taskType 与 defaultMode 一并回写：服务端仅在显式传入时才更新该列，
+      // 缺了它 DB 的 taskType 会与本地乐观更新的值漂移（旧 type 筛选失准）。
+      const result = await runAsyncAction(
+        () =>
+          updateMut.mutateAsync({
+            id,
+            modes,
+            defaultMode,
+            taskType: defaultMode,
+          }),
+        { report, failureText: "更新模式失败" },
+      );
+      /* 失败回滚：重新拉取列表，本地乐观更新的值被服务端真值替换。 */
+      if (!result.ok) void load();
     },
-    [setWorkflows, updateMut, toast, load],
+    [setWorkflows, updateMut, report, load],
   );
 
   /** 模型标签绑定持久化。乐观更新本地列表，失败回滚。 */
@@ -105,14 +121,13 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           workflow.id === id ? { ...workflow, modelTags: names } : workflow,
         ),
       );
-      try {
-        await updateMut.mutateAsync({ id, modelTags: names });
-      } catch (e) {
-        toast.error("更新模型标签失败", errorMessage(e, "未知错误"));
-        void load();
-      }
+      const result = await runAsyncAction(
+        () => updateMut.mutateAsync({ id, modelTags: names }),
+        { report, failureText: "更新模型标签失败" },
+      );
+      if (!result.ok) void load();
     },
-    [setWorkflows, updateMut, toast, load],
+    [setWorkflows, updateMut, report, load],
   );
 
   /** 整体落库 workflowIO（详情预览里改 seed「控件后行为」等参数级配置）。
@@ -123,30 +138,32 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
    *  拖一条线改落点，预览与编辑器都不该读到一个过期的 paramMap。 */
   const patchParamMap = useCallback(
     async (id: string, paramMap: Record<string, unknown>) => {
-      try {
-        await updateMut.mutateAsync({ id, paramMap });
-        await utils.workflow.detail.invalidate({ id });
-        await utils.workflow.detailFull.invalidate({ id });
-      } catch (e) {
-        toast.error("更新参数映射失败", errorMessage(e, "未知错误"));
-      }
+      await runAsyncAction(
+        async () => {
+          await updateMut.mutateAsync({ id, paramMap });
+          await utils.workflow.detail.invalidate({ id });
+          await utils.workflow.detailFull.invalidate({ id });
+        },
+        { report, failureText: "更新参数映射失败" },
+      );
     },
-    [updateMut, utils, toast],
+    [updateMut, utils, report],
   );
 
   const patchWorkflowIO = useCallback(
     async (id: string, workflowIO: Record<string, unknown>) => {
-      try {
-        await updateMut.mutateAsync({ id, workflowIO });
-        /* detailFull 才是预览表单的数据源（它带服务端富化的 defaultValue），
-         * 只失效 detail 的话富化 IO 的缓存查询不会重拉 → 默认值不刷新。 */
-        await utils.workflow.detail.invalidate({ id });
-        await utils.workflow.detailFull.invalidate({ id });
-      } catch (e) {
-        toast.error("更新参数配置失败", errorMessage(e, "未知错误"));
-      }
+      await runAsyncAction(
+        async () => {
+          await updateMut.mutateAsync({ id, workflowIO });
+          /* detailFull 才是预览表单的数据源（它带服务端富化的 defaultValue），
+           * 只失效 detail 的话富化 IO 的缓存查询不会重拉 → 默认值不刷新。 */
+          await utils.workflow.detail.invalidate({ id });
+          await utils.workflow.detailFull.invalidate({ id });
+        },
+        { report, failureText: "更新参数配置失败" },
+      );
     },
-    [updateMut, utils, toast],
+    [updateMut, utils, report],
   );
 
   /** 下载当前工作流 JSON —— 下载的是**这条工作流自己的原件**
@@ -154,53 +171,60 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const downloadJson = useCallback(
     async (id: string, name: string) => {
       setBundleBusy(id);
-      try {
-        const d = await utils.workflow.detail.fetch({ id });
-        const tpl = d?.template;
-        if (!tpl) {
-          toast.error("获取工作流失败", "未知错误");
-          return;
-        }
-        const payload = tpl.rawJson ?? null;
-        if (payload == null) {
-          toast.error("下载失败", "该工作流没有可下载的内容");
-          return;
-        }
-        saveJsonFile(payload, `${tpl.name ?? name}.json`);
-        toast.success("已下载工作流", `${tpl.name ?? name}.json`);
-      } catch (e) {
-        toast.error("下载失败", errorMessage(e, "网络错误"));
-      } finally {
-        setBundleBusy(null);
-      }
+      /* 三条「没做成」各有各的说辞（没取到模板 / 没有可下载内容 / 请求失败），
+       * 所以**不**用出口的 `successText` —— 出口管的是「结果怎么变成反馈」，
+       * 分支文案仍归调用处。抛错那一支仍走出口（`errorMessage` 兜底）。 */
+      await runAsyncAction(
+        async () => {
+          const d = await utils.workflow.detail.fetch({ id });
+          const tpl = d?.template;
+          if (!tpl) {
+            toast.error("获取工作流失败", "未知错误");
+            return true;
+          }
+          const payload = tpl.rawJson ?? null;
+          if (payload == null) {
+            toast.error("下载失败", "该工作流没有可下载的内容");
+            return true;
+          }
+          saveJsonFile(payload, `${tpl.name ?? name}.json`);
+          toast.success("已下载工作流", `${tpl.name ?? name}.json`);
+          return true;
+        },
+        { report, failureText: "下载失败" },
+      );
+      setBundleBusy(null);
     },
-    [toast, setBundleBusy, utils],
+    [toast, setBundleBusy, utils, report],
   );
 
   /** 重新导入本地工作流的源文件并刷新。 */
   const resyncWorkflow = useCallback(
     async (id: string, name: string) => {
       setResyncBusy(id);
-      try {
-        const d = await resyncMut.mutateAsync({ id });
-        if (d?.missing) {
-          toast.error(
-            "同步失败",
-            "磁盘文件已不存在，无法同步（请检查路径或重新载入）",
-          );
-        } else if (d?.unchanged) {
-          toast.info("磁盘文件未变化", name);
-        } else if (d?.updated) {
-          toast.success("已同步磁盘内容", name);
-          await load();
-        }
-      } catch (e) {
-        toast.error("同步请求失败", errorMessage(e, "网络错误"));
-      } finally {
-        setResyncBusy(null);
-      }
+      /* 三个结果分支各有各的说辞（磁盘没了 / 没变 / 已同步）——
+       * 那是本动作的域判据，留在调用处；抛错那一支走出口。 */
+      await runAsyncAction(
+        async () => {
+          const d = await resyncMut.mutateAsync({ id });
+          if (d?.missing) {
+            toast.error(
+              "同步失败",
+              "磁盘文件已不存在，无法同步（请检查路径或重新载入）",
+            );
+          } else if (d?.unchanged) {
+            toast.info("磁盘文件未变化", name);
+          } else if (d?.updated) {
+            toast.success("已同步磁盘内容", name);
+            await load();
+          }
+          return true;
+        },
+        { report, failureText: "同步请求失败" },
+      );
+      setResyncBusy(null);
     },
-    [toast, load, setResyncBusy, resyncMut],
+    [toast, load, setResyncBusy, resyncMut, report],
   );
 
   /** 把磁盘上发现的一个文件经单文件导入
@@ -208,24 +232,26 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const handleLoadPending = useCallback(
     async (pending: { id: string; name: string; sourcePath: string }) => {
       setPendingLoading((state) => ({ ...state, [pending.id]: true }));
-      try {
-        await createMut.mutateAsync({
-          sourcePath: pending.sourcePath,
-          name: pending.name,
-        });
-        toast.success(`已载入「${pending.name}」`, "开始跟踪文件变化");
-        void load();
-      } catch (e) {
-        toast.error("载入失败", errorMessage(e, "网络错误"));
-      } finally {
-        setPendingLoading((state) => {
-          const cp = { ...state };
-          delete cp[pending.id];
-          return cp;
-        });
-      }
+      const result = await runAsyncAction(
+        () =>
+          createMut.mutateAsync({
+            sourcePath: pending.sourcePath,
+            name: pending.name,
+          }),
+        {
+          report,
+          failureText: "载入失败",
+          successText: `已载入「${pending.name}」`,
+        },
+      );
+      if (result.ok) void load();
+      setPendingLoading((state) => {
+        const cp = { ...state };
+        delete cp[pending.id];
+        return cp;
+      });
     },
-    [setPendingLoading, createMut, toast, load],
+    [setPendingLoading, createMut, report, load],
   );
 
   return {

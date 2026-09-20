@@ -11,6 +11,7 @@ import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
 import { copyText, downloadText } from "~/lib/browser-io";
 import { timeAgo } from "~/lib/time-format";
+import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { StatusBadge } from "~/components/ui/status-badge";
 import {
   getActiveId,
@@ -39,13 +40,6 @@ const STATUS_LABEL: Record<string, string> = {
   QUEUED: "排队中",
   RUNNING: "生成中",
 };
-
-/** 参考图路径可能是 ComfyUI input 文件名（如 abc.png）或绝对 url 路径
- *  （如 /api/generated/.../img_0.png）。前者走 /api/images 代理预览。 */
-function refSrc(v: string): string {
-  if (v.startsWith("/")) return v;
-  return `/api/images?filename=${encodeURIComponent(v)}&type=input`;
-}
 
 function taskCover(images: ProjectOutputImage[]): ProjectOutputImage | null {
   const img = images.find((image) => image.mediaType === "image");
@@ -367,7 +361,7 @@ export function ProjectOutputs() {
                         >
                           {}
                           <MediaThumbnail
-                            src={refSrc(image)}
+                            src={mediaPreviewUrl(image)}
                             alt={`参考图 ${index + 1}`}
                             className="h-full w-full object-cover"
                           />

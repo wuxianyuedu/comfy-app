@@ -8,6 +8,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { WaterFillProgress } from "~/components/ui/water-fill-progress";
 import { useContentAssetGallery } from "./hooks/use-content-asset-gallery";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
+import { comfyImageUrl } from "~/lib/media/media-url";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 /* 项目画布 · 内容载体节点主体（text / picture / movie）
@@ -87,9 +88,10 @@ export function ContentAssetBody({
 
   // picture / movie
   const isPic = kind === "picture";
-  const mediaSrc = data.mediaPath
-    ? `/api/images?filename=${encodeURIComponent(data.mediaPath)}&type=input`
-    : undefined;
+  /* 引用 → 预览地址的拼装收在 `~/lib/media/media-url`（规范 16 §16.2.4.32）：
+   * 空引用返回 `null`（`MediaThumbnail` 的 `src` 本来就接受它），
+   * 不再拼出 `?filename=` 让服务端去报错。 */
+  const mediaSrc = comfyImageUrl({ filename: data.mediaPath ?? "" });
 
   /* 相册区已在下方用 `galleryImages` 收窄过一次：JSX 回调里的 TS 不会沿
    * 用外层的 `gallery.images &&` 判空，故先取成局部常量。 */
@@ -232,7 +234,9 @@ export function ContentAssetBody({
 
           {/* 主图 */}
           <MediaThumbnail
-            src={`/api/images?filename=${encodeURIComponent(galleryImages[gallery.index]?.localPath ?? "")}&type=input`}
+            src={comfyImageUrl({
+              filename: galleryImages[gallery.index]?.localPath ?? "",
+            })}
             alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
             className="border-border-strong max-h-[85vh] max-w-[85vw] rounded-lg border object-contain shadow-2xl"
             onClick={(event) => event.stopPropagation()}
@@ -295,7 +299,7 @@ export function ContentAssetBody({
                       title={`第 ${i + 1} 张`}
                     >
                       <MediaThumbnail
-                        src={`/api/images?filename=${encodeURIComponent(img.localPath)}&type=input`}
+                        src={comfyImageUrl({ filename: img.localPath })}
                         alt=""
                         className="h-full w-full object-cover"
                       />

@@ -3,6 +3,8 @@
 // 每行一个字段名 key + 一个值 value，值可为文本 / 数字 / 图片。
 // 本文件只放可被单测的纯函数与常量，DOM / FileReader 等留在视图层。
 
+import { withQuery } from "~/lib/query-string";
+
 /** 「实际使用」测试弹窗的一条额外请求体字段。key 是请求体里的字段名
  *（如 mode / first_frame / image），value 为输入内容——文本、数字或图片。
  * 图片既可以是远端 URL，也可以是本地上传后转成的 data:image URL。 */
@@ -262,7 +264,12 @@ export function buildVideoPollUrls(
   const dir = videoEndpointDir(path);
   let agnes: string | null = null;
   try {
-    agnes = `${new URL(base).origin}/agnesapi?video_id=${encodeURIComponent(taskId)}&model_name=${encodeURIComponent(model)}`;
+    /* 上游供应商的地址模板也走查询串出口：编码与省略口径同一处
+     *（规范 16 §16.2.4.32）—— 它是跨域地址，但参数拼装是同一件事。 */
+    agnes = withQuery(`${new URL(base).origin}/agnesapi`, {
+      video_id: taskId,
+      model_name: model,
+    });
   } catch {
     agnes = null;
   }

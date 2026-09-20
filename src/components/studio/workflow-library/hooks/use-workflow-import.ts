@@ -11,6 +11,7 @@
  *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
+import { runAsyncAction } from "~/lib/async-action";
 import { errorMessage } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 import { type api } from "~/trpc/react";
@@ -109,25 +110,33 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       return;
     }
     setImporting(true);
-    try {
-      const d = await createMut.mutateAsync({
-        name: importName.trim() || "未命名工作流",
-        modes: importModes,
-        defaultMode: importDefaultMode,
-        raw: parsed,
-      });
-      if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
-      setShowImport(false);
-      setImportName("");
-      setImportJson("");
-      setImportModes(["T2I"]);
-      setImportDefaultMode("T2I");
-      void load();
-    } catch (e: unknown) {
-      setImportErr(errorMessage(e, "导入失败"));
-    } finally {
-      setImporting(false);
-    }
+    /* 行内错误条（`setImportErr`）是这块的失败通道 —— 导入失败时用户往往
+     * 要改 JSON 重试，需要一个留着不走的出口；成功静默（面板关闭即结果）。
+     * 出口给「失败文案走 `errorMessage`」这一半。 */
+    await runAsyncAction(
+      async () => {
+        const d = await createMut.mutateAsync({
+          name: importName.trim() || "未命名工作流",
+          modes: importModes,
+          defaultMode: importDefaultMode,
+          raw: parsed,
+        });
+        if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
+        setShowImport(false);
+        setImportName("");
+        setImportJson("");
+        setImportModes(["T2I"]);
+        setImportDefaultMode("T2I");
+        void load();
+      },
+      {
+        report: (kind, detail) => {
+          if (kind === "err") setImportErr(detail);
+        },
+        failureText: "导入失败",
+      },
+    );
+    setImporting(false);
   }, [importName, importModes, importDefaultMode, importJson, load, createMut]);
 
   /** 文件入口的统一前处理漏斗（拖入 / 「选择文件」共用）：读文本 → JSON 解析 →

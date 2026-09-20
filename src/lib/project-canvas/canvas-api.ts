@@ -9,6 +9,7 @@
 
 import { waitForComfyReady } from "~/lib/comfy/comfy-readiness-client";
 import { clampPct } from "~/lib/progress";
+import { comfyImageUrl } from "~/lib/media/media-url";
 import {
   parseValidationErrorsJson,
   type ValidationError,
@@ -116,7 +117,9 @@ export async function uploadMediaFile(
   file: File,
 ): Promise<{ name: string; url: string }> {
   const name = await uploadImageFile(file);
-  const url = `/api/images?filename=${encodeURIComponent(name)}&type=input`;
+  /* 预览地址的拼装收在 `~/lib/media/media-url`（规范 16 §16.2.4.32）——
+   * 出口恒有文件名（`uploadImageFile` 刚返回的），所以这里不会是 null。 */
+  const url = comfyImageUrl({ filename: name })!;
   return { name, url };
 }
 

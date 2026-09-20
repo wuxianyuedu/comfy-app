@@ -1026,6 +1026,228 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P27 / P28 / P29：本批三条硬闸（规范 §16.2.4.30 ~ §16.2.4.32）────
+   *
+   * 三条同样按**形态**取锚点（`try/catch` + 反馈通道、`naturalWidth` 这类
+   * 属性名、`?key=${`/`&key=${`），每条都配反面用例 —— 判据太宽会逼下
+   * 一个人改坏代码去迎合它（本仓库的既有教训）。 */
+  it("自写「try/catch + 反馈通道」样板直接阻断（规范 P27）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawAsync.tsx",
+      [
+        'import { Button } from "~/components/ui/button";',
+        "export function U() {",
+        "  const { toast } = useToast();",
+        "  const save = async () => {",
+        "    try {",
+        "      await api.save.mutate({});",
+        "    } catch (e) {",
+        '      toast.error(errorMessage(e, "保存失败"));',
+        "    }",
+        "  };",
+        "  return <Button onClick={save}>保存</Button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P27");
+    expect(output).toContain("src/components/studio/RawAsync.tsx");
+  });
+
+  it("走 runAsyncAction 的动作不再被 P27 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkAsync.tsx",
+      [
+        'import { runAsyncAction } from "~/lib/async-action";',
+        'import { Button } from "~/components/ui/button";',
+        "export function U({ toast }: { toast: { error: (s: string) => void } }) {",
+        "  const save = () =>",
+        "    runAsyncAction(() => api.save.mutate({}), {",
+        '      report: (kind, detail) => (kind === "err" ? toast.error(detail) : undefined),',
+        '      failureText: "保存失败",',
+        "    });",
+        "  return <Button onClick={save}>保存</Button>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("没有反馈通道的 catch（静默降级）不被 P27 计", () => {
+    /* 只判「有 await 的 try/catch」会把「读缓存失败静默回落」那一族算上 ——
+     * 它们是合法的降级，根本没有反馈通道可谈。 */
+    seedBaseline();
+    write(
+      "src/components/studio/SilentFallback.tsx",
+      [
+        "export async function R() {",
+        "  try {",
+        "    await readCache();",
+        "  } catch (e) {",
+        "    console.warn(e);",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("逻辑层（hooks/）里的同一套样板同样被 P27 计（这条账的大头在 hooks）", () => {
+    /* P1/P2/P3 豁免 `hooks/`（它们数的是视图实现），但 P27 的存量恰恰
+     * 大部分在逻辑层 —— 不扫 hooks 等于对这条账视而不见。 */
+    seedBaseline();
+    write(
+      "src/components/studio/hooks/use-raw-async.ts",
+      [
+        "export function useRawAsync(toast, errorMessage) {",
+        "  return async () => {",
+        "    try {",
+        "      await api.save.mutate({});",
+        "    } catch (e) {",
+        '      toast.error(errorMessage(e, "保存失败"));',
+        "    }",
+        "  };",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P27");
+  });
+
+  it("视图里自己读媒体自然尺寸直接阻断（规范 P28）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawSize.tsx",
+      [
+        "export function P({ el }: { el: HTMLImageElement }) {",
+        "  const s = { w: el.naturalWidth, h: el.naturalHeight };",
+        "  return <span>{s.w}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P28");
+  });
+
+  it("视频的 videoWidth / videoHeight 也计 P28（两组读数同一条账）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawVideoSize.tsx",
+      [
+        "export function P({ el }: { el: HTMLVideoElement }) {",
+        "  return <span>{el.videoWidth + el.videoHeight}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P28");
+  });
+
+  it("使用 readNaturalSize 的文件不再被 P28 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkSize.tsx",
+      [
+        'import { readNaturalSize } from "~/lib/media/natural-size";',
+        "export function P({ el }: { el: HTMLImageElement }) {",
+        "  const s = readNaturalSize(el);",
+        "  return <span>{s?.width ?? 0}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("手拼查询串直接阻断（规范 P29）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawUrl.tsx",
+      [
+        "export function U(name: string) {",
+        "  return fetch(`/api/images?filename=${name}&type=input`);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P29");
+  });
+
+  it("模板串开头的第一个参数（`?id=${x}`）也被 P29 计", () => {
+    /* 前置字符是反引号 / 引号时，`?` 前面**不是**词字符 —— 判据若要求
+     * 「前面必须是词字符」，「第一个参数」那条写法能整片溜过。 */
+    seedBaseline();
+    write(
+      "src/components/studio/RawFirstParam.tsx",
+      [
+        "export function U(id: string) {",
+        "  const qs = `?id=${id}`;",
+        "  return fetch(`/api/x${qs}`);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P29");
+  });
+
+  it("走 withQuery / buildQueryString 的文件不再被 P29 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkUrl.tsx",
+      [
+        'import { withQuery } from "~/lib/query-string";',
+        "export function U(name: string) {",
+        "  return fetch(withQuery(`/api/images`, { filename: name, type: `input` }));",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("写死的 href 字面量与正则字面量不被 P29 计（不是「把一组值写成查询串」）", () => {
+    /* 只数 `?<键名>=` 会把这两族一起算上 —— 判据要求**真有值被内联**
+     *（`${` 或引号），这两处都不是。 */
+    seedBaseline();
+    write(
+      "src/components/studio/StaticHref.tsx",
+      [
+        "export function L() {",
+        "  return (",
+        '    <a href="/workspace?tab=canvas">去创作</a>',
+        "  );",
+        "}",
+        "export const RE = /\\|?msg=([^|]*)/;",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("边 id 的 `${a}?${b}` 拼接不被 P29 计（同形而不同源）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/EdgeId.tsx",
+      [
+        "export function edgeId(ns: string, entryId: string, handleId: string) {",
+        "  return `${ns}:${entryId}?${handleId}`;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
   it("P10~P23 未清零时 --update 拒绝更新基线", () => {
     write("src/components/studio/ToggleUpdate.tsx", ROLE_BUTTON_TOGGLE_VIEW);
     const { code, output } = run(["--update"]);
@@ -1058,6 +1280,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P24).toBeUndefined();
     expect(baseline.rules.P25).toBeUndefined();
     expect(baseline.rules.P26).toBeUndefined();
+    expect(baseline.rules.P27).toBeUndefined();
+    expect(baseline.rules.P28).toBeUndefined();
+    expect(baseline.rules.P29).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

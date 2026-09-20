@@ -348,6 +348,37 @@ const EXEMPT_DIRS = [
 ];
 
 /**
+ * 「逻辑层（`<feature>/hooks/**`）也要一起扫」的判据。
+ *
+ * 默认豁免 `hooks/` 是因为 P1/P2/P3（手写 `<button>` / portal / spinner）
+ * 数的是**视图实现** —— 逻辑层里不该出现 DOM，出现了反而是另一个问题。
+ *
+ * 但这几条**在逻辑层同样成立**，而且收口前的存量恰恰大部分在 `hooks/` 里
+ * （P27 收口前 21 处里 19 处在 hooks）：
+
+ *   · **P27**（异步动作的结果接到反馈通道）：设置页、工作流库、模型标签、
+ *     训练工作室的逻辑层各自写一遍「置忙 → 调用 → catch → report」——
+ *     它们**本来就不在视图里**，不扫 hooks 等于对这条账视而不见；
+ *   · **P29**（手拼查询串）：网络客户端全在 `lib/**`，但域内的取数也常在
+ *     `hooks/` 里拼串；
+ *   · **P26 / P24 / P12 / P13 / P20 / P25** 同样已按「视图 / 逻辑层」的口径
+ *     写在判据描述里 —— 它们此前能生效只是因为落点恰好不在 hooks 下。
+ *
+ * 因此这几条不走 `EXEMPT_DIRS` 的 hooks 豁免，逐条列在这里（口径写死，
+ * 不做模糊放行）。 */
+const HOOKS_ALSO_SCANNED = new Set([
+  "P12",
+  "P13",
+  "P20",
+  "P24",
+  "P25",
+  "P26",
+  "P27",
+  "P28",
+  "P29",
+]);
+
+/**
  * 按文件豁免（正则 + 理由，均按仓库相对 POSIX 路径匹配）——只给**某一条判据**
  * 用，不是整目录放行；每条都必须写清「为什么这一处不属于该判据」。
  */
@@ -391,6 +422,34 @@ const EXEMPT_FILES = {
         "「一行标签 + 下方控件」的块级形态。套上去会把那个并排的读数挪走，" +
         "改掉渲染结果（§16.2.4.2 第 9 条）。控件是 `ui/range-slider`，" +
         "已经不在本判据的照管范围内。",
+    },
+  ],
+  P27: [
+    {
+      re: /^src\/components\/studio\/project-canvas\/CanvasNode\/hooks\/use-workflow-modes\.ts$/,
+      reason:
+        "失败时**必须回滚本地模式状态**（`setModes(modes ?? …)`，否则节点上留下" +
+        "「僵尸模式章」），而回滚要用到 `catch` 现场那个 `modes` 快照 —— " +
+        "把它挪进 `runAsyncAction` 的 `action` 里会让回滚读到已经改过的新值。" +
+        "本判据管的是「文案怎么归一、报到哪」，这一处的**域判据在 catch 现场**，" +
+        "所以文案仍走 `errorMessage`（同一枚口径），只是不经过出口的编排。",
+    },
+    {
+      re: /^src\/components\/studio\/project-canvas\/hooks\/use-history-panel\.ts$/,
+      reason:
+        "取数失败要按**竞态守卫**决定报不报（`if (cancelled) return;` —— 卸载或" +
+        "切筛选后到达的旧响应不该往界面上写任何东西，包括错误文案），" +
+        "而 `cancelled` 是同一 effect 闭包里的局部标志 —— `runAsyncAction` 的 " +
+        "`action` 与 `catch` 都在它外面，表达不了「这一轮已经作废」。",
+    },
+    {
+      re: /^src\/app\/\(main\)\/settings\/hooks\/use-settings-page\.ts$/,
+      reason:
+        "`openComfy` 的动作里有**多分支的域判据**（未运行 → 一条带可执行动作的" +
+        "提示；探测结论 `embed` / `blocked` → 各自的 `decision.detail`；" +
+        "失败后**无论如何**都要刷新状态行）。三支各说各话、且都带 `await` 的" +
+        "副作用，挪进出口会把 `guard` / `finally` / `successText` 三处钩子都" +
+        "占满 —— 比留在原地更难读。该文件其余的 12 条动作已全部走出口。",
     },
   ],
   P10: [
@@ -809,6 +868,105 @@ const RULES = {
       ).length;
     },
   },
+  /* ── P27「异步动作的结果怎么接到反馈通道上」（硬闸，§16.2.4.30）──────
+   * 形态：`try { await … } catch { <反馈通道>(errorMessage(...)) }` ——
+   * 「置忙 → 调用 → 结算 → finally 清忙」这段样板的签名。
+   *
+   * 判据取**两个条件同时成立**：
+   *  ① `try` 块里真的 `await` 了（不是同步的 JSON.parse 那种）；
+   *  ② `catch` 块里既出现了**反馈通道**的调用，又出现了**错误取值**。
+   * 只判 ① 会把「读缓存失败静默回落」那一族（它们根本没有反馈通道，
+   * 是合法的降级）算进来；只判 ② 会把 `errorMessage` 在非 catch 处的
+   * 使用（服务端路由拼错误信封）算进来。
+   *
+   * ⚠️ **不数**服务端（`src/app/api/**` 与 `src/server/**`）：那边的
+   * 「反馈通道」是响应信封与 logger，不是用户可见出口 —— 与 P12/P13/P24
+   * 跳过 app/api 是同一条口径。 */
+  P27: {
+    label:
+      "自写「try/catch + 反馈通道(errorMessage)」样板（应使用 ~/lib/async-action 的 runAsyncAction）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      const blocks =
+        t2.match(
+          /try\s*\{[\s\S]{0,3000}?\}\s*catch\s*(?:\([^)]*\))?\s*\{[\s\S]{0,600}?\n\s*\}/g,
+        ) || [];
+      return blocks.filter((b) => {
+        if (!/\bawait\b/.test(b)) return false;
+        const catchBody = b.slice(b.indexOf("catch"));
+        if (
+          !/\b(?:toast\.error|setError|setErr|setMsg|showFlash|onFailed|setImportErr|setActionError)\s*\(/.test(
+            catchBody,
+          )
+        )
+          return false;
+        return /\berrorMessage\s*\(/.test(catchBody);
+      }).length;
+    },
+  },
+
+  /* ── P28「一张媒体图的自然尺寸是多少」（硬闸，§16.2.4.31）───────────
+   * 形态：直接出现 `naturalWidth` / `naturalHeight` / `videoWidth` /
+   * `videoHeight` 这四个读数。
+   *
+   * ⚠️ 判据取**属性名**而不是「调用了什么函数」：这条账里更差的一半正是
+   * 那几个**压根没判 0** 的落点（它们没有任何函数调用可锚）——
+   * 与 P13 / P18 的「更差的那种也要数」同源。出口自己豁免（`ui/` 目录 +
+   * `~/lib/media/natural-size.ts` 不在扫描范围内）。 */
+  P28: {
+    label:
+      "视图里自己读媒体的自然尺寸（应使用 ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (
+        t2.match(/\bnatural(?:Width|Height)\b/g) || []
+      ).length +
+        (t2.match(/\bvideo(?:Width|Height)\b/g) || []).length;
+    },
+  },
+
+  /* ── P29「一组值怎么写成查询串」（硬闸，§16.2.4.32）─────────────────
+   * 形态：模板字面量／普通字符串里出现 `?key=${…}` 或 `&key=${…}` ——
+   * 手拼查询串的签名。用了 `buildQueryString` / `withQuery` 的落点里
+   * 一个这样的片段都不会有（端点路径不带 `?`）。
+   *
+   * ⚠️ **不数**：
+   *   · 纯数字 / 枚举的内联（`?port=${port}` 的 URL 构造，如 drizzle-studio
+   *     的 host 链接与 WS 的 `?clientId=`）—— 它们是**另一个协议的地址**，
+   *     不是「发给本应用端点的查询串」（与 P22 的「不数对内路由跳转」同款）；
+   *   · 日志消息里的 `key=value`（`promptId=${…}` 不是查询串）。
+   * 判据取**「键名 + `=` + 内联值」**这一个签名：
+   * `?<键名>=` 或 `&<键名>=` 之后**紧跟 `${` 或一个字符串字面量**，
+   * 且 `?` 前面不是词字符（避开 `x?y` 三元与 `a&&b`）。
+   *
+   * 三条边界都是实测踩出来的：
+   *   1. **要求真有值被内联**（`${` 或引号）—— 只数 `?<键名>=` 会把
+   *      **写死的 href 字面量**（`href="/workspace?tab=canvas"`）与
+   *      **正则字面量**（`/\|?msg=([^|]*)/`）一起算上，那两处都不是
+   *      「把一组值写成查询串」；
+   *   2. **键名必须以字母开头**（`[A-Za-z][\w.-]*`）：查询串的键几乎不会是
+   *      数字 / 下划线开头，这条避开 `${a}?${b}=${c}` 这类 id 拼接；
+   *   3. **`?` 的前置字符必须在允许集里**（词字符 / `/` / `.` / `-` /
+   *      引号 / 反引号 / `(` / 行首）：路径末字符是词字符
+   *      （`/api/images?filename=` 的 `?` 前面正是 `s`）、模板串开头的
+   *      `?id=${x}` 前面是反引号 —— 两者都必须算，否则「第一个参数」那条
+   *      写法能整片溜过。`&` 那一支同理（它只可能在键值之间）。
+   *      `cond ? x = y` 这类表达式由第 1 条挡住（`=` 后面既不是 `${`
+   *      也不是引号），不必靠前置字符。
+   *
+   * 与 P22「不数对内路由跳转」、P28「只数属性名不数函数」是同一条口径：
+   * 判据锚在唯一的签名上，误伤一个合规者就等于逼人改坏代码。 */
+  P29: {
+    label:
+      "手拼查询串（应使用 ~/lib/query-string 的 buildQueryString / withQuery）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      const re =
+        /(?:^|[\w./\-'"`(])[?&][A-Za-z][\w.-]*=(?:\$\{|["'`])/g;
+      return (t2.match(re) || []).length;
+    },
+  },
+
   P26: {
     label:
       "视图里自写「Enter 提交」键位判据（应使用 ~/components/ui/use-enter-commit 的 enterCommit）",
@@ -851,7 +1009,7 @@ const RULES = {
   },
 };
 
-/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P15 属此类）。 */
+/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P29 属此类）。 */
 const HARD_GATE_RULES = new Set([
   "P4",
   "P5",
@@ -876,6 +1034,9 @@ const HARD_GATE_RULES = new Set([
   "P24",
   "P25",
   "P26",
+  "P27",
+  "P28",
+  "P29",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -907,10 +1068,14 @@ function collect() {
     for (const rel of walk(dir)) {
       if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) continue;
       if (isTest(rel)) continue;
-      if (EXEMPT_DIRS.some((e) => e.re.test(rel))) continue;
+      /* `ui/` 永远豁免（基元自身实现）；`hooks/` 只对「逻辑层也成立」的判据
+       * 不豁免（见 `HOOKS_ALSO_SCANNED`）。 */
+      if (/^src\/components\/ui\//.test(rel)) continue;
+      const inHooks = /\/hooks\//.test(rel);
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
       for (const [id, rule] of Object.entries(RULES)) {
         if (isExemptFile(id, rel)) continue;
+        if (inHooks && !HOOKS_ALSO_SCANNED.has(id)) continue;
         const n = rule.count(text);
         if (n > 0) (files[rel] ||= {})[id] = n;
       }
@@ -987,7 +1152,7 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P15）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P29）。\n  " +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、" +
@@ -1085,7 +1250,10 @@ function main() {
         "  「值不存在显示 —」→ ~/lib/display-value 的 displayValue / EMPTY_PLACEHOLDER、\n" +
         "  自绘模态外壳 → ui/dialog 的 Dialog / DialogContent（居中卡片）或 ui/sheet 的 SheetContent（抽屉）；\n" +
         "  裸写 <img> / <video> → ~/components/ui/media-thumbnail 的 MediaThumbnail（失败兜底收在出口里）；\n" +
-        "  媒体拖拽源 → ~/components/ui/media-drag-source 的 useMediaDragSource；全局快捷键 → ~/components/ui/use-hotkey 的 useHotkey。\n" +
+        "  媒体拖拽源 → ~/components/ui/media-drag-source 的 useMediaDragSource；全局快捷键 → ~/components/ui/use-hotkey 的 useHotkey；\n" +
+        "  异步动作的反馈样板 → ~/lib/async-action 的 runAsyncAction（失败文案走 errorMessage）；\n" +
+        "  读媒体自然尺寸 → ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio / isPortraitMedia；\n" +
+        "  手拼查询串 → ~/lib/query-string 的 buildQueryString / withQuery（媒体预览地址走 ~/lib/media/media-url）。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);

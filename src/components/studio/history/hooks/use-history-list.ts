@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 
+import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { copyText } from "~/lib/browser-io";
 
 import { useToast } from "../../ToastProvider";
@@ -147,39 +148,51 @@ export function useHistoryList(): HistoryListController {
   const cancelTask = api.task.cancel.useMutation();
   const deleteTask = api.task.delete.useMutation();
 
+  /* 反馈通道适配：本面板的「成功」走 `info`（一句陈述，不是庆祝），
+   * 「失败」走 `error`。收口前「取消失败，请稍后重试」这类**引导性文案**
+   * 是写死的，网络层原文（`ECONNREFUSED` / `Failed to fetch`）被整个丢掉 ——
+   * 现在统一走 `~/lib/async-action` 的 `errorMessage`。
+   *
+   * 成功那一侧用 `successText` 给一句陈述句；「取消失败」那条的失败文案
+   * 保留可执行动作（「稍后重试」），它是这条账里唯一值得写的引导。 */
+  const report: ActionReport = useCallback(
+    (kind, detail) =>
+      kind === "ok" ? toast.info(detail) : toast.error(detail),
+    [toast],
+  );
+
   const cancel = useCallback(
     async (id: string) => {
-      try {
-        await cancelTask.mutateAsync({ id });
-        toast.info("已发送取消请求");
-      } catch {
-        toast.error("取消失败，请稍后重试");
-      }
+      await runAsyncAction(() => cancelTask.mutateAsync({ id }), {
+        report,
+        failureText: "取消失败，请稍后重试",
+        successText: "已发送取消请求",
+      });
       refresh();
     },
-    [cancelTask, refresh, toast],
+    [cancelTask, refresh, report],
   );
 
   const remove = useCallback(
     async (id: string) => {
       if (!confirm("删除此任务记录？已生成的文件不会从磁盘删除。")) return;
-      try {
-        await deleteTask.mutateAsync({ id });
-        toast.success("已删除任务");
-        /* 乐观移除：直接改查询缓存，避免本地镜像 state */
-        queryClient.setQueryData(
-          getQueryKey(api.task.list),
-          (old: { tasks: Array<{ id: string }> } | undefined) =>
-            old
-              ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) }
-              : old,
-        );
-        if (detailId === id) setDetailId(null);
-      } catch {
-        toast.error("删除失败");
-      }
+      await runAsyncAction(
+        async () => {
+          await deleteTask.mutateAsync({ id });
+          /* 乐观移除：直接改查询缓存，避免本地镜像 state */
+          queryClient.setQueryData(
+            getQueryKey(api.task.list),
+            (old: { tasks: Array<{ id: string }> } | undefined) =>
+              old
+                ? { ...old, tasks: old.tasks.filter((task) => task.id !== id) }
+                : old,
+          );
+          if (detailId === id) setDetailId(null);
+        },
+        { report, failureText: "删除失败", successText: "已删除任务" },
+      );
     },
-    [deleteTask, detailId, toast, queryClient],
+    [deleteTask, detailId, report, queryClient],
   );
 
   const retry = useCallback(
@@ -189,20 +202,23 @@ export function useHistoryList(): HistoryListController {
         // 原 REST /api/tasks/[id]/retry 从未实现（历史一直 404）；后端无
         // 重试接口，复制参数到剪贴板，请到创作台手动重跑。
         const params = JSON.stringify(task.params ?? {}, null, 2);
-        await copyText(
+        /* 剪贴板的成败由 `copyText` 的返回**值**表达（它不抛）：失败时
+         * 走出口的失败分支，而不是让「复制失败」被 `try` 当成成功。 */
+        const copied = await copyText(
           `prompt: ${task.prompt ?? ""}\nworkflow: ${task.workflowName}\ntype: ${task.type}\nparams: ${params}`,
         );
-        toast.info(
-          "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
-        );
-      } catch {
-        toast.error("网络错误，重试请求未发送");
+        await runAsyncAction(async () => copied, {
+          report,
+          failureText: "网络错误，重试请求未发送",
+          successText:
+            "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
+        });
       } finally {
         setRetryingId(null);
         refresh();
       }
     },
-    [refresh, toast],
+    [refresh, report],
   );
 
   return {

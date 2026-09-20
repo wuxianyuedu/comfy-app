@@ -20,6 +20,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { useTheme } from "next-themes";
+import { errorMessage } from "~/lib/error-message";
 
 const EXT_TO_LANG: Record<string, string> = {
   ".ts": "typescript",
@@ -182,7 +183,11 @@ export function CodeBlock({
       } catch (err: unknown) {
         if (!cancelled) {
           setTokens(null);
-          setError(err instanceof Error ? err.message : String(err));
+          /* 失败文案走 `errorMessage`（同一枚口径，规范 16 §16.2.4.30）——
+           * 收口前这里是自己拼的 `err instanceof Error ? err.message : String(err)`，
+           * 抛出的值不是 Error 时会渲染成 `[object Object]`。
+           * 高亮失败是**非致命降级**：保持纯文本行号，所以这里不弹 toast。 */
+          setError(errorMessage(err, "代码高亮失败"));
         }
       }
     })();

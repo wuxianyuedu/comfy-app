@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Zap } from "lucide-react";
 import { authClient } from "~/server/better-auth/client";
+import { readQueryParam } from "~/lib/query-string";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
@@ -61,8 +62,20 @@ export default function LoginPage() {
         return;
       }
 
-      const params = new URLSearchParams(window.location.search);
-      const callback = params.get("callbackUrl") ?? "/workspace";
+      /* 读地址栏里的回调目标：`useSearchParams()` 在提交动作里够不到
+       * （它是渲染期契约），这里手上就是一句查询串，走 `~/lib/query-string`
+       * 的读取出口 —— 「键不存在」与「键为空串」分得开，坏转义不抛。 */
+      /* 空串 / 全空白都回落默认目标（`callbackUrl=` 是「没指定」而不是
+       * 「跳到首页」）—— 所以先归一，再判空，最后才 `??`。 */
+      const requested = readQueryParam(
+        window.location.search,
+        "callbackUrl",
+      )?.trim();
+      /* `requested` 为空串 / 全空白时回落默认目标（`callbackUrl=` 是
+       * 「没指定」而不是「跳到首页」）—— 空串归一后走 `??` 读不出差别，
+       * 所以显式用 `||` 的语义写在这一行，并在这里说明理由。 */
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串与全空白都要回落默认目标
+      const callback = requested || "/workspace";
       router.push(callback);
       router.refresh();
     } catch {

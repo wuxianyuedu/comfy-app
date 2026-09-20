@@ -3,6 +3,8 @@
 // 收窄只此一份。服务端改错误信封时改这里即可，视图零感知。
 // 类型镜像 /api/materials 响应（服务端形状见 src/lib/materials.ts）。
 
+import { withQuery } from "~/lib/query-string";
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
@@ -102,13 +104,18 @@ function parseList(body: unknown): MaterialListResult {
 export async function fetchMaterials(
   query: MaterialListQuery,
 ): Promise<MaterialListResult> {
-  const params = new URLSearchParams();
-  if (query.projectId) params.set("projectId", query.projectId);
-  params.set("scope", query.scope);
-  if (query.q) params.set("q", query.q);
-  else if (query.folder) params.set("folder", query.folder);
-
-  const res = await fetch(`${ENDPOINT}?${params.toString()}`);
+  /* 「搜索优先于分类」这条判据留在这里（它是本域的决定），但「哪些键进
+   * 查询串、怎么编码」收在 `~/lib/query-string`（规范 16 §16.2.4.32）：
+   * 空项目 / 空关键字由出口省略整个键 —— `URLSearchParams` 会把
+   * `undefined` 写成字符串 `"undefined"`，所以收口前得自己 `if` 一层。 */
+  const res = await fetch(
+    withQuery(ENDPOINT, {
+      projectId: query.projectId,
+      scope: query.scope,
+      q: query.q,
+      folder: query.q ? undefined : query.folder,
+    }),
+  );
   const body = await readJson(res);
   if (!res.ok)
     throw new Error(readMaterialError(body) ?? `请求失败 (${res.status})`);
@@ -170,7 +177,7 @@ export async function uploadMaterialItem(
 
 /** 删除素材。id 形如 `scope/folder/name`，服务端据此定位。 */
 export async function deleteMaterial(id: string): Promise<void> {
-  const res = await fetch(`${ENDPOINT}?id=${encodeURIComponent(id)}`, {
+  const res = await fetch(withQuery(ENDPOINT, { id }), {
     method: "DELETE",
   });
   const body = await readJson(res);
