@@ -96,6 +96,8 @@ playwright-report/
 
 # agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
 .workbuddy/
+# Qoder IDE 的本地会话 / 索引 / 配置（每个开发者机器各自生成，不入版本库）
+.qoder/
 
 # pnpm 本地 store（本环境 store-dir 落在仓库内，不入库）
 /.pnpm-store/
