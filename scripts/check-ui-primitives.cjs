@@ -378,6 +378,18 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P29",
   "P30",
   "P31",
+  /* 本批三条（规范 16 §16.2.4.36 ~ §16.2.4.38）：
+   *   · **P33**（生成唯一 id）：收口前的 6 处里有 2 处在 hooks
+   *     （`use-workshop-agent` 的对话条目与工具运行记录）——
+   *     「同一时刻的两条会不会撞 id」在逻辑层同样成立；
+   *   · **P34**（报错 → 建议）：词表若写在 hooks 里，一样会与视图侧漂移；
+   *   · **P35** 不在此列：它数的是「亲手拼一个画布节点对象」，
+   *     逻辑层里的落点（`use-canvas-drop`）本来就在扫描范围内、
+   *     也不需要跨 hooks 生效 —— 但**放进来无害且更一致**：
+   *     画布节点的创建逻辑天然住在 hooks 里。 */
+  "P33",
+  "P34",
+  "P35",
 ]);
 
 /**
@@ -923,9 +935,9 @@ const RULES = {
     count: (t) => {
       const t2 = stripComments(t);
       return (
-        t2.match(/\bnatural(?:Width|Height)\b/g) || []
-      ).length +
-        (t2.match(/\bvideo(?:Width|Height)\b/g) || []).length;
+        (t2.match(/\bnatural(?:Width|Height)\b/g) || []).length +
+        (t2.match(/\bvideo(?:Width|Height)\b/g) || []).length
+      );
     },
   },
 
@@ -965,8 +977,7 @@ const RULES = {
       "手拼查询串（应使用 ~/lib/query-string 的 buildQueryString / withQuery）",
     count: (t) => {
       const t2 = stripComments(t);
-      const re =
-        /(?:^|[\w./\-'"`(])[?&][A-Za-z][\w.-]*=(?:\$\{|["'`])/g;
+      const re = /(?:^|[\w./\-'"`(])[?&][A-Za-z][\w.-]*=(?:\$\{|["'`])/g;
       return (t2.match(re) || []).length;
     },
   },
@@ -1056,40 +1067,40 @@ const RULES = {
           /\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]/,
         );
         const setter = m[2];
-      /* ② **逐条写入点**：调用这个 setter 的函数**有除错误对象之外的实参**
-       *    （`polishOne(shot)` / `handleAICard(character)`）—— 说明这块错误位
-       *    是被「每一条各自」写的，而同一时刻可能两条都挂着错。
-       *
-       * ⚠️ 判据的难点全在「不误伤批量错误位」：`genError`（一句话生成整批
-       *    角色）/ `aiError`（全片拆镜）/ `loadError`（一个弹窗读源码）/
-       *    `actionError`（一个面板的上传与删除）**都是合法的单槽** ——
-       *    同一时刻只有一件事会失败，它们各自也只有一个写入点。
-       *
-       *    所以判据**不能**取 `.map(`：同一个符号在同一文件里既可能是
-       *    「逐条渲染」（`characters.map(c => <Row …>)`）也可能是
-       *    **状态更新助手**（`setXs(prev => prev.map(c => c.id === id ?
-       *    {…c, …patch} : c))`）—— 后者离 setter 的调用点很近，实测会把
-       *    `CharacterDesigner` 的 `setGenError` 误判成逐条写入。
-       *    判据只能取「写入点所在的那个函数的形参」(与 P31「名字不写死」
-       *    同款：锚在唯一的签名上)。 */
-      /* b) 从 setter 的每个调用点往前找最近的函数头，看它有没有条目实参。 */
-      let perItem = 0;
-      const callRe = new RegExp(`\\b${setter}\\s*\\(`, "g");
-      let cm;
-      while ((cm = callRe.exec(t2)) !== null) {
-        const before = t2.slice(0, cm.index);
-        const fn = before.match(
-          /(?:async\s+)?function\s+\w+\s*\(([^)]*)\)[^{]*\{[^{}]*$/,
-        );
-        if (!fn) continue;
-        const params = fn[1].trim();
-        if (!params) continue;
-        /* 唯一实参是错误对象 / 事件对象 → 那是「一个失败回调」，不是条目。 */
-        if (/^(?:event|e|ev|err|error|reason)[\s:]/i.test(params)) continue;
-        if (/^(?:event|e|ev|err|error|reason)$/i.test(params)) continue;
-        perItem += 1;
-      }
-      if (perItem > 0) hits += 1;
+        /* ② **逐条写入点**：调用这个 setter 的函数**有除错误对象之外的实参**
+         *    （`polishOne(shot)` / `handleAICard(character)`）—— 说明这块错误位
+         *    是被「每一条各自」写的，而同一时刻可能两条都挂着错。
+         *
+         * ⚠️ 判据的难点全在「不误伤批量错误位」：`genError`（一句话生成整批
+         *    角色）/ `aiError`（全片拆镜）/ `loadError`（一个弹窗读源码）/
+         *    `actionError`（一个面板的上传与删除）**都是合法的单槽** ——
+         *    同一时刻只有一件事会失败，它们各自也只有一个写入点。
+         *
+         *    所以判据**不能**取 `.map(`：同一个符号在同一文件里既可能是
+         *    「逐条渲染」（`characters.map(c => <Row …>)`）也可能是
+         *    **状态更新助手**（`setXs(prev => prev.map(c => c.id === id ?
+         *    {…c, …patch} : c))`）—— 后者离 setter 的调用点很近，实测会把
+         *    `CharacterDesigner` 的 `setGenError` 误判成逐条写入。
+         *    判据只能取「写入点所在的那个函数的形参」(与 P31「名字不写死」
+         *    同款：锚在唯一的签名上)。 */
+        /* b) 从 setter 的每个调用点往前找最近的函数头，看它有没有条目实参。 */
+        let perItem = 0;
+        const callRe = new RegExp(`\\b${setter}\\s*\\(`, "g");
+        let cm;
+        while ((cm = callRe.exec(t2)) !== null) {
+          const before = t2.slice(0, cm.index);
+          const fn = before.match(
+            /(?:async\s+)?function\s+\w+\s*\(([^)]*)\)[^{]*\{[^{}]*$/,
+          );
+          if (!fn) continue;
+          const params = fn[1].trim();
+          if (!params) continue;
+          /* 唯一实参是错误对象 / 事件对象 → 那是「一个失败回调」，不是条目。 */
+          if (/^(?:event|e|ev|err|error|reason)[\s:]/i.test(params)) continue;
+          if (/^(?:event|e|ev|err|error|reason)$/i.test(params)) continue;
+          perItem += 1;
+        }
+        if (perItem > 0) hits += 1;
       }
       return hits;
     },
@@ -1118,15 +1129,14 @@ const RULES = {
     count: (t) => {
       const t2 = stripComments(t);
       /* `let cancelled = false;` 这类声明：名字带作废语义。 */
-      const decls = t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) || [];
+      const decls =
+        t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) || [];
       let hits = 0;
       for (const decl of decls) {
         const name = decl.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=/)[1];
         if (!/cancel|abort|stale|alive|disposed/i.test(name)) continue;
         /* 读法：`if (x)` / `if (!x)` —— 只要有读，且有置位。 */
-        const readRe = new RegExp(
-          `if\\s*\\(\\s*!?\\s*(?:this\\.)?${name}\\b`,
-        );
+        const readRe = new RegExp(`if\\s*\\(\\s*!?\\s*(?:this\\.)?${name}\\b`);
         const setRe = new RegExp(`\\b${name}\\s*=\\s*true\\s*;`);
         if (readRe.test(t2) && setRe.test(t2)) hits += 1;
       }
@@ -1181,15 +1191,126 @@ const RULES = {
        * 「error 字段」是**各自协议的业务字段**，不是 HTTP 错误信封
        * （与 P22「不数对内路由跳转」、P31「名字不写死」同款：判据锚在
        * 唯一的签名上，误伤一个合规者就等于逼人改坏代码）。 */
-      const read = t2.match(
-        /(?:isRecord\s*\(\s*(\w+)\s*\)[\s\S]{0,80}?|\b(\w*(?:body|json|data)\w*)\s+as\s*\{[\s\S]{0,80}?)[\s\S]{0,80}?\b\1\2\.error\b/g,
-      ) || [];
+      const read =
+        t2.match(
+          /(?:isRecord\s*\(\s*(\w+)\s*\)[\s\S]{0,80}?|\b(\w*(?:body|json|data)\w*)\s+as\s*\{[\s\S]{0,80}?)[\s\S]{0,80}?\b\1\2\.error\b/g,
+        ) || [];
       return write + read.length;
+    },
+  },
+  /* ── P33「给一条新记录生成 id」（硬闸，§16.2.4.36）─────────────────────
+   * 形态：`Date.now().toString(36)` / `Date.now()` 出现在一个**字符串拼接**里
+   * —— 也就是「时间戳 + 序号 / 随机段」这种手写的唯一 id。
+   *
+   * ⚠️ 两条边界都是实测踩出来的：
+   *   1. **要求出现在模板串或字符串拼接里** —— 只数 `Date.now()` 会把
+   *      「取当前时刻」这一大类算上（日志解析的 `parsedAt` 兜底、去重判据、
+   *      `time:` 字段），它们与 id 无关；
+   *   2. **`time:` / `at:` / `expires` 这类键不算** —— 它们把时刻当**值**用，
+   *      不是把它当 id 的一段。判据只认「时刻与别的片段一起被拼成一个串」。
+   *
+   * 出口：`~/lib/unique-id` 的 `nextId` / `randomToken`。
+   * 收口前实测 6 处，分三派（计数器取模 / 随机后缀 / 裸毫秒数），
+   * 「同一毫秒产生的两条会不会撞 id」因此取决于是哪一处生成的。
+   */
+  P33: {
+    label: "自写「时间戳 + 序号」的唯一 id（应使用 ~/lib/unique-id 的 nextId）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      let hits = 0;
+      /* ① 模板串里的 `Date.now()`，且它**参与了 id 的拼装** —— 判据要求同
+       *    一串里另有 id 语义线索：`id` / `Id` / `_id` / `n_` / `msg_` 这类
+       *    前缀、`Math.random()` 随机段、或 `.toString(36)`。
+       *
+       *    ⚠️ 只数模板串里的 `Date.now()` 会把「把时刻当值用」的落点一起算上
+       *    （SSE 心跳注释行 `: hb ${Date.now()}`、文件名 `` `${Date.now()}_…` ``
+       *    —— 都不是「记录 id」，它们不参与任何去重 / 排序 / 引用判据）。
+       *    收口前那 6 处**每一处**都另有这三类线索之一，所以判据收窄后
+       *    仍全部命中（改完为 0）。 */
+      const ID_HINT_RE =
+        /(?:\b[A-Za-z_$]*[Ii]d\b|Math\.random\(\)|\.toString\(36\)|_\$?\{)/;
+      const templates = t2.match(/`[^`]*`/g) || [];
+      for (const tpl of templates) {
+        if (!/\bDate\.now\(\)/.test(tpl)) continue;
+        if (ID_HINT_RE.test(tpl)) hits += 1;
+      }
+      /* ② 字符串拼接里的同类写法：`"x_" + Date.now()` / `Date.now() + "_"`。
+       *    ⚠️ 判据要求 `Date.now()` 的**另一侧是一个字符串字面量** ——
+       *    否则 `Date.now() + 10 * 60 * 1000`（算截止时刻）这类算术会被算上，
+       *    而那与 id 无关（实测踩到：`VideoStudio` 的轮询超时 deadline）。 */
+      hits += (
+        t2.match(
+          /(?:"[^"\n]*"\s*\+\s*(?:Date\.now\(\)|new Date\(\)\.getTime\(\)))|(?:(?:Date\.now\(\)|new Date\(\)\.getTime\(\))\s*\+\s*"[^"\n]*")/g,
+        ) || []
+      ).length;
+      return hits;
+    },
+  },
+
+  /* ── P34「ComfyUI 报错 → 可行动建议」（硬闸，§16.2.4.37）────────────────
+   * 形态：**建议文案与判据词表在同一处** —— 即同一文件里既有
+   * `建议：` 这类行文开头，又有「报错形态」的正则（`out of memory` /
+   * `checkpoint` / `econnrefused` / `not installed` 这类 ComfyUI 报错的特征词）。
+   *
+   * ⚠️ **两个条件必须同时成立**：只数「建议」会把界面上任何一句提示算上；
+   * 只数特征词会把**读过原文并原样展示**的落点算上（那是对的写法 ——
+   * 判据要拦的是「自己又写了一份词表」）。
+   *
+   * 出口：`~/lib/comfyui/error-advice` 的 `adviseOnError` / `adviseWithFallback`。
+   * 收口前两处（任务历史卡、画布节点错误面板）各写一份词表，同一句报错在两处
+   * 给出的建议不同，且告警词表互相漏项。
+   */
+  P34: {
+    label:
+      "自写「ComfyUI 报错 → 建议」的规则表（应使用 ~/lib/comfyui/error-advice 的 adviseOnError）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      const hasAdviceText = /建议[:：]/.test(t2);
+      if (!hasAdviceText) return 0;
+      const faultRe =
+        /out of memory|OOM|cuda out|tried to allocate|checkpoint|ckpt|\.safetensors|econnrefused|econnreset|fetch failed|server_busy|prompthelperror|not installed/i;
+      const literalRe = /\/(?:[^/\\\n]|\\.)*\/[gimsuy]*/g;
+      const literals = t2.match(literalRe) || [];
+      return literals.some((re) => faultRe.test(re)) ? 1 : 0;
+    },
+  },
+
+  /* ── P35「把新节点放进画布」（硬闸，§16.2.4.38）─────────────────────────
+   * 形态：视图 / 逻辑层里**亲手拼一个画布节点对象** —— 同一片段里既有
+   * `type: "canvasNode"`，又有 `position:`。
+   *
+   * ⚠️ 只数 `id: makeNodeId()` 会把「只改 data 的节点更新助手」与
+   * `makeNodeId` 的单测一起算上；只数 `position:` 会把连线的 `position`
+   * （下拉锚点、菜单坐标）算上。两个锚点一起才咬住「新建一个节点」。
+   *
+   * 出口：`~/lib/project-canvas/canvas-helpers` 的 `placeCanvasNode`
+   *（取落点 → 换算 → 组节点 → 追加四步一次给全）。收口前三个入口各写一遍，
+   * `screenToFlowPosition` 的入参含义在 `use-canvas-drop` 的注释里还写过一遍
+   * 反的（注释说 client 坐标、代码传的是 flow 坐标）。
+   */
+  P35: {
+    label:
+      "视图 / 逻辑层里亲手拼画布节点（应使用 ~/lib/project-canvas/canvas-helpers 的 placeCanvasNode）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 判据取「同一片段里同时出现 `type: "canvasNode"` 与 `position:`」——
+       * 窗口取 300 字符（与 P17 的 160 字符同款：太大会把相邻的两个对象
+       * 连起来误报，太小会漏掉 `data` 比较长的节点）。
+       * ⚠️ 不用「花括号配对」取块：节点对象里**必然**嵌套 `position: { x, y }`，
+       * `\{[^{}]*\}` 这种非嵌套匹配会整片漏掉（实测：反面用例自己先挂了）。 */
+      const marker = /\btype:\s*"canvasNode"/g;
+      let hits = 0;
+      let m;
+      while ((m = marker.exec(t2)) !== null) {
+        const window = t2.slice(Math.max(0, m.index - 300), m.index + 300);
+        if (/\bposition\s*:/.test(window)) hits += 1;
+      }
+      return hits;
     },
   },
 };
 
-/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P32 属此类）。 */
+/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P35 属此类）。 */
 const HARD_GATE_RULES = new Set([
   "P4",
   "P5",
@@ -1220,6 +1341,9 @@ const HARD_GATE_RULES = new Set([
   "P30",
   "P31",
   "P32",
+  "P33",
+  "P34",
+  "P35",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -1335,7 +1459,7 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P32）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P35）。\n  " +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、" +
@@ -1421,7 +1545,8 @@ function main() {
   console.log(
     `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键 / P21 自写滚动跟随 / P22 自写外部导航 / P23 自写表单行 / P24 自写读文件 / P25 自写 localStorage /
   P26 自写 Enter 提交 / P27 自写异步动作反馈样板 / P28 自读媒体自然尺寸 /
-  P29 手拼查询串 / P30 按条目共用错误位 / P31 自写作废守卫 / P32 手拼错误信封，须为 0）：${hardGateHits(now).length} 处`,
+  P29 手拼查询串 / P30 按条目共用错误位 / P31 自写作废守卫 / P32 手拼错误信封 /
+  P33 自写唯一 id / P34 自写报错建议词表 / P35 亲手拼画布节点，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -1441,7 +1566,9 @@ function main() {
         "  手拼查询串 → ~/lib/query-string 的 buildQueryString / withQuery（媒体预览地址走 ~/lib/media/media-url）；\n" +
         "  按条目的错误位 → ~/components/ui/use-item-errors 的 useItemErrors（错误挂在**那一条**上）；\n" +
         "  取数 effect 的作废守卫 → ~/lib/stale-run 的 beginStaleRun（`commit` 一次给全「这一轮的写入」）；\n" +
-        "  服务端错误信封 → ~/lib/api-error 的 apiErrorBody / readApiError（纯错误走 ~/server/lib/error-response）。\n" +
+        "  服务端错误信封 → ~/lib/api-error 的 apiErrorBody / readApiError（纯错误走 ~/server/lib/error-response）；\n" +
+        "  唯一 id → ~/lib/unique-id 的 nextId / uniqueStamp；ComfyUI 报错建议 → ~/lib/comfyui/error-advice 的 adviseOnError；\n" +
+        "  往画布放节点 → ~/lib/project-canvas/canvas-helpers 的 placeCanvasNode。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);

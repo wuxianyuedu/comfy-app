@@ -12,6 +12,8 @@
 
 import { create } from "zustand";
 
+import { nextId } from "~/lib/unique-id";
+
 export type MessageKind = "update" | "restart" | "info";
 
 export interface MessageRecord {
@@ -48,11 +50,12 @@ export interface MessageCenterState {
   clear: () => void;
 }
 
-let msgSeq = 0;
-
+/* id 走全库唯一出口 `~/lib/unique-id` —— 收口前这里自写「时间戳 + 计数器」，
+ * 而且计数器**取模回绕**（`(msgSeq + 1) % 1_000_000`）：转一圈之后同一毫秒内
+ * 的两条消息会拿到同一个 id。消息中心按 id 标记已读 / 删除，撞 id 的表现是
+ * 「删一条把另一条一起删了」。 */
 function makeId(): string {
-  msgSeq = (msgSeq + 1) % 1_000_000;
-  return `msg_${Date.now().toString(36)}_${msgSeq.toString(36)}`;
+  return nextId("msg_");
 }
 
 const MAX_MESSAGES = 200;

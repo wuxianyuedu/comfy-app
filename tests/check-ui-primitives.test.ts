@@ -1286,8 +1286,10 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P30).toBeUndefined();
     expect(baseline.rules.P31).toBeUndefined();
     expect(baseline.rules.P32).toBeUndefined();
+    expect(baseline.rules.P33).toBeUndefined();
+    expect(baseline.rules.P34).toBeUndefined();
+    expect(baseline.rules.P35).toBeUndefined();
   });
-
 
   /* ── P30 / P31 / P32：本批三条硬闸（规范 §16.2.4.33 ~ §16.2.4.35）────
    *
@@ -1379,7 +1381,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "export function usePlanner(shots: Shot[]) {",
         "  const errors = useItemErrors(shots.map((s) => s.id));",
         "  async function polishOne(shot: Shot) {",
-        "    errors.report(shot.id)(\"err\", \"润色失败\");",
+        '    errors.report(shot.id)("err", "润色失败");',
         "  }",
         "  return { errors, polishOne };",
         "}",
@@ -1478,7 +1480,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "src/components/studio/raw-reader.ts",
       [
         "export function readRaw(body: unknown) {",
-        "  if (isRecord(body) && typeof body.error === \"string\") return body.error;",
+        '  if (isRecord(body) && typeof body.error === "string") return body.error;',
         "  return undefined;",
         "}",
       ].join("\n"),
@@ -1514,7 +1516,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "  try {",
         "    return NextResponse.json(await build());",
         "  } catch (e) {",
-        "    return NextResponse.json(apiErrorBody(e, \"读取失败\"), {",
+        '    return NextResponse.json(apiErrorBody(e, "读取失败"), {',
         "      status: 500,",
         "    });",
         "  }",
@@ -1532,6 +1534,172 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       [
         "export function readClean(body: unknown) {",
         "  return readApiError(body);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P33 / P34 / P35：本批三条硬闸（规范 §16.2.4.36 ~ §16.2.4.38）────
+   *
+   * 三条都按**形态**取锚点，每条都配反面用例 —— 判据太宽会逼下一个人改坏
+   * 代码去迎合它（P29 那批踩得最深；本批的 P33 收窄前后各踩到一次：
+   * `Date.now() + 10 * 60 * 1000` 是算截止时刻，不是 id）。 */
+  it("手拼「时间戳 + 序号」的 id 直接阻断（规范 P33）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/blank-id.ts",
+      [
+        "let n = 0;",
+        "export function makeId(): string {",
+        "  n = (n + 1) % 1_000_000;",
+        "  return `msg_${Date.now().toString(36)}_${n.toString(36)}`;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P33");
+    expect(output).toContain("blank-id.ts");
+  });
+
+  it("字符串拼接形态的 id 也计 P33（更差的那一半）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/blank-concat.ts",
+      'export const id = "shot-" + Date.now();\n',
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P33");
+  });
+
+  it("只把时刻当值用不算 P33（不是 id：超时截止、SSE 心跳）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/blank-clock.ts",
+      [
+        "export function poll(): void {",
+        "  const deadline = Date.now() + 10 * 60 * 1000;",
+        "  while (Date.now() < deadline) void tick();",
+        "  send(`: hb ${Date.now()}`);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 nextId 的落点不再被 P33 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/clean-id.ts",
+      [
+        'import { nextId } from "~/lib/unique-id";',
+        "export function makeId(): string {",
+        '  return nextId("msg_");',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("自写「ComfyUI 报错 → 建议」词表直接阻断（规范 P34）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/blank-advice.ts",
+      [
+        "export function advise(err: string): string {",
+        "  if (/out of memory|OOM|cuda/i.test(err))",
+        '    return "建议：降低 batch size 或分辨率。";',
+        '  return "建议：检查 ComfyUI 服务状态后重试。";',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P34");
+  });
+
+  it("只是展示报错原文不算 P34（读过原文是对的写法）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/blank-raw-error.ts",
+      [
+        "export function RawError({ error }: { error: string }) {",
+        "  if (/out of memory/i.test(error)) return <pre>{error}</pre>;",
+        "  return <pre>{error}</pre>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 adviseOnError 的落点不再被 P34 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/clean-advice.ts",
+      [
+        'import { adviseOnError } from "~/lib/comfyui/error-advice";',
+        "export function advise(err: string): string | null {",
+        "  return adviseOnError(err);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("亲手拼一个画布节点直接阻断（规范 P35）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/blank-canvas.tsx",
+      [
+        "export function add(setNodes: SetNodes) {",
+        "  setNodes((nds) => [",
+        "    ...nds,",
+        "    {",
+        '      id: "n_1",',
+        '      type: "canvasNode",',
+        "      position: { x: 0, y: 0 },",
+        '      data: defaultData("image"),',
+        "    },",
+        "  ]);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P35");
+  });
+
+  it("只改 data 的节点更新助手不算 P35（没有 position）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/blank-node-patch.ts",
+      [
+        "export function patch(nodes: CanvasNodeType[], id: string) {",
+        '  return nodes.map((n) => (n.id === id ? { ...n, type: "canvasNode" } : n));',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 placeCanvasNode 的落点不再被 P35 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/clean-canvas.tsx",
+      [
+        'import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";',
+        "export function add(setNodes: SetNodes, flow: Flow) {",
+        "  setNodes((nds) =>",
+        '    placeCanvasNode({ nodes: nds, flow, data: defaultData("image") }),',
+        "  );",
         "}",
       ].join("\n"),
     );

@@ -1,9 +1,10 @@
 import type { Scene, ProjectMeta, ProjectType } from "./types";
+import { nextId } from "~/lib/unique-id";
 
-let _id = 0;
+/* 场景 / 分镜 id 走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是
+ * 「时间戳 + 模块级计数器」，与另几处（日志 / 消息中心 / 画布节点）各写一份。 */
 function uid(prefix = "id"): string {
-  _id += 1;
-  return `${prefix}_${Date.now().toString(36)}_${_id}`;
+  return nextId(`${prefix}_`);
 }
 
 /* 把自由发挥的想法 / 粘贴进来的文本转成结构化的场景列表。

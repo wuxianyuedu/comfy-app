@@ -8,7 +8,7 @@
  *  所有组件作用域的闭包（d / patch / wfIO / React Flow setter）
  *  都经 args 对象显式传入。 */
 import { useEffect, type Dispatch, type SetStateAction } from "react";
-import type { Edge, Node } from "@xyflow/react";
+import type { Edge, Node, XYPosition } from "@xyflow/react";
 import {
   outputTargetKind,
   toWorkflowInputsPayload,
@@ -19,7 +19,10 @@ import {
   type CanvasNodeData,
   defaultData,
 } from "~/lib/project-canvas/canvas-types";
-import { makeNodeId } from "~/lib/project-canvas/canvas-helpers";
+import {
+  makeNodeId,
+  placeCanvasNode,
+} from "~/lib/project-canvas/canvas-helpers";
 import { beginStaleRun } from "~/lib/stale-run";
 import {
   importOutputAsInput,
@@ -68,6 +71,9 @@ export interface UseGenerateArgs {
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
   getNode: (id: string) => Node | undefined;
+  /** 屏幕坐标 → 画布坐标（`useReactFlow().screenToFlowPosition`）——
+   *  自动孵化下游节点时由出口用它换算落点。 */
+  screenToFlowPosition: (p: XYPosition) => XYPosition;
 }
 
 export function useGenerate({
@@ -80,6 +86,7 @@ export function useGenerate({
   setNodes,
   setEdges,
   getNode,
+  screenToFlowPosition,
 }: UseGenerateArgs) {
   /* 挂载时对账 —— 若节点带着陈旧的 `status="running"` 被
    *  加载（例如生成进行中 dev server 重启了，或用户在运行中
@@ -237,7 +244,10 @@ export function useGenerate({
           // 工作流节点只孵化一次（workflowSinkId 挡住重跑）。
           let sinkId = d.workflowSinkId;
           if (!sinkId) {
-            const nid = makeNodeId();
+            /* 这是**第四个**「把新节点放进画布」的落点（规范 16
+             * §16.2.4.38）—— 收口时只找到三处，是 P35 的判据把它抓出来的。
+             * 它的落点既不是指针也不是视口中心，而是**源节点右侧 340px**，
+             * 所以走出口的 `flowPosition` 那一支（坐标本身已在画布坐标系里）。 */
             const cur = getNode(id);
             const base = cur?.position ?? { x: 0, y: 0 };
             const isVideoOut =
@@ -267,15 +277,19 @@ export function useGenerate({
                   inputImage: imported ?? null,
                   mode: imported ? "img2img" : "txt2img",
                 };
-            setNodes((nds) => [
-              ...nds,
-              {
+            /* 节点 id 由出口生成 —— 先在本地算一份，好让紧接着的自动连线
+             * 用同一个 id（出口的 `placeCanvasNode` 只吃「已经定好的 id」
+             * 会把它自己的那枚判据挪回调用处）。 */
+            const nid = makeNodeId();
+            setNodes((nds) =>
+              placeCanvasNode({
+                nodes: nds,
                 id: nid,
-                type: "canvasNode",
-                position: { x: base.x + 340, y: base.y },
-                data: sinkData,
-              },
-            ]);
+                flowPosition: { x: base.x + 340, y: base.y },
+                flow: { screenToFlowPosition },
+                data: sinkData as CanvasNodeData,
+              }),
+            );
             setEdges((eds) => [
               ...eds,
               {

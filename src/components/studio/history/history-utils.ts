@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
+import { adviseWithFallback } from "~/lib/comfyui/error-advice";
 import { timeAgo as timeAgoImpl } from "~/lib/time-format";
 
 import type { TaskItem } from "./history-types";
@@ -68,20 +69,17 @@ export const STATUS_STYLE: Record<string, StatusStyle> = {
   },
 };
 
+/** 失败原因 → 一行可行动建议。
+ *
+ * 规则表本体收在 `~/lib/comfyui/error-advice`（规范 16 §16.2.4.37）——
+ * 收口前这里与画布节点错误面板**各写一份词表**，同一句 ComfyUI 报错在两处
+ * 会给出不同建议（`out of memory` 一处提「拆批次」、另一处提「降分辨率」），
+ * 且两边的告警词表互相漏项（「队列满了」在画布节点上根本没有建议）。
+ *
+ * 这里用 `adviseWithFallback` 而不是 `adviseOnError`：本卡片的建议是失败原因
+ * 下方**位置固定**的一行，给不出建议就会跳一次布局。 */
 export function suggestFix(err?: string | null): string {
-  if (!err) return "建议：检查 ComfyUI 服务状态后重试。";
-  if (/ckpt|checkpoint/i.test(err))
-    return "建议：检查 ckpt_name 是否存在于 ComfyUI 模型目录，或换一个可用模型。";
-  if (/seed/i.test(err))
-    return "建议：seed 值超出 INT 范围或被损坏，换一个随机 seed 重试。";
-  if (/network|timeout|connect|ECONNREFUSED|fetch failed/i.test(err))
-    return "建议：检查本地 ComfyUI 服务是否在线、端口是否被防火墙阻挡。";
-  if (/prompt|empty|null|undefined/i.test(err))
-    return "建议：检查提示词是否为空或包含非法字符。";
-  if (/out of memory|OOM|cuda/i.test(err))
-    return "建议：降低 batch size / 分辨率，或切换到更小的模型。";
-  if (/queue/i.test(err)) return "建议：清空 ComfyUI 队列或重启服务后重试。";
-  return `建议：复制错误码到 ComfyUI 控制台查日志：${err.slice(0, 40)}${err.length > 40 ? "…" : ""}`;
+  return `建议：${adviseWithFallback(err)}`;
 }
 
 /** 把 ISO 时间归到日期桶：今天 / 昨天 / yyyy-mm-dd */

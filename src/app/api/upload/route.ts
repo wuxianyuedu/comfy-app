@@ -5,6 +5,7 @@ import { ensureComfyUiReady } from "~/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
 import { apiErrorDetail } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { uniqueStamp } from "~/lib/unique-id";
 
 export const runtime = "nodejs";
 
@@ -52,7 +53,10 @@ export async function POST(req: NextRequest) {
   const ext = file.name.includes(".")
     ? file.name.slice(file.name.lastIndexOf("."))
     : ".png";
-  const filename = `comfyapp_${Date.now()}_${Math.floor(Math.random() * 1e6)}${ext}`;
+  /* 文件名走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是
+   * `comfyapp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`，与另两处
+   * 上传路由各写一份判据（其中一处用 36 进制随机段）。 */
+  const filename = `${uniqueStamp("comfyapp-")}${ext}`;
 
   try {
     const res = await uploadImage(buf, filename, "input");

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { currentServerUser } from "~/server/auth/request-user";
+import { uniqueStamp } from "~/lib/unique-id";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +43,9 @@ export async function POST(req: NextRequest) {
   const buf = Buffer.from(await file.arrayBuffer());
   const ext = path.extname(file.name) || ".mp3";
   const safe = file.name.replace(/[^\w.\-一-龥]/g, "_").slice(0, 60);
-  const name = `${Date.now()}_${safe}${ext}`;
+  /* 落盘文件名走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是手拼的
+   * `${Date.now()}_${safe}${ext}`，与另两处上传路由各写一份「怎么保证不撞名」。 */
+  const name = `${uniqueStamp("bgm-")}_${safe}${ext}`;
   const dir = path.join(process.cwd(), "public", "generated", "films", "bgm");
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, name), buf);

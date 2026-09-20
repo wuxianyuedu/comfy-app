@@ -12,6 +12,7 @@ import { X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
+import { nextId } from "~/lib/unique-id";
 
 type ToastKind = "success" | "error" | "info" | "loading";
 
@@ -101,7 +102,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const toast = useCallback(
     (t: Omit<ToastItem, "id">) => {
-      const id = `t_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      /* id 走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是
+       * 「毫秒数 + 5 位随机后缀」，与日志 / 消息中心那两处的「36 进制时间戳 +
+       * 递增序号」是**两种形状**：同一批产生的两条 toast 谁在前谁在后，
+       * 取决于哪一种。 */
+      const id = nextId("t_");
       setItems((prev) => [...prev, { ...t, id }]);
       schedule(id, t.duration ?? (t.kind === "loading" ? 0 : 3200));
       return id;
