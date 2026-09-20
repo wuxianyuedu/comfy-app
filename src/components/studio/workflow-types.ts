@@ -8,6 +8,7 @@
  *  `raw_inputs`（snake，服务端 DTO）/ `rawInputs`（camel，画布 data）/
  *  `inputs`（裸名，子图 data）同源，`rawJson` 同理。别只认其中一个名字。 */
 import type { ApiWorkflowNode } from "~/lib/comfyui/raw";
+import type { AnchorRect } from "~/lib/dom-rect";
 import type {
   WorkflowIOModeOverride,
   IOParamSlot,
@@ -224,14 +225,9 @@ export interface RgthreeGroupsContextValue {
 export interface NodeJsonViewerRequest {
   /** 触发浮层的 `#id` 芯片的 `DOMRect`。用户点下时抓取一次，随后在浮层
    *  存续期间冻结 —— 否则重渲染（或平移/缩放）会在阅读过程中把它拖着走。 */
-  anchorRect: {
-    left: number;
-    top: number;
-    right: number;
-    bottom: number;
-    width: number;
-    height: number;
-  };
+  /** 形状由 `~/lib/dom-rect` 的 `rectToAnchorRect` 给出（规范 16 §16.2.4.41）——
+   *  「把活着的 DOMRect 冻成一个可存的对象」这件事只在这一处定义。 */
+  anchorRect: AnchorRect;
   /** ComfyUI 工作流 JSON 的键 —— `data.nodeId`。子图**同样是**这个键
    *  （子图封装节点是 `graph` 里的顶层条目，不是嵌套的）。 */
   nodeId: string;

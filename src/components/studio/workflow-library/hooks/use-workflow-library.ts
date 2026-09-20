@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { errorMessage } from "~/lib/error-message";
 import { api } from "~/trpc/react";
+import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
 import {
@@ -77,9 +78,11 @@ export interface WorkflowLibraryController {
   deleting: boolean;
   cancelDelete: () => void;
   confirmDelete: (id: string) => Promise<void>;
-  /* 忙碌标志 */
+  /* 忙碌标志（由 `useItemAction` 给：id + 「这一条忙不忙」的判据） */
   bundleBusy: string | null;
   resyncBusy: string | null;
+  isBundleBusy: (id: string) => boolean;
+  isResyncBusy: (id: string) => boolean;
   /** 单个待载入项的「载入中」标志 —— 列表按 id 查表。 */
   pendingLoading: Record<string, boolean>;
   /* 错误：动作失败（不会自动消失） */
@@ -297,8 +300,12 @@ export function useWorkflowLibrary(
   );
 
   const [deleting, setDeleting] = useState(false);
-  const [bundleBusy, setBundleBusy] = useState<string | null>(null);
-  const [resyncBusy, setResyncBusy] = useState<string | null>(null);
+  /* 「哪一条在下载 / 在同步」收在 `~/components/ui/use-item-action`
+   *（规范 16 §16.2.4.40）：此前是该文件自持的两个 `useState<string | null>`，
+   * 且**都没有防重复点**（`setXBusy(id)` 是异步落状态，同一次事件循环里连点
+   * 两下读不出来）。出口的 `run` 一次给全「忙标记 + 判重入 + finally 清理」。 */
+  const bundleAction = useItemAction();
+  const resyncAction = useItemAction();
   /* 只写不读：载入中的标志目前只由 `useWorkflowActions` 的 finally 清理，
    * 视图尚未渲染它（保持本次「只搬不改」）。保留是为了不丢掉这条状态通道。 */
   const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>(
@@ -309,8 +316,8 @@ export function useWorkflowLibrary(
     setDeleting,
     setPendingDelete,
     setActionError,
-    setBundleBusy,
-    setResyncBusy,
+    runBundle: bundleAction.run,
+    runResync: resyncAction.run,
     setPendingLoading,
     setWorkflows,
     load,
@@ -397,8 +404,10 @@ export function useWorkflowLibrary(
     deleting,
     cancelDelete,
     confirmDelete: actions.handleDelete,
-    bundleBusy,
-    resyncBusy,
+    bundleBusy: bundleAction.busyId,
+    resyncBusy: resyncAction.busyId,
+    isBundleBusy: bundleAction.isBusy,
+    isResyncBusy: resyncAction.isBusy,
     pendingLoading,
     actionError,
     loadError: listQ.error

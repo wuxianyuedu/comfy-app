@@ -10,6 +10,7 @@ import { getQueryKey } from "@trpc/react-query";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { copyText } from "~/lib/browser-io";
+import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
 import {
@@ -47,6 +48,8 @@ export interface HistoryListController {
   /** 进行中任务的模拟进度 Map。 */
   progressMap: Record<string, number>;
   retryingId: string | null;
+  /** 「这一条在重试吗」的判据（收在 `useItemAction` 里，视图不再自己比较）。 */
+  isRetrying: (id: string) => boolean;
   detailId: string | null;
   detail: TaskDetail | null;
   detailLoading: boolean;
@@ -75,7 +78,10 @@ export function useHistoryList(): HistoryListController {
   const [sort, setSort] = useState<SortKey>("newest");
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [retryingId, setRetryingId] = useState<string | null>(null);
+  /* 「哪一条在重试」收在 `useItemAction`（规范 16 §16.2.4.40）：
+   * 此前是本文件自持的 `useState<string | null>`，与工坊两处（AI 润色）、
+   * 工作流库的下载与同步各写一份 —— 而「同一条能不能重复点」四处都没防。 */
+  const retryAction = useItemAction();
 
   const tasksQ = api.task.list.useQuery(undefined, {
     /* 保持旧数据：refetch / 删除后回源不闪空列表 */
@@ -197,8 +203,7 @@ export function useHistoryList(): HistoryListController {
 
   const retry = useCallback(
     async (task: TaskItem) => {
-      setRetryingId(task.id);
-      try {
+      await retryAction.run(task.id, async () => {
         // 原 REST /api/tasks/[id]/retry 从未实现（历史一直 404）；后端无
         // 重试接口，复制参数到剪贴板，请到创作台手动重跑。
         const params = JSON.stringify(task.params ?? {}, null, 2);
@@ -213,12 +218,12 @@ export function useHistoryList(): HistoryListController {
           successText:
             "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
         });
-      } finally {
-        setRetryingId(null);
-        refresh();
-      }
+      });
+      /* 忙标记由出口的 `finally` 清；这里只负责刷新（失败也要刷新，
+       * 用户可能是在别处重跑成功的）。 */
+      refresh();
     },
-    [refresh, report],
+    [refresh, report, retryAction],
   );
 
   return {
@@ -233,7 +238,8 @@ export function useHistoryList(): HistoryListController {
     canLoadMore,
     empty,
     progressMap,
-    retryingId,
+    retryingId: retryAction.busyId,
+    isRetrying: retryAction.isBusy,
     detailId,
     detail,
     detailLoading,

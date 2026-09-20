@@ -390,6 +390,9 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P33",
   "P34",
   "P35",
+  "P36",
+  "P37",
+  "P38",
 ]);
 
 /**
@@ -1308,9 +1311,136 @@ const RULES = {
       return hits;
     },
   },
+
+  /* ── P36「把一棵树的展开状态画成缩进列表」（硬闸，§16.2.4.39）───────────
+   * 形态：**同一片段里既有展开判据、又有一组手写的缩进档** —— 一棵树每往下
+   * 走一层都要再手写一遍「缩进 + 子行集合容器」。
+   *
+   * ⚠️ 两个条件必须同时成立：
+   *   · 只数缩进档（`ml-*` / `pl-*`）会把界面上的**卡片左内边距**、列表项的
+   *     常规缩进算上（全库几百处）；
+   *   · 只数展开判据（`isExpanded(` / `expanded &&`）会把**任何条件渲染**算上
+   *     （那是无处不在的合法写法）。
+   *
+   * 缩进档的判据取「**同一个 class 串里既有 `ml-*`/`pl-*`，又有引导线
+   * `border-l-*`**」—— 那正是「子行集合」的形态（`NodesTab` 的
+   * `ml-3 … border-l-2 border-dashed … pl-3`）。窗口取 400 字符：够跨过
+   * `cn(...)` 里那几行，又不至于把相邻的两个容器连起来。
+   *
+   * 出口：`~/components/ui/tree-rows` 的 `TreeChildren` / `TreeRow` /
+   * `indentClass`（缩进档与引导线是一组语义，`expansion-set` 只管状态、
+   * `Disclosure` 只管一行怎么折）。
+   */
+  P36: {
+    label:
+      "视图里手写「树的缩进档 + 子行集合容器」（应使用 ~/components/ui/tree-rows 的 TreeChildren / TreeRow）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 引导线 + 缩进同处一个 class 串 —— 即「子行集合」的形态。 */
+      const railRe =
+        /["'`][^"'`\n]*\b(?:ml|pl)-(?:2|3|4|5|6|8)\b[^"'`\n]*\bborder-l-\d\b[^"'`\n]*["'`]/g;
+      const rails = t2.match(railRe) || [];
+      if (rails.length === 0) return 0;
+      /* 展开判据：`isExpanded(` 这类读取，或 `<flag> && (` 条件渲染。 */
+      const expandRe =
+        /isExpanded\s*\(|\b(?:isOpen|open|expanded|expand\w*)\s*&&/;
+      return expandRe.test(t2) ? rails.length : 0;
+    },
+  },
+
+  /* ── P37「一屏多条目、一次只忙一条」（硬闸，§16.2.4.40）─────────────────
+   * 形态：**单值忙碌位的声明**，或**把它与条目 id 比较**。
+   *
+   * ⚠️ 不能只数 `useState<string | null>` —— 那是全库「当前选中项」的通用写法
+   *（菜单 id / 激活项 / 悬停项），会把几百处合法代码算进来；忙碌语义由**变量名**
+   * 给出（`…BusyId` / `…retry…Id`）—— 与 P30 同款：变量名是这条账里唯一能区分
+   *「忙碌位」与「选中位」的记号。
+   *
+   * ⚠️ 也不能要求「同一文件里同时出现两样」—— 控制器的声明
+   *（`use-history-list`）与视图的比较（`HistoryList`）常常分处两个文件。
+   *
+   * 出口：`~/components/ui/use-item-action` 的 `useItemAction`
+   *（忙标记 + `isBusy` 判据 + 同步 `ref` 判重入 + 随条目消失收敛）。
+   */
+  P37: {
+    label:
+      "视图 / 逻辑层里自写「某一条在忙」的执行态（应使用 ~/components/ui/use-item-action 的 useItemAction）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件直接跳过 —— 它的忙位由 `useItemAction` 给。 */
+      if (/useItemAction/.test(t2)) return 0;
+      const slotRe =
+        /(?:const|let)\s*\[\s*(\w+)\s*,[^\]]*\]\s*=\s*(?:React\.)?useState<\s*string\s*\|\s*null\s*>\(\s*null\s*\)/g;
+      let hits = 0;
+      let m;
+      while ((m = slotRe.exec(t2)) !== null) {
+        if (isBusySlotName(m[1])) hits += 1;
+      }
+      /* 视图侧的比较形态：`<busy 名字> === <x>.id`。 */
+      const cmpRe = /\b(\w*[Bb]usy\w*|\w*[Rr]etry\w*Id\w*)\s*===?\s*\w+\.id\b/g;
+      while ((m = cmpRe.exec(t2)) !== null) {
+        if (isBusySlotName(m[1])) hits += 1;
+      }
+      return hits;
+    },
+  },
+
+  /* ── P38「读一个元素的几何」（硬闸，§16.2.4.41）────────────────────────
+   * 形态取**算式**，不取「有没有调 `getBoundingClientRect`」。
+   *
+   * ⚠️ 只读尺寸不写（对齐检查）是合法的；这条账里更差的一半恰恰是
+   * **先减了、再滚**（或先除了、再定位）那几处，而它们的
+   * `getBoundingClientRect` 看着都正常 —— 与 P13「更差的那种也要数」同源。
+   *
+   * ⚠️ ④（自接 `ResizeObserver`）**必须两个条件同时成立**：单数
+   * `new ResizeObserver(` 会把合法用途算上（`use-library-wire-flow` 用它观测
+   * 节点内容变化并调 `updateNodeInternals`，那是 React Flow 的约定用法）。
+   *
+   * 出口：`~/lib/dom-rect` 的 `readElementBox` / `offsetWithin`、
+   * 「同一坐标系里的包含判断」`isWithinViewport`、「行高估算」`readLineHeight`、
+   * 「居中落点」`centerLineScrollTop`、「锚点矩形冻结与装配」
+   * `rectToAnchorRect` / `anchorRectToVirtualElement`；接线走
+   * `~/components/ui/use-element-box`。
+   */
+  P38: {
+    label:
+      "视图 / 逻辑层里手写元素几何的算术（应使用 ~/lib/dom-rect 的 offsetWithin / readLineHeight 等，量测接线走 use-element-box）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过。 */
+      if (/use-element-box/.test(t2)) return 0;
+      let hits = 0;
+      /* ① 两个 rect 相减 / 相加（面板内偏移、相对定位）。 */
+      const rectDiff =
+        /getBoundingClientRect\s*\(\s*\)[\s\S]{0,120}?[-+]\s*[\s\S]{0,120}?getBoundingClientRect\s*\(\s*\)/g;
+      hits += (t2.match(rectDiff) || []).length;
+      /* ② 行高估算：`scrollHeight` 与另一个量做除法。 */
+      const lineHeight = /scrollHeight\s*[/]|[)]\s*[/]\s*\w*[Ll]ines?\.length/g;
+      hits += (t2.match(lineHeight) || []).length;
+      /* ③ 用 `clientHeight` / `clientWidth` 算落点（除以 2、加偏移）。 */
+      const viewportMath =
+        /client(?:Height|Width)\s*[/]\s*2\b|client(?:Height|Width)\s*[+-]\s*\w/g;
+      hits += (t2.match(viewportMath) || []).length;
+      /* ④ 自己接线量测：`new ResizeObserver(` **且**手写等值判断落状态。 */
+      if (
+        /new\s+ResizeObserver\s*\(/.test(t2) &&
+        /prev\.(?:width|height|client\w+|scroll\w+)\s*===\s*(?:next|rect|box|el|element)\b/.test(
+          t2,
+        )
+      ) {
+        hits += 1;
+      }
+      return hits;
+    },
+  },
 };
 
-/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P35 属此类）。 */
+/** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
+function isBusySlotName(name) {
+  return /[Bb]usy/.test(name) || /^\w*[Rr]etry\w*Id$/.test(name);
+}
+
+/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P38 属此类）。 */
 const HARD_GATE_RULES = new Set([
   "P4",
   "P5",
@@ -1344,6 +1474,9 @@ const HARD_GATE_RULES = new Set([
   "P33",
   "P34",
   "P35",
+  "P36",
+  "P37",
+  "P38",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -1546,7 +1679,9 @@ function main() {
     `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键 / P21 自写滚动跟随 / P22 自写外部导航 / P23 自写表单行 / P24 自写读文件 / P25 自写 localStorage /
   P26 自写 Enter 提交 / P27 自写异步动作反馈样板 / P28 自读媒体自然尺寸 /
   P29 手拼查询串 / P30 按条目共用错误位 / P31 自写作废守卫 / P32 手拼错误信封 /
-  P33 自写唯一 id / P34 自写报错建议词表 / P35 亲手拼画布节点，须为 0）：${hardGateHits(now).length} 处`,
+  P33 自写唯一 id / P34 自写报错建议词表 / P35 亲手拼画布节点 /
+  P36 手写树的缩进与子行容器 / P37 自写「某一条在忙」的执行态 /
+  P38 手写元素几何的算术，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {

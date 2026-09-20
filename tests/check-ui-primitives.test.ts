@@ -1289,6 +1289,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P33).toBeUndefined();
     expect(baseline.rules.P34).toBeUndefined();
     expect(baseline.rules.P35).toBeUndefined();
+    expect(baseline.rules.P36).toBeUndefined();
+    expect(baseline.rules.P37).toBeUndefined();
+    expect(baseline.rules.P38).toBeUndefined();
   });
 
   /* ── P30 / P31 / P32：本批三条硬闸（规范 §16.2.4.33 ~ §16.2.4.35）────
@@ -1355,17 +1358,20 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
      * 写成单值是**正确**的（同一时刻只有一条在忙）。判据要求变量名带
      * `error` 语义，正是为了不把它们算进来。 */
     seedBaseline();
+    /* 变量名刻意避开「忙碌位」的记号（`…BusyId` / `…retry…Id`）——
+     * 本用例要验的是 P30（逐条挂错误），忙碌位那一族归 P37 管；
+     * 用 `useState<string | null>` 且不带忙碌记号，才是一次干净的 P30 反面场景。 */
     write(
-      "src/components/workshop/use-busy.ts",
+      "src/components/workshop/use-item-state.ts",
       [
-        "export function useBusy(shots: Shot[]) {",
-        "  const [polishBusyId, setPolishBusyId] = useState<string | null>(null);",
-        "  async function polishOne(shot: Shot) {",
-        "    setPolishBusyId(shot.id);",
-        "    await polish(shot);",
-        "    setPolishBusyId(null);",
+        "export function useItemState(shots: Shot[]) {",
+        "  const [activeId, setActiveId] = useState<string | null>(null);",
+        "  async function runOne(shot: Shot) {",
+        "    setActiveId(shot.id);",
+        "    await run(shot);",
+        "    setActiveId(null);",
         "  }",
-        "  return { polishBusyId, polishOne };",
+        "  return { activeId, runOne };",
         "}",
       ].join("\n"),
     );
@@ -1700,6 +1706,286 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "  setNodes((nds) =>",
         '    placeCanvasNode({ nodes: nds, flow, data: defaultData("image") }),',
         "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P36 / P37 / P38：本批三条硬闸（规范 §16.2.4.39 ~ §16.2.4.41）────
+   *
+   * 三条都按**形态**取锚点，且都**必须同时满足两个条件** —— 单数其中一半会把
+   * 界面上无处不在的合法写法算进来（左内边距 / 条件渲染 / 当前选中项 /
+   * 只读几何）。每条都配反面用例，且都用「先回放改造前的落点」验过判据真的
+   * 抓得住（判据漏掉更差的那一半，被拦下的就永远只是合规者）。 */
+
+  it("手写「树的缩进档 + 子行集合容器」直接阻断（规范 P36）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/tree-view.tsx",
+      [
+        "const isOpen = expanded[parent];",
+        "export function Tree() {",
+        "  return (",
+        "    <div>",
+        "      {isOpen && (",
+        '        <div className="mt-1 ml-3 space-y-1 border-l-2 border-dashed py-1 pl-3">',
+        "          {subs.map((s) => (",
+        "            <Row key={s.id} />",
+        "          ))}",
+        "        </div>",
+        "      )}",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P36");
+  });
+
+  it("只有左内边距、没有引导线不算 P36（卡片内边距到处都是）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/card.tsx",
+      [
+        "export function Card({ open }: { open: boolean }) {",
+        "  return (",
+        "    <div>",
+        '      {open && <div className="ml-3 pl-3">内容</div>}',
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("只有引导线、没有展开判据不算 P36（静态缩进列表是合法形态）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/static-list.tsx",
+      [
+        "export function List({ items }: { items: string[] }) {",
+        "  return (",
+        '    <ul className="ml-3 border-l-2 border-dashed pl-3">',
+        "      {items.map((i) => (",
+        "        <li key={i}>{i}</li>",
+        "      ))}",
+        "    </ul>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 TreeChildren 的落点不再被 P36 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/tree-clean.tsx",
+      [
+        'import { TreeChildren } from "~/components/ui/tree-rows";',
+        "export function Tree({ isOpen, subs }: Props) {",
+        "  return (",
+        "    <div>",
+        "      {isOpen && (",
+        "        <TreeChildren depth={1}>",
+        "          {subs.map((s) => (",
+        "            <Row key={s.id} />",
+        "          ))}",
+        "        </TreeChildren>",
+        "      )}",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("自写「某一条在忙」的执行态直接阻断（规范 P37）", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/busy-list.tsx",
+      [
+        "export function List({ items, busyId }: Props) {",
+        "  return (",
+        "    <ul>",
+        "      {items.map((item) => (",
+        "        <li key={item.id} data-busy={busyId === item.id} />",
+        "      ))}",
+        "    </ul>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P37");
+  });
+
+  it("控制器里声明的忙碌位也计 P37（声明与比较可能分处两个文件）", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/hooks/use-thing.ts",
+      [
+        'import { useState } from "react";',
+        "export function useThing() {",
+        "  const [polishBusyId, setPolishBusyId] = useState<string | null>(null);",
+        "  return { polishBusyId, setPolishBusyId };",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P37");
+  });
+
+  it("「当前选中项」不算 P37（useState<string|null> 到处都是合法写法）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/selection.tsx",
+      [
+        "export function Menu({ items, activeId }: Props) {",
+        "  return (",
+        "    <ul>",
+        "      {items.map((item) => (",
+        "        <li key={item.id} data-active={activeId === item.id} />",
+        "      ))}",
+        "    </ul>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 useItemAction 的落点不再被 P37 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/busy-clean.tsx",
+      [
+        'import { useItemAction } from "~/components/ui/use-item-action";',
+        "export function List({ items }: Props) {",
+        "  const action = useItemAction(items.map((i) => i.id));",
+        "  return (",
+        "    <ul>",
+        "      {items.map((item) => (",
+        "        <li key={item.id} data-busy={action.isBusy(item.id)} />",
+        "      ))}",
+        "    </ul>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("手写两个 rect 相减的面板内偏移直接阻断（规范 P38）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/scroll-to.ts",
+      [
+        "export function scrollToRow(panel: HTMLElement, row: HTMLElement) {",
+        "  const top = row.getBoundingClientRect().top - panel.getBoundingClientRect().top;",
+        "  panel.scrollTop = Math.max(0, panel.scrollTop + top - 8);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P38");
+  });
+
+  it("按行数估行高也计 P38（除数为 0 时给出 Infinity）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/jump-line.ts",
+      [
+        "export function jumpToLine(el: HTMLTextAreaElement, line: number, lines: string[]) {",
+        "  const lineHeight = el.scrollHeight / lines.length;",
+        "  el.scrollTo({ top: line * lineHeight });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P38");
+  });
+
+  it("自己接 ResizeObserver 量盒子也计 P38（量测接线各写一遍）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/measure.ts",
+      [
+        "export function useSize(el: HTMLElement, set: (s: Size) => void) {",
+        "  const sync = () => {",
+        "    const rect = el.getBoundingClientRect();",
+        "    set((prev) =>",
+        "      prev.width === rect.width ? prev : { width: rect.width },",
+        "    );",
+        "  };",
+        "  sync();",
+        "  const observer = new ResizeObserver(sync);",
+        "  observer.observe(el);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P38");
+  });
+
+  it("只读尺寸不写（对齐检查）不算 P38（更差的一半是先减了再滚）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/audit.ts",
+      [
+        "export function overlaps(a: HTMLElement, b: HTMLElement) {",
+        "  const ra = a.getBoundingClientRect();",
+        "  const rb = b.getBoundingClientRect();",
+        "  return ra.bottom > rb.top && ra.top < rb.bottom;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("用 ResizeObserver 观测内容变化不算 P38（React Flow 的约定用法）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/wire-flow.ts",
+      [
+        "export function watchNode(el: HTMLElement, update: () => void) {",
+        "  const observer = new ResizeObserver(() => update());",
+        "  observer.observe(el);",
+        "  return () => observer.disconnect();",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 offsetWithin 的落点不再被 P38 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/scroll-clean.ts",
+      [
+        'import { offsetWithin } from "~/lib/dom-rect";',
+        "export function scrollToRow(panel: HTMLElement, row: HTMLElement) {",
+        "  const top = offsetWithin(row, panel);",
+        "  if (top === null) return;",
+        "  panel.scrollTop = Math.max(0, panel.scrollTop + top - 8);",
         "}",
       ].join("\n"),
     );

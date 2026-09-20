@@ -41,9 +41,10 @@ export interface WorkflowLibraryDetailProps {
   onDelete: (id: string, name: string) => void;
   onDownload: (id: string, name: string) => void;
   onResync: (id: string, name: string) => void;
-  /** 正在打包下载 / 正在重新同步的 workflow id（由父级持有）。 */
-  bundleBusy: string | null;
-  resyncBusy: string | null;
+  /** 「这一条在下载 / 在同步吗」的判据（由父级的 `useItemAction` 给，
+   *  规范 16 §16.2.4.40）—— 详情面板不再自己拿 id 去比。 */
+  isBundleBusy: (id: string) => boolean;
+  isResyncBusy: (id: string) => boolean;
 }
 
 /** 详情接口里本面板用到的模板片段 —— 显式收窄，便于单测与复用。 */
