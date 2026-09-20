@@ -67,6 +67,12 @@ export default defineConfig({
         "src/lib/query-string.ts",
         "src/lib/media/natural-size.ts",
         "src/lib/media/media-url.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.33 ~ §16.2.4.35）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）；
+         * `use-item-errors` 是 `ui/` 下的 hook，一并登记。 */
+        "src/components/ui/use-item-errors.ts",
+        "src/lib/stale-run.ts",
+        "src/lib/api-error.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -364,6 +370,36 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 95,
+        },
+        /* 「每一条各自挂错误」的出口（§16.2.4.33，P30 的对面）：判据是
+         * 「错误属于哪一条」——`get` / `hasAny` / `report` / `clear` /
+         * `clearAll` 与生命周期收敛（条目删掉、错误随之消失）全在用例里。
+         * 分支取实测值 —— 未覆盖的是 `keys` 由 `undefined` 变为数组时
+         * 那一档的 `useMemo` 重算（组件挂载后 `keys` 恒定的常态）。 */
+        "src/components/ui/use-item-errors.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 90,
+        },
+        /* 「这一轮取数还算不算数」的出口（§16.2.4.34，P31 的对面）：
+         * `commit` 的原子性、作废后整段跳过、**「A 轮的 settle 不该覆盖
+         * B 轮的 loading」**、失败分支同样过守卫 —— 全是那段样板各判各的
+         * 地方，逐条有用例。 */
+        "src/lib/stale-run.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「服务端错误信封」的出口（§16.2.4.35，P32 的对面）：两条口径
+         * （取值走 `errorMessage`、形状只有两种）与客户端读取的两种历史
+         * 形态、空文案、非错误体都在用例里。 */
+        "src/lib/api-error.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         /* 「一张媒体图的自然尺寸是多少」的出口（§16.2.4.31，P28 的对面）：
          * 两组读数、0 / NaN / 负 / 无限的读不到判据、竖图三态、

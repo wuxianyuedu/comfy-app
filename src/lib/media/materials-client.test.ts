@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deleteMaterial,
   fetchMaterials,
-  readMaterialError,
   uploadMaterial,
 } from "./materials-client";
 
@@ -49,16 +48,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("readMaterialError", () => {
-  it("取字符串 error", () => {
-    expect(readMaterialError({ error: "无权限" })).toBe("无权限");
-  });
-
-  it("无 error 字段返回 undefined（交调用方用状态码兜底）", () => {
-    expect(readMaterialError({ items: [] })).toBeUndefined();
-    expect(readMaterialError(null)).toBeUndefined();
-  });
-});
+/* 错误信封的读法（`readApiError`）用例见 `~/lib/api-error.test.ts` —— 收口前
+ * materials / bgm / upload 三份**逐字相同**的读取函数各带一组同款用例。 */
 
 describe("fetchMaterials", () => {
   it("返回收窄后的 folders 与 items", async () => {

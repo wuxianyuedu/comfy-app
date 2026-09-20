@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { errorMessage } from "~/lib/error-message";
+import { beginStaleRun } from "~/lib/stale-run";
 import {
   fetchHistoryTasks,
   probeGlobalTaskCount,
@@ -76,7 +77,10 @@ export function useHistoryPanel({
 
   /* ── 拉取任务 ── */
   useEffect(() => {
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：卸载、或切筛选 / 作用域、
+     * 或点「重试」都会重开一轮，旧轮次的结果（**含失败文案与空列表**）
+     * 一律不落地。 */
+    const guard = beginStaleRun();
     const run = async () => {
       setLoading(true);
       setError(null);
@@ -90,20 +94,19 @@ export function useHistoryPanel({
       if (filter !== "all") params.media = filter;
       try {
         const rows = await fetchHistoryTasks(params);
-        if (cancelled) return;
-        setTasks(rows);
+        guard.commit(() => setTasks(rows));
       } catch (e) {
-        if (cancelled) return;
-        setError(errorMessage(e, "读取历史记录失败"));
-        setTasks([]);
+        /* 错误文案与清空列表都属于「这一轮的结论」，一起过守卫。 */
+        guard.commit(() => {
+          setError(errorMessage(e, "读取历史记录失败"));
+          setTasks([]);
+        });
       } finally {
-        if (!cancelled) setLoading(false);
+        guard.commit(() => setLoading(false));
       }
     };
     void run();
-    return () => {
-      cancelled = true;
-    };
+    return () => guard.dispose();
   }, [projectId, scope, filter, reloadKey]);
 
   /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
@@ -115,14 +118,11 @@ export function useHistoryPanel({
       globalCount !== null
     )
       return;
-    let cancelled = false;
+    const guard = beginStaleRun();
     void probeGlobalTaskCount().then((count) => {
-      if (cancelled) return;
-      setGlobalCount(count);
+      guard.commit(() => setGlobalCount(count));
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => guard.dispose();
   }, [scope, loading, tasks.length, globalCount]);
 
   const activeCount = countActive(tasks);

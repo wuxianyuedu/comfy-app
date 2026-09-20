@@ -6,7 +6,7 @@ import {
   streamLLM,
 } from "~/lib/llm/server";
 import { requireRequestUser } from "~/server/auth/request-user";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorBody } from "~/lib/api-error";
 import {
   TASK_TYPES,
   type LLMMessage,
@@ -93,10 +93,7 @@ export async function POST(req: NextRequest) {
     const body: unknown = await req.json();
     parsed = BodySchema.parse(body);
   } catch (e) {
-    return NextResponse.json(
-      { error: errorMessage(e, "请求格式错误") },
-      { status: 400 },
-    );
+    return NextResponse.json(apiErrorBody(e, "请求格式错误"), { status: 400 });
   }
 
   const cfg = await getLLMConfig(parsed.opts);
@@ -119,10 +116,9 @@ export async function POST(req: NextRequest) {
       const content = await completeLLM(cfg, parsed.messages);
       return NextResponse.json({ content });
     } catch (e) {
-      return NextResponse.json(
-        { error: errorMessage(e, "LLM 调用失败") },
-        { status: 502 },
-      );
+      return NextResponse.json(apiErrorBody(e, "LLM 调用失败"), {
+        status: 502,
+      });
     }
   }
 
@@ -140,7 +136,8 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({ error: errorMessage(e, "LLM 调用失败") })}\n\n`,
+            /* SSE 的一帧也用同一个键：客户端读的是同一处 `readApiError`。 */
+            `data: ${JSON.stringify(apiErrorBody(e, "LLM 调用失败"))}\n\n`,
           ),
         );
       } finally {

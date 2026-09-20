@@ -3,7 +3,7 @@ import path from "path";
 import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { logger } from "~/server/lib/logger";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorBody, apiErrorDetail } from "~/lib/api-error";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
@@ -148,9 +148,9 @@ export async function GET(req: NextRequest) {
       items,
     });
   } catch (e) {
-    logger.error(`[materials] GET failed | ${errorMessage(e, String(e))}`);
+    logger.error(`[materials] GET failed | ${apiErrorDetail(e, String(e))}`);
     return NextResponse.json(
-      { error: errorMessage(e, "读取素材库失败"), folders: [], items: [] },
+      apiErrorBody(e, "读取素材库失败", { folders: [], items: [] }),
       { status: 500 },
     );
   }
@@ -243,11 +243,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e) {
-    logger.error(`[materials] POST failed | ${errorMessage(e, String(e))}`);
-    return NextResponse.json(
-      { error: errorMessage(e, "上传失败") },
-      { status: 500 },
-    );
+    logger.error(`[materials] POST failed | ${apiErrorDetail(e, String(e))}`);
+    return NextResponse.json(apiErrorBody(e, "上传失败"), { status: 500 });
   }
 }
 
@@ -300,10 +297,7 @@ export async function DELETE(req: NextRequest) {
     }
     return NextResponse.json({ ok: true });
   } catch (e) {
-    logger.error(`[materials] DELETE failed | ${errorMessage(e, String(e))}`);
-    return NextResponse.json(
-      { error: errorMessage(e, "删除失败") },
-      { status: 500 },
-    );
+    logger.error(`[materials] DELETE failed | ${apiErrorDetail(e, String(e))}`);
+    return NextResponse.json(apiErrorBody(e, "删除失败"), { status: 500 });
   }
 }

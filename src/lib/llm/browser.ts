@@ -1,6 +1,7 @@
 "use client";
 
 import type { LLMMessage, LLMRequestOptions } from "./types";
+import { readApiError, readJsonBody } from "~/lib/api-error";
 
 interface ChatArgs {
   messages: LLMMessage[];
@@ -103,8 +104,13 @@ export async function completeChat({
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, stream: false, ...opts }),
   });
-  const json = (await res.json()) as { content?: string; error?: string };
-  if (!res.ok) throw new Error(json.error ?? `LLM 请求失败 (${res.status})`);
+  /* 错误信封的读法收在一处（规范 16 §16.2.4.35）。 */
+  const json = (await readJsonBody(res)) as {
+    content?: string;
+    error?: string;
+  };
+  if (!res.ok)
+    throw new Error(readApiError(json) ?? `LLM 请求失败 (${res.status})`);
   return json.content ?? "";
 }
 
@@ -138,18 +144,18 @@ export async function probeRemoteApi(input: {
       detail: e instanceof Error ? e.message : "网络请求失败",
     };
   }
-  const json = (await res.json().catch(() => ({}))) as {
+  const json = (await readJsonBody(res)) as {
     ok?: unknown;
     detail?: unknown;
     error?: unknown;
     models?: unknown;
   };
+  /* `detail` 优先（它是这条路由的**业务字段**：探测结论的说明），
+   * 错误信封交唯一读法（规范 16 §16.2.4.35）。 */
   const detail =
     typeof json.detail === "string"
       ? json.detail
-      : typeof json.error === "string"
-        ? json.error
-        : `请求失败 (${res.status})`;
+      : (readApiError(json) ?? `请求失败 (${res.status})`);
   return {
     ok: json.ok === true,
     detail,

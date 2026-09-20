@@ -143,7 +143,7 @@ describe("useModelTags", () => {
     await act(async () => {
       await result.current.addTag();
     });
-    expect(result.current.error).toBe("添加失败");
+    expect(result.current.errors.get(null)).toBe("添加失败");
     expect(result.current.draft).toBe("x");
   });
 
@@ -156,7 +156,7 @@ describe("useModelTags", () => {
     await act(async () => {
       await result.current.addTag();
     });
-    expect(result.current.error).toBe("标签名过长");
+    expect(result.current.errors.get(null)).toBe("标签名过长");
     expect(result.current.busy).toBe(false);
   });
 
@@ -202,7 +202,7 @@ describe("useModelTags", () => {
     });
     expect(onChanged).toHaveBeenCalled();
     // 刷新回包把列表覆盖成服务端形态，断言的是「请求已发出 + 无错误」
-    expect(result.current.error).toBeNull();
+    expect(result.current.errors.hasAny).toBe(false);
   });
 
   it("renameTag：同名/空名视为 no-op 成功，不发请求（避免 404 竞态）", async () => {
@@ -219,13 +219,17 @@ describe("useModelTags", () => {
 
   it("renameTag：后端返回无 tag 时返回 false 并给出错误（调用方据此不关闭编辑器）", async () => {
     vanilla.workflowModel.rename.mutate.mockResolvedValue({ tag: null });
-    const { result } = renderHook(() => useModelTags({ initialTags: [] }));
+    /* 那条标签必须在列表里 —— 错误挂在**它**身上（规范 16 §16.2.4.33），
+     * 条目集合收敛时不在屏幕上的条目不会留住错误。 */
+    const { result } = renderHook(() =>
+      useModelTags({ initialTags: [tag("a", 1)] }),
+    );
     let ok: boolean | undefined;
     await act(async () => {
       ok = await result.current.renameTag("a", "b");
     });
     expect(ok).toBe(false);
-    expect(result.current.error).toBe("重命名失败");
+    expect(result.current.errors.get("a")).toBe("重命名失败");
   });
 
   it("refresh 失败保留旧列表（弹窗仍可用，不让用户看到空白）", async () => {

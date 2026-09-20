@@ -15,6 +15,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
+import { beginStaleRun } from "~/lib/stale-run";
 import type { Dispatch, SetStateAction } from "react";
 import {
   fetchTaskImages,
@@ -54,19 +56,18 @@ export function useContentAssetGallery({
 
   useEffect(() => {
     if (!taskId || !enabled) return;
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换任务 / 关掉开关会重开一轮，
+     * 旧轮次的图集一律不落地（否则会短暂显示上一个任务的图）。 */
+    const guard = beginStaleRun();
     void (async () => {
       try {
         const list = await fetchTaskImages(taskId);
-        if (cancelled) return;
-        setImages(list && list.length > 1 ? list : null);
+        guard.commit(() => setImages(list && list.length > 1 ? list : null));
       } catch {
         /* 静默：单图模式仍正常显示，见文件头 */
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => guard.dispose();
   }, [taskId, enabled]);
 
   return { images, open, index, setOpen, setIndex };

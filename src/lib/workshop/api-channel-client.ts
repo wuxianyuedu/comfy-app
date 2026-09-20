@@ -2,6 +2,7 @@
 // 弹层不再自己 fetch，全部保存请求走这里——失败解析、响应校验集中一处，
 // 服务端换了错误信封（{error} 字符串 / {error:{message}}）只需改本文件。
 
+import { readApiError, readJsonBody } from "~/lib/api-error";
 import {
   isRecord,
   type ApiChannelSaveInput,
@@ -33,15 +34,15 @@ function isChannelsView(v: unknown): v is ApiChannelsView {
 }
 
 /**
- * 从后端错误体里取出可读消息。
- * 两种历史形态都要认：字符串 `error`，以及 `{error:{message}}`（鉴权错误用的信封）。
+ * 从后端错误体里取出可读消息 —— 转交 `~/lib/api-error` 的 `readApiError`
+ * （规范 16 §16.2.4.35：服务端错误信封的唯一读取口径）。
+ *
+ * 保留这个名字是因为它已被既有用例与调用点引用；职责与 `readApiError`
+ * **完全等价**，不再自己判第二遍形状（收口前它多认了一点：`{error:{message}}`
+ * 里的空字符串会被当成文案，而 `readApiError` 会回落调用处的 `fallback`）。
  */
 export function readApiErrorMessage(body: unknown): string | null {
-  if (!isRecord(body)) return null;
-  const err: unknown = body.error;
-  if (typeof err === "string") return err;
-  if (isRecord(err) && typeof err.message === "string") return err.message;
-  return null;
+  return readApiError(body);
 }
 
 /**
@@ -64,7 +65,8 @@ export async function saveApiChannels(
     throw new Error("无法连接服务器");
   }
 
-  const data = (await res.json().catch(() => ({}))) as {
+  /* 非法 JSON 按空对象处理（后端 500 可能返回非 JSON）—— 读法收在出口里。 */
+  const data = (await readJsonBody(res)) as {
     error?: unknown;
     channels?: unknown;
   };

@@ -10,6 +10,7 @@
  */
 
 import { useState } from "react";
+import { useItemErrors } from "~/components/ui/use-item-errors";
 import type { Shot, Scene, Character, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotPrompt,
@@ -420,7 +421,10 @@ export function useStoryboardPlanner(props: Props) {
    * 出图的提示词；negative 同步微调。 */
   const [polishBusyId, setPolishBusyId] = useState<string | null>(null);
   const [polishBusyAll, setPolishBusyAll] = useState(false);
-  const [polishError, setPolishError] = useState("");
+  /* 润色错误挂在**那个镜头**上（规范 16 §16.2.4.33）：收口前是一句
+   * `useState("")` —— 润色镜头 A 失败后去润色镜头 B，A 的提示就被盖掉，
+   * 用户只看到一句不知道指哪一行的话。 */
+  const polishErrors = useItemErrors(shots.map((shot) => shot.id));
 
   async function polishOne(shot: Shot) {
     if (!config) {
@@ -428,7 +432,7 @@ export function useStoryboardPlanner(props: Props) {
       return;
     }
     setPolishBusyId(shot.id);
-    setPolishError("");
+    polishErrors.clear(shot.id);
     try {
       const full = await streamChat({
         messages: [
@@ -450,7 +454,7 @@ export function useStoryboardPlanner(props: Props) {
       if (!polished) throw new Error("模型未返回提示词");
       updateShot(shot.id, { prompt: polished });
     } catch (e: unknown) {
-      setPolishError(errorMessage(e, "提示词润色失败"));
+      polishErrors.report(shot.id)("err", errorMessage(e, "提示词润色失败"));
     } finally {
       setPolishBusyId(null);
     }
@@ -469,7 +473,7 @@ export function useStoryboardPlanner(props: Props) {
       return;
     }
     setPolishBusyAll(true);
-    setPolishError("");
+    polishErrors.clearAll();
     try {
       for (const shot of shots) {
         await polishOne(shot);
@@ -502,7 +506,7 @@ export function useStoryboardPlanner(props: Props) {
     handleAISplit,
     polishBusyId,
     polishBusyAll,
-    polishError,
+    polishErrors,
     polishOne,
     polishAll,
     generateAll,

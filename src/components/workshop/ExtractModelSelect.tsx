@@ -2,6 +2,7 @@
 
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { beginStaleRun } from "~/lib/stale-run";
 import {
   fetchLocalModels,
   fetchRemoteModels,
@@ -61,7 +62,9 @@ export function ExtractModelSelect({
     if (!selKey) return;
     if (probeStarted.current[selKey]) return;
     probeStarted.current[selKey] = true;
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换选中项 / 通道 / 模型会重开
+     * 一轮，旧轮次的探测结论不落地（否则会把上一个选中项的结论写上去）。 */
+    const guard = beginStaleRun();
     // 远端探测带上当前选中的模型名：该模型若配了独立 baseUrl/apiKey，
     // 服务端会用它探测（而不是拿全局 Base URL 探，避免误报 fetch failed）。
     const probe =
@@ -69,15 +72,16 @@ export function ExtractModelSelect({
         ? () => fetchLocalModels()
         : () => fetchRemoteModels(model);
     void probe().then((res) => {
-      if (cancelled) return;
-      setAvailByKey((prev) => ({
-        ...prev,
-        [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
-      }));
+      guard.commit(() =>
+        setAvailByKey((prev) => ({
+          ...prev,
+          [selKey]: res.ok
+            ? { kind: "ok" }
+            : { kind: "err", detail: res.detail },
+        })),
+      );
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => guard.dispose();
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {

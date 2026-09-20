@@ -1283,6 +1283,260 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P27).toBeUndefined();
     expect(baseline.rules.P28).toBeUndefined();
     expect(baseline.rules.P29).toBeUndefined();
+    expect(baseline.rules.P30).toBeUndefined();
+    expect(baseline.rules.P31).toBeUndefined();
+    expect(baseline.rules.P32).toBeUndefined();
+  });
+
+
+  /* ── P30 / P31 / P32：本批三条硬闸（规范 §16.2.4.33 ~ §16.2.4.35）────
+   *
+   * 三条都同样按**形态**取锚点（错误位 + 逐条写入点、作废标志的声明与置位、
+   * 响应体里亲手拼 `error`），每条都配反面用例 —— 判据太宽会逼下一个人
+   * 改坏代码去迎合它（本仓库的既有教训，P29 那批踩得最深）。 */
+  it("按条目共用一块错误位直接阻断（规范 P30）", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/use-planner.ts",
+      [
+        "export function usePlanner(shots: Shot[]) {",
+        '  const [polishError, setPolishError] = useState("");',
+        "  async function polishOne(shot: Shot) {",
+        '    setPolishError("");',
+        "    try {",
+        "      await polish(shot);",
+        "    } catch (e) {",
+        '      setPolishError(errorMessage(e, "润色失败"));',
+        "    }",
+        "  }",
+        "  return { polishError, polishOne };",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P30");
+    expect(output).toContain("use-planner.ts");
+  });
+
+  it("批量错误位不被 P30 计（同一时刻只有一件事会失败）", () => {
+    /* `genError`（一句话生成整批角色）/ `aiError`（全片拆镜）/
+     * `loadError`（一个弹窗读源码）都是**合法的单槽** —— 它们的写入点
+     * 在无参的批量函数里，文件里另外那几个逐条函数与它们无关。 */
+    seedBaseline();
+    write(
+      "src/components/workshop/use-batch.ts",
+      [
+        "export function useBatch(characters: Character[]) {",
+        '  const [genError, setGenError] = useState("");',
+        "  async function generateAll() {",
+        '    setGenError("");',
+        "    try {",
+        "      await gen();",
+        "    } catch (e) {",
+        '      setGenError(errorMessage(e, "生成失败"));',
+        "    }",
+        "  }",
+        "  async function refreshOne(character: Character) {",
+        "    await refresh(character);",
+        "  }",
+        "  return { genError, generateAll, refreshOne };",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("忙碌位选择器（useState<string|null>）不被 P30 当错误位", () => {
+    /* `polishBusyId` / `aiBusyId` 天生就是「当前是哪一条在忙」——
+     * 写成单值是**正确**的（同一时刻只有一条在忙）。判据要求变量名带
+     * `error` 语义，正是为了不把它们算进来。 */
+    seedBaseline();
+    write(
+      "src/components/workshop/use-busy.ts",
+      [
+        "export function useBusy(shots: Shot[]) {",
+        "  const [polishBusyId, setPolishBusyId] = useState<string | null>(null);",
+        "  async function polishOne(shot: Shot) {",
+        "    setPolishBusyId(shot.id);",
+        "    await polish(shot);",
+        "    setPolishBusyId(null);",
+        "  }",
+        "  return { polishBusyId, polishOne };",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 useItemErrors 的错误位不再被 P30 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/workshop/use-planner.ts",
+      [
+        "export function usePlanner(shots: Shot[]) {",
+        "  const errors = useItemErrors(shots.map((s) => s.id));",
+        "  async function polishOne(shot: Shot) {",
+        "    errors.report(shot.id)(\"err\", \"润色失败\");",
+        "  }",
+        "  return { errors, polishOne };",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("自写「这一轮已作废」的守卫样板直接阻断（规范 P31）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawFetch.tsx",
+      [
+        "export function useRaw() {",
+        "  useEffect(() => {",
+        "    let cancelled = false;",
+        "    void (async () => {",
+        "      const rows = await load();",
+        "      if (cancelled) return;",
+        "      setRows(rows);",
+        "    })();",
+        "    return () => {",
+        "      cancelled = true;",
+        "    };",
+        "  }, []);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P31");
+    expect(output).toContain("RawFetch.tsx");
+  });
+
+  it("只读不改的局部布尔不被 P31 计（缺置位即不算作废标志）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/ReadOnly.tsx",
+      [
+        "export function useThing() {",
+        "  const flag = false;",
+        "  if (flag) return null;",
+        "  return 1;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 beginStaleRun 的取数 effect 不再被 P31 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Fresh.tsx",
+      [
+        "export function useFresh() {",
+        "  useEffect(() => {",
+        "    const guard = beginStaleRun();",
+        "    void load().then((rows) => guard.commit(() => setRows(rows)));",
+        "    return () => guard.dispose();",
+        "  }, []);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("路由里手拼错误信封直接阻断（规范 P32）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/demo/route.ts",
+      [
+        "export async function GET() {",
+        "  try {",
+        "    return NextResponse.json(await build());",
+        "  } catch (e) {",
+        "    return NextResponse.json(",
+        '      { error: errorMessage(e, "读取失败") },',
+        "      { status: 500 },",
+        "    );",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P32");
+    expect(output).toContain("api/demo/route.ts");
+  });
+
+  it("自己判响应体里 error 的形状也计 P32（读侧同一枚口径）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/raw-reader.ts",
+      [
+        "export function readRaw(body: unknown) {",
+        "  if (isRecord(body) && typeof body.error === \"string\") return body.error;",
+        "  return undefined;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P32");
+  });
+
+  it("本地对象字面量不被 P32 当响应信封（同形而不同源）", () => {
+    /* `cacheExtractPatch({ error: errorMessage(e, "导入失败") })` 是往缓存里
+     * 写一条状态记录，不是 HTTP 响应 —— 判据要求同一片段里出现「构造响应体」
+     * 的动作（`NextResponse.json(` / `JSON.stringify(`）。 */
+    seedBaseline();
+    write(
+      "src/components/workshop/State.ts",
+      [
+        "export function patch(state: State, e: unknown): State {",
+        '  return { ...state, error: errorMessage(e, "导入失败") };',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 apiErrorBody 的路由不再被 P32 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/demo/route.ts",
+      [
+        "export async function GET() {",
+        "  try {",
+        "    return NextResponse.json(await build());",
+        "  } catch (e) {",
+        "    return NextResponse.json(apiErrorBody(e, \"读取失败\"), {",
+        "      status: 500,",
+        "    });",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("走 readApiError 的客户端不再被 P32 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/clean-reader.ts",
+      [
+        "export function readClean(body: unknown) {",
+        "  return readApiError(body);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

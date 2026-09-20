@@ -376,6 +376,8 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P27",
   "P28",
   "P29",
+  "P30",
+  "P31",
 ]);
 
 /**
@@ -437,10 +439,12 @@ const EXEMPT_FILES = {
     {
       re: /^src\/components\/studio\/project-canvas\/hooks\/use-history-panel\.ts$/,
       reason:
-        "取数失败要按**竞态守卫**决定报不报（`if (cancelled) return;` —— 卸载或" +
+        "取数失败要按**作废守卫**决定报不报（`guard.commit(…)` —— 卸载或" +
         "切筛选后到达的旧响应不该往界面上写任何东西，包括错误文案），" +
-        "而 `cancelled` 是同一 effect 闭包里的局部标志 —— `runAsyncAction` 的 " +
-        "`action` 与 `catch` 都在它外面，表达不了「这一轮已经作废」。",
+        "而那条判据表达的是**非失败状态**（这一轮作废），" +
+        "`runAsyncAction` 的 `action` 与 `catch` 都在它外面，表达不了它。" +
+        "守卫本身已走唯一出口 `~/lib/stale-run`（§16.2.4.34），" +
+        "这里豁免的只是 P27 那一条 —— 两者管的是不同的事。",
     },
     {
       re: /^src\/app\/\(main\)\/settings\/hooks\/use-settings-page\.ts$/,
@@ -1007,9 +1011,185 @@ const RULES = {
       ).length;
     },
   },
+
+  /* ── P30「一次动作的错误挂在谁身上」（硬闸，§16.2.4.33）───────────────
+   * 形态：`useState<string | null>(null)` 配一个 `set<X>Error`，而同一块
+   * 视图里有**多个条目**在调它 —— 也就是「最近一次操作的草稿」。
+   *
+   * 判据取**两个条件同时成立**：
+   *  ① 出现 `useState<string | null>(null)`（或 `useState("" )` 那类错误位）；
+   *  ② 同一文件里 `set*Error(` 被**两处以上不同的调用点**调用，且那些调用点
+   *     位于逐条渲染的上下文里（`map(` / 多个同名动作）。
+   * 只判 ① 会把「整个面板只有一个错误位、本来就只有一件事会失败」的落点算上
+   *（那是合法的：设置页的整页提示条、设置页分区的保存）；
+   * 只判 ② 会把「多个动作共用一个整页提示条」算上（那是 §16.2.4.30 的
+   * `report` 通道，本来就该共用）。
+   *
+   * ⚠️ **不数** `~/lib/async-action` 的 `report` 通道（那是「这次说什么」），
+   * 也**不数**服务端路由（那边的错误归响应信封，是 P32 的账）。
+   *
+   * 出口：`~/components/ui/use-item-errors` 的 `useItemErrors`。
+   */
+  P30: {
+    label:
+      "按条目渲染的列表共用一块「最近一次操作」的错误位（应使用 ~/components/ui/use-item-errors 的 useItemErrors）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* ① **错误位**：变量名带 `error` 语义的字符串 state，两种写法都要认
+       *    —— 字面量初始值（`useState("")`）与可空初始值（`useState<string
+       *    | null>(null)`）；两种在收口前的存量里都有。
+       *
+       * ⚠️ 名字里的 `error` 是必须的：`useState<string | null>(null)` 这
+       * 一条**本身就是 P14/P15 那些忙碌位选择器的形态**
+       *（`polishBusyId` / `aiBusyId` / `editingId`：它们天生就是
+       * 「当前是哪一条在忙」，写成单值是**正确**的，因为同一时刻只有一条
+       * 在忙）。把它们当错误位算进来，会让判据逼着人改坏代码
+       *（与 P22 / P31 同款：判据锚在唯一的签名上）。 */
+      const slots =
+        t2.match(
+          /\bconst\s*\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*(?:React\.)?useState(?:<[^>]*>)?\s*\(/g,
+        ) || [];
+      if (slots.length === 0) return 0;
+      let hits = 0;
+      for (const slot of slots) {
+        const m = slot.match(
+          /\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]/,
+        );
+        const setter = m[2];
+      /* ② **逐条写入点**：调用这个 setter 的函数**有除错误对象之外的实参**
+       *    （`polishOne(shot)` / `handleAICard(character)`）—— 说明这块错误位
+       *    是被「每一条各自」写的，而同一时刻可能两条都挂着错。
+       *
+       * ⚠️ 判据的难点全在「不误伤批量错误位」：`genError`（一句话生成整批
+       *    角色）/ `aiError`（全片拆镜）/ `loadError`（一个弹窗读源码）/
+       *    `actionError`（一个面板的上传与删除）**都是合法的单槽** ——
+       *    同一时刻只有一件事会失败，它们各自也只有一个写入点。
+       *
+       *    所以判据**不能**取 `.map(`：同一个符号在同一文件里既可能是
+       *    「逐条渲染」（`characters.map(c => <Row …>)`）也可能是
+       *    **状态更新助手**（`setXs(prev => prev.map(c => c.id === id ?
+       *    {…c, …patch} : c))`）—— 后者离 setter 的调用点很近，实测会把
+       *    `CharacterDesigner` 的 `setGenError` 误判成逐条写入。
+       *    判据只能取「写入点所在的那个函数的形参」(与 P31「名字不写死」
+       *    同款：锚在唯一的签名上)。 */
+      /* b) 从 setter 的每个调用点往前找最近的函数头，看它有没有条目实参。 */
+      let perItem = 0;
+      const callRe = new RegExp(`\\b${setter}\\s*\\(`, "g");
+      let cm;
+      while ((cm = callRe.exec(t2)) !== null) {
+        const before = t2.slice(0, cm.index);
+        const fn = before.match(
+          /(?:async\s+)?function\s+\w+\s*\(([^)]*)\)[^{]*\{[^{}]*$/,
+        );
+        if (!fn) continue;
+        const params = fn[1].trim();
+        if (!params) continue;
+        /* 唯一实参是错误对象 / 事件对象 → 那是「一个失败回调」，不是条目。 */
+        if (/^(?:event|e|ev|err|error|reason)[\s:]/i.test(params)) continue;
+        if (/^(?:event|e|ev|err|error|reason)$/i.test(params)) continue;
+        perItem += 1;
+      }
+      if (perItem > 0) hits += 1;
+      }
+      return hits;
+    },
+  },
+
+  /* ── P31「这一轮还算不算数」（硬闸，§16.2.4.34）──────────────────────
+   * 形态：本地标志 + 守卫样板（声明 → 读 → 置位三段齐全），即「取数 effect
+   * 里这一轮已作废」的签名。
+   *
+   * ⚠️ 判据取**变量声明 + 置位**这两个锚点（不取具体变量名）：
+   *   1. `let <名> = false;` 之后同一文件里出现 `if (<同名校>)` 或
+   *      `if (!<同名校>)`，且该名字带 `cancel` / `abort` / `stale` / `alive`
+   *      这类语义（八处落点收口前用的都是 `cancelled`，但名字不该写死）；
+   *   2. `let <同名校> = true;` 在同文件里出现（置位）。
+   * 只判 ① 会把「一个只读不改的局部布尔」算上；两条一起才不会误伤。
+   *
+   * 与 P27 的分工：P27 数的是「失败怎么报到界面上」；这条数的是
+   * **「非失败状态」**（这一轮作废），所以 `use-history-panel` 此前在 P27
+   * 的豁免里 —— 那正是这条账一直没被追到的原因。
+   *
+   * 出口：`~/lib/stale-run` 的 `beginStaleRun`。
+   */
+  P31: {
+    label:
+      "自写「这一轮已作废」的守卫样板（应使用 ~/lib/stale-run 的 beginStaleRun）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* `let cancelled = false;` 这类声明：名字带作废语义。 */
+      const decls = t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) || [];
+      let hits = 0;
+      for (const decl of decls) {
+        const name = decl.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=/)[1];
+        if (!/cancel|abort|stale|alive|disposed/i.test(name)) continue;
+        /* 读法：`if (x)` / `if (!x)` —— 只要有读，且有置位。 */
+        const readRe = new RegExp(
+          `if\\s*\\(\\s*!?\\s*(?:this\\.)?${name}\\b`,
+        );
+        const setRe = new RegExp(`\\b${name}\\s*=\\s*true\\s*;`);
+        if (readRe.test(t2) && setRe.test(t2)) hits += 1;
+      }
+      return hits;
+    },
+  },
+
+  /* ── P32「服务端失败信封怎么拼 / 怎么读」（硬闸，§16.2.4.35）──────────
+   * 形态：`{ error: errorMessage(e, "…失败") }` 这类**手拼的错误信封** ——
+   * 在 `src/app/api/**` 里出现，且同一份形状会被 **6 个客户端**各读一遍。
+   *
+   * 判据取「字面量里亲自拼 `error` 键 + 错误取值」这一个签名：
+   *   `{ error: errorMessage(...) }` / `{ error: <标识符> }`。
+   * ⚠️ **不数** `errorResponse(e)`（那是 §10.9 的纯错误出口，是对的写法）、
+   * 业务字段（`detail` / `hint` —— 它们不是错误文案）。
+   *
+   * 读侧同理：`typeof <x>.error === "string"` 这种「自己判形状」也算 ——
+   * 收口前 bgm / upload / materials 三份读取函数**逐字相同**。
+   *
+   * 出口：`~/lib/api-error` 的 `apiErrorBody` / `apiErrorBody` 与
+   * `readApiError`（写侧）/ `~/server/lib/error-response`（纯错误侧）。
+   */
+  P32: {
+    label:
+      "手拼服务端错误信封 / 自己判它的形状（应使用 ~/lib/api-error 的 apiErrorBody / readApiError）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 写侧：`NextResponse.json({ error: errorMessage(...) })` 这类手拼
+       * 的**响应信封** —— 判据要求两件事同时成立：出现了「构造响应体」的
+       * 动作（`NextResponse.json(` / `data: ${JSON.stringify(`），
+       * **以及**该片段里亲手拼了 `error` 键。
+       *
+       * ⚠️ 只数 `{ error: errorMessage(...) }` 会把**本地对象字面量**算上
+       * （`cacheExtractPatch({ error: errorMessage(e, "导入失败") })` ——
+       * 那是往缓存里写一条状态记录，不是 HTTP 响应）。它同形但不同源，
+       * 与 P22 / P31 是同一条口径：判据锚在唯一的签名上。 */
+      const responseBodies =
+        t2.match(
+          /NextResponse\.json\([\s\S]{0,400}?\)|JSON\.stringify\([^)]{0,200}\)/g,
+        ) || [];
+      const write = responseBodies.filter((b) =>
+        /\berror:\s*(?:errorMessage|apiErrorDetail)\s*\(/.test(b),
+      ).length;
+      /* 读取侧：自己判「响应体里的 error 是不是字符串」—— 收口前 bgm /
+       * upload / materials 三份读取函数**逐字相同**，`isRecord(body) &&
+       * typeof body.error === "string"` 就是那个签名。
+       *
+       * ⚠️ 判据要求**两件事同时成立**：`isRecord(<名>)` 式的收窄（或
+       * `<名>` 带 body / json 语义），**以及**紧接着判它的 `error`。
+       * 只数 `typeof x.error === "string"` 会把 SSE 帧（`msg.error`）、
+       * 已落库的解析记录（`firstErr.error`）一起算上 —— 那两处的
+       * 「error 字段」是**各自协议的业务字段**，不是 HTTP 错误信封
+       * （与 P22「不数对内路由跳转」、P31「名字不写死」同款：判据锚在
+       * 唯一的签名上，误伤一个合规者就等于逼人改坏代码）。 */
+      const read = t2.match(
+        /(?:isRecord\s*\(\s*(\w+)\s*\)[\s\S]{0,80}?|\b(\w*(?:body|json|data)\w*)\s+as\s*\{[\s\S]{0,80}?)[\s\S]{0,80}?\b\1\2\.error\b/g,
+      ) || [];
+      return write + read.length;
+    },
+  },
 };
 
-/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P29 属此类）。 */
+/** 硬闸判据：清零后直接阻断新增，不进棘轮基线（P4~P32 属此类）。 */
 const HARD_GATE_RULES = new Set([
   "P4",
   "P5",
@@ -1037,6 +1217,9 @@ const HARD_GATE_RULES = new Set([
   "P27",
   "P28",
   "P29",
+  "P30",
+  "P31",
+  "P32",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -1152,7 +1335,7 @@ function main() {
     const gate = hardGateHits(now);
     if (gate.length) {
       console.error(
-        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P29）。\n  " +
+        "[ui-primitives] 拒绝更新基线：硬闸判据未清零（P4~P32）。\n  " +
           gate.join("\n  ") +
           "\n  改法：视图里不再写 `::-webkit-scrollbar` 外观（改用 globals.css 的 .custom-scrollbar / .soft-scrollbar）、" +
           "不再自写剪贴板与 Blob 下载（改用 ~/lib/browser-io 的 copyText / downloadText / downloadJson）、" +
@@ -1236,7 +1419,9 @@ function main() {
       `（规范 16 §16.2.3）`,
   );
   console.log(
-    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键 / P21 自写滚动跟随 / P22 自写外部导航 / P23 自写表单行，须为 0）：${hardGateHits(now).length} 处`,
+    `[ui-primitives] 硬闸判据（P4 自绘滚动条 / P5 剪贴板 / P6 Blob 下载 / P7 手工文件选择 / P8 自写缺值占位符 / P9 自绘模态浮层 / P10 自绘折叠开关 / P11 自绘浮层选项列表 / P12 自写轮询 / P13 自写搜索归一化 / P14 自写展开集合 / P15 自写加宽档 / P16 自绘进度条 / P17 自写键值行 / P18 裸写 img·video / P19 手写媒体拖拽源 / P20 自写全局快捷键 / P21 自写滚动跟随 / P22 自写外部导航 / P23 自写表单行 / P24 自写读文件 / P25 自写 localStorage /
+  P26 自写 Enter 提交 / P27 自写异步动作反馈样板 / P28 自读媒体自然尺寸 /
+  P29 手拼查询串 / P30 按条目共用错误位 / P31 自写作废守卫 / P32 手拼错误信封，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -1253,7 +1438,10 @@ function main() {
         "  媒体拖拽源 → ~/components/ui/media-drag-source 的 useMediaDragSource；全局快捷键 → ~/components/ui/use-hotkey 的 useHotkey；\n" +
         "  异步动作的反馈样板 → ~/lib/async-action 的 runAsyncAction（失败文案走 errorMessage）；\n" +
         "  读媒体自然尺寸 → ~/lib/media/natural-size 的 readNaturalSize / naturalAspectRatio / isPortraitMedia；\n" +
-        "  手拼查询串 → ~/lib/query-string 的 buildQueryString / withQuery（媒体预览地址走 ~/lib/media/media-url）。\n" +
+        "  手拼查询串 → ~/lib/query-string 的 buildQueryString / withQuery（媒体预览地址走 ~/lib/media/media-url）；\n" +
+        "  按条目的错误位 → ~/components/ui/use-item-errors 的 useItemErrors（错误挂在**那一条**上）；\n" +
+        "  取数 effect 的作废守卫 → ~/lib/stale-run 的 beginStaleRun（`commit` 一次给全「这一轮的写入」）；\n" +
+        "  服务端错误信封 → ~/lib/api-error 的 apiErrorBody / readApiError（纯错误走 ~/server/lib/error-response）。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);

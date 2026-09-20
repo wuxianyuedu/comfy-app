@@ -296,6 +296,20 @@ const DOMAIN_EXEMPT = new Set([
    * 编码与省略口径必须全库一致（手拼漏一处 `encodeURIComponent` 就是静默
    * 打到另一个端点）—— 顶层单例。 */
   "src/lib/query-string.ts",
+  /* 「这一轮取数还算不算数」的唯一出口（ISSUE #672）：模型库、任务图集、
+   * 历史面板、素材库、影片台、抽出模型选择、代码块、画布节点对账
+   * —— **八个** 取数 effect 都在用它，横跨 `model` / `project-canvas` /
+   * `studio` / `workshop` 与 `ui/` 基元，且「卸载后到达的失败要不要写界面」
+   * 必须同一口径。进任何子域都会让另一个域反向依赖它 —— 与
+   * `async-action` / `browser-storage` 同款：顶层单例。 */
+  "src/lib/stale-run.ts",
+  /* 「服务端错误信封」的唯一口径（ISSUE #672）：`src/app/api/**` 的十二处
+   * 带业务字段的失败响应与 `src/lib/**` 的六个网络客户端**两端共用** ——
+   * 一侧怎么编码、另一侧就怎么读，两边必须同一份形状（收口前三个客户端
+   * 各写一份**逐字相同**的读取函数）。它同时被服务端路由与浏览器客户端
+   * import，进任何子域都会让另一侧反向依赖它 —— 与 `error-message` 同款：
+   * 顶层单例。 */
+  "src/lib/api-error.ts",
 ]);
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */

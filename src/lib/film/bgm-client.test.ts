@@ -1,7 +1,7 @@
 import type { Mock } from "vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readBgmError, uploadBgm } from "./bgm-client";
+import { uploadBgm } from "./bgm-client";
 
 type FetchMock = Mock<typeof fetch>;
 
@@ -93,15 +93,5 @@ describe("uploadBgm", () => {
   });
 });
 
-describe("readBgmError", () => {
-  it("取出字符串 error", () => {
-    expect(readBgmError({ error: "坏了" })).toBe("坏了");
-  });
-
-  it("error 非字符串或缺失时返回 undefined", () => {
-    expect(readBgmError({ error: 500 })).toBeUndefined();
-    expect(readBgmError({})).toBeUndefined();
-    expect(readBgmError(null)).toBeUndefined();
-    expect(readBgmError("x")).toBeUndefined();
-  });
-});
+/* 错误信封的读法（`readApiError`）用例见 `~/lib/api-error.test.ts` —— 收口前
+ * bgm / upload / materials 三份**逐字相同**的读取函数各带一组同款用例。 */
