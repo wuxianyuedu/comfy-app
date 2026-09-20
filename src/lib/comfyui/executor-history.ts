@@ -19,6 +19,7 @@
 import { getHistory, resolveComfyBase } from "./client";
 import { HISTORY_RETRIES, HISTORY_RETRY_DELAY_MS, state } from "./runner-state";
 import { queueTraceSummary, trace } from "./trace";
+import { sleep } from "~/lib/with-timeout";
 
 /**
  * ComfyUI `GET /history/{prompt_id}` 单条条目的最小结构视图
@@ -78,7 +79,7 @@ export async function fetchHistoryEntry(
     } catch (err) {
       lastErr = err;
     }
-    await new Promise((resolve) => setTimeout(resolve, HISTORY_RETRY_DELAY_MS));
+    await sleep(HISTORY_RETRY_DELAY_MS);
   }
   /* 12 轮都没等到：把「最后一轮原始响应 / 最后一次网络错误 / ComfyUI 当前队列」
    * 一起落盘，否则「未找到生成结果」这个结论无法再往下追。 */
