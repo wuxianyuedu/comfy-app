@@ -16,6 +16,11 @@ import {
   type SchemaSyncNotice,
   type SchemaSyncStatus,
 } from "./hooks/use-schema-sync-status";
+import {
+  comfyQueueNotice,
+  useComfyQueue,
+  type ComfyQueueView,
+} from "./hooks/use-comfy-queue";
 import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -149,6 +154,27 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
   );
 }
 
+/**
+ * ComfyUI 排队 / 当前执行那一格（数据源 `use-comfy-queue`）。
+ *
+ * 说什么由 `comfyQueueNotice` 判（纯函数），这里只渲染。它回答的是用户盯着画布
+ * 转圈时最想知道的四件事：前面还堵着几个、当前跑了多久、跑的是哪个工作流、哪个
+ * 模型 —— 此前这些只散在日志面板里，**耗时更是完全没暴露过**（`startedAt` 只在
+ * 任务结束时被算成一句文本日志）。
+ */
+function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
+  const notice = comfyQueueNotice(view);
+  if (notice === null) return null;
+  return (
+    <span
+      className="text-ink-soft shrink-0 truncate tabular-nums"
+      title={notice.title}
+    >
+      {notice.text}
+    </span>
+  );
+}
+
 export function BrowserStatusBar() {
   const isOpen = useLogPanel((s) => s.isOpen);
   const toggleOpen = useLogPanel((s) => s.toggleOpen);
@@ -168,6 +194,7 @@ export function BrowserStatusBar() {
   const { cudaVram, smiVram, ram, degradedNote } = useComfyReadiness();
   const devServer = useDevServerStatus();
   const schemaSync = useSchemaSyncStatus();
+  const comfyQueue = useComfyQueue();
   // 非主应用页签（内嵌 ComfyUI 等 iframe 页签）时整体隐藏：状态栏是固定悬浮层，
   // 盖住窗口最底下 24px——iframe 页面自绘的底部控件（运行操作栏下缘、扩展面板）
   // 恰好落在这一条里，浏览器整窗打开时它们是完整可见的，页签里却被压住，形成
@@ -200,6 +227,10 @@ export function BrowserStatusBar() {
       <SchemaSyncItem status={schemaSync} />
 
       <div className="flex shrink-0 items-center gap-2.5">
+        {/* ComfyUI 排队 / 当前执行：任务串行排队（MAX_CONCURRENCY=1），这一格
+            回答「前面还堵着几个、当前跑了多久、跑的哪个工作流与模型」。 */}
+        <ComfyQueueItem view={comfyQueue} />
+
         {/* 实时帧率：画布 FpsMeter 悬浮层已移除，全应用仅此一处（FPS 归属见
             BrowserStatusBar 文件头设计要点 2）。 */}
         <span

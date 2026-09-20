@@ -509,3 +509,23 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     return null;
   }
 }
+
+/** 拉取 ComfyUI `/queue` 的**原始快照**（`queue_running` / `queue_pending`）。
+ *
+ *  与 `getSystemStats` 同口径：服务不可达时返回 null，由调用方降级展示。
+ *
+ *  **不在这里解析**：`/queue` 条目的形态随版本变（元组 `[n, prompt_id, …]` 或
+ *  第三方构建的 `{prompt_id}` 对象），解析只写了一处 ——
+ *  `~/lib/comfyui/trace` 的 `queueTraceSummary`（reaper 的对账用的就是它）。
+ *  两处各解一遍必然分叉，而「队列里有几个任务」正是状态栏要报的数。 */
+export async function getComfyQueue(): Promise<unknown> {
+  try {
+    const res = await fetch(`${comfyBase()}/queue`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
