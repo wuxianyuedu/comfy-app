@@ -185,6 +185,9 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P56** | 手工把路径变成展示文本（`path.relative(` 当展示用 / `.split(/[\\/]/).pop()` 取末段 / `.replace(/\\/g, "/")` 归一分隔符）                        | `~/lib/path-display` 的 `toDisplayPath` / `stripPathPrefix` / `lastSegments` / `ellipsisMiddle` / `normalizeSlashes`（见 §16.2.4.60）                                                                             |
 | **P57** | 自写「剔掉私有 prop 再透传」的剔除表（`Omit<React.ComponentProps<…>, "a" \| "b">`）                                                              | `~/lib/dom-props` 的 `OmitOwnProps`（类型侧）/ `splitDomProps`（运行时剥）/ `commonOwnProps`（两表取交集，不是并集）（见 §16.2.4.61）                                                                             |
 | **P58** | 自写「给异步结果加超时」的定时器样板（`Promise.race(` 与 `setTimeout(` 同现 / `setTimeout(() => … resolve(｜reject(`）                             | `~/lib/with-timeout` 的 `withTimeout`（超时抛错）/ `withTimeoutResult`（超时给兜底值）/ `TimeoutError` / `sleep`（见 §16.2.4.62）                                                                                 |
+| **P59** | 手写数值夹取（`Math.min(` 里包着 `Math.max(`、或反过来 —— **两种不同**的 Math 嵌套）                                                              | `~/lib/clamp` 的 `clamp`（纯夹取）/ `clampInt`（夹取 + 取整，`mode` 显式）（见 §16.2.4.63）                                                                                                                       |
+| **P60** | 自写大写归一（`(x ?? "")[.trim()].toUpperCase()` —— 明确处理了缺省或空白）                                                                        | `~/lib/upper-token` 的 `upperToken`（吃空白、缺省给空串）/ `upperTokenOr`（缺省给具名兜底）（见 §16.2.4.64）                                                                                                        |
+| **P61** | 裸写应用事件（`new CustomEvent(` / `addEventListener("<含冒号的名字>"`）                                                                        | `~/lib/app-events` 的 `emitAppEvent` / `subscribeAppEvent` + `AppEvents` 表（事件名与载荷同处定义）（见 §16.2.4.65）                                                                                                |
 
 **P4~~P52 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
 P4~P58 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
@@ -213,9 +216,10 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **P47/P48/P49 见 §16.2.4.51 ~ §16.2.4.53**、
 **P50/P51/P52 见 §16.2.4.54 ~ §16.2.4.56**、
 **P53/P54/P55 见 §16.2.4.57 ~ §16.2.4.59**、
-**P56/P57/P58 见 §16.2.4.60 ~ §16.2.4.62**。
+**P56/P57/P58 见 §16.2.4.60 ~ §16.2.4.62**、
+**P59/P60/P61 见 §16.2.4.63 ~ §16.2.4.65**。
 
-**P4~P58 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P61 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -448,6 +452,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 路径变成展示一行         | ~~**18 个文件**各写各的，对三件事各判各的：**相对谁**（`path.relative(LOG_ROOT,…)` / `(PROJECT_ROOT,…)` / `(REPO_ROOT,…)` / 原样绝对路径）、**分隔符**（`.replace(/\\/g,"/")` ×8 / `.split(path.sep).join("/")` ×2 / 不归一）、**超长怎么办**（视图清一色 `truncate` **只留头部** —— 而路径的语义在尾部，用户看到的恰好是被切掉的那一段）~~ | `~/lib/path-display` 的 `toDisplayPath`（相对化 + 归一）/ `stripPathPrefix`（剥命名前缀）/ `lastSegments`（取末 N 段，按「段」不按字符）/ `ellipsisMiddle`（中段省略，与 `clampText` 的分工是「保两头 vs 保一头」）/ `normalizeSlashes`；**P56 硬闸** | ✅ **见 §16.2.4.60** |
 | props 剔透传             | ~~**4 个基元**各写一份表，而**类型侧 `Omit<…, "a" \| "b">` 与运行时解构是两份**，必须逐字一致却无任何机器判据 —— 表里有、解构里漏，该字段**静默透传给 DOM**（React 19 只给一条 console 警告）；`value` / `onChange` 漏掉的表现是「界面有值但状态没变」~~ | `~/lib/dom-props` 的 `OmitOwnProps`（类型）/ `splitDomProps`（运行时，同一份表）/ `commonOwnProps`（两表取**交集**，并集会把只属于一侧的字段也剔掉）；**P57 硬闸** | ✅ **见 §16.2.4.61** |
 | 异步结果加超时           | ~~**8 处** `Promise.race` / `setTimeout` 样板，对三件事各判各的：**定时器谁来清**（`.finally` / 两分支各清 / 三分支各清 / 只一个分支清 —— 漏一处就是悬挂的定时器把进程引用留到超时）、**超时之后**（`reject` / `resolve` 哨兵 / 杀子进程再 fail）、**时长与文案**（自算 `${ms/1000}s` 与硬编码并存）~~ | `~/lib/with-timeout` 的 `withTimeout`（超时抛 `TimeoutError`）/ `withTimeoutResult`（超时给兜底值）/ `TimeoutError`；两者共用一条「胜出即清定时器」的收尾，`onTimeout` 是显式钩子（杀子进程 / 退订）且**钩子抛错不顶替超时结论**；**P58 硬闸** | ✅ **见 §16.2.4.62** |
+| 数值夹取                 | ~~**27 处**手写 `Math.min` / `Math.max` 的夹取，四派写法都编译、都运行、类型都对，差别只在**语义决定**上：**参数顺序**（`Math.min(max, Math.max(min, x))` vs `Math.max(min, Math.min(max, x))` —— 类型上不可分辨，传反了不报错）、**取整在内层还是外层**（先取整再夹会在 `[0, 0.4]` 里给出 `0.4` —— 一个「不是整数的整数值」）、**非有限数怎么办**（`Math.max(0, NaN)` 是 `NaN`，会一路静默传播到 `style` / 落库）、**只有下限 / 上限**时另写一个具名函数。实测还有一处真缺陷：`comfy-readiness-client` 的「像夹取实则漏了下限」，`pollMs` 传 0 会变成不等待的死循环~~ | `~/lib/clamp` 的 `clamp(value, min, max)`（**被夹的值放第一位**；`NaN` → `min`、`±Infinity` 按大小夹；`min > max` 不换序）/ `clampInt`（夹取 + 取整，`mode` 是显式域决定）；`~/lib/progress` 的 `clampPct` 改用它实现；**P59 硬闸** | ✅ **见 §16.2.4.63** |
+| 大写归一                 | ~~**30 处**各写一遍 `(x ?? "").trim().toUpperCase()` 这一族，而它们**不是同一件事**：**要不要吃空白**（这一条直接决定匹配成败 —— ComfyUI 类型字段带尾随空白、模式码来自用户输入）、**缺省给什么**（空串还是放开记号 `*`）。收口前的实况是**同一个文件里两种写法并存**（`model-mode-contract` 的 `builtInModeContract` trim、同文件的 `modeContractEntries` 不 trim）—— 同一个模式码，经过前者匹配得上、经过后者匹配不上~~ | `~/lib/upper-token` 的 `upperToken(value: unknown)`（**只有一个口径：吃空白**，刻意不提供开关；参数收 `unknown`，替调用处承担 `typeof === "string"` 守卫）/ `upperTokenOr(value, fallback)`（缺省给具名兜底）；**P60 硬闸** | ✅ **见 §16.2.4.64** |
+| 跨组件应用事件           | ~~**5 条**自定义事件散在 **6 个文件**里，事件名与载荷类型**分开两处**，且失效模式**全是静默的**：`canvas-store-changed` 的名字定义在 `lib/project-canvas` 却**不导出**（视图侧 3 处硬编码字符串）；`canvas:produce` 的载荷形状只在订阅侧有个 `as {...}` 断言；实测有**两条死监听** —— `open-task`（派发方早已搬走，注释还写着它派发）与 `local-workflows-path-changed`（全库只有监听侧）。**没有任何构建、测试会报它们**~~ | `~/lib/app-events` 的 `AppEvents` 表（事件名与载荷**同处定义**）+ `emitAppEvent`（纯信号派发普通 `Event`）/ `subscribeAppEvent`（返回退订函数，载荷类型从表里取、读侧不必断言）；无 `window` 时派发返回、订阅给空操作，**刻意不排队重放**；**P61 硬闸** | ✅ **见 §16.2.4.65** |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -4049,6 +4056,157 @@ sleep(ms); // 「等一会儿」（不是本条账，但同属定时器一族，
   `comfyui/status` 的「权威查询 vs 抢跑探测」：没有定时器、没有要清的东西；
 - **有 `setTimeout` 但没有 `clearTimeout` 的文件**（该等一个窗口就等完，
   没有别的路径能先赢）—— 实例是 `external-open.detectFolderHelper`。
+
+### 16.2.4.63 「把一个数夹进一个区间」有 27 处各写一遍（P59 硬闸）
+
+全库 **27 处**手写 `Math.min` / `Math.max` 的夹取，写法分四派 —— **四派都编译、
+都运行、类型都对**，差别只在几个从没被写下来的**语义决定**上：
+
+| 决定的 | 做法 A | 做法 B |
+| --- | --- | --- |
+| **参数顺序** | `Math.min(max, Math.max(min, x))` | `Math.max(min, Math.min(max, x))` |
+| **整数从哪来** | 夹在取整**内层**（`Math.min(max, Math.max(min, Math.round(x)))`） | 夹在取整**外层**（`Math.round(Math.min(max, Math.max(min, x)))`） |
+| **非有限数** | `Number.isFinite` 守卫，返回兜底值 | 直接进 `Math.max` —— `Math.max(0, NaN)` 是 `NaN` |
+| **只有下限 / 上限** | 写成半个夹取（`Math.max(0, x)`） | 另写一个具名函数 |
+
+**参数顺序这一条最要紧，因为它在类型上不可分辨**：`clamp(x, min, max)` 与
+`clamp(min, max, x)` 都是 `(number, number, number) => number`，传反了不会
+报错，只在边界值上给出不同答案。
+
+**「非有限数怎么办」的代价是静默的**：`NaN` 交给 `style={{ width: NaN }}` 是
+无效值、交给数据库是 `null`、交给 `Math.round` 还是 `NaN` —— 它会在整条链路上
+一路传下去。收口前只有少数几处有守卫。
+
+**取整顺序的代价**同样是静默的：先取整再夹，在 `[0, 0.4]` 区间里 `0.6` 会先
+变成 `1`、再夹成 `0.4` —— 得到一个**不是整数的整数值**。收口前
+`media-source.server` 是「先夹后整」、`video-studio-utils` 是「先整后夹」，
+两处都「对」只是因为它们的区间端点恰好是整数。
+
+#### 出口：`~/lib/clamp`
+
+```ts
+clamp(value, min, max); // 夹进 [min, max]；NaN → min（Infinity 按大小夹）
+clampInt(value, min, max, { mode }); // 夹取 + 取整（先夹后整）
+```
+
+- **签名把被夹的值放第一位**（`clamp(value, min, max)`）—— 与调用处「先有值、
+  再定区间」的读法一致，也让人一眼看出哪个是被夹的那个；
+- **`NaN` 返回 `min`，`±Infinity` 按大小夹取** —— 前者是「算不出来」，
+  后者是「明确大了 / 小了的数」，两件事分两种处理；
+- **区间本身不做校验**（`min > max` 时结果落在 `min`）—— 那是调用处的常量
+  写错，在这里悄悄换序只会把错误藏起来；
+- **`clampInt` 先夹后整**，取整模式（`round` / `floor` / `trunc`）是显式选项，
+  因为帧数取整与分页取整确实是**域决定**；
+- `~/lib/progress` 的 `clampPct` **改用本出口实现**（它自己仍带「非有限数 → 0」
+  的域口径），不再各写一份 `Math.min(PROGRESS_MAX, Math.max(0, …))`。
+
+#### 顺带修掉的一处真缺陷
+
+`comfy/comfy-readiness-client` 的 `Math.min(opts.pollMs ?? POLL_MS, Math.max(timeoutMs, 1))`
+看着像夹取，**实则漏了下限**：`opts.pollMs` 传 `0` 或负数时会真给 `0`，
+轮询变成**不等待的死循环**。改成 `clamp(…, 1, timeoutMs)` 后才是它本来想表达的
+「夹在 `[1, timeoutMs]`」。
+
+#### 判据：P59（硬闸）
+
+锚**两种 Math 的嵌套**这个形态签名：`Math.max(` 里包着 `Math.min(`、或反过来。
+
+**刻意不数**：
+
+- **同一种 Math 的嵌套**（`Math.max(1, 1 / Math.max(zoom, 0.01))`）—— 那是
+  **取值**不是夹取，实例是 `NodeFrost`；
+- **半个夹取**（`Math.max(0, filtered.length - n)` 只有一个边界）—— 那表达的
+  是「不许为负 / 不许超过 n」，不是「放进区间」，实例是 `LogPanel` /
+  `log-virtual` 的防负索引；
+- **出口自身的实现**（`lib/clamp.ts`）。
+
+### 16.2.4.64 「把一个外来串归一成大写记号」有 30 处各写一遍（P60 硬闸）
+
+全库 **30 处**各写一遍 `(x ?? "").trim().toUpperCase()` 这一族，而它们
+**不是同一件事**，差别只在两个语义决定上：
+
+| 决定的 | 做法 A | 做法 B |
+| --- | --- | --- |
+| **要不要吃空白** | `.trim().toUpperCase()` | 只有 `.toUpperCase()` |
+| **缺省给什么** | `(x ?? "").toUpperCase()`（空串） | `(x ?? "*").toUpperCase()`（放开记号） |
+
+**「要不要 trim」这一条决定匹配成败**：ComfyUI 的 `object_info` 里类型字段
+带尾随空白的形态真实存在，而模式码来自用户输入（前后空格是手滑的常态）。
+
+收口前的实况是**同一个文件里两种写法并存**：`lib/workshop/model-mode-contract.ts`
+的 `builtInModeContract` 用 `mode.trim().toUpperCase()`、同文件的
+`modeContractEntries` 用 `(mode ?? "").toUpperCase()` —— **同一个模式码，
+经过前者匹配得上、经过后者匹配不上**，而两处都看不出来自己在做不同的事。
+
+#### 出口：`~/lib/upper-token`
+
+```ts
+upperToken(value); // 吃空白、折大写；缺省（含非字符串）给 ""
+upperTokenOr(value, fallback); // 缺省给具名兜底（默认 "*"）
+```
+
+- **只有一个口径：吃空白**。想「不吃空白」的调用处没有正当理由（空白从来不
+  携带语义），所以刻意**不提供开关** —— 提供开关就等于把那条分歧留在库里；
+- **参数接受 `unknown`** —— 这是相对手写版的一处**收窄**：`rec.mode` 这类外来
+  值的类型是 `unknown`，手写版各写一遍 `typeof x === "string" ? … : ""`；
+- **`upperTokenOr` 的兜底不做 trim / 大写** —— 那是调用处自己的常量；
+- **刻意不数 `x.toUpperCase()`**（`x` 是类型上非空的 `string`）—— 那是
+  「把已知值画成大写展示」，不是「归一外来串」，实例是 `log-store` 的行内
+  级别与 `StyleSwitcher` 的档名展示。数进来会逼人改坏代码。
+
+### 16.2.4.65 「跨组件广播一条应用事件」有 11 处裸写（P61 硬闸）
+
+全库 **5 条**自定义事件散在 **6 个文件**里订阅或派发，而它们的**命运各不相同**
+—— 这不是重复代码，是**同一份字面量的两端分开两处**：
+
+| 事件 | 事件名的定义处 | 订阅侧 | 派发侧 |
+| --- | --- | --- | --- |
+| `comfyapp:canvas-store-changed` | `lib/project-canvas/canvas-store`（**不导出**） | 视图侧 3 处硬编码字符串 | 同定义处 |
+| `canvas:produce` | **没有** | 1 处硬编码 | 2 处硬编码 |
+| `open-task` | **没有** | 1 处硬编码 | **已经不存在**（死监听） |
+| `comfyapp:local-workflows-path-changed` | 订阅方自己的模块常量（**不导出**） | 同定义处 | 视图侧硬编码 |
+| `custom-nodes:updated` | `config/custom-nodes`（**导出了**） | 视图侧 import | 同定义处 |
+
+前四条的失效模式是同一种，**且全是静默的**：
+
+1. **写侧改名、读侧认不出自己** —— 与 §16.2.4.58 的横幅色板同款；
+2. **写侧删掉、读侧永远等不到** —— 实测有**两条死监听**：`open-task` 的注释
+   还写着「VideoQueueModal 的详情按钮通过它请求打开详情」，而那个派发早已搬走；
+   `comfyapp:local-workflows-path-changed` 更彻底，全库只有监听侧。
+   **没有任何构建、测试会报它们**；
+3. **载荷类型只在读侧写一遍** —— `canvas:produce` 的
+   `{ id, resultPath, resultMediaType }` 只在订阅侧有个 `as {...}` 断言，
+   派发侧多写一个字段不会有人发现。
+
+#### 出口：`~/lib/app-events`
+
+```ts
+emitAppEvent("canvas:produce", { id, resultPath }); // 带载荷
+emitAppEvent("comfyapp:canvas-store-changed"); // 纯信号（派发普通 Event）
+const off = subscribeAppEvent("canvas:produce", (p) => { /* p 类型已知 */ });
+```
+
+- **事件名与载荷类型同处定义**（`AppEvents` 表）—— 名字与形状在同一行上，
+  改名时编译期就能看见所有读侧；
+- **订阅与派发各一个带类型的函数** —— 读侧不必再 `as` 断言；
+- **无 `window` 时派发直接返回、订阅返回空操作** —— 调用方可以无条件
+  `return subscribeAppEvent(…)`，不必自己判环境；
+- **刻意不做「排队重放」**：事件是「此刻的广播」，补发一条上一轮的广播会让
+  读侧拿到过期的载荷；
+- **刻意不做事件总线 / 订阅中心**：这是 DOM 的 `window` 事件原样转发，多一份
+  注册表就多一处能泄漏的地方。
+
+#### 判据：P61（硬闸）
+
+锚**两种形态**：① `new CustomEvent(`；②
+`window.addEventListener("<带冒号的名字>"`（应用事件的命名空间形态）。
+
+**刻意不数** `addEventListener("click")` 这类 DOM 原生事件名（没有冒号），
+也**豁免**出口自身（`emitAppEvent` 的定义处当然要 `new CustomEvent`）。
+
+⚠️ **`src/config` 因此进了扫描根**：`custom-nodes:updated` 的派发侧住在
+`src/config/custom-nodes.ts` —— 只扫前四条根等于让这条事件的一半落在扫描面
+之外（与 `src/lib` 加进来同款）。
 
 ## 16.3 新增一个组件的标准动作
 

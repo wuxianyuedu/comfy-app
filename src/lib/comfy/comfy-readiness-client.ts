@@ -1,3 +1,4 @@
+import { clamp } from "~/lib/clamp";
 import { readApiError } from "~/lib/api-error";
 
 /* ── 「让 ComfyUI 立即可用」的客户端（第②层网络部分）─────────────────────
@@ -93,10 +94,9 @@ export async function waitForComfyReady(
   } = {},
 ): Promise<ComfyReadyResult> {
   const timeoutMs = opts.timeoutMs ?? COMFY_READY_TIMEOUT_MS;
-  const pollMs = Math.min(
-    opts.pollMs ?? COMFY_READY_POLL_MS,
-    Math.max(timeoutMs, 1),
-  );
+  /* 夹取而不是取值：`opts.pollMs` 传 0 / 负数会让轮询不等待（死循环），
+   * 传超大值又会让别的地方白等，故下限 1、上限取超时窗口本身。 */
+  const pollMs = clamp(opts.pollMs ?? COMFY_READY_POLL_MS, 1, timeoutMs);
   const deadline = Date.now() + timeoutMs;
   let last: ComfyReadyResult = {
     ok: false,

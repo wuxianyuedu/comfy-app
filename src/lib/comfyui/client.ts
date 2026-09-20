@@ -23,6 +23,7 @@
 // 进程列表确认「该路径的实例进程是否真的在运行」，再通过 PID→监听端口
 // 定位实际端口。端口上有别的 ComfyUI 响应 ≠ 配置路径的实例在运行。
 
+import { clamp } from "~/lib/clamp";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { COMFYUI_DEFAULT_PORT } from "../endpoints";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
@@ -484,10 +485,7 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     };
     const dev = pickGpu(data.devices);
     const vramTotal = dev?.vram_total ?? 0;
-    const vramFree = Math.max(
-      0,
-      Math.min(dev?.vram_free ?? vramTotal, vramTotal),
-    );
+    const vramFree = clamp(dev?.vram_free ?? vramTotal, 0, vramTotal);
     const vramUsed = vramTotal - vramFree;
     const ramTotal = data.system?.ram_total ?? 0;
     const ramFree = data.system?.ram_free ?? 0;

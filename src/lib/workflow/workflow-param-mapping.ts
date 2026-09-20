@@ -32,6 +32,7 @@
  * `WorkflowLibraryCanvas`）—— 拖线即编辑落点，映射没有第二套界面。
  */
 
+import { upperToken } from "~/lib/upper-token";
 import type {
   WorkflowIOEntry,
   WorkflowIOMap,
@@ -274,7 +275,7 @@ export function pinAcceptsEntry(
   if (pinFamily(ioEntry) !== family) return false;
   const accepted = acceptedPinTypesFor(cls);
   if (!accepted) return true;
-  const type = (ioEntry?.type ?? "").trim().toUpperCase();
+  const type = upperToken(ioEntry?.type);
   /* 类型未知（缺省 / `*`）：放行 —— 拿不到事实时不替作者做决定。 */
   if (!type || type === "*") return true;
   return accepted.includes(type);
@@ -364,7 +365,7 @@ export interface ParamOutputPort {
 
 /** 一枚标签/端口的类型展示名：声明类型原样大写，缺省 `*`。 */
 export function portTypeDisplay(type: string | undefined | null): string {
-  const t = (type ?? "").trim().toUpperCase();
+  const t = upperToken(type);
   return t.length > 0 ? t : "*";
 }
 

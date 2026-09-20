@@ -3,6 +3,7 @@
  * 让用户可以保留多个命名画布并安全切换。
  */
 
+import { emitAppEvent } from "~/lib/app-events";
 import type { Edge } from "@xyflow/react";
 import type { CanvasNodeType } from "~/lib/project-canvas/canvas-types";
 import {
@@ -28,12 +29,8 @@ const ACTIVE_KEY = "comfyapp.canvas.active.v1";
 /* 每次画布仓库变更（upsert / delete / create）都会广播的事件名。
  * 订阅它的页面（例如工作区首页）会重读仓库，刷新依赖它的视图
  *（最近项目、切换器标签等）。 */
-const CHANGED_EVENT = "comfyapp:canvas-store-changed";
-
 function emitChanged() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(CHANGED_EVENT));
-  }
+  emitAppEvent("comfyapp:canvas-store-changed");
 }
 
 /** 读项目索引（坏数据 / 没存过一律空表）。「能不能用 storage」与「坏数据怎么办」

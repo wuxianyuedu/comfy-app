@@ -13,6 +13,7 @@
 //
 // 输出类型由模式的类别决定（图像 → 图片，视频 → 视频，音频 → 音频）。
 
+import { upperToken } from "~/lib/upper-token";
 import {
   EXPOSED_PARAM_DISPLAY_LABEL,
   exposedCustomKindOf,
@@ -75,7 +76,7 @@ export function defaultInputsForMode(mode: string): Array<{
   type: WorkshopInputType;
   field: string;
 }> {
-  const code = mode.trim().toUpperCase();
+  const code = upperToken(mode);
   /* 「尺寸」的默认三行：比例 + 百万像素 + 倍数（与契约层的 size 口同一口径）。 */
   const size: Array<{ type: WorkshopInputType; field: string }> = [
     { type: "aspect-ratio", field: "aspect_ratio" },
@@ -161,8 +162,7 @@ export function parseRemoteModeAdapters(raw: unknown): RemoteModeAdapter[] {
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
-    const mode =
-      typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
+    const mode = upperToken(rec.mode);
     if (!mode || seen.has(mode)) continue;
     const inputs: Array<{ type: WorkshopInputType; field: string }> = [];
     if (Array.isArray(rec.inputs)) {
@@ -463,7 +463,7 @@ export function builtInModeContract(mode: string): ModeContract {
     (d) => d.id as ModeContractInputId,
   );
   return {
-    mode: mode.trim().toUpperCase(),
+    mode: upperToken(mode),
     inputs,
     output: outputKindForMode(mode),
     required: builtInRequiredInputs(inputs),
@@ -482,8 +482,7 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
   for (const item of raw) {
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
-    const mode =
-      typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
+    const mode = upperToken(rec.mode);
     if (!mode || seen.has(mode)) continue;
     /* 自定义口定义先解析：`inputs` 里的自定义口要靠它才能留下 —— 没有定义的口
      *  下游读不出名字与类型，列出来只会是一张无名卡片。 */
@@ -582,7 +581,7 @@ export function modeContractEntries(
   mode: string | null | undefined,
   storedContracts?: readonly ModeContract[] | null,
 ): ContractEntryDisplay[] {
-  const code = (mode ?? "").toUpperCase();
+  const code = upperToken(mode);
   const stored = storedContracts?.find((c) => c.mode === code);
   if (stored) return contractToStatusEntries(stored);
   return exposedParamsForMode(mode).map((def) => ({

@@ -22,6 +22,8 @@
 // 渲染侧（track + fill + 百分比文字）的唯一出口是
 // `~/components/ui/progress` 的 `ProgressBar` —— 本文件只管**数值怎么算**。
 
+import { clamp } from "~/lib/clamp";
+
 /** 上限。进度条的天然量纲是百分比。 */
 export const PROGRESS_MAX = 100;
 
@@ -33,7 +35,7 @@ export const PROGRESS_MAX = 100;
  */
 export function clampPct(value: number): number {
   if (!Number.isFinite(value)) return 0;
-  return Math.min(PROGRESS_MAX, Math.max(0, Math.round(value)));
+  return clamp(Math.round(value), 0, PROGRESS_MAX);
 }
 
 /**
@@ -79,5 +81,5 @@ export function pctToWidth(
   const clamped = clampPct(pct);
   if (clamped === 0) return 0;
   const minVisible = options.minVisible ?? 0;
-  return Math.max(clamped, Math.min(PROGRESS_MAX, minVisible));
+  return clamp(minVisible, clamped, PROGRESS_MAX);
 }

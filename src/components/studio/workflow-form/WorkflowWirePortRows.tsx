@@ -1,5 +1,6 @@
 "use client";
 
+import { upperToken } from "~/lib/upper-token";
 import React from "react";
 import {
   ioLabel,
@@ -128,9 +129,9 @@ export function WirePortRows({
         // 数值类（ComfyUI INT/FLOAT/NUMBER）→ 端口行底部用紧凑数字输入，
         // 避免和 text/textarea/image 分支重复触发。
         const numericType =
-          (wireInput.type ?? "").toUpperCase() === "INT" ||
-          (wireInput.type ?? "").toUpperCase() === "FLOAT" ||
-          (wireInput.type ?? "").toUpperCase() === "NUMBER";
+          upperToken(wireInput.type) === "INT" ||
+          upperToken(wireInput.type) === "FLOAT" ||
+          upperToken(wireInput.type) === "NUMBER";
         const v = values[wireInput.ioKey];
         {
           /* ── PortRowInt · 数值行 · h=33 严格（Ardot 3:52）───────────────

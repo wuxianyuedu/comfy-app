@@ -43,6 +43,8 @@
  * （dev-launcher.log 的 mtime）。两者都拿不到时返回 null——调用方此时不做
  * 时间线截断，宁可多显示几条历史行，也不能凭空丢掉本次运行的日志。
  */
+import { clamp } from "~/lib/clamp";
+
 export function resolveSessionStart(
   anchorMtimeMs: number | null,
   explicitStartMs: number | null = null,
@@ -53,5 +55,5 @@ export function resolveSessionStart(
 
 /** 把时间戳钳进 [0, now]：读不到时间的边界行不该污染面板时间线。 */
 export function clampLogTime(tsMs: number, nowMs: number): number {
-  return Math.max(0, Math.min(tsMs, nowMs));
+  return clamp(tsMs, 0, nowMs);
 }

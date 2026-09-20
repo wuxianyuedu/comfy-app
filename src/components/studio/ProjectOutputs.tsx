@@ -1,5 +1,6 @@
 "use client";
 
+import { subscribeAppEvent } from "~/lib/app-events";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -68,9 +69,7 @@ export function ProjectOutputs() {
       refreshProjects();
     };
     sync();
-    window.addEventListener("comfyapp:canvas-store-changed", sync);
-    return () =>
-      window.removeEventListener("comfyapp:canvas-store-changed", sync);
+    return subscribeAppEvent("comfyapp:canvas-store-changed", sync);
   }, [refreshProjects]);
 
   const {

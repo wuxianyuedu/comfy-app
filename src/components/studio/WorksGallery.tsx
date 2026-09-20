@@ -1,5 +1,6 @@
 "use client";
 
+import { subscribeAppEvent } from "~/lib/app-events";
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useToast } from "./ToastProvider";
@@ -77,15 +78,10 @@ export function WorksGallery({
 
   useEffect(() => {
     // 列出前先清掉遗留的空默认名草稿。
-    window.addEventListener(
+    return subscribeAppEvent(
       "comfyapp:canvas-store-changed",
       refreshCanvasProjects,
     );
-    return () =>
-      window.removeEventListener(
-        "comfyapp:canvas-store-changed",
-        refreshCanvasProjects,
-      );
   }, [refreshCanvasProjects]);
 
   return (

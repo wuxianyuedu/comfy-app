@@ -1,5 +1,6 @@
 "use client";
 
+import { clamp } from "~/lib/clamp";
 import React from "react";
 import { BaseEdge, type EdgeProps, Position } from "@xyflow/react";
 import { shouldDimEdge, type EdgeFocusRole } from "./flow-focus-endpoints";
@@ -47,10 +48,7 @@ function pickOffset(sx: number, sy: number, tx: number, ty: number) {
   const dx = Math.abs(tx - sx);
   const dy = Math.abs(ty - sy);
   const longAxis = Math.max(dx, dy);
-  const mag = Math.max(
-    MIN_OFFSET,
-    Math.min(MAX_OFFSET, longAxis * OFFSET_RATIO),
-  );
+  const mag = clamp(longAxis * OFFSET_RATIO, MIN_OFFSET, MAX_OFFSET);
   return mag;
 }
 

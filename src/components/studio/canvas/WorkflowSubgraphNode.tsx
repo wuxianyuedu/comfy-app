@@ -2,6 +2,7 @@
 /* 抽出的 WorkflowSubgraphNode（ComfyUI 子图封装节点的渲染器）。
  * 原本在 WorkflowCanvasEditor.tsx 内部。 */
 import React, { useState } from "react";
+import { clamp } from "~/lib/clamp";
 import { useTheme } from "next-themes";
 
 import { Handle, Position } from "@xyflow/react";
@@ -219,8 +220,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
           const wiredOutputs = cleanedOutputs.filter(({ out }) =>
             data.connectedOutputs?.has(out.name),
           );
-          const cylH = (count: number) =>
-            Math.min(64, Math.max(16, 12 + count * 4));
+          const cylH = (count: number) => clamp(12 + count * 4, 16, 64);
           return (
             <>
               {wiredInputs.length > 0 && (

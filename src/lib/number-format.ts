@@ -41,9 +41,11 @@
  *   fixed(Number.NaN, 2)  → null（非有限数）
  * ```
  */
+import { clampInt } from "~/lib/clamp";
+
 export function fixed(value: number, digits: number): string | null {
   if (!Number.isFinite(value)) return null;
-  const clamped = Math.max(0, Math.min(20, Math.trunc(digits)));
+  const clamped = clampInt(digits, 0, 20, { mode: "trunc" });
   return value.toFixed(clamped);
 }
 

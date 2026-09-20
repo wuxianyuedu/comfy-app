@@ -1,3 +1,4 @@
+import { clamp } from "~/lib/clamp";
 import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
@@ -56,8 +57,8 @@ const TAIL_BYTES = 1024 * 1024;
 function readBytes(file: string, start: number, length: number): Buffer | null {
   if (!fs.existsSync(/*turbopackIgnore: true*/ file)) return null;
   const size = fs.statSync(/*turbopackIgnore: true*/ file).size;
-  const from = Math.max(0, Math.min(start, size));
-  const len = Math.max(0, Math.min(length, size - from));
+  const from = clamp(start, 0, size);
+  const len = clamp(length, 0, size - from);
   if (len === 0) return Buffer.alloc(0);
   const buf = Buffer.alloc(len);
   const fd = fs.openSync(/*turbopackIgnore: true*/ file, "r");

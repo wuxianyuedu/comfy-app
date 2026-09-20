@@ -1,5 +1,6 @@
 "use client";
 
+import { upperToken } from "~/lib/upper-token";
 import React, { useEffect, useRef } from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
@@ -105,7 +106,7 @@ export function ImageGenerationPanel({
    * 扩 Chinese 关键字（"图生视频"/"文生视频"/
    *  "视频"）—— 全中文命名（无 I2V/T2V 等英文 marker）也能识别。 */
   const inferTypeByName = (rawName: string): string => {
-    const up = (rawName ?? "").toUpperCase();
+    const up = upperToken(rawName);
     // ── VIDEO 类（更具体优先；Chinese "图生视频" 出现在 I2V 之前，
     //    因为中文 "图生视频" 后面可能不带 "I2V" 字样）
     if (/图生视频|IMG2VIDEO/.test(rawName)) return "I2V";

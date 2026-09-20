@@ -1,5 +1,6 @@
 "use client";
 
+import { clamp } from "~/lib/clamp";
 import { useCallback, useLayoutEffect, useRef } from "react";
 
 /** 自动增高的 textarea，宽度严格锁死在父级。
@@ -43,7 +44,7 @@ export function AutoResizeTextarea({
     //（否则会被夹到上一次的显式高度）。
     el.style.height = "auto";
     const natural = el.scrollHeight;
-    const clamped = Math.min(Math.max(natural, minHeight), maxHeight);
+    const clamped = clamp(natural, minHeight, maxHeight);
     el.style.height = `${clamped}px`;
     el.style.overflowY = natural > maxHeight ? "auto" : "hidden";
   }, [minHeight, maxHeight]);

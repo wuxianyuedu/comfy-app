@@ -1,5 +1,6 @@
 "use client";
 
+import { upperToken } from "~/lib/upper-token";
 import React from "react";
 import { Handle, Position, useNodeId } from "@xyflow/react";
 
@@ -20,7 +21,7 @@ const PORT_VID = new Set([
 ]);
 
 function portColorFor(type?: string): string {
-  const t = (type ?? "").toUpperCase();
+  const t = upperToken(type);
   if (PORT_IMG.has(t)) return "#7C5CFC";
   if (PORT_VID.has(t)) return "#FF5CA8";
   if (t === "STRING" || t === "INT" || t === "FLOAT" || t === "NUMBER")

@@ -43,6 +43,8 @@
  * 一行（未换行）的像素高度：`text-[13px]` + `leading-snug` + `py-1` + 1px 下边框。
  * 必须与 `LogRow` 的 class 对齐。
  */
+import { clamp } from "~/lib/clamp";
+
 export const LOG_ROW_SINGLE = 27;
 
 /** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 13px 行高）。 */
@@ -225,9 +227,8 @@ export function pinTargetIndex(
   bottomIndex: number,
 ): number {
   return Math.max(
-    0,
-    Math.min(baseline, bottomIndex),
-    Math.min(applied, bottomIndex),
+    clamp(baseline, 0, bottomIndex),
+    clamp(applied, 0, bottomIndex),
   );
 }
 

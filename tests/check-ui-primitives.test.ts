@@ -3245,6 +3245,285 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+
+  /* ── P59：数值夹取（规范 §16.2.4.63）─────────────────────────────── */
+
+  it("手写 Math.min / Math.max 嵌套的夹取直接阻断（规范 P59）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function pick(page: number, total: number) {",
+        "  return Math.min(Math.max(1, page), total);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P59");
+  });
+
+  it("两种参数顺序都计入 P59（它们类型上不可分辨）", () => {
+    /* `clamp(x, min, max)` 与 `clamp(min, max, x)` 都是
+     * `(number, number, number) => number` —— 传反了不会报错。
+     * 手写版的两种顺序同样都该被数到。 */
+    seedBaseline();
+    write(
+      "src/lib/a.ts",
+      "export const a = (z: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, z));\n",
+    );
+    write(
+      "src/lib/b.ts",
+      "export const b = (z: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, z));\n",
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).toContain("src/lib/a.ts");
+    expect(output).toContain("src/lib/b.ts");
+  });
+
+  it("多行写法与取整混入都计入 P59", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export const snap = (v: number, m: number) =>",
+        "  Math.max(",
+        "    MIN,",
+        "    Math.min(MAX, Math.round(v / m) * m),",
+        "  );",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P59");
+  });
+
+  it("走 clamp 出口的落点不再被 P59 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        'import { clamp } from "~/lib/clamp";',
+        "export const pick = (page: number, total: number) =>",
+        "  clamp(page, 1, total);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("同一种 Math 的嵌套（max 里包 max）不算 P59（那是取值不是夹取）", () => {
+    /* `Math.max(1, 1 / Math.max(zoom, 0.01))` 是取值 —— 只数
+     * 「两种不同」的 Math 函数嵌套。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      "export const s = (zoom: number) => Math.max(1, 1 / Math.max(zoom, 0.01));\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("半个夹取（Math.max(0, x) 只有一个边界）不算 P59", () => {
+    /* 那表达的是「不许为负」，不是「放进区间」—— 换成
+     * `clamp(x, 0, Infinity)` 只会更绕。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      "export const i = (n: number, len: number) => Math.max(0, len - n);\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("出口自身的实现（lib/clamp.ts）不被 P59 计", () => {
+    seedBaseline();
+    write(
+      "src/lib/clamp.ts",
+      [
+        "export function clamp(v: number, min: number, max: number) {",
+        "  if (Number.isNaN(v)) return min;",
+        "  if (v < min) return min;",
+        "  return Math.min(max, Math.max(min, v));",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P60：大写归一（规范 §16.2.4.64）─────────────────────────────── */
+
+  it("`(x ?? \"\").toUpperCase()` 形态直接阻断（规范 P60）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      "export const t = (mode?: string) => (mode ?? '').toUpperCase();\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P60");
+  });
+
+  it("`.trim().toUpperCase()` 形态也计入 P60（同一条账的另一种写法）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      "export const t = (mode: string) => mode.trim().toUpperCase();\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P60");
+  });
+
+  it("两面都写的形态只计一次（不重复计）", () => {
+    /* `(x ?? "").trim().toUpperCase()` 同时命中两个子形态，
+     * 去重后应按 1 处记 —— 否则「收紧基线」会把同一行数两遍。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      "export const t = (mode?: string) => (mode ?? '').trim().toUpperCase();\n",
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).toMatch(/thing\.ts（1 处）/);
+  });
+
+  it("走 upper-token 出口的落点不再被 P60 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        'import { upperToken } from "~/lib/upper-token";',
+        "export const t = (mode?: string) => upperToken(mode);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("裸 `x.toUpperCase()`（x 是已知值、只作大写展示）不算 P60", () => {
+    /* 那不是「归一外来串」而是「把已知值画成大写」。数进来会逼人改坏代码
+     *（`log-store` 的行内级别、`StyleSwitcher` 的档名展示都是这一档）。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export const chip = (type: string) => {",
+        "  const t = type.toUpperCase();",
+        "  return t;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("出口自身的实现（lib/upper-token.ts）不被 P60 计", () => {
+    seedBaseline();
+    write(
+      "src/lib/upper-token.ts",
+      "export const upperToken = (v: unknown) => typeof v === 'string' ? v.trim().toUpperCase() : '';\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P61：应用事件（规范 §16.2.4.65）─────────────────────────────── */
+
+  it("自建 CustomEvent 直接阻断（规范 P61）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Thing.tsx",
+      [
+        "export const fire = () => {",
+        "  window.dispatchEvent(",
+        "    new CustomEvent('canvas:produce', { detail: { id: 'n1' } }),",
+        "  );",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P61");
+  });
+
+  it("订阅带命名空间冒号的事件名也计入 P61", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Thing.tsx",
+      [
+        "export const useIt = () => {",
+        "  useEffect(() => {",
+        "    window.addEventListener('comfyapp:canvas-store-changed', () => {});",
+        "  }, []);",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P61");
+  });
+
+  it("走 app-events 出口的落点不再被 P61 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Thing.tsx",
+      [
+        'import { emitAppEvent } from "~/lib/app-events";',
+        "export const fire = () => emitAppEvent('canvas:produce', { id: 'n1', resultPath: '/a' });",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("DOM 原生事件（click / resize）不算 P61（没有命名空间冒号）", () => {
+    /* 本条账只认「应用事件」—— `addEventListener('click')` 是 DOM 事件，
+     * 换了出口也没地方换。 */
+    seedBaseline();
+    write(
+      "src/components/studio/Thing.tsx",
+      [
+        "export const useIt = () => {",
+        "  useEffect(() => {",
+        "    window.addEventListener('click', () => {});",
+        "  }, []);",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("出口自身的实现（lib/app-events.ts）不被 P61 计", () => {
+    seedBaseline();
+    write(
+      "src/lib/app-events.ts",
+      [
+        "export const emitAppEvent = (name: string, detail?: unknown) => {",
+        "  window.dispatchEvent(detail === undefined ? new Event(name) : new CustomEvent(name, { detail }));",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("src/config 也在扫描范围内（应用事件的派发侧在那里）", () => {
+    /* `custom-nodes:updated` 的派发侧住在 `src/config/custom-nodes.ts` ——
+     * 只扫前四条根会让这条事件的一半落在扫描面之外。 */
+    seedBaseline();
+    write(
+      "src/config/thing.ts",
+      "export const fire = (count: number) => window.dispatchEvent(new CustomEvent('custom-nodes:updated', { detail: { count } }));\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P61");
+  });
+
   it("lib 层的既有出口实现不被 P1~P38 误伤（只有逐条登记的判据扫 lib）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规

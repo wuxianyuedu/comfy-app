@@ -19,6 +19,9 @@
  *      之前（旧的「按解析时刻 + 只追加」写法会把它们排到末尾，破坏时间序）。
  */
 
+import { upperToken } from "~/lib/upper-token";
+import { clamp } from "~/lib/clamp";
+
 import { create } from "zustand";
 
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
@@ -367,7 +370,7 @@ export function isRoutineRpcTimingLog(args: unknown[]): boolean {
 export function isRoutineRpcTimingLine(line: string): boolean {
   const m = APP_RUNTIME_LOG_RE.exec(line);
   const text = m ? (m[10] ?? "") : line;
-  const level = m ? (m[8] ?? "").toUpperCase() : "";
+  const level = m ? upperToken(m[8]) : "";
   // 失败 / 慢查询（error/warn 级别）永远保留
   if (level === "WARN" || level === "ERROR") return false;
   // 行格式两种来源：app-runtime 行的 text 已被 APP_RUNTIME_LOG_RE 拆掉 [ns]
@@ -1477,7 +1480,7 @@ export function selectPageLogs(
 ): { entries: LogEntry[]; page: number; totalPages: number } {
   const total = logs.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(Math.max(1, page), totalPages);
+  const safePage = clamp(page, 1, totalPages);
   const end = total - (safePage - 1) * pageSize;
   const start = Math.max(0, end - pageSize);
   return { entries: logs.slice(start, end), page: safePage, totalPages };
