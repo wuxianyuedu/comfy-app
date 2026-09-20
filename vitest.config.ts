@@ -110,6 +110,12 @@ export default defineConfig({
         "src/lib/keyboard.ts",
         "src/components/ui/simple-key-handler.ts",
         "src/lib/case-token.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.60 ~ §16.2.4.62）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。
+         * 三个都是纯函数模块（无 React、无 IO），可以逐分支钉死。 */
+        "src/lib/path-display.ts",
+        "src/lib/dom-props.ts",
+        "src/lib/with-timeout.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -571,6 +577,31 @@ export default defineConfig({
           branches: 100,
         },
         "src/lib/case-token.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 本批三条新出口（规范 16 §16.2.4.60 ~ §16.2.4.62），门槛按实测值设满档：
+         *   · P56 对面 `~/lib/path-display` —— 「相对不上就不剥」「上限比标记还短」
+         *     「n ≤ 0 给空串」「奇数余额给头部」这些刻意不做的花活逐条钉住；
+         *   · P57 对面 `~/lib/dom-props` —— 「只搬不改写」「不改动入参」
+         *     「未传的私有键不凭空补 undefined」与交集合并（不是并集）都验到；
+         *   · P58 对面 `~/lib/with-timeout` —— 成功 / 失败 / 超时三条路径的
+         *     **定时器清零**、`onTimeout` 钩子与「钩子抛错不顶替超时结论」都验到。 */
+        "src/lib/path-display.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/dom-props.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/with-timeout.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

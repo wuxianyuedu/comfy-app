@@ -14,6 +14,7 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 import { errorMessage } from "~/lib/error-message";
+import { withTimeoutResult } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
 interface Props {
@@ -29,6 +30,14 @@ interface Props {
 }
 
 type Channel = "local" | "api";
+
+/** 本地 ComfyUI 单个视频镜头的安全阀（30 分钟无响应即判超时）。 */
+const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** 空操作（订阅句柄的初值）。 */
+function noop(): void {
+  /* 无操作。 */
+}
 
 /**
  * 视频生成 stage：消费上游产出的镜头图片（自动用作
@@ -75,33 +84,39 @@ export function VideoStudio({
     });
   }
 
-  /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。 */
+  /** 等一个本地 ComfyUI 任务；SSE 流落定后 resolve。
+   *
+   *  与「安全阀」赛跑的那一半交给 `withTimeoutResult`：超时给兜底（不抛），
+   *  `onTimeout` 里退订 —— 放弃等待之后流还挂着才是真问题。 */
   function runLocalTask(shotId: string, taskId: string): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const close = watchTask(taskId, {
-        onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
-        onOutput: (out) => {
-          // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
-          if (out.kind !== "image") patchShot(shotId, { clipUrl: out.url });
-        },
-        onSettled: (r) => {
-          clearTimeout(timeout);
-          patchShot(shotId, { clipStatus: r.ok ? "done" : "failed" });
-          if (!r.ok) setShotError(shotId, r.message ?? "视频生成失败");
-          resolve();
-        },
-      });
-      // 安全阀：视频渲染慢，但永不让批量循环卡住。
-      const timeout = setTimeout(
-        () => {
+    /* 订阅句柄 —— watchTask 返回前先给一个空实现，settle 路径上一定已赋值。 */
+    let close: () => void = noop;
+    return withTimeoutResult(
+      new Promise<void>((resolve) => {
+        close = watchTask(taskId, {
+          onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
+          onOutput: (out) => {
+            // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
+            if (out.kind !== "image") patchShot(shotId, { clipUrl: out.url });
+          },
+          onSettled: (r) => {
+            patchShot(shotId, { clipStatus: r.ok ? "done" : "failed" });
+            if (!r.ok) setShotError(shotId, r.message ?? "视频生成失败");
+            resolve();
+          },
+        });
+      }),
+      LOCAL_TASK_TIMEOUT_MS,
+      undefined,
+      {
+        onTimeout: () => {
+          // 安全阀：视频渲染慢，但永不让批量循环卡住。
           close();
           patchShot(shotId, { clipStatus: "failed" });
           setShotError(shotId, "任务超时(30 分钟无响应)");
-          resolve();
         },
-        30 * 60 * 1000,
-      );
-    });
+      },
+    );
   }
 
   /** 轮询异步 API 视频任务直到 resolve 或超时（约 10 分钟）。 */

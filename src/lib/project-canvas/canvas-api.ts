@@ -8,6 +8,7 @@
  */
 
 import { waitForComfyReady } from "~/lib/comfy/comfy-readiness-client";
+import { lastSegments } from "~/lib/path-display";
 import { asRecord } from "~/lib/is-record";
 import { clampPct } from "~/lib/progress";
 import { comfyImageUrl } from "~/lib/media/media-url";
@@ -102,7 +103,7 @@ export async function importOutputAsInput(localPath: string): Promise<string> {
   const res = await fetch(abs);
   if (!res.ok) throw new Error("读取上游输出失败");
   const blob = await res.blob();
-  const fname = localPath.split("/").pop() ?? "input.png";
+  const fname = lastSegments(localPath, 1) || "input.png";
   const file = new File([blob], fname, { type: blob.type || "image/png" });
   const name = await uploadImageFile(file);
   importCache.set(localPath, name);

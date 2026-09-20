@@ -18,6 +18,7 @@
 
 import * as React from "react";
 
+import { type OmitOwnProps, splitDomProps } from "~/lib/dom-props";
 import { cn } from "~/lib/utils";
 
 /** 滑块基元的轨道色与已填充色（语义 token，两态各自取值）。 */
@@ -30,9 +31,21 @@ function fillPercent(value: number, min: number, max: number): number {
   return Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
 }
 
-export interface RangeSliderProps extends Omit<
+/** 本基元的**私有字段**（自己接管，不透传给底层 `<input>`）
+ *  —— 类型侧与运行时侧共用这一份表（`~/lib/dom-props`）。 */
+const OWN_PROPS = [
+  "type",
+  "value",
+  "min",
+  "max",
+  "step",
+  "onChange",
+  "className",
+] as const;
+
+export interface RangeSliderProps extends OmitOwnProps<
   React.ComponentProps<"input">,
-  "type" | "value" | "min" | "max" | "step" | "onChange"
+  (typeof OWN_PROPS)[number]
 > {
   /** 当前值（受控）。 */
   value: number;
@@ -45,19 +58,15 @@ export interface RangeSliderProps extends Omit<
   className?: string;
 }
 
-export function RangeSlider({
-  value,
-  min,
-  max,
-  step = 1,
-  onChange,
-  className,
-  ...props
-}: RangeSliderProps) {
+export function RangeSlider(props: RangeSliderProps) {
+  /* 私有字段与要透传的字段**从同一份表**分开（`OWN_PROPS`）—— 类型侧的
+   * `OmitOwnProps` 与这里的 `splitDomProps` 读的是同一个数组，结构上不会漂移。 */
+  const { own, rest } = splitDomProps(props, OWN_PROPS);
+  const { value, min, max, step = 1, onChange, className } = own;
   const percent = fillPercent(value, min, max);
   return (
     <input
-      {...props}
+      {...rest}
       type="range"
       min={min}
       max={max}

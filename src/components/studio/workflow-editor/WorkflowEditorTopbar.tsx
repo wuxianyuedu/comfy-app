@@ -16,6 +16,7 @@ import {
   selectIoPreviewOpen,
 } from "./WorkflowStores";
 import { Button } from "~/components/ui/button";
+import { lastSegments } from "~/lib/path-display";
 import {
   TOP_BAR_BREADCRUMB_CLASS,
   TOP_BAR_ROOT_CLASS,
@@ -254,7 +255,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             detail.sourceMissing ? (
               <p className="border-destructive/30 bg-destructive/10 text-danger-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
                 <span className="font-semibold">本地文件已丢失：</span>
-                <span className="truncate font-mono">{detail.sourcePath}</span>
+                <span className="truncate font-mono" title={detail.sourcePath}>
+                  {lastSegments(detail.sourcePath, 3)}
+                </span>
                 <span className="text-danger-strong/80 ml-1 shrink-0">
                   · 修改保存后刷新将自动重连
                 </span>
@@ -262,8 +265,11 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             ) : detail.sourceChanged ? (
               <p className="border-success/30 bg-success/10 text-success-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
                 <span className="font-semibold">已从本地文件刷新最新内容</span>
-                <span className="text-success-strong/80 truncate font-mono">
-                  {detail.sourcePath}
+                <span
+                  className="text-success-strong/80 truncate font-mono"
+                  title={detail.sourcePath}
+                >
+                  {lastSegments(detail.sourcePath, 3)}
                 </span>
               </p>
             ) : (

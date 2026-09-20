@@ -9,6 +9,7 @@
  * 从原来的单文件 CustomNodesSettings.tsx 原样搬来。 */
 
 import type { DiscoveredSubpkg, RowState, SummaryPkg } from "./types";
+import { normalizeSlashes } from "~/lib/path-display";
 
 export function pathKey(path: string): string {
   if (!path) return "";
@@ -16,7 +17,7 @@ export function pathKey(path: string): string {
   // 反斜杠换正斜杠。这样 discover 的输出（带
   // 用户输入的字母大小写 + 原生分隔符）就能并入清单的 byPath 键，
   // 而 Windows 不会抱怨大小写。
-  let normalized = path.replace(/\\/g, "/");
+  let normalized = normalizeSlashes(path);
   // 目录根去掉尾部的斜杠
   if (normalized.length > 1 && normalized.endsWith("/"))
     normalized = normalized.replace(/\/+$/, "");

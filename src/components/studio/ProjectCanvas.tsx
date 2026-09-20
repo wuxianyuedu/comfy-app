@@ -24,6 +24,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { downloadJson } from "~/lib/browser-io";
+import { lastSegments } from "~/lib/path-display";
 import { CanvasNode } from "./project-canvas/CanvasNode";
 import { WorkflowNodeArdot } from "./project-canvas/WorkflowNodeArdot";
 import {
@@ -561,7 +562,7 @@ function CanvasInner({
                 placeMediaNode({
                   url: template.cover,
                   displayName:
-                    template.cover.split("/").pop() ?? template.id.slice(0, 12),
+                    lastSegments(template.cover, 1) || template.id.slice(0, 12),
                   mediaType: template.mediaType,
                 })
               }

@@ -6,6 +6,7 @@ import { LOG_EXPORT_DIR, LOG_ROOT } from "~/lib/log/log-paths";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { formatCompactStamp } from "~/lib/time-format";
+import { toDisplayPath } from "~/lib/path-display";
 
 /**
  * 日志面板「保存到本地」端点：把面板当前筛选出的日志**真的写到磁盘**。
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
       /** 绝对路径：用户要能在文件管理器里直接找到它。 */
       path: file,
       /** 相对 log/ 的路径：面板空间窄，展示这一截即可。 */
-      relativePath: path.relative(LOG_ROOT, file).replace(/\\/g, "/"),
+      relativePath: toDisplayPath(file, LOG_ROOT),
       bytes: Buffer.byteLength(content, "utf-8"),
     });
   } catch (error) {

@@ -3,6 +3,7 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import fs from "node:fs";
 import path from "node:path";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { toDisplayPath } from "~/lib/path-display";
 
 const LOG_DIR = path.join(process.cwd(), "log");
 
@@ -26,7 +27,7 @@ function scanLogFiles(dir: string, base: string): LogFileInfo[] {
       const stat = fs.statSync(full);
       out.push({
         name: entry.name,
-        relativePath: rel.replace(/\\/g, "/"),
+        relativePath: toDisplayPath(rel),
         mtimeMs: stat.mtimeMs,
         size: stat.size,
       });

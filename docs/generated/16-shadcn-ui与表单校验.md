@@ -180,16 +180,20 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P53** | 元素上自写键盘键判据（`.key === "…"` 之类的字面量比对）                                                                                          | `~/components/ui/simple-key-handler` 的 `simpleKeyHandler`（元素上的那一个 `onKeyDown`）+ `~/lib/keyboard` 的 `normalizeKeyName` / `isKeyIn`（键名归一，两处共用一份，见 §16.2.4.57）                          |
 | **P54** | 自写 SGR 转义序列字面量（`\x1b[` / `\u001b[` 打头的形态）                                                                                        | `~/lib/log/log-ansi` 的 `hasSgr` / `stripSgr` / `stripAnsi`（剥与判两条账）+ `BANNER_ANSI`（横幅色板，写侧与读侧同一份，见 §16.2.4.58）                                                                          |
 | **P55** | 自写驼峰 ⇄ kebab 换算（`replace(/[A-Z]/g, …)` 带插值）                                                                                            | `~/lib/case-token` 的 `toKebabCase` / `toCamelCase`（见 §16.2.4.59）                                                                                                                                            |
+| **P56** | 手工把路径变成展示文本（`path.relative(` 当展示用 / `.split(/[\\/]/).pop()` 取末段 / `.replace(/\\/g, "/")` 归一分隔符）                        | `~/lib/path-display` 的 `toDisplayPath` / `stripPathPrefix` / `lastSegments` / `ellipsisMiddle` / `normalizeSlashes`（见 §16.2.4.60）                                                                             |
+| **P57** | 自写「剔掉私有 prop 再透传」的剔除表（`Omit<React.ComponentProps<…>, "a" \| "b">`）                                                              | `~/lib/dom-props` 的 `OmitOwnProps`（类型侧）/ `splitDomProps`（运行时剥）/ `commonOwnProps`（两表取交集，不是并集）（见 §16.2.4.61）                                                                             |
+| **P58** | 自写「给异步结果加超时」的定时器样板（`Promise.race(` 与 `setTimeout(` 同现 / `setTimeout(() => … resolve(｜reject(`）                             | `~/lib/with-timeout` 的 `withTimeout`（超时抛错）/ `withTimeoutResult`（超时给兜底值）/ `TimeoutError` / `sleep`（见 §16.2.4.62）                                                                                 |
 
 **P4~~P52 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P55 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+P4~P58 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
 加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键 / 滚动跟随 /
 外部导航 / 表单行 / 读文件 / localStorage / Enter 提交 / 异步动作的反馈样板 /
 媒体自然尺寸 / 查询串 / 按条目的错误位 / 作废守卫 / 服务端错误信封 /
 唯一 id / 报错建议词表 / 画布节点落地 /
 数字精度格式化 / 去重合并与排序 / data URL /
-键盘键判据 / SGR 转义序列 / 书写法换算」这**三十八件事**的
+键盘键判据 / SGR 转义序列 / 书写法换算 /
+路径展示 / props 剔透传 / 异步超时」这**四十一件事**的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
@@ -206,9 +210,10 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **P44/P45/P46 见 §16.2.4.48 ~ §16.2.4.50**、
 **P47/P48/P49 见 §16.2.4.51 ~ §16.2.4.53**、
 **P50/P51/P52 见 §16.2.4.54 ~ §16.2.4.56**、
-**P53/P54/P55 见 §16.2.4.57 ~ §16.2.4.59**。
+**P53/P54/P55 见 §16.2.4.57 ~ §16.2.4.59**、
+**P56/P57/P58 见 §16.2.4.60 ~ §16.2.4.62**。
 
-**P4~P55 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P58 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -438,6 +443,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 键盘键判据               | ~~**3 处**各写一遍「按键就做一件事」，而它们对三件事各判各的：**键名叫什么**（`" "` 还是 `"Space"`、要不要大小写归一 —— 无修饰单键的 `event.key` 是**带 Shift 的大写字符**，`Shift+Space` 给 `" "`）、**要不要 `preventDefault`**（混在同一个 `if` 里，看不出谁决定的）、**`event.repeat` 收不收**（按住空格会连发，对「切换一次」等于按了十几次）~~ | `~/components/ui/simple-key-handler` 的 `simpleKeyHandler`（`preventDefault` 与 `ignoreRepeat` 都是显式选项）+ `~/lib/keyboard` 的 `normalizeKeyName` / `isKeyIn`（**两个落点共用一份归一规则**，不再各记一份键名表）；**P53 硬闸** | ✅ **见 §16.2.4.57** |
 | SGR 转义序列             | ~~同一条形态 `\x1b\[[0-9;:]*m` 在 **4 处**各写一遍，而**判据不同**：`log-ansi` 的 `SGR_RE`（转义符必须在）、`logs/log-record` 的 `stripSgr`（连**残缺颜色码**一起剥 —— 少剥这层会在面板上显示成 `[[OK]【[90m[OK[0m] …`）、`logs/log-row-style` 的 `hasAnsi`（只判不改）、`session-banner.server` 与 `log-sessions` **写侧与读侧**各持一份同样的颜色码字面量（写侧改色，读侧就认不出自己写的横幅）；且「要不要连残缺码一起剥」这条差异**没有任何一处写下来**~~ | `~/lib/log/log-ansi` 的 `hasSgr`（只判）/ `stripSgr(text, { includePartial })`（判据成为**显式参数**）/ `stripAnsi` + `BANNER_ANSI`（写侧取色、读侧比对，同一个字面量）；**P54 硬闸** | ✅ **见 §16.2.4.58** |
 | 驼峰 ⇄ kebab 换算        | ~~全库只有 **1 处**（`lib/shell/overlay-z` 的 `zClass`），但判据写在**表达式里**：`replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)` —— 而它派生的 5 个工具类名（`z-canvas-ui` / `z-canvas-max` …）必须与 `globals.css` 的 `@theme` 逐字一致，**写错时静默**（Tailwind 找不到类名不报错，只是那一层没有 `z-index`）~~ | `~/lib/case-token` 的 `toKebabCase`（逐字符，不猜词边界、不抹前导下划线）/ `toCamelCase`（与它成对收在同一处）；**P55 硬闸** | ✅ **见 §16.2.4.59** |
+| 路径变成展示一行         | ~~**18 个文件**各写各的，对三件事各判各的：**相对谁**（`path.relative(LOG_ROOT,…)` / `(PROJECT_ROOT,…)` / `(REPO_ROOT,…)` / 原样绝对路径）、**分隔符**（`.replace(/\\/g,"/")` ×8 / `.split(path.sep).join("/")` ×2 / 不归一）、**超长怎么办**（视图清一色 `truncate` **只留头部** —— 而路径的语义在尾部，用户看到的恰好是被切掉的那一段）~~ | `~/lib/path-display` 的 `toDisplayPath`（相对化 + 归一）/ `stripPathPrefix`（剥命名前缀）/ `lastSegments`（取末 N 段，按「段」不按字符）/ `ellipsisMiddle`（中段省略，与 `clampText` 的分工是「保两头 vs 保一头」）/ `normalizeSlashes`；**P56 硬闸** | ✅ **见 §16.2.4.60** |
+| props 剔透传             | ~~**4 个基元**各写一份表，而**类型侧 `Omit<…, "a" \| "b">` 与运行时解构是两份**，必须逐字一致却无任何机器判据 —— 表里有、解构里漏，该字段**静默透传给 DOM**（React 19 只给一条 console 警告）；`value` / `onChange` 漏掉的表现是「界面有值但状态没变」~~ | `~/lib/dom-props` 的 `OmitOwnProps`（类型）/ `splitDomProps`（运行时，同一份表）/ `commonOwnProps`（两表取**交集**，并集会把只属于一侧的字段也剔掉）；**P57 硬闸** | ✅ **见 §16.2.4.61** |
+| 异步结果加超时           | ~~**8 处** `Promise.race` / `setTimeout` 样板，对三件事各判各的：**定时器谁来清**（`.finally` / 两分支各清 / 三分支各清 / 只一个分支清 —— 漏一处就是悬挂的定时器把进程引用留到超时）、**超时之后**（`reject` / `resolve` 哨兵 / 杀子进程再 fail）、**时长与文案**（自算 `${ms/1000}s` 与硬编码并存）~~ | `~/lib/with-timeout` 的 `withTimeout`（超时抛 `TimeoutError`）/ `withTimeoutResult`（超时给兜底值）/ `TimeoutError`；两者共用一条「胜出即清定时器」的收尾，`onTimeout` 是显式钩子（杀子进程 / 退订）且**钩子抛错不顶替超时结论**；**P58 硬闸** | ✅ **见 §16.2.4.62** |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -3865,6 +3873,180 @@ toCamelCase("canvas-ui"); // "canvasUi"（与上面成对收在同一处）
 ⚠️ 两类「看起来像」的替换**不属于本条账**，别硬搬进来：`replace(/:/g, "-")`
 （把时刻写进文件名）是「哪些字符非法」的账；`replace(/[^…]/g, "_")`
 （文件名安全化）见 §16.2.4.53 的 `~/lib/safe-name`。
+
+### 16.2.4.60 「把一段路径拼成可展示的一行」有 18 个文件各写各的（P56 硬闸）
+
+同一件「把一条文件系统路径变成界面上的一行」在全库散着三种写法，而它们对
+**三件事**各判各的：
+
+| 落点 | 相对谁 | 分隔符 | 超长怎么办 |
+| --- | --- | --- | --- |
+| `api/logs/list` / `api/logs/export` | `path.relative(LOG_ROOT, …)` | `.replace(/\\/g, "/")` | 交给 CSS `truncate` |
+| `api/debug/source` | `path.relative(PROJECT_ROOT, …)` | `.split(path.sep).join("/")` | 原样（弹窗里滚动） |
+| `api/update-check` | `path.relative(REPO_ROOT, …)` | 不归一 | 不展示 |
+| `CustomNodesSettings/parsing` | 不相对（原样绝对路径） | `.replace(/\\/g, "/")` | 交给 CSS `truncate` |
+| `NodesTab` / `SettingsParts` | 原样绝对路径 | 不归一 | CSS `truncate` |
+| `SettingsParts` 的进度行 | 原样 | `split(/[\\/]/).slice(-2).join("/")` | **取末 2 段** |
+
+三处差异的**代价**：
+
+1. **同一个文件在不同面板显示成三种样子** —— 日志列表面板给
+   `log/exports/a.txt`，自定义节点设置给 `F:\AI\…\log\exports\a.txt`；
+2. **用户会把界面上这行文本复制到终端 / URL / `vscode://file/` 里去用**，
+   而 `\` 在那一侧是转义符不是分隔符 —— 8 处归了一、2 处用 `path.sep` 归、
+   其余不归，于是「能不能复制去用」取决于落在哪个面板；
+3. **视图侧清一色 `truncate`（CSS `text-overflow: ellipsis`）只留头部**，
+   而路径的**语义在尾部**（哪个文件 / 哪个包）：`F:\AI\Other\Comfy-APP-T3\src\components\studio\workflo…`
+   —— 被切掉的恰好是用户要看的那一段。全库唯一「保留尾部」的写法在
+   `SettingsParts` 里，且只保留最后 2 段、不含省略标记。
+
+#### 出口：`~/lib/path-display`
+
+```ts
+toDisplayPath(raw, base?); // 相对 base + 归一分隔符（相对不上就原样返回）
+stripPathPrefix(raw, "ComfyUI-"); // 剥固定前缀（不是「根目录」，是「命名约定」）
+lastSegments(raw, 3); // 取末 N 段（路径太长只留「是哪个包 / 哪个文件」）
+ellipsisMiddle(text, 40); // 超长省略中段（保头保尾，标记占自己的额度）
+normalizeSlashes(raw); // 反斜杠 → 正斜杠 + 剥前导 ./
+```
+
+三条口径：
+
+- **相对不上就不剥**（不做 `..` 推导）—— 展示层要的是「相对这台机器上的哪个
+  根」，`../../..` 那一串对用户没有信息量；
+- **`lastSegments` 按「段」切，不按字符切** —— 段是不会被切一半的语义单位，
+  比字符级中段省略更符合直觉；
+- **`ellipsisMiddle` 与 `~/lib/text-clamp` 的 `clampText` 分工**：那个只保一头
+  （服务诊断文本：报错原因在前 / 日志最新在后），本函数保两头（服务有结构的
+  短标识：路径 / URL / id，头尾都有信息量、中段没有）。
+
+#### 判据：P56（硬闸）
+
+锚**「手工把路径变成展示文本」的三种形态**：
+
+1. `path.relative(` —— 但**排除包含判据**（`rel.startsWith("..") || path.isAbsolute(rel)`
+   是判断「这个路径在不在 root 里」的标准写法，不是展示）；
+2. `.split(/[...]/).pop()` / `.split("/").pop()` —— 取末段（`path.basename`
+   **不算**：它是 Node API，在「解析已有路径」里是正确的）；
+3. `.replace(/\\/g, "/")` —— 分隔符归一。
+
+**刻意不数** `path.join` / `path.resolve` / `path.dirname`（那些在拼路径，
+不是展示），也不数 `path.basename`（同上）。
+
+两个**显式豁免**（题面差异，不是遗漏）：
+
+- `~/lib/media/mime-ext`：`extOfPath` / `stemOfPath` 是**扩展名解析**
+  （§16.2.4.51 的 P47 出口），它的「取最后一段」要的正是 `split().pop()` 的
+  语义 —— `"a/b/"` 这种**目录形态**必须给出空段，而 `lastSegments` 刻意跳过
+  空段（展示层不希望显示成 `a//b`）。两者对空段的判据不同；
+- `~/components/ui/media-drag-source` 的 `displayNameFromUrl`：判据是「最后
+  一段为空就**回退到整串**」—— `/a/b/` 取末段给空串、于是回退到 URL。
+  这条已有用例钉住。
+
+### 16.2.4.61 「剔掉私有 prop 再透传」的剔除表有 4 份、且类型与运行时是两份（P57 硬闸）
+
+十几个基元都有同一段「从 props 里摘掉自己的私有字段、剩下的 `...rest` 原样
+透传给底层元素」，而**剔除表各写各的，且类型侧与运行时侧是两份**：
+
+```ts
+interface XxxProps extends Omit<React.ComponentProps<"input">, "type" | "value" | "onChange"> { … }
+function Xxx({ type, value, onChange, ...props }: XxxProps) { … <input {...props} /> }
+```
+
+两处必须逐字一致，而它们**没有任何机器判据**：
+
+- **表里有、解构里漏** → 该字段**静默透传给 DOM**。React 19 对未知属性只是
+  一条 console 警告（构建与测试都不拦），而 `value` / `onChange` 这类受控字段
+  漏掉的表现是**双份受控**：既有基元的受控状态、又有调用处经 DOM 直接写进去的
+  值 —— 界面表现为「输入框里有值但状态没变」；
+- **解构里有、表里漏** → TS 报错，这一侧安全（所以真正会漏的只有上一条）；
+- **同一件事（如 `className` 的合并）在两处各写一遍表**，改一处漏一处的代价是
+  「同一个基元在两个文件里形态不同」。
+
+#### 出口：`~/lib/dom-props`
+
+```ts
+const OWN_PROPS = ["type", "value", "onChange"] as const; // 表只写一遍
+type Props = OmitOwnProps<React.ComponentProps<"input">, (typeof OWN_PROPS)[number]> & { … };
+const { own, rest } = splitDomProps(props, OWN_PROPS); // 同一份表，运行时剥
+commonOwnProps(["src", "alt"], ["src", "poster"]); // 两表**取交集**（不是并集）
+```
+
+- **`commonOwnProps` 是取交集**：基元同时扩展两类底层（`img` + `video`）时，
+  该剔的是**两个底层共同接管的**那几个。写成 `[...A, ...B]`（并集）会把只属于
+  一个底层的字段也剔掉 —— 那个底层再也拿不到它该有的属性，且**没有报错**；
+- **`splitDomProps` 只做「搬」**：不给默认值、不合并 `className`（那是调用处的
+  域决定，放进这里会让「这个字段到底是不是被改过」只能去读实现）；
+- **未传的私有键不凭空补 `undefined`**（`k in rest` 而非 `k in schema`）。
+
+#### 判据：P57（硬闸）
+
+锚**「类型侧写了一张私有字段表」这个形态**：`Omit<` 的基类型是**底层元素 /
+组件的属性集**（`React.ComponentProps<…>` / `HTMLAttributes<…>` /
+`…Primitive.…Props` / `LucideProps` / `typeof <组件>`），且第二个参数是字符串
+字面量键。
+
+**刻意不数** `Omit<SomeModel, "id">` 这类**数据模型**的排除（它们不是「透传给
+DOM 的属性」，`Omit` 在那里只是表达「这条记录还没有 id」）—— 形态上的分界线是
+**Omit 的基类型**。
+
+### 16.2.4.62 「给一个异步结果加超时」的定时器样板有 8 处（P58 硬闸）
+
+`Promise.race` + `setTimeout` 的样板散在六处，而它们对三件事各判各的：
+
+| 落点 | 定时器谁来清 | 超时之后 | 时长 / 文案 |
+| --- | --- | --- | --- |
+| `use-workflow-detail-loader` | `.finally(clearTimeout)` | `reject` | 参数化 + 自算秒数 |
+| `comfyui/firstframe` | 三个分支各清一次 | `reject` | 硬编码 `5 * 60 * 1000` |
+| `process/process-launch` | 只在 `exit` 分支清 | `finish(null)` 哨兵 | 参数化 |
+| `server/film/orchestrator` | `close` / `error` 两分支各清 | `cp.kill("SIGKILL")` + `resolve` 哨兵 | 参数化 |
+| `api/llm/ollama-start` | `done()` 里清 | `settle({ok:false})` | 硬编码 grace |
+| `workshop/ShotStudio` / `VideoStudio` | `onSettled` 里清 | `close()` + `resolve` | 硬编码 30 分钟 |
+
+差异的**代价**：
+
+1. **漏清一处就是悬挂的定时器** —— 把子进程 / 流引用留到超时才释放，
+   长跑下来是「进程还在占 GPU，而代码以为早放弃了」；
+2. **「超时算失败还是算一种结果」没一处写下来** —— 同一件事在
+   `firstframe` 里 `reject`、在 `runFFmpeg` 里 `resolve({code:-1})`，
+   调用方只能逐个去读实现；
+3. **时长的量纲换算重复** —— 三处自己算 `${ms / 1000}s`、三处硬编码。
+
+#### 出口：`~/lib/with-timeout`
+
+```ts
+withTimeout(promise, ms, { label, message, onTimeout }); // 超时**抛** TimeoutError
+withTimeoutResult(promise, ms, fallback, { onTimeout }); // 超时**给兜底值**（不抛）
+sleep(ms); // 「等一会儿」（不是本条账，但同属定时器一族，收在一处）
+```
+
+- **两条出口共用一条「胜出即清定时器」的收尾** —— 成功 / 失败 / 超时三条路径
+  都经同一个收尾，调用处不再各写一遍 `clearTimeout`；
+- **`onTimeout` 是显式钩子**：把「超时不只是放弃等待」（杀子进程 / 退订）收进来，
+  而且**钩子抛错不顶替超时结论**（收尾失败不该改变「这是一次超时」）；
+- **`withTimeoutResult` 的 `fallback` 是值不是工厂** —— 调用处要「按当时的状态
+  算兜底」请自己包一层，出口不猜兜底值依赖什么。
+
+#### 判据：P58（硬闸）
+
+锚**「一个定时器在赛跑里把 Promise 结算掉」这个形态**，两种写法都数：
+
+1. **`Promise.race(` 与 `setTimeout(` 同现**；
+2. **`setTimeout(` 回调里 `resolve(` / `reject(`**（不用 race 而靠「谁先结算谁
+   算数」的那一档），以及回调里调一个**本地结算助手**（`finish(` / `settle(` /
+   `done(`）。
+
+**刻意不数**：
+
+- `new Promise((r) => setTimeout(r, ms))`（「等一会儿」的 sleep，没有赛跑、
+  没有对手 —— 但它收在同一文件的 `sleep` 里）；
+- **看门狗 / 防抖**（`setTimeout(() => void fail(…))`：定时器到点**做事**，
+  不结算任何 Promise）—— 实例是 `executor-ws.armWatchdog` 与 `runner-state`
+  的三处 debounce；
+- **两路来源抢跑**（`Promise.race` 但无 `setTimeout`）—— 实例是
+  `comfyui/status` 的「权威查询 vs 抢跑探测」：没有定时器、没有要清的东西；
+- **有 `setTimeout` 但没有 `clearTimeout` 的文件**（该等一个窗口就等完，
+  没有别的路径能先赢）—— 实例是 `external-open.detectFolderHelper`。
 
 ## 16.3 新增一个组件的标准动作
 

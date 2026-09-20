@@ -9,6 +9,7 @@ import { cn } from "~/lib/utils";
 import { ROW_STATE_PRESET } from "./constants";
 import { NodePreviewCard } from "./NodePreviewCard";
 import { ManifestSummary, ParseProgressBanner } from "./SettingsParts";
+import { lastSegments } from "~/lib/path-display";
 import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-settings";
 
 export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
@@ -281,7 +282,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 className="text-muted-foreground truncate font-mono text-[10px]"
                                 title={sub.path}
                               >
-                                {sub.path}
+                                {/* 同 SettingsParts：路径的语义在尾部，显式取末几段。 */}
+                                {lastSegments(sub.path, 3)}
                               </div>
                             </div>
                             <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">

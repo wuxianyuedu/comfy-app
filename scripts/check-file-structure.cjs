@@ -382,6 +382,25 @@ const DOMAIN_EXEMPT = new Set([
    * 两条会不会撞 id」必须全库同一口径。进任何子域都会让另一个域反向依赖它
    * —— 与 `browser-io` / `format-bytes` 同款：顶层单例。 */
   "src/lib/unique-id.ts",
+  /* 「把一段路径拼成可展示的相对路径 / 超长时省略中段」的唯一出口
+   * （ISSUE #672 / 规范 16 §16.2.4.60）：`src/app/api` 的三条路由
+   * （日志列表 / 导出 / 源码查看）与 `src/components/studio` 的四个视图
+   * （自定义节点设置、工作流编辑器顶栏、渲染链路弹窗、画布包脚注）**都在用**，
+   * 且两侧必须同一口径（一处相对项目根、一处相对 log/、一处原样绝对路径，
+   * 同一个文件在不同面板显示成三种样子）。进任何子域都会让其余侧反向依赖它
+   * —— 与 `safe-name` / `text-clamp` 同款：顶层单例。 */
+  "src/lib/path-display.ts",
+  /* 「透传 props 给底层元素前先剔掉自己的私有字段」的唯一出口
+   * （ISSUE #672 / 规范 16 §16.2.4.61）：`ui/` 的十几个基元都在用它，
+   * 而它们分属输入 / 滑块 / 图标 / 媒体 / 文件选择五类 —— 没有哪个域
+   * 拥有「props 怎么透传」这件事。与 `display-value` 同款：顶层单例。 */
+  "src/lib/dom-props.ts",
+  /* 「给一个异步结果加超时」的唯一出口（ISSUE #672 / 规范 16 §16.2.4.62）：
+   * `components/studio/workflow-editor`（tRPC 取数）、`lib/comfyui`（首帧等待 /
+   * 执行看门狗）、`lib/process`（中介进程退出）、`server/film`（ffmpeg 调用）
+   * **四处都在用**，横跨视图逻辑层、ComfyUI 执行链与服务端编排 ——
+   * 进任何子域都会让其余侧反向依赖它。与 `retry-policy` 同款：顶层单例。 */
+  "src/lib/with-timeout.ts",
 ]);
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */

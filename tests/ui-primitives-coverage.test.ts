@@ -205,15 +205,35 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
         "base64PayloadOf",
       ],
     ],
+    /* 本批三条（规范 16 §16.2.4.60 ~ §16.2.4.62）：P56/P57/P58 是硬闸，
+     * 判的是「又写了一份」；这一层补**另一侧** —— 出口自己的接口不许被绕过
+     *（绕过的形态可以不含判据锚的那几个字面量，例如自己写一个
+     *  `toDisplayPath` 却忘了归一分隔符）。 */
+    [
+      "~/lib/path-display",
+      [
+        "toDisplayPath",
+        "stripPathPrefix",
+        "lastSegments",
+        "ellipsisMiddle",
+        "normalizeSlashes",
+      ],
+    ],
+    ["~/lib/dom-props", ["OmitOwnProps", "splitDomProps", "commonOwnProps"]],
+    ["~/lib/with-timeout", ["withTimeout", "withTimeoutResult", "TimeoutError"]],
   ] as const)("%s 是「按形态收口」的出口，且已被业务引用", (spec, exports) => {
     const mod = readFileSync(
       join(SRC, spec.replace("~/", "").replace(/\//g, sep) + ".ts"),
       "utf8",
     );
     for (const name of exports) {
-      /* 导出形式：`export function <name>` 或 `export const <name>`。 */
+      /* 导出形式：`export function` / `export const` / `export type` /
+       * `export class`——出口可以是值也可以是类型（`OmitOwnProps` 是类型、
+       * `TimeoutError` 是类），三者都算「接口在这里」。 */
       expect(mod, `${spec} 应导出 ${name}`).toMatch(
-        new RegExp(`export (?:async )?(?:function|const) ${name}\\b`),
+        new RegExp(
+          `export (?:async )?(?:function|const|type|class|interface) ${name}\\b`,
+        ),
       );
     }
     /* 至少一处业务侧引用（排除自身与测试）。 */
