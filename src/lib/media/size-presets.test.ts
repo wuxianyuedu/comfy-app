@@ -5,16 +5,22 @@ import {
   DEFAULT_SIZE_SPEC,
   alignMultipleOf,
   aspectLabelForDims,
+  clarityKindOfLabel,
+  isClarityLabel,
   megapixelDims,
+  megapixelLabel,
+  megapixelTierOfLabel,
   megapixelsOf,
   nearestRatioPreset,
   normalizeAlignMultiple,
   normalizeRatioLabel,
   normalizeSizeSpec,
+  parseMegapixelLabel,
   parseSizeText,
   ratioOfLabel,
   resolutionDims,
   resolutionTierOf,
+  resolutionTierOfLabel,
   sceneFromMode,
   sceneIsModified,
   sizeSpecAspect,
@@ -26,11 +32,76 @@ import {
   sizeSpecMegapixels,
   sizeSpecMultiple,
   sizeSpecSummary,
+  sizeSpecToRelay,
   sizeSpecToWxH,
   toMegapixelSpec,
   toSizeSpec,
   type SizeSpec,
 } from "./size-presets";
+
+describe("size-presets：百万像素是连续量（任意值都要能走通）", () => {
+  it('解析与序列化互逆：2.5 ↔ "2.5M"', () => {
+    expect(parseMegapixelLabel("2.5M")).toBe(2.5);
+    expect(parseMegapixelLabel("1M")).toBe(1);
+    expect(parseMegapixelLabel(" 3 M ")).toBe(3);
+    /* 非百万像素写法与非法值一律 null（由调用方决定怎么回退）。 */
+    expect(parseMegapixelLabel("1k")).toBe(null);
+    expect(parseMegapixelLabel("")).toBe(null);
+    expect(parseMegapixelLabel("0M")).toBe(null);
+    expect(megapixelLabel(2.5)).toBe("2.5M");
+    expect(megapixelLabel(1)).toBe("1M");
+    for (const value of [0.5, 1, 2, 2.5, 12.75]) {
+      expect(parseMegapixelLabel(megapixelLabel(value))).toBe(value);
+    }
+  });
+
+  it("自由值是合法清晰度标签，且属于「百万像素」类", () => {
+    expect(isClarityLabel("2.5M")).toBe(true);
+    expect(isClarityLabel("2M")).toBe(true);
+    expect(isClarityLabel("1k")).toBe(true);
+    expect(isClarityLabel("999k")).toBe(false);
+    expect(isClarityLabel("")).toBe(false);
+    expect(clarityKindOfLabel("2.5M")).toBe("megapixel");
+    expect(megapixelTierOfLabel("2.5M")).toBe(2.5);
+    expect(resolutionTierOfLabel("2.5M")).toBe(null);
+  });
+
+  it("归一化不再把自由值回退成 1k（此前会静默按 1M 算）", () => {
+    expect(normalizeSizeSpec({ ratio: "16:9", clarity: "2.5M" }).clarity).toBe(
+      "2.5M",
+    );
+    /* 真正识别不出的值仍回退默认档。 */
+    expect(normalizeSizeSpec({ clarity: "999k" }).clarity).toBe(
+      DEFAULT_SIZE_SPEC.clarity,
+    );
+  });
+
+  it("自由值一路走到换算 / 摘要 / 下发（与档位同一条路径）", () => {
+    const spec: SizeSpec = {
+      ratio: "16:9 横屏",
+      clarity: "2.5M",
+      multiple: 64,
+    };
+    expect(sizeSpecKind(spec)).toBe("megapixel");
+    expect(sizeSpecMegapixels(spec)).toBe(2.5);
+    expect(sizeSpecSummary(spec)).toBe("16:9 / 2.5M / 64");
+    const dims = sizeSpecDims(spec);
+    /* 总像素落在 2.5M 附近（宽高被吸附到倍数网格上，偏差是网格粒度）。 */
+    expect(Math.abs(megapixelsOf(dims) - 2.5)).toBeLessThan(0.1);
+    expect(dims.width % 64).toBe(0);
+    expect(sizeSpecToRelay(spec).megapixels).toBe("2.5");
+  });
+
+  it("超出尺寸上界的自由值被网格钳制（不会「填了没生效」到离谱尺寸）", () => {
+    const huge = sizeSpecDims({
+      ratio: "1:1 正方",
+      clarity: "100M",
+      multiple: 64,
+    });
+    expect(huge.width).toBeLessThanOrEqual(4096);
+    expect(huge.height).toBeLessThanOrEqual(4096);
+  });
+});
 
 describe("size-presets：分辨率表", () => {
   it("图片与视频两个场景的 1k/2k/4k 取不同的值", () => {

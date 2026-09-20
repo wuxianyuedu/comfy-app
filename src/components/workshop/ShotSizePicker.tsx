@@ -9,6 +9,9 @@
  *    · 选中百万像素时追加「倍数」一段（8/16/32/64）—— 宽高由总像素预算
  *      与这个对齐倍数共同决定，因此它在百万像素档是必选项，不能藏起来。
  *
+ *  「百万像素」那一组下面还有一条「自定义」步进器（`MegapixelStepper`）——
+ *  百万像素在端口上是 FLOAT，档位（1M/2M/4M）之外还要能填 2.5 这类任意值。
+ *
  *  弹层脚注给出尺寸表入口（可查看 / 修改各场景 1k/2k/4k 的具体宽高）。
  *
  *  换算与摘要逻辑全部在 shot-size-config.ts（纯函数），本组件只做
@@ -23,7 +26,10 @@ import {
   SIZE_RATIO_PRESETS,
   SIZE_SCENE_LABELS,
   clarityKindOfLabel,
+  megapixelLabel,
+  megapixelTierOfLabel,
   normalizeAlignMultiple,
+  sizeSpecMegapixels,
   type SizeScene,
 } from "~/lib/media/size-presets";
 import {
@@ -33,6 +39,7 @@ import {
   type SegmentSection,
 } from "~/components/ui/segment-popover";
 import { SizePresetTableModal } from "~/components/studio/workflow-form/SizePresetTableModal";
+import { MegapixelStepper } from "~/components/studio/workflow-form/MegapixelStepper";
 import { Button } from "~/components/ui/button";
 import { shotSizeSummary, type ShotSizeState } from "./shot-size-config";
 
@@ -51,6 +58,15 @@ export function ShotSizePicker({
   const state = value;
   const [tableOpen, setTableOpen] = useState(false);
   const clarityKind = clarityKindOfLabel(state.clarity);
+
+  /* 步进器的起始值：当前已是百万像素档就用档位值；分辨率档用该档**换算出的
+   *  实际总像素** —— 用户点一下 +/- 就从眼前这个值开始调，而不是从 1M 跳一下
+   *  （选了 4k 再点 + 却变成 1.1M 是说不通的）。 */
+  const currentMegapixels = useMemo(
+    () =>
+      megapixelTierOfLabel(state.clarity) ?? sizeSpecMegapixels(state, scene),
+    [state, scene],
+  );
 
   const sections = useMemo<SegmentSection<string>[]>(() => {
     const list: SegmentSection<string>[] = [
@@ -74,6 +90,18 @@ export function ShotSizePicker({
           subgroup: CLARITY_SUBGROUP_LABELS[preset.kind],
         })),
         onChange: (clarity) => onChange({ ...state, clarity }),
+        /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着它的选项
+         *  渲染，属于「百万像素」这一组）。写出去的 label 与档位同形（"2.5M"），
+         *  所以换算 / 摘要 / 下发都不需要为「自由值」多认一种形状。 */
+        extra: (
+          <MegapixelStepper
+            value={currentMegapixels}
+            disabled={disabled}
+            onChange={(megapixels) =>
+              onChange({ ...state, clarity: megapixelLabel(megapixels) })
+            }
+          />
+        ),
       },
     ];
     /* 倍数只对百万像素档有意义：那一档的宽高由总像素预算 × 对齐倍数共同决定。 */
@@ -93,7 +121,7 @@ export function ShotSizePicker({
       });
     }
     return list;
-  }, [state, onChange, clarityKind]);
+  }, [state, onChange, clarityKind, currentMegapixels, disabled]);
 
   return (
     <>

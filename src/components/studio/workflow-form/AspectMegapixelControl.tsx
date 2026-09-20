@@ -10,6 +10,8 @@
  *   · 「分辨率」（1k/2k/4k）：按场景尺寸表算出宽高，再唯一解地换算成
  *     「百万像素 + 倍数」写下去；
  *   · 「百万像素」（1M/2M/4M）：直接写该档位的总像素量，倍数保持不变。
+ * `megapixels` 是 FLOAT（连续量），因此百万像素那一组下面还有一条「自定义」
+ * 步进器（`MegapixelStepper`）—— 档位之外能填 2.5 这类任意值。
  *
  * ComfyUI 可达时，精选针脚带 `options`，我们
  * 原样渲染它们（高亮仍有效，因为我们从
@@ -24,6 +26,7 @@ import {
   RESOLUTION_TIERS,
   SIZE_SCENE_LABELS,
   alignMultipleOf,
+  megapixelLabel,
   megapixelsOf,
   resolutionDims,
   sceneFromMode,
@@ -48,6 +51,7 @@ import {
   type SegmentSection,
 } from "~/components/ui/segment-popover";
 import { SizePresetTableModal } from "./SizePresetTableModal";
+import { MegapixelStepper } from "./MegapixelStepper";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 import { PortHandle } from "./WorkflowFormControls";
 import {
@@ -141,6 +145,18 @@ export function AspectMegapixelControl({
     [activeAspect, currentAspect],
   );
 
+  /** 写回 `aspect_ratio` 时用的值：选中的 → 节点当前值 → 第一个预设。
+   *
+   *  三个写入口（比例 / 像素 / 倍数 / 自定义百万像素）都要它，各写一遍会分叉
+   *  （任一处漏了末级兜底，用户没选过比例时就会被写成空串，节点静默清空）。 */
+  const aspectValue = useMemo(
+    () =>
+      activeAspect?.value ??
+      currentAspect ??
+      ASPECT_RATIO_LABEL_PRESETS[0]!.value,
+    [activeAspect, currentAspect],
+  );
+
   /* ── 倍数段：像素倍数（对齐网格），跟比例 / 像素并列写进同一个 popover ──
    *  语义是「宽高像素取该值的倍数」（如 8 → 尺寸是 8 的倍数），不是缩放
    *  系数。候选项优先用工作流自己的 options，否则给 8/16/32/64
@@ -190,15 +206,17 @@ export function AspectMegapixelControl({
   }, [scene, activeRatio, table, currentMultiple]);
 
   /* 当前 megapixels 值落在哪个档位上：分辨率档按「该档换算出的总像素」比对，
-   * 百万像素档按档位数值比对。 */
+   * 百万像素档按档位数值比对。
+   *
+   * 必须是**精确**命中（容差 0.01）：自由值（2.5M，步进器填的）不能被「最近的
+   * 档位」吸走名字 —— 16:9 的 2k 档换算出来是 2.359M，比 2M 离它更近，于是
+   * 触发器会显示成「2k」，用户看着像「我填的 2.5 没了」。命不中档位就按自由值
+   * 显示（`2.5M`）。 */
   const mpLabel = useMemo(() => {
-    const hit = clarityOptions.reduce((best, option) =>
-      Math.abs(option.megapixels - currentMp) <
-      Math.abs(best.megapixels - currentMp)
-        ? option
-        : best,
+    const exact = clarityOptions.find(
+      (option) => Math.abs(option.megapixels - currentMp) < 0.01,
     );
-    return hit?.label ?? `${currentMp}M`;
+    return exact?.label ?? megapixelLabel(currentMp);
   }, [clarityOptions, currentMp]);
 
   const multipleOptions = useMemo((): { value: number; label: string }[] => {
@@ -261,13 +279,20 @@ export function AspectMegapixelControl({
         onChange: (label) => {
           const preset = clarityOptions.find((item) => item.label === label);
           if (!preset) return;
-          const nextAspect =
-            activeAspect?.value ??
-            currentAspect ??
-            ASPECT_RATIO_LABEL_PRESETS[0]!.value;
           /* 分辨率档：唯一解地换算成「百万像素 + 倍数」；百万像素档保持不变。 */
-          apply(nextAspect, preset.megapixels, preset.multiple);
+          apply(aspectValue, preset.megapixels, preset.multiple);
         },
+        /* 百万像素在端口上是 FLOAT（连续量），档位只是常用值 —— 档位之外再给一个
+         *  能填任意值的步进器（挨着「百万像素」那一行渲染）。 */
+        extra: (
+          <MegapixelStepper
+            value={currentMp}
+            disabled={disabled}
+            onChange={(megapixels) =>
+              apply(aspectValue, megapixels, currentMultiple)
+            }
+          />
+        ),
       },
       ...(multiple
         ? [
@@ -283,13 +308,7 @@ export function AspectMegapixelControl({
                   (option) => option.label === label,
                 );
                 if (!hit) return;
-                apply(
-                  activeAspect?.value ??
-                    currentAspect ??
-                    ASPECT_RATIO_LABEL_PRESETS[0]!.value,
-                  currentMp,
-                  hit.value,
-                );
+                apply(aspectValue, currentMp, hit.value);
               },
             } satisfies SegmentSection<string>,
           ]
@@ -298,8 +317,10 @@ export function AspectMegapixelControl({
     [
       aspectOptions,
       activeAspect,
-      currentAspect,
+      aspectValue,
       currentMp,
+      currentMultiple,
+      disabled,
       mpLabel,
       clarityOptions,
       apply,
