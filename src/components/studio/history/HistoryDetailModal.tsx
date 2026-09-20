@@ -152,7 +152,7 @@ export function HistoryDetailModal({
                     <Button
                       variant="success"
                       size="xs"
-                      onClick={() => void actions.copyPath()}
+                      onClick={() => actions.copyPath()}
                       className="h-auto rounded-md px-2.5 py-1 text-[11px]"
                     >
                       📋 复制路径

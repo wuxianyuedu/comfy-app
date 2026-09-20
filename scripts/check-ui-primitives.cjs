@@ -328,7 +328,36 @@ const BASELINE = path.join(__dirname, ".ui-primitives-baseline.json");
 /* ── 扫描范围 ────────────────────────────────────────────── */
 
 /** 棘轮作用域：视图层（组件 + 路由页面）——与 UI/逻辑分离棘轮的 RATCHET_DIRS 同口径。 */
-const SCAN_DIRS = ["src/components", "src/app"];
+/** 视图层两条扫描根（P1~P38 的既有范围）。 */
+const VIEW_SCAN_DIRS = ["src/components", "src/app"];
+
+/**
+ * **本批三条判据（P39/P40/P41）**额外要扫的两条根。
+ *
+ * 为什么不能把 `src/lib` / `src/server` 直接加进 `SCAN_DIRS`：那会顺带把
+ * P1~P38 **全部**套到 lib 层上，而 lib 层里全是这些出口的**实现本身**
+ * （`lib/browser-io.ts` 就是剪贴板出口、`lib/dom-rect.ts` 就是几何出口）——
+ * 判据会把「出口实现自己做的事」当成违规（实测 21 处全是这种）。
+ * 逐条列在这里，与 `HOOKS_ALSO_SCANNED` / `UI_ALSO_SCANNED` 同一手法：
+ * 让「哪条判据扫哪一层」这件事写在明处。
+ */
+const LIB_SCANNED_RULES = new Set(["P39", "P40", "P41"]);
+
+const SCAN_DIRS = [
+  "src/components",
+  "src/app",
+  /* `src/lib` 与 `src/server` 加进来的理由（规范 16 §16.2.4.42 ~ §16.2.4.44）：
+   * P39（等一帧）/ P40（复制之后的反馈）/ P41（入参收窄）三条账的落点**本来
+   * 就横跨两侧** —— 帧调度在 `src/lib/project-canvas`，复制反馈在两处 hooks，
+   * `isRecord` 的 5 份实现在 `src/lib/**`。只扫视图层等于对这三条账的一半视而
+   * 不见（与 P27「存量大部分在 hooks」是同一课）。
+   *
+   * 这三条判据对 `src/lib/**` 与 `src/server/**` 的**全量**文本生效，但每条都
+   * 自带形态约束（P39 排除帧循环、P40 只认 `copyText(` 调用、P41 只认
+   * `isRecord` 定义与「`req.json()` + 400 信封」同现），不会把无关代码算进来。 */
+  "src/lib",
+  "src/server",
+];
 
 /**
  * 豁免目录（正则，均按仓库相对 POSIX 路径匹配）与理由：
@@ -366,6 +395,17 @@ const EXEMPT_DIRS = [
  *
  * 因此这几条不走 `EXEMPT_DIRS` 的 hooks 豁免，逐条列在这里（口径写死，
  * 不做模糊放行）。 */
+/**
+ * 「`components/ui/**` 也要一起扫」的判据 —— 默认跳过 `ui/`（基元自身实现），
+ * 这一条例外：
+ *
+ * - **P40**（复制之后给什么反馈）：`ui/json-viewer` 的「复制全部」是这条账的
+ *   一个真实落点（它此前只判 `if (await copyText(...))`、没有失败分支），
+ *   而 `ui/` 里其余基元也确实**不该**有复制动作。整体跳过会让出口的消费点
+ *   无从校验，逐条列在这里。
+ */
+const UI_ALSO_SCANNED = new Set(["P40"]);
+
 const HOOKS_ALSO_SCANNED = new Set([
   "P12",
   "P13",
@@ -393,6 +433,9 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P36",
   "P37",
   "P38",
+  "P39",
+  "P40",
+  "P41",
 ]);
 
 /**
@@ -400,6 +443,49 @@ const HOOKS_ALSO_SCANNED = new Set([
  * 用，不是整目录放行；每条都必须写清「为什么这一处不属于该判据」。
  */
 const EXEMPT_FILES = {
+  P39: [
+    {
+      re: /^src\/lib\/next-frame\.ts$/,
+      reason: "出口自身的实现（`onNextFrame` / `afterNextPaint` 就要调 rAF）。",
+    },
+  ],
+  P40: [
+    {
+      re: /^src\/lib\/browser-io\.ts$/,
+      reason:
+        "出口依赖的 IO 层 —— `copyText` 的定义就在这里（本判据数的是**调用**）。",
+    },
+    {
+      re: /^src\/components\/ui\/use-copy-feedback\.ts$/,
+      reason:
+        "出口自身实现 —— 它当然要调 `copyText`；本判据数的是**绕过出口**的调用。",
+    },
+    {
+      re: /^src\/components\/studio\/logs\/log-export\.ts$/,
+      reason:
+        "日志这一域的**转发适配**（`copyLogText`）—— 它已经把成败原样返回给 store，" +
+        "反馈由 `LogPanel` 给（那才是按钮所在处）。它调 `copyText` 正是「IO 归 IO」" +
+        "的分层：域适配层不该持有一份界面反馈。",
+    },
+    {
+      re: /^src\/components\/studio\/logs\/log-store\.ts$/,
+      reason:
+        "同上：store 的 `copyAll` 是**纯编排**（取当前筛选的行 → 拼串 → 交给域转发），" +
+        "它把 `Promise<boolean>` 向上返回，反馈落在 `LogPanel` 的按钮上。" +
+        "在这一层弹提示反而是分层倒置（store 不认识界面）。",
+    },
+  ],
+  P41: [
+    {
+      re: /^src\/server\/lib\/request-body\.ts$/,
+      reason:
+        "出口自身的实现（`readJsonRecord` 的定义处，它当然要调 `req.json()`）。",
+    },
+    {
+      re: /^src\/lib\/is-record\.ts$/,
+      reason: "同上：`isRecord` 的定义处（本判据数的是**别处**又写了一份）。",
+    },
+  ],
   P24: [
     {
       re: /^src\/app\/api\//,
@@ -1433,6 +1519,142 @@ const RULES = {
       return hits;
     },
   },
+
+  /* ── P39「等一帧再做事」（硬闸，§16.2.4.42）────────────────────────────
+   * 形态取「**裸的一帧调度**」，而不取「有没有调 `requestAnimationFrame`」：
+   * `use-fps` 与 `WorkflowEditorInner` 的贴合循环是**帧循环**（`step` 自递归
+   * 采样 / 收敛判断），不是「等这一轮落定再做下一件事」，形态不同、不该算。
+   *
+   * ⚠️ 判据要同时看两样 —— 「调了 rAF」且「回调体里没有再次 rAF 自己」：
+   * 只数前者会把上面那两处循环算进来（它们是合法的采样器）。
+   *
+   * ⚠️ 取消是可选的**写法**，但「不取消」是这条账里真实的一半缺陷：三处
+   * `use-custom-nodes-settings` 与 `json-viewer` 的高亮注入都写在 effect 里而
+   * 没有清理，effect 因依赖抖动重跑时旧帧仍会落地（往已经翻走的面板上滚一次）。
+   * 出口的返回取消函数就是为这件事存在的，判据不单独数它 —— 换用出口即自动有。
+   *
+   * 出口：`~/lib/next-frame` 的 `onNextFrame`（一帧，读刚渲染出来的 DOM）与
+   * `afterNextPaint`（两帧，等三方布局库重排完成）。
+   */
+  P39: {
+    label:
+      "视图 / 逻辑层里裸写「等一帧再做事」的调度（应使用 ~/lib/next-frame 的 onNextFrame / afterNextPaint）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过。 */
+      if (/from\s+"~\/lib\/next-frame"/.test(t2)) return 0;
+      let hits = 0;
+      const re =
+        /(?:window\.)?requestAnimationFrame\s*\(\s*\(?\s*(\w+)?\s*\)?\s*=>/g;
+      let m;
+      while ((m = re.exec(t2)) !== null) {
+        const param = m[1];
+        /* 帧循环：回调体内再次 rAF（`step` / `tick` 这类自递归采样器）。
+         * 取回调体前 900 字符，够跨过循环里的收敛判断与视口下发。 */
+        const body = t2.slice(m.index, m.index + 900);
+        if (
+          param &&
+          new RegExp(`requestAnimationFrame\\s*\\(\\s*${param}\\b`).test(body)
+        ) {
+          continue;
+        }
+        /* 双 rAF（`rAF(() => rAF(cb))`）同样计入 —— 它是同一件事的另一档。 */
+        hits += 1;
+      }
+      return hits;
+    },
+  },
+
+  /* ── P40「复制到剪贴板之后给什么反馈」（硬闸，§16.2.4.43）──────────────
+   * 形态取「**调了剪贴板写入出口**」，而不取「有没有 `navigator.clipboard`」——
+   * 后者已在 P5 收口（全库只剩 `~/lib/browser-io` 一处实现）。P5 之后剩下的
+   * 问题变成：**成败之后界面说什么**，而它在 14 个落点里有六种答案：
+   *
+   *   · 完全静默（`void copyText(…)`）—— ShellTabs / DebugChainFooter /
+   *     ResultCard / ErrorPanel ×2 / `log-export`，其中三处连注释里的理由都不一样
+   *    （「按钮上有 flash」/「用户可手动选中」/ 干脆没写）；
+   *   · `useFlashState` 亮一下 —— ProjectOutputs / WorkflowNodeJsonPopover /
+   *     settings 的 `UsageTestDialog`；
+   *   · `toast.success` + `toast.error` —— `use-history-detail-actions` 的复制路径；
+   *   · 进 `runAsyncAction` 的成功文案 —— `use-history-list` 的「重试」实为复制；
+   *   · 三态 `setOutcome("done" | "failed")` —— `logs/LogRow`；
+   *   · 只判 `if (await copyText(…))` 不写失败分支 —— settings 页的加载错误复制。
+   *
+   * 也就是说 —— **「复制失败了界面说不说、成功了亮不亮」取决于它是哪一处写的**。
+   * 用户可见结果是**不同的**：同一句「剪贴板不可用」在一种写法下能落到眼前、
+   * 在另一种下连按钮都不变（用户以为复制成功了）。
+   *
+   * 出口：`~/components/ui/use-copy-feedback` 的 `useCopyFeedback` —— 把
+   * 「写剪贴板 → 按成败执行调用处给的反馈」收一次；反馈形态（flash / toast /
+   * 行内）仍由调用处决定（那是表现层选择，与 `~/lib/async-action` 同款口径）。
+   */
+  P40: {
+    label:
+      "视图 / 逻辑层里裸调 copyText 而不接反馈出口（应使用 ~/components/ui/use-copy-feedback 的 useCopyFeedback）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过；出口自身的实现文件也跳过。 */
+      if (/use-copy-feedback/.test(t2)) return 0;
+      if (t2.includes("~/lib/browser-io")) {
+        /* 允许「只是 import 了 copyText 但没调」的情形 —— 计数靠下面的调用。 */
+      }
+      let hits = 0;
+      /* `copyText(` / `copyLogText(` 的**调用**（不是 import 行）。 */
+      const re = /\bcopy(?:Text|LogText)\s*\(/g;
+      let m;
+      while ((m = re.exec(t2)) !== null) {
+        const line = t2.slice(
+          Math.max(0, t2.lastIndexOf("\n", m.index)),
+          m.index,
+        );
+        if (line.includes("import") || line.includes("export function"))
+          continue;
+        hits += 1;
+      }
+      return hits;
+    },
+  },
+
+  /* ── P41「REST 路由的入参收窄」（硬闸，§16.2.4.44）────────────────────
+   * 形态取**两样之一**：① 手写 `isRecord` 收窄守卫；② POST 路由里
+   * 「取 JSON 体 → 判是不是对象 → 回 400」那一段入参收窄。
+   *
+   * ⚠️ 「必填字段校验」不在这条账里：每个端点的字段语义各不相同
+   *（`messages` 不能为空 / `image` 必须存在 / `stage` 要能解析），那是域判据。
+   * 这条账管的是**在那之前**的公共三步 —— 读得到 JSON 吗、它是不是对象、
+   * 不是的话回什么信封。
+   *
+   * ⚠️ 收口前的实测分歧正是它的价值：5 个文件逐字相同的 12 行；`custom-nodes`
+   * 与 `llm/test` 用 `req.json().catch(() => ({}))` —— **畸形 JSON 被静默当成
+   * 空对象**，于是同一个坏请求在一种写法下回 `400 请求格式错误`、在另一种下
+   * 走到「字段缺失」分支回一句完全无关的话；`workshop/logs` 又把 `isRecord`
+   * 就地展开成 `typeof body === "object" && body !== null`；**`llm/test` 与
+   * `llm/models` 的 `await currentServerUser();` 丢弃了返回值** —— 鉴权写了
+   * 但没判（这两处另有独立修复，见 §16.2.4.44 ③）。
+   *
+   * 出口：`~/server/lib/request-body` 的 `readJsonRecord`（读 + 判 + 回 400
+   * 一次给全）/ `isRecord`（`unknown` 收窄的唯一实现处）。
+   */
+  P41: {
+    label:
+      "REST 路由里自写入参收窄 / 自己定义 isRecord（应使用 ~/server/lib/request-body 的 readJsonRecord / isRecord）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 出口自身的实现文件跳过。 */
+      if (/server\/lib\/request-body/.test(t2)) return 0;
+      let hits = 0;
+      /* ① 自己定义 `isRecord`（9 处里 8 处是逐字相同的实现）。 */
+      hits += (t2.match(/function\s+isRecord\s*\(/g) || []).length;
+      /* ② 入参收窄三步：`req.json()` + 400 信封。 */
+      if (
+        /(?:req|request)\.json\s*\(/.test(t2) &&
+        /NextResponse\.json\(\s*\{[^}]*error/.test(t2)
+      ) {
+        hits += 1;
+      }
+      return hits;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -1477,6 +1699,9 @@ const HARD_GATE_RULES = new Set([
   "P36",
   "P37",
   "P38",
+  "P39",
+  "P40",
+  "P41",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */
@@ -1508,14 +1733,20 @@ function collect() {
     for (const rel of walk(dir)) {
       if (!/\.[jt]sx?$/.test(rel) || rel.endsWith(".d.ts")) continue;
       if (isTest(rel)) continue;
-      /* `ui/` 永远豁免（基元自身实现）；`hooks/` 只对「逻辑层也成立」的判据
-       * 不豁免（见 `HOOKS_ALSO_SCANNED`）。 */
-      if (/^src\/components\/ui\//.test(rel)) continue;
+      /* `ui/` 豁免与 `hooks/` 豁免都**只对「数视图实现」的判据**成立：
+       *   · P1/P2/P3 数的是视图里手写 `<button>` / portal / spinner ——
+       *     `ui/` 与 `hooks/` 里出现不是「自己实现一份」；
+       *   · 反过来，P40「复制之后给什么反馈」在 `ui/json-viewer` 也有消费点，
+       *     整体跳过会让出口的消费点无从校验 —— 所以本批三条不走 `ui/` 豁免。 */
+      const inUi = /^src\/components\/ui\//.test(rel);
       const inHooks = /\/hooks\//.test(rel);
+      const inLib = /^src\/(lib|server)\//.test(rel);
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
       for (const [id, rule] of Object.entries(RULES)) {
         if (isExemptFile(id, rel)) continue;
+        if (inUi && !UI_ALSO_SCANNED.has(id)) continue;
         if (inHooks && !HOOKS_ALSO_SCANNED.has(id)) continue;
+        if (inLib && !LIB_SCANNED_RULES.has(id)) continue;
         const n = rule.count(text);
         if (n > 0) (files[rel] ||= {})[id] = n;
       }
@@ -1681,7 +1912,8 @@ function main() {
   P29 手拼查询串 / P30 按条目共用错误位 / P31 自写作废守卫 / P32 手拼错误信封 /
   P33 自写唯一 id / P34 自写报错建议词表 / P35 亲手拼画布节点 /
   P36 手写树的缩进与子行容器 / P37 自写「某一条在忙」的执行态 /
-  P38 手写元素几何的算术，须为 0）：${hardGateHits(now).length} 处`,
+  P38 手写元素几何的算术 / P39 裸写「等一帧再做事」的调度 /
+  P40 裸调 copyText 不接反馈出口 / P41 自写入参收窄与 isRecord，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -1703,7 +1935,10 @@ function main() {
         "  取数 effect 的作废守卫 → ~/lib/stale-run 的 beginStaleRun（`commit` 一次给全「这一轮的写入」）；\n" +
         "  服务端错误信封 → ~/lib/api-error 的 apiErrorBody / readApiError（纯错误走 ~/server/lib/error-response）；\n" +
         "  唯一 id → ~/lib/unique-id 的 nextId / uniqueStamp；ComfyUI 报错建议 → ~/lib/comfyui/error-advice 的 adviseOnError；\n" +
-        "  往画布放节点 → ~/lib/project-canvas/canvas-helpers 的 placeCanvasNode。\n" +
+        "  往画布放节点 → ~/lib/project-canvas/canvas-helpers 的 placeCanvasNode；\n" +
+        "  等一帧再做事 → ~/lib/next-frame 的 onNextFrame / afterNextPaint；\n" +
+        "  复制之后的反馈 → ~/components/ui/use-copy-feedback 的 useCopyFeedback；\n" +
+        "  REST 入参收窄 → ~/server/lib/request-body 的 readJsonRecord（`unknown` 收窄用 ~/lib/is-record 的 isRecord）。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);

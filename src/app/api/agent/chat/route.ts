@@ -9,7 +9,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { handleAgentChat } from "~/lib/agent/server";
 import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
-import { isRecord } from "~/lib/workshop/api-channel-shared";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import type { AgentChatRequest } from "~/lib/agent/shared";
 import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
@@ -23,16 +23,8 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
-  }
-
-  if (!isRecord(body)) {
-    return NextResponse.json({ error: "请求体必须是对象" }, { status: 400 });
-  }
+  const body = await readJsonRecord(req);
+  if (isErrorResponse(body)) return body;
 
   const rawMessages = Array.isArray(body.messages)
     ? (body.messages as Array<Record<string, unknown>>)

@@ -4,7 +4,7 @@
 
 import { withQuery } from "~/lib/query-string";
 
-import { isRecord } from "./api-channel-shared";
+import { isRecord } from "~/lib/is-record";
 import type { GenerationLogStage } from "./generation-log";
 
 /** 一条待落盘的执行日志（与界面条目同形：ts / kind / summary / detail?）。 */

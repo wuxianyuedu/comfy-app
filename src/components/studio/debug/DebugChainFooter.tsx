@@ -21,7 +21,8 @@ import {
   type MouseEvent,
 } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
-import { copyText } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import { useFlashState } from "~/components/ui/use-flash-state";
 import { fetchDebugSource } from "~/lib/workflow/debug-source-client";
 import { useDebugStore } from "./debug-store";
 import {
@@ -101,9 +102,18 @@ export function DebugChainFooter({
     }
   }, []);
 
-  const onCopyText = useCallback((text: string) => {
-    void copyText(text);
-  }, []);
+  /* 源码弹窗里的两枚「复制」：成败都**原地改口**（两枚共用一行，闪一下对勾
+   * 最省地方；失败时说清怎么自救）。此前这一段完全静默 —— 弹窗里的复制失败
+   * 用户看不到任何反应（规范 16 §16.2.4.43）。 */
+  const copyOutcome = useFlashState(1400);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const onCopyText = useCopyFeedback({
+    onSuccess: () => {
+      setCopyFailed(false);
+      copyOutcome.flash();
+    },
+    onFailure: () => setCopyFailed(true),
+  });
 
   /* 弹窗内容只在 openFile 非空时渲染；提起为局部常量让内部的类型收窄
      （`openFile` 是 `useState<string | null>`）。 */
@@ -238,10 +248,22 @@ export function DebugChainFooter({
                 variant="outline"
                 size="xs"
                 onClick={() => onCopyText(viewedFile)}
-                className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright h-auto rounded-md px-2.5 py-1"
-                title="复制完整相对路径"
+                className={`h-auto rounded-md px-2.5 py-1 ${
+                  copyFailed
+                    ? "border-destructive/40 text-danger-strong"
+                    : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
+                }`}
+                title={
+                  copyFailed
+                    ? "复制失败：剪贴板不可用，请手动选中后复制"
+                    : "复制完整相对路径"
+                }
               >
-                复制路径
+                {copyFailed
+                  ? "复制失败"
+                  : copyOutcome.on
+                    ? "已复制"
+                    : "复制路径"}
               </Button>
               <Button
                 variant="warning"
@@ -249,9 +271,17 @@ export function DebugChainFooter({
                 onClick={() => source && onCopyText(source.content)}
                 disabled={!source}
                 className="h-auto rounded-md px-2.5 py-1"
-                title="复制全部源码"
+                title={
+                  copyFailed
+                    ? "复制失败：剪贴板不可用，请手动选中后复制"
+                    : "复制全部源码"
+                }
               >
-                复制代码
+                {copyFailed
+                  ? "复制失败"
+                  : copyOutcome.on
+                    ? "已复制"
+                    : "复制代码"}
               </Button>
               <Button
                 variant="outline"

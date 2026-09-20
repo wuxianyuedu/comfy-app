@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { LOG_EXPORT_DIR, LOG_ROOT } from "~/lib/log/log-paths";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 /**
@@ -50,11 +51,15 @@ export async function POST(request: Request) {
     return unauthorizedResponse();
   }
 
+  /* 读体走唯一出口（规范 16 §16.2.4.44）：此前这里是
+   * 类型断言形态 `(await request.json()) as {...}`（label / content 两个字段）——
+   * **类型断言不是校验**，畸形正文或非对象会在下一行属性访问处抛 TypeError，
+   * 被下面的 catch 兜成 500（用户看到的是「服务端错误」，而病因是他的请求体）。
+   * 现在格式不对就明确回 400。 */
+  const body = await readJsonRecord(request);
+  if (isErrorResponse(body)) return body;
+
   try {
-    const body = (await request.json()) as {
-      label?: unknown;
-      content?: unknown;
-    };
     const content = typeof body.content === "string" ? body.content : "";
     if (content.length === 0) {
       return NextResponse.json({ ok: false, error: "empty" }, { status: 400 });

@@ -7,6 +7,7 @@
  */
 
 import type { Edge, FitViewOptions, Node, XYPosition } from "@xyflow/react";
+import { afterNextPaint } from "~/lib/next-frame";
 import { nextId } from "~/lib/unique-id";
 import {
   type CanvasNodeType,
@@ -93,15 +94,17 @@ export function placeCanvasNode(opts: {
 }
 
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，
- *  替代脆弱的 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。 */
+ *  替代脆弱的 setTimeout(80ms) 魔法数字（慢机器上可能布局未完成）。
+ *
+ *  「等两帧」这件事本身收在 `~/lib/next-frame` 的 `afterNextPaint`
+ *  （规范 16 §16.2.4.42）：收口前这里与 `use-workflow-persistence` 各写一份
+ *  双 rAF，理由各写一遍注释。本函数只负责「贴合用什么参数」这个域判据。 */
 export function makeFitViewScheduler(
   fitView: (options?: FitViewOptions) => void,
 ): (padding?: number) => void {
   return (padding = 0.25) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        fitView({ padding, duration: 300 });
-      });
+    afterNextPaint(() => {
+      fitView({ padding, duration: 300 });
     });
   };
 }

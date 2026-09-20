@@ -17,6 +17,7 @@ import {
 } from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
 import { offsetWithin } from "~/lib/dom-rect";
+import { onNextFrame } from "~/lib/next-frame";
 import {
   useExpansionSet,
   type ExpansionSet,
@@ -187,7 +188,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       const idx = logs.findIndex(
         (log) => log.level === "error" || log.msg.includes("✗"),
       );
-      requestAnimationFrame(() => {
+      return onNextFrame(() => {
         const console_ = consoleRef.current;
         if (!console_) return;
         const row = console_.querySelectorAll<HTMLDivElement>("[data-log-row]");
@@ -209,7 +210,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 以下，用户得手动折叠父级才能看到。
   useEffect(() => {
     if (parsing || Object.values(perPkgParsing).some(Boolean)) {
-      requestAnimationFrame(() => {
+      return onNextFrame(() => {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
@@ -217,7 +218,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 单包解析完成时也滚到日志：此刻新 report 追加、reloadFromServer() 重新填充列表。
   useEffect(() => {
     if (report && !parsing && !Object.values(perPkgParsing).some(Boolean)) {
-      requestAnimationFrame(() => {
+      return onNextFrame(() => {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }

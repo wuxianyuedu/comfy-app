@@ -1,0 +1,41 @@
+/* ── 「`unknown` 是不是一个纯对象」的唯一出口（规范 16 §16.2.4.44）────────────
+ *
+ * 这个三行的类型守卫在全库有 **9 份实现**，其中 8 份逐字相同（唯一的差别是
+ * 形参叫 `v` 还是 `value`）：
+ *
+ *   REST 路由 4 份（`api/custom-nodes`、`api/llm`、`api/llm/test`、`api/llm/models`
+ *   里各自的本地函数）
+ *   `src/lib/workshop/api-channel-shared.ts`（导出）
+ *   `src/lib/llm/usage-test.server.ts`（导出）
+ *   `lib` 侧 3 份本地函数（`llm/ollama-client`、`workshop/script-parse`、
+ *   `media/materials-client`）
+ *
+ * 它们的「不一致」目前只体现在形参名上 —— 但那正是这类账的典型形态：
+ * 一份守卫一旦要被改（例如排除数组、排除 `Date`），九处就会各自漂移，
+ * 而**消费侧看不出自己吃的是哪一份**。同一份判据只允许一处定义。
+ *
+ * 为什么放 `src/lib` 根（而不是某个子域）：它同时被**客户端**（`materials-client`
+ * 收窄 fetch 响应）、**服务端域模块**（`usage-test.server` / `api-channel-shared`）
+ * 与**REST 路由**读取，进任何子域都会让另两个反向依赖它 —— 与 `display-value` /
+ * `list-filter` / `format-bytes` 同款：顶层单例（`DOMAIN_EXEMPT` 登记）。
+ *
+ * ⚠️ 它**不**排除数组（`typeof [] === "object"` 且非 `null`）—— 这是 8 份实现
+ * 的共同行为，本出口保持不变（改判据会静默改变九处消费点的收窄结果）。
+ * 需要「纯对象、非数组」时用 `isPlainRecord`。
+ */
+
+/** `unknown` 收窄成 `Record<string, unknown>`（数组也算，与既有九处同口径）。 */
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/**
+ * 收窄成「**非数组**的普通对象」。
+ *
+ * 与 {@link isRecord} 分开而不是改它：既有九处消费点全都建立在「数组也算」的
+ * 行为上（`usage-test` 对 `payload` 的收窄就是），改判据会静默改变它们的
+ * 行为。需要「JSON 对象体」这一层时（如 REST 的请求体）用本函数。
+ */
+export function isPlainRecord(v: unknown): v is Record<string, unknown> {
+  return isRecord(v) && !Array.isArray(v);
+}

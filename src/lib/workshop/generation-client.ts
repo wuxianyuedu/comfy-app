@@ -19,9 +19,9 @@
 import { clampPct } from "~/lib/progress";
 import { vanillaApi } from "~/trpc/vanilla";
 import type { RouterInputs } from "~/trpc/react";
+import { isRecord } from "~/lib/is-record";
 import {
   extractSavedOutputs,
-  isRecord,
   type ApiChannelView,
   type ApiChannelsView,
   type SavedOutput,

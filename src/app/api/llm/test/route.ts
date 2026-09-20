@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { isRecord } from "~/lib/is-record";
 import { currentServerUser } from "~/server/auth/request-user";
 import { getLLMConfig } from "~/lib/llm/server";
 import { apiErrorDetail } from "~/lib/api-error";
@@ -8,10 +9,6 @@ export const dynamic = "force-dynamic";
 
 /** 探测超时：对端不可达时宁可早失败，前端有自己的降级展示。 */
 const PROBE_TIMEOUT_MS = 6000;
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
 
 /**
  * POST /api/llm/test —— 测试 OpenAI 兼容接口连通性（设置页「添加模型」弹窗用）。

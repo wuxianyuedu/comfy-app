@@ -6,6 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
   GENERATION_LOG_STAGE_LABELS,
@@ -24,16 +25,11 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return unauthorizedResponse();
   }
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
-  }
-  const rec = (typeof body === "object" && body !== null ? body : {}) as Record<
-    string,
-    unknown
-  >;
+  /* 入参收窄走唯一出口（规范 16 §16.2.4.44）：此前这里的 `isRecord` 被就地
+   * 展开成 `typeof body === "object" && body !== null` —— 与别处同一条判据、
+   * 写出来却看不出是同一件事。 */
+  const rec = await readJsonRecord(req);
+  if (isErrorResponse(rec)) return rec;
   const stage = parseGenerationLogStage(rec.stage);
   if (!stage) {
     return NextResponse.json(

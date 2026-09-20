@@ -165,6 +165,9 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P36** | 手写「树的缩进档 + 子行集合容器」（同一个 class 串里既有 `ml-*`/`pl-*`，又有引导线 `border-l-*`，且同文件另有展开判据）                           | `~/components/ui/tree-rows` 的 `TreeChildren` / `TreeRow` / `indentClass`（缩进档与引导线是一组语义，见 §16.2.4.39）                                                                                            |
 | **P37** | 自写「某一条在忙」的执行态（单值忙碌位 `…BusyId` / `…retry…Id`，或把它与条目 id 比较）                                                            | `~/components/ui/use-item-action` 的 `useItemAction`（忙标记 + `isBusy` + 同步判重入 + 随条目消失收敛，见 §16.2.4.40）                                                                                          |
 | **P38** | 手写元素几何的算术（两个 `getBoundingClientRect()` 相减 / `scrollHeight` 除以行数 / 用 `clientHeight` 算落点 / 自接 `ResizeObserver` + 等值判断） | `~/lib/dom-rect` 的 `readElementBox` / `offsetWithin` / `readLineHeight` / `centerLineScrollTop` / `rectToAnchorRect` / `anchorRectToVirtualElement`；接线走 `~/components/ui/use-element-box`（见 §16.2.4.41） |
+| **P39** | 裸写「等一帧再做事」的调度（`requestAnimationFrame(`，**排除**回调里再次 rAF 自己的帧循环） | `~/lib/next-frame` 的 `onNextFrame`（一帧）/ `afterNextPaint`（两帧，等三方布局库重排）；两者都返回取消函数（见 §16.2.4.42） |
+| **P40** | 裸调剪贴板写入而不接反馈出口（`copyText(` / `copyLogText(`） | `~/components/ui/use-copy-feedback` 的 `useCopyFeedback`（成败各给一条出口）/ `useCopyResult`（只要成败、不报反馈）（见 §16.2.4.43） |
+| **P41** | REST 路由里自写入参收窄（自己定义 `isRecord`，或「`req.json()` + 400 信封」同现） | `~/server/lib/request-body` 的 `readJsonRecord` / `isErrorResponse`；`unknown` 的收窄用 `~/lib/is-record` 的 `isRecord` / `isPlainRecord`（见 §16.2.4.44） |
 
 **P4~~P35 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
 P4~P35 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
@@ -183,9 +186,10 @@ P18/P19/P20 见 §16.2.4.21 ~ §16.2.4.23、P21/P22/P23 见 §16.2.4.24 ~ §16.2
 P24/P25/P26 见 §16.2.4.27 ~ §16.2.4.29、P27/P28/P29 见 §16.2.4.30 ~ §16.2.4.32、
 **P30/P31/P32 见 §16.2.4.33 ~ §16.2.4.35**、
 P33/P34/P35 见 §16.2.4.36 ~ §16.2.4.38、
-P36/P37/P38 见 §16.2.4.39 ~ §16.2.4.41。
+P36/P37/P38 见 §16.2.4.39 ~ §16.2.4.41、
+**P39/P40/P41 见 §16.2.4.42 ~ §16.2.4.44**。
 
-**P4~P38 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P41 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -193,6 +197,12 @@ P36/P37/P38 见 §16.2.4.39 ~ §16.2.4.41。
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
 - 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
+  **P39/P40/P41 额外扫 `src/lib/**` 与 `src/server/**`**（`LIB_SCANNED_RULES`）——
+  这三条账的落点本来就横跨两侧（帧调度在 `lib/project-canvas`、复制反馈在两处
+  hooks、`isRecord` 的 5 份实现在 `lib/**`）。**不能**把这两条根直接加进
+  `SCAN_DIRS`：那会让 P1~P38 一起套到 lib 层，而 lib 层里全是这些出口的
+  **实现本身**（`lib/browser-io.ts` 就是剪贴板出口）—— 实测会一次性报出 21 处
+  「违规」，全是出口自己的实现；
 - 豁免 `src/components/ui/**`（基元自身实现）、`<feature>/hooks/**`（§16.2.1 第②层
   是逻辑层）、`*.test.*` / `__tests__/**`；
 - **豁免只剩两条**：`ui/` 自身实现与 `<feature>/hooks/**`（§16.2.1 第②层）。
@@ -393,6 +403,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 树的缩进与子行容器 | ~~`expansion-set` 只收了**状态**，渲染那一侧没动：`NodesTab` 一棵树三层，三层的子容器各写各的 —— 父目录那层只有 `border-t` 分隔、子包那层是 `ml-3 border-l-2 border-dashed pl-3`、节点卡那层又是卡片内自己的分区。「缩进档」与「引导线色」因此没有一处说得清~~                                                                                                                                                                                                                                                                 | `~/components/ui/tree-rows` 的 `TreeChildren` / `TreeRow` / `indentClass(depth)`（缩进档与引导线一组给全，行与它的子行绑成一对）；**P36 硬闸**                                                      | ✅ **见 §16.2.4.39**                        |
 | 「某一条在忙」     | ~~**4 处**（历史列表 `retryingId` / 角色润色 `aiBusyId` / 分镜润色 `polishBusyId` / 工作流库的 `bundleBusy` + `resyncBusy`）各写一遍单值忙位，而「这一条忙不忙」的判据散在视图里（`busyId === item.id` 各写一遍）；**四处没有一处防了重复点** —— `setBusyId(id)` 是异步落状态，同一次事件循环里连点两下读不出来（双击发两次请求）~~                                                                                                                                                                                            | `~/components/ui/use-item-action` 的 `useItemAction`（`busyId` / `isBusy` / `anyBusy` / `run`：同步 ref 判重入、`finally` 清忙、随条目消失收敛）；**P37 硬闸**                                      | ✅ **见 §16.2.4.40**                        |
 | 元素几何           | ~~**5 处**各写一遍「量一个元素的盒子再把量出来的值用于判据」：日志面板内偏移（两个 rect 相减）、`LogPanel` 与 `WorkflowLibraryCanvas` 各接一个 `ResizeObserver` + 手写等值判断、`ScriptMarkdownEditor` 用 `scrollHeight / lines.length` 估行高（行数为 0 时给出 `Infinity`）、浮层锚点矩形逐字段搬运。**「量不到算什么」在五处有三种处理**（0 / 兜底常量 / 提前 return）~~                                                                                                                                                     | `~/lib/dom-rect`（读盒子的纯算术，量不到一律 `null`）+ `~/components/ui/use-element-box` 的 `useElementBox`（首帧量一次 + `ResizeObserver` + 等值判断）；**P38 硬闸**                               | ✅ **见 §16.2.4.41**                        |
+| 「等一帧再做事」   | ~~**8 处**各写一遍「下一帧再做」：`WorkflowEditorInner` 的重新居中与 `use-custom-nodes-settings` 的三处滚动定位是**裸的一帧且没有清理**（effect 因依赖抖动重跑时旧帧仍会落地，往已经翻走的面板上滚一次）；`json-viewer` / `select-menu` / `confirm-dialog` 带取消但变量名各写各的；`canvas-helpers` 与 `use-workflow-persistence` 又各写一份**双 rAF**（理由各写一遍注释）~~                                                                                                                                                        | `~/lib/next-frame` 的 `onNextFrame`（一帧）/ `afterNextPaint`（两帧，等三方布局库重排），两者都返回取消函数；**P39 硬闸**                                                                            | ✅ **见 §16.2.4.42**                        |
+| 复制之后的反馈     | ~~**14 个落点六种答案**：完全静默 6 处（`void copyText(…)`，三处理由各不相同）、`useFlashState` 亮一下 3 处、toast 两条 1 处、进 `runAsyncAction` 1 处、三态 `setOutcome` 1 处、**只 `if (await copyText(…))` 没有失败分支** 2 处。差别不是风格 —— 「复制失败」在一半落点下**连按钮都不变**，用户以为复制成功了（只在打包后的 `http://` 里复现）~~                                                                                                                                                                            | `~/components/ui/use-copy-feedback` 的 `useCopyFeedback`（成败各一条出口、`"silent"` 是显式静默、ref 判重入）/ `useCopyResult`（只要成败、不报反馈）；**P40 硬闸**                                    | ✅ **见 §16.2.4.43**                        |
+| REST 入参收窄      | ~~11 个 POST 路由各写一遍「读体 → 判对象 → 400」：**5 份逐字相同的 12 行**；`custom-nodes` / `llm/test` / `workshop/logs` 用 `.catch(() => ({}))` —— **畸形 JSON 被静默当成空对象**，同一个坏请求在一种写法下回「请求格式错误」、在另一种下走到「字段缺失」分支回一句与病因无关的话；`logs/export` 干脆用**类型断言**（畸形体在下一行属性访问处抛 TypeError → 被兜成 500）；另有 **9 份**逐字相同的 `isRecord` 实现~~                                                                                                                           | `~/server/lib/request-body` 的 `readJsonRecord` / `isErrorResponse`（格式不对走 §10.9 的 `ValidationError` → `{ error: { code, message } }`）；`unknown` 收窄用 `~/lib/is-record` 的 `isRecord` / `isPlainRecord`；**P41 硬闸** | ✅ **见 §16.2.4.44**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -2975,6 +2988,169 @@ disabled = action.anyBusy; // 整表动作看这个
 是合法的；这条账里更差的一半恰恰是**先减了、再滚**（或先除了、再定位）那几处，
 而它们的 `getBoundingClientRect` 看着都正常 —— 与 P13「更差的那种也要数」
 同源。
+
+### 16.2.4.42 「等一帧再做事」八处各写一遍（P39 硬闸）
+
+按**形态**扫描时撞出来的账：全库有八处写「先让 React 提交 / 浏览器布局，
+下一帧再读 DOM 或算视口」——而它们对同一件事各判各的：
+
+| 落点 | 原来 |
+|------|------|
+| `WorkflowEditorInner`（重新居中） | 裸的一帧，挂在 `useCallback` 里（接不下清理） |
+| `use-custom-nodes-settings`（三处滚动定位） | 裸的一帧，**写在 effect 里而没有清理** |
+| `ui/json-viewer`（高亮重注入） | 同上（带取消的那处是「命中居中」，另一处没有） |
+| `ui/json-viewer`（命中居中）/ `ui/select-menu` / `ui/confirm-dialog` | 一帧 + `cancelAnimationFrame`，变量名各写各的（`raf` / `id`） |
+| `canvas-helpers` 的 fitView 调度器 / `use-workflow-persistence` 的 `afterNextPaint` | **双 rAF**，两处各写一份、理由各写一遍注释 |
+
+差别在三个**语义决定**上：
+
+1. **一帧还是两帧** —— 读刚渲染出来的 DOM 一帧就够；等 React Flow 这类
+   「先被喂数据、再按测量结果摆位」的三方库要两帧。同一份代码里两种答案并存，
+   而选错的表现只有「刚展开/折叠过节点时贴合不到位」这种慢机器上才稳定复现的现象；
+2. **要不要能取消** —— 落点几乎全在 effect / 事件回调里，而 effect 会因依赖抖动
+   重跑：不取消就是「上一轮的延迟动作落在这一轮的界面上」（往翻走的面板滚、
+   给已换内容的列表注入高亮）。八处里四处没有取消；
+3. **谁负责这件事** —— 双 rAF 那段此前在 `canvas-helpers` 与
+   `use-workflow-persistence` 各有一份，两处注释都把「为什么要两帧」重讲一遍。
+
+#### 出口：`~/lib/next-frame` 的 `onNextFrame` / `afterNextPaint`
+
+| 出口 | 等谁 | 用在哪 |
+|------|------|--------|
+| `onNextFrame(cb)` | React 提交 / 浏览器布局完成（一帧） | 读 DOM 尺寸、聚焦刚挂上的节点、滚到刚渲染出来的那一行 |
+| `afterNextPaint(cb)` | 浏览器**真的画完**（两帧） | React Flow 这类「提交 + 按新尺寸重排」两拍的三方库 |
+
+- **两者都返回取消函数**（`() => void`）：直接作 effect 的清理值即可 ——
+  「不取消」是这条账里真实的一半缺陷，所以它不是一个可选的讲究；
+- **不接管「等多久」的域判据**：去抖 / 防连点归各自的域（定时器轮询走
+  `~/components/ui/use-interval`），本出口只管「下一帧」这件事。
+
+> **不收**：**帧循环**（`use-fps` 的 rAF 自递归采样、`WorkflowEditorInner` 的
+> 贴合收敛循环）—— 它们的形态是「每帧做一次、直到条件满足」，
+> 不是「等这一轮落定再做下一件事」。判据也据此放行（见下）。
+
+#### 判据：P39（硬闸）
+
+形态取「**裸的一帧调度**」，且**排除回调里再次 rAF 自己的帧循环**：
+
+⚠️ **为什么不能只数 `requestAnimationFrame(`** —— `use-fps` 与
+`WorkflowEditorInner` 的贴合循环都调它，而它们是合法的采样器 / 收敛循环。
+两个条件必须同时成立：调了 rAF，**且**回调体里没有再次 rAF 同一个形参。
+
+⚠️ **双 rAF 同样计入**（`rAF(() => rAF(cb))`）—— 它是同一件事的另一档，
+换用 `afterNextPaint` 即可。
+
+### 16.2.4.43 「复制到剪贴板之后给什么反馈」六种答案（P40 硬闸）
+
+IO 本身早已收口：`~/lib/browser-io` 的 `copyText` 是全库唯一的剪贴板写入
+（§16.2.3 的 P5 硬闸）。**收口之后剩下的问题**是——写完之后的成败怎么告诉用户，
+而 14 个落点给出**六种答案**：
+
+| 落点 | 成败之后 |
+|------|---------|
+| `ShellTabs` / `DebugChainFooter` / `ResultCard` / `ErrorPanel`×2 / `log-export` | 完全静默（`void copyText(…)`），三处理由还各不相同 |
+| `ProjectOutputs` / `WorkflowNodeJsonPopover` / 设置页用量测试 | `useFlashState` 亮一下（**只是成功**才亮） |
+| `use-history-detail-actions`（路径复制） | `toast.success` + `toast.error` 两条 |
+| `use-history-list`（「重试」实为复制） | 进 `runAsyncAction` 的成功 / 失败文案 |
+| `logs/LogRow` | 三态 `setOutcome("done" ｜ "failed")` + flash |
+| 设置页加载错误 / `ui/json-viewer` | `if (await copyText(…))` —— **没有失败分支** |
+
+差别不是风格：**「复制失败」在一半落点下连按钮都不变**，用户以为复制成功了。
+浏览器要「非安全上下文 / 无剪贴板权限」两条同时不成立才会失败 —— 所以这条在
+开发机上几乎复现不出来，只在打包后的 `http://` 里出现（正是 §16.2.4.10 记的
+「可选链把失败吞掉」那类）。
+
+`logs` 那条还牵出一处**注释与实现不符**：`log-export.ts` 写着「面板的按钮已经
+给了视觉反馈」，而面板的复制按钮与 `wrap` 共用一排、自己没有任何状态 ——
+那段反馈**并不存在**，`copyLogText` 把结果吞掉之后，界面上完全看不出来。
+
+#### 出口：`~/components/ui/use-copy-feedback` 的 `useCopyFeedback` / `useCopyResult`
+
+```tsx
+const copy = useCopyFeedback({
+  onSuccess: () => copied.flash(),              // 成功分支：亮一下
+  onFailure: () => toast.error("复制失败", "请手动选中后复制"), // 失败分支
+});
+<Button onClick={() => copy(text)}>复制</Button>
+```
+
+- **成败各给一条出口**：出口只保证「两条路都有出口」，说什么由调用处给
+  （与 `~/lib/async-action` 同款：反馈形态是表现层选择）；
+- **`onFailure: "silent"` 是显式静默** —— 让「故意静默」与「忘了写失败分支」
+  在代码上长得不一样（正面例子：`ShellTabs` 的地址复制，旁边就印着那段地址，
+  用户能手动选中）；
+- **`copy(() => …)` 现算形态**：文本由点击那一刻取（日志面板的「复制全部」
+  要先从 store 取当前筛选的全部行再拼串）；
+- **同步 `ref` 判重入**：`setState` 是异步的，同一次事件循环里连点两下读不到
+  刚写的值 —— 与 `useItemAction`（§16.2.4.40）是同一个坑；
+- **`useCopyResult`**：只给成败、**不报反馈**，给「调用处自己要把结果接进另一条
+  通道」的落点（历史列表的「重试」实为复制，成败是它喂给 `runAsyncAction` 的输入）。
+  两件事分成两个 hook 而不是给一个对象加方法 —— 否则调用处看不出这次到底报没报，
+  而「报没报」正是这条账的全部内容。
+
+#### 判据：P40（硬闸）
+
+形态取「**调了剪贴板写入出口**」（`copyText(` / `copyLogText(`），不取
+`navigator.clipboard`（后者已由 P5 收口）。
+
+⚠️ **豁免三处**，逐条写清理由（不是按目录模糊放行）：
+- `~/lib/browser-io.ts` —— `copyText` 的**定义处**（判据数的是调用）；
+- `~/components/ui/use-copy-feedback.ts` —— 出口自身的实现；
+- `logs/log-export.ts` + `logs/log-store.ts` —— 日志这一域的**转发与纯编排**
+  两层：前者把成败原样返回，后者取行拼串后向上返回 `Promise<boolean>`，
+  反馈落在 `LogPanel` 的按钮上。在这两层弹提示反而是分层倒置。
+
+### 16.2.4.44 REST 路由的入参收窄十一处各写一遍（P41 硬闸）
+
+`src/app/api/**` 的 POST 路由里，「读 JSON 体 → 判它是不是对象 → 不是就回 400」
+这三步被写了十来遍 —— 而它们对同一件事各判各的：
+
+| 形态 | 落点 | 后果 |
+|------|------|------|
+| 逐字相同的 12 行 | `agent/chat`、`workshop/draft`、`workshop-api/config`、`workshop-api/generate`、`workshop-local/prepare` | 无（但它就是「照着抄」的模板） |
+| `await req.json().catch(() => ({}))` | `custom-nodes`、`llm/test` | **畸形 JSON 被静默当成空对象** —— 同一个坏请求在这里走到「action 不认识」/「字段缺失」分支，在别处回「请求格式错误」，用户看到的原因完全不同 |
+| `isRecord` 就地展开成三元 | `workshop/logs` | 语义同上，但写出来看不出是同一件事 |
+| **类型断言** `as { label?: unknown; … }` | `logs/export` | **断言不是校验**：畸形体在下一行属性访问处抛 TypeError → 被 catch 兜成 500（用户看到「服务端错误」，而病因是他的请求体） |
+| 自带的 `BodySchema.parse` | `llm/route`（保留） | 字段语义与 `LLMRequestOptions` 绑定，是这一域的判据 |
+
+另有 **9 份**逐字相同的 `isRecord` 实现（4 份在 REST 路由、2 份在 `lib` 导出、
+3 份在 `lib` 本地，唯一的差别是形参叫 `v` 还是 `value`）。
+
+#### 出口：`~/server/lib/request-body` + `~/lib/is-record`
+
+```ts
+const body = await readJsonRecord(req);   // 读体 + 收窄一次给全
+if (isErrorResponse(body)) return body;   // 格式不对：已带 400
+const kind = body.kind;                   // 到这里已经是 Record
+```
+
+- **返回 `NextResponse` 而不是抛**：调用处需要原样把它返回，而 `try/catch` 会把
+  「格式错误」与「业务失败」混进同一条控制流（那正是 `llm/route` 现在难读的原因）；
+- **畸形 JSON 不再被当成空对象**：坏请求得到准确的原因；
+- **数组算「不是对象」** —— 用 `isPlainRecord` 而不是 `isRecord`：JSON 数组也是
+  `typeof "object"`，放进去会让 `body.xxx` 静默拿到 `undefined`；
+- **错误信封走 §10.9**：`ValidationError` → `{ error: { code, message } }`。
+  这个类此前**只在规范里存在**（§10.9 的对照表一直写着它，而 `core/errors.ts`
+  当年按「无生产调用方不立类」的裁决把它删掉了）—— `readJsonRecord` 是它的
+  第一个真实调用方，按那条裁决，这时才值得立类；
+- **`isRecord` 放 `src/lib` 根**（`DOMAIN_EXEMPT` 登记）：客户端
+  （`media/materials-client` 收窄 fetch 响应）、服务端域模块
+  （`llm/usage-test.server`、`workshop/api-channel-shared`）、REST 路由与视图
+  逻辑层都在读它 —— 进任何子域都会让其余三侧反向依赖它（与 `dom-rect` /
+  `list-filter` 同款：顶层单例）。
+
+> **不收**：**字段级**校验（`messages` 不能为空 / `image` 必须存在 / `stage` 要能
+> 解析）—— 每个端点的字段语义各不相同，那是域判据，留在各自的路由里。
+> 也刻意**不**提供通用的 `requireString`：那会诱导所有人把各自的字段错误文案
+> 收成一句，丢掉「哪个字段错了」这条用户可见信息。
+
+#### 判据：P41（硬闸）
+
+形态取**两样之一**：① 自己定义 `isRecord`；② POST 路由里
+「`req.json()`」与「带 `error` 的 400 信封」同现。
+
+⚠️ **字段级校验不在这条账里**（`llm/route` 的 `BodySchema` 保留）；
+⚠️ 出口自身两处（`lib/is-record.ts`、`server/lib/request-body.ts`）豁免。
 
 ## 16.3 新增一个组件的标准动作
 

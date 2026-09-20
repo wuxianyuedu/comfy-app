@@ -39,6 +39,7 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Spinner } from "~/components/ui/page-loading";
 import { overlayClass } from "~/lib/full-screen-layer";
+import { onNextFrame } from "~/lib/next-frame";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -89,9 +90,8 @@ export function ConfirmDialog({
   // confirm() 的肌肉记忆。每次打开都重置。
   useEffect(() => {
     if (open) {
-      // 等一帧，好让 portal 挂载的节点已存在。
-      const id = requestAnimationFrame(() => confirmRef.current?.focus());
-      return () => cancelAnimationFrame(id);
+      // 等一帧，好让 portal 挂载的节点已存在。取消函数直接作 effect 清理。
+      return onNextFrame(() => confirmRef.current?.focus());
     }
   }, [open]);
 

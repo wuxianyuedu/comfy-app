@@ -20,6 +20,8 @@ import {
 import { readEnvVar } from "~/lib/envfile";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
+import { isRecord } from "~/lib/is-record";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorDetail } from "~/lib/api-error";
 import {
   errorResponse,
@@ -41,10 +43,6 @@ const REPORT = path.join(
 /* ── 外部 JSON 的窄化工具(替代原 any)───────────────────────────
  * manifest / report / python stdout 都是外部输入,统一 unknown 进、守卫窄化读;
  * 字段值仅在非 nullish 时原样透传,回退语义与原 `?.` + `??` 完全一致。 */
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
 /** 等价原 `src?.[key] ?? fallback`:值非 null/undefined 时原样返回,类型由调用处声明。 */
 function jsonField<T>(
   src: Record<string, unknown> | null | undefined,
@@ -642,8 +640,12 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const body: unknown = await req.json().catch(() => ({}));
-  const rec: Record<string, unknown> = isRecord(body) ? body : {};
+  /* 入参收窄走唯一出口（规范 16 §16.2.4.44）：此前这里是
+   * `await req.json().catch(() => ({}))` —— **畸形 JSON 被静默当成空对象**，
+   * 于是同一个坏请求在这里走到「action 不认识」分支、在别的路由回一句
+   * 「请求格式错误」，用户看到的原因完全不同。 */
+  const rec = await readJsonRecord(req);
+  if (isErrorResponse(rec)) return rec;
   const action: unknown = rec.action;
 
   if (action === "saveSettings") {

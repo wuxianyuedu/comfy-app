@@ -30,6 +30,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { onNextFrame } from "~/lib/next-frame";
 
 interface SelectMenuProps {
   value: string;
@@ -123,12 +124,11 @@ export function SelectMenu({
   /* 打开后把高亮项滚进可视区。 */
   useEffect(() => {
     if (!open) return;
-    const raf = requestAnimationFrame(() => {
+    return onNextFrame(() => {
       const idx = highlighted >= 0 ? highlighted : 0;
       const el = listRef.current?.children[idx] as HTMLElement | undefined;
       el?.scrollIntoView({ block: "nearest" });
     });
-    return () => cancelAnimationFrame(raf);
   }, [open, highlighted]);
 
   const pick = useCallback(

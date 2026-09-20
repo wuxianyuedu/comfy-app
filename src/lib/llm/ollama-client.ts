@@ -3,6 +3,7 @@
 // 集中到此处后：错误信封与超时策略改一处生效，视图零感知。
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
+import { isRecord } from "~/lib/is-record";
 
 /** 探测超时：Ollama 没起时连接会挂住，宁可早失败也别让页面一直转圈。 */
 const PROBE_TIMEOUT_MS = 3000;
@@ -18,10 +19,6 @@ export type OllamaProbe = { up: true; models: OllamaModel[] } | { up: false };
 /** Ollama 的 /api/tags 在 OpenAI 兼容 base URL（…/v1）后面，需要剥掉后缀。 */
 export function ollamaTagsUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/v1\/?$/, "")}/api/tags`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 /**

@@ -14,7 +14,7 @@ import {
   pollVideoViaApi,
   submitVideoViaApi,
 } from "~/lib/workshop/api-channel.server";
-import { isRecord } from "~/lib/workshop/api-channel-shared";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import {
   intField,
   resolveMediaDataUrl,
@@ -32,15 +32,8 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
-  }
-  if (!isRecord(body)) {
-    return NextResponse.json({ error: "请求体必须是对象" }, { status: 400 });
-  }
+  const body = await readJsonRecord(req);
+  if (isErrorResponse(body)) return body;
 
   const kind: unknown = body.kind;
   const model = strField(body, "model");

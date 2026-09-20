@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
+  Check,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -50,6 +51,8 @@ import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { useElementBox } from "~/components/ui/use-element-box";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue } from "~/lib/display-value";
 
 /** 单个级别的摘要文案；零条目的级别说「无」——它也是一条信息，不是空白。 */
@@ -351,8 +354,29 @@ export function LogPanel() {
   const storeJumpToLatest = useLogPanel((state) => state.jumpToLatest);
   const setIsOpen = useLogPanel((state) => state.setIsOpen);
   const clear = useLogPanel((state) => state.clear);
-  const copyAll = useLogPanel((state) => state.copyAll);
+  const copyAllRaw = useLogPanel((state) => state.copyAll);
   const download = useLogPanel((state) => state.download);
+
+  /* 「复制 / 下载」两枚工具按钮的成败反馈（规范 16 §16.2.4.43）：此前这一段
+   * 完全没有出口 —— `copyAll` 把剪贴板结果吞掉，按钮上也没有任何状态，于是
+   * 「复制失败」在这块界面上不可见（用户以为拿到了，贴出来是空的）。
+   * 成功亮一下（`useFlashState`）、失败原地换文案并说清怎么自救。 */
+  const copyOutcome = useFlashState(1500);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const copyAll = useCopyFeedback({
+    onSuccess: () => {
+      setCopyFailed(false);
+      copyOutcome.flash();
+    },
+    onFailure: () => setCopyFailed(true),
+  });
+
+  /* 「复制全部」的文本要到点击那一刻才从 store 取（当前筛选 × 所有页），
+   * 所以走出口的**现算**形态。 */
+  const copyAllAction = useCallback(
+    () => copyAll(() => copyAllRaw()),
+    [copyAll, copyAllRaw],
+  );
 
   const bodyRef = useRef<HTMLDivElement>(null);
   /* 滚动视口的**元素本身**进 state：下面「量视口」的 effect 必须等到这个元素
@@ -705,29 +729,45 @@ export function LogPanel() {
               >
                 <Type size={16} />
               </Button>
-              {/* title 写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。 */}
-              {(
-                [
-                  { onClick: copyAll, label: "复制", Icon: Copy },
-                  {
-                    onClick: download,
-                    label: "下载为文本文件",
-                    Icon: Download,
-                  },
-                ] as const
-              ).map(({ onClick, label, Icon }) => (
-                <Button
-                  key={label}
-                  variant="ghost"
-                  size="icon"
-                  onClick={onClick}
-                  title={`${label}当前筛选的全部日志（${scopeLabel} · ${total} 条）`}
-                  aria-label={`${label}当前筛选的全部日志`}
-                  className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-                >
-                  <Icon size={16} />
-                </Button>
-              ))}
+              {/* title 写明范围：复制/下载的是**当前筛选下的全部日志**（跨所有页）。
+               * 复制这枚自己带成败反馈（§16.2.4.43）—— 失败时原地换成「复制失败」
+               * 并说明怎么自救，成功时短暂换成对勾。 */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={copyAllAction}
+                title={
+                  copyFailed
+                    ? "复制失败：剪贴板不可用，请手动选中日志后复制"
+                    : `复制当前筛选的全部日志（${scopeLabel} · ${total} 条）`
+                }
+                aria-label="复制当前筛选的全部日志"
+                className={`rounded-md ${
+                  copyFailed
+                    ? "text-danger-strong"
+                    : "text-ink-muted hover:bg-subtle hover:text-ink"
+                }`}
+              >
+                {copyFailed ? (
+                  <span className="text-[10px] whitespace-nowrap">
+                    复制失败
+                  </span>
+                ) : copyOutcome.on ? (
+                  <Check size={16} />
+                ) : (
+                  <Copy size={16} />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={download}
+                title={`下载为文本文件（当前筛选的全部日志：${scopeLabel} · ${total} 条）`}
+                aria-label="下载当前筛选的全部日志"
+                className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
+              >
+                <Download size={16} />
+              </Button>
               {/* 服务端落盘版导出（见 SaveExportButton）。 */}
               <SaveExportButton
                 label={origin ?? "all"}

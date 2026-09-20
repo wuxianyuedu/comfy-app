@@ -12,7 +12,7 @@ import { type CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import { copyText } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
 import {
@@ -80,6 +80,16 @@ export function ErrorPanel({
     setPrevErrCtx(errCtx);
     if (status === "error" && shouldAutoExpand) setErrExpanded(true);
   }
+
+  /* 两枚复制按钮的成败反馈（规范 16 §16.2.4.43）：详情那枚失败时改口（旁边
+   * 就是可手动选中的原文，说一句「复制失败」比静默有用）；taskId 那枚**显式
+   * 静默** —— 它本身就是一段可见文本，点它只是省一次选中。 */
+  const [detailCopyFailed, setDetailCopyFailed] = useState(false);
+  const copyDetail = useCopyFeedback({
+    onSuccess: () => setDetailCopyFailed(false),
+    onFailure: () => setDetailCopyFailed(true),
+  });
+  const copyTaskId = useCopyFeedback({ onFailure: "silent" });
 
   /* 对错误文本做模式匹配，给出一行可行动的提示。
    *  认不出失败形态时返回 null（UI 保留通用的原始错误块，
@@ -160,8 +170,7 @@ export function ErrorPanel({
               <Button
                 variant="outline"
                 onClick={() => {
-                  /* 剪贴板不可用时静默 —— 用户仍可手动展开并选中原始错误文本。 */
-                  void copyText(
+                  copyDetail(
                     JSON.stringify(
                       {
                         nodeId: nodeId,
@@ -189,9 +198,13 @@ export function ErrorPanel({
                   );
                 }}
                 className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 h-auto rounded border px-1.5 py-0.5 text-[10px]"
-                title="复制错误详情到剪贴板（含 taskId 与请求参数）"
+                title={
+                  detailCopyFailed
+                    ? "复制失败：剪贴板不可用，请在下方展开后手动选中复制"
+                    : "复制错误详情到剪贴板（含 taskId 与请求参数）"
+                }
               >
-                ⧉
+                {detailCopyFailed ? "复制失败" : "⧉"}
               </Button>
             </div>
           </div>
@@ -279,9 +292,7 @@ export function ErrorPanel({
                           <span className="text-danger-strong/60">taskId</span>
                           <Button
                             variant="ghost"
-                            onClick={() => {
-                              void copyText(taskId);
-                            }}
+                            onClick={() => copyTaskId(taskId)}
                             className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
                             title="点击复制 taskId"
                           >
