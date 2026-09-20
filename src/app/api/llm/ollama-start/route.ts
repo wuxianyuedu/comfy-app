@@ -12,7 +12,7 @@ import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { OLLAMA_DEFAULT_PORT } from "~/lib/endpoints";
+import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { withTimeoutResult } from "~/lib/with-timeout";
 
 export const runtime = "nodejs";
@@ -69,7 +69,7 @@ function appendOllamaBanner(kind: "start" | "end", title: string): void {
 /** 探测 Ollama 是否已就绪（HTTP 200 = 服务在监听）。 */
 async function probeOllamaPort(): Promise<boolean> {
   try {
-    const res = await fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/version`, {
+    const res = await fetch(`${ollamaBaseUrl(OLLAMA_PORT)}/api/version`, {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     return res.ok;

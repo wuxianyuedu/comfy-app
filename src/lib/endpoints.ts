@@ -26,6 +26,11 @@ export const OLLAMA_DEFAULT_PORT = 11434;
 /** Ollama 的 OpenAI 兼容入口（默认 Base URL）。 */
 export const OLLAMA_DEFAULT_BASE_URL = `http://${LOOPBACK_HOST}:${OLLAMA_DEFAULT_PORT}/v1`;
 
+/** Ollama 的 HTTP 入口（与 comfyUiBaseUrl 同形态）；探测 `/api/version` 等按端口拼路径用。 */
+export function ollamaBaseUrl(port: number = OLLAMA_DEFAULT_PORT): string {
+  return `http://${LOOPBACK_HOST}:${port}`;
+}
+
 /** ComfyUI 默认监听端口（main.py 未传 `--port` 时的出厂值）。
  *
  *  为什么在这里、而不是在 `app-settings.ts`：本模块是**零依赖**的常量层，而
