@@ -697,6 +697,11 @@
       //    导航失败下个 tick 重试（3 秒节流，避免高频重复导航打断正在编译路由的
       //    dev server）。
       const authoritativeReady = !!(status && status.ready === true);
+      // 中间那一段「状态文件不在、但编排器还在起」的窗口期——自编排链路
+      //（双击壳，见 ISSUE #784）里壳自己刚把 dev-launcher 拉起来，它写第一份
+      // launch-status.json 之前有 1~2 秒空档——由自主探测补齐：状态文件不在
+      // 时探 /api/health，真就绪才导航。判据与「状态文件在」时同源（都要求
+      // 2xx），因此不会把半死会话放进来。
       const shouldNavigate =
         authoritativeReady || (!status && (await probeBackend(appUrl)));
       if (shouldNavigate) {
