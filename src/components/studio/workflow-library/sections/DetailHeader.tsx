@@ -19,8 +19,6 @@ import { SourceTag } from "~/components/ui/source-tag";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { modeLabel } from "../workflow-library-config";
 import { type WorkflowRow } from "../workflow-library-config";
-import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
-import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
 import { ActionButton } from "./DetailControls";
 import { ModelTagPicker } from "./MetaEditor";
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
@@ -63,12 +61,6 @@ export function DetailHeader({
   /* 多模式时点击顶部模式徽标展开全部模式的小提示（问题：模式重复罗列，
    * 收敛到顶部一处）。 */
   const [showAllModes, setShowAllModes] = useState(false);
-  /* 执行日志：详情头部固定的一扇门 —— 「画布节点」与「工坊封装」两个页签共用
-   *  同一份运行登记表（`workflow-run-store`）与同一个全屏弹窗（ISSUE #611）。
-   *  入口放在操作排里，位置固定；没跑过也显示（点开是空态文案），用户不必再
-   *  进页签找日志。`logTaskId` 为 null 时弹窗自己落到该工作流最近一次运行。 */
-  const [logOpen, setLogOpen] = useState(false);
-  const [logTaskId, setLogTaskId] = useState<string | null>(null);
   const modes = workflow.modes ?? [];
 
   return (
@@ -221,26 +213,8 @@ export function DetailHeader({
             label="删除"
             variant="danger"
           />
-          {/* 执行日志入口：详情头部的一扇固定门（两个页签共用同一份运行登记表、
-              同一个全屏弹窗）。没跑过也显示 —— 点开是空态文案，入口位置不随
-              「有没有跑过」变化，用户不必到页签里找日志。 */}
-          <WorkflowRunLogButton
-            workflowId={workflow.id}
-            taskId={logTaskId}
-            alwaysVisible
-            onOpen={() => setLogOpen(true)}
-          />
         </div>
       </div>
-
-      {/* 全屏执行日志弹窗：与两个页签同一个组件、同一份运行登记表。 */}
-      <WorkflowRunLogModal
-        open={logOpen}
-        workflowId={workflow.id}
-        viewTaskId={logTaskId}
-        onViewTaskIdChange={setLogTaskId}
-        onClose={() => setLogOpen(false)}
-      />
     </div>
   );
 }

@@ -30,6 +30,7 @@ import {
 import {
   runLogSourceLabel,
   type WorkflowRunMeta,
+  type WorkflowRunSource,
 } from "~/lib/workflow/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
 import { Button } from "~/components/ui/button";
@@ -81,6 +82,8 @@ const FILTER_LABELS: { label: string; value: Level | "all" }[] = [
 export interface WorkflowRunLogModalProps {
   /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
   workflowId: string;
+  /** 可选：只看某个来源的运行（画布节点 / 工坊封装各自独立入口时传入）。 */
+  source?: WorkflowRunSource;
   /** 当前要查看的运行（受控：节点卡片点击时上抛）。 */
   viewTaskId: string | null;
   onViewTaskIdChange: (taskId: string | null) => void;
@@ -95,16 +98,21 @@ const RUN_LOG_WIDTH = modalWidth("w-5xl");
 
 export function WorkflowRunLogModal({
   workflowId,
+  source,
   viewTaskId,
   onViewTaskIdChange,
   open,
   onClose,
 }: WorkflowRunLogModalProps) {
   const snapshot = useSyncExternalStoreShim();
-  /* 只取当前工作流自己的运行（新→旧），避免把别的工作流的日志串进来。 */
+  /* 只取当前工作流自己的运行（新→旧），避免把别的工作流的日志串进来。
+   * 传入 source 时进一步按来源过滤（画布节点 / 工坊封装各自只看自己的）。 */
   const runs = useMemo(
-    () => snapshot.runs.filter((r) => r.workflowId === workflowId),
-    [snapshot.runs, workflowId],
+    () =>
+      snapshot.runs.filter(
+        (r) => r.workflowId === workflowId && (!source || r.source === source),
+      ),
+    [snapshot.runs, workflowId, source],
   );
 
   /* 面板**打开那一刻**裁决默认选中：优先「运行中」的会话（本次运行日志），
