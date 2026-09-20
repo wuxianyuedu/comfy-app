@@ -127,45 +127,49 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 **判据**（`scripts/check-ui-primitives.cjs`，基线
 `scripts/.ui-primitives-baseline.json`）：
 
-| ID      | 判据                                                                              | 应改用什么                                                                                                                                                                             |
-| ------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **P1**  | 视图层手写 `<button`                                                              | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体）                                                                                                                         |
-| **P2**  | 视图层自建 `createPortal(` 浮层                                                   | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu`                                                                                                                           |
-| **P3**  | 视图层自写 `animate-spin` / `animate-pulse`                                       | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
-| **P4**  | 视图层自写 `::-webkit-scrollbar` 外观                                             | `globals.css` 的三个具名类：`.custom-scrollbar`（密集日志区）/ `.soft-scrollbar`（文字编辑区）/ 全局兜底（见 §16.2.4.9）                                                               |
-| **P5**  | 视图层自写剪贴板写入（`navigator.clipboard` / `document.execCommand`）            | `~/lib/browser-io` 的 `copyText`（含降级链路与 `navigator` 存在性判定）                                                                                                                |
-| **P6**  | 视图层自写 Blob 下载（`URL.createObjectURL`）                                     | `~/lib/browser-io` 的 `downloadText` / `downloadJson`（`revoke` 与 `click` 的顺序收在出口里）                                                                                          |
-| **P9**  | 视图层自绘模态浮层（视图里出现 `overlayClass(`）                                  | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）或 `ui/sheet` 的 `SheetContent`（右侧抽屉）；全屏视图走 `ui/fullscreen-dialog` / `FullScreenLayer`（见 §16.2.4.12）               |
-| **P10** | 视图层自绘折叠 / 展开开关（`<details>` 或 `role="button"` + `▸/▾`）               | `~/components/ui/disclosure` 的 `Disclosure`（见 §16.2.4.13）                                                                                                                          |
-| **P11** | 视图层自绘可滚动浮层选项列表（同文件里既建 `PopoverTrigger` 又画 `▾`）            | `~/components/ui/option-list-popover` 的 `OptionListPopover`（见 §16.2.4.14）                                                                                                          |
-| **P12** | 视图 / 逻辑层里自写 `setInterval(` 轮询                                           | `~/components/ui/use-interval` 的 `useInterval`（见 §16.2.4.15）                                                                                                                       |
-| **P13** | 视图 / 逻辑层里自写搜索关键字归一化（`.trim().toLowerCase()`，**或只 `trim()`**） | `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` / `filterGroups`（见 §16.2.4.16）                                                                                           |
-| **P14** | 视图里自写展开集合的翻转样板（`{ ...src, [key]: !src[key] }`）                    | `~/components/ui/expansion-set` 的 `useExpansionSet`（见 §16.2.4.17）                                                                                                                  |
-| **P15** | 视图里自写面板加宽档的三元（`<flag> ? <X>.wide : <X>.base`）                      | `~/components/ui/wide-panel` 的 `useWidePanel` / `WidePanelToggle`（见 §16.2.4.18）                                                                                                    |
-| **P16** | 视图里自绘进度条填充（`style={{ width: \`${…}%\` }}`）                            | `~/components/ui/progress-bar` 的 `ProgressBar`；**数值**（夹取 / 比例 / 下限可见宽度）走 `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（见 §16.2.4.19）                     |
-| **P17** | 视图里自写键值行（muted/faint 标签叶子 + `displayValue(` / `JSON.stringify(` 值） | `~/components/ui/key-value-rows` 的 `KeyValueRows`（四种布局；缺值仍走 `~/lib/display-value`，见 §16.2.4.20）                                                                          |
-| **P18** | 视图里裸写 `<img` / `<video`                                                      | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底与 `loading`/`decoding` 都在出口里；媒体语义可经 `as` 覆盖后缀推断，见 §16.2.4.21）                                     |
-| **P19** | 视图里手写媒体拖拽源（`setData("application/x-comfyapp-media"`）                  | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义，见 §16.2.4.22）                                                         |
-| **P20** | 视图 / 逻辑层里自己挂 `keydown` 监听                                              | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台、`filterInput`、`enabled`，见 §16.2.4.23）                                                                                   |
-| **P21** | 视图里自写滚动贴底（`scrollTop = …scrollHeight` 赋值）                            | `~/components/ui/use-scroll-follow` 的 `useScrollFollow`（贴底 / 跟随态 / 阈值 / 受控共享，见 §16.2.4.24）                                                                             |
-| **P22** | 视图里自写外部目标导航（`window.location.href =`）                                | `~/lib/external-open` 的结果归一与目标类型 + `~/components/ui/use-external-action` 的 `useExternalAction`（见 §16.2.4.25）                                                             |
-| **P23** | 视图里自写「标签 + 控件」的表单行（裸 `<label className="…block…">` + 输入控件）  | `~/components/ui/form-field` 的 `FormField`（`htmlFor` / `aria-invalid` / `aria-describedby` 一次给全，见 §16.2.4.26）                                                                 |
-| **P24** | 视图 / 逻辑层里自写读文件（`readAs*` 调用，或 `.text()` 调用）                    | `~/lib/file-io` 的 `readFileAsText` / `readFileAsDataUrl`（「读到空算不算失败」只在这里定，见 §16.2.4.27）                                                                             |
-| **P25** | 自写 `localStorage` 存取（`localStorage.getItem/setItem/removeItem` 调用）        | `~/lib/browser-storage` 的 `readStorageItem` / `readStorageJson` / `writeStorageItem` / `writeStorageJson` / `removeStorageItem` / `hasBrowserStorage`（见 §16.2.4.28）                |
-| **P26** | 视图里自写「Enter 提交 / Esc 取消」的键位判据（`onKeyDown` 里判 `"Enter"`）       | `~/components/ui/use-enter-commit` 的 `enterCommit` / `isCommitKey`（`preventDefault` 与 IME 判据一次给全，见 §16.2.4.29）                                                             |
-| **P27** | 自写「`try` + `catch` + 反馈通道(errorMessage)」样板                               | `~/lib/async-action` 的 `runAsyncAction` / `toActionResult`（失败文案一律 `errorMessage`，成功静默是**显式**的，见 §16.2.4.30）                                                     |
-| **P28** | 自己读媒体的自然尺寸（`naturalWidth` / `videoWidth` 这类属性名）                    | `~/lib/media/natural-size` 的 `readNaturalSize` / `naturalAspectRatio` / `isPortraitMedia` / `formatNaturalSize`（读不到给 `null` 而不是 `{0,0}`，见 §16.2.4.31）                     |
-| **P29** | 手拼查询串（`?key=${…}` / `&key=${…}`）                                             | `~/lib/query-string` 的 `buildQueryString` / `withQuery` / `readQueryParam`；媒体预览地址走 `~/lib/media/media-url`（见 §16.2.4.32）                                                |
-| **P30** | 按条目渲染的列表共用一块「最近一次操作」的错误位（`useState` 的错误槽 + 逐条写入点） | `~/components/ui/use-item-errors` 的 `useItemErrors`（错误挂在**那一条**上，条目删掉即随之消失，见 §16.2.4.33）                                                                        |
-| **P31** | 自写「这一轮已作废」的守卫样板（`let <名> = false;` + 读 + 置位）                  | `~/lib/stale-run` 的 `beginStaleRun`（`commit` 一次给全「这一轮的写入」，含 `finally` 里的清 loading，见 §16.2.4.34）                                                                 |
-| **P32** | 手拼服务端错误信封 / 自己判它的形状（`NextResponse.json({ error: … })`、`typeof body.error === "string"`） | `~/lib/api-error` 的 `apiErrorBody` / `apiErrorDetail` / `readApiError`；**纯错误**响应走 `~/server/lib/error-response` 的 `errorResponse`（见 §16.2.4.35）                             |
+| ID      | 判据                                                                                                       | 应改用什么                                                                                                                                                                             |
+| ------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1**  | 视图层手写 `<button`                                                                                       | `~/components/ui/button` 的 `<Button>`（缺语义变体就先补变体）                                                                                                                         |
+| **P2**  | 视图层自建 `createPortal(` 浮层                                                                            | `ui/dialog` / `ui/popover` / `ui/sheet` / `ui/dropdown-menu`                                                                                                                           |
+| **P3**  | 视图层自写 `animate-spin` / `animate-pulse`                                                                | 块级加载态 → `ui/page-loading` 的 `PageLoading`；行内 / 按钮内 → 同模块的 `Spinner`；占位 → `ui/skeleton`；进度 → `ui/progress`；状态圆点的脉冲 → `ui/status-dot` 的 `StatusDot pulse` |
+| **P4**  | 视图层自写 `::-webkit-scrollbar` 外观                                                                      | `globals.css` 的三个具名类：`.custom-scrollbar`（密集日志区）/ `.soft-scrollbar`（文字编辑区）/ 全局兜底（见 §16.2.4.9）                                                               |
+| **P5**  | 视图层自写剪贴板写入（`navigator.clipboard` / `document.execCommand`）                                     | `~/lib/browser-io` 的 `copyText`（含降级链路与 `navigator` 存在性判定）                                                                                                                |
+| **P6**  | 视图层自写 Blob 下载（`URL.createObjectURL`）                                                              | `~/lib/browser-io` 的 `downloadText` / `downloadJson`（`revoke` 与 `click` 的顺序收在出口里）                                                                                          |
+| **P9**  | 视图层自绘模态浮层（视图里出现 `overlayClass(`）                                                           | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）或 `ui/sheet` 的 `SheetContent`（右侧抽屉）；全屏视图走 `ui/fullscreen-dialog` / `FullScreenLayer`（见 §16.2.4.12）               |
+| **P10** | 视图层自绘折叠 / 展开开关（`<details>` 或 `role="button"` + `▸/▾`）                                        | `~/components/ui/disclosure` 的 `Disclosure`（见 §16.2.4.13）                                                                                                                          |
+| **P11** | 视图层自绘可滚动浮层选项列表（同文件里既建 `PopoverTrigger` 又画 `▾`）                                     | `~/components/ui/option-list-popover` 的 `OptionListPopover`（见 §16.2.4.14）                                                                                                          |
+| **P12** | 视图 / 逻辑层里自写 `setInterval(` 轮询                                                                    | `~/components/ui/use-interval` 的 `useInterval`（见 §16.2.4.15）                                                                                                                       |
+| **P13** | 视图 / 逻辑层里自写搜索关键字归一化（`.trim().toLowerCase()`，**或只 `trim()`**）                          | `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` / `filterGroups`（见 §16.2.4.16）                                                                                           |
+| **P14** | 视图里自写展开集合的翻转样板（`{ ...src, [key]: !src[key] }`）                                             | `~/components/ui/expansion-set` 的 `useExpansionSet`（见 §16.2.4.17）                                                                                                                  |
+| **P15** | 视图里自写面板加宽档的三元（`<flag> ? <X>.wide : <X>.base`）                                               | `~/components/ui/wide-panel` 的 `useWidePanel` / `WidePanelToggle`（见 §16.2.4.18）                                                                                                    |
+| **P16** | 视图里自绘进度条填充（`style={{ width: \`${…}%\` }}`）                                                     | `~/components/ui/progress-bar` 的 `ProgressBar`；**数值**（夹取 / 比例 / 下限可见宽度）走 `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（见 §16.2.4.19）                     |
+| **P17** | 视图里自写键值行（muted/faint 标签叶子 + `displayValue(` / `JSON.stringify(` 值）                          | `~/components/ui/key-value-rows` 的 `KeyValueRows`（四种布局；缺值仍走 `~/lib/display-value`，见 §16.2.4.20）                                                                          |
+| **P18** | 视图里裸写 `<img` / `<video`                                                                               | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底与 `loading`/`decoding` 都在出口里；媒体语义可经 `as` 覆盖后缀推断，见 §16.2.4.21）                                     |
+| **P19** | 视图里手写媒体拖拽源（`setData("application/x-comfyapp-media"`）                                           | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义，见 §16.2.4.22）                                                         |
+| **P20** | 视图 / 逻辑层里自己挂 `keydown` 监听                                                                       | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台、`filterInput`、`enabled`，见 §16.2.4.23）                                                                                   |
+| **P21** | 视图里自写滚动贴底（`scrollTop = …scrollHeight` 赋值）                                                     | `~/components/ui/use-scroll-follow` 的 `useScrollFollow`（贴底 / 跟随态 / 阈值 / 受控共享，见 §16.2.4.24）                                                                             |
+| **P22** | 视图里自写外部目标导航（`window.location.href =`）                                                         | `~/lib/external-open` 的结果归一与目标类型 + `~/components/ui/use-external-action` 的 `useExternalAction`（见 §16.2.4.25）                                                             |
+| **P23** | 视图里自写「标签 + 控件」的表单行（裸 `<label className="…block…">` + 输入控件）                           | `~/components/ui/form-field` 的 `FormField`（`htmlFor` / `aria-invalid` / `aria-describedby` 一次给全，见 §16.2.4.26）                                                                 |
+| **P24** | 视图 / 逻辑层里自写读文件（`readAs*` 调用，或 `.text()` 调用）                                             | `~/lib/file-io` 的 `readFileAsText` / `readFileAsDataUrl`（「读到空算不算失败」只在这里定，见 §16.2.4.27）                                                                             |
+| **P25** | 自写 `localStorage` 存取（`localStorage.getItem/setItem/removeItem` 调用）                                 | `~/lib/browser-storage` 的 `readStorageItem` / `readStorageJson` / `writeStorageItem` / `writeStorageJson` / `removeStorageItem` / `hasBrowserStorage`（见 §16.2.4.28）                |
+| **P26** | 视图里自写「Enter 提交 / Esc 取消」的键位判据（`onKeyDown` 里判 `"Enter"`）                                | `~/components/ui/use-enter-commit` 的 `enterCommit` / `isCommitKey`（`preventDefault` 与 IME 判据一次给全，见 §16.2.4.29）                                                             |
+| **P27** | 自写「`try` + `catch` + 反馈通道(errorMessage)」样板                                                       | `~/lib/async-action` 的 `runAsyncAction` / `toActionResult`（失败文案一律 `errorMessage`，成功静默是**显式**的，见 §16.2.4.30）                                                        |
+| **P28** | 自己读媒体的自然尺寸（`naturalWidth` / `videoWidth` 这类属性名）                                           | `~/lib/media/natural-size` 的 `readNaturalSize` / `naturalAspectRatio` / `isPortraitMedia` / `formatNaturalSize`（读不到给 `null` 而不是 `{0,0}`，见 §16.2.4.31）                      |
+| **P29** | 手拼查询串（`?key=${…}` / `&key=${…}`）                                                                    | `~/lib/query-string` 的 `buildQueryString` / `withQuery` / `readQueryParam`；媒体预览地址走 `~/lib/media/media-url`（见 §16.2.4.32）                                                   |
+| **P30** | 按条目渲染的列表共用一块「最近一次操作」的错误位（`useState` 的错误槽 + 逐条写入点）                       | `~/components/ui/use-item-errors` 的 `useItemErrors`（错误挂在**那一条**上，条目删掉即随之消失，见 §16.2.4.33）                                                                        |
+| **P31** | 自写「这一轮已作废」的守卫样板（`let <名> = false;` + 读 + 置位）                                          | `~/lib/stale-run` 的 `beginStaleRun`（`commit` 一次给全「这一轮的写入」，含 `finally` 里的清 loading，见 §16.2.4.34）                                                                  |
+| **P32** | 手拼服务端错误信封 / 自己判它的形状（`NextResponse.json({ error: … })`、`typeof body.error === "string"`） | `~/lib/api-error` 的 `apiErrorBody` / `apiErrorDetail` / `readApiError`；**纯错误**响应走 `~/server/lib/error-response` 的 `errorResponse`（见 §16.2.4.35）                            |
+| **P33** | 手拼「时间戳 + 序号」的唯一 id（`Date.now()` 参与 id 拼装，同一串里另有 id 语义线索）                      | `~/lib/unique-id` 的 `nextId`（同一前缀内严格递增、序号不回绕）/ `uniqueStamp`（一次性 id）/ `randomToken`（可读短标记，见 §16.2.4.36）                                                |
+| **P34** | 自写「ComfyUI 报错 → 建议」的规则表（同文件里既有 `建议：` 行文，又有报错特征词的正则）                    | `~/lib/comfyui/error-advice` 的 `adviseOnError`（未识别给 `null`，不编造建议）/ `adviseWithFallback`（位置固定的那一行）/ `shouldAutoExpandError`（见 §16.2.4.37）                     |
+| **P35** | 亲手拼一个画布节点（同一片段里既有 `type: "canvasNode"` 又有 `position:`）                                 | `~/lib/project-canvas/canvas-helpers` 的 `placeCanvasNode`（取落点 → 换算 → 组节点 → 追加四步一次给全，见 §16.2.4.38）                                                                 |
 
-**P4~~P32 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P32 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+**P4~~P35 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P35 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
 加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键 / 滚动跟随 /
 外部导航 / 表单行 / 读文件 / localStorage / Enter 提交 / 异步动作的反馈样板 /
-媒体自然尺寸 / 查询串 / 按条目的错误位 / 作废守卫 / 服务端错误信封」这二十九件事的
+媒体自然尺寸 / 查询串 / 按条目的错误位 / 作废守卫 / 服务端错误信封 /
+唯一 id / 报错建议词表 / 画布节点落地」这三十二件事的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
@@ -174,9 +178,10 @@ P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.
 P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18、P16/P17 见 §16.2.4.19 ~ §16.2.4.20、
 P18/P19/P20 见 §16.2.4.21 ~ §16.2.4.23、P21/P22/P23 见 §16.2.4.24 ~ §16.2.4.26、
 P24/P25/P26 见 §16.2.4.27 ~ §16.2.4.29、P27/P28/P29 见 §16.2.4.30 ~ §16.2.4.32、
-**P30/P31/P32 见 §16.2.4.33 ~ §16.2.4.35**。
+**P30/P31/P32 见 §16.2.4.33 ~ §16.2.4.35**、
+P33/P34/P35 见 §16.2.4.36 ~ §16.2.4.38。
 
-**P4~P32 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P35 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -332,49 +337,55 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 
 按「同一件事有几份实现」排序（**P2 已完成的条目保留在此，作为「怎么迁」的样板**）：
 
-| 形态             | 现状                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 去向                                                                                                                                                                                    | 状态                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| 对话框/浮层      | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~                                                                                                                                                                                                                                                                                                                                                                                                                                 | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet`                                                                                     | ✅ **P2 完成（P2 判据清零）**               |
-| 空态             | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~                                                                                                                                                                                                                                                                                                                                                                                                                 | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`）                                                                                                       | ✅ **P2 完成**                              |
-| 按钮             | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1                                                                                                                                              | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
-| 加载态           | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner                                                                                                                                                                                                                                                                                                                                                                                                                                                       | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里）                                                                                                 | ✅ **P3 判据清零**                          |
-| 状态圆点         | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~                                                                                                                                                                                                                                                                                                                                                                                                                    | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token）                                                                                                | ✅ **全库唯一实现（余量见 §16.2.4.5）**     |
-| 状态胶囊         | ~~**七个文件**各写一份「状态 → 配色」表（`emerald-500/15` / `emerald-400/10` / `emerald-100` 三种深浅各不相同）~~                                                                                                                                                                                                                                                                                                                                                                                                              | `ui/status-badge.tsx` 一份（`dot` 形态 / `dot={false}` 角标）；文案留在调用处                                                                                                           | ✅ **见 §16.2.4.5 ①**                       |
-| UI kit 目录      | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~                                                                                                                                                                                                                                                                                                                                                                                                                         | 见 §16.2.4.3                                                                                                                                                                            | ✅ **归并完成（豁免已归还）**               |
-| 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~                                                                                                                                                                                                                                                                                                                                                                                                                                                | 接上有明确场景的一批，其余记为「有基元、无场景」                                                                                                                                        | ✅ **见 §16.2.4.4 ①**                       |
-| 两套 token 口径  | ~~`shadcn` 别名与项目 token **各写一份字面量**（同一颜色 2~3 份拷贝）~~                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 别名**只做 `var()` 转发**（项目 token 是唯一事实来源）；`@theme inline` 不再重定义项目 token                                                                                            | ✅ **已合并，见 §16.2.4.4 ② / 03 §3.6.4**   |
-| 余量主题色       | ~~115 处写死色值「既不是豁免、也不是待治理项」~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 逐条定性：token 化 18 处 / 登记豁免 97 处 / 进固定暗色清单 2 处                                                                                                                         | ✅ **基线归零，见 §16.2.4.5 ②**             |
-| 滚动条外观       | ~~`.custom-scrollbar`（`globals.css`）与 `SCROLLBAR_VISIBLE_CLASSES`（视图里的任意值变体）**各写一份**自绘滚动条外观，取值已漂移~~                                                                                                                                                                                                                                                                                                                                                                                             | `globals.css` 是三档的唯一出口（`.custom-scrollbar` / `.soft-scrollbar` / 全局兜底），取值逐条保留；P4 硬闸禁止视图再写 `::-webkit-scrollbar`                                           | ✅ **见 §16.2.4.9**                         |
-| 表单校验规则     | ~~`ui/form`（RHF 族）零引用，规则该归谁持有**未决策**~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **决定不接**：字段级规则住 `src/lib/<domain>/*-schema.ts` 的纯函数，集合级留 controller                                                                                                 | ✅ **已决策，见 §16.2.4.8**                 |
-| 剪贴板写入       | ~~**4 份实现**（`copyText` / `copyLogText` / 两处内联），其中 6 个落点**完全没有降级链路**——可选链在 Tauri 的 `http://` 非安全上下文里把失败吞掉~~                                                                                                                                                                                                                                                                                                                                                                             | `~/lib/browser-io` 的 `copyText`（两条通道 + `navigator` 判定）；P5 硬闸禁止视图再写 `navigator.clipboard` / `execCommand`                                                              | ✅ **见 §16.2.4.10**                        |
-| Blob 下载        | ~~**7 份实现**，`revokeObjectURL` 与 `click()` 的**先后顺序不统一**（先 revoke 会让大文件拿到失效 URL）~~                                                                                                                                                                                                                                                                                                                                                                                                                      | `~/lib/browser-io` 的 `downloadText` / `downloadJson`；P6 硬闸禁止视图再写 `URL.createObjectURL`                                                                                        | ✅ **见 §16.2.4.10**                        |
-| 相对时间         | ~~**5 份实现**，档位/后缀各不相同（`workspace` 与 `WorksGallery` 两份逐字相同）~~                                                                                                                                                                                                                                                                                                                                                                                                                                              | `~/lib/time-format` 的 `timeAgo`（`maxDays` / `suffix` 承载差异）；域模块保留原名转发                                                                                                   | ✅ **见 §16.2.4.10**                        |
-| 时刻格式化       | ~~**6 份实现**，带毫秒的两处逐字相同；`workshop` 4 处**连区域设置都没固定**~~                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `~/lib/time-format` 的 `formatClock`（`millis` 档）；跨天补日期留在 `logs/log-format.ts`                                                                                                | ✅ **见 §16.2.4.10**                        |
-| 字节容量         | ~~**3 份实现**（`fmtBytes` / `fmtSize` / `formatSize` **三个名字**），而 `src/lib/format-bytes.ts` 早就在；1024 字节整这一档还敢给出不同答案~~                                                                                                                                                                                                                                                                                                                                                                                 | `~/lib/format-bytes` 的 `fmtBytes`（既有出口，本批把两处漏网的接上）                                                                                                                    | ✅ **见 §16.2.4.10**                        |
-| 隐藏文件选择框   | ~~**9 份实现**（`useRef` + `ref.current?.click()` 6 处、`<label htmlFor>` 隐式关联 2 处、input 直接露在界面 1 处）；多数落点**没有复位 `event.target.value`** —— 连选同一个文件不触发 `change`~~                                                                                                                                                                                                                                                                                                                               | `~/components/ui/file-picker` 的 `useFilePicker` / `FilePickerButton`；**P7 硬闸**禁止视图再写「隐藏 input + 手工触发」                                                                 | ✅ **见 §16.2.4.11**                        |
-| 一次性反馈       | ~~**6 份实现**，分两族：4 处裸 `setTimeout(() => setX(false), 1xx)`（**连卸载都不管**）、2 处手写 `timerRef` + `clearTimeout`；复位时长 1200/1400/1500/8000 各不相同且**没有一处说得清为什么**~~                                                                                                                                                                                                                                                                                                                               | `~/components/ui/use-flash-state` 的 `useFlashState`（单值）/ `useFlashLatch`（多字段同生共死）；`DEFAULT_FLASH_MS` 是唯一默认值                                                        | ✅ **见 §16.2.4.11**                        |
-| 模态浮层         | ~~**16 个视图**各拼一份 `overlayClass("modal", …)` 外壳（**一处 `createPortal` 都没有** —— 所以 P2 全库清零之后这批依然漏过）；a11y 语义各写各的：16 份里**只有 3 份**接 Esc、**3 份**声明 `role="dialog"`、**0 份**做焦点锁与焦点归还~~                                                                                                                                                                                                                                                                                       | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）、`ui/sheet` 的 `SheetContent`（抽屉）；全屏视图仍走 `FullScreenLayer` / `ui/fullscreen-dialog`；**P9 硬闸**禁止视图再自绘模态外壳 | ✅ **见 §16.2.4.12**                        |
-| 缺值占位符       | ~~**31 处**裸写 `?? "—"`，而「什么算不存在」**四种判法**：`??`（只管 null/undefined）、`\|\|`（把 `0` 与 `""` 也当缺值 —— 「步数 0」显示成「—」）、`> 0 ? x : "—"`、`!= null ? String(x) : "—"`~~                                                                                                                                                                                                                                                                                                                              | `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER`；**P8 硬闸**禁止视图再写占位符字面量                                                                                      | ✅ **见 §16.2.4.11**                        |
-| 折叠 / 展开      | ~~**三族写法**：原生 `<details>` 六处、自绘「布尔 state + 条件渲染 + `▸/▾`」四处、树形 `expanded*` 映射两份；无障碍语义各写各的（自绘那份基本只有 `onClick`，`NodesTab` 还被迫用 `role="button"` 绕开「button 嵌 button」）~~                                                                                                                                                                                                                                                                                                  | `~/components/ui/disclosure` 的 `Disclosure`（`caret` / `chevron` / `none` 三种标记；排内其余动作走 `leading` / `trailing`）；**P10 硬闸**禁止视图再自绘折叠开关                        | ✅ **见 §16.2.4.13**                        |
-| 浮层选项列表     | ~~画布四个 chip 各写一份**逐行同形**的浮层（触发器 `▾` + `max-h-* overflow-y-auto` + `role="option"` 行），选中配色四份各写各的（`violet-500/20` / `fuchsia-500/20` / `primary-soft` / `bg-accent`）~~                                                                                                                                                                                                                                                                                                                         | `~/components/ui/option-list-popover` 的 `OptionListPopover`；**P11 硬闸**禁止视图再手搓 chip 浮层                                                                                      | ✅ **见 §16.2.4.14**                        |
-| 定时轮询         | ~~**9 处**各自 `setInterval` + `clearInterval`：不立刻跑一次 / 后台空转 / 每次渲染重建定时器 / 前后台开关被抄两份 / 跑在已卸载组件上~~                                                                                                                                                                                                                                                                                                                                                                                         | `~/components/ui/use-interval` 的 `useInterval`（`immediate` / `pauseWhenHidden` / 回调放 ref）；**P12 硬闸**禁止视图再写 `setInterval`                                                 | ✅ **见 §16.2.4.15**                        |
-| 可搜索过滤       | ~~**8 处**各写一遍 `trim().toLowerCase()`，其中 `AttributeMultiSelect` **只写了 `trim()`** —— 候选含拉丁字母（`JK制服`）时用户输 `jk` 一条也搜不到~~                                                                                                                                                                                                                                                                                                                                                                           | `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` / `filterGroups`；**P13 硬闸**禁止视图再自写归一化                                                                           | ✅ **见 §16.2.4.16**                        |
-| 展开集合         | ~~一棵树用了 **3 份**同形 `Record<string, boolean>`，每份配一组逐字同形的读写，外加一段**抄了两遍**的「补默认展开」（`!!map[k]` 把「收起过」与「没碰过」压成同一个 false）~~                                                                                                                                                                                                                                                                                                                                                   | `~/components/ui/expansion-set` 的 `useExpansionSet`（`isExpanded` / **`hasKey`** 两种判据 / `seedDefaults` 不覆盖已有表态）；**P14 硬闸**                                              | ✅ **见 §16.2.4.17**                        |
-| 面板加宽档       | ~~`LogPanel` / `GlobalStepLogPanel` / `WorkflowRunLogModal` 三份逐字同形（`useState` + 同一文件里两处三元 + 按钮文案图标），且三份**都没有持久化** —— 加宽后关掉再打开又变回窄档~~                                                                                                                                                                                                                                                                                                                                             | `~/components/ui/wide-panel` 的 `useWidePanel`（记忆按 `id` 落 localStorage）/ `WidePanelToggle`；**P15 硬闸**                                                                          | ✅ **见 §16.2.4.18**                        |
-| 异步动作的进度   | ~~**10 处**各写一遍「track + `width: X%` + 百分比文字」，写法四派（`Math.max(4, p)` 可见下限 / 自算比例 / 不夹取 / 算好的 pct）；且**只有 2 处**声明 `role="progressbar"`~~                                                                                                                                                                                                                                                                                                                                                    | `~/components/ui/progress-bar` 的 `ProgressBar`（形态）+ `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（数值）；**P16 硬闸**                                                  | ✅ **见 §16.2.4.19**                        |
-| 键值行           | ~~**5 处**各写一遍「标签 + 值 + 空值占位」的行，四种布局语言（隔行参数表 / 网格卡片 / `<table>` / 行内状态项）~~                                                                                                                                                                                                                                                                                                                                                                                                               | `~/components/ui/key-value-rows` 的 `KeyValueRows`（`rows` / `stacked` / `table` / `inline` 四布局）；缺值仍走 `~/lib/display-value`；**P17 硬闸**                                      | ✅ **见 §16.2.4.20**                        |
-| 渲染媒体         | ~~**18 个文件**各写一遍裸 `<img>` / `<video>`，失败这一侧四种写法（`style.display = "none"` / `visibility = "hidden"` / 自持 `useState(failed)` 方块 / 长文案说明），**另外 14 处压根没有兜底**；`loading="lazy"` 只有 2 个写了~~                                                                                                                                                                                                                                                                                              | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底 + `loading`/`decoding` 都在出口里，`as` 可覆盖后缀推断）；**P18 硬闸**                                                  | ✅ **见 §16.2.4.21**                        |
-| 媒体拖拽源       | ~~`HistoryPanel` 与 `MaterialLibraryPanel` 的网格 / 列表四个视图**逐字重复四遍** `setData("application/x-comfyapp-media", …)`；消费端 `use-canvas-drop` 只做 `JSON.parse` + 类型断言，形状对不上就是**静默丢投**~~                                                                                                                                                                                                                                                                                                             | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义）；**P19 硬闸**                                                           | ✅ **见 §16.2.4.22**                        |
-| 全局快捷键       | ~~**6 处**各自 `addEventListener("keydown")`，修饰键判据不同：`LogProvider` / `UpdateCheckProvider` 只判 `ctrlKey`（**macOS 上按 ⌘ 没反应**）、`json-viewer` 判了 `metaKey \|\| ctrlKey` 却不过滤输入焦点、`ScriptMarkdownEditor` 两者都判~~                                                                                                                                                                                                                                                                                   | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台 / `filterInput` / `enabled` / `preventDefault`）；**P20 硬闸**                                                                | ✅ **见 §16.2.4.23**                        |
-| 滚动跟随底部     | ~~**4 处**各写「内容一变就 `scrollTop = scrollHeight`」，**判据各不相同**：设置页有「贴底 32px 内仍算跟随」+「恢复自动滚动」按钮，画布步骤日志与工作流库运行日志只有一个 `autoscroll` 布尔（**用户上滚会被按回底部**），工坊对话**连开关都没有**~~                                                                                                                                                                                                                                                                             | `~/components/ui/use-scroll-follow` 的 `useScrollFollow`（贴底 / 跟随态 / 阈值 / 受控共享）；**P21 硬闸**                                                                               | ✅ **见 §16.2.4.24**                        |
-| 触发外部动作     | ~~**9 处**各写一份「置忙 → 调用 → `ok ? ok : err` → `catch → errorMessage` → finally 清忙」，而**结果字段不统一**（三个端点读 `ok`、更新器读 `triggered`）、**空目标只有一处拦过**（其余把空串发给服务端，把 zod 的英文报错当用户提示）、自定义协议「助手是否注册」的探测只有一处写了（防静默失败）~~                                                                                                                                                                                                                          | `~/lib/external-open`（目标类型 / 结果归一 / 探测）+ `~/components/ui/use-external-action` 的 `useExternalAction`（执行态样板）；**P22 硬闸**                                           | ✅ **见 §16.2.4.25**                        |
-| 表单行           | ~~**15 处**各写一份「`<label>` + 控件」，三件事在不同落点被漏掉：`htmlFor` / `id` 关联（**没有一处**做过 —— 点标签不聚焦输入框、读屏器把标签读成孤立文本）、`aria-invalid` + `aria-describedby`（只有 1/15 处写了 `aria-invalid`、**没有一处**关联错误文案）、错误行（训练工作室只报一句整表文案，不指出是哪一行错）~~                                                                                                                                                                                                         | `~/components/ui/form-field` 的 `FormField`（`htmlFor`/ARIA/错误行一次给全，控件由调用处给）；**P23 硬闸**                                                                              | ✅ **见 §16.2.4.26**                        |
-| 读用户选的文件   | ~~**6 处**各写一遍「把 File 读成文本 / data URL」：**怎么读**两派（4 处 `file.text()`、2 处手搓 `new FileReader()` + `onload`/`onerror` 包 Promise）、**读到空算不算失败**两派（两处把 `typeof result === "string" ? result : ""` 与「读失败」压成同一个 `""`，调用处只能靠 `if (!dataUrl) throw` 反推；另两处 `void file.text().then(…)` 连 rejection 分支都没有，读失败被整个吞掉）~~                                                                                                                                        | `~/lib/file-io` 的 `readFileAsText` / `readFileAsDataUrl`（读到空一律抛出，两条通道的判据同源）；**P24 硬闸**                                                                           | ✅ **见 §16.2.4.27**                        |
-| 浏览器持久化     | ~~**9 个文件**、十余处各写一遍「读 / 写 localStorage」，而**怎么判「没有浏览器」有三套**：`typeof window === "undefined"`（多数）/ `typeof localStorage === "undefined"`（`canvas-store`）/ 压根不判只靠 try/catch（`UpdateCheckProvider`）。三者在 SSR、jsdom、隐私模式下**行为不同** —— 只判 window 的那几处在隐私模式下会抛异常（外层 try 兜住的是另一件事）~~                                                                                                                                                              | `~/lib/browser-storage` 的 `hasBrowserStorage` / `readStorageItem` / `readStorageJson` / `writeStorageItem` / `writeStorageJson` / `removeStorageItem`；**P25 硬闸**                    | ✅ **见 §16.2.4.28**                        |
-| 异步动作的反馈   | ~~**21 处**各写一遍「置忙 → 调用 → `ok ? ok : err` → `catch` 里 `report(errorMessage(e, "…失败"))` → `finally` 清忙」，而**反馈通道有五种**（整页提示条 / toast / 行内 `setError` / 工坊的 `setNotice` / 节点上的 `onFailed`），**成功那一侧的写法有三种**（给一句陈述 / 给服务端的 `detail` / 成功静默 —— 而「成功静默」与「忘了写成功分支」在代码上完全一样），**失败文案**又是自己拼的（`e instanceof Error ? e.message : String(e)` 另有三处，非 `Error` 抛值会渲染成 `[object Object]`）~~ | `~/lib/async-action` 的 `runAsyncAction` / `toActionResult`（结果归一 + 三层成功文案优先级 + 失败一律 `errorMessage`；通道由调用处注入）；**P27 硬闸** | ✅ **见 §16.2.4.30** |
-| 媒体自然尺寸     | ~~**5 处**读 `naturalWidth` / `naturalHeight`（视频是 `videoWidth` / `videoHeight`）再算，而**读不到时怎么办各判各的**：预览那处 `if (el.naturalWidth && …)` 把 0 静默跳过，其余几处拿到 0 照算 —— 得出 `NaN` / `Infinity` 的比例，渲染成「0 × 0」或直接把容器高度算崩；同一张（读失败的）图在一个面板显示 `—`、在另一个显示 `Infinity`~~ | `~/lib/media/natural-size` 的 `readNaturalSize` / `naturalAspectRatio` / `isPortraitMedia` / `formatNaturalSize`（读不到一律 `null`；竖图是三态）；**P28 硬闸** | ✅ **见 §16.2.4.31** |
-| 查询串            | ~~**两种写法并存**：一半落点 `new URLSearchParams({...})`、另一半手拼模板串（`?filename=${encodeURIComponent(name)}&type=input`）。四个语义决定各判各的：① **`undefined` 会被 `URLSearchParams` 写成字符串 `"undefined"`**（所以可选参数那几处还得自己 `if` 一层）；② **空串算不算「有这个参数」**（`set("q","")` 产出 `?q=`，手拼的 `if (q)` 整个省掉）；③ 重复键怎么表达；④ **编码是谁的责任** —— 12 处手拼里 3 处漏了 `encodeURIComponent`（`#` / `&` 进文件名时静默打到另一个端点）~~ | `~/lib/query-string` 的 `buildQueryString` / `withQuery` / `readQueryParam`；媒体预览地址再收一层到 `~/lib/media/media-url` 的 `comfyImageUrl` / `mediaPreviewUrl`（空引用给 `null`）；**P29 硬闸** | ✅ **见 §16.2.4.32** |
-| Enter 提交       | ~~**11 处**各在 `onKeyDown` 里判键，而**Enter 要不要 `preventDefault`** 有 6 处写了、**5 处没写**（没写的那几处在 `<form>` 里会连带提交整页，「回车新增标签」变成「回车提交整页」）；**Esc 取消要不要复位草稿**只有 3 处做了（其余留在原值，「再点开看到上次输入一半的内容」）；另有一族**没判 IME** —— `AgentOverlay` 的「Enter 发送」用中文输入法时，**拼音未上屏的 Enter 会被当成发送**。同期另有 **6 处** `role="button"` 元素在 `onKeyDown` 里复刻浏览器对原生按钮的默认行为（那类已改为 `<Button>` / 原生 `<button>`）~~ | `~/components/ui/use-enter-commit` 的 `enterCommit` / `isCommitKey`（`preventDefault` 恒开、`ignoreIme` 默认开、`onCancel` 给了才注册 Esc）；**P26 硬闸**                               | ✅ **见 §16.2.4.29**                        |
+| 形态             | 现状                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 去向                                                                                                                                                                                                | 状态                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 对话框/浮层      | ~~`ui/dialog.tsx`（业务零引用） / `studio/ui/ModalDialog.tsx` / 10 个文件各自 `createPortal`~~                                                                                                                                                                                                                                                                                                                                                                                                                                 | `ModalDialog` 改基于 `ui/dialog`；10 处自建 portal 全部换成 `ui/dialog` / `ui/popover` / `ui/sheet`                                                                                                 | ✅ **P2 完成（P2 判据清零）**               |
+| 空态             | ~~`ui/empty-state.tsx` / `studio/ui/EmptyState.tsx` / `DynamicWorkflowForm/sections/EmptyStateHint.tsx` 三份~~                                                                                                                                                                                                                                                                                                                                                                                                                 | 合并到 `ui/empty-state.tsx`（props 取并集，`variant` 分流 `page`/`error`/`hint`）                                                                                                                   | ✅ **P2 完成**                              |
+| 按钮             | ~~`ui/button.tsx` + 视图里的 400+ 处手写 `<button>`~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | P1 棘轮逐批换 `<Button>`；变体见 §16.2.4.1                                                                                                                                                          | ✅ **P1 判据清零**（分 5 批，见 §16.2.4.2） |
+| 加载态           | `ui/skeleton.tsx` / `ui/progress.tsx`（均零引用）+ 17 个文件自写 spinner                                                                                                                                                                                                                                                                                                                                                                                                                                                       | P3 棘轮；`ui/page-loading` 的 `Spinner` 是**内联**加载态的唯一出口（按钮内/一行文字里）                                                                                                             | ✅ **P3 判据清零**                          |
+| 状态圆点         | ~~ComfyUI / Drizzle Studio / Ollama 三条状态行各自写一份四分支三元套娃 + 各写各的 `bg-emerald-400` 等色值~~                                                                                                                                                                                                                                                                                                                                                                                                                    | `ui/status-dot.tsx` 的 `StatusDot`（状态语义 `up`/`busy`/`probing`/`down` → 语义 token）                                                                                                            | ✅ **全库唯一实现（余量见 §16.2.4.5）**     |
+| 状态胶囊         | ~~**七个文件**各写一份「状态 → 配色」表（`emerald-500/15` / `emerald-400/10` / `emerald-100` 三种深浅各不相同）~~                                                                                                                                                                                                                                                                                                                                                                                                              | `ui/status-badge.tsx` 一份（`dot` 形态 / `dot={false}` 角标）；文案留在调用处                                                                                                                       | ✅ **见 §16.2.4.5 ①**                       |
+| UI kit 目录      | ~~`components/ui/`（33）/ `components/studio/ui/`（11）/ `shared/` / `DynamicWorkflowForm/sections/`~~                                                                                                                                                                                                                                                                                                                                                                                                                         | 见 §16.2.4.3                                                                                                                                                                                        | ✅ **归并完成（豁免已归还）**               |
+| 基元齐全但没人用 | ~~`card` / `badge` / `input` / `textarea` / `switch` / `separator` 引用数为 0~~                                                                                                                                                                                                                                                                                                                                                                                                                                                | 接上有明确场景的一批，其余记为「有基元、无场景」                                                                                                                                                    | ✅ **见 §16.2.4.4 ①**                       |
+| 两套 token 口径  | ~~`shadcn` 别名与项目 token **各写一份字面量**（同一颜色 2~3 份拷贝）~~                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 别名**只做 `var()` 转发**（项目 token 是唯一事实来源）；`@theme inline` 不再重定义项目 token                                                                                                        | ✅ **已合并，见 §16.2.4.4 ② / 03 §3.6.4**   |
+| 余量主题色       | ~~115 处写死色值「既不是豁免、也不是待治理项」~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 逐条定性：token 化 18 处 / 登记豁免 97 处 / 进固定暗色清单 2 处                                                                                                                                     | ✅ **基线归零，见 §16.2.4.5 ②**             |
+| 滚动条外观       | ~~`.custom-scrollbar`（`globals.css`）与 `SCROLLBAR_VISIBLE_CLASSES`（视图里的任意值变体）**各写一份**自绘滚动条外观，取值已漂移~~                                                                                                                                                                                                                                                                                                                                                                                             | `globals.css` 是三档的唯一出口（`.custom-scrollbar` / `.soft-scrollbar` / 全局兜底），取值逐条保留；P4 硬闸禁止视图再写 `::-webkit-scrollbar`                                                       | ✅ **见 §16.2.4.9**                         |
+| 表单校验规则     | ~~`ui/form`（RHF 族）零引用，规则该归谁持有**未决策**~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | **决定不接**：字段级规则住 `src/lib/<domain>/*-schema.ts` 的纯函数，集合级留 controller                                                                                                             | ✅ **已决策，见 §16.2.4.8**                 |
+| 剪贴板写入       | ~~**4 份实现**（`copyText` / `copyLogText` / 两处内联），其中 6 个落点**完全没有降级链路**——可选链在 Tauri 的 `http://` 非安全上下文里把失败吞掉~~                                                                                                                                                                                                                                                                                                                                                                             | `~/lib/browser-io` 的 `copyText`（两条通道 + `navigator` 判定）；P5 硬闸禁止视图再写 `navigator.clipboard` / `execCommand`                                                                          | ✅ **见 §16.2.4.10**                        |
+| Blob 下载        | ~~**7 份实现**，`revokeObjectURL` 与 `click()` 的**先后顺序不统一**（先 revoke 会让大文件拿到失效 URL）~~                                                                                                                                                                                                                                                                                                                                                                                                                      | `~/lib/browser-io` 的 `downloadText` / `downloadJson`；P6 硬闸禁止视图再写 `URL.createObjectURL`                                                                                                    | ✅ **见 §16.2.4.10**                        |
+| 相对时间         | ~~**5 份实现**，档位/后缀各不相同（`workspace` 与 `WorksGallery` 两份逐字相同）~~                                                                                                                                                                                                                                                                                                                                                                                                                                              | `~/lib/time-format` 的 `timeAgo`（`maxDays` / `suffix` 承载差异）；域模块保留原名转发                                                                                                               | ✅ **见 §16.2.4.10**                        |
+| 时刻格式化       | ~~**6 份实现**，带毫秒的两处逐字相同；`workshop` 4 处**连区域设置都没固定**~~                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `~/lib/time-format` 的 `formatClock`（`millis` 档）；跨天补日期留在 `logs/log-format.ts`                                                                                                            | ✅ **见 §16.2.4.10**                        |
+| 字节容量         | ~~**3 份实现**（`fmtBytes` / `fmtSize` / `formatSize` **三个名字**），而 `src/lib/format-bytes.ts` 早就在；1024 字节整这一档还敢给出不同答案~~                                                                                                                                                                                                                                                                                                                                                                                 | `~/lib/format-bytes` 的 `fmtBytes`（既有出口，本批把两处漏网的接上）                                                                                                                                | ✅ **见 §16.2.4.10**                        |
+| 隐藏文件选择框   | ~~**9 份实现**（`useRef` + `ref.current?.click()` 6 处、`<label htmlFor>` 隐式关联 2 处、input 直接露在界面 1 处）；多数落点**没有复位 `event.target.value`** —— 连选同一个文件不触发 `change`~~                                                                                                                                                                                                                                                                                                                               | `~/components/ui/file-picker` 的 `useFilePicker` / `FilePickerButton`；**P7 硬闸**禁止视图再写「隐藏 input + 手工触发」                                                                             | ✅ **见 §16.2.4.11**                        |
+| 一次性反馈       | ~~**6 份实现**，分两族：4 处裸 `setTimeout(() => setX(false), 1xx)`（**连卸载都不管**）、2 处手写 `timerRef` + `clearTimeout`；复位时长 1200/1400/1500/8000 各不相同且**没有一处说得清为什么**~~                                                                                                                                                                                                                                                                                                                               | `~/components/ui/use-flash-state` 的 `useFlashState`（单值）/ `useFlashLatch`（多字段同生共死）；`DEFAULT_FLASH_MS` 是唯一默认值                                                                    | ✅ **见 §16.2.4.11**                        |
+| 模态浮层         | ~~**16 个视图**各拼一份 `overlayClass("modal", …)` 外壳（**一处 `createPortal` 都没有** —— 所以 P2 全库清零之后这批依然漏过）；a11y 语义各写各的：16 份里**只有 3 份**接 Esc、**3 份**声明 `role="dialog"`、**0 份**做焦点锁与焦点归还~~                                                                                                                                                                                                                                                                                       | `ui/dialog` 的 `Dialog` / `DialogContent`（居中卡片）、`ui/sheet` 的 `SheetContent`（抽屉）；全屏视图仍走 `FullScreenLayer` / `ui/fullscreen-dialog`；**P9 硬闸**禁止视图再自绘模态外壳             | ✅ **见 §16.2.4.12**                        |
+| 缺值占位符       | ~~**31 处**裸写 `?? "—"`，而「什么算不存在」**四种判法**：`??`（只管 null/undefined）、`\|\|`（把 `0` 与 `""` 也当缺值 —— 「步数 0」显示成「—」）、`> 0 ? x : "—"`、`!= null ? String(x) : "—"`~~                                                                                                                                                                                                                                                                                                                              | `~/lib/display-value` 的 `displayValue` / `EMPTY_PLACEHOLDER`；**P8 硬闸**禁止视图再写占位符字面量                                                                                                  | ✅ **见 §16.2.4.11**                        |
+| 折叠 / 展开      | ~~**三族写法**：原生 `<details>` 六处、自绘「布尔 state + 条件渲染 + `▸/▾`」四处、树形 `expanded*` 映射两份；无障碍语义各写各的（自绘那份基本只有 `onClick`，`NodesTab` 还被迫用 `role="button"` 绕开「button 嵌 button」）~~                                                                                                                                                                                                                                                                                                  | `~/components/ui/disclosure` 的 `Disclosure`（`caret` / `chevron` / `none` 三种标记；排内其余动作走 `leading` / `trailing`）；**P10 硬闸**禁止视图再自绘折叠开关                                    | ✅ **见 §16.2.4.13**                        |
+| 浮层选项列表     | ~~画布四个 chip 各写一份**逐行同形**的浮层（触发器 `▾` + `max-h-* overflow-y-auto` + `role="option"` 行），选中配色四份各写各的（`violet-500/20` / `fuchsia-500/20` / `primary-soft` / `bg-accent`）~~                                                                                                                                                                                                                                                                                                                         | `~/components/ui/option-list-popover` 的 `OptionListPopover`；**P11 硬闸**禁止视图再手搓 chip 浮层                                                                                                  | ✅ **见 §16.2.4.14**                        |
+| 定时轮询         | ~~**9 处**各自 `setInterval` + `clearInterval`：不立刻跑一次 / 后台空转 / 每次渲染重建定时器 / 前后台开关被抄两份 / 跑在已卸载组件上~~                                                                                                                                                                                                                                                                                                                                                                                         | `~/components/ui/use-interval` 的 `useInterval`（`immediate` / `pauseWhenHidden` / 回调放 ref）；**P12 硬闸**禁止视图再写 `setInterval`                                                             | ✅ **见 §16.2.4.15**                        |
+| 可搜索过滤       | ~~**8 处**各写一遍 `trim().toLowerCase()`，其中 `AttributeMultiSelect` **只写了 `trim()`** —— 候选含拉丁字母（`JK制服`）时用户输 `jk` 一条也搜不到~~                                                                                                                                                                                                                                                                                                                                                                           | `~/lib/list-filter` 的 `normalizeNeedle` / `matchesNeedle` / `filterGroups`；**P13 硬闸**禁止视图再自写归一化                                                                                       | ✅ **见 §16.2.4.16**                        |
+| 展开集合         | ~~一棵树用了 **3 份**同形 `Record<string, boolean>`，每份配一组逐字同形的读写，外加一段**抄了两遍**的「补默认展开」（`!!map[k]` 把「收起过」与「没碰过」压成同一个 false）~~                                                                                                                                                                                                                                                                                                                                                   | `~/components/ui/expansion-set` 的 `useExpansionSet`（`isExpanded` / **`hasKey`** 两种判据 / `seedDefaults` 不覆盖已有表态）；**P14 硬闸**                                                          | ✅ **见 §16.2.4.17**                        |
+| 面板加宽档       | ~~`LogPanel` / `GlobalStepLogPanel` / `WorkflowRunLogModal` 三份逐字同形（`useState` + 同一文件里两处三元 + 按钮文案图标），且三份**都没有持久化** —— 加宽后关掉再打开又变回窄档~~                                                                                                                                                                                                                                                                                                                                             | `~/components/ui/wide-panel` 的 `useWidePanel`（记忆按 `id` 落 localStorage）/ `WidePanelToggle`；**P15 硬闸**                                                                                      | ✅ **见 §16.2.4.18**                        |
+| 异步动作的进度   | ~~**10 处**各写一遍「track + `width: X%` + 百分比文字」，写法四派（`Math.max(4, p)` 可见下限 / 自算比例 / 不夹取 / 算好的 pct）；且**只有 2 处**声明 `role="progressbar"`~~                                                                                                                                                                                                                                                                                                                                                    | `~/components/ui/progress-bar` 的 `ProgressBar`（形态）+ `~/lib/progress` 的 `clampPct` / `toPct` / `pctToWidth`（数值）；**P16 硬闸**                                                              | ✅ **见 §16.2.4.19**                        |
+| 键值行           | ~~**5 处**各写一遍「标签 + 值 + 空值占位」的行，四种布局语言（隔行参数表 / 网格卡片 / `<table>` / 行内状态项）~~                                                                                                                                                                                                                                                                                                                                                                                                               | `~/components/ui/key-value-rows` 的 `KeyValueRows`（`rows` / `stacked` / `table` / `inline` 四布局）；缺值仍走 `~/lib/display-value`；**P17 硬闸**                                                  | ✅ **见 §16.2.4.20**                        |
+| 渲染媒体         | ~~**18 个文件**各写一遍裸 `<img>` / `<video>`，失败这一侧四种写法（`style.display = "none"` / `visibility = "hidden"` / 自持 `useState(failed)` 方块 / 长文案说明），**另外 14 处压根没有兜底**；`loading="lazy"` 只有 2 个写了~~                                                                                                                                                                                                                                                                                              | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底 + `loading`/`decoding` 都在出口里，`as` 可覆盖后缀推断）；**P18 硬闸**                                                              | ✅ **见 §16.2.4.21**                        |
+| 媒体拖拽源       | ~~`HistoryPanel` 与 `MaterialLibraryPanel` 的网格 / 列表四个视图**逐字重复四遍** `setData("application/x-comfyapp-media", …)`；消费端 `use-canvas-drop` 只做 `JSON.parse` + 类型断言，形状对不上就是**静默丢投**~~                                                                                                                                                                                                                                                                                                             | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义）；**P19 硬闸**                                                                       | ✅ **见 §16.2.4.22**                        |
+| 全局快捷键       | ~~**6 处**各自 `addEventListener("keydown")`，修饰键判据不同：`LogProvider` / `UpdateCheckProvider` 只判 `ctrlKey`（**macOS 上按 ⌘ 没反应**）、`json-viewer` 判了 `metaKey \|\| ctrlKey` 却不过滤输入焦点、`ScriptMarkdownEditor` 两者都判~~                                                                                                                                                                                                                                                                                   | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台 / `filterInput` / `enabled` / `preventDefault`）；**P20 硬闸**                                                                            | ✅ **见 §16.2.4.23**                        |
+| 滚动跟随底部     | ~~**4 处**各写「内容一变就 `scrollTop = scrollHeight`」，**判据各不相同**：设置页有「贴底 32px 内仍算跟随」+「恢复自动滚动」按钮，画布步骤日志与工作流库运行日志只有一个 `autoscroll` 布尔（**用户上滚会被按回底部**），工坊对话**连开关都没有**~~                                                                                                                                                                                                                                                                             | `~/components/ui/use-scroll-follow` 的 `useScrollFollow`（贴底 / 跟随态 / 阈值 / 受控共享）；**P21 硬闸**                                                                                           | ✅ **见 §16.2.4.24**                        |
+| 触发外部动作     | ~~**9 处**各写一份「置忙 → 调用 → `ok ? ok : err` → `catch → errorMessage` → finally 清忙」，而**结果字段不统一**（三个端点读 `ok`、更新器读 `triggered`）、**空目标只有一处拦过**（其余把空串发给服务端，把 zod 的英文报错当用户提示）、自定义协议「助手是否注册」的探测只有一处写了（防静默失败）~~                                                                                                                                                                                                                          | `~/lib/external-open`（目标类型 / 结果归一 / 探测）+ `~/components/ui/use-external-action` 的 `useExternalAction`（执行态样板）；**P22 硬闸**                                                       | ✅ **见 §16.2.4.25**                        |
+| 表单行           | ~~**15 处**各写一份「`<label>` + 控件」，三件事在不同落点被漏掉：`htmlFor` / `id` 关联（**没有一处**做过 —— 点标签不聚焦输入框、读屏器把标签读成孤立文本）、`aria-invalid` + `aria-describedby`（只有 1/15 处写了 `aria-invalid`、**没有一处**关联错误文案）、错误行（训练工作室只报一句整表文案，不指出是哪一行错）~~                                                                                                                                                                                                         | `~/components/ui/form-field` 的 `FormField`（`htmlFor`/ARIA/错误行一次给全，控件由调用处给）；**P23 硬闸**                                                                                          | ✅ **见 §16.2.4.26**                        |
+| 读用户选的文件   | ~~**6 处**各写一遍「把 File 读成文本 / data URL」：**怎么读**两派（4 处 `file.text()`、2 处手搓 `new FileReader()` + `onload`/`onerror` 包 Promise）、**读到空算不算失败**两派（两处把 `typeof result === "string" ? result : ""` 与「读失败」压成同一个 `""`，调用处只能靠 `if (!dataUrl) throw` 反推；另两处 `void file.text().then(…)` 连 rejection 分支都没有，读失败被整个吞掉）~~                                                                                                                                        | `~/lib/file-io` 的 `readFileAsText` / `readFileAsDataUrl`（读到空一律抛出，两条通道的判据同源）；**P24 硬闸**                                                                                       | ✅ **见 §16.2.4.27**                        |
+| 浏览器持久化     | ~~**9 个文件**、十余处各写一遍「读 / 写 localStorage」，而**怎么判「没有浏览器」有三套**：`typeof window === "undefined"`（多数）/ `typeof localStorage === "undefined"`（`canvas-store`）/ 压根不判只靠 try/catch（`UpdateCheckProvider`）。三者在 SSR、jsdom、隐私模式下**行为不同** —— 只判 window 的那几处在隐私模式下会抛异常（外层 try 兜住的是另一件事）~~                                                                                                                                                              | `~/lib/browser-storage` 的 `hasBrowserStorage` / `readStorageItem` / `readStorageJson` / `writeStorageItem` / `writeStorageJson` / `removeStorageItem`；**P25 硬闸**                                | ✅ **见 §16.2.4.28**                        |
+| 异步动作的反馈   | ~~**21 处**各写一遍「置忙 → 调用 → `ok ? ok : err` → `catch` 里 `report(errorMessage(e, "…失败"))` → `finally` 清忙」，而**反馈通道有五种**（整页提示条 / toast / 行内 `setError` / 工坊的 `setNotice` / 节点上的 `onFailed`），**成功那一侧的写法有三种**（给一句陈述 / 给服务端的 `detail` / 成功静默 —— 而「成功静默」与「忘了写成功分支」在代码上完全一样），**失败文案**又是自己拼的（`e instanceof Error ? e.message : String(e)` 另有三处，非 `Error` 抛值会渲染成 `[object Object]`）~~                                | `~/lib/async-action` 的 `runAsyncAction` / `toActionResult`（结果归一 + 三层成功文案优先级 + 失败一律 `errorMessage`；通道由调用处注入）；**P27 硬闸**                                              | ✅ **见 §16.2.4.30**                        |
+| 媒体自然尺寸     | ~~**5 处**读 `naturalWidth` / `naturalHeight`（视频是 `videoWidth` / `videoHeight`）再算，而**读不到时怎么办各判各的**：预览那处 `if (el.naturalWidth && …)` 把 0 静默跳过，其余几处拿到 0 照算 —— 得出 `NaN` / `Infinity` 的比例，渲染成「0 × 0」或直接把容器高度算崩；同一张（读失败的）图在一个面板显示 `—`、在另一个显示 `Infinity`~~                                                                                                                                                                                      | `~/lib/media/natural-size` 的 `readNaturalSize` / `naturalAspectRatio` / `isPortraitMedia` / `formatNaturalSize`（读不到一律 `null`；竖图是三态）；**P28 硬闸**                                     | ✅ **见 §16.2.4.31**                        |
+| 查询串           | ~~**两种写法并存**：一半落点 `new URLSearchParams({...})`、另一半手拼模板串（`?filename=${encodeURIComponent(name)}&type=input`）。四个语义决定各判各的：① **`undefined` 会被 `URLSearchParams` 写成字符串 `"undefined"`**（所以可选参数那几处还得自己 `if` 一层）；② **空串算不算「有这个参数」**（`set("q","")` 产出 `?q=`，手拼的 `if (q)` 整个省掉）；③ 重复键怎么表达；④ **编码是谁的责任** —— 12 处手拼里 3 处漏了 `encodeURIComponent`（`#` / `&` 进文件名时静默打到另一个端点）~~                                      | `~/lib/query-string` 的 `buildQueryString` / `withQuery` / `readQueryParam`；媒体预览地址再收一层到 `~/lib/media/media-url` 的 `comfyImageUrl` / `mediaPreviewUrl`（空引用给 `null`）；**P29 硬闸** | ✅ **见 §16.2.4.32**                        |
+| Enter 提交       | ~~**11 处**各在 `onKeyDown` 里判键，而**Enter 要不要 `preventDefault`** 有 6 处写了、**5 处没写**（没写的那几处在 `<form>` 里会连带提交整页，「回车新增标签」变成「回车提交整页」）；**Esc 取消要不要复位草稿**只有 3 处做了（其余留在原值，「再点开看到上次输入一半的内容」）；另有一族**没判 IME** —— `AgentOverlay` 的「Enter 发送」用中文输入法时，**拼音未上屏的 Enter 会被当成发送**。同期另有 **6 处** `role="button"` 元素在 `onKeyDown` 里复刻浏览器对原生按钮的默认行为（那类已改为 `<Button>` / 原生 `<button>`）~~ | `~/components/ui/use-enter-commit` 的 `enterCommit` / `isCommitKey`（`preventDefault` 恒开、`ignoreIme` 默认开、`onCancel` 给了才注册 Esc）；**P26 硬闸**                                           | ✅ **见 §16.2.4.29**                        |
+| 错误按条目挂     | ~~`use-model-tags` / `use-training-studio` / `useStoryboardPlanner` / `CharacterDesigner` / `ScriptGenerator` 五处把错误位写成 `useState<string \| null>` —— **「最近一次操作的草稿」**：新增失败后去删另一条，同一块错误条被覆盖，而上一条那行已不再标红（提示说的是哪一条，只能靠用户回忆）~~                                                                                                                                                                                                                                | `~/components/ui/use-item-errors` 的 `useItemErrors`（错误挂在**那一条**上，条目删掉即随之消失）；**P30 硬闸**                                                                                      | ✅ **见 §16.2.4.33**                        |
+| 作废守卫         | ~~**8 处**各写一遍 `let cancelled = false` + 读 + 置位；`finally` 里的读法最容易写错（不看守卫时 A 轮的 `setLoading(false)` 会在 B 轮开始后落地，把「正在加载」错报成「加载完了」—— 八处里六处写对、两处干脆没有 loading 态）~~                                                                                                                                                                                                                                                                                                | `~/lib/stale-run` 的 `beginStaleRun`（`isStale` / `commit` / `dispose`，`commit` 一次给全「这一轮的结果」）；**P31 硬闸**                                                                           | ✅ **见 §16.2.4.34**                        |
+| 服务端错误信封   | ~~`src/app/api/**` 里 **12 处**逐字同形的手拼信封（`NextResponse.json({ error: errorMessage(…) })`，其中 3 处还要连带回业务字段），而**读它们的客户端有 6 种写法**（三份逐字相同的取值、三种形态兼容、直接断言、以及 `agent/client` **只认** `{error:{message}}` —— 服务端回字符串信封时被读成「请求失败」）~~                                                                                                                                                                                                                 | `~/lib/api-error` 的 `apiErrorBody` / `apiErrorDetail` / `readApiError` / `readJsonBody`；**纯错误**响应走 `~/server/lib/error-response` 的 `errorResponse`；**P32 硬闸**                           | ✅ **见 §16.2.4.35**                        |
+| 唯一 id          | ~~**6 处**各写一遍「时间戳 + 序号」，分三派：计数器**取模回绕**（`(entryId + 1) % 1_000_000` —— 转一圈后同一毫秒的两条撞 id，日志去重会把新的当成旧的丢掉、消息中心「删一条把另一条一起删了」）/ 随机后缀（`.slice(2, 6)` 与 `.slice(2, 7)` 两处长度都不同）/ 裸 `Date.now()` 毫秒数（与 36 进制**字典序不可比**，于是「按 id 排序」在一半落点成立、另一半不成立）。另有一处**连线** id `e_${source}-${target}-${Date.now()}` —— 同一毫秒连两条同样的线会撞，而 React Flow 以 id 为键做边增删~~                                | `~/lib/unique-id` 的 `nextId`（序号**不回绕**）/ `uniqueStamp`（一次性 id：界面 `key`、连线 id、落盘文件名）/ `randomToken`；**P33 硬闸**                                                           | ✅ **见 §16.2.4.36**                        |
+| 报错建议词表     | ~~**2 处**各写一份「报错原文 → 建议」的正则表（任务历史卡 `suggestFix` / 画布节点错误面板 `suggestForError`）：同一句 `out of memory` 在两处给出不同建议，且**告警词表互相漏项** ——「队列满了」在画布节点上根本没有建议，「服务忙」在历史卡上也没有~~                                                                                                                                                                                                                                                                          | `~/lib/comfyui/error-advice` 的 `adviseOnError`（未识别给 `null`，不编造建议）/ `adviseWithFallback`（位置固定那一行）/ `shouldAutoExpandError`；**P34 硬闸**                                       | ✅ **见 §16.2.4.37**                        |
+| 画布节点落地     | ~~**3 处**（右键菜单两个入口 + 媒体拖放 / 「加入画布」按钮）各写一遍「取落点 → 换算 → 组节点 → 追加」，而**视口中心**那一句在两处逐字相同、第三处用容器尺寸；`use-canvas-drop` 的注释还把 `screenToFlowPosition` 的入参含义**写反了**（注释说 client 坐标、代码传的是 flow 坐标）~~                                                                                                                                                                                                                                            | `~/lib/project-canvas/canvas-helpers` 的 `placeCanvasNode`（缺省落点走 `viewportCenter()`）；**P35 硬闸**                                                                                           | ✅ **见 §16.2.4.38**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -2176,11 +2187,11 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 按形态扫描撞出来的第三批账。全库 **21 处**各写一遍同一段样板 ——
 「置忙 → 调用 → 成功一句 / 失败一句 → `finally` 清忙」，而它对三件事各判各的：
 
-| 决定的              | 写法 A                                                                        | 写法 B                                                                                                                              |
-| ------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **失败文案从哪来**  | `errorMessage(e, "保存失败")`（设置页 12 处、工作流库、模型标签）              | 一句写死的 `toast.error("删除失败")`（历史列表），或自己再抄一遍 `e instanceof Error ? e.message : String(e)`（另 **3 处**）          |
-| **反馈通道是谁**    | 整页提示条（设置页的 `showFlash`，带 `ok`/`err` 两态）                         | toast（历史详情 / 工作流库）/ 行内 `setError`（模型标签 / 训练工作室）/ 工坊的 `setNotice` / 节点上的 `onFailed`（画布拖放）—— **五种** |
-| **成功要不要说**    | 给一句陈述（「已保存」「已删除任务」）                                         | 给服务端返回的 `detail`（`result.ok ? "ok" : "err"` 配 `detail`）/ **成功静默**（列表刷新即结果）                                     |
+| 决定的             | 写法 A                                                            | 写法 B                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **失败文案从哪来** | `errorMessage(e, "保存失败")`（设置页 12 处、工作流库、模型标签） | 一句写死的 `toast.error("删除失败")`（历史列表），或自己再抄一遍 `e instanceof Error ? e.message : String(e)`（另 **3 处**）            |
+| **反馈通道是谁**   | 整页提示条（设置页的 `showFlash`，带 `ok`/`err` 两态）            | toast（历史详情 / 工作流库）/ 行内 `setError`（模型标签 / 训练工作室）/ 工坊的 `setNotice` / 节点上的 `onFailed`（画布拖放）—— **五种** |
+| **成功要不要说**   | 给一句陈述（「已保存」「已删除任务」）                            | 给服务端返回的 `detail`（`result.ok ? "ok" : "err"` 配 `detail`）/ **成功静默**（列表刷新即结果）                                       |
 
 也就是说 —— **「这个动作失败了界面说不说、说什么」取决于它是哪一处写的**。
 这类差异没有报错、没有告警（两种写法都合法、都编译）；更隐蔽的是**成功那一侧**：
@@ -2192,11 +2203,11 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 #### 出口：`~/lib/async-action` 的 `runAsyncAction` / `toActionResult`
 
-| 导出                     | 管什么                                                                                                                |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `runAsyncAction(action, opts)` | 跑一次动作 + 接反馈通道。返回 `{ ok, detail }`（**失败不抛**，调用处拿它决定要不要回滚乐观更新）                        |
-| `toActionResult(raw, fallback)` | 任意形状 → `{ ok, detail }`（`{ok,detail}` / `{triggered,detail}` / 布尔 / `void` / **业务对象**五种，不抛即成功）      |
-| `ActionReport`           | 通道的类型：`(kind: "ok" \| "err", detail: string) => void`                                                            |
+| 导出                            | 管什么                                                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `runAsyncAction(action, opts)`  | 跑一次动作 + 接反馈通道。返回 `{ ok, detail }`（**失败不抛**，调用处拿它决定要不要回滚乐观更新）                   |
+| `toActionResult(raw, fallback)` | 任意形状 → `{ ok, detail }`（`{ok,detail}` / `{triggered,detail}` / 布尔 / `void` / **业务对象**五种，不抛即成功） |
+| `ActionReport`                  | 通道的类型：`(kind: "ok" \| "err", detail: string) => void`                                                        |
 
 三条口径：
 
@@ -2231,11 +2242,11 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 #### 豁免（显式，每条写清「为什么这一处不属于该判据」）
 
-| 落点                                                  | 为什么不走出口                                                                                                                                                                                                |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CanvasNode/hooks/use-workflow-modes.ts`              | 失败时**必须回滚本地模式状态**，而回滚要用 `catch` 现场那个 `modes` 快照；挪进 `action` 里会读到已经改过的新值                                                                                                 |
-| `project-canvas/hooks/use-history-panel.ts`           | 取数失败要按**竞态守卫**决定报不报（`if (cancelled) return`）—— 卸载/切筛选后到达的旧响应不该往界面写任何东西，包括错误文案                                                                                    |
-| `app/(main)/settings/hooks/use-settings-page.ts`      | 仅 `openComfy` 一处：动作里有**多分支域判据**（未运行 / `embed` / `blocked`）+ 失败后无论如何都要刷新状态行。该文件其余 **12 个动作**已全部走出口                                                            |
+| 落点                                             | 为什么不走出口                                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CanvasNode/hooks/use-workflow-modes.ts`         | 失败时**必须回滚本地模式状态**，而回滚要用 `catch` 现场那个 `modes` 快照；挪进 `action` 里会读到已经改过的新值                                    |
+| `project-canvas/hooks/use-history-panel.ts`      | 取数失败要按**竞态守卫**决定报不报（`if (cancelled) return`）—— 卸载/切筛选后到达的旧响应不该往界面写任何东西，包括错误文案                       |
+| `app/(main)/settings/hooks/use-settings-page.ts` | 仅 `openComfy` 一处：动作里有**多分支域判据**（未运行 / `embed` / `blocked`）+ 失败后无论如何都要刷新状态行。该文件其余 **12 个动作**已全部走出口 |
 
 ### 16.2.4.31 「一张媒体图的自然尺寸是多少」有五种写法（P28 硬闸）
 
@@ -2243,10 +2254,10 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 （视频是 `videoWidth` / `videoHeight`）再算，而差别不在「读哪两个属性」，
 在**两个语义决定**上：
 
-| 决定的                   | 做法 A                                                                                     | 做法 B                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| **读不到尺寸怎么办**     | `if (el.naturalWidth && el.naturalHeight)` —— 把 `0` 当缺值**静默跳过**（`WorkflowImagePreview`） | 拿到 `0` 照算 → 比例是 `NaN` / `Infinity`，渲染成「0 × 0」或把容器高度算崩 |
-| **算成什么**             | `{ w, h }` 原样显示（「1102 × 834」）                                                       | 宽高比（`w / h`）给容器定高 / 「是不是竖图」一个布尔                      |
+| 决定的               | 做法 A                                                                                            | 做法 B                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **读不到尺寸怎么办** | `if (el.naturalWidth && el.naturalHeight)` —— 把 `0` 当缺值**静默跳过**（`WorkflowImagePreview`） | 拿到 `0` 照算 → 比例是 `NaN` / `Infinity`，渲染成「0 × 0」或把容器高度算崩 |
+| **算成什么**         | `{ w, h }` 原样显示（「1102 × 834」）                                                             | 宽高比（`w / h`）给容器定高 / 「是不是竖图」一个布尔                       |
 
 `0` 这个读数需要单独说明：媒体元素在**图片解码完成前 / 视频元数据到达前**，
 四个属性全都读作 `0` —— 那是「还不知道」，不是「尺寸是 0」。
@@ -2256,12 +2267,12 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 #### 出口：`~/lib/media/natural-size`
 
-| 导出                                     | 管什么                                                                            |
-| ---------------------------------------- | --------------------------------------------------------------------------------- |
-| `readNaturalSize(el)`                    | 图片读 `natural*`、视频读 `video*`；任一读不到（0 / NaN / 负 / 无限）→ `null`      |
-| `naturalAspectRatio(el)`                 | 宽 / 高；读不到 → `null`（**不是** `NaN` / `Infinity`）                            |
-| `isPortraitMedia(el)`                    | 竖图判据，**三态**：`true` / `false` / `null`（「还不知道」≠「确定不是竖图」）      |
-| `formatNaturalSize(el)`                  | 展示文案（`1102 × 834`）；读不到 → `null`，由调用处决定显示什么                    |
+| 导出                     | 管什么                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `readNaturalSize(el)`    | 图片读 `natural*`、视频读 `video*`；任一读不到（0 / NaN / 负 / 无限）→ `null`  |
+| `naturalAspectRatio(el)` | 宽 / 高；读不到 → `null`（**不是** `NaN` / `Infinity`）                        |
+| `isPortraitMedia(el)`    | 竖图判据，**三态**：`true` / `false` / `null`（「还不知道」≠「确定不是竖图」） |
+| `formatNaturalSize(el)`  | 展示文案（`1102 × 834`）；读不到 → `null`，由调用处决定显示什么                |
 
 两条口径：
 
@@ -2281,19 +2292,19 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 全库 **两种写法并存**，且各自的语义决定各不相同：
 
-| 写法                                   | 代表落点                                                                     |
-| -------------------------------------- | ---------------------------------------------------------------------------- |
-| `new URLSearchParams({...})`           | 日志会话列表、素材列表、登录页读 `callbackUrl`、几处测试                     |
-| 手拼模板串                             | `/api/images` 的 5 处、`/api/logs/current`、`/api/llm/models`、子图下钻、调试源码、工坊草稿、生成日志 |
+| 写法                         | 代表落点                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `new URLSearchParams({...})` | 日志会话列表、素材列表、登录页读 `callbackUrl`、几处测试                                              |
+| 手拼模板串                   | `/api/images` 的 5 处、`/api/logs/current`、`/api/llm/models`、子图下钻、调试源码、工坊草稿、生成日志 |
 
 两种写法**都编译、都运行、类型都对**，差别在四个语义决定上：
 
-| 决定的                       | `URLSearchParams`                                                     | 手拼模板串                                                                    |
-| ---------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **哪些参数会「被丢掉」**     | `undefined` 会被写成**字符串** `"undefined"`（不是省略！）—— 所以可选参数那几处还得自己 `if` 包一层 | 用 `${x ? `&y=${…}` : ""}` 三元 —— **同一个判据两处各写一遍**，且写法不一样     |
-| **空串算不算「有这个参数」** | `set("q", "")` 产出 `?q=`（服务端读到的是一次空搜索）                  | `if (q)` **整个省掉**这个键（`/api/materials` 的 `q` 为空时回落按分类取）      |
-| **重复键怎么办**             | `append` 产出 `?a=1&a=2`、`set` 覆盖                                   | 压根表达不了这一层                                                            |
-| **编码是谁的责任**           | 自动                                                                   | 调用处自己写 —— 12 处手拼里 **3 处漏了** `encodeURIComponent`                   |
+| 决定的                       | `URLSearchParams`                                                                                   | 手拼模板串                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **哪些参数会「被丢掉」**     | `undefined` 会被写成**字符串** `"undefined"`（不是省略！）—— 所以可选参数那几处还得自己 `if` 包一层 | 用 `${x ? `&y=${…}` : ""}` 三元 —— **同一个判据两处各写一遍**，且写法不一样 |
+| **空串算不算「有这个参数」** | `set("q", "")` 产出 `?q=`（服务端读到的是一次空搜索）                                               | `if (q)` **整个省掉**这个键（`/api/materials` 的 `q` 为空时回落按分类取）   |
+| **重复键怎么办**             | `append` 产出 `?a=1&a=2`、`set` 覆盖                                                                | 压根表达不了这一层                                                          |
+| **编码是谁的责任**           | 自动                                                                                                | 调用处自己写 —— 12 处手拼里 **3 处漏了** `encodeURIComponent`               |
 
 最后一条的后果最重：素材文件名带 `#`、子目录名带 `&` 时，
 `/api/images?filename=a#b.png` 的 `#` 会把之后的部分变成**片段标识符**，
@@ -2301,11 +2312,11 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 #### 出口：`~/lib/query-string`（+ 媒体预览地址再收一层）
 
-| 导出                          | 管什么                                                                                                    |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `buildQueryString(params, opts)` | 一组键值 → 查询串（**不带**前导 `?`）；空串返回 `""`                                                       |
-| `withQuery(path, params)`     | 接上 `?`（没有参数时**原样返回路径** —— 收口前手拼的落点在这里有三套写法，其中一套无条件带 `?`）            |
-| `readQueryParam(qs, key)`     | 从已有一句查询串里读值；「键不存在」（`null`）与「键存在但值为空串」（`""`）分得开；坏转义不抛              |
+| 导出                                                           | 管什么                                                                                                                        |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `buildQueryString(params, opts)`                               | 一组键值 → 查询串（**不带**前导 `?`）；空串返回 `""`                                                                          |
+| `withQuery(path, params)`                                      | 接上 `?`（没有参数时**原样返回路径** —— 收口前手拼的落点在这里有三套写法，其中一套无条件带 `?`）                              |
+| `readQueryParam(qs, key)`                                      | 从已有一句查询串里读值；「键不存在」（`null`）与「键存在但值为空串」（`""`）分得开；坏转义不抛                                |
 | `~/lib/media/media-url` 的 `comfyImageUrl` / `mediaPreviewUrl` | 媒体引用 → 可渲染地址。**空引用给 `null`**（不拼出 `?filename=` 让服务端去报错）；「以 `/` 开头即已是可渲染路径」也只在这里判 |
 
 四条口径（本文件是全库唯一的定义处）：
@@ -2353,10 +2364,10 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 
 差别不是「谁写得好看」，而是**错误的生命周期**：
 
-| | 语义 | 文件 |
-|---|---|---|
-| 「最近一次操作的草稿」 | 下一条消息必然把它盖掉（**时间维度的状态**） | `use-model-tags`（新增 / 删除 / 重命名共用一个 `error`）、`use-training-studio`（上传 / 提交 / 取消共用）、`useStoryboardPlanner` 的 `polishError`（逐镜头润色）、`CharacterDesigner` 的 `aiError`（逐角色润色）、`ScriptGenerator` 的 `aiError` |
-| 「按条目挂」 | 错误属于**那一条**，改别处不该动它（**对象维度的状态**） | 出口 `useItemErrors` |
+|                        | 语义                                                     | 文件                                                                                                                                                                                                                                             |
+| ---------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 「最近一次操作的草稿」 | 下一条消息必然把它盖掉（**时间维度的状态**）             | `use-model-tags`（新增 / 删除 / 重命名共用一个 `error`）、`use-training-studio`（上传 / 提交 / 取消共用）、`useStoryboardPlanner` 的 `polishError`（逐镜头润色）、`CharacterDesigner` 的 `aiError`（逐角色润色）、`ScriptGenerator` 的 `aiError` |
+| 「按条目挂」           | 错误属于**那一条**，改别处不该动它（**对象维度的状态**） | 出口 `useItemErrors`                                                                                                                                                                                                                             |
 
 两者在代码上长得几乎一样（都是 `setError(string)` + 一块行内错误条），
 所以这类差异没有报错、没有告警，tsc / eslint 也都不看。
@@ -2370,7 +2381,9 @@ errors.report(tag.name)("err", errorMessage(e, "删除失败"));
 // 无条目归属的那档（新增失败 / 列表刷新失败）
 errors.report(null)("err", detail);
 // 视图里
-{errors.get(tag.name) && <p>{errors.get(tag.name)}</p>}
+{
+  errors.get(tag.name) && <p>{errors.get(tag.name)}</p>;
+}
 ```
 
 **五个方法各对应一件事**：`get`（这一条有没有错）、`hasAny`（要不要渲染
@@ -2425,10 +2438,12 @@ key；成功时清掉该条**与**无 key 那档）、`clear` / `clearAll`。
 let cancelled = false;
 void (async () => {
   const rows = await fetchX();
-  if (cancelled) return;          // ← 卸载或换了参数，这一轮不要了
+  if (cancelled) return; // ← 卸载或换了参数，这一轮不要了
   setRows(rows);
 })();
-return () => { cancelled = true; };
+return () => {
+  cancelled = true;
+};
 ```
 
 在**八个文件**里各写一遍，而它对三件事各判各的：
@@ -2503,14 +2518,14 @@ return NextResponse.json(
 
 而**读它们的客户端有六种写法**（都在 `src/lib/**`）：
 
-| 落点 | 读法 |
-|------|------|
-| `readMaterialError` / `readBgmError` / `readUploadError` | 三份**逐字相同**的「取 `body.error` 字符串」，各自在文件内声明一次 |
-| `readApiErrorMessage`（workshop 通道） | 多认一种 `{error:{message}}`（且空串会被当成文案） |
-| `readComfyErrorMessage` | 三种形态（`detail` / `{error}` 字符串 / `{error:{message}}`） |
-| `debug-source-client` | 在 `unknown` 上直接取 `body?.error` |
-| `ollama-client` | 自己 `as { error?: string }` 断言 |
-| `agent/client` | **只认** `{error:{message}}` —— 服务端回 `{error: "…"}` 时被读成「请求失败」 |
+| 落点                                                     | 读法                                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `readMaterialError` / `readBgmError` / `readUploadError` | 三份**逐字相同**的「取 `body.error` 字符串」，各自在文件内声明一次           |
+| `readApiErrorMessage`（workshop 通道）                   | 多认一种 `{error:{message}}`（且空串会被当成文案）                           |
+| `readComfyErrorMessage`                                  | 三种形态（`detail` / `{error}` 字符串 / `{error:{message}}`）                |
+| `debug-source-client`                                    | 在 `unknown` 上直接取 `body?.error`                                          |
+| `ollama-client`                                          | 自己 `as { error?: string }` 断言                                            |
+| `agent/client`                                           | **只认** `{error:{message}}` —— 服务端回 `{error: "…"}` 时被读成「请求失败」 |
 
 也就是说 —— **「服务端失败了，客户端读到什么」取决于它是哪一处读的**。
 
@@ -2579,8 +2594,188 @@ if (!res.ok) throw new Error(readApiError(body) ?? "上传失败");
 （它们不是错误文案，是业务字段）；`{ ok: false, detail }` 这类**200 信封**
 （`/api/llm/test*` 走这条，`detail` 是探测结论）。
 
-## 16.3 新增一个组件的标准动作
+### 16.2.4.36 「给一条新记录分配 id」有六处写法（P33 硬闸）
 
+按形态扫描时撞出来的账：全库有 **6 处**各自从零写一遍「时间戳 + 序号」：
+
+| 落点                                    | 写法                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| `log-store`                             | `` `${Date.now().toString(36)}-${n.toString(36)}` ``，`n = (n + 1) % 1_000_000` |
+| `message-center-store`                  | `` `msg_${Date.now().toString(36)}_${seq.toString(36)}` ``，同样取模            |
+| `use-workshop-agent`（对话 + 工具运行） | `` `agent-msg-${Date.now().toString(36)}-${++n}` `` / `tool-run-…`              |
+| `script-parser`                         | `` `${prefix}_${Date.now().toString(36)}_${++n}` ``                             |
+| `ToastProvider`                         | `` `t_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` ``               |
+| `canvas-helpers`                        | `` `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` ``               |
+
+写法看着都对，**判据却各不相同**，而且分三派：
+
+- **计数器取模**（`(entryId + 1) % 1_000_000`）—— 转一圈之后同一毫秒内的两条
+  会拿到**同一个 id**。日志按 id 去重（`seen` 集合）会把新的那条当成旧的丢掉；
+  消息中心按 id 标记已读 / 删除，撞 id 的表现是「删一条把另一条一起删了」；
+- **随机后缀**（`Math.random()`）—— 靠概率避重，而且取值范围与长度写在
+  **三个不同的调用处**（`.slice(2, 6)` / `.slice(2, 7)` / `.slice(2, 8)`）；
+- **裸 `Date.now()` 毫秒数**直接拼进去 —— 与上面两派的**字典序完全不同**
+  （36 进制与 13 位十进制不可比），于是「同前缀的记录按 id 排序」
+  在一半落点成立、另一半不成立。
+
+还有一处更隐秘的：**连线 id**（`use-canvas-connections`）写的是
+`` `e_${c.source}-${c.target}-${Date.now()}` `` —— 同一毫秒内连两条**同样的**线
+会撞 id，而 React Flow 以 id 为键做边的增删改，撞 id 的表现是
+「新连的那条把上一条顶掉」。
+
+也就是说 —— **「两条同一毫秒产生的记录会不会撞 id」取决于它是哪一处生成的**。
+
+#### 出口：`~/lib/unique-id` 的 `nextId` / `uniqueStamp` / `randomToken`
+
+| 导出                           | 管什么                                                                                                                             |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `nextId(prefix, { now })`      | **同一前缀内严格递增**的 id。**序号不回绕** —— 撞 id 的代价（列表错位复用、去重丢掉新记录）远高于「序号位数变长」                  |
+| `uniqueStamp(prefix, { now })` | **一次性** id（随机段）：界面元素 `key`、连线 id、落盘文件名 —— 这些没有「枚举」问题，但「同一批生成的两条会不会撞」仍要由出口回答 |
+| `randomToken(bytes)`           | 只取可读短标记（不参与任何判据）                                                                                                   |
+
+三条口径：
+
+1. **id = 前缀 + 时间戳（36 进制）+ 序号**，前缀由调用处给（`msg_` /
+   `agent-msg-` / `log-`），出口只负责形状；
+2. **序号每前缀一套** —— 否则两个互不相干的列表会互相把对方的号推走；
+3. **`now` 由调用处注入**：同一批导入的记录要共享同一个时刻（`log-store`
+   的解析层已有 `now`），否则同一批里靠前的记录时间戳反而更晚。
+
+> **不收**：`crypto.randomUUID()`（那是**全局唯一**的 id，与这里「同一时刻、
+> 同一前缀内有序」的判据不是同一件事）；服务端的 id（归数据库）；
+> `log-store` 的 `seq`（那是「入库序」**排序次键**，与 id 是两种判据）。
+
+#### 判据：P33（硬闸）
+
+形态取「`Date.now()` 参与 id 的拼装」这一个签名，两个条件同时成立：
+
+1. **出现在模板串或字符串拼接里**（不是被当值用）；
+2. **同一串里另有 id 语义线索** —— `id` 前缀、`Math.random()` 随机段、
+   `.toString(36)`。
+
+⚠️ **两条边界都是实测踩出来的**：
+
+1. **只数模板串里的 `Date.now()` 会把「把时刻当值用」的落点一起算上**
+   （SSE 心跳注释行 `: hb ${Date.now()}`、超时截止 `Date.now() + 10 * 60 * 1000`
+   —— 都不是记录 id，不参与任何去重 / 排序 / 引用判据）。判据收窄后，
+   收口前那 6 处**每一处**仍命中（收口后全部为 0）；
+2. **拼接形态要求 `Date.now()` 的另一侧是字符串字面量** ——
+   否则 `Date.now() + 10 * 60 * 1000` 这类算术会被算上（`VideoStudio`
+   的轮询 deadline 就是这么撞上的）。
+
+### 16.2.4.37 「ComfyUI 报错 → 可行动建议」有两份词表（P34 硬闸）
+
+同一批扫描撞出来的账：**两处**各写一份「拿报错原文去跑一串正则，
+命中就给一句人话建议」——`history-utils` 的 `suggestFix`（任务历史卡）与
+`CanvasNode/error-suggestions` 的 `suggestForError`（画布节点错误面板）。
+
+两份都编译、都运行，而**同一句 ComfyUI 报错在两处会得到不同建议**：
+
+| 报错形态         | 历史卡                                                  | 画布面板                                                |
+| ---------------- | ------------------------------------------------------- | ------------------------------------------------------- |
+| `out of memory`  | 「降低 batch size / 分辨率，或切换到更小的模型」        | 「把工作流拆成更小的批次 / 关闭其他任务 / …」           |
+| checkpoints 缺失 | 「检查 `ckpt_name` 是否存在于…」                        | 「请放入该 .safetensors（或 .ckpt），或换一个已下载的」 |
+| 连接被拒 / 超时  | 「检查本地 ComfyUI 服务是否在线、端口是否被防火墙阻挡」 | 「确认本机 ComfyUI 进程还活着、最近没在初始化大模型」   |
+
+另一处更隐蔽的不一致：**告警词表互相漏项**。历史卡认 `queue` 与
+`prompt|empty`，画布面板认 `server_busy|503|429` 与
+`prompthelperror|input type mismatch` —— 也就是说，「队列满了」这条
+**在画布节点上根本没有建议**，而「服务忙」这条在历史卡上也没有。
+
+#### 出口：`~/lib/comfyui/error-advice`
+
+| 导出                            | 管什么                                                 |
+| ------------------------------- | ------------------------------------------------------ |
+| `adviseOnError(err)`            | 报错原文 → 一行建议；**未识别给 `null`（不编造建议）** |
+| `adviseWithFallback(err)`       | 同表，未命中回落 `GENERIC_ERROR_ADVICE`                |
+| `shouldAutoExpandError(err, n)` | 「这条错误值不值得自动展开面板」（可行动即展开）       |
+
+三条口径：
+
+1. **规则表只有一处**，顺序即优先级（UUID 形态与结构化校验排最前 ——
+   它们同时含 `not found` 子串，会被模型缺失那条抢走）；
+2. **建议文案是「用户此刻能做的动作」**，不重复报错原文（原文由调用处渲染），
+   也**不带「建议：」前缀** —— 那是渲染层的事；
+3. **未识别不编造建议**（`adviseOnError` 给 `null`）。只有「界面上那一行
+   **位置固定**」的落点才用 `adviseWithFallback`（历史卡的建议行在失败原因下方
+   恒定存在，缺了会跳一次布局）；画布面板的「建议」块是条件渲染的，
+   未识别时**不显示**比显示一句无用的更有用。
+
+> **不收**：`shouldAutoExpandError` 里的判据是「可不可行动」而不是「给哪句建议」
+> —— 它随出口一起来，但语义与建议表无关；报错文案本身的翻译归
+> `~/lib/error-message`（它管传输层原文）。
+
+#### 判据：P34（硬闸）
+
+形态取**两个条件同时成立**：同一文件里既有 `建议：` 这类行文开头，
+**又有**「报错形态」的正则（`out of memory` / `checkpoint` / `econnrefused` /
+`not installed` 这类 ComfyUI 报错的特征词）。
+
+⚠️ **只数「建议」会把界面上任何一句提示算上；只数特征词会把「读过原文并
+原样展示」的落点算上** —— 后者是**对的**写法，判据要拦的是「自己又写了一份
+词表」（与 P22 / P31 同款：判据锚在唯一的签名上）。
+
+### 16.2.4.38 「把新节点放进画布」有四个入口各写一遍（P35 硬闸）
+
+同一批扫描撞出来的账：**四步**（取落点 → 换算 → 组节点 → 追加）各写一遍，
+而每一步的判据都不一样。
+
+> **第四条是判据自己抓出来的**：人工梳理时只找到三处，P35 写完之后 pre-commit
+> 当场报出 `CanvasNode/hooks/use-generate.ts`（工作流跑完自动孵化下游节点）。
+> 那一处的落点既不是指针也不是视口中心，而是**源节点右侧 340px** —— 也让出口
+> 多出一支 `flowPosition`（坐标本身已在画布坐标系里，不再换算）。
+> 这条恰好复现了 §16.2.4.6 的方法论：**人工按「目录名 / 函数名」找会漏，
+> 判据按形态找不会**。
+
+| 决定的               | 写法 A                                                                       | 写法 B                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **落点从哪来**       | 拖放用指针（`e.clientX` / `e.clientY`）                                      | 右键菜单用手写菜单坐标（`menu.x` / `menu.y`）；「加入画布」按钮**没有落点** → 用视口中心 |
+| **视口中心怎么算**   | `window.innerWidth / 2`（`ProjectCanvas` 与 `use-canvas-drop` **逐字相同**） | 工坊侧的 `placeMediaNode` 用容器尺寸 —— 第三份口径                                       |
+| **节点数据怎么补**   | `{ ...defaultData(kind), mediaPath, … }`                                     | 少写 `...defaultData(kind)` 会让新节点缺 20 个必需字段                                   |
+| **mediaPath 从哪来** | 拖放要先 `importOutputAsInput`（字节拷回 ComfyUI 输入目录）                  | 按钮入口复用同一函数                                                                     |
+
+而 `use-canvas-drop` 的注释里**把 `screenToFlowPosition` 的入参含义写反了**
+（注释说传 client 坐标、代码传的是 flow 坐标）—— 收口后那段注释连同三份
+「四步」一起消失，只剩「落点从哪来」这一件真正属于调用处的事。
+
+#### 出口：`~/lib/project-canvas/canvas-helpers` 的 `placeCanvasNode`
+
+```ts
+setNodes((nds) =>
+  placeCanvasNode({
+    nodes: nds,
+    point: menu,                    // 缺省 → 视口中心
+    flow: { screenToFlowPosition },
+    data: { ...defaultData("workflow"), workflowId: … },
+  }),
+);
+```
+
+- **四步一次给全**：取落点（缺省 `viewportCenter()`）→ 换算 → 组节点
+  （id / `type: "canvasNode"` / `position`）→ 追加（返回**新数组**）；
+- **`nodeTypes` 那个特例跟着走**：纯视觉的 `workflowArdot` 节点没有数据，
+  它借 `defaultData("workflow")` 过一下（出口不认 `NodeKind` 之外的节点类型）；
+- **「新节点带什么数据」留在调用处** —— 那是域判据（媒体节点带 `mediaPath`、
+  工作流节点带 `workflowId`），出口只负责**基座**。
+
+> **不收**：「落点从哪来」（拖放 vs 菜单 vs 按钮是调用处的表现层选择）、
+> `importOutputAsInput`（那是媒体域的 IO）、节点数据的字段构成（域判据）。
+
+#### 判据：P35（硬闸）
+
+形态取「**同一片段里同时出现 `type: "canvasNode"` 与 `position:`**」
+（窗口 300 字符）。
+
+⚠️ **三条边界都是实测踩出来的**：
+
+1. **不用「花括号配对」取块** —— 节点对象里**必然**嵌套 `position: { x, y }`，
+   `\{[^{}]*\}` 这种非嵌套匹配会整片漏掉（本轮自己的反面用例先挂了，
+   才发现的）；
+2. **只数 `id: makeNodeId()` 会把「只改 data 的节点更新助手」与
+   `makeNodeId` 的单测一起算上**；
+3. **只数 `position:` 会把连线的锚点与菜单坐标算上**。
+
+## 16.3 新增一个组件的标准动作
 
 ```bash
 # 项目已装 shadcn，直接：

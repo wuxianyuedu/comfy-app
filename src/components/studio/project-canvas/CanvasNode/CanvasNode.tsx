@@ -41,7 +41,8 @@ export const CanvasNode = React.memo(function CanvasNode({
   selected,
 }: NodeProps<CanvasNodeType>) {
   const d = data as CanvasNodeData;
-  const { setNodes, getNode, setEdges, fitView } = useReactFlow();
+  const { setNodes, getNode, setEdges, fitView, screenToFlowPosition } =
+    useReactFlow();
   const meta = NODE_META[d.kind];
 
   const patch = useCallback(
@@ -110,6 +111,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     setNodes,
     setEdges,
     getNode,
+    screenToFlowPosition,
   });
 
   /* ── 按 kind 渲染 body ── */

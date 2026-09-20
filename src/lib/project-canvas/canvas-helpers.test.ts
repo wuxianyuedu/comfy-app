@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // 项目画布的纯函数工具单测。连线传播（applyPropagationToNodes）是画布
 // 数据流的地基：上游产出怎么落进下游节点，全靠这一个函数。
 
@@ -5,7 +6,12 @@ import type { Edge } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
 
 import type { CanvasNodeData, CanvasNodeType } from "./canvas-types";
-import { applyPropagationToNodes, makeNodeId } from "./canvas-helpers";
+import {
+  applyPropagationToNodes,
+  makeNodeId,
+  placeCanvasNode,
+  viewportCenter,
+} from "./canvas-helpers";
 
 /** 构造最小画布节点：applyPropagationToNodes 只读 id / type / data，
  *  其余 React Flow 字段（position 等）与传播逻辑无关。 */
@@ -31,11 +37,153 @@ function edge(target: string, targetHandle?: string): Edge {
 }
 
 describe("makeNodeId", () => {
-  it("n_ 前缀 + 时间戳 + 随机段，两次调用不重复", () => {
+  it("n_ 前缀 + 时间戳 + 序号，两次调用不重复", () => {
+    /* id 走全库唯一出口 `~/lib/unique-id`（规范 16 §16.2.4.36）——
+     * 收口前是 `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`：
+     * 「同一毫秒会不会撞」靠概率，而节点 id 是连线的引用目标
+     *（撞 id 的表现是「新节点把旧节点的连线一起接管」）。 */
     const a = makeNodeId();
     const b = makeNodeId();
-    expect(a).toMatch(/^n_\d+_[a-z0-9]{4}$/);
+    expect(a).toMatch(/^n_[0-9a-z]+-[0-9a-z]+$/);
     expect(a).not.toBe(b);
+  });
+});
+
+describe("viewportCenter", () => {
+  it("取浏览器视口中心（三处收口前各写一份，其中一处用容器尺寸）", () => {
+    const original = { w: window.innerWidth, h: window.innerHeight };
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1200,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+    });
+    expect(viewportCenter()).toEqual({ x: 600, y: 400 });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: original.w,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: original.h,
+    });
+  });
+});
+
+describe("placeCanvasNode", () => {
+  const flow = {
+    /* 屏幕坐标 → 画布坐标：只要断言「出口把**落点**交给了它」。 */
+    screenToFlowPosition: (p: { x: number; y: number }) => ({
+      x: p.x + 1000,
+      y: p.y + 2000,
+    }),
+  };
+
+  it("取落点 → 换算 → 组节点 → 追加（四步一次给全）", () => {
+    const base = [node("existing", { kind: "text" })];
+    const next = placeCanvasNode({
+      nodes: base,
+      point: { x: 30, y: 40 },
+      flow,
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    expect(next).toHaveLength(2);
+    expect(next[1]!.type).toBe("canvasNode");
+    expect(next[1]!.position).toEqual({ x: 1030, y: 2040 });
+    expect(next[1]!.data.kind).toBe("image");
+  });
+
+  it("不给落点时落在视口中心（收口前三处的第二分支）", () => {
+    let received: { x: number; y: number } | null = null;
+    placeCanvasNode({
+      nodes: [],
+      flow: {
+        screenToFlowPosition: (p) => {
+          received = p;
+          return p;
+        },
+      },
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    expect(received).toEqual(viewportCenter());
+  });
+
+  it("落点显式为 null 时同样回落视口中心", () => {
+    let received: { x: number; y: number } | null = null;
+    placeCanvasNode({
+      nodes: [],
+      point: null,
+      flow: {
+        screenToFlowPosition: (p) => {
+          received = p;
+          return p;
+        },
+      },
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    expect(received).toEqual(viewportCenter());
+  });
+
+  it("不改动传进来的节点表（返回新数组）", () => {
+    const base = [node("existing", { kind: "text" })];
+    const next = placeCanvasNode({
+      nodes: base,
+      point: { x: 0, y: 0 },
+      flow,
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    expect(base).toHaveLength(1);
+    expect(next).not.toBe(base);
+  });
+
+  it("坐标本身已在画布坐标系时走 `flowPosition`（不再换算）", () => {
+    /* 工作流跑完自动孵化下游节点就是这种情形：落点是「源节点右侧 340px」，
+     * 它**已经是画布坐标**。这一支是 P35 判据在收口时抓出来的第四个落点
+     * （当时只找到三处）—— 上一条的 `screenToFlowPosition` 被调了两次就说明
+     * 走错了支。 */
+    let calls = 0;
+    const next = placeCanvasNode({
+      nodes: [],
+      flowPosition: { x: 340, y: 10 },
+      flow: {
+        screenToFlowPosition: (p) => {
+          calls += 1;
+          return { x: p.x + 9999, y: p.y + 9999 };
+        },
+      },
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    expect(calls).toBe(0);
+    expect(next[0]!.position).toEqual({ x: 340, y: 10 });
+  });
+
+  it("可以显式指定 id（调用处要提前拿它建边）", () => {
+    const next = placeCanvasNode({
+      nodes: [],
+      id: "n_sink",
+      flowPosition: { x: 0, y: 0 },
+      flow,
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    expect(next[0]!.id).toBe("n_sink");
+  });
+
+  it("每个新节点拿到不同的 id（连线引用目标不能撞）", () => {
+    const first = placeCanvasNode({
+      nodes: [],
+      point: { x: 0, y: 0 },
+      flow,
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    const second = placeCanvasNode({
+      nodes: first,
+      point: { x: 0, y: 0 },
+      flow,
+      data: { kind: "image" } as CanvasNodeData,
+    });
+    expect(first[0]!.id).not.toBe(second[1]!.id);
   });
 });
 

@@ -4,6 +4,7 @@
 // 视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import React from "react";
+import { nextId } from "~/lib/unique-id";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
@@ -142,7 +143,9 @@ function draftKeyFor(id: string): string {
 }
 
 function newProjectId(): string {
-  return `wsp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  /* 工坊项目 id 走全库唯一出口（规范 16 §16.2.4.36）。这是**持久化**的 id ——
+   * 它落在项目索引里，撞 id 的表现是「新建项目覆盖掉另一个项目」。 */
+  return nextId("wsp_");
 }
 
 /** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。 */

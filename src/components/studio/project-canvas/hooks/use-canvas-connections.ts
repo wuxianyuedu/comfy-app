@@ -15,6 +15,7 @@ import {
 } from "react";
 import { addEdge, type Connection, type Edge } from "@xyflow/react";
 import { applyPropagationToNodes } from "~/lib/project-canvas/canvas-helpers";
+import { uniqueStamp } from "~/lib/unique-id";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import {
   isCanvasNode,
@@ -116,7 +117,11 @@ export function useCanvasConnections({
         const withNew: Edge[] = [
           ...edgesRef.current,
           {
-            id: `e_${c.source}-${c.target}-${Date.now()}`,
+            /* 连线 id 走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是
+             * 「源 + 目标 + 毫秒数」：同一毫秒内连两条**同样的**线会撞 id，
+             * 而 React Flow 以 id 为键做边的增删改，撞 id 的表现是
+             * 「新连的那条把上一条顶掉」。 */
+            id: uniqueStamp(`e_${c.source}-${c.target}-`),
             source: c.source,
             target: c.target,
           },

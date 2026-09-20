@@ -6,7 +6,8 @@
  * canvas-api.ts —— 那是第②层的网络部分，视图一律不得直接 fetch。
  */
 
-import type { Edge, FitViewOptions } from "@xyflow/react";
+import type { Edge, FitViewOptions, Node, XYPosition } from "@xyflow/react";
+import { nextId } from "~/lib/unique-id";
 import {
   type CanvasNodeType,
   type CanvasNodeData,
@@ -15,7 +16,80 @@ import {
 
 /** 生成画布节点唯一 id（项目画布各创建入口共用，避免散落重复逻辑）。 */
 export function makeNodeId(): string {
-  return `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  /* 节点 id 也走全库唯一出口（规范 16 §16.2.4.36）：收口前这里是
+   * 「毫秒数 + 4 位随机后缀」，与日志 / 消息中心 / 工坊那几处的形状都不同。
+   * 节点 id 是**连线**的引用目标（`edge.source` / `edge.target`），撞 id 的
+   * 表现是「新节点把旧节点的连线一起接管」。 */
+  return nextId("n_");
+}
+
+/** 画布视口中心的屏幕坐标 —— 「没有落点信息时新节点放哪」的唯一出处。 */
+export function viewportCenter(): XYPosition {
+  return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+}
+
+/** 落点信息：拖放时的指针位置，或右键菜单的位置（**屏幕**坐标）。 */
+export interface DropPoint {
+  x: number;
+  y: number;
+}
+
+/** 画布节点落地所需的上下文（由调用处从 React Flow 取，出口自己不持 ref）。 */
+export interface CanvasPlacementContext {
+  /** `useReactFlow().screenToFlowPosition` —— 屏幕坐标 → 画布坐标。 */
+  screenToFlowPosition: (point: XYPosition) => XYPosition;
+}
+
+/**
+ * 把一个画布节点放进项目画布 —— **全库唯一的入口**（规范 16 §16.2.4.38）。
+ *
+ * 收口前的三处（右键菜单两个入口、媒体拖放与「加入画布」按钮）各写一遍同样
+ * 的四步，而每一步的判据都不一样：
+ *
+ * | 决定的               | 写法 A                                               | 写法 B                                              |
+ * | -------------------- | ---------------------------------------------------- | --------------------------------------------------- |
+ * | **落点从哪来**       | 拖放用指针（`e.clientX`），按钮用**视口中心**         | 右键菜单用手写菜单坐标（`menu.x` / `menu.y`）        |
+ * | **`screenToFlowPosition` 的入参** | 有时传**屏幕**坐标（正确）              | 有时传**画布**坐标（错，节点会越点越远）             |
+ * | **视口中心怎么算**   | `window.innerWidth / 2`                               | 两处**逐字相同**，第三处（工坊侧）用容器尺寸 —— 三份口径 |
+ * | **节点数据怎么补**   | `{ ...defaultData(kind), 媒体字段 }`                  | 少写 `...defaultData(kind)` 会让新节点缺 20 个必需字段 |
+ *
+ * 出口把四步收成一次调用：**取落点 → 换算 → 组节点 → 追加**。
+ * 「新节点带什么数据」仍由调用处给（`data` 是域判据：媒体节点带 `mediaPath`，
+ * 工作流节点带 `workflowId`），出口只负责**基座**（id / type / position）。
+ */
+export function placeCanvasNode(opts: {
+  /** 当前节点表（`setNodes` 的 updater 入参）。
+   *
+   *  ⚠️ 类型刻意取 React Flow 的 `Node[]` 而不是 `CanvasNodeType[]`：
+   *  调用处的 `setNodes` 声明各式各样（`useNodesState<CanvasNodeType>` 给
+   *  `CanvasNodeType[]`，`useReactFlow().setNodes` 给 `Node[]`），
+   *  而出口**只做追加**、不读节点结构的任何字段 —— 收成 `CanvasNodeType[]`
+   *  会逼着每个调用处写一句断言（eslint 又会把「不必要的断言」拦回去，
+   *  两边互相打架）。 */
+  nodes: Node[];
+  /** 落点（**屏幕**坐标）；缺省落在视口中心。 */
+  point?: DropPoint | null;
+  /** **已经在画布坐标里**的落点 —— 当坐标本身来自画布（如「源节点右侧 340px」）
+   *  时用它，出口就不再换算。与 `point` 二选一。 */
+  flowPosition?: XYPosition | null;
+  /** 画布坐标换算（`useReactFlow().screenToFlowPosition`）。 */
+  flow: CanvasPlacementContext;
+  /** 节点数据 —— 出口会把它铺在 `defaultData` 之上，缺字段由默认值兜住。 */
+  data: CanvasNodeData;
+  /** 显式指定 id —— 只在**调用处需要提前拿到它**时给（自动连线要用同一个
+   *  id 建边：工作流跑完自动孵化下游节点时就是这种情形）。缺省由出口生成。 */
+  id?: string;
+}): CanvasNodeType[] {
+  const position =
+    opts.flowPosition ??
+    opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
+  const node: CanvasNodeType = {
+    id: opts.id ?? makeNodeId(),
+    type: "canvasNode",
+    position,
+    data: opts.data,
+  };
+  return [...opts.nodes, node] as CanvasNodeType[];
 }
 
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，

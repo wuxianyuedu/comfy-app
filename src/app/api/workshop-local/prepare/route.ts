@@ -14,6 +14,7 @@ import {
 } from "~/lib/workshop/media-source.server";
 import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { uniqueStamp } from "~/lib/unique-id";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,8 @@ export async function POST(req: NextRequest) {
       image,
       new URL(req.url).origin,
     );
-    const filename = `workshop-ref-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extForMime(mime)}`;
+    /* 文件名走全库唯一出口（规范 16 §16.2.4.36）。 */
+    const filename = `${uniqueStamp("workshop-ref-")}.${extForMime(mime)}`;
     const uploaded = await uploadImage(buffer, filename);
     return NextResponse.json({ filename: uploaded.name ?? filename });
   } catch (e) {

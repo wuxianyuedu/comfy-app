@@ -8,6 +8,7 @@
 //   3. 把工具结果回灌模型，继续循环直至模型直接回复用户
 // 视图层（AgentOverlay.tsx）只消费本 hook 返回的 controller。
 import React from "react";
+import { nextId } from "~/lib/unique-id";
 import { sendAgentMessage } from "~/lib/agent/client";
 import type { AgentMessageLike, AgentChatResponse } from "~/lib/agent/shared";
 import { resolveAgentTool, type AgentToolHandlers } from "~/lib/agent/executor";
@@ -47,16 +48,14 @@ export interface WorkshopAgentController {
   clearToolRuns: () => void;
 }
 
-let _agentMsgId = 0;
+/* 对话条目与工具运行记录的 id 走全库唯一出口（规范 16 §16.2.4.36）——
+ * 收口前这里是两份逐字同形的「时间戳 + 自己的模块级计数器」。 */
 function agentMsgId(): string {
-  _agentMsgId += 1;
-  return `agent-msg-${Date.now().toString(36)}-${_agentMsgId}`;
+  return nextId("agent-msg-");
 }
 
-let _toolRunId = 0;
 function toolRunId(): string {
-  _toolRunId += 1;
-  return `tool-run-${Date.now().toString(36)}-${_toolRunId}`;
+  return nextId("tool-run-");
 }
 
 export function useWorkshopAgent(

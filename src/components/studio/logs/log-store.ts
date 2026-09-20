@@ -24,6 +24,7 @@ import { create } from "zustand";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 
 import { saveLogExport, type SavedLogExport } from "~/lib/log/log-file-client";
+import { nextId as nextEntryId } from "~/lib/unique-id";
 
 import { copyLogText, downloadLogText } from "./log-export";
 import { formatForClipboard } from "./log-format";
@@ -115,10 +116,12 @@ export type LogLevelCounts = Record<LogLevel | "all", number>;
 /** 来源 × 级别的二维计数表（`all` 键为全部来源汇总，见 computeOriginCounts）。 */
 export type LogOriginCounts = Record<LogOriginFilter, LogLevelCounts>;
 
-let entryId = 0;
-function nextId() {
-  entryId = (entryId + 1) % 1_000_000;
-  return `${Date.now().toString(36)}-${entryId.toString(36)}`;
+/* 日志条的 id 走全库唯一出口 `~/lib/unique-id`（规范 16 §16.2.4.36）——
+ * 收口前这里自写「时间戳 + 计数器」，而且计数器**取模回绕**
+ *（`(entryId + 1) % 1_000_000`）：转一圈之后同一毫秒内的两条日志会拿到
+ * 同一个 id，下游按 id 去重（`seen` 集合）会把新的那条当成旧的丢掉。 */
+function nextId(now?: number) {
+  return nextEntryId("log-", { now });
 }
 
 /**
@@ -463,7 +466,7 @@ export function parseFileLogs(
       const d = new Date(today);
       d.setHours(Number(hh ?? "0"), Number(mm ?? "0"), Number(ss ?? "0"), 0);
       push({
-        id: nextId(),
+        id: nextId(d.getTime()),
         time: d.getTime(),
         level: parseLogLevel(lv ?? "INFO"),
         message: withRest(msg ?? ""),
@@ -486,7 +489,7 @@ export function parseFileLogs(
       );
       const msgText = withRest((ns ? `[${ns}] ` : "") + (msg ?? ""));
       push({
-        id: nextId(),
+        id: nextId(d.getTime()),
         time: d.getTime(),
         // Fast Refresh 进行中若沾染上一条错误的级别标记，按 info 落板
         level: FAST_REFRESH_REBUILD_RE.test(msgText)
@@ -511,7 +514,7 @@ export function parseFileLogs(
         Number(ms),
       );
       push({
-        id: nextId(),
+        id: nextId(d.getTime()),
         time: d.getTime(),
         level: "info",
         message: withRest(msg ?? ""),
@@ -521,7 +524,7 @@ export function parseFileLogs(
       continue;
     }
     push({
-      id: nextId(),
+      id: nextId(now),
       time: now,
       level: "info",
       message: record.text,

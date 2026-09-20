@@ -73,6 +73,10 @@ export default defineConfig({
         "src/components/ui/use-item-errors.ts",
         "src/lib/stale-run.ts",
         "src/lib/api-error.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.36 ~ §16.2.4.38）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/lib/unique-id.ts",
+        "src/lib/comfyui/error-advice.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -396,6 +400,24 @@ export default defineConfig({
          * （取值走 `errorMessage`、形状只有两种）与客户端读取的两种历史
          * 形态、空文案、非错误体都在用例里。 */
         "src/lib/api-error.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「给一条新记录分配 id」的出口（§16.2.4.36，P33 的对面）：同一前缀
+         * 内的严格递增、每前缀一套序号、注入时刻的批内共享、随机短标记都在
+         * 用例里。门槛先按实测值给 —— 「不回绕」这条判据本身就是用例的核心。 */
+        "src/lib/unique-id.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「ComfyUI 报错 → 可行动建议」的出口（§16.2.4.37，P34 的对面）：
+         * 规则顺序即优先级、两条旧词表各自认得 / 漏掉的形态、未识别不编造
+         * 建议、通用兜底的适用面、自动展开判据都在用例里。 */
+        "src/lib/comfyui/error-advice.ts": {
           lines: 100,
           functions: 100,
           statements: 100,
