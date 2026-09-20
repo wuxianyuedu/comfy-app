@@ -20,7 +20,7 @@ import {
 import { readEnvVar } from "~/lib/envfile";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorDetail } from "~/lib/api-error";
 import {
   errorResponse,
   unauthorizedResponse,
@@ -543,7 +543,7 @@ export async function GET() {
   } catch (e) {
     return errorResponse(
       new AppError(
-        errorMessage(e, "读取配置失败"),
+        apiErrorDetail(e, "读取配置失败"),
         "custom_nodes.read_failed",
         500,
       ),
@@ -620,7 +620,7 @@ async function buildGetResponse(): Promise<Response> {
         });
         send({ type: "done" });
       } catch (e) {
-        send({ type: "error", message: errorMessage(e, String(e)) });
+        send({ type: "error", message: apiErrorDetail(e, String(e)) });
       } finally {
         controller.close();
       }

@@ -43,6 +43,7 @@ export function ShotRow({
   progressByShot,
   generating,
   polishBusy,
+  polishError,
   onPolish,
   onUpdate,
   onRemove,
@@ -55,6 +56,8 @@ export function ShotRow({
   generating: boolean;
   /** 该镜头的 AI 提示词润色进行中 */
   polishBusy?: boolean;
+  /** 该镜头润色失败的文案（错误挂在**这一条**上，规范 16 §16.2.4.33）。 */
+  polishError?: string | null;
   onPolish?: () => void;
   onUpdate: (id: string, patch: Partial<Shot>) => void;
   onRemove: (id: string) => void;
@@ -187,6 +190,9 @@ export function ShotRow({
         <p className="text-ink/80 text-xs leading-relaxed break-words">
           {shot.prompt || "填写描述后自动生成…"}
         </p>
+        {polishError && (
+          <p className="text-danger-strong mt-1 text-[11px]">{polishError}</p>
+        )}
         {linkedChars.length > 0 && (
           <p className="text-primary/70 mt-1 text-xs">
             关联角色：

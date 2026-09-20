@@ -7,7 +7,7 @@ import {
   saveMediaToLocalTemp,
   strField,
 } from "~/lib/llm/usage-test.server";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorDetail } from "~/lib/api-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({
       ok: false,
-      detail: errorMessage(e, "查询失败"),
+      detail: apiErrorDetail(e, "查询失败"),
       elapsedMs: Date.now() - startedAt,
     });
   }

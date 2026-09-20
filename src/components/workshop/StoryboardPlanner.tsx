@@ -38,7 +38,6 @@ export function StoryboardPlanner(props: Props) {
     generateAll,
     polishBusyId,
     polishBusyAll,
-    polishError,
     polishOne,
     polishAll,
   } = planner;
@@ -157,12 +156,6 @@ export function StoryboardPlanner(props: Props) {
         </div>
       )}
 
-      {polishError && (
-        <div className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
-          {polishError}
-        </div>
-      )}
-
       {(aiProgress || aiError) && (
         <div
           className={`rounded-lg px-3 py-2 text-xs ${
@@ -198,6 +191,8 @@ export function StoryboardPlanner(props: Props) {
               progressByShot={progressByShot}
               generating={generating}
               polishBusy={polishBusyId === shot.id}
+              /* 润色错误挂在**这一条**上（规范 16 §16.2.4.33）。 */
+              polishError={planner.polishErrors.get(shot.id)}
               onPolish={() => void polishOne(shot)}
               onUpdate={planner.updateShot}
               onRemove={planner.removeShot}

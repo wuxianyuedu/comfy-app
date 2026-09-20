@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readUploadError, uploadDatasetImage } from "./dataset-upload-client";
+import { uploadDatasetImage } from "./dataset-upload-client";
 
 function jsonRes(status: number, body: unknown): Response {
   return {
@@ -72,10 +72,4 @@ describe("uploadDatasetImage", () => {
   });
 });
 
-describe("readUploadError", () => {
-  it("取出字符串 error；其余形态返回 undefined", () => {
-    expect(readUploadError({ error: "未收到文件" })).toBe("未收到文件");
-    expect(readUploadError({ error: { code: "E" } })).toBeUndefined();
-    expect(readUploadError(undefined)).toBeUndefined();
-  });
-});
+/* 错误信封的读法（`readApiError`）用例见 `~/lib/api-error.test.ts`。 */

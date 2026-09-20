@@ -19,7 +19,7 @@ import {
   listDraftsByUser,
   upsertDraft,
 } from "~/server/workshop/draft-repository";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -49,10 +49,9 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ exists: true, draft });
   } catch (e) {
-    return NextResponse.json(
-      { error: errorMessage(e, "读取服务端草稿失败") },
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(e, "读取服务端草稿失败"), {
+      status: 500,
+    });
   }
 }
 
@@ -79,10 +78,9 @@ export async function PUT(req: NextRequest) {
     await upsertDraft(project, draft, user.id);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { error: errorMessage(e, "保存服务端草稿失败") },
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(e, "保存服务端草稿失败"), {
+      status: 500,
+    });
   }
 }
 
@@ -97,9 +95,8 @@ export async function DELETE(req: NextRequest) {
     await deleteDraft(project);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { error: errorMessage(e, "删除服务端草稿失败") },
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(e, "删除服务端草稿失败"), {
+      status: 500,
+    });
   }
 }

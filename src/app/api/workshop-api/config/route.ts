@@ -11,7 +11,7 @@ import {
   saveWorkshopApiSettings,
 } from "~/lib/workshop/api-channel.server";
 import { isRecord } from "~/lib/workshop/api-channel-shared";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -55,9 +55,6 @@ export async function POST(req: NextRequest) {
     await saveWorkshopApiSettings(patch);
     return NextResponse.json({ channels: getMaskedChannels() });
   } catch (e) {
-    return NextResponse.json(
-      { error: errorMessage(e, "保存失败") },
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(e, "保存失败"), { status: 500 });
   }
 }

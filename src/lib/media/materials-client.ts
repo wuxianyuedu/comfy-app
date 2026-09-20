@@ -3,6 +3,7 @@
 // 收窄只此一份。服务端改错误信封时改这里即可，视图零感知。
 // 类型镜像 /api/materials 响应（服务端形状见 src/lib/materials.ts）。
 
+import { readApiError, readJsonBody } from "~/lib/api-error";
 import { withQuery } from "~/lib/query-string";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -51,20 +52,8 @@ export interface MaterialListQuery {
 
 const ENDPOINT = "/api/materials";
 
-/** 从 JSON 响应体里取出 error 字符串（后端一律 `{ error: string }`）。 */
-export function readMaterialError(body: unknown): string | undefined {
-  if (isRecord(body) && typeof body.error === "string") return body.error;
-  return undefined;
-}
-
-/** 读 JSON 体；非法 JSON 按空对象处理（后端 500 可能返回非 JSON）。 */
-async function readJson(res: Response): Promise<unknown> {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
+/* 错误信封的读法收在 `~/lib/api-error`（规范 16 §16.2.4.35）：这里此前
+ * 自己声明了一份 `readMaterialError`，与 bgm / upload 两份**逐字相同**。 */
 
 function isItem(v: unknown): v is MaterialItem {
   if (!isRecord(v)) return false;
@@ -116,9 +105,9 @@ export async function fetchMaterials(
       folder: query.q ? undefined : query.folder,
     }),
   );
-  const body = await readJson(res);
+  const body = await readJsonBody(res);
   if (!res.ok)
-    throw new Error(readMaterialError(body) ?? `请求失败 (${res.status})`);
+    throw new Error(readApiError(body) ?? `请求失败 (${res.status})`);
   return parseList(body);
 }
 
@@ -134,9 +123,9 @@ async function postMaterial(
   else fd.append("shared", "true");
 
   const res = await fetch(ENDPOINT, { method: "POST", body: fd });
-  const body = await readJson(res);
+  const body = await readJsonBody(res);
   if (!res.ok)
-    throw new Error(readMaterialError(body) ?? `上传失败 (${res.status})`);
+    throw new Error(readApiError(body) ?? `上传失败 (${res.status})`);
   return body;
 }
 
@@ -180,7 +169,7 @@ export async function deleteMaterial(id: string): Promise<void> {
   const res = await fetch(withQuery(ENDPOINT, { id }), {
     method: "DELETE",
   });
-  const body = await readJson(res);
+  const body = await readJsonBody(res);
   if (!res.ok)
-    throw new Error(readMaterialError(body) ?? `删除失败 (${res.status})`);
+    throw new Error(readApiError(body) ?? `删除失败 (${res.status})`);
 }

@@ -12,7 +12,7 @@ import {
   resolveMediaBytes,
   strField,
 } from "~/lib/workshop/media-source.server";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -57,9 +57,8 @@ export async function POST(req: NextRequest) {
     const uploaded = await uploadImage(buffer, filename);
     return NextResponse.json({ filename: uploaded.name ?? filename });
   } catch (e) {
-    return NextResponse.json(
-      { error: errorMessage(e, "参考图准备失败") },
-      { status: 502 },
-    );
+    return NextResponse.json(apiErrorBody(e, "参考图准备失败"), {
+      status: 502,
+    });
   }
 }

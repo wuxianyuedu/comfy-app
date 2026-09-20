@@ -21,6 +21,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useTheme } from "next-themes";
 import { errorMessage } from "~/lib/error-message";
+import { beginStaleRun } from "~/lib/stale-run";
 
 const EXT_TO_LANG: Record<string, string> = {
   ".ts": "typescript",
@@ -142,11 +143,13 @@ export function CodeBlock({
     resolvedTheme === "light" ? "github-light" : "one-dark-pro";
 
   useEffect(() => {
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换代码 / 换语言 / 换主题都会
+     * 重开一轮，旧轮次的分片结果与失败文案一律不落地。 */
+    const guard = beginStaleRun();
     void (async () => {
       /* 首帧提交纯文本行号，再异步进入高亮流程 */
       await Promise.resolve();
-      if (cancelled) return;
+      if (guard.isStale()) return;
       setTokens(null);
       setError(null);
 
@@ -155,14 +158,14 @@ export function CodeBlock({
 
       try {
         const hl = await getHighlighter();
-        if (cancelled) return;
+        if (guard.isStale()) return;
         const allLines = code.split("\n");
         const totalChunks = Math.ceil(allLines.length / CHUNK_LINES);
         const acc: ShikiToken[][] = [];
         let chunkIndex = 0;
 
         const processChunk = () => {
-          if (cancelled) return;
+          if (guard.isStale()) return;
           const start = chunkIndex * CHUNK_LINES;
           const slice = allLines.slice(start, start + CHUNK_LINES);
           const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
@@ -174,26 +177,24 @@ export function CodeBlock({
           if (chunkIndex < totalChunks) {
             /* 让出主线程一帧，长文件高亮期间 UI 保持可点 */
             setTimeout(processChunk, 0);
-          } else if (!cancelled) {
-            setTokens(acc);
+          } else {
+            guard.commit(() => setTokens(acc));
           }
         };
 
         setTimeout(processChunk, 0);
       } catch (err: unknown) {
-        if (!cancelled) {
+        guard.commit(() => {
           setTokens(null);
           /* 失败文案走 `errorMessage`（同一枚口径，规范 16 §16.2.4.30）——
            * 收口前这里是自己拼的 `err instanceof Error ? err.message : String(err)`，
            * 抛出的值不是 Error 时会渲染成 `[object Object]`。
            * 高亮失败是**非致命降级**：保持纯文本行号，所以这里不弹 toast。 */
           setError(errorMessage(err, "代码高亮失败"));
-        }
+        });
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => guard.dispose();
   }, [code, language, shikiTheme]);
 
   if (error) {

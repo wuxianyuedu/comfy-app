@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { normalizeNeedle } from "~/lib/list-filter";
+import { beginStaleRun } from "~/lib/stale-run";
 
 import {
   deleteMaterial,
@@ -94,7 +95,9 @@ export function useMaterialLibrary({
 
   /* ── 拉取素材（搜索做防抖）── */
   useEffect(() => {
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：卸载、或切分类 / 作用域、
+     * 或改关键字都会重开一轮，旧轮次的结果一律不落地（含失败与空列表）。 */
+    const guard = beginStaleRun();
     /* 关键字归一化走唯一出口（§16.2.4.16）：`trim().toLowerCase()` 手写一处
      * 就会漏一处 —— 这个 hook 此前只 `trim()`，候选里含拉丁字母的关键字
      * 大小写敏感（与 `AttributeMultiSelect` 的历史缺陷同源）。 */
@@ -111,16 +114,18 @@ export function useMaterialLibrary({
           folder: q ? null : folder,
           q: q || undefined,
         });
-        if (cancelled) return;
-        setFolders(result.folders);
-        setItems(result.items);
+        guard.commit(() => {
+          setFolders(result.folders);
+          setItems(result.items);
+        });
       } catch (e) {
-        if (cancelled) return;
-        setLoadError(errMsg(e, "读取素材库失败"));
-        setFolders([]);
-        setItems([]);
+        guard.commit(() => {
+          setLoadError(errMsg(e, "读取素材库失败"));
+          setFolders([]);
+          setItems([]);
+        });
       } finally {
-        if (!cancelled) setLoading(false);
+        guard.commit(() => setLoading(false));
       }
     };
 
@@ -131,7 +136,7 @@ export function useMaterialLibrary({
       q ? SEARCH_DEBOUNCE_MS : 0,
     );
     return () => {
-      cancelled = true;
+      guard.dispose();
       clearTimeout(t);
     };
   }, [projectId, scope, folder, search, reloadKey]);

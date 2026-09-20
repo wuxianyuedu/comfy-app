@@ -3,26 +3,13 @@
 // 集中到此处后：错误信封（含 ComfyUI 不可达的 hint）只解析一次，
 // 逐张上传的循环逻辑留在 hook 里，视图不再碰网络。
 
+import { readApiError, readJsonBody } from "~/lib/api-error";
+
 const ENDPOINT = "/api/upload";
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-/** 从 JSON 响应体里取出 error 字符串（后端该路由一律 `{ error: string }`）。 */
-export function readUploadError(body: unknown): string | undefined {
-  if (isRecord(body) && typeof body.error === "string") return body.error;
-  return undefined;
-}
-
-/** 读 JSON 体；非法 JSON 按空对象处理（后端 500 可能返回非 JSON）。 */
-async function readJson(res: Response): Promise<unknown> {
-  try {
-    return (await res.json()) as unknown;
-  } catch {
-    return {};
-  }
-}
+/* 错误信封的读法收在 `~/lib/api-error`（规范 16 §16.2.4.35）：
+ * 这里此前自己声明了一份 `readUploadError` 与 `readJson`，
+ * 与 materials / bgm 两份**逐字相同**。 */
 
 /**
  * 上传一张数据集图片，返回服务端/ComfyUI 落盘后的文件名。
@@ -32,9 +19,12 @@ export async function uploadDatasetImage(file: File): Promise<string> {
   const form = new FormData();
   form.append("image", file);
   const res = await fetch(ENDPOINT, { method: "POST", body: form });
-  const body = await readJson(res);
-  if (!res.ok) throw new Error(readUploadError(body) ?? "上传失败");
-  const name = isRecord(body) ? body.name : undefined;
+  const body = await readJsonBody(res);
+  if (!res.ok) throw new Error(readApiError(body) ?? "上传失败");
+  const name =
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>).name
+      : undefined;
   if (typeof name !== "string" || name.length === 0) {
     throw new Error("上传失败：响应缺少文件名");
   }

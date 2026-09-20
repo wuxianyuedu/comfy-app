@@ -11,6 +11,10 @@
 
 import { useCallback, useState } from "react";
 
+import {
+  useItemErrors,
+  type ItemErrors,
+} from "~/components/ui/use-item-errors";
 import { runAsyncAction } from "~/lib/async-action";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -29,8 +33,15 @@ export interface ModelTagsController {
   draft: string;
   setDraft: (value: string) => void;
   busy: boolean;
-  /** 最近一次操作的错误文案；null 表示无错误。 */
-  error: string | null;
+  /**
+   * 按条目挂的错误（规范 16 §16.2.4.33）。
+   *
+   * 此前是一句 `useState<string | null>` —— 也就是「最近一次操作的草稿」：
+   * 新增失败后去删另一条，错误条被同一块覆盖，而上一条那行已经不再标红。
+   * 现在错误属于**那一条**：`errors.get(id)` 决定这一行标不标红，
+   * `errors.get(null)` 承载整表级错误（如列表刷新失败）。
+   */
+  errors: ItemErrors;
   addTag: () => Promise<void>;
   /** 删除：count>0 时先弹二次确认（删掉会一并解除工作流绑定）。 */
   deleteTag: (name: string, count: number) => Promise<void>;
@@ -65,7 +76,9 @@ export function useModelTags({
   const [tags, setTags] = useState<TagItem[]>(initialTags);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /* 条目集合由标签名给出：删掉的标签，它挂着的错误随之消失 —— 否则会
+   * 留下一个指向已不存在条目的错误条，用户找不到它说的是什么。 */
+  const errors = useItemErrors(tags.map((tag) => tag.name));
 
   /* 只在父组件递来「带了新标签」的快照时才并入——合并规则见文件头。
    *
@@ -98,9 +111,11 @@ export function useModelTags({
     const name = draft.trim();
     if (!name) return;
     setBusy(true);
-    setError(null);
-    /* 行内错误条（`setError`）是这块唯一的反馈通道。两个「没做成」的来源
-     * 都归到 `failureText`：服务端返回 `!tag`（静默的失败信封）与抛错
+    /* 「新增」还没有对应的条目，错误挂在 `null` 那档（整表）—— 它呈现的位置
+     * 就是新增框下方那块错误条。 */
+    errors.clear(null);
+    /* 行内错误条是这块唯一的反馈通道。两个「没做成」的来源都归到
+     * `failureText`：服务端返回 `!tag`（静默的失败信封）与抛错
      *（走 `errorMessage`）——出口给的一半正是后者。 */
     const result = await runAsyncAction(
       async () => {
@@ -111,9 +126,7 @@ export function useModelTags({
         onChanged?.();
       },
       {
-        report: (kind, detail) => {
-          if (kind === "err") setError(detail);
-        },
+        report: errors.report(null),
         failureText: "添加失败",
       },
     );
@@ -121,7 +134,7 @@ export function useModelTags({
     /* `addTag` 的签名是 `Promise<void>`：结果本身没有下游用途
      *（失败已经落在 `error` 上），所以显式丢弃 —— 不留一个没人读的返回值。 */
     void result;
-  }, [draft, refresh, onChanged]);
+  }, [draft, refresh, onChanged, errors]);
 
   const deleteTag = useCallback(
     async (name: string, count: number) => {
@@ -140,14 +153,14 @@ export function useModelTags({
           onChanged?.();
         },
         {
-          report: (kind, detail) => {
-            if (kind === "err") setError(detail);
-          },
+          /* 失败挂在**被删的那一条**上：用户看到的是「这一行没删掉」，
+           * 而不是一块语焉不详的整表错误。 */
+          report: errors.report(name),
           failureText: "删除失败",
         },
       );
     },
-    [refresh, onChanged],
+    [refresh, onChanged, errors],
   );
 
   const renameTag = useCallback(
@@ -162,7 +175,7 @@ export function useModelTags({
             newName: trimmed,
           });
           if (!d.tag) throw new Error("重命名失败");
-          setError(null);
+          errors.clear(oldName);
           // 本地先换名，让弹窗立刻反映重命名，不等父组件 onChanged 的往返。
           setTags((prev) =>
             prev.map((tag) =>
@@ -173,16 +186,14 @@ export function useModelTags({
           onChanged?.();
         },
         {
-          report: (kind, detail) => {
-            if (kind === "err") setError(detail);
-          },
+          report: errors.report(oldName),
           failureText: "重命名失败",
         },
       );
       return result.ok;
     },
-    [refresh, onChanged],
+    [refresh, onChanged, errors],
   );
 
-  return { tags, draft, setDraft, busy, error, addTag, deleteTag, renameTag };
+  return { tags, draft, setDraft, busy, errors, addTag, deleteTag, renameTag };
 }

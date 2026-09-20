@@ -3,7 +3,7 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import { uploadImage, comfyBase } from "~/lib/comfyui/client";
 import { ensureComfyUiReady } from "~/lib/comfyui/lifecycle";
 import { logger } from "~/server/lib/logger";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorDetail } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "上传失败" }, { status: 500 });
     return NextResponse.json({ name: res.name });
   } catch (e) {
-    const msg = errorMessage(e, "上传失败");
+    const msg = apiErrorDetail(e, "上传失败");
     const base = comfyBase();
     if (isUnreachable(msg)) {
       /* ComfyUI 没在运行 / 配置路径的实例没起来。上传本身要求它已经跑着

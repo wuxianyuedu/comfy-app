@@ -10,6 +10,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
+import {
+  useItemErrors,
+  type ItemErrors,
+} from "~/components/ui/use-item-errors";
 import { uploadDatasetImage } from "~/lib/media/dataset-upload-client";
 import { runAsyncAction } from "~/lib/async-action";
 import { vanillaApi } from "~/trpc/vanilla";
@@ -52,8 +56,15 @@ export interface TrainingStudioController {
   dataset: DatasetItem[];
   setDataset: React.Dispatch<React.SetStateAction<DatasetItem[]>>;
   uploading: boolean;
-  /** 上传 / 网络等**非字段**错误文案；null 表示无错误。 */
-  error: string | null;
+  /**
+   * 按条目挂的错误（规范 16 §16.2.4.33）。
+   *
+   * 收口前是一句 `useState<string | null>` —— 「最近一次操作的草稿」：
+   * 取消某个任务失败后再提交一次表单，那条任务的错误就被盖掉了。
+   * 现在三个动作各挂各的 scope：上传 → `null`（整块）、提交 → `null`、
+   * 取消 → **任务 id**（那一行的「取消」按不动的原因就写在它旁边）。
+   */
+  errors: ItemErrors;
   /** 字段级校验错误（逐行渲染在对应控件下方）。 */
   fieldErrors: TrainFormErrors;
   /* 状态位 */
@@ -93,7 +104,9 @@ export function useTrainingStudio(): TrainingStudioController {
 
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /* 取消错误的 scope 是任务 id：任务不在列表里（已完成 / 被清掉）时，
+   * 它挂着的错误随之消失。 */
+  const errors = useItemErrors(jobs.map((job) => job.id));
   /* 字段级校验错误（`FormField` 逐行渲染）。与 `error` 分工明确：
    * 前者是**这个字段填错了**，后者是上传 / 网络的非字段错误（规范 16 §16.2.4.26）。 */
   const [fieldErrors, setFieldErrors] = useState<TrainFormErrors>({});
@@ -133,36 +146,37 @@ export function useTrainingStudio(): TrainingStudioController {
   useInterval(loadJobs, { ms: JOBS_POLL_MS });
 
   /* ── 数据集上传：逐张串行，失败即停并把错误抛给用户 ── */
-  const upload = useCallback(async (files: FileList | null) => {
-    const list = Array.from(files ?? []);
-    if (list.length === 0) return;
-    setUploading(true);
-    setError(null);
-    /* 行内错误条（`setError`）是这块唯一的反馈通道；成功静默
-     *（缩略图出现即结果）。出口给「失败文案走 `errorMessage`」这一半。 */
-    await runAsyncAction(
-      async () => {
-        for (const file of list) {
-          const name = await uploadDatasetImage(file);
-          setDataset((prev) => [...prev, { name, caption: "" }]);
-        }
-      },
-      {
-        report: (kind, detail) => {
-          if (kind === "err") setError(detail);
+  const upload = useCallback(
+    async (files: FileList | null) => {
+      const list = Array.from(files ?? []);
+      if (list.length === 0) return;
+      setUploading(true);
+      errors.clear(null);
+      /* 行内错误条是这块唯一的反馈通道；成功静默（缩略图出现即结果）。
+       * 出口给「失败文案走 `errorMessage`」这一半。 */
+      await runAsyncAction(
+        async () => {
+          for (const file of list) {
+            const name = await uploadDatasetImage(file);
+            setDataset((prev) => [...prev, { name, caption: "" }]);
+          }
         },
-        failureText: "上传失败",
-      },
-    );
-    setUploading(false);
-  }, []);
+        {
+          report: errors.report(null),
+          failureText: "上传失败",
+        },
+      );
+      setUploading(false);
+    },
+    [errors],
+  );
 
   const fillBlank = useCallback(() => {
     setDataset((prev) => fillBlankCaptions(prev, triggerWord));
   }, [triggerWord]);
 
   const submit = useCallback(async () => {
-    setError(null);
+    errors.clear(null);
     const payload: TrainJobInput = {
       name,
       baseModel,
@@ -220,9 +234,7 @@ export function useTrainingStudio(): TrainingStudioController {
         loadJobs();
       },
       {
-        report: (kind, detail) => {
-          if (kind === "err") setError(detail);
-        },
+        report: errors.report(null),
         failureText: "创建失败",
       },
     );
@@ -243,6 +255,7 @@ export function useTrainingStudio(): TrainingStudioController {
     scheduler,
     seed,
     loadJobs,
+    errors,
   ]);
 
   const cancelJob = useCallback(
@@ -253,14 +266,14 @@ export function useTrainingStudio(): TrainingStudioController {
           loadJobs();
         },
         {
-          report: (kind, detail) => {
-            if (kind === "err") setError(detail);
-          },
+          /* 失败挂在**那个任务**上：用户点的是哪一行的「取消」，
+           * 提示就出现在哪一行旁边。 */
+          report: errors.report(id),
           failureText: "取消失败",
         },
       );
     },
-    [loadJobs],
+    [loadJobs, errors],
   );
 
   const form = useMemo<TrainJobInput>(
@@ -321,7 +334,7 @@ export function useTrainingStudio(): TrainingStudioController {
     dataset,
     setDataset,
     uploading,
-    error,
+    errors,
     fieldErrors,
     submitting,
     activeJob,
