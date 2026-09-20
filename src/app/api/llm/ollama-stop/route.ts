@@ -3,6 +3,8 @@ import { currentServerUser } from "~/server/auth/request-user";
 import fs from "node:fs";
 import path from "node:path";
 import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
+import { formatLocalStamp } from "~/lib/time-format";
+import { OLLAMA_STOP_PROBE } from "~/lib/retry-policy";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { OLLAMA_DEFAULT_PORT } from "~/lib/endpoints";
 import { killProcessTreeByImage } from "~/lib/process/kill-process-tree";
@@ -21,9 +23,7 @@ const OLLAMA_IMAGE = process.platform === "win32" ? "ollama.exe" : "ollama";
 
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的。 */
 function localTimestamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return formatLocalStamp(new Date());
 }
 
 /** 追加一行到 ollama-runtime.log（失败不影响主流程）。 */
@@ -80,8 +80,9 @@ export async function POST(_req: NextRequest) {
     appendOllamaLog(`[err] ${msg}`);
     return NextResponse.json({ ok: false, detail: msg }, { status: 500 });
   }
-  // 等端口真正释放（最多 5s），给界面状态行一个确定的结果
-  for (let i = 0; i < 10; i++) {
+  // 等端口真正释放，给界面状态行一个确定的结果 —— 次数与间隔走
+  // `~/lib/retry-policy` 的 OLLAMA_STOP_PROBE（10 次 × 500ms = 5s，见 §16.2.4.49）。
+  for (let i = 0; i < OLLAMA_STOP_PROBE.maxAttempts; i++) {
     if (!(await ollamaUp())) {
       appendOllamaBanner("end", "■ Ollama 已手动关闭");
       appendOllamaLog("[state] Ollama 已关闭");

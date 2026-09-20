@@ -4,7 +4,12 @@
 //     （`history-utils` 封顶天数、`project-canvas` 30 天后转日期、
 //     `workspace` / `WorksGallery` 每档都带「修改」后缀、`ProjectOutputs` 都没有）；
 //   · `HH:mm:ss` 时刻——6 份实现（带毫秒的两处**逐字相同**、`workshop` 那几处
-//     裸调 `toLocaleTimeString()` 连区域设置都没固定）。
+//     裸调 `toLocaleTimeString()` 连区域设置都没固定）；
+//   · **「只写日期」那一档**（ISSUE #672 本轮补）——`YYYY-MM-DD` 在
+//     `history-utils`（日期桶）/ `MessageCenterPanel`（消息时刻）/ `generation-log`
+//     （按天文件名）三处各拼一遍；`MM-DD` 行首前缀在 `logs/log-format` 又一份；
+//     **本地时间戳**（`YYYY-MM-DD HH:mm:ss`）在 6 处 runtime/日志模块**逐字相同**
+//     （`app-runtime-log` / `trace` 各多一个 `.mmm`，`export` 那份是紧凑 `YYYYMMDD`）。
 //
 // 收口方式与 §16.2.4.9 的滚动条同款：**只搬定义、不动取值** ——
 // 每个函数保留调用处原有的档位与文案形态，差异用显式参数表达，不做「统一成
@@ -66,11 +71,89 @@ const CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
  * `formatTime`（它带同天判定）。本函数只负责时刻本身。
  */
 export function formatClock(
-  value: string | number,
+  value: TimeInput,
   opts: { millis?: boolean } = {},
 ): string {
-  return new Date(value).toLocaleTimeString("zh-CN", {
+  return toDate(value).toLocaleTimeString("zh-CN", {
     ...CLOCK_FORMAT,
     ...(opts.millis ? { fractionalSecondDigits: 3 } : {}),
   });
+}
+
+/* ── 「只写日期」那一档 ────────────────────────────────────────────────────
+ *
+ * 上面收的是「相对时间」与「时刻」；本轮补上**只写日期**与**本地时间戳**。
+ * 与时刻那半同款：格式化口径只有一处，差异用显式选项表达。
+ */
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** 入参：毫秒数 / ISO 串 / `Date`（比 {@link timeAgo} 宽一档，`Date` 直接用）。 */
+type TimeInput = string | number | Date;
+
+/** 统一的入参归一 —— 调用处不必自己 `new Date(...)`。 */
+const toDate = (value: TimeInput): Date =>
+  value instanceof Date ? value : new Date(value);
+
+/**
+ * 日期 → `YYYY-MM-DD`（**只写日期**那一档）。
+ *
+ * 三处同形（`history-utils` 的日期桶 / `MessageCenterPanel` 的消息时刻 /
+ * `generation-log` 的按天文件名）此前各拼一遍 —— 而它们的分隔符**恰好都是
+ * 半角连字符**，说明这三个落点本来就该是同一件事（不是「碰巧一样」）。
+ *
+ * 用**本地时间**：这些落点全是给本机用户看的（日期桶要与用户所在时区的
+ * 「今天」对齐、按天文件名要与用户当天看到的一致）。`toISOString()` 是 UTC，
+ * 在 +8 时区会把凌晨归到前一天。
+ */
+export function formatDate(value: TimeInput): string {
+  const d = toDate(value);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * 日期 → `MM-DD`（日志行首的短日期前缀）。
+ *
+ * 与 {@link formatDate} 是**两档**：日志行首只补月-日（年份在同一份日志里
+ * 从来不重要，写全会把紧凑的行首撑开），而日期桶要写全。
+ */
+export function formatShortDate(value: TimeInput): string {
+  const d = toDate(value);
+  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * 本地时间戳 → `YYYY-MM-DD HH:mm:ss`（`millis` 时带 `.mmm`）。
+ *
+ * runtime / 诊断日志的行首格式。此前 **6 处逐字相同**（`comfyui/lifecycle`、
+ * `drizzle-studio/lifecycle`、`ollama-start`、`ollama-stop`、`log/app-runtime-log`、
+ * `comfyui/trace`），每处的 `const p = (n) => String(n).padStart(2, "0")` 也
+ * 各写一遍。用**本地时间**而非 UTC：日志是给本机用户对照时钟看的，
+ * `toISOString()` 在 +8 时区会凭空差出 8 小时（这正是这些模块当年各自写
+ * 一份 `localTimestamp` 的由来）。
+ */
+export function formatLocalStamp(
+  value: TimeInput,
+  opts: { millis?: boolean } = {},
+): string {
+  const d = toDate(value);
+  const base = `${formatDate(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  return opts.millis
+    ? `${base}.${String(d.getMilliseconds()).padStart(3, "0")}`
+    : base;
+}
+
+/**
+ * 日期 → `YYYYMMDD-HHmmss`（**文件名**那一档：无分隔符，可直接进文件名）。
+ *
+ * 与 {@link formatLocalStamp} 的差别是「能不能进文件名」—— 冒号在 Windows
+ * 路径里非法，因此导出文件名那一处有自己的形态。收在这里是为了让「导出
+ * 文件名长什么样」也只有一处可查。
+ */
+export function formatCompactStamp(value: TimeInput): string {
+  const d = toDate(value);
+  return (
+    `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}` +
+    `-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`
+  );
 }

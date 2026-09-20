@@ -6,6 +6,8 @@ import {
   waitForDetachMediator,
 } from "~/lib/process/process-launch";
 import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
+import { formatLocalStamp } from "~/lib/time-format";
+import { INLINE_STDERR_MAX, clampText } from "~/lib/text-clamp";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -40,9 +42,7 @@ g[G_KEY] = st;
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
  *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
 function localTimestamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return formatLocalStamp(new Date());
 }
 
 /** 追加一行到 ollama-runtime.log（失败不影响主流程）。 */
@@ -194,11 +194,17 @@ async function spawnOllamaServe(
 
     // Ollama 输出（serve 的 stdout/stderr）——截断每行避免日志文件膨胀
     child.stdout?.on("data", (d: Buffer) => {
-      const text = d.toString("utf8").trimEnd().slice(0, 500);
+      const text = clampText(d.toString("utf8").trimEnd(), {
+        maxLength: INLINE_STDERR_MAX,
+        marker: "",
+      });
       if (text) appendOllamaLog(`[out] ${text}`);
     });
     child.stderr?.on("data", (d: Buffer) => {
-      const text = d.toString("utf8").trimEnd().slice(0, 500);
+      const text = clampText(d.toString("utf8").trimEnd(), {
+        maxLength: INLINE_STDERR_MAX,
+        marker: "",
+      });
       if (text) appendOllamaLog(`[err] ${text}`);
     });
 

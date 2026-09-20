@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { isRecord } from "~/lib/is-record";
 import { currentServerUser } from "~/server/auth/request-user";
 import { describeFetchFailure, getLLMConfig } from "~/lib/llm/server";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,7 +92,10 @@ export async function GET(req: NextRequest) {
 
     res = await probe(cfg.baseUrl);
     if (!res.ok) {
-      const snippet = (await res.text().catch(() => "")).slice(0, 200);
+      const snippet = clampText(await res.text().catch(() => ""), {
+        maxLength: INLINE_SNIPPET_MAX,
+        marker: "",
+      });
       return NextResponse.json({
         ok: false,
         models: [],

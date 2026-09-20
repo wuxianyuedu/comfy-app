@@ -28,6 +28,8 @@ import {
 } from "~/lib/log/log-paths";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { killProcessTree } from "~/lib/process/kill-process-tree";
+import { formatLocalStamp } from "~/lib/time-format";
+import { DRIZZLE_STOP_PROBE } from "../retry-policy";
 import {
   createChildExitHandler,
   createOutputSink,
@@ -119,9 +121,7 @@ export function resolveDrizzleKitBin(
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
  *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时（同 comfyui/lifecycle.ts）。 */
 function localTimestamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return formatLocalStamp(new Date());
 }
 
 function appendRuntimeLog(line: string): void {
@@ -279,8 +279,8 @@ export async function stopDrizzleStudio(
   const kill = await killProcessTree({ pid, detached: false });
   logger.info(`[drizzle-studio] 回收进程树：${kill.via}`);
   st.child = undefined;
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setTimeout(r, 400));
+  for (let i = 0; i < DRIZZLE_STOP_PROBE.maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, DRIZZLE_STOP_PROBE.baseMs));
     if (!(await probeDrizzleStudio(port))) {
       return { ok: true, detail: "Drizzle Studio 已关闭" };
     }

@@ -3,6 +3,7 @@
  * 没有 JSX，也不用 React hook。 */
 import { getCustomNodePackage } from "~/config/custom-nodes";
 import { displayValue } from "~/lib/display-value";
+import { TITLE_MAX, clampText } from "~/lib/text-clamp";
 import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
 import type { Node, Edge } from "@xyflow/react";
 import type {
@@ -86,8 +87,7 @@ export function extractNoteTitle(text: string, fallback?: string): string {
   }
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed)
-      return trimmed.length > 32 ? trimmed.slice(0, 30) + "…" : trimmed;
+    if (trimmed) return clampText(trimmed, { maxLength: TITLE_MAX });
   }
   return "";
 }
