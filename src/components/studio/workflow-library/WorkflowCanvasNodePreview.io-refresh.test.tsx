@@ -34,7 +34,6 @@ vi.mock("~/lib/workflow/workflow-run-store", () => {
     subscribeWorkflowRunStore: () => () => undefined,
   };
 });
-vi.mock("../WorkflowRunLogModal", () => ({ WorkflowRunLogModal: () => null }));
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { buildParamEntries } from "~/lib/workflow/workflow-param-mapping";

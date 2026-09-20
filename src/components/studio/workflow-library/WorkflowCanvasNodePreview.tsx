@@ -70,8 +70,6 @@ import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
 import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
-import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
-import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 
 type Phase =
   | { kind: "idle" }
@@ -118,9 +116,6 @@ export function WorkflowCanvasNodePreview({
    * "edit" = 编辑对外参数（参数连线画布，禁止执行生成）
    * "use"  = 实际使用（简化视图，可生成、可看结果） */
   const [viewMode, setViewMode] = useState<"edit" | "use">("edit");
-  /* 本页签独立的执行日志入口（按 source="canvas-node" 过滤） */
-  const [logOpen, setLogOpen] = useState(false);
-  const [logTaskId, setLogTaskId] = useState<string | null>(null);
   /* 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    * 上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
@@ -543,14 +538,6 @@ export function WorkflowCanvasNodePreview({
             实际使用
           </Button>
         </div>
-        {/* 本页签独立的执行日志入口（按 source="canvas-node" 过滤） */}
-        <WorkflowRunLogButton
-          workflowId={workflowId}
-          taskId={logTaskId}
-          source="canvas-node"
-          alwaysVisible
-          onOpen={() => setLogOpen(true)}
-        />
       </div>
 
       {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
@@ -779,16 +766,6 @@ export function WorkflowCanvasNodePreview({
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}
-
-      {/* ── 本页签独立的执行日志弹窗 ── */}
-      <WorkflowRunLogModal
-        open={logOpen}
-        workflowId={workflowId}
-        source="canvas-node"
-        viewTaskId={logTaskId}
-        onViewTaskIdChange={setLogTaskId}
-        onClose={() => setLogOpen(false)}
-      />
     </div>
   );
 }
