@@ -47,6 +47,13 @@ function DialogContent({
    *  `className` 分开，是为了让「内容体」与「外层容器」各自可覆盖。 */
   popupClassName,
   children,
+  /** 是否渲染内置的右上角关闭按钮（`absolute top-2 right-2`）。
+   *
+   *  **调用处只要自绘了关闭按钮，就必须传 `false`**：本仓库的弹窗形态约定
+   *  是「自绘 header + 自绘关闭」，漏传会同时渲染出两枚位置几乎重合的关闭
+   *  按钮 —— 点下去命中的是 DOM 靠后 + 绝对定位的内置那枚，两枚之间的间隙
+   *  还成了「点了没反应」的死区，用户看到的就是「两个 ✕ 且关不掉」。
+   *  默认 `true` 只服务「不自绘 header、直接用基元卡片」这一种形态。 */
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
