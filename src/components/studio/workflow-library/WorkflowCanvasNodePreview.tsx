@@ -20,16 +20,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   startLocalGenerate,
-  watchTask,
   type TaskProgressNode,
 } from "~/lib/workshop/generation-client";
 import {
   appendWorkflowRunLog,
-  failWorkflowRun,
-  latestRunForWorkflow,
-  patchWorkflowRun,
   registerWorkflowRun,
 } from "~/lib/workflow/workflow-run-store";
+import {
+  useWorkflowRunResume,
+  watchWorkflowRun,
+} from "./hooks/use-workflow-run-resume";
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import {
   defaultInputValues,
@@ -44,6 +44,7 @@ import {
 import { seedModeOverrides } from "~/components/studio/project-canvas/CanvasNode/helpers";
 import { Button } from "~/components/ui/button";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { SelectMenu } from "~/components/ui/select-menu";
 import {
   applyParamMapping,
   buildParamEntries,
@@ -127,8 +128,6 @@ export function WorkflowCanvasNodePreview({
   // onOutput 与 onSettled 都来自同一 SSE 闭包，state 读取会拿到渲染期旧值——
   // 用 ref 保证 onSettled 能看到 onOutput 刚写入的结果图。
   const resultUrlRef = useRef<string | null>(null);
-  /* 当前运行对应的 taskId；挂到 store 后窗口关闭再打开仍能恢复。 */
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   /* 选中的对外参数（点卡片或点它那条线）—— 选中后按 ⌫ 断开，或按卡片头 ↺ 恢复默认。 */
   const [selectedParamId, setSelectedParamId] = useState<string | null>(null);
   /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
@@ -181,47 +180,39 @@ export function WorkflowCanvasNodePreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 workflow/模式变化时整表播种，IO 变化走上面的保覆盖刷新
   }, [workflowIO, workflowId, effectiveMode]);
 
-  /* 重开窗口恢复：若 store 里有本工作流仍在运行的登记，恢复「生成中」视角。
-   * 恢复走惰性初始化（useState 的初始化函数在挂载时读 store），避免 effect
-   * 里同步 setState 的级联渲染。 */
-  const resumedRef = useRef(false);
-  useEffect(() => {
-    if (resumedRef.current) return;
-    resumedRef.current = true;
-    if (phase.kind !== "idle" || activeTaskId) return;
-    const resume = latestRunForWorkflow(workflowId, "canvas-node");
-    if (resume && (resume.status === "running" || !resume.status)) {
-      // 不自动弹全屏日志（避免打断用户）；由用户点「执行日志」查看。
-      void watchTask(resume.taskId, {
-        onProgress: (pct, node: TaskProgressNode | undefined) =>
-          setPhase({ kind: "running", pct, ...(node ? { node } : {}) }),
-        onLog: (entry) => {
-          appendWorkflowRunLog(resume.taskId, entry);
-        },
-        onOutput: (out) => {
-          if (out.kind === "image" && out.url) {
-            resultUrlRef.current = out.url;
-            setResultUrl(out.url);
-            patchWorkflowRun(resume.taskId, { resultUrl: out.url });
-          }
-        },
-        onSettled: (r) => {
-          if (r.ok) {
-            setPhase({
-              kind: "done",
-              imageUrl: resultUrlRef.current ?? undefined,
-            });
-            patchWorkflowRun(resume.taskId, { status: "done" });
-          } else {
-            setPhase({ kind: "failed", message: r.message ?? "生成失败" });
-            /* 失败原因同时落一条 error 日志（横幅之外，用户筛选/回放也能看到）。 */
-            failWorkflowRun(resume.taskId, r.message ?? "生成失败");
-          }
-        },
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载/回到本工作流时恢复一次
-  }, [workflowId]);
+  /* 重开窗口 / 切回本页签时的运行视角恢复：还在跑就重订阅 SSE（服务端回放
+   * 补齐历史帧），已完成直接恢复产物、已失败恢复原因。**三态都要恢复** ——
+   * 此前这里只认「还在跑」那一支，于是生成结束后切回来，产物与终态双双丢失
+   * （用户实测：「生成结束后也看不到产出内容」）。不自动弹全屏日志（避免
+   * 打断用户），由用户点「执行日志」查看。 */
+  useWorkflowRunResume({
+    workflowId,
+    source: "canvas-node",
+    handlers: {
+      onProgress: (taskId, pct, node) => {
+        setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
+      },
+      onLog: (taskId, entry) => {
+        appendWorkflowRunLog(taskId, entry);
+      },
+      onOutput: (taskId, output) => {
+        if (output.kind === "image" && output.url) {
+          resultUrlRef.current = output.url;
+          setResultUrl(output.url);
+        }
+      },
+      onSettled: (taskId, result) => {
+        if (result.ok) {
+          setPhase({
+            kind: "done",
+            imageUrl: resultUrlRef.current ?? undefined,
+          });
+        } else {
+          setPhase({ kind: "failed", message: result.message ?? "生成失败" });
+        }
+      },
+    },
+  });
 
   const running = phase.kind === "running" || phase.kind === "starting";
   const missing = useMemo(
@@ -317,7 +308,6 @@ export function WorkflowCanvasNodePreview({
         workflowInputs: [...workflowInputs, ...cagInputs],
       });
       setPhase({ kind: "running", pct: 0 });
-      setActiveTaskId(taskId);
       /* 登记运行记录；日志弹窗不再自动打开，由用户点详情头部的「执行日志」查看。 */
       registerWorkflowRun({
         taskId,
@@ -329,29 +319,28 @@ export function WorkflowCanvasNodePreview({
         source: "canvas-node",
       });
       await new Promise<void>((resolve) => {
-        watchTask(taskId, {
-          onProgress: (pct, node: TaskProgressNode | undefined) =>
+        /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 / 产物 /
+         * 终态写进运行登记表 —— 切页签回来才有的可恢复。 */
+        watchWorkflowRun(taskId, {
+          onProgress: (_taskId, pct, node) =>
             setPhase({ kind: "running", pct, ...(node ? { node } : {}) }),
-          onLog: (entry) => {
-            appendWorkflowRunLog(taskId, entry);
+          onLog: (id, entry) => {
+            appendWorkflowRunLog(id, entry);
           },
-          onOutput: (out) => {
+          onOutput: (_id, out) => {
             if (out.kind === "image" && out.url) {
               resultUrlRef.current = out.url;
               setResultUrl(out.url);
-              patchWorkflowRun(taskId, { resultUrl: out.url });
             }
           },
-          onSettled: (r) => {
+          onSettled: (_id, r) => {
             if (r.ok) {
               setPhase({
                 kind: "done",
                 imageUrl: resultUrlRef.current ?? undefined,
               });
-              patchWorkflowRun(taskId, { status: "done" });
             } else {
               setPhase({ kind: "failed", message: r.message ?? "生成失败" });
-              failWorkflowRun(taskId, r.message ?? "生成失败");
             }
             resolve();
           },
@@ -663,13 +652,32 @@ export function WorkflowCanvasNodePreview({
       {viewMode === "use" && (
         <div className="flex w-full max-w-[480px] flex-col gap-3">
           <div className="border-border bg-panel rounded-xl border p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-ink text-sm font-semibold">
+            <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+              <span className="text-ink min-w-0 truncate text-sm font-semibold">
                 {workflowName}
               </span>
-              <span className="text-ink-faint text-xs">
-                {effectiveModeLabel}
-              </span>
+              {/* 多模式工作流在这儿也要能换模式：两个页签读的是**同一个**
+                  生效模式（详情层持有），而 use 模式此前只把它当纯文本打出来
+                  —— 用户在「实际使用」里换不了模式，只能切回「编辑对外参数」
+                  再换（那一页的模式下拉在宿主卡片上）。形态与 `LibraryHostCard`
+                  的同一个下拉逐字一致，免得同一件事在两处长得不一样。 */}
+              {modes && modes.length > 1 && onModeChange ? (
+                <SelectMenu
+                  value={effectiveMode ?? taskType}
+                  onChange={onModeChange}
+                  options={modes}
+                  labels={Object.fromEntries(
+                    modes.map((code) => [code, modeLabel(code)]),
+                  )}
+                  popoverMinWidth={150}
+                  autoFitFromOptions={false}
+                  className="!border-border-strong shrink-0 !bg-transparent text-[11px]"
+                />
+              ) : (
+                <span className="text-ink-faint shrink-0 text-xs">
+                  {effectiveModeLabel}
+                </span>
+              )}
             </div>
             <DynamicWorkflowForm
               io={workflowIO ?? undefined}

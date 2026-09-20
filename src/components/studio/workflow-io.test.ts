@@ -485,6 +485,30 @@ describe("defaultInputValues — 推断出的数值控件不许造默认值（fi
   });
 });
 
+describe("defaultInputValues — 图片口不播种图内默认值", () => {
+  /** LoadImage 的图内默认值是一个服务器文件名（常见的就是 `image`）。 */
+  const uploadPin = (): WorkflowIOEntry => ({
+    ...pin("upload", "首帧图", "IMAGEUPLOAD"),
+    defaultValue: "image",
+  });
+
+  it("那个文件名不当「用户已选」：播种空串", () => {
+    const map: WorkflowIOMap = { "7::widget::upload": uploadPin() };
+    expect(defaultInputValues(map)["7::widget::upload"]).toBe("");
+  });
+
+  it("键必须仍在：默认值刷新不会把用户上传的那张图当成「被摘掉的 pin」删掉", () => {
+    const map: WorkflowIOMap = { "7::widget::upload": uploadPin() };
+    const merged = mergeRefreshedDefaults(
+      { "7::widget::upload": "mine.png" },
+      { "7::widget::upload": "" },
+      defaultInputValues(map),
+    );
+    /* null = 没有任何键需要改动，用户的值原样留在表单里。 */
+    expect(merged).toBeNull();
+  });
+});
+
 describe("persistEnrichedWorkflowIO — 保存时固化类型（fix 4）", () => {
   it("用图内字面量补全缺失 type，并保留已声明的条目", () => {
     const graph = { "7": { inputs: { seed: 42 } } };
