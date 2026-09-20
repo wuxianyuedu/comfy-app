@@ -6,6 +6,7 @@ import type { LLMConfigView } from "~/lib/llm/types";
 import { useLLMConfig, useLLMConfigSave } from "./hooks/use-llm-config";
 import { runAsyncAction } from "~/lib/async-action";
 import { Button } from "~/components/ui/button";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { FormField } from "~/components/ui/form-field";
 
@@ -143,7 +144,8 @@ function LLMSettingsModal({
   const [draftProvider, setDraftProvider] = React.useState<
     "local" | "remote" | null
   >(null);
-  const [testing, setTesting] = React.useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const testBusy = useBusyAction();
   const [msg, setMsg] = React.useState<{
     kind: "ok" | "err";
     text: string;
@@ -190,36 +192,36 @@ function LLMSettingsModal({
       setMsg({ kind: "err", text: "请先选择一个模型" });
       return;
     }
-    setTesting(true);
     setMsg(null);
-    await runAsyncAction(
-      async () => {
-        const out = await completeChat({
-          messages: [
-            { role: "system", content: "你是测试助手，只回复 OK。" },
-            { role: "user", content: "ping" },
-          ],
-          opts: {
-            provider,
-            baseUrl,
-            model: activeModel,
-            temperature: 0.2,
-            maxTokens: 16,
-          },
-        });
-        return out.slice(0, 60);
-      },
-      {
-        /* 成功文案是**动作结果**的函数（回显模型的前 60 个字符）——
-         * `successText` 支持函数形式正是为这类落点（同 `use-external-action`
-         * 的 `detail` 由端点给）。 */
-        report: (kind, detail) =>
-          setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
-        failureText: "连接失败",
-        successText: (result) => `连接成功：${result.detail}`,
-      },
+    await testBusy.run(() =>
+      runAsyncAction(
+        async () => {
+          const out = await completeChat({
+            messages: [
+              { role: "system", content: "你是测试助手，只回复 OK。" },
+              { role: "user", content: "ping" },
+            ],
+            opts: {
+              provider,
+              baseUrl,
+              model: activeModel,
+              temperature: 0.2,
+              maxTokens: 16,
+            },
+          });
+          return out.slice(0, 60);
+        },
+        {
+          /* 成功文案是**动作结果**的函数（回显模型的前 60 个字符）——
+           * `successText` 支持函数形式正是为这类落点（同 `use-external-action`
+           * 的 `detail` 由端点给）。 */
+          report: (kind, detail) =>
+            setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+          failureText: "连接失败",
+          successText: (result) => `连接成功：${result.detail}`,
+        },
+      ),
     );
-    setTesting(false);
   }
 
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩 +
@@ -331,10 +333,10 @@ function LLMSettingsModal({
             <Button
               variant="outline"
               onClick={handleTest}
-              disabled={testing}
+              disabled={testBusy.busy}
               className="border-border text-muted-foreground hover:bg-subtle h-auto rounded-lg px-3 py-2 text-sm"
             >
-              {testing ? "测试中…" : "测试连接"}
+              {testBusy.busy ? "测试中…" : "测试连接"}
             </Button>
             <Button
               variant="primary-solid"

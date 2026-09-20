@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { useItemErrors } from "~/components/ui/use-item-errors";
 import { useItemAction } from "~/components/ui/use-item-action";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import type { Shot, Scene, Character, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotPrompt,
@@ -108,7 +109,8 @@ export function useStoryboardPlanner(props: Props) {
     onCharactersChange,
     extract,
   } = props;
-  const [aiBusy, setAiBusy] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const ai = useBusyAction();
   const [aiProgress, setAiProgress] = useState("");
   const [aiError, setAiError] = useState("");
   const { config, openSettings } = useLLM();
@@ -354,7 +356,6 @@ export function useStoryboardPlanner(props: Props) {
       openSettings();
       return;
     }
-    setAiBusy(true);
     setAiProgress("");
     setAiError("");
     try {
@@ -363,47 +364,51 @@ export function useStoryboardPlanner(props: Props) {
       const charNames = characters
         .map((character) => character.name)
         .filter(Boolean);
-      for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i];
-        setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`);
-        const full = await streamChat({
-          messages: buildStoryboardMessages(scene!, charNames),
-          /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
-        });
-        const raws = parseStoryboard(full);
-        raws.forEach((raw) => {
-          n += 1;
-          const charIds = characters
-            .filter(
-              (character) =>
-                character.name && raw.characterNames.includes(character.name),
-            )
-            .map((character) => character.id);
-          const shot: Shot = {
-            id: workshopUid("shot"),
-            index: n,
-            sceneId: scene!.id,
-            sceneHeading: scene!.heading,
-            shotType: raw.shotType,
-            description: raw.description,
-            characterIds: charIds,
-            prompt: "",
-            negativePrompt: "",
-            params: {},
-            status: "idle",
-          };
-          const linkedChars = characters.filter((character) =>
-            charIds.includes(character.id),
+      /* 「逐幕拆镜」这一整段套进忙碌位出口：复位绑在 finally 上，
+       * 于是中途抛错（模型报错 / 解析失败）不会把「拆镜中」永远留在界面上。 */
+      await ai.run(async () => {
+        for (let i = 0; i < scenes.length; i++) {
+          const scene = scenes[i];
+          setAiProgress(
+            `正在拆镜 ${i + 1}/${scenes.length} · ${scene!.heading}`,
           );
-          built.push(recompute(shot, scene, linkedChars, undefined));
-        });
-      }
+          const full = await streamChat({
+            messages: buildStoryboardMessages(scene!, charNames),
+            /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
+          });
+          const raws = parseStoryboard(full);
+          raws.forEach((raw) => {
+            n += 1;
+            const charIds = characters
+              .filter(
+                (character) =>
+                  character.name && raw.characterNames.includes(character.name),
+              )
+              .map((character) => character.id);
+            const shot: Shot = {
+              id: workshopUid("shot"),
+              index: n,
+              sceneId: scene!.id,
+              sceneHeading: scene!.heading,
+              shotType: raw.shotType,
+              description: raw.description,
+              characterIds: charIds,
+              prompt: "",
+              negativePrompt: "",
+              params: {},
+              status: "idle",
+            };
+            const linkedChars = characters.filter((character) =>
+              charIds.includes(character.id),
+            );
+            built.push(recompute(shot, scene, linkedChars, undefined));
+          });
+        }
+      });
       onShotsChange([...shots, ...built]);
       setAiProgress(`已用 AI 生成 ${built.length} 个镜头`);
     } catch (e: unknown) {
       setAiError(errorMessage(e, "AI 拆镜失败"));
-    } finally {
-      setAiBusy(false);
     }
   }
 
@@ -422,10 +427,10 @@ export function useStoryboardPlanner(props: Props) {
    * 出图的提示词；negative 同步微调。 */
   /* 「哪一条在润色」收在 `useItemAction`（规范 16 §16.2.4.40）：此前是本
    * 文件自持的 `useState<string | null>`，与历史列表的重试、角色的润色各写
-   * 一份 —— 「同一条能不能重复点」三处都没防。`polishBusyAll` 是**整表**
-   * 动作的忙标记（批量润色），形态不同，留在原处。 */
+   * 一份 —— 「同一条能不能重复点」三处都没防。整表动作的忙标记（批量润色）
+   * 是**另一个形态**，走 `useBusyAction`（规范 16 §16.2.4.71），两者并用。 */
   const polishAction = useItemAction(shots.map((shot) => shot.id));
-  const [polishBusyAll, setPolishBusyAll] = useState(false);
+  const polishAllBusy = useBusyAction();
   /* 润色错误挂在**那个镜头**上（规范 16 §16.2.4.33）：收口前是一句
    * `useState("")` —— 润色镜头 A 失败后去润色镜头 B，A 的提示就被盖掉，
    * 用户只看到一句不知道指哪一行的话。 */
@@ -477,19 +482,18 @@ export function useStoryboardPlanner(props: Props) {
       openSettings();
       return;
     }
-    setPolishBusyAll(true);
     polishErrors.clearAll();
-    try {
+    /* 整表动作的忙碌位也走唯一出口（规范 16 §16.2.4.71）——「哪一条」走
+     * `useItemAction`，这里是「整批」，两者形态不同、并用。 */
+    await polishAllBusy.run(async () => {
       for (const shot of shots) {
         await polishOne(shot);
       }
-    } finally {
-      setPolishBusyAll(false);
-    }
+    });
   }
 
   return {
-    aiBusy,
+    aiBusy: ai.busy,
     aiProgress,
     aiError,
     config,
@@ -514,7 +518,7 @@ export function useStoryboardPlanner(props: Props) {
      * （规范 16 §16.2.4.40）。`polishAnyBusy` 同理。 */
     polishIsBusy: polishAction.isBusy,
     polishAnyBusy: polishAction.anyBusy,
-    polishBusyAll,
+    polishBusyAll: polishAllBusy.busy,
     polishErrors,
     polishOne,
     polishAll,

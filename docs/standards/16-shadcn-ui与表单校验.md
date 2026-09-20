@@ -191,9 +191,11 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P62** | 自写「事件值 → 值回调」的改写样板（`X => FUNC(X.target.value)` / `X => FUNC(X.target.checked)`）                                                  | `~/lib/form-props` 的 `textHandler` / `checkedHandler` / `numberHandler` / `bindKey` / `readTextInput` / `digitsOnly`（见 §16.2.4.66）                                                                            |
 | **P63** | 自写分页 / 窗口切片的算术（`… .length - … * …` / `Math.ceil(… / …)` / **接收者像集合**的 `.slice(-N)`）                                             | `~/lib/page-window` 的 `tailPages` / `countAfterPage` / `tailWindow` / `chunkRange` / `LOG_MODAL_MAX_ROWS`（见 §16.2.4.67）                                                                                      |
 | **P64** | 把高频进度回调直接写进 state（`onProgress: (…) => setXxx(`）                                                                                        | `~/components/ui/use-throttled-progress` 的 `useThrottledProgress`（单值）/ `useThrottledProgressMap`（按条目）/ `createThrottleGate`（只借闸门）（见 §16.2.4.68）                                                  |
+| **P65** | 一次异步动作的忙碌位复位写在成功路径上（`setX(true)` → `await …` → `setX(false)`，且复位不在 `finally` / `catch` 里）                              | `~/components/ui/use-busy-action` 的 `useBusyAction`（复位绑在 `finally` 上、异常不吞、卸载守卫）；store 级忙碌位见 `~/components/update-check/update-check-store` 的 `runChecking`（见 §16.2.4.71）                    |
+| **P66** | 自建「同一时刻只跑一件」的重入闸门（名字带 `busy`/`pending`/`inflight`/`locked`/`running`/`checked` 的 `useRef` + 写一次 + 读两处）                 | `~/lib/reentrancy-lock` 的 `useReentrancyLock`（同步 `tryEnter` / `exit`）/ `createReentrancyLock`（跨组件实例、非 hook 场景）（见 §16.2.4.69）                                                                       |
 
 **P4~~P52 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P58 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+P4~P66 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
 加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键 / 滚动跟随 /
 外部导航 / 表单行 / 读文件 / localStorage / Enter 提交 / 异步动作的反馈样板 /
@@ -202,7 +204,8 @@ P4~P58 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触�
 数字精度格式化 / 去重合并与排序 / data URL /
 键盘键判据 / SGR 转义序列 / 书写法换算 /
 路径展示 / props 剔透传 / 异步超时 /
-事件值改写样板 / 分页与窗口切片 / 进度回调节流」这**四十四件事**的
+事件值改写样板 / 分页与窗口切片 / 进度回调节流 /
+重入闸门 / 异步动作的忙碌位」这**四十六件事**的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
@@ -222,9 +225,11 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **P53/P54/P55 见 §16.2.4.57 ~ §16.2.4.59**、
 **P56/P57/P58 见 §16.2.4.60 ~ §16.2.4.62**、
 **P59/P60/P61 见 §16.2.4.63 ~ §16.2.4.65**、
-**P62/P63/P64 见 §16.2.4.66 ~ §16.2.4.68**。
+**P62/P63/P64 见 §16.2.4.66 ~ §16.2.4.68**、
+**P65/P66 见 §16.2.4.69 与 §16.2.4.71**（§16.2.4.70 是「刷新票据」的出口，
+它自身不成判据）。
 
-**P4~P64 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P66 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -232,7 +237,7 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
 - 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
-  **P39~P42、P44~P64 额外扫 `src/lib/**` 与 `src/server/**`**
+  **P39~P42、P44~P66 额外扫 `src/lib/**` 与 `src/server/**`**
   （`LIB_SCANNED_RULES`）——
   这些账的落点本来就横跨两侧（帧调度在 `lib/project-canvas`、复制反馈在两处
   hooks、`isRecord` 的 5 份实现在 `lib/**`；后来 P50 的数字精度、P59 的夹取、
@@ -462,6 +467,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 数值夹取                 | ~~**27 处**手写 `Math.min` / `Math.max` 的夹取，四派写法都编译、都运行、类型都对，差别只在**语义决定**上：**参数顺序**（`Math.min(max, Math.max(min, x))` vs `Math.max(min, Math.min(max, x))` —— 类型上不可分辨，传反了不报错）、**取整在内层还是外层**（先取整再夹会在 `[0, 0.4]` 里给出 `0.4` —— 一个「不是整数的整数值」）、**非有限数怎么办**（`Math.max(0, NaN)` 是 `NaN`，会一路静默传播到 `style` / 落库）、**只有下限 / 上限**时另写一个具名函数。实测还有一处真缺陷：`comfy-readiness-client` 的「像夹取实则漏了下限」，`pollMs` 传 0 会变成不等待的死循环~~ | `~/lib/clamp` 的 `clamp(value, min, max)`（**被夹的值放第一位**；`NaN` → `min`、`±Infinity` 按大小夹；`min > max` 不换序）/ `clampInt`（夹取 + 取整，`mode` 是显式域决定）；`~/lib/progress` 的 `clampPct` 改用它实现；**P59 硬闸** | ✅ **见 §16.2.4.63** |
 | 大写归一                 | ~~**30 处**各写一遍 `(x ?? "").trim().toUpperCase()` 这一族，而它们**不是同一件事**：**要不要吃空白**（这一条直接决定匹配成败 —— ComfyUI 类型字段带尾随空白、模式码来自用户输入）、**缺省给什么**（空串还是放开记号 `*`）。收口前的实况是**同一个文件里两种写法并存**（`model-mode-contract` 的 `builtInModeContract` trim、同文件的 `modeContractEntries` 不 trim）—— 同一个模式码，经过前者匹配得上、经过后者匹配不上~~ | `~/lib/upper-token` 的 `upperToken(value: unknown)`（**只有一个口径：吃空白**，刻意不提供开关；参数收 `unknown`，替调用处承担 `typeof === "string"` 守卫）/ `upperTokenOr(value, fallback)`（缺省给具名兜底）；**P60 硬闸** | ✅ **见 §16.2.4.64** |
 | 跨组件应用事件           | ~~**5 条**自定义事件散在 **6 个文件**里，事件名与载荷类型**分开两处**，且失效模式**全是静默的**：`canvas-store-changed` 的名字定义在 `lib/project-canvas` 却**不导出**（视图侧 3 处硬编码字符串）；`canvas:produce` 的载荷形状只在订阅侧有个 `as {...}` 断言；实测有**两条死监听** —— `open-task`（派发方早已搬走，注释还写着它派发）与 `local-workflows-path-changed`（全库只有监听侧）。**没有任何构建、测试会报它们**~~ | `~/lib/app-events` 的 `AppEvents` 表（事件名与载荷**同处定义**）+ `emitAppEvent`（纯信号派发普通 `Event`）/ `subscribeAppEvent`（返回退订函数，载荷类型从表里取、读侧不必断言）；无 `window` 时派发返回、订阅给空操作，**刻意不排队重放**；**P61 硬闸** | ✅ **见 §16.2.4.65** |
+| 重入闸门 | ~~**五族做法**：没有闸门（靠读 state 判 —— `setState` 是异步的，同一次事件循环里两次点击都读到旧值）、自建 ref 闸门 4 处（`use-copy-feedback` / `use-external-action` / `use-encapsulation-test-run` / `use-character-portrait`，同一段样板各写一份、复位位置还不一样）、store 里的布尔、读「忙标记不是 idle」。代价随动作变贵而放大 —— 「测试连接」双击 = **两次真实模型调用**，批处理双击 = 两轮串行批处理互相覆盖产物 | `~/lib/reentrancy-lock` 的 `useReentrancyLock`（同步 `tryEnter` / `exit`）/ `createReentrancyLock`（跨组件实例、非 hook 场景）；**P66 硬闸** | ✅ **见 §16.2.4.69** |
+| 刷新票据 | ~~四种表达：自增整数的 `useState` + `useCallback`（2 处）、**声明了票据却从不自增**（`workspace/page.tsx` 的 `recentsKey`，注释还写着「自增以重新读取」）、直接调取数函数、靠应用事件。差异全是静默的 —— 前者与「直接调」混用时同一个面板的刷新语义取决于它用哪支；后者点了没反应而构建与测试都不报~~ | `~/lib/refresh-ticket` 的 `useRefreshTicket`（初值 0、每次 +1；不暴露 setter 与数值；不防抖不合并）；**不成判据**（见 §16.2.4.70 —— 机器分不出刷新票据与组件内的普通计数） | ✅ **见 §16.2.4.70** |
+| 异步动作的忙碌位 | ~~**45 处**「先置忙碌位、跑完再复位」，其中 **20 处**把复位写在 `await` **之后**的成功路径上 —— 动作抛错（`await` 之后那一行 `setXxx` / `load()` / NDJSON 回调里抛）就**永远停在 true**：界面从此显示「正在保存…」/「批量生成中…」，按钮再也点不动，只有刷新页面才恢复~~ | `~/components/ui/use-busy-action` 的 `useBusyAction`（复位绑在 `finally` 上、不吞错、卸载守卫、`set` 给跨多段 `await` 的落点）；store 级忙碌位见 `~/components/update-check/update-check-store` 的 `runChecking`；**P65 硬闸** | ✅ **见 §16.2.4.71** |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -4384,6 +4392,157 @@ setter」。
 
 **刻意不取 `setProgress(` 这个函数名**：那条名字在全库既是「进度」也是
 「上传进度」「提取进度」，按名字数会连「不是订阅回调的写入点」一起算进来。
+
+### 16.2.4.69 「同一时刻只跑一件」的重入闸门有五种做法（P66 硬闸）
+
+按**形态**扫出来的账：全库有 45 处「一次异步动作的执行态」（上一节那条账），
+而其中防重入的做法散成五族：
+
+| 族 | 写法 | 落点 |
+| --- | --- | --- |
+| ① **没有闸门** | 靠读 state 判：`if (busy) return;` | 多数（`use-model-tags` / `use-material-library` / 两个批处理） |
+| ② **自建 ref 闸门** | `const xxRef = useRef(false)` + 读它判重入 + 置位 / 复位各一处 | `use-copy-feedback` / `use-external-action` / `use-encapsulation-test-run` / `use-character-portrait` |
+| ③ **store 里的布尔** | zustand 的 `checking` + 调用处自己 `try/finally` | `update-check-store` |
+| ④ **读「忙标记不是 idle」** | `if (appUpdateBusy !== "idle") return;` | 设置页的应用自更新 |
+| ⑤ **出口** | `useReentrancyLock()` | 本批收口后 |
+
+**①与④是同一类缺陷，且它的代价随动作变贵而放大**：React 的 `setState` 不会
+立刻改掉本次事件回调里读到的值 —— 同一次事件循环里的两次点击都读到旧值，
+两次都发出去。复制按钮双击只是两次剪贴板写入（用户看不出来），
+「测试连接」双击是**两次真实模型调用**（花两次钱），批处理双击是两轮串行
+批处理同时在跑（产物互相覆盖），上传双击是同一份文件落两份。
+
+> **②/③/⑤ 的差别不是「对不对」，是「写几遍」**：`use-copy-feedback` 与
+> `use-external-action` 的注释都逐字写着同一个坑（「`setState` 还没提交，
+> 第二次调用读到的仍是旧值」），而那段「同步 ref + 读 + 置 + 复位」各写一份；
+> 复位位置还各不相同（`.finally` / 两分支各清 / 三分支各清）。
+
+#### 出口：`~/lib/reentrancy-lock`
+
+```ts
+const lock = useReentrancyLock();
+if (!lock.tryEnter()) return; // 已经在跑 → 直接返回
+try {
+  await doIt();
+} finally {
+  lock.exit(); // 无论如何归还
+}
+createReentrancyLock(); // 跨组件实例 / 非 hook 场景（模块级、服务端编排、测试）
+```
+
+三条刻意的口径：
+
+1. **`tryEnter` 与 `exit` 是同步的** —— 这正是本出口存在的全部理由。
+   它表达的是「这一刻这件事是不是已经在跑了」，而 `useState` 的忙碌位表达的是
+   「界面该显示成什么样」；前者不能是异步的；
+2. **不接管忙碌位** —— 界面上「忙」的形态各不相同（按钮禁用、转圈、行内文案、
+   进度表），而重入判据只有一条。把两者揉在一起会让「只需要单飞、不需要忙碌位」
+   的落点（批处理、服务端编排）被迫重建一份界面状态；
+3. **不排队、不引用计数** —— 第二次调用直接丢弃（用户连点的意图是「再来一次
+   同一件事」，而前一次还在跑时重跑只会产出两份等价结果）；多持有者要的是池 /
+   队列，那是另一套语义。
+
+#### 判据：P66（硬闸）
+
+锚**「自建的重入闸门」这一形态**：一个 `useRef` 声明的名字带
+`busy` / `pending` / `inflight` / `locked` / `running` / `checked`，
+且在同一段里有**写**（`.current = …`）与**至少两处读**（判重入 + 复位）。
+
+**刻意不数**纯「最近一次的值」镜像 ref（`justDraggedRef` / `prevCfgData` /
+`projectIdRef`）—— 它们只写一次或只读，不是闸门。形态上的分界线是
+**名字所指的语义**与**「写一次 + 读两处」**这两个条件同时成立。
+
+出口自身的实现 `~/lib/reentrancy-lock.ts` 在 `EXEMPT_FILES.P66` 里显式登记。
+
+> ⚠️ **①（读 state 判）不在判据范围内** —— 「`if (busy) return;`」与
+> 「`if (!busy)` 才渲染」在文本上是同一件事，机器分不出这个 `busy` 是拿来做
+> 重入判据还是拿来做展示判据。这一族因此**没有机器判据**，靠的是评审与
+> 本节这条口径：**判重入必须读同步可见的值**。
+
+### 16.2.4.70 「按需求重新跑一遍取数」有四种表达（出口，非判据）
+
+同一件事（用户在面板上点「刷新 / 重试」）在全库有四种做法：
+
+| 写法 | 落点 |
+| --- | --- |
+| 自增整数的 `useState` + `useCallback` 换票号 | `use-history-panel` / `use-material-library` |
+| **声明了票据却从不自增** | `workspace/page.tsx` 的 `recentsKey`（注释还写着「自增以重新读取」） |
+| 直接调取数函数（`load()`） | 多处 |
+| 靠应用事件 | 首页的 `comfyapp:canvas-store-changed` |
+
+差异都是静默的：**票据 vs 直接调**混用时，同一个面板的刷新语义取决于它用哪支
+（票据在依赖变化时重跑、直接调不会）；**忘了接上**的那一处构建与测试都不报，
+只是用户点了没反应。
+
+#### 出口：`~/lib/refresh-ticket`
+
+```ts
+const { ticket, refresh } = useRefreshTicket(); // 初值 0，每次 +1
+useEffect(() => { void load(); return () => guard.dispose(); }, [scope, ticket]);
+```
+
+两条刻意的口径：**不暴露 setter、不暴露当前值**（调用处要的是「重新跑一遍」
+这个动作，不是票号是多少 —— 暴露数值会让它被拿去当缓存键）；**不做防抖 / 合并**
+（连点两次「重试」发两次取数，这是用户点出来的意图；要防重入的落点用
+`~/lib/reentrancy-lock`，两者可以并用）。
+
+**为什么它不成判据**：「自增票据」与「`useState(0)` 的计数器」在文本上
+完全一样，机器分不出这个计数器是刷新票据还是组件内的普通计数
+（`json-viewer` 的 `hitIndex`、`ScriptMarkdownEditor` 的 `historyIndex` 都是后者）。
+判据太宽会逼人给普通计数器改名去迎合门禁。
+
+### 16.2.4.71 「一次异步动作的忙碌位」有 45 处（P65 硬闸）
+
+「先置忙碌位、跑完再复位」这段执行态在全库有 45 处，而它们对**复位的位置**
+各判各的：
+
+| 复位位置 | 处数 | 代价 |
+| --- | --- | --- |
+| `finally` 里 | 25 | ✅ 正确 |
+| **`await` 之后的成功路径上** | **20** | ❌ 动作抛错 → 忙碌位**永远停在 true** |
+
+第二族的用户可见结果是：界面从此显示「正在保存…」/ 「测试中…」/ 「批量生成中…」，
+按钮再也点不动，**只有刷新页面才恢复**。而它触发得并不罕见 ——
+`await` 之后那一行（`setXxx`、`load()`、`readNdjson` 的回调）抛出来就够了。
+
+实测 20 处分布在设置页 6 个启停动作、工坊两个批处理、影片台、训练页、
+登录页、历史详情、模型标签、工作流导入、工作流保存等处。
+
+#### 出口：`~/components/ui/use-busy-action`
+
+```ts
+const save = useBusyAction();
+<Button disabled={save.busy} onClick={() => void save.run(() => doSave())}>
+  {save.busy ? "保存中…" : "保存"}
+</Button>
+```
+
+三条刻意的口径：
+
+1. **复位的判据是 `finally`，不是「正常路径走完了」** —— 这是本出口存在的
+   全部理由；
+2. **不吞错** —— `try/finally` 没有 `catch`：动作抛错时忙碌位落下、异常继续
+   往上走（硬规则 4：失败路径必须有可见出口，而那个出口由调用处选，不是本出口
+   替它选一个静默）；
+3. **提供 `set`** —— 少数落点的忙碌位跨越多个 `await` 之间的一段
+   （「先探测、再打开、再等结果」），那段不是单个 `action` 能表达的；
+   但推荐优先用 `run`。
+
+**store 级的忙碌位**（多个非嵌套组件都要读它）不走本出口 —— 那份实现是
+`~/components/update-check/update-check-store` 的 `runChecking`：
+「置忙 → 跑 → `finally` 复位」这段编排收在 store 里，组件只调它。
+
+#### 判据：P65（硬闸）
+
+锚**「复位的位置」**这一形态：
+
+1. 同名 setter 有 `setX(true)` 与 `setX(false)` 两态同现；
+2. 两者之间跨了 `await`（它是「一次异步动作」的执行态，不是同步开关）；
+3. 而 `setX(false)` 之前**没有** `finally` / `catch`（复位只在成功路径上）。
+
+**刻意不数**「复位写在 `finally` 里」的那些 —— 那形态本身是对的
+（`use-workflow-detail-loader` 的竞态令牌、`use-custom-nodes-settings` 的按子包
+忙碌位都属于这一类），数它们只会逼人改坏代码。
 
 ## 16.3 新增一个组件的标准动作
 

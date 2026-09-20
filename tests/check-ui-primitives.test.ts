@@ -3695,6 +3695,211 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P65：异步动作的忙碌位（规范 §16.2.4.71）─────────────────────── */
+
+  it("忙碌位复位写在成功路径上直接阻断（规范 P65）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P65Raw.tsx",
+      [
+        "export const useSave = () => {",
+        "  const [saving, setSaving] = useState(false);",
+        "  const run = async () => {",
+        "    setSaving(true);",
+        "    await save();",
+        "    setSaving(false);",
+        "  };",
+        "  return { saving, run };",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P65");
+  });
+
+  it("复位写在 `finally` 里不算 P65（那形态本身是对的）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P65Ok.tsx",
+      [
+        "export const useSave = () => {",
+        "  const [saving, setSaving] = useState(false);",
+        "  const run = async () => {",
+        "    setSaving(true);",
+        "    try {",
+        "      await save();",
+        "    } finally {",
+        "      setSaving(false);",
+        "    }",
+        "  };",
+        "  return { saving, run };",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).toContain("P65 ");
+    expect(output).not.toContain("studio/P65Ok.tsx");
+  });
+
+  it("复位写在 `catch` 里同样放行（失败路径也有出口）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P65Catch.tsx",
+      [
+        "export const useSave = () => {",
+        "  const [saving, setSaving] = useState(false);",
+        "  const run = async () => {",
+        "    setSaving(true);",
+        "    try {",
+        "      await save();",
+        "    } catch (e) {",
+        "      report(e);",
+        "    } finally {",
+        "      setSaving(false);",
+        "    }",
+        "  };",
+        "  return { saving, run };",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P65Catch.tsx");
+  });
+
+  it("走 use-busy-action 出口的落点不再被 P65 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P65Export.tsx",
+      [
+        'import { useBusyAction } from "~/components/ui/use-busy-action";',
+        "export const useSave = () => {",
+        "  const busy = useBusyAction();",
+        "  const run = () => busy.run(() => save());",
+        "  return { busy: busy.busy, run };",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P65Export.tsx");
+  });
+
+  it("**同步**的开关不算 P65（没有跨 await 的异步边界）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P65Sync.tsx",
+      [
+        "export const Toggle = () => {",
+        "  const [on, setOn] = useState(false);",
+        "  const turnOn = () => {",
+        "    setOn(true);",
+        "    setOn(false);",
+        "  };",
+        "  return { on, turnOn };",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P65Sync.tsx");
+  });
+
+  /* ── P66：重入闸门（规范 §16.2.4.69）─────────────────────────────── */
+
+  it("自建的重入闸门直接阻断（规范 P66）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P66Raw.tsx",
+      [
+        "export const useCopy = () => {",
+        "  const pendingRef = useRef(false);",
+        "  const copy = async () => {",
+        "    if (pendingRef.current) return;",
+        "    pendingRef.current = true;",
+        "    try {",
+        "      await write();",
+        "    } finally {",
+        "      pendingRef.current = false;",
+        "    }",
+        "  };",
+        "  return copy;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output);
+    expect(output).toContain("P66");
+  });
+
+  it("走 reentrancy-lock 出口的落点不再被 P66 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P66Ok.tsx",
+      [
+        'import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";',
+        "export const useCopy = () => {",
+        "  const lock = useReentrancyLock();",
+        "  const copy = async () => {",
+        "    if (!lock.tryEnter()) return;",
+        "    try {",
+        "      await write();",
+        "    } finally {",
+        "      lock.exit();",
+        "    }",
+        "  };",
+        "  return copy;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P66Ok.tsx");
+  });
+
+  it("镜像 ref（只读不判重入）不算 P66", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P66Mirror.tsx",
+      [
+        "export const useThing = (value: string) => {",
+        "  const valueRef = useRef(value);",
+        "  useEffect(() => {",
+        "    valueRef.current = value;",
+        "  }, [value]);",
+        "  const read = () => valueRef.current;",
+        "  return read;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P66Mirror.tsx");
+  });
+
+  it("出口自身的实现（components/ui/use-reentrancy-lock.ts）不被 P66 计", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/use-reentrancy-lock.ts",
+      [
+        "export function useReentrancyLock() {",
+        "  const lockedRef = useRef(false);",
+        "  const tryEnter = () => {",
+        "    if (lockedRef.current) return false;",
+        "    lockedRef.current = true;",
+        "    return true;",
+        "  };",
+        "  return { tryEnter };",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("components/ui/use-reentrancy-lock.ts");
+  });
+
   it("`onProgress` 写在别处的普通 setter 不算 P64（判据认的是订阅回调）", () => {
     seedBaseline();
     write(

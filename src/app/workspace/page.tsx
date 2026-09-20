@@ -146,9 +146,6 @@ export default function WorkspacePage() {
   // ── 画布：为 true 时，画布打开一个全新的命名项目
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
 
-  // ── 自增以重新读取 canvas-store（最近项目） ──
-  const [recentsKey] = useState(0);
-
   // ── 设置后，无限画布接收这条工作流并为它放一个
   //    `kind="workflow"` 节点（来自工作流库的「使用」动作）。
   const [pendingCanvasWorkflow, setPendingCanvasWorkflow] = useState<{
@@ -198,9 +195,11 @@ export default function WorkspacePage() {
       );
     };
     compute();
-    const refresh = () => compute();
-    return subscribeAppEvent("comfyapp:canvas-store-changed", refresh);
-  }, [recentsKey]);
+    /* 重新读取靠**应用事件**（`comfyapp:canvas-store-changed`），不靠依赖数组
+     * —— 收口前这里挂着一个 `useState(0)` 的「票据」却从不自增（注释还写着
+     * 「自增以重新读取」），那个依赖项从来没起过作用（规范 16 §16.2.4.70）。 */
+    return subscribeAppEvent("comfyapp:canvas-store-changed", compute);
+  }, []);
 
   // ── Handlers ──
   const handleNavSelect = useCallback(

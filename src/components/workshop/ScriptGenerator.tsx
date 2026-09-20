@@ -3,6 +3,7 @@ import React from "react";
 import { textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Textarea } from "~/components/ui/textarea";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { FormField } from "~/components/ui/form-field";
@@ -41,7 +42,8 @@ const PROJECT_TYPES: ProjectType[] = [
  *  拆解与场景维护属于后续阶段（角色卡 / 场景分镜），这里只负责产出与修改剧本。 */
 export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   const [idea, setIdea] = React.useState("");
-  const [aiBusy, setAiBusy] = React.useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const ai = useBusyAction();
   const [aiDraft, setAiDraft] = React.useState("");
   const [aiError, setAiError] = React.useState("");
   /** AI 生成成功提示（含本次实际使用的 本地/远端 模型） */
@@ -70,17 +72,18 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
     }
     // 生成剧本可独立于全局配置选 本地/远端 模型：genSel 为空则沿用全局 config。
     const { provider, model } = genEffective;
-    setAiBusy(true);
     setAiDraft("");
     setAiError("");
     setAiStatus("");
     try {
-      const full = await streamChat({
-        messages: buildScriptMarkdownMessages(meta, idea),
-        // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与角色卡一致）
-        opts: model ? { provider, model } : undefined,
-        onToken: (token) => setAiDraft((draft) => draft + token),
-      });
+      const full = await ai.run(() =>
+        streamChat({
+          messages: buildScriptMarkdownMessages(meta, idea),
+          // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与角色卡一致）
+          opts: model ? { provider, model } : undefined,
+          onToken: (token) => setAiDraft((draft) => draft + token),
+        }),
+      );
       const markdown = full.trim();
       if (!markdown) throw new Error("AI 未返回有效内容");
       onScriptChange(markdown);
@@ -90,8 +93,6 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       );
     } catch (e: unknown) {
       setAiError(errorMessage(e, "生成剧本失败"));
-    } finally {
-      setAiBusy(false);
     }
   }
 
@@ -176,7 +177,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             <Button
               variant="outline"
               onClick={handleStructure}
-              disabled={!idea.trim() || aiBusy}
+              disabled={!idea.trim() || ai.busy}
               className="border-border text-ink hover:bg-subtle h-auto rounded-lg px-4 py-2"
             >
               模板生成（离线）
@@ -184,10 +185,10 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
             <Button
               variant="primary-solid"
               onClick={handleAI}
-              disabled={!idea.trim() || aiBusy}
+              disabled={!idea.trim() || ai.busy}
               className="h-auto rounded-lg px-4 py-2"
             >
-              {aiBusy ? (
+              {ai.busy ? (
                 "AI 生成中…"
               ) : (
                 <>
@@ -201,7 +202,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               )}
             </Button>
           </div>
-          {aiBusy && aiDraft && (
+          {ai.busy && aiDraft && (
             <pre className="bg-bg text-ink/80 max-h-48 overflow-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap">
               {aiDraft}
             </pre>
@@ -214,7 +215,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
           {aiStatus && !aiError && (
             <p className="text-primary text-xs">{aiStatus}</p>
           )}
-          {!config && !aiBusy && (
+          {!config && !ai.busy && (
             <p className="text-muted-foreground text-xs">
               未配置 LLM，AI 生成将不可用（仍可用「模板生成」）。可在右上角「LLM
               设置」中接入本地或远端模型。

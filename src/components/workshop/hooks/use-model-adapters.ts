@@ -16,6 +16,7 @@ import {
 } from "~/lib/workshop/model-mode-contract";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { api } from "~/trpc/react";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 
 export interface AdapterCandidate {
   name: string;
@@ -46,7 +47,8 @@ export function useModelAdapters(): ModelAdaptersController {
   const modeContracts = useModeContracts();
   const [selectedModel, setSelectedModel] = useState("");
   const [draft, setDraft] = useState<RemoteModeAdapter[]>([]);
-  const [saving, setSaving] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const saveBusy = useBusyAction();
   const [message, setMessage] = useState<{
     kind: "ok" | "err";
     text: string;
@@ -131,13 +133,14 @@ export function useModelAdapters(): ModelAdaptersController {
 
   const save = useCallback(async () => {
     if (!selectedModel) return;
-    setSaving(true);
     setMessage(null);
     try {
-      const data = await saveMutation.mutateAsync({
-        name: selectedModel,
-        adapters: draft,
-      });
+      const data = await saveBusy.run(() =>
+        saveMutation.mutateAsync({
+          name: selectedModel,
+          adapters: draft,
+        }),
+      );
       setDraft(parseRemoteModeAdapters(data.adapters));
       setMessage({
         kind: "ok",
@@ -148,10 +151,8 @@ export function useModelAdapters(): ModelAdaptersController {
         kind: "err",
         text: e instanceof Error ? e.message : "保存失败",
       });
-    } finally {
-      setSaving(false);
     }
-  }, [selectedModel, draft, saveMutation]);
+  }, [selectedModel, draft, saveMutation, saveBusy]);
 
   return {
     candidates,
@@ -163,7 +164,7 @@ export function useModelAdapters(): ModelAdaptersController {
     selectedModel,
     addMode,
     save,
-    saving,
+    saving: saveBusy.busy,
     message,
   };
 }

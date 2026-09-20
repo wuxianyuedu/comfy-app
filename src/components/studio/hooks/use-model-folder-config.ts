@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { runAsyncAction } from "~/lib/async-action";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { api } from "~/trpc/react";
 
 import { type FolderConfigRow, splitFolders } from "../model-library-config";
@@ -44,7 +45,8 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   const [comfyReachable, setComfyReachable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [scanning, setScanning] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const scanBusy = useBusyAction();
   const [err, setErr] = useState<string | null>(null);
   const [onlyEnabled, setOnlyEnabled] = useState(false);
 
@@ -118,17 +120,17 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   );
 
   const rescan = useCallback(async () => {
-    setScanning(true);
     setErr(null);
-    await runAsyncAction(() => syncMut.mutateAsync(), {
-      report: (kind, detail) => {
-        if (kind === "err") setErr(detail);
-      },
-      failureText: "扫描失败",
-    });
-    setScanning(false);
+    await scanBusy.run(() =>
+      runAsyncAction(() => syncMut.mutateAsync(), {
+        report: (kind, detail) => {
+          if (kind === "err") setErr(detail);
+        },
+        failureText: "扫描失败",
+      }),
+    );
     await load();
-  }, [load, syncMut]);
+  }, [load, scanBusy, syncMut]);
 
   const { enabled, available } = useMemo(
     () => splitFolders(folders, q),
@@ -139,7 +141,7 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     folders,
     comfyReachable,
     loading,
-    scanning,
+    scanning: scanBusy.busy,
     err,
     q,
     setQ,
