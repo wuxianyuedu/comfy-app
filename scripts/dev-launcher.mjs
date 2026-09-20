@@ -41,12 +41,12 @@ import {
   APP_DEV_SCRIPT_MARKER,
   APP_START_SCRIPT_MARKER,
   PORT_OWNERSHIP,
+  classifyProbe,
   fileHasMarker,
   inspectPort,
   portOwnershipVerdict,
   readTail,
   usesExplicitPort,
-  waitForReady,
   writeLaunchStatus,
 } from "./launcher-core/orchestrator.mjs";
 import {
@@ -110,6 +110,7 @@ export {
 } from "./launcher-core/worktree.mjs";
 export {
   waitForReady,
+  classifyProbe,
   readTail,
   fileHasMarker,
   writeLaunchStatus,
@@ -912,7 +913,9 @@ export async function run(argv = process.argv.slice(2)) {
   const nextOut = path.join(nextDir, `nextjs-stdout-${runTimestamp}.log`);
   const nextErr = path.join(nextDir, `nextjs-stderr-${runTimestamp}.log`);
   log(`启动 Next.js dev server（${args.host}:${port}）…`, "STEP");
-  const dev = spawnDevServer(port, args.host, nextOut, nextErr);
+  // dev 用 let：就绪阶段若检测到「路由表 404」的确切信号，会清缓存重启一次
+  // （见步骤 9 的有界自愈），届时重新赋值 dev 供常驻循环与回收使用。
+  let dev = spawnDevServer(port, args.host, nextOut, nextErr);
   log(`dev server 已启动（PID ${dev.pid}，输出见 ${nextOut}）`, "OK");
 
   // 7) 会话锚点：把 PID 与心跳落盘，让「进程被杀后仍能回收」成立
@@ -940,32 +943,97 @@ export async function run(argv = process.argv.slice(2)) {
     );
   }
 
-  // 9) 等就绪（dev server 先退出则立刻定性，不空等 180s）
+  // 9) 等就绪（dev server 先退出则立刻定性；检测到路由表 404 则自愈一次）
   log(`等待服务就绪（http://${args.host}:${port}）…`, "STEP");
   status("dev-server-starting", 0.3, "本地服务已启动，等待就绪…", {
     staleShell,
   });
   const devExited = () => dev.exitCode !== null || dev.signalCode !== null;
-  const ready = await waitForReady({
-    port,
-    host: args.host,
-    timeoutMs: READY_TIMEOUT_MS,
-    isAlive: () => !devExited(),
-    onTick: (left) => {
-      const progress =
-        0.3 +
-        Math.min(
-          0.6,
-          ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6,
+
+  /** 只重启 dev 子进程（保住壳）：回收 dev 整棵子树 → 清 .next → 带重启原因
+   *  重新拉起 → 刷新会话锚点（新 dev 的 pid 要落进去，否则进程被杀后的孤儿回收
+   *  漏掉它）。这是「陈旧路由表」自愈的唯一动作，被上层限制为只跑一次。 */
+  async function restartDevForStaleRoutes() {
+    if (dev.pid) {
+      try {
+        await reapProcessTree({
+          pid: dev.pid,
+          detached: !isWindows(),
+          force: true,
+        });
+      } catch (error) {
+        log(
+          `回收旧 dev 子树失败：${error instanceof Error ? error.message : String(error)}`,
+          "WARN",
         );
-      status(
-        "dev-server-starting",
-        progress,
-        `正在等待本地服务就绪（还剩 ${left}s）…`,
-        { staleShell },
+      }
+    }
+    syncNextCache(ROOT, { FORCE_CLEAN: "1" });
+    dev = spawnDevServer(port, args.host, nextOut, nextErr, {
+      COMFYAPP_RESTART_REASON: "stale-route-table",
+    });
+    writeSession(ROOT, {
+      launcher_pid: process.pid,
+      child_pids: spawned
+        .map((c) => c.pid)
+        .filter((pid) => typeof pid === "number"),
+      app_port: port,
+      mode: args.mode,
+      started_at: new Date(startedAt).toISOString(),
+    });
+  }
+
+  // 「连上但 /api/health 持续 404」的确切签名 → 判定陈旧路由表，自愈一次。
+  // 阈值给 3 次（约 3s）：单次 404 可能只是路由还在按需编译，不足以定性。
+  const READY_ROUTE_404_THRESHOLD = 3;
+  let consecutive404 = 0;
+  let recovered = false;
+  let ready = false;
+  const readyDeadline = Date.now() + READY_TIMEOUT_MS;
+  while (Date.now() < readyDeadline) {
+    if (devExited()) break;
+    const state = await classifyProbe({ port, host: args.host });
+    if (state === "ready") {
+      ready = true;
+      break;
+    }
+    if (state === "route-404") {
+      consecutive404 += 1;
+      if (consecutive404 >= READY_ROUTE_404_THRESHOLD && !recovered) {
+        recovered = true;
+        consecutive404 = 0;
+        log(
+          "检测到路由表 404（服务已应答但 /api/health 未进编译图），判定为陈旧 .next 路由表：清缓存重启 dev server 一次。",
+          "WARN",
+        );
+        status(
+          "dev-server-starting",
+          0.35,
+          "检测到路由表不一致，清缓存重启中…",
+          { staleShell },
+        );
+        await restartDevForStaleRoutes();
+        log(`dev server 已重启（PID ${dev.pid}）`, "OK");
+      }
+    } else {
+      // not-up（连不上）：正常的「还没起来」，重置 404 计数。
+      consecutive404 = 0;
+    }
+    const left = Math.round((readyDeadline - Date.now()) / 1000);
+    const progress =
+      0.3 +
+      Math.min(
+        0.6,
+        ((READY_TIMEOUT_MS - left * 1000) / READY_TIMEOUT_MS) * 0.6,
       );
-    },
-  });
+    status(
+      "dev-server-starting",
+      progress,
+      `正在等待本地服务就绪（还剩 ${left}s）…`,
+      { staleShell },
+    );
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 
   if (devExited()) {
     return await concludeDownstreamExit({
@@ -980,14 +1048,28 @@ export async function run(argv = process.argv.slice(2)) {
   }
   if (!ready) {
     const tail = readTail(nextErr, 20) || "(无输出)";
-    log(
-      `服务未在 ${READY_TIMEOUT_MS / 1000}s 内就绪。最近输出：\n${tail}`,
-      "ERROR",
-    );
-    status("error", 1, "服务未在超时内就绪，见 log/nextjs/", {
-      error: true,
-      staleShell,
-    });
+    if (recovered) {
+      // 已自愈过一次仍持续 404：不再循环重启，把结论与现场交清楚。
+      log(
+        `清缓存重启一次后 /api/health 仍持续 404，路由表异常未恢复（已停止自动重启，避免循环）。最近输出：\n${tail}`,
+        "ERROR",
+      );
+      status(
+        "error",
+        1,
+        "路由表持续异常（已自动清缓存重启一次仍未恢复），见 log/nextjs/",
+        { error: true, staleShell },
+      );
+    } else {
+      log(
+        `服务未在 ${READY_TIMEOUT_MS / 1000}s 内就绪。最近输出：\n${tail}`,
+        "ERROR",
+      );
+      status("error", 1, "服务未在超时内就绪，见 log/nextjs/", {
+        error: true,
+        staleShell,
+      });
+    }
     await shutdown(1);
   }
   log(`服务已就绪：http://${args.host}:${port}`, "OK");
@@ -1103,7 +1185,7 @@ export async function syncDependencies(root, deps = {}) {
  * @param {string} outFile stdout 落盘路径
  * @param {string} errFile stderr 落盘路径
  */
-export function spawnDevServer(port, host, outFile, errFile) {
+export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
   // 起服务用的是**门禁验过的那个命令形态**（`commandInvocation`）：
   // `pnpm` 在 Windows 上常常只有 shebang shim 而 shim 起不来，此时真正能用的是
   // 同目录的 `pnpm.ps1`（经 PowerShell 宿主）。门禁选出来的形态必须在起服务这一
@@ -1116,7 +1198,12 @@ export function spawnDevServer(port, host, outFile, errFile) {
     command: invocation.command,
     args: [...invocation.prefixArgs, "dev", "-p", String(port), "-H", host],
     cwd: ROOT,
-    env: { ...process.env, COMFYAPP_PORT: String(port), PORT: String(port) },
+    env: {
+      ...process.env,
+      COMFYAPP_PORT: String(port),
+      PORT: String(port),
+      ...extraEnv,
+    },
     stdoutFile: outFile,
     stderrFile: errFile,
   });
