@@ -44,6 +44,31 @@ function lockBody(text: string): string {
   return stripBundledSection(text);
 }
 
+/**
+ * 根 importer 里某个直接依赖的条目原文（包名 / specifier / version 三行）。
+ *
+ * 用例拿它当「改一处」的锚点。**别把版本号抄成字面量**：抄了等于把判据挂在
+ * 「当前钉的是哪一版」上 —— 本文件已经被 `next` 与 `zod` 各绊过一次，升级依赖时
+ * 打红的是一批与升级毫无关系的用例。锚点从真 lockfile 里现取，升到哪一版都成立。
+ */
+function importerEntry(body: string, name: string): string {
+  const found = new RegExp(
+    `^ {6}${name}:\\n^ {8}specifier: .*\\n^ {8}version: .*$`,
+    "m",
+  ).exec(body);
+  if (!found) throw new Error(`lockfile 根 importer 里没有 ${name} 条目`);
+  return found[0];
+}
+
+/** 只把条目的 version 一行换成新值（其余原样），供「版本变了」那一档用例使用。 */
+function withEntryVersion(entry: string, version: string): string {
+  return entry.replace(/^ {8}version: .*$/m, `        version: ${version}`);
+}
+
+const ZOD = importerEntry(lockBody(LOCK), "zod");
+/** zod 在**当前** lockfile 里解析到的版本：渲染用例要断言它出现在报告里。 */
+const ZOD_VERSION = /^ {8}version: (\S+)$/m.exec(ZOD)![1];
+
 describe("stripBundledSection（pnpm 自举段必须剔除，否则差异报告全是噪声）", () => {
   it("仓库 lockfile 头部那段 pnpm 自举内容被剔掉，只留依赖正文", () => {
     const body = stripBundledSection(LOCK);
@@ -123,7 +148,6 @@ describe("diffLockfiles（两份 lockfile 的差异）", () => {
   });
 
   it("直接依赖新增 / 删除 / 版本变更都能定位到具体包名", () => {
-    const ZOD = "      zod:\n        specifier: ^4.4.3\n        version: 4.4.3";
     const oldText = body.replace(
       ZOD,
       `${ZOD}\n      brand-new-pkg:\n        specifier: ^1.0.0\n        version: 1.2.3`,
@@ -173,10 +197,7 @@ describe("diffLockfiles（两份 lockfile 的差异）", () => {
   });
 
   it("版本变了能被定位到具体包（拿真 lockfile 改一处）", () => {
-    const next = body.replace(
-      "      zod:\n        specifier: ^4.4.3\n        version: 4.4.3",
-      "      zod:\n        specifier: ^4.4.3\n        version: 5.0.0",
-    );
+    const next = body.replace(ZOD, withEntryVersion(ZOD, "5.0.0"));
     expect(next).not.toBe(body);
     const diff = diffLockfiles(body, next);
     const changed = diff.importers["."]!.dependencies!.changed;
@@ -190,13 +211,13 @@ describe("renderLockDiff（给人看的措辞）", () => {
   it("说出新增/删除/变更的具体包名与版本，而不是只说「不一致」", () => {
     const body = lockBody(LOCK);
     const next = body.replace(
-      "      zod:\n        specifier: ^4.4.3\n        version: 4.4.3",
-      "      zod:\n        specifier: ^4.4.3\n        version: 5.0.0\n      brand-new-pkg:\n        specifier: ^1.0.0\n        version: 1.2.3",
+      ZOD,
+      `${withEntryVersion(ZOD, "5.0.0")}\n      brand-new-pkg:\n        specifier: ^1.0.0\n        version: 1.2.3`,
     );
     const text = renderLockDiff(diffLockfiles(body, next)).join("\n");
     expect(text).toContain("brand-new-pkg");
     expect(text).toContain("zod");
-    expect(text).toContain("4.4.3");
+    expect(text).toContain(ZOD_VERSION);
     expect(text).toContain("5.0.0");
   });
 
