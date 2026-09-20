@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { beginStaleRun } from "~/lib/stale-run";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -41,7 +42,8 @@ export function useModelLibrary(): ModelLibraryController {
   const [type, setType] = useState("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const syncBusy = useBusyAction();
 
   const params = modelListParams(type, q);
 
@@ -77,15 +79,21 @@ export function useModelLibrary(): ModelLibraryController {
   }, [type, q]);
 
   const sync = async (): Promise<void> => {
-    setSyncing(true);
-    try {
+    await syncBusy.run(async () => {
       await vanillaApi.model.sync.mutate();
       const data = await vanillaApi.model.list.query(params);
       setModels((data.models ?? []) as unknown as ModelCardData[]);
-    } finally {
-      setSyncing(false);
-    }
+    });
   };
 
-  return { models, type, setType, q, setQ, loading, syncing, sync };
+  return {
+    models,
+    type,
+    setType,
+    q,
+    setQ,
+    loading,
+    syncing: syncBusy.busy,
+    sync,
+  };
 }

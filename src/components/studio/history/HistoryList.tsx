@@ -1,6 +1,7 @@
 "use client";
 
 import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { textHandler } from "~/lib/form-props";
 
 import { HistoryDetailModal } from "./HistoryDetailModal";
 import { HistoryTaskCard } from "./HistoryTaskCard";
@@ -91,7 +92,7 @@ export function HistoryList({
           <div className="flex items-center gap-2">
             <select
               value={c.sort}
-              onChange={(event) => c.setSort(event.target.value as SortKey)}
+              onChange={textHandler((value) => c.setSort(value as SortKey))}
               className="border-border bg-subtle text-ink-strong rounded-lg border px-3 py-1.5 text-xs outline-none focus:border-violet-500/40"
               aria-label="排序"
             >

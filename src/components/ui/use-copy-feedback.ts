@@ -69,6 +69,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { copyText } from "~/lib/browser-io";
+import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 
 /** 回调用「复制结果」这一件事：`true` = 已进剪贴板。 */
 export type CopyFeedback = (ok: boolean) => void;
@@ -159,25 +160,28 @@ export function useCopyFeedback({
     handlersRef.current = { success: onSuccess, failure: onFailure };
   }, [onSuccess, onFailure]);
 
-  /* 重入判重：同步可见，不等 React 提交。 */
-  const pendingRef = useRef(false);
+  /* 重入判重：同步可见，不等 React 提交 —— 判据收在唯一出口里
+   *（规范 16 §16.2.4.69：「同一时刻只跑一件」）。 */
+  const lock = useReentrancyLock();
 
   /* ⚠️ 入参必须是**产出 Promise 的函数**，不能是 Promise 本身：
-   * 后者会在调用 `report` 之前就把写入发出去，`pendingRef` 的重入判据
-   * 于是形同虚设（连点两下仍然发两次写入）—— 本用例集正是钉住这一点的。 */
-  const report = useCallback((start: () => Promise<boolean>) => {
-    if (pendingRef.current) return;
-    pendingRef.current = true;
-    void start()
-      .then((ok) => {
-        const handlers = handlersRef.current;
-        if (ok) handlers.success?.(true);
-        else if (handlers.failure !== "silent") handlers.failure?.(false);
-      })
-      .finally(() => {
-        pendingRef.current = false;
-      });
-  }, []);
+   * 后者会在调用 `report` 之前就把写入发出去，重入判据于是形同虚设
+   *（连点两下仍然发两次写入）—— 本用例集正是钉住这一点的。 */
+  const report = useCallback(
+    (start: () => Promise<boolean>) => {
+      if (!lock.tryEnter()) return;
+      void start()
+        .then((ok) => {
+          const handlers = handlersRef.current;
+          if (ok) handlers.success?.(true);
+          else if (handlers.failure !== "silent") handlers.failure?.(false);
+        })
+        .finally(() => {
+          lock.exit();
+        });
+    },
+    [lock],
+  );
 
   /* 两种调用形态共用同一条重入判据与同一份反馈：
    *   · `copy("文本")` —— 最常见；
@@ -209,12 +213,14 @@ export function useCopyFeedback({
  * 重入期间直接返回 `false`（正在飞的那次还没定论，重复点不该再发一次）。
  */
 export function useCopyResult(): (text: string) => Promise<boolean> {
-  const pendingRef = useRef(false);
-  return useCallback((text: string): Promise<boolean> => {
-    if (pendingRef.current) return Promise.resolve(false);
-    pendingRef.current = true;
-    return copyText(text).finally(() => {
-      pendingRef.current = false;
-    });
-  }, []);
+  const lock = useReentrancyLock();
+  return useCallback(
+    (text: string): Promise<boolean> => {
+      if (!lock.tryEnter()) return Promise.resolve(false);
+      return copyText(text).finally(() => {
+        lock.exit();
+      });
+    },
+    [lock],
+  );
 }

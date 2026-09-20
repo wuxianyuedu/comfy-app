@@ -6,6 +6,7 @@
 // 写入失败绝不抛给调用方——执行日志是辅助通道，不能把生成流程带崩。
 
 import { clampInt } from "~/lib/clamp";
+import { tailWindow } from "~/lib/page-window";
 import { errorText } from "~/lib/error-message";
 
 import "server-only";
@@ -87,7 +88,7 @@ export async function readGenerationLogs(
     }
     // 文件按新→旧遍历，collected 前段是新条目：取末尾 capped 条即「最近 limit 条」，
     // 并保持时间正序返回
-    return collected.slice(-capped);
+    return tailWindow(collected, capped);
   } catch {
     return [];
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
+import { checkedHandler, textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
@@ -46,7 +47,7 @@ export function ModelLibrary() {
             </Button>
             <input
               value={c.q}
-              onChange={(event) => c.setQ(event.target.value)}
+              onChange={textHandler(c.setQ)}
               placeholder="搜索模型名称…"
               className="border-border bg-subtle text-ink-bright w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40 sm:w-64"
             />
@@ -277,7 +278,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
           <div className="flex items-center gap-3 px-5 py-3">
             <input
               value={c.q}
-              onChange={(event) => c.setQ(event.target.value)}
+              onChange={textHandler(c.setQ)}
               placeholder="搜索目录名…"
               className="border-border bg-subtle text-ink-bright flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-violet-500/40"
             />
@@ -285,7 +286,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
               <input
                 type="checkbox"
                 checked={c.onlyEnabled}
-                onChange={(event) => c.setOnlyEnabled(event.target.checked)}
+                onChange={checkedHandler(c.setOnlyEnabled)}
                 className="border-border-strong bg-surface-2 h-3.5 w-3.5 rounded text-violet-700 focus:ring-violet-400/40 dark:text-violet-400"
               />
               仅显示已启用

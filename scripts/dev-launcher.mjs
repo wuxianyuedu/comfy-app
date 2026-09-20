@@ -30,7 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
-import { ensureSchemaCurrent, schemaNotice } from "./db-schema-state.mjs";
+import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
   archiveRunLog,
@@ -941,14 +941,21 @@ export async function run(argv = process.argv.slice(2)) {
   touchHeartbeat(ROOT);
   clearIntervalGuard(heartbeat);
 
-  // 8) DB schema 自检 + 按需自动同步（只提示不退出：改纯前端页面不该被空库
-  //    挡住，§9.1）。「拉了含 schema 变更的代码后忘了跑 db:push」由这里兜住 ——
-  //    判据与「自动做到哪一步为止」见 db-schema-state.mjs 的 ensureSchemaCurrent。
-  const schema = schemaNotice(ensureSchemaCurrent(ROOT));
-  if (schema) {
-    for (const line of schema.lines) {
-      log(line, schema.level === "warn" ? "WARN" : "INFO");
-    }
+  // 8) DB schema 自检 + **后台同步**（§9.1）。「拉了含 schema 变更的代码后忘了
+  //    跑 db:push」由这里兜住，但**不阻塞启动** —— drizzle 同步一次 15~30 秒，
+  //    等它等于让用户盯着空窗。判据见 db-schema-state.mjs 的 spawnSchemaSync；
+  //    不一致时它会自动同步，页面经 GET /api/schema 显示「已同步，请刷新」。
+  const schema = spawnSchemaSync(ROOT);
+  if (schema.started) {
+    log(
+      "数据库结构核对已在后台开始（不一致时自动同步，页面会提示刷新）",
+      "INFO",
+    );
+  } else {
+    log(
+      `无法后台核对数据库结构：${schema.reason ?? "原因未知"}（必要时手动跑 pnpm db:push）`,
+      "WARN",
+    );
   }
 
   // 9) 等就绪（dev server 先退出则立刻定性；检测到路由表 404 则自愈一次）

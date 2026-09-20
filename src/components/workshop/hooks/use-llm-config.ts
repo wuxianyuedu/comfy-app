@@ -13,6 +13,7 @@ import {
   type RemoteModelKind,
 } from "~/lib/llm/types";
 import { api } from "~/trpc/react";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 
 /** 判断远端模型是否为文本生成(对话)可用类型。
  *  kind 缺省(null)的历史条目按 chat 处理——与设置页 `kind ?? "chat"` 归组一致。 */
@@ -146,36 +147,32 @@ export interface LLMConfigSaveController {
 
 export function useLLMConfigSave(): LLMConfigSaveController {
   const saveCfg = api.llm.configSave.useMutation();
-  const [saving, setSaving] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const saveBusy = useBusyAction();
 
   const save = useCallback(
     async (input: LLMConfigSaveInput): Promise<LLMConfigView> => {
-      setSaving(true);
-      try {
-        const data = await saveCfg.mutateAsync(input);
-        const cfg = data.config;
-        const rawExtra: unknown = (cfg as Record<string, unknown>).extraModels;
-        return {
-          ...cfg,
-          hasApiKey: !!cfg.apiKey,
-          // 与 useLLMConfig 同口径：本机 ollama 误存成「远端」时，保存后的
-          // 视图配置也要按生效提供方展示，否则徽标/页脚闪回「远端」。
-          provider: effectiveProviderType(
-            cfg.provider as "local" | "remote",
-            cfg.baseUrl,
-            !!cfg.apiKey,
-          ),
-          extraModels: toModelNames(rawExtra),
-          temperatureByTask:
-            (cfg.temperatureByTask as
-              Record<string, number> | null | undefined) ?? undefined,
-        };
-      } finally {
-        setSaving(false);
-      }
+      const data = await saveBusy.run(() => saveCfg.mutateAsync(input));
+      const cfg = data.config;
+      const rawExtra: unknown = (cfg as Record<string, unknown>).extraModels;
+      return {
+        ...cfg,
+        hasApiKey: !!cfg.apiKey,
+        // 与 useLLMConfig 同口径：本机 ollama 误存成「远端」时，保存后的
+        // 视图配置也要按生效提供方展示，否则徽标/页脚闪回「远端」。
+        provider: effectiveProviderType(
+          cfg.provider as "local" | "remote",
+          cfg.baseUrl,
+          !!cfg.apiKey,
+        ),
+        extraModels: toModelNames(rawExtra),
+        temperatureByTask:
+          (cfg.temperatureByTask as
+            Record<string, number> | null | undefined) ?? undefined,
+      };
     },
-    [saveCfg],
+    [saveCfg, saveBusy],
   );
 
-  return { saving, save };
+  return { saving: saveBusy.busy, save };
 }

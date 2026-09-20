@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { checkedHandler, textHandler } from "~/lib/form-props";
 import { Redo2, Undo2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -465,15 +466,13 @@ export function FilmStudio() {
             >
               <input
                 value={selectedShot!.name}
-                onChange={(event) =>
+                onChange={textHandler((name) =>
                   setShots((prev) =>
                     prev.map((prev) =>
-                      prev.id === selectedShotId
-                        ? { ...prev, name: event.target.value }
-                        : prev,
+                      prev.id === selectedShotId ? { ...prev, name } : prev,
                     ),
-                  )
-                }
+                  ),
+                )}
                 className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
             </FormField>
@@ -550,7 +549,7 @@ export function FilmStudio() {
             >
               <Textarea
                 value={c.script}
-                onChange={(event) => c.setScript(event.target.value)}
+                onChange={textHandler(c.setScript)}
                 rows={3}
                 placeholder="支持一句话自动分镜…"
                 className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-[12px] leading-relaxed"
@@ -564,7 +563,7 @@ export function FilmStudio() {
             >
               <select
                 value={c.videoWorkflowId}
-                onChange={(event) => c.setVideoWorkflowId(event.target.value)}
+                onChange={textHandler(c.setVideoWorkflowId)}
                 className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               >
                 <option value="">
@@ -593,7 +592,7 @@ export function FilmStudio() {
             >
               <select
                 value={c.imageWorkflowId}
-                onChange={(event) => c.setImageWorkflowId(event.target.value)}
+                onChange={textHandler(c.setImageWorkflowId)}
                 className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               >
                 <option value="">
@@ -615,7 +614,7 @@ export function FilmStudio() {
               <input
                 type="checkbox"
                 checked={c.subtitleOn}
-                onChange={(event) => c.setSubtitleOn(event.target.checked)}
+                onChange={checkedHandler(c.setSubtitleOn)}
                 className="accent-violet-500"
               />
             </label>

@@ -32,7 +32,7 @@ log = "0.4"
 # tray-icon：系统托盘（「打开主界面」入口 + 显式退出）。应用启动时可能只显示
 # 到任务栏而不抢前台（见 lib.rs 的 show_main_window_without_focus），需要一个
 # 常驻的唤起入口，用户才不会「找不到窗口」。
-tauri = { version = "2.11.3", features = ["tray-icon"] }
+tauri = { version = "2.11.6", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
@@ -57,8 +57,20 @@ tauri-plugin-shell = "2"
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
   "Win32_System_Threading",
+  # 壳自编排（ISSUE #784）的两处需要：Job Object（KILL_ON_JOB_CLOSE 兜住
+  # 编排器崩溃时的孤儿）与进程环境块认亲（Toolhelp 快照 + 读 PEB 环境块）。
+  # 两者都只在 Windows 上存在，因此与父条目同在 target 条件依赖里。
+  "Win32_System_JobObjects",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Diagnostics_Debug",
+  # NtQueryInformationProcess / ProcessBasicInformation（PROCESSINFOCLASS）在
+  # **Wdk** 命名空间下，Win32 侧没有同名项；PROCESS_BASIC_INFORMATION 又在
+  # Win32_System_Threading 里由 Win32_System_Kernel 门控。二者缺一整条认亲链
+  # 就编译不过（判据：认亲不许退化成按名字/端口猜，见 is_own 的注释）。
+  "Win32_System_Kernel",
+  "Wdk_System_Threading",
 ] }

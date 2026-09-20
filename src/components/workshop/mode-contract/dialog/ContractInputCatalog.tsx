@@ -11,6 +11,7 @@
 // 本组件不持有契约状态：值从 props 来、动作往上抛（与编辑器其余部分同一条分层）。
 
 import { useState } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -140,7 +141,7 @@ export function ContractInputCatalog({
               <Input
                 autoFocus
                 value={draftName}
-                onChange={(event) => setDraftName(event.currentTarget.value)}
+                onChange={textHandler(setDraftName)}
                 /* Enter 提交 / Esc 取消走唯一实现（§16.2.4.29）：自己判键会漏掉
                  *  `preventDefault` 与输入法组字态（中文拼音未上屏时的 Enter
                  *  是「确认候选」，不是提交）。 */

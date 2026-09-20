@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "~/components/ui/button";
+import { textHandler } from "~/lib/form-props";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ModelCard } from "./ModelCard";
 import { useModelLibrary } from "./hooks/use-model-library";
@@ -42,7 +43,7 @@ export function ModelLibrary() {
         ))}
         <input
           value={c.q}
-          onChange={(event) => c.setQ(event.target.value)}
+          onChange={textHandler(c.setQ)}
           placeholder="搜索模型…"
           className="border-border bg-surface focus:border-primary ml-auto h-9 w-44 rounded-lg border px-3 text-sm outline-none sm:w-56"
         />

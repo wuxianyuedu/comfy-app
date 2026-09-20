@@ -1,6 +1,7 @@
 "use client";
 /* 拆出来的画布装饰组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import React, { useState, useRef, useMemo } from "react";
+import { digitsOnly, textHandler } from "~/lib/form-props";
 import { clamp } from "~/lib/clamp";
 import {
   useReactFlow,
@@ -200,7 +201,7 @@ export function ZoomIndicator({
         autoFocus
         value={draft}
         inputMode="numeric"
-        onChange={(event) => setDraft(event.target.value.replace(/[^\d]/g, ""))}
+        onChange={textHandler(setDraft, digitsOnly)}
         onBlur={commit}
         {...enterCommit({
           onCommit: commit,
