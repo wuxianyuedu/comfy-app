@@ -65,6 +65,18 @@ describe("WidgetInputRow — 图片上传位", () => {
     expect(screen.getByText(/已选：tmp3g2v80p6\.png/)).toBeInTheDocument();
   });
 
+  it("已选时渲染缩略图预览（此前只有一行文件名，选完图看不到图）", () => {
+    renderRow(uploadPin(), { value: "tmp3g2v80p6.png" });
+    const img = document.querySelector("img");
+    expect(img).not.toBeNull();
+    expect(img!.getAttribute("src")).toContain("filename=tmp3g2v80p6.png");
+  });
+
+  it("未选时不渲染图片（空文件名不拼出一个必然 404 的地址）", () => {
+    renderRow(uploadPin());
+    expect(document.querySelector("img")).toBeNull();
+  });
+
   it("类型徽章如实打印 IMAGEUPLOAD,不回退成别的类型", () => {
     renderRow(uploadPin());
     expect(screen.getByText("IMAGEUPLOAD")).toBeInTheDocument();
