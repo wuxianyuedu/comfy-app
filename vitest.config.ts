@@ -83,6 +83,12 @@ export default defineConfig({
         "src/components/ui/use-item-action.ts",
         "src/components/ui/use-element-box.ts",
         "src/lib/dom-rect.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.42 ~ §16.2.4.44）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/lib/next-frame.ts",
+        "src/components/ui/use-copy-feedback.ts",
+        "src/lib/is-record.ts",
+        "src/server/lib/request-body.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -455,6 +461,34 @@ export default defineConfig({
           lines: 95,
           functions: 80,
           statements: 90,
+          branches: 85,
+        },
+        /* 本批四条新出口（规范 16 §16.2.4.42 ~ §16.2.4.44）。门槛取**实测值**
+         * （§11.7 的覆盖率棘轮口径：不设理想值，设高了会让无关提交变红）。
+         * 两个类型守卫与两个调度函数都是纯判据，用例把每条分支都走到了；
+         * 反馈 hook 的三条分支（成功 / 失败 / 静默）与重入判据也在用例里。 */
+        "src/lib/next-frame.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/is-record.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/server/lib/request-body.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/ui/use-copy-feedback.ts": {
+          lines: 95,
+          functions: 90,
+          statements: 95,
           branches: 85,
         },
         /* 「一张媒体图的自然尺寸是多少」的出口（§16.2.4.31，P28 的对面）：

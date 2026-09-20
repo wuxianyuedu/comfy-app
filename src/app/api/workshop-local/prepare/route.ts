@@ -7,7 +7,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
 import { uploadImage } from "~/lib/comfyui/client";
-import { isRecord } from "~/lib/workshop/api-channel-shared";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import {
   resolveMediaBytes,
   strField,
@@ -35,15 +35,8 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
-  }
-  if (!isRecord(body)) {
-    return NextResponse.json({ error: "请求体必须是对象" }, { status: 400 });
-  }
+  const body = await readJsonRecord(req);
+  if (isErrorResponse(body)) return body;
   const image = strField(body, "image");
   if (!image) {
     return NextResponse.json({ error: "image 不能为空" }, { status: 400 });

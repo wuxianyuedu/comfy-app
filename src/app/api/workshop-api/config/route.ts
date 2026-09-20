@@ -10,7 +10,8 @@ import {
   getMaskedChannels,
   saveWorkshopApiSettings,
 } from "~/lib/workshop/api-channel.server";
-import { isRecord } from "~/lib/workshop/api-channel-shared";
+import { isRecord } from "~/lib/is-record";
+import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
@@ -31,15 +32,8 @@ export async function POST(req: NextRequest) {
     return unauthorizedResponse();
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
-  }
-  if (!isRecord(body)) {
-    return NextResponse.json({ error: "请求体必须是对象" }, { status: 400 });
-  }
+  const body = await readJsonRecord(req);
+  if (isErrorResponse(body)) return body;
 
   const patch: { image?: unknown; video?: unknown } = {};
   if (isRecord(body.image)) patch.image = body.image;

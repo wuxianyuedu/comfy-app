@@ -247,6 +247,19 @@ const DOMAIN_EXEMPT = new Set([
    * 进任何一个域都会让其余四个反向依赖它。与 `progress` / `list-filter` 同款：
    * 「唯一持有者 + 任何域消费」的顶层单例。 */
   "src/lib/dom-rect.ts",
+  /* 「`unknown` 是不是纯对象」的判据（ISSUE #672）：**客户端**
+   *（`media/materials-client` 收窄 fetch 响应）、**服务端域模块**
+   *（`llm/usage-test.server`、`workshop/api-channel-shared`）、
+   * **REST 路由**（`server/lib/request-body`）与**视图逻辑层**
+   *（`workshop/api-channel-client`、`agent/client`）都在读它 ——
+   * 收口前有 9 份逐字相同的实现。进任何子域都会让其余四侧反向依赖它。
+   * 与 `dom-rect` / `list-filter` / `progress` 同款：顶层单例。 */
+  "src/lib/is-record.ts",
+  /* 「等一帧再做事」的调度（ISSUE #672）：视图层（工作流编辑器 / 自定义节点
+   * 设置 / 选单 / 确认弹窗 / json-viewer）与 `lib` 侧（`project-canvas` 的
+   * fitView 调度器、流程表单的持久化）**都在用**，且两侧对「一帧还是两帧」
+   * 必须同一口径。进任何子域都会让另一侧反向依赖它 —— 顶层单例。 */
+  "src/lib/next-frame.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",

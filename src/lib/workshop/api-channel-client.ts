@@ -3,8 +3,8 @@
 // 服务端换了错误信封（{error} 字符串 / {error:{message}}）只需改本文件。
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
+import { isRecord } from "~/lib/is-record";
 import {
-  isRecord,
   type ApiChannelSaveInput,
   type ApiChannelsView,
   type ApiChannelView,

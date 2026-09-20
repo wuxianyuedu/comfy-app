@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
-import { copyText } from "~/lib/browser-io";
+import { useCopyResult } from "~/components/ui/use-copy-feedback";
 import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
@@ -201,20 +201,25 @@ export function useHistoryList(): HistoryListController {
     [deleteTask, detailId, report, queryClient],
   );
 
+  /* 「重试」的实际动作是**复制参数到剪贴板**（后端从来没有重试接口，见下）。
+   * 反馈走 `runAsyncAction` 的文案通道，而「复制成不成」是它的**输入** —— 所以
+   * 这里用出口把一个 Promise 化的复制结果接出来喂给动作（规范 16 §16.2.4.43）。 */
+  /* 只拿成败、不报反馈 —— 反馈由下面的 `runAsyncAction` 统一给。 */
+  const copyForRetry = useCopyResult();
   const retry = useCallback(
     async (task: TaskItem) => {
       await retryAction.run(task.id, async () => {
         // 原 REST /api/tasks/[id]/retry 从未实现（历史一直 404）；后端无
         // 重试接口，复制参数到剪贴板，请到创作台手动重跑。
         const params = JSON.stringify(task.params ?? {}, null, 2);
-        /* 剪贴板的成败由 `copyText` 的返回**值**表达（它不抛）：失败时
-         * 走出口的失败分支，而不是让「复制失败」被 `try` 当成成功。 */
-        const copied = await copyText(
+        /* 剪贴板的成败由出口的返回值表达（它不抛）：失败时走
+         * `runAsyncAction` 的失败分支，而不是让「复制失败」被 `try` 当成成功。 */
+        const copied = await copyForRetry(
           `prompt: ${task.prompt ?? ""}\nworkflow: ${task.workflowName}\ntype: ${task.type}\nparams: ${params}`,
         );
         await runAsyncAction(async () => copied, {
           report,
-          failureText: "网络错误，重试请求未发送",
+          failureText: "复制失败：剪贴板不可用，请到创作台手动重跑",
           successText:
             "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
         });
@@ -223,7 +228,7 @@ export function useHistoryList(): HistoryListController {
        * 用户可能是在别处重跑成功的）。 */
       refresh();
     },
-    [refresh, report, retryAction],
+    [refresh, report, retryAction, copyForRetry],
   );
 
   return {

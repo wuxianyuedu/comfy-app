@@ -7,7 +7,7 @@ import {
   type CanvasNodeData,
   type NodeKind,
 } from "~/lib/project-canvas/canvas-types";
-import { copyText } from "~/lib/browser-io";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { isVideo as isVideoSource } from "~/lib/media/media-kind";
 import { NodeChip, StatusBadge } from "./CanvasNodePrimitives";
@@ -34,6 +34,10 @@ export function ResultCard({
   text?: string;
   onReplace: () => void;
 }) {
+  /* 这枚「下载」（实为复制文本）的失败**显式静默**：产出文本就在下面的
+   * 只读块里印着，用户能直接手动选中复制（规范 16 §16.2.4.43）。 */
+  const copyResult = useCopyFeedback({ onFailure: "silent" });
+
   /* 业务事实（节点类型 / 产出元数据）与文件事实（扩展名）分层判断：扩展名那份
    * 判据收敛在 `media-kind.ts`（ISSUE #571），视图层不再自带第四份正则。 */
   const isVideo =
@@ -81,7 +85,7 @@ export function ResultCard({
             variant="ghost"
             title="下载"
             onClick={() => {
-              if (text) void copyText(text);
+              if (text) copyResult(text);
             }}
             className="text-ink-soft hover:bg-subtle h-auto rounded-md px-2 py-1 text-[11px] font-normal"
           >

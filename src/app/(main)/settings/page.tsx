@@ -16,12 +16,12 @@
  * 已被其取代，这里仅在内容区渲染外壳 + 该错误视图。
  */
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ChevronRight, Copy } from "lucide-react";
 
 import { Button, buttonVariants } from "~/components/ui/button";
-import { copyText } from "~/lib/browser-io";
 import { cn } from "~/lib/utils";
+import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { PageLoading } from "~/components/ui/page-loading";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -86,17 +86,26 @@ export function SettingsLoadError({
 }) {
   const [expanded, setExpanded] = useState(false);
   const copied = useFlashState();
+  /* 成败都改口（规范 16 §16.2.4.43）：收口前这里是
+   * `if (await copyText(errorText)) copied.flash();` —— 失败时按钮一动不动，
+   * 用户以为复制到了。 */
+  const [copyFailed, setCopyFailed] = useState(false);
+  const copyError = useCopyFeedback({
+    onSuccess: () => {
+      setCopyFailed(false);
+      copied.flash();
+    },
+    onFailure: () => setCopyFailed(true),
+  });
   const togglePanel = useLogPanel((s) => s.toggleOpen);
 
   /* 复制的是用户看到的这段可读文案（`errorText` 也已优先取服务端原文）；
    * 原始报错（tRPC code / 服务端 message / 堆栈首行）另见日志面板的同条记录
    * —— 视图不再手拼第二份原文，避免两处措辞漂移。 */
-  const copyError = async () => {
-    /* 剪贴板不可用（非安全上下文等）时静默失败，用户仍可展开后手动选择复制。 */
-    if (await copyText(errorText)) {
-      copied.flash();
-    }
-  };
+  const copyErrorText = useCallback(
+    () => copyError(errorText),
+    [copyError, errorText],
+  );
 
   return (
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">
@@ -146,11 +155,16 @@ export function SettingsLoadError({
           trailing={
             <Button
               variant="outline"
-              onClick={() => void copyError()}
+              onClick={copyErrorText}
               className="text-muted-foreground h-auto items-center gap-1 rounded-lg px-3 py-2 text-xs"
+              title={
+                copyFailed
+                  ? "复制失败：剪贴板不可用，请在下方展开后手动选中复制"
+                  : "复制这段错误文案"
+              }
             >
               <Copy size={13} />
-              {copied.on ? "已复制" : "复制"}
+              {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
             </Button>
           }
         >

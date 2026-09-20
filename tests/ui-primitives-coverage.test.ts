@@ -423,6 +423,23 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ],
       4,
     ],
+    /* 本批三条（规范 16 §16.2.4.42 ~ §16.2.4.44）：「等一帧再做事」的调度
+     *（P39）、复制之后的反馈（P40）、REST 的入参收窄（P41）。
+     * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
+    ["~/lib/next-frame", "ts", ["onNextFrame", "afterNextPaint"], 2],
+    [
+      "~/components/ui/use-copy-feedback",
+      "ts",
+      ["useCopyFeedback", "useCopyResult"],
+      4,
+    ],
+    ["~/lib/is-record", "ts", ["isRecord", "isPlainRecord"], 3],
+    [
+      "~/server/lib/request-body",
+      "ts",
+      ["readJsonRecord", "isErrorResponse"],
+      3,
+    ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
     (spec, ext, exports, min) => {

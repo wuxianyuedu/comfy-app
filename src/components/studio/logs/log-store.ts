@@ -929,7 +929,8 @@ export interface LogStoreState {
   setIsOpen: (open: boolean) => void;
   toggleOpen: () => void;
   clear: () => void;
-  copyAll: () => Promise<void>;
+  /** 复制当前筛选下的全部日志；返回值 = 是否真的进了剪贴板（反馈归面板，§16.2.4.43）。 */
+  copyAll: () => Promise<boolean>;
   download: () => void;
   /**
    * 把当前筛选下的**全部日志**保存到本机 `log/exports/`（返回落盘路径）。

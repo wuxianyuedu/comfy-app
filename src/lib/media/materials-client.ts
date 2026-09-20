@@ -5,10 +5,7 @@
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { withQuery } from "~/lib/query-string";
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
+import { isRecord } from "~/lib/is-record";
 
 /** 分类（文件夹）摘要，含该分类素材条数。 */
 export interface MaterialFolder {

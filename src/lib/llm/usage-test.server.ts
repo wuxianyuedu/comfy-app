@@ -24,6 +24,7 @@ import {
   pollRemoteVideoTask,
   saveMediaToLocalTemp,
 } from "~/lib/llm/video-task-util";
+import { isRecord } from "~/lib/is-record";
 
 /** chat / 生图 / 生视频的单次调用超时（生视频提交后若走任务制则由
  *  video-task-util 轮询取回，不受此上限约束，见 VIDEO_POLL_TOTAL_MS）。 */
@@ -33,10 +34,6 @@ export const MEDIA_TIMEOUT_MS = 180_000;
 /** 允许的用途。 */
 export const USAGE_TEST_KINDS = ["chat", "image", "video"] as const;
 export type UsageTestKind = (typeof USAGE_TEST_KINDS)[number];
-
-export function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
 
 /** 取一个 trim 过的字符串字段（缺省/类型不对一律给空串）。 */
 export function strField(rec: Record<string, unknown>, key: string): string {
