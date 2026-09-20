@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMyWorks } from "./hooks/use-my-works";
-import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   QUEUED: { label: "排队中", cls: "bg-subtle text-muted-foreground" },
@@ -61,9 +61,12 @@ export default function MyWorks() {
               >
                 <div className="bg-bg relative aspect-square">
                   {task.cover ? (
-                    <MediaThumbnail
+                    /* 封面点开即用通用查看器看大图：这一格是 `object-cover`
+                       的方形裁切，看不到整张图，而格子本身没有任何点击行为。 */
+                    <ViewableImage
                       src={task.cover}
                       alt={task.prompt}
+                      label={task.prompt || "作品"}
                       className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
                     />
                   ) : (
