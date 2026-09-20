@@ -48,6 +48,12 @@ export interface WorkflowRunMeta {
   source?: WorkflowRunSource;
   /** 终态（done / failed）时由订阅者 patch；running/缺省 = 仍在跑。 */
   status?: "running" | "done" | "failed";
+  /** 最近一次进度百分比（0–100）。
+   *
+   *  它必须落在这里而不是只留在组件的 `useState` 里：两个页签切走即卸载
+   *  （`ui/tabs` 的 Panel），进度是「切回来时这次运行还在不在跑」最直接的
+   *  证据 —— 只有它进了登记表，恢复出来的界面才不会从 0% 重新开始。 */
+  progress?: number;
   resultUrl?: string;
   errorMessage?: string;
   /** 累积的执行步骤日志（重开窗口后由 SSE 回放继续补齐）。 */
@@ -128,11 +134,11 @@ export function registerWorkflowRun(meta: WorkflowRunMeta): void {
   touch(meta);
 }
 
-/** patch 已登记运行的状态 / 结果 / 错误。 */
+/** patch 已登记运行的状态 / 进度 / 结果 / 错误。 */
 export function patchWorkflowRun(
   taskId: string,
   patch: Partial<
-    Pick<WorkflowRunMeta, "status" | "resultUrl" | "errorMessage">
+    Pick<WorkflowRunMeta, "status" | "resultUrl" | "errorMessage" | "progress">
   >,
 ): void {
   const prev = runs.get(taskId);

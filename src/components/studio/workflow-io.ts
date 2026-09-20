@@ -482,6 +482,22 @@ export function defaultInputValues(
   const { inputs } = splitWorkflowIO(io);
   for (const entry of inputs) {
     if (entry.control === "link") continue;
+    /* ── 图片口**不播种图内默认值** ────────────────────────────────────
+     *  图片口的默认值是 ComfyUI 服务器上的一个**文件名**（常见的正是 `image`
+     *  这类占位名，取自 LoadImage 的 widgets_values[0]）。它既不保证在服务器
+     *  上真的存在，也**不是用户选过的图** —— 播种进来会让表单一打开就写着
+     *  「已选：image」，用户以为已经选好了一张图（实测反馈）。
+     *
+     *  播种**空值**而不是干脆不写这个键：键必须在，否则
+     *  `mergeRefreshedDefaults` 会把用户上传过的值当成「被摘掉的 pin」删掉
+     *  —— IO 每次刷新都会走那条合并，上传的图会被静默清空。
+     *
+     *  空值不下发（`toWorkflowInputsPayload` 跳过 `""`），运行期仍由 ComfyUI
+     *  按图内默认值兜底 —— 运行语义与播种前完全一致，只是不再冒充「已选」。 */
+    if (entry.control === "image") {
+      out[entry.ioKey] = "";
+      continue;
+    }
     /* 有模式语境时按模式覆盖层取（`modeOverrides[mode].defaultValue` 压过图内默认值）；
      *  没有模式时就是图内读出的 `defaultValue`。 */
     const resolved = resolveEntryDefault(entry, mode);

@@ -24,14 +24,15 @@ import {
   buildLibraryWorkflowInput,
   prepareLocalInputImage,
   startLocalGenerate,
-  watchTask,
 } from "~/lib/workshop/generation-client";
 import {
   appendWorkflowRunLog,
-  failWorkflowRun,
-  patchWorkflowRun,
   registerWorkflowRun,
 } from "~/lib/workflow/workflow-run-store";
+import {
+  useWorkflowRunResume,
+  watchWorkflowRun,
+} from "./use-workflow-run-resume";
 import { readFileAsDataUrl } from "~/lib/file-io";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 
@@ -85,6 +86,40 @@ export function useEncapsulationTestRun({
   /* 重入闸门放 ref：`run` 在异步回调里判定时 state 还停在旧值。 */
   const runningRef = useRef(false);
 
+  /* 切页签回来（`ui/tabs` 的 Panel 卸载后重新挂载）时恢复这次运行的视角：
+   * 还在跑就回到「测试中」并重订阅，已完成直接恢复产物，已失败恢复原因。
+   * 取的是本工作流最近一次**流程测试**（不按模式细分 —— 逐模式测试是连续
+   * 动作，最近一次就是用户刚才那次）。 */
+  useWorkflowRunResume({
+    workflowId,
+    source: "encapsulation-test",
+    handlers: {
+      onProgress: (taskId, pct) => {
+        /* 重入闸门也要跟着恢复：否则「恢复成生成中」之后点按钮会再发一次。 */
+        runningRef.current = true;
+        setTaskId(taskId);
+        setRunning(true);
+        setProgress(pct);
+      },
+      onLog: (taskId, entry) => {
+        appendWorkflowRunLog(taskId, entry);
+      },
+      onOutput: (taskId, output) => {
+        setTaskId(taskId);
+        if (output.kind === "video") return;
+        setResultUrl(output.url);
+      },
+      onSettled: (taskId, result) => {
+        runningRef.current = false;
+        setTaskId(taskId);
+        setRunning(false);
+        if (!result.ok) {
+          setError(result.message ?? "流程测试失败");
+        }
+      },
+    },
+  });
+
   const run = useCallback<EncapsulationTestRunController["run"]>(
     (values) => {
       if (runningRef.current) return;
@@ -117,23 +152,22 @@ export function useEncapsulationTestRun({
             source: "encapsulation-test",
           });
           await new Promise<void>((resolve) => {
-            watchTask(id, {
-              onProgress: (pct) => setProgress(pct),
-              onLog: (entry) => {
-                appendWorkflowRunLog(id, entry);
+            /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 /
+             * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
+             * 这一页的运行视角才不会清零。 */
+            watchWorkflowRun(id, {
+              onProgress: (_taskId, pct) => setProgress(pct),
+              onLog: (taskId, entry) => {
+                appendWorkflowRunLog(taskId, entry);
               },
-              onOutput: (output) => {
+              onOutput: (_taskId, output) => {
+                /* 视频产物不进「生成一张图」那个结果位。 */
                 if (output.kind === "video") return;
                 setResultUrl(output.url);
-                patchWorkflowRun(id, { resultUrl: output.url });
               },
-              onSettled: (result) => {
-                if (result.ok) {
-                  patchWorkflowRun(id, { status: "done" });
-                } else {
-                  const reason = result.message ?? "流程测试失败";
-                  setError(reason);
-                  failWorkflowRun(id, reason);
+              onSettled: (_taskId, result) => {
+                if (!result.ok) {
+                  setError(result.message ?? "流程测试失败");
                 }
                 resolve();
               },
