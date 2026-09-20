@@ -5,7 +5,9 @@ import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { readFileAsText } from "~/lib/file-io";
 import { useFilePicker } from "~/components/ui/file-picker";
+import { useToast } from "~/components/studio/ToastProvider";
 import { useInterval } from "~/components/ui/use-interval";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -408,16 +410,22 @@ function ImportLinesButton({
 }: {
   onImported: (lines: string[]) => void;
 }) {
+  const toast = useToast();
   const picker = useFilePicker({
     accept: ".txt,.csv",
+    /* 读取统一走 `~/lib/file-io`（§16.2.4.27）：`file.text()` 的失败路径
+     * 此前在这里被 `void ... .then(...)` 整个吞掉 —— 读失败时用户看不到
+     * 任何反馈（`.then` 没有 rejection 分支）。 */
     onPick: (file) => {
-      void file.text().then((text) => {
-        const lines = text
-          .split(/\r?\n/)
-          .map((segment) => segment.trim())
-          .filter(Boolean);
-        onImported(lines);
-      });
+      void readFileAsText(file)
+        .then((text) => {
+          const lines = text
+            .split(/\r?\n/)
+            .map((segment) => segment.trim())
+            .filter(Boolean);
+          onImported(lines);
+        })
+        .catch(() => toast.error("读取文件失败"));
     },
   });
   return (

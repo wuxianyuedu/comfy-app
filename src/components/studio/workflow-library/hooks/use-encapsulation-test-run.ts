@@ -32,6 +32,7 @@ import {
   patchWorkflowRun,
   registerWorkflowRun,
 } from "~/lib/workflow/workflow-run-store";
+import { readFileAsDataUrl } from "~/lib/file-io";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 
 export interface EncapsulationTestRunArgs {
@@ -62,19 +63,6 @@ export interface EncapsulationTestRunController {
   /** 把用户选的本地图片送进 ComfyUI 输入目录，返回可直接落进工作流的文件名。
    *  读文件与上传都在这一层（§17.2 第②层），视图只拿结果字符串。 */
   uploadImage: (file: File) => Promise<string>;
-}
-
-/** 本地文件 → data URL（ComfyUI 输入目录的准备接口认这一种来源）。 */
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      resolve(typeof result === "string" ? result : "");
-    };
-    reader.onerror = () => reject(new Error("读取本地图片失败"));
-    reader.readAsDataURL(file);
-  });
 }
 
 /** 流程测试的运行编排：登记进共享运行态 + 订阅 SSE。 */
@@ -159,9 +147,10 @@ export function useEncapsulationTestRun({
   );
 
   const uploadImage = useCallback(async (file: File) => {
-    const dataUrl = await readAsDataUrl(file);
-    if (!dataUrl) throw new Error("读取本地图片失败");
-    return prepareLocalInputImage(dataUrl);
+    /* 「读到空值算失败」收在 `readFileAsDataUrl` 里（§16.2.4.27）——
+     * 此前这里要在调用点再补一次 `if (!dataUrl) throw`，而同一件事的另一处
+     * 落点没有补、把空串直接发给了上传接口。 */
+    return prepareLocalInputImage(await readFileAsDataUrl(file));
   }, []);
 
   return useMemo(

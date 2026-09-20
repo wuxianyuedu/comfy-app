@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 
 export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
   const [open, setOpen] = useState(false);
@@ -130,16 +131,15 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
             <input
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
+              {...enterCommit({
+                onCommit: () => {
                   const name = newName.trim();
                   if (name) {
                     toggle(name);
                     setNewName("");
                   }
-                }
-              }}
+                },
+              })}
               placeholder="新增标签，如 z-image"
               className="border-border bg-subtle text-ink-bright placeholder:text-ink-muted h-7 min-w-0 flex-1 rounded-md border px-2 text-xs focus:border-fuchsia-400/40 focus:outline-none"
             />

@@ -26,6 +26,8 @@
  *  不会与旧载荷相撞。
  */
 import React, { useCallback, useEffect, useSyncExternalStore } from "react";
+
+import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { Button } from "~/components/ui/button";
 import { RangeSlider } from "~/components/ui/range-slider";
@@ -81,26 +83,19 @@ export const DEFAULT_CANVAS_SETTINGS: CanvasSettings = {
 const STORAGE_KEY = "comfyapp:canvas-settings:v1";
 
 function readSettings(): CanvasSettings {
-  if (typeof window === "undefined") return DEFAULT_CANVAS_SETTINGS;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_CANVAS_SETTINGS;
+  /* SSR / 隐私模式 / 坏数据一律回落默认值 —— 三条判据收在
+   * `~/lib/browser-storage`（§16.2.4.28）。 */
+  return readStorageJson(STORAGE_KEY, DEFAULT_CANVAS_SETTINGS, (raw) => {
     const parsed = JSON.parse(raw) as Partial<CanvasSettings>;
     /* 向前兼容：存储里的未知键忽略，默认值补齐旧载荷留下的空洞。 */
     return { ...DEFAULT_CANVAS_SETTINGS, ...parsed };
-  } catch {
-    return DEFAULT_CANVAS_SETTINGS;
-  }
+  });
 }
 
 function writeSettings(s: CanvasSettings): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    /* 配额满 / 隐私模式 / 存储被禁用 —— 静默忽略。
-     * 设置对本次会话仍然生效，只是丢掉了持久化。 */
-  }
+  /* 写失败（配额满 / 隐私模式 / 被禁用）静默：设置对本次会话仍然生效，
+   * 只是丢掉了持久化。 */
+  writeStorageJson(STORAGE_KEY, s);
 }
 
 /* 画布偏好的唯一事实源。挂载时从 localStorage 读入；

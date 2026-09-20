@@ -14,6 +14,7 @@ import type {
   AgentToolRun,
 } from "./hooks/use-workshop-agent";
 import { zClass } from "~/lib/shell/overlay-z";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 
 const GREETING =
   "你好！我是工坊的创作指挥助手。你可以直接用自然语言告诉我想做什么，我会帮你指挥整个创作流程。\n\n比如：\n• 「帮我写一个海边重逢的温暖短片剧本」\n• 「在现有剧本基础上提取主要角色」\n• 「把分镜规划出来」";
@@ -217,12 +218,13 @@ export function AgentOverlay({
             event.target.style.height =
               Math.min(event.target.scrollHeight, 80) + "px";
           }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void send();
-            }
-          }}
+          /* Shift+Enter 换行、Enter 发送；`ignoreIme` 由出口默认开着 ——
+           * 此前这里没判 IME，中文输入法下**候选词未上屏的 Enter 会被当成发送**
+           *（把半截拼音发给 AI），见 §16.2.4.29。 */
+          {...enterCommit({
+            onCommit: () => void send(),
+            excludeShift: true,
+          })}
           rows={1}
           placeholder="描述你的创作想法… (Enter 发送)"
           className="border-border bg-subtle text-ink placeholder:text-muted-foreground/50 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-violet-500/40"

@@ -55,7 +55,12 @@ export default defineConfig({
         "src/components/ui/use-scroll-follow.ts",
         "src/components/ui/form-field.tsx",
         "src/components/ui/use-external-action.ts",
+        /* ⚠️ 新增 `ui/` 出口门槛时**两处同批改**：本数组 + `thresholds`。
+         * 只写门槛不进 `include` 会让门槛**静默失效**（报告里查无此文件）。 */
+        "src/components/ui/use-enter-commit.ts",
         "src/lib/external-open.ts",
+        "src/lib/file-io.ts",
+        "src/lib/browser-storage.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -305,6 +310,34 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 95,
+        },
+        /* 「按形态」收口的三条新出口（规范 16 §16.2.4.27 ~ §16.2.4.29）。
+         * 门槛取实测值向下取整到 5 的倍数（§18.6 的口径：不设理想值）：
+         *   · `file-io` 100/100/100/100 —— 两条通道的「读到 / 读到空 / 读失败」
+         *     六条路径（`file.text()` 与 `FileReader` 各三条）全在用例里；
+         *   · `browser-storage` 95/100/90/90 —— 未覆盖的是「`removeItem` 抛」
+         *     （配额满能测，删失败只有 Safari 隐私模式那一种现场）；
+         *   · `use-enter-commit` 100/100/100/100 —— 判据只有「按哪个键」与
+         *     「组字中不按」两件事，全在用例里。
+         * ⚠️ 三个都**同批**进了上面的 `coverage.include` —— 只写门槛不进
+         * `include` 会让门槛静默失效（`ui/file-picker.tsx` 的前车之鉴）。 */
+        "src/lib/file-io.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/browser-storage.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 90,
+          branches: 90,
+        },
+        "src/components/ui/use-enter-commit.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
         "src/lib/core/**": {
           lines: 95,

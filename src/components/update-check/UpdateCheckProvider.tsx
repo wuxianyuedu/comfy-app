@@ -14,18 +14,16 @@ import { useMessageCenterStore } from "~/components/message-center/message-cente
 import { useUpdateCheckStore } from "./update-check-store";
 import { useUpdateCheck } from "./hooks/use-update-check";
 import { useHotkey } from "~/components/ui/use-hotkey";
+import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
 
 const STORAGE_KEY = "comfyapp.updateCheck.enabled";
 const MANUAL_SHORTCUT = "检测本地更新 (Ctrl+Shift+U)";
 
 function readEnabledDefault(): boolean {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return true;
-    return raw === "1";
-  } catch {
-    return true;
-  }
+  /* 「读不到 = 从未设置过」→ 默认开启；读到 `"0"` 才关闭（§16.2.4.28）。
+   * 此前这里**不判 SSR**、只靠 try/catch 兜住 `window` 不存在时的异常 ——
+   * 兜是兜住了，但判据与另外几处不同（那几处判 `typeof window`）。 */
+  return readStorageItem(STORAGE_KEY) !== "0";
 }
 
 function summaryOf(
@@ -88,11 +86,8 @@ export function UpdateCheckProvider() {
   // 持久化：开关变化时写回 localStorage
   const enabled = useUpdateCheckStore((s) => s.enabled);
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, enabled ? "1" : "0");
-    } catch {
-      /* localStorage 不可用则仅内存态生效 */
-    }
+    /* localStorage 不可用则仅内存态生效（写失败已静默）。 */
+    writeStorageItem(STORAGE_KEY, enabled ? "1" : "0");
   }, [enabled]);
 
   // 把手动检测注册给共享 store（导航栏按钮经 store 触发）

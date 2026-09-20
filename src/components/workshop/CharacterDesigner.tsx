@@ -41,7 +41,9 @@ import {
 } from "~/lib/workshop/script-parse";
 import type { ParsedCharacterDraft } from "~/lib/workshop/script-parse";
 import { errorMessage } from "~/lib/error-message";
+import { readFileAsText } from "~/lib/file-io";
 import { useLLM } from "~/components/workshop/LLMContext";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import {
   useExtractSession,
   type ExtractSession,
@@ -375,7 +377,9 @@ export function CharacterDesigner({
   async function handleImportFile(file: File) {
     cacheExtractPatch({ busy: true, status: "", error: "" });
     try {
-      const text = await file.text();
+      /* 读取收在唯一出口里（§16.2.4.27）—— 此前两处各写一遍 `file.text()`，
+       * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
+      const text = await readFileAsText(file);
       const trimmed = text.trim();
       if (!trimmed) throw new Error("文件内容为空");
       let drafts: ParsedCharacterDraft[];
@@ -444,9 +448,13 @@ export function CharacterDesigner({
           <input
             value={brief}
             onChange={(event) => setBrief(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !genBusy) void handleAIGenerate();
-            }}
+            /* Enter 触发 AI 生成（Shift+Enter 不触发）；生成中不响应。 */
+            {...enterCommit({
+              onCommit: () => {
+                if (!genBusy) void handleAIGenerate();
+              },
+              excludeShift: true,
+            })}
             placeholder="例如：一位穿唐装的白发剑客，气质孤傲"
             className="border-border bg-bg focus:border-primary flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
           />

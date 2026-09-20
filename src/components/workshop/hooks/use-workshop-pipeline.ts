@@ -52,6 +52,11 @@ import { emptyProject } from "~/lib/workshop/script-parser";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import { errorMessage } from "~/lib/error-message";
 import {
+  readStorageItem,
+  removeStorageItem,
+  writeStorageJson,
+} from "~/lib/browser-storage";
+import {
   useCharacterPortrait,
   type PortraitSession,
   type PortraitSessionActions,
@@ -161,35 +166,19 @@ function parseDraft(raw: string | null): WorkshopDraft {
   }
 }
 
-/** SSR / 隐私模式下同样安全：读不到就当作空草稿。 */
+/** SSR / 隐私模式下同样安全：读不到就当作空草稿（§16.2.4.28）。 */
 function readDraft(id: string): WorkshopDraft {
-  if (typeof window === "undefined") return emptyDraft();
-  try {
-    return parseDraft(window.localStorage.getItem(draftKeyFor(id)));
-  } catch {
-    return emptyDraft();
-  }
+  return parseDraft(readStorageItem(draftKeyFor(id)));
 }
 
 function writeDraft(id: string, draft: WorkshopDraft): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(
-      draftKeyFor(id),
-      JSON.stringify({ v: 1, ...draft }),
-    );
-  } catch {
-    /* 存储满 / 隐私模式：静默失败，不影响编辑 */
-  }
+  /* 存储满 / 隐私模式：静默失败，不影响编辑。 */
+  writeStorageJson(draftKeyFor(id), { v: 1, ...draft });
 }
 
 function saveProjectsIndex(index: WorkshopProjectsIndex): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(PROJECTS_INDEX_KEY, JSON.stringify(index));
-  } catch {
-    /* 存储满 / 隐私模式：静默失败 */
-  }
+  /* 存储满 / 隐私模式：静默失败。 */
+  writeStorageJson(PROJECTS_INDEX_KEY, index);
 }
 
 /** 读取项目索引。索引不存在时把旧版单草稿迁移为第一个项目。 */
@@ -206,15 +195,12 @@ function loadProjectsIndex(): WorkshopProjectsIndex {
     saveProjectsIndex(index);
     return index;
   };
-  if (typeof window === "undefined") return freshIndex(emptyDraft());
+  const raw = readStorageItem(PROJECTS_INDEX_KEY);
+  if (raw === null) {
+    /* 首次升级：旧单草稿收编成项目 #1 —— 老用户不会丢内容。 */
+    return freshIndex(parseDraft(readStorageItem(LEGACY_DRAFT_KEY)));
+  }
   try {
-    const raw = window.localStorage.getItem(PROJECTS_INDEX_KEY);
-    if (!raw) {
-      /* 首次升级：旧单草稿收编成项目 #1 —— 老用户不会丢内容。 */
-      return freshIndex(
-        parseDraft(window.localStorage.getItem(LEGACY_DRAFT_KEY)),
-      );
-    }
     const parsed = JSON.parse(raw) as Partial<WorkshopProjectsIndex>;
     const items = Array.isArray(parsed.items) ? parsed.items : [];
     if (items.length === 0) return freshIndex(emptyDraft());
@@ -700,11 +686,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         applyDraft(readDraft(activeId));
         setActiveProjectId(activeId);
       }
-      try {
-        window.localStorage.removeItem(draftKeyFor(id));
-      } catch {
-        /* 隐私模式下可能直接抛错，忽略 */
-      }
+      /* 隐私模式下可能直接抛错 —— 删除也已静默（§16.2.4.28）。 */
+      removeStorageItem(draftKeyFor(id));
       void deleteServerDraft(id);
       const next: WorkshopProjectsIndex = { activeId, items };
       saveProjectsIndex(next);

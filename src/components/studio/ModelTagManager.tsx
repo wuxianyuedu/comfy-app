@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { enterCommit } from "~/components/ui/use-enter-commit";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 
 import { useModelTags, type TagItem } from "./hooks/use-model-tags";
@@ -90,9 +91,7 @@ export function ModelTagManager({
             <input
               value={c.draft}
               onChange={(event) => c.setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void c.addTag();
-              }}
+              {...enterCommit({ onCommit: () => void c.addTag() })}
               placeholder="新增模型名，如 z-image / wan2.2"
               className="border-border-strong bg-canvas-deep text-ink-bright placeholder:text-ink-muted min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-fuchsia-500/50"
             />
@@ -133,15 +132,10 @@ export function ModelTagManager({
                       maxLength={64}
                       onFocus={(event) => event.currentTarget.select()}
                       onChange={(event) => setEditingDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void commitEdit(tag.id, tag.name);
-                        } else if (event.key === "Escape") {
-                          event.preventDefault();
-                          cancelEdit();
-                        }
-                      }}
+                      {...enterCommit({
+                        onCommit: () => void commitEdit(tag.id, tag.name),
+                        onCancel: cancelEdit,
+                      })}
                       // 注意：刻意不设 onBlur → 提交。若用户以别的方式
                       // 退出编辑（点外部、关闭对话框），
                       // 本地状态会前进但不会发送重命名。

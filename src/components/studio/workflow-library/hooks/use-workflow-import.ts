@@ -11,6 +11,8 @@
  *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
+import { errorMessage } from "~/lib/error-message";
+import { readFileAsText } from "~/lib/file-io";
 import { type api } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
 
@@ -122,7 +124,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportDefaultMode("T2I");
       void load();
     } catch (e: unknown) {
-      setImportErr(e instanceof Error ? e.message : JSON.stringify(e ?? null));
+      setImportErr(errorMessage(e, "导入失败"));
     } finally {
       setImporting(false);
     }
@@ -143,12 +145,11 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       }
       let text: string;
       try {
-        text = await file.text();
+        /* 读取本身也收在唯一出口里（§16.2.4.27）：为什么用 `file.text()`
+         * 不用手搓 `FileReader`、失败怎么表达，口径只有一处。 */
+        text = await readFileAsText(file);
       } catch (e: unknown) {
-        showFileError(
-          "无法读取文件：" +
-            (e instanceof Error ? e.message : JSON.stringify(e ?? null)),
-        );
+        showFileError("无法读取文件：" + errorMessage(e, "未知错误"));
         return;
       }
       let parsed: unknown;

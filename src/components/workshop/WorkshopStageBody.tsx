@@ -10,6 +10,7 @@
 import React from "react";
 import { Button } from "~/components/ui/button";
 import { useFilePicker } from "~/components/ui/file-picker";
+import { readFileAsText } from "~/lib/file-io";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Icon } from "~/components/ui/icon";
 import { markdownToHtml } from "~/lib/comfyui/markdown";
@@ -116,9 +117,14 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
   const scriptPicker = useFilePicker({
     accept: ".md,.txt",
     onPick: (file) => {
-      void file.text().then((text) => {
-        if (text.trim()) setScriptMarkdown(text);
-      });
+      /* 读取统一走 `~/lib/file-io`（§16.2.4.27）：`file.text()` 的 rejection
+       * 此前在这里被吞掉，「选了个读不了的文件」与「选了个空文件」在界面上
+       * 长得一样。 */
+      void readFileAsText(file)
+        .then((text) => {
+          if (text.trim()) setScriptMarkdown(text);
+        })
+        .catch(() => setScriptMarkdown(""));
     },
   });
 

@@ -5,6 +5,7 @@ import { useCallback, useSyncExternalStore } from "react";
 
 import { Button } from "~/components/ui/button";
 import type { ModalWidth } from "~/components/ui/dialog-width";
+import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
 
 /**
  * 「面板的加宽档」与它的触发钮——**唯一出口**（规范 16 §16.2.4.18）。
@@ -50,29 +51,22 @@ function storageKey(id: string): string {
 
 /** 读取已记忆的加宽态（SSR / 隐私模式下返回缺省）。 */
 function readWide(id: string, fallback: boolean): boolean {
-  if (typeof window === "undefined") return fallback;
   /* 先看内存（同会话内的 `setItem` 立即生效，不依赖 storage 事件的时机）。 */
   const cached = WIDE_PANELS.get(id);
   if (cached !== undefined) return cached;
-  try {
-    const raw = window.localStorage.getItem(storageKey(id));
-    const value = raw === "1" ? true : raw === "0" ? false : fallback;
-    WIDE_PANELS.set(id, value);
-    return value;
-  } catch {
-    /* 配额满 / 隐私模式 / storage 被禁用：本会话仍然生效，只是丢了记忆。 */
-    return fallback;
-  }
+  /* 配额满 / 隐私模式 / storage 被禁用：本会话仍然生效，只是丢了记忆。
+   * 「能不能用 storage」与「读失败怎么办」收在 `~/lib/browser-storage`
+   *（§16.2.4.28）。 */
+  const raw = readStorageItem(storageKey(id));
+  const value = raw === "1" ? true : raw === "0" ? false : fallback;
+  WIDE_PANELS.set(id, value);
+  return value;
 }
 
 function writeWide(id: string, wide: boolean): void {
   WIDE_PANELS.set(id, wide);
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(storageKey(id), wide ? "1" : "0");
-  } catch {
-    /* 同上：静默 —— 记忆是增强，不是功能。 */
-  }
+  /* 同上：静默 —— 记忆是增强，不是功能。 */
+  writeStorageItem(storageKey(id), wide ? "1" : "0");
 }
 
 /* 订阅集合：`useSyncExternalStore` 的 subscribe 必须是稳定引用。 */

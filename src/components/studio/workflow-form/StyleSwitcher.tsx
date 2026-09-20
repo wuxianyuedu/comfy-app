@@ -2,6 +2,7 @@
 /* StyleSwitcher + 共享原子表单原语 —— 从 GroupedControls.tsx 抽出。 */
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { readStorageJson, writeStorageItem } from "~/lib/browser-storage";
 
 export type GroupStyle = "split" | "preset";
 
@@ -11,15 +12,13 @@ export function loadGroupStyle(
   workflowId: string | undefined,
   groupId: string,
 ): GroupStyle {
-  if (typeof window === "undefined") return "split";
-  try {
-    const raw = window.localStorage.getItem(
-      `${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`,
-    );
-    return raw === "preset" ? "preset" : "split";
-  } catch {
-    return "split";
-  }
+  /* 非 "preset" 的值（含 null / 坏数据 / 未知档）一律回落 "split" ——
+   * 窄化交给 `parse`（§16.2.4.28）。 */
+  return readStorageJson(
+    `${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`,
+    "split",
+    (raw) => (raw === "preset" ? "preset" : "split"),
+  );
 }
 
 export function saveGroupStyle(
@@ -27,15 +26,11 @@ export function saveGroupStyle(
   groupId: string,
   style: GroupStyle,
 ) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(
-      `${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`,
-      style,
-    );
-  } catch {
-    /* 存储不可用（隐私模式 / 配额）—— 非致命 */
-  }
+  /* 存储不可用（隐私模式 / 配额）非致命，静默。 */
+  writeStorageItem(
+    `${STYLE_PREFIX}:${workflowId ?? "global"}:${groupId}`,
+    style,
+  );
 }
 
 /** 切换当前填写范式的分段下拉。 */
