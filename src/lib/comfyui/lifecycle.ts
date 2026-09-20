@@ -31,6 +31,11 @@ import {
 } from "./status";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log/log-paths";
+import {
+  describeStaleSession,
+  type ComfyExitReport,
+  type ComfySessionMark,
+} from "./lifecycle-exit";
 import { formatLocalStamp } from "~/lib/time-format";
 import { COMFY_STOP_PROBE } from "../retry-policy";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
@@ -544,6 +549,67 @@ function deriveAndLatch(facts: {
   return status;
 }
 
+/** 「上一次 ComfyUI 会话」的标记文件。
+ *
+ *  存在的理由：**应用/系统也一起没了**那一档（编排器退出时 Windows Job Object
+ *  连带静默杀树、强制关机、任务管理器结束进程）没有任何活着的进程能写日志 ——
+ *  只能在下一次启动时读这个文件反推「上次那家伙不是正常结束的」。
+ *  「有开始没结束」就是那类情况的指纹。 */
+const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/comfyui-last-session.json`;
+
+function readSessionMark(): ComfySessionMark | null {
+  try {
+    const parsed: unknown = JSON.parse(
+      fs.readFileSync(COMFY_SESSION_MARK, "utf-8"),
+    );
+    if (parsed === null || typeof parsed !== "object") return null;
+    return parsed as ComfySessionMark;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionMark(mark: ComfySessionMark): void {
+  try {
+    fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
+    fs.writeFileSync(COMFY_SESSION_MARK, JSON.stringify(mark), "utf-8");
+  } catch {
+    /* 标记写不进去不该影响启动本身：最坏的结果只是下次启动少一条对账提示 */
+  }
+}
+
+function markComfySessionStart(info: {
+  pid: number | null;
+  mode: ComfySessionMark["mode"];
+}): void {
+  writeSessionMark({
+    pid: info.pid,
+    mode: info.mode,
+    startedAt: new Date().toISOString(),
+    exited: null,
+  });
+}
+
+function markComfySessionEnd(report: ComfyExitReport): void {
+  const prev = readSessionMark();
+  if (prev === null) return;
+  writeSessionMark({
+    ...prev,
+    exited: { at: new Date().toISOString(), reason: report.reason },
+  });
+}
+
+/** 每进程只对一次账（启动尝试可能被 WS 重连反复触发，重复提示是噪音）。 */
+let staleSessionChecked = false;
+
+/** 下次启动时反推「上一次会话为什么没有结局」。 */
+function warnStaleComfySession(note: (msg: string) => void): void {
+  if (staleSessionChecked) return;
+  staleSessionChecked = true;
+  const stale = describeStaleSession(readSessionMark());
+  if (stale !== null) note(`⚠ ${stale}`);
+}
+
 function appendRuntimeLog(line: string): void {
   try {
     fs.mkdirSync(SERVICES_LOG_DIR, { recursive: true });
@@ -597,6 +663,10 @@ export async function ensureComfyUiReady(
     opts.onLog?.(msg);
     appendRuntimeLog(msg);
   };
+
+  /* 对账上一次会话：应用/系统也一起没了时没有任何活着的进程能写日志，只能靠
+   * 标记文件反推（见 COMFY_SESSION_MARK）。 */
+  warnStaleComfySession(note);
 
   // 用户明确要求拉起 → 状态快照必然过期（进程树即将变化），先失效，
   // 让紧随其后的状态查询看到启动后的新事实而不是旧结论。
@@ -694,6 +764,8 @@ export async function ensureComfyUiReady(
       clearComfyStopping,
       localTimestamp,
       probeComfyUi,
+      markSessionStart: markComfySessionStart,
+      markSessionEnd: markComfySessionEnd,
     },
     settings,
     timeoutMs: opts.timeoutMs,
