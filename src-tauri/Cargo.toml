@@ -61,4 +61,16 @@ windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Security",
   "Win32_System_Threading",
+  # 壳自编排（ISSUE #784）的两处需要：Job Object（KILL_ON_JOB_CLOSE 兜住
+  # 编排器崩溃时的孤儿）与进程环境块认亲（Toolhelp 快照 + 读 PEB 环境块）。
+  # 两者都只在 Windows 上存在，因此与父条目同在 target 条件依赖里。
+  "Win32_System_JobObjects",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Diagnostics_Debug",
+  # NtQueryInformationProcess / ProcessBasicInformation（PROCESSINFOCLASS）在
+  # **Wdk** 命名空间下，Win32 侧没有同名项；PROCESS_BASIC_INFORMATION 又在
+  # Win32_System_Threading 里由 Win32_System_Kernel 门控。二者缺一整条认亲链
+  # 就编译不过（判据：认亲不许退化成按名字/端口猜，见 is_own 的注释）。
+  "Win32_System_Kernel",
+  "Wdk_System_Threading",
 ] }
