@@ -64,7 +64,7 @@ import {
 } from "./workflow-library-param-cards";
 import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-mode-contracts";
 import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
-import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { ViewableImage } from "~/components/ui/image-viewer";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
@@ -515,7 +515,15 @@ export function WorkflowCanvasNodePreview({
   );
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col items-center gap-3">
+    <div
+      className={`flex h-full min-h-0 w-full flex-col items-center gap-3 ${
+        /* use 模式的产出（表单 + 进度 + 结果图 + 提示）比可视区高是常态，
+           而它所在的父级是 `overflow-y-hidden`（edit 模式的画布靠它兜住
+           React Flow 的撑高）—— 纵向滚动只能由本层自己出，否则结果图下半
+           截被裁掉且滚不到（用户实测：「产出内容看不全」）。 */
+        viewMode === "use" ? "custom-scrollbar overflow-y-auto" : ""
+      }`}
+    >
       {/* ── 视图模式切换：编辑对外参数 / 实际使用 ── */}
       <div className="flex w-full items-center justify-between px-1">
         <div className="border-border bg-subtle flex rounded-lg border p-0.5">
@@ -715,9 +723,12 @@ export function WorkflowCanvasNodePreview({
       {resultUrl && (
         <div className="w-[380px]">
           <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
-          <MediaThumbnail
+          {/* 缩略图盒子只有 380px 宽，看细节得点开通用查看器
+              （原始大小 / 缩放 / 拖拽平移，见 `ui/image-viewer`）。 */}
+          <ViewableImage
             src={resultUrl}
             alt="运行结果"
+            label={`${workflowName} · 运行结果`}
             className="border-border w-full rounded-xl border"
           />
         </div>
