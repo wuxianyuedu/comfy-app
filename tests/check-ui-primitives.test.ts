@@ -2322,6 +2322,161 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P44：把一段文本按最大长度截断（规范 §16.2.4.48）──────────────────
+   *
+   * 这条账的**边界**最要紧：本仓库里 `slice(0, 8)` / `slice(0, 12)` 大量出现
+   * 在「id / sha 短码」上，那些不是「文本被切了一刀」。判据取 **N ≥ 24**
+   * 来分开这两档。 */
+
+  it("手写文本截断（slice + 省略号）直接阻断（规范 P44）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Title.tsx",
+      [
+        "export function Title({ p }: { p: string }) {",
+        "  return <span>{p.length > 40 ? `${p.slice(0, 40)}…` : p}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P44");
+  });
+
+  it("走 clampText 的落点不再被 P44 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Title.tsx",
+      [
+        'import { TITLE_MAX, clampText } from "~/lib/text-clamp";',
+        "export function Title({ p }: { p: string }) {",
+        "  return <span>{clampText(p, { maxLength: TITLE_MAX })}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("id / sha 短码的 slice(0, 8) 不被 P44 误伤（那是完整标识，不是「被切了」）", () => {
+    /* 这是本条判据的**边界**：短码旁边的 `…` 是显示约定，不是「这段被截断」。
+     * 判据取 N ≥ 24，就是为把它们分开 —— 太宽会把 20+ 处短码全算成违规。 */
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Ids.tsx",
+      [
+        "export const short = (id: string) => `${id.slice(0, 8)}…`;",
+        "export const hash = (h: string) => `${h.slice(0, 12)}…`;",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("注释里提到截断不算实现（与 P1 同一份剥离）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Documented.tsx",
+      "/* 这里此前是 `${p.slice(0, 40)}…`，已改走 text-clamp 的 clampText。 */\nexport const D = () => null;\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P45：一个异步动作重试几次、退避多久（规范 §16.2.4.49）────────────
+   *
+   * 判据取**指数退避的算术** `* 2 ** …` —— 它在本仓库与「退避」一一对应。
+   * 固定间隔一侧**不**做机器判据（`for (let i = 0; i < 5; i++)` 太常见，
+   * 数它只会逼人把循环写成别的形状去迎合判据）。 */
+
+  it("自写指数退避算术直接阻断（规范 P45）", () => {
+    seedBaseline();
+    write(
+      "src/lib/comfyui/ws-reconnect-extra.ts",
+      [
+        "export function nextDelay(attempt: number): number {",
+        "  return Math.min(1000 * 2 ** attempt, 15000);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P45");
+  });
+
+  it("走 backoffDelayMs 的落点不再被 P45 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/comfyui/ws-reconnect-extra.ts",
+      [
+        'import { WS_RECONNECT, backoffDelayMs } from "~/lib/retry-policy";',
+        "export function nextDelay(attempt: number): number {",
+        "  return backoffDelayMs({ ...WS_RECONNECT, attempt });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("普通的平方运算不算退避（P45 只认「2 的幂」这个签名）", () => {
+    seedBaseline();
+    write(
+      "src/lib/geometry.ts",
+      "export const area = (r: number) => Math.PI * 2 * r;\nexport const square = (x: number) => x * x;\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P46：手拼日期串（规范 §16.2.4.50）────────────────────────────── */
+
+  it("手拼日期串直接阻断（规范 P46）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Day.tsx",
+      [
+        "export const day = (d: Date) => {",
+        '  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;',
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P46");
+  });
+
+  it("走 formatDate 家族的落点不再被 P46 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Day.tsx",
+      [
+        'import { formatDate } from "~/lib/time-format";',
+        "export const day = (d: Date) => formatDate(d);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("同天判定里的 getMonth()/getDate() 比较不被 P46 误伤（那不是「拼日期串」）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/SameDay.ts",
+      [
+        "export const same = (a: Date, b: Date) =>",
+        "  a.getFullYear() === b.getFullYear() &&",
+        "  a.getMonth() === b.getMonth() &&",
+        "  a.getDate() === b.getDate();",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
   it("lib 层的既有出口实现不被 P1~P38 误伤（本批只让 P39~P43 扫 lib）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { APP_RUNTIME_LOG } from "~/lib/log/log-paths";
+import { formatLocalStamp } from "~/lib/time-format";
 
 /**
  * 应用运行操作日志（面板可见）。
@@ -25,12 +26,10 @@ import { APP_RUNTIME_LOG } from "~/lib/log/log-paths";
 
 export type AppLogLevel = "info" | "warn" | "error" | "debug";
 
-/** 本地时间戳（YYYY-MM-DD HH:mm:ss.mmm）。 */
+/** 本地时间戳（`YYYY-MM-DD HH:mm:ss.mmm`）—— 口径走 `~/lib/time-format`
+ *  的 `formatLocalStamp`（此前与另外 5 处 runtime 日志逐字相同）。 */
 function localTimestamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  const ms = String(d.getMilliseconds()).padStart(3, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${ms}`;
+  return formatLocalStamp(new Date(), { millis: true });
 }
 
 const LEVEL_TAG: Record<AppLogLevel, string> = {

@@ -13,6 +13,8 @@
  * @module comfyui/executor-errors — 面向用户的错误提示映射
  */
 
+import { TASK_ERROR_MAX, clampText } from "~/lib/text-clamp";
+
 // 把 ComfyUI / 节点抛回的原始错误翻译成用户能照着做的提示。
 //
 // 为什么不直接 `String(raw)`：部分 ComfyUI 构建（含 kaytool v0.28）把
@@ -57,10 +59,14 @@ export function friendlyError(raw: unknown): string {
       }
     }
     // 最后手段：把对象打印出来，让用户至少看到点东西而不是 "[object Object]"。
-    // 截断长度，避免超长的 traceback 撑爆数据库列。
+    // 截断长度，避免超长的 traceback 撑爆数据库列 —— 上限走
+    // `~/lib/text-clamp` 的 TASK_ERROR_MAX（受 DB 列体积约束，见 §16.2.4.48）。
     try {
       const json = JSON.stringify(raw, null, 2);
-      return json.length > 4000 ? json.slice(0, 4000) + "\n…(truncated)" : json;
+      return clampText(json, {
+        maxLength: TASK_ERROR_MAX,
+        marker: "\n…(truncated)",
+      });
     } catch {
       return "[unserializable error]";
     }

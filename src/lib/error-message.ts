@@ -7,6 +7,8 @@
 // 注意长度判空：`new Error("")` 会把空串当成有效文案渲染成空白提示条，
 // 因此空消息一律回落 fallback。
 
+import { LOG_DETAIL_MAX, clampText } from "~/lib/text-clamp";
+
 /**
  * 常见网络层故障的可读翻译。
  *
@@ -144,9 +146,11 @@ export function errorText(
  * 两者都落进 app-runtime 日志：前者进消息，后者进 `raw` 字段。没有它时，
  * 面板里只剩翻译后的文案，服务端真实报错（如 `no such table: xxx`）丢失。
  *
- * 长度设上限：stack 可达数百行，落盘只需能定位的头几行。
+ * 长度设上限：stack 可达数百行，落盘只需能定位的头几行 —— 取值走
+ * `~/lib/text-clamp` 的 {@link LOG_DETAIL_MAX}（"给人读的一行"预算，
+ * 上限与截断标记都收在那处，见 §16.2.4.48）。
  */
-export function rawErrorDetail(e: unknown, maxLen = 600): string {
+export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
   if (e === null || e === undefined) return "";
   const parts: string[] = [];
   if (typeof e === "string") {
@@ -188,5 +192,5 @@ export function rawErrorDetail(e: unknown, maxLen = 600): string {
     }
   }
   const text = parts.join(" — ");
-  return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
+  return clampText(text, { maxLength: maxLen });
 }

@@ -5,6 +5,7 @@ import { requireRequestUser } from "~/server/auth/request-user";
 import { LOG_EXPORT_DIR, LOG_ROOT } from "~/lib/log/log-paths";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { unauthorizedResponse } from "~/server/lib/error-response";
+import { formatCompactStamp } from "~/lib/time-format";
 
 /**
  * 日志面板「保存到本地」端点：把面板当前筛选出的日志**真的写到磁盘**。
@@ -35,14 +36,13 @@ const ALLOWED_LABELS = new Set([
   "console",
 ]);
 
-/** 本地时间戳文件名（与 runtime 家族日志同口径，本地时区便于用户对照）。 */
+/** 本地时间戳文件名（与 runtime 家族日志同口径，本地时区便于用户对照）。
+ *
+ *  形态（`YYYYMMDD-HHmmss`，无分隔符以便直接进文件名）走 `~/lib/time-format`
+ *  的 {@link formatCompactStamp} —— 冒号在 Windows 路径里非法，因此这一档
+ *  与日志行首的 `YYYY-MM-DD HH:mm:ss` 是**两个形态**，不是两次实现。 */
 function exportFileName(label: string): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  const stamp =
-    `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
-    `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-  return `logs-${label}-${stamp}.txt`;
+  return `logs-${label}-${formatCompactStamp(new Date())}.txt`;
 }
 
 export async function POST(request: Request) {

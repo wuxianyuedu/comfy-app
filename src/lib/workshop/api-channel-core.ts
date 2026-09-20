@@ -23,6 +23,7 @@ import {
   type ApiChannelsView,
 } from "./api-channel-shared";
 import { errorText } from "~/lib/error-message";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 /** 单个通道的配置（回导出：入口与用例都从这里取，避免各自 import 两个模块）。 */
 export type { ApiChannelStored };
@@ -173,7 +174,10 @@ const defaultJsonReader: UpstreamJsonReader = (res) =>
 
 /** 上游返回非 2xx 时统一的错误文案（截断响应体，避免把整页 HTML 灌进日志）。 */
 function upstreamError(label: string, status: number, payload: unknown): Error {
-  const detail = JSON.stringify(payload).slice(0, 200);
+  const detail = clampText(JSON.stringify(payload), {
+    maxLength: INLINE_SNIPPET_MAX,
+    marker: "",
+  });
   return new Error(`${label} (${status}): ${detail}`);
 }
 

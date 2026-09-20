@@ -260,6 +260,19 @@ const DOMAIN_EXEMPT = new Set([
    * fitView 调度器、流程表单的持久化）**都在用**，且两侧对「一帧还是两帧」
    * 必须同一口径。进任何子域都会让另一侧反向依赖它 —— 顶层单例。 */
   "src/lib/next-frame.ts",
+  /* 「把一段文本按最大长度截断」的唯一出口（ISSUE #672）：视图层
+   *（错误面板 / 用量测试结果 / 日志面板）、`src/lib` 的 runtime / 诊断 /
+   * ComfyUI 执行链、`src/app/api` 的 REST 路由**都在用**，且两侧必须同一
+   * 口径（一处截 600 另一处截 8000、一处标 `…` 另一处不标，用户会在同一块
+   * 面板上看到两种质量并存的文本）。进任何子域都会让其余侧反向依赖它 ——
+   * 与 `format-bytes` / `display-value` / `progress` 同款：顶层单例。 */
+  "src/lib/text-clamp.ts",
+  /* 「一个异步动作重试几次、退避多久」的唯一出口（ISSUE #672）：
+   * `src/lib/comfyui`（WS 重连 / history 轮询）、`src/lib/drizzle-studio`、
+   * `src/app/api`（Ollama 启停）、`src/app/(main)/settings` 的 hook **都在用**，
+   * 且「指数退避 vs 固定间隔」的分野是跨域的同一类判据。进任何子域都会让
+   * 其余侧反向依赖它 —— 与 `progress` / `list-filter` 同款：顶层单例。 */
+  "src/lib/retry-policy.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",

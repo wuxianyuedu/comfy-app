@@ -29,11 +29,10 @@ import {
   claimSettle,
   CLIENT_ID,
   JOB_TIMEOUT_MS,
-  RECONNECT_BASE_MS,
-  RECONNECT_MAX_MS,
   WS_PATHS,
   type LogEntry,
 } from "./runner-state";
+import { WS_RECONNECT, backoffDelayMs } from "../retry-policy";
 import { complete, fail } from "./executor-finalize";
 import {
   COMFYUI_AUTOSTART_TIMEOUT_MS,
@@ -227,8 +226,13 @@ function handleWsDrop(ws: WebSocket) {
 
 function scheduleReconnect() {
   const s = state();
-  const attempt = Math.min(s.reconnectAttempts++, 8);
-  const delay = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
+  /* 退避算法走 `~/lib/retry-policy` 的 {@link backoffDelayMs}（指数退避 + 上限，
+   * 且 `2 ** attempt` 的夹取在出口里 —— 此前 8 这个数字内联在这里，看不出
+   * 它是「防溢出」而不是「最多重试 8 次」，见 §16.2.4.49）。 */
+  const delay = backoffDelayMs({
+    ...WS_RECONNECT,
+    attempt: s.reconnectAttempts++,
+  });
   setTimeout(() => void connect(), delay);
 }
 

@@ -18,6 +18,7 @@ import {
 } from "~/components/ui/use-copy-feedback";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import {
   adviseOnError,
   shouldAutoExpandError,
@@ -224,7 +225,10 @@ export function ErrorPanel({
           {!errExpanded && (
             <p className="nodrag nopan text-danger-strong/80 mt-1 line-clamp-2 text-[10px] break-words">
               {typeof error === "string"
-                ? error.replace(/\n/g, " ").slice(0, 200)
+                ? clampText(error.replace(/\n/g, " "), {
+                    maxLength: INLINE_SNIPPET_MAX,
+                    marker: "",
+                  })
                 : "（点击 ▼ 展开查看完整错误）"}
             </p>
           )}

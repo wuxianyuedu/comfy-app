@@ -31,6 +31,8 @@ import {
 } from "./status";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
 import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log/log-paths";
+import { formatLocalStamp } from "~/lib/time-format";
+import { COMFY_STOP_PROBE } from "../retry-policy";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import {
   decideEnsureLaunch,
@@ -134,9 +136,7 @@ export const COMFY_NOT_RUNNING_HOLD_MS = 10_000;
 /** 本地时间戳（YYYY-MM-DD HH:mm:ss）：runtime 日志是给本机用户看的，
  *  toISOString 的 UTC 在 +8 时区会凭空差出 8 小时。 */
 function localTimestamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return formatLocalStamp(new Date());
 }
 
 /** 探测 ComfyUI 是否可达；成功返回实际可用的 base（可能带端口偏移）。
@@ -245,8 +245,8 @@ export async function stopComfyUiProcess(): Promise<{
   // 给进程一点退出时间，再探测确认。每轮结果都收集起来，由纯函数给出结论
   // （«最后一轮是否仍可达» 即「关了没有」），避免把判据散在循环与收尾两处。
   const stopProbes: (string | null)[] = [];
-  for (let i = 0; i < 5; i++) {
-    await new Promise((r) => setTimeout(r, 500));
+  for (let i = 0; i < COMFY_STOP_PROBE.maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, COMFY_STOP_PROBE.baseMs));
     const probe = await probeComfyUi(800);
     stopProbes.push(probe);
     if (!probe) break;
