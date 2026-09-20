@@ -391,6 +391,16 @@ const LIB_SCANNED_RULES = new Set([
   "P59",
   "P60",
   "P61",
+  /* 本批两条（§16.2.4.67 ~ §16.2.4.68）：
+   *   · **P63**（分页 / 窗口切片）—— 收口前的落点**大半在 `src/lib`**
+   *     （`log-store` 的倒序分页、`workflow-run-store` 的尾部窗口、
+   *     `generation-log.server` 的截取、`use-runtime-log-source` 的分段上限、
+   *     `executor-cli` 的 stderr 尾部）—— 只扫视图层等于对这条账的一半
+   *     视而不见（与 P27「存量大部分在 hooks」是同一课）；
+   *   · **P64**（进度回调节流）—— 订阅回调的落点横跨视图层与 `src/lib`
+   *     的客户端转发。 */
+  "P63",
+  "P64",
 ]);
 
 const SCAN_DIRS = [
@@ -542,6 +552,15 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P59",
   "P60",
   "P61",
+  /* 本批三条（规范 16 §16.2.4.66 ~ §16.2.4.68）：
+   *   · **P62**（事件值改写样板）—— 逻辑层里同样会写
+   *     （`use-...` 的取数表单与草稿改写）；
+   *   · **P63**（分页 / 窗口切片）—— 收口前的落点就有在 hooks 里的
+   *     （`use-runtime-log-source` 的分段上限）；
+   *   · **P64**（进度回调节流）—— 收口前的存量**大部分在 hooks / 视图**。 */
+  "P62",
+  "P63",
+  "P64",
   /* 本批一条（规范 16 §16.2.4.62）：**P58** —— 「给一个异步结果加超时」
    * 在逻辑层同样成立，且收口前的落点里就有一处在 hook 里
    *（`use-workflow-detail-loader` 的 `withTimeout`）。 */
@@ -859,6 +878,20 @@ const EXEMPT_FILES = {
         "失败后**无论如何**都要刷新状态行）。三支各说各话、且都带 `await` 的" +
         "副作用，挪进出口会把 `guard` / `finally` / `successText` 三处钩子都" +
         "占满 —— 比留在原地更难读。该文件其余的 12 条动作已全部走出口。",
+    },
+  ],
+  P63: [
+    {
+      re: /^src\/lib\/page-window\.ts$/,
+      reason:
+        "出口自身的实现（三族窗口的算式就在这里；本判据数的是**别处**又写了一遍）。",
+    },
+    {
+      re: /^src\/lib\/path-display\.ts$/,
+      reason:
+        "那是**路径展示**的取末段（§16.2.4.60 的 P56 出口）：`lastSegments` 的" +
+        "判据是「按**段**切」而不是「取最后 N 条」—— 它要处理 `a/` 这种尾段为空的" +
+        "形态，与「取尾部 N 条元素」不是同一件事（同款边界已在 P56 里写清）。",
     },
   ],
   P10: [
@@ -2744,6 +2777,121 @@ const RULES = {
       return dispatched + namespaced;
     },
   },
+
+  /* ── P62「把一组 props 转成另一个键的 props」（硬闸，§16.2.4.66）──────
+   * 全库 42 处 `onChange={(e) => FUNC(e.target.value)}` 这一族：都做同一件事
+   *（把 DOM 事件里取出的**值**交给只关心值的回调），而写法分四派，每一派都
+   * 编译、都运行、类型都对 —— 差别只在几个从没被写下来的决定上：
+   * 取 `target.value` 还是 `target.checked`；要不要就地 `Number(...)`；
+   * 过滤规则写在谁那里；对象改写的**键名**靠人眼对齐（写错一个字符就静默
+   * 写到另一个字段上）。
+   *
+   * 判据取**两种形态**（都以「事件对象的取值」为锚，不取函数名）：
+   *   ① `X => FUNC(X.target.value)` —— 文本类控件的改写样板；
+   *   ② `X => FUNC(X.target.checked)` —— 复选框 / 开关的改写样板。
+   * **刻意不数**带语句体的处理（`onChange={(e) => { … }}`）：那一族里常常要
+   * 在同一个事件里做别的事（读 `scrollHeight` 调高度、按值分派多个字段），
+   * 数它只会逼人把多步逻辑塞进一个表达式去迎合判据。那一侧的合规由
+   * `readTextInput` 提供（取值仍只有一处），判据够不着、也不该硬够。
+   *
+   * 出口：`~/lib/form-props` 的 `textHandler` / `checkedHandler` /
+   * `numberHandler` / `bindKey` / `readTextInput`。
+   */
+  P62: {
+    label:
+      "视图里自写「事件值 → 值回调」的改写样板（应使用 ~/lib/form-props 的 textHandler / checkedHandler）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/form-props"/.test(t2)) return 0;
+      const value = (
+        t2.match(
+          /=>\s*[A-Za-z_$][\w$.\[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.value\s*\)/g,
+        ) || []
+      ).length;
+      const checked = (
+        t2.match(
+          /=>\s*[A-Za-z_$][\w$.\[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.checked\s*\)/g,
+        ) || []
+      ).length;
+      return value + checked;
+    },
+  },
+
+  /* ── P63「给一个列表做分页 / 窗口切片」（硬闸，§16.2.4.67）────────────
+   * 全库做「从一个列表里切出一段」的算术，而它们是**三种方向相反的窗口**，
+   * 此前从未被写下来：倒序分页（第 1 页最新）、尾部窗口（恒取最后 N 条）、
+   * 平行分块（从头按片长切）。三者的边界处理各异，而每一种差异都是静默的：
+   * 空列表让 `end` 变负、页码越界不钳回（「看着第 1 页、state 里却是第 9 页」）、
+   * `pageSize` 传 0 让 `ceil(total / 0)` 变成 `Infinity` 页。
+   *
+   * 判据取**三种形态**：
+   *   ① `… . length - … * …` —— 倒序分页的偏移算式（含 `Math.max(0, …)`
+   *     那种「防负」包法）；
+   *   ② `Math.ceil(… / …)` —— 总页数 / 总块数；
+   *   ③ **接收者像集合**的 `.slice(-N)` —— 尾部窗口的字面写法。
+   * **刻意不数**通用字符串 `slice`（`slice(0, 6)` 取短码、`slice(1)` 去前缀
+   * 到处都是，数它只会逼人改坏代码）；③ 的接收者必须像集合
+   *（`logs` / `items` / `entries` / `lines`…）而非任意字符串 ——
+   * `id.slice(-4)` 与 `.toString(36).slice(-4)` 是**取短码**（显示位数），
+   * 与「取列表尾部 N 条」不是同一件事。
+   *
+   * 出口：`~/lib/page-window` 的 `tailPages` / `countAfterPage` /
+   * `tailWindow` / `chunkRange` / `LOG_MODAL_MAX_ROWS`。
+   */
+  P63: {
+    label:
+      "自写分页 / 窗口切片的算术（应使用 ~/lib/page-window 的 tailPages / tailWindow / chunkRange）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/page-window"/.test(t2)) return 0;
+      const offset = (
+        t2.match(/\.length\s*-\s*[A-Za-z_$][\w$.\[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.\[\]?]*/g) ||
+        []
+      ).length;
+      const ceilDiv = (
+        t2.match(/Math\.ceil\s*\(\s*[A-Za-z_$][\w$.\[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.\[\]?]*\s*\)/g) ||
+        []
+      ).length;
+      const tail = (t2.match(
+        /\b(?!Date\b)(?:logs?|items?|entries|rows?|lines?|list|arr|all|values?|records?|history|sessions?|segments?|collected|out)\b[\w$.\[\]?]*\.slice\(\s*-\s*(?:[A-Za-z_$][\w$]*|\d+)\s*\)/g,
+      ) || []).length;
+      return offset + ceilDiv + tail;
+    },
+  },
+
+  /* ── P64「把一次进度回调节流后写进 state」（硬闸，§16.2.4.68）─────────
+   * `watchTask` 的 `onProgress` 是**高频**回调（SSE 每帧一次，一次生成可调
+   * 几百次），而全库 6 处把它直接接到 `setState` 上，六处**没有一处节流**。
+   * 差别不在「怎么写这一行」，而在三个从未被写下来的决定上：多久写一次、
+   * 同值要不要短路、卸载之后还写不写。
+   *
+   * 判据取**「进度回调」这一形态**：
+   * `onProgress: (…) => setXxx(` 或 `onProgress: (…) => { … setXxx(…` ——
+   * 即「订阅回调用的是 setter」。**刻意不取 `setProgress(` 这个函数名**：
+   * 那条名字在全库既是「进度」也是「上传进度」「提取进度」
+   *（`use-dynamic-workflow-form` 的 `onUploadProgress` 就是另一条通道），
+   * 按名字数会连「不是订阅回调的写入点」一起算进来。
+   *
+   * 出口：`~/components/ui/use-throttled-progress` 的 `useThrottledProgress`
+   *（单值）/ `useThrottledProgressMap`（按条目）/ `createThrottleGate`（只判闸门）。
+   */
+  P64: {
+    label:
+      "把高频进度回调直接写进 state（应使用 ~/components/ui/use-throttled-progress 的 useThrottledProgress / useThrottledProgressMap / createThrottleGate）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/components\/ui\/use-throttled-progress"/.test(t2)) return 0;
+      /* 只认「订阅回调里写 state」：`onProgress:` 之后同一段里出现 setter。 */
+      const hits =
+        t2.match(
+          /onProgress\s*:\s*\([^)]*\)\s*=>\s*(?:\{[\s\S]{0,400}?)?set[A-Z][\w$]*\s*\(/g,
+        ) || [];
+      return hits.length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -2840,6 +2988,11 @@ const HARD_GATE_RULES = new Set([
   "P59",
   "P60",
   "P61",
+  /* 本批三条（§16.2.4.66 ~ §16.2.4.68）：事件值改写样板 / 分页与窗口切片 /
+   * 进度回调节流 —— 三条都按**形态**取锚点，且每条都配反面用例。 */
+  "P62",
+  "P63",
+  "P64",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */

@@ -498,6 +498,34 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ["ImageViewer", "ViewableImage"],
       1,
     ],
+    /* 本批三条（规范 16 §16.2.4.66 ~ §16.2.4.68）：事件值 → 值回调的改写样板
+     *（P62）、分页 / 窗口切片（P63）、进度回调节流（P64）。
+     * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
+    [
+      "~/lib/form-props",
+      "ts",
+      [
+        "textHandler",
+        "checkedHandler",
+        "numberHandler",
+        "bindKey",
+        "readTextInput",
+        "digitsOnly",
+      ],
+      10,
+    ],
+    [
+      "~/lib/page-window",
+      "ts",
+      ["tailPages", "countAfterPage", "tailWindow", "chunkRange"],
+      5,
+    ],
+    [
+      "~/components/ui/use-throttled-progress",
+      "ts",
+      ["useThrottledProgress", "useThrottledProgressMap", "createThrottleGate"],
+      3,
+    ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
     (spec, ext, exports, min) => {

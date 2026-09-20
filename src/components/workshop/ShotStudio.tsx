@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
@@ -78,7 +79,13 @@ export function ShotStudio({
   const [shotSize, setShotSize] = React.useState<ShotSizeState>(() =>
     parseShotSize(shots[0]?.params.size ?? undefined),
   );
-  const [progress, setProgress] = React.useState<Record<string, number>>({});
+  /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
+   * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
+  const {
+    progress,
+    report: reportProgress,
+    flush: flushProgress,
+  } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [batchRunning, setBatchRunning] = React.useState(false);
   /** 提示词被用户手改过的镜头 —— 自动预填不得覆盖。 */
@@ -142,11 +149,13 @@ export function ShotStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
+          onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
             if (out.kind !== "video") patchShot(shotId, { imageUrl: out.url });
           },
           onSettled: (r) => {
+            /* 落定即写终值（见 VideoStudio 同处注释）。 */
+            flushProgress(shotId, 100);
             patchShot(shotId, { status: r.ok ? "done" : "failed" });
             if (!r.ok) setShotError(shotId, r.message ?? "生成失败");
             resolve();

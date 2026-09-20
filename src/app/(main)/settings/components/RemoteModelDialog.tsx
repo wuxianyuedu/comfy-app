@@ -12,6 +12,7 @@
  */
 
 import { SelectMenu } from "~/components/ui/select-menu";
+import { textHandler } from "~/lib/form-props";
 import { FormField } from "~/components/ui/form-field";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
@@ -111,9 +112,9 @@ export function RemoteModelDialog({
                 {...a11y}
                 type="text"
                 value={d.addForm.baseUrl}
-                onChange={(event) =>
-                  d.setAddForm({ ...d.addForm, baseUrl: event.target.value })
-                }
+                onChange={textHandler((baseUrl) =>
+                  d.setAddForm({ ...d.addForm, baseUrl }),
+                )}
                 placeholder="https://api.example.com/v1"
                 className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
               />

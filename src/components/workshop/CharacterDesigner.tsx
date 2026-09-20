@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { textHandler } from "~/lib/form-props";
 import { Trash } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
@@ -458,7 +459,7 @@ export function CharacterDesigner({
           />
           <input
             value={brief}
-            onChange={(event) => setBrief(event.target.value)}
+            onChange={textHandler(setBrief)}
             /* Enter 触发 AI 生成（Shift+Enter 不触发）；生成中不响应。 */
             {...enterCommit({
               onCommit: () => {
@@ -737,7 +738,7 @@ function Field({
         <input
           {...a11y}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={textHandler(onChange)}
           className="border-border bg-bg focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
           placeholder={placeholder}
         />

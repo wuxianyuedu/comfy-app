@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
@@ -88,7 +89,7 @@ export function EditableLabel({
         ref={inputRef}
         type="text"
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={textHandler(setDraft)}
         onBlur={commit}
         {...enterCommit({
           onCommit: commit,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { textHandler } from "~/lib/form-props";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X, Zap } from "lucide-react";
@@ -312,7 +313,7 @@ function Field({
         <input
           type={type}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={textHandler(onChange)}
           placeholder={placeholder}
           autoComplete={autoComplete}
           required

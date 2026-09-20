@@ -11,6 +11,7 @@
  */
 
 import { useState } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import {
   TEMPERATURE_TASKS,
@@ -131,7 +132,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
               <select
                 {...a11y}
                 value={c.drafts.llm.model}
-                onChange={(event) => c.patchLlm({ model: event.target.value })}
+                onChange={textHandler((model) => c.patchLlm({ model }))}
                 className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
               >
                 {c.ollamaModels.map((model) => (

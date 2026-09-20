@@ -4,6 +4,7 @@
 // 视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import React from "react";
+import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { nextId } from "~/lib/unique-id";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
@@ -463,6 +464,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
   const [generating, setGenerating] = React.useState(false);
   const [shotProgress, setShotProgress] = React.useState<ShotProgressMap>({});
+  /* 镜头进度的节流闸门（见 `~/components/ui/use-throttled-progress`）。 */
+  const progressGate = React.useRef(createThrottleGate());
   const [rendered, setRendered] = React.useState(false);
   const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(
     null,
@@ -864,6 +867,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         await new Promise<void>((resolve) => {
           watchTask(taskId, {
             onProgress: (pct, node) => {
+              /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
+               * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
+              if (!progressGate.current.allow(shot.id)) return;
               setShotProgress((prev) => ({
                 ...prev,
                 [shot.id]: {

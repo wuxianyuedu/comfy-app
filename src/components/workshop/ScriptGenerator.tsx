@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -166,7 +167,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
         <div className="space-y-2">
           <Textarea
             value={idea}
-            onChange={(event) => setIdea(event.target.value)}
+            onChange={textHandler(setIdea)}
             rows={3}
             className="border-border bg-bg"
             placeholder="输入一句话灵感或粘贴一段粗稿，直接生成完整剧本…"

@@ -13,6 +13,8 @@
  */
 
 import { formatClock } from "~/lib/time-format";
+import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
+import { checkedHandler } from "~/lib/form-props";
 
 import {
   useEffect,
@@ -164,7 +166,9 @@ export function WorkflowRunLogModal({
 
   if (!open) return null;
 
-  const visibleAll = logs.slice(-300);
+  /* 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
+   * 尾部窗口收在 `~/lib/page-window`（规范 16 §16.2.4.67）。 */
+  const visibleAll = tailWindow(logs, LOG_MODAL_MAX_ROWS);
   const visible =
     filter === "all"
       ? visibleAll
@@ -307,7 +311,7 @@ export function WorkflowRunLogModal({
               <input
                 type="checkbox"
                 checked={autoscroll}
-                onChange={(event) => setAutoscroll(event.target.checked)}
+                onChange={checkedHandler(setAutoscroll)}
                 className="h-3.5 w-3.5 cursor-pointer accent-violet-500"
               />
               自动滚动
