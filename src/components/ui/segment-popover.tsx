@@ -69,6 +69,12 @@ export interface SegmentSection<T extends string = string> {
   }[];
   /** 用户在本分组中改选其他选项时调用。 */
   onChange: (value: T) => void;
+  /** 可选：渲染在本分组**所有子分组之后**的自由控件。
+   *
+   *  给「不是从几个选项里挑一个、而是直接给一个值」的连续量控件留的位置
+   *  （百万像素步进器：档位之外还要能填 2.5）。它属于这个分组（挨着它的选项
+   *  渲染），但形状不是 `options`，所以不走 `options`。 */
+  extra?: React.ReactNode;
 }
 
 export function MultiSegmentPopover({
@@ -205,6 +211,7 @@ const Section = React.memo(function Section({
           </div>
         </div>
       ))}
+      {section.extra ? <div className="mt-2">{section.extra}</div> : null}
     </div>
   );
 });

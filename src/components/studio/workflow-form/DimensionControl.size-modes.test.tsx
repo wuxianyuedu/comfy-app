@@ -8,7 +8,13 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 
 import type { EnrichedWidget } from "../workflow-io";
 import { DimensionControl } from "./DimensionControl";
@@ -78,5 +84,17 @@ describe("尺寸控件的两类表达", () => {
     for (const multiple of ["8", "16", "32", "64"])
       expect(labels).toContain(multiple);
     expect(screen.getByText("倍数")).toBeTruthy();
+  });
+
+  it("「百万像素」那一组挂着自定义步进器（档位之外能填任意值）", () => {
+    /* 百万像素在端口上是 FLOAT，1M/2M/4M 只是常用档位 —— 少了这条步进器，
+     *  要 2.5 这个值就只能去改工作流 JSON。 */
+    renderSize(1856, 1088);
+    expect(screen.getByText("自定义")).toBeTruthy();
+    /* 限定在步进器里查（同一块控件还有宽/高两个 NumberField，它们的步进按钮
+     *  title 长得一样），且不锁死步进量 —— 那是 `MegapixelStepper` 自己的决定。 */
+    const stepper = within(screen.getByTestId("megapixel-stepper"));
+    expect(stepper.getByTitle(/^增加 /)).toBeTruthy();
+    expect(stepper.getByTitle(/^减少 /)).toBeTruthy();
   });
 });

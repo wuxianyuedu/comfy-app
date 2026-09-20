@@ -375,12 +375,49 @@ export const CLARITY_SUBGROUP_LABELS: Record<ClarityKind, string> = {
   megapixel: "百万像素",
 };
 
-/** 清晰度档 label → 预设；未知 label 回退第一档（1k）。 */
-export function clarityPresetOfLabel(label: string): SizeClarityPreset {
+/** 自由百万像素标签解析（`"2.5M"` → 2.5）。
+ *
+ *  为什么要它：百万像素在端口上本来就是 **FLOAT**（连续量），1M / 2M / 4M 只是
+ *  常用档位 —— 界面上的步进器与外部 JSON 都能给出 2.5 这样的值。解析不出返回
+ *  null（`"1k"` / `""` / 乱串），由调用方决定怎么回退。 */
+export function parseMegapixelLabel(label: string): number | null {
+  const match = /^(\d+(?:\.\d+)?)\s*M$/i.exec(label.trim());
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/** 是不是一个合法清晰度标签：档位表里有（1k / 2M），或是自由百万像素值（2.5M）。 */
+export function isClarityLabel(label: string): boolean {
   return (
-    SIZE_CLARITY_PRESETS.find((preset) => preset.label === label) ??
-    SIZE_CLARITY_PRESETS[0]!
+    SIZE_CLARITY_PRESETS.some((preset) => preset.label === label) ||
+    parseMegapixelLabel(label) !== null
   );
+}
+
+/** 数值 → 百万像素标签（2.5 → `"2.5M"`、1 → `"1M"`）。
+ *
+ *  与 `parseMegapixelLabel` **互逆**：界面（步进器）写出去的 label 必须能被它读
+ *  回来，否则用户填的值会随一次归一化变成别的数。保留两位小数 —— 够表达
+ *  0.25M 这一档的微调，也让 `"2.25M"` 这类值往返稳定。 */
+export function megapixelLabel(value: number): string {
+  const safe = Number.isFinite(value) && value > 0 ? value : 1;
+  return `${Math.round(safe * 100) / 100}M`;
+}
+
+/** 清晰度档 label → 预设；未知 label 回退第一档（1k）。
+ *
+ *  **自由百万像素值（`"2.5M"`）也要认**：它不在档位表里，但它是界面写出来的
+ *  合法表达 —— 按「百万像素」类构造一个 preset 返回。不认它的代价是它悄悄
+ *  变回 1M（下面每个读 `megapixels` 的地方都会拿到 1，用户填的 2.5 一路失真，
+ *  而界面上还显示着 2.5M）。 */
+export function clarityPresetOfLabel(label: string): SizeClarityPreset {
+  const known = SIZE_CLARITY_PRESETS.find((preset) => preset.label === label);
+  if (known) return known;
+  const free = parseMegapixelLabel(label);
+  return free === null
+    ? SIZE_CLARITY_PRESETS[0]!
+    : { kind: "megapixel", label, megapixels: free };
 }
 
 /** 清晰度档 label 属于哪个子类（未知按分辨率处理）。 */
@@ -394,10 +431,11 @@ export function resolutionTierOfLabel(label: string): ResolutionTier | null {
   return preset?.tier ?? null;
 }
 
-/** 百万像素档 label（"2M"）→ 档位数值（2）；不是百万像素档返回 null。 */
+/** 百万像素 label（`"2M"` / `"2.5M"`）→ 数值（2 / 2.5）；不是百万像素返回 null。 */
 export function megapixelTierOfLabel(label: string): number | null {
   const preset = SIZE_CLARITY_PRESETS.find((item) => item.label === label);
-  return preset?.megapixels ?? null;
+  if (preset) return preset.megapixels ?? null;
+  return parseMegapixelLabel(label);
 }
 
 /* ══ 尺寸表达（全项目唯一口径）═════════════════════════════════════════
@@ -413,7 +451,9 @@ export function megapixelTierOfLabel(label: string): number | null {
 export interface SizeSpec {
   /** 比例预设 label（`SIZE_RATIO_PRESETS[].label`，如 "16:9 横屏" / "3:4"）。 */
   ratio: string;
-  /** 清晰度档 label（`SIZE_CLARITY_PRESETS[].label`，如 "1k" / "2M"）。 */
+  /** 清晰度标签：档位表里的（`SIZE_CLARITY_PRESETS[].label`，如 "1k" / "2M"），
+   *  或**任意百万像素值**（如 `"2.5M"` —— 界面上的步进器写出来的就是它：
+   *  百万像素在端口上是 FLOAT，1M/2M/4M 只是常用档位，不是值域边界）。 */
   clarity: string;
   /** 百万像素档的宽高对齐倍数；分辨率档不读它（宽高由场景表给定）。 */
   multiple: AlignMultiple;
@@ -439,8 +479,7 @@ export function normalizeSizeSpec(
 ): SizeSpec {
   const ratioLabel = normalizeRatioLabel(raw?.ratio);
   const clarityLabel =
-    typeof raw?.clarity === "string" &&
-    SIZE_CLARITY_PRESETS.some((preset) => preset.label === raw.clarity)
+    typeof raw?.clarity === "string" && isClarityLabel(raw.clarity)
       ? raw.clarity
       : DEFAULT_SIZE_SPEC.clarity;
   const multiple =

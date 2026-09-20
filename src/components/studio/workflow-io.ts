@@ -20,6 +20,7 @@ import {
   megapixelDims,
   megapixelTierOfLabel,
   normalizeAlignMultiple,
+  parseMegapixelLabel,
   resolutionDims,
   resolutionTierOfLabel,
   type ClarityKind,
@@ -735,6 +736,23 @@ export const DIM_CLARITY_PRESETS: DimClarityPreset[] = SIZE_CLARITY_PRESETS.map(
       : {}),
   }),
 );
+
+/** 清晰度标签 → 预设（含**自由百万像素值**）。
+ *
+ *  档位目录里有就用它；`"2.5M"` 这类档位之外的值按同一形状现造一个 ——
+ *  `dimsForRatio` 只读 `kind` 与 `totalPixels`，所以造出来的预设与档位走的是
+ *  同一条换算路径（不需要为自由值再写一条分支）。识别不出才回退第一档。
+ *
+ *  为什么必须走这一处：`DIM_CLARITY_PRESETS.find(...)` 找不到就回退会让用户
+ *  填的 2.5 悄悄变回 1k（界面上还显示着 2.5M）。 */
+export function clarityPresetFor(label: string): DimClarityPreset {
+  const known = DIM_CLARITY_PRESETS.find((preset) => preset.label === label);
+  if (known) return known;
+  const megapixels = parseMegapixelLabel(label);
+  return megapixels === null
+    ? DIM_CLARITY_PRESETS[0]!
+    : { kind: "megapixel", label, totalPixels: megapixels * 1_000_000 };
+}
 
 /** 「像素」大类下两个子类的显示名（与 `size-presets` 同一份）。 */
 export const CLARITY_SUBGROUP_OF_KIND: Record<
