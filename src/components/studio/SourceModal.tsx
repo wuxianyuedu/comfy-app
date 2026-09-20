@@ -52,7 +52,10 @@ export function SourceModal({
      `open={data !== null}` 与调用方的条件渲染同义，多一层兜底。 */
   return (
     <Dialog open={data !== null} onOpenChange={(next) => !next && onClose()}>
+      {/* 关闭按钮由下面的 header 自绘 —— 必须关掉基元的内置那枚，
+          否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
+        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
       >
@@ -75,11 +78,15 @@ export function SourceModal({
                   : "工作流(RAW)格式导入，显示磁盘上的原始文件内容，未做任何转换"}
               </p>
             </div>
+            {/* 唯一的一枚关闭按钮（`DialogContent` 的内置那枚已关掉）。
+                `aria-label` 与 `title` 都给：按钮内容是「✕」这个字形，
+                accessible name 会算成「✕」——读屏器念不出「关闭」。 */}
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={onClose}
               className="text-ink-muted hover:text-ink-soft"
+              aria-label="关闭"
               title="关闭"
             >
               ✕
