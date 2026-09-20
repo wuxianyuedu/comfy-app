@@ -20,7 +20,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
       {!c.appUpdate.inShell ? (
         <p className="text-muted-foreground text-sm">
           当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。
-          请使用打包后的桌面版（start-tauri）。
+          请使用打包后的桌面版。
         </p>
       ) : (
         <>

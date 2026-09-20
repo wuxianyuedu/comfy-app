@@ -18,8 +18,8 @@
  * 这一组断言此前锚在 scripts/dev-launcher.ps1 上（Windows 专属实现）；编排
  * 统一到 mjs 之后，判据与文案随之迁移，语义一条都没放宽。
  */
-import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, mkdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -27,20 +27,6 @@ import { describe, expect, it } from "vitest";
 const LAUNCHER = join(process.cwd(), "scripts", "dev-launcher.mjs");
 const launcher = readFileSync(LAUNCHER, "utf8");
 const SHELL = join(process.cwd(), "src-tauri", "src", "lib.rs");
-const python = readFileSync(join(process.cwd(), "scripts", "start_tauri_launcher.py"), "utf8");
-
-/** 可用的 Python 解释器（CI 上可能是 python3，Windows 上是 python）。 */
-function pythonBin(): string {
-  for (const candidate of ["python3", "python"]) {
-    try {
-      execFileSync(candidate, ["-c", "import sys; sys.exit(0)"], { stdio: "ignore" });
-      return candidate;
-    } catch {
-      // 试下一个
-    }
-  }
-  return "";
-}
 
 /** 在临时目录里造一份壳 stderr，再用真实实现读标记（不 mock 文件系统）。 */
 function markersFor(stderrText: string): { abandoned: boolean; crashed: boolean } {
@@ -195,85 +181,6 @@ describe("失败出口给出的是**本次运行**的日志，不是按名字猜
   });
 });
 
-describe("失败弹窗「日志要详细」：直接把 dev server 的输出贴出来（ISSUE #576）", () => {
-  /**
-   * 用户第二轮反馈：「启动失败，还是看不出那有问题，日志需要详细」。
-   * 弹窗当时只贴启动器两侧（dev-launcher.log / dev-launcher-stderr.log），
-   * 而失败**最关键的现场**在 dev server 自己的输出里（Next 编译错 / 端口被占 /
-   * pnpm 起不来都落在 log/nextjs/nextjs-stderr-*.log）—— 用户照着「详细日志」
-   * 去翻，翻到的全是启动器日志，难怪「看不出哪有问题」。
-   *
-   * 契约：
-   *   · 弹窗里必须有 dev server 的一段输出与它的绝对路径；
-   *   · 取「最新一份」按**文件时间戳**（历史命名混过两套格式，字典序会选到旧的）。
-   */
-  it("弹窗组装会带上 nextjs 日志段与路径", () => {
-    const body = python.slice(
-      python.indexOf("def _build_failure_message("),
-      python.indexOf("def _write_status("),
-    );
-    expect(body).toContain("nextjs-stderr-");
-    expect(body).toContain("nextjs-stdout-");
-    expect(body).toContain("dev server 错误输出");
-    expect(body).toContain("详细日志：");
-    // 「下一步」不能只有一句「看日志」——自查入口要指出来
-    expect(body).toContain("pnpm check:toolchain");
-  });
-
-  it("取最新一份 nextjs 日志按 mtime（不按文件名字典序）", () => {
-    const body = python.slice(
-      python.indexOf("def _newest_nextjs_log("),
-      python.indexOf("def _build_failure_message("),
-    );
-    expect(body).toContain("getmtime");
-    // 旧命名（下划线）与现命名（T）并存时，字典序恰恰把旧的排到后面；
-    // 这条判据必须靠时间戳，所以不许出现 sort()/sorted() 的选择逻辑。
-    expect(body).not.toMatch(/sorted\(|\.sort\(/);
-  });
-
-  it("真的挑到 mtime 最新的那份（真跑，不 mock）", () => {
-    // 造两份：名字上「旧命名」排在字典序后面，但 mtime 更早 —— 必须选中新的。
-    // 整个 launcher 在 Linux 上 import 不了（Windows 专用 ctypes.WINFUNCTYPE），
-    // 因此按本仓库既有套路用 AST 只抽出被测函数（不含平台代码）。
-    const dir = mkdtempSync(join(tmpdir(), "nextjs-log-pick-"));
-    try {
-      mkdirSync(join(dir, "log", "nextjs"), { recursive: true });
-      const oldNamed = join(dir, "log", "nextjs", "nextjs-stderr-2026-09-15_13-42-26.log");
-      const newNamed = join(dir, "log", "nextjs", "nextjs-stderr-2026-09-15T18-30-28.log");
-      writeFileSync(oldNamed, "OLD-RUN");
-      writeFileSync(newNamed, "CURRENT-RUN");
-      // 让「旧命名」那份的 mtime 更早（这正是现场：它是上一次运行留下的）
-      const past = Date.now() / 1000 - 3600;
-      utimesSync(oldNamed, past, past);
-      const script = `
-import ast, json, sys, os
-
-src = open(${JSON.stringify(
-        join(process.cwd(), "scripts", "start_tauri_launcher.py"),
-      )}, encoding="utf-8").read()
-tree = ast.parse(src)
-wanted = {"_newest_nextjs_log"}
-blocks = [
-    n for n in tree.body
-    if isinstance(n, ast.FunctionDef) and n.name in wanted
-]
-namespace = {"os": os}
-exec(compile(ast.Module(body=blocks, type_ignores=[]), "<stub>", "exec"), namespace)
-picked = namespace["_newest_nextjs_log"](${JSON.stringify(dir)}, "nextjs-stderr-")
-print("PICKED=" + (picked or ""))
-if picked:
-    print("CONTENT=" + open(picked, encoding="utf-8").read())
-`;
-      const out = spawnSync(pythonBin(), ["-c", script], { encoding: "utf8" });
-      const text = `${out.stdout ?? ""}${out.stderr ?? ""}`;
-      expect(text).toContain("CURRENT-RUN");
-      expect(text, "不得选中上一次运行的文件").not.toContain("OLD-RUN");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
-
 describe("判据用到的壳标记在壳侧真实存在", () => {
   it("src-tauri 仍会写下 launch abandoned", () => {
     expect(readFileSync(SHELL, "utf8")).toContain("launch abandoned");
@@ -291,7 +198,9 @@ describe("判据用到的壳标记在壳侧真实存在", () => {
     expect(readFileSync(SHELL, "utf8")).toContain("another instance of this checkout is running");
   });
 
-  it("python 启动器同判据（两侧读同一个标记，避免语义漂移）", () => {
-    expect(python).toContain('"launch abandoned" in (stderr_tail or "").lower()');
+  it("判据只有一处：编排侧读壳留下的标记，没有第二份实现要同步", () => {
+    // Python 启动器（历史上在这里各读一遍同一标记）已随 ISSUE #784 移除；
+    // 现在「谁结束了这次启动」这条判据只有 dev-launcher.mjs 一处。
+    expect(launcher).toContain("readShellMarkers");
   });
 });

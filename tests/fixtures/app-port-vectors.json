@@ -1,5 +1,5 @@
 {
-  "_comment": "端口推导的跨语言共享校验向量（launch-and-build.md §1.1）。四侧实现（Node scripts/app-port.mjs、PowerShell scripts/app-port.ps1、Python scripts/start_tauri_launcher.py、Rust src-tauri/src/single_instance.rs）必须对同一 input 得出同一 port。任一侧漂移即挂测试 —— 这是「四侧一致」从文档承诺变成可失败断言的地方。全部为平台无关的绝对路径（相对路径会拼 cwd，语义上不该跨机器比对，见 §1.1）。",
+  "_comment": "端口推导的跨语言共享校验向量（launch-and-build.md §1.1）。四侧实现（Node scripts/app-port.mjs、PowerShell scripts/app-port.ps1、Python scripts/app_port.py、Rust src-tauri/src/single_instance.rs）必须对同一 input 得出同一 port。任一侧漂移即挂测试 —— 这是「四侧一致」从文档承诺变成可失败断言的地方。全部为平台无关的绝对路径（相对路径会拼 cwd，语义上不该跨机器比对，见 §1.1）。",
   "vectors": [
     {
       "input": "F:\\AI\\Other\\comfy-app-t3-branch",

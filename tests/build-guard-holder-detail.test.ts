@@ -10,8 +10,10 @@
  * 钉死：
  *   1. Get-ProductDirHolder 经 Get-CimInstance Win32_Process 取 CommandLine / ParentProcessId；
  *   2. 命中对象带 CommandLine / ParentId 字段；
- *   3. 补充信息抽成 Write-HolderDetail 一处，两个出口（清理失败 / 前置检查）都调用它
- *      —— 避免两处各抄一份、日后漂移。
+ *   3. 补充信息抽成 Write-HolderDetail 一处，**所有**报占用者的出口都调用它
+ *      —— 避免两处各抄一份、日后漂移。当前唯一的出口是「目录清理失败」
+ *      （Assert-LauncherNotRunning 那条「打包第二层启动器 exe」的出口已随
+ *      ISSUE #784 移除：不再有 onedir 产物目录需要独占）。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -34,11 +36,13 @@ describe("Build-Guard.ps1 占用者清单补充命令行/父PID", () => {
     expect(SRC).toMatch(/CommandLine\s*=\s*[^}]+ParentId\s*=/s);
   });
 
-  it("补充信息抽成 Write-HolderDetail 一处，两个出口都调用", () => {
+  it("补充信息抽成 Write-HolderDetail 一处，报占用者的出口都调用", () => {
     expect(SRC).toContain("function Write-HolderDetail");
-    // 至少两处调用（清理失败出口 + 前置检查出口）。
     const calls = SRC.match(/Write-HolderDetail\s+-Indent/g) ?? [];
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    // 每个「列出占用者」的出口都必须同时给补充信息：只有一处出口时也盯住
+    // 「它不是内联拼字符串」。
+    expect(SRC).toContain("Get-ProductDirHolder -Directory $full");
   });
 
   it("含中文的 .ps1 保持 UTF-8 with BOM（§8.4）", () => {

@@ -18,7 +18,7 @@ start-tauri-dev.ps1 — 无控制台窗口启动 Tauri 桌面壳（dev / tauri d
   双击 <项目根>\tools\start\start-tauri-dev.ps1
   或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\start\start-tauri-dev.ps1
 
-等价入口：start-tauri-dev.exe（tools\build\build-launcher-dev.ps1 打包）。
+等价入口：pnpm tauri dev（POSIX / CI 直接用命令）。
 #>
 [CmdletBinding()]
 param()
