@@ -2,6 +2,7 @@
 
 import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
+import { TreeChildren } from "~/components/ui/tree-rows";
 import { Spinner } from "~/components/ui/page-loading";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { cn } from "~/lib/utils";
@@ -224,160 +225,158 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 />
                 {/* 子包 —— 仅展开时显示 */}
                 {isOpen && subs.length > 0 && (
-                  <div className="border-border bg-surface/50 border-t p-2">
-                    <div className="space-y-1.5">
-                      {subs.map(({ sub, saved, state }) => {
-                        const preset = ROW_STATE_PRESET[state.kind];
-                        const toolTip =
-                          state.kind === "outdated"
-                            ? `上次解析保存的 hash ${state.savedHash.slice(0, 8)}… / 当前磁盘 hash ${state.diskHash.slice(0, 8)}…（节点源文件有改动）`
-                            : state.kind === "loaded"
-                              ? `内容未变（hash ${state.savedHash.slice(0, 8)}…）`
-                              : sub.path;
-                        const nodeCount =
-                          state.kind === "loaded" || state.kind === "outdated"
-                            ? state.kind === "loaded"
-                              ? state.nodeCount
-                              : state.savedNodeCount
-                            : sub.packageFileCount;
-                        // 点击展开只对有已解析节点的包可用。
-                        // 未导入 / 缺失 /
-                        // 空的包没东西可显示。
-                        const nodesAreLoaded =
-                          state.kind === "loaded" || state.kind === "outdated";
-                        const nodeListOpen = nodeListExpansion.isExpanded(
-                          sub.path,
-                        );
-                        const nodeTypeList = saved?.nodeTypes ?? [];
-                        return (
-                          <div key={sub.path}>
-                            <div
-                              className={cn(
-                                "flex items-center justify-between gap-2 rounded-lg border p-2 pl-3",
-                                preset.rowCls,
-                              )}
-                              title={toolTip}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-ink font-medium">
-                                    {sub.name}
-                                  </span>
-                                  <StatusBadge
-                                    status={preset.status}
-                                    label={
-                                      state.kind === "loaded" && saved?.parsedAt
-                                        ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
-                                        : preset.label
-                                    }
-                                    dot={false}
-                                    className="px-2 py-0.5 text-[10px]"
-                                  />
-                                </div>
-                                <div
-                                  className="text-muted-foreground truncate font-mono text-[10px]"
-                                  title={sub.path}
-                                >
-                                  {sub.path}
-                                </div>
+                  <TreeChildren
+                    depth={0}
+                    className="border-border bg-surface/50 space-y-1.5 border-t p-2"
+                  >
+                    {subs.map(({ sub, saved, state }) => {
+                      const preset = ROW_STATE_PRESET[state.kind];
+                      const toolTip =
+                        state.kind === "outdated"
+                          ? `上次解析保存的 hash ${state.savedHash.slice(0, 8)}… / 当前磁盘 hash ${state.diskHash.slice(0, 8)}…（节点源文件有改动）`
+                          : state.kind === "loaded"
+                            ? `内容未变（hash ${state.savedHash.slice(0, 8)}…）`
+                            : sub.path;
+                      const nodeCount =
+                        state.kind === "loaded" || state.kind === "outdated"
+                          ? state.kind === "loaded"
+                            ? state.nodeCount
+                            : state.savedNodeCount
+                          : sub.packageFileCount;
+                      // 点击展开只对有已解析节点的包可用。
+                      // 未导入 / 缺失 /
+                      // 空的包没东西可显示。
+                      const nodesAreLoaded =
+                        state.kind === "loaded" || state.kind === "outdated";
+                      const nodeListOpen = nodeListExpansion.isExpanded(
+                        sub.path,
+                      );
+                      const nodeTypeList = saved?.nodeTypes ?? [];
+                      return (
+                        <div key={sub.path}>
+                          <div
+                            className={cn(
+                              "flex items-center justify-between gap-2 rounded-lg border p-2 pl-3",
+                              preset.rowCls,
+                            )}
+                            title={toolTip}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-ink font-medium">
+                                  {sub.name}
+                                </span>
+                                <StatusBadge
+                                  status={preset.status}
+                                  label={
+                                    state.kind === "loaded" && saved?.parsedAt
+                                      ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
+                                      : preset.label
+                                  }
+                                  dot={false}
+                                  className="px-2 py-0.5 text-[10px]"
+                                />
                               </div>
-                              <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
-                                {nodesAreLoaded ? (
-                                  /* 「节点计数」单元是一个折叠开关：点开看该包
+                              <div
+                                className="text-muted-foreground truncate font-mono text-[10px]"
+                                title={sub.path}
+                              >
+                                {sub.path}
+                              </div>
+                            </div>
+                            <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
+                              {nodesAreLoaded ? (
+                                /* 「节点计数」单元是一个折叠开关：点开看该包
                                      已加载的节点清单。此前是自绘的
                                      `role="button"` + `tabIndex` + 手写
                                      Enter/Space 处理（规范 16 §16.2.4.13）——
                                      基元把这些语义一次给全。`panelClassName`
                                      留空：面板是下面那个 rail（由外面的条件渲染
                                      承担），此处的 `Disclosure` 只接管这一行。 */
-                                  <Disclosure
-                                    open={nodeListOpen}
-                                    onOpenChange={() =>
-                                      nodeListExpansion.toggle(sub.path)
-                                    }
-                                    marker="caret"
-                                    className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
-                                    panelClassName="hidden"
-                                    trigger={
-                                      <div
-                                        title={
-                                          nodeListOpen
-                                            ? "收起节点列表"
-                                            : `点击查看已加载的 ${nodeCount} 个节点`
-                                        }
-                                      >
-                                        <div className="text-ink font-mono text-sm font-semibold">
-                                          {nodeCount}
-                                        </div>
-                                        <div className="text-[10px]">节点</div>
-                                      </div>
-                                    }
-                                  />
-                                ) : (
-                                  <div className="text-right">
-                                    <div className="text-ink font-mono text-sm font-semibold">
-                                      {nodeCount}
-                                    </div>
-                                    <div className="text-[10px]">映射文件</div>
-                                  </div>
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  onClick={() => onParseSingle(sub.path)}
-                                  disabled={
-                                    !!perPkgParsing[sub.path] ||
-                                    parsing ||
-                                    state.kind === "missing" ||
-                                    state.kind === "empty"
+                                <Disclosure
+                                  open={nodeListOpen}
+                                  onOpenChange={() =>
+                                    nodeListExpansion.toggle(sub.path)
                                   }
-                                  className={cn(
-                                    "h-auto rounded-md px-3 py-1.5 text-xs font-medium",
-                                    preset.btn,
-                                  )}
-                                >
-                                  {perPkgParsing[sub.path]
-                                    ? "解析中…"
-                                    : preset.btnLabel}
-                                </Button>
-                              </div>
+                                  marker="caret"
+                                  className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
+                                  panelClassName="hidden"
+                                  trigger={
+                                    <div
+                                      title={
+                                        nodeListOpen
+                                          ? "收起节点列表"
+                                          : `点击查看已加载的 ${nodeCount} 个节点`
+                                      }
+                                    >
+                                      <div className="text-ink font-mono text-sm font-semibold">
+                                        {nodeCount}
+                                      </div>
+                                      <div className="text-[10px]">节点</div>
+                                    </div>
+                                  }
+                                />
+                              ) : (
+                                <div className="text-right">
+                                  <div className="text-ink font-mono text-sm font-semibold">
+                                    {nodeCount}
+                                  </div>
+                                  <div className="text-[10px]">映射文件</div>
+                                </div>
+                              )}
+                              <Button
+                                variant="ghost"
+                                onClick={() => onParseSingle(sub.path)}
+                                disabled={
+                                  !!perPkgParsing[sub.path] ||
+                                  parsing ||
+                                  state.kind === "missing" ||
+                                  state.kind === "empty"
+                                }
+                                className={cn(
+                                  "h-auto rounded-md px-3 py-1.5 text-xs font-medium",
+                                  preset.btn,
+                                )}
+                              >
+                                {perPkgParsing[sub.path]
+                                  ? "解析中…"
+                                  : preset.btnLabel}
+                              </Button>
                             </div>
-                            {/* 可展开的 ComfyUI 风节点预览。只在
+                          </div>
+                          {/* 可展开的 ComfyUI 风节点预览。只在
                                 用户点击计数单元时渲染。
                                 每张卡片都是自己的收起 / 展开目标，好让
                                 一个 146 节点的包仍可扫读。 */}
-                            {nodesAreLoaded && nodeListOpen && (
-                              <div
-                                className={cn(
-                                  "mt-1 ml-3 space-y-1 border-l-2 border-dashed py-1 pl-3",
-                                  preset.railCls,
-                                )}
-                              >
-                                {nodeTypeList.length === 0 ? (
-                                  <div className="text-muted-foreground text-[10px] italic">
-                                    此包的清单中没有列出节点类型
-                                  </div>
-                                ) : (
-                                  nodeTypeList.map((ct) => (
-                                    <NodePreviewCard
-                                      key={ct}
-                                      data={manifestByNode[ct]}
-                                      fallbackName={ct}
-                                      expanded={nodeCardExpansion.isExpanded(
-                                        ct,
-                                      )}
-                                      onToggle={() =>
-                                        nodeCardExpansion.toggle(ct)
-                                      }
-                                    />
-                                  ))
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                          {nodesAreLoaded && nodeListOpen && (
+                            <TreeChildren
+                              depth={1}
+                              railClassName={preset.railCls}
+                              className="space-y-1"
+                            >
+                              {nodeTypeList.length === 0 ? (
+                                <div className="text-muted-foreground text-[10px] italic">
+                                  此包的清单中没有列出节点类型
+                                </div>
+                              ) : (
+                                nodeTypeList.map((ct) => (
+                                  <NodePreviewCard
+                                    key={ct}
+                                    data={manifestByNode[ct]}
+                                    fallbackName={ct}
+                                    expanded={nodeCardExpansion.isExpanded(ct)}
+                                    onToggle={() =>
+                                      nodeCardExpansion.toggle(ct)
+                                    }
+                                  />
+                                ))
+                              )}
+                            </TreeChildren>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </TreeChildren>
                 )}
                 {isOpen && subs.length === 0 && (
                   <div className="border-border bg-surface/50 text-muted-foreground border-t p-3 text-center text-[11px]">

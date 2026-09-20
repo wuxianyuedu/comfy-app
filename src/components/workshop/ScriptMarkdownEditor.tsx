@@ -17,6 +17,7 @@ import {
 import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer";
 import { Button } from "~/components/ui/button";
 import { zClass } from "~/lib/shell/overlay-z";
+import { centerLineScrollTop, readLineHeight } from "~/lib/dom-rect";
 import { useHotkey } from "~/components/ui/use-hotkey";
 
 interface ScriptMarkdownEditorProps {
@@ -255,9 +256,13 @@ export function ScriptMarkdownEditor({
       if (!el) return;
       el.focus();
       el.setSelectionRange(position, position);
-      const lineHeight = el.scrollHeight / lines.length;
+      /* 行高估算与居中滚动收在 `~/lib/dom-rect`（规范 16 §16.2.4.41）：
+       * 此前是就地写的 `el.scrollHeight / lines.length` —— 行数为 0 时给出
+       * `Infinity`，会把 `scrollTo({ top: Infinity })` 交给浏览器。 */
+      const lineHeight = readLineHeight(el, lines.length);
+      if (lineHeight === null) return;
       el.scrollTo({
-        top: Math.max(0, line * lineHeight - el.clientHeight / 2),
+        top: centerLineScrollTop(line, lineHeight, el.clientHeight),
         behavior: "smooth",
       });
     }, 0);

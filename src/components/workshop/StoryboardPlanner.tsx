@@ -36,7 +36,8 @@ export function StoryboardPlanner(props: Props) {
     handleAISplit,
     clearShots,
     generateAll,
-    polishBusyId,
+    polishIsBusy,
+    polishAnyBusy,
     polishBusyAll,
     polishOne,
     polishAll,
@@ -90,7 +91,7 @@ export function StoryboardPlanner(props: Props) {
                 size="xs"
                 title="用模型把模板提示词润色为更有画面感的生图提示词"
                 onClick={() => void polishAll()}
-                disabled={polishBusyAll || polishBusyId != null || aiBusy}
+                disabled={polishBusyAll || polishAnyBusy || aiBusy}
                 className="h-auto rounded-lg px-3 py-1.5"
               >
                 {polishBusyAll ? (
@@ -190,7 +191,7 @@ export function StoryboardPlanner(props: Props) {
               styles={styles}
               progressByShot={progressByShot}
               generating={generating}
-              polishBusy={polishBusyId === shot.id}
+              polishBusy={polishIsBusy(shot.id)}
               /* 润色错误挂在**这一条**上（规范 16 §16.2.4.33）。 */
               polishError={planner.polishErrors.get(shot.id)}
               onPolish={() => void polishOne(shot)}

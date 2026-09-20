@@ -10,7 +10,6 @@ import type {
   WorkflowDetail,
   RawOutputMeta,
   WorkflowGroup,
-  NodeJsonViewerRequest,
 } from "./workflow-types";
 /** 宽松对象视图：`typeof v === "object" && v !== null`（含数组）→ Record 视图，
  *  否则 null。与旧 any 代码 `x?.prop` / `Object.entries(x ?? {})` 的运行时语义
@@ -21,18 +20,9 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     : null;
 }
 
-export function rectToAnchor(
-  rect: DOMRect,
-): NodeJsonViewerRequest["anchorRect"] {
-  return {
-    left: rect.left,
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.bottom,
-    width: rect.width,
-    height: rect.height,
-  };
-}
+/* `rectToAnchor` 已迁到 `~/lib/dom-rect` 的 `rectToAnchorRect`
+ * （规范 16 §16.2.4.41：「把活着的 DOMRect 冻成可存对象」只在一处定义）。
+ * 本文件不再导出它 —— 迁移时连带检查过：唯一调用方是 `WorkflowStores`。 */
 
 /* 元信息条里的一个小信息芯片。就是个带样式的 span ——
  * 不需要按钮语义（点了没有任何反应）。 */

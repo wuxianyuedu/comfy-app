@@ -16,6 +16,7 @@ import {
   type ManifestNodeRaw,
 } from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
+import { offsetWithin } from "~/lib/dom-rect";
 import {
   useExpansionSet,
   type ExpansionSet,
@@ -192,12 +193,13 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         const row = console_.querySelectorAll<HTMLDivElement>("[data-log-row]");
         const target = row[idx];
         if (!target) return;
-        // 相对面板自身计算 scrollTop：`target.offsetTop` 量的是最近定位祖先，
-        // 而本面板没有 position:relative，会回退到更高层的 fixed 包装，得到乱值。
-        // getBoundingClientRect + 面板自身 rect + 其 scrollTop 才是正确的面板内偏移。
-        const targetTop =
-          target.getBoundingClientRect().top -
-          console_.getBoundingClientRect().top;
+        /* 相对面板自身的位置收在 `~/lib/dom-rect` 的 `offsetWithin`
+         * （规范 16 §16.2.4.41）：`target.offsetTop` 量的是最近定位祖先，
+         * 而本面板没有 `position:relative`，会回退到更高层的 `fixed` 包装，
+         * 得到乱值 —— 正确的算式（两个 rect 相减 + 面板自身滚动偏移 + 8px
+         * 留白）此前就地写在这一个文件里。 */
+        const targetTop = offsetWithin(target, console_);
+        if (targetTop === null) return;
         console_.scrollTop = Math.max(0, console_.scrollTop + targetTop - 8);
       });
     }

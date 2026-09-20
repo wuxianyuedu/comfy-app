@@ -400,6 +400,29 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ["adviseOnError", "adviseWithFallback", "shouldAutoExpandError"],
       2,
     ],
+    /* 本批三条（规范 16 §16.2.4.39 ~ §16.2.4.41）：树的缩进与子行容器（P36）、
+     * 「某一条在忙」的执行态（P37）、元素几何的算术与量测接线（P38）。
+     * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
+    [
+      "~/components/ui/tree-rows",
+      "tsx",
+      ["TreeChildren", "TreeRow", "indentClass", "TREE_INDENT_STEP"],
+      1,
+    ],
+    ["~/components/ui/use-item-action", "ts", ["useItemAction"], 4],
+    ["~/components/ui/use-element-box", "ts", ["useElementBox"], 2],
+    [
+      "~/lib/dom-rect",
+      "ts",
+      [
+        "readElementBox",
+        "offsetWithin",
+        "readLineHeight",
+        "rectToAnchorRect",
+        "anchorRectToVirtualElement",
+      ],
+      4,
+    ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
     (spec, ext, exports, min) => {

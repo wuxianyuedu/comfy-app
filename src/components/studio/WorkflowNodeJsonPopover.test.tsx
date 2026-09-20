@@ -32,6 +32,8 @@ afterEach(cleanup);
 
 const REQUEST: NodeJsonViewerRequest = {
   anchorRect: {
+    x: 120,
+    y: 300,
     left: 120,
     top: 300,
     right: 160,

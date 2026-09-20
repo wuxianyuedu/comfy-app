@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import { useItemErrors } from "~/components/ui/use-item-errors";
+import { useItemAction } from "~/components/ui/use-item-action";
 import type { Shot, Scene, Character, StyleRef } from "~/lib/workshop/types";
 import {
   buildShotPrompt,
@@ -419,7 +420,11 @@ export function useStoryboardPlanner(props: Props) {
    * 模板拼接的 prompt 覆盖构图/角色/风格要素，但画面叙事平淡。AI 润色把
    * 模板 prompt 作为要素清单，让模型补画面叙事、光影与镜头语言，产出更
    * 出图的提示词；negative 同步微调。 */
-  const [polishBusyId, setPolishBusyId] = useState<string | null>(null);
+  /* 「哪一条在润色」收在 `useItemAction`（规范 16 §16.2.4.40）：此前是本
+   * 文件自持的 `useState<string | null>`，与历史列表的重试、角色的润色各写
+   * 一份 —— 「同一条能不能重复点」三处都没防。`polishBusyAll` 是**整表**
+   * 动作的忙标记（批量润色），形态不同，留在原处。 */
+  const polishAction = useItemAction(shots.map((shot) => shot.id));
   const [polishBusyAll, setPolishBusyAll] = useState(false);
   /* 润色错误挂在**那个镜头**上（规范 16 §16.2.4.33）：收口前是一句
    * `useState("")` —— 润色镜头 A 失败后去润色镜头 B，A 的提示就被盖掉，
@@ -431,33 +436,33 @@ export function useStoryboardPlanner(props: Props) {
       openSettings();
       return;
     }
-    setPolishBusyId(shot.id);
-    polishErrors.clear(shot.id);
-    try {
-      const full = await streamChat({
-        messages: [
-          {
-            role: "system",
-            content:
-              "你是 AI 绘画提示词工程师。用户给出一个分镜镜头的要素清单（构图、场景、角色、风格）。" +
-              "请把它改写为一段 60~120 词的英文画面提示词：保留全部要素，补足光影、氛围、镜头语言与画面叙事，" +
-              "用逗号分隔的短语，不要解释、不要换行以外的多余文字。只输出提示词本身。",
-          },
-          {
-            role: "user",
-            content: shot.prompt || shot.description || sceneFallback(shot),
-          },
-        ],
-        opts: { temperature: 0.7 },
-      });
-      const polished = full.trim();
-      if (!polished) throw new Error("模型未返回提示词");
-      updateShot(shot.id, { prompt: polished });
-    } catch (e: unknown) {
-      polishErrors.report(shot.id)("err", errorMessage(e, "提示词润色失败"));
-    } finally {
-      setPolishBusyId(null);
-    }
+    await polishAction.run(shot.id, async () => {
+      polishErrors.clear(shot.id);
+      try {
+        const full = await streamChat({
+          messages: [
+            {
+              role: "system",
+              content:
+                "你是 AI 绘画提示词工程师。用户给出一个分镜镜头的要素清单（构图、场景、角色、风格）。" +
+                "请把它改写为一段 60~120 词的英文画面提示词：保留全部要素，补足光影、氛围、镜头语言与画面叙事，" +
+                "用逗号分隔的短语，不要解释、不要换行以外的多余文字。只输出提示词本身。",
+            },
+            {
+              role: "user",
+              content: shot.prompt || shot.description || sceneFallback(shot),
+            },
+          ],
+          opts: { temperature: 0.7 },
+        });
+        const polished = full.trim();
+        if (!polished) throw new Error("模型未返回提示词");
+        updateShot(shot.id, { prompt: polished });
+      } catch (e: unknown) {
+        polishErrors.report(shot.id)("err", errorMessage(e, "提示词润色失败"));
+      }
+      /* 忙标记由出口的 `finally` 清。 */
+    });
   }
 
   function sceneFallback(shot: Shot): string {
@@ -504,7 +509,11 @@ export function useStoryboardPlanner(props: Props) {
     removeShot,
     clearShots,
     handleAISplit,
-    polishBusyId,
+    polishBusyId: polishAction.busyId,
+    /* 「这一条忙不忙」的判据收在出口里，视图不再自己写 `busyId === item.id`
+     * （规范 16 §16.2.4.40）。`polishAnyBusy` 同理。 */
+    polishIsBusy: polishAction.isBusy,
+    polishAnyBusy: polishAction.anyBusy,
     polishBusyAll,
     polishErrors,
     polishOne,

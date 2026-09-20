@@ -119,8 +119,8 @@ export function useWorkflowLibraryDetail(
     onPatchModelTags,
     onPatchWorkflowIO,
     onPatchParamMap,
-    bundleBusy,
-    resyncBusy,
+    isBundleBusy,
+    isResyncBusy,
     onUse,
     onEdit,
     onDelete,
@@ -255,8 +255,7 @@ export function useWorkflowLibraryDetail(
       modelTags: workflow?.modelTags ?? [],
       allModelTags,
       busy:
-        !!workflow &&
-        (bundleBusy === workflow.id || resyncBusy === workflow.id),
+        !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
       patchModes: async (modes, defaultMode) => {
         if (!workflow || !onPatchModes) return;
         await onPatchModes(workflow.id, modes, defaultMode);
@@ -287,8 +286,8 @@ export function useWorkflowLibraryDetail(
     [
       workflow,
       allModelTags,
-      bundleBusy,
-      resyncBusy,
+      isBundleBusy,
+      isResyncBusy,
       onPatchModes,
       onPatchModelTags,
       onPatchWorkflowIO,
@@ -334,8 +333,8 @@ export function useWorkflowLibraryDetail(
     canResync: syncFlags.canResync,
     missing: syncFlags.missing,
     isTechnical: !!workflow && isTechnicalName(workflow.name),
-    busyDownload: !!workflow && bundleBusy === workflow.id,
-    busyResync: !!workflow && resyncBusy === workflow.id,
+    busyDownload: !!workflow && isBundleBusy(workflow.id),
+    busyResync: !!workflow && isResyncBusy(workflow.id),
     actions,
   };
 }
