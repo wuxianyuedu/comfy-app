@@ -158,8 +158,8 @@ export function WorkflowLibrary({
             onResync={(id, name) => {
               void c.handleResync(id, name);
             }}
-            bundleBusy={c.bundleBusy}
-            resyncBusy={c.resyncBusy}
+            isBundleBusy={c.isBundleBusy}
+            isResyncBusy={c.isResyncBusy}
           />
         </div>
       </div>

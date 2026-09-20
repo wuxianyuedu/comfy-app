@@ -17,7 +17,7 @@ import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 function HistoryGroupTaskList({
   items,
   progressMap,
-  retryingId,
+  isRetrying,
   onOpenDetail,
   onCancel,
   onRetry,
@@ -25,7 +25,9 @@ function HistoryGroupTaskList({
 }: {
   items: TaskItem[];
   progressMap: Record<string, number>;
-  retryingId: string | null;
+  /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
+   *  视图不再自己写 `retryingId === task.id`。 */
+  isRetrying: (id: string) => boolean;
   onOpenDetail: (id: string) => void;
   onCancel: (id: string) => void;
   onRetry: (task: TaskItem) => void;
@@ -48,7 +50,7 @@ function HistoryGroupTaskList({
           key={task.id}
           task={task}
           progress={progressMap[task.id] ?? 0}
-          retrying={retryingId === task.id}
+          retrying={isRetrying(task.id)}
           onOpenDetail={onOpenDetail}
           onCancel={onCancel}
           onRetry={onRetry}
@@ -181,7 +183,7 @@ export function HistoryList({
                 <HistoryGroupTaskList
                   items={group.items}
                   progressMap={c.progressMap}
-                  retryingId={c.retryingId}
+                  isRetrying={c.isRetrying}
                   onOpenDetail={c.openDetail}
                   onCancel={c.cancel}
                   onRetry={c.retry}

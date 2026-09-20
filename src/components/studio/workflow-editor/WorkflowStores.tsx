@@ -40,7 +40,7 @@ import type {
   NodeJsonViewerContextValue,
 } from "../workflow-types";
 import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
-import { rectToAnchor } from "../workflow-utils";
+import { rectToAnchorRect } from "~/lib/dom-rect";
 import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "~/lib/workflow/workflow-mutations";
 import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
@@ -613,7 +613,7 @@ export function createNodeJsonViewerStore(
 
     requestShow: (anchorEl, nodeId, kind) => {
       const rect = anchorEl.getBoundingClientRect();
-      set({ viewer: { anchorRect: rectToAnchor(rect), nodeId, kind } });
+      set({ viewer: { anchorRect: rectToAnchorRect(rect), nodeId, kind } });
     },
 
     dismiss: () => set({ viewer: null }),

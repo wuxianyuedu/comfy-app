@@ -55,6 +55,7 @@ import {
 } from "~/lib/workshop/extraction-log";
 import { streamChat } from "~/lib/llm/browser";
 import { useItemErrors } from "~/components/ui/use-item-errors";
+import { useItemAction } from "~/components/ui/use-item-action";
 import {
   buildCharacterMessages,
   buildCharacterFromBriefMessages,
@@ -135,11 +136,14 @@ export function CharacterDesigner({
   /** 一句话生成角色：独立选择的 本地/远端模型（<下拉值> 为 "local::<m>" 或 "remote::<m>"；
    *  空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
   const [genSel, setGenSel] = React.useState("");
-  const [aiBusyId, setAiBusyId] = React.useState<string | null>(null);
+  /* 「哪一条在润色」收在 `useItemAction`（规范 16 §16.2.4.40）：此前是本
+   * 组件自持的 `useState<string | null>`，与历史列表的重试、分镜的润色各写
+   * 一份 —— 「同一条能不能重复点」三处都没防。 */
+  const aiAction = useItemAction(characters.map((character) => character.id));
   /* 逐条润色的错误挂在**那个角色**上（规范 16 §16.2.4.33）：收口前是一句
    * `useState("")` —— 润色角色 A 失败后去润色角色 B，A 的提示就被盖掉。
-   * `aiBusyId` 保持单值是对的（同一时刻只有一条在忙，那是 P14/P15 那些
-   * 忙碌位选择器的形态，不是错误位）。 */
+   * 忙碌位是单值是对的（同一时刻只有一条在忙），那是 P14/P15 那些忙碌位
+   * 选择器的形态，不是错误位。 */
   const aiErrors = useItemErrors(characters.map((character) => character.id));
   const { config, openSettings } = useLLM();
 
@@ -254,32 +258,34 @@ export function CharacterDesigner({
       aiErrors.report(character.id)("err", "请先填写角色名再使用 AI 润色");
       return;
     }
-    setAiBusyId(character.id);
-    aiErrors.clear(character.id);
-    try {
-      const style = styles.find((style) => style.slug === character.skillSlug);
-      const full = await streamChat({
-        messages: buildCharacterMessages({
-          name: character.name,
-          appearance: character.appearance,
-          costume: character.costume,
-          personality: character.personality,
-          styleTags: character.styleTags,
-          skillName: style?.name,
-        }),
-        /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
-      });
-      const r = parseCharacter(full);
-      update(character.id, {
-        appearance: r.appearance || character.appearance,
-        costume: r.costume || character.costume,
-        personality: r.personality || character.personality,
-      });
-    } catch (e: unknown) {
-      aiErrors.report(character.id)("err", errorMessage(e, "AI 润色失败"));
-    } finally {
-      setAiBusyId(null);
-    }
+    await aiAction.run(character.id, async () => {
+      aiErrors.clear(character.id);
+      try {
+        const style = styles.find(
+          (style) => style.slug === character.skillSlug,
+        );
+        const full = await streamChat({
+          messages: buildCharacterMessages({
+            name: character.name,
+            appearance: character.appearance,
+            costume: character.costume,
+            personality: character.personality,
+            styleTags: character.styleTags,
+            skillName: style?.name,
+          }),
+          /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
+        });
+        const r = parseCharacter(full);
+        update(character.id, {
+          appearance: r.appearance || character.appearance,
+          costume: r.costume || character.costume,
+          personality: r.personality || character.personality,
+        });
+      } catch (e: unknown) {
+        aiErrors.report(character.id)("err", errorMessage(e, "AI 润色失败"));
+      }
+      /* 忙标记由出口的 `finally` 清。 */
+    });
   }
 
   /** 三通道提取入口:工具=确定性解析;本地/API=LLM 输出 JSON,失败降级提示 */
@@ -572,11 +578,11 @@ export function CharacterDesigner({
                   variant="outline"
                   size="xs"
                   onClick={() => handleAICard(character)}
-                  disabled={aiBusyId === character.id || genBusy}
+                  disabled={aiAction.isBusy(character.id) || genBusy}
                   className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
                   title="用 LLM 补全外貌/服装/性格"
                 >
-                  {aiBusyId === character.id ? (
+                  {aiAction.isBusy(character.id) ? (
                     "…"
                   ) : (
                     <>

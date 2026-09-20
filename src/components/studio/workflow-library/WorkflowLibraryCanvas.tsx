@@ -40,6 +40,8 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { Button } from "~/components/ui/button";
+import { useElementBox } from "~/components/ui/use-element-box";
+import type { ElementBox } from "~/lib/dom-rect";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
@@ -131,34 +133,27 @@ function positionOf(nodeId: string): { x: number; y: number } | null {
  *  —— 高度只会由「视口」与「内容」取大，兜底量级与卡片列一致，不会比真实需要的
  *  更小。尺寸变化时（窗口缩放、面板拖动）重新派生，同步进 React Flow 的节点表。
  */
-function useCanvasBackdropSize(
-  containerRef: React.RefObject<HTMLDivElement | null>,
-): { width: number; height: number } {
-  const [viewport, setViewport] = useState(() => ({
-    width:
-      LAYOUT_SIZING.paramsWidth +
-      LAYOUT_SIZING.hostWidth +
-      LAYOUT_SIZING.outputsWidth,
-    height: LAYOUT_SIZING.fillHeight,
-  }));
-
-  useEffect(() => {
-    const element = containerRef.current;
-    if (!element) return;
-    const sync = () => {
-      const rect = element.getBoundingClientRect();
-      setViewport((prev) =>
-        prev.width === rect.width && prev.height === rect.height
-          ? prev
-          : { width: rect.width, height: rect.height },
-      );
-    };
-    sync();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(sync);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [containerRef]);
+function useCanvasBackdropSize(box: ElementBox | null): {
+  width: number;
+  height: number;
+} {
+  /* 量测收在 `~/components/ui/use-element-box`（规范 16 §16.2.4.41）：
+   * 此前是本文件自持的 `ResizeObserver` + 手写等值判断 —— 与 `LogPanel`
+   * 的视口量测各写一遍。**唯一保留在调用处的**是「量不到时用哪个兜底值」：
+   * 那是本画布的域判据（下面那段注释解释为什么兜底量级不能更小）。 */
+  const viewport = useMemo(
+    () =>
+      box && box.width > 0 && box.height > 0
+        ? { width: box.width, height: box.height }
+        : {
+            width:
+              LAYOUT_SIZING.paramsWidth +
+              LAYOUT_SIZING.hostWidth +
+              LAYOUT_SIZING.outputsWidth,
+            height: LAYOUT_SIZING.fillHeight,
+          },
+    [box],
+  );
 
   return useMemo(
     () => libraryBackdropSize(LAYOUT_SIZING, viewport),
@@ -214,7 +209,11 @@ function WorkflowLibraryCanvasInner({
 }: WorkflowLibraryCanvasProps) {
   /* 画布容器：量它才知道「铺满」要铺到哪儿（ISSUE #596）。 */
   const containerRef = useRef<HTMLDivElement>(null);
-  const backdropSize = useCanvasBackdropSize(containerRef);
+  /* 「画布容器多大」交给唯一出口量（规范 16 §16.2.4.41）：`boxRef` 是它给的
+   * 回调 ref，与 `containerRef` 一并挂在同一个节点上（前者给 hook 用、
+   * 后者给本文件其余地方读）。 */
+  const [boxRef, containerBox] = useElementBox();
+  const backdropSize = useCanvasBackdropSize(containerBox);
   /* 端点清单变了就主动重算落点：等元素尺寸变化是等不到的（见
    * `useHandleInventoryRefresh` 的说明）。 */
   const handleInventory = useMemo(
@@ -375,7 +374,10 @@ function WorkflowLibraryCanvasInner({
 
   return (
     <div
-      ref={containerRef}
+      ref={(el) => {
+        containerRef.current = el;
+        boxRef(el);
+      }}
       /* `bg-canvas` 是画布自己的底色（与项目画布同一 token）—— 面板底色
        *  （`bg-panel-deep`）与画布底色深浅不同，画布但凡没铺到容器底边，那条
        *  缝就会以「下方一块空白却不是画布」的形式被看见（ISSUE #596）。 */

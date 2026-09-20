@@ -11,6 +11,7 @@ import { Popover, PopoverContent } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { copyText } from "~/lib/browser-io";
+import { anchorRectToVirtualElement } from "~/lib/dom-rect";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
@@ -124,22 +125,7 @@ export function NodeJsonPopover({
    *  只需 getBoundingClientRect）。浮层存续期间锚点不跟着画布平移 / 缩放走，
    *  与 anchorRect 的语义一致（见 NodeJsonViewerRequest 的注释）。 */
   const anchorElement = useMemo(
-    () => () => ({
-      getBoundingClientRect: () => {
-        const a = request.anchorRect;
-        return {
-          x: a.left,
-          y: a.top,
-          left: a.left,
-          top: a.top,
-          right: a.right,
-          bottom: a.bottom,
-          width: a.width,
-          height: a.height,
-          toJSON: () => ({}),
-        };
-      },
-    }),
+    () => () => anchorRectToVirtualElement(request.anchorRect),
     [request.anchorRect],
   );
 

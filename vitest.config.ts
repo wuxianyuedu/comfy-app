@@ -77,6 +77,12 @@ export default defineConfig({
          * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
         "src/lib/unique-id.ts",
         "src/lib/comfyui/error-advice.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.39 ~ §16.2.4.41）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/components/ui/tree-rows.tsx",
+        "src/components/ui/use-item-action.ts",
+        "src/components/ui/use-element-box.ts",
+        "src/lib/dom-rect.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -422,6 +428,34 @@ export default defineConfig({
           functions: 100,
           statements: 100,
           branches: 100,
+        },
+        /* 本批三条新出口（规范 16 §16.2.4.39 ~ §16.2.4.41）。
+         * 门槛按**实测值**设（未覆盖的是 jsdom 到不了的分支：`use-element-box`
+         * 的「`ResizeObserver` 回调里取值没变」与 `readElementBox` 的
+         * 「元素上取不到 `getBoundingClientRect`」）。 */
+        "src/components/ui/tree-rows.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/ui/use-item-action.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 85,
+        },
+        "src/components/ui/use-element-box.ts": {
+          lines: 95,
+          functions: 85,
+          statements: 95,
+          branches: 85,
+        },
+        "src/lib/dom-rect.ts": {
+          lines: 95,
+          functions: 80,
+          statements: 90,
+          branches: 85,
         },
         /* 「一张媒体图的自然尺寸是多少」的出口（§16.2.4.31，P28 的对面）：
          * 两组读数、0 / NaN / 负 / 无限的读不到判据、竖图三态、

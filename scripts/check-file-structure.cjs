@@ -240,6 +240,13 @@ const DOMAIN_EXEMPT = new Set([
    *  100% 但数据库还在涨」）。进任何子域都会让另一侧反向依赖它 —— 与
    * `format-bytes` / `display-value` / `list-filter` 同款：顶层单例。 */
   "src/lib/progress.ts",
+  /* 「读一个元素的几何」的算术（ISSUE #672）：`use-custom-nodes-settings` 的
+   * 面板内偏移、`LogPanel` 的视口量测、`WorkflowLibraryCanvas` 的底图尺寸、
+   * `ScriptMarkdownEditor` 的按行号定位、`WorkflowStores` 的浮层锚点矩形**都在用**，
+   * 且它们分属自定义节点设置、日志、工作流库、工坊、工作流编辑器五个域 ——
+   * 进任何一个域都会让其余四个反向依赖它。与 `progress` / `list-filter` 同款：
+   * 「唯一持有者 + 任何域消费」的顶层单例。 */
+  "src/lib/dom-rect.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",
