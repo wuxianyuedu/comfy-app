@@ -167,6 +167,12 @@ export async function buildLibraryWorkflowInput(
    *  两个模式的契约口与落点通常不同，只能测默认模式等于只能验一条链路。工坊
    *  正跑生成时仍走缺省口径（用工作流的默认模式）。 */
   requestedMode?: string | null,
+  /** 该模式**生效的契约口清单**（`modeContractEntries(...)` 的 id）。
+   *
+   *  不传时按内置默认契约组载荷 —— 作者在「模式契约」里新增的自定义口不在
+   *  其中，给它的值就落不下去（如实进 `unmatched`，不静默丢）。能拿到契约
+   *  注册表的调用方（封装页签的流程测试）必须传。 */
+  contractIds?: readonly string[],
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
   const io = detail?.workflowIO ?? null;
@@ -184,6 +190,7 @@ export async function buildLibraryWorkflowInput(
     paramMap: detail?.paramMap ?? null,
     mode,
     values,
+    contractIds,
   });
   /* 尺寸**不**再带 `size`（"WxH"）兼容字段：尺寸只以「比例 + 分辨率」或
    *  「比例 + 百万像素 + 倍数」表达，逐端口落进 `workflowInputs`；

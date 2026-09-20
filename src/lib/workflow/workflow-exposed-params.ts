@@ -201,11 +201,45 @@ export function exposedParamsForMode(
   return out;
 }
 
+/* ── 自定义对外参数口（`custom-<类型>-<序号>`）──
+ *
+ * 「预制口就那么几个，往后想加个新口还得改代码」——自定义口让作者在「模式契约」
+ * 里自己声明一个口（起名 + 选简单类型），类型只影响两件事：① 工坊用什么控件录入；
+ * ② 它接受哪一族的端口。两件事都从下面这张「类型 → 已有类」的表派生，下游
+ * （映射 / 封装 / 适配器）因此不必认识「自定义口」这个概念。
+ *
+ * **为什么复用已有的类，而不是新增 `custom-*` 类**：`ExposedParamClass` 的成员
+ * 同时承担「端口族」与「卡片上的类型展示」两个职责，自定义口的两件事与它同构，
+ * 映射过去即可。只有 `reference-image` 不能复用 —— 那一类带「第 N 张」的槽位语义
+ * （`workflow-encapsulation` 按它逐槽取 `referenceImages[i]`），自定义图片口蹭上
+ * 去会读到别的口的值，所以图片口映射到同样吃图片行、但没有槽位语义的 `first-frame`。
+ */
+
+/** 自定义对外参数口的简单类型。 */
+export type ExposedCustomKind = "text" | "image" | "number";
+
+const EXPOSED_CUSTOM_ID_RE = /^custom-(text|image|number)-(\d+)$/;
+
+/** 自定义口 id 的类型；不是自定义口返回 null。 */
+export function exposedCustomKindOf(id: string): ExposedCustomKind | null {
+  const matched = EXPOSED_CUSTOM_ID_RE.exec(id);
+  return matched ? (matched[1] as ExposedCustomKind) : null;
+}
+
+/** 自定义口类型 → 复用的对外参数类（见上方注释）。 */
+const EXPOSED_CUSTOM_CLASS: Record<ExposedCustomKind, ExposedParamClass> = {
+  text: "prompt",
+  image: "first-frame",
+  number: "duration",
+};
+
 /** 任意契约口 id 的**界面展示名**（带序号的参考图口显示为「参考图 2」）。
  *
- *  未知 id（历史落库键 / 自定义口）原样返回 —— 界面读不出名字时宁可显示键本身，
- *  也不凭空编一个名字。 */
+ *  未知 id（历史落库键）原样返回 —— 界面读不出名字时宁可显示键本身，也不凭空
+ *  编一个名字。自定义口给一条中性兜底：它的名字只有模式契约知道（作者起的名），
+ *  落到下面按「类」取会张冠李戴（把 `custom-text-1` 显示成「提示词」）。 */
 export function exposedParamDisplayLabel(id: string): string {
+  if (exposedCustomKindOf(id)) return "自定义参数";
   const cls = exposedClassOf(id);
   if (!cls) return id;
   const slot = referenceImageSlotIndex(id);
@@ -229,8 +263,11 @@ export function exposedParamLabel(id: string): string {
   return EXPOSED_PARAM_LABEL[cls] ?? id;
 }
 
-/** 某个统一参数 id 属于哪一类（`reference-image-2` 这类带序号的口归到同一类）。 */
+/** 某个统一参数 id 属于哪一类（`reference-image-2` 这类带序号的口归到同一类，
+ *  自定义口按它的简单类型归到同族的那一类，见 `EXPOSED_CUSTOM_CLASS`）。 */
 export function exposedClassOf(id: string): ExposedParamClass | null {
+  const custom = exposedCustomKindOf(id);
+  if (custom) return EXPOSED_CUSTOM_CLASS[custom];
   if (id in EXPOSED_PARAM_LABEL) return id as ExposedParamClass;
   if (/^reference-image-\d+$/.test(id)) return "reference-image";
   return null;

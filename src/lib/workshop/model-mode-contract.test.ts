@@ -6,13 +6,19 @@ import {
   adapterInputsFromContract,
   builtInModeContract,
   contractToStatusEntries,
+  customInputKindOf,
+  isCustomContractInputId,
   isModeContractInputId,
   modeContractEntries,
+  modeContractInputIdLabel,
+  moveContractInput,
+  nextCustomInputId,
   nextReferenceImageId,
   modeContractInputLabel,
   parseModeContracts,
   referenceImageSlotIndex,
   WORKSHOP_INPUT_TYPES,
+  type ModeContractInputId,
 } from "./model-mode-contract";
 
 /** 工作流库里所有「生成类」模式（契约编辑器只对它们开放）。 */
@@ -161,5 +167,133 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
     expect(modeContractEntries("t2i", stored).map((e) => e.id)).toEqual([
       "prompt",
     ]);
+  });
+});
+
+describe("自定义口：id 形状与序号", () => {
+  it("id 把简单类型编进去：custom-<类型>-<序号>", () => {
+    expect(isCustomContractInputId("custom-text-1")).toBe(true);
+    expect(isCustomContractInputId("custom-image-2")).toBe(true);
+    expect(isCustomContractInputId("custom-number-3")).toBe(true);
+    expect(isCustomContractInputId("custom-foo-1")).toBe(false);
+    expect(isModeContractInputId("custom-text-1")).toBe(true);
+    expect(customInputKindOf("custom-number-7")).toBe("number");
+    expect(customInputKindOf("prompt")).toBe(null);
+  });
+
+  it("序号在整个自定义口空间里递增（不是每种类型各排一列）", () => {
+    expect(nextCustomInputId([], "text")).toBe("custom-text-1");
+    const first: ModeContractInputId[] = ["prompt", "custom-text-1"];
+    /* 下一个图片口拿 2 —— 与文本口共用序号空间，删掉一个再加不会立刻复用
+     *  同一个 id（映射表按 id 存，复用会让旧落点线落到新口上）。 */
+    expect(nextCustomInputId(first, "image")).toBe("custom-image-2");
+    expect(nextCustomInputId([...first, "custom-image-2"], "text")).toBe(
+      "custom-text-3",
+    );
+  });
+});
+
+describe("自定义口：往返与归一化", () => {
+  const contract = {
+    mode: "T2I",
+    inputs: ["prompt", "custom-text-1", "size"] as ModeContractInputId[],
+    output: "image" as const,
+    customInputs: [
+      {
+        id: "custom-text-1" as ModeContractInputId,
+        label: "水彩风格",
+        kind: "text" as const,
+      },
+    ],
+  };
+
+  it("定义与口一起往返（不丢名字 / 不丢类型）", () => {
+    const round = parseModeContracts(JSON.parse(JSON.stringify([contract])));
+    expect(round).toEqual([contract]);
+  });
+
+  it("没有定义的自定义口被丢弃（下游读不出名字与类型）", () => {
+    const round = parseModeContracts([
+      { mode: "T2I", inputs: ["prompt", "custom-text-9"], output: "image" },
+    ]);
+    expect(round.map((c) => c.inputs)).toEqual([["prompt"]]);
+  });
+
+  it("空名的定义被丢弃，连带它的口", () => {
+    const round = parseModeContracts([
+      {
+        mode: "T2I",
+        inputs: ["prompt", "custom-text-1"],
+        output: "image",
+        customInputs: [{ id: "custom-text-1", label: "  ", kind: "text" }],
+      },
+    ]);
+    expect(round.map((c) => c.inputs)).toEqual([["prompt"]]);
+    expect(round[0]?.customInputs).toBeUndefined();
+  });
+
+  it("类型以 id 里编的为准（kind 字段被改写成别的也不会走散）", () => {
+    const round = parseModeContracts([
+      {
+        mode: "T2I",
+        inputs: ["custom-image-1"],
+        output: "image",
+        customInputs: [{ id: "custom-image-1", label: "风格图", kind: "text" }],
+      },
+    ]);
+    expect(round[0]?.customInputs?.[0]?.kind).toBe("image");
+  });
+
+  it("展示名取作者填的名字；控件形态按类型给", () => {
+    const entries = contractToStatusEntries(contract);
+    expect(entries.map((e) => e.id)).toEqual([
+      "prompt",
+      "custom-text-1",
+      "size",
+    ]);
+    expect(entries[1]?.label).toBe("水彩风格");
+    expect(entries[1]?.control).toBe("text");
+    /* 不传定义时给中性兜底 —— 不落到「提示词」这类张冠李戴的措辞上。 */
+    expect(modeContractInputIdLabel("custom-text-1")).toBe("自定义参数");
+    expect(
+      contractToStatusEntries({
+        mode: "T2I",
+        inputs: ["custom-image-1", "custom-number-2"],
+        output: "image",
+        customInputs: [
+          { id: "custom-image-1", label: "风格图", kind: "image" },
+          { id: "custom-number-2", label: "强度", kind: "number" },
+        ],
+      }).map((e) => e.control),
+    ).toEqual(["image", "number"]);
+  });
+});
+
+describe("调序：顺序就是工坊对外的参数顺序", () => {
+  const inputs: ModeContractInputId[] = ["prompt", "negative", "size"];
+
+  it("上移 / 下移交换相邻两项", () => {
+    expect(moveContractInput(inputs, "negative", -1)).toEqual([
+      "negative",
+      "prompt",
+      "size",
+    ]);
+    expect(moveContractInput(inputs, "negative", 1)).toEqual([
+      "prompt",
+      "size",
+      "negative",
+    ]);
+  });
+
+  it("越界时原样返回（视图据此把首尾的按钮置灰）", () => {
+    expect(moveContractInput(inputs, "prompt", -1)).toEqual(inputs);
+    expect(moveContractInput(inputs, "size", 1)).toEqual(inputs);
+    expect(moveContractInput(inputs, "custom-text-9", -1)).toEqual(inputs);
+  });
+
+  it("不改原数组（不可变更新）", () => {
+    const before = [...inputs];
+    moveContractInput(inputs, "prompt", 1);
+    expect(inputs).toEqual(before);
   });
 });

@@ -106,17 +106,28 @@ export function WorkshopEncapsulationPanel({
    * `modeContractEntries` 取，与「画布节点」页签的卡片列**同一份**
    * （ISSUE #596：两个页签各读各的，口径就对不上了）。 */
   const { contracts: storedContracts } = useModeContracts();
+  /* 该模式生效的契约口清单（含作者自定义的口）。下方三处**同一份**：必备口判据、
+   *  封装状态派生、流程测试组载荷 —— 各取一份会让「界面列出的口」与「测试能填的
+   *  口」走散。 */
+  const contractEntries = React.useMemo(
+    () => modeContractEntries(mode, storedContracts),
+    [mode, storedContracts],
+  );
+  const contractIds = React.useMemo(
+    () => contractEntries.map((entry) => entry.id),
+    [contractEntries],
+  );
   /* 必备口来自模式契约（可配置，「模式契约」编辑器里勾选的那个勾）——本页的
    *  「能不能用」判据读它，不再写死「提示词」。 */
   const requiredInputs = React.useMemo(
     () =>
       requiredInputsFor({
-        inputs: modeContractEntries(mode, storedContracts).map((e) => e.id),
+        inputs: contractIds,
         required: storedContracts.find(
           (c) => c.mode === (mode ?? "").toUpperCase(),
         )?.required,
       }),
-    [mode, storedContracts],
+    [contractIds, mode, storedContracts],
   );
   const status = React.useMemo(
     () =>
@@ -124,10 +135,10 @@ export function WorkshopEncapsulationPanel({
         io: workflowIO,
         paramMap,
         mode: mode ?? null,
-        contractEntries: modeContractEntries(mode, storedContracts),
+        contractEntries,
         requiredInputs,
       }),
-    [workflowIO, paramMap, mode, storedContracts, requiredInputs],
+    [workflowIO, paramMap, mode, contractEntries, requiredInputs],
   );
 
   /* 流程测试的运行编排（规范 §17.2 第②层）：与画布节点那次运行共用同一份
@@ -136,6 +147,7 @@ export function WorkshopEncapsulationPanel({
     workflowId,
     workflowName: displayName,
     mode: mode ?? null,
+    contractIds,
   });
 
   /* 表单交上来的就是**工坊对外值**本身（口子清单 = 该模式的契约口，见

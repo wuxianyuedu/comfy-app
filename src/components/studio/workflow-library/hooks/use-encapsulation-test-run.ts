@@ -41,6 +41,11 @@ export interface EncapsulationTestRunArgs {
   workflowName: string;
   /** 生效模式码（登记与日志标注用；缺省 null）。 */
   mode?: string | null;
+  /** 该模式**生效的契约口清单**（含作者自定义的口）。
+   *
+   *  组载荷要按它认口：不传就等于只认内置契约，作者给自定义口填的值落不下去
+   *  （会进 `unmatched`，不静默丢）。调用方请用 memo 稳住引用。 */
+  contractIds?: readonly string[];
 }
 
 export interface EncapsulationTestRunController {
@@ -70,6 +75,7 @@ export function useEncapsulationTestRun({
   workflowId,
   workflowName,
   mode,
+  contractIds,
 }: EncapsulationTestRunArgs): EncapsulationTestRunController {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -95,6 +101,7 @@ export function useEncapsulationTestRun({
             workflowId,
             values,
             mode ?? null,
+            contractIds,
           );
           const id = await startLocalGenerate(input);
           setTaskId(id);
@@ -143,7 +150,7 @@ export function useEncapsulationTestRun({
         }
       })();
     },
-    [workflowId, workflowName, mode],
+    [workflowId, workflowName, mode, contractIds],
   );
 
   const uploadImage = useCallback(async (file: File) => {
