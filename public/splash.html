@@ -529,19 +529,32 @@
       return 'http://127.0.0.1:3000/workspace';
     }
 
-    // 探测后端是否已可访问：先尝试跨域 GET，失败再用 no-cors HEAD 兜底
-    async function probeBackend(url) {
+    // 探测后端是否「真正就绪」：打 /api/health（权威就绪端点），且要求可读的 2xx。
+    // 为什么不再探 appUrl（/workspace 页面路由）、也不再用 no-cors HEAD 兜底：
+    //   · 「Turbopack 会话级路由失效」时页面路由仍回 200、只有 /api/* 404，探页面
+    //     会把半死会话判成就绪、导航进一个数据永远加载不出的页面（正是自退事故的
+    //     前奏）；/api/health 只有服务与数据层都就绪才回 200，是权威判据。
+    //   · no-cors 的响应是 opaque，读不到状态码，404 也不会让 fetch 抛错——等于
+    //     「端口一应答就算就绪」，是过早导航的根因。health 端点已放行 CORS，
+    //     cors GET 能读到真实状态码。
+    async function probeBackend(appUrl) {
+      let healthUrl;
       try {
-        const r = await fetch(url, { method: 'GET', cache: 'no-store', mode: 'cors' });
-        if (r.ok) return true;
+        const u = new URL(appUrl);
+        healthUrl = `${u.protocol}//${u.host}/api/health`;
       } catch (e) {
-        // 可能 CORS 或尚未就绪，继续 fallback
+        healthUrl = appUrl;
       }
       try {
-        await fetch(url, { method: 'HEAD', cache: 'no-store', mode: 'no-cors' });
-        return true;
-      } catch (e) {}
-      return false;
+        const r = await fetch(healthUrl, {
+          method: 'GET',
+          cache: 'no-store',
+          mode: 'cors',
+        });
+        return r.ok; // 仅 2xx 算就绪；404/5xx/连不上一律继续等
+      } catch (e) {
+        return false;
+      }
     }
 
     // 进度条只进不退：launcher 写状态文件与 splash 自身探测是两条并行的更新来源，
@@ -676,11 +689,17 @@
         );
       }
 
-      // 2. 自主探测后端可响应后，请 Rust 侧把隐藏的应用窗口导航到应用地址。
-      //    不再把本启动窗口 location.replace 过去：服务未就绪时那会正好把
-      //    Edge「无法访问此页面」错误页顶到用户面前。导航失败就下个 tick 重试
-      //    （3 秒节流，避免高频重复导航打断正在编译路由的 dev server）。
-      if (await probeBackend(appUrl)) {
+      // 2. 导航以启动器的权威就绪状态为准（`status.ready`）：启动器已在服务端
+      //    验过 /api/health 返回 200，且检测到陈旧路由表会先清缓存自愈，所以它
+      //    说「就绪」才是真就绪。只有拿不到启动器状态（纯 Web、无壳 IPC）时，
+      //    才退回自主探测 /api/health。两条都要求真就绪，杜绝「端口一应答就把
+      //    隐藏主窗导航进一个 /api/* 全 404、数据永远加载不出的半死页面」。
+      //    导航失败下个 tick 重试（3 秒节流，避免高频重复导航打断正在编译路由的
+      //    dev server）。
+      const authoritativeReady = !!(status && status.ready === true);
+      const shouldNavigate =
+        authoritativeReady || (!status && (await probeBackend(appUrl)));
+      if (shouldNavigate) {
         navigating = true;
         updateUI(0.95, 'dev-server-ready', '服务已就绪，正在加载应用…', false, Math.floor(ticks / 4));
         setTimeout(() => { navigating = false; }, 3000);

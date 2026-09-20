@@ -20,9 +20,10 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  classifyProbe,
   configFingerprint,
   scanPorts,
   spawnInGroup,
@@ -47,7 +48,10 @@ function countMarkedProcesses(marker: string): number {
     .length;
 }
 
-async function waitUntil(check: () => boolean, timeoutMs = 5000): Promise<boolean> {
+async function waitUntil(
+  check: () => boolean,
+  timeoutMs = 5000,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (check()) return true;
@@ -92,14 +96,18 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
         ],
         cwd: process.cwd(),
       });
-      expect(await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000)).toBe(true);
+      expect(
+        await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000),
+      ).toBe(true);
 
       const result = await killProcessTree({ pid: child.pid!, detached: true });
       expect(result.ok).toBe(true);
       // 「整组」是判据：信号落到 -pgid，而不只是 leader。
       expect(result.via).toContain("进程组");
 
-      expect(await waitUntil(() => countMarkedProcesses(marker) === 0, 8000)).toBe(true);
+      expect(
+        await waitUntil(() => countMarkedProcesses(marker) === 0, 8000),
+      ).toBe(true);
     },
     20_000,
   );
@@ -171,23 +179,34 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it(".next 缓存指纹：配置不变则保留，变了才清；SKIP_CLEAN 强制保留", () => {
     const root = makeTmp();
-    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "a" }));
+    fs.writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "a" }),
+    );
     const first = syncNextCache(root, { NODE_ENV: undefined });
     expect(first.cleaned).toBe(false); // 首次：写初始指纹，不「清理」
-    expect(fs.readFileSync(path.join(root, ".next", "config-fingerprint"), "utf8")).toBe(
-      configFingerprint(root).hash,
-    );
+    expect(
+      fs.readFileSync(path.join(root, ".next", "config-fingerprint"), "utf8"),
+    ).toBe(configFingerprint(root).hash);
 
     // 指纹一致 → 保留缓存（不清）
     expect(syncNextCache(root, { NODE_ENV: undefined }).cleaned).toBe(false);
 
     // 配置内容变了 → 清缓存（否则会拿旧 route/旧 chunk 跑）
-    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "b" }));
+    fs.writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "b" }),
+    );
     expect(syncNextCache(root, { NODE_ENV: undefined }).cleaned).toBe(true);
 
     // SKIP_CLEAN 明确要求保留
-    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "c" }));
-    expect(syncNextCache(root, { NODE_ENV: undefined, SKIP_CLEAN: "1" }).cleaned).toBe(false);
+    fs.writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "c" }),
+    );
+    expect(
+      syncNextCache(root, { NODE_ENV: undefined, SKIP_CLEAN: "1" }).cleaned,
+    ).toBe(false);
     // FORCE_CLEAN 明确要求清
     expect(
       syncNextCache(root, { NODE_ENV: undefined, FORCE_CLEAN: "1" }).reason,
@@ -227,8 +246,14 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it("sidecar 的拉起与回收走官方 shell 插件（跨平台机制由它选）", () => {
     const root = process.cwd();
-    const lib = fs.readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
-    const cargo = fs.readFileSync(path.join(root, "src-tauri", "Cargo.toml"), "utf8");
+    const lib = fs.readFileSync(
+      path.join(root, "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
+    const cargo = fs.readFileSync(
+      path.join(root, "src-tauri", "Cargo.toml"),
+      "utf8",
+    );
     // 插件在 Rust 侧提供跨平台 spawn/kill：写死 std::process::Command + taskkill
     // 时 POSIX 分支等于「什么都不做」（sidecar 活过壳退出，继续占端口）
     expect(cargo).toContain("tauri-plugin-shell");
@@ -239,7 +264,9 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     for (const cap of ["default", "remote", "splash"]) {
       const file = path.join(root, "src-tauri", "capabilities", `${cap}.json`);
       if (!fs.existsSync(file)) continue;
-      expect(fs.readFileSync(file, "utf8")).not.toMatch(/shell:(allow-execute|allow-spawn)/);
+      expect(fs.readFileSync(file, "utf8")).not.toMatch(
+        /shell:(allow-execute|allow-spawn)/,
+      );
     }
   });
 
@@ -254,12 +281,17 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     // 判据绑在入口形态上，换入口时就会再静默失效一次。
     expect(lib).toContain("fn looks_like_project_root");
     expect(lib).toContain('join("dev-launcher.mjs")');
-    expect(lib).not.toMatch(/looks_like_project_root[\s\S]{0,400}dev-launcher\.ps1/);
+    expect(lib).not.toMatch(
+      /looks_like_project_root[\s\S]{0,400}dev-launcher\.ps1/,
+    );
   });
 
   it("统一编排：Windows 走同一份 .mjs，.ps1 只剩调用入口", () => {
     const root = process.cwd();
-    const ps1 = fs.readFileSync(path.join(root, "scripts", "dev-launcher.ps1"), "utf8");
+    const ps1 = fs.readFileSync(
+      path.join(root, "scripts", "dev-launcher.ps1"),
+      "utf8",
+    );
     // 入口只做「定位 + 转交 + 透传退出码」：不再有 Windows 专属的编排调用
     // （taskkill / Get-CimInstance / Job Object / cmd.exe）。
     expect(ps1).toContain("dev-launcher.mjs");
@@ -287,14 +319,25 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     //   · launcher-core/shell.mjs 的 isWindows()（进程组 / 可执行名后缀）
     //   · launch-core/procs.mjs 的 isWindows()（进程与端口探测机制）
     expect(launcher).not.toMatch(/process\.platform === "win32"/);
-    for (const rel of ["shell.mjs", "procs.mjs", "orchestrator.mjs", "log.mjs", "worktree.mjs"]) {
-      expect(fs.existsSync(path.join(root, "scripts", "launcher-core", rel))).toBe(true);
+    for (const rel of [
+      "shell.mjs",
+      "procs.mjs",
+      "orchestrator.mjs",
+      "log.mjs",
+      "worktree.mjs",
+    ]) {
+      expect(
+        fs.existsSync(path.join(root, "scripts", "launcher-core", rel)),
+      ).toBe(true);
     }
   });
 
   it("壳退出时的统一回收走 reap-process.mjs（不在 Rust 里重写平台分支）", () => {
     const root = process.cwd();
-    const lib = fs.readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
+    const lib = fs.readFileSync(
+      path.join(root, "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
     // kill_sidecar 除了插件的 kill()，还要补一刀统一回收：Node 之下的
     // next-server / turbopack worker 才是真正会残留成孤儿的那几层。
     expect(lib).toMatch(/fn kill_sidecar\(project_root: &str\)/);
@@ -303,7 +346,10 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   });
 
   it("sidecar 命名按平台判据收口（不再是写死的 node.exe）", () => {
-    const lib = fs.readFileSync(path.join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+    const lib = fs.readFileSync(
+      path.join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
+    );
     // 写死 "node.exe" 时 Linux 启动找不到 sidecar（资源里叫 node，没有后缀）
     expect(lib).not.toMatch(/join\("node\.exe"\)/);
     expect(lib).toContain("sidecar_binary_name");
@@ -337,7 +383,9 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
 
   /** 剥掉块注释与整行 `//` 注释：注释里解释「为什么用动态 import」不该被当成说明符。 */
   function stripComments(source: string): string {
-    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+    return source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^[ \t]*\/\/.*$/gm, "");
   }
 
   function scriptFiles(dir: string): string[] {
@@ -367,7 +415,50 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
     }
     // 清单不能静默变空：`dev-launcher.mjs` 与 `reap-process.mjs` 各有一条，它们是
     // 「回收残留进程树」的唯一入口 —— 扫不到就说明这条判据本身失效了。
-    expect(checked, "没有扫到任何 src/lib 路径字面量——判据失效").toBeGreaterThanOrEqual(2);
+    expect(
+      checked,
+      "没有扫到任何 src/lib 路径字面量——判据失效",
+    ).toBeGreaterThanOrEqual(2);
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("classifyProbe（就绪三态：区分「没起来」与「起来了但路由 404」）", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("2xx → ready", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200 })),
+    );
+    expect(await classifyProbe({ port: 3100 })).toBe("ready");
+  });
+
+  it("404 → route-404（服务活着、路由没进编译图：陈旧路由表的确切签名）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 404 })),
+    );
+    expect(await classifyProbe({ port: 3100 })).toBe("route-404");
+  });
+
+  it("其它非 2xx（如 500 真故障）→ not-up，绝不误判成路由失效去清缓存", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 500 })),
+    );
+    expect(await classifyProbe({ port: 3100 })).toBe("not-up");
+  });
+
+  it("连不上（fetch 抛错）→ not-up", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("ECONNREFUSED");
+      }),
+    );
+    expect(await classifyProbe({ port: 3100 })).toBe("not-up");
   });
 });

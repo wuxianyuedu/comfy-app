@@ -18,6 +18,14 @@ import { probeSchemaSync } from "~/lib/db-schema-ready";
  */
 export const dynamic = "force-dynamic";
 
+/**
+ * 就绪探针放行跨域读取：Tauri 启动页（splash）与 dev server 跨域，它作为
+ * 「拿不到启动器状态时」的兜底就绪探测，必须能读到 /api/health 的真实状态码
+ * （cors 模式下没有这个头会被浏览器直接 reject，读不到 404/200）。本端点只回
+ * status/db/t，无敏感信息，允许任意源只读是安全的。
+ */
+const CORS_HEADERS = { "Access-Control-Allow-Origin": "*" };
+
 export async function GET() {
   const schema = probeSchemaSync();
   try {
@@ -31,19 +39,18 @@ export async function GET() {
           hint: "数据库表还没建：执行 pnpm db:push（见 docs/standards/launch-and-build.md §9.1）",
           t: new Date().toISOString(),
         },
-        { status: 503 },
+        { status: 503, headers: CORS_HEADERS },
       );
     }
-    return NextResponse.json({
-      status: "ok",
-      db: "up",
-      t: new Date().toISOString(),
-    });
+    return NextResponse.json(
+      { status: "ok", db: "up", t: new Date().toISOString() },
+      { headers: CORS_HEADERS },
+    );
   } catch (error) {
     logger.error({ err: error }, "health_check_failed");
     return NextResponse.json(
       { status: "error", db: "down", t: new Date().toISOString() },
-      { status: 503 },
+      { status: 503, headers: CORS_HEADERS },
     );
   }
 }

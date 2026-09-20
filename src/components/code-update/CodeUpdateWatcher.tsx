@@ -20,13 +20,43 @@ import { registerStaleStoreDeliver } from "~/lib/shell/stale-store-notify";
 
 import { useCodeUpdateWatch } from "./hooks/use-code-update-watch";
 
-/** 消息中心的类型：属于「代码更新」这一族，与本地更新检测同色。 */
+/** 消息中心的类型：属于「代码更新 / 运行态」这一族，与本地更新检测同色。 */
 const MESSAGE_KIND = "update";
+
+/** 把启动器注入的重启原因翻成用户可读的标题 + 正文。 */
+function describeDevServerRestart(reason: string | null): {
+  title: string;
+  body: string;
+} {
+  if (reason === "stale-route-table") {
+    return {
+      title: "应用服务已自动重启",
+      body:
+        "启动时检测到路由表与源码不一致（部分接口无响应），" +
+        "已自动清空编译缓存并重启应用服务一次，现已恢复正常。" +
+        "无需你手动操作；若反复出现，可在终端重启一次开发服务。",
+    };
+  }
+  return {
+    title: "应用服务已重启",
+    body: "本地开发服务（dev server）重启了一次。进行中的生成任务连接可能已断开，可在执行记录里回看。",
+  };
+}
 
 export function CodeUpdateWatcher() {
   const toast = useToast();
 
-  useCodeUpdateWatch();
+  useCodeUpdateWatch({
+    onDevServerRestart: (reason) => {
+      const { title, body } = describeDevServerRestart(reason);
+      toast.info(title, `${body}（可到消息中心查看）`, 8000);
+      useMessageCenterStore.getState().push({
+        kind: MESSAGE_KIND,
+        title,
+        body,
+      });
+    },
+  });
 
   useEffect(() => {
     registerStaleStoreDeliver((notification) => {

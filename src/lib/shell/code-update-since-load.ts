@@ -62,30 +62,65 @@ export function isPageOlderThanBuild(
   return loadedAt !== current;
 }
 
+/**
+ * 判定进程是否真的重启：bootId 变化（且前后都取得到）。
+ *
+ * 为什么单拎 bootId：`buildId` 里混了源码 mtime 指纹，mtime 变（改了代码）也会
+ * 让 buildId 变，但那不是「服务重启」。只有 bootId 变才是 dev server 进程真的
+ * 换了一次——这值得单独提示用户（服务重启会短暂中断进行中的任务连接）。
+ * 任一侧取不到 bootId（端点未就绪 / 旧版壳）时返回 false：无法判定不等于重启。
+ */
+export function isBootIdChange(
+  prev: string | null,
+  next: string | null,
+): boolean {
+  if (prev === null || next === null) return false;
+  return prev !== next;
+}
+
 /* ── 构建标识的网络读取（第②层的网络部分，规范 17 §17.2）──────────────
  * 收口在这里的理由与其它 `<domain>-client.ts` 一致：视图/逻辑层只关心
  * 「拿到标识没有、变了没有」，不发裸 fetch。
  */
 
-/** 构建标识的两次读取结果：null = 这一次没读到（服务端未就绪 / 接口不可达）。 */
+/** 构建标识的读取结果：字段为 null = 这一次没读到（服务端未就绪 / 接口不可达）。 */
 export interface BuildIdProbe {
   buildId: string | null;
+  /** 进程启动标识；单独解析出来用于区分「重启」与「仅源码变」。 */
+  bootId: string | null;
+  /** 启动器自愈重启 dev server 时注入的原因（如 stale-route-table）；无则 null。 */
+  restartReason: string | null;
 }
 
-/** 读一次构建标识；任何失败都退化为 null，绝不抛出、绝不阻塞交互。 */
+/** 读一次构建标识；任何失败都退化为全 null，绝不抛出、绝不阻塞交互。 */
 export async function fetchBuildId(): Promise<BuildIdProbe> {
+  const empty: BuildIdProbe = {
+    buildId: null,
+    bootId: null,
+    restartReason: null,
+  };
   try {
     const res = await fetch(BUILD_ID_ENDPOINT, {
       cache: "no-store",
       signal: AbortSignal.timeout(BUILD_ID_TIMEOUT_MS),
     });
-    if (!res.ok) return { buildId: null };
-    const data = (await res.json()) as { buildId?: unknown };
+    if (!res.ok) return empty;
+    const data = (await res.json()) as {
+      buildId?: unknown;
+      bootId?: unknown;
+      restartReason?: unknown;
+    };
     return {
       buildId:
         typeof data.buildId === "string" && data.buildId ? data.buildId : null,
+      bootId:
+        typeof data.bootId === "string" && data.bootId ? data.bootId : null,
+      restartReason:
+        typeof data.restartReason === "string" && data.restartReason
+          ? data.restartReason
+          : null,
     };
   } catch {
-    return { buildId: null };
+    return empty;
   }
 }
