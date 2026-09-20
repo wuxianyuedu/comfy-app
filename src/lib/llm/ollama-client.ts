@@ -2,6 +2,8 @@
 // 原先两处 `fetch` 内联在设置页的事件处理器里，响应收窄与失败降级散落在 JSX。
 // 集中到此处后：错误信封与超时策略改一处生效，视图零感知。
 
+import { readApiError, readJsonBody } from "~/lib/api-error";
+
 /** 探测超时：Ollama 没起时连接会挂住，宁可早失败也别让页面一直转圈。 */
 const PROBE_TIMEOUT_MS = 3000;
 
@@ -61,14 +63,13 @@ export async function probeOllama(baseUrl: string): Promise<OllamaProbe> {
 export async function startOllama(): Promise<void> {
   const res = await fetch("/api/llm/ollama-start", { method: "POST" });
   if (!res.ok) {
-    let detail = "启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用";
-    try {
-      const body = (await res.json()) as { error?: string };
-      if (body.error) detail = body.error;
-    } catch {
-      // ignore JSON parse failure — 用兜底文案
-    }
-    throw new Error(detail);
+    /* 错误信封的读法收在一处（规范 16 §16.2.4.35）：这里此前自己
+     * `as { error?: string }` 断言一遍（服务端回结构化信封就取不到）。 */
+    const body = await readJsonBody(res);
+    throw new Error(
+      readApiError(body) ??
+        "启动 Ollama 失败，请确认已安装 Ollama 并在 PATH 中可用",
+    );
   }
 }
 

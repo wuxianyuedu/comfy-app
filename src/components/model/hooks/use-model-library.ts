@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 
+import { beginStaleRun } from "~/lib/stale-run";
 import { vanillaApi } from "~/trpc/vanilla";
 
 import type { ModelCardData } from "../ModelCard";
@@ -54,22 +55,23 @@ export function useModelLibrary(): ModelLibraryController {
   }
 
   useEffect(() => {
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换类型 / 换关键字会重开一轮，
+     * 旧轮次的结果（含 `loading` 位）一律不落地。 */
+    const guard = beginStaleRun();
     void vanillaApi.model.list
       .query(params)
       .then((data) => {
-        if (!cancelled)
-          setModels((data.models ?? []) as unknown as ModelCardData[]);
+        guard.commit(() =>
+          setModels((data.models ?? []) as unknown as ModelCardData[]),
+        );
       })
       .catch(() => {
         /* 拉取失败保留上一次列表，不让页面弹空白 */
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        guard.commit(() => setLoading(false));
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => guard.dispose();
     // `params` 每次渲染都是新对象，故按它的两个分量声明依赖（值等量即可）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, q]);

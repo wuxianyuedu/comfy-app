@@ -154,13 +154,16 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P27** | 自写「`try` + `catch` + 反馈通道(errorMessage)」样板                               | `~/lib/async-action` 的 `runAsyncAction` / `toActionResult`（失败文案一律 `errorMessage`，成功静默是**显式**的，见 §16.2.4.30）                                                     |
 | **P28** | 自己读媒体的自然尺寸（`naturalWidth` / `videoWidth` 这类属性名）                    | `~/lib/media/natural-size` 的 `readNaturalSize` / `naturalAspectRatio` / `isPortraitMedia` / `formatNaturalSize`（读不到给 `null` 而不是 `{0,0}`，见 §16.2.4.31）                     |
 | **P29** | 手拼查询串（`?key=${…}` / `&key=${…}`）                                             | `~/lib/query-string` 的 `buildQueryString` / `withQuery` / `readQueryParam`；媒体预览地址走 `~/lib/media/media-url`（见 §16.2.4.32）                                                |
+| **P30** | 按条目渲染的列表共用一块「最近一次操作」的错误位（`useState` 的错误槽 + 逐条写入点） | `~/components/ui/use-item-errors` 的 `useItemErrors`（错误挂在**那一条**上，条目删掉即随之消失，见 §16.2.4.33）                                                                        |
+| **P31** | 自写「这一轮已作废」的守卫样板（`let <名> = false;` + 读 + 置位）                  | `~/lib/stale-run` 的 `beginStaleRun`（`commit` 一次给全「这一轮的写入」，含 `finally` 里的清 loading，见 §16.2.4.34）                                                                 |
+| **P32** | 手拼服务端错误信封 / 自己判它的形状（`NextResponse.json({ error: … })`、`typeof body.error === "string"`） | `~/lib/api-error` 的 `apiErrorBody` / `apiErrorDetail` / `readApiError`；**纯错误**响应走 `~/server/lib/error-response` 的 `errorResponse`（见 §16.2.4.35）                             |
 
-**P4~~P29 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P29 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+**P4~~P32 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P32 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
 加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键 / 滚动跟随 /
 外部导航 / 表单行 / 读文件 / localStorage / Enter 提交 / 异步动作的反馈样板 /
-媒体自然尺寸 / 查询串」这二十六件事的
+媒体自然尺寸 / 查询串 / 按条目的错误位 / 作废守卫 / 服务端错误信封」这二十九件事的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
@@ -168,9 +171,10 @@ P4~P29 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触�
 P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.4.15、
 P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18、P16/P17 见 §16.2.4.19 ~ §16.2.4.20、
 P18/P19/P20 见 §16.2.4.21 ~ §16.2.4.23、P21/P22/P23 见 §16.2.4.24 ~ §16.2.4.26、
-P24/P25/P26 见 §16.2.4.27 ~ §16.2.4.29、P27/P28/P29 见 §16.2.4.30 ~ §16.2.4.32。
+P24/P25/P26 见 §16.2.4.27 ~ §16.2.4.29、P27/P28/P29 见 §16.2.4.30 ~ §16.2.4.32、
+**P30/P31/P32 见 §16.2.4.33 ~ §16.2.4.35**。
 
-**P4~P29 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P32 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -184,7 +188,7 @@ P24/P25/P26 见 §16.2.4.27 ~ §16.2.4.29、P27/P28/P29 见 §16.2.4.30 ~ §16.2
 
   ⚠️ **`hooks/` 只对「数视图实现」的判据豁免**（P1/P2/P3 那几条）。
   「逻辑层同样成立」的判据逐条列在脚本的 `HOOKS_ALSO_SCANNED`
-  （P12 / P13 / P20 / P24 / P25 / P26 / P27 / P28 / P29）—— 它们此前能生效
+  （P12 / P13 / P20 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31）—— 它们此前能生效
   只是因为落点恰好不在 hooks 下，而不是因为口径上该放行。
   P27 就是这条的实例：收口前全库 21 处里 **19 处**在 `hooks/`
   （设置页 12 个动作、工作流库 8 个、模型标签 3 个），按目录粗放地豁免
@@ -2333,6 +2337,245 @@ P26 因此**显式不数**「同一段里同时判了 `" "`（Space）」的块 
 **不数**「另一个协议的地址」：`drizzle-studio` 的 `?port=` 与 ComfyUI 的 WS
 `?clientId=` 是**连接地址**，不是「发给本应用端点的查询串」—— 与 P22
 「不数对内路由跳转」同款（它们的地址本身由各自的连接口径给出）。
+
+### 16.2.4.33 「同一块错误条服务多个条目」有两处写法（P30 硬闸）
+
+按形态扫描时撞出来的账：`use-model-tags` / `use-training-studio` 这类
+**一屏多条目**的逻辑层，错误状态写的是 `useState<string | null>(null)` ——
+也就是「最近一次操作的草稿」：
+
+```
+新增失败 → 错误条出现 → 用户改删另一条 → 错误条被**同一块**覆盖，
+而上一条那行已经不再标红（提示说的是哪一条，只能靠用户自己回忆）。
+```
+
+差别不是「谁写得好看」，而是**错误的生命周期**：
+
+| | 语义 | 文件 |
+|---|---|---|
+| 「最近一次操作的草稿」 | 下一条消息必然把它盖掉（**时间维度的状态**） | `use-model-tags`（新增 / 删除 / 重命名共用一个 `error`）、`use-training-studio`（上传 / 提交 / 取消共用）、`useStoryboardPlanner` 的 `polishError`（逐镜头润色）、`CharacterDesigner` 的 `aiError`（逐角色润色）、`ScriptGenerator` 的 `aiError` |
+| 「按条目挂」 | 错误属于**那一条**，改别处不该动它（**对象维度的状态**） | 出口 `useItemErrors` |
+
+两者在代码上长得几乎一样（都是 `setError(string)` + 一块行内错误条），
+所以这类差异没有报错、没有告警，tsc / eslint 也都不看。
+
+#### 出口：`~/components/ui/use-item-errors` 的 `useItemErrors`
+
+```tsx
+const errors = useItemErrors(tags.map((tag) => tag.name));
+// 逐条写入：错误挂在**那一条**上
+errors.report(tag.name)("err", errorMessage(e, "删除失败"));
+// 无条目归属的那档（新增失败 / 列表刷新失败）
+errors.report(null)("err", detail);
+// 视图里
+{errors.get(tag.name) && <p>{errors.get(tag.name)}</p>}
+```
+
+**五个方法各对应一件事**：`get`（这一条有没有错）、`hasAny`（要不要渲染
+错误条容器）、`report`（接给 `runAsyncAction` 的 `report` —— 一次动作一个
+key；成功时清掉该条**与**无 key 那档）、`clear` / `clearAll`。
+
+**生命周期收敛是刻意设计的**：`keys` 给出「当前屏幕上真正存在的条目」，
+被删掉的那条的错误会随之消失 —— 否则删掉一条失败后留下一个指向已不存在
+条目的错误条，用户找不到它说的是什么。`keys` 按**内容**比较（调用处几乎
+都是 `tags.map(t => t.id)`，每次渲染都是新数组，按引用比较会每次重建错误表，
+让上一次的错误闪一下）。
+
+#### 与 `~/lib/async-action` 的分工
+
+`runAsyncAction` 的 `report(kind, detail)` 回答的是「这次动作**说什么**」；
+本出口回答的是「这句话**挂在谁身上**」。两者配合的形态见 `use-model-tags`。
+**取消授权**：`setError` 这一族的通道选择仍归调用处。
+
+#### 判据：P30（硬闸）
+
+形态取两个锚点，**两个条件同时成立**：
+
+1. **错误位** —— 变量名带 `error` 语义的字符串 state
+   （`const [xError, setXError] = useState("")` 或 `<string | null>(null)`）；
+2. **逐条写入点** —— 调用这个 setter 的函数**有除错误对象之外的实参**
+   （`polishOne(shot)` / `handleAICard(character)`）。
+
+⚠️ **两条边界都是实测踩出来的**：
+
+- **变量名里的 `error` 是必须的**：`useState<string | null>(null)` 这一条
+  **本身就是 P14/P15 那些忙碌位选择器的形态**（`polishBusyId` / `aiBusyId` /
+  `editingId`：它们天生就是「当前是哪一条在忙」，写成单值是**正确**的，因为
+  同一时刻只有一条在忙）。把它们当错误位算进来，会让判据逼着人改坏代码。
+- **判据不能取 `.map(`**：同一个符号在同一文件里既可能是「逐条渲染」
+  （`characters.map(c => <Row …>)`）也可能是**状态更新助手**
+  （`setXs(prev => prev.map(c => c.id === id ? {…c, …patch} : c))`）——
+  后者离 setter 的调用点很近，实测会把 `CharacterDesigner` 的 `setGenError`
+  （一句话生成**整批**角色，合法的单槽）误判成逐条写入。
+
+**反例**（必须不被计）：批量错误位（`genError` / `aiError` 全片拆镜 /
+`loadError` / `actionError` —— 它们各自只有一个写入点，在无参的批量函数里）；
+忙碌位选择器；已走 `useItemErrors` 的落点。
+
+**不数** `~/lib/async-action` 的 `report` 通道（那是「这次说什么」），
+也**不数**服务端路由（那边的错误归响应信封，是 P32 的账）。
+
+### 16.2.4.34 「取数 effect 里的作废守卫」有八处写法（P31 硬闸）
+
+同一段样板：
+
+```ts
+let cancelled = false;
+void (async () => {
+  const rows = await fetchX();
+  if (cancelled) return;          // ← 卸载或换了参数，这一轮不要了
+  setRows(rows);
+})();
+return () => { cancelled = true; };
+```
+
+在**八个文件**里各写一遍，而它对三件事各判各的：
+
+1. **作废的时机** —— 浏览器会在 effect 重跑前先跑清理，所以「卸载」与
+   「依赖变化」在 React 里本就是同一件事；但写法上分叉出「有没有接依赖」；
+2. **读法** —— `if (cancelled) return;` 与 `if (!cancelled) setX(...)`
+   两种都在用，后者在有两个 `setState` 时把守卫抄两遍；
+3. **`finally` 里的读法** —— 这一处最容易写错：`setLoading(false)` 若不看
+   守卫，A 轮的 `finally` 会在 B 轮已经开始后才落地，把「B 轮正在加载」
+   错报成「加载完了」。八处里有六处写对了，另外两处
+   （`use-content-asset-gallery` / `ExtractModelSelect`）干脆没有 loading 态
+   —— 差别不是风格，是**有没有这个 bug**。
+
+#### 出口：`~/lib/stale-run` 的 `beginStaleRun`
+
+```ts
+const guard = beginStaleRun();
+try {
+  const rows = await fetchHistoryTasks(params);
+  guard.commit(() => setTasks(rows));
+} catch (e) {
+  /* 错误文案与清空列表都属于「这一轮的结论」，一起过守卫。 */
+  guard.commit(() => setError(errorMessage(e, "读取历史记录失败")));
+} finally {
+  guard.commit(() => setLoading(false));
+}
+return () => guard.dispose();
+```
+
+三个方法各对应上面那三件事：`isStale` 是判据、`commit` 是「按轮次提交」、
+`dispose` 是清理。**`commit` 是一段原子写入** —— 用它就不必在每个
+`setState` 之前各抄一遍 `if (cancelled) return;`。
+
+#### 它表达的是「非失败状态」
+
+这不是异常，也不是 `runAsyncAction` 的失败分支：**「这一轮作废」是正常结果**，
+只是它的结果不该写进界面。因此它不走 `catch`、也不报任何提示 —— 这正是
+§16.2.4.30 里 `use-history-panel` 那条 P27 豁免的成因
+（`runAsyncAction` 表达不了这件事），也是这条账一直没被追到的原因。
+
+#### 为什么不收 `AbortController`
+
+真正把网络请求中断掉（而不只是丢弃结果）需要在**每一层**都传 `signal`：
+域客户端、`fetch`、以及 tRPC 的调用选项 —— 而八处落点里有一半走的是 tRPC
+客户端与 `EventSource`，它们的取消语义各不相同。本出口管的是
+**「结果还要不要」**这一侧：它与「请求有没有被真正中断」是两件事，且前者
+是这八处**共同**欠下的那一条（后者各自都有）。需要真中断的落点
+（如 `use-generate` 的轮询）可以在本出口之上自己再传 `signal`，两者不冲突。
+
+#### 判据：P31（硬闸）
+
+形态取**变量声明 + 置位**两个锚点（不取具体变量名）：
+
+1. `let <名> = false;`，且该名字带 `cancel` / `abort` / `stale` / `alive` /
+   `disposed` 语义（八处收口前用的都是 `cancelled`，但名字不该写死）；
+2. 同文件里既有 `if (<名>)` / `if (!<名>)` 的**读**，又有
+   `<名> = true;` 的**置位**。
+
+两条一起才不误伤「一个只读不改的局部布尔」。
+
+### 16.2.4.35 「服务端错误信封」有十二处写法 / 六个读法（P32 硬闸）
+
+按形态扫描时撞出来的账：`src/app/api/**` 里有十二处逐字同形的
+
+```ts
+return NextResponse.json(
+  { error: errorMessage(e, "读取素材库失败") },
+  { status: 500 },
+);
+```
+
+而**读它们的客户端有六种写法**（都在 `src/lib/**`）：
+
+| 落点 | 读法 |
+|------|------|
+| `readMaterialError` / `readBgmError` / `readUploadError` | 三份**逐字相同**的「取 `body.error` 字符串」，各自在文件内声明一次 |
+| `readApiErrorMessage`（workshop 通道） | 多认一种 `{error:{message}}`（且空串会被当成文案） |
+| `readComfyErrorMessage` | 三种形态（`detail` / `{error}` 字符串 / `{error:{message}}`） |
+| `debug-source-client` | 在 `unknown` 上直接取 `body?.error` |
+| `ollama-client` | 自己 `as { error?: string }` 断言 |
+| `agent/client` | **只认** `{error:{message}}` —— 服务端回 `{error: "…"}` 时被读成「请求失败」 |
+
+也就是说 —— **「服务端失败了，客户端读到什么」取决于它是哪一处读的**。
+
+#### 口径（两条，先定下来再做）
+
+1. **文案由 `errorMessage(e, fallback)` 产出**（与 UI 侧同一枚口径）：
+   网络层原文翻成人话、未知抛值有兜底。`fallback` 是**这一路动作**的标题
+   （「读取素材库失败」），不是通用兜底 —— 十二处各自给的就是它。
+2. **信封形状是「REST 侧」与「tRPC 侧」各一套，不许第三套**：
+   - **纯错误**（无业务字段）→ `~/server/lib/error-response` 的 `errorResponse(e)`
+     （`{ error: { code, message } }`，见规范 10 §10.9）；
+   - **带业务字段的失败** → 本出口。因为「业务失败」与「请求失败」不是同一件事：
+     `/api/materials` 的上传失败要连带回 `folders: []` / `items: []`
+     （客户端拿它当列表），`/api/upload` 要带 `hint: "comfyui-unreachable"`
+     让客户端知道可重试。这两种**不能**走 `errorResponse`（那是纯错误响应）。
+
+#### 出口：`~/lib/api-error`
+
+写侧（服务端）：
+
+```ts
+return NextResponse.json(
+  apiErrorBody(e, "读取素材库失败", { folders: [], items: [] }),
+  { status: 500 },
+);
+```
+
+读侧（客户端，`src/lib/**` 的网络层）：
+
+```ts
+const body = await readJsonBody(res);
+if (!res.ok) throw new Error(readApiError(body) ?? "上传失败");
+```
+
+四个导出各管一件事：`apiErrorDetail`（取值）、`apiErrorBody`（带业务字段的
+失败体，业务字段不会顶掉 `error` 键）、`readApiError`（读，两种历史形态都认：
+字符串 `error` 与 `{error:{message}}` 的结构化信封）、`readJsonBody`
+（非法 JSON 按空对象 —— 后端 500 可能返回 HTML）。
+
+#### 为什么它不是一个「用户可见出口」
+
+这条账此前一直没做，是因为它与 `~/lib/async-action` 混在一起讨论过
+（「这十二处也是失败路径」）。两者**不是同一件事**：那边管「动作失败怎么变成
+用户可见反馈」，这边管**响应体怎么编码**。先把这个口径定下来，收口才成立。
+
+#### 判据：P32（硬闸）
+
+形态取**「构造响应体」与「亲手拼 `error` 键」同时成立**：
+
+- **写侧**：`NextResponse.json(…)` / `JSON.stringify(…)` 的片段里出现
+  `error: errorMessage(…)` / `error: apiErrorDetail(…)`；
+- **读取侧**：`isRecord(body)` 式收窄（或 `<名>` 带 body / json 语义的断言）
+  紧跟着判 `<同一个名>.error`。
+
+⚠️ **两条边界都是实测踩出来的**：
+
+1. **只数 `{ error: errorMessage(...) }` 会把本地对象字面量算上**
+   （`cacheExtractPatch({ error: errorMessage(e, "导入失败") })` 是往缓存里
+   写一条状态记录，不是 HTTP 响应）—— 判据因此要求同一片段里有「构造响应体」
+   的动作；
+2. **只数 `typeof x.error === "string"` 会把 SSE 帧与已落库的解析记录算上**
+   （`msg.error` / `firstErr.error` 是**各自协议的业务字段**）—— 判据因此
+   要求「收窄后紧接着判同名变量的 `error`」。
+
+**不数**：`errorResponse(e)`（纯错误出口，是对的写法）；`detail` / `hint`
+（它们不是错误文案，是业务字段）；`{ ok: false, detail }` 这类**200 信封**
+（`/api/llm/test*` 走这条，`detail` 是探测结论）。
 
 ## 16.3 新增一个组件的标准动作
 

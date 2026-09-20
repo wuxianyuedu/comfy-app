@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
+import { beginStaleRun } from "~/lib/stale-run";
 import { uploadBgm } from "~/lib/film/bgm-client";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
@@ -126,7 +127,9 @@ export function useFilmStudio(): FilmStudioController {
 
   /* 挂载时拉一次技能与近期成片（defer 出 effect body，React 19 规则） */
   useEffect(() => {
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：卸载时旧轮次的元信息结论
+     * 一律不落地。 */
+    const guard = beginStaleRun();
     const t = setTimeout(() => {
       void (async () => {
         try {
@@ -135,7 +138,6 @@ export function useFilmStudio(): FilmStudioController {
             vanillaApi.film.list.query(),
             vanillaApi.workflow.list.query({}),
           ]);
-          if (cancelled) return;
           /* 工作流库列表：按内容类别分栏，逐镜生成只能选视频工作流、
            * 合成首帧只能选图类工作流（内置模板已移除）。 */
           const rawWorkflows: unknown = wData;
@@ -150,27 +152,29 @@ export function useFilmStudio(): FilmStudioController {
                 ? [{ id: wf.id, name: wf.name }]
                 : [];
             });
-          setVideoWorkflows(pick("video"));
-          setImageWorkflows(pick("image"));
           // skill.list 返回 `{...record, tags}` 行（router 的 spread 丢了索引签名），
           // 故按 record 视图读 slug/name；断言而非强转，畸形负载的行为与原先一致。
           const rawList: unknown = sData.skills;
           const list = Array.isArray(rawList) ? rawList : [];
-          setSkills(
-            list.map((raw) => {
-              const s = raw as Record<string, unknown>;
-              return { slug: s.slug as string, name: s.name as string };
-            }),
-          );
-          setFfmpegAvailable(!!fData.ffmpegAvailable);
-          setRecent(fData.films ?? []);
+          guard.commit(() => {
+            setVideoWorkflows(pick("video"));
+            setImageWorkflows(pick("image"));
+            setSkills(
+              list.map((raw) => {
+                const s = raw as Record<string, unknown>;
+                return { slug: s.slug as string, name: s.name as string };
+              }),
+            );
+            setFfmpegAvailable(!!fData.ffmpegAvailable);
+            setRecent(fData.films ?? []);
+          });
         } catch {
           /* 元信息拉取失败不影响成片生成，静默忽略 */
         }
       })();
     }, 0);
     return () => {
-      cancelled = true;
+      guard.dispose();
       clearTimeout(t);
     };
   }, []);

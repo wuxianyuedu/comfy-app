@@ -11,7 +11,7 @@ import { handleAgentChat } from "~/lib/agent/server";
 import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
 import { isRecord } from "~/lib/workshop/api-channel-shared";
 import type { AgentChatRequest } from "~/lib/agent/shared";
-import { errorMessage } from "~/lib/error-message";
+import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
@@ -51,9 +51,8 @@ export async function POST(req: NextRequest) {
     const result = await handleAgentChat(request);
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json(
-      { error: errorMessage(e, "Agent 处理请求失败") },
-      { status: 502 },
-    );
+    return NextResponse.json(apiErrorBody(e, "Agent 处理请求失败"), {
+      status: 502,
+    });
   }
 }

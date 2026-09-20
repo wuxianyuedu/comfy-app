@@ -1,6 +1,7 @@
 // ── Agent 浏览器端 API 客户端 ─────────────────────────────
 // 视图层不直接 fetch —— 组件把消息 + 项目快照交给本模块，
 // 由它发起 POST /api/agent/chat 并解析返回结构。
+import { readApiError, readJsonBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/workshop/api-channel-shared";
 import type { AgentChatRequest, AgentChatResponse } from "./shared";
 
@@ -18,16 +19,10 @@ export async function sendAgentMessage(
   } catch {
     throw new Error("无法连接服务器");
   }
-  const data: unknown = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg =
-      isRecord(data) && isRecord(data.error)
-        ? typeof data.error.message === "string"
-          ? data.error.message
-          : "请求失败"
-        : "请求失败";
-    throw new Error(msg);
-  }
+  /* 错误信封的读法收在一处（规范 16 §16.2.4.35）：这里此前只认
+   * `{error:{message}}`，服务端回 `{error: "…"}` 时会被读成「请求失败」。 */
+  const data: unknown = await readJsonBody(res);
+  if (!res.ok) throw new Error(readApiError(data) ?? "请求失败");
   return parseAgentResponse(data);
 }
 

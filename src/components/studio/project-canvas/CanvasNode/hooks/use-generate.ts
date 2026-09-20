@@ -20,6 +20,7 @@ import {
   defaultData,
 } from "~/lib/project-canvas/canvas-types";
 import { makeNodeId } from "~/lib/project-canvas/canvas-helpers";
+import { beginStaleRun } from "~/lib/stale-run";
 import {
   importOutputAsInput,
   startGenerate,
@@ -93,41 +94,44 @@ export function useGenerate({
   const taskIdForReconcile = typeof d.taskId === "string" ? d.taskId : "";
   useEffect(() => {
     if (d.status !== "running" || !taskIdForReconcile) return;
-    let cancelled = false;
+    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：节点卸载 / 换任务时，
+     * 对账结论（patch）一律不落地。 */
+    const guard = beginStaleRun();
     void (async () => {
       try {
-        if (cancelled) return;
         const t = await vanillaApi.task.detail.query({
           id: taskIdForReconcile,
         });
-        if (cancelled || !t?.status) return;
+        if (!t?.status) return;
         if (t.status === "RUNNING") {
           // 在另一个 runner 上合法地仍在运行 —— 节点保持原样。
           return;
         }
         if (t.status === "SUCCEEDED") {
-          patch({
-            status: "done",
-            error: undefined,
-            progress: 100,
-            ...(t.resultImages ? { resultImages: t.resultImages } : {}),
-          });
+          guard.commit(() =>
+            patch({
+              status: "done",
+              error: undefined,
+              progress: 100,
+              ...(t.resultImages ? { resultImages: t.resultImages } : {}),
+            }),
+          );
         } else if (t.status === "FAILED" || t.status === "CANCELLED") {
-          patch({
-            status: "error",
-            error:
-              t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
-            progress: 0,
-          });
+          guard.commit(() =>
+            patch({
+              status: "error",
+              error:
+                t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
+              progress: 0,
+            }),
+          );
         }
       } catch {
         /* 网络抖动 —— 静默忽略；用户重触发 / runner 恢复后，
          *  GlobalStepLogPanel 的实时 SSE 会自己追上。 */
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => guard.dispose();
     /* patch 是稳定的（setNodes setter + id）—— 故意省略以避免
      * 重复触发；每个 (status="running", taskId) 只对账一次。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps

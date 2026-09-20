@@ -144,7 +144,7 @@ describe("useTrainingStudio", () => {
         new File(["x"], "huge.png"),
       ] as unknown as FileList);
     });
-    expect(result.current.error).toBe("图片大小不能超过 50MB");
+    expect(result.current.errors.get(null)).toBe("图片大小不能超过 50MB");
     expect(result.current.dataset).toEqual([{ name: "a.png", caption: "" }]);
   });
 
@@ -195,8 +195,8 @@ describe("useTrainingStudio", () => {
       triggerWord: "请填写触发词",
       dataset: "请至少上传一张数据集图片",
     });
-    /* `error` 只留给非字段错误（上传 / 网络）。 */
-    expect(result.current.error).toBeNull();
+    /* `errors` 只留给非字段错误（上传 / 网络）。 */
+    expect(result.current.errors.hasAny).toBe(false);
   });
 
   it("submit 成功：提交 payload + 清空名称/触发词/数据集 + 刷新任务列表", async () => {
@@ -228,7 +228,7 @@ describe("useTrainingStudio", () => {
     await act(async () => {
       await result.current.submit();
     });
-    expect(result.current.error).toBe("训练后端未配置");
+    expect(result.current.errors.get(null)).toBe("训练后端未配置");
     expect(result.current.form.name).toBe("水墨风格");
     expect(result.current.dataset).toHaveLength(1);
   });

@@ -106,9 +106,10 @@ export function ModelTagManager({
             </Button>
           </div>
 
-          {c.error && (
-            <div className="mb-3 text-xs text-red-700 dark:text-red-400">
-              {c.error}
+          {/* 无条目归属的那档（新增失败 / 列表刷新失败）—— 挂在新增框下方。 */}
+          {c.errors.get(null) && (
+            <div className="text-danger-strong mb-3 text-xs">
+              {c.errors.get(null)}
             </div>
           )}
 
@@ -120,59 +121,71 @@ export function ModelTagManager({
             )}
             {c.tags.map((tag) => {
               const isEditing = editingId === tag.id;
+              /* 错误挂在**这一条**上（规范 16 §16.2.4.33）：删 / 改名失败时
+               * 只有这一行标红，用户不必回忆上一条消息说的是哪一行。 */
+              const rowError = c.errors.get(tag.name);
               return (
                 <div
                   key={tag.id}
-                  className="border-border-strong bg-subtle flex items-center justify-between rounded-lg border px-3 py-2"
+                  className="border-border-strong bg-subtle rounded-lg border"
                 >
-                  {isEditing ? (
-                    <input
-                      autoFocus
-                      value={editingDraft}
-                      maxLength={64}
-                      onFocus={(event) => event.currentTarget.select()}
-                      onChange={(event) => setEditingDraft(event.target.value)}
-                      {...enterCommit({
-                        onCommit: () => void commitEdit(tag.id, tag.name),
-                        onCancel: cancelEdit,
-                      })}
-                      // 注意：刻意不设 onBlur → 提交。若用户以别的方式
-                      // 退出编辑（点外部、关闭对话框），
-                      // 本地状态会前进但不会发送重命名。
-                      // 保存必须走 Enter（唯一有意的保存路径），
-                      // 否则两次提交会竞速（例如 Enter + blur 都触发，
-                      // 第二个看到一个已重命名的标签而报 404）。
-                      onBlur={() => cancelEdit()}
-                      className="bg-canvas-deep text-ink-bright min-w-0 flex-1 rounded-md border border-fuchsia-500/50 px-2 py-0.5 text-sm outline-none focus:border-fuchsia-400"
-                    />
-                  ) : (
-                    <span
-                      onDoubleClick={() => beginEdit(tag.id, tag.name)}
-                      title="双击重命名"
-                      className="text-ink-bright hover:bg-subtle hover:text-ink-bright cursor-text truncate rounded-sm px-0.5 text-sm select-none"
-                    >
-                      {tag.name}
-                    </span>
+                  {rowError && (
+                    <div className="border-danger/30 text-danger-strong border-b px-3 py-1 text-[11px]">
+                      {rowError}
+                    </div>
                   )}
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="bg-surface-2 text-ink-soft rounded-full px-2 py-0.5 text-[11px] tabular-nums">
-                      {tag.count} 个工作流
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => void c.deleteTag(tag.name, tag.count)}
-                      disabled={isEditing}
-                      title={
-                        tag.count > 0
-                          ? `删除「${tag.name}」，会一并解除 ${tag.count} 个工作流的绑定`
-                          : `删除「${tag.name}」`
-                      }
-                      className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
-                      aria-label={`删除 ${tag.name}`}
-                    >
-                      <Icon name="trash" className="h-3.5 w-3.5" />
-                    </Button>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={editingDraft}
+                        maxLength={64}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) =>
+                          setEditingDraft(event.target.value)
+                        }
+                        {...enterCommit({
+                          onCommit: () => void commitEdit(tag.id, tag.name),
+                          onCancel: cancelEdit,
+                        })}
+                        // 注意：刻意不设 onBlur → 提交。若用户以别的方式
+                        // 退出编辑（点外部、关闭对话框），
+                        // 本地状态会前进但不会发送重命名。
+                        // 保存必须走 Enter（唯一有意的保存路径），
+                        // 否则两次提交会竞速（例如 Enter + blur 都触发，
+                        // 第二个看到一个已重命名的标签而报 404）。
+                        onBlur={() => cancelEdit()}
+                        className="bg-canvas-deep text-ink-bright min-w-0 flex-1 rounded-md border border-fuchsia-500/50 px-2 py-0.5 text-sm outline-none focus:border-fuchsia-400"
+                      />
+                    ) : (
+                      <span
+                        onDoubleClick={() => beginEdit(tag.id, tag.name)}
+                        title="双击重命名"
+                        className="text-ink-bright hover:bg-subtle hover:text-ink-bright cursor-text truncate rounded-sm px-0.5 text-sm select-none"
+                      >
+                        {tag.name}
+                      </span>
+                    )}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="bg-surface-2 text-ink-soft rounded-full px-2 py-0.5 text-[11px] tabular-nums">
+                        {tag.count} 个工作流
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => void c.deleteTag(tag.name, tag.count)}
+                        disabled={isEditing}
+                        title={
+                          tag.count > 0
+                            ? `删除「${tag.name}」，会一并解除 ${tag.count} 个工作流的绑定`
+                            : `删除「${tag.name}」`
+                        }
+                        className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
+                        aria-label={`删除 ${tag.name}`}
+                      >
+                        <Icon name="trash" className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );

@@ -517,6 +517,13 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                           </Button>
                         </div>
                       </div>
+                      {/* 取消失败挂在**这一行**（规范 16 §16.2.4.33）：用户点的
+                          是这张卡上的「取消」，原因就写在它旁边。 */}
+                      {c.errors.get(job.id) && (
+                        <p className="text-danger-strong mt-2 text-[11px]">
+                          {c.errors.get(job.id)}
+                        </p>
+                      )}
 
                       {(job.status === "RUNNING" ||
                         job.status === "QUEUED") && (
@@ -812,7 +819,11 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
               />
             </FormField>
 
-            {c.error && <p className="text-danger-strong text-xs">{c.error}</p>}
+            {/* 无条目归属的那档（上传 / 创建失败）—— 挂在提交按钮上方。
+                任务取消失败挂在**那一行**（见下方任务列表）。 */}
+            {c.errors.get(null) && (
+              <p className="text-danger-strong text-xs">{c.errors.get(null)}</p>
+            )}
 
             <Button
               variant="primary-solid"

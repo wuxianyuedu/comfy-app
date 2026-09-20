@@ -54,6 +54,7 @@ import {
   makeExtractLog,
 } from "~/lib/workshop/extraction-log";
 import { streamChat } from "~/lib/llm/browser";
+import { useItemErrors } from "~/components/ui/use-item-errors";
 import {
   buildCharacterMessages,
   buildCharacterFromBriefMessages,
@@ -135,7 +136,11 @@ export function CharacterDesigner({
    *  空串 = 未手动选择，沿用全局 config 的 provider/model）。 */
   const [genSel, setGenSel] = React.useState("");
   const [aiBusyId, setAiBusyId] = React.useState<string | null>(null);
-  const [aiError, setAiError] = React.useState("");
+  /* 逐条润色的错误挂在**那个角色**上（规范 16 §16.2.4.33）：收口前是一句
+   * `useState("")` —— 润色角色 A 失败后去润色角色 B，A 的提示就被盖掉。
+   * `aiBusyId` 保持单值是对的（同一时刻只有一条在忙，那是 P14/P15 那些
+   * 忙碌位选择器的形态，不是错误位）。 */
+  const aiErrors = useItemErrors(characters.map((character) => character.id));
   const { config, openSettings } = useLLM();
 
   /** 一句话生成实际生效的 provider/model 与下拉展示值：
@@ -246,11 +251,11 @@ export function CharacterDesigner({
       return;
     }
     if (!character.name.trim()) {
-      setAiError("请先填写角色名再使用 AI 润色");
+      aiErrors.report(character.id)("err", "请先填写角色名再使用 AI 润色");
       return;
     }
     setAiBusyId(character.id);
-    setAiError("");
+    aiErrors.clear(character.id);
     try {
       const style = styles.find((style) => style.slug === character.skillSlug);
       const full = await streamChat({
@@ -271,7 +276,7 @@ export function CharacterDesigner({
         personality: r.personality || character.personality,
       });
     } catch (e: unknown) {
-      setAiError(errorMessage(e, "AI 润色失败"));
+      aiErrors.report(character.id)("err", errorMessage(e, "AI 润色失败"));
     } finally {
       setAiBusyId(null);
     }
@@ -539,13 +544,6 @@ export function CharacterDesigner({
         extractDisabled={!hasScript}
         extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
       />
-
-      {/* AI 润色失败提示：放在角色列表上方，与一句话生成区错误分离 */}
-      {aiError && (
-        <p className="rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
-          {aiError}
-        </p>
-      )}
 
       {characters.length === 0 ? (
         <div className="border-border text-muted-foreground rounded-xl border border-dashed py-10 text-center text-sm">

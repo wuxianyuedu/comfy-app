@@ -1,3 +1,5 @@
+import { readApiError } from "~/lib/api-error";
+
 /* ── 「让 ComfyUI 立即可用」的客户端（第②层网络部分）─────────────────────
  * 素材上传这类动作要求 ComfyUI 已经跑着（文件要写进它的 input 目录）。此前
  * 未运行时服务端只回一句原始错误，视图既没有可重试的语义、也没有用户可见出口
@@ -33,15 +35,13 @@ interface EnsureBody {
 export function readComfyErrorMessage(body: unknown, fallback: string): string {
   if (typeof body === "object" && body !== null) {
     const rec = body as EnsureBody;
+    /* `detail` 是这条路由的**业务字段**（「正在启动」的进度描述）而不是错误
+     * 文案，所以它优先于错误信封 —— 那不是第二套错误形状。
+     * `{error}` 字符串与 `{error:{message}}` 交 `~/lib/api-error` 的唯一读法
+     * （规范 16 §16.2.4.35）。 */
     if (typeof rec.detail === "string" && rec.detail.trim()) return rec.detail;
-    const err = rec.error;
-    if (typeof err === "string" && err.trim()) return err;
-    if (typeof err === "object" && err !== null) {
-      const nested = (err as { message?: unknown }).message;
-      if (typeof nested === "string" && nested.trim()) return nested;
-    }
   }
-  return fallback;
+  return readApiError(body) ?? fallback;
 }
 
 /** 单次「让 ComfyUI 可用」请求；网络异常也按「还在启动」处理（服务端可能正忙）。 */
