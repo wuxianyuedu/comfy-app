@@ -31,6 +31,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
+// 启动页副本（`splash.html` + `index.html`）的清单与同步：与 dev-launcher 共用
+// 同一份实现，避免「少写一个副本名」这类静默失误在两处各自发生。
+import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
 
 // 开发机私有输入（.env / db.sqlite*）的剔除清单与实现：与 `pnpm build` 的
 // 收尾步骤共用同一份，避免两处清单各写一套后静默漂移。
@@ -251,13 +254,14 @@ if (existsSync(splashSrc)) {
 // 同步启动页到 frontendDist（splash-assets/）：Tauri 窗口内嵌资源在编译期
 // 来自该目录（tauri.conf.json build.frontendDist）。不同步的话重编壳时嵌入的
 // 还是旧版启动页（历史故障：壳内 embedded=true 但内容陈旧/缺失 → 黑屏）。
-const splashDistDir = join(root, "src-tauri", "splash-assets");
+// 副本清单与同步动作走共享实现（`launcher-core/splash-assets.mjs`）——
+// 与 dev-launcher 同一份，这里不再自己列一遍副本名。
 if (existsSync(splashSrc)) {
-  mkdirSync(splashDistDir, { recursive: true });
-  copyFileSync(splashSrc, join(splashDistDir, "splash.html"));
-  copyFileSync(splashSrc, join(splashDistDir, "index.html"));
+  const synced = syncSplashAssets(root);
   console.log(
-    "[build-desktop]   已同步启动页 → src-tauri/splash-assets/（frontendDist，编译期嵌入）",
+    synced.status === "error"
+      ? `[build-desktop]   启动页同步失败：${synced.message}`
+      : `[build-desktop]   已同步启动页 → src-tauri/splash-assets/（${synced.names.join(" + ")}，frontendDist，编译期嵌入）`,
   );
 }
 

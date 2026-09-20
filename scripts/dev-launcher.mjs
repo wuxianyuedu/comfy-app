@@ -68,6 +68,7 @@ import {
   spawnInGroup,
   whichCommand,
 } from "./launcher-core/shell.mjs";
+import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
 import {
   checkNodeModules,
   lockfileDrift,
@@ -532,28 +533,33 @@ export function defaultShellExe(root = ROOT) {
   return null;
 }
 
-/** 确保 Tauri 启动页资源就位（frontendDist 编译期嵌入，运行时同步保证下次编对）。 */
-/** @param {string} [root] */
+/**
+ * 确保 Tauri 启动页资源就位（frontendDist 编译期嵌入，运行时同步保证下次编对）。
+ *
+ * 副本清单（`splash.html` + `index.html`）与同步动作在
+ * `launcher-core/splash-assets.mjs` 一处定义，这里只接线与记日志 ——
+ * **不要在本文件里再写一份副本名清单**：此前正是这里手写了一份、只同步了
+ * `splash.html`，`index.html` 于是长期停在旧版（症状与根因见该模块的文件头注释）。
+ *
+ * @param {string} [root]
+ */
 export function ensureSplashResource(root = ROOT) {
-  const src = path.join(root, "public", "splash.html");
-  const destDir = path.join(root, "src-tauri", "splash-assets");
-  if (!fs.existsSync(src)) {
+  const result = syncSplashAssets(root);
+  if (result.status === "missing-source") {
     log("未找到 public/splash.html，Tauri 启动页可能无法显示", "WARN");
-    return;
+    return result;
   }
-  try {
-    fs.mkdirSync(destDir, { recursive: true });
-    fs.copyFileSync(src, path.join(destDir, "splash.html"));
+  if (result.status === "error") {
+    log(`同步启动页失败：${result.message}`, "WARN");
+    return result;
+  }
+  if (result.status === "ok") {
     log(
-      "已同步 splash.html → src-tauri/splash-assets/splash.html（frontendDist，编译期嵌入）",
+      `已同步启动页 → src-tauri/splash-assets/（${result.written.join(" + ")}，frontendDist，编译期嵌入）`,
       "INFO",
     );
-  } catch (error) {
-    log(
-      `同步 splash.html 失败：${error instanceof Error ? error.message : String(error)}`,
-      "WARN",
-    );
   }
+  return result;
 }
 
 /** 拉起预编译壳，并把 PID 落盘（启动器先退出时的兜底回收锚点）。 */
