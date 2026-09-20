@@ -23,31 +23,24 @@
  */
 
 import { z } from "zod";
+import { isPlainRecord } from "~/lib/is-record";
 import { comfyBase } from "./client";
 
 /* ── raw JSON 收窄工具（§5.6：外部输入 unknown + 守卫）──────────────────
  * 这些 helper 是本模块与 workflow-detail-* / workflow-subgraph-parse 共用的
  * JSON 收窄原语：把 DB Json 列 / JSON.parse 产物的 unknown 收成可读视图，
- * 运行时零转换（断言只在编译期）。 */
-
-/** 宽松对象视图：`typeof v === "object" && v !== null` 的值（含数组）→
- *  Record 视图，否则 null。对应旧 any 代码 `x?.prop` / `Object.keys(x ?? {})`
- *  的运行时语义。 */
-export function asRecord(v: unknown): Record<string, unknown> | null {
-  return typeof v === "object" && v !== null
-    ? (v as Record<string, unknown>)
-    : null;
-}
-
-/** 严格普通对象守卫（排除数组）—— 用于 groups / pins 等逐条收窄。 */
-export function isJsonObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
+ * 运行时零转换（断言只在编译期）。
+ *
+ * 判据本身（`asRecord` / `isPlainRecord`）已收到 `~/lib/is-record`（ISSUE #672）：
+ * 收口前这里与 `components/studio/workflow-utils`、`lib/workshop/api-channel-core`
+ * 各写一份「宽松对象视图」，其中一处还**叫 isPlainRecord 却不排除数组**。
+ * 这里只留兼容再导出（本模块的 `asRecord` 有三个既有 import 点）。 */
+export { asRecord } from "~/lib/is-record";
 
 /** DB Json 列 / JSON.parse 产物 → RawWorkflow 视图。根不是普通对象时返回
  *  null（下游均有 `Array.isArray(raw.nodes)` 类守卫，路径与旧代码等价）。 */
 export function asRawWorkflow(v: unknown): RawWorkflow | null {
-  return isJsonObject(v) ? (v as RawWorkflow) : null;
+  return isPlainRecord(v) ? (v as RawWorkflow) : null;
 }
 
 /** `String(v)` 的类型收窄等价：值全部来自 JSON 反序列化产物（无 symbol /

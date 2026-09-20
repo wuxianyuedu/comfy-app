@@ -3,6 +3,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { currentServerUser } from "~/server/auth/request-user";
 import { uniqueStamp } from "~/lib/unique-id";
+import { safeDisplayName } from "~/lib/safe-name";
+import { extOfPath, stemOfPath } from "~/lib/media/mime-ext";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,11 +43,18 @@ export async function POST(req: NextRequest) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const ext = path.extname(file.name) || ".mp3";
-  const safe = file.name.replace(/[^\w.\-一-龥]/g, "_").slice(0, 60);
+  /* 扩展名与展示名各自走唯一出口（规范 16 §16.2.4.51 / §16.2.4.53）。
+   * 展示名保留 CJK：用户在文件管理器里要按它认人。
+   *
+   * **顺手修掉一处后缀重复**：收口前写的是 `${safe}${ext}` 而 `safe` 仍是
+   * 含后缀的整名（`bgm.mp3` + `.mp3` → `bgm.mp3.mp3`）—— 只在 `file.name`
+   * **没有点**时那个 `|| ".mp3"` 才会被用上，所以这条一直在但没人看见。
+   * 现在后缀只由 `ext` 一处给出，展示名先剥掉原名里的后缀。 */
+  const ext = extOfPath(file.name) || "mp3";
+  const safe = safeDisplayName(stemOfPath(file.name)).slice(0, 60) || "audio";
   /* 落盘文件名走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是手拼的
    * `${Date.now()}_${safe}${ext}`，与另两处上传路由各写一份「怎么保证不撞名」。 */
-  const name = `${uniqueStamp("bgm-")}_${safe}${ext}`;
+  const name = `${uniqueStamp("bgm-")}_${safe}.${ext}`;
   const dir = path.join(process.cwd(), "public", "generated", "films", "bgm");
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, name), buf);

@@ -2477,6 +2477,171 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P47：扩展名 ⇄ MIME 映射表（规范 §16.2.4.51）───────────────────
+   *
+   * 判据锚**映射表的形态**（`"image/x": "ext"` / `".ext": "image/x"`），
+   * 不数单个 `?? "image/png"` 兜底 —— 那是调用处的域选择。 */
+
+  it("自写扩展名 ⇄ MIME 映射表直接阻断（规范 P47）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/thing/route.ts",
+      [
+        "const MIME_BY_EXT: Record<string, string> = {",
+        '  ".png": "image/png",',
+        '  ".mp4": "video/mp4",',
+        "};",
+        "export const pick = (e: string) => MIME_BY_EXT[e];",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P47");
+  });
+
+  it("走 mime-ext 出口的落点不再被 P47 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/thing/route.ts",
+      [
+        'import { mimeForExt } from "~/lib/media/mime-ext";',
+        "export const pick = (e: string) => mimeForExt(e);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("单个 MIME 兜底字面量不算 P47（那是调用处的域选择，不是一张表）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/thing/route.ts",
+      [
+        'export const fallback = (m: string | null) => m ?? "image/png";',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P48：unknown 当宽松对象视图（规范 §16.2.4.52）─────────────────────
+   *
+   * 判据锚**转成视图**的那一处形态（`typeof X === "object" && X !== null`
+   * 之后紧跟 `as Record<string, unknown>`，同一变量名）。刻意**不数**另外
+   * 两种形态 —— 「就地读一个字段」与「取反早退守卫」，它们套出口只会更绕。 */
+
+  it("自写 unknown → 宽松对象视图直接阻断（规范 P48）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function asThing(v: unknown): Record<string, unknown> | null {",
+        '  return typeof v === "object" && v !== null',
+        "    ? (v as Record<string, unknown>)",
+        "    : null;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P48");
+  });
+
+  it("走 asRecord 出口的落点不再被 P48 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        'import { asRecord } from "~/lib/is-record";',
+        "export const name = (v: unknown) => asRecord(v)?.name;",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("「就地读一个字段」（typeof + in 判据）不算 P48", () => {
+    /* `typeof e === "object" && e !== null && "message" in e` 是就地读字段：
+     * 套出口要写成 `asRecord(e)?.message` 再判类型，反而多一层。
+     * 第一版判据把它算进来，一次报出 24 处，一半是它。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function msg(e: unknown): string {",
+        '  if (typeof e === "object" && e !== null && "message" in e) {',
+        '    return String((e as { message: unknown }).message);',
+        "  }",
+        '  return "";',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("「取反早退」的守卫不算 P48（收窄后立刻用掉，没有视图这回事）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function read(body: unknown): string | null {",
+        '  if (typeof body !== "object" || body === null) return null;',
+        '  return String((body as { detail?: unknown }).detail ?? "");',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P49：文件名安全化（规范 §16.2.4.53）─────────────────────────────
+   *
+   * 判据锚 `replace(/[^…]/g, "_")` 这一条替换形态 —— 精确到「把一批字符
+   * 换成下划线」，不数别的 `replace`（`.` → `-`、空格归一都不在此列）。 */
+
+  it("自写「非法字符换下划线」的文件名安全化直接阻断（规范 P49）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        "export const safe = (n: string) => n.replace(/[^\\w.-]/g, \"_\");",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P49");
+  });
+
+  it("走 safe-name 出口的落点不再被 P49 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        'import { safeFileNameSegment } from "~/lib/safe-name";',
+        "export const safe = (n: string) => safeFileNameSegment(n);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("别的 replace（空格归一 / 去掉尾斜杠）不算 P49", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        'export const norm = (n: string) => n.replace(/\\s+/g, " ").trim();',
+        'export const strip = (u: string) => u.replace(/\\/+$/, "");',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
   it("lib 层的既有出口实现不被 P1~P38 误伤（本批只让 P39~P43 扫 lib）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规

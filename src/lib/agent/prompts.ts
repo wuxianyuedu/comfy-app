@@ -3,6 +3,7 @@
 // 用本文件的 prompt 约束模型输出一段 JSON 指令序列，
 // 前端解析后逐条执行 —— 这是 TAPD 需求点名的 MVP 方式。
 
+import { isPlainRecord } from "~/lib/is-record";
 import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 
 /** 把项目状态快照拼成给模型的上下文（供工具决策参考）。 */
@@ -89,11 +90,9 @@ export function parseJsonInstruction(
   const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
   const body = (fence ? fence[1]! : trimmed).trim();
   try {
-    const obj: unknown = JSON.parse(body);
     // 只接受纯对象；数组 / 标量 / null 视为不可用。
-    return typeof obj === "object" && obj !== null && !Array.isArray(obj)
-      ? (obj as Record<string, unknown>)
-      : null;
+    const obj: unknown = JSON.parse(body);
+    return isPlainRecord(obj) ? obj : null;
   } catch {
     // 前后夹着散文时，尝试从中找出 JSON 对象的子串。
     const start = body.search(/\{/);
