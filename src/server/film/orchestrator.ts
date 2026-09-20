@@ -8,6 +8,7 @@
 // 封装），所以不需要任何内置模板。
 
 import { clamp } from "~/lib/clamp";
+import { sleep } from "~/lib/with-timeout";
 import "server-only";
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
@@ -718,9 +719,4 @@ export async function cancelFilm(id: string) {
   await filmShotRepository.markAllActiveFailed(id);
   await filmRepository.markCancelled(id);
   await appendFilmLog(id, "warn", "影片已取消");
-}
-
-// ── misc ───────────────────────────────────────────────────
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
