@@ -409,10 +409,10 @@ async function buildWorkflowDetailJson(input: {
     id: tpl.id,
     name: tpl.name,
     taskType: tpl.taskType,
-    /** 多模式支持。`modes` 是该工作流可运行的全部模式码（在这里解析
+    /** 多模式支持。`availableModes` 是该工作流可运行的全部模式码（在这里解析
      *  JSON 字符串列）；`defaultMode` 是规范默认值（写入时与 `taskType`
      *  保持同步）。 */
-    modes: parseModesJson(tpl.modes),
+    availableModes: parseModesJson(tpl.modes),
     defaultMode: tpl.defaultMode ?? null,
     graph: viewGraph,
     /** 导入时的原始 RAW（UI 格式）JSON —— 透传出去，客户端便能按原生形态
