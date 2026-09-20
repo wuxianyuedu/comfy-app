@@ -32,7 +32,7 @@ log = "0.4"
 # tray-icon：系统托盘（「打开主界面」入口 + 显式退出）。应用启动时可能只显示
 # 到任务栏而不抢前台（见 lib.rs 的 show_main_window_without_focus），需要一个
 # 常驻的唤起入口，用户才不会「找不到窗口」。
-tauri = { version = "2.11.3", features = ["tray-icon"] }
+tauri = { version = "2.11.6", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
@@ -57,7 +57,7 @@ tauri-plugin-shell = "2"
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
   "Win32_System_Threading",
