@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { textHandler } from "~/lib/form-props";
 import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
@@ -327,15 +328,13 @@ export function VideoQueueModal({
                       </span>
                       <Textarea
                         value={draftItem.prompt}
-                        onChange={(event) =>
+                        onChange={textHandler((prompt) =>
                           setDraft((arr) =>
                             arr.map((item, idx) =>
-                              idx === index
-                                ? { ...item, prompt: event.target.value }
-                                : item,
+                              idx === index ? { ...item, prompt } : item,
                             ),
-                          )
-                        }
+                          ),
+                        )}
                         rows={2}
                         placeholder="分镜提示词，含镜头运动描述…"
                         className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 resize-none text-xs"

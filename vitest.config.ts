@@ -126,6 +126,14 @@ export default defineConfig({
         "src/lib/clamp.ts",
         "src/lib/upper-token.ts",
         "src/lib/app-events.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.66 ~ §16.2.4.68）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）——
+         * 只写门槛不进 `include` 会让门槛静默失效。
+         *   · `form-props` / `page-window` 是纯函数模块（无 React、无 IO）；
+         *   · `use-throttled-progress` 是 `ui/` 下的 hook 出口（三个入口）。 */
+        "src/lib/form-props.ts",
+        "src/lib/page-window.ts",
+        "src/components/ui/use-throttled-progress.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -587,6 +595,32 @@ export default defineConfig({
           branches: 100,
         },
         "src/lib/case-token.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 本批三条新出口（规范 16 §16.2.4.66 ~ §16.2.4.68），门槛按实测值设满档：
+         *   · P62 对面 `~/lib/form-props` —— 五支适配器的边界逐条钉住
+         *     （空串不是 0、`Infinity` 不交出去、`digitsOnly` 只留数字）；
+         *   · P63 对面 `~/lib/page-window` —— 三族方向相反的窗口与各自的
+         *     边界（空列表 / 越界页码 / `pageSize` 为 0 / 最后一块收口）；
+         *   · P64 对面 `~/components/ui/use-throttled-progress` ——
+         *     首帧立即、窗口内丢弃、同值短路、`flush` 终值、卸载守卫、
+         *     按条目独立窗口与 `clear(key)`。 */
+        "src/lib/form-props.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/page-window.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/components/ui/use-throttled-progress.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

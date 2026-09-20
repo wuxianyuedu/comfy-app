@@ -819,7 +819,11 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/OkField.tsx",
-      'import { FormField } from "~/components/ui/form-field";\nexport function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <FormField label="名称" id="n">\n      {(a11y) => <input {...a11y} value={v} onChange={(e) => on(e.target.value)} />}\n    </FormField>\n  );\n}\n',
+      /* ⚠️ 取值走 `textHandler`：本用例验的是**P23 不误伤**，
+       * 而 `(e) => on(e.target.value)` 那个写法本身是 P62 的账 ——
+       * 两件事混在一个 fixture 里会让「验 P23」意外地也被 P62 判红
+       *（与 P30/P37 的 busyId fixture 互相串是同款问题）。 */
+      'import { FormField } from "~/components/ui/form-field";\nimport { textHandler } from "~/lib/form-props";\nexport function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <FormField label="名称" id="n">\n      {(a11y) => <input {...a11y} value={v} onChange={textHandler(on)} />}\n    </FormField>\n  );\n}\n',
     );
     const { code, output } = run();
     expect(code, output).toBe(0);
@@ -3522,6 +3526,194 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     const { code, output } = run();
     expect(code).toBe(1);
     expect(output).toContain("P61");
+  });
+
+  /* ── P62：事件值 → 值回调的改写样板（规范 §16.2.4.66）───────────── */
+
+  it("自写 `e => setX(e.target.value)` 阻断（规范 P62）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P62Value.tsx",
+      [
+        "export const Thing = ({ q, setQ }: { q: string; setQ: (v: string) => void }) => (",
+        '  <input value={q} onChange={(event) => setQ(event.target.value)} />',
+        ");",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P62");
+  });
+
+  it("自写 `e => setX(e.target.checked)` 同样阻断（同一条账的另一半）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P62Checked.tsx",
+      "export const Thing = ({ on }: { on: (v: boolean) => void }) => (\n  <input type=\"checkbox\" onChange={(e) => on(e.target.checked)} />\n);\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P62");
+  });
+
+  it("走 form-props 出口的落点不再被 P62 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P62Ok.tsx",
+      [
+        'import { checkedHandler, textHandler } from "~/lib/form-props";',
+        "export const Thing = ({ q, setQ, on }: { q: string; setQ: (v: string) => void; on: (v: boolean) => void }) => (",
+        "  <>",
+        "    <input value={q} onChange={textHandler(setQ)} />",
+        '    <input type="checkbox" onChange={checkedHandler(on)} />',
+        "  </>",
+        ");",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("带语句体的 onChange 不算 P62（同一事件里还要做别的事）", () => {
+    /* 判据太宽会逼人把那类多步逻辑塞进一个表达式去迎合它。取值仍应走
+     * `readTextInput`，但判据够不着、也不该硬够。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P62Block.tsx",
+      [
+        "export const Thing = ({ setQ }: { setQ: (v: string) => void }) => (",
+        "  <input",
+        "    onChange={(event) => {",
+        "      setQ(event.target.value);",
+        "      event.target.style.height = 'auto';",
+        "    }}",
+        "  />",
+        ");",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P63：分页 / 窗口切片（规范 §16.2.4.67）───────────────────────── */
+
+  it("自写倒序分页的偏移算式阻断（规范 P63）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P63Offset.tsx",
+      "export const after = (logs: number[], page: number, size: number) => Math.max(0, logs.length - page * size);\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P63");
+  });
+
+  it("自写总页数 / 总块数也计入 P63", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P63Ceil.tsx",
+      "export const pages = (all: string[], size: number) => Math.ceil(all.length / size);\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P63");
+  });
+
+  it("尾部窗口的 `.slice(-N)` 同样计入 P63", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P63Tail.tsx",
+      "export const tail = (logs: number[], size: number) => logs.slice(-size);\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P63");
+  });
+
+  it("走 page-window 出口的落点不再被 P63 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P63Ok.tsx",
+      [
+        'import { tailPages, tailWindow } from "~/lib/page-window";',
+        "export const slice = (logs: number[], page: number, size: number) => (",
+        "  tailPages(logs, page, size).entries.length + tailWindow(logs, size).length",
+        ");",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("取短码的 `.slice(-4)` 不算 P63（不是尾部窗口）", () => {
+    /* 判据太宽会把 `id.slice(-4)` / `.toString(36).slice(-4)` 这类「取短码」
+     * 一并算上，而它们与「取列表尾部 N 条」不是同一件事。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P63Short.tsx",
+      "export const short = (id: string) => `#${id.slice(-4)}`;\n",
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).toContain("P63 自写分页");
+    expect(output).not.toContain("studio/P63Short.tsx");
+  });
+
+  /* ── P64：进度回调节流（规范 §16.2.4.68）──────────────────────────── */
+
+  it("把高频进度回调直接写进 state 阻断（规范 P64）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P64Raw.tsx",
+      [
+        "export const watch = (runTask: (h: { onProgress: (p: number) => void }) => void) => {",
+        "  const [pct, setPct] = useState(0);",
+        "  runTask({ onProgress: (p) => setPct(p) });",
+        "  return pct;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P64");
+  });
+
+  it("走 use-throttled-progress 出口的落点不再被 P64 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P64Ok.tsx",
+      [
+        'import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";',
+        "export const watch = (runTask: (h: { onProgress: (p: number) => void }) => void) => {",
+        "  const pct = useThrottledProgressMap();",
+        "  runTask({ onProgress: (p) => pct.report('a', p) });",
+        "  return pct.progress;",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("`onProgress` 写在别处的普通 setter 不算 P64（判据认的是订阅回调）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P64Plain.tsx",
+      [
+        "export const useUpload = () => {",
+        "  const [pct, setPct] = useState(0);",
+        "  const start = async () => {",
+        "    setPct(0);",
+        "    await upload({ onUploaded: () => setPct(100) });",
+        "  };",
+        "  return { pct, start };",
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).toContain("P64 ");
+    expect(output).not.toContain("studio/P64Plain.tsx");
   });
 
   it("lib 层的既有出口实现不被 P1~P38 误伤（只有逐条登记的判据扫 lib）", () => {

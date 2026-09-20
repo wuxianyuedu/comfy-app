@@ -1,6 +1,7 @@
 "use client";
 
 import type { DragEventHandler } from "react";
+import { textHandler } from "~/lib/form-props";
 import { AlertTriangle, Search, Download } from "lucide-react";
 import {
   deriveFormatFlags,
@@ -99,7 +100,7 @@ export function WorkflowLibraryList({
           <input
             type="text"
             value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={textHandler(onSearchChange)}
             placeholder="搜索工作流名称…"
             className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-subtle focus:border-primary-500/40 h-8 w-full rounded-lg border pr-3 pl-8 text-xs focus:outline-none"
           />

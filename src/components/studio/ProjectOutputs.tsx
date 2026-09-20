@@ -1,6 +1,7 @@
 "use client";
 
 import { subscribeAppEvent } from "~/lib/app-events";
+import { textHandler } from "~/lib/form-props";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -186,7 +187,7 @@ export function ProjectOutputs() {
           <div className="flex items-center gap-2">
             <select
               value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
+              onChange={textHandler(setProjectId)}
               className="border-border-strong bg-subtle text-ink-soft rounded-lg border px-3 py-2 text-xs outline-none focus:border-violet-500/40"
             >
               {projects.map((project) => (

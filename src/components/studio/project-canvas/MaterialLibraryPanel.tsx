@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { MediaThumbnail as MediaThumb } from "~/components/ui/media-thumbnail";
+import { textHandler } from "~/lib/form-props";
 import { mediaDragSourceProps } from "~/components/ui/media-drag-source";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { fmtBytes } from "~/lib/format-bytes";
@@ -182,7 +183,7 @@ export function MaterialLibraryPanel({
           <input
             type="text"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={textHandler(setSearch)}
             placeholder={folder ? "在当前分类搜索" : "搜索全部素材"}
             className="text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 bg-transparent text-[12px] outline-none"
           />

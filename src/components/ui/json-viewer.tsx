@@ -30,6 +30,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import JsonView from "react18-json-view";
+import { textHandler } from "~/lib/form-props";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
@@ -386,7 +387,7 @@ export function JsonViewer({
           ref={searchRef}
           type="text"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={textHandler(setQuery)}
           onKeyDown={onSearchKey}
           placeholder="搜索 key / string / number / bool / null…（⌘F / Ctrl+F）"
           className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-faintest focus:border-primary-400/60 flex-1 rounded border px-2 py-0.5 font-mono outline-none"

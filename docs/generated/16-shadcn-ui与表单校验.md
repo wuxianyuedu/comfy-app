@@ -186,6 +186,9 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P59** | 手写数值夹取（`Math.min(` 里包着 `Math.max(`、或反过来 —— **两种不同**的 Math 嵌套）                                                              | `~/lib/clamp` 的 `clamp`（纯夹取）/ `clampInt`（夹取 + 取整，`mode` 显式）（见 §16.2.4.63）                                                                                                                       |
 | **P60** | 自写大写归一（`(x ?? "")[.trim()].toUpperCase()` —— 明确处理了缺省或空白）                                                                        | `~/lib/upper-token` 的 `upperToken`（吃空白、缺省给空串）/ `upperTokenOr`（缺省给具名兜底）（见 §16.2.4.64）                                                                                                        |
 | **P61** | 裸写应用事件（`new CustomEvent(` / `addEventListener("<含冒号的名字>"`）                                                                        | `~/lib/app-events` 的 `emitAppEvent` / `subscribeAppEvent` + `AppEvents` 表（事件名与载荷同处定义）（见 §16.2.4.65）                                                                                                |
+| **P62** | 自写「事件值 → 值回调」的改写样板（`X => FUNC(X.target.value)` / `X => FUNC(X.target.checked)`）                                                  | `~/lib/form-props` 的 `textHandler` / `checkedHandler` / `numberHandler` / `bindKey` / `readTextInput` / `digitsOnly`（见 §16.2.4.66）                                                                            |
+| **P63** | 自写分页 / 窗口切片的算术（`… .length - … * …` / `Math.ceil(… / …)` / **接收者像集合**的 `.slice(-N)`）                                             | `~/lib/page-window` 的 `tailPages` / `countAfterPage` / `tailWindow` / `chunkRange` / `LOG_MODAL_MAX_ROWS`（见 §16.2.4.67）                                                                                      |
+| **P64** | 把高频进度回调直接写进 state（`onProgress: (…) => setXxx(`）                                                                                        | `~/components/ui/use-throttled-progress` 的 `useThrottledProgress`（单值）/ `useThrottledProgressMap`（按条目）/ `createThrottleGate`（只借闸门）（见 §16.2.4.68）                                                  |
 
 **P4~~P52 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
 P4~P58 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
@@ -196,7 +199,8 @@ P4~P58 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触�
 唯一 id / 报错建议词表 / 画布节点落地 /
 数字精度格式化 / 去重合并与排序 / data URL /
 键盘键判据 / SGR 转义序列 / 书写法换算 /
-路径展示 / props 剔透传 / 异步超时」这**四十一件事**的
+路径展示 / props 剔透传 / 异步超时 /
+事件值改写样板 / 分页与窗口切片 / 进度回调节流」这**四十四件事**的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
@@ -215,9 +219,10 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **P50/P51/P52 见 §16.2.4.54 ~ §16.2.4.56**、
 **P53/P54/P55 见 §16.2.4.57 ~ §16.2.4.59**、
 **P56/P57/P58 见 §16.2.4.60 ~ §16.2.4.62**、
-**P59/P60/P61 见 §16.2.4.63 ~ §16.2.4.65**。
+**P59/P60/P61 见 §16.2.4.63 ~ §16.2.4.65**、
+**P62/P63/P64 见 §16.2.4.66 ~ §16.2.4.68**。
 
-**P4~P61 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P64 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -225,10 +230,11 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
 - 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
-  **P39/P40/P41、P42、P44~P55 额外扫 `src/lib/**` 与 `src/server/**`**
+  **P39~P42、P44~P64 额外扫 `src/lib/**` 与 `src/server/**`**
   （`LIB_SCANNED_RULES`）——
-  这三条账的落点本来就横跨两侧（帧调度在 `lib/project-canvas`、复制反馈在两处
-  hooks、`isRecord` 的 5 份实现在 `lib/**`）。**不能**把这两条根直接加进
+  这些账的落点本来就横跨两侧（帧调度在 `lib/project-canvas`、复制反馈在两处
+  hooks、`isRecord` 的 5 份实现在 `lib/**`；后来 P50 的数字精度、P59 的夹取、
+  P63 的倒序分页与尾部窗口更是**大半在 `lib`**）。**不能**把这两条根直接加进
   `SCAN_DIRS`：那会让 P1~P38 一起套到 lib 层，而 lib 层里全是这些出口的
   **实现本身**（`lib/browser-io.ts` 就是剪贴板出口）—— 实测会一次性报出 21 处
   「违规」，全是出口自己的实现；
@@ -238,7 +244,8 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 
   ⚠️ **`hooks/` 只对「数视图实现」的判据豁免**（P1/P2/P3 那几条）。
   「逻辑层同样成立」的判据逐条列在脚本的 `HOOKS_ALSO_SCANNED`
-  （P12 / P13 / P20 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31）—— 它们此前能生效
+  （P12 / P13 / P20 / P24 / P25 / P26 / P27 / P28 / P29 / P30 / P31 /
+  P33~P36 / P38~P51 / P58~P64）—— 它们此前能生效
   只是因为落点恰好不在 hooks 下，而不是因为口径上该放行。
   P27 就是这条的实例：收口前全库 21 处里 **19 处**在 `hooks/`
   （设置页 12 个动作、工作流库 8 个、模型标签 3 个），按目录粗放地豁免
@@ -4205,6 +4212,176 @@ const off = subscribeAppEvent("canvas:produce", (p) => { /* p 类型已知 */ })
 ⚠️ **`src/config` 因此进了扫描根**：`custom-nodes:updated` 的派发侧住在
 `src/config/custom-nodes.ts` —— 只扫前四条根等于让这条事件的一半落在扫描面
 之外（与 `src/lib` 加进来同款）。
+
+### 16.2.4.66 「把一组 props 转成另一个键的 props」有 42 处（P62 硬闸）
+
+按形态扫出来的账：全库 **42 处** `onChange={(e) => FUNC(e.target.value)}`
+（含 `checked` 那一半）。它们都做同一件事 —— 把 DOM 事件里取出来的**值**，
+交给一个只关心值的回调。而写法分四派，每一派都编译、都运行、类型都对：
+
+| 决定的 | 做法 A | 做法 B |
+| --- | --- | --- |
+| **取哪个字段** | `target.value` | `target.checked`（复选框 / 开关） |
+| **事件参数名** | `event` | `ev` / `e`（三种混用，看不出是不是同一件事） |
+| **就地转换** | `Number(e.target.value)` | `e.target.value.replace(/[^\d]/g, "")` —— 转换散在视图里 |
+| **去处** | 一个 setter | `{ ...prev, k: e.target.value }` / `patch({ model: e.target.value })` —— **键名靠人眼对齐** |
+
+前两派是纯样板。真正的病灶在后两派：
+
+- **转换散在视图里**时，「这个输入框收不收小数 / 允不允许负号」就变成每处
+  各自实现的行为 —— 同一个「时长」字段在两处各判各的，用户能在其中一处
+  打出另一处打不出的字符；
+- **键名靠人眼对齐**时，与 `value={cfg.model}` 的键名写错一个字符就编译通过、
+  运行时**静默写到另一个字段上**。
+
+#### 出口：`~/lib/form-props`
+
+| 导出 | 用途 |
+| --- | --- |
+| `textHandler(onValue, transform?)` | 文本 / `textarea` / `select`：取 `target.value` |
+| `checkedHandler(onValue)` | 复选框 / 开关：取 `target.checked` |
+| `numberHandler(onValue, fallback)` | 数字框：取 `value` 再转数，**读不出来时给调用处说的那个值** |
+| `bindKey(patch, key)` | 值回调 → 对象改写（键名只出现一次） |
+| `readTextInput(event, onValue)` | 就地取值（给「同一事件里还要做别的事」的落点） |
+| `digitsOnly` | 「只要数字」这条过滤规则的**一处定义** |
+
+```tsx
+<input value={q} onChange={textHandler(setQ)} />
+<input value={n} onChange={numberHandler(setN, 5)} />
+<input type="checkbox" onChange={checkedHandler(setFlag)} />
+```
+
+两条刻意的口径：
+
+1. **`numberHandler` 的 `fallback` 是必填的** —— `Number("abc")` 是 `NaN`
+   （一路传播到 `style` / 落库），而 `Number("")` 更隐蔽：它是 **`0`**，
+   `Number.isFinite` 拦不住。不判空串，「用户把输入框清空」会被写成
+   「设为 0」。实测这一条是写实现时被自己的用例抓出来的；
+2. **回调只收值，不收事件** —— 视图不再接触事件对象。少数必须在同一个事件里
+   读 `scrollHeight` 的落点走 `readTextInput`（取值仍只有一处）。
+
+#### 判据：P62（硬闸）
+
+锚**两种形态**：`X => FUNC(X.target.value)` 与 `X => FUNC(X.target.checked)`。
+
+**刻意不数**带语句体的 `onChange={(e) => { … }}`：那一族常常要在同一个事件里
+做别的事（调高度、按值分派多个字段），数它只会逼人把多步逻辑塞进一个表达式
+去迎合判据。
+
+### 16.2.4.67 「给一个列表做分页 / 窗口切片」有 8 处（P63 硬闸）
+
+按形态扫出来的账：全库做「从一个列表里切出一段」的算术。而它们不是同一件事
+的几种写法，是**三种方向相反**的窗口 —— 此前从未被写下来：
+
+| 族 | 语义 | 收口前落点 |
+| --- | --- | --- |
+| **倒序分页** | 第 1 页**最新**，往前翻看更早 | `log-store` 的 `selectPageLogs` + `LogPanel` 的「之后还有多少条」 |
+| **尾部窗口** | 恒取最后 N 条 | 两个日志弹窗的 `logs.slice(-300)`（**逐字相同**）、`workflow-run-store`、`generation-log.server`、`use-runtime-log-source`、`executor-cli` 的 stderr 尾部、`app/api/logs/sessions` 的会话清单 |
+| **平行分块** | 从头按片长切 | `ui/code-block` 的 `chunkIndex * CHUNK_LINES` + `ceil(total / CHUNK_LINES)` |
+
+三者的**边界处理各不相同，而每一种差异都是静默的**：
+
+- **空列表**时 `end` 可能为负（`slice(0, -5)` 不是空窗口，而是「从末尾倒数」）；
+- **页码越界**（用户在 3 页时删到只剩 1 页）—— 表现成「看着第 1 页、state 里
+  却是第 9 页」；
+- **`pageSize` 传 0 / 负数**—— `ceil(total / 0)` 是 `Infinity`，页脚渲染成
+  「第 1 / Infinity 页」；
+- 同一个 `300` 在两处各写一遍，**谁都没说为什么是 300**。
+
+#### 出口：`~/lib/page-window`
+
+| 导出 | 回答的问题 |
+| --- | --- |
+| `tailPages(items, page, size)` | 倒序分页的第 N 页（越界钳回，并返回钳过的页码） |
+| `countAfterPage(total, page, size)` | 这一页之后还有多少条更新的 |
+| `tailWindow(items, size)` | 最新的 N 条（**不含页码**，与分页不是同一支） |
+| `chunkRange(total, size, index)` | 平行分块的第 index 块覆盖的范围 |
+| `LOG_MODAL_MAX_ROWS` | 日志弹窗的行数预算（那个 `300` 的出处） |
+
+三条刻意的口径：
+
+1. **`Infinity` 与 `NaN` 分开处理** —— `NaN` 是「算不出来」→ 落回第 1 页 /
+   第 0 块；`±Infinity` 是「明确超出范围」→ 交给 `clamp` 撞到那一端。
+   ⚠️ 这一支实测踩到过：最初写的 `Number.isFinite(x) ? … : 默认` 会把
+   `Infinity` 一起归成第 0 块，而 `slice(Infinity, Infinity)` 静默给空；
+2. **`pageSize` 一律按「至少 1 条」处理**，负数 / 0 / `NaN` 都不许变成
+   `Infinity` 页；
+3. **越界页码钳回并把钳过的页码返回** —— 调用处才能据此把 state 归位。
+
+#### 判据：P63（硬闸）
+
+锚**三种形态**：`… .length - … * …`（倒序分页的偏移）、
+`Math.ceil(… / …)`（总页数 / 总块数）、以及**接收者像集合**的 `.slice(-N)`。
+
+两条刻意的边界（判据太宽会逼人改坏代码）：
+
+- **不数通用 `slice`** —— `slice(0, 6)` 取短码、`slice(1)` 去前缀到处都是；
+- **`.slice(-N)` 的接收者必须像集合**（`logs` / `items` / `entries` / `lines`…）——
+  `id.slice(-4)` 与 `.toString(36).slice(-4)` 是**取短码**（显示位数），
+  与「取列表尾部 N 条」不是同一件事。
+
+### 16.2.4.68 「把一次进度回调节流后写进 state」有 6 处（P64 硬闸）
+
+`watchTask` 的 `onProgress` 是**高频**回调 —— SSE 每收到一帧进度就调一次，
+一次生成可以调几百次。而全库 **6 处**把它直接接到 `setState` 上：
+
+| 落点 | 收口前 |
+| --- | --- |
+| `VideoStudio` | 回调里直接以 `shotId` 为键展开进度表 |
+| `ShotStudio` | **逐字相同**的一行 |
+| `use-workshop-pipeline` | 同形状，值多带一个 `label` |
+| `use-character-portrait` | 同形状，但只在「焦点还是这个角色」时写 |
+| `use-workflow-run-resume` | 经一层 `handlersRef` 转发 |
+| `use-encapsulation-test-run` | 直接 `setProgress(pct)` |
+
+差别不在「怎么写这一行」，而在**三个从未被写下来的决定**上：
+
+1. **多久写一次** —— 六处**没有一处节流**。一帧进度一次 `setState`，而 React
+   的批处理只合并**同一个事件循环内**的更新；SSE 帧是宏任务，每一帧都会引发
+   一次独立渲染。生成期间面板的重渲染次数与任务时长成正比；
+2. **写进去的是不是同一个值** —— `{ ...prev, [shotId]: p }` **无条件新建对象**：
+   `p` 与上一次相同时照样触发重渲染（React 只在 `Object.is` 相等时才跳过，
+   新对象永远不等）；
+3. **卸载之后还写不写** —— 六处里没有一处带守卫。`watchTask` 返回的 `close`
+   由调用处负责，而「组件卸载时有没有调到它」是另一件事：漏了就是「在已卸载
+   组件上 setState」（React 18+ 不再告警，**静默**）。
+
+#### 出口：`~/components/ui/use-throttled-progress`
+
+| 导出 | 给谁用 |
+| --- | --- |
+| `useThrottledProgress(initial?, tickMs?)` | **单值**进度（一次只跑一个任务） |
+| `useThrottledProgressMap(tickMs?)` | **按条目**的进度表（一屏多条目同时在跑） |
+| `createThrottleGate()` | 值不是数字、或要在别处做判断时，**只借那条闸门** |
+
+```ts
+const pct = useThrottledProgressMap();
+watchTask(taskId, {
+  onProgress: (p) => pct.report(shotId, p),
+  onSettled: () => pct.flush(shotId, 100), // 终值不允许被窗口吃掉
+});
+```
+
+四条刻意的口径：
+
+1. **首帧立即写**，之后按窗口采样 —— 进度是**单调推进的读数**，用户要看到它动；
+   所以这里是**节流**不是防抖（防抖会推迟到「安静下来之后」，而进度条恰好在
+   一直不安静时最需要更新）；
+2. **同值短路**（`prev === next` 时返回原引用）—— 收口前无条件 `{ ...prev, … }`
+   让同值也重渲染；
+3. **窗口内不排定时器** —— 下一个窗口的第一次调用会把值写进去（进度是持续的，
+   总有下一次；若没有，说明任务已停，那时调用处调 `flush`）。不排定时器的好处是
+   「组件卸载后定时器还在跑」这一类泄漏**从结构上不存在**；
+4. **按条目独立窗口** —— 三条镜头同时在跑时，共用一个窗口会让先报的那条把
+   后报的那条挤掉（读数变得随机取决于谁先来）。
+
+#### 判据：P64（硬闸）
+
+锚**「进度回调这一形态」**：`onProgress: (…) => setXxx(` —— 即「订阅回调用的是
+setter」。
+
+**刻意不取 `setProgress(` 这个函数名**：那条名字在全库既是「进度」也是
+「上传进度」「提取进度」，按名字数会连「不是订阅回调的写入点」一起算进来。
 
 ## 16.3 新增一个组件的标准动作
 

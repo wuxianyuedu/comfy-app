@@ -13,6 +13,7 @@
 //      项目被换掉时如实告知用户，不静默丢弃一次昂贵的生成。
 
 import React from "react";
+import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 
 import { errorMessage } from "~/lib/error-message";
 import {
@@ -136,6 +137,8 @@ export function useCharacterPortrait(opts: {
 }): [PortraitSession, PortraitSessionActions] {
   const { setCharacters, projectId } = opts;
   const [session, setSession] = React.useState<PortraitSession>(initialSession);
+  /* 定妆照进度的节流闸门（`~/components/ui/use-throttled-progress`）。 */
+  const progressGate = React.useRef(createThrottleGate());
 
   /* 发起时的项目 id：生成期间若换了项目，`characters` 已经是另一个项目的列表，
    *  被发起的那张角色卡不在里面 —— 此时写回候选会静默落空（图片进了素材库、
@@ -304,12 +307,16 @@ export function useCharacterPortrait(opts: {
             req,
             { workflowId: localWorkflowId },
             {
-              onProgress: (pct) =>
+              onProgress: (pct) => {
+                /* 高频回调：节流判据与别处同源（规范 16 §16.2.4.68）；
+                 * 「焦点还是不是这个角色」是本域的判据，留在调用处。 */
+                if (!progressGate.current.allow(character.id)) return;
                 setSession((prev) =>
                   prev.focusCharacterId === character.id
                     ? { ...prev, progress: pct }
                     : prev,
-                ),
+                );
+              },
               onLog: (entry) => {
                 if (entry.level === "progress") return;
                 appendLog(
