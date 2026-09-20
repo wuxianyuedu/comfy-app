@@ -20,7 +20,8 @@
  */
 
 import { upperToken } from "~/lib/upper-token";
-import { clamp } from "~/lib/clamp";
+import { countAfterPage, tailPages, tailWindow } from "~/lib/page-window";
+import {} from "~/lib/clamp";
 
 import { create } from "zustand";
 
@@ -1302,9 +1303,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         viewBaselineAfter:
           nextPage === 1
             ? 0
-            : Math.max(
-                0,
-                state.filteredLogs.length - nextPage * state.pageSize,
+            : countAfterPage(
+                state.filteredLogs.length,
+                nextPage,
+                state.pageSize,
               ),
         followBaseline: Math.max(0, state.filteredLogs.length - 1),
         followResetAt: 0,
@@ -1460,9 +1462,8 @@ function anchorOf(state: LogStoreState): { anchorId: string | null } {
 }
 
 function headOfFirstPage(state: LogStoreState): string | null {
-  const size = Math.max(1, state.pageSize);
-  const start = Math.max(0, state.filteredLogs.length - size);
-  return state.filteredLogs[start]?.id ?? null;
+  /* 第 1 页的头一条 = 「尾部窗口」的第一条（`~/lib/page-window`）。 */
+  return tailWindow(state.filteredLogs, state.pageSize)[0]?.id ?? null;
 }
 
 /* ── 派生视图：面板怎么切一页 ───────────────────────────────────────── */
@@ -1478,12 +1479,10 @@ export function selectPageLogs(
   page: number,
   pageSize: number,
 ): { entries: LogEntry[]; page: number; totalPages: number } {
-  const total = logs.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = clamp(page, 1, totalPages);
-  const end = total - (safePage - 1) * pageSize;
-  const start = Math.max(0, end - pageSize);
-  return { entries: logs.slice(start, end), page: safePage, totalPages };
+  /* 倒序分页的算式收在 `~/lib/page-window`（规范 16 §16.2.4.67）——
+   * 同一份账（越界页码钳回、`pageSize` 为 0 不许给出 `Infinity` 页）
+   * 此前在这里与视图侧各算一遍。 */
+  return tailPages(logs, page, pageSize);
 }
 
 /**
@@ -1511,8 +1510,7 @@ export function selectFirstPageWindow(
       return { entries, truncatedFromEnd: logs.length - (at + entries.length) };
     }
   }
-  const start = Math.max(0, logs.length - size);
-  return { entries: logs.slice(start), truncatedFromEnd: 0 };
+  return { entries: tailWindow(logs, size), truncatedFromEnd: 0 };
 }
 
 /**

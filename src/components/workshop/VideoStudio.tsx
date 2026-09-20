@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
 import type { Shot } from "~/lib/workshop/types";
 import {
   apiPollVideo,
@@ -57,7 +58,13 @@ export function VideoStudio({
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
   const [fps, setFps] = React.useState(16);
-  const [progress, setProgress] = React.useState<Record<string, number>>({});
+  /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
+   * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
+  const {
+    progress,
+    report: reportProgress,
+    flush: flushProgress,
+  } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [batchRunning, setBatchRunning] = React.useState(false);
 
@@ -94,12 +101,15 @@ export function VideoStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
+          onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
             // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
             if (out.kind !== "image") patchShot(shotId, { clipUrl: out.url });
           },
           onSettled: (r) => {
+            /* 落定即写终值：节流窗口会在边界上丢掉最后一次读数，
+             * 进度条停在 97% 而任务已完成的现场就是这么来的。 */
+            flushProgress(shotId, 100);
             patchShot(shotId, { clipStatus: r.ok ? "done" : "failed" });
             if (!r.ok) setShotError(shotId, r.message ?? "视频生成失败");
             resolve();

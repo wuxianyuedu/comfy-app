@@ -1,6 +1,7 @@
 "use client";
 
 import { upperToken } from "~/lib/upper-token";
+import { textHandler } from "~/lib/form-props";
 import React from "react";
 import {
   ioLabel,
@@ -287,7 +288,9 @@ export function WirePortRows({
                         : ""
                     }
                     placeholder={`输入 ${label}`}
-                    onChange={(ev) => set(wireInput.ioKey, ev.target.value)}
+                    onChange={textHandler((value) =>
+                      set(wireInput.ioKey, value),
+                    )}
                     className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder h-full w-full rounded-md px-2.5 py-2 text-[13px] outline-none"
                     style={{ fontFamily: "var(--font-sans)" }}
                   />

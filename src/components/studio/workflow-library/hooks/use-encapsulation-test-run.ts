@@ -19,6 +19,7 @@
  * 同一个动作的两种触发方式，不该有两套运行态。 */
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useThrottledProgress } from "~/components/ui/use-throttled-progress";
 
 import {
   buildLibraryWorkflowInput,
@@ -79,7 +80,14 @@ export function useEncapsulationTestRun({
   contractIds,
 }: EncapsulationTestRunArgs): EncapsulationTestRunController {
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
+  /* 进度是**单值**（一次只跑一个流程测试）—— 节流、同值短路与卸载守卫
+   * 都收在出口里（规范 16 §16.2.4.68）。 */
+  const {
+    value: progress,
+    report: reportProgress,
+    flush: flushProgress,
+    reset: resetProgress,
+  } = useThrottledProgress(0);
   const [error, setError] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -99,7 +107,7 @@ export function useEncapsulationTestRun({
         runningRef.current = true;
         setTaskId(taskId);
         setRunning(true);
-        setProgress(pct);
+        reportProgress(pct);
       },
       onLog: (taskId, entry) => {
         appendWorkflowRunLog(taskId, entry);
@@ -125,7 +133,7 @@ export function useEncapsulationTestRun({
       if (runningRef.current) return;
       runningRef.current = true;
       setRunning(true);
-      setProgress(0);
+      resetProgress();
       setError("");
       setResultUrl(null);
       void (async () => {
@@ -156,7 +164,7 @@ export function useEncapsulationTestRun({
              * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
              * 这一页的运行视角才不会清零。 */
             watchWorkflowRun(id, {
-              onProgress: (_taskId, pct) => setProgress(pct),
+              onProgress: (_taskId, pct) => reportProgress(pct),
               onLog: (taskId, entry) => {
                 appendWorkflowRunLog(taskId, entry);
               },
@@ -166,6 +174,8 @@ export function useEncapsulationTestRun({
                 setResultUrl(output.url);
               },
               onSettled: (_taskId, result) => {
+                /* 落定写终值：节流窗口会在边界上吃掉最后一次读数。 */
+                flushProgress(result.ok ? 100 : 0);
                 if (!result.ok) {
                   setError(result.message ?? "流程测试失败");
                 }
@@ -184,7 +194,15 @@ export function useEncapsulationTestRun({
         }
       })();
     },
-    [workflowId, workflowName, mode, contractIds],
+    [
+      workflowId,
+      workflowName,
+      mode,
+      contractIds,
+      reportProgress,
+      flushProgress,
+      resetProgress,
+    ],
   );
 
   const uploadImage = useCallback(async (file: File) => {

@@ -5,6 +5,7 @@
 // 触发按钮与详情头部其它操作按钮（导入画布 / 编辑 / 下载）同款式。
 
 import { useMemo, useState } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import type { MetaEditorController } from "../hooks/use-workflow-library-detail";
 import {
@@ -130,7 +131,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
           <div className="mb-2 flex gap-1.5">
             <input
               value={newName}
-              onChange={(event) => setNewName(event.target.value)}
+              onChange={textHandler(setNewName)}
               {...enterCommit({
                 onCommit: () => {
                   const name = newName.trim();

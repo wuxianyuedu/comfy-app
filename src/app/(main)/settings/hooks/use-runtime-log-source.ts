@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tailWindow } from "~/lib/page-window";
 import { useInterval } from "~/components/ui/use-interval";
 
 import { parseAnsiSegments, type AnsiSegment } from "~/lib/log/log-ansi";
@@ -78,9 +79,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
 
 /** 解析结果按上限取尾部（与「只看最新一段」的口径一致）。 */
 function capSegments(segments: AnsiSegment[]): AnsiSegment[] {
-  return segments.length > MAX_SEGMENTS
-    ? segments.slice(-MAX_SEGMENTS)
-    : segments;
+  return tailWindow(segments, MAX_SEGMENTS);
 }
 
 export interface RuntimeLogSourceOptions {

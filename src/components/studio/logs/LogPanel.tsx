@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { countAfterPage } from "~/lib/page-window";
 import {
   ArrowDownToLine,
   Check,
@@ -471,7 +472,7 @@ export function LogPanel() {
   /* 当前窗口之后还有多少条更新的日志（锚定窗口直接给出；历史页则按页码算）。 */
   const unseenAfterView = anchored
     ? anchored.truncatedFromEnd
-    : Math.max(0, filteredLogs.length - safePage * pageSize);
+    : countAfterPage(filteredLogs.length, safePage, pageSize);
 
   /* 连续重复行折叠只影响显示（见 log-store 的 dedupeRepeats），不改时间线。 */
   const pageLogs = useMemo(() => dedupeRepeats(visibleLogs), [visibleLogs]);

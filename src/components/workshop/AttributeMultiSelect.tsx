@@ -1,5 +1,6 @@
 "use client";
 import { useId, useRef, useState } from "react";
+import { textHandler } from "~/lib/form-props";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import {
   Popover,
@@ -141,7 +142,7 @@ export function AttributeMultiSelect({
               <Search size={13} className="text-muted-foreground shrink-0" />
               <input
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                onChange={textHandler(setKeyword)}
                 className="placeholder:text-muted-foreground/50 min-w-0 flex-1 bg-transparent text-xs outline-none"
                 placeholder="搜索…"
               />
@@ -195,7 +196,7 @@ export function AttributeMultiSelect({
             <div className="border-border flex items-center gap-1.5 border-t px-2 py-1.5">
               <input
                 value={custom}
-                onChange={(e) => setCustom(e.target.value)}
+                onChange={textHandler(setCustom)}
                 {...enterCommit({ onCommit: addCustom })}
                 className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded border px-1.5 py-0.5 text-xs outline-none"
                 placeholder="没有想要的？自定义添加后回车"

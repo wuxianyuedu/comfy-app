@@ -23,6 +23,7 @@
  * 有半套恢复（且只认 running）、一边一套都没有，同一件事在两处的行为不同。 */
 
 import { useEffect, useRef } from "react";
+import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 
 import {
   watchTask,
@@ -65,8 +66,13 @@ export function watchWorkflowRun(
   taskId: string,
   handlers: WorkflowRunHandlers,
 ): () => void {
+  /* 进度是高频的（SSE 每帧一次），而这里要落 store 的 patch **并且**再转给
+   * 调用处的 handlers —— 不节流的话上面两个订阅者都会被刷（规范 16
+   * §16.2.4.68）。闸门按 taskId 分，重连后不会与上一轮的窗口混在一起。 */
+  const gate = createThrottleGate();
   return watchTask(taskId, {
     onProgress: (pct, node) => {
+      if (!gate.allow(taskId)) return;
       patchWorkflowRun(taskId, { progress: pct });
       handlers.onProgress(taskId, pct, node);
     },
@@ -78,6 +84,8 @@ export function watchWorkflowRun(
       handlers.onOutput(taskId, output);
     },
     onSettled: (result) => {
+      /* 终值必须落进去：节流窗口会在边界上吃掉最后一次读数。 */
+      gate.reset(taskId);
       /* 失败一律走 `failWorkflowRun`（状态 + 原因 + 一条 error 日志行）：
        * 两条订阅路径若各写一份，就会出现「发起那次有错误日志行、恢复那次没有」。 */
       if (result.ok) patchWorkflowRun(taskId, { status: "done" });

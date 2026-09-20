@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { textHandler } from "~/lib/form-props";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
@@ -70,7 +71,7 @@ export function ContentAssetBody({
           className="border-border-strong bg-canvas-deep text-ink-bright h-[260px] w-full resize-none rounded-xl border px-3 py-2.5 text-[12px] leading-relaxed transition-colors outline-none focus:border-violet-500/40"
           value={data.content ?? ""}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
-          onChange={(event) => onPatch({ content: event.target.value })}
+          onChange={textHandler((content) => onPatch({ content }))}
         />
         <Button
           variant="ghost"

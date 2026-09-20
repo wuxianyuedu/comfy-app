@@ -20,6 +20,7 @@
 //     不该把工作流图里作者写好的负向提示词 / 首帧抹成空。
 
 import { useCallback, useState } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import { runAsyncAction } from "~/lib/async-action";
 
@@ -223,7 +224,7 @@ export function EncapsulationTestForm({
             />
             <Textarea
               value={text}
-              onChange={(event) => patchText(entry.id, event.target.value)}
+              onChange={textHandler((value) => patchText(entry.id, value))}
               rows={entry.id === "prompt" ? 2 : 1}
               className="border-border bg-bg text-xs"
               placeholder={

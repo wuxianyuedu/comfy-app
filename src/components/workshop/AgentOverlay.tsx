@@ -4,6 +4,7 @@
 // 纯展示组件：消费 useWorkshopAgent hook 返回的 controller，
 // 渲染「对话消息区 + 工作过程面板 + 输入框」。无业务逻辑。
 import React from "react";
+import { readTextInput } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
@@ -213,7 +214,9 @@ export function AgentOverlay({
           ref={taRef}
           value={input}
           onChange={(event) => {
-            setInput(event.target.value);
+            /* 这一处要在同一个事件里读 `scrollHeight` 调整高度，所以不能
+             * 直接把 `onChange` 换成适配器 —— 取值本身仍走出口。 */
+            readTextInput(event, setInput);
             event.target.style.height = "auto";
             event.target.style.height =
               Math.min(event.target.scrollHeight, 80) + "px";
