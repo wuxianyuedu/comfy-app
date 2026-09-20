@@ -796,7 +796,12 @@ function WorkflowEditorBody({
                   : null;
               setDetail((prev) =>
                 prev
-                  ? { ...prev, modes, defaultMode, taskType: defaultMode }
+                  ? {
+                      ...prev,
+                      availableModes: modes,
+                      defaultMode,
+                      taskType: defaultMode,
+                    }
                   : prev,
               );
               savePatch.mutate({
