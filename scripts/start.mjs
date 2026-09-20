@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
-import { probeSchemaSync } from "./db-schema-state.mjs";
+import { ensureSchemaCurrent, schemaNotice } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
@@ -27,11 +27,14 @@ process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}\n`);
 // 用户看到的是「起来了但报错」，而事实是端口无人监听。
 exitIfEnvNotReady(root);
 
-if (probeSchemaSync(root) !== "ready") {
-  process.stdout.write(
-    "[start.mjs] ⚠ 数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。\n" +
-      "[start.mjs]   先执行：pnpm db:push（见 docs/standards/launch-and-build.md §9.1）\n",
-  );
+/* schema 自检 + **按需自动同步**（与 dev.mjs 同一出口，见 db-schema-state.mjs）：
+ * 拉了含 schema 变更的代码之后不必记得跑 `pnpm db:push`。 */
+const schema = schemaNotice(ensureSchemaCurrent(root));
+if (schema) {
+  const marker = schema.level === "warn" ? "⚠" : "✓";
+  for (const line of schema.lines) {
+    process.stdout.write(`[start.mjs] ${marker} ${line}\n`);
+  }
 }
 
 // 与 dev.mjs 同一口径：pnpm 的可执行形态由 shell.mjs 判定（规范 §2.1.1）。
