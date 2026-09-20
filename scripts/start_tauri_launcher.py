@@ -2054,7 +2054,7 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
                 pass
         out = open(out_path, "a", encoding="utf-8", buffering=1)
         err = open(err_path, "a", encoding="utf-8", buffering=1)
-        return subprocess.Popen(
+        proc = subprocess.Popen(
             _node_argv(node, node_args),
             cwd=project_root,
             stdin=subprocess.DEVNULL,
@@ -2079,6 +2079,25 @@ def launch_dev_server(project_root: str, mode: str = "prebuilt") -> "subprocess.
     except Exception as exc:
         log(f"subprocess.Popen failed: {exc}")
         return None
+
+    # 把编排器纳入一个 KILL_ON_JOB_CLOSE 的 Windows Job Object（规范 §3.3 平台机制层）。
+    # 上面对 DETACHED_PROCESS 的说明只解决了「启动器交班退出后 app 要活着」；但编排器
+    # 自己若崩溃 / 被硬杀，它拉起的 node→pnpm→next→壳会残留成孤儿（锁住 start-tauri
+    # \_internal\*.dll，正是 build-launcher 前置检查报的那类占用）。Job Object 是 OS 级
+    # 兜底：job 句柄已复制进编排器进程，编排器一死最后一个句柄关闭 → OS 当场终止整棵树。
+    # best-effort：attach 失败（非 Windows / API 不可用 / 权限不足）只记日志，退回现有
+    # 回收路径，绝不因它拖垮启动。
+    try:
+        from win_job import attach_kill_on_close_job
+
+        if attach_kill_on_close_job(proc.pid):
+            log(f"编排器 PID {proc.pid} 已纳入 KILL_ON_JOB_CLOSE job（崩溃/被杀即整树回收）")
+        else:
+            log("Windows Job Object 未启用（非 Windows / API 失败），沿用现有回收路径")
+    except Exception as exc:
+        log(f"attach kill-on-close job skipped: {exc}")
+
+    return proc
 
 
 
