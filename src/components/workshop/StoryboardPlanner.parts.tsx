@@ -2,6 +2,7 @@
 
 import { Trash } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { FormField } from "~/components/ui/form-field";
 import type { Shot, ShotType, Character, StyleRef } from "~/lib/workshop/types";
 import { SHOT_TYPE_LABELS } from "~/lib/workshop/types";
 import { Button } from "~/components/ui/button";
@@ -85,8 +86,10 @@ export function ShotRow({
 
       <div className="grid gap-2 sm:grid-cols-2">
         {/* Shot type */}
-        <label className="block">
-          <span className="text-muted-foreground mb-1 block text-xs">景别</span>
+        <FormField
+          label="景别"
+          labelClassName="text-muted-foreground mb-1 text-xs"
+        >
           <SelectMenu
             className="!bg-subtle !border-border text-xs"
             value={shot.shotType}
@@ -97,13 +100,13 @@ export function ShotRow({
             labels={SHOT_TYPE_LABELS as Record<string, string>}
             placeholder="选择景别"
           />
-        </label>
+        </FormField>
 
         {/* Style */}
-        <label className="block">
-          <span className="text-muted-foreground mb-1 block text-xs">
-            风格 Skill
-          </span>
+        <FormField
+          label="风格 Skill"
+          labelClassName="text-muted-foreground mb-1 text-xs"
+        >
           <SelectMenu
             className="!bg-subtle !border-border text-xs"
             value={shot.skillSlug ?? ""}
@@ -119,7 +122,7 @@ export function ShotRow({
             )}
             placeholder="跟随角色/默认"
           />
-        </label>
+        </FormField>
       </div>
 
       {/* Description */}

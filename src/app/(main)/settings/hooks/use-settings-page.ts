@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { useFlashLatch } from "~/components/ui/use-flash-state";
+import { useExternalAction } from "~/components/ui/use-external-action";
 
 /* 默认端口从 `~/lib/endpoints` 取（零依赖常量层）：它同时被设置页视图消费，
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
@@ -460,7 +461,6 @@ export function useSettingsPage(): SettingsPageController {
   const comfyOpenM = api.setting.comfyOpen.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
-  const [comfyBrowserOpening, setComfyBrowserOpening] = useState(false);
   /* Drizzle Studio：状态查询 + 启动/关闭/打开动作（enabled 门控同 comfyStatus） */
   const dbStudioStatusQ = api.setting.dbStudioStatus.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -472,7 +472,6 @@ export function useSettingsPage(): SettingsPageController {
   const openExternalM = api.setting.openExternal.useMutation();
   const [dbStudioStarting, setDbStudioStarting] = useState(false);
   const [dbStudioStopping, setDbStudioStopping] = useState(false);
-  const [dbStudioOpening, setDbStudioOpening] = useState(false);
   const [ollamaStopping, setOllamaStopping] = useState(false);
 
   /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
@@ -730,18 +729,16 @@ export function useSettingsPage(): SettingsPageController {
    * 隔了很久，端口可能已经变了，拿旧地址会打开一个空白浏览器页。
    *
    * 与 openComfy 一样先 refetch 一次状态，避免拿几秒前的旧结论误报「未运行」。 */
+  const openComfyInBrowserAction = useExternalAction({
+    target: "browser",
+    report: showFlash,
+  });
   const openComfyInBrowser = useCallback(async () => {
-    setComfyBrowserOpening(true);
-    try {
+    await openComfyInBrowserAction.run(async () => {
       await comfyStatusQ.refetch();
-      const result = await comfyOpenM.mutateAsync();
-      showFlash(result.ok ? "ok" : "err", result.detail);
-    } catch (error) {
-      showFlash("err", errorMessage(error, "打开浏览器失败"));
-    } finally {
-      setComfyBrowserOpening(false);
-    }
-  }, [comfyOpenM, comfyStatusQ, showFlash]);
+      return comfyOpenM.mutateAsync();
+    });
+  }, [openComfyInBrowserAction, comfyOpenM, comfyStatusQ]);
 
   /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
   const startDbStudio = useCallback(async () => {
@@ -770,34 +767,27 @@ export function useSettingsPage(): SettingsPageController {
     }
   }, [dbStudioStopM, dbStudioStatusQ, showFlash]);
 
+  const openDbStudioAction = useExternalAction({
+    target: "browser",
+    report: showFlash,
+  });
   const openDbStudio = useCallback(async () => {
-    setDbStudioOpening(true);
-    try {
-      const result = await dbStudioOpenM.mutateAsync();
-      showFlash(result.ok ? "ok" : "err", result.detail);
-    } catch (error) {
-      showFlash("err", errorMessage(error, "打开 Drizzle Studio 失败"));
-    } finally {
-      setDbStudioOpening(false);
-    }
-  }, [dbStudioOpenM, showFlash]);
+    await openDbStudioAction.run(() => dbStudioOpenM.mutateAsync());
+  }, [openDbStudioAction, dbStudioOpenM]);
 
   /** 用系统默认浏览器打开生成的远程资源（视频 / 公网图片等）。
    *  桌面壳内 target=_blank 外链打不开，统一走服务端 openExternal。 */
+  const openExternalAction = useExternalAction({
+    target: "browser",
+    report: showFlash,
+  });
   const openExternalUrl = useCallback(
     async (url: string) => {
-      if (!url) {
-        showFlash("err", "没有可打开的资源地址");
-        return;
-      }
-      try {
-        const result = await openExternalM.mutateAsync({ url });
-        showFlash(result.ok ? "ok" : "err", result.detail);
-      } catch (error) {
-        showFlash("err", errorMessage(error, "打开资源失败"));
-      }
+      await openExternalAction.runWithTarget(url, (target) =>
+        openExternalM.mutateAsync({ url: target }),
+      );
     },
-    [openExternalM, showFlash],
+    [openExternalAction, openExternalM],
   );
 
   /* ── 应用自更新（Tauri updater + process）──────────────── */
@@ -1219,7 +1209,7 @@ export function useSettingsPage(): SettingsPageController {
     comfyStarting,
     comfyStopping,
     comfyOpening,
-    comfyBrowserOpening,
+    comfyBrowserOpening: openComfyInBrowserAction.busy,
     startComfy,
     stopComfy,
     openComfy,
@@ -1233,7 +1223,7 @@ export function useSettingsPage(): SettingsPageController {
       : null,
     dbStudioStarting,
     dbStudioStopping,
-    dbStudioOpening,
+    dbStudioOpening: openDbStudioAction.busy,
     startDbStudio,
     stopDbStudio,
     openDbStudio,

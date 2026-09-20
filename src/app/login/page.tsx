@@ -7,6 +7,7 @@ import { X, Zap } from "lucide-react";
 import { authClient } from "~/server/better-auth/client";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { FormField } from "~/components/ui/form-field";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
 
@@ -293,10 +294,7 @@ function Field({
   right?: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="text-ink-soft mb-1.5 block text-sm font-medium">
-        {label}
-      </span>
+    <FormField label={label}>
       <div className="relative">
         <input
           type={type}
@@ -313,6 +311,6 @@ function Field({
           </div>
         )}
       </div>
-    </label>
+    </FormField>
   );
 }

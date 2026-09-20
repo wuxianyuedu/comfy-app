@@ -19,6 +19,7 @@ import {
 import type { TaskType } from "~/lib/llm/types";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { Button } from "~/components/ui/button";
+import { FormField } from "~/components/ui/form-field";
 import { Spinner } from "~/components/ui/page-loading";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -125,25 +126,26 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       {/* Model area — 探测到模型时用下拉 + 候选多选；否则退化为手填 */}
       {c.ollamaStatus === "up" && c.ollamaModels.length > 0 ? (
         <div className="mb-3">
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            当前模型
-          </label>
-          <select
-            value={c.drafts.llm.model}
-            onChange={(event) => c.patchLlm({ model: event.target.value })}
-            className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-          >
-            {c.ollamaModels.map((model) => (
-              <option key={model.name} value={model.name}>
-                {model.name}
-              </option>
-            ))}
-          </select>
+          <FormField label="当前模型" id="ollama-current-model">
+            {(a11y) => (
+              <select
+                {...a11y}
+                value={c.drafts.llm.model}
+                onChange={(event) => c.patchLlm({ model: event.target.value })}
+                className="border-border text-ink focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              >
+                {c.ollamaModels.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
           {c.ollamaModels.length > 1 && (
             <>
-              <label className="text-ink/80 mt-3 mb-1.5 block text-sm font-medium">
-                工坊候选模型（可多选）
-              </label>
+              {/* 多选组：没有单一控件，标签行 + 下方候选按钮组。 */}
+              <FormField label="工坊候选模型（可多选）" className="mt-3" />
               <div className="flex flex-wrap gap-2">
                 {c.ollamaModels.map((model) => {
                   const checked =

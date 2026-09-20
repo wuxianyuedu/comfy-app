@@ -40,6 +40,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { useInterval } from "~/components/ui/use-interval";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
+import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { displayValue } from "~/lib/display-value";
 
 /** /api/tasks/[id]/stream 的 SSE 帧的运行时形状 —— 只含
@@ -194,7 +195,6 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const lastStatusRef = useRef<string | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const loadedForRef = useRef<string | null>(null);
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   // 被查看任务一变化就重新从缓存播种。
   useEffect(() => {
@@ -352,13 +352,17 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
     { ms: taskId ? 10000 : null, immediate: false },
   );
 
-  // 自动滚到底部。
-  useEffect(() => {
-    if (!autoscroll) return;
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [logs, filter, autoscroll]);
+  /* 自动滚到底部：贴底与「用户有没有接管滚动」的判据收在
+   * `ui/use-scroll-follow`（规范 16 §16.2.4.24）—— 收口前这里是手写的
+   * `scrollTop = scrollHeight`，且**用户上滚不会退出跟随**（会被按回底部，
+   * 读不到上面的步骤）。checkbox 保留为「跟随」的显式开关。 */
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const scroller = useScrollFollow({
+    containerRef: scrollerRef,
+    watch: `${logs.length}:${filter}`,
+    following: autoscroll,
+    onFollowingChange: setAutoscroll,
+  });
 
   const cachedIds = useMemo(
     () => listCachedTaskIds(),
@@ -589,6 +593,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
             {/* Log body — 与应用日志同款行样式 */}
             <div
               ref={scrollerRef}
+              onScroll={scroller.onScroll}
               className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
             >
               {valErrs.length > 0 && (

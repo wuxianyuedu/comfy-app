@@ -4,6 +4,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { SelectMenu } from "~/components/ui/select-menu";
+import { FormField } from "~/components/ui/form-field";
 import type { ProjectMeta, ProjectType } from "~/lib/workshop/types";
 import { PROJECT_TYPE_LABELS } from "~/lib/workshop/types";
 import { useLLM } from "~/components/workshop/LLMContext";
@@ -99,10 +100,10 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       <section className="border-border bg-surface rounded-xl border p-4">
         <h3 className="u-title mb-3">项目信息</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-muted-foreground mb-1 block text-xs">
-              类型
-            </span>
+          <FormField
+            label="类型"
+            labelClassName="text-muted-foreground mb-1 text-xs"
+          >
             <SelectMenu
               className="!bg-subtle !border-border text-sm"
               value={meta.type}
@@ -113,11 +114,11 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               labels={PROJECT_TYPE_LABELS as Record<string, string>}
               placeholder="选择类型"
             />
-          </label>
-          <label className="block">
-            <span className="text-muted-foreground mb-1 block text-xs">
-              基调 / 情绪
-            </span>
+          </FormField>
+          <FormField
+            label="基调 / 情绪"
+            labelClassName="text-muted-foreground mb-1 text-xs"
+          >
             <input
               value={meta.tone}
               onChange={(event) =>
@@ -126,11 +127,12 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
               placeholder="温暖治愈 / 悬疑紧张 / 史诗感"
             />
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="text-muted-foreground mb-1 block text-xs">
-              一句话梗概
-            </span>
+          </FormField>
+          <FormField
+            label="一句话梗概"
+            labelClassName="text-muted-foreground mb-1 text-xs"
+            className="sm:col-span-2"
+          >
             <input
               value={meta.logline}
               onChange={(event) =>
@@ -139,7 +141,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
               placeholder="一个关于…的故事"
             />
-          </label>
+          </FormField>
         </div>
       </section>
 

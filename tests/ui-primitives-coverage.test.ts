@@ -79,6 +79,13 @@ const REQUIRED_CONSUMERS: Record<string, string> = {
   "media-drag-source": "历史面板与素材库四个视图的媒体拖拽源",
   "use-hotkey":
     "日志面板 ⌘/Ctrl+Shift+L、更新检测 ⌘/Ctrl+Shift+U、Esc 关闭面板 / 菜单、剧本编辑器 ⌘S / ⌘Z",
+  /* 本批三条（规范 16 §16.2.4.24 ~ §16.2.4.26）：判据同样按**形态**取锚点
+   * （`scrollTop = …scrollHeight` 赋值 / `window.location.href` 赋值 /
+   * 裸 `<label className=\"…block…\">` + 输入控件）。 */
+  "use-scroll-follow":
+    "设置页运行日志、画布步骤日志、工作流库运行日志、工坊 Agent 对话四处",
+  "form-field":
+    "设置页四个分区、训练工作室超参、工作流导入面板、工坊角色与适配器、登录页",
 };
 
 /** 逐文件收集业务侧（非 ui/ 自身、非测试）的 import 说明符。 */

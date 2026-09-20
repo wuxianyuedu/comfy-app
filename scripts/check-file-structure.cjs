@@ -265,6 +265,14 @@ const DOMAIN_EXEMPT = new Set([
    * import 即被 `boundaries` 拦下；进 `project-canvas/**` 又会让服务端
    * 数据层反向依赖视图域。判据收敛在根层是唯一同时满足两侧的落点。 */
   "src/lib/task-state.ts",
+  /* 「触发一次系统文件对话框之外的外部动作」的**结果口径与目标类型**
+   *（ISSUE #672）：设置页四个分区（ComfyUI / Drizzle Studio 两个「在浏览器
+   * 打开」+ 远程资源外链 + 应用自更新）、历史详情弹窗的「打开目录」，以及
+   * `~/components/ui/use-external-action` 这个跨域执行态出口**都在用它**。
+   * 两侧必须同一口径（一端读 `ok`、另一端读 `triggered`，会把成功读成失败）。
+   * 进任何子域都会让另一个域反向依赖它 —— 与 `browser-io` / `display-value`
+   * 同款：「唯一持有者 + 任何域消费」的顶层单例。 */
+  "src/lib/external-open.ts",
 ]);
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */

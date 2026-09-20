@@ -52,6 +52,10 @@ export default defineConfig({
         "src/components/ui/media-thumbnail.tsx",
         "src/components/ui/media-drag-source.tsx",
         "src/components/ui/use-hotkey.ts",
+        "src/components/ui/use-scroll-follow.ts",
+        "src/components/ui/form-field.tsx",
+        "src/components/ui/use-external-action.ts",
+        "src/lib/external-open.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -260,6 +264,47 @@ export default defineConfig({
           functions: 100,
           statements: 90,
           branches: 85,
+        },
+        /* 本批三条出口（规范 16 §16.2.4.24 ~ §16.2.4.26）。同样**两处同批改**
+         * （`coverage.include` + 这里）—— 门槛只对报告里出现的文件生效。 */
+        /* 「滚动跟随到底」：贴底 / 退出跟随 / 跨实例受控 / 阈值可覆盖四条路径
+         * 都进了用例（jsdom 不做布局，用例自己给容器定义滚动几何 —— 量测口径
+         * 正是这条账的实质）。 */
+        /* 门槛取实测值向下取整到 5 的倍数（§18.6）；未覆盖的是 `controlled`
+         * 为 `undefined` 那一侧的少数分支与 ref 同步 effect —— 全量并行跑覆盖
+         * 率时这些行不进报告，单文件跑则满档（v8 覆盖率已知的抖动）。 */
+        "src/components/ui/use-scroll-follow.ts": {
+          lines: 95,
+          functions: 100,
+          statements: 95,
+          branches: 85,
+        },
+        /* 「标签 + 控件 + 校验错误」：ARIA 关联是本条账的核心，用例逐条钉
+         * （htmlFor/id、aria-invalid、aria-describedby、空串错误、
+         * hint 与错误的先后、可省略 children）。 */
+        "src/components/ui/form-field.tsx": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「外部动作的执行态」：结果归一 / 空目标拦截 / 连点只发一次 /
+         * 失败兜底文案 / guard 短路都进了用例。 */
+        "src/components/ui/use-external-action.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「外部目标的结果归一与协议助手探测」：`ok` / `triggered` 两种形状、
+         * 空目标四态、四个动词、探测三态都进了用例。分支取实测值 95 ——
+         * 未覆盖的是 `onBlur` 里 `if (handled) return` 那一支：`settle()` 在
+         * `handled` 为真时**立即 resolve 并摘掉监听**，之后的 blur 到不了那里。 */
+        "src/lib/external-open.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 95,
         },
         "src/lib/core/**": {
           lines: 95,

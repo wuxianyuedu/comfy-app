@@ -145,20 +145,24 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P18** | 视图里裸写 `<img` / `<video`                             | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底与 `loading`/`decoding` 都在出口里；媒体语义可经 `as` 覆盖后缀推断，见 §16.2.4.21）                        |
 | **P19** | 视图里手写媒体拖拽源（`setData("application/x-comfyapp-media"`） | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义，见 §16.2.4.22）                                              |
 | **P20** | 视图 / 逻辑层里自己挂 `keydown` 监听                     | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台、`filterInput`、`enabled`，见 §16.2.4.23）                                                                          |
+| **P21** | 视图里自写滚动贴底（`scrollTop = …scrollHeight` 赋值）       | `~/components/ui/use-scroll-follow` 的 `useScrollFollow`（贴底 / 跟随态 / 阈值 / 受控共享，见 §16.2.4.24）                                                                     |
+| **P22** | 视图里自写外部目标导航（`window.location.href =`）           | `~/lib/external-open` 的结果归一与目标类型 + `~/components/ui/use-external-action` 的 `useExternalAction`（见 §16.2.4.25）                                                     |
+| **P23** | 视图里自写「标签 + 控件」的表单行（裸 `<label className="…block…">` + 输入控件） | `~/components/ui/form-field` 的 `FormField`（`htmlFor` / `aria-invalid` / `aria-describedby` 一次给全，见 §16.2.4.26）                                                |
 
-**P4~P20 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
-P4~P20 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
+**P4~P23 与 P1~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
+P4~P23 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
 缺值占位符 / 模态浮层 / 折叠开关 / 浮层选项列表 / 轮询 / 搜索归一化 / 展开集合 /
-加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键」这十七件事的
+加宽档 / 进度条 / 键值行 / 渲染媒体 / 媒体拖拽源 / 全局快捷键 / 滚动跟随 /
+外部导航 / 表单行」这二十件事的
 **定义**只能有一处，没有「冻结在某个数字」的中间态可言。
 因此它们**不进基线**（`--update` 也不接受带违规的基线，否则「把违规一起写进
 基线」就成了唯一的绕过方式）。
 清零过程：P4 见 §16.2.4.9、P5/P6 见 §16.2.4.10、P7/P8 见 §16.2.4.11、
 P9 见 §16.2.4.12、P10 见 §16.2.4.13、P11 见 §16.2.4.14、P12 见 §16.2.4.15、
 P13/P14/P15 见 §16.2.4.16 ~ §16.2.4.18、P16/P17 见 §16.2.4.19 ~ §16.2.4.20、
-P18/P19/P20 见 §16.2.4.21 ~ §16.2.4.23。
+P18/P19/P20 见 §16.2.4.21 ~ §16.2.4.23、P21/P22/P23 见 §16.2.4.24 ~ §16.2.4.26。
 
-**P4~P20 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P23 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -339,6 +343,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 渲染媒体         | ~~**18 个文件**各写一遍裸 `<img>` / `<video>`，失败这一侧四种写法（`style.display = "none"` / `visibility = "hidden"` / 自持 `useState(failed)` 方块 / 长文案说明），**另外 14 处压根没有兜底**；`loading="lazy"` 只有 2 个写了~~ | `~/components/ui/media-thumbnail` 的 `MediaThumbnail`（失败兜底 + `loading`/`decoding` 都在出口里，`as` 可覆盖后缀推断）；**P18 硬闸** | ✅ **见 §16.2.4.21**                        |
 | 媒体拖拽源       | ~~`HistoryPanel` 与 `MaterialLibraryPanel` 的网格 / 列表四个视图**逐字重复四遍** `setData("application/x-comfyapp-media", …)`；消费端 `use-canvas-drop` 只做 `JSON.parse` + 类型断言，形状对不上就是**静默丢投**~~ | `~/components/ui/media-drag-source` 的 `mediaDragSourceProps` + `MEDIA_DRAG_MIME`（源端与落点共用一份载荷定义）；**P19 硬闸** | ✅ **见 §16.2.4.22**                        |
 | 全局快捷键       | ~~**6 处**各自 `addEventListener("keydown")`，修饰键判据不同：`LogProvider` / `UpdateCheckProvider` 只判 `ctrlKey`（**macOS 上按 ⌘ 没反应**）、`json-viewer` 判了 `metaKey \|\| ctrlKey` 却不过滤输入焦点、`ScriptMarkdownEditor` 两者都判~~ | `~/components/ui/use-hotkey` 的 `useHotkey`（`mod` 跨平台 / `filterInput` / `enabled` / `preventDefault`）；**P20 硬闸** | ✅ **见 §16.2.4.23**                        |
+| 滚动跟随底部     | ~~**4 处**各写「内容一变就 `scrollTop = scrollHeight`」，**判据各不相同**：设置页有「贴底 32px 内仍算跟随」+「恢复自动滚动」按钮，画布步骤日志与工作流库运行日志只有一个 `autoscroll` 布尔（**用户上滚会被按回底部**），工坊对话**连开关都没有**~~ | `~/components/ui/use-scroll-follow` 的 `useScrollFollow`（贴底 / 跟随态 / 阈值 / 受控共享）；**P21 硬闸** | ✅ **见 §16.2.4.24**                        |
+| 触发外部动作     | ~~**9 处**各写一份「置忙 → 调用 → `ok ? ok : err` → `catch → errorMessage` → finally 清忙」，而**结果字段不统一**（三个端点读 `ok`、更新器读 `triggered`）、**空目标只有一处拦过**（其余把空串发给服务端，把 zod 的英文报错当用户提示）、自定义协议「助手是否注册」的探测只有一处写了（防静默失败）~~ | `~/lib/external-open`（目标类型 / 结果归一 / 探测）+ `~/components/ui/use-external-action` 的 `useExternalAction`（执行态样板）；**P22 硬闸** | ✅ **见 §16.2.4.25**                        |
+| 表单行           | ~~**15 处**各写一份「`<label>` + 控件」，三件事在不同落点被漏掉：`htmlFor` / `id` 关联（**没有一处**做过 —— 点标签不聚焦输入框、读屏器把标签读成孤立文本）、`aria-invalid` + `aria-describedby`（只有 1/15 处写了 `aria-invalid`、**没有一处**关联错误文案）、错误行（训练工作室只报一句整表文案，不指出是哪一行错）~~ | `~/components/ui/form-field` 的 `FormField`（`htmlFor`/ARIA/错误行一次给全，控件由调用处给）；**P23 硬闸** | ✅ **见 §16.2.4.26**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -1844,6 +1851,157 @@ JSON 气泡 / 预览。窗口取 160 字符 —— 实测 400 字符会把环形
 那种也要数」同源：判据漏掉更差的写法时，被拦下的永远只是合规者）。反面用例
 钉住「只判 `ctrlKey`（mac 上没反应）」这一种也能数到。`ui/` 自身豁免
 （`use-hotkey` 就要挂 `keydown`）。
+
+### 16.2.4.24 「谁在给一段滚动内容做跟随底部」有四处写法（P21 硬闸）
+
+延续「按形态找，不按函数名找」的问法（§16.2.4.6 末的口径）：这一轮问的是
+**「谁在让一段滚动内容跟随底部」**。
+
+全库 **4 处**各写一份「内容一变就把 `scrollTop` 设成 `scrollHeight`」，写法
+看着都对，**判据却各不相同**：
+
+| 落点 | 贴底时机 | 「跟随态」怎么算 |
+| --- | --- | --- |
+| `RuntimeLogBox`（设置页运行日志） | `[log.text, follow]` 变化 | `scrollHeight - scrollTop - clientHeight < 32` |
+| `GlobalStepLogPanel`（画布步骤日志） | `[logs, filter, autoscroll]` 变化 | 只有一个 `autoscroll` 布尔，**没有「用户上滚即退出跟随」** |
+| `WorkflowRunLogModal`（工作流库运行日志） | `[logs.length, filter, autoscroll, open]` 变化 | 同上 |
+| `AgentOverlay`（工坊对话） | `[messages, busy]` 变化 | **连开关都没有**，永远强行贴底 |
+
+也就是说 —— **「用户往上滚会不会被拽回去」取决于看的是哪一个面板**：
+`RuntimeLogBox` 会退出跟随并给出「恢复自动滚动」按钮，另三处会把用户按回
+底部（`AgentOverlay` 里读不到上一句 AI 回复，滚上去立刻被拉回）。这类差异
+没有报错、没有告警，tsc / eslint 也都不看。
+
+#### 出口：`~/components/ui/use-scroll-follow` 的 `useScrollFollow`
+
+三件此前各处写不全的事：
+
+1. **贴底阈值只有一处**（`NEAR_BOTTOM_PX`，默认 32）—— 它是「离底多近仍算
+   还在跟随」的唯一出处，此前在两个文件里各写一份；
+2. **跟随态是 hook 的输出**（`following`），不是调用处自己算的布尔。给了它
+   才能在界面上给出「已暂停跟随 · 回到最新」这类**用户可见出口**（硬规则 4），
+   否则用户只会觉得「日志不刷新了」；
+3. **受控模式**（`following` + `onFollowingChange`）让同一份跟随态跨多个滚动
+   容器共享 —— `RuntimeLogBox` 的小窗口与全屏各挂一个实例，切进去时应仍是
+   「已暂停」，两个实例不能各判各的。
+
+`AgentOverlay` 是本批唯一**新增可见出口**的落点（此前连「已暂停跟随」这个
+状态都不存在，自然也不会有按钮）。
+
+⚠️ **不接管虚拟化面板的贴底**：`LogPanel` 的贴底按「位置表」算目标行
+（`log-virtual` 的 `pinPlan` / `pinScrollTop`），语义是「钉住已读水位」而不是
+「滚到最底」—— 两者不是同一件事，别把它改成本 hook 的调用方。
+
+#### 判据：P21（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P21**（`HARD_GATE_RULES`，不进基线）：视图里
+出现 `scrollTop = …scrollHeight` 这个**赋值形态**（两侧都要）。
+
+⚠️ **只数这个赋值**：单看 `scrollHeight` 会把 `log-virtual` 的贴底算术
+（只**读**几何、不改 DOM）与 textarea 自动增高（写的是 `style.height`）一并
+算上 —— 它们都不是「贴底」这个动作。
+
+### 16.2.4.25 「谁在触发一次系统文件对话框之外的外部动作」（P22 硬闸）
+
+第二个问法：**「谁在把控制权交给外部程序」**（浏览器 / 文件管理器 / 更新器）。
+「打开一个外部目标」这件事在库里散成 **三族写法**，而**结果怎么变成用户可见
+反馈**各判各的：
+
+| 落在哪 | 形状 |
+| --- | --- |
+| 交给系统默认浏览器（`setting.openExternal` / `comfyOpen` / `dbStudioOpen`） | 三处调用点各自拼「调 tRPC → `result.ok ? ok : err` → `catch → errorMessage(error, "…失败")`」 |
+| 打开本机目录（`comfyapp://` 自定义协议） | 只有一处，但带着一段**别处完全没有**的探测逻辑 |
+| 触发应用自更新 / 重启（Tauri updater） | 结果形状是 `{ triggered, detail }`，与 ①② 的 `{ ok, detail }` **字段名不同** |
+
+三件收口前的实情：
+
+1. **结果字段不统一** —— 调用点得自己记得「这个动作读 `ok`、那个读 `triggered`」，
+   记错的那一处会把成功读成失败（或反之）；
+2. **空目标只有一处拦过** —— `openExternal` 端点的入参是 `z.string().url()`，
+   其余落点把空串原样发给服务端，用户看到的第一句话是 zod 的英文报错；
+3. **失败方式在别的落点根本不存在** —— `comfyapp://` 的「协议助手没注册」是一个
+   只有那一处能表达的状态。不判它的话，「点了打开目录什么都没发生」在界面上与
+   「打开成功」长得一模一样（**静默失败**）。
+
+#### 出口：`~/lib/external-open` + `~/components/ui/use-external-action`
+
+- `~/lib/external-open`（**纯逻辑**，不依赖 React）：`ExternalTarget` 目标类型、
+  `toExternalResult` 结果归一（吃掉 `ok` / `triggered` 的形状差异）、
+  `isEmptyTarget` / `emptyTargetText`（空目标四类文案）、`externalFailureText`
+  （失败文案的唯一拼装处）、`detectFolderHelper`（协议助手探测：导航后窗口内
+  失焦 → `handled`，否则 `missing`）。
+- `useExternalAction`：**执行态样板** —— 空目标在发起 IO 之前拦、结果归一、
+  `catch` 走 `errorMessage` 兜底、`busy` 用**同步 ref** 判重入（同一次事件循环里
+  连点两下时 `setBusy(true)` 还没提交，状态读不出来 —— 那正是双击发两次请求的
+  成因）、可选 `guard` 域判据（如「先 refetch 判断是否在运行」）。
+- **反馈通道由调用处注入**（设置页用整页提示条、历史详情用 toast）—— 那是
+  调用处的表现层选择，不是本出口的判据。
+
+#### 判据：P22（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P22**（`HARD_GATE_RULES`，不进基线）：视图里
+出现 `window.location.href =` —— 本项目唯一实例是 `comfyapp://` 打开目录。
+
+⚠️ **不数对内的路由跳转**：那在 App Router 里走 `router.push`（`next/navigation`），
+不是同一个形态；也不数与文件选择相关的 `input.click()`（那是 P7 的账）。
+调用处「调 tRPC 打开浏览器」在形态上判不出来 —— 那一侧由出口契约
+（`tests/ui-primitives-coverage.test.ts`）反着钉。
+
+### 16.2.4.26 「谁在做『标签 + 输入 + 校验错误』的表单行」有十五处写法（P23 硬闸）
+
+第三个问法：**「谁在写一行表单」**。全库 **15 处**各写一份「`<label>` + 控件」，
+三件套一样、**四套度量语言**：设置页 `text-ink/80 mb-1.5 block text-sm`、
+训练工作室 `text-[11px] text-ink-faint`、工作流导入 `text-xs`、
+工坊适配器 `text-[10px]`。
+
+而**真正的病灶不是字号不一致**，是三件事在不同落点被漏掉：
+
+| 缺的是哪一件 | 收口前实情 |
+| --- | --- |
+| `htmlFor` / `id` 关联 | 15 处里**没有一处**把 `<label>` 与控件关联（点标签不聚焦输入框；读屏器把标签读成孤立文本） |
+| `aria-invalid` + `aria-describedby` | 只有 **1/15** 处写了 `aria-invalid`、**没有一处**把错误文案关联给控件 —— 读屏器不知道「这个框是错的、错在哪」 |
+| 错误行的位置 | 训练工作室只报**一句整表文案**（挂在提交按钮上方），改了下面某一行也**没有任何标记**指出是哪一行错 |
+
+#### 出口：`~/components/ui/form-field` 的 `FormField`
+
+三件一次给全：**`htmlFor` 由 `id` 派生**（不给则 `useId` 兜一份）、
+**错误态自动上 `aria-invalid` 与 `aria-describedby`**（两个属性同源，调用处
+不可能只写一个）、**错误行有稳定 id**。
+
+它**不接管控件**：`children` 是任意节点，要拿 ARIA 用 render-prop 形式
+（`{(a11y) => <Input {...a11y} />}`）—— 硬包一层 `<Input>` 会把 `SelectMenu`
+这类非 input 控件挡在门外。它**不判校验**（字段级纯函数住
+`~/lib/<domain>/*-schema.ts`，见 §16.2.4.8）、也**不管布局**（整行外边距由
+调用处给）。
+
+两条明确的边界：
+
+1. **「整块可点的开关行」不是这个形态**（`<label className="flex cursor-pointer
+   items-center justify-between">` 包住一个 `<Switch>`）：标签与控件**并排**、
+   点哪都切换，套上块级标签行会改掉那条排布（§16.2.4.2 第 9 条）。
+   `WorkflowCanvasSettings` 的 `LabeledSlider` 同理（标签与**实时读数**并排），
+   已按 `EXEMPT_FILES` 显式登记并写明理由。
+2. **「无单一控件」的行可以做纯标签行** —— `children` 可省略，`hint` 承载
+   说明文字（工坊「提供方 / 出场角色」这类二选一按钮组、设置页「请求体额外
+   字段」这类行编辑器）。
+
+#### 本批顺带修正的一条域判据
+
+`training-studio-config.ts` 的 `validateTrainForm` 此前返回**第一条错误的文案**
+（`string | null`），被挂在提交按钮上方。而逐字段判据本来就在这个函数里 ——
+只是被压成了一句。改成 `TrainFormErrors`（`字段 → 文案` 的映射）后，视图逐行
+标红；`TrainJobInput`-侧的 `error` 收窄为「上传 / 网络等**非字段**错误」。
+
+#### 判据：P23（硬闸）
+
+`check-ui-primitives.cjs` 新增 **P23**（`HARD_GATE_RULES`，不进基线）：视图里
+出现**块级标签行 + 输入控件**（`<label className="…block…">` 且其后 400 字符内
+出现 `<input` / `<textarea` / `<select` / `<Input` / `<Textarea` / `<SelectMenu` /
+`<NumberField` / `<RangeSlider`）。
+
+⚠️ **两个条件必须同时成立**：只判「带 `block` 的 `<label>`」会把「带只读徽标的
+区块标题」与「可点开关行」一并算上；单看 `aria-invalid` 则会漏掉那 14 处
+**完全没有** ARIA 标记的 —— 而它们才是这条账里更差的那一半（与 P13 同源）。
 
 ## 16.3 新增一个组件的标准动作
 

@@ -124,21 +124,34 @@ export function pickActiveJob(jobs: TrainJob[]): TrainJob | null {
   );
 }
 
+/** 训练表单**字段级**错误：字段名 → 第一条错误文案；空对象 = 全通过。 */
+export type TrainFormField = "name" | "baseModel" | "triggerWord" | "dataset";
+export type TrainFormErrors = Partial<Record<TrainFormField, string>>;
+
 /**
- * 提交前的表单校验。返回第一条错误的文案；通过则返回 null。
- * 顺序即原组件的提示顺序（名称 → 底模 → 触发词 → 数据集）。
+ * 提交前的**字段级**表单校验。
+ *
+ * 返回结构从「第一条错误的文案」改成「字段 → 文案」的映射
+ * （规范 16 §16.2.4.26）：此前它只返回一句话、被挂在提交按钮上方，用户改了
+ * 下面某一行也**没有任何标记**指出是哪一行错 —— 而逐字段判据本来就在这个
+ * 函数里，只是被压成了一句。与 `~/lib/llm/remote-model-schema` 的
+ * `validateRemoteModelFields` 同口径（字段级 = 纯函数，只依赖该字段自己的值）。
+ *
+ * **集合级规则**（如「任务重名」）仍留在 controller —— 它要看任务列表。
  */
 export function validateTrainForm(
   form: Pick<
     TrainJobInput,
     "name" | "baseModel" | "triggerWord" | "datasetImages"
   >,
-): string | null {
-  if (!form.name.trim()) return "请填写任务名称";
-  if (!form.baseModel) return "请选择底模（Checkpoint）";
-  if (!form.triggerWord.trim()) return "请填写触发词";
-  if (form.datasetImages.length === 0) return "请至少上传一张数据集图片";
-  return null;
+): TrainFormErrors {
+  const errors: TrainFormErrors = {};
+  if (!form.name.trim()) errors.name = "请填写任务名称";
+  if (!form.baseModel) errors.baseModel = "请选择底模（Checkpoint）";
+  if (!form.triggerWord.trim()) errors.triggerWord = "请填写触发词";
+  if (form.datasetImages.length === 0)
+    errors.dataset = "请至少上传一张数据集图片";
+  return errors;
 }
 
 /**

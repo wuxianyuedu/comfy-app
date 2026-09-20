@@ -181,13 +181,22 @@ describe("useTrainingStudio", () => {
     ]);
   });
 
-  it("submit 校验不通过：不发请求，error 是可读文案", async () => {
+  it("submit 校验不通过：不发请求，错误落到**字段**上（逐字段标红）", async () => {
     const { result } = renderHook(() => useTrainingStudio());
     await act(async () => {
       await result.current.submit();
     });
     expect(vanilla.train.create.mutate).not.toHaveBeenCalled();
-    expect(result.current.error).toBe("请填写任务名称");
+    /* 字段级错误住 `fieldErrors`（视图逐行渲染），不再是一句整表文案
+     * —— 用户改了下面某一行也能看到是哪一行错（规范 16 §16.2.4.26）。 */
+    expect(result.current.fieldErrors).toEqual({
+      name: "请填写任务名称",
+      baseModel: "请选择底模（Checkpoint）",
+      triggerWord: "请填写触发词",
+      dataset: "请至少上传一张数据集图片",
+    });
+    /* `error` 只留给非字段错误（上传 / 网络）。 */
+    expect(result.current.error).toBeNull();
   });
 
   it("submit 成功：提交 payload + 清空名称/触发词/数据集 + 刷新任务列表", async () => {

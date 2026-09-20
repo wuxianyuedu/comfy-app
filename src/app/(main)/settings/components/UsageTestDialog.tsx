@@ -26,6 +26,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { Spinner } from "~/components/ui/page-loading";
 import { Textarea } from "~/components/ui/textarea";
+import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
 
 import { FieldImagePreview } from "./SettingsPrimitives";
@@ -78,66 +79,79 @@ export function UsageTestDialog({
           {/* 接口地址 / 端点路径 / API Key 不再展示：
                 弹窗打开时按条目配置预填（openUsageTest），API Key 留空
                 即回落条目密钥——高级定制仍可在模型编辑弹窗里改。 */}
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            提示词
-          </label>
-          <Textarea
-            value={usageTest.prompt}
-            onChange={(event) =>
-              d.patchUsageTest({ prompt: event.target.value })
-            }
-            rows={2}
-            className="border-border text-ink bg-surface-2 mb-3 resize-y"
-          />
+          <FormField label="提示词" id="usage-test-prompt" className="mb-3">
+            {(a11y) => (
+              <Textarea
+                {...a11y}
+                value={usageTest.prompt}
+                onChange={(event) =>
+                  d.patchUsageTest({ prompt: event.target.value })
+                }
+                rows={2}
+                className="border-border text-ink bg-surface-2 resize-y"
+              />
+            )}
+          </FormField>
 
           {usageTest.kind === "image" && (
             <>
-              <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                尺寸
-              </label>
-              <Input
-                type="text"
-                value={usageTest.size}
-                onChange={(event) =>
-                  d.patchUsageTest({ size: event.target.value })
-                }
-                placeholder="1024x1024"
-                className="border-border text-ink bg-surface-2 mb-3"
-              />
+              <FormField label="尺寸" id="usage-test-size" className="mb-3">
+                {(a11y) => (
+                  <Input
+                    {...a11y}
+                    type="text"
+                    value={usageTest.size}
+                    onChange={(event) =>
+                      d.patchUsageTest({ size: event.target.value })
+                    }
+                    placeholder="1024x1024"
+                    className="border-border text-ink bg-surface-2"
+                  />
+                )}
+              </FormField>
             </>
           )}
 
           {usageTest.kind === "video" && (
             <>
-              <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-                尺寸（可选，留空 = 不传）
-              </label>
-              <Input
-                type="text"
-                value={usageTest.size}
-                onChange={(event) =>
-                  d.patchUsageTest({ size: event.target.value })
-                }
-                placeholder="如 720P（Agnes Flash 固定值）或 1280x704"
-                className="border-border text-ink bg-surface-2 mb-3"
-              />
+              <FormField
+                label="尺寸（可选，留空 = 不传）"
+                id="usage-test-size"
+                className="mb-3"
+              >
+                {(a11y) => (
+                  <Input
+                    {...a11y}
+                    type="text"
+                    value={usageTest.size}
+                    onChange={(event) =>
+                      d.patchUsageTest({ size: event.target.value })
+                    }
+                    placeholder="如 720P（Agnes Flash 固定值）或 1280x704"
+                    className="border-border text-ink bg-surface-2"
+                  />
+                )}
+              </FormField>
             </>
           )}
 
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            请求体额外字段
-          </label>
-          <p className="text-muted-foreground -mt-1 mb-2 text-[11px]">
-            每个字段用「字段名 + 值」两格填，替代原先手填整段 JSON；值可为 文本
-            / 数字 /
-            图片（点「上传」选本地图片，或点「链接」直接粘贴公网图片地址）。
-            数值自动按数字 / 布尔解析（如 seed 填 42 即数字）。
-          </p>
-          {usageTest.kind !== "chat" && (
-            <p className="text-muted-foreground -mt-1 mb-2 text-[11px]">
-              ⚠ {MEDIA_URL_NOTICE}
-            </p>
-          )}
+          {/* 这一处**没有单一控件**（下方是逐字段的行编辑器），所以标签行
+              只是小标题 —— 不传 `id`，`FormField` 用 `useId` 兜一份不参与
+              关联的 id（`htmlFor` 指向不存在的元素没有副作用，但也不该硬写
+              一个假的）。说明文字走 `hint`。 */}
+          <FormField
+            label="请求体额外字段"
+            hint={
+              <>
+                每个字段用「字段名 + 值」两格填，替代原先手填整段 JSON；值可为
+                文本 / 数字 /
+                图片（点「上传」选本地图片，或点「链接」直接粘贴公网图片地址）。
+                数值自动按数字 / 布尔解析（如 seed 填 42 即数字）。
+                {usageTest.kind !== "chat" && <> ⚠ {MEDIA_URL_NOTICE}</>}
+              </>
+            }
+            className="mb-2"
+          />
 
           {usageTest.kind === "video" && (
             <UsageVideoModeQuickPick d={d} usageTest={usageTest} />
