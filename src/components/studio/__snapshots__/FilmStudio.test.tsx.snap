@@ -50,7 +50,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
       >
         <svg
           aria-hidden="true"
-          class="lucide lucide-undo2 lucide-undo-2"
+          class="lucide lucide-undo-2"
           fill="none"
           height="16"
           stroke="currentColor"
@@ -78,7 +78,7 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
       >
         <svg
           aria-hidden="true"
-          class="lucide lucide-redo2 lucide-redo-2"
+          class="lucide lucide-redo-2"
           fill="none"
           height="16"
           stroke="currentColor"
