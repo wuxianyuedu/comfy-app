@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { chunkRange } from "~/lib/page-window";
 import { useTheme } from "next-themes";
 import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
@@ -160,14 +161,21 @@ export function CodeBlock({
         const hl = await getHighlighter();
         if (guard.isStale()) return;
         const allLines = code.split("\n");
-        const totalChunks = Math.ceil(allLines.length / CHUNK_LINES);
+        /* 分块的位置算术收在 `~/lib/page-window`（规范 16 §16.2.4.67）：
+         * 此前 `chunkIndex * CHUNK_LINES` 与 `ceil(total / CHUNK_LINES)`
+         * 各写一遍，且没有一处夹住越界块号。 */
+        const { total: totalChunks } = chunkRange(
+          allLines.length,
+          CHUNK_LINES,
+          0,
+        );
         const acc: ShikiToken[][] = [];
         let chunkIndex = 0;
 
         const processChunk = () => {
           if (guard.isStale()) return;
-          const start = chunkIndex * CHUNK_LINES;
-          const slice = allLines.slice(start, start + CHUNK_LINES);
+          const range = chunkRange(allLines.length, CHUNK_LINES, chunkIndex);
+          const slice = allLines.slice(range.start, range.end);
           const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
             lang: language,
             theme: shikiTheme,

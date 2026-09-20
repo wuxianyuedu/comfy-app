@@ -15,6 +15,7 @@ import {
   SeedModeButton,
 } from "~/components/studio/workflow-form/WorkflowFormControls";
 import { Button } from "~/components/ui/button";
+import { textHandler } from "~/lib/form-props";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { NumberField } from "~/components/ui/number-field";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -73,7 +74,7 @@ export function WidgetControl({
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
           placeholder={placeholder}
-          onChange={(ev) => onValueChange(ev.target.value)}
+          onChange={textHandler(onValueChange)}
         />
       );
     }
@@ -89,7 +90,7 @@ export function WidgetControl({
           }
           disabled={disabled}
           placeholder={`输入 ${label}${requiredHint}`}
-          onChange={(ev) => onValueChange(ev.target.value)}
+          onChange={textHandler(onValueChange)}
         />
       );
 

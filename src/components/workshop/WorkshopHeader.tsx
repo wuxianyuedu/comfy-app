@@ -7,6 +7,7 @@
 // 模式契约 = 每种模式对外有哪些统一输入 / 输出。后者在工作流库也有一份。
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
@@ -175,7 +176,7 @@ export function WorkshopHeader({
                         <input
                           autoFocus
                           value={draftTitle}
-                          onChange={(e) => setDraftTitle(e.target.value)}
+                          onChange={textHandler(setDraftTitle)}
                           {...enterCommit({
                             onCommit: () => commitRename(p.id),
                             onCancel: () => setEditingId(null),
@@ -244,7 +245,7 @@ export function WorkshopHeader({
                   <input
                     autoFocus
                     value={draftTitle}
-                    onChange={(e) => setDraftTitle(e.target.value)}
+                    onChange={textHandler(setDraftTitle)}
                     {...enterCommit({
                       onCommit: commitCreate,
                       onCancel: () => {

@@ -3,6 +3,7 @@
  * 为每个探测到的子 widget（时长 / 比例 /
  * 画质）渲染一个友好字段，在预设下拉与原生控件之间切换。 */
 import { NumberField } from "~/components/ui/number-field";
+import { textHandler } from "~/lib/form-props";
 import { SelectMenu } from "~/components/ui/select-menu";
 import {
   numericBounds,
@@ -149,7 +150,7 @@ function VideoField({
         value={str}
         disabled={disabled}
         className="nodrag nopan bg-canvas-deep text-ink-soft focus:ring-primary/40 w-full rounded-md px-2.5 py-2 text-[11px] outline-none focus:ring-1"
-        onChange={(event) => set(entry.ioKey, event.target.value)}
+        onChange={textHandler((value) => set(entry.ioKey, value))}
       />
     </Field>
   );

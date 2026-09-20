@@ -78,17 +78,25 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
        * §17.5.4 的「只有用户重试才清」通道 —— 这一批里唯一一条会因为
        * 「文件被占用」反复失败的动作用户需要看着它改。反馈通道由调用处
        * 注入，所以这里换一个 `report`（出口只负责文案归一）。 */
-      const result = await runAsyncAction(() => deleteMut.mutateAsync({ id }), {
-        report: (kind, detail) => {
-          if (kind === "err") setActionError(detail);
-        },
-        failureText: "删除失败",
-      });
-      if (result.ok) {
-        setPendingDelete(null);
-        void load();
+      try {
+        const result = await runAsyncAction(
+          () => deleteMut.mutateAsync({ id }),
+          {
+            report: (kind, detail) => {
+              if (kind === "err") setActionError(detail);
+            },
+            failureText: "删除失败",
+          },
+        );
+        if (result.ok) {
+          setPendingDelete(null);
+          void load();
+        }
+      } finally {
+        /* 复位绑在 `finally` 上 —— 收口前写在动作之后，`load()` 里任意一行
+         * 抛错就永远停在「删除中」。 */
+        setDeleting(false);
       }
-      setDeleting(false);
     },
     [setDeleting, deleteMut, setPendingDelete, load, setActionError],
   );

@@ -1,5 +1,7 @@
 "use client";
 import React from "react";
+import { useThrottledProgressMap } from "~/components/ui/use-throttled-progress";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
@@ -78,9 +80,17 @@ export function ShotStudio({
   const [shotSize, setShotSize] = React.useState<ShotSizeState>(() =>
     parseShotSize(shots[0]?.params.size ?? undefined),
   );
-  const [progress, setProgress] = React.useState<Record<string, number>>({});
+  /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
+   * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
+  const {
+    progress,
+    report: reportProgress,
+    flush: flushProgress,
+  } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
-  const [batchRunning, setBatchRunning] = React.useState(false);
+  /* 批处理的忙碌位走唯一出口（规范 16 §16.2.4.71）：它此前复位写在循环之后，
+   * 循环里抛错就永远停在「批处理中」。 */
+  const batch = useBusyAction();
   /** 提示词被用户手改过的镜头 —— 自动预填不得覆盖。 */
   const editedRef = React.useRef<Set<string>>(new Set());
 
@@ -142,11 +152,13 @@ export function ShotStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => setProgress((prev) => ({ ...prev, [shotId]: p })),
+          onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
             if (out.kind !== "video") patchShot(shotId, { imageUrl: out.url });
           },
           onSettled: (r) => {
+            /* 落定即写终值（见 VideoStudio 同处注释）。 */
+            flushProgress(shotId, 100);
             patchShot(shotId, { status: r.ok ? "done" : "failed" });
             if (!r.ok) setShotError(shotId, r.message ?? "生成失败");
             resolve();
@@ -227,14 +239,14 @@ export function ShotStudio({
   }
 
   async function generateBatch() {
-    if (batchRunning || pending.length === 0) return;
-    setBatchRunning(true);
-    for (const shot of [...pending]) {
-      // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
-      if (shot.status === "running" || shot.imageUrl) continue;
-      await generateShot(shot);
-    }
-    setBatchRunning(false);
+    if (pending.length === 0) return;
+    await batch.run(async () => {
+      for (const shot of [...pending]) {
+        // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
+        if (shot.status === "running" || shot.imageUrl) continue;
+        await generateShot(shot);
+      }
+    });
   }
 
   return (
@@ -284,7 +296,7 @@ export function ShotStudio({
           <ShotSizePicker
             value={shotSize}
             onChange={setShotSize}
-            disabled={batchRunning}
+            disabled={batch.busy}
           />
         </div>
         <Button
@@ -292,14 +304,14 @@ export function ShotStudio({
           size="xs"
           onClick={() => void generateBatch()}
           disabled={
-            batchRunning ||
+            batch.busy ||
             pending.length === 0 ||
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
           className="ml-auto h-auto rounded-lg px-3 py-1.5"
         >
-          {batchRunning ? "批量生成中…" : `批量生图 (${pending.length})`}
+          {batch.busy ? "批量生成中…" : `批量生图 (${pending.length})`}
         </Button>
         <Button
           variant="secondary"

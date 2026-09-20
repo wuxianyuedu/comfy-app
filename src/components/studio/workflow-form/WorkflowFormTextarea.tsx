@@ -1,6 +1,7 @@
 "use client";
 
 import { clamp } from "~/lib/clamp";
+import { textHandler } from "~/lib/form-props";
 import { useCallback, useLayoutEffect, useRef } from "react";
 
 /** 自动增高的 textarea，宽度严格锁死在父级。
@@ -58,7 +59,7 @@ export function AutoResizeTextarea({
       value={value}
       placeholder={placeholder}
       rows={1}
-      onChange={(ev) => onChange(ev.target.value)}
+      onChange={textHandler(onChange)}
       className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder block w-full min-w-0 resize-none overflow-x-hidden rounded-md py-2 pr-3 pl-2.5 text-[13px] leading-relaxed outline-none"
       style={{
         fontFamily: "var(--font-sans)",

@@ -11,7 +11,8 @@
 
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { errorText } from "~/lib/error-message";
 import { cancelTask } from "~/lib/task-cancel-client";
 
@@ -31,7 +32,8 @@ export function useCancelTask({
   taskId,
   onFailed,
 }: UseCancelTaskArgs): CancelTaskController {
-  const [cancelling, setCancelling] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const cancelBusy = useBusyAction();
 
   // 把最新的 taskId / onFailed 放在 ref 里，好让处理器（由异步
   // 回调触发）总能读到新鲜的值，而不必被重建。
@@ -48,20 +50,17 @@ export function useCancelTask({
      *  这一小段窗口内的取消点击（CanvasNode 正在发请求）。/cancel 端点幂等，
      *  对不存在的 taskId 返回 404 且无副作用；缺 id 时只告诉用户没送达。 */
     const currentTaskId = taskIdRef.current;
-    setCancelling(true);
+    if (!currentTaskId) {
+      onFailedRef.current("取消请求异常：尚未生成 taskId");
+      return;
+    }
     try {
-      if (!currentTaskId) {
-        onFailedRef.current("取消请求异常：尚未生成 taskId");
-        return;
-      }
-      await cancelTask(currentTaskId);
+      await cancelBusy.run(() => cancelTask(currentTaskId));
       // 取消请求已送达，收尾交给 SSE 的 error 事件。
     } catch (e) {
       onFailedRef.current(errorText(e, "取消请求异常"));
-    } finally {
-      setCancelling(false);
     }
-  }, []);
+  }, [cancelBusy]);
 
-  return { cancelling, cancel };
+  return { cancelling: cancelBusy.busy, cancel };
 }
