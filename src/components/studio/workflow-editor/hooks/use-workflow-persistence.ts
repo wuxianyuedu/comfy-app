@@ -175,29 +175,34 @@ export function useWorkflowPersistence({
 
   /* 保存 paramMap + workflowIO（对外输入 / 输出） */
   const handleSave = useCallback(async () => {
+    /* `setSaving` 由调用处持有（顶部栏据此禁用按钮），复位绑在 `finally`
+     * 上 —— 收口前写在动作之后，动作里任意一行抛错就永远停在「保存中」。 */
     setSaving(true);
-    await runAsyncAction(
-      async () => {
-        await savePatch.mutateAsync({
-          id: workflowId,
-          paramMap,
-          workflowIO,
-        });
-        onSave?.();
-      },
-      {
-        /* 成功 / 失败走**两条不同的通道**：成功是 toast（保存后停留在当前
-         * 工作流界面，不再 onClose 退出 —— 用户通常还要继续调整），失败是
-         * **行内错误块**（保存失败时往往要重试或去改配置，需要一个留着不走的
-         * 出口）。通道差异由 `report` 表达，文案归一由出口负责。 */
-        report: ((kind, detail) =>
-          kind === "ok"
-            ? toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑")
-            : setError(detail)) satisfies ActionReport,
-        failureText: "保存失败",
-      },
-    );
-    setSaving(false);
+    try {
+      await runAsyncAction(
+        async () => {
+          await savePatch.mutateAsync({
+            id: workflowId,
+            paramMap,
+            workflowIO,
+          });
+          onSave?.();
+        },
+        {
+          /* 成功 / 失败走**两条不同的通道**：成功是 toast（保存后停留在当前
+           * 工作流界面，不再 onClose 退出 —— 用户通常还要继续调整），失败是
+           * **行内错误块**（保存失败时往往要重试或去改配置，需要一个留着不走的
+           * 出口）。通道差异由 `report` 表达，文案归一由出口负责。 */
+          report: ((kind, detail) =>
+            kind === "ok"
+              ? toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑")
+              : setError(detail)) satisfies ActionReport,
+          failureText: "保存失败",
+        },
+      );
+    } finally {
+      setSaving(false);
+    }
   }, [
     workflowId,
     paramMap,

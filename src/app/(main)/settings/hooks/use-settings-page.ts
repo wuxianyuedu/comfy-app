@@ -19,6 +19,7 @@ import { useExternalAction } from "~/components/ui/use-external-action";
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { runAsyncAction } from "~/lib/async-action";
+import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
@@ -382,6 +383,9 @@ export function useSettingsPage(): SettingsPageController {
   const [appUpdateBusy, setAppUpdateBusy] = useState<
     "idle" | "checking" | "installing"
   >("idle");
+  /* 检测 / 下载安装的单飞闸门（规范 16 §16.2.4.69）：两者共用一把 ——
+   * 「检测中」时点「安装」会读到还没提交的 `idle`，于是并发发出去。 */
+  const appUpdateLock = useReentrancyLock();
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const [appUpdateVersion, setAppUpdateVersion] = useState<string | null>(null);
   const [appUpdateCurrent, setAppUpdateCurrent] = useState<string | null>(null);
@@ -607,34 +611,39 @@ export function useSettingsPage(): SettingsPageController {
     /* 「拉起 → 轮询等就绪 → 超时抛错」整段交给出口报成败：失败路径的文案
      *（含超时那句自带可执行动作的说明）走 `errorMessage`，成功静默
      *（状态行自己会变成「已运行」，是这条账里唯一不需要额外说一句的落点）。 */
-    const result = await runAsyncAction(
-      async () => {
-        await startOllamaClient();
-        // 轮询等就绪再交回控制权：期间保持「启动中…」按钮禁用。以前 POST 完
-        // 固定睡 2s 就探一次，ollama 冷启动远不止 2s，状态行变回「未运行」、
-        // 按钮恢复可点，用户误以为失败会连点——每次点击都再拉起一个 serve
-        // 进程，多进程抢 11434 端口在 Windows 上连环弹「端口被占用」错误框。
-        for (let i = 0; i < OLLAMA_START_POLL_TIMES; i++) {
-          if (llmBaseUrl) {
-            const probe = await probeOllamaClient(llmBaseUrl);
-            if (probe.up) {
-              setOllamaModels(probe.models);
-              setOllamaStatus("up");
-              return;
+    const result = await (async () => {
+      try {
+        return await runAsyncAction(
+          async () => {
+            await startOllamaClient();
+            // 轮询等就绪再交回控制权：期间保持「启动中…」按钮禁用。以前 POST 完
+            // 固定睡 2s 就探一次，ollama 冷启动远不止 2s，状态行变回「未运行」、
+            // 按钮恢复可点，用户误以为失败会连点——每次点击都再拉起一个 serve
+            // 进程，多进程抢 11434 端口在 Windows 上连环弹「端口被占用」错误框。
+            for (let i = 0; i < OLLAMA_START_POLL_TIMES; i++) {
+              if (llmBaseUrl) {
+                const probe = await probeOllamaClient(llmBaseUrl);
+                if (probe.up) {
+                  setOllamaModels(probe.models);
+                  setOllamaStatus("up");
+                  return;
+                }
+              }
+              await new Promise((resolve) =>
+                setTimeout(resolve, OLLAMA_START_POLL_INTERVAL_MS),
+              );
             }
-          }
-          await new Promise((resolve) =>
-            setTimeout(resolve, OLLAMA_START_POLL_INTERVAL_MS),
-          );
-        }
-        throw new Error(
-          "Ollama 启动超时：进程可能未成功运行，请确认已安装 Ollama 并可手动执行 ollama serve",
+            throw new Error(
+              "Ollama 启动超时：进程可能未成功运行，请确认已安装 Ollama 并可手动执行 ollama serve",
+            );
+          },
+          { report: showFlash, failureText: "启动 Ollama 失败" },
         );
-      },
-      { report: showFlash, failureText: "启动 Ollama 失败" },
-    );
-    setOllamaStarting(false);
-    ollamaStartingRef.current = false;
+      } finally {
+        setOllamaStarting(false);
+        ollamaStartingRef.current = false;
+      }
+    })();
     // 超时/失败后兜底探一次，让状态行和进程的真实情况对齐
     if (!result.ok && llmBaseUrl) await probeOllamaSilent(llmBaseUrl);
   }, [llmBaseUrl, probeOllamaSilent, showFlash]);
@@ -643,26 +652,29 @@ export function useSettingsPage(): SettingsPageController {
   const startComfy = useCallback(async () => {
     setSaving(true);
     setComfyStarting(true);
-    await runAsyncAction(
-      async () => {
-        await saveSetting.mutateAsync({
-          comfyuiPath: settingsDraft?.comfyuiPath,
-          comfyuiExtraArgs: settingsDraft?.comfyuiExtraArgs,
-          comfyuiAutoStart: settingsDraft?.comfyuiAutoStart,
-          comfyuiPort: settingsDraft?.comfyuiPort,
-        });
-        const result = await comfyStartM.mutateAsync({});
-        await comfyStatusQ.refetch();
-        // 启动动作会先把当前草稿（含路径）落库：形态跟着重判定一次。
-        await comfyInstanceQ.refetch();
-        /* 端点返回 `{ ok, detail }` 的信封（服务端自己探过启动结果），
-         * 交给出口按同一口径读 —— 调用处不再写 `result.ok ? "ok" : "err"`。 */
-        return result;
-      },
-      { report: showFlash, failureText: "启动 ComfyUI 失败" },
-    );
-    setSaving(false);
-    setComfyStarting(false);
+    try {
+      await runAsyncAction(
+        async () => {
+          await saveSetting.mutateAsync({
+            comfyuiPath: settingsDraft?.comfyuiPath,
+            comfyuiExtraArgs: settingsDraft?.comfyuiExtraArgs,
+            comfyuiAutoStart: settingsDraft?.comfyuiAutoStart,
+            comfyuiPort: settingsDraft?.comfyuiPort,
+          });
+          const result = await comfyStartM.mutateAsync({});
+          await comfyStatusQ.refetch();
+          // 启动动作会先把当前草稿（含路径）落库：形态跟着重判定一次。
+          await comfyInstanceQ.refetch();
+          /* 端点返回 `{ ok, detail }` 的信封（服务端自己探过启动结果），
+           * 交给出口按同一口径读 —— 调用处不再写 `result.ok ? "ok" : "err"`。 */
+          return result;
+        },
+        { report: showFlash, failureText: "启动 ComfyUI 失败" },
+      );
+    } finally {
+      setSaving(false);
+      setComfyStarting(false);
+    }
   }, [
     settingsDraft,
     saveSetting,
@@ -675,16 +687,19 @@ export function useSettingsPage(): SettingsPageController {
   const stopComfy = useCallback(async () => {
     setSaving(true);
     setComfyStopping(true);
-    await runAsyncAction(
-      async () => {
-        const result = await comfyStopM.mutateAsync();
-        await comfyStatusQ.refetch();
-        return result;
-      },
-      { report: showFlash, failureText: "关闭 ComfyUI 失败" },
-    );
-    setSaving(false);
-    setComfyStopping(false);
+    try {
+      await runAsyncAction(
+        async () => {
+          const result = await comfyStopM.mutateAsync();
+          await comfyStatusQ.refetch();
+          return result;
+        },
+        { report: showFlash, failureText: "关闭 ComfyUI 失败" },
+      );
+    } finally {
+      setSaving(false);
+      setComfyStopping(false);
+    }
   }, [comfyStopM, comfyStatusQ, showFlash]);
 
   const openComfy = useCallback(async () => {
@@ -753,28 +768,34 @@ export function useSettingsPage(): SettingsPageController {
   /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
   const startDbStudio = useCallback(async () => {
     setDbStudioStarting(true);
-    await runAsyncAction(
-      async () => {
-        const result = await dbStudioStartM.mutateAsync();
-        await dbStudioStatusQ.refetch();
-        return result;
-      },
-      { report: showFlash, failureText: "启动 Drizzle Studio 失败" },
-    );
-    setDbStudioStarting(false);
+    try {
+      await runAsyncAction(
+        async () => {
+          const result = await dbStudioStartM.mutateAsync();
+          await dbStudioStatusQ.refetch();
+          return result;
+        },
+        { report: showFlash, failureText: "启动 Drizzle Studio 失败" },
+      );
+    } finally {
+      setDbStudioStarting(false);
+    }
   }, [dbStudioStartM, dbStudioStatusQ, showFlash]);
 
   const stopDbStudio = useCallback(async () => {
     setDbStudioStopping(true);
-    await runAsyncAction(
-      async () => {
-        const result = await dbStudioStopM.mutateAsync();
-        await dbStudioStatusQ.refetch();
-        return result;
-      },
-      { report: showFlash, failureText: "关闭 Drizzle Studio 失败" },
-    );
-    setDbStudioStopping(false);
+    try {
+      await runAsyncAction(
+        async () => {
+          const result = await dbStudioStopM.mutateAsync();
+          await dbStudioStatusQ.refetch();
+          return result;
+        },
+        { report: showFlash, failureText: "关闭 Drizzle Studio 失败" },
+      );
+    } finally {
+      setDbStudioStopping(false);
+    }
   }, [dbStudioStopM, dbStudioStatusQ, showFlash]);
 
   const openDbStudioAction = useExternalAction({
@@ -802,7 +823,9 @@ export function useSettingsPage(): SettingsPageController {
 
   /* ── 应用自更新（Tauri updater + process）──────────────── */
   const checkAppUpdate = useCallback(async () => {
-    if (appUpdateBusy !== "idle") return;
+    /* 重入判据走唯一出口（规范 16 §16.2.4.69）：读 `appUpdateBusy` 是同一次
+     * 事件循环里判不出的（`setAppUpdateBusy` 是异步落状态的）。 */
+    if (!appUpdateLock.tryEnter()) return;
     setAppUpdateBusy("checking");
     setAppUpdateMessage(null);
     const result = await checkAppUpdateClient();
@@ -811,10 +834,11 @@ export function useSettingsPage(): SettingsPageController {
     setAppUpdateVersion(result.update?.version ?? null);
     setAppUpdateCurrent(result.update?.currentVersion ?? null);
     setAppUpdateMessage(result.detail);
-  }, [appUpdateBusy]);
+    appUpdateLock.exit();
+  }, [appUpdateLock]);
 
   const installAppUpdate = useCallback(async () => {
-    if (appUpdateBusy !== "idle") return;
+    if (!appUpdateLock.tryEnter()) return;
     setAppUpdateBusy("installing");
     setAppUpdateMessage(null);
     setAppUpdateProgress({ downloaded: 0 });
@@ -827,7 +851,8 @@ export function useSettingsPage(): SettingsPageController {
     setAppUpdateMessage(
       result.triggered ? "更新已安装，应用即将重启…" : result.detail,
     );
-  }, [appUpdateBusy]);
+    appUpdateLock.exit();
+  }, [appUpdateLock]);
 
   const relaunchApp = useCallback(async () => {
     const result = await relaunchAppClient();
@@ -864,13 +889,16 @@ export function useSettingsPage(): SettingsPageController {
     ollamaStoppingRef.current = true;
     /* 「停止 → 重新探测」两段都跑（无论成败状态行都要对齐），
      * 所以探测不进 `action` —— 它在 finally 的语义上，不在成功分支上。 */
-    await runAsyncAction(() => stopOllamaClient(), {
-      report: showFlash,
-      failureText: "关闭 Ollama 失败",
-      successText: "Ollama 已关闭",
-    });
-    setOllamaStopping(false);
-    ollamaStoppingRef.current = false;
+    try {
+      await runAsyncAction(() => stopOllamaClient(), {
+        report: showFlash,
+        failureText: "关闭 Ollama 失败",
+        successText: "Ollama 已关闭",
+      });
+    } finally {
+      setOllamaStopping(false);
+      ollamaStoppingRef.current = false;
+    }
     // 停止后重新探测，状态行回到「未运行」
     if (llmBaseUrl) await probeOllama(llmBaseUrl);
   }, [llmBaseUrl, probeOllama, showFlash]);
@@ -884,37 +912,40 @@ export function useSettingsPage(): SettingsPageController {
       /* 这一处**同时**要「反馈通道」与「返回值给调用方继续用」：
        * 出口的返回值正是为此给的（收口前这里是 `catch` 里再拼一次
        * `errorMessage` 并 return 一个 `{ok,error}`）。 */
-      const result = await runAsyncAction(
-        async () => {
-          // option C：把「本地候选(字符串) + 远端独立模型(对象)」合并成一整份清单
-          // 发给 configSave，由服务端按「字符串 vs 对象」各自写回 llmConfig / remoteModel 表。
-          const payloadExtra: Array<string | RemoteModelEntry> = [
-            ...draft.localCandidates,
-            ...draft.extraModels,
-          ];
-          await saveLlmCfg.mutateAsync({
-            provider: draft.provider,
-            apiKey: llmApiKey || undefined,
-            baseUrl: draft.baseUrl,
-            model: draft.model,
-            extraModels: payloadExtra,
-            temperature: draft.temperature,
-            temperatureByTask: draft.temperatureByTask,
-            maxTokens: draft.maxTokens,
-          });
-          if (llmApiKey) setLlmApiKey("");
-          await llmQ.refetch();
-        },
-        {
-          report: showFlash,
-          failureText: "保存失败",
-          successText: "LLM 配置已保存",
-        },
-      );
-      setSaving(false);
-      return result.ok
-        ? { ok: true as const }
-        : { ok: false as const, error: result.detail };
+      try {
+        const result = await runAsyncAction(
+          async () => {
+            // option C：把「本地候选(字符串) + 远端独立模型(对象)」合并成一整份清单
+            // 发给 configSave，由服务端按「字符串 vs 对象」各自写回 llmConfig / remoteModel 表。
+            const payloadExtra: Array<string | RemoteModelEntry> = [
+              ...draft.localCandidates,
+              ...draft.extraModels,
+            ];
+            await saveLlmCfg.mutateAsync({
+              provider: draft.provider,
+              apiKey: llmApiKey || undefined,
+              baseUrl: draft.baseUrl,
+              model: draft.model,
+              extraModels: payloadExtra,
+              temperature: draft.temperature,
+              temperatureByTask: draft.temperatureByTask,
+              maxTokens: draft.maxTokens,
+            });
+            if (llmApiKey) setLlmApiKey("");
+            await llmQ.refetch();
+          },
+          {
+            report: showFlash,
+            failureText: "保存失败",
+            successText: "LLM 配置已保存",
+          },
+        );
+        return result.ok
+          ? { ok: true as const }
+          : { ok: false as const, error: result.detail };
+      } finally {
+        setSaving(false);
+      }
     },
     [llmApiKey, saveLlmCfg, llmQ, showFlash],
   );
@@ -927,17 +958,24 @@ export function useSettingsPage(): SettingsPageController {
   const savePrefs = useCallback(async () => {
     if (!settingsDraft) return;
     setSaving(true);
-    await runAsyncAction(
-      async () => {
-        await saveSetting.mutateAsync(settingsDraft);
-        await settingsQ.refetch();
-        // 形态是「配置路径的目录形态」的函数：路径可能刚被改过，立即重判定一次
-        // （不必等 5s 轮询，也不该再走一次秒级运行态探测）。
-        await comfyInstanceQ.refetch();
-      },
-      { report: showFlash, failureText: "保存失败", successText: "偏好已保存" },
-    );
-    setSaving(false);
+    try {
+      await runAsyncAction(
+        async () => {
+          await saveSetting.mutateAsync(settingsDraft);
+          await settingsQ.refetch();
+          // 形态是「配置路径的目录形态」的函数：路径可能刚被改过，立即重判定一次
+          // （不必等 5s 轮询，也不该再走一次秒级运行态探测）。
+          await comfyInstanceQ.refetch();
+        },
+        {
+          report: showFlash,
+          failureText: "保存失败",
+          successText: "偏好已保存",
+        },
+      );
+    } finally {
+      setSaving(false);
+    }
   }, [settingsDraft, saveSetting, settingsQ, comfyInstanceQ, showFlash]);
 
   /* ── 按任务温度 ─────────────────────────────────────────── */

@@ -401,6 +401,14 @@ const LIB_SCANNED_RULES = new Set([
    *     的客户端转发。 */
   "P63",
   "P64",
+  /* 本批两条（§16.2.4.69 / §16.2.4.71）—— 两条的落点都**横跨两侧**：
+   *   · **P65**（异步动作的忙碌位）—— 收口前的 20 处里过半在
+   *     `app/(main)/settings` 与 `components/studio/hooks`（逻辑层），
+   *     出口 `~/components/ui/use-busy-action` 也在视图层；
+   *   · **P66**（重入闸门）—— 收口前的自建闸门在 `ui/use-copy-feedback`
+   *     与 `ui/use-external-action`（两个 `ui/` 基元），出口在 `lib/`。 */
+  "P65",
+  "P66",
 ]);
 
 const SCAN_DIRS = [
@@ -878,6 +886,13 @@ const EXEMPT_FILES = {
         "失败后**无论如何**都要刷新状态行）。三支各说各话、且都带 `await` 的" +
         "副作用，挪进出口会把 `guard` / `finally` / `successText` 三处钩子都" +
         "占满 —— 比留在原地更难读。该文件其余的 12 条动作已全部走出口。",
+    },
+  ],
+  P66: [
+    {
+      re: /^src\/components\/ui\/use-reentrancy-lock\.ts$/,
+      reason:
+        "出口自身的实现（`lockedRef` 就是这把闸门 —— 本判据数的是**别处**又自建了一份）。",
     },
   ],
   P63: [
@@ -2892,6 +2907,113 @@ const RULES = {
       return hits.length;
     },
   },
+
+  /* ── P65「一次异步动作的忙碌位的复位写在成功路径上」（硬闸，§16.2.4.71）──
+   * 全库 20 处「先置忙碌位、跑完再复位」的执行态把复位写在**成功路径**上
+   *（`await …; setBusy(false);`）而不是 `finally` 里。差别是静默的：
+   * 动作只要抛错（网络异常、`await` 之后那一行 `setXxx` 抛、`runAsyncAction`
+   * 之外的任何一行），忙碌位就**永远停在 true** —— 界面从此显示「正在保存…」，
+   * 按钮再也点不动，只有刷新页面才恢复。设置页的 6 个启动 / 关闭动作、
+   * 工坊两个批处理、影片台、训练页、登录页都在这一族里。
+   *
+   * 判据锚**「复位的位置」**这一形态，不锚 API、不锚名字：
+   *   · `setX(true)` 与 `setX(false)` 同现（该 setter 有忙 / 闲两态）；
+   *   · 两者之间跨了 `await`（它是「一次异步动作」的执行态，不是同步开关）；
+   *   · 而 `setX(false)` 之前**没有** `finally` / `catch`（复位只在成功路径上）。
+   * **刻意不数**「复位写在 `finally` 里」的那些 —— 那形态本身是对的
+   *（`use-workflow-detail-loader` 的竞态令牌、`use-custom-nodes-settings`
+   * 的按子包忙碌位都属于这一类），数它们只会逼人改坏代码。
+   *
+   * 出口：`~/components/ui/use-busy-action` 的 `useBusyAction`（复位绑在
+   * `finally` 上、卸载守卫、不吞错），store 级忙碌位见
+   * `~/components/update-check/update-check-store` 的 `runChecking`。
+   */
+  P65: {
+    label:
+      "把一次异步动作的忙碌位复位写在成功路径上（应使用 ~/components/ui/use-busy-action 的 useBusyAction）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/components\/ui\/use-busy-action"/.test(t2)) return 0;
+      const decl =
+        /const\s*\[\s*\w+\s*,\s*(set[A-Z][\w$]*)\s*\]\s*=\s*(?:React\.)?useState\s*\(/g;
+      const setters = new Set();
+      let m;
+      while ((m = decl.exec(t2)) !== null) setters.add(m[1]);
+      let hits = 0;
+      for (const setter of setters) {
+        const off = new RegExp("\\b" + setter + "\\(\\s*false\\s*\\)");
+        if (!off.test(t2)) continue;
+        const on = new RegExp(
+          "\\b" + setter + "\\(\\s*true\\s*\\)",
+          "g",
+        );
+        let o;
+        while ((o = on.exec(t2)) !== null) {
+          /* 取置忙之后的一段，够跨过动作体（含 NDJSON 流式消费那种长回调）。 */
+          const window = t2.slice(o.index, o.index + 1500);
+          const offAt = window.search(off);
+          if (offAt < 0) continue;
+          const awaitAt = window.search(/\bawait\b/);
+          if (awaitAt < 0 || awaitAt > offAt) continue;
+          const before = window.slice(0, offAt);
+          if (/\bfinally\b/.test(before) || /\bcatch\b/.test(before)) continue;
+          hits++;
+        }
+      }
+      return hits;
+    },
+  },
+
+  /* ── P66「一次异步动作的重入闸门」（硬闸，§16.2.4.69）──────────────────
+   * 同一件事全库有三种做法：**没有**闸门（靠读 state 判，而 `setState` 是
+   * 异步的，同一次事件循环里两次点击都读到 `false`）、**自建 ref 闸门**
+   *（`const xxRef = useRef(false)` + 读它判重入 + 置位 / 复位各一处）、
+   * 以及出口。第二族此前散在五个文件里，每个都写了同一段样板、且复位分散。
+   *
+   * 判据锚**「自建的重入闸门」这一形态**：一个 `useRef` 声明的名字带
+   * `busy` / `pending` / `inflight` / `locked` / `running` / `checked`，
+   * 且在同一段里有 **写**（`.current = …`）与**至少两处读**（判重入 + 复位）。
+   * `useReentrancyLock` 自己那份实现在 EXEMPT_FILES 里显式登记。
+   *
+   * **刻意不数**纯「最近一次的值」ref（`justDraggedRef` / `prevXRef` /
+   * `projectIdRef` 这类镜像 ref）：它们只读不写、或只写一次，不是闸门。
+   * 形态上的分界线是**名字所指的语义**与**写 + 两读**这两个条件同时成立。
+   *
+   * 出口：`~/components/ui/use-reentrancy-lock` 的 `useReentrancyLock`（同步 `tryEnter` /
+   * `exit`）/ `createReentrancyLock`（跨组件实例、非 hook 场景）。
+   */
+  P66: {
+    label:
+      "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/components\/ui\/use-reentrancy-lock"/.test(t2)) return 0;
+      const decl =
+        /(?:const|let)\s+(\w+)\s*=\s*(?:React\.)?useRef\s*\(/g;
+      let m;
+      let hits = 0;
+      while ((m = decl.exec(t2)) !== null) {
+        const name = m[1];
+        /* 只认「闸门语义」的名字 —— 镜像 ref / 计数 ref 不算。 */
+        if (!/busy|pending|inflight|locked|running|checked/i.test(name))
+          continue;
+        const window = t2.slice(m.index, m.index + 900);
+        const writes = (
+          window.match(
+            new RegExp("\\b" + name + "\\.current\\s*=", "g"),
+          ) || []
+        ).length;
+        const reads = (
+          window.match(new RegExp("!?\\b" + name + "\\.current", "g")) || []
+        ).length;
+        if (writes >= 1 && reads >= 2) hits++;
+      }
+      return hits;
+    },
+  },
+
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -3210,7 +3332,10 @@ function main() {
   P48 自写宽松对象视图 / P49 自写文件名安全化 /
   P50 自写数字精度格式化 / P51 自写去重合并 / P52 自拼自切 data URL /
   P53 手写键盘键判据 / P54 自写 SGR 转义序列 / P55 自写书写法换算 /
-  P56 手工把路径变成展示文本 / P57 自写 props 剔除表 / P58 自写异步超时 race，须为 0）：${hardGateHits(now).length} 处`,
+  P56 手工把路径变成展示文本 / P57 自写 props 剔除表 / P58 自写异步超时 race /
+  P59 手写数值夹取 / P60 自写大写归一 / P61 裸写应用事件 /
+  P62 自写事件值改写样板 / P63 自写分页与窗口切片 / P64 高频进度回调直写 state /
+  P65 忙碌位复位写在成功路径上 / P66 自建重入闸门，须为 0）：${hardGateHits(now).length} 处`,
   );
 
   if (problems.length) {
@@ -3244,7 +3369,9 @@ function main() {
         "  往画布放节点 → ~/lib/project-canvas/canvas-helpers 的 placeCanvasNode；\n" +
         "  等一帧再做事 → ~/lib/next-frame 的 onNextFrame / afterNextPaint；\n" +
         "  复制之后的反馈 → ~/components/ui/use-copy-feedback 的 useCopyFeedback；\n" +
-        "  REST 入参收窄 → ~/server/lib/request-body 的 readJsonRecord（`unknown` 收窄用 ~/lib/is-record 的 isRecord）。\n" +
+        "  REST 入参收窄 → ~/server/lib/request-body 的 readJsonRecord（`unknown` 收窄用 ~/lib/is-record 的 isRecord）；\n" +
+        "  异步动作的忙碌位 → ~/components/ui/use-busy-action 的 useBusyAction（复位绑在 finally 上）；\n" +
+        "  同一时刻只跑一件 → ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);

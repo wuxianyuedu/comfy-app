@@ -23,6 +23,15 @@ export interface UpdateCheckState {
   setEnabled: (value: boolean) => void;
   applyResult: (groups: UpdateGroup[], dirty: boolean) => void;
   setChecking: (value: boolean) => void;
+  /**
+   * 跑一次手动检测：置忙 → 跑 → **无论如何**复位（规范 16 §16.2.4.71）。
+   *
+   * 忙碌位住在 store 里（多个非嵌套组件都要读它），所以它不能走
+   * `~/components/ui/use-busy-action` 那份组件级实现 —— 但「复位绑在
+   * `finally` 上」这条判据是同一个：收口前检测器自己写 `try/finally`，
+   * 而任何一处漏掉就会让「检测中」永远留在按钮上（按钮再也点不动）。
+   */
+  runChecking: <T>(action: () => Promise<T>) => Promise<T>;
   clearDirty: () => void;
   /** 由挂载的轮询 Provider 注册的手动检测实现；未挂载时为 null */
   manualImpl: (() => Promise<boolean>) | null;
@@ -38,6 +47,14 @@ export const useUpdateCheckStore = create<UpdateCheckState>((set) => ({
   setEnabled: (value) => set({ enabled: value }),
   applyResult: (groups, dirty) => set({ groups, dirty }),
   setChecking: (value) => set({ checking: value }),
+  runChecking: async (action) => {
+    set({ checking: true });
+    try {
+      return await action();
+    } finally {
+      set({ checking: false });
+    }
+  },
   clearDirty: () => set({ dirty: false, groups: [] }),
   registerManual: (impl) => set({ manualImpl: impl }),
 }));

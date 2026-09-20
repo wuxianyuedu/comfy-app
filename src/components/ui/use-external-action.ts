@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   emptyTargetText,
@@ -10,6 +10,7 @@ import {
   type ExternalTarget,
 } from "~/lib/external-open";
 import { errorMessage } from "~/lib/error-message";
+import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 
 /**
  * useExternalAction —— 「触发一次外部动作」的**执行态样板**的唯一出口
@@ -95,15 +96,15 @@ export function useExternalAction({
   report,
 }: ExternalActionOptions): ExternalActionResult {
   const [busy, setBusy] = useState(false);
-  /* 用 ref 而不是读 `busy` 状态判重入：同一次事件循环里连点两下时，
-   * `setBusy(true)` 还没提交，第二次调用读到的 `busy` 仍是 `false` ——
-   * 那正是「双击发两次请求」的成因。ref 是同步写入的，挡得住。 */
-  const busyRef = useRef(false);
+  /* 重入判据收在唯一出口里（规范 16 §16.2.4.69）—— 用同步 ref 而不是读
+   * `busy` 状态：同一次事件循环里连点两下时，`setBusy(true)` 还没提交，
+   * 第二次调用读到的 `busy` 仍是 `false`，那正是「双击发两次请求」的成因。
+   * 忙碌位仍然由本 hook 持有（界面要用），两者是两件事。 */
+  const lock = useReentrancyLock();
 
   const run = useCallback<ExternalActionResult["run"]>(
     async (action, guard) => {
-      if (busyRef.current) return;
-      busyRef.current = true;
+      if (!lock.tryEnter()) return;
       setBusy(true);
       try {
         if (guard && !(await guard())) return;
@@ -113,11 +114,11 @@ export function useExternalAction({
       } catch (error) {
         report("err", errorMessage(error, externalFailureText(target)));
       } finally {
-        busyRef.current = false;
+        lock.exit();
         setBusy(false);
       }
     },
-    [report, target],
+    [lock, report, target],
   );
 
   const runWithTarget = useCallback<ExternalActionResult["runWithTarget"]>(

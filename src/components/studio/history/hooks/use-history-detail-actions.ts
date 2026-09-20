@@ -11,6 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { downloadJson } from "~/lib/browser-io";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { detectFolderHelper } from "~/lib/external-open";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 
@@ -68,15 +69,19 @@ export function useHistoryDetailActions(
   const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(
     null,
   );
-  const [openFolderBusy, setOpenFolderBusy] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  /* 两个忙碌位走唯一出口（规范 16 §16.2.4.71）：`downloading` 的复位此前
+   * 写在动作之后，`runAsyncAction` 之外的任意一行抛错就永远停在「下载中」。 */
+  const openFolderAction = useBusyAction();
+  const downloadAction = useBusyAction();
 
   /* 反馈通道的适配只做一次（`toast` 的身份在 Provider 里是稳定的）。 */
   const report = useMemo(() => toastReport(toast), [toast]);
 
   const openFolder = useCallback(
     async (taskId: string) => {
-      setOpenFolderBusy(true);
+      /* 忙碌位走唯一出口（规范 16 §16.2.4.71）；这里手写 `try/finally` 是因为
+       * 动作体里要在多处提前落 UI（不是单个 `run` 能表达的形状）。 */
+      openFolderAction.set(true);
       try {
         const result = await deps.openFolder(taskId);
         if (result.comfyappUrl) {
@@ -127,10 +132,10 @@ export function useHistoryDetailActions(
           { report, failureText: "打开目录失败" },
         );
       } finally {
-        setOpenFolderBusy(false);
+        openFolderAction.set(false);
       }
     },
-    [deps, toast, report],
+    [deps, toast, report, openFolderAction],
   );
 
   /* 路径复制走 toast 通道（这一族动作的既有表现层选择）。反馈形态是调用处
@@ -147,29 +152,29 @@ export function useHistoryDetailActions(
 
   const downloadWorkflow = useCallback(
     async (taskId: string) => {
-      setDownloading(true);
       /* 「拿到快照 → 落盘」这一整段走同一个出口：成功静默（文件已经在
        * 浏览器的下载目录里，再弹一句是噪声），失败走 `errorMessage`。 */
-      await runAsyncAction(
-        async () => {
-          const result = await deps.fetchWorkflow(taskId);
-          if (!result?.workflow) return false;
-          downloadJson(result.workflow, "workflow.json");
-          return true;
-        },
-        { report, failureText: "下载失败" },
+      await downloadAction.run(() =>
+        runAsyncAction(
+          async () => {
+            const result = await deps.fetchWorkflow(taskId);
+            if (!result?.workflow) return false;
+            downloadJson(result.workflow, "workflow.json");
+            return true;
+          },
+          { report, failureText: "下载失败" },
+        ),
       );
-      setDownloading(false);
     },
-    [deps, report],
+    [deps, report, downloadAction],
   );
 
   const dismissFolderPopover = useCallback(() => setFolderPopover(null), []);
 
   return {
     folderPopover,
-    openFolderBusy,
-    downloading,
+    openFolderBusy: openFolderAction.busy,
+    downloading: downloadAction.busy,
     openFolder,
     downloadWorkflow,
     copyPath,

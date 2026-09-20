@@ -25,6 +25,7 @@ import type {
   UsageTestResult,
 } from "~/lib/llm/usage-test-client";
 import type { RemoteModelEntry, RemoteModelKind } from "~/lib/llm/types";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { validateRemoteModelFields } from "~/lib/llm/remote-model-schema";
 
 import type { ReadySettingsPageController } from "./use-settings-page";
@@ -187,7 +188,8 @@ export function useRemoteModelDialogs(
     model: "",
     kind: "chat",
   });
-  const [testing, setTesting] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const testBusy = useBusyAction();
   const [testMsg, setTestMsg] = useState<{
     kind: "ok" | "err";
     text: string;
@@ -241,7 +243,7 @@ export function useRemoteModelDialogs(
   }
 
   async function testConnection() {
-    setTesting(true);
+    testBusy.set(true);
     setTestMsg(null);
     try {
       /* 编辑态 API Key 留空 = 沿用该条目已保存的密钥去测（「留空不改」） */
@@ -256,7 +258,7 @@ export function useRemoteModelDialogs(
       setTestMsg({ kind: out.ok ? "ok" : "err", text: out.detail });
       setSuggestions(out.ok && out.models ? out.models.slice(0, 40) : []);
     } finally {
-      setTesting(false);
+      testBusy.set(false);
     }
   }
 
@@ -460,7 +462,7 @@ export function useRemoteModelDialogs(
     addError,
     clearKey,
     setClearKey,
-    testing,
+    testing: testBusy.busy,
     testMsg,
     suggestions,
     submitDialog,

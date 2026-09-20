@@ -5,6 +5,7 @@ import { Trash } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { FormField } from "~/components/ui/form-field";
 import { Disclosure } from "~/components/ui/disclosure";
 import { AttributeMultiSelect } from "~/components/workshop/AttributeMultiSelect";
@@ -127,7 +128,9 @@ export function CharacterDesigner({
   portrait,
 }: Props) {
   const [brief, setBrief] = React.useState("");
-  const [genBusy, setGenBusy] = React.useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：这段 try/catch/finally 此前把
+   * 「置忙 → 生成 → 复位」写了一遍，且复位只在 finally 里落一次。 */
+  const gen = useBusyAction();
   /** 一句话生成角色：流式原始输出（执行日志） */
   const [genProgress, setGenProgress] = React.useState("");
   /** 一句话生成角色：成功/状态提示 */
@@ -218,18 +221,19 @@ export function CharacterDesigner({
     // 一句话生成可独立于全局配置选 本地/远端 模型：genSel 为空则沿用全局 config。
     const provider = genEffective.provider;
     const model = genEffective.model;
-    setGenBusy(true);
     setGenProgress("");
     setGenStatus("");
     setGenError("");
     const modelLabel = channelProviderLabel(provider);
     try {
-      const full = await streamChat({
-        messages: buildCharacterFromBriefMessages(brief),
-        // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与「从剧本提取」一致）
-        opts: model ? { provider, model } : undefined,
-        onToken: (token) => setGenProgress((prev) => prev + token),
-      });
+      const full = await gen.run(() =>
+        streamChat({
+          messages: buildCharacterFromBriefMessages(brief),
+          // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与「从剧本提取」一致）
+          opts: model ? { provider, model } : undefined,
+          onToken: (token) => setGenProgress((prev) => prev + token),
+        }),
+      );
       const r = parseCharacterFull(full);
       const character = newCharacter();
       character.name = r.name;
@@ -245,8 +249,6 @@ export function CharacterDesigner({
       setGenStatus(`已用 ${modelLabel} · ${model} 生成角色「${r.name}」`);
     } catch (e: unknown) {
       setGenError(errorMessage(e, "AI 生成失败"));
-    } finally {
-      setGenBusy(false);
     }
   }
 
@@ -463,7 +465,7 @@ export function CharacterDesigner({
             /* Enter 触发 AI 生成（Shift+Enter 不触发）；生成中不响应。 */
             {...enterCommit({
               onCommit: () => {
-                if (!genBusy) void handleAIGenerate();
+                if (!gen.busy) void handleAIGenerate();
               },
               excludeShift: true,
             })}
@@ -474,10 +476,10 @@ export function CharacterDesigner({
             variant="primary-solid"
             size="xs"
             onClick={handleAIGenerate}
-            disabled={!brief.trim() || genBusy}
+            disabled={!brief.trim() || gen.busy}
             className="h-auto rounded-lg px-3 py-2"
           >
-            {genBusy ? "生成中…" : "AI 生成"}
+            {gen.busy ? "生成中…" : "AI 生成"}
           </Button>
         </div>
         {config && !genSel && (
@@ -494,9 +496,9 @@ export function CharacterDesigner({
           </p>
         )}
         {/* 一句话生成角色的执行日志（模型调用过程/原文/成功/失败，独立展示不与提取区混杂） */}
-        {(genBusy || genProgress || genStatus || genError) && (
+        {(gen.busy || genProgress || genStatus || genError) && (
           <div className="mt-2">
-            {genBusy && (
+            {gen.busy && (
               <p className="text-primary text-xs">
                 {genProgress
                   ? "正在生成角色…"
@@ -505,7 +507,7 @@ export function CharacterDesigner({
                     } 生成角色…`}
               </p>
             )}
-            {genBusy && genProgress && (
+            {gen.busy && genProgress && (
               <Disclosure
                 defaultOpen
                 marker="caret"
@@ -579,7 +581,7 @@ export function CharacterDesigner({
                   variant="outline"
                   size="xs"
                   onClick={() => handleAICard(character)}
-                  disabled={aiAction.isBusy(character.id) || genBusy}
+                  disabled={aiAction.isBusy(character.id) || gen.busy}
                   className="border-primary-soft text-primary hover:bg-primary-soft h-auto rounded-md px-2 py-1"
                   title="用 LLM 补全外貌/服装/性格"
                 >
