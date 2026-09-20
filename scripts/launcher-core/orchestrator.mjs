@@ -32,9 +32,21 @@ import path from "node:path";
  */
 export function writeLaunchStatus(
   root,
-  { phase, progress, message, ready = false, error = false, appPort = null, staleShell = null, pnpmMismatch = null, startedAt = null },
+  {
+    phase,
+    progress,
+    message,
+    ready = false,
+    error = false,
+    appPort = null,
+    staleShell = null,
+    pnpmMismatch = null,
+    startedAt = null,
+  },
 ) {
-  const elapsed = startedAt ? Math.round((Date.now() - startedAt) / 100) / 10 : 0;
+  const elapsed = startedAt
+    ? Math.round((Date.now() - startedAt) / 100) / 10
+    : 0;
   const body = {
     phase,
     progress: Math.round(progress * 1000) / 1000,
@@ -50,10 +62,46 @@ export function writeLaunchStatus(
   try {
     const dir = path.join(root, "run");
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "launch-status.json"), JSON.stringify(body), "utf8");
+    fs.writeFileSync(
+      path.join(dir, "launch-status.json"),
+      JSON.stringify(body),
+      "utf8",
+    );
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * 单次探测就绪端点，回报三态（区分「服务没起来」与「起来了但这条路由 404」）。
+ *
+ * 为什么必须分开：Turbopack dev 偶发「会话级路由失效」（规范 §5 陈旧实例一族）
+ * 时，`next` 进程活着、端口能应答，但 `/api/health` 这类路由不进编译图、直接
+ * 404。旧的 `waitForReady` 只看 `res.ok`，把「404」和「连不上」都当成「还没就绪」
+ * 一味空等，180s 到点后回收整棵树——用户看到的就是「卡住→应用自己没了」。
+ * 把两者分开，编排器才能在「连上但持续 404」这一确切信号上做有界自愈。
+ *
+ * @param {{ port: number, host?: string, path?: string }} spec
+ * @returns {Promise<"ready" | "not-up" | "route-404">}
+ */
+export async function classifyProbe({
+  port,
+  host = "127.0.0.1",
+  path: probePath = "/api/health",
+}) {
+  try {
+    const res = await fetch(`http://${host}:${port}${probePath}`, {
+      cache: "no-store",
+    });
+    if (res.ok) return "ready";
+    // 拿到了 HTTP 应答但不是 2xx：404 是「路由没进编译图」的确切签名。
+    // 其它 4xx/5xx 不当成路由失效（那是真故障，如 500），交回上层按普通
+    // 未就绪继续等，避免把业务错误误读成缓存问题、错误地清缓存重启。
+    return res.status === 404 ? "route-404" : "not-up";
+  } catch {
+    // fetch 抛异常 = 连不上（进程还没监听）——正常的「尚未就绪」。
+    return "not-up";
   }
 }
 
@@ -74,11 +122,8 @@ export async function waitForReady({
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (isAlive && !isAlive()) return false;
-    try {
-      const res = await fetch(`http://${host}:${port}${probePath}`, { cache: "no-store" });
-      if (res.ok) return true;
-    } catch {
-      /* 还没起来：继续等 */
+    if ((await classifyProbe({ port, host, path: probePath })) === "ready") {
+      return true;
     }
     if (onTick) onTick(Math.round((deadline - Date.now()) / 1000));
     await new Promise((r) => setTimeout(r, 1000));
@@ -114,7 +159,10 @@ export function readTail(file, lines = 20) {
  */
 export function fileHasMarker(file, marker) {
   try {
-    return fs.readFileSync(file, "utf8").toLowerCase().includes(marker.toLowerCase());
+    return fs
+      .readFileSync(file, "utf8")
+      .toLowerCase()
+      .includes(marker.toLowerCase());
   } catch {
     return false;
   }
@@ -141,7 +189,12 @@ export const PORT_OWNERSHIP = {
 export async function inspectPort(port, { listenPids, belongsToRoot, root }) {
   const pids = await listenPids(port);
   if (pids.length === 0) {
-    return { ownership: PORT_OWNERSHIP.free, pids, ownPids: [], foreignPids: [] };
+    return {
+      ownership: PORT_OWNERSHIP.free,
+      pids,
+      ownPids: [],
+      foreignPids: [],
+    };
   }
   const ownPids = [];
   const foreignPids = [];
@@ -197,10 +250,20 @@ export const APP_START_SCRIPT_MARKER = "start.mjs";
  *           isAppProcess: (pid: number, cmdline: string) => boolean }} deps
  * @returns {Promise<{ ownership: string, ownPids: number[], foreignPids: number[], reclaimed: boolean }>}
  */
-export async function portOwnershipVerdict({ requestedPort, verdict, cmdlineOf, isAppProcess }) {
+export async function portOwnershipVerdict({
+  requestedPort,
+  verdict,
+  cmdlineOf,
+  isAppProcess,
+}) {
   // 空闲：没有占用者要裁。
   if (verdict.ownership === PORT_OWNERSHIP.free) {
-    return { ownership: PORT_OWNERSHIP.free, ownPids: [], foreignPids: [], reclaimed: false };
+    return {
+      ownership: PORT_OWNERSHIP.free,
+      ownPids: [],
+      foreignPids: [],
+      reclaimed: false,
+    };
   }
   // 旧判据已经认定属本检出（`pidBelongsToRoot` 命中）：不需要自证，照旧回收。
   if (verdict.ownership === PORT_OWNERSHIP.own) {
@@ -215,7 +278,12 @@ export async function portOwnershipVerdict({ requestedPort, verdict, cmdlineOf, 
   // 缺任何一条都原样返回——`ownPids` 必须留空，它是调用方唯一的回收依据，在这里
   // 顺手塞满就等于给「不回收」的结论配了一份「可以杀」的数据。
   if (!usesExplicitPort(requestedPort)) {
-    return { ownership: PORT_OWNERSHIP.foreign, ownPids: [], foreignPids: [...(verdict.foreignPids ?? [])], reclaimed: false };
+    return {
+      ownership: PORT_OWNERSHIP.foreign,
+      ownPids: [],
+      foreignPids: [...(verdict.foreignPids ?? [])],
+      reclaimed: false,
+    };
   }
 
   const appPids = [];
@@ -226,7 +294,12 @@ export async function portOwnershipVerdict({ requestedPort, verdict, cmdlineOf, 
     else restPids.push(pid);
   }
   if (appPids.length === 0) {
-    return { ownership: PORT_OWNERSHIP.foreign, ownPids: [], foreignPids: restPids, reclaimed: false };
+    return {
+      ownership: PORT_OWNERSHIP.foreign,
+      ownPids: [],
+      foreignPids: restPids,
+      reclaimed: false,
+    };
   }
   return {
     ownership: PORT_OWNERSHIP.own,

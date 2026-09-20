@@ -50,11 +50,20 @@ function moduleFingerprints(): string {
  *   · 指纹变 → 源码在本机被改过（页面还没重载到改动后的模块）。
  *
  * `force-dynamic` 且 `no-store`：构建标识必须反映此刻，不做任何缓存。
+ *
+ * 除 `buildId`（合并串）外，另单独回 `bootId` 与 `restartReason`：
+ *   · `bootId` 单独暴露，前端才能把「进程真的重启」与「只是源码 mtime 变了」
+ *     分开——只有 bootId 变才是重启，值得单独提示；
+ *   · `restartReason` 取启动器自愈重启 dev server 时注入的
+ *     `COMFYAPP_RESTART_REASON`（如陈旧路由表清缓存重启），让重启通知能说清
+ *     「为什么重启」，而不是只丢一句「服务重启了」。
  */
 export async function GET() {
-  const buildId = `${getServerBootId()}|${moduleFingerprints()}`;
+  const bootId = getServerBootId();
+  const buildId = `${bootId}|${moduleFingerprints()}`;
+  const restartReason = process.env.COMFYAPP_RESTART_REASON ?? null;
   return NextResponse.json(
-    { buildId },
+    { buildId, bootId, restartReason },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
