@@ -1,6 +1,6 @@
 # 启动与构建流程规范
 
-> 适用范围：Windows 桌面壳（{{shell.exe.prebuilt}}）启动链路、dev server、桌面壳编译与生产构建。
+> 适用范围：桌面壳（{{shell.app.exe}}）启动链路、dev server、桌面壳编译与生产构建。
 > 2026-09-02 依据当日五类启动故障的复盘制定。改流程前先读本文；改完流程必须更新本文。
 > AI 协作：本仓库根的 `AGENTS.md` 会在编码代理会话开始时自动加载，并把本文列为
 > 强制前置阅读；修改硬规则时必须同步 `AGENTS.md` 的摘要。
@@ -12,18 +12,23 @@
 
 ## 1. 启动链路与分层职责
 
-启动有**两个入口**，最终都收敛到同一份编排（`scripts/dev-launcher.mjs`）：
+启动**只有一个入口**：双击 src-tauri\target\release\{{shell.app.exe}}
+（ISSUE #784 的第二轮把 Python 启动器 `start-tauri*.exe` 整体移除）。
+所有编排都收敛到同一份实现（`scripts/dev-launcher.mjs`）：
 
 ```
-① 双击 start-tauri\{{shell.exe.prebuilt}}（scripts/start_tauri_launcher.py → PyInstaller）
-  │  职责：单实例保护、失败弹窗（人类可见出口）、run/launch-status.json 进度
-  ▼
-② 双击 src-tauri\target\release\{{shell.app.exe}}（**没有启动器这一层**，ISSUE #784）
-  │  职责：壳自己起编排器，并从启动页那条链读进度（见 §1.5）
+双击 src-tauri\target\release\{{shell.app.exe}}（**唯一入口**，没有第二层启动器）
+  │  壳自己承担的启动职责（src-tauri/src/shell_launch.rs）：
+  │    · 单实例判定与「唤起已运行实例」（single_instance）
+  │    · 运行模式：检出里有编排器 → prebuilt，没有 → standalone
+  │    · 起编排器、认亲、退出时回收整棵树 + Job Object 兜底
+  │    · 失败出口：写 run/launch-status.json，启动页显示原因
   ▼
 node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scripts/dev-launcher.ps1）
   │  职责：预检（依赖/壳时效）、进程编排、日志体系、进程树回收 —— **全平台唯一实现**
   ├─▶ src-tauri\target\release\{{shell.app.exe}}（Tauri 壳，秒出窗口）
+  │     ⚠️ 「双击壳 = 壳自己起编排器 = 编排器又起壳」是**同一形态的两条路径**：
+  │        自编排那次双击不会再起第二个壳（它这次只负责编排），见 §1.5 的说明。
   │     职责：splash 窗口展示启动进度（读 run/launch-status.json）
   │           + 「查看日志」面板（读 log/ 下启动器日志尾部，get_launch_log 命令）
   │           + 无原生标题栏（decorations: false）：窗口右上角自绘
@@ -35,14 +40,15 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
   │           （交换前做 TCP 可达性校验，失败进入重导航循环——WebView2 对导航
   │           失败同样触发 on_page_load Finished，不校验会把 Edge 错误页
   │           当成应用界面显示）
-  │           + 交换窗口默认**不抢前台**（窗口进任务栏 + 任务栏闪烁提醒），
-  │           是否给前台由启动器经 COMFYAPP_FOREGROUND 决定；窗口交接那一刻
-  │           再由启动器的复核进程复裁一次（见 §1.3）
+  │           + 交换窗口默认**不抢前台**（窗口进任务栏 + 任务栏闪烁提醒）：
+  │           双击路径的默认值收在壳里（`decide_front_when_self_launched` = false），
+  │           只有显式注入 COMFYAPP_FOREGROUND 才覆盖；「唤起已运行实例」是另一条
+  │           通道（单实例的焦点事件，明确给前台），见 §1.3
   │           + 用户关闭启动页（右上角 ✕）而主窗尚未显示 = **放弃本次启动，
   │           整个壳进程直接退出**：主窗是隐藏待命创建的，只关 splash 会留下
   │           看不见窗口的壳进程（任务栏残留、dev server 继续被拉起、稍后还会
-  │           自己把主窗弹出来）；壳退出后 dev server 由 dev-launcher 以壳退出
-  │           为锚点回收（正常交接时主窗已显示，壳自己关启动页不触发退出）
+  │           自己把主窗弹出来）；壳退出即回收编排器（它是壳的子进程），
+  │           编排器再回收它那棵树（正常交接时主窗已显示，不触发这条退出路径）
   └─▶ pnpm dev → node next dev（127.0.0.1:<解析端口>，见 §1.1；
         本检出缺省 = 路径推导值，静态兜底才是 3100）
         就绪后 splash 调 navigate_to_app → main 加载 /workspace → 交换窗口
@@ -50,17 +56,18 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
 
 分层边界（不要越层做事）：
 
-- **Python 启动器**不做进程树管理（它退出时 dev-launcher 必须还能活着继续工作；
-  `launch_dev_server` 以 `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` 起 `dev-launcher.mjs`，
-  使其脱离启动器进程树独立存活，从而能在桌面窗口关闭时回收 dev server）；
+- **Python 启动器已移除**（ISSUE #784 第二轮）：它原先的职责分给了两处 ——
+  「起编排器 / 认亲 / 回收」进壳（`shell_launch.rs`），「双击入口与开发入口」进
+  `.ps1`（`tools/start/start-tauri.ps1` / `start-tauri-dev.ps1`）。**不要再包第二层
+  exe**：多一层就多一个「关掉它窗口并不让它退出」的常驻进程，也是历史上
+  「产物目录被锁住、提示指不出占用者」那类事故的温床（§7.1.1 的判据随之删除）；
 - **`scripts/dev-launcher.mjs`** 是唯一的进程编排者：启动、预检、清理都在这一层
   （**全平台同一份**，见 §3）。`scripts/dev-launcher.ps1` 只是它在 Windows 侧的
   **调用入口**（定位项目根 → 转交 → 透传退出码），不含任何编排逻辑；
-- **Rust 壳**只负责窗口与导航，不启动任何进程（dev 模式）；
-  唯一例外是**壳自编排**（双击 {{shell.app.exe}}，见 §1.5）：此时壳是编排器的
-  父进程，起它是为了「双击一个 exe 就能用」，而不是把编排搬进 Rust —— 起什么、
-  怎么起、怎么回收都写在 `src-tauri/src/shell_launch.rs`，编排本身仍是
-  `dev-launcher.mjs` 那一份；
+- **Rust 壳**负责窗口与导航，**外加**编排宿主（双击 {{shell.app.exe}} 时，见 §1.5）：
+  此时壳是编排器的父进程，起它是为了「双击一个 exe 就能用」，而不是把编排搬进
+  Rust —— 起什么、怎么起、怎么回收都写在 `src-tauri/src/shell_launch.rs`，
+  编排本身仍是 `dev-launcher.mjs` 那一份；
 - 任何一层失败都必须有人类可见的出口（弹窗/窗口内提示），禁止只写文件。
 
 ### 1.1 端口统一配置（COMFYAPP_PORT）
@@ -86,7 +93,7 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
 | 层                        | 读取方式                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | dev-launcher.mjs          | `scripts/app-port.mjs` 的 `resolveAppPort`，用于 `pnpm dev -p`、健康检查、端口占用回收、`COMFYAPP_DEV_URL`（`.ps1` 只是入口，出口径同一处）                                                                                                                                                                                                                                      |
-| start_tauri_launcher.py   | `_read_app_port()`（.env 优先，缺省按检出路径推导），用于 `COMFYAPP_DEV_URL` 与 launch-status 的 `app_url`                                                                                                                                                                                                                                                                       |
+| shell_launch.rs（自编排） | 直接经 `single_instance::derive_app_port()` 推导并注入 `COMFYAPP_PORT` 给编排器；`COMFYAPP_DEV_URL` 由编排器按同一端口拼 |
 | Rust 壳（lib.rs）         | `default_dev_url()` 读 `COMFYAPP_PORT` 环境变量；未注入时按 `single_instance::derive_app_port()` 推导                                                                                                                                                                                                                                                                            |
 | tauri.conf.json           | `beforeDevCommand: node scripts/dev.mjs`，经 `scripts/app-port.mjs` 解析端口后启动 next dev                                                                                                                                                                                                                                                                                      |
 | `pnpm dev` / `pnpm start` | 统一经 `scripts/dev.mjs` / `scripts/start.mjs` → `scripts/app-port.mjs` 解析端口，再显式传 `-p` 给 next。**`dev` 与 `start` 都必须经脚本**：裸 `next dev` 会落 Next 默认的 3000，与 .env / 路径推导 / Playwright / 启动器找的端口对不上（2026-09-14 修 `dev` 一侧，`start` 此前已修）。`dev.mjs` 的 `-p` / `-H` 供 Windows 启动器显式覆盖，Linux / CI 直接 `pnpm dev` 即走解析值 |
@@ -108,25 +115,27 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
 > `pnpm dev` / `pnpm start` / `tauri.conf.json` 的 `beforeDevCommand` / Playwright ——
 > 它们都经 `scripts/dev.mjs` / `scripts/app-port.mjs`，缺省拿到的是**路径推导值**
 > （3200~3999）；静态链是 `tauri.conf.json` 的 `build.devUrl`（缺省写 3100）——
-> 它是**编译期内嵌的兜底值**，正常启动时被启动器注入的 `COMFYAPP_DEV_URL` 覆盖。
+> 它是**编译期内嵌的兜底值**，正常启动时被壳注入的 `COMFYAPP_DEV_URL` 覆盖。
 > 结论：**文档描述 `pnpm dev` 时写 3100 = 写错**（实测某检出推导为 3311，
 > 照 3100 打开即 `ERR_CONNECTION_REFUSED`），必须写控制台打印的
-> `[dev.mjs] COMFYAPP_PORT=<n>`；反之描述启动器 / 壳的兜底行为时，3100 才是对的。
+> `[dev.mjs] COMFYAPP_PORT=<n>`；反之描述壳的兜底行为时，3100 才是对的。
 > 两条事实在登记表里是分开的（`dev.port` / `dev.port.derived`，见
 > [reference-facts.md](../reference-facts.md) §1.1），`pnpm doc:check` 会按文档各自
 > 所属语境核对，防「用静态值给解析链文档背书」这类漏网。
 
-> **推荐经 `start-tauri.ps1` / `{{shell.exe.prebuilt}}`（launcher）启动**：launcher 会把
-> `COMFYAPP_DEV_URL` / `COMFYAPP_PORT` 注入壳进程，`tauri.conf.json` 的静态 `devUrl`
-> 仅作为兜底，不参与主导航。若绕过 launcher 直接 `pnpm tauri dev` 且改了端口，
-> 需同步修改 `src-tauri/tauri.conf.json` 的 `build.devUrl` 指向新端口。
+> **推荐双击 `{{shell.app.exe}}`**（等价入口：`tools/start/start-tauri.ps1`）：壳自己
+> 按检出路径解析端口、注入 `COMFYAPP_PORT` / `COMFYAPP_DEV_URL`，`tauri.conf.json`
+> 的静态 `devUrl` 仅是编译期兜底，不参与主导航。若绕开壳直接 `pnpm tauri dev`
+> 且改了端口，需同步修改 `build.devUrl` 指向新端口。
 
-### 1.2 comfy-cli 运行环境（python 启动器层，后台兜底）
+### 1.2 comfy-cli 运行环境（脚本侧，按需执行）
 
 raw UI-format（liblib 子图）工作流由 `src/lib/comfyui/executor-cli.ts` 交给项目内的
 comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comfy-cli\Scripts\python.exe`。
-`start_tauri_launcher.py` 的 `ensure_comfy_cli_venv()` **每次启动都后台触发一次**
-`scripts/setup-comfy-cli-venv.ps1`（不阻塞启动，独立进程组），判断逻辑全部在脚本里：
+`scripts/setup-comfy-cli-venv.ps1` 负责建 venv / 升级 / 节流，判断逻辑全部在脚本里。
+原先由 Python 启动器在每次启动时后台触发它；启动器移除后按需手工执行
+（`pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv.ps1`，
+加 `-Force` 跳过节流）：
 
 | 环境状态                         | 动作                                                      |
 | -------------------------------- | --------------------------------------------------------- |
@@ -136,8 +145,8 @@ comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comf
 
 硬约束（改这条链路前必读）：
 
-1. **启动器侧不要早退**：venv 存在也必须触发脚本，否则 venv 一旦建好就再也不会升级，
-   用户会长期停在有缺陷的旧版本上（1.17~1.19 的子图覆盖失效即此类）。
+1. **不要因为「venv 已存在」就早退**：venv 存在也必须跑脚本，否则它一旦建好就再也
+   不会升级，用户会长期停在有缺陷的旧版本上（1.17~1.19 的子图覆盖失效即此类）。
 2. **版本检查必须节流**：默认 24h 一次（状态落 `run/comfy-cli-upgrade-check.json`，
    `{ last_check_at, installed, latest }`），手工执行用 `-Force` 跳过节流。启动是高频动作，
    不节流等于每次启动都联网问 PyPI。
@@ -152,25 +161,30 @@ comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comf
 把窗口顶到最前面会把用户正在看的内容当场打断（用户可见的诉求：应用启动好
 只需在任务栏显示状态即可）。
 
-判据分两段，都不写死在壳里：
+判据只有两段，都在壳里（原先「判决」那一段在 Python 启动器里，随它一起移除）：
 
-| 段                     | 位置                                                         | 职责                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 判决（启动期，一次性） | `scripts/start_tauri_launcher.py` 的 `decide_foreground()`   | 决定本次启动是否允许给前台；结果写环境变量 `COMFYAPP_FOREGROUND`（`1`/`0`），由 dev-launcher.mjs 透传给壳                                                                                                                                                                                                                                                                                                                                                                                  |
-| 执行（窗口交换时）     | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()` | 主窗以 `focused(false)` 创建：首次 `show()` 由 tao 走 `SW_SHOWNOACTIVATE`——窗口进任务栏但不向前台要焦点（不带它的话 `show()` 自带的激活语义会让 Windows 把前台放行给主窗）；只有判决/调用方明确要求给前台时才调 `set_focus()`，未获前台则 `request_user_attention` 请求任务栏闪烁提醒；**窗口处于最小化时先 `unminimize()`**——`show()` 走 `SW_SHOW`，对最小化窗口不还原，只把它记为前台，用户看到的是「点托盘 / 二次启动没反应」（再点一次任务栏才出来，因为那次走的是系统自己的还原路径） |
+| 段                     | 位置                                                          | 职责                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 判决（启动期，一次性） | `src-tauri/src/shell_launch.rs` 的 `read_foreground_env()` / `decide_front_when_self_launched()` | **默认拒绝**（双击启动一律不给前台）；只有显式注入 `COMFYAPP_FOREGROUND`（`1`/`0`，脚本 / 终端调用场景）才覆盖。变量留空按「未表态」处理，不当作 `0`                                                                                                                                                                                                                                                                                                                                       |
+| 执行（窗口显示时）     | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()`   | 主窗以 `focused(false)` 创建：首次 `show()` 由 tao 走 `SW_SHOWNOACTIVATE`——窗口进任务栏但不向前台要焦点（不带它的话 `show()` 自带的激活语义会让 Windows 把前台放行给主窗）；只有调用方明确要求给前台时才调 `set_focus()`，未获前台则 `request_user_attention` 请求任务栏闪烁提醒；**窗口处于最小化时先 `unminimize()`**——`show()` 走 `SW_SHOW`，对最小化窗口不还原，只把它记为前台，用户看到的是「点托盘 / 二次启动没反应」（再点一次任务栏才出来，因为那次走的是系统自己的还原路径） |
 
-`decide_foreground()` 的判决表（命中任一即允许给前台，**默认拒绝**）：
+判决表（**默认拒绝**）：
 
-| 情形                                                                     | 结果     | 为什么不算「打断」                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 前台本来就是本应用（`foreground_window_process() == {{shell.app.exe}}`） | 允许     | 用户就是从应用里重启 / 更新后重启，前台本来就是它                                                                                                                                                                                                                                                                                                 |
-| 显式冷启动（`-ColdStart` / `--cold-start`，脚本或终端拉起）              | 允许     | 命令行路径，用户在终端里等结果                                                                                                                                                                                                                                                                                                                    |
-| 已有实例在跑，这次只是唤起（`--focus`，默认开）                          | 允许     | 用户点了启动就该看到界面                                                                                                                                                                                                                                                                                                                          |
-| 其余（含**双击启动**：前台是 explorer / 启动器自身）                     | **拒绝** | 双击之后切去干别的正是常态——启动期此刻前台还是双击入口，几十秒后正式窗口冒出来时用户早就在别处工作了，抢前台就是把用户当场打断（曾按「用户刚点的启动」放行，叠加交接复核的 `give` 把用户**打断两次**：第一次正式窗口弹出，用户点回别处后复核进程又把它强拉回前台）。现在双击启动一律不给前台：窗口进任务栏 + 闪烁提醒，用户处理完手上的事自己点开 |
+| 情形                                                     | 结果     | 为什么不算「打断」                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 显式注入 `COMFYAPP_FOREGROUND=1`（脚本 / 终端拉起）      | 允许     | 命令行路径，用户在终端里等结果                                                                                                                                                                                                                                                                                                                           |
+| 其余（含**双击启动**：前台是 explorer）                  | **拒绝** | 双击之后切去干别的正是常态——启动期此刻前台还是双击入口，几十秒后正式窗口冒出来时用户早就在别处工作了，抢前台就是把用户当场打断（曾按「用户刚点的启动」放行，叠加交接复核的 `give` 把用户**打断两次**：第一次正式窗口弹出，用户点回别处后复核进程又把它强拉回前台）。现在双击启动一律不给前台：窗口进任务栏 + 闪烁提醒，用户处理完手上的事自己点开 |
+
+**「再双击一次」= 唤起已运行实例，那是必须给前台的另一条通道**：第二个
+`{{shell.app.exe}}` 进程在 `run()` 早期经 `single_instance::another_instance_running()`
+判定「本检出已有实例」，向右跑的实例发焦点事件（Windows 具名事件 / POSIX `SIGUSR1`）
+后自己退出（不建窗口）。首实例的 `spawn_focus_waiter` 收到事件即以
+`request_focus = true` 显示主窗——用户显式意图，必须真的到前台。两条判据各管一段、
+互不重叠，且都不需要第二个进程去复核。
 
 ### 交接时刻的复核（`scripts/win32-window-focus.py`）
 
-只判一次不够——用户双击后去干别的可以持续几分钟，等应用真正冒出来时「双击入口还在
+只判一次不够——双击后用户切去干别的可以持续几分钟，等应用真正冒出来时「双击入口还在
 前台」这条判据早已失真；更关键的是**窗口交接那一刻 Windows 会把前台自动放行给新显示
 的主窗**：启动页窗口一直是 `WS_EX_TOOLWINDOW`（不产生任务栏按钮），主窗 `show()` 时
 任务栏按钮首次创建，Windows 把它当成「新窗口」按「用户刚启动 → 允许置前」放行。
@@ -178,12 +192,12 @@ comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comf
 这正是 ISSUE #359 修复后用户仍反馈「启动仍然抢前台」的原因。
 
 因此壳侧**不再无条件调 `set_focus()` 试探**（只在 `request_focus` / `configured`
-为真时才争取前台），并新增一个交接复核进程收尾：
+为真时才争取前台）：
 
-| 段                       | 位置                                                                                              | 职责                                                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 执行（窗口显示）         | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()`                                      | 首次显示不激活（`focused(false)` → `SW_SHOWNOACTIVATE`，窗口必须出现在任务栏）；只有显式要求给前台时调 `set_focus()`，未获前台则补任务栏闪烁 |
-| 复核（交接后，独立进程） | `scripts/start_tauri_launcher.py` 的 `spawn_foreground_watch()` → `scripts/win32-window-focus.py` | 主窗口可见后复裁一次：`give` 把前台拿到手（含键盘焦点）／`restore` 把系统自放的前台还回去／`leave` 什么都不做                                |
+| 段                       | 位置                                                                                  | 职责                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 执行（窗口显示）         | `src-tauri/src/lib.rs` 的 `show_main_window_without_focus()`                          | 首次显示不激活（`focused(false)` → `SW_SHOWNOACTIVATE`，窗口必须出现在任务栏）；只有显式要求给前台时调 `set_focus()`，未获前台则补任务栏闪烁 |
+| 复核（交接后，独立进程） | `scripts/win32-window-focus.py`（判据与执行都在这一份里；**当前没有调用方**，见下）   | 主窗口可见后复裁一次：`give` 把前台拿到手（含键盘焦点）／`restore` 把系统自放的前台还回去／`leave` 什么都不做                                |
 
 复核判决表（`decide_handoff()`，**默认什么都不做**）：
 
@@ -200,33 +214,19 @@ comfy-cli 做 UI→API 转换，解释器固定为 `<项目根>\python-venv\comf
 触发」那条路径）。复核只在交接那一刻执行一次，之后不再动前台：用户后来自己点了别处，
 就不该再被拉回去。
 
+> **这条路径目前没有调用方**：原先由 Python 启动器在三条完成路径（prebuilt / tauri dev /
+> standalone）上派发，启动器已随 ISSUE #784 移除。判据本身留在
+> `scripts/win32-window-focus.py`（纯函数、可测，且 `restore` 那条能力不可替代：
+> 主窗显示那一刻系统自动放行的前台需要有人还回去）。要重新启用它，调用方按
+> `foreground-watch.log` 的落盘约定派发即可，不要另写一份判决表。
+
 复核跑在**独立进程**而非线程：前台输入相关的动作（`AttachThreadInput` / `SendInput` /
 `SetForegroundWindow`）都绑定调用线程的输入状态，混进 GUI 线程会干扰窗口消息；
 独立进程还带 60s 超时熔断，不留常驻进程。日志：`log/launcher/foreground-watch.log`
 （交接发生在启动完成之后，那时启动器主日志已经收尾，独立落盘才排得到）。
 
-纯判定函数 `decide_handoff()` 不依赖 Win32，可在 CI 上直接测；回归测试见
-`tests/check-file-structure.test.ts` 的「窗口交接时刻的前台归属复核」用例组。
-
-启动器另有两个显式覆盖开关：`--foreground` / `--background`（调试与特殊入口用）。
-壳侧的三个调用点（main 页面加载完成交换窗口、splash 缺失时的兜底导航、150s
-安全网强制显示）统一走 `show_main_window_without_focus(handle, false)`；**只有
-用户主动唤起**（托盘「打开主界面」、二次启动的单实例回调）传 `request_focus =
-true`——这类场景的策略反过来，必须给前台。
-
-「用户再次启动已运行的实例」要闭环：二次启动的新进程会被
-`tauri-plugin-single-instance` 杀掉，运行中的实例得自己顶上来。做法是启动器在
-判定「已有实例」时立刻把 `COMFYAPP_FOREGROUND=1` 写入自身环境（连同
-`COMFYAPP_PROJECT_ROOT` 等一起被新实例继承），新实例起来后前端首次挂载调壳命令
-`should_activate_on_launch` 读到该标记，再调 `activate_main_window` 把自己带到
-前台（链路：`use-startup-foreground` → `~/lib/desktop-shell-client`）。标记放在
-壳进程里判、不放在前端读 env：非 `NEXT_PUBLIC_` 前缀的变量在客户端读不到，
-放前端会一律降级成「不给前台」。
-
-**托盘**：`build_tray()` 常驻一个系统托盘图标（左键单击 = 打开主界面，右键菜单 =
-打开主界面 / 退出），给「窗口只在任务栏、用户又切走了」提供一个稳定入口。
-关主窗仍然直接退出应用（不做「最小化到托盘」）——那需要另配重启 / 退出语义，
-不在本策略范围内。启用托盘需要 `tauri` 的 `tray-icon` feature（见 `Cargo.toml`）。
+启动页与「应用」窗口的置前是**两套判据**：启动页是用户刚点下去的直接反馈，必须出现在
+前面（`bring_splash_to_front`）；主窗才有上面这套「不打断」策略。
 
 ### 1.4 启动等待期的画面只有一个出口（ISSUE #730）
 
@@ -234,7 +234,7 @@ true`——这类场景的策略反过来，必须给前台。
 
 | 阶段                    | 画面来源                                                                          | 谁能保证                                                                       |
 | ----------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| 拉起 → 应用服务就绪     | 启动页（`src-tauri/splash-assets/{{shell.splash}}`：进度 / 日志 / 最小化 / 关闭） | 启动器 + 壳（`spawn_splash_watchdog` 把被带走的 URL 拨回来）                   |
+| 拉起 → 应用服务就绪     | 启动页（`src-tauri/splash-assets/{{shell.splash}}`：进度 / 日志 / 最小化 / 关闭） | 壳（`spawn_splash_watchdog` 把被带走的 URL 拨回来）                            |
 | 应用服务就绪 → 应用首帧 | **壳注入的加载占位**（`MAIN_LOADING_STUB_JS`）                                    | 壳的 `watch_main_first_paint`（注入）+ 应用的 `clearLaunchLoadingStub`（收尾） |
 | 应用首帧之后            | 应用自己（`src/app/layout.tsx` 起）                                               | 前端                                                                           |
 
@@ -258,11 +258,10 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
    / `__comfyappStubTimer`）写在两处就必须同源。
 
 `standalone` 模式**不注入占位**：内嵌 server 随壳一起就绪，主窗很快有画面，
-提前贴反而白闪一下（判据 `expect_slow_first_paint = launch_mode != "standalone"`，
-启动模式只在 `run()` 里读一次）。回归测试见 `tests/check-file-structure.test.ts`
+提前贴反而白闪一下（判据 `expect_slow_first_paint = launch_mode != "standalone"`）。回归测试见 `tests/check-file-structure.test.ts`
 的「主窗首帧之前由壳注入加载占位」用例。
 
-### 1.4 多检出并行（同一项目检出多份同时开发）
+### 1.6 多检出并行（同一项目检出多份同时开发）
 
 同一项目检出多份是开发期的常态，**各检出必须能同时运行、互不干扰**。为此
 启动链路做了三层按检出隔离：
@@ -270,16 +269,15 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 | 机制             | 位置                                               | 行为                                                                                                                                                                                                                                     |
 | ---------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 端口按检出推导   | §1.1（`.env` 显式值优先）                          | 各检出各自稳定的端口；两份检出不再争抢同一端口                                                                                                                                                                                           |
-| 单实例按检出隔离 | python 启动器互斥量 / Rust 壳 `single_instance.rs` | 互斥量与焦点事件名带**检出路径哈希**：同检出二次启动 → 唤起已有窗口；不同检出 → 各自独立运行                                                                                                                                             |
+| 单实例按检出隔离 | Rust 壳 `single_instance.rs` | 互斥量与焦点事件名带**检出路径哈希**：同检出二次启动 → 唤起已有窗口；不同检出 → 各自独立运行                                                                                                                                             |
 | 端口清理只动自己 | `dev-launcher.mjs` 的 `reconcilePort()`            | 回收占用端口的进程前先核对其工作目录是否落在本检出根内（`launcher-core/procs.mjs`）；外部进程（别份检出 / 其它程序）**绝不清理**，只给「改 `.env` 的 COMFYAPP_PORT」这类可行动提示。判据不清时一律不杀 —— 「猜着杀」比「说清楚」危险得多 |
 
-历史行为（已废弃）：启动器互斥量与壳单实例用全局固定名，端口清理按端口号
-无差别击杀——表现为「启动第二份检出时，把第一份检出的 dev server / 壳杀掉，
-或自己被第一份检出吞掉」。
+历史行为（已废弃）：单实例用全局固定名，端口清理按端口号无差别击杀——表现为
+「启动第二份检出时，把第一份检出的 dev server / 壳杀掉，或自己被第一份检出吞掉」。
 
-> **窗口识别也按检出**：python 启动器查找/聚焦应用窗口时核对窗口进程的 exe
-> 路径落在本检出内（`_SHELL_OWN_PREFIX`），否则另一份检出的同名壳
-> （进程都叫 {{shell.app.exe}}、标题相同）会被误认成自己的实例。
+> **窗口识别只按检出**：单实例的具名对象（Windows 互斥量 + 焦点事件 /
+> POSIX 锁文件）名字里带**检出路径哈希**，因此另一份检出的同名壳
+> （进程都叫 {{shell.app.exe}}、标题相同）不会被误认成自己的实例。
 >
 > **注意**：两份检出共用外部服务（如 ComfyUI 默认端口）的行为不变——后启动
 > 的一方会探测到已运行的实例并复用；需要隔离时在各自设置里配不同端口。
@@ -288,44 +286,53 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 
 ### 1.5 只启动一个 exe：壳自编排（ISSUE #784）
 
-用户要的形态是「双击**一个** exe 就能用」。旧链路做不到：双击的是启动器
-（{{shell.exe.prebuilt}}），它再拉起编排器与壳——任务栏上是两个图标，
+用户要的形态是「双击**一个** exe 就能用」。历史上做不到：双击的是启动器
+（`start-tauri*.exe`），它再拉起编排器与壳——任务栏上是两个图标，而
 `target\release\{{shell.app.exe}}` 直接双击则因为没人编排而加载一个连不上的
 静态 `devUrl`（内嵌错误页）。
 
-现在双击 {{shell.app.exe}} 也能起来，做法是**壳自己当编排的宿主**（不是把编排
-搬进 Rust）：
+第一轮（PR #788）让双击 `{{shell.app.exe}}` 也能起来；**第二轮（本次）把 Python
+启动器整体删除**：`start-tauri*.exe`、它的 PyInstaller spec 与三条打包脚本
+（`build-launcher*.ps1`）全部移除，`{{shell.app.exe}}` 成为唯一入口。
+「双层 exe」这个形态从此不存在，也就没有「两个同名 exe 谁是谁」的问题。
 
 | 环节                    | 判据 / 实现                                                                                                                                                      |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 谁在编排                | `COMFYAPP_LAUNCH_MODE` 环境变量。启动器一定会注入它，**它的缺席 = 没人编排我**（`LaunchContext::collect`）                                                       |
-| 起什么                  | `node scripts/dev-launcher.mjs --mode prebuilt`（`shell_launch::spawn_orchestrator`），经官方 shell 插件                                                         |
-| 起不起得来              | `can_self_launch()`：编排脚本 + `node_modules\.modules.yaml` + 关键依赖存在（只读、极快）；不满足就退回静态 `devUrl` 行为                                        |
-| 两份编排                | 起之前先用 `find_owned_orchestrator()` 查有没有**自己认领过的**编排器在跑；有就复用，绝不并发起两份（两份会争端口、互把对方的 dev server 当孤儿）                |
+| 谁在编排                | `COMFYAPP_PROJECT_ROOT` 环境变量。它**只在壳自己从 exe 位置推导出项目根时缺席**——那正是「双击 exe」。启动模式的 `COMFYAPP_LAUNCH_MODE` 现在由壳自己写（见下），不能拿它当判据（判据会随写入顺序漂） |
+| 起什么                  | `node scripts/dev-launcher.mjs --mode prebuilt`（`shell_launch::spawn_orchestrator`），经官方 shell 插件                                                                 |
+| 跑步模式                | `ensure_launch_mode()`：编排脚本在 → `prebuilt`（走 dev server）；不在 → `standalone`（走内嵌 server）。**只在 release 写**，debug 归 `pnpm tauri dev` 管 |
+| 起不起得来              | `can_self_launch()`：编排脚本 + `node_modules\.modules.yaml` + 关键依赖存在（只读、极快）；不满足时不静默 —— `mark_launch_failed()` 把原因与修法写到 `run/launch-status.json` |
+| 上一次的残留            | 起之前先用 `find_owned_orchestrator()` 找**自己认领过的**编排器（壳被强杀时 job 与进程组都可能落空，它会原地留着占端口，表现是「双击没反应」）；命中即 `reap_pid()` 回收再启动 |
 | 认亲                    | 进程环境块里的 `COMFYAPP_SHELL_OWNED=1`（只有壳写、只有它起的编排器才有）。**不按形态猜**——「有没有 dev server」「命令行里有没有项目根」都认不出是谁起的         |
-| 回收                    | 壳的 `RunEvent::Exit` → 插件 `kill()` + `scripts/reap-process.mjs`（`--detach`，自杀路径等不起 `wait`）；另挂 `KILL_ON_JOB_CLOSE` Job Object 兜住壳崩溃 / 被硬杀 |
-| 前台                    | 双击壳的人就是在等画面（`decide_front_when_self_launched`）；`COMFYAPP_FOREGROUND` 已注入时以它为准                                                              |
+| 回收                    | 壳的 `RunEvent::Exit` → 插件 `kill()` + `scripts/reap-process.mjs`（`--detach`，自杀路径等不起 `wait`）；另挂 `KILL_ON_JOB_CLOSE` Job Object 兜住壳崩溃 / 被硬杀（经 `scripts/win_job.py`，唯一实现） |
+| 前台                    | 双击一律不给（`decide_front_when_self_launched` = false）；`COMFYAPP_FOREGROUND` 已注入时以它为准。**唤起已运行实例**是另一条通道（单实例焦点事件），见 §1.3 |
 | 只 debug / release 哪边 | **只在 release**：debug 下的壳归 `pnpm tauri dev` 管，那时 dev server 由 `beforeDevCommand` 起着                                                                 |
 
-两个入口**并存且不打架**：老入口仍是「双击启动」，而它的 `launch_dev_server`
-起编排前会先查有没有壳自编排的编排器在跑（`_find_shell_owned_orchestrator`），
-命中就让位并把监控退化成「读进度 + 等窗口出现」；反过来壳起编排前也会避开
-已在跑的。回收侧，启动器的兜底补刀遇到壳自编排的编排器要让开
-（`_kill_shell_owned_pid`：它随壳退出，杀了就是把用户正在用的应用掐掉）。
+> **双击壳不会起第二个壳**：这条链看起来是「壳 → 编排器 → 壳」，实际不是。
+> 自编排那次双击里，本进程**只负责编排**（起编排器 + 当启动页宿主）；
+> 编排器起来的 `{{shell.app.exe}}` 是另一个进程，它带着启动器语义的环境
+> （`COMFYAPP_PROJECT_ROOT` / `COMFYAPP_LAUNCH_MODE` 都在），因此**不会再起第三份编排**。
+> 两个进程的窗口语义也不同：前者显示启动页并负责交接，后者是真正的应用窗口。
 
 **这一形态顺带修掉的两件事**：① 旧链路里壳只是编排器的子进程之一，python
 启动器早已退出，用户关掉主窗后整棵树能否回收取决于它退出前有没有把 Job Object
 句柄交出去；现在编排器是壳的孩子，「壳退出 → 回收编排器 → 编排器回收它自己那
-棵树」是一条没有中断的链。② 前台归属不再需要第二个进程（`win32-window-focus.py`）
-复核——壳自己知道这段编排是谁起的。
+棵树」是一条没有中断的链。② 前台归属不需要第二个进程复核（判据与执行都在壳里）。
 
-> **路径判据仍是一条**：壳与启动器都用「项目根 + `scripts/dev-launcher.mjs`」
-> 定位编排器（`orchestrator_script` / `_launcher_entry`），不各自另拼一份会漂的
-> 相对路径。
+> **路径判据仍是一条**：壳用「项目根 + `scripts/dev-launcher.mjs`」定位编排器
+> （`orchestrator_script`），不另拼一份会漂的相对路径。
+
+**失败出口（原先由启动器的弹窗承担）**：起不来时 `mark_launch_failed()` 写
+`run/launch-status.json`（`phase=error` + 可行动作），启动页据此显示原因；编排器
+的 stdout/stderr 由壳原样转发成 `[orchestrator] …` 进壳日志，点「查看日志」就是
+第一现场。**不再有第二个进程弹系统对话框**——窗口本来就开着，页面说比弹窗更贴近现场。
 
 ## 2. 启动预检（dev-launcher.mjs，新增于 2026-09-02）
 
-预检分两段：**工具链门禁**（`Test-ToolchainGate`）在预编译壳弹出**之前**执行，只做只读致命快检——命中即 throw，让 python 启动器在 Tauri 窗口出现前弹 MessageBox 告知根因（双击 exe 场景下窗口未现即弹窗）；**完整依赖预检**在壳窗口出现之后执行（见 §1：窗口秒出后再由 splash 展示进度）。
+预检分两段：**工具链门禁**在壳起编排器**之前**执行，只做只读致命快检——命中即
+throw，由 dev-launcher 把结论写进 `run/launch-status.json`（启动页显示「为什么起不来 +
+先做什么」）；**完整依赖预检**在窗口出现之后执行（见 §1：窗口秒出后再由 splash 展示进度）。
+两侧的口径都收在 `scripts/dev-launcher.mjs` / `launcher-core/*`，**没有第二份实现**。
 
 ### 2.1 工具链门禁（弹壳前，只读快检，任一失败立即终止并弹窗）
 
@@ -409,7 +416,7 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 这类现场里正好是 prepare 成功、`pnpm -v` 依旧起不来 —— 只报 prepare 成功
 等于把「修好了」当结论，用户下一次启动会原封不动再撞一次。
 
-#### 2.1.4 独立自查入口：**与启动器同一条口径**（ISSUE #576）
+#### 2.1.4 独立自查入口：**与编排器同一条口径**（ISSUE #576）
 
 `pnpm check:toolchain` → `scripts/check-pnpm-available.mjs`，登记在 §9.5 对照表。
 启动被门禁拦下之后，用户需要的是「只跑一次自查、看清结论与动作」，而不是反复双击
@@ -428,7 +435,7 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 | 探到的是「哪个 pnpm」          | 日志里记选中的可执行文件（`commandInvocation()`）                                               | 另打印「选中的 pnpm：<文件>」与「经宿主执行：<宿主> → <文件>」两行（§2.1.5）                                        |
 
 > 反例（已修）：自检此前只对版本不一致打一句 `[WARN]`、什么也不做，还以 0 退出；
-> 而启动器在同一情形下会自己 corepack 对齐。用户看到的是「排查完了、没办法」，
+> 而编排器在同一情形下会自己 corepack 对齐。用户看到的是「排查完了、没办法」，
 > 只能手动跑 corepack —— **自检与真启动两套说法**，正是 §9.5「一份逻辑两端复用」
 > 要消灭的形态。判据（`probePnpm` / `preparePnpm`）与动作（对齐 + 复核）现在都在
 > `corepack.mjs`，自检与 `reconcilePnpmVersion()` 各调用一次，不各写一份。
@@ -460,13 +467,13 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 
 #### 2.1.6 内层 spawn pnpm 也必须走同一个形态判据（ISSUE #576 第五轮）
 
-第五轮现场（用户第二次双击 `{{shell.exe.prebuilt}}`）：启动页报
+第五轮现场（用户第二次双击桌面壳）：启动页报
 `应用启动失败：启动进程 dev-launcher.mjs 提前退出（exit=1）`，而 `dev-launcher.log`
 里 `dev server 已启动（PID …）` 之后**两秒**就出现 `dev server 自身退出（exit=0）`，
 `最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=3734 host=127.0.0.1`，stderr 全空。
 用户的反馈是「还是看不出那有问题，日志需要详细」。
 
-根因在**编排器之下**：`scripts/dev.mjs`（`pnpm dev` 的入口，由启动器 spawn）当时写死
+根因在**编排器之下**：`scripts/dev.mjs`（`pnpm dev` 的入口，由编排器 spawn）当时写死
 `spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", …)`。Windows 上批处理
 只有 cmd.exe 会解释，**Node 起它会失败**（实测 `EINVAL`，正是 §2.1.1 已记录的那条判据），
 于是 `result.status === null`，而旧代码 `process.exit(result.status ?? 0)` 把它读成
@@ -491,10 +498,11 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 用户照着弹窗给的路径去翻，看到的是别的失败现场。现在把本次起的
 `nextOut` / `nextErr` **直接传进**收尾函数，不再按名字猜（`lastNextLog` 已删除）。
 
-失败弹窗（`_build_failure_message`）同时补齐最关键的现场：除了启动器两侧，
-还贴出 **dev server 自己的输出尾部**（`log/nextjs/nextjs-stderr-*.log`，取
-**mtime 最新**的一份 —— 不按文件名字典序，理由同上）与「下一步」（`pnpm check:toolchain`），
-让用户不必再去翻别处。
+**失败出口现在只有一处**（原先那一对是「python 启动器弹窗 + 启动页面板」）：
+编排起不来时壳写 `run/launch-status.json`（`mark_launch_failed`），启动页把原因
+与可行动作显示出来；编排器自己的 stdout/stderr 被壳原样转发成 `[orchestrator] …`
+进壳日志，「查看日志」面板就是第一现场。**不要再让失败依赖一个系统对话框**：
+它只在「双击后还没有窗口」时才有意义，而壳的启动页窗口本来就是先出现的那个。
 
 #### 2.1.7 门禁与工具脚本同样走同一个形态判据（ISSUE #638）
 
@@ -543,7 +551,7 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 
 按顺序执行，任一失败立即终止并展示日志尾部：
 
-1. **残留壳清理**：按命令行匹配终止上次运行遗留的同项目 {{shell.app.exe}}（防窗口叠加）。
+1. **残留编排器清理**：按进程环境块的 `COMFYAPP_SHELL_OWNED=1` 认出上一次运行遗留的编排器并回收（壳被硬杀时 job 与进程组都可能落空，它会原地占着端口，表现是「双击没反应」）。**壳本身**不在这里清理：同一检出的二次双击由壳自己的单实例判定拦下（只把已有窗口唤到前台）。
 2. **端口清理**：杀掉**本检出端口族**的监听进程——族 = `Get-AppPort` 的解析端口
    `[COMFYAPP_PORT, +1, +2]`（端口缺省时为路径推导值，静态兜底 3100 只是该族的一个
    特例，**不要写成写死的 3100/3101/3102**：那会在推导端口上留下残留实例，新实例
@@ -655,7 +663,7 @@ Windows 分支只在 win32 上断言命令构造。
 POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tcp` 解析、
 真起监听 socket 的 fd 交集、失败路径返回 null）。
 
-### 3.2 编排器入口（`dev-launcher.ps1` / 启动器 exe / Build-Guard.ps1）
+### 3.2 编排器入口（`dev-launcher.ps1` / 壳 / Build-Guard.ps1）
 
 > 编排的**唯一实现**是 `scripts/dev-launcher.mjs`（§3.3）。Windows 侧只保留
 > 「怎么被拉起」这一层入口，`taskkill` 之类的平台命令一律不在入口里。
@@ -666,21 +674,15 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 - `scripts/entry-common.ps1` 的 `Get-ProjectRoot` 判据是 `scripts/dev-launcher.mjs`
   （编排器的唯一实现），**不是** `.ps1` —— 判据绑在入口形态上，换入口时就会
   静默失效一次（本仓库已经栽过一回，见 §9.3 的 `looks_like_project_root`）。
-- **桌面壳进程树由编排器回收**，入口侧只保留两条兜底（都是历史事故换来的）：
-  - 编排器启动前按「exe 真实路径落在本仓库 `src-tauri/target/{release,debug}`」
-    回收残留壳（**不要**按 `CommandLine -like` 判断：预编译壳经
-    `ProcessStartInfo(UseShellExecute=false)` 启动，命令行里不含项目根路径）；
-  - 壳拉起后把 PID 写入 `log/launcher/tauri-shell.pid`，Python 启动器的监控线程在
-    编排器退出/异常/超时路径检查该 PID，仍存活就调
-    `node scripts/reap-process.mjs <pid> --force` 补刀并删除 PID 文件；
-  - **拉起编排器之前必须先删这个 PID 文件**：它是上一轮 run 的残留，而编排器是被
-    启动器另起的进程——在它写新 PID 之前，文件里还是旧 PID。系统会复用 PID，旧号
-    很可能已归某个无关进程，兜底路径读到就会去杀不相干的东西。先删 = 窗口期内读不到，
-    语义安全。
-- **Job Object 已退场**：`KILL_ON_JOB_CLOSE` 在本机设置失败（Win32 错误 87），
-  历史上只是「WARN 后靠自身兜底」。现在兜底就是唯一路径 —— 进程组（POSIX）与
-  `taskkill /T /F`（Windows）由 `kill-process-tree` 统一执行，不再有「看起来生效
-  其实没生效」的第二套机制。
+- **桌面壳进程树由编排器回收**（壳退出 → 编排器收到 `exit` → `shutdown()` 整树回收）。
+  原先入口侧还有两条兜底（回收残留壳 + `tauri-shell.pid` 监控线程），它们随 Python
+  启动器一起删除 —— 编排器现在**就是壳的子进程**，「宿主退出 → 整棵树回收」这条链
+  没有中断点，不再需要「谁替谁补刀」的中间人。
+- **Job Object 归壳**（`shell_launch::attach_kill_on_close_job`，经
+  `scripts/win_job.py` 唯一实现）：句柄**故意不关**，壳一死 job 就关、OS 当场终止
+  整棵树；这是「壳被硬杀」时的兜底，正常路径仍走进程组 / `taskkill /T /F`
+  的统一回收（`kill-process-tree`）。两者不冲突，也不再有第二套「看起来生效
+  其实没生效」的机制。
 - pnpm 已关闭 `verifyDepsBeforeRun`（见 §6）：任何 pnpm 命令都不会隐式
   补跑 install。dev server 运行期间不要手动跑 `pnpm install`
   （better-sqlite3 等原生模块被进程锁定，install 会 EPERM）。
@@ -702,12 +704,12 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 | 平台机制   | `scripts/launcher-core/{procs,shell}.mjs`                                         | 进程与端口探测、进程组拉起、可执行文件解析                                            |
 | 进程树回收 | `src/lib/process/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                    |
 
-> **Windows Job Object 归启动器侧**：编排器（node）若崩溃 / 被硬杀，它拉起的
-> `node → pnpm → next → 桌面壳` 会残留成孤儿（锁住 `start-tauri\_internal\*.dll`）。
-> OS 级兜底是一个 `KILL_ON_JOB_CLOSE` 的 Job Object：句柄复制进编排器进程，编排器一死
-> 最后一个句柄关闭 → OS 当场终止整棵树。纯 Node 无原生 job API（要 FFI / 原生插件，违背
-> 启动器「仅标准库 + ctypes」约束），故实现在 `scripts/win_job.py`，由
-> `start_tauri_launcher.py` 在拉起编排器后 best-effort 挂载（失败即退回现有回收路径）。
+> **Windows Job Object 的实现只有一处**：编排器（node）若崩溃 / 被硬杀，它拉起的
+> `node → pnpm → next` 会残留成孤儿（占端口、锁日志）。OS 级兜底是一个
+> `KILL_ON_JOB_CLOSE` 的 Job Object：最后一个句柄关闭 → 当场终止整棵树。
+> 纯 Node 无原生 job API，故实现在 `scripts/win_job.py`（Python / ctypes），
+> **由壳在拉起编排器后 best-effort 挂载**（`shell_launch::attach_job_via_helper`；
+> 挂不上只记 WARN，退回进程组 / `taskkill /T /F` 的统一回收）。
 > POSIX 侧无 Job Object，靠 `run/launcher-session.json` + 心跳 + 杀进程组兜底（见上表）。
 
 各环节的取值来源仍是**同一事实源**，只是不再有「第二份实现」：
@@ -721,20 +723,20 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 | 孤儿线索   | `run/launcher-session.json` + `run/launcher-heartbeat.txt`             |
 | 进度快照   | `run/launch-status.json`（字段口径见 §9.3）                            |
 
-**增量决策：不在 Rust/Python 里重写平台判据。** 壳的 sidecar 回收（`kill_sidecar`）、
-**壳自编排的编排器回收（`shell_launch::reap`，§1.5）** 与 Python 启动器的兜底补刀
-都转交 `scripts/reap-process.mjs`：Rust 里再写一套 `taskkill` 分支，就是
+**增量决策：不在 Rust / Python 里重写平台判据。** 壳的 sidecar 回收（`kill_sidecar`）
+与**壳自编排的编排器回收（`shell_launch::reap` / `reap_pid`，§1.5）**都转交
+`scripts/reap-process.mjs`：Rust 里再写一套 `taskkill` 分支，就是
 「各写各的、POSIX 上退化成单杀」那条老路的翻版。
 
-> **「正在退出的宿主」用 `--detach`**：壳的 `Exit` 事件与启动器收尾只剩几十毫秒，
+> **「正在退出的宿主」用 `--detach`**：壳的 `Exit` 事件只剩几十毫秒，
 > 而默认的 `wait: true` 要等 `taskkill` 跑完。`node scripts/reap-process.mjs <pid>
 --force --detach` 改为派发即返回——命令已经落地，宿主随后退出不会把它带走。
 > 其余场景保持等待（退出码能写进日志，落没落可核对）。
 
-> **Job Object 有两个持有者，取决于谁在编排**：老链路里是 python 启动器
-> （`scripts/win_job.py` 把句柄复制进编排器）；壳自编排时由壳自己建
-> （`shell_launch::attach_kill_on_close_job`，句柄故意不关，壳一死 job 就关）。
-> 两者不冲突：同一时刻只有一条编排链在跑（认亲判据见 §1.5）。
+> **Job Object 的持有者只有一个：壳**（`shell_launch::attach_kill_on_close_job`，
+> 句柄故意不关，壳一死 job 就关）。老链路里那个「句柄复制进编排器、由编排器决定
+> 生死」的形态已随 Python 启动器删除 —— 编排器现在是壳的孩子，壳就是那个
+> 「死了一起走」的锚点，不需要再复制句柄。
 
 **进程组是本方案的地基，不是优化项**。POSIX 上没有 Job Object，而
 `spawn` 默认让子进程与编排器**同组**：此时 §3.1 的防自杀判据会禁用组路径，
@@ -813,7 +815,7 @@ dev server（Next 不认 `COMFYAPP_PORT`，必须显式传），所以**端口�
 
 ```text
 log/
-├─ launcher/           双击启动链路：python 启动器 + dev-launcher 编排与预检输出
+├─ launcher/           双击启动链路：dev-launcher 编排与预检输出、壳日志重定向
 ├─ nextjs/             Next dev server 原始输出（按次命名，保留 5 份）
 │                     + 应用服务输出转录 nextjs-panel-<boot>.log（面板「应用服务」那一路）
 ├─ services/           常驻服务运行时日志（comfyui / drizzle-studio / ollama，追加写）
@@ -830,15 +832,14 @@ log/
 | `log/launcher/dev-launcher-current.txt`                                     | dev-launcher.mjs                                                                               | 指向本次真实日志的 sentinel（log 被锁回退改名时靠它定位）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 同上                                                           |
 | `log/nextjs/nextjs-stdout-<ts>.log` `log/nextjs/nextjs-stderr-<ts>.log`     | dev-launcher.mjs 重定向                                                                        | Next dev server 原始输出；**启动失败先看 stderr**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 按次命名，保留 5 份                                            |
 | `log/nextjs/nextjs-panel-<boot>.log`                                        | Next server（`src/lib/capture-streams.server.ts`，进程启动时经 `src/instrumentation.ts` 安装） | **应用服务输出转录**：本进程 stdout/stderr 的完整副本（首屏编译错误 / Turbopack FATAL / 未捕获的服务端异常 / pino 行）。「应用日志」面板经 `GET /api/logs/current?source=app` 轮询（规范 07 §7.18.2）——此前这些输出不在任何被轮询的文件里，应用服务起不来时面板一片空白                                                                                                                                                                                                                                                                                                                                                                                                   | 按次命名（进程启动标识），保留 5 份                            |
-| `log/launcher/dev-launcher-stderr.log`                                      | python 启动器重定向                                                                            | pwsh 的 stderr + {{shell.app.exe}} 的 `[ComfyAPP]` 诊断行（dev 下壳诊断经 log:: → Stderr target 仍落这里）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 每次启动覆盖                                                   |
+| `log/launcher/dev-launcher-stderr.log`                                      | 壳（dev 下经 log:: → Stderr）                                                                   | 壳自己的 `[ComfyAPP]` 诊断行 + `[orchestrator] …`（壳转发的编排器 stdout/stderr，见 §1.5）。**双击链路的第一现场就是它**：`log/launcher/` 下按次命名，保留 5 份                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 按次命名，保留 5 份                                            |
 | `log/shell/shell.log`                                                       | Tauri 壳（tauri-plugin-log，release 构建）                                                     | 壳自持日志：导航/看门狗/侧车/窗口交换等 `[ComfyAPP]` 诊断（standalone 双击无 launcher 重定向时的兜底落盘）；get_launch_log 启动面板尾部追加展示                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | KeepOne 轮转                                                   |
-| `log/launcher/start-tauri-launcher.log`                                     | python 启动器                                                                                  | 双击→pwsh→窗口检测的链路日志                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 超过 512KB 轮转，保留 5 份                                     |
 | `log/launcher/pnpm-install-stdout/stderr.log`                               | dev-launcher.mjs（依赖预检）                                                                   | 自动补装依赖的原始输出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 每次触发覆盖                                                   |
 | `log/launcher/drizzle-push-stdout/stderr.log`                               | dev-launcher.mjs（schema 同步）                                                                | drizzle-kit push / heal-db 的原始输出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 每次启动覆盖                                                   |
-| `log/launcher/tauri-shell.pid`                                              | dev-launcher.mjs 写 / python 启动器读+删                                                       | 本次拉起的桌面壳 PID；启动器先退出时靠它对仍存活的壳做整树回收（`node scripts/reap-process.mjs <pid> --force`，见 §3）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 每次启动覆盖，兜底回收后删除                                   |
-| `log/launcher/foreground-watch.log`                                         | python 启动器 → 交接复核进程（`scripts/win32-window-focus.py`）                                | 窗口交接时刻的前台归属裁定与执行结果（`give` / `restore` / `leave` + 句柄），排查「启动仍然抢前台」先看这里（见 §1.3）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 追加写                                                         |
-| `run/launch-status.json`                                                    | python 启动器                                                                                  | 结构化启动进度，splash 页展示；launcher 退出 30s 后自删                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | —                                                              |
-| 启动页「查看日志」面板                                                      | splash 前端轮询 `get_launch_log`                                                               | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log + log/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | —                                                              |
+| `log/launcher/tauri-shell.pid`                                              | dev-launcher.mjs 写                                                                             | 本次拉起的壳 PID（**仅供排查与外部工具参考**：编排器就是壳的子进程，回收走父子链，不再有人靠这个 PID 补刀）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 每次启动覆盖                                                   |
+| `log/launcher/foreground-watch.log`                                         | 交接复核进程（`scripts/win32-window-focus.py`，**当前无调用方**，见 §1.3）                       | 窗口交接时刻的前台归属裁定与执行结果（`give` / `restore` / `leave` + 句柄），排查「启动仍然抢前台」先看这里                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 追加写                                                         |
+| `run/launch-status.json`                                                    | dev-launcher.mjs（进度）+ 壳（失败出口，`mark_launch_failed`）                                  | 结构化启动进度，splash 页展示；**失败时是壳写下的 error + 可行动作**（见 §1.5）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | —                                                              |
+| 启动页「查看日志」面板                                                      | splash 前端轮询 `get_launch_log`                                                               | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | —                                                              |
 | `.next/dev/logs/next-development.log`                                       | Next dev server                                                                                | dev server 内部日志（含锁冲突提示）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Next 自管                                                      |
 | `log/services/comfyui-runtime.log`                                          | Next server（src/lib/comfyui/lifecycle.ts）                                                    | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）                                                                                                                                                                                                                                     | 追加不轮转；接口首次打开只回尾部窗口（1MB，按行对齐，见 §4.1） |
 | `log/services/comfyui-keepalive-<ts>.out/.err.log`                          | dev-launcher 保活中介（Start-Process 重定向）                                                  | 保活模式下 ComfyUI 的完整原始输出，等待循环增量跟随进 runtime.log                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 按次命名，不自动清理                                           |
@@ -858,7 +859,7 @@ log/
 
 | 环节     | 位置                                                                  | 职责                                                                                                                                   |
 | -------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 粒度起点 | `dev-launcher.log` 的 mtime                                           | 双击链路每次运行都覆盖重建该文件，mtime 即本次启动时刻；读不到（非双击链路）时面板退化为不做截断，多显示几条历史也好过凭空丢掉本次日志 |
+| 粒度起点 | `dev-launcher.log` 的 mtime                                           | 每次运行都覆盖重建该文件，mtime 即本次启动时刻；读不到（非编排链路）时面板退化为不做截断，多显示几条历史也好过凭空丢掉本次日志 |
 | 起点下发 | `GET /api/logs/current` 的 `sessionStart` 字段                        | **只有跨运行累积的来源**（`app-runtime` / `app`）在响应里带回起点，客户端无需额外请求；覆盖重建的来源（`launcher` / `dev`）恒为 `null` |
 | 行级截断 | `src/lib/log-session-scope.ts` + `log-store.ts` 的 `dropStaleEntries` | **逐来源**判定：只有 `isSessionScopedOrigin` 认的来源比较行时刻，其余一律保留；`setSessionStart` 幂等，页面重载不会把起点往后推        |
 
@@ -867,23 +868,22 @@ log/
 面板每行右侧标注来源（`dev` / `launcher` / `app` / `app-runtime`），便于对照文件排查。
 
 **裁剪必须逐来源判定，不能整条时间线一刀切**（ISSUE #262 四审）：会话起点取自
-`dev-launcher.log` 的 mtime，而启动器进程（`start-tauri-launcher.log`）在它被
-创建**之前**就写下了 python / exe / cwd / 探测 Node 这些行。整条时间线一刀切会
-把这些真·本次运行的行当成历史丢掉——用户读到的就是「启动和启动器日志丢失」。
-覆盖重建的来源不存在「历史行」，因此不参与裁剪；完整判据表见规范 07 §7.23.1。
+`dev-launcher.log` 的 mtime，而壳与启动脚本写在它被创建**之前**的行（python / exe /
+cwd / 探测 Node）同样属于本次运行。整条时间线一刀切会把这些行当成历史丢掉——
+用户读到的就是「启动和启动器日志丢失」。覆盖重建的来源不存在「历史行」，
+因此不参与裁剪；完整判据表见规范 07 §7.23.1。
 
 **行形态也是契约**（ISSUE #262 六审）：面板把 `dev` / `launcher` 的行按
 `[时刻] [级别] 正文` 解析，**解析不出来时整行会以原文落板**（级别标记变成正文，
 用户读到的就是「启动 / 启动器两项还是没有日志内容」）。两个来源的行形态因此各自
-写死如下，改 `dev-launcher.mjs` 的 `log()` 或 python 启动器的 `log()` 时必须
-同步 `LOG_LINE_RE` / `LAUNCHER_LOG_RE`：
+写死如下，改 `dev-launcher.mjs` 的 `log()` 时必须同步 `LOG_LINE_RE` / `LAUNCHER_LOG_RE`：
 
 | 来源       | 产出者                              | 行样例                                               | 解析方                                           |
 | ---------- | ----------------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
 | `dev`      | `Write-Log`（级别 `PadRight(5)`）   | `[10:22:24] [INFO ] 预检通过`                        | `LOG_LINE_RE`（级别标记容错、行首允许缩进）      |
 | `dev`      | 同一函数写出的缩进续行              | `  [10:22:27] [ERROR] 找不到预编译 Tauri 壳`         | 同上                                             |
 | `dev`      | Transcript + ANSI（颜色码可能残缺） | `[10:22:30] [[OK] 服务器已就绪`                      | 同上（剥 SGR 后可能多一个 `[`）                  |
-| `launcher` | python `log()`（裸文本、无级别）    | `[2026-09-13 10:22:24.723] === launcher started ===` | `LAUNCHER_LOG_RE`（时刻即写入时刻，级别恒 info） |
+| `launcher` | 启动脚本 / 壳写下的裸文本           | `[2026-09-13 10:22:24.723] === launcher started ===` | `LAUNCHER_LOG_RE`（时刻即写入时刻，级别恒 info） |
 
 **读取窗口**（`GET /api/logs/current` 的尾部窗口）：追加写文件积累数月后可能是
 几十 MB，首帧只回尾部一段。窗口 1MB（约 7000~12000 行）且**按行对齐**——起点被
@@ -895,10 +895,10 @@ log/
 > comfyui-runtime / drizzle-studio-runtime，**不在**该机制覆盖范围内：它们是
 > 单个服务的会话视图，靠会话横幅（`▶`/`■`）区分边界，由用户主动点「刷新」。
 
-排障顺序：`log/launcher/start-tauri-launcher.log`（双击层发生了什么）→
-`log/launcher/dev-launcher-stderr.log`（pwsh/壳层报错）→
-`log/launcher/dev-launcher.log`（编排步骤走到哪）
-→ `log/nextjs/nextjs-stderr-<ts>.log`（dev server 报错）。失败弹窗已包含后两者的尾部。
+排障顺序：`log/launcher/dev-launcher-stderr.log`（壳层报错 + `[orchestrator] …`）→
+`log/launcher/dev-launcher.log`（编排步骤走到哪）→
+`log/nextjs/nextjs-stderr-<ts>.log`（dev server 报错）→
+`log/shell/shell.log`（壳自持日志，release）。启动页「查看日志」面板已包含前三者的尾部。
 
 ### 4.2 ComfyUI 原始回执通道（trace）与「未找到生成结果」的定位路径
 
@@ -1052,9 +1052,9 @@ zustand 队列，而不是再加一个模块级单例。
 | 启动后 splash 停在依赖预检报「关键依赖目录 typescript / @typescript/native / next 为空或缺失」                                                                                                                                                                                                                      | pnpm 中断安装/拒装留下「目录在但内容空」的残缺（如 typescript 与 @typescript/native 空目录 → tsc 垫片找不到入口），旧版只查 `.modules.yaml` / `.bin/next` 查不出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 已由 `Test-DevDependencies` 覆盖关键目录非空检测，残缺时自动 `pnpm install` 自愈；install 后仍残缺则明确报错并指向 `log/launcher/pnpm-install-stderr.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `pnpm install` 已成功（exit 0）但仍报「node_modules/…为空或缺失」启动失败；同机跑 `sync-lint.ps1`/`run-local.ps1` 却正常                                                                                                                                                                                            | 假阳性：`Get-BrokenKeyDeps` 用 `Get-ChildItem -LiteralPath` 枚举顶层 junction/symlink 判空，pwsh（7.6.5 实测）对这类 reparse point 的枚举可能返回 0 项 → 健康安装被误判残缺，触发 install 后因 `.modules.yaml`/lockfile 已一致而“Already up to date”无法自愈，二次复查仍误报                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 已修：先 `Resolve-Path` 解析到链接目标真实绝对路径，再用 .NET `Directory.EnumerateFileSystemEntries` 对真实目录判非空（见 §2.2 step 5）。同步/自检脚本（sync-lint/run-local）本就只查 `.modules.yaml`+`.bin`+lockfile，故不受影响                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | junction 枚举已修（见上）后仍报「node_modules/ 仍为空或缺失」且 `pnpm install` 显示 “Already up to date”；报错串中目录名后为空                                                                                                                                                                                      | 第二处假阳性：`Get-BrokenKeyDeps` 结尾 `return ,$broken`（unary comma 防外层展开）。当依赖健康、`$broken` 为空数组 `@()` 时，`,@()` 向外输出「一个空数组」单对象，调用方 `@(Get-BrokenKeyDeps)` 收集成 `@(@())`——`.Count` 恒为 1 而非 0 → 健康环境永远被判有坏依赖，install 因依赖本就完好返回 exit 0 无法自愈，二次复查 `foreach ($d in …)` 取出空数组元素（`"$d"` 为空）再误报抛错                                                                                                                                                                                                                                                                                                                                                                                    | 已修：函数改 `return $broken`——空数组不产生输出，`@(...)` 得 0 项；非空正常展开，`foreach`/`.Count` 语义正确（见 §2.2 step 5）。勿再加 unary comma                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **双击 `target\release\{{shell.app.exe}}`：窗口出来了，但主窗一直不显示、启动页永远停在「正在等待本地服务就绪」**（ISSUE #784 之前的现场是内嵌 Edge 错误页）                                                                                                                                                        | 壳自编排的编排器起不来，而主窗又等不到就绪信号。常见成因：`node_modules` 被删/残缺（`can_self_launch` 直接放弃自编排，退回静态 `devUrl`）、PATH 上没有 `node`、`pnpm` 形态不可用（工具链门禁 fail）。**关键差别**：旧行为会把主窗导航到一个必然连不上的地址（用户看到「坏了」），现在主窗停在 `about:blank`，用户看到的是「还在启动」                                                                                                                                                                                                                                                                                                                                                                                                                                   | 先点启动页「查看日志」：壳把编排器的 stdout/stderr 原样转发成 `[orchestrator] …`。日志里会直接写「本检出还不能自编排（缺 scripts/dev-launcher.mjs 或 node_modules）」「壳自编排未能启动（…）」或编排器的工具链门禁结论（`pnpm check:toolchain` 是它的自查入口）。修完依赖重新双击即可；想回老链路就用 `{{shell.exe.prebuilt}}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **双击 `target\release\{{shell.app.exe}}`：窗口出来了，但主窗一直不显示、启动页永远停在「正在等待本地服务就绪」**（ISSUE #784 之前的现场是内嵌 Edge 错误页）                                                                                                                                                        | 壳自编排的编排器起不来，而主窗又等不到就绪信号。常见成因：`node_modules` 被删/残缺（`can_self_launch` 直接放弃自编排，退回静态 `devUrl`）、PATH 上没有 `node`、`pnpm` 形态不可用（工具链门禁 fail）。**关键差别**：旧行为会把主窗导航到一个必然连不上的地址（用户看到「坏了」），现在主窗停在 `about:blank`，用户看到的是「还在启动」                                                                                                                                                                                                                                                                                                                                                                                                                                   | 先点启动页「查看日志」：壳把编排器的 stdout/stderr 原样转发成 `[orchestrator] …`。日志里会直接写「本检出还不能自编排（缺 scripts/dev-launcher.mjs 或 node_modules）」「壳自编排未能启动（…）」或编排器的工具链门禁结论（`pnpm check:toolchain` 是它的自查入口）。修完依赖重新双击即可                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **双击 `target\release\{{shell.app.exe}}`：什么都没发生，也没有第二个窗口**                                                                                                                                                                                                                                         | 壳的单实例保护在 setup 之前就把本次启动退掉了（同一检出的壳已在跑）——这是**设计内**行为：二次启动只把已有窗口唤到前台，不新开窗口。日志里是 `another instance of this checkout is running, focus requested and exiting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 找已经开着的那个窗口（任务栏 / 托盘「打开主界面」）。要同时跑两份（比如对比两个分支）就用两份**检出**，不要复制 exe：身份锚点是检出路径，复制出去的 exe 仍认同一个检出（§1.4）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 双击 exe 完全无窗口、无报错                                                                                                                                                                                                                                                                                         | ① dev-launcher 静默失败（旧版无弹窗）② 日志文件被残留进程锁死                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 已修复：失败弹窗 + 日志按次命名。若复现，看 `start-tauri-launcher.log` 末行 exit code 与 `dev-launcher-stderr.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 双击 exe 完全无窗口、无报错                                                                                                                                                                                                                                                                                         | ① dev-launcher 静默失败（旧版无弹窗）② 日志文件被残留进程锁死                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 已修复：失败出口（启动页面板 + `run/launch-status.json`）+ 日志按次命名。若复现，看 `log/launcher/dev-launcher-stderr.log` 与 `log/shell/shell.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 窗口黑屏，左上角 `asset not found: {{shell.splash}}`                                                                                                                                                                                                                                                                | splash 窗口 URL 用了 macOS/Linux 形式的 `tauri://localhost`，Windows 资源源是 `http(s)://tauri.localhost`；或改了 splash-assets 但没重编壳                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | tauri.conf.json 用相对路径 `{{shell.splash}}`；重编壳                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **启动页的最小化 / 关闭点了没反应**（#412 二次回报；按钮画在右上角、能悬停高亮，就是点下去什么都不发生）                                                                                                                                                                                                            | 按钮「画出来」与「调得动窗口」是两件事：①`decorations: false` 之后窗口唯一的出口就是这两个按钮，而它们此前只挂在**一条** `addEventListener` 上——脚本没跑到绑定、监听被顶掉，点击就没人接；②兜底要靠新壳命令，而改了 `src-tauri/**` / `public/{{shell.splash}}` 不重编壳时跑的是旧壳（新命令不存在），症状同样是「点了没反应」；③`--splash` 那张启动器自绘画面用的是 `ShowWindow(SW_MINIMIZE)`——`WS_EX_TOPMOST` 的无主弹窗**不会被它最小化**（系统去找可最小化的父窗口组，找不到就什么都不做）                                                                                                                                                                                                                                                                           | 已修：启动页的窗口按钮改为「三条互补路径 + 失败可见」（事件监听 / 按钮内联 `onclick` → `window.__splashWinAction` / 应用自建命令 `win_minimize`·`win_close`，三条都失败时消息区写「当前壳缺少窗口命令，请更新」）；新命令按规范三处同步（`build.rs` AppManifest / `capabilities/splash.json`），壳侧直接操作 splash 窗口、不额外授权 `core:window` 命令面；启动器自绘画面的最小化改为「隐藏 + 撤置顶 + 交还前台」并由 40ms 定时器维持，尺寸同步到 744×216（与启动页一致）；另启动器启动前比一次壳文件时间戳，过期时在画面/日志里钉一条「请重编壳」。判据见 `tests/check-file-structure.test.ts`，规范 07 §7.18.7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **启动页窗口一大块没用的空白**，只有中间一张小卡片有内容；右上角只有一个 ✕、没有最小化（ISSUE #412）                                                                                                                                                                                                                | **窗口尺寸与内容尺寸脱钩**：splash 窗口按「窗口越大、日志一行越能放全」给了 1680×1000 并带原生标题栏，而内容卡片只有 720（收起日志）/1400（展开）宽——2K/4K 屏上于是大半块是空白，观感像「弹了个空窗口」。同时原生标题栏只为三个系统按钮多占一条，且窗口本身没有「跟内容一起长」的能力                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 已改为**窗口即内容 + 无边框**：①`decorations: false`（无原生标题栏），最小化/关闭由启动页右上角自绘（`-webkit-app-region: drag` 铺满标题行、按钮 `no-drag` 排除，否则点击被拖拽吞掉）；②开窗 = 紧凑档 `SPLASH_WINDOW_SIZE`（744×216，`tauri.conf.json` 同值，高度贴着收起日志时的内容），展开日志时页面调应用命令 `set_splash_compact(false)` 由壳调到 `SPLASH_WINDOW_SIZE_EXPANDED`（1424×788）并居中——**两档常量只在壳里一份**，页面不自己拼尺寸；③两档都过 `clamp_to_monitor` 收敛（小屏不越界）；④面板不再写死 320px 高度，改 `flex: 1` 吃掉窗口剩余高度，展开后既不是窄缝、下方也不留空白。新增命令已三处同步（`build.rs` AppManifest / `capabilities/splash.json`），改动 splash-assets 与 tauri.conf.json 后**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -1068,11 +1068,10 @@ zustand 队列，而不是再加一个模块级单例。
 | 所有请求挂死、`tsc` 报 typescript 缺失                                                                                                                                                                                                                                                                              | Next 16.3.2 默认 `useTypeScriptCli: true`，与 typescript6 别名不兼容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 已在 next.config.js 关闭；换回标准 typescript 包后可移除该配置                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 提交时钩子报 `Class extends value undefined`                                                                                                                                                                                                                                                                        | npm 11.19 在本机解析 .bin 别名链崩溃                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 钩子已改 `pnpm exec`；勿把钩子改回 npx                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 构建 release 壳在编译收尾报 `error: failed to remove file ...\target\release\{{shell.app.exe}}` / `Caused by: 拒绝访问。 (os error 5)`                                                                                                                                                                              | 上一次启动的桌面壳（{{shell.app.exe}}）还开着：cargo 覆盖产物前会先删除旧 exe，Windows 不允许替换运行中进程的可执行文件。等待整个 Rust 编译（可能十几分钟）走完才失败，报错本身也看不出「壳还在跑」（2026-09-06 定位）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 不要用任务管理器单杀壳（其 Next dev server 子进程会残留占端口，见 §3）：正常关闭桌面窗口即可（壳退出时会自行 `taskkill /T` 回收 sidecar 进程树），无响应时用 `taskkill /IM {{shell.app.exe}} /T /F`。已由 `tools/scripts/Build-Guard.ps1` 把这类占用提到编译**之前**拦截，并在失败时追加提示（见 §7）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **一键发布构建被「目标文件被占用」挡下**：双击 `tools\build\build-all.ps1`，一上来就在 `[2/4] 前置检查：目标壳是否仍在运行` 报「构建 release 壳 目标文件被占用，无法覆盖：src-tauri\target\release\`{{shell.app.exe}}`」，构建连编译都没开始（ISSUE #412）                                                          | **前置守卫把「陈旧壳」也当成了「用户正在用应用」**：用户的实际动作是「启动 exe → 关掉窗口 → 重新构建」，而关窗后壳常常已无人使用（启动器先退出、壳成无主孤儿进程，或只剩命令行残留），守卫却一律中止构建，要求用户「先去关桌面窗口」——用户照做也关不掉（窗口早就没了），卡成死循环。而且 `Assert-ShellNotRunning` 的 `-AutoCloseShell` 开关**从来没有调用方传过**，双击构建又没人能按任意键确认，等于自动回收这条路谁都没走                                                                                                                                                                                                                                                                                                                                             | 已修（`tools/scripts/Build-Guard.ps1`）：① 命中占用先分类，**陈旧壳**（`Get-RunningLauncher` 查不到本仓库启动器 = 起它的启动器已退出，或 exe 路径指不到本仓库）直接 `taskkill /PID <pid> /T /F` 回收后**继续构建**；② 双击 / 由启动器拉起的**非交互构建**（父进程是 `explorer.exe` 或 `start-tauri*.exe`）同样自动回收，不留「按任意键」死胡同；③ 只有「本仓库启动器仍在跑」才中止，日志额外点名「先结束启动器」——启动器会拉起新壳顶上 `{{shell.app.exe}}`，届时杀掉现有壳既丢了用户窗口、编译途中还会再次被占用。见 §7.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 构建 release 壳在编译**开局**（依赖全部编完、轮到 `app v0.1.0` 的 build script 时）报 `failed to run custom build command for app v0.1.0` + `resource path binaries\node-x86_64-pc-windows-msvc.exe doesn't exist`（2026-09-13 定位）                                                                               | `tauri.conf.json` 声明 `bundle.externalBin = ["binaries/node"]`，tauri-build 在**每次 cargo build 的编译期**都校验 `src-tauri\binaries\node-<target-triple>.exe` 存在——即便 prebuilt 壳运行时用不到 sidecar 也绕不开。而 `binaries/` 被 `src-tauri/.gitignore` 忽略不入库，`build-tauri-release.ps1` 又刻意不跑 `build-desktop.mjs`（防 8GB static 污染，只增量同步 splash），于是全新克隆 / 清理过 `binaries/` 的机器必然开局即败；此前只有 `build-standalone.ps1`（经 build-desktop.mjs 第 3/4 步）这条路会顺带生成 sidecar                                                                                                                                                                                                                                           | 已修（`tools/scripts/build-tauri-release.ps1` 第 3/4 步）：编译前检测 sidecar 缺失即从当前 Node 运行时复制补齐（与 build-desktop.mjs 同源逻辑，仅缺失时复制；PATH 无 node 时给明确报错并退出）。手动救急：把 node.exe 复制为报错所指路径后重跑                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 桌面窗口已经关了，`{{shell.app.exe}}` 进程还在（只能手工 `taskkill /IM {{shell.app.exe}} /T /F`）                                                                                                                                                                                                                   | **启动器先于壳退出，壳成了无主进程**：壳由编排器拉起，正常路径以「壳退出」为锚点回收；但用户关掉启动器窗口 / python 监控线程结束时 dev-launcher 的 `WaitForExit` 与 taskkill 兜底都没机会跑。旧实现的「残留壳清理」还按 `CommandLine -like "*<项目根>*"` 筛选，而预编译壳经 `ProcessStartInfo(UseShellExecute=false)` 启动、命令行里不含项目根路径 → 既漏判残留，也让残留壳锁住 `target\release\{{shell.app.exe}}`（连带 §5「os error 5」那条）                                                                                                                                                                                                                                                                                                                         | 已三层治理（2026-09-06 定位）：①启动前按 **exe 真实路径**回收残留壳；②壳拉起后 PID 落 `log/launcher/tauri-shell.pid`，python 启动器在监控退出/异常/超时时对仍存活的 PID 执行 `taskkill /PID <pid> /T /F` 后删除该文件；③正常关窗仍走编排器的进程树回收。见 §3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| 打包启动器时报「无法清理 start-tauri」                                                                                                                                                                                                                                                                              | 残留的提权进程（如卡死的 pyinstaller/启动器）持有 `_internal` 文件，普通权限无法终止                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 重启后重试；应急：`pyinstaller --distpath dist-new tools/start-tauri.spec` 打到新目录后手动换文件                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **一键发布构建第二步卡在 `[2/3] 清理旧产物`**：`[错误] 无法清理 start-tauri，可能被其他程序占用（如 {{shell.exe.prebuilt}} 仍在运行）`；而用户**已经关掉了桌面窗口**（他看到「壳有更改」提醒后关的），照提示去关窗口也关不掉（ISSUE #621）                                                                          | **关掉的是桌面壳，占了产物目录的是启动器自己**：`start-tauri\` 是 onedir 打包产物，运行中的 {{shell.exe.prebuilt}} 把 `_internal\*.dll` 映射在内存里，整个目录删不掉；而启动器是独立 exe，**关掉它的启动画面 / 桌面窗口并不会让它自己退出**。旧实现只把这个根因写进一句固定文案（「可能被其他程序占用」），**没有查任何进程表** —— 既指不出是谁占着，也给不出能照做的动作                                                                                                                                                                                                                                                                                                                                                                                               | 已修：新增 `Assert-LauncherNotRunning`（`tools/scripts/Build-Guard.ps1`），打包脚本在**清理旧产物之前**按 exe 真实路径自查本仓库启动器，命中即中止并点名 PID + 给 `taskkill /PID <pid> /T /F`；清理仍然失败时兜底提示补齐自查命令与「确认无同名进程 = 权限问题」的分流。**判据后来补了第二条**：占用者不止启动器 exe——启动器拉起的 dev server（`node`→`pnpm`→`next`）会把 `start-tauri\_internal\*.dll` 映射进自己的进程（实测 pnpm 侧的 `VCRUNTIME140.dll`），启动器异常退出后它们残留成孤儿，目录照样删不掉，而按 exe 名 / 路径判断一个都查不到（现场表现为「已经关掉启动器了，仍然无法清理」，提示还在猜同一个原因）。现在 `Get-ProductDirHolder` 按「被映射文件的路径落在产物目录内」把真正的占用者查出来，与启动器命中写在同一条消息里；清理失败走 `Write-ProductDirLockHint`，先给真实异常文案 + 占用者清单 + 逐条 `taskkill`，查不到人才是「杀毒 / 索引 / 权限」那条分流。见 §7.1.1，回归测试见 `tests/check-file-structure.test.ts` 的 Build-Guard 用例组                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 双击 `tools\build\build-all.ps1`，一上来就在前置检查里报「目标文件被占用，无法覆盖：src-tauri\target\release\`{{shell.app.exe}}`」，构建连编译都没开始（ISSUE #412）                                                                                                                                             | **前置守卫把「陈旧壳」也当成了「用户正在用应用」**：用户的实际动作是「启动应用 → 关掉窗口 → 重新构建」，而关窗后壳常常已无人使用（只剩命令行残留 / 取不到 exe 路径），守卫却一律中止构建，要求用户「先去关桌面窗口」——用户照做也关不掉（窗口早就没了），卡成死循环。而且 `Assert-ShellNotRunning` 的 `-AutoCloseShell` 开关**从来没有调用方传过**，双击构建又没人能按任意键确认，等于自动回收这条路谁都没走                                                                                                                                                                                                                                                                                                                                             | 已修（`tools/scripts/Build-Guard.ps1`）：① 命中占用先分类，**陈旧壳**（exe 路径指不到本仓库的老式残留）直接 `taskkill /PID <pid> /T /F` 回收后**继续构建**；② 双击构建（父进程是 `explorer.exe`）**非交互**，同样自动回收，不留「按任意键」死胡同；③ 判据是进程可执行文件的**真实路径**，别处的同名进程不算。见 §7.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 构建 release 壳在编译**开局**（依赖全部编完、轮到 `app v0.1.0` 的 build script 时）报 `failed to run custom build command for app v0.1.0` + `resource path binaries\node-x86_64-pc-windows-msvc.exe doesn't exist`（2026-09-13 定位）                                                                               | `tauri.conf.json` 声明 `bundle.externalBin = ["binaries/node"]`，tauri-build 在**每次 cargo build 的编译期**都校验 `src-tauri\binaries\node-<target-triple>.exe` 存在——即便 prebuilt 壳运行时用不到 sidecar 也绕不开。而 `binaries/` 被 `src-tauri/.gitignore` 忽略不入库，`build-tauri-release.ps1` 又刻意不跑 `build-desktop.mjs`（防 8GB static 污染，只增量同步 splash），于是全新克隆 / 清理过 `binaries/` 的机器必然开局即败；此前只有 `build-standalone.ps1`（经 build-desktop.mjs 第 3/4 步）这条路会顺带生成 sidecar                                                                                                                                                                                                                                           | 已修（`tools/scripts/build-tauri-release.ps1` 第 3/4 步）：编译前检测 sidecar 缺失即从当前 Node 运行时复制补齐（与 build-desktop.mjs 同源逻辑，仅缺失时复制；PATH 无 node 时给明确报错并退出）。手动救急：把 `{{shell.node.sidecar}}` 复制为报错所指路径后重跑                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 桌面窗口已经关了，`{{shell.app.exe}}` 进程还在（只能手工 `taskkill /IM {{shell.app.exe}} /T /F`）                                                                                                                                                                                                                   | **壳脱离了它的编排器**（历史成因是「启动器先于壳退出，壳成了无主进程」；那条链已随 ISSUE #784 删除）。现在编排器是壳的**子进程**，「壳退出 → 回收编排器 → 编排器回收它那棵树」是一条没有中断的链，正常关窗不会再留下壳。残留壳的判据是 **exe 真实路径**落在本仓库 `src-tauri/target/{release,debug}`（**不要**按 `CommandLine -like` 判断：编排器用 `spawnInGroup` 起壳，命令行里不含项目根路径），清除即可：`taskkill /IM {{shell.app.exe}} /T /F`。                                                                                                                                                                                                                                                                                                                                                                                          | 先按上面一条命令清理；若反复出现，看 `log/launcher/dev-launcher-stderr.log`（壳层报错 + `[orchestrator] …`）与 `log/shell/shell.log`。清理时别用任务管理器单杀壳：它的 Next dev server 子进程会残留占端口，`/T` 就是连带整棵子树。见 §3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **构建 release 壳时报「产物目录被占用」**（历史形态：`无法清理 start-tauri，可能被其他程序占用（如 start-tauri.exe 仍在运行）`，ISSUE #621） | **旧形态里「产物」是一个 onedir 目录**（`start-tauri\`），运行中的启动器把 `_internal\*.dll` 映射在内存里 → 整个目录删不掉；而启动器是独立 exe，**关掉它的启动画面 / 桌面窗口并不会让它自己退出**，旧提示只把根因写成一句猜出来的话、也没查任何进程表                                                                                                                                                                                                                                                                                                                                                                                                                                                     | **该形态随 Python 启动器一起消失**：现在产物是单个 `target\release\{{shell.app.exe}}`，由 `Assert-ShellNotRunning` 在编译前拦住（陈旧壳自动回收、启动器在跑才中止），不需要「打包前查谁锁着目录」。排查产物目录占用的通用出口仍保留：`Get-ProductDirHolder` + `Write-ProductDirLockHint`（按「哪些进程把这些文件映射进了地址空间」点名占用者 + 给 `taskkill /PID <pid> /T /F`，查不到人才是「杀毒 / 索引 / 权限」分流）。见 §7.1，回归测试见 `tests/check-file-structure.test.ts` 的 Build-Guard 用例组 |
 | 启动时先看到 Edge「无法访问此页面 / ERR_CONNECTION_REFUSED」（localhost 拒绝连接），之后才出现启动进度或直接黑等                                                                                                                                                                                                    | **壳编译时没带 `custom-protocol` feature**（裸 `cargo build --release`）：tauri 的 `cfg(dev)` 由该 feature 决定，不带它 = dev 模式行为——①启动页相对 URL 解析到 `build.devUrl`（http://localhost:3100/{{shell.splash}}），dev server 未就绪时 WebView2 渲染错误页且永不重试（2026-09-02 定位，冷启动必现；官方 `pnpm tauri build` 会自动带该 feature，所以生产包没这问题）②资源根本没内嵌进二进制（启动页由 dev server 提供）。叠加因素：壳二进制过期（改了 src-tauri 后未重编，旧版 splash 的 `window.location.replace` 兜底把错误页顶上来）；WebView2 对导航失败也触发 on_page_load Finished，交换窗口前不校验可达性会把错误页当应用显示                                                                                                                               | 重编壳必须带 feature：`cd src-tauri; cargo build --release --features custom-protocol`。现版壳已四重防护：splash 不再自导航、交换前 TCP 可达性校验、main 加载失败重导航循环、启动页看门狗（URL 被带走 1s 内恢复进度页）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **应用启动后有一段「未连接」状态**：窗口先显示 Edge「无法访问此页面 / **127.0.0.1 拒绝连接**」（或纯白空白），几秒后才变成 workspace；这段时间主窗**看不到关闭按钮**（ISSUE #730）                                                                                                                                  | **「端口可连」与「首帧画出来」之间那段等待没人接管**：启动页探测到应用端口可响应就调 `navigate_to_app`，而 navigate 一发起主窗画面就离开启动页；dev 模式下要等 next dev 首次编译（冷启动十几秒），这段等待里 WebView2 先给空白、连接被拒时给内嵌 Edge 错误页。**已有的 TCP 可达性校验防不住它**——连接被接受而首编译未完成时 `on_page_load(Finished)` 照样触发，交接就把错误页/空白顶出来；而主窗 `decorations: false`（标题行前端接管），页面没画出来时连右上角的关闭按钮都不存在，用户看到的是「窗口没有关闭按钮」。**别把它读成「壳没带 custom-protocol」**（那条起始画面就是错误页、且错误页永不消失）                                                                                                                                                               | 已修：新增**主窗首帧看护** `watch_main_first_paint()`（壳侧每 250ms 探测主窗 URL/DOM，应用文档还没渲染出来就 `eval` 注入加载占位 `MAIN_LOADING_STUB_JS`），启动页（进度 / 日志 / 关闭按钮）在首帧之前保持可见；占位自带重贴定时器（对抗错误页换 DOM），由应用根布局挂载时经 `clearLaunchLoadingStub()` 收尾，交接时壳再清一次。`standalone` 模式不注入（内嵌 server 随壳就绪）。见 §1.4，回归测试见 `tests/check-file-structure.test.ts` 的 ISSUE #730 用例                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **release 壳编译失败**：`cargo build --release --features custom-protocol` 报 `error: proc macro panicked` → `failed to parse plugin global API script paths: Error("trailing comma", line: 8, column: 1)`，报错位置指向 `src-tauri/src/lib.rs` 的 `generate_context!()`                                            | **报错位置指向的那一行是无关的**——真正被改坏的是 `tauri-build` 生成在 `src-tauri/target/` 下的 `out/__global-api-script.js`：插件全局 API 脚本清单由 `serde_json::to_string` 写成**紧凑单行** JSON（自身不可能带换行/尾逗号），而它后缀是 `.js`，于是 `pnpm format:write` 或编辑器保存时被 prettier 按 print-width **折成多行并补上尾逗号**，`generate_context!` 再用 serde_json 读就炸。6 个插件 → 6 项 + 首尾两行 = 8 行，「line: 8」正是折行后的最后一项。`ls -l` 看该文件 mtime 与形状（多行 = 被格式化过）即可确认                                                                                                                                                                                                                                                 | 已修：仓库根 `.prettierignore` 忽略 `src-tauri/target/`（prettier **只按 cwd 读 `.gitignore`**，看不到 `src-tauri/.gitignore` 里的 `/target/`，必须由根级文件兜）。已经踩中的检出：`rm -rf src-tauri/target` 重编，或把该 JSON 还原成单行。回归测试见 `tests/check-file-structure.test.ts` 的 ISSUE #730 用例                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -1081,12 +1080,12 @@ zustand 队列，而不是再加一个模块级单例。
 | **启动/构建卡在「端口被别的进程占用」上，改端口只能绕开、查不到是谁占着**；`.env` 里把 `COMFYAPP_PORT` 写成了用户固定的端口，而该端口上前一次的 dev server 并未干净退出（ISSUE #621）                                                                                                                               | **兜底回收一条都没跑**：会话锚点（`run/launcher-session.json`）在正常收尾时已清掉，而 `pidBelongsToRoot` 按「命令行里有没有出现过检出根路径」判定——`pnpm dev -p N`（缺省端口链路）与 `pnpm exec next dev --turbo` 两条命令行里都没有检出根路径，于是本检出自己的残留被判成「别的检出 / 别的程序」，按 §1.4 只提示不回收                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 已修：端口归属补第 ② 层**应用服务自证**（`portOwnershipVerdict`，`launcher-core/orchestrator.mjs`）——命令行跑的是本仓库的 `scripts/dev.mjs` / `scripts/start.mjs` 或 `next dev` / `next start` CLI 即认定为本检出残留；并由 `usesExplicitPort()` 收窄到**显式端口**（缺省解析链无法与别的检出区分，一律不碰）。见 §3.3，回归测试 `tests/dev-launcher-port-reclaim.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 上面这条修完、重编壳后**启动仍然抢前台**（ISSUE #359 回归）                                                                                                                                                                                                                                                         | **交接瞬间 Windows 自己把前台放行给了主窗**，壳里那条「不抢前台」根本管不到：①启动页窗口是 `WS_EX_TOOLWINDOW`，不产生任务栏按钮；主窗 `show()` 时任务栏按钮首次创建，Windows 按「新窗口 + 用户刚启动」放行前台（实测日志就是 `show_main_window_without_focus` 里 `is_focused()` 一开始就为 true）；②旧实现「无条件调一次 `set_focus()` 再看结果」——窗口已被系统放行，这次调用必然「成功」，反而把「不抢前台」演成了「一定给前台」；③启动期的 `decide_foreground()` 只判一次，用户切去干别的几分钟后「双击入口还在前台」这条早已失真                                                                                                                                                                                                                                     | 已修（两段）：①壳侧只在 `request_focus` / `COMFYAPP_FOREGROUND=1` 时才调 `set_focus()`，不再无条件试探；②新增交接复核进程（`scripts/win32-window-focus.py`，由 `spawn_foreground_watch()` 在主窗口可见时拉起）：不该给就给前台**还回去**（`SendInput` 无副作用 Alt + `SetForegroundWindow`），该给就拿到手（含键盘焦点）。判决表与结论见 §1.3，回归测试见 `tests/check-file-structure.test.ts`。诊断入口：`log/launcher/foreground-watch.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **双击启动完成后主窗弹到最前；点回别处遮盖它，马上又被强拉到最前（同一此启动被打断两次）**                                                                                                                                                                                                                          | **启动期判决把「前台是双击入口」放行了**：`decide_foreground()` 曾把「前台是 explorer / 启动器自身」判为允许（理由是「用户刚点过启动」），双击启动因此恒得 `COMFYAPP_FOREGROUND=1`——壳在交换窗口时 `set_focus()` 弹到最前（第一次）；用户点回别处后，交接复核进程按「启动期判决允许 = 用户就在等」执行 `give` 又把前台强拉回来（第二次）。而「双击之后切去干别的」正是常态：等几十秒后正式窗口冒出来时，「双击入口还在前台」这条判据早已失真                                                                                                                                                                                                                                                                                                                            | 已修：①判决表删去「双击入口」分支——双击启动一律 `COMFYAPP_FOREGROUND=0`，窗口进任务栏 + 闪烁提醒；显式给前台只剩 `--foreground` / `--cold-start` / 唤起已有实例；②主窗 builder 加 `focused(false)`：tao 据此把首次 `show()` 走 `SW_SHOWNOACTIVATE`，从源头掐掉「`show()` 自带激活语义被 Windows 当新窗口放行前台」的路径（无激活就无需复核进程去「还」）。改了启动器（`scripts/start_tauri_launcher.py`）与壳（`src-tauri/src/**`）：前者必须重打包（`tools\build\build-launcher.ps1`）才对双击 exe 生效，后者必须重编壳；回归测试见 `tests/check-file-structure.test.ts` 的「启动链路『不抢前台』判据」用例组                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **双击 `{{shell.exe.prebuilt}}` 后启动页被文件资源管理器等窗口压在后面**（用户看得到启动页露出的一个角，但不在最前面）；用户反馈「这不正常，应该显示在前面才对」（ISSUE #576）                                                                                                                                      | **把「应用窗口」的「不抢前台」策略套在了启动页上**：启动期判决（`decide_foreground`）为防打断用户，双击启动一律 `COMFYAPP_FOREGROUND=0`，壳侧 `show_main_window_without_focus()` 于是只 `show()` + 任务栏闪烁。这条对**几十秒后才冒出来**的应用窗口是对的（用户可能早已切走），但启动页是用户**刚刚双击下去**的直接反馈——不给前台的结果就是启动页出现在 Explorer 后面                                                                                                                                                                                                                                                                                                                                                                                                   | 已修（启动页单独一套判据，与主窗那套**不合并**）：① 启动器在启动页**首次可见**时拉一次独立复核进程（`spawn_splash_front()` → `win32-window-focus.py --splash`），复用已验证可靠的 `focus_window()`（Alt + `AttachThreadInput`）；判定收在纯函数 `should_front_splash()`——只抢**首次可见**那一下，one-shot；② 壳侧 `bring_splash_to_front()` 另做一次本地 `set_focus()` 兜底（冷启动时壳本就是前台进程，无须等复核进程）。改的是 `scripts/start_tauri_launcher.py`、`scripts/win32-window-focus.py` 与 `src-tauri/src/**`：前者必须重打包（`tools\build\build-launcher.ps1`），后者必须重编壳；回归测试见 `tests/check-file-structure.test.ts` 的「启动页首次可见时被带到前台」用例                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **双击后启动页被文件资源管理器等窗口压在后面**（用户看得到启动页露出的一个角，但不在最前面）；用户反馈「这不正常，应该显示在前面才对」（ISSUE #576）                                                                                                                                                                | **把「应用窗口」的「不抢前台」策略套在了启动页上**：启动期判决为防打断用户，双击启动一律不给前台，壳侧 `show_main_window_without_focus()` 于是只 `show()` + 任务栏闪烁。这条对**几十秒后才冒出来**的应用窗口是对的（用户可能早已切走），但启动页是用户**刚刚双击下去**的直接反馈——不给前台的结果就是启动页出现在 Explorer 后面                                                                                                                                                                                                                                                                                                                                                            | 已修（启动页单独一套判据，与主窗那套**不合并**）：① 判定收在纯函数 `should_front_splash()`（`scripts/win32-window-focus.py`）——只抢**首次可见**那一下，one-shot，复用已验证可靠的 `focus_window()`（Alt + `AttachThreadInput`）；② 壳侧 `bring_splash_to_front()` 在 `setup_splash_window` 里做一次本地 `set_focus()`（启动页建出来时壳本就是前台进程，无须等其它进程）。改的是 `src-tauri/src/**` 与判据脚本：**必须重编壳**（`cargo build --release --features custom-protocol`）；回归测试见 `tests/check-file-structure.test.ts` 的「启动页首次可见时被带到前台」用例                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **启动失败但「看不出哪有问题」**：启动页弹「启动进程 dev-launcher.mjs 提前退出（exit=1）」，`dev-launcher.log` 里 `dev server 已启动（PID …）` 后**两秒**就是 `dev server 自身退出（exit=0）`，`最近 stdout` 只有一行 `[dev.mjs] COMFYAPP_PORT=…`、stderr 全空（ISSUE #576 第五轮）                                 | **两个缺陷叠加**：① `scripts/dev.mjs` 写死 `spawnSync("pnpm.cmd", …)`，Windows 上批处理只有 cmd.exe 会解释、Node 起它必失败（`EINVAL`），于是 `result.status === null`，旧代码 `process.exit(result.status ?? 0)` 把它读成**成功退出 0** —— dev server 静默消失，Next 一行输出都没有（判据见 §2.1.1，只是「起服务那一层」没复用）；② 收尾函数还按文件名字典序重找「最近一份」nextjs 日志（历史 `_` 命名排在现 `T` 命名之后），弹窗给的路径恒定指向**上一次运行**的文件，用户照过去看自然是别的现场                                                                                                                                                                                                                                                                      | 已修：① 内层 spawn 一律经 `shell.mjs` 的 `pnpmInvocation()`（形态判据唯一出口），并把「命令没起来」（`result.error`）与「跑完非零退出」分开报、打印真实命令；② 本次运行的 `nextOut` / `nextErr` **直接传入**收尾函数（`lastNextLog` 删除），失败弹窗再补一段 **dev server 自己的输出尾部**（取 `log/nextjs/nextjs-stderr-*.log` 里 **mtime 最新**的一份）与自查入口 `pnpm check:toolchain`。见 §2.1.6；回归测试见 `tests/dev-launcher-toolchain-gate.test.ts` 与 `tests/dev-launcher-downstream-exit.test.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Windows 上 `pnpm format:ratchet` / `pnpm check:all` 直接崩：`[format] 无法执行 prettier:spawnSync pnpm.cmd EINVAL`**（ISSUE #638）                                                                                                                                                                                | **门禁脚本自己拼了 pnpm 可执行名**：`scripts/check-format.cjs` 写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`，而那正是 §2.1.1 早已判定「Node 起不来」的批处理形态（只有 cmd.exe 解释批处理，实测 `EINVAL`）。第五轮只修了「起**服务**」那一层（`dev.mjs` / `start.mjs` / `analyze-bundle.mjs`），门禁与工具脚本没进那份清单，于是同一个坑换了地方复发 —— 且同族脚本（`check-reformat-only.cjs`）的失败形态是**静默**的（每个文件都退回「无法判定」，门禁一声不吭地失效）                                                                                                                                                                                                                                                                                    | 已修（§2.1.7）：`shell.mjs` 新增 `runPnpmSync()`，与 `pnpmInvocation()` 一起构成「Node 起 pnpm」的唯一出口；`check-format.cjs` / `check-reformat-only.cjs` / `check-app-port-vectors.cjs` / `repair-imports.cjs` / `heal-db.cjs` / `db-push.mjs` / `quality-gate.mjs` / `run-tests.mjs` / `generate-docs.mjs` / `build-desktop.mjs` 全部改走它，失败时打印 `error.code` + **实际命令** + 自查入口；回归护栏改为**按形态全仓扫描**（`tests/dev-launcher-toolchain-gate.test.ts`：出现 `pnpm.cmd` 字面量 / 平台三元 / 裸起 pnpm 即失败），新增脚本自动落在判据内（它当场抓出了漏改的 `repair-imports.cjs` 与 `heal-db.cjs`）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **启动页一出现就自己最小化进任务栏**（用户没点任何按钮，只能从任务栏还原回来看进度）                                                                                                                                                                                                                                | **把「探测」写成了「执行」**：splash 页脚本加载即调 `probeWindowCommands()`，用 `invoke('win_minimize')` 探壳兜底命令是否就位——但 IPC 命令没有 dry-run，`invoke` 就是**真的执行**，启动页刚显示就把自己最小化了                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 已修：删除启动期探测（对有副作用的命令无法无损探测）；「壳过期」的判定改由用户真正点最小化/关闭按钮时的三条互补路径承担（窗口 API / 内联 onclick / 壳命令 `win_minimize`·`win_close`，全失败时消息区给可见提示，见 07 §7.18.7）。改的是 `splash-assets/**`（编译期内嵌），**必须重编壳**：`cd src-tauri; cargo build --release --features custom-protocol`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
-| 关掉应用、马上重新双击 {{shell.exe.prebuilt}}，再进工作流库看到「未找到匹配的工作流 / 共 0 个工作流」——像是工作流被清空了（ISSUE #369） | **「还没加载出来」与「真的没有」在界面上长得一样**：`workflow.list` 是服务端较慢的一跳，而服务启动期要经过依赖预检（可能触发一次 `pnpm install`）→ next dev 首屏编译 → Drizzle `push` 同步表结构，这段时间里查询一直没 resolve；列表组件只有「有数据 / 无数据」两种呈现，于是空态文案（「未找到匹配的工作流」）被当成结论显示出来。这与「数据库真的空 / 目录里真的没有工作流」逐字相同，用户无从区分 | 已修：列表三态明确分开——`loading`（正在加载）/ `loadStalled`（超过 8s 未返回 → 可重试 + 引导打开日志面板看原因）/ 真为空（区分「搜索无结果」与「还没有工作流」，给导入或配置本地目录的引导）。判据在 `use-workflow-library.ts` 的 controller，形态在 `workflow-library-config` 与 `WorkflowLibraryList`。**注意**：这类「慢一跳」的界面不能只在快路径上测；新增列表/详情页时默认要有加载态，否则同一症状会在别处再现 |
+| 关掉应用、马上重新双击桌面壳，再进工作流库看到「未找到匹配的工作流 / 共 0 个工作流」——像是工作流被清空了（ISSUE #369） | **「还没加载出来」与「真的没有」在界面上长得一样**：`workflow.list` 是服务端较慢的一跳，而服务启动期要经过依赖预检（可能触发一次 `pnpm install`）→ next dev 首屏编译 → Drizzle `push` 同步表结构，这段时间里查询一直没 resolve；列表组件只有「有数据 / 无数据」两种呈现，于是空态文案（「未找到匹配的工作流」）被当成结论显示出来。这与「数据库真的空 / 目录里真的没有工作流」逐字相同，用户无从区分 | 已修：列表三态明确分开——`loading`（正在加载）/ `loadStalled`（超过 8s 未返回 → 可重试 + 引导打开日志面板看原因）/ 真为空（区分「搜索无结果」与「还没有工作流」，给导入或配置本地目录的引导）。判据在 `use-workflow-library.ts` 的 controller，形态在 `workflow-library-config` 与 `WorkflowLibraryList`。**注意**：这类「慢一跳」的界面不能只在快路径上测；新增列表/详情页时默认要有加载态，否则同一症状会在别处再现 |
 
 | **同一次失败，执行日志与应用日志给出的原因不一样**：工作流执行日志写着「任务卡在队列超过 32s（dev server 重启后 in-memory 队列清空，无人 re-claim）— 请重新执行」，而应用日志里同一任务的原因是「未找到生成结果」（ISSUE #378） | **同一个 taskId 有两个独立写入者，且没有共享的终态锁**：reaper（孤儿回收）与正常 executor（complete / fail / 看门狗）各自把终态写进 DB 与日志。reaper 先经 `emitter` 把「卡在队列」推给 SSE 订阅者（执行日志弹窗读到的就是这条），随后 executor 又把 DB / 应用日志覆盖成真实原因（「未找到生成结果」）；`claimSettle` 只管 executor 内部，reaper 完全不参与 | 已修（两层锁）：① reaper 与 executor 共享「终态已认领」集合 `s.settled`（reaper 侧 `claimTerminal()` 语义对齐 `claimSettle()`），谁先认领谁赢，另一方跳过；② 新增「DB 终态一次写入」锁 `s.finalized`（`claimFinalize()`），`finalizeFailure` / `finalizeSuccess` 与两条 reaper 都先抢锁再落库，重复收口只写一行 warn。这样执行日志（SSE）与 DB / 应用日志永远出自同一次收口。回归测试见 `src/lib/comfyui/reaper-decisions.test.ts` |
 | **失败原因只有一句「未找到生成结果」，ComfyUI 到底回了什么完全查不到**（ISSUE #216） | **结论有出口、现场没有**：`completeInner` 在 `fetchHistoryEntry` 返回 null 时只写一句收口原因；而原始证据全在内存里即用即弃——comfy-cli 的 stdout 只在面板显示前 20 行（非 JSON）/ 只展示解析后事件，stderr 只显示前 60 行且过滤 Python 警告，`/history` 与 `/queue` 的 JSON 只在当次函数内，WS 帧解析失败静默 return。于是「CLI 没回传 prompt_id」「history 是空对象」「history 有条目但 outputs 空」「有 outputs 但收集不到产物」四种完全不同的成因在日志里长得一模一样 | 已修：新增 ComfyUI 原始回执通道 `src/lib/comfyui/trace.ts`（`trace(channel, taskId, message, meta?)`），原文追加写 `log/comfyui/comfyui-trace.log`；接入 `executor-cli`（命令行/每个 stdout chunk 与解析事件/非 JSON 行/stderr chunk/未收到 envelope 退出时的完整 errBuf）、`executor-ws`（全部 WS 帧、非法帧、history 三种终局原文、失败时额外探测 `/queue`）、`executor-finalize`（收口结论带成因、execution_error 完整 `status.messages`、有 outputs 未识别产物的原文）。面板侧同步给出摘要（history status/completed/输出节点明细），收口原因从「未找到生成结果」细化为「promptId=? + /history 无有效条目 + 原文路径」。排查路径见 §4.2，纯函数回归测试见 `src/lib/comfyui/trace.test.ts` |
@@ -1129,7 +1128,7 @@ zustand 队列，而不是再加一个模块级单例。
 | 启动时 `dev-launcher.legacy.ps1` 报 `ParserError: Unexpected token '-Level'`（定位到 corepack prepare 分支的 Write-Log 行），启动中断 | Write-Log 调用里把命名参数 `-Level WARN` 误写进了字符串括号内：`Write-Log ("…" -Level WARN)`，PowerShell 把它解析成对字符串的无效操作符而报语法错（2026-09-07 定位，仅当 pnpm 版本不一致且 corepack prepare 失败触发） | 已修：右括号移到字符串后：`Write-Log ("…") -Level WARN`，让 `-Level` 成为命名参数。排查同类错误：`grep -nE '\("[^"]*" -Level' *.ps1` |
 | 壳内打开 ComfyUI 报「Command open_comfyui_window not allowed by ACL」（壳已重编、命令已注册、`remote.json` 已加 `core:default` 仍如此） | 根因在 Tauri 2.11 起的安全变更（tauri fix#15266，随 2.11.0 合入）：远程源调用**应用自建命令**一律强制走 ACL，**必须先在 build.rs 用 `AppManifest::commands` 声明命令**（生成 `allow-<command>` 权限条目），否则即便 `remote.json` 的 permissions 有 `core:default` 也无法命中应用命令 → 无授权被拒。`core:default` 只放行 core 插件命令，不含应用自建命令。附带影响：一旦启用 AppManifest，本地 splash 的自建命令（get_launch_status/get_app_url/get_launch_log/navigate_to_app）也随之受 ACL 管控，需补 splash 的本地授权能力 | 三处配合：①`build.rs` 改 `tauri_build::try_build(Attributes::new().app_manifest(AppManifest::new().commands(&[...全部命令])))`；②`capabilities/remote.json` permissions 追加应用命令授权 `allow-open-comfyui-window` / `allow-activate-main-window` / `allow-should-activate-on-launch`（main 远程窗）；③新增 `capabilities/splash.json` 给 splash 窗授 `allow-get-launch-status`/`allow-get-app-url`/`allow-get-launch-log`/`allow-navigate-to-app`（本地命令，防 AppManifest 打开后 splash 也被拦）。**新增应用命令要三处同步**：`build.rs` 的 AppManifest 列表、`capabilities/default.json`（main 本地源）、`capabilities/remote.json`（main 远程源）——少一处就是运行期「not allowed by ACL」。改壳层配置/构建脚本，须重编：`cd src-tauri; cargo build --release --features custom-protocol` |
 | **ComfyUI 页签打开了，里面却是一片空白**（地址栏/CSP 都正常、日志无报错、看不出任何失败原因） | **未开 CORS 的 ComfyUI 对跨源请求返回 403，而宿主页判不出来**（ISSUE #310；成因在 2026-09-12 更正）：ComfyUI 未开 CORS 时挂 `create_origin_only_middleware()`，对 `Sec-Fetch-Site: cross-site` 或「回环地址下 Host 域名 ≠ Origin 域名」的请求**直接 403**（反 CSRF）——iframe 内嵌正是跨源请求，403 响应体为空所以一片白。**注意：成因不是 `X-Frame-Options: DENY`**（ComfyUI 与 aiohttp 都不发这个头，上一轮记错方向，导致绕道去另开窗口）。宿主页跨源读不到响应头、iframe 事件也不带原因，所以必须由服务端探 | 已修（判据见 12 §12.8.2）：① **开关握在自己手里** —— ComfyUI 由本应用 spawn，`buildSpawnArgs` 统一注入 `--enable-cors-header`（`withEmbedClearanceFlag`，幂等），跨源不再 403 并回 `Access-Control-Allow-Origin`，正常路径下必然可嵌；② 探测模拟 iframe 视角（**带 `Origin`**），按 `403` / `Access-Control-Allow-Origin` / CSP / XFO 判读，拿不到放行证据时按不可嵌处理；③ **打开方式只剩两档且都在同一窗口**：可嵌 → 内嵌页签；不可嵌 → 仍在页签里渲染可读说明（`ShellTab.blockedReason` + `TabBlockedNotice`），**不再另开独立窗口、也不跳系统浏览器**（用户要求「只要多页签」）。回归：`src/lib/comfy-embed.test.ts`、`src/lib/comfyui/lifecycle-derive.test.ts`、`src/app/(main)/settings/hooks/use-settings-page.test.ts`、`e2e/critical-flows.spec.ts`（两条都断言不弹窗） |
-| ComfyUI 页签打开了，但里面是 Edge 的 **「已阻止此内容。请与网站所有者联系以解决此问题。」**（探测判「可嵌」、地址也对、日志无报错；同一地址在浏览器里能正常打开） | **拦下它的是嵌入方页面自己的 CSP**（ISSUE #310）：应用级页签把 ComfyUI 内嵌进主窗页面，而 `next.config.js` 的 CSP **没有 `frame-src`**——回退到 `default-src 'self'` 后，跨端口（127.0.0.1:3100 → :8188）即跨源被拒。与上一行（403/XFO/CSP frame-ancestors）的区别：那些由**被嵌方**响应头执行、服务端探得到；这一条由**嵌入方页面**执行，探测侧永远「一切正常」 | 已修（见 12 §12.8.4）：`next.config.js` 的 CSP 加 `frame-src 'self' http://127.0.0.1:* http://localhost:*`（应用页放行内嵌本地 ComfyUI；`frame-ancestors 'none'` 反点击劫持不变）。**两条死路勿再走**：①exe 同级 `app.exe.manifest` 的 `per_app_arguments`（#445）——非 WebView2 官方机制，参数实测到不了浏览器进程，且 `build-launcher` 清空重建 `start-tauri/` 还会抹掉该文件，已移除；②`--disable-web-security`——只关同源策略、豁免不了嵌入方 CSP，实证无效，已放弃。改 CSP 后 dev server 需重启才生效（改 `next.config.js` 属「改了配置」，双击启动链路会自动重启 dev server）。门禁见 `tests/comfyui-embed-csp.test.ts`；不可嵌时页签说明里带地址供用户自查（`ShellTab.blockedUrl`） |
+| ComfyUI 页签打开了，但里面是 Edge 的 **「已阻止此内容。请与网站所有者联系以解决此问题。」**（探测判「可嵌」、地址也对、日志无报错；同一地址在浏览器里能正常打开） | **拦下它的是嵌入方页面自己的 CSP**（ISSUE #310）：应用级页签把 ComfyUI 内嵌进主窗页面，而 `next.config.js` 的 CSP **没有 `frame-src`**——回退到 `default-src 'self'` 后，跨端口（127.0.0.1:3100 → :8188）即跨源被拒。与上一行（403/XFO/CSP frame-ancestors）的区别：那些由**被嵌方**响应头执行、服务端探得到；这一条由**嵌入方页面**执行，探测侧永远「一切正常」 | 已修（见 12 §12.8.4）：`next.config.js` 的 CSP 加 `frame-src 'self' http://127.0.0.1:* http://localhost:*`（应用页放行内嵌本地 ComfyUI；`frame-ancestors 'none'` 反点击劫持不变）。**两条死路勿再走**：①exe 同级 `{{shell.app.exe}}.manifest` 的 `per_app_arguments`（#445）——非 WebView2 官方机制，参数实测到不了浏览器进程，且 `build-launcher` 清空重建 `start-tauri/` 还会抹掉该文件，已移除；②`--disable-web-security`——只关同源策略、豁免不了嵌入方 CSP，实证无效，已放弃。改 CSP 后 dev server 需重启才生效（改 `next.config.js` 属「改了配置」，双击启动链路会自动重启 dev server）。门禁见 `tests/comfyui-embed-csp.test.ts`；不可嵌时页签说明里带地址供用户自查（`ShellTab.blockedUrl`） |
 | **应用内的 ComfyUI 拖不进图片 / 工作流**（拖进去毫无反应；同一个 ComfyUI 在浏览器里整窗打开却可以；页签本身显示正常、日志无报错） | **宿主窗口的原生拖放处理器把 DOM 拖放事件吃掉了**（ISSUE #616）：宿主窗口默认挂 WebView2 的原生拖放处理器（wry 的 `drag_drop_handler_enabled` 默认 true）——Tauri 的 `disable_drag_drop_handler` 文档原文就是「This is required to use HTML5 drag and drop APIs on the frontend on Windows」。处理器一接手，Chromium 不再走自己的拖放路径，`dragover` / `drop` 不派发到 DOM，文件被换成 wry 的 `on_drag_drop` 回调，而本应用没有注册它。页签里的 ComfyUI 完全靠 `drop` 的 `dataTransfer.files`，所以「一点反应都没有」；**同一地址在浏览器里没有这层壳，所以拖放照常**——这条对照就是最快的判据 | 已修（见 12 §12.8.5）：主窗 builder 显式 `.disable_drag_drop_handler()`，把拖放交回 DOM。本应用**不消费**原生文件拖放（项目画布 / 工作流库的拖放都是页内拖元素的自定义 dataTransfer，壳侧也没有注册 `on_drag_drop`、没人监听 `tauri://drag-drop`），关掉是纯收益。**需重编 Rust 壳**（`cargo build --release --features custom-protocol`），只改前端跑旧二进制等于没改。门禁：`tests/comfyui-embed-csp.test.ts`。 |
 | **工作流编辑器 / 画布整块白屏**，console 报 `ioApi.getState().xxx is not a function`（ISSUE #389） | **运行图落后于源码**：桌面壳长开时拉了新提交，页面没重载；store 实例在挂载时创建一次、其动作集合也随之定格，而动作本身会随热更新整体替换——旧实例缺少新声明的动作，直接调用抛错被 ErrorBoundary 接住。**注意**：源码里该动作是存在的（`tsc` 干净、单测通过），报错的是运行中的旧实例，不是代码缺陷 | 已修（两层）：① `callStoreAction` 把「能力不存在」当 L1 降级——跳过本次调用 + 一条可诊断告警，不再让一次时序问题把整块画布打白；② 新增「页面是否还跑着旧代码」的判据（`/api/dev/build-id`）与应用内通知（toast + 消息中心），把「重载一次即恢复」和「重载不会丢工作」直接讲给用户。见 §4.3 |
 | **CI 的 E2E 起不来**：`Timed out waiting 180000ms from config.webServer`（本地 `pnpm start` 却像没事） | **`next start` 不认 `COMFYAPP_PORT`**：默认端口由 3000 改 3100 那次只改了 config/文档，`pnpm start` 仍回落 Next 默认的 **3000**，而 `webServer.url` 与 `baseURL` 都按 3100 等 —— 等满 180s 超时（2026-09-12 定位；同一处遗漏还让「本地手起生产服务」与配置对不上） | 已修：`pnpm start` 改为 `node scripts/start.mjs`，与 `scripts/dev.mjs` 对称（读 `.env` 的 `COMFYAPP_PORT`，再显式 `next start -p`）。**不要**把 `start` 改回裸 `next start`。参见 11 章 §11.3.1 |
@@ -1175,7 +1174,7 @@ zustand 队列，而不是再加一个模块级单例。
 | `.next/analyze/client.html` / `nodejs.html` / `edge.html`，并监听                         |
 | `http://127.0.0.1:8888` 可视化报告。`output: standalone` 以 webpack 构建时同样生效，      |
 | 可量化独立 server 侧 bundle。用 Node 包装以兼容 Windows（内联 `VAR=cmd` POSIX 专属）。    |
-| 重新打包双击启动器                                                                        | `tools\build\build-launcher.ps1`                                                                             | PyInstaller onedir，产物 `start-tauri/`（gitignore）                                                                                                                                                                                                                                                                                                                                    |
+| 重新打包双击启动器（**已废弃**）                                                          | —（Python 启动器与打包链已随 ISSUE #784 删除）                                                                | 现在双击的就是 `src-tauri\target\release\{{shell.app.exe}}` 本身                                                                                                                                                                                                                                                                                                                       |
 | 开发者工具箱                                                                              | `tools\build\rebuild-static.ps1` 等 / `dev-tools`                                                            | 见 `tools/README.md`                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### 7.0 构建耗时报告（`tools/scripts/Log-Common.ps1`）
@@ -1196,8 +1195,8 @@ zustand 队列，而不是再加一个模块级单例。
   双击场景里它是关窗口前最后读到的一行；失败时同样打印（判断是否直接重跑）；
 - **编排层** `tools\scripts\build-all.ps1`：汇总里给出「总耗时」，任一步失败中止时
   也报出已用时间；各步耗时由子脚本自己负责，编排层不重复计；
-- **子步骤** `build-tauri-release.ps1`（第 4/4 步 cargo build）/ `build-launcher.ps1`
-  （第 3/3 步 pyinstaller）：在各自的完成汇总里给出本步耗时。
+- **子步骤** `build-tauri-release.ps1`（第 4/4 步 cargo build）/ `build-standalone.ps1`
+  （第 3/3 步 tauri build）：在各自的完成汇总里给出本步耗时。
 
 新增构建/工具脚本时直接复用这三个函数，不要各写一套 `Stopwatch`——格式漂成几种
 就没法横向对比，汇总也对不齐。
@@ -1208,73 +1207,40 @@ zustand 队列，而不是再加一个模块级单例。
 `tools/scripts/Build-Guard.ps1`，调用 `Assert-ShellNotRunning` 检查
 `src-tauri\target\{release,debug}\{{shell.app.exe}}` 是否正被运行中的桌面壳占用：
 
-- **陈旧壳自动回收后继续构建**：命中占用的壳先分类——「陈旧壳」（起它的启动器已
-  退出，即无主孤儿壳；或连可执行文件路径都指不到本仓库的老式残留）与「非交互构建
-  下的占用」（双击构建 / 由启动器拉起的后台构建，没人能按任意键确认）
-  **一律 `taskkill /PID <pid> /T /F` 回收**（禁止单杀，见 §3）再复查，回收成功即
-  继续构建。`-AutoCloseShell` 显式打开同样行为；
+- **陈旧壳自动回收后继续构建**：命中占用的壳先分类——「陈旧壳」（连可执行文件路径
+  都指不到本仓库的老式残留，窗口多半已关掉、只剩进程）与「非交互构建下的占用」
+  （双击构建，没人能按任意键确认）**一律 `taskkill /PID <pid> /T /F` 回收**
+  （禁止单杀，见 §3）再复查，回收成功即继续构建。`-AutoCloseShell` 显式打开同样行为；
 - **只有「用户可能正开着应用」才中止**（exit 1，日志给处置提示），不让整轮编译走到
-  链接收尾才报 `os error 5`（见 §5 对应行）。判据是「本仓库启动器
-  （`start-tauri*.exe`）仍在运行」——启动器会把壳重新拉起来顶上
-  `target\release\{{shell.app.exe}}`，这时杀掉现有壳只是把窗口连同用户的工作一起
-  干掉，而且编译途中还会被新壳占用。中止日志因此额外点名「先结束启动器」；
-- **构建前也要查启动器本身**：`Get-RunningLauncher` 按 exe 真实路径（`start-tauri/`、
-  `start-tauri-dev/`、`start-tauri-standalone/` 三个产物目录）列出仍在跑的本仓库
-  启动器，供上面的分类判据与中止提示共用。别按进程名判断——别处的同名进程不算；
-- **判据是进程可执行文件的真实路径**，而不是进程名或命令行。预编译壳由
-  预编译壳经 `ProcessStartInfo` 启动，`UseShellExecute=false` 时命令行里
-  不含项目根路径——历史上清理残留壳用的 `CommandLine -like "*$root*"`
-  因此并不可靠，这里不能照抄。`ExecutablePath` 取不到时退回命令行匹配（宁可多提示
-  一次，也不要漏判后白跑构建）；
+  链接收尾才报 `os error 5`（见 §5 对应行）。判据宁严勿宽：判成「有人正在用」最多
+  让用户手动关一次窗口；判成「陈旧」却会在用户正开着应用时把它的窗口一起杀掉；
+- **判据是进程可执行文件的真实路径**，而不是进程名或命令行。壳由编排器用
+  `spawnInGroup` 启动，命令行里不含项目根路径——历史上清理残留壳用的
+  `CommandLine -like "*$root*"` 因此并不可靠，这里不能照抄。`ExecutablePath`
+  取不到时退回命令行匹配（宁可多提示一次，也不要漏判后白跑构建）；
 - 需要无人值守时用 `-AutoCloseShell` 自动 `taskkill /PID <pid> /T /F` 回收（**禁止**
-  单杀，见 §3），回收失败仍返回 1；
-- **判据宁严勿宽**：判成「有人正在用」最多让用户手动关一次窗口；判成「陈旧」却会在
-  用户正开着应用时把它的窗口一起杀掉，所以「启动器在跑」一律当作「有人用」。
+  单杀，见 §3），回收失败仍返回 1。
 
 回归测试：`tests/check-file-structure.test.ts` 的「Build-Guard.ps1（构建前置守卫）」
 用例用 PowerShell 打桩 `Get-CimInstance` 喂造数据，锁住「本仓库 target 下的 exe 命中 /
 别处同名进程不命中 / 路径大小写差异命中」「陈旧壳被自动回收（发布什么 kill）」
-「启动器在跑时不自动回收、改为中止」「非交互构建下自动回收」等规则
-（非 Windows 平台自动跳过）。
+「非交互构建下自动回收」等规则（非 Windows 平台自动跳过）。
 
-#### 7.1.1 打包启动器前的占用检查：产物目录被启动器自己锁住（ISSUE #621）
+#### 7.1.1 产物目录占用的通用出口（ISSUE #621 遗留能力）
 
-`build-tauri-release.ps1` 守的是**编译产物**（`target\release\{{shell.app.exe}}`）；打包
-步骤守的是**另一个产物目录** —— `build-launcher*.ps1` 的产物是整个目录
-（`start-tauri\`、`start-tauri-dev\`、`start-tauri-standalone\`，onedir 布局），
-清理时要 `Remove-Item -Recurse -Force` 删掉整个目录树，其中用户态被占用的
-`_internal\*.dll` 删不掉。
+原先这一节讲的是「打包启动器前的占用检查」：`build-launcher*.ps1` 的产物是**整个目录**
+（onedir 布局），`Remove-Item -Recurse -Force` 删不掉被运行中进程映射的 `_internal\*.dll`。
+**那条链路已随 Python 启动器整体删除**（ISSUE #784），不再有「第二层 exe 的产物目录」，
+也就没有「打包前先查谁锁着它」这一步。
 
-现场形态：用户双击启动器 → 看到「壳有更改」提醒（`stale_shell`，判据是壳源码比
-`{{shell.app.exe}}` 新）→ **关掉桌面窗口** → 跑 `build-all.ps1`。第一步（release 壳）顺利
-编译完，第二步在 `[2/3] 清理旧产物` 就报「无法清理 start-tauri，可能被其他程序占用
-（如 {{shell.exe.prebuilt}} 仍在运行）」。用户关掉的是**桌面壳**，而启动器自己是**独立 exe**
-（`start-tauri\{{shell.exe.prebuilt}}`，onedir 布局，窗口是它绘制的），关窗不等于它退出 ——
-提示因此既指不出是谁占着，给出的动作（去关窗口）也照做无效。
-
-**第二种现场形态（判据二要解决的那个）**：启动器起过一次应用，编排器在「回收上一次
-残留」这一步崩了（实测：编排器动态加载 `src/lib/process/kill-process-tree.ts` 的说明符
-没跟着目录迁移改 → `ERR_MODULE_NOT_FOUND`），于是**没人回收它拉起的 dev server**；
-启动器自己随后退出。此后跑 `build-all.ps1`，`Get-RunningLauncher` 查不到任何启动器，
-第二步却照样在 `Remove-Item` 上失败 —— 因为 dev server 进程把
-`start-tauri\_internal\VCRUNTIME140.dll` 映射在自己地址空间里。只按 exe 名 / 路径判断
-在这里必然漏判，提示也就只能继续猜「是不是启动器没关」。
-
-| 环节                     | 判据 / 动作                                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 检查时机                 | 打包脚本在**清理旧产物之前**（此时什么都还没删，中止零代价）                                                                                                                                                                                                                                                                                                                            |
-| 判据一                   | `Assert-LauncherNotRunning` → `Get-RunningLauncher`：exe **真实路径**落在本仓库三个启动器产物目录内。别处的同名进程不算；`ExecutablePath` 取不到时退回命令行匹配（同 `Get-RunningShellProcess`，宁可多提示也不要漏判）                                                                                                                                                                  |
-| 判据二                   | `Get-ProductDirHolder -Directory <产物目录>`：把「产物目录里的文件**映射进了哪个进程**」查出来。占用者不止启动器 exe 一类——启动器拉起的 dev server（`node` → `pnpm` → `next`）会继承启动器的 DLL 搜索目录，把 `_internal\*.dll` 映射进自己进程（实测：pnpm 侧的 `VCRUNTIME140.dll` 就取自产物目录），启动器异常退出后它们残留成孤儿，目录照样删不掉，而按 exe 名 / 路径判断一个都查不到 |
-| 命中后的动作             | **中止**并点名 PID + 给 `taskkill /PID <pid> /T /F`，**不自动回收**；两类命中在**同一条消息**里一起报，省掉「杀掉启动器 → 重跑 → 又被告知目录还被占着」                                                                                                                                                                                                                                 |
-| 为什么不像壳那样自动回收 | 壳有「无主孤儿」这条判据（起它的启动器已退出）；启动器没有——窗口就是它自己的，「关掉窗口」这个用户动作并不代表「放弃这个入口」。替用户杀掉他刚双击过的入口不合适。dev server 那一类同理：它可能就是用户正开着的那次启动的服务                                                                                                                                                           |
-| 清理仍然失败时           | 统一走 `Write-ProductDirLockHint`：**真实异常文案**（`$_.Exception.Message`）+ 查出来的持有者（PID / 进程名 / 被映射的文件）+ 逐条 `taskkill /PID <pid> /T /F`。查不到持有者时才给「杀毒 / 索引服务正在扫描，或权限不足（提权残留的 pyinstaller）」的分流——旧实现把这条分流当成唯一解释，用户照做无效                                                                                   |
-
-回归测试同样在 `tests/check-file-structure.test.ts` 的 Build-Guard 用例组里
-（打桩 `Get-CimInstance` 与 `Get-Process`）：命中即 `CODE=1` 且点名 PID；别处同名
-进程 + 无命中时 `CODE=0`；三个产物目录各自都能命中；**启动器已退出、只有 dev server
-孤儿占着目录时同样 `CODE=1`**（并点名孤儿 PID，不重复点名启动器）；
-`Write-ProductDirLockHint` 的输出里既有真实异常文案、也有查出来的占用者，
-查不到人时才是「权限 / 杀毒」那条分流。
+留下的是一条通用能力：**判「目录删不掉时到底是谁占着」**，实现仍在
+`tools/scripts/Build-Guard.ps1` 的 `Get-ProductDirHolder` + `Write-ProductDirLockHint`。
+判据是「哪些进程把该目录下的文件**映射进了自己的地址空间**」——不能按 exe 名 / 路径判断：
+实测启动器拉起的 dev server（`node` → `pnpm` → `next`）会继承启动器的 DLL 搜索目录，
+把产物目录里的 `VCRUNTIME140.dll` 映射进自己进程，此时按进程名一个都查不到，
+而目录照样删不掉。清理失败时的出口因此是：**真实异常文案 + 占用者清单（PID / 进程名 /
+被映射的文件 + 命令行 / 父 PID）+ 逐条 `taskkill /PID <pid> /T /F`**，
+查不到持有者时才给「杀毒 / 索引服务正在扫描，或权限不足」的分流。
 
 #### 应用自更新（tauri-plugin-updater / tauri-plugin-process）
 
@@ -1592,7 +1558,7 @@ outputFileTracingIncludes: {
 | 入口                                                                  | 逻辑                                                                                            |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `tools/start/start-web.ps1`                                           | `scripts/dev-launcher.ps1`（入口）→ `scripts/dev-launcher.mjs`（编排）                          |
-| `tools/start/start-tauri.ps1`                                         | 直接启动 `start-tauri\{{shell.exe.prebuilt}}`（prebuilt，见 `scripts/start_tauri_launcher.py`） |
+| `tools/start/start-tauri.ps1`                                         | 直接启动 `src-tauri\target\release\{{shell.app.exe}}`（**唯一入口**，编排由壳自己承担） |
 | `tools/start/start-tauri-dev.ps1`（隐藏窗口，原 `.vbs`）              | `scripts/dev-launcher.ps1 -Tauri` → `dev-launcher.mjs --mode tauri`                             |
 | `tools/start/run-local.ps1`                                           | `scripts/prepare-local-run.ps1`                                                                 |
 | `tools/start/verify-quality.ps1`                                      | `scripts/quality-gate.ps1`                                                                      |
@@ -1644,8 +1610,8 @@ reg delete "HKCU\Software\Classes\Microsoft.PowerShellScript.1\Shell\open\comman
 
 | 目录              | 放什么                                                         | 现有入口                                                                                                                                                                 |
 | ----------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tools/start/`    | **启动/初始化类**：起 dev server、起桌面壳、环境自检、质量门禁 | `start-web.ps1`、`start-tauri.ps1`、`start-tauri-dev.ps1`、`start-desktop.ps1`、`run-local.ps1`、`verify-quality.ps1`、`sync-lint.ps1`、`register-comfyapp-protocol.ps1` |
-| `tools/build/`    | **构建打包类**：编译壳、打启动器 exe、重建 static              | `build-all.ps1`、`build-launcher*.ps1`、`build-standalone.ps1`、`build-tauri-release.ps1`、`rebuild-static.ps1`                                                          |
+| `tools/start/`    | **启动/初始化类**：起 dev server、起桌面壳、环境自检、质量门禁 | `start-web.ps1`、`start-tauri.ps1`（双击即启，直启 `{{shell.app.exe}}`）、`start-tauri-dev.ps1`、`start-desktop.ps1`、`run-local.ps1`、`verify-quality.ps1`、`sync-lint.ps1`、`register-comfyapp-protocol.ps1` |
+| `tools/build/`    | **构建打包类**：编译壳、组装 standalone 资源、重建 static      | `build-all.ps1`、`build-standalone.ps1`、`build-tauri-release.ps1`、`rebuild-static.ps1`                                                                                 |
 | `tools/registry/` | 团队 shadcn Registry                                           | `start-registry.ps1`                                                                                                                                                     |
 | `tools/studio/`   | 数据库工具                                                     | `start-studio.ps1`                                                                                                                                                       |
 | `tools/scripts/`  | 上述入口对应的**逻辑脚本**（与入口同名不同层）                 | `build-*.ps1`、`start-registry.ps1`、`Log-Common.ps1`                                                                                                                    |
@@ -1829,7 +1795,7 @@ Next」，用户要盯着空窗等半分钟才看到页面；现在等待时间�
 ### 9.3 桌面壳的跨平台（`pnpm tauri build`）
 
 壳侧此前**整条都是 Windows 独占**：`Cargo.toml` 的 `windows` crate 是无条件
-依赖、`mod single_instance` 无 cfg 门控、sidecar 写死 `node.exe`、
+依赖、`mod single_instance` 无 cfg 门控、sidecar 写死 `node` 的 Windows 形态、
 `kill_sidecar` 写死 `taskkill`、`resolve_project_root()` 校验
 `dev-launcher.ps1` 是否存在（Windows 入口文件）。四项都会在 Linux / macOS 上直接炸：
 
@@ -1843,7 +1809,7 @@ Next」，用户要盯着空窗等半分钟才看到页面；现在等待时间�
 
 **sidecar 的命名判据必须两处同源**：`bundle.externalBin` 声明的是「无后缀
 basename」，打包器按目标三元组找 `node-<triple>[.exe]`，打进资源后按平台补
-`node.exe` / `node`。只改一处会得到「编译期 panic」或「编过了但运行时找不到
+`.exe` 后缀 / 无后缀。只改一处会得到「编译期 panic」或「编过了但运行时找不到
 sidecar」两种不同形态的失败。
 
 **POSIX 单实例为什么不是 `flock`**：锁随**文件描述符**存活，而壳要在启动早期
@@ -1911,7 +1877,7 @@ sidecar」两种不同形态的失败。
 | 生成原文文档（doc:check + doc:render）               | `scripts/generate-docs.ps1`                                              | `scripts/generate-docs.mjs`（`pnpm doc:gen`）                                                                                                        |
 | 端口推导跨语言自检                                   | `scripts/check-app-port-vectors.ps1`                                     | `scripts/check-app-port-vectors.cjs`                                                                                                                 |
 | 生成 / 补齐 `.env`                                   | `scripts/prepare-local-run.ps1`（第 4 步）                               | `scripts/env-init.mjs`（`pnpm env:init`）                                                                                                            |
-| 建库（Drizzle 表结构同步）                           | `scripts/prepare-local-run.ps1`（前置）/ 启动器预检 8                    | `scripts/db-push.mjs`（`pnpm db:push`）                                                                                                              |
+| 建库（Drizzle 表结构同步）                           | `scripts/prepare-local-run.ps1`（前置）/ 编排器预检                      | `scripts/db-push.mjs`（`pnpm db:push`）                                                                                                              |
 | `pnpm` 可用性自检与修复（工具链门禁的独立入口）      | `scripts/prepare-local-run.ps1`（第 2/3 步）                             | `scripts/check-pnpm-available.mjs`（`pnpm check:toolchain`）                                                                                         |
 | `src/lib` 的 Node-only 声明与可达性（规范 §18.4）    | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                    | `scripts/lib-node-only-scan.mjs`（`node scripts/lib-node-only-scan.mjs`，契约测试 `tests/lib-node-only-declarations.test.ts`）                       |
 | UI 基元复用棘轮（规范 16 §16.2.3）                   | `scripts/prepare-local-run.ps1`（跑门禁链时一并执行）                    | `scripts/check-ui-primitives.cjs`（`pnpm ui:primitives`，契约测试 `tests/check-ui-primitives.test.ts`）                                              |

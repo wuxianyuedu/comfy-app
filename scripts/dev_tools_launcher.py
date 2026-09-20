@@ -11,7 +11,7 @@ dev_tools_launcher.py — Comfy-APP 开发工具箱（按钮式 GUI 启动器）
   - 每个命令后台线程执行，GUI 不卡顿；长驻进程（dev server）可一键停止
   - 输出实时回显到文本框，自动滚动到底部
 
-打包为无控制台 exe（风格与 start_tauri_launcher.py 一致）：
+打包为无控制台 exe：
     pyinstaller --onedir --windowed --name dev-tools --distpath . scripts/dev_tools_launcher.py
 
 生成的 dev-tools/ 目录（含 dev-tools.exe 与 _internal 依赖）放在项目根目录，

@@ -64,12 +64,6 @@ if (Test-Path $splash) {
 } else {
     Log "[警告] 未找到 public/splash.html，构建出的壳将缺少启动页（窗口可能黑屏）"
 }
-$devLauncher = Join-Path $PROJECT_ROOT "scripts\dev-launcher.ps1"
-if (Test-Path $devLauncher) {
-    $destScripts = Join-Path $TAURI_DIR "static\scripts"
-    if (-not (Test-Path $destScripts)) { New-Item -ItemType Directory -Force $destScripts | Out-Null }
-    Copy-Item -Force $devLauncher (Join-Path $destScripts "dev-launcher.ps1")
-}
 # tauri.conf.json 声明 bundle.externalBin = ["binaries/node"]，tauri-build 在每次
 # cargo build 的编译期都会校验 src-tauri/binaries/node-<target-triple>.exe 存在——
 # 即便 prebuilt 壳运行时用不到 sidecar 也绕不开。binaries/ 被 src-tauri/.gitignore
@@ -120,7 +114,7 @@ Log "  构建完成"
 Log ("  耗时：{0}" -f (Format-Elapsed -Elapsed $buildWatch.Elapsed))
 Log "  产物: $TAURI_DIR\target\release\app.exe"
 Log ""
-Log "  之后打包 start-tauri.exe 时，Prebuilt 模式会自动优先使用该壳。"
+Log "  这个 app.exe 就是**唯一**的启动入口：双击它即可（编排由壳自己承担）。"
 Log "  如需完整发布构建，请运行 tools\build\build-all.ps1"
 Log "=========================================================="
 Log ""

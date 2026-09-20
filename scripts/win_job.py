@@ -5,23 +5,24 @@
 终止」的 Job Object，并把该 job 的句柄复制进编排器进程，让编排器自己决定 job 的生死。
 
 为什么在 Python 侧而不是 Node：Job Object 是 Win32 内核对象，纯 Node 无原生 API（要
-FFI / 原生插件，违背本启动器「仅标准库 + ctypes」的约束）；而启动器（本仓库
-`start_tauri_launcher.py`）本就全程用 ctypes 打 Win32。规范 §3.3「平台机制」层里，
-Windows 的 job 归启动器侧。
+FFI / 原生插件，而 ctypes 打 Win32 这条路本项目已经在走）；规范 §3.3「平台机制」层里，
+Windows 的 job 归这一处。**调用方是 Rust 壳**（`src-tauri/src/shell_launch.rs` 在起完
+编排器后 best-effort 挂载）：谁起编排器谁就负责给这棵树兜底 —— Python 启动器已随
+ISSUE #784 移除，编排器现在是壳的子进程。
 
-机制（关键约束：启动器交班退出后 app 必须继续存活，见 §1 分层边界）：
+机制（关键约束：挂上 job 之后**壳自己**不能成为唯一句柄持有者）：
   1. CreateJobObjectW 建 job；
   2. SetInformationJobObject(JobObjectBasicLimitInformation,
      LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)；
   3. OpenProcess(目标 pid)；
   4. **先** DuplicateHandle 把 job 句柄复制一份进目标进程（目标全程持有它）；
   5. **再** AssignProcessToJobObject 把目标纳入 job（目标后续子进程自动继承成员身份）；
-  6. 启动器交班退出 → 自己那份句柄关闭，但目标复制的那份仍在 → job 不死、app 继续；
+  6. 本进程退出 → 自己那份句柄关闭，但目标复制的那份仍在 → job 不死、那棵树继续；
   7. 目标（node 编排器）崩溃 / 被杀 → 它那份句柄关闭 → 最后一个句柄 → OS 当场终止整棵
      job（node → pnpm → next → 桌面壳），杜绝孤儿。
 
-顺序为什么是「先复制句柄、后 assign」：若 assign 成功而复制句柄失败，job 里就只剩启动器
-一个句柄持有者，启动器一退出 KILL_ON_JOB_CLOSE 会把刚起来的 app 一起杀掉（正是本模块要
+顺序为什么是「先复制句柄、后 assign」：若 assign 成功而复制句柄失败，job 里就只剩本进程
+一个句柄持有者，本进程一退出 KILL_ON_JOB_CLOSE 会把刚起来的应用一起杀掉（正是本模块要
 避免的反面）。先复制、后 assign，则任一步失败时目标要么根本没进 job、要么进的是一个没有
 成员的空 job（无害），行为退回现状。
 

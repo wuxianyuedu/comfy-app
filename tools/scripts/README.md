@@ -26,8 +26,8 @@
 | 文件 | 职责 |
 |---|---|
 | `Log-Common.ps1` | 统一日志与耗时：`Log` / `Invoke-Logged` / `Open-Log`，以及 `Start-LogStopwatch` / `Format-Elapsed` / `Log-Elapsed`（构建耗时报告，规范 §7.0）。**新增构建脚本复用这三个耗时函数，不要各写一套 `Stopwatch`** —— 格式漂成几种就没法横向对比。 |
-| `Build-Guard.ps1` | 编译前置守卫 `Assert-ShellNotRunning`：`target/{release,debug}/app.exe` 被占用时会在链接收尾报 `os error 5`，且要等整轮编译走完才失败。陈旧壳与非交互构建自动 `taskkill /T /F` 回收后继续；只有「启动器仍在跑 / 用户可能正开着应用」才中止（规范 §7.1）。 |
-| `Build-Guard.ps1`（同文件另一半） | 打包前置守卫 `Assert-LauncherNotRunning`：`build-launcher*.ps1` 的产物是**整个目录**（`start-tauri\` 等），运行中的启动器把 `_internal\*.dll` 锁住就删不掉，而「关掉桌面窗口」并不会让启动器自己退出。命中即中止并点名 PID + 给 `taskkill /PID <pid> /T /F`（**不自动回收**：启动器没有「无主孤儿」这条判据，见规范 §7.1.1）。 |
+| `Build-Guard.ps1` | 编译前置守卫 `Assert-ShellNotRunning`：`target/{release,debug}/app.exe` 被占用时会在链接收尾报 `os error 5`，且要等整轮编译走完才失败。陈旧壳与双击构建下的占用自动 `taskkill /T /F` 回收后继续；只有「用户可能正开着应用」才中止（规范 §7.1）。 |
+| `Build-Guard.ps1`（同文件另一半） | 目录占用的通用出口 `Get-ProductDirHolder` / `Write-ProductDirLockHint`：判「目录删不掉时到底是谁占着」——按「哪些进程把这些文件映射进了地址空间」点名占用者 + 给 `taskkill /PID <pid> /T /F`。原先服务的是「打包启动器 exe 的 onedir 产物目录」，那条链路已随 ISSUE #784 删除，能力保留（见规范 §7.1.1）。 |
 
 `scripts/entry-common.ps1`（仓库根的 `scripts/`，不在本目录）提供入口通用能力：
 `Get-ProjectRoot` / `Get-Pwsh` / `Invoke-Entry` / `Complete-Entry` / `Test-IsDoubleClicked`。

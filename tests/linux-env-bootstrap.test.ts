@@ -226,8 +226,30 @@ describe("dev/start 在起 Next 之前预检", () => {
     // 所以把入口与预检模块复制到一个最小检出副本里）。
     const scriptsDir = path.join(tmp, "scripts");
     fs.mkdirSync(scriptsDir, { recursive: true });
-    for (const name of ["dev.mjs", "env-preflight.mjs", "app-port.mjs", "db-schema-state.mjs"]) {
-      fs.copyFileSync(path.join(ROOT, "scripts", name), path.join(scriptsDir, name));
+    // `dev.mjs` 的模块图里还有 `db-schema-state.mjs` 与它自己的依赖
+    // （`db-push-core.mjs` / `lockfile/*` / `standalone-private-inputs.mjs`…）：
+    // 少拷一份，spawn 出来的就是「模块找不到」而不是预检结论 —— 那正是本条
+    // 断言曾经抓不住的东西（输出里只有 ERR_MODULE_NOT_FOUND 的调用栈）。
+    const needed = [
+      "dev.mjs",
+      "env-preflight.mjs",
+      "app-port.mjs",
+      "db-schema-state.mjs",
+      "db-push-core.mjs",
+      "standalone-private-inputs.mjs",
+    ];
+    for (const name of needed) {
+      const src = path.join(ROOT, "scripts", name);
+      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(scriptsDir, name));
+    }
+    for (const dir of ["lockfile"]) {
+      const from = path.join(ROOT, "scripts", dir);
+      if (!fs.existsSync(from)) continue;
+      const to = path.join(scriptsDir, dir);
+      fs.mkdirSync(to, { recursive: true });
+      for (const name of fs.readdirSync(from)) {
+        fs.copyFileSync(path.join(from, name), path.join(to, name));
+      }
     }
     // `dev.mjs` 依赖 `launcher-core/shell.mjs`（pnpm 可执行形态的单一判据，
     // 见规范 §2.1.1），副本里也要有它，否则 import 就失败、测的就不是预检了。

@@ -599,12 +599,12 @@ export function lastSeqOf(logs: LogEntry[]): number {
  *   - `app`（nextjs-panel-<pid>-<ts>.log）：文件名按进程命名，但服务端取的是
  *     「目录里最新的那一份」，在本次进程还没落盘时会**读到上一个进程的文件**，
  *     因此同样要裁；
- *   - `launcher`（start-tauri-launcher.log）/ `dev`（dev-launcher.log）：
+ *   - `launcher`（dev-launcher-stderr.log）/ `dev`（dev-launcher.log）：
  *     每次运行**覆盖重建**，文件内容天然只有本次——它们**不需要**裁。
  *
  * 为什么必须逐来源判定、而不能拿一个全局 cutoff 往整条时间线上套：
- * 会话起点取自 `dev-launcher.log` 的 mtime，而**启动器的头几行写在它被创建
- * 之前**（python 版本、exe、cwd、探测 Node…）。用一个全局 cutoff 一刀切，
+ * 会话起点取自 `dev-launcher.log` 的 mtime，而**壳写下的头几行在它被创建
+ * 之前**（exe 路径、项目根、探测结果…）。用一个全局 cutoff 一刀切，
  * 这些真·本次运行的行会被当成历史丢掉——用户读到的就是「启动和启动器日志
  * 丢失」（ISSUE #262 复审）。覆盖重建的来源不存在「历史行」，因此不参与裁剪。
  */
