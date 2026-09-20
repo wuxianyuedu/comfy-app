@@ -91,8 +91,18 @@ node -e "const D=require('better-sqlite3'); const src=new D('db.sqlite'); const 
 
 ### 3.2 注意事项
 
-- **只传 `db.sqlite`，不传 `-wal` / `-shm`**。带过来可能导致
-  `database disk image is malformed`（WAL 与主库 salt 不匹配）。
+- **只传 `db.sqlite`，不传 `-wal` / `-shm`**。原因：
+
+  应用正常关闭时，SQLite 会自动执行 checkpoint——把 WAL 中所有已提交的
+  数据合并回主库，WAL 随之清空。所以**关应用后的 `db.sqlite` 单文件就是
+  完整快照**，`-wal`/`-shm` 里已经没有任何数据了。
+
+  跨机器携带 WAL 不仅无益，反而有害：WAL 文件头有一个随机 salt 值，必须
+  与主库 header 中的 salt 一致 SQLite 才会回放它。不匹配时轻则忽略（白带），
+  重则像今天一样——WAL 本身已损坏，SQLite 尝试回放时报
+  `database disk image is malformed`，把一份健康的主库也带崩。
+
+  **结论**：备份和迁移永远只操作 `db.sqlite` 一个文件。
 - **版本兼容**：如果对方的 schema 比你本地代码新（多了列/表），启动时
   `heal-db` 会自动补列；如果对方 schema 比你旧，drizzle-kit push 会
   建新表/索引，不会删已有数据。
