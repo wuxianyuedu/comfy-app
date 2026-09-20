@@ -99,4 +99,47 @@ if (tables <= 0) {
   );
 }
 
-process.stdout.write(`[db:push] ✓ 用户表 ${tables} 张，schema 已就绪\n`);
+process.stdout.write(`[db:push] ✓ 用户表 ${tables} 张\n`);
+
+/* ── 复核二：表**结构**是否真的与 schema 一致 ────────────────────────────
+ *
+ * 「有表」不等于「表就是 schema 说的那一张」。实测现场：库里的
+ * `workflowTemplate` 留着历史版本删过的 `graph TEXT NOT NULL`，于是新建工作流
+ * 直接 `NOT NULL constraint failed: workflowTemplate.graph` —— 而上面那条
+ * 「表数 > 0」的复核一路绿灯，`probeSchemaSync` 也只判「表建没建」，同样说
+ * ready。用户看到的是一句数据库报错，所有自检都说没问题。
+ *
+ * 判据取 drizzle 自己的 diff：**再跑一次 push，它必须说 No changes detected**
+ * （收敛）。第一次跑完已应用变更，第二次仍报有变更 = 那些语句没落地 —— 本文件
+ * 头注释里那条坑的**第二种形态**：无 TTY 时交互提示被静默吞掉的另一种后果
+ * 不是「库被清空」（那种旧判据能抓到），而是「库原样不动」（旧判据抓不到）。 */
+const converge = runPnpmSync(["exec", "drizzle-kit", "push", "--force"], {
+  cwd: root,
+  stdio: "pipe",
+  timeoutMs: 600_000,
+});
+const convergeOut = `${converge.stdout}\n${converge.stderr}`;
+if (!/No changes detected/i.test(convergeOut)) {
+  fail(
+    [
+      "drizzle-kit 两次都报告有变更：第一次的语句没有全部落地，表结构与 schema 仍不一致。",
+      "",
+      `库文件：${dbPath}`,
+      "",
+      "第二次输出的尾部：",
+      ...convergeOut
+        .trim()
+        .split("\n")
+        .slice(-12)
+        .map((line) => `  ${line}`),
+      "",
+      "可行动作：",
+      "  · 手工重跑看完整输出：pnpm exec drizzle-kit push --force",
+      "  · 按签名里的表名核对库里的实际列（PRAGMA table_info(<表名>)），与",
+      "    src/server/db/schema.ts 对齐后再重跑；",
+      "  · 确认没有另一个进程（dev server）长时间占着写锁。",
+    ].join("\n"),
+  );
+}
+
+process.stdout.write(`[db:push] ✓ schema 已收敛（无待应用变更）\n`);
