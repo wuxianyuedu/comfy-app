@@ -55,6 +55,20 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 }
 
+/**
+ * 浏览器侧唯一通道的豁免清单。判据必须满足**全部**三条，缺一不可：
+ *  1. 文件首行是 `"use client"` —— 只进浏览器打包图，永不跑到服务端
+ *     （服务端日志唯一通道的判据只管服务端可达的代码）；
+ *  2. console 是这套诊断的**传输手段本身**，不是「图省事随手带开头」——
+ *    `watchTask` 的诊断日志靠 console.info 被 `LogProvider` 拦截后落进
+ *    应用日志面板，这是项目规定的客户端日志口（规范 07 §7.6）；
+ *  3. 同一份诊断还走 `h.onLog` 写进工作流库「执行日志」弹窗，两条通道都要。
+ *
+ * 豁免必须由正向后置断言锁住（见用例末尾的 `it("浏览器侧豁免确实标了
+ * use client")`），防止以后把豁免套在服务端可达的文件上静默放过。
+ */
+const CLIENT_ONLY = ["src/lib/workshop/generation-client.ts"];
+
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
@@ -74,6 +88,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
       for (const file of walk(join(ROOT, dir))) {
         const rel = relative(ROOT, file).split("\\").join("/");
         if (/\.test\.(ts|tsx)$/.test(rel)) continue; // 用例自己会打点/断言输出
+        if (CLIENT_ONLY.includes(rel)) continue; // 浏览器侧唯一通道，见上方清单
         const src = stripComments(readFileSync(file, "utf8"));
         if (/\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/.test(src)) {
           offenders.push(rel);
@@ -86,6 +101,21 @@ describe("日志实现只有一处（ISSUE #568）", () => {
         "（实现只有一份：`src/lib/core/logger.ts`；服务端可取 `src/server/lib/logger.ts` 的中转）：\n" +
         "直接 console 的后果是**绕开 redact 脱敏与 ERROR 镜像**（规范 07 §7.18.2.1）。",
     ).toEqual([]);
+  });
+
+  it("浏览器侧豁免确实标了 use client，且 console 真在用它", () => {
+    // 正向后置断言：豁免不许套在服务端可达的文件上。首行必须是 `"use client"`
+    // （只进浏览器图、永不上服务端），且文件里确实有 console 调用 —— 否则
+    // 这条豁免就是白挂的，应当从清单里删掉。
+    for (const rel of CLIENT_ONLY) {
+      const raw = readFileSync(join(ROOT, rel), "utf8");
+      expect(raw.split("\n")[0]?.trim(), `${rel} 首行必须是 "use client"`).toBe(
+        '"use client";',
+      );
+      expect(stripComments(raw), `${rel} 里应当有 console 调用`).toMatch(
+        /\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/,
+      );
+    }
   });
 
   it("core/logger 是唯一实现：日志配置全在这里，且不再自研拼行", () => {
