@@ -12,6 +12,7 @@ import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
 import { isPreviewableUrl } from "~/lib/llm/usage-test-config";
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { FormField } from "~/components/ui/form-field";
 
 import { statusButtonClass } from "../settings-status-row-config";
 
@@ -97,19 +98,22 @@ export function Field({
   type?: string;
   placeholder?: string;
 }) {
+  /* 标签 / 控件 / ARIA 关联走 `ui/form-field`（规范 16 §16.2.4.26）。
+   * 收口前这里的 `<label>` 是裸的 —— 点标签不聚焦输入框，读屏器把标签读成
+   * 孤立文本（全库 15 处表单行**没有一处**关联过 `htmlFor`）。 */
   return (
-    <div className="mb-3">
-      <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-        className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-      />
-    </div>
+    <FormField label={label} className="mb-3">
+      {(a11y) => (
+        <input
+          {...a11y}
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+        />
+      )}
+    </FormField>
   );
 }
 

@@ -721,7 +721,102 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-  it("P10~P20 未清零时 --update 拒绝更新基线", () => {
+  /* ── P21 / P22 / P23：本批三条硬闸（规范 §16.2.4.24 ~ §16.2.4.26）────
+   *
+   * 三条同样按**形态**取锚点（赋值 `scrollTop = …scrollHeight` /
+   * `window.location.href =` / 裸 `<label className="…block…">` + 输入控件），
+   * 每条都配反面用例 —— 判据太宽会逼下一个人改坏外观去迎合它。 */
+  it("视图里自写滚动贴底直接阻断（规范 P21）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/Follow.tsx",
+      "export function F({ text }: { text: string }) {\n  const ref = useRef<HTMLDivElement>(null);\n  useEffect(() => {\n    const el = ref.current;\n    if (el) el.scrollTop = el.scrollHeight;\n  }, [text]);\n  return <div ref={ref} className=\"overflow-y-auto\" />;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P21");
+    expect(output).toContain("src/components/studio/Follow.tsx");
+  });
+
+  it("只读 scrollHeight 做量测（虚拟化的贴底算术）不被 P21 计", () => {
+    /* `log-virtual` 的 `pinScrollTop` 只**读**几何、不改 DOM；
+     * textarea 自动增高写的是 `style.height`。两者都不是「贴底」这个动作。 */
+    seedBaseline();
+    write(
+      "src/components/studio/Measure.tsx",
+      "export function M({ el }: { el: HTMLElement }) {\n  const h = el.scrollHeight - el.clientHeight;\n  const ta = el as unknown as HTMLTextAreaElement;\n  ta.style.height = `${ta.scrollHeight}px`;\n  return <div>{h}</div>;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("使用 useScrollFollow 的文件不再被 P21 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkFollow.tsx",
+      "import { useScrollFollow } from \"~/components/ui/use-scroll-follow\";\nexport function F({ text }: { text: string }) {\n  const follow = useScrollFollow({ watch: text });\n  return <div ref={follow.containerRef} onScroll={follow.onScroll} />;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写外部目标导航直接阻断（规范 P22）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OpenFolder.tsx",
+      "export function O({ url }: { url: string }) {\n  return <div onClick={() => { window.location.href = url; }}>打开</div>;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P22");
+    expect(output).toContain("src/components/studio/OpenFolder.tsx");
+  });
+
+  it("对内的路由跳转不被 P22 计（那是 router.push，不是交给外部程序）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/GoPage.tsx",
+      "import { useRouter } from \"next/navigation\";\nexport function G() {\n  const router = useRouter();\n  return <div onClick={() => router.push(\"/studio\")}>去工作室</div>;\n}\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("视图里自写「标签 + 控件」的表单行直接阻断（规范 P23）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/RawField.tsx",
+      "export function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <label className=\"block\">\n      <span className=\"text-ink-faint mb-1.5 block text-[11px]\">名称</span>\n      <input value={v} onChange={(e) => on(e.target.value)} />\n    </label>\n  );\n}\n",
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P23");
+    expect(output).toContain("src/components/studio/RawField.tsx");
+  });
+
+  it("整块可点的开关行（label 包住 Switch）不被 P23 计", () => {
+    /* 那是另一种形态 —— 标签与控件**并排**、点哪都切换；
+     * `FormField` 的块级标签行套上去会改掉那条排布（§16.2.4.2 第 9 条）。 */
+    seedBaseline();
+    write(
+      "src/components/studio/SwitchRow.tsx",
+      "export function S({ v, on }: { v: boolean; on: (b: boolean) => void }) {\n  return (\n    <label className=\"flex cursor-pointer items-center justify-between gap-2\">\n      <span className=\"text-ink-soft\">显示网格</span>\n      <Switch checked={v} onCheckedChange={on} />\n    </label>\n  );\n}\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("使用 FormField 的文件不再被 P23 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/OkField.tsx",
+      "import { FormField } from \"~/components/ui/form-field\";\nexport function F({ v, on }: { v: string; on: (s: string) => void }) {\n  return (\n    <FormField label=\"名称\" id=\"n\">\n      {(a11y) => <input {...a11y} value={v} onChange={(e) => on(e.target.value)} />}\n    </FormField>\n  );\n}\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P10~P23 未清零时 --update 拒绝更新基线", () => {
     write("src/components/studio/ToggleUpdate.tsx", ROLE_BUTTON_TOGGLE_VIEW);
     const { code, output } = run(["--update"]);
     expect(code).toBe(1);
@@ -747,6 +842,9 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P18).toBeUndefined();
     expect(baseline.rules.P19).toBeUndefined();
     expect(baseline.rules.P20).toBeUndefined();
+    expect(baseline.rules.P21).toBeUndefined();
+    expect(baseline.rules.P22).toBeUndefined();
+    expect(baseline.rules.P23).toBeUndefined();
   });
 
   it("ui/ 基元自身实现放行（Button 里本来就是 <button>）", () => {

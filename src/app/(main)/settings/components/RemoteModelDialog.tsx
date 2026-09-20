@@ -12,6 +12,7 @@
  */
 
 import { SelectMenu } from "~/components/ui/select-menu";
+import { FormField } from "~/components/ui/form-field";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import {
@@ -60,87 +61,92 @@ export function RemoteModelDialog({
             </Button>
           </div>
 
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            供应商（仅支持 OpenAI 兼容协议 API）
-          </label>
-          <SelectMenu
-            className="mb-3 text-sm"
-            fullWidth
-            value="custom"
-            onChange={() => undefined}
-            options={["custom"]}
-            labels={{ custom: "◇ 自定义" }}
-            disabled
-            popoverMinWidth={160}
-            autoFitFromOptions={false}
-          />
-
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            用途
-          </label>
-          <SelectMenu
-            className="mb-3 text-sm"
-            fullWidth
-            value={d.addForm.kind}
-            onChange={(kind) =>
-              d.setAddForm((f) => ({
-                ...f,
-                kind: kind as RemoteModelKind,
-              }))
-            }
-            options={[...REMOTE_MODEL_KINDS]}
-            labels={REMOTE_MODEL_KIND_LABELS}
-            popoverMinWidth={160}
-            autoFitFromOptions={false}
-          />
-
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            接口地址
-          </label>
-          <input
-            type="text"
-            value={d.addForm.baseUrl}
-            onChange={(event) =>
-              d.setAddForm({ ...d.addForm, baseUrl: event.target.value })
-            }
-            placeholder="https://api.example.com/v1"
-            className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 mb-1 w-full rounded-lg border px-3 py-2 text-sm outline-none"
-          />
-          <p className="text-muted-foreground mb-3 text-[11px]">
-            留空则跟随已保存的全局接口地址
-          </p>
-
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            API Key
-          </label>
-          <div className="mb-1 flex gap-2">
-            <input
-              type="password"
-              value={d.addForm.apiKey}
-              onChange={(event) => {
-                d.setAddForm({
-                  ...d.addForm,
-                  apiKey: event.target.value,
-                });
-                /* 输入新密钥即撤销「清除」标记 */
-                if (event.target.value) d.setClearKey(false);
-              }}
-              placeholder={
-                dialog.mode === "edit" && dialog.entry.apiKey
-                  ? "已设置独立密钥，留空保持不变"
-                  : "留空则使用全局 API Key"
-              }
-              className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+          <FormField
+            label="供应商（仅支持 OpenAI 兼容协议 API）"
+            id="remote-model-provider"
+            className="mb-3"
+          >
+            <SelectMenu
+              className="text-sm"
+              fullWidth
+              value="custom"
+              onChange={() => undefined}
+              options={["custom"]}
+              labels={{ custom: "◇ 自定义" }}
+              disabled
+              popoverMinWidth={160}
+              autoFitFromOptions={false}
             />
-            <Button
-              variant="outline"
-              onClick={() => void d.testConnection()}
-              disabled={d.testing}
-              className="text-muted-foreground h-auto shrink-0 rounded-lg px-3 py-2 text-sm"
-            >
-              {d.testing ? "测试中…" : "测试连接"}
-            </Button>
-          </div>
+          </FormField>
+
+          <FormField label="用途" id="remote-model-kind" className="mb-3">
+            <SelectMenu
+              className="text-sm"
+              fullWidth
+              value={d.addForm.kind}
+              onChange={(kind) =>
+                d.setAddForm((f) => ({
+                  ...f,
+                  kind: kind as RemoteModelKind,
+                }))
+              }
+              options={[...REMOTE_MODEL_KINDS]}
+              labels={REMOTE_MODEL_KIND_LABELS}
+              popoverMinWidth={160}
+              autoFitFromOptions={false}
+            />
+          </FormField>
+
+          <FormField
+            label="接口地址"
+            id="remote-model-base-url"
+            hint="留空则跟随已保存的全局接口地址"
+            className="mb-3"
+          >
+            {(a11y) => (
+              <input
+                {...a11y}
+                type="text"
+                value={d.addForm.baseUrl}
+                onChange={(event) =>
+                  d.setAddForm({ ...d.addForm, baseUrl: event.target.value })
+                }
+                placeholder="https://api.example.com/v1"
+                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              />
+            )}
+          </FormField>
+
+          <FormField label="API Key" id="remote-model-api-key">
+            <div className="mb-1 flex gap-2">
+              <input
+                type="password"
+                value={d.addForm.apiKey}
+                onChange={(event) => {
+                  d.setAddForm({
+                    ...d.addForm,
+                    apiKey: event.target.value,
+                  });
+                  /* 输入新密钥即撤销「清除」标记 */
+                  if (event.target.value) d.setClearKey(false);
+                }}
+                placeholder={
+                  dialog.mode === "edit" && dialog.entry.apiKey
+                    ? "已设置独立密钥，留空保持不变"
+                    : "留空则使用全局 API Key"
+                }
+                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              />
+              <Button
+                variant="outline"
+                onClick={() => void d.testConnection()}
+                disabled={d.testing}
+                className="text-muted-foreground h-auto shrink-0 rounded-lg px-3 py-2 text-sm"
+              >
+                {d.testing ? "测试中…" : "测试连接"}
+              </Button>
+            </div>
+          </FormField>
           {dialog.mode === "edit" && dialog.entry.apiKey && (
             <p className="text-muted-foreground mb-1 text-[11px]">
               {d.clearKey ? (
@@ -203,24 +209,29 @@ export function RemoteModelDialog({
             </div>
           )}
 
-          <label className="text-ink/80 mb-1.5 block text-sm font-medium">
-            模型名称
-          </label>
-          <input
-            type="text"
-            value={d.addForm.model}
-            onChange={(event) =>
-              d.setAddForm({ ...d.addForm, model: event.target.value })
-            }
-            placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
-            aria-invalid={d.fieldErrors.model ? true : undefined}
-            className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 aria-invalid:border-destructive w-full rounded-lg border px-3 py-2 text-sm outline-none"
-          />
-          {d.fieldErrors.model && (
-            <p className="text-danger-strong mt-1 text-[11px]">
-              {d.fieldErrors.model}
-            </p>
-          )}
+          {/* 字段级错误行与 `aria-invalid` / `aria-describedby` 由
+              `FormField` 一次给全（规范 16 §16.2.4.26）—— 收口前这里手写了
+              `aria-invalid`，却**没有**把错误文案关联给控件，读屏器只知道
+              「这个框是错的」、不知道错在哪。 */}
+          <FormField
+            label="模型名称"
+            id="remote-model-name"
+            error={d.fieldErrors.model}
+            className="mb-3"
+          >
+            {(a11y) => (
+              <input
+                {...a11y}
+                type="text"
+                value={d.addForm.model}
+                onChange={(event) =>
+                  d.setAddForm({ ...d.addForm, model: event.target.value })
+                }
+                placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
+                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 aria-invalid:border-destructive w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              />
+            )}
+          </FormField>
           {d.addError && (
             <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
               {d.addError}

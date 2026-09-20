@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Textarea } from "~/components/ui/textarea";
 import { Separator } from "~/components/ui/separator";
+import { FormField } from "~/components/ui/form-field";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { useFilmStudio } from "./hooks/use-film-studio";
 import { AuroraGlow } from "~/components/ui/aurora-background";
@@ -458,10 +459,10 @@ export function FilmStudio() {
           {/* Form fields */}
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {/* Shot name */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                镜头名称
-              </span>
+            <FormField
+              label="镜头名称"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <input
                 value={selectedShot!.name}
                 onChange={(event) =>
@@ -475,13 +476,13 @@ export function FilmStudio() {
                 }
                 className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
-            </label>
+            </FormField>
 
             {/* Duration */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                时长 (秒)
-              </span>
+            <FormField
+              label="时长 (秒)"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <input
                 type="number"
                 step="0.1"
@@ -504,49 +505,49 @@ export function FilmStudio() {
                 }
                 className="border-border bg-subtle text-ink-field h-9 w-full rounded-lg border px-3 text-[13px] outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20"
               />
-            </label>
+            </FormField>
 
             {/* Mode select */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                生成模式
-              </span>
+            <FormField
+              label="生成模式"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <div className="border-border bg-subtle text-ink-field flex h-9 items-center rounded-lg border px-3 text-[13px]">
                 图生视频 (Wan I2V)
               </div>
-            </label>
+            </FormField>
 
             {/* Transition */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                转场效果
-              </span>
+            <FormField
+              label="转场效果"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <div className="border-border bg-subtle text-ink-strong flex h-9 items-center rounded-lg border px-3 text-[13px]">
                 溶解过渡 (Cross Dissolve)
               </div>
-            </label>
+            </FormField>
 
             {/* Prompt textarea */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                提示词 / 描述
-              </span>
+            <FormField
+              label="提示词 / 描述"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <Textarea
                 rows={3}
                 defaultValue="城市在晨光中苏醒，镜头缓缓推进，展现繁忙街道与远处天际线…"
                 className="border-border bg-subtle text-ink-fainter resize-none rounded-lg text-[12px] leading-relaxed"
               />
-            </label>
+            </FormField>
 
             {/* Divider —— 走 ui/separator（规范 16 §16.2.3）：`<hr>` 自带
                  UA 样式，改「分隔线长什么样」要同时找 `<hr>` 与 border-t 两种写法。 */}
             <Separator className="bg-border-subtle" />
 
             {/* 全局配置：剧本输入（从原版收起） */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                剧本 / 创意
-              </span>
+            <FormField
+              label="剧本 / 创意"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <Textarea
                 value={c.script}
                 onChange={(event) => c.setScript(event.target.value)}
@@ -554,13 +555,13 @@ export function FilmStudio() {
                 placeholder="支持一句话自动分镜…"
                 className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-[12px] leading-relaxed"
               />
-            </label>
+            </FormField>
 
             {/* 逐镜生成用的工作流（内置模板已移除，必须从工作流库选） */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                视频工作流（工作流库）
-              </span>
+            <FormField
+              label="视频工作流（工作流库）"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <select
                 value={c.videoWorkflowId}
                 onChange={(event) => c.setVideoWorkflowId(event.target.value)}
@@ -583,13 +584,13 @@ export function FilmStudio() {
                   请先在工作室「工作流库」导入并配好对外参数。
                 </span>
               )}
-            </label>
+            </FormField>
 
             {/* 文生视频镜头合成首帧用的图类工作流（镜头自带首帧时不需要） */}
-            <label className="block">
-              <span className="text-ink-faint mb-1.5 block text-[11px]">
-                首帧合成工作流（可选，工作流库）
-              </span>
+            <FormField
+              label="首帧合成工作流（可选，工作流库）"
+              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            >
               <select
                 value={c.imageWorkflowId}
                 onChange={(event) => c.setImageWorkflowId(event.target.value)}
@@ -606,7 +607,7 @@ export function FilmStudio() {
                   </option>
                 ))}
               </select>
-            </label>
+            </FormField>
 
             {/* Subtitle toggle */}
             <label className="border-border bg-canvas/60 flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5">

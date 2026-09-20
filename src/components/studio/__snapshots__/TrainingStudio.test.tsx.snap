@@ -412,32 +412,39 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
         <div
           class="flex-1 space-y-3.5 overflow-y-auto p-4"
         >
-          <div>
+          <div
+            class="min-w-0"
+          >
             <label
               class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+              for="train-name"
             >
               任务名称
             </label>
             <input
               class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/20"
+              id="train-name"
               placeholder="如：我的水墨风格"
               value=""
             />
           </div>
-          <div>
+          <div
+            class="min-w-0"
+          >
             <label
               class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+              for="train-base-model"
             >
               底模（Checkpoint）
             </label>
             <button
-              aria-controls="_r_0_"
+              aria-controls="_r_2_"
               aria-expanded="false"
               aria-haspopup="listbox"
               class="border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex items-center justify-between gap-x-2 rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
               data-base-ui-click-trigger=""
               data-slot="popover-trigger"
-              id="base-ui-_r_2_"
+              id="base-ui-_r_4_"
               role="combobox"
               tabindex="0"
               type="button"
@@ -467,45 +474,56 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
           <div
             class="grid grid-cols-2 gap-2.5"
           >
-            <div>
+            <div
+              class="min-w-0"
+            >
               <label
                 class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+                for="train-trigger-word"
               >
                 触发词
               </label>
               <input
                 class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/20"
+                id="train-trigger-word"
                 placeholder="如：somecjkstyle"
                 value=""
               />
             </div>
-            <div>
+            <div
+              class="min-w-0"
+            >
               <label
                 class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+                for="train-class-word"
               >
                 类别词（可选）
               </label>
               <input
                 class="h-9 w-full rounded-lg border-border border bg-subtle px-3 text-[13px] text-ink-field outline-none transition-colors focus:border-primary-500/50 focus:ring-1 focus:ring-primary-500/20"
+                id="train-class-word"
                 placeholder="person / style"
                 value=""
               />
             </div>
           </div>
-          <div>
+          <div
+            class="min-w-0"
+          >
             <label
               class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+              for="train-resolution"
             >
               分辨率
             </label>
             <button
-              aria-controls="_r_3_"
+              aria-controls="_r_8_"
               aria-expanded="false"
               aria-haspopup="listbox"
               class="border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex items-center justify-between gap-x-2 rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
               data-base-ui-click-trigger=""
               data-slot="popover-trigger"
-              id="base-ui-_r_5_"
+              id="base-ui-_r_a_"
               role="combobox"
               tabindex="0"
               type="button"
@@ -633,11 +651,16 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
             />
           </div>
           <div>
-            <label
-              class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+            <div
+              class="min-w-0"
             >
-              学习率
-            </label>
+              <label
+                class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+                for="_r_b_"
+              >
+                学习率
+              </label>
+            </div>
             <div
               class="nodrag nopan border-border-strong bg-subtle flex items-center gap-0 rounded-lg border transition-opacity  "
             >
@@ -705,20 +728,23 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
           <div
             class="grid grid-cols-2 gap-2.5"
           >
-            <div>
+            <div
+              class="min-w-0"
+            >
               <label
                 class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+                for="train-optimizer"
               >
                 优化器
               </label>
               <button
-                aria-controls="_r_6_"
+                aria-controls="_r_d_"
                 aria-expanded="false"
                 aria-haspopup="listbox"
                 class="border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex items-center justify-between gap-x-2 rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 data-base-ui-click-trigger=""
                 data-slot="popover-trigger"
-                id="base-ui-_r_8_"
+                id="base-ui-_r_f_"
                 role="combobox"
                 tabindex="0"
                 type="button"
@@ -745,20 +771,23 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
             </div>
-            <div>
+            <div
+              class="min-w-0"
+            >
               <label
                 class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+                for="train-scheduler"
               >
                 调度器
               </label>
               <button
-                aria-controls="_r_9_"
+                aria-controls="_r_h_"
                 aria-expanded="false"
                 aria-haspopup="listbox"
                 class="border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex items-center justify-between gap-x-2 rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none w-full !bg-subtle !border-border text-ink-field h-9 text-[13px]"
                 data-base-ui-click-trigger=""
                 data-slot="popover-trigger"
-                id="base-ui-_r_b_"
+                id="base-ui-_r_j_"
                 role="combobox"
                 tabindex="0"
                 type="button"
@@ -786,9 +815,12 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
               </button>
             </div>
           </div>
-          <div>
+          <div
+            class="min-w-0"
+          >
             <label
               class="mb-1.5 block text-[11px] font-medium text-ink-faint"
+              for="train-seed"
             >
               随机种子
             </label>
