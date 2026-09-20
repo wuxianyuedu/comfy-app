@@ -649,8 +649,16 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 | 层         | 文件                                                                              | 内容                                                                                  |
 | ---------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | 编排       | `scripts/dev-launcher.mjs`                                                        | 预检 / 端口 / 缓存 / 拉起 / 就绪 / 进度快照 / 收尾定性（**不摸 `process.platform`**） |
-| 平台机制   | `scripts/launcher-core/{procs,shell,job-object}.mjs`                              | 进程与端口探测、进程组拉起、可执行文件解析                                            |
+| 平台机制   | `scripts/launcher-core/{procs,shell}.mjs`                                         | 进程与端口探测、进程组拉起、可执行文件解析                                            |
 | 进程树回收 | `src/lib/process/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                    |
+
+> **Windows Job Object 归启动器侧**：编排器（node）若崩溃 / 被硬杀，它拉起的
+> `node → pnpm → next → 桌面壳` 会残留成孤儿（锁住 `start-tauri\_internal\*.dll`）。
+> OS 级兜底是一个 `KILL_ON_JOB_CLOSE` 的 Job Object：句柄复制进编排器进程，编排器一死
+> 最后一个句柄关闭 → OS 当场终止整棵树。纯 Node 无原生 job API（要 FFI / 原生插件，违背
+> 启动器「仅标准库 + ctypes」约束），故实现在 `scripts/win_job.py`，由
+> `start_tauri_launcher.py` 在拉起编排器后 best-effort 挂载（失败即退回现有回收路径）。
+> POSIX 侧无 Job Object，靠 `run/launcher-session.json` + 心跳 + 杀进程组兜底（见上表）。
 
 各环节的取值来源仍是**同一事实源**，只是不再有「第二份实现」：
 
