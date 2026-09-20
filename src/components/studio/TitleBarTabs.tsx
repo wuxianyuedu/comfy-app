@@ -45,6 +45,7 @@ import {
 } from "~/lib/shell/window-controls-client";
 import { useStartupForeground } from "./hooks/use-startup-foreground";
 import { Button } from "~/components/ui/button";
+import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 interface TitleBarTabsProps {
   tabs: ShellTab[];
@@ -72,12 +73,10 @@ function TitleBarTab({
       tabIndex={0}
       data-no-drag
       onClick={() => onActivate(tab.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onActivate(tab.id);
-        }
-      }}
+      /* 与 `ShellTabs` 同款：键判据走 `~/components/ui/simple-key-handler`
+       *（规范 16 §16.2.4.57）—— 两种渲染形态的页签对「哪个键激活」共用
+       *  同一个判据，不再各写一遍。 */
+      {...simpleKeyHandler(["Space", "Enter"], () => onActivate(tab.id))}
       className={`group border-border-subtle flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r px-3 text-sm transition-colors ${
         active
           ? "bg-canvas text-ink-bright"
