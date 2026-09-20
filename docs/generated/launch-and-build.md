@@ -43,7 +43,9 @@ node scripts/dev-launcher.mjs --mode prebuilt        （Windows 侧入口是 scr
 
 分层边界（不要越层做事）：
 
-- **Python 启动器**不做进程树管理（它退出时 dev-launcher 必须还能活着继续工作）；
+- **Python 启动器**不做进程树管理（它退出时 dev-launcher 必须还能活着继续工作；
+  `launch_dev_server` 以 `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` 起 `dev-launcher.mjs`，
+  使其脱离启动器进程树独立存活，从而能在桌面窗口关闭时回收 dev server）；
 - **`scripts/dev-launcher.mjs`** 是唯一的进程编排者：启动、预检、清理都在这一层
   （**全平台同一份**，见 §3）。`scripts/dev-launcher.ps1` 只是它在 Windows 侧的
   **调用入口**（定位项目根 → 转交 → 透传退出码），不含任何编排逻辑；
