@@ -4,6 +4,7 @@
 // 承载查询、筛选/排序/分页、详情弹层开关、取消/删除/重试三个动作。
 // HistoryList 视图只消费本 hook 返回的 controller，不再自己发请求。
 
+import { subscribeAppEvent } from "~/lib/app-events";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
@@ -81,8 +82,10 @@ export interface HistoryListController {
 
 /**
  * 历史记录列表的全部逻辑。
- * 外部组件（如 VideoQueueModal 的「详情」按钮）通过 window 上的 `open-task`
- * 自定义事件请求打开详情——这里统一监听，避免为每个调用方加 prop。
+ * 外部组件通过 `~/lib/app-events` 的 `open-task` 事件请求打开详情 —— 这里统一
+ * 监听，避免为每个调用方加 prop。（此前那条「VideoQueueModal 的详情按钮会派发
+ * 它」的注释已经过期：派发方早已搬走，监听器成了没有触发源的死代码；收口事件
+ * 出口时把它显式登记进 `AppEvents` 表，别再靠注释确认谁在派发。）
  */
 export function useHistoryList(): HistoryListController {
   const toast = useToast();
@@ -119,12 +122,9 @@ export function useHistoryList(): HistoryListController {
   const closeDetail = useCallback(() => setDetailId(null), []);
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail;
+    return subscribeAppEvent("open-task", (id) => {
       if (id) openDetail(id);
-    };
-    window.addEventListener("open-task", handler);
-    return () => window.removeEventListener("open-task", handler);
+    });
   }, [openDetail]);
 
   const detailQ = api.task.detail.useQuery(

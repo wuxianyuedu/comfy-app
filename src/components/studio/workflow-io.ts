@@ -10,6 +10,7 @@
  * （见 src/app/api/workflows/[id]/route.ts 的「workflowIO 富化」段）。
  */
 
+import { upperToken } from "~/lib/upper-token";
 import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import {
   CLARITY_SUBGROUP_LABELS,
@@ -114,7 +115,7 @@ const VIDEO_TYPES = new Set([
  *  没有（缺失 / 空串 / `*`）意味着控件种类是**推出来的**，不保证与 ComfyUI
  *  真类型一致 —— `defaultInputValues` 据此不给推断出的数值控件造默认值。 */
 function hasDeclaredType(e: WorkflowIOEntry): boolean {
-  const t = (e.type ?? "").trim().toUpperCase();
+  const t = upperToken(e.type);
   return t.length > 0 && t !== "*";
 }
 
@@ -179,7 +180,7 @@ export function isUploadPinName(e: { name?: string }): boolean {
  *  绝不把 `COMBO` 之类已有类型改写成别的名义 ——
  *  那会让「STRING 的行显示 INT」这类错位无从解释。 */
 export function typeDisplay(type: string | undefined, fallback = "*"): string {
-  const t = (type ?? "").trim().toUpperCase();
+  const t = upperToken(type);
   return t.length > 0 ? t : fallback;
 }
 
@@ -237,7 +238,7 @@ export function numericBounds(e: WorkflowIOEntry): {
   decimalPlaces: number;
 } {
   const name = `${e.name} ${e.label ?? ""}`.toLowerCase();
-  const isFloat = (e.type ?? "").toUpperCase() === "FLOAT";
+  const isFloat = upperToken(e.type) === "FLOAT";
   if (/seed|noise_seed/.test(name))
     return { min: 0, max: 4294967295, step: 1, decimalPlaces: 0 };
   if (name.includes("steps"))
@@ -457,11 +458,11 @@ export function outputTargetKind(
 ): "image" | "video" {
   const { outputs } = splitWorkflowIO(io);
   for (const output of outputs) {
-    const type = (output.type ?? "").toUpperCase();
+    const type = upperToken(output.type);
     if (VIDEO_TYPES.has(type)) return "video";
   }
   for (const output of outputs) {
-    if (IMAGE_TYPES.has((output.type ?? "").toUpperCase())) return "image";
+    if (IMAGE_TYPES.has(upperToken(output.type))) return "image";
   }
   const tt = (taskType ?? "").toLowerCase();
   if (tt.includes("video") || tt === "t2v" || tt === "i2v" || tt === "flfvideo")

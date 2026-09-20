@@ -8,6 +8,7 @@
 //   ② 落盘读写（含进程内缓存）;
 //   ③ 生图前查 `remoteModel` 表，决定走哪条上游（MCP 侧没有这张表）。
 // 其余（请求体字段、超时、错误文案、响应提取）与 MCP 入口逐字共用一份。
+import { upperToken } from "~/lib/upper-token";
 import "server-only";
 
 import { promises as fs, readFileSync } from "fs";
@@ -148,7 +149,7 @@ async function resolveTarget(
     // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
     const adapters =
       await remoteModelRepository.getWorkshopAdapters(wantedModel);
-    const wantedMode = (req.mode ?? "").trim().toUpperCase();
+    const wantedMode = upperToken(req.mode);
     const adapter =
       adapters.find((a) => a.mode === wantedMode) ??
       (adapters.length === 1 ? adapters[0]! : null);

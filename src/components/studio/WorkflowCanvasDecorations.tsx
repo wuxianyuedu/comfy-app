@@ -1,6 +1,7 @@
 "use client";
 /* 拆出来的画布装饰组件 —— 原本在 WorkflowCanvasEditor.tsx 里。 */
 import React, { useState, useRef, useMemo } from "react";
+import { clamp } from "~/lib/clamp";
 import {
   useReactFlow,
   useStore,
@@ -53,7 +54,7 @@ export function CanvasGrid({
      *  - 缩放 0.80 以上：t = 1 → 满透明度
      * 早先用的是 `(cellPx - 5) / 3`，要到 5px 一格（缩放 0.5）才开始淡入，
      * 于是对任何正常规模的工作流，fitView 之后的画布在视觉上都是空的。 */
-    const t = Math.max(0, Math.min(1, (cellPx - 3) / 3));
+    const t = clamp((cellPx - 3) / 3, 0, 1);
     return {
       minorAlpha: Math.round(t * 10) / 10,
       /* 淡出的是**细线**，不是整个网格层（见 GRID_FINE_FADE_ZOOM 的说明）。 */
@@ -149,7 +150,7 @@ export function ZoomIndicator({
   const pct = Math.round(zoom * 100);
 
   const applyZoom = (z: number) => {
-    const clamped = Math.min(maxZoom, Math.max(minZoom, z));
+    const clamped = clamp(z, minZoom, maxZoom);
     void rf.zoomTo(clamped, { duration: 0 });
   };
 

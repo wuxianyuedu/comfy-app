@@ -380,6 +380,17 @@ const LIB_SCANNED_RULES = new Set([
   "P56",
   "P57",
   "P58",
+  /* 本批三条（§16.2.4.63 ~ §16.2.4.65）：
+   *   · **P59**（数值夹取）—— 「同一个数在两个面板夹到不同的区间」在视图侧
+   *     （滑块 / 数值步进器）与服务端（日志切片 / 落库前夹取）同样成立；
+   *   · **P60**（大写归一）—— 收口前的 26 处**横跨视图 / lib / server**
+   *     （类型判定在 `workflow-io`、模式码在 `lib/workshop`、状态筛选在
+   *     `server/api/routers`），且 `trim` 与否的分歧正是同一文件里发生的；
+   *   · **P61**（应用事件）—— 「事件名与载荷分开两处」在视图层（订阅）与
+   *     `lib`（派发）同样成立，`open-task` 的死监听就在视图层。 */
+  "P59",
+  "P60",
+  "P61",
 ]);
 
 const SCAN_DIRS = [
@@ -396,6 +407,11 @@ const SCAN_DIRS = [
    * `isRecord` 定义与「`req.json()` + 400 信封」同现），不会把无关代码算进来。 */
   "src/lib",
   "src/server",
+  /* `src/config` 加进来的理由（规范 16 §16.2.4.65）：应用事件表里
+   * `custom-nodes:updated` 的派发侧就住在 `src/config/custom-nodes.ts` ——
+   * 只扫前四条根等于让这条事件的一半落在扫描面之外（与 `src/lib` 加进来同款）。
+   * 本目录只有这一个文件，且不含其余判据的形态（已实测）。 */
+  "src/config",
 ];
 
 /**
@@ -464,6 +480,11 @@ const UI_ALSO_SCANNED = new Set([
    * 「基元自己怎么写剔除表」，`ui/` 正是唯一该被数的地方）。 */
   "P56",
   "P57",
+  /* 本批一条：**P59** —— `ui/` 里有本条账的真实落点（`ui/range-slider` 的
+   * 填充比例、`ui/number-field` 的步进取整后夹取、`ui/use-image-zoom` 的
+   * 缩放倍数）。与 P40/P47/P57 同款：整体跳过会让出口的消费点无从校验。
+   * P60 / P61 不需要（`ui/` 里没有外来串归一与应用事件）。 */
+  "P59",
 ]);
 
 const HOOKS_ALSO_SCANNED = new Set([
@@ -511,6 +532,16 @@ const HOOKS_ALSO_SCANNED = new Set([
    *   · **P52** 不在此列：它的落点全在 lib / server（没有 hooks 里的）。 */
   "P50",
   "P51",
+  /* 本批三条（规范 16 §16.2.4.63 ~ §16.2.4.65）：
+   *   · **P59**（数值夹取）—— 逻辑层里的落点本来就有
+   *     （`use-material-library` 的搜索防抖窗口夹取、画布缩放 hook）；
+   *   · **P60**（大写归一）—— 类型判定在 hooks 里同样会漂移；
+   *   · **P61**（应用事件）—— 收口前的订阅侧**大部分在 hooks**
+   *     （`use-history-list` / `use-canvas-connections` / `use-workflow-library`），
+   *     与 P27「存量大部分在 hooks」是同一课。 */
+  "P59",
+  "P60",
+  "P61",
   /* 本批一条（规范 16 §16.2.4.62）：**P58** —— 「给一个异步结果加超时」
    * 在逻辑层同样成立，且收口前的落点里就有一处在 hook 里
    *（`use-workflow-detail-loader` 的 `withTimeout`）。 */
@@ -706,6 +737,31 @@ const EXEMPT_FILES = {
         "出口自身的实现（两个 race 就在这里；本判据数的是**别处**又写了一份）。",
     },
   ],
+  P59: [
+    {
+      re: /^src\/lib\/clamp\.ts$/,
+      reason:
+        "出口自身的实现（本条账的全部语义决定 —— 非有限数取 `min`、" +
+        "先夹后整 —— 都写在 `clamp` / `clampInt` 里；" +
+        "本判据数的是**别处**又写了一份）。",
+    },
+  ],
+  P60: [
+    {
+      re: /^src\/lib\/upper-token\.ts$/,
+      reason:
+        "出口自身的实现（`upperToken` 的定义处 —— 它当然要 `trim` 再 `toUpperCase`；" +
+        "本判据数的是**别处**又写了一份）。",
+    },
+  ],
+  P61: [
+    {
+      re: /^src\/lib\/app-events\.ts$/,
+      reason:
+        "出口自身的实现（`emitAppEvent` 的定义处 —— 它当然要 `new CustomEvent`；" +
+        "本判据数的是**别处**又裸写了事件名 / 自建了事件）。",
+    },
+  ],
   P42: [
     {
       re: /^src\/lib\/error-message\.ts$/,
@@ -881,6 +937,53 @@ function stripComments(text) {
     i++;
   }
   return out;
+}
+
+
+/**
+ * 数「夹取」的处数：`Math.max(` 里包着 `Math.min(`、或反过来。
+ *
+ * 实现是**配对扫描**而不是一个正则：正则要匹配「嵌套但深度不定」的括号，
+ * 写成 `Math\.(max|min)\([^()]*Math\.(?!\1)…` 会在多层括号（
+ * `Math.min(max, Math.max(min, Math.round(v)))`）上退化成漏报。
+ *
+ * 判据是「**两种不同**的 Math 函数嵌套」：`Math.max(1, 1 / Math.max(zoom, x))`
+ * 是取值（同一个函数），不是夹取 —— 只数 max 里包 min、min 里包 max。
+ *
+ * 取「**最近的**一层」：从每个 `Math.max(` / `Math.min(` 的左括号开始，
+ * 只看它**直接内层**（跳过嵌套括号）里有没有出现另一种 Math 调用；
+ * 深层的由它自己的那一处负责数 —— 这样 `Math.round(Math.min(max,
+ * Math.max(min, n)))` 只计 1 次（夹取），不重复计。
+ */
+function countNestedMinMax(text) {
+  let n = 0;
+  const re = /\bMath\.(max|min)\s*\(/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const outer = m[1];
+    const inner = outer === "max" ? "min" : "max";
+    /* 从外层的左括号开始，扫到**它自己**的右括号为止；
+     * 中途遇到 `Math.<inner>(` 即命中（该处夹取由外层负责数）。 */
+    let depth = 1;
+    let i = re.lastIndex;
+    const innerRe = new RegExp(`\\bMath\\.${inner}\\s*\\(`, "g");
+    while (i < text.length && depth > 0) {
+      const ch = text[i];
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      else if (ch === "M" && depth === 1) {
+        /* 只在**直接内层**（depth 仍为 1）判 —— 深一层的由那一处自己数。 */
+        innerRe.lastIndex = i;
+        const hit = innerRe.exec(text);
+        if (hit && hit.index === i) {
+          n++;
+          break;
+        }
+      }
+      i++;
+    }
+  }
+  return n;
 }
 
 /**
@@ -2542,6 +2645,105 @@ const RULES = {
       return races + settles + settledByHelper;
     },
   },
+
+  /* ── P59「把一个数夹进一个区间」（硬闸，§16.2.4.63）────────────────────
+   * 全库 19 处手写 `Math.min` / `Math.max` 的夹取，四派写法都编译、都运行、
+   * 类型都对，差别只在**参数顺序**（`Math.min(max, Math.max(min, x))` 与
+   * `Math.max(min, Math.min(max, x))` 都有人写）、**取整在内层还是外层**、
+   * 以及**非有限数怎么办**（`Math.max(0, NaN)` 是 `NaN`，会一路静默传播）。
+   *
+   * 判据锚**两种 Math 的嵌套**这个形态签名：`Math.max(` 里包着 `Math.min(`、
+   * 或反过来 —— 这正是「夹取」的形状，而**纯 max(max) / min(min) 不是**
+   *（`NodeFrost` 的 `Math.max(1, 1 / Math.max(zoom, 0.01))` 是取值不是夹取），
+   * 故要求**两种不同**的 Math 函数嵌套。
+   *
+   * 刻意**不数**「半个夹取」（`Math.max(0, x)` 只有一个边界）：那表达的是
+   * 「不许为负 / 不许超过 n」，不是「放进区间」，换成 `clamp(x, 0, Infinity)`
+   * 只会更绕。落点见 `LogPanel` / `log-virtual` 的防负索引。
+   *
+   * 出口：`~/lib/clamp` 的 `clamp` / `clampInt`。
+   */
+  P59: {
+    label:
+      "视图 / 逻辑 / 服务端里手写数值夹取（应使用 ~/lib/clamp 的 clamp / clampInt）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/clamp"/.test(t2)) return 0;
+      return countNestedMinMax(t2);
+    },
+  },
+
+  /* ── P60「把一个可能带空白 / 缺省的外来串归一成大写记号」（硬闸，§16.2.4.64）
+   * 全库 26 处各写一遍 `(x ?? "").trim().toUpperCase()` 这一族，而它们
+   * **不是同一件事**：差别只在「要不要吃空白」上 —— 而这一条决定**匹配成败**
+   *（ComfyUI 的类型字段带尾随空白、模式码来自用户输入）。
+   * 收口前的实况是同一个文件里两种写法并存（`model-mode-contract.ts` 的
+   * `builtInModeContract` trim、`modeContractEntries` 不 trim）。
+   *
+   * 判据取**两种形态**，它们共同的特征是「从缺省 / 空白里取值」：
+   *   ① `(x ?? "").toUpperCase()` —— 明确处理了缺省；
+   *   ② `.trim().toUpperCase()` —— 明确处理了空白。
+   * **刻意不数 `x.toUpperCase()`**（`x` 是类型上非空的 `string`）：那是
+   * 「把已知值画成大写展示」，不是「归一外来串」，数进来会逼人改坏代码
+   *（`log-store` 的行内级别、`StyleSwitcher` 的档名展示都是这一档）。
+   *
+   * 出口：`~/lib/upper-token` 的 `upperToken` / `upperTokenOr`。
+   */
+  P60: {
+    label:
+      "视图 / 逻辑 / 服务端里自写大写归一（应使用 ~/lib/upper-token 的 upperToken）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/upper-token"/.test(t2)) return 0;
+      /* ② 先数（含 `.trim()` 的形态一并数进来）。
+       * ① 再数**不带 `.trim()`** 的 `?? ""` 形态 —— 否则
+       * `(x ?? "").trim().toUpperCase()` 会被两种形态各数一次（重复计）。 */
+      const trimmed = (t2.match(/\.\s*trim\(\)\s*\.\s*toUpperCase\s*\(/g) || [])
+        .length;
+      const plain = (
+        t2.match(/\?\?\s*(?:"[^"]*"|'[^']*')\s*\)\s*\.toUpperCase\s*\(/g) || []
+      ).length;
+      return trimmed + plain;
+    },
+  },
+
+  /* ── P61「跨组件广播一条应用事件」（硬闸，§16.2.4.65）──────────────────
+   * 全库 5 条自定义事件散在 9 个文件里，事件名与载荷的类型**分开两处**：
+   * `comfyapp:canvas-store-changed` 的名字定义在 `lib/project-canvas` 却
+   * **不导出**（视图侧 3 处硬编码字符串）、`canvas:produce` 的载荷类型只在
+   * 读侧有个 `as {...}` 断言、`open-task` 与
+   * `comfyapp:local-workflows-path-changed` 的**派发方已经消失**（死监听，
+   * 没有任何构建 / 测试会报它）。
+   *
+   * 判据取**两种形态**：
+   *   ① `new CustomEvent(` —— 自建应用事件；
+   *   ② `window.addEventListener("…:…"` —— 订阅一个**带命名空间冒号**的事件名
+   *     （应用事件的命名空间形态，与 `keydown` / `change` / `resize` 这类
+   *     DOM 原生事件名区分开）。
+   * 两个条件都**只认带冒号或 `new CustomEvent`** 的写法：`addEventListener("click")`
+   * 这类 DOM 事件不在本条账里。
+   *
+   * 出口：`~/lib/app-events` 的 `emitAppEvent` / `subscribeAppEvent` +
+   * `AppEvents` 表（事件名与载荷同处定义）。
+   */
+  P61: {
+    label:
+      "视图 / 逻辑 / 服务端里裸写应用事件（应使用 ~/lib/app-events 的 emitAppEvent / subscribeAppEvent）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/from "~\/lib\/app-events"/.test(t2)) return 0;
+      const dispatched = (t2.match(/\bnew CustomEvent\s*\(/g) || []).length;
+      const namespaced = (
+        t2.match(
+          /\.(?:add|remove)EventListener\s*\(\s*(?:[A-Za-z_$][\w$]*\s*,\s*)?["'][a-z][\w-]*:[\w:-]+["']/g,
+        ) || []
+      ).length;
+      return dispatched + namespaced;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -2628,6 +2830,16 @@ const HARD_GATE_RULES = new Set([
   "P56",
   "P57",
   "P58",
+  /* 本批三条（规范 16 §16.2.4.63 ~ §16.2.4.65）：数值夹取 / 大写归一 /
+   * 应用事件 —— 三条的落点**都横跨两侧**：
+   *   · P59 的 19 处里大半在 `lib`（`progress` / `number-format` /
+   *     `log-session-scope` / `workshop` / `server/film`）；
+   *   · P60 的 26 处里过半在 `lib`（`workflow-param-mapping` /
+   *     `model-mode-contract` / `media/size-presets` / `comfyui/workflow-detail-io`）；
+   *   · P61 的派发侧在 `lib/project-canvas`（画布仓库变更广播）。 */
+  "P59",
+  "P60",
+  "P61",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */

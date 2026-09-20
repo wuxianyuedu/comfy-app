@@ -14,6 +14,7 @@
  * 与加载错误（`loadError`，重新拉取成功即消失）。
  */
 
+import { subscribeAppEvent } from "~/lib/app-events";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { errorMessage, errorText } from "~/lib/error-message";
@@ -34,9 +35,6 @@ import {
 } from "../workflow-library-config";
 import { useWorkflowActions } from "./use-workflow-actions";
 import { useWorkflowImport } from "./use-workflow-import";
-
-/** 目录配置改动后，已挂载的列表要重新拉取（事件由 CustomNodesSettings 抛出）。 */
-const PATHS_CHANGED_EVENT = "comfyapp:local-workflows-path-changed";
 
 /** 列表首次拉取超过这个时长仍未返回，就认为「等太久了」：视图据此把
  *  「加载中」换成可重试的提示，而不是让用户对着空列表猜（见 hook 内注释）。 */
@@ -246,14 +244,10 @@ export function useWorkflowLibrary(
     }
   }, [listQ.data, toast]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onChanged = () => load();
-    window.addEventListener(PATHS_CHANGED_EVENT, onChanged);
-    return () => {
-      window.removeEventListener(PATHS_CHANGED_EVENT, onChanged);
-    };
-  }, [load]);
+  useEffect(
+    () => subscribeAppEvent("comfyapp:local-workflows-path-changed", load),
+    [load],
+  );
 
   /** 空列表的「为什么是空」：判据在配置层（deriveLocalRootsHint），这里只负责
    *  在拿到数据后才给出结论（未加载完不算「空」）。 */

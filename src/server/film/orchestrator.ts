@@ -7,6 +7,7 @@
 // 每个镜头走与手动「视频」页签同一条库工作流链（工作流库 id +
 // 封装），所以不需要任何内置模板。
 
+import { clamp } from "~/lib/clamp";
 import "server-only";
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
@@ -129,7 +130,7 @@ async function expandScriptLLM(raw: string): Promise<
     heading: toStr(rec.heading ?? "场景"),
     action: toStr(rec.action ?? raw),
     dialogue: toStr(rec.dialogue ?? ""),
-    shotCount: Math.max(1, Math.min(4, Number(rec.shotCount ?? 2) || 2)),
+    shotCount: clamp(Number(rec.shotCount ?? 2) || 2, 1, 4),
   }));
 }
 

@@ -5,6 +5,7 @@
 //   · read：按文件名倒序回溯，收集指定环节最近 limit 条（时间正序返回）。
 // 写入失败绝不抛给调用方——执行日志是辅助通道，不能把生成流程带崩。
 
+import { clampInt } from "~/lib/clamp";
 import { errorText } from "~/lib/error-message";
 
 import "server-only";
@@ -55,7 +56,7 @@ export async function readGenerationLogs(
   stage: GenerationLogStage,
   limit: number,
 ): Promise<GenerationLogEntry[]> {
-  const capped = Math.max(1, Math.min(500, Math.floor(limit) || 100));
+  const capped = clampInt(Math.floor(limit) || 100, 1, 500, { mode: "trunc" });
   try {
     const names = (await fs.readdir(WORKSHOP_LOG_DIR))
       .filter((n) => /^generation-\d{4}-\d{2}-\d{2}\.log$/.test(n))

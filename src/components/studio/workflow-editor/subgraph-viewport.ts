@@ -15,6 +15,8 @@
  *      混用「body 顶边」会让旧式 `position` 兜底算出整体上移的框。 */
 
 /** 参与包围盒计算的节点最小结构。`wfNode` / `wfSubgraph` 节点与纯数据对象都能满足。 */
+import { clamp } from "~/lib/clamp";
+
 export interface FitBoundsNode {
   id?: string;
   position: { x: number; y: number };
@@ -138,7 +140,7 @@ export function computeFitViewport(
 
   const fitW = (containerW * (1 - 2 * padding.x)) / bboxW;
   const fitH = (containerH * (1 - 2 * padding.y)) / bboxH;
-  const zoom = Math.max(minZoom, Math.min(fitW, fitH, maxZoom));
+  const zoom = clamp(Math.min(fitW, fitH), minZoom, maxZoom);
 
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;

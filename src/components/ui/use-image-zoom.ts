@@ -18,6 +18,7 @@
 //   3. **倍数一律夹取**：滚轮连滚、极端视口下的适应倍数都可能算出 0.001 或
 //      1000 倍，夹到 `[MIN, MAX]` 才不会把图缩成一个点或撑出一屏空白。
 
+import { clamp } from "~/lib/clamp";
 import { useCallback, useMemo, useState } from "react";
 import type { NaturalSize } from "~/lib/media/natural-size";
 
@@ -44,7 +45,7 @@ export const FIT_SCALE_CAP = 1;
  */
 export function clampZoomScale(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 1;
-  return Math.min(MAX_ZOOM_SCALE, Math.max(MIN_ZOOM_SCALE, value));
+  return clamp(value, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE);
 }
 
 export interface UseImageZoomOptions {

@@ -12,6 +12,9 @@
  * 本模块无 React、无副作用（规范 17 §17.2 第①层），可直接单测。 */
 
 /** 尺寸所属场景：图片（AI 出图口径）/ 视频（显示器与视频行业标准口径）。 */
+import { clamp } from "~/lib/clamp";
+import { upperToken } from "~/lib/upper-token";
+
 export type SizeScene = "image" | "video";
 
 /** 一个比例预设：`label` 是 UI 上的显示名（含方位后缀），`ratio` = 宽 / 高。 */
@@ -174,7 +177,7 @@ export const SIZE_SCENE_LABELS: Record<SizeScene, string> = {
  *  刻意只看模式码：工作流库那层「内容分类」是展示维度，不是生成模式判据
  *  （与 `workflow-encapsulation` 的 `isVideoMode` 同一口径）。 */
 export function sceneFromMode(mode: string | null | undefined): SizeScene {
-  const code = (mode ?? "").trim().toUpperCase();
+  const code = upperToken(mode);
   if (!code) return "image";
   if (code.includes("VIDEO")) return "video";
   if (code.endsWith("V")) return "video";
@@ -288,10 +291,7 @@ export function normalizeAlignMultiple(multiple: number): AlignMultiple {
 /** 宽高吸附到 `multiple` 网格并钳制到 [MIN_SIZE, MAX_SIZE]。 */
 export function snapSize(size: SizeDims, multiple: AlignMultiple): SizeDims {
   const snap = (value: number) =>
-    Math.max(
-      MIN_SIZE,
-      Math.min(MAX_SIZE, Math.round(value / multiple) * multiple),
-    );
+    clamp(Math.round(value / multiple) * multiple, MIN_SIZE, MAX_SIZE);
   return { width: snap(size.width), height: snap(size.height) };
 }
 

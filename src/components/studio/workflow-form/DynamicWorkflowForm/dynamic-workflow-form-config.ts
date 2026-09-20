@@ -1,6 +1,7 @@
 // DynamicWorkflowForm 的公开契约与行派生规则。
 // 纯类型 + 纯函数（无 React、无副作用）：hook 据此派生行数据，视图只负责渲染。
 
+import { upperToken } from "~/lib/upper-token";
 import type { ReactNode } from "react";
 
 import type {
@@ -86,7 +87,7 @@ export interface DynamicWorkflowFormProps {
 const NUMERIC_TYPES = new Set(["INT", "FLOAT", "NUMBER"]);
 
 export function isNumericWidget(entry: EnrichedWidget): boolean {
-  return NUMERIC_TYPES.has((entry.type ?? "").toUpperCase());
+  return NUMERIC_TYPES.has(upperToken(entry.type));
 }
 /** 后端类型缺失 / 未知时，回落到与实际渲染的控件相匹配
  *  的章，好让徽标对该行

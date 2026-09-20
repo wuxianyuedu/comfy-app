@@ -14,6 +14,7 @@
 //   · 「流程测试」按封装口径真实跑一次生成（提示词 + 尺寸 → ComfyUI），验证它在
 //     工坊里的可用性 —— 与定妆照 / 镜头生图同一条 buildLibraryWorkflowInput 链路。
 
+import { upperToken } from "~/lib/upper-token";
 import React from "react";
 
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -118,9 +119,8 @@ export function WorkshopEncapsulationPanel({
     () =>
       requiredInputsFor({
         inputs: contractIds,
-        required: storedContracts.find(
-          (c) => c.mode === (mode ?? "").toUpperCase(),
-        )?.required,
+        required: storedContracts.find((c) => c.mode === upperToken(mode))
+          ?.required,
       }),
     [contractIds, mode, storedContracts],
   );

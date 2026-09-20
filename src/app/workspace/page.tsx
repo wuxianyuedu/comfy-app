@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { subscribeAppEvent } from "~/lib/app-events";
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -198,9 +199,7 @@ export default function WorkspacePage() {
     };
     compute();
     const refresh = () => compute();
-    window.addEventListener("comfyapp:canvas-store-changed", refresh);
-    return () =>
-      window.removeEventListener("comfyapp:canvas-store-changed", refresh);
+    return subscribeAppEvent("comfyapp:canvas-store-changed", refresh);
   }, [recentsKey]);
 
   // ── Handlers ──

@@ -1,5 +1,6 @@
 "use client";
 
+import { clamp } from "~/lib/clamp";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Alert } from "~/components/ui/alert";
@@ -251,10 +252,7 @@ export function ShotCard({
                 }
                 onChange={(e) =>
                   onPatch({
-                    duration: Math.max(
-                      1,
-                      Math.min(20, Number(e.target.value) || 5),
-                    ),
+                    duration: clamp(Number(e.target.value) || 5, 1, 20),
                   })
                 }
                 className="border-border bg-bg text-ink focus:border-primary w-14 rounded-md border px-2 py-0.5 text-[11px] outline-none"
