@@ -23,6 +23,7 @@ import {
   type ApiChannelsView,
 } from "./api-channel-shared";
 import { errorText } from "~/lib/error-message";
+import { asRecord, isRecord } from "~/lib/is-record";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 /** 单个通道的配置（回导出：入口与用例都从这里取，避免各自 import 两个模块）。 */
@@ -75,20 +76,12 @@ export interface ApiVideoSubmitResult {
   remoteTaskId?: string;
 }
 
-/** 归一化上游不明对象的窄化（唯一需要的那一种守卫）。 */
-export function isPlainRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
 /** 把一份可能残缺的配置归一化：字符串字段取默认、path 强制根相对。 */
 export function sanitizeChannel(
   raw: unknown,
   fallback: ApiChannelStored,
 ): ApiChannelStored {
-  const src = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
-    string,
-    unknown
-  >;
+  const src = asRecord(raw) ?? {};
   const str = (key: string): string | undefined => {
     const v: unknown = src[key];
     return typeof v === "string" ? v : undefined;
@@ -186,7 +179,10 @@ function pickStringByPath(payload: unknown, fieldPath?: string): string | null {
   if (!fieldPath) return null;
   let cur: unknown = payload;
   for (const seg of fieldPath.split(".").filter(Boolean)) {
-    if (!isPlainRecord(cur)) return null;
+    /* 用 isRecord（含数组）而非 isPlainRecord：本函数按点分路径下钻，
+     * 路径段是字符串，但数组索引 "0" 在 JS 里也能取到元素 —— 收口前的
+     * 实现正是「数组也算对象」，改用严格版会静默改变收窄结果。 */
+    if (!isRecord(cur)) return null;
     cur = cur[seg];
   }
   return typeof cur === "string" && cur.length > 0 ? cur : null;

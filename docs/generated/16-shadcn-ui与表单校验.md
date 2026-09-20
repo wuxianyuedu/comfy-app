@@ -171,6 +171,9 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P44** | 自写文本截断（`slice(0, N)` / `substring(0, N)` 且 **N ≥ 24**，同串出现 `…` / `truncated`）                                                       | `~/lib/text-clamp` 的 `clampText` + 具名上限（`LOG_DETAIL_MAX` / `TASK_ERROR_MAX` / `TRACE_LINE_MAX` …，见 §16.2.4.48）                                                                                         |
 | **P45** | 自写指数退避算术（`* 2 ** …` / `Math.pow(2, …)`）                                                                                                 | `~/lib/retry-policy` 的 `backoffDelayMs` + 具名策略（`WS_RECONNECT` / `HISTORY_READ` / `OLLAMA_READY` …，见 §16.2.4.49）                                                                                        |
 | **P46** | 手拼日期串（`` `${d.getFullYear()}-…` ``）                                                                                                        | `~/lib/time-format` 的 `formatDate` / `formatShortDate` / `formatLocalStamp` / `formatCompactStamp`（见 §16.2.4.50）                                                                                            |
+| **P47** | 自写「扩展名 ⇄ MIME」映射表（字面量对 `"image/x": "ext"` / `".ext": "image/x"`）                                                                 | `~/lib/media/mime-ext` 的 `mimeForExt` / `extForMime` / `extOfPath` / `stemOfPath` / `contentTypeForPath`（见 §16.2.4.51）                                                                                        |
+| **P48** | 自写「`unknown` 当宽松对象视图」（`typeof X === "object" && X !== null` 后紧跟 `as Record<string, unknown>`，同一变量名）                            | `~/lib/is-record` 的 `isRecord` / `isPlainRecord` / `asRecord`（见 §16.2.4.52）                                                                                                                                  |
+| **P49** | 自写文件名安全化（`replace(/[^…]/g, "_")`）                                                                                                       | `~/lib/safe-name` 的 `safeFileNameSegment` / `safeDisplayName`（见 §16.2.4.53）                                                                                                                                   |
 
 **P4~~P35 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
 P4~P35 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
@@ -192,9 +195,10 @@ P33/P34/P35 见 §16.2.4.36 ~ §16.2.4.38、
 P36/P37/P38 见 §16.2.4.39 ~ §16.2.4.41、
 **P39/P40/P41 见 §16.2.4.42 ~ §16.2.4.44**、
 P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
-**P44/P45/P46 见 §16.2.4.48 ~ §16.2.4.50**。
+**P44/P45/P46 见 §16.2.4.48 ~ §16.2.4.50**、
+**P47/P48/P49 见 §16.2.4.51 ~ §16.2.4.53**。
 
-**P4~P46 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
+**P4~P49 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
 「清零」不等于「以后不必管」—— 判据从棘轮变成硬闸（`--strict` 下基线上调即失败），
 防护强度只增不减。
@@ -202,7 +206,8 @@ P42/P43 见 §16.2.4.45 ~ §16.2.4.46、
 **范围与豁免**（脚本里的 `SCAN_DIRS` / `EXEMPT_DIRS`，与本节同源）：
 
 - 扫描 `src/components/**` + `src/app/**`（与 §17.3 的棘轮同一批目录）；
-  **P39/P40/P41 额外扫 `src/lib/**` 与 `src/server/**`**（`LIB_SCANNED_RULES`）——
+  **P39/P40/P41、P42、P44~P49 额外扫 `src/lib/**` 与 `src/server/**`**
+  （`LIB_SCANNED_RULES`）——
   这三条账的落点本来就横跨两侧（帧调度在 `lib/project-canvas`、复制反馈在两处
   hooks、`isRecord` 的 5 份实现在 `lib/**`）。**不能**把这两条根直接加进
   `SCAN_DIRS`：那会让 P1~P38 一起套到 lib 层，而 lib 层里全是这些出口的
@@ -414,6 +419,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 复制失败的**固定提示句** | ~~10 个落点每处手写同一句话，而有 **5 种变体**：`请手动选中后复制` ×5、`请手动选中复制` ×1（**漏了「后」**）、`请在下方展开后手动选中复制` ×2、`请手动选中日志后复制` ×1、`请到创作台手动重跑` ×1~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `~/components/ui/use-copy-feedback` 的 `copyFailureText(target?)` —— 固定句（浏览器为什么拒绝写剪贴板，与落点无关）走出口、「可复制物在哪一段界面里」（只有调用处知道）经参数注入；**P43 硬闸**                                 | ✅ **见 §16.2.4.46**                        |
 | 列表项的 **React key**   | ~~`key={i}` 与 `key={x.id}` 混用；其中 `UsageTestDialog` 拿 `fields.indexOf(f)` 反查下标当 key —— **删中间一行时后面所有行的下标整体左移**，React 复用错误的 DOM 节点，用户在某行刚输入的内容「闪到隔壁字段」~~                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 数据自带身份（`UsageField.id`，由 `~/lib/llm/usage-test-config` 的 `makeUsageField` 一处生成）；**不做门禁**（机器判不出「这个 list 会不会换序」，见 §16.2.4.47）                                                               | ✅ **见 §16.2.4.47**                        |
 | REST 入参收窄            | ~~11 个 POST 路由各写一遍「读体 → 判对象 → 400」：**5 份逐字相同的 12 行**；`custom-nodes` / `llm/test` / `workshop/logs` 用 `.catch(() => ({}))` —— **畸形 JSON 被静默当成空对象**，同一个坏请求在一种写法下回「请求格式错误」、在另一种下走到「字段缺失」分支回一句与病因无关的话；`logs/export` 干脆用**类型断言**（畸形体在下一行属性访问处抛 TypeError → 被兜成 500）；另有 **9 份**逐字相同的 `isRecord` 实现~~                                                                                                                                                                                                                                                                                                 | `~/server/lib/request-body` 的 `readJsonRecord` / `isErrorResponse`（格式不对走 §10.9 的 `ValidationError` → `{ error: { code, message } }`）；`unknown` 收窄用 `~/lib/is-record` 的 `isRecord` / `isPlainRecord`；**P41 硬闸** | ✅ **见 §16.2.4.44**                        |
+| 扩展名 ⇄ MIME            | ~~**6 份互不相同的映射表**：`api/generated`（13 条，还背了 txt/json）、`media-source.server`（7 条）、`character-portrait-client`（5 条）、`workshop-local/prepare`（4 条，**缺 webp**）、`film/bgm`（`path.extname() \|\| ".mp3"`）、`upload`（`lastIndexOf(".")` 手切）。差异互相矛盾 —— 同一个上传文件在「走 `resolveMediaBytes` 兜底」与「走 prepare 路由落盘」两条路径上得到不同的扩展名与 Content-Type~~ | `~/lib/media/mime-ext` 的 `mimeForExt` / `extForMime` / `extOfPath` / `stemOfPath` / `contentTypeForPath`（两张手写表，**不反转**；兜底值留给调用处；非媒体档收在 `contentTypeForPath` 一处）；**P47 硬闸** | ✅ **见 §16.2.4.51**                        |
+| unknown → 宽松对象视图   | ~~**4 份实现、名字各不同**：`workflow-utils` 与 `lib/comfyui/raw` 都叫 `asRecord`；`api-channel-core` **叫 `isPlainRecord` 却不排除数组**；`use-param-wiring` 的 `isPlainRecord` 真排除数组。第三处与 `~/lib/is-record` 的严格版**同名不同义** —— 按名字理解就会拿到意外的收窄结果~~ | `~/lib/is-record` 的三个函数语义各一：`isRecord`（含数组）/ `isPlainRecord`（非数组）/ **`asRecord`**（转成视图或 `null`）；`api-channel-core` 那处按**实际行为**改名；**P48 硬闸** | ✅ **见 §16.2.4.52**                        |
+| 文件名安全化             | ~~**4 份各不相同的正则**，差异没一处写下来：`/`[^\\w.\\-一-龥]/g``（留点、留 CJK）、`/`[^\\w一-龥-]+/g``（**吃掉点**）、`/`[^\\w.-]/g`` ×2（**吃掉 CJK**）。同一个中文名在 bgm 上传路径被保留、在工坊产出目录被替换成下划线；`v1.2` 在工坊里保留点、在 Lora 文件名里变成 `v1_2`~~ | `~/lib/safe-name` 的 `safeFileNameSegment`（ASCII 片段，进 ComfyUI 子目录 / URL 路径）/ `safeDisplayName`（额外保留 CJK，给用户认的名字）；`materials` 的 `sanitizeFileName` **不并入**（那是「这个名字能不能用」）；**P49 硬闸** | ✅ **见 §16.2.4.53**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
 
@@ -3418,6 +3426,143 @@ formatCompactStamp(value); // YYYYMMDD-HHmmss（导出文件名：冒号在 Wind
 `` `${d.getFullYear()}-…` `` 这个串）—— 它精确到「正在把年拼进一个日期串」，
 不会命中 `getMonth()` 的其它用法（如同天判定里的 `a.getMonth() === b.getMonth()`）。
 豁免一条：`time-format.ts` 自身。
+
+### 16.2.4.51 「扩展名 ⇄ MIME」有六份互不相同的映射表（P47 硬闸）
+
+按形态扫出来的账：同一件「这个扩展名对应什么 MIME / 这个 MIME 该落成什么
+扩展名」，全库有 **6 份**并列实现，而**它们互相矛盾**：
+
+| 落点                                        | 方向      | 条数 | 收口前缺什么                            |
+| ------------------------------------------- | --------- | ---- | --------------------------------------- |
+| `api/generated/[...path]/route.ts`          | EXT→MIME  | 13   | 还背了 `text/plain` / `application/json` |
+| `lib/workshop/media-source.server.ts`       | EXT→MIME  | 7    | 无 svg / mkv / avi                       |
+| `lib/workshop/character-portrait-client.ts` | MIME→EXT  | 5    | 无 `image/png` 项（靠兜底）             |
+| `api/workshop-local/prepare/route.ts`       | MIME→EXT  | 4    | **无 `image/webp`**                     |
+| `api/film/bgm/route.ts`                     | EXT 切片  | —    | `path.extname() \|\| ".mp3"`            |
+| `api/upload/route.ts`                       | EXT 切片  | —    | `lastIndexOf(".")` 手切                 |
+
+**差异不是「覆盖面不同」这一件小事**：同一个上传文件在「走
+`resolveMediaBytes` 兜底」与「走 prepare 路由落盘」两条路径上，会得到
+**不同的扩展名与 Content-Type**（`image/avif` 只在一半表里有）。
+
+#### 出口：`~/lib/media/mime-ext`
+
+```ts
+mimeForExt(ext); // "png" / ".PNG" → "image/png"；非媒体 / 未知 → null
+extForMime(mime); // "image/jpeg; charset=utf-8" → "jpg"；未知 → null
+extOfPath(p); // "a/b/c.PNG?x=1" → "png"；无点 / 隐藏文件 → ""
+stemOfPath(p); // "bgm.mp3" → "bgm"（与 extOfPath 配对）
+contentTypeForPath(p); // 媒体走上面那张表；txt/json/其它 各一档
+```
+
+- **两张手写表，不是「一张 + 反转」**：`jpeg` 与 `jpg` 映到同一个 MIME，
+  反转时该保留哪个是不确定的 —— 手写才说得清；
+- **兜底值不塞进出口**：`?? "png"` 是「当图片存」、`?? "application/octet-stream"`
+  是「我不知道」，两件事不该共用一个默认值。调用处写出来，差异才看得见；
+- **覆盖取六份旧表的并集，且只取媒体这一侧**：`contentTypeForPath` 里那一小段
+  非媒体档（txt/md/log/json/二进制）是 `api/generated` 的**域需求**
+  （它服务磁盘上的任意产物文件），收在这里是为了「谁是媒体」只有一处定义。
+
+#### 判据：P47（硬闸）
+
+取**映射表的形态**：一条形如 `"image/x": "ext"` 或 `".ext": "image/x"` 的
+字面量对。它精确到「正在把扩展名与 MIME 记成一张表」，**不数**单个
+`?? "image/png"` 兜底 —— 那是调用处的域选择，不是一张表。豁免一条：
+`mime-ext.ts` 自身。
+
+#### 顺手修掉的一处后缀重复
+
+`api/film/bgm/route.ts` 收口前写的是 `` `${safe}${ext}` ``，而 `safe` 仍是
+**含后缀的整名**（`bgm.mp3` + `.mp3` → `bgm.mp3.mp3`）。那个 `|| ".mp3"`
+只在 `file.name` **没有点**时才被用上，所以这条一直在但没人看见 ——
+`stemOfPath` 就是为这对「展示名 + 后缀分开放」准备的，顺手把它修掉了。
+
+### 16.2.4.52 「`unknown` 当宽松对象视图读」有四份、且各叫各的名字（P48 硬闸）
+
+同一件「把 `unknown` 变成一个可下钻的 `Record` 视图」，收口前有四份实现，
+而**它们的名字不同、其中一份与另一份同名不同义**：
+
+| 落点                                        | 名字             | 行为               |
+| ------------------------------------------- | ---------------- | ------------------ |
+| `components/studio/workflow-utils.ts`       | `asRecord`       | 宽松（含数组）     |
+| `lib/comfyui/raw.ts`                        | `asRecord`（导出）| 宽松（含数组）    |
+| `lib/workshop/api-channel-core.ts`          | **`isPlainRecord`** | **宽松（含数组）** |
+| `components/.../use-param-wiring.ts`        | `isPlainRecord`  | 严格（排除数组）   |
+
+第三处最危险：它与 `~/lib/is-record` 的**严格版 `isPlainRecord` 同名不同义**，
+谁按名字理解就会拿到意外的收窄结果。
+
+#### 出口：`~/lib/is-record` 的三个函数（语义各一）
+
+```ts
+isRecord(v);      // 类型守卫：是不是对象（含数组）
+isPlainRecord(v); // 类型守卫：是不是「非数组的普通对象」
+asRecord(v);      // 宽松视图：转成 Record 或 null（调用处接着写 ?.prop）
+```
+
+新增的是 `asRecord`：与 `isRecord` 的差别是**返回值**（视图 vs 布尔），
+与旧 any 代码的运行时语义一致。四份消费点里 `api-channel-core` 那处按它
+**实际的**行为改名为 `asRecord`（`pickStringByPath` 那处按点分路径下钻，
+显式用 `isRecord` 保留「数组也算」的原行为 —— 数组索引 `"0"` 取得到元素）。
+
+#### 判据：P48（硬闸）
+
+取**转成视图**的那一处形态：`typeof X === "object" && X !== null` 之后紧跟
+`as Record<string, unknown>`（**同一变量名**，反向引用钉住）。
+
+⚠️ **刻意不数另外两种形态** —— 第一版判据把它们一起算进来，实测报出 **24 处**，
+其中一半是这两类，硬套出口只会逼人改坏代码：
+
+- `typeof e === "object" && e !== null && "message" in e` —— **就地读一个字段**。
+  套出口要写成 `asRecord(e)?.message` 再判类型，反而多一层
+  （`error-message.ts` / `repository-user.ts` 属此类）；
+- `if (typeof body !== "object" || body === null) return null` —— **取反早退的守卫**，
+  收窄后立刻用掉，没有「视图」这回事（`api-error.ts` 属此类）。
+
+与 P44「N ≥ 24」、P45「不数固定间隔」同一条教训：**判据太宽会逼人改坏代码**。
+豁免一条：`is-record.ts` 自身。
+
+### 16.2.4.53 「把一段文本变成安全的文件名片段」有四份正则（P49 硬闸）
+
+同一件「非法字符换成 `_`」在全库有 **四份各不相同的正则**，而**差异没有一处
+写下来**：
+
+| 落点                                    | 正则                     | 保留点 | 保留 CJK |
+| --------------------------------------- | ------------------------ | ------ | -------- |
+| `api/film/bgm/route.ts`                 | `/[^\w.\-一-龥]/g`     | ✅     | ✅       |
+| `lib/comfyui/trainer.ts`                | `/[^\w一-龥-]+/g`       | **❌** | ✅       |
+| `server/workshop/comfyui.ts`（两处）    | `/[^\w.-]/g`            | ✅     | **❌**   |
+
+差异是**互相矛盾**而不是「覆盖面不同」：同一个中文名在 bgm 上传路径被保留、
+在工坊产出目录被替换成下划线；同一个带点的名字在工坊里保留点、在 Lora 文件名
+里把点吃掉（`v1.2` → `v1_2`，与另一条路径产出的名字对不上）。
+
+#### 出口：`~/lib/safe-name` 的两个具名档
+
+```ts
+safeFileNameSegment(raw); // 只留 ASCII：字母数字 / 下划线 / 连字符 / 点
+safeDisplayName(raw);     // 额外保留 CJK（`一-龥`）
+```
+
+**「保留哪些字符」是各域的域需求，该有各自的名字** —— 但「有一件事在把非法
+字符换成 `_`」这个形状只该有一处定义。为什么分两档：通用片段进
+ComfyUI 子目录 / URL 路径，这些下游由 Python 侧与浏览器各自解码，中文名在
+不同宿主的编码与规范化（NFC vs NFD、Windows 的 GBK 回退）下不保证往返一致，
+ASCII 是唯一确定性的形态；而**要给用户认的名字**（上传的 BGM、Lora 名）
+保留 CJK 才有意义，否则「背景音乐.mp3」存成「_.mp3」之后用户在文件管理器里
+再也认不出它。
+
+> `~/lib/media/materials` 的 `sanitizeFileName` **不并入本模块**：它做的是
+> 另一件事（剥目录成分 + 防 Windows 保留字符 + 长度判据 + 返回 `null` 表示
+> **拒绝**），语义是「这个名字能不能用」而不是「把坏字符换掉」。
+> 一句话判据：**要「换掉坏字符」用 `safe-name`；要「这个名字能不能用」用
+> `materials`。**
+
+#### 判据：P49（硬闸）
+
+取那条**替换形态**：`replace(/[^…]/g, "_")`（含 `+` 变体）—— 精确到
+「把一批字符换成下划线」。**不数**别的 `replace`（`.` → `-`、空格归一、
+去掉尾斜杠都不在此列）。豁免一条：`safe-name.ts` 自身。
 
 ## 16.3 新增一个组件的标准动作
 

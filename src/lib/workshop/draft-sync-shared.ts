@@ -3,6 +3,7 @@
 // webview 存储重置而丢失。此模块定义「前端草稿 ↔ 服务端镜像」共用的线上结构
 // 与纯校验函数，同时被客户端 hook 与服务端 route/repository 引用，保证两侧
 // 只对齐一份契约（风格对齐 api-channel-shared.ts —— 纯函数、客户端可安全 import）。
+import { asRecord } from "~/lib/is-record";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
@@ -16,14 +17,8 @@ export interface WorkshopDraftDto {
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。 */
 export function parseDraftDto(raw: unknown): WorkshopDraftDto {
-  const obj =
-    typeof raw === "object" && raw !== null
-      ? (raw as Record<string, unknown>)
-      : {};
-  const meta =
-    typeof obj.meta === "object" && obj.meta !== null
-      ? (obj.meta as Record<string, unknown>)
-      : {};
+  const obj = asRecord(raw) ?? {};
+  const meta = asRecord(obj.meta) ?? {};
   return {
     meta: {
       title: typeof meta.title === "string" ? meta.title : "",

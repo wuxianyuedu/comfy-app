@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
+import { safeFileNameSegment } from "~/lib/safe-name";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "~/lib/endpoints";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
@@ -162,7 +163,7 @@ export async function uploadComfyImage(
  *  sessionId 为空时退回公共根目录（兼容无项目历史调用）。 */
 export function outputDirForSession(sessionId?: string): string {
   if (sessionId) {
-    const safe = sessionId.replace(/[^\w.-]/g, "_");
+    const safe = safeFileNameSegment(sessionId);
     return path.join(OUTPUT_DIR, safe);
   }
   return OUTPUT_DIR;
@@ -316,7 +317,7 @@ export async function runComfyWorkflow(
     for (const item of items) {
       const buf = await getComfyView(item.filename, item.subfolder, item.type);
       const outName = `comfy-${promptId}-${files.length}-${item.filename}`;
-      const outPath = path.join(outDir, outName.replace(/[^\w.-]/g, "_"));
+      const outPath = path.join(outDir, safeFileNameSegment(outName));
       await fs.writeFile(outPath, buf);
       files.push(`file://${outPath}`);
     }

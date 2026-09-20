@@ -4,6 +4,7 @@
 //   · 远端：/api/workshop-api/generate 的 image 通道（OpenAI 兼容 images/generations）
 //   · 导入：素材库「角色」分类（/api/materials），落盘后拿到可引用的本地地址
 
+import { DEFAULT_IMAGE_MIME, extForMime } from "~/lib/media/mime-ext";
 import { uploadMaterialItem } from "~/lib/media/materials-client";
 import {
   sizeSpecToRelay,
@@ -70,21 +71,17 @@ export async function generateWorkflowPortrait(
   return { taskId, url };
 }
 
-/** MIME → 落盘扩展名（服务端按扩展名判素材种类；未知类型统一按 png 存）。 */
-const DATA_URL_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "image/bmp": "bmp",
-  "image/avif": "avif",
-};
+/* 未知 MIME 的兜底后缀：素材库按扩展名归属种类，没有后缀会被判成文档。 */
+const DEFAULT_EXT = "png";
 
 /** data URL → File（浏览器侧同源读取内联图片，不涉及跨域）。 */
 async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
   const blob = await (await fetch(dataUrl)).blob();
-  // 服务端按扩展名归属素材种类，没有扩展名会被当成文档，故这里必须有兜底后缀。
-  const ext = DATA_URL_EXTENSIONS[blob.type] ?? "png";
-  return new File([blob], `${name}.${ext}`, { type: blob.type || "image/png" });
+  /* 服务端按扩展名归属素材种类，没有扩展名会被当成文档，故这里必须有兜底后缀。 */
+  const ext = extForMime(blob.type) ?? DEFAULT_EXT;
+  return new File([blob], `${name}.${ext}`, {
+    type: blob.type || DEFAULT_IMAGE_MIME,
+  });
 }
 
 /** 远端通道常返回内联 b64（data URL）：这种地址进草稿会把 localStorage 与

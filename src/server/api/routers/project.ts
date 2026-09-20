@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { projectRepository, taskRepository } from "~/lib/core/repository";
+import { asRecord } from "~/lib/is-record";
 
 export const projectRouter = createTRPCRouter({
   /* GET /api/projects —— 读 */
@@ -80,10 +81,7 @@ export const projectRouter = createTRPCRouter({
         // params 是 Prisma Json 列:非对象(标量)时所有属性读取均为 undefined,与原
         // `(task.params ?? {}) as Record<string, any>` 的读取结果一致。
         const rawParams: unknown = task.params ?? {};
-        const params: Record<string, unknown> =
-          typeof rawParams === "object" && rawParams !== null
-            ? (rawParams as Record<string, unknown>)
-            : {};
+        const params: Record<string, unknown> = asRecord(rawParams) ?? {};
         return {
           id: task.id,
           type: task.type,

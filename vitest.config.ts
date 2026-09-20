@@ -89,6 +89,10 @@ export default defineConfig({
         "src/components/ui/use-copy-feedback.ts",
         "src/lib/is-record.ts",
         "src/server/lib/request-body.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.51 ~ §16.2.4.53）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/lib/media/mime-ext.ts",
+        "src/lib/safe-name.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -480,6 +484,26 @@ export default defineConfig({
           branches: 100,
         },
         "src/server/lib/request-body.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 「扩展名 ⇄ MIME」的唯一出口（§16.2.4.51，P47 的对面）：两组查表、
+         * 带参数的 content-type 切分、`extOfPath` 的点/隐藏文件/查询串三态、
+         * `stemOfPath` 与 `contentTypeForPath` 的两档兜底全在用例里。
+         * 行/函数/语句 100 是实测值；分支 85 也是实测 —— 未覆盖的四条是
+         * `split(...)[0] ?? ""` / `.pop() ?? ""` 这两处**不可达**兜底
+         *（`split` 对任意输入都至少返回一个元素）。 */
+        "src/lib/media/mime-ext.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 85,
+        },
+        /* 「把文本变成安全的文件名片段」的唯一出口（§16.2.4.53，P49 的对面）：
+         * 两档的差异（保留 / 不保留 CJK）就是这条账的全部内容，必须 100%。 */
+        "src/lib/safe-name.ts": {
           lines: 100,
           functions: 100,
           statements: 100,

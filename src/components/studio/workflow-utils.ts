@@ -3,6 +3,7 @@
  * 没有 JSX，也不用 React hook。 */
 import { getCustomNodePackage } from "~/config/custom-nodes";
 import { displayValue } from "~/lib/display-value";
+import { asRecord } from "~/lib/is-record";
 import { TITLE_MAX, clampText } from "~/lib/text-clamp";
 import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
 import type { Node, Edge } from "@xyflow/react";
@@ -12,15 +13,6 @@ import type {
   RawOutputMeta,
   WorkflowGroup,
 } from "./workflow-types";
-/** 宽松对象视图：`typeof v === "object" && v !== null`（含数组）→ Record 视图，
- *  否则 null。与旧 any 代码 `x?.prop` / `Object.entries(x ?? {})` 的运行时语义
- *  一致（§5.6：graph / JSON 值一律 unknown + 守卫）。 */
-function asRecord(v: unknown): Record<string, unknown> | null {
-  return typeof v === "object" && v !== null
-    ? (v as Record<string, unknown>)
-    : null;
-}
-
 /* `rectToAnchor` 已迁到 `~/lib/dom-rect` 的 `rectToAnchorRect`
  * （规范 16 §16.2.4.41：「把活着的 DOMRect 冻成可存对象」只在一处定义）。
  * 本文件不再导出它 —— 迁移时连带检查过：唯一调用方是 `WorkflowStores`。 */
