@@ -7,6 +7,7 @@
 // 更新源与签名公钥在 src-tauri/tauri.conf.json 的 plugins.updater 配置；未配置
 // 端点时 check() 返回 null（视为无更新），UI 提示「未配置更新源」。
 
+import { errorText } from "~/lib/error-message";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 一次「检测更新」的结果：是否有可用更新及其元信息。 */
@@ -73,7 +74,7 @@ export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
     return {
       ok: false,
       available: false,
-      detail: `检测更新失败：${e instanceof Error ? e.message : String(e)}。请确认已配置更新源与签名公钥。`,
+      detail: `${errorText(e, "检测更新失败")}。请确认已配置更新源与签名公钥。`,
     };
   }
 }
@@ -116,7 +117,7 @@ export async function downloadAndInstallUpdate(
     return {
       ok: false,
       triggered: false,
-      detail: `更新失败：${e instanceof Error ? e.message : String(e)}`,
+      detail: errorText(e, "更新失败"),
     };
   }
 }
@@ -136,7 +137,7 @@ export async function relaunchApp(): Promise<{ ok: boolean; detail: string }> {
   } catch (e) {
     return {
       ok: false,
-      detail: `重启失败：${e instanceof Error ? e.message : String(e)}`,
+      detail: errorText(e, "重启失败"),
     };
   }
 }

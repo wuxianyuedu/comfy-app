@@ -8,6 +8,7 @@
 // Next.js HMR 因此永远不会造出第二个定时器）。enqueue.ts 以副作用方式导入本模块，
 // 于是任何会入队 / 订阅的服务端一启动就把它拉起来了。
 
+import { errorText } from "~/lib/error-message";
 import { isSchemaReady } from "~/lib/db-schema-ready";
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
@@ -312,9 +313,7 @@ export async function reapStaleQueuedTasks(): Promise<void> {
       );
     }
   } catch (err) {
-    logger.warn(
-      `[comfyui] reapStaleQueuedTasks 失败：${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.warn(`[comfyui] ${errorText(err, "reapStaleQueuedTasks 失败")}`);
   }
 }
 
@@ -451,9 +450,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
       `[comfyui] reaper(running): checked ${stale.length} stale RUNNING task(s) (older than ${RUNNING_STALE_MS / 1000}s)`,
     );
   } catch (err) {
-    logger.warn(
-      `[comfyui] reapStaleRunningTasks 失败：${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.warn(`[comfyui] ${errorText(err, "reapStaleRunningTasks 失败")}`);
   }
 }
 

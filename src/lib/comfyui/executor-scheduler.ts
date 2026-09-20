@@ -14,6 +14,7 @@
  * @module comfyui/executor-scheduler — 队列调度与心跳（executor 的调度层）
  */
 import WebSocket from "ws";
+import { errorText } from "~/lib/error-message";
 import { logger } from "~/lib/core/logger";
 import { state, log, MAX_CONCURRENCY } from "./runner-state";
 import { registerQueueKick } from "./executor-continuation";
@@ -82,11 +83,7 @@ export async function processQueue() {
     } catch (inner) {
       /* finalizeFailure 自己也可能抛（数据库挂了）—— 不要再嵌一层 catch 递归，
        * 只记日志 + 手动归还并发槽，让队列继续往前走。 */
-      log(
-        job.taskId,
-        "error",
-        `finalizeFailure 二次失败：${inner instanceof Error ? inner.message : String(inner)}`,
-      );
+      log(job.taskId, "error", errorText(inner, "finalizeFailure 二次失败"));
       if (s.startedAt.has(job.taskId)) s.startedAt.delete(job.taskId);
       s.lastNodeByTask.delete(job.taskId);
       s.active = Math.max(0, s.active - 1);
@@ -122,9 +119,7 @@ function startHeartbeat() {
         void processQueue();
       }
     } catch (err) {
-      logger.warn(
-        `[comfyui] heartbeat processQueue 失败：${err instanceof Error ? err.message : String(err)}`,
-      );
+      logger.warn(`[comfyui] ${errorText(err, "heartbeat processQueue 失败")}`);
     }
   }, HEARTBEAT_MS);
 }

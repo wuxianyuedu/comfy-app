@@ -18,6 +18,7 @@ import {
   getSettingsSync,
 } from "~/lib/app-settings/app-settings.server";
 import { readEnvVar } from "~/lib/envfile";
+import { errorText } from "~/lib/error-message";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { AppError } from "~/lib/core/errors";
 import { isRecord } from "~/lib/is-record";
@@ -340,7 +341,7 @@ function runDiscoverStreaming(
             type: "progress",
             parent,
             phase: "scan",
-            msg: "⚠️ 启动解析进程失败：" + e.message,
+            msg: errorText(e, "⚠️ 启动解析进程失败"),
           });
           resolve([]);
         }
@@ -448,7 +449,7 @@ function streamParse(paths: string[], onlyPkgs?: readonly unknown[]): Response {
           send({
             type: "log",
             level: "error",
-            msg: "启动解析进程失败：" + e.message,
+            msg: errorText(e, "启动解析进程失败"),
           });
           send({
             type: "done",

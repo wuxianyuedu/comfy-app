@@ -10,7 +10,10 @@ import { useMemo, useState } from "react";
 import { Popover, PopoverContent } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { useFlashState } from "~/components/ui/use-flash-state";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { anchorRectToVirtualElement } from "~/lib/dom-rect";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
@@ -262,11 +265,7 @@ export function NodeJsonPopover({
               variant="outline"
               size="xs"
               onClick={() => handleCopy(pretty)}
-              title={
-                copyFailed
-                  ? "复制失败：剪贴板不可用，请手动选中后复制"
-                  : "复制 JSON 到剪贴板"
-              }
+              title={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}
               style={{
                 background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
                 color: copied.on ? accent : "var(--color-ink)",

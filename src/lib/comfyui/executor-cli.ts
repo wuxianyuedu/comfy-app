@@ -19,6 +19,7 @@
  *
  * @module comfyui/executor-cli — comfy-cli 执行路径（**两种格式统一**）
  */
+import { errorText } from "~/lib/error-message";
 import "server-only";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
@@ -424,7 +425,7 @@ export async function executeViaComfyCli(job: Job) {
     clearTimeout(guard);
     cliProcs.delete(taskId);
     trace("cli", taskId, "进程启动失败", { error: err });
-    log(taskId, "error", `comfy-cli 启动失败：${err.message}`);
-    void fail(taskId, promptId ?? "", `comfy-cli 启动失败：${err.message}`);
+    log(taskId, "error", errorText(err, "comfy-cli 启动失败"));
+    void fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败"));
   });
 }

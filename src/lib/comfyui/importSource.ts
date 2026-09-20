@@ -15,6 +15,7 @@
 // 猜错就是一份能打开、跑起来结果不对的图，历史 ISSUE #632 已证伪这条路）。
 
 import "server-only";
+import { errorText } from "~/lib/error-message";
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
 import { z } from "zod";
@@ -55,14 +56,16 @@ export async function readLocalFile(
   try {
     stat = await fs.stat(absPath);
   } catch (e: unknown) {
+    /* 只取 `code` 判「文件不存在」这一档；文案一律由 `errorText` 产出
+     *（它带网络层翻译，`String(e)` 那一路会把非 Error 抛值渲染成
+     * `[object Object]`）。 */
     const err = (typeof e === "object" && e !== null ? e : {}) as {
       code?: string;
-      message?: string;
     };
     if (err.code === "ENOENT") {
       throw new Error(`本地文件不存在：${absPath}`);
     }
-    throw new Error(`无法读取本地文件 ${absPath}：${err.message ?? String(e)}`);
+    throw new Error(errorText(e, `无法读取本地文件 ${absPath}`));
   }
   const text = await fs.readFile(absPath, "utf-8");
   return { text, mtimeMs: stat.mtimeMs };

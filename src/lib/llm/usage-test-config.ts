@@ -4,6 +4,7 @@
 // 本文件只放可被单测的纯函数与常量，DOM / FileReader 等留在视图层。
 
 import { withQuery } from "~/lib/query-string";
+import { nextId } from "~/lib/unique-id";
 
 /** 「实际使用」测试弹窗的一条额外请求体字段。key 是请求体里的字段名
  *（如 mode / first_frame / image），value 为输入内容——文本、数字或图片。
@@ -11,6 +12,20 @@ import { withQuery } from "~/lib/query-string";
 export interface UsageField {
   key: string;
   value: string;
+  /**
+   * 行的**稳定标识**，只给 React 当 `key` 用。
+   *
+   * 此前视图层拿「在数组里的下标」当 key（`usageTest.fields.indexOf(f)`），
+   * 而删除中间一行会让后面所有行的下标**整体左移** —— React 于是复用错误
+   * 的 DOM 节点：用户在某一行刚输入的内容会「闪到隔壁字段」。
+   *
+   * 不给也不会出错（`addField` 系与 `defaultVideoFields` 都会带上），
+   * 但**任何新建字段的地方都该给**：缺了它就又退回下标当 key。
+   *
+   * **它不参与序列化**：`usageFieldsToJson` 只读 `key` / `value`，
+   * 请求体里不会多出这个字段。
+   */
+  id: string;
 }
 
 /** 视频生成常见的 mode 预设（Agnes 等：text / keyframe / reference）。
@@ -25,10 +40,23 @@ export const VIDEO_MODE_HINT: Record<string, string> = {
   reference: "参考图/音频驱动：需额外传入 images 或 audios 至少一类",
 };
 
+/**
+ * 造一条字段行 —— 全库唯一的字段构造入口（`id` 只在这里给）。
+ *
+ * 为什么要有这个工厂：`UsageField.id` 是给 React 当 `key` 用的稳定标识，
+ * 而「新建字段」的落点有 5 处（`addField` / `addPresetField` / 两处 mode 写入 /
+ * `rescueMediaFromMode` 的搬移）。任何一处漏给 `id`，那一行就退回「下标当 key」
+ * —— 而这件事**只在删中间一行时才显形**（后面的 DOM 被 React 复用，用户刚输入的
+ * 内容闪到隔壁字段），代码上完全看不出来。
+ */
+export function makeUsageField(key: string, value: string): UsageField {
+  return { id: nextId("field-"), key, value };
+}
+
 /** 视频「请求体额外字段」的预填模板：mode 是大多数视频接口的必填项，
  *  一打开弹窗就可见可改，避免首次执行就因缺 mode 被 400。 */
 export function defaultVideoFields(): UsageField[] {
-  return [{ key: "mode", value: "text" }];
+  return [makeUsageField("mode", "text")];
 }
 
 /** 视频请求里承载媒体（图片/音频）的字段名集合。mode=text 不允许携带它们

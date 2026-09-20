@@ -168,6 +168,8 @@ node scripts/check-ui-primitives.cjs --update   # 治理后收紧基线
 | **P39** | 裸写「等一帧再做事」的调度（`requestAnimationFrame(`，**排除**回调里再次 rAF 自己的帧循环） | `~/lib/next-frame` 的 `onNextFrame`（一帧）/ `afterNextPaint`（两帧，等三方布局库重排）；两者都返回取消函数（见 §16.2.4.42） |
 | **P40** | 裸调剪贴板写入而不接反馈出口（`copyText(` / `copyLogText(`） | `~/components/ui/use-copy-feedback` 的 `useCopyFeedback`（成败各给一条出口）/ `useCopyResult`（只要成败、不报反馈）（见 §16.2.4.43） |
 | **P41** | REST 路由里自写入参收窄（自己定义 `isRecord`，或「`req.json()` + 400 信封」同现） | `~/server/lib/request-body` 的 `readJsonRecord` / `isErrorResponse`；`unknown` 的收窄用 `~/lib/is-record` 的 `isRecord` / `isPlainRecord`（见 §16.2.4.44） |
+| **P42** | 自拼错误文案的「动作前缀」（`失败/异常/错误/无法…` 之类的字面量 + 冒号 + 紧跟一个错误取值动作） | `~/lib/error-message` 的 `errorText(e, action, fallback?)`（动作名与详情两段式，分隔符只有一处定义，见 §16.2.4.45） |
+| **P43** | 手写「复制失败」的固定提示句（字面量里出现 `剪贴板不可用`） | `~/components/ui/use-copy-feedback` 的 `copyFailureText(target?)`（固定句走出口、**界面位置**经参数注入，见 §16.2.4.46） |
 
 **P4~~P35 与 P1~~P3 的性质不同，别混**：P1/P2/P3 是**计数棘轮**（先冻结存量、逐批降）；
 P4~P35 一上来就是**硬闸** —— 「自绘滚动条 / 写剪贴板 / 触发下载 / 手工文件选择 /
@@ -187,7 +189,8 @@ P24/P25/P26 见 §16.2.4.27 ~ §16.2.4.29、P27/P28/P29 见 §16.2.4.30 ~ §16.2
 **P30/P31/P32 见 §16.2.4.33 ~ §16.2.4.35**、
 P33/P34/P35 见 §16.2.4.36 ~ §16.2.4.38、
 P36/P37/P38 见 §16.2.4.39 ~ §16.2.4.41、
-**P39/P40/P41 见 §16.2.4.42 ~ §16.2.4.44**。
+**P39/P40/P41 见 §16.2.4.42 ~ §16.2.4.44**、
+P42/P43 见 §16.2.4.45 ~ §16.2.4.46。
 
 **P4~P41 当前都是硬闸**（基线里已无条目，新增任何自实现直接被阻断）：
 `pnpm ui:primitives` 在 2026-09 的分批治理后收于 **0 处 / 0 文件**。
@@ -405,6 +408,9 @@ P4 之后所有调用方传的都是 `zClass("modal")` / `zClass("canvasMax")`�
 | 元素几何           | ~~**5 处**各写一遍「量一个元素的盒子再把量出来的值用于判据」：日志面板内偏移（两个 rect 相减）、`LogPanel` 与 `WorkflowLibraryCanvas` 各接一个 `ResizeObserver` + 手写等值判断、`ScriptMarkdownEditor` 用 `scrollHeight / lines.length` 估行高（行数为 0 时给出 `Infinity`）、浮层锚点矩形逐字段搬运。**「量不到算什么」在五处有三种处理**（0 / 兜底常量 / 提前 return）~~                                                                                                                                                     | `~/lib/dom-rect`（读盒子的纯算术，量不到一律 `null`）+ `~/components/ui/use-element-box` 的 `useElementBox`（首帧量一次 + `ResizeObserver` + 等值判断）；**P38 硬闸**                               | ✅ **见 §16.2.4.41**                        |
 | 「等一帧再做事」   | ~~**8 处**各写一遍「下一帧再做」：`WorkflowEditorInner` 的重新居中与 `use-custom-nodes-settings` 的三处滚动定位是**裸的一帧且没有清理**（effect 因依赖抖动重跑时旧帧仍会落地，往已经翻走的面板上滚一次）；`json-viewer` / `select-menu` / `confirm-dialog` 带取消但变量名各写各的；`canvas-helpers` 与 `use-workflow-persistence` 又各写一份**双 rAF**（理由各写一遍注释）~~                                                                                                                                                        | `~/lib/next-frame` 的 `onNextFrame`（一帧）/ `afterNextPaint`（两帧，等三方布局库重排），两者都返回取消函数；**P39 硬闸**                                                                            | ✅ **见 §16.2.4.42**                        |
 | 复制之后的反馈     | ~~**14 个落点六种答案**：完全静默 6 处（`void copyText(…)`，三处理由各不相同）、`useFlashState` 亮一下 3 处、toast 两条 1 处、进 `runAsyncAction` 1 处、三态 `setOutcome` 1 处、**只 `if (await copyText(…))` 没有失败分支** 2 处。差别不是风格 —— 「复制失败」在一半落点下**连按钮都不变**，用户以为复制成功了（只在打包后的 `http://` 里复现）~~                                                                                                                                                                            | `~/components/ui/use-copy-feedback` 的 `useCopyFeedback`（成败各一条出口、`"silent"` 是显式静默、ref 判重入）/ `useCopyResult`（只要成败、不报反馈）；**P40 硬闸**                                    | ✅ **见 §16.2.4.43**                        |
+| 错误文案的**动作前缀** | ~~**四种写法并存**：模板串硬拼 `` `工作流列表加载失败：${errorMessage(e, "未知错误")}` ``（`use-workflow-library` ×2、`server/film/orchestrator` ×2、`use-cancel-task`）、`+` 拼（`use-workflow-import`）、**绕开 `errorMessage`** 的 `"读取配置失败：" + String(e)`（`use-custom-nodes-settings` ×4）、`` `${err instanceof Error ? err.message : "未知错误"}` ``（`usage-field-editor`）、`"启动解析进程失败：" + e.message`（`api/custom-nodes` ×2）；判据跑出来另有 **20+ 处**在 `src/lib/**`（`app-update-client` / `api-channel-core` / `comfyui/*` / `drizzle-studio` / `open-in-browser` / `media-source.server` / `final-compose`）用了同一个 `String(e)` 兜底写法 —— **人工梳理找不全，判据按形态找得到**~~ | `~/lib/error-message` 的 `errorText(e, action, fallback?)`（动作名与详情两段式；`String(e)` 对 `new Error("")` 产出 `"Error"`、对对象抛值产出 `"[object Object]"`，且绕过网络层翻译）；**P42 硬闸** | ✅ **见 §16.2.4.45** |
+| 复制失败的**固定提示句** | ~~10 个落点每处手写同一句话，而有 **5 种变体**：`请手动选中后复制` ×5、`请手动选中复制` ×1（**漏了「后」**）、`请在下方展开后手动选中复制` ×2、`请手动选中日志后复制` ×1、`请到创作台手动重跑` ×1~~ | `~/components/ui/use-copy-feedback` 的 `copyFailureText(target?)` —— 固定句（浏览器为什么拒绝写剪贴板，与落点无关）走出口、「可复制物在哪一段界面里」（只有调用处知道）经参数注入；**P43 硬闸** | ✅ **见 §16.2.4.46** |
+| 列表项的 **React key** | ~~`key={i}` 与 `key={x.id}` 混用；其中 `UsageTestDialog` 拿 `fields.indexOf(f)` 反查下标当 key —— **删中间一行时后面所有行的下标整体左移**，React 复用错误的 DOM 节点，用户在某行刚输入的内容「闪到隔壁字段」~~ | 数据自带身份（`UsageField.id`，由 `~/lib/llm/usage-test-config` 的 `makeUsageField` 一处生成）；**不做门禁**（机器判不出「这个 list 会不会换序」，见 §16.2.4.47） | ✅ **见 §16.2.4.47** |
 | REST 入参收窄      | ~~11 个 POST 路由各写一遍「读体 → 判对象 → 400」：**5 份逐字相同的 12 行**；`custom-nodes` / `llm/test` / `workshop/logs` 用 `.catch(() => ({}))` —— **畸形 JSON 被静默当成空对象**，同一个坏请求在一种写法下回「请求格式错误」、在另一种下走到「字段缺失」分支回一句与病因无关的话；`logs/export` 干脆用**类型断言**（畸形体在下一行属性访问处抛 TypeError → 被兜成 500）；另有 **9 份**逐字相同的 `isRecord` 实现~~                                                                                                                           | `~/server/lib/request-body` 的 `readJsonRecord` / `isErrorResponse`（格式不对走 §10.9 的 `ValidationError` → `{ error: { code, message } }`）；`unknown` 收窄用 `~/lib/is-record` 的 `isRecord` / `isPlainRecord`；**P41 硬闸** | ✅ **见 §16.2.4.44**                        |
 
 `pnpm ui:primitives:report` 输出的就是本表的机器版数据，排批次时照它来。
@@ -3151,6 +3157,123 @@ const kind = body.kind;                   // 到这里已经是 Record
 
 ⚠️ **字段级校验不在这条账里**（`llm/route` 的 `BodySchema` 保留）；
 ⚠️ 出口自身两处（`lib/is-record.ts`、`server/lib/request-body.ts`）豁免。
+
+### 16.2.4.45 错误文案的「动作前缀」四处各写一遍（P42 硬闸）
+
+`~/lib/error-message` 的 `errorMessage` 早已是**详情**那一半的唯一出口（它把
+`Unexpected token '<'` 这类无信息量的原文翻成人话）。但「**是哪个动作失败了**」
+那一半在收口前有四种写法并存：
+
+| 写法 | 实例 |
+|------|------|
+| 模板串硬拼 | `` `工作流列表加载失败：${errorMessage(e, "未知错误")}` ``（`use-workflow-library` ×2、`server/film/orchestrator` ×2、`use-cancel-task`） |
+| `+` 拼 | `"无法读取文件：" + errorMessage(e, "未知错误")`（`use-workflow-import`） |
+| **绕开 `errorMessage`** | `"读取配置失败：" + String(e)`（`use-custom-nodes-settings` ×4）、`` `${err instanceof Error ? err.message : "未知错误"}` ``（`usage-field-editor`）、`"启动解析进程失败：" + e.message`（`api/custom-nodes` ×2） |
+| 动作名当 `errorMessage` 的 fallback | `errorMessage(e, "保存失败")` —— **不算违规**（结果本就正确），但它表达不了「动作 + 详情」两段式 |
+
+第三档才是真正的缺陷：`String(e)` 对 `new Error("")` 产出 `"Error"`、对 tRPC
+的对象抛值产出 `"[object Object]"`，而且**绕过网络层翻译** —— 同一个文件里其它
+落点走 `errorMessage`，于是用户会在同一块面板上看到两种质量并存的文案。
+
+**判据跑出来比人工梳理多 20+ 处**：`src/lib/**` 里 `app-update-client` /
+`api-channel-core` / `comfyui/*`（executor-ws / reaper / executor-scheduler /
+executor-cli / executor-continuation / lifecycle-launch / status）/
+`drizzle-studio/lifecycle` / `shell/open-in-browser` / `workshop/media-source.server` /
+`server/workshop/final-compose` / `comfy/comfy-embed` / `comfyui/importSource`
+都用同一个 `instanceof Error ? e.message : String(e)` 兜底 —— 这是本仓库那条
+方法论的又一次验证：**人工按目录名 / 文件找会漏，判据按形态找不会。**
+
+#### 出口：`~/lib/error-message` 的 `errorText`
+
+```ts
+errorText(e, "读取配置")               // "读取配置：连接被拒绝或中断，…"
+errorText(e, "打开 ComfyUI", "启动失败") // 详情取不到时 → "打开 ComfyUI：启动失败"
+```
+
+- **分隔符由出口给**（全角冒号）：调用处不必各自决定用全角还是半角、后面带不带空格
+  （收口前两套都在用）；
+- **`fallback` 只兜详情**，动作前缀一定出现在结果里。裸调
+  `errorMessage(e, "保存失败")` 在取不到 message 时会把**动作名当详情**，于是
+  「保存失败：保存失败」—— 前缀分开之后那种重复不可能再出现。
+
+#### 判据：P42（硬闸）
+
+取「**动作前缀 + 冒号 + 紧跟一个错误取值动作**」这个签名，两个条件必须同时成立：
+
+1. 冒号前 40 字符内出现**出错语义**的字面量 —— `失败` / `异常` / `错误` / `出错` /
+   `无法` / `不能` / `未找到` / `不存在`（**词表取实测出来的四类**：只认「失败」
+   会把 `无法读取文件：` 那一处整个漏掉，而它恰恰是最常见的一档）；
+2. 冒号后 60 字符内出现 `errorMessage(` / `String(e|err|error)` /
+   `e|err|error.message` / `instanceof Error` 之一。
+
+只数冒号会把任何「标题：正文」的界面文案算上（那是合法的）；只数 `String(` 会把
+日志里别的转换算上。
+
+> **豁免两条，各带理由**：
+> ① `~/lib/error-message.ts` 自身（出口实现要拼那个冒号）；
+> ② `~/lib/llm/server.ts` 的 `describeFetchFailure` —— 它是**域诊断**而不是两段式：
+> 前缀里带 `（${base}）`（用户要看到是哪个 Base URL 出的问题），且按 undici 错误码
+> 分了四档各不相同的人话，`errorText` 的两段式表达不了。该文件已改用
+> `errorMessage` 取详情（原先的裸 `e.message` / `String(e)` 已收口）。
+
+### 16.2.4.46 复制失败的固定提示句五处变体（P43 硬闸）
+
+这是 P40（§16.2.4.43）的**下一层**。P40 让「复制成败说不说」收口之后，剩下的是
+**说了什么** —— 实测 10 个落点给失败提示时每一处都手写同一句话，而有 **5 种变体**：
+
+| 变体 | 次数 |
+|------|------|
+| `请手动选中后复制` | 5 |
+| `请手动选中复制`（**漏了「后」**） | 1 |
+| `请在下方展开后手动选中复制` | 2 |
+| `请手动选中日志后复制` | 1 |
+| `请到创作台手动重跑` | 1 |
+
+也就是说 —— **浏览器为什么拒绝写剪贴板**（非安全上下文 / 无权限）这件事在同一句
+提示里说了五种说法，其中一处还漏了半个字。
+
+#### 出口：`copyFailureText(target?)`
+
+```tsx
+copyFailureText()               // "复制失败：剪贴板不可用，请手动选中后复制"
+copyFailureText("日志列表")     // "复制失败：剪贴板不可用，请手动选中日志列表后复制"
+copyFailureText("下方展开区")   // "…请手动选中下方展开区后复制"
+```
+
+**为什么固定句走出口、位置走参数**：位置那半句是**界面事实**（同一个面板的布局
+变了，说法就该跟着变），而「浏览器拒绝了剪贴板」与落点无关 —— 它该只有一处定义。
+
+#### 判据：P43（硬闸）
+
+取固定句的**语义内核** `剪贴板不可用`，**不取**标题「复制失败」四个字 —— 后者是
+标题，与 `errorText` 的动作前缀同族，各面板本来就该说得不一样。
+出口自身（`use-copy-feedback.ts`）豁免。
+
+### 16.2.4.47 列表项的 React key 用下标（**这一条刻意不做门禁**）
+
+`UsageTestDialog` 此前是这样渲染字段行的：
+
+```tsx
+{d.usageFieldsToSend(usageTest).map((f) => {
+  const i = usageTest.fields.indexOf(f);
+  return <div key={i}>…</div>;   // ← 下标当 key
+})}
+```
+
+`i` 作为**动作参数**（`patchField(i, …)`）每次渲染现算都正确；但**不能拿它当
+`key`** —— 删中间一行会让后面所有行的下标整体左移，React 于是复用错误的 DOM 节点：
+用户在某一行刚输入的内容会「闪到隔壁字段」。
+
+修法：`UsageField` 增加 `id`（**不参与序列化** —— `usageFieldsToJson` 只读
+`key` / `value`，请求体里不会多出这个字段），由 `~/lib/llm/usage-test-config` 的
+`makeUsageField` **一处**生成。任何新建字段的地方都必须经它（新建落点有 5 处：
+`addField` / `addPresetField` / 两处 mode 写入 / `rescueMediaFromMode` 的搬移）。
+
+**为什么不做门禁**：机器判不出「这个 list 会不会换序 / 过滤」。
+`key={i}` 在「静态切段」（ANSI 文本分段、固定长度占位）里是**正确**写法 ——
+位置天然就是身份，硬换成一个造出来的 id 反而多此一举。因此这一档由 Code Review
+与 §13.1 自查清单兜，机器判据只落在**能判的那一半**：`usage-field-editor.test.ts`
+断言「删中间一行后其余行的 `id` 逐个不变」（此处若退回「生成字面量对象」，用例当场红）。
 
 ## 16.3 新增一个组件的标准动作
 

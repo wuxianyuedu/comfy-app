@@ -33,7 +33,10 @@ import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
-import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyFeedback,
+} from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { Icon } from "~/components/ui/icon";
 
@@ -370,11 +373,7 @@ export function JsonViewer({
           size="xs"
           onClick={() => copy(JSON.stringify(data, null, 2))}
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright bg-transparent"
-          title={
-            copyFailed
-              ? "复制失败：剪贴板不可用，请手动选中后复制"
-              : "把当前 JSON 复制到剪贴板"
-          }
+          title={copyFailed ? copyFailureText() : "把当前 JSON 复制到剪贴板"}
         >
           {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
         </Button>

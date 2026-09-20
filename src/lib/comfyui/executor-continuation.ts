@@ -32,6 +32,7 @@
  *
  * @module comfyui/executor-continuation — 出队续跑的回调总线（唯一注册点）
  */
+import { errorText } from "~/lib/error-message";
 import { logger } from "~/lib/core/logger";
 
 type KickQueue = () => void | Promise<void>;
@@ -68,8 +69,6 @@ export function kickQueue(): void {
     return;
   }
   void Promise.resolve(kick()).catch((err: unknown) => {
-    logger.warn(
-      `[comfyui] 续跑出队失败：${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.warn(`[comfyui] ${errorText(err, "续跑出队失败")}`);
   });
 }

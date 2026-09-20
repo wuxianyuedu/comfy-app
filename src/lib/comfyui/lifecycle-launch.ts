@@ -11,6 +11,7 @@
  * {@link LaunchHost} 注入，而不是回引 `lifecycle.ts` —— 后者会成环（§12.7）。
  */
 
+import { errorText } from "~/lib/error-message";
 import "server-only";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -326,7 +327,7 @@ async function launchBoundMode(
       env: stdioEnv,
     });
   } catch (e) {
-    const detail = `启动 ComfyUI 失败：${e instanceof Error ? e.message : String(e)}`;
+    const detail = errorText(e, "启动 ComfyUI 失败");
     note(detail);
     return { ok: false, base: null, detail };
   }

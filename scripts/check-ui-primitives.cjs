@@ -341,7 +341,7 @@ const VIEW_SCAN_DIRS = ["src/components", "src/app"];
  * 逐条列在这里，与 `HOOKS_ALSO_SCANNED` / `UI_ALSO_SCANNED` 同一手法：
  * 让「哪条判据扫哪一层」这件事写在明处。
  */
-const LIB_SCANNED_RULES = new Set(["P39", "P40", "P41"]);
+const LIB_SCANNED_RULES = new Set(["P39", "P40", "P41", "P42"]);
 
 const SCAN_DIRS = [
   "src/components",
@@ -436,6 +436,8 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P39",
   "P40",
   "P41",
+  "P42",
+  "P43",
 ]);
 
 /**
@@ -473,6 +475,31 @@ const EXEMPT_FILES = {
         "同上：store 的 `copyAll` 是**纯编排**（取当前筛选的行 → 拼串 → 交给域转发），" +
         "它把 `Promise<boolean>` 向上返回，反馈落在 `LogPanel` 的按钮上。" +
         "在这一层弹提示反而是分层倒置（store 不认识界面）。",
+    },
+  ],
+  P43: [
+    {
+      re: /^src\/components\/ui\/use-copy-feedback\.ts$/,
+      reason:
+        "出口自身的实现（`copyFailureText` 的定义处 —— 那句话本来就在这里；" +
+        "本判据数的是**别处**又手写了一份）。",
+    },
+  ],
+  P42: [
+    {
+      re: /^src\/lib\/error-message\.ts$/,
+      reason:
+        "出口自身的实现（`errorText` 的定义处 —— 它当然要拼那个冒号；" +
+        "本判据数的是**别处**又拼了一份动作前缀）。",
+    },
+    {
+      re: /^src\/lib\/llm\/server\.ts$/,
+      reason:
+        "`describeFetchFailure` 是**域诊断**而不是「动作 + 详情」两段式：它的" +
+        "前缀里带 `（${base}）`（用户要看到是哪个 Base URL 出的问题），" +
+        "且按 undici 错误码分了四档各不相同的人话 —— 那四句是域判据，" +
+        "`errorText` 的两段式表达不了。本文件已改用 `errorMessage` 取详情" +
+        "（原先的裸 `e.message` / `String(e)` 已收口），这正是本判据要的那一半。",
     },
   ],
   P41: [
@@ -1655,6 +1682,102 @@ const RULES = {
       return hits;
     },
   },
+
+  /* ── P42「错误文案里的『动作前缀』」（硬闸，§16.2.4.45）─────────────────
+   * `~/lib/error-message` 的 `errorMessage` 早已是「详情」那一半的唯一出口，
+   * 但「**是哪个动作失败了**」那一半在收口前有四种写法并存：
+   *
+   *   · 模板串硬拼 —— `` `工作流列表加载失败：${errorMessage(e, "未知错误")}` ``
+   *     （`use-workflow-library` ×2、`server/film/orchestrator` ×2、
+   *     `use-cancel-task`）；
+   *   · `+` 拼 —— `"无法读取文件：" + errorMessage(e, "未知错误")`
+   *     （`use-workflow-import`）；
+   *   · **绕开 `errorMessage`** —— `"读取配置失败：" + String(e)`
+   *     （`use-custom-nodes-settings` ×4）、
+   *     `` `${err instanceof Error ? err.message : "未知错误"}` ``
+   *     （`usage-field-editor`）、`"启动解析进程失败：" + e.message`
+   *     （`api/custom-nodes` ×2）；
+   *   · 动作名被当成 `errorMessage` 的 **fallback 参数** ——
+   *     `errorMessage(e, "保存失败")`。这一档**不算违规**（结果自然就是
+   *     「保存失败」），但它表达不了「动作 + 详情」两段式，所以本条判据
+   *     只管前三档。
+   *
+   * 第三档才是真正的缺陷：`String(e)` 对 `new Error("")` 产出 `"Error"`、
+   * 对 tRPC 的对象抛值产出 `"[object Object]"`，而且**绕过网络层翻译** ——
+   * 同一个文件里其它落点走 `errorMessage`，于是用户会在同一块面板上看到
+   * 两种质量并存的文案。
+   *
+   * 判据取**「动作前缀 + 冒号 + 紧跟一个错误取值动作」这个签名**：
+   *
+   *   ① 一个以动作名结尾的字符串字面量 / 模板串尾，紧跟全角或半角冒号；
+   *   ② 冒号之后 40 字符内出现 `errorMessage(` / `String(e…)` / `.message` /
+   *      `instanceof Error` 之一。
+   *
+   * 两个条件同时成立才计 —— 只数冒号会把任何「标题：正文」的界面文案算上
+   *（那是合法的），只数 `String(` 会把日志里的其它转换算上。
+   *
+   * 出口：`~/lib/error-message` 的 `errorText(e, action, fallback?)`。
+   */
+  P42: {
+    label:
+      "视图 / 逻辑 / 服务端里自拼错误文案的「动作前缀」（应使用 ~/lib/error-message 的 errorText）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（与 P39/P40 同款：换用出口即自动合规）。 */
+      if (/\berrorText\s*\(/.test(t2)) return 0;
+      let hits = 0;
+      /* ① 「…：」紧跟 ② 错误取值动作。冒号可为全角或半角（+ 空格）。 */
+      const re = /[：:]\s*\+?\s*\$?\{?/g;
+      let m;
+      while ((m = re.exec(t2)) !== null) {
+        /* 前缀那一侧必须有**出错语义**的字面量 —— 否则只是普通的
+         * 「标题：正文」界面文案（判据太宽会逼人改坏文案）。
+         *
+         * 词表取实测出来的四类：`失败` / `异常` / `错误` / `无法`（含「不能」
+         * 与「读取不出来」这类）。`无法读取文件：` 是这条账里的真实落点，
+         * 只认「失败」会把那一处整个漏掉 —— 而漏掉的那一半恰恰是最常见的一档。 */
+        const before = t2.slice(Math.max(0, m.index - 40), m.index);
+        if (!/(失败|异常|错误|出错|无法|不能|未找到|不存在)/.test(before))
+          continue;
+        const after = t2.slice(m.index, m.index + 60);
+        if (
+          /errorMessage\s*\(/.test(after) ||
+          /String\s*\(\s*(?:e|err|error)\b/.test(after) ||
+          /\bcatch(?:Message|Message)\s*\(/.test(after) ||
+          /instanceof\s+Error/.test(after) ||
+          /\b(?:e|err|error)\.message\b/.test(after)
+        ) {
+          hits += 1;
+        }
+      }
+      return hits;
+    },
+  },
+
+  /* ── P43「复制失败时那句提示」（硬闸，§16.2.4.46）───────────────────────
+   * 这是 P40 的**下一层**。P40 把「成败之后界面说不说」收口之后，剩下的是
+   * **说了什么** —— 实测 10 个落点给失败提示时每一处都手写同一句话，而有
+   * **5 种变体**（`请手动选中后复制` ×5 / `请手动选中复制` ×1（漏了「后」）/
+   * `请在下方展开后手动选中复制` ×2 / `请手动选中日志后复制` ×1 /
+   * `请到创作台手动重跑` ×1）。
+   *
+   * 判据取**固定句的语义内核**「剪贴板不可用」（浏览器拒绝写剪贴板的唯一原因，
+   * 与落点无关），而不取「复制失败」四个字 —— 后者是**标题**，与
+   * `errorText` 的动作前缀同族，各面板本来就该说得不一样。
+   *
+   * 出口：`~/components/ui/use-copy-feedback` 的 `copyFailureText(target?)` ——
+   * 固定句走出口、**界面位置**（只有调用处知道的事）经参数注入。
+   */
+  P43: {
+    label:
+      "视图 / 逻辑层里手写「复制失败」的固定提示句（应使用 ~/components/ui/use-copy-feedback 的 copyFailureText）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/\bcopyFailureText\s*\(/.test(t2)) return 0;
+      return (t2.match(/剪贴板不可用/g) || []).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -1702,6 +1825,8 @@ const HARD_GATE_RULES = new Set([
   "P39",
   "P40",
   "P41",
+  "P42",
+  "P43",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */

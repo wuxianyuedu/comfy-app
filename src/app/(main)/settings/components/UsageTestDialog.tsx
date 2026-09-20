@@ -365,9 +365,15 @@ function UsageFieldEditor({
 
       <div className="mb-2 flex flex-col gap-2">
         {d.usageFieldsToSend(usageTest).map((f) => {
+          /* `i` 是给动作（`patchField` / `setVideoMode`）用的**当下下标**，
+           * 每次渲染现算都正确；但**不能拿它当 React 的 `key`** ——
+           * 删中间一行会让后面所有行的下标整体左移，React 于是复用错误的
+           * DOM 节点，用户在某行刚输入的内容会闪到隔壁字段。`key` 用
+           * `f.id`（字段自带的稳定标识，见 `usage-test-config` 的
+           * `makeUsageField`）。 */
           const i = usageTest.fields.indexOf(f);
           return (
-            <div key={i} className="flex flex-col gap-1.5">
+            <div key={f.id} className="flex flex-col gap-1.5">
               <div className="flex gap-1.5">
                 <Input
                   type="text"

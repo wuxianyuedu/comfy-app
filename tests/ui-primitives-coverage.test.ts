@@ -427,13 +427,20 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
      *（P39）、复制之后的反馈（P40）、REST 的入参收窄（P41）。
      * 门槛留在现状之下：挡的是「掉回 0 / 掉回 1」，不是锁死数量。 */
     ["~/lib/next-frame", "ts", ["onNextFrame", "afterNextPaint"], 2],
+    /* P43（§16.2.4.46）把「复制失败的固定提示句」也收进同一个出口 ——
+     * `copyFailureText` 与两支调用形状同批钉住。 */
     [
       "~/components/ui/use-copy-feedback",
       "ts",
-      ["useCopyFeedback", "useCopyResult"],
-      4,
+      ["useCopyFeedback", "useCopyResult", "copyFailureText"],
+      6,
     ],
     ["~/lib/is-record", "ts", ["isRecord", "isPlainRecord"], 3],
+    /* 本批（规范 16 §16.2.4.45）：错误文案的「动作前缀」（P42）。
+     * `error-message` 本来就是出口（`errorMessage`），本条是把**另一半**
+     *（动作名）也收进同一个模块 —— 所以这里钉的是新导出 `errorText`
+     * 与它的消费点数下限。 */
+    ["~/lib/error-message", "ts", ["errorMessage", "errorText"], 6],
     [
       "~/server/lib/request-body",
       "ts",

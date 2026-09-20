@@ -9,7 +9,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
-import { useCopyResult } from "~/components/ui/use-copy-feedback";
+import {
+  copyFailureText,
+  useCopyResult,
+} from "~/components/ui/use-copy-feedback";
 import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
@@ -219,7 +222,7 @@ export function useHistoryList(): HistoryListController {
         );
         await runAsyncAction(async () => copied, {
           report,
-          failureText: "复制失败：剪贴板不可用，请到创作台手动重跑",
+          failureText: copyFailureText("创作台的参数区"),
           successText:
             "后端尚未提供重试接口，已复制参数到剪贴板，请到创作台手动重跑",
         });

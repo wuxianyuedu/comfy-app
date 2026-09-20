@@ -22,6 +22,7 @@ import {
   type ApiChannelStored,
   type ApiChannelsView,
 } from "./api-channel-shared";
+import { errorText } from "~/lib/error-message";
 
 /** 单个通道的配置（回导出：入口与用例都从这里取，避免各自 import 两个模块）。 */
 export type { ApiChannelStored };
@@ -271,9 +272,7 @@ export async function callImageGeneration(
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (e) {
-    throw new Error(
-      `API 生图请求失败: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    throw new Error(errorText(e, "API 生图请求失败"));
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) throw upstreamError("API 生图失败", res.status, payload);
@@ -303,9 +302,7 @@ export async function callVideoSubmit(
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (e) {
-    throw new Error(
-      `API 视频提交失败: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    throw new Error(errorText(e, "API 视频提交失败"));
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) throw upstreamError("API 视频提交失败", res.status, payload);
@@ -331,9 +328,7 @@ export async function callVideoPoll(
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
   } catch (e) {
-    throw new Error(
-      `API 视频轮询失败: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    throw new Error(errorText(e, "API 视频轮询失败"));
   }
   const payload = await (options.readJson ?? defaultJsonReader)(res);
   if (!res.ok) throw upstreamError("API 视频轮询失败", res.status, payload);
