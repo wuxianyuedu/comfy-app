@@ -25,6 +25,8 @@ import { runAsyncAction } from "~/lib/async-action";
 
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { NumberField } from "~/components/ui/number-field";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
@@ -289,6 +291,9 @@ function ImageField({
     [onPick, entryId],
   );
   const picker = useFilePicker({ accept: "image/*", onPick: handlePick });
+  /* 预览地址走 `~/lib/media/media-url` 的出口（空引用给 null）。此前这一行
+   *  只有文件名文本，选完图看不到图（实测反馈）。 */
+  const previewUrl = mediaPreviewUrl(value);
 
   return (
     <div className="space-y-1">
@@ -306,6 +311,14 @@ function ImageField({
         </Button>
         <picker.Input />
       </div>
+      {previewUrl && (
+        <MediaThumbnail
+          src={previewUrl}
+          alt={entry.label}
+          fallback="none"
+          className="border-border bg-surface max-h-40 w-full rounded-lg border object-contain"
+        />
+      )}
     </div>
   );
 }

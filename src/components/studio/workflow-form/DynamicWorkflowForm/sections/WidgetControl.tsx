@@ -17,6 +17,8 @@ import {
 import { Button } from "~/components/ui/button";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { NumberField } from "~/components/ui/number-field";
+import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { mediaPreviewUrl } from "~/lib/media/media-url";
 import { inputCls } from "../constants";
 
 interface WidgetControlProps {
@@ -166,23 +168,41 @@ export function WidgetControl({
         </Button>
       );
 
-    case "image":
+    case "image": {
+      const filename = typeof value === "string" ? value.trim() : "";
+      /* 预览地址走 `~/lib/media/media-url` 的出口（§16.2.4.32）：它同时管
+       *  「空引用不拼地址」与「已是以 `/` 开头的应用内路径」两种情况。
+       *  此前这里只有一行文件名文本，选完图**看不到图**（实测反馈）。 */
+      const previewUrl = mediaPreviewUrl(filename);
       return (
-        <Button
-          variant="ghost"
-          className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright gap-1.5 rounded-md px-2.5 text-[11px] ${
-            compact ? "h-[28px] w-full" : "mt-1 h-auto py-1.5"
-          } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
-          disabled={disabled || uploading}
-          onClick={onPickFile}
-        >
-          {uploading
-            ? "上传中…"
-            : typeof value === "string" && value
-              ? `已选：${value}`
-              : `上传 ${label}${requiredHint}`}
-        </Button>
+        <div className={compact ? "" : "mt-1"}>
+          <Button
+            variant="ghost"
+            className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright gap-1.5 rounded-md px-2.5 text-[11px] ${
+              compact ? "h-[28px] w-full" : "h-auto py-1.5"
+            } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
+            disabled={disabled || uploading}
+            onClick={onPickFile}
+          >
+            {uploading
+              ? "上传中…"
+              : filename
+                ? `已选：${filename}`
+                : `上传 ${label}${requiredHint}`}
+          </Button>
+          {previewUrl && (
+            /* 缩略图不可点（点它等于点「换一张」是另一种语义）：换图仍走上面
+               那个按钮，这里只负责把「选了哪张」显示出来。 */
+            <MediaThumbnail
+              src={previewUrl}
+              alt={label}
+              fallback="none"
+              className="border-border bg-canvas-deep mt-1.5 max-h-32 w-full rounded-md border object-contain"
+            />
+          )}
+        </div>
       );
+    }
 
     case "select":
       return (

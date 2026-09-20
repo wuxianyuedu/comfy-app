@@ -85,7 +85,12 @@ export function DetailHeader({
           >
             {workflow.name}
           </h2>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          {/* `leading-none`：这一行的三个胶囊各自继承不同祖先的 line-height
+              —— 任务类型胶囊在 `Button` 里，继承的是 Button 的 `text-sm`
+              （20px 行高），来源 / 模型标签继承的是父级（15px）—— 于是等宽的
+              三块底色高矮不一，`items-center` 只保证居中，看过去就是「上下没
+              对齐」。行高统一到 1 之后，三者都由自己的字号（10px）决定。 */}
+          <div className="mt-2 flex flex-wrap items-center gap-2 leading-none">
             <span className="relative">
               <Button
                 variant="ghost"
@@ -130,7 +135,10 @@ export function DetailHeader({
             {(workflow.modelTags ?? []).map((tag) => (
               <span
                 key={tag}
-                className="border-border bg-subtle text-ink-faint rounded-full border px-2 py-0.5 text-[10px]"
+                /* 边框走 `ring` 而不是 `border`：1px `border` 会把这枚胶囊的
+                   盒子撑高 2px，与旁边没有边框的胶囊再不齐 —— 而 `ring` 是
+                   box-shadow，不参与布局，视觉上仍是那圈浅描边。 */
+                className="bg-subtle text-ink-faint ring-border rounded-full px-2 py-0.5 text-[10px] ring-1 ring-inset"
               >
                 {tag}
               </span>
