@@ -2,6 +2,7 @@
 // 原先这些计算内联在 HistoryDetailModal 的 JSX 里（三个 IIFE 共 ~200 行），
 // 既无法单测也让视图无法重生成。抽到这里后：视图只负责排版，规则改动有测试兜底。
 
+import { asRecord } from "~/lib/is-record";
 import type { TaskDetail } from "./history-types";
 
 /** 一条展示用生成参数（种子/步数/CFG…）。 */
@@ -64,8 +65,7 @@ export interface WorkflowHints {
 
 /** 把任意值收窄成 workflowHints；非对象返回空对象（视图按「没有提示」处理）。 */
 export function toWorkflowHints(value: unknown): WorkflowHints {
-  if (typeof value === "object" && value !== null) return value;
-  return {};
+  return asRecord(value) ?? {};
 }
 
 function isBlank(v: unknown): boolean {
@@ -74,9 +74,7 @@ function isBlank(v: unknown): boolean {
 
 /** 取 detail.params（always object，缺失时给空对象）。 */
 function paramsOf(detail: TaskDetail | null): Record<string, unknown> {
-  const p: unknown = detail?.params;
-  if (typeof p === "object" && p !== null) return p as Record<string, unknown>;
-  return {};
+  return asRecord(detail?.params) ?? {};
 }
 
 /** 取 params.workflowInputs，非数组时给空数组。 */

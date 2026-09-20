@@ -18,6 +18,7 @@
  */
 
 import { trace } from "./trace";
+import { INLINE_DUMP_MAX, clampText } from "~/lib/text-clamp";
 
 /** 面板日志的注入点（同 TraceFn：默认用 runner-state 的 log，测试传收集器）。
  *  之所以经参数注入：`runner-state` 静态 import `core/repository` → DB，会让
@@ -397,7 +398,10 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
           : undefined;
       if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
         try {
-          const dump = JSON.stringify(env).slice(0, 900);
+          const dump = clampText(JSON.stringify(env), {
+            maxLength: INLINE_DUMP_MAX,
+            marker: "",
+          });
           log(
             taskId,
             "warn",

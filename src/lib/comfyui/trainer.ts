@@ -22,6 +22,7 @@
 //   .safetensors 文件名。
 
 import "server-only";
+import { safeDisplayName } from "~/lib/safe-name";
 import { loraTrainingJobRepository, modelRepository } from "../core/repository";
 import { promises as fs } from "fs";
 import path from "path";
@@ -169,8 +170,7 @@ async function finishJob(
 ): Promise<void> {
   const finalName =
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-    outputName ||
-    `${spec.name.replace(/[^\w一-龥-]+/g, "_")}_r${spec.rankDim}.safetensors`;
+    outputName || `${safeDisplayName(spec.name)}_r${spec.rankDim}.safetensors`;
 
   // 登记一条 Model 记录，让这个 LoRA 出现在选择器 / 模型库里。
   //（前提是后端已经把它写进 ComfyUI 的 loras 目录。）

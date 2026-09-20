@@ -341,7 +341,22 @@ const VIEW_SCAN_DIRS = ["src/components", "src/app"];
  * 逐条列在这里，与 `HOOKS_ALSO_SCANNED` / `UI_ALSO_SCANNED` 同一手法：
  * 让「哪条判据扫哪一层」这件事写在明处。
  */
-const LIB_SCANNED_RULES = new Set(["P39", "P40", "P41", "P42"]);
+const LIB_SCANNED_RULES = new Set([
+  "P39",
+  "P40",
+  "P41",
+  "P42",
+  "P44",
+  "P45",
+  "P46",
+  /* 本批三条（规范 16 §16.2.4.51 ~ §16.2.4.53）：MIME 表 / 宽松对象视图 /
+   * 文件名安全化 —— 三条的落点**横跨两侧**（MIME 表在 `lib/workshop` 与
+   * 两条 REST 路由、宽松视图在 `lib/comfyui` 与 `lib/workshop`、文件名
+   * 安全化在 `lib/comfyui/trainer` 与 `server/workshop`）。 */
+  "P47",
+  "P48",
+  "P49",
+]);
 
 const SCAN_DIRS = [
   "src/components",
@@ -404,7 +419,14 @@ const EXEMPT_DIRS = [
  *   而 `ui/` 里其余基元也确实**不该**有复制动作。整体跳过会让出口的消费点
  *   无从校验，逐条列在这里。
  */
-const UI_ALSO_SCANNED = new Set(["P40"]);
+const UI_ALSO_SCANNED = new Set([
+  "P40",
+  /* P47/P48 的落点也在 `ui/` 里出现过（`ui/code-block` 自己切后缀取扩展名、
+   * `ui/media-thumbnail` 收窄拖拽负载）—— 与 P40 同款：整体跳过会让出口的
+   * 消费点无从校验。P49 不需要（`ui/` 里没有文件名安全化）。 */
+  "P47",
+  "P48",
+]);
 
 const HOOKS_ALSO_SCANNED = new Set([
   "P12",
@@ -438,6 +460,12 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P41",
   "P42",
   "P43",
+  "P44",
+  "P45",
+  "P46",
+  "P47",
+  "P48",
+  "P49",
 ]);
 
 /**
@@ -483,6 +511,52 @@ const EXEMPT_FILES = {
       reason:
         "出口自身的实现（`copyFailureText` 的定义处 —— 那句话本来就在这里；" +
         "本判据数的是**别处**又手写了一份）。",
+    },
+  ],
+  P44: [
+    {
+      re: /^src\/lib\/text-clamp\.ts$/,
+      reason:
+        "出口自身的实现（`clampText` 的定义处 —— 它当然要 `slice`；" +
+        "本判据数的是**别处**又切了一刀）。",
+    },
+  ],
+  P45: [
+    {
+      re: /^src\/lib\/retry-policy\.ts$/,
+      reason:
+        "出口自身的实现（`backoffDelayMs` 的定义处 —— `2 ** attempt` 就在这里；" +
+        "本判据数的是**别处**又算了一份退避）。",
+    },
+  ],
+  P46: [
+    {
+      re: /^src\/lib\/time-format\.ts$/,
+      reason:
+        "出口自身的实现（`formatDate` 的定义处 —— `getFullYear()` 就在这里；" +
+        "本判据数的是**别处**又拼了一份日期串）。",
+    },
+  ],
+  P47: [
+    {
+      re: /^src\/lib\/media\/mime-ext\.ts$/,
+      reason:
+        "出口自身的实现（那张表当然就在这里；本判据数的是**别处**又记了一份）。",
+    },
+  ],
+  P48: [
+    {
+      re: /^src\/lib\/is-record\.ts$/,
+      reason:
+        "出口自身的实现（`isRecord` / `asRecord` 的判据就在这里；" +
+        "本判据数的是**别处**又写了一遍）。",
+    },
+  ],
+  P49: [
+    {
+      re: /^src\/lib\/safe-name\.ts$/,
+      reason:
+        "出口自身的实现（那两条 `replace` 就在这里；本判据数的是**别处**又写了一遍）。",
     },
   ],
   P42: [
@@ -1778,6 +1852,175 @@ const RULES = {
       return (t2.match(/剪贴板不可用/g) || []).length;
     },
   },
+
+  /* ── P44「把一段文本按最大长度截断」（硬闸，§16.2.4.48）──────────────────
+   * 全库十余处各写一遍「超长就切一刀」，而**长度上限、截断方向、省略标记**
+   * 三件事各写各的：上限 600 / 2000 / 4000 / 8000 散落，标记有 `…` /
+   * `\n…(truncated)` / `…(truncated, 原始 N 字符)` / **什么都不加**。
+   *
+   * ⚠️ **上半限的判据要取对，否则误报会把判据逼成噪音**：本仓库里
+   * `slice(0, 8)` / `slice(0, 12)` 大量出现在「id / sha 短码」上
+   * （`taskId.slice(0, 12)`、`hash.digest("hex").slice(0, 8)`），那些**不是**
+   * 本条账 —— 短码本来就是完整标识，旁边的 `…` 是显示约定而不是「这段被切了」。
+   * 两条账的分界是**量级**：prose 的预算是「一句话 / 一行」（≥ 24），
+   * 短码是「几个字符」（≤ 16）。判据因此取 **N ≥ 24**。
+   *
+   * 判据：`slice(0, N)` / `substring(0, N)`（N ≥ 24）**且**同一条语句里
+   * 出现省略标记（`…` / `truncated`）—— 两个条件同时成立。
+   * 出口：`~/lib/text-clamp` 的 `clampText`（上限走具名常量，见该模块）。
+   */
+  P44: {
+    label:
+      "视图 / 逻辑 / 服务端里自写文本截断（应使用 ~/lib/text-clamp 的 clampText）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/\bclampText\s*\(/.test(t2)) return 0;
+      return (
+        t2.match(
+          /\.(?:slice|substring)\(0, *(?:2[4-9]|[3-9][0-9]|[0-9]{3,})\)[^;\n]{0,40}(?:…|truncated)/g,
+        ) || []
+      ).length;
+    },
+  },
+
+  /* ── P45「一个异步动作重试几次、退避多久」（硬闸，§16.2.4.49）────────────
+   * 三处各写一份重试策略（WS 重连 / history 轮询 / Ollama 就绪），形状只有
+   * 两种（指数退避 + 上限 / 固定间隔 + 有界次数），但**没有任何一处说明
+   * 为什么这一处用指数、那一处用固定**。
+   *
+   * 判据取**指数退避的算术**这个签名 —— `… * 2 ** …`（含 `Math.pow(2, …)`）
+   * 与本项目的「退避」语义**一一对应**：固定间隔里不出现 `2 **`，而
+   * `2 **` 在本仓库唯一的用途就是退避（没有第二类用法）。
+   * 这条判据**不**数固定间隔的循环（那太宽 —— `for (let i = 0; i < 5; i++)`
+   * 到处都是），固定间隔一侧由具名常量（`retry-policy` 的 `*.baseMs` /
+   * `*.maxAttempts`）在 Code Review 与 import 侧约束。
+   *
+   * 出口：`~/lib/retry-policy` 的 `backoffDelayMs` + 具名策略。
+   */
+  P45: {
+    label:
+      "视图 / 逻辑 / 服务端里自写指数退避算术（应使用 ~/lib/retry-policy 的 backoffDelayMs）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/\bbackoffDelayMs\s*\(/.test(t2)) return 0;
+      return (t2.match(/\* *2 *\*\*|Math\.pow\( *2 *,/g) || []).length;
+    },
+  },
+
+  /* ── P46「把一个日期写成可读格式」的**只写日期**那一档（硬闸，§16.2.4.50）─
+   * `time-format` 早先收了「相对时间」与「时刻」，但「只写日期」那一档
+   * （`YYYY-MM-DD` 在历史日期桶 / 消息中心 / 按天文件名三处各拼一遍；
+   * `MM-DD` 行首前缀又一份）与**本地时间戳**（`YYYY-MM-DD HH:mm:ss` 在 6 处
+   * runtime / 日志模块逐字相同）没有出口。
+   *
+   * 判据取**手拼日期的形态**：「`getFullYear()` 后面紧跟 `}-`」（即
+   * `` `${d.getFullYear()}-…` `` 这个串）。它精确到「正在把年拼进一个日期串」，
+   * 不会命中 `getMonth()` 的其它用法（如 `isSameDay` 的比较）。
+   * 出口：`~/lib/time-format` 的 `formatDate` / `formatShortDate` /
+   * `formatLocalStamp` / `formatCompactStamp`。
+   */
+  P46: {
+    label:
+      "视图 / 逻辑 / 服务端里手拼日期串（应使用 ~/lib/time-format 的 formatDate 家族）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/\bformat(?:Date|ShortDate|LocalStamp|CompactStamp)\s*\(/.test(t2))
+        return 0;
+      return (t2.match(/getFullYear\(\)\}-/g) || []).length;
+    },
+  },
+  /* ── P47「扩展名 ⇄ MIME 类型」的映射表（硬闸，§16.2.4.51）──────────────
+   * 同一件事在全库有 **6 份互不相同的映射表**，而它们互相矛盾：
+   * `image/avif` 只在其中两份里有、`image/webp` 在一份里缺，`api/generated`
+   * 那份还多背了 `text/plain` / `application/json`（它服务磁盘上的任意产物）。
+   * 同一个上传文件在「走 resolveMediaBytes 兜底」与「走 prepare 路由落盘」
+   * 两条路径上会得到不同的扩展名与 Content-Type。
+   *
+   * 判据锚**映射表的形态**：一条形如 `"image/xxx": "ext"` 或 `".ext": "image/xxx"`
+   * 的字面量对。它精确到「正在把扩展名与 MIME 记成一张表」，不会命中
+   * 单个 `?? "image/png"` 兜底（那是调用处的域选择，另算）。
+   * 出口：`~/lib/media/mime-ext` 的 `mimeForExt` / `extForMime` /
+   * `extOfPath` / `stemOfPath` / `contentTypeForPath`。
+   */
+  P47: {
+    label:
+      "视图 / 逻辑 / 服务端里自写「扩展名 ⇄ MIME」映射表（应使用 ~/lib/media/mime-ext）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/\b(?:mimeForExt|extForMime|extOfPath|stemOfPath|contentTypeForPath)\s*\(/.test(t2))
+        return 0;
+      const mimeToExt = t2.match(/"\w[\w.+-]*\/[-\w.]+"\s*:\s*"[a-z0-9]{2,5}"/g) || [];
+      const extToMime = t2.match(/"\.?[a-z0-9]{2,5}"\s*:\s*"(?:image|video|audio)\/[-\w.+]+/g) || [];
+      return mimeToExt.length + extToMime.length;
+    },
+  },
+
+  /* ── P48「`unknown` 当宽松对象视图读」（硬闸，§16.2.4.52）────────────────
+   * 收口前全库有 **四份**这个实现，而它们**各叫各的名字**：
+   *   workflow-utils 的叫 `asRecord`、`lib/comfyui/raw` 的也叫 `asRecord`、
+   *   `api-channel-core` 的**叫 `isPlainRecord` 却不排除数组**、
+   *   `use-param-wiring` 的叫 `isPlainRecord`（真排除数组）。
+   * 第三处最危险：与 `~/lib/is-record` 的严格版**同名不同义**。
+   *
+   * 判据锚**转成视图**的那一处形态：`typeof X === "object" && X !== null`
+   * 之后紧跟 `as Record<string, unknown>`（同一变量名，反向引用钉住）。
+   * 出口：`~/lib/is-record` 的 `isRecord` / `isPlainRecord` / `asRecord`。
+   *
+   * ⚠️ **判据刻意不数另外两种形态**（写宽了会逼人改坏代码）：
+   *   · `typeof e === "object" && e !== null && "message" in e` —— 这是
+   *     「就地读一个字段」，用出口要写成 `asRecord(e)?.message` 再判类型，
+   *     反而多一层（`error-message.ts` / `repository-user.ts` 属此类）；
+   *   · `if (typeof body !== "object" || body === null) return null` ——
+   *     取反早退的**守卫**，收窄后立刻用掉，没有「视图」这回事
+   *     （`api-error.ts` / `comfy-readiness-client.ts` 属此类）。
+   *   第一版判据把这两种一起算进来，实测报出 **24 处**，其中一半是上面两种 ——
+   *   与 P44「N ≥ 24」、P45「不数固定间隔」同一条教训：**判据太宽会逼人改坏**。
+   * 豁免 `is-record.ts` 自身（定义处）。
+   */
+  P48: {
+    label:
+      "视图 / 逻辑 / 服务端里自写「unknown 当宽松对象视图」（应使用 ~/lib/is-record 的 isRecord / asRecord）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/from "~\/lib\/is-record"/.test(t2)) return 0;
+      /* 锚**转成视图**的形态：`typeof X === "object" && X !== null` 之后
+       * 紧跟 `as Record<string, unknown>`。**不**数「收窄后取一个字段」
+       * （`typeof e === "object" && e !== null && "message" in e`）与
+       * 「取反早退」（`if (typeof body !== "object" || body === null) return null`）
+       * —— 那些是**就地读字段**，不是「把 unknown 变成一个可下钻的视图」，
+       * 硬套出口只会逼人写 `asRecord(x)?.field` 再拼一层。
+       * 同一变量名（`\1` 反向引用）是判据的一部分：`A !== null` 却 `as` 的是
+       * 另一个变量时，这不是同一个视图。 */
+      return (
+        t2.match(
+          /typeof (\w+) === "object" && \1 !== null[\s\S]{0,40}?as Record<string, unknown>/g,
+        ) || []
+      ).length;
+    },
+  },
+
+  /* ── P49「把一段文本变成安全的文件名片段」（硬闸，§16.2.4.53）──────────
+   * 同一件「非法字符换成 `_`」在全库有 **四份各不相同的正则**，差异没有
+   * 一处写下来：保留点与不保留点、保留 CJK 与吃掉 CJK 互相矛盾
+   * （同一个中文名在 bgm 上传路径被保留、在工坊产出目录被替换成下划线）。
+   *
+   * 判据锚**那条替换形态**：`replace(/[^…]/g, "_")` —— 精确到「把一批字符
+   * 换成下划线」。不数别的 `replace`（`.` → `-`、空格归一都不在此列）。
+   * 出口：`~/lib/safe-name` 的 `safeFileNameSegment` / `safeDisplayName`。
+   */
+  P49: {
+    label:
+      "视图 / 逻辑 / 服务端里自写文件名安全化（应使用 ~/lib/safe-name 的 safeFileNameSegment / safeDisplayName）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/\b(?:safeFileNameSegment|safeDisplayName)\s*\(/.test(t2)) return 0;
+      return (
+        t2.match(/replace\(\/\[\^[^\]]*\]\+?\/g, *"_"\)/g) || []
+      ).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -1827,6 +2070,16 @@ const HARD_GATE_RULES = new Set([
   "P41",
   "P42",
   "P43",
+  /* 本批三条（§16.2.4.51 ~ §16.2.4.53）：
+   *   · **P47**（MIME 表）—— 「扩展名与 MIME 对不上」在浏览器侧同样成立
+   *     （上传前按 MIME 猜后缀、渲染前按后缀猜 MIME）；
+   *   · **P48**（宽松对象视图）—— 收口前一份就住在 `hooks/` 里
+   *     （`use-param-wiring` 的 `isPlainRecord`）；
+   *   · **P49**（文件名安全化）——「把用户给的字符串变成文件名」在逻辑层
+   *     同样危险（下游按名字判种类）。 */
+  "P47",
+  "P48",
+  "P49",
 ]);
 
 /* ── 采集 ────────────────────────────────────────────────── */

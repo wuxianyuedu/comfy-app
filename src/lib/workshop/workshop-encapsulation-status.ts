@@ -21,6 +21,7 @@ import {
   SIZE_SUB_IDS,
 } from "~/lib/workflow/workflow-param-mapping";
 import {
+  exposedCustomKindOf,
   exposedParamDisplayLabel,
   exposedParamsForMode,
 } from "~/lib/workflow/workflow-exposed-params";
@@ -32,8 +33,9 @@ import {
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
- *  时长是秒数选择。 */
-export type EncapsulationControl = "text" | "size" | "image" | "duration";
+ *  时长是秒数选择。`number` 是自定义口的「数字」类型（普通数值输入框）。 */
+export type EncapsulationControl =
+  "text" | "size" | "image" | "duration" | "number";
 
 export interface EncapsulationEntryStatus {
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
@@ -65,7 +67,8 @@ export interface EncapsulationStatus {
   resolvedCount: number;
 }
 
-/** 契约口 → 工坊控件形态。 */
+/** 契约口 → 工坊控件形态（没有生效契约时的回落路径；自定义口一律来自契约，
+ *  所以这里只处理预制口）。 */
 function controlFor(id: string): EncapsulationControl {
   if (id === "size") return "size";
   if (id === "duration") return "duration";
@@ -85,8 +88,12 @@ function controlFor(id: string): EncapsulationControl {
  *  自带 label 有两个坑：① 它可能来自**用户自定义契约**（措辞由用户当次输入，
  *  与内置口径能差到认不出是同一个口）；② 契约表里「尺寸」只写「尺寸」，而工坊
  *  控件是「比例 + 分辨率 / (百万像素 + 倍数)」的组合控件，只写两个字用户答不出
- *  该填什么（ISSUE #596：同一页面两处对不上）。 */
-function displayLabel(id: string): string {
+ *  该填什么（ISSUE #596：同一页面两处对不上）。
+ *
+ *  **自定义口是唯一的例外**：预制口的措辞有统一出处，自定义口没有 —— 它的名字
+ *  只存在契约里，按「类」取会张冠李戴（把 `custom-text-1` 显示成「提示词」）。 */
+function displayLabel(id: string, contractLabel?: string): string {
+  if (exposedCustomKindOf(id) && contractLabel) return contractLabel;
   return exposedParamDisplayLabel(id);
 }
 
@@ -178,7 +185,7 @@ export function deriveEncapsulationStatus(args: {
       : (resolved[slot.id] ?? (manual !== undefined ? manual : null));
     return {
       id: slot.id,
-      label: displayLabel(slot.id),
+      label: displayLabel(slot.id, slot.label),
       control: slot.control,
       targetIoKey: target,
       required: requiredSet.has(slot.id),

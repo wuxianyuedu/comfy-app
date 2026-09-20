@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import { builtInModeContract } from "~/lib/workshop/model-mode-contract";
 import {
   CONTRACT_MODES,
+  CUSTOM_INPUT_KINDS,
   addableContractInputs,
+  contractInputCatalog,
   contractModeLabel,
+  customInputKindLabel,
   effectiveModeContract,
   isModeContractCustomized,
 } from "./mode-contract-config";
@@ -50,5 +53,41 @@ describe("可追加的固定口清单", () => {
     expect(addable).not.toContain("size");
     expect(addable).not.toContain("reference-image");
     expect(addable).toContain("negative");
+  });
+});
+
+describe("全部参数表（「浏览全部参数」那一块）", () => {
+  it("列出**全部**预制口（含已用的），并标出哪些已在契约里", () => {
+    const catalog = contractInputCatalog(["prompt", "size"]);
+    expect(catalog.map((item) => item.type)).toEqual([
+      "prompt",
+      "negative",
+      "size",
+      "duration",
+      "reference-image",
+      "first-frame",
+      "last-frame",
+    ]);
+    expect(
+      catalog.filter((item) => item.added).map((item) => item.type),
+    ).toEqual(["prompt", "size"]);
+  });
+
+  it("参考图只要契约里有任意一张槽就算「已添加」", () => {
+    const catalog = contractInputCatalog(["prompt", "reference-image-2"]);
+    expect(catalog.find((item) => item.type === "reference-image")?.added).toBe(
+      true,
+    );
+  });
+});
+
+describe("自定义口的简单类型清单", () => {
+  it("三种类型各有展示名，看不懂的类型原样回显", () => {
+    expect(CUSTOM_INPUT_KINDS.map((item) => item.kind)).toEqual([
+      "text",
+      "image",
+      "number",
+    ]);
+    expect(customInputKindLabel("number")).toBe("数字");
   });
 });

@@ -2322,6 +2322,326 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
+  /* ── P44：把一段文本按最大长度截断（规范 §16.2.4.48）──────────────────
+   *
+   * 这条账的**边界**最要紧：本仓库里 `slice(0, 8)` / `slice(0, 12)` 大量出现
+   * 在「id / sha 短码」上，那些不是「文本被切了一刀」。判据取 **N ≥ 24**
+   * 来分开这两档。 */
+
+  it("手写文本截断（slice + 省略号）直接阻断（规范 P44）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Title.tsx",
+      [
+        "export function Title({ p }: { p: string }) {",
+        "  return <span>{p.length > 40 ? `${p.slice(0, 40)}…` : p}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P44");
+  });
+
+  it("走 clampText 的落点不再被 P44 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Title.tsx",
+      [
+        'import { TITLE_MAX, clampText } from "~/lib/text-clamp";',
+        "export function Title({ p }: { p: string }) {",
+        "  return <span>{clampText(p, { maxLength: TITLE_MAX })}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("id / sha 短码的 slice(0, 8) 不被 P44 误伤（那是完整标识，不是「被切了」）", () => {
+    /* 这是本条判据的**边界**：短码旁边的 `…` 是显示约定，不是「这段被截断」。
+     * 判据取 N ≥ 24，就是为把它们分开 —— 太宽会把 20+ 处短码全算成违规。 */
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Ids.tsx",
+      [
+        "export const short = (id: string) => `${id.slice(0, 8)}…`;",
+        "export const hash = (h: string) => `${h.slice(0, 12)}…`;",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("注释里提到截断不算实现（与 P1 同一份剥离）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Documented.tsx",
+      "/* 这里此前是 `${p.slice(0, 40)}…`，已改走 text-clamp 的 clampText。 */\nexport const D = () => null;\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P45：一个异步动作重试几次、退避多久（规范 §16.2.4.49）────────────
+   *
+   * 判据取**指数退避的算术** `* 2 ** …` —— 它在本仓库与「退避」一一对应。
+   * 固定间隔一侧**不**做机器判据（`for (let i = 0; i < 5; i++)` 太常见，
+   * 数它只会逼人把循环写成别的形状去迎合判据）。 */
+
+  it("自写指数退避算术直接阻断（规范 P45）", () => {
+    seedBaseline();
+    write(
+      "src/lib/comfyui/ws-reconnect-extra.ts",
+      [
+        "export function nextDelay(attempt: number): number {",
+        "  return Math.min(1000 * 2 ** attempt, 15000);",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P45");
+  });
+
+  it("走 backoffDelayMs 的落点不再被 P45 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/comfyui/ws-reconnect-extra.ts",
+      [
+        'import { WS_RECONNECT, backoffDelayMs } from "~/lib/retry-policy";',
+        "export function nextDelay(attempt: number): number {",
+        "  return backoffDelayMs({ ...WS_RECONNECT, attempt });",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("普通的平方运算不算退避（P45 只认「2 的幂」这个签名）", () => {
+    seedBaseline();
+    write(
+      "src/lib/geometry.ts",
+      "export const area = (r: number) => Math.PI * 2 * r;\nexport const square = (x: number) => x * x;\n",
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P46：手拼日期串（规范 §16.2.4.50）────────────────────────────── */
+
+  it("手拼日期串直接阻断（规范 P46）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Day.tsx",
+      [
+        "export const day = (d: Date) => {",
+        '  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;',
+        "};",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P46");
+  });
+
+  it("走 formatDate 家族的落点不再被 P46 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/Day.tsx",
+      [
+        'import { formatDate } from "~/lib/time-format";',
+        "export const day = (d: Date) => formatDate(d);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("同天判定里的 getMonth()/getDate() 比较不被 P46 误伤（那不是「拼日期串」）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/panels/SameDay.ts",
+      [
+        "export const same = (a: Date, b: Date) =>",
+        "  a.getFullYear() === b.getFullYear() &&",
+        "  a.getMonth() === b.getMonth() &&",
+        "  a.getDate() === b.getDate();",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P47：扩展名 ⇄ MIME 映射表（规范 §16.2.4.51）───────────────────
+   *
+   * 判据锚**映射表的形态**（`"image/x": "ext"` / `".ext": "image/x"`），
+   * 不数单个 `?? "image/png"` 兜底 —— 那是调用处的域选择。 */
+
+  it("自写扩展名 ⇄ MIME 映射表直接阻断（规范 P47）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/thing/route.ts",
+      [
+        "const MIME_BY_EXT: Record<string, string> = {",
+        '  ".png": "image/png",',
+        '  ".mp4": "video/mp4",',
+        "};",
+        "export const pick = (e: string) => MIME_BY_EXT[e];",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P47");
+  });
+
+  it("走 mime-ext 出口的落点不再被 P47 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/thing/route.ts",
+      [
+        'import { mimeForExt } from "~/lib/media/mime-ext";',
+        "export const pick = (e: string) => mimeForExt(e);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("单个 MIME 兜底字面量不算 P47（那是调用处的域选择，不是一张表）", () => {
+    seedBaseline();
+    write(
+      "src/app/api/thing/route.ts",
+      [
+        'export const fallback = (m: string | null) => m ?? "image/png";',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P48：unknown 当宽松对象视图（规范 §16.2.4.52）─────────────────────
+   *
+   * 判据锚**转成视图**的那一处形态（`typeof X === "object" && X !== null`
+   * 之后紧跟 `as Record<string, unknown>`，同一变量名）。刻意**不数**另外
+   * 两种形态 —— 「就地读一个字段」与「取反早退守卫」，它们套出口只会更绕。 */
+
+  it("自写 unknown → 宽松对象视图直接阻断（规范 P48）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function asThing(v: unknown): Record<string, unknown> | null {",
+        '  return typeof v === "object" && v !== null',
+        "    ? (v as Record<string, unknown>)",
+        "    : null;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P48");
+  });
+
+  it("走 asRecord 出口的落点不再被 P48 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        'import { asRecord } from "~/lib/is-record";',
+        "export const name = (v: unknown) => asRecord(v)?.name;",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("「就地读一个字段」（typeof + in 判据）不算 P48", () => {
+    /* `typeof e === "object" && e !== null && "message" in e` 是就地读字段：
+     * 套出口要写成 `asRecord(e)?.message` 再判类型，反而多一层。
+     * 第一版判据把它算进来，一次报出 24 处，一半是它。 */
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function msg(e: unknown): string {",
+        '  if (typeof e === "object" && e !== null && "message" in e) {',
+        '    return String((e as { message: unknown }).message);',
+        "  }",
+        '  return "";',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("「取反早退」的守卫不算 P48（收窄后立刻用掉，没有视图这回事）", () => {
+    seedBaseline();
+    write(
+      "src/lib/thing.ts",
+      [
+        "export function read(body: unknown): string | null {",
+        '  if (typeof body !== "object" || body === null) return null;',
+        '  return String((body as { detail?: unknown }).detail ?? "");',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  /* ── P49：文件名安全化（规范 §16.2.4.53）─────────────────────────────
+   *
+   * 判据锚 `replace(/[^…]/g, "_")` 这一条替换形态 —— 精确到「把一批字符
+   * 换成下划线」，不数别的 `replace`（`.` → `-`、空格归一都不在此列）。 */
+
+  it("自写「非法字符换下划线」的文件名安全化直接阻断（规范 P49）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        "export const safe = (n: string) => n.replace(/[^\\w.-]/g, \"_\");",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code).toBe(1);
+    expect(output).toContain("P49");
+  });
+
+  it("走 safe-name 出口的落点不再被 P49 计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        'import { safeFileNameSegment } from "~/lib/safe-name";',
+        "export const safe = (n: string) => safeFileNameSegment(n);",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+    expect(output).toContain("0 处");
+  });
+
+  it("别的 replace（空格归一 / 去掉尾斜杠）不算 P49", () => {
+    seedBaseline();
+    write(
+      "src/server/thing.ts",
+      [
+        'export const norm = (n: string) => n.replace(/\\s+/g, " ").trim();',
+        'export const strip = (u: string) => u.replace(/\\/+$/, "");',
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
   it("lib 层的既有出口实现不被 P1~P38 误伤（本批只让 P39~P43 扫 lib）", () => {
     /* 这是本批最容易踩的一脚：把 `src/lib` 直接加进扫描根，会让
      * `browser-io` / `dom-rect` / `file-io` 这些**出口自身的实现**被判违规

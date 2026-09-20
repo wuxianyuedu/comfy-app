@@ -570,8 +570,12 @@ export function WorkflowCanvasNodePreview({
           io={workflowIO}
           paramCards={paramCards}
           outputCards={outputCards}
+          /* 闸门（`isValidConnection`）按它判类型 —— 必须与卡片列**同一份**
+             契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
+             「这一行不收这个口子」，而卡片列明明画着它。 */
           entries={buildParamEntries(workflowIO ?? null, undefined, {
             mode: effectiveMode,
+            contractIds: contractEntries.map((item) => item.id),
           })}
           contractEntries={contractEntries}
           canWire={!!effectiveMode && !!onPatchParamMap}

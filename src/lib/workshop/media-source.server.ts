@@ -9,23 +9,11 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { isRecord } from "~/lib/is-record";
+import { DEFAULT_IMAGE_MIME, mimeForExt } from "~/lib/media/mime-ext";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const GENERATED_DIR = path.join(process.cwd(), "public", "generated");
 const MAX_BYTES = 24 * 1024 * 1024;
-
-const EXT_MIME: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  gif: "image/gif",
-  bmp: "image/bmp",
-  avif: "image/avif",
-};
-
-function mimeForExt(ext: string): string {
-  return EXT_MIME[ext.toLowerCase()] ?? "image/png";
-}
 
 /* 把服务端相对的生成路径（/api/generated/... 或 /generated/...）映射到
  * public/generated 下的文件。URL 不是指向本地生成产物时返回 null。
@@ -69,7 +57,7 @@ export async function resolveMediaBytes(
     if (!abs) throw new Error(`无法定位本地生成文件: ${src}`);
     const buffer = await fs.readFile(abs);
     if (buffer.byteLength > MAX_BYTES) throw new Error("图片超过 24MB 上限");
-    return { buffer, mime: mimeForExt(path.extname(abs).replace(".", "")) };
+    return { buffer, mime: mimeForExt(abs) ?? DEFAULT_IMAGE_MIME };
   }
 
   if (/^https?:\/\//.test(src)) {
@@ -87,7 +75,7 @@ export async function resolveMediaBytes(
       buffer,
       mime: mime?.startsWith("image/")
         ? mime
-        : mimeForExt(path.extname(new URL(src).pathname).replace(".", "")),
+        : (mimeForExt(new URL(src).pathname) ?? DEFAULT_IMAGE_MIME),
     };
   }
 
@@ -109,7 +97,9 @@ export async function readUpstreamJson(res: Response): Promise<unknown> {
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error(`上游返回非 JSON (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `上游返回非 JSON (${res.status}): ${clampText(text, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+    );
   }
 }
 

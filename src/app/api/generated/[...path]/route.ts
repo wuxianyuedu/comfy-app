@@ -1,6 +1,8 @@
 import { promises as fs } from "fs";
 import path from "node:path";
 
+import { contentTypeForPath } from "~/lib/media/mime-ext";
+
 /**
  * /api/generated/[...path] — 任务产物文件流。
  *
@@ -14,22 +16,6 @@ import path from "node:path";
  *  - 路径穿越防护：解析后必须仍落在 public/generated 内；
  *  - 产物不可变（taskId 目录一次性写入），长缓存安全。
  */
-
-const MIME_BY_EXT: Record<string, string> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".gif": "image/gif",
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mov": "video/quicktime",
-  ".wav": "audio/wav",
-  ".mp3": "audio/mpeg",
-  ".flac": "audio/flac",
-  ".txt": "text/plain; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-};
 
 export async function GET(
   _req: Request,
@@ -54,10 +40,9 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const ext = path.extname(abs).toLowerCase();
   return new Response(new Uint8Array(buf), {
     headers: {
-      "Content-Type": MIME_BY_EXT[ext] ?? "application/octet-stream",
+      "Content-Type": contentTypeForPath(abs),
       /* 产物按 taskId 目录一次性写入、内容不变，长缓存安全。 */
       "Cache-Control": "public, max-age=31536000, immutable",
     },

@@ -14,6 +14,7 @@
 
 import { getLLMConfig } from "~/lib/llm/server";
 import { errorMessage } from "~/lib/error-message";
+import { INLINE_JSON_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import {
   extractBase64DataUrl,
   extractMediaUrl,
@@ -159,9 +160,12 @@ export function httpFailureDetail(
   rawText = "",
 ): string {
   if (isRecord(payload)) {
-    return `HTTP ${status}：${JSON.stringify(payload).slice(0, 240)}`;
+    return `HTTP ${status}：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`;
   }
-  const snippet = rawText.trim().slice(0, 240);
+  const snippet = clampText(rawText.trim(), {
+    maxLength: INLINE_JSON_SNIPPET_MAX,
+    marker: "",
+  });
   return snippet ? `HTTP ${status}：${snippet}` : `HTTP ${status}`;
 }
 
@@ -228,7 +232,7 @@ export async function callChat(
   if (!text) {
     return {
       ok: false,
-      detail: `调用成功但未解析到回复文本：${JSON.stringify(payload).slice(0, 240)}`,
+      detail: `调用成功但未解析到回复文本：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
   return { ok: true, text };
@@ -265,7 +269,7 @@ export async function callImage(
   if (!url) {
     return {
       ok: false,
-      detail: `调用成功但未解析到图片 URL / b64 数据：${JSON.stringify(payload).slice(0, 240)}`,
+      detail: `调用成功但未解析到图片 URL / b64 数据：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
   return { ok: true, url };
@@ -305,7 +309,7 @@ export async function callVideo(
   if (!taskId) {
     return {
       status: "error",
-      detail: `响应中未找到视频 URL 或任务 ID：${JSON.stringify(payload).slice(0, 240)}`,
+      detail: `响应中未找到视频 URL 或任务 ID：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
   const doneUrl = await pollRemoteVideoTask(

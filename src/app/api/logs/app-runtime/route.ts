@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
+import { RUNTIME_LOG_MESSAGE_MAX, clampText } from "~/lib/text-clamp";
 
 /**
  * 应用运行日志写入端点（客户端 → 服务端）。
@@ -24,8 +25,14 @@ const ALLOWED_LEVEL = new Set<"info" | "warn" | "error">([
   "error",
 ]);
 
-/** 单条消息最大长度（截断，防止异常 payload 撑爆日志文件）。 */
-const MAX_MSG_LEN = 2000;
+/**
+ * 单条消息最大长度（截断，防止异常 payload 撑爆日志文件）。
+ *
+ * 取值来自 `~/lib/text-clamp` 的 {@link RUNTIME_LOG_MESSAGE_MAX}（受
+ * **日志文件体积**约束，见 §16.2.4.48）。这里**不加省略标记** —— 与既行为
+ * 一致（原文是拼在行首的时间戳行内，标记会被读成日志内容的一部分）。
+ */
+const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 
 export async function POST(request: Request) {
   try {
@@ -48,7 +55,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
     // 截断超长消息；fields 仅保留可序列化的标量/对象（由 logger 内部 stringify）。
-    const msg = body.msg.slice(0, MAX_MSG_LEN);
+    const msg = clampText(body.msg, {
+      maxLength: MAX_MSG_LEN,
+      marker: "",
+    });
     const fields =
       body.fields && typeof body.fields === "object" ? body.fields : undefined;
 

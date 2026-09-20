@@ -18,6 +18,7 @@ import fs from "fs";
 import path from "path";
 import { getExitPolicy } from "../app-settings/app-settings.server";
 import { COMFYUI_DEFAULT_PORT } from "../endpoints";
+import { INLINE_STDERR_MAX, clampText } from "../text-clamp";
 import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { resolveEffectiveLaunch } from "./desktop-instance";
@@ -235,7 +236,9 @@ async function launchKeepAliveMode(
       for (const line of buf.toString("utf-8").split(/\r?\n/)) {
         const trimmed = line.trimEnd();
         if (trimmed.trim())
-          appendRuntimeLog(`[${key}] ${trimmed.slice(0, 500)}`);
+          appendRuntimeLog(
+            `[${key}] ${clampText(trimmed, { maxLength: INLINE_STDERR_MAX, marker: "" })}`,
+          );
       }
     } catch {
       /* 文件尚未创建 / 读取抖动：下一轮再试 */

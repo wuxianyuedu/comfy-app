@@ -37,6 +37,7 @@ import {
   type OllamaModel,
 } from "~/lib/llm/ollama-client";
 import { probeRemoteApi, type RemoteProbeResult } from "~/lib/llm/browser";
+import { OLLAMA_READY } from "~/lib/retry-policy";
 import {
   queryUsageTask,
   testModelUsage,
@@ -364,10 +365,11 @@ function mergeExtraModels(
   return [...next, toggled];
 }
 
-/** Ollama 启动就绪轮询：最多 20 次 × 2s（覆盖 ollama 冷启动的常见耗时）。 */
-/** 启动流程期间状态行持有权标记的 ref 初始值（见 probeOllama 内说明）。 */
-const OLLAMA_START_POLL_TIMES = 20;
-const OLLAMA_START_POLL_INTERVAL_MS = 2000;
+/** Ollama 启动就绪轮询：**固定间隔 + 有界次数** —— 取值走
+ *  `~/lib/retry-policy` 的 {@link OLLAMA_READY}（20 次 × 2s，覆盖冷启动的
+ *  常见耗时；固定 2s 是为了让状态行尽快反映就绪，见 §16.2.4.49）。 */
+const OLLAMA_START_POLL_TIMES = OLLAMA_READY.maxAttempts;
+const OLLAMA_START_POLL_INTERVAL_MS = OLLAMA_READY.baseMs;
 
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
