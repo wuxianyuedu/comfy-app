@@ -105,6 +105,17 @@ function Get-ProductDirHolder {
 
     $prefix = [System.IO.Path]::GetFullPath($Directory).TrimEnd([char]92, [char]47) + "\"
 
+    # 命令行 / 父 PID 只有 Win32_Process（CIM）有，Get-Process 拿不到。一次性建 PID→CIM
+    # 索引，给每个命中进程补「它到底跑的什么、被谁拉起」——用户据此判断该连带杀哪棵子树，
+    # 而不是照着 PID 盲杀（孤儿 pnpm-native 此前看不出是谁的子孙）。CIM 取不到时留空、不猜。
+    $cimById = @{}
+    try {
+        foreach ($c in Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) {
+            $procId = [int]$c.ProcessId
+            if (-not $cimById.ContainsKey($procId)) { $cimById[$procId] = $c }
+        }
+    } catch { }
+
     $result = @()
     foreach ($p in @(Get-Process -ErrorAction SilentlyContinue)) {
         $module = ""
@@ -122,10 +133,38 @@ function Get-ProductDirHolder {
         if ($module) {
             $exePath = ""
             try { $exePath = [string]$p.Path } catch { }
-            $result += [pscustomobject]@{ Id = $p.Id; Name = $p.ProcessName; Module = $module; Path = $exePath }
+            $cmdLine = ""
+            $ppid = 0
+            $parentName = ""
+            if ($cimById.ContainsKey($p.Id)) {
+                $c = $cimById[$p.Id]
+                $cmdLine = [string]$c.CommandLine
+                $ppid = [int]$c.ParentProcessId
+                if ($cimById.ContainsKey($ppid)) { $parentName = [string]$cimById[$ppid].Name }
+            }
+            $result += [pscustomobject]@{
+                Id = $p.Id; Name = $p.ProcessName; Module = $module; Path = $exePath
+                CommandLine = $cmdLine; ParentId = $ppid; ParentName = $parentName
+            }
         }
     }
     return $result
+}
+
+# 把单个占用者的补充信息（可执行文件 / 命令行 / 父进程）逐行打到日志，缩进由调用方给。
+# 抽成一处，避免「清理失败出口」与「前置检查出口」两处各抄一份、日后漂移。
+function Write-HolderDetail {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Indent,
+        [Parameter(Mandatory = $true)]$Holder
+    )
+    if ($Holder.Path) { Log ("{0}可执行文件: {1}" -f $Indent, $Holder.Path) }
+    if ($Holder.CommandLine) { Log ("{0}命令行: {1}" -f $Indent, $Holder.CommandLine) }
+    if ($Holder.ParentId -gt 0) {
+        $pn = if ($Holder.ParentName) { " ({0})" -f $Holder.ParentName } else { "" }
+        Log ("{0}父进程: PID {1}{2}" -f $Indent, $Holder.ParentId, $pn)
+    }
 }
 
 # 产物目录清理失败时的**统一出错出口**：真实异常 + 点名占用者 + 可执行动作。
@@ -154,7 +193,10 @@ function Write-ProductDirLockHint {
     if ($holders.Count -gt 0) {
         Log ""
         Log "        持有该目录里文件的进程（查出来的，不是猜的）："
-        foreach ($h in $holders) { Log ("          PID {0}  {1}  ← {2}" -f $h.Id, $h.Name, $h.Module) }
+        foreach ($h in $holders) {
+            Log ("          PID {0}  {1}  ← {2}" -f $h.Id, $h.Name, $h.Module)
+            Write-HolderDetail -Indent "            " -Holder $h
+        }
         Log ""
         Log "        结束它们（连带子进程树，别在任务管理器里单杀）："
         foreach ($h in $holders) { Log ("          taskkill /PID {0} /T /F" -f $h.Id) }
@@ -347,7 +389,10 @@ function Assert-LauncherNotRunning {
         Log "        _internal\*.dll 映射进自己的进程；启动器一旦异常退出，它们会残留成"
         Log "        孤儿，目录照样删不掉 —— 而关掉启动画面 / 桌面窗口都解不开这一条。"
         Log ""
-        foreach ($h in $holders) { Log ("  正在占用的进程：PID {0}  {1}  ← {2}" -f $h.Id, $h.Name, $h.Module) }
+        foreach ($h in $holders) {
+            Log ("  正在占用的进程：PID {0}  {1}  ← {2}" -f $h.Id, $h.Name, $h.Module)
+            Write-HolderDetail -Indent "      " -Holder $h
+        }
         Log ""
         Log "  请结束它们（连带子进程树，别单杀）："
         foreach ($h in $holders) { Log ("    taskkill /PID {0} /T /F" -f $h.Id) }
