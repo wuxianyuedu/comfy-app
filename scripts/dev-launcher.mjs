@@ -30,7 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
-import { probeSchemaSync } from "./db-schema-state.mjs";
+import { ensureSchemaCurrent, schemaNotice } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
   archiveRunLog,
@@ -935,12 +935,14 @@ export async function run(argv = process.argv.slice(2)) {
   touchHeartbeat(ROOT);
   clearIntervalGuard(heartbeat);
 
-  // 8) DB schema 就绪提示（只警告不退出：改纯前端页面不该被空库挡住，§9.1）
-  if (probeSchemaSync(ROOT) !== "ready") {
-    log(
-      "数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。先执行：pnpm db:push",
-      "WARN",
-    );
+  // 8) DB schema 自检 + 按需自动同步（只提示不退出：改纯前端页面不该被空库
+  //    挡住，§9.1）。「拉了含 schema 变更的代码后忘了跑 db:push」由这里兜住 ——
+  //    判据与「自动做到哪一步为止」见 db-schema-state.mjs 的 ensureSchemaCurrent。
+  const schema = schemaNotice(ensureSchemaCurrent(ROOT));
+  if (schema) {
+    for (const line of schema.lines) {
+      log(line, schema.level === "warn" ? "WARN" : "INFO");
+    }
   }
 
   // 9) 等就绪（dev server 先退出则立刻定性；检测到路由表 404 则自愈一次）

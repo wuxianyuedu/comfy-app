@@ -557,11 +557,16 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
    WARN 提醒重编（`cd src-tauri; cargo build --release --features custom-protocol`）。
    窗口配置与启动页是编译期内嵌的，只改源码不重编壳 = 跑旧逻辑（黑屏问题的
    直接来源）。
-8. **数据库 schema 同步（Drizzle）**：依赖预检后执行 `pnpm exec drizzle-kit push`，
-   以 ALTER 方式把 `src/server/db/schema.ts` 的表结构增量同步进 `db.sqlite`
-   （保留现有数据）。改用 Drizzle 后不再有「运行时必须重新 prisma generate 一个
-   庞大 client + DLL 被锁」的步骤；改了 schema 后双击启动即可自动生效。失败仅
-   WARN（不阻断启动），日志：`log/launcher/drizzle-push-stdout/stderr.log`。
+8. **数据库 schema 同步（Drizzle）**：走 `scripts/db-schema-state.mjs` 的
+   `ensureSchemaCurrent` —— 指纹一致时毫秒级通过；不一致时自动同步，且**只自动
+   应用「建表 / 建索引 / 加列」**，含丢数据语句的一律交人工（见 §9.1）。改用
+   Drizzle 后不再有「运行时必须重新 prisma generate 一个庞大 client + DLL 被锁」
+   的步骤；改了 schema 后直接启动即可生效，**不需要记得跑 `pnpm db:push`**。
+   失败仅 WARN（不阻断启动）。
+
+   > 本节此前写的是「依赖预检后执行 `pnpm exec drizzle-kit push` … 失败仅 WARN，
+   > 日志：`log/launcher/drizzle-push-stdout/stderr.log`」——那是 `.ps1` 启动链的
+   > 行为，`dev-launcher.mjs` 从未实现过（它只探哨兵表 `task`），已按实际改口径。
 
 ## 3. 进程树管理规范
 
@@ -1024,6 +1029,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **CI 的 `Test` 步骤在 master 上一直红**（`pnpm test` 报 `MissingEnvFileError: 缺少 .env 环境配置文件`；本机有 `.env` 的人跑同一个用例是绿的） | **用例的 `process.cwd` 替身泄漏到了别的 `describe`，把 `src/env.js` 的 `.env` 探测带偏**（ISSUE #489）：`src/lib/db-schema-ready.test.ts` 的文件级 `beforeEach` 对文件内**所有** `describe` 都生效，而末尾「reaper 模块级副作用」那组要 `import` 真实的 `~/server/db` → `~/env`，`env.js` 拿 `<cwd>/../.env` 探测配置文件；cwd 被留在临时目录时探测必然落空。**注意只设 `BETTER_AUTH_GITHUB_CLIENT_ID` 两个变量是不够的**（实测仍然红）——校验有两层：`.env` 文件存在性 + 必填项，两层都要满足。CI 的 `Test` 是裸 `pnpm run test`（不注入 `SKIP_ENV_VALIDATION`），所以每次必挂；而 `test:coverage` 走另一条链路能过，于是呈现成「Coverage 绿、Test 红」这种最容易被忽略的形态 | 已修：cwd 替身改为**按 `describe` 建立、退出即还原**（`useTempCwd()` + 各自 `afterEach`），不再放进文件级钩子；该组自己 `vi.stubEnv` 补齐 `SKIP_ENV_VALIDATION` 与两处占位密钥，**不去读开发者本机的 `.env`**——用例的可通过性只能取决于用例自己造的东西 |
 | **`pnpm build` 在 CI 上必挂**，`Collecting page data` 阶段报 `TypeError: Cannot read properties of undefined (reading 'startsWith')`（行号落在 `src/server/db.ts::resolveDbPath`，但触发路由是 `/api/debug/source`、`/api/logs/history` 一类无关路由） | **`SKIP_ENV_VALIDATION=1` 放行了校验，却没给 `DATABASE_URL` 兜底**（ISSUE #489）：CI 的 Build 步骤只设 `SKIP_ENV_VALIDATION`、不注入 `DATABASE_URL`，于是 `env.DATABASE_URL` 是 `undefined`，`db.ts` 里直接 `url.startsWith("file:")` 抛错；`db.ts` 被每条路由的模块图拉到，异常浮出 worker 后聚合进 collect-page-data 阶段。与上一行「模块级副作用读库」**同族但不同档**：那条是「表还没建」，这条是「连库路径都没有」 | 已修：`resolveDbPath` 先兜 `url || "./db.sqlite"`（`src/server/workshop/db.ts` 一直是这么写的，`src/server/db.ts` 漏了），缺值时退到与 drizzle-kit 同一锚点的默认库文件，「表可能还没建」交给运行期的可读出口（`/api/health` 的 503 + `db: empty`）而不是构建期崩溃。**`src/server/db.ts` 顺带转为纯 ASCII**（它在构建期模块图上且实测会被 code frame 渲染，见下一行的 panic 风险） |
 | **`pnpm db:push` 在无 TTY 环境「成功」了，但应用起来只有真实业务页面 500**（`/`、`/api/health`、`/settings` 都 200，`/api/logs/list` 报 `SqliteError: no such table: user`） | **交互提示被静默吞掉**（ISSUE #489）：`drizzle-kit push` 需要交互确认时报 `Interactive prompts require a TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。管道输入、脚本、CI、远程会话、容器都是这个条件；文档 §9.1 的第一步就把它写成了 `pnpm db:push`。「只探首页会误判成 Linux 完全通了」是它最难查的地方——`SELECT 1` 在空库上也成功，所以 `/api/health` 照样回 `db: up` | 已修（§9.1「建库」）：`pnpm db:push` 改走 `scripts/db-push.mjs`——以 `--force` 运行（无交互、幂等），**复核库里到底有没有表**（不看退出码：无 TTY 上正是「报错但 exit 0」），复核失败即非零退出 + 可行动提示。另加两道出口：`dev.mjs` / `start.mjs` 启动即探哨兵表并警告（只警告不退出），`GET /api/health` 一并探 schema 就绪度（空库 → 503 + `db: "empty"`） |
+| **新建工作流报 `NOT NULL constraint failed: workflowTemplate.graph`**（或任何「库里留着一个 schema 里早就没有的列」的报错），而 `pnpm db:push` 与启动自检都说「已就绪」 | **库结构与 schema 漂移**：schema 里早已删掉的列（实测 `workflowTemplate.graph` / `apiSource`、`workshopDraft.checkpoint`）仍留在表上，`INSERT` 不提供它就撞 `NOT NULL`。当时两条复核都只看「有没有表」（`pnpm db:push` 数用户表数、启动探针找哨兵表 `task`），**一条都不涉及列**，于是整档消失 | 已修（§9.1）：`db:push` 复核结构（「再跑一次必须说 `No changes detected`」）并登记 schema 指纹；启动链路改走 `ensureSchemaCurrent` —— 指纹 + dry-run 白名单，一致则毫秒通过、只有安全变更则自动同步、含丢数据语句则交人工。存量库跑一次 `pnpm db:push` 即可自愈（**不会**丢数据：删列会打印语句，`--force` 才执行） |
 | **给构建期模块图上的文件加中文注释后，`next build` 报的不是业务错，而是整个构建被一个 Rust panic 带走**：`thread 'tokio-rt-worker' panicked at crates/next-code-frame/src/highlight.rs:1021:45: end byte index N is not a char boundary` + `Build error occurred [Error: Panic in async function]` | **Next 的 code frame 高亮按字节偏移切串，落在多字节字符中间就 panic**（Next 16.3.2 实测）：`next-code-frame` 渲染错误现场时按**字节**取「该行的第 a..b 字节」，而一个中文字符占 3 字节；只要某个高亮区间的 `end` 落在中文字符内部，Rust 侧切片直接 panic 把 build 打死。触发条件是**组合**而非内容：某模块既在构建期被加载、又成为错误现场被渲染成 code frame，且其注释/字符串含多字节字符、偏移恰好落在字符中间——同一文件删掉中文能过、换成不同长度的中文又能复现，属偏移敏感的脆弱路径 | 规避（本仓库口径）：**会被 `next-code-frame` 渲染到的模块一律保持纯 ASCII 源码**。实践上指「new / 改动了构建期模块图上的模块」（被 `next build` worker 加载、且可能成为报错现场的那个）：注释与字符串写英文；其余文档与业务模块不受影响，中文注释照常。**排查手法**：build 报上面这段 panic 时不要去找业务 bug，先把最近新增/改动、且位于构建期模块图上的文件临时改 ASCII 再跑一次，能过即命中本条；用 `node -e 'const s=require("fs").readFileSync("f.ts","utf8");console.log([...s].filter(c=>c.charCodeAt(0)>127).length)'` 数非 ASCII 字符定位 |
 | drizzle-kit push 非交互环境报 "Interactive prompts require a TTY"，或重建表时 "index xxx already exists" | push 遇到表重命名/重建差异需要交互确认；其重建路径在多次部分执行后有索引名冲突的已知缺陷 | 启动器用 `push --force`（非致命，失败仅 WARN）；手动收敛时按「清理 `__new_*` 残留表与同名索引 → 重试 push」循环；索引可安全 DROP 后由 push/schema 重建 |
 | **应用服务（dev server）没起来 / 起来了但页面拿不到数据，日志面板同时是空的**——用户无从判断是「真的没日志」还是「观测链路断了」（ISSUE #360） | **失败落在面板的轮询通道之外**：面板只读 launcher / dev / app-runtime 三路，而 Next dev server 的首屏编译错误、`FATAL: An unexpected Turbopack error`、未捕获的服务端异常、pino 的 ERROR 行都落在 `log/nextjs/nextjs-stdout|stderr-*.log`（不在三路里）；面板拉不到日志时的 `catch` 又是静默的（「静默忽略」在启动阶段成立、运行阶段就是藏问题）；服务端重启前后也没有任何标识能把两个进程的输出分开 | 已修（规范 07 §7.18）：① 进程启动时把 stdout/stderr **额外**转录到 `log/nextjs/nextjs-panel-<boot>.log`，面板新增第 4 路来源「应用服务」（`capture-streams.server.ts` + `source=app`）；② pino 的 ERROR 镜像进 app-runtime（面板可见），INFO 不镜像；③ 面板拉不到日志时给一条**只说一次**的 warn（应用服务不可达 + 常见原因），恢复时补一条 info；④ 每个响应带 `bootId`，进程变化即清空时间线并重读（避免重启前后混成一条线），页脚常驻「服务 <标识>」徽标 |
@@ -1633,7 +1639,15 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 - 以 `--force` 运行（无交互、幂等；已有 schema 时输出 `No changes detected`）；
 - **复核库里到底有没有表**——不看 drizzle-kit 的退出码（它在无 TTY 上正是
   「报错但 exit 0」，退出码在这条链路上不是事实来源）；
-- 复核失败即**非零退出**并打印可行动提示，绝不把「留了个空库」当成功。
+- **复核表结构**（不只是「有没有表」，2026-09-20 补）：「有表」不等于「表就是
+  schema 说的那张」——实测现场：`workflowTemplate` 留着历史版本删过的列，新建
+  工作流直接 `NOT NULL constraint failed: workflowTemplate.graph`，而上面两道
+  出口都报绿。判据是「**再跑一次 push 必须说 `No changes detected`**」；它补的
+  正是同一条坑的第二种形态：无 TTY 时交互提示被静默吞掉 —— 旧形态是「库被清空」
+  （表数为 0，旧判据能抓到），新形态是「库原样不动」（旧判据抓不到）；
+- 复核失败即**非零退出**并打印可行动提示，绝不把「留了个空库」当成功；
+- 成功后把 **schema 指纹**登记进库（`PRAGMA user_version`，见下），供启动链路
+  判断「库是不是当前这版 schema 建的」。
 
 > `--force` 的语义是「自动批准会丢数据的语句」（drop column / 重建表等）。
 > 首次建表与增量加表都没有丢数据的语句，无风险；但**当 schema 变更需要丢弃
@@ -1643,11 +1657,30 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 
 **三道防线一起看**（ISSUE #489 实测）：
 
-| 时点 | 探针                                             | 空库时的表现                                                                             |
-| ---- | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| 建库 | `scripts/db-push.mjs` 数用户表                   | 非零退出 + 可行动提示                                                                    |
-| 启动 | `scripts/dev.mjs` / `scripts/start.mjs` 探哨兵表 | 打印「表还没建 → 先跑 `pnpm db:push`」的 ⚠（**只警告不退出**：改纯前端的页面不该被挡住） |
-| 运行 | `GET /api/health` 一并探 schema 就绪度           | 503 + `db: "empty"`（此前只探 `SELECT 1`，空库照样回 `db: up`，探针因此漏报整档）        |
+| 时点 | 探针                                                                                | 空库 / 结构过期时的表现                                                                                                          |
+| ---- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 建库 | `scripts/db-push.mjs` 数用户表 + 复核结构收敛                                       | 非零退出 + 可行动提示                                                                                                            |
+| 启动 | `scripts/dev.mjs` / `start.mjs` / `dev-launcher.mjs` 走 `ensureSchemaCurrent`        | 表没建 → 提示「先跑 `pnpm db:push`」；结构过期 → **自动同步**（见下）；自动做不了才 ⚠（**只提示不退出**：改纯前端不该被挡住）     |
+| 运行 | `GET /api/health` 一并探 schema 就绪度                                              | 503 + `db: "empty"`（此前只探 `SELECT 1`，空库照样回 `db: up`，探针因此漏报整档）                                                |
+
+**「拉了含 schema 变更的代码之后要不要记得跑 `pnpm db:push`」——不需要了**
+（2026-09-20）：三个启动入口都走 `scripts/db-schema-state.mjs::ensureSchemaCurrent`，
+判据是 **schema 指纹**（`src/server/db/*.ts` 的内容哈希，`db:push` 成功后写进库的
+`PRAGMA user_version`；用内容哈希而不是 mtime，因为拉取会改 mtime 却不一定改内容）：
+
+| 情况                                                       | 行为                                                                                                     |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 指纹一致                                                   | 毫秒级通过，**不起 drizzle**（起一轮约 17 秒，这一步每天要走几十次）                                      |
+| 指纹不一致 + 待执行语句只有「建表 / 建索引 / 加列」        | **自动应用**（约 30 秒：dry-run + 应用）后登记指纹，打印一行「已自动同步」                                 |
+| 指纹不一致 + 含「删列 / 重建表」                           | **不自动执行** —— 那是丢数据的决定，必须由人做：把语句列出来，提示跑 `pnpm db:push`（它带 `--force`）      |
+
+判据里「哪些语句算安全」建在 `drizzle-kit push` **被 TTY 挡下时的那一次输出**上：
+`drizzle.config.ts` 开着 `strict: true`，它会先把待执行语句列出来、再要求确认，
+而无 TTY 里确认弹不出来、它原地退出且**库不动** —— 那一次恰好是一份免费的 dry-run。
+白名单是**白名单**（只认 `ALTER TABLE … ADD` / `CREATE TABLE` / `CREATE INDEX`）
+而不是黑名单：漏认的代价落在「交人工」一侧 —— drizzle 换了输出格式最多让用户多跑
+一次命令，不会让我们替他把列删了。同步前打印「正在核对…」，否则用户看到的是「启动
+卡住了」。
 
 全链路**不调用任何 `.ps1` / `pwsh` / `taskkill`**：
 
