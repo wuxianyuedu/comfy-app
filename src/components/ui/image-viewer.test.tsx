@@ -11,11 +11,24 @@
  * 这正是真实浏览器里 `onLoad` 那一刻读到的两个数。
  */
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageViewer, ViewableImage } from "./image-viewer";
 
-afterEach(cleanup);
+/* 拖拽的写入排到下一帧（`onNextFrame` 合并同一帧内的多个 pointermove）——
+ * 用例把它折成同步执行，好断言「这一帧写了什么」。 */
+beforeEach(() => {
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    cb(0);
+    return 1;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => undefined);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const SRC = "https://example.test/result.png";
 
@@ -109,9 +122,10 @@ describe("ImageViewer", () => {
     expect(viewer.percent()).toBe("100%");
   });
 
-  it("按住拖拽直接改容器的滚动偏移（位移与指针反向）", () => {
+  it("拖拽期间只平移内容（transform），松手才落到滚动偏移", () => {
     const viewer = renderViewer();
     const canvas = viewer.canvas();
+    const inner = viewer.getByTestId("image-viewer-content");
     canvas.scrollLeft = 100;
     canvas.scrollTop = 50;
 
@@ -122,13 +136,98 @@ describe("ImageViewer", () => {
       clientY: 200,
     });
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 180, clientY: 190 });
+
+    /* 拖动中：内容只用 transform 挪位（合成器，不重排），滚动偏移按兵不动。 */
+    expect(inner.style.transform).toBe("translate3d(-20px, -10px, 0)");
+    expect(canvas.scrollLeft).toBe(100);
+    expect(canvas.scrollTop).toBe(50);
+
+    /* 松手：位移一次性落到滚动偏移，transform 撤掉（滚动条与后续滚动随之对齐）。 */
+    fireEvent.pointerUp(canvas, { pointerId: 1 });
     expect(canvas.scrollLeft).toBe(120);
     expect(canvas.scrollTop).toBe(60);
+    expect(inner.style.transform).toBe("");
+  });
 
-    /* 松手后再移动不该继续平移。 */
+  it("松手后再移动不会继续平移", () => {
+    const viewer = renderViewer();
+    const canvas = viewer.canvas();
+    canvas.scrollLeft = 100;
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 1,
+      clientX: 200,
+      clientY: 200,
+    });
     fireEvent.pointerUp(canvas, { pointerId: 1 });
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 100, clientY: 100 });
-    expect(canvas.scrollLeft).toBe(120);
+    expect(canvas.scrollLeft).toBe(100);
+  });
+
+  it("同一帧内的多个 pointermove 只写一次，且写的是最后那个位置", () => {
+    /* 这一条自己接管 rAF：默认 stub 是「同步执行」，那样看不出「合并」。
+     * 帧队列里可能还有别的调用方（React / Dialog 的动画），所以按**增量**
+     * 数帧，而不是数总数。 */
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+
+    const viewer = renderViewer();
+    const canvas = viewer.canvas();
+    const inner = viewer.getByTestId("image-viewer-content");
+
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 1,
+      clientX: 200,
+      clientY: 200,
+    });
+    const before = frames.length;
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 190, clientY: 200 });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 180, clientY: 200 });
+
+    /* 两次移动只排一帧，而且在它落地前什么都不写（少一次布局就少一次重绘）。 */
+    expect(frames.length - before).toBe(1);
+    expect(inner.style.transform).toBe("");
+
+    frames[frames.length - 1]!(0);
+    expect(inner.style.transform).toBe("translate3d(-20px, 0px, 0)");
+  });
+
+  it("没有起手的 pointermove / pointerup 什么都不改", () => {
+    const viewer = renderViewer();
+    const canvas = viewer.canvas();
+    const inner = viewer.getByTestId("image-viewer-content");
+    canvas.scrollLeft = 33;
+
+    fireEvent.pointerMove(canvas, { pointerId: 9, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(canvas, { pointerId: 9 });
+    expect(inner.style.transform).toBe("");
+    expect(canvas.scrollLeft).toBe(33);
+  });
+
+  it("拖拽中关掉查看器会取消还排着的那一帧", () => {
+    vi.stubGlobal("requestAnimationFrame", () => 7);
+    const cancel = vi.fn();
+    vi.stubGlobal("cancelAnimationFrame", cancel);
+
+    const viewer = renderViewer();
+    fireEvent.pointerDown(viewer.canvas(), {
+      button: 0,
+      pointerId: 1,
+      clientX: 1,
+      clientY: 1,
+    });
+    fireEvent.pointerMove(viewer.canvas(), {
+      pointerId: 1,
+      clientX: 5,
+      clientY: 5,
+    });
+    viewer.unmount();
+    expect(cancel).toHaveBeenCalledWith(7);
   });
 
   it("关闭按钮是唯一的显式出口（回调由调用处决定关不关）", () => {
