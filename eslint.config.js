@@ -3,45 +3,69 @@ import next from "eslint-config-next/core-web-vitals";
 import unusedImports from "eslint-plugin-unused-imports";
 import boundaries from "eslint-plugin-boundaries";
 
+/* ── 扫描范围：**白名单**（Include > Exclude）──
+ *
+ * 「哪些文件被 lint」由两处决定，都不随业务目录增长而维护：
+ *   ① 下面的 `LINT_FILES` —— 规则**只**对匹配它的文件生效（只列 TS 源码：
+ *      `scripts/**` 那些 `.mjs` / `.cjs` 门禁脚本不套这里的 TS type-checked 规则，
+ *      与改造前那两条「ts / tsx」glob 同口径 —— 列宽了会给它们套上 1600+ 个假错）；
+ *   ② `package.json` 的 `lint` / `lint:fix` 脚本参数 —— 显式列出要扫的目录
+ *      （`eslint src tests scripts e2e tools *.config.*`），**不是** `eslint .`。
+ *
+ * 新增一个目录（草稿目录 `_scratch/`、临时实验目录…）默认**不被扫**：它既不在
+ * ① 也不在 ②，不必改这个文件，也不必往任何忽略清单里补一行。
+ *
+ * ⚠️ **别写「先用一条忽略所有文件的 glob 关掉整个世界、再用 `files` 白名单打开
+ * 要扫的目录」**：ESLint 的**全局 ignores 优先于 `files`**，被它命中的文件不会
+ * 被任何 `files` 重新打开（实测报 `File ignored because of a matching ignore
+ * pattern`）。那样写等于什么都不扫 —— 门禁全绿而实际没有任何检查，比漏报更危险。
+ *（本注释刻意不写出那条 glob 的字面量：它在块注释里会含 `星号 + 斜杠`，提前把
+ * 注释闭合掉 —— `ui/use-enter-commit` 的文件头记录过同一个坑。）
+ *
+ * 因此下面的 `ignores` 只放两类**固定坐标**（构建产物与生成代码），不是一份
+ * 「发现新目录就补一行」的清单。
+ *
+ * 另外：eslint 的 `--cache-strategy content` 也收在 `lint` 脚本里（缓存键含
+ * 「文件内容 + 解析后的 config」）—— `mtime` 策略下 `git checkout` / `stash` /
+ * `pull` / `prettier --write` 这类「只动时间戳」的操作会让缓存大面积失效，而
+ * 升级 eslint / typescript-eslint 之后要手动删一次 `node_modules/.cache/eslint`
+ *（插件实现变更不在缓存键里，这是 `--cache` 的已知边界）。
+ */
+const LINT_FILES = [
+  "src/**/*.{ts,tsx}",
+  "tests/**/*.{ts,tsx}",
+  "scripts/**/*.{ts,tsx}",
+  "e2e/**/*.{ts,tsx}",
+  "tools/**/*.{ts,tsx}",
+  // 根级工程配置里用 TS 写的那些（vitest / playwright / drizzle；eslint.config.js 自身
+  // 是 .js，由下面 `...next` 那块覆盖，与改造前同口径）
+  "*.config.{ts,tsx}",
+];
+
 export default tseslint.config(
   {
-    // ── 全局忽略：与 .gitignore 同步的产物 / 临时 / 第三方 store 目录 ──
-    // 维护约定：凡在 .gitignore 里新增忽略的产物/临时目录，若可能落 .ts/.tsx/.js
-    // 等代码文件（或目录物理存在、含海量 JS），必须同步补进此处，否则 `pnpm lint`
-    // （eslint .）会把目录内临时文件也扫进去误报、拖慢甚至 walk 崩溃。
     ignores: [
-      // 框架构建产物
-      ".next",
-      "out/",
-      "coverage/",
-      "dist/",
-      // 生成代码（根级与 src/public 下）
+      // 构建产物与第三方目录（固定坐标）
+      "**/node_modules/**",
+      "**/node_modules.old/**",
+      "**/.pnpm-store/**",
+      "**/.cache/**",
+      ".next/**",
+      "out/**",
+      "dist/**",
+      "coverage/**",
+      "test-results/**",
+      "playwright-report/**",
+      // 生成代码（在白名单目录内，必须显式排除）
+      "src/generated/**",
       "generated/**",
-      "public/generated/",
-      "src/generated/",
-      // Next/Tauri 静态产物
-      "src-tauri/static/",
-      // 运行时临时目录与本地工具产物
-      "temp/**",
-      "python-venv/**",
-      "dev-tools/",
-      "log/",
-      "run/",
-      "__pycache__/",
-      // node_modules 之外的依赖副本 / pnpm store（eslint 只硬忽略 node_modules 本体）
-      "node_modules.old/",
-      ".pnpm-store/",
-      // PyInstaller onedir 产物（start-tauri/、start-tauri-standalone/ 等）：
-      // 目录被清理后 eslint 9 默认会 walk 全部目录，humanfs 遇到不存在目录会 ENOENT 崩溃，显式忽略避免
-      "start-tauri*/",
-      "build-launcher*/",
-      // 测试产物
-      "test-results/",
-      "playwright-report/",
-      // agent 工具链本地产物（索引 / IDE 会话，可能含代码拷贝）
-      ".codegraph/",
-      ".zvec-grep/",
-      ".workbuddy/",
+      "public/generated/**",
+      "docs/api/**",
+      // 打包 / 交叉编译产物：PyInstaller（start-tauri*/、build-launcher*/）与 Tauri
+      // （src-tauri/**）下可能有海量 JS；误跑 `eslint .` 时这些 walk 会拖死甚至崩
+      "start-tauri*/**",
+      "build-launcher*/**",
+      "src-tauri/**",
     ],
   },
 
@@ -51,7 +75,7 @@ export default tseslint.config(
   // structure to JSON。这里直接展开扁平数组，绕开该崩溃。
   ...next,
   {
-    files: ["**/*.ts", "**/*.tsx"],
+    files: LINT_FILES,
     extends: [
       ...tseslint.configs.recommended,
       ...tseslint.configs.recommendedTypeChecked,
@@ -107,6 +131,7 @@ export default tseslint.config(
   //       components→server 拦截;UI 直引 drizzle-orm orm 包在本 pnpm 解析下 module.source
   //       为 null,无法用 module 选择器匹配,改用下方 scoped no-restricted-imports 兜底。
   {
+    files: LINT_FILES,
     plugins: { boundaries },
     settings: {
       "boundaries/elements": [

@@ -69,9 +69,10 @@ node scripts/check-title-bar-clearance.cjs || exit 1
 echo "[pre-commit] 6&7/27 tsc --noEmit + eslint（零警告，并行）"
 pnpm exec tsc --noEmit &
 tsc_pid=$!
-pnpm exec eslint . --max-warnings 0 \
-  --cache --cache-location node_modules/.cache/eslint \
-  --cache-strategy content &
+# eslint 的**扫描范围（白名单目录）与参数**收在 package.json 的 `lint` 脚本里 ——
+# 门禁、`pnpm lint`、CI 共用同一份，不在这里再抄一遍目录清单（抄一遍就会漂移；
+# 范围口径见 eslint.config.js 顶部那节）。上面那些 cache 说明描述的正是该脚本的参数。
+pnpm run lint &
 eslint_pid=$!
 rc=0
 wait "$tsc_pid" || rc=1
