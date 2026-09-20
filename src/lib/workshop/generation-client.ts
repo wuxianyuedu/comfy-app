@@ -1,4 +1,13 @@
+"use client";
+
 // ── 工坊生成客户端：本地 ComfyUI 链路 + API 中继 ───────────────────────
+// 本模块**只跑在浏览器**：EventSource / fetch 都取自浏览器，工作流库与工坊
+// 的视图层组件是它唯一的消费者。首行标 `"use client"` 是把这个事实写死 ——
+// 既让打包器把 node 侧排除在外，也让「日志唯一通道」那条门禁
+// （tests/single-logger-channel.test.ts）能把这里的 console 与**服务端**的
+// 直接 console 区分开：服务端直写会绕开脱敏与 ERROR 镜像，而这里的
+// console.info 正是项目规定的客户端日志口（被 LogProvider 拦截进应用日志
+// 面板，规范 07 §7.6）。
 // The 镜头生图 / 视频生成 stages run on one of two channels:
 //   • local —— tRPC 的 generate mutation → ComfyUI 任务，经 SSE 观察
 //    （与 studio 画布同一条链路：generate.generate + tasks 事件流）
@@ -254,12 +263,48 @@ function narrowLogEntry(raw: unknown): TaskLogEntry | null {
  * 返回一个 closer，用于提前断掉连接（取消 / 组件卸载）。
  */
 export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
+  /* ── 订阅层的诊断日志 ────────────────────────────────────────────────
+   *
+   * 为什么要有：任务「在 ComfyUI 那边已经生成好了，界面却一直卡在生成中」
+   * 这类现场，服务端日志是完整的（一路到「✓ 全部完成」），但**客户端收到
+   * 了哪些帧、为什么还没落定**此前一行都没有 —— 只能靠猜。缺口最典型的一处
+   * 是 `state` 帧的成功终态（SUCCEEDED）当前被静默跳过（只认 FAILED /
+   * CANCELLED / ERROR），它到底有没有到达、到达后被怎么处理，日志里看不出来。
+   *
+   * 这里只记**决策点**（订阅建立 / 收到终态帧 / 落定判定与原因 / 连接中断），
+   * 不记心跳与逐帧进度，避免把面板刷屏。日志经 `LogProvider` 的 console
+   * 拦截进客户端日志面板，因此只在浏览器端产生副作用，服务端不受影响。 */
+  const tag = `[watchTask ${taskId.slice(0, 8)}]`;
+  /* 诊断走**两条**通道：
+   *   · `console.info` → `LogProvider` 的拦截把它写进应用日志面板；
+   *   · `h.onLog` → 工作流库的「执行日志」弹窗时间线（`workflow-run-store`）。
+   * 两个面板读的不是同一份数据，只写其一都会让用户「在看的那个面板」里
+   * 恰好看不到 —— 这次卡住的现场就是执行日志弹窗里只有服务端行、客户端
+   * 一行没有。`src` 标记来源，好把客户端行与服务端行分开看。 */
+  const note = (msg: string) => {
+    const line = `${tag} ${msg}`;
+    console.info(line);
+    h.onLog?.({ t: Date.now(), level: "info", msg: line, src: "client" });
+  };
+
   const es = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/stream`);
+  note("已订阅 SSE");
   let settled = false;
+  /* `state` 帧会在每次进度变化时重复到达，同一个 status 只记一次，
+   * 否则面板会被「status=RUNNING」刷屏。 */
+  let lastStateStatus = "";
   const settle = (ok: boolean, message?: string) => {
-    if (settled) return;
+    if (settled) {
+      note(`重复落定被忽略（ok=${ok}）：${message ?? "无原因"}`);
+      return;
+    }
     settled = true;
     es.close();
+    note(
+      ok
+        ? "落定：成功，已关闭流"
+        : `落定：失败，已关闭流（原因：${message ?? "未提供"}）`,
+    );
     h.onSettled({ ok, message });
   };
   es.onmessage = (ev: MessageEvent<string>) => {
@@ -298,10 +343,25 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
           const st: unknown = msg.status;
           if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
             const err: unknown = msg.error;
+            note(`收到 state 帧 status=${st}，按失败落定`);
             settle(
               false,
               typeof err === "string" && err.trim() ? err : `任务 ${st}`,
             );
+          } else {
+            /* 关键诊断点：非失败终态（尤其成功终态 SUCCEEDED）**当前被静默
+             *  跳过**、不会触发落定。若现场出现「日志已全部完成但界面一直
+             *  生成中」，这里会如实打出收到了哪个状态、却没落定 ——
+             *  这就是那次卡住的证据。 */
+            const stStr = typeof st === "string" ? st : "";
+            if (stStr !== lastStateStatus) {
+              lastStateStatus = stStr;
+              note(
+                stStr
+                  ? `收到 state 帧 status=${stStr}，非失败终态不落定（等待 done 帧）`
+                  : "收到无 status 的 state 帧，跳过",
+              );
+            }
           }
         }
         return;
@@ -312,6 +372,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
         return;
       }
       if (type === "done") {
+        note("收到 done 帧（成功终态）");
         const outputs = extractSavedOutputs(msg.images);
         if (outputs.length === 0) {
           settle(false, "任务完成但没有产出文件");
@@ -323,6 +384,9 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
       }
       if (type === "error") {
         const err: unknown = msg.error;
+        note(
+          `收到 error 帧（失败终态）：${typeof err === "string" ? err : "无原因"}`,
+        );
         settle(false, typeof err === "string" && err ? err : "生成失败");
       }
     } catch {
@@ -330,11 +394,21 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
     }
   };
   es.onerror = () => {
+    /* 诊断：连接异常此前只有「彻底关闭才落定」这一条出口，中间过程不可见。
+     *  EventSource 的 readyState 有三态，分别对应「重连中 / 已关闭」。 */
+    note(
+      es.readyState === EventSource.CLOSED
+        ? "SSE 连接已关闭"
+        : "SSE 连接中断，浏览器将自动重连",
+    );
     // 短暂断开会自动重连；只有流真正彻底关闭才算终态。
     if (es.readyState === EventSource.CLOSED) settle(false, "任务连接中断");
   };
   return () => {
-    if (!settled) settled = true;
+    if (!settled) {
+      note("订阅被主动关闭（组件卸载 / 取消），未落定");
+      settled = true;
+    }
     es.close();
   };
 }
