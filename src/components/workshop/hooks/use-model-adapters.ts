@@ -6,6 +6,7 @@
 // 视图（WorkshopModelAdapterModal）只渲染 + 上抛，不直接出现 api.*。
 
 import React, { useCallback, useState } from "react";
+import { errorMessage } from "~/lib/error-message";
 
 import {
   adapterInputsFromContract,
@@ -146,7 +147,7 @@ export function useModelAdapters(): ModelAdaptersController {
     } catch (e) {
       setMessage({
         kind: "err",
-        text: e instanceof Error ? e.message : "保存失败",
+        text: errorMessage(e, "保存失败"),
       });
     } finally {
       setSaving(false);

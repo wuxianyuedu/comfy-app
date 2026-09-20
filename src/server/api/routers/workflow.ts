@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorMessage } from "~/lib/error-message";
 import { TRPCError } from "@trpc/server";
 import type { WorkflowTemplate } from "~/server/db/schema";
 import { workflowTemplate } from "~/server/db/schema";
@@ -299,7 +300,7 @@ export const workflowRouter = createTRPCRouter({
             diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
             renamedFromTo.set(w.id, `${oldName} → ${newName}`);
           } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
+            const msg = errorMessage(e, String(e));
             logger.warn(`[workflow.list] relink failed for ${w.id}: ${msg}`);
           }
         }
@@ -455,7 +456,7 @@ export const workflowRouter = createTRPCRouter({
             defaultName: typeof body.name === "string" ? body.name : undefined,
           });
         } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errorMessage(e, String(e));
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: msg || "本地文件读取失败",
@@ -525,7 +526,7 @@ export const workflowRouter = createTRPCRouter({
       } catch (e: unknown) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: e instanceof Error ? e.message : "工作流解析失败",
+          message: errorMessage(e, "工作流解析失败"),
         });
       }
       const rawJson = parsed.rawJson;
