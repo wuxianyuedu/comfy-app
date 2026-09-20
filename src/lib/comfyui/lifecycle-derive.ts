@@ -12,8 +12,10 @@
  * 是「任务卡在队列」「窗口关了进程还在」「关掉又被悄悄拉起」，都不是
  * 读代码能一眼看出的回归。纯函数化是让它们可被 CI 拦住的最低成本手段。
  *
- * 本模块只依赖常量与类型，不 import lifecycle.ts，避免循环依赖。
+ * 本模块只依赖常量与类型（含 endpoints 的 URL 家函数），不 import lifecycle.ts，避免循环依赖。
  */
+
+import { comfyUiBaseUrl } from "../endpoints";
 
 /** 拉起方式：bound 随应用退出关闭；keepAlive 脱离进程树保活。 */
 export type LaunchPolicy = "bound" | "keepAlive";
@@ -385,7 +387,7 @@ export function deriveComfyUiStatus(
   if (snap.running && port) {
     return {
       up: true,
-      base: `http://127.0.0.1:${port}`,
+      base: comfyUiBaseUrl(port),
       starting,
       stopping,
       probing: false,

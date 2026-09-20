@@ -21,6 +21,7 @@
 
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
+import { comfyUiBaseUrl } from "../endpoints";
 import {
   findPidForMainPyDetailed,
   findPidListeningPort,
@@ -160,5 +161,5 @@ export function baseForLocalPort(port: number | null): string | null {
     return null;
   }
   if (process.env.COMFYUI_BASE) return null;
-  return `http://127.0.0.1:${port}`;
+  return comfyUiBaseUrl(port);
 }
