@@ -139,9 +139,14 @@ export function HistoryList({
                 <span>{filterOption.label}</span>
                 <span
                   className={
+                    /* 选中态的计数徽标此前写的是 `bg-subtle5 text-white` —— 那个
+                       类**在样式表里不存在**（全库只此一处），背景因此是透明的，
+                       白字直接压在浅色底的胶囊上（「全部 47」的 47 几乎看不见，
+                       用户实测）。改成 pill 自身前景色的半透明底：深浅两套主题
+                       都由语义 token 给出对比度。 */
                     "rounded-full px-1.5 py-0.5 text-[10px] font-bold " +
                     (isActive
-                      ? "bg-subtle5 text-white"
+                      ? "bg-primary-foreground/20 text-primary-foreground"
                       : "bg-surface-2 text-ink-faint")
                   }
                 >
@@ -218,7 +223,7 @@ export function HistoryList({
         detailId={c.detailId}
         detail={c.detail}
         detailLoading={c.detailLoading}
-        workflowHints={c.workflowHints}
+        workflowIO={c.workflowIO}
         onClose={c.closeDetail}
       />
     </div>

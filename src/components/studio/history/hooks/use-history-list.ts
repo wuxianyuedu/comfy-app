@@ -17,6 +17,12 @@ import { useItemAction } from "~/components/ui/use-item-action";
 
 import { useToast } from "../../ToastProvider";
 import {
+  parseWorkflowIOMap,
+  type WorkflowIOMap,
+} from "~/lib/workflow/workflow-io-types";
+
+import { taskWorkflowId } from "../history-detail-derive";
+import {
   countByStatus,
   emptyStateText,
   filterTasks,
@@ -33,6 +39,9 @@ import {
 } from "../history-types";
 import { PAGE_SIZE, useSimulatedProgress } from "../history-utils";
 import { api } from "~/trpc/react";
+
+/** 空 IO 表：引用恒定（未查到工作流时沿用同一个对象，不每次渲染造新的）。 */
+const EMPTY_WORKFLOW_IO: WorkflowIOMap = {};
 
 export interface HistoryListController {
   tasks: TaskItem[];
@@ -56,8 +65,9 @@ export interface HistoryListController {
   detailId: string | null;
   detail: TaskDetail | null;
   detailLoading: boolean;
-  /** 工作流默认值兜底（来自 /api/tasks/[id] 的 workflowHints 子字段）。 */
-  workflowHints: unknown;
+  /** 本任务所用工作流的 IO 定义（参数可读名从它的 `label` 查）。
+   *  工作流已被删除 / 查询未回来时是空表，参数名如实回落 pin 名。 */
+  workflowIO: WorkflowIOMap;
   setSort: (sort: SortKey) => void;
   switchFilter: (filter: FilterKey) => void;
   loadMore: () => void;
@@ -125,11 +135,22 @@ export function useHistoryList(): HistoryListController {
      open 清空逻辑不再需要本地镜像 state。 */
   const detail = detailQ.isSuccess ? detailQ.data : null;
   const detailLoading = detailQ.isPending;
-  /** 工作流默认值兜底 —— 来自 /api/tasks/[id] 的 workflowHints 子字段。 */
-  const workflowHints = detailQ.isSuccess
-    ? ((detailQ.data as { workflowHints?: unknown } | null | undefined)
-        ?.workflowHints ?? null)
-    : null;
+  /* 参数可读名要按工作流 IO 的作者标签查 —— 任务行里只存了 pin 名
+   *（`text` / `aspect_ratio` / `megapixels`），那是 ComfyUI 的程序名。
+   * 用轻量的 `workflow.detail`（一次 DB 读，不做派生）拿 `workflowIO` 列；
+   * 工作流已被删除时查询失败，这里保持空表，参数名如实显示 pin 名 —— 不编。 */
+  const detailWorkflowId = detail ? taskWorkflowId(detail) : null;
+  const ioQ = api.workflow.detail.useQuery(
+    { id: detailWorkflowId ?? "" },
+    { enabled: !!detailWorkflowId },
+  );
+  const workflowIO = useMemo<WorkflowIOMap>(
+    () =>
+      ioQ.isSuccess
+        ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO)
+        : EMPTY_WORKFLOW_IO,
+    [ioQ.isSuccess, ioQ.data],
+  );
 
   const filtered = useMemo(
     () => sortTasks(filterTasks(tasks, filter), sort),
@@ -251,7 +272,7 @@ export function useHistoryList(): HistoryListController {
     detailId,
     detail,
     detailLoading,
-    workflowHints,
+    workflowIO,
     setSort,
     switchFilter,
     loadMore,
