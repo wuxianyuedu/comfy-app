@@ -6,19 +6,20 @@
 // 展示分组与「已改」判据来自 `mode-contract-config`。
 
 import {
+  customInputKindOf,
   modeContractInputIdLabel,
-  modeContractInputLabel,
   type ModeContract,
 } from "~/lib/workshop/model-mode-contract";
 import {
   CONTRACT_MODE_GROUPS,
   CONTRACT_MODES,
-  addableContractInputs,
   contractModeLabel,
+  customInputKindLabel,
   isModeContractCustomized,
 } from "../mode-contract-config";
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
+import { ContractInputCatalog } from "./ContractInputCatalog";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
 function LabelWithId({ label, id }: { label: string; id: string }) {
@@ -136,73 +137,91 @@ export function ModeContractEditorView({
               再下发，两种写法落到工作流 / 远端接口上的效果一致。
             </p>
             <div className="space-y-1.5">
-              {draft.inputs.map((input, i) => (
-                <div
-                  key={`${input}-${i}`}
-                  className="border-border bg-surface flex items-center justify-between rounded-lg border px-2.5 py-1.5"
-                >
-                  <span className="text-ink text-[11px]">
-                    {i + 1}.{" "}
-                    <LabelWithId
-                      label={modeContractInputIdLabel(input)}
-                      id={input}
-                    />
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <label
-                      className="text-muted-foreground flex cursor-pointer items-center gap-1 text-[10px]"
-                      title="必备口：本地工作流缺它的落点时，工坊里驱动不起来"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={controller.isRequired(input)}
-                        onChange={() => controller.toggleRequired(input)}
-                        className="accent-primary h-3 w-3"
-                      />
-                      必备
-                    </label>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => controller.removeInput(input)}
-                      className="text-muted-foreground/60 hover:text-danger-strong"
-                      aria-label={`移除 ${modeContractInputIdLabel(input)}`}
-                    >
-                      ✕
-                    </Button>
-                  </span>
-                </div>
-              ))}
+              {draft.inputs.map((input, i) => {
+                const label = modeContractInputIdLabel(
+                  input,
+                  draft.customInputs,
+                );
+                const kind = customInputKindOf(input);
+                return (
+                  <div
+                    key={input}
+                    className="border-border bg-surface flex items-center justify-between rounded-lg border px-2.5 py-1.5"
+                  >
+                    <span className="text-ink text-[11px]">
+                      {i + 1}. <LabelWithId label={label} id={input} />
+                      {kind && (
+                        <span className="text-muted-foreground/70 bg-subtle border-border-strong ml-1 rounded border px-1 py-0.5 text-[10px]">
+                          {customInputKindLabel(kind)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {/* 顺序**就是**工坊对外的参数顺序（序号即数组下标），
+                          所以调序改的是契约本身，不是界面偏好。 */}
+                      <span className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => controller.moveInput(input, -1)}
+                          disabled={i === 0}
+                          aria-label={`上移 ${label}`}
+                          className="text-muted-foreground/70 hover:text-ink disabled:opacity-25"
+                        >
+                          ↑
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => controller.moveInput(input, 1)}
+                          disabled={i === draft.inputs.length - 1}
+                          aria-label={`下移 ${label}`}
+                          className="text-muted-foreground/70 hover:text-ink disabled:opacity-25"
+                        >
+                          ↓
+                        </Button>
+                      </span>
+                      <label
+                        className="text-muted-foreground flex cursor-pointer items-center gap-1 text-[10px]"
+                        title="必备口：本地工作流缺它的落点时，工坊里驱动不起来"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={controller.isRequired(input)}
+                          onChange={() => controller.toggleRequired(input)}
+                          className="accent-primary h-3 w-3"
+                        />
+                        必备
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => controller.removeInput(input)}
+                        className="text-muted-foreground/60 hover:text-danger-strong"
+                        aria-label={`移除 ${label}`}
+                      >
+                        ✕
+                      </Button>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flex flex-wrap gap-1">
-              {addableContractInputs(draft.inputs).map((type) => (
-                <Button
-                  key={type}
-                  variant="outline"
-                  size="xs"
-                  onClick={() => controller.appendInput(type)}
-                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 h-auto rounded border-dashed px-2 py-0.5"
-                >
-                  ＋{" "}
-                  <LabelWithId label={modeContractInputLabel(type)} id={type} />
-                </Button>
-              ))}
-              {nextReferenceImageId && (
-                <Button
-                  variant="outline"
-                  size="xs"
-                  title="参考图不设数量上限，可继续追加"
-                  onClick={() => controller.appendInput(nextReferenceImageId)}
-                  className="border-primary text-primary hover:bg-primary/10 border-primary/40 h-auto rounded border-dashed px-2 py-0.5"
-                >
-                  ＋{" "}
-                  <LabelWithId
-                    label={modeContractInputLabel("reference-image")}
-                    id={nextReferenceImageId}
-                  />
-                </Button>
-              )}
-            </div>
+            {/* 参数库：全部预制口 + 自定义口（浏览 + 增删改都在这一块）。 */}
+            <ContractInputCatalog
+              inputs={draft.inputs}
+              customInputs={draft.customInputs ?? []}
+              onAddPredefined={(type) =>
+                controller.appendInput(
+                  type === "reference-image"
+                    ? (nextReferenceImageId ?? "reference-image")
+                    : type,
+                )
+              }
+              onAddCustom={controller.addCustomInput}
+              onRenameCustom={controller.renameCustomInput}
+              onRemoveCustom={controller.removeInput}
+            />
             <div>
               <p className="text-muted-foreground mb-1 text-[10px]">输出类别</p>
               <select
