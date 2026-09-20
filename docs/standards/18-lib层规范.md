@@ -40,7 +40,7 @@
 > **为什么 lib 不得 import components**：`lib` 是被 `components` / `app` / `server`
 > 共同依赖的**地基**。地基反过来引视图，会让「谁在最底层」变成循环，也让 lib 模块
 > 无法脱离 React 树单测。需要共享的类型要**下沉到 `src/lib` 下的类型模块**
-> （本项目实例：`src/lib/workflow-io-types.ts`）。
+> （本项目实例：`src/lib/workflow/workflow-io-types.ts`）。
 
 ## 18.3 分层边界：`lib` 是一个 element（机器强制）
 
