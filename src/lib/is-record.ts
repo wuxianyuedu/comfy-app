@@ -39,3 +39,33 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
 export function isPlainRecord(v: unknown): v is Record<string, unknown> {
   return isRecord(v) && !Array.isArray(v);
 }
+
+/**
+ * 「`unknown` 当宽松对象视图读」→ `Record<string, unknown>`；否则 `null`。
+ *
+ * 与 {@link isRecord} 是**两个语义**（这是本条账的核心，收口前被混在一起）：
+ *   · `isRecord(v)` 回答「**是不是**对象」—— 类型守卫，收窄后 `v` 仍是原值；
+ *   · `asRecord(v)` 回答「**当成对象读**」—— 返回视图或 `null`，值被转成
+ *     `Record`，调用处接着写 `?.prop`（与旧 any 代码的运行时语义一致）。
+ *
+ * 收口前全库有 **四份**这个「宽松视图」实现，而它们**各自还兼着不同的名字**：
+ *
+ *   components/studio/workflow-utils.ts   `asRecord`（本地函数，未导出）
+ *   lib/comfyui/raw.ts                    `asRecord`（导出，被 execution-graph /
+ *                                          workflow-detail* 三处 import）
+ *   lib/workshop/api-channel-core.ts      **叫 `isPlainRecord`，行为却是宽松视图**
+ *                                          ——名字说「排除数组」，实现不排除
+ *   components/studio/.../use-param-wiring.ts  `isPlainRecord`（本地，真排除数组）
+ *
+ * 第三处最危险：名字与 `~/lib/is-record` 的 `isPlainRecord`（严格版）
+ * **同名不同义**，谁按名字理解就会拿到意外的收窄结果。本模块两个函数各司其职后，
+ * 那处按它**实际的**行为改名为 `asRecord`。
+ *
+ * **不排除数组**：这是四份实现的共同行为，本出口保持不变（改判据会静默改变
+ * 全部消费点的收窄结果）。要「纯对象、非数组」用 {@link isPlainRecord}。
+ */
+export function asRecord(v: unknown): Record<string, unknown> | null {
+  return typeof v === "object" && v !== null
+    ? (v as Record<string, unknown>)
+    : null;
+}

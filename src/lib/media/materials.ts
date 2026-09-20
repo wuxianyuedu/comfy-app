@@ -15,6 +15,8 @@
  */
 
 import "server-only";
+
+import { compareText } from "~/lib/ordered-set";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -163,7 +165,9 @@ export async function listFolderItems(
     }
   }
   // 新的排前面
-  items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  /* 「按当前区域设置排序」走 `~/lib/ordered-set`（规范 16 §16.2.4.55）——
+   * 降序即参数顺序相反。 */
+  items.sort((left, right) => compareText(right.updatedAt, left.updatedAt));
   return items;
 }
 
@@ -196,6 +200,7 @@ export async function collectByFolder(
     }
   }
   for (const [, arr] of map)
-    arr.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    /* 同上：降序即比较参数相反。 */
+    arr.sort((left, right) => compareText(right.updatedAt, left.updatedAt));
   return map;
 }

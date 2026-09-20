@@ -30,6 +30,8 @@ import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import type { ProjectType } from "~/lib/workshop/types";
 import { errorMessage, errorText } from "~/lib/error-message";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
+import { fixed } from "~/lib/number-format";
 
 export type FilmStatus =
   "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
@@ -535,7 +537,7 @@ export async function composeFilm(id: string) {
         `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
         `pad=${W}:${H}:(${W}-iw)/2:(${H}-ih)/2,setsar=1,` +
         `fps=${fps},` +
-        `fade=t=in:st=0:d=0.3,fade=t=out:st=${fadeOut.toFixed(2)}:d=0.3`;
+        `fade=t=in:st=0:d=0.3,fade=t=out:st=${fixed(fadeOut, 2) ?? "0"}:d=0.3`;
 
       const srtPath = path.join(tmpDir, `seg_${i}.srt`);
       if (film.subtitleOn) {
@@ -568,7 +570,8 @@ export async function composeFilm(id: string) {
         "-b:a",
         "128k",
         "-t",
-        dur.toFixed(2),
+        /* ffmpeg 的 `-t` 与 fade 时刻按两位小数写（`~/lib/number-format`）。 */
+        fixed(dur, 2) ?? "0",
         segOut,
       ];
       let res = await runFFmpeg(args, tmpDir);
@@ -595,14 +598,14 @@ export async function composeFilm(id: string) {
           "-b:a",
           "128k",
           "-t",
-          dur.toFixed(2),
+          fixed(dur, 2) ?? "0",
           segOut,
         ];
         res = await runFFmpeg(args, tmpDir);
       }
       if (res.code !== 0) {
         throw new Error(
-          `镜头 ${i + 1} 归一化失败：${res.stderr.slice(0, 200)}`,
+          `镜头 ${i + 1} 归一化失败：${clampText(res.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
         );
       }
       await appendFilmLog(id, "info", `镜头 ${i + 1}/${shots.length} 已就绪`);
@@ -629,7 +632,9 @@ export async function composeFilm(id: string) {
       tmpDir,
     );
     if (cres.code !== 0)
-      throw new Error(`拼接失败：${cres.stderr.slice(0, 200)}`);
+      throw new Error(
+        `拼接失败：${clampText(cres.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+      );
 
     const finalPath = path.join(
       cwd,

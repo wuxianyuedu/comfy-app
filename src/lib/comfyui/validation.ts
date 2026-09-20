@@ -25,6 +25,7 @@
 // 组件（客户端）都能安全导入。
 
 import { z } from "zod";
+import { asRecord } from "~/lib/is-record";
 
 /* validationErrors 经 Prisma Json 列往返（服务端写入 → 客户端读取），
  * 所以读取侧**必须**重新校验：Json 列在类型上是 `unknown`，直接
@@ -84,10 +85,7 @@ export function extractValidationErrors(
   graph?: Record<string, unknown>,
 ): ValidationError[] {
   // 外部输入一律 unknown + 收窄：res 可能是 carrier 对象 / 列表 / 任意 JSON。
-  const resObj =
-    typeof res === "object" && res !== null
-      ? (res as Record<string, unknown>)
-      : undefined;
+  const resObj = asRecord(res) ?? undefined;
   let ne: unknown = resObj?.node_errors;
   // `res` 本身就是列表承载者（comfy-cli 信封这条路径）。
   const isListCarrier =
@@ -122,10 +120,7 @@ export function extractValidationErrors(
   for (const [nid, err] of entries) {
     const errRec = err as Record<string, unknown> | null | undefined;
     const graphNode = graph?.[nid];
-    const graphClass =
-      typeof graphNode === "object" && graphNode !== null
-        ? (graphNode as Record<string, unknown>).class_type
-        : undefined;
+    const graphClass = asRecord(graphNode)?.class_type;
     const errClass = errRec?.class_type;
     const classType: string =
       (typeof errClass === "string" ? errClass : undefined) ??

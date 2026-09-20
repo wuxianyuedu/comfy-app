@@ -15,9 +15,11 @@
 
 import {
   EXPOSED_PARAM_DISPLAY_LABEL,
+  exposedCustomKindOf,
   exposedParamDisplayLabel,
   exposedParamsForMode,
   isVideoMode,
+  type ExposedCustomKind,
 } from "~/lib/workflow/workflow-exposed-params";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 
@@ -258,19 +260,97 @@ export function modeContractInputLabel(type: ModeContractInputType): string {
   return MODE_CONTRACT_INPUT_TYPES.find((t) => t.type === type)?.label ?? type;
 }
 
-/** 契约口 id 的完整值域：6 个基础口 +「参考图」第 2 张起带序号
- *  （`reference-image-2`，见 workflow-exposed-params 的多参考图槽位）。
+/* ── 自定义输入口 ──
+ *
+ * 预制口只有七类，作者想多要一个口（`style` / `seed` / 某个接口特有的开关）就得改
+ * 代码 —— 那正是这套注册表要消掉的事。自定义口把「加一个口」变成一次配置：起个名
+ *  + 选一个**简单类型**，类型只决定 ① 工坊用什么控件录入；② 它接受哪一族的端口。
+ *
+ *  口 id 由系统生成、把类型编进去（`custom-<类型>-<序号>`）：类型是**结构信息**，
+ *  它必须能被纯函数层（映射 / 封装 / 适配器）从 id 直接读出来 —— 契约口清单一路传
+ *  下去时只带 id（见 `buildParamEntries` 的 `contractIds`），靠另一张表才能知道类型
+ *  的话，自定义口在落点画布上会静默消失（`exposedClassOf` 认不出来即整口丢弃）。
+ *  作者填的名字单独存在 `customInputs[].label` 里（见 `ModeContract.customInputs`）。 */
+
+/** 自定义口的简单类型（文本 / 图片 / 数字）。 */
+export type ModeContractCustomKind = ExposedCustomKind;
+
+/** 一条自定义口的定义：id（含类型与序号）+ 作者填的展示名。 */
+export interface ModeContractCustomInput {
+  /** 契约口 id（`custom-<类型>-<序号>`；序号在契约内不与其它自定义口重复）。 */
+  id: ModeContractInputId;
+  /** 展示名（作者填）。空名不留（归一化时丢弃）。 */
+  label: string;
+  /** 简单类型（恒与 id 里编的类型一致 —— 归一化时以 id 为准）。 */
+  kind: ModeContractCustomKind;
+}
+
+/** 契约口 id 的完整值域：7 个基础口 +「参考图」第 2 张起带序号
+ *  （`reference-image-2`）+ 自定义口（`custom-<类型>-<序号>`）。
  *
  *  与适配器侧的 WorkshopInputType 是**两套 id**，别混用：适配器口按接口请求体
  *  分得更细（契约的「尺寸」在适配器层拆成 aspect-ratio + megapixels + multiple），
- *  契约口是工坊对用户的统一口径（尺寸 / 参考图）。 */
+ *  契约口是工坊对用户的统一口径（尺寸 / 参考图 / 自定义）。 */
 export type ModeContractInputId =
-  ModeContractInputType | `reference-image-${number}`;
+  | ModeContractInputType
+  | `reference-image-${number}`
+  | `custom-${ModeContractCustomKind}-${number}`;
+
+/** 自定义口 id 的简单类型（非自定义口返回 null）。
+ *
+ *  转发底层的 `exposedCustomKindOf`：自定义口这个概念在映射 / 封装层就已经存在
+ *  （见 `exposedClassOf`），契约层不再自己解析一遍形状。 */
+export function customInputKindOf(
+  id: string | null | undefined,
+): ModeContractCustomKind | null {
+  return typeof id === "string" ? exposedCustomKindOf(id) : null;
+}
+
+/** 某个 id 是不是自定义口。 */
+export function isCustomContractInputId(v: unknown): v is ModeContractInputId {
+  return typeof v === "string" && exposedCustomKindOf(v) !== null;
+}
 
 export function isModeContractInputId(v: unknown): v is ModeContractInputId {
   if (typeof v !== "string") return false;
   if (isModeContractInputType(v)) return true;
-  return /^reference-image-\d+$/.test(v);
+  if (/^reference-image-\d+$/.test(v)) return true;
+  return isCustomContractInputId(v);
+}
+
+/** 下一个可用的自定义口 id：序号在**整个契约的自定义口空间**里递增（不是每种类型
+ *  各排一列）——不同类型的口共用序号，删掉一个口再加不会立刻复用同一个 id，指向
+ *  已删口的落点线因此不会「复活成新口」（映射表按 id 存）。 */
+export function nextCustomInputId(
+  inputs: readonly ModeContractInputId[],
+  kind: ModeContractCustomKind,
+): ModeContractInputId {
+  let max = 0;
+  for (const id of inputs) {
+    const matched = /^custom-[a-z]+-(\d+)$/.exec(id);
+    if (matched) max = Math.max(max, Number(matched[1]));
+  }
+  return `custom-${kind}-${max + 1}`;
+}
+
+/** 移动一个输入口的位置（`delta` = -1 上移 / +1 下移）。
+ *
+ *  顺序就是工坊对外的参数顺序（数组下标即展示序号），所以调序必须作用在同一份
+ *  `inputs` 数组上，而不是在视图层另存一份顺序 —— 两份顺序一定会走散。越界时
+ *  返回原数组（调用方据此维持按钮可用性，见视图里的首尾禁用）。 */
+export function moveContractInput(
+  inputs: readonly ModeContractInputId[],
+  id: ModeContractInputId,
+  delta: number,
+): ModeContractInputId[] {
+  const from = inputs.indexOf(id);
+  if (from < 0) return [...inputs];
+  const to = from + delta;
+  if (to < 0 || to >= inputs.length) return [...inputs];
+  const next = [...inputs];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved!);
+  return next;
 }
 
 /** 带序号的参考图口的序号（`reference-image-2` → 2；非带序号口返回 0）。 */
@@ -282,9 +362,15 @@ export function referenceImageSlotIndex(id: string): number {
 /** 任意契约口 id 的展示名（带序号的参考图口显示为「参考图 2」，其余同基础口）。
  *
  *  转发 `exposedParamDisplayLabel`：契约口清单的措辞只有那一份（ISSUE #596），
- *  本模块不再自己拼字符串。 */
-export function modeContractInputIdLabel(id: ModeContractInputId): string {
-  return exposedParamDisplayLabel(id);
+ *  本模块不再自己拼字符串。**自定义口例外**：它的名字只有契约知道（作者起的），
+ *  所以调用方要把该契约的自定义口定义一起传进来 —— 不传时退回一条中性兜底名，
+ *  不会显示成「提示词」这类张冠李戴的措辞。 */
+export function modeContractInputIdLabel(
+  id: ModeContractInputId,
+  customInputs?: readonly ModeContractCustomInput[],
+): string {
+  const custom = customInputs?.find((item) => item.id === id);
+  return custom ? custom.label : exposedParamDisplayLabel(id);
 }
 
 /* 下一个可追加的参考图口 id —— 参考图不设数量上限，每次追加下一个序号槽
@@ -329,6 +415,11 @@ export interface ModeContract {
    *  主动清空了必备口」是两个不同的状态，用空数组一锅端会让「我明明取消勾选了」
    *  与「我还没配过」读起来一样。 */
   required?: ModeContractRequired;
+  /** 自定义口的定义（id → 作者填的展示名 + 简单类型）。
+   *
+   *  `inputs` 里的自定义口必须在其中有定义：没有定义的口下游读不出名字与类型
+   *  （归一化时直接丢弃那个口，见 `parseModeContracts`）。 */
+  customInputs?: ModeContractCustomInput[];
 }
 
 /** 内置的必备口判定（未在注册表里配过时用它）。
@@ -394,9 +485,15 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
     const mode =
       typeof rec.mode === "string" ? rec.mode.trim().toUpperCase() : "";
     if (!mode || seen.has(mode)) continue;
+    /* 自定义口定义先解析：`inputs` 里的自定义口要靠它才能留下 —— 没有定义的口
+     *  下游读不出名字与类型，列出来只会是一张无名卡片。 */
+    const customInputs = parseCustomInputs(rec.customInputs);
     const rawInputs = Array.isArray(rec.inputs) ? rec.inputs : [];
-    const inputs = rawInputs.filter((i): i is ModeContractInputId =>
-      isModeContractInputId(i),
+    const inputs = rawInputs.filter(
+      (i): i is ModeContractInputId =>
+        isModeContractInputId(i) &&
+        (customInputKindOf(i) === null ||
+          customInputs.some((def) => def.id === i)),
     );
     if (inputs.length === 0) continue;
     /* 必备口：只收契约里真的存在的口（`required` 缺失 = 没配过 → 存 undefined，
@@ -412,13 +509,41 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
       rawOutput === "video" || rawOutput === "audio"
         ? rawOutput
         : outputKindForMode(mode);
+    /* 只留本契约真的用到的自定义口定义：`inputs` 里已删掉的口，定义跟着消失
+     *  （否则注册表会随每次「加一个又删一个」永久膨胀）。 */
+    const usedCustomInputs = customInputs.filter((def) =>
+      inputs.includes(def.id),
+    );
     seen.add(mode);
     out.push({
       mode,
       inputs,
       output,
       ...(required !== undefined ? { required } : {}),
+      ...(usedCustomInputs.length > 0
+        ? { customInputs: usedCustomInputs }
+        : {}),
     });
+  }
+  return out;
+}
+
+/** 解析一份契约里的自定义口定义（非法项丢弃）。
+ *
+ *  类型以 **id 里编的那个**为准：`kind` 字段只是落库后便于人读的冗余，被篡改时
+ *  不能让它与 id 走散 —— 走散就等于控件形态与端口族各认一个类型。 */
+function parseCustomInputs(raw: unknown): ModeContractCustomInput[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ModeContractCustomInput[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const id = typeof rec.id === "string" ? rec.id : "";
+    const label = typeof rec.label === "string" ? rec.label.trim() : "";
+    const kind = customInputKindOf(id);
+    if (!kind || !label || !isCustomContractInputId(id)) continue;
+    if (out.some((def) => def.id === id)) continue;
+    out.push({ id, label, kind });
   }
   return out;
 }
@@ -431,11 +556,19 @@ export function parseModeContracts(raw: unknown): ModeContract[] {
 export interface ContractEntryDisplay {
   id: string;
   label: string;
-  control: "text" | "size" | "image" | "duration";
+  control: "text" | "size" | "image" | "duration" | "number";
 }
 
-/** 契约口 id → 工坊控件形态（尺寸是组合控件、时长是秒数选择、其余按图示）。 */
-function contractControlFor(id: string): ContractEntryDisplay["control"] {
+/** 契约口 id → 工坊控件形态（尺寸是组合控件、时长是秒数选择、其余按图示）。
+ *
+ *  自定义口按它自己的简单类型给控件：文本 / 图片 / 数字 —— 类型是作者选的，
+ *  不从 id 之外的任何地方推。 */
+function contractControlFor(
+  id: string,
+  customInputs?: readonly ModeContractCustomInput[],
+): ContractEntryDisplay["control"] {
+  const custom = customInputs?.find((item) => item.id === id);
+  if (custom) return custom.kind;
   if (id === "size") return "size";
   if (id === "duration") return "duration";
   if (id === "prompt" || id === "negative") return "text";
@@ -459,22 +592,29 @@ export function modeContractEntries(
   }));
 }
 
-/** 契约 → 封装状态派生用的口子清单（id / 展示名 / 工坊控件形态）。 */
+/** 契约 → 封装状态派生用的口子清单（id / 展示名 / 工坊控件形态）。
+ *
+ *  自定义口的展示名与类型只此一处可取（契约里存着），所以这里必须把
+ *  `contract.customInputs` 一起带上 —— 不带的话下游只会拿到一条中性兜底名，
+ *  作者起的名字在画布 / 封装页签上全都看不见。 */
 export function contractToStatusEntries(
   contract: ModeContract,
 ): ContractEntryDisplay[] {
+  const customInputs = contract.customInputs;
   return contract.inputs.map((type) => ({
     id: type,
     // 带序号的参考图口展示为「参考图 2」（与 exposedParamsForMode 的命名一致）
-    label: modeContractInputIdLabel(type),
-    control: contractControlFor(type),
+    label: modeContractInputIdLabel(type, customInputs),
+    control: contractControlFor(type, customInputs),
   }));
 }
 
 /** 契约 → 远端适配器的默认输入映射（size 拆成宽高比 + 百万像素 + 倍数三行）。
  *
  *  第 2 张起的参考图口（reference-image-2…）没有约定的默认请求体字段名，这里不猜：
- *  不生成默认行，留给用户在适配器页自行加一行并把字段名填成该接口实际用的名字。 */
+ *  不生成默认行，留给用户在适配器页自行加一行并把字段名填成该接口实际用的名字。
+ *  **自定义口同理**：名字是作者起的，谁也猜不出该接口管它叫什么 —— 这里跳过，
+ *  本地工作流侧照常可用（落点由作者连线声明）。 */
 export function adapterInputsFromContract(
   contract: ModeContract,
 ): Array<{ type: WorkshopInputType; field: string }> {

@@ -5,6 +5,7 @@ import { Minus, Plus } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
+import { fixed } from "~/lib/number-format";
 
 /**
  * ComfyUI 风数值步进器：  [—] [值] [+]
@@ -49,8 +50,11 @@ export function NumberField({
 }: NumberFieldProps) {
   const [draft, setDraft] = useState<string | null>(null);
 
+  /* 「按某档小数位写数」走唯一出口（`~/lib/number-format`，规范 16 §16.2.4.54）——
+   * 本基元只是把小数位当 props 传下去，不自己拼一份。 */
   const fmt = useCallback(
-    (v: number) => (decimalPlaces > 0 ? v.toFixed(decimalPlaces) : String(v)),
+    (v: number) =>
+      decimalPlaces > 0 ? (fixed(v, decimalPlaces) ?? "") : String(v),
     [decimalPlaces],
   );
 

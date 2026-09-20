@@ -89,6 +89,21 @@ export default defineConfig({
         "src/components/ui/use-copy-feedback.ts",
         "src/lib/is-record.ts",
         "src/server/lib/request-body.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.51 ~ §16.2.4.53）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/lib/media/mime-ext.ts",
+        "src/lib/safe-name.ts",
+        /* 通用图片查看器（形态 + 数值）两个出口：前者是弹窗、滚轮锚点与拖拽
+         * 平移的组装，后者是缩放档位与倍数夹取。与上面那批同款 ——
+         * **两处同批改**（`coverage.include` + `thresholds`），只写门槛不进
+         * `include` 会让门槛静默失效。 */
+        "src/components/ui/image-viewer.tsx",
+        "src/components/ui/use-image-zoom.ts",
+        /* 本批三条新出口（规范 16 §16.2.4.54 ~ §16.2.4.56）。
+         * 与上面那批同款：**两处同批改**（`coverage.include` + `thresholds`）。 */
+        "src/lib/number-format.ts",
+        "src/lib/ordered-set.ts",
+        "src/lib/media/data-url.ts",
       ],
       exclude: ["src/lib/**/*.test.ts"],
       thresholds: {
@@ -485,6 +500,51 @@ export default defineConfig({
           statements: 100,
           branches: 100,
         },
+        /* 「扩展名 ⇄ MIME」的唯一出口（§16.2.4.51，P47 的对面）：两组查表、
+         * 带参数的 content-type 切分、`extOfPath` 的点/隐藏文件/查询串三态、
+         * `stemOfPath` 与 `contentTypeForPath` 的两档兜底全在用例里。
+         * 行/函数/语句 100 是实测值；分支 85 也是实测 —— 未覆盖的四条是
+         * `split(...)[0] ?? ""` / `.pop() ?? ""` 这两处**不可达**兜底
+         *（`split` 对任意输入都至少返回一个元素）。 */
+        "src/lib/media/mime-ext.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 85,
+        },
+        /* 「把文本变成安全的文件名片段」的唯一出口（§16.2.4.53，P49 的对面）：
+         * 两档的差异（保留 / 不保留 CJK）就是这条账的全部内容，必须 100%。 */
+        "src/lib/safe-name.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        /* 本批三条新出口（规范 16 §16.2.4.54 ~ §16.2.4.56），门槛按实测值设满档：
+         *   · P50 对面 `~/lib/number-format` —— 四档各有边界（非有限数 /
+         *     负零 / 整数 / 大小数位夹取），用例逐条钉住；
+         *   · P51 对面 `~/lib/ordered-set` —— 「首次出现 vs 字典序」
+         *     与「键为空值算不算身份」都是判据，逐条钉住；
+         *   · P52 对面 `~/lib/media/data-url` —— 畸形输入（缺逗号 /
+         *     非 base64 形态 / 空载荷）与浏览器侧分块编码都验到。 */
+        "src/lib/number-format.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/ordered-set.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
+        "src/lib/media/data-url.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
+        },
         "src/components/ui/use-copy-feedback.ts": {
           lines: 95,
           functions: 90,
@@ -627,6 +687,27 @@ export default defineConfig({
           functions: 70,
           statements: 65,
           branches: 55,
+        },
+        /* 通用图片查看器的两个出口（简化台账见 `docs/standards/16`）。
+         * 门槛取**实测值向下取整到 5 的倍数**（§18.6 / §11.7 的口径：不设
+         * 理想值 —— 设高了会让无关提交变红，设低了等于没设）：
+         *   · `use-image-zoom` 100/100/100/100 —— 缩放档位、夹取的四条边界
+         *     （0 / 负数 / NaN / Infinity）与档位切换全在用例里；
+         *   · `image-viewer` 实测 93.54/87.5/94.44/96.34，未覆盖的三行是
+         *     jsdom 到不了的真实指针捕获分支（`setPointerCapture` /
+         *     `releasePointerCapture` 在 jsdom 里不存在，代码里就是 `typeof`
+         *     守卫）与「滚轮到达倍数上限后提前返回」那一支。 */
+        "src/components/ui/image-viewer.tsx": {
+          lines: 95,
+          functions: 90,
+          statements: 90,
+          branches: 85,
+        },
+        "src/components/ui/use-image-zoom.ts": {
+          lines: 100,
+          functions: 100,
+          statements: 100,
+          branches: 100,
         },
       },
     },

@@ -13,6 +13,7 @@
  */
 
 import { formatClock } from "~/lib/time-format";
+import { formatShortDate } from "~/lib/time-format";
 
 /** 两个时刻是否同一天（决定行首是否补月-日）。 */
 export function isSameDay(a: Date, b: Date): boolean {
@@ -33,12 +34,10 @@ export function formatTime(
   ts: number,
   opts?: { alwaysDate?: boolean },
 ): string {
-  const d = new Date(ts);
   const time = formatClock(ts, { millis: true });
-  if (opts?.alwaysDate || !isSameDay(d, new Date())) {
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${month}-${day} ${time}`;
+  if (opts?.alwaysDate || !isSameDay(new Date(ts), new Date())) {
+    /* 短日期前缀（`MM-DD`）走 `~/lib/time-format` 的 `formatShortDate`。 */
+    return `${formatShortDate(ts)} ${time}`;
   }
   return time;
 }

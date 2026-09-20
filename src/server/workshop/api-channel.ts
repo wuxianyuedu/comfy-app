@@ -10,6 +10,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isInlineMedia, toDataUrl } from "~/lib/media/data-url";
+
 import {
   callImageGeneration,
   callVideoPoll,
@@ -72,10 +74,12 @@ export async function pollVideoViaApi(
 
 /** 把任意图片引用（远程 URL 或 data URL）解析为内联 data URL（送视频上游首帧）。 */
 export async function resolveMediaDataUrl(ref: string): Promise<string> {
-  if (ref.startsWith("data:")) return ref;
+  /* 「已经是内联 media 吗」与「怎么拼 data URL」各只有一处定义
+   *（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
+  if (isInlineMedia(ref)) return ref;
   const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) throw new Error(`解析媒体失败 (${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
   const mime = res.headers.get("content-type") ?? "image/png";
-  return `data:${mime};base64,${buf.toString("base64")}`;
+  return toDataUrl(buf, mime);
 }

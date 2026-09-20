@@ -3,6 +3,9 @@
  * 没有 JSX，也不用 React hook。 */
 import { getCustomNodePackage } from "~/config/custom-nodes";
 import { displayValue } from "~/lib/display-value";
+import { trimFixed } from "~/lib/number-format";
+import { asRecord } from "~/lib/is-record";
+import { TITLE_MAX, clampText } from "~/lib/text-clamp";
 import { edgeType, portColor, edgeTypeByInputName } from "~/lib/comfyui/types";
 import type { Node, Edge } from "@xyflow/react";
 import type {
@@ -11,15 +14,6 @@ import type {
   RawOutputMeta,
   WorkflowGroup,
 } from "./workflow-types";
-/** 宽松对象视图：`typeof v === "object" && v !== null`（含数组）→ Record 视图，
- *  否则 null。与旧 any 代码 `x?.prop` / `Object.entries(x ?? {})` 的运行时语义
- *  一致（§5.6：graph / JSON 值一律 unknown + 守卫）。 */
-function asRecord(v: unknown): Record<string, unknown> | null {
-  return typeof v === "object" && v !== null
-    ? (v as Record<string, unknown>)
-    : null;
-}
-
 /* `rectToAnchor` 已迁到 `~/lib/dom-rect` 的 `rectToAnchorRect`
  * （规范 16 §16.2.4.41：「把活着的 DOMRect 冻成可存对象」只在一处定义）。
  * 本文件不再导出它 —— 迁移时连带检查过：唯一调用方是 `WorkflowStores`。 */
@@ -86,8 +80,7 @@ export function extractNoteTitle(text: string, fallback?: string): string {
   }
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed)
-      return trimmed.length > 32 ? trimmed.slice(0, 30) + "…" : trimmed;
+    if (trimmed) return clampText(trimmed, { maxLength: TITLE_MAX });
   }
   return "";
 }
@@ -195,11 +188,13 @@ export function renderWidgetValue(value: unknown): string {
   if (value === undefined || value === null) return displayValue(null);
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
-    // 小数保留两位；整数不带小数点。
-    if (Number.isInteger(value) || value >= 10000) return String(value);
-    const str = (Math.round(value * 100) / 100).toFixed(2);
-    // 去掉末尾的 0（1.00 → 1），保留精度
-    return str.replace(/\.?0+$/, "") || "0";
+    /* 小数保留两位；整数不带小数点；去尾零（1.00 → 1）——
+     * 这三件事各有出口（`~/lib/number-format`，规范 16 §16.2.4.54）。
+     * 此前这里是 `(Math.round(v * 100) / 100).toFixed(2)` + 手写剥零，
+     * 即**两层舍入**（先十进制舍、再二进制舍），在边界值上与直接 `toFixed`
+     * 给出不同答案。 */
+    if (value >= 10000) return String(value);
+    return trimFixed(value, 2) ?? displayValue(null);
   }
   if (typeof value === "string") {
     /* 像 "DaSiWa_Wan22_I2V_14B_SnatchKiss_v1.safetensors" 这样的文件名
@@ -251,9 +246,9 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   if (value === undefined || value === null) return displayValue(null);
   if (typeof value === "boolean") return value ? "✓" : "✕";
   if (typeof value === "number") {
-    if (Number.isInteger(value) || value >= 10000) return String(value);
-    const str = (Math.round(value * 100) / 100).toFixed(2);
-    return str.replace(/\.?0+$/, "") || "0";
+    /* 与 `renderWidgetValue` 同一档（`~/lib/number-format`）。 */
+    if (value >= 10000) return String(value);
+    return trimFixed(value, 2) ?? displayValue(null);
   }
   if (typeof value === "string") {
     /* 与 `renderWidgetValue` 同理：**显示层面的截断交给 CSS**（`maxWidth:

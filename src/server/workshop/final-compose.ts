@@ -4,6 +4,7 @@
 // 本地文件时，可额外调用 ffmpeg 把片段（视频）或静帧（图片按 duration 占位）
 // 合成为最终 mp4。不依赖 server-only，纯 Node 可跑。
 import { errorText } from "~/lib/error-message";
+import { fixed } from "~/lib/number-format";
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -81,7 +82,8 @@ export function buildCompositionPlan(
     project: title,
     exportedAt: new Date().toISOString(),
     totalShots: segments.length,
-    totalDurationSec: Number(totalDurationSec.toFixed(1)),
+    /* 「按一位小数写数」走 `~/lib/number-format`（规范 16 §16.2.4.54）。 */
+    totalDurationSec: Number(fixed(totalDurationSec, 1) ?? "0"),
     segments,
   };
 }

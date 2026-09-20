@@ -9,23 +9,12 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { isRecord } from "~/lib/is-record";
+import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
+import { DEFAULT_IMAGE_MIME, mimeForExt } from "~/lib/media/mime-ext";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const GENERATED_DIR = path.join(process.cwd(), "public", "generated");
 const MAX_BYTES = 24 * 1024 * 1024;
-
-const EXT_MIME: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  gif: "image/gif",
-  bmp: "image/bmp",
-  avif: "image/avif",
-};
-
-function mimeForExt(ext: string): string {
-  return EXT_MIME[ext.toLowerCase()] ?? "image/png";
-}
 
 /* 把服务端相对的生成路径（/api/generated/... 或 /generated/...）映射到
  * public/generated 下的文件。URL 不是指向本地生成产物时返回 null。
@@ -52,16 +41,15 @@ export async function resolveMediaBytes(
   src: string,
   _origin: string,
 ): Promise<ResolvedMedia> {
-  if (src.startsWith("data:")) {
-    const comma = src.indexOf(",");
-    if (comma < 0) throw new Error("data URL 格式无效");
-    const meta = src.slice(5, comma);
-    const mime = /^([^;]+)/.exec(meta)?.[1] ?? "image/png";
-    const b64 = src.slice(comma + 1);
-    const buffer = Buffer.from(b64, "base64");
+  if (isInlineMedia(src)) {
+    /* 「怎么读回一个 data URL 的 MIME 与载荷」只有一处定义
+     *（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
+    const parsed = parseDataUrl(src);
+    if (!parsed) throw new Error("data URL 格式无效");
+    const buffer = Buffer.from(parsed.base64, "base64");
     if (buffer.byteLength === 0) throw new Error("data URL 解码为空");
     if (buffer.byteLength > MAX_BYTES) throw new Error("图片超过 24MB 上限");
-    return { buffer, mime };
+    return { buffer, mime: parsed.mime };
   }
 
   if (src.startsWith("/")) {
@@ -69,7 +57,7 @@ export async function resolveMediaBytes(
     if (!abs) throw new Error(`无法定位本地生成文件: ${src}`);
     const buffer = await fs.readFile(abs);
     if (buffer.byteLength > MAX_BYTES) throw new Error("图片超过 24MB 上限");
-    return { buffer, mime: mimeForExt(path.extname(abs).replace(".", "")) };
+    return { buffer, mime: mimeForExt(abs) ?? DEFAULT_IMAGE_MIME };
   }
 
   if (/^https?:\/\//.test(src)) {
@@ -87,7 +75,7 @@ export async function resolveMediaBytes(
       buffer,
       mime: mime?.startsWith("image/")
         ? mime
-        : mimeForExt(path.extname(new URL(src).pathname).replace(".", "")),
+        : (mimeForExt(new URL(src).pathname) ?? DEFAULT_IMAGE_MIME),
     };
   }
 
@@ -100,7 +88,7 @@ export async function resolveMediaDataUrl(
   _origin: string,
 ): Promise<string> {
   const { buffer, mime } = await resolveMediaBytes(src, _origin);
-  return `data:${mime};base64,${buffer.toString("base64")}`;
+  return toDataUrl(buffer, mime);
 }
 
 /* 解析并收窄上游响应的 JSON 体。 */
@@ -109,7 +97,9 @@ export async function readUpstreamJson(res: Response): Promise<unknown> {
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error(`上游返回非 JSON (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `上游返回非 JSON (${res.status}): ${clampText(text, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+    );
   }
 }
 

@@ -185,6 +185,26 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
   it.each([
     ["~/lib/browser-io", ["copyText", "downloadText", "downloadJson"]],
     ["~/lib/time-format", ["timeAgo", "formatClock"]],
+    /* 本批三条（规范 16 §16.2.4.54 ~ §16.2.4.56）：P50/P51/P52 是硬闸，
+     * 判的是「又写了一份」；这一层补**另一侧** —— 出口自己的接口不许被绕过
+     *（绕过的形态可以不含判据锚的那几个字面量）。 */
+    ["~/lib/number-format", ["fixed", "trimmed", "trimFixed", "alphaText"]],
+    [
+      "~/lib/ordered-set",
+      ["unique", "uniqueSorted", "uniqueBy", "union", "compareText"],
+    ],
+    [
+      "~/lib/media/data-url",
+      [
+        "isDataUrl",
+        "isInlineMedia",
+        "toDataUrl",
+        "wrapBase64",
+        "toBase64",
+        "parseDataUrl",
+        "base64PayloadOf",
+      ],
+    ],
   ] as const)("%s 是「按形态收口」的出口，且已被业务引用", (spec, exports) => {
     const mod = readFileSync(
       join(SRC, spec.replace("~/", "").replace(/\//g, sep) + ".ts"),
@@ -446,6 +466,17 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       "ts",
       ["readJsonRecord", "isErrorResponse"],
       3,
+    ],
+    /* 这一条不是「收口存量」，是**新增能力**：全库的图此前只能渲染、不能查看
+     *（缩略图盒子只有几百像素宽，细节看不到）。登记在这里的理由与上面那批
+     * 相同 —— 「抽出出口但没人用」等于没做，而 `ViewableImage` 正是那个
+     * 「换个组件名就能接上」的入口。门槛留在现状之下（当前一处：工作流库
+     * 「实际使用」的运行结果图）。 */
+    [
+      "~/components/ui/image-viewer",
+      "tsx",
+      ["ImageViewer", "ViewableImage"],
+      1,
     ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",

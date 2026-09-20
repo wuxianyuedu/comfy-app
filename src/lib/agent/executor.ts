@@ -1,7 +1,9 @@
 // ── 工坊 Agent 工具执行器（纯逻辑模块）────────────────────
 // 把 Agent tool_call 映射成对工坊 controller 的实际操作。
 // 本模块不直接持有 React state —— 所有数据读写经 handlers 回调完成。
+import { asRecord } from "~/lib/is-record";
 import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
+import { SUMMARY_MAX, clampText } from "~/lib/text-clamp";
 
 /** Agent 执行工具时需要调用的 controller 操作。 */
 export interface AgentToolHandlers {
@@ -27,10 +29,7 @@ export interface ResolvedAgentTool {
 /** 安全解析 JSON 参数串为对象。 */
 function safeParseJson(json: string): Record<string, unknown> {
   try {
-    const obj: unknown = JSON.parse(json);
-    return typeof obj === "object" && obj !== null
-      ? (obj as Record<string, unknown>)
-      : {};
+    return asRecord(JSON.parse(json)) ?? {};
   } catch {
     return {};
   }
@@ -233,7 +232,7 @@ export function resolveAgentTool(
           : "";
       return {
         toolName: name,
-        summary: `生成剧本（创意：${idea.slice(0, 80)}…）`,
+        summary: `生成剧本（创意：${clampText(idea, { maxLength: SUMMARY_MAX })}）`,
         argSummary,
         execute: async () => {
           const meta = hd.getMeta();
@@ -267,7 +266,7 @@ export function resolveAgentTool(
       const currentScript = hd.getScriptMarkdown();
       return {
         toolName: name,
-        summary: `修改剧本：${instruction.slice(0, 80)}…`,
+        summary: `修改剧本：${clampText(instruction, { maxLength: SUMMARY_MAX })}`,
         argSummary,
         execute: async () => {
           if (!currentScript.trim()) {

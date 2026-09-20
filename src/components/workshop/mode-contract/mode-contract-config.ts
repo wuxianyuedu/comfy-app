@@ -11,6 +11,7 @@ import {
   MODE_CONTRACT_INPUT_TYPES,
   builtInModeContract,
   type ModeContract,
+  type ModeContractCustomKind,
   type ModeContractInputType,
 } from "~/lib/workshop/model-mode-contract";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
@@ -66,4 +67,43 @@ export function addableContractInputs(
   return MODE_CONTRACT_INPUT_TYPES.filter(
     (t) => t.type !== "reference-image" && !inputs.includes(t.type),
   ).map((t) => t.type);
+}
+
+/** 自定义口的简单类型清单（作者新增自定义参数时选的那一项）。
+ *
+ *  「简单类型」的边界：只到「用什么控件录入 / 接哪一族端口」为止 —— 文本、图片、
+ *  数字。更细的形状（尺寸的组合控件、时长的秒/帧单位）都带语义，需要配套的换算
+ *  规则，不是一次配置能说清的，所以不开放给作者自选。 */
+export const CUSTOM_INPUT_KINDS: ReadonlyArray<{
+  kind: ModeContractCustomKind;
+  label: string;
+  hint: string;
+}> = [
+  { kind: "text", label: "文本", hint: "单行文本，可落到工作流的文本行" },
+  { kind: "image", label: "图片", hint: "选本地图片上传，可落到图片行" },
+  { kind: "number", label: "数字", hint: "数值输入，可落到数值 / 选项行" },
+];
+
+/** 自定义口类型 → 展示名。 */
+export function customInputKindLabel(kind: ModeContractCustomKind): string {
+  return CUSTOM_INPUT_KINDS.find((item) => item.kind === kind)?.label ?? kind;
+}
+
+/** **全部预制口** + 「本契约是否已经用了它」—— 「浏览全部参数」用。
+ *
+ *  与 `addableContractInputs` 的分工：那个给「＋ 添加」按钮清单（只列还没加的），
+ *  这个给一张**完整**的参数表（已加的也在，标出来），否则用户看不到「一共能有
+ *  哪些口」——只看得见剩下的那几个，读起来像「这套系统只支持这些参数」。 */
+export function contractInputCatalog(
+  inputs: readonly string[],
+): Array<{ type: ModeContractInputType; label: string; added: boolean }> {
+  return MODE_CONTRACT_INPUT_TYPES.map((item) => ({
+    type: item.type,
+    label: item.label,
+    added: inputs.some((id) =>
+      item.type === "reference-image"
+        ? id.startsWith("reference-image")
+        : id === item.type,
+    ),
+  }));
 }

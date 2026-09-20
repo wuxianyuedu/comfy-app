@@ -1,5 +1,7 @@
 "use client";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
+import { trimmed } from "~/lib/number-format";
+import { compareText } from "~/lib/ordered-set";
 import { useRgthreeGroups } from "./IOEditContext";
 import type { WorkflowGroup } from "../workflow-types";
 import { Button } from "~/components/ui/button";
@@ -20,7 +22,11 @@ export function RgthreeFastGroupsBypasserBody({
   const matches = groups
     .filter((group) => matchesNeedle(needle, group.title || ""))
     .slice()
-    .sort((left, right) => left.title.localeCompare(right.title));
+    /* 「按当前区域设置排序」走 `~/lib/ordered-set`（规范 16 §16.2.4.55）——
+     * 它与 `<` / 不带比较器的 `.sort()` 是**两种判据**（`localeCompare`
+     * 让 `"apple" < "Zebra"`，码位序让 `"Zebra" < "apple"`），
+     * 收口前两种混用。 */
+    .sort((left, right) => compareText(left.title, right.title));
   if (matches.length === 0) return null;
   const pad = Math.max(2, String(matches.length).length);
   return (
@@ -127,10 +133,10 @@ export function RgthreePowerLoraLoaderBody({
 }) {
   const fmtStrength = (v: unknown): string | undefined => {
     if (typeof v === "number") {
-      // ComfyUI 会剥掉末尾的零（"1.00" → "1"，"0.85" 保持）。
-      const s = v.toFixed(2);
-      const stripped = s.replace(/\.?0+$/, "");
-      return stripped.length > 0 ? stripped : "0";
+      /* ComfyUI 会剥掉末尾的零（"1.00" → "1"，"0.85" 保持）——
+       * 「按两位小数写 + 剥尾零」走 `~/lib/number-format`
+       *（规范 16 §16.2.4.54），此前这里是手写的一份。 */
+      return trimmed(v, 2) ?? undefined;
     }
     if (typeof v === "string" && v.length > 0 && v !== "undefined") return v;
     return undefined;

@@ -80,6 +80,10 @@ export function EncapsulationTestForm({
   });
   const [size, setSize] = useState<ShotSizeState>(DEFAULT_SHOT_SIZE);
   const [duration, setDuration] = useState(DEFAULT_TEST_DURATION);
+  /* 自定义「数字」口的值（`控制形态 number`）。文本 / 图片口的值走 `texts`
+   *  （`withExposedValue` 按 id 收进 `custom`），数字口要下发 number，所以单独
+   *  一张表 —— 混进 `texts` 会一路 `as` 断言下去。 */
+  const [numbers, setNumbers] = useState<Record<string, number>>({});
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const disabled = running || !canRun;
@@ -117,8 +121,21 @@ export function EncapsulationTestForm({
   );
 
   const submit = () => {
+    /* 空串一律当「没给」（见 `pruneEmptyExposedValues`）：自定义口的文本 / 图片
+     *  值已经在那里面收好了，这里只补上「数字」口那一批。 */
+    const pruned = pruneEmptyExposedValues(texts);
+    const custom: Record<string, string | number> = {
+      ...(pruned.custom ?? {}),
+    };
+    for (const entry of entries) {
+      const value = numbers[entry.id];
+      if (entry.control === "number" && value !== undefined) {
+        custom[entry.id] = value;
+      }
+    }
     const payload: WorkshopExposedValues = {
-      ...pruneEmptyExposedValues(texts),
+      ...pruned,
+      ...(Object.keys(custom).length > 0 ? { custom } : {}),
       ...(entries.some((entry) => entry.control === "size") ? { size } : {}),
       ...(entries.some((entry) => entry.control === "duration")
         ? { duration }
@@ -160,6 +177,26 @@ export function EncapsulationTestForm({
                 />
                 <span className="text-muted-foreground/70 text-[10px]">秒</span>
               </div>
+            </div>
+          );
+        }
+        /* 自定义「数字」口：普通数值输入（没有「秒」这类单位语义 —— 那由作者在
+         *  工作流那一端决定，这里只按工坊口径给一个数）。 */
+        if (entry.control === "number") {
+          return (
+            <div key={entry.id} className="space-y-1">
+              <FieldLabel
+                label={entry.label}
+                unwired={entry.targetIoKey === null}
+              />
+              <NumberField
+                value={numbers[entry.id] ?? 0}
+                onChange={(value) =>
+                  setNumbers((prev) => ({ ...prev, [entry.id]: value }))
+                }
+                disabled={disabled}
+                className="h-7 w-28"
+              />
             </div>
           );
         }

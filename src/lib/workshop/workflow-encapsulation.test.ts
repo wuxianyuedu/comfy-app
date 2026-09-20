@@ -538,6 +538,73 @@ describe("图片槽位：同名 pin 由线区分，不看名字 / 节点类名",
   });
 });
 
+/* ── 自定义口：作者自己声明的口 ───────────────────────────── */
+
+describe("自定义口：作者声明什么口，工坊就能给它落什么值", () => {
+  /** 该模式生效的契约口清单（含一个文本口与一个数字口）。 */
+  const contractIds = ["prompt", "custom-text-1", "custom-number-2"];
+
+  it("文本自定义口：按 id 给值 → 落到作者连的那一行", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { "custom-text-1": "text" }),
+      mode: "T2I",
+      values: { custom: { "custom-text-1": "水彩风格" } },
+      contractIds,
+    });
+    expect(res.workflowInputs).toContainEqual({
+      nodeId: "6",
+      name: "text",
+      value: "水彩风格",
+    });
+    expect(res.unmatched).toEqual([]);
+  });
+
+  it("数字自定义口下发的是数字（写成字符串会被数值端口判成非法值）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { "custom-number-2": "negative" }),
+      mode: "T2I",
+      values: { custom: { "custom-number-2": 7 } },
+      contractIds,
+    });
+    /* 值原样下发（不经过任何字符串化）：数值端口收到 `"7"` 时会被判成非法值，
+     *  静默回落到工作流图内的默认值（用户看到的就是「填了没生效」）。 */
+    expect(res.workflowInputs).toHaveLength(1);
+    expect(res.workflowInputs[0]?.value).toBe(7);
+    expect(typeof res.workflowInputs[0]?.value).toBe("number");
+  });
+
+  it("没给契约清单（只认内置契约）→ 值落不下去，如实进 unmatched", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { "custom-text-1": "text" }),
+      mode: "T2I",
+      values: { custom: { "custom-text-1": "水彩风格" } },
+    });
+    expect(res.workflowInputs).toEqual([]);
+    expect(res.unmatched).toContain("custom-text-1");
+  });
+
+  it("读写自定义口的值走同一份映射（表单与下发的口径一致）", () => {
+    const written = withExposedValue({}, "custom-text-1", "水彩风格");
+    expect(written.custom?.["custom-text-1"]).toBe("水彩风格");
+    expect(exposedValueOf(written, "custom-text-1")).toBe("水彩风格");
+  });
+
+  it("空串当「没给」；数字口不按假值剪（0 是有效值）", () => {
+    expect(
+      pruneEmptyExposedValues({ custom: { "custom-text-1": "  " } }).custom,
+    ).toBeUndefined();
+    expect(
+      pruneEmptyExposedValues({ custom: { "custom-number-2": 0 } }).custom,
+    ).toEqual({ "custom-number-2": 0 });
+    expect(
+      pruneEmptyExposedValues({ custom: { "custom-text-1": " ok " } }).custom,
+    ).toEqual({ "custom-text-1": "ok" });
+  });
+});
+
 /* ── 时长：单位与候选由落点端口声明 ───────────────────────── */
 
 describe("时长：单位与候选由落点端口声明", () => {

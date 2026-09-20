@@ -8,6 +8,7 @@
  */
 
 import { waitForComfyReady } from "~/lib/comfy/comfy-readiness-client";
+import { asRecord } from "~/lib/is-record";
 import { clampPct } from "~/lib/progress";
 import { comfyImageUrl } from "~/lib/media/media-url";
 import {
@@ -43,8 +44,7 @@ async function postUpload(file: File): Promise<UploadAttempt> {
   } catch {
     d = undefined;
   }
-  const obj =
-    typeof d === "object" && d !== null ? (d as Record<string, unknown>) : null;
+  const obj = asRecord(d);
   const name = typeof obj?.name === "string" ? obj.name : "";
   if (name) return { ok: true, name };
   const errRaw = obj?.error;

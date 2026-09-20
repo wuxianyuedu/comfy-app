@@ -14,6 +14,7 @@ import { useCallback, useRef, useState, type DragEvent } from "react";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
+import { fixed } from "~/lib/number-format";
 import { type api } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
 
@@ -148,7 +149,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setDropErr(null);
       if (file.size > 5 * 1024 * 1024) {
         showFileError(
-          `文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），单次导入上限 5 MB`,
+          `文件过大（${fixed(file.size / 1024 / 1024, 1) ?? "0"} MB），单次导入上限 5 MB`,
         );
         return;
       }

@@ -435,7 +435,16 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
     }
   });
 
-  it("data URL 缺逗号时分隔符兜底（不把整个串当 base64 解）", async () => {
+  it("data URL 缺逗号时判定为失败（不写一个 0 字节的文件冒充产物）", async () => {
+    /* 这条用例此前断言的是「兜底成空串、写一个 0 字节文件、返回非 null 路径」
+     * —— 用例名写着「不把整个串当 base64 解」，实际钉住的却是**另一种**
+     * 静默失败：畸形输入被当成一个「读到了，只是内容为空」的正常产物，
+     * 调用方拿着这个路径当有效本地媒体继续往下走。
+     *
+     * 收口到 `~/lib/media/data-url` 之后，缺逗号是**显式的不合法**
+     *（`parseDataUrl` 给 `null`），这里按「落盘失败一律返回 null」的既有口径
+     * 向上返回 `null` —— 与「HTTP 失败 / 空文件 / 网络抛错」同一档。
+     * 旧的「返回路径」行为会让下游把空文件当图片去送上游。 */
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
       const dest = await saveMediaToLocalTemp(
@@ -443,8 +452,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
         "m",
         "data:image/png;base64",
       );
-      expect(dest).not.toBeNull();
-      expect((await fs.readFile(dest!)).length).toBe(0);
+      expect(dest).toBeNull();
     } finally {
       spy.mockRestore();
     }
