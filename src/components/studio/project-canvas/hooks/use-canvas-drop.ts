@@ -12,7 +12,7 @@
  */
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { XYPosition } from "@xyflow/react";
-import { makeNodeId } from "~/lib/project-canvas/canvas-helpers";
+import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 import { runAsyncAction } from "~/lib/async-action";
 import { importOutputAsInput } from "~/lib/project-canvas/canvas-api";
 import {
@@ -63,24 +63,23 @@ export function useCanvasDrop({
         async () => {
           const name = await importOutputAsInput(url);
           const kind: NodeKind = mediaType === "video" ? "movie" : "picture";
-          const center =
-            position ??
-            screenToFlowPosition({
-              x: window.innerWidth / 2,
-              y: window.innerHeight / 2,
-            });
-          const node: CanvasNodeType = {
-            id: makeNodeId(),
-            type: "canvasNode",
-            position: center,
-            data: {
-              ...defaultData(kind),
-              mediaPath: name,
-              mediaName: displayName,
-              mediaKind: mediaType,
-            },
-          };
-          setNodes((nds) => [...nds, node]);
+          /* 「取落点 → 换算 → 组节点 → 追加」四步走唯一出口
+           *（`~/lib/project-canvas/canvas-helpers` 的 `placeCanvasNode`，
+           * 规范 16 §16.2.4.38）；缺省落点是**视口中心**，
+           * 由出口的 `viewportCenter()` 给。 */
+          setNodes((nds) =>
+            placeCanvasNode({
+              nodes: nds,
+              point: position,
+              flow: { screenToFlowPosition },
+              data: {
+                ...defaultData(kind),
+                mediaPath: name,
+                mediaName: displayName,
+                mediaKind: mediaType,
+              },
+            }),
+          );
           return true;
         },
         {

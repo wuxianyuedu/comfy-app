@@ -310,6 +310,13 @@ const DOMAIN_EXEMPT = new Set([
    * import，进任何子域都会让另一侧反向依赖它 —— 与 `error-message` 同款：
    * 顶层单例。 */
   "src/lib/api-error.ts",
+  /* 「给一条新记录分配 id」的唯一出口（ISSUE #672）：日志 store（`log/`）、
+   * 消息中心、工坊对话与草稿索引（`workshop/`）、剧本解析（`workshop/`）、
+   * 画布节点与连线（`project-canvas/`）、三条上传路由（`app/api/`）、
+   * 提示条（视图层）**都在用它** —— 横跨五个域与两端的路由，且「同一时刻的
+   * 两条会不会撞 id」必须全库同一口径。进任何子域都会让另一个域反向依赖它
+   * —— 与 `browser-io` / `format-bytes` 同款：顶层单例。 */
+  "src/lib/unique-id.ts",
 ]);
 
 /** R13/R14 的扫描:只看 `src/lib` 的顶层条目,不递归。 */

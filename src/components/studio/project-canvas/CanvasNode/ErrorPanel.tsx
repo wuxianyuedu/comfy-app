@@ -15,7 +15,10 @@ import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/browser-io";
 import { Alert } from "~/components/ui/alert";
 import { Disclosure } from "~/components/ui/disclosure";
-import { shouldAutoExpandError, suggestForError } from "./error-suggestions";
+import {
+  adviseOnError,
+  shouldAutoExpandError,
+} from "~/lib/comfyui/error-advice";
 
 interface ErrorPanelProps {
   nodeId: string;
@@ -82,7 +85,7 @@ export function ErrorPanel({
    *  认不出失败形态时返回 null（UI 保留通用的原始错误块，
    *  而不是编造不靠谱的建议）。 */
   const errorSuggestion: string | null = useMemo(
-    () => suggestForError(error),
+    () => adviseOnError(error),
     [error],
   );
 

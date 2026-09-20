@@ -35,7 +35,7 @@ import {
 } from "~/lib/project-canvas/canvas-types";
 import {
   makeFitViewScheduler,
-  makeNodeId,
+  placeCanvasNode,
 } from "~/lib/project-canvas/canvas-helpers";
 import {
   createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
@@ -267,22 +267,18 @@ function CanvasInner({
       const baseNodes = proj.nodes ?? [];
       let nextNodes = baseNodes;
       if (pendingWorkflow) {
-        const center = screenToFlowPosition({
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
-        });
-        const node: CanvasNodeType = {
-          id: makeNodeId(),
-          type: "canvasNode",
-          position: center,
+        /* 落点四步走唯一出口（规范 16 §16.2.4.38）：这里没有落点信息，
+         * 由出口的 `viewportCenter()` 给视口中心。 */
+        nextNodes = placeCanvasNode({
+          nodes: baseNodes,
+          flow: { screenToFlowPosition },
           data: {
             ...defaultData("workflow"),
             workflowId: pendingWorkflow.id,
             workflowName: pendingWorkflow.name,
             workflowTaskType: pendingWorkflow.taskType,
           },
-        };
-        nextNodes = [...baseNodes, node];
+        });
         onConsumePending?.();
       }
       setNodes(nextNodes);
@@ -315,14 +311,14 @@ function CanvasInner({
   const createNode = useCallback(
     (kind: NodeKind) => {
       if (!menu) return;
-      const position = screenToFlowPosition({ x: menu.x, y: menu.y });
-      const node: CanvasNodeType = {
-        id: makeNodeId(),
-        type: "canvasNode",
-        position,
-        data: defaultData(kind),
-      };
-      setNodes((nds) => [...nds, node]);
+      setNodes((nds) =>
+        placeCanvasNode({
+          nodes: nds,
+          point: menu,
+          flow: { screenToFlowPosition },
+          data: defaultData(kind),
+        }),
+      );
       setMenu(null);
     },
     [menu, screenToFlowPosition, setNodes],
@@ -333,14 +329,14 @@ function CanvasInner({
    *  `workflowArdot` 已收进 CanvasNodeType 联合类型，无需强转。 */
   const createTestWorkflowNode = useCallback(() => {
     if (!menu) return;
-    const position = screenToFlowPosition({ x: menu.x, y: menu.y });
-    const node: CanvasNodeType = {
-      id: makeNodeId(),
-      type: "workflowArdot",
-      position,
-      data: {},
-    };
-    setNodes((nds) => [...nds, node]);
+    setNodes((nds) =>
+      placeCanvasNode({
+        nodes: nds,
+        point: menu,
+        flow: { screenToFlowPosition },
+        data: defaultData("workflow"),
+      }),
+    );
     setMenu(null);
   }, [menu, screenToFlowPosition, setNodes]);
 
