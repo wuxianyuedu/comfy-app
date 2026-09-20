@@ -34,22 +34,25 @@ import path from "node:path";
 
 import { redactSecretShaped } from "~/lib/core/redact-secret";
 import { COMFYUI_TRACE_LOG } from "~/lib/log/log-paths";
+import { formatLocalStamp } from "~/lib/time-format";
+import { TRACE_LINE_MAX, clampText } from "~/lib/text-clamp";
 
 /** trace 子组件：同一 trace 文件中用来区分消息来自哪条通道。 */
 export type TraceChannel = "cli" | "ws" | "http" | "history" | "session";
 
-/** 单行内容上限（字符）。JSON 原文按此截断，避免把诊断文件写成数十 MB。 */
-export const TRACE_MAX_LINE = 8000;
+/**
+ * 单行内容上限（字符）。JSON 原文按此截断，避免把诊断文件写成数十 MB。
+ *
+ * 取值来自 `~/lib/text-clamp` 的 {@link TRACE_LINE_MAX}（受**诊断文件体积**
+ * 约束 —— 与「给人读的一行」的 600 是两条不同的预算，见 §16.2.4.48）。
+ * 本常量保留原名，便于既有测试与调用处继续引用。
+ */
+export const TRACE_MAX_LINE = TRACE_LINE_MAX;
 
-/** 本地时间戳（YYYY-MM-DD HH:mm:ss.mmm）——与 runtime 家族日志同口径。 */
+/** 本地时间戳（`YYYY-MM-DD HH:mm:ss.mmm`）—— 与 runtime 家族日志同口径，
+ *  定义收在 `~/lib/time-format` 的 `formatLocalStamp`。 */
 function localTimestamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  const ms = String(d.getMilliseconds()).padStart(3, "0");
-  return (
-    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${ms}`
-  );
+  return formatLocalStamp(new Date(), { millis: true });
 }
 
 /** 把任意值转成可读文本（对齐规范 07 §7.10：Error 取 stack，循环引用兜底）。 */
@@ -73,11 +76,12 @@ export function traceStringify(value: unknown): string {
   return `${value as string | number | boolean | bigint}`;
 }
 
-/** 单行截断（保留头部，尾部标注省略）。 */
+/** 单行截断（保留头部，尾注原始长度 —— 诊断通道最想知道「被切了多少」）。 */
 function clampLine(text: string): string {
-  return text.length > TRACE_MAX_LINE
-    ? `${text.slice(0, TRACE_MAX_LINE)}…(truncated, 原始 ${text.length} 字符)`
-    : text;
+  return clampText(text, {
+    maxLength: TRACE_MAX_LINE,
+    annotation: `truncated, 原始 ${text.length} 字符`,
+  });
 }
 
 /**

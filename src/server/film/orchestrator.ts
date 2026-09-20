@@ -30,6 +30,7 @@ import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import type { ProjectType } from "~/lib/workshop/types";
 import { errorMessage, errorText } from "~/lib/error-message";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 export type FilmStatus =
   "PARSING" | "GENERATING" | "COMPOSING" | "DONE" | "FAILED" | "CANCELLED";
@@ -602,7 +603,7 @@ export async function composeFilm(id: string) {
       }
       if (res.code !== 0) {
         throw new Error(
-          `镜头 ${i + 1} 归一化失败：${res.stderr.slice(0, 200)}`,
+          `镜头 ${i + 1} 归一化失败：${clampText(res.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
         );
       }
       await appendFilmLog(id, "info", `镜头 ${i + 1}/${shots.length} 已就绪`);
@@ -629,7 +630,9 @@ export async function composeFilm(id: string) {
       tmpDir,
     );
     if (cres.code !== 0)
-      throw new Error(`拼接失败：${cres.stderr.slice(0, 200)}`);
+      throw new Error(
+        `拼接失败：${clampText(cres.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+      );
 
     const finalPath = path.join(
       cwd,

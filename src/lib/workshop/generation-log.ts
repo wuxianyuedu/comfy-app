@@ -3,6 +3,8 @@
 // 刷新 / 重启就没了。这里定义落盘的统一条目形状与归一化规则（服务端追加与
 // 读取共用，纯函数可直接单测）；文件布局见 log-paths.ts 的 WORKSHOP_LOG_DIR。
 
+import { formatDate } from "~/lib/time-format";
+
 /** 产生执行日志的工坊环节。 */
 export const GENERATION_LOG_STAGES = [
   "character",
@@ -91,8 +93,7 @@ export function parseGenerationLogStage(v: unknown): GenerationLogStage | null {
 
 /** 按天的日志文件名（自然轮转：跨天写新文件，读取按文件名倒序回溯）。 */
 export function generationLogFileName(day: Date): string {
-  const y = day.getFullYear();
-  const m = String(day.getMonth() + 1).padStart(2, "0");
-  const d = String(day.getDate()).padStart(2, "0");
-  return `generation-${y}-${m}-${d}.log`;
+  /* 日期口径走 `~/lib/time-format` 的 `formatDate`（此前与历史日期桶、
+   * 消息中心各拼一遍，且都恰好用半角连字符 —— 那是同一件事的三种写法）。 */
+  return `generation-${formatDate(day)}.log`;
 }

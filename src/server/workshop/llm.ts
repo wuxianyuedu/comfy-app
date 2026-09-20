@@ -7,6 +7,7 @@ import type { LLMMessage } from "~/lib/llm/types";
 import { llmConfig } from "~/server/db/schema";
 import { workshopDb } from "./db";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 export interface WorkshopLLMConfig {
   baseUrl: string;
@@ -96,7 +97,7 @@ export async function completeWorkshopLLM(
         ? "（API Key 无效或未授权）"
         : "";
     throw new Error(
-      `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${detail.slice(0, 200)}` : ""}`,
+      `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
     );
   }
   const json = (await res.json()) as {

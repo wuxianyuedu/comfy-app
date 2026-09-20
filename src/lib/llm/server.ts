@@ -7,6 +7,7 @@ import {
   remoteModelRepository,
 } from "~/lib/core/repository";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 import {
   resolveTaskTemperature,
   splitExtraModels,
@@ -249,7 +250,9 @@ async function upstreamChat(
       res.status === 401 || res.status === 403
         ? "（API Key 无效或未授权，请检查后重试）"
         : "";
-    const snippet = detail.trim() ? `：${detail.slice(0, 200)}` : "";
+    const snippet = detail.trim()
+      ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`
+      : "";
     throw new Error(`LLM 请求失败 (${res.status})${hint}${snippet}`);
   }
   return res;

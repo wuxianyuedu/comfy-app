@@ -6,7 +6,7 @@
  * 生产方，本组件不 import 逻辑/网络（规范 17 第③层视图）。
  */
 
-import { formatClock } from "~/lib/time-format";
+import { formatClock, formatDate } from "~/lib/time-format";
 
 import { useMemo } from "react";
 import { zClass } from "~/lib/shell/overlay-z";
@@ -48,10 +48,9 @@ const KIND_META: Record<
 };
 
 function fmtTime(t: number): string {
-  const d = new Date(t);
-  /* 消息中心带完整日期（消息可能跨天阅读）。 */
-  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return `${date} ${formatClock(t)}`;
+  /* 消息中心带完整日期（消息可能跨天阅读）—— 日期口径走 `~/lib/time-format`
+   * 的 `formatDate`（此前这里与历史日期桶、按天文件名各拼一遍）。 */
+  return `${formatDate(t)} ${formatClock(t)}`;
 }
 
 export function MessageCenterPanel() {

@@ -341,7 +341,15 @@ const VIEW_SCAN_DIRS = ["src/components", "src/app"];
  * 逐条列在这里，与 `HOOKS_ALSO_SCANNED` / `UI_ALSO_SCANNED` 同一手法：
  * 让「哪条判据扫哪一层」这件事写在明处。
  */
-const LIB_SCANNED_RULES = new Set(["P39", "P40", "P41", "P42"]);
+const LIB_SCANNED_RULES = new Set([
+  "P39",
+  "P40",
+  "P41",
+  "P42",
+  "P44",
+  "P45",
+  "P46",
+]);
 
 const SCAN_DIRS = [
   "src/components",
@@ -438,6 +446,9 @@ const HOOKS_ALSO_SCANNED = new Set([
   "P41",
   "P42",
   "P43",
+  "P44",
+  "P45",
+  "P46",
 ]);
 
 /**
@@ -483,6 +494,30 @@ const EXEMPT_FILES = {
       reason:
         "出口自身的实现（`copyFailureText` 的定义处 —— 那句话本来就在这里；" +
         "本判据数的是**别处**又手写了一份）。",
+    },
+  ],
+  P44: [
+    {
+      re: /^src\/lib\/text-clamp\.ts$/,
+      reason:
+        "出口自身的实现（`clampText` 的定义处 —— 它当然要 `slice`；" +
+        "本判据数的是**别处**又切了一刀）。",
+    },
+  ],
+  P45: [
+    {
+      re: /^src\/lib\/retry-policy\.ts$/,
+      reason:
+        "出口自身的实现（`backoffDelayMs` 的定义处 —— `2 ** attempt` 就在这里；" +
+        "本判据数的是**别处**又算了一份退避）。",
+    },
+  ],
+  P46: [
+    {
+      re: /^src\/lib\/time-format\.ts$/,
+      reason:
+        "出口自身的实现（`formatDate` 的定义处 —— `getFullYear()` 就在这里；" +
+        "本判据数的是**别处**又拼了一份日期串）。",
     },
   ],
   P42: [
@@ -1776,6 +1811,84 @@ const RULES = {
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/\bcopyFailureText\s*\(/.test(t2)) return 0;
       return (t2.match(/剪贴板不可用/g) || []).length;
+    },
+  },
+
+  /* ── P44「把一段文本按最大长度截断」（硬闸，§16.2.4.48）──────────────────
+   * 全库十余处各写一遍「超长就切一刀」，而**长度上限、截断方向、省略标记**
+   * 三件事各写各的：上限 600 / 2000 / 4000 / 8000 散落，标记有 `…` /
+   * `\n…(truncated)` / `…(truncated, 原始 N 字符)` / **什么都不加**。
+   *
+   * ⚠️ **上半限的判据要取对，否则误报会把判据逼成噪音**：本仓库里
+   * `slice(0, 8)` / `slice(0, 12)` 大量出现在「id / sha 短码」上
+   * （`taskId.slice(0, 12)`、`hash.digest("hex").slice(0, 8)`），那些**不是**
+   * 本条账 —— 短码本来就是完整标识，旁边的 `…` 是显示约定而不是「这段被切了」。
+   * 两条账的分界是**量级**：prose 的预算是「一句话 / 一行」（≥ 24），
+   * 短码是「几个字符」（≤ 16）。判据因此取 **N ≥ 24**。
+   *
+   * 判据：`slice(0, N)` / `substring(0, N)`（N ≥ 24）**且**同一条语句里
+   * 出现省略标记（`…` / `truncated`）—— 两个条件同时成立。
+   * 出口：`~/lib/text-clamp` 的 `clampText`（上限走具名常量，见该模块）。
+   */
+  P44: {
+    label:
+      "视图 / 逻辑 / 服务端里自写文本截断（应使用 ~/lib/text-clamp 的 clampText）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      /* 已用出口的文件跳过（换用出口即自动合规）。 */
+      if (/\bclampText\s*\(/.test(t2)) return 0;
+      return (
+        t2.match(
+          /\.(?:slice|substring)\(0, *(?:2[4-9]|[3-9][0-9]|[0-9]{3,})\)[^;\n]{0,40}(?:…|truncated)/g,
+        ) || []
+      ).length;
+    },
+  },
+
+  /* ── P45「一个异步动作重试几次、退避多久」（硬闸，§16.2.4.49）────────────
+   * 三处各写一份重试策略（WS 重连 / history 轮询 / Ollama 就绪），形状只有
+   * 两种（指数退避 + 上限 / 固定间隔 + 有界次数），但**没有任何一处说明
+   * 为什么这一处用指数、那一处用固定**。
+   *
+   * 判据取**指数退避的算术**这个签名 —— `… * 2 ** …`（含 `Math.pow(2, …)`）
+   * 与本项目的「退避」语义**一一对应**：固定间隔里不出现 `2 **`，而
+   * `2 **` 在本仓库唯一的用途就是退避（没有第二类用法）。
+   * 这条判据**不**数固定间隔的循环（那太宽 —— `for (let i = 0; i < 5; i++)`
+   * 到处都是），固定间隔一侧由具名常量（`retry-policy` 的 `*.baseMs` /
+   * `*.maxAttempts`）在 Code Review 与 import 侧约束。
+   *
+   * 出口：`~/lib/retry-policy` 的 `backoffDelayMs` + 具名策略。
+   */
+  P45: {
+    label:
+      "视图 / 逻辑 / 服务端里自写指数退避算术（应使用 ~/lib/retry-policy 的 backoffDelayMs）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/\bbackoffDelayMs\s*\(/.test(t2)) return 0;
+      return (t2.match(/\* *2 *\*\*|Math\.pow\( *2 *,/g) || []).length;
+    },
+  },
+
+  /* ── P46「把一个日期写成可读格式」的**只写日期**那一档（硬闸，§16.2.4.50）─
+   * `time-format` 早先收了「相对时间」与「时刻」，但「只写日期」那一档
+   * （`YYYY-MM-DD` 在历史日期桶 / 消息中心 / 按天文件名三处各拼一遍；
+   * `MM-DD` 行首前缀又一份）与**本地时间戳**（`YYYY-MM-DD HH:mm:ss` 在 6 处
+   * runtime / 日志模块逐字相同）没有出口。
+   *
+   * 判据取**手拼日期的形态**：「`getFullYear()` 后面紧跟 `}-`」（即
+   * `` `${d.getFullYear()}-…` `` 这个串）。它精确到「正在把年拼进一个日期串」，
+   * 不会命中 `getMonth()` 的其它用法（如 `isSameDay` 的比较）。
+   * 出口：`~/lib/time-format` 的 `formatDate` / `formatShortDate` /
+   * `formatLocalStamp` / `formatCompactStamp`。
+   */
+  P46: {
+    label:
+      "视图 / 逻辑 / 服务端里手拼日期串（应使用 ~/lib/time-format 的 formatDate 家族）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/\bformat(?:Date|ShortDate|LocalStamp|CompactStamp)\s*\(/.test(t2))
+        return 0;
+      return (t2.match(/getFullYear\(\)\}-/g) || []).length;
     },
   },
 };

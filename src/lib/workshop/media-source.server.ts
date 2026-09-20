@@ -9,6 +9,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { isRecord } from "~/lib/is-record";
+import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const GENERATED_DIR = path.join(process.cwd(), "public", "generated");
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -109,7 +110,9 @@ export async function readUpstreamJson(res: Response): Promise<unknown> {
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error(`上游返回非 JSON (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `上游返回非 JSON (${res.status}): ${clampText(text, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+    );
   }
 }
 

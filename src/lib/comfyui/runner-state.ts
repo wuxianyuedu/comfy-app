@@ -18,6 +18,7 @@ import { EventEmitter } from "events";
 import type WebSocket from "ws";
 
 import { taskRepository } from "../core/repository";
+import { HISTORY_READ } from "../retry-policy";
 
 export const CLIENT_ID = process.env.COMFY_CLIENT_ID ?? "comfy-app-web";
 
@@ -27,17 +28,20 @@ export const JOB_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** ComfyUI 先发 `executing:null` / `execution_success`，随后才把结果写进 history。
 
- *  直接读会拿到空，必须轮询几轮。 */
+ *  直接读会拿到空，必须轮询几轮。
 
-export const HISTORY_RETRIES = 12;
+ *  取值走 `~/lib/retry-policy` 的 {@link HISTORY_READ}（**固定间隔 + 有界次数**：
+ *  对端一定就绪、只是慢一拍，指数退避只会让它更晚拿到结果 —— 见 §16.2.4.49）。 */
 
-export const HISTORY_RETRY_DELAY_MS = 250;
+export const HISTORY_RETRIES = HISTORY_READ.maxAttempts;
 
-/** WS 断线重连退避（毫秒），指数增长到上限。 */
+export const HISTORY_RETRY_DELAY_MS = HISTORY_READ.baseMs;
 
-export const RECONNECT_BASE_MS = 1000;
-
-export const RECONNECT_MAX_MS = 15000;
+/* WS 断线重连的退避参数（基数 / 封顶 / `2 ** attempt` 的夹取）**已整体搬到
+ * `~/lib/retry-policy` 的 WS_RECONNECT** —— `executor-ws` 的 `scheduleReconnect`
+ * 直接 `backoffDelayMs({ ...WS_RECONNECT, attempt })`，因此这里不再各留一个
+ * 「转发常量」：那只会让「重试策略有几处定义」这件事又多一处看不出消费方的
+ * 中转（`check-dead-exports` 正是这么抓出来的，见 §16.2.4.49）。 */
 
 /**
 

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useInterval } from "~/components/ui/use-interval";
 import { adviseWithFallback } from "~/lib/comfyui/error-advice";
 import { timeAgo as timeAgoImpl } from "~/lib/time-format";
+import { formatDate } from "~/lib/time-format";
 
 import type { TaskItem } from "./history-types";
 
@@ -95,7 +96,7 @@ export function dateBucket(iso: string): string {
   const task = startOfDay(date).getTime();
   if (task === today) return "今天";
   if (task === today - 86400000) return "昨天";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return formatDate(date);
 }
 
 /** 简单的「看起来在跑」动效：递增到 95% 后封顶；任务结束时归 0。 */
