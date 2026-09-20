@@ -191,13 +191,16 @@ export function latestActiveWorkflowRun(): WorkflowRunMeta | null {
   return latestActive ?? latest;
 }
 
-/** 查找某个工作流最近的一次运行（重开窗口恢复视角用）。 */
+/** 查找某个工作流最近的一次运行（重开窗口恢复视角用）。
+ *  传入 source 时只看该来源的运行（画布节点 / 工坊封装各自独立恢复）。 */
 export function latestRunForWorkflow(
   workflowId: string,
+  source?: WorkflowRunSource,
 ): WorkflowRunMeta | null {
   let found: WorkflowRunMeta | null = null;
   for (const meta of runs.values()) {
     if (meta.workflowId !== workflowId) continue;
+    if (source && meta.source !== source) continue;
     if (!found || meta.startedAt > found.startedAt) found = meta;
   }
   return found;

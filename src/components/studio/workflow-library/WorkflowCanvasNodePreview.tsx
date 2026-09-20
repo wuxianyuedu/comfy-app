@@ -69,6 +69,8 @@ import { useParamWiring } from "./hooks/use-param-wiring";
 import { WorkflowLibraryCanvas } from "./WorkflowLibraryCanvas";
 import { LibraryHostCard } from "./LibraryHostCard";
 import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
+import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 
 type Phase =
   | { kind: "idle" }
@@ -111,6 +113,13 @@ export function WorkflowCanvasNodePreview({
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  /* 画布节点页签的视图模式：
+   * "edit" = 编辑对外参数（参数连线画布，禁止执行生成）
+   * "use"  = 实际使用（简化视图，可生成、可看结果） */
+  const [viewMode, setViewMode] = useState<"edit" | "use">("edit");
+  /* 本页签独立的执行日志入口（按 source="canvas-node" 过滤） */
+  const [logOpen, setLogOpen] = useState(false);
+  const [logTaskId, setLogTaskId] = useState<string | null>(null);
   /* 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    * 上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
@@ -180,7 +189,7 @@ export function WorkflowCanvasNodePreview({
     if (resumedRef.current) return;
     resumedRef.current = true;
     if (phase.kind !== "idle" || activeTaskId) return;
-    const resume = latestRunForWorkflow(workflowId);
+    const resume = latestRunForWorkflow(workflowId, "canvas-node");
     if (resume && (resume.status === "running" || !resume.status)) {
       // 不自动弹全屏日志（避免打断用户）；由用户点「执行日志」查看。
       void watchTask(resume.taskId, {
@@ -235,7 +244,8 @@ export function WorkflowCanvasNodePreview({
       }),
     [missing, workflowIO],
   );
-  const canRun = usable && !running && missing.length === 0;
+  const canRun =
+    usable && !running && missing.length === 0 && viewMode === "use";
   /* 与画布 WorkflowNode 同源的双行结构：inputs 由 DynamicWorkflowForm(compact)
    * 渲染（库内无 React Flow 上下文，不带端点），outputs 单独成段在表单之后。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
@@ -505,110 +515,169 @@ export function WorkflowCanvasNodePreview({
   );
 
   return (
-    /* 容器只做布局：边框/标题/背景由 DetailBody 的页签面板负责（此前在这里
-     * 又包了一层同款边框 + 重复标题，出现「面板套面板」）。卡片宽 380，
-     * 进度/结果/错误行与其对齐。
-     *
-     * 纵向**吃满**父级高度（`h-full min-h-0`）：画布是这里唯一需要撑开的块，
-     * 它得拿到一个真实高度才能铺到面板底边（ISSUE #596）。前面那些进度 / 结果 /
-     * 日志块按内容高度排，剩下的全归画布。 */
     <div className="flex h-full min-h-0 w-full flex-col items-center gap-3">
-      {/* ── 画布视口外框（拖动平移 / 滚轮缩放 / 适应 / 复位）──
-          三列（对外参数 / 宿主卡片 / 对外输出参数）合起来常宽过面板，超出去的
-          部分此前看不到（ISSUE #355：「需要可以拖动整个画布查看其他超出边框的
-          内容」）。状态与手势都在这一层，拖动画布不会让预览主体重渲染。 */}
-      {/* ── 画布：三列各一个 React Flow 节点（ISSUE #529）──
-          拖动平移 / 滚轮缩放 / 适应 / 复位由 React Flow 承担；连线是真正的
-          edge，端点是真正的 <Handle>，「这一行收不收这个口子」收敛到
-          `isValidConnection`（与编辑器画布同一套语义）。
-          三列（对外参数 / 宿主卡片 / 对外输出参数）合起来常宽过面板，
-          超出边框的部分靠拖动平移看全。 */}
-      <WorkflowLibraryCanvas
-        io={workflowIO}
-        paramCards={paramCards}
-        outputCards={outputCards}
-        entries={buildParamEntries(workflowIO ?? null, undefined, {
-          mode: effectiveMode,
-        })}
-        /* 契约口清单：卡片头与「工坊封装」页签同一份措辞（ISSUE #596）。 */
-        contractEntries={contractEntries}
-        canWire={!!effectiveMode && !!onPatchParamMap}
-        selectedEntryId={selectedParamId}
-        selectedOutputId={selectedOutputId}
-        onSelectParam={(id) => {
-          setSelectedParamId(id);
-          if (id) setSelectedOutputId(null);
-        }}
-        onSelectOutput={(id) => {
-          setSelectedOutputId(id);
-          if (id) setSelectedParamId(null);
-        }}
-        /* 卡片头的 ↺：尺寸是一张卡（六行形态），一键恢复要把六个子口的线都撤掉
-         * —— 只撤其中一条会让卡片看着「还有线」。其余条目就是它自己那一个键。 */
-        onResetParam={(id) => {
-          /* 尺寸卡头一次撤六行形态：必须**一次算一次落库**（`resetMany`）——
-           *  逐条 `resetToAuto` 会各自从同一份旧值出发，后一次覆盖前一次，
-           *  用户看到的就是「重置清不掉」。 */
-          wiring.resetMany(sizeGroupIds(id));
-        }}
-        onResetOutput={outputWiring.reset}
-        onConnect={
-          effectiveMode && onPatchParamMap ? wiring.connect : undefined
-        }
-        onConnectOutput={
-          effectiveMode && onPatchParamMap ? outputWiring.connect : undefined
-        }
-        /* 删除单条线：点选某条线 → 删除，只断那一条（断开该 entryId / 输出 ioKey
-         *  的映射），不波及同一张卡片上的其它线（尺寸卡是六条形态线）。只读时
-         *  不可删，这里不传。 */
-        onDeleteWire={
-          effectiveMode && onPatchParamMap
-            ? (namespace, entryId) => {
-                if (namespace === "param") wiring.disconnect(entryId);
-                else outputWiring.disconnect(entryId);
-              }
-            : undefined
-        }
-        host={
-          <LibraryHostCard
-            workflowName={workflowName}
-            statusLabel={statusLabel}
-            running={running}
-            phaseKind={phase.kind}
-            modes={modes}
-            effectiveMode={effectiveMode}
-            taskType={taskType}
-            effectiveModeLabel={effectiveModeLabel}
-            onModeChange={onModeChange}
-            hostRef={hostRef}
-            form={
-              <DynamicWorkflowForm
-                io={workflowIO ?? undefined}
-                values={values}
-                onChange={setValues}
-                showOutputs={false}
-                compact
-                mode={effectiveMode}
-                seedModes={seedModes}
-                /* 被某个对外参数落到的那一行，行尾标出它属于谁 —— 与左侧卡片的
-                 * 端口行互为两端，一眼看出「这个参数到底喂给了哪一行」。 */
-                rowTrailing={(entry) => (
-                  <ParamOwnerTag label={paramCards.ownersByPin[entry.ioKey]} />
-                )}
-                onSeedModeChange={
-                  onSeedModeChange
-                    ? (ioKey: string, mode: string) =>
-                        onSeedModeChange(ioKey, mode)
-                    : undefined
+      {/* ── 视图模式切换：编辑对外参数 / 实际使用 ── */}
+      <div className="flex w-full items-center justify-between px-1">
+        <div className="border-border bg-subtle flex rounded-lg border p-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode("edit")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              viewMode === "edit"
+                ? "bg-panel text-ink shadow-sm"
+                : "text-ink-faint hover:text-ink"
+            }`}
+          >
+            编辑对外参数
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode("use")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              viewMode === "use"
+                ? "bg-panel text-ink shadow-sm"
+                : "text-ink-faint hover:text-ink"
+            }`}
+          >
+            实际使用
+          </Button>
+        </div>
+        {/* 本页签独立的执行日志入口（按 source="canvas-node" 过滤） */}
+        <WorkflowRunLogButton
+          workflowId={workflowId}
+          taskId={logTaskId}
+          source="canvas-node"
+          alwaysVisible
+          onOpen={() => setLogOpen(true)}
+        />
+      </div>
+
+      {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
+      {viewMode === "edit" && (
+        <WorkflowLibraryCanvas
+          io={workflowIO}
+          paramCards={paramCards}
+          outputCards={outputCards}
+          entries={buildParamEntries(workflowIO ?? null, undefined, {
+            mode: effectiveMode,
+          })}
+          contractEntries={contractEntries}
+          canWire={!!effectiveMode && !!onPatchParamMap}
+          selectedEntryId={selectedParamId}
+          selectedOutputId={selectedOutputId}
+          onSelectParam={(id) => {
+            setSelectedParamId(id);
+            if (id) setSelectedOutputId(null);
+          }}
+          onSelectOutput={(id) => {
+            setSelectedOutputId(id);
+            if (id) setSelectedParamId(null);
+          }}
+          onResetParam={(id) => {
+            wiring.resetMany(sizeGroupIds(id));
+          }}
+          onResetOutput={outputWiring.reset}
+          onConnect={
+            effectiveMode && onPatchParamMap ? wiring.connect : undefined
+          }
+          onConnectOutput={
+            effectiveMode && onPatchParamMap ? outputWiring.connect : undefined
+          }
+          onDeleteWire={
+            effectiveMode && onPatchParamMap
+              ? (namespace, entryId) => {
+                  if (namespace === "param") wiring.disconnect(entryId);
+                  else outputWiring.disconnect(entryId);
                 }
-                workflowId={workflowId}
-                onUploadProgress={(message) => setUploadNotice(message)}
-                onUploadError={(message) => setUploadNotice(message)}
-              />
-            }
-            outputs={outputs}
-            inputs={inputs}
-            actions={
+              : undefined
+          }
+          host={
+            <LibraryHostCard
+              workflowName={workflowName}
+              statusLabel={statusLabel}
+              running={running}
+              phaseKind={phase.kind}
+              modes={modes}
+              effectiveMode={effectiveMode}
+              taskType={taskType}
+              effectiveModeLabel={effectiveModeLabel}
+              onModeChange={onModeChange}
+              hostRef={hostRef}
+              form={
+                <DynamicWorkflowForm
+                  io={workflowIO ?? undefined}
+                  values={values}
+                  onChange={setValues}
+                  showOutputs={false}
+                  compact
+                  mode={effectiveMode}
+                  seedModes={seedModes}
+                  rowTrailing={(entry) => (
+                    <ParamOwnerTag
+                      label={paramCards.ownersByPin[entry.ioKey]}
+                    />
+                  )}
+                  onSeedModeChange={
+                    onSeedModeChange
+                      ? (ioKey: string, mode: string) =>
+                          onSeedModeChange(ioKey, mode)
+                      : undefined
+                  }
+                  workflowId={workflowId}
+                  onUploadProgress={(message) => setUploadNotice(message)}
+                  onUploadError={(message) => setUploadNotice(message)}
+                />
+              }
+              outputs={outputs}
+              inputs={inputs}
+              actions={
+                <WorkflowNodeActionButton
+                  label="▶ 用此工作流生成"
+                  disabled={true}
+                  onClick={run}
+                  title="切换到「实际使用」模式后可执行"
+                />
+              }
+            />
+          }
+        />
+      )}
+
+      {/* ── use 模式：简化视图（表单 + 生成按钮 + 结果） ── */}
+      {viewMode === "use" && (
+        <div className="flex w-full max-w-[480px] flex-col gap-3">
+          <div className="border-border bg-panel rounded-xl border p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-ink text-sm font-semibold">
+                {workflowName}
+              </span>
+              <span className="text-ink-faint text-xs">
+                {effectiveModeLabel}
+              </span>
+            </div>
+            <DynamicWorkflowForm
+              io={workflowIO ?? undefined}
+              values={values}
+              onChange={setValues}
+              showOutputs={false}
+              compact
+              mode={effectiveMode}
+              seedModes={seedModes}
+              onSeedModeChange={
+                onSeedModeChange
+                  ? (ioKey: string, mode: string) =>
+                      onSeedModeChange(ioKey, mode)
+                  : undefined
+              }
+              workflowId={workflowId}
+              onUploadProgress={(message) => setUploadNotice(message)}
+              onUploadError={(message) => setUploadNotice(message)}
+            />
+            <div className="mt-4">
               <WorkflowNodeActionButton
                 label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
                 disabled={!canRun}
@@ -619,12 +688,12 @@ export function WorkflowCanvasNodePreview({
                     : undefined
                 }
               />
-            }
-          />
-        }
-      />
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* 进度条（running 时） */}
+      {/* ── 进度条（两种模式通用，running 时显示） ── */}
       {phase.kind === "running" && (
         <div className="w-[380px]" aria-live="polite">
           <ProgressBar
@@ -642,7 +711,7 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
 
-      {/* 运行结果图 */}
+      {/* ── 运行结果图（use 模式或刚跑完时展示） ── */}
       {resultUrl && (
         <div className="w-[380px]">
           <p className="text-ink-faint mb-1 text-[11px]">运行结果</p>
@@ -654,15 +723,14 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
 
-      {/* 错误 / 必填提示 */}
+      {/* ── 错误提示 ── */}
       {phase.kind === "failed" && (
         <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-300">
           {phase.message}
         </div>
       )}
 
-      {/* 素材上传被「ComfyUI 未就绪」挡住时的出口：说明当前在等什么，
-          并给出去设置页手动启动的路（自动启动失败 / 手动关闭过才有这个必要）。 */}
+      {/* ── 素材上传提示 ── */}
       {uploadNotice && (
         <div
           className="w-[380px] rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
@@ -683,15 +751,21 @@ export function WorkflowCanvasNodePreview({
           </div>
         </div>
       )}
-      {!running && missingLabels.length > 0 && (
+      {!running && missingLabels.length > 0 && viewMode === "use" && (
         <p className="w-[380px] text-[11px] text-amber-700 dark:text-amber-300/80">
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}
 
-      {/* 执行日志入口不在这里 —— 它是**详情头部**的一扇固定门（DetailHeader）：
-          两个页签共用同一份运行登记表与同一个全屏弹窗，位置不再随页签 / 有没有
-          跑过而变化（ISSUE #611 与「入口位置固定」）。 */}
+      {/* ── 本页签独立的执行日志弹窗 ── */}
+      <WorkflowRunLogModal
+        open={logOpen}
+        workflowId={workflowId}
+        source="canvas-node"
+        viewTaskId={logTaskId}
+        onViewTaskIdChange={setLogTaskId}
+        onClose={() => setLogOpen(false)}
+      />
     </div>
   );
 }
