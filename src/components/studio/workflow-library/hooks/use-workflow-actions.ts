@@ -22,8 +22,16 @@ export interface UseWorkflowActionsArgs {
   setDeleting: (v: boolean) => void;
   setPendingDelete: (v: { id: string; name: string } | null) => void;
   setActionError: (v: string) => void;
-  setBundleBusy: (v: string | null) => void;
-  setResyncBusy: (v: string | null) => void;
+  /** 「哪一条在下载 / 在同步」的执行态由 `~/components/ui/use-item-action` 给
+   *  （规范 16 §16.2.4.40）—— 这里只拿它的 `run`（忙标记 + 同步判重入一次给全）。 */
+  runBundle: <T>(
+    id: string,
+    action: () => Promise<T>,
+  ) => Promise<T | undefined>;
+  runResync: <T>(
+    id: string,
+    action: () => Promise<T>,
+  ) => Promise<T | undefined>;
   setPendingLoading: (
     fn: (s: Record<string, boolean>) => Record<string, boolean>,
   ) => void;
@@ -41,8 +49,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     setDeleting,
     setPendingDelete,
     setActionError,
-    setBundleBusy,
-    setResyncBusy,
+    runBundle,
+    runResync,
     setPendingLoading,
     setWorkflows,
     load,
@@ -170,61 +178,63 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
    *  （ComfyUI 的工作流 / RAW 格式，与导入时逐字一致）。 */
   const downloadJson = useCallback(
     async (id: string, name: string) => {
-      setBundleBusy(id);
-      /* 三条「没做成」各有各的说辞（没取到模板 / 没有可下载内容 / 请求失败），
-       * 所以**不**用出口的 `successText` —— 出口管的是「结果怎么变成反馈」，
-       * 分支文案仍归调用处。抛错那一支仍走出口（`errorMessage` 兜底）。 */
-      await runAsyncAction(
-        async () => {
-          const d = await utils.workflow.detail.fetch({ id });
-          const tpl = d?.template;
-          if (!tpl) {
-            toast.error("获取工作流失败", "未知错误");
+      await runBundle(id, async () => {
+        /* 三条「没做成」各有各的说辞（没取到模板 / 没有可下载内容 / 请求失败），
+         * 所以**不**用出口的 `successText` —— 出口管的是「结果怎么变成反馈」，
+         * 分支文案仍归调用处。抛错那一支仍走出口（`errorMessage` 兜底）。 */
+        await runAsyncAction(
+          async () => {
+            const d = await utils.workflow.detail.fetch({ id });
+            const tpl = d?.template;
+            if (!tpl) {
+              toast.error("获取工作流失败", "未知错误");
+              return true;
+            }
+            const payload = tpl.rawJson ?? null;
+            if (payload == null) {
+              toast.error("下载失败", "该工作流没有可下载的内容");
+              return true;
+            }
+            saveJsonFile(payload, `${tpl.name ?? name}.json`);
+            toast.success("已下载工作流", `${tpl.name ?? name}.json`);
             return true;
-          }
-          const payload = tpl.rawJson ?? null;
-          if (payload == null) {
-            toast.error("下载失败", "该工作流没有可下载的内容");
-            return true;
-          }
-          saveJsonFile(payload, `${tpl.name ?? name}.json`);
-          toast.success("已下载工作流", `${tpl.name ?? name}.json`);
-          return true;
-        },
-        { report, failureText: "下载失败" },
-      );
-      setBundleBusy(null);
+          },
+          { report, failureText: "下载失败" },
+        );
+        /* 忙标记由 `useItemAction` 的 `finally` 清（收口前这里是手写的
+         * `setBundleBusy(null)`，漏一处就留下一个永不解除的忙标记）。 */
+      });
     },
-    [toast, setBundleBusy, utils, report],
+    [toast, runBundle, utils, report],
   );
 
   /** 重新导入本地工作流的源文件并刷新。 */
   const resyncWorkflow = useCallback(
     async (id: string, name: string) => {
-      setResyncBusy(id);
-      /* 三个结果分支各有各的说辞（磁盘没了 / 没变 / 已同步）——
-       * 那是本动作的域判据，留在调用处；抛错那一支走出口。 */
-      await runAsyncAction(
-        async () => {
-          const d = await resyncMut.mutateAsync({ id });
-          if (d?.missing) {
-            toast.error(
-              "同步失败",
-              "磁盘文件已不存在，无法同步（请检查路径或重新载入）",
-            );
-          } else if (d?.unchanged) {
-            toast.info("磁盘文件未变化", name);
-          } else if (d?.updated) {
-            toast.success("已同步磁盘内容", name);
-            await load();
-          }
-          return true;
-        },
-        { report, failureText: "同步请求失败" },
-      );
-      setResyncBusy(null);
+      await runResync(id, async () => {
+        /* 三个结果分支各有各的说辞（磁盘没了 / 没变 / 已同步）——
+         * 那是本动作的域判据，留在调用处；抛错那一支走出口。 */
+        await runAsyncAction(
+          async () => {
+            const d = await resyncMut.mutateAsync({ id });
+            if (d?.missing) {
+              toast.error(
+                "同步失败",
+                "磁盘文件已不存在，无法同步（请检查路径或重新载入）",
+              );
+            } else if (d?.unchanged) {
+              toast.info("磁盘文件未变化", name);
+            } else if (d?.updated) {
+              toast.success("已同步磁盘内容", name);
+              await load();
+            }
+            return true;
+          },
+          { report, failureText: "同步请求失败" },
+        );
+      });
     },
-    [toast, load, setResyncBusy, resyncMut, report],
+    [toast, load, runResync, resyncMut, report],
   );
 
   /** 把磁盘上发现的一个文件经单文件导入

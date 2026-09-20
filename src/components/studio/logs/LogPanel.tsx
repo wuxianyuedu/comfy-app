@@ -47,6 +47,7 @@ import { LOG_PANEL_POPUP_Z_CLASS } from "./log-panel-layers";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
+import { useElementBox } from "~/components/ui/use-element-box";
 import { FILTER_SELECTED_STYLES, selectionInsideLogs } from "./log-row-style";
 import { LogRow } from "./LogRow";
 import { displayValue } from "~/lib/display-value";
@@ -360,7 +361,17 @@ export function LogPanel() {
    * ref 还是 null 的时候，之后再也没有第二次，虚拟化于是静默退化成「整页渲染」
    *（jsdom 里两条分支都渲染全部行，肉眼看不出来；只有量 DOM 节点数才发现）。
    * 依赖「元素出现了没有」而不是「面板开了没有」，量测才与挂载方式无关。 */
-  const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null);
+  /* 视口量测收在 `~/components/ui/use-element-box`（规范 16 §16.2.4.41）：
+   * 此前是本文件自持的 `ResizeObserver` + 手写等值判断 —— 与
+   * `WorkflowLibraryCanvas` 的底图量测各写一遍。
+   *
+   * ⚠️ **量测必须晚于元素挂载**：改成弹窗基元（`ui/dialog`）之后，面板内容经
+   * Portal 渲染、挂载比本组件晚一个提交 —— 按 `[isOpen]` 触发的话，那次量测
+   * 会发生在 ref 还是 `null` 的时候，之后再也没有第二次，虚拟化于是静默退化成
+   * 「整页渲染」（jsdom 里两条分支都渲染全部行，肉眼看不出来；只有量 DOM
+   * 节点数才发现）。出口的**回调 ref** 恰好把「元素出现了没有」作为触发点，
+   * 量测因此与挂载方式无关。 */
+  const [bodyBoxRef, bodyBox] = useElementBox();
   /* 贴底基线（= 用户已看过的最新一条在**页面里的序号**）。
    *
    * 面板贴着底看时只滚到这里：新日志在下面累积，不再每两秒把内容整体上移一次
@@ -396,7 +407,12 @@ export function LogPanel() {
    * `setState` 在 React 18 的批处理下只重渲染**列表容器**（行本身是 memo 的），
    * 实测远低于一帧预算。
    */
-  const [viewport, setViewport] = useState({ height: 0, width: 0 });
+  /* 视口尺寸（高度 + 可视宽度）由 `useElementBox` 给；这里只保留派生的
+   * 便捷视图，未量到时保持与收口前一致的 0（下面的窗口逻辑据此走整页渲染）。 */
+  const viewport = {
+    height: bodyBox?.clientHeight ?? 0,
+    width: bodyBox?.clientWidth ?? 0,
+  };
   const [scrollTop, setScrollTop] = useState(0);
 
   /* 分页在**过滤后的时间线**上做（时间倒序，第 1 页最新）。页码越界时钳回，
@@ -558,28 +574,6 @@ export function LogPanel() {
    * 用 ResizeObserver 而不是 window 的 resize：加宽按钮改的是元素宽度，
    * 窗口尺寸一点没变。观测不到（jsdom / 老浏览器）时不额外退化——量出来恒为
    * 0 已经会让下面的窗口逻辑走「整页渲染」那一支，行为与改动前一致。 */
-  useEffect(() => {
-    const el = bodyEl;
-    if (!el) return;
-    /* 首次量测与后续量测走**同一条**路径：都从 `ResizeObserver` 的回调外部
-       调一次 `measure`。`measure` 里的 setState 只在取值真的变了才落状态
-       （见它自己的等值判断），因此这里不会「每次 effect 都触发一次渲染」。 */
-    const measure = () => {
-      const next = {
-        height: el.clientHeight,
-        width: el.clientWidth,
-      };
-      setViewport((prev) =>
-        prev.height === next.height && prev.width === next.width ? prev : next,
-      );
-      setScrollTop(el.scrollTop);
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [bodyEl]);
 
   const onScroll = () => {
     const el = bodyRef.current;
@@ -769,7 +763,12 @@ export function LogPanel() {
           <div
             ref={(el) => {
               bodyRef.current = el;
-              setBodyEl(el);
+              bodyBoxRef(el);
+              /* 量到之后把「滚动位置」一并同步一次：`useElementBox` 的观察者
+               * 回调里 `scrollTop` 可能已经变了（面板加宽会让换行数变化、
+               * 进而改变滚动范围），而出口只管盒子、不管滚动。这里在**回调
+               * ref**（外部系统通知）里同步，而不是在 effect 体里 setState。 */
+              setScrollTop(el?.scrollTop ?? 0);
             }}
             onScroll={onScroll}
             className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
