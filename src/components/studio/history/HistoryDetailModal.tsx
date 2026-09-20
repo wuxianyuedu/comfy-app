@@ -9,11 +9,12 @@ import {
 } from "~/lib/history-detail-actions";
 
 import {
-  deriveGenValues,
-  deriveParamRows,
-  derivePrompt,
+  deriveTaskOrigin,
+  deriveWorkflowParams,
+  deriveWorkshopParams,
   kvValueText,
 } from "./history-detail-derive";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
 import { Button } from "~/components/ui/button";
@@ -26,14 +27,20 @@ interface HistoryDetailModalProps {
   detailId: string | null;
   detail: TaskDetail | null;
   detailLoading: boolean;
-  /** 工作流默认值兜底（来自 /api/tasks/[id] 的 workflowHints 子字段）。 */
-  workflowHints: unknown;
+  /** 本任务所用工作流的 IO 定义：参数可读名从它的 `label` 查（任务行里只存了
+   *  pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
+  workflowIO: WorkflowIOMap;
   onClose: () => void;
 }
 
 /**
  * 历史任务详情弹窗 —— 纯展示层（规范 17 §17.2 第③层）。
- * 图片网格 + 提示词 + 生成参数卡 + 参数表 + 打开目录 / 下载工作流。
+ * 图片网格 + 工坊参数（工坊发起时）+ 工作流参数 + 打开目录 / 下载工作流。
+ *
+ * **不再有「独立」的提示词块与「生成参数」卡**：它们显示的内容与参数表重复
+ * （同一句提示词出现两次），而卡片只认一小撮硬编码键名，种子这类关键参数
+ * 反而从参数表里被过滤掉。现在一切参数都按来源分块，名字取工作流 IO 的作者
+ * 标签（`workflowIO`）。
  *
  * 数据派生在 history-detail-derive.ts，动作在 hooks/use-history-detail-actions.ts，
  * 网络在 lib/history-detail-actions.ts；本文件只做排版与事件上抛。
@@ -42,7 +49,7 @@ export function HistoryDetailModal({
   detailId,
   detail,
   detailLoading,
-  workflowHints,
+  workflowIO,
   onClose,
 }: HistoryDetailModalProps) {
   const actions = useHistoryDetailActions({
@@ -53,13 +60,16 @@ export function HistoryDetailModal({
   if (!detailId) return null;
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
   const current = detail;
-  const { showPrompt, prompt, negativePrompt } = derivePrompt(current);
-  const genValues = deriveGenValues(current, workflowHints);
+  /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
+   * 发起的任务只有「工作流参数」—— 判据见 `deriveTaskOrigin`。 */
+  const origin = deriveTaskOrigin(current);
+  const workshopParams =
+    origin === "workshop" ? deriveWorkshopParams(current) : [];
   const {
     rows: paramRows,
     topLevelEntries,
     hasAny: hasParams,
-  } = deriveParamRows(current);
+  } = deriveWorkflowParams(current, workflowIO);
   const firstImage = Array.isArray(current?.images)
     ? current.images[0]
     : undefined;
@@ -241,61 +251,10 @@ export function HistoryDetailModal({
                   <p className="text-ink-muted text-sm">该任务没有生成图像。</p>
                 )}
 
-                {showPrompt && (
-                  <div>
-                    <p className="text-ink-faint mb-1 text-xs font-semibold">
-                      正向提示词
-                    </p>
-                    <p className="text-ink-strong text-sm break-words whitespace-pre-wrap">
-                      {prompt}
-                    </p>
-                  </div>
-                )}
-                {negativePrompt && (
-                  <div>
-                    <p className="text-ink-faint mb-1 text-xs font-semibold">
-                      反向提示词
-                    </p>
-                    <p className="text-ink-faint text-sm break-words whitespace-pre-wrap">
-                      {negativePrompt}
-                    </p>
-                  </div>
-                )}
-
-                {genValues.length === 0 ? (
-                  /* 空态说明：让用户一眼知道是工作流没暴露参数，不是系统 bug。 */
-                  <div className="border-border bg-card text-ink-muted rounded-lg border border-dashed px-3 py-2.5 text-xs">
-                    本任务所用工作流未暴露常见生成参数（seed/steps/cfg
-                    等在节点硬编码默认值中）。
-                    如需查看完整参数，请展开下方的「原始 JSON」。
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-ink-faint mb-1 text-xs font-semibold">
-                      生成参数
-                    </p>
-                    <KeyValueRows
-                      columns={3}
-                      className="border-border-subtle bg-card gap-y-1.5 rounded-lg border p-3"
-                      /* 这一块刻意用「标签在值左侧」的行内形态（不是
-                         `stacked` 的标签在上）：参数名短、值长，并排更省高度。 */
-                      itemClassName="flex-row items-baseline gap-2"
-                      keyClassName="text-ink-muted shrink-0 text-[11px]"
-                      valueClassName="text-ink-bright truncate font-mono text-[12px] font-normal"
-                      items={genValues.map((item) => ({
-                        key: item.label,
-                        value: kvValueText(item.value),
-                        hint: item.hint,
-                      }))}
-                    />
-                    {genValues.some((item) => item.hint) && (
-                      <p className="text-ink-muted mt-1 text-[10px] leading-relaxed">
-                        注：种子字段在 control_after_generate=randomize
-                        时为默认值，非本次执行的真实种子。
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* 提示词与「生成参数」（种子 / 步数 / CFG）都走下面的参数块：
+                    提示词本来就是工作流的 IO 参数（工坊发起时是「工坊参数」），
+                    种子这类也一样 —— 单独再摆一份只会与参数表重复，而那份卡片
+                    还会把种子从参数表里过滤掉（用户实测：「参数乱糟糟的」）。 */}
 
                 {current.error && (
                   <div className="rounded-lg bg-red-500/10 p-2.5 text-xs text-red-700 dark:text-red-300">
@@ -303,10 +262,32 @@ export function HistoryDetailModal({
                   </div>
                 )}
 
+                {/* 工坊参数：工坊对外值（提示词 / 反向 / 首尾帧 / 帧数）单独
+                    摆一块 —— 它们不是工作流的 IO 端口，混在同一张表里会让
+                    「哪些是工坊给的、哪些是工作流收的」分不清。 */}
+                {workshopParams.length > 0 && (
+                  <div>
+                    <p className="text-ink-faint mb-1 text-xs font-semibold">
+                      工坊参数
+                    </p>
+                    <KeyValueRows
+                      layout="table"
+                      className="mb-2"
+                      keyClassName="text-ink-muted"
+                      items={workshopParams.map((row) => ({
+                        id: row.id,
+                        key: row.label,
+                        value: kvValueText(row.value),
+                        title: row.label,
+                      }))}
+                    />
+                  </div>
+                )}
+
                 {hasParams && (
                   <div>
                     <p className="text-ink-faint mb-1 text-xs font-semibold">
-                      参数
+                      工作流参数
                     </p>
 
                     {paramRows.length > 0 && (
@@ -314,12 +295,15 @@ export function HistoryDetailModal({
                         layout="table"
                         className="mb-2"
                         keyClassName="text-violet-700 dark:text-violet-300"
-                        items={paramRows.map((input, i) => ({
-                          id:
-                            (input.nodeId ?? "?") + ":" + input.name + ":" + i,
-                          key: input.name,
-                          value: kvValueText(input.value),
-                          title: input.name,
+                        items={paramRows.map((row) => ({
+                          id: row.id,
+                          /* 显示工作流 IO 的作者标签（「宽高比」而不是
+                             `aspect_ratio`）；查不到标签时它自己就是 pin 名。 */
+                          key: row.label,
+                          value: kvValueText(row.value),
+                          /* 悬停补上原始 pin 名：排查问题 / 对 ComfyUI 报错时
+                             用的是程序名，作者改的名字对不上。 */
+                          title: `${row.label}（${row.name}）`,
                         }))}
                       />
                     )}
