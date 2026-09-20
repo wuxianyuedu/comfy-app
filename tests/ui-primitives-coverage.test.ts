@@ -447,6 +447,17 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ["readJsonRecord", "isErrorResponse"],
       3,
     ],
+    /* 这一条不是「收口存量」，是**新增能力**：全库的图此前只能渲染、不能查看
+     *（缩略图盒子只有几百像素宽，细节看不到）。登记在这里的理由与上面那批
+     * 相同 —— 「抽出出口但没人用」等于没做，而 `ViewableImage` 正是那个
+     * 「换个组件名就能接上」的入口。门槛留在现状之下（当前一处：工作流库
+     * 「实际使用」的运行结果图）。 */
+    [
+      "~/components/ui/image-viewer",
+      "tsx",
+      ["ImageViewer", "ViewableImage"],
+      1,
+    ],
   ] as const)(
     "%s 是「同一形态的唯一出口」且已被业务引用",
     (spec, ext, exports, min) => {
