@@ -569,9 +569,17 @@
     // 探测成功瞬间状态文件里可能还是旧文案（下秒才刷新），若直接覆盖会来回跳。
     // 错误态不受此限制：失败提示必须始终能透出，避免被高进度挡住。
     let maxProgress = 0;
+    /* 壳的常驻快照轮（`fallback: true`）里进度恒为 0：那**不是**「退回起点」，
+     * 而是「这一刻还没有权威进度」。可它写盘比编排器更晚（壳在起编排器之后才
+     * 把快照推进到 shell-orchestrating），于是轮询到它时 0.3 会被 0 顶掉 ——
+     * 「启动本地服务」退回「拉起本地服务」、进度条退回 0%，看起来像启动自己
+     * 重来了一遍（ISSUE #784 手验反馈）。因此这一轮只更新文案，进度取两者
+     * 较大值：快照永远不许让进度条倒退。 */
+    let updateFromShellFallback = false;
 
     function updateUI(progress, phase, message, error, elapsed) {
-      const raw = Math.max(0, Math.min(1, progress || 0));
+      let raw = Math.max(0, Math.min(1, progress || 0));
+      if (updateFromShellFallback && !error) raw = Math.max(raw, maxProgress);
       if (raw < maxProgress && !error) return;
       maxProgress = raw;
       const pct = Math.round(raw * 100);
@@ -631,6 +639,31 @@
       return lines.join('\n');
     }
 
+    /** 「这次启动已经失败了」的诊断头。
+     *
+     * 编排器自己写的 `phase: error` 状态只带一句标题（`启动失败，见 log/`），
+     * 明细全在日志里；壳识别出自编排走不通时写的 `shellLaunchFailed` 更是
+     * **只有状态文件里有说明**——面板不把它带出来，用户就只能对着
+     * 「启动失败，见 log/」和一屏还没落地的路径干瞪眼（ISSUE #784 手验反馈）。
+     * 诊断内容一律取壳写下的字段，页面不自己拼路径。 */
+    function failureDiagnostics(status) {
+      const lines = ['（本次启动已经失败，下面就是现场。）'];
+      if (status && status.message) lines.push(status.message);
+      if (status && status.shellLaunchFailed) {
+        lines.push('（自编排没能起来：这一条不依赖日志文件，直接从启动状态里读出来的）');
+      }
+      const diag = (status && status.diagnostics) || null;
+      if (diag) {
+        lines.push('按顺序看这几处（存在哪份就先看哪份）：');
+        if (diag.projectRoot) lines.push(`项目根：${diag.projectRoot}`);
+        lines.push(`  1) 壳侧编排链路（壳自己写的，启动期最先有内容）：${diag.launchLog || '(未知)'}`);
+        lines.push(`  2) 壳日志（release）：${diag.shellLog || '(未知)'}`);
+        lines.push(`  3) 启动状态文件：${diag.statusFile || '(未知)'}`);
+      }
+      lines.push('诊断面板只读日志文件；日志还没落地时，上面这一份说明就是全部现场。');
+      return lines.join('\n');
+    }
+
     async function fetchLog() {
       const data = await invoke('get_launch_log');
       if (typeof data === 'string' && data) {
@@ -638,12 +671,20 @@
         renderLog(data);
       } else {
         logFailCount++;
-        /* 连续拿不到日志要能区分两种成因，否则用户看到空面板不知道该做什么：
+        /* 连续拿不到日志要能区分三种成因，否则用户看到空面板不知道该做什么：
+         *   - **这次启动已经失败**（状态里 error / shellLaunchFailed）→ 先把
+         *     失败说明与诊断出口摆出来，别让人以为「再等等就好」（见
+         *     failureDiagnostics）；
          *   - 日志确实还没产生（启动第一步卡住 / 编排器还没起）→ 给出壳写下的
          *     诊断路径（emptyLogGuidance，判据是壳的报告而不是页面自己猜）；
          *   - 壳版本过旧 / IPC 不可用（连路径都拿不到）→ 提示重编壳。 */
         if (logFailCount === 4 && !logPre.dataset.raw) {
-          renderLog(await emptyLogGuidance());
+          const status = await fetchStatus();
+          renderLog(
+            status && (status.error || status.shellLaunchFailed)
+              ? failureDiagnostics(status)
+              : await emptyLogGuidance(),
+          );
         }
       }
     }
@@ -679,7 +720,17 @@
 
       // 1. 先尝试读取 launcher 写入的进度信息（如果有）
       const status = await fetchStatus();
+      // 启动已经失败时，「再等等」不是出路：把面板打开摆到用户面前。
+      // 壳识别出自编排走不通时写的状态（`shellLaunchFailed`）可能只有一句标题
+      // （`启动失败，见 log/`），明细全在日志文件里；用户此刻唯一能做的动作就是
+      // 看日志（ISSUE #784 手验反馈：失败态下没有任何可见出口）。
+      if (status && (status.error || status.shellLaunchFailed) && !logVisible) {
+        logBtn.click();
+      }
       if (status) {
+        // 这一轮是不是壳的快照（而非编排器的权威进度）——见 updateUI 上的说明。
+        updateFromShellFallback =
+          status.fallback === true || status.phase === 'no-status-file';
         updateUI(status.progress || 0, status.phase, status.message, status.error, status.elapsed);
         // 壳过期提醒（dev-launcher 预检写入 launch-status.json 的 stale_shell）
         // 常驻语义：一旦出现过就保持可见（window.staleShown 锁存），不再随
@@ -698,6 +749,9 @@
           }
         }
       } else {
+        // 读不到状态：下面那份是本页自己按时间推的假进度，同样不许被别的来源
+        // 顶退，所以标记清零。
+        updateFromShellFallback = false;
         // 没有状态文件时显示等待动画，进度按时间平滑增长但不要满 100%
         const secs = Math.floor(ticks / 4);
         const fakeProgress = Math.min(0.9, ticks / 480); // 约 2 分钟到 90%

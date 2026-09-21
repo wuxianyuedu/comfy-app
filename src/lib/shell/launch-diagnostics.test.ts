@@ -80,6 +80,27 @@ describe("启动快照", () => {
     expect(idleFallback().phase).toBe("shell-prepare");
     expect(orchestratingFallback().phase).toBe("shell-orchestrating");
   });
+
+  it("快照自带诊断出口，且指向壳真实写入的那几份文件", () => {
+    // 快照是「编排器写自己的状态之前」磁盘上唯一的一份进度：它不带诊断路径，
+    // 启动页在这段窗口期就只能说「读不到」（ISSUE #784 手验反馈）。因此这里
+    // 钉住「路径来自 launchPaths 而不是页面自己拼」。
+    const paths = launchPaths("/proj");
+    for (const fallback of [
+      idleFallback("shell-prepare", "/proj"),
+      orchestratingFallback("/proj"),
+    ]) {
+      expect(fallback.diagnostics.statusFile).toBe(paths.statusFile);
+    }
+    expect(orchestratingFallback("/proj").diagnostics.launchLog).toBe(
+      paths.shellLaunchLog,
+    );
+    expect(orchestratingFallback("/proj").diagnostics.shellLog).toBe(
+      paths.shellLog,
+    );
+    // 项目根为空时路径仍是可解释的（不是 `undefined` / `null` 拼出来的野字符串）。
+    expect(idleFallback("shell-boot", "").diagnostics.projectRoot).toBe("");
+  });
 });
 
 describe("formatReportItem", () => {

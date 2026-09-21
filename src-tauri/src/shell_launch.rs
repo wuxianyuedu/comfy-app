@@ -260,6 +260,11 @@ pub fn mark_launch_failed(project_root: &str, message: &str) {
     "progress": 0,
     "message": message,
     "error": true,
+    // 「壳自己就没能把编排起起来」的显式标记（与编排器写的失败态区分开）：
+    // 编排器写失败时至少还有它自己的日志；壳这一侧的失败**明细只在这份状态里**，
+    // 启动页面板据此把 message 与诊断出口摆出来，而不是只显示一句
+    // 「启动失败，见 log/」（ISSUE #784 手验反馈：那三个路径的日志一份都没有）。
+    "shellLaunchFailed": true,
     // 诊断出口写清楚：启动页据此告诉用户「先看哪一份」，而不是让他去翻
     // 那两份此刻恰好为空的编排日志（手验反馈的成因）。
     "diagnostics": {
@@ -379,19 +384,44 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 /// 但可以在编排器还没写字时显示「壳在做什么」。
 ///
 /// 进度恒为 `0`：启动页把 `pct >= 100` 画成「✓」，常驻快照标成 100% 会让
-/// 「还在启动」看起来像「已经启动完了」。
-pub fn write_idle_status(project_root: &str, phase: &str, message: &str) {
+/// 「还在启动」看起来像「已经启动完了」。**但启动页也不能因此把进度条往回画**
+/// （那一轮快照到达时进度从 30% 掉回 0%，看起来像启动自己重来了一遍，见
+/// `src-tauri/splash-assets/index.html` 的 `updateFromShellFallback`）。
+///
+/// `report` 是壳接手那一刻的启动报告（`startup_report_json` 的产物），随快照
+/// 一起写进 `diagnostics`：编排器写自己的状态时会把这份快照整份顶掉，所以报告
+/// 必须在**它被顶掉之前**就已经落到磁盘上，启动期才有现场可查。
+pub fn write_idle_status(
+  project_root: &str,
+  phase: &str,
+  message: &str,
+  report: Option<serde_json::Value>,
+) {
   if project_root.is_empty() {
     return;
   }
-  let payload = serde_json::json!({
+  let mut payload = serde_json::json!({
     "phase": phase,
     "progress": 0,
     "message": message,
     "error": false,
     "fallback": true,
+    "diagnostics": {
+      "projectRoot": project_root,
+      "launchLog": launch_log_path(project_root).display().to_string(),
+      "shellLog": std::path::Path::new(project_root)
+        .join("log")
+        .join("shell")
+        .join("shell.log")
+        .display()
+        .to_string(),
+      "statusFile": status_file_path(project_root).display().to_string(),
+    },
     "updatedAt": iso_timestamp(),
   });
+  if let Some(report) = report {
+    payload["diagnostics"]["launchReport"] = report;
+  }
   let path = status_file_path(project_root);
   if let Some(dir) = path.parent() {
     if let Err(e) = std::fs::create_dir_all(dir) {
@@ -443,6 +473,31 @@ pub fn startup_report(project_root: &str, phase_note: &str) -> Vec<(String, Stri
       launch_log_path(project_root).display().to_string(),
     ),
   ]
+}
+
+/// 启动报告的结构化形态（`diagnostics.launchReport`）。
+///
+/// 与逐行写进日志的那份同源（同一次 `startup_report()` 调用），因此不会出现
+/// 「日志里一套、面板里另一套」。存在的理由：编排器把自己的 `launch-status.json`
+/// 顶掉壳的快照之后，**这份报告在状态文件里也就没了**——而它恰恰是「读不到任何
+/// 日志时唯一能看的一屏」（项目根 / 编排脚本在不在 / 依赖门禁 / 端口 / 各日志
+/// 路径）。启动页把它附在日志面板尾部，等于把现场一直留在用户手边。
+pub fn startup_report_json(project_root: &str, phase_note: &str) -> serde_json::Value {
+  let items: serde_json::Map<String, serde_json::Value> = startup_report(project_root, phase_note)
+    .into_iter()
+    .map(|(k, v)| (k, serde_json::Value::String(v)))
+    .collect();
+  serde_json::Value::Object(items)
+}
+
+/// 把启动报告拼成日志面板里的一段文本（每条一行的形态与日志里一致）。
+pub fn startup_report_section(project_root: &str, phase_note: &str) -> String {
+  let mut lines = vec![format!("=== 启动报告：{phase_note} ===")];
+  for (key, value) in startup_report(project_root, phase_note) {
+    let shown = if value.is_empty() { "(空)".to_string() } else { value };
+    lines.push(format!("  {key}: {shown}"));
+  }
+  lines.join("\n")
 }
 
 /// 把启动报告逐行写进编排链路日志（附一条头）。
