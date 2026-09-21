@@ -47,10 +47,15 @@ const OFFLINE: ComfyStatsPayload = {
 /** 让 controller 读到指定数据形态（不改网络层，只换 hook 返回）。
  *  online 显式传入：connecting 态正是「已连上但首个采样未到」，stats 为 null
  *  但 online 为 true，不能由 stats 反推。 */
-function stubStats(online: boolean, stats: ComfyStatsPayload | null) {
+function stubStats(
+  online: boolean,
+  stats: ComfyStatsPayload | null,
+  stale = false,
+) {
   return vi.spyOn(comfyStats, "useComfyStats").mockReturnValue({
     stats,
     online,
+    stale,
     refresh: noopAsync,
   });
 }
