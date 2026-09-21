@@ -81,6 +81,33 @@ async function main() {
     problems.push(`Node 侧实现不可导入：${e.message}`);
   }
 
+  // ── ①′ `.env` 单值解析（ISSUE #821）──
+  //
+  // 「壳必须自己读 .env」这条承诺的判据在**四侧解析同一份 .env 得出同一个值**上：
+  // 任一侧对「带引号 / 行尾注释 / 注释行」的理解不一致，用户写死的端口就只对一部分
+  // 进程可见，剩下的按路径推导去等另一个端口（现象：启动页卡在「等 dev server」）。
+  const envVectors = Array.isArray(fixture.envVectors) ? fixture.envVectors : [];
+  if (envVectors.length < 4) {
+    problems.push(`envVectors 不足（${envVectors.length} < 4）—— 防止误删后检查静默全绿`);
+  }
+  try {
+    const mod = await import(
+      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replace(/\\/g, "/")
+    );
+    for (const v of envVectors) {
+      const got = mod.readEnvFileValue(v.content, "COMFYAPP_PORT");
+      const port =
+        got !== null && /^\d+$/.test(got.trim()) ? Number.parseInt(got.trim(), 10) : null;
+      if (port !== v.port) {
+        problems.push(
+          `Node .env 解析 ${JSON.stringify(v.content)}：${port} ≠ ${v.port}（${v.note}）`
+        );
+      }
+    }
+  } catch (e) {
+    problems.push(`Node 侧 .env 解析不可导入：${e.message}`);
+  }
+
   // ── ② Python 侧真跑（可用时）──
   const pyChecker = "scripts/check-app-port-vectors.py";
   if (!fs.existsSync(path.join(ROOT, pyChecker))) {
@@ -109,6 +136,23 @@ async function main() {
       problems.push("Rust 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
     if (!rust.includes("app-port-vectors.json"))
       problems.push("Rust 侧测试未引用共享向量 app-port-vectors.json（四侧一致失效）");
+  }
+
+  // Rust 侧：`.env` 解析必须与 resolve 出口同源（否则壳又会按路径推导去等另一个端口）
+  if (rust) {
+    for (const needle of [
+      "fn read_dot_env_value",
+      "fn read_env_app_port",
+      "fn resolve_app_port_for_root",
+      "fn port_source_for_root",
+    ]) {
+      if (!rust.includes(needle)) {
+        problems.push(`Rust 侧缺少 ${needle}（.env 优先的端口解析被改回「只做路径推导」？）`);
+      }
+    }
+    if (!rust.includes("envVectors")) {
+      problems.push("Rust 侧测试未引用共享向量的 envVectors（.env 解析四侧一致失效）");
+    }
   }
 
   const ps = readIfExists("scripts/app-port.ps1");

@@ -122,15 +122,15 @@ impl AppState {
   }
 }
 
-/// 默认开发 URL：优先读 COMFYAPP_PORT 环境变量；未注入时按检出路径稳定推导
-/// （与 scripts/app-port.mjs 等多语言实现同算法，见 single_instance 模块注释
-/// 与 launch-and-build.md §1.1/§1.4）。
+/// 默认开发 URL：端口经 `single_instance::resolve_app_port()` 解析
+/// （环境变量 → 检出 `.env` → 路径推导，唯一出口，见 single_instance 模块注释
+/// 与 launch-and-build.md §1.1）。
+///
+/// **不要再在这里自己读 `COMFYAPP_PORT`**：那会漏掉 `.env` —— 壳不经过 Node，
+/// 只看环境变量就会按路径推导出另一个端口并导航过去，dev server 其实在 `.env`
+/// 写的那个端口上（ISSUE #821 的现场：启动页卡在「等 dev server」）。
 fn default_dev_url(host: &str) -> String {
-  let port = match std::env::var("COMFYAPP_PORT") {
-    Ok(raw) if !raw.trim().is_empty() => raw.trim().to_string(),
-    _ => single_instance::derive_app_port().to_string(),
-  };
-  format!("http://{}:{}/workspace", host, port)
+  format!("http://{}:{}/workspace", host, single_instance::resolve_app_port())
 }
 
 /// 从项目根目录读取启动状态文件 run/launch-status.json。

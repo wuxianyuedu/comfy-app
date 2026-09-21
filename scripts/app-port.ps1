@@ -44,13 +44,22 @@ function Get-AppPortFromRoot([string]$RootPath) {
 }
 
 # 读 .env 的 COMFYAPP_PORT；未配置 / 非法 / 文件缺失时返回 $null
+#
+# 形态与另三侧实现严格对齐（Node readEnvFileValue / Python read_env_port /
+# Rust read_dot_env_value，ISSUE #821）：行首允许空白、值去掉成对引号与行尾
+# 注释（`# 固定端口` 是 dotenv 常见写法）、只取第一个匹配行。四侧对同一份
+# .env 必须读出同一个值 —— 否则「同一处配置、两侧端口一致」又是文档承诺。
 function Get-DotEnvAppPort([string]$RootPath) {
   $envFile = Join-Path $RootPath ".env"
   if (-not (Test-Path -LiteralPath $envFile)) { return $null }
   $line = Get-Content -LiteralPath $envFile -Encoding UTF8 -ErrorAction SilentlyContinue |
-    Where-Object { $_ -match "^\s*COMFYAPP_PORT\s*=" } | Select-Object -First 1
+    Where-Object { $_ -notmatch "^\s*#" -and $_ -match "^\s*COMFYAPP_PORT\s*=" } |
+    Select-Object -First 1
   if (-not $line) { return $null }
-  $val = (($line -split "=", 2)[1]).Trim().Trim('"').Trim("'")
+  $val = (($line -split "=", 2)[1] -split "\s+#")[0].Trim()
+  if ($val.Length -ge 2 -and $val[0] -eq $val[-1] -and ($val[0] -eq '"' -or $val[0] -eq "'")) {
+    $val = $val.Substring(1, $val.Length - 2)
+  }
   $port = 0
   if ([int]::TryParse($val, [ref]$port) -and $port -ge 1 -and $port -le 65535) { return $port }
   return $null

@@ -7,11 +7,23 @@
 //! cwd 父目录）：互斥量与焦点事件名都带检出哈希，单实例语义按检出隔离——
 //! 同检出二次启动 → 唤起已有窗口；不同检出 → 各自独立运行。
 //!
-//! 端口推导与本模块同源（同一身份锚点）：与 scripts/app-port.mjs（Node）、
-//! scripts/dev-launcher.ps1（PowerShell）、scripts/start_tauri_launcher.py
-//! （Python）是同一算法的多语言实现，改动必须四处同步——对「绝对路径、
-//! 反斜杠转正斜杠、转小写」的 UTF-8 字节取 FNV-1a 32 位哈希，
-//! 映射到 3200..3999：port = 3200 + (fnv1a32(path) % 800)。
+//! 端口解析与本模块同源（同一身份锚点）：与 scripts/app-port.mjs（Node）、
+//! scripts/app-port.ps1（PowerShell）、scripts/app_port.py（Python）是同一
+//! 算法的多语言实现，改动必须四处同步。取值优先级（launch-and-build.md §1.1）：
+//!   1. 检出 `.env` 显式 `COMFYAPP_PORT`（**壳必须自己读**：它不经过 Node，
+//!      只看 OS 环境变量就会漏掉用户写死在 `.env` 里的端口，见下）；
+//!   2. 按检出绝对路径稳定推导——对「绝对路径、反斜杠转正斜杠、转小写」的
+//!      UTF-8 字节取 FNV-1a 32 位哈希，映射到 3200..3999：
+//!      port = 3200 + (fnv1a32(path) % 800)；
+//!   3. 兜底 3100（仅在路径推导不可用的异常情况）。
+//!
+//! **为什么 `.env` 这一条不能只由 Node 一侧读**（ISSUE #821）：双击链路里壳是
+//! 启动编排的**宿主**，编排器（`dev-launcher.mjs` → `dev.mjs`）继承的是壳注入的
+//! 环境。壳若只认路径推导，用户在 `.env` 里写的固定端口就对壳不可见：编排器按
+//! `.env` 在 3100 起 dev server，壳按路径推导在 3809 死等 —— 两边永远对不上，
+//! 现象是启动页卡在「等 dev server」而服务其实已经在另一个端口上跑着。
+//! 因此壳与 Node 侧读**同一处、同一优先级**，上游显式注入（`COMFYAPP_PORT`
+//! 环境变量）仍然最权威。
 
 use std::sync::OnceLock;
 
@@ -97,6 +109,60 @@ fn identity_root() -> String {
   String::new()
 }
 
+/// 从一段 `.env` 文本里取单个变量的值（本模块需要的**最小**子集，不引 dotenv）。
+///
+/// 形态与另三侧实现严格对齐（Node `readEnvFileValue` / Python `read_env_port` /
+/// PowerShell `Get-DotEnvAppPort`，ISSUE #821）：行首允许空白、值去掉成对引号与
+/// 行尾注释（`# 固定端口` 是 dotenv 的常见写法）、只取第一个匹配行。四侧对同一份
+/// `.env` 必须读出同一个值，否则「同一处配置、两侧端口一致」又是文档承诺而非可
+/// 失败断言（对齐判据在 `tests/app-port-cross-language.test.ts` 的 `.env` 用例组）。
+pub fn read_dot_env_value(content: &str, key: &str) -> Option<String> {
+  for raw_line in content.lines() {
+    let line = raw_line.trim();
+    // 整行注释直接跳过 —— 否则 `# COMFYAPP_PORT=1` 这种「示例行」会被当成配置。
+    if line.starts_with('#') {
+      continue;
+    }
+    // 判据是「行首（允许空白）就是 KEY=」，不是「行里出现过它」：后者会把
+    // `OTHER_COMFYAPP_PORT=` / `#PORT=` 这类行一起收进来。
+    let Some(rest) = line.strip_prefix(key) else {
+      continue;
+    };
+    let Some(after_eq) = rest.trim_start().strip_prefix('=') else {
+      continue;
+    };
+    // 行尾注释：只认「空白 + `#`」，`abc#def` 里的 `#` 是值的一部分。
+    let value = match after_eq.find(" #") {
+      Some(idx) => &after_eq[..idx],
+      None => after_eq,
+    };
+    let value = value.trim();
+    let bytes = value.as_bytes();
+    if bytes.len() >= 2
+      && (bytes[0] == b'"' || bytes[0] == b'\'')
+      && bytes[bytes.len() - 1] == bytes[0]
+    {
+      return Some(value[1..value.len() - 1].to_string());
+    }
+    return Some(value.to_string());
+  }
+  None
+}
+
+/// 读检出 `.env` 的 `COMFYAPP_PORT`（文件缺失 / 未配置 / 非法一律返回 None）。
+///
+/// 「非法」的定义与 Node 侧 `readEnvPort` 一致：必须能解析成整数且落在
+/// 1..=65535。解析不出来时返回 None 而**不是**报错——那与「没写这一行」在语义上
+/// 等价（退回路径推导），而报错会挡死启动。
+pub fn read_env_app_port(project_root: &str) -> Option<u16> {
+  if project_root.trim().is_empty() {
+    return None;
+  }
+  let content = std::fs::read_to_string(std::path::Path::new(project_root).join(".env")).ok()?;
+  let raw = read_dot_env_value(&content, "COMFYAPP_PORT")?;
+  raw.trim().parse::<u16>().ok().filter(|p| *p >= 1)
+}
+
 /// FNV-1a 32 位哈希（字节级与 Node / PowerShell / Python 实现对齐）。
 pub fn fnv1a32(bytes: &[u8]) -> u32 {
   let mut h: u32 = 0x811c_9dc5;
@@ -107,7 +173,7 @@ pub fn fnv1a32(bytes: &[u8]) -> u32 {
   h
 }
 
-/// 按检出路径推导应用端口（缺省端口的兜底，见模块注释的多语言约定）。
+/// 按检出路径推导应用端口（`resolve_app_port` 的第 ② 步，见模块注释的多语言约定）。
 pub fn derive_app_port() -> u16 {
   derive_app_port_for_root(&identity_root())
 }
@@ -123,6 +189,89 @@ pub fn normalize_root_for_port(root: &str) -> String {
 pub fn derive_app_port_for_root(root: &str) -> u16 {
   let normalized = normalize_root_for_port(root);
   3200 + (fnv1a32(normalized.as_bytes()) % 800) as u16
+}
+
+/// 指定检出的应用端口来源。
+///
+/// 只用于日志 / 启动报告：把「哪一侧错了」变成一行可读的归因。数字本身由
+/// `resolve_app_port_for_root` 给，两者必须同源同优先级（这里与它共用一份判据
+/// 顺序，不另写一套）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PortSource {
+  /// 进程环境 `COMFYAPP_PORT`
+  Env,
+  /// 检出 `.env` 的 `COMFYAPP_PORT`
+  DotEnv,
+  /// 按检出绝对路径推导
+  Derived,
+}
+
+impl PortSource {
+  /// 给人看的中文标签（日志 / 启动报告用）。
+  pub fn label(self) -> &'static str {
+    match self {
+      PortSource::Env => "环境变量 COMFYAPP_PORT",
+      PortSource::DotEnv => "检出 .env 的 COMFYAPP_PORT",
+      PortSource::Derived => "按检出路径推导（3200~3999）",
+    }
+  }
+}
+
+/// 指定检出的最终应用端口：`COMFYAPP_PORT` 环境变量 → 检出 `.env` → 路径推导。
+///
+/// **这是端口解析的唯一出口**（ISSUE #821），所有需要「应用端口是多少」的地方都调
+/// 它（`default_dev_url` / 壳给编排器注入 `COMFYAPP_PORT` / 启动报告）。
+/// 各处自己按 `derive_app_port_for_root()` 推导 = 又长出第二份口径，而 `.env` 一旦
+/// 被写死端口，两份口径立刻分叉：编排器按 `.env` 在 3100 起 dev server，壳按路径
+/// 推导在 3809 死等 —— 两边永远对不上（现象是启动页卡在「等 dev server」）。
+///
+/// 优先级与 `scripts/app-port.mjs` 的 `resolveAppPort` 逐条对齐：
+///   ① 进程环境 `COMFYAPP_PORT` —— 上游显式注入最权威（终端 / 脚本传进来的值
+///      不该被 `.env` 覆盖）；非法值按「没给」处理，继续往下走；
+///   ② 检出 `.env` 的 `COMFYAPP_PORT`；
+///   ③ 按检出路径推导。
+///
+/// 「非法」不报错：与「没写这一行」语义等价（退回路径推导），而报错会挡死启动。
+/// 这与另三侧 `resolveAppPort` / `resolve_app_port` / `Get-AppPort` 的口径一致。
+pub fn resolve_app_port_for_root(root: &str) -> u16 {
+  resolve_app_port_with_source_for_root(root).0
+}
+
+/// 与 `resolve_app_port_for_root` 同一次计算同时给出端口与来源 —— 两者分两次
+/// 各算一遍（一次取值、一次判来源）时，任一侧的判据被改就会被静默拉开，而表现是
+/// 「日志说 .env、实际用的是路径推导」这种**比没有日志更坏**的现场。
+pub fn resolve_app_port_with_source_for_root(root: &str) -> (u16, PortSource) {
+  // ① 进程环境：上游显式注入最权威（终端 / 脚本传进来的值不该被 .env 覆盖）；
+  //    非法值按「没给」处理，继续往下走（不报错 —— 报错会挡死启动）。
+  if let Some(port) = env_app_port() {
+    return (port, PortSource::Env);
+  }
+  // ② 检出 `.env`：**壳必须自己读**，否则用户写死的端口只对编排器可见。
+  if let Some(port) = read_env_app_port(root) {
+    return (port, PortSource::DotEnv);
+  }
+  // ③ 按检出路径推导（推导本身不会失败）。
+  (derive_app_port_for_root(root), PortSource::Derived)
+}
+
+/// 进程环境里的 `COMFYAPP_PORT`（缺失 / 空串 / 非法一律 None）。
+fn env_app_port() -> Option<u16> {
+  std::env::var("COMFYAPP_PORT")
+    .ok()
+    .and_then(|raw| raw.trim().parse::<u16>().ok())
+    .filter(|p| *p >= 1)
+}
+
+/// 端口来自哪一条（数字请用 `resolve_app_port_for_root` 取 —— 它与本函数读同一份
+/// 判据顺序）。
+pub fn port_source_for_root(root: &str) -> PortSource {
+  resolve_app_port_with_source_for_root(root).1
+}
+
+/// 本检出的最终应用端口（身份锚点 = `identity_root()`，双击场景也拿得到真值，
+/// 见 `publish_project_root_env`）。
+pub fn resolve_app_port() -> u16 {
+  resolve_app_port_for_root(&identity_root())
 }
 
 #[cfg(windows)]
@@ -391,6 +540,138 @@ mod tests {
         want_port,
         "端口不一致：{input}"
       );
+    }
+  }
+
+  /// `.env` 单值解析：四侧共用的最小子集（ISSUE #821）。
+  ///
+  /// 这些形态不是「顺手多测几条」—— 它们全是对齐判据的一部分：另三侧读的是
+  /// 同一份 `.env`，任一侧对「带引号 / 行尾注释 / 注释行 / 空串」的理解不一致
+  /// 都会让「同一处配置、两侧端口一致」当场失效，而现场表现只是「启动页一直等」。
+  #[test]
+  fn dot_env_value_parsing_matches_the_other_three_sides() {
+    // 成对引号（.env.example 与 prepare 脚本都写成 KEY="..."）。
+    assert_eq!(
+      super::read_dot_env_value("COMFYAPP_PORT=\"3100\"", "COMFYAPP_PORT").as_deref(),
+      Some("3100")
+    );
+    assert_eq!(
+      super::read_dot_env_value("COMFYAPP_PORT='3100'", "COMFYAPP_PORT").as_deref(),
+      Some("3100")
+    );
+    // 行首空白 + 行尾注释（dotenv 常见写法）。
+    assert_eq!(
+      super::read_dot_env_value("  COMFYAPP_PORT=3100   # 固定端口", "COMFYAPP_PORT").as_deref(),
+      Some("3100")
+    );
+    // `abc#def` 里的 `#` 是值的一部分，不能当注释切掉。
+    assert_eq!(
+      super::read_dot_env_value("COMFYAPP_PORT=abc#def", "COMFYAPP_PORT").as_deref(),
+      Some("abc#def")
+    );
+    // 整行注释（`.env.example` 里的示例行）必须被跳过。
+    assert_eq!(super::read_dot_env_value("# COMFYAPP_PORT=3100\n", "COMFYAPP_PORT"), None);
+    // 只认「行首就是 KEY=」：别的键里含同名子串不算（否则 OTHER_COMFYAPP_PORT 会串台）。
+    assert_eq!(
+      super::read_dot_env_value("OTHER_COMFYAPP_PORT=3100", "COMFYAPP_PORT"),
+      None
+    );
+    // 键名后允许空白（`COMFYAPP_PORT = 3100`）。
+    assert_eq!(
+      super::read_dot_env_value("COMFYAPP_PORT = 3100", "COMFYAPP_PORT").as_deref(),
+      Some("3100")
+    );
+    // 空文件 / 空串。
+    assert_eq!(super::read_dot_env_value("", "COMFYAPP_PORT"), None);
+  }
+
+  /// 「壳与 Node 侧读同一处」的本地回归：`.env` 显式端口必须被壳认出来，
+  /// 而不是退回路径推导（ISSUE #821 根因 —— 壳只看 OS 环境变量）。
+  ///
+  /// 用临时目录造 `.env`，不依赖开发者本机的配置（用例的可通过性只能取决于
+  /// 用例自己造的东西）。
+  #[test]
+  fn env_port_wins_over_derived_port_and_is_read_from_dot_env() {
+    let dir = std::env::temp_dir().join(format!("app-port-env-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let root = dir.to_string_lossy().to_string();
+    let env_path = dir.join(".env");
+
+    // 未配置 → 路径推导。
+    let _ = std::fs::remove_file(&env_path);
+    assert_eq!(super::read_env_app_port(&root), None);
+
+    // 显式 4321 → 读得到它，且**不等于**该路径的推导值。
+    std::fs::write(&env_path, "COMFYAPP_PORT=\"4321\"\n").unwrap();
+    assert_eq!(super::read_env_app_port(&root), Some(4321));
+    assert_ne!(super::derive_app_port_for_root(&root), 4321);
+
+    // 非法值 → 当作「没写」（退回推导，不报错、不挡启动）。
+    std::fs::write(&env_path, "COMFYAPP_PORT=not-a-number\n").unwrap();
+    assert_eq!(super::read_env_app_port(&root), None);
+
+    // 超范围 → 同样视为未配置（与 Node 侧 readEnvPort 的 1..=65535 判据一致）。
+    std::fs::write(&env_path, "COMFYAPP_PORT=70000\n").unwrap();
+    assert_eq!(super::read_env_app_port(&root), None);
+
+    // 整行被注释掉 → 未配置。
+    std::fs::write(&env_path, "# COMFYAPP_PORT=4321\n").unwrap();
+    assert_eq!(super::read_env_app_port(&root), None);
+
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  /// 端口来源判据与端口本体的顺序必须一致（分家 = 日志说一套、实际用另一套）。
+  #[test]
+  fn port_source_is_consistent_with_resolved_port() {
+    let dir = std::env::temp_dir().join(format!("app-port-src-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let root = dir.to_string_lossy().to_string();
+    let _ = std::fs::remove_file(dir.join(".env"));
+
+    // 无 .env → 路径推导（环境变量在本进程里可能已设，故只在它缺席时判这一条）。
+    if std::env::var("COMFYAPP_PORT").is_err() {
+      assert_eq!(super::port_source_for_root(&root), super::PortSource::Derived);
+      assert_eq!(
+        super::resolve_app_port_for_root(&root),
+        super::derive_app_port_for_root(&root)
+      );
+    }
+
+    // 有 .env 且环境变量缺席 → .env 优先。
+    std::fs::write(dir.join(".env"), "COMFYAPP_PORT=4321\n").unwrap();
+    if std::env::var("COMFYAPP_PORT").is_err() {
+      assert_eq!(super::port_source_for_root(&root), super::PortSource::DotEnv);
+      assert_eq!(super::resolve_app_port_for_root(&root), 4321);
+    }
+
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  /**
+   * 跨语言一致性：Rust 侧的 **.env 解析** 与另三侧读同一份 .env 得出同一个值。
+   *
+   * 这条由 `tests/app-port-cross-language.test.ts` + `scripts/check-app-port-vectors.cjs`
+   * 从外部复核（它们只能断言本文件引用了向量文件），真正的执行判据在这里。
+   */
+  #[test]
+  fn env_port_vectors_agree_across_languages() {
+    let raw = std::fs::read_to_string(vectors_path())
+      .expect("tests/fixtures/app-port-vectors.json 必须存在（四语言共享校验向量）");
+    let json: serde_json::Value = serde_json::from_str(&raw).expect("向量文件必须是合法 JSON");
+    let env_vectors = json["envVectors"]
+      .as_array()
+      .expect("向量文件必须含 envVectors 数组（.env 解析的四侧一致性，ISSUE #821）");
+    assert!(env_vectors.len() >= 4, "envVectors 至少 4 条（防止误删后静默全绿）");
+    for v in env_vectors {
+      let content = v["content"].as_str().expect("content 必须是字符串");
+      // `port: null` = 「未配置」（注释行 / 键名不匹配 / 空值 / 非数字），
+      // 与 Node 侧 `readEnvFileValue` + `Number.parseInt` 的落点一致。
+      let want = v["port"].as_i64();
+      let got = super::read_dot_env_value(content, "COMFYAPP_PORT")
+        .and_then(|raw| raw.trim().parse::<u16>().ok())
+        .map(i64::from);
+      assert_eq!(got, want, ".env 解析不一致：{content:?}");
     }
   }
 
