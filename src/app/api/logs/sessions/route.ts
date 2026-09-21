@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiErrorBody } from "~/lib/api-error";
 import fs from "node:fs";
 import { RUNTIME_LOG_FILES } from "~/lib/log/log-paths";
 import {
@@ -121,10 +122,7 @@ export async function GET(request: Request) {
     } satisfies LogSessionsPayload);
   } catch (error) {
     return NextResponse.json(
-      {
-        ...emptyPayload(0),
-        error: error instanceof Error ? error.message : String(error),
-      },
+      apiErrorBody(error, "读取日志会话失败", { ...emptyPayload(0) }),
       { status: 500 },
     );
   }

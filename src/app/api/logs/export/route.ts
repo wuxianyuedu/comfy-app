@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiErrorBody } from "~/lib/api-error";
 import fs from "node:fs";
 import path from "node:path";
 import { requireRequestUser } from "~/server/auth/request-user";
@@ -88,10 +89,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      },
+      apiErrorBody(error, "导出日志失败", { ok: false }),
       { status: 500 },
     );
   }

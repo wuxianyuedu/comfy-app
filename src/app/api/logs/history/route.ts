@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiErrorBody } from "~/lib/api-error";
 import { requireRequestUser } from "~/server/auth/request-user";
 import fs from "node:fs";
 import path from "node:path";
@@ -40,11 +41,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ content, size: content.length });
   } catch (error) {
     return NextResponse.json(
-      {
-        content: "",
-        size: 0,
-        error: error instanceof Error ? error.message : String(error),
-      },
+      apiErrorBody(error, "读取日志历史失败", { content: "", size: 0 }),
       { status: 500 },
     );
   }
