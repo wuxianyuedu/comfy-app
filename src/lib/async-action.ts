@@ -216,3 +216,50 @@ export async function runAsyncAction(
     return { ok: false, detail };
   }
 }
+
+/**
+ * 「发完即忘」的收口 —— 用来取代散在各处的 `void fn()` 形态。
+ *
+ * 语义上「不 await、不抛、失败必须落到一个显式 onError」：
+ *   · 静默兜底（`.catch(() => {})`）与「忘了 catch」在代码上完全一样，
+ *     前者是刻意、后者是漏口 —— 用 `fireAndForget` 显式命名这条**刻意**，
+ *     让 grep 得到干净的答案；
+ *   · `onError` 必填，本模块**不**给默认（`logger.warn` / `console.error`
+ *     都会让 caller 少做一层决定，而通道恰恰是这里最不该被"通用"掉的部分：
+ *     `lib` 侧的落盘要 pino，`"use client"` 侧只能 `console.error` 或
+ *     `setNotice`；本文件是全库地基，被两侧共同 import，只能留通道注入 ——
+ *     与 §16.2.4.30 里 `runAsyncAction` 的 `report` 同口径。
+ *
+ * ## 与 `runAsyncAction` 的分工
+ *
+ * 那一条把结果接到「用户可见反馈通道」上（成功 / 失败都可能有文案），
+ * 覆盖 tRPC / HTTP / 上传下载 这类"有操作者等待回执"的动作；
+ * 本条覆盖**没有等待方**的后台动作：定时器里的落盘、事件里的清理、
+ * 一次性埋点 —— 成功静默、失败交给 `onError`。
+ *
+ * ## 为什么不用 async/await
+ *
+ * `async function fireAndForget(...) { try { await task } catch (e) { onError(e) } }`
+ * 会让本函数返回 `Promise<void>`，caller 又要写 `void fireAndForget(...)` 或
+ * `fireAndForget(...).catch(...)` —— 问题只是下移一层。用 `.catch` 直接返回
+ * `void` 才能真正做到「调用即终结」，caller 那侧没有 Promise 需要处理。
+ *
+ * ## onError 自己抛了怎么办
+ *
+ * `.catch(onError)` 会重新产出一个 rejected Promise，回到「unhandledRejection」
+ * 原点。这里显式包一层：`onError` 内抛说明**兜底通道本身**坏了，不再向外冒
+ *（否则本函数就没有兑现「不制造 unhandledrejection」的承诺）。真故障由
+ * `onError` 自己的日志路径去暴露，本处只保证"最后一道防线不再漏"。
+ */
+export function fireAndForget(
+  task: Promise<unknown>,
+  onError: (e: unknown) => void,
+): void {
+  task.catch((e) => {
+    try {
+      onError(e);
+    } catch {
+      /* onError 内抛就不再向外冒，见上方文档。 */
+    }
+  });
+}

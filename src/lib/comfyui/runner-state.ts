@@ -17,6 +17,8 @@ import { EventEmitter } from "events";
 
 import type WebSocket from "ws";
 
+import { logger } from "~/lib/core/logger";
+import { errorText } from "~/lib/error-message";
 import { taskRepository } from "../core/repository";
 import { HISTORY_READ } from "../retry-policy";
 import { lastSegments } from "~/lib/path-display";
@@ -497,5 +499,19 @@ export async function persistLogs(taskId: string) {
 
   const arr = state().logs.get(taskId) ?? [];
 
-  await taskRepository.replaceLogs(taskId, arr);
+  // 内部把 DB 落库的失败咽下——理由与旧行为不匹配：
+  //   · caller 有 3 处写 `void persistLogs(...)`（防抖回调里），
+  //     不 catch 就直接变成 unhandledRejection，进程级噪声；
+  //   · 另外 7 处 `await persistLogs(...)`（enqueue / executor-finalize /
+  //     reaper），若这里抛错会让 finalize 链路整段回滚，表现比「一份日志
+  //     没落库」严重得多。
+  // 日志面板的**内存视图**仍完整（state().logs），只是这一次没持久化；
+  // 真故障通过 logger.warn 落 app-runtime.log 镜像通道，运维看得到。
+  try {
+    await taskRepository.replaceLogs(taskId, arr);
+  } catch (e) {
+    logger.warn(
+      `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`,
+    );
+  }
 }
