@@ -327,6 +327,34 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 的 stdout/stderr 由壳原样转发成 `[orchestrator] …` 进壳日志，点「查看日志」就是
 第一现场。**不再有第二个进程弹系统对话框**——窗口本来就开着，页面说比弹窗更贴近现场。
 
+#### 1.5.1 起编排器这一层自己也必须留痕（ISSUE #784 手验反馈）
+
+第一轮落地后手验发现：**编排没坏，坏的是「编排刚开始那 1~2 秒什么都读不到」**。
+`run/launch-status.json` 由 `dev-launcher.mjs` 在壳起编排器**之后**才创建，而
+release 壳（Windows `windows_subsystem = "windows"`，无控制台）的 stdout/stderr
+没有任何去处——于是「壳已接手、编排器还没写字」这段**唯一的启动路径**在磁盘上是
+一片空白。启动页显示「暂时读不到日志」，并让用户去翻那两份此刻恰好为空的编排日志：
+诊断信息指向了自己缺席的地方。
+
+三条补齐（**壳侧的每一次出手都要有一份磁盘痕迹**）：
+
+| 环节                | 实现                                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 壳侧编排链路日志    | 新增 `log/launcher/shell-launch.log`：壳把「拉起编排器的完整命令与 cwd」「编排器的 `[orchestrator] …`」「启动报告」都落这一份。它**不依赖编排器起来**，因此是启动期最先有内容的那份日志；`get_launch_log` 也读它（末段） |
+| 常驻进度快照        | 壳接手时写 `run/launch-status.json`（`fallback: true`，`progress: 0`），编排器一写自己的状态就顶掉它。启动页据此显示「壳在做什么 / 在等谁」，但**不当就绪判据**——就绪仍只有 `status.ready === true`（壳快照期间退回 `/api/health` 自主探测） |
+| 失败 / 空面板的出口 | `mark_launch_failed` 与「一条日志都没有」的兜底都带 `diagnostics`（壳侧链路日志 / 壳日志 / 状态文件 / 项目根），或按**文件存在性**逐项列出候选。原先写死的 `run/launch-status.json` 在项目根推不出来时指向一个不存在的位置 |
+
+`get_launch_status` 同时改掉「读不到 = 一句 `Err`」：`NotFound` 回结构化兜底
+（`phase: "no-status-file"` + 原因 + 诊断路径），**真故障（权限 / IO）仍然回 `Err`**
+——兜底不吞真问题。「编排器还没写」与「项目根推不出来」这两件事的处理方式相反
+（前者等、后者修环境），判据必须分得开。
+
+判据落在两处、形态一致：Rust 侧 `src-tauri/src/shell_launch.rs`（含 7 条单测）与
+Node 侧 `src/lib/shell/launch-diagnostics.ts`（13 条单测）。两侧共用**同一组路径与
+行形态**——路径若漂开，表现是「壳写了一份、面板读的是另一份」，而两侧看各自都对。
+可枚举的部分（路径、快照内容、日志行形态、清单）在 Node 侧，Rust 侧不可能也做不到
+那部分 IO；平台机制（环境块认亲 / Job Object）仍只在 Rust。
+
 ## 2. 启动预检（dev-launcher.mjs，新增于 2026-09-02）
 
 预检分两段：**工具链门禁**在壳起编排器**之前**执行，只做只读致命快检——命中即
@@ -838,7 +866,8 @@ log/
 | `log/launcher/drizzle-push-stdout/stderr.log`                               | dev-launcher.mjs（schema 同步）                                                                | drizzle-kit push / heal-db 的原始输出                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 每次启动覆盖                                                   |
 | `log/launcher/tauri-shell.pid`                                              | dev-launcher.mjs 写                                                                             | 本次拉起的壳 PID（**仅供排查与外部工具参考**：编排器就是壳的子进程，回收走父子链，不再有人靠这个 PID 补刀）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 每次启动覆盖                                                   |
 | `log/launcher/foreground-watch.log`                                         | 交接复核进程（`scripts/win32-window-focus.py`，**当前无调用方**，见 §1.3）                       | 窗口交接时刻的前台归属裁定与执行结果（`give` / `restore` / `leave` + 句柄），排查「启动仍然抢前台」先看这里                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 追加写                                                         |
-| `run/launch-status.json`                                                    | dev-launcher.mjs（进度）+ 壳（失败出口，`mark_launch_failed`）                                  | 结构化启动进度，splash 页展示；**失败时是壳写下的 error + 可行动作**（见 §1.5）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | —                                                              |
+| `log/launcher/shell-launch.log`                                             | 壳（`src-tauri/src/shell_launch.rs` 的 `log_launch_line`）                                      | **壳侧编排链路**：拉起编排器的完整命令与 cwd、启动报告（项目根 / 编排脚本 / 依赖门禁 / 端口 / 各日志路径）、编排器输出 `[orchestrator] …`、退出码。**启动期最先有内容的一份**（不依赖编排器起来），见 §1.5.1                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 追加不轮转                                                     |
+| `run/launch-status.json`                                                    | dev-launcher.mjs（进度）+ 壳（常驻快照与失败出口，`write_idle_status` / `mark_launch_failed`）  | 结构化启动进度，splash 页展示。壳写两种：**常驻快照**（`fallback: true`，编排器写第一份之前的那 1~2 秒，见 §1.5.1）与**失败**（`phase=error` + 可行动作 + `diagnostics` 路径）；编排器写则权威，`ready === true` 才是就绪判据                                                                                                                                                                                                                                                                                                                                                                                                                                               | —                                                              |
 | 启动页「查看日志」面板                                                      | splash 前端轮询 `get_launch_log`                                                               | dev-launcher.log（经 sentinel 定位）+ dev-launcher-stderr.log（含 `[orchestrator] …`）+ log/shell/shell.log（release）的尾部（去 ANSI、限长），启动页实时看执行到哪一步                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | —                                                              |
 | `.next/dev/logs/next-development.log`                                       | Next dev server                                                                                | dev server 内部日志（含锁冲突提示）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Next 自管                                                      |
 | `log/services/comfyui-runtime.log`                                          | Next server（src/lib/comfyui/lifecycle.ts）                                                    | ComfyUI 拉起/spawn 参数/等待与就绪结论 + 子进程 stdout/stderr（`[out]`/`[err]` 前缀），时间戳为本地时间；每次启动/停止前会写一条 **ANSI 亮色会话横幅**（`▶`/`■` box 分隔线），使多次启动累积的日志能一眼分清会话边界；设置页「创作后端 → 启动日志」面板经 `GET /api/logs/current?source=comfyui-runtime` 实时跟随。手动启动不设硬超时（冷加载慢不误报，可手动关闭中止）；任务自动启动保留 420s 上限（防止 reaper 启动窗口被无限拉长）                                                                                                                                                                                                                                     | 追加不轮转；接口首次打开只回尾部窗口（1MB，按行对齐，见 §4.1） |
@@ -895,7 +924,9 @@ cwd / 探测 Node）同样属于本次运行。整条时间线一刀切会把这
 > comfyui-runtime / drizzle-studio-runtime，**不在**该机制覆盖范围内：它们是
 > 单个服务的会话视图，靠会话横幅（`▶`/`■`）区分边界，由用户主动点「刷新」。
 
-排障顺序：`log/launcher/dev-launcher-stderr.log`（壳层报错 + `[orchestrator] …`）→
+排障顺序（**先看壳自己写的那份**——编排器还没起来时只有它有内容，见 §1.5.1）：
+`log/launcher/shell-launch.log`（壳侧编排链路：启动报告 + `[orchestrator] …`）→
+`log/launcher/dev-launcher-stderr.log`（壳层报错 + `[orchestrator] …`）→
 `log/launcher/dev-launcher.log`（编排步骤走到哪）→
 `log/nextjs/nextjs-stderr-<ts>.log`（dev server 报错）→
 `log/shell/shell.log`（壳自持日志，release）。启动页「查看日志」面板已包含前三者的尾部。
