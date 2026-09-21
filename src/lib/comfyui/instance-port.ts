@@ -22,11 +22,7 @@
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { classifyComfyInstall } from "./instance-kind";
 import { comfyUiBaseUrl } from "../endpoints";
-import {
-  findPidForMainPyDetailed,
-  findPidListeningPort,
-  type PidLookup,
-} from "./proc-detect";
+import { findPidForMainPyDetailed, findPidListeningPort } from "./proc-detect";
 import { collectComfyPythonCandidates } from "./env-python";
 import { launcherCommandCandidates, readRegisteredLauncher } from "./status";
 
@@ -81,7 +77,7 @@ export async function queryInstanceByPath(
   if (!("error" in plan)) {
     const lookup = await findPidForMainPyDetailed(plan.mainPy);
     if (lookup.pid) {
-      return withPort(lookup, "process", "配置路径的实例");
+      return withPort(lookup.pid, "process", "配置路径的实例");
     }
     if (lookup.failed) unverified = true;
   }
@@ -121,10 +117,14 @@ export async function queryInstanceByPath(
     candidates.map((c) => findPidForMainPyDetailed(c.cmd)),
   );
   for (let i = 0; i < candidates.length; i++) {
-    const lookup = lookups[i]!;
+    const candidate = candidates[i];
+    const lookup = lookups[i];
+    // `Promise.all` 与 `Array.map` 都保长度，理论上这两行取不到 undefined；
+    // `noUncheckedIndexedAccess` 下用空值守卫取代 `!`，判据与窄化在同一行落地。
+    if (!candidate || !lookup) continue;
     if (lookup.failed) unverified = true;
     if (lookup.pid) {
-      return withPort(lookup, candidates[i]!.source, candidates[i]!.via);
+      return withPort(lookup.pid, candidate.source, candidate.via);
     }
   }
 
@@ -134,11 +134,10 @@ export async function queryInstanceByPath(
 
 /** 命中进程后补上监听端口（拿不到就留 null = 进程在、端口未绑定）。 */
 async function withPort(
-  lookup: PidLookup,
+  pid: number,
   source: InstanceDiscoverySource,
   via: string,
 ): Promise<InstanceQuery> {
-  const pid = lookup.pid!;
   return {
     running: true,
     pid,

@@ -72,6 +72,24 @@ export type TrainJobSpec = {
   seed: number;
 };
 
+/** datasetImages 里的单条形状（与 TrainJobSpec 中内联声明一致）。 */
+type DatasetImage = TrainJobSpec["datasetImages"][number];
+
+/** caption 已确认是非空字符串的子形状（供 filter 的类型谓词使用）。 */
+type CaptionedImage = DatasetImage & { caption: string };
+
+/**
+ * 类型谓词：`caption?.trim()` 之后仍为真，说明 caption 存在且去空白非空。
+ * filter 只写内联箭头函数会让 item 类型停在「caption 可选」，map 里的
+ * `item.caption!.trim()` 只能靠 `!` 兜住。用显式谓词把判据在类型层落住，
+ * 判据与用法只此一份，改 filter 判据忘了同步 `!`（或反过来）的机会消掉。
+ */
+function hasNonEmptyCaption(
+  item: DatasetImage | undefined,
+): item is CaptionedImage {
+  return !!item?.caption?.trim();
+}
+
 export function isTrainerConfigured(): boolean {
   return trainerUrl().length > 0;
 }
@@ -99,8 +117,8 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   //（说明同时也随 datasetImages 一起带过去）。
   spec.captions = Object.fromEntries(
     (spec.datasetImages ?? [])
-      .filter((item) => item?.caption?.trim())
-      .map((item) => [item.name, item.caption!.trim()]),
+      .filter(hasNonEmptyCaption)
+      .map((item) => [item.name, item.caption.trim()]),
   );
 
   if (!trainerUrl()) {
