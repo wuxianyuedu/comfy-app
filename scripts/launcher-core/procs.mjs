@@ -15,6 +15,8 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+import { echoCommandLine } from "./command-echo.mjs";
+
 /** 跑一个命令并拿到 stdout（失败返回空串，不抛）。 */
 /**
  * @param {string} command
@@ -23,6 +25,10 @@ import path from "node:path";
  * @returns {Promise<string>}
  */
 export function runCapture(command, args, timeoutMs = 10_000) {
+  // 探测命令同样回显：这些调用（netstat / PowerShell CIM / ps）决定了「端口上是谁」
+  // 与「这个 PID 属不属于本检出」——回收残留实例之前的判据全在这里，出问题时
+  // 第一句要问的就是「到底探了什么」，而探测结果本身（空串）看不出来。
+  echoCommandLine(command, args);
   return new Promise((resolve) => {
     execFile(command, args, { timeout: timeoutMs, encoding: "utf8", windowsHide: true }, (err, stdout) => {
       resolve(err ? "" : String(stdout ?? ""));

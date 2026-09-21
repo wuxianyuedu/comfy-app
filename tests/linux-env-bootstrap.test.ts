@@ -252,8 +252,9 @@ describe("dev/start 在起 Next 之前预检", () => {
       }
     }
     // `dev.mjs` 依赖 `launcher-core/shell.mjs`（pnpm 可执行形态的单一判据，
-    // 见规范 §2.1.1），副本里也要有它，否则 import 就失败、测的就不是预检了。
-    for (const name of ["shell.mjs"]) {
+    // 见规范 §2.1.1）与它 import 的 `command-echo.mjs`（命令行回显的唯一出口，
+    // 见规范 §4.4）：副本里少一份，import 就失败、测的就不是预检了。
+    for (const name of ["shell.mjs", "command-echo.mjs"]) {
       fs.mkdirSync(path.join(scriptsDir, "launcher-core"), { recursive: true });
       fs.copyFileSync(
         path.join(ROOT, "scripts", "launcher-core", name),
