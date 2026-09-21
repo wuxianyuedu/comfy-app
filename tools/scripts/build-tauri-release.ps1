@@ -115,6 +115,7 @@ Log ("  耗时：{0}" -f (Format-Elapsed -Elapsed $buildWatch.Elapsed))
 Log "  产物: $TAURI_DIR\target\release\app.exe"
 Log ""
 Log "  这个 app.exe 就是**唯一**的启动入口：双击它即可（编排由壳自己承担）。"
-Log "  如需完整发布构建，请运行 tools\build\build-all.ps1"
+Log "  本脚本只编 release 壳（单步）。如需完整生产构建（前端一并打包、" `
+    "双击即独立运行、不连 dev server），请运行 tools\build\build-standalone.ps1"
 Log "=========================================================="
 Log ""

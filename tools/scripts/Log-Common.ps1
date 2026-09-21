@@ -44,6 +44,10 @@ function Log {
 
 function Invoke-Logged {
     param([string]$Command)
+    # 先把要执行的命令本身打到控制台 + 日志：双击入口用户只看到 Invoke-Entry 回显的
+    # 启动命令，内层外部命令（cargo / pnpm / next）此前只透传输出、不回显命令行本身，
+    # 看起来「只看到启动命令、没看到执行了哪些命令」。这里用 >>> 前缀与入口回显对齐。
+    Log ">>> $Command"
     $sb = [scriptblock]::Create($Command)
     & $sb 2>&1 | ForEach-Object {
         $line = "$_"
