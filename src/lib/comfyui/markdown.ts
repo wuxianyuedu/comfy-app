@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 /**
  * 轻量的 markdown → 安全 HTML 渲染器，服务于 ComfyUI 的便签正文。
  *
@@ -231,11 +230,14 @@ function renderInline(escapedText: string): string {
   //   会变成真正的换行，而反引号里捕获到的 <br> 原样不动（保持转义）。
   text = renderSafeInlineHtml(text);
   // 3) 链接 [文字](链接) —— 文字部分已经是转义形态，& 等都处理过了
-  text = text.replace(/\[([^\]]+?)\]\(([^)\s]+)\)/g, (_, txt, url) => {
-    const safe = safeHref(url);
-    if (!safe) return txt;
-    return `<a href="${escapeHtml(safe)}" target="_blank" rel="noreferrer" style="color:var(--color-md-link);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;">${txt}</a>`;
-  });
+  text = text.replace(
+    /\[([^\]]+?)\]\(([^)\s]+)\)/g,
+    (_full: string, txt: string, url: string) => {
+      const safe = safeHref(url);
+      if (!safe) return txt;
+      return `<a href="${escapeHtml(safe)}" target="_blank" rel="noreferrer" style="color:var(--color-md-link);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;">${txt}</a>`;
+    },
+  );
   // 4) Bold **…**  → <strong>
   text = text.replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>");
   // 5) 斜体 *…* → <em>（不能把已被粗体消费掉的成对星号再吞一遍）
@@ -278,7 +280,7 @@ function renderSafeInlineHtml(escapedText: string): string {
   let text = escapedText.replace(
     /&lt;\s*([A-Za-z][A-Za-z0-9]*)\s*\/?\s*&gt;/g,
 
-    (whole, tag) => {
+    (whole: string, tag: string) => {
       const key = tag.toLowerCase();
 
       const entry = SAFE_INLINE_HTML[key];
@@ -294,7 +296,7 @@ function renderSafeInlineHtml(escapedText: string): string {
   text = text.replace(
     /&lt;\s*(\/?)\s*([A-Za-z][A-Za-z0-9]*)\s*&gt;/g,
 
-    (whole, slash, tag) => {
+    (whole: string, slash: string, tag: string) => {
       const key = tag.toLowerCase();
 
       const entry = SAFE_INLINE_HTML[key];
