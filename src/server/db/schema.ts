@@ -267,22 +267,36 @@ export const task = sqliteTable(
   (t) => [
     index("task_user_created_idx").on(t.userId, t.createdAt),
     index("task_project_idx").on(t.projectId),
+    // 状态过滤（task.list / reaper 扫陈旧 QUEUED·RUNNING）与按 finishedAt 收敛：
+    // 复合 (status, finishedAt) 的最左前缀也覆盖纯 status 过滤。better-sqlite3
+    // 同步执行，缺索引时这些过滤退化成全表扫并卡住整个 server 事件循环。
+    index("task_status_finished_idx").on(t.status, t.finishedAt),
+    // promptId → task 反查（执行器对账 / history 回捞），此前无索引。
+    index("task_prompt_id_idx").on(t.promptId),
   ],
 );
 
-export const taskImage = sqliteTable("taskImage", {
-  id: cuid(),
-  taskId: text("taskId")
-    .notNull()
-    .references(() => task.id, { onDelete: "cascade" }),
-  localPath: text("localPath").notNull(),
-  mediaType: text("mediaType").notNull().default("image"),
-  seed: text("seed"),
-  width: integer("width"),
-  height: integer("height"),
-  isCover: integer("isCover", { mode: "boolean" }).notNull().default(false),
-  sortIndex: integer("sortIndex").notNull().default(0),
-});
+export const taskImage = sqliteTable(
+  "taskImage",
+  {
+    id: cuid(),
+    taskId: text("taskId")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
+    localPath: text("localPath").notNull(),
+    mediaType: text("mediaType").notNull().default("image"),
+    seed: text("seed"),
+    width: integer("width"),
+    height: integer("height"),
+    isCover: integer("isCover", { mode: "boolean" }).notNull().default(false),
+    sortIndex: integer("sortIndex").notNull().default(0),
+  },
+  (t) => [
+    // 每次 task.list / history 带 includeImages 都按 taskId IN(...) 回表；
+    // 产物行随任务增长，此前无索引 → 近全表扫。
+    index("taskimage_task_idx").on(t.taskId),
+  ],
+);
 
 export const workflowTemplate = sqliteTable(
   "workflowTemplate",
@@ -306,7 +320,12 @@ export const workflowTemplate = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  (t) => [index("wt_user_idx").on(t.userId)],
+  (t) => [
+    index("wt_user_idx").on(t.userId),
+    // workflow.list 的 listForUser：按 userId 过滤 + createdAt desc 排序。仅有
+    // userId 单列索引时仍需整段临时 B-tree 排序；复合索引让有序扫描走索引。
+    index("wt_user_created_idx").on(t.userId, t.createdAt),
+  ],
 );
 
 export const workflowModelTag = sqliteTable(
