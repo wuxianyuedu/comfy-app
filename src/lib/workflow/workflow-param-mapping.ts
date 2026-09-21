@@ -607,13 +607,17 @@ function classifyPins(
   };
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
     const entry = raw as WorkflowIOEntry | undefined;
+    // 显式空值守卫：`pinFamily(entry)` 的契约本就要求 entry 非 undefined 才
+    // 可能返回真 family，但编译器看不到——原实现里 push 的三行 `entry!.xxx`
+    // 是把这一契约「用两次」（判据 + 断言）；改成同行守卫后判据与窄化同源。
+    if (!entry) continue;
     const family = pinFamily(entry);
     if (!family) continue;
     pools[family].push({
       ioKey,
-      name: entry!.name,
-      type: entry!.type ?? "*",
-      defaultValue: entry!.defaultValue,
+      name: entry.name,
+      type: entry.type ?? "*",
+      defaultValue: entry.defaultValue,
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
