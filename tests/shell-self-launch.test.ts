@@ -258,8 +258,7 @@ describe("壳自编排：能自起的判据与真起得来", () => {
     // spawn_reaper（统一回收入口）、can_self_launch 的存在性检查 —— 都是「按项目根
     // 拼一个脚本路径」的同一件事，改动时几处一起改。数量钉住是为了让「又多抄一份
     // 路径拼接」这件事在评审里显形（而不是悄悄多一处会漂的副本）。
-    // 三处：orchestrator_script（脚本位置）、spawn_reaper（统一回收入口）、
-    // attach_job_via_helper（Job Object 辅助脚本）+ win_job.py 一处，共 4 处。
-    expect(occurrences.length).toBe(4);
+    // （Job Object 已改回壳内联实现，不再有 win_job.py 那条脚本路径。）
+    expect(occurrences.length).toBe(3);
   });
 });

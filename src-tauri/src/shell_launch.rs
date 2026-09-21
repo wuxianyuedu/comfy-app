@@ -583,67 +583,21 @@ pub fn spawn_orchestrator(
   Ok(())
 }
 
-/// 调 `scripts/win_job.py`，把编排器纳入一个 `KILL_ON_JOB_CLOSE` 的 job。
-///
-/// 为什么经命令行而不是在 Rust 里重写一遍 Win32：判据只许有一处
-/// （`scripts/win_job.py` 是 Job Object 的唯一实现，规范 §3.3「平台机制」层），
-/// 在壳里再抄一份 CreateJobObject / DuplicateHandle 就是「两处会漂的平台分支」。
-/// 顺序（先复制句柄、后 assign）与失败语义都由那份实现保证。
-///
-/// 失败一律只记 WARN：这是**兜底**，正常的回收链（壳退出 → 插件 kill → 统一回收）
-/// 不依赖它，挂不上不该拦住启动。
-#[cfg(windows)]
-fn attach_job_via_helper(project_root: &str, pid: u32) -> bool {
-  use std::os::windows::process::CommandExt;
-  // 候选解释器与「不弹控制台窗口」的判据都在这里一处。`py` 是 Windows 的
-  // 官方启动器（Store 版 Python 常常只留它）。
-  const NO_WINDOW: u32 = 0x0800_0000; // CREATE_NO_WINDOW
-  let script = std::path::Path::new(project_root)
-    .join("scripts")
-    .join("win_job.py");
-  if !script.is_file() {
-    log::warn!(
-      "[ComfyAPP] win_job.py 不存在（{}），跳过 Job Object 兜底",
-      script.display()
-    );
-    return false;
-  }
-  for python in ["python", "py", "python3"] {
-    let mut command = std::process::Command::new(python);
-    command.arg(&script).arg(pid.to_string());
-    // `creation_flags` 来自 `std::os::windows::process::CommandExt`，
-    // 必须显式引入（POSIX 上这个 trait 不存在，所以整段都在 cfg(windows) 里）。
-    command.creation_flags(NO_WINDOW);
-    match command.output() {
-      Ok(out) => {
-        if out.status.success() {
-          return true;
-        }
-        log::debug!(
-          "[ComfyAPP] {python} scripts/win_job.py 退出码 {:?}，试下一个解释器",
-          out.status.code()
-        );
-      }
-      Err(e) => log::debug!("[ComfyAPP] 无法用 {python} 运行 win_job.py：{e}"),
-    }
-  }
-  false
-}
-
 /// 给编排器挂一个 `KILL_ON_JOB_CLOSE` 的 Job Object（Windows）。
 ///
-/// 与 python 启动器里的 `scripts/win_job.py` 同一目的：编排器（node）若崩溃 /
-/// 被硬杀，它拉起的 `node → pnpm → next` 会残留成孤儿，锁住端口与日志。OS 级
-/// 兜底是「最后一个句柄关闭即当场终止整棵树」——句柄由壳持有，壳一死 job 就关。
+/// 编排器（node）若崩溃 / 被硬杀，它拉起的 `node → pnpm → next` 会残留成孤儿，
+/// 锁住端口与日志。OS 级兜底是「最后一个句柄关闭即当场终止整棵树」。
 ///
-/// 失败一律只记 WARN：这是**兜底**，正常的回收链（壳退出 → 插件 kill → 统一
-/// 回收）不依赖它，挂不上不该拦住启动。
+/// **句柄由壳持有**是 #784 架构下的正确归属：进程树是「壳 app.exe → node 编排器 →
+/// pnpm → next」，壳是顶。正常关窗有「壳退出 → 插件 kill 编排器 → 编排器回收它的树」
+/// 这条链；Job Object 专兜「壳被硬杀」——壳一死，OS 关掉它持有的 job 句柄 → 最后一个
+/// 句柄关闭 → 整棵树当场回收。（若把句柄交给编排器持有，则「壳被硬杀、node 还活着」
+/// 时 job 永不关闭、孤儿照留，兜不住这个场景。#784 前的 python 启动器时代用的是那个
+/// 模型，随启动器移除已废弃；这里不再经外部脚本，内联实现是唯一出处。）
+///
+/// 失败一律只记 WARN：这是兜底，正常回收链不依赖它，挂不上不该拦住启动。
 #[cfg(windows)]
 pub fn attach_kill_on_close_job() {
-  // 壳自己持有 job 句柄在这里是**有意**的（句柄故意不关，壳一死 job 就关）。
-  // 与旧链路（Python 启动器）的差别：那时句柄复制进编排器、由编排器决定生死。
-  // 现在编排器是壳的孩子，「壳退出 → 回收编排器 → 编排器回收它那棵树」是一条
-  // 没有中断的链，job 只是「壳被硬杀」时的兜底，因此句柄归壳最自然。
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
@@ -663,12 +617,6 @@ pub fn attach_kill_on_close_job() {
   };
   if pid == 0 {
     return;
-  }
-  if let Ok(root) = std::env::var("COMFYAPP_PROJECT_ROOT") {
-    if attach_job_via_helper(&root, pid) {
-      log::info!("[ComfyAPP] orchestrator {pid} attached to kill-on-close job (via win_job.py)");
-      return;
-    }
   }
   unsafe {
     let job = match CreateJobObjectW(None, windows::core::PCWSTR::null()) {
