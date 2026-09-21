@@ -614,38 +614,44 @@ export function contractToStatusEntries(
  *  不生成默认行，留给用户在适配器页自行加一行并把字段名填成该接口实际用的名字。
  *  **自定义口同理**：名字是作者起的，谁也猜不出该接口管它叫什么 —— 这里跳过，
  *  本地工作流侧照常可用（落点由作者连线声明）。 */
+
+/**
+ * 预制契约口 → 适配器输入行的固定映射。
+ *
+ * 用 `Record<ModeContractInputType, ...>` 让 TS 强制穷尽：
+ * `MODE_CONTRACT_INPUT_TYPES` 里新增一个 type、忘了在这里登记，
+ * `pnpm exec tsc --noEmit` 立刻报「缺属性」。原实现是无 `default` 的
+ * `switch (id)`，加新预制口时**运行时会被静默跳过**（表现为「工作流入参
+ * 配置里看不到这个字段」，无声无息），编译器完全不看。改成查表后，
+ * 「新加 type → 必须同步登记适配器行」变成硬约束。
+ */
+const CONTRACT_INPUT_TO_ADAPTER: Record<
+  ModeContractInputType,
+  Array<{ type: WorkshopInputType; field: string }>
+> = {
+  prompt: [{ type: "prompt", field: "prompt" }],
+  negative: [{ type: "negative", field: "negative_prompt" }],
+  size: [
+    { type: "aspect-ratio", field: "aspect_ratio" },
+    { type: "megapixels", field: "megapixels" },
+    { type: "multiple", field: "multiple" },
+  ],
+  "reference-image": [{ type: "image", field: "image" }],
+  "first-frame": [{ type: "first-frame", field: "first_frame" }],
+  "last-frame": [{ type: "last-frame", field: "last_frame" }],
+  duration: [{ type: "duration", field: "duration" }],
+};
+
 export function adapterInputsFromContract(
   contract: ModeContract,
 ): Array<{ type: WorkshopInputType; field: string }> {
   const out: Array<{ type: WorkshopInputType; field: string }> = [];
   for (const id of contract.inputs) {
-    switch (id) {
-      case "prompt":
-        out.push({ type: "prompt", field: "prompt" });
-        break;
-      case "negative":
-        out.push({ type: "negative", field: "negative_prompt" });
-        break;
-      case "size":
-        out.push(
-          { type: "aspect-ratio", field: "aspect_ratio" },
-          { type: "megapixels", field: "megapixels" },
-          { type: "multiple", field: "multiple" },
-        );
-        break;
-      case "reference-image":
-        out.push({ type: "image", field: "image" });
-        break;
-      case "first-frame":
-        out.push({ type: "first-frame", field: "first_frame" });
-        break;
-      case "last-frame":
-        out.push({ type: "last-frame", field: "last_frame" });
-        break;
-      case "duration":
-        out.push({ type: "duration", field: "duration" });
-        break;
-    }
+    // 带序号的参考图口 (`reference-image-${n}`) 与自定义口 (`custom-${k}-${n}`)
+    // 由本地工作流侧连线声明落点，不进这张表；判据用 isModeContractInputType
+    // 精确挑出「字面量预制口」这一族。
+    if (!isModeContractInputType(id)) continue;
+    out.push(...CONTRACT_INPUT_TO_ADAPTER[id]);
   }
   return out;
 }
