@@ -59,14 +59,13 @@ export { applyRawOverrides };
  * comfy-cli 回传 prompt_id 前一直是 QUEUED/promptId=null）。
  * 同族单例（runner-state / reaper 定时器 / lifecycle 启动锁）都已挂在
  * globalThis 上，这里补齐最后一个漏网项。 */
-const CLI_PROCS_GLOBAL = "__comfyCliProcs_v1";
-const globalRef = globalThis as unknown as Record<
-  string,
-  Map<string, ChildProcess> | undefined
->;
+
+declare global {
+  var __comfyCliProcs_v1: Map<string, ChildProcess> | undefined;
+}
+
 export const cliProcs: Map<string, ChildProcess> =
-  globalRef[CLI_PROCS_GLOBAL] ?? new Map<string, ChildProcess>();
-globalRef[CLI_PROCS_GLOBAL] = cliProcs;
+  (globalThis.__comfyCliProcs_v1 ??= new Map<string, ChildProcess>());
 
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 

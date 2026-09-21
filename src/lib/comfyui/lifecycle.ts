@@ -100,10 +100,12 @@ type LifecycleGlobal = {
    *  「上次为什么失败」，而不是只收到一句泛泛的「已跳过」。 */
   autoStartFailureDetail?: string;
 };
-const G_KEY = "__comfyLifecycle_v1";
-const g = globalThis as unknown as Record<string, LifecycleGlobal | undefined>;
-const st: LifecycleGlobal = g[G_KEY] ?? {};
-g[G_KEY] = st;
+
+declare global {
+  var __comfyLifecycle_v1: LifecycleGlobal | undefined;
+}
+
+const st: LifecycleGlobal = (globalThis.__comfyLifecycle_v1 ??= {});
 
 /** 任务自动启动路径的等待上限：到点后放弃本次等待，WS 层稍后重试时会
  *  重新拉起（单飞锁已释放）。设置页手动启动不设上限（见 ensureComfyUiReady）。 */
@@ -365,16 +367,12 @@ type StatusCacheGlobal = {
   inflight?: Promise<ComfyUiStatus>;
 };
 
-const STATUS_CACHE_KEY = "__comfyUiStatusCache_v1";
+declare global {
+  var __comfyUiStatusCache_v1: StatusCacheGlobal | undefined;
+}
 
 function statusCache(): StatusCacheGlobal {
-  const g = globalThis as unknown as Record<
-    string,
-    StatusCacheGlobal | undefined
-  >;
-  const st = g[STATUS_CACHE_KEY] ?? {};
-  g[STATUS_CACHE_KEY] = st;
-  return st;
+  return (globalThis.__comfyUiStatusCache_v1 ??= {});
 }
 
 /** 丢掉状态结论缓存：进程树刚被启动 / 关闭动作改动过，下一问必须重取事实。
