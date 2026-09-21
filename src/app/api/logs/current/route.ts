@@ -1,5 +1,6 @@
 import { clamp } from "~/lib/clamp";
 import { NextResponse } from "next/server";
+import { apiErrorBody } from "~/lib/api-error";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveSessionStart } from "~/lib/log/log-session-scope";
@@ -264,15 +265,14 @@ export async function GET(request: Request) {
     );
   } catch (error) {
     return NextResponse.json(
-      {
+      apiErrorBody(error, "读取当前日志失败", {
         content: "",
         size: 0,
         offset: 0,
         sessionStart: null,
         bootId,
         mismatch,
-        error: error instanceof Error ? error.message : String(error),
-      },
+      }),
       { status: 500 },
     );
   }

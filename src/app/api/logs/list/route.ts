@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiErrorBody } from "~/lib/api-error";
 import { requireRequestUser } from "~/server/auth/request-user";
 import fs from "node:fs";
 import path from "node:path";
@@ -49,10 +50,7 @@ export async function GET() {
     return NextResponse.json({ files });
   } catch (error) {
     return NextResponse.json(
-      {
-        files: [],
-        error: error instanceof Error ? error.message : String(error),
-      },
+      apiErrorBody(error, "读取日志列表失败", { files: [] }),
       { status: 500 },
     );
   }

@@ -38,6 +38,7 @@ import { PageLoading } from "~/components/ui/page-loading";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { lastSegments } from "~/lib/path-display";
 import { Button } from "~/components/ui/button";
+import { errorMessage } from "~/lib/error-message";
 
 export interface RenderChainModule {
   /** 完整相对路径（相对项目根，如 src/components/xxx.tsx） */
@@ -104,7 +105,7 @@ export function DebugChainFooter({
         const payload = await sourceBusy.run(() => fetchDebugSource(file));
         setSource(payload);
       } catch (err) {
-        setLoadError(err instanceof Error ? err.message : "读取源码失败");
+        setLoadError(errorMessage(err, "读取源码失败"));
       }
     },
     [sourceBusy],

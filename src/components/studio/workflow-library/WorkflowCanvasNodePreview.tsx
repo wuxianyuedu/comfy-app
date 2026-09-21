@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
+import { errorMessage } from "~/lib/error-message";
 import {
   startLocalGenerate,
   type TaskProgressNode,
@@ -351,7 +352,7 @@ export function WorkflowCanvasNodePreview({
     } catch (e) {
       setPhase({
         kind: "failed",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e, String(e)),
       });
     }
   }
