@@ -12,8 +12,8 @@
  * 实现短路掉（Better Harness 第二轮评审抓出）。已删除 win_job.py，内联是唯一出处。
  *
  * 钉死（静态；Rust 无法在 vitest 里跑，与 shell-self-launch.test.ts 同口径）：
- *   1. shell_launch.rs 有完整内联实现（CreateJobObjectW / SetInformationJobObject /
- *      AssignProcessToJobObject / JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE /
+ *   1. shell_launch.rs 有完整内联实现（CreateJobObjectW、SetInformationJobObject、
+ *      AssignProcessToJobObject、JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE、
  *      JobObjectExtendedLimitInformation）；
  *   2. 句柄由壳持有（存进 JOB_HANDLE、故意不 CloseHandle）；
  *   3. 不再有 win_job.py / attach_job_via_helper 外部脚本路径（单一实现）；
