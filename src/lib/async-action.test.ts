@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { runAsyncAction, toActionResult } from "./async-action";
+import { fireAndForget, runAsyncAction, toActionResult } from "./async-action";
 
 describe("toActionResult", () => {
   it("`ok` 与 `triggered` 两种形状归一（调用处不必记得读哪个字段）", () => {
@@ -207,5 +207,39 @@ describe("runAsyncAction", () => {
     if (!r.ok) rolledBack = true;
     expect(rolledBack).toBe(true);
     expect(r.detail).toBe("boom");
+  });
+});
+
+describe("fireAndForget", () => {
+  /** 冲刷 Promise 微任务队列，让 `.catch` 里的分支跑完。 */
+  const flushMicrotasks = () =>
+    new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("成功的 promise：onError 不被调用、也不向 caller 返回任何东西（不制造 caller 侧的 unhandledrejection）", async () => {
+    const onError = vi.fn();
+    const ret = fireAndForget(Promise.resolve("ok"), onError);
+    expect(ret).toBeUndefined();
+    await flushMicrotasks();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("失败的 promise：错误原样交给 onError（本模块**不**吞错、也不加工 message）", async () => {
+    const onError = vi.fn();
+    const boom = new Error("boom");
+    fireAndForget(Promise.reject(boom), onError);
+    await flushMicrotasks();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(boom);
+  });
+
+  it("onError 自己抛了 → 不再向 caller 冒（保证「本函数绝不制造新的 unhandledrejection」的承诺）", async () => {
+    // 若 fireAndForget 没兜住 onError 的 throw，这里会在测试环境里
+    // 冒出一条 unhandledRejection；vitest 会把它算成失败。断言不炸即通过。
+    const onError = vi.fn(() => {
+      throw new Error("handler blew up");
+    });
+    fireAndForget(Promise.reject(new Error("task failed")), onError);
+    await flushMicrotasks();
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 });
