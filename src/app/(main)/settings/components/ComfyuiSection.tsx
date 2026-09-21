@@ -136,6 +136,28 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           提交任务时 ComfyUI 未运行则自动启动
         </label>
       </div>
+      <div className="mb-4 flex items-center gap-2">
+        <input
+          id="auto-sync-local-workflow"
+          type="checkbox"
+          className="accent-primary size-4"
+          checked={c.drafts.settings.autoSyncLocalWorkflow ?? false}
+          onChange={(event) =>
+            c.patchSettings({ autoSyncLocalWorkflow: event.target.checked })
+          }
+        />
+        <label
+          htmlFor="auto-sync-local-workflow"
+          className="text-ink/80 text-sm"
+        >
+          查看本地文件工作流时自动同步最新内容
+        </label>
+      </div>
+      <p className="text-muted-foreground -mt-2 mb-4 text-xs">
+        关（默认）：进详情只提示「磁盘文件有更新」，需回工作流库点「同步」按钮才更新，
+        更新前内容不会变。开：进详情即把磁盘最新内容同步回库（相当于自动点一次「同步」）。
+        仅对「绑定到本地文件」的工作流生效。
+      </p>
       <div
         className={`border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
       >

@@ -123,6 +123,7 @@ const SETTINGS: Settings = {
   comfyuiPort: 0,
   exitKillComfyui: true,
   exitKillOllama: true,
+  autoSyncLocalWorkflow: false,
 };
 
 const LLM: LlmConfig = {

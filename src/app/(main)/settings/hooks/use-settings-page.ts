@@ -73,6 +73,8 @@ export type Settings = {
   exitKillComfyui: boolean;
   /** 应用退出是否连带关闭自己拉起的 Ollama（默认 true=连带关闭）。 */
   exitKillOllama: boolean;
+  /** 查看绑定到本地文件的工作流时，是否自动把磁盘最新内容同步回库（默认 false=手动，更新入口是「同步」按钮）。 */
+  autoSyncLocalWorkflow: boolean;
 };
 
 export type LlmConfig = {
