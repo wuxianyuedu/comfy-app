@@ -1,5 +1,5 @@
 {
-  "_comment": "端口推导的跨语言共享校验向量（launch-and-build.md §1.1）。四侧实现（Node scripts/app-port.mjs、PowerShell scripts/app-port.ps1、Python scripts/app_port.py、Rust src-tauri/src/single_instance.rs）必须对同一 input 得出同一 port。任一侧漂移即挂测试 —— 这是「四侧一致」从文档承诺变成可失败断言的地方。全部为平台无关的绝对路径（相对路径会拼 cwd，语义上不该跨机器比对，见 §1.1）。",
+  "_comment": "端口推导的跨语言共享校验向量（launch-and-build.md §1.1）。四侧实现（Node scripts/app-port.mjs、PowerShell scripts/app-port.ps1、Python scripts/app_port.py、Rust src-tauri/src/single_instance.rs）必须对同一 input 得出同一 port。任一侧漂移即挂测试 —— 这是「四侧一致」从文档承诺变成可失败断言的地方。全部为平台无关的绝对路径（相对路径会拼 cwd，语义上不该跨机器比对，见 §1.1）。 另含 `envVectors`：`.env` 单值解析（ISSUE #821）的四侧一致性向量 —— 壳必须自己读 `.env`，否则「用户在 .env 里写死的端口」对壳不可见，壳按路径推导出的另一个端口与编排器起的 dev server 永远对不上。",
   "vectors": [
     {
       "input": "F:\\AI\\Other\\comfy-app-t3-branch",
@@ -48,6 +48,68 @@
       "normalized": "/home/dev/proj",
       "fnv1a32": 879929521,
       "port": 3921
+    }
+  ],
+  "envVectors": [
+    {
+      "content": "COMFYAPP_PORT=3100",
+      "port": 3100,
+      "note": "裸值"
+    },
+    {
+      "content": "COMFYAPP_PORT=\"3100\"",
+      "port": 3100,
+      "note": "成对双引号（.env.example / prepare 脚本的写法）"
+    },
+    {
+      "content": "COMFYAPP_PORT='3100'",
+      "port": 3100,
+      "note": "成对单引号"
+    },
+    {
+      "content": "COMFYAPP_PORT = 3100",
+      "port": 3100,
+      "note": "键名后有空白"
+    },
+    {
+      "content": "COMFYAPP_PORT=3100   # 固定端口",
+      "port": 3100,
+      "note": "行尾注释"
+    },
+    {
+      "content": "  COMFYAPP_PORT=3100",
+      "port": 3100,
+      "note": "行首空白"
+    },
+    {
+      "content": "A=1\nCOMFYAPP_PORT=3999\nB=2",
+      "port": 3999,
+      "note": "多行文件里取匹配行"
+    },
+    {
+      "content": "# COMFYAPP_PORT=3100\nCOMFYAPP_PORT=3201",
+      "port": 3201,
+      "note": "注释行不算配置，取下面那行"
+    },
+    {
+      "content": "# COMFYAPP_PORT=3100",
+      "port": null,
+      "note": "只有注释行 → 未配置"
+    },
+    {
+      "content": "OTHER_COMFYAPP_PORT=3100",
+      "port": null,
+      "note": "键名不匹配（子串不算）"
+    },
+    {
+      "content": "COMFYAPP_PORT=",
+      "port": null,
+      "note": "空值 → 未配置"
+    },
+    {
+      "content": "COMFYAPP_PORT=abc",
+      "port": null,
+      "note": "非数字 → 未配置"
     }
   ]
 }

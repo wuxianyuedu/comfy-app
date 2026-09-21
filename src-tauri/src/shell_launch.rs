@@ -111,6 +111,28 @@ pub fn orchestrator_script(project_root: &str) -> Option<std::path::PathBuf> {
   script.is_file().then_some(script)
 }
 
+/// 「这个检出的应用端口是多少」的**唯一出口**（ISSUE #821）。
+///
+/// 壳把端口交给编排器（`COMFYAPP_PORT` 环境变量）与启动报告，而编排器自己也按
+/// `.env` → 路径推导解析一遍 —— 两侧必须落在同一个值上，否则 dev server 听一个
+/// 端口、壳等另一个（现象是启动页卡在「等 dev server」）。判据收在
+/// `single_instance::resolve_app_port()`：环境变量 → 检出 `.env` → 路径推导，
+/// 与 `scripts/app-port.mjs` 的 `resolveAppPort` 逐条对齐。
+///
+/// **不要在这里改成 `derive_app_port_for_root(project_root)`**：那样 `.env` 里写死的
+/// 端口对壳不可见（壳不经过 Node），正是本 ISSUE 的根因。
+pub fn app_port_for_root(project_root: &str) -> u16 {
+  crate::single_instance::resolve_app_port_for_root(project_root)
+}
+
+/// 端口的**来源**（`环境变量` / `.env` / `路径推导`）的可读标签，只用于日志与
+/// 启动报告 ——「哪一侧错了」全靠这一行才判得出来。与 `app_port_for_root` 同源、
+/// 同优先级（判据本体在 `single_instance::port_source_for_root`，标签只在那边定义
+/// 一次，这里不另写一份中文）。
+pub fn port_source_for_root(project_root: &str) -> &'static str {
+  crate::single_instance::port_source_for_root(project_root).label()
+}
+
 /// 这个检出能不能自己起来（= 有编排脚本 + 依赖装好了）。
 ///
 /// 判据必须**只读、极快、且宁可漏判成「没有」**：它决定「这次双击能不能把应用
@@ -441,7 +463,8 @@ pub fn write_idle_status(
 /// 端口、以及各份日志的路径。用户在报障时贴这一屏，就等价于把现场带出来了。
 pub fn startup_report(project_root: &str, phase_note: &str) -> Vec<(String, String)> {
   let script = orchestrator_script(project_root);
-  let port = crate::single_instance::derive_app_port_for_root(project_root);
+  let port = app_port_for_root(project_root);
+  let port_note = port_source_for_root(project_root);
   vec![
     ("阶段".to_string(), phase_note.to_string()),
     (
@@ -463,7 +486,9 @@ pub fn startup_report(project_root: &str, phase_note: &str) -> Vec<(String, Stri
       "启动命令".to_string(),
       format!("node {} --mode prebuilt", script.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(缺少编排脚本)".to_string())),
     ),
-    ("应用端口".to_string(), port.to_string()),
+    // 端口与**它的来源**一起给：只写数字在「壳在等 3809、dev server 在 3100」
+    // 时归不了因（用户看不出是 .env 写的还是路径推出来的，而修法完全不同）。
+    ("应用端口".to_string(), format!("{port}（来源：{port_note}）")),
     (
       "启动状态文件".to_string(),
       status_file_path(project_root).display().to_string(),
@@ -582,12 +607,13 @@ pub fn spawn_orchestrator(
   })?;
 
   let script_arg = script.to_string_lossy().to_string();
-  let port = crate::single_instance::derive_app_port_for_root(project_root);
+  let port = app_port_for_root(project_root);
   log_launch_line(
     project_root,
     "info",
     &format!(
-      "拉起编排器：node {script_arg} --mode prebuilt（端口 {port}，cwd {project_root}）"
+      "拉起编排器：node {script_arg} --mode prebuilt（端口 {port}，来源：{}，cwd {project_root}）",
+      port_source_for_root(project_root)
     ),
   );
   let (mut rx, child) = app

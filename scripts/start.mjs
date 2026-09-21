@@ -11,7 +11,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveAppPort } from "./app-port.mjs";
+import { APP_PORT_ENV_KEY, resolveAppPortWithSource } from "./app-port.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
@@ -20,8 +20,15 @@ import { pnpmInvocation } from "./launcher-core/shell.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // 显式 `-p` + PORT 双写：前者是 next 的权威参数，后者兜住其它读 PORT 的工具。
-const port = process.env.PORT ?? resolveAppPort(root);
-process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}\n`);
+// 端口来源一并打印（与 dev.mjs 同口径，ISSUE #821）：两侧对不上时，
+// 「是 .env 写的还是路径推出来的」决定了该改哪一处。
+const resolved = resolveAppPortWithSource(root);
+const fromPortEnv = process.env.PORT;
+const port = fromPortEnv ?? resolved.port;
+const sourceLabel = fromPortEnv
+  ? "环境变量 PORT"
+  : { env: `.env 的 ${APP_PORT_ENV_KEY}`, derived: "按检出路径推导（3200~3999）", fallback: "兜底 3100（路径推导不可用）" }[resolved.source];
+process.stdout.write(`[start.mjs] COMFYAPP_PORT=${port}（来源：${sourceLabel}）\n`);
 
 // 环境配置预检：失败就**在起 Next 之前**退出并给出可行动作。
 // 放在这里的理由见 env-preflight.mjs —— 否则 Next 会先打印「✓ Ready」，

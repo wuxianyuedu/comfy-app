@@ -16,13 +16,20 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveAppPort } from "./app-port.mjs";
+import { APP_PORT_ENV_KEY, resolveAppPortWithSource } from "./app-port.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
 import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/** 端口来源的可读标签（与 app-port.mjs 的 resolveAppPortWithSource 一一对应）。 */
+const PORT_SOURCE_LABEL = {
+  env: `.env 的 ${APP_PORT_ENV_KEY}`,
+  derived: "按检出路径推导（3200~3999）",
+  fallback: "兜底 3100（路径推导不可用）",
+};
 
 /** 解析透传参数：-p/--port 覆盖端口，-H/--hostname 指定监听地址。
  *  未显式给出时都用解析值/默认值，保证「开发者手工 pnpm dev」与
@@ -45,13 +52,29 @@ function parseArgs(argv) {
 const { port: portArg, hostname } = parseArgs(process.argv.slice(2));
 // 命令行显式端口优先（启动器已经算好）；否则走 .env → 路径推导 → 兜底。
 const parsed = Number.parseInt(portArg ?? "", 10);
-const port =
-  Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535
-    ? parsed
-    : resolveAppPort(root);
+const explicit = Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
+const resolved = resolveAppPortWithSource(root);
+const port = explicit ? parsed : resolved.port;
+// 端口来源一并打印：与壳「两侧读同一处」的判据就是这个值（ISSUE #821）。
+// 只给数字的日志在「dev server 在 3100、壳在等 3809」时归不了因 —— 一眼看不出
+// 是 .env 写的还是路径推出来的，而这两种情况的修法完全不同。
+const sourceLabel = explicit ? "命令行 -p/--port" : PORT_SOURCE_LABEL[resolved.source];
 process.stdout.write(
-  `[dev.mjs] COMFYAPP_PORT=${port}${hostname ? ` host=${hostname}` : ""}\n`,
+  `[dev.mjs] COMFYAPP_PORT=${port}${hostname ? ` host=${hostname}` : ""}（来源：${sourceLabel}）\n`,
 );
+
+// 「两侧读同一处」的自检（ISSUE #821）：端口**允许**来自命令行（启动器算过再传），
+// 但命令行若与进程环境给出的 COMFYAPP_PORT 不一致，那就是有人算了两遍而口径不同 ——
+// 这正是壳 3809 / dev server 3100 那类「永远对不上」的来源。不阻断启动（命令行是
+// 权威入口），但必须说出来，否则用户只能看到一个连不上的端口。
+const envPort = Number.parseInt(process.env[APP_PORT_ENV_KEY] ?? "", 10);
+if (explicit && Number.isInteger(envPort) && envPort >= 1 && envPort <= 65535 && envPort !== port) {
+  process.stderr.write(
+    `[dev.mjs] ⚠ 环境变量 ${APP_PORT_ENV_KEY}=${envPort} 与本次实际监听端口 ${port} 不一致：\n` +
+      "[dev.mjs]   命令行的 -p/--port 优先，本次以它为准；但请确认调用方算端口的口径\n" +
+      `[dev.mjs]   与 scripts/app-port.mjs 一致（.env 的 ${APP_PORT_ENV_KEY} → 路径推导 → 兜底 3100）。\n`,
+  );
+}
 
 // 环境配置预检：失败就**在起 Next 之前**退出并给出可行动作。
 // 放在这里的理由见 env-preflight.mjs —— 否则 Next 会先打印「✓ Ready」，

@@ -44,6 +44,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     fs.readFileSync(path.join(ROOT, VECTORS), "utf8"),
   ) as {
     vectors: { input: string; normalized: string; fnv1a32: number; port: number }[];
+    envVectors: { content: string; port: number | null; note: string }[];
   };
 
   it("向量文件存在且至少 5 条（防止误删后全绿）", () => {
@@ -83,6 +84,19 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     expect(rust!).toContain("fn derive_app_port_for_root");
     expect(rust!).toContain("app-port-vectors.json");
     expect(rust!).toContain("vectors");
+    // `.env` 优先那一层（ISSUE #821）：壳不经过 Node，只认环境变量的话
+    // 「用户在 .env 里写死的端口」对壳不可见 —— 壳按路径推导出另一个端口并死等，
+    // 编排器却在 .env 写的那个端口上起 dev server，两边永远对不上。
+    for (const fn of [
+      "fn read_dot_env_value",
+      "fn read_env_app_port",
+      "fn resolve_app_port_for_root",
+      "fn port_source_for_root",
+    ]) {
+      expect(rust!, `${fn} 必须存在（.env 优先的端口解析）`).toContain(fn);
+    }
+    // 且测试必须真跑 envVectors（否则「四侧读同一份 .env」又是文档承诺）。
+    expect(rust!).toContain("envVectors");
   });
 
   it("② PowerShell 侧算法与自检脚本引用同一份共享向量", () => {
@@ -110,6 +124,41 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // scripts/start_tauri_launcher.py，已随 ISSUE #784 移除）就跑不了。
     // 现在 Python 侧只剩这一个纯逻辑模块 + 它的自检脚本，两侧都不碰 Win32。
     expect(fs.existsSync(path.join(ROOT, "scripts", "check-app-port-vectors.py"))).toBe(true);
+  });
+
+  it("①′ `.env` 单值解析：Node 侧对共享 envVectors 逐条一致", async () => {
+    // 四侧读的**同一份** envVectors —— 任一侧对「带引号 / 行尾注释 / 注释行 /
+    // 空值」的理解不一致，用户写死的端口就只对一部分进程可见，剩下的按路径
+    // 推导去等另一个端口（现象是启动页卡在「等 dev server」，ISSUE #821）。
+    const { readEnvFileValue } = await import("../scripts/app-port.mjs");
+    for (const v of fixture.envVectors) {
+      const raw = readEnvFileValue(v.content, "COMFYAPP_PORT");
+      const port =
+        raw !== null && /^\d+$/.test(raw.trim())
+          ? Number.parseInt(raw.trim(), 10)
+          : null;
+      expect(port, `.env 解析：${JSON.stringify(v.content)}（${v.note}）`).toBe(
+        v.port,
+      );
+    }
+  });
+
+  it("①′ envVectors 至少 4 条（防止误删后全绿）", () => {
+    expect(fixture.envVectors.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("①′ 另三侧也读同一份 envVectors（不能真跑时锁引用）", () => {
+    for (const rel of [
+      "scripts/check-app-port-vectors.py",
+      "scripts/check-app-port-vectors.cjs",
+    ]) {
+      const src = readIfExists(rel);
+      expect(src, `${rel} 必须存在`).not.toBeNull();
+      expect(src, `${rel} 必须读 envVectors`).toContain("envVectors");
+    }
+    // PowerShell 侧无法在此执行，改为断言它提供了同型的 .env 单值解析。
+    const ps = readIfExists("scripts/app_port.py");
+    expect(ps!).toContain("def read_env_port");
   });
 
   it("self-check：向量中的 Windows 盘符路径未被平台相关的 resolve 污染", () => {

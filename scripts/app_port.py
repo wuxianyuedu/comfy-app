@@ -9,10 +9,14 @@
 抽出来后 Node 侧测试可经 `scripts/check-app-port-vectors.py` 拉起本模块，
 读**同一份**共享校验向量（tests/fixtures/app-port-vectors.json）做断言。
 
-取值优先级：
+取值优先级（**四语言实现必须逐条一致**，见 launch-and-build.md §1.1）：
   1. .env 显式 COMFYAPP_PORT（每个检出各自的 .env，要固定端口时配置）；
   2. 按检出绝对路径稳定推导——同一检出恒定同端口，多份检出并行互不冲突；
   3. 兜底 3100（仅在路径推导不可用的异常情况）。
+
+ISSUE #821：「.env 里写死端口」这条对**每一侧**都要生效 —— 壳不经过 Node，
+如果只有 Node 读了 .env，壳就会按路径推导出另一个端口并死等，两边永远对不上
+（现象是启动页卡在「等 dev server」，而 dev server 其实在另一个端口上跑着）。
 """
 
 from __future__ import annotations
@@ -65,17 +69,30 @@ def derive_app_port(project_root: str) -> int:
 
 
 def read_env_port(project_root: str) -> "int | None":
-    """读 .env 的 COMFYAPP_PORT；未配置 / 非法 / 文件缺失时返回 None。"""
+    """读 .env 的 COMFYAPP_PORT；未配置 / 非法 / 文件缺失时返回 None。
+
+    形态与另三侧实现严格对齐（Node readEnvFileValue / PowerShell
+    Get-DotEnvAppPort / Rust read_dot_env_value，ISSUE #821）：行首允许空白、
+    值去掉成对引号与行尾注释（`# 固定端口` 这写法在 dotenv 里很常见）、
+    只取第一个匹配行 —— 四侧对同一份 .env 必须读出同一个值，否则「同一处
+    配置、两边端口一致」这条承诺又是文档承诺而非可失败断言。
+    """
     try:
         env_path = os.path.join(project_root, ".env")
         with open(env_path, "r", encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if line.startswith("COMFYAPP_PORT="):
-                    val = line.split("=", 1)[1].strip().strip("'\"")
-                    port = int(val)
-                    if 1 <= port <= 65535:
-                        return port
+                line = line.rstrip("\r\n")
+                if line.strip().startswith("#"):
+                    continue
+                m = re.match(r"^\s*COMFYAPP_PORT\s*=\s*(.*)$", line)
+                if not m:
+                    continue
+                val = re.split(r"\s+#", m.group(1))[0].strip()
+                if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+                    val = val[1:-1]
+                port = int(val)
+                if 1 <= port <= 65535:
+                    return port
     except (OSError, ValueError):
         pass
     return None

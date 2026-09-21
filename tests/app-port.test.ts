@@ -7,8 +7,10 @@ import {
   FALLBACK_PORT,
   fnv1a32,
   normalizeRootForPort,
+  readEnvFileValue,
   readEnvPort,
   resolveAppPort,
+  resolveAppPortWithSource,
 } from "../scripts/app-port.mjs";
 
 /**
@@ -80,6 +82,64 @@ describe("app-port 端口解析", () => {
   it("尾斜杠与分隔符写法不影响端口（POSIX 检出同样稳定）", () => {
     expect(normalizeRootForPort("/workspace/")).toBe("/workspace");
     expect(derivePortFromPath("/workspace/")).toBe(derivePortFromPath("/workspace"));
+  });
+
+  it("端口来源可归因（.env / 路径推导 / 兜底）", () => {
+    // 只给数字的解析在「dev server 在 3100、壳在等 3809」时归不了因：看不出是
+    // .env 写的还是路径推出来的，而这两种情况的修法完全不同（ISSUE #821）。
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "app-port-src-"));
+    try {
+      expect(resolveAppPortWithSource(tmp)).toEqual({
+        port: derivePortFromPath(tmp),
+        source: "derived",
+      });
+      fs.writeFileSync(path.join(tmp, ".env"), "COMFYAPP_PORT=4321\n", "utf8");
+      expect(resolveAppPortWithSource(tmp)).toEqual({ port: 4321, source: "env" });
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it(".env 单值解析：形态与另三侧严格对齐（成对引号 / 行尾注释 / 注释行）", () => {
+    // 四侧读的是同一份 .env（Node / PowerShell / Python / Rust）。任一侧对下面
+    // 任一形态的理解不一致，用户写死的端口就只对一部分进程可见，剩下的按路径
+    // 推导去等另一个端口 —— 现象是启动页卡在「等 dev server」（ISSUE #821）。
+    // 逐条与 tests/fixtures/app-port-vectors.json 的 envVectors 同源。
+    expect(readEnvFileValue("COMFYAPP_PORT=3100", "COMFYAPP_PORT")).toBe("3100");
+    expect(readEnvFileValue('COMFYAPP_PORT="3100"', "COMFYAPP_PORT")).toBe("3100");
+    expect(readEnvFileValue("COMFYAPP_PORT='3100'", "COMFYAPP_PORT")).toBe("3100");
+    expect(readEnvFileValue("COMFYAPP_PORT = 3100", "COMFYAPP_PORT")).toBe("3100");
+    expect(readEnvFileValue("  COMFYAPP_PORT=3100", "COMFYAPP_PORT")).toBe("3100");
+    expect(
+      readEnvFileValue("COMFYAPP_PORT=3100   # 固定端口", "COMFYAPP_PORT"),
+    ).toBe("3100");
+    // `abc#def` 里的 `#` 是值的一部分，不能当注释切掉。
+    expect(readEnvFileValue("COMFYAPP_PORT=abc#def", "COMFYAPP_PORT")).toBe(
+      "abc#def",
+    );
+    // 整行注释（.env.example 的示例行）不算配置；键名子串不算匹配。
+    expect(readEnvFileValue("# COMFYAPP_PORT=3100\n", "COMFYAPP_PORT")).toBeNull();
+    expect(
+      readEnvFileValue("OTHER_COMFYAPP_PORT=3100", "COMFYAPP_PORT"),
+    ).toBeNull();
+    expect(readEnvFileValue("", "COMFYAPP_PORT")).toBeNull();
+  });
+
+  it(".env 非法值视为「未配置」而不是挡死启动（与另三侧同口径）", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "app-port-bad-"));
+    try {
+      for (const bad of ["not-a-number", "", "70000", "0", "-1"]) {
+        fs.writeFileSync(
+          path.join(tmp, ".env"),
+          `COMFYAPP_PORT=${bad}\n`,
+          "utf8",
+        );
+        expect(readEnvPort(tmp), `COMFYAPP_PORT=${bad}`).toBeNull();
+        expect(resolveAppPort(tmp)).toBe(derivePortFromPath(tmp));
+      }
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it(".env 缺失时按路径推导而不是撞默认端口（多检出并行的前提）", () => {
