@@ -30,6 +30,15 @@ const REPO_ROOT = process.cwd();
 
 /** §18.4 第二类：纯 Node 宿主（由 `scripts/*.mjs` 动态加载，不经 Next 打包）。 */
 const PURE_NODE_HOSTS = [
+  // 壳侧启动链路的路径 / 行形态 / 常驻快照内容（ISSUE #784）：
+  //   · 它服务的两个消费方都**不是** Next 页面 —— 面板读同一份路径靠 Rust 侧的
+  //     对应实现（`src-tauri/src/shell_launch.rs`，两侧逐项同形），而「壳会往
+  //     哪写」是构建期已被嵌进 exe 的常量；
+  //   · 文件句柄（`mkdirSync` / `appendFileSync`）只由壳侧宿主进程触达，浏览器
+  //     侧不可能也做不到；
+  //   · 加 `server-only` 会把「这本模块是构建期/壳侧常量」这件事说反（它的入口
+  //     会 throw），因此按 §18.4 第三类登记。
+  "src/lib/shell/launch-diagnostics.ts",
   "src/lib/process/kill-process-tree.ts",
   // workshop MCP：由 tools/mcp-{stdio,http}.ts 经 `tsx` 直接跑，**不经 Next**；
   // 它必须与 Next 侧共用同一份密文实现（`src/server/workshop/llm.ts` 也引它），
