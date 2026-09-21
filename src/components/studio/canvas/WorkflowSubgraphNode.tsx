@@ -14,6 +14,20 @@ import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 /** COMBO 输入额外携带自己的候选清单（由导入管线盖章；
  *  不属于共享的 RawInputMeta 契约）。 */
 type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
+
+/** 该 widget 槽是否按「上下堆叠」渲染成多行文本框：服务端盖的
+ *  `multiline` 章（节点类型声明 `("STRING", {"multiline": true})`）加上
+ *  「值很长 / 含换行」两条数据启发式 —— 不按字段名猜。行布局（grid 行轨道
+ *  是内容高还是 1fr）与渲染分支都要用它，收口一处。 */
+const stackedStringRow = (inp: RawInputMeta): boolean => {
+  const text = typeof inp.widgetValue === "string" ? inp.widgetValue : "";
+  return (
+    inp.isConnection !== true &&
+    inp.isBoundary !== true &&
+    inp.type === "STRING" &&
+    (inp.multiline === true || text.length >= 32 || text.includes("\n"))
+  );
+};
 import {
   valueCellColor,
   renderSubgraphWidgetValue,
@@ -437,7 +451,26 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         /* widget 区与卡片同底（`bg-node`）：此前取 `bg-surface-1`（近黑），
          *  节点框改灰之后它会变成「灰框里的黑块」，nodeMode ≠ 0 时又必须
          *  有一层不透明底（磨砂在负 z，透明会把行压到画布上）。 */
-        <div className="bg-node relative flex min-h-0 flex-1 flex-col py-0.5">
+        <div
+          className="bg-node relative min-h-0 flex-1 py-0.5"
+          style={{
+            /* 值列改走两栏 grid：第 1 列 `max-content` 由**最长的参数名**撑出
+             *  —— 所有行的值框共享同一起点 x；第 2 列 `minmax(64px, 1fr)`
+             *  给值框固定最小宽度并随节点余宽伸展。行自身用 `subgrid` 借用
+             *  同一组列轨道，跨行对齐由父 grid 统一裁决。 */
+            display: "grid",
+            gridTemplateColumns: "max-content minmax(64px, 1fr)",
+            /* STRING 堆叠行的轨道给 `1fr`：定尺寸节点上吸收剩余高度，
+             *  textarea 继续铺满；其余行轨道按内容收紧。 */
+            gridTemplateRows: widgetInputs
+              .map(({ inp }) =>
+                stackedStringRow(inp) ? "minmax(0, 1fr)" : "max-content",
+              )
+              .join(" "),
+            columnGap: 8,
+            alignContent: "start",
+          }}
+        >
           {widgetInputs.map(({ inp, label }, i) => {
             const v: unknown = inp.widgetValue;
             const isConn = inp.isConnection === true || inp.isBoundary === true;
@@ -461,20 +494,22 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                 key={`sub-w-${inp.name}-${i}`}
                 className={
                   isStringWidget
-                    ? /* R17 (parity with WorkflowNode): vertical STACKED layout
-                       *  for STRING widgets on the subgraph wrapper too.
-                       *  LABEL + charCount chip on the top row, textarea
-                       *  fills the remaining vertical space below.
-                       *  Previous `flex-row items-start` (kept inline with
-                       *  WorkflowNode) had the same title-and-value-
-                       *  on-one-row + maxHeight-capped regression; see
-                       *  the WorkflowNode branch comment for the full rationale. */
-                      "group relative flex min-h-0 flex-1 flex-col gap-1.5 py-1.5 pr-2 pl-5 text-[11px]"
-                    : /* long widget labels wrap onto
-                       *  multiple lines instead of being clipped to 22 px.
-                       *  See the WorkflowNode inline-branch comment for full
-                       *  rationale. */
-                      "group relative flex h-auto min-h-[22px] items-center gap-1.5 py-0.5 pr-2 pl-5 text-[11px]"
+                    ? /* STRING widget 上下堆叠：标签 + 字数章占顶行，
+                       *  textarea 借行轨道的 `1fr` 填满剩余竖向空间。 */
+                      "group relative flex min-h-0 flex-col gap-1.5 py-1.5 pr-2 pl-5 text-[11px]"
+                    : /* 标签 | 值框 两格行；行跨满两列并借用父 grid 的列轨道
+                       * （subgrid），标签列宽 = 全部行里最长参数名，
+                       *  值框起点逐行一致。 */
+                      "group relative grid min-h-[22px] py-0.5 pr-2 pl-5 text-[11px]"
+                }
+                style={
+                  isStringWidget
+                    ? { gridColumn: "1 / -1" }
+                    : {
+                        gridColumn: "1 / -1",
+                        gridTemplateColumns: "subgrid",
+                        alignItems: "center",
+                      }
                 }
                 data-sub-widget-name={inp.name}
                 data-sub-widget-value={String(v)}
@@ -497,102 +532,80 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                 {/* 工作流输入必须是**未连线**的 —— 已经带线的槽位
                  *  （isConnection / isBoundary）取值来自上游，
                  *  把它暴露成工作流输入没有意义。 */}
-                {/* 这个顶层复选框只服务**紧凑型**（非 STRING）widget。
-                 *  STRING widget 在下面堆叠块内部
-                 *  自己渲染 IoCheckbox，所以少了 `!isStringWidget`
-                 *  守卫时，一行 STRING 会显示**两个**复选框 —— 一个孤零零飘在
-                 *  行首，一个正确地挨着标签。 */}
-                {io?.ioEditMode && !isConn && !isStringWidget && (
-                  <IoCheckbox
-                    io={io}
-                    ioRef={{
-                      nodeId: String(data.nodeId),
-                      hostNodeId: data.hostNodeId,
-                      name: inp.name,
-                      kind: "widget",
-                      direction: "input",
-                    }}
-                  />
-                )}
                 {!isStringWidget && (
                   <>
+                    {/* 标签格（第 1 列）：IO 复选框 + 标签。列宽由父 grid 的
+                     *  `max-content` 轨道按**所有行里最长的参数名**统一裁决，
+                     *  值框因此共享同一起点 x。IO 复选框只服务**紧凑型**
+                     * （非 STRING）widget —— STRING 在下面堆叠块内部自己渲染，
+                     *  少了 `!isStringWidget` 守卫会出现两个复选框。 */}
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {io?.ioEditMode && !isConn && (
+                        <IoCheckbox
+                          io={io}
+                          ioRef={{
+                            nodeId: String(data.nodeId),
+                            hostNodeId: data.hostNodeId,
+                            name: inp.name,
+                            kind: "widget",
+                            direction: "input",
+                          }}
+                        />
+                      )}
+                      <span
+                        /* 去掉 `truncate`：让长的封装 widget 标签换成多行
+                         *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
+                        className="min-w-0 text-left text-[11px] break-words whitespace-normal"
+                        style={{
+                          color: isConn
+                            ? "var(--color-ink-strong)"
+                            : "var(--color-ink-subtle)",
+                        }}
+                        title={label}
+                      >
+                        {label}
+                      </span>
+                    </div>
                     {inp.type === "COMBO" &&
                     Array.isArray((inp as ComboInputMeta).comboOptions) &&
                     ((inp as ComboInputMeta).comboOptions as unknown[]).length >
                       0 ? (
-                      <>
-                        <span
-                          /* 去掉 `truncate`：让长的子图封装 COMBO widget 标签
-                           *  换成多行而不是被裁掉（与 WorkflowNode 内联分支
-                           *  同款修正）。 */
-                          className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
-                          style={{
-                            flex: "0 1 auto",
-                            color: isConn
-                              ? "var(--color-ink-strong)"
-                              : "var(--color-ink-subtle)",
-                          }}
-                          title={label}
-                        >
-                          {label}
-                        </span>
-                        {/* 标签与取值之间不画分隔线（与 ComfyUI 同款版式）。 */}
-                        {/* 工作流画布上的 COMBO widget 渲染成只读的
-                         *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
-                         *  在这里保持禁用（编辑发生在会落盘取值的项目
-                         *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
-                         *  触发器压到 22px 行高，免得
-                         *  破坏统一的针脚节奏。 */}
-                        <SelectMenu
-                          value={typeof v === "string" ? v : ""}
-                          onChange={() => undefined}
-                          options={
-                            (inp as ComboInputMeta).comboOptions as string[]
-                          }
-                          disabled
-                          /* `flex-1` 改的是**外层**的伸缩；触发器自身仍是内容宽，
-                           *  宽度要铺满外层就得显式要 `fullWidth`（规范 03 §3.8.1.1）。 */
-                          fullWidth
-                          className="!h-[22px] min-w-0 !py-0 !text-[11px]"
-                          popoverMinWidth={220}
-                        />
-                      </>
+                      /* 工作流画布上的 COMBO widget 渲染成只读的
+                       *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
+                       *  在这里保持禁用（编辑发生在会落盘取值的项目
+                       *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
+                       *  触发器铺满第 2 列（`fullWidth`），与值框同一坐标。 */
+                      <SelectMenu
+                        value={typeof v === "string" ? v : ""}
+                        onChange={() => undefined}
+                        options={
+                          (inp as ComboInputMeta).comboOptions as string[]
+                        }
+                        disabled
+                        fullWidth
+                        className="!h-[22px] min-w-0 !py-0 !text-[11px]"
+                        popoverMinWidth={220}
+                      />
                     ) : (
-                      <>
-                        <span
-                          /* 去掉 `truncate`：让长的子图封装 widget 标签换成多行
-                           *  而不是被裁掉（与 WorkflowNode 内联分支同款修正）。 */
-                          className="min-w-0 shrink text-left text-[11px] break-words whitespace-normal"
-                          style={{
-                            flex: "0 1 auto",
-                            color: isConn
-                              ? "var(--color-ink-strong)"
-                              : "var(--color-ink-subtle)",
-                          }}
-                          title={label}
-                        >
-                          {label}
-                        </span>
-                        <span
-                          className="min-w-0 truncate text-left text-[10.5px] tabular-nums"
-                          style={{
-                            /* 与 WorkflowNode 的值 span 同理 —— `truncate` 回来了，
-                             *  但只有文字本身缩略；节点宽度仍由用户控制
-                             *  （ComfyUI 改尺寸 ↔ 画布镜像）。
-                             *  不加 `minWidth: fit-content`
-                             *  （长文件名会把它撑到 810px），
-                             *  也不加 `maxWidth` 上限（会把本来就合法的宽节点裁掉）。
-                             *
-                             *  左对齐 + 不画分隔线 = ComfyUI 的值列版式；颜色按
-                             *  「有没有连线」取两档（见 `valueCellColor`）。 */
-                            flex: "1 1 0",
-                            color: valueCellColor(v, isConn),
-                          }}
-                          title={String(v)}
-                        >
-                          {displayValue}
-                        </span>
-                      </>
+                      <span
+                        className="min-w-0 truncate rounded-[5px] px-1.5 text-left text-[10.5px] tabular-nums"
+                        style={{
+                          /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
+                           *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
+                           *  余宽伸展），文本左对齐，超长省略（只缩略文字，
+                           *  节点宽度仍由用户控制）。颜色按「有没有连线」
+                           *  取两档（见 `valueCellColor`）。 */
+                          display: "flex",
+                          alignItems: "center",
+                          minHeight: 18,
+                          background: "var(--color-canvas-deep)",
+                          border: "1px solid var(--color-border-subtle)",
+                          color: valueCellColor(v, isConn),
+                        }}
+                        title={String(v)}
+                      >
+                        {displayValue}
+                      </span>
                     )}
                   </>
                 )}
