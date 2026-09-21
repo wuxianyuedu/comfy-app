@@ -56,10 +56,12 @@ type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;
   starting?: Promise<EnsureResult>;
 };
-const G_KEY = "__drizzleStudioLifecycle_v1";
-const g = globalThis as unknown as Record<string, LifecycleGlobal | undefined>;
-const st: LifecycleGlobal = g[G_KEY] ?? {};
-g[G_KEY] = st;
+
+declare global {
+  var __drizzleStudioLifecycle_v1: LifecycleGlobal | undefined;
+}
+
+const st: LifecycleGlobal = (globalThis.__drizzleStudioLifecycle_v1 ??= {});
 
 /** drizzle-kit 的本地端口能否建立 TCP 连接（即 studio 进程是否已就绪）。 */
 export async function probeDrizzleStudio(

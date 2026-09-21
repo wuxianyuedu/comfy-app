@@ -89,10 +89,11 @@ type SnapshotGlobal = {
   inflight?: Promise<ComfyRuntimeSnapshot>;
 };
 
-const G_KEY = "__comfyRuntimeSnapshot_v1";
-const g = globalThis as unknown as Record<string, SnapshotGlobal | undefined>;
-const st: SnapshotGlobal = g[G_KEY] ?? {};
-g[G_KEY] = st;
+declare global {
+  var __comfyRuntimeSnapshot_v1: SnapshotGlobal | undefined;
+}
+
+const st: SnapshotGlobal = (globalThis.__comfyRuntimeSnapshot_v1 ??= {});
 
 /** 该快照是否属于「正在启动」：进程在跑、但监听端口还没出现。
  *  这种结论到期极快（见 COMFY_UNBOUND_PORT_TTL_MS），否则会把状态行按在
@@ -124,16 +125,13 @@ function emptySnapshot(): ComfyRuntimeSnapshot {
 
 /** 本进程持有的子进程（bound 模式）：最可靠的事实，优先于任何查询。
  *
- * 读的是 lifecycle 挂在 globalThis 上的会话状态（HMR 单例）。测试可用
+ * 读的是 lifecycle 挂在 globalThis 上的会话状态（HMR 单例）；`__comfyLifecycle_v1`
+ * 由 `./lifecycle.ts` 的 `declare global` 定义，这里直接以它的类型读子段的 `child?.pid`，
+ * 不再本地重抄一份 ChildHolder 形状 + `as unknown as` 单跳。测试可用
  * `setBoundChildPidReader` 注入桩，避免为一条判据去搭真实子进程。
  */
-type ChildHolder = { child?: { pid?: number } };
-
 let readBoundChildPid: () => number | null = () => {
-  const holder = (
-    globalThis as unknown as { __comfyLifecycle_v1?: ChildHolder }
-  ).__comfyLifecycle_v1;
-  const pid = holder?.child?.pid;
+  const pid = globalThis.__comfyLifecycle_v1?.child?.pid;
   return typeof pid === "number" && pid > 0 ? pid : null;
 };
 
