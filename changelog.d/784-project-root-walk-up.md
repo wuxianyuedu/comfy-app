@@ -1,0 +1,3 @@
+## Fixed
+
+- **双击 `src-tauri\target\release\app.exe` 启动页写着「项目根未推导出来（`COMFYAPP_PROJECT_ROOT` 为空）」、进度停在 0% 一直卡住**（ISSUE #784 手验反馈）：之前项目根推导只查 exe 的**同级目录**（也就是 `target\release`），而 `package.json` 在**上溯三级**的地方——于是「按规范唯一入口的落位双击」这条路径，推导项目根**永远失败**。项目根是壳内所有编排决策的锚点（编排器路径、`run/launch-status.json`、`log/` 目录、端口推导），一处失败就全部落空。现在改为从 exe 所在目录**逐级上溯**找最近的检出根（认 `package.json` + `scripts/dev-launcher.mjs` 两个标识），并把结果回填进 `COMFYAPP_PROJECT_ROOT`，使单实例身份与端口推导锚在同一份检出上（此前它们只能退回 cwd，双击时往往是 `C:\Windows\System32`，于是「同一检出第二次双击不唤起已有实例」、推导端口也不是 dev server 真正在听的那个）。「找不到项目根」的提示也改成可行动——附上 exe 位置、当前目录与判断检出的两个标志文件，而不再只重复一句「请确认 app.exe 位于项目根的 src-tauri/target/release/ 下」（那正是用户当时已经在做的事）。

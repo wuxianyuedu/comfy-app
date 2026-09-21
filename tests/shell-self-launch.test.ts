@@ -131,7 +131,10 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     // 判据是 COMFYAPP_PROJECT_ROOT 缺席（= 没人给壳指路，是用户双击了 exe 本身）。
     // 用它而不是 COMFYAPP_LAUNCH_MODE：后者现在由壳自己写，判据会随写入顺序漂。
     expect(decl).toContain('std::env::var("COMFYAPP_PROJECT_ROOT").is_err()');
-    expect(decl).toContain("!project_root.is_empty()");
+    // 「推出来的根非空」——变量名从 project_root 改成 resolved_root 是因为
+    // 它现在在 run() 最开头就算好（回填给单实例/端口推导用），与 collect()
+    // 里那份是同一个值。
+    expect(decl).toContain("!resolved_root.is_empty()");
   });
 
   it("运行模式由壳自己按「编排器在不在」决定，且只在 release 写", () => {
@@ -328,5 +331,77 @@ describe("壳自编排：能自起的判据与真起得来", () => {
     // 路径拼接」这件事在评审里显形（而不是悄悄多一处会漂的副本）。
     // （Job Object 已改回壳内联实现，不再有 win_job.py 那条脚本路径。）
     expect(occurrences.length).toBe(3);
+  });
+
+  // ── 第三轮（手验反馈：提示还在、一直卡住）────────────────────────────────
+  //
+  // 现场：用户重编壳后双击 `target\release\app.exe`，启动页仍写着
+  // 「项目根未推导出来（COMFYAPP_PROJECT_ROOT 为空）」。根因是**项目根推导
+  // 只看 exe 的同级目录**（= `target\release`），而 `package.json` 在
+  // 上溯三级的地方 —— 也就是说「按文档唯一入口的落位双击」这条路径，
+  // 推导项目根**永远失败**，而失败的表现是启动页停在 0% + 一句指向不存在
+  // 文件的提示（看起来像「双击没反应」）。
+  describe("项目根推导：必须逐级上溯（ISSUE #784 手验反馈）", () => {
+    const lib = () => stripComments(read("src-tauri/src/lib.rs"));
+
+    it("从 exe 目录逐级上溯到检出根，而不是只看同级", () => {
+      const source = lib();
+      // 上溯函数本体：循环取 parent，命中 looks_like_project_root 才停。
+      expect(source).toContain("fn find_project_root_from");
+      expect(source).toMatch(
+        /fn find_project_root_from\([\s\S]{0,400}?\.parent\(\)/,
+      );
+      // 推导链必须经过上溯函数。
+      expect(source).toMatch(
+        /fn resolve_project_root\(\)[\s\S]{0,900}?find_project_root_from/,
+      );
+    });
+
+    it("不得退回「只查 exe 同级目录」的写法", () => {
+      const source = lib();
+      const fn = source.slice(source.indexOf("fn resolve_project_root()"));
+      const body = fn.slice(0, fn.indexOf("\n}\n"));
+      // 旧写法的指纹：直接对 exe.parent() 调 looks_like_project_root。
+      expect(body).not.toMatch(/looks_like_project_root\(dir\)/);
+      // 而现在的写法是「拿到 dir 之后上溯」。
+      expect(body).toContain("find_project_root_from");
+    });
+
+    it("项目根必须在单实例判定之前回填进环境变量", () => {
+      // single_instance::identity_root()（单实例身份 + 端口推导的锚点）在 run()
+      // 的第一行就读走：那时没人给过它项目根，只能退回 cwd（双击时是
+      // C:\Windows\System32），于是单实例失效、推导端口也不是 dev server
+      // 真正在听的那个。回填必须发生在它之前。
+      const source = lib();
+      const run = source.slice(source.indexOf("pub fn run()"));
+      const fillAt = run.indexOf("publish_project_root_env");
+      const singleAt = run.indexOf("another_instance_running");
+      expect(fillAt).toBeGreaterThan(-1);
+      expect(singleAt).toBeGreaterThan(-1);
+      expect(fillAt).toBeLessThan(singleAt);
+    });
+
+    it("self_launch 判据在回填之前捕获（否则永远为假）", () => {
+      // 判据是「COMFYAPP_PROJECT_ROOT 缺席」，而回填会让它不再缺席 ——
+      // 取判据与回填的顺序反过来，双击链路就不会再自编排了。
+      const source = lib();
+      const run = source.slice(source.indexOf("pub fn run()"));
+      const judgeAt = run.indexOf("let self_launch");
+      const fillAt = run.indexOf("publish_project_root_env");
+      expect(judgeAt).toBeGreaterThan(-1);
+      expect(judgeAt).toBeLessThan(fillAt);
+      // collect 不再自己重算这条判据（重算时环境已被回填 = 常量）。
+      const collect = source.slice(source.indexOf("fn collect("));
+      const collectBody = collect.slice(0, collect.indexOf("\n  }\n"));
+      expect(collectBody).not.toMatch(/let self_launch\s*=/);
+    });
+
+    it("「找不到项目根」的提示必须可行动（说出找过哪儿）", () => {
+      // 旧提示只说「请确认 app.exe 位于项目根的 src-tauri/target/release/ 下」，
+      // 而那正是用户当时已经在做的事 —— 反复指回原点。
+      const source = lib();
+      expect(source).toContain("fn project_root_search_hint");
+      expect(source).toMatch(/project_root_search_hint\(\)/);
+    });
   });
 });
