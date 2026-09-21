@@ -234,10 +234,23 @@ describe("跨平台动作的实现契约", () => {
       "utf8",
     );
     const squash = (t: string) => t.replace(/\s+/g, " ");
-    for (const needle of ["typecheck", "eslint", "--max-warnings", "vitest"]) {
+    // 注意：lint 的扫描范围与 `--max-warnings 0` 等参数已按防漂移原则收进
+    // package.json 的 `lint` 脚本，两侧门禁脚本只是 `pnpm run lint` 的委托方，
+    // 其源码里不再内联这些参数——故这里只核对「两侧都委托同一 lint 命令」，
+    // `--max-warnings` 的真实生效改到下面对 package.json 的断言里校验。
+    for (const needle of ["typecheck", "eslint", "run", "lint", "vitest"]) {
       expect(squash(ps1), `quality-gate.ps1 缺 ${needle}`).toContain(needle);
       expect(squash(mjs), `quality-gate.mjs 缺 ${needle}`).toContain(needle);
     }
+    // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
+    // 零警告门禁形同虚设却没人发现）。
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+    expect(
+      pkg.scripts?.lint ?? "",
+      "package.json 的 lint 脚本缺 --max-warnings（零警告门槛丢失）",
+    ).toContain("--max-warnings");
     // 两侧的三项门禁名必须一致（增减门禁时只改一侧 = 两个平台给出不同结论）
     for (const key of ["typecheck", "lint", "test"]) {
       expect(mjs).toContain(`${key}:`);

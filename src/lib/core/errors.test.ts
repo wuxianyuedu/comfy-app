@@ -112,8 +112,10 @@ describe("errors — 错误类清单：每个导出都必须有生产调用方",
     return out.split("\n").filter((line) => line.trim().length > 0).length;
   }
 
-  it("两个具名子类都有生产调用方", () => {
-    for (const name of ["AuthError", "NotFoundError"]) {
+  it("在用的具名子类都有生产调用方", () => {
+    // ValidationError 是活跃契约（errors.ts 定义、request-body.ts 用作 §10.9 的
+    // errorResponse 形态），故归入"必须有调用点"一侧，而非"该删的分类树"。
+    for (const name of ["AuthError", "NotFoundError", "ValidationError"]) {
       expect(
         productionCallSites(name),
         `${name} 在 src/** 生产代码里没有任何 new 调用点 —— 要么接线上它，要么按 ISSUE #573 删掉`,
@@ -124,7 +126,6 @@ describe("errors — 错误类清单：每个导出都必须有生产调用方",
   it("已删除的类不会再回来(它们零调用方,只让错误契约看起来像分类树)", () => {
     for (const name of [
       "ForbiddenError",
-      "ValidationError",
       "ConflictError",
       "DomainError",
       "MethodNotAllowedError",
