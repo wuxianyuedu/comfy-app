@@ -262,9 +262,12 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   · 修改保存后刷新将自动重连
                 </span>
               </p>
-            ) : detail.sourceChanged ? (
-              <p className="border-success/30 bg-success/10 text-success-strong mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]">
-                <span className="font-semibold">已从本地文件刷新最新内容</span>
+            ) : detail.sourceOutdated ? (
+              <p className="mt-1 flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
+                <span className="font-semibold">磁盘文件有更新</span>
+                <span className="opacity-80">
+                  · 回工作流库点「同步」拉取最新内容
+                </span>
                 <span
                   className="text-success-strong/80 truncate font-mono"
                   title={detail.sourcePath}

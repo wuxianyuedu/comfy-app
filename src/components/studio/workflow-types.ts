@@ -360,10 +360,13 @@ export interface WorkflowDetail {
     innerSlotName: string;
   }[];
   /** 该工作流由本地文件支撑（经「本机路径」导入）时的绝对路径。
-   *  文件一变，服务端就重新导入。 */
+   *  文件一变，界面就会显示「磁盘文件有更新」等用户点「同步」。 */
   sourcePath?: string | null;
-  /** 本次 detail GET 检出并应用了源文件变更时设置。 */
-  sourceChanged?: boolean;
+  /** 磁盘上的源文件比库里的新（**检出**，未应用）时设置。
+   *
+   *  注意它不等于「已同步」：详情加载**不会**再自动把磁盘内容写回库里 ——
+   *  那样「切界面」就等于「同步」，而同步按钮失去意义。 */
+  sourceOutdated?: boolean;
   /** 被跟踪的源文件在磁盘上已不存在时设置。 */
   sourceMissing?: boolean;
   /** 分类："local" = 文件支撑；"online" = 粘贴 / API 导入。 */
