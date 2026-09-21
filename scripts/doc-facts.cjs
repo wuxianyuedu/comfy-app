@@ -52,9 +52,15 @@ const SCOPED_DOCS = [
   "docs/guides/TESTING.md",
   "docs/guides/sync-after-pull.md",
 ];
-function readJson(p) { return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8")); }
-function readText(p) { return fs.readFileSync(path.join(ROOT, p), "utf8"); }
-function exists(p) { return fs.existsSync(path.join(ROOT, p)); }
+function readJson(p) {
+  return JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
+}
+function readText(p) {
+  return fs.readFileSync(path.join(ROOT, p), "utf8");
+}
+function exists(p) {
+  return fs.existsSync(path.join(ROOT, p));
+}
 function splitHostPort(url) {
   const m = url.match(/\/\/([^:/]+):(\d+)/);
   if (!m) throw new Error(`无法从 URL 提取 host:port: ${url}`);
@@ -78,7 +84,9 @@ function extractDevHostPort() {
       .join("\n")
       .match(/COMFYAPP_PORT\s*=\s*["']?([0-9]+)["']?/);
     if (m && Number(m[1]) !== port) {
-      throw new Error(`端口权威源冲突：tauri.conf.json devUrl=${port} 但 .env.example COMFYAPP_PORT=${m[1]}`);
+      throw new Error(
+        `端口权威源冲突：tauri.conf.json devUrl=${port} 但 .env.example COMFYAPP_PORT=${m[1]}`,
+      );
     }
   }
   return { host, port };
@@ -111,7 +119,9 @@ function extractFallbackPorts() {
 function extractDerivedAppPort() {
   const { createRequire } = require("node:module");
   const req = createRequire(__filename);
-  const port = req(path.join(ROOT, "scripts", "app-port.mjs")).resolveAppPort(ROOT);
+  const port = req(path.join(ROOT, "scripts", "app-port.mjs")).resolveAppPort(
+    ROOT,
+  );
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`无法从 scripts/app-port.mjs 解析本检出端口：${port}`);
   }
@@ -129,13 +139,16 @@ function extractShellAppExe() {
   const src = readText("scripts/dev-launcher.mjs");
   const m = src.match(/"(src-tauri\/target\/release\/([^"/]+))\.exe"/);
   if (!m) {
-    throw new Error("无法从 scripts/dev-launcher.mjs 的 defaultShellExe 提取壳文件名");
+    throw new Error(
+      "无法从 scripts/dev-launcher.mjs 的 defaultShellExe 提取壳文件名",
+    );
   }
   return `${m[2]}.exe`;
 }
 function extractSplash() {
   const conf = readJson("src-tauri/tauri.conf.json");
-  const win = conf.app.windows.find((w) => w.label === "splash") || conf.app.windows[0];
+  const win =
+    conf.app.windows.find((w) => w.label === "splash") || conf.app.windows[0];
   return win.url;
 }
 
@@ -162,7 +175,10 @@ function extractComfyUIPort() {
    * 整页 500）。app-settings.ts 只再导出同名，因此这里必须读**定义处**。 */
   const t = readText("src/lib/endpoints.ts");
   const m = t.match(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(\d+)/);
-  if (!m) throw new Error("无法从 src/lib/endpoints.ts 的 COMFYUI_DEFAULT_PORT 提取 ComfyUI 默认端口");
+  if (!m)
+    throw new Error(
+      "无法从 src/lib/endpoints.ts 的 COMFYUI_DEFAULT_PORT 提取 ComfyUI 默认端口",
+    );
 
   return m[1];
 }
@@ -190,19 +206,27 @@ function extractAsciiOnlyModules() {
     if (!exists(doc)) continue;
     const text = readText(doc);
     // 取登记行：`| comment.language.asciiOnly | <路径清单> | ... |`
-    const line = text.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
+    const line = text
+      .split("\n")
+      .find((l) => l.includes("comment.language.asciiOnly"));
     if (!line) continue;
     // 取「名单」那一格（第 2 列），逐项提取反引号包裹的模块路径。
     // 括号里的理由（「构建期被加载」这类）写在路径的**同一对反引号之外**，
     // 因此 `[^`]+?` 天然不会把它吃进来 —— 不需要按「（」二次切分。
     const cell = line.split("|")[2] ?? "";
-    const paths = [...cell.matchAll(/`((?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g)].map((m) => m[1]);
+    const paths = [
+      ...cell.matchAll(
+        /`((?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g,
+      ),
+    ].map((m) => m[1]);
     // 名单可以为**空**（棘轮基线归零是这条规则的目标形态），但「读不到登记行」
     // 必须报错：一个永远返回空数组的解析器会让所有断言全绿（§12.16 的同款教训）。
     // 判据因此落在「登记行在不在」上，而不是「解析出几项」。
     if (line) return paths;
   }
-  throw new Error("docs/reference-facts.md 里读不到 comment.language.asciiOnly 的登记行");
+  throw new Error(
+    "docs/reference-facts.md 里读不到 comment.language.asciiOnly 的登记行",
+  );
 }
 
 // FACTS：机器可读事实定义（与 docs/reference-facts.md 的 key 一一对应）
@@ -215,14 +239,29 @@ const FACTS = [
   // 占位符类：文档用占位符替代裸值
   // 桌面壳的 exe 名：**唯一**的启动入口（Python 启动器与它的三个 LAUNCHER_NAME
   // 产物已随 ISSUE #784 移除，只剩这一条事实）。
-  { key: "shell.app.exe", placeholder: "{{shell.app.exe}}", kind: "placeholder", extract: extractShellAppExe },
-  { key: "shell.splash", placeholder: "{{shell.splash}}", kind: "placeholder", extract: extractSplash },
+  {
+    key: "shell.app.exe",
+    placeholder: "{{shell.app.exe}}",
+    kind: "placeholder",
+    extract: extractShellAppExe,
+  },
+  {
+    key: "shell.splash",
+    placeholder: "{{shell.splash}}",
+    kind: "placeholder",
+    extract: extractSplash,
+  },
   // 核对类：文档保留直观值，脚本核对权威源当前端口族
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
   // dev 端口族仅对描述 dev 启动链路的文档校验；workshop-mcp.md 的 4300 是 MCP HTTP
   // 端口（非 dev 回落），若参与 verify 会误判「缺 dev 主端口 3100」，故排除该文档。
   // 静态链端口（tauri.conf.json devUrl）：只对**描述启动器 / 壳 / 兜底**的文档适用。
-  { key: "dev.port", kind: "verify", extract: () => String(extractDevHostPort().port), excludeDocs: ["docs/workshop-mcp.md"] },
+  {
+    key: "dev.port",
+    kind: "verify",
+    extract: () => String(extractDevHostPort().port),
+    excludeDocs: ["docs/workshop-mcp.md"],
+  },
   // 解析链端口（scripts/app-port.mjs）：对**描述 pnpm dev / start 的文档**适用。
   // 与静态链互斥：同一篇文档里不能同时把两条链路的端口都写成裸值，否则两条事实
   // 会互相打架（见上方 extractDerivedAppPort 的说明）。
@@ -234,29 +273,84 @@ const FACTS = [
     //（start-web.ps1 → dev-launcher.ps1 → pnpm dev），故适用解析链。
     onlyDocs: ["docs/guide-non-developer.md"],
   },
-  { key: "dev.port.fallback", kind: "verify", extract: extractFallbackPorts, excludeDocs: ["docs/workshop-mcp.md"] },
+  {
+    key: "dev.port.fallback",
+    kind: "verify",
+    extract: extractFallbackPorts,
+    excludeDocs: ["docs/workshop-mcp.md"],
+  },
   // 独立单值端口（非 dev 端口族）。workshop-mcp.md 的端口（MCP 4300 / ComfyUI 8188）
   // 属独立语义，用占位符替代裸值，doc:render 替换成真实值。
-  { key: "registry.port", placeholder: "{{registry.port}}", kind: "placeholder", extract: extractRegistryPort },
+  {
+    key: "registry.port",
+    placeholder: "{{registry.port}}",
+    kind: "placeholder",
+    extract: extractRegistryPort,
+  },
   // MCP / ComfyUI 端口是「独立单值」；MCP 默认端口已取在 dev 回落族之外（4300），
   // 但为明确语义仍用占位符，并限定仅在 workshop-mcp.md 校验避免跨文档误判。
-  { key: "mcp.http.port", placeholder: "{{mcp.http.port}}", kind: "placeholder", extract: extractMcpHttpPort, onlyDocs: ["docs/workshop-mcp.md"] },
+  {
+    key: "mcp.http.port",
+    placeholder: "{{mcp.http.port}}",
+    kind: "placeholder",
+    extract: extractMcpHttpPort,
+    onlyDocs: ["docs/workshop-mcp.md"],
+  },
   // otherDocs：该值在别的文档里的「引用点」不是无括号端口形态（如主规范的
   //          `localhost:3100` / `:8188` 并列行），须在另一套文档里也防裸值回潮。
-  { key: "comfyui.port", placeholder: "{{comfyui.port}}", kind: "placeholder", extract: extractComfyUIPort, onlyDocs: ["docs/workshop-mcp.md"], otherDocs: ["docs/standards/Comfy-APP-T3-项目开发规范.md"] },
+  {
+    key: "comfyui.port",
+    placeholder: "{{comfyui.port}}",
+    kind: "placeholder",
+    extract: extractComfyUIPort,
+    onlyDocs: ["docs/workshop-mcp.md"],
+    otherDocs: ["docs/standards/Comfy-APP-T3-项目开发规范.md"],
+  },
   // 注释语言白名单（ISSUE #678 / 规范 12 §12.4.6）：名单本身是权威定义，
   // 由 reference-facts 的一行承载，脚本解析它 —— 两侧只有一份清单。
-  { key: "comment.language.asciiOnly", kind: "list", extract: extractAsciiOnlyModules },
+  {
+    key: "comment.language.asciiOnly",
+    kind: "list",
+    extract: extractAsciiOnlyModules,
+  },
   // 路径类：核对文件存在
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
-  { key: "path.dev-launcher", kind: "path", source: "scripts/dev-launcher.ps1" },
-  { key: "path.shell-launch-rs", kind: "path", source: "src-tauri/src/shell_launch.rs" },
-  { key: "path.start-entry", kind: "path", source: "tools/start/start-tauri.ps1" },
-  { key: "path.start-entry-dev", kind: "path", source: "tools/start/start-tauri-dev.ps1" },
-  { key: "path.build-desktop", kind: "path", source: "scripts/build-desktop.mjs" },
-  { key: "path.rebuild-static", kind: "path", source: "tools/build/rebuild-static.ps1" },
-  { key: "path.build-tauri-release", kind: "path", source: "tools/build/build-tauri-release.ps1" },
+  {
+    key: "path.dev-launcher",
+    kind: "path",
+    source: "scripts/dev-launcher.ps1",
+  },
+  {
+    key: "path.shell-launch-rs",
+    kind: "path",
+    source: "src-tauri/src/shell_launch.rs",
+  },
+  {
+    key: "path.start-entry",
+    kind: "path",
+    source: "tools/start/start-tauri.ps1",
+  },
+  {
+    key: "path.start-entry-dev",
+    kind: "path",
+    source: "tools/start/start-tauri-dev.ps1",
+  },
+  {
+    key: "path.build-desktop",
+    kind: "path",
+    source: "scripts/build-desktop.mjs",
+  },
+  {
+    key: "path.rebuild-static",
+    kind: "path",
+    source: "tools/build/rebuild-static.ps1",
+  },
+  {
+    key: "path.build-tauri-release",
+    kind: "path",
+    source: "tools/build/build-tauri-release.ps1",
+  },
   { key: "path.nvmrc", kind: "path", source: ".nvmrc" },
   // 平台侧 CI 配置（.cnb.yml）**已删除**（ISSUE #623：免费额度 160 核时/月，
   // 跑不起）。这里不再登记它的路径——path 类事实的语义是「文档里指向的文件必须
@@ -282,9 +376,11 @@ const SCOPED_DOC_DIRS = ["docs/standards", "docs/guides"];
  */
 const SCOPED_DOC_EXEMPTIONS = {
   // 文档集索引：只有导航与关系说明，不含值类裸值或可失效的路径引用。
-  "docs/standards/README.md": "文档集索引（导航与章节映射），不含被校验的值类引用",
+  "docs/standards/README.md":
+    "文档集索引（导航与章节映射），不含被校验的值类引用",
   // 评审归档：记录一次性的审查结论与处置，历史快照，不随源码演进。
-  "docs/guides/reviews/2026-08-30-canvasnode-review.md": "代码审查归档，历史快照，不随源码演进",
+  "docs/guides/reviews/2026-08-30-canvasnode-review.md":
+    "代码审查归档，历史快照，不随源码演进",
 };
 
 /** 生成文档输出目录（相对 ROOT） */

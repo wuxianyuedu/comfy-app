@@ -36,12 +36,25 @@ const {
 
 const problems = [];
 
+// 代理自动加载的唯一导航文件（AGENTS 硬规则 15 前置阅读的第一站）。
+// 与 docs/** 不同：它不含 {{占位符}}、也不进 render-doc-placeholders 的生成面；
+// 台账命令口径守卫（C4）与 checkAgentsMdDrift（C1/C2/C3）都以它为判据对象。
+const AGENTS_MD_PATH = "AGENTS.md";
+
 function checkFactKeysMatchDocs() {
-  if (!exists("docs/reference-facts.md")) { problems.push("缺少 docs/reference-facts.md 登记表"); return; }
+  if (!exists("docs/reference-facts.md")) {
+    problems.push("缺少 docs/reference-facts.md 登记表");
+    return;
+  }
   const md = readText("docs/reference-facts.md");
-  for (const f of FACTS) if (!md.includes(f.key)) problems.push(`登记表缺少事实 key：${f.key}`);
-  const mdKeys = [...md.matchAll(/\| `([a-z][a-z0-9_.]+)` \|/g)].map((m) => m[1]);
-  for (const k of mdKeys) if (!FACTS.some((f) => f.key === k)) problems.push(`登记表有多余/脚本未支持 key：${k}`);
+  for (const f of FACTS)
+    if (!md.includes(f.key)) problems.push(`登记表缺少事实 key：${f.key}`);
+  const mdKeys = [...md.matchAll(/\| `([a-z][a-z0-9_.]+)` \|/g)].map(
+    (m) => m[1],
+  );
+  for (const k of mdKeys)
+    if (!FACTS.some((f) => f.key === k))
+      problems.push(`登记表有多余/脚本未支持 key：${k}`);
 }
 
 /* ── 校验范围守卫（ISSUE #316）─────────────────────────────────────────
@@ -59,7 +72,9 @@ function checkScopeCoverage() {
   for (const dir of SCOPED_DOC_DIRS) {
     const absDir = path.join(ROOT, dir);
     if (!fs.existsSync(absDir)) {
-      problems.push(`校验范围守卫：目录不存在 ${dir}（SCOPED_DOC_DIRS 需与仓库结构一致）`);
+      problems.push(
+        `校验范围守卫：目录不存在 ${dir}（SCOPED_DOC_DIRS 需与仓库结构一致）`,
+      );
       continue;
     }
     const walk = (abs) => {
@@ -75,7 +90,7 @@ function checkScopeCoverage() {
         problems.push(
           `校验范围守卫：${rel} 既未登记进 SCOPED_DOCS、也不在豁免名单里——` +
             `新增规范文档必须二选一（登记则参与校验；豁免则须在 scripts/doc-facts.cjs 的 ` +
-            `SCOPED_DOC_EXEMPTIONS 里写明理由），不允许静默跳过。见 docs/reference-facts.md §3。`
+            `SCOPED_DOC_EXEMPTIONS 里写明理由），不允许静默跳过。见 docs/reference-facts.md §3。`,
         );
       }
     };
@@ -83,10 +98,14 @@ function checkScopeCoverage() {
   }
   for (const [rel, reason] of Object.entries(SCOPED_DOC_EXEMPTIONS)) {
     if (!reason || !reason.trim()) {
-      problems.push(`校验范围守卫：豁免名单条目 ${rel} 没有写理由（豁免必须可核验）`);
+      problems.push(
+        `校验范围守卫：豁免名单条目 ${rel} 没有写理由（豁免必须可核验）`,
+      );
     }
     if (!exists(rel)) {
-      problems.push(`校验范围守卫：豁免名单条目 ${rel} 指向的文件不存在——过期条目应删除`);
+      problems.push(
+        `校验范围守卫：豁免名单条目 ${rel} 指向的文件不存在——过期条目应删除`,
+      );
     }
   }
 }
@@ -119,7 +138,7 @@ function checkVerify(text, docPath, f) {
         problems.push(
           `[${docPath}] 文档 dev 地址端口 ${docPorts.join(" / ")} 未包含本检出按路径推导的端口 ${derivedPort}` +
             `（pnpm dev / pnpm start 的实际监听端口，见 scripts/app-port.mjs）。` +
-            `照文档地址打开会 ERR_CONNECTION_REFUSED；请改为 ${derivedPort} 或写成「解析值」而非固定数字。`
+            `照文档地址打开会 ERR_CONNECTION_REFUSED；请改为 ${derivedPort} 或写成「解析值」而非固定数字。`,
         );
       }
       return;
@@ -133,7 +152,7 @@ function checkVerify(text, docPath, f) {
       const hasDevFam = docPorts.some((p) => allowed.has(p));
       if (hasDevFam && !docPorts.includes(port)) {
         problems.push(
-          `[${docPath}] 文档 dev 地址端口 ${docPorts.filter((p) => allowed.has(p)).join(" / ")} 未包含权威主端口 ${port}。请核对端口是否变更。`
+          `[${docPath}] 文档 dev 地址端口 ${docPorts.filter((p) => allowed.has(p)).join(" / ")} 未包含权威主端口 ${port}。请核对端口是否变更。`,
         );
       }
     }
@@ -148,7 +167,7 @@ function checkVerify(text, docPath, f) {
       const devFam = new Set([port, ...candidates]);
       if (devFam.has(mcpPort)) {
         problems.push(
-          `[${docPath}] MCP HTTP 端口 ${mcpPort} 与 dev 端口族 ${[port, ...candidates].join("/")} 冲突，会将 MCP 监听误判成 dev server。请为 MCP 换独立端口。`
+          `[${docPath}] MCP HTTP 端口 ${mcpPort} 与 dev 端口族 ${[port, ...candidates].join("/")} 冲突，会将 MCP 监听误判成 dev server。请为 MCP 换独立端口。`,
         );
       }
     }
@@ -170,10 +189,15 @@ function checkVerify(text, docPath, f) {
  * 即视为说明而非可执行命令。
  */
 const NPM_CMD_RE = /(^|[\s`(（])(npm\s+run|npx)\b/;
-const NPM_CMD_EXPLAIN_RE = /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/;
+const NPM_CMD_EXPLAIN_RE =
+  /改为|修正|修正为|pnpm|禁止|违反|原记录|不要用|应使用/;
 
 function checkLedgerCommands() {
-  for (const doc of SCOPED_DOCS) {
+  // AGENTS.md 是**代理自动加载**的仓库根导航文件，历史上「npm run test:e2e」这类
+  // 硬规则 1 的违反最容易出现在这里；但它不含 {{占位符}}、不进 render-doc-placeholders
+  // 的生成面，所以刻意不塞进 SCOPED_DOCS——在这里显式并入遍历集合。
+  const ledgerDocs = [AGENTS_MD_PATH, ...SCOPED_DOCS];
+  for (const doc of ledgerDocs) {
     if (!exists(doc)) continue;
     const lines = readText(doc).split("\n");
     lines.forEach((line, i) => {
@@ -182,7 +206,7 @@ function checkLedgerCommands() {
       problems.push(
         `[${doc}:${i + 1}] 出现 npm/npx 命令（AGENTS 硬规则 1「包管理只用 pnpm」）。` +
           `请改为 pnpm（如 npm run test → pnpm test）；若是在描述该规则本身，` +
-          `补上「改为/修正/pnpm」等纠正词以标明是说明而非可执行命令。`
+          `补上「改为/修正/pnpm」等纠正词以标明是说明而非可执行命令。`,
       );
     });
   }
@@ -191,24 +215,39 @@ function checkLedgerCommands() {
 function shouldApplyFactToDoc(f, docPath) {
   // onlyDocs：事实的主适用文档组（未命中即跳过）；otherDocs：额外适用文档，
   // 与主文档组取并集（同一值在另一篇文档里以别的形态出现时用，见 doc-facts.cjs）。
-  if (f.onlyDocs && !f.onlyDocs.includes(docPath) && !(f.otherDocs || []).includes(docPath)) return false;
+  if (
+    f.onlyDocs &&
+    !f.onlyDocs.includes(docPath) &&
+    !(f.otherDocs || []).includes(docPath)
+  )
+    return false;
   if (f.excludeDocs && f.excludeDocs.includes(docPath)) return false;
   return true;
 }
 
 function checkDoc(docPath) {
-  if (!exists(docPath)) { problems.push(`试点文档不存在：${docPath}`); return; }
+  if (!exists(docPath)) {
+    problems.push(`试点文档不存在：${docPath}`);
+    return;
+  }
   const text = readText(docPath);
   for (const f of FACTS) {
     if (!shouldApplyFactToDoc(f, docPath)) continue; // 事实声明了适用文档范围，未命中则跳过
     if (f.kind === "placeholder") {
       let realValue;
-      try { realValue = f.extract(); } catch (e) { problems.push(`[${docPath}] 无法提取 ${f.key}（${e.message}）`); continue; }
+      try {
+        realValue = f.extract();
+      } catch (e) {
+        problems.push(`[${docPath}] 无法提取 ${f.key}（${e.message}）`);
+        continue;
+      }
       const vals = Array.isArray(realValue) ? realValue : [realValue];
       for (const rv of vals) {
         if (!rv) continue;
         if (bareValueOccurs(text, rv)) {
-          problems.push(`[${docPath}] 发现裸值 "${rv}"（对应 ${f.key}，应改用占位符 ${f.placeholder}）。见 docs/reference-facts.md。`);
+          problems.push(
+            `[${docPath}] 发现裸值 "${rv}"（对应 ${f.key}，应改用占位符 ${f.placeholder}）。见 docs/reference-facts.md。`,
+          );
         }
       }
     } else if (f.kind === "verify") {
@@ -225,17 +264,204 @@ function checkPaths() {
   }
 }
 
+/* ── AGENTS.md ↔ standards 漂移守卫 ────────────────────────────────────
+ * 目的：让「AGENTS.md 里复述的路径 / 文件 / 章节锚点与实际仓库状态脱钩」
+ *      这件事变成硬错误。
+ *
+ * 起因（2026-09-20 那次评审抓到两处具体漂移，同型问题至今仍在攒）：
+ *   - AGENTS.md 声称门禁在 CI 跑而 §13.5 已随 ISSUE #623 下线；
+ *   - 硬规则 22 里 `src/lib/workflow-io-types.ts` 示例路径实际在 workflow/ 子目录；
+ *   - 本次上线时首跑又抓到一处：硬规则 12 表格里 `scripts/start_tauri_launcher.py`
+ *     已随 #784 移除（启动器进壳、`shell_launch.rs` 自编排），AGENTS.md 未同步。
+ *
+ * 这类问题的共性：**不是规范条款错了，而是 AGENTS.md 的复述落后于源码/规范**。
+ * 现有 SCOPED_DOCS 覆盖 docs/standards/**、docs/guides/**，AGENTS.md 恰好是
+ * 代理自动加载却不在校验范围里的唯一导航文件——它一旦被机器读进 context，
+ * 里面的过期路径就会直接把代理误导到错误位置。
+ *
+ * 判据（与 AGENTS 硬规则 24「复用优先」一致，不新写独立门禁）：
+ *   C1/C3：AGENTS.md 里出现的**仓库相对路径**（反引号内、或 markdown 链接目标）
+ *          必须存在于文件系统。仅当路径以允许前缀（scripts/、src/、tests/、
+ *          docs/、tools/、.githooks/、src-tauri/、changelog.d/、public/、e2e/）
+ *          开头，或属于允许根配置文件白名单（package.json / README.md / 等）
+ *          时才纳入核对；其他形态（通配 `**` / 占位符 `<x>` / range `01~18` /
+ *          `§` 章节号 / 代码符号 / 简称文件名）自动跳过。
+ *   C2：3 行窗口内同一 bullet 里同时出现 `docs/standards/NN-*.md` 与 `§NN.M`
+ *       时，去目标 standards 文件里定位 `^#{1,6}\s+(§)?NN.M\b` 锚点。仅覆盖
+ *       「文件 + 章节号双写、但 §号在该文件里不存在」这一种确定性缺陷。
+ *       launch-and-build.md（无 NN 前缀）、跨文件同名编号（§9.5 同时属于
+ *       standards/09 与 launch-and-build）都不进入 C2 的匹配面。
+ *   C4：checkLedgerCommands 把 AGENTS.md 与 SCOPED_DOCS 合并遍历，防 npm/npx
+ *       命令表述漂移（AGENTS.md 不进 SCOPED_DOCS——它没有 {{占位符}}，
+ *       进 SCOPED_DOCS 会被 render-doc-placeholders 生成一份 docs/generated/AGENTS.md
+ *       副本，反而误导读者）。
+ *
+ * 不覆盖：同章节号存在但内容语义漂移（比如 §13.5 标题仍在但表述从「CI 兜底」
+ *         改成「按需召唤」）——这类属于 review/人读，机器只挡「找不到」。
+ */
+const AGENTS_PATH_PREFIXES = [
+  "scripts/",
+  "src/",
+  "tests/",
+  "docs/",
+  "tools/",
+  ".githooks/",
+  "src-tauri/",
+  "changelog.d/",
+  "public/",
+  "e2e/",
+];
+const AGENTS_ROOT_FILES = new Set([
+  "AGENTS.md",
+  "README.md",
+  "CHANGELOG.md",
+  "package.json",
+  "pnpm-workspace.yaml",
+  "next.config.js",
+  "eslint.config.js",
+  "tsconfig.json",
+  "vitest.config.ts",
+  ".env.example",
+  ".nvmrc",
+  ".mcp.json",
+  "db.sqlite",
+]);
+
+/** 把一段反引号内容或链接 URL 判成「仓库相对路径」→ 返回规范化后的相对路径；不是则返回 null。 */
+function looksLikeRepoPath(raw) {
+  const p = raw.trim();
+  if (!p) return null;
+  // 通配、占位符、range、章节号、代码符号、URL、锚点、配置对、带参数的调用形态
+  if (/[<>*~§()=\s]/.test(p)) return null;
+  if (p.startsWith("#")) return null;
+  if (/^[a-z]+:\/\//i.test(p)) return null;
+  if (/^::?1$/.test(p) || /^[\d.]+$/.test(p)) return null; // ::1 或 IP
+  const hasSlash = p.includes("/");
+  if (!hasSlash) {
+    return AGENTS_ROOT_FILES.has(p) ? p : null;
+  }
+  // 有斜杠：必须以允许前缀开头，避免误伤「简称文件名 / 抽象目录名」
+  const allowed = AGENTS_PATH_PREFIXES.some((pre) => p.startsWith(pre));
+  if (!allowed) return null;
+  // 末尾斜杠表目录形态；去掉再交给 fs.existsSync
+  const normalized = p.endsWith("/") ? p.slice(0, -1) : p;
+  return normalized || null;
+}
+
+function checkAgentsMdPaths() {
+  if (!exists(AGENTS_MD_PATH)) {
+    problems.push(
+      "AGENTS.md 漂移守卫：仓库根应存在 AGENTS.md（AGENTS 硬规则 15 前置阅读的第一站）",
+    );
+    return;
+  }
+  const text = readText(AGENTS_MD_PATH);
+  const lines = text.split(/\r?\n/);
+  const seen = new Set();
+  lines.forEach((line, idx) => {
+    const lineno = idx + 1;
+    const candidates = [];
+    for (const m of line.matchAll(/`([^`\n]+)`/g)) {
+      candidates.push({ raw: m[1], source: "backtick" });
+    }
+    for (const m of line.matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)) {
+      // 链接目标允许带 #fragment；只核对 fragment 之前的路径部分
+      candidates.push({ raw: m[1].split("#")[0], source: "md-link" });
+    }
+    for (const c of candidates) {
+      const p = looksLikeRepoPath(c.raw);
+      if (!p) continue;
+      const key = `${p}@L${lineno}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!exists(p)) {
+        problems.push(
+          `[AGENTS.md:L${lineno}] 反引号路径 \`${c.raw}\` 在仓库中不存在。` +
+            `若该文件已删除/移动，请同步更新 AGENTS.md（AGENTS 硬规则 15 / §12.5.3）；` +
+            `若是历史决策记录（如「随 ISSUE #N 已下线」句式），请去掉反引号或改写成不带路径的表述。`,
+        );
+      }
+    }
+  });
+}
+
+function checkAgentsMdSectionAnchors() {
+  if (!exists(AGENTS_MD_PATH)) return;
+  const text = readText(AGENTS_MD_PATH);
+  const lines = text.split(/\r?\n/);
+  // 「3 行窗口」：把当前行、上一行、下一行拼成一段——覆盖「同 bullet 跨行、
+  // 文件在头行、§号在后行」这种 AGENTS.md 里常见的写法（如「改 src/lib/**
+  // → docs/standards/18-lib层规范.md ... 尤其 §18.4 三选一的唯一口径」）。
+  const fileRe = /docs\/standards\/(\d+)-[^\s`)\]~]+\.md/g;
+  const sectionRe = /§(\d+(?:\.\d+){0,3})/g;
+  // 已报告过的 (path + §num) 组合，避免窗口重叠导致重复计数
+  const reported = new Set();
+  const targetCache = new Map();
+  const readTarget = (rel) => {
+    if (targetCache.has(rel)) return targetCache.get(rel);
+    const content = exists(rel) ? readText(rel) : "";
+    targetCache.set(rel, content);
+    return content;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const window = [lines[i - 1] ?? "", lines[i], lines[i + 1] ?? ""].join(
+      "\n",
+    );
+    const files = [];
+    let m;
+    fileRe.lastIndex = 0;
+    while ((m = fileRe.exec(window))) {
+      files.push({ num: m[1], path: m[0] });
+    }
+    if (!files.length) continue;
+    sectionRe.lastIndex = 0;
+    while ((m = sectionRe.exec(window))) {
+      const full = m[1]; // 形如 "18" / "18.4" / "13.6.1"
+      const major = full.split(".")[0];
+      const target = files.find((f) => f.num === major);
+      if (!target) continue; // 窗口里只有别的 standards 文件，跳过（避免误配）
+      if (full === major) continue; // 单级 §N（如 §17）不校验——粒度太粗、易混淆
+      if (!exists(target.path)) continue; // 文件本身缺失由 checkAgentsMdPaths 报，这里不重复
+      const dedupKey = `${target.path}#${full}`;
+      if (reported.has(dedupKey)) continue;
+      const content = readTarget(target.path);
+      const escaped = full.replace(/\./g, "\\.");
+      const anchorRe = new RegExp(
+        `^#{1,6}\\s+(?:§)?${escaped}(?:\\s|[^\\d]|$)`,
+        "m",
+      );
+      if (!anchorRe.test(content)) {
+        reported.add(dedupKey);
+        problems.push(
+          `[AGENTS.md:L${i + 1}] 章节引用 \`§${full}\` 在 \`${target.path}\` 中未找到对应标题锚点。` +
+            `请核对章节号是否写错、该章节是否被合并/重编号；若目标文件里的标题格式与 \`§${full}\` 有出入，` +
+            `请统一到 standards 惯例（\`## ${full} ...\` 或 \`### ${full} ...\`）。`,
+        );
+      }
+    }
+  }
+}
+
+function checkAgentsMdDrift() {
+  checkAgentsMdPaths();
+  checkAgentsMdSectionAnchors();
+}
+
 function main() {
   checkFactKeysMatchDocs();
   checkScopeCoverage();
   checkLedgerCommands();
   checkPaths();
+  checkAgentsMdDrift();
   for (const doc of SCOPED_DOCS) checkDoc(doc);
 
   if (problems.length > 0) {
     console.error("\n[doc:check] 发现文档引用一致性问题：\n");
     for (const p of problems) console.error("  ✗ " + p);
-    console.error(`\n共 ${problems.length} 项。请对照 docs/reference-facts.md 更新文档。`);
+    console.error(
+      `\n共 ${problems.length} 项。请对照 docs/reference-facts.md 更新文档。`,
+    );
     process.exit(1);
   }
   console.log("[doc:check] ✓ 文档引用与权威源一致。");
