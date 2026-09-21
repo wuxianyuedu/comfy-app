@@ -126,8 +126,8 @@ Comfy-APP-T3/
 - **WebView2 运行时**：Windows 10/11 通常已内置；Linux 用系统 WebKitGTK
   （Debian/Ubuntu：`libwebkit2gtk-4.1-dev` / `libgtk-3-dev` / `pkg-config`，
   Fedora：`webkit2gtk4.1-devel`），macOS 用系统 WKWebView
-- （可选）**Python**：仅 comfy-cli venv（`scripts/setup-comfy-cli-venv.ps1`）与
-  Windows Job Object 辅助（`scripts/win_job.py`）用到
+- （可选）**Python**：仅 comfy-cli venv（`scripts/setup-comfy-cli-venv.ps1`）用到
+  （Windows Job Object 已由壳内联 Rust 实现，不再依赖 Python）
 
 启动编排**只有一份实现**：`scripts/dev-launcher.mjs`（Windows 也走它）。
 双击入口就是壳本身（`src-tauri\target\release\app.exe`），平台差异如下
