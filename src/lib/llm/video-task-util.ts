@@ -15,6 +15,7 @@ import path from "path";
 import { lastSegments } from "~/lib/path-display";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
 import { extractMediaUrl } from "~/lib/workshop/api-channel-shared";
+import { sleep } from "~/lib/with-timeout";
 import {
   buildVideoPollUrls,
   mediaDefaultExt,
@@ -93,7 +94,7 @@ export async function pollRemoteVideoTask(
   const pollUrls = [rest, ...(agnes ? [agnes] : [])];
   const deadline = Date.now() + VIDEO_POLL_TOTAL_MS;
   while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, VIDEO_POLL_INTERVAL_MS));
+    await sleep(VIDEO_POLL_INTERVAL_MS);
     for (const pollUrl of pollUrls) {
       try {
         const pollRes = await fetch(pollUrl, {

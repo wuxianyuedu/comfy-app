@@ -109,6 +109,10 @@ function Invoke-Entry {
   # 双击场景不必先手工改机器的执行策略。子脚本自己负责中文输出编码。
   $argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$abs`"") + $ScriptArgs
 
+  # 命令行回显：入口经 Start-Process 转到逻辑脚本，命令行本身不会出现在窗口里 ——
+  # 回显一行即可让「这次双击到底跑了哪个逻辑脚本」有据可查（与 .mjs 侧同一 `>>> ` 前缀）。
+  Write-Host ">>> $psExe $($argList -join ' ')" -ForegroundColor Yellow
+
   if ($HideWindow) {
     return (Start-Process -FilePath $psExe -ArgumentList $argList `
         -WorkingDirectory $Root -WindowStyle Hidden -PassThru)

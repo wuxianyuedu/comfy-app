@@ -39,10 +39,14 @@ export const LIGHT_PALETTE_BASE: NodePaletteBase = {
   dotFallback: "#6b6b76",
 };
 
-/** 深色底色 —— 也就是转成随主题之前用过的那批值。 */
+/** 深色底色 —— 与 `.dark` 块的 `--color-node` / `--color-node-accent` 同源
+ *  （`body` 就是 `--color-node` 的值，改动要两处一起改）。
+ *
+ *  底色**不再是近黑**（原 `#16161E`）：它和画布底 `#0a0a0f` 几乎同深，节点框
+ *  在暗色下看不出边界（用户口径：「和黑色背景相比有些看不清」），现在是一档灰。 */
 export const DARK_PALETTE_BASE: NodePaletteBase = {
-  body: "#16161E",
-  header: "#1A1A22",
+  body: "#2B2B36",
+  header: "#34343F",
   borderFallback: "#26262e",
   titleFallback: "#E2E2EA",
   dotFallback: "#6b7280",

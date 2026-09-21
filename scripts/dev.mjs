@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
+import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -97,6 +98,10 @@ if (invocation.viaHost) {
   );
 }
 
+// 起服务之前先回显命令行：dev server 一起就接管终端输出，之后看不出跑的是哪条
+// （`>>> ` 与门禁脚本同一口径，一次运行的日志里 grep 得到全部命令行）。
+echoCommandLine(invocation.command, invocation.args);
+
 // Next.js dev 读取 PORT 环境变量；显式透传给 next dev 子进程
 const result = spawnSync(invocation.command, invocation.args, {
   stdio: "inherit",
@@ -107,7 +112,7 @@ const result = spawnSync(invocation.command, invocation.args, {
 if (result.error) {
   process.stderr.write(
     `[dev.mjs] ✗ 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}\n` +
-      `[dev.mjs]   实际命令：${invocation.command} ${invocation.args.join(" ")}\n`,
+      `[dev.mjs]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
   );
   process.exit(1);
 }

@@ -21,6 +21,7 @@ import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { runAsyncAction } from "~/lib/async-action";
 import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
+import { sleep } from "~/lib/with-timeout";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
@@ -631,9 +632,7 @@ export function useSettingsPage(): SettingsPageController {
                   return;
                 }
               }
-              await new Promise((resolve) =>
-                setTimeout(resolve, OLLAMA_START_POLL_INTERVAL_MS),
-              );
+              await sleep(OLLAMA_START_POLL_INTERVAL_MS);
             }
             throw new Error(
               "Ollama 启动超时：进程可能未成功运行，请确认已安装 Ollama 并可手动执行 ollama serve",

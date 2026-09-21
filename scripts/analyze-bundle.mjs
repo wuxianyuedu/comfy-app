@@ -13,6 +13,7 @@
  *   http://127.0.0.1:8888 提供可视化报告。
  */
 import { spawn } from "node:child_process";
+import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 process.env.ANALYZE = "true";
@@ -27,6 +28,8 @@ if (!invocation) {
   );
   process.exit(1);
 }
+// 回显命令行（`ANALYZE=true` 由本进程注入、不在行里体现，见文件头）。
+echoCommandLine(invocation.command, invocation.args);
 const child = spawn(invocation.command, invocation.args, {
   stdio: "inherit",
   cwd: process.cwd(),
@@ -36,7 +39,7 @@ const child = spawn(invocation.command, invocation.args, {
 child.on("error", (error) => {
   process.stderr.write(
     `[analyze] ✗ 起 pnpm 失败（${error.code ?? "UNKNOWN"}）：${error.message}\n` +
-      `[analyze]   实际命令：${invocation.command} ${invocation.args.join(" ")}\n`,
+      `[analyze]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
   );
   process.exit(1);
 });

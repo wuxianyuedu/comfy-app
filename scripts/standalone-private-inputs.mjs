@@ -87,6 +87,13 @@ export function stripPrivateInputs(dir, onRemoved) {
  *   · 组件的 `scripts/launcher-core/*` 与 `kill-process-tree` 是编排器的运行期
  *     依赖 —— 缺一份就是运行时 ENOENT，而表现只是「双击没反应」。
  *
+ * **判据是编排器的相对 import 闭包，不是「看着像运行时的都写上」**：
+ * `dev-launcher.mjs` 的顶层是静态 import，ESM 在加载期就解析整张图 —— 缺一份不是
+ * 「那一步跳过」，而是整个编排器起不来（`ERR_MODULE_NOT_FOUND`）。因此清单必须覆盖
+ * 从 `dev-launcher.mjs` 出发递归可达的每个 `scripts/**` 模块，这条由
+ * `tests/dist-artifact-hygiene.test.ts` 自动核对（新增内部分件漏登记即失败）；
+ * 只出现在 JSDoc 类型注释里的说明符（如 `lockfile/lock-diff.d.mts`）不算运行期依赖。
+ *
  * `.ps1` 只是 Windows 侧的**调用入口**，编排逻辑不在这里（见规范 §3/§8）。
  */
 export const RUNTIME_SCRIPTS = [
@@ -100,18 +107,34 @@ export const RUNTIME_SCRIPTS = [
   // 缺一份即整条编排在运行时 ENOENT
   "dev-launcher-session.mjs",
   "app-port.mjs",
+  // 起 Next 之前的两道预检（`.env` 三项非空、schema 待应用）与执行件：
+  // 都在 dev-launcher.mjs 的顶层静态 import 里（见规范 §9.1 / §9.2）。
+  "env-preflight.mjs",
+  "db-schema-state.mjs",
+  "db-push-core.mjs",
   // 统一的进程树回收入口：编排器收尾、Python 启动器的兜底补刀、Rust 壳的
   // `kill_sidecar` 补刀都调它（平台判据只此一份，见 AGENTS 硬规则 3），
   // 连同它 import 的 kill-process-tree 一起缺不了。
   "reap-process.mjs",
-  // 编排器的内部分件（procs / shell / log / worktree / orchestrator）：
-  // 逐项登记而不是放行整个目录 —— 目录级放行会让**以后新增**的脚本自动进产物，
-  // 而「新增脚本默认不进产物」正是这条白名单的意义。
+  // lockfile 差异：编排器启动前打印「不一致的具体位置」（render-lock-diff），
+  // worktree 解析同一份差异对象（lock-diff）—— 两者都是静态 import。
+  "lockfile/render-lock-diff.mjs",
+  "lockfile/lock-diff.mjs",
+  // 编排器的内部分件（procs / shell / log / worktree / orchestrator / corepack /
+  // splash-assets）：逐项登记而不是放行整个目录 —— 目录级放行会让**以后新增**的
+  // 脚本自动进产物，而「新增脚本默认不进产物」正是这条白名单的意义。
+  // corepack 负责工具链探测与 corepack 对齐、splash-assets 在编排前同步启动页
+  // 资源，两者也都在 dev-launcher.mjs 的顶层静态 import 里。
   "launcher-core/procs.mjs",
   "launcher-core/shell.mjs",
+  // shell.mjs 与 procs.mjs 都要 import 它（命令行回显的唯一出口）：少这份就是
+  // 运行期 `ERR_MODULE_NOT_FOUND`，表现与「缺一份内部分件」完全一样。
+  "launcher-core/command-echo.mjs",
   "launcher-core/log.mjs",
   "launcher-core/worktree.mjs",
   "launcher-core/orchestrator.mjs",
+  "launcher-core/corepack.mjs",
+  "launcher-core/splash-assets.mjs",
 ];
 
 /** 产物根下不该随分发包出去的开发文件（相对产物根）。 */

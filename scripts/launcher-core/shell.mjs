@@ -12,6 +12,8 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+import { echoCommandLine } from "./command-echo.mjs";
+
 /** `whichCommand` / `usableCommand` 共用的选项（`env` 与 `platform` 可注入，便于单测）。 */
 /**
  * @typedef {{ env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
@@ -372,6 +374,9 @@ export function spawnInGroup({
   stderrFile,
   platform = process.platform,
 }) {
+  // 起之前先把命令行打出来：长驻服务一旦起来就接管终端（或把输出重定向进日志），
+  // 事后没人看得出当时跑的是哪条命令；`>>>` 一行留在编排日志里即可对照时间线。
+  echoCommandLine(command, args);
   /** @type {import("node:child_process").StdioOptions} */
   let stdio = "inherit";
   if (stdoutFile && stderrFile) {
@@ -416,6 +421,8 @@ export function runSync(
   args = [],
   { cwd, env, timeoutMs = 600_000, stdio = "pipe" } = {},
 ) {
+  // 回显与真正 spawn 的是同一个 (command, args)：跑起来之前先留一行证据。
+  echoCommandLine(command, args);
   const result = spawnSync(command, args, {
     cwd,
     env,
@@ -486,6 +493,9 @@ export function runPnpmSync(
       args,
     };
   }
+  // 回显的是**形态判据选出来的**那条（宿主 + `-File <shim>` 都带上）：源码里的
+  // `pnpm <args>` 与这台机器上真正被执行的命令常常不是同一条（见 pnpmInvocation）。
+  echoCommandLine(invocation.command, invocation.args);
   const result = spawnSync(invocation.command, invocation.args, {
     cwd,
     env,

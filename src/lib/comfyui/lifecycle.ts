@@ -30,6 +30,7 @@ import {
   type ComfyRuntimeSnapshot,
 } from "./status";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
+import { sleep } from "~/lib/with-timeout";
 import { COMFYUI_RUNTIME_LOG, SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import {
   describeStaleSession,
@@ -251,7 +252,7 @@ export async function stopComfyUiProcess(): Promise<{
   // （«最后一轮是否仍可达» 即「关了没有」），避免把判据散在循环与收尾两处。
   const stopProbes: (string | null)[] = [];
   for (let i = 0; i < COMFY_STOP_PROBE.maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, COMFY_STOP_PROBE.baseMs));
+    await sleep(COMFY_STOP_PROBE.baseMs);
     const probe = await probeComfyUi(800);
     stopProbes.push(probe);
     if (!probe) break;

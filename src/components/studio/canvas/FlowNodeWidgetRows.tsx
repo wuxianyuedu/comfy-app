@@ -9,7 +9,6 @@ import { friendlyInputName } from "~/lib/comfyui/node-titles";
 import {
   renderWidgetValue,
   valueCellColor,
-  withAlpha,
   sanitizeComboLabel,
 } from "../workflow-utils";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";
@@ -201,32 +200,22 @@ export function FlowNodeWidgetRows({
                   {friendlyLabel}
                 </span>
 
-                {/* 标签与取值之间的柔和 1px 竖向分隔线。 */}
-                <>
-                  <span
-                    className={
-                      isConn
-                        ? "bg-border-strong h-2 w-px shrink-0 opacity-50"
-                        : "bg-border-strong h-2 w-px shrink-0"
-                    }
-                    aria-hidden
-                  />
-                  {/* **同时**带线的 widget 输入仍显示它的
-                   * 控件取值（ComfyUI 从不隐藏它）—— 只是调暗，让
-                   * 读者能看出这个活值来自连线。 */}
-                  <span
-                    className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
-                    style={{
-                      flex: "1 1 0",
-                      color: isConn
-                        ? withAlpha(valueCellColor(v))
-                        : valueCellColor(v),
-                    }}
-                    title={String(v)}
-                  >
-                    {renderWidgetValue(v)}
-                  </span>
-                </>
+                {/* **同时**带线的 widget 输入仍显示它的
+                 * 控件取值（ComfyUI 从不隐藏它）—— 只是调暗，让
+                 * 读者能看出这个活值来自连线。
+                 *
+                 * 版式对齐 ComfyUI：标签与取值之间**不画分隔线**，值紧接标签
+                 * 左对齐（此前是一条 1px 竖线 + 右对齐的值列）。 */}
+                <span
+                  className="min-w-0 truncate text-left text-[10.5px] tabular-nums"
+                  style={{
+                    flex: "1 1 0",
+                    color: valueCellColor(v, isConn),
+                  }}
+                  title={String(v)}
+                >
+                  {renderWidgetValue(v)}
+                </span>
               </div>
             )}
             {/* STRING widget 文本框 —— **堆叠**在 LABEL 行下方。

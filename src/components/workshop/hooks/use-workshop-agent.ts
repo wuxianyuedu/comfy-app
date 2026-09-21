@@ -8,6 +8,7 @@
 //   3. 把工具结果回灌模型，继续循环直至模型直接回复用户
 // 视图层（AgentOverlay.tsx）只消费本 hook 返回的 controller。
 import React from "react";
+import { runAsyncAction } from "~/lib/async-action";
 import { nextId } from "~/lib/unique-id";
 import { sendAgentMessage } from "~/lib/agent/client";
 import type { AgentMessageLike, AgentChatResponse } from "~/lib/agent/shared";
@@ -170,7 +171,7 @@ export function useWorkshopAgent(
         .filter((m) => m.role !== "tool-run")
         .map((m) => ({ role: m.role, content: m.content }));
 
-    try {
+    const runLoop = async (): Promise<void> => {
       let currentMessages: AgentMessageLike[] = wireOf();
       const maxRounds = 10;
 
@@ -247,17 +248,22 @@ export function useWorkshopAgent(
         }
         break;
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "与 Agent 通信失败";
-      setError(msg);
-      pushMsg({
-        id: agentMsgId(),
-        role: "assistant",
-        content: `抱歉，出错了：${msg}`,
-      });
-    } finally {
-      setBusy(false);
-    }
+    };
+    await runAsyncAction(runLoop, {
+      report: (kind, detail) => {
+        if (kind === "err") {
+          setError(detail);
+          pushMsg({
+            id: agentMsgId(),
+            role: "assistant",
+            content: `抱歉，出错了：${detail}`,
+          });
+        }
+      },
+      failureText: "与 Agent 通信失败",
+      readResultEnvelope: false,
+    });
+    setBusy(false);
   }, [input, busy, pushMsg, executeOneTool]);
 
   const openAgent = React.useCallback(() => setOpen(true), []);

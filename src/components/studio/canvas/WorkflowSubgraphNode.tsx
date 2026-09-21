@@ -434,7 +434,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
        *  值很长的 STRING widget 拆成上下堆叠块。
        *  章折叠时隐藏。 */}
       {!isCollapsed && widgetInputs.length > 0 && (
-        <div className="bg-surface-1 relative flex min-h-0 flex-1 flex-col py-0.5">
+        /* widget 区与卡片同底（`bg-node`）：此前取 `bg-surface-1`（近黑），
+         *  节点框改灰之后它会变成「灰框里的黑块」，nodeMode ≠ 0 时又必须
+         *  有一层不透明底（磨砂在负 z，透明会把行压到画布上）。 */
+        <div className="bg-node relative flex min-h-0 flex-1 flex-col py-0.5">
           {widgetInputs.map(({ inp, label }, i) => {
             const v: unknown = inp.widgetValue;
             const isConn = inp.isConnection === true || inp.isBoundary === true;
@@ -533,11 +536,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         >
                           {label}
                         </span>
-                        {/* 标签与取值之间的竖向 1px 分隔线。 */}
-                        <span
-                          className="bg-border-strong h-2 w-px shrink-0"
-                          aria-hidden
-                        />
+                        {/* 标签与取值之间不画分隔线（与 ComfyUI 同款版式）。 */}
                         {/* 工作流画布上的 COMBO widget 渲染成只读的
                          *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
                          *  在这里保持禁用（编辑发生在会落盘取值的项目
@@ -574,26 +573,20 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                         >
                           {label}
                         </span>
-                        {/* 标签与取值之间的竖向 1px 分隔线。
-                         *  现在是一段柔和竖向渐变（上下端
-                         *  淡出到透明）而不是硬条 —— 读起来是
-                         *  列提示，而不是「把行切成两半」的线。
-                         *  宽度仍是 1px，不占行的版面。 */}
                         <span
-                          className="bg-border-strong h-2 w-px shrink-0"
-                          aria-hidden
-                        />
-                        <span
-                          className="min-w-0 truncate text-right text-[10.5px] tabular-nums"
+                          className="min-w-0 truncate text-left text-[10.5px] tabular-nums"
                           style={{
                             /* 与 WorkflowNode 的值 span 同理 —— `truncate` 回来了，
                              *  但只有文字本身缩略；节点宽度仍由用户控制
                              *  （ComfyUI 改尺寸 ↔ 画布镜像）。
                              *  不加 `minWidth: fit-content`
                              *  （长文件名会把它撑到 810px），
-                             *  也不加 `maxWidth` 上限（会把本来就合法的宽节点裁掉）。 */
+                             *  也不加 `maxWidth` 上限（会把本来就合法的宽节点裁掉）。
+                             *
+                             *  左对齐 + 不画分隔线 = ComfyUI 的值列版式；颜色按
+                             *  「有没有连线」取两档（见 `valueCellColor`）。 */
                             flex: "1 1 0",
-                            color: valueCellColor(v),
+                            color: valueCellColor(v, isConn),
                           }}
                           title={String(v)}
                         >
@@ -648,10 +641,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
                       >
                         {label}
                       </span>
-                      <span
-                        className="bg-border-strong h-2 w-px shrink-0"
-                        aria-hidden
-                      />
+                      {/* 标签与字数之间同样不画分隔线（与 ComfyUI 同款版式）。 */}
                       <span
                         className="text-ink-muted text-right text-[10px] tracking-wider uppercase"
                         title={`STRING · ${stringText.length} chars`}

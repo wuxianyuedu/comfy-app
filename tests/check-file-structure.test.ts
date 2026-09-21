@@ -1258,7 +1258,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     // 决定者只有 shell_launch::ensure_launch_mode 一处，
     // 消费者是 setup_standalone_runtime 一处（后者经环境变量读，因为是它决定
     // 要不要拉内嵌 server 的那个瞬间）。
-    expect(rust).toContain("shell_launch::ensure_launch_mode(&project_root)");
+    // 调用点在自编排的命名步骤里（run() 与 setup 闭包都不再直接调它：
+    // 步骤体抽成 start_self_orchestration 是因为 Rust 侧函数长度阈值 120 行）。
+    expect(rust).toContain("shell_launch::ensure_launch_mode(project_root)");
     expect(
       rust.match(/std::env::var\("COMFYAPP_LAUNCH_MODE"\)/g)?.length,
       "启动模式的读取点只许有三处：collect()（推导首帧看护）+ setup_standalone_runtime" +

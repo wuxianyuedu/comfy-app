@@ -74,15 +74,21 @@ describe("壳自编排：认亲判据", () => {
   });
 
   it("Python 启动器已整体移除（唯一入口是 app.exe）", () => {
-    expect(fs.existsSync(path.join(ROOT, "scripts", "start_tauri_launcher.py"))).toBe(false);
-    expect(fs.existsSync(path.join(ROOT, "tools", "start-tauri.spec"))).toBe(false);
+    expect(
+      fs.existsSync(path.join(ROOT, "scripts", "start_tauri_launcher.py")),
+    ).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, "tools", "start-tauri.spec"))).toBe(
+      false,
+    );
     for (const rel of [
       "tools/build/build-launcher.ps1",
       "tools/build/build-launcher-dev.ps1",
       "tools/build/build-launcher-standalone.ps1",
       "tools/scripts/build-launcher.ps1",
     ]) {
-      expect(fs.existsSync(path.join(ROOT, rel)), `${rel} 应已删除`).toBe(false);
+      expect(fs.existsSync(path.join(ROOT, rel)), `${rel} 应已删除`).toBe(
+        false,
+      );
     }
     // 唯一的双击入口（.ps1 壳层）指向那个 exe 本身，不再指向第二层启动器。
     const entry = read("tools/start/start-tauri.ps1");
@@ -94,13 +100,23 @@ describe("壳自编排：认亲判据", () => {
 describe("壳自编排：两个入口不许同时起两份编排", () => {
   it("起第二份之前先回收上一次遗留的编排器（不再有「命中就跳过」的捷径）", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
-    const branch = lib.slice(lib.indexOf("if self_launch {"));
+    // 编排步骤体在命名函数里（Rust 侧函数长度阈值 120 行，见规范 §12.13），
+    // 调用点必须仍是安装期的一条：`if self_launch { … }`。
+    expect(lib).toMatch(
+      /if self_launch \{\s*start_self_orchestration\(app, &project_root\);/,
+    );
+    const branch = lib.slice(
+      lib.indexOf("fn start_self_orchestration("),
+      lib.indexOf("fn start_own_orchestrator("),
+    );
     // 判据是环境块标记（不是「有没有 dev server」），命中即回收：
     // 「别人已经在编排」这条路在双击形态下不存在（编排器只可能是壳自己起的），
     // 残留只可能是壳被强杀留下的孤儿 —— 留着它会占着端口，表现为双击没反应。
     expect(branch).toContain("shell_launch::find_owned_orchestrator()");
-    expect(branch).toContain("shell_launch::reap_pid(&project_root, pid)");
-    expect(branch).toContain("start_own_orchestrator(app.handle(), &project_root)");
+    expect(branch).toContain("shell_launch::reap_pid(project_root, pid)");
+    expect(branch).toContain(
+      "start_own_orchestrator(app.handle(), project_root)",
+    );
     // 命中残留要说清「先回收再启动」，别让它看起来像一次正常启动。
     expect(branch).toContain("先回收它再启动本次编排");
   });
@@ -130,12 +146,14 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
       /#\[cfg\(debug_assertions\)\]\s*pub fn ensure_launch_mode\(_project_root: &str\) \{\}/,
     );
     const lib = stripComments(read("src-tauri/src/lib.rs"));
-    expect(lib).toContain("shell_launch::ensure_launch_mode(&project_root)");
+    expect(lib).toContain("shell_launch::ensure_launch_mode(project_root)");
   });
 
   it("起不来写启动页可见的出口（原先由 Python 启动器的弹窗承担）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    expect(rust).toMatch(/pub fn mark_launch_failed\(project_root: &str, message: &str\)/);
+    expect(rust).toMatch(
+      /pub fn mark_launch_failed\(project_root: &str, message: &str\)/,
+    );
     expect(rust).toContain("launch-status.json");
     expect(rust).toContain('"phase": "error"');
     // progress 必须是 0：启动页把 100% 画成「✓」，一次失败会看起来像「成功但没打开」。
@@ -143,7 +161,57 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     // 写失败只记 WARN：失败出口本身不该再产生一个失败。
     expect(rust).toContain("create_dir_all");
     const lib = stripComments(read("src-tauri/src/lib.rs"));
-    expect(lib).toMatch(/shell_launch::mark_launch_failed\([\s\S]{0,200}pnpm install/);
+    expect(lib).toMatch(
+      /shell_launch::mark_launch_failed\([\s\S]{0,200}pnpm install/,
+    );
+  });
+});
+
+describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", () => {
+  const splash = () => read("src-tauri/splash-assets/index.html");
+
+  it("壳的常驻快照不许让进度条倒退（0% 是「还没有权威进度」，不是「回到起点」）", () => {
+    const page = splash();
+    // 快照轮必须被标记出来，updateUI 才会拿 maxProgress 兜底。
+    expect(page).toContain("updateFromShellFallback");
+    expect(page).toMatch(
+      /updateFromShellFallback && !error\) raw = Math\.max\(raw, maxProgress\)/,
+    );
+    // 标记必须**每轮都重算**：编排器写自己的状态之后就再也不该走这条兜底
+    //（否则它的 20% 也会被抬到上一次的 30%）。
+    const marks = page.match(/updateFromShellFallback =/g) ?? [];
+    expect(marks.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("启动失败必须在启动页上看得见（状态里 error / shellLaunchFailed 都要认）", () => {
+    const page = splash();
+    // 壳识别出自编排走不通时写的标记：明细只在那份状态里，不带出来用户只能干等。
+    expect(page).toContain("shellLaunchFailed");
+    expect(page).toContain("failureDiagnostics");
+    // 「再等等」不是失败态的出路：面板要自己打开。
+    expect(page).toMatch(/status\.error \|\| status\.shellLaunchFailed/);
+    // 有失败态时面板给的是失败诊断（含壳写下的路径），而不是「日志还没写入」。
+    expect(page).toMatch(/failureDiagnostics\(status\)/);
+  });
+
+  it("快照自己也带诊断出口（编排器顶掉它之前，现场已经在磁盘上）", () => {
+    const page = splash();
+    // 编排器写的 launch-status.json 不带 diagnostics，一写就把壳的快照整份顶掉；
+    // 空面板这段窗口期只能靠快照里那几条路径（页面不自己拼路径）。
+    expect(page).toContain("diag.launchLog");
+    expect(page).toContain("diag.statusFile");
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(rust).toMatch(/pub fn write_idle_status\(/);
+    expect(rust).toContain('"diagnostics"');
+    expect(rust).toContain("startup_report_json");
+  });
+
+  it("读不到日志时把壳写下的启动报告一并给出（报告是那一刻唯一的现场）", () => {
+    const rust = stripComments(read("src-tauri/src/lib.rs"));
+    // 三个路径全空 → 只回「暂无日志」等于让用户去贴截图；报告里有项目根、
+    // 编排脚本是否找到、端口与各日志路径，用户贴这一屏就等于把现场带出来。
+    expect(rust).toContain("startup_report_section");
+    expect(rust).toMatch(/report[\s\S]{0,200}no_log_guidance\(&root\)/);
   });
 });
 
@@ -258,8 +326,7 @@ describe("壳自编排：能自起的判据与真起得来", () => {
     // spawn_reaper（统一回收入口）、can_self_launch 的存在性检查 —— 都是「按项目根
     // 拼一个脚本路径」的同一件事，改动时几处一起改。数量钉住是为了让「又多抄一份
     // 路径拼接」这件事在评审里显形（而不是悄悄多一处会漂的副本）。
-    // 三处：orchestrator_script（脚本位置）、spawn_reaper（统一回收入口）、
-    // attach_job_via_helper（Job Object 辅助脚本）+ win_job.py 一处，共 4 处。
-    expect(occurrences.length).toBe(4);
+    // （Job Object 已改回壳内联实现，不再有 win_job.py 那条脚本路径。）
+    expect(occurrences.length).toBe(3);
   });
 });

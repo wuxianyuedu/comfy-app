@@ -28,6 +28,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { runPnpmSync } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 
@@ -72,12 +73,12 @@ function main() {
   }
 
   console.log("");
-  console.log(`>>> pnpm ${args.map((a) => `"${a}"`).join(" ")}`);
-  console.log("");
-  // pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：这里曾拿
-  // `whichCommand("pnpm")` 的裸路径直接 spawn —— Windows 上它可能是 Node 起不来的
-  // `.cmd`（EINVAL，只有 cmd.exe 解释批处理），而能跑的是同目录经 PowerShell 宿主的
-  // `.ps1`，宿主与 `-File` 参数必须一起给（ISSUE #638）。
+  // 命令行由 `runPnpmSync()` 的回显出口打印（`>>> …`）——这里不再手写一份：
+  // 手写的那份只能猜「pnpm」这个字面名，而 Windows 上真正被执行的是形态判据
+  // 选出来的那条（可能是经 PowerShell 宿主的 `.ps1`）。判据与回显都只在 shell.mjs
+  // 一处（规范 §2.1.1 / §9.5）：这里曾拿 `whichCommand("pnpm")` 的裸路径直接 spawn ——
+  // Windows 上它可能是 Node 起不来的 `.cmd`（只有 cmd.exe 解释批处理），而能跑的是
+  // 同目录经 PowerShell 宿主的 `.ps1`（ISSUE #638）。
   const result = runPnpmSync(args, {
     cwd: ROOT,
     stdio: "inherit",
@@ -88,7 +89,7 @@ function main() {
       `[ERROR] 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
     );
     console.log(
-      `        [INFO] 实际命令：${result.command} ${result.args.join(" ")}`,
+      `        [INFO] 实际命令：${formatCommandLine(result.command, result.args)}`,
     );
     console.log("        [INFO] 自查：pnpm check:toolchain");
     return 1;

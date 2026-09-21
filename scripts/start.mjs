@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
+import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -56,6 +57,8 @@ if (!invocation) {
   process.exit(1);
 }
 
+// 与 dev.mjs 同一口径：起服务前先回显真正要跑的那条命令行。
+echoCommandLine(invocation.command, invocation.args);
 const result = spawnSync(invocation.command, invocation.args, {
   stdio: "inherit",
   env: { ...process.env, PORT: String(port) },
@@ -63,7 +66,7 @@ const result = spawnSync(invocation.command, invocation.args, {
 if (result.error) {
   process.stderr.write(
     `[start.mjs] ✗ 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}\n` +
-      `[start.mjs]   实际命令：${invocation.command} ${invocation.args.join(" ")}\n`,
+      `[start.mjs]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
   );
   process.exit(1);
 }

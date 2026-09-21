@@ -7,9 +7,17 @@
  * `workflow.resync`（同步按钮）。随后补了一个设置项 `autoSyncLocalWorkflow`：
  * 关（默认）= 只检出不写库；开 = 进详情等价于点一次同步（自动写回）。
  *
- * 用真实 repository（内存 SQLite，见 tests/helpers/test-db）跑通整条链路，
- * 而不是源码级字符串断言 —— 这条契约的价值在于「默认路径到底写不写库」，
+ * 契约三条，缺一条那个症状就会回来：
+ *   1. 默认关时详情路径**只检出**（stat 比 mtime）**不写库**；
+ *   2. 开启时详情即写回，且写回后响应反映最新内容（不是同步前的旧值）；
+ *   3. `workflow.resync` 仍是「重新导入 + 落库 + 清详情缓存」的入口
+ *      —— 否则「点了同步、再进详情还是旧内容」又是新的自相矛盾（缓存 TTL 30s）。
+ *
+ * 1 / 2 用真实 repository（内存 SQLite，见 tests/helpers/test-db）跑通整条链路，
+ * 而不是源码级字符串断言 —— 它们的价值在于「这条路径到底写不写库」，
  * 而那是会随设置开关变化、必须真正执行才能定死的事实。
+ * 3 是「唯一写入口」的接线事实，读一眼就能定死，做成集成测试要拖进
+ * repository、object_info 解析与磁盘夹具，成本远高于它挡住的风险。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -74,6 +82,11 @@ function seedLocalWorkflow(id: string) {
   return { id, sourcePath };
 }
 
+/** 读一段源码做接线断言（只用于「有没有第二个写入口」这类读一眼就能定死的事实）。 */
+function read(rel: string): string {
+  return fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+}
+
 describe("本地文件工作流 · 自动同步设置", () => {
   it("默认关：进详情只检出、不写库（更新入口仍是『同步』按钮）", async () => {
     getSettingsMock.mockReturnValue({ autoSyncLocalWorkflow: false });
@@ -114,5 +127,20 @@ describe("本地文件工作流 · 自动同步设置", () => {
     // 响应也反映最新内容（不是同步前的旧值）
     expect(detail.rawJson).toEqual({ nodes: [{ id: "9", type: "NewNode" }] });
     expect(detail.sourceOutdated).toBe(false);
+  });
+});
+
+describe("resync 是写回磁盘内容的唯一入口", () => {
+  const src = read("src/server/api/routers/workflow.ts");
+
+  it("它才做「重新导入 + 落库」", () => {
+    expect(src).toMatch(/resync:[\s\S]{0,2000}?reimportFromSource/);
+    expect(src).toMatch(/sourceMtime: result\.update\.sourceMtime/);
+  });
+
+  it("写回后清掉详情缓存（否则点完同步、详情还是旧内容）", () => {
+    expect(src).toMatch(
+      /resync:[\s\S]{0,2000}?invalidateWorkflowDetailCache\(ctx\.user\.id, existing\.id\)/,
+    );
   });
 });
