@@ -861,6 +861,10 @@ export const workflowRouter = createTRPCRouter({
         sourceChecksum: result.update.sourceChecksum ?? existing.sourceChecksum,
         taskType: result.update.taskType ?? existing.taskType,
       });
+      /* 详情缓存的 TTL 是 30s：不清的话用户点完「同步」再进详情还是旧内容，
+       * 而磁盘标记已经翻回「无更新」—— 那是最难解释的一种自相矛盾。
+       * （这是**唯一**会写回磁盘内容的入口，缓存失效也就只在这一处需要。） */
+      invalidateWorkflowDetailCache(ctx.user.id, existing.id);
       return { updated: true, template: updated };
     }),
 
