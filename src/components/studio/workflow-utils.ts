@@ -211,31 +211,19 @@ export function renderWidgetValue(value: unknown): string {
   return (value as { toString(): string }).toString();
 }
 
-/** 按值的 JS 类型给「值单元格」挑一个文字颜色。目标是让值列在视觉上**让位**
- *  于标签列，同时一眼扫过去仍能分辨 —— 所有色相都压在一套低饱和调色板里，
- *  免得整个芯片看起来像彩虹。返回可直接用于内联样式的 CSS 颜色（rgba）。 */
-export function valueCellColor(value: unknown): string {
-  if (value === undefined || value === null) return "rgba(255,255,255,0.30)";
-  if (typeof value === "boolean")
-    return value ? "#86efac" /* green-300 绿 */ : "#fca5a5"; /* red-300 红 */
-  if (typeof value === "number") return "#fcd34d"; /* amber-300 琥珀 */
-  if (typeof value === "string") return "#c7d2fe"; /* indigo-200 靛蓝 */
-  return "rgba(255,255,255,0.55)";
-}
-
-/** 给值单元格的颜色补一个 alpha 通道：**已接线**的 widget 行上的值要比未接线
- *  的暗一档 —— 这是「当前显示的是 widget 默认值，真正的值来自连线」的信号。
- *  真实值走 `valueCellColor` 返回的 6 位十六进制；遇到 rgba 输入这类边角情况
- *  则改为降低 alpha。 */
-export function withAlpha(color: string): string {
-  if (color.startsWith("#") && color.length === 7) return color + "66";
-  const match = /rgba\(([^)]+)\)/.exec(color);
-  if (match) {
-    const parts = match[1]!.split(",").map((str) => str.trim());
-    if (parts.length === 4)
-      return `rgba(${parts[0]},${parts[1]},${parts[2]},0.40)`;
-  }
-  return color;
+/** 「值单元格」的文字颜色：**未连线**取主档、**已连线**取低一档（值来自上游的信号）。
+ *  两态取值交给主题 token（`--color-widget-value` / `-dim`）：暗色档是**纯白**，
+ *  因为底色是深灰的节点表面（用户口径：「暗色下参数值都读成白的，有连线的那几个比
+ *  纯白暗一点」）；浅色档不能照抄白（白底上会消失），所以不是一处写死的颜色。
+ *
+ *  此前这里按 JS 类型分色（数字琥珀 / 字符串靛蓝 / 布尔绿红），值列比标签列还抢眼；
+ *  现在类型信息交给行首的端口圆点与类型徽章，值只有「亮 / 略暗」两档。 */
+export function valueCellColor(value: unknown, connected = false): string {
+  /* 空值不是「值」，仍单独压弱一档 —— 与有没有连线无关。 */
+  if (value === undefined || value === null) return "var(--color-ink-faintest)";
+  return connected
+    ? "var(--color-widget-value-dim)"
+    : "var(--color-widget-value)";
 }
 
 /** 与 WorkflowNode 的 widget 值同形，但去掉了所有按 classType / 键名的

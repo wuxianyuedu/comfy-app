@@ -103,6 +103,11 @@
   --color-ink-faintest: #b6b6bf; /* 极弱文字 (light default) */
   --color-ink-icon: #8e8e98; /* 折叠箭头/图标弱文字 (light default) */
   --color-ink-placeholder: #a1a1aa; /* placeholder (light default) */
+  /* 画布节点的「参数值」文字：未连线取主档、已连线取低一档（值来自上游的提示）。
+     两态各自取值 —— 暗色档是**纯白**（用户口径：暗色下参数值都读成白的，连线的暗一点），
+     浅色档不能照抄白（白底上会消失），所以它是 token 而不是写死色（规范 03 §3.6.2）。 */
+  --color-widget-value: #18181b; /* 参数值文字 (light default) */
+  --color-widget-value-dim: #6b6b76; /* 参数值文字·已连线（低一档）(light default) */
   --color-info: #2563eb; /* 信息/链接强调 (light default) */
   --color-success: #0ea472; /* 成功/薄荷强调 (light default) */
   --color-success-strong: #10b981; /* 成功绿 (light default) */
@@ -127,7 +132,9 @@
   --color-accent-soft: #ec4899; /* accent (light default) */
   /* 画布浮层投影：浅色下不能再用 55% 黑（看着像脏污），改成中性深灰。 */
   --color-shadow-strong: rgb(0 0 0 / 0.18); /* 浮层重投影 (light default) */
-  --color-ring-shadow: rgb(0 0 0 / 0.08); /* 浮层 1px ring（浅色下用中性灰，不用前景色）(light default) */
+  --color-ring-shadow: rgb(
+    0 0 0 / 0.08
+  ); /* 浮层 1px ring（浅色下用中性灰，不用前景色）(light default) */
   --shadow-card: 0 4px 20px rgb(0 0 0 / 0.18); /* 浮层卡片投影 (light default) */
   /* 便签（Note）身体色的混色基准：用户给的 note 颜色是内容语义色，
      基准必须跟主题走，否则浅色下便签仍是一块暗色。 */
@@ -240,7 +247,9 @@
   --color-panel: #14141a; /* 面板/顶栏/浮层 */
   --color-panel-deep: #0f0f16; /* 侧栏/页脚 */
   --color-card: #16161c; /* 卡片/下拉浮层 */
-  --color-node: #16161e; /* 节点表面/option */
+  /* 节点表面改**灰**：此前 #16161e 与画布底 #0a0a0f 几乎同深，节点框在暗色下
+     看不出边界（用户口径：「和黑色背景相比有些看不清」）。 */
+  --color-node: #2b2b36; /* 节点表面/option */
   --color-node-accent: #1e1a2e; /* 节点强调底 */
   --color-overlay-accent-surface: #241f38; /* 浮层（chip/徽标）强调底 */
   --color-chip-type-image-bg: #1e1a2e; /* 类型 chip 载体底：IMAGE/MASK（= 原写死值） */
@@ -257,12 +266,16 @@
   --color-ink-faintest: #5a5f73; /* 极弱文字 */
   --color-ink-icon: #6e6e80; /* 折叠箭头/图标弱文字 */
   --color-ink-placeholder: #5a5a6b; /* placeholder */
+  --color-widget-value: #ffffff; /* 参数值文字（暗色档 = 纯白） */
+  --color-widget-value-dim: #c9c9d6; /* 参数值文字·已连线（比纯白暗一档） */
   --color-info: #5bc6ff; /* 信息/链接强调 */
   --color-success: #5be3c4; /* 成功/薄荷强调 */
   --color-success-strong: #10b981; /* 成功绿 */
   --color-warning-strong: #fbbf24; /* 警告文字档（琥珀-400 同值） */
   --color-danger-strong: #fca5a5; /* 危险文字档（红-300 同值） */
-  --color-destructive: oklch(0.704 0.191 22.216); /* 危险原色（深色档，红-400 同值） */
+  --color-destructive: oklch(
+    0.704 0.191 22.216
+  ); /* 危险原色（深色档，红-400 同值） */
   --color-info-strong: #7dd3fc; /* 信息文字档（天蓝-300 同值） */
   --color-status-online: #33d499; /* 「本机/在线」状态点与文字（深色档 — 即原写死值） */
   --color-encap-pending: #fbbf24; /* 未配置对外参数的文字档 */
@@ -270,10 +283,12 @@
   --color-amber: #ffb553; /* 琥珀强调 */
   --color-accent-soft: #ff8ac4; /* accent */
   --color-shadow-strong: rgb(0 0 0 / 0.55); /* 浮层重投影 */
-  --color-ring-shadow: rgb(255 255 255 / 0.1); /* 浮层 1px ring（深色下用中性白） */
+  --color-ring-shadow: rgb(
+    255 255 255 / 0.1
+  ); /* 浮层 1px ring（深色下用中性白） */
   --shadow-card: 0 4px 20px rgb(0 0 0 / 0.55); /* 浮层卡片投影（深色档） */
   --color-note-tint-base: #22222c; /* note 混色基准 */
-  --color-node-mix-base: #16161e; /* 子图标题栏混色基准 */
+  --color-node-mix-base: #2b2b36; /* 子图标题栏混色基准（与 `--color-node` 同值） */
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -940,7 +955,9 @@ textarea::-webkit-scrollbar {
   --secondary: var(--color-subtle);
   --secondary-foreground: var(--color-ink);
   --muted: var(--color-subtle); /* 表面语义：bg-muted（shadcn 约定） */
-  --muted-foreground: var(--color-ink-muted); /* 文字语义：text-muted-foreground */
+  --muted-foreground: var(
+    --color-ink-muted
+  ); /* 文字语义：text-muted-foreground */
   --accent: var(--color-accent);
   --accent-foreground: var(--color-on-brand);
   --border: var(--color-border);

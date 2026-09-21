@@ -49,9 +49,8 @@ export function RgthreeFastGroupsBypasserBody({
             >
               {label}
             </span>
-            <span className="bg-border-strong h-2 w-px shrink-0" aria-hidden />
             <span
-              className={`min-w-0 truncate text-right text-[10.5px] tabular-nums ${
+              className={`min-w-0 truncate text-left text-[10.5px] tabular-nums ${
                 bypass ? "text-accent-soft" : "text-ink-fainter"
               }`}
               style={{ flex: "1 1 0" }}
