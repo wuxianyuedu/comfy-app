@@ -2,7 +2,7 @@
 
 import { upperToken } from "~/lib/upper-token";
 import { textHandler } from "~/lib/form-props";
-import React from "react";
+import React, { useState } from "react";
 import {
   ioLabel,
   numericBounds,
@@ -15,6 +15,13 @@ import { NumberField } from "~/components/ui/number-field";
 import { PortHandle, portChipStyle } from "./WorkflowPortHandle";
 import { AutoResizeTextarea } from "./WorkflowFormTextarea";
 import { isSeedLike, SeedModeButton } from "~/components/ui/seed-mode-button";
+import type { WorkflowIODropPosition } from "../workflow-types";
+
+/** 端口行与 widget 行同一守卫：可编辑控件（输入框 / 下拉 / 按钮）上起手
+ *  不发起拖拽 —— 行级 draggable 会劫持文本选择，且从这些控件发起的原生
+ *  拖拽经常不触发 drop（只有 dragend），表现成「拖了但顺序没变」。 */
+const DRAG_CANCEL_SELECTOR =
+  "input, textarea, select, button, [contenteditable]";
 
 /** 画布 `workflow` 节点的可连接端口行。连线型输入渲染一个
  *  骑在左边缘的句柄 + 一个卡片体（STRING → 内联 textarea，IMAGE → 上传
@@ -45,10 +52,8 @@ export function WirePortRows({
   /** 与 widget 行同一套拖拽契约。
    *  只有 IO 编辑预览会传它们；画布其余界面
    *  留 undefined，行保持不可拖。
-   *  铺到行的外层 <div> 上，好让整行都可抓 ——
-   *  原生 draggable 属性会接住用户点击的任意位置（端口行
-   *  不需要单独把手，因为它们没有可编辑输入框
-   *  来抢焦点）。 */
+   *  铺到行的外层 <div> 上 —— 可抓位置是行的不可编辑区域；从输入框 /
+   *  下拉 / 按钮上起手会在 dragstart 里被取消（与 widget 行同守卫）。 */
   draggingKey,
   dragOverKey,
   onReorder,
@@ -75,7 +80,11 @@ export function WirePortRows({
    *  不带拖拽提示。 */
   draggingKey?: string | null;
   dragOverKey?: string | null;
-  onReorder?: (fromKey: string, beforeKey: string | null) => void;
+  onReorder?: (
+    fromKey: string,
+    targetKey: string | null,
+    position: WorkflowIODropPosition,
+  ) => void;
   /** 回调，好让父级在被拖的是
    *  端口行时同步它的 `draggingKey` 状态。镜像
    *  widget 行用的契约（DynamicWorkflowForm 自己的
@@ -93,11 +102,29 @@ export function WirePortRows({
    *  `onPortDragStart` / `onPortDragEnd` 回调上抛，好让
    *  父级在某端口行开始 / 结束拖拽时更新它的
    *  `draggingKey` setter。 */
+  /* 落点位置（指针在目标行的上/下半区）：端口行自己持有 —— 上抛给父级的
+   *  只有「拖起 / 放下」这两个时机，位置随每条 dragover 变化，放父级会多余
+   *  一趟重渲染。指示线画的位置与 onDrop 收到的 position 同源。 */
+  const [portDropPosition, setPortDropPosition] =
+    useState<WorkflowIODropPosition>("before");
+  const positionOf = (
+    e: React.DragEvent<HTMLDivElement>,
+  ): WorkflowIODropPosition => {
+    const rect = e.currentTarget?.getBoundingClientRect?.();
+    if (!rect || rect.height <= 0) return "before";
+    return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+  };
   const portDrag = (ioKey: string) => {
     if (!onReorder) return {};
     return {
       draggable: true,
       onDragStart: (e: React.DragEvent<HTMLDivElement>) => {
+        /* 输入框 / 下拉 / 按钮上起手不拖（与 widget 行同守卫）。 */
+        const target = e.target as HTMLElement | null;
+        if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
+          e.preventDefault();
+          return;
+        }
         try {
           e.dataTransfer.setData("text/plain", ioKey);
           e.dataTransfer.effectAllowed = "move";
@@ -110,13 +137,18 @@ export function WirePortRows({
         if (!draggingKey || draggingKey === ioKey) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        const pos = positionOf(e);
+        if (portDropPosition !== pos) setPortDropPosition(pos);
       },
       onDrop: (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         if (!onReorder || !draggingKey || draggingKey === ioKey) return;
-        onReorder(draggingKey, ioKey);
+        const pos = positionOf(e);
+        setPortDropPosition("before");
+        onReorder(draggingKey, ioKey, pos);
       },
       onDragEnd: () => {
+        setPortDropPosition("before");
         onPortDragEnd?.();
       },
     };
@@ -160,7 +192,9 @@ export function WirePortRows({
               className={`relative flex h-[33px] shrink-0 items-center gap-2.5 pr-[14px] pl-[14px] ${isDragging ? "opacity-50" : ""}`}
             >
               {isDropTarget && (
-                <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                <div
+                  className={`z-base pointer-events-none absolute inset-x-0 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                />
               )}
               <PortHandle
                 id={wireInput.ioKey}
@@ -240,7 +274,9 @@ export function WirePortRows({
               dragOverKey === wireInput.ioKey &&
               draggingKey &&
               draggingKey !== wireInput.ioKey && (
-                <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                <div
+                  className={`z-base pointer-events-none absolute inset-x-0 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                />
               )}
             <PortHandle
               id={wireInput.ioKey}
@@ -338,7 +374,9 @@ export function WirePortRows({
                   dragOverKey === output.ioKey &&
                   draggingKey &&
                   draggingKey !== output.ioKey && (
-                    <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                    <div
+                      className={`z-base pointer-events-none absolute inset-x-0 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${portDropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                    />
                   )}
                 <PortHandle
                   id={output.ioKey}

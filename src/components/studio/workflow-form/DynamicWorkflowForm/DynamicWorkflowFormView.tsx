@@ -14,6 +14,7 @@ import {
   resolveEntrySeedMode,
   type EnrichedWidget,
 } from "~/components/studio/workflow-io";
+import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
 import type { DynamicWorkflowFormController } from "./hooks/use-dynamic-workflow-form";
 import { SectionHeader } from "./SectionHeader";
 import { EmptyStateHint } from "./sections/EmptyStateHint";
@@ -42,7 +43,11 @@ interface DynamicWorkflowFormViewProps {
    *  seed 递增递减显示的是该模式的覆盖值。不传 = 按条目全局值（兼容旧场景）。 */
   mode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
-  onReorder?: (fromKey: string, beforeKey: string | null) => void;
+  onReorder?: (
+    fromKey: string,
+    targetKey: string | null,
+    position: WorkflowIODropPosition,
+  ) => void;
   /** 行尾附加的只读徽标（工作流库画布节点用它标出每个参数连到的「对外参数」）。 */
   rowTrailing?: (entry: EnrichedWidget) => ReactNode;
 }
@@ -86,6 +91,7 @@ export function DynamicWorkflowFormView({
     dragHandlers,
     draggingKey,
     dragOverKey,
+    dropPosition,
     beginPortDrag,
     endDrag,
     FileInput,
@@ -202,12 +208,17 @@ export function DynamicWorkflowFormView({
                 onDragEnd={dragHandlers.onDragEnd}
                 className={`relative ${isDragging ? "opacity-50" : ""}`}
               >
-                {/* 插入指示线只画在目标行顶边 —— 若整段都画会造成频闪。 */}
+                {/* 插入指示线画在**实际插入位置**：指针在目标行上半区 = 行顶、
+                 *  下半区 = 行底，与 reorderIO 收到的 position 同源 —— 若整段
+                 *  都画会造成频闪。 */}
                 {isDropTarget && (
-                  <div className="z-base pointer-events-none absolute inset-x-0 -top-px h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)]" />
+                  <div
+                    className={`z-base pointer-events-none absolute inset-x-0 h-0.5 bg-violet-400 shadow-[0_0_8px_rgba(124,92,252,0.6)] ${dropPosition === "before" ? "-top-px" : "-bottom-px"}`}
+                  />
                 )}
-                {/* 手柄只是视觉提示（真正可拖来自父层的 draggable）；它自身
-                 *  pointer-events-none，点击会落到下面的输入框上。 */}
+                {/* 手柄只是视觉提示（真正可拖来自父层的 draggable，且从输入框 /
+                 *  下拉上起手会在 dragstart 里被取消）；它自身 pointer-events-none，
+                 *  点击会落到下面的输入框上。 */}
                 <div
                   className="z-base pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-[10px] leading-[6px] text-white/30 select-none"
                   aria-hidden
