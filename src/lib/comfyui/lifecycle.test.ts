@@ -29,6 +29,14 @@ vi.mock("./client", () => ({
   resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")),
   resetComfyBase: vi.fn(),
 }));
+/* ./status 的 getComfyRuntimeSnapshot 直接从 ./probe 导入 probeComfyAtPort（不经
+ * ./client），只 mock ./client 会漏掉这条 → 真探本机端口，机器上跑着 ComfyUI 时
+ * 快照报 running、getComfyUiStatus 的 up 变 true（「期望未运行」的用例因此环境相关地
+ * 红）。把 ./probe 也做成默认「探不通」的桩，快照路径才 hermetic。 */
+vi.mock("./probe", () => ({
+  probeComfyAtPort: vi.fn().mockResolvedValue(null),
+  probeBaseOnce: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("./launch-path", () => ({
   resolveComfyLaunchPlan: vi.fn().mockReturnValue({
     cmd: "python",
