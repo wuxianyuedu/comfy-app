@@ -25,6 +25,10 @@ import { spawnSync } from "node:child_process";
 
 import { diffLockfiles, isEmptyDiff } from "./lockfile/lock-diff.mjs";
 import { renderDriftReport } from "./lockfile/render-lock-diff.mjs";
+import {
+  echoCommandLine,
+  formatCommandLine,
+} from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 
@@ -139,7 +143,9 @@ function runGate(pnpm, key) {
     const script = path.resolve(ROOT, "scripts", path.basename(gate.args[0]));
     console.log("");
     console.log(`==> ${gate.label}`);
-    console.log(`>>> node scripts/${path.basename(script)}`);
+    // 回显解释器与脚本的**真实**路径（不写成 `node scripts/x.cjs` 的近似形态）：
+    // 这一步用的是 `process.execPath`，与 PATH 上的 `node` 未必是同一个。
+    echoCommandLine(process.execPath, [script, ...gate.args.slice(1)]);
     const r = spawnSync(process.execPath, [script, ...gate.args.slice(1)], {
       cwd: ROOT,
       stdio: "inherit",
@@ -159,8 +165,10 @@ function runGate(pnpm, key) {
   }
   console.log("");
   console.log(`==> ${gate.label}`);
-  console.log(`>>> pnpm ${args.map((a) => `"${a}"`).join(" ")}`);
+  // 回显真正被执行的那条（`pnpm.command` 可能是经 PowerShell 宿主的 `.ps1`），
+  // 而不是把参数拼到「pnpm」这个字面名后面 —— 后者在 Windows 上常常不是同一条。
   const [command, ...argv] = invocation(args);
+  echoCommandLine(command, argv);
   const result = spawnSync(command, argv, {
     cwd: ROOT,
     stdio: "inherit",
@@ -172,7 +180,7 @@ function runGate(pnpm, key) {
     fail(
       `起 ${command} 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}`,
     );
-    console.log(`        实际命令：${command} ${argv.join(" ")}`);
+    console.log(`        实际命令：${formatCommandLine(command, argv)}`);
     return 1;
   }
   const code = result.status ?? 1;

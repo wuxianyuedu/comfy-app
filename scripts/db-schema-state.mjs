@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import {
   canAutoApply,
   pendingStatements,
@@ -412,6 +413,9 @@ export function spawnSchemaSync(root) {
     /* 日志文件开不出来就丢弃输出，不影响同步本身。 */
   }
   try {
+    // 后台同步是「看不见的 15~30 秒」：先回显要跑的那条命令，出问题时至少知道
+    // 谁在后台动数据库（输出落在 log/schema-sync.log，命令行则留在当前终端/编排日志）。
+    echoCommandLine(process.execPath, [script]);
     const child = spawn(process.execPath, [script], {
       cwd: root,
       detached: true,

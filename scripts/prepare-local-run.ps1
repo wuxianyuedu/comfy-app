@@ -184,6 +184,9 @@ if ($needInstall) {
     Write-Host ""
     Push-Location $root
     try {
+        # 命令行回显：`pnpm install` 是本脚本最久的一步，先打印再执行（与 .mjs 侧
+        # 同一 `>>> ` 前缀；那侧的唯一出口是 launcher-core/command-echo.mjs）。
+        Write-Host ">>> pnpm install" -ForegroundColor Yellow
         & pnpm install
         if ($LASTEXITCODE -ne 0) {
             Say-Err "pnpm install 失败（exit=$LASTEXITCODE）。请检查网络后重新双击本脚本。"

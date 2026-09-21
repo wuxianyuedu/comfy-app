@@ -28,6 +28,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+import { echoCommandLine } from "./command-echo.mjs";
 import { commandInvocation, whichCommand } from "./shell.mjs";
 
 /** 探测选项（`env` / `platform` 可注入，单测与「模拟另一平台」都靠它）。 */
@@ -120,6 +121,9 @@ export function probeCommand(candidate, { root = process.cwd(), env = process.en
   // 形态与回退由 usableCommand 决定（shebang shim 会换成 `powershell -File <name>.ps1`），
   // 本模块不自己判断平台后缀 —— 那是 shell.mjs 的单一判据。
   const { command, prefixArgs } = commandInvocation(candidate, args, { env, platform });
+  // 工具链探测也回显：`pnpm -v` 失败时提示里会写「命令起不来 / 版本号取不到」，
+  // 而「探测的到底是哪个候选、经没经宿主」只有这一行能说清（ISSUE #576）。
+  echoCommandLine(command, [...prefixArgs, ...args]);
   const probe = spawnSync(command, [...prefixArgs, ...args], {
     cwd: root,
     env: spawnEnv,
@@ -205,6 +209,8 @@ export function preparePnpm({ root = process.cwd(), expected = null, env = proce
   // 注入 `{ env, platform }`：corepack 在 Windows 上也可能是 `.cmd` 形态，回退到
   // 旁边的 `.ps1` 时要用**同一个**平台判据（否则模拟平台与真实平台不一致）。
   const { command, prefixArgs } = commandInvocation(candidate, ["--version"], { env, platform });
+  // 重建动作会联网下载，耗时以分钟计：先回显再执行，用户才知道这几分钟在跑什么。
+  echoCommandLine(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"]);
   const result = spawnSync(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"], {
     cwd: root,
     env: spawnEnv,

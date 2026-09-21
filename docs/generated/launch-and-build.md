@@ -832,7 +832,8 @@ dev server（Next 不认 `COMFYAPP_PORT`，必须显式传），所以**端口�
 | `src/lib/process/kill-process-tree.windows.test.ts` | **Windows 分支真跑**：注入同名假 taskkill，断言 `taskkill /PID <pid> /T /F`、`/IM <name> /T /F` 真的被调起；空 target 不猜测性击杀；`wait: true` 等到命令结束并把退出码写进 `via`；命令起不来返回 `ok:false` 而不抛错（「参数真的发出去了」两条在 Windows 上跳过：假件只能是 `.cmd`，Node 不能直接 spawn 批处理） | `windowsKillArgs` 去掉 `/T` → 用例必失败                       |
 | `tests/dev-launcher-downstream-exit.test.ts`        | 「下游先退出」四种成因的判决表与文案（`downstreamExitKind` / `describeDownstreamExit`），只认壳侧**正标记**                                                                                                                                                                                                       | 判决表退化成「壳退了就算放弃」 → 必失败                        |
 | `tests/dev-launcher-port-reclaim.test.ts`           | 端口残留回收的两层判据：显式端口 + 应用服务自证才回收；缺省端口 / 只有检出根路径 / 命令行取不到一律不碰                                                                                                                                                                                                           | 去掉 `usesExplicitPort` 开关或去掉自证 → 必失败                |
-| `tests/dist-artifact-hygiene.test.ts`               | `scripts/` 白名单**真删一次**：嵌套条目保留、未登记的新文件被剔                                                                                                                                                                                                                                                   | 白名单改目录级放行 → 必失败                                    |
+| `tests/dist-artifact-hygiene.test.ts`               | `scripts/` 白名单**真删一次**：嵌套条目保留、未登记的新文件被剔；两侧清单集合相同；`RUNTIME_SCRIPTS` 覆盖 `dev-launcher.mjs` 的相对 import 闭包（新增内部分件漏登记即失败）                                                                                                                                       | 白名单改目录级放行、或从闭包里挑一个模块删掉登记 → 必失败      |
+| `tests/command-echo.test.ts`                        | 命令行回显：格式化规则（引号 / 空参数 / 单行）、`COMFYAPP_ECHO_COMMANDS` 开关、以及 `shell.mjs` 三个执行出口真的接了回显（§4.4）                                                                                                                                                                                  | 删掉任一出入口的 `echoCommandLine(` → 必失败                   |
 
 ## 4. 日志布局（排障从上往下看）
 
@@ -1062,6 +1063,36 @@ zustand 队列，而不是再加一个模块级单例。
 `src/app/api/dev/build-id/route.test.ts`（构建标识稳定性与敏感度）、
 `src/components/code-update/**`（观测器接线 + 用户可见结果）、
 `src/components/studio/workflow-editor/WorkflowStores.test.ts`（降级 → 通知的接线）。
+
+### 4.4 命令行回显（`>>> `）：脚本执行了什么，一眼可查
+
+脚本只打印步骤名（「1/4 执行 pnpm build」/「步骤 1/2：pnpm install」）时，**真正被执行的
+命令行**只在失败分支里出现 —— 顺利时看不到、出问题时才补一句。而 Windows 上 `pnpm`
+到底被解析成哪一种形态（无扩展名 shim / `.ps1` / `.cmd`，判据见 §2.1.1）只能从命令行
+看出来，不回显就只能靠猜（ISSUE #576 的四轮现场都是这么收敛的）。
+
+**约定：每条会执行外部命令的出口，执行前先回显一行 `>>> <命令行>`。**
+
+| 侧                  | 回显出口                                                                                                                                                                                                                                                                                                  | 覆盖面                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Node（`.mjs`/`.cjs`） | `scripts/launcher-core/command-echo.mjs` 的 `echoCommandLine()` —— **唯一出口**；`shell.mjs`（`spawnInGroup` / `runSync` / `runPnpmSync`）、`procs.mjs`（`runCapture` 探测）、`corepack.mjs`（工具链探测与重建）在出口处调用；其余入口里直连 spawn 的地方（`dev.mjs` / `start.mjs` / `analyze-bundle.mjs` / `build-desktop.mjs` / `db-schema-state.mjs` / `quality-gate.mjs` / `dev-launcher.mjs`）显式调用同一个出口 | 起服务 / 装依赖 / 跑门禁 / 构建 / 端口与进程探测 / 工具链探测              |
+| Windows 入口（`.ps1`） | 同一 `>>> ` 前缀**手工回显**（`.ps1` 无法 import 上面的模块）：`dev-launcher.ps1`、`entry-common.ps1`、`sync-lint.ps1`、`generate-docs.ps1`、`prepare-local-run.ps1`；`quality-gate.ps1` / `run-tests.ps1` 原本就有                                                                                              | 双击入口转交、`.ps1` 侧直接跑的 pnpm 子命令                                |
+
+三条口径：
+
+1. **回显的是形态判据选出来的那条命令行**（宿主 + `-File <shim>` 一起带上），不是源码里
+   写的字面量 —— 后者在 Windows 上常常不是真正被执行的那条；
+2. **只回显动作命令**：起服务 / 装依赖 / 跑门禁 / 构建 / 探测（端口·进程·工具链）都算；
+   模块内部为取证而发的查询（读 HEAD、比对基线的 `git rev-parse`）不回显 —— 它们是被动
+   查询、次数多且没有操作意义，回显只会把真正的动作淹掉；
+3. `COMFYAPP_ECHO_COMMANDS=0` 整体静默（需要机器解析 stdout 的场景）。
+
+回显行写在**当前终端**（双击/编排链路同时进 `log/launcher/dev-launcher.log`），
+`grep '>>>'` 即可拿到一次运行执行过的全部命令行。
+
+回归护栏：`tests/command-echo.test.ts`（格式化规则、开关、以及「执行出口真的接了回显」）——
+把任一出入口里的 `echoCommandLine(` 删掉即失败；反向验证锚点是 `shell.mjs` 的三个出口
+（`spawnInGroup` / `runSync` / `runPnpmSync`）逐个核对。
 
 ## 5. 排障手册（症状 → 已知根因）
 
@@ -1470,14 +1501,28 @@ tracking 还会带上仓库根的 `AGENTS.md`（内部协作规范全文）、`C
 | 根级文件   | **黑名单**逐项点名              | 根目录是「工程配置清单」，变动低频且显式                                 |
 | `scripts/` | **白名单**（`RUNTIME_SCRIPTS`） | 脚本会不断新增；黑名单欠完备，漏掉是静默的（`db.sqlite` 就这么漏过一次） |
 
-白名单当前只有两项，判据是「代码里能指到 `process.cwd()` + 路径拼接」：
+白名单条目的判据有两条，都是**机器可核对**的（不是「看着像运行时的都写上」）：
 
-- `install-comfyapp-helper.ps1` —— `src/app/api/helper/{install,status}/route.ts`
-  把它当下载内容返回（`installerAvailable` 也靠它判）；
-- `dev-launcher.mjs` —— `src-tauri/src/lib.rs::looks_like_project_root()` 的项目根判据。
+1. **被代码指到**：`install-comfyapp-helper.ps1` —— `src/app/api/helper/{install,status}/route.ts`
+   把它当下载内容返回（`installerAvailable` 也靠它判）；
+2. **编排器的相对 import 闭包**：`dev-launcher.mjs` 既是
+   `src-tauri/src/lib.rs::looks_like_project_root()` 的项目根判据，也是桌面包脱离仓库后
+   「重新编排一次」的入口 —— 它顶层是静态 import，ESM 在**加载期**就解析整张图，因此
+   闭包里每个 `scripts/**` 模块都缺不得：少一份不是「那一步跳过」，而是整个编排器
+   `ERR_MODULE_NOT_FOUND`（用户只看得到「双击没反应」）。这条由
+   `tests/dist-artifact-hygiene.test.ts` 从 `dev-launcher.mjs` 出发递归核对，新增内部
+   分件漏登记即失败；只出现在 JSDoc 类型注释里的说明符（`lockfile/lock-diff.d.mts`）
+   不算运行期依赖。
+
+> 这两条判据是**后来才补齐的**：此前清单靠人记，于是 `env-preflight` / `db-schema-state`
+> / `db-push-core`（起 Next 前的两道预检）、`corepack` / `splash-assets`（工具链与启动页资源）、
+> `lockfile/*`（依赖差异打印）全都漏在清单外 —— 而在产物里走到任何一条都是同一个
+> 「编排器起不来」。
 
 产物层由 `check-standalone-contents.cjs` 的 `ALLOWED_SCRIPTS` 白名单同款守：
-**产物 `scripts/` 下的每个条目都必须是登记过的**（比正则形状更严，新脚本进来即命中）。
+**产物 `scripts/` 下的每个条目都必须是登记过的**（比正则形状更严，新脚本进来即命中），
+且该集合必须与 `RUNTIME_SCRIPTS` **完全相同** —— 两侧漂移的两种表现都难查：剔除侧漏了
+→ 产物缺件、重编排起不来；检查侧漏了 → 合法的产物被判成违规。
 反向验证：把白名单条目从剔除实现里去掉重新 build，产物护栏立刻报出 44 个门禁脚本。
 
 ### 7.4 standalone 运行时完整性：Next 自带运行时脚本必须显式包含（ISSUE #489）

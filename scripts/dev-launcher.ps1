@@ -71,11 +71,16 @@ if ($Port)      { $argList += @("--port", $Port) }
 if ($HostName)  { $argList += @("--host", $HostName) }
 if ($ShellExe)  { $argList += @("--shell-exe", $ShellExe) }
 
+# 真实命令行：`-DryRun` 与实跑打印同一份。经 Start-Process 起进程后，命令行不再
+# 出现在窗口里 —— 不回显就只能靠猜「这次双击到底跑了什么」（与 .mjs 侧同一前缀）。
+$cmdLine = (@("node", "`"$launcher`"") + ($argList | Select-Object -Skip 1)) -join " "
+
 if ($DryRun) {
-  Write-Host ("[INFO] 将调用：node " + ($argList -join " ")) -ForegroundColor Cyan
+  Write-Host "[INFO] 将调用：$cmdLine" -ForegroundColor Cyan
   exit 0
 }
 
+Write-Host ">>> $cmdLine" -ForegroundColor Yellow
 # -NoNewWindow -Wait：日志留在当前窗口，退出码原样带回（与调用方的收尾语义一致）。
 $proc = Start-Process -FilePath $node.Source -ArgumentList $argList `
   -WorkingDirectory $root -NoNewWindow -Wait -PassThru
