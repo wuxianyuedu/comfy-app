@@ -19,9 +19,9 @@ start-desktop.ps1 — 桌面版一键自检 + 启动入口（原 run-desktop.bat
   或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\start\start-desktop.ps1
 
 前置条件：
-  - 本入口需与桌面包在同一目录结构下（放项目根，桌面包在其 start-tauri*\ 下）。
-  - 桌面包由开发人员在 Windows 上运行 tools\build\build-standalone.ps1 +
-    tools\build\build-launcher-standalone.ps1 产出（见 docs/guide-non-developer.md 第 6 节）。
+  - 本入口需与桌面包在同一目录结构下（放项目根，壳在其 src-tauri\target\release\ 下）。
+  - 桌面包由开发人员在 Windows 上运行 tools\build\build-standalone.ps1 产出
+    （见 docs/guide-non-developer.md 第 6 节）。
 
 退出码：0 已启动；1 自检未通过。
 #>
@@ -57,33 +57,32 @@ $fail = 0
 Say-Info "检查目录结构..."
 if (-not (Test-Path -LiteralPath (Join-Path $root "scripts\dev-launcher.mjs"))) {
     Say-Err "未找到 scripts\dev-launcher.mjs —— 本入口须放在项目根目录，"
-    Write-Host "         且桌面包紧邻其下的 start-tauri*\ 文件夹才能工作。" -ForegroundColor Red
+    Write-Host "         且桌面包紧邻其下的 src-tauri\target\release\ 文件夹才能工作。" -ForegroundColor Red
     Write-Host "         请把整个「即开即用桌面包」解压到不含中文/空格的目录后，再双击本入口。" -ForegroundColor Red
     $fail = 1
 } else {
     Say-OK "目录结构正确。"
 }
 
-# 2) 定位桌面启动器（优先独立版，其次 prebuilt 版）
+# 2) 定位桌面壳（就是 app.exe 本身：它是唯一入口，编排由壳自己承担）
+$RELEASE_SHELL = Join-Path $root "src-tauri\target\release\app.exe"
+$DEBUG_SHELL   = Join-Path $root "src-tauri\target\debug\app.exe"
 $launcher = $null
-$standalone = Join-Path $root "start-tauri-standalone\start-tauri-standalone.exe"
-$prebuilt   = Join-Path $root "start-tauri\start-tauri.exe"
 
 Write-Host ""
-Say-Info "查找桌面启动器..."
-if (Test-Path -LiteralPath $standalone) {
-    $launcher = $standalone
-    Say-OK "找到独立版桌面启动器（免装任何开发环境）。"
-} elseif (Test-Path -LiteralPath $prebuilt) {
-    $launcher = $prebuilt
-    Say-OK "找到桌面启动器 start-tauri\start-tauri.exe。"
-    Say-Warn "该入口默认以 prebuilt 模式运行，需要本机已装 Node/pnpm 并起 dev server；"
-    Write-Host "         若你不是开发人员、只想要免装的成品，请让开发人员分发「独立版桌面包」。" -ForegroundColor Yellow
+Say-Info "查找桌面壳..."
+if (Test-Path -LiteralPath $RELEASE_SHELL) {
+    $launcher = $RELEASE_SHELL
+    Say-OK "找到桌面壳 src-tauri\target\release\app.exe。"
+} elseif (Test-Path -LiteralPath $DEBUG_SHELL) {
+    $launcher = $DEBUG_SHELL
+    Say-Warn "只找到 debug 壳，启动会慢一些（且改动 Rust 后需重新编译）。"
+    Write-Host "         建议运行 tools\build\build-tauri-release.ps1 产出 release 壳。" -ForegroundColor Yellow
 } else {
-    Say-Err "未找到桌面启动器（start-tauri\start-tauri.exe 或独立版）。"
+    Say-Err "未找到桌面壳（src-tauri\target\release\app.exe）。"
     Write-Host "         桌面包尚未构建。请先由开发人员在 Windows 上运行：" -ForegroundColor Red
-    Write-Host "           tools\build\build-standalone.ps1           （构建独立壳）" -ForegroundColor Red
-    Write-Host "           tools\build\build-launcher-standalone.ps1 （打包独立启动器）" -ForegroundColor Red
+    Write-Host "           tools\build\build-standalone.ps1   （独立版：内嵌 server，免装 Node）" -ForegroundColor Red
+    Write-Host "           tools\build\build-tauri-release.ps1（开发版：需要本机 Node/pnpm）" -ForegroundColor Red
     $fail = 1
 }
 
@@ -94,10 +93,10 @@ if ($fail -ne 0) {
     exit 1
 }
 
-# 3) 自检通过，启动桌面启动器
+# 3) 自检通过，启动桌面壳
 Write-Host ""
 Say-Info "自检通过，正在启动桌面应用，请稍候..."
-Write-Host "       （独立版无需安装任何开发环境，稍等即弹出主窗口。）" -ForegroundColor Gray
+Write-Host "       （独立版内嵌 server，无需安装任何开发环境；开发版需要本机已装 Node/pnpm。）" -ForegroundColor Gray
 Write-Host ""
-Start-Process -FilePath $launcher -WorkingDirectory (Split-Path -Parent $launcher)
+Start-Process -FilePath $launcher -WorkingDirectory $root
 exit 0

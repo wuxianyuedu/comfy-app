@@ -27,7 +27,7 @@ export function isDesktopShell(): boolean {
  * 询问壳：本次启动完成后要不要自动把应用窗口给前台。
  *
  * 判据在壳进程里（启动器注入的 `COMFYAPP_FOREGROUND`，见
- * `scripts/start_tauri_launcher.py` 的 decide_foreground）：默认 false——
+ * 壳的 `decide_front_when_self_launched()`）：默认 false——
  * 启动耗时期间用户可能已切去别的窗口，加载完成抢前台会打断他正在看的内容；
  * 只有「前台本来就是本应用 / 用户刚点的启动 / 用户再次唤起运行中的实例」
  * 才为 true。非壳环境（服务端渲染、浏览器）返回 false。

@@ -9,18 +9,24 @@
  * 两个图标**，而且用户关掉主窗后整棵树能不能被回收，取决于启动器退出前有没有
  * 把 Job Object 句柄交出去。
  *
- * 本用例钉死四条契约（每条都做了反向验证：还原旧实现，对应用例必失败）：
+ * **第二轮（本条 ISSUE 的后续）：Python 启动器整体移除**，双击 `app.exe` 是唯一
+ * 的启动入口形态。随之搬进壳的三件事也在这里钉住：运行模式由壳自己定（按编排器
+ * 在不在）、双击单实例的「唤起已有实例」仍由壳自己承担、失败时写启动页可见的出口。
+ *
+ * 本用例钉死五条契约（每条都做了反向验证：还原旧实现，对应用例必失败）：
  *   1. **认亲判据是环境标记，不是形态**。环境块里的 `COMFYAPP_SHELL_OWNED`
- *      只有壳自己写、只有它起的编排器才有；把判据换成「命令行里有没有项目根」
- *      或「有没有 dev server 在跑」时，启动器会让位给**别人的**编排器、壳会去
- *      杀**用户的**启动过程 —— 误认一次就是误杀一次。
- *   2. **两个入口不许同时起两份编排**：壳起之前先查有没有自己认领过的编排器
- *      在跑；python 启动器起之前先查有没有壳起的编排器在跑。
+ *      只有壳自己写、只有它起的编排器才有；把它换成「命令行里有没有项目根」
+ *      或「有没有 dev server 在跑」，回收就会打到**别人的**启动过程上 ——
+ *      误认一次就是误杀一次。
+ *   2. **不许同时起两份编排**：壳起之前先清掉上一次运行遗留的编排器（原先靠
+ *      「有就跳过」，现在双击路径上不存在「别人起的编排器」，只能回收旧孤儿）。
  *   3. **回收链不许断**：壳退出 → 回收自己起的编排器（插件 kill + 统一回收），
  *      并且**转发给 `scripts/reap-process.mjs`**，而不是在 Rust 里另写一套
  *      `taskkill`（POSIX 上会退化成单杀 leader，AGENTS 硬规则 3）。
- *   4. **壳的退出路径只给「自己起的」编排器补刀**，启动器的兜底补刀遇到
- *      壳自编排的编排器要让开（它随壳退出，杀了就是把用户正在用的应用掐掉）。
+ *   4. **运行模式由壳决定**（按编排器在不在），且只在 release 写 —— debug 归
+ *      `pnpm tauri dev` 管，壳再插一手就是两边争同一个端口。
+ *   5. **起不来有人类可见出口**：写 `run/launch-status.json`，启动页据此显示原因
+ *      （原先这个出口是 Python 启动器的 msgbox，随它一起消失）。
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -59,51 +65,85 @@ describe("壳自编排：认亲判据", () => {
     expect(findFn).not.toMatch(/CommandLine|tasklist|wmic/i);
   });
 
-  it("标记由壳写进编排器环境（两边同名，改一处必须两处都改）", () => {
+  it("标记由壳写进编排器环境，常量只定义一次", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    const py = stripComments(read("scripts/start_tauri_launcher.py"), false);
     expect(rust).toContain('.env(OWNED_ENV, "1")');
-    // Python 侧的判断常量必须与 Rust 侧同名：两边各写一个字面量就又是一处
-    // 会静默漂移的判据（一边改成 SHELL_OWNED=yes，另一边就永远认不出）。
-    expect(py).toContain('_SHELL_OWNED_ENV = "COMFYAPP_SHELL_OWNED"');
-    expect(py).toContain('f"{_SHELL_OWNED_ENV}=1"');
+    // 常量只许有一处定义 + 一处使用（写进编排器环境）——两边各写一个字面量
+    // 就又是一处会静默漂移的判据（一边改成 SHELL_OWNED=yes，另一边永远认不出）。
+    expect(rust.match(/"COMFYAPP_SHELL_OWNED"/g)?.length).toBe(1);
+  });
+
+  it("Python 启动器已整体移除（唯一入口是 app.exe）", () => {
+    expect(fs.existsSync(path.join(ROOT, "scripts", "start_tauri_launcher.py"))).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, "tools", "start-tauri.spec"))).toBe(false);
+    for (const rel of [
+      "tools/build/build-launcher.ps1",
+      "tools/build/build-launcher-dev.ps1",
+      "tools/build/build-launcher-standalone.ps1",
+      "tools/scripts/build-launcher.ps1",
+    ]) {
+      expect(fs.existsSync(path.join(ROOT, rel)), `${rel} 应已删除`).toBe(false);
+    }
+    // 唯一的双击入口（.ps1 壳层）指向那个 exe 本身，不再指向第二层启动器。
+    const entry = read("tools/start/start-tauri.ps1");
+    expect(entry).toContain("src-tauri");
+    expect(entry).toContain("app.exe");
   });
 });
 
 describe("壳自编排：两个入口不许同时起两份编排", () => {
-  it("壳在 setup 里先查「有没有自己认领过的编排器还活着」", () => {
+  it("起第二份之前先回收上一次遗留的编排器（不再有「命中就跳过」的捷径）", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
-    expect(lib).toContain("mod shell_launch");
-    expect(lib).toContain("start_own_orchestrator");
     const branch = lib.slice(lib.indexOf("if self_launch {"));
+    // 判据是环境块标记（不是「有没有 dev server」），命中即回收：
+    // 「别人已经在编排」这条路在双击形态下不存在（编排器只可能是壳自己起的），
+    // 残留只可能是壳被强杀留下的孤儿 —— 留着它会占着端口，表现为双击没反应。
     expect(branch).toContain("shell_launch::find_owned_orchestrator()");
-    // 找到就先记日志、不起第二份 —— 第二份编排会争同一个端口，也会把对方的
-    // dev server 当成「上一次的孤儿」回收掉。
-    expect(branch).toContain("will not start a second one");
+    expect(branch).toContain("shell_launch::reap_pid(&project_root, pid)");
+    expect(branch).toContain("start_own_orchestrator(app.handle(), &project_root)");
+    // 命中残留要说清「先回收再启动」，别让它看起来像一次正常启动。
+    expect(branch).toContain("先回收它再启动本次编排");
   });
 
-  it("python 启动器发现壳已编排时让位（而不是再起一份）", () => {
-    const py = stripComments(read("scripts/start_tauri_launcher.py"), false);
-    const launcherFn = py.slice(py.indexOf("def launch_dev_server("));
-    expect(launcherFn).toContain("_find_shell_owned_orchestrator()");
-    expect(launcherFn).toContain(
-      "reusing it instead of starting a second orchestrator",
-    );
-    // 「让位」与「真的起不来」共用 None 返回值，必须有显式标记分开：把让位报成
-    // 失败会弹一个红色「无法启动 dev-launcher.mjs」，而现场一切正常。
-    expect(py).toContain("def shell_launch_handoff()");
-    expect(py).toMatch(/if proc is None and not shell_launch_handoff\(\)/);
-  });
-
-  it("自编排只在 release、且没人注入启动模式时生效（debug 归 pnpm tauri dev 管）", () => {
+  it("自编排只在 release、且在没人替壳做过编排决策时生效（debug 归 pnpm tauri dev 管）", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
     const decl = lib.slice(
       lib.indexOf("let self_launch ="),
       lib.indexOf("let self_launch =") + 400,
     );
     expect(decl).toContain("cfg!(not(debug_assertions))");
-    expect(decl).toContain("launch_mode.is_empty()");
+    // 判据是 COMFYAPP_PROJECT_ROOT 缺席（= 没人给壳指路，是用户双击了 exe 本身）。
+    // 用它而不是 COMFYAPP_LAUNCH_MODE：后者现在由壳自己写，判据会随写入顺序漂。
+    expect(decl).toContain('std::env::var("COMFYAPP_PROJECT_ROOT").is_err()');
     expect(decl).toContain("!project_root.is_empty()");
+  });
+
+  it("运行模式由壳自己按「编排器在不在」决定，且只在 release 写", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(rust).toMatch(/pub fn ensure_launch_mode\(project_root: &str\)/);
+    expect(rust).toContain("orchestrator_script(project_root).is_some()");
+    expect(rust).toContain("COMFYAPP_LAUNCH_MODE");
+    expect(rust).toMatch(
+      /#\[cfg\(not\(debug_assertions\)\)\]\s*pub fn ensure_launch_mode/,
+    );
+    expect(rust).toMatch(
+      /#\[cfg\(debug_assertions\)\]\s*pub fn ensure_launch_mode\(_project_root: &str\) \{\}/,
+    );
+    const lib = stripComments(read("src-tauri/src/lib.rs"));
+    expect(lib).toContain("shell_launch::ensure_launch_mode(&project_root)");
+  });
+
+  it("起不来写启动页可见的出口（原先由 Python 启动器的弹窗承担）", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    expect(rust).toMatch(/pub fn mark_launch_failed\(project_root: &str, message: &str\)/);
+    expect(rust).toContain("launch-status.json");
+    expect(rust).toContain('"phase": "error"');
+    // progress 必须是 0：启动页把 100% 画成「✓」，一次失败会看起来像「成功但没打开」。
+    expect(rust).toMatch(/"progress": 0,/);
+    // 写失败只记 WARN：失败出口本身不该再产生一个失败。
+    expect(rust).toContain("create_dir_all");
+    const lib = stripComments(read("src-tauri/src/lib.rs"));
+    expect(lib).toMatch(/shell_launch::mark_launch_failed\([\s\S]{0,200}pnpm install/);
   });
 });
 
@@ -127,11 +167,17 @@ describe("壳自编排：回收链", () => {
     expect(onExit).toContain("shell_launch::reap(&root)");
   });
 
-  it("启动器的兜底补刀放过壳自编排的编排器（它随壳退出）", () => {
-    const py = stripComments(read("scripts/start_tauri_launcher.py"), false);
-    const killFn = py.slice(py.indexOf("def _kill_shell_from_pid_file("));
-    expect(killFn).toContain("_is_shell_owned_pid(pid)");
-    expect(killFn).toContain("it dies with that shell");
+  it("按 PID 回收上一次的残留也走同一处平台判据", () => {
+    const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
+    const fn = rust.slice(
+      rust.indexOf("pub fn reap_pid("),
+      rust.indexOf("pub fn ensure_launch_mode("),
+    );
+    // 不许在壳里另写一套 taskkill / 单杀 leader（硬规则 3）：转交统一回收。
+    expect(fn).toContain("spawn_reaper(");
+    expect(fn).not.toMatch(/taskkill|Command::new\("kill"\)/);
+    // 自残保护：不回收自己（壳自己也在进程表里）。
+    expect(fn).toContain("std::process::id()");
   });
 
   it("reap-process.mjs 支持 --detach（正在退出的宿主等不起 wait）", () => {
@@ -205,15 +251,15 @@ describe("壳自编排：能自起的判据与真起得来", () => {
     expect(out).toContain("dry-run");
   });
 
-  it("编排脚本路径拼接只有一处（壳与启动器不许各拼一份）", () => {
+  it("编排脚本路径拼接只有一处（启动器已移除，壳是唯一持有者）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
     const occurrences = rust.match(/join\("scripts"\)/g) ?? [];
     // shell_launch.rs 里出现三处 join("scripts")：orchestrator_script（脚本位置）、
     // spawn_reaper（统一回收入口）、can_self_launch 的存在性检查 —— 都是「按项目根
     // 拼一个脚本路径」的同一件事，改动时几处一起改。数量钉住是为了让「又多抄一份
     // 路径拼接」这件事在评审里显形（而不是悄悄多一处会漂的副本）。
-    expect(occurrences.length).toBe(3);
-    const py = stripComments(read("scripts/start_tauri_launcher.py"), false);
-    expect(py).toContain('"dev-launcher.mjs"');
+    // 三处：orchestrator_script（脚本位置）、spawn_reaper（统一回收入口）、
+    // attach_job_via_helper（Job Object 辅助脚本）+ win_job.py 一处，共 4 处。
+    expect(occurrences.length).toBe(4);
   });
 });

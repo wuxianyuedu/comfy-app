@@ -52,7 +52,7 @@ Comfy-APP-T3/
 ├─ tools/                   # 双击入口与构建编排（Windows .ps1，按用途分目录）
 │  ├─ start/                # 启动与初始化入口（双击用）
 │  │  ├─ start-web.ps1            # 控制台模式启动 Web 开发（可见日志）
-│  │  ├─ start-tauri.ps1          # 直接启动 start-tauri\start-tauri.exe（prebuilt 秒出）
+│  │  ├─ start-tauri.ps1          # 双击即启动桌面壳（直启 src-tauri\target\release\app.exe）
 │  │  ├─ start-tauri-dev.ps1        # 隐藏窗口启动 Tauri 壳（dev / tauri dev，Rust 热重载）
 │  │  ├─ start-desktop.ps1        # 桌面版一键自检 + 启动（给拿到桌面包的人）
 │  │  ├─ run-local.ps1            # 非开发人员一键初始化（自检/生成 .env/装依赖）
@@ -61,9 +61,8 @@ Comfy-APP-T3/
 │  │  ├─ sync-lint.ps1           # 同步依赖 + pnpm lint（拉取更新/改码后日常自检）
 │  │  └─ register-comfyapp-protocol.ps1  # 注册 comfyapp:// 协议（免管理员）
 │  ├─ build/                # 构建打包入口
-│  │  ├─ build-all.ps1            # 一键发布构建（release 壳 + 打包 start-tauri.exe）
+│  │  ├─ build-all.ps1            # 一键发布构建（release 壳 = 唯一入口 app.exe）
 │  │  ├─ build-tauri-release.ps1  # 仅构建 release 版 Tauri 壳
-│  │  ├─ build-launcher.ps1       # 仅打包 start-tauri.exe
 │  │  └─ rebuild-static.ps1       # 清理并重建 src-tauri/static
 │  ├─ registry/             # 团队 shadcn Registry（start-registry.ps1）
 │  ├─ studio/               # 数据库工具（start-studio.ps1）
@@ -106,8 +105,9 @@ Comfy-APP-T3/
 > 写进 `outputFileTracingExcludes` 就以为解决了——实测对 `.env` 无效，见
 > [规范 §7.3](docs/standards/launch-and-build.md)。
 
-> `tools/start/start-tauri.ps1` 直接启动打包好的 `start-tauri\start-tauri.exe`（prebuilt，秒出窗口）；
-> dev/tauri dev 模式的入口是 `tools/start/start-tauri-dev.ps1`。
+> `tools/start/start-tauri.ps1` 直接启动 `src-tauri\target\release\app.exe` —— **它就是唯一入口**：
+> 编排（起 dev server / 端口 / 缓存 / 回收）由壳自己承担（规范 §1.5）。
+> dev/tauri dev 模式（Rust 热重载）的入口是 `tools/start/start-tauri-dev.ps1`。
 
 ---
 
@@ -126,16 +126,16 @@ Comfy-APP-T3/
 - **WebView2 运行时**：Windows 10/11 通常已内置；Linux 用系统 WebKitGTK
   （Debian/Ubuntu：`libwebkit2gtk-4.1-dev` / `libgtk-3-dev` / `pkg-config`，
   Fedora：`webkit2gtk4.1-devel`），macOS 用系统 WKWebView
-- （可选）**Python**：仅 Windows 双击入口（`start-tauri*.exe` 的启动画面）与
-  comfy-cli venv 用到
+- （可选）**Python**：仅 comfy-cli venv（`scripts/setup-comfy-cli-venv.ps1`）与
+  Windows Job Object 辅助（`scripts/win_job.py`）用到
 
 启动编排**只有一份实现**：`scripts/dev-launcher.mjs`（Windows 也走它）。
-Windows 侧多一层「怎么被拉起」的入口（双击 / `start-tauri*.exe`），平台差异如下
+双击入口就是壳本身（`src-tauri\target\release\app.exe`），平台差异如下
 （规范 §3.2 / §3.3）：
 
 | 平台 | 入口 | 平台机制（回收 / 探测） |
 |---|---|---|
-| Windows | `scripts/dev-launcher.ps1`、`tools/start/*.ps1`（双击）、`start-tauri*.exe` | `taskkill /PID <pid> /T /F`（收在 `src/lib/process/kill-process-tree.ts`） |
+| Windows | `app.exe`（双击）、`tools/start/*.ps1` | `taskkill /PID <pid> /T /F`（收在 `src/lib/process/kill-process-tree.ts`） |
 | Linux / macOS | `pnpm dev`、`node scripts/dev-launcher.mjs` | POSIX 进程组（`detached` 建组 + 整组信号） |
 
 平台判据只有两处出处（`scripts/launcher-core/**` 与 `kill-process-tree`）：入口与
@@ -152,7 +152,7 @@ Windows 侧多一层「怎么被拉起」的入口（双击 / `start-tauri*.exe`
 | 我想… | 双击 |
 |---|---|
 | 在浏览器里开发（看得到日志） | `tools/start/start-web.ps1` |
-| 启动桌面壳（prebuilt，秒出窗口） | `tools/start/start-tauri.ps1`（等价于双击 `start-tauri.exe`） |
+| 启动桌面壳（双击即用） | `tools/start/start-tauri.ps1`（等价于双击 `src-tauri\target\release\app.exe`） |
 | 启动桌面壳（dev，Rust 热重载） | `tools/start/start-tauri-dev.ps1` |
 | 运行已构建好的桌面包 | `tools/start/start-desktop.ps1` |
 | 第一次在本机跑起来（自检 + 装依赖 + 生成 `.env`） | `tools/start/run-local.ps1` |
@@ -160,7 +160,7 @@ Windows 侧多一层「怎么被拉起」的入口（双击 / `start-tauri*.exe`
 | 只跑测试（可指定单个文件 / 复现基线失败） | `tools/start/run-tests.ps1` |
 | 拉取更新后同步依赖并跑 lint | `tools/start/sync-lint.ps1` |
 | 注册 `comfyapp://` 协议（任务历史「打开文件夹」） | `tools/start/register-comfyapp-protocol.ps1` |
-| 构建发行包 / 重新打包启动器 | `tools/build/*.ps1`（见 `tools/README.md`） |
+| 构建发行包（release 壳） | `tools/build/*.ps1`（见 `tools/README.md`） |
 
 ### 同一件事在 Linux / macOS / CI 上怎么写
 
@@ -268,46 +268,41 @@ pnpm tauri build
 | 方式 | 命令 / 入口 | 说明 |
 |------|------------|------|
 | 纯前端（浏览器） | `pnpm dev` | 启动 Next dev server，访问控制台打印的 `http://localhost:<COMFYAPP_PORT>`（缺省按检出路径推导到 3200~3999，不是固定 3100；端口契约见 [规范 §1.1](docs/standards/launch-and-build.md#11-端口统一配置comfyapp_port)） |
-| 桌面壳（预编译秒出 + 前端热重载） | 双击 `start-tauri.exe` | 默认 prebuilt 模式：用已编译的 release 壳秒出窗口，后台连 dev server，改前端即时刷新（Rust 改动需重新 `cargo build`） |
-| 桌面壳（Rust 也热重载） | 双击 `start-tauri-dev.exe` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
-| 桌面壳（独立运行，不连 dev server） | 双击 `start-tauri-standalone.exe`（需先 `tools\build\build-standalone.ps1`） | standalone 模式：内置 Node sidecar 运行 Next standalone server，双击即独立运行，改动需重新构建才生效 |
-| 桌面壳（prebuilt，无控制台入口） | 双击 `tools/start/start-tauri.ps1` | 直接启动 `start-tauri\start-tauri.exe`（等价于 prebuilt，秒出窗口） |
-| 桌面壳（dev，Rust 热重载） | 双击 `tools/start/start-tauri-dev.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `start-tauri-dev.exe`） |
+| 桌面壳（双击即用） | 双击 `src-tauri\target\release\app.exe` | 壳自己起编排器与 dev server：窗口秒出、改前端即时刷新（Rust 改动需重新 `cargo build`） |
+| 桌面壳（Rust 也热重载） | 双击 `tools/start/start-tauri-dev.ps1` 或 `pnpm tauri dev` | 自动起 dev server + 重新编译 Rust 壳，前端/后端改动即时刷新（首次编译较慢） |
+| 桌面壳（独立运行，不连 dev server） | 先跑 `tools\build\build-standalone.ps1`，再双击 `src-tauri\target\release\app.exe` | standalone 模式：内置 Node sidecar 运行 Next standalone server（检出里没有编排器时壳自动走这条路），改动需重新构建才生效 |
+| 桌面壳（无控制台入口） | 双击 `tools/start/start-tauri.ps1` | 直接启动 `src-tauri\target\release\app.exe`（等价于双击壳本身） |
+| 桌面壳（dev，Rust 热重载） | 双击 `tools/start/start-tauri-dev.ps1` | 隐藏窗口启动 tauri dev 模式（等价于 `pnpm tauri dev`） |
 | Web 开发（可见日志） | 双击 `tools/start/start-web.ps1` | 控制台打印 dev-launcher 日志 |
 
-> Dev 模式下窗口初始加载 `splash.html` 启动页，随后自动探测 dev server 就绪并跳转应用；
-> 探测地址由启动器按 §1.1 的端口契约注入（`COMFYAPP_DEV_URL`），`tauri.conf.json` 的静态
+> 窗口初始加载 `splash.html` 启动页，随后自动探测 dev server 就绪并跳转应用；
+> 探测地址由壳按 §1.1 的端口契约注入（`COMFYAPP_DEV_URL`），`tauri.conf.json` 的静态
 > `devUrl`（`localhost:3100`）只是编译期兜底、不参与主导航。
 
 ---
 
 ## 发布构建（Release）
 
-发布构建会编译 **release 版 Rust 壳**（启动更快），并（可选）打包出可直接分发的 `start-tauri.exe`。
+发布构建会编译 **release 版 Rust 壳** —— 它**就是**唯一的启动入口
+（`src-tauri\target\release\app.exe`），不再打包第二层启动器 exe。
 
 > ⚠️ 构建依赖 `src-tauri/static` 目录（`frontendDist`）。该目录在编译时被嵌入二进制，
 > 若它**缺失或被污染**（例如被误写入整个项目副本），会导致启动黑屏。
-> 正常情况下 `build-all` 流程会自动同步资源；若曾出现异常，先跑 `tools\build\rebuild-static.ps1` 再构建。
+> 正常情况下构建流程会自动同步资源；若曾出现异常，先跑 `tools\build\rebuild-static.ps1` 再构建。
 
-### 方式一：一键发布（推荐）
-
-> 说明：`tools\build\build-all.ps1` 产出的 `start-tauri.exe` 本身就是一个「开发/预编译」启动入口——
-> 双击它会用预编译壳秒出窗口并后台连接 dev server（前端热重载），**日常开发直接双击即可**，
-> 无需先构建。它并非只能用于发布：当你需要**不依赖 dev server 的独立程序**时，才用下面的
-> 「方式三：完整安装包」（内嵌 standalone server，双击即独立运行）。
+### 方式一：一键构建（推荐）
 
 ```text
 双击 tools\build\build-all.ps1
 ```
 
-它依次执行：
-1. `tools\build\build-tauri-release.ps1` → 编译 `src-tauri/target/release/app.exe`
-   - 若 `src-tauri/static` 不存在，会自动跑 `node scripts/build-desktop.mjs` 完整组装；
-   - 已存在则仅增量同步 `splash.html` / 启动编排器（`dev-launcher.mjs` 与其
-     `launcher-core/*` 运行期依赖） / `index.html`。
-2. `tools\build\build-launcher.ps1` → 打包 `start-tauri\start-tauri.exe`
+它执行 `tools\build\build-tauri-release.ps1` → 编译出
+`src-tauri/target/release/app.exe`。编译前会：
+- 同步 `splash.html` 进 `src-tauri/splash-assets/`（启动页是编译期嵌入的）；
+- 补齐 Node sidecar（`src-tauri/binaries/node-<triple>.exe`，`externalBin` 在编译期被校验）。
 
-最终双击 `start-tauri\start-tauri.exe` 即可启动（自动优先使用 release 壳）。
+完成后**双击 `src-tauri\target\release\app.exe`** 即可启动
+（或用入口 `tools\start\start-tauri.ps1`）。
 
 ### 方式二：仅构建 release 壳
 
@@ -315,37 +310,35 @@ pnpm tauri build
 双击 tools\build\build-tauri-release.ps1
 ```
 
-产物：`src-tauri/target/release/app.exe`。适合只想替换壳、再用现有 `start-tauri.exe` 启动。
+产物同上一节。适合只想替换壳的场合。
 
-### 方式三：完整安装包（msi / nsis）
+### 方式三：完整安装包与 standalone 资源
 
 ```bash
-pnpm tauri build
+pnpm tauri build              # 系统安装包（msi / nsis）
+tools\build\build-standalone.ps1   # 组装 standalone 资源（server.js + .next + sidecar）
 ```
 
-由 Tauri CLI 走 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）组装资源，
-再产出系统安装包（位于 `src-tauri/target/release/bundle/`）。
+两者都经 `beforeBuildCommand`（`node scripts/build-desktop.mjs`）组装资源，
+安装包产出在 `src-tauri/target/release/bundle/`。
 
-### 启动入口一览（三种独立 exe）
+### 运行形态：壳自己按「检出里有没有编排器」决定
 
-`scripts/start_tauri_launcher.py` 是**一份源码**，由 `tools\build\build-launcher*.ps1` 通过
-`LAUNCHER_NAME` 环境变量打包出三个入口 exe；运行时再按 **exe 文件名**自动选择模式
-（也可显式用参数覆盖：`--tauri-dev` / `--standalone`）：
+**一个 exe，两种形态**（判据见规范 §1.5，`shell_launch::ensure_launch_mode`）：
 
-| 入口 exe | 模式 | 说明 | 改动热更新 |
-|----------|------|------|-----------|
-| 双击 `start-tauri.exe` | prebuilt（默认） | 预编译壳秒出窗口 + 后台 dev server | 前端 HMR；Rust 需重编 |
-| 双击 `start-tauri-dev.exe` | tauri dev | 重新编译 Rust 壳 + dev server | 前端 + Rust 均热重载 |
-| 双击 `start-tauri-standalone.exe` | standalone | 内置 Node sidecar 独立运行（需先 `tools\build\build-standalone.ps1`） | 不可（需重构建） |
-| `pnpm tauri build` 安装包 | standalone | 以安装包形式分发的独立程序 | 不可 |
+| 形态 | 触发条件 | 说明 | 改动热更新 |
+|------|----------|------|-----------|
+| prebuilt（开发检出） | 检出里有 `scripts/dev-launcher.mjs` | 壳起编排器 → dev server，前端 HMR | 前端 HMR；Rust 需重编 |
+| standalone（分发副本） | 检出里**没有**编排器 | 壳走内嵌 server（Node sidecar），双击即独立运行 | 不可（需重构建） |
 
-> 三种方式的「哪些能热更 / 哪些不能 / 构建 `static` 对谁有影响」，见
-> [docs/startup-hotreload.md](./docs/startup-hotreload.md)。
+> 为什么不是「按 exe 名字区分」：用户手里只有 `app.exe` 一个文件，拿它去猜形态
+> 会把两种形态都判错。判据放在**内容**（编排器在不在）上，这是唯一可判且不会漂的。
 
 > 为何 prebuilt 默认连 dev server 而非独立运行：直接运行 `target/release/app.exe` 时，
 > Tauri 的 `resource_dir()` 指向 `src-tauri`，而 standalone 的 `server.js` 在 `src-tauri/static`
-> 子目录，壳检测不到 `server.js` 便回退到 `COMFYAPP_DEV_URL`（dev server）；只有打包安装后
-> `resource_dir()` 指向 resources 且 `server.js` 在根，才会走真正独立的 standalone 模式。
+> 子目录，壳检测不到 `server.js` 便回退到 `COMFYAPP_DEV_URL`（dev server）；只有组装过
+> standalone 资源（或打包安装）后 `resource_dir()` 指向 resources 且 `server.js` 在根，
+> 才会走真正独立的 standalone 模式。
 
 ### 资源异常时清理重建
 
@@ -354,7 +347,7 @@ pnpm tauri build
 ```
 
 删除旧的 `src-tauri/static` 并重新运行 `build-desktop.mjs`（含 `pnpm build` 生成 standalone），
-随后再跑上面的任一发布构建以重新嵌入干净的前端资源。
+随后再跑上面的任一构建以重新嵌入干净的前端资源。
 
 ---
 
@@ -363,15 +356,14 @@ pnpm tauri build
 | 目标 | 命令 |
 |------|------|
 | 浏览器开发 | `pnpm dev` |
-| 桌面壳开发（热重载） | `pnpm tauri dev` 或双击 `start-tauri-dev.exe` |
-| 一键发布（壳 + launcher） | `tools\build\build-all.ps1` |
+| 桌面壳开发（热重载） | `pnpm tauri dev` 或双击 `tools\start\start-tauri-dev.ps1` |
+| 一键构建（release 壳 = 唯一入口） | `tools\build\build-all.ps1` |
 | 仅 release 壳 | `tools\build\build-tauri-release.ps1` |
-| 独立模式壳（standalone） | `tools\build\build-standalone.ps1` |
-| 独立模式启动入口 | `tools\build\build-launcher-standalone.ps1`（打包 `start-tauri-standalone.exe`） |
+| 独立模式资源（standalone） | `tools\build\build-standalone.ps1` |
 | 完整安装包 | `pnpm tauri build` |
 | 清理重建前端资源 | `tools\build\rebuild-static.ps1` |
 
-更详细的脚本职责、启动入口对比（start-tauri.ps1 / start-tauri-dev.ps1 / start-tauri.exe）、CSP 与 standalone 模式说明，
+更详细的脚本职责、启动入口对比（`start-tauri.ps1` / `start-tauri-dev.ps1` / 壳自身）、CSP 与 standalone 模式说明，
 见 [`tools/README.md`](./tools/README.md)。
 启动方式的热更新（HMR）能力矩阵、以及重建 `src-tauri/static` 对每种方式的影响，
 见 [`docs/startup-hotreload.md`](./docs/startup-hotreload.md)。

@@ -596,18 +596,12 @@ const SCAN_EXCLUDED = [
   "temp/",
   "python-venv/",
   "log/",
-  "build-launcher/",
   "dist/",
   "docs/",
   "playwright-report/",
   ".workbuddy/",
   "src-tauri/target/",
   "src-tauri/static/",
-  "start-tauri/",
-  "start-tauri-dev/",
-  "start-tauri-standalone/",
-  "build-launcher-dev/",
-  "build-launcher-standalone/",
 ];
 (function walkScripts(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

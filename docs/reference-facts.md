@@ -28,7 +28,7 @@
 > | 链路 | 谁在监听 | 端口来源 | 文档里的正确形态 |
 > |---|---|---|---|
 > | **解析链**：`pnpm dev` / `pnpm start` / `pnpm tauri dev`（beforeDevCommand）/ Playwright | `node scripts/dev.mjs` → `next dev -p` | `.env` 的 `COMFYAPP_PORT` → **按检出路径推导 3200~3999** → 兜底 3100（`scripts/app-port.mjs`） | 路径推导值（本检出固定，换机器会变），或写「解析值」不给数字 |
-> | **静态链**：Windows 双击链路（`start-tauri.exe` / `dev-launcher.ps1` / Rust 壳） | 挂在上面的解析链上，端口由启动器注入 `COMFYAPP_PORT` / `COMFYAPP_DEV_URL` | `src-tauri/tauri.conf.json` 的 `build.devUrl`（**编译期内嵌的兜底值**，正常启动时被注入值覆盖） | `localhost:3100`（兜底值语境） |
+> | **静态链**：Windows 双击链路（`app.exe` / `dev-launcher.ps1` / Rust 壳） | 挂在上面的解析链上，端口由壳 / 编排器注入 `COMFYAPP_PORT` / `COMFYAPP_DEV_URL` | `src-tauri/tauri.conf.json` 的 `build.devUrl`（**编译期内嵌的兜底值**，正常启动时被注入值覆盖） | `localhost:3100`（兜底值语境） |
 >
 > 所以：**描述 `pnpm dev` 语境的文档必须写解析链端口**（`dev.port.derived`）；
 > `localhost:3100` 只在「启动器 / 壳 / 异常兜底」的上下文里才是正确形态。
@@ -41,22 +41,18 @@
 | `dev.port.derived` | `:3311`（某检出上的推导值示例） | **解析链**端口：`pnpm dev` / `pnpm start` / Playwright 实际监听的端口 | `scripts/app-port.mjs`（唯一事实源，另有 PowerShell / Python / Rust 三侧同型实现） | `resolveAppPort(<仓库根>)`——直接复用 Node 侧实现，不在校验脚本里重写算法（第五份实现必然是漂移源） |
 | `dev.port.fallback` | `:3312` `:3313`（= 解析链端口 +1 / +2） | 解析链端口被占时的回落候选 | `scripts/dev-launcher.ps1` 的 `$scanPorts = appPort/+1/+2` | 由解析链端口推导；Windows 启动器按此顺序试听 |
 
-### 1.2 启动器（launcher）可执行文件
+### 1.2 唯一的启动入口（Rust 壳 exe）
 
-> 三个 exe 由同一份 `tools/start-tauri.spec` 打包，靠 `LAUNCHER_NAME` 区分。
-> 权威定义点是 `tools/scripts/build-launcher*.ps1` 注入的 `LAUNCHER_NAME` 值。
-
-| key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
-|---|---|---|---|---|
-| `shell.exe.prebuilt` | `{{shell.exe.prebuilt}}` | prebuilt 启动器 exe | `tools/scripts/build-launcher.ps1` 的 `$env:LAUNCHER_NAME` | 读 `LAUNCHER_NAME` 值，产物为 `start-tauri.exe` |
-| `shell.exe.dev` | `{{shell.exe.dev}}` | tauri dev 启动器 exe | `tools/scripts/build-launcher-dev.ps1` 的 `$env:LAUNCHER_NAME` | 同上，产物为 `start-tauri-dev.exe` |
-| `shell.exe.standalone` | `{{shell.exe.standalone}}` | standalone 启动器 exe | `tools/scripts/build-launcher-standalone.ps1` 的 `$env:LAUNCHER_NAME` | 同上，产物为 `start-tauri-standalone.exe` |
+> **只有一个 exe**：Python 启动器（`start-tauri*.exe`）与它的 `LAUNCHER_NAME`
+> 打包链已随 ISSUE #784 整体移除 —— 双击 `{{shell.app.exe}}` 就是完整的启动形态，
+> 编排（起 dev server / 端口 / 缓存 / 回收）由壳自己承担
+> （`src-tauri/src/shell_launch.rs`）。
 
 ### 1.3 Rust 壳目标文件
 
 | key | placeholder | meaning（可读语义） | source（权威定义文件） | extract |
 |---|---|---|---|---|
-| `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe | `scripts/dev-launcher.ps1` 指向的 `src-tauri/target/release/app.exe` | 读 `dev-launcher.ps1` 中 `app.exe` 文件名与路径 |
+| `shell.app.exe` | `{{shell.app.exe}}` | 编译出的 Tauri 壳 exe（**唯一入口**） | `scripts/dev-launcher.mjs` 的 `defaultShellExe()` 候选路径（「壳在哪」的唯一判据） | 读候选路径里的文件名（Windows 产物 `app.exe`）。**不要**取 `productName`（是 `ComfyAPP`）或 `externalBin`（是 Node sidecar）：两者都不是这个 exe 的名字 |
 | `shell.splash` | `{{shell.splash}}` | 启动页文件名 | `src-tauri/tauri.conf.json` 的 `windows[0].url` | 读 `windows[0].url` 值（`splash.html`） |
 
 ### 1.4 独立单值端口（非 dev 端口族）
@@ -117,9 +113,9 @@
 | `path.dev-launcher` | 启动编排脚本（Windows） | `scripts/dev-launcher.ps1` | Windows 侧进程编排者（taskkill / Job Object） |
 | `path.dev-launcher.mjs` | 启动编排脚本（跨平台） | `scripts/dev-launcher.mjs` | Linux / macOS 侧进程编排者（进程组 / 会话锚点），与 .ps1 同契约同产物（规范 §3.3） |
 | `path.dev-launcher-session` | 启动会话锚点 | `scripts/dev-launcher-session.mjs` | PID + 心跳落盘，崩溃后仍可回收孤儿 |
-| `path.start-launcher-py` | Python 启动器 | `scripts/start_tauri_launcher.py` | PyInstaller 打包来源 |
-| `path.spec` | PyInstaller spec | `tools/start-tauri.spec` | 三个 exe 共用的打包定义 |
-| `path.build-launcher` | 打包预编译 exe 脚本 | `tools/scripts/build-launcher.ps1` | prebuilt 入口 |
+| `path.shell-launch-rs` | 壳自编排模块 | `src-tauri/src/shell_launch.rs` | 起编排器 / 认亲 / 回收 / 运行模式 |
+| `path.start-entry` | 桌面壳启动入口 | `tools/start/start-tauri.ps1` | 双击即启动（直启 `app.exe`） |
+| `path.start-entry-dev` | 壳开发入口（Rust 热重载） | `tools/start/start-tauri-dev.ps1` | `pnpm tauri dev` |
 | `path.build-desktop` | static 组装脚本 | `scripts/build-desktop.mjs` | 产出 `src-tauri/static` |
 | `path.rebuild-static` | 重建 static 入口 | `tools/build/rebuild-static.ps1` | 入口薄壳（逻辑在 tools/scripts/） |
 | `path.build-tauri-release` | 重编壳 + 打包 | `tools/build/build-tauri-release.ps1` | 重编壳入口 |
@@ -189,8 +185,8 @@
 >
 > | 态 | 位置 | 内容 | 维护者 |
 > |---|---|---|---|
-> | **编辑文档** | 上表 SCOPED_DOCS 对应的源文件（如 "docs/standards/launch-and-build.md"） | 用语义化占位符 {{shell.exe.prebuilt}} 作单一事实 | 人写，配合 pnpm doc:check 防裸值回潮 |
-> | **生成文档** | 运行 pnpm doc:render 输出到 docs/generated/ | 占位符已替换成从源码提取的**真实值**（如 start-tauri.exe） | 脚本自动生成，**禁止手改**；改编辑文档后重新生成 |
+> | **编辑文档** | 上表 SCOPED_DOCS 对应的源文件（如 "docs/standards/launch-and-build.md"） | 用语义化占位符 {{shell.app.exe}} 作单一事实 | 人写，配合 pnpm doc:check 防裸值回潮 |
+> | **生成文档** | 运行 pnpm doc:render 输出到 docs/generated/ | 占位符已替换成从源码提取的**真实值**（如 app.exe） | 脚本自动生成，**禁止手改**；改编辑文档后重新生成 |
 >
 > - **单一事实**：两态共用同一份 FACTS（scripts/doc-facts.cjs），真实值只从
 >   源码/配置动态提取，不存在第二事实。改源码 → 跑 pnpm doc:render → 生成文档自动同步。
@@ -210,7 +206,7 @@
    无括号 `:8188`、在主规范里是 `localhost:3100` / `:8188` 并列行）时：
    用 `onlyDocs` 声明主适用文档组 + `otherDocs` 追加其余引用点，**不要把引用点
    挪出校验范围**——挪出去等于放弃防回潮，下次改端口这两处就静默过期。
-3. **占位符要可读**：`placeholder` 用语义化命名（如 `{{dev.port}}`、`{{shell.exe.prebuilt}}`），
+3. **占位符要可读**：`placeholder` 用语义化命名（如 `{{dev.port}}`、`{{shell.app.exe}}`），
    禁止 `{{x1}}` 这类晦涩代号；表内 `meaning` 列给出人类可读解释。
 4. **本表不存值**：禁止在本表硬编码真实值（那是第二事实）。值只在源码，由脚本提取。
    > 例外的边界：§1.1 表格里出现的 `:3100` / `:3311` 是**文档形态示例**（说明「这类值在文档里

@@ -122,9 +122,10 @@ async function main() {
   if (!pyMod) problems.push("缺少 Python 侧可导入模块：scripts/app_port.py");
   else if (!pyMod.includes("def normalize_root_for_port"))
     problems.push("Python 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
-  const launcher = readIfExists("scripts/start_tauri_launcher.py");
-  if (launcher && !launcher.includes("from app_port import"))
-    problems.push("start_tauri_launcher.py 未从 app_port 导入端口算法（抽模块约定被破坏）");
+  // Python 侧的使用者现在只剩这个可导入模块本身与其自检脚本
+  //（原先还有 Windows-only 的 start_tauri_launcher.py，已随 ISSUE #784 移除）。
+  if (!readIfExists("scripts/check-app-port-vectors.py"))
+    problems.push("缺少 Python 侧自检脚本：scripts/check-app-port-vectors.py");
 
   report();
 }

@@ -15,12 +15,17 @@
 //!   2. 前台归属不再需要第二个进程复核：双击时「用户就是在等这个应用」，壳自己
 //!      知道（判据见 `decide_front_when_self_launched`）。
 //!
-//! 与 python 启动器的关系（并存，不替代）：后者仍是「双击入口」，它的
-//! `tools/start/start-tauri.ps1`、`--help`、环境预检与失败弹窗都还在；它拉起壳
-//! 之前会先起 dev-launcher，因此新壳看到「已经认识本检出的编排器在跑」就直接
-//! 复用，不会起第二份编排（双份编排会争端口、争 `run/launch-session.json`）。
-//! 反过来，用户直接双击 `target/release/app.exe`（没有 python 启动器）时，壳
-//! 自己把编排补齐 —— 这正是本 ISSUE 要的形态。
+//! **本模块现在是唯一的启动入口形态**：Python 启动器（`start-tauri*.exe`）已在
+//! 本 ISSUE 的第二轮里整体移除，双击 `app.exe` 就是唯一的「一键启动」。随之搬进
+//! 壳的三件事（原先都在 python 启动器里，删它就必须先接住）：
+//!   1. **运行模式** `COMFYAPP_LAUNCH_MODE`（prebuilt / standalone）由本模块
+//!      决定并写进自己的环境——原先由启动器按 exe 文件名 / 参数解析后注入；
+//!   2. **双击单实例的「唤起已有实例」**：原先由启动器的具名互斥量承担（壳自己
+//!      的单实例保护要在窗口创建之前判定，那时还找不到编排器）；
+//!   3. **启动失败的人类可见出口**：原先靠启动器的 msgbox，现在由启动页面板 +
+//!      日志面板承担（见 `mark_launch_failed`）。
+//! 编排本身仍是 `scripts/dev-launcher.mjs` 那一份唯一实现 —— 本模块只回答
+//! 「起什么、怎么起、怎么回收、认亲判据是什么」。
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -45,6 +50,11 @@ static JOB_HANDLE: Mutex<usize> = Mutex::new(0);
 static ORCHESTRATOR: Mutex<Option<tauri_plugin_shell::process::CommandChild>> = Mutex::new(None);
 
 /// 本模块亲手起的编排器，其进程环境里必有这一条（认亲判据，见 `is_own`）。
+///
+/// 双击壳时**不再需要**它（编排器只可能是壳自己起的）——留着是因为「上一次运行
+/// 遗留的编排器」可能仍带着这个标记在跑（例如用户强杀壳、job 与进程组都没来得及
+/// 回收），而 `reap` 之后又立刻复用会去杀它：保留标记 = 那些历史残留仍能被正确
+/// 认出来并回收，不会误伤别人的启动过程（认亲判据仍只认环境块，不按形态猜）。
 pub const OWNED_ENV: &str = "COMFYAPP_SHELL_OWNED";
 
 /// 已由壳完成编排（= 本次启动的 dev server 由壳拉起）。
@@ -87,10 +97,11 @@ pub fn orchestrator_script(project_root: &str) -> Option<std::path::PathBuf> {
 
 /// 这个检出能不能自己起来（= 有编排脚本 + 依赖装好了）。
 ///
-/// 判据必须**只读、极快、且宁可漏判成「没有」**：它跑在 Windows 的
-/// `CreateProcess` 前置检查里，决定「能不能直接执行 `dev-launcher.mjs`」，
-/// 也就是零进程切换那条起法能不能成立。漏判只是退回「自己起 node」的形态，
-/// 误判才是把「双击没反应」塞给用户。
+/// 判据必须**只读、极快、且宁可漏判成「没有」**：它决定「这次双击能不能把应用
+/// 拉起来」，而判错的代价是不对称的——漏判只是退回「等静态 devUrl」的旧行为
+/// （页面明确说没就绪），误判则是让用户对着一个必然失败的过程等下去。
+/// **自编排是唯一路径后，它同时是启动失败出口的开关**：判 false 时
+/// `mark_launch_failed` 会把「为什么起不来、该先做什么」写到启动页上。
 pub fn can_self_launch(project_root: &str) -> bool {
   if orchestrator_script(project_root).is_none() {
     return false;
@@ -113,12 +124,18 @@ pub fn can_self_launch(project_root: &str) -> bool {
 
 /// 「双击 app.exe」时要不要把主窗顶到前台。
 ///
-/// 与 python 启动器的 `decide_foreground` 同一取向但不查进程表：直接双击这个
-/// 壳的人就是刚点完它、正在等画面的人（ISSUE #576「双击像没反应」的另一面）。
-/// `COMFYAPP_FOREGROUND` 已由启动器显式注入时以它为准（`read_foreground_env`），
+/// 判据收在壳里（Python 启动器的 `decide_foreground` 已随它一起移除）：启动期
+/// **仍然不抢**——启动要几十秒，用户常在这段时间切去别的窗口干活，几十秒后正式
+/// 窗口冒出来时把前台抢走就是当场打断（ISSUE #359 的教训）；双击场景下窗口进
+/// 任务栏 + 任务栏闪烁提醒。真正的「唤起」交给壳自己的第二个进程：用户再双击一次
+/// `app.exe`，那时 `single_instance::another_instance_running()` 会向右跑的实例
+/// 发信号，`spawn_focus_waiter` 收到后以 `request_focus = true` 把窗口带到前台
+/// （用户显式意图，必须给）。
+///
+/// `COMFYAPP_FOREGROUND` 仍可显式覆盖（脚本 / 终端调用场景，`read_foreground_env`），
 /// 这里的默认值只在变量缺席时生效。
 pub fn decide_front_when_self_launched() -> bool {
-  true
+  false
 }
 
 /// 从环境读前台开关（三方注入：python 启动器 / 脚本 / 壳自己）。
@@ -135,7 +152,7 @@ pub fn read_foreground_env() -> Option<bool> {
   Some(value == "1" || value == "true" || value == "yes")
 }
 
-/// 回收本次启动拉起的编排器整棵进程树。
+/// 回收本次启动拉起的编排器整棵进程树（**启动前**也要来一次，见调用点）。
 ///
 /// 两道机制与 `kill_sidecar` 同构（AGENTS 硬规则 3：必须杀整棵树）：
 ///   1. **shell 插件自己的 `kill()`** —— 按平台选机制；
@@ -151,6 +168,96 @@ pub fn reap(project_root: &str) {
     Err(e) => log::warn!("[ComfyAPP] shell orchestrator stop via shell plugin failed: {e:?}"),
   }
   spawn_reaper(project_root, pid);
+}
+
+/// 回收一个**已知进程号**的编排器（启动前清理上一次的残留，见调用点）。
+///
+/// 与 `reap` 的差别只在「句柄从哪来」：`reap` 收的是本进程持有的 `CommandChild`，
+/// 这里收的是上一次运行留下的孤儿（壳被强杀 / job 与进程组都没来得及回收）。
+/// 两者都转交同一处平台判据，壳里**不出现** `taskkill` / 单杀 leader（硬规则 3）。
+pub fn reap_pid(project_root: &str, pid: u32) {
+  if pid == 0 || pid == std::process::id() {
+    return;
+  }
+  // KILL_ON_JOB_CLOSE 的 job 已经会带走自己那一棵树；这里补的是
+  // 「job 也没挂上 / 壳被硬杀」的边角，动作仍走统一回收。
+  spawn_reaper(project_root, pid);
+}
+
+/// 本次运行的启动模式（`prebuilt` / `standalone`）。
+///
+/// **唯一读取点**：该环境变量原先由 Python 启动器按 exe 文件名 / 参数解析后注入，
+/// 启动器移除后必须有人替它决定，否则 `setup_standalone_runtime` 永远读到空串
+/// （standalone 壳不拉内嵌 server，页面连不上）。决定者是壳自己，判据是「编排器
+/// 在不在」，**不是** exe 的名字：用户手里只有 `target/release/app.exe` 一个文件，
+/// 拿它去猜「这是哪种形态」只会把两种形态都判错。
+///
+/// 非 release（debug，`pnpm tauri dev`）**不写**：那里 dev server 由
+/// `beforeDevCommand` 起着，壳写一个模式进去只会与 dev 链路打架。
+#[cfg(not(debug_assertions))]
+pub fn ensure_launch_mode(project_root: &str) {
+  if std::env::var("COMFYAPP_LAUNCH_MODE").is_ok() {
+    return;
+  }
+  let mode = if orchestrator_script(project_root).is_some() {
+    "prebuilt"
+  } else {
+    "standalone"
+  };
+  // SAFETY：启动期单线程（窗口与事件循环都还没建），没有并发读环境变量的路径。
+  std::env::set_var("COMFYAPP_LAUNCH_MODE", mode);
+  log::info!(
+    "[ComfyAPP] launch mode={mode}（编排器{}）",
+    if mode == "prebuilt" { "在，走 dev server" } else { "不在，走内嵌 standalone server" }
+  );
+}
+
+#[cfg(debug_assertions)]
+pub fn ensure_launch_mode(_project_root: &str) {}
+
+/// 起不来时写 `run/launch-status.json`，让启动页说清「为什么起不来、该先做什么」。
+///
+/// Python 启动器被删除后，这里接的是它原先的**人类可见失败出口**（msgbox）。改成
+/// 启动页面板是更好的形态：窗口本来就开着（`setup_splash_window` 先建启动页），
+/// 页面直接读这份状态，比弹一个系统对话框更贴近「你只是没启动成功」。
+///
+/// 目录不存在时递归建（全新克隆 / 清理过 `run/` 的场景），写失败只记 WARN ——
+/// 失败出口本身不该再产生一个失败。
+pub fn mark_launch_failed(project_root: &str, message: &str) {
+  if project_root.is_empty() {
+    log::error!("[ComfyAPP] launch failed: {message}");
+    return;
+  }
+  let dir = std::path::Path::new(project_root).join("run");
+  if let Err(e) = std::fs::create_dir_all(&dir) {
+    log::warn!("[ComfyAPP] cannot create {}: {e:?}", dir.display());
+    return;
+  }
+  let payload = serde_json::json!({
+    // 判据与 `get_launch_status` 的消费方（启动页 `updateUI`）对齐：
+    // `progress` 保持 < 1，否则页面会把 100% 的前缀画成「✓」——一次失败
+    // 于是看起来像「成功但没打开」。
+    "phase": "error",
+    "progress": 0,
+    "message": message,
+    "error": true,
+    "updatedAt": iso_timestamp(),
+  });
+  let path = dir.join("launch-status.json");
+  match std::fs::write(&path, payload.to_string()) {
+    Ok(()) => log::error!("[ComfyAPP] launch failed (reported on the splash): {message}"),
+    Err(e) => log::warn!("[ComfyAPP] cannot write {}: {e:?}", path.display()),
+  }
+}
+
+/// 极简 ISO-8601（UTC）时间戳：只为进度快照里的 `updatedAt`，不引入时间库。
+fn iso_timestamp() -> String {
+  use std::time::{SystemTime, UNIX_EPOCH};
+  let secs = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .map(|d| d.as_secs())
+    .unwrap_or(0);
+  format!("unix:{secs}")
 }
 
 /// 调 `scripts/reap-process.mjs`（非 TS 宿主的唯一命令行回收入口）。
@@ -207,7 +314,7 @@ pub fn spawn_orchestrator(
 
   let script = orchestrator_script(project_root).ok_or_else(|| {
     format!(
-      "找不到启动编排器：{}（请把壳放在项目根内，或经 start-tauri.exe 启动）",
+      "找不到启动编排器：{}（请把壳放在项目根内：壳要靠项目根里的 scripts/dev-launcher.mjs 起服务）",
       std::path::Path::new(project_root)
         .join("scripts")
         .join("dev-launcher.mjs")
@@ -255,6 +362,53 @@ pub fn spawn_orchestrator(
   Ok(())
 }
 
+/// 调 `scripts/win_job.py`，把编排器纳入一个 `KILL_ON_JOB_CLOSE` 的 job。
+///
+/// 为什么经命令行而不是在 Rust 里重写一遍 Win32：判据只许有一处
+/// （`scripts/win_job.py` 是 Job Object 的唯一实现，规范 §3.3「平台机制」层），
+/// 在壳里再抄一份 CreateJobObject / DuplicateHandle 就是「两处会漂的平台分支」。
+/// 顺序（先复制句柄、后 assign）与失败语义都由那份实现保证。
+///
+/// 失败一律只记 WARN：这是**兜底**，正常的回收链（壳退出 → 插件 kill → 统一回收）
+/// 不依赖它，挂不上不该拦住启动。
+#[cfg(windows)]
+fn attach_job_via_helper(project_root: &str, pid: u32) -> bool {
+  use std::os::windows::process::CommandExt;
+  // 候选解释器与「不弹控制台窗口」的判据都在这里一处。`py` 是 Windows 的
+  // 官方启动器（Store 版 Python 常常只留它）。
+  const NO_WINDOW: u32 = 0x0800_0000; // CREATE_NO_WINDOW
+  let script = std::path::Path::new(project_root)
+    .join("scripts")
+    .join("win_job.py");
+  if !script.is_file() {
+    log::warn!(
+      "[ComfyAPP] win_job.py 不存在（{}），跳过 Job Object 兜底",
+      script.display()
+    );
+    return false;
+  }
+  for python in ["python", "py", "python3"] {
+    let mut command = std::process::Command::new(python);
+    command.arg(&script).arg(pid.to_string());
+    // `creation_flags` 来自 `std::os::windows::process::CommandExt`，
+    // 必须显式引入（POSIX 上这个 trait 不存在，所以整段都在 cfg(windows) 里）。
+    command.creation_flags(NO_WINDOW);
+    match command.output() {
+      Ok(out) => {
+        if out.status.success() {
+          return true;
+        }
+        log::debug!(
+          "[ComfyAPP] {python} scripts/win_job.py 退出码 {:?}，试下一个解释器",
+          out.status.code()
+        );
+      }
+      Err(e) => log::debug!("[ComfyAPP] 无法用 {python} 运行 win_job.py：{e}"),
+    }
+  }
+  false
+}
+
 /// 给编排器挂一个 `KILL_ON_JOB_CLOSE` 的 Job Object（Windows）。
 ///
 /// 与 python 启动器里的 `scripts/win_job.py` 同一目的：编排器（node）若崩溃 /
@@ -265,6 +419,10 @@ pub fn spawn_orchestrator(
 /// 回收）不依赖它，挂不上不该拦住启动。
 #[cfg(windows)]
 pub fn attach_kill_on_close_job() {
+  // 壳自己持有 job 句柄在这里是**有意**的（句柄故意不关，壳一死 job 就关）。
+  // 与旧链路（Python 启动器）的差别：那时句柄复制进编排器、由编排器决定生死。
+  // 现在编排器是壳的孩子，「壳退出 → 回收编排器 → 编排器回收它那棵树」是一条
+  // 没有中断的链，job 只是「壳被硬杀」时的兜底，因此句柄归壳最自然。
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
@@ -284,6 +442,12 @@ pub fn attach_kill_on_close_job() {
   };
   if pid == 0 {
     return;
+  }
+  if let Ok(root) = std::env::var("COMFYAPP_PROJECT_ROOT") {
+    if attach_job_via_helper(&root, pid) {
+      log::info!("[ComfyAPP] orchestrator {pid} attached to kill-on-close job (via win_job.py)");
+      return;
+    }
   }
   unsafe {
     let job = match CreateJobObjectW(None, windows::core::PCWSTR::null()) {

@@ -2,7 +2,7 @@
 <#
 setup-comfy-cli-venv.ps1 — 准备 comfy-cli 的 Python 虚拟环境
 ===============================================================================
-由 start-tauri.exe（scripts/start_tauri_launcher.py）在启动时后台触发。
+原先由启动器在每次启动时后台触发；启动器已随 ISSUE #784 移除，现按需手工执行。
 
 背景：raw UI-format（liblib 子图）工作流需要交给 comfy-cli 做 UI→API 转换，
 executor-cli.ts 固定使用 <项目根>/python-venv/comfy-cli 下的 Python 解释器。
