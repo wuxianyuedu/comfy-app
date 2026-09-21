@@ -193,6 +193,10 @@ export interface IoRef {
   hostNodeId?: string;
 }
 
+/** 拖拽落点在目标行的上半区（插到它之前）还是下半区（插到它之后）。
+ *  指示线与实际插入位置同源 —— 所见即所得。 */
+export type WorkflowIODropPosition = "before" | "after";
+
 /** 共享 context：让每个自定义节点（WorkflowNode / WorkflowSubgraphNode）都能读到
  *  当前 IO 编辑模式与实时勾选集合，而不必在每次切换时重建节点的 `data`。
  *  切换只在这里更新 `workflowIO` 状态，所有消费节点经 context 直接重渲染。 */
@@ -210,11 +214,17 @@ export interface IOEditContextValue {
    *  （下一次 PATCH 整份发送）。键不在表里时是空操作 ——
    *  required 只对已勾选的 pin 有意义。 */
   toggleIORequired: (key: string) => void;
-  /** IO 预览里的拖拽排序：把 `fromKey` 移到渲染列表中 `beforeKey` 的正前方
-   *  （传 `null` 表示移到末尾）。会重排受影响分组的 `displayOrder` 并即时
-   *  PATCH 服务端，让排列能扛过一次刷新。密集编号策略与分组隔离契约见
-   *  `reorderIO` 的实现。 */
-  reorderIO: (fromKey: string, beforeKey: string | null) => void;
+  /** IO 预览里的拖拽排序：把 `fromKey` 移到渲染列表中 `targetKey` 的前方
+   *  （`before`）或后方（`after`）；传 `null` 表示移到末尾。插入点由指针在
+   *  目标行内的上/下半区显式给出，与拖拽指示线画的位置同源（旧版按拖动方向
+   *  猜插入点、指示线却永远画在行顶，两者打架时用户看到「拖了但顺序没变」）。
+   *  会重排受影响分组的 `displayOrder` 并即时 PATCH 服务端，让排列能扛过
+   *  一次刷新。密集编号策略与分组隔离契约见 `reorderIO` 的实现。 */
+  reorderIO: (
+    fromKey: string,
+    targetKey: string | null,
+    position: WorkflowIODropPosition,
+  ) => void;
 }
 export interface RgthreeGroupsContextValue {
   /** 某个分组 id 的**生效**旁路状态（本地覆盖 > detail）。 */

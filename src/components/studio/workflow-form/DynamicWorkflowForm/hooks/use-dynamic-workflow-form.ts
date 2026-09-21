@@ -20,6 +20,25 @@ import {
   isNumericWidget,
   type DynamicWorkflowFormProps,
 } from "../dynamic-workflow-form-config";
+import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
+
+/** 在这些可编辑控件上起手不发起拖拽：输入框 / 下拉 / 按钮是「用」的地方，
+ *  不是「抓」的地方 —— 行级 draggable 会劫持文本选择与下拉交互；且从这些
+ *  控件发起的原生拖拽经常根本不触发 drop（只有 dragend），表现成
+ *  「拖了但顺序没变」。用户口径：只能从不可编辑区域拖动。 */
+const DRAG_CANCEL_SELECTOR =
+  "input, textarea, select, button, [contenteditable]";
+
+/** 指针在行内的上/下半区决定插入点：上半区 = 插到该行之前，下半区 = 之后。
+ *  指示线画在实际插入位置，落点即所见。取不到几何信息（测试桩 / 理论上
+ *  的分离节点）时退回 before。 */
+const positionOf = (
+  event: DragEvent<HTMLDivElement>,
+): WorkflowIODropPosition => {
+  const rect = event.currentTarget?.getBoundingClientRect?.();
+  if (!rect || rect.height <= 0) return "before";
+  return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+};
 
 /** 每行的 HTML5 拖拽事件包，由 controller 统一生成后下发给行组件。
  *
@@ -66,6 +85,9 @@ export interface DynamicWorkflowFormController {
   dragHandlers: RowDragHandlers | null;
   draggingKey: string | null;
   dragOverKey: string | null;
+  /** 指示线画在 `dragOverKey` 那一行的上缘还是下缘 —— 与 reorderIO 收到的
+   *  `position` 同源，指示线永远画在实际插入位置。 */
+  dropPosition: WorkflowIODropPosition;
   /** 端口行被拿起时回传本 controller —— 端口行自身不持有拖拽状态。 */
   beginPortDrag: (ioKey: string) => void;
   endDrag: () => void;
@@ -182,6 +204,8 @@ export function useDynamicWorkflowForm(
   const dragFromRef = useRef<string | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] =
+    useState<WorkflowIODropPosition>("before");
 
   const beginDrag = useCallback((ioKey: string) => {
     dragFromRef.current = ioKey;
@@ -193,6 +217,7 @@ export function useDynamicWorkflowForm(
     dragFromRef.current = null;
     setDraggingKey(null);
     setDragOverKey(null);
+    setDropPosition("before");
   }, []);
 
   /* 事件目标所在的行：`data-io-key` 挂在每一行的行锚点上（参数行与端口行
@@ -210,9 +235,16 @@ export function useDynamicWorkflowForm(
     if (!onReorder) return null;
     return {
       onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
+        /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
+         *  —— preventDefault 直接取消这次拖拽。 */
+        const target = event.target as HTMLElement | null;
+        if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
+          event.preventDefault();
+          return;
+        }
         /* 起手行以**事件目标所在的那一行**为准：行级 draggable 下目标通常是
-         *  行内子元素（标签按钮、输入框），bind 进来的 ioKey 是渲染时那一次
-         *  的闭包值，可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
+         *  行内子元素（标签按钮），bind 进来的 ioKey 是渲染时那一次的闭包值，
+         *  可能与用户实际抓住的行不一致。取不到才退回 bind 值。 */
         beginDrag(rowKeyOf(event.target) ?? ioKey);
         /* Firefox 不调 dataTransfer.setData 就拒绝开始拖拽。
          * Payload 只给原生拖拽一个「有内容」的凭据 —— 真正的来源键
@@ -230,20 +262,24 @@ export function useDynamicWorkflowForm(
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
         if (dragOverKey !== ioKey) setDragOverKey(ioKey);
+        const pos = positionOf(event);
+        if (dropPosition !== pos) setDropPosition(pos);
       },
       onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         /* 来源一律取**起手那一刻记下的键**（ref）。落点行以事件目标为准，
-         *  两者相同即「拖回原地」，不动数据。 */
+         *  两者相同即「拖回原地」，不动数据。插入点以松手时指针所在的
+         *  半区为准，与指示线一致。 */
         const fromKey = dragFromRef.current;
         const toKey = rowKeyOf(event.target) ?? ioKey;
+        const pos = positionOf(event);
         endDrag();
         if (!fromKey || fromKey === toKey) return;
-        onReorder(fromKey, toKey);
+        onReorder(fromKey, toKey, pos);
       },
       onDragEnd: endDrag,
     };
-  }, [onReorder, dragOverKey, endDrag, beginDrag, rowKeyOf]);
+  }, [onReorder, dragOverKey, dropPosition, endDrag, beginDrag, rowKeyOf]);
 
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -319,6 +355,7 @@ export function useDynamicWorkflowForm(
     dragHandlers,
     draggingKey,
     dragOverKey,
+    dropPosition,
     beginPortDrag,
     endDrag,
   };

@@ -33,7 +33,7 @@ import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 import { Button } from "~/components/ui/button";
 import { mergeExposedEntry } from "./workflow-editor/io-exposure";
-import type { WorkflowIOParam } from "./workflow-types";
+import type { WorkflowIODropPosition, WorkflowIOParam } from "./workflow-types";
 import { RequiredSummary } from "./RequiredSummary";
 import { getIOEditApi } from "./workflow-editor/WorkflowStores";
 
@@ -137,8 +137,11 @@ export function WorkflowIoPreviewPanel({
     [effectiveMode, ioApi],
   );
   const reorderIO = useCallback(
-    (fromKey: string, beforeKey: string | null) =>
-      ioApi.getState().reorderIO(fromKey, beforeKey),
+    (
+      fromKey: string,
+      targetKey: string | null,
+      position: WorkflowIODropPosition,
+    ) => ioApi.getState().reorderIO(fromKey, targetKey, position),
     [ioApi],
   );
 

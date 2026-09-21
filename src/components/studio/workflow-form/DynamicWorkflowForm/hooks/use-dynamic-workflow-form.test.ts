@@ -351,10 +351,48 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
       } as never),
     );
 
-    expect(onReorder).toHaveBeenCalledWith("from", "to");
+    expect(onReorder).toHaveBeenCalledWith("from", "to", "before");
     // 拖完必须清高亮，否则会留下一道假的插入线
     expect(result.current.draggingKey).toBeNull();
     expect(result.current.dragOverKey).toBeNull();
+  });
+
+  it("落点在目标行下半区时插到其后（指示线与插入位置同源）", () => {
+    const onReorder = vi.fn();
+    const { result } = renderHook(() =>
+      useDynamicWorkflowForm(baseProps({ onReorder })),
+    );
+    act(() => result.current.beginPortDrag("from"));
+    act(() =>
+      result.current.dragHandlers!.onDrop("to")({
+        preventDefault: vi.fn(),
+        dataTransfer: {},
+        clientY: 80,
+        currentTarget: {
+          getBoundingClientRect: () => ({ top: 0, height: 100 }),
+        },
+      } as never),
+    );
+    expect(onReorder).toHaveBeenCalledWith("from", "to", "after");
+  });
+
+  it("从输入框/下拉起手取消拖拽（只能从不可编辑区域拖动）", () => {
+    const onReorder = vi.fn();
+    const { result } = renderHook(() =>
+      useDynamicWorkflowForm(baseProps({ onReorder })),
+    );
+    const preventDefault = vi.fn();
+    const setData = vi.fn();
+    act(() =>
+      result.current.dragHandlers!.onDragStart("k1")({
+        target: { closest: () => ({}) }, // 命中可编辑控件（input/select…）
+        preventDefault,
+        dataTransfer: { setData, effectAllowed: "" },
+      } as never),
+    );
+    expect(preventDefault).toHaveBeenCalled();
+    expect(setData).not.toHaveBeenCalled();
+    expect(result.current.draggingKey).toBeNull();
   });
 
   it("drop 到自己身上不触发重排（避免无意义的顺序写入）", () => {
