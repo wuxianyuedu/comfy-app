@@ -113,6 +113,59 @@ export function envelopeErrorMessage(env: unknown): string {
   return str(err, "message") ?? str(err, "hint") ?? "comfy-cli 执行失败";
 }
 
+/** comfy-cli 1.20.0 在 UI→API 转换后对照 server `object_info` 校验产生的
+ *  `workflow_unknown_nodes` 错误（本仓库不产生，见 `extractEnvelopeValidationErrors`
+ *  只认 `node_errors`）。错误形状是 `error.details.errors[]`，每条带
+ *  `node_id` / `field` / `code` / `message` / `hint`。这里特判它，把英文原始
+ *  envelope 翻成中文可操作提示，而不是把裸错误丢给用户（用户实测：节点
+ *  `459:452` 的 autogrow 输入 `images` 零连线 → `autogrow_no_slots`）。
+ *
+ *  返回 `null` 表示不是这种错误（交给下方兜底逻辑按原样落盘）。 */
+export function translateWorkflowUnknownNodesError(
+  env: unknown,
+): string | null {
+  if (env == null || typeof env !== "object") return null;
+  const err = (env as JsonRecord).error;
+  if (err == null || typeof err !== "object") return null;
+  if ((err as JsonRecord).code !== "workflow_unknown_nodes") return null;
+  const details = (err as JsonRecord).details;
+  const list =
+    details != null && typeof details === "object"
+      ? (details as JsonRecord).errors
+      : undefined;
+  if (Array.isArray(list) && list.length > 0) {
+    const lines = list.slice(0, 12).map((raw) => {
+      const e = raw as JsonRecord;
+      const node =
+        typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
+      const field = typeof e.field === "string" ? ` 的「${e.field}」输入` : "";
+      const hint =
+        typeof e.hint === "string"
+          ? e.hint
+          : typeof e.message === "string"
+            ? e.message
+            : "";
+      const codeStr = typeof e.code === "string" ? e.code : "";
+      const tail =
+        /autogrow/i.test(codeStr) || /autogrow/i.test(hint)
+          ? "（autogrow 类型需逐根连线：images.image_1、images.image_2……）"
+          : "";
+      return `  · ${node}${field}：${hint}${tail}`;
+    });
+    const more = list.length > 12 ? `\n  …还有 ${list.length - 12} 处` : "";
+    return (
+      "工作流校验未通过（comfy-cli 对照服务端校验），请修正后重新执行：\n" +
+      lines.join("\n") +
+      more
+    );
+  }
+  const message =
+    typeof (err as JsonRecord).message === "string"
+      ? ((err as JsonRecord).message as string)
+      : "未知校验错误";
+  return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
+}
+
 export interface EnvelopeParserDeps {
   taskId: string;
   /** 面板日志。 */
@@ -359,6 +412,7 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
     }
     const msg = envelopeErrorMessage(env);
     const validationErrors = extractEnvelopeValidationErrors(env, deps.patched);
+    let translated: string | null = null;
     if (validationErrors?.length) {
       // 与 API 路径一致：把结构化清单汇总成一行，再交给 fail() 让 UI 渲染
       // 成逐字段红框。
@@ -384,34 +438,47 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         );
       }
     } else {
-      // 兜底：消息说「validation error」但深搜没找到结构化 node_errors。
-      // 把原始 envelope（截断）落盘，支持现场能看到真实形状，而不是只剩
-      // 一句「Workflow has N validation error(s)」。
-      const rawMsg = msg;
-      const err =
-        env != null && typeof env === "object"
-          ? (env as JsonRecord).error
-          : undefined;
-      const errCode =
-        err != null && typeof err === "object"
-          ? (err as JsonRecord).code
-          : undefined;
-      if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
-        try {
-          const dump = clampText(JSON.stringify(env), {
-            maxLength: INLINE_DUMP_MAX,
-            marker: "",
-          });
-          log(
-            taskId,
-            "warn",
-            `⚠ 未从 comfy-cli envelope 解析出结构化校验错误，原始 envelope（截断）：${dump}`,
-          );
-        } catch {
-          /* stringify 可能因循环引用抛错 —— 忽略 */
+      // comfy-cli 1.20.0 的 `workflow_unknown_nodes` 校验错误（对照 server
+      // object_info）走的是 error.details.errors，本仓库的 node_errors 深搜
+      // 拿不到，故特判并翻成中文可操作提示，而不是把裸英文 envelope 丢给用户。
+      translated = translateWorkflowUnknownNodesError(env);
+      if (translated) {
+        log(taskId, "error", translated);
+      } else {
+        // 兜底：消息说「validation error」但深搜没找到结构化 node_errors。
+        // 把原始 envelope（截断）落盘，支持现场能看到真实形状，而不是只剩
+        // 一句「Workflow has N validation error(s)」。
+        const rawMsg = msg;
+        const err =
+          env != null && typeof env === "object"
+            ? (env as JsonRecord).error
+            : undefined;
+        const errCode =
+          err != null && typeof err === "object"
+            ? (err as JsonRecord).code
+            : undefined;
+        if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
+          try {
+            const dump = clampText(JSON.stringify(env), {
+              maxLength: INLINE_DUMP_MAX,
+              marker: "",
+            });
+            log(
+              taskId,
+              "warn",
+              `⚠ 未从 comfy-cli envelope 解析出结构化校验错误，原始 envelope（截断）：${dump}`,
+            );
+          } catch {
+            /* stringify 可能因循环引用抛错 —— 忽略 */
+          }
         }
       }
     }
-    deps.fail(taskId, deps.promptId() ?? "", msg, validationErrors);
+    deps.fail(
+      taskId,
+      deps.promptId() ?? "",
+      translated ?? msg,
+      validationErrors,
+    );
   };
 }
