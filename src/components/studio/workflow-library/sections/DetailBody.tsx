@@ -66,8 +66,15 @@ export function DetailBody({
 
   return (
     <>
-      {tab === "canvas" && (
-        /* 画布页签**吃满可用高度**（不再钉在 420px）：用户把详情面板看全屏时，
+      {(tab === "canvas" || tab === "use") && (
+        /* 「编辑对外参数 / 实际使用」是同一份预览的两个视图模式（受控
+         * `viewMode`）：两个分支**必须渲染同一棵元素树**（同样的包裹层 +
+         * 同一个 `WorkflowCanvasNodePreview`，只有 `viewMode` 取值不同），
+         * 页签切换时 React 才会认成同一个实例 —— 表单值、运行态、结果图
+         * 因此都不丢（外层视图用常驻容器挂载本分支，见
+         * `WorkflowLibraryDetailView`）。
+         *
+         *  画布页签**吃满可用高度**（不再钉在 420px）：用户把详情面板看全屏时，
          *  画布要一直铺到面板底部，下面不留一块面板底色（ISSUE #596）。高度链条
          *  靠 flex 传下去 —— 外层的 `min-h-0 flex-1` 与本层的 `h-full` 缺一不可。 */
         <div className="border-border bg-panel-deep flex h-full min-h-[420px] flex-col rounded-2xl border p-1">
@@ -102,6 +109,9 @@ export function DetailBody({
                 workflowIO={workflowIO}
                 paramMap={paramMap}
                 usable={usable}
+                /* 页签即视图模式：「实际使用」页签可生成、可看结果，
+                 * 「编辑对外参数」页签是参数落点编辑画布。 */
+                viewMode={tab === "use" ? "use" : "edit"}
                 modes={meta?.modes}
                 /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
                  * 作为「未切过时的初值」与卡片上的默认标记。 */

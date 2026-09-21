@@ -28,6 +28,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
+import { primaryModelName } from "./executed-model";
 import { state, log } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
@@ -141,6 +142,11 @@ export async function executeViaComfyCli(job: Job) {
       ? `→ executeViaComfyCli 入口（RAW UI-format，由 comfy-cli 做 UI→API 转换）`
       : `→ executeViaComfyCli 入口（API 图，由 comfy-cli 直接提交）`,
   );
+  /* 工作流名入日志：执行日志要能自包含地回答「这次跑的是哪个工作流」——
+   * 面板标题是客户端从运行登记表拼的，落库的日志行才是可回放/可导出的
+   * 现场。入队方（generate 路由 / 工坊运行编排）都带得上；旧任务缺省时
+   * 如实显示「未知」。 */
+  log(taskId, "info", `工作流：${job.workflowName ?? "（未知）"}`);
   const base = await resolveComfyBase();
   let host = LOOPBACK_HOST;
   let port = COMFYUI_DEFAULT_PORT;
@@ -207,6 +213,14 @@ export async function executeViaComfyCli(job: Job) {
     "info",
     `工作流文件就绪（${Object.keys(patched?.nodes ?? {}).length || Object.keys(patched).length} 节点）`,
   );
+  /* 主模型名入日志（复用 `executed-model.ts` 的双格式识别，与状态栏同一份
+   * 口径）：模型名是执行日志里最常被追问的上下文，出问题时「当时用的哪个
+   * 模型」必须能直接从面板读到，不必去翻 trace 或工作流文件。识别不出
+   * （图里没有主模型加载节点）就不打这一行，别用占位文案添噪。 */
+  const modelName = primaryModelName(patched);
+  if (modelName) {
+    log(taskId, "info", `使用模型：${modelName}`);
+  }
 
   const binDir = process.platform === "win32" ? "Scripts" : "bin";
   const pyName = process.platform === "win32" ? "python.exe" : "python";
