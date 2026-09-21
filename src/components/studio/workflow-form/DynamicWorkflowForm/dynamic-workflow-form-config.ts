@@ -9,6 +9,7 @@ import type {
   EnrichedWidget,
   WorkflowIOMap,
 } from "~/components/studio/workflow-io";
+import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
 
 export interface DynamicWorkflowFormProps {
   /** 来自 GET /api/workflows/[id] 的富化 workflowIO 表。 */
@@ -49,17 +50,20 @@ export interface DynamicWorkflowFormProps {
    *  模式值经 onSeedModeChange 上抛。 */
   seedModes?: Record<string, string>;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
-  /** 设置后，渲染列表里的行变成可拖拽重排：作者
-   *  用拖拽把手拎起一行，放到另一行上，就插到它
-   *  之前。回调收到
-   *  `(fromKey, beforeKey | null)`，其中 `beforeKey === null` 表示「送到
-   *  同组末尾」。消费方（通常是 IO 编辑
-   *  预览面板）负责重排 `displayOrder` 序号并
-   *  落盘 —— 这里只发意图，好让本组件不背
-   *  持久化的包袱。不传 = 行不可拖
+  /** 设置后，渲染列表里的行变成可拖拽重排：作者从行的**不可编辑区域**
+   *  （标签、空白处；输入框 / 下拉 / 按钮上起手会被取消）拎起一行，放到
+   *  另一行上。回调收到 `(fromKey, targetKey, position)`：`targetKey` 是
+   *  松手时所在的那一行，`position` 由指针在该行的上/下半区给出（与指示线
+   *  画的位置同源）；`targetKey === null` 表示「送到同组末尾」。消费方
+   * （通常是 IO 编辑预览面板）负责重排 `displayOrder` 序号并落盘 —— 这里只
+   *  发意图，好让本组件不背持久化的包袱。不传 = 行不可拖
    *（只读场景如 CreatePanel、WorkflowLibrary、画布的
    *  `workflow` 节点）。 */
-  onReorder?: (fromKey: string, beforeKey: string | null) => void;
+  onReorder?: (
+    fromKey: string,
+    targetKey: string | null,
+    position: WorkflowIODropPosition,
+  ) => void;
   /** 宿主工作流 id —— 把用户选的分组填写范式
    *（分别填写 ⇄ 比例+清晰度 / 时长+画质+比例）限定在 localStorage 作用域，好让
    *  这个偏好扛过重新加载。省略则回落到按浏览器的

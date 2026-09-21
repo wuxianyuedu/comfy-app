@@ -38,6 +38,7 @@ import type {
   RgthreeGroupsContextValue,
   NodeJsonViewerRequest,
   NodeJsonViewerContextValue,
+  WorkflowIODropPosition,
 } from "../workflow-types";
 import type { WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 import { rectToAnchorRect } from "~/lib/dom-rect";
@@ -81,7 +82,11 @@ export interface IOEditActions {
   toggleIORequired: (key: string) => void;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。 */
   setIOSeedMode: (key: string, mode: string) => void;
-  reorderIO: (fromKey: string, beforeKey: string | null) => void;
+  reorderIO: (
+    fromKey: string,
+    targetKey: string | null,
+    position: WorkflowIODropPosition,
+  ) => void;
   /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
    *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
    *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
@@ -254,14 +259,14 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         };
       }),
 
-    /* 拖拽排序：把 `fromKey` 移动到 `beforeKey` 表示的位置。
+    /* 拖拽排序：把 `fromKey` 移动到 `targetKey` 表示的位置。
      *
-     *  契约：`beforeKey` 是**松手时鼠标所在的那一行**（`null` = 移到末尾）。
-     *  「落在谁身上」有两种语义，按拖动方向选 —— 向右拖时插到目标之后，向左
-     *  拖时插到目标之前。只用「插到目标之前」的话，右移一格等于原地不动
-     *  （ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。 */
-    reorderIO: (fromKey, beforeKey) => {
-      if (fromKey === beforeKey) return;
+     *  契约：`targetKey` 是**松手时鼠标所在的那一行**（`null` = 移到末尾）；
+     *  插到它前面还是后面由 `position` **显式**给出 —— 指针在目标行上半区 =
+     *  before、下半区 = after，与指示线画的位置同源。旧版按拖动方向猜插入点，
+     *  指示线却永远画在行顶，两者打架时用户看到的就是「拖了但顺序没变」。 */
+    reorderIO: (fromKey, targetKey, position) => {
+      if (fromKey === targetKey) return;
       set((state) => {
         const prev = state.workflowIO;
         const fromEntry = prev[fromKey];
@@ -282,22 +287,12 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             if (bo === undefined) return -1;
             return ao - bo;
           });
-        /* 被移动行在重排前的下标 —— 判定落点「在目标之前还是之后」用。 */
-        const fromIndex = ordered.findIndex(
-          ({ entryKey }) => entryKey === fromKey,
-        );
         const without = ordered.filter(({ entryKey }) => entryKey !== fromKey);
         let targetIdx = without.length;
-        if (beforeKey) {
-          const i = without.findIndex(({ entryKey }) => entryKey === beforeKey);
+        if (targetKey) {
+          const i = without.findIndex(({ entryKey }) => entryKey === targetKey);
           if (i >= 0) {
-            /* 落在目标上时插到它**前面还是后面**，看这次拖动是往前还是往后：
-             *  用户向右拖（`fromIndex` 在目标之前）时目标落在原位置的下方，
-             *  松手看到的落点是「目标之后」；向左拖反之。只用「插到目标之前」
-             *  的话，右移一格等于原地不动 —— 用户看到的就是「拖了但顺序没变」
-             *  （ISSUE #349：编辑 IO 里拖拽调整参数顺序失效）。 */
-            const targetIndex = ordered.indexOf(without[i]!);
-            targetIdx = fromIndex < targetIndex ? i + 1 : i;
+            targetIdx = position === "after" ? i + 1 : i;
           }
         }
         without.splice(targetIdx, 0, { entryKey: fromKey, entry: fromEntry });
