@@ -25,7 +25,11 @@ const PREFIX = "enc:v1:";
 const KEY_FILE = join(process.cwd(), "data", "llm-secret.key");
 const ENV_VAR = "LLM_SECRET";
 
-let cachedKey: Buffer | null | undefined;
+// 缓存派生后的主密钥。三处赋值全产 Buffer，"未初始化" 只用 undefined 表达；
+// 声明里刻意不留 null——否则 loadOrCreateKey 里 `!== undefined` 之后还剩
+// `Buffer | null`，函数返回 Buffer 的契约只能靠非空断言兜住，那是用 `!` 遮
+// 类型声明本身写错。
+let cachedKey: Buffer | undefined;
 
 function deriveKey(material: string): Buffer {
   // 32 字节主密钥：任意长度的口令/文件内容都先经 SHA-256 归一化到密钥长度。
@@ -33,7 +37,7 @@ function deriveKey(material: string): Buffer {
 }
 
 function loadOrCreateKey(): Buffer {
-  if (cachedKey !== undefined) return cachedKey!;
+  if (cachedKey !== undefined) return cachedKey;
   // 优先持久化在本机 data/ 的密钥文件：Next server 与 Workshop MCP 进程都从
   // 项目根拉起，读同一文件即用同一密钥，加密 / 解密互通。文件不可用时再退回
   // 环境变量或进程内随机兜底。
