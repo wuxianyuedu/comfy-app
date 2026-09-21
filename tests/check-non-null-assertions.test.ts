@@ -54,8 +54,8 @@ function run(args: string[] = []): { code: number; output: string } {
   }
 }
 
-function writeLibFile(rel: string, body: string): void {
-  const abs = join(workdir, "src", "lib", rel);
+function writeSrcFile(rel: string, body: string): void {
+  const abs = join(workdir, "src", rel);
   mkdirSync(abs.slice(0, abs.lastIndexOf("/")), { recursive: true });
   writeFileSync(abs, body, "utf8");
 }
@@ -67,7 +67,7 @@ beforeEach(() => {
     SCRIPT,
     join(workdir, "scripts", "check-non-null-assertions.cjs"),
   );
-  mkdirSync(join(workdir, "src", "lib"), { recursive: true });
+  mkdirSync(join(workdir, "src"), { recursive: true });
 });
 
 afterEach(() => {
@@ -76,8 +76,8 @@ afterEach(() => {
 
 describe("check-non-null-assertions AST 判据", () => {
   it("认 arr[i]! 与 match[N]! 这两种 noUncheckedIndexedAccess 惯用法", () => {
-    writeLibFile(
-      "sample.ts",
+    writeSrcFile(
+      "lib/sample.ts",
       `function pick(arr: string[], i: number): string { return arr[i]!; }
 function grab(re: RegExp, s: string): string { const m = re.exec(s); return m ? m[1]! : ""; }
 export { pick, grab };`,
@@ -87,9 +87,9 @@ export { pick, grab };`,
     expect(r.output).toMatch(/总数 2|total 2|2 处/);
   });
 
-  it("不误伤 `!==` / `!x` / 行注释与块注释里的裸 `!`", () => {
-    writeLibFile(
-      "clean.ts",
+  it("不误伤 !== / !x / 行注释与块注释里的裸 `!`", () => {
+    writeSrcFile(
+      "lib/clean.ts",
       `// 这里 ! 只在注释里! 举例
 /* 块注释也不该被算! */
 export function ok(a: string | null): boolean {
@@ -103,13 +103,13 @@ export function ok(a: string | null): boolean {
     expect(r.output).toMatch(/0 处/);
   });
 
-  it("跳过 .test.ts / __tests__ / .d.ts,只扫 lib 生产代码", () => {
-    writeLibFile(
-      "a.test.ts",
+  it("跳过 .test.ts / __tests__ / .d.ts,只扫 src 生产代码", () => {
+    writeSrcFile(
+      "lib/a.test.ts",
       `const x = [1] as (number | undefined)[]; expect(x[0]!).toBe(1);`,
     );
-    writeLibFile(
-      "b.d.ts",
+    writeSrcFile(
+      "lib/b.d.ts",
       `declare const v: { n?: number }; export declare const w: number; void (v.n!);`,
     );
     mkdirSync(join(workdir, "src", "lib", "__tests__"), { recursive: true });
@@ -122,12 +122,34 @@ export function ok(a: string | null): boolean {
     expect(r.code).toBe(0);
     expect(r.output).toMatch(/0 处/);
   });
+
+  it("v2 起扫描覆盖到 src/components / src/app / src/server(视图与服务端不再是盲区)", () => {
+    writeSrcFile(
+      "components/one.ts",
+      `const a: (string | undefined)[] = ["x"]; export const v = a[0]!;`,
+    );
+    writeSrcFile(
+      "app/api/route.ts",
+      `const b: (number | undefined)[] = [1]; export const w = b[0]!;`,
+    );
+    writeSrcFile(
+      "server/svc.ts",
+      `const c: (boolean | undefined)[] = [true]; export const z = c[0]!;`,
+    );
+    const r = run(["--report"]);
+    expect(r.code).toBe(0);
+    // 三处 `!` 分布在三个新盲区里,都要被看见
+    expect(r.output).toMatch(/3 处/);
+    expect(r.output).toMatch(/src\/components\/one\.ts/);
+    expect(r.output).toMatch(/src\/app\/api\/route\.ts/);
+    expect(r.output).toMatch(/src\/server\/svc\.ts/);
+  });
 });
 
 describe("check-non-null-assertions 棘轮", () => {
   it("--update 建立基线;此后同数量 OK、新增阻断、下降允许", () => {
-    writeLibFile(
-      "mod.ts",
+    writeSrcFile(
+      "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;
 export const b = arr[0]!;`,
@@ -152,8 +174,8 @@ export const b = arr[0]!;`,
     expect(ok.code).toBe(0);
     expect(ok.output).toMatch(/OK/);
     // 新增第三处:阻断
-    writeLibFile(
-      "mod.ts",
+    writeSrcFile(
+      "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;
 export const b = arr[0]!;
@@ -167,8 +189,8 @@ export const c = arr[0]!;`,
     expect(refuse.code).toBe(1);
     expect(refuse.output).toMatch(/拒绝 --update/);
     // 下降到 1 处:通过、提示可 --update 收紧
-    writeLibFile(
-      "mod.ts",
+    writeSrcFile(
+      "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;`,
     );
@@ -178,8 +200,8 @@ export const a = arr[0]!;`,
   });
 
   it("判据版本变了必须同步改脚本常数,否则 --update 拒绝", () => {
-    writeLibFile(
-      "mod.ts",
+    writeSrcFile(
+      "lib/mod.ts",
       `const arr: (number | undefined)[] = [1];
 export const a = arr[0]!;`,
     );
