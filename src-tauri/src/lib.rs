@@ -151,10 +151,16 @@ fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String
     // 返回结构化兜底（让启动页能说出原因）而不是 Err（Err 在页面上只是一句
     // 无信息量的「读不到」）。
     log::warn!("[ComfyAPP] get_launch_status: COMFYAPP_PROJECT_ROOT 为空，无法定位启动状态文件");
+    let searched = project_root_search_hint();
     return Ok(no_status_payload(
       "",
-      "项目根未推导出来（COMFYAPP_PROJECT_ROOT 为空）：壳找不到 run/launch-status.json。\
-       常见原因：app.exe 不在项目根的 src-tauri/target/release/ 下。",
+      &format!(
+        "项目根未推导出来：壳找不到 run/launch-status.json。\
+         已按「环境变量 → exe 所在目录逐级上溯 → 当前目录逐级上溯」找过，没有一处像本检出\
+         （认 package.json + scripts/dev-launcher.mjs）。{searched}\
+         若是把 exe 复制到别处运行：检出不完整时请回到项目根的 src-tauri/target/release/ 启动；\
+         独立模式（standalone）的产物请用 tools\\build\\build-standalone.ps1 构建。"
+      ),
     ));
   }
   let path = shell_launch::status_file_path(&root);
@@ -513,6 +519,27 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
   Some(lines.join("\n"))
 }
 
+/// 「项目根是怎么找的、找过哪些地方」一段可读的过程说明。
+///
+/// 存在的理由：`项目根未推导出来` 这句话本身**不可行动** —— 用户（与贴图报障的人）
+/// 需要知道壳试过哪儿、以及「什么样才算检出」，才能判断自己是「把 exe 挪走了」还是
+/// 「检出缺文件」。旧提示只说「请确认 app.exe 位于项目根的 src-tauri/target/release/ 下」，
+/// 而那句话正是用户当时**已经**在做的事（ISSUE #784 手验反馈：反复出现同一句提示、
+/// 每次都指回原点）。
+fn project_root_search_hint() -> String {
+  let mut parts: Vec<String> = Vec::new();
+  if let Ok(exe) = std::env::current_exe() {
+    parts.push(format!("exe 位置：{}", exe.display()));
+  }
+  if let Ok(cwd) = std::env::current_dir() {
+    parts.push(format!("当前目录：{}", cwd.display()));
+  }
+  parts.push(
+    "检出的标志是两个文件同时存在：package.json 与 scripts/dev-launcher.mjs".to_string(),
+  );
+  format!("（{}）", parts.join("；"))
+}
+
 /// 一条日志都取不到时的「按顺序看这里」清单。
 ///
 /// 判据是**文件在不在**，不是「该看哪一份」的经验之谈：把存在的那几份一一列出来
@@ -524,10 +551,10 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
 fn no_log_guidance(root: &str) -> String {
   let mut lines = vec!["（暂无日志。）".to_string()];
   if root.is_empty() {
-    lines.push("根因指向项目根：壳没能推导出项目根（COMFYAPP_PROJECT_ROOT 为空）。".to_string());
+    lines.push("根因指向项目根：壳没能推导出项目根（三处候选都没命中本检出）。".to_string());
+    lines.push(project_root_search_hint());
     lines.push(
-      "请确认 app.exe 位于项目根的 src-tauri/target/release/ 下 —— 壳靠项目根里的\
-       scripts/dev-launcher.mjs 找编排器与日志目录。"
+      "项目根是编排器路径、日志目录与端口推导的共同锚点；推不出来时上述路径全都无处可写。"
         .to_string(),
     );
     return lines.join("\n");
@@ -1027,8 +1054,39 @@ fn looks_like_project_root(dir: &std::path::Path) -> bool {
   dir.join("package.json").is_file() && dir.join("scripts").join("dev-launcher.mjs").is_file()
 }
 
+/// 从某个起点向上找最近的检出根（含起点自身）。
+///
+/// **必须逐级上溯，不能只看起点这一层**：规范里唯一入口的落位是
+/// `src-tauri/target/release/app.exe`（§1，`start-tauri.ps1` 也据此拼路径），
+/// 而 `package.json` 在**上溯三级**的地方。旧实现只查 `exe.parent()`（= `target/release`），
+/// 于是「按文档落位双击」这条**唯一**的启动路径永远推不出项目根 —— 表现是本文件的
+/// `get_launch_status` 回「项目根未推导出来」、启动页永远停在 0%、壳日志也落不了盘，
+/// 而根因只是这一层没往上走（ISSUE #784 手验反馈：反复出现同一句提示）。
+///
+/// 上溯而不是「拼 `../..`」：拼死层数等于把「壳产物落在哪儿」这条会变的形态
+/// 写进判据 —— 换一次产物布局（或 cargo 的 target-dir 被改）就静默失效一次，
+/// 正是 `looks_like_project_root` 上一条注释里踩过的坑。上溯的代价是每层两次
+/// `is_file`，而它只在启动时跑一次。
+fn find_project_root_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
+  let mut dir = Some(start);
+  while let Some(current) = dir {
+    if looks_like_project_root(current) {
+      return Some(current.to_path_buf());
+    }
+    dir = current.parent();
+  }
+  None
+}
+
 /// 尝试从 launcher 传入的环境变量读取项目根目录；
-/// 失败则回退到当前 exe 所在目录。
+/// 失败则回退到**从 exe 所在目录逐级上溯**，再退到当前工作目录。
+///
+/// cwd 作为候选的意义：`tools/start/start-tauri.ps1` 用
+/// `Start-Process -WorkingDirectory $root` 拉起壳，因此「双击 .ps1 能进、双击 exe 卡住」
+/// 这类差异里 cwd 是一条**真实**的项目根来源（双击 exe 时 cwd 通常是
+/// `C:\Windows\System32`，命中不了）。环境的候选顺序刻意是
+/// 「注入 → exe 位置 → cwd」：注入最权威，exe 位置与本检出绑定最紧（同一份 exe
+/// 不论从哪儿双击都认得出自己的检出），cwd 则是「壳被谁在哪儿拉起」的旁证。
 fn resolve_project_root() -> String {
   if let Ok(root) = std::env::var("COMFYAPP_PROJECT_ROOT") {
     if looks_like_project_root(std::path::Path::new(&root)) {
@@ -1037,12 +1095,46 @@ fn resolve_project_root() -> String {
   }
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
-      if looks_like_project_root(dir) {
-        return dir.to_string_lossy().to_string();
+      if let Some(found) = find_project_root_from(dir) {
+        return found.to_string_lossy().to_string();
       }
     }
   }
+  if let Ok(cwd) = std::env::current_dir() {
+    if let Some(found) = find_project_root_from(&cwd) {
+      return found.to_string_lossy().to_string();
+    }
+  }
   String::new()
+}
+
+/// 把推导出的检出根**回填进自己的环境变量**，供「比它更早的读取点」使用。
+///
+/// 为什么必须有这一步：`single_instance::identity_root()`（单实例身份 + 端口推导的
+/// 锚点）在 `run()` 的**第一行**就被读走 —— 那时还没有人给过它项目根，它只能退回
+/// cwd；而双击场景的 cwd 往往是 `C:\Windows\System32`（explorer 启动），于是
+/// 身份锚点与端口推导**双双落在一个与检出无关的路径上**：同一检出双击第二次
+/// 认不出第一次（单实例失效、叠加窗口），推导端口也不是 dev server 真正在听的
+/// 那个（启动页永远等不到就绪）。原先这两个值由 Python 启动器注入，启动器随
+/// ISSUE #784 移除后就成了无主字段。
+///
+/// 回填的语义是「壳自己就是那个注入者」：只在变量**缺席**时才写，不覆盖外部显式
+/// 注入的值 —— `COMFYAPP_PROJECT_ROOT` 仍是「谁起的壳」的一手证据
+/// （`LaunchContext::self_launch` 的判据就挂在它缺席与否上）。
+///
+/// 因此调用点必须是「先捕获 `self_launch` → 再回填」（见 `run()`）：
+/// 顺序反过来会把那条判据变成永远为假的常量，双击链路于是不再自编排。
+fn publish_project_root_env(root: &str) {
+  if root.is_empty() {
+    return;
+  }
+  if let Ok(existing) = std::env::var("COMFYAPP_PROJECT_ROOT") {
+    if !existing.trim().is_empty() {
+      return; // 外部注入优先：不覆盖「谁起的壳」这条一手证据
+    }
+  }
+  // SAFETY：启动期单线程（事件循环与窗口都还没建），没有并发读环境变量的路径。
+  std::env::set_var("COMFYAPP_PROJECT_ROOT", root);
 }
 
 /// 日志插件：开发模式走 stdout（launcher 已把 stderr 重定向进
@@ -1320,7 +1412,11 @@ impl LaunchContext {
   /// 导航过去（见 `start_own_orchestrator`）。判据见 `self_launch` 字段。
   /// **release 才做**：debug 下的壳归 `pnpm tauri dev` 管，那时 dev server 由
   /// beforeDevCommand 起着，壳再抢一次编排就会两边争同一个端口。
-  fn collect() -> Self {
+  ///
+  /// `self_launch` 由 `run()` 在**回填环境变量之前**捕获后传进来（见
+  /// `publish_project_root_env`）：判据是「本次双击有没有外部注入者」，
+  /// 而回填之后这个判据就永远为假了 —— 在 collect 里重算等于把判据变成常量。
+  fn collect(self_launch: bool) -> Self {
     let project_root = resolve_project_root();
     // 开发模式默认跳本地 Next.js dev server；脚本 / 终端调用可经环境变量注入。
     // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
@@ -1330,9 +1426,6 @@ impl LaunchContext {
     // 在 setup 里按「编排器在不在」写它（那是**唯一读取点**）。这里只在
     // 显式传入时用它推导首帧看护。
     let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
-    let self_launch = cfg!(not(debug_assertions))
-      && std::env::var("COMFYAPP_PROJECT_ROOT").is_err()
-      && !project_root.is_empty();
     if self_launch {
       log::info!(
         "[ComfyAPP] no external launcher owns this process (COMFYAPP_PROJECT_ROOT absent): \
@@ -1357,6 +1450,18 @@ impl LaunchContext {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  // 「本次是不是双击壳」必须在回填项目根**之前**判定：判据挂在
+  // COMFYAPP_PROJECT_ROOT 缺席上（见 LaunchContext::self_launch），而下面这行
+  // 回填会让它永远不再缺席。先取判据、再回填，顺序反过来就是把判据变成常量。
+  let resolved_root = resolve_project_root();
+  let self_launch = cfg!(not(debug_assertions))
+    && std::env::var("COMFYAPP_PROJECT_ROOT").is_err()
+    && !resolved_root.is_empty();
+  // 项目根必须在**任何**后续读取点之前定下来：单实例身份与端口推导
+  // （single_instance::identity_root）在下一行就要用，而双击场景下这是唯一一次
+  // 机会（见 publish_project_root_env 的注释）。
+  publish_project_root_env(&resolved_root);
+
   // 按检出单实例（§1.4）：同一检出的壳已在跑时，向其发送「唤起前台」事件后
   // 退出；不同检出的壳互不可见、各自独立运行。必须在建窗口之前判定。
   if single_instance::another_instance_running() {
@@ -1372,7 +1477,7 @@ pub fn run() {
     expect_slow_first_paint,
     self_launch,
     foreground,
-  } = LaunchContext::collect();
+  } = LaunchContext::collect(self_launch);
 
   let log_plugin = build_log_plugin(&project_root);
 
@@ -1886,4 +1991,126 @@ fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     }
     _ => {}
   }
+}
+
+/// 项目根推导的回归测试（ISSUE #784 手验反馈）。
+///
+/// 这组用例存在的理由：**唯一入口的落位与「项目根在哪儿」差着三层目录**，
+/// 而判据一旦退回「只看 exe 同级」，表现不是崩溃而是启动页永远停在 0% + 一句
+/// 指向不存在文件的提示 —— 从用户视角看是「双击没反应」，从代码视角看每一行
+/// 都「是对的」。因此这里用真实临时目录把**目录层数**钉住：假检出放在
+/// `<tmp>/src-tauri/target/release/` 下，与规范 §1 的落位同形。
+#[cfg(test)]
+mod project_root_tests {
+  use super::*;
+
+  /// 造一个「假检出」：含 `package.json` 与 `scripts/dev-launcher.mjs`
+  /// （`looks_like_project_root` 认的两个标识）。
+  fn make_checkout(dir: &std::path::Path) {
+    std::fs::create_dir_all(dir.join("scripts")).unwrap();
+    std::fs::write(dir.join("package.json"), "{}").unwrap();
+    std::fs::write(dir.join("scripts").join("dev-launcher.mjs"), "").unwrap();
+  }
+
+  fn temp_root(tag: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("comfyapp-projroot-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+  }
+
+  #[test]
+  fn walks_up_from_the_exe_directory_to_the_checkout_root() {
+    // 这一条就是 ISSUE #784 的现场：exe 在 `target/release` 下，
+    // 项目根在上溯三级的地方。只看同级 = 永远推不出来。
+    let tmp = temp_root("walk");
+    let checkout = tmp.join("checkout");
+    let release = checkout.join("src-tauri").join("target").join("release");
+    std::fs::create_dir_all(&release).unwrap();
+    make_checkout(&checkout);
+
+    assert_eq!(
+      find_project_root_from(&release),
+      Some(checkout.clone()),
+      "从 exe 所在目录必须能上溯到检出根"
+    );
+    // 起点本身就是检出根时应原样返回（standalone 情形：exe 与检出同层）。
+    assert_eq!(find_project_root_from(&checkout), Some(checkout.clone()));
+    let _ = std::fs::remove_dir_all(&tmp);
+  }
+
+  #[test]
+  fn returns_none_outside_any_checkout() {
+    // 反例必须真的返回 None：否则「随便哪个目录都能当项目根」，
+    // 编排器路径、日志目录、端口推导全都会指到无关位置。
+    let tmp = temp_root("none");
+    let stray = tmp.join("somewhere").join("else");
+    std::fs::create_dir_all(&stray).unwrap();
+    assert_eq!(find_project_root_from(&stray), None);
+    let _ = std::fs::remove_dir_all(&tmp);
+  }
+
+  #[test]
+  fn needs_both_marker_files() {
+    // 两个标识缺一不可：只有 `scripts/` 的目录（比如某个工具仓库）
+    // 不能被当成检出 —— 认错了就会去它那儿找编排器与日志目录。
+    let tmp = temp_root("markers");
+    let half = tmp.join("half");
+    std::fs::create_dir_all(half.join("scripts")).unwrap();
+    std::fs::write(half.join("package.json"), "{}").unwrap();
+    assert_eq!(find_project_root_from(&half), None, "缺 dev-launcher.mjs 不算检出");
+
+    make_checkout(&half);
+    assert_eq!(find_project_root_from(&half), Some(half.clone()));
+    let _ = std::fs::remove_dir_all(&tmp);
+  }
+
+  #[test]
+  fn documented_entry_location_resolves_root_and_port() {
+    // 端到端复现用户现场：exe 就在规范 §1 的**唯一入口落位**
+    // （`<检出>/src-tauri/target/release/`）下。修好前这一步推出的是空串 ——
+    // 于是启动页写着「项目根未推导出来」并停在 0%，壳日志与状态文件全无去处。
+    let tmp = temp_root("e2e");
+    let checkout = tmp.join("comfy-app-t3");
+    let release = checkout.join("src-tauri").join("target").join("release");
+    std::fs::create_dir_all(&release).unwrap();
+    make_checkout(&checkout);
+
+    let found = find_project_root_from(&release).expect("唯一入口的落位必须能推出检出根");
+    assert_eq!(found, checkout);
+
+    // 项目根同时也是端口推导的锚点：推不出来时端口会落在与检出无关的值上，
+    // dev server 与启动页于是各自等一个不同的端口（「一直卡住」的另一半原因）。
+    let port = crate::single_instance::derive_app_port_for_root(&found.to_string_lossy());
+    assert!(
+      (3200..4000).contains(&port),
+      "推导端口必须落在约定区间，实际 {port}"
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
+  }
+
+  #[test]
+  fn port_matches_node_side_for_same_root() {
+    // 与 Node 侧 scripts/app-port.mjs 的 derivePortFromPath 同输入同输出。
+    assert_eq!(crate::single_instance::derive_app_port_for_root("/x/comfy-app-t3"), 3723);
+  }
+
+  #[test]
+  fn root_resolution_never_only_looks_at_one_level() {
+    // 形态判据（源码级）：`resolve_project_root` 必须经过上溯函数，
+    // 而不是回到「只看 `exe.parent()` 一层」的老写法。
+    let src = include_str!("lib.rs");
+    let body = &src[src.find("fn resolve_project_root()").unwrap()..];
+    let body = &body[..body.find("\n}\n").unwrap()];
+    assert!(
+      body.contains("find_project_root_from"),
+      "项目根推导必须逐级上溯：{body}"
+    );
+    assert!(
+      !body.contains("looks_like_project_root(dir)"),
+      "不得退回「只查 exe 同级目录」的写法：{body}"
+    );
+  }
+
+
 }
