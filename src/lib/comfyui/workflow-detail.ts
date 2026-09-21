@@ -18,6 +18,8 @@ import "server-only";
 import fs from "fs";
 import { TRPCError } from "@trpc/server";
 import { workflowTemplateRepository } from "~/lib/core/repository";
+import { getSettingsSync } from "~/lib/app-settings/app-settings.server";
+import { reimportFromSource } from "~/lib/comfyui/importSource";
 import {
   asRawWorkflow,
   asRecord,
@@ -558,10 +560,54 @@ export async function buildWorkflowDetailFull(
       workflowIO: true,
       rawJson: true,
       positions: true,
+      sourcePath: true,
+      sourceMtime: true,
+      sourceChecksum: true,
     },
   );
   if (!tpl)
     throw new TRPCError({ code: "NOT_FOUND", message: "未找到该工作流" });
+
+  /* ── 自动同步（可选，默认关）──
+   *  设置 `autoSyncLocalWorkflow` 开启时，「进详情」等价于「点同步」：检出到磁盘
+   *  有更新就立刻把最新内容写回库，用户无需回到列表点「同步」按钮（与历史旧行为
+   *  一致）。默认关：上一段只检出不写库，更新的唯一入口是 `workflow.resync`。
+   *
+   *  复用 `workflow.resync` 同一条重导入链路（reimportFromSource + 落库 +
+   *  详情缓存失效），保证两种入口的产物完全一致 —— 不另写一份「自动版导入」，
+   *  避免两边判据漂移。写回后把 `sourceOutdated` 翻回 false，否则界面仍挂着
+   *  「有更新」提示，而内容其实已经是最新（自相矛盾）。 */
+  if (sourcePath && sourceOutdated && getSettingsSync().autoSyncLocalWorkflow) {
+    const reimported = await reimportFromSource({
+      sourcePath: tpl.sourcePath ?? "",
+      sourceMtime: tpl.sourceMtime,
+      sourceChecksum: tpl.sourceChecksum,
+      existingTaskType: tpl.taskType,
+    });
+    if (!reimported.missing && reimported.update) {
+      /* 先把字段落到内存里的 tpl：下面 buildWorkflowDetailJson 用的是 tpl，
+       * 不在这里就地刷新，响应就会是同步前的旧内容（写库成功、界面没变）。 */
+      tpl.rawJson = reimported.update.rawJson ?? tpl.rawJson;
+      tpl.paramMap = reimported.update.paramMap ?? tpl.paramMap;
+      tpl.positions = reimported.update.positions ?? tpl.positions;
+      tpl.sourceMtime = reimported.update.sourceMtime ?? tpl.sourceMtime;
+      tpl.sourceChecksum =
+        reimported.update.sourceChecksum ?? tpl.sourceChecksum;
+      tpl.taskType = reimported.update.taskType ?? tpl.taskType;
+      await workflowTemplateRepository.update(tpl.id, {
+        rawJson: tpl.rawJson,
+        paramMap: tpl.paramMap,
+        positions: tpl.positions,
+        sourceMtime: tpl.sourceMtime,
+        sourceChecksum: tpl.sourceChecksum,
+        taskType: tpl.taskType,
+      });
+      /* 详情缓存 TTL 30s：不清的话同一次窗口内再进详情还是旧内容，而标记已
+       * 翻回「无更新」。与 `workflow.resync` 同一处失效、同一理由。 */
+      invalidateWorkflowDetailCache(userId, tpl.id);
+      sourceOutdated = false;
+    }
+  }
 
   /* 下面的转换是纯的（只依赖 tpl.graph / tpl.rawJson / tpl.positions，
    * 它们在两次写入之间不会变），因此按 user+id 缓存**已序列化**的 JSON 字符串，
