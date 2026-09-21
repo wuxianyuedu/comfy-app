@@ -29,6 +29,9 @@ import { promises as fs } from "fs";
 import path from "path";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { sleep } from "~/lib/with-timeout";
+import { fireAndForget } from "~/lib/async-action";
+import { logger } from "~/lib/core/logger";
+import { errorText } from "~/lib/error-message";
 
 function trainerUrl(): string {
   const settings = getSettingsSync();
@@ -205,7 +208,9 @@ export async function enqueueTraining(jobId: string): Promise<void> {
     // e 可能是任意 throw 值：先收窄再取 message（与旧 `e?.message ?? …` 等价，
     // fetch/undici 抛的都是 Error 实例）。
     const msg = (e as Error | undefined)?.message ?? "训练后端通信失败";
-    void failJob(jobId, msg);
+    fireAndForget(failJob(jobId, msg), (inner) =>
+      logger.warn(errorText(inner, `failJob(${jobId}) 落库失败`)),
+    );
   });
 }
 

@@ -208,7 +208,16 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   };
 
   const handle = setTimer(() => {
-    void tick();
+    // tick 里同步调用 `deps.isStopped()`、`deps.onExit()` 与异步 `findPid()`；
+    // 任何一处抛都会让 `void tick()` 变 unhandledRejection。本模块刻意保持
+    // 「纯逻辑 + 依赖注入」、不引 logger，兜底就留在回调里：监督器自己炸不能
+    // 反过来拖住主循环或让定时器停下。真故障由 caller 注入的 deps 各自的
+    // 日志路径去暴露（`findPid` 已经在自己内部 `.catch(() => null)`）。
+    // 用 `void` 前缀：`.catch` 返回 Promise，不显式丢弃会撞 check-react-updater-purity
+    // 的启发式（本地 setTimer 变量名走 `/^set[A-Z]/` 判 setter，见 scripts 里的排除清单）。
+    void tick().catch(() => {
+      /* 见上；此处必须留一句 catch，否则 unhandledRejection 会污染 Node 全局。 */
+    });
   }, interval);
   /* 监督器不该成为「进程退不出去」的原因（Node 里未 unref 的 interval 会吊住
    * 事件循环）。 */

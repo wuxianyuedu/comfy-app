@@ -9,6 +9,7 @@
 // 归属：壳交互（桌面侧能力）→ `src/lib/<domain>-client.ts`。
 
 import { isDesktopShell } from "./desktop-shell-client";
+import { fireAndForget } from "~/lib/async-action";
 
 /** 窗口最大化状态订阅的取消函数。 */
 export type UnlistenFn = () => void;
@@ -92,7 +93,15 @@ export async function onWindowResized(
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     return await getCurrentWindow().onResized(() => {
-      void isWindowMaximized().then(handler);
+      // isWindowMaximized 内部已 catch 保证 resolve；但 handler 是 caller
+      // 传进来的回调（多半是 setState 之类），它抛的话链尾 reject 就变成
+      // unhandledRejection。这里没有面板通道可注入，用户看不到最大化按钮的
+      // **当前一次**刷新失败而已，下一帧 resize 事件会再补——fireAndForget
+      // 内部已把 onError 自己的 throw 也吞了，是链上最合适的收口点。
+      fireAndForget(isWindowMaximized().then(handler), () => {
+        // 有意为空：handler 抛只丢本帧刷新，下一帧 resize 事件会再补；
+        // fireAndForget 内部已把 onError 自己的 throw 也吞掉，这里就是链尾。
+      });
     });
   } catch {
     return noopUnlisten;
