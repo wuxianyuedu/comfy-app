@@ -72,43 +72,45 @@ function expandIdea(
   const type = meta.type || "short_video";
   const base = idea.replace(/[。.！!？?\s]+$/, "");
 
-  const template: Array<Partial<Scene> & { action: string; dialogue: string }> =
-    [
-      {
-        heading: "场景1 · 开端",
-        location: "室内",
-        time: "白天",
-        action: `镜头缓缓推进，${base}。环境氛围${tone}，用光影交代人物处境。`,
-        dialogue: `（旁白）故事，从这一刻开始。`,
-        shotCount: 2,
-      },
-      {
-        heading: "场景2 · 发展",
-        location: "室外",
-        time: "黄昏",
-        action: `冲突浮现，${base}的转折点在${tone}的基调中展开，人物做出关键选择。`,
-        dialogue: `（对白）你确定要这么做吗？`,
-        shotCount: 3,
-      },
-      {
-        heading: "场景3 · 高潮/结尾",
-        location: "室内",
-        time: "夜晚",
-        action: `情绪到达顶点，${base}迎来收束，留下余韵。`,
-        dialogue: `（旁白）有些故事，注定被记住。`,
-        shotCount: 2,
-      },
-    ];
+  const template: readonly Omit<Scene, "id">[] = [
+    {
+      heading: "场景1 · 开端",
+      location: "室内",
+      time: "白天",
+      action: `镜头缓缓推进，${base}。环境氛围${tone}，用光影交代人物处境。`,
+      dialogue: `（旁白）故事，从这一刻开始。`,
+      shotCount: 2,
+    },
+    {
+      heading: "场景2 · 发展",
+      location: "室外",
+      time: "黄昏",
+      action: `冲突浮现，${base}的转折点在${tone}的基调中展开，人物做出关键选择。`,
+      dialogue: `（对白）你确定要这么做吗？`,
+      shotCount: 3,
+    },
+    {
+      heading: "场景3 · 高潮/结尾",
+      location: "室内",
+      time: "夜晚",
+      action: `情绪到达顶点，${base}迎来收束，留下余韵。`,
+      dialogue: `（旁白）有些故事，注定被记住。`,
+      shotCount: 2,
+    },
+  ];
 
   void type;
-  return template.map((template) => ({
+  // 逐字段展开而不是 `{ id, ...t }` 一把梭：Scene 未来加字段时，这里少给一个
+  // tsc 会立刻报缺属性——把「新字段是否需要在预制模板里给个默认」这道问题
+  // 留在编译器手里，而不是等运行时用到才发现是 undefined。
+  return template.map((t) => ({
     id: uid("scene"),
-    heading: template.heading!,
-    location: template.location!,
-    time: template.time!,
-    action: template.action,
-    dialogue: template.dialogue,
-    shotCount: template.shotCount!,
+    heading: t.heading,
+    location: t.location,
+    time: t.time,
+    action: t.action,
+    dialogue: t.dialogue,
+    shotCount: t.shotCount,
   }));
 }
 

@@ -58,6 +58,7 @@ function viewModel(
     stats: null,
     online,
     connecting: false,
+    stale: false,
     cudaVram: { used: 2 * GIB, total: 8 * GIB, pct: 25 },
     smiVram: null,
     ram: { used: 16 * GIB, total: 32 * GIB, pct: 50 },

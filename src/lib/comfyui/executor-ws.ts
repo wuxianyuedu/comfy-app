@@ -14,6 +14,7 @@
 import WebSocket from "ws";
 import { taskRepository } from "../core/repository";
 import { errorText } from "~/lib/error-message";
+import { fireAndForget } from "~/lib/async-action";
 import { toPct } from "~/lib/progress";
 import { logger } from "~/lib/core/logger";
 import {
@@ -156,7 +157,13 @@ export async function connect(): Promise<void> {
     } else if (!isComfyAutoStartSuppressed()) {
       // 自动启动已在单飞中进行：仅维持调用以保 isComfyStarting 为真，
       // 不再重复挂日志回调（否则启动完成会向队列刷多条「已就绪」）。
-      void ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS });
+      // 但**必须挂一个 catch**——单飞的 promise 若因未预期路径 reject，
+      // 上面 `if (!comfyDownNotified)` 分支那次调用已挂了 .then/.catch，
+      // 这次「已经在飞」的分支若不接住，reject 就变成 unhandledRejection。
+      fireAndForget(
+        ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS }),
+        (e) => logger.warn(`[comfyui] ${errorText(e, "自动启动等待失败")}`),
+      );
     }
     // 自动启动已被闩锁抑制（启动失败 / 用户手动关闭）时不重连：重连只会每
     // 15s 走一遍「探测失败 → 讨要启动 → 被闩锁拦下」的空转（ISSUE #335）。
@@ -196,7 +203,11 @@ export async function connect(): Promise<void> {
     comfyDownNotified = false;
     kickQueue();
   });
-  ws.on("message", (data) => void handleMessage((data as Buffer).toString()));
+  ws.on("message", (data) =>
+    fireAndForget(handleMessage((data as Buffer).toString()), (e) =>
+      logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`),
+    ),
+  );
   // error / close 都交给 handleWsDrop 统一处理（幂等，双发只生效一次）。
   ws.on("close", () => handleWsDrop(ws));
   ws.on("error", (err: Error) => {
@@ -418,7 +429,9 @@ export function armWatchdog(taskId: string, promptId: string) {
   const existing = s.timers.get(taskId);
   if (existing) clearTimeout(existing);
   const timer = setTimeout(() => {
-    void fail(taskId, promptId, "生成超时");
+    fireAndForget(fail(taskId, promptId, "生成超时"), (e) =>
+      logger.warn(`[comfyui] ${errorText(e, `fail(${taskId}) 超时收口异常`)}`),
+    );
   }, JOB_TIMEOUT_MS);
   s.timers.set(taskId, timer);
 }

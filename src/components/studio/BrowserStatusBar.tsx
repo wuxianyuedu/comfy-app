@@ -173,10 +173,7 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   const detailLines = notice.title.split("\n");
   return (
     <Popover>
-      <PopoverTrigger
-        className="text-ink-soft hover:bg-subtle inline-flex max-w-[160px] cursor-pointer items-center gap-1 rounded px-1 py-0.5 tabular-nums"
-        title={notice.title}
-      >
+      <PopoverTrigger className="text-ink-soft hover:bg-subtle inline-flex max-w-[160px] cursor-pointer items-center gap-1 rounded px-1 py-0.5 tabular-nums">
         <span className="truncate">{notice.text}</span>
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-80 text-[12px]">
@@ -208,7 +205,7 @@ export function BrowserStatusBar() {
   }, []);
 
   const fps = useFps();
-  const { cudaVram, smiVram, ram, degradedNote } = useComfyReadiness();
+  const { cudaVram, smiVram, ram, degradedNote, stale } = useComfyReadiness();
   const devServer = useDevServerStatus();
   const schemaSync = useSchemaSyncStatus();
   const comfyQueue = useComfyQueue();
@@ -243,13 +240,18 @@ export function BrowserStatusBar() {
       </div>
 
       {/* ── 第 2 区：ComfyUI 排队/运行信息（弹性，左对齐） ── */}
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <ComfyQueueItem view={comfyQueue} />
         <SchemaSyncItem status={schemaSync} />
       </div>
 
       {/* ── 第 3 区：显存 + 内存等资源指标（固定宽度） ── */}
-      <div className="flex w-[500px] shrink-0 items-center gap-2.5">
+      <div
+        className={`flex w-[500px] shrink-0 items-center gap-2.5 transition-opacity ${
+          stale ? "opacity-50" : "opacity-100"
+        }`}
+        title={stale ? "ComfyUI 指标暂时读不到，显示的是上一次数据" : undefined}
+      >
         {/* 显存（nvidia-smi 物理专用显存口径） */}
         {smiVram && (
           <UsageItem

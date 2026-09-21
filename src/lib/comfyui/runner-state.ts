@@ -215,15 +215,17 @@ export type RunnerState = {
   wsWaitLogged: Set<string>;
 };
 
-const globalObj = globalThis as unknown as { comfyRunner?: RunnerState };
+declare global {
+  var comfyRunner: RunnerState | undefined;
+}
 
 export function state(): RunnerState {
-  if (!globalObj.comfyRunner) {
+  if (!globalThis.comfyRunner) {
     const emitter = new EventEmitter();
 
     emitter.setMaxListeners(0);
 
-    globalObj.comfyRunner = {
+    globalThis.comfyRunner = {
       ws: null,
 
       queue: [],
@@ -261,7 +263,7 @@ export function state(): RunnerState {
     };
   }
 
-  return globalObj.comfyRunner;
+  return globalThis.comfyRunner;
 }
 
 function callerLoc(): string {

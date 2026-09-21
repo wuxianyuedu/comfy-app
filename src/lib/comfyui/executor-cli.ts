@@ -20,6 +20,8 @@
  * @module comfyui/executor-cli — comfy-cli 执行路径（**两种格式统一**）
  */
 import { errorText } from "~/lib/error-message";
+import { fireAndForget } from "~/lib/async-action";
+import { logger } from "~/lib/core/logger";
 import { tailWindow } from "~/lib/page-window";
 import "server-only";
 import { spawn } from "child_process";
@@ -60,14 +62,13 @@ export { applyRawOverrides };
  * comfy-cli 回传 prompt_id 前一直是 QUEUED/promptId=null）。
  * 同族单例（runner-state / reaper 定时器 / lifecycle 启动锁）都已挂在
  * globalThis 上，这里补齐最后一个漏网项。 */
-const CLI_PROCS_GLOBAL = "__comfyCliProcs_v1";
-const globalRef = globalThis as unknown as Record<
-  string,
-  Map<string, ChildProcess> | undefined
->;
+
+declare global {
+  var __comfyCliProcs_v1: Map<string, ChildProcess> | undefined;
+}
+
 export const cliProcs: Map<string, ChildProcess> =
-  globalRef[CLI_PROCS_GLOBAL] ?? new Map<string, ChildProcess>();
-globalRef[CLI_PROCS_GLOBAL] = cliProcs;
+  (globalThis.__comfyCliProcs_v1 ??= new Map<string, ChildProcess>());
 
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 
@@ -186,7 +187,13 @@ export async function executeViaComfyCli(job: Job) {
     const prep = prepareGraphForExecution(withOverrides);
     if (!Object.keys(prep.graph).length) {
       log(taskId, "error", "工作流没有可执行的节点（可能全部被禁用）");
-      void fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）");
+      fireAndForget(
+        fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"),
+        (e) =>
+          logger.warn(
+            `[comfyui] ${errorText(e, `fail(${taskId}) 空图收口异常`)}`,
+          ),
+      );
       return;
     }
     if (prep.removed.length) {
@@ -271,7 +278,13 @@ export async function executeViaComfyCli(job: Job) {
       "或设置环境变量 COMFY_CLI_PYTHON 指向已有的 Python 解释器。";
     const hint = process.platform === "win32" ? winHint : nixHint;
     log(taskId, "error", `未找到 comfy-cli Python 解释器：${py}\n${hint}`);
-    void fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`);
+    fireAndForget(
+      fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`),
+      (e) =>
+        logger.warn(
+          `[comfyui] ${errorText(e, `fail(${taskId}) 缺解释器收口异常`)}`,
+        ),
+    );
     return;
   }
 
@@ -338,7 +351,13 @@ export async function executeViaComfyCli(job: Job) {
       /* ignore */
     }
     cliProcs.delete(taskId);
-    void fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）");
+    fireAndForget(
+      fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"),
+      (e) =>
+        logger.warn(
+          `[comfyui] ${errorText(e, `fail(${taskId}) 看门狗收口异常`)}`,
+        ),
+    );
   }, CLI_TIMEOUT_MS);
 
   /* stdout / stderr 的流解析与 envelope 收口都收在 executor-cli-stream.ts：
@@ -348,8 +367,14 @@ export async function executeViaComfyCli(job: Job) {
     taskId,
     log,
     patched,
-    complete: (id, pid) => void complete(id, pid),
-    fail: (id, pid, detail, ves) => void fail(id, pid, detail, ves),
+    complete: (id, pid) =>
+      fireAndForget(complete(id, pid), (e) =>
+        logger.warn(`[comfyui] ${errorText(e, `complete(${id}) 收口异常`)}`),
+      ),
+    fail: (id, pid, detail, ves) =>
+      fireAndForget(fail(id, pid, detail, ves), (e) =>
+        logger.warn(`[comfyui] ${errorText(e, `fail(${id}) 收口异常`)}`),
+      ),
     settle: () => {
       if (settled) return false;
       settled = true;
@@ -427,10 +452,16 @@ export async function executeViaComfyCli(job: Job) {
       "error",
       `comfy-cli 进程已退出（code=${code}），未收到 envelope 事件`,
     );
-    void fail(
-      taskId,
-      promptId ?? "",
-      `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`,
+    fireAndForget(
+      fail(
+        taskId,
+        promptId ?? "",
+        `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`,
+      ),
+      (e) =>
+        logger.warn(
+          `[comfyui] ${errorText(e, `fail(${taskId}) 进程退出收口异常`)}`,
+        ),
     );
   });
 
@@ -441,6 +472,12 @@ export async function executeViaComfyCli(job: Job) {
     cliProcs.delete(taskId);
     trace("cli", taskId, "进程启动失败", { error: err });
     log(taskId, "error", errorText(err, "comfy-cli 启动失败"));
-    void fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败"));
+    fireAndForget(
+      fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败")),
+      (e) =>
+        logger.warn(
+          `[comfyui] ${errorText(e, `fail(${taskId}) 启动失败收口异常`)}`,
+        ),
+    );
   });
 }

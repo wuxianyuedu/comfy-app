@@ -271,18 +271,19 @@ export interface LocalChecksumEntry {
  *  挂在 `globalThis`（项目里 lifecycle / executor-cli 等同款口径）：Turbopack
  *  热重载会重新求值本模块，模块级 `Map` 每次都被清空，记忆就白做了。
  *  容量有上限：文件被删 / 改名后旧键会留在表里，不设界就是慢性泄漏。 */
-const CHECKSUM_CACHE_KEY = "__localWorkflowChecksums_v1";
 const CHECKSUM_CACHE_MAX = 512;
 
 type ChecksumMemo = { mtimeMs: number; size: number; checksum: string };
 
+declare global {
+  var __localWorkflowChecksums_v1: Map<string, ChecksumMemo> | undefined;
+}
+
 function checksumCache(): Map<string, ChecksumMemo> {
-  const g = globalThis as unknown as Record<
+  return (globalThis.__localWorkflowChecksums_v1 ??= new Map<
     string,
-    Map<string, ChecksumMemo> | undefined
-  >;
-  g[CHECKSUM_CACHE_KEY] ??= new Map();
-  return g[CHECKSUM_CACHE_KEY];
+    ChecksumMemo
+  >());
 }
 
 /** checksum 记忆的容量淘汰：超出上限时丢掉最早插入的键（Map 的插入序）。

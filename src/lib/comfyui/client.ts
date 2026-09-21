@@ -74,14 +74,13 @@ export const COMFY_PROBE_LOG_REPEAT_MS = 60_000;
  *
  *  这不是状态结论、不参与任何判定（运行与否由 `comfyui/status.ts` 的快照回答），
  *  只是一个防刷屏的写入开关：地址清单一变（用户改了端口）就重新允许写第一条。 */
-const SILENT_PROBE_KEY = "__comfySilentProbeV1";
 type SilentProbeGlobal = { key?: string; lastAt?: number };
-const probeLogStore = globalThis as unknown as Record<
-  string,
-  SilentProbeGlobal | undefined
->;
-const probeLog: SilentProbeGlobal = probeLogStore[SILENT_PROBE_KEY] ?? {};
-probeLogStore[SILENT_PROBE_KEY] = probeLog;
+
+declare global {
+  var __comfySilentProbeV1: SilentProbeGlobal | undefined;
+}
+
+const probeLog: SilentProbeGlobal = (globalThis.__comfySilentProbeV1 ??= {});
 
 /** 探测链路的会话标识：只有**同一会话 + 同一批地址**才算「重复」。 */
 const SESSION_ID = Math.random().toString(36).slice(2, 10);
