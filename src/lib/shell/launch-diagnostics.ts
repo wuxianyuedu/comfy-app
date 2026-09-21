@@ -55,6 +55,13 @@ export interface LaunchFallback {
   error: boolean;
   /** 标记这是壳的常驻快照（不是编排器的权威进度）。 */
   fallback: true;
+  /** 诊断出口（壳写下的路径，页面不自己拼）——见 idleFallback 的说明。 */
+  diagnostics: {
+    projectRoot: string;
+    launchLog: string;
+    shellLog: string;
+    statusFile: string;
+  };
 }
 
 export interface LaunchPaths {
@@ -109,9 +116,15 @@ export interface LaunchReportItem {
  * 它替代的是「编排器还没写 = 什么都没有」：启动页读到 fallback 标记就知道
  * 这是壳的快照（不是权威进度），既能显示「壳在做什么」，也能在编排器卡死时
  * 从快照里读出**它本来要起什么、日志会写在哪**。
+ *
+ * 快照**必须自带 `diagnostics`**（与 `no_status_payload` 同形）：编排器一旦写
+ * 自己的 `launch-status.json`，这份快照就被整份顶掉（它不带 diagnostics），
+ * 而它写第一份日志之前磁盘上恰恰什么都没有 —— 那段窗口期里启动页能拿到的
+ * 现场只有这份快照里的路径与启动报告（ISSUE #784 手验反馈）。
  */
 export function idleFallback(
   phase: LaunchPhase = "shell-prepare",
+  root = "",
 ): LaunchFallback {
   return {
     phase,
@@ -121,17 +134,42 @@ export function idleFallback(
     message: "桌面壳已接手启动编排，正在拉起本地服务…",
     error: false,
     fallback: true,
+    diagnostics: fallbackDiagnostics(root),
   };
 }
 
 /** 编排器已拉起、等它写第一份状态时的快照。 */
-export function orchestratingFallback(): LaunchFallback {
+export function orchestratingFallback(root = ""): LaunchFallback {
   return {
     phase: "shell-orchestrating",
     progress: 0,
     message: "正在等待本地服务就绪（编排器已启动，诊断见「查看日志」）…",
     error: false,
     fallback: true,
+    diagnostics: fallbackDiagnostics(root),
+  };
+}
+
+/**
+ * 快照自带的诊断出口（与 Rust 侧 `write_idle_status` / `no_status_payload`
+ * 写的是同一组键）。
+ *
+ * 它存在的意义是「快照被顶掉之前，现场已经在磁盘上了」：用户读到的
+ * `run/launch-status.json` 在双击后的头两秒就是这一份，点「查看日志」时
+ * 面板也照它去取。
+ */
+export function fallbackDiagnostics(root: string): {
+  projectRoot: string;
+  launchLog: string;
+  shellLog: string;
+  statusFile: string;
+} {
+  const paths = launchPaths(root);
+  return {
+    projectRoot: root,
+    launchLog: paths.shellLaunchLog,
+    shellLog: paths.shellLog,
+    statusFile: paths.statusFile,
   };
 }
 
