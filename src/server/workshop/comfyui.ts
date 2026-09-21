@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { safeFileNameSegment } from "~/lib/safe-name";
 import { base64PayloadOf, isInlineMedia } from "~/lib/media/data-url";
+import { sleep } from "~/lib/with-timeout";
 import { comfyUiBaseUrl, LOOPBACK_HOST } from "~/lib/endpoints";
 import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
@@ -306,7 +307,7 @@ export async function runComfyWorkflow(
       entry?.status?.status_str === "success";
     const failed = entry?.status?.status_str === "error";
     if (done || failed) break;
-    await new Promise((r) => setTimeout(r, 1500));
+    await sleep(1500);
   }
 
   const entry = history[promptId] as

@@ -22,6 +22,7 @@ import fs from "fs";
 import path from "path";
 import { logger } from "~/lib/core/logger";
 import { openUrlInBrowser } from "~/lib/shell/open-in-browser";
+import { sleep } from "~/lib/with-timeout";
 import {
   DRIZZLE_STUDIO_RUNTIME_LOG,
   SERVICES_LOG_DIR,
@@ -291,7 +292,7 @@ export async function stopDrizzleStudio(
   logger.info(`[drizzle-studio] 回收进程树：${kill.via}`);
   st.child = undefined;
   for (let i = 0; i < DRIZZLE_STOP_PROBE.maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, DRIZZLE_STOP_PROBE.baseMs));
+    await sleep(DRIZZLE_STOP_PROBE.baseMs);
     if (!(await probeDrizzleStudio(port))) {
       return { ok: true, detail: "Drizzle Studio 已关闭" };
     }
