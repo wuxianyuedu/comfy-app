@@ -12,6 +12,7 @@
  */
 
 import { withQuery } from "~/lib/query-string";
+import { errorMessage } from "~/lib/error-message";
 
 export interface RemoteModelCatalog {
   ok: boolean;
@@ -61,7 +62,7 @@ async function getModels(
     return {
       ok: false,
       models: [],
-      detail: e instanceof Error ? e.message : "网络请求失败",
+      detail: errorMessage(e, "网络请求失败"),
     };
   }
 }
