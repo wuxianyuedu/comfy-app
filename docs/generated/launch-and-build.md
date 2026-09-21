@@ -302,7 +302,7 @@ navigate 一发起，主窗画面就离开启动页；而「TCP 可连」到「�
 | 起不起得来              | `can_self_launch()`：编排脚本 + `node_modules\.modules.yaml` + 关键依赖存在（只读、极快）；不满足时不静默 —— `mark_launch_failed()` 把原因与修法写到 `run/launch-status.json` |
 | 上一次的残留            | 起之前先用 `find_owned_orchestrator()` 找**自己认领过的**编排器（壳被强杀时 job 与进程组都可能落空，它会原地留着占端口，表现是「双击没反应」）；命中即 `reap_pid()` 回收再启动 |
 | 认亲                    | 进程环境块里的 `COMFYAPP_SHELL_OWNED=1`（只有壳写、只有它起的编排器才有）。**不按形态猜**——「有没有 dev server」「命令行里有没有项目根」都认不出是谁起的         |
-| 回收                    | 壳的 `RunEvent::Exit` → 插件 `kill()` + `scripts/reap-process.mjs`（`--detach`，自杀路径等不起 `wait`）；另挂 `KILL_ON_JOB_CLOSE` Job Object 兜住壳崩溃 / 被硬杀（经 `scripts/win_job.py`，唯一实现） |
+| 回收                    | 壳的 `RunEvent::Exit` → 插件 `kill()` + `scripts/reap-process.mjs`（`--detach`，自杀路径等不起 `wait`）；另挂 `KILL_ON_JOB_CLOSE` Job Object 兜住壳崩溃 / 被硬杀（壳内联实现，唯一出处） |
 | 前台                    | 双击一律不给（`decide_front_when_self_launched` = false）；`COMFYAPP_FOREGROUND` 已注入时以它为准。**唤起已运行实例**是另一条通道（单实例焦点事件），见 §1.3 |
 | 只 debug / release 哪边 | **只在 release**：debug 下的壳归 `pnpm tauri dev` 管，那时 dev server 由 `beforeDevCommand` 起着                                                                 |
 
@@ -704,8 +704,8 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
   原先入口侧还有两条兜底（回收残留壳 + `tauri-shell.pid` 监控线程），它们随 Python
   启动器一起删除 —— 编排器现在**就是壳的子进程**，「宿主退出 → 整棵树回收」这条链
   没有中断点，不再需要「谁替谁补刀」的中间人。
-- **Job Object 归壳**（`shell_launch::attach_kill_on_close_job`，经
-  `scripts/win_job.py` 唯一实现）：句柄**故意不关**，壳一死 job 就关、OS 当场终止
+- **Job Object 归壳**（`shell_launch::attach_kill_on_close_job` 内联实现，唯一出处）：
+  句柄**故意不关**，壳一死 job 就关、OS 当场终止
   整棵树；这是「壳被硬杀」时的兜底，正常路径仍走进程组 / `taskkill /T /F`
   的统一回收（`kill-process-tree`）。两者不冲突，也不再有第二套「看起来生效
   其实没生效」的机制。
@@ -730,12 +730,13 @@ POSIX 端口探测回归：`src/lib/comfyui/proc-detect.test.ts`（`/proc/net/tc
 | 平台机制   | `scripts/launcher-core/{procs,shell}.mjs`                                         | 进程与端口探测、进程组拉起、可执行文件解析                                            |
 | 进程树回收 | `src/lib/process/kill-process-tree.ts`（`scripts/reap-process.mjs` 为命令行入口） | Windows `taskkill /T /F`；POSIX 读 PGID 后发组信号                                    |
 
-> **Windows Job Object 的实现只有一处**：编排器（node）若崩溃 / 被硬杀，它拉起的
-> `node → pnpm → next` 会残留成孤儿（占端口、锁日志）。OS 级兜底是一个
-> `KILL_ON_JOB_CLOSE` 的 Job Object：最后一个句柄关闭 → 当场终止整棵树。
-> 纯 Node 无原生 job API，故实现在 `scripts/win_job.py`（Python / ctypes），
-> **由壳在拉起编排器后 best-effort 挂载**（`shell_launch::attach_job_via_helper`；
-> 挂不上只记 WARN，退回进程组 / `taskkill /T /F` 的统一回收）。
+> **Windows Job Object 的实现只有一处**：编排器（node）是壳的子进程，若**壳被硬杀**
+> （任务管理器 / 崩溃），它拉起的 `node → pnpm → next` 会残留成孤儿（占端口、锁日志）。
+> OS 级兜底是一个 `KILL_ON_JOB_CLOSE` 的 Job Object：最后一个句柄关闭 → 当场终止整棵树。
+> **句柄归壳持有**（`shell_launch::attach_kill_on_close_job` 内联实现，用 `windows` crate，
+> 故意不 `CloseHandle`）——壳一死 OS 关掉句柄即触发。#784 前经外部脚本 `scripts/win_job.py`
+> 把句柄交给编排器持有的模型，在 #784「壳是顶」下兜不住「壳被硬杀、node 还活着」，已废弃删除。
+> 挂不上只记 WARN，退回进程组 / `taskkill /T /F` 的统一回收（`kill-process-tree`）。
 > POSIX 侧无 Job Object，靠 `run/launcher-session.json` + 心跳 + 杀进程组兜底（见上表）。
 
 各环节的取值来源仍是**同一事实源**，只是不再有「第二份实现」：
