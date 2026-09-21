@@ -21,6 +21,11 @@ import {
   useComfyQueue,
   type ComfyQueueView,
 } from "./hooks/use-comfy-queue";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { fmtBytes } from "~/lib/format-bytes";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { StatusDot } from "~/components/ui/status-dot";
@@ -165,13 +170,25 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
 function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   const notice = comfyQueueNotice(view);
   if (notice === null) return null;
+  const detailLines = notice.title.split("\n");
   return (
-    <span
-      className="text-ink-soft shrink-0 truncate tabular-nums"
-      title={notice.title}
-    >
-      {notice.text}
-    </span>
+    <Popover>
+      <PopoverTrigger
+        className="text-ink-soft hover:bg-subtle inline-flex max-w-[160px] cursor-pointer items-center gap-1 rounded px-1 py-0.5 tabular-nums"
+        title={notice.title}
+      >
+        <span className="truncate">{notice.text}</span>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="w-80 text-[12px]">
+        <div className="flex flex-col gap-1">
+          {detailLines.map((line, i) => (
+            <span key={i} className="text-ink-soft leading-relaxed">
+              {line}
+            </span>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -207,10 +224,11 @@ export function BrowserStatusBar() {
 
   return (
     <div
-      className="border-border bg-panel/95 text-ink-muted z-toast fixed right-0 bottom-0 left-0 flex h-6 items-center justify-between gap-3 border-t px-3 text-[11px] backdrop-blur-sm"
+      className="border-border bg-panel/95 text-ink-muted z-toast fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3 text-[11px] backdrop-blur-sm"
       aria-label="底部状态栏"
     >
-      <div className="flex min-w-0 items-center gap-1.5">
+      {/* ── 第 1 区：地址栏（固定宽度） ── */}
+      <div className="flex w-[170px] shrink-0 items-center gap-1.5">
         <Lock
           size={11}
           className="shrink-0 text-emerald-600 dark:text-emerald-400"
@@ -224,15 +242,61 @@ export function BrowserStatusBar() {
         </span>
       </div>
 
-      <SchemaSyncItem status={schemaSync} />
-
-      <div className="flex shrink-0 items-center gap-2.5">
-        {/* ComfyUI 排队 / 当前执行：任务串行排队（MAX_CONCURRENCY=1），这一格
-            回答「前面还堵着几个、当前跑了多久、跑的哪个工作流与模型」。 */}
+      {/* ── 第 2 区：ComfyUI 排队/运行信息（弹性，左对齐） ── */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <ComfyQueueItem view={comfyQueue} />
+        <SchemaSyncItem status={schemaSync} />
+      </div>
 
-        {/* 实时帧率：画布 FpsMeter 悬浮层已移除，全应用仅此一处（FPS 归属见
-            BrowserStatusBar 文件头设计要点 2）。 */}
+      {/* ── 第 3 区：显存 + 内存等资源指标（固定宽度） ── */}
+      <div className="flex w-[500px] shrink-0 items-center gap-2.5">
+        {/* 显存（nvidia-smi 物理专用显存口径） */}
+        {smiVram && (
+          <UsageItem
+            label="显存"
+            title="nvidia-smi 物理专用显存（与任务管理器「专用 GPU 内存」同口径）"
+            used={smiVram.used}
+            total={smiVram.total}
+            pct={smiVram.pct}
+          />
+        )}
+
+        {/* 显存（ComfyUI CUDA 逻辑口径） */}
+        {cudaVram && (
+          <UsageItem
+            label="显存·ComfyUI"
+            title="ComfyUI 上报的 CUDA 口径（显存剩余可用/总量，已用 = 总量 − 剩用）"
+            used={cudaVram.used}
+            total={cudaVram.total}
+            pct={cudaVram.pct}
+          />
+        )}
+
+        {/* 内存占用 */}
+        {ram && (
+          <UsageItem
+            label="内存"
+            title="系统内存占用"
+            used={ram.used}
+            total={ram.total}
+            pct={ram.pct}
+          />
+        )}
+
+        {/* 降级提示 */}
+        {degradedNote && (
+          <span
+            className="hidden items-center gap-1 text-amber-600/90 sm:flex dark:text-amber-300/80"
+            title={degradedNote}
+          >
+            {degradedNote}
+          </span>
+        )}
+      </div>
+
+      {/* ── 第 4 区：FPS + 消息中心 + 日志 + 应用服务状态（固定宽度，最右） ── */}
+      <div className="flex w-[280px] shrink-0 items-center justify-end gap-2.5 whitespace-nowrap">
+        {/* 实时帧率 */}
         <span
           className="hidden items-center gap-1 md:flex"
           title="全应用实时帧率：≥50 流畅，30~49 轻微掉帧，<30 明显卡顿"
@@ -247,54 +311,6 @@ export function BrowserStatusBar() {
           <span className="text-ink-soft">FPS</span>
         </span>
 
-        {/* 显存（nvidia-smi 物理专用显存口径，对齐任务管理器「专用 GPU 内存」）。
-            用户反馈 ComfyUI 的 CUDA 口径有时不准确，故同时显示两种口径做对照。
-            非 NVIDIA 卡 / nvidia-smi 查询失败 → smiVram 为 null，整项隐藏（不留空项）。 */}
-        {smiVram && (
-          <UsageItem
-            label="显存"
-            title="nvidia-smi 物理专用显存（与任务管理器「专用 GPU 内存」同口径）"
-            used={smiVram.used}
-            total={smiVram.total}
-            pct={smiVram.pct}
-          />
-        )}
-
-        {/* 显存（ComfyUI CUDA 逻辑口径）：vram_free 语义是「剩余可用」，
-            已用 = 总量 − 剩用，与内存侧推导一致。非 NVIDIA 卡上这是唯一口径。 */}
-        {cudaVram && (
-          <UsageItem
-            label="显存·ComfyUI"
-            title="ComfyUI 上报的 CUDA 口径（显存剩余可用/总量，已用 = 总量 − 剩用）"
-            used={cudaVram.used}
-            total={cudaVram.total}
-            pct={cudaVram.pct}
-          />
-        )}
-
-        {/* 内存占用：具体数值 + 百分比 */}
-        {ram && (
-          <UsageItem
-            label="内存"
-            title="系统内存占用"
-            used={ram.used}
-            total={ram.total}
-            pct={ram.pct}
-          />
-        )}
-
-        {/* 降级提示：离线/轮询失败时占用条不再显示，这里给出可见出口，
-            说明「看不到数据」的原因，而不是让两项静默消失。 */}
-        {degradedNote && (
-          <span
-            className="hidden items-center gap-1 text-amber-600/90 sm:flex dark:text-amber-300/80"
-            title={degradedNote}
-          >
-            {degradedNote}
-          </span>
-        )}
-
-        {/* 消息中心：系统级提示（本地更新需重启等）的收件箱，未读有数量，点开全屏查看 */}
         <MessageCenterButton />
 
         <Button
@@ -315,10 +331,6 @@ export function BrowserStatusBar() {
           )}
         </Button>
 
-        {/* 应用服务（dev server）状态：这一格回答「应用服务此刻能不能应答」，
-         *  与 ComfyUI 是否运行无关（判据见 ~/lib/dev-server-status）。
-         *  重启后的「任务已丢失」提示不另占一格，并进这条的文案里，
-         *  避免状态栏为同一件事叠两处标记。 */}
         <span
           className={`flex items-center gap-1 ${
             devServer.state === "online"
@@ -341,8 +353,6 @@ export function BrowserStatusBar() {
             }
             sizeClass="size-1.5"
             pulse={devServer.state === "starting"}
-            /* 这格是状态栏里的**实时状态灯**：与设置页的状态行不同，它沿用
-               原来的发光描边，好在深色状态栏上仍然显眼。 */
             className={
               devServer.state === "online"
                 ? "shadow-[0_0_6px_rgba(52,211,153,0.8)]"
