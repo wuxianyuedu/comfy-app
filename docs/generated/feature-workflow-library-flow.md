@@ -234,7 +234,7 @@ flowchart TD
   GEN --> TASK["task 入队 → ComfyUI 执行"]
   TASK --> SSE["SSE 进度 / 步骤日志 / 产物"]
   SSE --> REG["运行登记表 workflow-run-store<br/>taskId → 状态 / 日志 / 产物"]
-  REG --> MODAL["全屏执行日志弹窗（入口只有详情头部一处）"]
+  REG --> MODAL["全屏执行日志弹窗（入口分散在画布节点 / 工坊封装两个页签，各带来源过滤）"]
   REG --> LS["localStorage 写穿：关窗重开仍可恢复「生成中」视角"]
   REG --> R3["运行记录上限 32 条 / 日志 300 行"]
 ```

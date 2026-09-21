@@ -15,7 +15,7 @@
 //     工坊里的可用性 —— 与定妆照 / 镜头生图同一条 buildLibraryWorkflowInput 链路。
 
 import { upperToken } from "~/lib/upper-token";
-import React from "react";
+import React, { useMemo, useState } from "react";
 
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
@@ -34,6 +34,9 @@ import { modeLabel } from "../workflow-library-config";
 import { sceneFromMode } from "~/lib/media/size-presets";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { useEncapsulationTestRun } from "../hooks/use-encapsulation-test-run";
+import { WorkflowRunLogButton } from "../WorkflowRunLogButton";
+import { WorkflowRunLogModal } from "../WorkflowRunLogModal";
+import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 import { displayValue } from "~/lib/display-value";
 import { EncapsulationTestForm } from "./EncapsulationTestForm";
@@ -152,11 +155,28 @@ export function WorkshopEncapsulationPanel({
     test.run(values);
   };
 
+  /* 本页签独立的「执行日志」入口：带 encapsulation-test 来源过滤，与画布节点
+   * 页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
+  const [logOpen, setLogOpen] = useState(false);
+  const [logTaskId, setLogTaskId] = useState<string | null>(null);
+  const latestLogTaskId = useMemo(
+    () =>
+      latestRunForWorkflow(workflowId, "encapsulation-test")?.taskId ?? null,
+    [workflowId],
+  );
+  const logViewTaskId = logTaskId ?? latestLogTaskId;
+
   return (
     <div className="border-border bg-panel-deep mx-auto max-w-2xl space-y-4 rounded-2xl border p-4">
-      {/* 封装状态总览。执行日志入口**不在这里** —— 它固定在详情头部那一排
-          （ISSUE #611：同一扇门只许有一处，位置也不随页签变化）。 */}
+      {/* 封装状态总览。执行日志入口**在本页签这一排**（带 encapsulation-test 来源），
+          与画布节点页签各自独立（ISSUE #611 旧形态：两个页签各写各的）。 */}
       <div className="flex flex-wrap items-center gap-2">
+        <WorkflowRunLogButton
+          workflowId={workflowId}
+          source="encapsulation-test"
+          taskId={logViewTaskId}
+          onOpen={() => setLogOpen(true)}
+        />
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
         {status.ready ? (
           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800 dark:text-emerald-300">
@@ -322,6 +342,14 @@ export function WorkshopEncapsulationPanel({
           </p>
         </div>
       </div>
+      <WorkflowRunLogModal
+        open={logOpen}
+        workflowId={workflowId}
+        source="encapsulation-test"
+        viewTaskId={logViewTaskId}
+        onViewTaskIdChange={setLogTaskId}
+        onClose={() => setLogOpen(false)}
+      />
     </div>
   );
 }

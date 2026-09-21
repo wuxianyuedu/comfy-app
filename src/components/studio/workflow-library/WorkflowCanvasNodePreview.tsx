@@ -26,12 +26,15 @@ import {
 } from "~/lib/workshop/generation-client";
 import {
   appendWorkflowRunLog,
+  latestRunForWorkflow,
   registerWorkflowRun,
 } from "~/lib/workflow/workflow-run-store";
 import {
   useWorkflowRunResume,
   watchWorkflowRun,
 } from "./hooks/use-workflow-run-resume";
+import { WorkflowRunLogButton } from "./WorkflowRunLogButton";
+import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWorkflowForm";
 import {
   defaultInputValues,
@@ -216,6 +219,15 @@ export function WorkflowCanvasNodePreview({
   });
 
   const running = phase.kind === "running" || phase.kind === "starting";
+  /* 本页签独立的「执行日志」入口：按钮带 canvas-node 来源过滤，弹窗同理，
+   * 与「工坊封装」页签各自一处（ISSUE #611 旧形态：两个页签各写各的）。 */
+  const [logOpen, setLogOpen] = useState(false);
+  const [logTaskId, setLogTaskId] = useState<string | null>(null);
+  const latestLogTaskId = useMemo(
+    () => latestRunForWorkflow(workflowId, "canvas-node")?.taskId ?? null,
+    [workflowId],
+  );
+  const logViewTaskId = logTaskId ?? latestLogTaskId;
   const missing = useMemo(
     () =>
       workflowIO
@@ -309,7 +321,7 @@ export function WorkflowCanvasNodePreview({
         workflowInputs: [...workflowInputs, ...cagInputs],
       });
       setPhase({ kind: "running", pct: 0 });
-      /* 登记运行记录；日志弹窗不再自动打开，由用户点详情头部的「执行日志」查看。 */
+      /* 登记运行记录；日志弹窗不再自动打开，由用户点本页签的「执行日志」查看。 */
       registerWorkflowRun({
         taskId,
         workflowId,
@@ -651,6 +663,12 @@ export function WorkflowCanvasNodePreview({
               <span className="text-ink min-w-0 truncate text-sm font-semibold">
                 {workflowName}
               </span>
+              <WorkflowRunLogButton
+                workflowId={workflowId}
+                source="canvas-node"
+                taskId={logViewTaskId}
+                onOpen={() => setLogOpen(true)}
+              />
               {/* 多模式工作流在这儿也要能换模式：两个页签读的是**同一个**
                   生效模式（详情层持有），而 use 模式此前只把它当纯文本打出来
                   —— 用户在「实际使用」里换不了模式，只能切回「编辑对外参数」
@@ -774,6 +792,14 @@ export function WorkflowCanvasNodePreview({
           必填参数未填：{missingLabels.join("、")}
         </p>
       )}
+      <WorkflowRunLogModal
+        open={logOpen}
+        workflowId={workflowId}
+        source="canvas-node"
+        viewTaskId={logViewTaskId}
+        onViewTaskIdChange={setLogTaskId}
+        onClose={() => setLogOpen(false)}
+      />
     </div>
   );
 }
