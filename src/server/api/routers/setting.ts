@@ -50,6 +50,8 @@ export const settingRouter = createTRPCRouter({
         comfyuiAutoStart: z.boolean().optional(),
         exitKillComfyui: z.boolean().optional(),
         exitKillOllama: z.boolean().optional(),
+        /** 绑定到本地文件的工作流：进详情是否自动把磁盘最新内容同步回库。 */
+        autoSyncLocalWorkflow: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input }) => {

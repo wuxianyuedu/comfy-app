@@ -13,6 +13,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     loginRequired: false,
     exitKillComfyui: false,
     exitKillOllama: true,
+    autoSyncLocalWorkflow: false,
     ...patch,
   };
 }

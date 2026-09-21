@@ -66,6 +66,18 @@ export type AppSettings = {
   /** 同 exitKillComfyui，作用于应用拉起的 Ollama serve 进程。 */
   exitKillOllama: boolean;
   /**
+   * 查看「绑定到本地文件的工作流」详情时，是否自动把磁盘上的最新内容同步回库。
+   *
+   * 默认 false（手动）：进详情只**检出**磁盘有没有更新、不写库，真正的更新入口
+   * 是工作流库里的「同步」按钮（`workflow.resync`）—— 否则「切界面」就等于
+   * 「同步」，用户还没决定内容就变了、标记也翻回无更新（PR #806 修的就是这个）。
+   *
+   * 开启后，「进详情」等价于「点同步」：检出到磁盘有更新就立刻重导入并落库，
+   * 用户无需回到列表点按钮。两种入口复用同一条重导入链路（`reimportFromSource`），
+   * 产物一致。
+   */
+  autoSyncLocalWorkflow: boolean;
+  /**
    * exitKillComfyui 默认值迁移标记（一次性，非用户可见开关）。
    * 该开关的历史默认值是 true，而 saveSettings 会把整个对象（含默认值）写盘 ——
    * 于是老安装的设置文件里都躺着一条 true，光改 DEFAULTS 对它们不生效。
@@ -84,6 +96,8 @@ export const DEFAULTS: AppSettings = {
   loginRequired: false,
   exitKillComfyui: false,
   exitKillOllama: true,
+  /** 绑定到本地文件的工作流：进详情是否自动把磁盘最新内容同步回库（默认手动）。 */
+  autoSyncLocalWorkflow: false,
 };
 
 /** 退出策略默认值变更的一次性迁移（判据见 exitKillComfyuiDefaultMigrated）。
