@@ -89,17 +89,19 @@ const RUNNING_TICK_CAP = 5;
  *  （现场是「卡在队列 2203s / 2210s / 2217s」三条）。
  *  因此把 handle 与在途守卫**都**挂在 globalThis 上：
  *  无论热重载多少次，每个进程里只有一个回收器。 */
-const REAPER_GLOBAL = "__comfyReaper_v1";
 interface ReaperGlobal {
   handle: ReturnType<typeof setInterval> | null;
   reaping: Set<string>;
 }
-const rg = globalThis as unknown as Record<string, ReaperGlobal | undefined>;
-const reaperState: ReaperGlobal = rg[REAPER_GLOBAL] ?? {
+
+declare global {
+  var __comfyReaper_v1: ReaperGlobal | undefined;
+}
+
+const reaperState: ReaperGlobal = (globalThis.__comfyReaper_v1 ??= {
   handle: null,
   reaping: new Set(),
-};
-rg[REAPER_GLOBAL] = reaperState;
+});
 /**
  * 纯内存的认领检查：`taskId` 是否仍被**当前** dev server 进程持有
  *  （相对于冷重启留下的真孤儿）。

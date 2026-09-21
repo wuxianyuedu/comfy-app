@@ -21,14 +21,15 @@ interface CacheStore {
 
 const MAX_ENTRIES = 256;
 
+declare global {
+  var __comfyServerCache: CacheStore | undefined;
+}
+
 function getStore(): CacheStore {
-  const globalObj = globalThis as unknown as {
-    __comfyServerCache?: CacheStore;
-  };
-
-  globalObj.__comfyServerCache ??= { map: new Map(), max: MAX_ENTRIES };
-
-  return globalObj.__comfyServerCache;
+  return (globalThis.__comfyServerCache ??= {
+    map: new Map(),
+    max: MAX_ENTRIES,
+  });
 }
 
 /**
