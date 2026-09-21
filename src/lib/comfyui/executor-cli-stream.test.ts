@@ -14,6 +14,7 @@ import {
   envelopeErrorMessage,
   findNodeErrorsCarrier,
   MAX_NON_JSON_LINES,
+  translateWorkflowUnknownNodesError,
 } from "./executor-cli-stream";
 
 /** 静默 trace / log（默认实现会写盘或拖 DB，测试用自己的收集器）。 */
@@ -42,6 +43,43 @@ describe("findNodeErrorsCarrier（深搜结构化校验错误）", () => {
     const a: Record<string, unknown> = {};
     a.self = a;
     expect(findNodeErrorsCarrier(a)).toBeUndefined();
+  });
+});
+
+describe("translateWorkflowUnknownNodesError（comfy-cli 校验错误翻中文）", () => {
+  it("workflow_unknown_nodes + details.errors 翻成中文可操作提示", () => {
+    const env = {
+      error: {
+        code: "workflow_unknown_nodes",
+        message: "Workflow has 1 validation error(s) against server",
+        details: {
+          errors: [
+            {
+              node_id: "459:452",
+              field: "images",
+              code: "autogrow_no_slots",
+              message:
+                "required autogrow input 'images' has no connected slots",
+              hint: "wire one key per connection: images.image_1, images.image_2",
+            },
+          ],
+        },
+      },
+    };
+    const out = translateWorkflowUnknownNodesError(env);
+    expect(out).toContain("工作流校验未通过");
+    expect(out).toContain("节点 459:452");
+    expect(out).toContain("images");
+    expect(out).toContain("images.image_1、images.image_2");
+  });
+
+  it("非 workflow_unknown_nodes 返回 null（交给兜底逻辑）", () => {
+    expect(
+      translateWorkflowUnknownNodesError({
+        error: { code: "prompt_rejected", message: "x" },
+      }),
+    ).toBeNull();
+    expect(translateWorkflowUnknownNodesError(undefined)).toBeNull();
   });
 });
 
