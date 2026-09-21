@@ -333,6 +333,72 @@ describe("壳自编排：能自起的判据与真起得来", () => {
     expect(occurrences.length).toBe(3);
   });
 
+  // ── 第三轮（ISSUE #821：用户 .env 写死端口，壳却按路径推导，两边永远对不上）──
+  //
+  // 现场：「.env 里 COMFYAPP_PORT="3100" 与 Rust 壳按路径推导的端口 3809 不一致。
+  // 壳不读 .env 文件（只看 OS 环境变量），所以它按 f:/ai/other/comfy-app-t3-branch2
+  // 的 FNV-1a 哈希推出 3809 并死等；而 launcher 读 .env 拿到 3100 去起 Next.js，
+  // 结果 3100 又被另一个副本占了 → EADDRINUSE → 两边永远对不上」。
+  //
+  // 判据不是「壳里出现过 .env 字样」——那是可以写在注释里的东西。真正的判据是
+  // **端口解析只有一个出口**：所有需要端口的调用点都走它，而它按
+  // 环境变量 → 检出 .env → 路径推导 的顺序取值（与 scripts/app-port.mjs 逐条对齐）。
+  describe("端口解析：.env 必须对壳可见（ISSUE #821）", () => {
+    const single = () => stripComments(read("src-tauri/src/single_instance.rs"));
+
+    it("壳侧有一条 .env 优先的解析出口（而不是只做路径推导）", () => {
+      const src = single();
+      for (const fn of [
+        "pub fn read_dot_env_value",
+        "pub fn read_env_app_port",
+        "pub fn resolve_app_port_for_root",
+        "pub fn port_source_for_root",
+      ]) {
+        expect(src, `${fn} 必须存在`).toContain(fn);
+      }
+      // 取值顺序：环境变量 → .env → 路径推导。任一条缺席都会让两侧分叉。
+      expect(src).toContain("resolve_app_port_with_source_for_root");
+      expect(src).toContain("if let Some(port) = env_app_port()");
+      expect(src).toContain("if let Some(port) = read_env_app_port(root)");
+      expect(src).toContain("derive_app_port_for_root(root), PortSource::Derived");
+      expect(src).toContain('std::env::var("COMFYAPP_PORT")');
+      // 端口与来源必须**同一次计算**给出：各算一遍时判据容易被静默拉开，
+      // 而表现是「日志说 .env、实际用的是路径推导」——比没有日志更坏。
+      expect(src).toMatch(
+        /pub fn port_source_for_root\(root: &str\) -> PortSource \{\s*resolve_app_port_with_source_for_root\(root\)\.1/,
+      );
+    });
+
+    it("壳里不许再有第二个「按路径推导端口」的调用点", () => {
+      // 各处自己推导 = 又长出第二份口径；而 .env 一旦被写死端口，两份口径立刻
+      // 分叉（这正是本 ISSUE 的现场：壳 3809 / dev server 3100）。
+      const shell = stripComments(read("src-tauri/src/shell_launch.rs"));
+      const lib = stripComments(read("src-tauri/src/lib.rs"));
+      expect(shell).not.toContain("derive_app_port_for_root(project_root)");
+      expect(lib).not.toMatch(/single_instance::derive_app_port\(\)/);
+      // 壳侧要端口一律经 app_port_for_root（= single_instance 的唯一出口）。
+      expect(shell).toContain("crate::single_instance::resolve_app_port_for_root(project_root)");
+    });
+
+    it("启动报告与编排日志都带上端口来源（归因那一半信息）", () => {
+      const shell = stripComments(read("src-tauri/src/shell_launch.rs"));
+      expect(shell).toContain("pub fn port_source_for_root");
+      // 只写数字的现场在「两侧对不上」时归不了因：看不出是 .env 写的还是
+      // 路径推出来的，而这两种情况的修法完全不同。
+      expect(shell).toContain("（来源：");
+    });
+
+    it("注入给编排器的 COMFYAPP_PORT 与壳自己用的端口同源", () => {
+      const shell = stripComments(read("src-tauri/src/shell_launch.rs"));
+      // 到下一个顶层 `pub fn` 为止（函数结尾形态会随格式化漂，盯它是脆弱判据）。
+      const start = shell.indexOf("pub fn spawn_orchestrator");
+      const next = shell.indexOf("\npub fn ", start + 1);
+      const body = shell.slice(start, next > start ? next : undefined);
+      expect(body).toContain("let port = app_port_for_root(project_root)");
+      expect(body).toContain('.env("COMFYAPP_PORT", port.to_string())');
+    });
+  });
+
   // ── 第三轮（手验反馈：提示还在、一直卡住）────────────────────────────────
   //
   // 现场：用户重编壳后双击 `target\release\app.exe`，启动页仍写着

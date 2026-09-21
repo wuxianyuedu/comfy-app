@@ -17,10 +17,16 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import app_port  # noqa: E402
+
+# `.env` 向量要在**临时目录**里造一份 .env 再读（走与生产同一条 read_env_port），
+# 不能就地读仓库根的 .env —— 用例的可通过性只能取决于用例自己造的东西。
+_TMP_ENV_DIR = tempfile.mkdtemp(prefix="app-port-env-")
+_TMP_ENV_FILE = os.path.join(_TMP_ENV_DIR, ".env")
 
 
 def main(argv: "list[str]") -> int:
@@ -47,12 +53,30 @@ def main(argv: "list[str]") -> int:
         port = app_port.derive_app_port(inp)
         if port != v.get("port"):
             diffs.append(f"端口 {inp!r}: {port} != {v.get('port')}")
+    # `.env` 单值解析（ISSUE #821）：四侧对同一份 .env 必须得出同一个值。
+    # 只测端口算法是不够的 —— 「壳必须自己读 .env」这条承诺落地在解析形态上，
+    # 任一侧对「带引号 / 行尾注释 / 注释行」的理解不一致，用户写死的端口就只对
+    # 一部分进程可见，剩下的按路径推导去等另一个端口。
+    env_vectors = data.get("envVectors") or []
+    if len(env_vectors) < 4:
+        print(f"FAIL envVectors 不足（{len(env_vectors)} < 4）—— 防止误删后自检静默全绿")
+        return 1
+    for v in env_vectors:
+        content = v.get("content", "")
+        want = v.get("port")
+        # 复用真实的 read_env_port：写一份临时 .env，走与生产同一条读取路径。
+        with open(_TMP_ENV_FILE, "w", encoding="utf-8") as f:
+            f.write(content)
+        got = app_port.read_env_port(_TMP_ENV_DIR)
+        if got != want:
+            diffs.append(f".env 解析 {content!r}: {got} != {want}（{v.get('note', '')}）")
+
     if diffs:
         print("FAIL Python 侧与共享向量不一致：")
         for d in diffs:
             print("  - " + d)
         return 1
-    print(f"OK Python 侧与共享向量一致（{len(vectors)} 条）")
+    print(f"OK Python 侧与共享向量一致（{len(vectors)} 条 + {len(env_vectors)} 条 .env 向量）")
     return 0
 
 
