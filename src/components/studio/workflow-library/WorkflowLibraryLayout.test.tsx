@@ -13,7 +13,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 import type { WorkflowRow } from "./workflow-library-config";
 import type { MetaEditorController } from "./hooks/use-workflow-library-detail";
@@ -88,27 +88,26 @@ describe("详情头部：窄屏不丢按钮", () => {
   });
 });
 
-describe("详情头部：执行日志入口固定在这一排", () => {
+describe("详情头部：执行日志入口已下沉到各页签", () => {
   const ROOT = path.resolve(__dirname);
   const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
-  it("没跑过也显示入口，点开是全屏日志弹窗（入口不随有没有跑过而变）", () => {
-    renderHeader();
-    const open = screen.getByTestId("wflib-log-open");
-    expect(open.textContent).toContain("暂无运行");
-    fireEvent.click(open);
-    expect(screen.getByTestId("wflib-log-modal")).toBeTruthy();
+  it("详情头部不再集中放置统一入口（入口分散到画布节点 / 工坊封装页签）", () => {
+    expect(read("sections/DetailHeader.tsx")).not.toContain(
+      "WorkflowRunLogButton",
+    );
   });
 
-  it("入口只有头部一处：两个页签里各放一个入口的旧形态不再回来", () => {
-    /* 用户口径：入口要放在详情头部这一排。页签里再各挂一个会让「门」重新变成
-     *  两处（ISSUE #611 的旧形态），位置也继续随页签 / 有无运行记录变化。 */
-    expect(read("sections/WorkshopEncapsulationPanel.tsx")).not.toContain(
-      "WorkflowRunLogButton",
-    );
-    expect(read("WorkflowCanvasNodePreview.tsx")).not.toContain(
-      "WorkflowRunLogButton",
-    );
+  it("画布节点页签有独立入口，且带 canvas-node 来源过滤", () => {
+    const src = read("WorkflowCanvasNodePreview.tsx");
+    expect(src).toContain("WorkflowRunLogButton");
+    expect(src).toContain('source="canvas-node"');
+  });
+
+  it("工坊封装页签有独立入口，且带 encapsulation-test 来源过滤", () => {
+    const src = read("sections/WorkshopEncapsulationPanel.tsx");
+    expect(src).toContain("WorkflowRunLogButton");
+    expect(src).toContain('source="encapsulation-test"');
   });
 });
 
