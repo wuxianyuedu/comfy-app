@@ -37,19 +37,18 @@ function Strip-Ansi([string]$s) {
 
 function Log {
     param(
-        # 可传多个字符串参数（多行拼接场景，如 build-tauri-release.ps1 结尾那段），
-        # 统一拼成一个文本；单字符串调用时退化为原行为。
-        [string[]]$Msg,
-        # 可选前景色：只给「命令回显」这类需要与正文区分的行用，其余走控制台默认色。
+        [string]$Msg,
+        # 可选前景色：只能「命名」传入（-ForegroundColor）。命令回显（>>> 一行）用 Yellow，
+        # 其余走控制台默认色。多行拼接请由调用方先拼成单个字符串，否则第二个位置参数会被
+        # 误当成颜色值——build-tauri-release.ps1 结尾那行就是这么踩的。
         [ConsoleColor]$ForegroundColor
     )
-    $text = $Msg -join ""
     if ($null -ne $ForegroundColor) {
-        Write-Host $text -ForegroundColor $ForegroundColor
+        Write-Host $Msg -ForegroundColor $ForegroundColor
     } else {
-        Write-Host $text
+        Write-Host $Msg
     }
-    $clean = Strip-Ansi $text
+    $clean = Strip-Ansi $Msg
     Add-Content -Encoding UTF8 -Path $script:LOG -Value $clean
 }
 
