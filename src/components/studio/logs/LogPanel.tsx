@@ -21,6 +21,7 @@ import {
   selectNewLogCount,
   selectPageLogs,
   selectShouldPinToLatest,
+  type LogEntry,
   type LogLevel,
   type LogLevelCounts,
   type LogOriginFilter,
@@ -326,6 +327,10 @@ function pageSummary(
   return `${head} · ${tail}`;
 }
 
+/* 面板关闭时喂给分页/布局 memo 的稳定空数组（引用恒定，memo 据此不随
+ * header.filteredLogs 每 2s 变化而重算整页前缀和）。 */
+const NO_LOG_ENTRIES: LogEntry[] = [];
+
 export function LogPanel() {
   const {
     filteredLogs,
@@ -443,6 +448,11 @@ export function LogPanel() {
   };
   const [scrollTop, setScrollTop] = useState(0);
 
+  /* 关闭时把重活（分页切片 + 整页前缀和 + 折行估高）从数据流上摘掉：
+   * 面板不可见却仍随 header.filteredLogs 每 2s 重算一次 2000 行是不必要的 CPU 税。
+   * viewLogs 引用恒定（空数组常量），下面几个 memo 因此在关闭态整体短路。 */
+  const viewLogs = isOpen ? filteredLogs : NO_LOG_ENTRIES;
+
   /* 分页在**过滤后的时间线**上做（时间倒序，第 1 页最新）。页码越界时钳回，
    * 并把 store 里的 page 一并归位，避免「看着第 1 页、state 里却是第 9 页」。 */
   const {
@@ -450,8 +460,8 @@ export function LogPanel() {
     page: safePage,
     totalPages,
   } = useMemo(
-    () => selectPageLogs(filteredLogs, page, pageSize),
-    [filteredLogs, page, pageSize],
+    () => selectPageLogs(viewLogs, page, pageSize),
+    [viewLogs, page, pageSize],
   );
 
   /* 第 1 页用**锚定**窗口（见 store 的 anchorId）：不锚定时窗口整体前移，每来一条
@@ -464,15 +474,15 @@ export function LogPanel() {
   const anchored = useMemo(
     () =>
       safePage === 1
-        ? selectFirstPageWindow(filteredLogs, anchorId, pageSize)
+        ? selectFirstPageWindow(viewLogs, anchorId, pageSize)
         : null,
-    [safePage, filteredLogs, anchorId, pageSize],
+    [safePage, viewLogs, anchorId, pageSize],
   );
   const visibleLogs = anchored ? anchored.entries : rawPageLogs;
   /* 当前窗口之后还有多少条更新的日志（锚定窗口直接给出；历史页则按页码算）。 */
   const unseenAfterView = anchored
     ? anchored.truncatedFromEnd
-    : countAfterPage(filteredLogs.length, safePage, pageSize);
+    : countAfterPage(viewLogs.length, safePage, pageSize);
 
   /* 连续重复行折叠只影响显示（见 log-store 的 dedupeRepeats），不改时间线。 */
   const pageLogs = useMemo(() => dedupeRepeats(visibleLogs), [visibleLogs]);
