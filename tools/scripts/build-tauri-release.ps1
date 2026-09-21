@@ -59,8 +59,21 @@ $assetsDir = Join-Path $TAURI_DIR "splash-assets"
 if (-not (Test-Path $assetsDir)) { New-Item -ItemType Directory -Force $assetsDir | Out-Null }
 $splash = Join-Path $PROJECT_ROOT "public\splash.html"
 if (Test-Path $splash) {
-    Copy-Item -Force $splash (Join-Path $TAURI_DIR "splash-assets\splash.html")
-    Copy-Item -Force $splash (Join-Path $TAURI_DIR "splash-assets\index.html")
+    # 与 scripts/launcher-core/splash-assets.mjs 及 src-tauri/build.rs 同判据：内容相同不写盘。
+    # 无条件 Copy-Item -Force 每次构建都会刷新 mtime，而 /api/update-check 的脏检测指纹
+    # 只看 mtime+size（无内容 hash），会让运行中的会话在每次构建后误报「需重编壳」。
+    foreach ($name in @("splash.html", "index.html")) {
+        $dest = Join-Path $assetsDir $name
+        if (Test-Path $dest) {
+            $srcBytes = [System.IO.File]::ReadAllBytes($splash)
+            $dstBytes = [System.IO.File]::ReadAllBytes($dest)
+            if ($srcBytes.Length -eq $dstBytes.Length -and
+                [System.Linq.Enumerable]::SequenceEqual($srcBytes, $dstBytes)) {
+                continue
+            }
+        }
+        Copy-Item -Force $splash $dest
+    }
 } else {
     Log "[警告] 未找到 public/splash.html，构建出的壳将缺少启动页（窗口可能黑屏）"
 }
