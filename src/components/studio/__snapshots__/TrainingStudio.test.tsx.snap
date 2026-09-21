@@ -690,7 +690,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-center font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 inputmode="decimal"
                 type="text"
                 value="0.0001"
@@ -855,7 +855,7 @@ exports[`TrainingStudio > 挂载后拉取底模与训练任务列表，并渲染
                 </svg>
               </button>
               <input
-                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-center font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                class="text-ink-bright h-[24px] min-w-[36px] flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 inputmode="decimal"
                 type="text"
                 value="0"
