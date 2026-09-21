@@ -349,18 +349,19 @@ pnpm theme:check    # 棘轮检查：未豁免的写死色值只许降不许升
 
 **本项目已有的语义色 token**（新增前先查这张表，别再写死字面量）：
 
-| 语义       | token / 类名                                   | 用途                                                        |
-| ---------- | ---------------------------------------------- | ----------------------------------------------------------- |
-| 品牌主色   | `--color-primary` → `primary`                  | 浅色底下当**底**用（`bg-primary/15`）                       |
-| 品牌文字档 | `--color-primary-strong` → `primary-strong`    | 浅底上的品牌**文字/图标**（原 `violet-700` / `violet-400`） |
-| 品牌实心档 | `--color-primary-500` / `--color-primary-600`  | 实心按钮底、spinner 描边（原 `violet-500` / `violet-600`）  |
-| 品牌浅底   | `--color-primary-soft`                         | 图标托底、选中项底                                          |
-| 强调/品红  | `--color-accent` / `--color-accent-soft`       | 第二品牌色                                                  |
-| 成功       | `--color-success` / `--color-success-strong`   | 状态绿（原 `emerald-*`）                                    |
-| 警告       | `--color-warning` / `--color-warning-strong`   | 待处理/排队（原 `amber-*`）                                 |
-| 危险       | `--destructive` / `--color-danger-strong`      | 失败/删除（原 `red-*`）                                     |
-| 信息       | `--color-info` / `--color-info-strong`         | 链接/提示（原 `cyan-*` / `blue-*`）                         |
-| 极光晕     | `--color-aurora-violet` / `-cyan` / `-magenta` | 装饰性背景光晕的**色相**（强度由调用处决定）                |
+| 语义       | token / 类名                                        | 用途                                                                                                                                                     |
+| ---------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 品牌主色   | `--color-primary` → `primary`                       | 浅色底下当**底**用（`bg-primary/15`）                                                                                                                    |
+| 品牌文字档 | `--color-primary-strong` → `primary-strong`         | 浅底上的品牌**文字/图标**（原 `violet-700` / `violet-400`）                                                                                              |
+| 品牌实心档 | `--color-primary-500` / `--color-primary-600`       | 实心按钮底、spinner 描边（原 `violet-500` / `violet-600`）                                                                                               |
+| 品牌浅底   | `--color-primary-soft`                              | 图标托底、选中项底                                                                                                                                       |
+| 强调/品红  | `--color-accent` / `--color-accent-soft`            | 第二品牌色                                                                                                                                               |
+| 成功       | `--color-success` / `--color-success-strong`        | 状态绿（原 `emerald-*`）                                                                                                                                 |
+| 警告       | `--color-warning` / `--color-warning-strong`        | 待处理/排队（原 `amber-*`）                                                                                                                              |
+| 危险       | `--destructive` / `--color-danger-strong`           | 失败/删除（原 `red-*`）                                                                                                                                  |
+| 信息       | `--color-info` / `--color-info-strong`              | 链接/提示（原 `cyan-*` / `blue-*`）                                                                                                                      |
+| 极光晕     | `--color-aurora-violet` / `-cyan` / `-magenta`      | 装饰性背景光晕的**色相**（强度由调用处决定）                                                                                                             |
+| 节点参数值 | `--color-widget-value` / `--color-widget-value-dim` | 画布节点（WorkflowNode / 子图 / rgthree）参数行的值文本：未连线取主档、已连线取低一档（暗色档=纯白、已连线比纯白暗一档；浅色档不照抄白，否则白底上消失） |
 
 **「同一个原色在两个位置上取不同值」是正常的，别用同一份写死值糊过去**：
 品牌紫 `#7c5cfc` 当底色可以、当浅底上的文字色对比度不够 —— 所以有
