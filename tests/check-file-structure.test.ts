@@ -24,6 +24,7 @@
  * 调用，且内部用 process.cwd() 定位扫描根；复用同一调用方式才等价于真实门禁。
  */
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -753,7 +754,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   // ISSUE #412 的判据——不真的动本机进程。
   //
   // 造数据用 `{ Id, Path, Cmd, Name }`：Name 为 `app.exe`（壳）或启动器 exe 名
-  // （`start-tauri.exe` 等）。`Name='xxx'` 按名过滤；`ProcessId=<n>` 用来回答
+  // （`app.exe`）。`Name='xxx'` 按名过滤；`ProcessId=<n>` 用来回答
   // 「我是谁 / 我爹是谁」（`Test-UnattendedBuild` 靠它判双击 / 由启动器拉起），
   // 桩件查自身时如实回 `$PID`，查父进程时回 `opts.parent`。
   const guardScript = (
@@ -913,31 +914,6 @@ Write-Output ("|END")
   );
 
   it.skipIf(!psExe)(
-    "启动器还在跑时不自动回收，改为中止并点名要求先结束启动器（ISSUE #412）",
-    () => {
-      const root = process.cwd();
-      const json = JSON.stringify([
-        {
-          Id: 721,
-          Path: join(root, "src-tauri", "target", "release", "app.exe"),
-          Cmd: "",
-          Name: "app.exe",
-        },
-        {
-          Id: 722,
-          Path: join(root, "start-tauri", "start-tauri.exe"),
-          Cmd: "",
-          Name: "start-tauri.exe",
-        },
-      ]);
-      const out = runGuard(assertShellScript(json, { parent: "pwsh.exe" }));
-      expect(out).toContain("CODE=1");
-      expect(out).toContain("KILLED=0");
-      expect(out).toContain("请先结束启动器");
-    },
-  );
-
-  it.skipIf(!psExe)(
     "双击构建（父进程 explorer）没人能确认，占用一律自动回收后继续",
     () => {
       const root = process.cwd();
@@ -948,12 +924,6 @@ Write-Output ("|END")
           Cmd: "",
           Name: "app.exe",
         },
-        {
-          Id: 732,
-          Path: join(root, "start-tauri", "start-tauri.exe"),
-          Cmd: "",
-          Name: "start-tauri.exe",
-        },
       ]);
       const out = runGuard(assertShellScript(json, { parent: "explorer.exe" }));
       expect(out).toContain("CODE=0");
@@ -962,334 +932,54 @@ Write-Output ("|END")
     },
   );
 
-  /**
-   * ISSUE #621：发布构建第二步（打包 start-tauri.exe）在清理产物时报
-   * 「无法清理 start-tauri，可能被其他程序占用（如 start-tauri.exe 仍在运行）」，
-   * 而用户刚刚关掉的是**桌面窗口**——启动器自己是独立 exe，关窗并不让它退出，
-   * 它继续锁着 `start-tauri\_internal\*.dll`。旧提示既指不出是谁占着（没查进程表），
-   * 动作也不对（叫用户去关一个已经关了的窗口）。
-   *
-   * 现在打包脚本编译/打包前先经 `Assert-LauncherNotRunning` 自查启动器，命中即
-   * 点名 PID + 给 `taskkill /PID <pid> /T /F`；这里锁住「哪些进程算命中」。
-   *
-   * 判据后来补了第二条（`-ProductDir`）：**占用者不一定启动器 exe 本身**。启动器拉起的
-   * dev server（node → pnpm → next）会把 `start-tauri\_internal\*.dll` 映射进自己的进程
-   * （实测 pnpm 侧的 VCRUNTIME140.dll 就取自产物目录），启动器异常退出后它们残留成孤儿，
-   * 目录照样删不掉 —— 而按 exe 名 / 路径判断的判据在这里查到 0 个启动器，于是清理失败，
-   * 提示还在猜「是不是启动器没关」，用户照做无效。
-   */
-  const assertLauncherScript = (
-    procsJson: string,
-    opts: { processes?: unknown[]; productDir?: string } = {},
-  ): string => {
-    const dirArg = opts.productDir ? ` -ProductDir "${opts.productDir}"` : "";
-    return (
-      guardScript(procsJson, { processes: opts.processes }).replace(
-        "function Log { param([string]$Msg) Write-Output $Msg }",
-        "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
-      ) +
-      `
-$code = Assert-LauncherNotRunning -ProjectRoot $root -Purpose "打包启动器"${dirArg}
-Write-Output ("CODE=" + $code)
-Write-Output ("|END")
-`
-    );
-  };
-
-  it.skipIf(!psExe)("启动器在跑时打包被拦下，并点名 PID（ISSUE #621）", () => {
-    const root = process.cwd();
-    const json = JSON.stringify([
-      {
-        Id: 811,
-        Path: join(root, "start-tauri", "start-tauri.exe"),
-        Cmd: "",
-        Name: "start-tauri.exe",
-      },
-    ]);
-    const out = runGuard(assertLauncherScript(json));
-    expect(out).toContain("CODE=1");
-    expect(out).toContain("正在运行的启动器：PID 811");
-    expect(out).toContain("taskkill /PID <上面的 PID> /T /F");
-  });
-
-  it.skipIf(!psExe)(
-    "没有启动器在跑时打包照常继续，别处的同名进程不算占用",
-    () => {
-      const json = JSON.stringify([
-        {
-          Id: 821,
-          Path: "D:\\other\\start-tauri.exe",
-          Cmd: "",
-          Name: "start-tauri.exe",
-        },
-        { Id: 822, Path: "D:\\other\\app.exe", Cmd: "", Name: "app.exe" },
-      ]);
-      const out = runGuard(assertLauncherScript(json));
-      expect(out).toContain("CODE=0");
-      expect(out).not.toContain("正在运行的启动器");
-    },
-  );
-
-  it.skipIf(!psExe)("三个启动器产物目录（-dev / -standalone）都算占用", () => {
-    const root = process.cwd();
-    const json = JSON.stringify([
-      {
-        Id: 831,
-        Path: join(root, "start-tauri-dev", "start-tauri-dev.exe"),
-        Cmd: "",
-        Name: "start-tauri-dev.exe",
-      },
-    ]);
-    const out = runGuard(assertLauncherScript(json));
-    expect(out).toContain("CODE=1");
-    expect(out).toContain("PID 831");
-  });
-
-  it.skipIf(!psExe)(
-    "启动器进程的命中同样按 exe 真实路径，别处的同名进程不算",
-    () => {
-      const json = JSON.stringify([
-        {
-          Id: 741,
-          Path: "D:\\other\\start-tauri.exe",
-          Cmd: "",
-          Name: "start-tauri.exe",
-        },
-      ]);
-      const out = runGuard(guardScript(json));
-      expect(out).toContain("HITS=0");
-    },
-  );
-
-  it.skipIf(!psExe)(
-    "启动器已退出、它拉起的 dev server 还在跑时同样中止，并点名真正的占用者",
-    () => {
-      // 现场形态：启动器异常退出（本次即「编排器加载模块失败」），它拉起的 dev server
-      // 残留成孤儿，把 start-tauri\_internal\*.dll 映射在自己进程里。旧判据在这里查到
-      // 0 个启动器，打包一路走到 Remove-Item 才失败，且提示还在猜「启动器没关吧」。
-      const root = process.cwd();
-      const productDir = join(root, "start-tauri");
-      const processes = [
-        {
-          Id: 921,
-          Name: "pnpm-native",
-          Path: "C:\\corepack\\pnpm-native.exe",
-          Modules: [join(productDir, "_internal", "VCRUNTIME140.dll")],
-        },
-      ];
-      const out = runGuard(
-        assertLauncherScript(JSON.stringify([]), { processes, productDir }),
-      );
-      expect(out).toContain("CODE=1");
-      expect(out).toContain("正在占用的进程：PID 921");
-      expect(out).toContain(
-        `← ${join(productDir, "_internal", "VCRUNTIME140.dll")}`,
-      );
-      expect(out).toContain("taskkill /PID 921 /T /F");
-    },
-  );
-
-  it.skipIf(!psExe)(
-    "产物目录的占用只认「文件被映射进该进程」，别处的模块不算",
-    () => {
-      const root = process.cwd();
-      const productDir = join(root, "start-tauri");
-      const processes = [
-        {
-          Id: 931,
-          Name: "node",
-          Path: "D:\\nodejs\\node.exe",
-          Modules: [
-            "C:\\Windows\\System32\\kernel32.dll",
-            "D:\\nodejs\\node.dll",
-          ],
-        },
-      ];
-      const out = runGuard(
-        assertLauncherScript(JSON.stringify([]), { processes, productDir }),
-      );
-      expect(out).toContain("CODE=0");
-    },
-  );
-
-  it.skipIf(!psExe)(
-    "启动器自己也在持有者名单里时不重复点名（同一个 PID 只报一次）",
-    () => {
-      const root = process.cwd();
-      const productDir = join(root, "start-tauri");
-      const launcherExe = join(productDir, "start-tauri.exe");
-      const processes = [
-        {
-          Id: 811,
-          Name: "start-tauri",
-          Path: launcherExe,
-          Modules: [launcherExe],
-        },
-      ];
-      const json = JSON.stringify([
-        { Id: 811, Path: launcherExe, Cmd: "", Name: "start-tauri.exe" },
-      ]);
-      const out = runGuard(
-        assertLauncherScript(json, { processes, productDir }),
-      );
-      expect(out).toContain("CODE=1");
-      expect(out).toContain("正在运行的启动器：PID 811");
-      expect(out).not.toContain("正在占用的进程");
-    },
-  );
-
-  it.skipIf(!psExe)("清理失败时同时给出真实异常与查出来的占用者", () => {
-    const root = process.cwd();
-    const productDir = join(root, "start-tauri");
-    const processes = [
-      {
-        Id: 941,
-        Name: "pnpm-native",
-        Path: "C:\\corepack\\pnpm-native.exe",
-        Modules: [join(productDir, "_internal", "VCRUNTIME140.dll")],
-      },
-    ];
-    const out = runGuard(
-      guardScript(JSON.stringify([]), { processes }) +
-        `
-Write-ProductDirLockHint -Purpose "打包启动器" -Name "start-tauri" -Directory "${productDir}" -Detail "另一个程序正在使用此文件，进程无法访问。"
-`,
-    );
-    expect(out).toContain("系统报错：另一个程序正在使用此文件，进程无法访问。");
-    expect(out).toContain("PID 941");
-    expect(out).toContain("taskkill /PID 941 /T /F");
-    // 查到占用者就不再给「权限问题 / 杀毒软件」那条分流（它是查不到人时的兜底）
-    expect(out).not.toContain("没有查到持有文件的进程");
-  });
 });
 
-describe("启动链路「不抢前台」判据（python 启动器）", () => {
+describe("启动链路「不抢前台」判据（唯一的入口是壳）", () => {
   /**
    * 应用启动要几十秒，用户很可能切去别的窗口干活；加载完成若是照直把窗口顶到
-   * 最前面，正在看的内容就被打断。判据收敛在 start_tauri_launcher.py 的
-   * decide_foreground：只有「前台本来就是本应用」「显式冷启动」「唤起已有实例」
-   * 才允许自动给前台；**双击启动也不给**——双击之后切去干别的正是常态，等
-   * 正式窗口冒出来时用户早就在别处工作了（曾按「用户刚点的启动」放行，结果
-   * 连同交接复核的 give 一起把用户打断两次）。其余情形一律留在任务栏并用
-   * 任务栏闪烁提示（Rust 壳侧 show_main_window_without_focus 执行）。
+   * 最前面，正在看的内容就被打断（ISSUE #359）。判据现在只在**壳**里：
+   * `shell_launch::decide_front_when_self_launched()` 默认 false（双击启动不给
+   * 前台，窗口进任务栏 + 闪烁提醒），`read_foreground_env()` 只让显式注入的
+   * `COMFYAPP_FOREGROUND` 覆盖它（脚本 / 终端调用场景）。
    *
-   * Win32 前台窗口在 Linux CI 上取不到，因此按本文件里 PowerShell 桩件的同一套路：
-   * 把函数源码从启动器里抽出来、打桩 _window_process_name 后直接断言判决表，
-   * 锁住「默认不抢前台」这条用户可感知行为。
+   * 「唤起已有实例」不再走「猜前台」这条路：壳的第二个进程经
+   * `single_instance::another_instance_running()` 找到运行中的实例、发焦点事件，
+   * `spawn_focus_waiter` 收到后以 `request_focus = true` 显示主窗——用户显式
+   * 意图，必须给前台。两条判据各管一段，互不重叠。
+   *
+   * 为什么断言源码而不是真跑：Win32 前台窗口在 Linux / CI 上取不到，而这两个
+   * 函数是编译期常量决策，源码就是判据本体（历史实现是 python 启动器的
+   * `decide_foreground()` + PowerShell 桩件真跑，启动器已随 ISSUE #784 移除）。
    */
-  const LAUNCHER_PY = join(process.cwd(), "scripts", "start_tauri_launcher.py");
-  const python = (() => {
-    for (const candidate of ["python3", "python"]) {
-      try {
-        execFileSync(candidate, ["-c", "import sys; sys.exit(0)"], {
-          stdio: "ignore",
-        });
-        return candidate;
-      } catch {
-        // 试下一个候选
-      }
-    }
-    return "";
-  })();
-
-  /** 抽 decide_foreground / foreground_window_process 的源码，打桩后跑一次判决。 */
-  const decide = (call: string, foregroundProcess: string): string => {
-    const script = `
-import ast, json, sys
-
-src = open(${JSON.stringify(LAUNCHER_PY)}, encoding="utf-8").read()
-tree = ast.parse(src)
-wanted = {"decide_foreground", "foreground_window_process", "_foreground_window_path"}
-blocks = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
-namespace = {}
-exec(compile(ast.Module(body=blocks, type_ignores=[]), "<stub>", "exec"), namespace)
-
-messages = []
-namespace["log"] = lambda msg: messages.append(str(msg))
-namespace["foreground_window_process"] = lambda: ${JSON.stringify(foregroundProcess)}
-# 按检出窗口识别前缀（launch-and-build.md §1.4）：stub 里置空 = 未初始化的
-# 旧行为（仅按进程名判定）；这些用例锁的是前台判决表本身，不是检出隔离。
-namespace["_SHELL_OWN_PREFIX"] = ""
-
-verdict = namespace["decide_foreground"](${call})
-print("RESULT=" + json.dumps(verdict))
-print("LOG=" + " | ".join(messages))
-`;
-    const proc = spawnSync(python, ["-c", script], { encoding: "utf8" });
-    return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
-  };
-
-  it.skipIf(!python)("用户切走了（前台是别的应用）时不自动抢前台", () => {
-    const out = decide("", "notepad.exe");
-    expect(out).toContain("RESULT=false");
-    expect(out).toContain("foreground denied");
-  });
-
-  it.skipIf(!python)(
-    "双击启动（前台是资源管理器）也不给前台——用户切去干别的正是常态",
-    () => {
-      const out = decide("", "explorer.exe");
-      expect(out).toContain("RESULT=false");
-      expect(out).toContain("foreground denied");
-    },
-  );
-
-  it.skipIf(!python)(
-    "前台本来就是本应用（重启 / 更新后重启）允许给前台",
-    () => {
-      expect(decide("", "app.exe")).toContain("RESULT=true");
-    },
-  );
-
-  it.skipIf(!python)("脚本 / 终端冷启动允许给前台", () => {
-    expect(decide("cold_start=True", "pwsh.exe")).toContain("RESULT=true");
-  });
-
-  it.skipIf(!python)("已有实例被唤起（重复启动）允许给前台", () => {
-    expect(decide("already_running=True", "pwsh.exe")).toContain("RESULT=true");
-  });
-
-  it.skipIf(!python)(
-    "双击入口自身的进程（打包后的 start-tauri.exe）同样不给前台",
-    () => {
-      expect(decide("", "start-tauri.exe")).toContain("RESULT=false");
-    },
-  );
-});
-
-describe("桌面壳 PID 文件的残留窗口（ISSUE #412 附带修复）", () => {
-  /**
-   * `log/launcher/tauri-shell.pid` 是「上一轮 run 的残留」：dev-launcher.ps1 是被
-   * 本次启动器另起的进程，在它写到「壳已启动」那一步之前，文件里还是上一轮的旧 PID。
-   * Windows 会复用 PID，旧号很可能已归某个无关进程——兜底回收路径读到它就会去杀
-   * 不相干的东西。修法是拉起 dev-launcher.ps1 之前先删文件（窗口期内读不到 = 安全）。
-   */
-  const launcher = readFileSync(
-    join(process.cwd(), "scripts", "start_tauri_launcher.py"),
+  const rust = readFileSync(
+    join(process.cwd(), "src-tauri", "src", "shell_launch.rs"),
     "utf8",
   );
 
-  it("拉起 dev-launcher.ps1 之前先清掉上一轮的壳 PID 文件", () => {
-    expect(launcher).toContain("def _reset_shell_pid_file(");
-    const start = launcher.indexOf("def launch_dev_server(");
-    const body = launcher.slice(start, launcher.indexOf("def monitor(", start));
-    expect(body).toContain("_reset_shell_pid_file(project_root)");
-    // 必须在 subprocess.Popen 之前（否则清除会把本次真实 PID 一起删掉）
-    expect(body.indexOf("_reset_shell_pid_file(")).toBeLessThan(
-      body.indexOf("subprocess.Popen("),
+  it("双击启动默认**不**抢前台（判据是常量 false，不是查进程表）", () => {
+    const fn = rust.slice(
+      rust.indexOf("pub fn decide_front_when_self_launched()"),
+      rust.indexOf("pub fn read_foreground_env()"),
     );
+    expect(fn).toMatch(/->\s*bool\s*{\s*false\s*}/);
   });
 
-  it("兜底回收读不到 PID 文件时不做任何猜测性击杀", () => {
-    const body = launcher.slice(
-      launcher.indexOf("def _kill_shell_from_pid_file("),
-      launcher.indexOf(
-        "# ═══",
-        launcher.indexOf("def _kill_shell_from_pid_file("),
-      ),
+  it("显式注入的 COMFYAPP_FOREGROUND 覆盖默认值（脚本 / 终端调用场景）", () => {
+    expect(rust).toContain("pub fn read_foreground_env()");
+    // 空串按「未表态」处理：启动脚本在后台场景会显式写 "0"，而 .env 里留空
+    // 不该被误读成「要抢前台」。
+    expect(rust).toMatch(/value\.is_empty\(\)\s*{[\s\S]{0,80}return None/);
+  });
+
+  it("壳用「读到的注入值 ?? 双击默认值」这一条判据，不另写一份", () => {
+    const lib = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
+      "utf8",
     );
-    expect(body).toContain("except Exception:");
-    expect(body).toContain("return");
+    expect(lib).toContain("shell_launch::read_foreground_env()");
+    expect(lib).toContain("shell_launch::decide_front_when_self_launched");
+    // 启动期不给 → 交给窗口显示那一层执行（它负责「进任务栏 + 闪烁提醒」）
+    expect(lib).toContain("show_main_window_without_focus");
   });
 });
 
@@ -1426,40 +1116,38 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     ).toBeGreaterThanOrEqual(3);
   });
 
-  it("启动器在窗口就绪时拉起交接复核进程", () => {
-    const launcher = readFileSync(
-      join(process.cwd(), "scripts", "start_tauri_launcher.py"),
-      "utf8",
-    );
-    expect(launcher).toContain("def spawn_foreground_watch(");
-    // 三条完成路径（prebuilt / tauri dev / standalone）都要复核
-    expect(
-      launcher.match(/spawn_foreground_watch\(/g)?.length,
-    ).toBeGreaterThanOrEqual(4);
-    expect(launcher).toContain("foreground-watch.log");
+  it("交接复核进程的唯一调用方是启动脚本（Python 启动器已移除）", () => {
+    // 复核进程原先由 Python 启动器在三条完成路径上拉起（prebuilt / tauri dev /
+    // standalone）。启动器随 ISSUE #784 移除后，**没有调用方**是一个必须显式
+    // 记住的现状：判据脚本本身（win32-window-focus.py，判据部分仍被这条与下面
+    // 几条用例断言）留着，谁需要「把系统自动放行的前台还回去」就经它派发。
+    const focus = readFileSync(FOCUS_SCRIPT, "utf8");
+    expect(focus).toContain("def decide_handoff(");
+    expect(focus).toContain("foreground-watch.log");
+    expect(existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py"))).toBe(false);
   });
 
-  it("启动页首次可见时被带到前台（双击启动的反馈，不是「别打断」那一档）", () => {
-    // 现场（ISSUE #576）：双击 `start-tauri.exe`，启动页被文件资源管理器压住，
-    // 用户看到的是「双击了没反应」。根因是**同一套「不抢前台」策略被套在了启动页上**
-    // ——那套策略针对的是几十秒后才冒出来的**应用窗口**（用户可能早已切走）。
-    // 启动页是用户刚刚点下去的直接反馈，必须出现在前面。
-    const launcher = readFileSync(
-      join(process.cwd(), "scripts", "start_tauri_launcher.py"),
+  it("启动页首次可见时被带到前台（双击的直接反馈，不是「别打断」那一档）", () => {
+    // 现场（ISSUE #576）：双击启动入口，启动页被文件资源管理器压住，用户看到的是
+    // 「双击了没反应」。根因是**同一套「不抢前台」策略被套在了启动页上**——那套
+    // 策略针对的是几十秒后才冒出来的**应用窗口**（用户可能早已切走）；启动页是
+    // 用户刚刚点下去的直接反馈，必须出现在前面。
+    //
+    // 启动器移除后这一段的执行者换成壳自己：`setup_splash_window` 里
+    // `bring_splash_to_front`，判据（`should_front_splash` / `run_bring_splash`）
+    // 仍留在复核脚本里，供需要它的一方派发。
+    const lib = readFileSync(
+      join(process.cwd(), "src-tauri", "src", "lib.rs"),
       "utf8",
     );
     const focus = readFileSync(FOCUS_SCRIPT, "utf8");
-    // ① 启动器：启动页一可见就拉一次（one-shot，只做一次）
-    expect(launcher).toContain("def spawn_splash_front(");
-    expect(launcher).toMatch(
-      /if not splash_front_done and find_tauri_window\(\):/,
-    );
-    expect(launcher).toContain("splash_front_done = True");
-    // ② 判据在复核脚本里，复用已验证可靠的前台手段（Alt + AttachThreadInput）
+    expect(lib).toContain("fn bring_splash_to_front(");
+    expect(lib).toMatch(/bring_splash_to_front\(&splash\)/);
+    // 判据在复核脚本里，复用已验证可靠的前台手段（Alt + AttachThreadInput）
     expect(focus).toContain("def should_front_splash(");
     expect(focus).toContain("def run_bring_splash(");
     expect(focus).toContain("focus_window(hwnd)");
-    // ③ 启动页与主窗是两套判据，不许合并成一条
+    // 启动页与主窗是两套判据，不许合并成一条
     expect(focus.indexOf("def should_front_splash(")).toBeGreaterThan(-1);
     expect(focus).toContain("两套判据");
   });
@@ -1560,20 +1248,24 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
       join(process.cwd(), "src-tauri", "src", "lib.rs"),
       "utf8",
     );
-    // 「要不要注入」的判据取自启动模式，且判据只有一处（launch_mode 在 run() 里
-    // 读一次、传下去），不许 setup_standalone_runtime 再自己读一遍
-    expect(rust).toContain("let expect_slow_first_paint = launch_mode != \"standalone\";");
+    // 「要不要注入」的判据取自启动模式，且判据只有一处：`collect()` 里读一次、
+    // 由 `expect_slow_first_paint` 传下去，`setup_standalone_runtime` 不再自己判。
+    expect(rust).toContain('expect_slow_first_paint: launch_mode != "standalone"');
     expect(rust).toContain(
       "watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);",
     );
-    expect(rust).toContain("setup_standalone_runtime(app, &launch_mode)?;");
-    // 读出的启动模式只许有一处（run()），其余调用点都接收判定结果：
-    // 多处读取会让「跳过 sidecar」与「要不要占位」各自漂移
+    // 模式本身由壳自己按「编排器在不在」定（Python 启动器已移除）：
+    // 决定者只有 shell_launch::ensure_launch_mode 一处，
+    // 消费者是 setup_standalone_runtime 一处（后者经环境变量读，因为是它决定
+    // 要不要拉内嵌 server 的那个瞬间）。
+    expect(rust).toContain("shell_launch::ensure_launch_mode(&project_root)");
     expect(
-      rust.match(/let launch_mode = std::env::var\("COMFYAPP_LAUNCH_MODE"\)/g)
-        ?.length,
-      "启动模式判据只许有一处：多处读取会让「跳过 sidecar」与「要不要占位」各自漂移",
-    ).toBe(1);
+      rust.match(/std::env::var\("COMFYAPP_LAUNCH_MODE"\)/g)?.length,
+      "启动模式的读取点只许有三处：collect()（推导首帧看护）+ setup_standalone_runtime" +
+        "（决定起不起 sidecar）+ spawn_sidecar 内的 refuses_dev_fallback（显式 standalone 不许回退 dev）；" +
+        "写入点则只有 shell_launch::ensure_launch_mode 一处",
+    ).toBe(3);
+    expect(rust).toContain("shell_launch::ensure_launch_mode");
   });
 
   it("壳侧启动页也显式置前一次（本地冷启动时无须等复核进程）", () => {
@@ -1893,25 +1585,18 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(splashCap).toContain('"allow-win-minimize"');
   });
 
-  it("自绘启动器的窗口尺寸与启动页同值，且最小化不是空调用", () => {
-    const py = readFileSync(
-      join(process.cwd(), "scripts", "start_tauri_launcher.py"),
-      "utf8",
-    );
+  it("自绘启动器（Python Win32 弹窗）已整体移除，画面只剩一个出口", () => {
+    // 同一张「启动中」画面曾有两个实现（壳内嵌启动页 + 启动器自绘置顶弹窗），
+    // 尺寸/最小化语义各写一份就会改一处、两边不一致。ISSUE #784 的第二轮把
+    // 整个 Python 启动器删掉，画面从此只有壳内嵌的启动页一处 —— 这里把「不再
+    // 长出第二份实现」变成可失败断言，避免下一个人为了「双击反馈」再画一个。
+    expect(
+      existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py")),
+    ).toBe(false);
+    // 启动页那一个出口仍在，且仍有自己的紧凑 / 展开两档尺寸。
     const win = splashWindow();
-    const w = Number(/^SPLASH_W = (\d+)/m.exec(py)?.[1]);
-    const h = Number(/^SPLASH_H = (\d+)/m.exec(py)?.[1]);
-    // 同一张「启动中」画面在本链路有两个实现（壳内嵌启动页 / 启动器 Win32 弹窗），
-    // 尺寸各写一份就会改一处、两边不一致——这里盯死必须同值。
-    expect(w).toBe(win.width);
-    expect(h).toBe(win.height);
-
-    // 置顶弹窗不会被 ShowWindow(SW_MINIMIZE) 最小化，必须走「隐藏 + 撤置顶」，
-    // 且用定时器维持（否则其它逻辑一 ShowWindow 就把它翻回来）。
-    expect(py).toContain("def _minimize");
-    expect(py).toContain("def _keep_minimized");
-    expect(py).toContain("SW_HIDE");
-    expect(py).toMatch(/if self\._minimized:\s*\n\s*self\._keep_minimized\(\)/);
+    expect(win.width).toBeGreaterThan(0);
+    expect(win.height).toBeGreaterThan(0);
   });
 
   it("日志面板吃掉窗口剩余高度（展开后不是一条窄缝，也不留空白）", () => {

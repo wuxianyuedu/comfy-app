@@ -18,6 +18,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createThrottleGate } from "~/components/ui/use-throttled-progress";
+import { errorMessage } from "~/lib/error-message";
 import {
   startLocalGenerate,
   type TaskProgressNode,
@@ -112,6 +114,8 @@ export function WorkflowCanvasNodePreview({
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。 */
+  const progressGate = useRef(createThrottleGate());
   /* 画布节点页签的视图模式：
    * "edit" = 编辑对外参数（参数连线画布，禁止执行生成）
    * "use"  = 实际使用（简化视图，可生成、可看结果） */
@@ -185,6 +189,8 @@ export function WorkflowCanvasNodePreview({
     source: "canvas-node",
     handlers: {
       onProgress: (taskId, pct, node) => {
+        /* 高频回调：按任务节流（规范 16 §16.2.4.68）。 */
+        if (!progressGate.current.allow(taskId)) return;
         setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
       },
       onLog: (taskId, entry) => {
@@ -317,8 +323,10 @@ export function WorkflowCanvasNodePreview({
         /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 / 产物 /
          * 终态写进运行登记表 —— 切页签回来才有的可恢复。 */
         watchWorkflowRun(taskId, {
-          onProgress: (_taskId, pct, node) =>
-            setPhase({ kind: "running", pct, ...(node ? { node } : {}) }),
+          onProgress: (_taskId, pct, node) => {
+            if (!progressGate.current.allow(taskId)) return;
+            setPhase({ kind: "running", pct, ...(node ? { node } : {}) });
+          },
           onLog: (id, entry) => {
             appendWorkflowRunLog(id, entry);
           },
@@ -344,7 +352,7 @@ export function WorkflowCanvasNodePreview({
     } catch (e) {
       setPhase({
         kind: "failed",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e, String(e)),
       });
     }
   }

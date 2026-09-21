@@ -11,6 +11,7 @@ import { waitForComfyReady } from "~/lib/comfy/comfy-readiness-client";
 import { lastSegments } from "~/lib/path-display";
 import { asRecord } from "~/lib/is-record";
 import { clampPct } from "~/lib/progress";
+import { sleep } from "~/lib/with-timeout";
 import { comfyImageUrl } from "~/lib/media/media-url";
 import {
   parseValidationErrorsJson,
@@ -237,7 +238,7 @@ export async function pollTask(
     } catch {
       /* 暂时性失败 —— 继续轮询 */
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await sleep(2000);
   }
 }
 

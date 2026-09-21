@@ -14,6 +14,8 @@
  */
 
 import { formatClock } from "~/lib/time-format";
+import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
+import { checkedHandler } from "~/lib/form-props";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNodes } from "@xyflow/react";
@@ -390,7 +392,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
    * 瞬间消失）；关闭弹窗后入口按钮与弹窗一起隐藏。 */
   if (!debugMode && !open) return null;
 
-  const visibleAll = logs.slice(-300);
+  /* 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——
+   * 尾部窗口收在 `~/lib/page-window`（规范 16 §16.2.4.67）。 */
+  const visibleAll = tailWindow(logs, LOG_MODAL_MAX_ROWS);
   const visible =
     filter === "all"
       ? visibleAll
@@ -583,7 +587,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                 <input
                   type="checkbox"
                   checked={autoscroll}
-                  onChange={(event) => setAutoscroll(event.target.checked)}
+                  onChange={checkedHandler(setAutoscroll)}
                   className="h-3.5 w-3.5 cursor-pointer accent-violet-500"
                 />
                 自动滚动

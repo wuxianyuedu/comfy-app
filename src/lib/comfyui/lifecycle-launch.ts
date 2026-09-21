@@ -17,7 +17,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { getExitPolicy } from "../app-settings/app-settings.server";
-import { COMFYUI_DEFAULT_PORT } from "../endpoints";
+import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl } from "../endpoints";
 import { INLINE_STDERR_MAX, clampText } from "../text-clamp";
 import type { getSettingsSync } from "../app-settings/app-settings.server";
 import { resolveComfyLaunchPlan } from "./launch-path";
@@ -41,6 +41,11 @@ import {
   createRecentOutputLedger,
   waitForComfyReady,
 } from "./lifecycle-wait";
+import {
+  reportKeepAliveExit,
+  startComfyExitWatcher,
+  type ComfyExitReport,
+} from "./lifecycle-exit";
 
 export type EnsureResult = { ok: boolean; base: string | null; detail: string };
 
@@ -66,6 +71,14 @@ export interface LaunchHost {
   clearComfyStopping: () => void;
   /** 本地时间戳（保活重定向文件名用）。 */
   localTimestamp: () => string;
+  /** 记下「本次会话开始了」（写 `log/services/comfyui-last-session.json`）。 */
+  markSessionStart: (info: {
+    pid: number | null;
+    mode: "keepAlive" | "bound";
+  }) => void;
+  /** 记下「本次会话结束了」。应用自己也一起没了时这一步不会发生 ——
+   *  那正是下次启动要反推的情况。 */
+  markSessionEnd: (report: ComfyExitReport) => void;
   /** 探测 ComfyUI 是否可达（注入以避免 `本模块 → lifecycle.ts` 的循环依赖）。 */
   probeComfyUi: (timeoutMs?: number) => Promise<string | null>;
 }
@@ -203,6 +216,9 @@ async function launchKeepAliveMode(
   appendRuntimeLog(
     `[keepAlive-spawn] 完整输出重定向：${kaOutLog} 与 ${kaErrLog}`,
   );
+  /* 会话开始标记：pid 这里拿不到（真实进程是 Start-Process 的孙进程），退出
+   * 监督器见到它时会知道「活了多久」，对账只关心「有没有结局」。 */
+  host.markSessionStart({ pid: null, mode: "keepAlive" });
   /* 中介 powershell「立即」退出；Start-Process 参数被拒等拉起失败都发生在
    * 中介里（目标进程根本没被拉起）。等它退出并带出 stderr，失败立刻报错
    * 返回 —— 否则会跌进下面无 deadline 的端口轮询，把「启动中…」挂死。 */
@@ -300,9 +316,38 @@ async function launchKeepAliveMode(
         : `ComfyUI 启动失败：保活拉起后进程未出现。${common}`;
     },
   });
-  if (!result.ok) note(result.detail);
+  if (!result.ok) {
+    note(result.detail);
+    return result;
+  }
+
+  /* 就绪之后起**退出监督**：保活模式没有子进程句柄（Windows 上是 Start-Process
+   * 的孙进程、POSIX 上已 unref），「它什么时候没的」只能从外面看进程表 —— 没有
+   * 这一条，用户能看到的只有下一次状态轮询里的「未运行」，原因一个字都没有，
+   * 正是「莫名退出」这个说法的来源。
+   *
+   * 重新拉起前先停掉上一次的监督器，否则它会一直盯着旧会话、把新进程当成
+   * 「旧的那个回来了」。 */
+  keepAliveExitWatcher?.stop();
+  keepAliveExitWatcher = startComfyExitWatcher({
+    findPid: async () => (await findPidForMainPy(plan.mainPy)) ?? null,
+    isStopped: () => st.stopRequested === true,
+    onExit: (facts) => {
+      const report = reportKeepAliveExit({
+        facts,
+        stopRequested: st.stopRequested === true,
+        appendSessionBanner: (b) => appendSessionBanner("end", b),
+        appendRuntimeLog,
+        log: note,
+      });
+      host.markSessionEnd(report);
+    },
+  });
   return result;
 }
+
+/** 当前保活会话的退出监督器（同一时刻最多一个，重新拉起前会被停掉）。 */
+let keepAliveExitWatcher: { stop: () => void } | null = null;
 
 /**
  * bound 模式：直连 spawn（与父同组），stdio 直管，等就绪靠「已知子进程 PID
@@ -342,6 +387,7 @@ async function launchBoundMode(
   appendRuntimeLog(
     `[spawn] pid=${child.pid} cmd=${plan.cmd} args=${JSON.stringify(args)} cwd=${plan.cwd}`,
   );
+  host.markSessionStart({ pid: child.pid ?? null, mode: "bound" });
 
   // 最近输出留底：进程秒退时从里面提取「No module named 'X'」给出可行动的报错
   const ledger = createRecentOutputLedger();
@@ -351,17 +397,27 @@ async function launchBoundMode(
   });
   child.stdout?.on("data", outSink);
   child.stderr?.on("data", outSink);
+  /* 会话起点：存活时长基于它算（「跑了 3 分钟就死」与「刚起就死」是两种问题）。 */
+  const spawnedAt = Date.now();
   child.on(
     "exit",
     createChildExitHandler({
-      // 会话结束横幅（ANSI 亮黄）：无论自然退出还是用户手动关闭，
-      // 都在日志里明确划上会话终点，方便区分前后两次启动。
-      banner: (code) => `■ ComfyUI 进程已退出（code=${String(code)}）`,
+      /* 横幅直接写「为什么退出」：此前只有 `code=...`，而用户的问题是
+       * 「它是由什么退出的」—— 结论该出现在日志里，不该留给读者去推。 */
+      banner: (report) => `■ ComfyUI 进程已退出：${report.reason}`,
       appendSessionBanner: (b) => appendSessionBanner("end", b),
+      appendRuntimeLog,
       log: note,
       clearChild: () => {
         if (st.child === child) st.child = undefined;
       },
+      context: () => ({
+        pid: child.pid ?? null,
+        uptimeMs: Date.now() - spawnedAt,
+        stopRequested: st.stopRequested === true,
+        mode: "bound",
+      }),
+      onExitReport: (report) => host.markSessionEnd(report),
     }),
   );
 
@@ -400,7 +456,7 @@ export async function probeChildReady(
   const childPid = child.pid;
   const listenPort = childPid ? await findPidListeningPort(childPid) : null;
   if (!listenPort) return null;
-  const base = `http://127.0.0.1:${listenPort}`;
+  const base = comfyUiBaseUrl(listenPort);
   try {
     const r = await fetch(`${base}/system_stats`, {
       signal: AbortSignal.timeout(2000),

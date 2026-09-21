@@ -14,7 +14,7 @@
  * @module comfyui/executor-scheduler — 队列调度与心跳（executor 的调度层）
  */
 import WebSocket from "ws";
-import { errorText } from "~/lib/error-message";
+import { errorText, errorMessage } from "~/lib/error-message";
 import { logger } from "~/lib/core/logger";
 import { state, log, MAX_CONCURRENCY } from "./runner-state";
 import { registerQueueKick } from "./executor-continuation";
@@ -76,7 +76,7 @@ export async function processQueue() {
    * 跑过，`s.active` 永远停在 1，此后所有 enqueue 都被这个假占用的槽位堵死
    * （界面表现：任务永远 QUEUED 0%）。所以必须把 rejection 兜进统一收口路径。 */
   void executeViaComfyCli(job).catch(async (err) => {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err, String(err));
     log(job.taskId, "error", `工作流启动异常：${msg}`);
     try {
       await finalizeFailure(job.taskId, "", msg);

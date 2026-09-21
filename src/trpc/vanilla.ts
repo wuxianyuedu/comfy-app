@@ -2,12 +2,7 @@ import { createTRPCClient, httpBatchStreamLink } from "@trpc/client";
 import SuperJSON from "superjson";
 
 import type { AppRouter } from "~/server/api/root";
-
-function getBaseUrl() {
-  if (typeof window !== "undefined") return window.location.origin;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return `http://localhost:${process.env.COMFYAPP_PORT ?? process.env.PORT ?? 3100}`;
-}
+import { getBaseUrl } from "./base-url";
 
 /**
  * 给用不了 `~/trpc/react` 那套 React hook 的纯 TS 模块（例如

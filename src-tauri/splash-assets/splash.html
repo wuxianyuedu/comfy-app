@@ -307,6 +307,14 @@
       ready: '启动完成',
       error: '启动失败',
       timeout: '仍在启动',
+      // 壳自编排（ISSUE #784）后新增的三档：壳自己会在「编排器还没写状态」的
+      // 窗口期写一份 fallback 快照（见 src/lib/shell/launch-diagnostics.ts），
+      // 状态文件真读不到时 Rust 侧回 no-status-file。标签给全，页面才不会把
+      // 这几档显示成裸的英文 phase 名。
+      'shell-boot': '桌面壳已启动',
+      'shell-prepare': '准备启动环境',
+      'shell-orchestrating': '拉起本地服务',
+      'no-status-file': '等待状态文件',
     };
 
     function fmtTime(sec) {
@@ -598,6 +606,31 @@
       logPanel.scrollTop = logPanel.scrollHeight;
     }
 
+    /** 把「读不到日志」翻译成「现在看哪里、下一步做什么」。
+     *
+     * 事实一律来自壳侧报告（`get_launch_status` 的 diagnostics：壳写下的路径
+     * 与项目根），不猜文件名 —— 手验反馈「启动读不到日志，启动状态文件也没有」
+     * 的根因就是旧提示把用户指去两份此刻恰好为空的文件（ISSUE #784）。
+     * 取不到报告（纯 Web / 壳过旧）才退回「重编壳」那一句。
+     */
+    async function emptyLogGuidance() {
+      const lines = ['（面板暂时读不到日志。）'];
+      const status = await fetchStatus();
+      const diag = (status && status.diagnostics) || null;
+      if (diag) {
+        lines.push('桌面壳已接手编排，但日志还没落地。现在按顺序看这几处：');
+        lines.push(`  1) 壳侧编排链路（壳自己写的，启动期最先有内容）：${diag.launchLog || '(未知)'}`);
+        lines.push(`  2) 壳日志（release）：${diag.shellLog || '(未知)'}`);
+        lines.push(`  3) 启动状态文件：${diag.statusFile || '(未知)'}`);
+        if (diag.projectRoot) lines.push(`项目根：${diag.projectRoot}`);
+        lines.push('编排器（dev-launcher.mjs）写自己那份日志之前，第 1 份就是唯一的现场。');
+        return lines.join('\n');
+      }
+      lines.push('状态里连诊断路径都没带（说明桌面壳过旧），请重编壳后重试：');
+      lines.push('  cd src-tauri && cargo build --release --features custom-protocol');
+      return lines.join('\n');
+    }
+
     async function fetchLog() {
       const data = await invoke('get_launch_log');
       if (typeof data === 'string' && data) {
@@ -606,17 +639,11 @@
       } else {
         logFailCount++;
         /* 连续拿不到日志要能区分两种成因，否则用户看到空面板不知道该做什么：
-         *   - 壳版本过旧 / IPC 不可用（拿不到数据）→ 提示重编壳；
-         *   - 日志确实还没产生（启动第一步就卡住）→ 提示看状态文件与磁盘日志。 */
+         *   - 日志确实还没产生（启动第一步卡住 / 编排器还没起）→ 给出壳写下的
+         *     诊断路径（emptyLogGuidance，判据是壳的报告而不是页面自己猜）；
+         *   - 壳版本过旧 / IPC 不可用（连路径都拿不到）→ 提示重编壳。 */
         if (logFailCount === 4 && !logPre.dataset.raw) {
-          renderLog(
-            '（暂时读不到日志。）\n' +
-              '若启动器刚启动，日志可能还没写入：稍等几秒后本面板会自动刷新。\n' +
-              '持续为空时按顺序看这两处：\n' +
-              '  1) 启动状态文件 run/launch-status.json（记录执行到哪一步、什么阶段失败）\n' +
-              '  2) log/launcher/dev-launcher.log 与 log/launcher/dev-launcher-stderr.log\n' +
-              '若两处都取不到（命令不可用）→ 桌面壳版本过旧，重编：cd src-tauri && cargo build --release --features custom-protocol',
-          );
+          renderLog(await emptyLogGuidance());
         }
       }
     }
@@ -675,10 +702,16 @@
         const secs = Math.floor(ticks / 4);
         const fakeProgress = Math.min(0.9, ticks / 480); // 约 2 分钟到 90%
         /* 久等而无进度时，把「怎么自查」写进同一条消息——启动页是用户此刻唯一
-         * 能看到的界面，只显示一个转圈的秒数等于让人干等（ISSUE #360）。 */
+         * 能看到的界面，只显示一个转圈的秒数等于让人干等（ISSUE #360）。
+         * 提示要指向**壳真实写下的路径**（diagnostics 由壳给出）：写死的
+         * run/launch-status.json 在项目根推不出来时指向一个不存在的位置，
+         * 用户照着找只会更困惑（ISSUE #784 手验反馈）。 */
+        const diag = (status && status.diagnostics) || null;
         const hint =
           secs > 90
-            ? '· 等待超过 90 秒，可点「查看日志」，或看启动状态文件 run/launch-status.json'
+            ? `· 等待超过 90 秒，可点「查看日志」，或看启动状态文件 ${
+                (diag && diag.statusFile) || 'run/launch-status.json'
+              }`
             : '· 可随时点「查看日志」看执行到哪一步';
         updateUI(
           fakeProgress,
@@ -696,9 +729,20 @@
       //    隐藏主窗导航进一个 /api/* 全 404、数据永远加载不出的半死页面」。
       //    导航失败下个 tick 重试（3 秒节流，避免高频重复导航打断正在编译路由的
       //    dev server）。
+      // 壳的常驻快照（`fallback: true` / `no-status-file`）**不是**权威进度：
+      // 它只回答「壳接手了、在等谁」，不回答「服务好了没」。就绪判据仍只有
+      // `status.ready === true`（编排器在服务端验过 /api/health）；快照则在
+      // 下面第二支里退回自主探测，由 /api/health 定夺。
+      const shellFallback =
+        !!status && (status.fallback === true || status.phase === 'no-status-file');
       const authoritativeReady = !!(status && status.ready === true);
+      // 中间那一段「状态文件不在、但编排器还在起」的窗口期——自编排链路
+      //（双击壳，见 ISSUE #784）里壳自己刚把 dev-launcher 拉起来，它写第一份
+      // launch-status.json 之前有 1~2 秒空档——由自主探测补齐：状态文件不在
+      // 时探 /api/health，真就绪才导航。判据与「状态文件在」时同源（都要求
+      // 2xx），因此不会把半死会话放进来。
       const shouldNavigate =
-        authoritativeReady || (!status && (await probeBackend(appUrl)));
+        authoritativeReady || ((!status || shellFallback) && (await probeBackend(appUrl)));
       if (shouldNavigate) {
         navigating = true;
         updateUI(0.95, 'dev-server-ready', '服务已就绪，正在加载应用…', false, Math.floor(ticks / 4));

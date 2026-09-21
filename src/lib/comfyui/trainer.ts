@@ -27,6 +27,7 @@ import { loraTrainingJobRepository, modelRepository } from "../core/repository";
 import { promises as fs } from "fs";
 import path from "path";
 import { getSettingsSync } from "../app-settings/app-settings.server";
+import { sleep } from "~/lib/with-timeout";
 
 function trainerUrl(): string {
   const settings = getSettingsSync();
@@ -136,7 +137,7 @@ async function runRemote(spec: TrainJobSpec): Promise<void> {
   // 轮询到终态为止。
   const POLL_MS = 4000;
   for (;;) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    await sleep(POLL_MS);
     const st = await fetch(`${base}/train/${encodeURIComponent(backendId)}`);
     if (!st.ok) throw new Error(`训练状态查询失败 ${st.status}`);
     const info = (await st.json()) as {

@@ -39,10 +39,12 @@ export const SERVICES_LOG_DIR = path.join(LOG_ROOT, "services");
 export const WORKSHOP_LOG_DIR = path.join(LOG_ROOT, "workshop");
 
 // ── 启动链路（launcher/）──
-/** python 双击启动器的链路日志。 */
-export const START_TAURI_LAUNCHER_LOG = path.join(
+/** 壳自己的启动链路日志：壳把 `[ComfyAPP]` 诊断与编排器输出（`[orchestrator] …`）
+ *  重定向到这里，是双击链路排障的第一现场（Python 启动器已随 ISSUE #784 移除，
+ *  这个常量名沿用是为了不动日志面板的来源契约）。 */
+export const LAUNCHER_SHELL_LOG = path.join(
   LAUNCHER_LOG_DIR,
-  "start-tauri-launcher.log",
+  "dev-launcher-stderr.log",
 );
 /** dev-launcher 当前运行日志（每次运行覆盖，供启动页/应用内面板实时读取）。 */
 export const DEV_LAUNCHER_LOG = path.join(LAUNCHER_LOG_DIR, "dev-launcher.log");

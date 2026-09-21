@@ -21,6 +21,12 @@
  * 失守。
  */
 
+import {
+  describeComfyExit,
+  type ComfyExitFacts,
+  type ComfyExitReport,
+} from "./lifecycle-exit";
+
 /** 就绪探测：返回可达 base（不可达为 null）。 */
 export type ComfyProbe = () => Promise<string | null>;
 /** 判死：返回 true 表示进程已确定不会起来（保活进程未出现 / 子进程消失）。 */
@@ -165,26 +171,47 @@ export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
 }
 
 export interface ChildExitDeps {
-  /** 进程退出时的会话结束横幅文案（含 ANSI）。 */
-  banner: (code: number | null) => string;
+  /** 会话结束横幅文案（含 ANSI）。 */
+  banner: (report: ComfyExitReport) => string;
   /** 写会话横幅。 */
   appendSessionBanner: (banner: string) => void;
-  /** 进入日志。 */
+  /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
+   *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
+  appendRuntimeLog: (line: string) => void;
+  /** 进入应用日志（pino）。 */
   log: (msg: string) => void;
   /** 清掉宿主持有的子进程句柄（仅当仍是同一个 child 时）。 */
   clearChild: () => void;
+  /** 把这次退出记进「上一次会话」标记文件（供下次启动对账：
+   *  应用自己也一起没了的那种情况，只能靠它反推）。 */
+  onExitReport?: (report: ComfyExitReport) => void;
+  /** 退出事实里只有宿主知道的那几样（pid / 存活时长 / 是否用户主动关 / 模式）。 */
+  context: () => Pick<
+    ComfyExitFacts,
+    "pid" | "uptimeMs" | "stopRequested" | "mode"
+  >;
 }
 
 /**
- * 构造 `child.on("exit")` 回调：落会话结束横幅 + 清句柄。
+ * 构造 `child.on("exit")` 回调：判「为什么退出」→ 落横幅 + `[exit]` 两行 → 清句柄。
+ *
+ * **`signal` 是这次补上的**：此前回调只接 `code`，于是「被 SIGKILL 强杀」与
+ * 「自己 exit 1」在日志里长得一模一样 —— 而前者是外部动作（任务管理器 / Job
+ * Object 关闭 / OOM 杀手），后者是它自己的异常，排查方向完全相反。
+ *
  * 依赖显式传参后可直接单测，不必起真进程。
  */
 export function createChildExitHandler(
   deps: ChildExitDeps,
-): (code: number | null) => void {
-  return (code: number | null) => {
-    deps.appendSessionBanner(deps.banner(code));
-    deps.log(`ComfyUI 进程退出（code=${code ?? "null"}）`);
+): (code: number | null, signal: NodeJS.Signals | null) => void {
+  return (code: number | null, signal: NodeJS.Signals | null = null) => {
+    const report = describeComfyExit({ code, signal, ...deps.context() });
+    deps.appendSessionBanner(deps.banner(report));
+    deps.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
+    if (report.advice !== null)
+      deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
+    deps.log(`ComfyUI 进程退出：${report.reason}`);
+    deps.onExitReport?.(report);
     deps.clearChild();
   };
 }

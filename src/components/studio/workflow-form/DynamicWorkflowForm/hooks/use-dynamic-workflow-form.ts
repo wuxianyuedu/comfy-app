@@ -4,6 +4,7 @@
 // 值写入。视图层只消费这里返回的 controller，不持有任何业务规则。
 
 import { useFilePicker } from "~/components/ui/file-picker";
+import { errorMessage } from "~/lib/error-message";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ComponentType, DragEvent } from "react";
 
@@ -285,7 +286,7 @@ export function useDynamicWorkflowForm(
         });
         set(uploadTarget, name);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "上传失败";
+        const message = errorMessage(err, "上传失败");
         console.error("[DynamicWorkflowForm] upload failed", err);
         setUploadError(message);
         onUploadError?.(message);

@@ -118,16 +118,20 @@ function extractDerivedAppPort() {
   return String(port);
 }
 
-function extractLauncherExe() {
-  const spec = readText("tools/start-tauri.spec");
-  const m = spec.match(/os\.environ\.get\(\s*['"]LAUNCHER_NAME['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
-  return `${(m ? m[1] : "start-tauri")}.exe`;
-}
-function extractLauncherExeByName(ps1) {
-  const t = readText(ps1);
-  const m = t.match(/\$env:LAUNCHER_NAME\s*=\s*["']([^"']+)["']/);
-  if (!m) throw new Error(`无法从 ${ps1} 提取 LAUNCHER_NAME`);
-  return `${m[1]}.exe`;
+/** 桌面壳的 exe 名（**唯一**的启动入口）。
+ *
+ *  **权威源是编排器里那份「壳在哪」的判据**（`defaultShellExe` 的候选路径），
+ *  而不是 tauri.conf.json 里的某个名字：`productName` 是 `ComfyAPP`、
+ *  `bundle.externalBin` 指的是 Node **sidecar**，两者都不是这个 exe 的名字。
+ *  Python 启动器与它的 `LAUNCHER_NAME` 打包链已随 ISSUE #784 移除，壳的产物名
+ *  现在只由 cargo / tauri 的目标名（crate 名 `app`）决定。 */
+function extractShellAppExe() {
+  const src = readText("scripts/dev-launcher.mjs");
+  const m = src.match(/"(src-tauri\/target\/release\/([^"/]+))\.exe"/);
+  if (!m) {
+    throw new Error("无法从 scripts/dev-launcher.mjs 的 defaultShellExe 提取壳文件名");
+  }
+  return `${m[2]}.exe`;
 }
 function extractSplash() {
   const conf = readJson("src-tauri/tauri.conf.json");
@@ -209,10 +213,9 @@ function extractAsciiOnlyModules() {
 // --------------------------------------------------------------------------
 const FACTS = [
   // 占位符类：文档用占位符替代裸值
-  { key: "shell.exe.prebuilt", placeholder: "{{shell.exe.prebuilt}}", kind: "placeholder", extract: extractLauncherExe },
-  { key: "shell.exe.dev", placeholder: "{{shell.exe.dev}}", kind: "placeholder", extract: () => extractLauncherExeByName("tools/scripts/build-launcher-dev.ps1") },
-  { key: "shell.exe.standalone", placeholder: "{{shell.exe.standalone}}", kind: "placeholder", extract: () => extractLauncherExeByName("tools/scripts/build-launcher-standalone.ps1") },
-  { key: "shell.app.exe", placeholder: "{{shell.app.exe}}", kind: "placeholder", extract: () => "app.exe" },
+  // 桌面壳的 exe 名：**唯一**的启动入口（Python 启动器与它的三个 LAUNCHER_NAME
+  // 产物已随 ISSUE #784 移除，只剩这一条事实）。
+  { key: "shell.app.exe", placeholder: "{{shell.app.exe}}", kind: "placeholder", extract: extractShellAppExe },
   { key: "shell.splash", placeholder: "{{shell.splash}}", kind: "placeholder", extract: extractSplash },
   // 核对类：文档保留直观值，脚本核对权威源当前端口族
   { key: "dev.host", kind: "verify", extract: () => extractDevHostPort().host },
@@ -248,9 +251,9 @@ const FACTS = [
   { key: "path.tauri.conf", kind: "path", source: "src-tauri/tauri.conf.json" },
   { key: "path.lib.rs", kind: "path", source: "src-tauri/src/lib.rs" },
   { key: "path.dev-launcher", kind: "path", source: "scripts/dev-launcher.ps1" },
-  { key: "path.start-launcher-py", kind: "path", source: "scripts/start_tauri_launcher.py" },
-  { key: "path.spec", kind: "path", source: "tools/start-tauri.spec" },
-  { key: "path.build-launcher", kind: "path", source: "tools/scripts/build-launcher.ps1" },
+  { key: "path.shell-launch-rs", kind: "path", source: "src-tauri/src/shell_launch.rs" },
+  { key: "path.start-entry", kind: "path", source: "tools/start/start-tauri.ps1" },
+  { key: "path.start-entry-dev", kind: "path", source: "tools/start/start-tauri-dev.ps1" },
   { key: "path.build-desktop", kind: "path", source: "scripts/build-desktop.mjs" },
   { key: "path.rebuild-static", kind: "path", source: "tools/build/rebuild-static.ps1" },
   { key: "path.build-tauri-release", kind: "path", source: "tools/build/build-tauri-release.ps1" },
@@ -299,8 +302,7 @@ module.exports = {
   exists,
   extractDevHostPort,
   extractFallbackPorts,
-  extractLauncherExe,
-  extractLauncherExeByName,
+  extractShellAppExe,
   extractSplash,
   extractRegistryPort,
   extractMcpHttpPort,

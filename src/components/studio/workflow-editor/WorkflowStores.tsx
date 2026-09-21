@@ -360,7 +360,7 @@ export function getViewerApi(): StoreApi<NodeJsonViewerStore> {
  *  会随热更新（HMR）/ 重新编译整体替换。于是存在一个稳定可复现的窗口：
  *
  *    · 开发态 dev server 长开，拉了新提交后页面没重载；
- *    · 编辑器在改动前就已挂载（如 `start-tauri.exe` 起的窗口一直开着）；
+ *    · 编辑器在改动前就已挂载（如桌面壳窗口一直开着）；
  *
  *  此时 `getState()` 返回的仍是**旧实例**——它带着旧的动作集合，可能缺少本模块
  *  新声明的动作。直接调用会抛 `xxx is not a function`，被

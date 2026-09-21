@@ -17,13 +17,16 @@
  * 在构建后真去数文件（清单还在 ≠ 清单生效）。
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 
 // 运行时真的调用白名单剔除（不是只读源码文本）：嵌套条目 / 未登记新文件的
 // 行为只有真删一次才看得出来。
-import { stripDevArtifacts } from "../scripts/standalone-private-inputs.mjs";
+import {
+  RUNTIME_SCRIPTS,
+  stripDevArtifacts,
+} from "../scripts/standalone-private-inputs.mjs";
 
 const buildDesktop = readFileSync(
   join(process.cwd(), "scripts", "build-desktop.mjs"),
@@ -40,6 +43,57 @@ const checker = readFileSync(
 const pkg = JSON.parse(
   readFileSync(join(process.cwd(), "package.json"), "utf8"),
 ) as { scripts: Record<string, string> };
+
+/* ── 白名单判据的两个取样器（供下面的用例共用）────────────────────────── */
+
+/** 从 `check-standalone-contents.cjs` 源码里取出 ALLOWED_SCRIPTS 的字面量集合。 */
+function allowedScriptsFromChecker(source: string): string[] {
+  const start = source.indexOf("const ALLOWED_SCRIPTS = new Set([");
+  expect(start, "check-standalone-contents.cjs 里找不到 ALLOWED_SCRIPTS").toBeGreaterThan(
+    -1,
+  );
+  const body = source.slice(start, source.indexOf("]);", start));
+  return [...body.matchAll(/"([^"]+)"/g)]
+    .map((m) => m[1])
+    .filter((name): name is string => typeof name === "string");
+}
+
+/**
+ * 收集某个模块的**相对 import 闭包**（只跟 `scripts/` 下的 `.mjs`，返回相对 `scripts/` 的路径）。
+ *
+ * 判据为什么是源码解析而不是 `import()` 真加载：真加载会执行编排器的顶层代码
+ * （它会跑预检、写会话锚点），那份代价与风险不该由一条清单判据承担 —— 这里要回答的
+ * 只是「产物里重编排时会不会缺件」，静态说明符出现即成立（ESM 加载期解析整张图）。
+ * 行注释必须先剥掉：JSDoc 里的 `import("../lockfile/lock-diff.d.mts")` 是类型引用，
+ * 不是运行期依赖（登记它反而违背「运行时真的会读」这条判据）。
+ */
+function collectRelativeClosure(entry: string): string[] {
+  const scriptsRoot = join(process.cwd(), "scripts");
+  const seen = new Set<string>();
+  const walk = (file: string): void => {
+    const rel = relative(scriptsRoot, file).split("\\").join("/");
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const code = readFileSync(file, "utf8")
+      .split("\n")
+      // 只剥「整行是注释」的形态：这几份脚本的 import 都在行首，足够用且不会
+      // 误伤字符串里的 `//`（例如 URL）
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join("\n");
+    for (const m of code.matchAll(/from\s+"(\.[^"]+)"|import\(\s*"(\.[^"]+)"\s*\)/g)) {
+      const spec = m[1] ?? m[2];
+      if (!spec) continue;
+      const target = resolve(dirname(file), spec);
+      // `../src/**` 由 Next 的编译产物提供（不在 scripts/ 的白名单管辖内），
+      // `.d.mts` 之类的类型声明也不参与运行期加载
+      if (!target.startsWith(scriptsRoot) || !target.endsWith(".mjs")) continue;
+      if (!existsSync(target)) continue;
+      walk(target);
+    }
+  };
+  walk(entry);
+  return [...seen];
+}
 
 describe("开发机私有输入的剔除清单（单一实现，两处复用）", () => {
   it("清单覆盖 .env 家族与 db.sqlite*（含 WAL/SHM 边车文件）", () => {
@@ -169,6 +223,39 @@ describe("check-standalone-contents：scripts/ 白名单与运行时缺件", () 
     expect(checker).toContain('"dev-launcher.mjs"');
     expect(checker).toContain('"launcher-core/orchestrator.mjs"');
     expect(checker).toContain("ALLOWED_SCRIPTS");
+  });
+
+  /**
+   * 两份清单是同一件事的两个视角：剔除侧决定「产物里留什么」，检查侧决定
+   * 「产物里出现什么算违规」。漂移的两种表现都很难查：剔除侧漏了 → 产物缺件、
+   * 重编排起不来（表现只是「双击没反应」）；检查侧漏了 → 构建后检查把合法产物
+   * 判成违规，而剔除明明保留了它。
+   */
+  it("两份白名单集合相同（漏在一处 = 剔除与检查互相打架）", () => {
+    expect(new Set(allowedScriptsFromChecker(checker))).toEqual(
+      new Set(RUNTIME_SCRIPTS),
+    );
+  });
+
+  /**
+   * 清单的判据是**编排器的相对 import 闭包**，不是「看着像运行时的都写上」：
+   * `dev-launcher.mjs` 顶层是静态 import，ESM 加载期解析整张图 —— 少一份不是
+   * 「那一步跳过」，而是整个编排器起不来。此前 `env-preflight` / `corepack` /
+   * `splash-assets` / `lockfile/*` 就是这样漏在清单外的（登记靠人记，必漏）。
+   */
+  it("清单覆盖编排器的相对 import 闭包（新增内部分件漏登记即失败）", () => {
+    const closure = collectRelativeClosure(
+      join(process.cwd(), "scripts", "dev-launcher.mjs"),
+    );
+    // 闭包本身要有内容：解析退化（正则写坏、路径换了）会让这条断言静默变成
+    // 「什么都没漏」，那正是这类清单判据最危险的失效形态
+    expect(closure.length).toBeGreaterThan(10);
+    const missing = closure.filter((rel) => !RUNTIME_SCRIPTS.includes(rel));
+    expect(
+      missing,
+      "以下模块在 dev-launcher.mjs 的 import 闭包里却没登记进 RUNTIME_SCRIPTS —— " +
+        "产物里走到重编排就是 ERR_MODULE_NOT_FOUND（用户只看得到「双击没反应」）",
+    ).toEqual([]);
   });
 
   it("产物层检查也验「Next 运行时脚本不得缺件」", () => {

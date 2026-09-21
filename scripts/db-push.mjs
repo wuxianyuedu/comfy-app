@@ -25,7 +25,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
-import { runPnpmSync } from "./launcher-core/shell.mjs";
+import { pushSchema } from "./db-push-core.mjs";
+import {
+  schemaFingerprint,
+  writeSchemaFingerprint,
+} from "./db-schema-state.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -66,25 +70,25 @@ function fail(message) {
 
 process.stdout.write(`[db:push] 同步 schema → ${dbPath}\n`);
 
-// pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）：写死 `pnpm`
-// 在 Windows 上选中的是 Node 起不来的形态，而 `status` 会是 null —— 本脚本刻意
-// 不看退出码，于是「命令没起来」会被下面那句「库里表数为 0」的复核捕获并报成
-// 「drizzle-kit 无 TTY」的误导现场（ISSUE #638 同族）。
-const result = runPnpmSync(["exec", "drizzle-kit", "push", "--force"], {
-  cwd: root,
-  stdio: "inherit",
-  timeoutMs: 600_000,
-});
+/* pnpm 的可执行形态由 shell.mjs 一处判定（规范 §2.1.1 / §9.5）；「跑一次并
+ * 复核它真的落地」收在 `db-push-core.mjs` —— 启动链路的按需同步用同一份，
+ * 判据不会分叉（写死 `pnpm` 在 Windows 上会选中 Node 起不来的形态，而本脚本
+ * 刻意不看退出码，于是「命令没起来」会被下面那句「库里表数为 0」的复核捕获，
+ * 报成一句与真相无关的「drizzle-kit 无 TTY」，ISSUE #638 同族）。
+ *
+ * `--force` 是本命令的既定口径（自动批准「会丢数据」的语句）——启动链路刻意
+ * **不**沿用它，见 db-schema-state.mjs 的 `ensureSchemaCurrent`。 */
+const result = pushSchema(root, { force: true });
 
-// 注意：这里**刻意不看 result.status**。drizzle-kit 在无 TTY 上正是「报错但
-// exit 0」，退出码在这条链路上不是事实来源；下面直接查库。
+/* 注意：这里**刻意不看 drizzle-kit 的退出码**。它在无 TTY 上正是「报错但
+ * exit 0」，退出码在这条链路上不是事实来源；下面直接查库。 */
 const tables = countUserTables();
 if (tables <= 0) {
-  const hint = result.error
-    ? `起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}；实际命令：${result.command} ${result.args.join(" ")}。`
-    : result.status === 0
-      ? "drizzle-kit 报告成功，但库里的用户表数为 0 —— 典型的「无 TTY 交互提示被静默吞掉」。"
-      : `drizzle-kit 退出码 ${result.status ?? "?"}，且库里的用户表数为 0。`;
+  const hint = result.invocationFailed
+    ? `起 pnpm 失败（${result.error?.code ?? "UNKNOWN"}）：${result.error?.message ?? ""}`
+    : result.blockedByTty
+      ? "drizzle-kit 报「Interactive prompts require a TTY terminal」——交互提示被静默吞掉，库原样没动。"
+      : "drizzle-kit 没走到 diff 那一步（输出见上），且库里的用户表数为 0。";
   fail(
     [
       hint,
@@ -109,17 +113,8 @@ process.stdout.write(`[db:push] ✓ 用户表 ${tables} 张\n`);
  * 「表数 > 0」的复核一路绿灯，`probeSchemaSync` 也只判「表建没建」，同样说
  * ready。用户看到的是一句数据库报错，所有自检都说没问题。
  *
- * 判据取 drizzle 自己的 diff：**再跑一次 push，它必须说 No changes detected**
- * （收敛）。第一次跑完已应用变更，第二次仍报有变更 = 那些语句没落地 —— 本文件
- * 头注释里那条坑的**第二种形态**：无 TTY 时交互提示被静默吞掉的另一种后果
- * 不是「库被清空」（那种旧判据能抓到），而是「库原样不动」（旧判据抓不到）。 */
-const converge = runPnpmSync(["exec", "drizzle-kit", "push", "--force"], {
-  cwd: root,
-  stdio: "pipe",
-  timeoutMs: 600_000,
-});
-const convergeOut = `${converge.stdout}\n${converge.stderr}`;
-if (!/No changes detected/i.test(convergeOut)) {
+ * 判据（跑了第二次仍不是 `No changes detected`）收在 `db-push-core.mjs`。 */
+if (!result.converged) {
   fail(
     [
       "drizzle-kit 两次都报告有变更：第一次的语句没有全部落地，表结构与 schema 仍不一致。",
@@ -127,7 +122,7 @@ if (!/No changes detected/i.test(convergeOut)) {
       `库文件：${dbPath}`,
       "",
       "第二次输出的尾部：",
-      ...convergeOut
+      ...result.finalOutput
         .trim()
         .split("\n")
         .slice(-12)
@@ -143,3 +138,24 @@ if (!/No changes detected/i.test(convergeOut)) {
 }
 
 process.stdout.write(`[db:push] ✓ schema 已收敛（无待应用变更）\n`);
+
+/* ── 登记 schema 指纹 ────────────────────────────────────────────────────
+ *
+ * 启动链路（dev / start / 启动器）靠这个数判断「库是不是当前这版 schema 建的」，
+ * 好让「拉了含 schema 变更的代码后忘了跑 db:push」不再依赖人记得
+ * （见 db-schema-state.mjs 的 `ensureSchemaCurrent`）。
+ *
+ * 登记失败**不算错**：最坏的后果只是启动时多跑一次 diff（那次会说
+ * No changes detected），所以这里只提示不退出。 */
+const fingerprint = schemaFingerprint(root);
+if (fingerprint === null) {
+  process.stdout.write(
+    "[db:push] ⚠ 读不到 src/server/db/*.ts，跳过指纹登记（启动时会多跑一次 diff）\n",
+  );
+} else if (writeSchemaFingerprint(root, undefined, fingerprint)) {
+  process.stdout.write(`[db:push] ✓ 已登记 schema 指纹 ${fingerprint}\n`);
+} else {
+  process.stdout.write(
+    "[db:push] ⚠ 指纹登记失败（库不可写 / 被占用）——启动时会多跑一次 diff\n",
+  );
+}

@@ -2,15 +2,17 @@
 <#
 build-all.ps1 — 一键发布构建入口（原 tools\build\build-all.bat，逻辑在 tools\scripts\）
 
-编排两步：
-  1) tools\scripts\build-tauri-release.ps1 —— 构建 release 版 Tauri 壳
-  2) tools\scripts\build-launcher.ps1      —— 打包 start-tauri.exe
+编排一步：
+  1) tools\scripts\build-tauri-release.ps1 —— 构建 release 版 Tauri 壳（app.exe）
+
+产物 `src-tauri\target\release\app.exe` 就是**唯一**的启动入口：编排（dev server /
+端口 / 缓存 / 回收）由壳自己承担，不再打包第二层启动器 exe（ISSUE #784）。
 
 用法：
   双击 <项目根>\tools\build\build-all.ps1
   或在终端执行：pwsh -NoProfile -ExecutionPolicy Bypass -File tools\build\build-all.ps1
 
-详见 tools\README.md。
+详见 tools/README.md。
 #>
 [CmdletBinding()]
 param()
@@ -23,7 +25,7 @@ $ErrorActionPreference = "Stop"
 $root = Get-ProjectRoot
 Set-Location $root
 
-Write-Host "[INFO] 开始一键发布构建（release 壳 + 打包 start-tauri.exe）..." -ForegroundColor Cyan
+Write-Host "[INFO] 开始一键发布构建（release 壳 app.exe）..." -ForegroundColor Cyan
 Write-Host ""
 
 # 入口自己也计一轮（含子进程启动开销），保证双击场景里「最后一行」是总耗时：

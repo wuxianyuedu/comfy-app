@@ -17,6 +17,7 @@
  */
 
 import { useRef, useState, type ReactNode } from "react";
+import { textHandler } from "~/lib/form-props";
 import { Maximize2, Minimize2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -183,7 +184,7 @@ function LogToolbar({
         {log.sessions.length > 1 && (
           <select
             value={log.sessionId ?? ""}
-            onChange={(event) => log.selectSession(event.target.value)}
+            onChange={textHandler(log.selectSession)}
             aria-label="切换要查看的启动"
             title="切换要查看的启动"
             className="border-border bg-surface-2 text-ink focus:border-primary max-w-55 truncate rounded-md border px-2 py-0.5 text-[11px] outline-none"

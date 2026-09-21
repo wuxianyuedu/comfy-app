@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { apiErrorBody } from "~/lib/api-error";
+import { tailWindow } from "~/lib/page-window";
 import fs from "node:fs";
 import { RUNTIME_LOG_FILES } from "~/lib/log/log-paths";
 import {
@@ -101,7 +103,7 @@ export async function GET(request: Request) {
     const size = fs.statSync(/*turbopackIgnore: true*/ file).size;
     const { text, windowed } = readTailText(file, SCAN_BYTES);
     const all = parseLogSessions(text);
-    const sessions = all.slice(-MAX_SESSIONS);
+    const sessions = tailWindow(all, MAX_SESSIONS);
     const selected =
       (requested !== null
         ? sessions.find((session) => session.id === requested)
@@ -121,10 +123,7 @@ export async function GET(request: Request) {
     } satisfies LogSessionsPayload);
   } catch (error) {
     return NextResponse.json(
-      {
-        ...emptyPayload(0),
-        error: error instanceof Error ? error.message : String(error),
-      },
+      apiErrorBody(error, "读取日志会话失败", { ...emptyPayload(0) }),
       { status: 500 },
     );
   }

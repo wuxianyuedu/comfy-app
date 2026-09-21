@@ -3,6 +3,7 @@
 // 从环境变量读取默认值，并可被 `llmConfig` 表里的用户设置覆盖（与界面
 // 设置 UI 共享同一张表，复用 workshopDb 读取，不触碰 `~/env`）。
 import { decryptSecret } from "~/lib/llm/secrets";
+import { errorMessage } from "~/lib/error-message";
 import type { LLMMessage } from "~/lib/llm/types";
 import { llmConfig } from "~/server/db/schema";
 import { workshopDb } from "./db";
@@ -77,7 +78,7 @@ export async function completeWorkshopLLM(
       signal: AbortSignal.timeout(180_000),
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e, String(e));
     const cause =
       e instanceof TypeError && e.cause instanceof Error
         ? String(e.cause.message)

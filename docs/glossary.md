@@ -122,7 +122,7 @@
 | 术语 | 唯一所指 | 代码落点 |
 |---|---|---|
 | **桌面壳**（Tauri 壳） | Rust 编写的窗口/sidecar 宿主 | `src-tauri/` |
-| **启动器**（launcher） | 打包出的 `start-tauri*.exe` 入口 | `tools/start-tauri.spec`、`tools/scripts/build-launcher*.ps1` |
+| **启动器**（launcher） | **已废弃的历史概念**：原先指打包出的 `start-tauri*.exe` 入口。现在唯一的启动入口是壳本身（`src-tauri\target\release\app.exe`），编排由壳承担 | `src-tauri/src/shell_launch.rs`（ISSUE #784 起） |
 | **启动编排** | 真正起 dev server / 壳 / 探端口的逻辑脚本 | `scripts/dev-launcher.ps1`（唯一编排者） |
 | **侧车**（sidecar） | 壳托管的 Node 运行时进程（跑 Next standalone） | `src-tauri/src/lib.rs`（sidecar 目录 `src-tauri/binaries/` 为构建产物，本地可能不存在） |
 | **启动页**（splash） | 冷启动加载页 | `public/splash.html`（`tauri.conf.json` 的 `windows[0].url`） |

@@ -143,28 +143,29 @@
 | **源码仓库**（一堆 .ts/.rs 文件） | 原始代码 | ❌ 没有编译产物，需整套开发环境，**不适合非开发人员** |
 | **即开即用桌面包**（完整构建好的成品目录） | 由开发人员产出、可直接双击的成品 | ✅ 解压后双击 `tools/start/start-desktop.ps1`（或对应 exe）即可 |
 
-> 判断口诀：桌面包目录里有没有 **`scripts\dev-launcher.ps1`** 和桌面启动器
-> （`start-tauri\{{shell.exe.prebuilt}}`，或独立版 `start-tauri-standalone\{{shell.exe.standalone}}`）？
+> 判断口诀：桌面包目录里有没有 **`scripts\dev-launcher.mjs`**、以及能不能找到
+> `src-tauri\target\release\{{shell.app.exe}}`？
 > **有 = 成品，双击就能用**；没有 = 源码，只能走上面的浏览器模式。
 
 > ⚠️ 关于「免装环境」的一句话说清楚：
-> 桌面启动器分两种——
+> 桌面包里的启动器就是 **`{{shell.app.exe}}` 本身**（不再有第二层 exe），它有两种形态：
 > - **独立版（standalone，推荐给非开发人员）**：把前端静态资源 + Node 运行时都内嵌好，
->   运行时不连 dev server，**真正免装任何开发环境**。
-> - **prebuilt 版（默认 `start-tauri\{{shell.exe.prebuilt}}`）**：运行时会启动一个 Node dev server，
->   因此**仍需本机装有 Node/pnpm**，更适合开发人员日常用。
+>   运行时不连 dev server，**真正免装任何开发环境**。壳的判据是「检出里没有编排器」。
+> - **prebuilt 版**：运行时会起一个 Node dev server，因此**仍需本机装有 Node/pnpm**，
+>   更适合开发人员日常用。
 >
-> 给非开发人员分发时，**请务必分发独立版**，否则对方仍会被要求装 Node。要最省事，直接用下方
-> 的 `tools/start/start-desktop.ps1`——它会自检并自动选择可用的启动器。
+> 给非开发人员分发时，**请务必分发独立版**（完整目录，别只拷一个 exe），否则对方仍会被
+> 要求装 Node。要最省事，直接用下方的 `tools/start/start-desktop.ps1`——它会自检并自动
+> 选择可用的壳。
 
 ### 6.2 谁来产出「即开即用桌面包」
 
 桌面包由**开发人员**在一台 Windows 电脑上构建生成：
 
-- 构建独立版（推荐分发）：运行 `tools\build\build-standalone.ps1`（完整生产构建壳）后，
-  再运行 `tools\build\build-launcher-standalone.ps1`（打包独立启动器），产出
-  `start-tauri-standalone\`；
-- 或运行 `tools\build\build-all.ps1` 产出 prebuilt 版 `start-tauri\`（需对方装 Node，见上）。
+- 构建独立版（推荐分发）：运行 `tools\build\build-standalone.ps1`（完整生产构建壳 +
+  standalone 资源），产出 `src-tauri\target\release\`（含 `{{shell.app.exe}}` / `server.js` /
+  `.next` / `binaries\`）；
+- 或运行 `tools\build\build-all.ps1` 产出 prebuilt 版（只有壳，需对方装 Node，见上）。
 
 随后把成品目录（含随附的 `tools/start/start-desktop.ps1`）打成 zip 发给普通用户。
 **你作为非开发人员不需要碰构建这一步。**
@@ -176,13 +177,13 @@
 3. 自检通过后会自动启动：先弹出一个「正在启动」的加载画面，稍等出现主窗口即成功；
 4. 关掉主窗口即退出（日志保留在 `log\` 目录，方便出问题时发给团队）。
 
-> 不想用 `tools/start/start-desktop.ps1`，也可直接双击桌面包里的启动器 exe（独立版为
-> `start-tauri-standalone\{{shell.exe.standalone}}`）。
+> 不想用 `tools/start/start-desktop.ps1`，也可直接双击桌面包里的
+> `src-tauri\target\release\{{shell.app.exe}}`。
 
 ### 6.4 桌面包没运行起来怎么办
 
-- 双击 `tools/start/start-desktop.ps1` 时若提示「未找到启动器/缺少文件」→ 按提示的说明对照 6.2，多半是
-  桌面包不完整（少了 `_internal` 等运行依赖），重新完整解压即可；
+- 双击 `tools/start/start-desktop.ps1` 时若提示「未找到桌面壳/缺少文件」→ 按提示的说明对照 6.2，多半是
+  桌面包不完整（少了 `server.js` / `binaries\` 等运行资源），重新完整解压即可；
 - Windows 10/11 已内置 WebView2，一般无需单独装；
 - 仍失败：把 `log\` 下的日志发给开发人员即可（详见第 8 节）。
 

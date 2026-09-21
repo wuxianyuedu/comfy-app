@@ -35,8 +35,10 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { PageLoading } from "~/components/ui/page-loading";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { lastSegments } from "~/lib/path-display";
 import { Button } from "~/components/ui/button";
+import { errorMessage } from "~/lib/error-message";
 
 export interface RenderChainModule {
   /** 完整相对路径（相对项目根，如 src/components/xxx.tsx） */
@@ -80,7 +82,8 @@ export function DebugChainFooter({
 
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [source, setSource] = useState<SourcePayload | null>(null);
-  const [loading, setLoading] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const sourceBusy = useBusyAction();
   const [loadError, setLoadError] = useState<string | null>(null);
 
   /* 关闭弹窗：Esc 或点击遮罩 / 关闭按钮（Esc 与遮罩由 ui/dialog 负责）。 */
@@ -88,23 +91,25 @@ export function DebugChainFooter({
     setOpenFile(null);
     setSource(null);
     setLoadError(null);
-    setLoading(false);
-  }, []);
+    /* 关弹窗即复位（请求还在飞时也应如此）——出口的 `set` 是给这类
+     * 「跨多段 await」的落点用的。 */
+    sourceBusy.set(false);
+  }, [sourceBusy]);
 
-  const openSource = useCallback(async (file: string) => {
-    setOpenFile(file);
-    setSource(null);
-    setLoadError(null);
-    setLoading(true);
-    try {
-      const payload = await fetchDebugSource(file);
-      setSource(payload);
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "读取源码失败");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const openSource = useCallback(
+    async (file: string) => {
+      setOpenFile(file);
+      setSource(null);
+      setLoadError(null);
+      try {
+        const payload = await sourceBusy.run(() => fetchDebugSource(file));
+        setSource(payload);
+      } catch (err) {
+        setLoadError(errorMessage(err, "读取源码失败"));
+      }
+    },
+    [sourceBusy],
+  );
 
   /* 源码弹窗里的两枚「复制」：成败都**原地改口**（两枚共用一行，闪一下对勾
    * 最省地方；失败时说清怎么自救）。此前这一段完全静默 —— 弹窗里的复制失败
@@ -294,18 +299,18 @@ export function DebugChainFooter({
           </div>
           {/* 内容区 */}
           <div className="bg-canvas-deep min-h-0 flex-1 overflow-auto p-0">
-            {loading && (
+            {sourceBusy.busy && (
               <PageLoading
                 label="正在读取源码…"
                 className="py-10 text-[12px]"
               />
             )}
-            {!loading && loadError && (
+            {!sourceBusy.busy && loadError && (
               <div className="px-4 py-6 text-[12px] text-rose-700 dark:text-rose-300">
                 读取失败：{loadError}
               </div>
             )}
-            {!loading && source && (
+            {!sourceBusy.busy && source && (
               <div className="flex flex-col">
                 <div className="border-border-subtle bg-subtle text-ink-muted flex shrink-0 items-center justify-between border-b px-4 py-1.5 font-mono text-[10.5px]">
                   <span>{source.size.toLocaleString()} 字符</span>

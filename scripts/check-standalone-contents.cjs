@@ -60,10 +60,13 @@ const FORBIDDEN = [
  * 判据是「运行时真的会读」——目前只有两处，且都在代码里能指到：
  *   · install-comfyapp-helper.ps1：src/app/api/helper/{install,status}/route.ts
  *     以 process.cwd() 拼路径把它当下载内容返回（installerAvailable 也靠它判）；
- *   · dev-launcher.mjs（+ 其 import 的 session / app-port / reap-process）：
+ *   · dev-launcher.mjs（+ 其相对 import 闭包里的 session / app-port / 两道预检 /
+ *     lockfile 差异 / launcher-core/*）：
  *     启动编排的唯一实现，也是 src-tauri/src/lib.rs::looks_like_project_root()
  *     的项目根判据；dev-launcher.ps1 只是它的 Windows 调用入口。
- *     清单必须与 scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 同源。
+ *     **清单必须与 scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 同源**
+ *     （集合相同，由 tests/dist-artifact-hygiene.test.ts 核对）：两处漂移的表现是
+ *     「剔除时保留、检查时判违规」或反过来（保留清单漏了 → 产物里缺件、启动即崩）。
  *
  * 为什么白名单而不是黑名单：黑名单欠完备，每加一个根级文件/脚本就要记得补一条，
  * 而漏掉是静默的（上一次 db.sqlite 就是这么漏的）。白名单下新增脚本默认不进产物，
@@ -71,17 +74,26 @@ const FORBIDDEN = [
  */
 const ALLOWED_SCRIPTS = new Set([
   "install-comfyapp-helper.ps1",
-  "dev-launcher.ps1",
   "dev-launcher.mjs",
+  "dev-launcher.ps1",
   "dev-launcher-session.mjs",
   "app-port.mjs",
+  "env-preflight.mjs",
+  "db-schema-state.mjs",
+  "db-push-core.mjs",
   "reap-process.mjs",
-  // 编排器的内部分件（与 scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS 同源）
+  "lockfile/render-lock-diff.mjs",
+  "lockfile/lock-diff.mjs",
+  // 编排器的内部分件（逐项登记；与 RUNTIME_SCRIPTS 同源）
   "launcher-core/procs.mjs",
   "launcher-core/shell.mjs",
+  // shell.mjs / procs.mjs 的命令行回显出口（少这份 = 运行期 ERR_MODULE_NOT_FOUND）
+  "launcher-core/command-echo.mjs",
   "launcher-core/log.mjs",
   "launcher-core/worktree.mjs",
   "launcher-core/orchestrator.mjs",
+  "launcher-core/corepack.mjs",
+  "launcher-core/splash-assets.mjs",
 ]);
 
 /** Next 自带运行时脚本目录（相对产物根）。 */

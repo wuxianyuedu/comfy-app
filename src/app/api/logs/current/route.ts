@@ -1,5 +1,6 @@
 import { clamp } from "~/lib/clamp";
 import { NextResponse } from "next/server";
+import { apiErrorBody } from "~/lib/api-error";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveSessionStart } from "~/lib/log/log-session-scope";
@@ -11,10 +12,10 @@ import {
   NEXTJS_LOG_DIR,
   NEXTJS_PANEL_LOG_PREFIX,
   RUNTIME_LOG_FILES,
-  START_TAURI_LAUNCHER_LOG,
+  LAUNCHER_SHELL_LOG,
 } from "~/lib/log/log-paths";
 
-const LAUNCHER_LOG_FILE = START_TAURI_LAUNCHER_LOG;
+const LAUNCHER_LOG_FILE = LAUNCHER_SHELL_LOG;
 const SENTINEL_FILE = DEV_LAUNCHER_CURRENT_SENTINEL;
 
 /** 应用服务输出转录文件（本次进程）：惰性解析，取不到时退化为「文件不存在」。 */
@@ -264,15 +265,14 @@ export async function GET(request: Request) {
     );
   } catch (error) {
     return NextResponse.json(
-      {
+      apiErrorBody(error, "读取当前日志失败", {
         content: "",
         size: 0,
         offset: 0,
         sessionStart: null,
         bootId,
         mismatch,
-        error: error instanceof Error ? error.message : String(error),
-      },
+      }),
       { status: 500 },
     );
   }

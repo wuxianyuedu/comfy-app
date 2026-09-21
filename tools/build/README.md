@@ -3,31 +3,25 @@
 Windows 双击入口，逻辑在 [`../scripts/`](../scripts/) 同名文件里（对照表见
 [tools/README.md](../README.md) 与 [tools/scripts/README.md](../scripts/README.md)）。
 
-## 三个启动器 exe 分别怎么打
+## 只有一个 exe：壳 `app.exe`
 
-| 产物 | 入口 | 说明 |
-|---|---|---|
-| `start-tauri/start-tauri.exe` | `build-launcher.ps1` | prebuilt（默认入口，秒出窗口 + dev server） |
-| `start-tauri-dev/start-tauri-dev.exe` | `build-launcher-dev.ps1` | 双击即走 `tauri dev`（Rust 热重载） |
-| `start-tauri-standalone/start-tauri-standalone.exe` | `build-launcher-standalone.ps1` | 双击即走独立模式（不连 dev server） |
-
-三个 exe 由**同一份** `scripts/start_tauri_launcher.py` 打包而来（PyInstaller 在
-打包脚本里用 `LAUNCHER_NAME` 指定文件名）。因此**改完启动器后三个入口都要重新打包**
-才全部生效。
+**不再打包「启动器 exe」**：Python 启动器（`start-tauri*.exe`）与它的打包链
+（`build-launcher*.ps1` / `tools/start-tauri.spec`）已随 ISSUE #784 整体删除。
+双击 `src-tauri/target/release/app.exe` 就是完整的启动形态 —— 编排（起 dev server /
+端口 / 缓存 / 回收）由壳自己承担（见 `src-tauri/src/shell_launch.rs` 与规范 §1.5）。
 
 ## 壳（Rust）怎么编
 
 | 入口 | 产物 | 什么时候用 |
 |---|---|---|
-| `build-tauri-release.ps1` | `src-tauri/target/release/app.exe` | 改完 Rust / 窗口配置 / 启动页后（**必须带 `--features custom-protocol`**，否则启动页会被导航到 devUrl 且资源不内嵌） |
+| `build-tauri-release.ps1` | `src-tauri/target/release/app.exe`（**唯一入口**） | 改完 Rust / 窗口配置 / 启动页后（**必须带 `--features custom-protocol`**，否则启动页会被导航到 devUrl 且资源不内嵌） |
 | `build-standalone.ps1` | 完整生产构建（`pnpm tauri build --no-bundle`） | 要「双击即独立运行、不连 dev server」的分发场景 |
 | `rebuild-static.ps1` | 重建 `src-tauri/static` | `static` 被污染导致黑屏时，先跑它再重编壳 |
 
 ## 一键发布
 
-`build-all.ps1` = `build-tauri-release.ps1` + `build-launcher.ps1`，结束时报告
-整轮与各步耗时（规范 §7.0）。两个子步骤职责独立、前置工具链不同（Rust vs Python），
-**不合并为单文件**。
+`build-all.ps1` = `build-tauri-release.ps1`（单步），结束时报告整轮耗时（规范 §7.0）。
+原先还有「打包启动器 exe」那一步，已随 ISSUE #784 删除；产物就是壳本身。
 
 ## 非 Windows 平台
 

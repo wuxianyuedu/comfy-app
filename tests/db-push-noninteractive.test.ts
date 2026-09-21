@@ -56,16 +56,25 @@ describe("pnpm db:push 非交互可用", () => {
     expect(pkg.scripts["db:push"]).not.toContain("drizzle-kit");
   });
 
-  it("脚本以 --force 运行 drizzle-kit（无交互的前提）并复核用户表数", () => {
+  it("以 --force 运行 drizzle-kit，且判定依据不是它的退出码", () => {
     const src = fs.readFileSync(
       path.join(process.cwd(), "scripts", "db-push.mjs"),
       "utf8",
     );
-    expect(src).toContain('"--force"');
-    // 关键：判定依据必须是「库里有没有表」，不能是 drizzle-kit 的退出码
-    //（无 TTY 上正是「报错但 exit 0」）。用例用「退出码被显式忽略」的写法钉住这条。
+    const core = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "db-push-core.mjs"),
+      "utf8",
+    );
+    /* `--force` 与「命令起没起来 / 跑完落没落地」的判据自 2026-09-20 起收在
+     * db-push-core.mjs：`pnpm db:push`（force: true）与启动链路的按需同步
+     * （force: false）共用它 —— 两处各判一次必然分叉。 */
+    expect(core).toContain('"--force"');
+    expect(src).toContain("force: true");
     expect(src).toContain("countUserTables");
-    expect(src).toMatch(/刻意不看\s*result\.status|result\.status/);
+    // 判定依据必须是「库里到底有什么」，不能是 drizzle-kit 的退出码
+    //（无 TTY 上正是「报错但 exit 0」）。用例用「退出码被显式忽略」的写法钉住这条。
+    expect(src).toContain("刻意不看");
+    expect(src).not.toMatch(/result\.status\s*===/);
   });
 
   it("无 TTY 真跑：库文件建不出来时非零退出，而不是留个空库当成功", () => {

@@ -20,6 +20,7 @@
  * @module comfyui/executor-cli — comfy-cli 执行路径（**两种格式统一**）
  */
 import { errorText } from "~/lib/error-message";
+import { tailWindow } from "~/lib/page-window";
 import "server-only";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
@@ -42,7 +43,7 @@ import {
   type JsonRecord,
 } from "./raw-overrides";
 import { trace } from "./trace";
-import { COMFYUI_DEFAULT_PORT } from "../endpoints";
+import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST } from "../endpoints";
 
 // 保持 executor.ts barrel 的 `applyRawOverrides` 导出不变
 //（纯逻辑已抽到 ./raw-overrides，这里仅透传）。
@@ -141,11 +142,11 @@ export async function executeViaComfyCli(job: Job) {
       : `→ executeViaComfyCli 入口（API 图，由 comfy-cli 直接提交）`,
   );
   const base = await resolveComfyBase();
-  let host = "127.0.0.1";
+  let host = LOOPBACK_HOST;
   let port = COMFYUI_DEFAULT_PORT;
   try {
     const u = new URL(base);
-    host = u.hostname === "localhost" ? "127.0.0.1" : u.hostname;
+    host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
     port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     /* keep defaults */
@@ -399,7 +400,7 @@ export async function executeViaComfyCli(job: Job) {
         `[comfy-cli stderr] 另有 ${noisy} 行 Python Deprecation/Syntax 警告（第三方库噪声，与执行结果无关）已省略`,
       );
     }
-    const tail = stderrSink.raw().trim().split("\n").slice(-12).join("\n");
+    const tail = tailWindow(stderrSink.raw().trim().split("\n"), 12).join("\n");
     /* 未收到 envelope 的退出是「结果丢失」的头号嫌疑路径：完整 stderr +
      * 未消费的 stdout 尾部一次性落 trace（面板仍是精简的 12 行）。 */
     trace("cli", taskId, `进程退出 code=${code}（未收到 envelope）`, {

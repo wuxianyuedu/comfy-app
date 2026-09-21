@@ -6,7 +6,7 @@ import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
 import { formatLocalStamp } from "~/lib/time-format";
 import { OLLAMA_STOP_PROBE } from "~/lib/retry-policy";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
-import { OLLAMA_DEFAULT_PORT } from "~/lib/endpoints";
+import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { killProcessTreeByImage } from "~/lib/process/kill-process-tree";
 
 export const runtime = "nodejs";
@@ -47,7 +47,7 @@ function appendOllamaBanner(kind: "start" | "end", title: string): void {
 }
 
 async function ollamaUp(): Promise<boolean> {
-  return fetch(`http://127.0.0.1:${OLLAMA_PORT}/api/version`, {
+  return fetch(`${ollamaBaseUrl(OLLAMA_PORT)}/api/version`, {
     signal: AbortSignal.timeout(2000),
   })
     .then((r) => r.ok)

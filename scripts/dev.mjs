@@ -17,8 +17,9 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAppPort } from "./app-port.mjs";
-import { probeSchemaSync } from "./db-schema-state.mjs";
+import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { exitIfEnvNotReady } from "./env-preflight.mjs";
+import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -33,8 +34,10 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "-p" || a === "--port") port = argv[i + 1] ?? port;
     else if (a.startsWith("--port=")) port = a.slice("--port=".length);
-    else if (a === "-H" || a === "--hostname") hostname = argv[i + 1] ?? hostname;
-    else if (a.startsWith("--hostname=")) hostname = a.slice("--hostname=".length);
+    else if (a === "-H" || a === "--hostname")
+      hostname = argv[i + 1] ?? hostname;
+    else if (a.startsWith("--hostname="))
+      hostname = a.slice("--hostname=".length);
   }
   return { port, hostname };
 }
@@ -55,13 +58,17 @@ process.stdout.write(
 // 用户看到的是「起来了但报错」，而事实是端口无人监听。
 exitIfEnvNotReady(root);
 
-// 表没建时**提前讲清楚**，而不是等页面 500：`/` 与 `/api/health` 在空库上
-// 也都能过（详见 scripts/db-push.mjs 的说明），用户很容易误判成「装好了」。
-// 只警告不退出 —— 前端页面本身可跑，退出会让「只想改 UI」的人被挡住。
-if (probeSchemaSync(root) !== "ready") {
+/* schema 自检 + **后台**同步：拉了含 schema 变更的代码之后不必记得跑
+ * `pnpm db:push`（判据、自动做到哪一步为止见 db-schema-state.mjs）。
+ *
+ * 这里**不等它**——drizzle 一轮约 17 秒、同步一次 15~30 秒，等它等于「先同步、
+ * 再起 Next」，用户要盯着空窗等半分钟才看到页面。等待时间还给用户，期间由页面
+ * 自己说「正在同步，稍候刷新」（`GET /api/schema` + 状态栏）。 */
+const schema = spawnSchemaSync(root);
+if (!schema.started) {
   process.stdout.write(
-    "[dev.mjs] ⚠ 数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。\n" +
-      "[dev.mjs]   先执行：pnpm db:push（见 docs/standards/launch-and-build.md §9.1）\n",
+    `[dev.mjs] ⚠ 无法后台核对数据库结构（${schema.reason ?? "原因未知"}）——` +
+      "必要时手动跑：pnpm db:push\n",
   );
 }
 
@@ -91,6 +98,10 @@ if (invocation.viaHost) {
   );
 }
 
+// 起服务之前先回显命令行：dev server 一起就接管终端输出，之后看不出跑的是哪条
+// （`>>> ` 与门禁脚本同一口径，一次运行的日志里 grep 得到全部命令行）。
+echoCommandLine(invocation.command, invocation.args);
+
 // Next.js dev 读取 PORT 环境变量；显式透传给 next dev 子进程
 const result = spawnSync(invocation.command, invocation.args, {
   stdio: "inherit",
@@ -101,7 +112,7 @@ const result = spawnSync(invocation.command, invocation.args, {
 if (result.error) {
   process.stderr.write(
     `[dev.mjs] ✗ 起 pnpm 失败（${result.error.code ?? "UNKNOWN"}）：${result.error.message}\n` +
-      `[dev.mjs]   实际命令：${invocation.command} ${invocation.args.join(" ")}\n`,
+      `[dev.mjs]   实际命令：${formatCommandLine(invocation.command, invocation.args)}\n`,
   );
   process.exit(1);
 }
