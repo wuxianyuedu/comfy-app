@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { isRecord } from "~/lib/is-record";
+import { useOfflineGate } from "./use-offline-gate";
 import type {
   ComfyQueueStatus,
   ComfyRunningTask,
@@ -136,8 +137,15 @@ export function useComfyQueue(): ComfyQueueView {
    * 会让 SSR 与客户端首帧不一致；没有在跑的任务时它根本不被读。 */
   const [now, setNow] = useState(0);
   const stoppedRef = useRef(false);
+  /* 在线判定走与资源格同一条迟滞（use-offline-gate）：ComfyUI 跑图时 /queue
+   * 偶发超时被服务端判 online:false，单次不该让这一格闪没，连续达阈值才提交离线。
+   * 两路共用同一原语，保证「ComfyUI 是否在线」的口径一致。 */
+  const tolerateOffline = useOfflineGate();
+  /* 自增请求号：只接受最新一次的观测，丢弃乱序迟到的旧回包，避免污染连续失败计数。 */
+  const reqIdRef = useRef(0);
 
   const probe = useCallback(async () => {
+    const myReq = ++reqIdRef.current;
     try {
       const res = await fetch("/api/comfy/queue", {
         cache: "no-store",
@@ -145,13 +153,22 @@ export function useComfyQueue(): ComfyQueueView {
       });
       if (!res.ok) return;
       const data: unknown = await res.json();
-      if (stoppedRef.current) return;
-      setStatus(parseStatus(data));
+      if (stoppedRef.current || myReq !== reqIdRef.current) return;
+      const parsed = parseStatus(data);
+      if (parsed.online) {
+        tolerateOffline(true);
+        setStatus(parsed);
+        return;
+      }
+      // 离线观测：容忍期内保留上一次好状态（不闪），连续失败达阈值才提交离线。
+      if (!tolerateOffline(false)) {
+        setStatus(parsed);
+      }
     } catch {
       /* 探测失败不动状态：瞬时断网不该让状态栏那一格忽明忽暗（与 dev server
        * 存活探测同口径，见 use-dev-server-liveness.ts 文件头）。 */
     }
-  }, []);
+  }, [tolerateOffline]);
 
   useInterval(
     useCallback(() => {
