@@ -9,8 +9,8 @@
  * mock 边界：~/server/db（内存测试库）、~/server/better-auth（可控 getSession）、
  * ~/lib/core/logger（静音）。鉴权/限流中间件均走真实实现。
  *
- * 说明：tRPC `timingMiddleware` 在非生产为 dev 而加 100–500ms 人工延迟，故超窗测试
- * 先用同一模块的 `checkRateLimit` 预填桶（二者共享限流桶），把真实 tRPC 调用压到最少。
+ * 说明：限流「超窗测试」先用同一模块的 `checkRateLimit` 预填桶（二者共享限流桶），
+ * 以最少真实 tRPC 调用确定性地命中「超窗 → TOO_MANY_REQUESTS」路径。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 

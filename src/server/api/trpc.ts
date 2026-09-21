@@ -10,7 +10,6 @@
 import "server-only";
 
 import { initTRPC, TRPCError } from "@trpc/server";
-import { sleep } from "~/lib/with-timeout";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
@@ -149,10 +148,9 @@ export function resetSlowQueryBuckets(): void {
 
 const timingMiddleware = t.middleware(async ({ next, path, type }) => {
   const start = Date.now();
-  if (t._config.isDev) {
-    const waitMs = Math.floor(Math.random() * 400) + 100;
-    await sleep(waitMs);
-  }
+  // 本地单机应用（Tauri 壳 ↔ loopback server），不注入任何人为延迟：
+  // create-t3-app 脚手架的「模拟网络延迟」在此毫无意义，却会让每个
+  // procedure 无端 0.1–0.5s，dev 期整体明显偏慢。这里只保留耗时观测。
   try {
     const result = await next();
     const durationMs = Date.now() - start;
