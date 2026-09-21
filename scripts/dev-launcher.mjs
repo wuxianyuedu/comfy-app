@@ -68,6 +68,7 @@ import {
   spawnInGroup,
   whichCommand,
 } from "./launcher-core/shell.mjs";
+import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
 import {
   checkNodeModules,
@@ -714,6 +715,9 @@ export function openBrowser(url) {
       ? "open"
       : "xdg-open";
   const args = isWindows() ? ["/c", "start", "", url] : [url];
+  // 三平台各有一条不同的命令（cmd / open / xdg-open）：回显后「浏览器没弹出来」
+  // 这类现象能落到具体是哪条命令、参数对不对上。
+  echoCommandLine(command, args);
   const child = spawn(command, args, {
     stdio: "ignore",
     detached: true,

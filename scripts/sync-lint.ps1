@@ -73,6 +73,8 @@ if ($devRunning) {
 
 # ── 2) pnpm install（非交互，对齐 lockfile）────────────────
 Say-Info "步骤 1/2：pnpm install"
+# 命令行回显：与 .mjs 侧同一 `>>> ` 前缀（那侧的唯一出口是 launcher-core/command-echo.mjs）。
+Write-Host ">>> pnpm install" -ForegroundColor Yellow
 & pnpm install
 $code = $LASTEXITCODE
 if ($code -ne 0) {
@@ -86,6 +88,7 @@ Say-OK "pnpm install 完成"
 
 # ── 3) pnpm lint ───────────────────────────────────────────
 Say-Info "步骤 2/2：pnpm lint"
+Write-Host ">>> pnpm lint" -ForegroundColor Yellow
 & pnpm lint
 $code = $LASTEXITCODE
 if ($code -ne 0) {

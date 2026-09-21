@@ -47,6 +47,8 @@ if (-not (Test-Path -LiteralPath (Join-Path $root "node_modules\.bin"))) {
 Say-OK "node $(& node -v) / pnpm $(& pnpm -v)"
 
 Say-Info "步骤 1/2：文档引用一致性校验（pnpm doc:check）"
+# 命令行回显：与 .mjs 侧同一 `>>> ` 前缀（那侧的唯一出口是 launcher-core/command-echo.mjs）。
+Write-Host ">>> pnpm doc:check" -ForegroundColor Yellow
 & pnpm doc:check
 $code = $LASTEXITCODE
 if ($code -ne 0) {
@@ -57,6 +59,7 @@ if ($code -ne 0) {
 Say-OK "文档引用一致性通过"
 
 Say-Info "步骤 2/2：生成原文文档（pnpm doc:render）"
+Write-Host ">>> pnpm doc:render" -ForegroundColor Yellow
 & pnpm doc:render
 $code = $LASTEXITCODE
 if ($code -ne 0) {

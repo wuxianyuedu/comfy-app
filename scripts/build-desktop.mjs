@@ -30,6 +30,10 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  echoCommandLine,
+  formatCommandLine,
+} from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 // 启动页副本（`splash.html` + `index.html`）的清单与同步：与 dev-launcher 共用
 // 同一份实现，避免「少写一个副本名」这类静默失误在两处各自发生。
@@ -120,6 +124,9 @@ console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）..
   if (!invocation) {
     fail("PATH 上找不到可用的 pnpm（先跑 pnpm check:toolchain 自查）。");
   }
+  // 这一句是「1/4 执行 pnpm build」的**真实命令行**：构建日志里既有步骤名、也有
+  // 到底跑了哪条命令，事后核对构建产物与命令的对应关系不必再猜。
+  echoCommandLine(invocation.command, invocation.args);
   const build = spawnSync(invocation.command, invocation.args, {
     stdio: "inherit",
     cwd: root,
@@ -128,7 +135,7 @@ console.log("[build-desktop] 1/4 执行 pnpm build（Next standalone 输出）..
   if (build.error) {
     fail(
       `起 pnpm 失败（${build.error.code ?? "UNKNOWN"}）：${build.error.message}；` +
-        `实际命令：${invocation.command} ${invocation.args.join(" ")}`,
+        `实际命令：${formatCommandLine(invocation.command, invocation.args)}`,
     );
   }
   if (build.status !== 0)
