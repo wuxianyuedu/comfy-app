@@ -40,12 +40,32 @@ type CheckedEvent = { target: { checked: boolean } };
  *
  * `transform` 是**显式**的：过滤 / 限长这类转换写在调用处、以具名函数传入，
  * 而不是塞进箭头函数体 —— 同一件事就不再有两处各自实现的机会。
+ *
+ * 两条重载的意义：`T = string` 时可以省 `transform`（取到的原值就是最终值）；
+ * `T` 是别的类型时**必须**显式给 —— 早期单签 + `transform = (raw) => raw as unknown as T`
+ * 的默认值，会让 `textHandler<number>(cb)` 忘记传 transform 时把 `"42"` 的字符串
+ * 原文交给 `(value: number) => void` 的回调：TypeScript 看不出、运行时下游
+ * `Number.isFinite(str)` 一律 false 走 fallback、或者直接落库变字符串。
+ * 「值转换是可选的」在这个模块的定位（全库唯一 props 适配器出口）里就是谎言，
+ * 现在把它从**类型契约**上就掐掉。
  */
-export function textHandler<T = string>(
+export function textHandler(
+  onValue: ValueHandler<string>,
+): (event: ValueEvent) => void;
+export function textHandler<T>(
   onValue: ValueHandler<T>,
-  transform: (raw: string) => T = (raw) => raw as unknown as T,
+  transform: (raw: string) => T,
+): (event: ValueEvent) => void;
+export function textHandler<T>(
+  onValue: ValueHandler<T>,
+  transform?: (raw: string) => T,
 ): (event: ValueEvent) => void {
-  return (event) => onValue(transform(event.target.value));
+  // 走到这里 transform 一定存在，除非调用方命中的是「T = string」那条重载 ——
+  // 这时把 raw 原样交给回调就是恒等，`as unknown as T` 只在**编译器已经
+  // 通过重载决议把 T 锁到 string** 的路径上生效，不再有「非 string T 忘传
+  // transform」的漏口。
+  const fn: (raw: string) => T = transform ?? ((raw) => raw as unknown as T);
+  return (event) => onValue(fn(event.target.value));
 }
 
 /**
