@@ -1,5 +1,6 @@
 import { clamp } from "~/lib/clamp";
 import { readApiError } from "~/lib/api-error";
+import { errorMessage } from "~/lib/error-message";
 
 /* ── 「让 ComfyUI 立即可用」的客户端（第②层网络部分）─────────────────────
  * 素材上传这类动作要求 ComfyUI 已经跑着（文件要写进它的 input 目录）。此前
@@ -54,7 +55,7 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
     return {
       ok: false,
       pending: true,
-      message: e instanceof Error ? e.message : "无法连接应用服务，稍后重试",
+      message: errorMessage(e, "无法连接应用服务，稍后重试"),
     };
   }
   let body: unknown;

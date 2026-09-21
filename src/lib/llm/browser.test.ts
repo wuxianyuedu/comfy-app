@@ -327,7 +327,7 @@ describe("probeRemoteApi", () => {
     );
     const got = await probeRemoteApi({});
     expect(got.ok).toBe(false);
-    expect(got.detail).toBe("Failed to fetch");
+    expect(got.detail).toBe("网络请求失败，请检查应用服务是否正在运行");
   });
 
   it("detail 缺失时回落到 error 字段", async () => {

@@ -213,12 +213,12 @@ describe("model-catalog-client", () => {
     });
   });
 
-  it("网络抛错 → ok:false + 原始错误消息", async () => {
+  it("网络抛错 → ok:false + errorMessage 翻译成人话（不再是原始消息）", async () => {
     fetchMock.mockRejectedValue(new Error("The operation was aborted"));
     await expect(fetchLocalModels()).resolves.toEqual({
       ok: false,
       models: [],
-      detail: "The operation was aborted",
+      detail: "请求超时或被中断，请稍候重试",
     });
   });
 
