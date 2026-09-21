@@ -633,10 +633,16 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       ));
     }
   }
+  // 一条都没读到时，把壳在启动那一刻写下的报告附上（`startup_report()` 与
+  // 日志里那份同源）。原由：编排器写自己的 `launch-status.json` 时会把壳的快照
+  // （含 diagnostics.projectRoot 与这份报告）整份顶掉，而它写第一份日志之前，
+  // 磁盘上确实一份日志都没有 —— 那段窗口期里「这条日志读不到」的现场就只剩
+  // 这一份报告（项目根 / 编排脚本在不在 / 依赖门禁 / 端口 / 各日志路径）。
   if sections.is_empty() {
-    // 走到这里 = 一条都没读到。「没了」这一步必须给出**下一步做什么**，
-    // 否则用户唯一能做的就是把屏幕截图发出来（手验反馈正是如此）。
-    return Ok(no_log_guidance(&root));
+    let report = shell_launch::startup_report_section(&root, "（读不到日志，这是壳接手时的快照）");
+    // 「没了」这一步必须给出**下一步做什么**，否则用户唯一能做的就是把屏幕
+    // 截图发出来（手验反馈正是如此）。
+    return Ok(format!("{}\n\n{}", report, no_log_guidance(&root)));
   }
   Ok(sections.join("\n\n"))
 }
@@ -1414,33 +1420,8 @@ pub fn run() {
       // sidecar 与托盘。
       setup_splash_window(app);
 
-      // 双击壳（唯一的启动入口形态）：这里承担原先 Python 启动器的那一段编排。
-      //   · 先定运行模式（编排器在 = prebuilt，不在 = standalone）——它在
-      //     `setup_standalone_runtime` 之前定好，否则 standalone 壳不会去拉内嵌 server；
-      //   · 再清掉上一次运行留下的编排器孤儿（壳被强杀时 job 与进程组都可能落空），
-      //     否则「新编排器起不来 + 端口被旧 dev server 占着」会表现为双击没反应；
-      //   · 最后起编排器。**不留「命中的就跳过」的捷径**：两个 `app.exe` 进程同时
-      //     双击的场景已由 run() 早期的单实例判定拦下（第二个进程不建窗口就退出）。
       if self_launch {
-        shell_launch::ensure_launch_mode(&project_root);
-        // 「壳已接手」这一时刻必须在磁盘上留痕：编排器写第一份
-        // run/launch-status.json 之前有 1~2 秒空档，而 release 壳没有控制台，
-        // 那时启动页与日志面板会**什么都读不到**（ISSUE #784 手验反馈）。
-        // 先写一份 fallback 快照 + 一份启动报告，让这段窗口期有现场可查；
-        // 编排器一旦写自己的状态，这份快照就被顶掉，不会与它争权威。
-        shell_launch::write_idle_status(
-          &project_root,
-          "shell-prepare",
-          "桌面壳已接手启动编排，正在检查这个检出能不能自己起…",
-        );
-        shell_launch::log_startup_report(&project_root, "壳已接手（双击 app.exe）");
-        if let Some(pid) = shell_launch::find_owned_orchestrator() {
-          log::warn!(
-            "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
-          );
-          shell_launch::reap_pid(&project_root, pid);
-        }
-        start_own_orchestrator(app.handle(), &project_root);
+        start_self_orchestration(app, &project_root);
       }
 
       // ── 方向 B：启动页与「应用」窗口分离 ──
@@ -1467,6 +1448,40 @@ pub fn run() {
     .expect("error while building tauri application");
 
   app.run(handle_run_event);
+}
+
+/// 双击壳（唯一的启动入口形态）：承担原先 Python 启动器的那一段编排。
+///
+/// 顺序是契约，抽成一个命名步骤而不是塞在 `setup` 闭包里（Rust 侧同维度阈值
+/// 120 行，见规范 §12.13）：
+///   1. **先定运行模式**（编排器在 = prebuilt，不在 = standalone）—— 它在
+///      `setup_standalone_runtime` 之前定好，否则 standalone 壳不会去拉内嵌 server；
+///   2. **再在磁盘上留痕**：「壳已接手」这一时刻必须可查（编排器写第一份
+///      run/launch-status.json 之前有 1~2 秒空档，而 release 壳没有控制台，
+///      那时启动页与日志面板会**什么都读不到**，ISSUE #784 手验反馈）。
+///      写的是 fallback 快照（带启动报告）+ 编排链路日志，编排器一旦写自己的
+///      状态就把快照顶掉，因此它不会与权威进度争；
+///   3. **回收上一次的残留**：壳被强杀时 job 与进程组都可能落空，遗留的编排器
+///      会占着端口 → 表现为双击没反应；
+///   4. **最后起编排器**。**不留「命中的就跳过」的捷径**：两个 `app.exe` 同时
+///      双击的场景已由 run() 早期的单实例判定拦下（第二个进程不建窗口就退出）。
+fn start_self_orchestration(app: &mut tauri::App, project_root: &str) {
+  shell_launch::ensure_launch_mode(project_root);
+  const PHASE_NOTE: &str = "壳已接手（双击 app.exe）";
+  shell_launch::write_idle_status(
+    project_root,
+    "shell-prepare",
+    "桌面壳已接手启动编排，正在检查这个检出能不能自己起…",
+    Some(shell_launch::startup_report_json(project_root, PHASE_NOTE)),
+  );
+  shell_launch::log_startup_report(project_root, PHASE_NOTE);
+  if let Some(pid) = shell_launch::find_owned_orchestrator() {
+    log::warn!(
+      "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
+    );
+    shell_launch::reap_pid(project_root, pid);
+  }
+  start_own_orchestrator(app.handle(), project_root);
 }
 
 /// 自编排：由壳自己起 dev-launcher.mjs，并把「服务就绪」这一步接到启动页那条
@@ -1505,6 +1520,7 @@ fn start_own_orchestrator(app: &tauri::AppHandle, project_root: &str) {
         project_root,
         "shell-orchestrating",
         "编排器已启动，正在等待本地服务就绪（诊断见「查看日志」）…",
+        None,
       );
       shell_launch::log_launch_line(project_root, "info", "编排器已拉起，等待它写第一份状态");
       shell_launch::attach_kill_on_close_job();
