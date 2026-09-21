@@ -76,6 +76,7 @@ export const generateRouter = createTRPCRouter({
       });
       enqueue({
         taskId: task.id,
+        workflowName,
         rawJson: tpl.rawJson,
         overrides: data.workflowInputs,
       });

@@ -69,6 +69,10 @@ export type RawWorkflowOverride = {
 export type Job = {
   taskId: string;
 
+  /** 工作流名（入队方从模板行带上）：执行日志要能独立说出「这次跑的是哪个
+   *  工作流」—— 面板标题是客户端拼的，日志行才是可导出/回放的自包含现场。 */
+  workflowName?: string;
+
   prompt?: Record<string, unknown>;
 
   /** /** 原始 UI 格式的 JSON（含子图 wrapper）—— 走 comfy-cli 执行。 */

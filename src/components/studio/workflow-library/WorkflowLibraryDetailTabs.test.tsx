@@ -53,7 +53,7 @@ function TabHarness({ onValueChange }: { onValueChange?: () => void }) {
 }
 
 describe("详情面板页签走 ui/tabs", () => {
-  it("三个页签都渲染成 role=tab，标签沿用 DETAIL_TABS", () => {
+  it("全部页签都渲染成 role=tab，标签沿用 DETAIL_TABS", () => {
     render(<TabHarness />);
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual(
@@ -63,7 +63,7 @@ describe("详情面板页签走 ui/tabs", () => {
 
   it("同一时刻只挂载当前页签的面板", () => {
     render(<TabHarness />);
-    expect(screen.getByText("面板：画布节点")).toBeInTheDocument();
+    expect(screen.getByText("面板：编辑对外参数")).toBeInTheDocument();
     expect(screen.queryByText("面板：工坊封装")).toBeNull();
     expect(screen.queryByText("面板：源文件")).toBeNull();
   });

@@ -58,9 +58,11 @@ interface WorkshopEncapsulationPanelProps {
   onModeChange?: (mode: string) => void;
 }
 
-/** 契约口状态徽标的形态（配色表；文案由 `entryStateBadge` 按缺口给）。 */
+/** 契约口状态徽标的形态（配色表；文案由 `entryStateBadge` 按缺口给）。
+ *  暗色下背景必须跟着切（`dark:bg-emerald-500/15`）：只切文字色的话是
+ *  浅绿字叠在浅绿底上，对比度极低（用户实测「暗色下看不清」）。 */
 const RESOLVED_BADGE_CLASS =
-  "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
+  "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300";
 const MISSING_REQUIRED_BADGE_CLASS =
   "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300";
 
@@ -179,7 +181,7 @@ export function WorkshopEncapsulationPanel({
         />
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
         {status.ready ? (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800 dark:text-emerald-300">
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
             已配置 · 工坊可用
           </span>
         ) : (

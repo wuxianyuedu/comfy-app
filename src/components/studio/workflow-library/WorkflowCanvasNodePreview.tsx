@@ -100,6 +100,11 @@ interface Props {
   /** 对外参数落点的持久化回调（库里拖圆点改落点，写回
    *  `paramMap.source.mode:<模式>`）。不传时卡片列只呈现当前落点、不可拖。 */
   onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
+  /** 视图模式（受控，顶层页签持有）：
+   *  "edit" = 编辑对外参数（参数连线画布，禁止执行生成）
+   *  "use"  = 实际使用（简化视图，可生成、可看结果）
+   *  缺省按 "edit"（首个页签；测试等只读消费方无需关心视图模式）。 */
+  viewMode?: "edit" | "use";
 }
 
 export function WorkflowCanvasNodePreview({
@@ -114,15 +119,14 @@ export function WorkflowCanvasNodePreview({
   onModeChange,
   onSeedModeChange,
   onPatchParamMap,
+  viewMode: viewModeProp,
 }: Props) {
+  /* 视图模式归一：未指定按 "edit"（首个页签，见 Props 注释）。 */
+  const viewMode = viewModeProp ?? "edit";
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   /* 节点相位的节流闸门（`~/components/ui/use-throttled-progress`）。 */
   const progressGate = useRef(createThrottleGate());
-  /* 画布节点页签的视图模式：
-   * "edit" = 编辑对外参数（参数连线画布，禁止执行生成）
-   * "use"  = 实际使用（简化视图，可生成、可看结果） */
-  const [viewMode, setViewMode] = useState<"edit" | "use">("edit");
   /* 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    * 上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
@@ -528,38 +532,6 @@ export function WorkflowCanvasNodePreview({
         viewMode === "use" ? "custom-scrollbar overflow-y-auto" : ""
       }`}
     >
-      {/* ── 视图模式切换：编辑对外参数 / 实际使用 ── */}
-      <div className="flex w-full items-center justify-between px-1">
-        <div className="border-border bg-subtle flex rounded-lg border p-0.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode("edit")}
-            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-              viewMode === "edit"
-                ? "bg-panel text-ink shadow-sm"
-                : "text-ink-faint hover:text-ink"
-            }`}
-          >
-            编辑对外参数
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode("use")}
-            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-              viewMode === "use"
-                ? "bg-panel text-ink shadow-sm"
-                : "text-ink-faint hover:text-ink"
-            }`}
-          >
-            实际使用
-          </Button>
-        </div>
-      </div>
-
       {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
       {viewMode === "edit" && (
         <WorkflowLibraryCanvas
@@ -647,7 +619,7 @@ export function WorkflowCanvasNodePreview({
                   label="▶ 用此工作流生成"
                   disabled={true}
                   onClick={run}
-                  title="切换到「实际使用」模式后可执行"
+                  title="切换到「实际使用」页签后可执行"
                 />
               }
             />

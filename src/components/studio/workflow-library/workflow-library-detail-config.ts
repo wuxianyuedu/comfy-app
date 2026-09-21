@@ -5,9 +5,15 @@ import type { SourceModalData } from "~/components/studio/SourceModal";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowRow } from "./workflow-library-config";
 
-/** 详情面板的三个页签 —— 数组顺序即渲染顺序。 */
+/** 详情面板的四个页签 —— 数组顺序即渲染顺序。
+ *
+ *  「编辑对外参数 / 实际使用」原先是「画布节点」页签内部的子页签，二者内容
+ *  基本独立（前者是参数落点编辑画布，后者是填表运行），拆成顶层页签少一层
+ *  嵌套。两者共用同一个常驻实例（见 `WorkflowLibraryDetailView`）：切页签
+ *  只切视图模式，表单值与运行态不丢。 */
 export const DETAIL_TABS = [
-  { key: "canvas", label: "画布节点" },
+  { key: "canvas", label: "编辑对外参数" },
+  { key: "use", label: "实际使用" },
   { key: "params", label: "工坊封装" },
   { key: "source", label: "源文件" },
 ] as const;

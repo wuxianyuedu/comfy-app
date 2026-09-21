@@ -101,6 +101,7 @@ export async function createWorkflowRunTask(
   }
   enqueue({
     taskId: task.id,
+    workflowName: tpl.name,
     rawJson: tpl.rawJson,
     overrides: workflowInputs,
   });
