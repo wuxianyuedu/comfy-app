@@ -97,9 +97,22 @@ export function collectOutputs(
  *     "inputs": { "seed": 941524759465139, "steps": 25, "cfg": 4, ... }  // 真实 seed 等
  *   }   // 上面 inputs 里就是本次真实执行用的参数
  *
- * 取 graph 顺序第一个 KSampler/KSamplerAdvanced 为主采样器。返回值所有字段都可能
- * 为 `undefined`，调用方自行决定是否覆盖请求默认值。
+ * 一个工作流可能有**多个**采样节点（两段采样、放大链路各带一个 KSampler 等）。
+ * 这里把 graph 里每个采样节点按出现顺序收进 `samplers`，并把**第一个**作为「主
+ * 采样器」摊平到顶层字段——顶层那份是历史既有形态（种子落库 / manifest / 成功日志
+ * 都读它），保留它让下游零改动；要看全部采样器就读 `samplers`。
  */
+export type SamplerRuntime = {
+  nodeId: string;
+  classType: string;
+  seed?: number;
+  steps?: number;
+  cfg?: number;
+  sampler_name?: string;
+  scheduler?: string;
+  denoise?: number;
+};
+
 export type RuntimeParams = {
   seed?: number;
   steps?: number;
@@ -109,7 +122,41 @@ export type RuntimeParams = {
   denoise?: number;
   samplerNodeId?: string;
   samplerClassType?: string;
+  /** graph 里全部采样节点（按出现顺序）；只有一个时也是长度 1 的数组。 */
+  samplers?: SamplerRuntime[];
 };
+
+/** 采样节点类名判定：KSamplerAdvanced 用 noise_seed，KSampler / SamplerCustom 用 seed。 */
+function isSamplerClassType(t: string): boolean {
+  return t === "KSampler" || t === "KSamplerAdvanced" || t === "SamplerCustom";
+}
+
+/** 读单个采样节点的 inputs → `SamplerRuntime`（缺字段留 undefined，不臆造）。 */
+function readSamplerNode(
+  nodeId: string,
+  classType: string,
+  inputs: Record<string, unknown>,
+): SamplerRuntime {
+  const seedRaw = inputs.noise_seed ?? inputs.seed;
+  const seed =
+    typeof seedRaw === "number"
+      ? seedRaw
+      : typeof seedRaw === "string" &&
+          seedRaw.trim() !== "" &&
+          Number.isFinite(Number(seedRaw))
+        ? Number(seedRaw)
+        : undefined;
+  const out: SamplerRuntime = { nodeId, classType };
+  if (typeof seed === "number" && Number.isFinite(seed)) out.seed = seed;
+  if (typeof inputs.steps === "number") out.steps = inputs.steps;
+  if (typeof inputs.cfg === "number") out.cfg = inputs.cfg;
+  if (typeof inputs.sampler_name === "string" && inputs.sampler_name)
+    out.sampler_name = inputs.sampler_name;
+  if (typeof inputs.scheduler === "string" && inputs.scheduler)
+    out.scheduler = inputs.scheduler;
+  if (typeof inputs.denoise === "number") out.denoise = inputs.denoise;
+  return out;
+}
 
 export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const out: RuntimeParams = {};
@@ -117,48 +164,27 @@ export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const graphRaw = (prompt as Record<string, unknown> | null | undefined)?.[2];
   if (!graphRaw || typeof graphRaw !== "object") return out;
   const graph = graphRaw as Record<string, unknown>;
+  const samplers: SamplerRuntime[] = [];
   for (const [nid, nodeRaw] of Object.entries(graph)) {
     const node = nodeRaw as Record<string, unknown> | undefined;
     const t = typeof node?.class_type === "string" ? node.class_type : "";
-    // KSamplerAdvanced 用 noise_seed；KSampler / SamplerCustom 用 seed。
-    if (t !== "KSampler" && t !== "KSamplerAdvanced" && t !== "SamplerCustom")
-      continue;
+    if (!isSamplerClassType(t)) continue;
     const inputs = (node?.inputs ?? {}) as Record<string, unknown>;
-    if (out.samplerNodeId === undefined) {
-      out.samplerNodeId = nid;
-      out.samplerClassType = t;
-    }
-    // 仅看第一个主采样器：后续出现的同类型不覆盖。
-    if (out.samplerNodeId !== nid) continue;
-    const seedRaw = inputs.noise_seed ?? inputs.seed;
-    const n =
-      typeof seedRaw === "number"
-        ? seedRaw
-        : typeof seedRaw === "string" &&
-            seedRaw.trim() !== "" &&
-            Number.isFinite(Number(seedRaw))
-          ? Number(seedRaw)
-          : undefined;
-    if (typeof n === "number" && Number.isFinite(n) && out.seed === undefined)
-      out.seed = n;
-    if (typeof inputs.steps === "number" && out.steps === undefined)
-      out.steps = inputs.steps;
-    if (typeof inputs.cfg === "number" && out.cfg === undefined)
-      out.cfg = inputs.cfg;
-    if (
-      typeof inputs.sampler_name === "string" &&
-      inputs.sampler_name &&
-      out.sampler_name === undefined
-    )
-      out.sampler_name = inputs.sampler_name;
-    if (
-      typeof inputs.scheduler === "string" &&
-      inputs.scheduler &&
-      out.scheduler === undefined
-    )
-      out.scheduler = inputs.scheduler;
-    if (typeof inputs.denoise === "number" && out.denoise === undefined)
-      out.denoise = inputs.denoise;
+    samplers.push(readSamplerNode(nid, t, inputs));
   }
+  if (samplers.length === 0) return out;
+  out.samplers = samplers;
+  /* 主采样器 = graph 顺序第一个：摊平到顶层，保持历史既有形态（下游零改动）。 */
+  const primary = samplers[0];
+  if (!primary) return out;
+  out.samplerNodeId = primary.nodeId;
+  out.samplerClassType = primary.classType;
+  if (primary.seed !== undefined) out.seed = primary.seed;
+  if (primary.steps !== undefined) out.steps = primary.steps;
+  if (primary.cfg !== undefined) out.cfg = primary.cfg;
+  if (primary.sampler_name !== undefined)
+    out.sampler_name = primary.sampler_name;
+  if (primary.scheduler !== undefined) out.scheduler = primary.scheduler;
+  if (primary.denoise !== undefined) out.denoise = primary.denoise;
   return out;
 }

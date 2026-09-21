@@ -1,11 +1,13 @@
 "use client";
 
 import { useRef } from "react";
+import { PackagePlus } from "lucide-react";
 import { useCustomNodesSettings } from "./hooks/use-custom-nodes-settings";
 import { NodesTab } from "./NodesTab";
 import { ParseConsole, ReportCards } from "./SettingsParts";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
+import { HEADER_ACTION_BTN } from "../workflow-library-config";
 
 /** 自定义节点导入对话框。
  *
@@ -17,16 +19,15 @@ export function CustomNodesSettings() {
   const dialogRef = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div>
-        <Button
-          onClick={() => ctrl.setOpen(true)}
-          className="h-auto w-full gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold shadow-sm hover:opacity-90"
-          title="从 ComfyUI 安装目录的 custom_nodes 导入自定义节点（服务端只读、绝不修改这些目录里的任何文件）"
-        >
-          <span>{"\u{1F4E6}"}</span>
-          <span>导入自定义节点</span>
-        </Button>
-      </div>
+      <Button
+        variant="outline"
+        onClick={() => ctrl.setOpen(true)}
+        className={`${HEADER_ACTION_BTN} border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright`}
+        title="从 ComfyUI 安装目录的 custom_nodes 导入自定义节点（服务端只读、绝不修改这些目录里的任何文件）"
+      >
+        <PackagePlus size={13} />
+        导入自定义节点
+      </Button>
 
       {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘
           遮罩 + `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */}

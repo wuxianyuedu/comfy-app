@@ -15,6 +15,7 @@ import {
   kvValueText,
 } from "./history-detail-derive";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
 import type { TaskDetail } from "./history-types";
 import { Button } from "~/components/ui/button";
@@ -30,6 +31,9 @@ interface HistoryDetailModalProps {
   /** 本任务所用工作流的 IO 定义：参数可读名从它的 `label` 查（任务行里只存了
    *  pin 名）。工作流已被删除时是空表，参数名如实回落 pin 名。 */
   workflowIO: WorkflowIOMap;
+  /** 模式契约注册表（只含用户改过的模式）：工坊参数按「任务模式 + 生效契约」枚举。
+   *  为 null 时回落内置默认契约。 */
+  modeContracts?: readonly ModeContract[] | null;
   onClose: () => void;
 }
 
@@ -50,6 +54,7 @@ export function HistoryDetailModal({
   detail,
   detailLoading,
   workflowIO,
+  modeContracts,
   onClose,
 }: HistoryDetailModalProps) {
   const actions = useHistoryDetailActions({
@@ -64,7 +69,14 @@ export function HistoryDetailModal({
    * 发起的任务只有「工作流参数」—— 判据见 `deriveTaskOrigin`。 */
   const origin = deriveTaskOrigin(current);
   const workshopParams =
-    origin === "workshop" ? deriveWorkshopParams(current) : [];
+    origin === "workshop"
+      ? deriveWorkshopParams(
+          current,
+          current?.type ?? null,
+          modeContracts,
+          workflowIO,
+        )
+      : [];
   const {
     rows: paramRows,
     topLevelEntries,
@@ -277,7 +289,12 @@ export function HistoryDetailModal({
                       items={workshopParams.map((row) => ({
                         id: row.id,
                         key: row.label,
-                        value: kvValueText(row.value),
+                        value:
+                          row.value === undefined ? (
+                            <span className="text-ink-fainter">未提供</span>
+                          ) : (
+                            kvValueText(row.value)
+                          ),
                         title: row.label,
                       }))}
                     />

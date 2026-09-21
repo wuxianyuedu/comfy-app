@@ -11,11 +11,17 @@
 // 错位画面（旧形态：三个下拉各自 `w-full` 铺满整行，一共三行）。包一层之后
 // 宽度压力只在「过滤组」与「动作组」之间分配，两组各自保持完整的一行。
 
+import { FolderInput } from "lucide-react";
+
 import { Button } from "~/components/ui/button";
 import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
-import type { SourceFilter, TypeFilter } from "./workflow-library-config";
+import {
+  HEADER_ACTION_BTN,
+  type SourceFilter,
+  type TypeFilter,
+} from "./workflow-library-config";
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
 interface WorkflowLibraryHeaderProps {
@@ -73,9 +79,10 @@ export function WorkflowLibraryHeader({
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
         <Button
           onClick={onToggleImport}
-          className="btn-gradient shadow-primary-500/20 hover:shadow-primary-500/30 h-auto rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-lg"
+          className={`${HEADER_ACTION_BTN} btn-gradient shadow-primary-500/20 hover:shadow-primary-500/30 text-white shadow-lg`}
         >
-          ＋ 导入工作流
+          <FolderInput size={13} />
+          导入工作流
         </Button>
         <ModeContractSettings />
         <CustomNodesSettings />

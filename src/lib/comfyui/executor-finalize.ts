@@ -307,6 +307,11 @@ async function completeInner(
         ? { sampler_class: runtime.samplerClassType }
         : {}),
       ...(runtime.samplerNodeId ? { sampler_node: runtime.samplerNodeId } : {}),
+      // 一个工作流可能有多个采样节点：顶层字段只反映主采样器（第一个），完整
+      // 逐节点信息随 samplers 数组落库，原始 JSON 因此能展示全部 KSampler。
+      ...(runtime.samplers && runtime.samplers.length > 0
+        ? { samplers: runtime.samplers }
+        : {}),
       source: "history",
     };
   }

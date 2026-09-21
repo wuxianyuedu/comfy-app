@@ -21,6 +21,7 @@ import {
   parseWorkflowIOMap,
   type WorkflowIOMap,
 } from "~/lib/workflow/workflow-io-types";
+import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 
 import { taskWorkflowId } from "../history-detail-derive";
 import {
@@ -69,6 +70,9 @@ export interface HistoryListController {
   /** 本任务所用工作流的 IO 定义（参数可读名从它的 `label` 查）。
    *  工作流已被删除 / 查询未回来时是空表，参数名如实回落 pin 名。 */
   workflowIO: WorkflowIOMap;
+  /** 模式契约注册表（只含用户改过的模式）：详情弹窗按它 + 任务模式枚举工坊对外口。
+   *  未加载 / 失败时为 null，工坊参数回落内置默认契约。 */
+  modeContracts: readonly ModeContract[] | null;
   setSort: (sort: SortKey) => void;
   switchFilter: (filter: FilterKey) => void;
   loadMore: () => void;
@@ -151,6 +155,13 @@ export function useHistoryList(): HistoryListController {
         : EMPTY_WORKFLOW_IO,
     [ioQ.isSuccess, ioQ.data],
   );
+  /* 模式契约注册表：详情弹窗按「任务模式 + 生效契约」枚举工坊对外口（与工坊
+   * 封装页、工作流库画布卡片同一份口径）。只在打开详情时拉，列表态不空跑。 */
+  const contractsQ = api.llm.modeContractsGet.useQuery(undefined, {
+    enabled: !!detailId,
+  });
+  const modeContracts = (contractsQ.data?.contracts ?? null) as
+    readonly ModeContract[] | null;
 
   const filtered = useMemo(
     () => sortTasks(filterTasks(tasks, filter), sort),
@@ -273,6 +284,7 @@ export function useHistoryList(): HistoryListController {
     detail,
     detailLoading,
     workflowIO,
+    modeContracts,
     setSort,
     switchFilter,
     loadMore,
