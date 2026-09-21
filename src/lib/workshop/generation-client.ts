@@ -436,7 +436,17 @@ function relayErrorMessage(data: unknown, status: number): string {
   return `API 请求失败 (${status})`;
 }
 
-async function postRelay(body: Record<string, unknown>): Promise<unknown> {
+/**
+ * 中继（`/api/workshop-api/generate`）的响应载荷：服务协议约定 `res.ok` 时
+ * body 一定是一个 JSON 对象；解析失败或形状不符 → `null`。三个 caller 各自
+ * 决定「拿到 null 时是抛错还是降级」（生图 / 提交视频：抛；轮询：返回
+ * `{ pending: true }`）。
+ */
+type RelayResponse = Record<string, unknown> | null;
+
+async function postRelay(
+  body: Record<string, unknown>,
+): Promise<RelayResponse> {
   const res = await fetch("/api/workshop-api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -449,7 +459,9 @@ async function postRelay(body: Record<string, unknown>): Promise<unknown> {
     data = undefined;
   }
   if (!res.ok) throw new Error(relayErrorMessage(data, res.status));
-  return data;
+  // 「res.ok 但 body 不是对象」——以前是三个 caller 各自 `isRecord(data)` 前奏，
+  // 现在这一层判据只写一次；null 交给 caller 决定抛错还是降级。
+  return isRecord(data) ? data : null;
 }
 
 /* API 通道：一次性图片生成 → 返回可用的图片 URL。
@@ -484,9 +496,7 @@ export async function apiGenerateImage(req: {
     ...(req.image ? { image: req.image } : {}),
   });
   const url =
-    isRecord(data) && typeof data.url === "string" && data.url
-      ? data.url
-      : null;
+    data && typeof data.url === "string" && data.url ? data.url : null;
   if (!url) throw new Error("API 生图响应中未找到图片 URL");
   return url;
 }
@@ -515,7 +525,7 @@ export async function apiSubmitVideo(req: {
     frames: req.frames,
     fps: req.fps,
   });
-  if (!isRecord(data)) throw new Error("API 视频响应格式错误");
+  if (!data) throw new Error("API 视频响应格式错误");
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   const remoteTaskId =
     typeof data.remoteTaskId === "string" && data.remoteTaskId
@@ -531,7 +541,7 @@ export async function apiPollVideo(
   remoteTaskId: string,
 ): Promise<{ url?: string; pending: boolean }> {
   const data = await postRelay({ kind: "video", remoteTaskId });
-  if (!isRecord(data)) return { pending: true };
+  if (!data) return { pending: true };
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   return { url, pending: !url };
 }
