@@ -36,8 +36,16 @@ function Strip-Ansi([string]$s) {
 }
 
 function Log {
-    param([string]$Msg)
-    Write-Host $Msg
+    param(
+        [string]$Msg,
+        # 可选前景色：只给「命令回显」这类需要与正文区分的行用，其余走控制台默认色。
+        [ConsoleColor]$ForegroundColor
+    )
+    if ($null -ne $ForegroundColor) {
+        Write-Host $Msg -ForegroundColor $ForegroundColor
+    } else {
+        Write-Host $Msg
+    }
     $clean = Strip-Ansi $Msg
     Add-Content -Encoding UTF8 -Path $script:LOG -Value $clean
 }
@@ -46,8 +54,10 @@ function Invoke-Logged {
     param([string]$Command)
     # 先把要执行的命令本身打到控制台 + 日志：双击入口用户只看到 Invoke-Entry 回显的
     # 启动命令，内层外部命令（cargo / pnpm / next）此前只透传输出、不回显命令行本身，
-    # 看起来「只看到启动命令、没看到执行了哪些命令」。这里用 >>> 前缀与入口回显对齐。
-    Log ">>> $Command"
+    # 看起来「只看到启动命令、没看到执行了哪些命令」。这里用 >>> 前缀与入口回显对齐，
+    # 配色也统一成入口侧（entry-common.ps1 Invoke-Entry）的 Yellow，避免两处回显
+    # 一黄一白、看起来像两种级别的输出。
+    Log ">>> $Command" -ForegroundColor Yellow
     $sb = [scriptblock]::Create($Command)
     & $sb 2>&1 | ForEach-Object {
         $line = "$_"
