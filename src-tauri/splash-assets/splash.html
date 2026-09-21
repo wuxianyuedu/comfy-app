@@ -107,6 +107,10 @@
       /* 提示是多行的（诊断 + 修复命令），必须按换行原样渲染：
          压成一行会把「先做什么」挤没，而这正是用户此刻唯一能照着做的东西。 */
       white-space: pre-wrap;
+      /* 诊断文案允许选中复制（拖拽判定见 startSplashDrag 的 data-no-drag），
+         光标给 text 提示「这里能选」，与整窗拖拽区区分开。 */
+      user-select: text;
+      cursor: text;
       padding: 8px 10px;
       border: 1px solid rgba(245, 180, 60, 0.35);
       background: rgba(245, 180, 60, 0.1);
@@ -152,6 +156,10 @@
       min-height: 34px;
       word-break: break-word;
       flex-shrink: 0;
+      /* 消息区常放诊断文案（项目根、状态文件路径等），要能选中复制发给协作者；
+         它因此不参与整窗拖拽（data-no-drag，见 startSplashDrag）。 */
+      user-select: text;
+      cursor: text;
     }
     .message.error {
       color: var(--error);
@@ -191,8 +199,10 @@
        更多行；窗口被用户拉大时也不会在面板下方留空白。 */
     .log-panel {
       display: none;
-      /* 日志面板里要能选中复制现场（见 pre 的 user-select: text），
-         所以整块不参与拖拽，否则按住一拖就把窗口带走了。 */
+      /* 日志面板里要能选中复制现场（见 pre 的 user-select: text）。
+         「不参与拖拽」由元素上的 data-no-drag 保证（startSplashDrag 的判定
+         口径）——单靠 -webkit-app-region 并不可靠：页面脚本的 startDragging
+         是真正的拖拽入口，它不看 CSS 的 app-region。 */
       -webkit-app-region: no-drag;
       margin-top: 12px;
       background: #0B0A12;
@@ -215,6 +225,7 @@
       overflow-x: auto;
       /* 日志内容允许选中复制，便于把启动卡住的现场发给协作者 */
       user-select: text;
+      cursor: text;
     }
     .spinner {
       display: inline-block;
@@ -264,7 +275,7 @@
         </button>
       </div>
     </div>
-    <div class="stale-banner" id="stale-banner"></div>
+    <div class="stale-banner" id="stale-banner" data-no-drag></div>
     <div class="bar-track">
       <div class="bar-fill" id="bar"></div>
     </div>
@@ -272,13 +283,13 @@
       <span class="phase" id="phase"><span class="spinner"></span>初始化</span>
       <span id="percent">0%</span>
     </div>
-    <div class="message" id="message">启动器正在初始化…</div>
+    <div class="message" id="message" data-no-drag>启动器正在初始化…</div>
     <div class="footer">
       <span class="hint">关闭（右上角 ✕）即放弃本次启动</span>
       <button class="log-toggle" id="log-btn" type="button">查看日志</button>
       <span class="elapsed" id="elapsed">00:00</span>
     </div>
-    <div class="log-panel" id="log-panel">
+    <div class="log-panel" id="log-panel" data-no-drag>
       <pre id="log-pre"></pre>
     </div>
   </div>
@@ -353,6 +364,9 @@
     //   ③ 应用自建命令 win_minimize / win_close（壳侧直接操作窗口）——
     //      Tauri window API 抛错或全局对象不可得时的最后一条。
     // 三条都不可用时消息区给出可见提示（不再「点了没反应」）。
+    // 紧凑档尺寸：**只**在壳命令 set_splash_compact 调不动（壳过旧 / 纯 Web）
+    // 时的兜底值，与壳侧 SPLASH_WINDOW_SIZE 同值。正常路径下尺寸一律由壳算，
+    // 页面不参与（见 applyCompact）。
     const COMPACT_SIZE = { width: 744, height: 216 };
     const subtitleEl = $('subtitle');
 
@@ -461,8 +475,10 @@
     // 就是按住不动。权限声明在 capabilities/splash.json（与主窗同一条）。
     //
     // 判定口径与主窗口 title-bar-derive 的 isDragRegionTarget 一致：
-    // 落点落在 button/a/input/textarea/select/[data-no-drag] 上就不拖，
-    // 按钮点击与日志文本的选中复制才不会被拖拽吞掉。
+    // 落点落在 button/a/input/textarea/select/[data-no-drag] 上就不拖。
+    // data-no-drag 同时标在三类**文本现场**上（消息区 / 陈旧壳横幅 / 日志面板）：
+    // 这些地方常放着用户要复制给协作者的路径与诊断，按住想选中时若还触发
+    // startDragging，选择永远拖成窗口移动——文本复制优先于「整窗哪里都能拖」。
     const INTERACTIVE_SELECTOR = 'button, a, input, textarea, select, [data-no-drag]';
 
     /** 按住窗口任意非交互区域即开始拖动。 */
@@ -495,15 +511,25 @@
     // 会真的把窗口最小化），启动页会一出现就自己缩进任务栏。壳是否过期由用户
     // 真正点按钮时的三条互补路径判断，全部失败时消息区已给出可见提示。
 
-    /** 把窗口调到与内容匹配的档位（展开日志变宽变高，收起回到紧凑）。 */
+    /** 把窗口调到与内容匹配的档位（展开日志变宽变高，收起回到紧凑）。
+     *
+     * 尺寸由壳按与建窗同一份常量计算（含显示器上限），页面只把「紧凑 / 展开」
+     * 告诉壳。页面侧的 setSize + center **只在壳命令失败时**兜底走一次——
+     * 正常路径上再调一轮就是「开窗后闪一下、位置小幅挪动」的来源：壳建窗时
+     * 已按同档尺寸居中过，两条路径各自取整与 DPI 换算存在毫厘差，两次居中
+     * 叠在一起就是肉眼可见的一跳。 */
     async function applyCompact(compact) {
       subtitleEl.textContent = compact ? '正在启动桌面应用…' : '正在启动桌面应用…（展开日志）';
-      // 尺寸由壳按与建窗同一份常量计算（含显示器上限），页面不自己写第二份
-      // magic number，只把「紧凑 / 展开」这件事告诉壳。非壳环境忽略。
-      await invoke('set_splash_compact', { compact });
-      if (!compact) return;
-      // 收起日志时若用户手动拉大过窗口，把它收回内容宽度：窗口状态插件不记忆
-      // splash，回落档位以 COMPACT_SIZE 为准，避免「收起后仍是宽窗」的空白。
+      let handled = false;
+      try {
+        await invokeRaw('set_splash_compact', { compact });
+        handled = true;
+      } catch (e) {
+        console.warn('set_splash_compact failed, fall back to page-side resize:', e);
+      }
+      if (handled || !compact) return;
+      // 兜底（壳没接住时）：窗口状态插件不记忆 splash，回落档位以
+      // COMPACT_SIZE 为准，避免「收起后仍是宽窗」的空白。
       const win = currentWindow();
       const api = window.__TAURI__ && window.__TAURI__.window;
       if (win && api && api.LogicalSize) {
@@ -809,9 +835,12 @@
       }
     }
 
-    // 开局把窗口尺寸对齐到「紧凑」档（壳建窗时已设过一次；用户上次把窗口
-    // 拉大后重启，这里再对齐一次以保证一致）。
-    void applyCompact(true);
+    // 开局**不再**重对齐窗口档位：壳建窗时（setup_splash_window）已按紧凑档
+    // 设好尺寸并居中，页面这里再调一轮 set_splash_compact / setSize 就是
+    // 「窗口弹出后闪一下、位置小幅挪动」的直接来源（两次居中的取整与 DPI
+    // 换算有毫厘差，叠加成肉眼可见的一跳）。窗口与内容的对齐只发生在真实的
+    // 档位切换——用户点「查看日志」展开 / 收起那一刻（applyCompact）。
+    // 用户把窗口拉大后重启的情境同样由壳在建窗时收口，页面无需补一次。
 
     // 首次立即执行，随后每 250ms 轮询，保证启动页观感顺滑
     tick();
