@@ -95,11 +95,13 @@ playwright-report/
 .zvec-grep/
 
 # agent 工具链本地产物（IDE 会话记忆 / temp / tmp，不入版本库）
-# QoderWork 项目本地工作区（Better Harness 评审 canvas/findings/run 等产物落点）
-.qoder/
 .workbuddy/
-# Qoder IDE 的本地会话 / 索引 / 配置（每个开发者机器各自生成，不入版本库）
-.qoder/
+# Qoder 项目本地工作区：默认忽略其内容（Better Harness 评审 canvas/findings/run 产物、
+# 每开发者机器各自生成的 IDE 会话/索引/配置），但放行可提交的 project agent 资产
+# skills/commands（它们是共享配置，等同 AGENTS.md，应入库）。
+.qoder/*
+!.qoder/skills/
+!.qoder/commands/
 
 # pnpm 本地 store（本环境 store-dir 落在仓库内，不入库）
 /.pnpm-store/
