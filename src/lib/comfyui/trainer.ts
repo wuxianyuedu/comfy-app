@@ -24,6 +24,7 @@
 import "server-only";
 import { safeDisplayName } from "~/lib/safe-name";
 import { loraTrainingJobRepository, modelRepository } from "../core/repository";
+import type { LoraTrainingJob } from "~/server/db/schema";
 import { promises as fs } from "fs";
 import path from "path";
 import { getSettingsSync } from "../app-settings/app-settings.server";
@@ -72,6 +73,93 @@ export type TrainJobSpec = {
   seed: number;
 };
 
+/** datasetImages 里的单条形状（与 TrainJobSpec 中内联声明一致）。 */
+type DatasetImage = TrainJobSpec["datasetImages"][number];
+
+/** caption 已确认是非空字符串的子形状（供 filter 的类型谓词使用）。 */
+type CaptionedImage = DatasetImage & { caption: string };
+
+/**
+ * 类型谓词：`caption?.trim()` 之后仍为真 → caption 存在且去空白非空。
+ *
+ * filter 用内联箭头返回 boolean 不会窄化元素类型，`map` 里 `item.caption`
+ * 仍被 TS 判为可选、只能靠 `!` 兜住。用显式谓词把「caption 非空」这一
+ * 判据在类型层落住，判据与用法只此一份；改判据忘了同步 `!`（或反过来）
+ * 的分叉机会消掉。
+ */
+function hasNonEmptyCaption(item: DatasetImage): item is CaptionedImage {
+  return !!item.caption?.trim();
+}
+
+/**
+ * LoraTrainingJob 的 DB 行 → 后端契约 TrainJobSpec 的**唯一**归一化。
+ *
+ * 取代原来 caller 里那句 `job as unknown as TrainJobSpec` 双跳断言。那一行
+ * 吞掉了三类漂移：
+ *   · schema 多出来的列（`userId` / `status` / `progress` / `outputName` /
+ *     `logs` / `error` / `createdAt` / `updatedAt`）会被 `JSON.stringify(spec)`
+ *     **原样**发给训练后端 —— 后端多解一步就多一处可能踩坑，也让「DB 加
+ *     一列」在这条通道上变成一次未审计的 API 变更；
+ *   · `classWord: string | null`（DB）与 `classWord?: string`（契约）语义
+ *     并不相同：前者是「显式 null」、后者是「不提供」，盲 cast 让下游按
+ *     undefined 判的代码读到 null；
+ *   · `datasetImages` 是 JSON 列（`mode: "json"`），Drizzle 侧类型是 unknown，
+ *     历史上真出现过「只存了文件名数组」的老行形状。
+ *
+ * 归一化后，schema 与契约的对齐变成**编译器 + 一处判据**的责任：TrainJobSpec
+ * 加字段忘了在 toTrainJobSpec 里给值 → `tsc` 立刻报缺属性；运行时形状不符 →
+ * 归一化到合法形状或退化到 []，不再让「发上去什么形状，后端就得到什么形状」。
+ */
+function toTrainJobSpec(job: LoraTrainingJob): TrainJobSpec {
+  return {
+    id: job.id,
+    name: job.name,
+    baseModel: job.baseModel,
+    triggerWord: job.triggerWord,
+    // DB 的 `string | null` 归到契约的 `?: string`：null 视为「不提供」，
+    // 避免 JSON.stringify 把 `"classWord": null` 发下去、后端按 undefined 判
+    // 的代码读到 null。
+    ...(job.classWord != null ? { classWord: job.classWord } : {}),
+    datasetImages: normalizeDatasetImages(job.datasetImages),
+    // captions 由 caller 在 datasetImages 摊平之后填进来，这里不猜。
+    resolution: job.resolution,
+    steps: job.steps,
+    batchSize: job.batchSize,
+    learningRate: job.learningRate,
+    rankDim: job.rankDim,
+    networkAlpha: job.networkAlpha,
+    optimizer: job.optimizer,
+    scheduler: job.scheduler,
+    seed: job.seed,
+  };
+}
+
+/**
+ * `datasetImages` 是 JSON 列，Drizzle 给到的是 `unknown`。判据**故意宽**：
+ *   · 数组项是字符串 → 视作 `{ name: 那串 }`（历史老行只存了文件名）；
+ *   · 数组项是对象且 `name` 是 string → 按 `{ name; caption? }` 收下，
+ *     `caption` 非 string 就丢，不给后端凑一份「未知形状」；
+ *   · 其他项 → 丢弃（缺 name 的条目下游按 name 索引就是没锚点）。
+ * 整体不是数组 / 是 null → 退化成 `[]`：后端拿空数组会明确拒绝执行、报
+ * 「没有可训练数据」，比让它拿到 undefined 或半成品 payload 好排查。
+ */
+function normalizeDatasetImages(raw: unknown): DatasetImage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DatasetImage[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      out.push({ name: item });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const name = (item as { name?: unknown }).name;
+    if (typeof name !== "string") continue;
+    const caption = (item as { caption?: unknown }).caption;
+    out.push(typeof caption === "string" ? { name, caption } : { name });
+  }
+  return out;
+}
+
 export function isTrainerConfigured(): boolean {
   return trainerUrl().length > 0;
 }
@@ -94,13 +182,13 @@ export async function enqueueTraining(jobId: string): Promise<void> {
   const job = await loraTrainingJobRepository.findById(jobId);
   if (!job) return;
 
-  const spec = job as unknown as TrainJobSpec;
+  const spec = toTrainJobSpec(job);
   // 把逐图说明摊平成「文件名 → 说明」映射，供需要它的后后端使用
   //（说明同时也随 datasetImages 一起带过去）。
   spec.captions = Object.fromEntries(
-    (spec.datasetImages ?? [])
-      .filter((item) => item?.caption?.trim())
-      .map((item) => [item.name, item.caption!.trim()]),
+    spec.datasetImages
+      .filter(hasNonEmptyCaption)
+      .map((item) => [item.name, item.caption.trim()]),
   );
 
   if (!trainerUrl()) {
