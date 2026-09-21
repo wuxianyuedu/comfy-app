@@ -158,12 +158,14 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
   };
 
   async function loadScope(): Promise<ScopeMod> {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
+    const mod =
+      (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
     return mod;
   }
 
   it("仓库当前不存在「未登记也未豁免」的规范文档（守卫基线为绿）", async () => {
-    const { SCOPED_DOCS, SCOPED_DOC_DIRS, SCOPED_DOC_EXEMPTIONS } = await loadScope();
+    const { SCOPED_DOCS, SCOPED_DOC_DIRS, SCOPED_DOC_EXEMPTIONS } =
+      await loadScope();
     expect(SCOPED_DOC_DIRS.length).toBeGreaterThan(0);
     const scoped = new Set(SCOPED_DOCS);
     const { readdirSync, statSync } = await import("node:fs");
@@ -177,7 +179,8 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
           continue;
         }
         if (!name.endsWith(".md")) continue;
-        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS)) offenders.push(rel);
+        if (!scoped.has(rel) && !(rel in SCOPED_DOC_EXEMPTIONS))
+          offenders.push(rel);
       }
     };
     SCOPED_DOC_DIRS.forEach(walk);
@@ -185,7 +188,12 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
   });
 
   it("新增一个未登记的规范文档 → doc:check 失败并点名该文件", () => {
-    const temp = join(REPO_ROOT, "docs", "standards", "99-temp-unregistered.md");
+    const temp = join(
+      REPO_ROOT,
+      "docs",
+      "standards",
+      "99-temp-unregistered.md",
+    );
     writeFileSync(temp, "# 临时未登记文档\n\n端口 localhost:9999\n", "utf8");
     try {
       const { code, output } = runCheck();
@@ -253,7 +261,10 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   /* 用一个**已登记**的文档做探针：临时改写它的内容、跑校验、再还原。
    * 不能新建临时文件——那会先被「校验范围守卫」拦下（未登记），
    * 测不到本守卫，得到假绿。 */
-  function withRegisteredDocProbe(appended: string): { code: number; output: string } {
+  function withRegisteredDocProbe(appended: string): {
+    code: number;
+    output: string;
+  } {
     const probe = "docs/guides/DEV-QUERIES.md";
     const original = readFileSync(join(REPO_ROOT, probe), "utf8");
     writeFileSync(join(REPO_ROOT, probe), `${original}\n${appended}\n`, "utf8");
@@ -265,7 +276,9 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   }
 
   it("把 npm 命令写进已登记的文档 → doc:check 失败并给出改法", () => {
-    const { code, output } = withRegisteredDocProbe("```bash\nnpm run test:e2e\n```");
+    const { code, output } = withRegisteredDocProbe(
+      "```bash\nnpm run test:e2e\n```",
+    );
     expect(code).not.toBe(0);
     expect(output).toContain("DEV-QUERIES.md");
     expect(output).toContain("硬规则 1");
@@ -273,7 +286,9 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
   });
 
   it("npx 同样被拦下", () => {
-    const { code, output } = withRegisteredDocProbe("```bash\nnpx tsc --noEmit\n```");
+    const { code, output } = withRegisteredDocProbe(
+      "```bash\nnpx tsc --noEmit\n```",
+    );
     expect(code).not.toBe(0);
     expect(output).toContain("npx");
   });
@@ -287,6 +302,97 @@ describe("台账命令口径守卫（AGENTS 硬规则 1：包管理只用 pnpm�
 
   it("当前仓库台账已无存量违规（守卫基线为绿）", () => {
     const { code, output } = runCheck();
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:check] ✓");
+  });
+});
+
+describe("AGENTS.md ↔ standards 漂移守卫", () => {
+  /* 目的：AGENTS.md 是代理自动加载的唯一导航文件，历史上两处漂移都恰好
+   *      落在 SCOPED_DOCS 的盲区（AGENTS.md 在仓库根，docs/ 才纳入）。
+   *      checkAgentsMdDrift 承担 C1/C3（路径存在性）+ C2（章节锚点）；
+   *      C4（npm/npx 命令）由 checkLedgerCommands 显式并入 AGENTS.md 承担——
+   *      AGENTS.md 不进 SCOPED_DOCS，否则 render-doc-placeholders 会为它
+   *      生成一份没有 {{占位符}} 的 docs/generated/AGENTS.md 冗余副本。
+   *      判据细节见 scripts/check-doc-references.cjs 顶部的段注释。 */
+
+  it("已接入 main 流程（不是定义了却没人调用）", () => {
+    const script = readFileSync(CHECK, "utf8");
+    expect(script).toContain("function checkAgentsMdDrift()");
+    const mainBody = script.slice(script.indexOf("function main()"));
+    expect(mainBody).toContain("checkAgentsMdDrift()");
+  });
+
+  it("AGENTS.md 由 checkLedgerCommands 显式并入遍历（不进 SCOPED_DOCS、避免生成冗余副本）", async () => {
+    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+      SCOPED_DOCS: string[];
+    };
+    // AGENTS.md 刻意不入 SCOPED_DOCS：进则被 render-doc-placeholders 复制成
+    // docs/generated/AGENTS.md，产物里没有占位符替换、只是同一份内容，反而
+    // 让读者以为可以改产物（规范 §13.5.5 明确「禁止手改生成物」）。
+    expect(mod.SCOPED_DOCS).not.toContain("AGENTS.md");
+    const script = readFileSync(CHECK, "utf8");
+    const ledgerBody = script.slice(
+      script.indexOf("function checkLedgerCommands()"),
+      script.indexOf("function shouldApplyFactToDoc"),
+    );
+    expect(ledgerBody).toMatch(
+      /\[\s*AGENTS_MD_PATH\s*,\s*\.\.\.SCOPED_DOCS\s*\]/,
+    );
+  });
+
+  it("当前 AGENTS.md 无漂移（基线为绿）", () => {
+    const { code, output } = runCheck();
+    expect(code).toBe(0);
+    expect(output).toContain("[doc:check] ✓");
+  });
+
+  /* 反向探针：直接改 AGENTS.md 末尾、跑校验、还原。不能新建临时文件——
+   * 那会被「校验范围守卫」拦下（未登记），测不到本守卫。 */
+  function withAgentsMdProbe(appended: string): {
+    code: number;
+    output: string;
+  } {
+    const target = join(REPO_ROOT, "AGENTS.md");
+    const original = readFileSync(target, "utf8");
+    writeFileSync(target, `${original}\n${appended}\n`, "utf8");
+    try {
+      return runCheck();
+    } finally {
+      writeFileSync(target, original, "utf8");
+    }
+  }
+
+  it("AGENTS.md 里出现不存在的路径 → doc:check 失败并点名行号", () => {
+    const { code, output } = withAgentsMdProbe(
+      "临时探针：`scripts/__agents_md_drift_probe__.mjs` 用于测试。",
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain("AGENTS.md:L");
+    expect(output).toContain("__agents_md_drift_probe__.mjs");
+    expect(output).toContain("在仓库中不存在");
+  });
+
+  it("AGENTS.md 里写了某章节号但目标 standards 文件里找不到锚点 → doc:check 失败", () => {
+    // 同行给出文件链接 + 不存在的 §13.99，触发 C2 锚点核对。
+    const { code, output } = withAgentsMdProbe(
+      "临时探针：见 [13-提交与-code-review.md](docs/standards/13-提交与-code-review.md) §13.99。",
+    );
+    expect(code).not.toBe(0);
+    expect(output).toContain("AGENTS.md:L");
+    expect(output).toContain("§13.99");
+    expect(output).toContain("未找到对应标题锚点");
+  });
+
+  it("路径通配 / 占位符 / range 记法不被误判为路径（零误报回归）", () => {
+    // 探针里塞几种典型「看起来像路径但不是路径」的形态，期望 code=0。
+    const { code, output } = withAgentsMdProbe(
+      [
+        "- `src/lib/**` 通配、`docs/standards/01~18` range、",
+        "  `tools/<分类>/*.ps1` 占位符、`.server.ts` 简称、",
+        "  `Process.Kill()` 代码符号——都不应被 C1/C3 判成路径。",
+      ].join(""),
+    );
     expect(code).toBe(0);
     expect(output).toContain("[doc:check] ✓");
   });
