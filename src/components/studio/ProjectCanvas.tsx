@@ -95,6 +95,21 @@ const MINIMAP_COLOR_BY_KIND = new Map(
   (Object.keys(NODE_META) as NodeKind[]).map((k) => [k, NODE_META[k].color]),
 );
 
+/* 默认连线选项与 proOptions 提到模块级常量 —— 内联对象字面量每次渲染都重建，
+ * 会让 ReactFlow 的 props 浅比较恒失效、把整棵画布子树拖进 reconcile（规范 §2.11）。
+ * animated:false：此前本画布给**每一条边**永久开 CSS dash 动画，130+ 边的图即便
+ * 不操作也在逐帧 paint（DevTools Paint flashing 可见满屏闪烁），与工作流编辑器
+ * 画布（同为 animated:false）口径统一。type/stroke 维持原值，不改渲染形状。 */
+const DEFAULT_EDGE_OPTIONS = {
+  type: "smoothstep",
+  animated: false,
+  deletable: false,
+  reconnectable: false,
+  style: { stroke: "url(#canvas-edge-gradient)", strokeWidth: 2.5 },
+};
+
+const PRO_OPTIONS = { hideAttribution: true };
+
 interface ProjectCanvasProps {
   seedNew?: boolean;
   onConsumeSeed?: () => void;
@@ -397,17 +412,11 @@ function CanvasInner({
         /* 选中节点后按 Backspace / Delete 删除（⌫ 工具栏按钮走 deleteSelf）。
          * React Flow 会自动忽略输入框 / textarea 聚焦时的按键，不会误删。 */
         deleteKeyCode={["Backspace", "Delete"]}
-        defaultEdgeOptions={{
-          type: "smoothstep",
-          animated: true,
-          /* 惰性边交互 —— 未碰过的边保持
-           *  惰性（不接删除 / 重连管线）；onEdgeClick 在首次使用时
-           *  激活它们。 */
-          deletable: false,
-          reconnectable: false,
-          style: { stroke: "url(#canvas-edge-gradient)", strokeWidth: 2.5 },
-        }}
-        proOptions={{ hideAttribution: true }}
+        defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+        /* 惰性边交互 —— 未碰过的边保持
+         *  惰性（不接删除 / 重连管线）；onEdgeClick 在首次使用时
+         *  激活它们。 */
+        proOptions={PRO_OPTIONS}
       >
         {/* 渐变描边定义（粉彩 6 色 → 端口/连线渐变） */}
         <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden>
