@@ -190,7 +190,12 @@ export async function pollTask(
       const imgs: TaskResult[] = task?.images ?? [];
       if (imgs.length) {
         const v = imgs.find((img) => img.mediaType === "video") ?? imgs[0];
-        return { taskId, localPath: v!.localPath, mediaType: v!.mediaType };
+        // `imgs.length > 0` 已在上一行判据，`imgs[0]` 必然存在；这里用 `if (v)`
+        // 让 noUncheckedIndexedAccess 下的窄化与判据同行，取代旧 `v!`。
+        // else 分支是「编译器认为不可能」的兜底：走到这里就让轮询继续。
+        if (v) {
+          return { taskId, localPath: v.localPath, mediaType: v.mediaType };
+        }
       }
       const st = task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {

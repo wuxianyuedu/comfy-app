@@ -347,9 +347,11 @@ export function moveContractInput(
   if (from < 0) return [...inputs];
   const to = from + delta;
   if (to < 0 || to >= inputs.length) return [...inputs];
-  const next = [...inputs];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved!);
+  // filter 摘掉 `from` 位置那一项（保留其余原序），再按 `to` 插回。
+  // 与「splice(from, 1) + splice(to, 0, moved)」语义等价，但不需要
+  // `moved!` 去遮 noUncheckedIndexedAccess 下 splice 返回数组索引的 undefined。
+  const next = inputs.filter((_, i) => i !== from);
+  next.splice(to, 0, id);
   return next;
 }
 
