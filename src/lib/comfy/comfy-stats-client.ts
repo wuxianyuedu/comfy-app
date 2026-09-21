@@ -21,6 +21,10 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
   try {
     const res = await fetch(`/api/comfy/stats`, {
       cache: "no-store",
+      // 宽松的客户端超时：只兜住病态挂死的连接、给轮询一个上界。不能设得比
+      // 服务端自身延迟还紧——getSystemStats 对 ComfyUI 有 2.5s 超时、还要跑
+      // nvidia-smi，正常回包可能 3~4s，卡太紧反而会制造「误离线」。
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok)
       return {

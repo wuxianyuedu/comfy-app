@@ -15,20 +15,17 @@ import {
   fetchComfyStats,
   type ComfyStatsPayload,
 } from "~/lib/comfy/comfy-stats-client";
+import { useOfflineGate } from "./use-offline-gate";
 
 export const COMFY_STATS_POLL_MS = 4000;
-
-/** 连续失败多少次才判定离线（迟滞）。ComfyUI 跑图时 `/system_stats` 偶发超时
- * （服务端 2.5s 上限）或单次网络抖动都会返回 online:false，但 ComfyUI 其实一直
- * 在线——单次失败就翻「未运行」会让状态栏忽明忽暗。给 3 次容忍（≈12s 持续失败
- * 才报离线），任一次成功立即清零。 */
-const OFFLINE_THRESHOLD = 3;
 
 export interface ComfyStatsController {
   /** 最近一次读到的指标；尚未返回时为 null */
   stats: ComfyStatsPayload | null;
   /** ComfyUI 是否在线（online 且最近一次成功） */
   online: boolean;
+  /** 数据陈旧：处于迟滞容忍期、显示的是上一次好数据（不闪离线，但需弱化提示） */
+  stale: boolean;
   /** 主动触发一次刷新（如页面回前台） */
   refresh: () => Promise<void>;
 }
@@ -44,24 +41,34 @@ const OFFLINE: ComfyStatsPayload = {
 
 export function useComfyStats(): ComfyStatsController {
   const [stats, setStats] = useState<ComfyStatsPayload | null>(null);
-  /* 连续失败计数：用 ref 而非 state，避免每次轮询多一次无谓 re-render；
-   * 它只影响「是否翻离线」的判据，不直接参与渲染。 */
-  const failCountRef = useRef(0);
+  const [stale, setStale] = useState(false);
+  /* 连续失败迟滞：单次探测失败（ComfyUI 跑图时 /system_stats 超时或网络抖动）
+   * 不立刻翻离线，保留上一次好数据；连续达阈值才提交离线（判据见 use-offline-gate）。 */
+  const tolerateOffline = useOfflineGate();
+  /* 自增请求号：useInterval 不挡重叠（背压由调用方决定），慢/抖动下上一拍可能
+   * 晚于下一拍返回。只接受最新一次的观测，丢弃乱序迟到的旧回包，避免污染连续
+   * 失败计数（例如一个晚到的 online:false 把刚清零的计数又 +1）。 */
+  const reqIdRef = useRef(0);
 
   const pollOnce = useCallback(async () => {
+    const myReq = ++reqIdRef.current;
     const next = await fetchComfyStats();
+    if (myReq !== reqIdRef.current) return; // 已有更新的请求在跑，丢弃本次迟到回包
     if (next.online) {
-      failCountRef.current = 0;
+      tolerateOffline(true);
       setStats(next);
+      setStale(false);
       return;
     }
-    /* 单次失败：若已有上一次的好数据，保留它（不闪「未运行」）；只有连续失败
-     * 达阈值、或从未成功过（首帧就没有可保留的数据）才真正翻离线。 */
-    failCountRef.current += 1;
-    if (failCountRef.current >= OFFLINE_THRESHOLD) {
+    /* 离线观测：容忍期内保留上一次好数据、只打 stale 标记（不闪「未运行」）；
+     * 连续失败达阈值才真正翻离线。 */
+    if (tolerateOffline(false)) {
+      setStale(true);
+    } else {
       setStats(OFFLINE);
+      setStale(false);
     }
-  }, []);
+  }, [tolerateOffline]);
 
   /* 「前台轮询、后台暂停、回前台立即补跑」同 `use-update-check` —— 此前这段
    * 逐字抄了两份，现在共用 `useInterval`（规范 16 §16.2.4.15）。 */
@@ -72,5 +79,5 @@ export function useComfyStats(): ComfyStatsController {
 
   const online = stats?.online === true;
 
-  return { stats, online, refresh: pollOnce };
+  return { stats, online, stale: online && stale, refresh: pollOnce };
 }

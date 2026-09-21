@@ -29,6 +29,8 @@ export interface ComfyStatusViewModel {
   online: boolean;
   /** 已连接但首个采样还没回来（轮询空窗），占用条暂不显示但不应报「未连接」 */
   connecting: boolean;
+  /** 数据陈旧：处于迟滞容忍期、当前显示的是上一次好数据（视图据此弱化占用条） */
+  stale: boolean;
   /** ComfyUI CUDA 逻辑口径；非 NVIDIA 卡上仍是唯一可显示的口径 */
   cudaVram: StatBar | null;
   /** nvidia-smi 物理专用显存口径；非 NVIDIA 卡 / 查询失败时为 null（隐藏，不留空项） */
@@ -57,12 +59,13 @@ function toBar(
 }
 
 export function useComfyReadiness(): ComfyStatusViewModel {
-  const { stats, online } = useComfyStats();
+  const { stats, online, stale } = useComfyStats();
   const hasStats = online && stats !== null;
 
   return {
     stats,
     online,
+    stale,
     connecting: online && !hasStats,
     cudaVram: hasStats ? toBar(stats?.vramUsed, stats?.vramTotal) : null,
     smiVram: hasStats ? toBar(stats?.smiVramUsed, stats?.smiVramTotal) : null,
