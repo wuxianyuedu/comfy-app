@@ -19,6 +19,7 @@
  * 同一个动作的两种触发方式，不该有两套运行态。 */
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { runAsyncAction } from "~/lib/async-action";
 
 import {
   buildLibraryWorkflowInput,
@@ -129,59 +130,65 @@ export function useEncapsulationTestRun({
       setError("");
       setResultUrl(null);
       void (async () => {
-        try {
-          /* 按**当前选中的模式**组载荷：封装页签可以逐个模式跑一次流程测试
-           *  （多模式工作流的两个模式契约口往往不同，只测默认模式验不全）。 */
-          const { input } = await buildLibraryWorkflowInput(
-            workflowId,
-            values,
-            mode ?? null,
-            contractIds,
-          );
-          const id = await startLocalGenerate(input);
-          setTaskId(id);
-          /* 登记进共享运行登记表：日志弹窗（两个页签共用同一扇门）按 taskId
-           *  找到它，切页签 / 关弹窗都不丢。 */
-          registerWorkflowRun({
-            taskId: id,
-            workflowId,
-            workflowName,
-            taskType: mode ?? "",
-            startedAt: Date.now(),
-            status: "running",
-            source: "encapsulation-test",
-          });
-          await new Promise<void>((resolve) => {
-            /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 /
-             * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
-             * 这一页的运行视角才不会清零。 */
-            watchWorkflowRun(id, {
-              onProgress: (_taskId, pct) => setProgress(pct),
-              onLog: (taskId, entry) => {
-                appendWorkflowRunLog(taskId, entry);
-              },
-              onOutput: (_taskId, output) => {
-                /* 视频产物不进「生成一张图」那个结果位。 */
-                if (output.kind === "video") return;
-                setResultUrl(output.url);
-              },
-              onSettled: (_taskId, result) => {
-                if (!result.ok) {
-                  setError(result.message ?? "流程测试失败");
-                }
-                resolve();
-              },
+        /* 外层只兜「提交阶段抛错」（buildLibraryWorkflowInput / startLocalGenerate
+         * 失败、还没拿到 taskId）→ 走 runAsyncAction 的失败出口 setError；
+         * 运行本身的终态由 watchWorkflowRun 的 onSettled 落 setError，所以
+         * readResultEnvelope:false（动作返回 void，不靠返回值判成败）、成功静默。
+         * 忙标记归调用处，收尾在 await 之后。 */
+        await runAsyncAction(
+          async () => {
+            const { input } = await buildLibraryWorkflowInput(
+              workflowId,
+              values,
+              mode ?? null,
+              contractIds,
+            );
+            const id = await startLocalGenerate(input);
+            setTaskId(id);
+            /* 登记进共享运行登记表：日志弹窗（两个页签共用同一扇门）按 taskId
+             *  找到它，切页签 / 关弹窗都不丢。 */
+            registerWorkflowRun({
+              taskId: id,
+              workflowId,
+              workflowName,
+              taskType: mode ?? "",
+              startedAt: Date.now(),
+              status: "running",
+              source: "encapsulation-test",
             });
-          });
-        } catch (e) {
-          const reason = e instanceof Error ? e.message : String(e);
-          setError(reason);
-          /* 提交阶段就失败（还没拿到 taskId）：没有可收口的运行记录，
-           *  只落本页签的可见出口。 */
-        } finally {
-          runningRef.current = false;
-          setRunning(false);
-        }
+            await new Promise<void>((resolve) => {
+              /* 订阅走 `watchWorkflowRun`（与恢复路径同一份）：它顺手把进度 /
+               * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
+               * 这一页的运行视角才不会清零。 */
+              watchWorkflowRun(id, {
+                onProgress: (_taskId, pct) => setProgress(pct),
+                onLog: (taskId, entry) => {
+                  appendWorkflowRunLog(taskId, entry);
+                },
+                onOutput: (_taskId, output) => {
+                  /* 视频产物不进「生成一张图」那个结果位。 */
+                  if (output.kind === "video") return;
+                  setResultUrl(output.url);
+                },
+                onSettled: (_taskId, result) => {
+                  if (!result.ok) {
+                    setError(result.message ?? "流程测试失败");
+                  }
+                  resolve();
+                },
+              });
+            });
+          },
+          {
+            report: (kind, detail) => {
+              if (kind === "err") setError(detail);
+            },
+            failureText: "流程测试失败",
+            readResultEnvelope: false,
+          },
+        );
+        runningRef.current = false;
+        setRunning(false);
       })();
     },
     [workflowId, workflowName, mode, contractIds],
