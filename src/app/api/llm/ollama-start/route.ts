@@ -14,12 +14,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { withTimeoutResult } from "~/lib/with-timeout";
+import { errorMessage } from "~/lib/error-message";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Ollama 默认端口；Base URL 可配置，但「点一下启动」的场景默认拉起的就是它。 */
 const OLLAMA_PORT = OLLAMA_DEFAULT_PORT;
+
+/** 把 spawn / 启动错误翻成用户可行动的提示：ENOENT / EACCES → 安装指引，其余走 errorMessage 原文。 */
+function ollamaFailureHint(error: unknown): string {
+  const msg = errorMessage(error, String(error));
+  return /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
+    ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
+    : msg;
+}
 
 /** 探测 Ollama 服务超时（毫秒）。 */
 const PROBE_TIMEOUT_MS = 2000;
@@ -216,11 +225,7 @@ async function spawnOllamaServe(
       new Promise<{ ok: boolean; detail: string }>((settle) => {
         // spawn 找不到可执行文件时触发（异步 error 事件）
         child.on("error", (err) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          const hint =
-            /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
-              ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
-              : msg;
+          const hint = ollamaFailureHint(err);
           appendOllamaLog(`[err] spawn error：${hint}`);
           settle({ ok: false, detail: `启动 Ollama 失败：${hint}` });
         });
@@ -319,11 +324,7 @@ export async function POST(_req: NextRequest) {
     }
     return NextResponse.json({ error: result.detail }, { status: 500 });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const hint =
-      /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")
-        ? "未找到 ollama 命令，请先安装 Ollama 或将其加入 PATH 后重试"
-        : msg;
+    const hint = ollamaFailureHint(e);
     appendOllamaLog(`[err] 启动失败：${hint}`);
     return NextResponse.json(
       { error: `启动 Ollama 失败：${hint}` },
