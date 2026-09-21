@@ -334,7 +334,10 @@ export function toWsBase(httpBase: string): string {
 export async function getHistory(
   promptId: string,
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(`${comfyBase()}/api/history/${promptId}`);
+  const res = await fetch(`${comfyBase()}/api/history/${promptId}`, {
+    // 本地 ComfyUI 正常秒回；此超时只兜「连上却不返回」的病态挂死，给足余量。
+    signal: AbortSignal.timeout(15_000),
+  });
   return (await res.json()) as Record<string, unknown>;
 }
 
@@ -351,7 +354,10 @@ export async function getView(
 
   url.searchParams.set("type", type ?? "");
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), {
+    // 取图/视频字节，大图或视频可能慢；给足余量，只挡真正的无限悬挂。
+    signal: AbortSignal.timeout(60_000),
+  });
 
   if (!res.ok) throw new Error(`getView failed: ${res.status}`);
 
@@ -363,6 +369,7 @@ export async function listModels(folder: string): Promise<string[]> {
   try {
     const res = await fetch(
       `${comfyBase()}/api/models/${encodeURIComponent(folder)}`,
+      { signal: AbortSignal.timeout(5_000) },
     );
     if (!res.ok) return [];
     const data = (await res.json()) as string[];
@@ -408,6 +415,8 @@ export async function uploadImage(
   const res = await fetch(`${base}/api/upload/image`, {
     method: "POST",
     body: form,
+    // 上传参考图/大文件到本地 ComfyUI，给足余量，只挡病态挂死。
+    signal: AbortSignal.timeout(120_000),
   });
   if (!res.ok) {
     throw new Error(
@@ -419,7 +428,10 @@ export async function uploadImage(
 
 export async function interrupt(): Promise<void> {
   const base = await resolveComfyBase();
-  await fetch(`${base}/api/interrupt`, { method: "POST" });
+  await fetch(`${base}/api/interrupt`, {
+    method: "POST",
+    signal: AbortSignal.timeout(5_000),
+  });
 }
 
 /* ── /system_stats ──────────────────────────────────────────────────────
