@@ -30,7 +30,7 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
   const { onDirty } = opts;
   const enabled = useUpdateCheckStore((s) => s.enabled);
   const applyResult = useUpdateCheckStore((s) => s.applyResult);
-  const setChecking = useUpdateCheckStore((s) => s.setChecking);
+  const runChecking = useUpdateCheckStore((s) => s.runChecking);
   const wasDirtyRef = useRef(false);
   const onDirtyRef = useRef(onDirty);
   // ref 须在 effect 里同步：渲染期写 ref 会被 react-hooks/refs 判为
@@ -40,8 +40,7 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
   }, [onDirty]);
 
   const checkNow = useCallback(async (): Promise<boolean> => {
-    setChecking(true);
-    try {
+    return runChecking(async () => {
       const payload = await fetchUpdateCheck();
       // 服务端尚未建立基线（首轮）或请求失败：不改变脏态、不提示。
       if (!payload.ok || !payload.armed) return false;
@@ -58,10 +57,8 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
         );
       }
       return true;
-    } finally {
-      setChecking(false);
-    }
-  }, [applyResult, setChecking]);
+    });
+  }, [applyResult, runChecking]);
 
   /* 开关开启且前台时轮询，切后台暂停（与 `useComfyStats` 共用同一份实现
    * —— 此前这段逐字抄了两遍，规范 16 §16.2.4.15）。`ms: null` 表示不轮询。 */

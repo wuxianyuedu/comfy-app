@@ -215,15 +215,26 @@ export async function ensureDrizzleStudioUp(
     });
     child.stdout?.on("data", outSink);
     child.stderr?.on("data", outSink);
+    /* 会话起点：存活时长基于它算。 */
+    const spawnedAt = Date.now();
     child.on(
       "exit",
       createChildExitHandler({
-        banner: (code) => `■ Drizzle Studio 进程已退出（code=${String(code)}）`,
+        banner: (report) => `■ Drizzle Studio 进程已退出：${report.reason}`,
         appendSessionBanner: (b) => appendSessionBanner("end", b),
+        appendRuntimeLog,
         log: note,
         clearChild: () => {
           if (st.child === child) st.child = undefined;
         },
+        context: () => ({
+          pid: child.pid ?? null,
+          uptimeMs: Date.now() - spawnedAt,
+          /* studio 侧没有「用户主动关」的标记：它的关闭路径直接杀子进程并清
+           * 句柄，退出记录因此表现为信号 / 非零码而不是「主动关闭」。 */
+          stopRequested: false,
+          mode: "studio",
+        }),
       }),
     );
 

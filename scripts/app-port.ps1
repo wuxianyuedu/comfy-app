@@ -1,5 +1,5 @@
 ﻿# app-port.ps1 — 应用端口解析的唯一事实源（PowerShell 侧），与 Node / Python /
-# Rust 侧的 scripts/app-port.mjs、start_tauri_launcher.py、src-tauri/src/single_instance.rs
+# Rust 侧的 scripts/app-port.mjs、scripts/app_port.py、src-tauri/src/single_instance.rs
 # 是同一算法的多语言实现，改动必须四处同步（launch-and-build.md §1.1 / §1.4）。
 #
 # 取值优先级：

@@ -1237,7 +1237,7 @@ describe("parseFileLogs 文件日志解析", () => {
 
   /*
    * 启动链路（`dev` = log/launcher/dev-launcher.log / `launcher` =
-   * log/launcher/start-tauri-launcher.log）的行来自 PowerShell 的
+   * log/launcher/dev-launcher-stderr.log）的行来自壳写下的裸文本
    * `Write-Log`（`[ts] [LEVEL] msg`）与 python 启动器的裸文本（`[ts] msg`）。
    *
    * 这里逐条钉住「整行必须以日志行的身份落板」——行内容对了但没被认出来时，

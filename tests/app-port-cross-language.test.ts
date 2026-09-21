@@ -95,7 +95,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     expect(checker!).toContain("app-port-vectors.json");
   });
 
-  it("② Python 侧算法抽到可导入模块（不是内联在 Windows-only 模块里）", () => {
+  it("② Python 侧算法在可导入模块里（不内联进任何 Windows-only 宿主）", () => {
     const mod = readIfExists("scripts/app_port.py");
     expect(mod).not.toBeNull();
     for (const fn of [
@@ -105,11 +105,11 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     ]) {
       expect(mod!).toContain(fn);
     }
-    // start_tauri_launcher.py 只能 Windows 导入（顶层 ctypes.windll），
-    // 端口算法必须从 app_port 导入，才能在 Linux / CI 上被验证。
-    const launcher = readIfExists("scripts/start_tauri_launcher.py");
-    expect(launcher).not.toBeNull();
-    expect(launcher!).toContain("from app_port import");
+    // 端口算法必须在可导入的模块里，才能在 Linux / CI 上被验证 ——
+    // 内联进「顶层就打 ctypes.windll」的 Windows-only 宿主（历史上是
+    // scripts/start_tauri_launcher.py，已随 ISSUE #784 移除）就跑不了。
+    // 现在 Python 侧只剩这一个纯逻辑模块 + 它的自检脚本，两侧都不碰 Win32。
+    expect(fs.existsSync(path.join(ROOT, "scripts", "check-app-port-vectors.py"))).toBe(true);
   });
 
   it("self-check：向量中的 Windows 盘符路径未被平台相关的 resolve 污染", () => {

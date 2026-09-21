@@ -7,7 +7,9 @@
 // 放在工坊之外、给两个入口共用：工坊（驱动生成）与工作流库（配落点）读写的
 // 是**同一份注册表**，各存一个 hook 会让「保存后另一处看不到」变成常态。
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+
+import { useBusyAction } from "~/components/ui/use-busy-action";
 
 import {
   parseModeContracts,
@@ -17,7 +19,8 @@ import { api } from "~/trpc/react";
 
 export function useModeContracts() {
   const query = api.llm.modeContractsGet.useQuery();
-  const [saving, setSaving] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const saveBusy = useBusyAction();
 
   const contracts: ModeContract[] = parseModeContracts(query.data?.contracts);
 
@@ -25,15 +28,12 @@ export function useModeContracts() {
 
   const save = useCallback(
     async (contracts: ModeContract[]) => {
-      setSaving(true);
-      try {
+      await saveBusy.run(async () => {
         await saveMutation.mutateAsync({ contracts });
         await query.refetch();
-      } finally {
-        setSaving(false);
-      }
+      });
     },
-    [saveMutation, query],
+    [saveMutation, query, saveBusy],
   );
 
   return {
@@ -41,7 +41,7 @@ export function useModeContracts() {
     contracts,
     loading: query.isLoading,
     save,
-    saving,
+    saving: saveBusy.busy,
     refetch: query.refetch,
   };
 }

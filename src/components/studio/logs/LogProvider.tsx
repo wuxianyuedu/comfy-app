@@ -73,7 +73,8 @@ export function describeUnhandledRejection(reason: unknown): string {
 /**
  * 面板轮询的日志来源与顺序。顺序即请求顺序，也决定同一批轮询的入库先后。
  *
- * - `dev` / `launcher`：启动链路（dev-launcher.log / start-tauri-launcher.log）；
+ * - `dev` / `launcher`：启动链路（dev-launcher.log / dev-launcher-stderr.log，
+ *   后者是壳写下的诊断与 `[orchestrator] …` 转发）；
  * - `app`：**应用服务自身输出**（Next dev server 的 stdout / stderr 转录，
  *   见 `src/lib/capture-streams.server.ts`）——首屏编译错误、Turbopack FATAL、
  *   未捕获的服务端异常都在这里，此前不在任何被轮询的文件里，导致「应用服务

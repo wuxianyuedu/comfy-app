@@ -30,7 +30,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveAppPort } from "./app-port.mjs";
-import { probeSchemaSync } from "./db-schema-state.mjs";
+import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { checkEnvFile } from "./env-preflight.mjs";
 import {
   archiveRunLog,
@@ -68,6 +68,7 @@ import {
   spawnInGroup,
   whichCommand,
 } from "./launcher-core/shell.mjs";
+import { syncSplashAssets } from "./launcher-core/splash-assets.mjs";
 import {
   checkNodeModules,
   lockfileDrift,
@@ -532,28 +533,33 @@ export function defaultShellExe(root = ROOT) {
   return null;
 }
 
-/** 确保 Tauri 启动页资源就位（frontendDist 编译期嵌入，运行时同步保证下次编对）。 */
-/** @param {string} [root] */
+/**
+ * 确保 Tauri 启动页资源就位（frontendDist 编译期嵌入，运行时同步保证下次编对）。
+ *
+ * 副本清单（`splash.html` + `index.html`）与同步动作在
+ * `launcher-core/splash-assets.mjs` 一处定义，这里只接线与记日志 ——
+ * **不要在本文件里再写一份副本名清单**：此前正是这里手写了一份、只同步了
+ * `splash.html`，`index.html` 于是长期停在旧版（症状与根因见该模块的文件头注释）。
+ *
+ * @param {string} [root]
+ */
 export function ensureSplashResource(root = ROOT) {
-  const src = path.join(root, "public", "splash.html");
-  const destDir = path.join(root, "src-tauri", "splash-assets");
-  if (!fs.existsSync(src)) {
+  const result = syncSplashAssets(root);
+  if (result.status === "missing-source") {
     log("未找到 public/splash.html，Tauri 启动页可能无法显示", "WARN");
-    return;
+    return result;
   }
-  try {
-    fs.mkdirSync(destDir, { recursive: true });
-    fs.copyFileSync(src, path.join(destDir, "splash.html"));
+  if (result.status === "error") {
+    log(`同步启动页失败：${result.message}`, "WARN");
+    return result;
+  }
+  if (result.status === "ok") {
     log(
-      "已同步 splash.html → src-tauri/splash-assets/splash.html（frontendDist，编译期嵌入）",
+      `已同步启动页 → src-tauri/splash-assets/（${result.written.join(" + ")}，frontendDist，编译期嵌入）`,
       "INFO",
     );
-  } catch (error) {
-    log(
-      `同步 splash.html 失败：${error instanceof Error ? error.message : String(error)}`,
-      "WARN",
-    );
   }
+  return result;
 }
 
 /** 拉起预编译壳，并把 PID 落盘（启动器先退出时的兜底回收锚点）。 */
@@ -935,10 +941,19 @@ export async function run(argv = process.argv.slice(2)) {
   touchHeartbeat(ROOT);
   clearIntervalGuard(heartbeat);
 
-  // 8) DB schema 就绪提示（只警告不退出：改纯前端页面不该被空库挡住，§9.1）
-  if (probeSchemaSync(ROOT) !== "ready") {
+  // 8) DB schema 自检 + **后台同步**（§9.1）。「拉了含 schema 变更的代码后忘了
+  //    跑 db:push」由这里兜住，但**不阻塞启动** —— drizzle 同步一次 15~30 秒，
+  //    等它等于让用户盯着空窗。判据见 db-schema-state.mjs 的 spawnSchemaSync；
+  //    不一致时它会自动同步，页面经 GET /api/schema 显示「已同步，请刷新」。
+  const schema = spawnSchemaSync(ROOT);
+  if (schema.started) {
     log(
-      "数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。先执行：pnpm db:push",
+      "数据库结构核对已在后台开始（不一致时自动同步，页面会提示刷新）",
+      "INFO",
+    );
+  } else {
+    log(
+      `无法后台核对数据库结构：${schema.reason ?? "原因未知"}（必要时手动跑 pnpm db:push）`,
       "WARN",
     );
   }

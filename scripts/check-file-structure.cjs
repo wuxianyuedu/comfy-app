@@ -313,6 +313,20 @@ const DOMAIN_EXEMPT = new Set([
    *（收口前分开两处，已经养出两条死监听）。进任何子域都会让其余侧反向依赖它
    * —— 与 `browser-storage` / `next-frame` 同款：顶层单例。 */
   "src/lib/app-events.ts",
+  /* 「把一组 props 转成另一个键的 props」的唯一出口（ISSUE #672）：视图层
+   *（设置页四个分区、工坊六处、工作流库、影片台、训练页、画布设置、三个
+   *  `ui/` 基元）与 `src/app/login` **都在用**，且「控件收值、抛值」这件事
+   * 必须全库同一口径（一处取 `target.value`、一处取 `target.checked`，
+   * 传错不会报错，只会在运行时静默拿到 `undefined`）。进任何子域都会让其余
+   * 域反向依赖它 —— 与 `display-value` / `file-io` 同款：顶层单例。 */
+  "src/lib/form-props.ts",
+  /* 「给一个列表做分页 / 窗口切片」的唯一出口（ISSUE #672）：`log/`（倒序
+   * 分页与锚定窗口）、`ui/code-block`（平行分块）、两个日志弹窗与
+   * `workflow` / `workshop` 的三处尾部窗口、`app/api/logs/sessions` 的会话
+   * 清单**都在用**，且三族窗口的方向相反、边界处理各异（页码越界 /
+   * `pageSize` 为 0 / 空列表），必须同一口径。进任何子域都会让其余侧反向
+   * 依赖它 —— 与 `clamp` / `ordered-set` 同款：顶层单例。 */
+  "src/lib/page-window.ts",
   "src/lib/server-cache.ts",
   // 数据层:在 §18.3 里是 element `server`(与 lib/core 同层),不是域
   "src/lib/db.ts",
@@ -582,18 +596,12 @@ const SCAN_EXCLUDED = [
   "temp/",
   "python-venv/",
   "log/",
-  "build-launcher/",
   "dist/",
   "docs/",
   "playwright-report/",
   ".workbuddy/",
   "src-tauri/target/",
   "src-tauri/static/",
-  "start-tauri/",
-  "start-tauri-dev/",
-  "start-tauri-standalone/",
-  "build-launcher-dev/",
-  "build-launcher-standalone/",
 ];
 (function walkScripts(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

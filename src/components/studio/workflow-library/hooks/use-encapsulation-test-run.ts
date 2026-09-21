@@ -18,7 +18,9 @@
  * （提示词 + 负向 + 尺寸，`buildLibraryWorkflowInput`）—— 两个入口本来就是
  * 同一个动作的两种触发方式，不该有两套运行态。 */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useThrottledProgress } from "~/components/ui/use-throttled-progress";
+import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 
 import {
   buildLibraryWorkflowInput,
@@ -79,12 +81,20 @@ export function useEncapsulationTestRun({
   contractIds,
 }: EncapsulationTestRunArgs): EncapsulationTestRunController {
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
+  /* 进度是**单值**（一次只跑一个流程测试）—— 节流、同值短路与卸载守卫
+   * 都收在出口里（规范 16 §16.2.4.68）。 */
+  const {
+    value: progress,
+    report: reportProgress,
+    flush: flushProgress,
+    reset: resetProgress,
+  } = useThrottledProgress(0);
   const [error, setError] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
-  /* 重入闸门放 ref：`run` 在异步回调里判定时 state 还停在旧值。 */
-  const runningRef = useRef(false);
+  /* 重入闸门走唯一出口（规范 16 §16.2.4.69）——同步可见，`run` 在异步回调里
+   * 判定时 state 还停在旧值，读它判不出重入。 */
+  const lock = useReentrancyLock();
 
   /* 切页签回来（`ui/tabs` 的 Panel 卸载后重新挂载）时恢复这次运行的视角：
    * 还在跑就回到「测试中」并重订阅，已完成直接恢复产物，已失败恢复原因。
@@ -96,10 +106,10 @@ export function useEncapsulationTestRun({
     handlers: {
       onProgress: (taskId, pct) => {
         /* 重入闸门也要跟着恢复：否则「恢复成生成中」之后点按钮会再发一次。 */
-        runningRef.current = true;
+        lock.tryEnter();
         setTaskId(taskId);
         setRunning(true);
-        setProgress(pct);
+        reportProgress(pct);
       },
       onLog: (taskId, entry) => {
         appendWorkflowRunLog(taskId, entry);
@@ -110,7 +120,7 @@ export function useEncapsulationTestRun({
         setResultUrl(output.url);
       },
       onSettled: (taskId, result) => {
-        runningRef.current = false;
+        lock.exit();
         setTaskId(taskId);
         setRunning(false);
         if (!result.ok) {
@@ -122,10 +132,9 @@ export function useEncapsulationTestRun({
 
   const run = useCallback<EncapsulationTestRunController["run"]>(
     (values) => {
-      if (runningRef.current) return;
-      runningRef.current = true;
+      if (!lock.tryEnter()) return;
       setRunning(true);
-      setProgress(0);
+      resetProgress();
       setError("");
       setResultUrl(null);
       void (async () => {
@@ -156,7 +165,7 @@ export function useEncapsulationTestRun({
              * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
              * 这一页的运行视角才不会清零。 */
             watchWorkflowRun(id, {
-              onProgress: (_taskId, pct) => setProgress(pct),
+              onProgress: (_taskId, pct) => reportProgress(pct),
               onLog: (taskId, entry) => {
                 appendWorkflowRunLog(taskId, entry);
               },
@@ -166,6 +175,8 @@ export function useEncapsulationTestRun({
                 setResultUrl(output.url);
               },
               onSettled: (_taskId, result) => {
+                /* 落定写终值：节流窗口会在边界上吃掉最后一次读数。 */
+                flushProgress(result.ok ? 100 : 0);
                 if (!result.ok) {
                   setError(result.message ?? "流程测试失败");
                 }
@@ -179,12 +190,21 @@ export function useEncapsulationTestRun({
           /* 提交阶段就失败（还没拿到 taskId）：没有可收口的运行记录，
            *  只落本页签的可见出口。 */
         } finally {
-          runningRef.current = false;
+          lock.exit();
           setRunning(false);
         }
       })();
     },
-    [workflowId, workflowName, mode, contractIds],
+    [
+      lock,
+      workflowId,
+      workflowName,
+      mode,
+      contractIds,
+      reportProgress,
+      flushProgress,
+      resetProgress,
+    ],
   );
 
   const uploadImage = useCallback(async (file: File) => {

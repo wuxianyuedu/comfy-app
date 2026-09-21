@@ -22,6 +22,7 @@ import {
   writeStorageJson,
 } from "../browser-storage";
 import type { TaskLogEntry } from "../workshop/generation-client";
+import { tailWindow } from "~/lib/page-window";
 
 /** 这次运行**从哪个入口发起**。
  *
@@ -76,7 +77,7 @@ function persist(): void {
    *（§16.2.4.28）。 */
   const arr = Array.from(runs.values()).map((meta) => ({
     ...meta,
-    logs: meta.logs?.slice(-MAX_LOGS),
+    logs: meta.logs ? tailWindow(meta.logs, MAX_LOGS) : undefined,
   }));
   writeStorageJson(STORAGE_KEY, arr);
 }
@@ -167,14 +168,17 @@ export function failWorkflowRun(taskId: string, message: string): void {
     (last.msg === reason || last.msg.includes(reason));
   const nextLogs = duplicatedAsLogLine
     ? logs
-    : [
-        ...logs,
-        {
-          t: Date.now(),
-          level: "error" as const,
-          msg: `✗ 生成失败：${reason}`,
-        },
-      ].slice(-MAX_LOGS);
+    : tailWindow(
+        [
+          ...logs,
+          {
+            t: Date.now(),
+            level: "error" as const,
+            msg: `✗ 生成失败：${reason}`,
+          },
+        ],
+        MAX_LOGS,
+      );
   touch({ ...prev, status: "failed", errorMessage: reason, logs: nextLogs });
 }
 
@@ -231,7 +235,7 @@ export function appendWorkflowRunLog(
   if (logs.some((log) => log.t === entry.t && log.msg === entry.msg)) {
     return logs;
   }
-  const next = [...logs, entry].slice(-MAX_LOGS);
+  const next = tailWindow([...logs, entry], MAX_LOGS);
   touch({ ...prev, logs: next });
   return next;
 }

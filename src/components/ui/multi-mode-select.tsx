@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
+import { textHandler } from "~/lib/form-props";
 
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
@@ -223,7 +224,7 @@ export function MultiModeSelect({
             type="text"
             placeholder="搜索模式（标签 / 缩写）…"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={textHandler(setQuery)}
             {...enterCommit({ onCommit: handleSave })}
             className="bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-surface-2 focus:ring-primary-500/30 w-full rounded-md px-2.5 py-1.5 text-sm transition-colors outline-none focus:ring-1"
           />

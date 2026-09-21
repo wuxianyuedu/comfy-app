@@ -14,6 +14,11 @@ use tauri_plugin_window_state::StateFlags as WindowStateFlags;
 // 该模块自带平台实现（Windows 具名内核对象 / POSIX 锁文件 + SIGUSR1），
 // 因此**不需要**在模块声明上做 cfg —— 调用点因此不用按平台分叉。
 mod single_instance;
+// 壳自编排（「只启动一个 exe」，ISSUE #784）：双击 app.exe 时由壳自己起
+// dev-launcher.mjs —— **这是唯一的启动入口形态**（Python 启动器已随本 ISSUE
+// 整体移除）。模块自带平台实现（Job Object / 环境块认亲只在 Windows 有），
+// 调用点因此不用分叉。
+mod shell_launch;
 
 /// 生产模式 sidecar（Next standalone server）句柄，应用退出时回收。
 ///
@@ -1127,6 +1132,75 @@ fn splash_window_size(app: &tauri::AppHandle) -> (f64, f64) {
   clamp_to_monitor(app, SPLASH_WINDOW_SIZE)
 }
 
+/// 本次启动的形态：项目根、应用 URL、启动模式与前台开关。
+///
+/// 收成一个结构而不是在 `run()` 里摊开四个局部量：这些值**互相**决定解读方式
+/// （`launch_mode` 缺席才谈得上自编排；自编排又决定前台默认值），摊平写会让
+/// 「谁先谁后」只能靠阅读顺序维持。读环境变量这件事也在这里收口。
+struct LaunchContext {
+  project_root: String,
+  app_url: String,
+  /// 启动模式（standalone / prebuilt / tauri）。只在 release 的
+  /// `setup_standalone_runtime` 里读（debug 下那段整体 cfg 掉了），因此这里
+  /// 显式说明「不是死字段」——它的用途是决定「要不要拉起内嵌 server」。
+  #[allow(dead_code)]
+  /// 主窗「首帧看护」要不要注入加载占位：dev / prebuilt 下应用首帧必然晚于
+  /// 导航（要等 next dev 首编译），而 standalone 的内嵌 server 随壳一起就绪，
+  /// 注入占位只会白闪一下（见 `watch_main_first_paint`）。
+  expect_slow_first_paint: bool,
+  /// 本次是不是「双击壳」这条链路（= 没有人替壳做过编排决策）。
+  ///
+  /// 判据是 `COMFYAPP_PROJECT_ROOT` 缺席：它是**壳内所有编排决策的前置条件**
+  /// （端口推导、单实例按检出隔离、编排脚本与日志路径都以它为锚点），只有壳自己
+  /// 从 exe 位置推导出项目根时才会缺席 —— 那正是「双击 `target/release/app.exe`」。
+  /// 用它而不是「`COMFYAPP_LAUNCH_MODE` 缺席」，是因为后者现在由壳自己写
+  /// （`ensure_launch_mode`），在 `collect()` 之后才存在，判据会随写入顺序漂。
+  self_launch: bool,
+  foreground: bool,
+}
+
+impl LaunchContext {
+  /// 按「单实例 → 路径 → 环境」的顺序收集。
+  ///
+  /// 双击壳时编排由壳自己补：起 dev-launcher.mjs、等它把服务拉起来、再把主窗
+  /// 导航过去（见 `start_own_orchestrator`）。判据见 `self_launch` 字段。
+  /// **release 才做**：debug 下的壳归 `pnpm tauri dev` 管，那时 dev server 由
+  /// beforeDevCommand 起着，壳再抢一次编排就会两边争同一个端口。
+  fn collect() -> Self {
+    let project_root = resolve_project_root();
+    // 开发模式默认跳本地 Next.js dev server；脚本 / 终端调用可经环境变量注入。
+    // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
+    let app_url = std::env::var("COMFYAPP_DEV_URL")
+      .unwrap_or_else(|_| default_dev_url("localhost"));
+    // 启动模式（standalone / prebuilt）此时可能还没定：`ensure_launch_mode`
+    // 在 setup 里按「编排器在不在」写它（那是**唯一读取点**）。这里只在
+    // 显式传入时用它推导首帧看护。
+    let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
+    let self_launch = cfg!(not(debug_assertions))
+      && std::env::var("COMFYAPP_PROJECT_ROOT").is_err()
+      && !project_root.is_empty();
+    if self_launch {
+      log::info!(
+        "[ComfyAPP] no external launcher owns this process (COMFYAPP_PROJECT_ROOT absent): \
+         the shell orchestrates the dev stack itself (single-exe double click, ISSUE #784)"
+      );
+    }
+    // 是否允许启动完成时把应用窗口顶到前台。默认 false（不打断用户正在看的
+    // 内容：启动要几十秒，用户常已切去别处）；脚本 / 终端调用可注入
+    // COMFYAPP_FOREGROUND=1 覆盖。真正的「唤起」走壳自己的第二个进程
+    // （single_instance 的 focus 通道），见 docs/standards/launch-and-build.md §1.3。
+    let foreground = shell_launch::read_foreground_env()
+      .unwrap_or_else(shell_launch::decide_front_when_self_launched);
+    Self {
+      expect_slow_first_paint: launch_mode != "standalone",
+      project_root,
+      app_url,
+      self_launch,
+      foreground,
+    }
+  }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   // 按检出单实例（§1.4）：同一检出的壳已在跑时，向其发送「唤起前台」事件后
@@ -1138,32 +1212,15 @@ pub fn run() {
     );
     return;
   }
-  let project_root = resolve_project_root();
-  // 开发模式默认跳本地 Next.js dev server；可由 launcher 通过环境变量注入。
-  // 生产模式在 spawn_sidecar 中更新为实际 sidecar 端口。
-  let app_url = std::env::var("COMFYAPP_DEV_URL")
-    .unwrap_or_else(|_| default_dev_url("localhost"));
-
-  // 启动模式（standalone / prebuilt / tauri）由启动器经环境变量透传，壳按它决定
-  // 是否拉起内嵌 server（见 setup_standalone_runtime）。这里提前读出来还有第二个
-  // 用处：主窗「首帧看护」要不要注入加载占位**取决于它**——dev / prebuilt 下应用
-  // 首帧必然晚于导航（要等 next dev 首编译），而 standalone 的内嵌 server 随壳
-  // 一起就绪，注入占位只会白闪一下（见 watch_main_first_paint）。
-  let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
-  let expect_slow_first_paint = launch_mode != "standalone";
+  let LaunchContext {
+    project_root,
+    app_url,
+    expect_slow_first_paint,
+    self_launch,
+    foreground,
+  } = LaunchContext::collect();
 
   let log_plugin = build_log_plugin(&project_root);
-
-  // 是否允许启动完成时把应用窗口顶到前台。默认 false（不打断用户正在看的
-  // 内容）；启动器在「前台本来就是本应用 / 用户主动唤起 / 冷启动」等场景注入
-  // COMFYAPP_FOREGROUND=1 覆盖（判据见 scripts/start_tauri_launcher.py 的
-  // decide_foreground 与 docs/standards/launch-and-build.md §1.3）。
-  let foreground = std::env::var("COMFYAPP_FOREGROUND")
-    .map(|raw| {
-      let value = raw.trim().to_ascii_lowercase();
-      value == "1" || value == "true" || value == "yes"
-    })
-    .unwrap_or(false);
 
   let app = tauri::Builder::default()
     .plugin(build_window_state_plugin())
@@ -1179,7 +1236,11 @@ pub fn run() {
     // 安全取向：**不把 shell 命令暴露给前端**（caps 里不授 shell:allow-execute /
     // allow-spawn），只有壳内 Rust 代码经 ShellExt 使用，前端窗口拿不到执行能力。
     .plugin(tauri_plugin_shell::init())
-    .manage(AppState::new(project_root, app_url, foreground))
+    // 两份 project_root：一份进 AppState（命令与 sidecar 回收用），一份留给
+    // setup 闭包（自编排要按项目根拼编排脚本路径）。`clone` 是**必要的**——
+    // 上面那条 `let LaunchContext { project_root, .. } = ...` 把所有权拆出来了，
+    // 而 manage 会把它移进状态里，闭包再引用就是 use-after-move。
+    .manage(AppState::new(project_root.clone(), app_url, foreground))
     .invoke_handler(tauri::generate_handler![
       get_launch_status,
       navigate_to_app,
@@ -1205,6 +1266,24 @@ pub fn run() {
       // sidecar 与托盘。
       setup_splash_window(app);
 
+      // 双击壳（唯一的启动入口形态）：这里承担原先 Python 启动器的那一段编排。
+      //   · 先定运行模式（编排器在 = prebuilt，不在 = standalone）——它在
+      //     `setup_standalone_runtime` 之前定好，否则 standalone 壳不会去拉内嵌 server；
+      //   · 再清掉上一次运行留下的编排器孤儿（壳被强杀时 job 与进程组都可能落空），
+      //     否则「新编排器起不来 + 端口被旧 dev server 占着」会表现为双击没反应；
+      //   · 最后起编排器。**不留「命中的就跳过」的捷径**：两个 `app.exe` 进程同时
+      //     双击的场景已由 run() 早期的单实例判定拦下（第二个进程不建窗口就退出）。
+      if self_launch {
+        shell_launch::ensure_launch_mode(&project_root);
+        if let Some(pid) = shell_launch::find_owned_orchestrator() {
+          log::warn!(
+            "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
+          );
+          shell_launch::reap_pid(&project_root, pid);
+        }
+        start_own_orchestrator(app.handle(), &project_root);
+      }
+
       // ── 方向 B：启动页与「应用」窗口分离 ──
       // 配置里的 splash 窗口仅显示启动进度；「应用」窗口（label="main"）在此创建
       // 为隐藏窗口，先停在 about:blank，由启动页探测后端就绪后经 navigate_to_app
@@ -1216,7 +1295,7 @@ pub fn run() {
       spawn_splash_watchdog(app);
 
       #[cfg(not(debug_assertions))]
-      setup_standalone_runtime(app, &launch_mode)?;
+      setup_standalone_runtime(app)?;
 
       // 托盘是「窗口只在任务栏、用户又切走了」时的兜底唤起入口：创建失败
       // （缺图标资源 / 系统限制）只记 WARN，绝不能让整个应用起不来。
@@ -1229,6 +1308,53 @@ pub fn run() {
     .expect("error while building tauri application");
 
   app.run(handle_run_event);
+}
+
+/// 自编排：由壳自己起 dev-launcher.mjs，并把「服务就绪」这一步接到启动页那条
+/// 现成的链上（启动页轮询 `get_launch_status` → 就绪后调 `navigate_to_app`）。
+///
+/// 为什么不等别的启动器：**没有别的启动器了**（Python 启动器已随本 ISSUE 移除）。
+/// 旧行为是「直接双击 `target/release/app.exe` 时没人编排，壳加载
+/// `tauri.conf.json` 的静态 devUrl（兜底 127.0.0.1:3100），没服务就显示 Edge
+/// 错误页」，用户看到的是「双击了，弹了个坏页面」。
+///
+/// 编排器起不来时**不发导航**：主窗始终停在 `about:blank`，启动页把原因写在面板上
+/// （`mark_launch_failed`），日志面板里就是 node 打印的第一现场（`[orchestrator] …`）。
+/// 关键是别再犯旧行为那一步——把主窗导航到一个必然连不上的地址，等于把
+/// 「还在启动」说成「坏了」。
+fn start_own_orchestrator(app: &tauri::AppHandle, project_root: &str) {
+  if !shell_launch::can_self_launch(project_root) {
+    // 自编排是**唯一**的启动路径：这里起不来就没有第二条路可退。把原因与修法
+    // 写到启动页上（原先由 Python 启动器的 msgbox 承担这个出口），别让用户对着
+    // 一个停在「正在启动」的窗口猜。
+    shell_launch::mark_launch_failed(
+      project_root,
+      "找不到启动编排器（scripts/dev-launcher.mjs）或依赖未安装。\n\
+       请确认 app.exe 位于项目根的 src-tauri/target/release/ 下，并先执行 pnpm install。",
+    );
+    return;
+  }
+  match shell_launch::spawn_orchestrator(app, project_root) {
+    Ok(()) => {
+      log::info!(
+        "[ComfyAPP] 壳已自行启动编排器（node scripts/dev-launcher.mjs --mode prebuilt），\
+         这份编排器随壳退出一起回收"
+      );
+      shell_launch::attach_kill_on_close_job();
+    }
+    Err(e) => {
+      log::warn!(
+        "[ComfyAPP] 壳自编排未能启动（{e}）；故障原因见本行之上的日志"
+      );
+      shell_launch::mark_launch_failed(
+        project_root,
+        &format!(
+          "无法启动本地服务（node scripts/dev-launcher.mjs 未能拉起）：{e}\n\
+           请确认已安装 Node.js / pnpm，详见 log/launcher/ 与 log/shell/shell.log。"
+        ),
+      );
+    }
+  }
 }
 
 /// 收二次启动的「唤起前台」事件，并把配置里的 splash 窗口收成「刚好装下内容」
@@ -1410,7 +1536,8 @@ fn on_main_page_finished(handle: &tauri::AppHandle, url: tauri::Url) {
 /// 主窗在 setup 时就已创建（隐藏待命）：只关 splash 会让壳带着一个看不见的主窗
 /// 继续活着（任务栏图标挂着、dev server 继续被拉起，还会在服务就绪后把主窗又弹
 /// 出来）。因此启动页的关闭请求到达而主窗仍未显示时，标记「已放弃」并退出整个壳
-/// 进程——dev-launcher 以壳退出为锚点回收 dev server 进程树，任务栏不再残留。
+/// 进程——dev server 整棵树随壳一起被回收（编排器就是壳的子进程，见 `shell_launch`），
+/// 任务栏不再残留。
 /// 正常交接（壳自己关启动页）时主窗已经显示，走不到这条退出路径。
 fn install_splash_close_handler(app: &mut tauri::App) {
   let handle_for_splash_close = app.handle().clone();
@@ -1500,16 +1627,16 @@ fn spawn_splash_watchdog(_app: &mut tauri::App) {}
 /// 生产模式（release）启动编排：按启动模式决定是否拉起内嵌 standalone server，
 /// 并在启动页资源缺失时走「等应用就绪直接导航」的兜底，避免永久黑屏。
 #[cfg(not(debug_assertions))]
-fn setup_standalone_runtime(
-  app: &mut tauri::App,
-  launch_mode: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+  // 启动模式的**唯一读取点**就在本函数里（原先由 run() 读一次再传进来，于是
+  // 同一个环境变量在两处被解读，改一处判据就会悄悄分叉）。
+  let launch_mode = std::env::var("COMFYAPP_LAUNCH_MODE").unwrap_or_default();
   if launch_mode == "standalone" {
-    // 显式 standalone：必须启动内嵌 server（缺失时 spawn_sidecar 会报错）。
+    // standalone（检出里没有编排器）：必须启动内嵌 server（缺失时 spawn_sidecar 会报错）。
     spawn_sidecar(app.handle())?;
   } else {
-    // prebuilt / tauri / 未指定：壳直接加载 COMFYAPP_DEV_URL（由
-    // dev-launcher.ps1 起 dev server），不启动 standalone sidecar。
+    // prebuilt：壳直接加载 COMFYAPP_DEV_URL（由 dev-launcher.mjs 起 dev server），
+    // 不启动 standalone sidecar。
     log::info!(
       "[ComfyAPP] launch mode={:?}，跳过 standalone sidecar，使用 dev URL",
       launch_mode
@@ -1541,8 +1668,15 @@ fn setup_standalone_runtime(
 fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
   match event {
     tauri::RunEvent::Exit => {
+      let root = app.state::<AppState>().project_root();
+      // 先收自己起的编排器（它下面还挂着 dev server 整棵树），再收 standalone
+      // sidecar：前者是 dev/prebuilt 链路的根，后者只在内嵌 server 模式存在。
+      if shell_launch::is_owning() {
+        log::info!("[ComfyAPP] exiting, reaping the orchestrator started by this shell");
+        shell_launch::reap(&root);
+      }
       #[cfg(not(debug_assertions))]
-      kill_sidecar(&app.state::<AppState>().project_root());
+      kill_sidecar(&root);
     }
     tauri::RunEvent::ExitRequested { code, .. } => {
       /* 壳的退出码是「谁结束了这次启动」在壳侧唯一可靠的出口：prebuilt 链路里

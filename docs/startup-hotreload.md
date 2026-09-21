@@ -17,24 +17,28 @@
 
 | 启动方式 | 入口 | 模式 | 实际加载的内容 | 是否需要编译 Rust | 热更新能力 |
 |----------|------|------|----------------|------------------|------------|
-| **prebuilt（默认）** | 双击 `{{shell.exe.prebuilt}}` | **dev（开发态，固定）** | 秒出窗口并连 dev server（`dev-launcher.ps1` 起 `pnpm dev`）。launcher 通过 `COMFYAPP_LAUNCH_MODE=prebuilt` 显式告知 Rust 壳走 `COMFYAPP_DEV_URL`，**不再依赖 `resource_dir()` 探测**——`{{shell.exe.prebuilt}}` 恒为开发态，与是否跑过 `pnpm tauri build` 无关 | 否（壳已就绪；`{{shell.exe.prebuilt}}` 自动起 dev server） | 前端源码可 HMR；Rust/配置改动需重新 `cargo build --release --features custom-protocol` |
-| **tauri dev** | 双击 `{{shell.exe.dev}}` / `{{shell.exe.prebuilt}} --tauri-dev` / `tools/start/start-tauri-dev.ps1` / `pnpm tauri dev` | tauri dev | `cargo` 重新编译 Rust 壳 + 起 dev server，前端/后端同源 | 是（增量编译，首次较慢） | 前端 **和** Rust 均热重载 |
-| **standalone 安装包** | `pnpm tauri build` 产出的安装包 | standalone | `beforeBuildCommand` 组装 `src-tauri/static`（standalone `server.js` + `.next/static` + Node sidecar）；打包后 `resource_dir()=resources` 根、`server.js` 在根 ⇒ 壳以 Node sidecar 运行内嵌 server，**不依赖 dev server** | 是（cargo release + 打包） | 全部不可热更新（除非重新构建发布包） |
+| **prebuilt（开发检出）** | 双击 `src-tauri\target\release\{{shell.app.exe}}` | prebuilt | 秒出窗口；壳起 `node scripts/dev-launcher.mjs` → dev server（`pnpm dev`），自己按 `COMFYAPP_DEV_URL` 加载 | 否（壳已就绪；编排由壳自己承担） | 前端源码可 HMR；Rust/配置改动需重新 `cargo build --release --features custom-protocol` |
+| **tauri dev** | 双击 `tools/start/start-tauri-dev.ps1` / `pnpm tauri dev` | tauri dev | `cargo` 重新编译 Rust 壳 + 起 dev server，前端/后端同源 | 是（增量编译，首次较慢） | 前端 **和** Rust 均热重载 |
+| **standalone（分发副本）** | 同一个 `{{shell.app.exe}}`（检出里没有编排器时） | standalone | `beforeBuildCommand` 组装 `src-tauri/static`（standalone `server.js` + `.next/static` + Node sidecar）；壳以 Node sidecar 运行内嵌 server，**不依赖 dev server** | 是（cargo release + 组装资源） | 全部不可热更新（除非重新构建发布包） |
 
-> **为什么 `{{shell.exe.prebuilt}}` 永远是 dev、不会变成 standalone**：launcher 在启动时就写入 `COMFYAPP_LAUNCH_MODE=prebuilt` 环境变量，Rust 壳据此**跳过** `spawn_sidecar`、直接加载 `COMFYAPP_DEV_URL`（dev server）；只有显式 `COMFYAPP_LAUNCH_MODE=standalone`（即双击 `{{shell.exe.standalone}}`）才要求 `server.js` 就位并跑内嵌 server。因此 dev/standalone 由你双击的 exe **显式决定**，与是否跑过 `pnpm tauri build` 无关——解决了「同一份壳既可能 dev 又可能 standalone」的歧义。
+> **形态由「检出内容」决定，不由 exe 名字决定**：壳看到
+> `scripts/dev-launcher.mjs` 在 → `COMFYAPP_LAUNCH_MODE=prebuilt`（走
+> `COMFYAPP_DEV_URL`）；不在 → `standalone`（要求 `server.js` 就位并跑内嵌 server）。
+> 用户手里只有一个 `{{shell.app.exe}}`，按文件名猜形态会把两种都判错（规范 §1.5）；
+> 判据放在内容上，也就没有「同一份壳既可能 dev 又可能 standalone」的歧义。
 
 ---
 
 ## 2. 热更新能力矩阵（按代码/资源区域）
 
-| 代码 / 资源 | prebuilt（`{{shell.exe.prebuilt}}`） | tauri dev（`{{shell.exe.dev}}`） | standalone（`{{shell.exe.standalone}}`） |
+| 代码 / 资源 | prebuilt（开发检出：编排器在） | tauri dev | standalone（分发副本：编排器不在） |
 |-------------|------------------------------|--------------------------------------|--------------------|
 | **前端源码** `src/`（app / components / server / lib 等） | ✅ HMR（dev server 提供） | ✅ HMR + Rust 热重载 | ❌ 产物快照，不可变 |
 | **启动页** `public/{{shell.splash}}` | ❌ 已随 `frontendDist` 嵌入二进制；仅窗口初始屏显示，跳转后才是 dev 应用。改动需重编壳 | ❌ 同上（初始屏仍用嵌入副本） | ❌ 内嵌，需重打包才生效 |
 | **`src-tauri/static` 内嵌产物**（`server.js` / `.next/static` / Node sidecar） | 不加载（回退 dev server） | dev server 不依赖这些产物 | ❌ 核心来源，必须重打包 |
 | **Rust 代码** `src-tauri/src/*`（lib.rs / main.rs / build.rs） | ❌ 需 `cargo build --release` | ✅ 热重载 | ❌ 需重打包 |
 | **Tauri 配置** `tauri.conf.json` / capabilities / permissions | ❌ 需 `cargo build` | ✅（部分变更触发壳重编） | ❌ 需重打包 |
-| **Drizzle schema** `src/server/db/schema.ts` | 需 `pnpm db:push`（非 HMR，数据库独立；启动器每次启动也会自动 push） | 同左 | 同左（数据库独立于安装包） |
+| **Drizzle schema** `src/server/db/schema.ts` | 需 `pnpm db:push`（非 HMR，数据库独立；编排器每次启动也会后台同步） | 同左 | 同左（数据库独立于安装包） |
 | **运行时配置** `.env` 等 | 通常需重启 dev server 才生效 | 同左 | 已固化，需重打包 |
 
 **一句话**：`prebuilt` 与 `tauri dev` 是「源码驱动」（dev server + HMR）；`standalone 安装包` 是「产物驱动」（`static` 快照，不可变）。
@@ -67,30 +71,30 @@
 
 ---
 
-## 5. 三种启动方式各有一个独立 exe（已实现）
+## 5. 只有一个 exe：壳 `{{shell.app.exe}}`（ISSUE #784 第二轮）
 
 原痛点：`--tauri-dev` 带参数在「双击 / 发给他人」场景不便；dev 入口原本只有 `.vbs`
-（2026-09-04 起该入口改为 `tools/start/start-tauri-dev.ps1`，双击关联见 `scripts\enable-ps1-double-click.ps1`）。
-现已实现**一份 launcher 源码打包出三个独立 exe**，双击即用、无需记参数：
+（2026-09-04 起该入口改为 `tools/start/start-tauri-dev.ps1`，双击关联见
+`scripts\enable-ps1-double-click.ps1`）。
 
-| 启动方式 | 独立 exe 入口 | 打包脚本 | 双击即用 |
-|----------|--------------|----------|----------|
-| prebuilt | `{{shell.exe.prebuilt}}` | `tools\build\build-launcher.ps1` | ✅ |
-| tauri dev | `{{shell.exe.dev}}` | `tools\build\build-launcher-dev.ps1` | ✅ |
-| standalone | `{{shell.exe.standalone}}` | `tools\build\build-launcher-standalone.ps1`（壳本身需先 `tools\build\build-standalone.ps1`） | ✅ |
+**曾经**的形态是「一份 Python launcher 源码打包出三个独立 exe」（prebuilt / dev /
+standalone），双击即用、无需记参数。**现在这三个 exe 都已删除** —— 它们带来的是
+「任务栏两个图标」「关掉窗口不等于启动器退出」「产物目录被它锁住」这一整类问题，
+而收益只是省掉一个参数。取而代之的是**壳自己承担编排**（`src-tauri/src/shell_launch.rs`）：
+
+| 启动方式 | 入口 | 怎么进 | 双击即用 |
+|----------|------|--------|----------|
+| prebuilt（开发检出） | `src-tauri\target\release\{{shell.app.exe}}` | 壳发现检出里有 `scripts/dev-launcher.mjs` → 起编排器 → dev server | ✅ |
+| standalone（分发副本） | 同上（同一个文件） | 壳发现检出里**没有**编排器 → 走内嵌 Node sidecar 的 Next standalone server | ✅ |
+| tauri dev（改 Rust 时） | `tools\start\start-tauri-dev.ps1` | `pnpm tauri dev`（dev server 由 `beforeDevCommand` 起着） | ✅ |
 
 实现要点：
-- `scripts/start_tauri_launcher.py` 在运行时按 **exe 文件名**自动选模式
-  （`{{shell.exe.dev}}` → tauri dev，`{{shell.exe.standalone}}` → standalone，否则 prebuilt）；
-  也可用参数 `--tauri-dev` / `--standalone` 显式覆盖。
-- `tools\start-tauri.spec` 的入口名由环境变量 `LAUNCHER_NAME` 决定，
-  三个 `build-launcher*.ps1` 各自注入不同 `LAUNCHER_NAME`，复用同一份 spec。
-- standalone 入口不依赖 `dev-launcher.ps1`，直接 spawn 已构建的
-  `src-tauri/target/release/{{shell.app.exe}}`；若 standalone 资源（server.js / node sidecar）缺失会
-  明确报错提示先跑 `tools\build\build-standalone.ps1`，避免黑屏。
-
-> ⚠️ 改完 `scripts/start_tauri_launcher.py` 后，三个入口都要重新打包（dev / standalone / 默认）
-> 才生效——它们共享同一份源码。
+- 形态判据是**检出内容**（`orchestrator_script` 在不在），不是 exe 文件名 ——
+  用户手里只有 `{{shell.app.exe}}` 一个文件，拿它去猜形态会把两种形态都判错（规范 §1.5）。
+- standalone 资源（`server.js` / Node sidecar）缺失时壳会报错并保持启动页可见，
+  不再静默黑屏；组装资源用 `tools\build\build-standalone.ps1`。
+- 改完 `src-tauri/src/shell_launch.rs` / `lib.rs` 后**必须重编壳**
+  （`cargo build --release --features custom-protocol`）才生效。
 
 `tools\` 目录按用途归类（dev 构建 vs standalone 构建）见 [`../tools/README.md`](../tools/README.md)。
 
@@ -98,7 +102,7 @@
 
 ## 6. 运行期「本地更新需重启」检测
 
-`{{shell.exe.prebuilt}}`（prebuilt）开着、且 dev server 在跑时，前端源码 `src/` 的改动由
+`{{shell.app.exe}}`（prebuilt）开着、且 dev server 在跑时，前端源码 `src/` 的改动由
 dev server HMR 自动生效，无需打扰；但上表第 2 列那批「**改完当前窗口不生效、得重启**」
 的文件不会热更。为让用户第一时间知道「本地更新了但当前界面是旧的」，前端在运行期
 轮询 `/api/update-check`：

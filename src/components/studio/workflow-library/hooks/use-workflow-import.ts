@@ -11,6 +11,7 @@
  *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
@@ -74,7 +75,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   const [importModes, setImportModes] = useState<string[]>([]);
   const [importDefaultMode, setImportDefaultMode] = useState("");
   const [importJson, setImportJson] = useState("");
-  const [importing, setImporting] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
+  const importBusy = useBusyAction();
   const [importErr, setImportErr] = useState("");
   const [importWarn, setImportWarn] = useState<string[]>([]);
   //（#53）：导入面板的「?」帮助以前只有悬停
@@ -110,35 +112,43 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportErr("不是有效的工作流 JSON（应为对象）");
       return;
     }
-    setImporting(true);
     /* 行内错误条（`setImportErr`）是这块的失败通道 —— 导入失败时用户往往
      * 要改 JSON 重试，需要一个留着不走的出口；成功静默（面板关闭即结果）。
      * 出口给「失败文案走 `errorMessage`」这一半。 */
-    await runAsyncAction(
-      async () => {
-        const d = await createMut.mutateAsync({
-          name: importName.trim() || "未命名工作流",
-          modes: importModes,
-          defaultMode: importDefaultMode,
-          raw: parsed,
-        });
-        if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
-        setShowImport(false);
-        setImportName("");
-        setImportJson("");
-        setImportModes(["T2I"]);
-        setImportDefaultMode("T2I");
-        void load();
-      },
-      {
-        report: (kind, detail) => {
-          if (kind === "err") setImportErr(detail);
+    await importBusy.run(() =>
+      runAsyncAction(
+        async () => {
+          const d = await createMut.mutateAsync({
+            name: importName.trim() || "未命名工作流",
+            modes: importModes,
+            defaultMode: importDefaultMode,
+            raw: parsed,
+          });
+          if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
+          setShowImport(false);
+          setImportName("");
+          setImportJson("");
+          setImportModes(["T2I"]);
+          setImportDefaultMode("T2I");
+          void load();
         },
-        failureText: "导入失败",
-      },
+        {
+          report: (kind, detail) => {
+            if (kind === "err") setImportErr(detail);
+          },
+          failureText: "导入失败",
+        },
+      ),
     );
-    setImporting(false);
-  }, [importName, importModes, importDefaultMode, importJson, load, createMut]);
+  }, [
+    importName,
+    importModes,
+    importDefaultMode,
+    importJson,
+    load,
+    createMut,
+    importBusy,
+  ]);
 
   /** 文件入口的统一前处理漏斗（拖入 / 「选择文件」共用）：读文本 → JSON 解析 →
    *  校验是 ComfyUI 原始工作流 → 预填导入面板并打开，让用户确认名称 / 模式后再提交。
@@ -227,7 +237,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     setImportDefaultMode,
     importJson,
     setImportJson,
-    importing,
+    importing: importBusy.busy,
     importErr,
     importWarn,
     showHelpTip,

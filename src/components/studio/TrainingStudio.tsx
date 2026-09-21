@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { textHandler } from "~/lib/form-props";
 import { Upload } from "lucide-react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { useFilePicker } from "~/components/ui/file-picker";
@@ -258,15 +259,13 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                       />
                       <input
                         value={data.caption}
-                        onChange={(event) =>
+                        onChange={textHandler((caption) =>
                           c.setDataset((prev) =>
                             prev.map((item, j) =>
-                              j === i
-                                ? { ...item, caption: event.target.value }
-                                : item,
+                              j === i ? { ...item, caption } : item,
                             ),
-                          )
-                        }
+                          ),
+                        )}
                         placeholder="图片描述，如：a photo of somecjkstyle person"
                         className="border-border bg-canvas-deep text-ink-bright focus:border-primary-500/40 min-w-0 flex-1 rounded border px-2 py-1 text-[11px] outline-none"
                       />
@@ -607,7 +606,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                 <input
                   {...a11y}
                   value={c.form.name}
-                  onChange={(event) => c.setName(event.target.value)}
+                  onChange={textHandler(c.setName)}
                   placeholder="如：我的水墨风格"
                   className={fieldClass}
                 />
@@ -647,7 +646,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   <input
                     {...a11y}
                     value={c.form.triggerWord}
-                    onChange={(event) => c.setTriggerWord(event.target.value)}
+                    onChange={textHandler(c.setTriggerWord)}
                     placeholder="如：somecjkstyle"
                     className={fieldClass}
                   />
@@ -662,7 +661,7 @@ export function TrainingStudio({ onOpenSettings }: TrainingStudioProps = {}) {
                   <input
                     {...a11y}
                     value={c.form.classWord ?? ""}
-                    onChange={(event) => c.setClassWord(event.target.value)}
+                    onChange={textHandler(c.setClassWord)}
                     placeholder="person / style"
                     className={fieldClass}
                   />

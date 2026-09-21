@@ -20,6 +20,7 @@
  * @module comfyui/executor-cli — comfy-cli 执行路径（**两种格式统一**）
  */
 import { errorText } from "~/lib/error-message";
+import { tailWindow } from "~/lib/page-window";
 import "server-only";
 import { spawn } from "child_process";
 import type { ChildProcess } from "child_process";
@@ -399,7 +400,7 @@ export async function executeViaComfyCli(job: Job) {
         `[comfy-cli stderr] 另有 ${noisy} 行 Python Deprecation/Syntax 警告（第三方库噪声，与执行结果无关）已省略`,
       );
     }
-    const tail = stderrSink.raw().trim().split("\n").slice(-12).join("\n");
+    const tail = tailWindow(stderrSink.raw().trim().split("\n"), 12).join("\n");
     /* 未收到 envelope 的退出是「结果丢失」的头号嫌疑路径：完整 stderr +
      * 未消费的 stdout 尾部一次性落 trace（面板仍是精简的 12 行）。 */
     trace("cli", taskId, `进程退出 code=${code}（未收到 envelope）`, {

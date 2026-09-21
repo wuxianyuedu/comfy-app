@@ -17,6 +17,7 @@
  */
 
 import { clamp } from "~/lib/clamp";
+import { numberHandler } from "~/lib/form-props";
 import * as React from "react";
 
 import { type OmitOwnProps, splitDomProps } from "~/lib/dom-props";
@@ -73,7 +74,7 @@ export function RangeSlider(props: RangeSliderProps) {
       max={max}
       step={step}
       value={value}
-      onChange={(event) => onChange(Number(event.target.value))}
+      onChange={numberHandler(onChange, min)}
       style={{
         background: `linear-gradient(to right, ${FILL_COLOR} 0%, ${FILL_COLOR} ${percent}%, ${TRACK_COLOR} ${percent}%, ${TRACK_COLOR} 100%)`,
       }}

@@ -56,7 +56,7 @@
 | 跨平台动作（新增/删除 `.ps1` 或 `.mjs` 入口、改 `package.json` 脚本） | `package.json`、`tools/**`、`scripts/*.ps1`、`scripts/*.mjs` | §9.5（[launch-and-build.md](docs/standards/launch-and-build.md) 的**跨平台动作对照表**）+ §12.8；门禁 `scripts/check-ps1-consistency.mjs` |
 | 跨平台行为 / 端口与文档 | 新增按平台分叉的逻辑、改动 `src/lib/process/kill-process-tree.ts` / `launch-path.ts` 的平台判据、动 `scripts/app-port.mjs` 或 `src-tauri/`（Cargo 的 windows/gate、sidecar 命名、shell 插件）、**在文档/README 里写具体端口号** | §1.1、§3.1、§3.3、§9（[launch-and-build.md](docs/standards/launch-and-build.md)）；端口「两条链路」见 [reference-facts.md](docs/reference-facts.md) §1.1 |
 | 构建与打包 | `scripts/build-desktop.mjs`、`tools/**` | §7、§8 |
-| 复用/去重与常量收口 | 抽共享模块、加/改默认地址与端口、写新的质量门禁 | §12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口） |
+| 复用/去重与常量收口 | 抽共享模块、加/改默认地址与端口、写新的质量门禁、**动手前查有无现成实现 / 缺能力补地基** | §12.18（复用优先·写之前先查）、§12.12（跨文件重复）、§12.13（函数长度）、§12.14（端点收口） |
 
 ## 硬规则（违反 = 提交被拒或必须回滚）
 
@@ -126,6 +126,8 @@
 22. **`src/lib` 是门禁的一等公民，不是盲区**（ISSUE #575 / §18）：**lib 不得 import 视图层**（`src/components/**`、`src/app/**`）——`lib` 是被 `components` / `app` / `server` 共同依赖的地基；需要共享的类型下沉到 `src/lib` 下的类型模块（实例：`src/lib/workflow/workflow-io-types.ts`）。由 `eslint.config.js` 的 `boundaries` 强制，**元素顺序是语义**（`src/lib/core/**` 等数据层须排在 `src/lib/**` 之前，见 §18.3）。**Node-only 三选一，不许「都没有」**（§18.4）：全部出口只能服务端用 → `import "server-only"`；同领域服务端拆件 → `.server.ts`；纯 Node 宿主（由 `scripts/*.mjs` 动态加载，如 `src/lib/process/kill-process-tree.ts`）→ 两者都不加（给它加 `server-only` 会让启动编排直接崩，`server-only` 入口就是 `throw`）。**新增守卫前先查是否已有更强的一条**：客户端打包安全已由 `tests/client-bundle-node-builtins.test.ts`（从 `"use client"` 入口 DFS 可达性 + 完整引用链）守住，别再写「检查有没有 `server-only`」的第二判据。**R5 超 900 行文件走棘轮**（`--strict` 下新增 / 变大即阻断；此前「只提醒」= 没有判据），基线 `scripts/.file-size-baseline.json`。
 
 23. **注释语言：一律中文**（ISSUE #678，机器强制）：业务代码、测试、脚本（`.ts` / `.tsx` / `.mjs` / `.cjs` / `.ps1` / Rust）里的注释统一写中文。**唯一例外**：会被 `next-code-frame` 渲染到的构建期模块（硬规则 16 那批）保持纯 ASCII + 英文注释，并在文件头一条说明原因。白名单登记在 `docs/reference-facts.md` 的 `comment.language.asciiOnly` 一行，由 `pnpm doc:check` 核对；判据、例外语义与自查入口见 §12.4.6 与 §9.6。
+
+24. **复用优先：写之前先查、缺能力补地基，不造第二轮子**（§12.18）：动手写一段新逻辑前，先花一次 grep 的代价回答「这能力是不是已经有了、或本该有」——有等价 / 更通用的实现就 import（缺的差异用参数或薄封装补，**不在调用点重抄**）；没有、但属跨模块通用能力（格式化 / 单位换算 / 端口与地址 / 错误信封 / 进程与路径 / 重试与超时…）就补进对应地基（`src/lib/<domain>` 或 `core`）写一次 + 配单测，调用点 import；确认是这一处独有的业务才就地写。补地基的门槛是**真通用**（≥2 个现有调用点、或明确马上有第 2 个）；只有 1 个又看不出第二个的，先就地写、别急着抽象（§12.15 第三条）。地基里不放任何一侧的传输层代码（§18.4 / §12.12）。**分工**：本条管**落笔时的取向**；事后回潮由 §12.12（字面孪生 ≥75%）/ §12.14（端点收口）/ §12.16（零消费导出）机器兜底——**别再为其新写「抓该不该通用」的启发式扫描器**（会误报一片、本身就成了「会静默失效的清单」，那是用造轮子的方式反造轮子）。
 
 ## 快速排障
 

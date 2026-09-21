@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { textHandler } from "~/lib/form-props";
 import { Trash, X } from "lucide-react";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { Icon } from "~/components/ui/icon";
@@ -9,6 +10,7 @@ import { runAsyncAction } from "~/lib/async-action";
 import { readFileAsText } from "~/lib/file-io";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { useToast } from "~/components/studio/ToastProvider";
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { useInterval } from "~/components/ui/use-interval";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -60,7 +62,8 @@ export function VideoQueueModal({
 }: VideoQueueModalProps) {
   const [tasks, setTasks] = useState<VideoTask[]>([]);
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：此前复位写在动作之后。 */
+  const submitBusy = useBusyAction();
   const [error, setError] = useState("");
   const [draft, setDraft] = useState<
     { prompt: string; params?: Record<string, unknown> }[]
@@ -108,40 +111,40 @@ export function VideoQueueModal({
   const submitDrafts = useCallback(async () => {
     const items = draft.filter((draft) => draft.prompt.trim());
     if (!items.length) return;
-    setSubmitting(true);
     setError("");
     /* 「逐条提交、跳过失败项、只要有一条成功就算成功」是本动作的域语义，
      * 留在调用处；**失败通道只有一条**（这块行内 `setError`），
      * 所以 `report` 恒接到它上（规范 16 §16.2.4.30：通道由调用处给）。 */
-    const result = await runAsyncAction(
-      async () => {
-        let ok = 0;
-        for (const it of items) {
-          try {
-            const d = await submitGeneration(it.params, it.prompt);
-            if (d.taskId) ok++;
-          } catch {
-            /* 跳过失败项 */
+    const result = await submitBusy.run(() =>
+      runAsyncAction(
+        async () => {
+          let ok = 0;
+          for (const it of items) {
+            try {
+              const d = await submitGeneration(it.params, it.prompt);
+              if (d.taskId) ok++;
+            } catch {
+              /* 跳过失败项 */
+            }
           }
-        }
-        if (ok === 0) {
-          /* 一条都没成：抛出去走出口的失败通道，文案带可执行动作。 */
-          throw new Error("提交失败，请检查参数或 ComfyUI 连接");
-        }
-        setDraft([]);
-        setTab("queue");
-        void loadTasks();
-      },
-      {
-        report: (kind: "ok" | "err", detail: string) => {
-          if (kind === "err") setError(detail);
+          if (ok === 0) {
+            /* 一条都没成：抛出去走出口的失败通道，文案带可执行动作。 */
+            throw new Error("提交失败，请检查参数或 ComfyUI 连接");
+          }
+          setDraft([]);
+          setTab("queue");
+          void loadTasks();
         },
-        failureText: "提交失败",
-      },
+        {
+          report: (kind: "ok" | "err", detail: string) => {
+            if (kind === "err") setError(detail);
+          },
+          failureText: "提交失败",
+        },
+      ),
     );
-    setSubmitting(false);
     return result;
-  }, [draft, loadTasks]);
+  }, [draft, loadTasks, submitBusy]);
 
   if (!open) return null;
 
@@ -327,15 +330,13 @@ export function VideoQueueModal({
                       </span>
                       <Textarea
                         value={draftItem.prompt}
-                        onChange={(event) =>
+                        onChange={textHandler((prompt) =>
                           setDraft((arr) =>
                             arr.map((item, idx) =>
-                              idx === index
-                                ? { ...item, prompt: event.target.value }
-                                : item,
+                              idx === index ? { ...item, prompt } : item,
                             ),
-                          )
-                        }
+                          ),
+                        )}
                         rows={2}
                         placeholder="分镜提示词，含镜头运动描述…"
                         className="border-border-strong bg-subtle text-ink-bright placeholder:text-ink-fainter min-w-0 flex-1 resize-none text-xs"
@@ -393,12 +394,12 @@ export function VideoQueueModal({
                 variant="primary-solid"
                 onClick={submitDrafts}
                 disabled={
-                  submitting ||
+                  submitBusy.busy ||
                   draft.filter((draft) => draft.prompt.trim()).length === 0
                 }
                 className="h-auto rounded-lg px-5 py-2"
               >
-                {submitting
+                {submitBusy.busy
                   ? "提交中…"
                   : `开始生成（${draft.filter((draft) => draft.prompt.trim()).length}）`}
               </Button>

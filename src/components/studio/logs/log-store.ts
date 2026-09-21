@@ -20,7 +20,8 @@
  */
 
 import { upperToken } from "~/lib/upper-token";
-import { clamp } from "~/lib/clamp";
+import { countAfterPage, tailPages, tailWindow } from "~/lib/page-window";
+import {} from "~/lib/clamp";
 
 import { create } from "zustand";
 
@@ -598,12 +599,12 @@ export function lastSeqOf(logs: LogEntry[]): number {
  *   - `app`（nextjs-panel-<pid>-<ts>.log）：文件名按进程命名，但服务端取的是
  *     「目录里最新的那一份」，在本次进程还没落盘时会**读到上一个进程的文件**，
  *     因此同样要裁；
- *   - `launcher`（start-tauri-launcher.log）/ `dev`（dev-launcher.log）：
+ *   - `launcher`（dev-launcher-stderr.log）/ `dev`（dev-launcher.log）：
  *     每次运行**覆盖重建**，文件内容天然只有本次——它们**不需要**裁。
  *
  * 为什么必须逐来源判定、而不能拿一个全局 cutoff 往整条时间线上套：
- * 会话起点取自 `dev-launcher.log` 的 mtime，而**启动器的头几行写在它被创建
- * 之前**（python 版本、exe、cwd、探测 Node…）。用一个全局 cutoff 一刀切，
+ * 会话起点取自 `dev-launcher.log` 的 mtime，而**壳写下的头几行在它被创建
+ * 之前**（exe 路径、项目根、探测结果…）。用一个全局 cutoff 一刀切，
  * 这些真·本次运行的行会被当成历史丢掉——用户读到的就是「启动和启动器日志
  * 丢失」（ISSUE #262 复审）。覆盖重建的来源不存在「历史行」，因此不参与裁剪。
  */
@@ -1302,9 +1303,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         viewBaselineAfter:
           nextPage === 1
             ? 0
-            : Math.max(
-                0,
-                state.filteredLogs.length - nextPage * state.pageSize,
+            : countAfterPage(
+                state.filteredLogs.length,
+                nextPage,
+                state.pageSize,
               ),
         followBaseline: Math.max(0, state.filteredLogs.length - 1),
         followResetAt: 0,
@@ -1460,9 +1462,8 @@ function anchorOf(state: LogStoreState): { anchorId: string | null } {
 }
 
 function headOfFirstPage(state: LogStoreState): string | null {
-  const size = Math.max(1, state.pageSize);
-  const start = Math.max(0, state.filteredLogs.length - size);
-  return state.filteredLogs[start]?.id ?? null;
+  /* 第 1 页的头一条 = 「尾部窗口」的第一条（`~/lib/page-window`）。 */
+  return tailWindow(state.filteredLogs, state.pageSize)[0]?.id ?? null;
 }
 
 /* ── 派生视图：面板怎么切一页 ───────────────────────────────────────── */
@@ -1478,12 +1479,10 @@ export function selectPageLogs(
   page: number,
   pageSize: number,
 ): { entries: LogEntry[]; page: number; totalPages: number } {
-  const total = logs.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = clamp(page, 1, totalPages);
-  const end = total - (safePage - 1) * pageSize;
-  const start = Math.max(0, end - pageSize);
-  return { entries: logs.slice(start, end), page: safePage, totalPages };
+  /* 倒序分页的算式收在 `~/lib/page-window`（规范 16 §16.2.4.67）——
+   * 同一份账（越界页码钳回、`pageSize` 为 0 不许给出 `Infinity` 页）
+   * 此前在这里与视图侧各算一遍。 */
+  return tailPages(logs, page, pageSize);
 }
 
 /**
@@ -1511,8 +1510,7 @@ export function selectFirstPageWindow(
       return { entries, truncatedFromEnd: logs.length - (at + entries.length) };
     }
   }
-  const start = Math.max(0, logs.length - size);
-  return { entries: logs.slice(start), truncatedFromEnd: 0 };
+  return { entries: tailWindow(logs, size), truncatedFromEnd: 0 };
 }
 
 /**

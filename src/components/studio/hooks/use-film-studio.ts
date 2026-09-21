@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { beginStaleRun } from "~/lib/stale-run";
 import { uploadBgm } from "~/lib/film/bgm-client";
@@ -104,7 +105,8 @@ export function useFilmStudio(): FilmStudioController {
   const [ffmpegAvailable, setFfmpegAvailable] = useState(true);
 
   const [film, setFilm] = useState<Film | null>(null);
-  const [loading, setLoading] = useState(false);
+  /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：两个动作此前复位都写在动作之后。 */
+  const actionBusy = useBusyAction();
   /** 未消费的技能列表：先取回来用于后续开放风格选择，暂不渲染。 */
   const [, setSkills] = useState<{ slug: string; name: string }[]>([]);
   const [, setRecent] = useState<
@@ -184,32 +186,32 @@ export function useFilmStudio(): FilmStudioController {
       toastError("请先输入剧本或创意");
       return;
     }
-    setLoading(true);
-    await runAsyncAction(
-      async () => {
-        const { id } = await vanillaApi.film.create.mutate({
-          title,
-          script,
-          type,
-          styleSlug: styleSlug || null,
-          size,
-          fps,
-          framesPerShot: frames,
-          subtitleOn,
-          bgmName,
-          ...(videoWorkflowId ? { videoWorkflowId } : {}),
-          ...(imageWorkflowId ? { imageWorkflowId } : {}),
-        });
-        await vanillaApi.film.start.mutate({ id });
-        await fetchDetail(id);
-      },
-      {
-        report: reportSuccess,
-        failureText: "启动失败",
-        successText: "已启动一键成片，正在逐镜生成…",
-      },
+    await actionBusy.run(() =>
+      runAsyncAction(
+        async () => {
+          const { id } = await vanillaApi.film.create.mutate({
+            title,
+            script,
+            type,
+            styleSlug: styleSlug || null,
+            size,
+            fps,
+            framesPerShot: frames,
+            subtitleOn,
+            bgmName,
+            ...(videoWorkflowId ? { videoWorkflowId } : {}),
+            ...(imageWorkflowId ? { imageWorkflowId } : {}),
+          });
+          await vanillaApi.film.start.mutate({ id });
+          await fetchDetail(id);
+        },
+        {
+          report: reportSuccess,
+          failureText: "启动失败",
+          successText: "已启动一键成片，正在逐镜生成…",
+        },
+      ),
     );
-    setLoading(false);
   }, [
     script,
     title,
@@ -218,6 +220,7 @@ export function useFilmStudio(): FilmStudioController {
     size,
     fps,
     frames,
+    actionBusy,
     subtitleOn,
     bgmName,
     videoWorkflowId,
@@ -240,17 +243,17 @@ export function useFilmStudio(): FilmStudioController {
 
   const recompose = useCallback(async () => {
     if (!film) return;
-    setLoading(true);
     /* 成功静默：合成本身要几分钟，界面有进度与产物，多一句 toast 反而是噪声。 */
-    await runAsyncAction(
-      async () => {
-        await vanillaApi.film.compose.mutate({ id: film.id });
-        await fetchDetail(film.id);
-      },
-      { report: reportInfo, failureText: "重新合成失败" },
+    await actionBusy.run(() =>
+      runAsyncAction(
+        async () => {
+          await vanillaApi.film.compose.mutate({ id: film.id });
+          await fetchDetail(film.id);
+        },
+        { report: reportInfo, failureText: "重新合成失败" },
+      ),
     );
-    setLoading(false);
-  }, [film, fetchDetail, reportInfo]);
+  }, [film, fetchDetail, reportInfo, actionBusy]);
 
   const uploadBgmFile = useCallback(
     async (file: File) => {
@@ -305,7 +308,7 @@ export function useFilmStudio(): FilmStudioController {
     ffmpegAvailable,
     film,
     running,
-    loading,
+    loading: actionBusy.busy,
     create,
     cancel,
     recompose,

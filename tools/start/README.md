@@ -8,7 +8,7 @@ Windows 双击入口，逻辑在 [`../../scripts/`](../../scripts/) 同名或对
 | 入口 | 什么时候用 | 逻辑 |
 |---|---|---|
 | `start-web.ps1` | 跑 Web 开发模式（控制台显示日志） | `scripts/dev-launcher.ps1` → `scripts/dev-launcher.mjs` |
-| `start-tauri.ps1` | 直接启动打包好的 `start-tauri/start-tauri.exe`（秒出窗口） | 由 exe 内的 `scripts/start_tauri_launcher.py` 负责 |
+| `start-tauri.ps1` | 双击即启动桌面壳 `src-tauri/target/release/app.exe`（秒出窗口） | 编排由壳自己负责（`src-tauri/src/shell_launch.rs`） |
 | `start-tauri-dev.ps1` | 开发 Rust 壳本身（Rust 热重载，编译慢） | `scripts/dev-launcher.ps1 -Tauri` |
 | `start-desktop.ps1` | 拿到「即开即用桌面包」的普通用户：自检 + 启动 | 自检逻辑内联在入口里 |
 | `run-local.ps1` | 非开发人员一次性初始化（自检 node/pnpm、生成 `.env`、补依赖） | `scripts/prepare-local-run.ps1` |
