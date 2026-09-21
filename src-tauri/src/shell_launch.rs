@@ -26,6 +26,22 @@
 //!      日志面板承担（见 `mark_launch_failed`）。
 //! 编排本身仍是 `scripts/dev-launcher.mjs` 那一份唯一实现 —— 本模块只回答
 //! 「起什么、怎么起、怎么回收、认亲判据是什么」。
+//!
+//! ## 可见性：起编排器的这一层必须自己也留痕（ISSUE #784 手验反馈）
+//!
+//! 手验暴露的缺口不是编排失败，而是**编排刚开始的那 1~2 秒里启动页什么都没得看**：
+//! `run/launch-status.json` 由 dev-launcher.mjs 在壳起编排器**之后**才创建，
+//! 而 release 壳（Windows 无控制台）的 stdout/stderr 没有任何去处 —— 于是
+//! 「壳已接手、编排器还没写字」这段唯一的启动路径是**一片空白**：启动页显示
+//! 「暂时读不到日志」，并让用户去翻那两份此刻恰好为空的文件。
+//!
+//! 因此本模块补齐三条（与 Node 侧的 `src/lib/shell/launch-diagnostics.ts`
+//! 同路径、同形态；那边的单测锁住路径与行形态，这里保持逐项一致）：
+//!   1. 写**常驻进度快照**（`run/launch-status.json`，`fallback: true`）——
+//!      编排器一写自己的状态就把它顶掉，因此它只服务启动窗口期；
+//!   2. 落一份**壳自持的编排链路日志**（`log/launcher/shell-launch.log`）——
+//!      编排器输出（`[orchestrator] …`）与其启动报告都写它，release 也可靠；
+//!   3. 起不来时**先写状态再回一条可行动的出口**，别让日志面板指向空文件。
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -225,14 +241,17 @@ pub fn ensure_launch_mode(_project_root: &str) {}
 /// 失败出口本身不该再产生一个失败。
 pub fn mark_launch_failed(project_root: &str, message: &str) {
   if project_root.is_empty() {
-    log::error!("[ComfyAPP] launch failed: {message}");
+    // 连项目根都没有时，磁盘上没有任何可写的地方：**必须**把话说到渠道里
+    // （tauri-plugin-log 的 channel / 控制台），并在报告里点出「项目根为空」
+    // 这一条 —— 它正是「状态文件与日志都读不到」的常见根因之一。
+    log::error!("[ComfyAPP] 启动失败（且项目根为空，无法落盘诊断）：{message}");
+    log_launch_line("", "error", message);
     return;
   }
-  let dir = std::path::Path::new(project_root).join("run");
-  if let Err(e) = std::fs::create_dir_all(&dir) {
-    log::warn!("[ComfyAPP] cannot create {}: {e:?}", dir.display());
-    return;
-  }
+  // 先落一行到编排链路日志：状态文件写失败时，这份日志是唯一的出口。
+  log_launch_line(project_root, "error", &format!("启动失败：{message}"));
+  log_startup_report(project_root, "启动失败（上面的报告就是现场）");
+
   let payload = serde_json::json!({
     // 判据与 `get_launch_status` 的消费方（启动页 `updateUI`）对齐：
     // `progress` 保持 < 1，否则页面会把 100% 的前缀画成「✓」——一次失败
@@ -241,12 +260,197 @@ pub fn mark_launch_failed(project_root: &str, message: &str) {
     "progress": 0,
     "message": message,
     "error": true,
+    // 诊断出口写清楚：启动页据此告诉用户「先看哪一份」，而不是让他去翻
+    // 那两份此刻恰好为空的编排日志（手验反馈的成因）。
+    "diagnostics": {
+      "launchLog": launch_log_path(project_root).display().to_string(),
+      "shellLog": std::path::Path::new(project_root).join("log").join("shell").join("shell.log").display().to_string(),
+      "statusFile": status_file_path(project_root).display().to_string(),
+    },
     "updatedAt": iso_timestamp(),
   });
-  let path = dir.join("launch-status.json");
+  let path = status_file_path(project_root);
+  if let Some(dir) = path.parent() {
+    if let Err(e) = std::fs::create_dir_all(dir) {
+      log::warn!("[ComfyAPP] cannot create {}: {e:?}", dir.display());
+      return;
+    }
+  }
   match std::fs::write(&path, payload.to_string()) {
     Ok(()) => log::error!("[ComfyAPP] launch failed (reported on the splash): {message}"),
     Err(e) => log::warn!("[ComfyAPP] cannot write {}: {e:?}", path.display()),
+  }
+}
+
+/// 编排链路日志（`log/launcher/shell-launch.log`）的绝对路径。
+///
+/// 与 `src/lib/shell/launch-diagnostics.ts` 的 `launchPaths().shellLaunchLog`
+/// **逐项同形**（那份的文件名与分段由 `src/lib/shell/launch-diagnostics.test.ts`
+/// 钉住；本模块 `tests::launch_paths_match_node_side` 钉住这一侧）。
+/// 两份不能各自手拼：漂开的表现是「壳写了一份、面板读的是另一份」，而两侧看
+/// 各自都是对的。
+pub fn launch_log_path(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root)
+    .join("log")
+    .join("launcher")
+    .join("shell-launch.log")
+}
+
+/// 进度快照文件（`run/launch-status.json`）。
+pub fn status_file_path(project_root: &str) -> std::path::PathBuf {
+  std::path::Path::new(project_root).join("run").join("launch-status.json")
+}
+
+/// 把编排链路日志写一行（时间戳 + 级别 + 正文）。
+///
+/// **为什么必须有这份文件**：release 壳（Windows `windows_subsystem = "windows"`）
+/// 的 stdout/stderr 没有控制台，`log::` 只进 tauri-plugin-log 的 channel；
+/// 编排器写第一份日志之前，用户能查的任何磁盘文件都还不存在。这份日志由壳自己
+/// 落，是所有启动诊断里**最先有内容**的一份（ISSUE #784 手验反馈：面板指着
+/// dev-launcher.log，而它当时还没被创建）。
+///
+/// 写失败只记 WARN：诊断通道本身不该把启动带崩（与 `mark_launch_failed` 同一取向）。
+pub fn log_launch_line(project_root: &str, level: &str, message: &str) {
+  if project_root.is_empty() {
+    return;
+  }
+  let line = format!("[{}] [{}] {}\n", local_timestamp(), level.to_uppercase(), message);
+  if let Err(e) = append_line(&launch_log_path(project_root), &line) {
+    log::warn!("[ComfyAPP] 编排链路日志写入失败：{e:?}");
+  }
+}
+
+/// 追加一行（目录缺失时递归建）。返回 Err 而不是 panic —— 调用方一律只记 WARN。
+fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
+  use std::io::Write;
+  if let Some(dir) = path.parent() {
+    std::fs::create_dir_all(dir)?;
+  }
+  let mut file = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
+  file.write_all(line.as_bytes())
+}
+
+/// `YYYY-MM-DD HH:MM:SS.mmm` 时间戳（与 Node 侧 `formatLogLine` 的**形态**同形）。
+///
+/// **是 UTC，不是本地时刻**（函数名保留 `local_` 是为了与 Node 侧对齐，形态
+/// 才是契约）：不引入时间库就得自己拆日期字段，而正确的本地时区换算要读
+/// `TZ` / Windows 注册表 —— 为一行日志引入 chrono / time 不值当。这份日志的
+/// 用途是「按时刻把壳的行与编排器的行排成一条时间线」，两侧各自单调即可；
+/// 编排器那份自带本地时刻，因此跨两份对照时**以编排器那份为准**。
+fn local_timestamp() -> String {
+  use std::time::{SystemTime, UNIX_EPOCH};
+  let secs = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .map(|d| d.as_secs())
+    .unwrap_or(0);
+  let millis = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .map(|d| d.subsec_millis())
+    .unwrap_or(0);
+  let days = (secs / 86_400) as i64;
+  let secs_of_day = secs % 86_400;
+  let (year, month, day) = civil_from_days(days);
+  format!(
+    "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}.{millis:03}",
+    secs_of_day / 3600,
+    (secs_of_day % 3600) / 60,
+    secs_of_day % 60
+  )
+}
+
+/// 天数（1970-01-01 起）→ (年, 月, 日)。经典 civil-from-days，无依赖。
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+  let z = days + 719_468;
+  let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+  let doe = (z - era * 146_097) as u64;
+  let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+  let y = yoe as i64 + era * 400;
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  let mp = (5 * doy + 2) / 153;
+  let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+  let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+  (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+/// 写「壳已接手 / 编排器已拉起」的常驻进度快照（启动窗口期的兜底）。
+///
+/// 关键在 `fallback: true`：启动页据此知道这不是编排器的权威进度，因此
+/// **不会**拿它当「就绪判据」（`status.ready === true` 仍是唯一权威），
+/// 但可以在编排器还没写字时显示「壳在做什么」。
+///
+/// 进度恒为 `0`：启动页把 `pct >= 100` 画成「✓」，常驻快照标成 100% 会让
+/// 「还在启动」看起来像「已经启动完了」。
+pub fn write_idle_status(project_root: &str, phase: &str, message: &str) {
+  if project_root.is_empty() {
+    return;
+  }
+  let payload = serde_json::json!({
+    "phase": phase,
+    "progress": 0,
+    "message": message,
+    "error": false,
+    "fallback": true,
+    "updatedAt": iso_timestamp(),
+  });
+  let path = status_file_path(project_root);
+  if let Some(dir) = path.parent() {
+    if let Err(e) = std::fs::create_dir_all(dir) {
+      log::warn!("[ComfyAPP] 无法创建 {}：{e:?}", dir.display());
+      return;
+    }
+  }
+  if let Err(e) = std::fs::write(&path, payload.to_string()) {
+    log::warn!("[ComfyAPP] 无法写 {}：{e:?}", path.display());
+  }
+}
+
+/// 启动报告：把「壳打算怎么起、这个检出到底什么样」落成可读的几行。
+///
+/// 手验反馈里最难办的一点是「什么都读不到时该看哪」——这份报告让那一段空白
+/// 变成**有内容的一屏**：项目根、编排脚本在不在、依赖门禁结论、要执行的命令、
+/// 端口、以及各份日志的路径。用户在报障时贴这一屏，就等价于把现场带出来了。
+pub fn startup_report(project_root: &str, phase_note: &str) -> Vec<(String, String)> {
+  let script = orchestrator_script(project_root);
+  let port = crate::single_instance::derive_app_port_for_root(project_root);
+  vec![
+    ("阶段".to_string(), phase_note.to_string()),
+    (
+      "项目根".to_string(),
+      if project_root.is_empty() { String::new() } else { project_root.to_string() },
+    ),
+    (
+      "编排脚本".to_string(),
+      script
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default(),
+    ),
+    (
+      "可自启动".to_string(),
+      can_self_launch(project_root).to_string(),
+    ),
+    (
+      "启动命令".to_string(),
+      format!("node {} --mode prebuilt", script.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(缺少编排脚本)".to_string())),
+    ),
+    ("应用端口".to_string(), port.to_string()),
+    (
+      "启动状态文件".to_string(),
+      status_file_path(project_root).display().to_string(),
+    ),
+    (
+      "编排链路日志".to_string(),
+      launch_log_path(project_root).display().to_string(),
+    ),
+  ]
+}
+
+/// 把启动报告逐行写进编排链路日志（附一条头）。
+pub fn log_startup_report(project_root: &str, phase_note: &str) {
+  log_launch_line(project_root, "info", &format!("=== 启动报告：{phase_note} ==="));
+  for (key, value) in startup_report(project_root, phase_note) {
+    let shown = if value.is_empty() { "(空)".to_string() } else { value };
+    log_launch_line(project_root, "info", &format!("  {key}: {shown}"));
   }
 }
 
@@ -323,7 +527,14 @@ pub fn spawn_orchestrator(
   })?;
 
   let script_arg = script.to_string_lossy().to_string();
-  let port = crate::single_instance::derive_app_port();
+  let port = crate::single_instance::derive_app_port_for_root(project_root);
+  log_launch_line(
+    project_root,
+    "info",
+    &format!(
+      "拉起编排器：node {script_arg} --mode prebuilt（端口 {port}，cwd {project_root}）"
+    ),
+  );
   let (mut rx, child) = app
     .shell()
     .command("node")
@@ -340,20 +551,30 @@ pub fn spawn_orchestrator(
   // 编排器的输出必须有人读：shell 插件把输出投递到事件通道，无人消费时管道
   // 写满会让它静默卡死（表现为「启动页一直停在第一步」）。落进壳日志，同时
   // 转发给 dlog 让 dev-launcher 自己写的那份日志之外还有一条「谁起的它」。
+  let log_root = project_root.to_string();
   tauri::async_runtime::spawn(async move {
     use tauri_plugin_shell::process::CommandEvent;
     while let Some(event) = rx.recv().await {
       match event {
-        CommandEvent::Stdout(line) => log::info!(
-          "[orchestrator] {}",
-          String::from_utf8_lossy(&line).trim_end()
-        ),
-        CommandEvent::Stderr(line) => log::warn!(
-          "[orchestrator] {}",
-          String::from_utf8_lossy(&line).trim_end()
-        ),
+        CommandEvent::Stdout(line) => {
+          let text = String::from_utf8_lossy(&line).trim_end().to_string();
+          log::info!("[orchestrator] {text}");
+          // 同一行再落一份盘：release 壳没有控制台，`log::` 只进 channel，
+          // 用户手里的磁盘上必须有一份（见 log_launch_line 的注释）。
+          log_launch_line(&log_root, "info", &format!("[orchestrator] {text}"));
+        }
+        CommandEvent::Stderr(line) => {
+          let text = String::from_utf8_lossy(&line).trim_end().to_string();
+          log::warn!("[orchestrator] {text}");
+          log_launch_line(&log_root, "warn", &format!("[orchestrator] {text}"));
+        }
         CommandEvent::Terminated(payload) => {
-          log::info!("[ComfyAPP] orchestrator terminated: {:?}", payload.code)
+          log::info!("[ComfyAPP] orchestrator terminated: {:?}", payload.code);
+          log_launch_line(
+            &log_root,
+            "info",
+            &format!("编排器结束，退出码 {:?}", payload.code),
+          );
         }
         _ => {}
       }
@@ -674,3 +895,92 @@ pub fn find_owned_orchestrator() -> Option<u32> {
   None
 }
 
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// 启动链路路径必须与 Node 侧（`src/lib/shell/launch-diagnostics.ts` 的
+  /// `launchPaths`）逐项一致：两侧读的是同一批文件，漂开的表现是「壳写了
+  /// 一份、面板读的是另一份」，而两侧看各自都是对的。
+  ///
+  /// 这里用**分段拼接**断言而不是写死一整个字符串：平台分隔符不同（Windows
+  /// `\`、POSIX `/`），写死会在另一平台上失败——而这条判据要管的恰恰是「跨侧
+  /// 同形」，不是「某一侧的字面量」。
+  #[test]
+  fn launch_paths_match_node_side() {
+    let root = std::path::Path::new("/proj");
+    assert_eq!(
+      launch_log_path("/proj"),
+      root.join("log").join("launcher").join("shell-launch.log")
+    );
+    assert_eq!(status_file_path("/proj"), root.join("run").join("launch-status.json"));
+  }
+
+  #[test]
+  fn civil_from_days_matches_known_dates() {
+    // 1970-01-01 是第 0 天；闰年与年末边界各来一条（日期算错的表现是日志行的
+    // 时刻整体错位，而这种错位在「只想看顺序」时是**看不出来**的）。
+    assert_eq!(civil_from_days(0), (1970, 1, 1));
+    assert_eq!(civil_from_days(11_016), (2000, 2, 29));
+    assert_eq!(civil_from_days(20_685), (2026, 8, 20));
+    // 世纪闰年规则（1900 不是闰年、2000 是）：`yoe / 4 - yoe / 100` 这条修正
+    // 写错时的表现就是「某些年份差一天」，日常几乎看不出来。
+    assert_eq!(civil_from_days(-25_567), (1900, 1, 1));
+  }
+
+  #[test]
+  fn local_timestamp_is_sortable_fixed_width() {
+    let stamp = local_timestamp();
+    assert_eq!(stamp.len(), 23, "YYYY-MM-DD HH:MM:SS.mmm 必须定宽：{stamp}");
+    assert_eq!(&stamp[10..11], " ");
+    assert_eq!(&stamp[19..20], ".");
+  }
+
+  #[test]
+  fn startup_report_always_carries_the_log_locations() {
+    // 报告的价值就在于「什么都读不到时，仍能说出该看哪一份」——因此即便项目根
+    // 不存在，报告也必须是**非空且有结构**的，不能整条消失。
+    let report = startup_report("", "测试");
+    assert_eq!(report.len(), 8);
+    assert_eq!(report[0].0, "阶段");
+    assert!(report.iter().any(|(k, _)| k == "编排链路日志"));
+  }
+
+  #[test]
+  fn startup_report_pins_paths_to_project_root() {
+    let report = startup_report("/proj", "测试");
+    let value_of = |key: &str| {
+      report
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.clone())
+        .unwrap_or_default()
+    };
+    assert!(value_of("项目根") == "/proj");
+    assert!(value_of("编排链路日志").ends_with("shell-launch.log"));
+    assert!(value_of("启动状态文件").ends_with("launch-status.json"));
+    // 「可自启动」在 /proj 上必然是 false（没有 scripts/dev-launcher.mjs）：
+    // 判据必须真的读盘，不能恒真（恒真的判据等于没有判据）。
+    assert_eq!(value_of("可自启动"), "false");
+  }
+
+  #[test]
+  fn can_self_launch_rejects_root_without_manager_script() {
+    assert!(!can_self_launch(""));
+    assert!(!can_self_launch("/definitely/not/a/checkout"));
+  }
+
+  #[test]
+  fn idle_status_is_not_authoritative() {
+    // 快照落盘后必须能被「是不是权威进度」的判据排除掉：它写的是 fallback
+    // 标记 + progress 0，消费方（启动页）据此只显示「在等谁」，不据此导航。
+    let json = serde_json::json!({
+      "phase": "shell-prepare",
+      "progress": 0,
+      "fallback": true,
+    });
+    assert_eq!(json["fallback"], serde_json::json!(true));
+    assert_eq!(json["progress"], serde_json::json!(0));
+  }
+}

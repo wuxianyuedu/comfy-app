@@ -133,18 +133,85 @@ fn default_dev_url(host: &str) -> String {
   format!("http://{}:{}/workspace", host, port)
 }
 
-/// 从项目根目录读取 launcher 写入的启动状态文件 run/launch-status.json。
+/// 从项目根目录读取启动状态文件 run/launch-status.json。
+///
+/// **读不到时不再只是一句 Err**（ISSUE #784 手验反馈：「启动状态文件也没有」）：
+/// 「编排器还没写」与「项目根推不出来 / 文件在另一个地方」这两件事实在太容易
+/// 混为一谈，而它们的处理方式完全相反（前者等，后者修环境）。因此失败时返回
+/// 一份**壳自持的兜底状态**：`phase: "no-status-file"`，`reason` 说明是哪一种，
+/// 附上诊断出口（壳侧链路日志 / 壳日志 / 应然路径）。
+///
+/// 但判据仍然要能分辨**真故障**：读失败若是「权限 / IO 错误」而不是
+/// `NotFound`，那是实打实的问题，照样回 Err —— 不能被兜底吞掉。
 #[tauri::command]
 fn get_launch_status(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
   if root.is_empty() {
-    return Err("COMFYAPP_PROJECT_ROOT not set".to_string());
+    // 项目根为空 = 壳推不出来：这不是「还没写」，壳写不进去就是因为没根。
+    // 返回结构化兜底（让启动页能说出原因）而不是 Err（Err 在页面上只是一句
+    // 无信息量的「读不到」）。
+    log::warn!("[ComfyAPP] get_launch_status: COMFYAPP_PROJECT_ROOT 为空，无法定位启动状态文件");
+    return Ok(no_status_payload(
+      "",
+      "项目根未推导出来（COMFYAPP_PROJECT_ROOT 为空）：壳找不到 run/launch-status.json。\
+       常见原因：app.exe 不在项目根的 src-tauri/target/release/ 下。",
+    ));
   }
-  let path = std::path::Path::new(&root).join("run").join("launch-status.json");
+  let path = shell_launch::status_file_path(&root);
   match std::fs::read_to_string(&path) {
     Ok(text) => Ok(text),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+      // 编排器还没写（正常启动窗口期）或路径不对（环境问题）——两者都可能，
+      // 因此把判断所需的事实（应然路径 + 壳侧日志位置）一起给出去。
+      log::info!("[ComfyAPP] 启动状态文件尚未出现：{}", path.display());
+      Ok(no_status_payload(
+        &root,
+        &format!(
+          "启动状态文件尚未出现（{}）。若是刚双击启动，编排器写第一份状态前有 1~2 秒空档；\
+           若持续为空，说明编排器没能起来 —— 先看壳侧编排链路日志。",
+          path.display()
+        ),
+      ))
+    }
     Err(e) => Err(format!("无法读取启动状态文件：{} ({})", path.display(), e)),
   }
+}
+
+/// 构造「没有状态文件」时的兜底状态（形态与编排器写的那份同域 + 多两个字段）。
+///
+/// `progress` 保持 < 1 且 `error: false`（这是「还没到」不是「失败」）——
+/// 启动页据此继续显示等待动画，而不是把一次正常启动画成错误。
+fn no_status_payload(root: &str, reason: &str) -> String {
+  let launch_log = if root.is_empty() {
+    String::new()
+  } else {
+    shell_launch::launch_log_path(root).display().to_string()
+  };
+  let shell_log = if root.is_empty() {
+    String::new()
+  } else {
+    std::path::Path::new(root)
+      .join("log")
+      .join("shell")
+      .join("shell.log")
+      .display()
+      .to_string()
+  };
+  serde_json::json!({
+    "phase": "no-status-file",
+    "progress": 0,
+    "message": reason,
+    "error": false,
+    "noStatusFile": true,
+    "diagnostics": {
+      "projectRoot": root,
+      "launchLog": launch_log,
+      "shellLog": shell_log,
+      "statusFile": if root.is_empty() { String::new() } else { shell_launch::status_file_path(root).display().to_string() },
+    },
+    "updatedAt": "shell",
+  })
+  .to_string()
 }
 
 /// 启动页检测到 ready 后，让 Rust 侧把「应用」窗口（main，隐藏）导航到真正的应用 URL。
@@ -446,15 +513,81 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
   Some(lines.join("\n"))
 }
 
-/// 启动页「查看日志」面板的数据源：返回本次启动的编排日志尾部。
+/// 一条日志都取不到时的「按顺序看这里」清单。
+///
+/// 判据是**文件在不在**，不是「该看哪一份」的经验之谈：把存在的那几份一一列出来
+/// 并标出路径，用户（以及贴图报障的人）照着走就能拿到现场。全都不在时说明
+/// 「这一层的日志都还没落地」，并点出**最可能的原因**（项目根没推出来 / 壳太旧）。
+///
+/// `logHintLines()`（Node 侧 `src/lib/shell/launch-diagnostics.ts`）是同一份清单的
+/// Node 实现，两侧的候选路径必须一致 —— Node 侧的单测锁住那份。
+fn no_log_guidance(root: &str) -> String {
+  let mut lines = vec!["（暂无日志。）".to_string()];
+  if root.is_empty() {
+    lines.push("根因指向项目根：壳没能推导出项目根（COMFYAPP_PROJECT_ROOT 为空）。".to_string());
+    lines.push(
+      "请确认 app.exe 位于项目根的 src-tauri/target/release/ 下 —— 壳靠项目根里的\
+       scripts/dev-launcher.mjs 找编排器与日志目录。"
+        .to_string(),
+    );
+    return lines.join("\n");
+  }
+  lines.push(format!("项目根：{root}"));
+  lines.push("按顺序看这几处（存在哪份就先看哪份）：".to_string());
+  let candidates = [
+    (
+      "壳侧编排链路（壳自己写的，启动期最先有内容）",
+      shell_launch::launch_log_path(root),
+    ),
+    (
+      "壳日志（release）",
+      std::path::Path::new(root).join("log").join("shell").join("shell.log"),
+    ),
+    (
+      "编排日志（编排器起来后才有）",
+      std::path::Path::new(root).join("log").join("launcher").join("dev-launcher.log"),
+    ),
+    (
+      "编排错误输出",
+      std::path::Path::new(root)
+        .join("log")
+        .join("launcher")
+        .join("dev-launcher-stderr.log"),
+    ),
+    ("启动状态文件", shell_launch::status_file_path(root)),
+  ];
+  let mut found = 0usize;
+  for (label, path) in candidates {
+    let exists = path.is_file();
+    if exists {
+      found += 1;
+    }
+    lines.push(format!("  {} {}：{}", if exists { "●" } else { "○" }, label, path.display()));
+  }
+  if found == 0 {
+    lines.push(
+      "以上一处都还没落地：说明壳侧编排还没走到写日志那一步。请重编壳后重试：\
+       cd src-tauri && cargo build --release --features custom-protocol"
+        .to_string(),
+    );
+  }
+  lines.join("\n")
+}
+
 /// 启动编排器的日志在文件被占用时会回退改名，以 sentinel
-/// log/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部，
-/// 启动卡住时用户能直接在启动页看到「执行到哪一步 / 卡在哪里」。
+/// log/launcher/dev-launcher-current.txt 指向的真实文件为准；附带 stderr 尾部、
+/// 壳自持日志与**壳侧编排链路日志**（`log/launcher/shell-launch.log`，启动期
+/// 最先有内容的一份，见 §1.5.1），启动卡住时用户能直接在启动页看到
+///「执行到哪一步 / 卡在哪里」。
 #[tauri::command]
 fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   let root = state.project_root();
   if root.is_empty() {
-    return Err("COMFYAPP_PROJECT_ROOT not set".to_string());
+    // 项目根为空时不再回一句「没设环境变量」：面板需要的是**能做点什么**，
+    // 而这里能说的是「壳推不出项目根」，以及唯一有效的动作（见 noLogGuidance
+    // 的同名分支）。返回文本而不是 Err —— 面板把两者都渲染成一行，但前者
+    // 至少把根因写出来了。
+    return Ok(no_log_guidance(""));
   }
   let log_dir = std::path::Path::new(&root).join("log").join("launcher");
   let mut sections: Vec<String> = Vec::new();
@@ -487,8 +620,23 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
       sections.push(format!("─ 壳日志（log/shell/shell.log）─\n{}", tail));
     }
   }
+  // 壳侧的编排链路日志（`log/launcher/shell-launch.log`）：**这是启动期最先
+  // 有内容的一份**——它由壳自己落，不依赖编排器起来（编排器写的三份日志在
+  // 「壳已接手、编排器还没写」的窗口期全是空的，正是手验反馈里「暂时读不到
+  // 日志」的现场）。放在最后一段是因为它信息密度最高（启动报告 + 编排器输出）。
+  let launch_log = shell_launch::launch_log_path(&root);
+  if let Some(tail) = tail_log_file(&launch_log, 16 * 1024, 200) {
+    if !tail.trim().is_empty() {
+      sections.push(format!(
+        "─ 壳侧编排链路（log/launcher/shell-launch.log）─\n{}",
+        tail
+      ));
+    }
+  }
   if sections.is_empty() {
-    return Ok("（暂无日志：启动器尚未写入输出）".to_string());
+    // 走到这里 = 一条都没读到。「没了」这一步必须给出**下一步做什么**，
+    // 否则用户唯一能做的就是把屏幕截图发出来（手验反馈正是如此）。
+    return Ok(no_log_guidance(&root));
   }
   Ok(sections.join("\n\n"))
 }
@@ -1275,6 +1423,17 @@ pub fn run() {
       //     双击的场景已由 run() 早期的单实例判定拦下（第二个进程不建窗口就退出）。
       if self_launch {
         shell_launch::ensure_launch_mode(&project_root);
+        // 「壳已接手」这一时刻必须在磁盘上留痕：编排器写第一份
+        // run/launch-status.json 之前有 1~2 秒空档，而 release 壳没有控制台，
+        // 那时启动页与日志面板会**什么都读不到**（ISSUE #784 手验反馈）。
+        // 先写一份 fallback 快照 + 一份启动报告，让这段窗口期有现场可查；
+        // 编排器一旦写自己的状态，这份快照就被顶掉，不会与它争权威。
+        shell_launch::write_idle_status(
+          &project_root,
+          "shell-prepare",
+          "桌面壳已接手启动编排，正在检查这个检出能不能自己起…",
+        );
+        shell_launch::log_startup_report(&project_root, "壳已接手（双击 app.exe）");
         if let Some(pid) = shell_launch::find_owned_orchestrator() {
           log::warn!(
             "[ComfyAPP] 上一次运行遗留的编排器仍在跑（pid {pid}），先回收它再启动本次编排"
@@ -1340,6 +1499,14 @@ fn start_own_orchestrator(app: &tauri::AppHandle, project_root: &str) {
         "[ComfyAPP] 壳已自行启动编排器（node scripts/dev-launcher.mjs --mode prebuilt），\
          这份编排器随壳退出一起回收"
       );
+      // 编排器已拉起、还没写第一份状态：把快照推进到这一档，启动页于是能说出
+      // 「在等谁」，而不是让用户对着「暂时读不到日志」猜。
+      shell_launch::write_idle_status(
+        project_root,
+        "shell-orchestrating",
+        "编排器已启动，正在等待本地服务就绪（诊断见「查看日志」）…",
+      );
+      shell_launch::log_launch_line(project_root, "info", "编排器已拉起，等待它写第一份状态");
       shell_launch::attach_kill_on_close_job();
     }
     Err(e) => {
