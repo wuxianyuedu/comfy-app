@@ -225,6 +225,7 @@ export function HistoryList({
         detail={c.detail}
         detailLoading={c.detailLoading}
         workflowIO={c.workflowIO}
+        modeContracts={c.modeContracts}
         onClose={c.closeDetail}
       />
     </div>

@@ -8,9 +8,11 @@
 // 入口形态与 CustomNodesSettings 一致（同一排的按钮），点击后开独立弹窗。
 
 import { useState } from "react";
+import { Puzzle } from "lucide-react";
 
 import { ModeContractDialog } from "~/components/workshop/mode-contract/ModeContractDialog";
 import { Button } from "~/components/ui/button";
+import { HEADER_ACTION_BTN } from "./workflow-library-config";
 
 export function ModeContractSettings() {
   const [open, setOpen] = useState(false);
@@ -21,10 +23,10 @@ export function ModeContractSettings() {
         variant="outline"
         onClick={() => setOpen(true)}
         title="配置每种模式对外有哪些统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器"
-        className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright h-auto gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+        className={`${HEADER_ACTION_BTN} border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright`}
       >
-        <span>{"\u{1F9E9}"}</span>
-        <span>模式契约</span>
+        <Puzzle size={13} />
+        模式契约
       </Button>
 
       {open && <ModeContractDialog onClose={() => setOpen(false)} />}

@@ -13,6 +13,10 @@
 //     快照它，只能按 `params.workflow` 现查（见 `resolveParamLabel`）。
 
 import { asRecord } from "~/lib/is-record";
+import {
+  modeContractEntries,
+  type ModeContract,
+} from "~/lib/workshop/model-mode-contract";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { TaskDetail } from "./history-types";
 
@@ -79,34 +83,85 @@ export function deriveTaskOrigin(detail: TaskDetail | null): TaskOrigin {
     : "workflow";
 }
 
-/** 工坊对外值在历史里的展示名（键即 `/api/generate` 的入参名）。 */
-const WORKSHOP_PARAM_LABELS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: "prompt", label: "正向提示词" },
-  { key: "negative", label: "反向提示词" },
-  { key: "firstFrame", label: "首帧图" },
-  { key: "lastFrame", label: "尾帧图" },
-  { key: "frames", label: "帧数" },
-];
-
-/** 一行「工坊参数」。 */
+/** 一行「工坊参数」（模式契约的一个对外口 + 该次任务落在它上面的值）。
+ *  `value` 为 `undefined` 表示这个口本次没给值——仍占一行（契约配了几个口就显示几个）。 */
 export interface WorkshopParamRow {
   id: string;
   label: string;
   value: unknown;
 }
 
-/** 工坊参数：工坊对外值里**真的落到 params 顶层**的那几项。 */
+/** 契约口 id → params 顶层键的别名。工坊对外值落库时用的是 generate 入参名，
+ *  与契约口 id 不完全同名（first-frame ↔ firstFrame、duration ↔ frames…）。 */
+const PORT_TO_PARAM_KEYS: Record<string, readonly string[]> = {
+  prompt: ["prompt"],
+  negative: ["negative"],
+  "first-frame": ["firstFrame"],
+  "last-frame": ["lastFrame"],
+  duration: ["duration", "frames"],
+  "reference-image": ["inputImage", "image"],
+};
+
+/** 「尺寸」口没有单一顶层值——工坊的尺寸被拆进 workflowInputs 的具体 pin。
+ *  这几族 pin 名归它（作者连线用的程序名，中英文都兜）。 */
+const SIZE_PIN_NAMES = new Set([
+  "aspect_ratio",
+  "aspect-ratio",
+  "megapixels",
+  "multiple",
+  "width",
+  "height",
+  "resolution",
+]);
+
+interface RawWorkflowInput {
+  nodeId?: string;
+  name: string;
+  value: unknown;
+}
+
+/** 解析一个契约口在本次任务里的值：顶层 params（含别名）→ 尺寸口按 size 族 pin
+ *  聚合 → 同名 workflowInputs pin 兜底。都取不到返回 `undefined`（不臆造）。 */
+function resolvePortValue(
+  portId: string,
+  params: Record<string, unknown>,
+  inputs: RawWorkflowInput[],
+  io: WorkflowIOMap | null | undefined,
+): unknown {
+  const keys = PORT_TO_PARAM_KEYS[portId] ?? [portId];
+  for (const key of keys) {
+    if (!isBlank(params[key])) return params[key];
+  }
+  if (portId === "size") {
+    const parts = inputs
+      .filter((input) => SIZE_PIN_NAMES.has(input.name))
+      .map(
+        (input) =>
+          `${resolveParamLabel(input, io)} ${kvValueText(input.value)}`,
+      );
+    if (parts.length > 0) return parts.join(" · ");
+  }
+  const pin = inputs.find((input) => input.name === portId);
+  if (pin && !isBlank(pin.value)) return pin.value;
+  return undefined;
+}
+
+/** 工坊参数：按**该任务模式的生效契约口清单**逐个列出（含本次没给值的口），
+ *  值从 params / workflowInputs 解析。契约来源与工坊封装页、工作流库画布卡片
+ *  同一份（`modeContractEntries`），不再各写一份硬编码键名清单。 */
 export function deriveWorkshopParams(
   detail: TaskDetail | null,
+  mode: string | null | undefined,
+  contracts: readonly ModeContract[] | null | undefined,
+  io: WorkflowIOMap | null | undefined,
 ): WorkshopParamRow[] {
   const params = paramsOf(detail);
-  const out: WorkshopParamRow[] = [];
-  for (const { key, label } of WORKSHOP_PARAM_LABELS) {
-    const value = params[key];
-    if (isBlank(value)) continue;
-    out.push({ id: key, label, value });
-  }
-  return out;
+  const inputs = workflowInputsOf<RawWorkflowInput>(detail);
+  return modeContractEntries(mode, contracts).map((port) => ({
+    id: port.id,
+    label: port.label,
+    value: resolvePortValue(port.id, params, inputs, io),
+  }));
 }
 
 /** 一行「工作流参数」（下发给工作流的 IO 端口）。 */

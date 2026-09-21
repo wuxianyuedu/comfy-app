@@ -13,6 +13,12 @@ import {
   normalizeTaskType,
 } from "~/lib/workflow/workflow-types";
 
+/** 工作流库页头右侧动作按钮的**统一形态基类**：紧凑、同高度同圆角同字重。
+ *  主 / 次按钮只差配色（渐变 vs outline），由调用方各自追加，避免三处各写一份
+ *  padding / 圆角 / 字号而漂移成三种观感（此前正是粉渐变 / 深色 / 纯紫混杂）。 */
+export const HEADER_ACTION_BTN =
+  "h-auto shrink-0 gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium";
+
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
 export interface LocalWorkflowRoot {
   absPath: string;

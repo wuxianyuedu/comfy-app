@@ -95,23 +95,54 @@ describe("deriveTaskOrigin", () => {
 });
 
 describe("deriveWorkshopParams", () => {
-  it("只取真的落到 params 顶层的对外值，按固定顺序配中文名", () => {
-    const rows = deriveWorkshopParams(
-      makeDetail({ workflow: "w", prompt: "少女", frames: 81 }),
-    );
-    expect(rows.map((row) => row.label)).toEqual(["正向提示词", "帧数"]);
-    expect(rows[0]!.value).toBe("少女");
+  it("T2I：按契约列出提示词 / 负向提示词 / 尺寸三个口（空值也占位）", () => {
+    const detail = makeDetail({
+      workflow: "w",
+      prompt: "少女",
+      workflowInputs: [
+        { nodeId: "23", name: "aspect_ratio", value: "3:4" },
+        { nodeId: "24", name: "megapixels", value: 1 },
+        { nodeId: "25", name: "multiple", value: 64 },
+      ],
+    });
+    const rows = deriveWorkshopParams(detail, "T2I", null, null);
+    expect(rows.map((r) => r.id)).toEqual(["prompt", "negative", "size"]);
+    expect(rows[0]?.value).toBe("少女");
+    expect(rows[1]?.value).toBeUndefined(); // 没给负向 → 仍占位、value undefined
+    expect(String(rows[2]?.value)).toContain("3:4"); // 尺寸从 workflowInputs 聚合
   });
 
-  it("空值不占位（没有反向提示词就不显示那一行）", () => {
+  it("负向提示词有值时如实显示", () => {
     const rows = deriveWorkshopParams(
-      makeDetail({ prompt: "x", negative: "" }),
+      makeDetail({ prompt: "a", negative: "blurry" }),
+      "T2I",
+      null,
+      null,
     );
-    expect(rows.map((row) => row.label)).toEqual(["正向提示词"]);
+    expect(rows.find((r) => r.id === "negative")?.value).toBe("blurry");
   });
 
-  it("工作流直接发起的任务没有工坊参数", () => {
-    expect(deriveWorkshopParams(makeDetail({ workflow: "w" }))).toEqual([]);
+  it("用户改过的模式契约优先于内置默认", () => {
+    const contracts = [
+      { mode: "T2I", inputs: ["prompt", "size"], output: "image" },
+    ] as unknown as Parameters<typeof deriveWorkshopParams>[2];
+    const rows = deriveWorkshopParams(
+      makeDetail({ prompt: "x" }),
+      "T2I",
+      contracts,
+      null,
+    );
+    expect(rows.map((r) => r.id)).toEqual(["prompt", "size"]);
+  });
+
+  it("模式为空时回落内置默认契约（仍列出口，不返回空）", () => {
+    const rows = deriveWorkshopParams(
+      makeDetail({ workflow: "w" }),
+      null,
+      null,
+      null,
+    );
+    expect(rows.length).toBeGreaterThan(0);
   });
 });
 
