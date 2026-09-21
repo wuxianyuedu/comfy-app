@@ -14,6 +14,8 @@
  * workflow-subgraph-parse.ts（子图的连线/图/pin 解析）。
  * 本文件只留编排与缓存两层。
  */
+import "server-only";
+import fs from "fs";
 import { TRPCError } from "@trpc/server";
 import { workflowTemplateRepository } from "~/lib/core/repository";
 import {
@@ -131,7 +133,7 @@ export interface WorkflowDetailFull {
   hasRaw?: boolean;
   usable?: boolean;
   sourcePath?: string | null;
-  sourceChanged?: boolean;
+  sourceOutdated?: boolean;
   sourceMissing?: boolean;
   source?: "local" | "online";
   /** 子图变体：顶层工作流的 id。 */
@@ -169,7 +171,7 @@ async function buildWorkflowDetailJson(input: {
     field: string,
   ) => Promise<boolean | undefined>;
   sourcePath: string | null;
-  sourceChanged: boolean;
+  sourceOutdated: boolean;
   sourceMissing: boolean;
 }): Promise<string> {
   const {
@@ -178,7 +180,7 @@ async function buildWorkflowDetailJson(input: {
     comboOptionsForFieldName,
     multilineForClassField,
     sourcePath,
-    sourceChanged,
+    sourceOutdated,
     sourceMissing,
   } = input;
   /* rawJson 收窄为 RawWorkflow 视图（根不是普通对象时为 null，下游均有守卫，
@@ -448,7 +450,7 @@ async function buildWorkflowDetailJson(input: {
     hasRaw: detailHasRaw,
     usable: detailUsable,
     sourcePath,
-    sourceChanged,
+    sourceOutdated,
     sourceMissing,
     /** 分类：绑定到磁盘文件时为 "local"，否则 "online"。 */
     source: sourcePath ? "local" : "online",
@@ -497,52 +499,39 @@ export async function buildWorkflowDetailFull(
     cacheDel(cacheKey);
   }
 
-  /* ── 本地文件工作流：检出磁盘变更并自动重新导入 ──
-   *  如果这个工作流是从本地文件导入的（设置了 sourcePath），先 stat 一下文件
-   *  （很便宜），好在返回陈旧缓存之前把它重新导入。
-   *  用户在 ComfyUI 里改完文件、刷新就能看到最新内容，靠的就是这一步 ——
-   *  **有没有**点 🔄 强制重载都一样。
-   *  `meta` 是轻量查询，免得把（很大的）rawJson 拖两遍；
-   *  缓存未命中时下面仍会完整读一次。 */
-  let sourceChanged = false;
+  /* ── 本地文件工作流：只**检出**磁盘变更，不写库 ──
+   *  从本地文件导入的工作流（有 `sourcePath`）在这里 stat 一下（很便宜），
+   *  把「磁盘上已经有新版本」这一事实带给界面。
+   *
+   *  **刻意不在这里重新导入**：这一处曾经会在检出变更时直接
+   *  `workflowTemplateRepository.update(...)` 把磁盘内容写回库里 —— 于是
+   *  「切到详情」就等于「同步」，列表/详情上那个「同步」按钮变得毫无意义。
+   *  用户实测反馈：「工作流文件有更新时，切界面后就自动更新了，需要我点同步
+   *  按钮再更新」。现在**更新的唯一入口**是 `workflow.resync`（那个按钮），
+   *  详情只回答「有没有新版本」。
+   *
+   *  判据与列表页 `workflow.list` 的 `diskDirty` **同一口径**（mtime 比大小）：
+   *  两处判据一旦不同，就会出现「列表说有更新、详情说没有」这种自相矛盾。
+   *  `meta` 是轻量查询，免得把（很大的）rawJson 拖两遍。 */
+  let sourceOutdated = false;
   let sourceMissing = false;
   let sourcePath: string | null = null;
   const meta = await workflowTemplateRepository.findByIdForUserSelect(
     userId,
     id,
-    {
-      id: true,
-      sourcePath: true,
-      sourceMtime: true,
-      sourceChecksum: true,
-      taskType: true,
-    },
+    { id: true, sourcePath: true, sourceMtime: true },
   );
   if (meta?.sourcePath) {
     sourcePath = meta.sourcePath;
-    const { reimportFromSource } = await import("~/lib/comfyui/importSource");
-    const re = await reimportFromSource({
-      sourcePath: meta.sourcePath,
-      sourceMtime: meta.sourceMtime,
-      sourceChecksum: meta.sourceChecksum,
-      /* 透传已存在的 taskType 让 reimport 时保留
-       * 用户在 UI 里手动设置的值（不再被自动推断覆盖）。 */
-      existingTaskType: meta.taskType ?? null,
-    });
-    if (re.missing) {
+    try {
+      const stat = fs.statSync(sourcePath);
+      sourceOutdated =
+        typeof meta.sourceMtime === "number" &&
+        Math.floor(stat.mtimeMs / 1000) > meta.sourceMtime;
+    } catch {
+      /* 文件不在了：告诉界面（它会给「磁盘文件已丢失」而不是「有更新」）。 */
       sourceMissing = true;
-      cacheDel(cacheKey); // rebuild so the missing flag reaches the client
-    } else if (re.update) {
-      await workflowTemplateRepository.update(id, {
-        rawJson: re.update.rawJson,
-        positions: re.update.positions,
-        paramMap: re.update.paramMap,
-        taskType: re.update.taskType,
-        sourceChecksum: re.update.sourceChecksum,
-        sourceMtime: re.update.sourceMtime,
-      });
-      sourceChanged = true;
-      cacheDel(cacheKey); // force a fresh re-serialisation below
+      cacheDel(cacheKey);
     }
   }
 
@@ -587,7 +576,7 @@ export async function buildWorkflowDetailFull(
       comboOptionsForFieldName,
       multilineForClassField,
       sourcePath,
-      sourceChanged,
+      sourceOutdated,
       sourceMissing,
     }),
   );
