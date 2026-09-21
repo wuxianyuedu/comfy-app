@@ -2,6 +2,7 @@
 
 import type { LLMMessage, LLMRequestOptions } from "./types";
 import { readApiError, readJsonBody } from "~/lib/api-error";
+import { errorMessage } from "~/lib/error-message";
 
 interface ChatArgs {
   messages: LLMMessage[];
@@ -141,7 +142,7 @@ export async function probeRemoteApi(input: {
   } catch (e) {
     return {
       ok: false,
-      detail: e instanceof Error ? e.message : "网络请求失败",
+      detail: errorMessage(e, "网络请求失败"),
     };
   }
   const json = (await readJsonBody(res)) as {
