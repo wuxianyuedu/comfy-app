@@ -5,6 +5,7 @@ import path from "node:path";
 import { OLLAMA_RUNTIME_LOG } from "~/lib/log/log-paths";
 import { formatLocalStamp } from "~/lib/time-format";
 import { OLLAMA_STOP_PROBE } from "~/lib/retry-policy";
+import { sleep } from "~/lib/with-timeout";
 import { appendSessionBanner as appendSessionBannerToFile } from "~/lib/session-banner.server";
 import { OLLAMA_DEFAULT_PORT, ollamaBaseUrl } from "~/lib/endpoints";
 import { killProcessTreeByImage } from "~/lib/process/kill-process-tree";
@@ -88,7 +89,7 @@ export async function POST(_req: NextRequest) {
       appendOllamaLog("[state] Ollama 已关闭");
       return NextResponse.json({ ok: true, detail: "Ollama 已关闭" });
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await sleep(500);
   }
   const msg = "关闭命令已发送，但 Ollama 仍在响应，请手动确认进程已退出";
   appendOllamaLog(`[err] ${msg}`);

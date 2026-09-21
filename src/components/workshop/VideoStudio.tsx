@@ -16,7 +16,7 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { ChannelSwitch, ShotCard } from "./VideoStudio.parts";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 import { errorMessage } from "~/lib/error-message";
-import { withTimeoutResult } from "~/lib/with-timeout";
+import { withTimeoutResult, sleep } from "~/lib/with-timeout";
 import { Button } from "~/components/ui/button";
 
 interface Props {
@@ -139,7 +139,7 @@ export function VideoStudio({
   ): Promise<void> {
     const deadline = Date.now() + 10 * 60 * 1000;
     while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 3000));
+      await sleep(3000);
       const r = await apiPollVideo(remoteTaskId);
       if (r.url) {
         patchShot(shotId, { clipStatus: "done", clipUrl: r.url });
