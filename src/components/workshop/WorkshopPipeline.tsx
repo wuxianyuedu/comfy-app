@@ -54,12 +54,6 @@ export function WorkshopPipeline() {
           apiChannels={controller.apiChannels}
           onOpenApiSettings={controller.openApiSettings}
           onOpenModeContract={controller.openModeContract}
-          projects={controller.projects}
-          activeProjectId={controller.activeProjectId}
-          onSwitchProject={controller.switchProject}
-          onCreateProject={controller.createProject}
-          onRenameProject={controller.renameProject}
-          onDeleteProject={controller.deleteProject}
         />
 
         <WorkshopStageNav
