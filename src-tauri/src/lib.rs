@@ -328,6 +328,18 @@ fn show_main_window_without_focus(app: &tauri::AppHandle, request_focus: bool) {
   let configured = state.as_ref().map(|s| s.foreground()).unwrap_or(false);
   let activate = request_focus || configured;
 
+  /* 首次显示这一刻才套用「上一次运行的窗口几何」（尺寸 / 位置 / 最大化）。
+   *
+   * 为什么不是让窗口状态插件在「窗口就绪」时套用（见 build_window_state_plugin
+   * 的 skip_initial_state）：插件的 `maximized` 分支是 `window.maximize()`，
+   * Windows 上它自带显示语义 —— 对一个**还该隐藏**的主窗调它，就是把窗口显示
+   * 出来（实测启动期整屏闪一下）。放在这一行则窗口本来就要显示，最大化不再有
+   * 副作用；而且位置 / 尺寸是在显示之前设好的，窗口一出现就在记忆的位置上，
+   * 不会先冒出来再挪。 */
+  if first_show {
+    apply_saved_main_window_state(&win);
+  }
+
   /* 最小化时先还原：`show()`（tao 走 SW_SHOW）对最小化窗口不会还原——Windows
    * 只把它「按原尺寸/原状态」显示出来，仍是任务栏上一条不动的按钮；随后的
    * `set_focus()` 也只是把「最小化的窗口」记为前台。用户双击启动或点托盘得到的
@@ -1177,16 +1189,32 @@ fn build_log_plugin(_project_root: &str) -> tauri::plugin::TauriPlugin<Wry> {
     .build()
 }
 
+/// 窗口状态插件要记忆 / 还原的维度。
+///
+/// 保存与还原**必须同源**：壳自己在建窗那一刻调 `restore_state` 时传的就是它
+/// （见 `apply_saved_main_window_state`），这里分叉会出现「记得住、还原不回来」
+/// 这种最难查的形态。
+fn window_state_flags() -> WindowStateFlags {
+  WindowStateFlags::SIZE | WindowStateFlags::POSITION | WindowStateFlags::MAXIMIZED
+}
+
 /// 窗口状态持久化：记忆 main / comfyui 窗口的位置、尺寸与最大化，重启后还原。
 /// 刻意排除 VISIBLE——本壳的 main 窗由「启动页 → 导航 → 交换」流程控制显隐，
 /// 交给插件自动 show 会破坏隐藏待命语义（见 run() 里对 main 的 visible(false)）。
 /// splash 只做进度展示，无记忆需求，deny 掉。
+///
+/// **main 的初始还原也交给壳自己做**（`skip_initial_state`）：插件的还原发生在
+/// 「窗口就绪」那一刻，而它的 `maximized` 分支是 `window.maximize()` —— Windows
+/// 上这个调用**自带显示语义**，会把一个还该隐藏的主窗显示出来。实测
+/// （2560x1600）：t=+2.7s 出现一个铺满屏幕的可见主窗（(-11,-11,2582,1550)），
+/// 95ms 后被建窗流程重新隐藏，用户看到的就是「启动页之外整屏闪一下」。
+/// 套用几何的位置改到建窗那一刻并由壳立刻收回隐藏态，见
+/// `apply_saved_main_window_state`。
 fn build_window_state_plugin() -> tauri::plugin::TauriPlugin<Wry> {
   tauri_plugin_window_state::Builder::default()
     .with_denylist(&["splash"])
-    .with_state_flags(
-      WindowStateFlags::SIZE | WindowStateFlags::POSITION | WindowStateFlags::MAXIMIZED,
-    )
+    .skip_initial_state("main")
+    .with_state_flags(window_state_flags())
     .build()
 }
 
@@ -1655,12 +1683,36 @@ fn setup_splash_window(app: &mut tauri::App) {
   // 判定与 single_instance 模块注释）。
   single_instance::spawn_focus_waiter(app.handle().clone());
 
-  if let Some(splash) = app.get_webview_window("splash") {
-    let (width, height) = splash_window_size(app.handle());
+  let Some(splash) = app.get_webview_window("splash") else {
+    return;
+  };
+  /* **只在显示器上限真的收窄了尺寸时才动窗口。**
+
+   * 声明式窗口（tauri.conf.json 的 width/height/center）已经按同一档尺寸建好
+   * 并居中过，这里无条件再 `set_size` + `center()` 一次就是**第二次居中** ——
+   * 而两次居中的口径不同：配置那条按**客户区**居中，`center()` 用**外框**
+   * （resizable 窗口的不可见边框，本机 150% 缩放下一侧 11px）。实测
+   * 2560x1600：启动页 t=+0.25s 显示在 (722,602)，setup 执行到这一步时
+   * （t=+1.6s）被挪到 (711,595) —— 差值正是边框，用户看到的是「黑框出现
+   * 一会儿后自己挪了一下」。同一个坑在页面侧已经修过一次（见 splash.html
+   * 的 applyCompact 注释）：**不允许出现第二个人去摆这个窗口**。
+   *
+   * 尺寸也只有收窄这一种情形需要壳出手；不收窄时连 `set_size` 都不该调
+   * （同尺寸的 set_size 仍会走一次窗口重排）。 */
+  let requested = SPLASH_WINDOW_SIZE;
+  let (width, height) = splash_window_size(app.handle());
+  if (width, height) != requested {
+    log::info!(
+      "[ComfyAPP] splash size clamped to monitor: {:.0}x{:.0} (requested {:.0}x{:.0})",
+      width,
+      height,
+      requested.0,
+      requested.1
+    );
     let _ = splash.set_size(tauri::LogicalSize::new(width, height));
     let _ = splash.center();
-    bring_splash_to_front(&splash);
   }
+  bring_splash_to_front(&splash);
 }
 
 /// 启动页首次出现时把它带到前台。
@@ -1722,6 +1774,31 @@ fn bring_splash_to_front(splash: &tauri::WebviewWindow) {
 /// 无人监听。关掉它是纯收益：DOM 恢复正常拖放语义，同时少一层原生处理器。
 /// **改回默认值 = 重新引入本缺陷**，门禁把它钉在
 /// `tests/comfyui-embed-csp.test.ts`（同族还有页签内嵌的 CSP 放行断言）。
+
+/// 把上一次运行记住的几何（尺寸 / 位置 / 最大化）套用到主窗。
+///
+/// **调用点必须是「窗口本来就要显示」的那一刻**（见 `show_main_window_without_focus`
+/// 的首次显示分支），不能在窗口还该隐藏时提前调：插件的 `maximized` 分支是
+/// `window.maximize()`，Windows 上这个调用**自带显示语义**，会当场把窗口显示出来
+/// —— 实测启动期整屏闪一下。
+///
+/// 「提前套用、随后马上 hide 回去」这条看似可行的绕法实测**更差**：`maximize()`
+/// 自身要跑几百毫秒（要等窗口过程与 WebView2 宿主应答），实测窗口可见 379ms
+/// （原缺陷是 95ms）。判据钉在 `window_startup_tests` 里，别把它改回去。
+///
+/// 为什么不自己存一份几何：窗口几何是用户的偏好，插件已经记着（本机实测 main
+/// 记着 maximized + 1920x1200），再存一份就又多了一个事实源（§12.18）。
+fn apply_saved_main_window_state(win: &tauri::WebviewWindow) {
+  use tauri_plugin_window_state::WindowExt;
+  if let Err(e) = win.restore_state(window_state_flags()) {
+    log::warn!("[ComfyAPP] restore main window geometry failed: {:?}", e);
+  }
+  log::info!(
+    "[ComfyAPP] main window geometry restored (visible={} maximized={})",
+    win.is_visible().unwrap_or(false),
+    win.is_maximized().unwrap_or(false)
+  );
+}
 
 /// 创建隐藏待命的「应用」窗口（label="main"），并挂上「页面加载完成即交换窗口」回调。
 ///
@@ -2111,6 +2188,95 @@ mod project_root_tests {
       "不得退回「只查 exe 同级目录」的写法：{body}"
     );
   }
+}
 
+/// 启动期窗口行为的回归测试。
+///
+/// 这两条缺陷的共同点：**判据没法用运行期断言表达**——「启动页有没有被挪
+/// 一下」「主窗有没有闪一下」需要一个真实窗口、一块真实显示器与一双眼睛
+/// （实测手段见本节各用例的注释：一个 20ms 采样的窗口矩形探针）。因此判据
+/// 落在**源码形态**上：把「谁来摆这个窗口」「谁在什么时候套用几何」钉死，
+/// 改回旧写法即在 `cargo test` 阶段被拦下。
+#[cfg(test)]
+mod window_startup_tests {
+  use super::*;
 
+  /// 取 `include_str!("lib.rs")` 里从 `marker` 到下一个顶层 `}` 的源码片段
+  /// （与 `root_resolution_never_only_looks_at_one_level` 同一手法）。
+  fn fn_body(marker: &str) -> String {
+    let src = include_str!("lib.rs");
+    let start = src.find(marker).unwrap_or_else(|| panic!("找不到 {marker}"));
+    let rest = &src[start..];
+    rest[..rest.find("\n}\n").unwrap()].to_string()
+  }
+
+  #[test]
+  fn splash_is_never_recentered_after_the_config_placed_it() {
+    // 现场（2560x1600，150% 缩放）：启动页 t=+0.25s 由声明式窗口显示在 (722,602)，
+    // 而 setup 到 t=+1.6s 才执行 —— 那里的 `set_size` + `center()` 是**第二次
+    // 居中**：配置那条按客户区算，`center()` 按外框算（一侧 11px 边框），
+    // 于是窗口在用户眼前挪到 (711,595)。
+    let body = fn_body("fn setup_splash_window");
+    let guard = body.find("!= requested").expect(
+      "尺寸没被显示器收窄时必须整段跳过窗口调整（重新居中 = 肉眼可见地挪一下）",
+    );
+    // 认**调用形态**（带接收者），不认裸标识符：本函数的注释里就写着 `set_size` /
+    // `center()` 这两个词，按裸词找会命中注释、把判据变成永远通过（第一版实测如此）。
+    let resize = body
+      .find("splash.set_size(")
+      .expect("收窄分支仍要能调尺寸");
+    let center = body.find("splash.center()").expect("收窄分支仍要能重新居中");
+    assert!(resize > guard, "set_size 必须在「收窄了」判断之后：{body}");
+    assert!(center > guard, "center() 必须在「收窄了」判断之后：{body}");
+  }
+
+  #[test]
+  fn main_window_geometry_is_applied_at_the_handover_moment() {
+    // 现场：插件在「窗口就绪」时还原几何，其 `maximized` 分支 `window.maximize()`
+    // 在 Windows 上会把隐藏窗口显示出来 —— 实测 t=+2.7s 出现一个铺满屏幕的可见
+    // 主窗（(-11,-11,2582,1550)），95ms 后被建窗流程重新隐藏。
+    let plugin = fn_body("fn build_window_state_plugin");
+    assert!(
+      plugin.contains("skip_initial_state(\"main\")"),
+      "插件不得在窗口就绪时还原 main 的几何（maximize() 会把隐藏窗口显示出来）：{plugin}"
+    );
+
+    let show = fn_body("fn show_main_window_without_focus");
+    assert!(
+      show.contains("if first_show {") && show.contains("apply_saved_main_window_state(&win)"),
+      "套用几何必须发生在「首次显示」这一刻：{show}"
+    );
+
+    // 「提前套用 + 随后 hide 回去」这条绕法实测更差（maximize() 自身要跑几百
+    // 毫秒，窗口可见 379ms > 原缺陷的 95ms），不许再改回去。
+    let apply = fn_body("fn apply_saved_main_window_state");
+    assert!(
+      apply.contains("restore_state"),
+      "套用几何必须经窗口状态插件（不许自己再存一份几何）：{apply}"
+    );
+    assert!(
+      !apply.contains(".hide()"),
+      "不许用「先显示再藏回去」绕：maximize() 的显示窗口期实测 379ms，比原缺陷更久：{apply}"
+    );
+  }
+
+  #[test]
+  fn splash_config_size_matches_the_shell_constant() {
+    // 声明式窗口的尺寸与壳里的常量必须同值：壳只在「显示器上限把尺寸收窄了」
+    // 时才动窗口（见 setup_splash_window），两者一旦分叉，正常屏幕上就会变成
+    // 「建窗按配置、判断按常量」—— 每次启动都白走一次调整（= 挪一下）。
+    let conf: String = include_str!("../tauri.conf.json")
+      .chars()
+      .filter(|c| !c.is_whitespace())
+      .collect();
+    assert!(conf.contains(r#""label":"splash""#), "splash 窗口不见了：{conf}");
+    assert!(
+      conf.contains(&format!(r#""width":{}"#, SPLASH_WINDOW_SIZE.0 as u32)),
+      "tauri.conf.json 的 splash 宽度必须等于 SPLASH_WINDOW_SIZE.0"
+    );
+    assert!(
+      conf.contains(&format!(r#""height":{}"#, SPLASH_WINDOW_SIZE.1 as u32)),
+      "tauri.conf.json 的 splash 高度必须等于 SPLASH_WINDOW_SIZE.1"
+    );
+  }
 }

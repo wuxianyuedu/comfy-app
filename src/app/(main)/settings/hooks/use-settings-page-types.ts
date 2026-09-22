@@ -3,10 +3,10 @@
 /**
  * 设置页的**共享类型与常量**（`use-settings-page` 的拆分件）。
  *
- * 从 `use-settings-page.ts` 抽出:视图与容器共用的 `Settings` / `LlmConfig` /
- * `QueryLlmConfig` / `Section` / `OllamaStatus` / `FlashMessage` /
- * `SettingsPageDrafts` / `SettingsPageController` / `ReadySettingsPageController`
- * 类型,与侧边栏分区表 `SETTINGS_SECTIONS`、按任务温度区的 `TEMPERATURE_TASKS`
+ * 从 `use-settings-page.ts` 抽出视图与容器共用的类型：`Settings`、
+ * `LlmConfig`、`QueryLlmConfig`、`Section`、`OllamaStatus`、`FlashMessage`、
+ * `SettingsPageDrafts`、`SettingsPageController`、`ReadySettingsPageController`，
+ * 以及侧边栏分区表 `SETTINGS_SECTIONS`、按任务温度区的 `TEMPERATURE_TASKS`
  * 两个纯配置常量。它们与 `useSettingsPage` hook 的实现体无关,只是被两侧共同
  * 引用;§12.7 `check-circular-deps` 不看 `import type`、只要 AST 上有 import
  * 边就算环,所以类型必须沉到独立叶子文件才能真正把方向拉直:

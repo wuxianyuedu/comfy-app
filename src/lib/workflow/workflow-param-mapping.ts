@@ -31,8 +31,8 @@
  * 宿主卡片 / 输出卡片列）是同一份数据的视图（`workflow-library-param-cards` +
  * `WorkflowLibraryCanvas`）—— 拖线即编辑落点，映射没有第二套界面。
  *
- * 拆包：分类模型与判定 / 展示类纯函数（`ParamClass` / `PinFamily` /
- * `SIZE_CLASSES` / `ParamEntry` / `paramOutputPorts` / `wiredTargetsForEntry`
+ * 拆包：分类模型与判定 / 展示类纯函数（`ParamClass`、`PinFamily`、
+ * `SIZE_CLASSES`、`ParamEntry`、`paramOutputPorts`、`wiredTargetsForEntry`
  * 等 15 个符号）已下沉到 `./workflow-param-classes.ts`（叶子模块）。本文件
  * 只做**映射**（组装 / 存储 / 解析 / 落值 / 布局常量）并把分类符号 re-export
  * 回来；消费者 import 路径不变。
