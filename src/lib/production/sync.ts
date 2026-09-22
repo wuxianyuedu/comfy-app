@@ -89,3 +89,25 @@ export function planShotSync(
   }
   return { patches, newShotIds };
 }
+
+/** 带 shotId 锚的最小节点形状（画布节点结构上满足；避免耦合 ReactFlow 完整类型）。 */
+export interface ShotAnchoredNode {
+  data?: { shotId?: string } & Record<string, unknown>;
+}
+
+/** 把 shot 补丁按 `data.shotId` 合并到已有节点：命中则合并补丁，非镜头节点或无匹配
+ *  原样返回。纯函数，供画布物化镜头节点用（Phase 3c）——新建节点需要视口坐标，由
+ *  调用方（画布）经 `placeCanvasNode` 处理，这里只负责「已有节点的回写合并」。 */
+export function applyShotPatches<T extends ShotAnchoredNode>(
+  nodes: T[],
+  patches: readonly ShotNodePatch[],
+): T[] {
+  const byShot = new Map(patches.map((patch) => [patch.shotId, patch]));
+  return nodes.map((node) => {
+    const shotId = node.data?.shotId;
+    if (!shotId) return node;
+    const patch = byShot.get(shotId);
+    if (!patch) return node;
+    return { ...node, data: { ...node.data, ...patch } };
+  });
+}

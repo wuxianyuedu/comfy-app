@@ -22,6 +22,30 @@ function productionFromBody(
   return isRecord(body.production) ? body.production : null;
 }
 
+function projectIdFrom(q: string | null): string | null {
+  const trimmed = q?.trim();
+  if (trimmed) return trimmed;
+  return null;
+}
+
+export async function GET(req: NextRequest) {
+  const user = await requireRequestUser();
+  if (!user) return unauthorizedResponse();
+  const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
+  if (!project) {
+    return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
+  }
+  try {
+    const row = await productionRepository.getForUser(user.id, project);
+    if (!row) return NextResponse.json({ exists: false });
+    return NextResponse.json({ exists: true, production: row });
+  } catch (e) {
+    return NextResponse.json(apiErrorBody(e, "读取生产数据失败"), {
+      status: 500,
+    });
+  }
+}
+
 export async function PUT(req: NextRequest) {
   const user = await requireRequestUser();
   if (!user) return unauthorizedResponse();
