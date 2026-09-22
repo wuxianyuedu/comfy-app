@@ -14,6 +14,7 @@
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -26,6 +27,23 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const SCRIPT = join(process.cwd(), "scripts", "check-reformat-only.cjs");
+
+/**
+ * 目录链接:Windows 走 "junction"、其它平台走 "dir"。
+ *
+ * 为什么要区分:Windows 下 `fs.symlinkSync(a, b, "dir")` 需要开发者模式或管理
+ * 员权限,普通开发者跑到这里 100% EPERM——门禁本体完全能跑,红的只是「测试
+ * 夹具搭不起来」的环境噪声。`"junction"` 是 NTFS 内建的目录链接形式,不需要
+ * 特权,在本用例的场景里(不跨机、不跨卷、能创建/删除)语义等价。macOS/Linux
+ * 忽略 type 参数,行为与旧实现一致。
+ */
+function symlinkSafe(target: string, linkPath: string): void {
+  symlinkSync(
+    target,
+    linkPath,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+}
 
 /* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 prettier
  * （门禁按「整批一次 prettier」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
@@ -124,19 +142,26 @@ beforeEach(() => {
   copyFileSync(SCRIPT, join(workdir, "scripts", "check-reformat-only.cjs"));
   // pnpm 形态判据模块按**相对脚本的路径**动态导入（scripts/launcher-core/shell.mjs）：
   // 临时仓库里没有它，缺了脚本会以 exit 2 结束 —— 那验的是「能不能加载」而不是本门禁。
-  mkdirSync(join(workdir, "scripts", "launcher-core"), { recursive: true });
-  symlinkSync(
-    join(process.cwd(), "scripts", "launcher-core", "shell.mjs"),
-    join(workdir, "scripts", "launcher-core", "shell.mjs"),
+  // cpSync 递归拷整个 launcher-core/ 而不是 symlink 单文件:Windows 下
+  // fs.symlink(文件) 需要 dev 模式,普通用户 100% EPERM;而且 shell.mjs 还依赖
+  // 同目录的 command-echo.mjs,单拷一个不够。9 个 .mjs、<50 KB,拷一份比维护
+  // 跨平台软链更省心。
+  cpSync(
+    join(process.cwd(), "scripts", "launcher-core"),
+    join(workdir, "scripts", "launcher-core"),
+    { recursive: true },
   );
   mkdirSync(join(workdir, "src", "lib"), { recursive: true });
   // 临时仓库也要能解析 prettier：真实场景里门禁在**源码仓库**里跑（node_modules
   // 就在旁边），临时仓库没有 —— 软链过来最贴近真实的解析路径，也让脚本的
   // 「向上找 prettier」这一档被真正走到（而不是悄悄退回 pnpm 兜底）。
-  symlinkSync(
+  // 用 "junction" 而不是 "dir":Windows 下 fs.symlink(type="dir") 需要开发者
+  // 模式或管理员,普通用户 100% EPERM;junction 是 NTFS 内建的目录链接形式,
+  // **不需要**特权,语义在这里等价(不跨机、不跨卷、能创建/删除)。macOS/Linux
+  // 忽略 type 参数,行为与旧实现一致。
+  symlinkSafe(
     join(process.cwd(), "node_modules"),
     join(workdir, "node_modules"),
-    "dir",
   );
   git(["init", "-q"]);
   git(["config", "user.email", "t@local"]);
@@ -373,10 +398,9 @@ describe(
         wrapper,
         join(workdir, "node_modules", "prettier", "bin", "prettier.cjs"),
       );
-      symlinkSync(
+      symlinkSafe(
         join(process.cwd(), "node_modules", "prettier-plugin-tailwindcss"),
         join(workdir, "node_modules", "prettier-plugin-tailwindcss"),
-        "dir",
       );
       writeFileSync(
         join(workdir, "node_modules", "prettier", "package.json"),
@@ -459,13 +483,19 @@ describe("批量口径的缺项退回逐文件 stdin 判定", { timeout: 60_000 
     // 判定为「不是纯格式化」靠的是 stdin 给的回文与改动后不同。
     const clean = "export const P = { a: 1, b: 2 };\n";
     const changed = "export const P = { a: 1, b: 3 };\n";
-    expect([...mod.classifyReformatOnly([{ file: "src/lib/p.ts", before: clean, after: changed }])]).toEqual([]);
+    expect([
+      ...mod.classifyReformatOnly([
+        { file: "src/lib/p.ts", before: clean, after: changed },
+      ]),
+    ]).toEqual([]);
     // 同一个文件若是「改动前就不规范、改动后是它的规范形态」→ 纯格式化。
     const messy = "export const P={a:1,\n\n\n  b:2};\n";
     const tidy = "export const P = {\n  a: 1,\n\n  b: 2,\n};\n";
-    expect([...mod.classifyReformatOnly([{ file: "src/lib/p.ts", before: messy, after: tidy }])]).toEqual([
-      "src/lib/p.ts",
-    ]);
+    expect([
+      ...mod.classifyReformatOnly([
+        { file: "src/lib/p.ts", before: messy, after: tidy },
+      ]),
+    ]).toEqual(["src/lib/p.ts"]);
   });
 });
 
