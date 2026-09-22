@@ -150,7 +150,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 > 理由见上面 `⚠️` 那段。
 
 ```
-本地提交前必须通过（.githooks/pre-commit，28 步）：
+本地提交前必须通过（.githooks/pre-commit，29 步）：
 ✅ node scripts/check-branch-guard.cjs     # 不在 master 上直接提交（见 13.6）
 ✅ node scripts/check-file-structure.cjs   # 命名/组织硬规则 R1-R4/R7-R12（见 §12.6/§12.8/§12.11）
 ✅ node scripts/check-react-updater-purity.cjs
@@ -179,6 +179,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
    # core 出口纪律与基类纯度（见 18 §18.8）
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
 ✅ node scripts/check-non-null-assertions.cjs # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
+✅ node scripts/check-void-floats.cjs         # src/lib `void someFn(...)` 悬空棘轮（见下 13.5.7）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
@@ -387,7 +388,7 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 **边界（不要做过头）**：
 
 - **这不是把门禁从本地搬回平台**。机器判据仍然只在 `.githooks/pre-commit`
-  （13.5 的清单，28 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
+  （13.5 的清单，29 步）；按需召唤给的是**另一次运行的机会**，不是新的唯一事实源。
 - **不要为它写 `.cnb.yml`**。`pull_request` / `push` 类事件是**无条件执行**的，
   写下去就又回到 13.5.3 的额度结论；「每天只跑一次」这种节流平台也不支持
   （无「今天跑过就跳过」的判据，见 13.5.3）。
@@ -445,6 +446,37 @@ TypeScript AST 的 `ts.isNonNullExpression`（不用正则——正则会把 `!=
 个常数——旧基线与新计数**不是同一个量**，`--update` 会拒绝放宽（除非版本已
 改），防止「顺手把基线调大」的后门。判据排在 `.githooks/pre-commit` 第 28
 步（浮层刻度是 27）。
+
+#### 13.5.7 src/lib `void someFn(...)` 悬空棘轮（`node scripts/check-void-floats.cjs`）
+
+类型安全审查 src/lib 报告 **H-6** 的机器化收口。PR-4b 加了 `fireAndForget(task, onError)`
+作为「刻意不 await、失败必须落到显式 onError」的地基；PR-10 逐个审了 lib 里
+30+ 处 `void fn()`、把 10 处真漏改走 fireAndForget。但**人工审计会漂**——下一
+位写下 `void persistLogs(taskId)`（若被调方没有内部 catch）就是一颗未来的
+unhandledRejection，pre-commit 不会响。
+
+**为什么不直接开 eslint `@typescript-eslint/no-floating-promises`**：那条判据
+覆盖面大得多——除了 `void someFn()`，还会把「裸 `someFn()`（无 await 无 void
+无 catch）」「`await someFn()` 后没接住 rejection 的写法」「Promise.all 未
+await」等一并揪出来，一次报几百处、评审看下来全是"这里合理"的噪声。合理
+路径是**基线棘轮**（与 §12.12 / §12.13 / §13.5.6 同构）：判据走 TypeScript AST，
+**只认**「ExpressionStatement 的表达式是 `VoidExpression` 且操作数是
+`CallExpression`」这一形状；`.catch(...)` 链尾（`void someFn().catch(...)`）
+视为**显式**接管了 rejection、跳过；`await someFn()` / 裸 `someFn()` 也不在
+本判据里（前者显式等待、后者是 no-floating-promises 完整版的活，未来若真要
+覆盖，把 RULE_VERSION 升到 2 并扩判据即可）。
+
+**为什么只扫 src/lib 不扫视图**：`void fetch(...)`、`void setState(fn())`
+这一族在 React 事件处理器里是**表现层职责**——用户点了按钮触发的异步动作
+不需要 UI 层的 await，`void` 前缀在这里是"我知道我在悬空、lint 请闭嘴"的
+标记。视图层的悬空靠 §17 UI/逻辑分离那一条去治理（业务逻辑下沉 hooks/，
+`void` 的取舍变成 hook 内部的事）。**lib 侧**是地基、被跨端共同消费，悬空
+一次可能污染整条链，值得单独收口。
+
+基线 `scripts/.void-floats-baseline.json` 首建 14 处 / 5 文件（`enqueue.ts` 4、
+`executor-scheduler.ts` 3、`runner-state.ts` 3、`reaper.ts` 2、
+`canvas-store.ts` 2）；`--update` 需伴随下降、`--strict` 强制下降同批收紧。
+判据排在 `.githooks/pre-commit` 第 29 步。
 
 ### 13.6 分支与合并策略
 
