@@ -1,10 +1,10 @@
-// 统一生产模型的前端写入客户端（Phase 3b-2）。
-// 工坊在自动保存时，除了既有的 workshopDraft 镜像，额外把「一份生产数据」
-// 写穿到 production 表，供画布读取物化（3c）。放 src/lib/<domain>-client 层，
-// 视图/组件不经手 fetch（对齐 UI/逻辑分离守卫）。
+// 统一生产模型的前端读写客户端（Phase 3b-2 写 / 3c-1 读）。
+// 工坊自动保存时把「一份生产数据」写穿到 production 表；画布读取并物化为节点。
+// 放 src/lib/<domain>-client 层，视图/组件不经手 fetch（对齐 UI/逻辑分离守卫）。
 //
 // 与 draft-sync-client 同款：静默失败，localStorage 仍是即时缓存，下次再补推。
-// 读侧（fetchProduction）在 Phase 3c 画布接入时再补，避免此刻留下无消费方的导出。
+import { withQuery } from "~/lib/query-string";
+import { isRecord } from "~/lib/is-record";
 
 /** 一次生产数据写入的载荷（字段与 production 表列一一对应）。 */
 export interface ProductionPayload {
@@ -18,6 +18,9 @@ export interface ProductionPayload {
   shots: unknown[];
   progress: { stage: string; rendered: boolean };
 }
+
+/** 读回的生产数据（与写入载荷同形）。 */
+export type ProductionData = ProductionPayload;
 
 /** 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。静默失败。 */
 export async function pushProduction(
@@ -33,5 +36,25 @@ export async function pushProduction(
     });
   } catch {
     /* 网络/服务不可用时静默降级：localStorage 仍是即时缓存 */
+  }
+}
+
+/** 拉取某项目的生产数据；无该行 / 请求失败 → null。 */
+export async function fetchProduction(
+  projectId: string,
+): Promise<ProductionData | null> {
+  if (!projectId) return null;
+  try {
+    const res = await fetch(
+      withQuery("/api/production", { project: projectId }),
+    );
+    if (!res.ok) return null;
+    const data: unknown = await res.json();
+    if (isRecord(data) && data.exists === true && isRecord(data.production)) {
+      return data.production as unknown as ProductionData;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }

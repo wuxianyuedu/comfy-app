@@ -22,7 +22,7 @@ vi.mock("~/server/auth/request-user", () => ({
 
 import { getTestDb, seedUser } from "../../../../tests/helpers/test-db";
 import { productionRepository } from "~/lib/core/repository-production";
-import { PUT } from "./route";
+import { GET, PUT } from "./route";
 
 const tdb = getTestDb();
 
@@ -73,5 +73,47 @@ describe("PUT /api/production", () => {
     expect(got?.title).toBe("我的短剧");
     expect(got?.shots).toEqual([{ id: "s1", prompt: "p" }]);
     expect(got?.progress).toEqual({ stage: "storyboard", rendered: false });
+  });
+});
+
+function getRequest(project: string | null) {
+  const url = new URL("http://localhost/api/production");
+  if (project) url.searchParams.set("project", project);
+  return { nextUrl: url } as never;
+}
+
+describe("GET /api/production", () => {
+  it("未鉴权 → 401", async () => {
+    auth.user = null;
+    const res = await GET(getRequest("proj_1"));
+    expect(res.status).toBe(401);
+  });
+
+  it("缺 project → 400", async () => {
+    const res = await GET(getRequest(null));
+    expect(res.status).toBe(400);
+  });
+
+  it("无该行 → { exists:false }", async () => {
+    const res = await GET(getRequest("missing"));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ exists: false });
+  });
+
+  it("有行 → exists:true 且回传 production（JSON 列已解析）", async () => {
+    await productionRepository.upsertForUser("u1", {
+      id: "proj_1",
+      title: "我的短剧",
+      shots: [{ id: "s1" }],
+    });
+    const res = await GET(getRequest("proj_1"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      exists: boolean;
+      production: { title: string; shots: unknown };
+    };
+    expect(body.exists).toBe(true);
+    expect(body.production.title).toBe("我的短剧");
+    expect(body.production.shots).toEqual([{ id: "s1" }]);
   });
 });

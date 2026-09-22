@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Shot } from "~/lib/workshop/types";
 import {
+  applyShotPatches,
   nodeEditToShot,
   planShotSync,
   shotStatusToNodeStatus,
@@ -81,5 +82,38 @@ describe("planShotSync", () => {
     const { patches, newShotIds } = planShotSync([], new Set(["a"]));
     expect(patches).toEqual([]);
     expect(newShotIds).toEqual([]);
+  });
+});
+
+describe("applyShotPatches", () => {
+  it("命中 shotId 的节点合并补丁；非镜头节点原样保留", () => {
+    const nodes = [
+      { id: "n1", data: { shotId: "a", prompt: "旧", kind: "image" } },
+      { id: "n2", data: { kind: "text", content: "自由节点" } },
+    ];
+    const out = applyShotPatches(nodes, [
+      {
+        shotId: "a",
+        kind: "image",
+        prompt: "新提示词",
+        negative: "",
+        status: "done",
+        resultPath: "/api/generated/a.png",
+      },
+    ]);
+    expect(out[0]?.data).toMatchObject({
+      shotId: "a",
+      prompt: "新提示词",
+      status: "done",
+      resultPath: "/api/generated/a.png",
+    });
+    // 非镜头节点原样返回（同一引用）
+    expect(out[1]).toBe(nodes[1]);
+  });
+
+  it("无匹配补丁的镜头节点不动", () => {
+    const nodes = [{ id: "n1", data: { shotId: "a", prompt: "x" } }];
+    const out = applyShotPatches(nodes, []);
+    expect(out[0]).toBe(nodes[0]);
   });
 });
