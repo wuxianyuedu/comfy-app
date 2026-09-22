@@ -3,9 +3,9 @@
   "ruleVersion": 4,
   "note": "超 900 行的文件(规范 §12.6 R5 / ISSUE #575)。棘轮只许下降:新增超限文件须先拆分,再收紧基线。比对前按 `baselineRev` 的内容**同口径重数**基线行数(见脚本注释)。",
   "threshold": 900,
-  "baselineRev": "6e0b79ff4de61b2c02e8dfa50c50a6beceb217cf",
+  "baselineRev": "21294a2d2d00faad0fd69a14170ab135f42d4cb1",
   "total": 1,
   "files": {
-    "src/app/(main)/settings/hooks/use-settings-page.ts": 1079
+    "src/app/(main)/settings/hooks/use-settings-page.ts": 966
   }
 }
