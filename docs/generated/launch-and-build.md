@@ -1228,6 +1228,7 @@ zustand 队列，而不是再加一个模块级单例。
 | **CI 的 `Test` 步骤在 master 上一直红**（`pnpm test` 报 `MissingEnvFileError: 缺少 .env 环境配置文件`；本机有 `.env` 的人跑同一个用例是绿的） | **用例的 `process.cwd` 替身泄漏到了别的 `describe`，把 `src/env.js` 的 `.env` 探测带偏**（ISSUE #489）：`src/lib/db-schema-ready.test.ts` 的文件级 `beforeEach` 对文件内**所有** `describe` 都生效，而末尾「reaper 模块级副作用」那组要 `import` 真实的 `~/server/db` → `~/env`，`env.js` 拿 `<cwd>/../.env` 探测配置文件；cwd 被留在临时目录时探测必然落空。**注意只设 `BETTER_AUTH_GITHUB_CLIENT_ID` 两个变量是不够的**（实测仍然红）——校验有两层：`.env` 文件存在性 + 必填项，两层都要满足。CI 的 `Test` 是裸 `pnpm run test`（不注入 `SKIP_ENV_VALIDATION`），所以每次必挂；而 `test:coverage` 走另一条链路能过，于是呈现成「Coverage 绿、Test 红」这种最容易被忽略的形态 | 已修：cwd 替身改为**按 `describe` 建立、退出即还原**（`useTempCwd()` + 各自 `afterEach`），不再放进文件级钩子；该组自己 `vi.stubEnv` 补齐 `SKIP_ENV_VALIDATION` 与两处占位密钥，**不去读开发者本机的 `.env`**——用例的可通过性只能取决于用例自己造的东西 |
 | **`pnpm build` 在 CI 上必挂**，`Collecting page data` 阶段报 `TypeError: Cannot read properties of undefined (reading 'startsWith')`（行号落在 `src/server/db.ts::resolveDbPath`，但触发路由是 `/api/debug/source`、`/api/logs/history` 一类无关路由） | **`SKIP_ENV_VALIDATION=1` 放行了校验，却没给 `DATABASE_URL` 兜底**（ISSUE #489）：CI 的 Build 步骤只设 `SKIP_ENV_VALIDATION`、不注入 `DATABASE_URL`，于是 `env.DATABASE_URL` 是 `undefined`，`db.ts` 里直接 `url.startsWith("file:")` 抛错；`db.ts` 被每条路由的模块图拉到，异常浮出 worker 后聚合进 collect-page-data 阶段。与上一行「模块级副作用读库」**同族但不同档**：那条是「表还没建」，这条是「连库路径都没有」 | 已修：`resolveDbPath` 先兜 `url || "./db.sqlite"`（`src/server/workshop/db.ts` 一直是这么写的，`src/server/db.ts` 漏了），缺值时退到与 drizzle-kit 同一锚点的默认库文件，「表可能还没建」交给运行期的可读出口（`/api/health` 的 503 + `db: empty`）而不是构建期崩溃。**`src/server/db.ts` 顺带转为纯 ASCII**（它在构建期模块图上且实测会被 code frame 渲染，见下一行的 panic 风险） |
 | **`pnpm db:push` 在无 TTY 环境「成功」了，但应用起来只有真实业务页面 500**（`/`、`/api/health`、`/settings` 都 200，`/api/logs/list` 报 `SqliteError: no such table: user`） | **交互提示被静默吞掉**（ISSUE #489）：`drizzle-kit push` 需要交互确认时报 `Interactive prompts require a TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。管道输入、脚本、CI、远程会话、容器都是这个条件；文档 §9.1 的第一步就把它写成了 `pnpm db:push`。「只探首页会误判成 Linux 完全通了」是它最难查的地方——`SELECT 1` 在空库上也成功，所以 `/api/health` 照样回 `db: up` | 已修（§9.1「建库」）：`pnpm db:push` 改走 `scripts/db-push.mjs`——以 `--force` 运行（无交互、幂等），**复核库里到底有没有表**（不看退出码：无 TTY 上正是「报错但 exit 0」），复核失败即非零退出 + 可行动提示。另加两道出口：`dev.mjs` / `start.mjs` 启动即探哨兵表并警告（只警告不退出），`GET /api/health` 一并探 schema 就绪度（空库 → 503 + `db: "empty"`） |
+| **双击 `app.exe` 后卡满三分钟、应用自己消失**（splash 只写「服务未在超时内就绪，见 log/nextjs/」，而那两份 `nextjs-stdout|stderr-*.log` 看起来是空的；`log/services/app-runtime.log` 里每秒一条 `health_check_schema_not_ready`） | **「库在、一张表都没有」这一档过去没有任何自动出口，而就绪判据只认 2xx**（2026-09-22 定位）：`ensureSchemaCurrent` 在「库文件缺失 / 哨兵表不在」时**提前 `return missing`**（自动同步只覆盖「指纹不一致」），于是 `/api/health` 恒返回 503（`db: "empty"` + `hint: 跑 pnpm db:push`），而 `classifyProbe` 把 503 归进「普通未就绪」→ 空等满 `READY_TIMEOUT_MS` 后回收整棵树。§9.1 那条给用户的提示写在**页面状态栏**上，页面却要等就绪判定通过才打开——提示与用户之间隔着一个「先就绪」的前置条件，绕回原点。取证侧另有一个坑：超时分支只读 `readTail(nextErr, 20)`，而 Next 的横幅与请求日志走 **stdout**（同一现场 `nextjs-stdout-*.log` 事后是 31KB / 485 行 / 157 条 503），且重定向文件在进程仍在写时可能读到 0 字节——「最近输出」于是永远为空 | 已修（§9.1）：① `ensureSchemaCurrent` 不再对「没表」提前返回，空库 / 缺库文件与「指纹不一致」走同一条「dry-run → 白名单 → 自动应用」（首次建表只有 `CREATE TABLE` / `CREATE INDEX`，全在安全白名单里；建不起来才如实报 `missing`）；② `classifyProbe` 新增 `schema-not-ready` 档（503 + `db ∈ {empty, unknown}`），启动器连中 8 次即**在超时之前**写下「后台正在建表 / 必要时跑 `pnpm db:push`」并把状态推到启动页；③ 超时出口改走 `readDiagnosticsTail`（stderr → stdout → 应用服务转录 `nextjs-panel-*.log`，用 `startedAt` 排除上一次运行），并把「最后一次探测是哪一档」写进日志与状态。回归见 `tests/db-schema-current.test.ts` 与 `tests/cross-platform-launcher.test.ts` |
 | **新建工作流报 `NOT NULL constraint failed: workflowTemplate.graph`**（或任何「库里留着一个 schema 里早就没有的列」的报错），而 `pnpm db:push` 与启动自检都说「已就绪」 | **库结构与 schema 漂移**：schema 里早已删掉的列（实测 `workflowTemplate.graph` / `apiSource`、`workshopDraft.checkpoint`）仍留在表上，`INSERT` 不提供它就撞 `NOT NULL`。当时两条复核都只看「有没有表」（`pnpm db:push` 数用户表数、启动探针找哨兵表 `task`），**一条都不涉及列**，于是整档消失 | 已修（§9.1）：`db:push` 复核结构（「再跑一次必须说 `No changes detected`」）并登记 schema 指纹；启动链路改走 `ensureSchemaCurrent` —— 指纹 + dry-run 白名单，一致则毫秒通过、只有安全变更则自动同步、含丢数据语句则交人工。存量库跑一次 `pnpm db:push` 即可自愈（**不会**丢数据：删列会打印语句，`--force` 才执行） |
 | **给构建期模块图上的文件加中文注释后，`next build` 报的不是业务错，而是整个构建被一个 Rust panic 带走**：`thread 'tokio-rt-worker' panicked at crates/next-code-frame/src/highlight.rs:1021:45: end byte index N is not a char boundary` + `Build error occurred [Error: Panic in async function]` | **Next 的 code frame 高亮按字节偏移切串，落在多字节字符中间就 panic**（Next 16.3.2 实测）：`next-code-frame` 渲染错误现场时按**字节**取「该行的第 a..b 字节」，而一个中文字符占 3 字节；只要某个高亮区间的 `end` 落在中文字符内部，Rust 侧切片直接 panic 把 build 打死。触发条件是**组合**而非内容：某模块既在构建期被加载、又成为错误现场被渲染成 code frame，且其注释/字符串含多字节字符、偏移恰好落在字符中间——同一文件删掉中文能过、换成不同长度的中文又能复现，属偏移敏感的脆弱路径 | 规避（本仓库口径）：**会被 `next-code-frame` 渲染到的模块一律保持纯 ASCII 源码**。实践上指「new / 改动了构建期模块图上的模块」（被 `next build` worker 加载、且可能成为报错现场的那个）：注释与字符串写英文；其余文档与业务模块不受影响，中文注释照常。**排查手法**：build 报上面这段 panic 时不要去找业务 bug，先把最近新增/改动、且位于构建期模块图上的文件临时改 ASCII 再跑一次，能过即命中本条；用 `node -e 'const s=require("fs").readFileSync("f.ts","utf8");console.log([...s].filter(c=>c.charCodeAt(0)>127).length)'` 数非 ASCII 字符定位 |
 | drizzle-kit push 非交互环境报 "Interactive prompts require a TTY"，或重建表时 "index xxx already exists" | push 遇到表重命名/重建差异需要交互确认；其重建路径在多次部分执行后有索引名冲突的已知缺陷 | 启动器用 `push --force`（非致命，失败仅 WARN）；手动收敛时按「清理 `__new_*` 残留表与同名索引 → 重试 push」循环；索引可安全 DROP 后由 push/schema 重建 |
@@ -1837,24 +1838,36 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 
 **三道防线一起看**（ISSUE #489 实测）：
 
-| 时点 | 探针                                                                              | 空库 / 结构过期时的表现                                                                                                               |
-| ---- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 建库 | `scripts/db-push.mjs` 数用户表 + 复核结构收敛                                     | 非零退出 + 可行动提示                                                                                                                 |
-| 启动 | `scripts/dev.mjs` / `start.mjs` / `dev-launcher.mjs` **后台** spawn `db-sync.mjs` | **不阻塞启动**；结构过期时后台自动同步（见下），进度与结果经 `GET /api/schema` 透出，状态栏显示「同步中 / 已同步请刷新 / 需人工同步」 |
+| 时点 | 探针                                                                              | 空库 / 结构过期时的表现                                                                                                                                                               |
+| ---- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 建库 | `scripts/db-push.mjs` 数用户表 + 复核结构收敛                                     | 非零退出 + 可行动提示                                                                                                                                                                 |
+| 启动 | `scripts/dev.mjs` / `start.mjs` / `dev-launcher.mjs` **后台** spawn `db-sync.mjs` | **不阻塞启动**；**空库与结构过期走同一条自动路径**（见下），进度与结果经 `GET /api/schema` 透出，状态栏显示「同步中 / 已同步请刷新 / 需人工同步」                                     |
 | 运行 | `GET /api/health` 一并探 schema 就绪度                                            | 503 + `db: "empty"`（此前只探 `SELECT 1`，空库照样回 `db: up`，探针因此漏报整档）                                                     |
 
-**「拉了含 schema 变更的代码之后要不要记得跑 `pnpm db:push`」——不需要了**
-（2026-09-20）：启动脚本在把 Next 拉起来的**同时** spawn `scripts/db-sync.mjs`
+**「拉了含 schema 变更的代码之后要不要记得跑 `pnpm db:push`」——不需要了；
+全新检出（连库文件都没有）同样不需要**（2026-09-20 起，2026-09-22 补齐空库这档）：
+启动脚本在把 Next 拉起来的**同时** spawn `scripts/db-sync.mjs`
 （`spawnSchemaSync`，**不等它返回**），由它跑一次
 `scripts/db-schema-state.mjs::ensureSchemaCurrent`。判据是 **schema 指纹**
 （`src/server/db/*.ts` 的内容哈希，`db:push` 成功后写进库的 `PRAGMA user_version`；
 用内容哈希而不是 mtime，因为拉取会改 mtime 却不一定改内容）：
 
-| 情况                                                | 行为                                                                                                  |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 指纹一致                                            | 毫秒级通过，**不起 drizzle**（起一轮约 17 秒，而这一步每次启动都要走）                                |
-| 指纹不一致 + 待执行语句只有「建表 / 建索引 / 加列」 | **自动应用**（约 30 秒：dry-run + 应用）后登记指纹                                                    |
-| 指纹不一致 + 含「删列 / 重建表」                    | **不自动执行** —— 那是丢数据的决定，必须由人做：把语句列出来，提示跑 `pnpm db:push`（它带 `--force`） |
+| 情况                                                        | 行为                                                                                                  |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **库里一张表都没有**（新检出 / 空库 / 0 字节库文件）        | **自动建表**：不走指纹闸门（空库给不出可信基线），直接进同一条「dry-run → 白名单 → 自动应用」——首次建表只产生 `CREATE TABLE` / `CREATE INDEX`，全在安全白名单里 |
+| 指纹一致                                                    | 毫秒级通过，**不起 drizzle**（起一轮约 17 秒，而这一步每次启动都要走）                                |
+| 指纹不一致 + 待执行语句只有「建表 / 建索引 / 加列」         | **自动应用**（约 30 秒：dry-run + 应用）后登记指纹                                                    |
+| 指纹不一致 + 含「删列 / 重建表」                            | **不自动执行** —— 那是丢数据的决定，必须由人做：把语句列出来，提示跑 `pnpm db:push`（它带 `--force`） |
+
+**为什么空库那档必须自动建**（2026-09-22，实测现场）：它过去是 `ensureSchemaCurrent`
+的**提前返回分支**（`return { state: "missing" }`），而「跑 `pnpm db:push`」这条提示
+的出口写在**页面状态栏**上——页面却要等就绪判定通过才会打开。于是链路自相矛盾：
+`/api/health` 恒返回 503（`db: "empty"`）→ 启动器的就绪判据只认 2xx，把 503 归进
+「普通未就绪」→ 空等满 `READY_TIMEOUT_MS` 后回收整棵树，用户看到的是「双击后卡三
+分钟、应用自己消失」，而那句该做的话始终没机会说出来。现在三道出口都补齐：
+`ensureSchemaCurrent` 自动建表（建不起来才如实报 `missing`）、`classifyProbe` 多了
+`schema-not-ready` 一档（`db ∈ {empty, unknown}`，连中 8 次即在超时前把话说出来）、
+超时出口把「最后一次探测是哪一档」与真正的日志一起给出（见 §5 对应行）。
 
 **为什么不等它**：drizzle 一轮约 17 秒、同步一次 15~30 秒。此前是「先同步、再起
 Next」，用户要盯着空窗等半分钟才看到页面；现在等待时间还给用户，**页面自己会说

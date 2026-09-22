@@ -74,7 +74,17 @@ export function writeLaunchStatus(
 }
 
 /**
- * 单次探测就绪端点，回报三态（区分「服务没起来」与「起来了但这条路由 404」）。
+ * `/api/health` 的 503 里，只有这几种 `db` 值才算「表还没建」。
+ *
+ * 端点把两件事都编码成 503（见 `src/app/api/health/route.ts`）：schema 未就绪
+ * 时回 `db: "empty" | "unknown"`，真连不上库时回 `db: "down"`。只有前两种属于
+ * 「等一等 / 建一次表就能好」；把后者混进同一档会让启动器把「数据库起不来」
+ * 说成「表还没建」，那是两种完全不同的处置。
+ */
+const SCHEMA_NOT_READY_DB = new Set(["empty", "unknown"]);
+
+/**
+ * 单次探测就绪端点，回报四态。
  *
  * 为什么必须分开：Turbopack dev 偶发「会话级路由失效」（规范 §5 陈旧实例一族）
  * 时，`next` 进程活着、端口能应答，但 `/api/health` 这类路由不进编译图、直接
@@ -82,8 +92,14 @@ export function writeLaunchStatus(
  * 一味空等，180s 到点后回收整棵树——用户看到的就是「卡住→应用自己没了」。
  * 把两者分开，编排器才能在「连上但持续 404」这一确切信号上做有界自愈。
  *
+ * `schema-not-ready` 是同一个坑的第二种形态（实测现场）：服务活着、路由也在，
+ * 但库是空的 / 表没建，`/api/health` 于是**恒返回 503**，而 503 过去被归进
+ * 「普通未就绪」——启动器空等 180s、把结论说成「服务没起来」，用户完全看不到
+ * 真正的原因（「跑 pnpm db:push」），只能对着空日志猜。单独成档之后，编排器
+ * 能在超时**之前**就把这句可行动的话讲出来（见 `describeProbeState`）。
+ *
  * @param {{ port: number, host?: string, path?: string }} spec
- * @returns {Promise<"ready" | "not-up" | "route-404">}
+ * @returns {Promise<"ready" | "not-up" | "route-404" | "schema-not-ready">}
  */
 export async function classifyProbe({
   port,
@@ -96,12 +112,43 @@ export async function classifyProbe({
     });
     if (res.ok) return "ready";
     // 拿到了 HTTP 应答但不是 2xx：404 是「路由没进编译图」的确切签名。
-    // 其它 4xx/5xx 不当成路由失效（那是真故障，如 500），交回上层按普通
-    // 未就绪继续等，避免把业务错误误读成缓存问题、错误地清缓存重启。
-    return res.status === 404 ? "route-404" : "not-up";
+    if (res.status === 404) return "route-404";
+    // 503 要看**响应体**才能定性：只有「表还没建」这一类不该被当成普通未就绪。
+    if (res.status === 503 && (await healthBodySaysSchemaNotReady(res)))
+      return "schema-not-ready";
+    // 其余 4xx/5xx 不当成路由失效或建库问题（那是真故障，如 500），交回上层
+    // 按普通未就绪继续等，避免把业务错误误读成缓存 / 建库问题。
+    return "not-up";
   } catch {
     // fetch 抛异常 = 连不上（进程还没监听）——正常的「尚未就绪」。
     return "not-up";
+  }
+}
+
+/** `/api/health` 的 503 响应体是不是「schema 没就绪」（读不到就按「不是」）。 */
+/** @param {Response} res @returns {Promise<boolean>} */
+async function healthBodySaysSchemaNotReady(res) {
+  try {
+    const body = await res.json();
+    return SCHEMA_NOT_READY_DB.has(String(body?.db ?? ""));
+  } catch {
+    // 不是 JSON / 已经被读过：判不出就不下结论（按普通未就绪处理）。
+    return false;
+  }
+}
+
+/** 探测结论翻成给人看的一句话（失败出口里必须能读出「卡在哪一档」）。 */
+/** @param {string} state @returns {string} */
+export function describeProbeState(state) {
+  switch (state) {
+    case "ready":
+      return "服务已就绪";
+    case "route-404":
+      return "服务已应答，但 /api/health 不在编译图里（陈旧路由表）";
+    case "schema-not-ready":
+      return "服务已应答，但数据库表还没建（/api/health 503，db=empty）";
+    default:
+      return "连不上服务（进程还没监听）";
   }
 }
 
@@ -166,6 +213,83 @@ export function fileHasMarker(file, marker) {
   } catch {
     return false;
   }
+}
+
+/**
+ * 应用服务输出的**转录文件**前缀（`nextjs-panel-<bootId>.log`）。
+ *
+ * 与 `src/lib/log/log-paths.ts` 的 `NEXTJS_PANEL_LOG_PREFIX` 同一口径：那份是
+ * TS 侧（`server-only`），纯 Node 宿主（`scripts/*.mjs`）import 不了，所以这里
+ * 保留一份字面量 —— 由 `tests/cross-platform-launcher.test.ts` 钉住两处一致。
+ */
+export const NEXTJS_PANEL_LOG_PREFIX = "nextjs-panel-";
+
+/**
+ * 目录里最新的一份应用服务转录文件；取不到返回 null。
+ *
+ * `since` 用于**排除上一次运行留下的文件**（按 mtime 判）：诊断只有一个用途，
+ * 就是回答「这一次为什么失败」，把上一次的失败现场摆在用户面前比没有更坏。
+ * @param {string} dir @param {{ prefix?: string, since?: number }} [options]
+ * @returns {string | null}
+ */
+export function latestPanelTranscript(
+  dir,
+  { prefix = NEXTJS_PANEL_LOG_PREFIX, since = 0 } = {},
+) {
+  let best = null;
+  let names = [];
+  try {
+    names = fs.readdirSync(dir).filter((name) => name.startsWith(prefix));
+  } catch {
+    return null; // 目录还不存在（应用服务从未启动过）——不是错误
+  }
+  for (const name of names) {
+    const file = path.join(dir, name);
+    let mtimeMs = 0;
+    try {
+      mtimeMs = fs.statSync(file).mtimeMs;
+    } catch {
+      continue; // 正在被轮转删掉
+    }
+    if (mtimeMs < since) continue;
+    if (!best || mtimeMs > best.mtimeMs) best = { file, mtimeMs };
+  }
+  return best ? best.file : null;
+}
+
+/**
+ * 失败诊断的取词顺序：**stderr → stdout → 应用服务转录**。
+ *
+ * 为什么不能用单一通道（ISSUE 实测，规范 §5）：
+ *   · Next 的横幅与请求日志走 **stdout**，而超时分支过去只读 stderr —— 那里
+ *     通常只有 pnpm 打印的一行脚本横幅，于是「最近输出」等于什么都没说，
+ *     而同一现场 `nextjs-stdout-*.log` 里躺着 480 行、157 条 `503`；
+ *   · 这两个重定向文件的行是**子进程直写 fd** 得到的，重定向文件在进程仍在写
+ *     时可能读到 0 字节（实测：事后同一文件 31KB）；
+ *   · 应用服务自己会同步追加一份转录（`nextjs-panel-*.log`，`appendFileSync`，
+ *     随写随见），它是唯一在失败那一刻就**一定读得到**的通道。
+ * 三者按「离失败最近、最不容易空」排序，取第一个非空结果。
+ *
+ * @param {{ stderrFile?: string | null, stdoutFile?: string | null,
+ *           panelDir?: string | null, panelSince?: number, lines?: number }} spec
+ * @returns {string} 诊断文本（三路都拿不到时为 ""，调用方自己给兜底文案）
+ */
+export function readDiagnosticsTail({
+  stderrFile = null,
+  stdoutFile = null,
+  panelDir = null,
+  panelSince = 0,
+  lines = 20,
+}) {
+  const panel = panelDir
+    ? latestPanelTranscript(panelDir, { since: panelSince })
+    : null;
+  for (const file of [stderrFile, stdoutFile, panel]) {
+    if (!file) continue;
+    const tail = readTail(file, lines);
+    if (tail) return tail;
+  }
+  return "";
 }
 
 /** 端口归属：空闲 / 自己的残留 / 别人的。 */

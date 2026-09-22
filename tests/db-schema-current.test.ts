@@ -60,6 +60,33 @@ const NO_CHANGES_OUTPUT = `[✓] Pulling schema from database...
 [i] No changes detected
 `;
 
+/**
+ * **空库**上 `drizzle-kit push`（不带 `--force`）的真实输出形态（实测于本机
+ * drizzle-kit 0.31.10）：先把待执行的语句列出来，再被无 TTY 挡下、库不动。
+ *
+ * 这一档是 ISSUE 的实际现场：库文件在、一张表都没有（`drizzle-kit` 在无 TTY 上
+ * 留下的就是 0 字节文件），过去 `ensureSchemaCurrent` 直接 `return missing`，
+ * 于是 `/api/health` 恒返回 503、启动器空等满 180s 回收整棵树。现在它必须能被
+ * 自动建起来 —— 首次建表只会产生下面这两类语句，全在自动应用的白名单里。
+ */
+const FRESH_DB_DRY_RUN_OUTPUT = `No config path provided, using default 'drizzle.config.ts'
+Reading config file 'drizzle.config.ts'
+[⣷] Pulling schema from database...
+[✓] Pulling schema from database...
+
+ Warning  You are about to execute current statements:
+
+CREATE TABLE \`task\` (
+\t\`id\` text PRIMARY KEY NOT NULL,
+\t\`status\` text NOT NULL
+);
+
+CREATE INDEX \`task_status_idx\` ON \`task\` (\`status\`);
+
+Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or process.stdout.isTTY is false).
+    at render10 (/x/node_modules/drizzle-kit/bin.cjs:1450:31)
+`;
+
 function pushStub(options: {
   dryOutput: string;
   applyChanges?: () => void;
@@ -167,9 +194,8 @@ describe("canAutoApply —— 白名单", () => {
   });
 
   it("删列 / 重建表不在白名单里（判据的失败方向必须是「不自动应用」）", async () => {
-    const { canAutoApply, riskyStatements } = await import(
-      "../scripts/db-push-core.mjs"
-    );
+    const { canAutoApply, riskyStatements } =
+      await import("../scripts/db-push-core.mjs");
     const drop = [
       "ALTER TABLE `user` DROP COLUMN `color`;",
       "DROP TABLE `task`;",
@@ -188,19 +214,90 @@ describe("canAutoApply —— 白名单", () => {
   });
 });
 
-describe("ensureSchemaCurrent —— 三条出口", () => {
-  it("库/哨兵表都没有时判 missing", async () => {
-    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
-    expect(ensureSchemaCurrent(root, { databaseUrl }).state).toBe("missing");
+describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
+  /** 建出哨兵表，模拟「drizzle 这轮真的把表建起来了」。 */
+  function createSentinelTable(): void {
+    execFileSync(
+      process.execPath,
+      [
+        "-e",
+        `const { DatabaseSync } = require("node:sqlite");
+         const db = new DatabaseSync(${JSON.stringify(dbFile)});
+         db.exec("CREATE TABLE task (id TEXT PRIMARY KEY, status TEXT)");
+         db.close();`,
+      ],
+      { stdio: "pipe" },
+    );
+  }
 
-    fs.writeFileSync(dbFile, "");
-    expect(ensureSchemaCurrent(root, { databaseUrl }).state).toBe("missing");
+  it("库文件都不存在时也自动建表（不再交给用户 / 不再等超时）", async () => {
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
+    expect(fs.existsSync(dbFile)).toBe(false);
+    const state = ensureSchemaCurrent(root, {
+      databaseUrl,
+      push: pushStub({
+        dryOutput: FRESH_DB_DRY_RUN_OUTPUT,
+        applyChanges: createSentinelTable,
+      }),
+    });
+    expect(state.state).toBe("synced");
+    expect(
+      readUserVersion(dbFile),
+      "建完必须登记指纹，否则每次启动都要再跑一轮 drizzle",
+    ).toBe(schemaFingerprint(root));
   });
 
+  it("0 字节空库（drizzle-kit 在无 TTY 上留下的形态）同样自动建起来", async () => {
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
+    fs.writeFileSync(dbFile, "");
+    const state = ensureSchemaCurrent(root, {
+      databaseUrl,
+      push: pushStub({
+        dryOutput: FRESH_DB_DRY_RUN_OUTPUT,
+        applyChanges: createSentinelTable,
+      }),
+    });
+    expect(state.state).toBe("synced");
+    expect(readUserVersion(dbFile)).toBe(schemaFingerprint(root));
+  });
+
+  it("自动建表没落地（报了 applied 但库没变）→ missing，且不登记指纹", async () => {
+    const { ensureSchemaCurrent } =
+      await import("../scripts/db-schema-state.mjs");
+    fs.writeFileSync(dbFile, "");
+    const state = ensureSchemaCurrent(root, {
+      databaseUrl,
+      push: pushStub({ dryOutput: FRESH_DB_DRY_RUN_OUTPUT }),
+    });
+    /* 表从来没建起来 —— 说法必须是 missing（「跑 pnpm db:push」），不是 stale。 */
+    expect(state.state).toBe("missing");
+    expect(readUserVersion(dbFile)).toBe(0);
+  });
+
+  it("空库 + 认不出待执行语句 → missing，绝不猜着执行", async () => {
+    const { ensureSchemaCurrent } =
+      await import("../scripts/db-schema-state.mjs");
+    fs.writeFileSync(dbFile, "");
+    const applyChanges = vi.fn();
+    const state = ensureSchemaCurrent(root, {
+      databaseUrl,
+      push: pushStub({
+        dryOutput: "Error: 什么都认不出来\n",
+        applyChanges,
+      }),
+    });
+    expect(state.state).toBe("missing");
+    expect(state.detail).toContain("没能从 drizzle 的输出里认出");
+    expect(applyChanges, "认不出就交人工，不许盲执行").not.toHaveBeenCalled();
+  });
+});
+
+describe("ensureSchemaCurrent —— 三条出口", () => {
   it("指纹一致时直接 ready，**不起 drizzle**", async () => {
-    const { ensureSchemaCurrent, schemaFingerprint } = await import(
-      "../scripts/db-schema-state.mjs"
-    );
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
     makeDb(dbFile);
     const fingerprint = schemaFingerprint(root);
     expect(fingerprint, "项目根的 schema 源必须可读").not.toBeNull();
@@ -217,14 +314,15 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     );
 
     const push = vi.fn();
-    expect(ensureSchemaCurrent(root, { databaseUrl, push }).state).toBe("ready");
+    expect(ensureSchemaCurrent(root, { databaseUrl, push }).state).toBe(
+      "ready",
+    );
     expect(push, "指纹一致时不该有任何 drizzle 调用").not.toHaveBeenCalled();
   });
 
   it("指纹缺登记、但库其实已经一致：登记指纹并判 ready（不打扰用户）", async () => {
-    const { ensureSchemaCurrent, schemaFingerprint } = await import(
-      "../scripts/db-schema-state.mjs"
-    );
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -235,9 +333,8 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
   });
 
   it("安全变更（加列）自动应用，并把指纹登记上", async () => {
-    const { ensureSchemaCurrent, schemaFingerprint } = await import(
-      "../scripts/db-schema-state.mjs"
-    );
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -264,9 +361,8 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
   });
 
   it("危险变更（删列）不自动应用：判 stale，且**库里的列还在**", async () => {
-    const { ensureSchemaCurrent, schemaFingerprint } = await import(
-      "../scripts/db-schema-state.mjs"
-    );
+    const { ensureSchemaCurrent, schemaFingerprint } =
+      await import("../scripts/db-schema-state.mjs");
     makeDb(dbFile, "db.exec('ALTER TABLE user ADD COLUMN color text')");
     const applyChanges = vi.fn();
     const state = ensureSchemaCurrent(root, {
@@ -290,7 +386,8 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
   });
 
   it("drizzle 说「已应用」但库结构没变时判 stale（不许错写指纹）", async () => {
-    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } =
+      await import("../scripts/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -309,8 +406,22 @@ describe("schemaNotice —— 只在该说话时说话", () => {
 
   it("stale 要把「跑哪条命令」讲清楚（启动链路不替用户做丢数据的决定）", async () => {
     const { schemaNotice } = await import("../scripts/db-schema-state.mjs");
-    const notice = schemaNotice({ state: "stale", detail: "含「会丢数据」的语句" });
+    const notice = schemaNotice({
+      state: "stale",
+      detail: "含「会丢数据」的语句",
+    });
     expect(notice?.level).toBe("warn");
     expect(notice?.lines.join("\n")).toContain("pnpm db:push");
+  });
+
+  it("missing 要说清是「自动建表没成功」（不是「你忘了建库」）", async () => {
+    const { schemaNotice } = await import("../scripts/db-schema-state.mjs");
+    const notice = schemaNotice({ state: "missing" });
+    expect(notice?.level).toBe("warn");
+    const text = notice?.lines.join("\n") ?? "";
+    expect(text).toContain("pnpm db:push");
+    expect(text, "建表是启动链路自己试过的，别把责任推给用户").toContain(
+      "自动建表",
+    );
   });
 });

@@ -42,9 +42,11 @@ import {
   APP_START_SCRIPT_MARKER,
   PORT_OWNERSHIP,
   classifyProbe,
+  describeProbeState,
   fileHasMarker,
   inspectPort,
   portOwnershipVerdict,
+  readDiagnosticsTail,
   readTail,
   usesExplicitPort,
   writeLaunchStatus,
@@ -113,6 +115,9 @@ export {
 export {
   waitForReady,
   classifyProbe,
+  describeProbeState,
+  latestPanelTranscript,
+  readDiagnosticsTail,
   readTail,
   fileHasMarker,
   writeLaunchStatus,
@@ -1005,13 +1010,21 @@ export async function run(argv = process.argv.slice(2)) {
   // 「连上但 /api/health 持续 404」的确切签名 → 判定陈旧路由表，自愈一次。
   // 阈值给 3 次（约 3s）：单次 404 可能只是路由还在按需编译，不足以定性。
   const READY_ROUTE_404_THRESHOLD = 3;
+  // 「服务已应答但库还没建」连中几次才提示（约 8s）：后台 db-sync 建表要 30 秒
+  // 上下，单次 503 完全正常，过早开口等于制造噪声。
+  const READY_SCHEMA_NOTICE_THRESHOLD = 8;
   let consecutive404 = 0;
+  let consecutiveSchemaNotReady = 0;
+  let schemaNoticeSent = false;
   let recovered = false;
   let ready = false;
+  /** 最后一次探测的结论：超时出口要靠它讲清「卡在哪一档」（见 §5）。 */
+  let lastProbeState = "not-up";
   const readyDeadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < readyDeadline) {
     if (devExited()) break;
     const state = await classifyProbe({ port, host: args.host });
+    lastProbeState = state;
     if (state === "ready") {
       ready = true;
       break;
@@ -1034,9 +1047,28 @@ export async function run(argv = process.argv.slice(2)) {
         await restartDevForStaleRoutes();
         log(`dev server 已重启（PID ${dev.pid}）`, "OK");
       }
-    } else {
-      // not-up（连不上）：正常的「还没起来」，重置 404 计数。
+      consecutiveSchemaNotReady = 0;
+    } else if (state === "schema-not-ready") {
+      /* 服务活着、路由也在，只是库还没建。**不能就这么空等**：用户看到的将是
+       * 「卡了三分钟、应用自己消失」，而真正该做的是「等一下（后台正在建）」
+       * 或「跑一次 pnpm db:push」——这句话必须在他还盯着屏幕的时候说出来。 */
       consecutive404 = 0;
+      consecutiveSchemaNotReady += 1;
+      if (
+        consecutiveSchemaNotReady >= READY_SCHEMA_NOTICE_THRESHOLD &&
+        !schemaNoticeSent
+      ) {
+        schemaNoticeSent = true;
+        log(
+          "本地服务已应答，但数据库表还没建（/api/health 503，db=empty）。后台同步正在按 schema 建表（约 30 秒）；" +
+            "若长时间不就绪，手动跑一次 pnpm db:push（见 docs/standards/launch-and-build.md §9.1）。",
+          "WARN",
+        );
+      }
+    } else {
+      // not-up（连不上）：正常的「还没起来」，重置两个计数。
+      consecutive404 = 0;
+      consecutiveSchemaNotReady = 0;
     }
     const left = Math.round((readyDeadline - Date.now()) / 1000);
     const progress =
@@ -1048,7 +1080,9 @@ export async function run(argv = process.argv.slice(2)) {
     status(
       "dev-server-starting",
       progress,
-      `正在等待本地服务就绪（还剩 ${left}s）…`,
+      schemaNoticeSent
+        ? `数据库表还没建，正在等待自动建表（还剩 ${left}s）…`
+        : `正在等待本地服务就绪（还剩 ${left}s）…`,
       { staleShell },
     );
     await new Promise((r) => setTimeout(r, 1000));
@@ -1066,11 +1100,21 @@ export async function run(argv = process.argv.slice(2)) {
     });
   }
   if (!ready) {
-    const tail = readTail(nextErr, 20) || "(无输出)";
+    /* 诊断的取词顺序与理由见 orchestrator.readDiagnosticsTail：Next 的输出走
+     * stdout，而这里过去只读 stderr（那里通常只有 pnpm 的一行脚本横幅），
+     * 于是「最近输出」什么都没说；应用服务自己的转录是随写随见的那一份。 */
+    const tail =
+      readDiagnosticsTail({
+        stderrFile: nextErr,
+        stdoutFile: nextOut,
+        panelDir: nextjsLogDir,
+        panelSince: startedAt,
+      }) || "(无输出)";
+    const stateLine = describeProbeState(lastProbeState);
     if (recovered) {
       // 已自愈过一次仍持续 404：不再循环重启，把结论与现场交清楚。
       log(
-        `清缓存重启一次后 /api/health 仍持续 404，路由表异常未恢复（已停止自动重启，避免循环）。最近输出：\n${tail}`,
+        `清缓存重启一次后 /api/health 仍持续 404，路由表异常未恢复（已停止自动重启，避免循环）。最后一次探测：${stateLine}。最近输出：\n${tail}`,
         "ERROR",
       );
       status(
@@ -1081,13 +1125,17 @@ export async function run(argv = process.argv.slice(2)) {
       );
     } else {
       log(
-        `服务未在 ${READY_TIMEOUT_MS / 1000}s 内就绪。最近输出：\n${tail}`,
+        `服务未在 ${READY_TIMEOUT_MS / 1000}s 内就绪。最后一次探测：${stateLine}。最近输出：\n${tail}`,
         "ERROR",
       );
-      status("error", 1, "服务未在超时内就绪，见 log/nextjs/", {
-        error: true,
-        staleShell,
-      });
+      status(
+        "error",
+        1,
+        lastProbeState === "schema-not-ready"
+          ? "数据库表一直没建起来：跑一次 pnpm db:push（见 log/nextjs/）"
+          : "服务未在超时内就绪，见 log/nextjs/",
+        { error: true, staleShell },
+      );
     }
     await shutdown(1);
   }

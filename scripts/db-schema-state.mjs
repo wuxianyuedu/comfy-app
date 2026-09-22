@@ -193,10 +193,20 @@ function schemaDigest(root, databaseUrl) {
 /**
  * 启动链路的 schema 自检 + **按需自动同步** —— 本模块对启动路径的唯一出口。
  *
- * 目标形态：拉了含 schema 变更的代码之后，**不需要记得**跑 `pnpm db:push`。
+ * 目标形态：拉了含 schema 变更的代码之后，**不需要记得**跑 `pnpm db:push`；
+ * **全新检出**（库文件都不在）同样不需要 —— 首次建表只会产生 `CREATE TABLE` /
+ * `CREATE INDEX`，全在自动应用的白名单里，启动链路自己就能建起来。
+ *
  * 判据用指纹闸门而不是「每次都跑一遍 drizzle」：一致时毫秒级返回，不一致时
  * 才付出一次 drizzle 启动的代价（本机约 2-3 秒，且只在 schema 真的变过之后
  * 第一次启动发生）。
+ *
+ * **「库里一张表都没有」不进指纹闸门**：指纹登记在 `PRAGMA user_version`，
+ * 空库给不出有意义的基线。实测现场：0 张表的 `db.sqlite` 让 `/api/health` 恒
+ * 返回 503，而启动器的就绪判据只认 2xx → 空等满 180s 后回收整棵树，用户看到
+ * 的是「双击后卡三分钟、应用自己消失」；文档 §9.1 那条「跑 pnpm db:push」的
+ * 提示出口在页面状态栏上，而页面要等就绪判定通过才会打开，于是它根本到不了
+ * 用户眼前。这类情形直接进「dry-run → 白名单 → 自动应用」。
  *
  * 自动同步**不带 `--force`**：要让 drizzle 自己在「会丢数据的语句」（删列 /
  * 重建表）上停下来 —— 那种变更必须由人决定，启动链路不替用户做（无 TTY 时它
@@ -216,22 +226,36 @@ export function ensureSchemaCurrent(root, options = {}) {
     forward = (chunk) => process.stdout.write(chunk),
   } = options;
 
-  if (!fs.existsSync(resolveSqlitePath(root, databaseUrl))) {
-    return { state: "missing" };
+  const tablesReady = probeSchemaSync(root, databaseUrl) === "ready";
+  /** 表还没建时没有可信的指纹基线，跳过闸门；已就绪才比对指纹。 */
+  let want = null;
+  if (tablesReady) {
+    want = schemaFingerprint(root);
+    if (want === null)
+      return { state: "unknown", detail: "读不到 schema 源文件" };
+    const have = readSchemaFingerprint(root, databaseUrl);
+    if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
+    if (have === want) return { state: "ready" };
+
+    /* 同步前讲一句：drizzle 每次 diff 要十几秒，不说清楚的话用户看到的是
+     * 「启动卡住了」。 */
+    forward("数据库结构与当前 schema 不一致，正在核对…\n");
+  } else {
+    forward("数据库里还没有表，正在按 schema 建表…\n");
   }
-  if (probeSchemaSync(root, databaseUrl) !== "ready")
-    return { state: "missing" };
 
-  const want = schemaFingerprint(root);
-  if (want === null)
-    return { state: "unknown", detail: "读不到 schema 源文件" };
-  const have = readSchemaFingerprint(root, databaseUrl);
-  if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
-  if (have === want) return { state: "ready" };
-
-  /* 同步前讲一句：drizzle 每次 diff 要十几秒，不说清楚的话用户看到的是
-   * 「启动卡住了」。 */
-  forward("数据库结构与当前 schema 不一致，正在核对…\n");
+  /* 没同步成功时报哪一档，取决于「表在不在」：从来没建起来 → `missing`
+   * （调用方据此说「跑 pnpm db:push」）；表在、结构没跟上 → `stale`
+   * （那是丢数据的决定，说法完全不同）。 */
+  /** @param {string} detail @returns {{ state: "stale" | "missing", detail: string }} */
+  const notSynced = (detail) => ({
+    /* 字面量联合必须显式钉住：不加注时 TS 会把它放宽成 `string`，与
+     * `ensureSchemaCurrent` 声明的返回类型对不上（`.mjs` 同样在 tsc 扫描范围内）。 */
+    state: /** @type {"stale" | "missing"} */ (
+      tablesReady ? "stale" : "missing"
+    ),
+    detail,
+  });
 
   /* 第一次**不带 `--force`**：`strict: true` 会让 drizzle 先把待执行的语句列
    * 出来、再要求确认，而无 TTY 环境里确认弹不出来、它原地退出且**库不动** ——
@@ -242,7 +266,7 @@ export function ensureSchemaCurrent(root, options = {}) {
   if (probe.converged) {
     /* 库本来就是对的，只是指纹没登记（登记失败，或上一个版本还没登记过）。
      * 不提示 —— 用户没有需要做的事。 */
-    writeSchemaFingerprint(root, databaseUrl, want);
+    if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
     return { state: "ready" };
   }
 
@@ -253,13 +277,11 @@ export function ensureSchemaCurrent(root, options = {}) {
       for (const statement of pending) forward(`  ${statement}\n`);
       forward("\n");
     }
-    return {
-      state: "stale",
-      detail:
-        pending.length === 0
-          ? "没能从 drizzle 的输出里认出待执行的语句"
-          : `含「会丢数据」的语句 ${riskyStatements(pending).length} 条（删列 / 重建表），启动链路不替你做这个决定`,
-    };
+    return notSynced(
+      pending.length === 0
+        ? "没能从 drizzle 的输出里认出待执行的语句"
+        : `含「会丢数据」的语句 ${riskyStatements(pending).length} 条（删列 / 重建表），启动链路不替你做这个决定`,
+    );
   }
 
   /* 全是安全语句（建表 / 建索引 / 加列）—— 自动应用。仍然复核「真的落地了」：
@@ -269,6 +291,12 @@ export function ensureSchemaCurrent(root, options = {}) {
    * 复核用 push 前后的**库结构摘要**对比（毫秒级），不再起第三轮 drizzle：
    * 每轮 drizzle 在这台机器上约 17 秒，而它多覆盖的只是「部分语句落地」。 */
   forward("\n这批变更不涉及丢数据，自动应用…\n");
+  /* 复核「真的落地了」用 push 前后的库结构摘要对比。判据必须带上「库之前到底
+   * 在不在」：文件本来就不存在时 `before` 是 null，而**「库还没出生」是一种可
+   * 核对的初始态**——只看 `before === null` 会把「第一张表建好了」误判成
+   * 「没变化」，那正好是这次要修的那一档（新检出、连库文件都没有）。 */
+  const dbFile = resolveSqlitePath(root, databaseUrl);
+  const existedBefore = fs.existsSync(dbFile);
   const before = schemaDigest(root, databaseUrl);
   const applied = push(root, {
     databaseUrl,
@@ -276,19 +304,22 @@ export function ensureSchemaCurrent(root, options = {}) {
     verifyConvergence: false,
     forward,
   });
+  const after = schemaDigest(root, databaseUrl);
   if (
     !applied.converged ||
-    before === null ||
-    schemaDigest(root, databaseUrl) === before
+    after === null ||
+    (existedBefore && after === before)
   ) {
-    return {
-      state: "stale",
-      detail: applied.converged
+    return notSynced(
+      applied.converged
         ? "drizzle-kit 报「已应用」，但库的结构没有变化"
         : staleReason(applied),
-    };
+    );
   }
-  writeSchemaFingerprint(root, databaseUrl, want);
+  /* 空库这一档进来时 `want` 还没取过（闸门被跳过）—— 现在库已经建好了，
+   * 取一次指纹登记上，下一次启动就走毫秒级的快路径。 */
+  if (want === null) want = schemaFingerprint(root);
+  if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
   return { state: "synced" };
 }
 
@@ -327,7 +358,7 @@ export function schemaNotice(result) {
       return {
         level: "warn",
         lines: [
-          "数据库表还没建（db.sqlite 缺失或为空）——真实业务页面会 500。",
+          "数据库表还没建，且自动建表没能完成（库文件缺失 / 不可写 / 起不了 drizzle）——真实业务页面会 500。",
           "先执行：pnpm db:push（见 docs/standards/launch-and-build.md §9.1）",
         ],
       };
