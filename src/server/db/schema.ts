@@ -623,6 +623,39 @@ export const workshopDraft = sqliteTable(
   (t) => [index("workshop_draft_user_updated_idx").on(t.userId, t.updatedAt)],
 );
 
+// ── 统一生产模型（Phase 3b：画布 / 工坊 / 成片共享的项目生产数据）──────────
+// 项目为容器：镜头 / 场景 / 角色 / 进度作为**一份**共享生产数据挂在 proj_* 上，
+// 工坊写入、画布读取并物化为节点，取代此前「工坊 shot 在 workshopDraft、画布节点
+// 在 project.nodes」两份并行、互不同步的割裂。id = project.id（proj_*），一对一。
+// 启动时由 drizzle-kit push 自动建表（纯新增表，不动既有表）。
+export const production = sqliteTable(
+  "production",
+  {
+    id: text("id").primaryKey(), // = project.id（proj_*）
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("未命名项目"),
+    type: text("type").notNull().default("short_video"),
+    tone: text("tone").notNull().default(""),
+    logline: text("logline").notNull().default(""),
+    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
+    scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
+    characters: text("characters", { mode: "json" }).notNull().default("[]"),
+    shots: text("shots", { mode: "json" }).notNull().default("[]"),
+    /** 完成状态（阶段游标 + rendered 等），两侧一致展示的唯一来源（Phase 3d）。 */
+    progress: text("progress", { mode: "json" }).notNull().default("{}"),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("production_user_updated_idx").on(t.userId, t.updatedAt)],
+);
+
 // ── 关系（仅 include 用到：task.images / filmProject.shots）────────
 export const taskRelations = relations(task, ({ many }) => ({
   images: many(taskImage),
@@ -663,6 +696,7 @@ export type FilmProject = InferSelectModel<typeof filmProject>;
 export type FilmShot = InferSelectModel<typeof filmShot>;
 export type AuditLog = InferSelectModel<typeof auditLog>;
 export type WorkshopSession = InferSelectModel<typeof workshopSession>;
+export type Production = InferSelectModel<typeof production>;
 export type WorkshopSessionInsert = InferInsertModel<typeof workshopSession>;
 
 export type WorkshopDraft = InferSelectModel<typeof workshopDraft>;
