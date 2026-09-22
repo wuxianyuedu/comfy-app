@@ -1,25 +1,26 @@
 #!/usr/bin/env node
 // @ts-nocheck -- 提交门槛脚本:非空断言 `!` 计数棘轮(供 .githooks/pre-commit 与 CI 调用)
 /**
- * src/lib 生产代码非空断言 `!` 计数棘轮 —— 类型安全审查 src/lib 报告的低段收尾。
+ * src 生产代码非空断言 `!` 计数棘轮 —— 类型安全审查 src/lib 报告 Low 段的**扩展**。
  *
- * 背景:项目审计时 src/lib 生产代码里有 ~102 处 `!`(35 个文件),分布两类:
- *   · **filter/map 不 narrow 的病灶** — 13 处,已在本轮 6 个 PR 里消掉
- *     (PR-1 secrets / PR-2 filter+withPort / PR-5 trainer 归一化 / PR-8
- *     script-parser 模板 / PR-12 canvas-api / param-mapping / model-mode-contract);
- *   · **`arr[i]!` / `match[N]!`** — 打开 `noUncheckedIndexedAccess` 后的
- *     合法惯用法,~89 处,不属病灶但也不该无约束地继续长出。
+ * 背景:lib 侧的 filter/map 不 narrow 病灶 13 处已在本轮 6 个 PR 消化完
+ * (PR-1 secrets / PR-2 filter+withPort / PR-5 trainer 归一化 / PR-8
+ * script-parser 模板 / PR-12 canvas-api / param-mapping / model-mode-contract);
+ * 剩下的是 `arr[i]!` / `match[N]!` 一类 `noUncheckedIndexedAccess` 合法惯用法的
+ * 存量。lib 单独收口之后,components / app / server 同样有一批 `!`(热区如
+ * `use-settings-page.ts` 尤其多),若**只挡 lib**、病灶就会往视图层漂移,基线
+ * 棘轮的防护就漏一半。合理路径是把扫描范围**扩到整个 src**。
  *
- * 直接开 `@typescript-eslint/no-non-null-assertion` 会一次报 100+ 处、远超类型
- * 审计边界。合理路径是**棘轮基线**:把当前 102 记成基线,只挡**新增**、允许
- * 逐步下降。这与 `check-function-length.cjs`(§12.13)与 `check-code-duplication.cjs`
- * (§12.12)的机制同构。
+ * 直接开 `@typescript-eslint/no-non-null-assertion` 一次会报几百处、评审全是
+ * 噪声。合理机制仍是**基线棘轮**:把每文件的当前数量记成基线,只挡**新增**、
+ * 允许逐步下降。与 `check-function-length.cjs`(§12.13)与
+ * `check-code-duplication.cjs`(§12.12)同构。
  *
  * 判据走 TypeScript AST (`ts.isNonNullExpression`),不用正则——正则会把
- * `!==` / `!x` / `! /* 注释` 之类误伤,而 AST 只认 `<expr>!` 这一形状。
+ * `!==` / `!x` / 注释里的裸 `!` 误伤,而 AST 只认 `<expr>!` 这一形状。
  *
- * 扫描范围:只 src/lib 下的 .ts/.tsx 非测试文件。lib 是被 components / app / server
- * 共同依赖的地基(§18),这一层收紧即可,视图与路由侧的 `!` 不在本次审计边界。
+ * 扫描范围:src 下的 .ts/.tsx 非测试文件(测试文件里 `expect(x!.field)` 是
+ * 常见形态、`.d.ts` 是类型声明,一并豁免)。
  *
  * 用法:
  *   node scripts/check-non-null-assertions.cjs           # 检查(棘轮)
@@ -37,10 +38,11 @@ const UPDATE = ARGS.has("--update");
 const REPORT_ONLY = ARGS.has("--report");
 
 /** 判据版本:`ts.isNonNullExpression` 语义固定,不会漂;留号便于将来
- *  把 `x?.y!` / `<T>x!` 之类扩展形态纳入时区分。 */
-const RULE_VERSION = 1;
+ *  把 `x?.y!` / `<T>x!` 之类扩展形态纳入时区分。
+ *  v1 → v2:扫描范围从 src/lib 扩到整个 src (基线数字量级变化,不再是同一个量)。 */
+const RULE_VERSION = 2;
 
-const SCAN_DIR = "src/lib";
+const SCAN_DIR = "src";
 const isTestFile = (rel) =>
   /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 
@@ -99,7 +101,7 @@ function writeBaseline(files, total) {
   const payload = {
     generatedAt: new Date().toISOString().slice(0, 10),
     ruleVersion: RULE_VERSION,
-    note: "src/lib 生产代码里 `!` 非空断言的数量(棘轮,只许降不许升)。判据:TypeScript AST 的 NonNullExpression。规则版本变了必须同步改脚本常数。",
+    note: "src 生产代码里 `!` 非空断言的数量(棘轮,只许降不许升)。判据:TypeScript AST 的 NonNullExpression。规则版本变了必须同步改脚本常数。",
     total,
     files,
   };
@@ -120,7 +122,7 @@ function main() {
 
   if (REPORT_ONLY) {
     console.log(
-      `[non-null] src/lib 生产代码 ${total} 处 \`!\` 分布 ${Object.keys(current).length} 个文件`,
+      `[non-null] src 生产代码 ${total} 处 \`!\` 分布 ${Object.keys(current).length} 个文件`,
     );
     for (const [rel, n] of Object.entries(current).sort(
       (a, b) => b[1] - a[1],
@@ -180,7 +182,7 @@ function main() {
   }
   if (problems.length > 0) {
     console.error(
-      "[non-null] src/lib 里新增非空断言(§18 lib 规范 + 类型安全审查 src/lib 报告 Low 段):\n" +
+      "[non-null] src 里新增非空断言(§18 lib 规范 + 类型安全审查 src/lib 报告 Low 段的扩展):\n" +
         problems.join("\n") +
         "\n  修法:改用 type predicate(如 (x): x is T => 判据)/ ?? 兜底 / 显式空值守卫,\n" +
         "  让**判据与用法**同一处落地,而不是把「同一件事用两次」写进类型系统。\n" +
@@ -194,7 +196,7 @@ function main() {
       ? ` (较基线 ${baseline.total} 降 ${baseline.total - total},可 --update 收紧)`
       : "";
   console.log(
-    `[non-null] src/lib \`!\` 总数 ${total}(基线 ${baseline.total})${reduced}`,
+    `[non-null] src \`!\` 总数 ${total}(基线 ${baseline.total})${reduced}`,
   );
   console.log("[non-null] OK");
 }
