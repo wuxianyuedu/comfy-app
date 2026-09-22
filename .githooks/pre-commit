@@ -81,9 +81,11 @@ wait "$eslint_pid" || rc=1
 
 # 2026-09-04: UI 与逻辑分离棘轮(规范 17)。违规数只许降不许升:
 # 新增 fetch / vanillaApi / tRPC hook 进视图层 → 阻断;
-# 治理后指标下降 → 提示执行 --update 收紧基线(不阻断,避免打断提交)。
+# 2026-09-22: 治理后指标下降也走 `--strict` 阻断 —— AGENTS.md 硬规则 10 明确
+# 「治理后必须 `--update` 收紧基线」,此前只提示不阻断,效果是「基线虚高、
+# 下一个人借余量偷偷新增」,纪律停在纸面。补上 --strict 把这条硬规则变机器判据。
 echo "[pre-commit] 8/28 UI/逻辑分离棘轮"
-node scripts/check-ui-logic-separation.cjs || exit 1
+node scripts/check-ui-logic-separation.cjs --strict || exit 1
 
 # 2026-09-12(ISSUE #408): CHANGELOG 碎片形态。
 # CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
