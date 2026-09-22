@@ -111,18 +111,35 @@ function collectImports(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * 业务侧源码的「路径 + 内容」快照（只取一次）。
+ *
+ * 本文件 60+ 个用例逐个调 `consumerCount`，而它此前每次都重走一遍目录、重读
+ * 每个文件 —— `ui/` 的基元越加越多，单条用例就会擦着 vitest 默认的 5s 超时
+ * （实测出现过一次「Test timed out」的 flake，重跑即过：是成本问题，不是判据问题）。
+ * 快照只读一次，判据一个字没改。
+ */
+let businessSnapshot: { rel: string; text: string }[] | null = null;
+
+function businessSources(): { rel: string; text: string }[] {
+  businessSnapshot ??= collectImports(SRC)
+    .map((abs) => ({
+      rel: relative(SRC, abs).split(sep).join("/"),
+      text: readFileSync(abs, "utf8"),
+    }))
+    /* 基元之间互相引用不算「被业务用起来」。 */
+    .filter(
+      (f) => !(f.rel.startsWith("components/ui/") && !f.rel.includes(".test.")),
+    );
+  return businessSnapshot;
+}
+
 /** 业务侧引用 `~/components/ui/<name>` 的文件数（不含 ui/ 内部互相引用）。 */
 function consumerCount(name: string): number {
   const pattern = new RegExp(
     `from\\s+["']~/components/ui/${name.replace(/[-]/g, "\\-")}["']`,
   );
-  let n = 0;
-  for (const abs of collectImports(SRC)) {
-    const rel = relative(SRC, abs).split(sep).join("/");
-    if (rel.startsWith("components/ui/") && !rel.includes(".test.")) continue;
-    if (pattern.test(readFileSync(abs, "utf8"))) n++;
-  }
-  return n;
+  return businessSources().filter((f) => pattern.test(f.text)).length;
 }
 
 describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
@@ -220,7 +237,10 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ],
     ],
     ["~/lib/dom-props", ["OmitOwnProps", "splitDomProps", "commonOwnProps"]],
-    ["~/lib/with-timeout", ["withTimeout", "withTimeoutResult", "TimeoutError"]],
+    [
+      "~/lib/with-timeout",
+      ["withTimeout", "withTimeoutResult", "TimeoutError"],
+    ],
   ] as const)("%s 是「按形态收口」的出口，且已被业务引用", (spec, exports) => {
     const mod = readFileSync(
       join(SRC, spec.replace("~/", "").replace(/\//g, sep) + ".ts"),
