@@ -148,5 +148,6 @@ export async function deleteSession(id: string): Promise<boolean> {
   const result = await workshopDb
     .delete(workshopSession)
     .where(eq(workshopSession.id, id));
-  return (result.changes ?? 0) > 0;
+  // libsql 的 ResultSet 用 rowsAffected（better-sqlite3 的 RunResult.changes 已不存在）。
+  return (result.rowsAffected ?? 0) > 0;
 }
