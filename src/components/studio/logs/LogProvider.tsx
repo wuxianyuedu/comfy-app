@@ -89,11 +89,14 @@ type PollSource = (typeof POLL_SOURCES)[number];
 
 /** 轮询间隔：日志「实时感」与请求量的折中（对齐规范 07 §7.8 的增量轮询）。 */
 const POLL_MS = 2000;
+/** 面板关闭时的放宽间隔：无人看时间线，5s 足够（新数据仍会进缓冲与计数徽标）。 */
+const POLL_IDLE_MS = 5000;
 
 export function LogProvider({ children }: { children: React.ReactNode }) {
   const addEntry = useLogStore((s) => s.addEntry);
   const appendFileLogs = useLogStore((s) => s.appendFileLogs);
   const toggleOpen = useLogStore((s) => s.toggleOpen);
+  const isOpen = useLogStore((s) => s.isOpen);
 
   // ── 拦截 console.*，好让日志出现在面板里 ──
   useEffect(() => {
@@ -319,14 +322,16 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    for (const source of POLL_SOURCES) {
-      await pollSource(source);
-    }
+    /* 四路并行拉取：此前 `for await` 串行，一轮 = 4 次往返叠加在单进程 Next
+     * 上排队；改 Promise.all 后一轮 ≈ 1 次往返。各源已在 pollSource 内自行
+     * try/catch（网络失败只记一次「不可达」），单源出错不会让整批 reject。 */
+    await Promise.all(POLL_SOURCES.map((source) => pollSource(source)));
   }, [addEntry, appendFileLogs, setSessionStart, setBootId]);
 
   /* 每 `POLL_MS` 拉一次；挂载即先拉一次（`immediate`），切后台暂停
-   * （规范 16 §16.2.4.15）。 */
-  useInterval(poll, { ms: POLL_MS });
+   * （规范 16 §16.2.4.15）。面板关闭时放宽到 `POLL_IDLE_MS`，减少无人观察时
+   * 的后台往返；`ms` 变化会让 useInterval 重挂并按当前可见性立即补跑一次。 */
+  useInterval(poll, { ms: isOpen ? POLL_MS : POLL_IDLE_MS });
 
   /* 键盘快捷键：⌘/Ctrl+Shift+L —— 收在 `useHotkey` 里（`mod` 同时覆盖 ⌘ 与
    * Ctrl，此前只判 `ctrlKey`，macOS 上按 ⌘ 没有任何反应）。 */
