@@ -25,6 +25,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   classifyProbe,
   configFingerprint,
+  latestPanelTranscript,
+  readDiagnosticsTail,
   scanPorts,
   spawnInGroup,
   syncNextCache,
@@ -451,6 +453,48 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
     expect(await classifyProbe({ port: 3100 })).toBe("not-up");
   });
 
+  it("连接上但库是空的（503 + db=empty）→ schema-not-ready 单独一档", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({
+          status: "error",
+          db: "empty",
+          hint: "数据库表还没建：执行 pnpm db:push",
+        }),
+      })),
+    );
+    expect(await classifyProbe({ port: 3100 })).toBe("schema-not-ready");
+  });
+
+  it("503 但 db=down（库真起不来）→ not-up：不许把真故障说成「表还没建」", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({ status: "error", db: "down" }),
+      })),
+    );
+    expect(await classifyProbe({ port: 3100 })).toBe("not-up");
+  });
+
+  it("503 响应体读不出 JSON → not-up（判不出就不下结论）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        json: async () => {
+          throw new Error("Unexpected token < in JSON");
+        },
+      })),
+    );
+    expect(await classifyProbe({ port: 3100 })).toBe("not-up");
+  });
+
   it("连不上（fetch 抛错）→ not-up", async () => {
     vi.stubGlobal(
       "fetch",
@@ -459,5 +503,129 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
       }),
     );
     expect(await classifyProbe({ port: 3100 })).toBe("not-up");
+  });
+});
+
+describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
+  const tmpDirs: string[] = [];
+
+  function makeTmp(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfyapp-diag-"));
+    tmpDirs.push(dir);
+    return dir;
+  }
+
+  /** 造一份应用服务转录（mtime 可指定，用来验「只认本次运行」）。 */
+  function writePanel(
+    dir: string,
+    name: string,
+    text: string,
+    mtimeMs: number,
+  ) {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, text, "utf8");
+    fs.utimesSync(file, new Date(mtimeMs), new Date(mtimeMs));
+    return file;
+  }
+
+  afterEach(() => {
+    while (tmpDirs.length > 0) {
+      const dir = tmpDirs.pop();
+      if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("stderr 有内容就用 stderr（最贴近失败的那一路）", () => {
+    const dir = makeTmp();
+    const stderrFile = path.join(dir, "nextjs-stderr.log");
+    const stdoutFile = path.join(dir, "nextjs-stdout.log");
+    fs.writeFileSync(stderrFile, "stderr 现场\n", "utf8");
+    fs.writeFileSync(stdoutFile, "stdout 现场\n", "utf8");
+    const tail = readDiagnosticsTail({
+      stderrFile,
+      stdoutFile,
+      panelDir: makeTmp(),
+    });
+    expect(tail).toContain("stderr 现场");
+  });
+
+  it("stderr 为空时退到 stdout —— Next 的横幅与请求日志都在 stdout", () => {
+    const dir = makeTmp();
+    const stderrFile = path.join(dir, "nextjs-stderr.log");
+    const stdoutFile = path.join(dir, "nextjs-stdout.log");
+    fs.writeFileSync(stderrFile, "", "utf8");
+    fs.writeFileSync(stdoutFile, "GET /api/health 503\n", "utf8");
+    expect(
+      readDiagnosticsTail({ stderrFile, stdoutFile, panelDir: makeTmp() }),
+    ).toContain("503");
+  });
+
+  it("两个重定向文件都空 → 退到应用服务转录（同步 append，随写随见）", () => {
+    const dir = makeTmp();
+    const panelDir = makeTmp();
+    const stderrFile = path.join(dir, "nextjs-stderr.log");
+    const stdoutFile = path.join(dir, "nextjs-stdout.log");
+    fs.writeFileSync(stderrFile, "", "utf8");
+    fs.writeFileSync(stdoutFile, "", "utf8");
+    writePanel(
+      panelDir,
+      "nextjs-panel-100-1.log",
+      "----- 应用服务输出（本次运行）-----\nhealth_check_schema_not_ready\n",
+      Date.now(),
+    );
+    const tail = readDiagnosticsTail({ stderrFile, stdoutFile, panelDir });
+    expect(tail).toContain("health_check_schema_not_ready");
+  });
+
+  it("三路都空 → 空串（调用方给兜底文案，不在这里编）", () => {
+    const dir = makeTmp();
+    expect(
+      readDiagnosticsTail({
+        stderrFile: path.join(dir, "none-stderr.log"),
+        stdoutFile: path.join(dir, "none-stdout.log"),
+        panelDir: path.join(dir, "none-panel"),
+      }),
+    ).toBe("");
+  });
+
+  it("best-effort：没有 panelDir 时不当成错误（转录目录可能还不存在）", () => {
+    const dir = makeTmp();
+    const stdoutFile = path.join(dir, "nextjs-stdout.log");
+    fs.writeFileSync(stdoutFile, "只有 stdout\n", "utf8");
+    expect(readDiagnosticsTail({ stdoutFile, panelDir: null })).toContain(
+      "只有 stdout",
+    );
+  });
+
+  it("panelSince 之前的转录一律不算 —— 不把上一次的失败现场摆给用户", () => {
+    const panelDir = makeTmp();
+    const now = Date.now();
+    writePanel(
+      panelDir,
+      "nextjs-panel-1-1.log",
+      "上一次的失败\n",
+      now - 60_000,
+    );
+    writePanel(panelDir, "nextjs-panel-2-2.log", "本次的失败\n", now);
+    expect(
+      readDiagnosticsTail({ panelDir, panelSince: now - 5_000 }),
+    ).toContain("本次的失败");
+    expect(readDiagnosticsTail({ panelDir, panelSince: now + 60_000 })).toBe(
+      "",
+    );
+  });
+
+  it("latestPanelTranscript：取 mtime 最新的那一份；目录不在时返回 null", () => {
+    const panelDir = makeTmp();
+    const now = Date.now();
+    writePanel(panelDir, "nextjs-panel-1-1.log", "旧\n", now - 60_000);
+    writePanel(panelDir, "nextjs-panel-2-2.log", "新\n", now);
+    fs.writeFileSync(
+      path.join(panelDir, "nextjs-stdout-1.log"),
+      "不是转录",
+      "utf8",
+    );
+    expect(latestPanelTranscript(panelDir)).toContain("nextjs-panel-2-2.log");
+    expect(latestPanelTranscript(path.join(panelDir, "不存在"))).toBeNull();
   });
 });
