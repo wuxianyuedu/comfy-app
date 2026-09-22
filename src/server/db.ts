@@ -1,11 +1,17 @@
 /**
- * `db.ts` -- Drizzle instance (replaces the former PrismaClient singleton).
+ * `db.ts` -- Drizzle instance over the async `@libsql/client` driver.
  * ===========================================================================
  *
- * Connects to `db.sqlite` through the synchronous better-sqlite3 driver
- * (`DATABASE_URL` looks like `file:./db.sqlite`). In development the singleton
- * is parked on globalThis so Next dev hot reloads do not reopen the
- * connection on every re-evaluation.
+ * Connects to `db.sqlite` via `@libsql/client` (`DATABASE_URL` looks like
+ * `file:./db.sqlite`). In development the singleton is parked on globalThis so
+ * Next dev hot reloads do not reopen the connection on every re-evaluation.
+ *
+ * Why libsql (was better-sqlite3): better-sqlite3 is a *synchronous* driver --
+ * any slow SQL, big Zod safeParse, or index scan pinned the whole Next server
+ * event loop and amplified every backend slowdown (see MEMORY notes). libsql
+ * speaks the same SQLite file format and ships a native async client, so we
+ * keep the schema, the file layout and Drizzle's `libsql` adapter and stop
+ * blocking the loop. Same WAL / foreign_keys pragmas as before.
  *
  * NOTE (keep this file ASCII-only): it sits on the build-time module graph and
  * Next's error code frame renderer computes highlight spans by byte offset,
@@ -19,8 +25,8 @@
 import "server-only";
 import path from "node:path";
 import { env } from "~/env";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./db/schema";
 
 /** Fallback DB file when `DATABASE_URL` carries no path (relative to CWD).
@@ -54,14 +60,24 @@ function resolveDbPath(url: string): string {
   );
 }
 
-const sqlite = new Database(resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE));
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+// libsql's file: URL wants the resolved absolute path so hot reloads and
+// drizzle-kit keep pointing at the same file regardless of process CWD shifts.
+const client = createClient({
+  url: `file:${resolveDbPath(env.DATABASE_URL ?? DEFAULT_DB_FILE)}`,
+});
+
+// Pragma init: awaited at module top-level so the exported `db` never runs a
+// query before WAL / foreign_keys are on. The Drizzle async adapter queues
+// commands, so a slow startup pragma would otherwise race with the first
+// route-handler hit. Next 15 / Node 20 support top-level await in ESM server
+// modules; this file is `server-only` so it never lands in the client graph.
+await client.execute("PRAGMA journal_mode = WAL");
+await client.execute("PRAGMA foreign_keys = ON");
 
 const globalForDb = globalThis as unknown as {
   db: ReturnType<typeof drizzle<typeof schema>> | undefined;
 };
 
-export const db = globalForDb.db ?? drizzle(sqlite, { schema });
+export const db = globalForDb.db ?? drizzle(client, { schema });
 
 if (env.NODE_ENV !== "production") globalForDb.db = db;
