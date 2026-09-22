@@ -39,6 +39,16 @@ import {
   placeCanvasNode,
 } from "~/lib/project-canvas/canvas-helpers";
 import {
+  applyShotPatches,
+  planShotSync,
+  shotToNodePatch,
+} from "~/lib/production/sync";
+import {
+  fetchProduction,
+  type ProductionData,
+} from "~/lib/production/production-client";
+import type { Shot } from "~/lib/workshop/types";
+import {
   createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
   hydrateFromServer,
   listProjects,
@@ -107,6 +117,40 @@ const DEFAULT_EDGE_OPTIONS = {
 };
 
 const PRO_OPTIONS = { hideAttribution: true };
+
+type PlaceFlowFn = Parameters<
+  typeof placeCanvasNode
+>[0]["flow"]["screenToFlowPosition"];
+
+/** 把 production.shots 物化 / 合并进画布节点（Phase 3c-2a，幂等）。
+ *  已有镜头节点（data.shotId 命中）合并补丁，缺失的新建；非镜头节点原样保留。
+ *  独立于 CanvasInner，避免其超过函数长度棘轮（§12.13）。 */
+function materializeProductionShots(
+  nodes: CanvasNodeType[],
+  prod: ProductionData | null,
+  screenToFlowPosition: PlaceFlowFn,
+): CanvasNodeType[] {
+  const shots = prod && Array.isArray(prod.shots) ? (prod.shots as Shot[]) : [];
+  if (shots.length === 0) return nodes;
+  const existingShotIds = new Set(
+    nodes
+      .map((n) => (n.data as { shotId?: string } | undefined)?.shotId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const { patches, newShotIds } = planShotSync(shots, existingShotIds);
+  let result = applyShotPatches(nodes, patches);
+  const byId = new Map(shots.map((s) => [s.id, s]));
+  for (const sid of newShotIds) {
+    const shot = byId.get(sid);
+    if (!shot) continue;
+    result = placeCanvasNode({
+      nodes: result,
+      flow: { screenToFlowPosition },
+      data: { ...defaultData("image"), ...shotToNodePatch(shot) },
+    });
+  }
+  return result;
+}
 
 interface ProjectCanvasProps {
   seedNew?: boolean;
@@ -259,6 +303,11 @@ function CanvasInner({
         });
         onConsumePending?.();
       }
+      nextNodes = materializeProductionShots(
+        nextNodes,
+        await fetchProduction(proj.id),
+        screenToFlowPosition,
+      );
       setNodes(nextNodes);
 
       setEdges(proj.edges ?? []);
