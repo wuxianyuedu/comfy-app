@@ -239,7 +239,7 @@ export async function runAsyncAction(
  *
  * ## 为什么不用 async/await
  *
- * `async function fireAndForget(...) { try { await task } catch (e) { onError(e) } }`
+ * 写成 `async function fireAndForget(...) { try { await task } catch (e) { onError(e) } }`
  * 会让本函数返回 `Promise<void>`，caller 又要写 `void fireAndForget(...)` 或
  * `fireAndForget(...).catch(...)` —— 问题只是下移一层。用 `.catch` 直接返回
  * `void` 才能真正做到「调用即终结」，caller 那侧没有 Promise 需要处理。
