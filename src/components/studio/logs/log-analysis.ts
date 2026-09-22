@@ -1,12 +1,12 @@
 /**
  * 日志面板的**采集 / 解析 / 过滤**纯函数（`log-store` 的拆分件）。
  *
- * 从 `log-store.ts` 抽出：`serialize` / `captureLocation` 一族噪音判据
- * （`isReactQueryLog` / `isNoisyFrameworkLog` / `isNextDevNoise` /
- * `isRoutineRpcTimingLog` / `isRoutineRpcTimingLine` /
- * `isPanelSelfPollingLine`）→ 文件行解析（`parseFileLogs`）→ 时间线合并 /
- * 去重 / 计数（`mergeTimeline` / `lastSeqOf` / `dropStaleEntries` /
- * `dedupeRepeats` / `computeCounts` / `computeOriginCounts` /
+ * 从 `log-store.ts` 抽出：`serialize`、`captureLocation` 一族噪音判据
+ * （`isReactQueryLog`、`isNoisyFrameworkLog`、`isNextDevNoise`、
+ * `isRoutineRpcTimingLog`、`isRoutineRpcTimingLine`、
+ * `isPanelSelfPollingLine`）→ 文件行解析（`parseFileLogs`）→ 时间线合并、
+ * 去重、计数（`mergeTimeline`、`lastSeqOf`、`dropStaleEntries`、
+ * `dedupeRepeats`、`computeCounts`、`computeOriginCounts`、
  * `computeFiltered`）与 ID 生成的窄封装。store 与外部消费者通过 `log-store`
  * 的 re-export 使用同一批符号，import 路径不变（§12.18 复用优先——
  * 拆包只挪文件、不动契约）。

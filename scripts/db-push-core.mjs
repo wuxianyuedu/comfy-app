@@ -112,15 +112,19 @@ export function riskyStatements(statements) {
  * 跑一次 push 并复核收敛。
  *
  * @param {string} root 项目根（作为 drizzle-kit 的 cwd）
- * @param {{ databaseUrl?: string, force?: boolean, config?: string,
+ * @param {{ databaseUrl?: string, force?: boolean,
  *           verifyConvergence?: boolean, timeoutMs?: number,
  *           run?: typeof runPnpmSync,
  *           forward?: (chunk: string) => void }} [options]
  *   `force` 为 true 时带 `--force`（自动批准「会丢数据」的语句，`pnpm db:push`
  *   的口径）；启动链路的自动同步**必须**用 false —— 那种变更要由人决定。
- *   `config` 指到另一份 drizzle 配置（启动链路用 `drizzle.config.autosync.ts`：
- *   关掉 `strict` 才可能在没有 TTY 的情况下自动应用「加表 / 加列」这类安全变更，
- *   详见那份配置的说明）。
+ *
+ *   **两条链路跑的是同一份 `drizzle.config.ts`**（这里不传 `--config`）：曾经
+ *   有过一个 `config` 选项，注释指向一份「关掉 `strict` 的
+ *   `drizzle.config.autosync.ts`」，而那份配置文件与调用方都不存在 —— 注释让
+ *   人以为「自动应用安全变更是靠另一份配置」，实际靠的是**输出白名单**
+ *   （`canAutoApply`：只认建表 / 建索引 / 加列，见本文件顶部）。死选项随本次
+ *   一并删掉（§12.16 零消费），判据仍留在原处、不分叉。
  * @returns {{ converged: boolean, alreadyCurrent: boolean, invocationFailed: boolean,
  *             blockedByTty: boolean, error: NodeJS.ErrnoException | null,
  *             firstOutput: string, finalOutput: string }}
@@ -129,7 +133,6 @@ export function pushSchema(root, options = {}) {
   const {
     databaseUrl,
     force = false,
-    config,
     verifyConvergence = true,
     timeoutMs = 600_000,
     run = runPnpmSync,
@@ -138,7 +141,6 @@ export function pushSchema(root, options = {}) {
 
   const args = ["exec", "drizzle-kit", "push"];
   if (force) args.push("--force");
-  if (config) args.push(`--config=${config}`);
   const env =
     databaseUrl === undefined
       ? process.env
