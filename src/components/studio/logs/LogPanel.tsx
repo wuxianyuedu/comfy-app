@@ -419,7 +419,16 @@ export function LogPanel() {
      给出（`ui/dialog` 的遮罩取 `Z.modal`），面板内的弹层继续取 `Z.popup`
      （§16.2.5 的 `popup > modal` 判据不变）。 */
   return (
-    <Dialog open onOpenChange={(next) => !next && setIsOpen(false)}>
+    /* 非模态：base-ui 的模态弹窗会把 portal 以外的整页设 inert/aria-hidden，令窗口标题行
+     * 里的「应用页签」tablist 在面板打开时从无障碍树消失（ISSUE #310 的 e2e 断言页签在
+     * 面板打开时仍可见可点，仅靠 z-index 只保住了鼠标命中、没保住 a11y 可见）。日志面板
+     * 本就是「开着还能继续用页签」的非阻塞工具窗，用非模态正好。关闭路径不变（Esc +
+     * onOpenChange + Ctrl+Shift+L + 关闭按钮）。 */
+    <Dialog
+      open
+      modal={false}
+      onOpenChange={(next) => !next && setIsOpen(false)}
+    >
       <DialogContent
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
