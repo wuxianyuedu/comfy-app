@@ -91,6 +91,11 @@ export interface StrictCanvasNodeData {
   // 链路串联：这个 inputImage 是从哪个上游节点自动喂进来的（节点 id）
   upstreamId?: string;
 
+  /** 该节点是否是某个工坊 Shot 的投影，以及是哪个（`shot.id`）。
+   *  Phase 3a：画布节点 ↔ 工坊镜头的 shot 级同步锚点。非镜头节点为 undefined，
+   *  不参与同步（画布的即性编排仍归画布私有）。见 `lib/production/sync`。 */
+  shotId?: string;
+
   // 结果
   taskId?: string;
   resultPath?: string;

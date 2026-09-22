@@ -1,0 +1,91 @@
+// ── 生产模型同步 reducer（Phase 3a：纯函数，无 React、无 IO）──────────────
+//
+// 画布节点 ↔ 工坊镜头（Shot）的 shot 级双向映射。这是「工坊产出什么、画布就出现
+// 什么」的换算内核：两侧都经这里搬运，视图不各写一份（§12.12 去重、§17 逻辑收口）。
+//
+// 单一写入者（ADR §6.4）：
+//   · 镜头「编辑面」（prompt / negative）—— 画布节点可改，回写进 Shot；
+//   · 镜头「生成态」（status / taskId / 产物 url）—— 由工坊/任务侧写，投影到节点；
+// 两侧写的是同一批 Shot 的不同字段，不互相覆盖。
+//
+// 本文件只做「值怎么换算/合并」，不碰存储与渲染；接线（工坊写入、画布物化）在
+// Phase 3b/3c。
+
+import type { Shot } from "~/lib/workshop/types";
+import type { StrictCanvasNodeData } from "~/lib/project-canvas/canvas-types";
+
+/** 两侧状态词表不同：Shot 有 queued/stale，画布节点只有 idle/running/done/error。
+ *  收口成一处映射，避免各调用点各猜一次。 */
+export function shotStatusToNodeStatus(
+  status: Shot["status"],
+): StrictCanvasNodeData["status"] {
+  switch (status) {
+    case "running":
+    case "queued":
+      return "running";
+    case "done":
+      return "done";
+    case "failed":
+      return "error";
+    case "stale":
+    case "idle":
+    default:
+      return "idle";
+  }
+}
+
+/** 一个 Shot 投影到画布节点 data 上的字段补丁（写进带同一 shotId 的节点）。 */
+export interface ShotNodePatch {
+  shotId: string;
+  kind: "image" | "video";
+  prompt: string;
+  negative: string;
+  status: StrictCanvasNodeData["status"];
+  taskId?: string;
+  resultPath?: string;
+}
+
+/** Shot → 节点补丁。当前阶段镜头图（imageUrl）投影为 image 节点的 resultPath；
+ *  视频片段（clipUrl）在 Phase 3c 接入视频节点，这里先只映镜头图。 */
+export function shotToNodePatch(shot: Shot): ShotNodePatch {
+  return {
+    shotId: shot.id,
+    kind: "image",
+    prompt: shot.prompt,
+    negative: shot.negativePrompt,
+    status: shotStatusToNodeStatus(shot.status),
+    taskId: shot.taskId,
+    resultPath: shot.imageUrl,
+  };
+}
+
+/** 画布节点上对某镜头的「编辑面」改动，回写成 Shot 的部分补丁。
+ *  只回写 prompt / negative，不回写生成态（那是任务侧的写入面）。 */
+export interface ShotEditPatch {
+  prompt: string;
+  negativePrompt: string;
+}
+
+export function nodeEditToShot(patch: {
+  prompt: string;
+  negative: string;
+}): ShotEditPatch {
+  return { prompt: patch.prompt, negativePrompt: patch.negative };
+}
+
+/** 把一批 Shot 同步进「已有节点」的规划：
+ *   · 每个 Shot 产出一条节点补丁（供 patch 已存在的同 shotId 节点）；
+ *   · 现有节点里没有对应 shotId 的，列为待新建。
+ *  非镜头节点（无 shotId）不在输入集合里，天然不受影响。纯函数，便于单测。 */
+export function planShotSync(
+  shots: Shot[],
+  existingShotIds: ReadonlySet<string>,
+): { patches: ShotNodePatch[]; newShotIds: string[] } {
+  const patches: ShotNodePatch[] = [];
+  const newShotIds: string[] = [];
+  for (const shot of shots) {
+    patches.push(shotToNodePatch(shot));
+    if (!existingShotIds.has(shot.id)) newShotIds.push(shot.id);
+  }
+  return { patches, newShotIds };
+}
