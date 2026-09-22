@@ -82,10 +82,12 @@ export function WorkshopHeader({
     setCreating(false);
     setPendingDelete(null);
   }, []);
+  // 不传 target：useHotkey 在其 effect 内自解析宿主（默认 window，对 keydown 与
+  // document 等价）。此前显式传 `target: document` 会在 render 期读 document，
+  // 令 /workshop 的 SSG 预渲染在服务端抛「document is not defined」而打断 next build。
   useHotkey({ key: "Escape" }, closeMenu, {
     enabled: open,
     filterInput: false,
-    target: document,
   });
 
   const commitRename = (id: string) => {
