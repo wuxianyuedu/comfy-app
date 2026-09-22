@@ -22,6 +22,10 @@ import {
   pushServerDraft,
 } from "~/lib/workshop/draft-sync-client";
 import {
+  pushProduction,
+  type ProductionPayload,
+} from "~/lib/production/production-client";
+import {
   draftHasContent,
   type WorkshopDraftDto,
 } from "~/lib/workshop/draft-sync-shared";
@@ -122,6 +126,25 @@ function draftIsEmpty(draft: WorkshopDraft): boolean {
 
 function draftKeyFor(id: string): string {
   return `comfyapp.workshop.draft.${id}.v1`;
+}
+
+/** 工坊草稿 → 统一生产模型写入载荷（Phase 3b-2）。meta 摊平 + 进度（阶段游标 + rendered）。 */
+function buildProductionPayload(
+  draft: WorkshopDraft,
+  stage: string,
+  rendered: boolean,
+): ProductionPayload {
+  return {
+    title: draft.meta.title,
+    type: draft.meta.type,
+    tone: draft.meta.tone,
+    logline: draft.meta.logline,
+    scriptMarkdown: draft.scriptMarkdown,
+    scenes: draft.scenes,
+    characters: draft.characters,
+    shots: draft.shots,
+    progress: { stage, rendered },
+  };
 }
 
 /** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。 */
@@ -465,12 +488,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 
-  /* 最新项目 id / 草稿的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。 */
+  /* 最新项目 id / 草稿 / 阶段 / rendered 的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。 */
   const activeProjectRef = React.useRef(activeProjectId);
   const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
+  const tabRef = React.useRef(tab);
+  const renderedRef = React.useRef(rendered);
   React.useEffect(() => {
     activeProjectRef.current = activeProjectId;
     latestDraftRef.current = currentDraft();
+    tabRef.current = tab;
+    renderedRef.current = rendered;
   });
 
   /** 卸载时让模块级草稿缓存失效，避免组件重挂载时读回旧的当前项目草稿。 */
@@ -485,9 +512,14 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       // localStorage 为即时缓存；同时写穿一份到本地 db.sqlite（防缓存被清丢失）。
       writeDraft(activeProjectId, draft);
       void pushServerDraft(activeProjectId, draft);
+      // Phase 3b-2：额外写穿一份「生产数据」到 production 表，供画布读取物化（3c）。
+      void pushProduction(
+        activeProjectId,
+        buildProductionPayload(draft, tab, rendered),
+      );
     }, 600);
     return () => clearTimeout(timer);
-  }, [activeProjectId, currentDraft]);
+  }, [activeProjectId, currentDraft, tab, rendered]);
 
   /* 卸载兜底保存 —— 工坊常作为 workspace 的一个页签渲染，切走其它页签时本组件
    * 会被卸载。若只靠上面的 600ms 防抖，用户在编辑/导入剧本后立刻切走，卸载时
@@ -501,6 +533,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       const draft = latestDraftRef.current;
       writeDraft(activeProjectRef.current, draft);
       void pushServerDraft(activeProjectRef.current, draft);
+      void pushProduction(
+        activeProjectRef.current,
+        buildProductionPayload(draft, tabRef.current, renderedRef.current),
+      );
       invalidateDraftCache();
     };
     // 仅在卸载时执行一次
