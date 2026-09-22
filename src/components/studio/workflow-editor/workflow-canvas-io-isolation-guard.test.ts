@@ -252,15 +252,17 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
      *  尺寸卡取子口 id（卡内唯一的行标识）；库内不许各写一套字符串拼装。 */
     expect(cards).toContain("wiredTargetsForEntry");
     expect(cards).toMatch(/handleId:[\s\S]{0,120}wired\.ioKey/);
-    const mapping = readFileSync(
+    const classes = readFileSync(
       path.resolve(
         __dirname,
-        "../../../lib/workflow/workflow-param-mapping.ts",
+        "../../../lib/workflow/workflow-param-classes.ts",
       ),
       "utf8",
     );
-    expect(mapping).toContain("export function wiredTargetsForEntry");
+    /* `wiredTargetsForEntry` 的定义已随 86e515a 拆分移到 workflow-param-classes.ts
+     *（mapping.ts 只再导出），故断言指向定义真正所在的那份文件。 */
+    expect(classes).toContain("export function wiredTargetsForEntry");
     /* 换算那一层已删除（函数定义不该再存在）。 */
-    expect(mapping).not.toContain("export function wireHandleIdForIoKey");
+    expect(classes).not.toContain("export function wireHandleIdForIoKey");
   });
 });
