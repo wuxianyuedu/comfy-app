@@ -12,9 +12,12 @@ import {
 } from "~/components/studio";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkshopPipeline } from "~/components/workshop/WorkshopPipeline";
+import { ProjectGate } from "~/components/studio/ProjectGate";
 import { ShellTabs } from "~/components/studio/ShellTabs";
 import { timeAgo } from "~/lib/time-format";
 import {
+  createProject,
+  getActiveId,
   listProjects,
   setActive,
   reapAllEmptyDrafts,
@@ -146,6 +149,23 @@ export default function WorkspacePage() {
   // ── 画布：为 true 时，画布打开一个全新的命名项目
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
 
+  // ── 当前活跃项目 id（项目闸门的判据）：来源 canvas-store 的 active 键，
+  //    只在客户端可读，SSR 首帧为 null。订阅 store 变化事件保持同步。
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const refreshActiveProject = useCallback(
+    () => setActiveProjectId(getActiveId()),
+    [],
+  );
+  useEffect(() => {
+    // 首帧后同步一次活跃项目 id（getActiveId 只在客户端可读，SSR 为 null）；
+    // 与本文件恢复视图处同一约定。订阅回调里的 setState 属合规的外部同步。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshActiveProject();
+    return subscribeAppEvent("comfyapp:canvas-store-changed", () =>
+      refreshActiveProject(),
+    );
+  }, [refreshActiveProject]);
+
   // ── 设置后，无限画布接收这条工作流并为它放一个
   //    `kind="workflow"` 节点（来自工作流库的「使用」动作）。
   const [pendingCanvasWorkflow, setPendingCanvasWorkflow] = useState<{
@@ -210,11 +230,12 @@ export default function WorkspacePage() {
   );
 
   const handleNewProject = useCallback(() => {
-    // 打开「新建项目」会把用户带进一个全新的命名画布项目
-    //（上一个项目保留在项目 store 里）。
-    setCanvasSeedNew(true);
+    // 统一「新建项目」入口：创建一个真实的 proj_* 项目（落库 + 设为活跃），
+    // 画布/工坊/成片后续都挂在这个项目上（Phase 1 先立画布为脊柱）。
+    createProject();
+    refreshActiveProject();
     navigateTo("canvas");
-  }, [navigateTo]);
+  }, [navigateTo, refreshActiveProject]);
 
   // 打开一个画布项目 —— 设为活跃并跳到画布视图。
   const handleOpenCanvasProject = useCallback(
@@ -243,15 +264,16 @@ export default function WorkspacePage() {
   const handleOpenProject = useCallback(
     (id: string) => {
       if (id === "new") {
-        // 原 "新建项目" 创作台已移除，改为直接进入画布
-        setCanvasSeedNew(true);
+        // 统一新建项目：创建真实 proj_* 并进入画布（与 handleNewProject 一致）。
+        createProject();
+        refreshActiveProject();
         navigateTo("canvas");
       } else {
         // 真实作品：跳转作品详情页（溯源 + 执行日志）
         router.push(`/create/${id}`);
       }
     },
-    [navigateTo, router],
+    [navigateTo, router, refreshActiveProject],
   );
 
   // 从工作流库「使用」一条工作流 → 跳到无限画布
@@ -273,6 +295,20 @@ export default function WorkspacePage() {
   // 其它模式切换会反复装卸 console 包装（makeLogger 双重嵌套），是日志观察者
   // 自身报错的结构性诱因（LogProvider Console Error）。
   const renderCenter = () => {
+    // 项目优先闸门：进入画布 / 工坊 / 成片前必须先有一个活跃项目。
+    if (
+      (viewMode === "canvas" ||
+        viewMode === "workshop" ||
+        viewMode === "film") &&
+      !activeProjectId
+    ) {
+      return (
+        <ProjectGate
+          onEnter={refreshActiveProject}
+          onExit={() => navigateTo("home")}
+        />
+      );
+    }
     switch (viewMode) {
       case "works":
         return (
