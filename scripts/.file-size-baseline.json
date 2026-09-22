@@ -10,7 +10,7 @@
     "src/components/studio/logs/LogPanel.tsx": 993,
     "src/components/studio/logs/log-store.ts": 1557,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 957,
-    "src/components/studio/workflow-io.ts": 1025,
+    "src/components/studio/workflow-io.ts": 651,
     "src/components/workshop/hooks/use-workshop-pipeline.ts": 1074,
     "src/lib/comfyui/raw.ts": 1057,
     "src/lib/comfyui/workflow-detail-raw.ts": 939,
