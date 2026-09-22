@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
+
 /**
  * useInterval —— 「按固定间隔重复跑一个异步动作」的**唯一实现**
  * （规范 16 §16.2.4.15）。
@@ -26,6 +28,13 @@ import { useEffect, useRef } from "react";
  *     由调用方决定（多数轮询是幂等的单次查询，重叠无害；需要串行的落点应自己
  *     在 `run` 里排队）。本 hook 只负责「什么时候该跑」。
  *
+ * **桌面场景补的一条**（`pauseWhenUnfocused`）：WebView2 里窗口被别的窗口
+ * 遮挡但未最小化时，`document.visibilityState` 仍报 `visible`、`visibilitychange`
+ * 不会触发，全库 15 处轮询会**白拉**——用户切回来时看到的是几秒前的状态，
+ * 而不是他目光回到窗口那一刻的实况。判据用 `document.hasFocus()` +
+ * `window` 的 focus/blur 事件补上；默认跟随 `isDesktopShell()`（浏览器 tab
+ * 场景保留既有语义，避免「切走焦点就不刷新」的过度反应）。
+ *
  * 与 `useFlashState`（一次性定时器）的分工：那个管「按一下亮一会儿」，
  * 这个管「每隔一段时间重复跑」。两者都用定时器，但取消语义与生命周期不同。
  */
@@ -41,6 +50,13 @@ export interface UseIntervalOptions {
    * 是最新状态，不用等一个间隔）。
    */
   pauseWhenHidden?: boolean;
+  /**
+   * 是否在窗口失焦时也暂停（默认跟随 `isDesktopShell()`）。
+   * 桌面壳里 WebView2 遮挡未最小化时，`visibilitychange` 不会触发，靠这条
+   * 补上。浏览器 tab 场景**默认 false**：切焦点到别的窗口时用户可能仍希望
+   * 页面在跟新（例如挂着看长任务进度），维持既有语义不越过边界。
+   */
+  pauseWhenUnfocused?: boolean;
 }
 
 /**
@@ -51,7 +67,12 @@ export interface UseIntervalOptions {
  */
 export function useInterval(
   run: () => unknown,
-  { ms, immediate = true, pauseWhenHidden = true }: UseIntervalOptions,
+  {
+    ms,
+    immediate = true,
+    pauseWhenHidden = true,
+    pauseWhenUnfocused,
+  }: UseIntervalOptions,
 ): void {
   const runRef = useRef(run);
   /* 渲染期写 ref 会被 react-hooks/refs 判为「渲染期访问 ref」，且并发渲染下
@@ -63,6 +84,9 @@ export function useInterval(
 
   useEffect(() => {
     if (ms == null || ms <= 0) return;
+
+    // 未显式指定时按运行环境决定：桌面壳里默认开、浏览器 tab 里默认关。
+    const unfocused = pauseWhenUnfocused ?? isDesktopShell();
 
     let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -81,21 +105,44 @@ export function useInterval(
       }
     };
 
-    if (!pauseWhenHidden) {
+    if (!pauseWhenHidden && !unfocused) {
       start();
       return stop;
     }
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") start();
-      else stop();
+    // 停轮询的判据：任一命中即「用户此刻不在这个窗口上」。
+    // - `visibilitychange` 覆盖：浏览器切标签页 / 最小化 / 系统休眠；
+    // - `document.hasFocus()` 覆盖：桌面壳里窗口被别的窗口遮挡但未最小化，
+    //   visibilityState 仍是 visible，`visibilitychange` 不触发。
+    const shouldPause = () => {
+      if (pauseWhenHidden && document.visibilityState !== "visible")
+        return true;
+      if (unfocused && !document.hasFocus()) return true;
+      return false;
     };
-    /* 首帧就按当前可见性决定起停：标签页在后台打开时不必先空跑一次。 */
-    if (document.visibilityState === "visible") start();
-    document.addEventListener("visibilitychange", onVisible);
+
+    const onChange = () => {
+      if (shouldPause()) stop();
+      else start();
+    };
+
+    if (!shouldPause()) start();
+    if (pauseWhenHidden) {
+      document.addEventListener("visibilitychange", onChange);
+    }
+    if (unfocused) {
+      window.addEventListener("focus", onChange);
+      window.addEventListener("blur", onChange);
+    }
     return () => {
       stop();
-      document.removeEventListener("visibilitychange", onVisible);
+      if (pauseWhenHidden) {
+        document.removeEventListener("visibilitychange", onChange);
+      }
+      if (unfocused) {
+        window.removeEventListener("focus", onChange);
+        window.removeEventListener("blur", onChange);
+      }
     };
-  }, [ms, immediate, pauseWhenHidden]);
+  }, [ms, immediate, pauseWhenHidden, pauseWhenUnfocused]);
 }

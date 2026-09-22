@@ -26,6 +26,7 @@ afterEach(() => {
     configurable: true,
     get: () => "visible",
   });
+  document.hasFocus = () => true;
 });
 
 /** 把 `document.visibilityState` 置成指定值并派发一次 visibilitychange。 */
@@ -35,6 +36,12 @@ function setVisibility(state: "visible" | "hidden") {
     get: () => state,
   });
   document.dispatchEvent(new Event("visibilitychange"));
+}
+
+/** 把 `document.hasFocus()` 置成指定值并派发一次 focus/blur 事件。 */
+function setFocused(focused: boolean) {
+  document.hasFocus = () => focused;
+  window.dispatchEvent(new Event(focused ? "focus" : "blur"));
 }
 
 describe("useInterval", () => {
@@ -142,5 +149,36 @@ describe("useInterval", () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
     expect(run).toHaveBeenCalledTimes(4);
+  });
+
+  it("pauseWhenUnfocused=true：窗口失焦暂停、重新聚焦立即补跑一次并恢复（WebView2 遮挡场景）", async () => {
+    const run = vi.fn();
+    renderHook(() => useInterval(run, { ms: 1000, pauseWhenUnfocused: true }));
+    expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
+
+    act(() => setFocused(false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(run, "失焦后不该继续跑").toHaveBeenCalledTimes(1);
+
+    act(() => setFocused(true));
+    expect(run, "重新聚焦应立即补跑一次").toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(run).toHaveBeenCalledTimes(3);
+  });
+
+  it("pauseWhenUnfocused=false：显式关时失焦仍跑（浏览器 tab 场景保留既有语义）", async () => {
+    const run = vi.fn();
+    renderHook(() => useInterval(run, { ms: 1000, pauseWhenUnfocused: false }));
+    expect(run).toHaveBeenCalledTimes(1);
+    act(() => setFocused(false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(run, "显式关掉 unfocused 判据后失焦也不停").toHaveBeenCalledTimes(4);
   });
 });
