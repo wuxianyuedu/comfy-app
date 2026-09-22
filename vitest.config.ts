@@ -209,6 +209,15 @@ export default defineConfig({
           statements: 75,
           branches: 70,
         },
+        // Phase 3a：生产模型同步 reducer（shot ↔ 画布节点）。sync.ts 实测 100%，
+        // 门槛取 95 给 3b/3c 追加留余量，只升不降（§18.6）。src/lib/** 已在
+        // coverage.include 里，无需单列 include。
+        "src/lib/production/**": {
+          lines: 95,
+          functions: 95,
+          statements: 95,
+          branches: 95,
+        },
         // 从「40/35/40/35」抬到实测值：仓储层（`repository-*.ts` 共 12 个模块，
         // 占本目录分母的绝对大头）此前**零覆盖**。补法不是逐个 mock，而是让测试
         // 走 `tests/helpers/test-db.ts` 的**内存 SQLite + 真 Drizzle** —— 这一层的

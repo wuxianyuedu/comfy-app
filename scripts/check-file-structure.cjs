@@ -207,6 +207,7 @@ const DOMAINS = [
   "log",
   "media",
   "process",
+  "production",
   "project-canvas",
   "shell",
   "workflow",
