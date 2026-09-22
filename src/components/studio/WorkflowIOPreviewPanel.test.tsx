@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   act,
   cleanup,
@@ -21,6 +21,23 @@ import type { WorkflowIOParam } from "./workflow-types";
 type IOMap = Record<string, WorkflowIOParam>;
 
 afterEach(cleanup);
+
+/* jsdom 无布局：getBoundingClientRect 恒全 0 → 拖拽 positionOf 会因 height<=0 一律退
+ * 回 "before"，指针上/下半区（插入点）无从验证。统一给一个 20px 高、top:0 的盒，
+ * 让 clientY<10 = 之前、>=10 = 之后 如实生效。 */
+beforeEach(() => {
+  Element.prototype.getBoundingClientRect = () => ({
+    top: 0,
+    left: 0,
+    width: 200,
+    height: 20,
+    bottom: 20,
+    right: 200,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+});
 
 /** 服务端富化后的条目形状：封装槽位 `value_1` 的作者名在 label/slotLabel 上。 */
 function wrapperSeedEntry(): WorkflowIOParam {
@@ -80,7 +97,12 @@ function seedRowLabel(): string | null {
  * drop 之间隔着若干次 React 重渲（拖拽高亮、插入指示线都会改状态），`drop`
  * 拿到的处理器闭包未必是起手那一次渲染的。只有让事件各自 dispatch 一遍，
  * 才能命中「闭包里的被拖行已过期」这条路径。 */
-function nativeDrag(target: Element, type: string, ioKey: string): void {
+function nativeDrag(
+  target: Element,
+  type: string,
+  ioKey: string,
+  clientY = 5,
+): void {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", {
     value: {
@@ -90,6 +112,7 @@ function nativeDrag(target: Element, type: string, ioKey: string): void {
       dropEffect: "move",
     },
   });
+  Object.defineProperty(event, "clientY", { value: clientY });
   target.dispatchEvent(event);
 }
 
@@ -100,14 +123,16 @@ function rowFor(ioKey: string): HTMLElement {
   return row;
 }
 
-/** 一次完整的「起手 → 越到目标 → 落下」，从行内子元素起手（用户抓的是行里的
- *  按钮/输入框，不是行本身）。 */
-function dragOnto(fromKey: string, toKey: string): void {
+/** 一次完整的「起手 → 越到目标 → 落下」。起手落在行的可拖区域（row 本身
+ *  draggable），刻意不从重命名 <button> 起手——它属 DRAG_CANCEL_SELECTOR
+ * （input/textarea/select/button/[contenteditable]），从可编辑区起手会被取消。 */
+function dragOnto(fromKey: string, toKey: string, after = false): void {
   const fromRow = rowFor(fromKey);
   const toRow = rowFor(toKey);
-  nativeDrag(fromRow.querySelector("button") ?? fromRow, "dragstart", fromKey);
-  nativeDrag(toRow.querySelector("span") ?? toRow, "dragover", toKey);
-  nativeDrag(toRow, "drop", toKey);
+  const y = after ? 15 : 5;
+  nativeDrag(fromRow, "dragstart", fromKey);
+  nativeDrag(toRow.querySelector("span") ?? toRow, "dragover", toKey, y);
+  nativeDrag(toRow, "drop", toKey, y);
 }
 
 function orderOf(io: IOMap): Record<string, number | undefined> {
@@ -162,7 +187,7 @@ describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", 
     const io = threeRows();
     const { stores, refresh } = renderPanel(io);
 
-    dragOnto("1::widget::first", "1::widget::second");
+    dragOnto("1::widget::first", "1::widget::second", true);
     act(refresh);
 
     expect(orderOf(stores.io.getState().workflowIO)).toEqual({
@@ -190,17 +215,28 @@ describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", 
     const io = threeRows();
     const { stores, refresh } = renderPanel(io);
 
-    /* 起手目标是行里的 <button>（可改名的标签），drop 目标是另一行里的
-     * <span>（控件）——两侧都不是行本身，来源键只能靠起手现场记下的那个。 */
+    /* 起手落在行内的非编辑子元素（<span>，不是行本身、也不是被禁拖的
+     * <button>/输入框/下拉）——来源键只能靠起手现场 closest 认，正是本用例要守的路径。
+     * drop 落在第三行的下半区（clientY 15）→ 插到第三行之后。 */
     const fromRow = rowFor("1::widget::first");
     const toRow = rowFor("1::widget::third");
     nativeDrag(
-      fromRow.querySelector("button")!,
+      fromRow.querySelector("span") ?? fromRow,
       "dragstart",
       "1::widget::first",
     );
-    nativeDrag(toRow.querySelector("span")!, "dragover", "1::widget::third");
-    nativeDrag(toRow.querySelector("span")!, "drop", "1::widget::third");
+    nativeDrag(
+      toRow.querySelector("span") ?? toRow,
+      "dragover",
+      "1::widget::third",
+      15,
+    );
+    nativeDrag(
+      toRow.querySelector("span") ?? toRow,
+      "drop",
+      "1::widget::third",
+      15,
+    );
     act(refresh);
 
     expect(orderOf(stores.io.getState().workflowIO)).toEqual({
