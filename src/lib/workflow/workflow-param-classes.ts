@@ -1,13 +1,13 @@
 /**
  * 对外参数分类与 pin 判定（`workflow-param-mapping` 的拆分件）。
  *
- * 从 `workflow-param-mapping.ts` 抽出：**分类模型**（`ParamClass` /
- * `PinFamily` / `SIZE_CLASSES` / `SIZE_SUB_IDS` / `ParamEntry` /
- * `ParamOutputPort`）与**判定 / 展示**类纯函数（`nodeIdOfIoKey` /
- * `sizeSubLabel` / `sizeGroupIds` / `pinFamily` / `familyOfClass` /
- * `isSizeClass` / `pinAcceptsEntry` / `candidateClasses` / `isSizeDetermined` /
- * `portTypeDisplay` / `sizeSubTypeDisplay` / `acceptedPinTypesFor` /
- * `classPinType` / `paramOutputPorts` / `wiredTargetsForEntry`）。
+ * 从 `workflow-param-mapping.ts` 抽出：**分类模型**（`ParamClass`、
+ * `PinFamily`、`SIZE_CLASSES`、`SIZE_SUB_IDS`、`ParamEntry`、
+ * `ParamOutputPort`）与**判定 / 展示**类纯函数（`nodeIdOfIoKey`、
+ * `sizeSubLabel`、`sizeGroupIds`、`pinFamily`、`familyOfClass`、
+ * `isSizeClass`、`pinAcceptsEntry`、`candidateClasses`、`isSizeDetermined`、
+ * `portTypeDisplay`、`sizeSubTypeDisplay`、`acceptedPinTypesFor`、
+ * `classPinType`、`paramOutputPorts`、`wiredTargetsForEntry`）。
  *
  * 主文件保留**映射本身**（`buildParamEntries` 组装、`ParamMapping` 存储解析、
  * `applyParamMapping` 运行时落值、卡片布局常量），并从本模块 re-export 上述

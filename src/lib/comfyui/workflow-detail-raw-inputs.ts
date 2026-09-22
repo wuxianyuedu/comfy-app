@@ -2,10 +2,10 @@
  * RAW 详情构建器的「逐节点输入元数据」路径（`workflow-detail-raw` 的拆分件）。
  *
  * 从 `workflow-detail-raw.ts` 抽出：`buildRawInputs`（约 470 行）与它私有依赖的
- * `LOAD_IMAGE_NODE_TYPES` 常量 + 5 个 helper（`proxyKey` /
- * `collectProxyWidgetPairs` / `isUuidLikeClassType` / `isWrapperAliasSlot` /
+ * `LOAD_IMAGE_NODE_TYPES` 常量 + 5 个 helper（`proxyKey`、
+ * `collectProxyWidgetPairs`、`isUuidLikeClassType`、`isWrapperAliasSlot`、
  * `subgraphAuthorLabelsByUid`）。原文件保留另三个 build* 出口
- * （`buildRawNodeMeta` / `buildNodeTypeMap` / `buildInnerNodeInputs` /
+ * （`buildRawNodeMeta`、`buildNodeTypeMap`、`buildInnerNodeInputs`、
  * `buildRawView`），并从本模块 re-export `buildRawInputs`；消费者 import
  * 路径不变。
  *
