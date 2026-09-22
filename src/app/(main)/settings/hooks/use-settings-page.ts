@@ -20,19 +20,10 @@ import { useExternalAction } from "~/components/ui/use-external-action";
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
-import { sleep } from "~/lib/with-timeout";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
-import { parseOllamaLogText } from "~/lib/log/log-ansi";
 import { postAppRuntimeLog } from "~/lib/log/log-file-client";
-import {
-  probeOllama as probeOllamaClient,
-  startOllama as startOllamaClient,
-  stopOllama as stopOllamaClient,
-  type OllamaModel,
-} from "~/lib/llm/ollama-client";
 import { probeRemoteApi } from "~/lib/llm/browser";
-import { OLLAMA_READY } from "~/lib/retry-policy";
 import {
   queryUsageTask,
   testModelUsage,
@@ -50,13 +41,13 @@ import { api } from "~/trpc/react";
 import { useRuntimeLogSource } from "./use-runtime-log-source";
 import { useSettingsAppUpdate } from "./use-settings-page-app-update";
 import { useSettingsDbStudio } from "./use-settings-page-db-studio";
+import { useSettingsOllama } from "./use-settings-page-ollama";
 
 /* 类型与共享叶子（`use-settings-page-types`）拆到独立文件,消费者 `from
  * "./use-settings-page"` 的路径**完全不变**（§12.18 复用优先）。 */
 import type {
   FlashMessage,
   LlmConfig,
-  OllamaStatus,
   QueryLlmConfig,
   Section,
   Settings,
@@ -132,12 +123,6 @@ function mergeExtraModels(
   return [...next, toggled];
 }
 
-/** Ollama 启动就绪轮询：**固定间隔 + 有界次数** —— 取值走
- *  `~/lib/retry-policy` 的 {@link OLLAMA_READY}（20 次 × 2s，覆盖冷启动的
- *  常见耗时；固定 2s 是为了让状态行尽快反映就绪，见 §16.2.4.49）。 */
-const OLLAMA_START_POLL_TIMES = OLLAMA_READY.maxAttempts;
-const OLLAMA_START_POLL_INTERVAL_MS = OLLAMA_READY.baseMs;
-
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
 export function useSettingsPage(): SettingsPageController {
   const [section, setSection] = useState<Section>("llmLocal");
@@ -153,23 +138,6 @@ export function useSettingsPage(): SettingsPageController {
 
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
-  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>("checking");
-  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
-  const [ollamaStarting, setOllamaStarting] = useState(false);
-  // startOllama 的轮询里要读最新状态；state 闭包会拿到旧值，用 effect 同步到 ref
-  const ollamaStatusRef = useRef<OllamaStatus>("checking");
-  useEffect(() => {
-    ollamaStatusRef.current = ollamaStatus;
-  }, [ollamaStatus]);
-  /* 启动流程期间状态行的持有权标记：launch 流程会自己落「启动中/运行中/未运行」，
-   * 期间挂载触发的探测不得覆盖状态（否则 UI 会跳变——轮询探测本身不发
-   * 「checking」+ 静默写结果，但 baseUrl 等其它 effect 仍可能并发探测）。 */
-  const ollamaStartingRef = useRef(false);
-  /* 「关闭中」持锁标记：stopOllama 进行中禁止探测覆盖状态。Ollama 的关闭
-   * 动作（终止进程树 + 等端口释放）最长可挂 5s，期间 useEffect 触发的探测
-   * 会把状态行抢回「未运行」并重开「关闭 Ollama」按钮（同 #103 的
-   * 「操作后状态被覆盖」族问题）。 */
-  const ollamaStoppingRef = useRef(false);
   const [settingsDraft, setSettingsDraft] = useState<Settings | null>(null);
   const [comfyStarting, setComfyStarting] = useState(false);
 
@@ -225,7 +193,6 @@ export function useSettingsPage(): SettingsPageController {
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
   const openExternalM = api.setting.openExternal.useMutation();
-  const [ollamaStopping, setOllamaStopping] = useState(false);
 
   /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
    * 卸载清掉）由 `useFlashLatch` 收口 —— 此前这里是手写的 `flashTimerRef`，
@@ -304,93 +271,24 @@ export function useSettingsPage(): SettingsPageController {
     writeSettingsCache(lastGood);
   }
 
-  /* ── Ollama 探测 ───────────────────────────────────────── */
-  /* 单独取出 baseUrl：下面 effect 与 startOllama 都只需它，依赖写具体字段可让
-   * React Compiler 校验通过（写 `llmDraft?.baseUrl` 会被判定为「推断依赖比
-   * 手写依赖更宽」，进而跳过整个组件的优化）。 */
+  /* ── Ollama 探测 / 拉起 / 关闭 / 运行时日志（沉在 sub-hook）────────
+   * baseUrl 与 provider 从 llmDraft 里取出传入；sub-hook 不碰草稿的编辑与
+   * 持久化——那是主 hook 的边界。status / models / starting / stopping / log
+   * 与两个动作（startOllama / stopOllama）逐字段展开到 controller。 */
   const llmBaseUrl = llmDraft?.baseUrl ?? "";
-  /** 静默探测：不发「检测中」、不与其他探测互相覆盖状态。 */
-  const probeOllamaSilent = useCallback(async (baseUrl: string) => {
-    const result = await probeOllamaClient(baseUrl);
-    if (ollamaStartingRef.current || ollamaStoppingRef.current) return;
-    if (result.up) {
-      setOllamaModels(result.models);
-      setOllamaStatus("up");
-      return;
-    }
-    setOllamaModels([]);
-    setOllamaStatus("down");
-  }, []);
-
-  /** 探测并把结果落到状态行。启动流程内部轮询禁用此函数（见 probeOllamaSilent）。 */
-  const probeOllama = useCallback(
-    async (baseUrl: string) => {
-      if (ollamaStartingRef.current || ollamaStoppingRef.current) return;
-      setOllamaStatus("checking");
-      await probeOllamaSilent(baseUrl);
-    },
-    [probeOllamaSilent],
-  );
-
-  // baseUrl 变化或本地 provider 切换时重新探测。
-  // 只有「本地 provider + 已填 baseUrl」才有得探测；否则说明当前没有可探测的
-  // Ollama（provider 是远端、或还没填地址），若仍停留在初始/遗留的 checking
-  // 态，状态行会一直「检测 Ollama 服务…」转圈永不结束——这里落定为 down。
-  useEffect(() => {
-    if (llmDraft?.provider !== "local" || !llmBaseUrl) {
-      // 没有可探测的 Ollama（provider 是远端、或还没填地址）：若仍停留在
-      // 初始/遗留的 checking 态，状态行会一直「检测 Ollama 服务…」转圈永不
-      // 结束——这里 defer 一次把它落定为 down（不落在同步 effect 体里）。
-      const settle = setTimeout(() => {
-        setOllamaStatus((prev) => (prev === "checking" ? "down" : prev));
-      }, 0);
-      return () => clearTimeout(settle);
-    }
-    const timer = setTimeout(() => void probeOllama(llmBaseUrl), 0);
-    return () => clearTimeout(timer);
-  }, [llmDraft?.provider, llmBaseUrl, probeOllama]);
-
-  const startOllama = useCallback(async () => {
-    setOllamaStarting(true);
-    ollamaStartingRef.current = true;
-    setOllamaStatus("starting");
-    /* 「拉起 → 轮询等就绪 → 超时抛错」整段交给出口报成败：失败路径的文案
-     *（含超时那句自带可执行动作的说明）走 `errorMessage`，成功静默
-     *（状态行自己会变成「已运行」，是这条账里唯一不需要额外说一句的落点）。 */
-    const result = await (async () => {
-      try {
-        return await runAsyncAction(
-          async () => {
-            await startOllamaClient();
-            // 轮询等就绪再交回控制权：期间保持「启动中…」按钮禁用。以前 POST 完
-            // 固定睡 2s 就探一次，ollama 冷启动远不止 2s，状态行变回「未运行」、
-            // 按钮恢复可点，用户误以为失败会连点——每次点击都再拉起一个 serve
-            // 进程，多进程抢 11434 端口在 Windows 上连环弹「端口被占用」错误框。
-            for (let i = 0; i < OLLAMA_START_POLL_TIMES; i++) {
-              if (llmBaseUrl) {
-                const probe = await probeOllamaClient(llmBaseUrl);
-                if (probe.up) {
-                  setOllamaModels(probe.models);
-                  setOllamaStatus("up");
-                  return;
-                }
-              }
-              await sleep(OLLAMA_START_POLL_INTERVAL_MS);
-            }
-            throw new Error(
-              "Ollama 启动超时：进程可能未成功运行，请确认已安装 Ollama 并可手动执行 ollama serve",
-            );
-          },
-          { report: showFlash, failureText: "启动 Ollama 失败" },
-        );
-      } finally {
-        setOllamaStarting(false);
-        ollamaStartingRef.current = false;
-      }
-    })();
-    // 超时/失败后兜底探一次，让状态行和进程的真实情况对齐
-    if (!result.ok && llmBaseUrl) await probeOllamaSilent(llmBaseUrl);
-  }, [llmBaseUrl, probeOllamaSilent, showFlash]);
+  const {
+    ollamaStatus,
+    ollamaModels,
+    ollamaStarting,
+    ollamaStopping,
+    ollamaLog,
+    startOllama,
+    stopOllama,
+  } = useSettingsOllama({
+    llmBaseUrl,
+    providerIsLocal: llmDraft?.provider === "local",
+    showFlash,
+  });
 
   /* ── ComfyUI 启动 ───────────────────────────────────────── */
   const startComfy = useCallback(async () => {
@@ -547,32 +445,6 @@ export function useSettingsPage(): SettingsPageController {
     source: "comfyui-runtime",
     active: comfyLogActive,
   });
-  const ollamaLogActive = ollamaStarting || ollamaStatus === "starting";
-  const ollamaLog = useRuntimeLogSource({
-    source: "ollama-runtime",
-    active: ollamaLogActive,
-    /* Ollama 落盘的是 logrus 纯文本（无 ANSI 码），按 level= 语义上色 */
-    parse: parseOllamaLogText,
-  });
-
-  const stopOllamaFn = useCallback(async () => {
-    setOllamaStopping(true);
-    ollamaStoppingRef.current = true;
-    /* 「停止 → 重新探测」两段都跑（无论成败状态行都要对齐），
-     * 所以探测不进 `action` —— 它在 finally 的语义上，不在成功分支上。 */
-    try {
-      await runAsyncAction(() => stopOllamaClient(), {
-        report: showFlash,
-        failureText: "关闭 Ollama 失败",
-        successText: "Ollama 已关闭",
-      });
-    } finally {
-      setOllamaStopping(false);
-      ollamaStoppingRef.current = false;
-    }
-    // 停止后重新探测，状态行回到「未运行」
-    if (llmBaseUrl) await probeOllama(llmBaseUrl);
-  }, [llmBaseUrl, probeOllama, showFlash]);
 
   /* ── 保存 ───────────────────────────────────────────────── */
   /** 把给定草稿落库。远程模型的添加 / 编辑 / 移除即时保存也走这里；
@@ -946,9 +818,9 @@ export function useSettingsPage(): SettingsPageController {
     openExternalUrl,
     comfyLog: { ...comfyLog, active: comfyLogActive },
     dbStudioLog,
-    ollamaLog: { ...ollamaLog, active: ollamaLogActive },
+    ollamaLog,
     ollamaStopping,
-    stopOllama: stopOllamaFn,
+    stopOllama,
     saving,
     saveLlm,
     savePrefs,
