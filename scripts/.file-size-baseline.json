@@ -8,7 +8,7 @@
   "files": {
     "src/app/(main)/settings/hooks/use-settings-page.ts": 1450,
     "src/components/studio/logs/LogPanel.tsx": 740,
-    "src/components/studio/logs/log-store.ts": 1557,
+    "src/components/studio/logs/log-store.ts": 832,
     "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": 957,
     "src/components/studio/workflow-io.ts": 1025,
     "src/components/workshop/hooks/use-workshop-pipeline.ts": 1074,
