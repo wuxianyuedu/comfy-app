@@ -19,17 +19,10 @@ import { useExternalAction } from "~/components/ui/use-external-action";
  * 而 `app-settings.ts` 顶层 import fs —— 走那条路会让设置页整页 500（ISSUE #282/#317）。 */
 import { COMFYUI_DEFAULT_PORT } from "~/lib/endpoints";
 import { runAsyncAction } from "~/lib/async-action";
-import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 import { errorMessage, rawErrorDetail } from "~/lib/error-message";
 import { sleep } from "~/lib/with-timeout";
-import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
-import {
-  checkAppUpdate as checkAppUpdateClient,
-  downloadAndInstallUpdate,
-  relaunchApp as relaunchAppClient,
-} from "~/lib/shell/app-update-client";
 import { parseOllamaLogText } from "~/lib/log/log-ansi";
 import { postAppRuntimeLog } from "~/lib/log/log-file-client";
 import {
@@ -55,6 +48,8 @@ import {
 import { api } from "~/trpc/react";
 
 import { useRuntimeLogSource } from "./use-runtime-log-source";
+import { useSettingsAppUpdate } from "./use-settings-page-app-update";
+import { useSettingsDbStudio } from "./use-settings-page-db-studio";
 
 /* 类型与共享叶子（`use-settings-page-types`）拆到独立文件,消费者 `from
  * "./use-settings-page"` 的路径**完全不变**（§12.18 复用优先）。 */
@@ -149,22 +144,12 @@ export function useSettingsPage(): SettingsPageController {
   const { theme, setTheme } = useTheme();
   const [saving, setSaving] = useState(false);
 
-  /* 应用自更新：检测 / 下载安装的进行态与结果。运算放 lib/app-update-client，
-   * 这里只记 UI 需要的暂态（夹在壳交互与视图中层）。 */
-  const [appUpdateBusy, setAppUpdateBusy] = useState<
-    "idle" | "checking" | "installing"
-  >("idle");
-  /* 检测 / 下载安装的单飞闸门（规范 16 §16.2.4.69）：两者共用一把 ——
-   * 「检测中」时点「安装」会读到还没提交的 `idle`，于是并发发出去。 */
-  const appUpdateLock = useReentrancyLock();
-  const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
-  const [appUpdateVersion, setAppUpdateVersion] = useState<string | null>(null);
-  const [appUpdateCurrent, setAppUpdateCurrent] = useState<string | null>(null);
-  const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null);
-  const [appUpdateProgress, setAppUpdateProgress] = useState<{
-    downloaded: number;
-    total?: number;
-  } | null>(null);
+  /* 应用自更新：检测 / 下载安装 / 重启的三个动作与其全部暂态沉在
+   * `./use-settings-page-app-update` sub-hook 里；主 hook 只调一次、把
+   * 返回值直接接进 controller 的 `appUpdate / checkAppUpdate /
+   * installAppUpdate / relaunchApp` 四个字段。 */
+  const { appUpdate, checkAppUpdate, installAppUpdate, relaunchApp } =
+    useSettingsAppUpdate();
 
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
@@ -239,17 +224,7 @@ export function useSettingsPage(): SettingsPageController {
   const comfyOpenM = api.setting.comfyOpen.useMutation();
   const [comfyStopping, setComfyStopping] = useState(false);
   const [comfyOpening, setComfyOpening] = useState(false);
-  /* Drizzle Studio：状态查询 + 启动/关闭/打开动作（enabled 门控同 comfyStatus） */
-  const dbStudioStatusQ = api.setting.dbStudioStatus.useQuery(undefined, {
-    refetchInterval: 15_000,
-    enabled: statusQueriesEnabled,
-  });
-  const dbStudioStartM = api.setting.dbStudioStart.useMutation();
-  const dbStudioStopM = api.setting.dbStudioStop.useMutation();
-  const dbStudioOpenM = api.setting.dbStudioOpen.useMutation();
   const openExternalM = api.setting.openExternal.useMutation();
-  const [dbStudioStarting, setDbStudioStarting] = useState(false);
-  const [dbStudioStopping, setDbStudioStopping] = useState(false);
   const [ollamaStopping, setOllamaStopping] = useState(false);
 
   /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
@@ -534,46 +509,19 @@ export function useSettingsPage(): SettingsPageController {
     });
   }, [openComfyInBrowserAction, comfyOpenM, comfyStatusQ]);
 
-  /* ── Drizzle Studio 启动 / 关闭 / 打开 ─────────────────── */
-  const startDbStudio = useCallback(async () => {
-    setDbStudioStarting(true);
-    try {
-      await runAsyncAction(
-        async () => {
-          const result = await dbStudioStartM.mutateAsync();
-          await dbStudioStatusQ.refetch();
-          return result;
-        },
-        { report: showFlash, failureText: "启动 Drizzle Studio 失败" },
-      );
-    } finally {
-      setDbStudioStarting(false);
-    }
-  }, [dbStudioStartM, dbStudioStatusQ, showFlash]);
-
-  const stopDbStudio = useCallback(async () => {
-    setDbStudioStopping(true);
-    try {
-      await runAsyncAction(
-        async () => {
-          const result = await dbStudioStopM.mutateAsync();
-          await dbStudioStatusQ.refetch();
-          return result;
-        },
-        { report: showFlash, failureText: "关闭 Drizzle Studio 失败" },
-      );
-    } finally {
-      setDbStudioStopping(false);
-    }
-  }, [dbStudioStopM, dbStudioStatusQ, showFlash]);
-
-  const openDbStudioAction = useExternalAction({
-    target: "browser",
-    report: showFlash,
-  });
-  const openDbStudio = useCallback(async () => {
-    await openDbStudioAction.run(() => dbStudioOpenM.mutateAsync());
-  }, [openDbStudioAction, dbStudioOpenM]);
+  /* ── Drizzle Studio：状态查询 + 启动 / 关闭 / 打开 + 运行时日志 ──
+   * 状态与动作沉在 sub-hook；enabled 门控与 comfyStatus 同口径（首屏两份配置
+   * 就绪前不发探测）。返回形状逐字段展开到 controller。 */
+  const {
+    dbStudioStatus,
+    dbStudioStarting,
+    dbStudioStopping,
+    dbStudioOpening,
+    dbStudioLog,
+    startDbStudio,
+    stopDbStudio,
+    openDbStudio,
+  } = useSettingsDbStudio({ statusQueriesEnabled, showFlash });
 
   /** 用系统默认浏览器打开生成的远程资源（视频 / 公网图片等）。
    *  桌面壳内 target=_blank 外链打不开，统一走服务端 openExternal。 */
@@ -590,46 +538,6 @@ export function useSettingsPage(): SettingsPageController {
     [openExternalAction, openExternalM],
   );
 
-  /* ── 应用自更新（Tauri updater + process）──────────────── */
-  const checkAppUpdate = useCallback(async () => {
-    /* 重入判据走唯一出口（规范 16 §16.2.4.69）：读 `appUpdateBusy` 是同一次
-     * 事件循环里判不出的（`setAppUpdateBusy` 是异步落状态的）。 */
-    if (!appUpdateLock.tryEnter()) return;
-    setAppUpdateBusy("checking");
-    setAppUpdateMessage(null);
-    const result = await checkAppUpdateClient();
-    setAppUpdateBusy("idle");
-    setAppUpdateAvailable(result.available);
-    setAppUpdateVersion(result.update?.version ?? null);
-    setAppUpdateCurrent(result.update?.currentVersion ?? null);
-    setAppUpdateMessage(result.detail);
-    appUpdateLock.exit();
-  }, [appUpdateLock]);
-
-  const installAppUpdate = useCallback(async () => {
-    if (!appUpdateLock.tryEnter()) return;
-    setAppUpdateBusy("installing");
-    setAppUpdateMessage(null);
-    setAppUpdateProgress({ downloaded: 0 });
-    const result = await downloadAndInstallUpdate((downloaded, total) => {
-      setAppUpdateProgress({ downloaded, total });
-    });
-    setAppUpdateBusy("idle");
-    setAppUpdateProgress(null);
-    // 安装成功后应用通常会退出重启；失败时把可读错误透给用户。
-    setAppUpdateMessage(
-      result.triggered ? "更新已安装，应用即将重启…" : result.detail,
-    );
-    appUpdateLock.exit();
-  }, [appUpdateLock]);
-
-  const relaunchApp = useCallback(async () => {
-    const result = await relaunchAppClient();
-    if (!result.ok) {
-      setAppUpdateMessage(result.detail);
-    }
-  }, []);
-
   /* ── 常驻服务启动日志（ComfyUI / Drizzle Studio / Ollama）─────────────
    * 三条通道都是「追加不轮转」的文件（多次启动的行混在一起），服务端按会话
    * 横幅切分后回「会话列表 + 选中会话正文」，见 use-runtime-log-source。
@@ -638,12 +546,6 @@ export function useSettingsPage(): SettingsPageController {
   const comfyLog = useRuntimeLogSource({
     source: "comfyui-runtime",
     active: comfyLogActive,
-  });
-  const dbStudioLogActive =
-    dbStudioStarting || !!dbStudioStatusQ.data?.starting;
-  const dbStudioLog = useRuntimeLogSource({
-    source: "drizzle-studio-runtime",
-    active: dbStudioLogActive,
   });
   const ollamaLogActive = ollamaStarting || ollamaStatus === "starting";
   const ollamaLog = useRuntimeLogSource({
@@ -970,7 +872,6 @@ export function useSettingsPage(): SettingsPageController {
   }, [settingsQ, llmQ]);
 
   const comfy = comfyStatusQ.data;
-  const dbStudio = dbStudioStatusQ.data;
 
   /* 两份草稿齐了才算「可渲染表单」；只有一份时仍走错误/加载态，避免
    * 半份草稿导致视图里到处判空。 */
@@ -1035,22 +936,16 @@ export function useSettingsPage(): SettingsPageController {
     stopComfy,
     openComfy,
     openComfyInBrowser,
-    dbStudioStatus: dbStudio
-      ? {
-          up: !!dbStudio.up,
-          starting: !!dbStudio.starting,
-          port: dbStudio.port ?? 4983,
-        }
-      : null,
+    dbStudioStatus,
     dbStudioStarting,
     dbStudioStopping,
-    dbStudioOpening: openDbStudioAction.busy,
+    dbStudioOpening,
     startDbStudio,
     stopDbStudio,
     openDbStudio,
     openExternalUrl,
     comfyLog: { ...comfyLog, active: comfyLogActive },
-    dbStudioLog: { ...dbStudioLog, active: dbStudioLogActive },
+    dbStudioLog,
     ollamaLog: { ...ollamaLog, active: ollamaLogActive },
     ollamaStopping,
     stopOllama: stopOllamaFn,
@@ -1060,15 +955,7 @@ export function useSettingsPage(): SettingsPageController {
     flash: flashLatch.value,
     dismissFlash: flashLatch.reset,
     setTaskTemperature,
-    appUpdate: {
-      inShell: isDesktopShell(),
-      busy: appUpdateBusy,
-      available: appUpdateAvailable,
-      version: appUpdateVersion,
-      currentVersion: appUpdateCurrent,
-      message: appUpdateMessage,
-      progress: appUpdateProgress,
-    },
+    appUpdate,
     checkAppUpdate,
     installAppUpdate,
     relaunchApp,
