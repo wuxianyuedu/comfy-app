@@ -178,7 +178,7 @@ Reviewer 按以下维度逐项检查，而非只"看能不能跑"：
 ✅ vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
    # core 出口纪律与基类纯度（见 18 §18.8）
 ✅ node scripts/render-doc-placeholders.cjs --check # 生成态 docs/generated 与源一致（见下 13.5.5）
-✅ node scripts/check-non-null-assertions.cjs # src/lib `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
+✅ node scripts/check-non-null-assertions.cjs # src `!` 计数棘轮（见下 13.5.6 / 18 §18.6）
 ```
 
 > **本地钩子没接、也不打算接的判据**（`test:coverage` / `build` /
@@ -416,26 +416,35 @@ guard.js` 被格式化后，在 #619 的合并提交里落成了「纯格式化�
 归一到 LF —— 这条判据问的是「内容是否一致」，行尾由 `.gitattributes` 与 §13.7 负责，
 两件事不混在一处。
 
-#### 13.5.6 src/lib 非空断言 `!` 棘轮（`node scripts/check-non-null-assertions.cjs`）
+#### 13.5.6 src 非空断言 `!` 棘轮（`node scripts/check-non-null-assertions.cjs`）
 
-本轮类型安全审查 src/lib 报告 Low 段收尾。**为什么不直接开 eslint
-`@typescript-eslint/no-non-null-assertion`**：lib 里现在 102 处 `!` 分两族——
-13 处「filter/map 不 narrow 病灶」（本轮 6 个 PR 已消化）与 ~89 处
-`arr[i]!` / `match[N]!`（`noUncheckedIndexedAccess` 打开后的**合法惯用法**，
-把 `lines[i]` 从 `string | undefined` 收回到 `string`，配合外层长度判据）。
-直接开规则一次会报 100+ 处，评审看下来全是"这里其实合理"的噪声；不开规则
-又挡不住下一轮病灶长出。
+本轮类型安全审查 src/lib 报告 Low 段收尾，v2 起扫描范围从 src/lib 扩到整个 src。
+**为什么不直接开 eslint `@typescript-eslint/no-non-null-assertion`**：lib 侧
+102 处 `!` 分两族——13 处「filter/map 不 narrow 病灶」（本轮 6 个 PR 已消化）
+与 ~89 处 `arr[i]!` / `match[N]!`（`noUncheckedIndexedAccess` 打开后的**合法
+惯用法**，把 `lines[i]` 从 `string | undefined` 收回到 `string`，配合外层长度
+判据）。直接开规则一次会报 100+ 处，评审看下来全是"这里其实合理"的噪声；不
+开规则又挡不住下一轮病灶长出。
 
-合理路径是**基线棘轮**（与 §12.12 代码重复、§12.13 函数长度同构）：判据走
-TypeScript AST 的 `ts.isNonNullExpression`（不用正则——正则会把 `!==` /
-`!x` / 注释里的 `!` 全误伤），只扫 src/lib 下的 .ts/.tsx 非测试文件；把当前
-102 记成 `scripts/.non-null-assertions-baseline.json`，**只挡每个文件的**
-新增、允许逐步下降。修完一批就 `--update` 收紧基线。
+**为什么扫描范围要扩到整个 src**：lib 侧立了基线、components / app / server
+不管，等于给病灶留了一条**漂移通道**——写视图侧的 `!` 门不会响。v1 的 102 只
+算 lib；v2 首跑覆盖到 `src/components` 里 `use-settings-page.ts` 之类热区，
+一次落到 **225 处 / 85 文件** 的新基线。判据与语义完全一致，只是「量的定义」
+变了，`RULE_VERSION` 从 1 升到 2；`--update` 会拒绝旧基线（版本对不上即拒），
+必须显式承认「范围扩了、量重记」才能重建。
+
+合理机制是**基线棘轮**（与 §12.12 代码重复、§12.13 函数长度同构）：判据走
+TypeScript AST 的 `ts.isNonNullExpression`（不用正则——正则会把 `!==` / `!x`
+/ 注释里的 `!` 全误伤），扫描 src 下的 .ts/.tsx 非测试文件（测试里
+`expect(x!.field)` 是常见形态，`.d.ts` 是类型声明，一并豁免）；基线
+`scripts/.non-null-assertions-baseline.json` 记**每文件**当前计数，**只挡**
+**新增**、允许逐步下降。修完一批就 `--update` 收紧基线。
 
 `RULE_VERSION` 常量：目前只认 `NonNullExpression` 一种形态；将来若把
-`<T>x!` / `x?.y!` 之类扩展形态纳入，必须同步改这个常数——旧基线与新计数
-**不是同一个量**，`--update` 会拒绝放宽（除非版本已改），防止「顺手把基线
-调大」的后门。判据排在 `.githooks/pre-commit` 第 28 步（浮层刻度是 27）。
+`<T>x!` / `x?.y!` 之类扩展形态纳入，或**再一次调整扫描范围**，必须同步改这
+个常数——旧基线与新计数**不是同一个量**，`--update` 会拒绝放宽（除非版本已
+改），防止「顺手把基线调大」的后门。判据排在 `.githooks/pre-commit` 第 28
+步（浮层刻度是 27）。
 
 ### 13.6 分支与合并策略
 

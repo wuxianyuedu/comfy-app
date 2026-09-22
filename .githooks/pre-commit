@@ -240,15 +240,18 @@ node scripts/render-doc-placeholders.cjs --check || exit 1
 echo "[pre-commit] 27/28 浮层层级刻度棘轮"
 node scripts/check-overlay-z.cjs || exit 1
 
-# 2026-09-21(类型安全审查 src/lib 报告 · Low 段收尾): src/lib 非空断言 `!` 计数棘轮。
+# 2026-09-21(类型安全审查 src/lib 报告 · Low 段收尾): src 非空断言 `!` 计数棘轮。
 # 审计已把「filter 返回 boolean 不 narrow、map 里靠 `!` 兜住」这一族 13 处病灶
-# 全部消化(PR-1/2/5/8/12);但 lib 里还有 ~89 处 `arr[i]!` / `match[N]!` 是
+# 全部消化(PR-1/2/5/8/12);lib 里还有一批 `arr[i]!` / `match[N]!` 是
 # `noUncheckedIndexedAccess` 打开后的合法惯用法。直接开 eslint `no-non-null-assertion`
-# 会一次报 102 处、远超类型审计边界。合理路径是**棘轮基线**:把当前 102 记成
-# 基线,只挡**新增**、允许逐步下降。与 check-function-length (§12.13) /
+# 会一次报几百处、远超类型审计边界。合理路径是**棘轮基线**:把当前每文件计数
+# 记成基线,只挡**新增**、允许逐步下降。与 check-function-length (§12.13) /
 # check-code-duplication (§12.12) 的机制同构。判据走 TypeScript AST
 # (`ts.isNonNullExpression`),不用正则,避免误伤 `!==` / `!x` / 注释里的 `!`。
-echo "[pre-commit] 28/28 src/lib 非空断言棘轮"
+# v2 (同一日):扫描范围从 src/lib 扩到整个 src —— 只挡 lib、视图/服务端不管
+# 等于给病灶留漂移通道。RULE_VERSION 从 1 升到 2,旧基线与新量对不上、`--update`
+# 会拒绝;这是「调整量 = 改常数」纪律的第一次执行。
+echo "[pre-commit] 28/28 src 非空断言棘轮"
 node scripts/check-non-null-assertions.cjs || exit 1
 
 echo "[pre-commit] 全部通过 ✓"
