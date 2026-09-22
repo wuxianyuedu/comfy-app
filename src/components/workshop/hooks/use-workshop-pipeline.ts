@@ -5,7 +5,7 @@
 
 import React from "react";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
-import { nextId } from "~/lib/unique-id";
+import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import {
@@ -19,9 +19,7 @@ import {
 } from "~/lib/workshop/generation-client";
 import {
   fetchServerDraft,
-  fetchServerDraftList,
   pushServerDraft,
-  deleteServerDraft,
 } from "~/lib/workshop/draft-sync-client";
 import {
   draftHasContent,
@@ -53,24 +51,18 @@ import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import { emptyProject } from "~/lib/workshop/script-parser";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import { errorMessage } from "~/lib/error-message";
-import {
-  readStorageItem,
-  removeStorageItem,
-  writeStorageJson,
-} from "~/lib/browser-storage";
+import { readStorageItem, writeStorageJson } from "~/lib/browser-storage";
 import {
   useCharacterPortrait,
   type PortraitSession,
   type PortraitSessionActions,
 } from "./use-character-portrait";
 
-/* ── 工坊项目存储层（单草稿 → 多项目可切换） ──
+/* ── 工坊草稿存储层（Phase 2：并入统一 proj_* 项目） ──
  *
- *  索引（项目列表 + 当前项目 id）单独存一个键，每个项目的正文按 id 各存一个键。
- *  这样切换项目只读当前那份草稿，不必把全部项目正文都解析一遍。
- *  旧版只有一个固定键的单草稿，首次升级时会被收编成项目 #1，老用户不丢内容。 */
-const PROJECTS_INDEX_KEY = "comfyapp.workshop.projects.v1";
-const LEGACY_DRAFT_KEY = "comfyapp.workshop.draft.v1";
+ *  工坊不再是独立的多项目体系：当前项目 = 画布活跃 proj_*（getActiveId），
+ *  草稿按 proj_* 各存一个键，服务端镜像 workshopDraft 也以 proj_* 为主键。
+ *  项目的新建 / 切换 / 删除统一在首页（canvas-store）发生，工坊只跟随所在项目。 */
 
 /* 默认项目元信息不在视图层写一份：`emptyProject()` 是「新项目的初始 meta」
  *  的唯一出处（工坊 `script-parser`），这里照抄一份就是同一件事的两个名字 ——
@@ -91,17 +83,6 @@ interface WorkshopDraft {
    *  字段与生图分开 —— 两类工作流的对外参数口径不同（生图无首帧、视频有），
    *  共用一个 id 会互相串味。 */
   videoWorkflowId: string;
-}
-
-/** 项目摘要：切换器只需要这几个字段，正文按 id 另读。 */
-export interface WorkshopProjectSummary {
-  id: string;
-  title: string;
-  updatedAt: string;
-}
-interface WorkshopProjectsIndex {
-  activeId: string;
-  items: WorkshopProjectSummary[];
 }
 
 function emptyDraft(): WorkshopDraft {
@@ -143,12 +124,6 @@ function draftKeyFor(id: string): string {
   return `comfyapp.workshop.draft.${id}.v1`;
 }
 
-function newProjectId(): string {
-  /* 工坊项目 id 走全库唯一出口（规范 16 §16.2.4.36）。这是**持久化**的 id ——
-   * 它落在项目索引里，撞 id 的表现是「新建项目覆盖掉另一个项目」。 */
-  return nextId("wsp_");
-}
-
 /** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。 */
 function parseDraft(raw: string | null): WorkshopDraft {
   if (!raw) return emptyDraft();
@@ -180,62 +155,21 @@ function writeDraft(id: string, draft: WorkshopDraft): void {
   writeStorageJson(draftKeyFor(id), { v: 1, ...draft });
 }
 
-function saveProjectsIndex(index: WorkshopProjectsIndex): void {
-  /* 存储满 / 隐私模式：静默失败。 */
-  writeStorageJson(PROJECTS_INDEX_KEY, index);
-}
-
-/** 读取项目索引。索引不存在时把旧版单草稿迁移为第一个项目。 */
-function loadProjectsIndex(): WorkshopProjectsIndex {
-  const freshIndex = (draft: WorkshopDraft): WorkshopProjectsIndex => {
-    const id = newProjectId();
-    writeDraft(id, draft);
-    const index: WorkshopProjectsIndex = {
-      activeId: id,
-      items: [
-        { id, title: draft.meta.title, updatedAt: new Date().toISOString() },
-      ],
-    };
-    saveProjectsIndex(index);
-    return index;
-  };
-  const raw = readStorageItem(PROJECTS_INDEX_KEY);
-  if (raw === null) {
-    /* 首次升级：旧单草稿收编成项目 #1 —— 老用户不会丢内容。 */
-    return freshIndex(parseDraft(readStorageItem(LEGACY_DRAFT_KEY)));
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<WorkshopProjectsIndex>;
-    const items = Array.isArray(parsed.items) ? parsed.items : [];
-    if (items.length === 0) return freshIndex(emptyDraft());
-    const activeId = items.some((item) => item.id === parsed.activeId)
-      ? parsed.activeId!
-      : items[0]!.id;
-    return { activeId, items };
-  } catch {
-    return freshIndex(emptyDraft());
-  }
-}
-
-/** 页面加载期间只读一次 localStorage（多个 state 惰性初始化器共用）。 */
-let projectsCache: WorkshopProjectsIndex | undefined;
-function loadProjectsOnce(): WorkshopProjectsIndex {
-  projectsCache ??= loadProjectsIndex();
-  return projectsCache;
-}
+/** 页面加载期间只读一次 localStorage（多个 state 惰性初始化器共用）。
+ *  工坊当前项目 = 画布活跃 proj_*（getActiveId）；Phase 1 闸门保证进入工坊时
+ *  已有活跃项目，异常无活跃项目时返回 null，state 落默认值。 */
 let workshopDraftCache: WorkshopDraft | null | undefined;
 function loadWorkshopDraftOnce(): WorkshopDraft | null {
-  /* invalidateDraftCache() 卸载/切项目时把缓存置 null 标记“需从 localStorage 重读”。
-   * 这里须用 ??=（null / undefined 都重读），若原先 === undefined 的判空，置 null 后的
-   * 重挂载会跳过重读直接返回 null → 剧本内容恢复成空（切页签即丢）。 */
-  workshopDraftCache ??= readDraft(loadProjectsOnce().activeId);
+  /* invalidateDraftCache() 卸载时把缓存置 null 标记「需从 localStorage 重读」，
+   * 这里须用 ??=（null / undefined 都重读），否则重挂载读回旧缓存 → 切页签丢内容。 */
+  const pid = getActiveId();
+  if (!pid) return null;
+  workshopDraftCache ??= readDraft(pid);
   return workshopDraftCache;
 }
 
 /** 本浏览器会话内已做过一次「服务端镜像回填」的项目集合（避免热重挂载反复拉取）。 */
 const serverRecoveredIds = new Set<string>();
-/** 是否已把服务端项目列表并回本地索引（会话级只做一次）。 */
-let serverListRecovered = false;
 
 /** /api/skills 返回 payload：用于在 fetch 边界收窄，消除 any 散落。 */
 type SkillsApiResponse = {
@@ -371,13 +305,8 @@ export interface WorkshopPipelineController {
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
   dismissNotice: () => void;
   markRendered: () => void;
-  /* ── 多项目：工坊可在多个项目间切换 ── */
-  projects: WorkshopProjectSummary[];
+  /* ── 所在项目（Phase 2：并入统一 proj_*，工坊不再自建多项目） ── */
   activeProjectId: string;
-  switchProject: (id: string) => void;
-  createProject: (title?: string) => void;
-  renameProject: (id: string, title: string) => void;
-  deleteProject: (id: string) => void;
 }
 
 /** 创建一个收在 controller 的提取会话（state + 稳定动作）。
@@ -492,12 +421,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
   const [isScriptEditorOpen, setIsScriptEditorOpen] = React.useState(false);
 
-  /* ── 多项目：索引与当前项目 id ── */
-  const [projectsIndex, setProjectsIndex] =
-    React.useState<WorkshopProjectsIndex>(() => loadProjectsOnce());
-  const [activeProjectId, setActiveProjectId] = React.useState<string>(
-    () => loadProjectsOnce().activeId,
-  );
+  /* ── 所在项目：= 画布活跃 proj_*（Phase 2 并入统一项目）。工坊内不切项目，
+   *  切换在首页发生 → 重挂载时按新的 getActiveId 读对应草稿。 ── */
+  const [activeProjectId] = React.useState<string>(() => getActiveId() ?? "");
 
   // ── 角色定妆照会话（同提取会话：由 controller 常驻，切页签不丢进度；
   //    候选写在角色对象上，随草稿持久化）──
@@ -505,18 +431,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setCharacters,
     projectId: activeProjectId,
   });
-
-  /** 定妆照任务期间禁止换项目。
-   *
-   *  换项目会用目标项目的草稿替换 `characters`，发起时那张角色卡已不在列表里，
-   *  在途的结果只能丢弃 —— 而一次本机定妆照要跑几分钟，白跑不可接受。故拦下并
-   *  给出可见出口（notice），而不是让项目切换器无声失效。
-   *  返回 true 表示已拦下（调用方直接 return）。 */
-  const blockedByPortraitTask = React.useCallback((): boolean => {
-    if (!characterPortrait.busy && !characterPortrait.importing) return false;
-    setNotice("定妆照正在生成，请等这一次跑完再切换项目");
-    return true;
-  }, [characterPortrait.busy, characterPortrait.importing]);
 
   /** 当前全部可持久化内容（落盘、切换前保存都用它）。 */
   const currentDraft = React.useCallback(
@@ -554,157 +468,17 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   /* 最新项目 id / 草稿的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。 */
   const activeProjectRef = React.useRef(activeProjectId);
   const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
-  const projectsIndexRef = React.useRef(projectsIndex);
   React.useEffect(() => {
     activeProjectRef.current = activeProjectId;
     latestDraftRef.current = currentDraft();
-    projectsIndexRef.current = projectsIndex;
   });
 
-  /** 切换 / 增删项目后：让模块级缓存失效，避免组件重挂载时读回旧的当前项目。 */
+  /** 卸载时让模块级草稿缓存失效，避免组件重挂载时读回旧的当前项目草稿。 */
   const invalidateDraftCache = () => {
     workshopDraftCache = null;
-    projectsCache = undefined;
   };
 
-  /** 把当前项目的标题与更新时间快照进索引（切换、新建前调用）。 */
-  const snapshotActiveInto = React.useCallback(
-    (items: WorkshopProjectSummary[]): WorkshopProjectSummary[] =>
-      items.map((item) =>
-        item.id === activeProjectId
-          ? { ...item, title: meta.title, updatedAt: new Date().toISOString() }
-          : item,
-      ),
-    [activeProjectId, meta.title],
-  );
-
-  const switchProject = React.useCallback(
-    (id: string) => {
-      if (id === activeProjectId) return;
-      if (blockedByPortraitTask()) return;
-      /* 先把当前内容同步落盘（localStorage + 服务端）：否则防抖中的定时器醒来会把
-       * 旧内容写到新项目上，且切走前最后一改若未及服务端可能在崩溃时丢失。 */
-      const outgoing = currentDraft();
-      writeDraft(activeProjectId, outgoing);
-      void pushServerDraft(activeProjectId, outgoing);
-      const next: WorkshopProjectsIndex = {
-        activeId: id,
-        items: snapshotActiveInto(projectsIndex.items),
-      };
-      saveProjectsIndex(next);
-      setProjectsIndex(next);
-      setActiveProjectId(id);
-      invalidateDraftCache();
-      const localDraft = readDraft(id);
-      applyDraft(localDraft);
-      /* 目标项目本地为空但服务端有镜像（例如清缓存后重建的项目）→ 异步回填。 */
-      if (draftIsEmpty(localDraft) && !serverRecoveredIds.has(id)) {
-        serverRecoveredIds.add(id);
-        void fetchServerDraft(id).then((serverDraft) => {
-          if (serverDraft && draftHasContent(serverDraft)) {
-            const draft = dtoToDraft(serverDraft);
-            writeDraft(id, draft);
-            workshopDraftCache = draft;
-            // 仅当仍停留在该项目时才应用，避免把用户刚切走后的内容覆盖。
-            if (activeProjectRef.current === id) applyDraft(draft);
-          }
-        });
-      }
-    },
-    [
-      activeProjectId,
-      currentDraft,
-      projectsIndex.items,
-      snapshotActiveInto,
-      applyDraft,
-      blockedByPortraitTask,
-    ],
-  );
-
-  const createProject = React.useCallback(
-    (title?: string) => {
-      /* 新建项目同样会把 activeId 切到新项目（见 blockedByPortraitTask）。 */
-      if (blockedByPortraitTask()) return;
-      const outgoing = currentDraft();
-      writeDraft(activeProjectId, outgoing);
-      void pushServerDraft(activeProjectId, outgoing);
-      const id = newProjectId();
-      const trimmed = title?.trim();
-      const projectTitle =
-        trimmed && trimmed.length > 0 ? trimmed : DEFAULT_META.title;
-      const draft: WorkshopDraft = {
-        ...emptyDraft(),
-        meta: { ...DEFAULT_META, title: projectTitle },
-      };
-      writeDraft(id, draft);
-      const next: WorkshopProjectsIndex = {
-        activeId: id,
-        items: [
-          ...snapshotActiveInto(projectsIndex.items),
-          { id, title: draft.meta.title, updatedAt: new Date().toISOString() },
-        ],
-      };
-      saveProjectsIndex(next);
-      setProjectsIndex(next);
-      setActiveProjectId(id);
-      invalidateDraftCache();
-      applyDraft(draft);
-    },
-    [
-      activeProjectId,
-      currentDraft,
-      projectsIndex.items,
-      snapshotActiveInto,
-      applyDraft,
-      blockedByPortraitTask,
-    ],
-  );
-
-  const renameProject = React.useCallback(
-    (id: string, title: string) => {
-      const nextTitle = title.trim();
-      if (!nextTitle) return;
-      const next: WorkshopProjectsIndex = {
-        ...projectsIndex,
-        items: projectsIndex.items.map((item) =>
-          item.id === id ? { ...item, title: nextTitle } : item,
-        ),
-      };
-      saveProjectsIndex(next);
-      setProjectsIndex(next);
-      /* 改的是当前项目时，正文里的标题也要跟着变。 */
-      if (id === activeProjectId) setMeta((m) => ({ ...m, title: nextTitle }));
-    },
-    [projectsIndex, activeProjectId],
-  );
-
-  const deleteProject = React.useCallback(
-    (id: string) => {
-      /* 至少保留一个项目，避免工坊变成没有可编辑对象的空壳。 */
-      if (projectsIndex.items.length <= 1) return;
-      /* 删掉的若是当前项目，activeId 会跳到别的项目（同样替换 characters）：
-       * 与切换同口径拦下；删别的项目不动当前项目，不必拦。 */
-      if (id === projectsIndex.activeId && blockedByPortraitTask()) return;
-      const items = projectsIndex.items.filter((item) => item.id !== id);
-      let activeId = projectsIndex.activeId;
-      if (activeId === id) {
-        activeId = items[0]!.id;
-        applyDraft(readDraft(activeId));
-        setActiveProjectId(activeId);
-      }
-      /* 隐私模式下可能直接抛错 —— 删除也已静默（§16.2.4.28）。 */
-      removeStorageItem(draftKeyFor(id));
-      void deleteServerDraft(id);
-      const next: WorkshopProjectsIndex = { activeId, items };
-      saveProjectsIndex(next);
-      setProjectsIndex(next);
-      invalidateDraftCache();
-    },
-    [projectsIndex, applyDraft, blockedByPortraitTask],
-  );
-
-  /* 自动保存只写当前项目的键；索引里的标题在切换 / 新建时快照，
-   * 因此这里不需要动 React state，也就不会自触发形成回环。 */
+  /* 自动保存只写当前项目的键；因此这里不需要动 React state，也就不会自触发形成回环。 */
   React.useEffect(() => {
     const timer = setTimeout(() => {
       const draft = currentDraft();
@@ -732,60 +506,30 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     // 仅在卸载时执行一次
   }, []);
 
-  /* 挂载回填：把服务端 db.sqlite 里的项目镜像找回来，防 localStorage 被清后丢内容。
-   * 只做两件事，都不覆盖用户进行中的编辑：
-   *  1) 本地索引缺的云端项目补进索引（清空 localStorage 后仍能找到旧项目）；
-   *  2) 当前项目本地为空但云端有内容时，用云端内容恢复当前项目。
-   * 同会话只执行一次（热重挂载由上面的卸载兜底保存保住了 localStorage）。 */
+  /* 挂载回填：当前项目本地为空、但服务端 db.sqlite 有镜像（清缓存 / 换设备后）时，
+   * 用云端内容恢复当前项目，不覆盖进行中的编辑。同会话只执行一次
+   *（热重挂载由上面的卸载兜底保存保住了 localStorage）。 */
   React.useEffect(() => {
     void (async () => {
       const activeId = activeProjectRef.current;
+      if (!activeId) return;
+      if (serverRecoveredIds.has(activeId)) return;
+      serverRecoveredIds.add(activeId);
+      if (!draftIsEmpty(latestDraftRef.current)) return;
       try {
-        const summaries = await fetchServerDraftList();
-        if (summaries.length > 0 && !serverListRecovered) {
-          serverListRecovered = true;
-          // 基于最新已提交的索引(经 ref 读,避免闭包陈旧 state)做纯合并,
-          // 副作用(落盘/缓存)留在 setState 之外——updater 必须是纯函数,
-          // 渲染期写 localStorage / 外部缓存会触发 "update during render" 告警。
-          const prev = projectsIndexRef.current;
-          const known = new Set(prev.items.map((i) => i.id));
-          const missing = summaries.filter((d) => !known.has(d.id));
-          if (missing.length > 0) {
-            const next: WorkshopProjectsIndex = {
-              activeId: prev.activeId,
-              items: [
-                ...prev.items,
-                ...missing.map((d) => ({
-                  id: d.id,
-                  title: d.title,
-                  updatedAt: d.updatedAt,
-                })),
-              ],
-            };
-            saveProjectsIndex(next);
-            projectsCache = next;
-            setProjectsIndex(next);
-          }
+        const serverDraft = await fetchServerDraft(activeId);
+        if (serverDraft && draftHasContent(serverDraft)) {
+          const draft = dtoToDraft(serverDraft);
+          writeDraft(activeId, draft);
+          applyDraft(draft);
+          // 让模块级草稿缓存也指向恢复后的内容，避免再次重挂载读到旧空草稿。
+          workshopDraftCache = draft;
         }
       } catch {
         /* 服务不可用：保持纯本地 */
       }
-
-      if (serverRecoveredIds.has(activeId)) return;
-      serverRecoveredIds.add(activeId);
-
-      const localEmpty = draftIsEmpty(latestDraftRef.current);
-      if (!localEmpty) return;
-      const serverDraft = await fetchServerDraft(activeId);
-      if (serverDraft && draftHasContent(serverDraft)) {
-        const draft = dtoToDraft(serverDraft);
-        writeDraft(activeId, draft);
-        applyDraft(draft);
-        // 让模块级草稿缓存也指向恢复后的内容，避免再次重挂载读到旧空草稿。
-        workshopDraftCache = draft;
-      }
     })();
-    // 仅首挂载执行一次；闭包读取经 ref / 函数式 set，避免陈旧 state
+    // 仅首挂载执行一次；闭包读取经 ref，避免陈旧 state
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1054,11 +798,6 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     handleApiChannelsSaved,
     dismissNotice,
     markRendered,
-    projects: projectsIndex.items,
     activeProjectId,
-    switchProject,
-    createProject,
-    renameProject,
-    deleteProject,
   };
 }
