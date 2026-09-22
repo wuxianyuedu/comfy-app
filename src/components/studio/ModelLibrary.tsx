@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, type CSSProperties } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { checkedHandler, textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
@@ -12,6 +14,7 @@ import { useModelLibrary } from "./hooks/use-model-library";
 import {
   ALL_TYPES,
   type FolderConfigRow as FolderConfigRowData,
+  type ModelRow,
   fmtSize,
 } from "./model-library-config";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -98,52 +101,9 @@ export function ModelLibrary() {
           // 紧凑列表 —— 每行是 [类型药丸][文件名][大小]。
           // 旧的卡片栅格（4 列 + 28px 占位图标 + 重复的 fileName）
           // 太重；对最终只是「一行文件名 + 大小」的这种负载，
-          // N 行画廊可读性好得多。
-          <div
-            role="list"
-            aria-label="模型文件列表"
-            className="border-border-subtle bg-card overflow-hidden rounded-xl border"
-          >
-            {c.filtered.map((m, idx) => {
-              const meta = folderMeta(m.type);
-              const isLast = idx === c.filtered.length - 1;
-              return (
-                <div
-                  key={m.id}
-                  role="listitem"
-                  className={`group hover:bg-subtle flex items-center gap-3 px-3 py-2 transition-colors ${
-                    isLast ? "" : "border-border-subtle border-b"
-                  }`}
-                >
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${meta.color}`}
-                  >
-                    {meta.label}
-                  </span>
-                  <span
-                    className="text-ink-bright) min-w-0 flex-1 truncate font-mono text-sm"
-                    title={m.fileName}
-                  >
-                    {m.fileName}
-                  </span>
-                  {!m.isAvailable && (
-                    <span
-                      className="bg-surface-2 text-ink-faint shrink-0 rounded-md px-1.5 py-0.5 text-[10px]"
-                      title="当前未在 ComfyUI 扫描结果中"
-                    >
-                      不可用
-                    </span>
-                  )}
-                  <span
-                    className="text-ink-muted shrink-0 text-xs tabular-nums"
-                    title="文件大小"
-                  >
-                    {fmtSize(m.fileSize)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          // N 行画廊可读性好得多。行数可能上探到三位数（LoRA/ckpt 混放），
+          // 交给 ModelList 做定高虚拟滚动（量不到视口时退回整页渲染）。
+          <ModelList items={c.filtered} />
         )}
       </div>
 
@@ -155,6 +115,121 @@ export function ModelLibrary() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+const MODEL_ROW_H = 37; // px，单行（truncate 不换行）：py-2 + text-sm 行高 + 1px 分隔
+
+/**
+ * 模型文件列表 —— 定高虚拟滚动（规范 §2.6）。行数上探三位数时只渲染视口内的
+ * 一段，DOM 数量恒定；量不到视口高度（jsdom 不做布局 / 首帧未测量）时退回
+ * 整页渲染 —— 虚拟化是性能优化，绝不能变成「内容看不见」（同 LogPanel 口径）。
+ */
+function ModelList({ items }: { items: ModelRow[] }) {
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  // virtualizer 的读数（getVirtualItems/getTotalSize）只在本组件 render 内消费，
+  // 不外传给被 memo 的子组件，不存在该规则担心的「跨组件陈旧 UI」风险，此告警对本用法是误报。
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => MODEL_ROW_H,
+    overscan: 12,
+  });
+  const measured = (scrollEl?.clientHeight ?? 0) > 0;
+
+  return (
+    <div
+      ref={setScrollEl}
+      role="list"
+      aria-label="模型文件列表"
+      className="border-border-subtle bg-card max-h-[70vh] overflow-auto rounded-xl border"
+    >
+      {measured ? (
+        <div
+          style={{
+            height: virtualizer.getTotalSize(),
+            position: "relative",
+            width: "100%",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((vi) => {
+            const m = items[vi.index];
+            if (!m) return null;
+            return (
+              <ModelRowLine
+                key={vi.key}
+                model={m}
+                isLast={vi.index === items.length - 1}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: vi.size,
+                  transform: `translateY(${vi.start}px)`,
+                }}
+              />
+            );
+          })}
+        </div>
+      ) : (
+        items.map((m, idx) => (
+          <ModelRowLine
+            key={m.id}
+            model={m}
+            isLast={idx === items.length - 1}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function ModelRowLine({
+  model,
+  isLast,
+  style,
+}: {
+  model: ModelRow;
+  isLast: boolean;
+  style?: CSSProperties;
+}) {
+  const meta = folderMeta(model.type);
+  return (
+    <div
+      role="listitem"
+      style={style}
+      className={`group hover:bg-subtle flex items-center gap-3 px-3 py-2 transition-colors ${
+        isLast ? "" : "border-border-subtle border-b"
+      }`}
+    >
+      <span
+        className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${meta.color}`}
+      >
+        {meta.label}
+      </span>
+      <span
+        className="text-ink-bright) min-w-0 flex-1 truncate font-mono text-sm"
+        title={model.fileName}
+      >
+        {model.fileName}
+      </span>
+      {!model.isAvailable && (
+        <span
+          className="bg-surface-2 text-ink-faint shrink-0 rounded-md px-1.5 py-0.5 text-[10px]"
+          title="当前未在 ComfyUI 扫描结果中"
+        >
+          不可用
+        </span>
+      )}
+      <span
+        className="text-ink-muted shrink-0 text-xs tabular-nums"
+        title="文件大小"
+      >
+        {fmtSize(model.fileSize)}
+      </span>
     </div>
   );
 }
