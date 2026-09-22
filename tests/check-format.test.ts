@@ -14,10 +14,10 @@
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -89,10 +89,16 @@ beforeEach(() => {
   // pnpm 形态判据模块按**相对脚本的路径**动态导入（scripts/launcher-core/shell.mjs）：
   // 临时工作区里没有它，缺了就会以 exit 2 结束 —— 那验的是「脚本能不能加载」，
   // 而不是本脚本的棘轮判定。软链一份，与真实布局一致。
-  mkdirSync(join(workdir, "scripts", "launcher-core"), { recursive: true });
-  symlinkSync(
-    join(process.cwd(), "scripts", "launcher-core", "shell.mjs"),
-    join(workdir, "scripts", "launcher-core", "shell.mjs"),
+  // 用 cpSync 递归拷贝整个 launcher-core/ 而不是只链一个 shell.mjs:
+  //   · Windows 下 fs.symlink(文件) 需要开发者模式或管理员,普通用户 100% EPERM
+  //     ——门禁本体 (check-format.cjs) 在 Windows 上完全能跑,红的只是「夹具
+  //     搭不起来」的环境噪声;
+  //   · 单拷 shell.mjs 会漏它的 `./command-echo.mjs` 同级依赖 → 脚本 exit 2。
+  // launcher-core/ 一共 9 个 .mjs、<50 KB,拷一份比维护跨平台软链更省心。
+  cpSync(
+    join(process.cwd(), "scripts", "launcher-core"),
+    join(workdir, "scripts", "launcher-core"),
+    { recursive: true },
   );
   git("init", "-q");
   git("config", "user.email", "t@local");
