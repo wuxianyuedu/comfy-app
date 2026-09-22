@@ -49,7 +49,6 @@ import {
   type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
 import { useProjectPersistence } from "./project-canvas/hooks/use-project-persistence";
-import { useProjectManager } from "./project-canvas/hooks/use-project-manager";
 import { useCanvasConnections } from "./project-canvas/hooks/use-canvas-connections";
 import { useCanvasDrop } from "./project-canvas/hooks/use-canvas-drop";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
@@ -67,7 +66,6 @@ import {
 } from "./ProjectCanvasSettings";
 import { GlobalStepLogPanel } from "./project-canvas/GlobalStepLogPanel";
 import { CanvasContextMenu } from "./project-canvas/CanvasContextMenu";
-import { ProjectSwitcher } from "./project-canvas/ProjectSwitcher";
 import { useRelatedEdgesHighlight } from "./canvas/hooks/use-related-edges-highlight";
 import { ProjectEdge } from "./project-canvas/ProjectEdge";
 import { CanvasToolbar } from "./project-canvas/CanvasToolbar";
@@ -162,54 +160,18 @@ function CanvasInner({
   // 初始项目从存储水合完成前一直是 true。
   // 避免内容加载时闪一下「空画布」提示。
   const [hydrating, setHydrating] = useState(true);
-  /* ── 拆分：持久化三件套 → useProjectPersistence；
-   *  项目 CRUD + 下拉 UI 状态 → useProjectManager；CanvasInner 只留编排与 JSX。
-   *  连线分派 → useCanvasConnections；媒体落地 →
-   *  useCanvasDrop；右键菜单 / 项目切换器 / 工具栏 / 空状态 → 独立组件。 */
-  const { persistNow } = useProjectPersistence({
+  /* ── 持久化三件套 → useProjectPersistence（CanvasInner 只留编排与 JSX）。
+   *  连线分派 → useCanvasConnections；媒体落地 → useCanvasDrop；右键菜单 /
+   *  工具栏 / 空状态 → 独立组件。
+   *  Phase 2b：画布不再有自建项目管理（切换 / 新建 / 重命名 / 删除统一在首页），
+   *  故 useProjectManager 与项目切换器一并移除，这里只保留自动持久化。 ── */
+  useProjectPersistence({
     projectId,
     nodes,
     edges,
     projectName,
     loaded: !hydrating,
   });
-  const projectManager = useProjectManager({
-    getCurrent: () => ({
-      pid: projectIdRef.current,
-      name: projectNameRef.current,
-      nodes: nodesRef.current,
-      edges: edgesRef.current,
-    }),
-    persistNow,
-    setProjectId,
-    setProjectName,
-    setNodes,
-    setEdges,
-    fitView: (...fitViewArgs: Parameters<typeof fitView>) => {
-      fitView(...fitViewArgs).catch(() => {
-        /* noop */
-      });
-    },
-    toast,
-  });
-  const {
-    projects,
-    projMenu,
-    renaming,
-    renameVal,
-    confirmDelete,
-    setProjMenu,
-    setRenaming,
-    setRenameVal,
-    setConfirmDelete,
-    openProjMenu,
-    switchProject,
-    newProject,
-    deleteCurrent,
-    applyDeleteCurrent,
-    startRename,
-    commitRename,
-  } = projectManager;
 
   /* 连线分派 / 媒体拖拽落地（抽离，行为与之前完全一致）。 */
   const { onConnect, onEdgeClick } = useCanvasConnections({
@@ -375,10 +337,6 @@ function CanvasInner({
     downloadJson({ nodes, edges }, `${projectName || "comfy-canvas"}.json`);
   }, [nodes, edges, projectName]);
 
-  /* ── 项目切换动作（已抽入 useProjectManager；含 switchProject、
-   *  newProject、deleteCurrent、applyDeleteCurrent、loadProject、
-   *  startRename、commitRename 等动作）。 ── */
-
   const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), []);
 
   return (
@@ -464,27 +422,6 @@ function CanvasInner({
         />
       </ReactFlow>
 
-      {/* 项目切换器（左上角） */}
-      <div className="z-canvas-ui absolute top-3 left-3">
-        <ProjectSwitcher
-          projectName={projectName}
-          projectId={projectId}
-          projects={projects}
-          menuOpen={projMenu}
-          renaming={renaming}
-          renameVal={renameVal}
-          onToggleMenu={openProjMenu}
-          onCloseMenu={() => setProjMenu(false)}
-          onSwitch={switchProject}
-          onNew={newProject}
-          onStartRename={startRename}
-          onRenameValChange={setRenameVal}
-          onCommitRename={commitRename}
-          onCancelRename={() => setRenaming(false)}
-          onDelete={deleteCurrent}
-        />
-      </div>
-
       {/* 浮动工具栏（居中） */}
       <CanvasToolbar
         onFitView={() => fitView({ padding: 0.2, duration: 400 })}
@@ -520,16 +457,6 @@ function CanvasInner({
       )}
 
       {/* ── 用自定义深色弹窗替换 window.confirm ── */}
-      <ConfirmDialog
-        open={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
-        title="删除此项目？"
-        description={`项目「${projectName}」将被永久删除，连同画布上的所有节点和连线。\n\n此操作不可撤销。`}
-        confirmLabel="删除"
-        cancelLabel="取消"
-        danger
-        onConfirm={applyDeleteCurrent}
-      />
       <ConfirmDialog
         open={confirmClear}
         onClose={() => setConfirmClear(false)}
