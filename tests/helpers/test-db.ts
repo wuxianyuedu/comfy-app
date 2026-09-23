@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS loraTrainingJob (
   outputName TEXT, logs TEXT, error TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS filmProject (
-  id TEXT PRIMARY KEY, userId TEXT NOT NULL, title TEXT NOT NULL, script TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'short_video',
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, projectId TEXT, title TEXT NOT NULL, script TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'short_video',
   styleSlug TEXT, size TEXT NOT NULL DEFAULT '1280x720', fps INTEGER NOT NULL DEFAULT 16, framesPerShot INTEGER NOT NULL DEFAULT 49,
   subtitleOn INTEGER NOT NULL DEFAULT 1, bgmName TEXT, status TEXT NOT NULL DEFAULT 'PARSING', progress INTEGER NOT NULL DEFAULT 0,
   finalVideo TEXT, logs TEXT, error TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL

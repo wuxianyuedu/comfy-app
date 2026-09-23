@@ -487,6 +487,9 @@ export const filmProject = sqliteTable(
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    /** 关联的统一项目 id（proj_*）。Phase 5：成片挂到统一项目下，
+     *  可从该项目的 `production.shots` 直接建片（而非自建剧本再平行分镜）。 */
+    projectId: text("projectId"),
     title: text("title").notNull(),
     script: text("script").notNull(),
     type: text("type").notNull().default("short_video"),
@@ -511,7 +514,10 @@ export const filmProject = sqliteTable(
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("film_user_created_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("film_user_created_idx").on(t.userId, t.createdAt),
+    index("film_project_idx").on(t.projectId),
+  ],
 );
 
 export const filmShot = sqliteTable(
