@@ -17,6 +17,7 @@ import { AppearanceSection } from "./components/AppearanceSection";
 import { ComfyuiSection } from "./components/ComfyuiSection";
 import { DatabaseSection } from "./components/DatabaseSection";
 import { ExitSection } from "./components/ExitSection";
+import { LogCategorySection } from "./components/LogCategorySection";
 import { LlmLocalSection } from "./components/LlmLocalSection";
 import { LlmRemoteSection } from "./components/LlmRemoteSection";
 import { UpdateCheckSection } from "./components/UpdateCheckSection";
@@ -108,6 +109,9 @@ export function SettingsPageView({
       {c.section === "database" && <DatabaseSection c={c} />}
 
       {c.section === "exit" && <ExitSection c={c} />}
+
+      {/* ═══ 日志（分类开关，纯前端偏好：存 localStorage）═══ */}
+      {c.section === "logs" && <LogCategorySection />}
     </SettingsShell>
   );
 }
