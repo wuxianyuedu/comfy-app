@@ -197,3 +197,20 @@ export function applyShotRedo(shots: unknown[], shotId: string): unknown[] {
   });
   return hit ? next : shots;
 }
+
+/** 单镜「改提示词重新生成」（Phase 8 · P8-1a）：先把该镜 `prompt` 换成新值，再走 `applyShotRedo`
+ *  的清产物 + rev 自增 —— 于是评审不合格时既改了文案、又让 run 规划器把它重新纳入待办、用新提示词重跑。
+ *  复用 `applyShotRedo` 这一原语做退回（§12.18 不在调用点重抄退回语义）。无命中 → 原样返回入参引用。 */
+export function applyReprompt(
+  shots: unknown[],
+  shotId: string,
+  newPrompt: string,
+): unknown[] {
+  let hit = false;
+  const withPrompt = shots.map((raw) => {
+    if (!isRecord(raw) || raw.id !== shotId) return raw;
+    hit = true;
+    return { ...raw, prompt: newPrompt };
+  });
+  return hit ? applyShotRedo(withPrompt, shotId) : shots;
+}
