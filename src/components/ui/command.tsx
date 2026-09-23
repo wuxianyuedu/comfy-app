@@ -60,7 +60,14 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        {/* The <Command> wrapper is mandatory: CommandInput / CommandList /
+            CommandItem / CommandGroup / CommandEmpty all read the store from
+            <Command>'s context via cmdk's useCmdk, which dereferences
+            store.subscribe directly. Without this ancestor, opening the dialog
+            throws "Cannot read properties of undefined (reading 'subscribe')"
+            (the primitives are not rendered while the dialog is closed, so the
+            bug stays hidden until the panel opens). */}
+        <Command>{children}</Command>
       </DialogContent>
     </Dialog>
   );
