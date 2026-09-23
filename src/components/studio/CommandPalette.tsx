@@ -26,8 +26,8 @@ export interface CommandPaletteProps {
  * `Dialog` + 自绘列表，否则会撞 P11（自绘浮层选项列表）。
  *
  * 目前只收纳「切换视图」这一类命令，数据源就是 `NAV_ITEMS`，与侧栏同一份
- * （避免两套事实来源）。后面要加「打开设置 / 跳到我的作品 / 搜项目」等，往
- * `CommandGroup` 里加一组即可，不必动侧栏。
+ * （避免两套事实来源）。后面要加「打开设置 / 搜项目」等，往 `CommandGroup`
+ * 里加一组即可，不必动侧栏。
  */
 export function CommandPalette({
   open,
