@@ -186,6 +186,9 @@ export interface EnvelopeParserDeps {
   onProgress: (percent: number) => void;
   /** 可注入的 trace（默认全局 trace）。 */
   trace?: TraceFn;
+  /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。默认不收集
+   *  （测试不传），生产由 executor-cli 注入 runner-state 的 appendRawCli。 */
+  rawCli?: (taskId: string, line: string) => void;
 }
 
 /** stdout 解析器：喂 chunk 的回调 + 未消费尾部（进程退出时落 trace 用）。 */
@@ -218,6 +221,7 @@ export function createCliEnvelopeParser(
     } catch {
       // 非 JSON 行也要露面：comfy-cli 打印 Python traceback / import error
       // 时用户才能看见。带上限，避免合法 verbose 输出刷屏。
+      deps.rawCli?.(taskId, `[comfy-cli stdout] ${line}`);
       nonJsonLines++;
       doTrace("cli", taskId, "stdout 非 JSON 行", { line });
       if (nonJsonLines <= MAX_NON_JSON_LINES) {
@@ -244,6 +248,9 @@ export function createCliEnvelopeParser(
      * 「ComfyUI 到底回了什么」此前只能翻 trace 文件。带行数与单行截断
      * 上限，原文仍完整落 trace。 */
     rawJsonLines++;
+    /* 完整原始行（不截断）：面板摘要有 300 行 / 单行 400 字符上限，但排障
+     * 要看被截掉的部分，故这里以完整形态另行留存，交给前端「查看完整输出」。 */
+    deps.rawCli?.(taskId, `[comfy-cli 原始] ${line}`);
     if (rawJsonLines <= MAX_RAW_JSON_LINES) {
       const trimmed =
         line.length > RAW_JSON_LINE_CHARS
@@ -340,6 +347,8 @@ export interface StderrSinkDeps {
   /** 面板日志。 */
   log: LogFn;
   trace?: TraceFn;
+  /** 完整原始行（不截断）收集：供前端「查看完整输出」入口。 */
+  rawCli?: (taskId: string, line: string) => void;
 }
 
 /** stderr 汇总态：调用方在 close 时读 `summary()` 落 tail。 */
@@ -378,6 +387,7 @@ export function createCliStderrSink(deps: StderrSinkDeps): StderrSink {
         continue;
       }
       errLines++;
+      deps.rawCli?.(taskId, `[comfy-cli stderr] ${trimmed}`);
       if (errLines <= STDERR_MAX_LINES) {
         const t =
           trimmed.length > STDERR_LINE_CHARS
