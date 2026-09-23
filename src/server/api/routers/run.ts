@@ -19,8 +19,10 @@ import {
   type ProductionRun,
   type RunAction,
 } from "~/lib/production/run-types";
+import { regenerateShot, reviewContent } from "~/server/agent/review";
 
 const approvalModeEnum = z.enum(["auto", "stage", "shot"]);
+const reviewModeEnum = z.enum(["gacha", "reprompt"]);
 
 /** fire-and-forget 拉起执行引擎推进 run（动态 import 解耦；引擎自带异常兜底，不外抛）。 */
 function kickEngine(userId: string, projectId: string): void {
@@ -160,5 +162,63 @@ export const runRouter = createTRPCRouter({
         awaitingStage: null,
         updatedAt: new Date().toISOString(),
       });
+    }),
+
+  /** 评审一个分镜镜头（文本评审）：调模型给判定 → 落库 `shot.review` → 回显判定。 */
+  reviewShot: authedProcedure
+    .input(
+      z.object({ projectId: z.string().min(1), shotId: z.string().min(1) }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const verdict = await reviewContent(
+        ctx.user.id,
+        input.projectId,
+        "shot",
+        input.shotId,
+      );
+      return { verdict };
+    }),
+
+  /** 评审一张角色卡（文本评审）。 */
+  reviewCharacter: authedProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        characterId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const verdict = await reviewContent(
+        ctx.user.id,
+        input.projectId,
+        "character",
+        input.characterId,
+      );
+      return { verdict };
+    }),
+
+  /**
+   * 评审不合格后的重生成（镜头）：gacha=同提示词换种子重出，reprompt=（未给新提示词时）据评审
+   * 意见改写提示词再重出。两者都把镜头退回（rev 自增）交规划器重新纳入 —— 本端点不主动起 run，
+   * 是否立即重跑由调用方（视图 resume / 自动评审）决定。
+   */
+  regenerateShot: authedProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        shotId: z.string().min(1),
+        mode: reviewModeEnum,
+        newPrompt: z.string().max(2000).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await regenerateShot(
+        ctx.user.id,
+        input.projectId,
+        input.shotId,
+        input.mode,
+        input.newPrompt,
+      );
+      return { ok: true };
     }),
 });

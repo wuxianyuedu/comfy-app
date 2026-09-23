@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildCharacterFromBriefMessages,
   buildCharacterMessages,
+  buildReviewMessages,
   buildScriptMarkdownMessages,
   buildScriptTemplate,
+  buildShotRepromptMessages,
   buildStoryboardMessages,
   parseCharacter,
   parseCharacterFull,
@@ -226,5 +228,67 @@ describe("buildCharacterFromBriefMessages", () => {
   it("brief 原样进 user 消息", () => {
     const [, user] = buildCharacterFromBriefMessages("一个夜班出租车司机");
     expect(user!.content).toBe("一个夜班出租车司机");
+  });
+});
+
+describe("buildReviewMessages", () => {
+  const ctx = {
+    title: "夜班车",
+    type: "微电影",
+    tone: "冷峻",
+    logline: "司机与乘客",
+    scriptExcerpt: "Δ 司机点烟",
+  };
+  it("system 是评审规范；user 带创作上下文 + 待评审内容 + 实体名", () => {
+    const [system, user] = buildReviewMessages("分镜镜头", "空荡的路", ctx);
+    expect(system!.role).toBe("system");
+    expect(system!.content).toContain("质检评审");
+    expect(user!.content).toContain("夜班车");
+    expect(user!.content).toContain("冷峻");
+    expect(user!.content).toContain("司机点烟");
+    expect(user!.content).toContain("【待评审的分镜镜头】");
+    expect(user!.content).toContain("空荡的路");
+  });
+  it("空字段兜底（未命名 / 未指定 / 无）", () => {
+    const [, user] = buildReviewMessages("角色卡", "设定", {
+      title: "",
+      type: "",
+      tone: "",
+      logline: "",
+      scriptExcerpt: "",
+    });
+    expect(user!.content).toContain("未命名");
+    expect(user!.content).toContain("剧本节选：\n（无）");
+  });
+});
+
+describe("buildShotRepromptMessages", () => {
+  const ctx = {
+    title: "",
+    type: "动画",
+    tone: "温暖",
+    logline: "",
+    scriptExcerpt: "旁白",
+  };
+  it("原提示词 + 缺陷清单 + 建议都进 user，system 是改写规范", () => {
+    const [system, user] = buildShotRepromptMessages(
+      "一个人走路",
+      { issues: ["太含混", "缺光线"], suggestion: "补主体动作" },
+      ctx,
+    );
+    expect(system!.content).toContain("提示词改写助手");
+    expect(user!.content).toContain("一个人走路");
+    expect(user!.content).toContain("- 太含混");
+    expect(user!.content).toContain("- 缺光线");
+    expect(user!.content).toContain("补主体动作");
+  });
+  it("无缺陷 / 无建议 → 占位文案，不抛", () => {
+    const [, user] = buildShotRepromptMessages(
+      "p",
+      { issues: [], suggestion: "" },
+      ctx,
+    );
+    expect(user!.content).toContain("（未逐条列出）");
+    expect(user!.content).toContain("【改进建议】（无）");
   });
 });
