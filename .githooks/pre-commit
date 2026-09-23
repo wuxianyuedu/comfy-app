@@ -66,6 +66,7 @@ run_group C "core/lib 结构守护测试" sh -c 'pnpm exec vitest run \
   tests/core-spine-single-source.test.ts \
   tests/lib-node-only-declarations.test.ts \
   tests/core-barrel-entry-discipline.test.ts \
+  tests/test-mock-targets.test.ts \
   tests/repository-base-purity.test.ts'
 
 # ── D：其余静态判据（互不依赖；组内串行以控内存，但整体与 A/B/C 并行）──────
