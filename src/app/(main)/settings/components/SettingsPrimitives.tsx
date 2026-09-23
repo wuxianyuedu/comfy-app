@@ -12,6 +12,7 @@ import type { AnsiSegment, AnsiStyleKey } from "~/lib/log/log-ansi";
 import { textHandler } from "~/lib/form-props";
 import { isPreviewableUrl } from "~/lib/llm/usage-test-config";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { FormField } from "~/components/ui/form-field";
 
@@ -99,19 +100,30 @@ export function Field({
   type?: string;
   placeholder?: string;
 }) {
-  /* 标签 / 控件 / ARIA 关联走 `ui/form-field`（规范 16 §16.2.4.26）。
-   * 收口前这里的 `<label>` 是裸的 —— 点标签不聚焦输入框，读屏器把标签读成
-   * 孤立文本（全库 15 处表单行**没有一处**关联过 `htmlFor`）。 */
+  /* 标签 / 控件 / ARIA 关联走 `ui/form-field`（规范 16 §16.2.4.26）；
+   * 控件本体走 `ui/input`（shadcn Input、§16.2.3 / §12.18 · P67 f 治理）。
+   * 收口前这里的 `<label>` 是裸的 —— 点标签不聚焦输入框、读屏器把标签读成
+   * 孤立文本（全库 15 处表单行**没有一处**关联过 `htmlFor`）；控件也是裸
+   * `<input>` + `focus:border-primary` —— Chrome 的 UA focus ring 与自定义
+   * border 叠加成「双层紫」（设置页「全局默认温度」那格最明显）。换成
+   * shadcn `<Input>` 之后焦点档走 `focus-visible:border-ring +
+   * focus-visible:ring-3 focus-visible:ring-ring/50`（同一 --ring token、
+   * 只在键盘聚焦时出现），视觉是一层协调的 ring、不再叠 UA ring。
+   *
+   * className 覆盖 shadcn Input 默认（`h-8 bg-transparent border-input
+   * px-2.5 py-1 text-base md:text-sm`）回到本页深色档：`h-auto` 让 py-2
+   * 决定高度、`bg-surface-2` 深色底、`border-border` 与本页其它控件同色系、
+   * `text-ink` / `placeholder:text-muted-foreground/60` 走项目色板。 */
   return (
     <FormField label={label} className="mb-3">
       {(a11y) => (
-        <input
+        <Input
           {...a11y}
           type={type}
           value={value}
           placeholder={placeholder}
           onChange={textHandler(onChange)}
-          className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+          className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
         />
       )}
     </FormField>

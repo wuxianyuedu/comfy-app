@@ -9,6 +9,7 @@
  */
 
 import { StatusDot, type StatusDotState } from "~/components/ui/status-dot";
+import { Checkbox } from "~/components/ui/checkbox";
 
 import {
   STATUS_ACTIONS_CLASS,
@@ -123,13 +124,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         </>
       )}
       <div className="mb-4 flex items-center gap-2">
-        <input
+        <Checkbox
           id="comfyui-autostart"
-          type="checkbox"
-          className="accent-primary size-4"
           checked={c.drafts.settings.comfyuiAutoStart ?? true}
-          onChange={(event) =>
-            c.patchSettings({ comfyuiAutoStart: event.target.checked })
+          onCheckedChange={(next) =>
+            c.patchSettings({ comfyuiAutoStart: next === true })
           }
         />
         <label htmlFor="comfyui-autostart" className="text-ink/80 text-sm">
@@ -137,13 +136,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         </label>
       </div>
       <div className="mb-4 flex items-center gap-2">
-        <input
+        <Checkbox
           id="auto-sync-local-workflow"
-          type="checkbox"
-          className="accent-primary size-4"
           checked={c.drafts.settings.autoSyncLocalWorkflow ?? false}
-          onChange={(event) =>
-            c.patchSettings({ autoSyncLocalWorkflow: event.target.checked })
+          onCheckedChange={(next) =>
+            c.patchSettings({ autoSyncLocalWorkflow: next === true })
           }
         />
         <label

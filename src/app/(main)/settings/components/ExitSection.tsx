@@ -9,6 +9,7 @@
  */
 
 import { StatusButton, Card } from "./SettingsPrimitives";
+import { Checkbox } from "~/components/ui/checkbox";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 export function ExitSection({ c }: { c: ReadySettingsPageController }) {
@@ -22,14 +23,12 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
       </p>
       <div className="mb-4">
         <div className="flex items-center gap-2">
-          <input
+          <Checkbox
             id="exit-kill-comfyui"
-            type="checkbox"
-            className="accent-primary size-4"
             checked={c.drafts.settings.exitKillComfyui ?? false}
-            onChange={(event) =>
+            onCheckedChange={(next) =>
               c.patchSettings({
-                exitKillComfyui: event.target.checked,
+                exitKillComfyui: next === true,
               })
             }
           />
@@ -46,14 +45,12 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
       </div>
       <div className="mb-4">
         <div className="flex items-center gap-2">
-          <input
+          <Checkbox
             id="exit-kill-ollama"
-            type="checkbox"
-            className="accent-primary size-4"
             checked={c.drafts.settings.exitKillOllama ?? true}
-            onChange={(event) =>
+            onCheckedChange={(next) =>
               c.patchSettings({
-                exitKillOllama: event.target.checked,
+                exitKillOllama: next === true,
               })
             }
           />
