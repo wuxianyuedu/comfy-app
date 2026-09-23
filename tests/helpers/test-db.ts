@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS filmProject (
   finalVideo TEXT, logs TEXT, error TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS filmShot (
-  id TEXT PRIMARY KEY, filmId TEXT NOT NULL, "order" INTEGER NOT NULL, heading TEXT, prompt TEXT NOT NULL,
+  id TEXT PRIMARY KEY, filmId TEXT NOT NULL, shotId TEXT, "order" INTEGER NOT NULL, heading TEXT, prompt TEXT NOT NULL,
   negative TEXT, params TEXT, taskId TEXT, status TEXT NOT NULL DEFAULT 'IDLE', progress INTEGER NOT NULL DEFAULT 0,
   videoPath TEXT, duration REAL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );

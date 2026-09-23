@@ -527,6 +527,9 @@ export const filmShot = sqliteTable(
     filmId: text("filmId")
       .notNull()
       .references(() => filmProject.id, { onDelete: "cascade" }),
+    /** 关联的统一镜头 id（production.shots[].id）。Phase 5：成片逐镜生成结果按它
+     *  回写统一项目对应 Shot 的视频态（clipUrl / clipStatus）。自由建片时为 null。 */
+    shotId: text("shotId"),
     order: integer("order").notNull(),
     heading: text("heading"),
     prompt: text("prompt").notNull(),
