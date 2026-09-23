@@ -185,9 +185,20 @@ export async function driveFilmRun(opts, deps) {
     doSleep = (/** @type {number} */ ms) => sleep(ms),
     log = () => {},
   } = deps;
+  /** 已打印过的日志时间戳，避免每次轮询重复输出。 */
+  const seen = new Set();
+  /** 打印 snapshot.run.log 里新增的执行日志条目（引擎每步一条；run.log 缺失时安全跳过）。 */
+  const flushLog = (snap) => {
+    for (const step of snap?.run?.log ?? []) {
+      if (!step || seen.has(step.ts)) continue;
+      seen.add(step.ts);
+      log(`  ${step.ok ? "✓" : "✗"} [${step.kind}] ${step.detail}`);
+    }
+  };
   /** @type {RunSnapshot} */
   let snapshot = parseSuperjsonEnvelope(await request(buildStartCall(opts)));
   log(formatStep(snapshot));
+  flushLog(snapshot);
   const deadline = Date.now() + opts.timeoutMs;
   let polls = 0;
   while (snapshot?.run?.status === "running") {
@@ -195,7 +206,7 @@ export async function driveFilmRun(opts, deps) {
     await doSleep(opts.pollMs);
     polls++;
     snapshot = parseSuperjsonEnvelope(await request(buildStatusCall(opts)));
-    log(formatStep(snapshot));
+    flushLog(snapshot);
   }
   return { snapshot, timedOut: false, polls };
 }
