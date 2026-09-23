@@ -1,11 +1,42 @@
 {
-  "generatedAt": "2026-09-20",
+  "generatedAt": "2026-09-23",
   "note": "视图层自实现 UI 基元的存量（规范 16 §16.2.3）。棘轮只许下降；新增请先改用 ui/ 基元，不要用 --update 放水。豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
   "rules": {
     "P1": "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
     "P2": "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
-    "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）"
+    "P3": "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
+    "P44": "视图 / 逻辑 / 服务端里自写文本截断（应使用 ~/lib/text-clamp 的 clampText）",
+    "P45": "视图 / 逻辑 / 服务端里自写指数退避算术（应使用 ~/lib/retry-policy 的 backoffDelayMs）",
+    "P46": "视图 / 逻辑 / 服务端里手拼日期串（应使用 ~/lib/time-format 的 formatDate 家族）",
+    "P65": "把一次异步动作的忙碌位复位写在成功路径上（应使用 ~/components/ui/use-busy-action 的 useBusyAction）",
+    "P66": "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
+    "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）"
   },
-  "total": 0,
-  "files": {}
+  "total": 8,
+  "files": {
+    "src/components/ui/empty-state.tsx": {
+      "P67": 1
+    },
+    "src/components/ui/form-field.tsx": {
+      "P67": 1
+    },
+    "src/components/ui/list-badge.tsx": {
+      "P67": 1
+    },
+    "src/components/ui/progress-bar.tsx": {
+      "P67": 1
+    },
+    "src/components/ui/range-slider.tsx": {
+      "P67": 1
+    },
+    "src/components/ui/source-tag.tsx": {
+      "P67": 1
+    },
+    "src/components/ui/status-badge.tsx": {
+      "P67": 1
+    },
+    "src/components/ui/task-type-chip.tsx": {
+      "P67": 1
+    }
+  }
 }
