@@ -9,7 +9,7 @@
 import "server-only";
 
 import { db } from "~/lib/db";
-import { decryptSecret, encryptSecret } from "~/lib/llm/secrets";
+import { decryptLlmKey, encryptLlmKey } from "~/lib/llm/secrets";
 import type { RawExtraModel } from "~/lib/llm/types";
 import {
   user,
@@ -62,13 +62,13 @@ export class UserRepository {
 
 /* ── 逐条解密远端模型条目里的独立 apiKey（与整表 apiKey 字段同密） ─────── */
 function decryptRow(row: LlmConfig): LlmConfig {
-  const apiKey = decryptSecret(row.apiKey);
+  const apiKey = decryptLlmKey(row.apiKey);
   const extraModels = Array.isArray(row.extraModels)
     ? row.extraModels.map((item: RawExtraModel) => {
         if (typeof item === "object" && item !== null && "apiKey" in item) {
           const rec = { ...item };
           if (typeof rec.apiKey === "string") {
-            rec.apiKey = decryptSecret(rec.apiKey);
+            rec.apiKey = decryptLlmKey(rec.apiKey);
           }
           return rec;
         }
@@ -86,13 +86,13 @@ function encryptInput(
   apiKey: string | null | undefined;
   extraModels: RawExtraModel[] | null | undefined;
 } {
-  const encKey = encryptSecret(apiKey ?? null);
+  const encKey = encryptLlmKey(apiKey ?? null);
   const encExtra = extraModels
     ? extraModels.map((item) => {
         if (typeof item === "object" && item !== null && "apiKey" in item) {
           return {
             ...item,
-            apiKey: encryptSecret(
+            apiKey: encryptLlmKey(
               typeof item.apiKey === "string" ? item.apiKey : null,
             ),
           };

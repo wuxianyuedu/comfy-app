@@ -22,7 +22,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "~/server/db/schema";
-import { encryptSecret } from "~/lib/llm/secrets";
+import { encryptLlmKey } from "~/lib/llm/secrets";
 
 export type Row = Record<string, unknown>;
 
@@ -392,12 +392,12 @@ let seedSeq = 0;
 
 /**
  * seed 期用的密钥加密：与 `lib/core/repository-user.ts` 落库前调用的是**同一个**
- * `encryptSecret`（不是再写一份），否则 helper 与生产写入会各自漂移 —— 而
+ * `encryptLlmKey`（不是再写一份），否则 helper 与生产写入会各自漂移 —— 而
  * 「密文形态」恰恰是 `LlmConfigRepository` / `RemoteModelRepository` 的关键行为。
  */
-function encryptSeedSecret(plain: string | null | undefined): string | null {
+function encryptSeedLlmKey(plain: string | null | undefined): string | null {
   if (plain == null || plain === "") return null;
-  return encryptSecret(plain);
+  return encryptLlmKey(plain);
 }
 
 export function seedUser(
@@ -565,7 +565,7 @@ export interface SeedRemoteModelInput {
 }
 
 /**
- * seed 一行远端模型。`apiKey` 收**明文**、由 helper 调 `encryptSecret` 落库
+ * seed 一行远端模型。`apiKey` 收**明文**、由 helper 调 `encryptLlmKey` 落库
  * —— 直接 insert 明文的测试会绕开 `LlmConfigRepository.replaceAll` 的加密语义，
  * 让「读取时解密」这条真实行为在测试里消失（假通过）。
  */
@@ -579,7 +579,7 @@ export function seedRemoteModel(
     id,
     name: input.name,
     baseUrl: input.baseUrl ?? null,
-    apiKey: encryptSeedSecret(input.apiKey),
+    apiKey: encryptSeedLlmKey(input.apiKey),
     kind: input.kind ?? "chat",
     workshopAdapters:
       input.workshopAdapters === undefined

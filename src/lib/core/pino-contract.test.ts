@@ -1,4 +1,5 @@
 import { describe, expect, it, afterEach, beforeEach } from "vitest";
+import { randomBytes } from "node:crypto";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -89,18 +90,18 @@ describe("pino 脱敏契约（redact 生效）", () => {
     log.warn(
       {
         userId: "u-1",
-        password: "p@ssw0rd-明文",
-        token: "tok-明文",
-        apiKey: "key-明文",
+        password: "sample-password-明文",
+        token: "sample-token-明文",
+        apiKey: "sample-key-明文",
       },
       "audit",
     );
     await flush();
 
     const raw = lines()[0]!;
-    expect(raw).not.toContain("p@ssw0rd-明文");
-    expect(raw).not.toContain("tok-明文");
-    expect(raw).not.toContain("key-明文");
+    expect(raw).not.toContain("sample-password-明文");
+    expect(raw).not.toContain("sample-token-明文");
+    expect(raw).not.toContain("sample-key-明文");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     expect(parsed.password).toBe("[Redacted]");
     expect(parsed.token).toBe("[Redacted]");
@@ -112,9 +113,15 @@ describe("pino 脱敏契约（redact 生效）", () => {
     const log = createPinoLogger({ destination: dest });
     log.info(
       {
-        client: { secret: "nest-明文", apiSecret: "apisec-明文" },
+        client: {
+          secret: "sample-nested-明文",
+          apiSecret: "sample-api-value-明文",
+        },
         req: {
-          headers: { authorization: "Bearer tok-明文", cookie: "sid=明文" },
+          headers: {
+            authorization: "Bearer sample-token-明文",
+            cookie: "sid=sample-session",
+          },
         },
       },
       "http",
@@ -122,18 +129,18 @@ describe("pino 脱敏契约（redact 生效）", () => {
     await flush();
 
     const raw = lines()[0]!;
-    expect(raw).not.toContain("nest-明文");
-    expect(raw).not.toContain("apisec-明文");
-    expect(raw).not.toContain("tok-明文");
-    expect(raw).not.toContain("sid=明文");
-    const parsed = JSON.parse(raw) as {
-      client: { secret: string; apiSecret: string };
-      req: { headers: { authorization: string; cookie: string } };
-    };
-    expect(parsed.client.secret).toBe("[Redacted]");
-    expect(parsed.client.apiSecret).toBe("[Redacted]");
-    expect(parsed.req.headers.authorization).toBe("[Redacted]");
-    expect(parsed.req.headers.cookie).toBe("[Redacted]");
+    expect(raw).not.toContain("sample-nested-明文");
+    expect(raw).not.toContain("sample-api-value-明文");
+    expect(raw).not.toContain("sample-token-明文");
+    expect(raw).not.toContain("sid=sample-session");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    expect(parsed.client).toEqual({
+      secret: "[Redacted]",
+      apiSecret: "[Redacted]",
+    });
+    expect(parsed.req).toEqual({
+      headers: { authorization: "[Redacted]", cookie: "[Redacted]" },
+    });
   });
 
   it("BETTER_AUTH_SECRET 类全局密钥不进日志", async () => {
@@ -143,11 +150,11 @@ describe("pino 脱敏契约（redact 生效）", () => {
       destination: dest,
       mirror: { error: () => undefined },
     });
-    log.error({ BETTER_AUTH_SECRET: "secret-明文" }, "cfg");
+    log.error({ BETTER_AUTH_SECRET: "sample-value-明文" }, "cfg");
     await flush();
 
     const raw = lines()[0]!;
-    expect(raw).not.toContain("secret-明文");
+    expect(raw).not.toContain("sample-value-明文");
   });
 });
 
@@ -304,8 +311,7 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
    *     形态（64 位 hex，`openssl rand -hex 32` 的产物）。pino 的 `*` 通配只支持
    *     「整段」不支持「部分字符串」（实测 `*secret` / `*_SECRET` 全无效，`*`
    *     会把整条记录打成 [Redacted]），所以它只能靠**值形状守卫**兜住。 */
-  const HEX_SECRET =
-    "99486355989d06c782d60d892774bbafdf8a157c223fd963b6b8d15dc38f83f6";
+  const HEX_SECRET = randomBytes(32).toString("hex");
 
   it("镜像文件里也不许出现密钥原文（redact 不覆盖这条通道）", async () => {
     const { dest, lines } = capture();
@@ -320,7 +326,7 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
     // 的名字 pino 侧擦不掉（这是 pino 通配语义的限制，见 REDACT_PATHS 上方注释），
     // 其防线是日志写入边界上的值形状守卫——镜像文件那一行就是它的证词。
     expect(lines().join("")).not.toContain(
-      'BETTER_AUTH_SECRET":"99486355989d06c782d60d892774bbafdf8a157c223fd963b6b8d15dc38f83f6',
+      `BETTER_AUTH_SECRET":"${HEX_SECRET}`,
     );
   });
 
@@ -328,9 +334,9 @@ describe("服务端 ERROR 镜像进面板（app-runtime）", () => {
    * 「名字无法穷举」的密钥唯一的兜底，因此单独钉住它的判据与边界。 */
   it("值形状守卫：私钥块 / JWT / 高熵串被擦，普通长句不误伤", () => {
     const pem =
-      "-----BEGIN RSA PRIVATE KEY-----\nMIIEow…\n-----END RSA PRIVATE KEY-----";
+      "-----BEGIN RSA PRIVATE KEY-----\n<示例私钥内容>\n-----END RSA PRIVATE KEY-----";
     const jwt =
-      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1LTEifQ.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1LTEifQ.example-placeholder-signature";
     expect(redactSecretShaped(pem)).toContain("[Redacted]");
     expect(redactSecretShaped(jwt)).toContain("[Redacted]");
     expect(redactSecretShaped(HEX_SECRET)).toBe("[Redacted]");

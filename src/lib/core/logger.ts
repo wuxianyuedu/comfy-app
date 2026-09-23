@@ -169,7 +169,7 @@ export const logger = createPinoLogger();
  * **镜像必须自己保证「只有文本落盘」**：这条通道只取 `msg` / `err.message`
  * 这类**文本字段**，不整包透传 payload —— pino 的 `redact` 只作用于它自己的
  * 输出流，镜像走的是 `appRuntimeLog` 另一条写入路径，**不受 redact 保护**
- * （实测：`log.error({ BETTER_AUTH_SECRET: "MARKER" })` 在 pino 流里是
+ * （实测：`log.error({ BETTER_AUTH_SECRET: "<示例占位值>" })` 在 pino 流里是
  * `[Redacted]`，镜像文件里却是明文）。因此这里绝不 `JSON.stringify(payload)`
  * 整包兜底：兜底会把「名字没被 redact 覆盖的任意字段」——包括密钥——原样写进
  * 面板可见的日志文件。对象既没有可读文本字段、又非空时，只输出**键名清单**

@@ -2,7 +2,7 @@
 // 不依赖 ~/lib/llm/server（后者 import "server-only" 会在纯 Node 抛错）。
 // 从环境变量读取默认值，并可被 `llmConfig` 表里的用户设置覆盖（与界面
 // 设置 UI 共享同一张表，复用 workshopDb 读取，不触碰 `~/env`）。
-import { decryptSecret } from "~/lib/llm/secrets";
+import { decryptLlmKey } from "~/lib/llm/secrets";
 import { errorMessage } from "~/lib/error-message";
 import type { LLMMessage } from "~/lib/llm/types";
 import { llmConfig } from "~/server/db/schema";
@@ -37,7 +37,7 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
     if (row) {
       if (row.baseUrl) cfg.baseUrl = row.baseUrl;
       if (row.model) cfg.model = row.model;
-      if (row.apiKey) cfg.apiKey = decryptSecret(row.apiKey);
+      if (row.apiKey) cfg.apiKey = decryptLlmKey(row.apiKey);
       if (row.temperature != null) cfg.temperature = row.temperature;
       if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
     }
