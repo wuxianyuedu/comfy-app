@@ -15,8 +15,8 @@
  *   （函数 / 常量 / 类 / 枚举）——
  *   `type` / `interface` 一律不看：它们大多是「同文件内使用的 props 类型」，
  *   正是那份 566 个清单里 90% 的来源，纳入只会把判据变成噪音。
- *   值导出在 `src/**`、`scripts/**`、`e2e/**`、`tests/**` 里除了自己的声明处
- *   之外零引用 ⇒ 判定为零消费，必须登记进基线棘轮。
+ *   值导出在 `src/**`、`scripts/**`、`e2e/**` 里除了自己的声明处之外零引用，
+ *   且不被同域单测锁住 ⇒ 判定为零消费，必须登记进基线棘轮。
  *
  * 为什么按**符号**记账（而不是按文件）：与重复块 / 函数长度 / 文件行数同口径，
  * 棘轮只许降不许升。登记项会**反向核对** —— 某个符号后来被接上线（或删掉），
@@ -48,6 +48,20 @@
  *
  * 「测试算不算消费方」在 §12.16 已裁决：**算**（这是全仓唯一的口径）。
  *
+ * ## 性能：判据一次成型，别再 O(符号数 × 全仓) 扫（本次优化）
+ *
+ * 旧实现每判一个导出，就把「全仓拼接语料」按 `\b名\b` 正则 split 一遍计数，且每
+ * 个模块都重新 walk + 读一遍 `tests/` 找它的单测 —— 一次 `--report` 实测 57s（并行
+ * 门禁里争抢 CPU 时飙到 114s）。判据不变的前提下换成**先建索引、再查表**：
+ *   - `PROD_FREQ`：生产语料按词元**切一遍**建词频表，`mentions(名)` 退化成 O(1) 查表
+ *     （对 `\w` 构成的标识符，与旧 `\b名\b` 计数逐字等价；含 `$` 的名字旧正则会因未转义
+ *     的 `$` 锚点而基本不命中，词元表同样把它切成非完整词 → 行为一致）；
+ *   - `TEST_FILES`：所有测试文件**预加载一次**（各自的词元 Set + 归一后的 import 说明符），
+ *     模块↔单测的匹配只在内存里比对，不再每模块重读磁盘。
+ * 「同基名测试即使没 import 也算消费方」这一旧语义与 `importsModule` 的模糊后缀匹配，
+ * 均在 `matchedTestFilesOf` / `specsImport` 里原样保留；`tests/check-dead-exports.test.ts`
+ * 的 18 例（含非空死集的夹具 + 真实仓库 `--strict`/`--verify`）即等价性证明。
+ *
  * 用法:
  *   node scripts/check-dead-exports.cjs           # 检查(棘轮)
  *   node scripts/check-dead-exports.cjs --strict  # 基线未收紧也失败(CI 用)
@@ -69,7 +83,9 @@ const REPORT_ONLY = ARGS.has("--report");
 /** `--verify <rel>#<Symbol>`:单条精确复核。清单归零后「为空」不再能证明
  *  扫描器在工作(一个永远返回空的扫描器会让断言全绿,§12.16),所以留一条
  *  可对**指定符号**当场复核的通道 —— 注入式反向验证用它。 */
-const verifyArg = process.argv.slice(2).find((a) => !a.startsWith("--") && a.includes("#")) ?? "";
+const verifyArg =
+  process.argv.slice(2).find((a) => !a.startsWith("--") && a.includes("#")) ??
+  "";
 
 /** 扫描范围:地基层(见头注)——lib 纯工具层 + trpc 客户端入口层。 */
 const SCAN_ROOTS = [path.join(SRC, "lib"), path.join(SRC, "trpc")];
@@ -79,6 +95,7 @@ const USAGE_ROOTS = ["src", "scripts", "e2e"];
 /** 同域单测的后缀:与声明处同目录、同基名的测试文件。它们算消费方。 */
 const TEST_CONSUMER_EXT = [".test.ts", ".test.tsx"];
 const SKIP_RE = /\.(test|spec)\.(ts|tsx)$|\.d\.ts$/;
+const TEST_FILE_RE = /\.(test|spec)\.(ts|tsx)$/;
 
 function walk(dir, out = []) {
   let entries;
@@ -134,13 +151,6 @@ function exportedValues(src) {
   return out;
 }
 
-/** 全部**生产**引用方源码（拼接成一份文本，按词边界计数）。 */
-function usageCorpus() {
-  const files = [];
-  for (const r of USAGE_ROOTS) walk(path.join(ROOT, r), files);
-  return files.map((f) => stripComments(fs.readFileSync(f, "utf8"))).join("\n");
-}
-
 /** 模块标识串：把所有可能的 import 写法归一成同一把钥匙。 */
 function moduleKeys(absPathNoExt) {
   const rel = toPosix(path.relative(ROOT, absPathNoExt));
@@ -152,66 +162,30 @@ function moduleKeys(absPathNoExt) {
   return keys;
 }
 
-/** 该模块**被它的**单测覆盖时，返回测试源码（不含则空串）。
- *
- *  判定只看一件事：**有没有测试文件 import 了这个模块** —— 与测试文件叫什么
- *  名字、放在哪个目录无关。三种既成布局都能命中（实测三种都在用，只认一种
- *  就会让另外两类模块被误判为零消费）：
- *
- *    ① 同目录同基名  `src/lib/x/y.ts`  ⇄ `src/lib/x/y.test.ts`
- *    ② 集中目录同基名 `src/lib/x/y.ts`  ⇄ `tests/y.test.ts`
- *    ③ 集中目录异名   `src/lib/workshop/generation-log.ts`
- *                       与 tests/workshop-generation-log.test.ts 配对
- *
- *  为什么按「import 了它」而不是按「全 tests/ 一起算」：后者等于把整个测试
- *  目录都当消费方 —— 任何被任何测试**提到过名字**的符号都不再是零消费，
- *  判据会退化成「有没有人写过这个名字」。按 import 关系判定则是精确的：
- *  `parseGenerationLogLine`（被 `tests/workshop-generation-log.test.ts` 逐条
- *  锁住）正确认作消费方，而 `shouldReportReady` 这类**没有任何测试文件
- *  import 它所在模块**的符号仍留在清单上。
- *
- *  也仍然**不可能**误伤真死代码：真死代码不会有人为它写测试。 */
-function testConsumersOf(relPath) {
-  const base = relPath.replace(/\.tsx?$/, "");
-  const wanted = moduleKeys(path.join(ROOT, base));
-  // ① 同目录同基名 / ② 集中目录同基名：直接命中，无需扫
-  const direct = [];
-  for (const ext of TEST_CONSUMER_EXT) {
-    direct.push(path.join(ROOT, `${base}${ext}`));
-    direct.push(path.join(ROOT, "tests", `${path.basename(base)}${ext}`));
-  }
-  const hits = direct.filter((full) => fs.existsSync(full));
-  // ③ 其余：扫全部测试文件，看谁 import 了本模块
-  for (const file of walk(path.join(ROOT, "tests"))) {
-    if (!/\.(test|spec)\.(ts|tsx)$/.test(file)) continue;
-    if (hits.includes(file)) continue;
-    const src = fs.readFileSync(file, "utf8");
-    if (importsModule(src, wanted)) hits.push(file);
-  }
-  // `src/lib/**` 内的测试文件（同目录但不同基名）也一并算
-  for (const root of SCAN_ROOTS) {
-    for (const file of walk(root)) {
-      if (!/\.(test|spec)\.(ts|tsx)$/.test(file)) continue;
-      if (hits.includes(file) || file === path.join(ROOT, relPath)) continue;
-      const src = fs.readFileSync(file, "utf8");
-      if (importsModule(src, wanted)) hits.push(file);
-    }
-  }
-  return hits
-    .map((full) => stripComments(fs.readFileSync(full, "utf8")))
-    .join("\n");
-}
-
-/** 源码里是否 import 了目标模块（只看 import / from 说明符，不认注释）。 */
-function importsModule(src, wantedKeys) {
+/** 从源码抽出**归一后的 import 说明符**（与旧 `importsModule` 同一过滤 + 归一）。 */
+function importSpecs(src) {
+  const out = [];
   const re = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
   let m;
   while ((m = re.exec(src))) {
     const spec = m[1];
-    if (!spec || !spec.startsWith(".") && !spec.startsWith("~") && !spec.startsWith("@") && !spec.startsWith("src/")) {
+    if (
+      !spec ||
+      (!spec.startsWith(".") &&
+        !spec.startsWith("~") &&
+        !spec.startsWith("@") &&
+        !spec.startsWith("src/"))
+    ) {
       continue;
     }
-    const norm = spec.replace(/\.tsx?$/, "").replace(/^src\//, "");
+    out.push(spec.replace(/\.tsx?$/, "").replace(/^src\//, ""));
+  }
+  return out;
+}
+
+/** 归一说明符集合是否命中某模块的钥匙（复刻旧 `importsModule` 的三分支模糊匹配）。 */
+function specsImport(specs, wantedKeys) {
+  for (const norm of specs) {
     for (const key of wantedKeys) {
       if (norm === key || key.endsWith(norm) || norm.endsWith(key)) return true;
     }
@@ -219,19 +193,85 @@ function importsModule(src, wantedKeys) {
   return false;
 }
 
-/** 某符号在该文本里出现了几次（词边界计数）。 */
-function mentions(text, name) {
-  return text.split(new RegExp(`\\b${name}\\b`)).length - 1;
+// ── 预加载索引（判据不变，只是把「每判一次就重扫全仓」摊成一次成型）──────────
+
+/** 生产语料的词元 → 出现次数（切一遍 src/scripts/e2e），替代逐符号 regex-split 全仓。 */
+const PROD_FREQ = (() => {
+  const freq = new Map();
+  const files = [];
+  for (const r of USAGE_ROOTS) walk(path.join(ROOT, r), files);
+  for (const f of files) {
+    const toks = stripComments(fs.readFileSync(f, "utf8")).match(/\w+/g);
+    if (!toks) continue;
+    for (const t of toks) freq.set(t, (freq.get(t) || 0) + 1);
+  }
+  return freq;
+})();
+
+/** 所有测试文件预加载一次：`{ rel, tokens:Set(词元), specs:归一 import 说明符 }`。
+ *  覆盖 tests/ 与地基层内的测试文件（去重）——与旧 `testConsumersOf` 的取集合一致。 */
+const TEST_FILES = (() => {
+  const seen = new Set();
+  const list = [];
+  const push = (file) => {
+    const abs = path.resolve(file);
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    const src = stripComments(fs.readFileSync(abs, "utf8"));
+    list.push({
+      rel: toPosix(path.relative(ROOT, abs)),
+      tokens: new Set(src.match(/\w+/g) || []),
+      specs: importSpecs(src),
+    });
+  };
+  for (const f of walk(path.join(ROOT, "tests")))
+    if (TEST_FILE_RE.test(f)) push(f);
+  for (const root of SCAN_ROOTS)
+    for (const f of walk(root)) if (TEST_FILE_RE.test(f)) push(f);
+  return list;
+})();
+
+/** 该模块的「消费测试文件」：① 同基名直连测试（存在即算，旧语义）∪ ② import 了它的测试。
+ *  返回其词元并集所在的文件列表；调用方按符号名查词元是否命中。 */
+function matchedTestFilesOf(relPath) {
+  const base = relPath.replace(/\.tsx?$/, "");
+  const wanted = moduleKeys(path.join(ROOT, base));
+  const directRel = new Set();
+  for (const ext of TEST_CONSUMER_EXT) {
+    directRel.add(
+      toPosix(path.relative(ROOT, path.join(ROOT, `${base}${ext}`))),
+    );
+    directRel.add(
+      toPosix(
+        path.relative(
+          ROOT,
+          path.join(ROOT, "tests", `${path.basename(base)}${ext}`),
+        ),
+      ),
+    );
+  }
+  const hits = [];
+  for (const tf of TEST_FILES) {
+    if (directRel.has(tf.rel) || specsImport(tf.specs, wanted)) hits.push(tf);
+  }
+  return hits;
+}
+
+/** 某符号在生产侧出现几次（词表 O(1)，与旧 `\b名\b` 计数等价）。 */
+function prodMentions(name) {
+  return PROD_FREQ.get(name) || 0;
 }
 
 /** 判定一个符号是否零消费，返回判定依据（供 `--verify` 打印）。 */
 function classify(relPath, name) {
-  const prod = usageCorpus();
-  const prodMentions = mentions(prod, name);
+  const prod = prodMentions(name);
   // 声明处自己也贡献 1 次计数；生产侧除声明外无人提及才继续看测试。
-  if (prodMentions > 1) return { dead: false, why: `生产消费方引用 ${prodMentions - 1} 处` };
-  const test = testConsumersOf(relPath);
-  const testMentions = test ? mentions(test, name) : 0;
+  if (prod > 1) return { dead: false, why: `生产消费方引用 ${prod - 1} 处` };
+  const hits = matchedTestFilesOf(relPath);
+  const testMentions = hits.reduce(
+    (n, tf) => n + (tf.tokens.has(name) ? 1 : 0),
+    0,
+  );
   if (testMentions > 0) {
     return { dead: false, why: `同域单测引用 ${testMentions} 处` };
   }
@@ -242,7 +282,6 @@ function collect() {
   const dead = [];
   const checkedFiles = [];
   const files = SCAN_ROOTS.flatMap((root) => walk(root));
-  const prodCorpus = usageCorpus();
   for (const file of files) {
     const rel = toPosix(path.relative(ROOT, file));
     if (SKIP_RE.test(rel)) continue;
@@ -250,10 +289,12 @@ function collect() {
     const names = exportedValues(src);
     if (!names.length) continue;
     checkedFiles.push(rel);
-    const testCorpus = testConsumersOf(rel);
+    // 消费测试文件集合按模块算一次（旧实现是拼测试语料，此处取词元命中等价）。
+    let testHits = null;
     for (const name of names) {
-      if (mentions(prodCorpus, name) > 1) continue;
-      if (testCorpus && mentions(testCorpus, name) > 0) continue;
+      if (prodMentions(name) > 1) continue;
+      testHits ??= matchedTestFilesOf(rel);
+      if (testHits.some((tf) => tf.tokens.has(name))) continue;
       dead.push(`${rel}#${name}`);
     }
   }
