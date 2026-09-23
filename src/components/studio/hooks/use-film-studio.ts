@@ -7,12 +7,14 @@
 // 时间轴编辑（镜头列表、播放态、播放头）是纯视觉状态、不产生网络请求，
 // 按规范留在视图层——下沉反而要透传一堆 prop。
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { beginStaleRun } from "~/lib/stale-run";
 import { uploadBgm } from "~/lib/film/bgm-client";
+import { getActiveId } from "~/lib/project-canvas/canvas-store";
+import { fetchProduction } from "~/lib/production/production-client";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -30,9 +32,19 @@ import {
   isFilmRunning,
 } from "../film-studio-config";
 
+/** 成片镜头来源：统一项目的镜头（工坊产出），或自由文本剧本自动分镜。 */
+export type FilmShotSource = "project" | "script";
+
 export interface FilmStudioController {
   /* 成片参数（目前为常量，保留 setter 以便后续开放编辑） */
   title: string;
+  /** 镜头来源（项目镜头 / 剧本自动分镜）与当前活跃项目信息（Phase 5 接入）。 */
+  shotSource: FilmShotSource;
+  setShotSource: (source: FilmShotSource) => void;
+  /** 当前活跃统一项目 id（无则 null）。 */
+  activeProjectId: string | null;
+  /** 该项目的镜头数（`production.shots.length`；无项目 / 无镜头为 0）。 */
+  projectShotCount: number;
   /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
   videoWorkflows: { id: string; name: string }[];
   videoWorkflowId: string;
@@ -58,6 +70,8 @@ export interface FilmStudioController {
   loading: boolean;
   /* 动作 */
   create: () => Promise<void>;
+  /** 用当前统一项目的镜头一键成片（走 film.createFromProject）。 */
+  createFromProject: () => Promise<void>;
   cancel: () => Promise<void>;
   recompose: () => Promise<void>;
   uploadBgmFile: (file: File) => Promise<void>;
@@ -103,6 +117,17 @@ export function useFilmStudio(): FilmStudioController {
   const [subtitleOn, setSubtitleOn] = useState(true);
   const [bgmName, setBgmName] = useState<string | null>(null);
   const [ffmpegAvailable, setFfmpegAvailable] = useState(true);
+
+  /* Phase 5 接入：镜头来源（项目镜头 / 剧本）。进入时读一次活跃项目的镜头数；
+   * 用户没手动选过来源、且项目确有镜头时，默认切到「项目镜头」。 */
+  const [activeProjectId] = useState<string | null>(() => getActiveId());
+  const [projectShotCount, setProjectShotCount] = useState(0);
+  const [shotSource, setShotSourceState] = useState<FilmShotSource>("script");
+  const sourceChosenRef = useRef(false);
+  const setShotSource = useCallback((source: FilmShotSource) => {
+    sourceChosenRef.current = true;
+    setShotSourceState(source);
+  }, []);
 
   const [film, setFilm] = useState<Film | null>(null);
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：两个动作此前复位都写在动作之后。 */
@@ -181,36 +206,67 @@ export function useFilmStudio(): FilmStudioController {
     };
   }, []);
 
+  /* Phase 5：读一次活跃项目的镜头数（production.shots）。作废守卫用 beginStaleRun，
+   * 卸载即不落地；无活跃项目 / 服务不可用则静默留 0（回落剧本模式）。 */
+  useEffect(() => {
+    const id = getActiveId();
+    if (!id) return;
+    const guard = beginStaleRun();
+    void (async () => {
+      const prod = await fetchProduction(id);
+      const count = prod && Array.isArray(prod.shots) ? prod.shots.length : 0;
+      guard.commit(() => {
+        setProjectShotCount(count);
+        // 用户未手动选过来源、且项目确有镜头 → 默认走项目镜头。
+        if (count > 0 && !sourceChosenRef.current)
+          setShotSourceState("project");
+      });
+    })();
+    return () => guard.dispose();
+  }, []);
+
+  /* 「建片 → start → 拉详情」的共用尾链（§12.12）：create 与 createFromProject
+   * 只在「用哪条 create mutation」上不同，其余（启动 + 轮询起手 + 反馈通道）一致。 */
+  const launchFilm = useCallback(
+    async (
+      mutate: () => Promise<{ id: string }>,
+      successText: string,
+    ): Promise<void> => {
+      await actionBusy.run(() =>
+        runAsyncAction(
+          async () => {
+            const { id } = await mutate();
+            await vanillaApi.film.start.mutate({ id });
+            await fetchDetail(id);
+          },
+          { report: reportSuccess, failureText: "启动失败", successText },
+        ),
+      );
+    },
+    [actionBusy, fetchDetail, reportSuccess],
+  );
+
   const create = useCallback(async () => {
     if (!script.trim()) {
       toastError("请先输入剧本或创意");
       return;
     }
-    await actionBusy.run(() =>
-      runAsyncAction(
-        async () => {
-          const { id } = await vanillaApi.film.create.mutate({
-            title,
-            script,
-            type,
-            styleSlug: styleSlug || null,
-            size,
-            fps,
-            framesPerShot: frames,
-            subtitleOn,
-            bgmName,
-            ...(videoWorkflowId ? { videoWorkflowId } : {}),
-            ...(imageWorkflowId ? { imageWorkflowId } : {}),
-          });
-          await vanillaApi.film.start.mutate({ id });
-          await fetchDetail(id);
-        },
-        {
-          report: reportSuccess,
-          failureText: "启动失败",
-          successText: "已启动一键成片，正在逐镜生成…",
-        },
-      ),
+    await launchFilm(
+      () =>
+        vanillaApi.film.create.mutate({
+          title,
+          script,
+          type,
+          styleSlug: styleSlug || null,
+          size,
+          fps,
+          framesPerShot: frames,
+          subtitleOn,
+          bgmName,
+          ...(videoWorkflowId ? { videoWorkflowId } : {}),
+          ...(imageWorkflowId ? { imageWorkflowId } : {}),
+        }),
+      "已启动一键成片，正在逐镜生成…",
     );
   }, [
     script,
@@ -220,13 +276,44 @@ export function useFilmStudio(): FilmStudioController {
     size,
     fps,
     frames,
-    actionBusy,
     subtitleOn,
     bgmName,
     videoWorkflowId,
     imageWorkflowId,
-    fetchDetail,
-    reportSuccess,
+    launchFilm,
+    toastError,
+  ]);
+
+  const createFromProject = useCallback(async () => {
+    if (!activeProjectId || projectShotCount === 0) {
+      toastError("当前项目还没有镜头，请先在工坊产出镜头");
+      return;
+    }
+    await launchFilm(
+      () =>
+        vanillaApi.film.createFromProject.mutate({
+          projectId: activeProjectId,
+          size,
+          fps,
+          framesPerShot: frames,
+          subtitleOn,
+          bgmName,
+          ...(videoWorkflowId ? { videoWorkflowId } : {}),
+          ...(imageWorkflowId ? { imageWorkflowId } : {}),
+        }),
+      "已用项目镜头启动成片，正在逐镜生成…",
+    );
+  }, [
+    activeProjectId,
+    projectShotCount,
+    size,
+    fps,
+    frames,
+    subtitleOn,
+    bgmName,
+    videoWorkflowId,
+    imageWorkflowId,
+    launchFilm,
     toastError,
   ]);
 
@@ -292,6 +379,10 @@ export function useFilmStudio(): FilmStudioController {
 
   return {
     title,
+    shotSource,
+    setShotSource,
+    activeProjectId,
+    projectShotCount,
     videoWorkflows,
     videoWorkflowId,
     setVideoWorkflowId,
@@ -310,6 +401,7 @@ export function useFilmStudio(): FilmStudioController {
     running,
     loading: actionBusy.busy,
     create,
+    createFromProject,
     cancel,
     recompose,
     uploadBgmFile,

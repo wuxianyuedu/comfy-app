@@ -31,6 +31,21 @@ vi.mock("~/lib/film/bgm-client", () => ({
   uploadBgm: vi.fn(),
 }));
 
+/* Phase 5：hook 会读活跃项目镜头（getActiveId + fetchProduction）。默认无活跃项目
+ * （回落剧本模式，既有 create() 用例行为不变）；来源相关用例在用例内改写返回值。 */
+const getActiveIdMock = vi.hoisted(() =>
+  vi.fn<() => string | null>(() => null),
+);
+const fetchProductionMock = vi.hoisted(() =>
+  vi.fn<(id: string) => Promise<unknown>>(async () => null),
+);
+vi.mock("~/lib/project-canvas/canvas-store", () => ({
+  getActiveId: getActiveIdMock,
+}));
+vi.mock("~/lib/production/production-client", () => ({
+  fetchProduction: fetchProductionMock,
+}));
+
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     skill: { list: { query: vi.fn() } },
@@ -38,6 +53,7 @@ vi.mock("~/trpc/vanilla", () => ({
       list: { query: vi.fn() },
       detail: { query: vi.fn() },
       create: { mutate: vi.fn() },
+      createFromProject: { mutate: vi.fn() },
       start: { mutate: vi.fn() },
       cancel: { mutate: vi.fn() },
       compose: { mutate: vi.fn() },
@@ -57,6 +73,9 @@ const vanilla = {
     list: { query: mockOf(vanillaApi.film.list.query) },
     detail: { query: mockOf(vanillaApi.film.detail.query) },
     create: { mutate: mockOf(vanillaApi.film.create.mutate) },
+    createFromProject: {
+      mutate: mockOf(vanillaApi.film.createFromProject.mutate),
+    },
     start: { mutate: mockOf(vanillaApi.film.start.mutate) },
     cancel: { mutate: mockOf(vanillaApi.film.cancel.mutate) },
     compose: { mutate: mockOf(vanillaApi.film.compose.mutate) },
@@ -88,6 +107,9 @@ function runningFilm(id = "f-1") {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.clearAllTimers?.();
+  // 默认无活跃项目 → 回落剧本模式（既有 create() 用例不受来源逻辑影响）。
+  getActiveIdMock.mockReturnValue(null);
+  fetchProductionMock.mockResolvedValue(null);
   vanilla.skill.list.query.mockResolvedValue({ skills: [] });
   vanilla.film.list.query.mockResolvedValue({
     films: [],
@@ -95,6 +117,7 @@ beforeEach(() => {
   });
   vanilla.film.detail.query.mockResolvedValue({ film: runningFilm() });
   vanilla.film.create.mutate.mockResolvedValue({ id: "f-1" });
+  vanilla.film.createFromProject.mutate.mockResolvedValue({ id: "f-1" });
   vanilla.film.start.mutate.mockResolvedValue({ ok: true });
   vanilla.film.cancel.mutate.mockResolvedValue({ ok: true });
   vanilla.film.compose.mutate.mockResolvedValue({ ok: true });
@@ -236,5 +259,59 @@ describe("useFilmStudio", () => {
     });
     expect(vanilla.film.cancel.mutate).not.toHaveBeenCalled();
     expect(vanilla.film.compose.mutate).not.toHaveBeenCalled();
+  });
+
+  it("有活跃项目镜头时默认切到「项目镜头」来源", async () => {
+    getActiveIdMock.mockReturnValue("proj_1");
+    fetchProductionMock.mockResolvedValue({
+      shots: [{ id: "a" }, { id: "b" }],
+    });
+    const { result } = renderHook(() => useFilmStudio());
+    await waitFor(() => expect(result.current.shotSource).toBe("project"));
+    expect(result.current.projectShotCount).toBe(2);
+  });
+
+  it("无活跃项目 / 无镜头时回落剧本模式", async () => {
+    const { result } = renderHook(() => useFilmStudio());
+    await waitFor(() => expect(vanilla.skill.list.query).toHaveBeenCalled());
+    expect(result.current.shotSource).toBe("script");
+    expect(result.current.projectShotCount).toBe(0);
+  });
+
+  it("createFromProject：用项目镜头 create→start→拉详情 + 成功提示", async () => {
+    getActiveIdMock.mockReturnValue("proj_9");
+    fetchProductionMock.mockResolvedValue({ shots: [{ id: "a" }] });
+    const { result } = renderHook(() => useFilmStudio());
+    await waitFor(() => expect(result.current.shotSource).toBe("project"));
+
+    await act(async () => {
+      await result.current.createFromProject();
+    });
+
+    expect(vanilla.film.createFromProject.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: "proj_9",
+        size: FILM_SIZE,
+        fps: 16,
+      }),
+    );
+    expect(vanilla.film.create.mutate).not.toHaveBeenCalled();
+    expect(vanilla.film.start.mutate).toHaveBeenCalledWith({ id: "f-1" });
+    expect(vanilla.film.detail.query).toHaveBeenCalledWith({ id: "f-1" });
+    expect(toast.success).toHaveBeenCalledWith(
+      "已用项目镜头启动成片，正在逐镜生成…",
+    );
+  });
+
+  it("createFromProject 无镜头时短路：不发请求、提示回工坊产镜头", async () => {
+    // 默认无活跃项目（beforeEach）→ projectShotCount 0。
+    const { result } = renderHook(() => useFilmStudio());
+    await act(async () => {
+      await result.current.createFromProject();
+    });
+    expect(vanilla.film.createFromProject.mutate).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      "当前项目还没有镜头，请先在工坊产出镜头",
+    );
   });
 });
