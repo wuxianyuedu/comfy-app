@@ -1,12 +1,6 @@
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -19,7 +13,6 @@ import {
   useReactFlow,
   type Edge,
   type Node as FlowNode,
-  type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -47,6 +40,12 @@ import {
   fetchProduction,
   type ProductionData,
 } from "~/lib/production/production-client";
+import {
+  normalizeProductionProgress,
+  type ProductionProgress,
+} from "~/lib/production/progress";
+import { CanvasProgressIndicator } from "./project-canvas/CanvasProgressIndicator";
+import { useCanvasMenu } from "./project-canvas/hooks/use-canvas-menu";
 import type { Shot } from "~/lib/workshop/types";
 import {
   createDraftProject, // new: lands on a canvas w/o polluting the index until first real change
@@ -174,6 +173,8 @@ function CanvasInner({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("未命名");
+  /* 统一生产模型的完成状态（与工坊共读 production 行的 progress 一份，Phase 4b / §7）。 */
+  const [progress, setProgress] = useState<ProductionProgress | null>(null);
   /* 确认对话框（用自定义弹窗替换了 window.confirm） */
   const [confirmClear, setConfirmClear] = useState(false);
   /* Canvas panel system: 素材库 / 历史记录 slide-out panels */
@@ -303,11 +304,14 @@ function CanvasInner({
         });
         onConsumePending?.();
       }
+      const prod = await fetchProduction(proj.id);
       nextNodes = materializeProductionShots(
         nextNodes,
-        await fetchProduction(proj.id),
+        prod,
         screenToFlowPosition,
       );
+      /* 顺带取回完成状态：与工坊共读同一份 production.progress（Phase 4b / §7）。 */
+      setProgress(prod ? normalizeProductionProgress(prod.progress) : null);
       setNodes(nextNodes);
 
       setEdges(proj.edges ?? []);
@@ -330,42 +334,9 @@ function CanvasInner({
     return (kind ? MINIMAP_COLOR_BY_KIND.get(kind) : undefined) ?? "#6B7280";
   }, []);
 
-  const onPaneContextMenu = useCallback((e: React.MouseEvent | MouseEvent) => {
-    e.preventDefault();
-    setMenu({ x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY });
-  }, []);
-
-  const createNode = useCallback(
-    (kind: NodeKind) => {
-      if (!menu) return;
-      setNodes((nds) =>
-        placeCanvasNode({
-          nodes: nds,
-          point: menu,
-          flow: { screenToFlowPosition },
-          data: defaultData(kind),
-        }),
-      );
-      setMenu(null);
-    },
-    [menu, screenToFlowPosition, setNodes],
-  );
-
-  /** 在右键位置放一个纯视觉的 Ardot 风工作流节点。
-   *  无数据、无处理器 —— 只渲染设计参考组件。
-   *  `workflowArdot` 已收进 CanvasNodeType 联合类型，无需强转。 */
-  const createTestWorkflowNode = useCallback(() => {
-    if (!menu) return;
-    setNodes((nds) =>
-      placeCanvasNode({
-        nodes: nds,
-        point: menu,
-        flow: { screenToFlowPosition },
-        data: defaultData("workflow"),
-      }),
-    );
-    setMenu(null);
-  }, [menu, screenToFlowPosition, setNodes]);
+  /* 右键菜单 + 落子的一簇回调（抽到 useCanvasMenu，CanvasInner 只留编排，§12.13）。 */
+  const { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick } =
+    useCanvasMenu({ menu, setMenu, setNodes, screenToFlowPosition });
 
   const clearCanvas = useCallback(() => {
     if (nodes.length === 0 && edges.length === 0) {
@@ -385,8 +356,6 @@ function CanvasInner({
   const exportJson = useCallback(() => {
     downloadJson({ nodes, edges }, `${projectName || "comfy-canvas"}.json`);
   }, [nodes, edges, projectName]);
-
-  const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), []);
 
   return (
     <div
@@ -477,6 +446,10 @@ function CanvasInner({
         onExport={exportJson}
         onClear={clearCanvas}
       />
+
+      {/* 生产进度（与工坊共读 production 行的 progress 一份，Phase 4b / §7）——
+          仅当该项目已有生产数据时展示；定位与 pointer-events 收在指示器内部。 */}
+      {progress && <CanvasProgressIndicator progress={progress} />}
 
       {/* 项目画布设置（右上角齿轮）。从右边缘滑出抽屉，内含
        *  「调试模式」开关。状态经 useDebugMode 与
