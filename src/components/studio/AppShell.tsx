@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Layers, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 import { useHotkey } from "~/components/ui/use-hotkey";
 import {
@@ -83,9 +83,6 @@ export function AppShell({
                 tooltip="Comfy-APP"
                 onClick={() => onSelect("home")}
               >
-                <span className="bg-primary/12 text-primary ring-primary/30 flex size-8 shrink-0 items-center justify-center rounded-lg ring-1">
-                  <Layers size={18} />
-                </span>
                 <span className="text-ink-strong grid flex-1 text-left text-sm leading-tight font-semibold">
                   Comfy-APP
                 </span>
