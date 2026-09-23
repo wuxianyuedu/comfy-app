@@ -36,6 +36,8 @@ type CreatedShot = {
   order: number;
   params: Record<string, unknown>;
   prompt: string;
+  heading?: string | null;
+  negative?: string | null;
 };
 
 const shotRepo = vi.hoisted(() => ({
@@ -56,12 +58,18 @@ const taskRepo = vi.hoisted(() => ({
 const skillRepo = vi.hoisted(() => ({
   findBySlug: vi.fn(async (_slug: string) => null),
 }));
+const prodRepo = vi.hoisted(() => ({
+  getForUser: vi.fn<(userId: string, id: string) => Promise<unknown>>(),
+}));
 
 vi.mock("~/lib/core/repository", () => ({
   filmRepository: filmRepo,
   filmShotRepository: shotRepo,
   skillRepository: skillRepo,
   taskRepository: taskRepo,
+}));
+vi.mock("~/lib/core/repository-production", () => ({
+  productionRepository: prodRepo,
 }));
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   createWorkflowRunTask: vi.fn(async () => ({
@@ -106,7 +114,12 @@ vi.mock("child_process", async (importOriginal) => ({
   })),
 }));
 
-import { cancelFilm, composeFilm, createFilm } from "./orchestrator";
+import {
+  cancelFilm,
+  composeFilm,
+  createFilm,
+  createFilmFromProject,
+} from "./orchestrator";
 import { NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
 
 beforeEach(() => {
@@ -259,5 +272,83 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     expect(size).toMatchObject({ ratio: "16:9 横屏", clarity: "1k" });
     // 兜底常量是尺寸表达（镜头没带尺寸时用）
     expect(NATIVE_SHOT_VIDEO_SIZE).toMatchObject({ ratio: "16:9 横屏" });
+  });
+});
+
+describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 5）", () => {
+  // 只映射用到的字段即可（index / prompt / negativePrompt / sceneHeading）。
+  const shot = (over: Record<string, unknown>) =>
+    ({ sceneHeading: "", negativePrompt: "", ...over }) as never;
+
+  it("逐条映射镜头、按镜号排序，不触发 LLM 分镜，且落 projectId 关联", async () => {
+    filmRepo.create.mockResolvedValue({ id: "film-p1" });
+    prodRepo.getForUser.mockResolvedValue({
+      title: "项目片",
+      type: "animation",
+      scriptMarkdown: "# 剧本",
+      shots: [
+        shot({
+          index: 2,
+          prompt: "第二镜",
+          negativePrompt: "n2",
+          sceneHeading: "H2",
+        }),
+        shot({
+          index: 1,
+          prompt: "第一镜",
+          negativePrompt: "n1",
+          sceneHeading: "H1",
+        }),
+      ],
+    });
+
+    const r = await createFilmFromProject({
+      userId: "u1",
+      projectId: "proj_1",
+      videoWorkflowId: "wf-video",
+      imageWorkflowId: "wf-image",
+    });
+
+    expect(r).toEqual({ id: "film-p1", shots: 2 });
+    // 不再走 LLM 分镜（镜头是工坊定稿）
+    expect(llmStructured).not.toHaveBeenCalled();
+
+    // 成片挂上 projectId，标题 / 类型 / 剧本取自项目
+    const created = filmRepo.create.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(created.projectId).toBe("proj_1");
+    expect(created.title).toBe("项目片");
+    expect(created.type).toBe("animation");
+    expect(created.script).toBe("# 剧本");
+
+    const [filmId, shots] = shotRepo.createMany.mock.calls[0]!;
+    expect(filmId).toBe("film-p1");
+    // 按镜号排序后 order 从 0 起，prompt/negative 原样带入
+    expect(shots.map((s) => s.order)).toEqual([0, 1]);
+    expect(shots[0]!.prompt).toBe("第一镜");
+    expect(shots[0]!.negative).toBe("n1");
+    expect(shots[1]!.prompt).toBe("第二镜");
+    // 逐镜 params 与自由建片同一口径
+    expect(shots[0]!.params).toMatchObject({
+      videoWorkflowId: "wf-video",
+      imageWorkflowId: "wf-image",
+    });
+  });
+
+  it("项目无 production 行或无镜头 → 抛错且不落库", async () => {
+    prodRepo.getForUser.mockResolvedValue(null);
+    await expect(
+      createFilmFromProject({ userId: "u1", projectId: "proj_missing" }),
+    ).rejects.toThrow(/还没有镜头/);
+    expect(filmRepo.create).not.toHaveBeenCalled();
+    expect(shotRepo.createMany).not.toHaveBeenCalled();
+
+    prodRepo.getForUser.mockResolvedValue({ shots: [] });
+    await expect(
+      createFilmFromProject({ userId: "u1", projectId: "proj_empty" }),
+    ).rejects.toThrow(/还没有镜头/);
+    expect(filmRepo.create).not.toHaveBeenCalled();
   });
 });

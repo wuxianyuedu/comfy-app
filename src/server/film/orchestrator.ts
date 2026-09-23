@@ -19,6 +19,8 @@ import {
   skillRepository,
   taskRepository,
 } from "~/lib/core/repository";
+import { productionRepository } from "~/lib/core/repository-production";
+import type { Shot } from "~/lib/workshop/types";
 import { cancelTask } from "~/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
@@ -191,11 +193,60 @@ async function parseScriptToShots(
 }
 
 // ── create ─────────────────────────────────────────────────
+/** 落库一份成片 + 其镜头行。`createFilm`（剧本自解析）与 `createFilmFromProject`
+ *  （读统一项目 Shot[]）共用的唯一落点 —— 逐镜 params 的折算只此一处（§12.12）。 */
+async function persistFilmWithShots(args: {
+  userId: string;
+  projectId?: string | null;
+  title: string;
+  script: string;
+  type: string;
+  styleSlug?: string | null;
+  sizeSpec: unknown;
+  fps: number;
+  framesPerShot: number;
+  subtitleOn: boolean;
+  bgmName?: string | null;
+  videoWorkflowId: string;
+  imageWorkflowId: string;
+  shotInputs: FilmShotInput[];
+}): Promise<string> {
+  const film = await filmRepository.create({
+    userId: args.userId,
+    projectId: args.projectId ?? null,
+    title: args.title,
+    script: args.script,
+    type: args.type,
+    styleSlug: args.styleSlug ?? null,
+    size: JSON.stringify(args.sizeSpec),
+    fps: args.fps,
+    framesPerShot: args.framesPerShot,
+    subtitleOn: args.subtitleOn,
+    bgmName: args.bgmName ?? null,
+  });
+  await filmShotRepository.createMany(
+    film.id,
+    args.shotInputs.map((shot) => ({
+      order: shot.order,
+      heading: shot.heading ?? null,
+      prompt: shot.prompt,
+      negative: shot.negative ?? null,
+      params: {
+        frames: args.framesPerShot,
+        fps: args.fps,
+        size: args.sizeSpec,
+        videoWorkflowId: args.videoWorkflowId,
+        imageWorkflowId: args.imageWorkflowId,
+      },
+    })),
+  );
+  return film.id;
+}
+
 export async function createFilm(input: CreateFilmInput) {
   /* 成片画幅按尺寸表达存（数据库那一列是文本，存 JSON）；镜头侧存同一份尺寸表达
    * （工作流库工作流由封装层逐端口派值，不再折算成 "WxH"）。 */
   const sizeSpec = toSizeSpec(input.size ?? FILM_COMPOSE_SIZE);
-  const shotSize = sizeSpec;
   const fps = input.fps ?? 16;
   const framesPerShot = input.framesPerShot ?? 49;
 
@@ -216,48 +267,94 @@ export async function createFilm(input: CreateFilmInput) {
     styleNegative,
   );
 
-  const videoWorkflowId = input.videoWorkflowId ?? "";
-  const imageWorkflowId = input.imageWorkflowId ?? "";
-
-  const film = await filmRepository.create({
+  const filmId = await persistFilmWithShots({
     userId: input.userId,
     title: input.title,
     script: input.script,
     type: input.type ?? "short_video",
     styleSlug: input.styleSlug ?? null,
-    size: JSON.stringify(sizeSpec),
+    sizeSpec,
     fps,
     framesPerShot,
     subtitleOn: input.subtitleOn ?? true,
     bgmName: input.bgmName ?? null,
+    videoWorkflowId: input.videoWorkflowId ?? "",
+    imageWorkflowId: input.imageWorkflowId ?? "",
+    shotInputs: shots,
   });
 
-  await filmShotRepository.createMany(
-    film.id,
-    shots.map((shot) => {
-      const params: Record<string, unknown> = {
-        frames: framesPerShot,
-        fps,
-        size: shotSize,
-        videoWorkflowId,
-        imageWorkflowId,
-      };
-      return {
-        order: shot.order,
-        heading: shot.heading ?? null,
-        prompt: shot.prompt,
-        negative: shot.negative ?? null,
-        params,
-      };
-    }),
-  );
-
   await appendFilmLog(
-    film.id,
+    filmId,
     "success",
     `已生成分镜，共 ${shots.length} 个镜头`,
   );
-  return { id: film.id, shots: shots.length };
+  return { id: filmId, shots: shots.length };
+}
+
+export interface CreateFilmFromProjectInput {
+  userId: string;
+  /** 统一项目 id（proj_*）；镜头取自该项目的 production.shots。 */
+  projectId: string;
+  /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
+  videoWorkflowId?: string | null;
+  /** 文生视频镜头合成首帧用的图类工作流 id。 */
+  imageWorkflowId?: string | null;
+  title?: string;
+  type?: string;
+  size?: unknown;
+  fps?: number;
+  framesPerShot?: number;
+  subtitleOn?: boolean;
+  bgmName?: string | null;
+}
+
+/** 从统一项目的 `production.shots` 直接建片（Phase 5 接入，设计 §6.3）：
+ *  工坊已产出的镜头不再走「自建剧本 → LLM 平行分镜」，而是逐条映射为成片镜头。
+ *  镜头的 prompt / negative 已是工坊定稿（含风格），这里不二次加工；顺序按镜号 index。 */
+export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
+  const row = await productionRepository.getForUser(
+    input.userId,
+    input.projectId,
+  );
+  const rawShots = row && Array.isArray(row.shots) ? (row.shots as Shot[]) : [];
+  const shots = [...rawShots].sort((a, b) => a.index - b.index);
+  if (!shots.length) {
+    throw new Error("该项目还没有镜头，请先在工坊产出镜头再成片");
+  }
+
+  const sizeSpec = toSizeSpec(input.size ?? FILM_COMPOSE_SIZE);
+  const fps = input.fps ?? 16;
+  const framesPerShot = input.framesPerShot ?? 49;
+
+  const shotInputs: FilmShotInput[] = shots.map((shot, i) => ({
+    order: i,
+    heading: shot.sceneHeading || undefined,
+    prompt: shot.prompt,
+    negative: shot.negativePrompt || undefined,
+  }));
+
+  const filmId = await persistFilmWithShots({
+    userId: input.userId,
+    projectId: input.projectId,
+    title: input.title ?? row?.title ?? "未命名成片",
+    script: row?.scriptMarkdown ?? "",
+    type: input.type ?? row?.type ?? "short_video",
+    sizeSpec,
+    fps,
+    framesPerShot,
+    subtitleOn: input.subtitleOn ?? true,
+    bgmName: input.bgmName ?? null,
+    videoWorkflowId: input.videoWorkflowId ?? "",
+    imageWorkflowId: input.imageWorkflowId ?? "",
+    shotInputs,
+  });
+
+  await appendFilmLog(
+    filmId,
+    "success",
+    `从项目镜头建片，共 ${shotInputs.length} 个镜头`,
+  );
+  return { id: filmId, shots: shotInputs.length };
 }
 
 // ── 生成一个视频镜头 ──────────────────────────────────────

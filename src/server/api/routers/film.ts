@@ -59,6 +59,33 @@ export const filmRouter = createTRPCRouter({
       return { id, shots };
     }),
 
+  /* POST /api/film/from-project —— 从统一项目建片（Phase 5 接入，设计 §6.3）：
+   *  镜头取自该项目的 production.shots（工坊定稿），不再走「自建剧本 → LLM 平行分镜」。 */
+  createFromProject: authedProcedure
+    .input(
+      z.object({
+        projectId: z.string().min(1),
+        videoWorkflowId: z.string().optional(),
+        imageWorkflowId: z.string().optional(),
+        title: z.string().min(1).max(200).optional(),
+        type: z.string().min(1).optional(),
+        size: z.union([sizeSpecSchema, z.string()]).optional(),
+        fps: z.number().int().positive().optional(),
+        framesPerShot: z.number().int().positive().optional(),
+        subtitleOn: z.boolean().optional(),
+        bgmName: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { createFilmFromProject } =
+        await import("~/server/film/orchestrator");
+      const { id, shots } = await createFilmFromProject({
+        userId: ctx.user.id,
+        ...input,
+      });
+      return { id, shots };
+    }),
+
   /* GET /api/film/[id] —— 读 */
   detail: authedProcedure
     .input(z.object({ id: z.string() }))
