@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  LOG_ROW_EXPANDED,
   LOG_ROW_LINE,
   LOG_ROW_SINGLE,
   LOG_SCROLL_MAX,
@@ -80,6 +81,46 @@ describe("行位置表", () => {
 
   it("空列表给出空位置表与 0 总高", () => {
     expect(layoutRows([], true, 0)).toEqual({ rows: [], totalSize: 0 });
+  });
+});
+
+describe("展开行与强制单行的原始输出行（按 id 点名）", () => {
+  const entries = [
+    { id: "a", message: '[comfy-cli 原始] {"a":1}' },
+    { id: "b", message: '[comfy-cli 原始] {"b":2}' },
+    { id: "c", message: "普通日志" },
+  ];
+
+  it("展开的行固定为 LOG_ROW_EXPANDED，不受内容长度影响", () => {
+    const { rows } = layoutRows(entries, true, 0, {
+      expandedIds: new Set(["b"]),
+    });
+    expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_SINGLE });
+    expect(rows[1]).toEqual({ start: LOG_ROW_SINGLE, size: LOG_ROW_EXPANDED });
+  });
+
+  it("强制单行的原始输出行在 wrap 下也只占一行（完整原文交给展开态）", () => {
+    const long = `[comfy-cli 原始] ${JSON.stringify({ nodes: "x".repeat(5000) })}`;
+    const list = [{ id: "a", message: long }];
+    /* 不点名时，wrap 会把它按宽度估成很多行（那就是「错的显示 + 错的滚动长度」）。 */
+    const loose = layoutRows(list, true, 130);
+    expect(loose.rows[0]!.size).toBeGreaterThan(LOG_ROW_SINGLE);
+    /* 点名之后恒为一行。 */
+    const tight = layoutRows(list, true, 130, {
+      singleLineIds: new Set(["a"]),
+    });
+    expect(tight.rows[0]!.size).toBe(LOG_ROW_SINGLE);
+  });
+
+  it("start 前缀和仍由实际行高累加（位置与滚动条同一口径）", () => {
+    const { rows, totalSize } = layoutRows(entries, true, 0, {
+      expandedIds: new Set(["a"]),
+      singleLineIds: new Set(["a", "b"]),
+    });
+    expect(rows[0]).toEqual({ start: 0, size: LOG_ROW_EXPANDED });
+    expect(rows[1]!.start).toBe(LOG_ROW_EXPANDED);
+    expect(rows[2]!.start).toBe(LOG_ROW_EXPANDED + LOG_ROW_SINGLE);
+    expect(totalSize).toBe(LOG_ROW_EXPANDED + LOG_ROW_SINGLE * 2);
   });
 });
 

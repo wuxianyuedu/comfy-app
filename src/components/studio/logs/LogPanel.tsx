@@ -47,6 +47,8 @@ import {
   useCopyFeedback,
 } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
+import { useExpansionSet } from "~/components/ui/expansion-set";
+import { isCliJsonLine } from "~/lib/log/log-cli-json";
 
 /**
  * 页脚的一行摘要：说清楚「现在看的是哪一段、还有多少」。
@@ -166,6 +168,13 @@ export function LogPanel() {
    * （见 `log-virtual` 的 `pinShouldYield`），是记账值，不进 state。 */
   const appliedTopRef = useRef(0);
   const [wrap, setWrap] = useState(true);
+  /* comfy-cli 原始输出行的展开集合：状态走唯一出口 `useExpansionSet`
+   * （规范 16 §16.2.4.17），高度由 `log-virtual` 按 **id** 给常量（展开态
+   * `LOG_ROW_EXPANDED`、折叠态强制单行）。状态挂面板而不是行内，行滚出窗口
+   * 卸载后回来仍是同一行、同一展开态。 */
+  const expansion = useExpansionSet();
+  /* 直接取 `toggle` 交给行：它的引用稳定（`useExpansionSet` 内 `useCallback([])`），
+   * 因此 `LogRow` 的 memo 不会被每次展开 / 收起破坏。 */
   /* 加宽档与它的记忆收在 `~/components/ui/wide-panel`（规范 16 §16.2.4.18）：
    * 此前三个日志面板各写一份 `useState`，且**都没有持久化** ——
    * 用户加宽后关掉再打开又回到窄档。 */
@@ -242,9 +251,31 @@ export function LogPanel() {
    *
    * `viewport.width` 为 0（首帧未量到 / jsdom 不做布局）时 `layoutRows` 只按
    * 显式换行估高——宁可少估，也不瞎估。 */
+  /* 可展开的原始输出行（comfy-cli 原文 + JSON 容器）：折叠态强制单行、展开态
+   * 用行高常量。判据走共享的 `isCliJsonLine`（便宜，只看前缀与首字符）——
+   * 与 `LogRow` 同一口径，两边不会分叉。 */
+  const cliJsonIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entry of pageLogs) {
+      if (isCliJsonLine(entry.message)) ids.add(entry.id);
+    }
+    return ids;
+  }, [pageLogs]);
+  const expandedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const key of Object.keys(expansion.map)) {
+      if (expansion.map[key]) ids.add(key);
+    }
+    return ids;
+  }, [expansion.map]);
+
   const { rows, totalSize } = useMemo(
-    () => layoutRows(pageLogs, wrap, wrap ? viewport.width : 0),
-    [pageLogs, wrap, viewport.width],
+    () =>
+      layoutRows(pageLogs, wrap, wrap ? viewport.width : 0, {
+        expandedIds,
+        singleLineIds: cliJsonIds,
+      }),
+    [pageLogs, wrap, viewport.width, expandedIds, cliJsonIds],
   );
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   /* 量不到视口高度（jsdom 不做布局 / 首帧测量之前）就**整页渲染**：虚拟化是
@@ -614,6 +645,8 @@ export function LogPanel() {
                           entry={entry}
                           wrap={wrap}
                           keyword={search}
+                          expanded={expansion.isExpanded(entry.id)}
+                          onToggleExpand={expansion.toggle}
                           /* 显式高度 = 估算高度：两者不同口径时误差会累积，
                            滚动位置与内容就错开了（见 log-virtual 的常量）。 */
                           style={{

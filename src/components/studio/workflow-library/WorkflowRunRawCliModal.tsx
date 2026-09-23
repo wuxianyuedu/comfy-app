@@ -3,9 +3,10 @@
 /**
  * WorkflowRunRawCliModal — work-flow library "view full comfy-cli output" dialog.
  *
- * The execution-log summary truncates comfy-cli lines (per-line 400 chars /
- * 300 rows) to avoid flooding the panel. This dialog fetches the COMPLETE,
- * untruncated comfy-cli stdout/stderr lines for a task from
+ * The execution-log panel folds each `[comfy-cli 原始]` line into one row (and
+ * caps how many it keeps by row count), so this dialog is the "get everything"
+ * exit: it fetches the COMPLETE, untruncated comfy-cli stdout/stderr lines for a
+ * task from
  * /api/tasks/[id]/raw-cli and renders them: JSON payloads (the `[comfy-cli
  * 原始]` / `stdout` lines) go through the collapsible, syntax-highlighted
  * JsonViewer; everything else is shown as raw text. View-only: the network
@@ -23,27 +24,22 @@ import { useInterval } from "~/components/ui/use-interval";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { fetchRawCli } from "~/lib/comfyui/raw-cli-client";
-
-const RAW_LINE_PREFIX = /^\[(comfy-cli (?:原始|stdout|stderr))\]\s?/;
+import { parseCliJsonLine, splitCliLogLine } from "~/lib/log/log-cli-json";
 
 type ParsedLine =
   | { kind: "json"; tag: string; value: unknown }
   | { kind: "text"; tag: string; text: string };
 
+/**
+ * 把一行拆成「JSON 载荷」或「原文」：判据与解析都走 `~/lib/log/log-cli-json`
+ * 的唯一口径（日志面板的折叠行用的是同一份），两处不会分叉。
+ */
 function parseLine(line: string): ParsedLine {
-  const m = RAW_LINE_PREFIX.exec(line);
-  if (!m) return { kind: "text", tag: "", text: line };
-  const tag = m[1] ?? "";
-  const payload = line.slice(m[0].length);
-  try {
-    const value: unknown = JSON.parse(payload);
-    if (value && typeof value === "object") {
-      return { kind: "json", tag, value };
-    }
-  } catch {
-    /* not JSON — fall through to raw text */
-  }
-  return { kind: "text", tag, text: payload };
+  const json = parseCliJsonLine(line);
+  if (json) return { kind: "json", tag: json.tag, value: json.value };
+  const split = splitCliLogLine(line);
+  if (!split) return { kind: "text", tag: "", text: line };
+  return { kind: "text", tag: split.tag, text: split.payload };
 }
 
 const TAG_STYLES: Record<string, string> = {

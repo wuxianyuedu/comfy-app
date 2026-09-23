@@ -15,17 +15,21 @@
  *   一致（那个模块的注释指向的就是这里）。
  */
 
-import React, { memo, useState } from "react";
+import React, { memo, useMemo, useState } from "react";
 import { Copy } from "lucide-react";
 import { formatEntryForClipboard, type LogEntry } from "./log-store";
 import { Button } from "~/components/ui/button";
+import { Disclosure } from "~/components/ui/disclosure";
+import { JsonViewer } from "~/components/ui/json-viewer";
 import {
   copyFailureText,
   useCopyFeedback,
 } from "~/components/ui/use-copy-feedback";
+import { isCliJsonLine, parseCliJsonLine } from "~/lib/log/log-cli-json";
 import { normalizeNeedle } from "~/lib/list-filter";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { formatTime } from "./log-format";
+import { LOG_ROW_EXPANDED, LOG_ROW_SINGLE } from "./log-virtual";
 import {
   LEVEL_BADGE_STYLES,
   LEVEL_TEXT_STYLES,
@@ -191,72 +195,163 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
  *
  * 同时 `overflow-hidden`：高度被钉死之后，内容若比估算的高就会溢到下一行上，
  * 把两行叠在一起（不换行时尤其明显）。
+ *
+ * comfy-cli 原始输出行（`[comfy-cli 原始] {json}`）多一条形态：折叠成一行、
+ * 展开后经 `JsonViewer` 显示完整 JSON（判据与解析见 `~/lib/log/log-cli-json`）。
+ * 展开**状态**归面板（`useExpansionSet`），展开**高度**归 `log-virtual` 的
+ * `LOG_ROW_EXPANDED` —— 行内不自己测高，否则虚拟滚动会与内容错位。
  */
 export const LogRow = memo(function LogRow({
   entry,
   wrap,
   keyword,
+  expanded,
+  onToggleExpand,
   style,
 }: {
   entry: LogEntry;
   wrap: boolean;
   keyword: string;
+  /** 该行是否处于展开态（只对可展开的原始输出行有意义）。 */
+  expanded: boolean;
+  /** 点标题行折叠 / 展开（`Disclosure` 的受控回调）；回调带 id 以便面板方用稳定引用。 */
+  onToggleExpand: (id: string) => void;
   style: React.CSSProperties;
 }) {
   /* 文件路径那枚的复制：**显式静默**失败 —— 整条路径就印在按钮上，
    * 旁边没有第二处可说的地方，而弹 toast 会盖住正在看的日志。 */
   const copyLocation = useCopyFeedback({ onFailure: "silent" });
+
+  /* 可展开判据与解析都走共享模块的唯一口径：面板按 `isCliJsonLine` 给高度，
+   * 这里按它决定要不要走 `Disclosure`，两边不会分叉。 */
+  const expandable = isCliJsonLine(entry.message);
+  const cliJson = useMemo(
+    () => (expandable ? parseCliJsonLine(entry.message) : null),
+    [expandable, entry.message],
+  );
+
+  const location = entry.location;
+  const timeNode = (
+    <time
+      dateTime={new Date(entry.time).toISOString()}
+      className="text-ink-muted shrink-0 tabular-nums"
+    >
+      {formatTime(entry.time)}
+    </time>
+  );
+  const levelNode = (
+    <span
+      className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_BADGE_STYLES[entry.level]}`}
+    >
+      {entry.level}
+    </span>
+  );
+  /* 可展开行折叠态恒为一行摘要（完整内容在展开态），因此不受 `wrap` 影响。 */
+  const truncated = expandable || !wrap;
+  const messageTitle = expandable
+    ? expanded
+      ? "点击收起完整输出"
+      : "点击展开完整 JSON"
+    : !wrap
+      ? entry.message
+      : undefined;
+  const messageNode = (
+    <span
+      /* 选区判定的落点：面板贴底前要知道「用户框选的是不是日志正文」，
+       * 这个属性就是那件事的载体（见 selectionInsideLogs）。 */
+      {...{ [LOG_ROW_TEXT_ATTRIBUTE]: "" }}
+      className={`min-w-0 flex-1 ${
+        truncated ? "truncate" : "break-words whitespace-pre-wrap"
+      } ${LEVEL_TEXT_STYLES[entry.level]}`}
+      title={messageTitle}
+    >
+      <HighlightedText text={entry.message} keyword={keyword} />
+    </span>
+  );
+  const locationNode = location ? (
+    <Button
+      variant="ghost"
+      onClick={() => copyLocation(location)}
+      className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
+      title={`${location}（点击复制）`}
+    >
+      {location}
+    </Button>
+  ) : null;
+  const sourceNode = entry.origin ? (
+    <span className="text-ink-fainter shrink-0 text-[11px]">
+      {entry.origin}
+    </span>
+  ) : entry.source !== "console" ? (
+    <span className="text-ink-fainter shrink-0 text-[11px]">
+      {entry.source}
+    </span>
+  ) : null;
+  /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
+     `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */
+  const copyNode = <RowCopyButton entry={entry} />;
+
+  if (!expandable) {
+    return (
+      <div
+        style={style}
+        className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 py-1 font-mono text-[13px] leading-snug"
+      >
+        {timeNode}
+        {levelNode}
+        {messageNode}
+        {locationNode}
+        {sourceNode}
+        {copyNode}
+      </div>
+    );
+  }
+
+  /* 可展开行：整行是 `Disclosure`（触发开关 = 标题行，面板 = JsonViewer）。
+   * 面板 `basis-full` 独占一行，高度 = 行高常量 − 标题行高；用 `gap-x` 而非
+   * `gap`（不要行间距，否则标题行 + 面板会超出 `LOG_ROW_EXPANDED` 而被裁掉）。 */
   return (
     <div
       style={style}
-      className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 py-1 font-mono text-[13px] leading-snug"
+      className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-[13px] leading-snug"
     >
-      <time
-        dateTime={new Date(entry.time).toISOString()}
-        className="text-ink-muted shrink-0 tabular-nums"
+      <Disclosure
+        open={expanded}
+        onOpenChange={(next) => {
+          if (next !== expanded) onToggleExpand(entry.id);
+        }}
+        marker="chevron"
+        rootClassName="flex flex-wrap items-start gap-x-2.5 px-4 py-1"
+        className="w-auto min-w-0 flex-1"
+        panelClassName="basis-full"
+        leading={
+          <>
+            {timeNode}
+            {levelNode}
+          </>
+        }
+        trailing={
+          <>
+            {locationNode}
+            {sourceNode}
+            {copyNode}
+          </>
+        }
+        trigger={messageNode}
       >
-        {formatTime(entry.time)}
-      </time>
-      <span
-        className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase ${LEVEL_BADGE_STYLES[entry.level]}`}
-      >
-        {entry.level}
-      </span>
-      <span
-        /* 选区判定的落点：面板贴底前要知道「用户框选的是不是日志正文」，
-         * 这个属性就是那件事的载体（见 selectionInsideLogs）。 */
-        {...{ [LOG_ROW_TEXT_ATTRIBUTE]: "" }}
-        className={`min-w-0 flex-1 ${
-          wrap ? "break-words whitespace-pre-wrap" : "truncate"
-        } ${LEVEL_TEXT_STYLES[entry.level]}`}
-        title={!wrap ? entry.message : undefined}
-      >
-        <HighlightedText text={entry.message} keyword={keyword} />
-      </span>
-      {entry.location && (
-        <Button
-          variant="ghost"
-          onClick={() => copyLocation(entry.location!)}
-          className="text-ink-fainter hover:text-ink-soft h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right text-[11px] font-normal whitespace-nowrap"
-          title={`${entry.location}（点击复制）`}
-        >
-          {entry.location}
-        </Button>
-      )}
-      {entry.origin ? (
-        <span className="text-ink-fainter shrink-0 text-[11px]">
-          {entry.origin}
-        </span>
-      ) : (
-        entry.source !== "console" && (
-          <span className="text-ink-fainter shrink-0 text-[11px]">
-            {entry.source}
-          </span>
-        )
-      )}
-      {/* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
-          `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */}
-      <RowCopyButton entry={entry} />
+        {expanded && cliJson ? (
+          <div
+            className="min-h-0"
+            style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}
+          >
+            <JsonViewer
+              data={cliJson.value}
+              title={`comfy-cli ${cliJson.tag}`}
+              initialCollapsedDepth={2}
+            />
+          </div>
+        ) : null}
+      </Disclosure>
     </div>
   );
 });
