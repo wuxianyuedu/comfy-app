@@ -14,6 +14,7 @@ import { materialRouter } from "~/server/api/routers/material";
 import { workflowModelRouter } from "~/server/api/routers/workflow-model";
 import { customNodeRouter } from "~/server/api/routers/custom-nodes";
 import { generateRouter } from "~/server/api/routers/generate";
+import { runRouter } from "~/server/api/routers/run";
 
 /**
  * 这是服务端的主路由。
@@ -36,6 +37,7 @@ export const appRouter = createTRPCRouter({
   workflowModel: workflowModelRouter,
   customNode: customNodeRouter,
   generate: generateRouter,
+  run: runRouter,
 });
 
 // 对外导出 API 的类型定义
