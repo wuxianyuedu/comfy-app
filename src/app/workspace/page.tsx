@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import {
   VideoQueueModal,
   HomePage,
-  WorkspaceNav,
+  AppShell,
   AuroraBackground,
 } from "~/components/studio";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
@@ -362,54 +362,42 @@ export default function WorkspacePage() {
     <ShellTabs>
       <>
         {/* 日志/Toast Provider 与底部状态栏已全局挂载（根布局），此处不再重复包裹 */}
-        {viewMode === "home" ? (
-          <>
+        {/* 侧栏 + 顶栏 + 主内容容器都归 `AppShell`（规范 §12.1 规划的壳层）。
+            home 与其余视图共用同一套导航与工具条 —— 此前是「首页自带内联侧栏与
+            顶栏 / 其余视图用 64px 自绘竖排导航条」两套形态，属历史遗留。 */}
+        <AppShell
+          active={viewMode}
+          onSelect={handleNavSelect}
+          onOpenSettings={openSettings}
+        >
+          {viewMode === "home" ? (
             <HomePage
               onNewProject={handleNewProject}
               recentProjects={recentProjects}
               onOpenProject={handleOpenProject}
               onOpenCanvasProject={handleOpenCanvasProject}
-              activeNav="home"
               onNavigate={handleHomeNavigate}
               onShowAllProjects={handleShowAllProjects}
-              onOpenSettings={openSettings}
             />
-            <VideoQueueModal
-              open={videoQueueOpen}
-              onClose={() => setVideoQueueOpen(false)}
-            />
-          </>
-        ) : (
-          <>
-            <div
-              className="bg-canvas text-ink flex h-full w-full overflow-hidden"
-              style={{ fontFamily: "var(--font-sans)" }}
-            >
+          ) : (
+            <>
               {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感 */}
               <AuroraBackground />
+              {renderCenter()}
+            </>
+          )}
+        </AppShell>
 
-              <WorkspaceNav
-                active={viewMode}
-                onSelect={handleNavSelect}
-                onOpenSettings={openSettings}
-              />
-
-              <div className="flex min-w-0 flex-1 flex-col">
-                {renderCenter()}
-              </div>
-
-              <VideoQueueModal
-                open={videoQueueOpen}
-                onClose={() => setVideoQueueOpen(false)}
-                onOpenTask={(id) => {
-                  setVideoQueueOpen(false);
-                  // 直接跳转到作品详情页（溯源 + 执行日志）
-                  router.push(`/create/${id}`);
-                }}
-              />
-            </div>
-          </>
-        )}
+        {/* 视频队列弹窗：两个视图分支此前各挂一份同构实例，合并为一处。 */}
+        <VideoQueueModal
+          open={videoQueueOpen}
+          onClose={() => setVideoQueueOpen(false)}
+          onOpenTask={(id) => {
+            setVideoQueueOpen(false);
+            // 直接跳转到作品详情页（溯源 + 执行日志）
+            router.push(`/create/${id}`);
+          }}
+        />
 
         {/* 设置 overlay：仅打开时挂载。置于最顶层，不卸载下方 workspace 组件树。 */}
         {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
