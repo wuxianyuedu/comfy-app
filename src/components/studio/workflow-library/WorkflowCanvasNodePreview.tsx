@@ -639,6 +639,7 @@ export function WorkflowCanvasNodePreview({
                 workflowId={workflowId}
                 source="canvas-node"
                 taskId={logViewTaskId}
+                alwaysVisible
                 onOpen={() => setLogOpen(true)}
               />
               {/* 多模式工作流在这儿也要能换模式：两个页签读的是**同一个**
