@@ -33,6 +33,8 @@ import { useFileUpload } from "./hooks/use-file-upload";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
 import { useShotGenerationWriteback } from "./hooks/use-shot-generation-writeback";
+import { requestShotRedo } from "~/lib/production/shot-writeback";
+import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { ErrorPanel } from "./ErrorPanel";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
@@ -61,6 +63,14 @@ export const CanvasNode = React.memo(function CanvasNode({
     [id, setNodes],
   );
   const deleteSelf = () => setNodes((nds) => nds.filter((nd) => nd.id !== id));
+
+  /* 镜头节点「退回让 AI 重做」：本地先回落 idle（清结果），并写回统一项目（清 imageUrl/clipUrl
+   * + rev 自增）；run 若在跑，规划器下一步会重做该镜。IO 走 lib 客户端，本视图不碰 fetch。 */
+  const redoShot = useCallback(() => {
+    if (!d.shotId) return;
+    patch({ status: "idle", resultPath: undefined, error: undefined });
+    void requestShotRedo(getActiveId() ?? "", d.shotId);
+  }, [d.shotId, patch]);
 
   const focusNode = () =>
     fitView({ nodes: [{ id }], duration: 300, padding: 0.2, maxZoom: 1.2 });
@@ -289,7 +299,11 @@ export const CanvasNode = React.memo(function CanvasNode({
       }
     >
       {selected && (
-        <SelectedToolbar onDelete={deleteSelf} onFocusNode={focusNode} />
+        <SelectedToolbar
+          onDelete={deleteSelf}
+          onFocusNode={focusNode}
+          onRedo={d.shotId ? redoShot : undefined}
+        />
       )}
       {/* 头部按节点类型分支：自定义工作流走 Ardot 稿 v2 精确 token
        * （紫色 W 圆角方块 + 标题 + 状态胶囊）；其它节点保留通用 NodeChip。
