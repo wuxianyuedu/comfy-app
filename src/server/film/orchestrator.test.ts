@@ -34,6 +34,7 @@ const filmRepo = vi.hoisted(() => ({
 type ShotRow = { id: string; taskId: string | null };
 type CreatedShot = {
   order: number;
+  shotId?: string | null;
   params: Record<string, unknown>;
   prompt: string;
   heading?: string | null;
@@ -122,7 +123,7 @@ import {
   composeFilm,
   createFilm,
   createFilmFromProject,
-  markProductionRendered,
+  syncFilmToProject,
 } from "./orchestrator";
 import { NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
 
@@ -280,7 +281,7 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
 });
 
 describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 5）", () => {
-  // 只映射用到的字段即可（index / prompt / negativePrompt / sceneHeading）。
+  // 只映射用到的字段即可（id / index / prompt / negativePrompt / sceneHeading）。
   const shot = (over: Record<string, unknown>) =>
     ({ sceneHeading: "", negativePrompt: "", ...over }) as never;
 
@@ -292,12 +293,14 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
       scriptMarkdown: "# 剧本",
       shots: [
         shot({
+          id: "shot-2",
           index: 2,
           prompt: "第二镜",
           negativePrompt: "n2",
           sceneHeading: "H2",
         }),
         shot({
+          id: "shot-1",
           index: 1,
           prompt: "第一镜",
           negativePrompt: "n1",
@@ -334,6 +337,9 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
     expect(shots[0]!.prompt).toBe("第一镜");
     expect(shots[0]!.negative).toBe("n1");
     expect(shots[1]!.prompt).toBe("第二镜");
+    // 逐镜回填来源 shotId（Phase 5 回写逐镜 clip 的锚点）
+    expect(shots[0]!.shotId).toBe("shot-1");
+    expect(shots[1]!.shotId).toBe("shot-2");
     // 逐镜 params 与自由建片同一口径
     expect(shots[0]!.params).toMatchObject({
       videoWorkflowId: "wf-video",
@@ -357,8 +363,8 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
   });
 });
 
-describe("markProductionRendered — 成片合成后回写统一项目完成状态（Phase 5 §6.3/§7）", () => {
-  it("production 行存在 → 读改写：rendered=true、stage=render，其余字段原样保留", async () => {
+describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写（Phase 5 §6.3/§7）", () => {
+  it("按 shotId 命中镜头写入 clipUrl/clipStatus，并标 rendered；其余字段与未命中镜头原样保留", async () => {
     prodRepo.getForUser.mockResolvedValue({
       id: "proj_1",
       title: "项目片",
@@ -368,24 +374,41 @@ describe("markProductionRendered — 成片合成后回写统一项目完成状�
       scriptMarkdown: "# 剧本",
       scenes: [{ id: "sc1" }],
       characters: [{ id: "c1" }],
-      shots: [{ id: "s1", index: 1 }],
+      shots: [
+        { id: "s1", index: 1, prompt: "p1" },
+        { id: "s2", index: 2, prompt: "p2" },
+      ],
       progress: { stage: "video", rendered: false },
     });
 
-    await markProductionRendered("u1", "proj_1");
+    await syncFilmToProject("u1", "proj_1", [
+      { shotId: "s1", videoPath: "/v/s1.mp4", status: "SUCCEEDED" },
+      { shotId: null, videoPath: "/v/orphan.mp4", status: "SUCCEEDED" }, // 自由建片镜头：无来源，跳过
+      { shotId: "s2", videoPath: null, status: "FAILED" }, // 无产物，clip 不写
+    ]);
 
     expect(prodRepo.upsertForUser).toHaveBeenCalledTimes(1);
     const [userId, data] = prodRepo.upsertForUser.mock.calls[0]!;
     expect(userId).toBe("u1");
     expect(data.progress).toEqual({ stage: "render", rendered: true });
-    // 非进度字段整体回写、不丢失
-    expect(data.id).toBe("proj_1");
+    // s1 命中且带 videoPath → 写 clipUrl + clipStatus done；prompt 等原字段保留
+    expect(data.shots).toEqual([
+      {
+        id: "s1",
+        index: 1,
+        prompt: "p1",
+        clipUrl: "/v/s1.mp4",
+        clipStatus: "done",
+      },
+      // s2 无 videoPath → 原样，不被 clip 覆盖
+      { id: "s2", index: 2, prompt: "p2" },
+    ]);
+    // 非镜头字段整体回写、不丢失
     expect(data.title).toBe("项目片");
-    expect(data.shots).toEqual([{ id: "s1", index: 1 }]);
     expect(data.characters).toEqual([{ id: "c1" }]);
   });
 
-  it("脏 progress（缺字段 / 非法 stage）也规范化后再标已合成", async () => {
+  it("脏 progress（缺字段 / 非法 stage）也规范化后再回写", async () => {
     prodRepo.getForUser.mockResolvedValue({
       id: "proj_2",
       title: "T",
@@ -398,14 +421,15 @@ describe("markProductionRendered — 成片合成后回写统一项目完成状�
       shots: [],
       progress: {},
     });
-    await markProductionRendered("u1", "proj_2");
+    await syncFilmToProject("u1", "proj_2", []);
     const [, data] = prodRepo.upsertForUser.mock.calls[0]!;
     expect(data.progress).toEqual({ stage: "render", rendered: true });
+    expect(data.shots).toEqual([]);
   });
 
-  it("无 production 行 → 不写（幂等 / 纯文本自由建片不受影响）", async () => {
+  it("无 production 行 → 不写（纯文本自由建片不受影响）", async () => {
     prodRepo.getForUser.mockResolvedValue(null);
-    await markProductionRendered("u1", "proj_missing");
+    await syncFilmToProject("u1", "proj_missing", []);
     expect(prodRepo.upsertForUser).not.toHaveBeenCalled();
   });
 });
