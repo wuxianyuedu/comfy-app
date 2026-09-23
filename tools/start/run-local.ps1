@@ -2,8 +2,9 @@
 <#
 run-local.ps1 — 非开发人员本地运行引导入口（原 run-local.bat）
 
-一键完成环境自检与初始化：检查 node/pnpm → 生成 .env → 补齐依赖，
-完成后提示双击 start-web.ps1 启动。实际逻辑在 scripts\prepare-local-run.ps1。
+一键完成环境自检与初始化：检查 node/pnpm → 生成 .env → 补齐依赖 →
+补齐 comfy-cli 运行环境，完成后提示双击 start-web.ps1 启动。实际逻辑在
+scripts\prepare-local-run.ps1。
 
 前置（一次性）：Windows 默认双击 .ps1 是「用记事本打开」，需先右键
   scripts\enable-ps1-double-click.ps1 选择「使用 PowerShell 运行」完成关联。

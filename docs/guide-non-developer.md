@@ -93,6 +93,7 @@
 - ✅ 检查 pnpm 版本是否与项目要求一致（`package.json` 的 `packageManager`），不一致时自动用 corepack 切换到正确版本；
 - ✅ 检查依赖是否已安装，未安装则自动执行 `pnpm install`（会下载较久，**别关窗口**）；
 - ✅ 自动从 `.env.example` 生成一份 `.env`（已存在则跳过，不会覆盖你的配置）；
+- ✅ 检查 `comfy-cli` 运行环境（`<项目根>/python-venv/comfy-cli` 下的 Python 解释器），缺失时自动创建虚拟环境并安装 `comfy-cli`（已就绪则跳过）；工作流执行依赖它，拿不到会报「未找到 comfy-cli Python 解释器」；
 - ✅ 最后提示你接下来双击 `tools/start/start-web.ps1`。
 
 > 窗口最末尾如果出现绿色的 `[OK]` 或类似「初始化完成」提示，就说明成功了。
@@ -201,6 +202,7 @@
 | 团队更新了代码后启动报错 / 拉取更新后怎么同步环境 | 见 [`guides/sync-after-pull.md`](guides/sync-after-pull.md)：先关掉运行中的窗口，重双击 `tools/start/run-local.ps1`；报 pnpm 相关错误则删 `node_modules` 后重双击 |
 | 启动时提示「pnpm 版本不匹配 / pnpm 有更新」 | 启动器会自动检测并在必要时用 corepack 对齐，**通常无需手动操作**；若自动对齐失败，窗口/日志会给出提示，手动执行一次 `corepack enable && corepack prepare pnpm@12.4.1 --activate`（版本号以提示为准）即可 |
 | 双击 `tools/start/start-web.ps1` 报「数据库/表不存在」 | 首次会自动建库；如仍异常，先双击 `tools/start/run-local.ps1` 补齐依赖与 `.env` 后重试 |
+| 跑工作流时提示「未找到 comfy-cli Python 解释器」 | 本机 `python-venv/comfy-cli` 缺失；重新双击 `tools/start/run-local.ps1` 会自动补装，或手工执行 `scripts/setup-comfy-cli-venv.ps1`（需联网） |
 | 浏览器打不开页面（`ERR_CONNECTION_REFUSED`） | 先看地址栏端口是不是照抄了 `3100`——实际端口是窗口打印的 `[dev.mjs] COMFYAPP_PORT=<端口>`（见 4.3~4.4）；再确认 `tools/start/start-web.ps1` 的控制台窗口还开着；首次编译较慢，多等一会再刷新 |
 | 端口被占用起不来 | 启动器会先清理**本检出端口族**（`COMFYAPP_PORT` 及 +1/+2）的残留进程，并自动往后找一个空闲端口；仍失败可重启电脑后再试 |
 | 想彻底重置环境 | 删除项目里的 `node_modules` 文件夹和 `.env` 文件后，重新执行 4.1~4.3 |
