@@ -52,9 +52,6 @@ export const STDERR_MAX_LINES = 60;
 /** comfy-cli 返回的原始 JSON 行进入面板的上限（envelope 可能很大，且事件行
  *  数随节点数走；设上限防止一次失控的执行把日志面板刷成瀑布）。 */
 export const MAX_RAW_JSON_LINES = 300;
-/** 原始 JSON 单行进入面板的截断上限（envelope 尾部的大对象被截断，完整
- *  原文仍在 trace）。 */
-export const RAW_JSON_LINE_CHARS = 400;
 
 /**
  * 在任意嵌套对象/数组里深搜 `node_errors`（dict 或非空 list）。
@@ -248,15 +245,13 @@ export function createCliEnvelopeParser(
      * 「ComfyUI 到底回了什么」此前只能翻 trace 文件。带行数与单行截断
      * 上限，原文仍完整落 trace。 */
     rawJsonLines++;
-    /* 完整原始行（不截断）：面板摘要有 300 行 / 单行 400 字符上限，但排障
-     * 要看被截掉的部分，故这里以完整形态另行留存，交给前端「查看完整输出」。 */
+    /* 原始行**完整**进面板（不按单行截断）：面板把它折成一行，展开后经
+     * JsonViewer 显示完整 JSON —— 排障要看被截掉的那一段（envelope 尾部的
+     * 大对象、hint 里的逐节点明细）。同一份原文另存进 rawCli 缓冲，交给
+     * 「查看完整输出」弹窗按需整体拉取。 */
     deps.rawCli?.(taskId, `[comfy-cli 原始] ${line}`);
     if (rawJsonLines <= MAX_RAW_JSON_LINES) {
-      const trimmed =
-        line.length > RAW_JSON_LINE_CHARS
-          ? line.slice(0, RAW_JSON_LINE_CHARS) + "…"
-          : line;
-      log(taskId, "info", `[comfy-cli 原始] ${trimmed}`);
+      log(taskId, "info", `[comfy-cli 原始] ${line}`);
     } else if (rawJsonLines === MAX_RAW_JSON_LINES + 1) {
       log(
         taskId,
