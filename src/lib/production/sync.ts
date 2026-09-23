@@ -111,3 +111,66 @@ export function applyShotPatches<T extends ShotAnchoredNode>(
     return { ...node, data: { ...node.data, ...patch } };
   });
 }
+
+/* ── 画布 → Shot 生成态回写（Phase 3c-2b）────────────────────────────────
+ *  画布上对某镜头节点触发生图，产出的生成态（status / taskId / 结果 url）回写进
+ *  对应 Shot，让工坊反映「画布上跑的镜头」。与 shotStatusToNodeStatus 对偶的反向
+ *  映射收在一处。单一写入者（ADR §6.4）：这里只写生成态字段，绝不碰编辑面
+ *  （prompt/negative 是工坊写入面）。 */
+
+/** 画布节点生成态词表 → Shot.status 反向映射（与 shotStatusToNodeStatus 对偶）。
+ *  节点词表更窄（idle/running/done/error），逐一对回：done→done、error→failed。 */
+export function nodeStatusToShotStatus(
+  status: StrictCanvasNodeData["status"],
+): Shot["status"] {
+  switch (status) {
+    case "running":
+      return "running";
+    case "done":
+      return "done";
+    case "error":
+      return "failed";
+    case "idle":
+    default:
+      return "idle";
+  }
+}
+
+/** 一次镜头生成态回写的补丁（只覆盖生成态字段，不含编辑面）。 */
+export interface ShotGenerationPatch {
+  status: Shot["status"];
+  taskId?: string;
+  imageUrl?: string;
+}
+
+/** 从画布镜头节点的 data 提炼生成态补丁。节点 resultPath ↔ Shot imageUrl（与
+ *  shotToNodePatch 同口径）：仅 done 且有结果时才写 url，避免运行中清空已有 url。 */
+export function nodeGenToShot(node: {
+  status: StrictCanvasNodeData["status"];
+  taskId?: string;
+  resultPath?: string;
+}): ShotGenerationPatch {
+  const patch: ShotGenerationPatch = {
+    status: nodeStatusToShotStatus(node.status),
+  };
+  if (node.taskId !== undefined) patch.taskId = node.taskId;
+  if (node.status === "done" && node.resultPath)
+    patch.imageUrl = node.resultPath;
+  return patch;
+}
+
+/** 把某镜头的生成态补丁合并进 shots（按 id 命中，不可变返回新数组）。
+ *  无命中 → 原样返回入参引用（调用方可据此判断「没有对应镜头、无需落库」）。 */
+export function applyShotGeneration(
+  shots: Shot[],
+  shotId: string,
+  patch: ShotGenerationPatch,
+): Shot[] {
+  let hit = false;
+  const next = shots.map((shot) => {
+    if (shot.id !== shotId) return shot;
+    hit = true;
+    return { ...shot, ...patch };
+  });
+  return hit ? next : shots;
+}
