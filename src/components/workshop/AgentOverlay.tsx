@@ -9,6 +9,7 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/page-loading";
 import { StatusDot } from "~/components/ui/status-dot";
+import { Textarea } from "~/components/ui/textarea";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import type {
   WorkshopAgentController,
@@ -210,7 +211,7 @@ export function AgentOverlay({
 
       {/* Input */}
       <div className="border-border flex items-end gap-2 border-t p-3">
-        <textarea
+        <Textarea
           ref={taRef}
           value={input}
           onChange={(event) => {
@@ -230,7 +231,7 @@ export function AgentOverlay({
           })}
           rows={1}
           placeholder="描述你的创作想法… (Enter 发送)"
-          className="border-border bg-subtle text-ink placeholder:text-muted-foreground/50 min-w-0 flex-1 resize-none rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-violet-500/40"
+          className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-[13px]"
         />
         <Button
           variant="primary-solid"

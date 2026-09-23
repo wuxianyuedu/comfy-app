@@ -29,6 +29,7 @@ import {
 } from "./shot-size-config";
 import { ShotSizePicker } from "./ShotSizePicker";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { Textarea } from "~/components/ui/textarea";
 import { errorMessage } from "~/lib/error-message";
 import { paramString } from "~/lib/workshop/param-coerce";
 
@@ -382,14 +383,14 @@ export function ShotStudio({
                   />
                 )}
 
-                <textarea
+                <Textarea
                   value={shot.prompt}
                   onChange={(e) => {
                     editedRef.current.add(shot.id);
                     patchShot(shot.id, { prompt: e.target.value });
                   }}
                   rows={2}
-                  className="border-border bg-bg text-ink focus:border-primary w-full rounded-md border px-2 py-1.5 text-xs outline-none"
+                  className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 rounded-md px-2 py-1.5 text-xs"
                   placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
                 />
                 {err && (

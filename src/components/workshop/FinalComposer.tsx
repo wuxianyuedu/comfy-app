@@ -8,6 +8,7 @@ import { fixed } from "~/lib/number-format";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { FormField } from "~/components/ui/form-field";
+import { Input } from "~/components/ui/input";
 import {
   MOTION_LABELS,
   TRANSITION_LABELS,
@@ -316,7 +317,7 @@ export function FinalComposer({
                   label="时长(s)"
                   labelClassName="text-muted-foreground mb-0.5 text-[10px]"
                 >
-                  <input
+                  <Input
                     type="number"
                     min={1}
                     max={20}
@@ -326,7 +327,7 @@ export function FinalComposer({
                         duration: clamp(Number(event.target.value) || 4, 1, 20),
                       })
                     }
-                    className="border-border bg-bg text-ink focus:border-primary w-14 rounded-md border px-2 py-1 text-xs outline-none"
+                    className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
                   />
                 </FormField>
                 <FormField
