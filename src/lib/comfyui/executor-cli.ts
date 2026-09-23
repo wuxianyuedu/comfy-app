@@ -40,6 +40,7 @@ import {
   createCliStderrSink,
 } from "./executor-cli-stream";
 import { prepareGraphForExecution } from "./execution-graph";
+import { stripUiOnlyNodes } from "./raw-ui-only-nodes";
 import {
   applyApiOverrides,
   applyRawOverrides,
@@ -72,61 +73,9 @@ export const cliProcs: Map<string, ChildProcess> =
 
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 
-/** Read a string field off an unknown payload（非 string → undefined）。 */
-function strField(o: unknown, key: string): string | undefined {
-  if (o == null || typeof o !== "object") return undefined;
-  const v = (o as JsonRecord)[key];
-  return typeof v === "string" ? v : undefined;
-}
-
-/**
- * 部分第三方节点（如 rgthree 的 Fast Groups Bypasser / Muter）是纯 UI 控制节点，
- * 没有后端实现，不会出现在 ComfyUI 的 object_info 中。comfy-cli 做 UI→API 转换后
- * 向 /prompt 校验时会因 unknown_class_type 整单失败。提交前把它们从 raw UI-format
- * 工作流里剔除即可：它们不携带数据流，只影响画布分组显隐。
- */
-const UI_ONLY_NODE_TYPES = new Set([
-  "Fast Groups Bypasser (rgthree)",
-  "Fast Groups Muter (rgthree)",
-  "Fast Groups Bookmarker (rgthree)",
-]);
-
-function stripUiOnlyNodes(raw: JsonRecord): JsonRecord {
-  if (!Array.isArray(raw.nodes)) return raw;
-  const removedIds = new Set<string>();
-  const filtered: unknown[] = [];
-  for (const n of raw.nodes) {
-    if (n == null || typeof n !== "object") {
-      filtered.push(n);
-      continue;
-    }
-    const node = n as JsonRecord;
-    const type = strField(node, "type") ?? strField(node, "class_type");
-    if (type && UI_ONLY_NODE_TYPES.has(type)) {
-      const rawId = node.id;
-      const id =
-        typeof rawId === "string" || typeof rawId === "number"
-          ? String(rawId)
-          : undefined;
-      if (id) removedIds.add(id);
-      continue;
-    }
-    filtered.push(n);
-  }
-  if (removedIds.size === 0) return raw;
-  raw.nodes = filtered;
-  // 同时清理 LiteGraph links 中与被删节点相关的连接（格式：
-  // [linkId, originNodeId, originSlot, targetNodeId, targetSlot, type] 六元组）
-  if (Array.isArray(raw.links)) {
-    raw.links = raw.links.filter((link) => {
-      if (!Array.isArray(link)) return true;
-      const origin = String(link[1] ?? "");
-      const target = String(link[3] ?? "");
-      return !removedIds.has(origin) && !removedIds.has(target);
-    });
-  }
-  return raw;
-}
+/* 纯 UI 节点的名单与剔除逻辑收在 `./raw-ui-only-nodes`（纯叶子：单测可直接喂
+ * 夹具，不必把本模块那一串服务端依赖拉进测试；名单缺项此前也没有判据会红 —— 那
+ * 正是 `Bookmark (rgthree)` 让整单校验失败的成因）。 */
 
 export async function executeViaComfyCli(job: Job) {
   const s = state();
@@ -163,18 +112,13 @@ export async function executeViaComfyCli(job: Job) {
   let patched: JsonRecord;
   if (isRaw) {
     patched = applyRawOverrides(rawJson, overrides);
-    const nodeCountBefore = Array.isArray(patched.nodes)
-      ? patched.nodes.length
-      : 0;
-    patched = stripUiOnlyNodes(patched);
-    const nodeCountAfter = Array.isArray(patched.nodes)
-      ? patched.nodes.length
-      : 0;
-    if (nodeCountAfter !== nodeCountBefore) {
+    const stripped = stripUiOnlyNodes(patched);
+    patched = stripped.raw;
+    if (stripped.removed > 0) {
       log(
         taskId,
         "info",
-        `已剔除 ${nodeCountBefore - nodeCountAfter} 个纯 UI 控制节点（无后端实现），避免 comfy-cli 校验失败`,
+        `已剔除 ${stripped.removed} 个纯 UI 控制节点（无后端实现），避免 comfy-cli 校验失败`,
       );
     }
   } else {
