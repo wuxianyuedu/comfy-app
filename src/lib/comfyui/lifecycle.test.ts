@@ -62,10 +62,23 @@ vi.mock("~/lib/process/process-launch", () => ({
 vi.mock("~/lib/shell/open-in-browser", () => ({
   openUrlInBrowser: vi.fn().mockResolvedValue({ ok: true }),
 }));
-vi.mock("../log-paths", () => ({
-  COMFYUI_RUNTIME_LOG: "/tmp/comfyui-runtime.log",
-  SERVICES_LOG_DIR: "/tmp",
-}));
+/* 日志落盘必须真的被隔离到**临时目录**。
+ *
+ * 说明符要能解析到真实模块：它是 `~/lib/log/log-paths`（`src/lib/log/` 下）。
+ * 此前写的是 `"../log-paths"` —— 从本文件出发解析到 `src/lib/log-paths`，**不存在**，
+ * 于是这是一个**死 mock**：mock 注册在不存在的路径上（无人 import），真实模块照用，
+ * 夹具会话因此被写进仓库真实的 `log/services/comfyui-runtime.log` 与
+ * `comfyui-last-session.json`（`python -s /x/main.py` 那些行就是它），下一次真机
+ * 启动便报「上一次 ComfyUI 会话…却没有退出记录」——用户看到的是「ComfyUI 莫名退出」，
+ * 而那个会话根本没被拉起过。判据见 `tests/test-mock-targets.test.ts`。 */
+vi.mock("~/lib/log/log-paths", () => {
+  /* 工厂会被 hoist 到 import 之前，所以这里只用全局 `process`（不引模块变量）。 */
+  const dir = `${process.env.TEMP ?? process.env.TMPDIR ?? "/tmp"}/comfyapp-lifecycle-test`;
+  return {
+    COMFYUI_RUNTIME_LOG: `${dir}/comfyui-runtime.log`,
+    SERVICES_LOG_DIR: dir,
+  };
+});
 vi.mock("~/lib/core/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
