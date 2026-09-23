@@ -16,6 +16,8 @@ export interface AgentToolHandlers {
   setCharacters: (characters: WorkshopDraftDto["characters"]) => void;
   getShots: () => WorkshopDraftDto["shots"];
   setShots: (shots: WorkshopDraftDto["shots"]) => void;
+  /** 用当前项目镜头一键成片（服务端逐镜视频 + 合成 + 回写进度）。缺省表示该上下文不支持。 */
+  renderFilm?: () => Promise<{ ok: boolean; summary: string; detail?: string }>;
 }
 
 /** 一个待执行的工具（已解析出参数摘要）。 */
@@ -462,6 +464,24 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
           summary: "生图需在「镜头生图」页手动触发",
           detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
         }),
+      };
+    }
+
+    case "render_film": {
+      return {
+        toolName: name,
+        summary: "用项目镜头一键成片（逐镜视频 + 合成）",
+        argSummary,
+        execute: async () => {
+          if (!hd.renderFilm) {
+            return {
+              ok: false,
+              summary: "当前上下文不支持一键成片，请在「成片工作室」手动导出",
+            };
+          }
+          const r = await hd.renderFilm();
+          return { ok: r.ok, summary: r.summary, detail: r.detail };
+        },
       };
     }
 
