@@ -72,6 +72,8 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
 
   async create(input: {
     userId: string;
+    /** 关联的统一项目 id（proj_*）；纯文本自由建片时为空。 */
+    projectId?: string | null;
     title: string;
     script: string;
     type: string;
@@ -88,6 +90,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .insert(filmProject)
       .values({
         userId: input.userId,
+        projectId: input.projectId ?? null,
         title: input.title,
         script: input.script,
         type: input.type,
