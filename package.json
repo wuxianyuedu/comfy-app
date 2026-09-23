@@ -6,6 +6,7 @@
   "scripts": {
     "build": "next build && node scripts/standalone-private-inputs.mjs",
     "analyze": "node scripts/analyze-bundle.mjs",
+    "agent:film": "node scripts/agent-film.mjs",
     "check": "pnpm run lint && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
