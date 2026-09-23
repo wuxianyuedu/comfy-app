@@ -15,6 +15,7 @@ import { beginStaleRun } from "~/lib/stale-run";
 import { uploadBgm } from "~/lib/film/bgm-client";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { fetchProduction } from "~/lib/production/production-client";
+import { requestShotRedo } from "~/lib/production/shot-writeback";
 import type { SizeSpec } from "~/lib/media/size-presets";
 import { vanillaApi } from "~/trpc/vanilla";
 
@@ -30,6 +31,8 @@ import {
   FILM_TYPE,
   type Film,
   isFilmRunning,
+  productionShotsToShotList,
+  type ShotListItem,
 } from "../film-studio-config";
 
 /** 成片镜头来源：统一项目的镜头（工坊产出），或自由文本剧本自动分镜。 */
@@ -45,6 +48,8 @@ export interface FilmStudioController {
   activeProjectId: string | null;
   /** 该项目的镜头数（`production.shots.length`；无项目 / 无镜头为 0）。 */
   projectShotCount: number;
+  /** 该项目镜头的真实列表（左栏渲染，含缩略图 / 状态）。 */
+  projectShots: ShotListItem[];
   /** 工作流库里可选的视频工作流（逐镜生成用；本地链路唯一来源）。 */
   videoWorkflows: { id: string; name: string }[];
   videoWorkflowId: string;
@@ -72,6 +77,8 @@ export interface FilmStudioController {
   create: () => Promise<void>;
   /** 用当前统一项目的镜头一键成片（走 film.createFromProject）。 */
   createFromProject: () => Promise<void>;
+  /** 退回某镜（清产出 + rev 自增 + 刷新列表），让自主 run 重做该镜。 */
+  redoShot: (shotId: string) => Promise<void>;
   cancel: () => Promise<void>;
   recompose: () => Promise<void>;
   uploadBgmFile: (file: File) => Promise<void>;
@@ -122,6 +129,7 @@ export function useFilmStudio(): FilmStudioController {
    * 用户没手动选过来源、且项目确有镜头时，默认切到「项目镜头」。 */
   const [activeProjectId] = useState<string | null>(() => getActiveId());
   const [projectShotCount, setProjectShotCount] = useState(0);
+  const [projectShots, setProjectShots] = useState<ShotListItem[]>([]);
   const [shotSource, setShotSourceState] = useState<FilmShotSource>("script");
   const sourceChosenRef = useRef(false);
   const setShotSource = useCallback((source: FilmShotSource) => {
@@ -206,24 +214,46 @@ export function useFilmStudio(): FilmStudioController {
     };
   }, []);
 
-  /* Phase 5：读一次活跃项目的镜头数（production.shots）。作废守卫用 beginStaleRun，
-   * 卸载即不落地；无活跃项目 / 服务不可用则静默留 0（回落剧本模式）。 */
+  /* Phase 5/6：读活跃项目的镜头 → 左栏真实列表（production.shots）。挂载用 beginStaleRun
+   * 守卫（卸载即不落地）；redoShot 退回某镜后重载列表。 */
+  const applyProjectShots = useCallback((list: ShotListItem[]) => {
+    setProjectShots(list);
+    setProjectShotCount(list.length);
+    // 用户未手动选过来源、且项目确有镜头 → 默认走项目镜头。
+    if (list.length > 0 && !sourceChosenRef.current)
+      setShotSourceState("project");
+  }, []);
+
+  const fetchProjectShots = useCallback(async (): Promise<ShotListItem[]> => {
+    if (!activeProjectId) return [];
+    const prod = await fetchProduction(activeProjectId);
+    const raw = prod && Array.isArray(prod.shots) ? prod.shots : [];
+    return productionShotsToShotList(raw);
+  }, [activeProjectId]);
+
   useEffect(() => {
-    const id = getActiveId();
-    if (!id) return;
+    if (!activeProjectId) return;
     const guard = beginStaleRun();
     void (async () => {
-      const prod = await fetchProduction(id);
-      const count = prod && Array.isArray(prod.shots) ? prod.shots.length : 0;
-      guard.commit(() => {
-        setProjectShotCount(count);
-        // 用户未手动选过来源、且项目确有镜头 → 默认走项目镜头。
-        if (count > 0 && !sourceChosenRef.current)
-          setShotSourceState("project");
-      });
+      const list = await fetchProjectShots();
+      guard.commit(() => applyProjectShots(list));
     })();
     return () => guard.dispose();
-  }, []);
+  }, [activeProjectId, fetchProjectShots, applyProjectShots]);
+
+  const reloadProjectShots = useCallback(async () => {
+    applyProjectShots(await fetchProjectShots());
+  }, [fetchProjectShots, applyProjectShots]);
+
+  /** 单镜「退回让 AI 重做」：写回项目 + 刷新左栏列表（画布/工坊镜头行的退回入口共用）。 */
+  const redoShot = useCallback(
+    async (shotId: string) => {
+      if (!activeProjectId) return;
+      await requestShotRedo(activeProjectId, shotId);
+      await reloadProjectShots();
+    },
+    [activeProjectId, reloadProjectShots],
+  );
 
   /* 「建片 → start → 拉详情」的共用尾链（§12.12）：create 与 createFromProject
    * 只在「用哪条 create mutation」上不同，其余（启动 + 轮询起手 + 反馈通道）一致。 */
@@ -383,6 +413,7 @@ export function useFilmStudio(): FilmStudioController {
     setShotSource,
     activeProjectId,
     projectShotCount,
+    projectShots,
     videoWorkflows,
     videoWorkflowId,
     setVideoWorkflowId,
@@ -402,6 +433,7 @@ export function useFilmStudio(): FilmStudioController {
     loading: actionBusy.busy,
     create,
     createFromProject,
+    redoShot,
     cancel,
     recompose,
     uploadBgmFile,

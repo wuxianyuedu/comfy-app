@@ -64,6 +64,10 @@ export function FilmStudio() {
   const selectedShot =
     shots.find((shot) => shot.id === selectedShotId) ?? shots[0];
   const running = c.running;
+  /* 项目来源且该项目确有镜头 → 左栏显示真实镜头（缩略图/时长/状态）；否则维持样例时间轴。 */
+  const isProjectSource =
+    c.shotSource === "project" && c.projectShots.length > 0;
+  const listShots = isProjectSource ? c.projectShots : shots;
 
   const handleSelectShot = useCallback((id: string) => {
     setSelectedShotId(id);
@@ -227,72 +231,98 @@ export function FilmStudio() {
                 分镜列表
               </span>
               <span className="text-ink-fainter text-[11px]">
-                {shots.length} 镜头
+                {listShots.length} 镜头
               </span>
             </div>
-            <Button
-              variant="primary"
-              size="icon-xs"
-              onClick={handleAddShot}
-              className="rounded-md"
-              title="新增镜头"
-            >
-              +
-            </Button>
+            {!isProjectSource && (
+              <Button
+                variant="primary"
+                size="icon-xs"
+                onClick={handleAddShot}
+                className="rounded-md"
+                title="新增镜头"
+              >
+                +
+              </Button>
+            )}
           </div>
 
           {/* Shot items */}
           <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
-            {shots.map((shot) => {
+            {listShots.map((shot) => {
               const badge = STATUS_BADGE[shot.status];
               const isSelected = shot.id === selectedShotId;
               return (
-                <Button
+                <div
                   key={shot.id}
-                  variant="ghost"
-                  onClick={() => handleSelectShot(shot.id)}
-                  className={`group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all ${
+                  className={`flex items-center gap-1 rounded-xl border transition-all ${
                     isSelected
                       ? "border-primary-500/40 bg-primary-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
-                      : "bg-card hover:border-border hover:bg-subtle border-transparent"
+                      : "bg-card hover:border-border border-transparent"
                   }`}
                 >
-                  {/* Thumbnail placeholder */}
-                  <div
-                    className={`flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] ${
-                      isSelected
-                        ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-                        : "bg-subtle text-ink-faintest"
-                    }`}
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSelectShot(shot.id)}
+                    className="group flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl p-2.5 text-left font-normal"
                   >
-                    镜头缩略图
-                  </div>
+                    {/* Thumbnail：项目镜头有产出图则显缩略图，否则占位 */}
+                    {shot.thumbnailUrl ? (
+                      <MediaThumbnail
+                        src={shot.thumbnailUrl}
+                        className="h-12 w-[56px] shrink-0 rounded-md object-cover"
+                      />
+                    ) : (
+                      <div
+                        className={`flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] ${
+                          isSelected
+                            ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
+                            : "bg-subtle text-ink-faintest"
+                        }`}
+                      >
+                        镜头缩略图
+                      </div>
+                    )}
 
-                  {/* Info */}
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`truncate text-[12px] font-medium ${isSelected ? "text-ink-field" : "text-ink-strong"}`}
-                    >
-                      {shot.name}
-                    </p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-ink-faintest text-[10px]">
-                        {shot.duration}
-                      </span>
-                      <span className="text-ink-faintest text-[10px]">·</span>
-                      <span className="text-ink-fainter text-[10px]">
-                        {MODE_LABELS[shot.mode]}
-                      </span>
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`truncate text-[12px] font-medium ${isSelected ? "text-ink-field" : "text-ink-strong"}`}
+                      >
+                        {shot.name}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-ink-faintest text-[10px]">
+                          {shot.duration}
+                        </span>
+                        <span className="text-ink-faintest text-[10px]">·</span>
+                        <span className="text-ink-fainter text-[10px]">
+                          {MODE_LABELS[shot.mode]}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Status badge */}
-                  <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium ${badge.bg} ${badge.text}`}
-                  >
-                    {badge.label}
-                  </span>
-                </Button>
+                    {/* Status badge */}
+                    <span
+                      className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium ${badge.bg} ${badge.text}`}
+                    >
+                      {badge.label}
+                    </span>
+                  </Button>
+
+                  {/* 项目镜头才给「退回让 AI 重做」入口（与画布镜头节点同源 requestShotRedo）。 */}
+                  {isProjectSource && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => void c.redoShot(shot.id)}
+                      title="退回让 AI 重做这一镜"
+                      className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
+                    >
+                      ↺
+                    </Button>
+                  )}
+                </div>
               );
             })}
           </div>

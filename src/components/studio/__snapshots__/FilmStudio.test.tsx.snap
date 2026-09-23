@@ -174,141 +174,153 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
         <div
           class="flex-1 space-y-1.5 overflow-y-auto p-2"
         >
-          <button
-            class="group/button shrink-0 justify-center bg-clip-padding text-sm whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all border-primary-500/40 bg-primary-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
-            data-slot="button"
-            tabindex="0"
-            type="button"
+          <div
+            class="flex items-center gap-1 rounded-xl border transition-all border-primary-500/40 bg-primary-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
           >
-            <div
-              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-400"
+            <button
+              class="group/button justify-center border border-transparent bg-clip-padding text-sm whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl p-2.5 text-left font-normal"
+              data-slot="button"
+              tabindex="0"
+              type="button"
             >
-              镜头缩略图
-            </div>
-            <div
-              class="min-w-0 flex-1"
-            >
-              <p
-                class="truncate text-[12px] font-medium text-ink-field"
-              >
-                开场 · 城市全景
-              </p>
               <div
-                class="mt-1 flex items-center gap-2"
+                class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-violet-500/10 text-violet-700 dark:text-violet-400"
               >
-                <span
-                  class="text-ink-faintest text-[10px]"
-                >
-                  00:03.2
-                </span>
-                <span
-                  class="text-ink-faintest text-[10px]"
-                >
-                  ·
-                </span>
-                <span
-                  class="text-ink-fainter text-[10px]"
-                >
-                  文生图首帧
-                </span>
+                镜头缩略图
               </div>
-            </div>
-            <span
-              class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-            >
-              完成
-            </span>
-          </button>
-          <button
-            class="group/button shrink-0 justify-center bg-clip-padding text-sm whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
-            data-slot="button"
-            tabindex="0"
-            type="button"
+              <div
+                class="min-w-0 flex-1"
+              >
+                <p
+                  class="truncate text-[12px] font-medium text-ink-field"
+                >
+                  开场 · 城市全景
+                </p>
+                <div
+                  class="mt-1 flex items-center gap-2"
+                >
+                  <span
+                    class="text-ink-faintest text-[10px]"
+                  >
+                    00:03.2
+                  </span>
+                  <span
+                    class="text-ink-faintest text-[10px]"
+                  >
+                    ·
+                  </span>
+                  <span
+                    class="text-ink-fainter text-[10px]"
+                  >
+                    文生图首帧
+                  </span>
+                </div>
+              </div>
+              <span
+                class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+              >
+                完成
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-1 rounded-xl border transition-all bg-card hover:border-border border-transparent"
           >
-            <div
-              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
+            <button
+              class="group/button justify-center border border-transparent bg-clip-padding text-sm whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl p-2.5 text-left font-normal"
+              data-slot="button"
+              tabindex="0"
+              type="button"
             >
-              镜头缩略图
-            </div>
-            <div
-              class="min-w-0 flex-1"
-            >
-              <p
-                class="truncate text-[12px] font-medium text-ink-strong"
-              >
-                人物特写 · 走向镜头
-              </p>
               <div
-                class="mt-1 flex items-center gap-2"
+                class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
               >
-                <span
-                  class="text-ink-faintest text-[10px]"
-                >
-                  00:05.0
-                </span>
-                <span
-                  class="text-ink-faintest text-[10px]"
-                >
-                  ·
-                </span>
-                <span
-                  class="text-ink-fainter text-[10px]"
-                >
-                  图生视频
-                </span>
+                镜头缩略图
               </div>
-            </div>
-            <span
-              class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-violet-500/15 text-violet-700 dark:text-violet-300"
-            >
-              生成中
-            </span>
-          </button>
-          <button
-            class="group/button shrink-0 justify-center bg-clip-padding text-sm whitespace-nowrap outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto w-full items-center gap-3 rounded-xl border p-2.5 text-left font-normal transition-all bg-card hover:border-border hover:bg-subtle border-transparent"
-            data-slot="button"
-            tabindex="0"
-            type="button"
+              <div
+                class="min-w-0 flex-1"
+              >
+                <p
+                  class="truncate text-[12px] font-medium text-ink-strong"
+                >
+                  人物特写 · 走向镜头
+                </p>
+                <div
+                  class="mt-1 flex items-center gap-2"
+                >
+                  <span
+                    class="text-ink-faintest text-[10px]"
+                  >
+                    00:05.0
+                  </span>
+                  <span
+                    class="text-ink-faintest text-[10px]"
+                  >
+                    ·
+                  </span>
+                  <span
+                    class="text-ink-fainter text-[10px]"
+                  >
+                    图生视频
+                  </span>
+                </div>
+              </div>
+              <span
+                class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-violet-500/15 text-violet-700 dark:text-violet-300"
+              >
+                生成中
+              </span>
+            </button>
+          </div>
+          <div
+            class="flex items-center gap-1 rounded-xl border transition-all bg-card hover:border-border border-transparent"
           >
-            <div
-              class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
+            <button
+              class="group/button justify-center border border-transparent bg-clip-padding text-sm whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 group flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl p-2.5 text-left font-normal"
+              data-slot="button"
+              tabindex="0"
+              type="button"
             >
-              镜头缩略图
-            </div>
-            <div
-              class="min-w-0 flex-1"
-            >
-              <p
-                class="truncate text-[12px] font-medium text-ink-strong"
-              >
-                转场 · 溶解过渡
-              </p>
               <div
-                class="mt-1 flex items-center gap-2"
+                class="flex h-12 w-[56px] shrink-0 items-center justify-center rounded-md text-[10px] bg-subtle text-ink-faintest"
               >
-                <span
-                  class="text-ink-faintest text-[10px]"
-                >
-                  00:01.5
-                </span>
-                <span
-                  class="text-ink-faintest text-[10px]"
-                >
-                  ·
-                </span>
-                <span
-                  class="text-ink-fainter text-[10px]"
-                >
-                  自动转场
-                </span>
+                镜头缩略图
               </div>
-            </div>
-            <span
-              class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-subtle text-ink-fainter"
-            >
-              待处理
-            </span>
-          </button>
+              <div
+                class="min-w-0 flex-1"
+              >
+                <p
+                  class="truncate text-[12px] font-medium text-ink-strong"
+                >
+                  转场 · 溶解过渡
+                </p>
+                <div
+                  class="mt-1 flex items-center gap-2"
+                >
+                  <span
+                    class="text-ink-faintest text-[10px]"
+                  >
+                    00:01.5
+                  </span>
+                  <span
+                    class="text-ink-faintest text-[10px]"
+                  >
+                    ·
+                  </span>
+                  <span
+                    class="text-ink-fainter text-[10px]"
+                  >
+                    自动转场
+                  </span>
+                </div>
+              </div>
+              <span
+                class="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium bg-subtle text-ink-fainter"
+              >
+                待处理
+              </span>
+            </button>
+          </div>
         </div>
       </aside>
       <main
@@ -482,10 +494,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
           class="flex-1 space-y-4 overflow-y-auto p-4"
         >
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_0_"
             >
               镜头名称
@@ -496,10 +512,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             />
           </div>
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_1_"
             >
               时长 (秒)
@@ -514,10 +534,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             />
           </div>
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_2_"
             >
               生成模式
@@ -529,10 +553,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </div>
           </div>
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_3_"
             >
               转场效果
@@ -544,10 +572,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </div>
           </div>
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_4_"
             >
               提示词 / 描述
@@ -594,10 +626,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </button>
           </div>
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_5_"
             >
               剧本 / 创意
@@ -612,10 +648,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </textarea>
           </div>
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_6_"
             >
               视频工作流（工作流库）
@@ -636,10 +676,14 @@ exports[`FilmStudio > 挂载后拉取技能与近期影片，并渲染工作台�
             </span>
           </div>
           <div
-            class="min-w-0"
+            class="group/field flex w-full data-[invalid=true]:text-destructive flex-col *:w-full [&>.sr-only]:w-auto min-w-0 gap-0"
+            data-orientation="vertical"
+            data-slot="field"
+            role="group"
           >
             <label
-              class="block font-medium text-ink-faint mb-1.5 text-[11px]"
+              class="items-center select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 group/field-label peer/field-label has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-2.5 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col block w-full font-medium text-ink-faint mb-1.5 text-[11px]"
+              data-slot="field-label"
               for="_r_7_"
             >
               首帧合成工作流（可选，工作流库）
