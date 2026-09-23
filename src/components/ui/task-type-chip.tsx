@@ -8,7 +8,8 @@ import {
 } from "~/lib/workflow/workflow-types";
 
 /**
- * 工作流类型只读标签（`<Badge>` 薄封装，规范 §16.2.3 / §12.18 的 P67 治理）。
+ * 工作流类型只读标签（`<Badge size="sm" variant="outline">` 薄封装，
+ * 规范 §16.2.3 / §12.18 的 P67 治理）。
  *
  * 三档色**刻意保留 Tailwind 字面量**（violet / sky / amber，规范 §3.6.1
  * 类型色例外）：image / video / audio 是「这一类工作流是哪种媒体」的分类
@@ -19,9 +20,12 @@ import {
  *
  * 之前这里是裸 `<span>` 手写胶囊（P67 判据 a 命中）；换成 `<Badge>` 后
  * 复用基元的 `data-slot="badge"` / `useRender` / `focus-visible:*` /
- * icon slot（`has-data-[icon=inline-start]:pl-1.5`）等契约，`className`
- * 只覆盖**尺寸形态**（h-auto / rounded-md / px / py / text-[10px]）
- * 与**类型色例外**两档，不动 Badge 的 variant 逻辑。
+ * icon slot（`has-data-[icon=inline-start]:pl-1.5`）等契约。PR-4 起
+ * Badge cva 加了 `size` 轴（default / sm / xs），本件从手抄 `CHIP_SHAPE`
+ * 常量迁到 `size="sm"`（h-auto / rounded-md / px-1.5 / py-0.5 /
+ * text-[10px] 都在 cva 里给，`font-medium` 是 Badge base 自带）；
+ * **只留一条 `OUTLINE_RESET` 顶掉 `variant="outline"` 的 `border-border`**
+ * （PR-1 时 CHIP_SHAPE 里也带这条、职责不变）。
  */
 const CATEGORY_STYLES: Record<WorkflowCategory, { bg: string; text: string }> =
   {
@@ -36,12 +40,10 @@ const CATEGORY_STYLES: Record<WorkflowCategory, { bg: string; text: string }> =
     },
   };
 
-/** Badge 默认的 `h-5 / rounded-4xl / px-2 / text-xs` 是通用胶囊形态；
- *  本 chip 是**密集行内元信息**（工作流库列表 / 详情头 / 画布节点头），
- *  尺寸要更紧一档——只覆盖 layout 类（尺寸/圆角/内边距），不覆盖色/字重
- *  （规范 shadcn styling.md：`className` for layout, not styling）。 */
-const CHIP_SHAPE =
-  "h-auto rounded-md border-transparent px-1.5 py-0.5 text-[10px] font-medium";
+/** `variant="outline"` 会带一条 `border-border`；chip 两档**不想要边框**
+ *  （密集行内元信息、色底就够表达语义），用 `border-transparent` 顶掉
+ *  （tailwind-merge 后传者胜）。这一条与 `size` 轴无关、留在本地。 */
+const OUTLINE_RESET = "border-transparent";
 
 export function TaskTypeChip({ taskType }: { taskType?: string | null }) {
   const code = normalizeTaskType(taskType ?? "");
@@ -52,8 +54,9 @@ export function TaskTypeChip({ taskType }: { taskType?: string | null }) {
 
   return (
     <Badge
+      size="sm"
       variant="outline"
-      className={`${CHIP_SHAPE} ${styles.bg} ${styles.text}`}
+      className={`${OUTLINE_RESET} ${styles.bg} ${styles.text}`}
       title={def?.description ?? label}
     >
       {label}
