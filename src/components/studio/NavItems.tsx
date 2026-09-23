@@ -38,6 +38,11 @@ export interface NavItem {
   label: string;
   /** 这个视图的工作是否已上线（驱动 cursor / opacity） */
   enabled?: boolean;
+  /**
+   * 项目作用域工具：只有进入某个项目后才在侧栏出现（首页不显示其页签）。
+   * 画布 / 工坊是对「当前项目」的操作投影，没打开项目时不该出现在主页导航里。
+   */
+  projectScoped?: boolean;
   icon: React.ReactNode;
 }
 
@@ -63,6 +68,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "canvas",
     label: "画布",
     enabled: true,
+    projectScoped: true,
     icon: (
       <svg {...ICON_PROPS}>
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -85,12 +91,14 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: "workshop",
     label: "工坊",
+    projectScoped: true,
     icon: <BookOpen size={22} strokeWidth={1.8} />,
   },
   {
     id: "outputs",
     label: "产出",
     enabled: true,
+    projectScoped: true,
     icon: <ImageIcon size={22} strokeWidth={1.8} />,
   },
   {
@@ -114,6 +122,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: "film",
     label: "成片",
+    projectScoped: true,
     icon: <Film size={22} strokeWidth={1.8} />,
   },
   {
@@ -129,3 +138,11 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
 ];
+
+/**
+ * 某视图下侧栏应显示的导航项：首页隐藏项目作用域工具（画布 / 工坊），
+ * 进入其它（项目）视图后恢复。侧栏与（未来）其它消费方共用这一条规则，避免漂移。
+ */
+export function visibleNavItems(active: WorkspaceView): NavItem[] {
+  return NAV_ITEMS.filter((item) => !(item.projectScoped && active === "home"));
+}
