@@ -17,7 +17,7 @@
  * 映射**在这里可编辑（三列 React Flow 画布，见 WorkflowLibraryCanvas）。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";
 import { errorMessage } from "~/lib/error-message";
 import {
@@ -139,6 +139,31 @@ export function WorkflowCanvasNodePreview({
   /* 右列选中的对外输出口 —— 与左列的选中互斥（同一时刻只有一处被选，否则
    *  「按 ⌫ 断的是哪一根」说不清）。 */
   const [selectedOutputId, setSelectedOutputId] = useState<string | null>(null);
+
+  /* 用户修改输入值或对外参数连线后，上一次失败的 banner/状态点应自动清空，
+   *  让「用此工作流生成」按钮回到可再次点击的 idle 状态。失败态只保留到用户
+   *  采取行动前，避免「已经改过了还是显示失败」的错觉。 */
+  const clearFailureOnInteraction = useCallback(() => {
+    setPhase((p) => (p.kind === "failed" ? { kind: "idle" } : p));
+  }, []);
+  const setValuesAndClearFailure = useCallback(
+    (
+      next:
+        | Record<string, unknown>
+        | ((prev: Record<string, unknown>) => Record<string, unknown>),
+    ) => {
+      clearFailureOnInteraction();
+      setValues(next);
+    },
+    [clearFailureOnInteraction],
+  );
+  const handlePatchParamMap = useCallback(
+    (next: Record<string, unknown>) => {
+      clearFailureOnInteraction();
+      return onPatchParamMap?.(next);
+    },
+    [clearFailureOnInteraction, onPatchParamMap],
+  );
 
   /* 生效模式与节点上的模式 chip 同一口径（defaultMode → modes[0] → taskType）——
    * 卡片列、宿主表单、seed 模式、必填判定全都按它解析，不会再出现「chip 显示着
@@ -409,7 +434,7 @@ export function WorkflowCanvasNodePreview({
   const wiring = useParamWiring({
     paramMap: paramMap ?? {},
     mode: effectiveMode,
-    onPatchParamMap,
+    onPatchParamMap: handlePatchParamMap,
   });
   /* 本地 overlay 已经并入 wiring 内部的生效 paramMap，但卡片列与连线要读的
    * 是同一份 —— 故把 overlay 之后的 paramMap 回传给派生。`reportParamMap`
@@ -578,9 +603,20 @@ export function WorkflowCanvasNodePreview({
           host={
             <LibraryHostCard
               workflowName={workflowName}
-              statusLabel={statusLabel}
+              /* 编辑对外参数页签是配置界面，不应显示上次运行的失败状态（红点 +
+               *  「失败」文案）。这里把失败态渲染成「待开始」的中性状态，运行中 /
+               *  已完成等状态保留，方便用户必要时感知运行进度。 */
+              statusLabel={
+                viewMode === "edit" && phase.kind === "failed"
+                  ? "待开始"
+                  : statusLabel
+              }
               running={running}
-              phaseKind={phase.kind}
+              phaseKind={
+                viewMode === "edit" && phase.kind === "failed"
+                  ? "idle"
+                  : phase.kind
+              }
               modes={modes}
               effectiveMode={effectiveMode}
               taskType={taskType}
@@ -591,7 +627,7 @@ export function WorkflowCanvasNodePreview({
                 <DynamicWorkflowForm
                   io={workflowIO ?? undefined}
                   values={values}
-                  onChange={setValues}
+                  onChange={setValuesAndClearFailure}
                   showOutputs={false}
                   compact
                   mode={effectiveMode}
@@ -668,7 +704,7 @@ export function WorkflowCanvasNodePreview({
             <DynamicWorkflowForm
               io={workflowIO ?? undefined}
               values={values}
-              onChange={setValues}
+              onChange={setValuesAndClearFailure}
               showOutputs={false}
               compact
               mode={effectiveMode}
@@ -732,8 +768,9 @@ export function WorkflowCanvasNodePreview({
         </div>
       )}
 
-      {/* ── 错误提示 ── */}
-      {phase.kind === "failed" && (
+      {/* ── 错误提示（只在「实际使用」页签显示；编辑对外参数是配置界面，
+            不应展示上一次运行的执行错误） ── */}
+      {phase.kind === "failed" && viewMode === "use" && (
         <div className="w-[380px] rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-300">
           {phase.message}
         </div>
