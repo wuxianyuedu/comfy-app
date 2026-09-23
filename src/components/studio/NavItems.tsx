@@ -98,6 +98,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: "outputs",
     label: "产出",
     enabled: true,
+    projectScoped: true,
     icon: <ImageIcon size={22} strokeWidth={1.8} />,
   },
   {
@@ -121,6 +122,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: "film",
     label: "成片",
+    projectScoped: true,
     icon: <Film size={22} strokeWidth={1.8} />,
   },
   {
