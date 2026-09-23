@@ -20,6 +20,8 @@ import { WorkshopHeader } from "~/components/workshop/WorkshopHeader";
 import { WorkshopStageBody } from "~/components/workshop/WorkshopStageBody";
 import { WorkshopStageNav } from "~/components/workshop/WorkshopStageNav";
 import type { WorkshopAgentToolHandlers } from "~/components/workshop/hooks/use-workshop-agent";
+import { renderProjectFilm } from "~/lib/film/render-film-client";
+import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 export function WorkshopPipeline() {
   const controller = useWorkshopPipeline();
@@ -41,6 +43,13 @@ export function WorkshopPipeline() {
     setCharacters: (characters) => controller.setCharacters(characters),
     getShots: () => controller.shots,
     setShots: (shots) => controller.setShots(shots),
+    // Phase 5：Agent 用当前项目镜头一键成片（走服务端成片管线，含逐镜视频 + 合成 + 回写）。
+    renderFilm: () =>
+      renderProjectFilm({
+        projectId: getActiveId(),
+        videoWorkflowId: controller.videoWorkflowId || undefined,
+        imageWorkflowId: controller.workflowId || undefined,
+      }),
   };
   const agentController = useWorkshopAgent(agentHandlers);
 

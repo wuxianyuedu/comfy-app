@@ -145,6 +145,15 @@ export const WORKSHOP_AGENT_TOOL_DEFS: LLMTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "render_film",
+      description:
+        "用当前统一项目已产出的镜头一键成片：服务端逐镜生成视频（图生视频）并用 ffmpeg 合成成片，完成后自动把各镜视频与成片状态回写项目进度。需要项目已有镜头、且已在工坊选好视频工作流。这是从「分镜/生图」推进到「成片」的收尾工具。",
+      parameters: { type: "object", properties: {} },
+    },
+  },
 ];
 
 /** 工坊全部工具 → OpenAI 兼容的 tools 请求数组。 */

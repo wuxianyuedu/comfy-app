@@ -315,6 +315,32 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
     expect(res.summary).toContain("手动触发");
     expect(res.detail).toBeTruthy();
   });
+
+  it("render_film：无 renderFilm handler 时给可行动回退，不空转", async () => {
+    const { handlers } = makeMockContext();
+    const res = await resolveAgentTool("render_film", "{}", handlers).execute();
+    expect(res.ok).toBe(false);
+    expect(res.summary).toContain("成片工作室");
+  });
+
+  it("render_film：有 renderFilm handler 时透传其结果", async () => {
+    const { handlers } = makeMockContext();
+    const renderFilm = vi.fn(async () => ({
+      ok: true,
+      summary: "已启动成片",
+      detail: "film-42",
+    }));
+    const res = await resolveAgentTool("render_film", "{}", {
+      ...handlers,
+      renderFilm,
+    }).execute();
+    expect(renderFilm).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({
+      ok: true,
+      summary: "已启动成片",
+      detail: "film-42",
+    });
+  });
 });
 
 describe("resolveAgentTool — 参数摘要", () => {
