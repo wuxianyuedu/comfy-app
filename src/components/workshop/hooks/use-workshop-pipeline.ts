@@ -21,10 +21,14 @@ import {
   fetchServerDraft,
   pushServerDraft,
 } from "~/lib/workshop/draft-sync-client";
+import { pushProduction } from "~/lib/production/production-client";
+import { buildProductionPayload } from "~/lib/production/payload";
 import {
-  pushProduction,
-  type ProductionPayload,
-} from "~/lib/production/production-client";
+  DEFAULT_META,
+  readWorkshopDraft as readDraft,
+  writeWorkshopDraft as writeDraft,
+  type WorkshopDraft,
+} from "~/lib/workshop/draft-store";
 import {
   draftHasContent,
   type WorkshopDraftDto,
@@ -52,10 +56,8 @@ import {
 import { parseShotSize } from "~/components/workshop/shot-size-config";
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
-import { emptyProject } from "~/lib/workshop/script-parser";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
 import { errorMessage } from "~/lib/error-message";
-import { readStorageItem, writeStorageJson } from "~/lib/browser-storage";
 import {
   useCharacterPortrait,
   type PortraitSession,
@@ -68,38 +70,11 @@ import {
  *  草稿按 proj_* 各存一个键，服务端镜像 workshopDraft 也以 proj_* 为主键。
  *  项目的新建 / 切换 / 删除统一在首页（canvas-store）发生，工坊只跟随所在项目。 */
 
-/* 默认项目元信息不在视图层写一份：`emptyProject()` 是「新项目的初始 meta」
- *  的唯一出处（工坊 `script-parser`），这里照抄一份就是同一件事的两个名字 ——
- *  改文案时只改一处是运气，不是判据（§12.14 默认值不得各处硬编码）。 */
-const DEFAULT_META: ProjectMeta = emptyProject();
-
-/** 自动保存的工坊状态（恢复时逐字段校验类型，损坏则按全新状态继续）。 */
-interface WorkshopDraft {
-  meta: ProjectMeta;
-  scriptMarkdown: string;
-  scenes: Scene[];
-  characters: Character[];
-  shots: Shot[];
-  /** 工坊「生图」阶段选定用来生成的「工作流库工作流」id（ISSUE #145）。
-   *  仅本地持久化（服务端镜像不含此字段）。 */
-  workflowId: string;
-  /** 工坊「视频」阶段选定的「工作流库工作流」id。
-   *  字段与生图分开 —— 两类工作流的对外参数口径不同（生图无首帧、视频有），
-   *  共用一个 id 会互相串味。 */
-  videoWorkflowId: string;
-}
-
-function emptyDraft(): WorkshopDraft {
-  return {
-    meta: DEFAULT_META,
-    scriptMarkdown: "",
-    scenes: [],
-    characters: [],
-    shots: [],
-    workflowId: "",
-    videoWorkflowId: "",
-  };
-}
+/* 工坊草稿的存储原语（WorkshopDraft 类型 / DEFAULT_META / readDraft / writeDraft /
+ *  parseDraft / draftKeyFor / buildProductionPayload）已下沉到
+ *  `~/lib/workshop/draft-store` 与 `~/lib/production/payload`——画布生成态回写
+ *  （Phase 3c-2b）要写同一份按 proj_* 存的草稿，两侧必须共用同一套键规则与组装
+ *  口径（§12.12 去重、§12.18 复用优先）。这里只留工坊恢复专用的两个本地转换。 */
 
 /** 服务端 DTO → 内部草稿（字段完全同构，显式构造避免隐式 cast 告警）。 */
 function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
@@ -122,60 +97,6 @@ function draftIsEmpty(draft: WorkshopDraft): boolean {
     draft.characters.length === 0 &&
     draft.shots.length === 0
   );
-}
-
-function draftKeyFor(id: string): string {
-  return `comfyapp.workshop.draft.${id}.v1`;
-}
-
-/** 工坊草稿 → 统一生产模型写入载荷（Phase 3b-2）。meta 摊平 + 进度（阶段游标 + rendered）。 */
-function buildProductionPayload(
-  draft: WorkshopDraft,
-  stage: string,
-  rendered: boolean,
-): ProductionPayload {
-  return {
-    title: draft.meta.title,
-    type: draft.meta.type,
-    tone: draft.meta.tone,
-    logline: draft.meta.logline,
-    scriptMarkdown: draft.scriptMarkdown,
-    scenes: draft.scenes,
-    characters: draft.characters,
-    shots: draft.shots,
-    progress: { stage, rendered },
-  };
-}
-
-/** 解析并补全一份草稿：逐字段校验类型，损坏则回退成空草稿。 */
-function parseDraft(raw: string | null): WorkshopDraft {
-  if (!raw) return emptyDraft();
-  try {
-    const draft = JSON.parse(raw) as Partial<WorkshopDraft>;
-    return {
-      meta: draft.meta ?? DEFAULT_META,
-      scriptMarkdown:
-        typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
-      scenes: Array.isArray(draft.scenes) ? draft.scenes : [],
-      characters: Array.isArray(draft.characters) ? draft.characters : [],
-      shots: Array.isArray(draft.shots) ? draft.shots : [],
-      workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
-      videoWorkflowId:
-        typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
-    };
-  } catch {
-    return emptyDraft();
-  }
-}
-
-/** SSR / 隐私模式下同样安全：读不到就当作空草稿（§16.2.4.28）。 */
-function readDraft(id: string): WorkshopDraft {
-  return parseDraft(readStorageItem(draftKeyFor(id)));
-}
-
-function writeDraft(id: string, draft: WorkshopDraft): void {
-  /* 存储满 / 隐私模式：静默失败，不影响编辑。 */
-  writeStorageJson(draftKeyFor(id), { v: 1, ...draft });
 }
 
 /** 页面加载期间只读一次 localStorage（多个 state 惰性初始化器共用）。

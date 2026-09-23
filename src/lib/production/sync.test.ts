@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import type { Shot } from "~/lib/workshop/types";
 import {
+  applyShotGeneration,
   applyShotPatches,
   nodeEditToShot,
+  nodeGenToShot,
+  nodeStatusToShotStatus,
   planShotSync,
   shotStatusToNodeStatus,
   shotToNodePatch,
@@ -115,5 +118,75 @@ describe("applyShotPatches", () => {
     const nodes = [{ id: "n1", data: { shotId: "a", prompt: "x" } }];
     const out = applyShotPatches(nodes, []);
     expect(out[0]).toBe(nodes[0]);
+  });
+});
+
+describe("nodeStatusToShotStatus", () => {
+  it("节点词表逐一对回 Shot 词表", () => {
+    expect(nodeStatusToShotStatus("done")).toBe("done");
+    expect(nodeStatusToShotStatus("error")).toBe("failed");
+    expect(nodeStatusToShotStatus("running")).toBe("running");
+    expect(nodeStatusToShotStatus("idle")).toBe("idle");
+  });
+
+  it("与 shotStatusToNodeStatus 对偶：done/error 往返一致", () => {
+    expect(shotStatusToNodeStatus(nodeStatusToShotStatus("done"))).toBe("done");
+    expect(shotStatusToNodeStatus(nodeStatusToShotStatus("error"))).toBe(
+      "error",
+    );
+  });
+});
+
+describe("nodeGenToShot", () => {
+  it("done + 结果 → 写 status/taskId/imageUrl", () => {
+    expect(
+      nodeGenToShot({
+        status: "done",
+        taskId: "t1",
+        resultPath: "/api/generated/a.png",
+      }),
+    ).toEqual({
+      status: "done",
+      taskId: "t1",
+      imageUrl: "/api/generated/a.png",
+    });
+  });
+
+  it("error → 只标 failed，不带 imageUrl（不清空已有 url）", () => {
+    const patch = nodeGenToShot({ status: "error", taskId: "t2" });
+    expect(patch).toEqual({ status: "failed", taskId: "t2" });
+    expect(patch).not.toHaveProperty("imageUrl");
+  });
+
+  it("done 但无 resultPath → 不写 imageUrl", () => {
+    const patch = nodeGenToShot({ status: "done" });
+    expect(patch).toEqual({ status: "done" });
+    expect(patch).not.toHaveProperty("imageUrl");
+  });
+});
+
+describe("applyShotGeneration", () => {
+  it("命中 shotId → 生成态合并进该镜头，其它镜头原样引用", () => {
+    const shots = [makeShot({ id: "a" }), makeShot({ id: "b" })];
+    const out = applyShotGeneration(shots, "a", {
+      status: "done",
+      taskId: "t",
+      imageUrl: "/x.png",
+    });
+    expect(out[0]).toMatchObject({
+      id: "a",
+      status: "done",
+      imageUrl: "/x.png",
+    });
+    // 未命中的镜头是同一引用（未变）
+    expect(out[1]).toBe(shots[1]);
+    // 命中的镜头是新对象（不可变）
+    expect(out[0]).not.toBe(shots[0]);
+  });
+
+  it("无命中 → 原样返回入参引用（供调用方判「无需落库」）", () => {
+    const shots = [makeShot({ id: "a" })];
+    const out = applyShotGeneration(shots, "missing", { status: "done" });
+    expect(out).toBe(shots);
   });
 });
