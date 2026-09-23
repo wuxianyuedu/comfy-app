@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -90,15 +91,20 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
             }
           />
           <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuLabel>应用</DropdownMenuLabel>
-            <DropdownMenuItem onClick={onOpenSettings}>
-              <Settings strokeWidth={1.8} />
-              设置
-            </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href="/me/works" />}>
-              <UserRound strokeWidth={1.8} />
-              我的作品
-            </DropdownMenuItem>
+            {/* base-ui's DropdownMenuLabel is Menu.GroupLabel and must be wrapped in
+                DropdownMenuGroup (or DropdownMenuRadioGroup); otherwise opening the
+                menu throws "MenuGroupContext is missing" (matches CanvasContextMenu). */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>应用</DropdownMenuLabel>
+              <DropdownMenuItem onClick={onOpenSettings}>
+                <Settings strokeWidth={1.8} />
+                设置
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/me/works" />}>
+                <UserRound strokeWidth={1.8} />
+                我的作品
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
