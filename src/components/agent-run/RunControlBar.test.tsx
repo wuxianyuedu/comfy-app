@@ -91,4 +91,35 @@ describe("RunControlBarView", () => {
     expect(screen.getByText("重新开始")).toBeTruthy();
     expect(screen.getByText(/配额不足/)).toBeTruthy();
   });
+
+  it("有执行日志 → 渲染每步（含失败标记）", () => {
+    render(
+      <RunControlBarView
+        c={{
+          ...withStatus("running"),
+          run: {
+            ...normalizeProductionRun(null),
+            status: "running",
+            log: [
+              {
+                ts: "2026-01-01T08:00:00.000Z",
+                kind: "generate_script",
+                ok: true,
+                detail: "已生成剧本（1240 字）",
+              },
+              {
+                ts: "2026-01-01T08:00:05.000Z",
+                kind: "render_images",
+                ok: false,
+                detail: "逐镜生图：0 成功 / 1 失败",
+              },
+            ],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText("已生成剧本（1240 字）")).toBeTruthy();
+    expect(screen.getByText("逐镜生图：0 成功 / 1 失败")).toBeTruthy();
+    expect(screen.getByLabelText("执行日志")).toBeTruthy();
+  });
 });
