@@ -46,6 +46,36 @@ import { cn } from "~/lib/utils";
  * 链接，例如 `displayValue(o.seed)`），后者给**原始值**（缺值交给
  * `displayValue` 处理）。
  *
+ * ## 为什么没合到 shadcn `Item`（P67 §12.18 中间地带 · 已评估保留）
+ *
+ * `ui/item.tsx` 是「列表项 + 前缀 media + 主内容 title / description
+ * + 右侧 actions」的复合行容器（`ItemMedia` / `ItemContent` /
+ * `ItemTitle` / `ItemDescription` / `ItemActions` 五个 slot）。
+ * **形状只贴本件 4 layout 中的 `rows` 一档**、其余三档超出它的模型：
+ *
+ *   - `rows`：label 左 + value 右 + 可选外框与隔行底色 —— Item 的
+ *     `ItemTitle` + `ItemContent` 结构确实能凑出，但需要把 Item 默认的
+ *     `line-clamp-1` / `text-sm` / `font-medium` 都覆盖掉、把本件的
+ *     `bordered` / `striped` 逻辑（外层 `Item` + 每行 `Item` + `bg-subtle`
+ *     隔行）手写一遍。凑出来比直接用 `<div>` 复杂；
+ *   - `stacked`：label 在值**上方**、多列网格 —— Item 的 media/content
+ *     是横排语义，网格靠 `grid-cols-*` 在 Item 外面套；`hint` 又要走
+ *     ItemDescription 的 line-clamp-2（本件是自由 ReactNode、可能塞
+ *     徽标 / 链接、不该被裁），语义硬拧；
+ *   - `table`：真正的 `<table>` + `<th scope="row">` 行表头，是无障碍
+ *     语义强要求（表头单元格必须用 `th` + `scope`）。Item 全 `<div>`
+ *     系、撑不住 `<table>`；
+ *   - `inline`：`<span>` 里 label + value 挤一行不换行（状态栏 /
+ *     指标条），Item 是 `flex w-full flex-wrap`、块级 + 撑满整行；
+ *     硬套会破坏内联语义。
+ *
+ * 结论：合 Item 只能覆盖 4/1 档、还得覆盖 Item 默认样式；拆四档
+ * API 又与本件「统一 items 契约、只 layout 切换」的初衷相反。**收益
+ * 1/4、代价 4/4 拆 API**，保留自绘更清晰（§12.18「只有 1 个又看不出
+ * 第二个的，先就地写、别急着抽象」的镜像：这里已经是 5 处消费共用
+ * 一档形状、抽象层已经在，缺的是**这四种 layout 的基元**、Item 提供
+ * 不了）。
+ *
  * ⚠️ **它不管「取哪些字段」**：那是域判据（哪些参数该露、哪些被过滤掉），
  * 留在调用处的派生函数里（如 `history-detail-derive` 的 `deriveParamRows`）。
  */
