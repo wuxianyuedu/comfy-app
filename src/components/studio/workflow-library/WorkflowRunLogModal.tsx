@@ -35,6 +35,7 @@ import {
   type WorkflowRunSource,
 } from "~/lib/workflow/workflow-run-store";
 import { useCancelTask } from "../project-canvas/hooks/use-cancel-task";
+import { WorkflowRunRawCliModal } from "./WorkflowRunRawCliModal";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
@@ -107,6 +108,8 @@ export function WorkflowRunLogModal({
   onClose,
 }: WorkflowRunLogModalProps) {
   const snapshot = useSyncExternalStoreShim();
+  /* 「查看完整输出」弹窗：拉取 comfy-cli 未经截断的完整原文（JSON 折叠高亮）。 */
+  const [rawOpen, setRawOpen] = useState(false);
   /* 只取当前工作流自己的运行（新→旧），避免把别的工作流的日志串进来。
    * 传入 source 时进一步按来源过滤（画布节点 / 工坊封装各自只看自己的）。 */
   const runs = useMemo(
@@ -263,6 +266,16 @@ export function WorkflowRunLogModal({
                   ))}
                 </select>
               )}
+              <Button
+                variant="ghost"
+                onClick={() => setRawOpen(true)}
+                disabled={!viewTaskId}
+                title="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）"
+                data-testid="wflib-log-raw"
+                className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md px-2 py-0.5 text-[10.5px]"
+              >
+                查看完整输出
+              </Button>
               <WidePanelToggle
                 panel={panel}
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
@@ -377,6 +390,12 @@ export function WorkflowRunLogModal({
           </div>
         </div>
       </DialogContent>
+      <WorkflowRunRawCliModal
+        taskId={viewTaskId}
+        running={status === "running"}
+        open={rawOpen}
+        onClose={() => setRawOpen(false)}
+      />
     </Dialog>
   );
 }

@@ -31,7 +31,7 @@ import path from "path";
 import { taskRepository } from "../core/repository";
 import { resolveComfyBase } from "./client";
 import { primaryModelName } from "./executed-model";
-import { state, log } from "./runner-state";
+import { state, log, appendRawCli } from "./runner-state";
 import type { Job } from "./runner-state";
 import { complete, fail } from "./executor-finalize";
 import {
@@ -389,6 +389,7 @@ export async function executeViaComfyCli(job: Job) {
   const stdoutParser = createCliEnvelopeParser({
     taskId,
     log,
+    rawCli: appendRawCli,
     patched,
     finish,
     onPromptId: (id: string) => {
@@ -422,7 +423,7 @@ export async function executeViaComfyCli(job: Job) {
   // DeprecationWarning 噪声不占额度、计数后由 close 汇总，避免把真正的
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
   // stderrSink.raw() 始终完整累积，close 时的 tail 汇总不受行数上限影响。
-  const stderrSink = createCliStderrSink({ taskId, log });
+  const stderrSink = createCliStderrSink({ taskId, log, rawCli: appendRawCli });
   child.stderr?.setEncoding("utf-8");
   child.stderr?.on("data", stderrSink.sink);
 

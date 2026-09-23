@@ -155,6 +155,12 @@ export type RunnerState = {
 
   logs: Map<string, LogEntry[]>;
 
+  /** comfy-cli 完整原始输出（按行、不截断）：供前端「查看完整输出」入口按需
+   *  拉取。面板的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做了单行与
+   *  行数截断（executor-cli-stream 的 MAX_*），但排障常要看被截掉的完整 JSON
+   *  与完整 traceback，故这里单独以「不截断」方式留存，上限见 RAW_CLI_MAX_LINES。 */
+  rawCli: Map<string, string[]>;
+
   lastLogPct: Map<string, number>;
 
   /** /** 按节点记录完成情况。ComfyUI 发 `executing` 且 `data.node !== null` 时，
@@ -241,6 +247,8 @@ export function state(): RunnerState {
       promptByTask: new Map(),
 
       logs: new Map(),
+
+      rawCli: new Map(),
 
       lastLogPct: new Map(),
 
@@ -520,4 +528,27 @@ export async function persistLogs(taskId: string) {
       `[comfyui] persistLogs(${taskId}) 落库失败：${errorText(e, "unknown")}`,
     );
   }
+}
+
+/* comfy-cli 完整原始输出缓冲（详见 RunnerState.rawCli 的字段说明）。
+ *
+ * 上限远大于面板摘要的 300 行，足以覆盖节点数很多的 workflow；超出后
+ * 丢弃最旧的行（保留「最新的一段」），避免失控执行把内存撑爆。 */
+export const RAW_CLI_MAX_LINES = 5000;
+
+/** 追加一行 comfy-cli 完整原文（不截断），供前端「查看完整输出」按需拉取。 */
+export function appendRawCli(taskId: string, line: string): void {
+  if (!taskId) return;
+  const store = state();
+  const arr = store.rawCli.get(taskId) ?? [];
+  arr.push(line);
+  if (arr.length > RAW_CLI_MAX_LINES) {
+    arr.splice(0, arr.length - RAW_CLI_MAX_LINES);
+  }
+  store.rawCli.set(taskId, arr);
+}
+
+/** 读取某次执行累积的 comfy-cli 完整原文（无记录返回空数组）。 */
+export function getRawCli(taskId: string): string[] {
+  return state().rawCli.get(taskId) ?? [];
 }
