@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { ChevronDown, Search, Settings, UserRound } from "lucide-react";
+import { ChevronDown, Search, Settings } from "lucide-react";
 
 import { MessageCenterButton } from "~/components/message-center/MessageCenterButton";
 import { Button } from "~/components/ui/button";
@@ -31,7 +30,7 @@ export interface TopBarProps {
 /**
  * 顶部工具条（规范 §12.1 里与 `AppShell` 并列的那个空位）。
  *
- * 四件事：
+ * 三件事：
  *
  *   - **侧栏开合**：`SidebarTrigger`。它同时就是「布局切换」—— 官方 `sidebar` 在
  *     `collapsible="icon"` 下，这个按钮切换的正是「宽栏 ↔ 图标档」两种形态；
@@ -43,7 +42,7 @@ export interface TopBarProps {
  *   - **全局搜索（⌘/Ctrl+K 命令面板）**：接 `command` 基元（`AppShell` 里用
  *     `useHotkey` 监听 ⌘/Ctrl+K 打开）。此前压住是因为 `command` 还没合并
  *     （在 #886），用 `Dialog` + 自绘列表会撞 P11（自绘浮层选项列表）。
- *   - **应用菜单**：设置与「我的作品」。
+ *   - **应用菜单**：设置。
  */
 export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   const label = NAV_ITEMS.find((item) => item.id === active)?.label ?? "工作区";
@@ -99,10 +98,6 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
               <DropdownMenuItem onClick={onOpenSettings}>
                 <Settings strokeWidth={1.8} />
                 设置
-              </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href="/me/works" />}>
-                <UserRound strokeWidth={1.8} />
-                我的作品
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
