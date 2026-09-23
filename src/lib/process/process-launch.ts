@@ -9,9 +9,15 @@
 //   - bound（默认）：子进程挂在应用进程树里 → 应用退出被 taskkill 整树带走；
 //   - keepAlive：子进程脱离应用进程树成为孤儿 → 应用退出后继续存活，下次复用。
 //
-// POSIX 用 spawn({detached:true}) + unref()；Windows 经 powershell
-// Start-Process 中介拉起——Start-Process 自己立即退出，目标进程挂在已退出
-// powershell 之下成为孤儿，树级 taskkill 遍历不到。
+// POSIX 用 spawn({detached:true}) + unref()；Windows 经**中介进程**拉起：
+// 中介立即退出，目标挂在已退出的中介之下成为孤儿，树级 taskkill 遍历不到。
+// Windows 的中介有两种形态，优先走前者，判据是壳有没有发布自己的路径
+// （`COMFYAPP_SHELL_EXE`）：
+//   1. 壳的 CLI 形态（`app.exe --spawn-detached`）——它带
+//      `CREATE_BREAKAWAY_FROM_JOB` 创建目标，连**壳的 Job Object** 一起逃掉；
+//   2. powershell `Start-Process`——只能做到「孤儿」，逃不出 job。
+// 为什么必须逃 job：壳给编排器挂了 `KILL_ON_JOB_CLOSE`，job 成员身份在创建时
+// 继承，壳一退出 job 关闭就把被保活的服务一并终止（详见被调用处注释）。
 //
 // 注意：keepAlive 路径没有直连的 stdio 管道（真实子进程是孙进程），调用方
 // 应改用「端口/PID 存活探测」判断就绪，不要再依赖子进程的 stdout/stderr 或
@@ -179,7 +185,51 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     }
   }
 
-  // Windows keepAlive：powershell Start-Process 中介。stderr 用 pipe 带出
+  /* Windows keepAlive：**优先**走壳的 CLI 形态中介（`app.exe --spawn-detached`）。
+   *
+   * 为什么不能只靠 Start-Process：它确实把目标变成了孤儿（树级 `taskkill /T`
+   * 遍历不到），但**孤儿仍在壳的 Job Object 里** —— job 成员身份在进程创建时继承，
+   * 而壳给编排器挂了 `KILL_ON_JOB_CLOSE`。壳一退出 job 关闭，被保活的服务照样
+   * 当场终止，「应用退出后不关闭」名存实亡。逃出 job 需要创建时带
+   * `CREATE_BREAKAWAY_FROM_JOB`（父 job 已允许，见 shell_launch.rs 的
+   * `JOB_OBJECT_LIMIT_BREAKAWAY_OK`），而 `child_process.spawn` 与 `Start-Process`
+   * 都传不了这个创建标志 —— 只有壳自己（Rust）能，于是壳多出一个 CLI 形态
+   * （见 src-tauri/src/detached_spawn.rs）。
+   *
+   * 壳把自身路径经 `COMFYAPP_SHELL_EXE` 发布给下游（编排器 → dev server）；
+   * 拿不到时（例如 `pnpm tauri dev`：那时没有 job 要逃）退回下面的中介。
+   * 两侧契约一致：中介立即退出，退出码非 0 表示拉起被拒，stderr 带原因。 */
+  const shellExe = process.env.COMFYAPP_SHELL_EXE?.trim();
+  if (shellExe) {
+    const cliArgs = [
+      "--spawn-detached",
+      "--cmd",
+      command,
+      ...args.flatMap((a) => ["--arg", a]),
+    ];
+    if (opts.cwd) cliArgs.push("--cwd", opts.cwd);
+    if (opts.redirectStdoutFile && opts.redirectStderrFile) {
+      cliArgs.push(
+        "--out",
+        opts.redirectStdoutFile,
+        "--err",
+        opts.redirectStderrFile,
+      );
+    }
+    try {
+      // 不传 env：与下面的 powershell 中介同语义（继承本进程环境，目标再由它继承）。
+      const mediator = spawn(shellExe, cliArgs, {
+        windowsHide: true,
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      mediator.unref();
+      return { child: mediator };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  // 退回：powershell Start-Process 孤儿中介。stderr 用 pipe 带出
   // （调用方经 waitForDetachMediator 读），拉起被拒时才有可行动的报错。
   const cwdArg = opts.cwd
     ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}`

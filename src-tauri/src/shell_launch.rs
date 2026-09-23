@@ -703,7 +703,8 @@ pub fn attach_kill_on_close_job() {
   use windows::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
     JobObjectExtendedLimitInformation, JOBOBJECT_BASIC_LIMIT_INFORMATION,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_BREAKAWAY_OK,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
   };
   use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
@@ -729,7 +730,15 @@ pub fn attach_kill_on_close_job() {
     };
     let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
     info.BasicLimitInformation = JOBOBJECT_BASIC_LIMIT_INFORMATION {
-      LimitFlags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+      /* KILL_ON_JOB_CLOSE：壳消失（含被硬杀）时 job 关闭即终止整棵树 —— 编排器
+       * 崩溃后不留孤儿的 OS 级兜底。
+       *
+       * BREAKAWAY_OK 是它的**必要配对**：保活服务（keepAlive 的服务）必须能逃出
+       * 这个 job，否则「应用退出后不关闭」在 Windows 上不成立（job 成员身份在
+       * 创建时继承，壳一退即被连带终止）。少了这一位，子进程带
+       * `CREATE_BREAKAWAY_FROM_JOB` 创建会被直接拒（ERROR_ACCESS_DENIED），
+       * 只能退回「跟着壳一起被杀」。申请脱离的那一半见 `detached_spawn`。 */
+      LimitFlags: JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK,
       ..Default::default()
     };
     let size = std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32;

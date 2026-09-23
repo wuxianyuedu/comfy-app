@@ -918,6 +918,36 @@ dev server（Next 不认 `COMFYAPP_PORT`，必须显式传），所以**端口�
 | `tests/dist-artifact-hygiene.test.ts`               | `scripts/` 白名单**真删一次**：嵌套条目保留、未登记的新文件被剔；两侧清单集合相同；`RUNTIME_SCRIPTS` 覆盖 `dev-launcher.mjs` 的相对 import 闭包（新增内部分件漏登记即失败）                                                                                                                                       | 白名单改目录级放行、或从闭包里挑一个模块删掉登记 → 必失败      |
 | `tests/command-echo.test.ts`                        | 命令行回显：格式化规则（引号 / 空参数 / 单行）、`COMFYAPP_ECHO_COMMANDS` 开关、以及 `shell.mjs` 三个执行出口真的接了回显（§4.4）                                                                                                                                                                                  | 删掉任一出入口的 `echoCommandLine(` → 必失败                   |
 
+### 3.4 保活服务必须能逃出 Job Object（Windows，硬规则 3 的边界）
+
+壳给编排器挂了 `KILL_ON_JOB_CLOSE` 的 Job Object（`shell_launch.rs` 的
+`attach_kill_on_close_job`）：壳被硬杀时由 OS 兜底终止整棵树，不留孤儿。
+
+代价是 **job 成员身份在进程创建时继承** —— 被保活的服务（`keepAlive` 的 ComfyUI）
+即使经 powershell `Start-Process` 变成孤儿（树级 `taskkill /T` 已遍历不到它），
+**仍在 job 里**：壳一退出、job 关闭，它当场终止，「应用退出后不关闭」名存实亡。
+
+逃出去需要两半配合，缺一不可：
+
+| 一半      | 在哪                                                             | 做什么                                                         |
+| --------- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| 父 job 允许 | `shell_launch.rs` 的 `LimitFlags`                              | 加 `JOB_OBJECT_LIMIT_BREAKAWAY_OK`                             |
+| 创建时请求  | `src-tauri/src/detached_spawn.rs`（壳的 CLI 形态）               | `CreateProcess` 带 `CREATE_BREAKAWAY_FROM_JOB`                 |
+
+第二半只能由壳做：`child_process.spawn` 与 `Start-Process` 都传不了这个创建标志，
+而服务是被 **Next server（Node）** 拉起的（Tauri 的命令面只有 webview 够得着，
+服务端叫不到）。因此壳多一个入口：`app.exe --spawn-detached --cmd <exe> --arg … --out … --err …`
+—— 带该标志启动时不做 GUI，只当一次中介就退出（`run()` 最前面分叉，见
+`detached_spawn` 模块头）。壳把自身路径经 `COMFYAPP_SHELL_EXE` 发布给下游
+（编排器 → dev server），`process-launch.ts` 的 Windows keepAlive 分支据此优先走它，
+拿不到时（例 `pnpm tauri dev`：那时没有 job 要逃）退回 `Start-Process` 中介。
+
+**与硬规则 3 的边界**：那条规则约束的是**回收**（一律经 `kill-process-tree` 的平台
+判据，禁止各自 `taskkill` / 单杀）；这里恰恰要的是「不被调用方的树回收带走」，那正是
+`keepAlive` 的语义。回收路径一字未改，脱离只发生在「拉起」这一步。判据见
+`src-tauri/src/detached_spawn.rs` 的 4 条单测（参数表解析 / 字面量取值 / 缺值与未知
+参数 / GUI 启动不受影响）。
+
 ## 4. 日志布局（排障从上往下看）
 
 `log/` 按子系统分区，禁止新文件平铺在根目录（路径常量的唯一事实来源：
@@ -1240,6 +1270,7 @@ zustand 队列，而不是再加一个模块级单例。
 | 工作流库/项目列表整页空数据，tRPC 查询 500（console 报 no such table / Could not locate bindings） | **Drizzle 迁移三重遗漏**（2026-09-03 定位）：① better-sqlite3@11 无 Node 24 预编译包、本机无 MSVC → 原生绑定缺失，所有 DB 查询崩（升级到 v12，prebuild 下载即可）② `resolveDbPath` 用 `new URL("file:./db.sqlite")` 解析 → Windows 落到盘符根 `F:\db.sqlite` 空库（真实数据在 `prisma/db.sqlite`）③ schema.ts 表名 camelCase 与 Prisma 建的 PascalCase 表不一致 | ① better-sqlite3 钉在 v12（v13 移除预编译包，本机无编译链不能升）② 路径解析统一走 `path.resolve(process.cwd(), …)`（与 drizzle-kit 同锚点）③ 表名已重命名对齐 schema.ts；**换 Node 版本或重装依赖后先跑一次 `pnpm db:studio` 确认表与数据都在** |
 | **ComfyUI 莫名退出**（跑着跑着就没了，日志里只有一句 `code=null`，看不出原因） | 旧实现缺三样：① `exit` 事件的 `signal` 参数被丢弃 —— 「被 SIGKILL 强杀」（外部动作：任务管理器 / Job Object 连带杀树 / OOM 杀手）与「自己 exit 1」在日志里长得一模一样，而两者排查方向完全相反；② **保活模式（双击启动的主路径）完全没有退出事件**（进程是 `Start-Process` 的孙进程 / 已 `unref`），「它什么时候没的」根本不知道，只能等下一次状态轮询发现「不在了」；③ 「用户主动关」与「自己挂了」不区分（`stopRequested` 只喂给启动等待循环，不喂给退出回调） | 已修：判据收在 `src/lib/comfyui/lifecycle-exit.ts` 的 `describeComfyExit`（**信号优先于退出码**、用户主动关最先判、拿不到就说拿不到而不编一个 `code=0`），会话横幅直接写结论、`[exit]` 行带 `pid` / 存活时长 / `code` / `signal` / 模式 + 可行动作；保活模式加**退出监督**（`startComfyExitWatcher` 轮询进程表，进程消失即报「什么时候没的、活了多久」）；再加**跨会话对账**（`log/services/comfyui-last-session.json` 有开始没结束 → 下次启动提示「应用或系统在它之前就结束了」—— 覆盖 Job Object 连带杀树 / 强制关机 / 任务管理器结束进程那一档，那些情况下没有任何活着的进程能写日志）。Drizzle Studio 复用同一套原语，一并受益 |
 | **启动时提示「上一次 ComfyUI 会话（pid=未知）开始于 …，却没有退出记录」，但没人关过 ComfyUI**（紧接着又按配置路径把它拉起来，用户读成「ComfyUI 莫名退出」） | **单元测试把夹具会话写进了真实 `log/services/`**：`src/lib/comfyui/lifecycle.test.ts` 的 mock 说明符写成 `vi.mock("../log-paths", …)`，而真实模块在 `src/lib/log/log-paths.ts` —— 该说明符解析不到任何文件。`vi.mock` 对**解析不到的路径不报错**（工厂被注册在一个无人 import 的路径上），于是 mock 静默失效、真实模块照用：夹具的 `/x/main.py` 会话被写进真实的 `comfyui-runtime.log` 与 `comfyui-last-session.json`，留下一条「有开始、没结束」的记录。跨会话对账（`describeStaleSession`）据此报出那句告警，而那个会话**根本没被拉起过**（它没有任何 `comfyui-keepalive-*.log` 输出文件）。这类缺陷测试自身全绿，只有下一次真机启动才露出来。**与上面「ComfyUI 莫名退出」那条要分开看**：那条是真被关掉（应用先没了），这条是记录被测试污染的假阳性 | 已修：mock 说明符改为真实模块 `~/lib/log/log-paths`，落盘目录改指系统临时目录（`%TEMP%/comfyapp-lifecycle-test`），测试不再触碰仓库 `log/`（AGENTS 硬规则 17）。新增机器判据 `tests/test-mock-targets.test.ts`：剥注释后扫描全仓 `vi.mock` / `vi.doMock`，**可解析的说明符必须命中真实文件**（死 mock 直接红，判据自身也断言「扫描到了东西」以防范围写错） |
+| **勾了「保活（应用退出后不关闭）」，一关应用 ComfyUI 就跟着没了**（`log/services/comfyui-last-session.json` 里那条会话因此「有开始、没结束」） | **被保活的服务仍在壳的 Job Object 里**：壳给编排器挂了 `KILL_ON_JOB_CLOSE` 的 job，而 job 成员身份在**进程创建时继承**。`Start-Process` 中介只解决了「树级 `taskkill /T` 遍历不到」，job 这一层没解决 —— 壳退出一关 job，整棵树（含 ComfyUI）当场终止。逃出去要两半配合：父 job 允许（`JOB_OBJECT_LIMIT_BREAKAWAY_OK`）+ 创建时请求（`CREATE_BREAKAWAY_FROM_JOB`），而后者 `child_process.spawn` 与 `Start-Process` 都传不了 | 已修（见 §3.4）：壳侧加 `BREAKAWAY_OK`，并新增壳的 CLI 形态 `app.exe --spawn-detached …` 当脱离 job 的中介（`src-tauri/src/detached_spawn.rs`）；`process-launch.ts` 的 Windows keepAlive 分支优先走它（壳经 `COMFYAPP_SHELL_EXE` 发布自身路径），拿不到时退回 `Start-Process`。**需重编壳**（`cargo build --release --features custom-protocol`） |
 | `pnpm build` 报 **`Dynamic filesystem access causes tracing of the whole project`**（若干条，围绕 `db.ts` / `lifecycle.ts` / `api/dev/build-id` / `api/update-check` 等动态路径访问点） | **动态路径访问让 Turbopack 放弃静态追踪、退化为「整个项目全量追踪」**：`fs.*` / `path.resolve` / `path.join` 的参数只要依赖 `process.cwd()`、`process.env`、目录项或 HTTP 入参，它就无法把路径静态收敛到某个子目录，于是把**整个项目**（含 `public/`）都算作 server code 的依赖。判据是**高亮行正好落在那条「算出路径」的表达式上**（`path.join(...)` / `path.resolve(...)` 那一行），而不是消费它的 `fs.statSync`。后果是 `.next/standalone` 被撑大（本仓库实测修复前 62MB、`standalone/src` 里 143 个 `*.test.ts` 与 89 份 `changelog.d/*.md` 都在里面；补上 exclude 后产物干净、测试文件归零） | **已纠正口径（ISSUE #489 实测）**：`/*turbopackIgnore: true*/` 对 `fs.*` **一概无效**——它只作用于动态 `import()` / `require()`（Next 文档里这类注解的语义是 "skip bundling"）。仓库里那些存量注解（`envfile.ts` / `debug/source/route.ts` / `localWorkflows.ts` / `db.ts`）**从未真正生效**，告警一直在；把它们换位置、做常量、写进 `path.join` 参数里都试过，5 条告警一条不少。**真正的防线是 `next.config.js` 的 `outputFileTracingExcludes`**（体积护栏 1.5GB 也靠它）：它按**最终产物路径**排除，不依赖 Turbopack 的静态分析。**不要**用 `turbopack.ignoreIssue` 去「消警」：实测它只关消息、不改行为（配了它，把哨兵目录从 `outputFileTracingExcludes` 里摘掉后，哨兵**照样**回到 `standalone`）——那是把唯一的可见信号关掉而产物照旧被放大（反模式 E9）。详见 §7.2 |
 | **`pnpm build` 在 master / CI / 干净检出上必失败**（`next build` 挂在 `Collecting page data` 阶段，报错 import trace 指向 `/api/logs/history` 一类与库无关的路由） | **模块级副作用在「表还没建好」时读库**：ComfyUI 孤儿任务回收（`src/lib/comfyui/reaper.ts`）是模块级副作用（`enqueue.ts` 用裸 `import "./reaper"` 把它挂上启动路径），build 期 worker 加载模块图时同样会执行它；而干净检出只跑 `pnpm install`、没跑 `pnpm db:push`，于是 `no such table: task` / `no such table: user` 以未捕获异常浮出 worker，被 Next 聚合进 collect-page-data 阶段错误——报错行号落在无关路由上，把人引向错误方向 | 已修：新增 `src/lib/db-schema-ready.ts`（只读探 `sqlite_master` 的哨兵表，三态 ready / missing / unknown，同进程只探一次；对外导出判据函数 `isSchemaReady()`），reaper 每轮 sweep 先判就绪、未就绪整轮跳过（回收幂等且每 30s 重跑，只推迟一轮）；**不吞真故障**——「表存在但查询失败」仍照原路径暴露。该模块必须保持纯 ASCII，见下一条 |
 | **CI 的 `Test` 步骤在 master 上一直红**（`pnpm test` 报 `MissingEnvFileError: 缺少 .env 环境配置文件`；本机有 `.env` 的人跑同一个用例是绿的） | **用例的 `process.cwd` 替身泄漏到了别的 `describe`，把 `src/env.js` 的 `.env` 探测带偏**（ISSUE #489）：`src/lib/db-schema-ready.test.ts` 的文件级 `beforeEach` 对文件内**所有** `describe` 都生效，而末尾「reaper 模块级副作用」那组要 `import` 真实的 `~/server/db` → `~/env`，`env.js` 拿 `<cwd>/../.env` 探测配置文件；cwd 被留在临时目录时探测必然落空。**注意只设 `BETTER_AUTH_GITHUB_CLIENT_ID` 两个变量是不够的**（实测仍然红）——校验有两层：`.env` 文件存在性 + 必填项，两层都要满足。CI 的 `Test` 是裸 `pnpm run test`（不注入 `SKIP_ENV_VALIDATION`），所以每次必挂；而 `test:coverage` 走另一条链路能过，于是呈现成「Coverage 绿、Test 红」这种最容易被忽略的形态 | 已修：cwd 替身改为**按 `describe` 建立、退出即还原**（`useTempCwd()` + 各自 `afterEach`），不再放进文件级钩子；该组自己 `vi.stubEnv` 补齐 `SKIP_ENV_VALIDATION` 与两处占位密钥，**不去读开发者本机的 `.env`**——用例的可通过性只能取决于用例自己造的东西 |
