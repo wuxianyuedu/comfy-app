@@ -56,6 +56,33 @@ export class ProductionRepository extends DrizzleRepository<Production> {
     return rows.length > 0;
   }
 
+  /**
+   * 只更新内容列（剧本 / 角色 / 镜头）—— 供服务端 run 引擎写回阶段产物用。刻意**不碰 run /
+   * progress**（引擎写 run 走 updateRun、进度走别处），字段各写各的列、互不覆盖。只给出现在想改的
+   * 字段即可（缺省字段不动）。行不存在 → false。
+   */
+  async patchContent(
+    userId: string,
+    id: string,
+    patch: {
+      scriptMarkdown?: string;
+      characters?: unknown;
+      shots?: unknown;
+    },
+  ): Promise<boolean> {
+    const set: Record<string, unknown> = { updatedAt: new Date() };
+    if (patch.scriptMarkdown !== undefined)
+      set.scriptMarkdown = patch.scriptMarkdown;
+    if (patch.characters !== undefined) set.characters = patch.characters;
+    if (patch.shots !== undefined) set.shots = patch.shots;
+    const rows = await db
+      .update(production)
+      .set(set)
+      .where(and(eq(production.id, id), eq(production.userId, userId)))
+      .returning({ id: production.id });
+    return rows.length > 0;
+  }
+
   /** 按 proj_* upsert 生产数据（不存在则建、存在则更新，带归属）。 */
   async upsertForUser(
     userId: string,

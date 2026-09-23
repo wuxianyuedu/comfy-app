@@ -12,6 +12,10 @@ vi.mock("~/server/db", async () => {
 vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
+// start/approve/resume 会 fire-and-forget 拉起执行引擎；端点测试只验状态回显，mock 掉引擎避免真跑。
+vi.mock("~/server/agent/run-engine", () => ({
+  advanceRunLoop: vi.fn(async () => undefined),
+}));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { runRouter } from "~/server/api/routers/run";
