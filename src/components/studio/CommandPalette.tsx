@@ -9,11 +9,13 @@ import {
   CommandList,
 } from "~/components/ui/command";
 
-import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
+import { visibleNavItems, type WorkspaceView } from "./NavItems";
 
 export interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 当前视图：首页时命令面板也不列项目作用域工具（画布 / 工坊），与侧栏同一规则。 */
+  active: WorkspaceView;
   /** 选中某条命令时回调（这里用来切换视图）。 */
   onSelect: (view: WorkspaceView) => void;
 }
@@ -32,6 +34,7 @@ export interface CommandPaletteProps {
 export function CommandPalette({
   open,
   onOpenChange,
+  active,
   onSelect,
 }: CommandPaletteProps) {
   return (
@@ -45,19 +48,21 @@ export function CommandPalette({
       <CommandList>
         <CommandEmpty>没有匹配的结果</CommandEmpty>
         <CommandGroup heading="视图">
-          {NAV_ITEMS.filter((item) => item.enabled !== false).map((item) => (
-            <CommandItem
-              key={item.id}
-              value={`${item.label} ${item.id}`}
-              onSelect={() => {
-                onSelect(item.id);
-                onOpenChange(false);
-              }}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </CommandItem>
-          ))}
+          {visibleNavItems(active)
+            .filter((item) => item.enabled !== false)
+            .map((item) => (
+              <CommandItem
+                key={item.id}
+                value={`${item.label} ${item.id}`}
+                onSelect={() => {
+                  onSelect(item.id);
+                  onOpenChange(false);
+                }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </CommandItem>
+            ))}
         </CommandGroup>
       </CommandList>
     </CommandDialog>

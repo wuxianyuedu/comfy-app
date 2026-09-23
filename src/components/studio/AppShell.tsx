@@ -19,7 +19,7 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-import { NAV_ITEMS, type WorkspaceView } from "./NavItems";
+import { visibleNavItems, type WorkspaceView } from "./NavItems";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 
@@ -69,6 +69,10 @@ export function AppShell({
   const [commandOpen, setCommandOpen] = useState(false);
   useHotkey({ key: "k", mod: true }, () => setCommandOpen(true));
 
+  /* 首页不显示项目作用域工具（画布 / 工坊）——它们是对「当前项目」的操作投影，
+   * 只有进入某个项目后才出现在侧栏。规则收在 `visibleNavItems`，与命令面板共用。 */
+  const navItems = visibleNavItems(active);
+
   return (
     <SidebarProvider
       defaultOpen={defaultSidebarOpen}
@@ -95,7 +99,7 @@ export function AppShell({
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {NAV_ITEMS.map((item) => {
+                {navItems.map((item) => {
                   const enabled = item.enabled !== false;
                   return (
                     <SidebarMenuItem key={item.id}>
@@ -151,6 +155,7 @@ export function AppShell({
       <CommandPalette
         open={commandOpen}
         onOpenChange={setCommandOpen}
+        active={active}
         onSelect={onSelect}
       />
     </SidebarProvider>
