@@ -9,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { Textarea } from "~/components/ui/textarea";
 import { SHOT_STATUS_LABEL } from "./ShotStudio";
 import type { ShotProgress } from "./useStoryboardPlanner";
 
@@ -129,13 +130,13 @@ export function ShotRow({
       </div>
 
       {/* Description */}
-      <textarea
+      <Textarea
         value={shot.description}
         onChange={(event) =>
           onUpdate(shot.id, { description: event.target.value })
         }
         rows={2}
-        className="border-border bg-bg focus:border-primary mt-2 w-full rounded-md border px-2 py-1.5 text-xs outline-none"
+        className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 mt-2 min-h-0 rounded-md px-2 py-1.5 text-xs"
         placeholder="画面描述（留空则使用场景动作描述）"
       />
 

@@ -14,7 +14,7 @@
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）"
   },
-  "total": 19,
+  "total": 12,
   "files": {
     "src/components/studio/canvas/IOEditContext.tsx": {
       "P69": 1
@@ -51,27 +51,6 @@
     },
     "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
       "P69": 1
-    },
-    "src/components/workshop/AgentOverlay.tsx": {
-      "P68": 1
-    },
-    "src/components/workshop/FinalComposer.tsx": {
-      "P68": 1
-    },
-    "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx": {
-      "P69": 1
-    },
-    "src/components/workshop/ScriptMarkdownEditor.parts.tsx": {
-      "P68": 1
-    },
-    "src/components/workshop/ShotStudio.tsx": {
-      "P68": 1
-    },
-    "src/components/workshop/StoryboardPlanner.parts.tsx": {
-      "P68": 1
-    },
-    "src/components/workshop/VideoStudio.parts.tsx": {
-      "P68": 1
     }
   }
 }

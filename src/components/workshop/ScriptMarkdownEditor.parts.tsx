@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { OutlineItem } from "./script-markdown-utils";
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 /** 可滚动 + 编辑区档位的滚动条外观。
@@ -270,7 +271,7 @@ export function EditorBody({
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
       ) : (
-        <textarea
+        <Textarea
           ref={textareaRef}
           value={value}
           onChange={(event) => {
@@ -299,7 +300,7 @@ export function EditorBody({
           }}
           spellCheck={false}
           placeholder="# 剧本标题\n\n## 第一场\n\n（在此处编写完整剧本……）"
-          className={`${SCROLLBAR_VISIBLE_CLASSES} bg-canvas text-ink-bright placeholder:text-ink-fainter min-h-0 flex-1 resize-none p-6 font-mono text-[13px] leading-7 outline-none`}
+          className={`${SCROLLBAR_VISIBLE_CLASSES} field-sizing-normal bg-canvas text-ink-bright placeholder:text-ink-fainter min-h-0 flex-1 resize-none rounded-none border-0 p-6 font-mono text-[13px] leading-7 focus-visible:ring-0`}
           style={{ tabSize: 2 }}
         />
       )}
