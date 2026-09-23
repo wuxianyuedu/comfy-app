@@ -12,7 +12,7 @@
     "P66": "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
     "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）"
   },
-  "total": 8,
+  "total": 6,
   "files": {
     "src/components/ui/empty-state.tsx": {
       "P67": 1
@@ -29,13 +29,7 @@
     "src/components/ui/range-slider.tsx": {
       "P67": 1
     },
-    "src/components/ui/source-tag.tsx": {
-      "P67": 1
-    },
     "src/components/ui/status-badge.tsx": {
-      "P67": 1
-    },
-    "src/components/ui/task-type-chip.tsx": {
       "P67": 1
     }
   }
