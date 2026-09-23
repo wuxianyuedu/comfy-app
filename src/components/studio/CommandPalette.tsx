@@ -9,12 +9,12 @@ import {
   CommandList,
 } from "~/components/ui/command";
 
-import { visibleNavItems, type WorkspaceView } from "./NavItems";
+import { globalNavItems, projectTabs, type WorkspaceView } from "./NavItems";
 
 export interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** 当前视图：首页时命令面板也不列项目作用域工具（画布 / 工坊），与侧栏同一规则。 */
+  /** 当前视图（保留入参：以后按视图给命令排序 / 高亮用，与侧栏同一份数据源）。 */
   active: WorkspaceView;
   /** 选中某条命令时回调（这里用来切换视图）。 */
   onSelect: (view: WorkspaceView) => void;
@@ -34,7 +34,6 @@ export interface CommandPaletteProps {
 export function CommandPalette({
   open,
   onOpenChange,
-  active,
   onSelect,
 }: CommandPaletteProps) {
   return (
@@ -48,7 +47,7 @@ export function CommandPalette({
       <CommandList>
         <CommandEmpty>没有匹配的结果</CommandEmpty>
         <CommandGroup heading="视图">
-          {visibleNavItems(active)
+          {[...globalNavItems(), ...projectTabs()]
             .filter((item) => item.enabled !== false)
             .map((item) => (
               <CommandItem
