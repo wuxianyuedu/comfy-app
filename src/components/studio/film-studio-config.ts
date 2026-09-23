@@ -5,6 +5,8 @@
 
 import { FILM_COMPOSE_SIZE } from "~/lib/film/film-size";
 import { fixed } from "~/lib/number-format";
+import { isRecord } from "~/lib/is-record";
+import { EMPTY_PLACEHOLDER } from "~/lib/display-value";
 
 /* ── 类型（与后端 Prisma 行的 UI 视图一致，保持对外 API 不变）── */
 
@@ -54,7 +56,49 @@ export interface ShotListItem {
   duration: string;
   mode: ShotMode;
   status: ShotStatus;
+  /** 该镜已产出的首帧 / 图（项目真实镜头有则显缩略图）。 */
+  thumbnailUrl?: string;
   selected?: boolean;
+}
+
+/** production 的镜头状态（idle/queued/running/done/failed/stale）→ 成片列表大写态。 */
+function shotStatusToFilmStatus(status: unknown): ShotStatus {
+  switch (status) {
+    case "done":
+      return "SUCCEEDED";
+    case "running":
+    case "queued":
+      return "RUNNING";
+    case "failed":
+      return "FAILED";
+    default:
+      return "IDLE";
+  }
+}
+
+/** 把统一项目的 `production.shots`（unknown 记录）映射为成片左栏的镜头列表（纯函数）。 */
+export function productionShotsToShotList(shots: unknown[]): ShotListItem[] {
+  const list: ShotListItem[] = [];
+  for (const raw of shots) {
+    if (!isRecord(raw) || typeof raw.id !== "string") continue;
+    const name =
+      (typeof raw.sceneHeading === "string" && raw.sceneHeading) ||
+      (typeof raw.prompt === "string" && raw.prompt.slice(0, 24)) ||
+      `镜头 ${list.length + 1}`;
+    const duration =
+      typeof raw.duration === "number"
+        ? `${fixed(raw.duration, 1)}s`
+        : EMPTY_PLACEHOLDER;
+    list.push({
+      id: raw.id,
+      name,
+      duration,
+      mode: raw.imageUrl ? "img2video" : "txt2img",
+      status: shotStatusToFilmStatus(raw.status),
+      thumbnailUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
+    });
+  }
+  return list;
 }
 
 /** 时间轴上的一段素材条。 */
