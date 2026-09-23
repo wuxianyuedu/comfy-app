@@ -14,6 +14,7 @@ import {
   normalizeProductionProgress,
   type ProductionStage,
 } from "~/lib/production/progress";
+import { tailWindow } from "~/lib/page-window";
 import { asRecord } from "~/lib/is-record";
 
 /** 点头粒度：全自动 / 每阶段确认 / 逐镜确认。默认 `stage`。 */
@@ -28,6 +29,17 @@ export type RunStatus =
   | "done"
   | "failed"
   | "cancelled";
+
+/** 一条执行日志：引擎每执行一个动作追加一条，供 CLI / 控制条展示「跑了什么」。 */
+export interface RunStep {
+  /** ISO 时间戳。 */
+  ts: string;
+  /** 动作 kind（generate_script / extract_characters / plan_storyboard / render_images / render_film / done / failed…）。 */
+  kind: string;
+  ok: boolean;
+  /** 人读摘要（产出了什么 / 失败原因）。 */
+  detail: string;
+}
 
 export interface ProductionRun {
   status: RunStatus;
@@ -48,6 +60,8 @@ export interface ProductionRun {
    * （换图 / 改提示词 / 退回），规划器据此把该镜重新纳入待办——这是「基于改动续跑」的判据。
    */
   processedShotRev: Record<string, number>;
+  /** 执行日志（引擎每步追加，有界；见 appendRunStep）。 */
+  log: RunStep[];
   error: string | null;
   updatedAt: string;
 }
@@ -62,9 +76,21 @@ export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   videoWorkflowId: "",
   filmStartedAt: "",
   processedShotRev: {},
+  log: [],
   error: null,
   updatedAt: "",
 };
+
+/** 执行日志上限：只保留最近 N 条，避免 run 列无限膨胀。 */
+export const RUN_LOG_LIMIT = 80;
+
+/** 追加一条执行日志（不可变，尾部追加、超上限从头裁剪）。 */
+export function appendRunStep(
+  run: ProductionRun,
+  step: RunStep,
+): ProductionRun {
+  return { ...run, log: tailWindow([...run.log, step], RUN_LOG_LIMIT) };
+}
 
 const RUN_STATUSES: readonly RunStatus[] = [
   "idle",
@@ -95,6 +121,19 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
         processed[key] = value;
     }
   }
+  const log: RunStep[] = [];
+  if (Array.isArray(obj.log)) {
+    for (const raw of obj.log) {
+      const rec = asRecord(raw);
+      if (!rec || typeof rec.ts !== "string") continue;
+      log.push({
+        ts: rec.ts,
+        kind: typeof rec.kind === "string" ? rec.kind : "info",
+        ok: rec.ok !== false,
+        detail: typeof rec.detail === "string" ? rec.detail : "",
+      });
+    }
+  }
   return {
     status,
     approvalMode,
@@ -110,6 +149,7 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     filmStartedAt:
       typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
     processedShotRev: processed,
+    log,
     error: typeof obj.error === "string" ? obj.error : null,
     updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : "",
   };
