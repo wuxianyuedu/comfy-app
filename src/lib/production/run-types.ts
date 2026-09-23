@@ -38,6 +38,11 @@ export interface ProductionRun {
   goal: string;
   /** status=awaiting_approval 时，在等哪个阶段被确认。 */
   awaitingStage: ProductionStage | null;
+  /** 逐镜生图 / 出片用的工作流库工作流 id（本地链路唯一来源，由 start 带入、存进 run）。 */
+  imageWorkflowId: string;
+  videoWorkflowId: string;
+  /** 已触发出片的时间戳（非空=已 kick render，引擎下一步只等 rendered、不重复起）。 */
+  filmStartedAt: string;
   /**
    * 每个镜头「上次被本 run 处理完时」的 rev 快照。当前镜头 rev > 快照值 → 用户在之后改过
    * （换图 / 改提示词 / 退回），规划器据此把该镜重新纳入待办——这是「基于改动续跑」的判据。
@@ -53,6 +58,9 @@ export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   stage: "script",
   goal: "",
   awaitingStage: null,
+  imageWorkflowId: "",
+  videoWorkflowId: "",
+  filmStartedAt: "",
   processedShotRev: {},
   error: null,
   updatedAt: "",
@@ -95,6 +103,12 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     awaitingStage: isProductionStage(obj.awaitingStage)
       ? obj.awaitingStage
       : null,
+    imageWorkflowId:
+      typeof obj.imageWorkflowId === "string" ? obj.imageWorkflowId : "",
+    videoWorkflowId:
+      typeof obj.videoWorkflowId === "string" ? obj.videoWorkflowId : "",
+    filmStartedAt:
+      typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
     processedShotRev: processed,
     error: typeof obj.error === "string" ? obj.error : null,
     updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : "",
