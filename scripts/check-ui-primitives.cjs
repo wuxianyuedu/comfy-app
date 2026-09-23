@@ -505,6 +505,29 @@ const UI_ALSO_SCANNED = new Set([
   "P59",
 ]);
 
+/**
+ * **只扫 `ui/` 层**的判据集合。与 `UI_ALSO_SCANNED` 对偶：
+ *   · `UI_ALSO_SCANNED` = 「主战场在视图层，`ui/` 也顺带扫一下」；
+ *   · `UI_ONLY_RULES` = 「这条账问的就是 `ui/` 层自己有没有绕开基元，
+ *     视图层不该被算进来」。
+ *
+ * 为什么需要它（P67 引入）：P67 判据「`export function X(Badge|Chip|Tag)`
+ * 且没 import Badge」形态的锚点在 `ui/` 里能精准命中 status-badge /
+ * list-badge / source-tag / task-type-chip 四个真轮子；但视图层里
+ * `WorkflowPickChip` / `NodeIdChip` / `ShotStatusBadge` 这类**消费 ui/ 基元的
+ * 业务包装**用同样的命名不算轮子——不加范围收窄会误伤一片。同款理由对
+ * Empty / Field 两条子判据也成立。
+ */
+const UI_ONLY_RULES = new Set([
+  /* §16.2.3 / §12.18：ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress /
+   * Slider / Empty / Field）。判据本身按形态锚点已经收窄（`export function
+   * X(Badge|Chip|Tag)` / `role="progressbar"` / `type="range"` /
+   * `export function Empty\w*` / `<label htmlFor>` + `aria-describedby`），
+   * 视图层里出现同样形态**本就不该**——那是 P1/P16 的账；让 P67 只在 ui/ 里
+   * 跑，避免与视图层判据重复计数、也避免误伤业务包装组件。 */
+  "P67",
+]);
+
 const HOOKS_ALSO_SCANNED = new Set([
   "P12",
   "P13",
@@ -743,7 +766,7 @@ const EXEMPT_FILES = {
       reason:
         "那是**扩展名解析**（§16.2.4.51 的 P47 出口），不是展示 —— `extOfPath` / " +
         "`stemOfPath` 的「取最后一段」要的正是 `split().pop()` 的语义：" +
-        "`\"a/b/\"` 这种**目录形态**必须给出空段（拿它当文件名会多出一层），" +
+        '`"a/b/"` 这种**目录形态**必须给出空段（拿它当文件名会多出一层），' +
         "而 `~/lib/path-display` 的 `lastSegments` 刻意跳过空段（展示层" +
         "不希望显示成 `a//b`）。两者对空段的判据不同，硬合会把一处的语义" +
         "带进另一处。",
@@ -986,7 +1009,6 @@ function stripComments(text) {
   }
   return out;
 }
-
 
 /**
  * 数「夹取」的处数：`Math.max(` 里包着 `Math.min(`、或反过来。
@@ -2587,8 +2609,10 @@ const RULES = {
       const tail =
         (t2.match(/\.split\(\/\[[^\]\n]*\]\/\)\.pop\(\)/g) || []).length +
         (t2.match(/\.split\("\/"\)\.pop\(\)/g) || []).length;
-      const slashes = (t2.match(/\.replace\(\/\\\\\/g,\s*"\/"\)/g) || []).length;
-      const sepJoin = (t2.match(/\.split\(path\.sep\)\.join\("\/"\)/g) || []).length;
+      const slashes = (t2.match(/\.replace\(\/\\\\\/g,\s*"\/"\)/g) || [])
+        .length;
+      const sepJoin = (t2.match(/\.split\(path\.sep\)\.join\("\/"\)/g) || [])
+        .length;
       return relative + tail + slashes + sepJoin;
     },
   },
@@ -2622,14 +2646,18 @@ const RULES = {
       const base =
         "(?:React\\.)?(?:ComponentProps|HTMLAttributes|InputHTMLAttributes|ImgHTMLAttributes|VideoHTMLAttributes|ButtonHTMLAttributes|AnchorHTMLAttributes|LabelHTMLAttributes|TextareaHTMLAttributes)|LucideProps|[A-Za-z]*Primitive\\.[A-Za-z.]+Props|typeof\\s+\\w+";
       const oneLine = new RegExp(
-        "\\bOmit\\s*<\\s*(?:" + base + ")[^;]{0,200}?,\\s*\"[^\"]+\"",
+        "\\bOmit\\s*<\\s*(?:" + base + ')[^;]{0,200}?,\\s*"[^"]+"',
         "g",
       );
       const multiLine = new RegExp(
-        "\\bOmit\\s*<[^;]{0,200}?(?:" + base + ")[^;]{0,300}?\\n\\s*\\|[^;]{0,200}?\"[^\"]+\"",
+        "\\bOmit\\s*<[^;]{0,200}?(?:" +
+          base +
+          ')[^;]{0,300}?\\n\\s*\\|[^;]{0,200}?"[^"]+"',
         "g",
       );
-      return (t2.match(oneLine) || []).length + (t2.match(multiLine) || []).length;
+      return (
+        (t2.match(oneLine) || []).length + (t2.match(multiLine) || []).length
+      );
     },
   },
 
@@ -2681,14 +2709,18 @@ const RULES = {
        * 才是 `resolve(…)`），用 `[^;]` 会把那一档**静默漏掉**（漏掉的又恰好是
        * 更完整的那个写法 —— 与 P13/P52「更差的写法也要数」同一课）。 */
       const settles = (
-        t2.match(/\bsettimeout\s*\([\s\S]{0,200}?\b(?:resolve|reject)\s*\(/gi) || []
+        t2.match(
+          /\bsettimeout\s*\([\s\S]{0,200}?\b(?:resolve|reject)\s*\(/gi,
+        ) || []
       ).length;
       /* ③ 定时器回调里调一个**本地的结算助手**（`finish(` / `settle(` / `done(`）——
        * `waitForDetachMediator` 就是这样写的：它把「这一轮结束」收成 `finish()`
        *（内部判重入 + resolve），定时器到点调它。只看 `resolve(` 会漏掉这一档。
        * 这几个名字在本仓库的语义是「本轮到此为止」。 */
       const settledByHelper = (
-        t2.match(/\bsetTimeout\s*\([\s\S]{0,200}?\b(?:finish|settle|done)\s*\(/gi) || []
+        t2.match(
+          /\bsetTimeout\s*\([\s\S]{0,200}?\b(?:finish|settle|done)\s*\(/gi,
+        ) || []
       ).length;
       return races + settles + settledByHelper;
     },
@@ -2862,16 +2894,20 @@ const RULES = {
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/lib\/page-window"/.test(t2)) return 0;
       const offset = (
-        t2.match(/\.length\s*-\s*[A-Za-z_$][\w$.\[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.\[\]?]*/g) ||
-        []
+        t2.match(
+          /\.length\s*-\s*[A-Za-z_$][\w$.\[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.\[\]?]*/g,
+        ) || []
       ).length;
       const ceilDiv = (
-        t2.match(/Math\.ceil\s*\(\s*[A-Za-z_$][\w$.\[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.\[\]?]*\s*\)/g) ||
-        []
+        t2.match(
+          /Math\.ceil\s*\(\s*[A-Za-z_$][\w$.\[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.\[\]?]*\s*\)/g,
+        ) || []
       ).length;
-      const tail = (t2.match(
-        /\b(?!Date\b)(?:logs?|items?|entries|rows?|lines?|list|arr|all|values?|records?|history|sessions?|segments?|collected|out)\b[\w$.\[\]?]*\.slice\(\s*-\s*(?:[A-Za-z_$][\w$]*|\d+)\s*\)/g,
-      ) || []).length;
+      const tail = (
+        t2.match(
+          /\b(?!Date\b)(?:logs?|items?|entries|rows?|lines?|list|arr|all|values?|records?|history|sessions?|segments?|collected|out)\b[\w$.\[\]?]*\.slice\(\s*-\s*(?:[A-Za-z_$][\w$]*|\d+)\s*\)/g,
+        ) || []
+      ).length;
       return offset + ceilDiv + tail;
     },
   },
@@ -2944,10 +2980,7 @@ const RULES = {
       for (const setter of setters) {
         const off = new RegExp("\\b" + setter + "\\(\\s*false\\s*\\)");
         if (!off.test(t2)) continue;
-        const on = new RegExp(
-          "\\b" + setter + "\\(\\s*true\\s*\\)",
-          "g",
-        );
+        const on = new RegExp("\\b" + setter + "\\(\\s*true\\s*\\)", "g");
         let o;
         while ((o = on.exec(t2)) !== null) {
           /* 取置忙之后的一段，够跨过动作体（含 NDJSON 流式消费那种长回调）。 */
@@ -2990,8 +3023,7 @@ const RULES = {
       const t2 = stripComments(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
       if (/from "~\/components\/ui\/use-reentrancy-lock"/.test(t2)) return 0;
-      const decl =
-        /(?:const|let)\s+(\w+)\s*=\s*(?:React\.)?useRef\s*\(/g;
+      const decl = /(?:const|let)\s+(\w+)\s*=\s*(?:React\.)?useRef\s*\(/g;
       let m;
       let hits = 0;
       while ((m = decl.exec(t2)) !== null) {
@@ -3001,9 +3033,7 @@ const RULES = {
           continue;
         const window = t2.slice(m.index, m.index + 900);
         const writes = (
-          window.match(
-            new RegExp("\\b" + name + "\\.current\\s*=", "g"),
-          ) || []
+          window.match(new RegExp("\\b" + name + "\\.current\\s*=", "g")) || []
         ).length;
         const reads = (
           window.match(new RegExp("!?\\b" + name + "\\.current", "g")) || []
@@ -3014,6 +3044,78 @@ const RULES = {
     },
   },
 
+  P67: {
+    label:
+      "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      let hits = 0;
+
+      /* a. Badge 绕开：`export function X(Badge|Chip|Tag)` 命名形态，且没
+       *    import `~/components/ui/badge`。shadcn 已装基元（avatar/combobox/
+       *    sidebar）内部的 `function AvatarBadge` / `function ComboboxChip` /
+       *    `function SidebarMenuBadge` 都**不带 export function**（只在文件
+       *    末尾 `export { ... }` 聚合导出），判据以 `export function` 为形态
+       *    锚点即可精准避开——不用逐个基元走 EXEMPT_FILES。
+       *    实测 2026-09-23：命中 status-badge / list-badge / source-tag /
+       *    task-type-chip 四处真轮子；badge.tsx 自身（`function Badge`）不命中。 */
+      if (
+        !/from ["']~\/components\/ui\/badge["']/.test(t2) &&
+        /export function \w*(?:Badge|Chip|Tag)\s*\(/.test(t2)
+      )
+        hits++;
+
+      /* b. Progress 绕开：手写 `role="progressbar"` 却没用 shadcn Progress
+       *    也没直接引 base-ui Progress。`ui/progress.tsx` 自身走的是
+       *    `ProgressPrimitive.Root`（base-ui 会自己挂 role），源码里不含
+       *    字面 `role="progressbar"`——因此不需 EXEMPT_FILES。 */
+      if (
+        !/from ["']~\/components\/ui\/progress["']/.test(t2) &&
+        !/from ["']@base-ui\/react\/progress["']/.test(t2) &&
+        /role=["']progressbar["']/.test(t2)
+      )
+        hits++;
+
+      /* c. Slider 绕开：原生 `<input type="range">` 却不用 shadcn Slider。
+       *    `ui/slider.tsx` 自身是 base-ui 复合控件，源码里不含字面
+       *    `type="range"`（已实测）。 */
+      if (
+        !/from ["']~\/components\/ui\/slider["']/.test(t2) &&
+        !/from ["']@base-ui\/react\/slider["']/.test(t2) &&
+        /type=["']range["']/.test(t2)
+      )
+        hits++;
+
+      /* d. Empty 绕开：`export function Empty*` 命名形态。shadcn 的 Empty
+       *    基元当前未装（components.json 里没有 empty），此判据先冻结
+       *    1 处起点 —— 装上并二次封装后自动清零。 */
+      if (
+        !/from ["']~\/components\/ui\/empty["']/.test(t2) &&
+        /export function Empty\w*\s*\(/.test(t2)
+      )
+        hits++;
+
+      /* e. Field 绕开：手拼 `<label htmlFor=` 与 `aria-describedby=` 的表单
+       *    行 —— shadcn Field 系（FieldGroup / Field / FieldLabel /
+       *    FieldDescription / FieldError）当前未装。此判据起点会包含：
+       *      · `ui/form-field.tsx`（真轮子，见 outputs 审计报告 A5）；
+       *      · `ui/form.tsx`（shadcn 已装、react-hook-form 集成版，
+       *        `FormLabel` 就是 `<Label htmlFor>` + 内部挂 `aria-describedby`）
+       *        —— 走 EXEMPT_FILES 显式豁免（它是**已装基元**，不算轮子）。
+       *    aria-describedby 的锚点**必须同时吃两种写法**：JSX 属性
+       *    （`aria-describedby="…"`）与 JS 对象键（`"aria-describedby": …`
+       *    —— form-field.tsx 通过 a11y 对象把三条 aria-* 透传给 children，
+       *    只有后者），否则真轮子会漏检。 */
+      if (
+        !/from ["']~\/components\/ui\/field["']/.test(t2) &&
+        /<label[\s\S]{0,60}?htmlFor=/.test(t2) &&
+        /aria-describedby["']?\s*[:=]/.test(t2)
+      )
+        hits++;
+
+      return hits;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -3157,9 +3259,19 @@ function collect() {
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
       for (const [id, rule] of Object.entries(RULES)) {
         if (isExemptFile(id, rel)) continue;
-        if (inUi && !UI_ALSO_SCANNED.has(id)) continue;
-        if (inHooks && !HOOKS_ALSO_SCANNED.has(id)) continue;
-        if (inLib && !LIB_SCANNED_RULES.has(id)) continue;
+        /* P67 引入的对偶判据：这条账问的就是 ui/ 层自己有没有绕开 shadcn
+         * 基元（Badge / Progress / Slider / Empty / Field），视图层里同样的
+         * 命名形态是消费基元的业务包装、不该被算进来。见 UI_ONLY_RULES 上方
+         * 的注释。**分支必须短路在下面三条之前**：否则 ui/ 会先被
+         * `inUi && !UI_ALSO_SCANNED.has(id)` 早一步 continue 掉、UI_ONLY
+         * 反而永远扫不到自己该扫的那一层。 */
+        if (UI_ONLY_RULES.has(id)) {
+          if (!inUi) continue;
+        } else {
+          if (inUi && !UI_ALSO_SCANNED.has(id)) continue;
+          if (inHooks && !HOOKS_ALSO_SCANNED.has(id)) continue;
+          if (inLib && !LIB_SCANNED_RULES.has(id)) continue;
+        }
         const n = rule.count(text);
         if (n > 0) (files[rel] ||= {})[id] = n;
       }
@@ -3371,7 +3483,12 @@ function main() {
         "  复制之后的反馈 → ~/components/ui/use-copy-feedback 的 useCopyFeedback；\n" +
         "  REST 入参收窄 → ~/server/lib/request-body 的 readJsonRecord（`unknown` 收窄用 ~/lib/is-record 的 isRecord）；\n" +
         "  异步动作的忙碌位 → ~/components/ui/use-busy-action 的 useBusyAction（复位绑在 finally 上）；\n" +
-        "  同一时刻只跑一件 → ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock。\n" +
+        "  同一时刻只跑一件 → ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock；\n" +
+        "  ui/ 层自造组件绕开 shadcn 基元 → 徽章改 ~/components/ui/badge 的 <Badge>（cva 扩 size/tone 而非各写 <span>）、\n" +
+        "  进度条改 ~/components/ui/progress 的 <Progress>+ProgressTrack/Indicator/Label/Value、\n" +
+        '  滑块改 ~/components/ui/slider 的 <Slider>（原生 <input type="range"> 只接管取材时也要显式说明理由），\n' +
+        "  空态基元未装 → `pnpm dlx shadcn@latest add empty` 后改基于 <Empty> 二次封装，\n" +
+        "  表单行基元未装 → `pnpm dlx shadcn@latest add field` 后改基于 <Field>+FieldLabel/Description/Error 二次封装。\n" +
         "  治理后执行 --update 收紧基线。",
     );
     process.exit(1);
