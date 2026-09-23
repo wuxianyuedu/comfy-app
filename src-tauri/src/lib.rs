@@ -968,6 +968,48 @@ fn navigate_when_ready(handle: tauri::AppHandle, url: String) {
   });
 }
 
+/// 启动页不可用时的**唯一兜底**：等应用地址就绪后直接导航并显示主窗。
+///
+/// 两个调用点共用它，判据只在这里写一遍：
+///   · `setup_standalone_runtime`：`splash.html` 资源没嵌入（老壳 / 构造异常）；
+///   · `spawn_splash_watchdog`：资源在、**启动页的 WebView 却没起来**——现场是
+///     WebView2 建窗报 `HRESULT(0x80070057) 参数错误`，窗口对象存在但
+///     `url()` 永远拿不到 `splash.html`，页面 JS 从不执行，于是没人会调
+///     `navigate_to_app`，主窗一直停在 `about:blank`（隐藏态没有任务栏图标，
+///     从托盘唤起看到的就是白屏）。
+///
+/// 原先的判据是「资源有没有嵌进二进制」（`has_splash`），它看不见第二种形态，
+/// 于是这一类故障没有出口。这里把它接上：**启动页跑不起来**与**启动页不存在**
+/// 对用户是同一件事，走同一条路。
+fn fallback_without_splash(handle: &tauri::AppHandle) {
+  #[cfg(not(debug_assertions))]
+  {
+    let Some(state) = handle.try_state::<AppState>() else {
+      return;
+    };
+    let url = state.app_url();
+    if url.is_empty() {
+      /* 应用地址还没定：没有可导航的目标。正常路径下 `LaunchContext::collect()`
+       * 早已把它写进 AppState（prebuilt 的 `COMFYAPP_DEV_URL` / standalone 的
+       * sidecar 端口），这里落空只说明这次启动连地址都没解析出来。 */
+      log::warn!("[ComfyAPP] 启动页不可用，但应用地址尚未确定，无法回退导航");
+      return;
+    }
+    log::warn!(
+      "[ComfyAPP] 启动页不可用（资源缺失或 WebView 未生效），就绪后直接导航到 {}",
+      url
+    );
+    navigate_when_ready(handle.clone(), url);
+  }
+  #[cfg(debug_assertions)]
+  {
+    /* debug 构建（`pnpm tauri dev`）没有这条兜底：`navigate_when_ready` 只在
+     * release 编译，且那时启动页由 dev server 提供，不依赖内嵌资源。 */
+    let _ = handle;
+    log::warn!("[ComfyAPP] 启动页不可用（debug 构建没有「等就绪直接导航」这条兜底）");
+  }
+}
+
 /// 主窗首帧看护：在应用自己渲染出界面之前，**不让 WebView2 的空白首帧露出来**。
 ///
 /// 现场（ISSUE #730）：启动页探测到应用端口可响应后调 `navigate_to_app`，而
@@ -2017,7 +2059,14 @@ fn spawn_splash_watchdog(app: &mut tauri::App) {
       std::thread::sleep(Duration::from_millis(100));
     }
     let Some(splash_url) = base else {
-      log::warn!("[ComfyAPP] splash watchdog: base url not seen in 5s, giving up");
+      /* 启动页的 WebView 没起来（现场：WebView2 建窗报 0x80070057 参数错误）：
+       * 窗口对象在、但 `url()` 永远是空 / about:blank，页面 JS 从不执行，于是
+       * 没人会调 `navigate_to_app`。此时再等下去也没有出口，改走「无启动页」
+       * 兜底（等应用端口就绪 → 导航主窗 → 显示主窗）。 */
+      log::warn!(
+        "[ComfyAPP] splash watchdog: base url not seen in 5s（启动页 WebView 未生效），回退到「无启动页」兜底"
+      );
+      fallback_without_splash(&handle);
       return;
     };
     log::info!("[ComfyAPP] splash watchdog: base url {}", splash_url);
@@ -2073,13 +2122,8 @@ fn setup_standalone_runtime(app: &mut tauri::App) -> Result<(), Box<dyn std::err
   let has_splash = app.asset_resolver().get("splash.html".to_string()).is_some();
   log::info!("[ComfyAPP] splash.html embedded: {}", has_splash);
   if !has_splash {
-    if let Some(state) = app.try_state::<AppState>() {
-      let url = state.app_url();
-      if !url.is_empty() {
-        log::warn!("[ComfyAPP] splash.html 未嵌入，启动页不可用，就绪后直接导航到 {}", url);
-        navigate_when_ready(app.handle().clone(), url);
-      }
-    }
+    log::warn!("[ComfyAPP] splash.html 未嵌入，启动页不可用，走「无启动页」兜底");
+    fallback_without_splash(app.handle());
   }
   Ok(())
 }
@@ -2336,6 +2380,32 @@ mod window_startup_tests {
     assert!(
       conf.contains(&format!(r#""height":{}"#, SPLASH_WINDOW_SIZE.1 as u32)),
       "tauri.conf.json 的 splash 高度必须等于 SPLASH_WINDOW_SIZE.1"
+    );
+  }
+
+  #[test]
+  fn unavailable_splash_falls_back_to_navigate_when_ready() {
+    // 现场（2026-09-23）：WebView2 建启动页的 webview 失败（HRESULT
+    // 0x80070057「参数错误」），资源在（`has_splash == true`）但页面 JS 从不执行
+    // → 没人调 `navigate_to_app` → 主窗停在 `about:blank`（隐藏态没有任务栏图标，
+    // 从托盘唤起看到的就是白屏）。「资源存在性」这条判据看不见这种形态，因此
+    // 「启动页跑不起来」必须与「启动页不存在」走同一条兜底。
+    let watchdog = fn_body("fn spawn_splash_watchdog");
+    assert!(
+      watchdog.contains("base url not seen in 5s") && watchdog.contains("fallback_without_splash"),
+      "启动页 WebView 没起来时必须走「无启动页」兜底，而不是打一条日志就返回：{watchdog}"
+    );
+
+    let setup = fn_body("fn setup_standalone_runtime");
+    assert!(
+      setup.contains("fallback_without_splash"),
+      "「资源缺失」与「WebView 没起来」必须共用同一条兜底：{setup}"
+    );
+
+    let fallback = fn_body("fn fallback_without_splash");
+    assert!(
+      fallback.contains("navigate_when_ready") && fallback.contains("app_url"),
+      "兜底必须落到 navigate_when_ready（等应用就绪 → 导航主窗 → 显示主窗），并取到应用地址：{fallback}"
     );
   }
 }
