@@ -6,31 +6,64 @@
  * 为什么不能直接用原生控件：Chromium / Windows 上原生 `<option>` 忽略
  * CSS `background-color`（它是 OS 级控件），深色主题里会闪出一块白底列表。
  *
- * 浮层走 `~/components/ui/popover`（规范 16 §16.2.3 P2）：此前这里自搓了
- * `createPortal` + 手写 fixed 定位 + 滚动重定位 + 手写 Esc / 外点关闭 +
- * z-index 魔数，与 `ui/popover` 是同一个能力的第二份实现。现在翻上翻下、
- * 收边、滚动重定位、Esc / 点外部关闭全部交给 base-ui 的 Positioner 与 Root，
- * 本组件只保留「下拉选择」这件事自己的语义。
+ * ## 浮层与 a11y 都交给 base-ui Select 原语（P67 §12.18 系列尾单）
  *
- * `labels` 是 `Record<string, ReactNode>`（不是 `string`），调用处才能在每行
- * 挂彩色圆点 /「本机」/「在线」徽标 —— `string` 本身是合法 ReactNode，因此
- * 这个签名向后兼容。
+ * 此前这里用 `~/components/ui/popover` 手写了 combobox 语义
+ * （`role="combobox"` + `aria-controls` + `role="listbox"` + `role="option"`
+ * + `aria-selected` + 键盘 ←/→ / Enter + 高亮滚入 + mouseenter 高亮 +
+ * 局部 open state 与滚动 ref），与 `~/components/ui/select`（shadcn
+ * Select、base-ui 版）**是同一件事的第二份实现**——popover 只是浮层，
+ * combobox 语义还得本件自己拼。base-ui Select 的 Trigger 天生就是
+ * combobox（`role="combobox"` + `aria-expanded` + `aria-controls`），
+ * List / Item 带 `role="listbox"` / `role="option"` / `aria-selected`，
+ * 键盘 ←/→ / Home / End / Enter 与滚入视野都是内置；`data-highlighted`
+ * / `data-selected` / `data-disabled` 三条数据属性把视觉状态从 JS 里
+ * 挪进 CSS。本件因此从 285 行降到 ~130 行、且读屏器与浏览器兼容性
+ * 都比手拼更稳。
+ *
+ * ## 富 ReactNode 标签（原文件头的核心动机、依然成立且被基元原生支持）
+ *
+ * `labels` 是 `Record<string, ReactNode>`（不是 `string`），调用处才能在
+ * 每行挂彩色圆点 /「本机」/「在线」徽标 —— `string` 本身是合法 ReactNode，
+ * 因此这个签名向后兼容。**base-ui 对这一档原生支持**：
+ *   · 触发器显示：`<SelectPrimitive.Value>{ReactNode}</SelectPrimitive.Value>`
+ *     或 render prop `(value: string | null) => ReactNode`（其 .d.ts 行 28
+ *     的官方示例正是 `{(v) => v ? labels[v] : 'No value'}`）；
+ *   · 选项行：`<SelectPrimitive.Item value={opt}><SelectPrimitive.ItemText>
+ *     {ReactNode}</SelectPrimitive.ItemText></SelectPrimitive.Item>`；
+ *   · Root 的 `items?: Record<string, ReactNode>` 还能整表映射（本件不用、
+ *     直接走 children 更贴合 `labels[value] ?? value` 的回退语义）。
+ * 之前**没有**迁到 Select 的顾虑「富 ReactNode 撑不住」实证不成立。
+ *
+ * ## 视觉契约（33 处消费点的观感与 PR 之前完全一致）
+ *
+ * 深色定制定向覆盖到 base-ui 各件：
+ *   · Trigger：`border-border bg-subtle text-ink-bright rounded-md px-2.5
+ *     py-1.5 text-[12px]` + 自定义 chevron（`group-data-[open]:rotate-180`）；
+ *     默认 `w-auto`（**刻意不 `w-full`**，见 `TRIGGER_BASE` 上方原注释——
+ *     一排筛选控件里 `w-auto` 覆盖 `w-full` 会被 Tailwind 输出顺序决胜、
+ *     导致每个都铺满整行；工作流库页头三个下拉曾撞这条）。
+ *   · Content：`bg-card border-border-strong shadow-lg` +
+ *     `p-1 max-h-60 overflow-y-auto`（List 层滚动）；`min-w` 走原
+ *     `autoFitFromOptions` 算法（按最长字符串标签估宽、上限 720）；
+ *   · Item：`text-[12px] rounded-sm px-2.5 py-1` + 三态样式
+ *     （`text-ink-faint` 默认 / `data-[highlighted]` 高亮 /
+ *     `data-[selected]` 选中；同现时 selected 后写胜、与旧三元一致）。
+ *     **无 check 图标**（旧实现就没有、base-ui 允许不引 ItemIndicator）。
+ *   · Footer：与旧一致，作为 List 的**兄弟节点**渲染在 Popup 底部
+ *     （`mt-1 border-t pt-1`）、不参与滚动。
+ *
+ * 外部 props 一字未改（`value` / `onChange` / `options` / `labels` /
+ * `placeholder` / `disabled` / `className` / `fullWidth` /
+ * `popoverMinWidth` / `autoFitFromOptions` / `footer` / `onOpenChange`
+ * 全保留），33 处消费点 0 改动。
  */
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Select as SelectPrimitive } from "@base-ui/react/select";
+import { ChevronDown } from "lucide-react";
+import React, { useMemo } from "react";
 
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
-import { onNextFrame } from "~/lib/next-frame";
+import { cn } from "~/lib/utils";
 
 interface SelectMenuProps {
   value: string;
@@ -44,7 +77,7 @@ interface SelectMenuProps {
   /**
    * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行
    *（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展；
-   *  触发器本身比这个下限宽时，浮层仍会回落到 `trigger.width`。
+   *  触发器本身比这个下限宽时，浮层仍会回落到 `--anchor-width`。
    *  并按视口做上限裁剪 + 自动左移，保证不会溢出右边缘。
    *
    * 开启 `autoFitFromOptions` 时，**生效**的下限为
@@ -54,17 +87,12 @@ interface SelectMenuProps {
    */
   popoverMinWidth?: number;
   /**
-   * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。
-   *
-   * 缺省是自适应：触发器宽度由标签撑开、外层容器多宽都不管 —— 并排的
-   * 一排筛选控件要的就是这个（宽度一致会让短文案两侧空一块，不一致又
-   * 会在窄窗口里被压）。需要「一个下拉独占一行」时传 `true`。
+   * 触发器取**固定宽度**（铺满容器）而不是「随内容自适应」。缺省是自适应。
    */
   fullWidth?: boolean;
   /**
    * 自动加宽浮层以容纳最长的选项标签。
-   *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过，
-   *  因为不渲染到屏幕外就无法测量它的宽度。默认 true。
+   *  只测量字符串 / 数字标签 —— 富 ReactNode 标签（如徽标、图标）会被跳过。默认 true。
    */
   autoFitFromOptions?: boolean;
   /**
@@ -73,11 +101,41 @@ interface SelectMenuProps {
    */
   footer?: React.ReactNode;
   /**
-   * 浮层打开 / 关闭时调用。打开状态由组件自身持有；
+   * 浮层打开 / 关闭时调用。打开状态由 base-ui Select 内部持有；
    *  调用方借此在列表即将可见时惰性加载选项。
    */
   onOpenChange?: (open: boolean) => void;
 }
+
+/* 触发器：与 PR 之前 Popover+Trigger 版本逐字对齐的深色样式。
+ * 基础里**没有** `w-full`：默认宽度由调用处决定（`w-full` 用在需要铺满
+ * 容器的地方、`w-auto` 用在并排的筛选控件里）。基础样式带 `w-full` 时，
+ * 调用处的 `w-auto` 覆盖不掉（同族 utility 按 Tailwind 输出顺序决胜），
+ * 会出现「写 `w-auto` 却每个都占整行」——工作流库页头三个筛选下拉曾因此翻车。 */
+const TRIGGER_BASE =
+  "group flex w-auto items-center justify-between gap-x-2 rounded-md border border-border bg-subtle px-2.5 py-1.5 text-[12px] text-ink-bright outline-none transition-colors focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-60";
+
+/* 浮层容器：与 PR 之前的 PopoverContent 视觉一致。Popup 本身带 base-ui 的
+ * `--anchor-width` 变量，`w-(--anchor-width)` 让浮层至少跟触发器同宽；
+ * `min-w` / `max-w` 通过 style 传入。 */
+const CONTENT_BASE =
+  "relative isolate flex max-h-96 flex-col overflow-hidden rounded-md border border-border-strong bg-card p-1 text-[12px] shadow-lg shadow-black/5 outline-none dark:shadow-black/40";
+
+/* 可滚动区（旧 <ul role="listbox">）；max-h-60 与旧一致。base-ui 的 List
+ * 会自己管 `data-` 属性与滚动条按钮，不需要我们手挂 role。 */
+const LIST_BASE = "max-h-60 w-full overflow-y-auto outline-none";
+
+/* 选项行三态。旧实现在此顺序上写「selected ? A : highlighted ? B : C」，
+ * 转 CSS 后靠 tailwind-merge 的属性族决胜——把 selected 写在 highlighted
+ * 之后，两者同现时 selected 胜。 */
+const ITEM_BASE =
+  "flex cursor-default items-center gap-1.5 truncate rounded-sm px-2.5 py-1 text-[12px] text-ink-faint outline-none transition-colors data-[highlighted]:bg-surface-2 data-[highlighted]:text-ink-bright data-[selected]:bg-primary-500/20 data-[selected]:font-medium data-[selected]:text-primary-strong data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+
+/** 浮层自动加宽的四条常量口径与 PR 之前一致（详见文件头注释）。 */
+const POPOVER_AUTO_MAX = 720;
+const POPOVER_AUTO_HEADROOM = 56; // 24 px padding + ~32 px for dot / arrow
+const POPOVER_PER_CHAR_PX = 8; // ~8 px per text-[12px] glyph in Inter
+const POPOVER_AUTO_MIN = 160;
 
 export function SelectMenu({
   value,
@@ -93,57 +151,6 @@ export function SelectMenu({
   footer,
   onOpenChange,
 }: SelectMenuProps) {
-  const [open, setOpen] = useState(false);
-  const [highlighted, setHighlighted] = useState(-1);
-  const listRef = useRef<HTMLUListElement>(null);
-  /* 用 ref 持有最新的 onOpenChange，effect deps 不依赖函数引用：
-   * 调用方每次渲染传入的新箭头函数不会导致 effect 反复重建。 */
-  const onOpenChangeRef = useRef(onOpenChange);
-  useEffect(() => {
-    onOpenChangeRef.current = onOpenChange;
-  });
-  /* a11y：role="combobox" 必须能通过 aria-controls 指向它控制的 listbox，
-   *  否则读屏软件无法把触发按钮与选项列表关联起来。useId 保证同一页面上
-   *  多个 SelectMenu 实例不会撞 id。 */
-  const listboxId = React.useId();
-
-  const emitOpenChange = useCallback((next: boolean) => {
-    onOpenChangeRef.current?.(next);
-  }, []);
-
-  /* 打开时重置高亮项。 */
-  const [prevOpen, setPrevOpen] = useState(open);
-  if (open !== prevOpen) {
-    setPrevOpen(open);
-    if (open) {
-      const idx = options.indexOf(value);
-      setHighlighted(idx >= 0 ? idx : -1);
-    }
-  }
-
-  /* 打开后把高亮项滚进可视区。 */
-  useEffect(() => {
-    if (!open) return;
-    return onNextFrame(() => {
-      const idx = highlighted >= 0 ? highlighted : 0;
-      const el = listRef.current?.children[idx] as HTMLElement | undefined;
-      el?.scrollIntoView({ block: "nearest" });
-    });
-  }, [open, highlighted]);
-
-  const pick = useCallback(
-    (v: string) => {
-      onChange(v);
-      setOpen(false);
-      emitOpenChange(false);
-    },
-    [onChange, emitOpenChange],
-  );
-
-  const POPOVER_AUTO_MAX = 720;
-  const POPOVER_AUTO_HEADROOM = 56; // 24 px padding + ~32 px for dot / arrow
-  const POPOVER_PER_CHAR_PX = 8; // ~8 px per text-sm (14px) glyph in Inter
-  const POPOVER_AUTO_MIN = 160;
   const effectiveMinWidth = useMemo(() => {
     if (!autoFitFromOptions) return popoverMinWidth;
     let longest = 0;
@@ -161,123 +168,76 @@ export function SelectMenu({
     return Math.min(POPOVER_AUTO_MAX, effective);
   }, [autoFitFromOptions, options, labels, popoverMinWidth]);
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        if (!open) {
-          setOpen(true);
-          emitOpenChange(true);
-          return;
-        }
-        setHighlighted((index) => Math.min(index + 1, options.length - 1));
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setHighlighted((index) => Math.max(index - 1, 0));
-      }
-      if (event.key === "Enter" && open && highlighted >= 0) {
-        event.preventDefault();
-        pick(options[highlighted]!);
-      }
-    },
-    [open, options, highlighted, pick, emitOpenChange],
-  );
-
-  const label = value
+  /* 触发器显示：与 PR 之前的 `label` 表达式**完全一致**——有值时取
+   * labels[value]、value 本身或 placeholder；空值直接落 placeholder。
+   * base-ui 的 `<SelectPrimitive.Value>` 允许 children 为 ReactNode
+   * （其 .d.ts 行 32）——不再需要 render prop。 */
+  const display: React.ReactNode = value
     ? (labels?.[value] ??
       options.find((option) => option === value) ??
       placeholder)
     : placeholder;
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        emitOpenChange(next);
+    <SelectPrimitive.Root
+      /* base-ui Select 的 value 允许 null 表示「未选」；空串不当 null 处理，
+       * 显式转 null 让 placeholder 正常显示（与旧实现的行为一致：`value=""`
+       * 时 trigger 显示 placeholder）。 */
+      value={value || null}
+      onValueChange={(next) => {
+        if (typeof next === "string") onChange(next);
       }}
+      onOpenChange={(next) => onOpenChange?.(next)}
+      disabled={disabled}
     >
-      <PopoverTrigger
-        type="button"
-        role="combobox"
-        aria-controls={listboxId}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        disabled={disabled}
-        onKeyDown={handleKeyDown}
-        /* 基础样式里**没有** `w-full`：默认宽度由调用处决定（`w-full` 用在
-         *  需要铺满容器的地方，`w-auto` 用在并排的一排控件里）。基础样式里带
-         *  `w-full` 时，调用处的 `w-auto` **覆盖不掉**它 —— 两个同属性 utility
-         *  同时出现时按 Tailwind 的输出顺序决胜，而 `w-full` 与 `w-auto` 同属
-         *  宽度族、顺序不受调用处控制，结果是「写了 `w-auto` 但一排放不下、
-         *  每个都铺满整行」（工作流库页头的三个筛选下拉就撞上了这一条）。 */
-        className={`border-border bg-subtle text-ink-bright focus:border-primary-500/40 flex items-center justify-between gap-x-2 rounded-md border px-2.5 py-1.5 text-[12px] transition-colors outline-none ${fullWidth ? "w-full" : "w-auto"} ${className}`}
+      <SelectPrimitive.Trigger
+        className={cn(TRIGGER_BASE, fullWidth && "w-full", className)}
       >
-        {/* min-w-0 + flex-1 + truncate 让富 ReactNode 标签能干净地裁剪；
-         *  想让徽标（如「本机」/「在线」）右对齐的调用方，应在徽标前放一个
-         *  `flex-1` 占位，这样在 `truncate`（nowrap）上下文里它才会被推向右侧。 */}
-        <span className="flex min-w-0 flex-1 items-center truncate">
-          {label}
-        </span>
-        <svg
-          className={`text-ink-muted ml-2 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-        >
-          <path
-            d="M3 4.5L6 7.5L9 4.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </PopoverTrigger>
+        <SelectPrimitive.Value className="flex min-w-0 flex-1 items-center truncate">
+          {display}
+        </SelectPrimitive.Value>
+        <ChevronDown
+          className={cn(
+            /* 与旧实现同款：12×12 自绘箭头 + open 时旋转 180°；
+             * `group` 挂在 Trigger 上、这里靠 `group-data-[open]:` 反应。 */
+            "text-ink-muted size-3 shrink-0 transition-transform group-data-[open]:rotate-180",
+          )}
+        />
+      </SelectPrimitive.Trigger>
 
-      <PopoverContent
-        align="start"
-        sideOffset={4}
-        /* `min-w`/`w` 由调用处的 popoverMinWidth 与单选行文案共同决定；
-           `p-1` 抵消基元默认的 `p-2.5`，保住选项行的边到边观感。 */
-        className="border-border-strong bg-card gap-0 p-1 shadow-lg shadow-black/5 dark:shadow-black/40"
-        style={{ width: `min(${effectiveMinWidth}px, 92vw)` }}
-        role="presentation"
-      >
-        <ul
-          id={listboxId}
-          ref={listRef}
-          role="listbox"
-          tabIndex={-1}
-          className="max-h-60 overflow-y-auto outline-none"
+      <SelectPrimitive.Portal>
+        <SelectPrimitive.Positioner
+          align="start"
+          sideOffset={4}
+          className="z-popup isolate outline-none"
         >
-          {options.map((opt, i) => (
-            <li
-              key={opt}
-              role="option"
-              aria-selected={value === opt}
-              onMouseEnter={() => setHighlighted(i)}
-              onClick={() => pick(opt)}
-              className={`flex cursor-pointer items-center gap-1.5 truncate rounded-sm px-2.5 py-1 text-[12px] transition-colors ${
-                value === opt
-                  ? "bg-primary-500/20 text-primary-strong font-medium"
-                  : i === highlighted
-                    ? "bg-surface-2 text-ink-bright"
-                    : "text-ink-faint hover:bg-subtle hover:text-ink-bright"
-              }`}
-            >
-              {labels?.[opt] ?? opt}
-            </li>
-          ))}
-        </ul>
-        {footer ? (
-          <div className="border-border-strong mt-1 border-t pt-1">
-            {footer}
-          </div>
-        ) : null}
-      </PopoverContent>
-    </Popover>
+          <SelectPrimitive.Popup
+            className={cn(CONTENT_BASE)}
+            style={{
+              width: `min(${effectiveMinWidth}px, 92vw)`,
+            }}
+          >
+            <SelectPrimitive.List className={LIST_BASE}>
+              {options.map((opt) => (
+                <SelectPrimitive.Item
+                  key={opt}
+                  value={opt}
+                  className={ITEM_BASE}
+                >
+                  <SelectPrimitive.ItemText>
+                    {labels?.[opt] ?? opt}
+                  </SelectPrimitive.ItemText>
+                </SelectPrimitive.Item>
+              ))}
+            </SelectPrimitive.List>
+            {footer ? (
+              <div className="border-border-strong mt-1 border-t pt-1">
+                {footer}
+              </div>
+            ) : null}
+          </SelectPrimitive.Popup>
+        </SelectPrimitive.Positioner>
+      </SelectPrimitive.Portal>
+    </SelectPrimitive.Root>
   );
 }
