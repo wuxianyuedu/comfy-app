@@ -3249,7 +3249,6 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).toBe(0);
   });
 
-
   /* ── P59：数值夹取（规范 §16.2.4.63）─────────────────────────────── */
 
   it("手写 Math.min / Math.max 嵌套的夹取直接阻断（规范 P59）", () => {
@@ -3359,7 +3358,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
 
   /* ── P60：大写归一（规范 §16.2.4.64）─────────────────────────────── */
 
-  it("`(x ?? \"\").toUpperCase()` 形态直接阻断（规范 P60）", () => {
+  it('`(x ?? "").toUpperCase()` 形态直接阻断（规范 P60）', () => {
     seedBaseline();
     write(
       "src/lib/thing.ts",
@@ -3536,7 +3535,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "src/components/studio/P62Value.tsx",
       [
         "export const Thing = ({ q, setQ }: { q: string; setQ: (v: string) => void }) => (",
-        '  <input value={q} onChange={(event) => setQ(event.target.value)} />',
+        "  <input value={q} onChange={(event) => setQ(event.target.value)} />",
         ");",
       ].join("\n"),
     );
@@ -3549,7 +3548,7 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     seedBaseline();
     write(
       "src/components/studio/P62Checked.tsx",
-      "export const Thing = ({ on }: { on: (v: boolean) => void }) => (\n  <input type=\"checkbox\" onChange={(e) => on(e.target.checked)} />\n);\n",
+      'export const Thing = ({ on }: { on: (v: boolean) => void }) => (\n  <input type="checkbox" onChange={(e) => on(e.target.checked)} />\n);\n',
     );
     const { code, output } = run();
     expect(code).toBe(1);
@@ -4088,5 +4087,225 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(baseline.rules.P1).toBeTruthy();
     expect(baseline.rules.P2).toBeTruthy();
     expect(baseline.rules.P3).toBeTruthy();
+  });
+
+  /* ── P67：ui/ 层自造组件绕开 shadcn 基元（§16.2.3 / §12.18）────────
+   * 与 P1~P66 的"视图层不自造原语"对偶：这一条守的是 ui/ 层自己有没有
+   * 基于 shadcn 已装基元二次封装。范围收窄到 ui/ 是因为视图层的
+   * `WorkflowPickChip` / `ShotStatusBadge` 等业务包装消费 ui/ 基元后
+   * 用同样的命名不算轮子（见脚本内 UI_ONLY_RULES 的注释）。
+   * Empty / Field 基元当前未装，命中数即棘轮起点，装上并二次封装后
+   * 自动清零。 */
+
+  it("P67 a. Badge 绕开：ui/ 里 `export function X(Badge|Chip|Tag)` 未 import Badge → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/P67Badge.tsx",
+      [
+        'import { cn } from "~/lib/utils";',
+        "export function MyFancyBadge({ children }: { children: React.ReactNode }) {",
+        "  return <span className={cn('inline-flex items-center rounded-full text-xs', className)}>{children}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P67");
+    expect(output).toContain("ui/P67Badge.tsx");
+  });
+
+  it("P67 a. 已 import Badge 的二次封装 → 合规者不误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/P67BadgeOk.tsx",
+      [
+        'import { Badge } from "~/components/ui/badge";',
+        "export function MyFancyBadge({ children }: { children: React.ReactNode }) {",
+        '  return <Badge variant="secondary">{children}</Badge>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("ui/P67BadgeOk.tsx");
+  });
+
+  it("P67 a. shadcn 基元内部的 `function XBadge`（非 export）不算轮子", () => {
+    /* 复刻 shadcn avatar.tsx / combobox.tsx 内部 `function AvatarBadge` /
+     * `function ComboboxChip` 的形态：不写 `export function`，而是内部
+     * `function Foo` + 文件末尾 `export { ..., Foo }` 聚合导出。
+     * 判据以 `export function` 为锚点即可精准避开——不用逐个基元走
+     * EXEMPT_FILES。 */
+    seedBaseline();
+    write(
+      "src/components/ui/P67ShadcnInner.tsx",
+      [
+        "function InternalBadge({ children }: { children: React.ReactNode }) {",
+        "  return <span>{children}</span>;",
+        "}",
+        "export function Root() {",
+        "  return <span>root</span>;",
+        "}",
+        "export { InternalBadge };",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("ui/P67ShadcnInner.tsx");
+  });
+
+  it('P67 b. Progress 绕开：ui/ 里手写 `role="progressbar"` 未 import Progress → 阻断', () => {
+    seedBaseline();
+    write(
+      "src/components/ui/P67Progress.tsx",
+      [
+        'import { cn } from "~/lib/utils";',
+        "export function MyProgress({ value }: { value: number }) {",
+        "  return (",
+        '    <div role="progressbar" aria-valuenow={value} className={cn("h-1 w-full")}>',
+        "      <div style={{ width: `${value}%` }} />",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P67");
+    expect(output).toContain("ui/P67Progress.tsx");
+  });
+
+  it("P67 b. 已 import Progress 的二次封装 → 合规者不误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/P67ProgressOk.tsx",
+      [
+        'import { Progress } from "~/components/ui/progress";',
+        "export function MyProgress({ value }: { value: number }) {",
+        "  return <Progress value={value} />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("ui/P67ProgressOk.tsx");
+  });
+
+  it('P67 c. Slider 绕开：ui/ 里原生 `<input type="range">` 未 import Slider → 阻断', () => {
+    seedBaseline();
+    write(
+      "src/components/ui/P67Slider.tsx",
+      [
+        "export function MySlider({ v, on }: { v: number; on: (n: number) => void }) {",
+        "  return (",
+        '    <input type="range" min={0} max={100} value={v} onChange={(e) => on(+e.target.value)} />',
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P67");
+    expect(output).toContain("ui/P67Slider.tsx");
+  });
+
+  it("P67 d. Empty 绕开：ui/ 里 `export function EmptyState` 未 import Empty → 阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/P67Empty.tsx",
+      [
+        "export function EmptyCustom() {",
+        '  return <div className="border-dashed">空</div>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P67");
+    expect(output).toContain("ui/P67Empty.tsx");
+  });
+
+  it("P67 e. Field 绕开：ui/ 里手拼 `<label htmlFor>` + JS 对象键 `aria-describedby` → 阻断", () => {
+    /* 与 form-field.tsx 的实际写法对齐：a11y 通过 `{ "aria-describedby": id }`
+     * 对象透传，不是 JSX 属性 aria-describedby="…"。判据必须吃这一形态，
+     * 否则真轮子会漏检。 */
+    seedBaseline();
+    write(
+      "src/components/ui/P67Field.tsx",
+      [
+        "export function MyFormField({ id, err }: { id: string; err?: string }) {",
+        "  const a11y = {",
+        "    id,",
+        '    ...(err ? { "aria-describedby": `${id}-err` } : {}),',
+        "  };",
+        "  return (",
+        "    <div>",
+        "      <label htmlFor={id}>标签</label>",
+        "      <input {...a11y} />",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P67");
+    expect(output).toContain("ui/P67Field.tsx");
+  });
+
+  it("P67 e. shadcn form.tsx 用 `<Label htmlFor>` 大写组件（非 `<label>`）→ 不误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/ui/P67FormOk.tsx",
+      [
+        'import { Label } from "~/components/ui/label";',
+        "export function FormLabelShadcn({ id }: { id: string }) {",
+        '  const a11y = { "aria-describedby": `${id}-desc` };',
+        "  return (",
+        "    <div>",
+        "      <Label htmlFor={id}>标签</Label>",
+        "      <input {...a11y} />",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("ui/P67FormOk.tsx");
+  });
+
+  it("P67 范围收窄：视图层里同样命名的业务包装不算轮子（UI_ONLY 短路生效）", () => {
+    /* UI_ONLY_RULES 的意义：P67 只在 ui/ 层跑，视图层同样的命名形态
+     * 是消费基元的业务包装、不该被算进本条账。少了这层收窄，
+     * WorkflowPickChip / ShotStatusBadge 等一片会被误伤。
+     * **刻意不 import Badge**——否则 sub-signal 内部的 import 短路自己
+     * 就命中合规分支，测不到范围收窄本身。 */
+    seedBaseline();
+    write(
+      "src/components/studio/P67ViewChip.tsx",
+      [
+        "export function FeatureStatusChip({ tone }: { tone: string }) {",
+        "  return <span className={`chip-${tone}`}>feature</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P67ViewChip.tsx");
+  });
+
+  it("P67 基线冻结 8 处，再新增一处 ui/ 轮子 → 阻断（棘轮只许降）", () => {
+    /* 直接跑（不带 --report / --update），main 会把新命中当"新增 P67"
+     * 报出来并阻断——这是治理前 P67 起点已经在真仓库锁死的直接体现。 */
+    seedBaseline();
+    write(
+      "src/components/ui/P67Sneak.tsx",
+      "export function SneakyBadge() { return <span>b</span>; }\n",
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P67");
+    expect(output).toContain("ui/P67Sneak.tsx");
   });
 });
