@@ -15,7 +15,7 @@ import {
   pushProduction,
 } from "~/lib/production/production-client";
 import type { Shot } from "~/lib/workshop/types";
-import { recordCanvasShotGeneration } from "./shot-writeback";
+import { recordCanvasShotGeneration, requestShotRedo } from "./shot-writeback";
 
 vi.mock("~/lib/production/production-client", () => ({
   fetchProduction: vi.fn(),
@@ -139,6 +139,97 @@ describe("recordCanvasShotGeneration", () => {
       status: "done",
       imageUrl: "/z.png",
     });
+    expect(pushProdMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("requestShotRedo", () => {
+  function seedDraftWithDoneShotA() {
+    writeWorkshopDraft("proj_1", {
+      ...emptyWorkshopDraft(),
+      // rev 不在 Shot 类型上，作为未知扩展字段写入（草稿 JSON 列宽容）。
+      shots: [
+        {
+          ...shotA(),
+          imageUrl: "/x.png",
+          clipUrl: "/y.mp4",
+          status: "done",
+          rev: 0,
+        } as never,
+      ],
+    });
+  }
+
+  it("空 projectId / 空 shotId → 短路，不发 IO", async () => {
+    await requestShotRedo("", "a");
+    await requestShotRedo("proj_1", "");
+    expect(fetchProdMock).not.toHaveBeenCalled();
+    expect(pushDraftMock).not.toHaveBeenCalled();
+  });
+
+  it("命中镜头：草稿与 production 都清产出 + 状态 idle + rev 自增", async () => {
+    seedDraftWithDoneShotA();
+    fetchProdMock.mockResolvedValue({
+      title: "T",
+      type: "",
+      tone: "",
+      logline: "",
+      scriptMarkdown: "",
+      scenes: [],
+      characters: [],
+      shots: [
+        {
+          id: "a",
+          imageUrl: "/x.png",
+          clipUrl: "/y.mp4",
+          status: "done",
+          rev: 0,
+        },
+      ],
+      progress: { stage: "render", rendered: false },
+    });
+
+    await requestShotRedo("proj_1", "a");
+
+    const drafted = readWorkshopDraft("proj_1").shots[0] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(drafted).toMatchObject({ status: "idle", rev: 1 });
+    expect(drafted.imageUrl).toBeUndefined();
+    expect(pushDraftMock).toHaveBeenCalledTimes(1);
+
+    expect(pushProdMock).toHaveBeenCalledTimes(1);
+    const [, payload] = pushProdMock.mock.calls[0]!;
+    const pushed = (payload.shots as Record<string, unknown>[])[0]!;
+    expect(pushed).toMatchObject({
+      status: "idle",
+      clipStatus: "idle",
+      rev: 1,
+    });
+    expect(pushed.imageUrl).toBeUndefined();
+    // 非镜头字段保留
+    expect(payload.progress).toEqual({ stage: "render", rendered: false });
+  });
+
+  it("两侧都没有该镜头 → 不落任何写", async () => {
+    writeWorkshopDraft("proj_1", {
+      ...emptyWorkshopDraft(),
+      shots: [{ ...shotA(), id: "other" }],
+    });
+    fetchProdMock.mockResolvedValue({
+      title: "T",
+      type: "",
+      tone: "",
+      logline: "",
+      scriptMarkdown: "",
+      scenes: [],
+      characters: [],
+      shots: [{ id: "other" }],
+      progress: { stage: "script", rendered: false },
+    });
+    await requestShotRedo("proj_1", "a");
+    expect(pushDraftMock).not.toHaveBeenCalled();
     expect(pushProdMock).not.toHaveBeenCalled();
   });
 });
