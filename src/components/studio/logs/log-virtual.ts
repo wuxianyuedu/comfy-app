@@ -50,6 +50,17 @@ export const LOG_ROW_SINGLE = 27;
 /** 换行显示时，**每一行文字**的像素高度（`leading-snug` 下的 13px 行高）。 */
 export const LOG_ROW_LINE = 18;
 
+/**
+ * **展开**的日志行高度（常量，不是量出来的）。
+ *
+ * 展开内容（comfy-cli 原始 JSON）交给 `JsonViewer` 渲染，而它自带工具栏 / 搜索
+ * 与内部滚动 —— 于是树的展开、搜索命中跳转都不改变**行**高，行高只由这个常量
+ * 决定。这正是虚拟滚动要的「可枚举」：{@link layoutRows} 不必测 DOM 就能给出
+ * 位置，滚动位置与内容不会错开（见本模块文件头对「为什么不能 measureElement」
+ * 的说明）。取 360 ≈ 单行(27) + 一份够用的 JSON 视口。
+ */
+export const LOG_ROW_EXPANDED = 360;
+
 /** 上下各多渲染几行：常量行高的小误差与快速滚动都不会露出空白。 */
 export const LOG_VIRTUAL_OVERSCAN = 12;
 
@@ -105,18 +116,39 @@ export interface RowLayout {
   size: number;
 }
 
+/** {@link layoutRows} 的两类**按 id 点名**的行（见下方说明）。 */
+export interface LogLayoutOptions {
+  /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
+  expandedIds?: ReadonlySet<string>;
+  /**
+   * 折叠态**强制单行**的行 id（comfy-cli 原始 JSON 行）。
+   *
+   * 这类行的完整原文（可能几十 KB、且不含换行符）在 `wrap` 模式下会被
+   * `countLines` 按宽度估成几百行——那既是错的显示（原文本该折起来），也是
+   * 错的滚动长度。它们的折叠态恒为一行摘要，完整内容交给展开态，因此高度不
+   * 参与换行估高。
+   */
+  singleLineIds?: ReadonlySet<string>;
+}
+
 /**
  * 估算整页每一行的位置与高度。
  *
  * 之所以**整页算一遍**而不是按需累加：位置是单调前缀和，`start[i]` 必须对得上
  * `sum(size[0..i-1])`，否则 `translateY` 与滚动条会各说各话。整页 2000 次乘法
  * 远低于一帧预算（实测 < 1ms），换来的是「窗口怎么取都不会错位」。
+ *
+ * `options` 里的两类行按 **id** 点名（不是下标）：分页窗口会随新日志前移，
+ * 下标不稳定，而 id 与那一条日志一一对应——用户展开的那一行在滚动 / 轮询之后
+ * 仍是同一行。
  */
 export function layoutRows(
-  entries: readonly { message: string }[],
+  entries: readonly { message: string; id?: string }[],
   wrap: boolean,
   availableWidth = 0,
+  options: LogLayoutOptions = {},
 ): { rows: RowLayout[]; totalSize: number } {
+  const { expandedIds, singleLineIds } = options;
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
   const rows: RowLayout[] = Array.from({ length: entries.length }, () => ({
@@ -125,10 +157,18 @@ export function layoutRows(
   }));
   let start = 0;
   for (let i = 0; i < entries.length; i += 1) {
-    const message = entries[i]!.message;
-    /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */
-    const lines = wrap ? countLines(message, availableWidth) : 1;
-    const size = LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
+    const entry = entries[i]!;
+    const id = entry.id;
+    let size: number;
+    if (id && expandedIds?.has(id)) {
+      size = LOG_ROW_EXPANDED;
+    } else if (id && singleLineIds?.has(id)) {
+      size = LOG_ROW_SINGLE;
+    } else {
+      /* 每行的行数只数一次：estimateRowHeight 与 countLines 都靠它推高度。 */
+      const lines = wrap ? countLines(entry.message, availableWidth) : 1;
+      size = LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
+    }
     rows[i] = { start, size };
     start += size;
   }
