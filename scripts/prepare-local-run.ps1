@@ -1,5 +1,5 @@
 ﻿# prepare-local-run.ps1 - 非开发人员本地运行引导（由入口 tools/start/run-local.ps1 调用）
-# 职责：检查 node/pnpm -> 补齐 .env -> 补齐 node_modules -> 提示启动方式
+# 职责：检查 node/pnpm -> 补齐 .env -> 补齐 node_modules -> 补齐 comfy-cli 运行环境 -> 提示启动方式
 # 说明：面向普通用户，任何失败都要给出人能看懂的中文提示，不静默失败。
 
 param()
@@ -30,7 +30,7 @@ Write-Host "项目目录：$root"
 Write-Host ""
 
 # ── 1) 检查 node ──────────────────────────────────────────────
-Write-Host "---------- [1/5] 检查 Node.js ----------" -ForegroundColor White
+Write-Host "---------- [1/6] 检查 Node.js ----------" -ForegroundColor White
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
     Say-Err "未检测到 Node.js。"
@@ -42,7 +42,7 @@ Say-OK "Node.js 版本：$(& node -v)"
 
 # ── 2) 检查 / 开启 pnpm（corepack）────────────────────────────
 Write-Host ""
-Write-Host "---------- [2/5] 检查 pnpm ----------" -ForegroundColor White
+Write-Host "---------- [2/6] 检查 pnpm ----------" -ForegroundColor White
 $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue
 if (-not $pnpm) {
     Say-Warn "未检测到 pnpm，尝试用 Node 自带的 corepack 开启..."
@@ -67,7 +67,7 @@ if ($pnpm) {
 
 # ── 3) 版本一致性检查：pnpm 是否与 package.json 的 packageManager 对齐 ──
 Write-Host ""
-Write-Host "---------- [3/5] 检查 pnpm 版本 ----------" -ForegroundColor White
+Write-Host "---------- [3/6] 检查 pnpm 版本 ----------" -ForegroundColor White
 $expectedPnpm = ""
 try {
     $pkgContent = Get-Content -Raw -Path (Join-Path $root "package.json")
@@ -111,7 +111,7 @@ if ($expectedPnpm) {
 
 # ── 4) 生成 .env（已存在则跳过）───────────────────────────────
 Write-Host ""
-Write-Host "---------- [4/5] 生成本地配置 .env ----------" -ForegroundColor White
+Write-Host "---------- [4/6] 生成本地配置 .env ----------" -ForegroundColor White
 $envFile = Join-Path $root ".env"
 if (Test-Path $envFile) {
     Say-OK "已存在 .env，跳过生成（不覆盖你的配置）。"
@@ -141,7 +141,7 @@ if (Test-Path $envFile) {
 
 # ── 5) 检查 / 安装依赖 node_modules ───────────────────────────
 Write-Host ""
-Write-Host "---------- [5/5] 检查项目依赖 ----------" -ForegroundColor White
+Write-Host "---------- [5/6] 检查项目依赖 ----------" -ForegroundColor White
 # 只探测"装没装"会漏掉"装的是旧 lockfile"的情况：拉取新增依赖后没重装，依赖是
 # 残缺的，但 .modules.yaml 与 next.cmd 都在 → 被当成"已就绪"而跳过安装。
 # 追加"lockfile 漂移"判定：pnpm 会把最近一次成功安装的 lockfile 复制到
@@ -199,6 +199,37 @@ if ($needInstall) {
     Say-OK "依赖安装完成。"
 } else {
     Say-OK "依赖已就绪，跳过安装。"
+}
+
+# ── 6) 检查 / 安装 comfy-cli 运行环境 ───────────────────────────
+Write-Host ""
+Write-Host "---------- [6/6] 检查 comfy-cli 运行环境 ----------" -ForegroundColor White
+# raw UI-format（liblib 子图）工作流需要 comfy-cli 做 UI→API 转换，执行器固定使用
+# <项目根>/python-venv/comfy-cli 下的 Python 解释器。该 venv 缺失时工作流执行会直接
+# 报「未找到 comfy-cli Python 解释器」。本地初始化阶段就把缺失的环境补齐：调用
+# scripts\setup-comfy-cli-venv.ps1（幂等：已就绪则跳过；失败也不阻断启动）。
+$comfyVenv  = Join-Path $root "python-venv\comfy-cli\Scripts\python.exe"
+$comfySetup = Join-Path $root "scripts\setup-comfy-cli-venv.ps1"
+if (Test-Path $comfyVenv) {
+    Say-OK "comfy-cli 运行环境已就绪，跳过安装。"
+} elseif (-not (Test-Path $comfySetup)) {
+    Say-Warn "未找到 comfy-cli 安装脚本（$comfySetup），跳过检测。"
+} else {
+    Say-Warn "未检测到 comfy-cli 运行环境，正在创建并安装（首次较慢，请勿关闭窗口）..."
+    Write-Host ""
+    try {
+        Write-Host ">>> pwsh -ExecutionPolicy Bypass -File scripts\setup-comfy-cli-venv.ps1" -ForegroundColor Yellow
+        & $comfySetup
+        if ($LASTEXITCODE -ne 0) {
+            Say-Err "comfy-cli 运行环境安装失败（exit=$LASTEXITCODE）。"
+            Say-Info "工作流执行将不可用，但不影响应用启动；联网后可重新双击本脚本补齐。"
+        } else {
+            Say-OK "comfy-cli 运行环境已就绪。"
+        }
+    } catch {
+        Say-Err "comfy-cli 安装脚本异常：$($_.Exception.Message)"
+        Say-Info "工作流执行将不可用，但不影响应用启动；可重新双击本脚本重试。"
+    }
 }
 
 # ── 完成提示 ──────────────────────────────────────────────────
