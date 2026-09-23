@@ -4741,3 +4741,50 @@ shadcn add @comfy-app-t3/form @comfy-app-t3/select
 - **新增视图代码前先查 `ui/` 有没有现成基元**（§16.2.3 的棘轮会在提交阶段拦下
   手写 `<button>` / 自建 portal / 自写 spinner）。需要覆盖样式就在使用处以
   `className` 覆盖或扩展 `cva` 变体，**不要**在原地另起一份实现。
+
+## 16.8 `ui/` 本地改动台账（覆盖前必读）
+
+`ui/` 是**工具生成目录**（§16.7：不手工编辑、界面变更靠 `shadcn add` 重生成）。
+但本仓库确实在 8 个基元上做过**有意改动**，而"哪些文件不能被覆盖"此前没有任何地方
+记着，只能靠人事先记得。实测代价（2026-09-22 用 `--dry-run` 量的）：`shadcn add
+command` 会覆盖 `button` / `input` / `textarea` / `dialog` 四个文件 —— 其中
+`button.tsx` 与 `dialog.tsx` 的定制一旦被冲掉，前者让全库 40 多个文件里的
+`variant="danger"` 一类调用**编译不过**，后者让浮层不再让出标题行（`check-title-bar-clearance`
+当场红）；它还会顺手引入新依赖 `cmdk`。
+
+**口径两条**：
+
+1. **与官方版有语义差异的文件**：文件头带一行标记
+   `/* ui-customized: … */`（`"use client"` 文件放在指令行之后，其余放第一行），
+   并在下表登记。判据 `scripts/check-ui-customizations.cjs`（**标记 ⟺ 台账**，双向
+   一致，零网络，已挂 pre-commit）——只登记不标记、或只标记不登记，提交即卡。
+2. **只在 import 别名（`~/lib/utils` 那层 `cn` 间接）、class 串顺序、注释中文化上
+   与官方不同的文件**：不登记、不带标记。覆盖它们不丢行为，可以当官方原版用
+   （实测属于这一档的：`accordion` / `avatar` / `badge` / `card` / `input` /
+   `label` / `progress` / `scroll-area` / `separator` / `skeleton` / `slider` /
+   `sonner` / `switch` / `tabs` / `textarea`）。
+
+**覆盖前的标准动作**（三步，别跳）：
+
+```bash
+pnpm exec shadcn add <name> --dry-run -y          # ① Files 里的 overwrite 是否命中下表
+pnpm exec shadcn add <name> --diff src/components/ui/<file>.tsx   # ② 看具体差异
+# ③ 命中下表：不要直接 add —— 用 --view 只取需要的新文件；确实要覆盖就先照「覆盖后怎么补」一列补回并恢复标记
+```
+
+| 文件            | 本仓库的定制                                                                                              | 为什么                                                                                     | 覆盖后怎么补                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `button.tsx`    | 官方版 + 9 个语义色变体（`primary` / `danger` / `success` / `warning` / `info` 软底，以及 4 个 `*-solid`）+ `ButtonLink` | P1 按钮棘轮把全库手写 `<button>` 收口到基元后，「语义角色」需要一个变体出口（§3.6.2 取角色不取色名）；`ButtonLink` 是 base-ui Button 没有 `asChild` 的补偿 | 把 9 个变体与 `ButtonLink` 加回 `cva` 与导出，并恢复标记              |
+| `dialog.tsx`    | backdrop 收敛到 `dialogBackdropClass()`；新增 `popupClassName`；去掉 `sm:max-w-sm`；层级走刻度表的 `z-modal` | ① 浮层必须让出标题行（ISSUE #310）；② `sm:max-w-sm` 让「加宽」按钮按了没反应（ISSUE #720）；③ 层级走刻度表（§16.2.5） | 四处改动逐条加回（`dialog-overlay.ts` 与本文件的 import 是连着的）    |
+| `sheet.tsx`     | backdrop 走 `dialogBackdropClass()`；层级 `z-modal`                                                        | 同 `dialog` 的 ①③（遮罩由两处收敛到一份）                                                   | 加回 `dialogBackdropClass()` 与层级档                                 |
+| `alert.tsx`     | 官方版 + 4 个语义色变体（`warning` / `info` / `success` / `danger`）                                       | 与 `button` 同源的软底语义色，通知块需要按严重度上色（`8189c8d0`）                           | 加回 4 个变体                                                         |
+| `dropdown-menu.tsx` | 层级走刻度表的 `z-popup`                                                                               | 浮层层级收成一张刻度表（`ee0abfd8`）                                                        | 把 `z-50` 一族换成刻度表档位                                          |
+| `popover.tsx`   | 层级 `z-popup` + 两态化（深底压浅字）                                                                      | 同上；下拉/浮层在两套主题下的对比度（`56ff17a7`）                                            | 加回层级档与对比度类                                                  |
+| `select.tsx`    | 层级 `z-popup` + 下拉归位 / 选中项对比度                                                                   | 同上（`d73e4f4a` / `4ca5fae3`）                                                              | 加回层级档与定位/对比度修正                                           |
+| `tooltip.tsx`   | 层级 `z-popup`                                                                                             | 同上                                                                                        | 把 `z-50` 换成刻度表档位                                              |
+
+> **为什么不干脆"重来一遍、以官方为底"**：实测官方 registry 今天的内容已经与当初
+> 引入的那版不同（例如 `accordion` 今天带文档站自己的 `IconPlaceholder` shim、
+> `cn` 也从 `cn` 包直接导入），照今天的官方重写会把**未审的上游变化**混进来；
+> 而我们的定制是「在官方基础上做加法 / 收敛」（有 git 基线与本表为证），
+> 所以正确动作是**保住定制 + 把它登记清楚**，不是重写。

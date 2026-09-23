@@ -9,6 +9,10 @@
 #   合并 26s）、D=其余静态检查（组内仍串行，避免一次起几十个 node 抢内存）。
 #   wall ≈ max(各组) 而非求和；内存仍受控在 ~4 个并发。任一非零仍阻断提交（口径不变）。
 #
+# 新增判据的落点：与既有静态判据互不依赖 → 追加进 D 组（组内串行，顺序即执行序）；
+# 需要另起 vite 的测试 → 并入 C 组的同一行 vitest run（别新起一次，那正是本次要消掉的
+# 开销）。基线与旧版的步号已无意义，脚本自身的注释与规范章节才是指路牌。
+#
 # 保留的坑位注释：npx→pnpm exec（typescript 别名链 npx 会崩）；master 只走 PR（规范 13.6，
 # 故分支守卫最先跑、错了不必再耗 tsc/lint）；eslint 零警告口径；tsc/eslint 各建一份 TS
 # 程序、并发吃内存（机器紧张把 C/D 也挪成串行即可）。--no-verify 绕过会进历史，慎用。
@@ -34,10 +38,28 @@ run_group() {
 }
 
 # ── A/B：类型 + lint（判据独立，并行；沿用 package.json 的 lint 白名单与零警告口径）──
+# eslint 的**扫描范围（白名单目录）与参数**收在 package.json 的 `lint` 脚本里 ——
+# 门禁、`pnpm lint`、CI 共用同一份，不在这里再抄一遍目录清单（抄一遍就会漂移；
+# 范围口径见 eslint.config.js 顶部那节）。
+# `--cache --cache-strategy content`（实测，全仓约 964 个代码文件）：
+#   · 冷跑/全量重建 311s（默认策略）· 346s（content，仅切换策略后首跑一次）
+#   · 稳态热跑 28.8–46.3s
+#   · **只碰 mtime、内容不变**：默认 metadata 策略 → 3 条失效、87.5s；
+#     content 策略 → **0 条失效**、46.3s
+#   · 真改 1 个文件内容：1 条失效、44s
+# `--cache-strategy` 默认是 `metadata`（用 mtime + size 判定），于是任何「重写同一
+# 份内容」的操作都会把文件判成已变：`git checkout` / `stash` / `pull`、`prettier
+# --write`、编辑器保存、构建脚本 touch —— 一次动很多文件就是**大面积失效**。
+# 换成 `content`（按内容哈希）后这类抖动不再失效，真实内容改动照常只失效自己那
+# 一条。缓存键含「文件内容 + 解析后的 config」，所以改 eslint.config.js 会自然
+# 失效；缓存放 node_modules/.cache/eslint（已被 gitignore 覆盖，不必登记忽略清单）。
+# ⚠️ 升级 eslint / typescript-eslint **之后**先删掉该缓存目录 —— 插件实现变更不在
+# 缓存键里（这是 --cache 的已知边界，不是本仓的判据问题）；换 cache-location 或
+# cache-strategy 也会导致一次全量重建，属预期。
 run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'
 run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm run lint'
 
-# ── C：6 个结构守护测试合并成一次 vitest（只 boot 一次 vite）──────────────
+# ── C：core/lib 结构守护测试合并成一次 vitest（只 boot 一次 vite）──────────
 run_group C "core/lib 结构守护测试" sh -c 'pnpm exec vitest run \
   tests/single-logger-channel.test.ts \
   tests/container-single-access.test.ts \
@@ -47,33 +69,93 @@ run_group C "core/lib 结构守护测试" sh -c 'pnpm exec vitest run \
   tests/repository-base-purity.test.ts'
 
 # ── D：其余静态判据（互不依赖；组内串行以控内存，但整体与 A/B/C 并行）──────
-# 每条命令的规范出处见 scripts/ 对应脚本头部；顺序与旧版一致，只是收进一个后台组。
+# 每条命令的规范出处见 scripts/ 对应脚本头部；顺序即执行序，新增判据追加到这里。
 run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   set -e
   run() { echo "── check: $1"; shift; "$@"; }
+  # R5 的棘轮（超 900 行文件）需要 --strict 才判定,这里保持「只提醒」,与其余棘轮
+  # （重复块 / 函数长度 / 主题色）的本地口径一致 —— 被拦下的动作要求拆分文件,
+  # 不适合在本地每次提交都挡一次。
+  # ⚠️ 遗留：平台侧流水线（.cnb.yml）删除后,R5 棘轮的 --strict 判定不在这里执行
+  # （规范 13.5.3）。它的去处是「按需召唤」（规范 13.5.4）:在 PR / Issue 里 @ 评审
+  # NPC 跑一轮,不 @ 就不跑 —— 不是把 .cnb.yml 贴回去。要恢复成本地每提交都跑,
+  # 先按提示把超基线的文件拆到位,再给这一步加上 --strict。
   run "文件结构硬规则(R1-R12，R5 只提醒)" node scripts/check-file-structure.cjs
+  # 跨平台动作对照表（规范 §9.5）。Windows 入口是 .ps1（§8），Linux / macOS 跑不了
+  # .ps1 —— 同一个动作因此在两侧各有一份实现。启动编排已经栽过一次（Windows 一条
+  # .ps1 链、POSIX 一条 .mjs 链各自演进，四项行为静默分叉），所以「新增动作必须两侧
+  # 都在」与「会失效的清单只许定义一次」都机器化：新增 .mjs 忘了登记、或在 .ps1 里又
+  # 抄一份 KNOWN_FAILED_FILES，都在这里被拦下。
   run "跨平台动作对照(.ps1⇄.mjs)" node scripts/check-ps1-consistency.mjs
   run "React 函数式 updater 纯净性" node scripts/check-react-updater-purity.cjs
+  # 标题行(页签栏)让位：页签搬到窗口标题行后，任何 `fixed inset-0` 的顶层浮层都会
+  # 把页签和右上角窗口按钮一起盖住；首轮修复只改了全屏视图、弹窗类漏改。
   run "标题行让位硬规则" node scripts/check-title-bar-clearance.cjs
+  # UI 与逻辑分离棘轮(规范 17)。违规数只许降不许升:新增 fetch / vanillaApi / tRPC
+  # hook 进视图层 → 阻断;治理后指标下降也走 `--strict` 阻断 —— AGENTS.md 硬规则 10
+  # 明确「治理后必须 `--update` 收紧基线」,此前只提示不阻断,效果是「基线虚高、
+  # 下一个人借余量偷偷新增」,纪律停在纸面。
   run "UI/逻辑分离棘轮(--strict)" node scripts/check-ui-logic-separation.cjs --strict
+  # CHANGELOG.md 的 [Unreleased] 是「人人都改同一处」的文件,并行分支必然冲突;
+  # 改为一件变更一个 changelog.d/ 碎片(见规范 13.10.5)后,这里守住碎片的文件名与
+  # 段落标题口径——碎片写歪了会在发版并入时才暴露,那时已难追溯。
   run "CHANGELOG 碎片" node scripts/check-changelog-fragments.cjs
+  # import 别名统一（规范 §12.2 / §16.2）：本仓库的别名约定是 `~` 前缀，但
+  # tsconfig.json 的 paths 里同时留着 `@/*`（脚手架的历史项）—— 于是 `@/` 也能编译、
+  # 也能跑，没有任何反馈，漂移面积自己变大。`shadcn add` 生成的组件默认写 `@/`
+  # （§16.3 已点名），src/components/ui/ 因此是重灾区。
   run "import 别名统一(~ 前缀)" node scripts/check-import-alias.cjs
+  # 端口推导的跨语言一致性（规范 §1.1）：四侧（Node / PowerShell / Python / Rust）读
+  # 同一份共享校验向量 tests/fixtures/app-port-vectors.json，任一侧漂移即在此拦下。
   run "端口推导跨语言一致性" node scripts/check-app-port-vectors.cjs
+  # UI 基元复用棘轮（规范 16 §16.2.3）：存量冻结在基线，只许降不许升。
   run "UI 基元复用棘轮" node scripts/check-ui-primitives.cjs
+  # 主题色扫描棘轮：「类型色例外」的豁免清单显式化，未豁免的写死色值走棘轮。
   run "主题色扫描棘轮" node scripts/check-theme-colors.cjs
+  # ComfyUI 端口口径一致性（规范 §5）：分叉的表现不是「连不上」，而是静默连到另一个
+  # 实例（现象是上传失败/端口漂移）。
   run "ComfyUI 端口口径一致性" node scripts/check-comfyui-port-contract.cjs
+  # 视图层不得动态注入 <style>(规范 03 §3.5 / 反模式 T5)。本仓库踩过两次、形态一样
+  # （组件私有 CSS 字符串 + 渲染时注入），「自己修完自己写注释」挡不住下一个人。
   run "内联样式注入" node scripts/check-inline-style.cjs
+  # 跨文件重复块(规范 12.12)：新增孪生对即阻断，存量修掉后收紧基线。
   run "跨文件重复块" node scripts/check-code-duplication.cjs
+  # 函数长度(规范 12.13)：文件行数由 R5 管,函数没人管 —— 于是 2186 行的单函数一路
+  # 合法存在。无名字的块体(IIFE / 回调 / 闭包)与跨行签名同受约束(§12.13.2)。
   run "函数长度棘轮" node scripts/check-function-length.cjs
+  # Rust 函数长度（规范 12.13）：阈值 120（Rust 是结构化编排，自然长度比 TSX 短）。
   run "Rust 函数长度棘轮" node scripts/check-rust-function-length.cjs
+  # 模块循环依赖（规范 12.7）：环的症状是「import 顺序变了就 undefined is not a
+  # function」，排查成本极高，因此把「无环」做成棘轮。
   run "模块循环依赖棘轮" node scripts/check-circular-deps.cjs
+  # prettier 格式棘轮（规范 13.5）：基线 + 只许下降；新增脏文件即阻断。
   run "prettier 格式棘轮" node scripts/check-format.cjs
+  # 格式化提交与行为改动分离（规范 13.7）：一次提交里「过一遍 prettier 就变成另一种
+  # 写法」的文件 ≥ 10 个就阻断，要求拆成两次提交。
   run "格式化提交与行为改动分离" node scripts/check-reformat-only.cjs
+  # 地基层(src/lib + src/trpc)的零消费值导出（规范 §12.16）：机械判据化 AI 审计报告
   run "地基层零消费导出棘轮" node scripts/check-dead-exports.cjs
+  # 生成态文档与源同步（规范 §13.5.5）：docs/generated/** 是提交进 git 的原文文档，
+  # 改了编辑文档却不重渲染，生成物就静默过期，而读者看的正是生成物。这里用与
+  # doc:render 同一份计算做「只比对不写入」，漂了就阻断并给出修法。
   run "生成态文档与源同步" node scripts/render-doc-placeholders.cjs --check
+  # 浮层层级刻度（规范 §16.2.5）：行内数字 zIndex 与任意值写法全库清零（硬闸），
+  # 刻度之外的裸数字档按文件记棘轮、只许降不许升。z-index 写错的表现是「时灵时不灵」
+  # ——jsdom 不做层叠与命中测试，单测全绿也照样复现，所以判据只能落在源码形态上。
   run "浮层层级刻度棘轮" node scripts/check-overlay-z.cjs
+  # src 非空断言 `!` 计数棘轮：判据走 TypeScript AST (ts.isNonNullExpression),不用
+  # 正则,避免误伤 `!==` / `!x` / 注释里的 `!`。扫描范围是整个 src。
   run "src 非空断言棘轮" node scripts/check-non-null-assertions.cjs
+  # src/lib `void someFn(...)` 悬空棘轮：只认「整条语句就是 `void 一个函数调用`」这一
+  # 形态;`void someFn().catch(...)` 链尾显式接管 rejection 的跳过。修法:改用
+  # `fireAndForget(someFn(), onError)`,或 `--update` 时说明「被调方内部已 catch」。
   run "src/lib void 悬空 Promise 棘轮" node scripts/check-void-floats.cjs
+  # ui/ 定制标记 ⟺ 台账（规范 16 §16.8）：`ui/` 是工具生成目录,但本仓库在若干基元上
+  # 做过有意改动(button 的语义变体与 ButtonLink、dialog 的 backdrop 与 popupClassName…),
+  # 此前没有任何地方记着哪个不能覆盖 —— 实测 `shadcn add command` 会顺手覆盖
+  # button/input/textarea/dialog 四个。这条把「改过的地方留痕」机器化:标记与
+  # docs/standards/16 §16.8 的台账双向一致,零网络(不判断差异内容,只保证两边不脱节)。
+  run "ui/ 定制标记与台账（§16.8）" node scripts/check-ui-customizations.cjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
