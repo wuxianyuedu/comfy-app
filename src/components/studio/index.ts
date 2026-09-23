@@ -7,8 +7,16 @@ export type { VideoQueueModalProps } from "./VideoQueueModal";
 export { HomePage } from "./HomePage";
 export type { HomePageProps, RecentProject } from "./HomePage";
 
-export { WorkspaceNav } from "./WorkspaceNav";
-export type { WorkspaceView } from "./WorkspaceNav";
+/* ── 壳层（规范 §12.1 的目录树 / §12.2 的 barrel 示例里一直写着这两个名字，
+ *    本轮才真正落地）── */
+export { AppShell } from "./AppShell";
+export type { AppShellProps } from "./AppShell";
+export { TopBar } from "./TopBar";
+export type { TopBarProps } from "./TopBar";
+export { CommandPalette } from "./CommandPalette";
+export type { CommandPaletteProps } from "./CommandPalette";
+/* 视图枚举的权威来源是 `NavItems`（`WorkspaceNav` 退役后不再有第二个入口）。 */
+export type { WorkspaceView } from "./NavItems";
 
 export { WorksGallery } from "./WorksGallery";
 export { ProjectOutputs } from "./ProjectOutputs";

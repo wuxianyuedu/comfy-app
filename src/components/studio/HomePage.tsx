@@ -3,21 +3,17 @@
 import React from "react";
 import {
   Activity,
-  Bell,
   BookOpen,
   Box,
   Image as ImageIcon,
   LayoutTemplate,
   Plus,
-  Search,
   Video,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { AuroraGlow } from "~/components/ui/aurora-background";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
-import { useToast } from "./ToastProvider";
 import { type WorkspaceView } from "./NavItems";
-import { WorkspaceNav } from "./WorkspaceNav";
 
 /* ── 首页 —— Updream 风全屏仪表盘（对齐 Ardot） ─
   深色主题首页，左侧栏导航 + 顶栏 + 极光背景。
@@ -95,14 +91,10 @@ export interface HomePageProps {
   onOpenProject?: (id: string) => void;
   /** 打开一个画布项目（跳到画布视图，而不是 /create/{id}）。 */
   onOpenCanvasProject?: (id: string) => void;
-  /** 当前活跃的导航项（WorkspaceView id） */
-  activeNav?: WorkspaceView;
   /** 跳到一个工作区视图（模型 / 工作流 / 画布等） */
   onNavigate?: (view: WorkspaceView) => void;
-  /** Switch to the "项目" (works) tab to show all projects */
+  /** 切到「项目」（works）视图，看全部项目 */
   onShowAllProjects?: () => void;
-  /** 打开设置浮层（保持工作区树存活）。 */
-  onOpenSettings?: () => void;
 }
 
 export function HomePage({
@@ -110,12 +102,9 @@ export function HomePage({
   recentProjects = [],
   onOpenProject,
   onOpenCanvasProject,
-  activeNav = "home",
   onNavigate,
   onShowAllProjects,
-  onOpenSettings,
 }: HomePageProps) {
-  const toast = useToast();
   return (
     <div
       className="bg-canvas text-ink relative flex h-full w-full overflow-hidden"
@@ -138,50 +127,16 @@ export function HomePage({
         />
       </div>
 
-      {/* ── 左侧栏导航 ───────────────── */}
-      <WorkspaceNav
-        active={activeNav}
-        onSelect={(id) => onNavigate?.(id)}
-        onOpenSettings={onOpenSettings}
-      />
-
-      {/* ── 右侧区：顶栏 + 主内容 ──────────── */}
-      <div className="z-base relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* ── Top Bar ── */}
-        <header className="border-border-subtle bg-panel/88 flex shrink-0 items-center justify-between gap-3 border-b px-5 py-0 backdrop-blur-md">
-          {/* Search */}
-          <div className="border-border bg-subtle py-1.8 text-ink-fainter focus-within:border-border-strong focus-within:bg-surface-1 flex max-w-[280px] flex-1 items-center gap-2.5 rounded-lg border px-3 text-sm transition-colors">
-            <Search size={16} />
-            <span className="whitespace-nowrap">搜索项目、模板或技能...</span>
-          </div>
-
-          {/* Right side */}
-          <div className="flex items-center gap-4">
-            {/* Notification bell */}
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              onClick={() => toast.info("通知", "暂无新消息")}
-              className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
-              aria-label="通知"
-            >
-              <Bell size={18} strokeWidth={1.8} />
-            </Button>
-
-            {/* User avatar */}
-            <Button
-              variant="ghost"
-              onClick={() => toast.info("账户", "点击头像可管理账号设置")}
-              className="hover:bg-subtle h-auto gap-2 rounded-lg px-1 py-0.5"
-              title="账户"
-            >
-              <div className="u-avatar h-8 w-8 overflow-hidden rounded-full" />
-            </Button>
-          </div>
-        </header>
-
-        {/* ── 主内容区 ──────────────────────── */}
-        <main className="relative flex min-w-0 flex-1 overflow-y-auto">
+      {/* ── 主内容区 ────────────────────────
+          侧栏（`ui/sidebar`）与顶栏（`TopBar`）由 `AppShell` 统一提供 ——
+          壳负责「导航 + 工具条 + 滚动容器」，首页只管自己的内容。
+          此前这里的搜索框是个 `<div>` 假实现（连 input 都不是）、铃铛与头像
+          只弹一句 toast 占位，三者本轮一并移除；消息入口改由顶栏复用状态栏
+          那个 `MessageCenterButton`。 */}
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* 内容容器用 `<div>` 而不是 `<main>`：外壳的 `SidebarInset` 才是
+            本页唯一的 `<main>`（规范 06 §语义标签），嵌套两个会破坏地标导航。 */}
+        <div className="relative flex min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[960px] px-10 py-16">
             {/* ── Title ── */}
             <h1 className="text-ink mb-3 text-center text-[34px] font-bold tracking-tight">
@@ -389,7 +344,7 @@ export function HomePage({
               </div>
             </section>
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );
