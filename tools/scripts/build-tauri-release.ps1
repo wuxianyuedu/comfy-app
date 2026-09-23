@@ -127,6 +127,17 @@ Log "  构建完成"
 Log ("  耗时：{0}" -f (Format-Elapsed -Elapsed $buildWatch.Elapsed))
 Log "  产物: $TAURI_DIR\target\release\app.exe"
 Log ""
+
+# 构建完成后在仓库根生成启动快捷方式（指向本次产物 app.exe），省去每次去
+# target\release 里翻。独立脚本 tools\start\Create-AppShortcut.ps1 也可在手动
+# `cargo build --release --features custom-protocol` 之后单独运行来补生成。
+$shortcutScript = Join-Path $TOOLS_DIR "start\Create-AppShortcut.ps1"
+if (Test-Path $shortcutScript) {
+    & $shortcutScript -ProjectRoot $PROJECT_ROOT
+} else {
+    Log "[警告] 未找到 $shortcutScript，跳过快捷方式生成。"
+}
+Log ""
 Log "  这个 app.exe 就是**唯一**的启动入口：双击它即可（编排由壳自己承担）。"
 Log ("  本脚本只编 release 壳（单步）。如需完整生产构建（前端一并打包、" + "双击即独立运行、不连 dev server），请运行 tools\build\build-standalone.ps1")
 Log "=========================================================="
