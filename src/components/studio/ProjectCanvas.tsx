@@ -45,6 +45,7 @@ import {
   type ProductionProgress,
 } from "~/lib/production/progress";
 import { CanvasProgressIndicator } from "./project-canvas/CanvasProgressIndicator";
+import { RunControlBar } from "~/components/agent-run/RunControlBar";
 import { useCanvasMenu } from "./project-canvas/hooks/use-canvas-menu";
 import type { Shot } from "~/lib/workshop/types";
 import {
@@ -450,6 +451,11 @@ function CanvasInner({
       {/* 生产进度（与工坊共读 production 行的 progress 一份，Phase 4b / §7）——
           仅当该项目已有生产数据时展示；定位与 pointer-events 收在指示器内部。 */}
       {progress && <CanvasProgressIndicator progress={progress} />}
+
+      {/* AI 自主成片控制条（Phase 6 · 与工坊同一份 run 的操纵台，画布顶部浮层）。 */}
+      <div className="z-canvas-ui absolute inset-x-0 top-0">
+        <RunControlBar />
+      </div>
 
       {/* 项目画布设置（右上角齿轮）。从右边缘滑出抽屉，内含
        *  「调试模式」开关。状态经 useDebugMode 与
