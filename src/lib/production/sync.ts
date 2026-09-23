@@ -11,6 +11,7 @@
 // 本文件只做「值怎么换算/合并」，不碰存储与渲染；接线（工坊写入、画布物化）在
 // Phase 3b/3c。
 
+import { isRecord } from "~/lib/is-record";
 import type { Shot } from "~/lib/workshop/types";
 import type { StrictCanvasNodeData } from "~/lib/project-canvas/canvas-types";
 
@@ -171,6 +172,28 @@ export function applyShotGeneration(
     if (shot.id !== shotId) return shot;
     hit = true;
     return { ...shot, ...patch };
+  });
+  return hit ? next : shots;
+}
+
+/** 单镜「退回让 AI 重做」（Phase 6 · P6-3b）：清空该镜已产出的图/视频、状态回落 idle、
+ *  并把 `rev` 自增，作为「用户改过」的显式信号 —— run 规划器据此把该镜重新纳入待办、只重做它。
+ *  作用于 production/draft 的 shots（unknown 记录）。无命中 → 原样返回入参引用。 */
+export function applyShotRedo(shots: unknown[], shotId: string): unknown[] {
+  let hit = false;
+  const next = shots.map((raw) => {
+    if (!isRecord(raw) || raw.id !== shotId) return raw;
+    hit = true;
+    const rev =
+      typeof raw.rev === "number" && Number.isFinite(raw.rev) ? raw.rev : 0;
+    return {
+      ...raw,
+      imageUrl: undefined,
+      clipUrl: undefined,
+      status: "idle",
+      clipStatus: "idle",
+      rev: rev + 1,
+    };
   });
   return hit ? next : shots;
 }

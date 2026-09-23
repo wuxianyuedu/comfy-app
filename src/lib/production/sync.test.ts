@@ -7,6 +7,7 @@ import type { Shot } from "~/lib/workshop/types";
 import {
   applyShotGeneration,
   applyShotPatches,
+  applyShotRedo,
   nodeEditToShot,
   nodeGenToShot,
   nodeStatusToShotStatus,
@@ -188,5 +189,42 @@ describe("applyShotGeneration", () => {
     const shots = [makeShot({ id: "a" })];
     const out = applyShotGeneration(shots, "missing", { status: "done" });
     expect(out).toBe(shots);
+  });
+});
+
+describe("applyShotRedo", () => {
+  it("命中镜头：清图/视频、状态回 idle、rev 自增；其它镜头原样引用", () => {
+    const shots = [
+      {
+        id: "a",
+        imageUrl: "/x.png",
+        clipUrl: "/y.mp4",
+        status: "done",
+        rev: 2,
+      },
+      { id: "b", imageUrl: "/z.png" },
+    ];
+    const out = applyShotRedo(shots, "a");
+    const a = out[0] as Record<string, unknown>;
+    expect(a.imageUrl).toBeUndefined();
+    expect(a.clipUrl).toBeUndefined();
+    expect(a.status).toBe("idle");
+    expect(a.clipStatus).toBe("idle");
+    expect(a.rev).toBe(3);
+    expect(out[1]).toBe(shots[1]);
+    expect(out[0]).not.toBe(shots[0]);
+  });
+
+  it("无 rev 的镜头按 0 起，退回后置 1", () => {
+    const out = applyShotRedo([{ id: "a", imageUrl: "/x" }], "a") as Record<
+      string,
+      unknown
+    >[];
+    expect(out[0]!.rev).toBe(1);
+  });
+
+  it("非记录项 / 无命中 → 原样返回入参引用", () => {
+    const shots = ["字符串项", { id: "b" }];
+    expect(applyShotRedo(shots, "missing")).toBe(shots);
   });
 });
