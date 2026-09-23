@@ -32,6 +32,7 @@ import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
 import { useFileUpload } from "./hooks/use-file-upload";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
+import { useShotGenerationWriteback } from "./hooks/use-shot-generation-writeback";
 import { ErrorPanel } from "./ErrorPanel";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
@@ -44,6 +45,9 @@ export const CanvasNode = React.memo(function CanvasNode({
   const { setNodes, getNode, setEdges, fitView, screenToFlowPosition } =
     useReactFlow();
   const meta = NODE_META[d.kind];
+
+  /* 镜头节点生成落定 → 回写对应 Shot（Phase 3c-2b，见 hook 注释）。 */
+  useShotGenerationWriteback(d);
 
   const patch = useCallback(
     (p: Partial<CanvasNodeData>) =>
