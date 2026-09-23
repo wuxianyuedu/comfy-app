@@ -124,3 +124,37 @@ export function readStorageJson<T>(
 export function writeStorageJson(key: string, value: unknown): boolean {
   return writeStorageItem(key, JSON.stringify(value));
 }
+
+/**
+ * 写一个 cookie（`path=/` + `max-age=<秒>`）；没有浏览器 / 写失败**静默**
+ * （口径同 `writeStorageItem`，返回是否写成功）。
+ *
+ * **为什么这个模块里会出现 cookie**：本模块是「把一件小事留下来」的唯一入口，
+ * 而 cookie 是 localStorage 之外的第二条通道 —— 它的独特之处是**服务端读得
+ * 到**：`(main)/layout.tsx` 能用 `next/headers` 的 `cookies()` 读出来直接传给
+ * `SidebarProvider` 的 `defaultOpen`，于是首屏就渲染成用户上次选的样子，不必
+ * 等水合（localStorage 只能等客户端，首屏与客户端不一致就是一次水合不匹配）。
+ *
+ * 代价要清楚：名称空间是所有 cookie 共享的一个字符串；有效期必须显式给
+ * `max-age`（不给就是会话级、关窗即忘）；清理粒度与 localStorage 不同
+ * （浏览器里「清除 Cookie」与「清除本地存储」是两个开关）。所以**只在
+ * 「必须让服务端读到」这一种情况下用它**，其余一律 `writeStorageItem`。
+ *
+ * 读侧刻意不在这里提供：服务端读走 `next/headers`，客户端读只能作为水合后的
+ * 修补（首帧仍要用服务端给的初始值），两者都不是「读一件小事」这个形状 ——
+ * 等真有第二个消费方时再按那时的形状加。
+ */
+export function writeCookieItem(
+  name: string,
+  value: string,
+  maxAgeSeconds: number,
+): boolean {
+  if (typeof document === "undefined") return false;
+  try {
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
+    return true;
+  } catch {
+    /* 同 `writeStorageItem`：记忆是增强，不是功能。 */
+    return false;
+  }
+}
