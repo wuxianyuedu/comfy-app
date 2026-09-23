@@ -47,6 +47,7 @@ const jsonColumns = new Set<string>([
   "characters",
   "shots",
   "progress",
+  "run",
 ]);
 
 const TABLES = [
@@ -188,7 +189,7 @@ CREATE TABLE IF NOT EXISTS production (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, title TEXT NOT NULL DEFAULT '未命名项目', type TEXT NOT NULL DEFAULT 'short_video',
   tone TEXT NOT NULL DEFAULT '', logline TEXT NOT NULL DEFAULT '', scriptMarkdown TEXT NOT NULL DEFAULT '',
   scenes TEXT NOT NULL DEFAULT '[]', characters TEXT NOT NULL DEFAULT '[]', shots TEXT NOT NULL DEFAULT '[]',
-  progress TEXT NOT NULL DEFAULT '{}', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+  progress TEXT NOT NULL DEFAULT '{}', run TEXT NOT NULL DEFAULT '{}', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 
 
