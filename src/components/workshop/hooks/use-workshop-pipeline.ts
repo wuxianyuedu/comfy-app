@@ -21,8 +21,12 @@ import {
   fetchServerDraft,
   pushServerDraft,
 } from "~/lib/workshop/draft-sync-client";
-import { pushProduction } from "~/lib/production/production-client";
+import {
+  fetchProductionProgress,
+  pushProduction,
+} from "~/lib/production/production-client";
 import { buildProductionPayload } from "~/lib/production/payload";
+import { beginStaleRun } from "~/lib/stale-run";
 import {
   DEFAULT_META,
   readWorkshopDraft as readDraft,
@@ -488,6 +492,26 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     })();
     // 仅首挂载执行一次；闭包读取经 ref，避免陈旧 state
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Phase 4（设计 §7）：完成状态以 production 表的 progress 为单一持久来源。
+   * 挂载时从持久化 progress 恢复 rendered —— 修「rendered 只在 React state、刷新即丢」；
+   * 并在用户尚未导航（tab 仍是默认 script）时一并恢复阶段游标。服务端 progress 是本组件
+   * 自己 push 上去的权威值，恢复不会覆盖进内容编辑；作废守卫用 beginStaleRun（规范 16 §16.2.4.34），
+   * 卸载即 dispose、结论不落地。 */
+  React.useEffect(() => {
+    const activeId = activeProjectRef.current;
+    if (!activeId) return;
+    const guard = beginStaleRun();
+    void (async () => {
+      const progress = await fetchProductionProgress(activeId);
+      if (!progress) return;
+      guard.commit(() => {
+        setRendered(progress.rendered);
+        if (tabRef.current === "script") setTab(progress.stage);
+      });
+    })();
+    return () => guard.dispose();
   }, []);
 
   React.useEffect(() => {
