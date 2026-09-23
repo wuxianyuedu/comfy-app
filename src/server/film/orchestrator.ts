@@ -47,6 +47,8 @@ export type ShotStatus = "IDLE" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
 export interface FilmShotInput {
   order: number;
+  /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
+  shotId?: string;
   heading?: string;
   prompt: string;
   negative?: string;
@@ -229,6 +231,7 @@ async function persistFilmWithShots(args: {
     film.id,
     args.shotInputs.map((shot) => ({
       order: shot.order,
+      shotId: shot.shotId ?? null,
       heading: shot.heading ?? null,
       prompt: shot.prompt,
       negative: shot.negative ?? null,
@@ -329,6 +332,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
 
   const shotInputs: FilmShotInput[] = shots.map((shot, i) => ({
     order: i,
+    shotId: shot.id,
     heading: shot.sceneHeading || undefined,
     prompt: shot.prompt,
     negative: shot.negativePrompt || undefined,
@@ -358,18 +362,46 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   return { id: filmId, shots: shotInputs.length };
 }
 
-// ── 回写：成片合成完成 → 统一项目完成状态（Phase 5 / §6.3 + §7 film 状态源收敛）──
-/** 把「从项目建的片」在合成完成后，回写来源项目的 `production.progress` 为已合成。
- *  production 行的 progress 是两侧共读的唯一来源（`src/lib/production/progress.ts`）；
- *  这里读-改-写：只把 `rendered` 置真、阶段推进到 `render`，其余字段（剧本/场景/角色/
- *  镜头/其它进度）原样保留。仅对 `filmProject.projectId` 非空（走统一项目建片）生效。 */
-export async function markProductionRendered(
+// ── 回写：成片合成完成 → 统一项目逐镜 clip + 完成状态（Phase 5 / §6.3 + §7）──
+/** 合成成片里一个镜头的结果（用于把逐镜视频回写进统一项目的对应 Shot）。 */
+export interface FilmShotClip {
+  /** 关联的统一镜头 id（production.shots[].id）；自由建片的镜头为 null（跳过）。 */
+  shotId: string | null;
+  videoPath: string | null;
+  status: ShotStatus;
+}
+
+/** 把「从项目建的片」合成完成后的结果，回写进来源统一项目：
+ *   1) 逐镜视频 —— 按 `shotId` 命中 `production.shots` 里的对应 Shot，写入 clipUrl / clipStatus；
+ *   2) 完成状态 —— `progress` 读-改-写：`rendered=true`、阶段推进到 `render`，其余字段原样保留。
+ *  一次读-改-写完成（progress 与 shots 是同一行的两列，分两次写会互相覆盖，故合并）。
+ *  仅对 `filmProject.projectId` 非空（走统一项目建片）生效。 */
+export async function syncFilmToProject(
   userId: string,
   projectId: string,
+  filmShots: FilmShotClip[],
 ): Promise<void> {
   const row = await productionRepository.getForUser(userId, projectId);
   if (!row) return;
   const progress = normalizeProductionProgress(row.progress);
+  const rawShots = Array.isArray(row.shots) ? (row.shots as Shot[]) : [];
+
+  // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
+  const clipByShotId = new Map<string, FilmShotClip>();
+  for (const fs of filmShots) {
+    if (fs.shotId && fs.videoPath) clipByShotId.set(fs.shotId, fs);
+  }
+
+  const nextShots: Shot[] = rawShots.map((shot) => {
+    const clip = clipByShotId.get(shot.id);
+    if (!clip) return shot;
+    return {
+      ...shot,
+      clipUrl: clip.videoPath ?? undefined,
+      clipStatus: "done",
+    };
+  });
+
   await productionRepository.upsertForUser(userId, {
     id: row.id,
     title: row.title,
@@ -379,7 +411,7 @@ export async function markProductionRendered(
     scriptMarkdown: row.scriptMarkdown,
     scenes: row.scenes,
     characters: row.characters,
-    shots: row.shots,
+    shots: nextShots,
     progress: { ...progress, stage: "render", rendered: true },
   });
 }
@@ -823,17 +855,26 @@ export async function composeFilm(id: string) {
     await filmRepository.markDone(id, localPath);
     await appendFilmLog(id, "success", `🎬 影片合成完成：${localPath}`);
 
-    /* 回写闭环（Phase 5 / §6.3 + §7）：从统一项目建的片，合成完成后把该项目进度标为
-     * 已合成 —— 工坊 / 画布据此共读到「已出片」。回写失败不影响成片本身（已 markDone），
-     * 只记一条 warn。 */
+    /* 回写闭环（Phase 5 / §6.3 + §7）：从统一项目建的片，合成完成后把逐镜视频与项目进度
+     * 回写来源项目 —— 工坊 / 画布据此共读到「哪一镜出片了 / 已出片」。回写失败不影响成片
+     * 本身（已 markDone），只记一条 warn。 */
     if (film.projectId) {
       try {
-        await markProductionRendered(film.userId, film.projectId);
+        const finalShots = await filmShotRepository.listByFilm(id);
+        await syncFilmToProject(
+          film.userId,
+          film.projectId,
+          finalShots.map((s) => ({
+            shotId: s.shotId ?? null,
+            videoPath: s.videoPath ?? null,
+            status: s.status as ShotStatus,
+          })),
+        );
       } catch (e) {
         await appendFilmLog(
           id,
           "warn",
-          `已合成，但回写项目进度失败：${errorText(e, "未知错误")}`,
+          `已合成，但回写项目失败：${errorText(e, "未知错误")}`,
         );
       }
     }
