@@ -5,9 +5,9 @@
 // 两个视图（画布 / 工坊）都是它的操纵台：都能 start / pause / resume / approve / cancel，
 // 都能读 status 看「下一步该做什么」。
 //
-// 本 PR（P6-1）只做**地基与只读规划回显**：控制端点管理 run 生命周期、`status` 用纯规划器
-// 算出下一步动作并回显。真正「按动作执行」（调 LLM 阶段、提交 ComfyUI 生图任务、复用 render 管线）
-// 在 P6-2 的服务端引擎里消费同一套 run + planner，故此处不产生副作用。
+// 控制端点管理 run 生命周期、`status` 用纯规划器算出下一步动作并回显。`start / resume / approve`
+// 把 run 置为 running 后，以 fire-and-forget 拉起服务端执行引擎 `advanceRunLoop`（推进到下一个
+// 停点：等点头 / 完成 / 失败 / 被暂停），引擎内部自带异常兜底、不抛给调用方。
 import { z } from "zod";
 
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
@@ -21,6 +21,14 @@ import {
 } from "~/lib/production/run-types";
 
 const approvalModeEnum = z.enum(["auto", "stage", "shot"]);
+
+/** fire-and-forget 拉起执行引擎推进 run（动态 import 解耦；引擎自带异常兜底，不外抛）。 */
+function kickEngine(userId: string, projectId: string): void {
+  void (async () => {
+    const { advanceRunLoop } = await import("~/server/agent/run-engine");
+    await advanceRunLoop(userId, projectId);
+  })();
+}
 
 /** 读项目并归一 run；无生产数据行 → 抛可行动错误。 */
 async function loadRun(
@@ -70,6 +78,8 @@ export const runRouter = createTRPCRouter({
         projectId: z.string().min(1),
         goal: z.string().max(500).optional(),
         approvalMode: approvalModeEnum.optional(),
+        imageWorkflowId: z.string().optional(),
+        videoWorkflowId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -79,11 +89,15 @@ export const runRouter = createTRPCRouter({
         status: "running",
         approvalMode: input.approvalMode ?? run.approvalMode,
         goal: input.goal ?? run.goal,
+        imageWorkflowId: input.imageWorkflowId ?? run.imageWorkflowId,
+        videoWorkflowId: input.videoWorkflowId ?? run.videoWorkflowId,
         awaitingStage: null,
         error: null,
         updatedAt: new Date().toISOString(),
       };
-      return persistAndPlan(ctx.user.id, input.projectId, next);
+      const result = await persistAndPlan(ctx.user.id, input.projectId, next);
+      kickEngine(ctx.user.id, input.projectId);
+      return result;
     }),
 
   /** 用户主动暂停（画布/工坊的「暂停」按钮）。 */
@@ -108,11 +122,13 @@ export const runRouter = createTRPCRouter({
       const run = await loadRun(ctx.user.id, input.projectId);
       if (run.status !== "paused")
         return { run, action: { kind: "idle" } as RunAction };
-      return persistAndPlan(ctx.user.id, input.projectId, {
+      const result = await persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
         status: "running",
         updatedAt: new Date().toISOString(),
       });
+      kickEngine(ctx.user.id, input.projectId);
+      return result;
     }),
 
   /** 对某步点头放行（awaiting_approval → running）。 */
@@ -123,12 +139,14 @@ export const runRouter = createTRPCRouter({
       if (run.status !== "awaiting_approval") {
         return { run, action: { kind: "idle" } as RunAction };
       }
-      return persistAndPlan(ctx.user.id, input.projectId, {
+      const result = await persistAndPlan(ctx.user.id, input.projectId, {
         ...run,
         status: "running",
         awaitingStage: null,
         updatedAt: new Date().toISOString(),
       });
+      kickEngine(ctx.user.id, input.projectId);
+      return result;
     }),
 
   /** 取消整条自主执行。 */
