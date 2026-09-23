@@ -654,6 +654,9 @@ export const production = sqliteTable(
     shots: text("shots", { mode: "json" }).notNull().default("[]"),
     /** 完成状态（阶段游标 + rendered 等），两侧一致展示的唯一来源（Phase 3d）。 */
     progress: text("progress", { mode: "json" }).notNull().default("{}"),
+    /** AI 自主执行 run 的协调状态（审批粒度 / 生命周期 / 每镜已处理 rev 快照，Phase 6）。
+     *  由 run 控制端点单独写，不进工坊的 production 自动保存载荷（字段所有权）。 */
+    run: text("run", { mode: "json" }).notNull().default("{}"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

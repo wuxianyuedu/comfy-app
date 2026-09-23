@@ -8,6 +8,7 @@ import { db } from "~/lib/db";
 import { production, type Production } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { and, eq } from "drizzle-orm";
+import type { ProductionRun } from "~/lib/production/run-types";
 
 /** 写一条生产数据（按 proj_* upsert）的入参；JSON 列传对象，Drizzle 负责序列化。 */
 export interface ProductionInput {
@@ -36,6 +37,23 @@ export class ProductionRepository extends DrizzleRepository<Production> {
       .where(and(eq(production.id, id), eq(production.userId, userId)))
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  /**
+   * 只更新 `run` 列（AI 自主执行协调态），不碰内容字段 —— 字段所有权：run 由控制端点写、
+   * 工坊自动保存写内容，两条路各写各的列，互不覆盖。行不存在（项目还没生产数据）→ false。
+   */
+  async updateRun(
+    userId: string,
+    id: string,
+    run: ProductionRun,
+  ): Promise<boolean> {
+    const rows = await db
+      .update(production)
+      .set({ run, updatedAt: new Date() })
+      .where(and(eq(production.id, id), eq(production.userId, userId)))
+      .returning({ id: production.id });
+    return rows.length > 0;
   }
 
   /** 按 proj_* upsert 生产数据（不存在则建、存在则更新，带归属）。 */
