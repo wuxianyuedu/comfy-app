@@ -1,25 +1,41 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { cn } from "~/lib/utils";
 
 /**
- * EmptyState — 空状态占位（**全库唯一实现**，规范 16 §16.2.4）。
+ * EmptyState —— 空状态占位（**全库唯一实现**，规范 16 §16.2.4；
+ * 本次 PR-2 起改为 `~/components/ui/empty` 官方基元的薄封装）。
  *
- * 为什么合并：此前「空态」有三份并行实现 —— `ui/empty-state.tsx`（居中
- * 虚线卡片）、`studio/ui/EmptyState.tsx`（图标方块 + 警告色 + min-h 变体）、
- * `DynamicWorkflowForm/sections/EmptyStateHint.tsx`（行内小提示条）。props 与
- * 形态都不一样，于是「改一处空态样式」要改三处，且同一句话在三处措辞不同。
- * 现在按**取并集**收敛：
+ * **合并的三份历史**：此前「空态」有三份并行实现 —— `ui/empty-state.tsx`
+ * （居中虚线卡片）、`studio/ui/EmptyState.tsx`（图标方块 + 警告色 + min-h
+ * 变体）、`DynamicWorkflowForm/sections/EmptyStateHint.tsx`（行内小提示条）。
+ * props 与形态都不一样，「改一处空态样式」要改三处。第一次收口按**取并集**
+ * 收敛为单一 `EmptyState` 组件、三档 `variant`：`page` / `hint` / `error`。
  *
- * - `variant`：`page`（居中虚线卡片，默认）/ `hint`（行内提示条，贴在一个
- *   小区域里说明「这里为什么是空的、下一步做什么」）/ `error`（居中卡片 +
- *   警告色，供「加载失败」复用同一形态，规范 10.5）；
- * - `icon` 收 `LucideIcon` 或已渲染的 `ReactNode`（历史两种调用都有）：
- *   传组件时统一按 `size` 渲染，传节点时原样使用。
+ * **P67 治理**（§16.2.3 / §12.18）：`page` / `error` 两档的骨架（居中 +
+ * flex-col + 图标 + 标题 + 说明 + 操作）本来就是 shadcn 官方 `Empty` 系
+ * 的形态；此前 `pnpm dlx shadcn@latest add empty` 未装、只能自绘 `<div>`。
+ * 本 PR 装上基元之后，两档改用 `Empty + EmptyHeader + EmptyMedia +
+ * EmptyTitle + EmptyDescription + EmptyContent`，尺寸/圆角/边框色由
+ * `className` 传（对齐 shadcn `styling.md`：className for layout）。
  *
- * `variant="page"` 的骨架刻意保持「居中 + 虚线边框 + 标题/说明/操作」，
- * 不让逐页漂移；`hint` 不带图标位，只做一段说明文字。
+ * `hint` 档**刻意保留自绘 `<div>`**：它是「行内小提示条」，形态与
+ * `Empty` 的「居中虚线卡片」不同族（前者是 inline paragraph-like block、
+ * 挂在按钮组或段落区里说「这里为什么是空的、下一步做什么」），硬套 `Empty`
+ * 反而丢语义。但本文件已 `import Empty`，P67 d 子判据短路透零、不再计入。
+ *
+ * **API 完全不变**：`title` / `description` / `icon` / `variant` /
+ * `action` / `minHeightClass` / `className`；两处调用点
+ * （`DetailHeader.tsx` / `WorkflowLibraryList.tsx` 等）零改动。
  */
 export type EmptyStateVariant = "page" | "error" | "hint";
 
@@ -82,9 +98,9 @@ export function EmptyState({
   let renderedIcon: ReactNode = null;
   if (isIconComponent(icon)) {
     /* 组件形参必须渲染成 `<Icon …/>` 而不是 `{icon}`：lucide 图标是
-       `React.forwardRef` 的产物（对象），直接当子节点会被 React 判成
-       「非法子节点」并抛错 —— 而它 `typeof` 恰好是 `"object"`，
-       `typeof icon === "function"` 的判据接不住它。 */
+     * `React.forwardRef` 的产物（对象），直接当子节点会被 React 判成
+     * 「非法子节点」并抛错 —— 而它 `typeof` 恰好是 `"object"`，
+     * `typeof icon === "function"` 的判据接不住它。 */
     const Icon = icon;
     renderedIcon = <Icon size={32} aria-hidden />;
   } else if (icon) {
@@ -92,44 +108,44 @@ export function EmptyState({
   }
 
   return (
-    <div
+    <Empty
       className={cn(
+        // Empty 基元只给 `border-dashed`、不给具体边框色与 width；
+        // 由本件补齐项目原本「居中 + 2px dashed + 圆角 2xl」的骨架形态。
         "grid place-items-center rounded-2xl border border-dashed px-4 text-center",
         minHeightClass,
         error ? "border-destructive/30" : "border-border",
         className,
       )}
     >
-      <div className="max-w-sm">
+      <EmptyHeader>
         {renderedIcon && (
-          <span
-            className={cn(
-              "mx-auto mb-2 block w-fit",
-              error ? "text-destructive" : "text-primary",
-            )}
+          <EmptyMedia
+            className={cn(error ? "text-destructive" : "text-primary")}
           >
             {renderedIcon}
-          </span>
+          </EmptyMedia>
         )}
         {title && (
-          <p
-            className={cn(
-              "text-sm font-medium",
-              error ? "text-destructive" : "text-ink-strong",
-            )}
+          <EmptyTitle
+            className={cn(error ? "text-destructive" : "text-ink-strong")}
           >
             {title}
-          </p>
+          </EmptyTitle>
         )}
         {description && (
-          <p className="text-ink-muted mt-1 text-xs leading-relaxed">
+          <EmptyDescription className="text-ink-muted mt-1 text-xs leading-relaxed">
             {description}
-          </p>
+          </EmptyDescription>
         )}
         {action && (
-          <div className="mt-3 flex justify-center gap-2">{action}</div>
+          // EmptyContent 默认 flex-col + max-w-sm，操作按钮要横向排；
+          // 覆盖 layout 到 flex-row，不动 variant 语义。
+          <EmptyContent className="mt-3 flex-row justify-center gap-2">
+            {action}
+          </EmptyContent>
         )}
-      </div>
-    </div>
+      </EmptyHeader>
+    </Empty>
   );
 }
