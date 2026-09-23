@@ -60,6 +60,9 @@ const skillRepo = vi.hoisted(() => ({
 }));
 const prodRepo = vi.hoisted(() => ({
   getForUser: vi.fn<(userId: string, id: string) => Promise<unknown>>(),
+  upsertForUser: vi.fn<
+    (userId: string, data: Record<string, unknown>) => Promise<unknown>
+  >(async () => undefined),
 }));
 
 vi.mock("~/lib/core/repository", () => ({
@@ -119,6 +122,7 @@ import {
   composeFilm,
   createFilm,
   createFilmFromProject,
+  markProductionRendered,
 } from "./orchestrator";
 import { NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
 
@@ -350,5 +354,58 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
       createFilmFromProject({ userId: "u1", projectId: "proj_empty" }),
     ).rejects.toThrow(/还没有镜头/);
     expect(filmRepo.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("markProductionRendered — 成片合成后回写统一项目完成状态（Phase 5 §6.3/§7）", () => {
+  it("production 行存在 → 读改写：rendered=true、stage=render，其余字段原样保留", async () => {
+    prodRepo.getForUser.mockResolvedValue({
+      id: "proj_1",
+      title: "项目片",
+      type: "animation",
+      tone: "轻快",
+      logline: "L",
+      scriptMarkdown: "# 剧本",
+      scenes: [{ id: "sc1" }],
+      characters: [{ id: "c1" }],
+      shots: [{ id: "s1", index: 1 }],
+      progress: { stage: "video", rendered: false },
+    });
+
+    await markProductionRendered("u1", "proj_1");
+
+    expect(prodRepo.upsertForUser).toHaveBeenCalledTimes(1);
+    const [userId, data] = prodRepo.upsertForUser.mock.calls[0]!;
+    expect(userId).toBe("u1");
+    expect(data.progress).toEqual({ stage: "render", rendered: true });
+    // 非进度字段整体回写、不丢失
+    expect(data.id).toBe("proj_1");
+    expect(data.title).toBe("项目片");
+    expect(data.shots).toEqual([{ id: "s1", index: 1 }]);
+    expect(data.characters).toEqual([{ id: "c1" }]);
+  });
+
+  it("脏 progress（缺字段 / 非法 stage）也规范化后再标已合成", async () => {
+    prodRepo.getForUser.mockResolvedValue({
+      id: "proj_2",
+      title: "T",
+      type: "short_video",
+      tone: "",
+      logline: "",
+      scriptMarkdown: "",
+      scenes: [],
+      characters: [],
+      shots: [],
+      progress: {},
+    });
+    await markProductionRendered("u1", "proj_2");
+    const [, data] = prodRepo.upsertForUser.mock.calls[0]!;
+    expect(data.progress).toEqual({ stage: "render", rendered: true });
+  });
+
+  it("无 production 行 → 不写（幂等 / 纯文本自由建片不受影响）", async () => {
+    prodRepo.getForUser.mockResolvedValue(null);
+    await markProductionRendered("u1", "proj_missing");
+    expect(prodRepo.upsertForUser).not.toHaveBeenCalled();
   });
 });

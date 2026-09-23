@@ -20,6 +20,7 @@ import {
   taskRepository,
 } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
+import { normalizeProductionProgress } from "~/lib/production/progress";
 import type { Shot } from "~/lib/workshop/types";
 import { cancelTask } from "~/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
@@ -355,6 +356,32 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     `从项目镜头建片，共 ${shotInputs.length} 个镜头`,
   );
   return { id: filmId, shots: shotInputs.length };
+}
+
+// ── 回写：成片合成完成 → 统一项目完成状态（Phase 5 / §6.3 + §7 film 状态源收敛）──
+/** 把「从项目建的片」在合成完成后，回写来源项目的 `production.progress` 为已合成。
+ *  production 行的 progress 是两侧共读的唯一来源（`src/lib/production/progress.ts`）；
+ *  这里读-改-写：只把 `rendered` 置真、阶段推进到 `render`，其余字段（剧本/场景/角色/
+ *  镜头/其它进度）原样保留。仅对 `filmProject.projectId` 非空（走统一项目建片）生效。 */
+export async function markProductionRendered(
+  userId: string,
+  projectId: string,
+): Promise<void> {
+  const row = await productionRepository.getForUser(userId, projectId);
+  if (!row) return;
+  const progress = normalizeProductionProgress(row.progress);
+  await productionRepository.upsertForUser(userId, {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    tone: row.tone,
+    logline: row.logline,
+    scriptMarkdown: row.scriptMarkdown,
+    scenes: row.scenes,
+    characters: row.characters,
+    shots: row.shots,
+    progress: { ...progress, stage: "render", rendered: true },
+  });
 }
 
 // ── 生成一个视频镜头 ──────────────────────────────────────
@@ -795,6 +822,21 @@ export async function composeFilm(id: string) {
 
     await filmRepository.markDone(id, localPath);
     await appendFilmLog(id, "success", `🎬 影片合成完成：${localPath}`);
+
+    /* 回写闭环（Phase 5 / §6.3 + §7）：从统一项目建的片，合成完成后把该项目进度标为
+     * 已合成 —— 工坊 / 画布据此共读到「已出片」。回写失败不影响成片本身（已 markDone），
+     * 只记一条 warn。 */
+    if (film.projectId) {
+      try {
+        await markProductionRendered(film.userId, film.projectId);
+      } catch (e) {
+        await appendFilmLog(
+          id,
+          "warn",
+          `已合成，但回写项目进度失败：${errorText(e, "未知错误")}`,
+        );
+      }
+    }
   } catch (e) {
     await filmRepository.markFailed(id, errorMessage(e, "合成失败"));
     await appendFilmLog(id, "error", errorText(e, "合成失败"));
