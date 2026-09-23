@@ -22,6 +22,7 @@ import { WorkshopStageNav } from "~/components/workshop/WorkshopStageNav";
 import type { WorkshopAgentToolHandlers } from "~/components/workshop/hooks/use-workshop-agent";
 import { renderProjectFilm } from "~/lib/film/render-film-client";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
+import { RunControlBar } from "~/components/agent-run/RunControlBar";
 
 export function WorkshopPipeline() {
   const controller = useWorkshopPipeline();
@@ -64,6 +65,8 @@ export function WorkshopPipeline() {
           onOpenApiSettings={controller.openApiSettings}
           onOpenModeContract={controller.openModeContract}
         />
+
+        <RunControlBar />
 
         <WorkshopStageNav
           tab={controller.tab}
