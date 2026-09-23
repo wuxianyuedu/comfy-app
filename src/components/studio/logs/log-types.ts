@@ -80,6 +80,24 @@ export function bucketOf(entry: Pick<LogEntry, "origin">): LogOriginFilter {
   return entry.origin ?? CONSOLE_ORIGIN;
 }
 
+/**
+ * 可在「设置 → 日志」里逐个开关的日志分类。
+ *
+ * 是 `LogOriginFilter` 去掉 `"all"` 后的真子集——面板里能按来源筛的那几类，
+ * 这里都能单独关掉。新增一个来源分类时，往这里加一项即可（来源下拉的
+ * `ORIGIN_LABELS` / `ORIGIN_TEXT` 也要同步）。
+ */
+export type LogCategoryFilter = Exclude<LogOriginFilter, "all">;
+
+/** 分类的展示顺序（设置页开关与未来任何枚举都按它排列）。 */
+export const LOG_CATEGORY_FILTERS: LogCategoryFilter[] = [
+  "app-runtime",
+  "app",
+  "dev",
+  "launcher",
+  "console",
+];
+
 /** 单一级别的计数表（`all` = 该范围内全部级别）。 */
 export type LogLevelCounts = Record<LogLevel | "all", number>;
 

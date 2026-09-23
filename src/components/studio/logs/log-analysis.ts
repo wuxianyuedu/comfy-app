@@ -21,6 +21,7 @@ import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { nextId as nextEntryId } from "~/lib/unique-id";
 import { splitLogRecords, stripSgr } from "./log-record";
 import type {
+  LogCategoryFilter,
   LogEntry,
   LogFilter,
   LogLevel,
@@ -688,12 +689,21 @@ export function computeFiltered(
   filter: LogFilter,
   search: string,
   origin: LogOriginFilter,
+  /** 被「设置 → 日志」开关关掉、要从面板隐藏的分类（与 `bucketOf` 同域）。 */
+  disabled: LogCategoryFilter[] = [],
 ): LogEntry[] {
+  const disabledSet = disabled.length > 0 ? new Set(disabled) : null;
   return logs.filter((entry) => {
     const levelOk = filter === "all" || entry.level === filter;
     /* 过滤与计数共用 `bucketOf`：两处各写一份判据必然漂移，而漂移的表现正是
      * 「下拉上写着 5 条、切过去只有 3 条」这类不再可信的数字（ISSUE #360）。 */
     const originOk = origin === "all" || bucketOf(entry) === origin;
-    return levelOk && originOk && matchesSearch(entry, search);
+    /* 分类开关：被关掉的分类（无论当前在看「全部来源」还是某个具体来源）一律隐藏。
+     * 计数维度（`computeOriginCounts`）不读这里——下拉里仍显示真实条数，开关只
+     * 影响「显示哪些行」，与「来源筛选下拉」是两条正交的轴。 */
+    const categoryOk = disabledSet
+      ? !disabledSet.has(bucketOf(entry) as LogCategoryFilter)
+      : true;
+    return levelOk && originOk && categoryOk && matchesSearch(entry, search);
   });
 }
