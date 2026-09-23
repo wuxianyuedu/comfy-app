@@ -347,6 +347,26 @@ pub fn log_launch_line(project_root: &str, level: &str, message: &str) {
   }
 }
 
+/// 启动会话标记前缀。壳在每次启动时往 shell-launch.log 写一行，
+/// `get_launch_log` 据此只返回本次启动的日志，避免历史日志混淆。
+pub const SESSION_START_MARKER: &str = "=== 启动会话开始";
+
+/// 在编排链路日志里写下本次启动的会话标记。
+///
+/// 放在最前面：后续所有当前启动的日志都落在这行之后，日志面板就能
+/// 从后往前找到它，并只显示它之后的内容。
+pub fn log_session_start(project_root: &str) {
+  if project_root.is_empty() {
+    return;
+  }
+  let pid = std::process::id();
+  log_launch_line(
+    project_root,
+    "info",
+    &format!("{SESSION_START_MARKER}（shell_pid: {pid}）"),
+  );
+}
+
 /// 追加一行（目录缺失时递归建）。返回 Err 而不是 panic —— 调用方一律只记 WARN。
 fn append_line(path: &std::path::Path, line: &str) -> std::io::Result<()> {
   use std::io::Write;
@@ -1011,5 +1031,32 @@ mod tests {
     });
     assert_eq!(json["fallback"], serde_json::json!(true));
     assert_eq!(json["progress"], serde_json::json!(0));
+  }
+
+  #[test]
+  fn session_start_writes_marker_with_pid() {
+    // 会话标记必须写进 shell-launch.log，并带上 shell_pid，否则日志面板找不到
+    // 本次启动的边界，就会把历史日志一起倒出来。
+    let tmp = std::env::temp_dir().join(format!(
+      "comfyapp-session-marker-{}",
+      std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let root = tmp.to_str().unwrap();
+
+    log_session_start(root);
+
+    let content = std::fs::read_to_string(launch_log_path(root)).unwrap();
+    assert!(
+      content.contains(SESSION_START_MARKER),
+      "shell-launch.log 里必须有启动会话标记：{content}"
+    );
+    assert!(
+      content.contains("shell_pid:"),
+      "启动会话标记必须带 shell_pid：{content}"
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp);
   }
 }

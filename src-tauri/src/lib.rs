@@ -531,6 +531,53 @@ fn tail_log_file(path: &std::path::Path, max_bytes: usize, max_lines: usize) -> 
   Some(lines.join("\n"))
 }
 
+/// 读取日志文件，只返回最后一个 `marker` 之后的尾部行。
+///
+/// 找不到 marker 时退回普通 `tail_log_file` 行为，避免首次上线 marker 前日志空白。
+fn tail_log_file_since_marker(
+  path: &std::path::Path,
+  marker: &str,
+  max_bytes: usize,
+  max_lines: usize,
+) -> Option<String> {
+  let data = std::fs::read(path).ok()?;
+  if data.is_empty() {
+    return Some(String::new());
+  }
+  let text = String::from_utf8_lossy(&data);
+  let plain = strip_ansi(&text);
+  let lines: Vec<&str> = plain
+    .lines()
+    .map(str::trim_end)
+    // PowerShell Transcript 会把每秒一次的健康检查超时原样灌进日志
+    //（PS>TerminatingError(...)），对「执行到哪一步」毫无信息量，直接滤掉
+    .filter(|l| !l.starts_with("PS>TerminatingError"))
+    .collect();
+
+  // 找最后一个会话标记；找不到时按原 tail_log_file 逻辑取尾部。
+  let start = lines
+    .iter()
+    .rposition(|l| l.contains(marker))
+    .map(|i| i + 1)
+    .unwrap_or_else(|| lines.len().saturating_sub(max_lines));
+
+  if start >= lines.len() {
+    return Some(String::new());
+  }
+  let mut selected = &lines[start..];
+  if selected.len() > max_lines {
+    selected = &selected[selected.len() - max_lines..];
+  }
+  let mut joined = selected.join("\n");
+  if joined.len() > max_bytes {
+    let cut = joined.len() - max_bytes;
+    // 从截断点向后找到第一个换行符，避免首行残缺
+    let next_newline = joined[cut..].find('\n').map(|i| cut + i + 1).unwrap_or(cut);
+    joined = joined[next_newline..].to_string();
+  }
+  Some(joined)
+}
+
 /// 「项目根是怎么找的、找过哪些地方」一段可读的过程说明。
 ///
 /// 存在的理由：`项目根未推导出来` 这句话本身**不可行动** —— 用户（与贴图报障的人）
@@ -663,8 +710,16 @@ fn get_launch_log(state: tauri::State<'_, AppState>) -> Result<String, String> {
   // 有内容的一份**——它由壳自己落，不依赖编排器起来（编排器写的三份日志在
   // 「壳已接手、编排器还没写」的窗口期全是空的，正是手验反馈里「暂时读不到
   // 日志」的现场）。放在最后一段是因为它信息密度最高（启动报告 + 编排器输出）。
+  //
+  // 这份日志是追加写的，会累积历次启动。壳在每次启动时先写一行会话标记，
+  // 这里只取最后一个标记之后的行，保证面板只显示本次启动相关的内容。
   let launch_log = shell_launch::launch_log_path(&root);
-  if let Some(tail) = tail_log_file(&launch_log, 16 * 1024, 200) {
+  if let Some(tail) = tail_log_file_since_marker(
+    &launch_log,
+    shell_launch::SESSION_START_MARKER,
+    16 * 1024,
+    200,
+  ) {
     if !tail.trim().is_empty() {
       sections.push(format!(
         "─ 壳侧编排链路（log/launcher/shell-launch.log）─\n{}",
@@ -1507,6 +1562,10 @@ pub fn run() {
     foreground,
   } = LaunchContext::collect(self_launch);
 
+  // 先写本次启动的会话标记，日志面板随后据此只展示本次启动内容。
+  // 必须在 build_log_plugin 之前：该函数不依赖日志插件，直接写 shell-launch.log。
+  shell_launch::log_session_start(&project_root);
+
   let log_plugin = build_log_plugin(&project_root);
 
   let app = tauri::Builder::default()
@@ -2278,5 +2337,65 @@ mod window_startup_tests {
       conf.contains(&format!(r#""height":{}"#, SPLASH_WINDOW_SIZE.1 as u32)),
       "tauri.conf.json 的 splash 高度必须等于 SPLASH_WINDOW_SIZE.1"
     );
+  }
+}
+
+#[cfg(test)]
+mod log_filter_tests {
+  use super::*;
+
+  fn temp_log(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+      "comfyapp-log-filter-{name}-{}",
+      std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join("test.log")
+  }
+
+  #[test]
+  fn tail_since_marker_returns_only_lines_after_last_marker() {
+    let path = temp_log("since-marker");
+    std::fs::write(
+      &path,
+      "[2026-09-22 11:00:00.000] [INFO] 旧的日志\n\
+       === 启动会话开始（shell_pid: 1）===\n\
+       [2026-09-22 11:01:00.000] [INFO] 上一次启动\n\
+       === 启动会话开始（shell_pid: 2）===\n\
+       [2026-09-23 04:15:00.000] [INFO] 本次启动\n",
+    )
+    .unwrap();
+
+    let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 1024, 10).unwrap();
+    assert!(!tail.contains("旧的日志"), "不应包含最旧启动的日志：{tail}");
+    assert!(!tail.contains("上一次启动"), "不应包含上一次启动的日志：{tail}");
+    assert!(tail.contains("本次启动"), "必须包含本次启动的日志：{tail}");
+  }
+
+  #[test]
+  fn tail_since_marker_falls_back_to_plain_tail_when_no_marker() {
+    let path = temp_log("no-marker");
+    std::fs::write(
+      &path,
+      "[2026-09-22 11:00:00.000] [INFO] 第一行\n\
+       [2026-09-22 11:01:00.000] [INFO] 第二行\n",
+    )
+    .unwrap();
+
+    let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 1024, 1).unwrap();
+    assert!(
+      !tail.contains("第一行"),
+      "无标记时应退回尾部截断：{tail}"
+    );
+    assert!(tail.contains("第二行"), "应保留最尾部的行：{tail}");
+  }
+
+  #[test]
+  fn tail_since_marker_handles_empty_file() {
+    let path = temp_log("empty");
+    std::fs::write(&path, "").unwrap();
+    let tail = tail_log_file_since_marker(&path, "=== 启动会话开始", 1024, 10).unwrap();
+    assert!(tail.is_empty());
   }
 }
