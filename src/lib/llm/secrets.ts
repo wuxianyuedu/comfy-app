@@ -68,7 +68,7 @@ export function isEncrypted(value: string): boolean {
   return value.startsWith(PREFIX);
 }
 
-export function encryptSecret(
+export function encryptLlmKey(
   plaintext: string | null | undefined,
 ): string | null {
   if (!plaintext) return null;
@@ -82,7 +82,7 @@ export function encryptSecret(
   return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ct.toString("base64")}`;
 }
 
-export function decryptSecret(enc: string | null | undefined): string | null {
+export function decryptLlmKey(enc: string | null | undefined): string | null {
   if (!enc) return null;
   if (!isEncrypted(enc)) return enc; // 兼容历史上遗留的明文值
   try {

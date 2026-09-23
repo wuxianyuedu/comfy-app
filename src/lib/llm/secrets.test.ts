@@ -45,52 +45,52 @@ describe("isEncrypted", () => {
   });
 });
 
-describe("encryptSecret / decryptSecret", () => {
+describe("encryptLlmKey / decryptLlmKey", () => {
   it("往返一致，且密文里不含明文", async () => {
-    const { encryptSecret, decryptSecret, isEncrypted } = await loadSecrets();
-    const enc = encryptSecret("sk-super-secret-value");
+    const { encryptLlmKey, decryptLlmKey, isEncrypted } = await loadSecrets();
+    const enc = encryptLlmKey("sample-llm-key");
     expect(enc).not.toBeNull();
     expect(isEncrypted(enc!)).toBe(true);
-    expect(enc).not.toContain("sk-super-secret-value");
-    expect(decryptSecret(enc)).toBe("sk-super-secret-value");
+    expect(enc).not.toContain("sample-llm-key");
+    expect(decryptLlmKey(enc)).toBe("sample-llm-key");
   });
 
   it("同一明文两次加密得到不同密文（每次新 IV），但都能解回", async () => {
-    const { encryptSecret, decryptSecret } = await loadSecrets();
-    const a = encryptSecret("same");
-    const b = encryptSecret("same");
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const a = encryptLlmKey("same");
+    const b = encryptLlmKey("same");
     expect(a).not.toBe(b);
-    expect(decryptSecret(a)).toBe("same");
-    expect(decryptSecret(b)).toBe("same");
+    expect(decryptLlmKey(a)).toBe("same");
+    expect(decryptLlmKey(b)).toBe("same");
   });
 
   it("空值一律归一为 null，不产出 `enc:v1:` 空壳", async () => {
-    const { encryptSecret } = await loadSecrets();
-    expect(encryptSecret("")).toBeNull();
-    expect(encryptSecret(null)).toBeNull();
-    expect(encryptSecret(undefined)).toBeNull();
+    const { encryptLlmKey } = await loadSecrets();
+    expect(encryptLlmKey("")).toBeNull();
+    expect(encryptLlmKey(null)).toBeNull();
+    expect(encryptLlmKey(undefined)).toBeNull();
   });
 
   it("非加密串按「历史遗留明文」原样返回（不炸、不吞值）", async () => {
-    const { decryptSecret } = await loadSecrets();
-    expect(decryptSecret("sk-legacy-plaintext")).toBe("sk-legacy-plaintext");
-    expect(decryptSecret("")).toBeNull();
-    expect(decryptSecret(null)).toBeNull();
-    expect(decryptSecret(undefined)).toBeNull();
+    const { decryptLlmKey } = await loadSecrets();
+    expect(decryptLlmKey("legacy-plaintext")).toBe("legacy-plaintext");
+    expect(decryptLlmKey("")).toBeNull();
+    expect(decryptLlmKey(null)).toBeNull();
+    expect(decryptLlmKey(undefined)).toBeNull();
   });
 
   it("字段不足 / 非法 base64 / 篡改密文一律返回 null 而不抛错", async () => {
-    const { encryptSecret, decryptSecret } = await loadSecrets();
-    const good = encryptSecret("payload")!;
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const good = encryptLlmKey("demo-payload")!;
     const parts = good.slice("enc:v1:".length).split(":");
 
-    expect(decryptSecret("enc:v1:onlyiv:onlytag")).toBeNull();
+    expect(decryptLlmKey("enc:v1:onlyiv:onlytag")).toBeNull();
 
     // 篡改密文体：GCM 的认证标签必须拦住它，而不是解出乱码。
     const tamperedCt = Buffer.from(parts[2]!, "base64");
     tamperedCt[0] = tamperedCt[0]! ^ 0xff;
     expect(
-      decryptSecret(
+      decryptLlmKey(
         `enc:v1:${parts[0]}:${parts[1]}:${tamperedCt.toString("base64")}`,
       ),
     ).toBeNull();
@@ -99,24 +99,24 @@ describe("encryptSecret / decryptSecret", () => {
     const tamperedTag = Buffer.from(parts[1]!, "base64");
     tamperedTag[0] = tamperedTag[0]! ^ 0xff;
     expect(
-      decryptSecret(
+      decryptLlmKey(
         `enc:v1:${parts[0]}:${tamperedTag.toString("base64")}:${parts[2]}`,
       ),
     ).toBeNull();
 
-    expect(decryptSecret("enc:v1:!!!:!!!:!!!")).toBeNull();
+    expect(decryptLlmKey("enc:v1:!!!:!!!:!!!")).toBeNull();
   });
 
   it("换密钥后旧密文解不开（返回 null 而不是明文垃圾）", async () => {
     const first = await loadSecrets();
-    const enc = first.encryptSecret("rotated")!;
+    const enc = first.encryptLlmKey("demo-rotated")!;
 
     // 换 cwd 即换 `data/llm-secret.key` 的落点 → 等价于轮换了密钥。
     const other = mkdtempSync(join(tmpdir(), "llm-secrets-rotated-"));
     try {
       process.cwd = () => other;
       const second = await loadSecrets();
-      expect(second.decryptSecret(enc)).toBeNull();
+      expect(second.decryptLlmKey(enc)).toBeNull();
     } finally {
       rmSync(other, { recursive: true, force: true });
     }
@@ -125,11 +125,11 @@ describe("encryptSecret / decryptSecret", () => {
 
 describe("密钥来源", () => {
   it("首次使用即在 data/ 下生成 0600 密钥文件，并由其派生密钥", async () => {
-    const { encryptSecret } = await loadSecrets();
+    const { encryptLlmKey } = await loadSecrets();
     const keyFile = join(sandbox, "data", "llm-secret.key");
     expect(existsSync(keyFile)).toBe(false);
 
-    encryptSecret("x");
+    encryptLlmKey("x");
     expect(existsSync(keyFile)).toBe(true);
 
     const content = readFileSync(keyFile, "utf-8").trim();
@@ -143,11 +143,11 @@ describe("密钥来源", () => {
     // 「文件不可读」造在 import 之前：先建一个同名目录占位。
     const { mkdirSync } = await import("node:fs");
     mkdirSync(join(sandbox, "data", "llm-secret.key"), { recursive: true });
-    process.env.LLM_SECRET = "env-derived-secret";
+    process.env.LLM_SECRET = "env-derived-value";
 
-    const { encryptSecret, decryptSecret } = await loadSecrets();
-    const enc = encryptSecret("via-env")!;
-    expect(decryptSecret(enc)).toBe("via-env");
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const enc = encryptLlmKey("demo-via-env")!;
+    expect(decryptLlmKey(enc)).toBe("demo-via-env");
 
     // 同一 env 值在另一个 cwd 下必须解得出 —— 证明密钥来自 env 而不是本机文件。
     const other = mkdtempSync(join(tmpdir(), "llm-secrets-env-"));
@@ -155,7 +155,7 @@ describe("密钥来源", () => {
       mkdirSync(join(other, "data", "llm-secret.key"), { recursive: true });
       process.cwd = () => other;
       const second = await loadSecrets();
-      expect(second.decryptSecret(enc)).toBe("via-env");
+      expect(second.decryptLlmKey(enc)).toBe("demo-via-env");
     } finally {
       rmSync(other, { recursive: true, force: true });
     }
@@ -164,27 +164,27 @@ describe("密钥来源", () => {
   it("小写 llm_secret 也认（Workshop MCP 侧的历史写法）", async () => {
     const { mkdirSync } = await import("node:fs");
     mkdirSync(join(sandbox, "data", "llm-secret.key"), { recursive: true });
-    process.env.llm_secret = "lowercase-env-secret";
+    process.env.llm_secret = "lowercase-env-value";
 
-    const { encryptSecret, decryptSecret } = await loadSecrets();
-    const enc = encryptSecret("via-lower-env")!;
-    expect(decryptSecret(enc)).toBe("via-lower-env");
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const enc = encryptLlmKey("demo-via-lower-env")!;
+    expect(decryptLlmKey(enc)).toBe("demo-via-lower-env");
   });
 
   it("太短的 env 口令不被采用（回落进程内随机，仍可往返）", async () => {
     process.env.LLM_SECRET = "short";
-    const { encryptSecret, decryptSecret } = await loadSecrets();
-    const enc = encryptSecret("fallback")!;
-    expect(decryptSecret(enc)).toBe("fallback");
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const enc = encryptLlmKey("demo-fallback")!;
+    expect(decryptLlmKey(enc)).toBe("demo-fallback");
   });
 
   it("派生是 SHA-256 归一化：不同长度口令都得到 32 字节密钥", async () => {
     // 直接核对 deriveKey 的口径（它未导出，用行为等价的方式验证）：
     // 长短两种口令都能正常加解密，说明长度不参与密钥形状。
     process.env.LLM_SECRET = "a".repeat(200);
-    const { encryptSecret, decryptSecret } = await loadSecrets();
-    const enc = encryptSecret("long-key")!;
-    expect(decryptSecret(enc)).toBe("long-key");
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const enc = encryptLlmKey("demo-long-key")!;
+    expect(decryptLlmKey(enc)).toBe("demo-long-key");
     expect(createHash("sha256").update("probe").digest().length).toBe(32);
   });
 
@@ -194,9 +194,9 @@ describe("密钥来源", () => {
     writeFileSync(blockingFile, "not a directory");
     process.cwd = () => blockingFile;
 
-    const { encryptSecret, decryptSecret } = await loadSecrets();
-    const enc = encryptSecret("readonly");
+    const { encryptLlmKey, decryptLlmKey } = await loadSecrets();
+    const enc = encryptLlmKey("demo-readonly");
     expect(enc).not.toBeNull();
-    expect(decryptSecret(enc)).toBe("readonly");
+    expect(decryptLlmKey(enc)).toBe("demo-readonly");
   });
 });
