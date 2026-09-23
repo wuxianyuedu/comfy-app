@@ -107,7 +107,7 @@ export function HomePage({
 }: HomePageProps) {
   return (
     <div
-      className="bg-canvas text-ink relative flex h-full w-full overflow-hidden"
+      className="bg-canvas text-ink relative flex h-full min-h-0 w-full flex-col overflow-hidden"
       style={{ fontFamily: "var(--font-sans)" }}
     >
       {/* ── 极光背景光斑 ───────────────── */}
@@ -132,11 +132,16 @@ export function HomePage({
           壳负责「导航 + 工具条 + 滚动容器」，首页只管自己的内容。
           此前这里的搜索框是个 `<div>` 假实现（连 input 都不是）、铃铛与头像
           只弹一句 toast 占位，三者本轮一并移除；消息入口改由顶栏复用状态栏
-          那个 `MessageCenterButton`。 */}
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+          那个 `MessageCenterButton`。
+
+          flex 链上每一处都加 `min-h-0`：在 flex 列里，子项默认
+          `min-height: auto`，不会缩到比内容还小，导致内容溢出父容器被
+          `overflow-hidden` 裁掉（首页上下部分内容因此看不到）。显式声明
+          `min-h-0` 后，滚动容器才能按 `flex-1` 正确收缩并出现滚动条。 */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* 内容容器用 `<div>` 而不是 `<main>`：外壳的 `SidebarInset` 才是
             本页唯一的 `<main>`（规范 06 §语义标签），嵌套两个会破坏地标导航。 */}
-        <div className="relative flex min-w-0 flex-1 overflow-y-auto">
+        <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[960px] px-10 py-16">
             {/* ── Title ── */}
             <h1 className="text-ink mb-3 text-center text-[34px] font-bold tracking-tight">
