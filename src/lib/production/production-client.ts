@@ -5,6 +5,10 @@
 // 与 draft-sync-client 同款：静默失败，localStorage 仍是即时缓存，下次再补推。
 import { withQuery } from "~/lib/query-string";
 import { isRecord } from "~/lib/is-record";
+import {
+  normalizeProductionProgress,
+  type ProductionProgress,
+} from "~/lib/production/progress";
 
 /** 一次生产数据写入的载荷（字段与 production 表列一一对应）。 */
 export interface ProductionPayload {
@@ -16,7 +20,8 @@ export interface ProductionPayload {
   scenes: unknown[];
   characters: unknown[];
   shots: unknown[];
-  progress: { stage: string; rendered: boolean };
+  /** 完成状态单一来源（Phase 4 / 设计 §7）：阶段游标 + rendered。 */
+  progress: ProductionProgress;
 }
 
 /** 读回的生产数据（与写入载荷同形）。 */
@@ -57,4 +62,14 @@ export async function fetchProduction(
   } catch {
     return null;
   }
+}
+
+/** 读某项目的完成状态（阶段游标 + rendered）。工坊与画布共读这一份（Phase 4 / §7）。
+ *  无该行 / 请求失败 → null；服务端 progress 是任意 JSON，经 normalize 宽容成合法形状。 */
+export async function fetchProductionProgress(
+  projectId: string,
+): Promise<ProductionProgress | null> {
+  const prod = await fetchProduction(projectId);
+  if (!prod) return null;
+  return normalizeProductionProgress(prod.progress);
 }
