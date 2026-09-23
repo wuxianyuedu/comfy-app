@@ -105,6 +105,14 @@ describe("advanceRunLoop", () => {
       awaitingStage: "script",
       stage: "script",
     });
+    // 执行日志：这一步追加了一条 generate_script 成功记录（含产出摘要）
+    const steps = normalizeProductionRun(row!.run).log;
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      kind: "generate_script",
+      ok: true,
+    });
+    expect(steps[0]!.detail).toMatch(/^已生成剧本（\d+ 字）$/);
   });
 
   it("角色步：completeLLMStructured 产出写入 characters 后停在角色阶段等确认", async () => {

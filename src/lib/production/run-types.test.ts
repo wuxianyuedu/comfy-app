@@ -2,10 +2,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  appendRunStep,
   DEFAULT_PRODUCTION_RUN,
   markActionProcessed,
   normalizeProductionRun,
   planNextRunAction,
+  RUN_LOG_LIMIT,
   toRunView,
   type ProductionRun,
   type ProductionRunView,
@@ -242,5 +244,50 @@ describe("markActionProcessed", () => {
       kind: "done",
     });
     expect(r.processedShotRev).toEqual({});
+  });
+});
+
+describe("appendRunStep", () => {
+  const step = (i: number) => ({
+    ts: `t${i}`,
+    kind: "generate_script",
+    ok: true,
+    detail: `#${i}`,
+  });
+  it("尾部追加、不可变（不改原 run.log）", () => {
+    const base = run();
+    const next = appendRunStep(base, step(1));
+    expect(base.log).toEqual([]);
+    expect(next.log).toHaveLength(1);
+    const two = appendRunStep(next, step(2));
+    expect(two.log.map((s) => s.detail)).toEqual(["#1", "#2"]);
+  });
+  it("超上限从头裁剪，只保留最近 RUN_LOG_LIMIT 条", () => {
+    let r = run();
+    for (let i = 0; i < RUN_LOG_LIMIT + 5; i++) r = appendRunStep(r, step(i));
+    expect(r.log).toHaveLength(RUN_LOG_LIMIT);
+    expect(r.log[0]!.detail).toBe(`#5`); // 早期 5 条被裁掉
+    expect(r.log.at(-1)!.detail).toBe(`#${RUN_LOG_LIMIT + 4}`);
+  });
+});
+
+describe("normalizeProductionRun · log", () => {
+  it("解析合法 step 条目；无 ts / 非对象项丢弃；ok 缺省视为 true", () => {
+    const r = normalizeProductionRun({
+      log: [
+        { ts: "a", kind: "generate_script", ok: true, detail: "x" },
+        { kind: "no_ts" },
+        "junk",
+        { ts: "b", detail: "y" },
+      ],
+    });
+    expect(r.log).toEqual([
+      { ts: "a", kind: "generate_script", ok: true, detail: "x" },
+      { ts: "b", kind: "info", ok: true, detail: "y" },
+    ]);
+  });
+  it("log 缺省 / 非数组 → 空数组", () => {
+    expect(normalizeProductionRun({ log: "x" }).log).toEqual([]);
+    expect(normalizeProductionRun({}).log).toEqual([]);
   });
 });
