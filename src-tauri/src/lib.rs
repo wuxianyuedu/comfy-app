@@ -10,6 +10,8 @@ use tauri::{Manager, Wry};
 use tauri_plugin_process;
 use tauri_plugin_window_state::StateFlags as WindowStateFlags;
 
+// 保活服务的「脱离 job 拉起」中介：同一个 exe 的 CLI 形态（见模块头）。
+mod detached_spawn;
 // 按检出隔离的单实例保护与端口推导（launch-and-build.md §1.4 多检出并行）。
 // 该模块自带平台实现（Windows 具名内核对象 / POSIX 锁文件 + SIGUSR1），
 // 因此**不需要**在模块声明上做 cfg —— 调用点因此不用按平台分叉。
@@ -1246,6 +1248,20 @@ fn publish_project_root_env(root: &str) {
   std::env::set_var("COMFYAPP_PROJECT_ROOT", root);
 }
 
+/// 把壳自己的 exe 路径发布给下游（编排器 → dev server → 服务生命周期）。
+///
+/// 保活服务必须经壳的 CLI 形态拉起才能逃出 `KILL_ON_JOB_CLOSE` 的 job（见
+/// `detached_spawn` 模块头），而「壳在哪」只有壳自己知道：编排器由壳拉起、dev
+/// server 由编排器拉起，因此这一行写下的变量会顺着链传下去。
+///
+/// 与 `publish_project_root_env` 同一时机（启动期、建窗口之前）写入。
+fn publish_shell_exe_env() {
+  if let Ok(exe) = std::env::current_exe() {
+    // SAFETY：同 publish_project_root_env —— 启动期单线程。
+    std::env::set_var("COMFYAPP_SHELL_EXE", exe);
+  }
+}
+
 /// 日志插件：开发模式走 stdout（launcher 已把 stderr 重定向进
 /// log/launcher/dev-launcher-stderr.log）；生产模式额外落一份壳自持日志到
 /// <项目根>/log/shell/（standalone 双击无 launcher 重定向时的兜底落盘，见
@@ -1575,6 +1591,12 @@ impl LaunchContext {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  /* CLI 形态（保活拉起的中介）必须在**任何**壳初始化之前分叉出去：它只做一次
+   * CreateProcess 就退出，不该建窗口、不该认领单实例身份、也不该去拉编排器
+   * （见 `detached_spawn` 模块头）。 */
+  if let Some(code) = detached_spawn::run_from_args() {
+    std::process::exit(code);
+  }
   // 「本次是不是双击壳」必须在回填项目根**之前**判定：判据挂在
   // COMFYAPP_PROJECT_ROOT 缺席上（见 LaunchContext::self_launch），而下面这行
   // 回填会让它永远不再缺席。先取判据、再回填，顺序反过来就是把判据变成常量。
@@ -1586,6 +1608,7 @@ pub fn run() {
   // （single_instance::identity_root）在下一行就要用，而双击场景下这是唯一一次
   // 机会（见 publish_project_root_env 的注释）。
   publish_project_root_env(&resolved_root);
+  publish_shell_exe_env();
 
   // 按检出单实例（§1.4）：同一检出的壳已在跑时，向其发送「唤起前台」事件后
   // 退出；不同检出的壳互不可见、各自独立运行。必须在建窗口之前判定。
