@@ -1,47 +1,60 @@
-import { cn } from "~/lib/utils";
+import { Badge } from "~/components/ui/badge";
 
 /**
- * StatusBadge — 状态徽章。把业务状态字符串映射为统一的状态胶囊，
- * 避免各处手写 if/else 配色（规范 16 §16.2.4.5）。
+ * StatusBadge —— 状态徽章（**Badge 基座 + 状态键 → tone 映射**的薄封装，
+ * 规范 16 §16.2.4.5；本次 PR-4 起改为 `<Badge tone=...>` 二次封装）。
  *
  * 两种形态：
  *   · `dot`（缺省）保留状态圆点 —— 画布节点头、结果卡、镜头卡等独立徽标；
  *   · `dot={false}` 纯文字胶囊 —— 叠在缩略图/媒体上的角标，图本身已经
  *     足够花，圆点只是噪声。
  *
- * **颜色全部走语义 token**（规范 03 §3.6.2）：这里曾把 44 处
- * `emerald-*` / `violet-*` / `amber-*` / `red-*` 写死，于是「把品牌色换成
- * 蓝色」对徽标不起作用 —— 徽标是全应用最显眼的状态指示，它不改，视觉体系
- * 立刻破功。改用 `--color-primary-*` / `--color-success*` / `--color-warning*`
- * / `--color-destructive` 后，改 token 即改全站。
+ * ## P67 治理（§16.2.3 / §12.18 / §4.11.1）
+ *
+ * 此前本件是**手写 `<span>` 胶囊 + 一份 STATUS_STYLES 常量表**——正是
+ * P67 判据 a 的锚点形态。语义色 token 化在 §4.11.1 的 ISSUE #672 整改里
+ * 已经完成（不再写死 `emerald-*` / `violet-*`），但基座仍是 `<span>`。
+ * PR-4 把 `size` 与 `tone` 两轴沉进 `~/components/ui/badge` 的 cva 之后，
+ * 本件只需保留「业务状态字符串 → 5 档语义 tone」这一张映射表（这才是
+ * 真正的**业务判据**，与样式无关），其余交给基元。
+ *
+ * **颜色全部走语义 token**（规范 03 §3.6.2）：这里曾把 44 处 `emerald-*`
+ * / `violet-*` / `amber-*` / `red-*` 写死，于是「把品牌色换成蓝色」对
+ * 徽标不起作用——徽标是全应用最显眼的状态指示，它不改，视觉体系立刻破功。
+ * 现在 tone 一列全部取自 `~/components/ui/badge` 里的 cva.tone（`--color-success`
+ * / `--color-warning` / `--color-destructive` / `--color-primary-*`），
+ * 改 token 即改全站。
  *
  * 文案档刻意**不由本文件提供**：业务里同一个状态在不同界面叫法不同
- *（任务历史「已完成」/ 画布节点「运行后生成」/ 镜头「片段就绪」），
- * 那属于业务文案、不是样式。调用处用自己的标签表，配色走本文件。
+ * （任务历史「已完成」/ 画布节点「运行后生成」/ 镜头「片段就绪」），
+ * 那属于业务文案、不是样式。调用处用自己的标签表，配色走本件。
  */
-const STATUS_STYLES: Record<string, string> = {
-  // 成功/完成（语义 token：--color-success / -strong 已两态取值）
-  SUCCEEDED: "border-success/30 bg-success/10 text-success-strong",
-  ACTIVE: "border-success/30 bg-success/10 text-success-strong",
-  PUBLISHED: "border-success/30 bg-success/10 text-success-strong",
-  READY: "border-success/30 bg-success/10 text-success-strong",
-  DONE: "border-success/30 bg-success/10 text-success-strong",
-  // 进行中（品牌色：全部走 --color-primary-* 语义类名，改品牌色时这里跟着变）
-  RUNNING: "border-primary-500/30 bg-primary-500/10 text-primary-strong",
-  QUEUED: "border-warning/30 bg-warning/10 text-warning-strong",
-  PENDING: "border-warning/30 bg-warning/10 text-warning-strong",
-  DRAFT: "border-warning/30 bg-warning/10 text-warning-strong",
-  STARTING: "border-warning/30 bg-warning/10 text-warning-strong",
+type StatusTone = "success" | "warning" | "danger" | "primary" | "neutral";
+
+const STATUS_TONE: Record<string, StatusTone> = {
+  // 成功/完成
+  SUCCEEDED: "success",
+  ACTIVE: "success",
+  PUBLISHED: "success",
+  READY: "success",
+  DONE: "success",
+  // 进行中（品牌色）
+  RUNNING: "primary",
+  // 待处理/过渡（警告色）
+  QUEUED: "warning",
+  PENDING: "warning",
+  DRAFT: "warning",
+  STARTING: "warning",
   // 失败/异常（走 shadcn 的 --destructive，与 Button 的 destructive 同源）
-  FAILED: "border-destructive/30 bg-destructive/10 text-destructive",
-  ERROR: "border-destructive/30 bg-destructive/10 text-destructive",
-  BANNED: "border-destructive/30 bg-destructive/10 text-destructive",
-  STALE: "border-destructive/30 bg-destructive/10 text-destructive",
+  FAILED: "danger",
+  ERROR: "danger",
+  BANNED: "danger",
+  STALE: "danger",
   // 中性
-  IDLE: "border-border-strong bg-subtle text-ink-muted",
-  DISABLED: "border-border-strong bg-subtle text-ink-muted",
-  INACTIVE: "border-border-strong bg-subtle text-ink-muted",
-  LOCKED: "border-border-strong bg-subtle text-ink-muted",
+  IDLE: "neutral",
+  DISABLED: "neutral",
+  INACTIVE: "neutral",
+  LOCKED: "neutral",
 };
 
 export function StatusBadge({
@@ -57,22 +70,16 @@ export function StatusBadge({
   dot?: boolean;
   className?: string;
 }) {
-  const style = STATUS_STYLES[status.toUpperCase()] ?? STATUS_STYLES.IDLE;
+  const tone: StatusTone = STATUS_TONE[status.toUpperCase()] ?? "neutral";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-        style,
-        className,
-      )}
-    >
+    <Badge tone={tone} className={className}>
       {dot && (
         <span
-          className="h-1.5 w-1.5 rounded-full bg-current opacity-80"
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80"
           aria-hidden
         />
       )}
       {label ?? status}
-    </span>
+    </Badge>
   );
 }
