@@ -85,6 +85,9 @@ playwright-report/
 /src-tauri/static/
 /src-tauri/binaries/
 
+# 构建后在仓库根生成的启动快捷方式（指向 src-tauri/target/release/app.exe，本地便捷入口，不入库）
+*.lnk
+
 # 本机应用设置（含 ComfyUI 路径等，local-only）
 /data/
 
