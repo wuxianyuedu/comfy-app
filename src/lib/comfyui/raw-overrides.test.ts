@@ -225,3 +225,94 @@ describe("applyApiOverrides — API 格式载荷的覆盖注入", () => {
     ).toEqual({});
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * 抵消 comfy-cli 提升控件回写的**槽位漂移**。
+ *
+ * 夹具复刻现场：子图有一个「被转成输入插槽」的提升引脚 —— 宿主 inputs[] 上
+ * `widget` 是 `null`（ComfyUI 不给它 widgets_values 的槽），但它的边界连线目标
+ * （内层控件）带 widget 标记，comfy-cli 因此**多算一个槽**，整条宿主回写错位。
+ * ───────────────────────────────────────────────────────────────────────── */
+
+const DRIFT_UUID = "11111111-2222-3333-4444-555555555555";
+
+/** `socketInnerHasWidget` 决定是否产生漂移（内层目标带不带 widget 标记）。 */
+function driftRaw(socketInnerHasWidget: boolean) {
+  return {
+    nodes: [
+      {
+        id: "9",
+        type: DRIFT_UUID,
+        inputs: [
+          /* 被转成插槽的引脚：宿主没有 widget，不占 widgets_values。 */
+          { name: "socket", widget: null },
+          { name: "clip_name", widget: { name: "clip_name" } },
+        ],
+        widgets_values: ["umt5_xxl_fp8.safetensors"],
+      },
+    ],
+    definitions: {
+      subgraphs: {
+        [DRIFT_UUID]: {
+          id: DRIFT_UUID,
+          nodes: [
+            {
+              id: "100",
+              type: "CLIPLoader",
+              inputs: [{ name: "clip_name", widget: { name: "clip_name" } }],
+              widgets_values: ["default.safetensors"],
+            },
+            {
+              id: "200",
+              type: "PrimitiveBoolean",
+              inputs: [
+                socketInnerHasWidget
+                  ? { name: "value", widget: { name: "value" } }
+                  : { name: "value", widget: null },
+              ],
+              widgets_values: [false],
+            },
+          ],
+          inputs: [
+            { name: "socket", linkIds: ["1"] },
+            { name: "clip_name", linkIds: ["2"] },
+          ],
+          links: [
+            { id: "1", origin_id: -10, target_id: "200", target_slot: 0 },
+            { id: "2", origin_id: -10, target_id: "100", target_slot: 0 },
+          ],
+        },
+      },
+    },
+  };
+}
+
+type DriftOut = {
+  nodes: { id: string; widgets_values: unknown[] }[];
+};
+
+describe("抵消 comfy-cli 提升控件回写的槽位漂移", () => {
+  it("漂移存在时：宿主值折进内层，宿主数组清空（回写变空操作）", () => {
+    const out = applyRawOverrides(driftRaw(true), []) as DriftOut;
+    /* 宿主按下标 0 的 clip_name 值落进内层 CLIPLoader —— 不是错位的 undefined。 */
+    expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual([
+      "umt5_xxl_fp8.safetensors",
+    ]);
+    /* 清空后 comfy-cli 的 host_value 一律 UNSET，不再覆盖上面的正确值。 */
+    expect(out.nodes[0]!.widgets_values).toEqual([]);
+  });
+
+  it("没有覆盖项时同样抵消（错位与「这次有没有画布覆盖」无关）", () => {
+    const out = applyRawOverrides(driftRaw(true)) as DriftOut;
+    expect(out.nodes[0]!.widgets_values).toEqual([]);
+    expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual([
+      "umt5_xxl_fp8.safetensors",
+    ]);
+  });
+
+  it("漂移不存在时不动载荷（宿主数组与内层默认值都保留）", () => {
+    const out = applyRawOverrides(driftRaw(false), []) as DriftOut;
+    expect(out.nodes[0]!.widgets_values).toEqual(["umt5_xxl_fp8.safetensors"]);
+    expect(widgetsOf(out, DRIFT_UUID, "100")).toEqual(["default.safetensors"]);
+  });
+});

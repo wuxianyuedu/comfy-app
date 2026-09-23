@@ -255,20 +255,36 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
  * 该连线的 `target_id` / `target_slot` 即内层节点与其入参槽位；外层 wrapper 的
  * `inputs[]` 与定义 `inputs[]` 按**名字**对齐（顺序可能不同）。
  */
-function applySubgraphInteriorOverrides(
+/** 一个子图 wrapper 的「提升输入 → 内层节点」解析结果。 */
+interface SubgraphTargets {
+  /** 子图定义本体（用于继续下钻嵌套实例）。 */
+  sub: RawSubgraph;
+  /** 定义内部节点（按 id）。 */
+  innerById: Map<string, RawUiNode>;
+  /** 提升引脚名 → 内层节点 id 与其**入参下标**（首条 origin=-10 的边界连线）。 */
+  targetByName: Map<string, { nodeId: string; slot: number }>;
+  /** 定义里声明的输入引脚（**按声明顺序**）。 */
+  defInputs: SubgraphPin[];
+}
+
+/**
+ * 解析一个子图 wrapper 的提升输入映射（宿主值 → 内层节点的落点）。
+ *
+ * 规则与 ComfyUI 前端一致（`SubgraphNode._resolveInputWidget`）：定义的
+ * `inputs[i]` 取其 `linkIds` 中第一条「起点是 `-10`（输入轨）」的边界连线，
+ * 该连线的 `target_id` / `target_slot` 即内层节点与其入参槽位。
+ */
+function collectSubgraphTargets(
   raw: JsonRecord,
   wrapper: RawUiNode,
-  wrapperId: string,
-  entries: { name: string; value: unknown }[],
-): void {
+): SubgraphTargets | null {
   const classType = typeof wrapper.type === "string" ? wrapper.type : undefined;
-  if (!classType) return;
+  if (!classType) return null;
   const sub = subgraphDefs(raw).get(classType);
-  if (!sub) return;
+  if (!sub) return null;
 
-  const innerNodes = Array.isArray(sub.nodes) ? sub.nodes : [];
   const innerById = new Map<string, RawUiNode>();
-  for (const n of innerNodes) {
+  for (const n of Array.isArray(sub.nodes) ? sub.nodes : []) {
     const parsed = UiNodeIdentitySchema.safeParse(n);
     if (!parsed.success) continue;
     innerById.set(String(parsed.data.id), parsed.data);
@@ -282,26 +298,14 @@ function applySubgraphInteriorOverrides(
     linksById.set(String(link.id), link);
   }
 
-  /* 外层 wrapper 输入槽 → 子图定义输入名（按 wrapper.inputs[] 的名字查） */
-  const defInputNameByWrapperName = new Map<string, string>();
-  const defInputs = Array.isArray(sub.inputs) ? sub.inputs : [];
-  const defNames = new Set<string>();
-  for (const i of defInputs) {
+  const defInputs: SubgraphPin[] = [];
+  for (const i of Array.isArray(sub.inputs) ? sub.inputs : []) {
     if (i == null || typeof i !== "object") continue;
-    const pin = i as SubgraphPin;
-    if (typeof pin.name === "string") defNames.add(pin.name);
-  }
-  for (const inp of wrapper.inputs ?? []) {
-    if (typeof inp?.name !== "string") continue;
-    if (defNames.has(inp.name))
-      defInputNameByWrapperName.set(inp.name, inp.name);
+    defInputs.push(i as SubgraphPin);
   }
 
-  /* 子图定义输入名 → 内层 (nodeId, slot) */
   const targetByName = new Map<string, { nodeId: string; slot: number }>();
-  for (const i of defInputs) {
-    if (i == null || typeof i !== "object") continue;
-    const pin = i as SubgraphPin;
+  for (const pin of defInputs) {
     if (typeof pin.name !== "string") continue;
     for (const lid of Array.isArray(pin.linkIds) ? pin.linkIds : []) {
       if (typeof lid !== "string" && typeof lid !== "number") continue;
@@ -321,19 +325,139 @@ function applySubgraphInteriorOverrides(
     }
   }
 
+  return { sub, innerById, targetByName, defInputs };
+}
+
+/** 宿主 inputs[] 里「控件型提升输入名 → widgets_values 下标」（**我们的判据**）。
+ *
+ *  与 ComfyUI 序列化同口径：数组长度正好等于这类输入的个数（实测 35/35）。 */
+function hostWidgetIndexes(wrapper: RawUiNode): Map<string, number> {
+  const out = new Map<string, number>();
+  let i = 0;
+  for (const inp of wrapper.inputs ?? []) {
+    if (!inp?.widget) continue;
+    if (typeof inp.name === "string") out.set(inp.name, i);
+    i += 1;
+  }
+  return out;
+}
+
+function applySubgraphInteriorOverrides(
+  raw: JsonRecord,
+  wrapper: RawUiNode,
+  entries: { name: string; value: unknown }[],
+): void {
+  const t = collectSubgraphTargets(raw, wrapper);
+  if (!t) return;
+  const defNames = new Set<string>();
+  for (const pin of t.defInputs) {
+    if (typeof pin.name === "string") defNames.add(pin.name);
+  }
+
   for (const { name, value } of entries) {
-    const defName = defInputNameByWrapperName.get(name);
-    if (defName === undefined) continue;
-    const target = targetByName.get(defName);
+    if (!defNames.has(name)) continue;
+    const target = t.targetByName.get(name);
     if (!target) continue;
-    const inner = innerById.get(target.nodeId);
+    const inner = t.innerById.get(target.nodeId);
     if (!inner) continue;
     const slot = mapInputSlotToWidgetSlot(inner, target.slot);
     if (slot < 0) continue;
     if (!Array.isArray(inner.widgets_values)) continue;
     inner.widgets_values[slot] = value;
   }
-  void wrapperId;
+}
+
+/**
+ * 抵消 comfy-cli 提升控件回写的**槽位漂移**（只在该漂移确实存在时动手）。
+ *
+ * 现场与判据：comfy-cli 的 `promoted_inputs` 只按「边界连线的**内层目标**带不带
+ * widget 标记」判定「这个提升输入占不占宿主 widgets_values 的槽」，而 ComfyUI 前端
+ * 用的是**宿主自己** `inputs[].widget`。两者在某些引脚上不一致 —— 例如被转成输入
+ * 插槽的引脚：宿主 `widget` 是 `null`（不占槽），但内层目标仍是控件，comfy-cli 就
+ * 多算一个。于是它按 `widgets_values[i + 漂移]` 读值：给 `clip_name` 读到 `5`、
+ * 给 `shift` 读到 `true`、给 `steps_total` 读到 `'euler'`，再把这些垃圾以「宿主优先」
+ * **覆盖**掉内层节点上的正确值 —— 表现就是一批 `shape_mismatch`（本次 17 处）。
+ *
+ * 该缺陷在 **1.20.0 与 GitHub 主干 `5cd4b77` 上同样存在**（已用 comfy-cli 自带的
+ * `promoted` 模块在这份载荷上实测：两侧下标不一致的引脚 35 个，漂移 +3）。
+ *
+ * 修法不是去迎合它那个下标（那会把载荷绑死在有缺陷的规则上，它一修好我们反而错），
+ * 而是**让载荷的正确性只依赖内层值**（那正是 ComfyUI 的真实语义：宿主值只是被提升
+ * 出去的镜像）：
+ *   1. 把宿主上**所有**控件型提升输入的值，按我们（与序列化一致）的下标折进内层；
+ *   2. 清空该实例的 `widgets_values` —— comfy-cli 的 `host_value` 因
+ *      `value_index < len(values)` 不成立而一律返回 UNSET，回写整段跳过。
+ *
+ * 只改深拷贝出来的载荷，库里的工作流不受影响。
+ */
+function neutralizePromotedHostDrift(raw: JsonRecord): void {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return;
+  /** comfy-cli 的判据（复刻自 `comfy_cli.cql.promoted.promoted_inputs`）。 */
+  const cliWidgetIndexes = (t: SubgraphTargets): Map<string, number> => {
+    const out = new Map<string, number>();
+    let idx = 0;
+    for (const pin of t.defInputs) {
+      if (typeof pin.name !== "string") continue;
+      const target = t.targetByName.get(pin.name);
+      if (!target) continue;
+      const inner = t.innerById.get(target.nodeId);
+      if (!inner?.inputs?.[target.slot]?.widget) continue;
+      out.set(pin.name, idx);
+      idx += 1;
+    }
+    return out;
+  };
+
+  const visit = (nodes: unknown, depth: number): void => {
+    /* 嵌套层数只是防止定义里的环把遍历拖死；真实工作流远到不了这个深度。 */
+    if (depth > 8 || !Array.isArray(nodes)) return;
+    for (const n of nodes) {
+      const parsed = UiNodeIdentitySchema.safeParse(n);
+      if (!parsed.success) continue;
+      const node = parsed.data;
+      const t = collectSubgraphTargets(raw, node);
+      if (!t) continue;
+      /* 先下钻：与 comfy-cli 一致（内层实例先处理，外层后处理）。 */
+      visit(t.sub.nodes, depth + 1);
+
+      const cli = cliWidgetIndexes(t);
+      const ours = hostWidgetIndexes(node);
+      let drift = cli.size !== ours.size;
+      if (!drift) {
+        for (const [name, idx] of ours) {
+          if (cli.get(name) !== idx) {
+            drift = true;
+            break;
+          }
+        }
+      }
+      if (!drift) continue;
+
+      /* zod 解析出的副本上 `widgets_values` 是 `any[]`：这里显式收成 `unknown[]`，
+       * 逐项取出的值才不会把 `any` 带进「写回内层」的那一步。 */
+      const host = (
+        Array.isArray(node.widgets_values) ? node.widgets_values : []
+      ) as unknown[];
+      for (const [name, idx] of ours) {
+        const value = host[idx];
+        if (value === undefined) continue;
+        const target = t.targetByName.get(name);
+        if (!target) continue;
+        const inner = t.innerById.get(target.nodeId);
+        if (!inner) continue;
+        const slot = mapInputSlotToWidgetSlot(inner, target.slot);
+        if (slot < 0) continue;
+        if (!Array.isArray(inner.widgets_values)) continue;
+        inner.widgets_values[slot] = value;
+      }
+      /* **就地**清空，不能重新赋值：`UiNodeIdentitySchema.safeParse` 给出的
+       * `node` 是解析出的副本，给它换一个数组不会反映到载荷上；清空**同一份**
+       * 数组才会（本模块其它写入同理，都只改数组元素）。 */
+      if (Array.isArray(node.widgets_values)) node.widgets_values.length = 0;
+    }
+  };
+
+  visit(raw.nodes, 0);
 }
 
 /**
@@ -436,8 +560,14 @@ export function applyRawOverrides(
   rawJson: unknown,
   overrides?: RawWorkflowOverride[],
 ): JsonRecord {
-  if (!overrides?.length) return rawJson as JsonRecord;
   const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
+  /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
+   * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
+   * 的引脚上）。因此这一步先于「有没有覆盖」的判断。 */
+  if (!overrides?.length) {
+    neutralizePromotedHostDrift(raw);
+    return raw;
+  }
   /* 已落到节点上的覆盖项，循环结束后统一同步子图内层（见文件末尾）。 */
   const pendingByNode = new Map<string, { name: string; value: unknown }[]>();
   for (const ov of overrides) {
@@ -491,7 +621,11 @@ export function applyRawOverrides(
   for (const [nodeId, entries] of pendingByNode) {
     const node = resolveRawNode(raw, nodeId);
     if (!node) continue;
-    applySubgraphInteriorOverrides(raw, node, nodeId, entries);
+    applySubgraphInteriorOverrides(raw, node, entries);
   }
+  /* 最后一步：抵消 comfy-cli 提升控件回写的槽位漂移（见该函数注释）。必须在覆盖
+   * 与内层同步**之后** —— 那时宿主上的值（含本次覆盖）已全部折进内层，清空宿主
+   * 数组不会丢东西。 */
+  neutralizePromotedHostDrift(raw);
   return raw;
 }
