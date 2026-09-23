@@ -10,8 +10,47 @@
     "P46": "视图 / 逻辑 / 服务端里手拼日期串（应使用 ~/lib/time-format 的 formatDate 家族）",
     "P65": "把一次异步动作的忙碌位复位写在成功路径上（应使用 ~/components/ui/use-busy-action 的 useBusyAction）",
     "P66": "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
-    "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）"
+    "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
+    "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
+    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）"
   },
-  "total": 0,
-  "files": {}
+  "total": 12,
+  "files": {
+    "src/components/studio/canvas/IOEditContext.tsx": {
+      "P69": 1
+    },
+    "src/components/studio/FilmStudio.tsx": {
+      "P69": 1
+    },
+    "src/components/studio/logs/LogFilterBar.tsx": {
+      "P68": 1
+    },
+    "src/components/studio/ModelLibrary.tsx": {
+      "P69": 1
+    },
+    "src/components/studio/project-canvas/ContentAssetNode.tsx": {
+      "P68": 1
+    },
+    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
+      "P69": 1
+    },
+    "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": {
+      "P68": 1
+    },
+    "src/components/studio/project-canvas/WorkflowNodeArdot.tsx": {
+      "P68": 1
+    },
+    "src/components/studio/StringTextarea.tsx": {
+      "P68": 1
+    },
+    "src/components/studio/workflow-form/WorkflowFormTextarea.tsx": {
+      "P68": 1
+    },
+    "src/components/studio/workflow-library/WorkflowLibraryList.tsx": {
+      "P68": 1
+    },
+    "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
+      "P69": 1
+    }
+  }
 }

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Shot } from "~/lib/workshop/types";
 import {
+  applyReprompt,
   applyShotGeneration,
   applyShotPatches,
   applyShotRedo,
@@ -226,5 +227,46 @@ describe("applyShotRedo", () => {
   it("非记录项 / 无命中 → 原样返回入参引用", () => {
     const shots = ["字符串项", { id: "b" }];
     expect(applyShotRedo(shots, "missing")).toBe(shots);
+  });
+});
+
+describe("applyReprompt", () => {
+  it("命中镜头：换新 prompt + 复用退回语义（清产物 / 状态 idle / rev 自增）", () => {
+    const shots = [
+      {
+        id: "a",
+        prompt: "旧提示词",
+        imageUrl: "/x.png",
+        clipUrl: "/y.mp4",
+        status: "done",
+        rev: 2,
+      },
+      { id: "b", prompt: "别的" },
+    ];
+    const out = applyReprompt(shots, "a", "新提示词") as Record<
+      string,
+      unknown
+    >[];
+    expect(out[0]!.prompt).toBe("新提示词");
+    expect(out[0]!.imageUrl).toBeUndefined();
+    expect(out[0]!.clipUrl).toBeUndefined();
+    expect(out[0]!.status).toBe("idle");
+    expect(out[0]!.rev).toBe(3);
+    // 未命中镜头保持原引用（不被连带改写）
+    expect(out[1]).toBe(shots[1]);
+  });
+
+  it("无命中 → 原样返回入参引用（不误改别的镜头）", () => {
+    const shots = [{ id: "a", prompt: "x" }];
+    expect(applyReprompt(shots, "missing", "新").length).toBe(1);
+    expect(applyReprompt(shots, "missing", "新")).toBe(shots);
+  });
+
+  it("非记录项被跳过（只认带 id 的对象）", () => {
+    const shots = ["字符串项", { id: "b", prompt: "p" }];
+    const out = applyReprompt(shots, "b", "改后") as Record<string, unknown>[];
+    expect(out[0]).toBe("字符串项");
+    expect(out[1]!.prompt).toBe("改后");
+    expect(out[1]!.rev).toBe(1);
   });
 });

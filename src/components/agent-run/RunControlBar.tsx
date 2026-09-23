@@ -66,6 +66,13 @@ const APPROVAL_OPTIONS: { value: ApprovalMode; label: string }[] = [
   { value: "auto", label: "全自动跑完" },
 ];
 
+/** 日志时间戳 → 本地时分秒；解析失败给空串。 */
+function formatStepTime(ts: string): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("zh-CN", { hour12: false });
+}
+
 export function RunControlBar() {
   return <RunControlBarView c={useAgentRun()} />;
 }
@@ -91,6 +98,32 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           </span>
         ) : null}
       </div>
+
+      {/* 执行日志：引擎每步一条（最新在上），让「AI 跑到哪、产出了什么」在应用内可见。 */}
+      {run.log.length > 0 && (
+        <ul
+          className="border-border-subtle bg-canvas/50 max-h-32 space-y-0.5 overflow-y-auto rounded-md border px-2.5 py-1.5"
+          aria-label="执行日志"
+        >
+          {[...run.log].reverse().map((step) => (
+            <li
+              key={step.ts}
+              className="text-ink-fainter flex items-baseline gap-1.5 text-[11px]"
+            >
+              <span
+                className={step.ok ? "text-emerald-500" : "text-destructive"}
+                aria-hidden
+              >
+                {step.ok ? "✓" : "✗"}
+              </span>
+              <span className="text-ink-faintest shrink-0 tabular-nums">
+                {formatStepTime(step.ts)}
+              </span>
+              <span className="min-w-0">{step.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {(run.status === "idle" ||
         run.status === "done" ||

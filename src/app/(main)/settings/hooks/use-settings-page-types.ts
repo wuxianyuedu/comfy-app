@@ -90,7 +90,8 @@ export type Section =
   | "llmRemote"
   | "comfyui"
   | "database"
-  | "exit";
+  | "exit"
+  | "logs";
 export type OllamaStatus = "checking" | "starting" | "up" | "down";
 
 export interface FlashMessage {
@@ -280,6 +281,7 @@ export const SETTINGS_SECTIONS: { id: Section; label: string }[] = [
   { id: "comfyui", label: "创作后端" },
   { id: "database", label: "数据库" },
   { id: "exit", label: "退出与后台服务" },
+  { id: "logs", label: "日志" },
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */

@@ -16,6 +16,17 @@ vi.mock("~/server/better-auth", () => ({
 vi.mock("~/server/agent/run-engine", () => ({
   advanceRunLoop: vi.fn(async () => undefined),
 }));
+// 评审 / 重生成的落库逻辑在 review.test.ts 覆盖；此处只验端点的入参校验 + 委派 seam。
+const { reviewContent, regenerateShot } = vi.hoisted(() => ({
+  reviewContent: vi.fn(async () => ({
+    pass: false,
+    issues: ["含混"],
+    suggestion: "更具体",
+    scoredAt: "t",
+  })),
+  regenerateShot: vi.fn(async () => undefined),
+}));
+vi.mock("~/server/agent/review", () => ({ reviewContent, regenerateShot }));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { runRouter } from "~/server/api/routers/run";
@@ -130,5 +141,76 @@ describe("run.start / 生命周期", () => {
     await createCaller(makeCtx()).start({ projectId: "proj_5" });
     const res = await createCaller(makeCtx()).cancel({ projectId: "proj_5" });
     expect(res.run.status).toBe("cancelled");
+  });
+});
+
+describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
+  it("reviewShot → 委派评审执行器（shot 种类 + 目标 id）并回显 verdict", async () => {
+    const res = await createCaller(makeCtx()).reviewShot({
+      projectId: "proj_r",
+      shotId: "s1",
+    });
+    expect(reviewContent).toHaveBeenCalledWith(
+      "user-a",
+      "proj_r",
+      "shot",
+      "s1",
+    );
+    expect(res.verdict.pass).toBe(false);
+  });
+
+  it("reviewCharacter → 以 character 种类委派", async () => {
+    await createCaller(makeCtx()).reviewCharacter({
+      projectId: "proj_r",
+      characterId: "c1",
+    });
+    expect(reviewContent).toHaveBeenCalledWith(
+      "user-a",
+      "proj_r",
+      "character",
+      "c1",
+    );
+  });
+
+  it("regenerateShot(gacha) → 委派重生成，mode 透传，返回 ok", async () => {
+    const res = await createCaller(makeCtx()).regenerateShot({
+      projectId: "proj_r",
+      shotId: "s1",
+      mode: "gacha",
+    });
+    expect(regenerateShot).toHaveBeenCalledWith(
+      "user-a",
+      "proj_r",
+      "s1",
+      "gacha",
+      undefined,
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  it("regenerateShot(reprompt + newPrompt) → 把新提示词一并透传", async () => {
+    await createCaller(makeCtx()).regenerateShot({
+      projectId: "proj_r",
+      shotId: "s1",
+      mode: "reprompt",
+      newPrompt: "改进后的提示词",
+    });
+    expect(regenerateShot).toHaveBeenCalledWith(
+      "user-a",
+      "proj_r",
+      "s1",
+      "reprompt",
+      "改进后的提示词",
+    );
+  });
+
+  it("regenerateShot：mode 非法被入参 schema 拒绝", async () => {
+    await expect(
+      createCaller(makeCtx()).regenerateShot({
+        projectId: "proj_r",
+        shotId: "s1",
+        mode: "乱" as "gacha",
+      }),
+    ).rejects.toThrow();
   });
 });

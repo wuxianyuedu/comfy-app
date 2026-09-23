@@ -27,6 +27,7 @@ import { saveLogExport, type SavedLogExport } from "~/lib/log/log-file-client";
 
 import { copyLogText, downloadLogText } from "./log-export";
 import { formatForClipboard } from "./log-format";
+import { disabledCategories, useLogCategoryStore } from "./log-category-store";
 
 /* 格式化口径落在 log-format（视图与 store 共用一份）；这里按原路径转出，
  * 既有导入（测试、面板）逐字不变。 */
@@ -267,7 +268,13 @@ function derive(
     logs,
     counts: computeCounts(logs, search),
     countsByOrigin: computeOriginCounts(logs, search),
-    filteredLogs: computeFiltered(logs, filter, search, origin),
+    filteredLogs: computeFiltered(
+      logs,
+      filter,
+      search,
+      origin,
+      disabledCategories(),
+    ),
     revision,
   };
 }
@@ -318,6 +325,7 @@ function applyView(derived: ReturnType<typeof derive>, view: LogPanelView) {
     view.filter,
     view.search,
     view.origin,
+    disabledCategories(),
   );
   return {
     ...derived,
@@ -680,6 +688,24 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   saveExport: (label) =>
     saveLogExport(label, formatForClipboard(get().filteredLogs)),
 }));
+
+/* ── 分类开关联动：设置页关掉某类日志后，面板实时隐藏对应行 ───────
+ * 分类开关住在独立的 `useLogCategoryStore`（设置页与面板共享）。它在被改写时
+ * 本 store 并不知道，因此这里订阅它：`enabled` 一变就按**合并后的视图**重算
+ * `filteredLogs`（`derive` 已把 disabled 集合塞进 computeFiltered）。仅当
+ * `enabled` 引用变化才重算，避免其它字段改动（如未来新增的字段）触发无谓重排。
+ * 无 DOM 环境（SSR / node 测试）下订阅同样安全：读不到 localStorage 就取默认开启，
+ * 且订阅本身不触碰 DOM，只是一次状态重算。 */
+useLogCategoryStore.subscribe((state, prev) => {
+  if (state.enabled === prev.enabled) return;
+  const s = useLogStore.getState();
+  useLogStore.setState(
+    applyView(
+      derive(s.logs, s.filter, s.search, s.origin, s.revision),
+      viewOf(s),
+    ),
+  );
+});
 
 /* ── 已读水位与贴底基线 ─────────────────────────────────────────────── */
 

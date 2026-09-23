@@ -25,6 +25,8 @@ import {
   formatEntryForClipboard,
 } from "./log-store";
 import type { LogEntry } from "./log-store";
+import { useLogCategoryStore } from "./log-category-store";
+import { LOG_CATEGORY_FILTERS, type LogCategoryFilter } from "./log-types";
 
 /* ── 测试夹具 ─────────────────────────────────────────────── */
 
@@ -889,6 +891,94 @@ describe("computeFiltered 级别过滤与搜索", () => {
     const { search, filteredLogs } = useLogStore.getState();
     expect(search).toBe("  kernel  ");
     expect(filteredLogs).toHaveLength(2);
+  });
+});
+
+/* ── 日志分类开关：被关掉的分类从面板隐藏 ───────────────────────
+ * 开关住在独立的 `useLogCategoryStore`，与「来源筛选下拉」正交：下拉决定看哪一类，
+ * 开关决定某类是否整体可见。计数维度不读开关——下拉仍显示真实条数。 */
+describe("日志分类开关过滤", () => {
+  /** 每条用例前后把所有分类复位为开启，避免用例间污染（store 是模块级单例）。 */
+  beforeEach(() => {
+    for (const c of LOG_CATEGORY_FILTERS)
+      useLogCategoryStore.getState().setEnabled(c, true);
+  });
+  afterEach(() => {
+    for (const c of LOG_CATEGORY_FILTERS)
+      useLogCategoryStore.getState().setEnabled(c, true);
+  });
+
+  function seedByCategory() {
+    useLogStore
+      .getState()
+      .appendFileLogs([
+        makeEntry({ id: "app-runtime-1", origin: "app-runtime" }),
+        makeEntry({ id: "app-1", origin: "app" }),
+        makeEntry({ id: "dev-1", origin: "dev" }),
+        makeEntry({ id: "launcher-1", origin: "launcher" }),
+        makeEntry({ id: "console-1", source: "console" }),
+      ]);
+  }
+
+  it("默认全开时全部 5 类都显示", () => {
+    seedByCategory();
+    expect(useLogStore.getState().filteredLogs).toHaveLength(5);
+  });
+
+  it("关掉「应用服务」后，面板不再显示该分类（含全部来源视图）", () => {
+    seedByCategory();
+    useLogCategoryStore.getState().setEnabled("app", false);
+    const ids = idsOf(useLogStore.getState().filteredLogs);
+    expect(ids).toContain("app-runtime-1");
+    expect(ids).not.toContain("app-1");
+    expect(ids).toHaveLength(4);
+  });
+
+  it("关掉 console 分类也会隐藏无文件来源的行", () => {
+    seedByCategory();
+    useLogCategoryStore.getState().setEnabled("console", false);
+    const ids = idsOf(useLogStore.getState().filteredLogs);
+    expect(ids).not.toContain("console-1");
+    expect(ids).toHaveLength(4);
+  });
+
+  it("同时关掉多类：被关的都隐藏，未被关的保留", () => {
+    seedByCategory();
+    useLogCategoryStore.getState().setEnabled("dev", false);
+    useLogCategoryStore.getState().setEnabled("launcher", false);
+    const ids = idsOf(useLogStore.getState().filteredLogs);
+    expect(ids).toEqual(["app-runtime-1", "app-1", "console-1"]);
+  });
+
+  it("重新开启后恢复显示（开关实时生效，无需重开面板）", () => {
+    seedByCategory();
+    useLogCategoryStore.getState().setEnabled("app", false);
+    expect(idsOf(useLogStore.getState().filteredLogs)).not.toContain("app-1");
+    useLogCategoryStore.getState().setEnabled("app", true);
+    expect(idsOf(useLogStore.getState().filteredLogs)).toContain("app-1");
+  });
+
+  it("关掉的分类在来源筛选下拉里仍计入真实条数", () => {
+    seedByCategory();
+    useLogCategoryStore.getState().setEnabled("app", false);
+    const counts = useLogStore.getState().countsByOrigin;
+    // 计数维度不读开关：应用服务的计数仍是 1（只是不显示）
+    expect(counts.app.all).toBe(1);
+    expect(useLogStore.getState().filteredLogs).toHaveLength(4);
+  });
+
+  it("computeFiltered 的 disabled 参数可独立生效", async () => {
+    const { computeFiltered } = await import("./log-store");
+    const base = [
+      makeEntry({ id: "x1", origin: "app-runtime" }),
+      makeEntry({ id: "x2", origin: "app" }),
+    ];
+    const open = computeFiltered(base, "all", "", "all");
+    const hidden = computeFiltered(base, "all", "", "all", [
+      "app",
+    ] as LogCategoryFilter[]);
+    expect(idsOf(open)).toEqual(["x1", "x2"]);
+    expect(idsOf(hidden)).toEqual(["x1"]);
   });
 });
 

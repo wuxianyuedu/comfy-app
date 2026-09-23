@@ -157,4 +157,48 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
     expect(timedOut).toBe(true);
     expect(request.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("打印引擎执行日志（run.log 新增条目，去重）", async () => {
+    interface Step {
+      ts: string;
+      kind: string;
+      ok: boolean;
+      detail: string;
+    }
+    const withLog = (status: string, log: Step[]) => ({
+      run: { status, log },
+      action: { kind: "idle" },
+    });
+    const step1 = {
+      ts: "t1",
+      kind: "generate_script",
+      ok: true,
+      detail: "已生成剧本（7 字）",
+    };
+    const step2 = {
+      ts: "t2",
+      kind: "done",
+      ok: true,
+      detail: "全流程完成，已出片",
+    };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(envelope(withLog("running", [step1])))
+      .mockResolvedValue(envelope(withLog("done", [step1, step2])));
+    const lines: string[] = [];
+    await driveFilmRun(
+      opts({ project: "p", idea: "i", pollMs: 1, timeoutMs: 1000 }),
+      {
+        request,
+        doSleep: noopSleep,
+        log: (s: string) => lines.push(s),
+      },
+    );
+    expect(lines.some((l) => l.includes("已生成剧本（7 字）"))).toBe(true);
+    expect(lines.some((l) => l.includes("全流程完成，已出片"))).toBe(true);
+    // step1 只在 start 打印一次，轮询不重复
+    expect(lines.filter((l) => l.includes("已生成剧本（7 字）"))).toHaveLength(
+      1,
+    );
+  });
 });

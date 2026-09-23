@@ -3116,6 +3116,65 @@ const RULES = {
       return hits;
     },
   },
+
+  /* ── P68「视图层手写 `<input>` 或 `<textarea>`」（棘轮，§16.2.3 / §12.18）─────
+   * P67 是 ui/ 层判据（UI_ONLY_RULES），P68/P69 是**视图层**判据（默认作用域：
+   * view + app + server，`ui/` `hooks/` `lib/` 走原有 EXEMPT_DIRS 短路）。
+   * 2026-09-23 治理 settings/ 目录 9 处 raw input 之后，全库还剩约 40 处
+   * 视图层轮子（workshop / studio / login / model 等）；本条按棘轮冻结起点、
+   * 后续按域分片治理。
+   *
+   * 锚点分两半：
+   *   ① 显式 `type="text|number|password|url|email|search|tel"` 的 `<input>`
+   *     （`type` 属性可能换行、用 `[\s\S]{0,80}` 窗口匹配）；
+   *   ② `<textarea>`（本项目 textarea 一律走 `ui/textarea`，无正当原生
+   *     落点）。
+   *
+   * 未列 `<input>` 无 type（默认 text）与 `type="file"`：前者实测视图层没有
+   * 出现（都写了显式 type）、判据先保守；后者由 P7（file-picker 硬闸）管，
+   * 不重复计。`type="checkbox|radio"` 走 P69。
+   *
+   * 已 import `~/components/ui/{input,textarea,number-field}` 的文件短路
+   * 清零（换用基元即自动合规）。 */
+  P68: {
+    label:
+      "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (
+        /from ["']~\/components\/ui\/(?:input|textarea|number-field)["']/.test(
+          t2,
+        )
+      )
+        return 0;
+      const inputs =
+        t2.match(
+          /<input[\s\S]{0,80}type=["'](?:text|number|password|url|email|search|tel)["']/g,
+        ) || [];
+      const textareas = t2.match(/<textarea[\s\n>]/g) || [];
+      return inputs.length + textareas.length;
+    },
+  },
+
+  /* ── P69「视图层手写 `<input type="checkbox|radio">`」（棘轮，§16.2.3 / §12.18）
+   * shadcn `ui/checkbox.tsx` 与 `ui/radio-group.tsx` 早已装（PR #925 拉齐到
+   * 最新形态），但视图层仍有多处原生 `<input type="checkbox">` + `accent-*`
+   * 着色档——浏览器 OS 级控件、深色主题下勾选态与整站焦点档不协调、
+   * `accent-color` 跨浏览器渲染不一致。本条按棘轮冻结起点、后续按域分片治理。
+   *
+   * 已 import `~/components/ui/{checkbox,radio-group}` 的文件短路清零。 */
+  P69: {
+    label:
+      "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      if (/from ["']~\/components\/ui\/(?:checkbox|radio-group)["']/.test(t2))
+        return 0;
+      return (
+        t2.match(/<input[\s\S]{0,80}type=["'](?:checkbox|radio)["']/g) || []
+      ).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
@@ -3484,6 +3543,10 @@ function main() {
         "  REST 入参收窄 → ~/server/lib/request-body 的 readJsonRecord（`unknown` 收窄用 ~/lib/is-record 的 isRecord）；\n" +
         "  异步动作的忙碌位 → ~/components/ui/use-busy-action 的 useBusyAction（复位绑在 finally 上）；\n" +
         "  同一时刻只跑一件 → ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock；\n" +
+        "  视图层手写 <input type=text|number|password|…> 或 <textarea> → ~/components/ui/input 的 <Input>、\n" +
+        "  ~/components/ui/textarea 的 <Textarea>、~/components/ui/number-field 的 <NumberField>（P68）；\n" +
+        "  视图层手写 <input type=checkbox|radio> → ~/components/ui/checkbox 的 <Checkbox>、\n" +
+        "  ~/components/ui/radio-group 的 <RadioGroup> + <RadioGroupItem>（P69）；\n" +
         "  ui/ 层自造组件绕开 shadcn 基元 → 徽章改 ~/components/ui/badge 的 <Badge>（cva 扩 size/tone 而非各写 <span>）、\n" +
         "  进度条改 ~/components/ui/progress 的 <Progress>+ProgressTrack/Indicator/Label/Value、\n" +
         '  滑块改 ~/components/ui/slider 的 <Slider>（原生 <input type="range"> 只接管取材时也要显式说明理由），\n' +

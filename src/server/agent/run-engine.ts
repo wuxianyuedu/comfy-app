@@ -28,6 +28,7 @@ import {
   normalizeProductionRun,
   planNextRunAction,
   toRunView,
+  appendRunStep,
   type ProductionRun,
   type ProductionRunView,
   type RunAction,
@@ -45,8 +46,30 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 interface ExecResult {
   ok: boolean;
   error?: string;
+  /** 人读产出摘要（写进执行日志），如「已生成剧本（1234 字）」。 */
+  summary?: string;
+  /** 该步只是等待（如出片未就绪），不追加执行日志，避免每拍刷屏。 */
+  skipLog?: boolean;
   /** 执行后应写回的 run（多数动作不改 run，返回 undefined 表示沿用原 run）。 */
   run?: ProductionRun;
+}
+
+/** 动作 kind → 日志里的动作名。 */
+function actionLabel(action: RunAction): string {
+  switch (action.kind) {
+    case "generate_script":
+      return "生成剧本";
+    case "extract_characters":
+      return "提取角色";
+    case "plan_storyboard":
+      return "规划分镜";
+    case "render_images":
+      return `逐镜生图（${action.shotIds.length} 个）`;
+    case "render_film":
+      return "生成视频并合成成片";
+    default:
+      return action.kind;
+  }
 }
 
 /** 动作 → 完成后要 gate / 推进到的阶段。 */
@@ -100,7 +123,7 @@ async function execScript(
   await productionRepository.patchContent(userId, projectId, {
     scriptMarkdown: md,
   });
-  return { ok: true };
+  return { ok: true, summary: `已生成剧本（${md.length} 字）` };
 }
 
 async function execCharacters(
@@ -149,7 +172,7 @@ async function execCharacters(
   await productionRepository.patchContent(userId, projectId, {
     characters: created,
   });
-  return { ok: true };
+  return { ok: true, summary: `已提取 ${created.length} 个角色` };
 }
 
 async function execStoryboard(
@@ -196,7 +219,7 @@ async function execStoryboard(
     }));
   if (shots.length === 0) return { ok: false, error: "未解析出分镜镜头" };
   await productionRepository.patchContent(userId, projectId, { shots });
-  return { ok: true };
+  return { ok: true, summary: `已规划 ${shots.length} 个镜头` };
 }
 
 async function execImages(
@@ -236,9 +259,14 @@ async function execImages(
     }
   }
   await productionRepository.patchContent(userId, projectId, { shots: next });
+  const doneCount = next.filter(
+    (s) => want.has(s.id) && s.status === "done",
+  ).length;
+  const failedCount = shotIds.length - doneCount;
   // 记录这些镜头「已按当前 rev 处理」——用户之后再改（rev 变大）会被重新纳入。
   return {
     ok: true,
+    summary: `逐镜生图：${doneCount} 成功${failedCount > 0 ? ` / ${failedCount} 失败` : ""}`,
     run: markActionProcessed(run, view, { kind: "render_images", shotIds }),
   };
 }
@@ -248,7 +276,8 @@ async function execFilm(
   projectId: string,
   run: ProductionRun,
 ): Promise<ExecResult> {
-  if (run.filmStartedAt) return { ok: true }; // 已起片，等 rendered
+  if (run.filmStartedAt)
+    return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。
   // createFilmFromProject→start：服务端 watchFilm 逐镜视频 + composeFilm 合成 + syncFilmToProject 回写。
   try {
@@ -264,7 +293,11 @@ async function execFilm(
   } catch (e: unknown) {
     return { ok: false, error: errorMessage(e, "启动成片失败") };
   }
-  return { ok: true, run: { ...run, filmStartedAt: nowIso() } };
+  return {
+    ok: true,
+    summary: "已启动成片：服务端逐镜视频 + 合成中",
+    run: { ...run, filmStartedAt: nowIso() },
+  };
 }
 
 /**
@@ -288,7 +321,12 @@ export async function advanceRunLoop(
       if (action.kind === "idle" || action.kind === "await_approval") return;
       if (action.kind === "done") {
         await saveRun(userId, projectId, {
-          ...run,
+          ...appendRunStep(run, {
+            ts: nowIso(),
+            kind: "done",
+            ok: true,
+            detail: "全流程完成，已出片",
+          }),
           status: "done",
           awaitingStage: null,
         });
@@ -322,6 +360,18 @@ export async function advanceRunLoop(
       }
 
       if (res.run) run = res.run;
+      // 每执行一个动作追加一条执行日志（含成功/失败与产出摘要），随后续 saveRun 落库。
+      // 纯等待步（skipLog）不追加，避免出片轮询把日志刷爆。
+      if (!res.skipLog) {
+        run = appendRunStep(run, {
+          ts: nowIso(),
+          kind: action.kind,
+          ok: res.ok,
+          detail: res.ok
+            ? (res.summary ?? actionLabel(action))
+            : (res.error ?? "失败"),
+        });
+      }
       if (!res.ok) {
         await saveRun(userId, projectId, {
           ...run,

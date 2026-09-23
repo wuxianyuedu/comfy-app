@@ -214,3 +214,90 @@ export function parseStoryboard(text: string): RawShot[] {
     };
   });
 }
+
+// ─────────────────────────────────────────────────────────────
+// Content review (Phase 8 · P8-1a：文本评审 —— 分镜镜头 / 角色卡)
+// ─────────────────────────────────────────────────────────────
+
+/** 评审时的创作上下文（判断内容是否贴合项目意图）。字段都可能是空串，构建时兜底。 */
+export interface ContentReviewContext {
+  title: string;
+  type: string;
+  tone: string;
+  logline: string;
+  /** 剧本节选（判一致性用），已由调用方裁剪长度。 */
+  scriptExcerpt: string;
+}
+
+export const REVIEW_SYSTEM = `你是严格的 AI 生成内容质检评审。用户会给出创作上下文（项目类型 / 基调 / 梗概 / 剧本节选）与一条待评审内容（分镜镜头或角色卡的文本）。判断它是否合格：
+- 画面 / 设定是否**具象、可拍**（不是空泛套话）；
+- 是否与剧本、基调、项目意图一致（不跑题、不自相矛盾）；
+- 关键信息是否完整（镜头要有明确主体与动作，角色卡要有可视外貌/服装）。
+只输出严格 JSON 对象，不要任何解释或代码围栏：
+{ "pass": true 或 false, "issues": ["逐条列出具体缺陷，合格则给空数组"], "suggestion": "不合格时给一句话改进方向（合格可留空）" }
+全程使用中文，判断从严但务实：能拍、贴合剧本即算合格，不因风格偏好判不合格。`;
+
+/** 组装「评审一条内容」的消息。`kindLabel` 是人读实体名（"分镜镜头" / "角色卡"），
+ *  `sourceText` 是该实体的可评审文本（由调用方从记录提炼，纯文本、不含结构）。 */
+export function buildReviewMessages(
+  kindLabel: string,
+  sourceText: string,
+  ctx: ContentReviewContext,
+): LLMMessage[] {
+  const user = `【创作上下文】
+项目标题：${ctx.title || "未命名"}
+类型：${ctx.type || "未指定"}
+基调：${ctx.tone || "未指定"}
+梗概：${ctx.logline || "无"}
+剧本节选：
+${ctx.scriptExcerpt || "（无）"}
+
+【待评审的${kindLabel}】
+${sourceText}
+
+请评审这份${kindLabel}是否合格。`;
+  return [
+    { role: "system", content: REVIEW_SYSTEM },
+    { role: "user", content: user },
+  ];
+}
+
+export const REPROMPT_SYSTEM = `你是提示词改写助手。给定一条镜头的原提示词与评审意见，产出一版**改进后**的镜头画面提示词：保持原意与镜头定位，但具象化、修掉评审指出的缺陷（补主体/动作/光线，去掉含混或跑题的部分），用于 AI 文生图。
+只输出严格 JSON 对象，不要任何解释或代码围栏：
+{ "prompt": "改进后的镜头提示词（中文，具象、可拍）" }`;
+
+/** 评审意见的最小形状（与 `ReviewVerdict` 结构兼容；这里不 import production 域，避免跨域耦合）。 */
+export interface RepromptFeedback {
+  issues: string[];
+  suggestion: string;
+}
+
+/** 组装「据评审意见改写镜头提示词」的消息。`sourceText` 是原提示词 / 画面描述文本。 */
+export function buildShotRepromptMessages(
+  sourceText: string,
+  feedback: RepromptFeedback,
+  ctx: ContentReviewContext,
+): LLMMessage[] {
+  const defects =
+    feedback.issues.length > 0
+      ? feedback.issues.map((issue) => `- ${issue}`).join("\n")
+      : "（未逐条列出）";
+  const user = `【创作上下文】
+类型：${ctx.type || "未指定"}
+基调：${ctx.tone || "未指定"}
+剧本节选：
+${ctx.scriptExcerpt || "（无）"}
+
+【原镜头提示词】
+${sourceText}
+
+【评审指出的缺陷】
+${defects}
+【改进建议】${feedback.suggestion || "（无）"}
+
+请产出改进后的镜头提示词。`;
+  return [
+    { role: "system", content: REPROMPT_SYSTEM },
+    { role: "user", content: user },
+  ];
+}
