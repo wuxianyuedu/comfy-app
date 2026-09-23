@@ -3561,6 +3561,12 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
       "src/components/studio/P62Ok.tsx",
       [
         'import { checkedHandler, textHandler } from "~/lib/form-props";',
+        /* 顺带 import ui/checkbox 让新加的 P69 判据短路——本 fixture 的
+         * 原意是「checkedHandler 走 form-props 出口不被 P62 计」,与 P69
+         * 无关;fixture 只跑 check-ui-primitives.cjs、不跑 eslint,未使用的
+         * import 不会报警。 */
+        'import { Checkbox } from "~/components/ui/checkbox";',
+        "void Checkbox;",
         "export const Thing = ({ q, setQ, on }: { q: string; setQ: (v: string) => void; on: (v: boolean) => void }) => (",
         "  <>",
         "    <input value={q} onChange={textHandler(setQ)} />",
@@ -4307,5 +4313,109 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(code, output).not.toBe(0);
     expect(output).toContain("P67");
     expect(output).toContain("ui/P67Sneak.tsx");
+  });
+
+  /* ── P68/P69：视图层 raw <input> / <textarea> / <input type=checkbox|radio>
+   * 判据（§16.2.3 / §12.18 · settings/ 目录 9 处治理之后加，冻结剩余视图层
+   * 落点为棘轮起点）。P67 是 ui/ 层判据（UI_ONLY_RULES），P68/P69 是视图层
+   * 判据（默认作用域：view + app + server；ui/、hooks/、lib/ 走原有 EXEMPT_DIRS
+   * 短路）。 */
+
+  it("P68 视图层手写 <input type=text> 阻断（规范 P68）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P68RawInput.tsx",
+      [
+        "export function SearchBox() {",
+        '  return <input type="text" placeholder="搜" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P68");
+    expect(output).toContain("studio/P68RawInput.tsx");
+  });
+
+  it("P68 视图层手写 <textarea> 同样阻断", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P68RawTextarea.tsx",
+      [
+        "export function NotesBox() {",
+        "  return <textarea rows={4} />;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P68");
+    expect(output).toContain("studio/P68RawTextarea.tsx");
+  });
+
+  it("P68 已 import ui/input 的落点不再被计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P68OkInput.tsx",
+      [
+        'import { Input } from "~/components/ui/input";',
+        "export function SearchBox() {",
+        '  return <Input type="text" placeholder="搜" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P68OkInput.tsx");
+  });
+
+  it("P68 ui/ 基元自身实现放行（`ui/file-picker.tsx` 里的 <input type=file> 不算视图轮子）", () => {
+    /* ui/ 层默认被 EXEMPT_DIRS 豁免（P68 不在 UI_ALSO_SCANNED 也不在
+     * UI_ONLY_RULES），基元自身的 raw input 不该被算进视图层账。 */
+    seedBaseline();
+    write(
+      "src/components/ui/P68PrimitiveFilePicker.tsx",
+      [
+        'import { cn } from "~/lib/utils";',
+        "export function MyFilePicker() {",
+        '  return <input type="file" className={cn("hidden")} />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("ui/P68PrimitiveFilePicker.tsx");
+  });
+
+  it("P69 视图层手写 <input type=checkbox> 阻断（规范 P69）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P69RawCheckbox.tsx",
+      [
+        "export function Toggle() {",
+        '  return <input id="x" type="checkbox" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P69");
+    expect(output).toContain("studio/P69RawCheckbox.tsx");
+  });
+
+  it("P69 已 import ui/checkbox 的落点不再被计（合规者不误伤）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P69OkCheckbox.tsx",
+      [
+        'import { Checkbox } from "~/components/ui/checkbox";',
+        "export function Toggle() {",
+        '  return <Checkbox id="x" />;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--report"]);
+    expect(code).toBe(0);
+    expect(output).not.toContain("studio/P69OkCheckbox.tsx");
   });
 });
