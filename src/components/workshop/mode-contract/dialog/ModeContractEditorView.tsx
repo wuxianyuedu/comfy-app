@@ -19,6 +19,7 @@ import {
 } from "../mode-contract-config";
 import type { ModeContractEditorController } from "../hooks/use-mode-contract-editor";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { ContractInputCatalog } from "./ContractInputCatalog";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
@@ -185,11 +186,12 @@ export function ModeContractEditorView({
                         className="text-muted-foreground flex cursor-pointer items-center gap-1 text-[10px]"
                         title="必备口：本地工作流缺它的落点时，工坊里驱动不起来"
                       >
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={controller.isRequired(input)}
-                          onChange={() => controller.toggleRequired(input)}
-                          className="accent-primary h-3 w-3"
+                          onCheckedChange={() =>
+                            controller.toggleRequired(input)
+                          }
+                          className="size-3"
                         />
                         必备
                       </label>

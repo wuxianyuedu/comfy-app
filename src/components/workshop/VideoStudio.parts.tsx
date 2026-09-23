@@ -15,6 +15,7 @@ import {
 } from "~/lib/workshop/types";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
+import { Input } from "~/components/ui/input";
 import { framesFor, videoPrompt } from "./video-studio-utils";
 
 const FPS_OPTIONS = ["8", "12", "16", "24"];
@@ -241,7 +242,7 @@ export function ShotCard({
           <div className="mt-1.5 flex items-center gap-2">
             <label className="flex items-center gap-1 text-[11px]">
               <span className="text-muted-foreground">时长(s)</span>
-              <input
+              <Input
                 type="number"
                 min={1}
                 max={20}
@@ -255,7 +256,7 @@ export function ShotCard({
                     duration: clamp(Number(e.target.value) || 5, 1, 20),
                   })
                 }
-                className="border-border bg-bg text-ink focus:border-primary w-14 rounded-md border px-2 py-0.5 text-[11px] outline-none"
+                className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-0.5 text-[11px]"
               />
             </label>
             <label className="flex items-center gap-1 text-[11px]">
