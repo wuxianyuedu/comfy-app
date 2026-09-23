@@ -11,6 +11,16 @@
  *   2. **a11y 语义由基元给**（收口前 10 处里只有 2 处声明了 `role`）/「不确定」态没有 `aria-valuenow`（它不该被读成一个数）；
  *   3. 宽度下限只抬非零值（`minVisible`）；
  *   4. 填充观感差异走 `fillClassName`，不重画轨道。
+ *
+ * **PR-3 起 DOM 分两层**（P67 治理、改用 `ProgressPrimitive.Root`）：
+ *   · `data-slot="progress-bar-track"` 挂在 base-ui Progress **Root** 上，
+ *     管 ARIA（role / aria-valuenow / min / max / valuetext）—— 与旧手写
+ *     `<div role="progressbar">` 的 data-slot 名保持兼容；
+ *   · `data-slot="progress-track"` 是 shadcn `ProgressTrack`（base-ui Track
+ *     的 cva 薄封装），管**视觉轨道**（`bg-*` / `h-*` / `overflow-hidden` /
+ *     `rounded-*`）；`trackClassName` 覆盖的是这一层。
+ *   本文件里 `aria-*` 与 `role` 类断言查前者，视觉类（bg/h/overflow）断言
+ *   查后者，语义分层清晰、避免把 ARIA 与外观混在同一元素上。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
@@ -89,7 +99,7 @@ describe("ProgressBar 的不确定态（value === null）", () => {
 });
 
 describe("ProgressBar 的外观可覆盖而不重画轨道", () => {
-  it("fillClassName 落在填充上，trackClassName 落在轨道上", () => {
+  it("fillClassName 落在填充上，trackClassName 落在视觉轨道上", () => {
     const { container } = render(
       <ProgressBar
         value={50}
@@ -97,10 +107,18 @@ describe("ProgressBar 的外观可覆盖而不重画轨道", () => {
         fillClassName="bg-linear-to-r from-violet-500"
       />,
     );
-    const track = container.querySelector('[data-slot="progress-bar-track"]')!;
+    /* PR-3 起 progress-bar 分两层：
+     *   · data-slot="progress-bar-track" → base-ui ProgressPrimitive.Root，
+     *     管 ARIA（role/aria-valuenow/min/max/valuetext）；
+     *   · data-slot="progress-track" → shadcn ProgressTrack（视觉轨道容器），
+     *     管 bg-* / h-* / rounded-* / overflow-* 这类外观档。
+     * trackClassName 是覆盖**视觉轨道**的，所以断言查后者。 */
+    const visualTrack = container.querySelector(
+      '[data-slot="progress-track"]',
+    )!;
     const fill = container.querySelector('[data-slot="progress-bar-fill"]')!;
-    expect(track.className).toContain("bg-elevated");
-    expect(track.className).toContain("h-1");
+    expect(visualTrack.className).toContain("bg-elevated");
+    expect(visualTrack.className).toContain("h-1");
     expect(fill.className).toContain("bg-linear-to-r");
     /* 填充仍带基元的过渡与圆角（差异化不该把这两条也顶掉）。 */
     expect(fill.className).toContain("transition-all");
