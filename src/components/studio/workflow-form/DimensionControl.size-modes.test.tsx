@@ -59,9 +59,16 @@ function renderSize(width: number, height: number) {
     />,
   );
   fireEvent.click(container.querySelector('[aria-label="选择比例与像素"]')!);
-  return Array.from(screen.queryAllByRole("option")).map(
-    (el) => el.textContent ?? "",
-  );
+  /* 段内选项从手拼 `<Button role="option">` 迁到 base-ui ToggleGroup 之后,
+   * 每行是 `<ToggleGroupItem>`(base-ui Toggle 只写 `aria-pressed`、默认
+   * role=button,不再挂 role=option)。shadcn 的 `ui/toggle-group.tsx` 给
+   * 每个 item 显式挂 `data-slot="toggle-group-item"`,拿它做 selector 比
+   * role 更稳、也不被未来 base-ui 语义微调打断。
+   * 注意:PopoverContent 走 Portal 挂到 `document.body`、不在 `container`
+   * 里 —— 必须从 document 或 `screen` 拿,与旧 `screen.queryAllByRole` 等价。 */
+  return Array.from(
+    document.querySelectorAll<HTMLElement>("[data-slot=toggle-group-item]"),
+  ).map((el) => el.textContent ?? "");
 }
 
 describe("尺寸控件的两类表达", () => {
