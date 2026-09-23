@@ -21,6 +21,7 @@ import type { TaskType } from "~/lib/llm/types";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
+import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/page-loading";
 import { StatusDot } from "~/components/ui/status-dot";
 import { Disclosure } from "~/components/ui/disclosure";
@@ -268,7 +269,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                       ↺
                     </Button>
                   )}
-                  <input
+                  <Input
                     type="number"
                     step={0.05}
                     min={0}
@@ -279,7 +280,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                       c.setTaskTemperature(key, event.target.value);
                     }}
                     onBlur={() => clearTaskEdit(key)}
-                    className="border-border text-ink focus:border-primary bg-surface-2 w-24 rounded-lg border px-2 py-1.5 text-right text-sm outline-none"
+                    className="border-border bg-surface-2 text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-24 rounded-lg px-2 py-1.5 text-right text-sm"
                   />
                 </div>
               );

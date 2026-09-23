@@ -16,6 +16,7 @@ import { textHandler } from "~/lib/form-props";
 import { FormField } from "~/components/ui/form-field";
 import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import {
   REMOTE_MODEL_KINDS,
   REMOTE_MODEL_KIND_LABELS,
@@ -108,7 +109,7 @@ export function RemoteModelDialog({
             className="mb-3"
           >
             {(a11y) => (
-              <input
+              <Input
                 {...a11y}
                 type="text"
                 value={d.addForm.baseUrl}
@@ -116,14 +117,14 @@ export function RemoteModelDialog({
                   d.setAddForm({ ...d.addForm, baseUrl }),
                 )}
                 placeholder="https://api.example.com/v1"
-                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
               />
             )}
           </FormField>
 
           <FormField label="API Key" id="remote-model-api-key">
             <div className="mb-1 flex gap-2">
-              <input
+              <Input
                 type="password"
                 value={d.addForm.apiKey}
                 onChange={(event) => {
@@ -139,7 +140,7 @@ export function RemoteModelDialog({
                     ? "已设置独立密钥，留空保持不变"
                     : "留空则使用全局 API Key"
                 }
-                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
               />
               <Button
                 variant="outline"
@@ -224,7 +225,7 @@ export function RemoteModelDialog({
             className="mb-3"
           >
             {(a11y) => (
-              <input
+              <Input
                 {...a11y}
                 type="text"
                 value={d.addForm.model}
@@ -232,7 +233,7 @@ export function RemoteModelDialog({
                   d.setAddForm({ ...d.addForm, model: event.target.value })
                 }
                 placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
-                className="border-border text-ink placeholder:text-muted-foreground/60 focus:border-primary bg-surface-2 aria-invalid:border-destructive w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
               />
             )}
           </FormField>
