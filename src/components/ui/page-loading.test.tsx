@@ -1,16 +1,25 @@
 // @vitest-environment jsdom
 /**
- * 加载态基元的形态契约（ISSUE #720）。
+ * 加载态基元的形态契约。
  *
- * 现场是「工作流库加载中那块有个不知道是什么的图案」：`EmptyState` 的图标位
- * 是非 flex 的容器（`<span class="block">`），而 `Spinner` 是个 `<span>`
- * —— 默认 `display: inline`，`size-*` 出的 `width` / `height` 对**行内盒**
- * 不生效，画出来的是「2px 上下边框叠在一个行内盒上」：一条约 4px 宽、20px
- * 高的竖线。此前它唯一的落点都在 flex 容器里（flex 会把子项块化），这个前提
- * 从没被写下来，也没人发现它依赖调用处的布局。
+ * 本件自 PR-2 起把内部实现下沉到官方 shadcn `~/components/ui/spinner`
+ * （`Loader2Icon` + `animate-spin` + `role="status"` + `aria-label`），
+ * 由 `~/components/ui/page-loading` 薄 re-export 保持既有 `Spinner`
+ * 消费点不破。
  *
- * jsdom 不做布局，量不出像素 —— 所以判据落在**尺寸的成立条件**上：
- * 转圈必须自己给出非行内的 `display`，而不是把「尺寸生效」外包给调用处。
+ * **历史 ISSUE #720 的现场**：旧 `Spinner` 是自绘 `<span class="border-2
+ * animate-spin rounded-full">`，`<span>` 默认 `display: inline`、`size-*`
+ * 对行内盒不生效；`EmptyState` 的图标位是 `<span class="block">`（非
+ * flex），画出来成「2px 上下边框叠在一个行内盒上」——约 4px 宽、20px 高的
+ * 竖线。当时的解法是给 `<span>` 自带 `inline-block`。
+ *
+ * 换成 lucide `Loader2Icon`（`<svg>`）之后**这条坑天然不存在**——`<svg>`
+ * 是 replaced element、`width` / `height` 直接生效、不依赖调用处的
+ * `display`。所以旧的 `inline-block` 断言删掉，改成断言**新契约**：
+ *   · `data-slot="spinner"` / `role="status"` / `aria-label="Loading"`
+ *     ——a11y 三件套由基元给出；
+ *   · `size-6` 在调用处生效（jsdom 无布局、只能验类名）；
+ *   · `animate-spin` 走基元而非调用处自写（P3 判据的合规方向）。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
@@ -19,28 +28,37 @@ import { Spinner } from "./page-loading";
 
 afterEach(cleanup);
 
-describe("Spinner 的尺寸不依赖调用处布局", () => {
-  it("自带 inline-block（行内盒上 width/height 不生效）", () => {
+describe("Spinner 契约（shadcn 基元薄 re-export）", () => {
+  it("渲染为 svg 元素，带 data-slot / role / aria-label 三件 a11y 语义", () => {
     const { container } = render(<Spinner className="size-6" />);
     const spinner = container.querySelector('[data-slot="spinner"]');
     expect(spinner).not.toBeNull();
-    const className = spinner!.className;
-    expect(className).toContain("inline-block");
-    expect(className).toContain("size-6");
-    /* flex 行里不被压扁（按钮内联态）。 */
-    expect(className).toContain("shrink-0");
+    expect(spinner!.tagName.toLowerCase()).toBe("svg");
+    expect(spinner!.getAttribute("role")).toBe("status");
+    expect(spinner!.getAttribute("aria-label")).toBe("Loading");
   });
 
-  it("外层容器是非 flex 时尺寸类仍在（EmptyState 图标位那一段现场）", () => {
+  it("调用处的 `size-*` 与基元自带的 `animate-spin` 同时挂在同一元素上", () => {
+    const { container } = render(<Spinner className="size-6" />);
+    const spinner = container.querySelector('[data-slot="spinner"]')!;
+    /* SVG 元素的 `className` 是 `SVGAnimatedString` 对象、不是字符串
+       （jsdom 里 `String(x)` 得到 `[object SVGAnimatedString]`）；
+       `getAttribute("class")` 才是 CSS 类串。 */
+    const className = spinner.getAttribute("class") ?? "";
+    expect(className).toContain("size-6");
+    expect(className).toContain("animate-spin");
+  });
+
+  it("外层容器是非 flex 时仍能正常渲染（svg 是 replaced element、天然块级）", () => {
     /* 复刻 `EmptyState` 的图标位：`<span class="block">` 里塞 Spinner。
-       这里断言的是「尺寸类没有丢」——「它真的画成圆」由 e2e 量。 */
+       历史 ISSUE #720 是「span 里塞 span」；换 `<svg>` 后不再依赖调用处
+       display，只需断言它渲染存在即可。 */
     const { container } = render(
       <span className="block">
         <Spinner className="size-6" />
       </span>,
     );
-    const spinner = container.querySelector('[data-slot="spinner"]')!;
-    expect(spinner.className).toContain("inline-block");
     expect(container.querySelector("span.block")).not.toBeNull();
+    expect(container.querySelector('[data-slot="spinner"]')).not.toBeNull();
   });
 });

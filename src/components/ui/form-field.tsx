@@ -2,11 +2,18 @@
 
 import { useId, type ReactNode } from "react";
 
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 
 /**
  * FormField —— 「标签 + 控件 + 校验错误」这一行的唯一出口
- * （规范 16 §16.2.4.26）。
+ * （规范 16 §16.2.4.26；本次 PR-2 起改为 `~/components/ui/field`
+ * 官方基元的薄封装）。
  *
  * 为什么收口：全库有 **15 处**各写一份「一行表单」，三件套一样、**四套度量
  * 语言**：
@@ -38,6 +45,24 @@ import { cn } from "~/lib/utils";
  *    `error` 的存在性决定，调用处**不可能**忘记其中一个（此前正是「写了
  *    `aria-invalid` 却忘了关联错误文案」）；
  * 3. **错误行有稳定 id**，与 `aria-describedby` 同源（改名不会漏一处）。
+ *
+ * ## P67 治理（§16.2.3 / §12.18）
+ *
+ * 此前内部是**裸 `<label htmlFor>` + `<p id>` + `<p>` 手拼三件套**（P67 e
+ * 判据的锚点形态）；`pnpm dlx shadcn@latest add field` 装上官方基元后，
+ * 三件分别换成 `FieldLabel` / `FieldDescription` / `FieldError`，外层
+ * `<div>` 换成 `<Field>`（带 `role="group"`、语义更完整）。
+ * **外部 API 完全不变**（`label` / `id` / `error` / `hint` / `required`
+ * / `children` render-prop / `className` / `labelClassName` /
+ * `errorClassName`）——调用点零改动。
+ *
+ * **保留的自绘细节**（`Field` 基元不管这两档）：
+ *   · 必填 `*` 标记（`<span className="text-danger-strong ml-0.5">*</span>`）
+ *     挂在 FieldLabel 内、`aria-hidden`；
+ *   · 项目色板 `text-ink/80` 与 `text-danger-strong`（shadcn `text-muted-foreground`
+ *     / `text-destructive` 是通用档，项目两档色更贴主题）；
+ *   · `errorId` 由 `fieldId + "-error"` 派生，`FieldError` 通过 props 拿
+ *     `id` 落到 DOM。
  *
  * ## 它不做的事
  *
@@ -109,12 +134,12 @@ export function FormField({
   };
 
   return (
-    <div className={cn("min-w-0", className)}>
+    <Field className={cn("min-w-0 gap-0", className)}>
       {label != null && (
-        <label
+        <FieldLabel
           htmlFor={fieldId}
           className={cn(
-            "text-ink/80 mb-1.5 block text-sm font-medium",
+            "text-ink/80 mb-1.5 block w-full text-sm font-medium",
             labelClassName,
           )}
         >
@@ -124,22 +149,25 @@ export function FormField({
               *
             </span>
           )}
-        </label>
+        </FieldLabel>
       )}
       {typeof children === "function" ? children(a11y) : (children ?? null)}
       {hint != null && (
-        <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
+        <FieldDescription className="text-[11px] leading-relaxed">
           {hint}
-        </p>
+        </FieldDescription>
       )}
       {error != null && error !== "" && (
-        <p
+        <FieldError
           id={errorId}
-          className={cn("text-danger-strong mt-1 text-[11px]", errorClassName)}
+          className={cn(
+            "text-danger-strong mt-1 text-[11px] font-normal",
+            errorClassName,
+          )}
         >
           {error}
-        </p>
+        </FieldError>
       )}
-    </div>
+    </Field>
   );
 }
