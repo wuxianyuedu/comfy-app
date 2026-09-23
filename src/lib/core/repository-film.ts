@@ -176,6 +176,8 @@ export class FilmShotRepository {
     filmId: string,
     shots: Array<{
       order: number;
+      /** 关联的统一镜头 id（Phase 5 回写用）；自由建片时为空。 */
+      shotId?: string | null;
       heading?: string | null;
       prompt: string;
       negative?: string | null;
@@ -185,6 +187,7 @@ export class FilmShotRepository {
     await db.insert(filmShot).values(
       shots.map((shot) => ({
         filmId,
+        shotId: shot.shotId ?? null,
         order: shot.order,
         heading: shot.heading ?? null,
         prompt: shot.prompt,
@@ -201,6 +204,7 @@ export class FilmShotRepository {
   ): Promise<
     Array<{
       id: string;
+      shotId: string | null;
       order: number;
       heading: string | null;
       prompt: string;
