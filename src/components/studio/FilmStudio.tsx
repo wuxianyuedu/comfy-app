@@ -183,11 +183,24 @@ export function FilmStudio() {
         <Button
           variant="primary"
           size="sm"
-          onClick={() => void c.create()}
-          disabled={c.loading || !c.videoWorkflowId}
+          onClick={() =>
+            void (c.shotSource === "project"
+              ? c.createFromProject()
+              : c.create())
+          }
+          disabled={
+            c.loading ||
+            !c.videoWorkflowId ||
+            (c.shotSource === "project" &&
+              (!c.activeProjectId || c.projectShotCount === 0))
+          }
           className="bg-subtle h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
         >
-          {c.loading ? "启动中…" : "导出成片"}
+          {c.loading
+            ? "启动中…"
+            : c.shotSource === "project"
+              ? "用项目镜头成片"
+              : "导出成片"}
         </Button>
 
         {/* 取消按钮（运行中时） */}
@@ -542,19 +555,58 @@ export function FilmStudio() {
                  UA 样式，改「分隔线长什么样」要同时找 `<hr>` 与 border-t 两种写法。 */}
             <Separator className="bg-border-subtle" />
 
-            {/* 全局配置：剧本输入（从原版收起） */}
-            <FormField
-              label="剧本 / 创意"
-              labelClassName="text-ink-faint mb-1.5 text-[11px]"
+            {/* 镜头来源：统一项目镜头（工坊产出）/ 剧本自动分镜（自由文本）。
+                有活跃项目镜头时默认走项目；无镜头时项目项禁用。 */}
+            <div
+              className="flex items-center gap-1"
+              role="group"
+              aria-label="镜头来源"
             >
-              <Textarea
-                value={c.script}
-                onChange={textHandler(c.setScript)}
-                rows={3}
-                placeholder="支持一句话自动分镜…"
-                className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-[12px] leading-relaxed"
-              />
-            </FormField>
+              <Button
+                type="button"
+                variant={c.shotSource === "project" ? "primary" : "ghost"}
+                size="xs"
+                aria-pressed={c.shotSource === "project"}
+                disabled={!c.activeProjectId || c.projectShotCount === 0}
+                onClick={() => c.setShotSource("project")}
+                className="h-auto flex-1 rounded-lg"
+              >
+                当前项目镜头
+                {c.projectShotCount > 0 ? `（${c.projectShotCount}）` : ""}
+              </Button>
+              <Button
+                type="button"
+                variant={c.shotSource === "script" ? "primary" : "ghost"}
+                size="xs"
+                aria-pressed={c.shotSource === "script"}
+                onClick={() => c.setShotSource("script")}
+                className="h-auto flex-1 rounded-lg"
+              >
+                剧本自动分镜
+              </Button>
+            </div>
+
+            {c.shotSource === "project" ? (
+              <p className="text-ink-fainter bg-canvas/60 border-border rounded-lg border px-3 py-2 text-[11px] leading-relaxed">
+                将使用当前项目的 {c.projectShotCount}{" "}
+                个镜头逐镜生成成片（镜头提示词与风格由工坊产出）。
+                如需增删或改镜头，请回到「工坊」调整后再来成片。
+              </p>
+            ) : (
+              /* 全局配置：剧本输入（从原版收起） */
+              <FormField
+                label="剧本 / 创意"
+                labelClassName="text-ink-faint mb-1.5 text-[11px]"
+              >
+                <Textarea
+                  value={c.script}
+                  onChange={textHandler(c.setScript)}
+                  rows={3}
+                  placeholder="支持一句话自动分镜…"
+                  className="border-border bg-subtle text-ink-fainter placeholder:text-ink-faintest resize-none rounded-lg text-[12px] leading-relaxed"
+                />
+              </FormField>
+            )}
 
             {/* 逐镜生成用的工作流（内置模板已移除，必须从工作流库选） */}
             <FormField

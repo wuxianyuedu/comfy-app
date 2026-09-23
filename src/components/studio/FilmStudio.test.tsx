@@ -17,6 +17,7 @@ vi.mock("~/trpc/vanilla", () => ({
       },
       detail: { query: vi.fn().mockResolvedValue(null) },
       create: { mutate: vi.fn().mockResolvedValue({ id: "f-1" }) },
+      createFromProject: { mutate: vi.fn().mockResolvedValue({ id: "f-1" }) },
       start: { mutate: vi.fn().mockResolvedValue({}) },
       cancel: { mutate: vi.fn().mockResolvedValue({}) },
       compose: { mutate: vi.fn().mockResolvedValue({}) },
