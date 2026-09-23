@@ -78,11 +78,11 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
    * `REDACT_PATHS` 擦成 `[Redacted]`，在旧 `core/logger` 里则原文落盘。 */
   it("敏感字段被 pino redact 擦掉", () => {
     const { log, lines } = makeLogger("auth");
-    log.error("login", { password: "P@ssw0rd", token: "tok" });
+    log.error("login", { password: "sample-password", token: "sample-token" });
     const raw = JSON.stringify(lines()[0]);
     expect(raw).toContain("[Redacted]");
-    expect(raw).not.toContain("P@ssw0rd");
-    expect(raw).not.toContain('"tok"');
+    expect(raw).not.toContain("sample-password");
+    expect(raw).not.toContain('"sample-token"');
   });
 
   it("命名空间不同的两个日志器互不串台", () => {
