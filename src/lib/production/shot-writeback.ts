@@ -19,6 +19,7 @@ import {
 } from "~/lib/production/production-client";
 import {
   applyShotGeneration,
+  applyShotRedo,
   type ShotGenerationPatch,
 } from "~/lib/production/sync";
 import {
@@ -63,5 +64,35 @@ export async function recordCanvasShotGeneration(
     await pushProduction(projectId, { ...prod, shots: patched });
   } catch {
     /* 服务不可用时静默降级：草稿已更新，工坊侧下次自动保存会补推 production 镜像 */
+  }
+}
+
+/** 单镜「退回让 AI 重做」（Phase 6 · P6-3b）：清空该镜产出、状态回 idle、rev 自增，
+ *  作为「用户改过」的显式信号 —— run 规划器据此把该镜重新纳入待办。同样落草稿 + production 两处。 */
+export async function requestShotRedo(
+  projectId: string,
+  shotId: string,
+): Promise<void> {
+  if (!projectId || !shotId) return;
+
+  const draft = readWorkshopDraft(projectId);
+  const nextShots = applyShotRedo(draft.shots, shotId);
+  if (nextShots !== draft.shots) {
+    const nextDraft = { ...draft, shots: nextShots as Shot[] };
+    writeWorkshopDraft(projectId, nextDraft);
+    fireAndForget(pushServerDraft(projectId, nextDraft), () => {
+      /* 静默：pushServerDraft 自带 catch，草稿本地缓存已兜底 */
+    });
+  }
+
+  try {
+    const prod = await fetchProduction(projectId);
+    if (!prod) return;
+    const prodShots = Array.isArray(prod.shots) ? prod.shots : [];
+    const patched = applyShotRedo(prodShots, shotId);
+    if (patched === prodShots) return;
+    await pushProduction(projectId, { ...prod, shots: patched });
+  } catch {
+    /* 服务不可用静默：草稿已退回，工坊下次自动保存会补推 production */
   }
 }

@@ -16,9 +16,12 @@ import {
 export function SelectedToolbar({
   onDelete,
   onFocusNode,
+  onRedo,
 }: {
   onDelete: () => void;
   onFocusNode: () => void;
+  /** 提供时（镜头节点）在工具条上出现「退回让 AI 重做」按钮。 */
+  onRedo?: () => void;
 }) {
   const btn =
     "nodrag nopan text-ink-soft hover:bg-subtle flex h-7 w-7 items-center justify-center rounded-full text-[13px] transition-colors";
@@ -32,6 +35,16 @@ export function SelectedToolbar({
       >
         ⌫
       </Button>
+      {onRedo && (
+        <Button
+          variant="ghost"
+          title="退回让 AI 重做这一镜"
+          onClick={onRedo}
+          className={`${btn} hover:bg-primary/15`}
+        >
+          ↺
+        </Button>
+      )}
       <Button variant="ghost" title="节点信息" className={btn}>
         ⓘ
       </Button>
