@@ -11,9 +11,30 @@
  * focusin 关闭 + z-index 魔数。定位、翻转、收边、外点关闭交给 base-ui 的
  * Positioner 与 Root 之后，本组件只留「多段面板」这件事自己的渲染。
  *
- * 触发按钮与选项行都是 `ui/button` 的 `<Button>`（同 §16.2.4.2 第 1 条：
+ * 触发按钮是 `ui/button` 的 `<Button>`（同 §16.2.4.2 第 1 条：
  * `PopoverTrigger` 用 `render` 把按钮本体交给基元，base-ui 会把 `aria-*`
  * 与委托事件原样透传）。
+ *
+ * ## 段内选项是 `ui/toggle-group`（P67 系列尾单 · §12.18 中间地带）
+ *
+ * 每一段（Section）内部原本是「手写 `<Button variant="ghost"
+ * role="option" aria-selected={selected} onClick={...}>` 循环」——
+ * 与 `~/components/ui/toggle-group` 是同一件事的第二份实现：单选分段
+ * 控件的「按状态上 `data-[state=on]`、点已在项不改动、点新项切换、
+ * 键盘 ←/→ 与 Home/End 在段内游走」全部由 base-ui ToggleGroup 提供。
+ * 本件把每段换成一个 `<ToggleGroup value={[section.value]} multiple={false}>`
+ * 包住该段的所有子分组行（子分组之间共享一个 `section.value`、跨子分组
+ * 互斥；这正是 ToggleGroup 的 React Context 语义），每行选项换成
+ * `<ToggleGroupItem value={opt.value}>`。触发 Popover 保持。
+ *
+ * 顺带去掉旧 PopoverTrigger 的 `aria-haspopup="listbox"` 与
+ * PopoverContent 的 `role="listbox"`：面板里已经是**分段单选组**、
+ * 不再是 listbox；让 base-ui Popover 自己给 `aria-haspopup="dialog"` +
+ * `aria-expanded`。
+ *
+ * `opt.render` 是任意 ReactNode（比例图标 / 清晰度小徽标），`children`
+ * 通道原生支持。选中态用 `data-[state=on]:` 属性选择器 + tailwind-merge
+ * 表达：`bg-primary/20 text-ink-bright ring-primary/55` 与旧三元一致。
  */
 
 import React, { useMemo } from "react";
@@ -25,6 +46,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 
 /** 用小矩形直观呈现宽高比。 */
 export function RatioIcon({
@@ -77,6 +99,22 @@ export interface SegmentSection<T extends string = string> {
   extra?: React.ReactNode;
 }
 
+/** 段内 ToggleGroup 的排布：跨子分组共享一个 `value`（互斥），
+ *  每个子分组仍是「flex flex-wrap 横排、子分组间纵向堆叠」。
+ *  ToggleGroup 默认 `flex w-fit flex-row items-center gap-[var(--gap)]`
+ *  与我们的多行子分组不匹配——用 `flex-col items-stretch gap-0`
+ *  顶掉、由内层 subgroup div 各自管横排与间距。 */
+const SECTION_GROUP_CLASS = "flex w-full flex-col items-stretch gap-2";
+
+/** ToggleGroupItem 的视觉档，与旧 `<Button variant="ghost" role="option">`
+ *  循环里的两态**逐字对齐**：`min-w-[52px] flex-col gap-1 rounded-md
+ *  px-1.5 py-1.5 text-[11px]`；未选 `text-ink-muted hover:bg-subtle
+ *  hover:text-ink-bright`；已选 `bg-primary/20 text-ink-bright
+ *  ring-primary/55`。base-ui Toggle 的 `data-[state=on]` 取代旧的
+ *  `selected` 布尔类拼接。 */
+const ITEM_CLASS =
+  "nodrag nopan h-auto min-w-[52px] flex-col gap-1 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-[11px] font-normal text-ink-muted hover:bg-subtle hover:text-ink-bright data-[state=on]:bg-primary/20 data-[state=on]:text-ink-bright data-[state=on]:ring-1 data-[state=on]:ring-primary/55 data-[state=on]:hover:bg-primary/20";
+
 export function MultiSegmentPopover({
   triggerContent,
   sections,
@@ -94,14 +132,13 @@ export function MultiSegmentPopover({
   /** 可选插槽，渲染在浮层卡片里各分组的下方。
    *  用于百万像素「对齐倍数」步进器（一种连续数值控件，不符合
    *  `SegmentSection` 的形状）。刻意保持通用，好让后续场景
-   *（如视频码率 / 帧率覆盖）复用同一套管线。 */
+   * （如视频码率 / 帧率覆盖）复用同一套管线。 */
   footer?: React.ReactNode;
 }) {
   return (
     <Popover>
       <PopoverTrigger
         aria-label={ariaLabel}
-        aria-haspopup="listbox"
         disabled={disabled}
         render={
           <Button
@@ -116,7 +153,6 @@ export function MultiSegmentPopover({
         <ChevronDown size={10} className="text-ink-muted shrink-0" />
       </PopoverTrigger>
       <PopoverContent
-        role="listbox"
         align={align === "right" ? "end" : "start"}
         sideOffset={6}
         /* 面板自身滚动：段数与选项数都不固定，给高度封顶。
@@ -180,37 +216,45 @@ const Section = React.memo(function Section({
       <div className="text-ink-muted mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
         {section.label}
       </div>
-      {grouped.map((group, gi) => (
-        <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
-          {group.label && (
-            <div className="text-ink-icon mb-1 text-[9px] tracking-wider uppercase">
-              {group.label}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {group.options.map((opt) => {
-              const selected = opt.value === section.value;
-              return (
-                <Button
+      {/* 整段共享一个 ToggleGroup(单选,`multiple={false}`);跨子分组互斥
+          由 base-ui 的 React Context 天然处理,不需要每 subgroup 各自持
+          state。value 走数组是 base-ui ToggleGroup 的固定形状(单选也用
+          长度 1 的数组);onValueChange 拿最新点击项(section.value 之外的
+          那一个)回传给 onChange。multiple={false} 时数组长度恒 ≤1,
+          `vals[0]` 就是唯一/最新值。 */}
+      <ToggleGroup
+        value={[section.value]}
+        multiple={false}
+        onValueChange={(vals) => {
+          const next = vals[0];
+          if (typeof next === "string" && next !== section.value) {
+            section.onChange(next);
+          }
+        }}
+        className={SECTION_GROUP_CLASS}
+      >
+        {grouped.map((group, gi) => (
+          <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
+            {group.label && (
+              <div className="text-ink-icon mb-1 text-[9px] tracking-wider uppercase">
+                {group.label}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {group.options.map((opt) => (
+                <ToggleGroupItem
                   key={String(opt.value)}
-                  variant="ghost"
-                  role="option"
-                  aria-selected={selected}
-                  onClick={() => section.onChange(opt.value)}
-                  className={`nodrag nopan min-w-[52px] flex-col gap-1 rounded-md px-1.5 py-1.5 text-[11px] ${
-                    selected
-                      ? "bg-primary/20 text-ink-bright hover:bg-primary/20 ring-primary/55 ring-1"
-                      : "text-ink-muted hover:bg-subtle hover:text-ink-bright"
-                  }`}
+                  value={String(opt.value)}
+                  className={ITEM_CLASS}
                 >
                   {opt.render}
                   <span>{opt.label}</span>
-                </Button>
-              );
-            })}
+                </ToggleGroupItem>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </ToggleGroup>
       {section.extra ? <div className="mt-2">{section.extra}</div> : null}
     </div>
   );

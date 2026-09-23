@@ -93,7 +93,11 @@ describe("画布 / 库内的组合参数控件", () => {
     expect(
       column.querySelector('[aria-label="选择比例、像素与倍数"]'),
     ).toBeTruthy();
-    expect(column.querySelector('[aria-haspopup="listbox"]')).toBeTruthy();
+    /* 段内选项从手拼 `<Button role="option">` 迁到 `ui/toggle-group` 之后，
+     * 浮层面板不再手挂 `aria-haspopup="listbox"`——base-ui Popover.Trigger
+     * 自己给 `aria-haspopup="dialog"`（源码 SelectTrigger.js:123），语义更
+     * 正确：面板是 dialog、里面是 toggle group、不是 listbox。 */
+    expect(column.querySelector('[aria-haspopup="dialog"]')).toBeTruthy();
   });
 
   it("三个参数摆在组合框**外**，各自成行且带大端点", () => {
