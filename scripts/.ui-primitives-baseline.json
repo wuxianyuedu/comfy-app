@@ -15,7 +15,7 @@
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
   },
-  "total": 200,
+  "total": 183,
   "files": {
     "src/components/message-center/MessageCenterButton.tsx": {
       "P71": 1
@@ -39,15 +39,6 @@
       "P71": 4
     },
     "src/components/studio/FilmStudio.tsx": {
-      "P71": 5
-    },
-    "src/components/studio/history/history-utils.ts": {
-      "P71": 4
-    },
-    "src/components/studio/history/HistoryDetailModal.tsx": {
-      "P71": 8
-    },
-    "src/components/studio/history/HistoryTaskCard.tsx": {
       "P71": 5
     },
     "src/components/studio/HomePage.tsx": {

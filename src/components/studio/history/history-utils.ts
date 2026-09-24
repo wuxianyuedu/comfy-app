@@ -25,37 +25,40 @@ export interface StatusStyle {
   failureSuggestion?: (err?: string | null) => string;
 }
 
+/** 任务状态 → pill / 左缘 accent / 卡边框样式（**状态语义**，全部走语义 token）。
+ *  §4.11.1 + P71：`--color-destructive` / `--color-success` / `--color-primary`
+ *  / `--color-info` 等 token 内部已含浅/深两态，不再写 `dark:` 手写档；这也让
+ *  状态色与其他域（log 徽标 / status-badge / alert）同源，改主题一处生效全站。 */
 export const STATUS_STYLE: Record<string, StatusStyle> = {
   QUEUED: {
     label: "排队中",
-    pillCls:
-      "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 border-dashed",
-    accentCls: "border-l-cyan-500",
-    cardBorderCls: "border-cyan-500/30 border-dashed",
+    pillCls: "bg-info/15 text-info-strong border border-info/30 border-dashed",
+    accentCls: "border-l-info",
+    cardBorderCls: "border-info/30 border-dashed",
     isActive: true,
     showProgress: false,
   },
   RUNNING: {
     label: "生成中",
-    pillCls: "bg-violet-500/20 text-violet-700 dark:text-violet-300",
-    accentCls: "border-l-violet-500",
-    cardBorderCls: "border-violet-500/30",
+    pillCls: "bg-primary/20 text-primary-strong",
+    accentCls: "border-l-primary",
+    cardBorderCls: "border-primary/30",
     isActive: true,
     showProgress: true,
   },
   SUCCEEDED: {
     label: "已完成",
-    pillCls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-    accentCls: "border-l-emerald-500",
+    pillCls: "bg-success/15 text-success-strong",
+    accentCls: "border-l-success",
     cardBorderCls: "border-border-subtle",
     isActive: false,
     showProgress: false,
   },
   FAILED: {
     label: "失败",
-    pillCls: "bg-red-500/15 text-red-700 dark:text-red-400",
-    accentCls: "border-l-red-500",
-    cardBorderCls: "border-red-500/30",
+    pillCls: "bg-destructive/15 text-destructive",
+    accentCls: "border-l-destructive",
+    cardBorderCls: "border-destructive/30",
     isActive: false,
     showProgress: false,
     failureSuggestion: (err) => suggestFix(err),
