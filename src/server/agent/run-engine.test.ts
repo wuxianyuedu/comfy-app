@@ -29,6 +29,23 @@ vi.mock("~/server/film/orchestrator", () => ({
   createFilmFromProject: vi.fn(async () => ({ id: "film-1", shots: 1 })),
   startFilm: vi.fn(async () => undefined),
 }));
+// 自动评审执行器调 reviewContent（LLM 判定）——mock 掉，按用例返回过/不过。
+const reviewContent = vi.hoisted(() =>
+  vi.fn(
+    async (
+      _u: string,
+      _p: string,
+      _k: string,
+      _id: string,
+    ): Promise<{
+      pass: boolean;
+      issues: string[];
+      suggestion: string;
+      scoredAt: string;
+    }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
+  ),
+);
+vi.mock("~/server/agent/review", () => ({ reviewContent }));
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../tests/helpers/test-db");
@@ -208,5 +225,68 @@ describe("advanceRunLoop", () => {
   it("无生产数据行 → 直接返回，不抛", async () => {
     await expect(advanceRunLoop(USER, "no_such")).resolves.toBeUndefined();
     expect(completeLLM).not.toHaveBeenCalled();
+  });
+});
+
+describe("advanceRunLoop · 自动评审", () => {
+  it("评审通过：定稿 reviewedShotRev，不再重出，直达 done", async () => {
+    reviewContent.mockResolvedValue({
+      pass: true,
+      issues: [],
+      suggestion: "",
+      scoredAt: "t",
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
+        rendered: true,
+      },
+      {
+        status: "running",
+        approvalMode: "auto",
+        autoReview: true,
+        processedShotRev: { a: 1 },
+      },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(reviewContent).toHaveBeenCalledWith(USER, PROJ, "shot", "a");
+    expect(synthesizeFirstFrame).not.toHaveBeenCalled(); // 通过 → 不抽卡
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.reviewedShotRev).toEqual({ a: 1 });
+    expect(run.status).toBe("done");
+  });
+
+  it("评审持续不合格：抽卡重出封顶 REVIEW_MAX_RETRY 后保留、收敛到 done", async () => {
+    reviewContent.mockResolvedValue({
+      pass: false,
+      issues: ["含混"],
+      suggestion: "更具体",
+      scoredAt: "t",
+    });
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
+        rendered: true,
+      },
+      {
+        status: "running",
+        approvalMode: "auto",
+        autoReview: true,
+        imageWorkflowId: "wf-img",
+        processedShotRev: { a: 1 },
+      },
+    );
+    await advanceRunLoop(USER, PROJ);
+    // REVIEW_MAX_RETRY=2 → 评审 3 次（fail→抽卡、fail→抽卡、达上限保留），抽卡 2 次。
+    expect(reviewContent).toHaveBeenCalledTimes(3);
+    expect(synthesizeFirstFrame).toHaveBeenCalledTimes(2);
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.reviewAttempts).toEqual({ a: 2 });
+    expect(run.reviewedShotRev).toEqual({ a: 3 }); // 第 3 轮 rev 定稿
+    expect(run.status).toBe("done");
   });
 });

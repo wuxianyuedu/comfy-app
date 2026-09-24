@@ -42,6 +42,8 @@ export interface StartRunInput {
   approvalMode?: ApprovalMode;
   imageWorkflowId?: string;
   videoWorkflowId?: string;
+  /** 生图后自动逐镜评审、不合格自动抽卡重生成（有界重试）。 */
+  autoReview?: boolean;
 }
 
 /** 启动 / 重启自主执行（引擎会在服务端 fire-and-forget 推进到下一个停点）。 */
