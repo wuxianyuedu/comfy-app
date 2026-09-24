@@ -125,6 +125,85 @@ describe("createWorkflowRunTask", () => {
     });
   });
 
+  it("randomizeSeed → 给带 seed 控件的节点注 control_after_generate=randomize 覆盖", async () => {
+    wfRepoStub.findByIdForUser.mockResolvedValue({
+      id: "wf-1",
+      name: "库生图",
+      taskType: "T2I",
+      modes: "[]",
+      defaultMode: null,
+      rawJson: {
+        nodes: [
+          {
+            id: 9,
+            type: "KSampler",
+            inputs: [{ name: "seed", type: "INT", widget: { name: "seed" } }],
+            widgets_values: [123, "fixed", 20],
+          },
+          {
+            id: 3,
+            type: "CheckpointLoaderSimple",
+            inputs: [{ name: "ckpt_name", widget: { name: "ckpt_name" } }],
+            widgets_values: ["sd.safetensors"],
+          },
+        ],
+      },
+      workflowIO: IO,
+      paramMap: {},
+    });
+    await createWorkflowRunTask({
+      userId: "u1",
+      workflowId: "wf-1",
+      values: { prompt: "一只猫" },
+      randomizeSeed: true,
+    });
+    const job = enqueueMock.mock.calls[0]![0] as { overrides?: unknown };
+    // 只有带 seed 控件的 KSampler(id 9) 被注 randomize；无 seed 的加载器(id 3) 不被注。
+    expect(job.overrides).toContainEqual({
+      nodeId: "9",
+      name: "control_after_generate",
+      value: "randomize",
+    });
+    expect(job.overrides).not.toContainEqual({
+      nodeId: "3",
+      name: "control_after_generate",
+      value: "randomize",
+    });
+  });
+
+  it("未开 randomizeSeed → 不注 control_after_generate 覆盖（首刷保持图内 seed）", async () => {
+    wfRepoStub.findByIdForUser.mockResolvedValue({
+      id: "wf-1",
+      name: "库生图",
+      taskType: "T2I",
+      modes: "[]",
+      defaultMode: null,
+      rawJson: {
+        nodes: [
+          {
+            id: 9,
+            type: "KSampler",
+            inputs: [{ name: "seed", widget: { name: "seed" } }],
+            widgets_values: [123],
+          },
+        ],
+      },
+      workflowIO: IO,
+      paramMap: {},
+    });
+    await createWorkflowRunTask({
+      userId: "u1",
+      workflowId: "wf-1",
+      values: { prompt: "一只猫" },
+    });
+    const job = enqueueMock.mock.calls[0]![0] as { overrides?: unknown[] };
+    expect(
+      (job.overrides ?? []).some(
+        (o) => (o as { name?: string }).name === "control_after_generate",
+      ),
+    ).toBe(false);
+  });
+
   it("无 rawJson → 抛「没有可执行内容」，不建任务也不入队", async () => {
     wfRepoStub.findByIdForUser.mockResolvedValue({
       id: "wf-2",
