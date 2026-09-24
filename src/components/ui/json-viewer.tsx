@@ -22,6 +22,7 @@
  */
 
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -40,6 +41,13 @@ import {
 } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { Icon } from "~/components/ui/icon";
+
+/* 渲染层整棵子树交给 `react18-json-view`，而它自身**没有** memo：本文件每次
+ * setState（敲搜索框、命中跳转）都会让它把整棵树重新 render 一遍 —— payload 大
+ * 时（comfy-cli 的 prompt_preview 动辄几百个节点）这就是「敲一个字卡一下」。
+ * 按 props 记忆化之后，搜索框的每次输入都不再触碰这棵树；`src` 的对象身份由
+ * 调用方保证稳定（逐行解析缓存 / store 里的同一份数据），其余入参都是字面量。 */
+const MemoJsonView = memo(JsonView);
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
 type JsonValue =
@@ -256,10 +264,11 @@ export interface JsonViewerProps {
   data: unknown;
   /** Toolbar 副标题 (默认 "JSON") */
   title?: string;
-  /** 默认折叠深度 (重新定义):
-   *   - 0   → 全部展开 (top-level objects 内嵌子项也展开)
-   *   - >=1 → 超 N 项的 object/array 在首次渲染时折叠 (N=20+depth*40, dense 场景下更紧凑)
-   * 默认 1 (与之前的语义接近) */
+  /** 首屏折叠口径（阈值由下方 `collapseObjectsAfterLength` 决定）：
+   *   - 0   → 全部展开（不折叠任何容器）
+   *   - >=1 → 项数超过 `30 + N*40` 的 object/array 首屏折成 `…`，
+   *           N 越大阈值越宽松（dense 场景下更紧凑）
+   * 默认 1。 */
   initialCollapsedDepth?: number;
 }
 
@@ -288,14 +297,25 @@ export function JsonViewer({
     setHitIndex(0);
   }
 
+  /* 上一轮是否真的往 DOM 里写过高亮标记。`applyHighlights` 的头一件事是
+   * `clearPreviousHighlights`（对整棵子树 querySelectorAll ×2 + normalize()），
+   * 没在搜索时它纯粹是白扫一遍 —— 而本 effect 会随 `data` / `hits` / `query`
+   * 的身份变化重跑（轮询刷新、父级重渲染都算）。记一笔「有没有写过」，从没写过
+   * 就直接跳过整轮 DOM 后处理。 */
+  const paintedRef = useRef(false);
+
   // ── DOM 后处理: query / hitIndex / data 变化时重新注入高亮 ──
   useEffect(() => {
     ensureHighlightCss();
-    if (!bodyRef.current) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    const needle = query.trim();
+    if (!needle && !paintedRef.current) return;
     // 折叠 state 引发的 DOM 变化先 settle, 再扫
     return onNextFrame(() => {
       if (!bodyRef.current) return;
-      applyHighlights(bodyRef.current, hits, hitIndex, query.trim());
+      applyHighlights(bodyRef.current, hits, hitIndex, needle);
+      paintedRef.current = needle.length > 0 && hits.length > 0;
     });
   }, [query, hits, hitIndex, data]);
 
@@ -441,13 +461,18 @@ export function JsonViewer({
         {data === undefined ? (
           <span className="text-ink-fainter">(empty)</span>
         ) : (
-          <JsonView
+          <MemoJsonView
             src={data}
             /* 不再传 `dark`（它会挂上写死的 dark.css），语法着色统一由
                `.jv-theme-comfy` 的两态 token 负责（见 globals.css）。 */
             theme="default"
-            // collapsed={false} 让初始全部展开, dense 场景靠 collapseObjectsAfterLength 自然折叠
-            collapsed={false}
+            /* 这里**不能**传 `collapsed`：库的 isCollapsed() 第一句就是
+               `if (typeof collapsed === 'boolean') return collapsed;` —— 传
+               `collapsed={false}` 会让它「每个容器都返回 false」，下面的
+               `collapseObjectsAfterLength` 阈值**永远不生效**，整棵树（含几百
+               个键的 prompt）首屏全量展开。comfy-cli 的 prompt_preview 因此能把
+               「查看完整输出」弹窗卡死。省略它才走阈值分支：小容器展开、项数
+               超过 `collapseThreshold` 的容器折成 `…`，点开才渲染。 */
             collapseObjectsAfterLength={collapseThreshold}
             collapseStringsAfterLength={80}
             collapseStringMode="word"
