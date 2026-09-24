@@ -143,16 +143,16 @@ export function HistoryDetailModal({
                     </Button>
                   </div>
                   {actions.folderPopover.helperMissing ? (
-                    <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-700 dark:text-amber-300">
+                    <div className="border-warning/30 bg-warning/10 text-warning-strong mb-2 rounded border px-2.5 py-1.5 text-[10.5px] leading-relaxed">
                       未检测到 ComfyApp
                       助手，浏览器没有弹出「打开外部应用」确认框。
                       请双击运行项目内{""}
-                      <code className="text-amber-700 dark:text-amber-300">
+                      <code className="text-warning-strong">
                         scripts\install-comfyapp-helper.ps1
                       </code>
                       {""}
                       注册
-                      <code className="text-amber-700 dark:text-amber-300">
+                      <code className="text-warning-strong">
                         {""}
                         comfyapp://
                       </code>
@@ -160,18 +160,18 @@ export function HistoryDetailModal({
                       协议（仅本机、无需管理员）， 或直接{""}
                       <a
                         href="/api/helper/install"
-                        className="underline hover:text-amber-700 dark:text-amber-300"
+                        className="hover:text-warning-strong underline"
                       >
                         下载安装脚本
                       </a>
                       。
                     </div>
                   ) : (
-                    <div className="mb-2 rounded border border-emerald-500/20 bg-emerald-500/6 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-emerald-700 dark:text-emerald-300/90">
+                    <div className="border-success/20 bg-success/6 text-success-strong mb-2 rounded border px-2.5 py-1.5 text-[10.5px] leading-relaxed">
                       若浏览器弹出「是否打开外部应用」，点击「打开」即可在资源管理器中打开该目录。
                     </div>
                   )}
-                  <code className="bg-canvas-deep block rounded px-2.5 py-2 text-[11px] leading-relaxed break-all text-emerald-700 select-all dark:text-emerald-400">
+                  <code className="bg-canvas-deep text-success-strong block rounded px-2.5 py-2 text-[11px] leading-relaxed break-all select-all">
                     {actions.folderPopover.path}
                   </code>
                   <div className="mt-2 flex flex-wrap justify-end gap-2">
@@ -272,7 +272,7 @@ export function HistoryDetailModal({
  还会把种子从参数表里过滤掉（用户实测：「参数乱糟糟的」）。 */}
 
                 {current.error && (
-                  <div className="rounded-lg bg-red-500/10 p-2.5 text-xs text-red-700 dark:text-red-300">
+                  <div className="bg-destructive/10 text-destructive rounded-lg p-2.5 text-xs">
                     错误：{current.error}
                   </div>
                 )}
@@ -314,7 +314,7 @@ export function HistoryDetailModal({
                       <KeyValueRows
                         layout="table"
                         className="mb-2"
-                        keyClassName="text-violet-700 dark:text-violet-300"
+                        keyClassName="text-primary-strong"
                         items={paramRows.map((row) => ({
                           id: row.id,
                           /* 显示工作流 IO 的作者标签（「宽高比」而不是

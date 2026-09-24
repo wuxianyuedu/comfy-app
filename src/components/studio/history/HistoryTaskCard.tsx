@@ -91,7 +91,7 @@ export function HistoryTaskCard({
           )}
           {/* 排队中：虚线边框 + 计时图标 */}
           {task.status === "QUEUED" && (
-            <div className="pointer-events-none absolute inset-0 rounded-xl border border-dashed border-cyan-500/40" />
+            <div className="border-info/40 pointer-events-none absolute inset-0 rounded-xl border border-dashed" />
           )}
         </Button>
 
@@ -107,7 +107,7 @@ export function HistoryTaskCard({
               {st.label}
             </span>
             {st.showProgress && (
-              <span className="text-[10px] text-violet-700 tabular-nums dark:text-violet-400">
+              <span className="text-primary-strong text-[10px] tabular-nums">
                 {clampPct(progress)}%
               </span>
             )}
@@ -122,25 +122,25 @@ export function HistoryTaskCard({
             {task.prompt || "（无提示词）"}
           </p>
           {task.status === "FAILED" && task.error && (
-            <div className="mt-2 rounded-md border border-red-500/20 bg-red-500/6 px-2.5 py-1.5">
-              <p className="text-[11px] leading-relaxed text-red-700 dark:text-red-400">
+            <div className="border-destructive/20 bg-destructive/6 mt-2 rounded-md border px-2.5 py-1.5">
+              <p className="text-destructive text-[11px] leading-relaxed">
                 <span className="font-semibold">错误：</span>
                 {task.error}
               </p>
               {st.failureSuggestion && (
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-700/90 dark:text-amber-600/90">
+                <p className="text-warning-strong/90 mt-1 text-[11px] leading-relaxed">
                   {st.failureSuggestion(task.error)}
                 </p>
               )}
               {/* 结构化校验错误逐字段列表 */}
               {task.validationErrors && task.validationErrors.length > 0 && (
-                <div className="bg-canvas-deep mt-1.5 rounded border border-red-400/20 px-2 py-1.5">
-                  <div className="mb-1 text-[10px] font-semibold text-red-700 dark:text-red-400">
+                <div className="bg-canvas-deep border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
+                  <div className="text-destructive mb-1 text-[10px] font-semibold">
                     节点配置校验（{task.validationErrors.length} 项）
                   </div>
                   <ValidationErrorList
                     errors={task.validationErrors}
-                    className="text-red-600/90 dark:text-red-400/90"
+                    className="text-destructive/90"
                   />
                 </div>
               )}
