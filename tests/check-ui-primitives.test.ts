@@ -4403,19 +4403,61 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("studio/P69RawCheckbox.tsx");
   });
 
-  it("P69 已 import ui/checkbox 的落点不再被计（合规者不误伤）", () => {
+  it("P71 视图层手写 dark:palette 色计入棘轮（规范 §4.11.1 / P71）", () => {
     seedBaseline();
     write(
-      "src/components/studio/P69OkCheckbox.tsx",
+      "src/components/studio/P71DarkPalette.tsx",
       [
-        'import { Checkbox } from "~/components/ui/checkbox";',
-        "export function Toggle() {",
-        '  return <Checkbox id="x" />;',
+        "export function V() {",
+        '  return <span className="text-red-700 dark:text-red-400">x</span>;',
         "}",
       ].join("\n"),
     );
-    const { code, output } = run(["--report"]);
-    expect(code).toBe(0);
-    expect(output).not.toContain("studio/P69OkCheckbox.tsx");
+    const { code, output } = run();
+    expect(code, output).not.toBe(0);
+    expect(output).toContain("P71");
+    expect(output).toContain("studio/P71DarkPalette.tsx");
+  });
+
+  it("P71 语义 token（含 dark: 但不带 palette 色名）不误伤", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P71Semantic.tsx",
+      [
+        "export function V() {",
+        '  return <span className="text-ink-muted dark:text-ink-bright">x</span>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run();
+    expect(code, output).toBe(0);
+  });
+
+  it("P71 只计 p71-allow 块外的 dark:palette（§3.6.1 ANSI 例外靠标记生效）", () => {
+    seedBaseline();
+    write(
+      "src/components/studio/P71Allow.tsx",
+      [
+        "const ANSI = {",
+        "  // p71-allow:start ANSI SGR 终端色是 §3.6.1 例外",
+        '  inside: "text-red-700 dark:text-red-400",',
+        "  // p71-allow:end",
+        '  outside: "text-rose-700 dark:text-rose-400",',
+        "};",
+        "export function V() {",
+        "  return <span>{ANSI.inside}{ANSI.outside}</span>;",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = run(["--update"]);
+    expect(code, output).toBe(0);
+    const baseline = JSON.parse(
+      readFileSync(
+        join(workdir, "scripts", ".ui-primitives-baseline.json"),
+        "utf8",
+      ),
+    ) as { files: Record<string, { P71?: number }> };
+    // 块外那一处计入、块内那一处被 allow 标记剥掉 → 恰好 1，而不是 2。
+    expect(baseline.files["src/components/studio/P71Allow.tsx"]?.P71).toBe(1);
   });
 });

@@ -79,9 +79,9 @@ function CountColumn({
     value === 0
       ? "text-ink-fainter"
       : tone === "warn"
-        ? "text-amber-600 dark:text-amber-300"
+        ? "text-warning-strong"
         : tone === "error"
-          ? "text-rose-600 dark:text-rose-300"
+          ? "text-destructive"
           : "text-ink-soft";
   return (
     <span className={`w-14 shrink-0 text-right tabular-nums ${color}`}>
