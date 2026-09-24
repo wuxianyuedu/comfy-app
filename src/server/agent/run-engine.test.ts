@@ -188,10 +188,8 @@ describe("advanceRunLoop", () => {
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
-    // 自主流水线出图带 randomizeSeed，让「抽卡重生成」同提示词也能换种子出不同图。
-    expect(synthesizeFirstFrame).toHaveBeenCalledWith(
-      expect.objectContaining({ randomizeSeed: true, workflowId: "wf-img" }),
-    );
+    // 首刷（无 processedShotRev 记录）不注 seed —— 用工作流图内自带的 seed 配置。
+    expect(synthesizeFirstFrame.mock.calls[0]![0]).not.toHaveProperty("seed");
     const shot = (row!.shots as { imageUrl?: string; status: string }[])[0];
     expect(shot).toMatchObject({
       status: "done",
@@ -200,6 +198,34 @@ describe("advanceRunLoop", () => {
     const run = normalizeProductionRun(row!.run);
     expect(run.processedShotRev).toEqual({ a: 0 });
     expect(run.status).toBe("done");
+  });
+
+  it("抽卡重生成（rev 比快照新）：出图带一个新的随机 seed", async () => {
+    await seed(
+      {
+        scriptMarkdown: "# 剧本",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 1 }],
+        rendered: true,
+      },
+      {
+        status: "running",
+        approvalMode: "auto",
+        imageWorkflowId: "wf-img",
+        processedShotRev: { a: 0 }, // 之前处理过 rev0，如今 rev1 → 这是退回后的重出
+      },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
+    expect(synthesizeFirstFrame.mock.calls[0]![0]).toMatchObject({
+      workflowId: "wf-img",
+    });
+    // 重出走的是「抽卡」：带一个有限数字 seed（具体值随机，只断类型）
+    const seedArg = (
+      synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
+    ).seed;
+    expect(typeof seedArg).toBe("number");
+    expect(Number.isFinite(seedArg)).toBe(true);
   });
 
   it("生图缺 imageWorkflowId → 该步失败落 failed", async () => {

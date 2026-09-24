@@ -17,8 +17,8 @@ function ids(mode: string | null): string[] {
 }
 
 describe("exposedParamsForMode", () => {
-  it("文生图只保留提示词与尺寸", () => {
-    expect(ids("T2I")).toEqual(["prompt", "negative", "size"]);
+  it("文生图只保留提示词与尺寸（+ 种子口）", () => {
+    expect(ids("T2I")).toEqual(["prompt", "negative", "size", "seed"]);
   });
 
   it("图生图额外给参考图（输入本身就是一张图）", () => {
@@ -28,6 +28,7 @@ describe("exposedParamsForMode", () => {
       "reference-image",
       "reference-image-2",
       "size",
+      "seed",
     ]);
   });
 
@@ -38,6 +39,7 @@ describe("exposedParamsForMode", () => {
       "first-frame",
       "size",
       "duration",
+      "seed",
     ]);
   });
 
@@ -49,11 +51,18 @@ describe("exposedParamsForMode", () => {
       "last-frame",
       "size",
       "duration",
+      "seed",
     ]);
   });
 
   it("文生视频不给首帧（没有图可给），但有时长", () => {
-    expect(ids("T2V")).toEqual(["prompt", "negative", "size", "duration"]);
+    expect(ids("T2V")).toEqual([
+      "prompt",
+      "negative",
+      "size",
+      "duration",
+      "seed",
+    ]);
   });
 
   it("时长是视频专有口：生图模式不带", () => {
@@ -61,9 +70,9 @@ describe("exposedParamsForMode", () => {
     expect(ids("I2I")).not.toContain("duration");
   });
 
-  it("没有模式时退到最保守的一套（提示词 + 尺寸）", () => {
-    expect(ids(null)).toEqual(["prompt", "negative", "size"]);
-    expect(ids("")).toEqual(["prompt", "negative", "size"]);
+  it("没有模式时退到最保守的一套（提示词 + 尺寸 + 种子）", () => {
+    expect(ids(null)).toEqual(["prompt", "negative", "size", "seed"]);
+    expect(ids("")).toEqual(["prompt", "negative", "size", "seed"]);
   });
 
   it("契约口一律常驻：没有 `optional` 这种「看工作流脸色」的标记", () => {
@@ -72,7 +81,7 @@ describe("exposedParamsForMode", () => {
     for (const def of exposedParamsForMode("T2I")) {
       expect(Object.keys(def)).not.toContain("optional");
     }
-    expect(ids("T2I")).toEqual(["prompt", "negative", "size"]);
+    expect(ids("T2I")).toEqual(["prompt", "negative", "size", "seed"]);
   });
 });
 
