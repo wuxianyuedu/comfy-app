@@ -145,17 +145,30 @@ Write-Host "---------- [5/6] 检查项目依赖 ----------" -ForegroundColor Whi
 # 只探测"装没装"会漏掉"装的是旧 lockfile"的情况：拉取新增依赖后没重装，依赖是
 # 残缺的，但 .modules.yaml 与 next.cmd 都在 → 被当成"已就绪"而跳过安装。
 # 追加"lockfile 漂移"判定：pnpm 会把最近一次成功安装的 lockfile 复制到
-# node_modules\.pnpm\lock.yaml，与仓库根 pnpm-lock.yaml 不一致即说明依赖陈旧，需重装。
+# node_modules\.pnpm\lock.yaml，与仓库根 pnpm-lock.yaml 有**实质**差异即说明
+# 依赖陈旧，需重装。
+# 判据只能是"实质差异"、不能是文件哈希：pnpm 复制出去的那份与仓库根那份本就
+# 不同形（注释 / 空行 / 条目顺序都不一样），逐字节哈希比对恒为"不一致" →
+# 每一次双击入口都跑一遍全量 pnpm install。真正的判据在 Node 侧
+# scripts/lockfile/diff-cli.mjs（与启动器 launcher-core/worktree.mjs 同源，
+# 全仓唯一实现），退出码：0 一致 / 1 有实质差异 / 2 参数或读取错误。
 $instLock    = Join-Path $root "node_modules\.pnpm\lock.yaml"
 $drifted     = $false
 $hasInstLock = $false
+$driftReport = @()
 if ((Test-Path (Join-Path $root "node_modules")) -and (Test-Path (Join-Path $root "pnpm-lock.yaml"))) {
     if (-not (Test-Path $instLock)) { $drifted = $true }
     else {
         $hasInstLock = $true
-        $hRoot = (Get-FileHash -LiteralPath (Join-Path $root "pnpm-lock.yaml") -Algorithm SHA256).Hash
-        $hInst = (Get-FileHash -LiteralPath $instLock -Algorithm SHA256).Hash
-        $drifted = ($hRoot -ne $hInst)
+        Push-Location $root
+        try {
+            $driftReport = & node "scripts\lockfile\diff-cli.mjs" --installed $instLock --root $root 2>&1
+            $diffExit    = $LASTEXITCODE
+        } finally {
+            Pop-Location
+        }
+        # 退出码 2 是"判不了"（缺文件 / 参数错）—— 保守按已漂移处理，宁可多装一次。
+        $drifted = ($diffExit -ne 0)
     }
 }
 $needInstall = -not (Test-Path (Join-Path $root "node_modules\.modules.yaml")) -or
@@ -165,15 +178,10 @@ if ($drifted) {
     Say-Warn "检测到依赖与 lockfile 不一致（拉取更新后未重装），将补装依赖..."
     # 只报「不一致」用户无从判断是什么变了（ISSUE #550）：把差异逐项打印出来。
     # 差异定位在 Node 侧 scripts/lockfile/lock-diff.mjs（唯一实现，质量门禁复用），
-    # 这里只负责调用与展示，不再自己实现一遍解析。
+    # 这里只负责展示判定阶段那次调用的结果，不再自己实现一遍解析、也不再调第二次。
     if ($hasInstLock) {
         Say-Info "下面列出不一致的具体位置（仓库 pnpm-lock.yaml 对比最近一次安装时的 lockfile）："
-        Push-Location $root
-        try {
-            & node "scripts\lockfile\diff-cli.mjs" --installed $instLock --root $root
-        } finally {
-            Pop-Location
-        }
+        $driftReport | ForEach-Object { Write-Host $_ }
         Write-Host ""
     } else {
         Say-Info "本次是首次安装（没有可比对的历史 lockfile），跳过差异明细。"
