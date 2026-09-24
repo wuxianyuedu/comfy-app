@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23",
+  "generatedAt": "2026-09-24",
   "note": "视图层自实现 UI 基元的存量（规范 16 §16.2.3）。棘轮只许下降；新增请先改用 ui/ 基元，不要用 --update 放水。豁免口径见脚本内 EXEMPT_DIRS（与规范 §16.2.3 同源）。",
   "rules": {
     "P1": "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
@@ -12,8 +12,214 @@
     "P66": "自建「同一时刻只跑一件」的重入闸门（应使用 ~/components/ui/use-reentrancy-lock 的 useReentrancyLock / createReentrancyLock）",
     "P67": "ui/ 层自造组件绕开已装 shadcn 基元（Badge / Progress / Slider / Empty / Field —— 规范 §16.2.3 / §12.18）",
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
-    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）"
+    "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
+    "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
   },
-  "total": 0,
-  "files": {}
+  "total": 215,
+  "files": {
+    "src/components/message-center/MessageCenterButton.tsx": {
+      "P71": 1
+    },
+    "src/components/message-center/MessageCenterPanel.tsx": {
+      "P71": 5
+    },
+    "src/components/studio/BrowserStatusBar.tsx": {
+      "P71": 5
+    },
+    "src/components/studio/canvas/SubgraphHeader.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/canvas/WorkflowCanvasEditor.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/debug/DebugChainFooter.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/film-studio-config.ts": {
+      "P71": 4
+    },
+    "src/components/studio/FilmStudio.tsx": {
+      "P71": 5
+    },
+    "src/components/studio/history/history-utils.ts": {
+      "P71": 4
+    },
+    "src/components/studio/history/HistoryDetailModal.tsx": {
+      "P71": 8
+    },
+    "src/components/studio/history/HistoryTaskCard.tsx": {
+      "P71": 5
+    },
+    "src/components/studio/HomePage.tsx": {
+      "P71": 3
+    },
+    "src/components/studio/logs/log-row-style.ts": {
+      "P71": 12
+    },
+    "src/components/studio/logs/LogPanel.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/logs/LogPanelOriginSelect.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/logs/LogRow.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/ModelLibrary.tsx": {
+      "P71": 5
+    },
+    "src/components/studio/ModelTagManager.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/CanvasContextMenu.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/CanvasNode/SelectedToolbar.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/CanvasPanelToolbar.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/CanvasToolbar.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/EmptyCanvasHint.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
+      "P71": 7
+    },
+    "src/components/studio/project-canvas/HistoryPanel.tsx": {
+      "P71": 4
+    },
+    "src/components/studio/project-canvas/ImageGenerationPanel.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": {
+      "P71": 11
+    },
+    "src/components/studio/project-canvas/WorkflowNode.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/ProjectOutputs.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/RequiredSummary.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/SourceModal.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/training-studio-config.ts": {
+      "P71": 4
+    },
+    "src/components/studio/VideoQueueModal.tsx": {
+      "P71": 10
+    },
+    "src/components/studio/workflow-editor/WorkflowEditorInner.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/workflow-editor/WorkflowEditorNodes.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/workflow-editor/WorkflowEditorTopbar.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/workflow-editor/WorkflowParamCard.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/workflow-form/DynamicWorkflowForm/DynamicWorkflowFormView.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.tsx": {
+      "P71": 5
+    },
+    "src/components/studio/workflow-library/ParamOwnerTag.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/workflow-library/sections/DetailHeader.tsx": {
+      "P71": 4
+    },
+    "src/components/studio/workflow-library/sections/EncapsulationTestForm.tsx": {
+      "P71": 1
+    },
+    "src/components/studio/workflow-library/sections/WorkshopEncapsulationPanel.tsx": {
+      "P71": 11
+    },
+    "src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx": {
+      "P71": 3
+    },
+    "src/components/studio/workflow-library/WorkflowLibrary.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/workflow-library/WorkflowLibraryList.tsx": {
+      "P71": 3
+    },
+    "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/workflow-library/WorkflowRunRawCliModal.tsx": {
+      "P71": 3
+    },
+    "src/components/studio/WorkflowImportPanel.tsx": {
+      "P71": 3
+    },
+    "src/components/studio/WorkflowIOPreviewPanel.tsx": {
+      "P71": 2
+    },
+    "src/components/studio/WorksGallery.tsx": {
+      "P71": 2
+    },
+    "src/components/workshop/AgentOverlay.tsx": {
+      "P71": 1
+    },
+    "src/components/workshop/api-channel-settings-config.ts": {
+      "P71": 2
+    },
+    "src/components/workshop/CharacterDesigner.tsx": {
+      "P71": 1
+    },
+    "src/components/workshop/CharacterPortraitStudio.tsx": {
+      "P71": 5
+    },
+    "src/components/workshop/ExtractModelSelect.tsx": {
+      "P71": 2
+    },
+    "src/components/workshop/ExtractToolbar.tsx": {
+      "P71": 6
+    },
+    "src/components/workshop/FinalComposer.tsx": {
+      "P71": 2
+    },
+    "src/components/workshop/LLMContext.tsx": {
+      "P71": 3
+    },
+    "src/components/workshop/mode-contract/dialog/ModeContractEditorView.tsx": {
+      "P71": 3
+    },
+    "src/components/workshop/ScriptGenerator.tsx": {
+      "P71": 1
+    },
+    "src/components/workshop/StoryboardPlanner.tsx": {
+      "P71": 1
+    },
+    "src/components/workshop/WorkshopModelAdapterModal.tsx": {
+      "P71": 3
+    },
+    "src/components/workshop/WorkshopStageNav.tsx": {
+      "P71": 1
+    },
+    "src/app/(main)/settings/components/SettingsPrimitives.tsx": {
+      "P71": 18
+    },
+    "src/app/login/page.tsx": {
+      "P71": 1
+    }
+  }
 }

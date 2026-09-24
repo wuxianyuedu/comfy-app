@@ -3191,6 +3191,37 @@ const RULES = {
       return (t2.match(/space-[xy]-\d/g) || []).length;
     },
   },
+
+  /* ── P71「视图层手写 dark:palette 色（应走语义 token）」（棘轮，§4.11.1）───
+   * shadcn `styling.md`「No manual `dark:` color overrides. Use semantic
+   * tokens」+ 规范 §4.11.1「映射表里的颜色也必须走语义 token」。项目的
+   * `--color-success` / `--color-warning` / `--color-destructive` /
+   * `--color-primary-*` 等 token 内部已含深浅两态，写 `text-amber-700
+   * dark:text-amber-400` 这种「字面量 + 手写 dark:」等于把同一件事在明暗
+   * 两处各写一遍，改主题跟不动。
+   *
+   * 锚点：`dark:` 前缀 + Tailwind 调色板色名 + 数字档位（覆盖
+   * `dark:text-red-400` / `dark:bg-emerald-500/15` / `dark:border-amber-*`
+   * 等）。`text-ink-*` / `bg-subtle` / `text-muted-foreground` 这类语义类
+   * 不含调色板色名 + 数字档，天然不命中。
+   *
+   * 棘轮（非硬闸）：2026-09-24 全界面扫网实测视图层 230 处存量，本批折叠
+   * log-level 色系统后冻结为 215 处起点、只许降。「精确等值」的状态文字
+   * （text-amber-700/red-700 配 dark:）已在本批折叠；其余（状态底色
+   * bg/border、品牌紫 violet→primary、类型青 cyan）token 值非精确等值、
+   * 需逐案视觉核对，按域分片降基线。 */
+  P71: {
+    label:
+      "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
+    count: (t) => {
+      const t2 = stripComments(t);
+      return (
+        t2.match(
+          /dark:(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file|space)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
+        ) || []
+      ).length;
+    },
+  },
 };
 
 /** P37 的「忙碌位」名字判据：按变量名区分「忙碌位」与「选中位」（与 P30 同款）。 */
