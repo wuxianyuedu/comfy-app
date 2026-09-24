@@ -252,10 +252,11 @@ async function execImages(
       next.push(shot);
       continue;
     }
-    // 抽卡重生成：这一镜之前已被本 run 处理过（processedShotRev 有记录）、如今因退回/改提示词
-    // 重新纳入 → 给一个新的随机 seed，让同提示词也能换图。首刷（无记录）不注 seed，用工作流
-    // 图内自带的 seed 配置（是否真能换由工作流是否连了「种子」口决定）。
-    const isReroll = run.processedShotRev[shot.id] !== undefined;
+    // 「种子」算高级输入、默认随机：每次自主出图都带一个新的随机 seed（首刷与抽卡重出一样），
+    // 让同提示词每次重跑都能换图。seed 只经「种子」对外参数下发（synthesizeFirstFrame →
+    // createWorkflowRunTask → buildEncapsulatedInputs → applyParamMapping），落到作者在工作流里
+    // 连好的 seed / noise_seed 端口上；作者没连这一口 → 落进 unmatched、不写任何节点，工作流用它
+    // 图内自带的 seed。运行期绝不直接改写工作流节点（不动 control_after_generate、不注图内 seed）。
     try {
       const path = await synthesizeFirstFrame({
         userId,
@@ -263,7 +264,7 @@ async function execImages(
         prompt: shot.prompt,
         negative: shot.negativePrompt || undefined,
         projectId,
-        ...(isReroll ? { seed: randomSeed() } : {}),
+        seed: randomSeed(),
       });
       next.push({ ...shot, imageUrl: path, status: "done" });
     } catch {
@@ -288,7 +289,7 @@ async function execImages(
  * 自动评审执行器（Phase 8 · P8-1c）：逐镜调 `reviewContent` 出判定（同时落库 `shot.review`），据此：
  *   · 通过 → 记 `reviewedShotRev[id]=rev`（定稿，规划器不再纳入）；
  *   · 不合格且未达重试上限 → `reviewAttempts[id]++` + `applyShotRedo`（清图 + rev 自增）→ 该镜回到
- *     待生图、用新种子重出（PR#942 的 randomizeSeed）后再次评审；
+ *     待生图，重跑时由 `execImages` 带一个新的随机 seed（走「种子」对外参数）换图后再次评审；
  *   · 不合格但已达 `REVIEW_MAX_RETRY` → 记 `reviewedShotRev[id]=rev` 保留当前结果、停止返工（保证收敛）。
  * 评审只写 `shot.review`（`reviewContent` 内部），退回重出走一次 `patchContent`；重出前重读一次，
  * 避免用评审前的旧快照覆盖掉刚写入的判定。
