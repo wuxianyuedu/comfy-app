@@ -448,6 +448,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */}
       <Dialog open={open} onOpenChange={(next) => setOpen(next)}>
         <DialogContent
+          aria-label="执行步骤日志"
           showCloseButton={false}
           className="bg-transparent p-0 ring-0"
           popupClassName={panel.widthClass}
