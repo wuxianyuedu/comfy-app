@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Settings } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 
 import { useHotkey } from "~/components/ui/use-hotkey";
+import { Disclosure } from "~/components/ui/disclosure";
+import { cn } from "~/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -15,13 +17,21 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-import { visibleNavItems, type WorkspaceView } from "./NavItems";
+import { globalNavItems, PROJECTS_ENTRY, type WorkspaceView } from "./NavItems";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
+
+/** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
+export interface SidebarProject {
+  id: string;
+  name: string;
+}
 
 export interface AppShellProps {
   /** 当前视图（决定侧栏高亮与顶部标题）。 */
@@ -32,6 +42,16 @@ export interface AppShellProps {
   onOpenSettings: () => void;
   /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
   defaultSidebarOpen?: boolean;
+  /** 底部「项目」分组列出的项目（来自 canvas-store）。 */
+  projects: SidebarProject[];
+  /** 当前活跃项目 id（用于高亮分组里的对应项）。 */
+  activeProjectId: string | null;
+  /** 点开某个项目 → 进入项目界面（画布为其默认页签）。 */
+  onOpenProject: (id: string) => void;
+  /** 「查看全部」→ 项目网格落地页（works）。 */
+  onShowAllProjects: () => void;
+  /** 新建项目 → 建一条 proj_* 并进画布。 */
+  onNewProject: () => void;
   /** 主内容。各视图只往这里塞东西，外壳细节（侧栏 / 顶栏 / 滚动容器）不归它们管。 */
   children: ReactNode;
 }
@@ -39,29 +59,24 @@ export interface AppShellProps {
 /**
  * 应用外壳 —— 左侧栏（官方 `ui/sidebar`）+ 顶部工具条（`TopBar`）+ 主内容。
  *
- * ## 为什么现在才有它
+ * 侧栏分两段：
+ *   · 顶部 = 全局项（首页 / 模型 / 历史 / 炼丹 / 流程），常驻、不随当前视图增减；
+ *   · 底部 = 「项目」折叠分组（`Disclosure`，P10 唯一实现），展开列出已有项目 + 查看全部 / 新建。
  *
- * 规范 §12.1 的目录树与 §12.2 的 barrel 示例里一直写着 `AppShell` / `TopBar`
- * 两个名字，但文件从未落地。主界面此前是 `workspace/page.tsx` 里手工拼的
- * 「64px 自绘竖排导航条 + 各视图自己的内容」，首页 `HomePage` 另有一份内联
- * 顶部条（搜索是个 `<div>` 假实现、铃铛与头像只弹一句 toast 占位）——
- * 同一件事两处实现，且两处都没有官方基元已有的能力（折叠成图标档 / ⌘B / 记忆）。
- *
- * 引入官方 `sidebar` 后，这里把三件事一次收拢：
- *
- *   - **侧栏**：`NAV_ITEMS` 的**唯一**渲染者（`WorkspaceNav` 随之退役）；
- *   - **顶部工具条**：`TopBar`（§12.1 的另一个空位）；
- *   - **主内容**：`SidebarInset`（渲染成 `<main>`，符合规范 06 的语义标签要求）。
- *
- * 侧栏开合态由 `ui/sidebar` 自己写 cookie（`sidebar_state`）、并由**服务端**
- * 读出来经 `defaultSidebarOpen` 回传，首屏即用户上次选的那一档；⌘/Ctrl+B
- * 与「在输入框里不抢键」都由 `ui/sidebar` 内部走 `useHotkey` 保证。
+ * 画布 / 工坊 / 产出 / 成片不再出现在这里 —— 它们是「项目界面」内部的顶部标签页
+ * （见 `ProjectTabBar`）。此前用 `active === "home"` 决定这四项显隐，导致点「项目」等
+ * 非首页视图时它们莫名复现；改成按分区归属一次性定型，显隐不再随视图漂移。
  */
 export function AppShell({
   active,
   onSelect,
   onOpenSettings,
   defaultSidebarOpen,
+  projects,
+  activeProjectId,
+  onOpenProject,
+  onShowAllProjects,
+  onNewProject,
   children,
 }: AppShellProps) {
   /* 全局命令面板（⌘/Ctrl+K）。状态留在这里：搜索按钮在 TopBar、键盘监听用
@@ -69,9 +84,7 @@ export function AppShell({
   const [commandOpen, setCommandOpen] = useState(false);
   useHotkey({ key: "k", mod: true }, () => setCommandOpen(true));
 
-  /* 首页不显示项目作用域工具（画布 / 工坊）——它们是对「当前项目」的操作投影，
-   * 只有进入某个项目后才出现在侧栏。规则收在 `visibleNavItems`，与命令面板共用。 */
-  const navItems = visibleNavItems(active);
+  const navItems = globalNavItems();
 
   return (
     <SidebarProvider
@@ -121,6 +134,61 @@ export function AppShell({
                     </SidebarMenuItem>
                   );
                 })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          {/* 底部「项目」分组：`mt-auto` 顶到内容区最下（在设置页脚之上）。图标档折叠时
+              整组隐藏 —— 展开式列表在 3rem 图标栏里没有落点，展开侧栏才能选项目。 */}
+          <SidebarGroup className="mt-auto group-data-[collapsible=icon]:hidden">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <Disclosure
+                    defaultOpen
+                    marker="chevron"
+                    trigger={
+                      <>
+                        {PROJECTS_ENTRY.icon}
+                        <span>{PROJECTS_ENTRY.label}</span>
+                      </>
+                    }
+                    className={cn(
+                      "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
+                    )}
+                    panelClassName="mt-1"
+                  >
+                    <SidebarMenuSub>
+                      {projects.map((project) => (
+                        <SidebarMenuSubItem key={project.id}>
+                          <SidebarMenuButton
+                            size="sm"
+                            isActive={project.id === activeProjectId}
+                            tooltip={project.name}
+                            onClick={() => onOpenProject(project.id)}
+                          >
+                            <span>{project.name}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                      <SidebarMenuSubItem>
+                        <SidebarMenuButton
+                          size="sm"
+                          onClick={onShowAllProjects}
+                        >
+                          <span>查看全部</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuButton size="sm" onClick={onNewProject}>
+                          <Plus />
+                          <span>新建项目</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </Disclosure>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
