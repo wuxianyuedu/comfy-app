@@ -21,7 +21,11 @@ import { getSettingsSync } from "../app-settings/app-settings.server";
 import { probeComfyBase, probeComfyAtPort } from "./client";
 import { logger } from "~/lib/core/logger";
 import { killProcessTree } from "~/lib/process/kill-process-tree";
-import { runEnsureLaunch } from "./lifecycle-launch";
+import {
+  ensureKeepAliveWatchOnAdoption,
+  runEnsureLaunch,
+  type LaunchHost,
+} from "./lifecycle-launch";
 import { resolveComfyLaunchPlan } from "./launch-path";
 import { findPidForMainPy } from "./proc-detect";
 import {
@@ -674,9 +678,28 @@ export async function ensureComfyUiReady(
     resetComfyUiStatus();
   }
 
+  const host: LaunchHost = {
+    st,
+    appendRuntimeLog,
+    appendSessionBanner,
+    clearComfyStopping,
+    localTimestamp,
+    probeComfyUi,
+    markSessionStart: markComfySessionStart,
+    markSessionEnd: markComfySessionEnd,
+  };
+  const settings = getSettingsSync();
+
   // 快路径：已经在运行（探测可能有端口偏移，返回真实 base）
   const upBase = await probeComfyUi();
-  if (upBase) return { ok: true, base: upBase, detail: "ComfyUI 已在运行" };
+  if (upBase) {
+    /* 接管：这个实例不是本次会话拉起的（上一会话的保活实例 / 外部启动），
+     * `launchKeepAliveMode` 里的退出监督器不会为它启动。不补上的话，它之后真
+     * 没了就只剩状态轮询里的「未运行」——原因一个字都没有，正是「保活莫名
+     * 退出」的来源。幂等：反复轮询不会重挂。 */
+    ensureKeepAliveWatchOnAdoption({ host, settings, note });
+    return { ok: true, base: upBase, detail: "ComfyUI 已在运行" };
+  }
 
   // 单飞：并发调用共享同一次启动
   if (st.starting) {
@@ -715,7 +738,6 @@ export async function ensureComfyUiReady(
     return { ok: false, base: null, detail: last };
   }
 
-  const settings = getSettingsSync();
   /* 判决表（顺序即优先级）抽在 lifecycle-derive 的 decideEnsureLaunch 里：
    * 已在运行 → 手动启动优先于闩锁 → 自动来源遇闩锁让路（ISSUE #290）→
    * 未开自动启动 / 未配路径给可行动提示。这里只负责把事实喂进去、把结论
@@ -756,16 +778,7 @@ export async function ensureComfyUiReady(
     };
   }
   st.starting = runEnsureLaunch({
-    host: {
-      st,
-      appendRuntimeLog,
-      appendSessionBanner,
-      clearComfyStopping,
-      localTimestamp,
-      probeComfyUi,
-      markSessionStart: markComfySessionStart,
-      markSessionEnd: markComfySessionEnd,
-    },
+    host,
     settings,
     timeoutMs: opts.timeoutMs,
     note,

@@ -332,27 +332,115 @@ async function launchKeepAliveMode(
    *
    * 重新拉起前先停掉上一次的监督器，否则它会一直盯着旧会话、把新进程当成
    * 「旧的那个回来了」。 */
-  keepAliveExitWatcher?.stop();
-  keepAliveExitWatcher = startComfyExitWatcher({
-    findPid: () => findPidForMainPyDetailed(plan.mainPy),
+  startKeepAliveWatch({
+    host,
+    mainPy: plan.mainPy,
+    logs: { out: kaOutLog, err: kaErrLog },
     isStopped: () => st.stopRequested === true,
-    onExit: (facts) => {
-      const report = reportKeepAliveExit({
-        facts,
-        stopRequested: st.stopRequested === true,
-        appendSessionBanner: (b) => appendSessionBanner("end", b),
-        appendRuntimeLog,
-        log: note,
-        keepAliveLogs: { out: kaOutLog, err: kaErrLog },
-      });
-      host.markSessionEnd(report);
-    },
+    note,
   });
   return result;
 }
 
 /** 当前保活会话的退出监督器（同一时刻最多一个，重新拉起前会被停掉）。 */
 let keepAliveExitWatcher: { stop: () => void } | null = null;
+
+/**
+ * 保活退出监督的统一装配入口：「本次会话拉起」与「重启后接管」两条路径共用。
+ * 同一时刻最多一个监督器 —— 重新拉起前会先停掉上一个，否则它会一直盯着旧
+ * 会话、把新进程当成「旧的那个回来了」。
+ */
+function startKeepAliveWatch(params: {
+  host: LaunchHost;
+  mainPy: string;
+  /** 崩溃尾部来源（本次拉起的重定向文件；接管场景给不出来时留空 ——
+   *  监督照常工作，只是退出时带不出尾部）。 */
+  logs?: { out?: string; err?: string };
+  isStopped: () => boolean;
+  note: (msg: string) => void;
+}): void {
+  keepAliveExitWatcher?.stop();
+  keepAliveExitWatcher = startComfyExitWatcher({
+    findPid: () => findPidForMainPyDetailed(params.mainPy),
+    isStopped: params.isStopped,
+    onExit: (facts) => {
+      const report = reportKeepAliveExit({
+        facts,
+        stopRequested: params.isStopped(),
+        appendSessionBanner: (b) => params.host.appendSessionBanner("end", b),
+        appendRuntimeLog: params.host.appendRuntimeLog,
+        log: params.note,
+        keepAliveLogs: params.logs,
+      });
+      params.host.markSessionEnd(report);
+      /* 监督器已自停：清掉引用，之后若这个实例又活了（外部/别处拉起），
+       * 「接管」路径能重新挂上监督。 */
+      keepAliveExitWatcher = null;
+    },
+  });
+}
+
+/**
+ * 找 SERVICES_LOG_DIR 里最新的一对 `comfyui-keepalive-*.{out,err}.log`。
+ *
+ * 用于「接管」场景：那个实例不是本进程拉起的，拿不到它当次的重定向文件路径，
+ * 只能按 mtime 取最近被写入的那份（还在跑的实例还在写，基本就是它）。
+ * 取不到就返回空对象 —— 退出时带不出尾部，但监督本身照常。
+ */
+function findLatestKeepAliveLogs(): { out?: string; err?: string } {
+  try {
+    if (!fs.existsSync(SERVICES_LOG_DIR)) return {};
+    const pick = (suffix: string): string | undefined => {
+      const newest = fs
+        .readdirSync(SERVICES_LOG_DIR)
+        .filter(
+          (name) =>
+            name.startsWith("comfyui-keepalive-") && name.endsWith(suffix),
+        )
+        .map((name) => ({
+          name,
+          mtime: fs.statSync(path.join(SERVICES_LOG_DIR, name)).mtimeMs,
+        }))
+        .sort((a, b) => b.mtime - a.mtime)[0];
+      if (!newest) return undefined;
+      return path.join(SERVICES_LOG_DIR, newest.name);
+    };
+    return { out: pick(".out.log"), err: pick(".err.log") };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 「接管」场景补挂保活退出监督：应用重启后复用了上一次会话拉起的保活实例
+ * （或实例由外部启动），那次拉起发生在上一个进程里，本次会话的
+ * `launchKeepAliveMode` 根本没机会给它装监督器 —— 于是它之后真没了就只剩
+ * 状态轮询里的「未运行」，原因一个字都没有，正是「保活莫名退出」的来源。
+ *
+ * 只在保活策略下生效（bound 模式有子进程句柄，退出由直连的 exit 事件落）。
+ * 幂等：状态轮询 / WS 重连会反复走到这里，监督器一旦挂上就不再重挂 —— 重挂
+ * 会把「进程开头时间」重置成最后一次轮询的时刻，存活时长就失真了。
+ */
+export function ensureKeepAliveWatchOnAdoption(input: {
+  host: LaunchHost;
+  settings: ReturnType<typeof getSettingsSync>;
+  note: (msg: string) => void;
+}): void {
+  const { host, settings, note } = input;
+  if (resolveLaunchPolicy(getExitPolicy().exitKillComfyui) !== "keepAlive") {
+    return;
+  }
+  if (keepAliveExitWatcher !== null) return;
+  const plan = resolveComfyLaunchPlan(settings.comfyuiPath);
+  if ("error" in plan) return;
+  startKeepAliveWatch({
+    host,
+    mainPy: plan.mainPy,
+    logs: findLatestKeepAliveLogs(),
+    isStopped: () => host.st.stopRequested === true,
+    note,
+  });
+}
 
 /**
  * bound 模式：直连 spawn（与父同组），stdio 直管，等就绪靠「已知子进程 PID
