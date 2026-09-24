@@ -82,10 +82,20 @@ export async function syncModels(userId?: string): Promise<number> {
   // 第 2 步 —— 只在 ComfyUI 可达时才从磁盘回填。
   if (!(await isComfyReachable())) return 0;
 
+  /* 按目录**并发**拉取：原先是串行 await，目录一个接一个等，总耗时是所有目录
+   * 的往返之和。目录数就是模型类型数（十几个），并发不会打爆本地 ComfyUI。 */
+  const enabledFolders = [...overrides]
+    .filter(([, ov]) => ov.enabled)
+    .map(([folder]) => folder);
+  const perFolder = await Promise.all(
+    enabledFolders.map(async (folder) => ({
+      folder,
+      files: await listModels(folder),
+    })),
+  );
+
   const scanned: ScannedFile[] = [];
-  for (const [folder, ov] of overrides) {
-    if (!ov.enabled) continue;
-    const files = await listModels(folder);
+  for (const { folder, files } of perFolder) {
     for (const fileName of files) {
       const name = stripExt(fileName);
       scanned.push({
@@ -98,15 +108,9 @@ export async function syncModels(userId?: string): Promise<number> {
     }
   }
 
-  for (const s of scanned) {
-    await modelRepository.upsertScanned({
-      fileName: s.fileName,
-      folder: s.folder,
-      name: s.name,
-      type: s.type,
-      baseModel: s.baseModel,
-    });
-  }
+  /* 一次性批量落库：模型目录常数百到数千文件，逐条 `await upsertScanned`
+   * 就是同数量的数据库往返，同步接口因此长时间挂起。 */
+  await modelRepository.upsertScannedMany(scanned);
 
   return scanned.length;
 }

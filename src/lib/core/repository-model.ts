@@ -13,7 +13,11 @@ import {
   type UserModelConfig,
 } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
-import { eq, and, like, inArray, desc, count } from "drizzle-orm";
+import { eq, and, like, inArray, desc, count, sql } from "drizzle-orm";
+
+/* 单条多值 INSERT 的行数上限：SQLite 的绑定变量有上限，一次塞几千行会直接报
+ * 「参数过多」，因此批量 upsert 按这个大小切片。 */
+const UPSERT_CHUNK = 400;
 
 export class ModelRepository extends DrizzleRepository<Model> {
   constructor() {
@@ -75,6 +79,47 @@ export class ModelRepository extends DrizzleRepository<Model> {
           baseModel: input.baseModel,
         },
       });
+  }
+
+  /* `upsertScanned` 的批量版。扫描一次模型目录就是几百到几千个文件，逐条
+   * `await` 等于同数量的数据库往返；这里拼成多值 INSERT ... ON CONFLICT DO
+   * UPDATE，往返数从 N 降到 N / UPSERT_CHUNK。语义与单条版一致：按
+   * (fileName, folder) 冲突则更新为「可见 + 最新的 name/type/baseModel」。 */
+  async upsertScannedMany(
+    inputs: {
+      fileName: string;
+      folder: string;
+      name: string;
+      type: string;
+      baseModel: string;
+    }[],
+  ): Promise<void> {
+    if (!inputs.length) return;
+    for (let start = 0; start < inputs.length; start += UPSERT_CHUNK) {
+      const chunk = inputs.slice(start, start + UPSERT_CHUNK);
+      await db
+        .insert(model)
+        .values(
+          chunk.map((input) => ({
+            fileName: input.fileName,
+            folder: input.folder,
+            name: input.name,
+            type: input.type,
+            baseModel: input.baseModel,
+            isAvailable: true,
+            source: "LOCAL" as const,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [model.fileName, model.folder],
+          set: {
+            isAvailable: true,
+            name: sql`excluded.name`,
+            type: sql`excluded.type`,
+            baseModel: sql`excluded.baseModel`,
+          },
+        });
+    }
   }
 
   async listAvailableFileNamesByFolders(folders: string[]): Promise<string[]> {
