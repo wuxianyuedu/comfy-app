@@ -100,7 +100,7 @@ export function WidgetValueChip({
         className={`rounded px-1.5 py-px font-mono text-[10px] font-semibold ${
           on
             ? "bg-success-strong/18 text-success-strong"
-            : "bg-red-500/18 text-red-600 dark:text-red-400"
+            : "bg-destructive/18 text-destructive"
         }`}
       >
         {on ? "✓" : "✗"}
@@ -110,7 +110,7 @@ export function WidgetValueChip({
   if (widget === "select") {
     return (
       <span
-        className="max-w-[100px] truncate rounded bg-violet-500/18 px-1.5 py-px font-mono text-[10px] font-semibold text-violet-700 dark:text-violet-300"
+        className="bg-primary/18 text-primary-strong max-w-[100px] truncate rounded px-1.5 py-px font-mono text-[10px] font-semibold"
         title={widgetValueToText(value)}
       >
         {displayValue(widgetValueToText(value))}
@@ -267,8 +267,8 @@ export function ParseConsole({
               data-log-row
               className={
                 log.level === "error"
-                  ? "text-red-700 dark:text-red-400"
-                  : "text-emerald-700 dark:text-emerald-300/90"
+                  ? "text-destructive"
+                  : "text-success-strong"
               }
             >
               {log.msg}
@@ -354,7 +354,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   {pkg.errors.map((er, j) => (
                     <div
                       key={j}
-                      className="font-mono text-[11px] text-red-700 dark:text-red-400"
+                      className="text-destructive font-mono text-[11px]"
                     >
                       ⚠ {er.file}: {er.error}
                     </div>

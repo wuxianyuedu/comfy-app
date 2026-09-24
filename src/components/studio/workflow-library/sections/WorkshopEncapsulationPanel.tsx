@@ -59,12 +59,11 @@ interface WorkshopEncapsulationPanelProps {
 }
 
 /** 契约口状态徽标的形态（配色表；文案由`entryStateBadge` 按缺口给）。
- * 暗色下背景必须跟着切（`dark:bg-emerald-500/15`）：只切文字色的话是
- * 浅绿字叠在浅绿底上，对比度极低（用户实测「暗色下看不清」）。 */
-const RESOLVED_BADGE_CLASS =
-  "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300";
-const MISSING_REQUIRED_BADGE_CLASS =
-  "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300";
+ *  走语义 token（§4.11.1 / P71）：已落点→success、必填未落点→destructive。
+ *  token 内部已含浅/深两态，bg 与 text 自动配套——不再需要手写 `dark:bg-*`
+ *  单独切深底（此前的「浅绿字叠浅绿底、暗色看不清」事故正是这么补的）。 */
+const RESOLVED_BADGE_CLASS = "bg-success/15 text-success-strong";
+const MISSING_REQUIRED_BADGE_CLASS = "bg-destructive/15 text-destructive";
 
 /** 落点状态 → 徽标：**已落点才给徽标**，没落点返回 null。
  *
@@ -181,11 +180,11 @@ export function WorkshopEncapsulationPanel({
         />
         <h3 className="text-ink-strong text-sm font-medium">工坊封装</h3>
         {status.ready ? (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+          <span className="bg-success/15 text-success-strong rounded-full px-2 py-0.5 text-[11px]">
             已配置 · 工坊可用
           </span>
         ) : (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+          <span className="bg-warning/15 text-warning-strong rounded-full px-2 py-0.5 text-[11px]">
             未配置
           </span>
         )}
@@ -217,7 +216,7 @@ export function WorkshopEncapsulationPanel({
         </span>
       </div>
       {!status.ready && (
-        <p className="rounded-lg bg-amber-100 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
+        <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-[11px]">
           必填口 {status.missingRequired.join("、")}
           还没落到任何端口 —— 工坊（角色卡定妆照 / 镜头生图）无法驱动这条
           工作流。到「画布节点」页签把对应卡片的圆点拖到工作流里承载它的那一行
@@ -257,7 +256,7 @@ export function WorkshopEncapsulationPanel({
                       <span
                         className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                           entry.required
-                            ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                            ? "bg-destructive/15 text-destructive"
                             : "bg-subtle text-muted-foreground/80 border-border-strong border"
                         }`}
                       >
@@ -322,7 +321,7 @@ export function WorkshopEncapsulationPanel({
             />
           )}
           {test.error && (
-            <p className="rounded-lg bg-red-100 px-3 py-2 text-[11px] text-red-800 dark:text-red-300">
+            <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-[11px]">
               {test.error}
             </p>
           )}

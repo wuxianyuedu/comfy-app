@@ -15,7 +15,7 @@
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
   },
-  "total": 183,
+  "total": 146,
   "files": {
     "src/components/message-center/MessageCenterButton.tsx": {
       "P71": 1
@@ -115,39 +115,6 @@
     },
     "src/components/studio/workflow-form/DynamicWorkflowForm/DynamicWorkflowFormView.tsx": {
       "P71": 1
-    },
-    "src/components/studio/workflow-library/CustomNodesSettings/NodesTab.tsx": {
-      "P71": 2
-    },
-    "src/components/studio/workflow-library/CustomNodesSettings/SettingsParts.tsx": {
-      "P71": 5
-    },
-    "src/components/studio/workflow-library/ParamOwnerTag.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/workflow-library/sections/DetailHeader.tsx": {
-      "P71": 4
-    },
-    "src/components/studio/workflow-library/sections/EncapsulationTestForm.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/workflow-library/sections/WorkshopEncapsulationPanel.tsx": {
-      "P71": 11
-    },
-    "src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx": {
-      "P71": 3
-    },
-    "src/components/studio/workflow-library/WorkflowLibrary.tsx": {
-      "P71": 2
-    },
-    "src/components/studio/workflow-library/WorkflowLibraryList.tsx": {
-      "P71": 3
-    },
-    "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
-      "P71": 2
-    },
-    "src/components/studio/workflow-library/WorkflowRunRawCliModal.tsx": {
-      "P71": 3
     },
     "src/components/studio/WorkflowImportPanel.tsx": {
       "P71": 3
