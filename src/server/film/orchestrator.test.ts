@@ -66,6 +66,23 @@ const prodRepo = vi.hoisted(() => ({
   >(async () => undefined),
 }));
 
+/* 首帧图合成 / 视频任务创建：startFilm 测试要读它们的**入参**断言
+ * 「每次自主出图都带一个新的随机 seed」，因此 hoisted 出来命名持有。 */
+const createRunTaskMock = vi.hoisted(() =>
+  vi.fn<
+    (input: {
+      userId: string;
+      workflowId: string;
+      values: { seed?: number } & Record<string, unknown>;
+    }) => Promise<{ taskId: string; workflowName: string; taskType: string }>
+  >(async () => ({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
+);
+const synthFirstFrameMock = vi.hoisted(() =>
+  vi.fn<(opts: { seed?: number } & Record<string, unknown>) => Promise<string>>(
+    async () => "firstframe.png",
+  ),
+);
+
 vi.mock("~/lib/core/repository", () => ({
   filmRepository: filmRepo,
   filmShotRepository: shotRepo,
@@ -76,11 +93,7 @@ vi.mock("~/lib/core/repository-production", () => ({
   productionRepository: prodRepo,
 }));
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
-  createWorkflowRunTask: vi.fn(async () => ({
-    taskId: "task-1",
-    workflowName: "wf",
-    taskType: "T2V",
-  })),
+  createWorkflowRunTask: createRunTaskMock,
 }));
 const cancelTaskMock = vi.hoisted(() =>
   vi.fn(async (_taskId: string) => undefined),
@@ -91,7 +104,7 @@ vi.mock("~/lib/comfyui/enqueue", () => ({
   cancelTask: cancelTaskMock,
 }));
 vi.mock("~/lib/comfyui/firstframe", () => ({
-  synthesizeFirstFrame: vi.fn(async () => "firstframe.png"),
+  synthesizeFirstFrame: synthFirstFrameMock,
 }));
 vi.mock("~/lib/workshop/script-parser", () => ({
   parseIdeaToScenes: vi.fn(() => []),
@@ -123,6 +136,7 @@ import {
   composeFilm,
   createFilm,
   createFilmFromProject,
+  startFilm,
   syncFilmToProject,
 } from "./orchestrator";
 import { NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
@@ -174,6 +188,42 @@ describe("cancelFilm — 取消要撤到任务层，不能只改界面状态", (
 
     expect(cancelTaskMock).toHaveBeenCalledTimes(2);
     expect(filmRepo.markCancelled).toHaveBeenCalledWith("f1");
+  });
+});
+
+describe("startFilm — 自主成片逐镜生成默认带随机种子（走「种子」对外参数）", () => {
+  it("首帧图与视频两跳都各带一个有限数字 seed", async () => {
+    // status=CANCELLED 只为了让 startFilm 末尾的 `void watchFilm` 立刻早退，
+    // 不在测试里跑后台轮询循环（startFilm 本身只挡 GENERATING/COMPOSING）。
+    filmRepo.findById.mockResolvedValue({
+      id: "f1",
+      userId: "u1",
+      status: "CANCELLED",
+    });
+    shotRepo.listByFilm.mockResolvedValue([
+      {
+        id: "s1",
+        order: 0,
+        prompt: "海边日落",
+        negative: null,
+        // 不给现成首帧 → 走「先合成一张图、再喂视频」这条双跳出图路径。
+        params: { videoWorkflowId: "wf-v", imageWorkflowId: "wf-i" },
+      },
+    ]);
+
+    await startFilm("f1");
+
+    // 跳 1：合成首帧图 —— 带一个新随机 seed。
+    expect(synthFirstFrameMock).toHaveBeenCalledTimes(1);
+    const imgSeed = synthFirstFrameMock.mock.calls[0]![0].seed;
+    expect(typeof imgSeed).toBe("number");
+    expect(Number.isFinite(imgSeed)).toBe(true);
+
+    // 跳 2：视频工作流 —— values.seed 同样带一个新随机 seed。
+    expect(createRunTaskMock).toHaveBeenCalledTimes(1);
+    const videoSeed = createRunTaskMock.mock.calls[0]![0].values.seed;
+    expect(typeof videoSeed).toBe("number");
+    expect(Number.isFinite(videoSeed)).toBe(true);
   });
 });
 

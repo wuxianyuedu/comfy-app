@@ -22,6 +22,7 @@ import {
 } from "~/lib/llm/server";
 import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
+import { randomSeed } from "~/lib/comfyui/random-seed";
 import { workshopUid } from "~/lib/workshop/script-parser";
 import {
   markActionProcessed,
@@ -45,8 +46,6 @@ const MAX_TICKS = 240;
 const TICK_MS = 4000;
 const nowIso = () => new Date().toISOString();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** 抽卡用的非负随机种子（JS 安全整数内，与 comfy 前端 seed 量级一致）。 */
-const randomSeed = () => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
 interface ExecResult {
   ok: boolean;
