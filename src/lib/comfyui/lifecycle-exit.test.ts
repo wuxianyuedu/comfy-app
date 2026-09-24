@@ -9,14 +9,19 @@
  *      「未运行」，原因一个字都没有。
  */
 import { describe, expect, it, vi } from "vitest";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 import {
   describeComfyExit,
   describeStaleSession,
   formatUptime,
+  reportKeepAliveExit,
   startComfyExitWatcher,
   type ComfyExitFacts,
 } from "./lifecycle-exit";
+import type { PidLookup } from "./proc-detect";
 
 function facts(over: Partial<ComfyExitFacts> = {}): ComfyExitFacts {
   return {
@@ -93,10 +98,7 @@ describe("describeComfyExit", () => {
 
 describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
   /** 可控定时器：测试自己决定什么时候「到了下一轮」。 */
-  function harness(
-    findPid: () => Promise<number | null>,
-    stopRequested = false,
-  ) {
+  function harness(findPid: () => Promise<PidLookup>, stopRequested = false) {
     const ticks: Array<() => void> = [];
     let stopped = false;
     const onExit = vi.fn();
@@ -127,9 +129,9 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("先见到进程、之后连续两次查不到 → 报一次退出并自停", async () => {
     const findPid = vi
-      .fn<() => Promise<number | null>>()
-      .mockResolvedValueOnce(7001)
-      .mockResolvedValue(null);
+      .fn<() => Promise<PidLookup>>()
+      .mockResolvedValueOnce({ pid: 7001, failed: false })
+      .mockResolvedValue({ pid: null, failed: false });
     const h = harness(findPid);
 
     await h.tick(); // 第一次见到它：记开头
@@ -146,7 +148,9 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("还没第一次见到它就查不到 → 不抢答（拉起失败由启动循环自己报）", async () => {
     const h = harness(
-      vi.fn<() => Promise<number | null>>().mockResolvedValue(null),
+      vi
+        .fn<() => Promise<PidLookup>>()
+        .mockResolvedValue({ pid: null, failed: false }),
     );
     await h.tick();
     await h.tick();
@@ -157,11 +161,11 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("中间又见到进程 → miss 计数复位（冷启动抖动不误报）", async () => {
     const findPid = vi
-      .fn<() => Promise<number | null>>()
-      .mockResolvedValueOnce(7001)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(7001)
-      .mockResolvedValue(null);
+      .fn<() => Promise<PidLookup>>()
+      .mockResolvedValueOnce({ pid: 7001, failed: false })
+      .mockResolvedValueOnce({ pid: null, failed: false })
+      .mockResolvedValueOnce({ pid: 7001, failed: false })
+      .mockResolvedValue({ pid: null, failed: false });
     const h = harness(findPid);
     await h.tick();
     await h.tick(); // miss 1
@@ -172,7 +176,9 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("用户主动关 → 监督器自停，不报「莫名退出」", async () => {
     const h = harness(
-      vi.fn<() => Promise<number | null>>().mockResolvedValue(null),
+      vi
+        .fn<() => Promise<PidLookup>>()
+        .mockResolvedValue({ pid: null, failed: false }),
       true,
     );
     await h.tick();
@@ -182,11 +188,74 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("stop() 之后不再回调（宿主重新拉起前会调它）", async () => {
     const h = harness(
-      vi.fn<() => Promise<number | null>>().mockResolvedValue(7001),
+      vi
+        .fn<() => Promise<PidLookup>>()
+        .mockResolvedValue({ pid: 7001, failed: false }),
     );
     h.watcher.stop();
     await h.tick();
     expect(h.onExit).not.toHaveBeenCalled();
+  });
+
+  it("进程表查询失败（超时）不当作进程消失：连续失败不报退出，恢复后仍正常判死", async () => {
+    const findPid = vi
+      .fn<() => Promise<PidLookup>>()
+      .mockResolvedValue({ pid: null, failed: true });
+    const h = harness(findPid);
+    await h.tick();
+    await h.tick();
+    await h.tick();
+    expect(h.onExit).not.toHaveBeenCalled();
+    expect(h.stopped()).toBe(false);
+
+    // 之后恢复：见到进程 → 再两次查不到才判死
+    findPid.mockResolvedValueOnce({ pid: 7001, failed: false });
+    findPid.mockResolvedValue({ pid: null, failed: false });
+    await h.tick(); // 见到
+    await h.tick(); // miss 1
+    await h.tick(); // miss 2 → 判死
+    expect(h.onExit).toHaveBeenCalledTimes(1);
+    expect(h.stopped()).toBe(true);
+  });
+});
+
+describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志", () => {
+  it("传入 keepAliveLogs 时，把 .err/.out 末尾带进 [exit][err]/[exit][out]", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keepalive-exit-"));
+    const errFile = path.join(dir, "comfyui-keepalive-x.err.log");
+    const outFile = path.join(dir, "comfyui-keepalive-x.out.log");
+    fs.writeFileSync(
+      errFile,
+      'boot ok\nTraceback (most recent call last):\n  File "main.py", line 1\nValueError: boom\n',
+    );
+    fs.writeFileSync(outFile, "started ok\n");
+    const runtime: string[] = [];
+    const banners: string[] = [];
+    reportKeepAliveExit({
+      facts: { pid: 149720, uptimeMs: 26 * 60_000 + 13_000 },
+      stopRequested: false,
+      keepAliveLogs: { out: outFile, err: errFile },
+      appendSessionBanner: (b) => banners.push(b),
+      appendRuntimeLog: (l) => runtime.push(l),
+      log: vi.fn(),
+    });
+    const tailErr = runtime.filter((l) => l.startsWith("[exit][err]"));
+    const tailOut = runtime.filter((l) => l.startsWith("[exit][out]"));
+    expect(tailErr.some((l) => l.includes("ValueError: boom"))).toBe(true);
+    expect(tailOut.some((l) => l.includes("started ok"))).toBe(true);
+    expect(banners[0]).toContain("进程消失");
+  });
+
+  it("没有 keepAliveLogs 时不带尾部（向后兼容）", () => {
+    const runtime: string[] = [];
+    reportKeepAliveExit({
+      facts: { pid: 1, uptimeMs: 1000 },
+      stopRequested: false,
+      appendSessionBanner: vi.fn(),
+      appendRuntimeLog: (l) => runtime.push(l),
+      log: vi.fn(),
+    });
+    expect(runtime.some((l) => l.startsWith("[exit][err]"))).toBe(false);
   });
 });
 
