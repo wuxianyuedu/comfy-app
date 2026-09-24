@@ -29,10 +29,13 @@ import {
   planNextRunAction,
   toRunView,
   appendRunStep,
+  REVIEW_MAX_RETRY,
   type ProductionRun,
   type ProductionRunView,
   type RunAction,
 } from "~/lib/production/run-types";
+import { applyShotRedo } from "~/lib/production/sync";
+import { reviewContent } from "~/server/agent/review";
 import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage } from "~/lib/error-message";
 import type { Character, ProjectType, Shot } from "~/lib/workshop/types";
@@ -65,6 +68,8 @@ function actionLabel(action: RunAction): string {
       return "规划分镜";
     case "render_images":
       return `逐镜生图（${action.shotIds.length} 个）`;
+    case "review_shots":
+      return `逐镜评审（${action.shotIds.length} 个）`;
     case "render_film":
       return "生成视频并合成成片";
     default:
@@ -82,6 +87,7 @@ function gateStageFor(action: RunAction): ProductionStage | null {
     case "plan_storyboard":
       return "storyboard";
     case "render_images":
+    case "review_shots":
       return "shots";
     case "render_film":
       return "render";
@@ -271,6 +277,69 @@ async function execImages(
   };
 }
 
+/**
+ * 自动评审执行器（Phase 8 · P8-1c）：逐镜调 `reviewContent` 出判定（同时落库 `shot.review`），据此：
+ *   · 通过 → 记 `reviewedShotRev[id]=rev`（定稿，规划器不再纳入）；
+ *   · 不合格且未达重试上限 → `reviewAttempts[id]++` + `applyShotRedo`（清图 + rev 自增）→ 该镜回到
+ *     待生图、用新种子重出（PR#942 的 randomizeSeed）后再次评审；
+ *   · 不合格但已达 `REVIEW_MAX_RETRY` → 记 `reviewedShotRev[id]=rev` 保留当前结果、停止返工（保证收敛）。
+ * 评审只写 `shot.review`（`reviewContent` 内部），退回重出走一次 `patchContent`；重出前重读一次，
+ * 避免用评审前的旧快照覆盖掉刚写入的判定。
+ */
+async function execReviewShots(
+  userId: string,
+  projectId: string,
+  run: ProductionRun,
+  view: ProductionRunView,
+  shotIds: string[],
+): Promise<ExecResult> {
+  const reviewed = { ...run.reviewedShotRev };
+  const attempts = { ...run.reviewAttempts };
+  const revById = new Map(view.shots.map((s) => [s.id, s.rev]));
+  const rerollIds: string[] = [];
+  let passed = 0;
+  let exhausted = 0;
+
+  for (const shotId of shotIds) {
+    const rev = revById.get(shotId) ?? 0;
+    let pass: boolean;
+    try {
+      pass = (await reviewContent(userId, projectId, "shot", shotId)).pass;
+    } catch {
+      // 单镜评审本身失败：不阻断流水线，按「定稿保留」处理，避免反复重试坏镜。
+      reviewed[shotId] = rev;
+      continue;
+    }
+    if (pass) {
+      reviewed[shotId] = rev;
+      passed++;
+    } else if ((attempts[shotId] ?? 0) < REVIEW_MAX_RETRY) {
+      attempts[shotId] = (attempts[shotId] ?? 0) + 1;
+      rerollIds.push(shotId);
+    } else {
+      reviewed[shotId] = rev; // 达上限：保留当前结果、定稿，停止返工
+      exhausted++;
+    }
+  }
+
+  if (rerollIds.length > 0) {
+    const fresh = await productionRepository.getForUser(userId, projectId);
+    let shots: unknown[] =
+      fresh && Array.isArray(fresh.shots) ? fresh.shots : [];
+    for (const id of rerollIds) shots = applyShotRedo(shots, id);
+    await productionRepository.patchContent(userId, projectId, { shots });
+  }
+
+  const parts = [`${passed} 通过`];
+  if (rerollIds.length > 0) parts.push(`${rerollIds.length} 抽卡重出`);
+  if (exhausted > 0) parts.push(`${exhausted} 达上限保留`);
+  return {
+    ok: true,
+    summary: `逐镜评审：${parts.join(" / ")}`,
+    run: { ...run, reviewedShotRev: reviewed, reviewAttempts: attempts },
+  };
+}
+
 async function execFilm(
   userId: string,
   projectId: string,
@@ -350,6 +419,15 @@ export async function advanceRunLoop(
             projectId,
             run,
             row,
+            view,
+            action.shotIds,
+          );
+          break;
+        case "review_shots":
+          res = await execReviewShots(
+            userId,
+            projectId,
+            run,
             view,
             action.shotIds,
           );
