@@ -11,9 +11,16 @@
  * 原始]` /`stdout` lines) go through the collapsible, syntax-highlighted
  * JsonViewer; everything else is shown as raw text. View-only: the network
  * call lives in lib/comfyui/raw-cli-client (UI/logic separation).
+ *
+ * 运行期每 1.5s 轮询一次完整输出（服务端上限 5000 行），所以这里刻意不做
+ * 「整份重建」—— 三条防线合起来让轮询只在**真的来了新行**时付代价：
+ *   1. 逐行解析走 `./raw-cli-lines` 的缓存 → 未变的行保持同一个对象身份；
+ *   2. 行组件是 `memo` 的 → 身份没变就不重渲染（连带它内部那棵 JSON 树）；
+ *   3. 两轮内容逐字相同时连 setState 都不发（见 `sameRawCliLines`）。
+ * 少了任何一条，每 1.5s 都会把整份输出重新解析 + 全部 JsonViewer 重建一遍。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, FileJson, RefreshCw, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -24,29 +31,62 @@ import { useInterval } from "~/components/ui/use-interval";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { fetchRawCli } from "~/lib/comfyui/raw-cli-client";
-import { parseCliJsonLine, splitCliLogLine } from "~/lib/log/log-cli-json";
-
-type ParsedLine =
-  | { kind: "json"; tag: string; value: unknown }
-  | { kind: "text"; tag: string; text: string };
-
-/**
- * 把一行拆成「JSON 载荷」或「原文」：判据与解析都走`~/lib/log/log-cli-json`
- * 的唯一口径（日志面板的折叠行用的是同一份），两处不会分叉。
- */
-function parseLine(line: string): ParsedLine {
-  const json = parseCliJsonLine(line);
-  if (json) return { kind: "json", tag: json.tag, value: json.value };
-  const split = splitCliLogLine(line);
-  if (!split) return { kind: "text", tag: "", text: line };
-  return { kind: "text", tag: split.tag, text: split.payload };
-}
+import {
+  parseRawCliLine,
+  sameRawCliLines,
+  type ParsedCliLine,
+} from "./raw-cli-lines";
 
 const TAG_STYLES: Record<string, string> = {
   原始: "text-cyan-700 dark:text-cyan-400",
   stdout: "text-slate-600 dark:text-slate-300",
   stderr: "text-rose-700 dark:text-rose-400",
 };
+
+/**
+ * 一行原文的卡片。
+ *
+ * `memo` 是这里的关键：轮询拿到新数组时，只有**真的新增**的行会换掉 `entry`
+ * （其余行由 `parseRawCliLine` 的缓存给出同一个引用），于是旧行连同它内部那棵
+ * JsonViewer 树一个都不重建。没有它时每 1.5s 整份输出全量重渲染 —— 大 payload
+ * 下就是「这个界面非常卡」的一半来源（另一半是首屏全量展开，见
+ * `ui/json-viewer` 里 `collapsed` 那段注释）。
+ */
+const RawCliLineCard = memo(function RawCliLineCard({
+  entry,
+}: {
+  entry: ParsedCliLine;
+}) {
+  const tagClass = TAG_STYLES[entry.tag] ?? "text-ink-muted";
+
+  if (entry.kind === "json") {
+    return (
+      <div className="border-border-subtle bg-card/60 rounded-lg border p-2">
+        <div className={`mb-1 font-mono text-[10.5px] uppercase ${tagClass}`}>
+          [comfy-cli {entry.tag}]
+        </div>
+        <JsonViewer
+          data={entry.value}
+          title="comfy-cli 输出"
+          initialCollapsedDepth={2}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-border-subtle bg-card/40 rounded-lg border p-2">
+      {entry.tag && (
+        <div className={`mb-1 font-mono text-[10.5px] uppercase ${tagClass}`}>
+          [comfy-cli {entry.tag}]
+        </div>
+      )}
+      <pre className="text-ink-strong font-mono text-[12.5px] leading-snug wrap-break-word whitespace-pre-wrap">
+        {entry.text}
+      </pre>
+    </div>
+  );
+});
 
 export interface WorkflowRunRawCliModalProps {
   /** 当前查看的运行；无则禁用入口。 */
@@ -69,19 +109,22 @@ export function WorkflowRunRawCliModal({
   const [copied, setCopied] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  const parsed = useMemo(() => lines.map(parseLine), [lines]);
+  const parsed = useMemo(() => lines.map(parseRawCliLine), [lines]);
 
-  const loadRef = useRef<() => void>(() => undefined);
+  /* `background = true` 是轮询那条路：不翻 `loaded`（它只决定「加载中…」还是
+   * 空态文案，每 1.5s 翻一次会让头部提示闪一下、还白搭两次渲染）。 */
+  const loadRef = useRef<(background?: boolean) => void>(() => undefined);
 
   useEffect(() => {
     if (!open || !taskId) return;
     let alive = true;
-    const doLoad = () => {
+    const doLoad = (background = false) => {
       if (!alive) return;
-      setLoaded(false);
+      if (!background) setLoaded(false);
       void fetchRawCli(taskId)
         .then((l) => {
-          if (alive) setLines(l);
+          /* 逐字比对后才写 state：内容没变时保持旧数组，整棵列表一次都不重渲染。 */
+          if (alive) setLines((prev) => (sameRawCliLines(prev, l) ? prev : l));
         })
         .catch(() => undefined)
         .finally(() => {
@@ -96,7 +139,7 @@ export function WorkflowRunRawCliModal({
   }, [open, taskId]);
 
   /* 运行期按需轮询刷新完整输出（统一走 useInterval，不自写 setInterval）。 */
-  useInterval(() => loadRef.current(), {
+  useInterval(() => loadRef.current(true), {
     ms: running ? 1500 : null,
     immediate: false,
   });
@@ -154,13 +197,7 @@ export function WorkflowRunRawCliModal({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => {
-                  setLoaded(false);
-                  void fetchRawCli(taskId ?? "")
-                    .then((l) => setLines(l))
-                    .catch(() => undefined)
-                    .finally(() => setLoaded(true));
-                }}
+                onClick={() => loadRef.current()}
                 title="刷新"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
               >
@@ -202,45 +239,12 @@ export function WorkflowRunRawCliModal({
                 )}
               </div>
             ) : (
-              parsed.map((entry, index) => {
-                const tagClass = TAG_STYLES[entry.tag] ?? "text-ink-muted";
-                if (entry.kind === "json") {
-                  return (
-                    <div
-                      key={index}
-                      className="border-border-subtle bg-card/60 rounded-lg border p-2"
-                    >
-                      <div
-                        className={`mb-1 font-mono text-[10.5px] uppercase ${tagClass}`}
-                      >
-                        [comfy-cli {entry.tag}]
-                      </div>
-                      <JsonViewer
-                        data={entry.value}
-                        title="comfy-cli 输出"
-                        initialCollapsedDepth={2}
-                      />
-                    </div>
-                  );
-                }
-                return (
-                  <div
-                    key={index}
-                    className="border-border-subtle bg-card/40 rounded-lg border p-2"
-                  >
-                    {entry.tag && (
-                      <div
-                        className={`mb-1 font-mono text-[10.5px] uppercase ${tagClass}`}
-                      >
-                        [comfy-cli {entry.tag}]
-                      </div>
-                    )}
-                    <pre className="text-ink-strong font-mono text-[12.5px] leading-snug wrap-break-word whitespace-pre-wrap">
-                      {entry.text}
-                    </pre>
-                  </div>
-                );
-              })
+              /* 服务端缓冲只从**尾部**追加、到上限后从头部裁，所以除裁切那一轮外
+                 下标与行的对应关系稳定；配上行内 `memo`（按 `entry` 身份跳过），
+                 追加新行不会牵连已有卡片。 */
+              parsed.map((entry, index) => (
+                <RawCliLineCard key={index} entry={entry} />
+              ))
             )}
           </div>
 
