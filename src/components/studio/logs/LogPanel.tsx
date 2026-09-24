@@ -474,10 +474,7 @@ export function LogPanel() {
             `min-w-56`），所以行高用 `min-h`、允许内容把它撑高而不是钉死高度。 */}
           <div className="border-border-strong bg-surface-1 flex min-h-14 shrink-0 flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
             <div className="flex shrink-0 items-center gap-2">
-              <FileText
-                size={16}
-                className="shrink-0 text-violet-700 dark:text-violet-400"
-              />
+              <FileText size={16} className="text-primary-strong shrink-0" />
               {/* 标题不可换行：换行会把行头撑高、把下面的筛选器挤成竖排单字
                 （窄窗口下实测就是这样）。宽度不够时宁可让别的元素让它。 */}
               <span className="text-ink-bright text-[15px] font-semibold whitespace-nowrap">
