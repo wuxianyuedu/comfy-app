@@ -61,16 +61,16 @@ function fmtClock(t: number | null): string {
 }
 
 const fpsTextColor: Record<string, string> = {
-  ok: "text-emerald-600 dark:text-emerald-300",
-  warn: "text-amber-600 dark:text-amber-300",
-  bad: "text-rose-600 dark:text-rose-300",
+  ok: "text-success-strong",
+  warn: "text-warning-strong",
+  bad: "text-destructive",
   unknown: "text-ink-muted",
 };
 
 const fpsDotColor: Record<string, string> = {
-  ok: "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]",
-  warn: "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]",
-  bad: "bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)]",
+  ok: "bg-success shadow-[0_0_6px_var(--color-success)]",
+  warn: "bg-warning shadow-[0_0_6px_var(--color-warning)]",
+  bad: "bg-destructive shadow-[0_0_6px_var(--color-destructive)]",
   unknown: "bg-ink-fainter",
 };
 
@@ -131,8 +131,8 @@ function UsageItem({
  */
 const SCHEMA_TONE_CLASS: Record<SchemaSyncNotice["tone"], string> = {
   info: "text-ink-soft",
-  ok: "text-emerald-600 dark:text-emerald-400",
-  error: "text-rose-600 dark:text-rose-400",
+  ok: "text-success-strong",
+  error: "text-destructive",
 };
 
 function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {

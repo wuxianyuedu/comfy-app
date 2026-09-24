@@ -461,6 +461,7 @@ export function LogPanel() {
       onOpenChange={(next) => !next && setIsOpen(false)}
     >
       <DialogContent
+        aria-label="应用日志"
         showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName={panel.widthClass}
