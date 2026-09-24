@@ -23,7 +23,7 @@ export function CanvasToolbar({
 }: CanvasToolbarProps) {
   return (
     <div className="border-border-strong bg-panel/85 shadow-shadow-strong z-canvas-ui absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border px-2 py-1.5 shadow-lg backdrop-blur-md">
-      <span className="flex items-center px-2 text-[11px] font-medium text-violet-700 dark:text-violet-200">
+      <span className="text-primary-strong flex items-center px-2 text-[11px] font-medium">
         <Icon name="sparkles" size={13} className="mr-1.5" />
         无限画布
       </span>

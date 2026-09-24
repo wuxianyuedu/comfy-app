@@ -31,7 +31,7 @@ export function SelectedToolbar({
         variant="ghost"
         title="删除节点 (Delete)"
         onClick={onDelete}
-        className={`${btn} text-rose-700 hover:bg-rose-500/15 dark:text-rose-300`}
+        className={`${btn} text-destructive hover:bg-destructive/15`}
       >
         ⌫
       </Button>

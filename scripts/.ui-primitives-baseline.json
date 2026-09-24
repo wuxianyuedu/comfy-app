@@ -15,7 +15,7 @@
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     "P71": "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）"
   },
-  "total": 115,
+  "total": 85,
   "files": {
     "src/components/message-center/MessageCenterButton.tsx": {
       "P71": 1
@@ -51,39 +51,6 @@
       "P71": 5
     },
     "src/components/studio/ModelTagManager.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/CanvasContextMenu.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/CanvasNode/CanvasNode.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/CanvasNode/SelectedToolbar.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/CanvasPanelToolbar.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/CanvasToolbar.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/EmptyCanvasHint.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
-      "P71": 7
-    },
-    "src/components/studio/project-canvas/HistoryPanel.tsx": {
-      "P71": 4
-    },
-    "src/components/studio/project-canvas/ImageGenerationPanel.tsx": {
-      "P71": 1
-    },
-    "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": {
-      "P71": 11
-    },
-    "src/components/studio/project-canvas/WorkflowNode.tsx": {
       "P71": 1
     },
     "src/components/studio/ProjectOutputs.tsx": {
