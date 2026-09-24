@@ -12,6 +12,7 @@ import {
 } from "./workflow-library-config";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/page-loading";
 import { deriveEncapsulationStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import { SourceTag } from "~/components/ui/source-tag";
@@ -97,12 +98,12 @@ export function WorkflowLibraryList({
       <div className="border-border-subtle shrink-0 border-b p-3">
         <div className="relative">
           <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
-          <input
+          <Input
             type="text"
             value={search}
             onChange={textHandler(onSearchChange)}
             placeholder="搜索工作流名称…"
-            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus:bg-subtle focus:border-primary-500/40 h-8 w-full rounded-lg border pr-3 pl-8 text-xs focus:outline-none"
+            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus-visible:border-primary-500/40 focus-visible:ring-primary/30 h-8 w-full rounded-lg border pr-3 pl-8 text-xs"
           />
         </div>
       </div>

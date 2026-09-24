@@ -14,43 +14,6 @@
     "P68": "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
     "P69": "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）"
   },
-  "total": 12,
-  "files": {
-    "src/components/studio/canvas/IOEditContext.tsx": {
-      "P69": 1
-    },
-    "src/components/studio/FilmStudio.tsx": {
-      "P69": 1
-    },
-    "src/components/studio/logs/LogFilterBar.tsx": {
-      "P68": 1
-    },
-    "src/components/studio/ModelLibrary.tsx": {
-      "P69": 1
-    },
-    "src/components/studio/project-canvas/ContentAssetNode.tsx": {
-      "P68": 1
-    },
-    "src/components/studio/project-canvas/GlobalStepLogPanel.tsx": {
-      "P69": 1
-    },
-    "src/components/studio/project-canvas/MaterialLibraryPanel.tsx": {
-      "P68": 1
-    },
-    "src/components/studio/project-canvas/WorkflowNodeArdot.tsx": {
-      "P68": 1
-    },
-    "src/components/studio/StringTextarea.tsx": {
-      "P68": 1
-    },
-    "src/components/studio/workflow-form/WorkflowFormTextarea.tsx": {
-      "P68": 1
-    },
-    "src/components/studio/workflow-library/WorkflowLibraryList.tsx": {
-      "P68": 1
-    },
-    "src/components/studio/workflow-library/WorkflowRunLogModal.tsx": {
-      "P69": 1
-    }
-  }
+  "total": 0,
+  "files": {}
 }
