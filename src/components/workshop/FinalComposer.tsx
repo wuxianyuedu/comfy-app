@@ -182,7 +182,7 @@ export function FinalComposer({
         <span
           className={`rounded-lg px-3 py-1 text-[11px] ${
             clipsDone === timeline.length
-              ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
+              ? "bg-success/15 text-success-strong"
               : "bg-amber/15 text-amber"
           }`}
         >
@@ -226,7 +226,7 @@ export function FinalComposer({
       </div>
 
       {rendered && (
-        <div className="rounded-xl bg-emerald-100 px-4 py-2 text-xs text-emerald-800 dark:text-emerald-300">
+        <div className="bg-success/10 text-success-strong rounded-xl px-4 py-2 text-xs">
           ✓ 合成清单已导出，成片产物完成。可在右侧资源库下载。
         </div>
       )}

@@ -125,7 +125,7 @@ export function WorkshopModelAdapterModal({
               {loading ? (
                 <p className="text-muted-foreground text-xs">加载中…</p>
               ) : candidates.length === 0 ? (
-                <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
                   还没有远端模型 —— 到「设置 → 模型」添加 kind=图片 / 视频
                   的远端条目后， 回来为它配置各模式的输入输出。
                 </p>
@@ -385,8 +385,8 @@ export function WorkshopModelAdapterModal({
               <p
                 className={`rounded-lg px-3 py-2 text-xs ${
                   message.kind === "ok"
-                    ? "bg-emerald-100 text-emerald-800 dark:text-emerald-300"
-                    : "bg-red-100 text-red-800 dark:text-red-300"
+                    ? "bg-success/10 text-success-strong"
+                    : "bg-destructive/10 text-destructive"
                 }`}
               >
                 {message.text}

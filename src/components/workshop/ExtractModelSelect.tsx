@@ -116,13 +116,13 @@ export function ExtractModelSelect({
       );
     } else if (selAvail?.kind === "ok") {
       hint = (
-        <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">
+        <p className="text-success-strong mt-1 text-[11px]">
           {badge}服务可达，可直接使用。
         </p>
       );
     } else if (selAvail?.kind === "err") {
       hint = (
-        <p className="mt-1 text-[11px] leading-relaxed text-red-700 dark:text-red-400">
+        <p className="text-destructive mt-1 text-[11px] leading-relaxed">
           {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 /
           配置正确后再试。
         </p>

@@ -17,21 +17,24 @@ import type { PersistableGenerationLog } from "~/lib/workshop/generation-log-cli
 /** @deprecated 兼容既有 import：通道类型已迁至 ExtractModelSelect */
 export type { ExtractChannel } from "~/components/workshop/ExtractModelSelect";
 
-/** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。 */
+/** 提取执行日志的展示样式（按日志类型区分色块，不随组件卸载清空）。
+ *  状态色全走语义 token（§4.11.1 / P71）：init→primary（品牌）、
+ *  request→info（信息/进行中）、output/result→success（有产物）、
+ *  skipped→warning（跳过 = 待办）、error→destructive（失败）。 */
 function logBadge(kind: ExtractLogEntry["kind"]): string {
   switch (kind) {
     case "init":
       return "bg-primary-soft text-primary";
     case "request":
-      return "bg-indigo-100 text-indigo-800 dark:text-indigo-300";
+      return "bg-info/15 text-info-strong";
     case "output":
-      return "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
+      return "bg-success/15 text-success-strong";
     case "result":
-      return "bg-emerald-100 text-emerald-800 dark:text-emerald-300";
+      return "bg-success/15 text-success-strong";
     case "skipped":
-      return "bg-amber-100 text-amber-800 dark:text-amber-300";
+      return "bg-warning/15 text-warning-strong";
     case "error":
-      return "bg-red-100 text-red-800 dark:text-red-300";
+      return "bg-destructive/15 text-destructive";
   }
 }
 
@@ -164,7 +167,7 @@ export function ExtractToolbar({
         <p className="text-primary mt-2 text-xs">{statusText}</p>
       )}
       {errorText && (
-        <p className="mt-2 rounded-lg bg-red-100 px-3 py-2 text-xs text-red-800 dark:text-red-300">
+        <p className="bg-destructive/10 text-destructive mt-2 rounded-lg px-3 py-2 text-xs">
           {errorText}
         </p>
       )}
