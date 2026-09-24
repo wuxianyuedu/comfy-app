@@ -29,6 +29,7 @@ import {
   CharacterPortraitStudio,
   type CharacterPortraitContext,
 } from "~/components/workshop/CharacterPortraitStudio";
+import { CharacterReviewButton } from "~/components/workshop/CharacterReviewButton";
 import {
   channelProviderLabel,
   channelSelectionDisplayValue,
@@ -598,6 +599,7 @@ export function CharacterDesigner({
                     </>
                   )}
                 </Button>
+                <CharacterReviewButton character={character} />
                 <Button
                   variant="ghost"
                   size="icon-sm"
