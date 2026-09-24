@@ -82,6 +82,7 @@ export const runRouter = createTRPCRouter({
         approvalMode: approvalModeEnum.optional(),
         imageWorkflowId: z.string().optional(),
         videoWorkflowId: z.string().optional(),
+        autoReview: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -93,6 +94,7 @@ export const runRouter = createTRPCRouter({
         goal: input.goal ?? run.goal,
         imageWorkflowId: input.imageWorkflowId ?? run.imageWorkflowId,
         videoWorkflowId: input.videoWorkflowId ?? run.videoWorkflowId,
+        autoReview: input.autoReview ?? run.autoReview,
         awaitingStage: null,
         error: null,
         updatedAt: new Date().toISOString(),

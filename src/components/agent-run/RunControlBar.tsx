@@ -7,6 +7,7 @@
 //   已暂停=继续/取消；完成/失败/取消=状态+重新开始。复用 Button/Badge/Textarea（不自造原语）。
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Textarea } from "~/components/ui/textarea";
 import { textHandler } from "~/lib/form-props";
 import { useAgentRun, type AgentRunController } from "./use-agent-run";
@@ -152,6 +153,13 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-[12px]">
+            <Checkbox
+              checked={c.autoReview}
+              onCheckedChange={(checked) => c.setAutoReview(checked === true)}
+            />
+            <span>生图后自动评审</span>
           </label>
           <Button
             type="button"

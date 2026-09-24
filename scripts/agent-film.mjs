@@ -26,7 +26,7 @@ export const DEFAULT_URL = "http://127.0.0.1:3000";
  * @typedef {"auto"|"stage"|"shot"} Approval
  * @typedef {{
  *   url:string; project:string; idea:string; imageWorkflowId:string; videoWorkflowId:string;
- *   approval:Approval; pollMs:number; timeoutMs:number; dryRun:boolean; json:boolean;
+ *   approval:Approval; autoReview:boolean; pollMs:number; timeoutMs:number; dryRun:boolean; json:boolean;
  *   help?:boolean; unknown?:string[];
  * }} FilmCliOpts
  * @typedef {{ method:"POST"|"GET"; url:string; body?:{ json:Record<string,unknown> } }} HttpCall
@@ -43,6 +43,7 @@ export function parseArgs(argv) {
     imageWorkflowId: "",
     videoWorkflowId: "",
     approval: "auto",
+    autoReview: false,
     pollMs: 3000,
     timeoutMs: 30 * 60 * 1000,
     dryRun: false,
@@ -74,6 +75,9 @@ export function parseArgs(argv) {
           : "auto";
         break;
       }
+      case "--auto-review":
+        opts.autoReview = true;
+        break;
       case "--poll":
         opts.pollMs = Number(next()) || opts.pollMs;
         break;
@@ -117,6 +121,7 @@ export function buildStartCall(opts) {
   };
   if (opts.imageWorkflowId) json.imageWorkflowId = opts.imageWorkflowId;
   if (opts.videoWorkflowId) json.videoWorkflowId = opts.videoWorkflowId;
+  if (opts.autoReview) json.autoReview = true;
   return {
     method: "POST",
     url: `${opts.url.replace(/\/$/, "")}/api/trpc/run.start`,
@@ -213,7 +218,8 @@ export async function driveFilmRun(opts, deps) {
 
 const HELP = `用法: pnpm agent:film --project <proj_..> --idea "创意" [选项]
   --image-workflow <id> 逐镜生图  --video-workflow <id> 出片视频工作流
-  --approval auto|stage|shot (默认 auto)  --url <appBase> (默认 ${DEFAULT_URL})
+  --approval auto|stage|shot (默认 auto)  --auto-review 生图后自动评审、不合格抽卡重出
+  --url <appBase> (默认 ${DEFAULT_URL})
   --poll <ms> (默认3000)  --timeout <ms> (默认1800000)  --dry-run  --json
 `;
 

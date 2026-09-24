@@ -60,6 +60,15 @@ export interface ProductionRun {
    * （换图 / 改提示词 / 退回），规划器据此把该镜重新纳入待办——这是「基于改动续跑」的判据。
    */
   processedShotRev: Record<string, number>;
+  /**
+   * 自动评审（Phase 8 · P8-1c）：生图后逐镜 AI 评审，不合格自动抽卡重生成（换种子），有界重试。
+   * 默认 false（不改既有 run 行为）；由 `run.start` 带入。
+   */
+  autoReview: boolean;
+  /** 每个镜头「上次被本 run 评审并定稿（通过 / 达重试上限保留）」时的 rev 快照。当前 rev > 快照 → 该镜需（再）评审。 */
+  reviewedShotRev: Record<string, number>;
+  /** 每个镜头已被自动抽卡重出的次数；达 `REVIEW_MAX_RETRY` 后保留当前结果、停止返工（避免无限循环）。 */
+  reviewAttempts: Record<string, number>;
   /** 执行日志（引擎每步追加，有界；见 appendRunStep）。 */
   log: RunStep[];
   error: string | null;
@@ -76,6 +85,9 @@ export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   videoWorkflowId: "",
   filmStartedAt: "",
   processedShotRev: {},
+  autoReview: false,
+  reviewedShotRev: {},
+  reviewAttempts: {},
   log: [],
   error: null,
   updatedAt: "",
@@ -83,6 +95,9 @@ export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
 
 /** 执行日志上限：只保留最近 N 条，避免 run 列无限膨胀。 */
 export const RUN_LOG_LIMIT = 80;
+
+/** 自动评审不合格时，每镜最多抽卡重出几次（超过则保留当前结果，避免无限返工）。 */
+export const REVIEW_MAX_RETRY = 2;
 
 /** 追加一条执行日志（不可变，尾部追加、超上限从头裁剪）。 */
 export function appendRunStep(
@@ -103,6 +118,17 @@ const RUN_STATUSES: readonly RunStatus[] = [
 ];
 const APPROVAL_MODES: readonly ApprovalMode[] = ["auto", "stage", "shot"];
 
+/** 宽容解析一个 `id → 有限数字` 的映射（rev 快照类字段共用）；非对象 / 非法值丢弃。 */
+function parseRevMap(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  const source = asRecord(raw);
+  if (!source) return out;
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+  }
+  return out;
+}
+
 /** 未知值（production.run 列）→ 规范化 ProductionProgress run；非法/缺字段回落默认，不抛。 */
 export function normalizeProductionRun(raw: unknown): ProductionRun {
   const obj = asRecord(raw);
@@ -113,14 +139,6 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
   const approvalMode = APPROVAL_MODES.includes(obj.approvalMode as ApprovalMode)
     ? (obj.approvalMode as ApprovalMode)
     : "stage";
-  const processed: Record<string, number> = {};
-  const revSource = asRecord(obj.processedShotRev);
-  if (revSource) {
-    for (const [key, value] of Object.entries(revSource)) {
-      if (typeof value === "number" && Number.isFinite(value))
-        processed[key] = value;
-    }
-  }
   const log: RunStep[] = [];
   if (Array.isArray(obj.log)) {
     for (const raw of obj.log) {
@@ -148,7 +166,10 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
       typeof obj.videoWorkflowId === "string" ? obj.videoWorkflowId : "",
     filmStartedAt:
       typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
-    processedShotRev: processed,
+    processedShotRev: parseRevMap(obj.processedShotRev),
+    autoReview: obj.autoReview === true,
+    reviewedShotRev: parseRevMap(obj.reviewedShotRev),
+    reviewAttempts: parseRevMap(obj.reviewAttempts),
     log,
     error: typeof obj.error === "string" ? obj.error : null,
     updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : "",
@@ -222,14 +243,17 @@ export type RunAction =
   | { kind: "extract_characters" }
   | { kind: "plan_storyboard" }
   | { kind: "render_images"; shotIds: string[] }
+  | { kind: "review_shots"; shotIds: string[] }
   | { kind: "render_film" };
 
 /**
  * 给定当前 production 视图 + run 状态，算「下一步该做的一个动作」。纯 state-driven：
  *   · 非 running → 由 status 决定（awaiting_approval 透出待确认阶段；done/idle 原样）。
- *   · running → 沿「剧本→角色→分镜→生图→(视频+合成成片)」找**第一个未完成**的步骤：
+ *   · running → 沿「剧本→角色→分镜→生图→(自动评审→返工)→(视频+合成成片)」找**第一个未完成**的步骤：
  *     某镜 `hasImage=false` 或 `rev` 比 run 处理快照更新（用户改过/退回）→ 纳入待生图；
- *     图齐但未出片 → render_film（服务端管线含逐镜视频 + 合成）；已出片 → done。
+ *     开了 `autoReview` 且有镜头已出图但「评审定稿快照」落后于当前 rev → 纳入待评审（评审不合格会
+ *     抽卡重出、把该镜 rev 抬高 → 又回到待生图，直到通过或达重试上限）；
+ *     图齐（且评审已定稿）未出片 → render_film；已出片 → done。
  * 这里只出「做什么」，「做完后是否停下等点头」由执行引擎按 approvalMode 处理（P6-2）。
  */
 export function planNextRunAction(
@@ -261,6 +285,15 @@ export function planNextRunAction(
     .map((s) => s.id);
   if (needImage.length > 0)
     return { kind: "render_images", shotIds: needImage };
+  // 自动评审：图齐后，把「已出图但评审定稿快照落后于当前 rev」的镜头纳入待评审。
+  // 评审不合格的抽卡会抬高该镜 rev → 重新出现在 needImage → 重出后再评，直到通过或达上限。
+  if (run.autoReview) {
+    const needReview = view.shots
+      .filter((s) => s.hasImage && (run.reviewedShotRev[s.id] ?? -1) < s.rev)
+      .map((s) => s.id);
+    if (needReview.length > 0)
+      return { kind: "review_shots", shotIds: needReview };
+  }
   if (!view.filmRendered) return { kind: "render_film" };
   return { kind: "done" };
 }

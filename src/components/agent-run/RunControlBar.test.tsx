@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // RunControlBarView 各状态渲染（Phase 6 · P6-3）：纯展示，喂假 controller 断按钮/文案。
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -24,6 +24,8 @@ function controller(
     setGoal: vi.fn(),
     approvalMode: "stage",
     setApprovalMode: vi.fn(),
+    autoReview: false,
+    setAutoReview: vi.fn(),
     start: vi.fn(async () => undefined),
     pause: vi.fn(async () => undefined),
     resume: vi.fn(async () => undefined),
@@ -51,6 +53,18 @@ describe("RunControlBarView", () => {
     render(<RunControlBarView c={withStatus("idle")} />);
     expect(screen.getByRole("button", { name: "启动" })).toBeTruthy();
     expect(screen.getByText("AI 自主成片")).toBeTruthy();
+  });
+
+  it("idle → 「生图后自动评审」复选框，点选回抛 setAutoReview(true)", () => {
+    const setAutoReview = vi.fn();
+    render(
+      <RunControlBarView
+        c={controller({ autoReview: false, setAutoReview })}
+      />,
+    );
+    expect(screen.getByText("生图后自动评审")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(setAutoReview).toHaveBeenCalledWith(true);
   });
 
   it("running → 暂停 / 取消，并显示下一步", () => {
